@@ -6,11 +6,7 @@ struct ModelPurposeRoute: Hashable { var id: String }
 /// The hub supplies the catalog so newly added consumers appear without another client-side list.
 struct ModelConfigurationView: View {
     @State private var page = ModelConfigurationModel()
-    @State private var query = ""
-
-    private var groups: [String] {
-        page.filtered(query).reduce(into: []) { if !$0.contains($1.group) { $0.append($1.group) } }
-    }
+    @State private var scopeExpanded = false
 
     var body: some View {
         List {
@@ -23,41 +19,53 @@ struct ModelConfigurationView: View {
             if page.loading && !page.loaded {
                 ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl)
             }
-            ForEach(groups, id: \.self) { group in
-                Section(group) {
-                    ForEach(page.filtered(query).filter { $0.group == group }) { purpose in
-                        NavigationLink(value: ModelPurposeRoute(id: purpose.id)) {
+            if !page.categories.isEmpty {
+                Section {
+                    ForEach(page.categories) { category in
+                        NavigationLink(value: ModelPurposeRoute(id: category.id)) {
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                                Text(purpose.name).font(Theme.Font.body).lineLimit(1)
-                                Text(page.summary(purpose).isEmpty ? "未配置" : page.summary(purpose))
+                                Text(category.name).font(Theme.Font.body).lineLimit(1)
+                                Text(page.modelSummary(category))
                                     .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
-                                if let limit = purpose.limit {
+                                if let limit = category.limit {
                                     ModelLimitLine(limit: limit, font: Theme.Font.caption)
-                                } else if let status = purpose.status, !status.isEmpty {
-                                    Text(status).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(2)
+                                } else if let status = category.status, !status.isEmpty, status != "未验证" {
+                                    Text(status).font(Theme.Font.caption).foregroundStyle(Theme.cautionText)
                                 }
                             }
                             .padding(.vertical, Theme.Space.xxs)
                         }
-                        .accessibilityIdentifier("model-purpose-\(purpose.id)")
+                        .accessibilityIdentifier("model-purpose-\(category.id)")
                     }
                 }
-            }
-            if page.loaded && page.error == nil && page.filtered(query).isEmpty {
-                EmptyStateView(symbol: Theme.Icon.model, title: query.isEmpty ? "暂无模型用途" : "没有找到", message: "应用内的 AI 功能会在这里统一配置。")
-                    .listRowBackground(Color.clear)
-            }
-            if !page.purposes.isEmpty {
                 Section {
-                    Text("供应商管理连接和凭据；这里按用途选择模型。未单独设置的项目保留现有默认，修改从下一次任务或对话开始生效。")
-                        .font(Theme.Font.label).foregroundStyle(.secondary)
+                    DisclosureGroup(isExpanded: $scopeExpanded) {
+                        VStack(alignment: .leading, spacing: Theme.Space.l) {
+                            ForEach(page.categories) { category in
+                                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                                    Text(category.name).font(Theme.Font.labelStrong)
+                                    Text((category.uses ?? []).map(\.name).joined(separator: "、"))
+                                        .font(Theme.Font.label).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .padding(.vertical, Theme.Space.s)
+                    } label: {
+                        Text("适用范围").font(Theme.Font.body).lineLimit(1)
+                    }
+                    .accessibilityIdentifier("model-config-scope")
+                } footer: {
+                    Text("修改一个分类，将统一用于该分类的所有用途；从下一次运行生效，不打断当前任务。")
+                        .font(Theme.Font.caption)
                 }
+            } else if page.loaded && page.error == nil {
+                EmptyStateView(symbol: Theme.Icon.model, title: "暂无模型配置", message: "连接支持四类模型配置的 hub 后，可在这里统一设置。")
+                    .listRowBackground(Color.clear)
             }
         }
         .themedPage()
         .navigationTitle("模型配置")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: "搜索用途、供应商或模型")
         .task { await page.load() }
         .refreshable { await page.load() }
     }
@@ -119,18 +127,19 @@ struct ModelPurposeEditorView: View {
                                 Text(effort).tag(effort)
                             }
                         }
+                        .lineLimit(1)
                     }
                 } header: {
-                    Text("此用途的设置")
+                    Text("模型设置")
                 } footer: {
-                    Text("留空表示继承。更换供应商会清除旧模型和思考强度，避免把不同供应商的参数混在一起。自定义模型 ID 需要供应商支持。")
+                    Text("此分类的所有用途统一使用这项配置。留空使用现有默认；更换供应商会清除旧模型和思考强度。自定义模型 ID 需要供应商支持。")
                 }
                 .disabled(page.saving || page.loading)
                 Section {
                     Button {
                         page.restoreInheritance()
                     } label: {
-                        Label("恢复继承", systemImage: Theme.Icon.undo).lineLimit(1)
+                        Label("恢复默认", systemImage: Theme.Icon.undo).lineLimit(1)
                     }
                     .disabled(page.saving || page.loading || page.draft.isEmpty)
                 } footer: {
@@ -183,6 +192,7 @@ struct ModelPurposeEditorView: View {
                 Text("\(id)（当前配置）").tag(id)
             }
         }
+        .lineLimit(1)
         .accessibilityIdentifier("model-config-provider")
     }
 

@@ -971,14 +971,7 @@ func (h *Hub) runTask(t Task, due, now time.Time, manual bool) (proto.Session, e
 	defer h.sched.end(t.ID)
 	if t.SessionID != "" {
 		if m := h.localMachine(t.MachineID); m != nil {
-			params := map[string]any{"session_id": t.SessionID, "text": taskPrompt(t, due, now, loc, manual, kb, false), "launcher": t.Launcher, "model": t.Model, "permission_mode": t.PermissionMode, "effort": t.Effort}
-			if t.Launcher == "" {
-				if r, e := h.modelRecord(ctx, "schedule"); e == nil && r.Binding.Provider == "" {
-					if source, ok := m.session(t.SessionID); ok {
-						params["launcher"] = source.Launcher
-					}
-				}
-			}
+			params := map[string]any{"session_id": t.SessionID, "text": taskPrompt(t, due, now, loc, manual, kb, false), "permission_mode": t.PermissionMode}
 			err := h.applyModel(ctx, "task."+t.ID, params)
 			if err == nil {
 				err = m.call(ctx, "assistant.send", params, nil)
@@ -993,16 +986,13 @@ func (h *Hub) runTask(t Task, due, now time.Time, manual bool) (proto.Session, e
 		}
 	}
 	cfg := h.assistantConfig(ctx)
-	launcher := t.Launcher
-	if launcher == "" {
-		binding, err := h.resolveModel(ctx, "task."+t.ID)
-		if err != nil {
-			run.Status, run.Error = runFailed, err.Error()
-			h.recordRun(run)
-			return proto.Session{}, err
-		}
-		launcher = strings.TrimPrefix(binding.Provider, "launcher.")
+	binding, err := h.resolveModel(ctx, "task."+t.ID)
+	if err != nil {
+		run.Status, run.Error = runFailed, err.Error()
+		h.recordRun(run)
+		return proto.Session{}, err
 	}
+	launcher := strings.TrimPrefix(binding.Provider, "launcher.")
 	if t.RunSessionID != "" {
 		m := h.localMachine(t.RunMachineID)
 		switch {
@@ -1015,7 +1005,7 @@ func (h *Hub) runTask(t Task, due, now time.Time, manual bool) (proto.Session, e
 			run.MachineID, run.SessionID = t.RunMachineID, t.RunSessionID
 			return proto.Session{}, h.skipRun(run, errTaskBusy)
 		default:
-			params := map[string]any{"session_id": t.RunSessionID, "text": taskPrompt(t, due, now, loc, manual, kb, true), "launcher": t.Launcher, "model": t.Model, "permission_mode": t.PermissionMode, "effort": t.Effort, "resume_only": true}
+			params := map[string]any{"session_id": t.RunSessionID, "text": taskPrompt(t, due, now, loc, manual, kb, true), "permission_mode": t.PermissionMode, "resume_only": true}
 			err := h.applyModel(ctx, "task."+t.ID, params)
 			if err == nil {
 				err = m.call(ctx, "assistant.send", params, nil)
@@ -1029,7 +1019,7 @@ func (h *Hub) runTask(t Task, due, now time.Time, manual bool) (proto.Session, e
 			h.logf("task %s into its conversation %s: %v; starting a new one", t.ID, short(t.RunSessionID), err)
 		}
 	}
-	sess, err := h.startAssistant(ctx, taskPrompt(t, due, now, loc, manual, kb, false), nil, t.Launcher, t.PermissionMode, t.Effort, "task."+t.ID)
+	sess, err := h.startAssistant(ctx, taskPrompt(t, due, now, loc, manual, kb, false), nil, "", t.PermissionMode, "", "task."+t.ID)
 	if err != nil {
 		h.logf("task %s: %v", t.ID, err)
 		run.Status, run.Error = runFailed, err.Error()
@@ -1169,6 +1159,7 @@ func (h *Hub) tasksView(ctx context.Context, keep func(Task) bool) []Task {
 		if t.MachineID == "" {
 			t.MachineID = machine
 		}
+		t.Launcher, t.Model, t.Effort = "", "", ""
 		out = append(out, t)
 	}
 	return out
@@ -1189,10 +1180,8 @@ func editTask(old, in Task, now time.Time) Task {
 	t := old
 	t.Title, t.Prompt, t.Repeat, t.Enabled = in.Title, in.Prompt, in.Repeat, in.Enabled
 	t.Time, t.Weekdays, t.EveryMinutes = in.Time, in.Weekdays, in.EveryMinutes
-	t.Launcher, t.Model, t.PermissionMode, t.Effort = in.Launcher, in.Model, in.PermissionMode, in.Effort
-	if t.Launcher != old.Launcher || t.Model != old.Model || t.Effort != old.Effort {
-		t.ModelRevision++
-	}
+	t.PermissionMode = in.PermissionMode
+	t.Launcher, t.Model, t.Effort = "", "", ""
 	if in.SessionID == "" {
 		t.SessionID = ""
 	}
@@ -1268,15 +1257,6 @@ func (h *Hub) scheduleRoutes(api *http.ServeMux) {
 			s.mu.Unlock()
 			writeErr(w, 400, err)
 			return
-		}
-		if _, ok := raw["launcher"]; !ok {
-			in.Launcher = s.tasks[i].Launcher
-		}
-		if _, ok := raw["model"]; !ok {
-			in.Model = s.tasks[i].Model
-		}
-		if _, ok := raw["effort"]; !ok {
-			in.Effort = s.tasks[i].Effort
 		}
 		t := editTask(s.tasks[i], in, time.Now())
 		if err := checkTask(&t, time.Now()); err != nil {

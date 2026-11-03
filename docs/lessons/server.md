@@ -2,6 +2,7 @@
 
 踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
 
+- 将用途模型收敛成分类默认时，不能只隐藏列表或让 resolver 忽略旧记录（2026-11-03，#697）：任务新建运行、续自己的会话、回来源会话仍可能把旧 `Launcher/Model/Effort` 放回执行参数，`applyModel` 又会把它们认作显式选择。执行入口必须停止传这些旧用途参数，续聊是否换 launcher 也只比较分类结果；回归同时验证三条路径的真实 RPC 参数、权限不变、旧用途 PATCH 拒绝和原始记录保留。
 - ssh 会话读不了 macOS 的登录钥匙串：hub 经 ssh 起的 node 再起的 claude，如果 API key 从钥匙串取，会报 401（herdr 里的 Agent 没事，herdr 在登录会话里）。
   在那台 Mac 上装常驻 node（`scripts/deploy/node-launchd.sh install`，`docs/server.md`「常驻 node」）。
 - Go 的 `UnixListener.Close()` 默认会删掉 socket 文件：重新部署时旧 node 退出会把新 node 的 `~/.jarvis/node.sock` 删掉，

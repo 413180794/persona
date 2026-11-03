@@ -2416,46 +2416,60 @@ def fs_post(h, p, q, body):
 MODEL_BINDINGS = {}
 MODEL_CONFIG_LOCK = threading.RLock()
 MODEL_DEFINITIONS = [
-    ("assistant", "Jarvis 对话", "对话与 Agent", "launcher"),
-    ("inbox.agent", "AI 分身", "对话与 Agent", "launcher"),
-    ("lark.agent", "飞书 /agent", "对话与 Agent", "launcher"),
-    ("agent.new", "新建 Agent", "对话与 Agent", "launcher"),
-    ("inbox.triage", "分拣与摘要", "收件箱", "api"),
-    ("inbox.judge", "AI 分身判断", "收件箱", "api"),
-    ("inbox.draft", "草拟回复", "收件箱", "api"),
-    ("translate", "文本与邮件翻译", "翻译", "api"),
-    ("kb", "知识处理默认模型", "知识处理", "api"),
-    ("kb.compress", "会话压缩与打标", "知识处理", "api"),
-    ("kb.project", "项目档案重写", "知识处理", "api"),
-    ("kb.dedupe", "项目去重", "知识处理", "api"),
-    ("kb.items", "事项提取与打标", "知识处理", "api"),
-    ("kb.moments", "removed关联", "知识处理", "api"),
-    ("assistant.title", "对话标题", "辅助功能", "api"),
-    ("agent.title", "Agent 标签名", "辅助功能", "api"),
-    ("schedule", "定时任务默认模型", "定时任务", "launcher"),
+    ("assistant", "主对话", "默认模型", "launcher"),
+    ("agent.new", "Agents", "默认模型", "launcher"),
+    ("kb", "信息处理", "默认模型", "api"),
+    ("inbox.triage", "信息筛选", "默认模型", "api"),
+    ("inbox.agent", "AI 分身执行", "Agents", "launcher"),
+    ("lark.agent", "飞书 /agent", "Agents", "launcher"),
+    ("inbox.judge", "AI 分身判断", "信息筛选", "api"),
+    ("inbox.draft", "草拟回复", "信息处理", "api"),
+    ("translate", "文本与邮件翻译", "信息处理", "api"),
+    ("kb.compress", "会话压缩与打标", "信息处理", "api"),
+    ("kb.project", "项目档案重写", "信息处理", "api"),
+    ("kb.dedupe", "项目去重", "信息处理", "api"),
+    ("kb.items", "事项提取与打标", "信息处理", "api"),
+    ("kb.moments", "removed关联", "信息处理", "api"),
+    ("assistant.title", "对话标题", "信息处理", "api"),
+    ("agent.title", "Agent 标签名", "信息处理", "api"),
+    ("schedule", "自动任务", "Agents", "launcher"),
 ]
+MODEL_SCOPES = {
+    "assistant": ["与当前 persona 的直接对话"],
+    "agent.new": ["新建 Agent", "AI 分身执行", "飞书 /agent", "自动任务"],
+    "kb": ["文本与邮件翻译", "草拟回复", "知识整理与会话压缩", "项目整理与事项提取", "对话标题与 Agent 标签名"],
+    "inbox.triage": ["收件箱分拣与摘要", "重要性判断", "判断是否需要回复或交给 Agent"],
+}
+MODEL_CATEGORY_FOR = {pid: {"Agents": "agent.new", "信息处理": "kb", "信息筛选": "inbox.triage"}.get(group, pid)
+                      for pid, _, group, _ in MODEL_DEFINITIONS}
 
 
-def model_configuration():
+def model_configuration(include_uses=False):
     providers = [dict(id="launcher." + l["name"], name=l["name"], kind=l.get("kind", "launcher"),
                       model=l.get("model"), hidden=l.get("hidden", False)) for l in LAUNCHERS]
     providers += [{"id": "launcher.claude", "name": "claude", "kind": "launcher", "model": "model-chat"},
                   {"id": "legacy.ai", "name": "轻量 API", "kind": "api", "api": "messages", "model": "model-fast"}]
-    definitions = MODEL_DEFINITIONS + [("task." + t["id"], t.get("title") or "跟进任务", "定时任务", "launcher") for t in SCHEDULE]
+    definitions = list(MODEL_DEFINITIONS if include_uses else MODEL_DEFINITIONS[:4])
+    if include_uses:
+        definitions += [("task." + t["id"], t.get("title") or "跟进任务", "Agents", "launcher") for t in SCHEDULE]
     purposes = []
     with MODEL_CONFIG_LOCK:
         for pid, name, group, kind in definitions:
-            stored = MODEL_BINDINGS.get(pid, {"revision": 0, "override": {}})
+            category = "agent.new" if pid.startswith("task.") else MODEL_CATEGORY_FOR[pid]
+            stored = MODEL_BINDINGS.get(category, {"revision": 0, "override": {}})
             binding = dict(stored["override"])
             effective = {"provider": "legacy.ai" if kind == "api" else "launcher.claude", "model": "model-fast" if kind == "api" else "model-chat"}
             if binding.get("provider"):
                 provider = next((p for p in providers if p["id"] == binding["provider"]), {})
                 effective = {"provider": binding["provider"], "model": provider.get("model", "")}
             effective.update(binding)
-            purpose = dict(id=pid, name=name, group=group, kind=kind, override=binding, effective=effective,
-                           revision=stored["revision"], inherited_from="现有默认" if not binding else "此用途",
-                           fields=["provider", "model"] if kind == "api" else ["provider", "model", "effort"],
-                           provider_ids=[p["id"] for p in providers if p["kind"] == kind], status="")
+            purpose = dict(id=pid, category_id=category, name=name, group=group, kind=kind,
+                           override=binding if pid == category else {}, effective=effective,
+                           revision=stored["revision"], inherited_from="现有默认" if pid == category else group,
+                           fields=(["provider", "model"] if kind == "api" else ["provider", "model", "effort"]) if pid == category else [],
+                           provider_ids=[p["id"] for p in providers if p["kind"] == kind], status="未验证")
+            if pid in MODEL_SCOPES:
+                purpose["uses"] = [{"name": use} for use in MODEL_SCOPES[pid]]
             # MOCK_MODEL_LIMIT=1: the default API connection is out of quota for 23 more minutes (docs/model-config.md「上游限流」).
             if os.environ.get("MOCK_MODEL_LIMIT") and effective["provider"] == "legacy.ai":
                 purpose["limit"] = {"reason": "quota", "until": later(minutes=23)}
@@ -3975,7 +3989,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/assistant": return self.send_json(assistant_state())
         if p == "/api/v1/model-config": return self.send_json(model_configuration())
         if p.startswith("/api/v1/model-config/purposes/"):
-            catalog = model_configuration()
+            catalog = model_configuration(include_uses=True)
             purpose = next((x for x in catalog["purposes"] if x["id"] == unquote(p.rsplit("/", 1)[1])), None)
             if not purpose: return self.send_json({"error": "模型用途不存在"}, 404)
             return self.send_json({"purpose": purpose, "providers": catalog["providers"]})
@@ -4375,12 +4389,17 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/model-config/purposes/") and self.command == "PATCH":
             pid, body = unquote(p.rsplit("/", 1)[1]), json.loads(self.last_body or b"{}")
             with MODEL_CONFIG_LOCK:
-                catalog = model_configuration()
+                catalog = model_configuration(include_uses=True)
                 purpose = next((x for x in catalog["purposes"] if x["id"] == pid), None)
                 if purpose is None: return self.send_json({"error": "模型用途不存在"}, 404)
+                if purpose["category_id"] != pid:
+                    return self.send_json({"error": "用途模型只读，请修改所属分类的模型配置"}, 400)
                 if os.environ.get("MOCK_MODEL_CONFLICT") or body.get("revision") != purpose["revision"]:
                     return self.send_json({"error": "配置已在别处修改"}, 409)
                 binding = dict(purpose["override"])
+                if "provider" in body and body["provider"] != binding.get("provider"):
+                    binding.pop("model", None)
+                    binding.pop("effort", None)
                 for field in purpose["fields"]:
                     if field not in body: continue
                     if body[field] is None: binding.pop(field, None)

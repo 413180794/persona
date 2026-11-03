@@ -39,8 +39,14 @@ type ModelProvider struct {
 	Status   string        `json:"status,omitempty"`
 }
 
+type ModelUse struct {
+	Name string `json:"name"`
+}
+
 type ModelPurpose struct {
 	ID            string       `json:"id"`
+	CategoryID    string       `json:"category_id,omitempty"`
+	Uses          []ModelUse   `json:"uses,omitempty"`
 	Name          string       `json:"name"`
 	Group         string       `json:"group"`
 	Kind          string       `json:"kind"`
@@ -56,24 +62,38 @@ type ModelPurpose struct {
 	ProviderIDs   []string     `json:"provider_ids"`
 }
 
+var modelCategoryIDs = []string{"assistant", "agent.new", "kb", "inbox.triage"}
+
 var modelPurposes = []ModelPurpose{
-	{ID: "assistant", Name: "Jarvis 对话", Group: "对话与 Agent", Kind: "launcher"},
-	{ID: "inbox.agent", Name: "AI 分身", Group: "对话与 Agent", Kind: "launcher", Parent: "assistant"},
-	{ID: "lark.agent", Name: "飞书 /agent", Group: "对话与 Agent", Kind: "launcher", Parent: "assistant"},
-	{ID: "agent.new", Name: "新建 Agent", Group: "对话与 Agent", Kind: "launcher"},
-	{ID: "inbox.triage", Name: "分拣与摘要", Group: "收件箱", Kind: "api"},
-	{ID: "inbox.judge", Name: "AI 分身判断器", Group: "收件箱", Kind: "api"},
-	{ID: "inbox.draft", Name: "草拟回复", Group: "收件箱", Kind: "api"},
-	{ID: "translate", Name: "文本与邮件翻译", Group: "翻译", Kind: "api", Parent: "inbox.triage"},
-	{ID: "kb", Name: "知识处理默认模型", Group: "知识处理", Kind: "api", Parent: "inbox.triage"},
-	{ID: "kb.compress", Name: "会话压缩与打标", Group: "知识处理", Kind: "api", Parent: "kb"},
-	{ID: "kb.project", Name: "项目档案重写", Group: "知识处理", Kind: "api", Parent: "kb"},
-	{ID: "kb.dedupe", Name: "项目去重", Group: "知识处理", Kind: "api", Parent: "kb"},
-	{ID: "kb.items", Name: "事项提取与打标", Group: "知识处理", Kind: "api", Parent: "kb"},
-	{ID: "kb.moments", Name: "removed关联", Group: "知识处理", Kind: "api", Parent: "kb"},
-	{ID: "assistant.title", Name: "对话标题", Group: "辅助功能", Kind: "api"},
-	{ID: "agent.title", Name: "Agent 标签名", Group: "辅助功能", Kind: "api"},
-	{ID: "schedule", Name: "定时任务默认模型", Group: "定时任务", Kind: "launcher", Parent: "assistant"},
+	{ID: "assistant", Name: "主对话", Group: "默认模型", Kind: "launcher", Uses: []ModelUse{{Name: "与当前 persona 的直接对话"}}},
+	{ID: "agent.new", Name: "Agents", Group: "默认模型", Kind: "launcher", Uses: []ModelUse{{Name: "新建 Agent"}, {Name: "AI 分身执行"}, {Name: "飞书 /agent"}, {Name: "自动任务"}}},
+	{ID: "kb", Name: "信息处理", Group: "默认模型", Kind: "api", Uses: []ModelUse{{Name: "文本与邮件翻译"}, {Name: "草拟回复"}, {Name: "知识整理与会话压缩"}, {Name: "项目整理与事项提取"}, {Name: "对话标题与 Agent 标签名"}}},
+	{ID: "inbox.triage", Name: "信息筛选", Group: "默认模型", Kind: "api", Uses: []ModelUse{{Name: "收件箱分拣与摘要"}, {Name: "重要性判断"}, {Name: "判断是否需要回复或交给 Agent"}}},
+	{ID: "inbox.agent", Name: "AI 分身执行", Group: "Agents", Kind: "launcher", Parent: "agent.new"},
+	{ID: "lark.agent", Name: "飞书 /agent", Group: "Agents", Kind: "launcher", Parent: "agent.new"},
+	{ID: "inbox.judge", Name: "AI 分身判断器", Group: "信息筛选", Kind: "api", Parent: "inbox.triage"},
+	{ID: "inbox.draft", Name: "草拟回复", Group: "信息处理", Kind: "api", Parent: "kb"},
+	{ID: "translate", Name: "文本与邮件翻译", Group: "信息处理", Kind: "api", Parent: "kb"},
+	{ID: "kb.compress", Name: "会话压缩与打标", Group: "信息处理", Kind: "api", Parent: "kb"},
+	{ID: "kb.project", Name: "项目档案重写", Group: "信息处理", Kind: "api", Parent: "kb"},
+	{ID: "kb.dedupe", Name: "项目去重", Group: "信息处理", Kind: "api", Parent: "kb"},
+	{ID: "kb.items", Name: "事项提取与打标", Group: "信息处理", Kind: "api", Parent: "kb"},
+	{ID: "kb.moments", Name: "removed关联", Group: "信息处理", Kind: "api", Parent: "kb"},
+	{ID: "assistant.title", Name: "对话标题", Group: "信息处理", Kind: "api", Parent: "kb"},
+	{ID: "agent.title", Name: "Agent 标签名", Group: "信息处理", Kind: "api", Parent: "kb"},
+	{ID: "schedule", Name: "自动任务", Group: "Agents", Kind: "launcher", Parent: "agent.new"},
+}
+
+func modelCategoryID(id string) string {
+	if strings.HasPrefix(id, "task.") {
+		return "agent.new"
+	}
+	for _, p := range modelPurposes {
+		if p.ID == id && p.Parent != "" {
+			return p.Parent
+		}
+	}
+	return id
 }
 
 var errModelPurposeNotFound = errors.New("没有这个模型用途")
@@ -92,6 +112,7 @@ func (h *Hub) modelRecord(ctx context.Context, id string) (modelRecord, error) {
 func (h *Hub) modelPurposeDef(ctx context.Context, id string) (ModelPurpose, error) {
 	for _, p := range modelPurposes {
 		if p.ID == id {
+			p.CategoryID = modelCategoryID(id)
 			if p.Kind == "launcher" && p.ID != "agent.new" {
 				p.MachineID = h.assistantConfigLegacy(ctx).MachineID
 			}
@@ -115,7 +136,7 @@ func (h *Hub) modelPurposeDef(ctx context.Context, id string) (ModelPurpose, err
 		}
 		for _, t := range s.tasks {
 			if id == "task."+t.ID {
-				return ModelPurpose{ID: id, Name: t.label(), Group: "定时任务", Kind: "launcher", Parent: "schedule", MachineID: t.MachineID}, nil
+				return ModelPurpose{ID: id, CategoryID: "agent.new", Name: t.label(), Group: "Agents", Kind: "launcher", Parent: "agent.new", MachineID: t.MachineID}, nil
 			}
 		}
 	}
@@ -205,19 +226,6 @@ func (h *Hub) modelProviders(ctx context.Context) []ModelProvider {
 
 func (h *Hub) modelBaseline(ctx context.Context, p ModelPurpose) (ModelBinding, string, error) {
 	if p.Parent != "" {
-		// Explicit old per-use launchers/configurations remain baselines, not new immutable overrides.
-		if h.cfg != nil {
-			if p.ID == "inbox.agent" && h.cfg.Inbox.Agent.Launcher != "" {
-				return ModelBinding{Provider: "launcher." + h.cfg.Inbox.Agent.Launcher}, "hub 配置", nil
-			}
-			if p.ID == "lark.agent" && h.cfg.LarkAgent.Launcher != "" {
-				return ModelBinding{Provider: "launcher." + h.cfg.LarkAgent.Launcher}, "hub 配置", nil
-			}
-			if p.ID == "kb" && h.cfg.KB.AI != nil {
-				c := h.legacyModelConfig("legacy.kb")
-				return ModelBinding{Provider: "legacy.kb", Model: c.Model, Effort: c.ReasoningEffort}, "hub 配置", nil
-			}
-		}
 		b, err := h.resolveModel(ctx, p.Parent)
 		return b, p.Parent, err
 	}
@@ -226,8 +234,8 @@ func (h *Hub) modelBaseline(ctx context.Context, p ModelPurpose) (ModelBinding, 
 		if p.ID == "inbox.triage" {
 			provider = "legacy.triage"
 		}
-		if p.ID == "inbox.judge" {
-			provider = "legacy.judge"
+		if p.ID == "kb" {
+			provider = "legacy.kb"
 		}
 		c := h.legacyModelConfig(provider)
 		if c.BaseURL == "" {
@@ -300,19 +308,12 @@ func (h *Hub) resolveModel(ctx context.Context, id string) (ModelBinding, error)
 	if err != nil {
 		return ModelBinding{}, err
 	}
+	if p.CategoryID != "" && p.CategoryID != id {
+		return h.resolveModel(ctx, p.CategoryID)
+	}
 	base, _, err := h.modelBaseline(ctx, p)
 	if err != nil {
 		return base, err
-	}
-	if strings.HasPrefix(id, "task.") {
-		s := h.loadSchedule(ctx)
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		for _, t := range s.tasks {
-			if id == "task."+t.ID {
-				return mergeModel(base, ModelBinding{Provider: launcherProvider(t.Launcher), Model: t.Model, Effort: t.Effort}), nil
-			}
-		}
 	}
 	r, err := h.modelRecord(ctx, id)
 	if err != nil {
@@ -395,22 +396,18 @@ func (h *Hub) modelPurpose(ctx context.Context, id string, providers []ModelProv
 	if err != nil {
 		return p, err
 	}
-	r, err := h.modelRecord(ctx, id)
+	recordID := id
+	if p.CategoryID != "" {
+		recordID = p.CategoryID
+	}
+	r, err := h.modelRecord(ctx, recordID)
 	if err != nil {
 		return p, err
 	}
 	p.Override, p.Revision = r.Binding, r.Revision
-	if strings.HasPrefix(id, "task.") {
-		s := h.loadSchedule(ctx)
-		s.mu.Lock()
-		for _, t := range s.tasks {
-			if id == "task."+t.ID {
-				p.Override = ModelBinding{Provider: launcherProvider(t.Launcher), Model: t.Model, Effort: t.Effort}
-				p.Revision = t.ModelRevision
-				break
-			}
-		}
-		s.mu.Unlock()
+	readOnly := recordID != id
+	if readOnly {
+		p.Override = ModelBinding{}
 	}
 	p.Effective, err = h.resolveModel(ctx, id)
 	if err != nil {
@@ -485,6 +482,15 @@ func (h *Hub) modelPurpose(ctx context.Context, id string, providers []ModelProv
 				p.Status = "运行机器离线"
 			} else if info.Version != "" && !info.ModelConfiguration {
 				p.Status = "需要更新 node"
+			}
+		}
+	}
+	if readOnly {
+		p.Fields = []string{}
+		for _, category := range modelPurposes {
+			if category.ID == recordID {
+				p.InheritedFrom = category.Name
+				break
 			}
 		}
 	}
@@ -632,26 +638,7 @@ func (h *Hub) modelConfigRoutes(api *http.ServeMux) {
 		ctx := r.Context()
 		providers := h.modelProviders(ctx)
 		purposes := []ModelPurpose{}
-		ids := []string{}
-		for _, p := range modelPurposes {
-			ids = append(ids, p.ID)
-		}
-		s := h.loadSchedule(ctx)
-		s.mu.Lock()
-		for _, t := range s.tasks {
-			if !t.done() {
-				ids = append(ids, "task."+t.ID)
-			}
-		}
-		s.mu.Unlock()
-		if h.plugins != nil {
-			for _, p := range h.plugins.list() {
-				if p.Kind == "voice" {
-					ids = append(ids, "plugin."+p.ID)
-				}
-			}
-		}
-		for _, id := range ids {
+		for _, id := range modelCategoryIDs {
 			p, err := h.modelPurpose(ctx, id, providers)
 			if err != nil {
 				writeErr(w, 500, err)
@@ -700,6 +687,10 @@ func (h *Hub) modelConfigRoutes(api *http.ServeMux) {
 			writeErr(w, status, err)
 			return
 		}
+		if p.CategoryID != "" && p.CategoryID != id {
+			writeErr(w, http.StatusBadRequest, errors.New("用途模型只读，请修改所属分类的模型配置"))
+			return
+		}
 		if p.Revision != *in.Revision {
 			writeErr(w, 409, errModelConflict)
 			return
@@ -732,11 +723,7 @@ func (h *Hub) modelConfigRoutes(api *http.ServeMux) {
 				return
 			}
 		}
-		if strings.HasPrefix(id, "task.") {
-			err = h.saveTaskModel(ctx, strings.TrimPrefix(id, "task."), p.Revision, b)
-		} else {
-			err = h.saveModelRecord(ctx, id, p.Revision, b)
-		}
+		err = h.saveModelRecord(ctx, id, p.Revision, b)
 		if err != nil {
 			status := 500
 			if errors.Is(err, errModelConflict) {
@@ -747,32 +734,6 @@ func (h *Hub) modelConfigRoutes(api *http.ServeMux) {
 		}
 		detail(w, r)
 	})
-}
-
-func (h *Hub) saveTaskModel(ctx context.Context, id string, revision int64, b ModelBinding) error {
-	s := h.loadSchedule(ctx)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if !s.loaded || h.store == nil {
-		return errors.New("读不到任务数据库")
-	}
-	i := s.indexLocked(id)
-	if i < 0 {
-		return errors.New("没有这个任务")
-	}
-	if s.tasks[i].ModelRevision != revision {
-		return errModelConflict
-	}
-	old := s.tasks[i]
-	s.tasks[i].Launcher = strings.TrimPrefix(b.Provider, "launcher.")
-	s.tasks[i].Model = b.Model
-	s.tasks[i].Effort = b.Effort
-	s.tasks[i].ModelRevision++
-	if err := h.store.PutSetting(ctx, tasksKey, s.tasks); err != nil {
-		s.tasks[i] = old
-		return err
-	}
-	return nil
 }
 
 func (h *Hub) modelBindingFingerprint(ctx context.Context, b ModelBinding) (string, error) {

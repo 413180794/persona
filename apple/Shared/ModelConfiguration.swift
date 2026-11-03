@@ -9,8 +9,14 @@ nonisolated struct ModelBinding: Codable, Hashable, Sendable {
     var isEmpty: Bool { provider == nil && model == nil && effort == nil }
 }
 
+nonisolated struct ModelUse: Codable, Hashable, Sendable {
+    var name: String
+}
+
 nonisolated struct ModelPurpose: Codable, Hashable, Identifiable, Sendable {
     var id: String
+    var categoryID: String?
+    var uses: [ModelUse]?
     var name: String
     var group: String
     var kind: String
@@ -27,7 +33,8 @@ nonisolated struct ModelPurpose: Codable, Hashable, Identifiable, Sendable {
     var providerIDs: [String]?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, group, kind, parent, override, effective, revision, status, limit, fields
+        case id, name, group, kind, parent, override, effective, revision, status, limit, fields, uses
+        case categoryID = "category_id"
         case machineID = "machine_id", inheritedFrom = "inherited_from", providerIDs = "provider_ids"
     }
 

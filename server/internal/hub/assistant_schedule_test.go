@@ -193,7 +193,7 @@ func TestARunReschedulingItselfKeepsOneTask(t *testing.T) {
 	}
 	p := tasks[0]
 	if p.ID != "fu_1" || p.Repeat != repeatInterval || p.EveryMinutes != 30 || !p.Enabled || p.Prompt != prompt ||
-		p.PermissionMode != "acceptEdits" || p.Launcher != "claude-fast" {
+		p.PermissionMode != "acceptEdits" || p.Launcher != "" {
 		t.Fatalf("one repeating task with the user's settings and the prompt without the ⏰ line: %+v", p)
 	}
 	if got := taskPrompt(p, p.At, p.At, time.UTC, false, false, false); !strings.Contains(got, "不用再用 schedule_followup") ||

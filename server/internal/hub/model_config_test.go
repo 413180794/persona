@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -126,7 +127,7 @@ func TestModelConfigurationPatchIsSparseAndVersioned(t *testing.T) {
 	if b.Model != "original" || b.Effort != "high" {
 		t.Fatalf("restore inheritance: %+v", b)
 	}
-	r = modelRequest(mux, "PATCH", "inbox.judge", `{"revision":0,"model":"judge"}`)
+	r = modelRequest(mux, "PATCH", "kb", `{"revision":0,"model":"knowledge"}`)
 	if r.Code != 200 {
 		t.Fatal(r.Body.String())
 	}
@@ -151,13 +152,13 @@ func TestModelConfigurationPreservesLegacyBaselines(t *testing.T) {
 	h.cfg.Assistant.Launcher = "conversation"
 	h.cfg.LarkAgent.Launcher = "slash"
 	h.cfg.Inbox.Agent.Launcher = "delegate"
-	for id, want := range map[string]string{"inbox.triage": "triage", "inbox.judge": "judge", "translate": "triage", "kb.compress": "knowledge", "assistant.title": "base"} {
+	for id, want := range map[string]string{"inbox.triage": "triage", "inbox.judge": "triage", "translate": "knowledge", "kb.compress": "knowledge", "assistant.title": "knowledge"} {
 		b, err := h.resolveModel(ctx, id)
 		if err != nil || b.Model != want {
 			t.Errorf("%s: %+v %v", id, b, err)
 		}
 	}
-	for id, want := range map[string]string{"assistant": "conversation", "lark.agent": "slash", "inbox.agent": "delegate"} {
+	for id, want := range map[string]string{"assistant": "conversation", "lark.agent": "claude", "inbox.agent": "claude"} {
 		b, err := h.resolveModel(ctx, id)
 		if err != nil || b.Provider != launcherProvider(want) {
 			t.Errorf("%s: %+v %v", id, b, err)
@@ -167,8 +168,15 @@ func TestModelConfigurationPreservesLegacyBaselines(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, _ := h.resolveModel(ctx, "lark.agent")
+	if b.Provider != "launcher.claude" {
+		t.Fatal("deprecated use override still applied")
+	}
+	if err := h.saveModelRecord(ctx, "agent.new", 0, ModelBinding{Provider: "launcher.new"}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ = h.resolveModel(ctx, "lark.agent")
 	if b.Provider != "launcher.new" {
-		t.Fatal("old slash config overrode new selection")
+		t.Fatal("category selection did not reach the slash agent")
 	}
 }
 
@@ -194,11 +202,14 @@ func TestAllAPIModelPurposesReachTheSelectedModel(t *testing.T) {
 	if err := h.put(ctx, launchersManagedKey, []storedLauncher{provider}); err != nil {
 		t.Fatal(err)
 	}
+	revisions := map[string]int{}
 	for _, p := range modelPurposes {
 		if p.Kind != "api" {
 			continue
 		}
-		r := modelRequest(mux, "PATCH", p.ID, `{"revision":0,"provider":"launcher.direct","model":"`+p.ID+`"}`)
+		category := modelCategoryID(p.ID)
+		r := modelRequest(mux, "PATCH", category, fmt.Sprintf(`{"revision":%d,"provider":"launcher.direct","model":"%s"}`, revisions[category], p.ID))
+		revisions[category]++
 		if r.Code != 200 {
 			t.Fatalf("%s: %d %s", p.ID, r.Code, r.Body.String())
 		}
@@ -264,7 +275,7 @@ func TestTaskModelConfigurationSurvivesOrdinaryTaskSave(t *testing.T) {
 	s.mu.Lock()
 	s.tasks = []Task{{ID: "one", Title: "任务", Prompt: "x", Repeat: repeatInterval, EveryMinutes: 30, Enabled: true}}
 	s.mu.Unlock()
-	r := modelRequest(mux, "PATCH", "task.one", `{"revision":0,"provider":"launcher.claude","model":"exact","effort":"high"}`)
+	r := modelRequest(mux, "PATCH", "agent.new", `{"revision":0,"provider":"launcher.claude","model":"exact","effort":"high"}`)
 	if r.Code != 200 {
 		t.Fatal(r.Body.String())
 	}
@@ -343,10 +354,10 @@ func TestAPIModelPurposesFallBackToAKeyedConnection(t *testing.T) {
 			t.Fatalf("%s: sent %q, %v", id, model, err)
 		}
 	}
-	if p := purpose("inbox.draft"); p.InheritedFrom != modelAutoSource {
+	if p := purpose("kb"); p.InheritedFrom != modelAutoSource {
 		t.Fatalf("fallback not labelled: %+v", p)
 	}
-	if p := purpose("translate"); p.InheritedFrom != "inbox.triage" {
+	if p := purpose("translate"); p.InheritedFrom != "信息处理" {
 		t.Fatalf("child no longer inherits its parent: %+v", p)
 	}
 
@@ -363,14 +374,14 @@ func TestAPIModelPurposesFallBackToAKeyedConnection(t *testing.T) {
 	}
 
 	// An explicit choice wins over the fallback, and hub.json's "ai" still wins over it too.
-	if r := modelRequest(mux, "PATCH", "inbox.draft", `{"revision":0,"provider":"launcher.claude-gw","model":"picked"}`); r.Code != 200 {
+	if r := modelRequest(mux, "PATCH", "kb", `{"revision":0,"provider":"launcher.claude-gw","model":"picked"}`); r.Code != 200 {
 		t.Fatalf("%d %s", r.Code, r.Body.String())
 	}
 	if b, _ := h.resolveModel(ctx, "inbox.draft"); b.Provider != "launcher.claude-gw" || b.Model != "picked" {
 		t.Fatalf("explicit choice lost: %+v", b)
 	}
 	h.cfg.AI = ai.Config{BaseURL: srv.URL, APIKeyFile: "/tmp/test-key", Model: "hub-json"}
-	if b, _ := h.resolveModel(ctx, "assistant.title"); b.Provider != "legacy.ai" || b.Model != "hub-json" {
+	if b, _ := h.resolveModel(ctx, "inbox.triage"); b.Provider != "legacy.triage" || b.Model != "hub-json" {
 		t.Fatalf("hub.json baseline replaced: %+v", b)
 	}
 }

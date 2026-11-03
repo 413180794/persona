@@ -156,7 +156,7 @@ func TestATaskRunsInItsOwnConversation(t *testing.T) {
 // A conversation that is gone (Claude Code cleans transcripts up after 30 days), one on another launcher, or one the
 // user reset (下次开新对话) can't be continued: the run starts a new one and that becomes the task's.
 func TestATaskStartsANewConversationWhenItsOwnCannotGoOn(t *testing.T) {
-	h := newTestHub(t)
+	h, _ := modelTestHub(t)
 	n := newAssistantNode(t, h)
 	setTasks(h, Task{ID: "p", Title: "巡检", Prompt: "巡检", Repeat: repeatInterval, EveryMinutes: 30, Enabled: true})
 	first, _ := runNow(t, h, "p")
@@ -176,11 +176,9 @@ func TestATaskStartsANewConversationWhenItsOwnCannotGoOn(t *testing.T) {
 		t.Fatalf("a new conversation gets the whole message again: %q", text)
 	}
 
-	// The user picks Codex for it.
-	s := h.loadSchedule(context.Background())
-	s.mu.Lock()
-	s.tasks[s.indexLocked("p")].Launcher = "codex"
-	s.mu.Unlock()
+	if err := h.saveModelRecord(context.Background(), "agent.new", 0, ModelBinding{Provider: "launcher.codex"}); err != nil {
+		t.Fatal(err)
+	}
 	switched, _ := runNow(t, h, "p")
 	if switched.SessionID == gone.SessionID {
 		t.Fatal("a conversation started with claude isn't continued with codex")

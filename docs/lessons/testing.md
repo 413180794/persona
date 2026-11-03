@@ -41,6 +41,7 @@
 - 看不到截图（Read 打开 PNG 什么都没有、模型说「工具没有输出」）不是目录的问题（2026-10-31 试过 `$TMPDIR`、`/tmp`、仓库里的图都一样）：
   是模型网关把工具结果里的图片丢了，只留文字。先用一张已知内容的图分别放在用户消息和 tool_result 里直接请求网关，对比两边能不能读出来；
   界面改动必须真的看到截图再交付，看不到就先修这条链路。具体网关和修法见 `CLAUDE.local.md`。
+- 手动给 XCUITest 传环境变量时，命令行使用 `TEST_RUNNER_<变量名>`，测试进程读取去掉前缀后的变量名（2026-11-03，#697）。直接 `JARVIS_MOCK_HUB=... xcodebuild test` 没传进 runner，测试因缺 mock 地址跳过，但整体仍打印 `TEST SUCCEEDED`。验收必须确认用例实际执行、跳过数量和断言结果，不能只看退出码；修好环境后，旧界面的四类配置回归确实失败。
 - 手动跑 `xcodebuild test` / `build-for-testing` 前先 `eval "$(python3 scripts/jarvis_config.py env)"`：配置里的 `xcode` 只经它变成 `DEVELOPER_DIR`。
   直接跑用的是系统默认的 Xcode，SDK 旧一档时报 `toolbarVerticalEdge` 之类「no exact matches in call to initializer」（2026-10-31 被当成别人的代码坏了，白查一下午）。
 - 量界面的跳动 / 闪动要看画面：`simctl io recordVideo` 录下来、ffmpeg 拆帧，逐帧跟踪一条像素；只闪一帧的跳只有这样看得到。

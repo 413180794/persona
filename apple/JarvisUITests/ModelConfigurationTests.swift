@@ -27,16 +27,49 @@ final class ModelConfigurationTests: XCTestCase {
         for _ in 0..<4 where !purposes.isHittable { app.swipeUp() }
         XCTAssertTrue(providers.exists && purposes.exists)
         purposes.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["model-purpose-lark.agent"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["model-purpose-assistant"].waitForExistence(timeout: 10))
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.lifetime = .keepAlways
         add(attachment)
     }
 
+    @MainActor func testFourCategoriesAndReadOnlyScope() {
+        let app = launch(["-openModelConfiguration", "YES"])
+        XCTAssertTrue(app.descendants(matching: .any)["model-purpose-assistant"].waitForExistence(timeout: 10))
+        for id in ["assistant", "agent.new", "kb", "inbox.triage"] {
+            XCTAssertTrue(app.descendants(matching: .any)["model-purpose-\(id)"].exists)
+        }
+        XCTAssertEqual(app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "model-purpose-")).count, 4)
+        XCTAssertFalse(app.searchFields.firstMatch.exists)
+        let drafts = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "草拟回复"))
+        XCTAssertFalse(drafts.firstMatch.exists)
+        let scope = app.buttons["model-config-scope"]
+        XCTAssertTrue(scope.exists)
+        scope.tap()
+        XCTAssertTrue(drafts.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["草拟回复"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["model-purpose-inbox.draft"].exists)
+        addShot(app, "expanded")
+        scope.tap()
+        XCTAssertFalse(drafts.firstMatch.exists)
+        addShot(app, "collapsed")
+    }
+
+    @MainActor private func addShot(_ app: XCUIApplication, _ state: String) {
+        let screenshot = app.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        if let directory = ProcessInfo.processInfo.environment["JARVIS_MODEL_SHOTS"] {
+            try? screenshot.pngRepresentation.write(to: URL(fileURLWithPath: directory).appendingPathComponent("\(state).png"))
+        }
+    }
+
     @MainActor func testPurposeSaveUsesTheUnifiedConfigurationEndpoint() throws {
-        let app = launch(["-openModelConfiguration", "YES", "-openModelPurpose", "lark.agent"])
+        let app = launch(["-openModelConfiguration", "YES", "-openModelPurpose", "agent.new"])
         let field = app.textFields["model-config-model"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
+        addShot(app, "editor")
         field.tap()
         if let current = field.value as? String, !current.contains("留空"), !current.isEmpty {
             field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
@@ -49,7 +82,7 @@ final class ModelConfigurationTests: XCTestCase {
         let deadline = Date().addingTimeInterval(10)
         var model: String?
         repeat {
-            let data = try Data(contentsOf: URL(string: hub + "/api/v1/model-config/purposes/lark.agent")!)
+            let data = try Data(contentsOf: URL(string: hub + "/api/v1/model-config/purposes/agent.new")!)
             let result = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             model = ((result?["purpose"] as? [String: Any])?["override"] as? [String: Any])?["model"] as? String
             if model != requested { usleep(100_000) }

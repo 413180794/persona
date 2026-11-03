@@ -43,7 +43,7 @@ func TestInboxJudgeQueuesOrSkips(t *testing.T) {
 	it := actionItem("lark:f1:11", now)
 	h.inbox.items[it.ID] = it
 
-	h.judgeAI = fakeModel(t, `{"handle":true,"task":"查 1013 是否合入","reason":"可查"}`)
+	h.triageAI = fakeModel(t, `{"handle":true,"task":"查 1013 是否合入","reason":"可查"}`)
 	if got := h.inbox.toJudge(now.Add(-time.Hour)); len(got) != 1 {
 		t.Fatalf("toJudge = %d", len(got))
 	}
@@ -57,7 +57,7 @@ func TestInboxJudgeQueuesOrSkips(t *testing.T) {
 
 	// New messages: judged again, and the old work is replaced.
 	it.Last, it.TriagedAt = "13", "13"
-	h.judgeAI = fakeModel(t, "```json\n{\"handle\":false,\"reason\":\"只是通知\"}\n```")
+	h.triageAI = fakeModel(t, "```json\n{\"handle\":false,\"reason\":\"只是通知\"}\n```")
 	if !h.judgeOne(context.Background(), it) || it.Agent.State != AgentSkipped || it.Agent.Reason != "只是通知" {
 		t.Fatalf("agent = %+v", it.Agent)
 	}
@@ -80,7 +80,7 @@ func TestInboxJudgeModelFailureRetries(t *testing.T) {
 	h := agentHub(t)
 	it := actionItem("x", time.Now())
 	h.inbox.items[it.ID] = it
-	h.judgeAI = fakeModel(t, "no json here")
+	h.triageAI = fakeModel(t, "no json here")
 	if h.judgeOne(context.Background(), it) || it.JudgedAt != "" || it.Agent != nil {
 		t.Fatalf("judged on a failed call: %+v", it.Agent)
 	}
@@ -201,7 +201,7 @@ func TestInboxModelsLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := agentHub(t)
-	h.triageAI, h.judgeAI = ai.New(cfg), ai.New(cfg)
+	h.triageAI, h.triageAI = ai.New(cfg), ai.New(cfg)
 	it := &InboxItem{ID: "x", Kind: KindDM, Last: "12", UpdatedAt: time.Now(), Lark: &InboxLark{FeedID: "f1"},
 		Context: "张三（10:02）：你那边 codex 的改动合进 1013 分支了吗？今天下午要封版，合了的话把 MR 发我一下"}
 	h.inbox.items[it.ID] = it

@@ -463,7 +463,7 @@ func TestGoldenInboxJudge(t *testing.T) {
 	} {
 		h := agentHub(t)
 		model, calls := captureModel(t, `{"handle":false,"reason":"r"}`)
-		h.judgeAI = model
+		h.triageAI = model
 		h.cfg.Assistant.Owner, h.cfg.Inbox.Agent.Rules = c.owner, c.rules
 		it := *items[c.item]
 		h.inbox.items[it.ID] = &it

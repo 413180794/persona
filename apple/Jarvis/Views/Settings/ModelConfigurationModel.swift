@@ -28,11 +28,13 @@ import Observation
 
     var dirty: Bool { purpose.map { draft != $0.override } ?? false }
 
-    func filtered(_ query: String) -> [ModelPurpose] {
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return q.isEmpty ? purposes : purposes.filter {
-            [$0.name, $0.group, summary($0), $0.effective.model ?? ""].contains { $0.localizedCaseInsensitiveContains(q) }
-        }
+    var categories: [ModelPurpose] { purposes.filter { $0.uses != nil } }
+
+    func modelSummary(_ p: ModelPurpose) -> String {
+        let model = p.effective.model ?? p.effective.provider.flatMap { id in providers.first { $0.id == id }?.name }
+        let effort = p.effective.effort.map { value in SessionModes.effortLevels.first { $0.id == value }?.title ?? value }
+        let result = [model, effort].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        return result.isEmpty ? "未配置" : result
     }
 
     func summary(_ p: ModelPurpose) -> String {
@@ -64,7 +66,14 @@ import Observation
         do {
             guard let api = deps.api() else { throw APIError(status: 0, message: "还没连接 hub") }
             if let purposeID {
-                let result = try await api.modelPurpose(purposeID)
+                var result = try await api.modelPurpose(purposeID)
+                if let category = result.purpose.categoryID, category != result.purpose.id {
+                    result = try await api.modelPurpose(category)
+                }
+                guard result.purpose.kind == "plugin" || (result.purpose.categoryID == result.purpose.id && result.purpose.uses != nil) else {
+                    purpose = nil
+                    throw APIError(status: 0, message: "hub 尚不支持四类模型配置，请先更新服务器。")
+                }
                 purpose = result.purpose
                 providers = result.providers
                 draft = result.purpose.override
@@ -72,6 +81,10 @@ import Observation
                 let result = try await api.modelConfiguration()
                 purposes = result.purposes
                 providers = result.providers
+                if !purposes.isEmpty && categories.isEmpty {
+                    error = "hub 尚不支持四类模型配置，请先更新服务器。"
+                    return
+                }
             }
             error = nil
             conflict = false
@@ -81,7 +94,7 @@ import Observation
     }
 
     func save() async -> Bool {
-        guard !saving && !loading, let purpose else { return false }
+        guard !saving && !loading, let purpose, purpose.fields?.isEmpty != true else { return false }
         saving = true
         defer { saving = false }
         do {

@@ -54,14 +54,11 @@ class ModelConfigMockTests(unittest.TestCase):
     def test_catalog(self):
         catalog = self.request("/api/v1/model-config")
         ids = [p["id"] for p in catalog["purposes"]]
-        self.assertIn("lark.agent", ids)
-        self.assertIn("inbox.triage", ids)
-        self.assertIn("kb.compress", ids)
-        self.assertTrue(any(p.startswith("task.") for p in ids))
-        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(ids, ["assistant", "agent.new", "kb", "inbox.triage"])
+        self.assertTrue(all(p["category_id"] == p["id"] and p["uses"] for p in catalog["purposes"]))
 
     def test_save_conflict_and_restore(self):
-        path = "/api/v1/model-config/purposes/lark.agent"
+        path = "/api/v1/model-config/purposes/agent.new"
         original = self.request(path)["purpose"]
         saved = self.request(path, {"revision": original["revision"], "model": "model-mock-test"})["purpose"]
         self.assertEqual(saved["effective"]["model"], "model-mock-test")
@@ -72,6 +69,22 @@ class ModelConfigMockTests(unittest.TestCase):
         restored = self.request(path, {"revision": saved["revision"], "model": None})["purpose"]
         self.assertNotIn("model", restored["override"])
         self.assertEqual(restored["effective"]["model"], "model-chat")
+
+    def test_uses_follow_category_and_cannot_be_edited(self):
+        category_path = "/api/v1/model-config/purposes/kb"
+        original = self.request(category_path)["purpose"]
+        self.request(category_path, {"revision": original["revision"], "model": "processing-model"})
+        for pid in ("translate", "inbox.draft", "kb.compress", "assistant.title"):
+            path = "/api/v1/model-config/purposes/" + pid
+            purpose = self.request(path)["purpose"]
+            self.assertEqual(purpose["category_id"], "kb")
+            self.assertEqual(purpose["effective"]["model"], "processing-model")
+            self.assertEqual(purpose["override"], {})
+            self.assertEqual(purpose["fields"], [])
+            with self.assertRaises(HTTPError) as error:
+                self.request(path, {"revision": purpose["revision"], "model": "individual"})
+            self.assertEqual(error.exception.code, 400)
+        self.assertEqual(len(self.request("/api/v1/model-config")["purposes"]), 4)
 
     def test_unknown_purpose_is_not_created(self):
         for body in (None, {"revision": 0, "model": "x"}):

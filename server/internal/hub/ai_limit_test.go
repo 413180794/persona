@@ -126,7 +126,7 @@ func TestInboxJudgePutOffQuietly(t *testing.T) {
 	h := agentHub(t)
 	var logs bytes.Buffer
 	h.logger = log.New(&logs, "", 0)
-	h.judgeAI = ai.New(ai.Config{BaseURL: srv.URL, APIKey: "k", Model: "m"})
+	h.triageAI = ai.New(ai.Config{BaseURL: srv.URL, APIKey: "k", Model: "m"})
 	for _, id := range []string{"x", "y"} {
 		it := actionItem(id, time.Now())
 		h.inbox.items[id] = it
