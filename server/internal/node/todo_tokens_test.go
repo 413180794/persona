@@ -391,6 +391,8 @@ func TestNodeReconcileDoesNotClearTokensBeforeFirstSync(t *testing.T) {
 }
 
 func TestNodeReconcileSkipsNonHerdrPanes(t *testing.T) {
+	// The host lists a pane whose id names another host (Orca), with a stale persona_ mark on it: reconciling reaches
+	// the host-kind check for it, and nothing is written to it through the herdr reporter (#948).
 	fh := &fakeMetadataHost{
 		agents: []host.Agent{
 			{
@@ -400,6 +402,10 @@ func TestNodeReconcileSkipsNonHerdrPanes(t *testing.T) {
 					Value: "s_herdr",
 				},
 				Tokens: map[string]string{},
+			},
+			{
+				PaneID: "orca:t1:p1",
+				Tokens: map[string]string{"persona_todo": "stale"},
 			},
 		},
 	}
@@ -430,10 +436,51 @@ func TestNodeReconcileSkipsNonHerdrPanes(t *testing.T) {
 
 	fh.mu.Lock()
 	defer fh.mu.Unlock()
+	herdrWritten := false
 	for _, call := range fh.reportCalls {
 		if call["pane"] == "orca:t1:p1" || call["pane"] == "t1:p1" {
 			t.Fatalf("herdr reporter should not receive report for orca pane: %+v", call)
 		}
+		if call["pane"] == "w1:p1" {
+			herdrWritten = true
+		}
+	}
+	if !herdrWritten {
+		t.Fatalf("the herdr pane's marks were not written: %+v", fh.reportCalls)
+	}
+}
+
+// TestNodeReconcileSameSessionInTwoPanes: a session open in two panes (resumed in a second one) keeps its marks on
+// the pane n.agents has for it; the other pane, which the host reports with the same session id, gets none (#948).
+func TestNodeReconcileSameSessionInTwoPanes(t *testing.T) {
+	fh := &fakeMetadataHost{
+		agents: []host.Agent{
+			{PaneID: "w1:p1", AgentSession: &host.AgentSession{Kind: "id", Value: "s1"}, Tokens: map[string]string{}},
+			{PaneID: "w1:p2", AgentSession: &host.AgentSession{Kind: "id", Value: "s1"}, Tokens: map[string]string{}},
+		},
+	}
+	n := &Node{
+		hosts:  host.NewRegistry(fh),
+		agents: map[string]host.Agent{"s1": {PaneID: "w1:p1"}},
+	}
+	expected := map[string]map[string]string{
+		"s1": {"persona_todo": "todo_a", "persona_todo_ref": "todo_a@m1/s1"},
+	}
+	if err := n.syncTodoTokens(context.Background(), expected); err != nil {
+		t.Fatalf("syncTodoTokens: %v", err)
+	}
+
+	fh.mu.Lock()
+	defer fh.mu.Unlock()
+	var panes []any
+	for _, call := range fh.reportCalls {
+		panes = append(panes, call["pane"])
+	}
+	if len(panes) != 1 || panes[0] != "w1:p1" {
+		t.Fatalf("marks written to %v, want only w1:p1", panes)
+	}
+	if got := fh.agents[1].Tokens["persona_todo"]; got != "" {
+		t.Fatalf("second pane got persona_todo %q", got)
 	}
 }
 

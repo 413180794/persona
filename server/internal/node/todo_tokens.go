@@ -88,11 +88,16 @@ func (n *Node) reconcileTodoTokens(ctx context.Context) error {
 	}
 	n.mu.Unlock()
 
-	// 2. Fall back to host-reported AgentSession only for panes n.agents does not cover:
+	// 2. Fall back to host-reported AgentSession only for panes n.agents does not cover, and only for a session that
+	// has no pane yet: the same session open in two panes (`claude --resume` it in a second one) keeps its marks on the
+	// pane it already has, instead of moving them to the other (#948).
 	for _, a := range agents {
 		if a.PaneID != "" && livePaneIDs[a.PaneID] {
 			if _, covered := paneToLiveSession[a.PaneID]; !covered {
 				if a.AgentSession != nil && a.AgentSession.Kind == "id" && a.AgentSession.Value != "" {
+					if _, claimed := sessionToPane[a.AgentSession.Value]; claimed {
+						continue
+					}
 					paneToLiveSession[a.PaneID] = a.AgentSession.Value
 					sessionToPane[a.AgentSession.Value] = a.PaneID
 				}
@@ -128,7 +133,9 @@ func (n *Node) reconcileTodoTokens(ctx context.Context) error {
 	for paneID := range panesToInspect {
 		paneRef := n.hosts.Ref(paneID)
 		if paneRef.Kind != h.Kind() {
-			continue // skip panes belonging to other hosts (#762 F4)
+			// Defensive: the panes come from h's own Agents, so they are h's; a pane whose id names another host (an
+			// Orca pane) is never written through h's reporter (#762 F4, #948).
+			continue
 		}
 
 		live := livePanes[paneID]
