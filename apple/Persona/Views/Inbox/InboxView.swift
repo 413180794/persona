@@ -680,8 +680,11 @@ struct InboxDestinations: ViewModifier {
     // own stack, where the inbox page's handler does not reach.
     func body(content: Content) -> some View {
         content
+            // Keyed by the item, as on the Mac: in the split the list's links replace the detail column's page, and an
+            // unkeyed one is updated in place with the last item's state — a Feishu chat kept the chat before's messages
+            // and draft under the new chat's title (#885).
             .navigationDestination(for: InboxItem.self) {
-                InboxDetailView(item: $0, accounts: accounts).splitDetailPage().feishuHandlesLinks(feishuOpen)
+                InboxDetailView(item: $0, accounts: accounts).id($0.id).splitDetailPage().feishuHandlesLinks(feishuOpen)
             }
             .navigationDestination(for: FeishuRoute.self) { FeishuRouteView(route: $0).splitDetailPage().feishuHandlesLinks(feishuOpen) }
     }

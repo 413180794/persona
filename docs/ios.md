@@ -360,7 +360,8 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
 - 左栏顶到屏幕顶：分栏的左栏从状态栏下面开始画、自己画不进状态栏，那一条原来是窗口的白色，看起来列表「没顶到头」（2026-10-31）。
   `SidebarTopFill` 在整个分栏后面按左栏的宽度把那一条涂成左栏的颜色（玻璃风格是系统左栏色 `Theme.systemSidebar`，其他风格是页面底色）；
   左栏收起时不涂（看分栏的 `columnVisibility`，收起后左栏最后的位置还会留着上报）。`IPadLayoutTests.testSidebarReachesTheTop` 按像素查。
-- 测试：`IPadLayoutTests`（只在 iPad 模拟器上跑：竖屏 / 横屏都是原生全屏、左栏够宽、对话在右栏打开）。XCUITest 自己在横屏下截的图是转过的，
+- 测试：`IPadLayoutTests`（只在 iPad 模拟器上跑：竖屏 / 横屏都是原生全屏、左栏够宽、对话在右栏打开）；`InboxSplitTests`（分栏时跑：
+  收件箱从一个飞书会话点到另一个，右栏是新会话自己的消息和草稿，再点回来草稿还在）。XCUITest 自己在横屏下截的图是转过的，
   看横屏要 `TEST_RUNNER_JARVIS_HOLD=<秒>` 停住、用 `simctl io screenshot` 拍。
 
 ## 思考强度和权限模式

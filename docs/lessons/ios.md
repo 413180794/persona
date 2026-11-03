@@ -150,6 +150,10 @@
   页面是一个黄色 ⚠️：要按具体类型 append（`SettingsView.openDebugPage`）。
 - `NavigationSplitView` 右栏里推出的页面，是用左栏登记的 `navigationDestination` 在左栏的环境里建的：给右栏页面的环境值
   要挂在整个分栏视图上，挂在右栏的 NavigationStack 上拿不到（`SplitNavigation`）。
+- 分栏里左栏点另一条，换的是右栏那一页的参数，同一种页面不重建（2026-11-03，#885）：`@State`、`.task`、订阅都还是上一条的，
+  只有直接读参数的标题、占位字跟着变。收件箱从一个飞书会话点到另一个，标题换了，中间还是上一个会话的消息，框里没发的草稿也留着。
+  左栏打开的页面要按条目挂 `.id`（`InboxDetailView(…).id(item.id)`，Agents 的 `ChatView(key:).id(key)`、Mac 收件箱早就这样）；
+  只给 `.task` 加 `id:` 不够，草稿、引用、已读位置这些 `@State` 不会重置。`InboxSplitTests` 覆盖（iPad、iPhone Duo 打开时跑）。
 - iPhone Duo（`docs/ios.md`「iPhone Duo」）：按宽度（size class）分布局，不看机型；模拟器开合只能在 Device Hub 里切，
   截图要 `--display=1/3` 指定屏幕，否则可能拍到熄灭的那块（全黑）。
 - 推出的页面别用 `.toolbar(.hidden, for: .tabBar)`（`.toolbarVisibility` 一样）藏 tab 栏：它在 push 的第一帧就把 tab 栏拿掉，
