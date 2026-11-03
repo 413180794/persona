@@ -1138,7 +1138,9 @@ struct ChatView: View {
                                            newest: scratch.atNewest, follows: followsEnd,
                                            offset: Int(scratch.scrollY.rounded()), content: Int(scratch.contentHeight.rounded()),
                                            frozen: frozen != nil, ids: order.suffix(4).map { String($0.suffix(16)) },
-                                           x: Int(scratch.offsetX.rounded())))
+                                           x: Int(scratch.offsetX.rounded()),
+                                           atBottom: atBottom, arrow: !atBottom && settled, gap: Int(scratch.newestGap.rounded()),
+                                           dragging: scratch.userDragging, held: pin.holding))
         }
     }
 
@@ -3859,5 +3861,12 @@ nonisolated struct ChatRowsShown: Encodable, Equatable {
     var ids: [String]
     /// The list's horizontal offset (-16 at rest: the side margins).
     var x: Int
+    /// The end sentinel is on screen; ↓ 回到最新 shows; how far the list is from its newest end (pt); a finger is on it;
+    /// the pin holds a header.
+    var atBottom: Bool
+    var arrow: Bool
+    var gap: Int
+    var dragging: Bool
+    var held: Bool
 }
 #endif

@@ -297,3 +297,79 @@ App 端 `apple/Persona/App/ScreenProbe.swift`，DEBUG，`-probes YES` 才挂：
 - `differences(shown:truth:deferrable:)`：逐项比，`deferrable` 里的字段不算。
 
 测试：`ScreenTruthTests`（`docs/testing.md`「真实性与及时性」）。
+
+## 回到最新：对话页的「跟随最新处」（2026-11-04，梳理，未改行为）
+
+Agents 对话和 Jarvis 对话是同一个 `ChatView`：列表倒着放（最新的在偏移 0），右下角的 ↓（「回到最新」）和「跟随最新处」都在这里。
+下面是现状、实测出的问题，和一个对照 Vercel `useScrollToBottom` 的单一真相方案。复现用 `ScrollToBottomTests`（每种情况记下
+`probe.chat-rows` 的时间线：按钮、跟随、扣住、哨兵、离最新处多远、手指、pin）。
+
+### 现在有几份真相
+
+| 状态 | 是什么 | 谁写 |
+| --- | --- | --- |
+| `atBottom` | 最新那一端 1 pt 的哨兵在屏幕上（`onScrollVisibilityChange`，阈值 0.01） | 哨兵；`landed()` 在离最新处超过一屏时强制 false（#597） |
+| `scratch.atNewest` / `newestGap` | 滚动几何：偏移是否在最新处、差多少 pt | `onScrollGeometryChange` |
+| `followsEnd` | 意图：新内容来了要不要带着列表走 | 见下表，十来处 |
+| `frozen` | 扣住：往上读时，快照之后的条目、流式文字、待发气泡都不进列表 | `followsEnd` 变 false 时拍快照，变 true 时清掉；`store.resets` 清掉 |
+| `settled` | 进对话后 0.4 s 内不出 ↓（免得落地时闪） | `settleAtEnd`；切页、换会话时重置 |
+| `userScrolled` / `scratch.userDragging` | 用户拖过 / 手指正按着或惯性中 | 滚动阶段 |
+| `scratch.landingInFlight`、`entry` | 正在落到「上次读到的地方」或「最新回答的开头」 | 进对话 |
+| `pin.holding` | 点开 / 折叠的标题正被保持在手指下（1.5 s） | `ChatPin` |
+
+↓ 只看 `!atBottom && settled`，不看 `followsEnd`；扣不扣看 `followsEnd`。两件事由两份不同的状态决定。
+（Agents 列表的 `Hold` 不管对话页：对话页的「用户正在操作」是上表这些。）
+
+### `followsEnd` 的迁移
+
+| 从 | 到 | 触发 |
+| --- | --- | --- |
+| 跟随 | 不跟随 | 手指拖动（`tracking` / `interacting`，哪怕 1 pt）；落到保存的位置（`landEntry`）；点开或折叠工作行（`changeWork`，#862） |
+| 不跟随 | 跟随 | 哨兵出现且 pin 没在保持；新内容来时 `atBottom` 且几何也在最新处、没拖、没在落地、pin 没保持（`contentArrived`）；滚动停下且在最底（`userScrolled`）；落地结束时在最底（`landed`）；点 ↓（`jumpToEnd`）；发出消息（`store.pending` 变多，或自己的消息到了 transcript 且发出后没滚过）；看子 Agent；从文件 / Git 切回对话；换会话；折叠后内容一屏放得下（#862） |
+| 跟随时新内容到 | — | `contentArrived` → `scrollToEnd()`（已在最新处就不动；`ChatStreamFollow` 每 40 个字一次） |
+| 键盘弹起 / 收起 | — | 列表变矮，偏移跟着变：`scrolled(by:)` 按高度变化跳过，不算用户滚动；倒着的列表自己留在最新处 |
+
+### 实测（两种布局，mock；`ScrollToBottomTests`）
+
+| # | 情况 | 结果 |
+| --- | --- | --- |
+| 1 | 流式输出时手指往上拖 40 pt 松开 | **不对**：立刻不跟随，`frozen`，↓ 出现，离最新处 34 pt。之后流式文字和新步骤全被扣住，直到手动拖回精确的最底或点 ↓。两种布局一样 |
+| 2 | 往上翻几屏后往下甩 | 甩停在离最新处 1332 pt，↓ 在、不跟随：对。没测到「甩到快到底」：mock 的历史太长，一甩到不了 |
+| 3 | 在最新处点开运行中的工作行，再折叠 | 点开：标题保持在手指下，步骤把最新处推出 1820 pt，↓ 出现、不跟随、**扣住**——这一轮后面的步骤不再进列表，打开的工作行停在点开那一刻（**不对**：正在看的就是这一轮）。折叠：回到最新处、跟随，对 |
+| 4 | 键盘弹起 / 收起 | 新外壳：一直在最新处、跟随，↓ 不出不闪：对。旧布局 + 液态玻璃：输入框不在无障碍树里（#1006），没测到 |
+| 5 | 往上读时发消息 | **没测到**：往上翻之后测试在 Agents 对话里找不到输入框（两种布局），没查原因 |
+| 6 | 往上读时推送进来，再点 ↓ | 读的时候 ↓ 一直在、一直不跟随、条目在后台进来但被扣住：对。点 ↓ 0.11 s 后回到最新、跟随、↓ 消失：对 |
+| 7 | 退出对话再进来 | **没测到**：返回列表后测试找不到能点的 Agent 行（选择器问题），跳过 |
+| 8 | 切后台 6 s 再回来 | 回来后在最新处、跟随，↓ 不出、不闪：对 |
+| 9 | 一屏都不满（新对话），手指拖一下 | ↓ 从不出现，跟随不断：对（拖不动，滚动阶段不进 `tracking`） |
+| 10 | 好几张待处理卡片（#939） | 静止时不出 ↓、跟随：对。那个对话只有两条，没法往上翻，「↓ 被卡片挡住」没测到 |
+
+### 问题清单
+
+1. **没有「接近最底」的容差**：只要哨兵（1 pt）离开屏幕就算不在最底，手指一碰（`tracking`）就不跟随并扣住。往上拖几十 pt 看一眼，流式回答就停了，
+   只能精确拖回最底或点 ↓。Vercel 用 100 pt 的容差：在容差内算在最底，内容变长时照样带着走。（实测 #1）
+2. **↓ 和「跟随」是两份真相**：↓ 看哨兵，扣不扣看 `followsEnd`。正常情况下两者一致，但只靠一处又一处补丁对齐（`landed` 的 #597、`contentArrived` 的 #754、
+   哨兵在 pin 保持期间不算）。哨兵在懒列表里会被回收，可见性也比 pin 直接改的偏移晚一帧。
+3. **点开运行中的工作行会冻住它**：点开是「用户接过列表」，不跟随就扣住，于是正在看的这一轮不再长新步骤。点开的人恰恰想看新步骤。（实测 #3）
+   改法候选：扣住只扣「最新处之后插进来、会把正在读的东西推走」的条目；或者点开工作行只停止跟随、不扣住（pin 已经负责标题不动）。
+4. **「用户在滚」只有手指那一刻**：`tracking` 一来就定成不跟随，没有 Vercel 那种「滚动结束后再判」：轻碰一下没真滚也算接过。可以改成在滚动停下时，
+   按停下的位置（在不在容差内）决定跟不跟随。
+5. **几处「回到跟随」的条件都在各自判断**（上表右列十来处）：新加一处很容易漏一个（`pin.holding`、`landingInFlight`、`userDragging`）。
+
+### 方案：一份真相 + 一个函数
+
+照 Vercel 的思路，但用我们已有的手势信息区分用户滚动和程序滚动（Vercel 分不清这两种）：
+
+- **唯一真相 `follow: Follow`**（`@State`，同时放一份在 `scratch` 给回调同步读，免得闭包读到旧值，同 Vercel 的 state + ref）：
+  `.following`（带着走）、`.reading(since: Date)`（用户在看别处，扣住）、`.landing`（落地中）、`.holding`（pin 保持标题中）。
+- **在不在最底由几何决定**：`nearNewest = newestGap ≤ 100 pt`（容差同 Vercel）。哨兵只作为几何未就绪时的兜底，不再单独驱动 ↓。
+- **迁移只在三个入口**：
+  - 用户滚动结束（滚动阶段从 `tracking`/`decelerating` 回到 `idle`，即我们的「手指」信号，Vercel 没有）：`nearNewest` → `.following`，否则 → `.reading`；
+    手指按着时不迁移（等松手），不管内容怎么变；
+  - 程序动作：点 ↓、发消息、换会话 / 切回对话 → `.following`；落地 → `.landing` → 结束时按 `nearNewest`；点开 / 折叠工作行 → `.holding` → 结束时按 `nearNewest`；
+  - 内容变长（新条目、流式文字）：只有 `.following` 才 `scrollToEnd`；`.holding` 交给 pin。
+- **派生**：↓ = `follow != .following && !nearNewest && settled`；扣住 = `follow == .reading`（`.holding` 不扣：问题 3）。
+- 放在一个小的纯类型里（`ChatFollow`），所有迁移是它的方法，单元测试覆盖上面每一条；`ChatView` 只把手势、几何、程序动作报给它。
+
+验收：`ScrollToBottomTests` 从记录改成断言（每种情况的期望写在上面的表里），两种布局 × 两种风格；现有 `ChatFollowTests`、`RunningChatTests`、
+`ScreenTruthTests` 不变红。
