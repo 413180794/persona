@@ -53,7 +53,7 @@ nonisolated struct TaskPlan: Codable, Hashable, Identifiable, Sendable {
 /// An item the hub inserted into an assistant conversation; drawn among the transcript's lines by `at`.
 nonisolated struct FeedItem: Codable, Hashable, Identifiable, Sendable {
     enum Kind: String, Codable, Sendable {
-        case plan, task, answered, receipt, routed, unknown
+        case plan, task, answered, receipt, routed, today, unknown
         init(from decoder: Decoder) throws {
             self = Kind(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
         }
@@ -86,10 +86,36 @@ nonisolated struct FeedItem: Codable, Hashable, Identifiable, Sendable {
     /// `routed`: what the user said straight to the task.
     var text: String? { string("text") }
 
+    /// `today`: the day's card (TodayBody).
+    var today: TodayBody? {
+        guard kind == .today, let body, let data = try? JSON.encoder.encode(body) else { return nil }
+        return try? JSON.decoder.decode(TodayBody.self, from: data)
+    }
+
     /// "PR #901" from a pull request URL.
     var prLabel: String? {
         guard let pr, let n = pr.split(separator: "/").last, Int(n) != nil else { return nil }
         return "PR #\(n)"
+    }
+}
+
+/// The 今天 card's content (docs/protocol.md「任务和对话动态」, kind `today`), built by the hub.
+nonisolated struct TodayBody: Codable, Hashable, Sendable {
+    nonisolated struct TaskRef: Codable, Hashable, Sendable { var id: String; var title: String }
+    nonisolated struct Meeting: Codable, Hashable, Sendable { var start: Date; var end: Date; var title: String }
+    nonisolated struct Chat: Codable, Hashable, Sendable { var name: String; var unread: Int?; var preview: String? }
+
+    var date: String
+    var done: [TaskRef]?
+    var waiting: [TaskRef]?
+    var working: Int?
+    var meetings: [Meeting]?
+    var atMe: [Chat]?
+    var unread: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case date, done, waiting, working, meetings, unread
+        case atMe = "at_me"
     }
 }
 
@@ -230,6 +256,27 @@ nonisolated extension APIClient {
 
     func dismissPlan(_ id: String) async throws -> TaskPlan {
         try await post("/api/v1/task-plans/\(id)/dismiss", as: PlanResponse.self).plan
+    }
+
+    /// The conversation's 今天 card for the user's day (made on the first call of the day).
+    func today(conversation: String) async throws -> FeedItem {
+        let id = conversation.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? conversation
+        return try await post("/api/v1/assistant/conversations/\(id)/today", as: ItemResponse.self).item
+    }
+
+    struct TrustKind: Decodable, Hashable, Sendable {
+        var key: String
+        var machine: String
+        var cwd: String
+        var readonly: Bool
+    }
+    private struct TrustResponse: Decodable { var kinds: [TrustKind] }
+
+    /// The kinds of tasks remembered with 这类以后直接开.
+    func taskTrust() async throws -> [TrustKind] { try await get("/api/v1/task-trust", as: TrustResponse.self).kinds }
+
+    func forgetTrust(_ key: String) async throws {
+        _ = try await request("DELETE", "/api/v1/task-trust", query: ["key": key])
     }
 
     /// Sends text straight to a task's agent; the answer is the conversation's new `routed` item.

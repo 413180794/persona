@@ -20,12 +20,16 @@ final class TasksStore {
     var showBoard = false
     /// A task picked on the board, opened when the board has gone down.
     var openAfterBoard: String?
+    /// Quick results (QuickResult.callID) the user took back with 撤销.
+    private(set) var undone: Set<String> = []
     /// Plans being started or dismissed (their card shows it and takes no second tap).
     private(set) var busyPlans: Set<String> = []
     var error: String?
 
     @ObservationIgnored private var reloadingTodos: Task<Void, Never>?
     @ObservationIgnored private var loading: [String: Task<Void, Never>] = [:]
+    /// Conversation id → the day its 今天 card was asked for (once a day).
+    @ObservationIgnored private var todayAsked: [String: String] = [:]
 
     private init() {}
 
@@ -141,7 +145,31 @@ final class TasksStore {
         return sorted.map(\.todo)
     }
 
+    /// The main conversation's 今天 card, once a day: the hub makes it on the first ask and answers it after that.
+    func loadToday(_ conversation: String) {
+        let day = Date.now.formatted(.iso8601.year().month().day())
+        guard todayAsked[conversation] != day, let api = AppModel.shared.api else { return }
+        todayAsked[conversation] = day
+        Task {
+            if let item = try? await api.today(conversation: conversation) { received(item) } else { todayAsked[conversation] = nil }
+        }
+    }
+
     // MARK: Actions
+
+    /// 撤销 on a quick result: the reminder or event comes off the phone.
+    func undo(_ result: QuickResult) async {
+        do {
+            switch result.kind {
+            case .reminder: _ = try RemindersTool.remove(id: result.itemID)
+            case .event: _ = try CalendarTool.remove(id: result.itemID)
+            }
+            undone.insert(result.callID)
+            Haptics.success()
+        } catch {
+            AppModel.shared.toast = Toast("没撤销成功：\(error.localizedDescription)", style: .error)
+        }
+    }
 
     func start(_ plan: TaskPlan, edits: [PlanTask]? = nil, remember: Bool = false) async {
         guard let api = AppModel.shared.api, !busyPlans.contains(plan.id) else { return }

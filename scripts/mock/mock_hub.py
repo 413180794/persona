@@ -1268,6 +1268,8 @@ if MOCK_TASKS:
                    "/Users/me/code/weather", 44, "plan_mock_1"),
         _task_todo("todo_task_release", "整理发布说明", "把这周合并的 PR 整理成发布说明，只读。", "macbook", RELEASE,
                    "/Users/me/code/weather", 30, "plan_mock_2"),
+        _task_todo("todo_task_blog", "博客迁移到 Astro", "把博客从 Hexo 迁到 Astro。", "studio", BLOG,
+                   "/Users/me/code/blog", 60 * 26, "plan_mock_0"),
     ]
     TODOS = copy.deepcopy(TODOS_INIT)
 
@@ -1282,6 +1284,9 @@ if MOCK_TASKS:
         return t
 
     TASK_PLANS.update({
+        "plan_mock_0": _plan("plan_mock_0", "started", 60 * 26, [
+            dict(_ptask("博客迁移到 Astro", False, "博客在 Mac Studio 上。", "todo_task_blog"), machine="studio",
+                 cwd="/Users/me/code/blog")]),
         "plan_mock_1": _plan("plan_mock_1", "started", 44, [
             _ptask("修小组件横屏崩溃", False, "weather 这三天都在 MacBook 上开发；iOS 的修复你上次也用 Opus。", "todo_task_widget"),
             _ptask("补齐网络层的单元测试", False, "同一个仓库另开一个 Agent，和上一个互不打扰。", "todo_task_tests")]),
@@ -1294,7 +1299,23 @@ if MOCK_TASKS:
     def _feed(fid, minutes, kind, ref, body=None):
         return {"id": fid, "conversation": ASK1, "at": ago(minutes=minutes), "kind": kind, "ref": ref, "body": body or {}}
 
+    _local = datetime.now().astimezone()
+    _midnight = _local.replace(hour=0, minute=0, second=0, microsecond=0)
+    _today_min = (NOW - _midnight.astimezone(timezone.utc)).total_seconds() / 60
+    TASK_TRUST = [{"key": "macbook|/Users/me/code/weather|read", "machine": "macbook", "cwd": "/Users/me/code/weather", "readonly": True},
+                  {"key": "studio|/Users/me/code/blog|edit", "machine": "studio", "cwd": "/Users/me/code/blog", "readonly": False}]
     TASK_FEED[ASK1] = [
+        _feed("feed_m0a", 60 * 26 - 0.5, "plan", "plan_mock_0"),
+        _feed("feed_m0b", 60 * 26 - 0.6, "task", "todo_task_blog"),
+        _feed("feed_today", _today_min, "today", _midnight.strftime("%Y-%m-%d"), {
+            "date": _midnight.strftime("%Y-%m-%d"),
+            "done": [{"id": "todo_task_blog", "title": "博客迁移到 Astro"}],
+            "waiting": [{"id": "todo_task_tests", "title": "补齐网络层的单元测试"}],
+            "working": 1,
+            "meetings": [{"start": later(hours=2), "end": later(hours=3), "title": "设计评审"},
+                         {"start": later(hours=4), "end": later(hours=4.5), "title": "和李雷 1:1"}],
+            "at_me": [{"name": "发布群", "unread": 3, "preview": "韩梅梅：周五的发布能赶上吗？"}],
+            "unread": 4}),
         _feed("feed_m1", 43.5, "plan", "plan_mock_1"),
         _feed("feed_m2", 43.4, "task", "todo_task_widget"),
         _feed("feed_m3", 43.3, "task", "todo_task_tests"),
@@ -1309,14 +1330,19 @@ if MOCK_TASKS:
         _feed("feed_m9", 1.8, "plan", "plan_mock_3"),
     ]
     ITEMS[ASK1] = (
-        [it("user", "text", 45, text="小组件横屏会崩，帮我修一下；网络层的单元测试也补一下")]
+        [it("user", "text", 60 * 26, text="博客迁移到 Astro，在 Mac Studio 上做")]
+        + tool("mcp__jarvis__task_plan", {"tasks": []}, "Plan plan_mock_0 is on the user's screen as a card.", 60 * 26 - 0.3)
+        + [it("assistant", "text", 60 * 26 - 0.4, text="好，计划在下面。")]
+        + [it("user", "text", 45, text="小组件横屏会崩，帮我修一下；网络层的单元测试也补一下")]
         + tool("mcp__jarvis__task_plan", {"tasks": []}, "Plan plan_mock_1 is on the user's screen as a card.", 44)
         + [it("assistant", "text", 44, text="拆成两件事，都在 MacBook 的 weather 仓库里开。")]
         + [it("user", "text", 30, text="这周的发布说明也整理一下")]
         + tool("mcp__jarvis__task_plan", {"tasks": []}, "Started 1 task(s) without asking.", 30)
         + [it("assistant", "text", 29.6, text="发布说明我来整理。只读、不改东西，所以直接开始了。")]
         + [it("user", "text", 5, text="周六上午提醒我给爸妈打电话")]
-        + tool("mcp__jarvis__phone_reminders_create", {"title": "给爸妈打电话", "due": "周六 10:00"}, "已创建提醒", 5)
+        + tool("mcp__jarvis__phone_reminders_create", {"title": "给爸妈打电话", "due": "周六 10:00"},
+               json.dumps({"id": "mock-reminder-1", "title": "给爸妈打电话", "due": later(hours=60), "completed": False,
+                           "list": "提醒事项", "priority": 0}, ensure_ascii=False), 5)
         + [it("assistant", "text", 4.5, text="加好了：周六 10:00 提醒你给爸妈打电话。")]
         + [it("user", "text", 3, text="顺便把 PR #42 的 review 意见处理掉")]
         + tool("mcp__jarvis__task_plan", {"tasks": []}, "Plan plan_mock_3 is on the user's screen as a card.", 2)
@@ -1340,6 +1366,19 @@ def tasks_area(h, method, p, raw):
         items = TASK_FEED.get(conv, [])
         plans = {i["ref"]: TASK_PLANS[i["ref"]] for i in items if i["kind"] == "plan" and i["ref"] in TASK_PLANS}
         h.send_json({"items": items, "plans": plans})
+        return True
+    if method == "POST" and p.startswith("/api/v1/assistant/conversations/") and p.endswith("/today"):
+        conv = p.split("/")[5]
+        item = next((i for i in TASK_FEED.get(conv, []) if i["kind"] == "today"), None)
+        h.send_json({"item": item, "new": False} if item else {"error": "no today in the mock"}, 200 if item else 503)
+        return True
+    if p == "/api/v1/task-trust":
+        if method == "DELETE":
+            key = parse_qs(urlparse(h.path).query).get("key", [""])[0]
+            TASK_TRUST[:] = [k for k in TASK_TRUST if k["key"] != key]
+            h.send_json({"ok": True})
+        else:
+            h.send_json({"kinds": TASK_TRUST})
         return True
     if method == "GET" and p.startswith("/api/v1/task-plans/"):
         plan = TASK_PLANS.get(p.split("/")[4])
@@ -1560,7 +1599,11 @@ def mock_interactions():
     # INTERACTIONS is the list the churn and bump switches change; MOCK_INTERACTIONS adds the expanded inbox. Both served.
     with REQUEST_LOCK:
         seen = {x["id"] for x in INTERACTIONS}
-        return list(INTERACTIONS) + [x for x in MOCK_INTERACTIONS if x["id"] not in seen]
+        out = list(INTERACTIONS) + [x for x in MOCK_INTERACTIONS if x["id"] not in seen]
+        # MOCK_TASKS_NO_ASKS=1: the tasks' agents ask nothing, so the conversation shows above the composer whole.
+        if os.environ.get("MOCK_TASKS_NO_ASKS") == "1":
+            out = [x for x in out if x.get("session_id") not in (TESTS, WIDGET, RELEASE)]
+        return out
 
 
 # MOCK_FLEET: the hub's fleet summary (server/internal/hub/liveactivity.go buildFleet) for Android's ongoing notification,

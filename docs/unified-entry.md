@@ -155,7 +155,15 @@ hub 往对话里插的条目，不进 Claude 的 transcript（插进去会多跑
 - 任务坞的胶囊放不下时让标题省略，「等你」两个字不省略。
 - 任务详情浮层的头部只有状态、任务名、关闭；在哪台电脑、用什么，下面嵌的 Agent 页自己的标题行里有。
 - 截图：`MOCK_TASKS=1`、`MOCK_TASKS_AT`、`-showTaskDetail`、`-showTaskBoard`（`docs/testing.md`）。
-- 还没做（第 4 步）：秒办的手机工具调用画成结果卡、早报画成「今天」、按天分段和折叠、消息卡关联任务、`tasks.trust` 的设置页。
+- 第 4 步（#996 和这一步的 iOS）：
+  - **按天分段**：`ChatLines.daySections` 在每天第一行上面加一行日期（今天 / 昨天 / 几月几日 周几），只在助手对话里。
+  - **旧任务卡折叠**：不是今天的 `task` 条目画成一行（`TaskLine`：状态、标题、到哪了），点开是详情。
+  - **秒办结果卡**：`phone_reminders_create`、`phone_calendar_create_event` 成功时，结果画在那一轮的工作行下面（`QuickResult`、
+    `ChatLines.quickResults`），「撤销」在手机上用 EventKit 删掉（`RemindersTool.remove`、`CalendarTool.remove`），不经过 hub。
+  - **今天**：主对话每天第一次显示时 `POST …/today`（`TasksStore.loadToday`），卡片在当天零点的位置：做完的、等你的、在做几个、
+    飞书的会（「准备」替你说一句）、@你 的会话（「过一遍」）；App 已有提醒事项权限时，再加上今天到期的提醒（不会为此弹授权）。
+  - **直接开的任务**：Persona 资料页「主动做事」里，列出记住的几类，左滑删掉。
+- 还没做：消息卡关联任务（要助手判断哪条消息和哪个任务有关，另做）。
 
 ## 分步
 
@@ -164,7 +172,7 @@ hub 往对话里插的条目，不进 Claude 的 transcript（插进去会多跑
 | 1 | 本文档和原型 |
 | 2 ✅ | hub：迁移（`todos.origin` / `plan_id`、`task_plans`、`assistant_feed`）、`task_plan` 工具和提示词、计划开始 / 不开接口、对话动态的接口和推送、做完 / 答过 / 路由的钩子、快照里的任务 |
 | 3 ✅ | iOS：模型和 `FakeHub`、对话动态合并、计划卡、任务卡、任务坞、问题卡、回执、`@` 和路由、任务详情浮层、任务板 |
-| 4 | 秒办结果卡、早报进主对话画成「今天」、按天分段和折叠、消息卡关联任务、`tasks.trust` 的设置页 |
+| 4 ✅ | 秒办结果卡、主对话的「今天」卡片、按天分段和折叠、`tasks.trust` 的设置页（消息卡关联任务另做） |
 | 5 | 手表和实时活动（只放在做几个、等你几个，手表能批准和选选项）；Android、网页对齐 |
 
 ## 已拍板（2026-11-03）

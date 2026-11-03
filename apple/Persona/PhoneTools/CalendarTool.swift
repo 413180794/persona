@@ -104,6 +104,14 @@ enum CalendarTool {
         return false
     }
 
+    /// Takes back an event the conversation added (its 撤销, docs/unified-entry.md); false when it is gone already.
+    static func remove(id: String) throws -> Bool {
+        let store = EKEventStore()
+        guard let event = store.event(withIdentifier: id) else { return false }
+        try store.remove(event, span: .thisEvent, commit: true)
+        return true
+    }
+
     static func encode(_ event: EKEvent) -> JSONValue {
         let attendees: [JSONValue] = (event.attendees ?? []).map { attendee in
             Output.object([

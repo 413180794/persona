@@ -254,6 +254,13 @@ extension Theme {
         static let handToAI = "paperplane"
         /// Mentions of the user (@我).
         static let mention = "at"
+        /// The day's 今天 card at the top of the assistant's conversation (docs/unified-entry.md).
+        static let today = "sun.max.fill"
+        /// Something done on the phone from the conversation: an event added to its calendar, a reminder.
+        static let addedEvent = "calendar.badge.plus"
+        static let addedReminder = "checklist.checked"
+        /// Kinds of tasks that start without asking first (这类以后直接开).
+        static let taskTrust = "bolt.shield"
         /// Tasks from the assistant's conversation (docs/unified-entry.md): the board of all of them (任务板).
         static let taskBoard = "rectangle.grid.2x2"
         /// A plan the assistant handed the user (计划卡).

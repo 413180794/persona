@@ -217,6 +217,7 @@ struct ChatView: View {
         .task(id: key) {
             guard style == .assistant else { return }
             TasksStore.shared.load(key.sessionID)
+            if key == model.assistantMain { TasksStore.shared.loadToday(key.sessionID) }
             #if DEBUG
             // `-showTaskDetail <todo id>` / `-showTaskBoard YES`: a task's detail or the board, for screenshots.
             if let id = UserDefaults.standard.string(forKey: "showTaskDetail") { TasksStore.shared.detailTask = id }
@@ -334,7 +335,10 @@ struct ChatView: View {
             scratch.frozenSettled = built.settled
             blocks = built.blocks
         }
-        let lines = ChatLines.mergeFeed(lineBuilder.build(Self.debugTrim(blocks), live: key.live), feed)
+        var lines = lineBuilder.build(Self.debugTrim(blocks), live: key.live)
+        if style == .assistant { // docs/unified-entry.md: the hub's items, quick results, a line for each day
+            lines = ChatLines.daySections(ChatLines.quickResults(ChatLines.mergeFeed(lines, feed)))
+        }
         scratch.lines = lines
         scratch.linesKey = key
         return lines
@@ -603,6 +607,8 @@ struct ChatView: View {
         switch line.content {
         case .row(let r): rowView(r, isLatest: false, live: true)
         case .feed(let item): FeedLine(item: item)
+        case .quick(let result): QuickResultCard(result: result)
+        case .day(let date): DayLine(date: date)
         case .apiError(let item, let info, let count):
             // 重试 only when the error is the last thing, the agent is not working (someone may have retried already) and
             // trying again can help (not a login or a bad request).
@@ -2936,6 +2942,10 @@ struct ChatLine: Identifiable {
         case apiError(item: Item, info: APIErrorInfo, count: Int)
         /// What the hub added to an assistant conversation: a plan, a task, a receipt… (docs/unified-entry.md).
         case feed(FeedItem)
+        /// A reminder or an event the assistant added on the phone, under its turn's work line (QuickResult).
+        case quick(QuickResult)
+        /// The date over the first line of a day (the assistant's conversation).
+        case day(Date)
 
         var id: String {
             switch self {
@@ -2951,6 +2961,8 @@ struct ChatLine: Identifiable {
             case .recaps(let id, _): id
             case .apiError(let item, _, _): item.id
             case .feed(let f): "feed-" + f.id
+            case .quick(let q): "quick-" + q.callID
+            case .day(let d): "day-\(Int(d.timeIntervalSince1970))"
             }
         }
     }
@@ -2977,6 +2989,8 @@ struct ChatLine: Identifiable {
     }
     static func apiError(item: Item, info: APIErrorInfo, count: Int) -> Self { Self(.apiError(item: item, info: info, count: count)) }
     static func feed(_ item: FeedItem) -> Self { Self(.feed(item)) }
+    static func quick(_ result: QuickResult) -> Self { Self(.quick(result)) }
+    static func day(_ date: Date) -> Self { Self(.day(date)) }
     static func toolRun(id: String, calls: [ToolCall], open: Bool, first: Bool) -> Self {
         Self(.toolRun(id: id, calls: calls, open: open, first: first))
     }

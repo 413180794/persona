@@ -70,6 +70,7 @@ struct AssistantProfileView: View {
                 NavigationLink { AssistantRunsView() } label: {
                     row("运行记录", "clock.arrow.circlepath", detail: runs.flatMap(\.first).map { AssistantRunText.statusWord($0) + " · " + Fmt.relative($0.at) })
                 }
+                NavigationLink { TaskTrustView() } label: { row("直接开的任务", Theme.Icon.taskTrust, detail: nil) }
             } header: {
                 Text("主动做事")
             } footer: {
@@ -134,6 +135,7 @@ struct AssistantProfileView: View {
                     NavigationLink { AssistantRunsView() } label: {
                         buiRow("运行记录", "clock.arrow.circlepath", detail: runs.flatMap(\.first).map { AssistantRunText.statusWord($0) + " · " + Fmt.relative($0.at) })
                     }
+                    NavigationLink { TaskTrustView() } label: { buiRow("直接开的任务", Theme.Icon.taskTrust, detail: nil) }
                 }
                 BUIListSection("了解你", footer: "「关于我」是你告诉 Persona 的；「记忆」是它在对话里自己记下的，都可以改。") {
                     NavigationLink { AssistantNotesView() } label: {

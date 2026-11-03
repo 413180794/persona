@@ -320,6 +320,32 @@ struct TaskNowLine: View {
     }
 }
 
+/// A task of another day, folded: one line; a tap opens its detail.
+struct TaskLine: View {
+    var todoID: String
+    private var store: TasksStore { .shared }
+
+    var body: some View {
+        if let todo = store.todos[todoID] {
+            let state = store.state(todo)
+            Button { store.detailTask = todo.id } label: {
+                HStack(spacing: Theme.Space.s) {
+                    TaskMark(state: state).scaledFrame(width: Theme.Size.markM)
+                    Text(todo.title).font(Theme.Font.secondaryMedium).lineLimit(1)
+                    Spacer(minLength: Theme.Space.s)
+                    Text(state.label).font(Theme.Font.caption).foregroundStyle(state.agentState.tone.text).lineLimit(1).fixedSize()
+                    Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, Theme.Space.m)
+                .padding(.vertical, Theme.Space.s)
+                .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
 // MARK: - The hub's lines
 
 /// One line the hub added to the conversation (docs/protocol.md「任务和对话动态」).
@@ -333,7 +359,12 @@ struct FeedLine: View {
         case .plan:
             if let id = item.ref, let plan = store.plans[id] { PlanCard(plan: plan) }
         case .task:
-            if let id = item.ref { TaskCard(todoID: id, conversation: item.conversation) }
+            if let id = item.ref {
+                // A task card of another day folds into a line: its mark, title and where it got to.
+                if Calendar.current.isDateInToday(item.at) { TaskCard(todoID: id, conversation: item.conversation) } else { TaskLine(todoID: id) }
+            }
+        case .today:
+            if let body = item.today { TodayCard(item: item, body: body) }
         case .answered: answered
         case .receipt: ReceiptCard(item: item)
         case .routed: routed

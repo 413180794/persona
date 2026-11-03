@@ -188,6 +188,14 @@ enum RemindersTool {
         return Output.json(encode(reminder))
     }
 
+    /// Takes back a reminder the conversation added (its 撤销, docs/unified-entry.md); false when it is gone already.
+    static func remove(id: String) throws -> Bool {
+        let store = EKEventStore()
+        guard let item = store.calendarItem(withIdentifier: id) as? EKReminder else { return false }
+        try store.remove(item, commit: true)
+        return true
+    }
+
     // MARK: - Completing
 
     static func complete(_ args: JSONValue) async throws -> [ToolContent] {
