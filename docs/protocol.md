@@ -833,7 +833,7 @@ hub → node 请求：
 
 | method | params → result |
 | --- | --- |
-| `node.info` | → `{hostname, os, arch, home, herdr_version, claude_version, version, system, engine, engines}`（`system` 见 Machine，node 启动时读一次；`engine` 是 node 现在用的引擎，`engines` 是它找到的，见「引擎」；旧 node 没有这两个） |
+| `node.info` | → `{hostname, os, arch, home, herdr_version, claude_version, version, system, engine, engines}`（`system` 见 Machine，node 启动时读一次；`engine` 是 node 现在用的引擎，`engines` 是它找到的，见「引擎」；旧 node 没有这两个）。连上时 `claude_version` 为空（`claude --version` 那次没跑成），hub 隔 1、2、5、10、30 分钟、之后每小时再问一次，拿到就更新机器并推给 App，连接断了就停（#542） |
 | `engine.use` | `{engine}` → `{engine}`：换成这个引擎（不认识的报错）；和现在一样时什么都不做，否则换掉宿主、丢掉旧引擎的 Agent（切换前开始、切换后才回来的刷新结果作废）、结束所有终端流（每个推 `terminal.end`，error 说引擎换了）、换事件流，并推一次 `sessions.changed`。多个 `engine.use` 依次执行 |
 | `launchers.list` | → `{launchers}` |
 | `launchers.models` | `{name, agent_type?, refresh?}` → `{agent, models, locked?}`：同 REST 的 `…/launchers/{name}/models`；`agent_type` 是 hub 配置里这个启动器的类型（不给就按 node 自己认出的） |

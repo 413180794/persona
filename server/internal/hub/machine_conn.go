@@ -299,6 +299,9 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 		_ = c.peer.Call(ctx, "session.watch", map[string]any{"session_id": id, "since_seq": since}, nil)
 	}
 	go m.watchPaths(sctx, c)
+	if info.ClaudeVersion == "" {
+		go m.retryClaudeVersion(sctx, c.peer)
+	}
 
 	// The connection ends when the node's output does, or when the peer is closed (reconnect, a better path): then
 	// an ssh process is still there and its output never ends — waiting only for it left the machine "online" with
@@ -552,4 +555,40 @@ func (m *Machine) connect(ctx context.Context) error {
 	c.close()
 	m.detach(err, false)
 	return err
+}
+
+// claudeVersionRetry is how long the hub waits before asking a node again for its Claude version while node.info came
+// back without one; the last wait repeats until the connection ends.
+var claudeVersionRetry = []time.Duration{time.Minute, 2 * time.Minute, 5 * time.Minute, 10 * time.Minute, 30 * time.Minute, time.Hour}
+
+// retryClaudeVersion asks the node for node.info again until it reports a Claude version, then shows it (#542). The
+// node finds the version by running `claude --version` in a login shell, which fails now and then on connecting (the
+// machine just woke, a slow ~/.zshrc, Claude updating itself); asked only then, the machine showed no version until it
+// reconnected. A machine without Claude is asked again every hour while it stays connected.
+func (m *Machine) retryClaudeVersion(ctx context.Context, peer *rpc.Peer) {
+	for i := 0; ; i++ {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(claudeVersionRetry[min(i, len(claudeVersionRetry)-1)]):
+		}
+		var info proto.NodeInfo
+		cctx, cancel := context.WithTimeout(ctx, 40*time.Second)
+		err := peer.Call(cctx, "node.info", map[string]any{}, &info)
+		cancel()
+		if err != nil || info.ClaudeVersion == "" {
+			continue
+		}
+		m.mu.Lock()
+		current := m.peer == peer
+		if current {
+			m.info.ClaudeVersion = info.ClaudeVersion
+		}
+		m.mu.Unlock()
+		if current {
+			m.hub.logf("[%s] claude %s", m.cfg.ID, info.ClaudeVersion)
+			m.hub.broadcastMachines()
+		}
+		return
+	}
 }
