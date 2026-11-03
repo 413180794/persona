@@ -31,22 +31,22 @@ func TestMeshGroupAndConnectors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if c, err := d.ConnectorCredential(ctx, "example-machine"); err != nil || c != nil {
+	if c, err := d.ConnectorCredential(ctx, "example-workstation"); err != nil || c != nil {
 		t.Fatalf("no credential yet: %+v %v", c, err)
 	}
-	if err := d.SaveConnectorCredential(ctx, ConnectorCredential{MachineID: "example-machine", FP: "fp1", Token: "sealed1", Version: "v1"}); err != nil {
+	if err := d.SaveConnectorCredential(ctx, ConnectorCredential{MachineID: "example-workstation", FP: "fp1", Token: "sealed1", Version: "v1"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.SaveConnectorCredential(ctx, ConnectorCredential{MachineID: "example-machine", FP: "fp2", Token: "sealed2", Version: "v2"}); err != nil {
+	if err := d.SaveConnectorCredential(ctx, ConnectorCredential{MachineID: "example-workstation", FP: "fp2", Token: "sealed2", Version: "v2"}); err != nil {
 		t.Fatal(err)
 	}
-	if c, err := d.ConnectorCredential(ctx, "example-machine"); err != nil || c == nil || c.FP != "fp2" || c.Token != "sealed2" || c.Version != "v2" {
+	if c, err := d.ConnectorCredential(ctx, "example-workstation"); err != nil || c == nil || c.FP != "fp2" || c.Token != "sealed2" || c.Version != "v2" {
 		t.Fatalf("replaced credential %+v %v", c, err)
 	}
-	if ok, err := d.DeleteConnectorCredential(ctx, "example-machine"); err != nil || !ok {
+	if ok, err := d.DeleteConnectorCredential(ctx, "example-workstation"); err != nil || !ok {
 		t.Fatalf("delete %v %v", ok, err)
 	}
-	if ok, _ := d.DeleteConnectorCredential(ctx, "example-machine"); ok {
+	if ok, _ := d.DeleteConnectorCredential(ctx, "example-workstation"); ok {
 		t.Fatal("deleted twice")
 	}
 }

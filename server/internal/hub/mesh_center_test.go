@@ -472,50 +472,50 @@ func (fc *fakeConnector) repair() {
 // A computer of kind service: paired from its link, reached through its connector, refused with a wrong credential,
 // and marked for pairing again when the connector moved to another hub.
 func TestCenterServiceConnector(t *testing.T) {
-	dev := newMeshNode("uid-dev", "example-machine", "s9")
+	dev := newMeshNode("uid-dev", "example-workstation", "s9")
 	dev.resident = true
 	fc := newFakeConnector(t, dev)
-	center := startTestHub(t, hubB, "Office", []MachineConfig{{ID: "example-machine", Name: "example-machine", Kind: kindService, Address: fc.addr()}}, nil)
+	center := startTestHub(t, hubB, "Office", []MachineConfig{{ID: "example-workstation", Name: "example-workstation", Kind: kindService, Address: fc.addr()}}, nil)
 	fc.nodeOf = center.h
 	tok, _ := center.deviceToken(t, roleFull)
 	// Not paired yet: it says so.
-	eventually(t, 10*time.Second, "example-machine says it is not paired", func() bool {
-		return strings.Contains(center.machines(t, tok)["example-machine"].Error, "没配对")
+	eventually(t, 10*time.Second, "example-workstation says it is not paired", func() bool {
+		return strings.Contains(center.machines(t, tok)["example-workstation"].Error, "没配对")
 	})
 	// A wrong code is refused.
 	bad := strings.Replace(fc.link(), fc.code, "wrong", 1)
-	if _, _, err := center.h.pairConnector(context.Background(), bad, "example-machine", "", ""); err == nil || !strings.Contains(err.Error(), "配对码") {
+	if _, _, err := center.h.pairConnector(context.Background(), bad, "example-workstation", "", ""); err == nil || !strings.Contains(err.Error(), "配对码") {
 		t.Fatalf("a wrong code: %v", err)
 	}
 	// A link pinned to another key is refused before anything is sent.
 	otherPin := strings.Replace(fc.link(), url.QueryEscape(fc.fp), "AAAA", 1)
-	if _, _, err := center.h.pairConnector(context.Background(), otherPin, "example-machine", "", ""); err == nil {
+	if _, _, err := center.h.pairConnector(context.Background(), otherPin, "example-workstation", "", ""); err == nil {
 		t.Fatal("paired with a connector of another key")
 	}
-	addr, version, err := center.h.pairConnector(context.Background(), fc.link(), "example-machine", "", "")
+	addr, version, err := center.h.pairConnector(context.Background(), fc.link(), "example-workstation", "", "")
 	if err != nil || addr != fc.addr() || version != "test-connector" {
 		t.Fatalf("pair: %q %q %v", addr, version, err)
 	}
-	if fc.hubID != hubB || fc.machine != "example-machine" {
+	if fc.hubID != hubB || fc.machine != "example-workstation" {
 		t.Fatalf("the connector got hub %q machine %q", fc.hubID, fc.machine)
 	}
 	cs := center.store
-	row, _ := cs.ConnectorCredential(context.Background(), "example-machine")
+	row, _ := cs.ConnectorCredential(context.Background(), "example-workstation")
 	if row == nil || row.FP != fc.fp || strings.HasPrefix(row.Token, "jc_") {
 		t.Fatalf("stored credential %+v (must be sealed)", row)
 	}
-	eventually(t, 15*time.Second, "example-machine online through its connector", func() bool {
-		m := center.machines(t, tok)["example-machine"]
+	eventually(t, 15*time.Second, "example-workstation online through its connector", func() bool {
+		m := center.machines(t, tok)["example-workstation"]
 		return m.Online && m.Route != nil && m.Route.Via == kindService
 	})
 	a := dialApp(t, center, tok)
-	a.send(t, map[string]any{"type": "subscribe", "machine_id": "example-machine", "session_id": "s9"})
-	a.wait(t, "example-machine's backlog", 0, hasItem("hi from s9"))
+	a.send(t, map[string]any{"type": "subscribe", "machine_id": "example-workstation", "session_id": "s9"})
+	a.wait(t, "example-workstation's backlog", 0, hasItem("hi from s9"))
 
 	// The connector is paired with another hub: 4002, and the hub stops trying until it is paired again.
 	fc.repair()
-	eventually(t, 10*time.Second, "example-machine needs pairing again", func() bool {
-		m := center.machines(t, tok)["example-machine"]
+	eventually(t, 10*time.Second, "example-workstation needs pairing again", func() bool {
+		m := center.machines(t, tok)["example-workstation"]
 		return !m.Online && strings.Contains(m.Error, "重新配对")
 	})
 	before := fc.infos.Load()
@@ -528,12 +528,12 @@ func TestCenterServiceConnector(t *testing.T) {
 	sealed, _ := center.h.sealKey("jc_wrong")
 	row.Token = sealed
 	_ = cs.SaveConnectorCredential(context.Background(), *row)
-	m := center.h.byID["example-machine"]
+	m := center.h.byID["example-workstation"]
 	m.mu.Lock()
 	m.svc = serviceState{}
 	m.mu.Unlock()
 	m.wake()
 	eventually(t, 10*time.Second, "a wrong credential is refused", func() bool {
-		return strings.Contains(center.machines(t, tok)["example-machine"].Error, "不认")
+		return strings.Contains(center.machines(t, tok)["example-workstation"].Error, "不认")
 	})
 }

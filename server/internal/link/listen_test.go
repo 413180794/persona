@@ -178,7 +178,7 @@ func (h *hubSide) do(method, path, token string, body any) reply {
 }
 
 func (h *hubSide) pair(code, token string) reply {
-	return h.do(http.MethodPost, ConnectorPairPath, "", map[string]string{"code": code, "token": token, "machine": "example-machine",
+	return h.do(http.MethodPost, ConnectorPairPath, "", map[string]string{"code": code, "token": token, "machine": "example-workstation",
 		"hub_id": "0f1e2d3c-0000-4000-8000-000000000000", "hub_name": "家里"})
 }
 
@@ -212,7 +212,7 @@ func TestPassivePairsAndStreamsToTheNode(t *testing.T) {
 	if r := h.pair("jc_wrong", tokenA); r.status != http.StatusUnauthorized || r.body["error"] != "bad_code" {
 		t.Fatalf("wrong code: %+v", r)
 	}
-	for _, bad := range []map[string]string{{"code": code, "token": "short", "machine": "example-machine"}, {"code": code, "token": tokenA}, {"token": tokenA, "machine": "example-machine"}} {
+	for _, bad := range []map[string]string{{"code": code, "token": "short", "machine": "example-workstation"}, {"code": code, "token": tokenA}, {"token": tokenA, "machine": "example-workstation"}} {
 		if r := h.do(http.MethodPost, ConnectorPairPath, "", bad); r.status != http.StatusBadRequest {
 			t.Fatalf("pairing with %v: %+v", bad, r)
 		}
@@ -224,7 +224,7 @@ func TestPassivePairsAndStreamsToTheNode(t *testing.T) {
 		t.Fatalf("the code twice: %+v", r)
 	}
 	s := c.waitFor(t, func(s Status) bool { return s.State == "listening" })
-	if s.Machine != "example-machine" || s.HubName != "家里" || s.CodeExpires != nil || s.From != "127.0.0.1" || s.LastSeen == nil {
+	if s.Machine != "example-workstation" || s.HubName != "家里" || s.CodeExpires != nil || s.From != "127.0.0.1" || s.LastSeen == nil {
 		t.Fatalf("status %+v", s)
 	}
 
@@ -248,7 +248,7 @@ func TestPassivePairsAndStreamsToTheNode(t *testing.T) {
 	if r := h.do(http.MethodGet, ConnectorInfoPath, tokenB, nil); r.status != http.StatusUnauthorized {
 		t.Fatalf("info with another credential: %+v", r)
 	}
-	if r := h.do(http.MethodGet, ConnectorInfoPath, tokenA, nil); r.status != http.StatusOK || r.body["machine"] != "example-machine" || r.body["version"] != "test-version" {
+	if r := h.do(http.MethodGet, ConnectorInfoPath, tokenA, nil); r.status != http.StatusOK || r.body["machine"] != "example-workstation" || r.body["version"] != "test-version" {
 		t.Fatalf("info: %+v", r)
 	}
 	// Nothing else is there, with a credential or without.
@@ -475,7 +475,7 @@ func TestPassiveListenFailsWhenThePortIsTaken(t *testing.T) {
 func TestActivePairingKeepsPassiveMode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "link.json")
 	if err := Update(path, func(c *Config) error {
-		c.Mode, c.Passive = ModePassive, &Passive{Listen: ":18663", TokenSHA256: hashHex(tokenA), Machine: "example-machine"}
+		c.Mode, c.Passive = ModePassive, &Passive{Listen: ":18663", TokenSHA256: hashHex(tokenA), Machine: "example-workstation"}
 		return nil
 	}); err != nil {
 		t.Fatal(err)

@@ -162,7 +162,7 @@ TLS 端口、指纹、https 候选、**连着的链路**（对端 hub_id 和 RTT
 
 （`service.go`；连接器那一侧见 [link.md](link.md)「被动模式」。）
 
-- hub.json：`{"id":"example-machine","name":"开发机","kind":"service","address":"<主机>:18663","proxy":"socks5://<主机>:1080"}`，`proxy` 可选。
+- hub.json：`{"id":"example-workstation","name":"开发机","kind":"service","address":"<主机>:18663","proxy":"socks5://<主机>:1080"}`，`proxy` 可选。
   连接器的指纹和凭据不在 hub.json，在 Postgres 的 `connector_credentials`（迁移 0191）：凭据用 `~/.jarvis/secret.key` AES-GCM 封好再存，和模型供应商的 key、
   邮箱凭据同一套做法。
 - **配对**：电脑上 `jarvis-link pair --listen`（或安装器 `--node --listen`、菜单栏「让 hub 来连」）打印 `jarvis://connector?addr=…&fp=…&code=…`；

@@ -66,7 +66,7 @@
   | 模式 | 谁连谁 | 适合 |
   | --- | --- | --- |
   | **主动**（现状，[link.md](link.md)） | 连接器拨 hub 的 WSS `/api/v1/link` | 笔记本、NAT 后面、换网络的电脑 |
-  | **被动**（新） | hub 拨连接器在本机监听的 TLS 端口 | 固定地址、hub 能连到的电脑（服务器、example-machine） |
+  | **被动**（新） | hub 拨连接器在本机监听的 TLS 端口 | 固定地址、hub 能连到的电脑（服务器、开发工作站） |
 
 - **被动模式的协议**（两路都按这个做，细节由连接器那一路补进 link.md）：
   - 连接器监听 `listen`（默认 `:18663`），TLS 用连接器自己的 ECDSA P-256 身份密钥和自签证书（`~/.jarvis/link-tls/`，0700 / 0600），
@@ -85,7 +85,7 @@
      （hub 生成随机凭据交给连接器，连接器存 hash），然后照常开流连 node。
   3. hub 把凭据加密存 Postgres（和邮箱凭据同一套 AES-GCM 做法），不写 `hub.json`。
 - **hub.json 的 `machines`**：kind `link`（主动，现状）、新 kind `service`（被动：`address`，可选 `proxy`（`socks5://…`，hub 经代理去连，
-  例如 example-machine 只能经某台机器上的 SOCKS 到达））。
+  例如 开发工作站 只能经某台机器上的 SOCKS 到达））。
 - **SSH**：不再推荐，管理界面不再提供「添加 ssh 电脑」；已有的 kind `ssh` / `tailcat` 机器继续能用（兼容），文档写迁移到 service / link 的步骤。以后再删。
 - **node 更新**：不能再经 SSH 推二进制。本轮：service / link 机器的「重新部署」改成提示「到这台电脑上更新」；经连接器推更新留给 #284（hub 版本更新）。
 

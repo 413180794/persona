@@ -231,7 +231,7 @@ describe("connector links", () => {
       expect(parseConnectorLink(bad), bad).toBeNull();
   });
   it("checks host:port and socks5 proxies like the hub", () => {
-    for (const ok of ["192.0.2.30:18663", "example-machine.example.com:443", "[2001:db8::30]:18663", "[fe80::1%en0]:1"]) expect(validHostPort(ok), ok).toBe(true);
+    for (const ok of ["192.0.2.30:18663", "workstation.example.com:443", "[2001:db8::30]:18663", "[fe80::1%en0]:1"]) expect(validHostPort(ok), ok).toBe(true);
     for (const bad of ["192.0.2.30", "192.0.2.30:0", "192.0.2.30:70000", "2001:db8::30:18663", "a/b:1", ":1", "https://x:1"]) expect(validHostPort(bad), bad).toBe(false);
     for (const ok of ["socks5://192.0.2.5:1080", "socks5h://proxy.example.com:1080", "SOCKS5://u:p@[2001:db8::5]:1080"]) expect(validProxy(ok), ok).toBe(true);
     for (const bad of ["http://192.0.2.5:3128", "socks5://192.0.2.5", "192.0.2.5:1080", "socks5://"]) expect(validProxy(bad), bad).toBe(false);

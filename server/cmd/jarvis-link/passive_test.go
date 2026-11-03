@@ -101,7 +101,7 @@ func TestPassiveStatus(t *testing.T) {
 	paired := f.now().Add(-26 * time.Hour)
 	if err := link.Update(f.configPath(), func(c *link.Config) error {
 		c.Mode, c.Passive = link.ModePassive, &link.Passive{Listen: ":18663", HubID: "0f1e2d3c-0000-4000-8000-000000000000", HubName: "家里",
-			Machine: "example-machine", TokenSHA256: strings.Repeat("ab", 32), PairedAt: &paired}
+			Machine: "example-workstation", TokenSHA256: strings.Repeat("ab", 32), PairedAt: &paired}
 		return nil
 	}); err != nil {
 		t.Fatal(err)
@@ -115,14 +115,14 @@ func TestPassiveStatus(t *testing.T) {
 	}
 	defer release()
 	seen := f.now().Add(-3 * time.Minute)
-	f.saveStatus(t, link.Status{State: "listening", Mode: link.ModePassive, Listen: ":18663", Machine: "example-machine", HubName: "家里",
+	f.saveStatus(t, link.Status{State: "listening", Mode: link.ModePassive, Listen: ":18663", Machine: "example-workstation", HubName: "家里",
 		LastSeen: &seen, From: "192.0.2.10", Node: "online", Addrs: []string{"[fd00::10]:18663"}}, 77)
 	if err := status(f.env, nil); err != nil {
 		t.Fatalf("listening is fine in passive mode: %v\n%s", err, f.out)
 	}
 	out := f.out.String()
 	for _, want := range []string{"模式：让 hub 来连（被动），监听 :18663\n", "链路：在监听，等 hub 连进来\n", "hub「家里」（1 天 2 小时前配对）\n",
-		"上一次 hub 连进来：3 分钟前，来自 192.0.2.10\n", "这台电脑：hub 上的「example-machine」\n", "连接器指纹：", "  · [fd00::10]:18663\n",
+		"上一次 hub 连进来：3 分钟前，来自 192.0.2.10\n", "这台电脑：hub 上的「example-workstation」\n", "连接器指纹：", "  · [fd00::10]:18663\n",
 		"后台服务：没装（jarvis-link install）", "进程：pid 77"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
@@ -139,7 +139,7 @@ func TestPassiveStatus(t *testing.T) {
 	}
 	var r report
 	if err := json.Unmarshal(f.out.Bytes(), &r); err != nil || r.Mode != link.ModePassive || r.Passive == nil || !r.Passive.Paired ||
-		r.Passive.FP == "" || r.Passive.Machine != "example-machine" || r.Link.State != "connected" || strings.Contains(f.out.String(), strings.Repeat("ab", 32)) {
+		r.Passive.FP == "" || r.Passive.Machine != "example-workstation" || r.Link.State != "connected" || strings.Contains(f.out.String(), strings.Repeat("ab", 32)) {
 		t.Fatalf("%v %s", err, f.out)
 	}
 	f.out.Reset()
@@ -165,12 +165,12 @@ func TestInstallPassive(t *testing.T) {
 		}
 		return "", nil
 	}
-	if err := install(f.env, []string{"--listen", "--addr", "example-machine.example.com"}); err != nil {
+	if err := install(f.env, []string{"--listen", "--addr", "workstation.example.com"}); err != nil {
 		t.Fatalf("%v\n%s", err, f.out)
 	}
 	out := f.out.String()
 	for _, want := range []string{"等它开始监听…", "在监听 :18663，等 hub 来配对。", "电脑 › 添加电脑 › hub 来连",
-		"jarvis://connector?addr=example-machine.example.com%3A18663&fp=", "只对 hub 放行 TCP 18663"} {
+		"jarvis://connector?addr=workstation.example.com%3A18663&fp=", "只对 hub 放行 TCP 18663"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
@@ -332,7 +332,7 @@ func TestDiscover(t *testing.T) {
 
 func TestUninstallPurgeTakesTheIdentityToo(t *testing.T) {
 	f := newFakeEnv(t)
-	if _, err := link.PairListen(f.configPath(), "", []string{"example-machine.example.com"}, f.now()); err != nil {
+	if _, err := link.PairListen(f.configPath(), "", []string{"workstation.example.com"}, f.now()); err != nil {
 		t.Fatal(err)
 	}
 	if !fileExists(link.TLSDir(f.configPath())) {

@@ -13,7 +13,7 @@
 | 模式 | 谁连谁 | 适合 | 要什么 |
 | --- | --- | --- | --- |
 | **主动**（我去连 hub） | jarvis-link 拨 hub 的 WSS `/api/v1/link`（下面「链路」） | 笔记本、在 NAT 后面、经常换网络的电脑 | hub 开着 TLS 端口（`public.tls_listen`），这台连得到 hub |
-| **被动**（让 hub 来连） | hub 拨 jarvis-link 在本机监听的 TLS 端口（下面「被动模式」） | 地址固定、hub 连得到的电脑：服务器、example-machine、家里的台式机 | hub 连得到这台的端口（直连或经 SOCKS 代理），这台的防火墙只对 hub 放行这个端口 |
+| **被动**（让 hub 来连） | hub 拨 jarvis-link 在本机监听的 TLS 端口（下面「被动模式」） | 地址固定、hub 连得到的电脑：服务器、开发工作站、家里的台式机 | hub 连得到这台的端口（直连或经 SOCKS 代理），这台的防火墙只对 hub 放行这个端口 |
 
 怎么选：这台电脑连得到 hub、hub 连不到它（笔记本、公司内网里的机器连家里的 hub）→ 主动；hub 连得到它、它连不到 hub（hub 在公网不可达的地方，
 但能经代理进到这台所在的网络）或者不想让它对外发起连接 → 被动；两边都通时都行，主动模式不用开端口，更省事。
@@ -194,7 +194,7 @@ jarvis-link ── WSS /api/v1/link ──▶ hub 的 TLS 端口（public.tls_li
 ### link.json 里的被动模式
 
 ```json
-{"mode":"passive","passive":{"listen":":18663","hub_id":"…","hub_name":"家里","machine":"example-machine",
+{"mode":"passive","passive":{"listen":":18663","hub_id":"…","hub_name":"家里","machine":"example-workstation",
  "token_sha256":"…","paired_at":"…","code":{"sha256":"…","expires":"…"}}}
 ```
 

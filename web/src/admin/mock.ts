@@ -62,11 +62,11 @@ export function installMock(scenario: string) {
       ? [
           local,
           {
-            id: "example-machine", name: "开发机", kind: "service", icon: "server", online: true, transport: "service", node_version: VERSION, os: "linux", state: "active",
+            id: "example-workstation", name: "开发机", kind: "service", icon: "server", online: true, transport: "service", node_version: VERSION, os: "linux", state: "active",
             address: "192.0.2.30:18663", proxy: "socks5://192.0.2.5:1080", hub_id: SELF,
             paths: [
-              { via: "service", hub_id: SELF, id: "example-machine", ok: true, rtt_ms: 9, active: true },
-              { via: "hub", hub_id: OFFICE, id: "example-machine", ok: true, rtt_ms: 41 },
+              { via: "service", hub_id: SELF, id: "example-workstation", ok: true, rtt_ms: 9, active: true },
+              { via: "hub", hub_id: OFFICE, id: "example-workstation", ok: true, rtt_ms: 41 },
             ],
           },
           {

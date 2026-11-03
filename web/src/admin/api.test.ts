@@ -102,13 +102,13 @@ describe("the center and connectors", () => {
   it("adds a computer either way", async () => {
     const calls = stub(200, { machine: {}, restart: { required: false, reasons: [] } });
     await addLinkMachine({ id: "air", name: "Air", icon: "laptop" });
-    await addServiceMachine({ id: "example-machine", name: "开发机", icon: "server", pair_link: "jarvis://connector?fp=f&code=c", proxy: "socks5://192.0.2.5:1080" });
+    await addServiceMachine({ id: "example-workstation", name: "开发机", icon: "server", pair_link: "jarvis://connector?fp=f&code=c", proxy: "socks5://192.0.2.5:1080" });
     expect(body(calls[0])).toEqual({ kind: "link", id: "air", name: "Air", icon: "laptop" });
-    expect(body(calls[1])).toEqual({ kind: "service", id: "example-machine", name: "开发机", icon: "server", pair_link: "jarvis://connector?fp=f&code=c", proxy: "socks5://192.0.2.5:1080" });
+    expect(body(calls[1])).toEqual({ kind: "service", id: "example-workstation", name: "开发机", icon: "server", pair_link: "jarvis://connector?fp=f&code=c", proxy: "socks5://192.0.2.5:1080" });
     await linkPair("air");
     expect(calls[2].url).toBe("/api/v1/admin/machines/air/link-pair");
-    await repairConnector("example-machine", "jarvis://connector?fp=f&code=c", "");
-    expect(calls[3].url).toBe("/api/v1/admin/machines/example-machine/connector");
+    await repairConnector("example-workstation", "jarvis://connector?fp=f&code=c", "");
+    expect(calls[3].url).toBe("/api/v1/admin/machines/example-workstation/connector");
     expect(body(calls[3])).toEqual({ pair_link: "jarvis://connector?fp=f&code=c" });
   });
 

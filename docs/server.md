@@ -278,7 +278,7 @@ NAS 上是 `sudo /usr/local/bin/docker exec jarvisd /opt/jarvis/bin/jarvisd hub 
 
 ## hub 来连（kind service）
 
-服务器、example-machine 这类地址固定、hub 连得到的电脑，hub.json 里 kind 写 `service`：电脑上的连接器（jarvis-link 的被动模式，`jarvis-link pair --listen`）
+服务器、开发工作站这类地址固定、hub 连得到的电脑，hub.json 里 kind 写 `service`：电脑上的连接器（jarvis-link 的被动模式，`jarvis-link pair --listen`）
 在本机开一个 TLS 端口，hub 按配对时的指纹钉扎拨过去，开流连常驻 node，不用 ssh（可选经 `socks5://` 代理）。在管理界面「电脑 › 添加电脑 ›
 hub 来连」粘贴它打印的链接即可，加完立刻生效。凭据加密存 Postgres。细节见 [mesh.md](mesh.md)「kind service」和 [link.md](link.md)「被动模式」。
 ssh 电脑照常能用，但不再推荐、管理界面不再添加，迁移见 [mesh.md](mesh.md)「SSH / tailcat：兼容」。

@@ -198,9 +198,9 @@ class InstallNodeServiceTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.calls_made(), ["install --listen :18700"])
         self.calls.unlink()
-        result = self.run_install("--addr", "example-machine.example.com", "--addr=[2001:db8::7]")
+        result = self.run_install("--addr", "workstation.example.com", "--addr=[2001:db8::7]")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(self.calls_made(), ["install --listen --addr example-machine.example.com --addr [2001:db8::7]"])
+        self.assertEqual(self.calls_made(), ["install --listen --addr workstation.example.com --addr [2001:db8::7]"])
 
     def test_both_ways_at_once_is_refused(self):
         self.publish()

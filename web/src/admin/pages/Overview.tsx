@@ -96,7 +96,7 @@ function AddFirst() {
       <div className="min-w-[220px] flex-1">
         <div className="text-[14px] font-semibold text-ink">添加你的电脑</div>
         <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-2">
-          这台 hub 还没有连别的电脑。全家只要这一台 hub；其他电脑都装 node 服务，再在这里添加：笔记本选「电脑来连」，服务器、example-machine 选「hub 来连」。
+          这台 hub 还没有连别的电脑。全家只要这一台 hub；其他电脑都装 node 服务，再在这里添加：笔记本选「电脑来连」，服务器、开发工作站选「hub 来连」。
         </p>
       </div>
       <Button tone="primary" icon="plus" onClick={() => navigate("machines")}>

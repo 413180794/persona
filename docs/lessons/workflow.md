@@ -36,7 +36,8 @@
 - `gh pr edit` 更新正文时可能附带查询组织 / 讨论字段，只带 `repo` scope 的 token 会报缺 `read:org`（2026-11-02）。
   更新正文不需要扩权限：把 `{"body": "…"}` 作为 JSON 标准输入交给 `gh api --method PATCH repos/<owner>/<repo>/pulls/<number> --input -`，只访问仓库的 PR 接口。
 
-- 在独立 worktree 跑隐私扫描时，先进入那棵工作树再执行脚本：`privacy_check.py` 用当前目录的 `git rev-parse --show-toplevel` 取扫描根，不是脚本所在目录（2026-11-02，#341）。从主工作区执行 `/tmp/<worktree>/scripts/privacy_check.py` 实际扫描的是主工作区，也会读它的 `CLAUDE.local.md`；两边结果不同先确认扫描根，不要跳过或放宽规则。
+- 独立 worktree 的隐私扫描用脚本所属 checkout 定位根目录（#336），不受调用者当前目录影响。旧版取调用者的 `git rev-parse --show-toplevel`：从主工作区调用 `/tmp/<worktree>/scripts/privacy_check.py` 会扫主工作区，也会读它的 `CLAUDE.local.md`（2026-11-02，#341）。两边结果不同先确认脚本版本和扫描根，不要跳过或放宽规则。
+- 网页静态说明、表单 placeholder、mock、测试里的示例机器 ID 也要避免个人配置值（2026-11-03，#627）：即使是常见的机器类型词，与本机配置重合也会让全仓隐私扫描拦住发布。ID 用明确的示例标识，域名用 example.com，说明文字描述机器类型，不修改敏感词或给页面加豁免。
 - `gh pr checks` 的旧版本不支持 `--fail-fast`（2026-11-02，#341）：先看 `--help`，用支持的 `--watch` / `--interval`；参数错误的退出码 1 不等于 CI 失败，要看具体 check 的结论。
 
 ## 临时的测试 hub

@@ -100,7 +100,7 @@ function AddCard({ onPick, noTLS }: { onPick: (w: AddWay) => void; noTLS: boolea
       w: "service",
       icon: "machine",
       title: "hub 来连",
-      fit: "服务器、example-machine 这类地址固定的电脑",
+      fit: "服务器、开发工作站这类地址固定的电脑",
       desc: "hub 按地址连那台电脑上的连接器，也能经 SOCKS 代理连过去。",
     },
   ];
@@ -622,14 +622,14 @@ function AddService({ open, onClose, existing, onAdded }: { open: boolean; onClo
       ) : (
         <form onSubmit={submit} className="space-y-3.5">
           <div>
-            <p className="mb-2 text-[12.5px] leading-relaxed text-ink-2">hub 按地址连那台电脑上的连接器，适合服务器、example-machine 这类地址固定、hub 连得到的电脑。先在那台电脑上运行：</p>
+            <p className="mb-2 text-[12.5px] leading-relaxed text-ink-2">hub 按地址连那台电脑上的连接器，适合服务器、开发工作站这类地址固定、hub 连得到的电脑。先在那台电脑上运行：</p>
             <CodeBlock value="jarvis-link pair --listen" copyLabel="拷贝命令" />
             <p className="mt-1.5 text-[11.5px] leading-relaxed text-ink-3">
               Mac 的菜单栏、Windows 的托盘里选「让 hub 来连」也一样。它会打印一条 jarvis://connector?… 链接，10 分钟内有效，只能用一次。
             </p>
           </div>
           <ConnectorLinkField value={link} onChange={setLink} autoFocus />
-          <MachineFields example={{ id: "example-machine", name: "开发机" }} id={id} setId={setId} name={name} setName={setName} icon={icon} setIcon={setIcon} existing={existing} />
+          <MachineFields example={{ id: "example-workstation", name: "开发机" }} id={id} setId={setId} name={name} setName={setName} icon={icon} setIcon={setIcon} existing={existing} />
           <div>
             <button type="button" onClick={() => setMore((v) => !v)} aria-expanded={more} className="flex items-center gap-1 text-[12px] font-medium whitespace-nowrap text-ink-2 hover:text-ink">
               <AdminIcon name="chevronRight" size={13} className="transition-transform duration-200" style={{ transform: more ? "rotate(90deg)" : undefined }} />
