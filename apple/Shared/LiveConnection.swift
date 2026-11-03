@@ -47,6 +47,11 @@ nonisolated enum ServerEvent: Sendable {
     case hubUpdate(HubUpdateStatus)
     /// The desktop apps connected to the hub now (sent on connect and whenever one comes or goes).
     case desktops([DesktopDevice])
+    /// Tasks from an assistant conversation (docs/unified-entry.md): the todos changed (pull them), a conversation's
+    /// feed grew, a plan changed.
+    case todos
+    case assistantFeed(FeedItem)
+    case taskPlan(TaskPlan)
     case terminal(SessionKey, TerminalEvent)
     case error(SessionKey?, String)
 
@@ -98,10 +103,12 @@ nonisolated enum ServerEvent: Sendable {
         var hubID: String?
         var hubName: String?
         var mesh: MeshField?
+        var item: FeedItem?
+        var plan: TaskPlan?
 
         enum CodingKeys: String, CodingKey {
             case type, machines, sessions, upsert, remove, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
-            case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, mesh, channel, build, update
+            case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, mesh, channel, build, update, item, plan
             case hubID = "hub_id", hubName = "hub_name", protocolVersion = "protocol", minAppBuild = "min_app_build"
             case machineID = "machine_id", sessionID = "session_id", hasMore = "has_more", callID = "call_id",
                  moreAfter = "more_after", fromSeq = "from_seq", toSeq = "to_seq",
@@ -160,6 +167,9 @@ nonisolated enum ServerEvent: Sendable {
         // the list prefs changed on another device: a non-session id wakes only the lists, which re-pull the prefs
         case "agents.prefs": return .agents(sessionIDs: ["agents.prefs"])
         case "inbox": return .inbox
+        case "todos": return .todos
+        case "assistant_feed": return e.item.map { .assistantFeed($0) }
+        case "task_plan": return e.plan.map { .taskPlan($0) }
         case "fleet": return e.fleet.map { .fleet($0) }
         case "desktops": return .desktops(e.desktops ?? [])
         case "terminal":
@@ -195,7 +205,8 @@ nonisolated extension ServerEvent {
         case .error(let key, let message): return .error(key.map(k), message)
         case .sessionsDelta(let machine, let upsert, let remove):
             return .sessionsDelta(machineID: machine, upsert: upsert.map { var s = $0; s.group = group; return s }, remove: remove)
-        case .hello, .interactionResolved, .toolCall, .revs, .lark, .agents, .inbox, .fleet, .hubUpdate, .desktops: return self
+        case .hello, .interactionResolved, .toolCall, .revs, .lark, .agents, .inbox, .fleet, .hubUpdate, .desktops, .todos,
+             .assistantFeed, .taskPlan: return self
         }
     }
 }

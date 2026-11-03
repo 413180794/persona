@@ -266,3 +266,42 @@ nonisolated struct ChangedFile: Hashable, Sendable {
     var adds: Int
     var dels: Int
 }
+
+extension ChatLines {
+    // MARK: The assistant's feed
+
+    /// The lines with what the hub added to an assistant conversation (docs/unified-entry.md) among them: an item
+    /// goes at the end of the exchange it happened in — before the first message sent after it — so a plan card or a
+    /// receipt follows the answer of its turn instead of splitting it; what came after the last message goes last.
+    static func mergeFeed(_ lines: [ChatLine], _ feed: [FeedItem]) -> [ChatLine] {
+        guard !feed.isEmpty else { return lines }
+        var out: [ChatLine] = []
+        out.reserveCapacity(lines.count + feed.count)
+        var next = 0
+        for line in lines {
+            if let at = inputTime(line) {
+                while next < feed.count, feed[next].at < at {
+                    out.append(.feed(feed[next]))
+                    next += 1
+                }
+            }
+            out.append(line)
+        }
+        while next < feed.count {
+            out.append(.feed(feed[next]))
+            next += 1
+        }
+        return out
+    }
+
+    /// When a line the user sent was sent; nil for every other line.
+    private static func inputTime(_ line: ChatLine) -> Date? {
+        switch line.content {
+        case .row(.user(let i)): i.ts
+        case .row(.image(let i)) where i.role == "user": i.ts
+        case .mergedUsers(_, let rows): rows.first?.firstTS
+        case .userImages(_, let items): items.first?.ts
+        default: nil
+        }
+    }
+}

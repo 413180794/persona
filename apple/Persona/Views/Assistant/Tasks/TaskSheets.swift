@@ -1,0 +1,166 @@
+import SwiftUI
+
+/// A task's detail, risen from the bottom like a link (docs/unified-entry.md「任务详情」): opens full, pulled down to
+/// 0.6 the conversation behind stays usable. Its agent's page is the Agents page's own chat (`ChatView(style: .dev)`),
+/// so everything that page does works here; a task with several agents switches between them at the top.
+struct TaskDetailSheet: View {
+    var todoID: String
+    @State private var detent: PresentationDetent = .large
+    @State private var picked: SessionKey?
+    @Environment(\.dismiss) private var dismiss
+    private var store: TasksStore { .shared }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let todo = store.todos[todoID] {
+                    content(todo)
+                } else {
+                    EmptyStateView(symbol: Theme.Icon.todo, title: "没有这个任务了", message: "它可能被删了。")
+                }
+            }
+            // The agent's page hides the bar (it draws its own header): the sheet's close is in the task's header.
+            .toolbarVisibility(.hidden, for: .navigationBar)
+        }
+        .presentationDetents([.fraction(0.6), .large], selection: $detent)
+        .presentationDragIndicator(.visible)
+        .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.6)))
+    }
+
+    @ViewBuilder private func content(_ todo: TodoItem) -> some View {
+        let sessions = store.sessions(todo)
+        let key = picked.flatMap { p in sessions.first { $0.key == p }?.key } ?? store.leadSession(todo)?.key
+        // Top-aligned: when the agent's page asks for more than the sheet has (several tall cards waiting), what gives
+        // is its bottom, never the task's header with its close.
+        GeometryReader { geo in
+        VStack(spacing: 0) {
+            header(todo, sessions: sessions, selected: key)
+            Divider()
+            Group {
+                if let key {
+                    ChatView(key: key, style: .dev)
+                        .id(key)
+                } else {
+                    EmptyStateView(symbol: Theme.Icon.working,
+                                   title: todo.agents.first?.startError.map { _ in "Agent 没开起来" } ?? "正在开 Agent",
+                                   message: todo.agents.first?.startError ?? "开好以后这里就是它的对话。")
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(width: geo.size.width, height: geo.size.height, alignment: .top) // the sheet's height, not the page's wish
+        .clipped()
+        }
+    }
+
+    private func header(_ todo: TodoItem, sessions: [Session], selected: SessionKey?) -> some View {
+        let state = store.state(todo)
+        return VStack(alignment: .leading, spacing: Theme.Space.s) {
+            HStack(spacing: Theme.Space.s) {
+                TaskMark(state: state).scaledFrame(width: Theme.Size.markM)
+                Text(todo.title).font(Theme.Font.heading).lineLimit(2)
+                Spacer(minLength: Theme.Space.s)
+                Button { dismiss() } label: {
+                    Image(systemName: Theme.Icon.close).font(Theme.Font.secondaryStrong)
+                        .scaledFrame(width: Theme.Size.well, height: Theme.Size.well)
+                }
+                .themedButton()
+                .clipShape(.circle)
+                .accessibilityLabel("关闭")
+            }
+            if sessions.count > 1 {
+                ScrollView(.horizontal) {
+                    HStack(spacing: Theme.Space.s) {
+                        ForEach(sessions) { s in
+                            Button { picked = s.key } label: {
+                                HStack(spacing: Theme.Space.xs) {
+                                    StatusDot(state: s.state, size: Theme.Size.dotS)
+                                    Text(s.title.isEmpty ? s.agentLabel : s.title).lineLimit(1)
+                                }
+                                .font(Theme.Font.captionStrong)
+                                .padding(.horizontal, Theme.Space.m)
+                                .padding(.vertical, Theme.Space.sm)
+                                .background(s.key == selected ? Theme.accent.opacity(0.16) : Theme.Fill.chip, in: .capsule)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+            }
+        }
+        .padding(.horizontal, Theme.Space.page)
+        .padding(.top, Theme.Space.l) // below the sheet's grabber
+        .padding(.bottom, Theme.Space.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// 全部: the conversation's tasks by where they are — waiting for the user, going on, done, stopped.
+struct TaskBoardSheet: View {
+    var conversation: String
+    @Environment(\.dismiss) private var dismiss
+    private var store: TasksStore { .shared }
+
+    var body: some View {
+        NavigationStack {
+            let rows = store.tasks(of: conversation).map { (todo: $0, state: store.state($0)) }
+            List {
+                if rows.isEmpty {
+                    EmptyStateView(symbol: Theme.Icon.todo, title: "还没有任务", message: "在对话里说要做的事，Persona 会把它变成任务。")
+                        .listRowBackground(Color.clear)
+                }
+                section("等你", rows.filter { $0.state == .needsYou })
+                section("在做", rows.filter { $0.state == .working || $0.state == .notStarted })
+                section("做完了", rows.filter { $0.state == .unread })
+                section("停着", rows.filter { $0.state == .followup })
+                section("已完成", rows.filter { $0.state == .done })
+            }
+            .themedGroupedPage()
+            .navigationTitle("任务")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { dismiss() } label: { Image(systemName: Theme.Icon.close) }
+                        .accessibilityLabel("关闭")
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    @ViewBuilder private func section(_ title: String, _ rows: [(todo: TodoItem, state: TaskState)]) -> some View {
+        if !rows.isEmpty {
+            Section {
+                ForEach(rows, id: \.todo.id) { row in
+                    Button {
+                        store.openAfterBoard = row.todo.id // opened once the board is down (one sheet at a time)
+                        store.showBoard = false
+                    } label: {
+                        HStack(spacing: Theme.Space.m) {
+                            TaskMark(state: row.state).scaledFrame(width: Theme.Size.markM)
+                            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                                Text(row.todo.title).font(Theme.Font.body).lineLimit(1)
+                                Text(subtitle(row.todo)).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            Spacer(minLength: Theme.Space.s)
+                            Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
+                        }
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } header: {
+                Text("\(title) · \(rows.count)")
+            }
+        }
+    }
+
+    private func subtitle(_ todo: TodoItem) -> String {
+        let lead = store.leadSession(todo)
+        let place = TaskPlace.line(todo, lead: lead)
+        guard let last = lead?.lastText?.trimmingCharacters(in: .whitespacesAndNewlines), !last.isEmpty else { return place }
+        return place + " · " + last
+    }
+}

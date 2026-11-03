@@ -1248,6 +1248,126 @@ ITEMS[ASK1] = (
 - 14:00 设计评审（会议室 3）
 - 16:30 和李雷 1:1""")]
 )
+# MOCK_TASKS=1: the unified entry (docs/unified-entry.md, #930). The main conversation dispatches tasks: a started plan
+# of two (the widget fix working, the unit tests waiting for an answer — ix_tests), a read-only one that finished with a
+# receipt, an answered card, a message routed straight to a task, a reminder done on the phone, and an open plan at the
+# end. Served at /api/v1/assistant/conversations/{id}/feed and /api/v1/task-plans/…; the tasks are todos with origin.
+MOCK_TASKS = os.environ.get("MOCK_TASKS") == "1"
+TASK_PLANS = {}
+TASK_FEED = {}
+if MOCK_TASKS:
+    def _task_todo(tid, title, notes, mid, sid, cwd, minutes, plan):
+        return {"id": tid, "title": title, "notes": notes, "done_at": None, "created_at": ago(minutes=minutes),
+                "updated_at": ago(minutes=1), "origin": ASK1, "plan_id": plan, "spaces": [],
+                "agents": [{"machine_id": mid, "session_id": sid, "linked_at": ago(minutes=minutes), "released_at": None,
+                            "title": title, "cwd": cwd, "agent": "claude", "start_error": "", "source": "manual", "via": ""}]}
+    TODOS_INIT += [
+        _task_todo("todo_task_widget", "修小组件横屏崩溃", "天气 App 的主屏幕小组件在横屏时崩溃，修好并补测试。", "macbook", WIDGET,
+                   "/Users/me/code/weather", 44, "plan_mock_1"),
+        _task_todo("todo_task_tests", "补齐网络层的单元测试", "网络层的单元测试补到 80% 覆盖。", "macbook", TESTS,
+                   "/Users/me/code/weather", 44, "plan_mock_1"),
+        _task_todo("todo_task_release", "整理发布说明", "把这周合并的 PR 整理成发布说明，只读。", "macbook", RELEASE,
+                   "/Users/me/code/weather", 30, "plan_mock_2"),
+    ]
+    TODOS = copy.deepcopy(TODOS_INIT)
+
+    def _plan(pid, state, minutes, tasks):
+        return {"id": pid, "conversation": ASK1, "state": state, "created_at": ago(minutes=minutes), "updated_at": ago(minutes=minutes),
+                "tasks": tasks}
+
+    def _ptask(title, readonly, why, todo=None, permission="acceptEdits"):
+        t = {"title": title, "prompt": title, "machine": "macbook", "cwd": "/Users/me/code/weather", "launcher": "",
+             "model": "", "permission": "" if readonly else permission, "readonly": readonly, "why": why}
+        if todo: t["todo_id"] = todo
+        return t
+
+    TASK_PLANS.update({
+        "plan_mock_1": _plan("plan_mock_1", "started", 44, [
+            _ptask("修小组件横屏崩溃", False, "weather 这三天都在 MacBook 上开发；iOS 的修复你上次也用 Opus。", "todo_task_widget"),
+            _ptask("补齐网络层的单元测试", False, "同一个仓库另开一个 Agent，和上一个互不打扰。", "todo_task_tests")]),
+        "plan_mock_2": _plan("plan_mock_2", "started", 30, [
+            _ptask("整理发布说明", True, "只读：只看这周合并的 PR。", "todo_task_release")]),
+        "plan_mock_3": _plan("plan_mock_3", "open", 2, [
+            _ptask("处理 PR #42 的 review 意见", False, "PR #42 在 weather 仓库；review 类的活你常用 Codex。")]),
+    })
+
+    def _feed(fid, minutes, kind, ref, body=None):
+        return {"id": fid, "conversation": ASK1, "at": ago(minutes=minutes), "kind": kind, "ref": ref, "body": body or {}}
+
+    TASK_FEED[ASK1] = [
+        _feed("feed_m1", 43.5, "plan", "plan_mock_1"),
+        _feed("feed_m2", 43.4, "task", "todo_task_widget"),
+        _feed("feed_m3", 43.3, "task", "todo_task_tests"),
+        _feed("feed_m4", 29.5, "plan", "plan_mock_2"),
+        _feed("feed_m5", 29.4, "task", "todo_task_release"),
+        _feed("feed_m6", 25, "answered", "todo_task_widget", {"question": "使用 Bash", "answer": "批准了 · 以后同类不再问"}),
+        _feed("feed_m7", 20, "receipt", "todo_task_release",
+              {"title": "整理发布说明", "state": "done", "machine": "MacBook",
+               "summary": "整理好了：这周合并了 7 个 PR，分成新功能、修复和其他三组，写在 docs/release-notes.md 里，等你过目。",
+               "pr": "https://github.com/example/weather/pull/43"}),
+        _feed("feed_m8", 10, "routed", "todo_task_tests", {"text": "Mock 用协议注入，不要用单例"}),
+        _feed("feed_m9", 1.8, "plan", "plan_mock_3"),
+    ]
+    ITEMS[ASK1] = (
+        [it("user", "text", 45, text="小组件横屏会崩，帮我修一下；网络层的单元测试也补一下")]
+        + tool("mcp__jarvis__task_plan", {"tasks": []}, "Plan plan_mock_1 is on the user's screen as a card.", 44)
+        + [it("assistant", "text", 44, text="拆成两件事，都在 MacBook 的 weather 仓库里开。")]
+        + [it("user", "text", 30, text="这周的发布说明也整理一下")]
+        + tool("mcp__jarvis__task_plan", {"tasks": []}, "Started 1 task(s) without asking.", 30)
+        + [it("assistant", "text", 29.6, text="发布说明我来整理。只读、不改东西，所以直接开始了。")]
+        + [it("user", "text", 5, text="周六上午提醒我给爸妈打电话")]
+        + tool("mcp__jarvis__phone_reminders_create", {"title": "给爸妈打电话", "due": "周六 10:00"}, "已创建提醒", 5)
+        + [it("assistant", "text", 4.5, text="加好了：周六 10:00 提醒你给爸妈打电话。")]
+        + [it("user", "text", 3, text="顺便把 PR #42 的 review 意见处理掉")]
+        + tool("mcp__jarvis__task_plan", {"tasks": []}, "Plan plan_mock_3 is on the user's screen as a card.", 2)
+        + [it("assistant", "text", 1.9, text="这个要改代码，计划在下面，你点开始就开。")]
+    )
+    # MOCK_TASKS_AT=<minutes>: the conversation as it was that many minutes ago (newer items and feed left out), to
+    # see its earlier parts at the bottom of the screen without scrolling.
+    _cut = float(os.environ.get("MOCK_TASKS_AT") or 0)
+    if _cut:
+        _cut_at = ago(minutes=_cut)
+        ITEMS[ASK1] = [x for x in ITEMS[ASK1] if (x.get("ts") or "") <= _cut_at]
+        TASK_FEED[ASK1] = [x for x in TASK_FEED[ASK1] if x["at"] <= _cut_at]
+
+
+def tasks_area(h, method, p, raw):
+    """The unified entry's endpoints (MOCK_TASKS=1): the feed, starting / dismissing a plan, routing to a task."""
+    if not MOCK_TASKS:
+        return False
+    if method == "GET" and p.startswith("/api/v1/assistant/conversations/") and p.endswith("/feed"):
+        conv = p.split("/")[5]
+        items = TASK_FEED.get(conv, [])
+        plans = {i["ref"]: TASK_PLANS[i["ref"]] for i in items if i["kind"] == "plan" and i["ref"] in TASK_PLANS}
+        h.send_json({"items": items, "plans": plans})
+        return True
+    if method == "GET" and p.startswith("/api/v1/task-plans/"):
+        plan = TASK_PLANS.get(p.split("/")[4])
+        h.send_json({"plan": plan} if plan else {"error": "plan not found"}, 200 if plan else 404)
+        return True
+    if method == "POST" and p.startswith("/api/v1/task-plans/") and p.endswith(("/start", "/dismiss")):
+        pid = p.split("/")[4]
+        plan = TASK_PLANS.get(pid)
+        if not plan:
+            h.send_json({"error": "plan not found"}, 404)
+            return True
+        if plan["state"] != "open":
+            h.send_json({"error": "this plan was already started or dismissed"}, 409)
+            return True
+        plan["state"] = "dismissed" if p.endswith("/dismiss") else "started"
+        h.send_json({"plan": plan})
+        return True
+    if method == "POST" and p.startswith("/api/v1/assistant/conversations/") and p.endswith("/route"):
+        body = json.loads(raw or b"{}")
+        conv = p.split("/")[5]
+        item = {"id": "feed_r%d" % len(TASK_FEED.get(conv, [])), "conversation": conv, "at": ago(), "kind": "routed",
+                "ref": body.get("todo_id"), "body": {"text": body.get("text", "")}}
+        TASK_FEED.setdefault(conv, []).append(item)
+        h.send_json({"item": item})
+        return True
+    return False
+
+
 ITEMS[ASK2] = [it("user", "text", 60 * 5, text="⏰ 早报")] + [it("assistant", "text", 60 * 5, text="早上好！今天 2 个会议，3 封邮件需要回复。")]
 ITEMS[ASK3] = [it("user", "text", 60 * 29, text="帮我约周五和韩梅梅吃饭")] + [it("assistant", "text", 60 * 28, text="已经在日历里加好了。")]
 # MOCK_LARK_AGENT=1: 帮我约周五… is a Feishu /agent conversation instead (prompts/lark/chat_agent.md): the
@@ -5110,6 +5230,7 @@ class H(BaseHTTPRequestHandler):
             secs, step = {"1h": (3600, 10), "6h": (6 * 3600, 60), "24h": (86400, 240)}.get(r, (3600, 10))
             return self.send_json({"metrics": machine_metrics(p.split("/")[4], secs, step), "range": r, "step": step})
         if p == "/api/v1/sessions": return self.send_json({"sessions": out_by_machine(all_sessions())})
+        if tasks_area(self, "GET", p, None): return
         if p == "/api/v1/todos": return self.send_json({"todos": sorted_todos()})
         if p.startswith("/api/v1/todos/") and p.count("/") == 4:
             tid = p.split("/")[4]
@@ -5525,6 +5646,7 @@ class H(BaseHTTPRequestHandler):
         if github_area(self, self.command, p, self.last_body): return
         if mail_area(self, self.command, p, parse_qs(urlparse(self.path).query)): return
         if MOCK_LARK and fs_post(self, p, parse_qs(urlparse(self.path).query), self.last_body): return  # area: feishu chat page
+        if tasks_area(self, self.command, p, self.last_body): return
         if p == "/api/v1/todos" and self.command == "POST":
             if is_read_only(self): return self.send_json({"error": "只读角色不能修改待办"}, 403)
             body = json.loads(self.last_body or b"{}")

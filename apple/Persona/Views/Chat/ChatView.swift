@@ -181,6 +181,19 @@ struct ChatView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        // The assistant's tasks (docs/unified-entry.md): a task's detail rises like a link; 全部 is the board.
+        .sheet(isPresented: Binding(get: { style == .assistant && TasksStore.shared.detailTask != nil },
+                                    set: { if !$0 { TasksStore.shared.detailTask = nil } })) {
+            if let id = TasksStore.shared.detailTask { TaskDetailSheet(todoID: id) }
+        }
+        .sheet(isPresented: Binding(get: { style == .assistant && TasksStore.shared.showBoard },
+                                    set: { TasksStore.shared.showBoard = $0 }),
+               onDismiss: {
+                   let tasks = TasksStore.shared
+                   if let id = tasks.openAfterBoard { tasks.openAfterBoard = nil; tasks.detailTask = id }
+               }) {
+            TaskBoardSheet(conversation: key.sessionID)
+        }
         #else
         // On the Mac the details are an inspector beside the chat (Agent › 显示会话信息 ⌥⌘I, or the title).
         .macInspector(isPresented: $showInfo) {
@@ -199,6 +212,15 @@ struct ChatView: View {
         }
         #endif
         .task(id: "\(key.machineID)/\(key.sessionID)|\(session?.cwd ?? "")") { await loadGit() }
+        .task(id: key) {
+            guard style == .assistant else { return }
+            TasksStore.shared.load(key.sessionID)
+            #if DEBUG
+            // `-showTaskDetail <todo id>` / `-showTaskBoard YES`: a task's detail or the board, for screenshots.
+            if let id = UserDefaults.standard.string(forKey: "showTaskDetail") { TasksStore.shared.detailTask = id }
+            if UserDefaults.standard.bool(forKey: "showTaskBoard") { TasksStore.shared.showBoard = true }
+            #endif
+        }
         // Left alone for a few seconds, the open chrome folds away by itself (the page goes back to being all chat).
         .task(id: style == .dev && pane == .chat) {
             guard style == .dev, pane == .chat else { return }
@@ -299,9 +321,10 @@ struct ChatView: View {
         let items = store.items
         // Frozen: the items up to the snapshot (they are in transcript order); what comes after waits.
         let cut = frozen.map { f in Self.prefixCount(items) { ($0.seq, $0.part) <= (f.seq, f.part) } } ?? items.count
+        let feed = style == .assistant ? TasksStore.shared.feed(shownKey.sessionID) : []
         let key = ChatScratch.LinesKey(store: "\(shownKey.machineID)/\(shownKey.sessionID)", version: frozen == nil ? store.version : cut,
                                        first: items.first?.id, live: frozen == nil ? liveTurnID : frozen?.live, open: openWork,
-                                       runs: openRuns, frozen: frozen)
+                                       runs: openRuns, frozen: frozen, feed: feed.map(\.id))
         if scratch.linesKey == key { return scratch.lines }
         var blocks = store.blocks
         if frozen != nil {
@@ -309,7 +332,7 @@ struct ChatView: View {
             scratch.frozenSettled = built.settled
             blocks = built.blocks
         }
-        let lines = lineBuilder.build(Self.debugTrim(blocks), live: key.live)
+        let lines = ChatLines.mergeFeed(lineBuilder.build(Self.debugTrim(blocks), live: key.live), feed)
         scratch.lines = lines
         scratch.linesKey = key
         return lines
@@ -577,6 +600,7 @@ struct ChatView: View {
     @ViewBuilder private func lineView(_ line: ChatLine) -> some View {
         switch line.content {
         case .row(let r): rowView(r, isLatest: false, live: true)
+        case .feed(let item): FeedLine(item: item)
         case .apiError(let item, let info, let count):
             // 重试 only when the error is the last thing, the agent is not working (someone may have retried already) and
             // trying again can help (not a login or a bad request).
@@ -1072,8 +1096,29 @@ struct ChatView: View {
             }
     }
 
+    /// Above the assistant's composer (docs/unified-entry.md): what the conversation's tasks ask, the @ list while
+    /// a mention is typed, the dock, and the route chip.
+    @ViewBuilder private var taskFooter: some View {
+        let conversation = key.sessionID
+        let tasks = TasksStore.shared
+        TaskQuestions(conversation: conversation)
+        if let range = TaskMentionList.mention(in: model.drafts[key] ?? "") {
+            TaskMentionList(conversation: conversation) { todo in
+                withAnimation(Theme.Motion.state) {
+                    var draft = model.drafts[key] ?? ""
+                    draft.removeSubrange(range)
+                    model.drafts[key] = draft
+                    tasks.routes[conversation] = todo.id
+                }
+            }
+        }
+        TaskDock(conversation: conversation)
+        RouteChip(conversation: conversation)
+    }
+
     private var mainFooter: some View {
             VStack(spacing: Theme.Space.m) {
+                if style == .assistant, viewing == nil { taskFooter }
                 ForEach(model.interactions(for: key)) { ix in
                     InteractionPanel(interaction: ix).disabled(session?.canApprove != true)
                 }
@@ -2492,6 +2537,12 @@ struct Composer: View, Equatable {
         // Picked page excerpts ride along as <jarvis-context> tags before what was typed.
         let body = t.isEmpty ? (images.isEmpty ? "参考上面的内容。" : "请看图片") : t
         let message = ctx.isEmpty ? body : ctx.map(\.xml).joined(separator: "\n") + "\n\n" + body
+        // Routed to a task (「对「xx」说」): straight to its agent, not to Persona (docs/unified-entry.md「指向谁」).
+        if images.isEmpty, key.group == (model.hub?.group ?? ""), TasksStore.shared.sendRouted(key.sessionID, text: message) {
+            if raw == text { text = "" }
+            model.composerContexts[key] = nil
+            return
+        }
         // On screen at once; the request runs in the background (a failure turns the bubble into "重发").
         model.sendNow(key, text: message, images: images.map(\.1))
         if raw == text { text = "" }
@@ -2875,6 +2926,8 @@ struct ChatLine: Identifiable {
         case workEnd(group: String, count: Int, files: [ChangedFile])
         /// A model API error (`APIErrorInfo`), repeated `count` times in a row.
         case apiError(item: Item, info: APIErrorInfo, count: Int)
+        /// What the hub added to an assistant conversation: a plan, a task, a receipt… (docs/unified-entry.md).
+        case feed(FeedItem)
 
         var id: String {
             switch self {
@@ -2889,6 +2942,7 @@ struct ChatLine: Identifiable {
             case .wakes(let t, _): "wk-" + t.id
             case .recaps(let id, _): id
             case .apiError(let item, _, _): item.id
+            case .feed(let f): "feed-" + f.id
             }
         }
     }
@@ -2914,6 +2968,7 @@ struct ChatLine: Identifiable {
         Self(.workEnd(group: group, count: count, files: files))
     }
     static func apiError(item: Item, info: APIErrorInfo, count: Int) -> Self { Self(.apiError(item: item, info: info, count: count)) }
+    static func feed(_ item: FeedItem) -> Self { Self(.feed(item)) }
     static func toolRun(id: String, calls: [ToolCall], open: Bool, first: Bool) -> Self {
         Self(.toolRun(id: id, calls: calls, open: open, first: first))
     }
@@ -3514,6 +3569,8 @@ final class ChatScratch {
         var open: Set<String>
         var runs: Set<String>
         var frozen: ChatView.Frozen?
+        /// The assistant conversation's feed items (TasksStore): one more is a new line.
+        var feed: [String] = []
     }
     /// What was sent from this chat lately: its transcript copy arriving brings you to the newest, others do not.
     var sentHere: [String] = []

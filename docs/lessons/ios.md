@@ -511,3 +511,11 @@ mock 和真 hub 上试了很多种都不出，最后是拿那一轮的真实条�
 - **加新的 Swift package 后 xcodebuild 解析失败**：`Revision … for swift-markdown-ui … does not match previously recorded value`。上游把 2.4.1 的 tag 移了，而本机 `~/Library/org.swift.swiftpm/security/fingerprints` 记着旧的；只要不重新解析就没事，一加 package 就全部重新解析。不动全机共用的指纹记录：把已有的 `Package.resolved`（别的 worktree 生成的工程里有）拷进 `Persona.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/`，合并上新 package 的 pin，再用 `xcodebuild -disableAutomaticPackageResolution`。`xcodegen generate` 会重建工程，拷的文件要再放回去。
 - **swift-nio-ssh 的连接要等 `UserAuthSuccessEvent` 才算好**：TCP 连上、握手完都不代表能开通道；登录结果靠这个 user event，失败从 `errorCaught` 来。主机密钥校验失败、公钥被拒的原因 NIOSSH 包得看不出来，在自己的 delegate 里记下 verdict 再分类。
 - **Glue 两边必须在同一个 event loop**：本机监听的子连接和 SSH 的子通道互相写，隧道用一个单线程的 `NIOTSEventLoopGroup`；listener 的 `childChannelInitializer` 返回的 future 完成前不会读这个连接，所以可以在里面等 SSH 拨号和开通道，不会丢请求的头几个字节。
+
+## 浮层里嵌一个对话页：内容比浮层高时整列被居中、头部被顶出去（2026-11-03，#930）
+
+任务详情（`TaskDetailSheet`）在浮层里放了自己的头部 + `ChatView(style: .dev)`。Agent 同时有两张很高的待处理卡片时，对话页底部那一块
+（卡片 + 输入框）本身就比浮层高，`VStack` 整列被浮层居中，上面的头部和关闭按钮、下面的输入框各被裁掉一截；`frame(maxHeight: .infinity,
+alignment: .top)` 也拦不住（外层按内容的高度排）。做法：`GeometryReader` 读出浮层的高度，把整列 `frame(height:)` 钉死、顶部对齐、`clipped()`，
+放不下时只裁对话页的底部。浮层里嵌页面都这样做，别指望对齐参数。
+

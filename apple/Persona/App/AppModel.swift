@@ -394,6 +394,7 @@ final class AppModel {
         guard !isPaired else { return }
         DemoHub.shared.reset()
         InboxStore.shared.forget()
+        TasksStore.shared.forget()
         forgetDemoChats()
         chats = [:]
         assistantCurrent = DemoHub.shared.mainConversation // Persona opens on a conversation, not a blank new one
@@ -419,6 +420,7 @@ final class AppModel {
         links = []
         applyPersonaPalette()
         InboxStore.shared.forget()
+        TasksStore.shared.forget()
         forgetDemoChats()
         chats = [:]
         subscribers = [:]
@@ -933,6 +935,7 @@ final class AppModel {
             Task { await personas.refresh(api) }
             LarkSync.shared.reconnected()
             InboxStore.shared.reload()
+            TasksStore.shared.reconnected()
         }
         AgentSync.shared.schedule()
         // 更新中… until the open chats' backlog and the pending interactions are in (ConnectionStatus).
@@ -1129,6 +1132,12 @@ final class AppModel {
             if isHub { PersonalAgentSync.shared.received(ids) }
         case .inbox:
             if isHub { InboxStore.shared.reload() }
+        case .todos:
+            if isHub { TasksStore.shared.reloadTodos() }
+        case .assistantFeed(let item):
+            if isHub { TasksStore.shared.received(item) }
+        case .taskPlan(let plan):
+            if isHub { TasksStore.shared.received(plan) }
         case .fleet(let state):
             link(group)?.fleet = state
             LiveActivityController.shared.apply(mergedFleet())
@@ -1198,6 +1207,9 @@ final class AppModel {
         case .lark: "lark"
         case .agents: "agents"
         case .inbox: "inbox"
+        case .todos: "todos"
+        case .assistantFeed: "assistant_feed"
+        case .taskPlan: "task_plan"
         case .fleet: "fleet"
         case .hubUpdate: "hub_update"
         case .desktops: "desktops"
@@ -1656,6 +1668,7 @@ final class AppModel {
         }
         if let a = assistantCurrent, a.group != hub?.group { assistantCurrent = assistantMain }
         InboxStore.shared.forget()
+        TasksStore.shared.forget()
         InboxStore.shared.reload()
         Task {
             await refreshAssistant()

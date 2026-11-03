@@ -272,3 +272,9 @@
 - 权限分离下每个会话是两个进程（`sshd-session: user [priv]` 和它的子进程），socket 在子进程里：模拟断线要把监听进程的子孙一起杀；只杀 `[priv]` 那个，连接还在。停 sshd 时不杀子孙，会话会变成父进程为 1 的孤儿一直挂着。
 - `swift test` 的输出跑完才出来；卡住的用例要靠写文件的 trace 或 `sample <pid>` 找。Swift Testing 的 `.timeLimit` 管不住卡在不可取消的等待上的用例。
 - 系统弹窗（`.alert`）的按钮用无障碍激活点不到，`personactl.py tap` 会退到 idb（本机没装）；要点弹窗的流程写成 XCUITest（`app.alerts[...].buttons[...]`）。
+
+## 删模拟器前先确认 udid 不是空的（2026-11-03）
+
+从文件读 udid 再 `xcrun simctl delete $SIM`：文件不存在时 `$SIM` 是空的，这次只打印了用法；要是写成 `delete "$SIM" all` 之类就会删掉所有人的模拟器。
+脚本里读出 udid 后先 `[ -n "$SIM" ] || exit 1`，再做删除、卸载这类动作。
+

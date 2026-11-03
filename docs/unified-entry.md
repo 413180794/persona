@@ -139,13 +139,30 @@ hub 往对话里插的条目，不进 Claude 的 transcript（插进去会多跑
 - 截图：mock hub（`scripts/mock/mock_hub.py`）加计划、任务、动态的假数据，DEBUG 参数 `-openUnifiedStep <n>` 停在原型对应的那一步，
   每一步深浅色各截一张对照原型。
 
+## 实现（iOS，第 3 步）
+
+| 部分 | 在哪 |
+| --- | --- |
+| 数据类型（计划、对话动态、待办、任务状态）和接口 | `apple/Shared/Tasks.swift` |
+| 状态：待办、计划、每段对话的动态，路由到哪个任务、打开哪个任务 | `apple/Persona/App/TasksStore.swift`（`todos` / `assistant_feed` / `task_plan` 事件，连上时重拉） |
+| 计划卡、任务卡、回执、答过的问题、路由气泡、任务坞、问题卡、路由标签、`@` 列表 | `apple/Persona/Views/Assistant/Tasks/TaskViews.swift` |
+| 任务详情（嵌 Agent 的对话页）、任务板 | `apple/Persona/Views/Assistant/Tasks/TaskSheets.swift` |
+| 对话动态排进对话：放在它发生的那一轮末尾（下一条消息之前） | `ChatLines.mergeFeed`，`ChatLine.Content.feed` |
+| 输入框上方：问题卡（只放最早的一张，写「还有 N 件」）、`@` 列表、任务坞、路由标签；路由时消息直接交给任务 | `ChatView.taskFooter`、`Composer.sendText` |
+
+- 状态颜色沿用 Agent 的（`AgentState.tone`：需要你红、工作中琥珀、完成未看绿），不用原型里的橙色等你，和 Agents 页一致。
+- 任务坞的胶囊放不下时让标题省略，「等你」两个字不省略。
+- 任务详情浮层的头部只有状态、任务名、关闭；在哪台电脑、用什么，下面嵌的 Agent 页自己的标题行里有。
+- 截图：`MOCK_TASKS=1`、`MOCK_TASKS_AT`、`-showTaskDetail`、`-showTaskBoard`（`docs/testing.md`）。
+- 还没做（第 4 步）：秒办的手机工具调用画成结果卡、早报画成「今天」、按天分段和折叠、消息卡关联任务、`tasks.trust` 的设置页。
+
 ## 分步
 
 | 步 | 内容 |
 | --- | --- |
 | 1 | 本文档和原型 |
 | 2 ✅ | hub：迁移（`todos.origin` / `plan_id`、`task_plans`、`assistant_feed`）、`task_plan` 工具和提示词、计划开始 / 不开接口、对话动态的接口和推送、做完 / 答过 / 路由的钩子、快照里的任务 |
-| 3 | iOS：模型和 `FakeHub`、对话动态合并、计划卡、任务卡、任务坞、问题卡、回执、`@` 和路由、任务详情浮层、任务板 |
+| 3 ✅ | iOS：模型和 `FakeHub`、对话动态合并、计划卡、任务卡、任务坞、问题卡、回执、`@` 和路由、任务详情浮层、任务板 |
 | 4 | 秒办结果卡、早报进主对话画成「今天」、按天分段和折叠、消息卡关联任务、`tasks.trust` 的设置页 |
 | 5 | 手表和实时活动（只放在做几个、等你几个，手表能批准和选选项）；Android、网页对齐 |
 
