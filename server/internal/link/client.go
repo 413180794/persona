@@ -451,6 +451,10 @@ func watchMode(ctx context.Context, path, mode string, cancel context.CancelFunc
 		return time.Time{}
 	}
 	was := stamp()
+	if currentMode(path) != mode {
+		cancel()
+		return
+	}
 	t := time.NewTicker(modeCheck)
 	defer t.Stop()
 	for {
