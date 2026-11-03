@@ -47,12 +47,41 @@ class PersonaIdentifiersTest(unittest.TestCase):
             caller = (ROOT / relative).read_text()
             self.assertIn('mainActivityIntent(', caller)
             self.assertNotIn('MainActivity::class.java', caller)
-        self.assertEqual({('jarvis', 'pair'), ('jarvis', 'open')}, {
+        self.assertEqual({('jarvis', 'pair'), ('jarvis', 'open'), ('persona', 'pair'), ('persona', 'open')}, {
             (data.get('{http://schemas.android.com/apk/res/android}scheme'),
              data.get('{http://schemas.android.com/apk/res/android}host'))
             for data in app.findall('activity/intent-filter/data')
             if data.get('{http://schemas.android.com/apk/res/android}scheme')
         })
+
+    def test_debug_metadata_is_queried_on_the_canonical_target_not_the_alias(self):
+        source = (ROOT / 'android/app/src/main/java/persona/android/MainActivity.kt').read_text()
+        self.assertIn('getActivityInfo(ComponentName(this, MainActivity::class.java), PackageManager.GET_META_DATA)', source)
+        self.assertNotIn('getActivityInfo(componentName,', source)
+        self.assertIn('getString("jarvis.launchAdapter")', source)
+        debug = ET.parse(ROOT / 'android/app/src/debug/AndroidManifest.xml').getroot().find('application')
+        target = next(item for item in debug.findall('activity') if item.get(ANDROID_NAME) == 'persona.android.MainActivity')
+        metadata = target.find('meta-data')
+        self.assertEqual('jarvis.launchAdapter', metadata.get(ANDROID_NAME))
+        self.assertEqual('persona.android.debug.DebugLaunchAdapter', metadata.get('{http://schemas.android.com/apk/res/android}value'))
+        main = ET.parse(ROOT / 'android/app/src/main/AndroidManifest.xml').getroot()
+        self.assertFalse(any(item.get(ANDROID_NAME) == 'jarvis.launchAdapter' for item in main.iter('meta-data')))
+        adapter = (ROOT / 'android/app/src/debug/java/persona/android/debug/DebugLaunchAdapter.kt').read_text()
+        self.assertIn('class DebugLaunchAdapter : LaunchAdapter', adapter)
+
+    def test_pairing_wrappers_parse_both_link_schemes_before_permission_and_networking(self):
+        helper = (ROOT / 'android/app/src/main/java/persona/android/platform/PairingLinks.kt').read_text()
+        self.assertIn('listOf("persona:", "jarvis:").any(url.trim()::startsWith)', helper)
+        self.assertIn('PairingInput.parse(url)', helper)
+        platform = (ROOT / 'android/app/src/main/java/persona/android/platform/LocalNetworkPermission.kt').read_text()
+        self.assertEqual(2, platform.count('val parsed = request.parsedPairingLink() ?: request'))
+        self.assertEqual(2, platform.count('permission.ensureAllowed(parsed)'))
+        self.assertEqual(2, platform.count('permission.missingFor(parsed)'))
+        self.assertNotIn('startsWith("jarvis:")', platform)
+        wired = (ROOT / 'android/app/src/main/java/persona/android/di/PairingModule.kt').read_text()
+        self.assertIn('val parsed = request.parsedPairingLink()', wired)
+        self.assertIn('HubPairingClient.addresses(parsed)', wired)
+        self.assertNotIn('startsWith("jarvis:")', wired)
 
     def test_only_one_foreground_service_identity_is_registered(self):
         manifest = ET.parse(ROOT / 'android/platform/notify/src/main/AndroidManifest.xml').getroot()

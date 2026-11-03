@@ -1,6 +1,7 @@
 package persona.android
 
 import android.Manifest
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -61,7 +62,8 @@ class MainActivity : ComponentActivity() {
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
     /** Installed only by the debug manifest; release builds have no launch adapter or developer pages. */
     private val launchAdapter: LaunchAdapter? by lazy {
-        packageManager.getActivityInfo(componentName, PackageManager.GET_META_DATA).metaData
+        // 启动组件可能是 legacy alias；alias 不继承 target 的 metadata，应查询真实 Activity。
+        packageManager.getActivityInfo(ComponentName(this, MainActivity::class.java), PackageManager.GET_META_DATA).metaData
             ?.getString("jarvis.launchAdapter")
             ?.let { Class.forName(it).getDeclaredConstructor().newInstance() as LaunchAdapter }
     }

@@ -6,6 +6,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import persona.android.PersonaApp
+import persona.android.platform.parsedPairingLink
 import persona.core.contracts.HubScope
 import persona.core.contracts.api.*
 import persona.core.data.HubCredentials
@@ -13,7 +14,6 @@ import persona.core.data.HubDataStore
 import persona.core.domain.Pairing
 import persona.core.hub.*
 import persona.feature.settings.SettingsServices
-import persona.feature.settings.PairingInput
 import java.io.OutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -65,9 +65,8 @@ class WiredPairingService @Inject constructor(application: Application, private 
         var networking: HubPairingClient? = null
         try {
             progress(PairingProgress(PairingStage.Parse))
-            val parsed = if (request.url.trim().startsWith("jarvis:")) {
-                PairingInput.parse(request.url)
-            } else request.copy(url = request.url.trim(), token = request.token.trim())
+            val parsed = request.parsedPairingLink()
+                ?: request.copy(url = request.url.trim(), token = request.token.trim())
             val addresses = HubPairingClient.addresses(parsed)
             networking = HubPairingClient(parsed.hub, parsed.fp, addresses, app.clientVersion())
             val result = networking.pair(parsed.token, app.deviceName, progress)

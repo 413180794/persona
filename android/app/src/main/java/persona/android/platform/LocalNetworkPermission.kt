@@ -20,7 +20,6 @@ import persona.android.di.WiredPairingService
 import persona.core.contracts.api.*
 import persona.core.hub.HubPairingClient
 import persona.core.hub.LocalAddressPolicy
-import persona.feature.settings.PairingInput
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
@@ -86,7 +85,7 @@ class PlatformPairing @Inject constructor(
     }
     override suspend fun pair(request: PairingRequest) = pair(request) { }
     override suspend fun pair(request: PairingRequest, progress: (PairingProgress) -> Unit) {
-        val parsed = if (request.url.trim().startsWith("jarvis:")) PairingInput.parse(request.url) else request
+        val parsed = request.parsedPairingLink() ?: request
         permission.ensureAllowed(parsed)
         try {
             delegate.pair(parsed, progress)
@@ -105,7 +104,7 @@ class PlatformPairing @Inject constructor(
         override val isPaired: kotlinx.coroutines.flow.StateFlow<Boolean> = none
         override suspend fun pair(request: PairingRequest) = pair(request) { }
         override suspend fun pair(request: PairingRequest, progress: (PairingProgress) -> Unit) {
-            val parsed = if (request.url.trim().startsWith("jarvis:")) PairingInput.parse(request.url) else request
+            val parsed = request.parsedPairingLink() ?: request
             permission.ensureAllowed(parsed)
             try { delegate.addHub(parsed, progress) }
             catch (error: PairingException) {
