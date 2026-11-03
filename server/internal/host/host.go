@@ -20,11 +20,13 @@ const (
 	Orca = "orca"
 	// HerdrCore is herdr-core (hc), the runtime behind the Herdr desktop app: not classic herdr, a host of its own.
 	HerdrCore = "herdr-core"
+	// Botmux is botmux, the Feishu topic ↔ AI CLI bridge: a pane is a botmux session, its id the session id.
+	Botmux = "botmux"
 )
 
 // Kinds are the host kinds a stored pane may be prefixed with; the list is fixed, not what a machine registers, so
 // a stored pane means the same everywhere.
-var Kinds = []string{Herdr, Orca, HerdrCore}
+var Kinds = []string{Herdr, Orca, HerdrCore, Botmux}
 
 // Host is what every terminal host provides. Pane ids in what it returns (Agent.PaneID, Created.Pane) are PaneRefs
 // of its own kind; the PaneRefs it is given are always of its kind.

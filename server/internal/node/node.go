@@ -171,7 +171,7 @@ func New(version string) (*Node, error) {
 		n.logger.Printf("machine uid: %v", err) // the hubs then treat this computer as theirs alone
 	}
 	n.configureCodex(proto.CodexConfig{})
-	n.hosts = host.NewRegistry(engineHosts(proto.EngineHerdr, n.logger.Printf)...) // herdr until engine.use
+	n.hosts = host.NewRegistry(nodeHosts(proto.EngineHerdr, n.logger.Printf)...) // herdr until engine.use
 	n.resetSignals()
 	n.state = newState()
 	n.ports.kick = make(chan struct{}, 1)

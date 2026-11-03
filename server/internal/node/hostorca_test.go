@@ -25,6 +25,8 @@ import (
 func TestMain(m *testing.M) {
 	// No test may reach the user's running Orca: the default metadata path points nowhere.
 	os.Setenv("ORCA_USER_DATA_PATH", "/tmp/jarvis-test-no-orca")
+	// Nor the user's botmux: a node registers no botmux host unless a test gives it one.
+	botmuxBin = func() string { return "" }
 	os.Exit(m.Run())
 }
 

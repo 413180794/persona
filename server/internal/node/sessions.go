@@ -876,6 +876,9 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 			continue
 		}
 		if id := a.SessionID(); id != "" {
+			if liveTaken(m, id) && a.AgentStatus == proto.StatusOffline {
+				continue // the same session runs in another host's pane (botmux's parked row, herdr's resume)
+			}
 			m[id] = a
 			continue
 		}
@@ -901,7 +904,7 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 			id = n.panes[a.PaneID]
 			n.mu.Unlock()
 		}
-		if _, taken := m[id]; id == "" || taken {
+		if id == "" || liveTaken(m, id) {
 			id = n.guessSession(a, m)
 		}
 		if id != "" {
@@ -959,6 +962,13 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 		n.lastPanes[id] = a.PaneID
 	}
 	return true
+}
+
+// liveTaken: a running agent already has session id in m. An offline one (a parked botmux session) gives way to the
+// pane that runs it.
+func liveTaken(m map[string]host.Agent, id string) bool {
+	a, ok := m[id]
+	return ok && a.AgentStatus != proto.StatusOffline
 }
 
 // sessionFromProcess reads the session a pane's claude runs from ~/.claude/sessions/<pid>.json, which Claude Code

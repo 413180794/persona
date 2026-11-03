@@ -65,7 +65,7 @@ type Controller interface { CanControl() bool
 ```
 
 - **窗格引用 `PaneRef`**：宿主类型 + 宿主自己的 id。存储和传输时写成 `<kind>:<id>`；herdr 的窗格不加前缀（herdr 的 id 本身带冒号，
-  如 `w1:p2`），前缀不在 `host.Kinds`（固定的已知类型：herdr、orca、herdr-core，不看本机注册了哪些）里的都当作 herdr；已知类型但本机没有这个宿主的，查找时报「no <kind> host on this machine」，不会发给 herdr，所以 hub 数据库、`proto.Session`、hook 带的窗格都不用迁移。
+  如 `w1:p2`），前缀不在 `host.Kinds`（固定的已知类型：herdr、orca、herdr-core、botmux，不看本机注册了哪些）里的都当作 herdr；已知类型但本机没有这个宿主的，查找时报「no <kind> host on this machine」，不会发给 herdr，所以 hub 数据库、`proto.Session`、hook 带的窗格都不用迁移。
   node 里的窗格一律存这个字符串（`n.panes`、`Agent.PaneID`），调用时由 `Registry.Pane` 解析出宿主和 id。
 - **会话模型**：node 内部是 `map[string]host.Agent`（字段和原来的 herdr Agent 一样，`PaneID` 是 `PaneRef` 字符串），宿主返回的
   `Agent`、`Created` 里的窗格都已经是本宿主的 `PaneRef`。

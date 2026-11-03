@@ -163,7 +163,7 @@ func (n *Node) useEngine(ctx context.Context, engine string) error {
 		return nil
 	}
 	n.eng.mu.Lock()
-	n.hosts.Set(engineHosts(engine, n.logf)...)
+	n.hosts.Set(nodeHosts(engine, n.logf)...)
 	n.resetSignals()
 	n.eng.name = engine
 	n.mu.Lock()

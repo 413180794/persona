@@ -6,6 +6,8 @@
 例外是 **「herdr + Herdr App（并列）」**：一台电脑同时在用经典 herdr 和 Herdr App（典型场景：人在电脑本地用终端里的 herdr，
 另一台电脑上的 Herdr App 通过 remote 连到这台机器开终端）时选它，两边的会话合并显示。下文「并列」一节有它的边界。
 
+另外，装了 **botmux** 的电脑上，botmux 里的会话会和所选引擎里的会话一起显示（下文「botmux」一节）：botmux 不占引擎选项，也不用选。
+
 下文的「引擎」都指这个选择；接口、存储和 node 怎么切换见 `docs/protocol.md`「引擎」，设计和取舍见 `docs/plan-orca-support.md`。
 
 ## 引擎
@@ -65,6 +67,26 @@ iOS 和 Android App 都有这两处入口（Android 的机器页在 Agents：列
 - 检测：只有 herdr 和 herdr-core 都「检测到可用」时这个选项才标可用（也可以在离线机器上预选，连上后生效；只有一边在时，
   在的一边照常工作，另一边的会话为空）。
 - Orca 不进并列（它每秒轮询、开销最大），要和 Orca 并用以后再做。
+
+## botmux
+
+[botmux](https://github.com/deepcoldy/botmux) 把每个飞书话题接成一个 Claude Code 会话，跑在它自己的 tmux 里。它不是引擎：
+node 所在的电脑 PATH 上有 `botmux` 时，node 在所选引擎的宿主之外再挂一个 botmux 宿主（`server/internal/node/hostbotmux.go`），
+典型场景是工作的 Agent 在 botmux、个人的在 herdr，两边一起看。
+
+- **列出和状态**：每次刷新一次 `botmux observe --include-raw`（所有 daemon 的所有会话，结果 5 秒内复用，发出消息后马上重看；本机约 500 个会话时 0.3–0.9 秒；observe 偶尔失败时沿用上一次的列表）。
+  只列 Claude Code 的会话：在跑的按 botmux 的状态（对话框 `tuiPromptActive` 或 botmux 的「需要你」→ 需要你，`working` / `starting` / `analyzing` → 工作中，
+  其余 → 做完）；挂起的（`not_running`、没关闭、7 天内动过）显示成「未运行」。botmux 会话 id 就是 Claude 会话 id（botmux 用它拉起 claude），对话记录照旧。
+  空间是工作目录（和 Herdr App 没放进空间的终端一样），名字是 botmux 的会话标题。
+- **发消息**：交给 botmux 投递（它的 dashboard 的 `POST /api/trigger`，目标是这个会话），不往终端里打字：会话忙时 botmux 排队，
+  挂起的会话 botmux 自己续上（不会在 herdr 里另起一个 `claude --resume`；挂起超过 7 天、不在列表里的也一样），回答照常发回飞书话题。
+  dashboard 的 token 由 node 跑 `botmux dashboard current` 取，只存在内存里，只连本机 127.0.0.1。消息在 Claude 那边带着 botmux 的任务标签和一段「外部事件」说明。
+- **做不到**：读屏、按键、回答对话框（在飞书里答）、关闭、改名、新建、实时终端；App 按能力隐藏或提示。
+- **不重复**：botmux 用 herdr 后端时，它的会话本来就是 herdr 的窗格，botmux 宿主不再列；Codex / TRAEX 的 botmux 会话第一期不列。
+- **同一个会话两边都有**：它也开在 herdr 等引擎的窗格里（以前从手机 `--resume` 过）时，以在跑的窗格为准，botmux 的挂起记录让开。
+- **检测时机**：node 启动和切换引擎时找 `botmux`：PATH 上的，没有就是 botmux 安装时写的 `~/.botmux/bin/botmux`（launchd 常驻的 node 只有系统的 PATH）；之后才装 botmux 的，重启那台电脑的 personad 才会显示。
+- **待办**：按会话 id 挂，和别的会话一样；按项目整组挂时，项目是 botmux 会话的工作目录。
+- 实测：`go test -tags botmuxlive -run BotmuxLive ./internal/node/ -v`（只读列表，加一次 dry run 投递：botmux 校验并渲染，不派发）。
 
 ## 选不了某个引擎时
 

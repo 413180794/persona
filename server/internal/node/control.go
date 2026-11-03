@@ -361,6 +361,13 @@ func (n *Node) paneFor(ctx context.Context, id string) (string, error) {
 			return a.PaneID, nil
 		}
 	}
+	// A botmux session parked for too long to be listed is still botmux's: a reply goes to botmux, which resumes it,
+	// not to a claude --resume of ours.
+	if h, ok := n.hosts.Get(host.Botmux).(*botmuxHost); ok {
+		if _, a, err := h.row(ctx, id); err == nil {
+			return a.PaneID, nil
+		}
+	}
 	return "", fmt.Errorf("session %s is not running", id)
 }
 
