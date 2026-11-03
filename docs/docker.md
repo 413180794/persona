@@ -124,6 +124,47 @@ docker compose pull && docker compose up -d
   `network_mode: host`（同时去掉 `ports`）。
 - hub 默认是 HTTP，只该在内网、VPN 或 HTTPS 反向代理后面访问，不要把 18660 直接暴露到公网。
 
+### 同一台机器上的反向代理
+
+hub 把自己容器的网关当公网（[network.md](network.md)「来源判断与反向代理」）：公网来的明文请求回 `403 tls_required`、不能用主 token。
+NAS 上常见的两种反向代理接法，连 hub 时来源都会变成网关，要按下面接：
+
+- **代理在另一个容器里**（Caddy、nginx、Nginx Proxy Manager…）：不要经宿主机映射的端口连 hub（`<NAS 地址>:18660`）。代理容器在别的
+  Docker 网络里，转过去时源地址被 MASQUERADE 成 hub 所在网络的网关。让 hub 也加入代理的网络，代理按别名连：
+
+  ```yaml
+  services:
+    hub:
+      networks:
+        default:            # 不能漏：hub 经它连 Postgres
+        proxy:
+          aliases: [persona-hub]
+  networks:
+    proxy:
+      name: <代理所在的网络>  # docker network ls
+      external: true
+  ```
+
+  代理里写 `persona-hub:18660`，hub 看到的是代理容器的私网地址。
+- **代理跑在宿主机上**（NAS 系统自带的反向代理）：连 NAS 自己的局域网地址（`http://<NAS 局域网地址>:18660`），不要连 `127.0.0.1` / `localhost`：
+  后者经 docker-proxy 转进去，来源是网关；前者经 iptables DNAT，来源是 NAS 自己的局域网地址。
+- **代理上拦住外网的 `/admin`**：这样接好以后，经代理来的请求 hub 都当局域网，而管理界面首次设管理员密码对局域网不要验证码
+  （[admin.md](admin.md)「首次设置」）。只让局域网的客户端打开 `/admin`，例如 Caddy：
+
+  ```caddyfile
+  @admin_outside {
+  	path /admin /admin/*
+  	not client_ip private_ranges
+  }
+  respond @admin_outside 403
+  reverse_proxy persona-hub:18660 {
+  	flush_interval -1
+  }
+  ```
+
+- **在 NAS 上调 hub 的接口**同理：`curl http://127.0.0.1:18660/…` 会被当公网，换成局域网地址，或进容器调
+  （`docker compose exec hub wget -qO- --header "Authorization: Bearer <token>" http://127.0.0.1:18660/api/v1/machines`）。
+
 ## 管理界面
 
 `<JARVIS_PUBLIC_URL>/admin` 是 hub 自带的管理界面（[admin.md](admin.md)）：第一次打开设管理员密码，之后在网页上加电脑、管设备、改网络。
