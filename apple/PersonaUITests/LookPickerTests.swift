@@ -20,7 +20,7 @@ final class LookPickerTests: XCTestCase {
             let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
             for (page, id) in [("color", "color-style"), ("style", "style-glass")] {
                 let app = XCUIApplication()
-                app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openAppearance", page, "-openPersona", "jarvis"]
+                app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openAppearance", page, "-openPersona", "persona"]
                 app.launchJarvis()
                 _ = app.collectionViews.firstMatch.waitForExistence(timeout: 10)
                 let bar = app.tabBars.firstMatch.frame.minY
@@ -129,7 +129,7 @@ final class LookPickerTests: XCTestCase {
 
     /// The built-in brings no colors: no 跟随形象 to choose.
     @MainActor func testNoFollowingAPersonaWithoutColors() throws {
-        let app = launch("color", ["-ui.style", "glass", "-ui.color", "style", "-openPersona", "jarvis"])
+        let app = launch("color", ["-ui.style", "glass", "-ui.color", "style", "-openPersona", "persona"])
         XCTAssertTrue(reveal(app, app.buttons["color-blue"]))
         XCTAssertTrue(app.buttons["color-style"].isSelected)
         XCTAssertFalse(app.buttons["color-persona"].exists, "跟随形象 offered for the built-in")
@@ -137,7 +137,7 @@ final class LookPickerTests: XCTestCase {
 
     /// The iPhone's shell keeps 设置 in a sheet: a choice rebuilds the tree, the sheet included, and lands back on 主题色.
     @MainActor func testShellSheetStaysOnAppearance() throws {
-        let app = launch("color", ["-ui.oldLayout", "NO", "-ui.style", "glass", "-ui.color", "style", "-openPersona", "jarvis"])
+        let app = launch("color", ["-ui.oldLayout", "NO", "-ui.style", "glass", "-ui.color", "style", "-openPersona", "persona"])
         let bar = app.navigationBars["主题色"]
         XCTAssertTrue(bar.waitForExistence(timeout: 20), "the shell's 设置 is not on 主题色")
         XCTAssertFalse(app.tabBars.firstMatch.exists, "not the shell")

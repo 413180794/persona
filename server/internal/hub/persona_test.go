@@ -74,13 +74,15 @@ func TestPersonasListOnlyWholePackages(t *testing.T) {
 	h := newTestHub(t)
 	dir := h.personasDir()
 	writePersona(t, dir, "doudou", personaManifestJSON("doudou"), personaFilesOK())
-	// Each of these is left out: a file the manifest names is missing, the id is not the directory's, the built-in id,
+	// Each of these is left out: a file the manifest names is missing, the id is not the directory's, the built-ins' ids,
 	// no idle dot, a path out of the package, a format the hub does not know.
 	missing := personaFilesOK()
 	delete(missing, "dot/working.png")
 	writePersona(t, dir, "missing", personaManifestJSON("missing"), missing)
 	writePersona(t, dir, "renamed", personaManifestJSON("other"), personaFilesOK())
 	writePersona(t, dir, "jarvis", personaManifestJSON("jarvis"), personaFilesOK())
+	writePersona(t, dir, "persona", personaManifestJSON("persona"), personaFilesOK())
+	writePersona(t, dir, "jarvis-circuit", personaManifestJSON("jarvis-circuit"), personaFilesOK())
 	writePersona(t, dir, "noidle", strings.Replace(personaManifestJSON("noidle"), `"idle"`, `"thinking"`, 1), personaFilesOK())
 	writePersona(t, dir, "escape", strings.Replace(personaManifestJSON("escape"), "avatar/128.png", "../doudou/avatar/128.png", 1), personaFilesOK())
 	writePersona(t, dir, "future", strings.Replace(personaManifestJSON("future"), `"format":1`, `"format":2`, 1), personaFilesOK())

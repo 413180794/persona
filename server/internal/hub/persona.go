@@ -25,14 +25,15 @@ import (
 
 const (
 	personaFormat = 1
-	// The built-in look (drawn by the app) owns this id.
-	personaBuiltin = "jarvis"
 	// A package is a few hundred KB of PNGs; the bounds keep a mistake (a 4K source image left in) off the phones.
 	personaMaxFile  = 4 << 20
 	personaMaxTotal = 16 << 20
 )
 
 var personaIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
+
+// personaBuiltins are the looks the apps draw themselves (团子, the default; 面罩; 汇流): a package may not take their ids.
+var personaBuiltins = map[string]bool{"persona": true, "jarvis": true, "jarvis-circuit": true}
 
 // personaStates are the dot's states; idle is the one a package must have (the app shows it for any it lacks).
 var personaStates = []string{"idle", "thinking", "working", "needs_you", "offline"}
@@ -89,8 +90,8 @@ func loadPersona(dir, id string) (personaInfo, error) {
 	if !personaIDPattern.MatchString(id) {
 		return personaInfo{}, errors.New("the directory's name is not an id (a-z, 0-9, -)")
 	}
-	if id == personaBuiltin {
-		return personaInfo{}, fmt.Errorf("%q is the built-in look's id", personaBuiltin)
+	if personaBuiltins[id] {
+		return personaInfo{}, fmt.Errorf("%q is a built-in look's id", id)
 	}
 	root := filepath.Join(dir, id)
 	raw, err := os.ReadFile(filepath.Join(root, "persona.json"))

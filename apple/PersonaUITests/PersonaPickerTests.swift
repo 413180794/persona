@@ -19,10 +19,10 @@ final class PersonaPickerTests: XCTestCase {
     /// Whatever happened, the simulator is left on the built-in: other tests read "Persona" in the bar.
     override func tearDown() {
         if let hub {
-            // `-openPersona jarvis` takes effect as the app starts.
+            // `-openPersona persona` takes effect as the app starts.
             let app = XCUIApplication()
             let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-            app.launchArguments = ["-pairURL", pair, "-openPersona", "jarvis"]
+            app.launchArguments = ["-pairURL", pair, "-openPersona", "persona"]
             app.launchPinned()
             _ = app.tabBars.firstMatch.waitForExistence(timeout: 10)
             app.terminate()
@@ -30,11 +30,11 @@ final class PersonaPickerTests: XCTestCase {
         super.tearDown()
     }
 
-    /// On the Persona tab's main conversation. `-openPersona jarvis`: from the built-in, whatever the last run chose.
+    /// On the Persona tab's main conversation. `-openPersona persona`: from the built-in, whatever the last run chose.
     @MainActor private func launch() -> XCUIApplication {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-openAssistant", main, "-openPersona", "jarvis"]
+        app.launchArguments = ["-pairURL", pair, "-openAssistant", main, "-openPersona", "persona"]
         app.launchPinned()
         return app
     }
@@ -58,7 +58,7 @@ final class PersonaPickerTests: XCTestCase {
     /// 设置 › 外观 › 形象: the settings tab remembers its page, so the second time it is already open.
     @MainActor private func openAppearance(_ app: XCUIApplication) {
         app.tabBars.buttons["设置"].tap()
-        if app.buttons["persona-jarvis"].waitForExistence(timeout: 2) { return }
+        if app.buttons["persona-persona"].waitForExistence(timeout: 2) { return }
         let row = app.buttons["settings-persona"]
         XCTAssertTrue(row.waitForExistence(timeout: 10), "no 形象 row:\n\(app.debugDescription)")
         row.tap()
@@ -68,7 +68,7 @@ final class PersonaPickerTests: XCTestCase {
         let app = launch()
         XCTAssertTrue(topBarName(app).hasPrefix("Persona"), "the bar should start on the built-in")
         openAppearance(app)
-        let builtin = app.buttons["persona-jarvis"]
+        let builtin = app.buttons["persona-persona"]
         let demo = app.buttons["persona-demo"]
         XCTAssertTrue(demo.waitForExistence(timeout: 20), "the hub's persona is not offered:\n\(app.debugDescription)")
         XCTAssertTrue(builtin.isSelected, "the built-in should be the one on screen")
@@ -84,24 +84,32 @@ final class PersonaPickerTests: XCTestCase {
         shot(app, "topbar-demo")
 
         openAppearance(app)
-        let back = app.buttons["persona-jarvis"]
+        let back = app.buttons["persona-persona"]
         XCTAssertTrue(back.waitForExistence(timeout: 10))
         back.tap()
-        waitSelected(app.buttons["persona-jarvis"], "choosing Persona again did not take")
+        waitSelected(app.buttons["persona-persona"], "choosing Persona again did not take")
         XCTAssertTrue(topBarName(app).hasPrefix("Persona"), "the top bar did not go back to Persona")
     }
 
-    /// 汇流 is a built-in next to the default (no download): choosing it keeps the name Persona.
+    /// 汇流 and 面罩 are built-ins next to the default (no download): choosing them keeps the name Persona.
     @MainActor func testChoosingCircuitKeepsTheName() throws {
         let app = launch()
         openAppearance(app)
         let circuit = app.buttons["persona-jarvis-circuit"]
         XCTAssertTrue(circuit.waitForExistence(timeout: 10), "汇流 is not offered:\n\(app.debugDescription)")
-        XCTAssertTrue(app.buttons["persona-jarvis"].isSelected, "the default should still be 面罩")
+        XCTAssertTrue(app.buttons["persona-persona"].isSelected, "the default should be 团子")
         circuit.tap()
         waitSelected(app.buttons["persona-jarvis-circuit"], "choosing 汇流 did not take")
         shot(app, "settings-circuit")
         XCTAssertTrue(topBarName(app).hasPrefix("Persona"), "汇流 should keep the name Persona")
         shot(app, "topbar-circuit")
+
+        // 面罩, the default until 2026-11-03, is still there to choose.
+        openAppearance(app)
+        let visor = app.buttons["persona-jarvis"]
+        XCTAssertTrue(visor.waitForExistence(timeout: 10), "面罩 is not offered:\n\(app.debugDescription)")
+        visor.tap()
+        waitSelected(app.buttons["persona-jarvis"], "choosing 面罩 did not take")
+        XCTAssertTrue(topBarName(app).hasPrefix("Persona"), "面罩 should keep the name Persona")
     }
 }

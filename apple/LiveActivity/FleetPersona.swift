@@ -6,7 +6,7 @@ import UIKit
 /// The look's drawing and where the app leaves it for the extension (the value itself: Shared/FleetState.swift).
 nonisolated extension FleetLook {
     /// Before the app told the activity anything: the default persona in the app's default accent.
-    static let standard = FleetLook(design: PersonaFace.Design.visor.rawValue, light: 0x007AFF, dark: 0x0A84FF)
+    static let standard = FleetLook(design: PersonaFace.Design.mochi.rawValue, light: 0x007AFF, dark: 0x0A84FF)
 
     /// A design in a (dynamic) color, resolved to its light and dark values.
     init(design: PersonaFace.Design, tint: Color, package: String? = nil) {
@@ -21,7 +21,7 @@ nonisolated extension FleetLook {
         return ch(r.red) << 16 | ch(r.green) << 8 | ch(r.blue)
     }
 
-    var faceDesign: PersonaFace.Design { PersonaFace.Design(rawValue: design) ?? .visor }
+    var faceDesign: PersonaFace.Design { PersonaFace.Design(rawValue: design) ?? .mochi }
     var tint: Color { Color(light: light, dark: dark) }
 
     /// What the app saved last; `standard` when nothing is readable. Cheap enough to call on every render. The widget

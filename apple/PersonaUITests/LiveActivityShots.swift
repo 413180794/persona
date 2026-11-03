@@ -14,7 +14,7 @@ final class LiveActivityShots: XCTestCase {
             app.launchArguments = ["-showFleetSample", phase, "-fleetDetails", env["JARVIS_FLEET_DETAILS"] ?? "NO",
                                    "-fleetIsland", env["JARVIS_FLEET_ISLAND"] ?? "a", "-tab", "settings",
                                    "-showFleetCount", env["JARVIS_FLEET_COUNT"] ?? "0"]
-            // The persona on the activity (`jarvis`, the default, `jarvis-circuit`, or a hub package such as mock_hub's
+            // The persona on the activity (`persona`, the default, `jarvis` (面罩), `jarvis-circuit`, or a hub package such as mock_hub's
             // `demo`, which needs JARVIS_MOCK_HUB to be downloaded from).
             if let persona = env["JARVIS_PERSONA"] { app.launchArguments += ["-openPersona", persona] }
             if let pair = Self.pair { app.launchArguments += ["-pairURL", pair] }
@@ -108,7 +108,7 @@ final class LiveActivityShots: XCTestCase {
         }
         // Leave the simulator on the default for the other tests.
         app.terminate()
-        app.launchArguments = ["-openPersona", "jarvis", "-tab", "settings"]
+        app.launchArguments = ["-openPersona", "persona", "-tab", "settings"]
         app.launchPinned()
         sleep(2)
         app.terminate()

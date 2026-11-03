@@ -1,14 +1,16 @@
 // Persona's persona in the page (docs/persona.md, the app's PersonaStore / PersonaViews / PersonaPicker): the packages the
 // hub offers, the one chosen in this browser, and its face (a still avatar) and dot (the state's APNG, which the
-// browser animates by itself). With the built-in chosen, or no package (an older hub, an empty list), every place
-// keeps what it showed before: the views take that as `fallback`.
+// browser animates by itself). The default is 团子 (MochiFace), also while a chosen package is not there (an older hub,
+// an empty list); with the page's mark chosen (the default before 2026-11-03) every place keeps what it showed before:
+// the views take that as `fallback`.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { api, ApiError, errorText, getToken } from "../../lib/api";
 import {
-  avatarFile, BUILTIN_PERSONA, dotFile, PERSONA_STATES, personaFileURL, usablePersonas, type PersonaInfo, type PersonaState,
+  avatarFile, BUILTIN_PERSONA, dotFile, isBuiltinPersona, MARK_PERSONA, PERSONA_STATES, personaFileURL, usablePersonas, type PersonaInfo, type PersonaState,
 } from "../../lib/persona";
 import { cx } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { MochiFace } from "./MochiFace";
 
 const CHOSEN_KEY = "jarvis.persona";
 
@@ -69,14 +71,16 @@ function subscribe(l: () => void) {
 function usePersonaStore(): PersonaStoreState {
   const s = useSyncExternalStore(subscribe, () => ps);
   useEffect(() => {
-    if (!ps.loaded && ps.chosen !== BUILTIN_PERSONA) void refreshPersonas();
+    if (!ps.loaded && !isBuiltinPersona(ps.chosen)) void refreshPersonas();
   }, []);
   return s;
 }
 
 export interface CurrentPersona {
-  /** The package on screen; null: the built-in (the page's own mark). */
+  /** The package on screen; null: a built-in. */
   info: PersonaInfo | null;
+  /** 团子 is on screen (the default, or a chosen package that is not there); false with a package or the mark. */
+  mochi: boolean;
   name: string;
   chosen: string;
 }
@@ -84,8 +88,8 @@ export interface CurrentPersona {
 /** The persona on screen: the chosen package once the hub listed it, else the built-in named Persona. */
 export function usePersona(): CurrentPersona {
   const s = usePersonaStore();
-  const info = s.chosen === BUILTIN_PERSONA ? null : (s.list.find((p) => p.id === s.chosen) ?? null);
-  return { info, name: info?.manifest.name ?? "Persona", chosen: s.chosen };
+  const info = isBuiltinPersona(s.chosen) ? null : (s.list.find((p) => p.id === s.chosen) ?? null);
+  return { info, mochi: !info && s.chosen !== MARK_PERSONA, name: info?.manifest.name ?? "Persona", chosen: s.chosen };
 }
 
 function useReducedMotion(): boolean {
@@ -100,7 +104,7 @@ function useReducedMotion(): boolean {
   return reduce;
 }
 
-/** The built-in's face at a size: the web's own mark (the same as 设置 › 助手). */
+/** The page's own mark at a size (the same as 设置 › 助手): the built-in before 团子, still a choice. */
 export function BuiltinFace({ size }: { size: number }) {
   return (
     <span className="flex shrink-0 items-center justify-center rounded-full bg-ink text-surface" style={{ width: size, height: size }}>
@@ -109,14 +113,17 @@ export function BuiltinFace({ size }: { size: number }) {
   );
 }
 
-/** A still face in a circle: the package's avatar at the size it needs, else `fallback` (what the place showed before). */
+/**
+ * A still face in a circle: the package's avatar at the size it needs; 团子 when it is the one on screen; else `fallback`
+ * (what the place showed before, for the page's mark).
+ */
 export function PersonaAvatar({ size, persona, fallback, className }: { size: number; persona?: PersonaInfo | null; fallback: React.ReactNode; className?: string }) {
   const current = usePersona();
   const p = persona === undefined ? current.info : persona;
   const [broken, setBroken] = useState(false);
   const file = p ? avatarFile(p.manifest, size * Math.max(2, Math.ceil(typeof devicePixelRatio === "number" ? devicePixelRatio : 2))) : undefined;
   useEffect(() => setBroken(false), [p?.id, p?.rev]);
-  if (!p || !file || broken) return <>{fallback}</>;
+  if (!p || !file || broken) return persona === undefined && current.mochi ? <MochiFace size={size} className={className} /> : <>{fallback}</>;
   return (
     <img
       src={personaFileURL(p, file, getToken())}
@@ -134,7 +141,8 @@ export function PersonaAvatar({ size, persona, fallback, className }: { size: nu
 
 /**
  * The face moving for a state (the top bar's dot): the state's frames, looping. With reduced motion only the first frame,
- * which says the state by itself (a canvas draws an animated image's first frame). `fallback` with no package.
+ * which says the state by itself (a canvas draws an animated image's first frame). 团子 for the default, `fallback`
+ * for the page's mark.
  */
 export function PersonaDot({ size, state, persona, fallback, className }: { size: number; state: PersonaState; persona?: PersonaInfo | null; fallback: React.ReactNode; className?: string }) {
   const current = usePersona();
@@ -144,7 +152,7 @@ export function PersonaDot({ size, state, persona, fallback, className }: { size
   const file = p ? dotFile(p.manifest, state) : undefined;
   const url = p && file ? personaFileURL(p, file, getToken()) : "";
   useEffect(() => setBroken(false), [url]);
-  if (!p || !file || broken) return <>{fallback}</>;
+  if (!p || !file || broken) return persona === undefined && current.mochi ? <MochiFace size={size} state={state} className={className} /> : <>{fallback}</>;
   if (still) return <StillFrame url={url} size={size} className={className} onError={() => setBroken(true)} />;
   return (
     <img
@@ -201,8 +209,8 @@ function Swatches({ p }: { p: PersonaInfo }) {
 }
 
 /**
- * 形象 (设置 › 通用 and the profile page; the app's 设置 › 外观 › 形象): the built-in, then the hub's packages, and the
- * chosen one's dot in each state. Choosing changes the name, face and dot in this browser; the page's colors stay.
+ * 形象 (设置 › 通用 and the profile page; the app's 设置 › 外观 › 形象): 团子 (the default), the page's mark, then the hub's
+ * packages, and the chosen one's dot in each state. `builtin` is the mark's face. Choosing changes the name, face and dot in this browser; the page's colors stay.
  */
 export function PersonaPicker({ builtin }: { builtin: React.ReactNode }) {
   const s = usePersonaStore();
@@ -211,10 +219,11 @@ export function PersonaPicker({ builtin }: { builtin: React.ReactNode }) {
     void refreshPersonas();
   }, []);
   const cards: { id: string; title: string; sub: React.ReactNode; face: React.ReactNode }[] = [
-    { id: BUILTIN_PERSONA, title: "Persona", sub: <span className="text-[11px] text-ink-3">默认形象</span>, face: builtin },
-    ...s.list.map((p) => ({ id: p.id, title: p.manifest.name, sub: <Swatches p={p} />, face: <PersonaAvatar size={56} persona={p} fallback={builtin} /> })),
+    { id: BUILTIN_PERSONA, title: "团子", sub: <span className="text-[11px] text-ink-3">默认形象</span>, face: <MochiFace size={56} /> },
+    { id: MARK_PERSONA, title: "标志", sub: <span className="text-[11px] text-ink-3">网页的标志</span>, face: builtin },
+    ...s.list.map((p) => ({ id: p.id, title: p.manifest.name, sub: <Swatches p={p} />, face: <PersonaAvatar size={56} persona={p} fallback={<MochiFace size={56} />} /> })),
   ];
-  const missing = s.chosen !== BUILTIN_PERSONA && s.loaded && !s.list.some((p) => p.id === s.chosen);
+  const missing = !isBuiltinPersona(s.chosen) && s.loaded && !s.list.some((p) => p.id === s.chosen);
   return (
     <div className="flex flex-col gap-3 p-3">
       <div role="radiogroup" aria-label="形象" className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
@@ -226,7 +235,7 @@ export function PersonaPicker({ builtin }: { builtin: React.ReactNode }) {
               type="button"
               role="radio"
               aria-checked={selected}
-              aria-label={c.id === BUILTIN_PERSONA ? "Persona，默认形象" : c.title}
+              aria-label={c.id === BUILTIN_PERSONA ? "团子，默认形象" : c.title}
               onClick={() => choosePersona(c.id)}
               className={cx(
                 "flex flex-col items-center gap-2 rounded-card px-2 pt-3.5 pb-2.5 transition-[background-color,box-shadow] duration-150",
@@ -243,7 +252,7 @@ export function PersonaPicker({ builtin }: { builtin: React.ReactNode }) {
           );
         })}
       </div>
-      {current.info && (
+      {(current.info || current.mochi) && (
         <div className="grid grid-cols-5 gap-1 rounded-card bg-inset py-2.5 shadow-hairline" aria-label={`${current.name}的五种状态：空闲、思考中、工作中、等你处理、离线`} role="img">
           {PERSONA_STATES.map((st) => (
             <span key={st.id} className="flex flex-col items-center gap-1">

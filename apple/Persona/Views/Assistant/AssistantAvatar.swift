@@ -1,17 +1,18 @@
 import SwiftUI
 
-/// The built-in personas' faces (docs/persona.md「内置形象」): drawn from shapes in the current style's accent, so they
-/// follow 设置 › 界面风格 and stay sharp at any size; no bitmap assets. As the top bar's dot each moves for the state:
+/// The built-in personas' faces (docs/persona.md「内置形象」): drawn from shapes, so they stay sharp at any size; no
+/// bitmap assets. 团子 keeps the app icon's colors; the others are in the current style's accent. As the top bar's dot each moves for the state:
 /// a blink now and then (空闲), eyes looking up under a thought bubble (思考中), eyes scanning (面罩) or signals
 /// running down the traces into the core (汇流) (工作中), a pulsing ring in 需要你's red (等你处理), dimmed and gray (离线).
 struct AssistantAvatar: View {
-    /// The designs that were tried (docs/assistant.md「头像」): `.visor` is the default persona's, `.circuit` the
-    /// built-in 汇流's (`Persona.circuit`).
+    /// The designs that were tried (docs/assistant.md「头像」): `.mochi` is the default persona's (the app icon's
+    /// character), `.visor` the built-in 面罩's (`Persona.visor`, the default until 2026-11-03), `.circuit` 汇流's.
     enum Design: String, CaseIterable, Identifiable {
-        case visor, circuit, spark, halo
+        case mochi, visor, circuit, spark, halo
         var id: String { rawValue }
         var title: String {
             switch self {
+            case .mochi: "团子"
             case .circuit: "汇流"
             case .visor: "面罩"
             case .spark: "火花"
@@ -21,14 +22,14 @@ struct AssistantAvatar: View {
     }
 
     var size: CGFloat
-    var design: Design = .visor
+    var design: Design = .mochi
     var state: PersonaState = .idle
     /// Hold still (Reduce Motion, Low Power Mode): the state's look without its motion.
     var still = false
     /// Defaults to the current style's accent.
     var tint: Color?
 
-    init(size: CGFloat, design: Design = .visor, state: PersonaState = .idle, still: Bool = false, tint: Color? = nil) {
+    init(size: CGFloat, design: Design = .mochi, state: PersonaState = .idle, still: Bool = false, tint: Color? = nil) {
         self.size = size
         self.design = design
         self.state = state
@@ -46,6 +47,7 @@ struct AssistantAvatar: View {
         #endif
         Group {
             switch design {
+            case .mochi: face(.mochi)
             case .circuit: face(.circuit)
             case .visor: face(.visor)
             case .spark: spark
@@ -56,7 +58,7 @@ struct AssistantAvatar: View {
         .accessibilityHidden(true)
     }
 
-    // MARK: 汇流 and 面罩: PersonaFace (shared with the Live Activity), on a clock while moving.
+    // MARK: 团子, 汇流 and 面罩: PersonaFace (shared with the Live Activity), on a clock while moving.
 
     private func face(_ d: PersonaFace.Design) -> some View {
         TimelineView(.animation(minimumInterval: 1 / 15, paused: !moving)) { tl in

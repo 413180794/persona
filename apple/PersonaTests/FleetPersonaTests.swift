@@ -41,11 +41,13 @@ struct FleetPersonaTests {
 
     @Test func unknownDesignFallsBackToTheDefaultFace() throws {
         let look = try JSONDecoder().decode(FleetLook.self, from: Data(#"{"design":"later","light":1,"dark":2}"#.utf8))
-        #expect(look.faceDesign == .visor)
+        #expect(look.faceDesign == .mochi)
+        #expect(FleetLook(persona: .builtin, builtinAccent: Palette.coral).faceDesign == .mochi)
+        #expect(FleetLook(persona: .visor, builtinAccent: Palette.coral).faceDesign == .visor)
     }
 
     @Test func lookRoundTrips() throws {
-        let look = FleetLook(design: .visor, tint: Palette.systemBlue)
+        let look = FleetLook(design: .mochi, tint: Palette.systemBlue)
         #expect(try JSONDecoder().decode(FleetLook.self, from: JSONEncoder().encode(look)) == look)
         #expect(look == FleetLook.standard)
     }

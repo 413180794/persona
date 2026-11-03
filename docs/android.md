@@ -377,7 +377,7 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 - 五个状态：空闲（每 3.6 秒眨眼）、思考中（眼睛看右上，思考气泡三个点轮流亮）、工作中（眼睛左右扫）、等你处理（呼吸的环）、离线（灰，眼睛闭成线）。只有后三个每帧动（约 12 帧/秒），空闲只在眨眼时动；「减少动画」或省电模式时每个状态停在静止的一帧（同 iOS 的低电量模式）。
 - 状态的取法（`feature/assistant` 的 `personaState`，规则同 iOS `AppModel.personaState`）：hub 连不上（连接中、等待网络等，「更新中」不算）或这段对话的机器离线是离线；对话等你（`needs_you` 或有待处理的交互）是等你处理；正在跑一轮是工作中；其他空闲。看的是当前打开的对话；新对话页没有对话，只看 Persona 所在的机器在不在线，其他时候空闲。
 - 和 iOS 的差别：这一页拿不到对话的最后一条，分不出思考中和工作中，跑着的一轮都显示工作中；等你处理的环用 Android 设计系统的「需要你」色（橙），不是 iOS 的红；晨报风格的主题色就是墨色（近黑 / 近白），面罩和星标会糊掉，所以晨报里脸用次级墨色（中灰），不给这个风格加颜色；iOS 在收件箱有事时给脸挂托盘标记，Android 的收件箱是底部的独立 tab、自带提醒，脸上不再挂。
-- 选哪个：设置 › 外观 › 形象（`feature/settings` 的 `PersonaSettings`），内置的两张卡片、hub 上的包，加选中那个的五种状态，马上生效。选择存在手机上（`AppStyleStore.personaId`，和界面风格同一份偏好，记的是 iOS 同款 id：内置的 `jarvis` / `jarvis-circuit`，或者包的 id），换 hub、重新配对都不丢；`LocalPersonaDesign` 把它传给每个 `PersonaFace`。体验模式同 iOS 只有默认形象（面罩）。
+- 选哪个：设置 › 外观 › 形象（`feature/settings` 的 `PersonaSettings`），内置的两张卡片、hub 上的包，加选中那个的五种状态，马上生效。选择存在手机上（`AppStyleStore.personaId`，和界面风格同一份偏好，记的是 iOS 同款 id：内置的 `jarvis` / `jarvis-circuit`，或者包的 id），换 hub、重新配对都不丢；`LocalPersonaDesign` 把它传给每个 `PersonaFace`。体验模式只有默认形象（面罩）。iOS 和网页 2026-11-03 起默认是团子（id `persona`，`docs/persona.md`），Android 还没跟上，默认仍是面罩。
 - 汇流：深色圆底上三条走线汇进带两只眼的核心，工作中每条线上有一个光点跑进核心；没有星标。几何同 iOS 的 `Circuit`。
 - hub 上的形象包（`docs/persona.md`「包格式」，规则同 iOS 的 `PersonaStore`）：`core/designsystem` 的 `PersonaStore`，全机一份，不跟 hub 走。
   - 列表：每次连上 hub 和打开形象页时各取一次 `GET /api/v1/personas`（`core/hub` 的 `HttpPersonaPacks`），存进 `files/personas/index.json`，下次启动先显示。手机端再查一遍 hub 的检查规则（`PersonaManifest.problem`）；旧 hub 没有这个接口时提示「这个 hub 还不能放形象：更新 hub 后再看」。

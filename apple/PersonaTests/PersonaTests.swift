@@ -42,6 +42,7 @@ struct PersonaTests {
             try Self.decode(Self.manifest.replacingOccurrences(of: from, with: to)).problem
         }
         #expect(try problem(#""id":"doudou""#, #""id":"jarvis""#) != nil) // the built-ins' ids
+        #expect(try problem(#""id":"doudou""#, #""id":"persona""#) != nil)
         #expect(try problem(#""id":"doudou""#, #""id":"jarvis-circuit""#) != nil)
         #expect(try problem(#""id":"doudou""#, #""id":"Dou Dou""#) != nil)
         #expect(try problem(#""format":1"#, #""format":2"#) != nil)
@@ -113,7 +114,7 @@ struct PersonaTests {
         for f in try Self.decode().files { hub.on("GET", "/api/v1/personas/doudou/\(f)", json: "png:\(f)") }
         let (s, root, defaults) = store()
         await s.refresh(hub.client)
-        #expect(s.offered.map(\.id) == [Persona.builtinID, Persona.circuit.id, "doudou"])
+        #expect(s.offered.map(\.id) == [Persona.builtinID, Persona.visor.id, Persona.circuit.id, "doudou"])
         #expect(s.current.isBuiltin) // offered, not chosen
         let p = try #require(s.offered.last)
         #expect(!s.isOnPhone(p))
@@ -146,16 +147,44 @@ struct PersonaTests {
         #expect(s.chosenID == "doudou")
     }
 
+    /// 团子 became the default on 2026-11-03: a phone that never chose a persona (nothing saved) gets it, one that chose
+    /// 面罩 ("jarvis" saved) or 汇流 keeps that, and choosing 面罩 again sticks across launches.
+    @Test func mochiIsTheDefaultAndAnEarlierChoiceStays() async throws {
+        let (fresh, _, freshDefaults) = store()
+        #expect(freshDefaults.string(forKey: PersonaStore.chosenKey) == nil)
+        #expect(fresh.chosenID == "persona" && fresh.current.id == Persona.builtinID)
+        #expect(fresh.current.avatarDesign == .mochi && fresh.current.cardTitle == "团子" && fresh.current.name == "Persona")
+        #expect(freshDefaults.string(forKey: PersonaStore.chosenKey) == nil) // nothing written for them
+
+        for kept in [Persona.visor, Persona.circuit] {
+            let (_, root, defaults) = store()
+            defaults.set(kept.id, forKey: PersonaStore.chosenKey)
+            let s = PersonaStore(root: root, defaults: defaults)
+            #expect(s.current.id == kept.id)
+            // The hub answering doesn't move them to the new default.
+            let hub = FakeHub()
+            hub.on("GET", "/api/v1/personas", json: #"{"personas":[]}"#)
+            await s.refresh(hub.client)
+            #expect(s.current.id == kept.id)
+        }
+        #expect(Persona.visor.id == "jarvis" && Persona.visor.cardTitle == "面罩")
+
+        await fresh.choose(Persona.visor, api: nil)
+        #expect(PersonaStore(root: fresh.root, defaults: freshDefaults).current.id == "jarvis")
+        await fresh.choose(Persona.builtin, api: nil)
+        #expect(PersonaStore(root: fresh.root, defaults: freshDefaults).current.id == Persona.builtinID)
+    }
+
     /// 汇流 is offered next to the default before the hub answers (or with no hub at all), is chosen without a
     /// download, and stays chosen across launches; it is still called Persona, with its own card title.
     @Test func circuitIsABuiltInChoice() async throws {
         let (s, _, defaults) = store()
-        #expect(s.offered.map(\.id) == [Persona.builtinID, Persona.circuit.id])
-        #expect(s.current.id == Persona.builtinID) // the default stays 面罩
+        #expect(s.offered.map(\.id) == [Persona.builtinID, Persona.visor.id, Persona.circuit.id])
+        #expect(s.current.id == Persona.builtinID) // the default stays 团子
         let circuit = try #require(s.offered.last)
         #expect(circuit.isBuiltin && s.isOnPhone(circuit))
         #expect(circuit.name == "Persona" && circuit.cardTitle == "汇流")
-        #expect(circuit.avatarDesign == .circuit && Persona.builtin.avatarDesign == .visor)
+        #expect(circuit.avatarDesign == .circuit && Persona.builtin.avatarDesign == .mochi && Persona.visor.avatarDesign == .visor)
 
         await s.choose(circuit, api: nil)
         #expect(s.current.id == Persona.circuit.id)

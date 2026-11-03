@@ -1,11 +1,20 @@
 // Persona's persona (docs/persona.md): its name, its face and the animated dot, from a package on the hub
 // (GET /personas, files under /personas/{id}/{file}). The choice is this browser's (the phone keeps its own, as the
-// app does), and the built-in is the web's own mark: with no package chosen nothing on the page changes.
+// app does). The default is 团子, the app icon's character the page draws (MochiFace); the page's own mark, the
+// built-in before 2026-11-03, is still a choice: with it chosen every place shows what it did before.
 // The pure parts (checks, which file, which state) are here; the views and the list are views/assistant/Persona.tsx.
 
-export const BUILTIN_PERSONA = "jarvis";
-/** The phone's other built-in drawing (汇流): a package may not take its id either. */
-const RESERVED = [BUILTIN_PERSONA, "jarvis-circuit"];
+/** The default, 团子 (nothing saved means it). */
+export const BUILTIN_PERSONA = "persona";
+/** The page's mark, the default until 2026-11-03 (on the phone this id is 面罩, its default then). */
+export const MARK_PERSONA = "jarvis";
+/** The built-ins (the phone's 汇流 too): a package may not take their ids. */
+const RESERVED = [BUILTIN_PERSONA, MARK_PERSONA, "jarvis-circuit"];
+
+/** Whether a choice is drawn by the page rather than a package. */
+export function isBuiltinPersona(id: string): boolean {
+  return id === BUILTIN_PERSONA || id === MARK_PERSONA;
+}
 
 export type PersonaState = "idle" | "thinking" | "working" | "needs_you" | "offline";
 

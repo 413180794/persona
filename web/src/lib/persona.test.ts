@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { avatarFile, dotFile, personaFileURL, personaProblem, personaState, usablePersonas, type PersonaInfo } from "./persona";
+import { avatarFile, dotFile, isBuiltinPersona, personaFileURL, personaProblem, personaState, usablePersonas, type PersonaInfo } from "./persona";
 
 const pack = (patch: Partial<PersonaInfo["manifest"]> = {}, id = "doudou"): PersonaInfo => ({
   id,
@@ -21,6 +21,8 @@ describe("persona packages", () => {
     expect(personaProblem(pack({ format: 2 }))).toBe("format 2");
     expect(personaProblem(pack({}, "jarvis"))).toMatch(/^id/);
     expect(personaProblem(pack({}, "jarvis-circuit"))).toMatch(/^id/);
+    expect(personaProblem(pack({}, "persona"))).toMatch(/^id/);
+    expect(isBuiltinPersona("persona") && isBuiltinPersona("jarvis") && !isBuiltinPersona("doudou")).toBe(true);
     expect(personaProblem({ ...pack(), id: "other" })).toMatch(/^id/);
     expect(personaProblem(pack({ id: "Bad_ID" }, "Bad_ID"))).toMatch(/^id/);
     expect(personaProblem(pack({ name: " " }))).toBe("no name");

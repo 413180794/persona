@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 设置 › 外观 › 形象 (docs/persona.md): the built-ins (Persona's default 面罩, then 汇流) and the packages on the hub, in a
+/// 设置 › 外观 › 形象 (docs/persona.md): the built-ins (Persona's default 团子, then 面罩 and 汇流) and the packages on the hub, in a
 /// grid like the styles, and the chosen one's top-bar dot in each state under it. Choosing one changes Persona's name, face and dot; the app's
 /// colors only under 主题色「跟随形象」 (`ThemeColorPicker`). The tree is rebuilt, as for a style; 外观 stays open because
 /// the settings path is AppModel's. A package is downloaded first and kept on the phone.
@@ -90,7 +90,7 @@ struct PersonaPicker: View {
                         Text(p.cardTitle).font(Theme.Font.captionStrong).lineLimit(1)
                     }
                     if p.isBuiltin {
-                        Text("颜色随主题色").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                        Text(p.builtinNote).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                     } else {
                         PersonaSwatches(palette: p.palette).frame(height: Theme.Space.l)
                     }
@@ -100,7 +100,7 @@ struct PersonaPicker: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(p.id == Persona.builtinID ? "\(p.name)，默认形象"
+        .accessibilityLabel(p.id == Persona.builtinID ? "\(p.cardTitle)，默认形象"
                             : p.isBuiltin ? p.cardTitle : here ? p.name : "\(p.name)，选中后下载")
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier("persona-\(p.id)")

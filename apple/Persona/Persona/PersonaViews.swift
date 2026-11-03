@@ -62,8 +62,8 @@ struct PersonaDot: View {
 }
 
 extension Persona {
-    /// A built-in's drawing; the default's (面罩) for a package, whose face falls back to it while it is not on the phone.
-    var avatarDesign: AssistantAvatar.Design { design.flatMap(AssistantAvatar.Design.init(rawValue:)) ?? .visor }
+    /// A built-in's drawing; the default's (团子) for a package, whose face falls back to it while it is not on the phone.
+    var avatarDesign: AssistantAvatar.Design { design.flatMap(AssistantAvatar.Design.init(rawValue:)) ?? .mochi }
 }
 
 #if os(iOS)

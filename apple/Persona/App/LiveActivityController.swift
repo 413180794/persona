@@ -323,11 +323,11 @@ extension AppModel {
 
 nonisolated extension FleetLook {
     /// A built-in in the accent it has in the app; a package as its pictures (`FleetFaces`), and while they cannot be
-    /// read the default face in its primary color. From the persona itself, not `Theme`: the spec is recomposed after
+    /// read 面罩 in its primary color (面罩 takes a tint; 团子, the default, keeps the icon's colors). From the persona itself, not `Theme`: the spec is recomposed after
     /// the persona changes.
     init(persona p: Persona, builtinAccent: Color) {
         guard !p.isBuiltin else {
-            self.init(design: p.design.flatMap(PersonaFace.Design.init(rawValue:)) ?? .visor, tint: builtinAccent)
+            self.init(design: p.design.flatMap(PersonaFace.Design.init(rawValue:)) ?? .mochi, tint: builtinAccent)
             return
         }
         let color = p.palette?.primary

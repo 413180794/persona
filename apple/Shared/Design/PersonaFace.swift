@@ -18,13 +18,15 @@ nonisolated enum PersonaState: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// The built-in personas' faces (面罩, 汇流) at one moment: everything JarvisAvatar draws for them, without the clock.
+/// The built-in personas' faces (团子, 面罩, 汇流) at one moment: everything JarvisAvatar draws for them, without the clock.
 /// Shared with the widget extension, which draws the Live Activity (docs/live-activity.md「形象」) and cannot run
 /// timelines: it passes `moving: false` and gets each state's still frame (the same one Reduce Motion shows). The app
 /// wraps it in a TimelineView and passes the time (JarvisAvatar). Reads no app-only token: the tint, the brand mark and
 /// the blink come in from the caller.
 struct PersonaFace: View {
     enum Design: String, Sendable {
+        /// 团子, the default: the app icon's character in the icon's own colors (not the tint).
+        case mochi
         case visor, circuit
     }
 
@@ -48,14 +50,95 @@ struct PersonaFace: View {
     static let ringMin: CGFloat = 1.5
     static let offlineOpacity = 0.7
 
+    @Environment(\.colorScheme) private var scheme
+
     private var accent: Color { state == .offline ? Color(white: 0.62) : tint }
     private var needsYou: Color { StatusPalette.needsYou.dot }
 
     var body: some View {
         switch design {
+        case .mochi: mochi
         case .circuit: circuit
         case .visor: visor
         }
+    }
+
+    // MARK: 团子: the app icon's white blob waving on its paper disc (a dark one in the dark), outlined in ink, with
+    // its orange cheek. It ignores the tint: the icon's colors are what make it the icon's character.
+
+    private var mochi: some View {
+        let t = time
+        let ink = MochiInk(dark: scheme == .dark, offline: state == .offline)
+        let compact = size < Mochi.compactBelow
+        return ZStack {
+            Circle().fill(LinearGradient(colors: ink.disc, startPoint: .top, endPoint: .bottom))
+            if state == .working { mochiArc(t) }
+            ZStack {
+                Canvas { ctx, box in Mochi.draw(&ctx, side: box.width, ink: ink, compact: compact, lines: mochiLines(t)) }
+                if state != .offline { mochiEyes(t, ink: ink, compact: compact) }
+            }
+            .rotationEffect(.degrees(mochiRock(t)), anchor: UnitPoint(x: Mochi.pivot.x, y: Mochi.pivot.y))
+            .offset(y: mochiBob(t))
+            if state == .thinking {
+                bubble(t, lit: Mochi.cheekColor).offset(x: size * 0.25, y: -size * 0.29)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(.circle)
+        .overlay { needsYouRing(t) }
+    }
+
+    /// The motion lines beside the hand: steady when idle and needs-you, lit one after another while working, none
+    /// while thinking (the bubble is there) or offline.
+    private func mochiLines(_ t: TimeInterval) -> [Double] {
+        switch state {
+        case .idle, .needsYou: return [1, 1, 1]
+        case .working:
+            guard moving else { return [1, 0.35, 0.35] }
+            let lit = Int(t * 4) % 3
+            return (0..<3).map { $0 == lit ? 1 : 0.35 }
+        case .thinking, .offline: return []
+        }
+    }
+
+    /// The eyes: they blink when idle, look up at the bubble while thinking, and scan while working.
+    private func mochiEyes(_ t: TimeInterval, ink: MochiInk, compact: Bool) -> some View {
+        let r = Mochi.eyeRadius * (compact ? Mochi.compactFeatures : 1) * size
+        let look: CGSize = switch state {
+        case .thinking: CGSize(width: size * 0.022, height: -size * 0.03)
+        case .working: CGSize(width: size * (moving ? sin(t * 1.8) * 0.028 : -0.024), height: size * 0.012)
+        default: .zero
+        }
+        return ZStack {
+            ForEach(Mochi.eyes.indices, id: \.self) { i in
+                Circle().fill(ink.line).frame(width: r * 2, height: r * 2)
+                    .position(x: Mochi.eyes[i].x * size, y: Mochi.eyes[i].y * size)
+            }
+        }
+        .frame(width: size, height: size)
+        .modifier(Blink(animation: state == .idle ? blink : nil, anchor: UnitPoint(x: 0.5, y: Mochi.eyeLine)))
+        .offset(look)
+    }
+
+    /// 需要你 waves: the body rocks on its bottom like the icon's hello.
+    private func mochiRock(_ t: TimeInterval) -> Double {
+        state == .needsYou && moving ? sin(t * 7) * 5 : 0
+    }
+
+    /// Working bobs a little.
+    private func mochiBob(_ t: TimeInterval) -> CGFloat {
+        state == .working && moving ? CGFloat(abs(sin(t * 5))) * -size * 0.02 : 0
+    }
+
+    /// Working's arc of the cheek's orange running around the rim.
+    private func mochiArc(_ t: TimeInterval) -> some View {
+        let turn = moving ? (t / 1.6).truncatingRemainder(dividingBy: 1) * 360 : 300
+        let w = max(Self.ringMin, size * Self.ringShare)
+        return Circle()
+            .trim(from: 0, to: 0.28)
+            .stroke(Mochi.cheekColor, style: StrokeStyle(lineWidth: w, lineCap: .round))
+            .padding(w / 2)
+            .rotationEffect(.degrees(turn - 90))
     }
 
     // MARK: 汇流: three pads on the left whose traces run into a core with two eyes (your computers' agents coming
@@ -94,7 +177,7 @@ struct PersonaFace: View {
             circuitEyes(t, color: ground)
                 .offset(x: size * (Circuit.core.x - 0.5), y: size * (Circuit.core.y - 0.5))
             if state == .thinking {
-                bubble(t).offset(x: size * 0.25, y: -size * 0.3)
+                bubble(t, lit: accent).offset(x: size * 0.25, y: -size * 0.3)
             }
         }
         .overlay(Circle().strokeBorder(accent.opacity(0.35), lineWidth: max(0.5, size * 0.02)))
@@ -139,7 +222,7 @@ struct PersonaFace: View {
                 .overlay { eyes(t) }
                 .offset(y: size * 0.02)
             if state == .thinking {
-                bubble(t).offset(x: size * 0.25, y: -size * 0.3)
+                bubble(t, lit: accent).offset(x: size * 0.25, y: -size * 0.3)
             } else {
                 Image(systemName: mark)
                     .font(.system(size: size * 0.2, weight: .bold))
@@ -182,12 +265,12 @@ struct PersonaFace: View {
     }
 
     /// A small thought bubble whose three dots light up in turn.
-    private func bubble(_ t: TimeInterval) -> some View {
+    private func bubble(_ t: TimeInterval, lit color: Color) -> some View {
         let lit = moving ? Int(t * 2.5) % 4 : 3
         return HStack(spacing: size * 0.025) {
             ForEach(0..<3) { i in
                 Circle()
-                    .fill(i == lit || lit == 3 ? accent : Color(white: 0.7))
+                    .fill(i == lit || lit == 3 ? color : Color(white: 0.7))
                     .frame(width: size * 0.05, height: size * 0.05)
             }
         }
@@ -201,16 +284,142 @@ struct PersonaFace: View {
     /// phase animation. No animation: no blink.
     private struct Blink: ViewModifier {
         var animation: Animation?
+        var anchor: UnitPoint = .center
 
         func body(content: Content) -> some View {
             if let animation {
                 TimelineView(.periodic(from: .now, by: 3.6)) { tl in
                     content.phaseAnimator([1.0, 0.12, 1.0], trigger: tl.date) { v, open in
-                        v.scaleEffect(x: 1, y: open, anchor: .center)
+                        v.scaleEffect(x: 1, y: open, anchor: anchor)
                     } animation: { _ in animation }
                 }
             } else {
                 content
+            }
+        }
+    }
+}
+
+/// 团子's colors in one appearance: the icon's paper (or its dark) behind, a white body outlined in ink. Offline
+/// fades the body to gray.
+nonisolated struct MochiInk {
+    var disc: [Color]
+    var body: [Color]
+    var line: Color
+    /// The motion lines: ink on the paper, light gray on the dark disc (as in the dark icon).
+    var motion: Color
+    var outline: Color
+    var gloss: Color
+    var cheek: Color
+    var shadow: Color
+    /// Asleep: closed eyes, drawn with the body.
+    var offline: Bool
+
+    init(dark: Bool, offline: Bool) {
+        self.offline = offline
+        disc = dark ? [Color(hex: 0x332A26), Color(hex: 0x1D1816)] : [Color(hex: 0xF4EADF), Color(hex: 0xE7D7C4)]
+        body = offline ? [Color(hex: 0xD9D4D0), Color(hex: 0xBDB6B1)] : [.white, Color(hex: 0xE9E3DE)]
+        line = offline ? Color(hex: 0x6E6763) : Color(hex: 0x1D1816)
+        motion = dark ? Color(hex: 0xD6D1CD) : line
+        // The dark icon keeps the ink outline: on the dark disc it reads as the body's shadow edge.
+        outline = offline ? Color(hex: 0x6E6763) : Color(hex: dark ? 0x0E0B0A : 0x1D1816)
+        gloss = .white
+        cheek = offline ? Color(hex: 0xA59D98) : Mochi.cheekColor
+        shadow = .black.opacity(dark ? 0.45 : 0.14)
+    }
+}
+
+/// 团子's geometry in fractions of the avatar's side, 0…1 from the top left, traced from the 1024 px app icon
+/// (`p` maps icon pixels into the disc, a little larger than the icon's square so it fills the circle).
+nonisolated enum Mochi {
+    static let scale: CGFloat = 1.16
+    static let origin = CGPoint(x: 545, y: 548)
+    static let cheekColor = Color(hex: 0xF2703C)
+    /// Below this many points the motion lines and the gloss go, and the eyes and cheek grow, so the face still reads.
+    static let compactBelow: CGFloat = 36
+    static let compactFeatures: CGFloat = 1.3
+
+    static func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+        CGPoint(x: 0.5 + (x - origin.x) / 1024 * scale, y: 0.5 + (y - origin.y) / 1024 * scale)
+    }
+
+    static let eyes = [p(397, 497), p(553, 480)]
+    static var eyeLine: CGFloat { (eyes[0].y + eyes[1].y) / 2 }
+    static let eyeRadius: CGFloat = 29 / 1024 * scale
+    static let cheek = p(312, 556)
+    static let cheekRadius: CGFloat = 37 / 1024 * scale
+    /// The outline, as a share of the side; never thinner than `strokeMin` points.
+    static let stroke: CGFloat = 30 / 1024 * scale
+    static let strokeMin: CGFloat = 1.3
+    /// Where the body rocks from (its bottom middle).
+    static let pivot = p(500, 780)
+    /// The three lines beside the hand.
+    static let lines: [(CGPoint, CGPoint)] = [
+        (p(792, 352), p(818, 298)),
+        (p(838, 384), p(884, 340)),
+        (p(864, 428), p(924, 408)),
+    ]
+
+    static func body(_ w: CGFloat) -> Path {
+        func q(_ x: CGFloat, _ y: CGFloat) -> CGPoint { let u = p(x, y); return CGPoint(x: u.x * w, y: u.y * w) }
+        var b = Path()
+        b.move(to: q(262, 778))
+        b.addCurve(to: q(702, 772), control1: q(420, 792), control2: q(600, 790))
+        b.addCurve(to: q(760, 640), control1: q(742, 764), control2: q(752, 700))
+        b.addCurve(to: q(826, 502), control1: q(800, 598), control2: q(828, 562))
+        b.addCurve(to: q(764, 428), control1: q(825, 446), control2: q(795, 418))
+        b.addCurve(to: q(712, 494), control1: q(736, 440), control2: q(722, 468))
+        b.addCurve(to: q(560, 304), control1: q(690, 440), control2: q(650, 350))
+        b.addCurve(to: q(254, 382), control1: q(470, 260), control2: q(330, 288))
+        b.addCurve(to: q(168, 672), control1: q(184, 462), control2: q(158, 582))
+        b.addCurve(to: q(262, 778), control1: q(176, 742), control2: q(206, 772))
+        b.closeSubpath()
+        return b
+    }
+
+    /// The icon's highlight on the top left of the head.
+    static func gloss(_ w: CGFloat) -> Path {
+        func q(_ x: CGFloat, _ y: CGFloat) -> CGPoint { let u = p(x, y); return CGPoint(x: u.x * w, y: u.y * w) }
+        var g = Path()
+        g.move(to: q(312, 380))
+        g.addQuadCurve(to: q(412, 334), control: q(352, 346))
+        g.move(to: q(288, 414))
+        g.addLine(to: q(290, 411))
+        return g
+    }
+
+    /// Everything but the eyes (views, so they can blink) on a side of `w`: the shadow, the body, the cheek, the
+    /// gloss, and the motion lines at the given opacities (none: no lines). Offline closes the eyes here.
+    static func draw(_ ctx: inout GraphicsContext, side w: CGFloat, ink: MochiInk, compact: Bool, lines: [Double]) {
+        let lw = max(strokeMin, w * stroke)
+        ctx.drawLayer { shadowCtx in
+            shadowCtx.addFilter(.blur(radius: w * 0.02))
+            let c = p(490, 800)
+            shadowCtx.fill(Path(ellipseIn: CGRect(x: (c.x - 0.3) * w, y: (c.y - 0.022) * w, width: 0.6 * w, height: 0.044 * w)), with: .color(ink.shadow))
+        }
+        let body = body(w)
+        ctx.fill(body, with: .linearGradient(Gradient(colors: ink.body), startPoint: CGPoint(x: 0.4 * w, y: 0.3 * w), endPoint: CGPoint(x: 0.5 * w, y: 0.82 * w)))
+        ctx.stroke(body, with: .color(ink.outline), style: StrokeStyle(lineWidth: lw, lineCap: .round, lineJoin: .round))
+        let k: CGFloat = compact ? compactFeatures : 1
+        let r = cheekRadius * k
+        ctx.fill(Path(ellipseIn: CGRect(x: (cheek.x - r) * w, y: (cheek.y - r * 0.9) * w, width: 2 * r * w, height: 1.8 * r * w)), with: .color(ink.cheek))
+        if !compact {
+            ctx.stroke(gloss(w), with: .color(ink.gloss), style: StrokeStyle(lineWidth: lw * 0.6, lineCap: .round))
+            for (i, (a, b)) in self.lines.enumerated() where i < lines.count {
+                var l = Path()
+                l.move(to: CGPoint(x: a.x * w, y: a.y * w))
+                l.addLine(to: CGPoint(x: b.x * w, y: b.y * w))
+                ctx.stroke(l, with: .color(ink.motion.opacity(lines[i])), style: StrokeStyle(lineWidth: lw * 0.85, lineCap: .round))
+            }
+        }
+        if ink.offline {
+            // Closed eyes, two short curves.
+            for e in eyes {
+                var l = Path()
+                let half = eyeRadius * k * w
+                l.move(to: CGPoint(x: e.x * w - half, y: e.y * w))
+                l.addQuadCurve(to: CGPoint(x: e.x * w + half, y: e.y * w), control: CGPoint(x: e.x * w, y: e.y * w + half * 0.7))
+                ctx.stroke(l, with: .color(ink.line), style: StrokeStyle(lineWidth: lw * 0.8, lineCap: .round))
             }
         }
     }

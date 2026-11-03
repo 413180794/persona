@@ -113,13 +113,13 @@ export function StarterLauncherChip() {
 
 // ── the header ──────────────────────────────────────────
 
-/** The persona's dot beside a Persona conversation's title, in the conversation's state; nothing for the built-in. */
+/** The persona's dot beside a Persona conversation's title, in the conversation's state; nothing for the page's mark. */
 export function AssistantFace({ session, last }: { session?: Session; last?: Item }) {
   const persona = usePersona();
   const conn = useStore((s) => s.conn);
   const machineOnline = useStore((s) => s.machines.find((m) => m.id === (session?.machine_id ?? s.assistant?.machine_id))?.online);
   const waiting = useStore((s) => (session ? s.interactions.filter((i) => i.machine_id === session.machine_id && i.session_id === session.session_id).length : 0));
-  if (!persona.info) return null;
+  if (!persona.info && !persona.mochi) return null;
   const state = personaState({ online: conn === "online", machineOnline, state: session?.state, interactions: waiting, last });
   return <PersonaDot size={30} state={state} fallback={null} className="-my-1" />;
 }

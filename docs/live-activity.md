@@ -106,7 +106,7 @@ App 负责开始活动、上报 token；Widget 扩展（源码 `apple/PersonaWid
 | Fleet | 形象的状态 | 样子 |
 | --- | --- | --- |
 | 有需要你 | 等你处理 | 红色的圈 |
-| 在工作 | 工作中 | 眼睛看向一边（面罩）/ 看向走线（汇流） |
+| 在工作 | 工作中 | 眼睛看向一边、橙色弧线停在圆边上（团子）/ 眼睛看向一边（面罩）/ 看向走线（汇流） |
 | 只剩做完未看，或没有 | 空闲 | 睁眼 |
 | 没有 Agent 在忙、只有助手在回答（`assistant`） | 思考中 | 抬眼、思考气泡 |
 | 内容过期（hub 15 分钟没推，`isStale`） | 离线 | 灰色、闭眼 |
@@ -114,7 +114,7 @@ App 负责开始活动、上报 token；Widget 扩展（源码 `apple/PersonaWid
 - 「出错」：Fleet 没有单独的出错状态，最接近的是 hub 断了导致内容过期，所以过期用离线（灰）。
 - 「思考中」：Fleet 分不出 Agent 在思考还是在写，只有助手在回答时才用；`assistant` 只推给灵动岛显示助手的设备，别的设备看到的是空闲。
 - **不动，只在状态变时淡入淡出**：实时活动里 TimelineView、重复的 symbol 动画都不跑（见「坑」），所以画的是每个状态的静止帧（和「减弱动态效果」时 App 里的一样，`PersonaFace(moving: false)`），状态变时 `.transition(.opacity)`。不用位图序列帧，不为动画加推送。
-- **画法共用**：面罩、汇流的绘制在 `apple/Shared/Design/PersonaFace.swift`，App 的 `AssistantAvatar` 在外面套 TimelineView 让它动，扩展直接画静止帧；扩展只多编译这一个文件。
+- **画法共用**：团子、面罩、汇流的绘制在 `apple/Shared/Design/PersonaFace.swift`，App 的 `AssistantAvatar` 在外面套 TimelineView 让它动，扩展直接画静止帧；扩展只多编译这一个文件。
 - **选的哪个、什么颜色**：扩展读不到 App 的设置。`FleetLook` 是形象的画法 + 主色的浅色 / 深色值，形象包再加 `<id>/<rev>`。
   它放在实时活动的内容里（`FleetState.look`，build 99 之后）：
   - App 自己更新活动时带上它；
@@ -133,7 +133,7 @@ App 负责开始活动、上报 token；Widget 扩展（源码 `apple/PersonaWid
   每张一个文件：`Fleet/faces/<id>_<rev>_3x/<状态>_<pt>.png`、`avatar_<pt>.png`（目录名的 `_3x`：旧版本存的 4 KB 小图会重做），只留当前这个包，换包时整个目录换掉（先写在旁边再挪进来，扩展不会读到两个包各一半）。
   扩展按当前形态的大小只读那一张（`FleetLookStore.face`），按它的大小、3 倍解码（`FleetFaces.image`），裁成圆。为什么要这样，见下面「为什么 build 98 还不对」。
   包里没有某个状态的帧时用头像，再按内置形象的样子加提示：需要你加红圈，离线变灰。图片只在手机上（App 下载的包里和 App Group 容器里），不进仓库，也不进安装包；测试用纯色占位图。
-  读不到图（还没写、写失败）时画默认形象（面罩），颜色用这个形象包的主色，不画别的包的图（目录名就是包的 `<id>/<rev>`）。
+  读不到图（还没写、写失败）时画面罩（团子不跟颜色，面罩能换成这个形象包的主色），颜色用这个形象包的主色，不画别的包的图（目录名就是包的 `<id>/<rev>`）。
 - **放进 ContentState**（build 98 之前没放：当时以为钥匙串就够了，而 hub 的推送会整个替换 content-state、hub 又不知道手机选了哪个形象）：
   所以要 App 把形象告诉 hub。没有 `look` 的内容（旧 hub）照常解码，扩展退回读 App 存下的 `look.json`；读不懂的 `look`（以后的格式）只丢掉这一项。
 - 设置 › 通知 › 灵动岛的预览（`IslandPreview`）左侧也是形象，读的是扩展读的同一份，和紧凑态一致。

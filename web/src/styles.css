@@ -197,3 +197,19 @@ button:disabled { cursor: default; }
 .prose-j input[type=checkbox] { margin-right: .4em; accent-color: var(--ink); }
 .prose-j img { max-width: 100%; border-radius: 8px; }
 .prose-sm { font-size: 13px; line-height: 1.65; }
+
+/* 团子, the default persona (views/assistant/MochiFace.tsx): the app icon's colors, not the page's accent. */
+:root {
+  --mochi-disc-top: #f4eadf; --mochi-disc-bottom: #e7d7c4; --mochi-body-top: #fff; --mochi-body-bottom: #e9e3de;
+  --mochi-ink: #1d1816; --mochi-outline: #1d1816; --mochi-motion: #1d1816; --mochi-cheek: #f2703c; --mochi-shadow: rgb(0 0 0 / .14);
+  --mochi-sleep-top: #d9d4d0; --mochi-sleep-bottom: #bdb6b1; --mochi-sleep-ink: #6e6763; --mochi-sleep-cheek: #a59d98; --mochi-needs-you: #e5484d;
+}
+.dark { --mochi-disc-top: #332a26; --mochi-disc-bottom: #1d1816; --mochi-outline: #0e0b0a; --mochi-motion: #d6d1cd; --mochi-shadow: rgb(0 0 0 / .45); --mochi-needs-you: #ff6369; }
+@keyframes mochi-blink { 0%, 94%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.12); } }
+@keyframes mochi-rock { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+@keyframes mochi-pulse { 50% { opacity: .35; } }
+.mochi-blink { transform-box: fill-box; transform-origin: center; animation: mochi-blink 3.6s infinite; }
+.mochi-spin { transform-origin: 512px 512px; animation: spin 1.6s linear infinite; }
+.mochi-rock { animation: mochi-rock .9s ease-in-out infinite; }
+.mochi-pulse { animation: mochi-pulse 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .mochi-blink, .mochi-spin, .mochi-rock, .mochi-pulse { animation: none; } }

@@ -1,17 +1,24 @@
 import Foundation
 
 /// A look for Persona (docs/persona.md): its name, its face, the animated dot in the Persona tab's top bar and its
-/// colors. The built-in ones are the app's own drawings (JarvisAvatar, in the style's accent); every other one is a
+/// colors. The built-in ones are the app's own drawings (JarvisAvatar: 团子 in the icon's colors, the others in the
+/// style's accent); every other one is a
 /// package on the hub (~/.jarvis/personas/<id>/) that the phone downloads and keeps (`PersonaStore`).
 nonisolated struct Persona: Identifiable, Sendable, Hashable {
-    static let builtinID = "jarvis"
-    /// The default: 面罩.
-    static let builtin = Persona(id: builtinID, name: "Persona", subtitle: "默认形象，颜色随主题色", rev: "", manifest: nil)
+    /// The default's id. Until 2026-11-03 the default was 面罩 under "jarvis"; a phone that never chose has no id
+    /// saved and gets 团子, one that chose 面罩 has "jarvis" saved and keeps it (`PersonaStore.chosenID`).
+    static let builtinID = "persona"
+    /// The default: 团子, the app icon's character, in the icon's colors.
+    static let builtin = Persona(id: builtinID, name: "Persona", subtitle: "App 图标里招手的团子", rev: "", manifest: nil,
+                                 design: "mochi", title: "团子")
+    /// 面罩, the default until 2026-11-03, now a choice; still named Persona, in the accent.
+    static let visor = Persona(id: "jarvis", name: "Persona", subtitle: "面罩，颜色随主题色", rev: "", manifest: nil,
+                               design: "visor", title: "面罩")
     /// 汇流 (three traces running into a core with two eyes), a choice next to the default; still named Persona.
     static let circuit = Persona(id: "jarvis-circuit", name: "Persona", subtitle: "汇流，颜色随主题色", rev: "", manifest: nil,
                                  design: "circuit", title: "汇流")
     /// What 设置 › 外观 › 形象 offers before the hub's packages, the default first.
-    static let builtins = [builtin, circuit]
+    static let builtins = [builtin, visor, circuit]
 
     var id: String
     var name: String
@@ -27,6 +34,8 @@ nonisolated struct Persona: Identifiable, Sendable, Hashable {
 
     var isBuiltin: Bool { manifest == nil }
     var cardTitle: String { title ?? name }
+    /// A built-in's line under its card in 设置: whose colors it is drawn in.
+    var builtinNote: String { design == PersonaFace.Design.mochi.rawValue ? "App 图标的配色" : "颜色随主题色" }
     var palette: PersonaPalette? {
         manifest?.colors.flatMap { PersonaPalette(light: $0.light, dark: $0.dark) }
     }
