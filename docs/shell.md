@@ -130,9 +130,13 @@ TabView 只在显示时建 tab，没有这个问题。
   （`toastSink`、`onShown`），和 tab 一样当场做，不靠视图重画。行的高度也是当场推给窗口（`onRoom`），不经过外壳的 body：经过 body 时
   慢了一秒多，药丸先压在了切换上。
 - 让位置时，停在顶端的列表保持在顶端（跟着整页一起移）：offset 按变化之前的值加减这一行的高度来定。
-- **还没解决**：这一行收起时，导航栈里的列表有 100–200 ms 读到 inset 和 offset 都是 0（导航栈重新排版，四种做法都有：SwiftUI 动画、
-  不加动画、`UIView.animate`、不在动画里排版），导航栏偶尔（实测 12 次里 2 次）把这当成一次滚动，把 Agents 上拉出来的搜索框收了。
-  现在 0.6 s 后把列表放回原来停的位置，搜索框跟着出来，但看得到收起又出来的那一下。跟进见下一个 PR，用 ScreenProbe 断言收放过程中搜索框的可见状态不变。
+- **还没解决（#413）**：这一行收起时，导航栈里的列表有几帧读到 inset 为 0（导航栈重新排版，四种做法都有：SwiftUI 动画、
+  不加动画、`UIView.animate`、不在动画里排版），行跳约 210pt，导航栏偶尔（实测 6 次里 2 次）把这当成一次滚动，把 Agents 上拉出来的搜索框收了。
+  现在 0.6 s 后把列表放回原来停的位置，搜索框跟着出来，但看得到收起又出来的那一下。
+  - 逐帧量：`probe.agents-scroll` 的 `room`；`ShellRoomScrollTests` 断言开合中搜索框高度不变、行一帧不跳超过 12pt、收起后回到原处。修好之前它会挂，
+    只在 `TEST_RUNNER_JARVIS_KNOWN_ISSUES=1` 时跑，不进验收。
+  - 试过、不行的做法（数据在 #413）：从 UIKit 改 SwiftUI 的导航控制器（safe area、transform）、开合期间自己管列表 inset、关 `hidesSearchBarWhenScrolling`，
+    都会被 SwiftUI 改回去或带出别的跳动；Agents 根页的导航栏也没法为它变高（紧凑导航栏只有 54 / 88 两档，88 已经给顶栏的 clearance 用了）。
 - 这一行出现、消失只改透明度，不插入、不移除视图：用 `.transition` 插入时，第二次起停在透明（看不见，VoiceOver 也读不到）。
 
 DEBUG：`-showConnectionCycle connecting:7:4`（第 7 秒起显示连接中… 4 秒，然后恢复；`waiting` / `connecting` / `updating`）、

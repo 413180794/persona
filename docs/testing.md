@@ -154,6 +154,9 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 `MOCK_PORTS=1 PORT=18791 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:PersonaUITests/PortForwardTests`；
 深浅色 × 新外壳 / 旧布局用 `TEST_RUNNER_JARVIS_LAYOUT`、`TEST_RUNNER_SHOT_SUFFIX` 各跑一遍，截图在 `/tmp/jarvis-ports-*`。
 
+已知会挂、修好之前不进验收的 UI 测试先跳过，`TEST_RUNNER_JARVIS_KNOWN_ISSUES=1` 才跑，跳过的说明里写 issue 号：
+现在只有 `ShellRoomScrollTests`（外壳状态行收起时 Agents 搜索框闪一下，#413，`docs/shell.md`「状态行」）。
+
 发消息和终端对话框的安全检查（`SendSafetyTests`）也连 mock：
 `PORT=18771 MOCK_SCREEN_DIALOG=1 MOCK_PROMPT_CHANGED=1 MOCK_SEND_REFUSE=input_draft python3 scripts/mock/mock_hub.py &`，再
 `TEST_RUNNER_JARVIS_SAFETY_HUB=http://127.0.0.1:18771 xcodebuild test … -only-testing:PersonaUITests/SendSafetyTests`：

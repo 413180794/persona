@@ -37,6 +37,8 @@ struct AgentsScrollReturn: Encodable, Equatable {
     var row = Span(), nav = Span(), search = Span(), inset = Span(), container = Span(), safe = Span()
     /// The largest change of the row's y from one frame to the next.
     var rowStep: CGFloat = 0
+    /// For the status row (`room`): the room it went to, 0 when it folded.
+    var to: CGFloat?
 
     struct Span: Encodable, Equatable {
         var min: CGFloat = .infinity
@@ -50,6 +52,14 @@ struct AgentsScrollValue: Encodable, Equatable {
     /// Where it was the frame before a page was pushed over the list.
     var left: AgentsScrollPlace?
     var back: AgentsScrollReturn?
+    /// Every frame of the last time the shell's status row opened or folded (`ShellWindowHooks`), from its start to a
+    /// while after: `n` counts them. The search field keeps its height and the rows move without a jump (#413).
+    var room: AgentsScrollReturn?
+}
+
+extension Notification.Name {
+    /// The shell's status row starts to open or fold (posted by `ShellWindowHooks`).
+    static let shellRoomChanges = Notification.Name("shellRoomChanges")
 }
 
 @Observable @MainActor final class AgentsScrollSampler {
@@ -73,8 +83,13 @@ private struct SamplerHost: UIViewControllerRepresentable {
         private var settleUntil: CFTimeInterval?
         private var lastRow: CGFloat?
         private var returns = 0
+        private var roomTrip: AgentsScrollReturn?
+        private var roomUntil: CFTimeInterval = 0
+        private var roomLastRow: CGFloat?
+        private var rooms = 0
         /// How long after the pop the way back is still watched: the list sprang 0.4–0.6 s after it.
         private static let settle: CFTimeInterval = 1
+        private static let roomWatch: CFTimeInterval = 1.2
 
         init(sampler: AgentsScrollSampler) {
             self.sampler = sampler
@@ -93,6 +108,21 @@ private struct SamplerHost: UIViewControllerRepresentable {
             let l = CADisplayLink(target: Tick(self), selector: #selector(Tick.tick))
             l.add(to: .main, forMode: .common)
             link = l
+            NotificationCenter.default.addObserver(self, selector: #selector(roomStarts), name: .shellRoomChanges, object: nil)
+        }
+
+        /// The row opens or folds: every frame from now until a while after it is done (a folded search came back
+        /// 0.6 s after the fold).
+        @objc private func roomStarts(_ note: Notification) {
+            defer { roomTrip?.to = note.object as? CGFloat }
+            if roomTrip == nil {
+                roomTrip = AgentsScrollReturn()
+                // The same row all along: rows coming on screen above it are not a jump.
+                followed = nil
+                followed = topRow()?.path
+            }
+            roomUntil = CACurrentMediaTime() + Self.roomWatch
+            roomLastRow = nil
         }
 
         override func viewWillDisappear(_ animated: Bool) {
@@ -139,6 +169,22 @@ private struct SamplerHost: UIViewControllerRepresentable {
                     followed = nil
                 } else {
                     trip = t
+                }
+            }
+            if var t = roomTrip {
+                t.frames += 1
+                t.row.add(place.row); t.nav.add(place.nav); t.search.add(place.search)
+                t.inset.add(place.inset); t.container.add(place.container); t.safe.add(place.safe)
+                if let roomLastRow { t.rowStep = max(t.rowStep, abs(place.row - roomLastRow)) }
+                roomLastRow = place.row
+                if CACurrentMediaTime() >= roomUntil {
+                    rooms += 1
+                    t.n = rooms
+                    sampler.value.room = t
+                    roomTrip = nil
+                    if trip == nil { followed = nil }
+                } else {
+                    roomTrip = t
                 }
             }
             if sampler.value.now != place { sampler.value.now = place }

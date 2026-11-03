@@ -297,6 +297,9 @@ struct ShellWindowHooks: UIViewRepresentable {
         func setRoom(_ room: CGFloat, animated: Bool) {
             self.room = room
             guard let root = window?.rootViewController, root.additionalSafeAreaInsets.top != room else { return }
+            #if DEBUG || PERF_SIGNPOST
+            NotificationCenter.default.post(name: .shellRoomChanges, object: room) // probe.agents-scroll's `room`
+            #endif
             // Lists resting at their top stay at their top, moved with the page as one piece: their offset follows the
             // room's change, counted from before it (read after the layout, it can be a passing 0, below).
             let delta = room - root.additionalSafeAreaInsets.top

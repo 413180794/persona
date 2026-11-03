@@ -283,6 +283,8 @@ App 端 `apple/Persona/App/ScreenProbe.swift`，DEBUG，`-probes YES` 才挂：
     - `left`：推入别的页之前那一帧的位置；
     - `back`：最近一次返回的逐帧记录，从返回开始到之后 1 秒，每项 `{min, max}`，`rowStep` 是第一行相邻两帧最大的跳动，`n` 是第几次返回、`frames` 是帧数。
     - 用法见 `AgentsReturnTests`：返回前后 `row`、`nav`、`search` 都等于 `left`，范围不超过 1pt；`container`、`safe` 不变。
+    - `room`：外壳状态行最近一次展开或收起的逐帧记录，从开始到之后 1.2 s，字段同 `back`，另有 `to`（让出的高度，收起为 0）；`row` 跟着开始那一刻屏幕上第一行走，上面新露出来的行不算跳。
+      用法见 `ShellRoomScrollTests`（#413）。
   - `connection`：`{shown, network}`；
   - `chat`：`{key}`，打开的是哪个对话（page 是它所在的页）；
   - `shell`：live 车道，`{strip, selected, tab, position, moving, drawerOpen, chatRoot, workRoot, trace}`。

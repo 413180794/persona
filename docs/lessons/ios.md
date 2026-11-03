@@ -340,6 +340,11 @@
   DEBUG 开关都跑了，用户却没看到它（2026-11-02，ovis 车道看到 `appeared()` 连着跑、消息重复发）。这类有副作用的 `onAppear` 别指望「出现 = 看到」：
   页面没选中就别建（`ShellState.assistantBuilt`），或者改用 `.onTabVisibility`。DEBUG 开关也别挂在 `onAppear` 上做一次性的事。
 
+- SwiftUI 的 `NavigationStack` 底下的 `UINavigationController` 和 `List` 底下的 `UICollectionView` 归 SwiftUI 管：从 UIKit 改它们的
+  `additionalSafeAreaInsets`、`view.transform`、`contentInsetAdjustmentBehavior` / `contentInset`，SwiftUI 下一次排版就改回去，或者用它自己记的位置把 offset 设回去
+  （行跳 150–180pt）。SwiftUI 里给它 `ignoresSafeArea` 或负的 `safeAreaPadding`，它改用容器的 frame 来让位，开合中 frame 在 0 和 90 多之间来回跳（2026-11-02，#413
+  状态行收起时搜索框闪动，六种做法的逐帧数据在 issue 里）。先用 `probe.agents-scroll` 这类逐帧探针量清楚是谁在动，再决定改哪一层。
+
 ## Swift 与编译
 
 - 闭包属性别和调用它的方法同名：`func close(_ s: Session) { close(s) }` 会解析成递归调用方法，点「关闭 Agent」后栈溢出；重命名同理。
