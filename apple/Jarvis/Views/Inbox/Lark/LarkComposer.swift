@@ -38,14 +38,28 @@ struct LarkComposer: View {
     /// does not: no picker, the box works as before).
     @State private var members: [LarkMember] = []
     @State private var membersAnswered = false
+    /// Where the cursor is: an @ is looked up, and a picked name goes in, there (not only at the end).
+    @State private var selection: TextSelection?
 
-    private var mentionQuery: String? { mentionFeed == nil ? nil : LarkMentions.query(in: text) }
+    /// The @ being typed before the cursor, in a group. Before the field reports a cursor it is the end of the text;
+    /// while a range is selected no @ is being typed.
+    private var typing: LarkMentions.Typing? {
+        guard mentionFeed != nil else { return nil }
+        guard let selection else { return LarkMentions.typing(in: text) }
+        guard case .selection(let r) = selection.indices, r.isEmpty else { return nil }
+        let at = min(r.lowerBound, text.endIndex) // the text may have changed since (a send, a draft put back)
+        return LarkMentions.typing(in: text, cursor: text.distance(from: text.startIndex, to: at))
+    }
+
+    private var mentionQuery: String? { typing?.query }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             if let q = mentionQuery, membersAnswered, !members.isEmpty || LarkMentions.offersEveryone(q) {
                 LarkMentionPicker(query: q, members: members) { m in
-                    text = LarkMentions.inserting(m, into: text)
+                    let picked = LarkMentions.insert(m, into: text, cursor: typing?.end)
+                    text = picked.text
+                    selection = TextSelection(insertionPoint: text.index(text.startIndex, offsetBy: picked.cursor))
                     mentions.wrappedValue.append(m)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -55,7 +69,7 @@ struct LarkComposer: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             HStack(alignment: .bottom, spacing: Theme.Space.s) {
-                TextField(placeholder, text: $text, axis: .vertical)
+                TextField(placeholder, text: $text, selection: $selection, axis: .vertical)
                     .lineLimit(1...5)
                     .focused(focused)
                     .accessibilityIdentifier(boxID)

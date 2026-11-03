@@ -32,24 +32,51 @@ nonisolated enum LarkMentions {
     /// Longest lookup after @ that still keeps the picker up.
     static let maxQuery = 20
 
-    /// The name being typed after the last @ at the end of the text ("" right after the @), or nil when no @ is being
-    /// typed: none, one inside a word like an email address, or a space / new line typed since (the picked name and
-    /// its space end it too).
-    static func query(in text: String) -> String? {
-        guard let at = text.lastIndex(of: "@") else { return nil }
-        if at > text.startIndex {
-            let before = text[text.index(before: at)]
-            if before.isASCII && (before.isLetter || before.isNumber) { return nil }
-        }
-        let typed = text[text.index(after: at)...]
-        guard typed.count <= maxQuery, !typed.contains(where: { $0.isWhitespace }) else { return nil }
-        return String(typed)
+    /// An @ being typed: what follows it up to the cursor (the lookup), where the @ is and where the cursor is, as
+    /// character offsets into the text.
+    struct Typing: Equatable, Sendable {
+        var query: String
+        var start: Int
+        var end: Int
     }
 
-    /// The text with the @ being typed replaced by `@name ` (Feishu's mention, a space after it to go on writing).
+    /// The @ being typed just before `cursor` (a character offset; nil: the end of the text), or nil when none is: no
+    /// @ before the cursor, one inside a word like an email address, or a space / new line typed since (the picked
+    /// name and its space end it too). What comes after the cursor does not matter.
+    static func typing(in text: String, cursor: Int? = nil) -> Typing? {
+        let chars = Array(text)
+        let end = min(max(cursor ?? chars.count, 0), chars.count)
+        guard let at = chars[..<end].lastIndex(of: "@") else { return nil }
+        if at > 0 {
+            let before = chars[at - 1]
+            if before.isASCII && (before.isLetter || before.isNumber) { return nil }
+        }
+        let typed = chars[(at + 1)..<end]
+        guard typed.count <= maxQuery, !typed.contains(where: { $0.isWhitespace }) else { return nil }
+        return Typing(query: String(typed), start: at, end: end)
+    }
+
+    /// The name being typed after the @ before the cursor ("" right after the @); nil when no @ is being typed.
+    static func query(in text: String, cursor: Int? = nil) -> String? {
+        typing(in: text, cursor: cursor)?.query
+    }
+
+    /// Picking `m`: the @ being typed before the cursor becomes `@name ` (Feishu's mention, a space after it to go on
+    /// writing; none is added when a space already follows), and the cursor goes after that space. With no @ being
+    /// typed, `@name ` goes in at the cursor.
+    static func insert(_ m: LarkMention, into text: String, cursor: Int? = nil) -> (text: String, cursor: Int) {
+        let chars = Array(text)
+        let at = min(max(cursor ?? chars.count, 0), chars.count)
+        let t = typing(in: text, cursor: at) ?? Typing(query: "", start: at, end: at)
+        let rest = chars[t.end...]
+        let spaced = rest.first == " "
+        let written = "@" + m.name + (spaced ? "" : " ")
+        return (String(chars[..<t.start]) + written + String(rest), t.start + written.count + (spaced ? 1 : 0))
+    }
+
+    /// `insert` at the end of the text.
     static func inserting(_ m: LarkMention, into text: String) -> String {
-        guard query(in: text) != nil, let at = text.lastIndex(of: "@") else { return text + "@" + m.name + " " }
-        return String(text[..<at]) + "@" + m.name + " "
+        insert(m, into: text).text
     }
 
     /// Who the text mentions out of those picked: one whose `@name` was deleted is left out, someone picked twice

@@ -33,6 +33,45 @@ struct LarkMentionsTests {
         #expect(LarkMentions.inserting(tom, into: "@小周 一起 @") == "@小周 一起 @Tom ")
     }
 
+    // MARK: The cursor in the middle
+
+    @Test func anAtBeforeTheCursorIsLookedUpWhateverFollows() {
+        let text = "周六 @小 一起去"
+        // The cursor right after "@小" (offset 5): the lookup is 小; what follows does not count.
+        #expect(LarkMentions.typing(in: text, cursor: 5) == LarkMentions.Typing(query: "小", start: 3, end: 5))
+        #expect(LarkMentions.query(in: text, cursor: 4) == "", "right after the @")
+        #expect(LarkMentions.query(in: text, cursor: 3) == nil, "before the @")
+        #expect(LarkMentions.query(in: text, cursor: 6) == nil, "past the space after it")
+        #expect(LarkMentions.query(in: text) == nil, "at the end there is no @ being typed")
+        #expect(LarkMentions.query(in: "me@example 你好", cursor: 10) == nil, "an address is not a mention")
+        #expect(LarkMentions.query(in: "@", cursor: 99) == "", "a cursor past the end is the end")
+    }
+
+    @Test func pickingWritesTheNameAtTheCursor() {
+        // "周六 @小| 一起去": the space that follows is kept, not doubled; the cursor lands after it.
+        let mid = LarkMentions.insert(zhou, into: "周六 @小 一起去", cursor: 5)
+        #expect(mid.text == "周六 @小周 一起去")
+        #expect(mid.cursor == 7)
+        // "你好@|明天见": a space goes in, the cursor after it.
+        let tight = LarkMentions.insert(tom, into: "你好@明天见", cursor: 3)
+        #expect(tight.text == "你好@Tom 明天见")
+        #expect(tight.cursor == 7)
+        // No @ being typed there: the name goes in at the cursor.
+        let plain = LarkMentions.insert(.everyone, into: "集合 明天", cursor: 3)
+        #expect(plain.text == "集合 @所有人 明天")
+        // At the end, as before.
+        #expect(LarkMentions.insert(zhou, into: "周六 @小").text == "周六 @小周 ")
+        #expect(LarkMentions.insert(zhou, into: "周六 @小").cursor == 7)
+    }
+
+    @Test func aMentionPickedInTheMiddleIsSentAndDroppedLikeAnyOther() {
+        let picked = LarkMentions.insert(zhou, into: "周六 @ 一起去 @Tom ", cursor: 4).text
+        #expect(picked == "周六 @小周 一起去 @Tom ")
+        #expect(LarkMentions.mentions(in: picked, picked: [tom, zhou]) == [tom, zhou])
+        // Deleting the one in the middle drops only it.
+        #expect(LarkMentions.mentions(in: "周六 一起去 @Tom ", picked: [tom, zhou]) == [tom])
+    }
+
     @Test func everyoneIsOfferedUntilTheLookupRulesItOut() {
         #expect(LarkMentions.offersEveryone(""))
         #expect(LarkMentions.offersEveryone("所"))

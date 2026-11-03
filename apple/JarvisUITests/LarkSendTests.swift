@@ -217,6 +217,31 @@ final class LarkSendTests: XCTestCase {
         XCTAssertTrue(parts.contains { $0["kind"] as? String == "at" && $0["refId"] as? String == "u-Mia" }, "\(parts)")
     }
 
+    /// @ typed where the cursor is, not at the end: the picker comes up there and the name goes in there.
+    @MainActor func testAtWhereTheCursorIsPicksSomeone() {
+        let app = openHikingChat()
+        let box = app.textFields["lark.box"]
+        XCTAssertTrue(box.waitForExistence(timeout: 5))
+        box.tap()
+        box.typeText("一起去")
+        // The cursor to the start of the text, then @ there.
+        box.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.5)).tap()
+        box.typeText("@")
+        XCTAssertEqual(box.value as? String, "@一起去", "the @ went in at the cursor")
+        let mia = app.buttons["@Mia"]
+        XCTAssertTrue(mia.waitForExistence(timeout: 5), "@ before other words still lists the members")
+        shot(app, "lark-mention-cursor-picker")
+        mia.tap()
+        XCTAssertEqual(box.value as? String, "@Mia 一起去", "the name goes in at the cursor, not at the end")
+        box.typeText("周六")
+        XCTAssertEqual(box.value as? String, "@Mia 周六一起去", "and the cursor is right after it")
+        shot(app, "lark-mention-cursor-picked")
+        // Leave the box empty for the next run.
+        app.buttons["lark.send"].tap()
+        XCTAssertTrue(app.textFields.matching(NSPredicate(format: "value == %@", "@Mia 周六一起去")).firstMatch.waitForNonExistence(timeout: 3))
+        sleep(3)
+    }
+
     /// What is typed and not sent is still in the box, quote and all, after the app is gone and back (LarkDrafts).
     @MainActor func testDraftOutlivesTheApp() {
         var app = openHikingChat()
