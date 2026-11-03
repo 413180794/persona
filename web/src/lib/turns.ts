@@ -253,8 +253,8 @@ export const TOOL_LABEL: Record<string, string> = {
 export function toolLabel(name?: string): string {
   if (!name) return "工具";
   if (TOOL_LABEL[name]) return TOOL_LABEL[name];
-  const m = /^mcp__([^_]+)__(.+)$/.exec(name);
-  if (m) return m[2].replace(/_/g, " ");
+  // mcp__<server>__<tool>, and the server may have underscores itself (mcp__plugin_x_y__tool), like the apps
+  if (name.startsWith("mcp__")) return name.slice(name.lastIndexOf("__") + 2).replace(/_/g, " ");
   return name;
 }
 

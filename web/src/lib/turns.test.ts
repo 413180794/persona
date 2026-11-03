@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chatLines, isLoopTick, mergeItems, parseUserText, segments, toolChip, wakeDrawer, workSegment, workSummary } from "./turns";
+import { chatLines, isLoopTick, mergeItems, parseUserText, segments, toolChip, toolLabel, wakeDrawer, workSegment, workSummary } from "./turns";
 import type { Item } from "./types";
 
 const u = (seq: number, text: string, extra: Partial<Item> = {}): Item => ({ id: `u${seq}#0`, seq, role: "user", kind: "text", text, ...extra });
@@ -195,4 +195,11 @@ describe("workSegment", () => {
     expect(s.steps.map((x) => x.kind)).toEqual(["tool", "text", "tool", "text"]);
     expect(s.replies).toBe(2);
   });
+});
+
+it("toolLabel names an MCP tool by its own name, whatever the server is called", () => {
+  expect(toolLabel("mcp__github__create_issue")).toBe("create issue");
+  expect(toolLabel("mcp__plugin_lark_docs__fetch_doc")).toBe("fetch doc");
+  expect(toolLabel("mcp__x")).toBe("x");
+  expect(toolLabel("Bash")).toBe("运行");
 });
