@@ -404,3 +404,43 @@ func TestCodexRemotePrivateUnixWebSocket(t *testing.T) {
 		}
 	}
 }
+
+// A thread/read that fails for a loaded thread keeps the thread: it is still the app-server's, and its session stays
+// sendable until a read says it is gone.
+func TestCodexRemoteFailedReadKeepsThread(t *testing.T) {
+	n := remoteTestNode(t)
+	home := t.TempDir()
+	f, c := connectRemoteFixture(t, n, home, "one", remoteRaw)
+	id := n.registerCodex(home, remoteRaw, "")
+	waitFor(t, "thread listed", func() bool { _, _, err := n.codexOwner(id); return err == nil })
+
+	f.mu.Lock()
+	f.reject = "thread/read"
+	f.mu.Unlock()
+	if err := c.refresh(); err != nil {
+		t.Fatal(err)
+	}
+	c.mu.Lock()
+	_, kept := c.threads[remoteRaw]
+	c.mu.Unlock()
+	if !kept {
+		t.Fatal("a failed thread/read dropped a loaded thread")
+	}
+	if _, _, err := n.codexOwner(id); err != nil {
+		t.Fatalf("session no longer owned after a failed read: %v", err)
+	}
+
+	// Gone from the loaded list: dropped as before.
+	f.mu.Lock()
+	f.reject, f.threads = "", nil
+	f.mu.Unlock()
+	if err := c.refresh(); err != nil {
+		t.Fatal(err)
+	}
+	c.mu.Lock()
+	_, kept = c.threads[remoteRaw]
+	c.mu.Unlock()
+	if kept {
+		t.Fatal("an unloaded thread was kept")
+	}
+}

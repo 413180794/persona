@@ -345,6 +345,11 @@ func (c *codexRemote) refresh() error {
 			Thread remoteThreadData `json:"thread"`
 		}
 		if err := c.wire.call(ctx, "thread/read", map[string]any{"threadId": raw, "includeTurns": false}, &reply); err != nil {
+			// Still loaded, just not read this time (a slow or failed call): keep the last copy and its asks.
+			c.n.logf("codex %s: read %s: %v", c.spec.ID, raw, err)
+			if t.id != "" {
+				next[raw] = t
+			}
 			continue
 		}
 		d := reply.Thread
