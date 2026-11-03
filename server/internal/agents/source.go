@@ -44,12 +44,22 @@ type SearchHit struct {
 
 // Status is one source's health and the agents it serves.
 type Status struct {
-	Source    string               `json:"source"`
-	Enabled   bool                 `json:"enabled"`
-	Error     string               `json:"error,omitempty"`
+	Source  string `json:"source"`
+	Enabled bool   `json:"enabled"`
+	Error   string `json:"error,omitempty"`
+	// Setup is why a reachable source has nothing to list yet (SetupMissing / SetupDisabled / SetupNoAccounts); the
+	// apps say what to do about it.
+	Setup     string               `json:"setup,omitempty"`
 	Providers []lark.AgentProvider `json:"providers"`
 	Accounts  []lark.AgentAccount  `json:"accounts"`
 }
+
+// Status.Setup values.
+const (
+	SetupMissing    = "missing"     // the backend has no agent support (an lark-connector from before agent-bridge)
+	SetupDisabled   = "disabled"    // supported but turned off (lark-connector: lark-connector_AGENT_BRIDGE unset)
+	SetupNoAccounts = "no_accounts" // on, but no agent account is connected yet
+)
 
 // Source is one backend of agents and their sessions; keys are the source's own session keys.
 type Source interface {

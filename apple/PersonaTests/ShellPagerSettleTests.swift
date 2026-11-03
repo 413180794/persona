@@ -10,12 +10,12 @@ import Testing
 struct ShellPagerSettleTests {
     /// The two pages on the strip, as `ShellView` lays them out: 助手 red, Agents blue.
     private struct Strip: View {
-        let pager: ShellPager
+        let shell: ShellState
 
         var body: some View {
             ZStack {
-                Color.red.modifier(ShellPageSlide(pager: pager, index: 0))
-                Color.blue.modifier(ShellPageSlide(pager: pager, index: 1))
+                Color.red.modifier(ShellPageSlide(shell: shell, index: 0))
+                Color.blue.modifier(ShellPageSlide(shell: shell, index: 1))
             }
             .ignoresSafeArea()
         }
@@ -46,7 +46,8 @@ struct ShellPagerSettleTests {
 
     @Test(arguments: [1, 0])
     func thePageIsInPlaceWhenTheStripStopsMoving(to page: Int) async {
-        let pager = ShellPager()
+        let shell = ShellState()
+        let pager = shell.pager
         pager.width = 402
         if page == 0 { pager.slide(to: 1, animated: false) }
         // In the host app's scene: a window without one is never drawn.
@@ -54,7 +55,7 @@ struct ShellPagerSettleTests {
         let window = scene.map { UIWindow(windowScene: $0) } ?? UIWindow()
         window.frame = CGRect(x: 0, y: 0, width: 402, height: 874)
         window.windowLevel = .alert + 1
-        window.rootViewController = UIHostingController(rootView: Strip(pager: pager))
+        window.rootViewController = UIHostingController(rootView: Strip(shell: shell))
         window.makeKeyAndVisible()
         defer { window.isHidden = true }
         try? await Task.sleep(for: .milliseconds(300))

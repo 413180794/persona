@@ -41,10 +41,15 @@ final class ShellTests: XCTestCase {
         // The empty chat: what needs the user (the demo has agents waiting and inbox items to answer).
         see(button("shell-needs-agent"), "an agent waiting, over the composer")
         XCTAssertTrue(button("shell-needs-inbox").exists, "the inbox's 需要你 over the composer")
-        see(button("shell-agents"), "Agents").tap()
+        let finger = ShellFinger(app)
+        finger.switchTo(agents: true, "Agents tapped on the empty chat")
         see(button("agents-new"), "新建会话 on Agents")
-        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5), "the agents' search on Agents")
-        button("shell-assistant").tap()
+        // The search starts folded away (2026-11-01 user request, 9de38a9) and a pull brings it back.
+        sleep(1)
+        let field = app.searchFields.firstMatch
+        XCTAssertFalse(field.exists && field.isHittable, "the agents' search is out at first, not folded away")
+        app.revealAgentsSearch()
+        finger.switchTo(agents: false, "助手 tapped with Agents' search out")
         see(button("assistant-new"), "新对话 on 助手")
     }
 

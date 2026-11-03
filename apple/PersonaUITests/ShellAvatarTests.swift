@@ -37,7 +37,7 @@ final class ShellAvatarTests: XCTestCase {
         XCTAssertTrue(value(face).contains("收件箱有事等你"), "no inbox mark: \(value(face))")
         openAndCloseDrawer(face, "助手")
 
-        app.buttons["shell-agents"].firstMatch.tap()
+        ShellFinger(app).switchTo(agents: true, "Agents tapped after the drawer on 助手")
         let agentsFace = app.buttons["work-sidebar-button"].firstMatch
         XCTAssertTrue(agentsFace.waitForExistence(timeout: 10), "no face on Agents")
         XCTAssertTrue(value(agentsFace).contains("收件箱有事等你"), "no inbox mark on Agents: \(value(agentsFace))")

@@ -3,6 +3,8 @@ package agents
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net/http"
 
 	"github.com/nwverse/persona/server/internal/lark"
 )
@@ -32,16 +34,36 @@ func wrap(s lark.AgentSession) Session {
 	return Session{ID: OLKBridge + ":" + s.SessionKey, Source: OLKBridge, AgentSession: s}
 }
 
+// missingBridge is lark-connector answering 404 for the bridge's own routes: a build from before agent-bridge existed.
+func missingBridge(err error) bool {
+	var ae *lark.APIError
+	return errors.As(err, &ae) && ae.Status == http.StatusNotFound
+}
+
 func (b Bridge) Status(ctx context.Context) (Status, error) {
 	st, err := b.API.AgentBridgeStatus(ctx)
+	if missingBridge(err) {
+		return Status{Source: OLKBridge, Setup: SetupMissing}, nil
+	}
 	if err != nil {
 		return Status{Source: OLKBridge, Error: err.Error()}, err
 	}
-	return Status{Source: OLKBridge, Enabled: st.Enabled, Providers: st.Providers, Accounts: st.Accounts}, nil
+	out := Status{Source: OLKBridge, Enabled: st.Enabled, Providers: st.Providers, Accounts: st.Accounts}
+	switch {
+	case !st.Enabled:
+		out.Setup = SetupDisabled
+	case len(st.Accounts) == 0:
+		out.Setup = SetupNoAccounts
+	}
+	return out, nil
 }
 
+// Sessions is empty, not an error, on an lark-connector without the bridge: Status says why (SetupMissing).
 func (b Bridge) Sessions(ctx context.Context) ([]Session, error) {
 	ss, err := b.API.AgentSessions(ctx)
+	if missingBridge(err) {
+		return []Session{}, nil
+	}
 	if err != nil {
 		return nil, err
 	}

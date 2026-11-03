@@ -7,6 +7,7 @@ import XCTest
 /// the empty bar (`RootBarHidden`).
 final class ShellSwitchTests: XCTestCase {
     private var app: XCUIApplication!
+    private var finger: ShellFinger!
 
     override func setUp() {
         continueAfterFailure = false
@@ -36,8 +37,9 @@ final class ShellSwitchTests: XCTestCase {
         } else {
             app.launchArguments = ["-demo.on", "YES"]
         }
-        app.launchArguments += ["-ui.oldLayout", "NO", "-newAssistant", "YES"]
+        app.launchArguments += ["-ui.oldLayout", "NO", "-newAssistant", "YES", "-tab", "assistant"]
         app.launchPinned()
+        finger = ShellFinger(app)
     }
 
     @MainActor private func button(_ id: String) -> XCUIElement { app.buttons[id].firstMatch }
@@ -78,19 +80,13 @@ final class ShellSwitchTests: XCTestCase {
         XCTAssertTrue(met, "助手's top bar is not at the top (\(menu.frame)) \(what)")
     }
 
-    /// Switches with the switch the user sees: the one where it belongs (both pages have one, at the same place).
-    @MainActor private func tapSwitch(_ id: String) {
-        app.buttons.matching(identifier: id).allElementsBoundByIndex.first { $0.isHittable }?.tap()
-    }
-
-    /// Agents, then 助手 again, each one really drawn.
+    /// Agents, then 助手 again, tapped where a finger taps the switch, each one really in front in time (the strip,
+    /// the switch and the tab agree).
     @MainActor private func switchBothWays(_ how: String) {
-        tapSwitch("shell-agents")
+        finger.switchTo(agents: true, "switched to Agents after \(how)")
         reachable(button("agents-new"), "the Agents page (新建会话) after \(how)")
-        expectAgents(true, "switched to Agents after \(how)")
-        tapSwitch("shell-assistant")
+        finger.switchTo(agents: false, "switched back to 助手 after \(how)")
         reachable(chatComposer, "助手 again after \(how)")
-        expectAgents(false, "switched back to 助手 after \(how)")
     }
 
     /// Back from a pushed page: the back button, or the edge swipe as a finger does it (held, slow; a quick flick is
@@ -118,9 +114,8 @@ final class ShellSwitchTests: XCTestCase {
         for (from, swipe) in [("助手", false), ("Agents", true), ("助手", true), ("Agents", false)] {
             let how = "\(title) from \(from), back by \(swipe ? "swipe" : "button")"
             if from == "Agents" {
-                tapSwitch("shell-agents")
+                finger.switchTo(agents: true, "Agents before \(how)")
                 reachable(button("agents-new"), "Agents before \(how)")
-                expectAgents(true, "Agents before \(how)")
             }
             see(button(from == "Agents" ? "work-sidebar-button" : "assistant-sidebar-button"), "☰ on \(from)").tapCenter()
             see(button(entry), "\(entry) in the drawer").tap()

@@ -242,6 +242,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/intents.md` | Siri / 快捷指令（App Intents）：问 Claude、状态、批准第一个待处理 |
 | `docs/siri.md` | Siri 深度集成：问 Persona（助手主对话）、让个人 Agent 去做、未读、控制中心 / 操作按钮、Spotlight 索引 |
 | `docs/live-activity.md` | 锁屏 / 灵动岛实时活动（Fleet）：显示什么、和其他 App 共用灵动岛（限宽 / 最小态）、ContentState、hub 的 liveactivity 推送和 push-to-start、怎么在模拟器上验证 |
+| `docs/shell.md` | 新外壳的状态模型：哪一页在前的唯一来源 `ShellState`、切换段 / 横条 / 路由怎么同步、不在前的页、一致和及时的验收标准与测试 |
 | `docs/persona.md` | 形象：名字、头像、顶栏的动态状态圆点、配色怎么做成一个包（hub 的 `~/.persona/personas`），色系怎么接到设计 token，接入新形象的脚本（Codex 生图） |
 | `docs/multi-hub.md` | 一台设备连多组 hub：配对注册表和迁移、按 mesh 分组、每组一条连接和选路、按组的键（默认组不变）、合并显示和按组筛选、推送 / 实时活动 / 手表 / Siri 按组路由 |
 | `docs/mac.md` | macOS App：和 iOS 共用逻辑层和内容视图、Mac 壳（`apple/Mac/`）、iOS 专用 API 的隔离和兼容层、功能对齐清单 |

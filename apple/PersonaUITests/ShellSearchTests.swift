@@ -35,11 +35,17 @@ final class ShellSearchTests: XCTestCase {
          ("Agents", app.buttons["shell-agents"].firstMatch), ("新建会话", app.buttons["agents-new"].firstMatch)]
     }
 
-    /// No top-bar control that is on screen overlaps the search field.
+    /// No top-bar control that is on screen overlaps the search field, and nothing at all of the bar does (any element
+    /// in it: the face's inbox mark lay over the field, 2026-11-02).
     @MainActor private func assertClear(of field: XCUIElement, _ when: String) {
         let f = field.frame
         for (name, e) in topBar where e.exists && e.isHittable {
             XCTAssertFalse(e.frame.intersects(f), "\(name) \(e.frame) over the search field \(f) \(when)")
+        }
+        let bar = app.descendants(matching: .any)["agents-top-bar"].firstMatch
+        guard bar.exists else { return } // made way for the search
+        for e in bar.descendants(matching: .any).allElementsBoundByIndex where e.exists && !e.frame.isEmpty {
+            XCTAssertFalse(e.frame.intersects(f), "\(e.identifier.isEmpty ? e.label : e.identifier) \(e.frame) of the top bar over the search field \(f) \(when)")
         }
     }
 
@@ -75,7 +81,8 @@ final class ShellSearchTests: XCTestCase {
         XCTAssertFalse(app.keyboards.firstMatch.exists, "the keyboard still up after 取消")
         sleep(1)
         attachScreen("after cancel")
-        assertClear(of: app.searchFields.firstMatch, "after 取消")
+        // Closed, the field may fold away with the list (UIKit's): pulled out again, nothing of the bar is over it.
+        assertClear(of: app.revealAgentsSearch(), "after 取消")
     }
     /// 展开的搜索框在小、标准、大字号下都要避开顶栏，包括头像超出按钮的角标。
     @MainActor func testExpandedSearchClearsTheTopBarAtEveryTextSize() {
@@ -120,6 +127,25 @@ final class ShellSearchTests: XCTestCase {
         assertClear(of: returned, "从搜索结果返回")
     }
 
+    /// After a search on Agents is cancelled the switch works where a finger taps it, both ways (#174's bar coming
+    /// back must take the taps).
+    @MainActor func testSwitchAfterASearchIsCancelled() {
+        app = XCUIApplication()
+        app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "NO", "-tab", "assistant", "-dev.openChat", ""]
+        app.launchPinned()
+        let finger = ShellFinger(app)
+        finger.switchTo(agents: true, "Agents tapped")
+        let field = app.revealAgentsSearch()
+        field.tapCenter()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "no keyboard for the search")
+        field.typeText("zqxj")
+        let cancel = app.navigationBars.buttons.matching(
+            NSPredicate(format: "label IN {'取消', 'Cancel', '关闭', 'Close'} OR identifier == 'Cancel'")).firstMatch
+        see(cancel, "取消 beside the search field").tap()
+        XCTAssertTrue(app.buttons["agents-new"].firstMatch.waitForExistence(timeout: 5), "the bar is not back after 取消")
+        finger.switchTo(agents: false, "助手 tapped after 取消")
+        finger.switchTo(agents: true, "Agents tapped after 取消")
+    }
     /// 收件箱 and 知识库, pushed on 助手, search in their own navigation bar: the shell's top bar is not over them.
     @MainActor func testSearchOnPagesPushedOnTheAssistant() {
         for (page, title) in [("inbox", "收件箱"), ("knowledge", "知识库")] {

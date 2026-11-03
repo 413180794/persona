@@ -259,7 +259,8 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
 | 弱网 | 顶栏下面一个小药丸（等待网络 / 连接中…），两页共用；原来的标题位被切换按钮占了 |
 
 路由不变：所有跳转仍然写 `AppModel.selectedTab`（通知、Siri、交给 Persona、收件箱的行…），壳把 `.assistant` / `.chats` 当成两页，
-`.mail` 变成「在助手页推收件箱」，`.settings` 变成「打开设置浮层」，然后回到原来那一页。
+`.mail` 变成「在助手页推收件箱」，`.settings` 变成「打开设置浮层」，然后回到原来那一页。哪一页在前只有一个来源 `ShellState.page`，
+写 `selectedTab` 当场转给外壳（不靠 `onChange`），切换段、拖动也都经过它：见 `docs/shell.md`。
 
 UI 测试一律用 `launchPinned()` 固定风格；布局包装在 `PersonaUITests/LaunchLayout.swift` 的 `launchPersona()`（默认带 `-ui.oldLayout YES`），旧 `launchJarvis()` 仍转发到同一实现。
 壳自己的在 `ShellTests`、`ShellAvatarTests`（左上角的头像和收件箱角标）、`ShellPagerTests`（翻页）、`ShellSwitchTests`、`ShellSearchTests`（`-ui.oldLayout NO`）。DEBUG：`-openShellPage inbox|machines|routines|knowledge|profile`；`-showShellPagerAt 0.3` 把横条停在三成处截图；`-showHomeState empty|error`（新对话页：什么都不用你处理 / 一条开始失败的提示，截图用）。
@@ -270,7 +271,7 @@ UI 测试一律用 `launchPinned()` 固定风格；布局包装在 `PersonaUITes
 以前靠的是系统 `TabView` 切走时把旧 tab 摘下窗口（`onDisappear` 触发、`.task` 取消）。新外壳的两页（助手、Agents）是一个 ZStack，
 藏起来的一页只是透明、不接触摸，**不摘窗**，`onDisappear` 不会触发：不加信号，藏着的那页会一直轮询、替用户标已读。
 
-- 往下给 `tabIsActive`（不在任何页里时为真）：新外壳是 `ShellPageVisibility` 按这页是否显示设；旧布局、iPad、iPhone Duo 打开的 `TabView` 是每个 tab 内容上的 `TabActivityScope`。
+- 往下给 `tabIsActive`（不在任何页里时为真）：新外壳是 `ShellPageSlide` 按这页是不是在前（`ShellState.page`）设；旧布局、iPad、iPhone Duo 打开的 `TabView` 是每个 tab 内容上的 `TabActivityScope`。
 - `.tabActiveTask` / `.tabActiveTask(id:)`：页到后面就取消，回到前面从头再跑。`.onTabVisibility(appear:disappear:)` 代替成对的
   `onAppear` / `onDisappear`，两边各只调一次；系统在切走途中把旧 tab 短暂放回窗口时不算出现。
 - 用到的地方：飞书会话的 60 秒兜底轮询和已读上报（回到前面时补报）；「机器」页（`MachinesView`）和机器详情（`MachineDetailView`）的轮询。

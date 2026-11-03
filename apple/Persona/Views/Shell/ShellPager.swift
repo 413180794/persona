@@ -12,11 +12,19 @@ import SwiftUI
     private(set) var position: CGFloat = 0
     /// A drag or a settle is under way: both pages are on screen until it ends.
     private(set) var moving = false
+    /// The strip came to rest under a finger already down: the moving bar stays in its place until the finger lets go,
+    /// so a tap that began on its switch still lands (`ShellMovingBar`). Taken away, the switch under the finger took
+    /// nothing: a tap on Agents as the strip came back to 助手 was lost (`ShellRaceTests`).
+    private(set) var lingering = false
+    /// A finger is on the screen (the window's watcher, `ShellWindowHooks`).
+    @ObservationIgnored private var touching = false
     /// The page's width (`ShellView` measures it).
     @ObservationIgnored var width: CGFloat = 390
     @ObservationIgnored private var dragStart: CGFloat = 0
     /// Each settle's number: only the last one's end clears `moving`.
     @ObservationIgnored private var serial = 0
+    /// Where the strip rests or is headed (0 or 1); nil while a finger holds it.
+    @ObservationIgnored private var goal: CGFloat? = 0
     /// Where a drag settled: the shell selects that page.
     @ObservationIgnored var settled: (Int) -> Void = { _ in }
     /// A drag took hold: the shell builds Agents if it has not yet.
@@ -25,8 +33,34 @@ import SwiftUI
     /// The page at rest (or nearest).
     var page: Int { position < 0.5 ? 0 : 1 }
 
+    /// A finger came down on the window, or the last one let go.
+    func fingers(down: Bool) {
+        touching = down
+        if !down, lingering {
+            #if DEBUG
+            ShellTrace.shared.note("bar let go")
+            #endif
+            lingering = false
+        }
+    }
+
+    /// The strip comes to rest; a finger down keeps the moving bar standing in (`lingering`).
+    private func rest() {
+        if moving, touching {
+            #if DEBUG
+            ShellTrace.shared.note("bar held")
+            #endif
+            lingering = true
+        }
+        moving = false
+    }
+
     func dragBegan() {
+        #if DEBUG
+        ShellTrace.shared.note("drag began pos=\(String(format: "%.2f", position))")
+        #endif
         serial += 1
+        goal = nil
         dragStart = position
         moving = true
         began()
@@ -53,19 +87,27 @@ import SwiftUI
         let goes = SwipeRelease.goes(progress: along, velocity: speed, width: max(width, 1))
         let target = goes ? toward : from
         if goes { Haptics.tap() }
+        #if DEBUG
+        ShellTrace.shared.note("let go along=\(String(format: "%.2f", along)) v=\(Int(velocity)) goes=\(goes)")
+        #endif
         settle(at: target, velocity: velocity)
         if goes { settled(Int(target)) }
     }
 
-    /// To `page` (0 or 1): the switch was tapped, or something routed to the other page. Nothing to do when a drag
-    /// already settled there (its target is the position already).
+    /// To `page` (0 or 1): the switch was tapped, or something routed to the other page. Nothing to do when the strip
+    /// rests there or is already on its way (a drag that settled there, the same tap twice); a slide the other way
+    /// that has not started yet is replaced, one under way turns around.
     func slide(to page: Int, animated: Bool = true) {
         let target = CGFloat(page)
-        guard position != target else { return }
+        #if DEBUG
+        ShellTrace.shared.note("slide \(page) pos=\(String(format: "%.2f", position)) moving=\(moving)")
+        #endif
+        guard goal != target else { return }
         serial += 1
+        goal = target
         guard animated else {
             position = target
-            moving = false
+            rest()
             return
         }
         if moving {
@@ -84,6 +126,7 @@ import SwiftUI
     #if DEBUG
     /// `-showShellPagerAt <0…1>`: the strip held part way, as under a finger, for screenshots of a drag.
     func hold(at p: CGFloat) {
+        goal = nil
         moving = true
         position = p
     }
@@ -95,6 +138,12 @@ import SwiftUI
     }
 
     private func settle(at target: CGFloat, velocity: CGFloat) {
+        goal = target
+        guard position != target else {
+            // Nothing to animate, so no animation would end and clear `moving`.
+            rest()
+            return
+        }
         let way = (target - position) * max(width, 1)
         // The spring's initial velocity is a share of the way per second (the strip moves against the finger).
         let share = abs(way) > 1 ? max(0, Double(-velocity / way)) : 0
@@ -107,10 +156,26 @@ import SwiftUI
         withAnimation(motion, completionCriteria: .removed) {
             position = target
         } completion: { [weak self] in
+            #if DEBUG
+            ShellTrace.shared.note("settled \(target) current=\(self?.serial == mine)")
+            #endif
             guard let self, serial == mine else { return }
-            moving = false
+            rest()
+        }
+        // `.removed` waits for every view that took the animation, and one out of the window (under a pushed page) never
+        // runs it: opening an agent from the inbox the slide never ended (2026-11-03, `ShellBarAtRest`, `PagerPill`).
+        // Should another such view turn up, the strip still rests, long after any spring of this length.
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.settleLimit) { [weak self] in
+            guard let self, serial == mine, moving, position == target else { return }
+            #if DEBUG
+            ShellTrace.shared.note("settle lost \(target)")
+            #endif
+            rest()
         }
     }
+
+    /// The longest a settle takes (the spring is 0.32 s; ended as `.removed`, up to ~0.85 s seen), with room to spare.
+    static let settleLimit: DispatchTimeInterval = .milliseconds(1200)
 }
 
 /// Where a drag that follows the finger lets go, like the system's back swipe: a flick goes its way, otherwise past half
@@ -125,37 +190,57 @@ enum SwipeRelease {
 
 /// One of the shell's pages on the strip: beside the other one while the strip moves, alone and in reach at rest. At
 /// rest the hidden page lies under the shown one (transparent, out of reach), not off the screen: UI tests find a
-/// page's controls by id, and the first match off screen could not be tapped (`ShellTests`).
+/// page's controls by id, and the first match off screen could not be tapped (`ShellTests`). Only the page in front
+/// (`ShellState.page`) with the strip at rest on it takes taps and is read by VoiceOver.
 struct ShellPageSlide: ViewModifier {
-    let pager: ShellPager
+    let shell: ShellState
     /// 0 = 助手, 1 = Agents.
     let index: Int
 
     func body(content: Content) -> some View {
+        let pager = shell.pager
         let p = pager.position
         let shown = pager.moving ? abs(CGFloat(index) - p) < 1 : index == pager.page
-        let resting = !pager.moving && index == pager.page
+        let inReach = !pager.moving && index == pager.page && index == shell.page
         content
             // The page behind is never taken out of the window, so `onDisappear` does not fire for it: `tabIsActive`
-            // tells its polling and read reports to stop (docs/ios.md「只在前台做的事」). The selected page, so a drag
+            // tells its polling and read reports to stop (docs/ios.md「只在前台做的事」). The page in front, so a drag
             // that does not settle on the other page does not restart them.
-            .environment(\.tabIsActive, index == pager.page)
+            .environment(\.tabIsActive, index == shell.page)
             .offset(x: pager.moving ? (CGFloat(index) - p) * pager.width : 0)
             .opacity(shown ? 1 : 0)
-            .allowsHitTesting(resting)
-            .accessibilityHidden(!resting)
+            .allowsHitTesting(inReach)
+            .accessibilityHidden(!inReach)
             .zIndex(index == pager.page ? 1 : 0)
     }
 }
 
-/// A page's own top bar steps aside while the strip moves: `ShellMovingBar` stands in for both (drawn in its page, each
-/// bar was covered by the other page where it reached over it).
+/// A page's own top bar steps aside while the strip moves (and until a finger down as it came to rest lets go,
+/// `ShellPager.lingering`): `ShellMovingBar` stands in for both (drawn in its page, each
+/// bar was covered by the other page where it reached over it). While the strip rests on the other page the bar is not
+/// there at all. Hidden (`accessibilityHidden`, opacity, hit testing) was not enough: its switch is a menu and its
+/// buttons are glass, all UIKit, and after a page pushed on 助手 was swiped back Agents' bar was in the accessibility
+/// tree again over 助手's, invisible and "hittable" — VoiceOver could land on it, and a tap on the switch the tree
+/// offered first hit neither segment (`ShellSwitchTests`). It comes back, transparent, as soon as a slide starts.
 struct ShellBarAtRest: ViewModifier {
     @Environment(\.shell) private var shell
+    /// The bar's page on the strip: 0 = 助手, 1 = Agents.
+    let page: Int
 
     func body(content: Content) -> some View {
         if let pager = shell?.pager {
-            content.opacity(pager.moving ? 0 : 1)
+            let standIn = pager.moving || pager.lingering
+            // The bar comes and goes with `pager.page`, which a slide changes in its animated transaction, and a page pushed
+            // over it (now or before the spring ends) takes it out of the window, where that transition never runs: the
+            // slide waited for it (`ShellPager.settle`). Opening an agent from the inbox, pushed on 助手, left the strip
+            // moving, both pages out of reach and the moving bar's switch over the chat (2026-11-03,
+            // `ShellInboxAgentTests`). It is transparent while the strip moves (`ShellMovingBar` stands in): no animation.
+            Group {
+                if standIn || pager.page == page {
+                    content.opacity(standIn ? 0 : 1)
+                }
+            }
+            .transaction { $0.animation = nil }
         } else {
             content
         }

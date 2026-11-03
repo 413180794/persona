@@ -64,7 +64,14 @@ struct PersonalAgentListView: View {
                 }
             }
             if loaded && sessions.isEmpty && error == nil {
-                Text("没有个人 Agent 会话").foregroundStyle(.secondary)
+                let hints = sources.compactMap(\.setupHint)
+                if hints.isEmpty {
+                    Text("没有个人 Agent 会话").foregroundStyle(.secondary)
+                } else {
+                    ForEach(hints, id: \.self) { hint in
+                        Label(hint, systemImage: Theme.Icon.info).foregroundStyle(.secondary)
+                    }
+                }
             } else if loaded && groups.isEmpty && error == nil {
                 Text("没有匹配的会话").foregroundStyle(.secondary)
             }

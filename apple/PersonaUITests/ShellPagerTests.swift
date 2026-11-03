@@ -3,7 +3,8 @@ import XCTest
 /// The shell's 助手 | Agents strip (docs/ios.md「新外壳」, `ShellPager`): a drag to the left on 助手 slides to Agents, a
 /// drag to the right on Agents slides back, a drag to the right on 助手 is still the drawer; pushed pages keep the
 /// system's back swipe, the list scrolls up and down without paging, and a row's own swipe (置顶…) stays the row's.
-/// Which page shows is checked by pixels (`agentsDrawn`): the hidden page stays in the accessibility tree.
+/// Which page shows is read from the app's probe (`ShellPageProbe.swift`): the hidden page can stay in the accessibility
+/// tree.
 final class ShellPagerTests: XCTestCase {
     private var app: XCUIApplication!
 
@@ -46,7 +47,7 @@ final class ShellPagerTests: XCTestCase {
     @MainActor private func expectAgents(_ shown: Bool, _ what: String) {
         let ok = app.waitAgentsDrawn(shown)
         if !ok { attachScreen(what) }
-        XCTAssertTrue(ok, shown ? "Agents is not drawn: \(what)" : "Agents still drawn: \(what)")
+        XCTAssertTrue(ok, (shown ? "Agents is not drawn: \(what)" : "Agents still drawn: \(what)") + " \(app.shellTrace)")
     }
 
     @MainActor private var drawerOpen: Bool { app.descendants(matching: .any)["assistant-drawer-close"].firstMatch.exists }
@@ -126,7 +127,8 @@ final class ShellPagerTests: XCTestCase {
         XCTAssertTrue(app.buttons["agents-new"].firstMatch.waitForNonExistence(timeout: 5), "the chat did not open")
         sleep(1)
         edgeSwipeBack()
-        XCTAssertTrue(app.buttons["agents-new"].firstMatch.waitForExistence(timeout: 5), "the swipe did not go back to the list")
+        XCTAssertTrue(app.buttons["agents-new"].firstMatch.waitForExistence(timeout: 5),
+                      "the swipe did not go back to the list: [\(app.shellPage)] \(app.shellTrace)")
         expectAgents(true, "back from a chat on Agents")
     }
 

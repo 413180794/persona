@@ -6,19 +6,126 @@ import SwiftUI
 ///
 /// The pages read this from the environment (`\.shell`): nil means they are in the old layout, on an iPad or on the
 /// Mac, and look exactly as before.
-@MainActor @Observable final class ShellState {
+///
+/// Which page is in front has one answer, `page` (docs/shell.md): the switch's segments, which page takes taps and is
+/// read by VoiceOver, `tabIsActive` and the drawer all read it, and the strip's position follows it. It changes only
+/// through `select` (the switch, a drag that settles) and `route` (anything that sets `AppModel.selectedTab`), both at
+/// once, not when a view is next drawn: the shell's `onChange(of: selectedTab)` was skipped now and then, the strip
+/// stayed on 助手 with the tab on Agents, and Agents became the menu of an empty list of options (2026-11-02).
+@MainActor @Observable final class ShellState: TabRouter {
     /// The drawer is the shell's (it used to be the Persona tab's own): it slides both pages aside.
     let drawer = AssistantDrawer()
     /// 助手 and Agents side by side: a drag sideways moves from one to the other (`ShellPager`).
     let pager = ShellPager()
+    #if os(iOS)
+    /// The status row's link state and toasts (`ShellStatusRow`).
+    let notices = ShellNotices()
+    #endif
+    /// The page in front: 0 = 助手, 1 = Agents.
+    private(set) var page = 0
+    /// Agents is built the first time it is selected or dragged in (TabView builds a tab when shown), then kept. Not
+    /// before: hidden, its controls are still in the accessibility tree (its glass and list are UIKit).
+    private(set) var agentsBuilt = false
+    /// 助手 likewise. Built while the app opened on Agents, its conversation appeared there unseen: subscribed, shown,
+    /// marked seen, and whatever hangs off `onAppear` ran a second time at launch (2026-11-02, `ShellLaunchTests`).
+    private(set) var assistantBuilt = false
     /// What the drawer or the home page asked the 助手 page to show; `serial` makes the same request count twice.
     private(set) var request: (page: ShellPage, serial: Int)?
     /// Each page says whether it is at its root: the drawer's drag only opens there (pushed pages swipe back).
-    var chatAtRoot = true
-    var workAtRoot = true
+    var chatAtRoot = true {
+        didSet {
+            #if DEBUG
+            if chatAtRoot != oldValue { ShellTrace.shared.note("chatRoot \(chatAtRoot)") }
+            #endif
+        }
+    }
+    var workAtRoot = true {
+        didSet {
+            #if DEBUG
+            if workAtRoot != oldValue { ShellTrace.shared.note("workRoot \(workAtRoot)") }
+            #endif
+        }
+    }
+    @ObservationIgnored private weak var model: AppModel?
+    /// The first route lands on its page without sliding there.
+    @ObservationIgnored private var routed = false
+
+    /// `page`: where the app opens (its tab), so the page that is not in front is not built at launch.
+    init(page: Int = 0) {
+        self.page = page
+        agentsBuilt = page == 1
+        assistantBuilt = page == 0
+        pager.slide(to: page, animated: false)
+        pager.settled = { [unowned self] p in select(p) }
+        pager.began = { [unowned self] in agentsBuilt = true; assistantBuilt = true }
+    }
+
+    /// The page in front, with the root of the page in front (pushed pages swipe back instead of opening the drawer).
+    var atRoot: Bool { page == 1 ? workAtRoot : chatAtRoot }
 
     func show(_ page: ShellPage) {
         request = (page, (request?.serial ?? 0) + 1)
+    }
+
+    /// Takes the app's tab from now on: every `AppModel.selectedTab` lands here as it is set.
+    func attach(to model: AppModel) {
+        self.model = model
+        model.tabRouter = self
+        route(model.selectedTab, in: model)
+        #if os(iOS)
+        // The status row takes the toasts and the link's state as they are set, like the tab.
+        model.toastSink = notices
+        model.connection.onShown = { [weak notices] in notices?.linkChanged($0) }
+        notices.linkChanged(model.connection.shown)
+        if let toast = model.toast { model.toast = toast } // one set before the shell was up goes to the row
+        #endif
+    }
+
+    func detach(from model: AppModel) {
+        if model.tabRouter === self { model.tabRouter = nil }
+        #if os(iOS)
+        if model.toastSink === notices {
+            model.toastSink = nil
+            model.connection.onShown = nil
+        }
+        #endif
+    }
+
+    /// `p` in front (0 = 助手, 1 = Agents): the switch, a drag that settled there, a route. The strip slides there and
+    /// the app's tab says so. Taps that come while the strip still moves are not lost: the last one is where it ends.
+    func select(_ p: Int, animated: Bool = true) {
+        if p == 1 { agentsBuilt = true } else { assistantBuilt = true }
+        if page != p {
+            page = p
+            #if DEBUG
+            ShellTrace.shared.note("select \(p)")
+            #endif
+        }
+        pager.slide(to: p, animated: animated && routed)
+        routed = true
+        let tab: AppTab = p == 1 ? .chats : .assistant
+        if let model, model.selectedTab != tab { model.selectedTab = tab }
+    }
+
+    /// Routes that are not one of the two pages land on 助手 (the inbox) or in the sheet (设置), and the tab goes
+    /// back to the page in front.
+    func route(_ t: AppTab, in model: AppModel) {
+        #if DEBUG
+        ShellTrace.shared.note("route \(t)")
+        #endif
+        // 旧布局 was just turned on (设置 › 外观 › 布局 sets the tab to 设置 for the tabs): the tabs take it from here,
+        // the shell goes away with the next update.
+        guard !model.oldLayout else { return detach(from: model) }
+        switch t {
+        case .assistant: select(0)
+        case .chats: select(1)
+        case .mail:
+            show(.inbox)
+            select(0)
+        case .settings:
+            model.shellSettings = true
+            select(page)
+        }
     }
 }
 
@@ -34,4 +141,24 @@ enum ShellRoute: Hashable, Sendable {
 
 extension EnvironmentValues {
     @Entry var shell: ShellState?
+    /// The switch's pill follows the strip's position (only in `ShellMovingBar`).
+    @Entry var shellPillFollowsStrip = false
 }
+
+#if DEBUG
+/// What happened to the shell lately (switch taps, routes, slides, settles), for UI tests that chase a lost tap: the
+/// probe's label.
+@MainActor @Observable final class ShellTrace {
+    static let shared = ShellTrace()
+    private(set) var events: [String] = []
+    @ObservationIgnored private var serial = 0
+    /// Each event says when, in seconds since the trace began: a test that waited too long tells what took the time.
+    @ObservationIgnored private let start = Date()
+
+    func note(_ s: String) {
+        serial += 1
+        events.append("\(serial) @\(String(format: "%.2f", Date().timeIntervalSince(start))) \(s)")
+        if events.count > 24 { events.removeFirst(events.count - 24) }
+    }
+}
+#endif

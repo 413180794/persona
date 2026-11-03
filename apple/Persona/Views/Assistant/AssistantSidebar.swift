@@ -370,6 +370,12 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
             }
             // Within 45° of horizontal: steeper is the page's own scrolling.
             guard abs(dx) > abs(dy) else { return refused("direction") }
+            if Self.pushed(at: start, in: view) {
+                #if DEBUG
+                ShellTrace.shared.note("pan refused: pushed")
+                #endif
+                return refused("pushed")
+            }
             if let pager, Self.pages(pager: pager, dx: dx) {
                 if Self.sidewaysScroller(at: start, in: view, towardsRight: dx < 0) { return refused("sideways scroller") }
                 if Self.typing(at: start, in: view) { return refused("typing") }
@@ -417,6 +423,22 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
             return false
         }
 
+        /// A navigation stack under the finger has a page pushed: a drag from there is that stack's back swipe, whatever
+        /// the page last said about being at its root (`enabled`). That word comes through SwiftUI state and was stale
+        /// now and then: on a chat opened on Agents the strip took the edge swipe and slid to 助手, the chat still pushed
+        /// (`ShellPagerTests.testPushedPagesSwipeBack`, 3 in 24 runs). UIKit's stack is what the swipe acts on.
+        static func pushed(at point: CGPoint, in view: UIView) -> Bool {
+            var r: UIResponder? = view.hitTest(point, with: nil)
+            while let x = r, x !== view {
+                if let vc = x as? UIViewController, let nav = (vc as? UINavigationController) ?? vc.navigationController,
+                   nav.viewControllers.count > 1 {
+                    return true
+                }
+                r = x.next
+            }
+            return false
+        }
+
         /// The finger is on the text being typed (moving the cursor, selecting): not a page turn.
         static func typing(at point: CGPoint, in view: UIView) -> Bool {
             var hit = view.hitTest(point, with: nil)
@@ -437,12 +459,39 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
             return false
         }
 
-        /// The finger is on a list row (the Agents list's rows swipe to the right to 置顶 / 中断 / 标为已看).
+        /// The finger is on a list row with a swipe of its own (the Agents list's rows swipe to the right to 置顶 / 中断 /
+        /// 标为已看). A row marked `NoRowSwipe` (the filter bar, the list's first row on a phone) has none: a drag along
+        /// it turns the strip back to 助手, as it did when the bar sat above the list.
         static func onRow(at point: CGPoint, in view: UIView) -> Bool {
             var hit = view.hitTest(point, with: nil)
             while let v = hit, v !== view {
-                if v is UICollectionViewCell || v is UITableViewCell { return true }
+                if v is UICollectionViewCell || v is UITableViewCell { return !NoRowSwipe.marks(v) }
                 hit = v.superview
+            }
+            return false
+        }
+    }
+
+    /// Marks a list row that has no swipe of its own (`Coordinator.onRow`): a point-sized view in the row's background,
+    /// found among the cell's subviews.
+    struct NoRowSwipe: UIViewRepresentable {
+        final class Marker: UIView {}
+
+        func makeUIView(context: Context) -> Marker {
+            let v = Marker()
+            v.isUserInteractionEnabled = false
+            v.isAccessibilityElement = false
+            return v
+        }
+
+        func updateUIView(_ uiView: Marker, context: Context) {}
+
+        /// Whether `cell` holds a marker (a few levels down: the row's hosting views).
+        static func marks(_ cell: UIView) -> Bool {
+            var level = [cell]
+            for _ in 0..<8 where !level.isEmpty {
+                if level.contains(where: { $0 is Marker }) { return true }
+                level = level.flatMap(\.subviews)
             }
             return false
         }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addSection, agentPath, arrangeSessions, assignSection, blockView, emptyPrefs, groupSessions, isDefaultView, mergeMessages, normalizePrefs, pendingOutgoing, removeSection, resetView, setView, toggleProvider, togglePin, totalUnread, viewOf, type AgentMessage, type AgentSession, type Outgoing } from "./agents";
+import { addSection, agentPath, arrangeSessions, assignSection, blockView, emptyPrefs, groupSessions, isDefaultView, mergeMessages, normalizePrefs, pendingOutgoing, removeSection, resetView, setView, setupHints, toggleProvider, togglePin, totalUnread, viewOf, type AgentMessage, type AgentSession, type Outgoing } from "./agents";
 
 const s = (id: string, provider: string, rank: number, unread = 0, title = id): AgentSession => ({ id, source: "removedbridge", sessionKey: id, provider, title, canSend: true, unreadCount: unread, rankTimeMs: rank });
 const m = (id: string, pos: number, role = "assistant", text = id, t = pos * 1000): AgentMessage => ({ externalId: id, role, blocks: [{ type: "text", text }], createTimeMs: t, position: pos });
@@ -110,5 +110,19 @@ describe("arrangeSessions", () => {
   it("normalizes whatever the hub or storage returns", () => {
     expect(normalizePrefs(null)).toEqual(emptyPrefs());
     expect(normalizePrefs({ pins: ["x"] } as never).sections).toEqual([]);
+  });
+});
+
+describe("setupHints", () => {
+  it("says what to do for each source that is not set up, nothing for a ready one", () => {
+    const h = setupHints([
+      { source: "a", enabled: false, setup: "disabled" },
+      { source: "b", enabled: true, setup: "no_accounts" },
+      { source: "c", enabled: true },
+      { source: "d", enabled: true, setup: "later" },
+    ]);
+    expect(h).toHaveLength(2);
+    expect(h[0]).toContain("lark-connector_AGENT_BRIDGE");
+    expect(h[1]).toContain("账号");
   });
 });

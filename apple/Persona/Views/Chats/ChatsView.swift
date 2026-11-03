@@ -421,7 +421,12 @@ private struct AgentsList: View {
             // fold away and come back on a pull (a bar pinned in the safe area stayed put under a folded search field,
             // leaving a blurred gap, TestFlight 35). Beside the split (regular width) it stays above the list.
             if widthClass != .regular {
-                Section { filterBar }
+                Section {
+                    filterBar
+                        #if os(iOS)
+                        .background { DrawerPan.NoRowSwipe() } // no swipe of its own: a drag to the right pages to 助手
+                        #endif
+                }
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
@@ -2239,6 +2244,8 @@ struct AgentsTopBar: View, Equatable {
         .padding(.horizontal, Theme.Space.l)
         .padding(.top, Theme.Space.xxs)
         .shellTopBarScaled()
-        .modifier(ShellBarAtRest()) // ShellMovingBar stands in while the strip slides
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("agents-top-bar") // ShellSearchTests: nothing of it over the search field
+        .modifier(ShellBarAtRest(page: 1)) // ShellMovingBar stands in while the strip slides
     }
 }

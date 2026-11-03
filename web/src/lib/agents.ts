@@ -58,6 +58,27 @@ export function fetchSessions() {
   return api<{ sessions: AgentSession[] | null }>("/agents/sessions").then((r) => r.sessions ?? []);
 }
 
+// A source's setup state (agents.Setup* on the hub): why a reachable source has nothing to list yet.
+export interface AgentSourceStatus {
+  source: string;
+  enabled: boolean;
+  error?: string;
+  setup?: "missing" | "disabled" | "no_accounts" | string;
+}
+
+const SETUP_HINTS: Record<string, string> = {
+  missing: "lark-connector 的版本还没有个人 Agent，升级 lark-connector 后再试",
+  disabled: "lark-connector 没有开启个人 Agent：在它的部署里设置 lark-connector_AGENT_BRIDGE=true 后重启",
+  no_accounts: "还没有连接个人 Agent 账号：在 lark-connector 的设置里添加 Cue 或 Grok Bot",
+};
+
+/** What to do so the sources list agents, one line per source that is not set up. */
+export const setupHints = (sources: AgentSourceStatus[]) => sources.flatMap((x) => (x.setup && SETUP_HINTS[x.setup] ? [SETUP_HINTS[x.setup]] : []));
+
+export function fetchSources() {
+  return api<{ sources: AgentSourceStatus[] | null }>("/agents").then((r) => r.sources ?? []);
+}
+
 export function fetchMessages(id: string, cursor?: string, limit = 50) {
   const q = new URLSearchParams({ limit: String(limit) });
   if (cursor) q.set("cursor", cursor);
@@ -145,8 +166,8 @@ export function pendingOutgoing(out: Outgoing[], messages: AgentMessage[], slack
 
 // ── session list store, refreshed on the hub's {"type":"agents"} event ─
 
-type ListState = { sessions: AgentSession[]; loaded: boolean; error: string };
-let list: ListState = { sessions: [], loaded: false, error: "" };
+type ListState = { sessions: AgentSession[]; loaded: boolean; error: string; hints: string[] };
+let list: ListState = { sessions: [], loaded: false, error: "", hints: [] };
 const listeners = new Set<() => void>();
 const emit = (p: Partial<ListState>) => {
   list = { ...list, ...p };
@@ -155,8 +176,8 @@ const emit = (p: Partial<ListState>) => {
 
 let inflight: Promise<void> | null = null;
 export function refreshAgentSessions(): Promise<void> {
-  inflight ??= fetchSessions()
-    .then((sessions) => emit({ sessions, loaded: true, error: "" }))
+  inflight ??= Promise.all([fetchSessions(), fetchSources().catch(() => null)])
+    .then(([sessions, sources]) => emit({ sessions, loaded: true, error: "", ...(sources ? { hints: setupHints(sources) } : {}) }))
     .catch((e) => emit({ loaded: true, error: e instanceof Error ? e.message : String(e) }))
     .finally(() => (inflight = null));
   return inflight;
@@ -181,7 +202,7 @@ export function setLocalRead(id: string) {
 }
 
 export function resetAgents() {
-  emit({ sessions: [], loaded: false, error: "" });
+  emit({ sessions: [], loaded: false, error: "", hints: [] });
 }
 
 export function useAgentList(): ListState {

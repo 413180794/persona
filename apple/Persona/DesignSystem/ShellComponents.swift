@@ -9,6 +9,10 @@ import SwiftUI
 /// menu: 知识库, 详细信息, the launcher…), like tapping the title in ChatGPT; tapping Agents while it is selected opens
 /// the list's options (分组, 显示, 机器…).
 ///
+/// In the shell the selection is the shell's (`ShellState.page`, docs/shell.md), not `tab`: a tap selects at once, and a
+/// segment is its page's menu only while the strip rests on that page, so a segment never stands for a page that is
+/// not on screen (a tab that said Agents over 助手 made Agents the menu of an empty list of options, 2026-11-02).
+///
 /// The switch reads nothing that the hub's pushes change: an open menu is laid out again whenever its button is, and
 /// went back to its top under the finger choosing a machine (TestFlight 70, docs/lessons/ios.md). The count is
 /// `WaitingBadge`, beside the menu rather than in its label, and reads the agents itself.
@@ -19,6 +23,9 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
     @Namespace private var pill
     /// The strip under the switch: its pill follows the pages while they slide (`ShellPager`).
     @Environment(\.shell) private var shell
+    /// In the moving bar (`ShellMovingBar`): the pill glides with the strip. The pages' own bars are transparent while
+    /// it moves, so theirs sits on the page in front and does not read the strip at all (`PagerPill`).
+    @Environment(\.shellPillFollowsStrip) private var follows
     @Environment(\.buiTheme) private var theme
 
     var body: some View {
@@ -31,18 +38,34 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
                 .padding(Theme.Space.xs)
                 .background(theme.colors.field, in: .capsule)
                 .overlay(Capsule().strokeBorder(theme.colors.line, lineWidth: Theme.Size.hairline))
-                .animation(Theme.Motion.state, value: tab)
+                .animation(Theme.Motion.state, value: chosen)
         } else {
             row
                 .padding(Theme.Space.xs)
                 .surface(interactive: true, in: .capsule)
-                .animation(Theme.Motion.state, value: tab)
+                .animation(Theme.Motion.state, value: chosen)
         }
+    }
+
+    /// The page the switch shows as chosen: the shell's, or `tab` outside it.
+    private var chosen: AppTab {
+        guard let shell else { return tab }
+        return shell.page == 1 ? .chats : .assistant
+    }
+
+    /// Whether the chosen segment opens its menu: not while the strip slides (a tap then picks a page). Only `moving`,
+    /// not where the strip is: `pager.page` changes in the slide's animated transaction, and a switch reading it took
+    /// that animation into a bar a pushed page had taken out of the window, so the slide never ended (`ShellPager.settle`).
+    /// At rest the strip is on the shell's page anyway.
+    private func opensMenu(_ value: AppTab) -> Bool {
+        guard chosen == value else { return false }
+        guard let pager = shell?.pager else { return true }
+        return !pager.moving
     }
 
     private var row: some View {
         HStack(spacing: .zero) {
-            if tab == .assistant {
+            if opensMenu(.assistant) {
                 Menu { chatMenu() } label: { segment("助手", selected: true) }
                     .menuStyle(.button)
                     .buttonStyle(.plain)
@@ -52,7 +75,7 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
                 button("助手", .assistant, id: "shell-assistant")
             }
             ZStack(alignment: .topTrailing) {
-                if tab == .chats {
+                if opensMenu(.chats) {
                     Menu { workMenu() } label: { segment("Agents", selected: true) }
                         .menuStyle(.button)
                         .buttonStyle(.plain)
@@ -65,21 +88,29 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
             }
         }
         .background(alignment: .leading) {
-            if let pager = shell?.pager { PagerPill(pager: pager) }
+            if let shell { PagerPill(shell: shell, follows: follows) }
         }
     }
 
     private func button(_ title: String, _ value: AppTab, id: String) -> some View {
         Button {
-            guard tab != value else { return }
-            Haptics.tap()
-            tab = value
+            #if DEBUG
+            ShellTrace.shared.note("switch \(value) chosen=\(chosen)")
+            #endif
+            if let shell {
+                // Also while the strip slides: the last tap is where it ends.
+                if chosen != value { Haptics.tap() }
+                shell.select(value == .chats ? 1 : 0)
+            } else if tab != value {
+                Haptics.tap()
+                tab = value
+            }
         } label: {
-            segment(title, selected: tab == value)
+            segment(title, selected: chosen == value)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(id)
-        .accessibilityAddTraits(tab == value ? .isSelected : [])
+        .accessibilityAddTraits(chosen == value ? .isSelected : [])
     }
 
     @ViewBuilder private func segment(_ title: String, selected: Bool) -> some View {
@@ -120,22 +151,29 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
 
 /// The switch's pill in the shell: under 助手 or Agents as the strip's position says, gliding with the finger. Its own
 /// view: only it reads the position, the switch (and its menus) are not drawn again on every frame of a drag.
+///
+/// Only the moving bar's pill follows the strip. A page's bar can be out of the window (a page pushed over it, even
+/// one pushed while the strip still slides), and a view there that took the slide's animation never runs it: the
+/// slide's end waited for it, both pages out of reach and the moving bar's switch over the chat (2026-11-03, opening an
+/// agent from the inbox, `ShellInboxAgentTests`).
 private struct PagerPill: View {
-    let pager: ShellPager
+    let shell: ShellState
+    var follows: Bool
     @Environment(\.buiTheme) private var theme
 
     var body: some View {
         GeometryReader { g in
             let half = g.size.width / 2
+            let at = follows ? min(1, max(0, shell.pager.position)) : CGFloat(shell.page)
             if AppStyle.current.usesBeautifulUI {
                 // BeautifulUI's segmented control: the chosen segment is a raised capsule.
                 Color.clear.buiSurface(Capsule(), fill: theme.colors.surface, elevation: .button)
                     .frame(width: half, height: g.size.height)
-                    .offset(x: min(1, max(0, pager.position)) * half)
+                    .offset(x: at * half)
             } else {
                 Capsule().fill(Theme.Shell.segment)
                     .frame(width: half, height: g.size.height)
-                    .offset(x: min(1, max(0, pager.position)) * half)
+                    .offset(x: at * half)
             }
         }
     }
@@ -194,15 +232,26 @@ struct ShellCircleButton: View {
 /// The top bar's left button on both pages (2026-11-01 user request, in place of ☰): the persona's face in Persona's
 /// state, as the old layout's bar shows it in the middle (`PersonaDot`, docs/persona.md「状态」), opening the drawer
 /// (历史对话, 收件箱…). The state is that of Persona's conversation on 助手 (`assistantCurrent`), on Agents too, so the
-/// face stays the same while the strip slides. A tray mark sits on the face's lower corner while the inbox has
-/// something for the user: a tray, not a dot, so it does not read as the face's state, and just outside the frame's
-/// corner, where it clears the round face and its rings (needs-you, working) with a gap, and the corners the packages
-/// draw in (the thought bubble and the z are top right). The button reads all of it itself: the bars around it are not drawn again with each push (#178).
+/// face stays the same while the strip slides. A tray mark sits beside the face's lower right while the inbox has
+/// something for the user: a tray, not a dot, so it does not read as the face's state; its bottom level with the face's
+/// (2026-11-02: hung below the frame it lay over Agents' search field, so nothing of the bar reaches below the face
+/// now, on every page), as far right as clears the round face and its rings (needs-you, working) by a gap, away from
+/// the corner the packages draw in (the thought bubble and the z are top right). The button reads all of it itself:
+/// the bars around it are not drawn again with each push (#178).
 struct ShellPersonaButton: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dynamicTypeSize) private var typeSize
     var id: String
     var action: () -> Void
+
+    /// How far right of the face's lower right corner the mark goes (its bottom level with the face's) so that it
+    /// clears the round face by `gap`: the centers `face / 2 + mark / 2 + gap` apart.
+    nonisolated static func markShift(face: CGFloat, mark: CGFloat, gap: CGFloat) -> CGFloat {
+        let r = face / 2, m = mark / 2
+        let down = r - m // the mark's center below the face's
+        let across = ((r + m + gap) * (r + m + gap) - down * down).squareRoot()
+        return across - (r - m) // from bottomTrailing, where the mark's center is r - m right of the face's
+    }
 
     var body: some View {
         let key = model.assistantCurrent
@@ -222,7 +271,7 @@ struct ShellPersonaButton: View {
         .overlay(alignment: .bottomTrailing) {
             if inbox {
                 InboxMark(size: mark)
-                    .offset(x: mark / 2 + Theme.Space.xxs, y: mark / 2 + Theme.Space.xxs)
+                    .offset(x: Self.markShift(face: Theme.Size.tapTarget * k, mark: mark, gap: Theme.Space.xxs))
             }
         }
         .accessibilityLabel("历史对话")

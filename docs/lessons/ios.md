@@ -117,6 +117,15 @@
   默认的完成回调在弹簧「看起来差不多到了」时就来，`ShellPager` 的 0.32 秒弹簧这时还差约 5pt；`moving` 一变 false，各页自己的顶栏接回来，骑在还在走的页面偏移上，
   顶栏横着跳 3–5pt 再慢慢回去（两种风格都有）。XCUITest 看不出来：元素的 frame 是布局值，不含偏移，截一张图也比这 170ms 慢；
   录屏逐帧量（`simctl io recordVideo` + ffmpeg 抽帧比对顶栏那一条），单测在宿主 App 的 scene 里挂一个窗口、`drawHierarchy` 读像素（`ShellPagerSettleTests`；不挂 scene 的 `UIWindow` 不绘制，读出来是空的）。
+- `.removed`（`.logicallyComplete` 也一样）的完成回调要等**所有**接了这次动画的视图都跑完；接了动画的视图如果在窗口外（导航栈里被推出页面盖住的根页，包括弹簧还没停就被盖住的），
+  动画不跑、也就不结束，回调一直等到它回到窗口（2026-11-03 用户报：从收件箱的「需要你」点进 Agent 对话后，「助手页面变收件箱，划不动点不动」，对话顶上卡着切换器）。
+  横条一直 `moving`，两页都不接点按，`ShellMovingBar` 的切换器一直盖在对话上；返回收件箱、根页回到窗口那一刻回调才来（trace 里晚了 3.7 秒）。
+  接了动画的是各页自己的顶栏：它随 `pager.page`（由 position 算出）出现 / 消失，切换器的药丸读 position。改成：各页顶栏的出现消失不带动画（`ShellBarAtRest` 包一层
+  `.transaction { $0.animation = nil }`；包在 `if` 里面没用，要包住 `if`），药丸只有滑动时顶替的那条跟着 position 走，各页顶栏里的停在 `shell.page`（滑动时它们本来就透明）。
+  只在被盖住时关掉、或者只给药丸套 `.transaction` 都不够：直接观察 position 的子视图不吃祖先的 transaction 改写。`ShellPager.settle` 另有 1.2 秒兜底（trace 记 `settle lost`）。
+  切换器自己也读了 `pager.page`（选中的那段是 Menu 还是按钮），一样接了动画：模拟器负载高时（并行跑另一台）还是 `settle lost`，兜底一结束 `moving` 一变、切换器重画，回调 20ms 后才来。
+  现在切换器只读 `moving`（动画外设置），不读 position 算出来的任何东西。规矩：各页顶栏里的东西只读 `moving` / `lingering` / `shell.page`，不读 `position` / `pager.page`。
+  试过不行的：一个 0 尺寸的 `Animatable` 视图逐帧报位置（不在屏上画就不逐帧算 body）。查法：trace 里 `slide` 之后很久才 `settled`，或者有 `settle lost`（`ShellInboxAgentTests` 断言没有）。
 - 新外壳的两页一直建着、静止时只用 opacity 藏另一页，藏起来的那一页仍在无障碍树里（玻璃按钮、列表都是 UIKit），而且两页的切换器 id 相同：
   `exists` / `isHittable` / `firstMatch` 分不出哪一页在显示，要按像素判断（`ShellSwitchTests.agentsDrawn`），点切换器要挑可点的那个。
 - 列表的 `.searchable` 处于搜索状态时推出的页面，系统导航栏会被强制显示（隐藏导航栏的对话页出现两行标题）；推出之后再关搜索也没用。
@@ -288,6 +297,32 @@
 - 一组子视图（`HStack` 里的图标、文字、计数）只在外面挂 `.accessibilityLabel` 不够：标签会落到每个子视图上，读屏连读几遍
   （「还有 N 个空闲」那行读三遍「展开 N 个空闲的 agent」，iOS 和 Mac 一样，#405，2026-11-02）。先 `.accessibilityElement(children: .ignore)`
   合成一个元素再给标签；包在 `Button` 里也照样能按。
+
+- 新外壳两页叠在一起（`ShellPageSlide`），藏起来的那页只靠 `accessibilityHidden` 出不了无障碍树：它的顶栏切换是 Menu、按钮是玻璃，
+  列表是 UICollectionView，都是 UIKit。在助手上推一页再右滑返回之后，Agents 的整页（导航栏、列表、顶栏）又回到树里，盖在助手的顶栏上面，
+  看不见却「可点」：VoiceOver 会落到它上面，UI 测试按 id 取到的第一个 `shell-agents` 是它，点它的中心哪一段都不是（2026-11-01，
+  `ShellSwitchTests` 四个用例）。藏起来那页的顶栏现在不在树里（`ShellBarAtRest(page:)`：横条停在另一页时不画，一开始滑就放回来、透明）；
+  列表还会漏进树里，判断哪页在显示用状态探针（`shell-pager-probe`），别用「某个控件 exists / isHittable」。
+- 把一个控件搬进 List 当第一行（Agents 的筛选条，56b2ead，为了搜索框能收起）之后，它就是一个 UICollectionViewCell：凡是「从行上起拖就让给行」
+  的手势判断（`DrawerPan.onRow`，行的右滑是置顶 / 中断 / 标为已看）都会把它当成行，沿筛选条右拖翻回助手就失效了。没有自己右滑的行要显式标出来
+  （`DrawerPan.NoRowSwipe`）。
+
+- 同一件事别留两个来源再靠 `.onChange` 同步：新外壳「哪页在前」原来是 `AppModel.selectedTab` 和横条的位置两份，靠外壳的
+  `onChange(of: selectedTab)` 去滑横条。SwiftUI 有时不重新求那个 body（追踪里 tab 改了、之后没有 body 也没有 onChange），
+  横条不动，两份就此分叉，之后的点击全错（2026-11-02，`docs/shell.md`）。要跟着一个值做事，就在写它的地方当场做（`didSet` 里调
+  `tabRouter`），或者只留一个来源让大家都读它。
+- 「已选中的段再点打开菜单」这类按状态变成另一种控件的按钮：状态一旦和屏幕对不上，按钮就变成别的东西（空菜单），用户只看到点了没反应。
+  决定它是什么的状态必须就是屏幕上显示的那个（新外壳：横条静止在这页才是菜单）。
+
+- 反复出现又消失的小条别用 `if … { view.transition(.opacity) }` 插入：外面同时有根控制器 `additionalSafeAreaInsets` 的 UIKit 动画时，
+  第二次起插进来的视图停在透明，body 照常跑、页面也让出了位置，就是看不见，VoiceOver 也读不到（透明的不进无障碍树）（2026-11-02，新外壳的状态行）。
+  一直留着它、只动 opacity（收起时画上一次的内容），每次都能显示。
+- 按状态插入 / 拿掉的可点视图（`if moving { 顶替的顶栏 }`）：状态在手指按着的时候变了，视图被拿掉，按在它上面的那一下就没了，
+  Button 的 action 不会调，下面露出来的同一个按钮也收不到（触摸开始时落在被拿掉的那个上）。新外壳的横条刚好在点击中途停下时就是这样，
+  动画慢的 BeautifulUI 下几乎每次连点都丢一下（2026-11-02，`testQuickTapsEndOnTheLast`）。拿掉要等手指抬起（`ShellPager.lingering`）。
+- 新外壳两页都建着，藏在后面那页的 `onAppear` 照样会跑：从 Agents 启动时助手页的对话「出现」了，订阅、标为已看、
+  DEBUG 开关都跑了，用户却没看到它（2026-11-02，ovis 车道看到 `appeared()` 连着跑、消息重复发）。这类有副作用的 `onAppear` 别指望「出现 = 看到」：
+  页面没选中就别建（`ShellState.assistantBuilt`），或者改用 `.onTabVisibility`。DEBUG 开关也别挂在 `onAppear` 上做一次性的事。
 
 ## Swift 与编译
 

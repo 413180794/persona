@@ -27,7 +27,11 @@ final class ConnectionStatus {
 
     /// What the titles show: `phase` once it has lasted `delay`. Reconnecting after coming back to the app or
     /// switching networks usually takes well under that, and the title would just flash.
-    private(set) var shown: Phase = .online
+    private(set) var shown: Phase = .online {
+        didSet { if shown != oldValue { onShown?(shown) } }
+    }
+    /// Told of each new `shown` as it is set (the iPhone shell's status row: docs/shell.md「状态行」).
+    @ObservationIgnored var onShown: ((Phase) -> Void)?
     private(set) var networkUp = true
     private(set) var catchingUp = false
     /// The last time everything was fine (for the details: 「上次连上 3 分钟前」).
@@ -54,6 +58,19 @@ final class ConnectionStatus {
     case "updating": .updating
     default: nil
     }
+    /// `-showConnectionCycle <waiting|connecting|updating>:<off>:<on>`: the link is fine for `off` seconds, then in that
+    /// state for `on` seconds, over and over (UI tests of what shows it, coming and going, whenever they are ready).
+    @ObservationIgnored private let cycle: (phase: Phase, at: Double, length: Double)? = {
+        let parts = (UserDefaults.standard.string(forKey: "showConnectionCycle") ?? "").split(separator: ":")
+        guard parts.count == 3, let at = Double(parts[1]), let length = Double(parts[2]) else { return nil }
+        let phase: Phase? = switch parts[0] {
+        case "waiting": .waitingForNetwork
+        case "connecting": .connecting
+        case "updating": .updating
+        default: nil
+        }
+        return phase.map { ($0, at, length) }
+    }()
     /// `-simulateOffline YES`: the network path reads as down (the simulator always has the Mac's network).
     @ObservationIgnored private let offline = UserDefaults.standard.bool(forKey: "simulateOffline")
     #endif
@@ -62,6 +79,16 @@ final class ConnectionStatus {
         #if DEBUG
         if let forced { shown = forced }
         if offline { networkUp = false }
+        if let cycle {
+            Task { @MainActor [weak self] in
+                while self != nil {
+                    try? await Task.sleep(for: .seconds(cycle.at))
+                    self?.shown = cycle.phase
+                    try? await Task.sleep(for: .seconds(cycle.length))
+                    self?.shown = .online
+                }
+            }
+        }
         #endif
         monitor.pathUpdateHandler = { [weak self] path in
             let up = path.status == .satisfied
@@ -99,7 +126,7 @@ final class ConnectionStatus {
     /// Something that decides the phase changed: show it after the delay, or go back to the title right away.
     func update() {
         #if DEBUG
-        if forced != nil { return }
+        if forced != nil || cycle != nil { return }
         #endif
         let now = phase
         if now == .online {

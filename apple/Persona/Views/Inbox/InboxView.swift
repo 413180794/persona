@@ -224,6 +224,7 @@ struct InboxPage: View {
         }
         .buttonStyle(.plain)
         .modifier(InboxRowLook())
+        .accessibilityIdentifier("inbox.agentRow")
     }
 
     /// The agent's chat (the assistant's in 对话), where the question / plan / approval waits.

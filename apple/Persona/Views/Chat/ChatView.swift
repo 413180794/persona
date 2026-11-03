@@ -60,6 +60,12 @@ struct ChatView: View {
     /// while it is on — a lone jump into rows the lazy stack never laid out lands on an earlier message.
     @State private var followsEnd = true
     @State private var entered = false
+    #if DEBUG
+    /// How many times each conversation has appeared since launch (`probe.chat`'s `appeared`). Opened at launch it
+    /// appeared three times within 0.2 s while the shell's navigation went back and forth (2026-11-02): once it is.
+    static var appearances: [String: Int] = [:]
+    @State private var appearCount = 0
+    #endif
     /// Where to land on entry, once the lines are there: the start of the latest answer (finished, unread) or where
     /// you left off (finished, read).
     @State private var entry: Entry?
@@ -927,7 +933,7 @@ struct ChatView: View {
                     #if DEBUG
                     .overlay(alignment: .topLeading) { if Self.scrollProbe { scrollState } }
                     .screenProbe("chat", page: style == .assistant ? "assistant" : "agents",
-                                 ChatShown(key: shownKey.machineID + "/" + shownKey.sessionID))
+                                 ChatShown(key: shownKey.machineID + "/" + shownKey.sessionID, appeared: appearCount))
                     #endif
             }
             ChatRegion(name: "ChatFooter.body") { footer }
@@ -1736,6 +1742,12 @@ struct ChatView: View {
     }
 
     private func appeared() {
+            #if DEBUG
+            let id = shownKey.machineID + "/" + shownKey.sessionID
+            Self.appearances[id, default: 0] += 1
+            appearCount = Self.appearances[id, default: 0]
+            ShellTrace.shared.note("chat appeared \(style == .assistant ? "assistant" : "agents") #\(appearCount)")
+            #endif
             bindMenu()
             if !entered { // only on entry: coming back from a full-screen cover must not move what you were reading
                 entered = true
@@ -3562,5 +3574,7 @@ private struct VerticalBarsEdgeReader: ViewModifier {
 /// The open conversation (`probe.chat`, docs/ios-state.md): which one, for the tests to check against what was tapped.
 nonisolated struct ChatShown: Encodable, Equatable {
     var key: String
+    /// How many times this conversation has appeared since launch (`ChatView.appearances`).
+    var appeared: Int
 }
 #endif

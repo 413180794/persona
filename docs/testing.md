@@ -208,6 +208,7 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
   `TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light … -only-testing:PersonaUITests/CompactListShots`，深色再跑一遍。
   改前 / 改后对比：在 `git worktree add --detach <目录> origin/master` 里放进同一个测试文件拍改前，两边同一份数据。
   带 `-openWelcome YES` 是为了去掉别的测试留下的配对（Keychain 里的 hub 优先于体验模式），`-demo.on YES` 让它直接进体验模式。
+  所有 `launchJarvis()` / `launchPinned()` 的启动都一样：带 `-demo.on YES`、没带 `-pairURL` 时自动加 `-openWelcome YES`，不会接着用前面测试配对的 mock。
 
 ### 空间标签的停止关闭（`SiblingTabsTests`）
 

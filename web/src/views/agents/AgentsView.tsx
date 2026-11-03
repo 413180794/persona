@@ -46,7 +46,7 @@ function Header({ title, sub, avatar, onToggleSidebar }: { title: string; sub?: 
 }
 
 function AgentList({ onToggleSidebar }: { onToggleSidebar: () => void }) {
-  const { sessions, loaded, error } = useAgentList();
+  const { sessions, loaded, error, hints } = useAgentList();
   const [q, setQ] = useState("");
   useEffect(() => void refreshAgentSessions(), []);
   const prefs = useAgentPrefs();
@@ -59,7 +59,8 @@ function AgentList({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索会话" className="mb-4 h-9 w-full rounded-control bg-inset px-3 text-[13px] text-ink shadow-hairline outline-none placeholder:text-ink-3" />
           {!loaded && <Loading />}
           {error && <p className="text-[13px] text-red">{error}</p>}
-          {loaded && !error && !groups.length && <p className="text-[13px] text-ink-3">{q ? "没有匹配的会话" : "还没有个人 Agent 会话"}</p>}
+          {loaded && !error && !groups.length && (q || !hints.length) && <p className="text-[13px] text-ink-3">{q ? "没有匹配的会话" : "还没有个人 Agent 会话"}</p>}
+          {loaded && !error && !sessions.length && !q && hints.map((h) => <p key={h} className="mb-1 text-[13px] text-ink-3">{h}</p>)}
           {groups.map((g, i) => (
             <section key={g.key} className="mb-4 overflow-hidden rounded-card bg-surface shadow-card" style={{ animation: `fade-up 420ms ${EASE} ${i * 60}ms both` }}>
               <h2 className="flex items-center gap-2 px-4 pt-3 pb-1 text-[12px] font-medium text-ink-3">

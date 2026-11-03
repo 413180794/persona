@@ -40,8 +40,20 @@ nonisolated struct PersonalAgentSourceStatus: Codable, Hashable, Sendable {
     var source: String
     var enabled: Bool
     var error: String?
+    /// Why a reachable source has nothing to list yet: "missing" / "disabled" / "no_accounts" (agents.Setup*).
+    var setup: String?
     var providers: [PersonalAgentProvider]?
     var accounts: [PersonalAgentAccount]?
+
+    /// What to do so this source lists agents, for an empty list; nil when it is set up.
+    var setupHint: String? {
+        switch setup {
+        case "missing": return "lark-connector 的版本还没有个人 Agent，升级 lark-connector 后再试"
+        case "disabled": return "lark-connector 没有开启个人 Agent：在它的部署里设置 lark-connector_AGENT_BRIDGE=true 后重启"
+        case "no_accounts": return "还没有连接个人 Agent 账号：在 lark-connector 的设置里添加 Cue 或 Grok Bot"
+        default: return nil
+        }
+    }
 }
 
 /// One block of a message. Unknown types keep their raw JSON so they can be shown as a summary, not dropped.

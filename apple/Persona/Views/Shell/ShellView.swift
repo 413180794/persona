@@ -10,23 +10,15 @@ import SwiftUI
 /// rows…): `.assistant` / `.chats` pick the page, `.mail` opens the inbox on 助手, `.settings` the sheet.
 struct ShellView: View {
     @Environment(AppModel.self) private var model
-    @State private var shell = ShellState()
-    /// Agents is built the first time it is shown or dragged in (TabView builds a tab when shown), then kept. Not before:
-    /// hidden, its controls are still in the accessibility tree (its glass and list are UIKit) and UI tests on 助手 met them.
-    @State private var workBuilt = false
-    /// The page under 设置 and the inbox: they come back to it.
-    @State private var lastPage: AppTab = .assistant
-    /// The first route lands on its page without sliding there.
-    @State private var routed = false
-
-    private var tab: AppTab { model.selectedTab == .chats ? .chats : .assistant }
+    /// Opens on the app's tab: the page behind is built when it is first selected or dragged in.
+    @State private var shell = ShellState(page: AppModel.shared.selectedTab == .chats ? 1 : 0)
 
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("ShellView")
         #endif
         @Bindable var model = model
-        AssistantDrawerLayout(drawer: shell.drawer, enabled: tab == .chats ? shell.workAtRoot : shell.chatAtRoot,
+        AssistantDrawerLayout(drawer: shell.drawer, enabled: shell.atRoot,
                               backdrop: Theme.Shell.drawer, pager: shell.pager, sidebar: { sidebar }, page: pages)
             .environment(\.shell, shell)
             .sheet(isPresented: $model.shellSettings) {
@@ -36,70 +28,53 @@ struct ShellView: View {
                     .environment(\.shell, shell)
                     .id(model.look)
             }
-            .onChange(of: model.selectedTab, initial: true) { _, t in route(t) }
+            // The shell takes the app's tab as it is set (`ShellState.route`): not an onChange here, which was skipped now
+            // and then (docs/shell.md).
             .onAppear {
-                // A drag that settles on the other page selects it; one that starts builds Agents if it is not yet.
-                shell.pager.settled = { page in model.selectedTab = page == 1 ? .chats : .assistant }
-                shell.pager.began = { workBuilt = true }
+                shell.attach(to: model)
                 #if DEBUG
+                // `-showToasts "<at>:<info|success|error>:<words>;…"`: toasts at those seconds after launch (UI tests of the
+                // status row: one after another, over the link's state).
+                for part in (UserDefaults.standard.string(forKey: "showToasts") ?? "").split(separator: ";") {
+                    let f = part.split(separator: ":", maxSplits: 2).map(String.init)
+                    guard f.count == 3, let at = Double(f[0]) else { continue }
+                    let style: Toast.Style = f[1] == "error" ? .error : f[1] == "success" ? .success : .info
+                    DispatchQueue.main.asyncAfter(deadline: .now() + at) { model.toast = Toast(f[2], style: style) }
+                }
                 let at = UserDefaults.standard.double(forKey: "showShellPagerAt")
                 if at > 0 {
-                    workBuilt = true
+                    shell.select(1, animated: false)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1) { shell.pager.hold(at: at) }
                 }
                 #endif
             }
-            // Weak network: one small line under the top bar, for both pages (the switch keeps the title's place).
-            .overlay(alignment: .top) {
-                let link = model.connection.shown
-                if link != .online {
-                    ConnectionLabel(phase: link, compact: true)
-                        .padding(.horizontal, Theme.Space.m)
-                        .scaledFrame(height: Theme.Size.icon)
-                        .modifier(ShellStatusSurface())
-                        .padding(.top, AssistantTopBar.height)
-                        .transition(.opacity)
-                        .allowsHitTesting(false)
-                }
-            }
-            .animation(Theme.Motion.standard, value: model.connection.shown)
+            .onDisappear { shell.detach(from: model) }
+            // 等待网络 / 连接中… / 更新中… and the toasts: one row under the status bar that takes its room, the pages and
+            // their bars making way (docs/shell.md「状态行」); it opens and folds once no finger moves the screen.
+            .overlay { ShellStatusRow(notices: shell.notices) }
+            .background { ShellWindowHooks(notices: shell.notices, pager: shell.pager) }
     }
 
     /// The two pages on one strip, 助手 on the left (`ShellPager`): at rest only the selected one is on screen.
     private var pages: some View {
         GeometryReader { g in
             ZStack {
-                AssistantView()
-                    .modifier(ShellPageSlide(pager: shell.pager, index: 0))
-                if workBuilt || tab == .chats {
+                if shell.assistantBuilt {
+                    AssistantView()
+                        .modifier(ShellPageSlide(shell: shell, index: 0))
+                }
+                if shell.agentsBuilt {
                     ChatsView()
-                        .modifier(ShellPageSlide(pager: shell.pager, index: 1))
+                        .modifier(ShellPageSlide(shell: shell, index: 1))
                 }
             }
             .frame(width: g.size.width, height: g.size.height)
             .overlay(alignment: .top) { ShellMovingBar(pager: shell.pager) }
+            #if DEBUG
+            .overlay(alignment: .bottomTrailing) { ShellPagerProbe(shell: shell) }
+            #endif
             .onAppear { shell.pager.width = g.size.width }
             .onChange(of: g.size.width) { _, w in shell.pager.width = w }
-        }
-    }
-
-    /// Routes that are not one of the two pages land on 助手 (the inbox) or in the sheet (设置).
-    private func route(_ t: AppTab) {
-        defer { routed = true }
-        switch t {
-        case .assistant:
-            lastPage = .assistant
-            shell.pager.slide(to: 0, animated: routed)
-        case .chats:
-            workBuilt = true
-            lastPage = .chats
-            shell.pager.slide(to: 1, animated: routed)
-        case .mail:
-            shell.show(.inbox)
-            model.selectedTab = .assistant
-        case .settings:
-            model.shellSettings = true
-            model.selectedTab = lastPage
         }
     }
 
@@ -131,27 +106,46 @@ struct ShellView: View {
     }
 }
 
-/// The weak-network line's capsule: a material, or in the BeautifulUI style its raised capsule.
-private struct ShellStatusSurface: ViewModifier {
-    func body(content: Content) -> some View {
-        if AppStyle.current.usesBeautifulUI {
-            content.buiSurface(Capsule(), elevation: .button)
-        } else {
-            content.background(.regularMaterial, in: .capsule)
-        }
+#if DEBUG
+/// What the strip shows, for UI tests (`ShellPageProbe.swift`): a point-sized element whose value is the page the strip
+/// rests on (`assistant` / `agents`, `moving` while it slides), the page in front (`ShellState.page`, what the switch
+/// shows), the app's tab, and the drawer and the pages' roots; its label is the latest `ShellTrace`. Pixels told which
+/// page was drawn before; both pages stay built, so `exists` cannot.
+private struct ShellPagerProbe: View {
+    @Environment(AppModel.self) private var model
+    let shell: ShellState
+
+    var body: some View {
+        let pager = shell.pager
+        let page = pager.moving ? "moving" : pager.page == 1 ? "agents" : "assistant"
+        let tab = model.selectedTab == .chats ? "agents" : model.selectedTab == .assistant ? "assistant" : model.selectedTab.rawValue
+        let n = shell.notices
+        let status = switch n.shown { case .toast: "toast"; case .link: "link"; case nil: "none" }
+        let row = " status=\(status) opened=\(n.opened) folded=\(n.folded) room=\(Int(n.room.rounded()))"
+        Color.clear
+            .frame(width: Theme.Size.line, height: Theme.Size.line)
+            .accessibilityElement()
+            .accessibilityIdentifier("shell-pager-probe")
+            .accessibilityValue("\(page) selected=\(shell.page == 1 ? "agents" : "assistant") tab=\(tab)"
+                + " position=\(String(format: "%.2f", pager.position)) drawer=\(shell.drawer.isOpen ? 1 : 0)"
+                + " chatRoot=\(shell.chatAtRoot ? 1 : 0) workRoot=\(shell.workAtRoot ? 1 : 0)" + row)
+            .accessibilityLabel(ShellTrace.shared.events.joined(separator: " | "))
+            .allowsHitTesting(false)
     }
 }
+#endif
 
 /// The top bar while the strip moves, over both pages and still: the face and the switch where they always are (the switch's
 /// pill under the finger), the right-hand button fading from 助手's 新对话 into Agents' 新建会话, 助手's fog fading with
-/// its page. Only to look at: the pages' own bars (hidden meanwhile, `ShellBarAtRest`) take the taps at rest. Laid out as
+/// its page. Only its switch takes taps (one while the strip slides picks where it ends: a tap is never lost to the
+/// slide); the pages' own bars (hidden meanwhile, `ShellBarAtRest`) take the taps at rest. Laid out as
 /// `AgentsTopBar`, which lines up with 助手's to the pixel.
 private struct ShellMovingBar: View {
     @Environment(AppModel.self) private var model
     let pager: ShellPager
 
     var body: some View {
-        if pager.moving {
+        if pager.moving || pager.lingering {
             let p = min(1, max(0, pager.position))
             HStack(alignment: .top, spacing: Theme.Space.s) {
                 ShellPersonaButton(id: "shell-moving-sidebar") {}
@@ -164,17 +158,19 @@ private struct ShellMovingBar: View {
                         .opacity(p)
                 }
             }
+            .allowsHitTesting(false)
             .overlay(alignment: .top) {
                 ShellSwitch(tab: .constant(pager.page == 1 ? .chats : .assistant)) { EmptyView() } workMenu: { EmptyView() }
+                    .environment(\.shellPillFollowsStrip, true)
             }
             .padding(.horizontal, Theme.Space.l)
             .padding(.top, Theme.Space.xxs)
-            .shellScaled()
+            .shellTopBarScaled()
             .background(alignment: .top) {
                 BarFog(solid: AssistantTopBar.height - Theme.Space.sm, fade: AssistantTopBar.fade)
                     .opacity(1 - p)
+                    .allowsHitTesting(false)
             }
-            .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
     }

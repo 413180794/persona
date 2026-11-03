@@ -89,7 +89,7 @@ struct AssistantTopBar: View {
         .frame(height: Self.height, alignment: .top)
         .background(alignment: .top) { BarFog(solid: Self.height - 6, fade: Self.fade) }
         .connectionDetails($showLink)
-        .modifier(ShellBarAtRest()) // ShellMovingBar stands in while the strip slides
+        .modifier(ShellBarAtRest(page: 0)) // ShellMovingBar stands in while the strip slides
     }
 
     private var classicBar: some View {

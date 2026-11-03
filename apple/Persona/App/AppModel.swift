@@ -69,7 +69,17 @@ final class AppModel {
     private(set) var interactions: [String: Interaction] = [:] { didSet { saveSnapshot(); countBadges() } }
     /// The machine whose engine the pairing asks for (a newly paired group's hub machine).
     var pairingEngineMachine: MachineRef?
-    var toast: Toast?
+    /// A short message (`ToastOverlay`, or in the iPhone's shell its status row, which takes it as it is set:
+    /// `toastSink`, docs/shell.md「状态行」).
+    var toast: Toast? {
+        didSet {
+            guard let toast, let toastSink else { return }
+            toastSink.take(toast)
+            self.toast = nil
+        }
+    }
+    /// The iPhone's shell while it is on screen: it shows the toasts in its status row, one after another.
+    @ObservationIgnored weak var toastSink: (any ToastSink)?
     var openChat: SessionKey?
     /// A chat to open at its latest answer, like a finished one from the list (ChatView takes it): a tap on a
     /// "完成" notification. From the background the session list is stale (the agent still reads as working until the
@@ -80,11 +90,19 @@ final class AppModel {
     var selectedTab: AppTab = .assistant {
         didSet {
             UserDefaults.standard.set(selectedTab.rawValue, forKey: "app.tab")
+            #if DEBUG
+            ShellTrace.shared.note("tab \(oldValue)->\(selectedTab)")
+            #endif
+            // The shell routes it now, not when a view is next drawn (docs/shell.md).
+            if selectedTab != oldValue { tabRouter?.route(selectedTab, in: self) }
             #if PERF_SIGNPOST
             PerfTrace.event("Tab selection", selectedTab.rawValue)
             #endif
         }
     }
+
+    /// The iPhone's shell while it is on screen (`ShellState`): it takes every new tab as it is set.
+    @ObservationIgnored weak var tabRouter: (any TabRouter)?
 
     /// The dev chat that was open; saved when a chat opens, cleared when going back to the list.
     static func rememberChat(_ key: SessionKey?) {
@@ -132,9 +150,11 @@ final class AppModel {
         connection = ConnectionStatus()
         DemoHub.install()
         #if DEBUG
-        // `-openWelcome YES`: start unpaired and out of 体验模式, on the pairing page (DemoModeTests).
+        // `-openWelcome YES`: start unpaired and out of 体验模式, on the pairing page (DemoModeTests); with `-demo.on YES`
+        // too, 体验模式 from a clean start (UI tests, `launchJarvis`).
         if UserDefaults.standard.bool(forKey: "openWelcome") {
             HubStore.save(HubRegistry()) // known empty: deletes the registry and the old single pairing
+            StateCache.remove(Self.snapshotName("")) // and the lists it left: 体验模式 would show them (a paired app)
             UserDefaults.standard.removeObject(forKey: Self.demoKey)
         }
         #endif
@@ -1859,4 +1879,14 @@ enum Haptics {
 nonisolated struct TabBadges: Equatable, Sendable {
     var assistant = 0
     var agents = 0
+}
+
+/// Who shows the app's tabs, told of each new one as it is set (`AppModel.tabRouter`): the iPhone's shell.
+@MainActor protocol TabRouter: AnyObject {
+    func route(_ tab: AppTab, in model: AppModel)
+}
+
+/// Who shows the app's toasts instead of `ToastOverlay` (`AppModel.toastSink`): the iPhone's shell.
+@MainActor protocol ToastSink: AnyObject {
+    func take(_ toast: Toast)
 }
