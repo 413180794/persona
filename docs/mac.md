@@ -344,6 +344,8 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   例：`scripts/app/mac_shot.sh inbox-link -tab mail -openInboxMatch 下周的分享 -openInboxLink https://example.com/`。
 - 截图补充（2026-11-01）：窗口上的 sheet 是另一个窗口，`-macSnapshot` 现在把它另存成 `<名字>.sheet.png`；sheet 里有文本编辑器时 `terminate` 会被挡住，截完 1 秒后直接退出。
   锁屏时未签名的新构建读另一个构建写的钥匙串条目会一直卡在 securityd（跳过授权界面也一样），截图模式（`-macSnapshot`）下 Mac 的 DEBUG 构建不读钥匙串。
+  没锁屏时同样的读会弹「想要使用你储存在钥匙串的 <bundle id> 中的机密信息」、要输登录密码的框，App 卡在启动、一直没有窗口（2026-11-03）：
+  每次编出来的未签名构建都算新的身份，上一版存的配对它读不了。真窗口验收的副本重新编译后换一个新的 bundle id（新 id 下钥匙串里没有条目，不会弹框），别去点那个框。
 
 ## 验收清单
 
@@ -351,7 +353,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 2026-11-01 全部过了一遍：分 5 组并行，每组用离屏截图（体验模式和 `scripts/mock/mock_hub.py` 的假数据，深浅色）和单元测试（`JarvisMacTests`）逐条核对，顺手修了能修的；再由一个 reviewer 逐条试着推翻打的勾，推翻了的不勾，写清看到了什么、没看到什么。
 核对后 106 条 [x]、118 条 [ ]。没勾的每条下面都写了原因：「要到 Mac 前看」是要解锁后在 Mac 上点、按、看的，「没做」是还没做的，「Mac 上没有」是 Mac 上本来就不该有的。
-2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 131 条 [x]、91 条 [ ]。
+2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 134 条 [x]、88 条 [ ]。
 待你确认：`-showSampleScreen` 的示例「终端在问你」里原来有像内部工具 / 服务的名字，已在提交「chore: the sample terminal dialog uses made-up names only」里全换成编造的名字；以前拍的截图里可能还是旧文字。
 
 ### 真窗口验收怎么分工（2026-11-03 起）
@@ -390,6 +392,9 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - 滚动给固定的量（往上滚 3 次、每次多少），不写「滚到看见某一条为止」：执行者会为找那一条来回滚好几分钟。
 - sheet 里往输入框打字写明用前台投递：后台的辅助功能插入会让字显示在框里，但不触发 App 的搜索（见 `docs/lessons/testing.md`）。
   还要写明怎么拿到 sheet 里的框（同一条经验）：没写，执行者在 sheet 上卡了 8 分钟。
+- 要看右键菜单的，写明先把副本切到前台（`bring_to_front`）再用前台投递右键：前台投递做完会切回原来的 App，菜单跟着关掉，
+  执行者就报「右键没有菜单」（2026-11-03 终端的右键菜单就这样误报过一次）。
+- 不起眼的控件写清长什么样、在哪：终端的「关闭终端」是 sheet 顶部正中那根手柄，没写，执行者点了左上角的「窗口尺寸」，报「点了不关」。
 
 **切换前的对照**（2026-11-03）：拿 3 项已有结论的让执行者跑：建议胶囊（通过）、消息右键操作条（不通过，#501）、头像菜单（通过）。
 - 第一遍：1 项一致，2 项报「存疑」，证据都对。
@@ -409,8 +414,8 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Readable width cap (chat 760pt, welcome 560pt) — Views/Chat/ChatView.swift, Shared/Design/Theme.swift
   - Mac（2026-11-01 核对）：2000pt 宽窗口截图：对话栏约 760pt 居中，欢迎页（`-openWelcome`）约 560pt 居中。
 - [x] URL handling: `jarvis://pair?...` pairing, `jarvis://open?machine=&session=` (Live Activity) — App/JarvisApp.swift。Mac：`MacOpenURL`（有测试），open 打开那个对话（从别的页面也切过去，`-macOpenURL <链接>` 验过），pair 只在没配对 / 体验模式时接受；对话里的 jarvis:// 链接仍只拷贝（LinkPolicy）。外面来的链接交给已经开着的主窗口（`handlesExternalEvents`）：以前每来一个链接就多开一个主窗口（`open -a Jarvis.app jarvis://…` 两次 → 3 个，`-macWindowLog YES` 记数）
-- [ ] Scene phase: reconnect + refresh on active, disconnect socket on background — App/JarvisApp.swift
-  - Mac（2026-11-03 Mac mini 真窗口：执行者操作，开发会话看假 hub 的请求日志）：⌘H 隐藏期间一个请求都没有；带回前台后依次 GET machines / interactions / sessions / pins / mutes / fleet（`refresh()`）。在后台不断开 WebSocket 是 Mac 有意的（见「阶段 0」）。还差：断了的连接回到前台会不会重连（比如隐藏期间重启假 hub，再带回前台）。
+- [x] Scene phase: reconnect + refresh on active, disconnect socket on background — App/JarvisApp.swift
+  - Mac（2026-11-03 Mac mini 真窗口：执行者操作，开发会话看假 hub 的请求日志）：⌘H 隐藏期间一个请求都没有；带回前台后依次 GET machines / interactions / sessions / pins / mutes / fleet（`refresh()`）。在后台不断开 WebSocket 是 Mac 有意的（见「阶段 0」）。断线重连（2026-11-03 第 5 批）：假 hub `GET /mock/down?s=20` 断开所有连接、20 秒不应答，4 秒后侧栏底部和头像下都是转圈加「连接中…」；随即 ⌘H 隐藏，等 25 秒，假 hub 恢复后隐藏期间 App 自己重连上 `/api/v1/ws`，带回前台再拉一遍 pins / interactions / sessions / machines / fleet，「连接中…」消失、内容和隐藏前一样。
 - [x] Remember last tab / last open chat / reading position across cold start (`chat.read.<session>`) — App/AppModel.swift, Views/Chat/ChatView.swift
   - 要到 Mac 前看：在对话里往上翻，⌘Q 后重开，看是不是回到同一行（⌘Q 不一定触发 onDisappear）。只带 `-app.tab chats -dev.openChat …` 启动时回到了 Agents 和那个对话，tab 和对话的恢复看过。
   - Mac（2026-11-03 Mac mini 真窗口）：⌘Q 后不带参数重开，回到 Agents 和上次打开的对话；同一次运行里切到别的对话再切回来，回到原来看的那一行。冷启动后的阅读位置原来停在最底部（#597：冷启动只有最近两轮，找不到那一行就放弃），修好后（2026-11-03）离屏截图复验：假 hub 像真 hub 一样分页（`/mock/paging?on=1`），先打开一次写下缓存，再带 `-chat.read.<会话> <「第 5 个问题」的行 id>` 冷启动，落在第 4–9 轮（修之前是第 15 轮和最底部）；iOS 上 `ChatFollowTests` 的冷启动用例管着。
@@ -432,8 +437,8 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-02 Mac mini 真窗口逐项点过；11-03 执行验收的 Agent 又跑了一遍、截图复核）：标题「Persona · 启动器」，知识库、详细信息（档案页）、回到主对话（只在侧对话里有，点了回到主对话）、拷贝目录 / 拷贝信息（多行，含启动器）/ 拷贝会话 ID（名字胶囊「✓ 已拷贝会话 ID」）、启动器 › 下一条消息起使用（切换后菜单显示新的启动器）、会话信息（运行 / 用量 / 位置 sheet）。「中断」只在对话工作中、「连接详情」只在连接不在线时出现（`AssistantTopBar` 里的条件），空闲、在线的主对话上没有，是对的。
 - [x] Left button: history sidebar; right button: new chat (disabled on new-chat page) — AssistantTopBar.swift
   - Mac（2026-11-01 核对）深色截图：左边侧栏开关、右边新对话按钮都在（浅色下玻璃按钮只剩边框）；新对话页上按钮置灰没截，和 iOS 同一份代码。
-- [ ] Sidebar: search, new chat, Persona card (online/offline + machine → profile), 定时任务 / 知识库 tiles, 置顶 (main pinned, long-press pin, `assistant.pinned`), day groups 今天/昨天/最近7天/更早 (8 + 查看全部), row = title + preview + time + status dot (need-you red / unread blue / working spinner), long-press 拷贝会话 ID / 结束 / 置顶, 设置 row in drawer — Views/Assistant/AssistantSidebar.swift
-  - Mac（2026-11-03 Mac mini 真窗口，执行者跑）：mock 加 `MOCK_ASSISTANT_SIDEBAR=1`。行尾：需要你红点、完成未看蓝点、工作中转圈，别的行没有标记。「最近」显示 30 条，末尾「查看全部（39）」展开到全部、变成「收起」。右键一行：置顶、重命名…、归档、拷贝会话 ID（剪贴板里是会话 id）、结束…（确认 sheet「关闭这个 Agent？」，取消后还在）；主对话只有拷贝会话 ID、结束…。置顶后排在「置顶」里主对话下面，取消置顶回到按时间的位置。搜索（见 §25）、底部 Persona 卡片（资料页）、定时任务、知识库都点过。清单里的按天分组和磁贴是旧设计（iOS 也一样），现在一行是标题加行尾标记。Persona 卡片离线（2026-11-03 离屏截图，假 hub 把助手的机器改成离线的 NAS：`PUT /api/v1/assistant {"machine_id":"nas"}`）：深浅色下底部卡片都是灰点「离线 · NAS」。抽屉底部的「设置」Mac 上没有：Mac 的 `horizontalSizeClass` 恒为 regular（`Mac/Compat/SwiftUICompat.swift`），Persona 页总是分栏、不出抽屉，设置在壳的分区里。还差：点「新对话」。
+- [x] Sidebar: search, new chat, Persona card (online/offline + machine → profile), 定时任务 / 知识库 tiles, 置顶 (main pinned, long-press pin, `assistant.pinned`), day groups 今天/昨天/最近7天/更早 (8 + 查看全部), row = title + preview + time + status dot (need-you red / unread blue / working spinner), long-press 拷贝会话 ID / 结束 / 置顶, 设置 row in drawer — Views/Assistant/AssistantSidebar.swift
+  - Mac（2026-11-03 Mac mini 真窗口，执行者跑）：mock 加 `MOCK_ASSISTANT_SIDEBAR=1`。行尾：需要你红点、完成未看蓝点、工作中转圈，别的行没有标记。「最近」显示 30 条，末尾「查看全部（39）」展开到全部、变成「收起」。右键一行：置顶、重命名…、归档、拷贝会话 ID（剪贴板里是会话 id）、结束…（确认 sheet「关闭这个 Agent？」，取消后还在）；主对话只有拷贝会话 ID、结束…。置顶后排在「置顶」里主对话下面，取消置顶回到按时间的位置。搜索（见 §25）、底部 Persona 卡片（资料页）、定时任务、知识库都点过。清单里的按天分组和磁贴是旧设计（iOS 也一样），现在一行是标题加行尾标记。Persona 卡片离线（2026-11-03 离屏截图，假 hub 把助手的机器改成离线的 NAS：`PUT /api/v1/assistant {"machine_id":"nas"}`）：深浅色下底部卡片都是灰点「离线 · NAS」。抽屉底部的「设置」Mac 上没有：Mac 的 `horizontalSizeClass` 恒为 regular（`Mac/Compat/SwiftUICompat.swift`），Persona 页总是分栏、不出抽屉，设置在壳的分区里。「新对话」（第 5 批）：右边换成空的新对话（问候、引导卡片、空输入框「问 Jarvis…」，跟着形象名，假 hub 的形象叫 Jarvis），第二栏原来选中的「主对话」不再高亮；点回「最近」里的对话能回去。
 - [ ] Drawer gesture: pan anywhere, 45° rule, yields to horizontally scrollable content, velocity/half settle, page card scale/offset, tab bar fade (UIKit host) — AssistantSidebar.swift (DrawerPan, DrawerPageMotion, DrawerSidebarHost), Views/Assistant/DrawerProbe.swift
   - Mac 上没有：窗口恒为 regular，侧栏是分栏的一列加开关按钮；抽屉（`AssistantDrawer+Mac.swift`）没有拖动，而且主窗口里走不到（`horizontalSizeClass` 恒为 regular，窗口再窄也是分栏），`DrawerPan` / `DrawerProbe` 只在 iOS 编译。
 - [x] Regular width: sidebar = split view left column, toggle button — AssistantView.swift, SplitNavigation.swift
@@ -612,8 +617,8 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   「本会话总是允许」在 Mac 上原来是第三个推按钮，改成和 iOS 一样的文字链接；卡片标题栏的 ⋯ 原来是带边框、自带 ⌄ 的弹出按钮（旁边还有折叠的 ⌄），改成只有 ⋯。「查看终端」展开后、其他回答…的输入框要点击，没看。离屏截图里玻璃卡片的文字在深色下画成深色（换 `-ui.style lark` 就正常），属截图问题。
 
 ## 7. Terminal
-- [ ] Terminal cover (bottom-up full page, drag to dismiss, size/handle/settings bar) — Views/Chat/ChatView.swift (TerminalCover), Views/Session/SessionPanes.swift (TerminalPanel)
-  - 要到 Mac 前看：终端大 sheet 怎么关（Esc、拖手柄），拖动关闭能不能用或有没有替代。`-openTerminal YES` 截图里手柄、换行 chip、设置按钮、键栏都在。
+- [x] Terminal cover (bottom-up full page, drag to dismiss, size/handle/settings bar) — Views/Chat/ChatView.swift (TerminalCover), Views/Session/SessionPanes.swift (TerminalPanel)
+  - Mac 真窗口（2026-11-03，mock `MOCK_TERMINAL_STREAM=1`）：终端是大 sheet，顶部正中的手柄往下拖能关，单击手柄（无障碍名「关闭终端」）也能关；Esc 不关，按设计发给终端里的程序。关掉后点对话页的「打开终端」能再打开。手柄、「窗口尺寸 132×24」、设置按钮、键栏都在。
 - [ ] Live stream (terminal_stream, epoch/seq) or 1s ANSI polling fallback — Views/Session/Terminal/TerminalFeed.swift, SessionPanes.swift (TerminalFeedLink)
   - Mac（2026-11-01 核对）：流式这半截图看过（`MOCK_TERMINAL_STREAM=1`：颜色、真彩、反显、下划线）；普通 mock 下只看到一份静态的终端快照，看不出每秒轮询在刷新，回退这半没证实。
 - [x] Grid model + cell renderer (wide chars, box drawing as shapes) — Terminal/TerminalGrid.swift, Terminal/TerminalView.swift (TerminalCanvas), Terminal/BoxDrawing.swift
@@ -621,9 +626,9 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [ ] Phone-size takeover (terminal_control), 接管 / 只看 prompt — SessionPanes.swift, AppModel.terminalSubscribe
   - 要到 Mac 前看：用 `MOCK_TERMINAL_CONTROL=1`（提示用 `MOCK_TERMINAL_BUSY=1`）或真 herdr 打开终端，看窗格按窗口改尺寸、接管 / 只看能切。终端设置里「窗口尺寸 / 电脑尺寸」的说法截图看过。
 - [ ] Wrap toggle, themes (Jarvis/Solarized/深夜/ink), font size, pinch zoom — Terminal/TerminalWrap.swift, Terminal/TerminalTheme.swift, TerminalView.swift
-  - 要到 Mac 前看：切换行、换配色、⌘+ / ⌘- 和触控板捏合。换行 chip 和设置里的配色列表（带预览）截图里有。
+  - Mac 真窗口（2026-11-03）：切换「长行换行」后长行在折行和截断之间切换；配色换成 Solarized 后背景和文字色跟着变，再换回墨黑；⌘= 两次字变大（终端从 132×24 变成 116×21），⌘- 两次复原。还剩触控板捏合没试（cua 模拟不了捏合）。
 - [ ] Selection (long-press word, drag, 拷贝 / 全选), OSC 8 / URL tap → in-app link — TerminalView.swift (SelectionHandle)
-  - 要到 Mac 前看：拖选、双击选词、⌘C / 右键 拷贝 / 全选，点带下划线的 OSC 8 链接在 App 里打开。都要真鼠标。
+  - Mac 真窗口（2026-11-03）：拖选第一行 ⌘C 拷出「Welcome to Claude Code」，双击选中一个词，⌘A ⌘C 拷出整屏；右键弹出 拷贝（没选中时灰）/ 粘贴 / 全选，系统还会自动加一项「自动填充」。还剩点带下划线的 OSC 8 链接在 App 里打开没试。
 - [ ] Scrollback loading 200 lines at a time (screen/before), 回到最新, ~1000-line limit notice — SessionPanes.swift
   - 要到 Mac 前看：滚轮 / 触控板往上滚，触发每次 200 行的加载、回到最新、约 1000 行的提示。
 - [ ] Link status bar (last update, retry backoff, 重试) — SessionPanes.swift (TerminalLinkStatus)
