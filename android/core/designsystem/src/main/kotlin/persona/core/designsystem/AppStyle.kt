@@ -42,6 +42,9 @@ class AppStyleStore(context: Context) {
     private val currentGlass = MutableStateFlow(GlassPreference.fromKey(preferences.getString(KEY_GLASS, null)))
     val style: StateFlow<AppStyle> = currentStyle.asStateFlow()
     val glass: StateFlow<GlassPreference> = currentGlass.asStateFlow()
+    private val currentFace = MutableStateFlow(PersonaDesign.fromId(preferences.getString(KEY_PERSONA, null)))
+    /** 设置 › 外观 › 形象, one of the built-ins for now. */
+    val face: StateFlow<PersonaDesign> = currentFace.asStateFlow()
 
     init { ActiveStyle.value = currentStyle.value }
 
@@ -54,6 +57,11 @@ class AppStyleStore(context: Context) {
     fun setGlass(preference: GlassPreference) {
         preferences.edit().putString(KEY_GLASS, preference.key).apply()
         currentGlass.value = preference
+    }
+
+    fun setFace(design: PersonaDesign) {
+        preferences.edit().putString(KEY_PERSONA, design.id).apply()
+        currentFace.value = design
     }
 
     /** The level glass actually renders at, before any runtime downgrade. */
@@ -69,6 +77,7 @@ class AppStyleStore(context: Context) {
     private companion object {
         const val KEY_STYLE = "style"
         const val KEY_GLASS = "glass"
+        const val KEY_PERSONA = "persona"
     }
 }
 

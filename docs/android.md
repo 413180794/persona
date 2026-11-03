@@ -369,14 +369,16 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 
 ## 形象（Persona 的脸）
 
-照 iOS（`docs/persona.md`）复刻内置的默认形象「面罩」（#638）：`core/designsystem` 的 `PersonaFace` 用 Canvas 画，几何、配色比例和动作取自 iOS 的 `PersonaFace.swift`，按当前主题色着色，任意尺寸都清楚，不用位图。
+照 iOS（`docs/persona.md`）复刻两个内置形象，默认的「面罩」和可选的「汇流」（#638）：`core/designsystem` 的 `PersonaFace` 用 Canvas 画，几何、配色比例和动作取自 iOS 的 `PersonaFace.swift`，按当前主题色着色，任意尺寸都清楚，不用位图。
 
 - 用在：Persona 页顶栏左上角（`JPersonaButton`，替换原来的「对话列表」图标，点它照旧打开对话列表；读屏读「对话列表」和「Persona，<状态>」），对话列表顶部（原来的字母头像，宽屏常驻的侧栏也是它）。两处显示同一个状态。
 - 五个状态：空闲（每 3.6 秒眨眼）、思考中（眼睛看右上，思考气泡三个点轮流亮）、工作中（眼睛左右扫）、等你处理（呼吸的环）、离线（灰，眼睛闭成线）。只有后三个每帧动（约 12 帧/秒），空闲只在眨眼时动；「减少动画」或省电模式时每个状态停在静止的一帧（同 iOS 的低电量模式）。
 - 状态的取法（`feature/assistant` 的 `personaState`，规则同 iOS `AppModel.personaState`）：hub 连不上（连接中、等待网络等，「更新中」不算）或这段对话的机器离线是离线；对话等你（`needs_you` 或有待处理的交互）是等你处理；正在跑一轮是工作中；其他空闲。看的是当前打开的对话；新对话页没有对话，只看 Persona 所在的机器在不在线，其他时候空闲。
 - 和 iOS 的差别：这一页拿不到对话的最后一条，分不出思考中和工作中，跑着的一轮都显示工作中；等你处理的环用 Android 设计系统的「需要你」色（橙），不是 iOS 的红；晨报风格的主题色就是墨色（近黑 / 近白），面罩和星标会糊掉，所以晨报里脸用次级墨色（中灰），不给这个风格加颜色；iOS 在收件箱有事时给脸挂托盘标记，Android 的收件箱是底部的独立 tab、自带提醒，脸上不再挂。
-- 还没做：内置的「汇流」、hub 上的形象包（`~/.persona/personas/`，APNG 帧）、设置 › 外观 › 形象的选择页。
-- 截图核对：组件目录（调试包 `--es debug.openPage catalog`）的「形象」一节并排画五个状态。
+- 选哪个：设置 › 外观 › 形象（`feature/settings` 的 `PersonaSettings`），两张卡片加选中那个的五种状态，马上生效。选择存在手机上（`AppStyleStore.face`，和界面风格同一份偏好，记的是 iOS 同款 id `jarvis` / `jarvis-circuit`），换 hub、重新配对都不丢；`LocalPersonaDesign` 把它传给每个 `PersonaFace`。体验模式同 iOS 只有默认形象（面罩）。
+- 汇流：深色圆底上三条走线汇进带两只眼的核心，工作中每条线上有一个光点跑进核心；没有星标。几何同 iOS 的 `Circuit`。
+- 还没做：hub 上的形象包（`~/.persona/personas/`，APNG 帧），选择页暂时只有两个内置形象。
+- 截图核对：组件目录（调试包 `--es debug.openPage catalog`）的「形象」一节按形象各一行，并排画五个状态。
 
 ## 助手设置（设置 › 助手）
 

@@ -134,6 +134,10 @@ private fun SettingsContent(
             item { AppearanceSettings() }
             item { deviceFeedback() }
         }
+        "persona" -> JListPage(title = "形象", onBack = back) {
+            item { PersonaSettings(demo = services.demo) }
+            item { deviceFeedback() }
+        }
         "about" -> JListPage(title = "关于 Persona", onBack = back) {
             item { AboutSettingsPage() }
             item { deviceFeedback() }
@@ -180,7 +184,8 @@ private fun SettingsContent(
             item { JSectionHeader("交给 AI 的手机数据") }
             item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.PhoneData), title = "手机数据", leadingIcon = PhIcons.AddressBook, subtitle = "通讯录、日历、照片、位置和剪贴板", onClick = { if (onOpen == null && onPhoneData != null) onPhoneData() else open(SettingsPage.PhoneData) }) } }
             item { JSectionHeader("外观") }
-            item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Appearance), title = "界面风格", leadingIcon = PhIcons.SquaresFour, value = PersonaTheme.style.label, onClick = { open(SettingsPage.Appearance) }) } }
+            item { JGroupItem(GroupPosition.of(0, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Persona), title = "形象", leadingIcon = PhIcons.Robot, value = LocalPersonaDesign.current.title, onClick = { open(SettingsPage.Persona) }) } }
+            item { JGroupItem(GroupPosition.of(1, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Appearance), title = "界面风格", leadingIcon = PhIcons.SquaresFour, value = PersonaTheme.style.label, onClick = { open(SettingsPage.Appearance) }) } }
             item { JSectionHeader("关于") }
             item { JGroupItem(GroupPosition.of(0, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.About), title = "关于", leadingIcon = PhIcons.Info, subtitle = "当前版本和构建号", onClick = { open(SettingsPage.About) }) } }
             item { JGroupItem(GroupPosition.of(1, 2)) {

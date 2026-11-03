@@ -2,6 +2,7 @@ package persona.core.designsystem.catalog
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -185,12 +186,12 @@ fun ComponentCatalogScreen(modifier: Modifier = Modifier, onBack: (() -> Unit)? 
             )
         }
         item { JSectionHeader("形象") }
-        item {
-            // The default persona's face in each state, as iOS's PersonaGallery shows its dot (docs/persona.md「状态」).
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+        // Each built-in face in each state, as iOS's PersonaGallery shows its dot (docs/persona.md「状态」).
+        items(PersonaDesign.entries) { design ->
+            Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                 PersonaState.entries.forEach { state ->
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        PersonaFace(state, size = 46.dp)
+                        PersonaFace(state, size = 46.dp, design = design)
                         Spacer(Modifier.height(6.dp))
                         Text(state.label, style = PersonaTheme.type.caption, color = palette.ink2, maxLines = 1)
                     }

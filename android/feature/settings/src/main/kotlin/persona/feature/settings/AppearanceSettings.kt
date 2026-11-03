@@ -58,11 +58,8 @@ fun AppearanceSettings(modifier: Modifier = Modifier) {
 @Composable
 private fun StyleOption(style: AppStyle, selected: Boolean, onClick: () -> Unit) {
     val palette = PersonaTheme.palette
-    val shape = PersonaTheme.shapes.cardShape
     Row(
-        Modifier.fillMaxWidth().clip(shape).background(palette.surface)
-            .border(if (selected) 2.dp else 1.dp, if (selected) palette.accent.takeIf { PersonaTheme.style != AppStyle.Brief } ?: palette.ink else palette.line, shape)
-            .clickable(role = Role.RadioButton, onClick = onClick).semantics { this.selected = selected }.padding(14.dp),
+        Modifier.option(selected, onClick).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         StylePreview(style)
@@ -76,8 +73,19 @@ private fun StyleOption(style: AppStyle, selected: Boolean, onClick: () -> Unit)
             Text(style.summary, style = PersonaTheme.type.callout, color = palette.ink2)
         }
         Spacer(Modifier.width(8.dp))
-        JRadio(selected, onClick)
+        // The card is the radio button; this one only shows the state, so a screen reader stops once.
+        JRadio(selected, null)
     }
+}
+
+/** A selectable option card: the whole card is the radio button, outlined in the accent (ink in 晨报) when chosen. */
+@Composable
+private fun Modifier.option(selected: Boolean, onClick: () -> Unit): Modifier {
+    val palette = PersonaTheme.palette
+    val shape = PersonaTheme.shapes.cardShape
+    return fillMaxWidth().clip(shape).background(palette.surface)
+        .border(if (selected) 2.dp else 1.dp, if (selected) palette.accent.takeIf { PersonaTheme.style != AppStyle.Brief } ?: palette.ink else palette.line, shape)
+        .clickable(role = Role.RadioButton, onClick = onClick).semantics(mergeDescendants = true) { this.selected = selected }
 }
 
 /** The app's four tabs, as the shell shows them, for the previews' navigation. */
@@ -137,5 +145,61 @@ private fun StylePreview(style: AppStyle) {
             }
         }
         Box(Modifier.matchParentSize().pointerInput(Unit) {})
+    }
+}
+
+/**
+ * 设置 › 外观 › 形象 (docs/persona.md): the built-in faces, the default first, applied at once and remembered on this
+ * phone, with the chosen one in each state under them. The hub's persona packs are not offered yet.
+ */
+@Composable
+fun PersonaSettings(demo: Boolean, modifier: Modifier = Modifier) {
+    val store = LocalAppStyleStore.current ?: return
+    val chosen by store.face.collectAsState()
+    val current = if (demo) PersonaDesign.Default else chosen
+    val palette = PersonaTheme.palette
+    Column(modifier.fillMaxWidth()) {
+        Text(if (demo) "体验模式只有默认形象。" else "顶栏和对话列表里 Persona 的脸。颜色跟着界面风格走，不另外改 App 的颜色。",
+            style = PersonaTheme.type.callout, color = palette.ink2)
+        Spacer(Modifier.height(Tokens.Space.l))
+        (if (demo) listOf(PersonaDesign.Default) else PersonaDesign.entries).forEach { design ->
+            PersonaOption(design, selected = design == current) { store.setFace(design) }
+            Spacer(Modifier.height(Tokens.Space.m))
+        }
+        JSectionHeader("${current.title}的五种状态")
+        Row(
+            Modifier.fillMaxWidth().clip(PersonaTheme.shapes.cardShape).background(palette.surface).padding(vertical = Tokens.Space.m)
+                .semantics(mergeDescendants = true) {},
+        ) {
+            PersonaState.entries.forEach { state ->
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    PersonaFace(state, size = Tokens.Space.xxxl + Tokens.Space.s, design = current)
+                    Spacer(Modifier.height(Tokens.Space.xs))
+                    Text(state.label, style = PersonaTheme.type.caption, color = palette.ink2, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PersonaOption(design: PersonaDesign, selected: Boolean, onClick: () -> Unit) {
+    val palette = PersonaTheme.palette
+    Row(
+        Modifier.option(selected, onClick).padding(Tokens.Space.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PersonaFace(PersonaState.Idle, size = Tokens.Space.xxxl * 2, design = design)
+        Spacer(Modifier.width(Tokens.Space.l))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(design.title, style = PersonaTheme.type.title, color = palette.ink)
+                if (design == PersonaDesign.Default) { Spacer(Modifier.width(Tokens.Space.s)); JTag("默认") }
+            }
+            Spacer(Modifier.height(Tokens.Space.xs))
+            Text(design.summary, style = PersonaTheme.type.callout, color = palette.ink2)
+        }
+        Spacer(Modifier.width(Tokens.Space.s))
+        JRadio(selected, null)
     }
 }

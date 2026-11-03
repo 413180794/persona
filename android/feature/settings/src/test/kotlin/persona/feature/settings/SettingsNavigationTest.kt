@@ -19,6 +19,7 @@ class SettingsNavigationTest {
             SettingsPage.ClaudeCode to "claude",
             SettingsPage.ModelConfig to "models",
             SettingsPage.Hubs to "hubs",
+            SettingsPage.Persona to "persona",
         )
         assertEquals(SettingsPage.entries.toSet(), pages.keys)
         assertEquals(pages.size, pages.values.toSet().size)

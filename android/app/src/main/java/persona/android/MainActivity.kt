@@ -41,6 +41,7 @@ import persona.core.designsystem.GlassThrottle
 import persona.core.designsystem.PersonaTheme
 import persona.core.designsystem.LocalAppStyleStore
 import persona.core.designsystem.LocalGlassLevel
+import persona.core.designsystem.LocalPersonaDesign
 import persona.core.navigation.*
 import persona.feature.settings.SettingsServices
 import kotlinx.coroutines.CancellationException
@@ -89,12 +90,14 @@ class MainActivity : ComponentActivity() {
             val forced = darkTheme.value
             val style by app.appearance.style.collectAsStateWithLifecycle()
             val glassPreference by app.appearance.glass.collectAsStateWithLifecycle()
+            val face by app.appearance.face.collectAsStateWithLifecycle()
             // Levels are ordered best first, so the lower of the two choices is the later one.
             val glassLevel = maxOf(app.appearance.deviceLevel(glassPreference), GlassThrottle.ceiling.value)
             AppearanceOverride(forced) { CompositionLocalProvider(
                 LocalDeveloperTools provides launchAdapter?.tools,
                 LocalAppStyleStore provides app.appearance,
                 LocalGlassLevel provides glassLevel,
+                LocalPersonaDesign provides face,
             ) {
                 val dark = isSystemInDarkTheme()
                 SideEffect {
