@@ -895,7 +895,7 @@ struct AssistantSidebar: View {
         if AppStyle.current.usesBeautifulUI {
             let items = menu()
             BUISidebarHeading(text) {
-                if !(items is EmptyView) {
+                if !HeadingMenu.isEmpty(items) {
                     SwiftUI.Menu { items } label: {
                         Image(systemName: Theme.Icon.more).font(Theme.Font.captionStrong)
                             .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.wellXS)
@@ -906,6 +906,7 @@ struct AssistantSidebar: View {
                     .accessibilityLabel(text + "的更多操作")
                 }
             }
+            .scaledFrame(minHeight: HeadingMenu.minHeight(Menu.self))
             .padding(.top, Theme.Space.l)
             .padding(.bottom, Theme.Space.xs)
         } else {
@@ -918,7 +919,7 @@ struct AssistantSidebar: View {
         return HStack {
             Text(text).font(Theme.Font.caption).foregroundStyle(Color.secondary).accessibilityAddTraits(.isHeader)
             Spacer(minLength: 0)
-            if !(items is EmptyView) {
+            if !HeadingMenu.isEmpty(items) {
                 SwiftUI.Menu { items } label: {
                     Image(systemName: Theme.Icon.more).font(Theme.Font.captionStrong).foregroundStyle(.tertiary)
                         .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.wellXS)
@@ -929,6 +930,7 @@ struct AssistantSidebar: View {
                 .accessibilityLabel(text + "的更多操作")
             }
         }
+        .scaledFrame(minHeight: HeadingMenu.minHeight(Menu.self))
         .padding(.leading, Theme.Space.m)
         .padding(.top, Theme.Space.l)
         .padding(.bottom, Theme.Space.xs)
@@ -1220,5 +1222,23 @@ final class SidebarFeed {
     func archived(_ live: Int?) -> Int {
         if let live { archivedCount = live }
         return archivedCount
+    }
+}
+
+/// A sidebar heading's ⋯ menu (#778: 置顶 with only the main conversation pinned drew a ⋯ that opened nothing).
+nonisolated enum HeadingMenu {
+    /// Whether the menu has nothing in it now, so the heading draws no ⋯: no items, or items behind one `if` that is
+    /// false, which a view builder makes a nil `Optional` rather than an `EmptyView`. Only those two shapes are looked
+    /// into: several `if`s, an `if` / `else`, a `ForEach` or a `Group` count as items even when they draw nothing.
+    static func isEmpty(_ items: some View) -> Bool {
+        if items is EmptyView { return true }
+        let mirror = Mirror(reflecting: items)
+        return mirror.displayStyle == .optional && mirror.children.isEmpty
+    }
+
+    /// The heading's least height: one whose menu can empty keeps the ⋯'s height without it, so what is below does
+    /// not jump; one that never has a menu (the search's 「N 个对话」) keeps its own.
+    static func minHeight<Items: View>(_: Items.Type) -> CGFloat? {
+        Items.self == EmptyView.self ? nil : Theme.Size.wellXS
     }
 }
