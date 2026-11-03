@@ -194,3 +194,6 @@
   Reduce Motion 管不住它们。先用改动前的包连拍三四次当噪声，比较时排除落在噪声里的像素，剩下的差异逐张放大看（2026-11-02，#256；做法写在 testing.md「多 hub」）。
 - 要比得稳：固定状态栏时间、冻结 mock 的时钟、每次卸载重装 App、mock 每次重启（相对时间一致），等画面停下再截（不要固定睡几秒：这台机器负载高时 7 秒还可能是白屏）。
 
+- `scripts/test/test-server.sh` 只同步了 `server/`，#630 带进来的 `spec/fixtures` 测试（`TestWireSamples`、续传、resolution）读 `../../../spec` 和 `apple/` 的 Swift 源码，
+  在 hub 上全量跑必挂（`open ../../../spec/fixtures/wire: no such file`），看着像自己的改动坏了。现在脚本连 `spec/` 和 `apple/**/*.swift` 一起同步（#642）；
+  再有测试读 `server/` 以外的文件，同样要加进脚本（2026-11-03）。
