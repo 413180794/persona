@@ -6,6 +6,9 @@
 
 - 截图验证别靠 computer-use 点模拟器（Mac 锁屏时拿不到窗口，没锁时会抢用户的鼠标）：用 DEBUG 启动参数（`docs/ios.md`）直达页面再截图。
 - `xcodebuild test` 会启动不带 `-pairURL` 的 App 申请通知权限，之后这台模拟器的截图都会被授权弹窗挡住，跑完测试要重启模拟器再截图。
+- 新装（或换了签名重装）的 App 第一次带 `-pairURL` 启动就弹通知授权，弹框在的时候 App 一直不是活跃状态，收件箱不刷新：
+  新外壳顶栏形象的收件箱角标不出来，`ShellAvatarTests` 报「no inbox mark」，截图整屏发灰（2026-11-04）。`simctl privacy grant` 给不了通知权限
+  （Operation not permitted）；UI 测试启动后在 springboard 上点「允许」（`ShellAvatarTests.launch`），手动截图前先跑一次这样的测试。
 - 模拟器里上一次启动遗留的系统授权弹窗，卸载重装 App 也不消失，要 `simctl shutdown` 重启模拟器（手动 `simctl launch` 不带 `-pairURL` 就会弹通知授权）。
 - `xcrun simctl launch` 对已经在运行的 App 只是拉到前台、新启动参数不生效：截图前用 `--terminate-running-process`。
 - UI 测试一律 `app.launchPinned()` 启动（`UITestStyle`）：App 记着上一个测试留下的风格，BeautifulUI 风格的界面又不一样，不说风格的测试会碰上别人留下的样子
