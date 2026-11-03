@@ -302,6 +302,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 // Todo：待办事项（docs/todos.md）
 {"id":"todo_…","title":"天气 App 发 1.3 版","notes":"说明","done_at":null,
  "created_at":"...","updated_at":"...",
+ "origin":"<助手对话 id>","plan_id":"plan_…",   // 只有从助手对话开的任务才有（docs/unified-entry.md）
  "spaces":[{"machine_id":"…","space":"group/alpha","linked_at":"..."}],
  "agents":[{"machine_id":"…","session_id":"…","linked_at":"...","released_at":null,
            "title":"…","cwd":"…","agent":"claude","start_error":"","source":"manual|space|spawned","via":""}]}
@@ -397,6 +398,11 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | PUT | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | 整组挂工作区项目到待办 → 200 `{"ok":true,"linked":N}`；`space` 为 URL 编码的项目名（通配接住）；已完成 409，不存在 404，只读设备 403 |
 | DELETE | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | 解除整组挂（物理删除待办下该项目的 space 关联 Agents） → 200 `{"ok":true}`；不存在 404，只读设备 403 |
 | PUT | `/api/v1/todos/{id}/agents/{mid}/{sid}` | 关联已有 Agent → 200 `{"ok":true}`；同一 Agent 原挂在别处标 released，清掉 dismissed，已完成 409，不存在 404，只读设备 403 |
+| GET | `/api/v1/task-plans/{id}` | 一个计划（`TaskPlan`，见下面「任务和对话动态」） → 200 `{"plan":TaskPlan}`；不存在 404 |
+| POST | `/api/v1/task-plans/{id}/start` | 开始计划 `{"tasks"?:[PlanTask],"remember"?:bool}`：`tasks` 按下标覆盖用户在卡片上改过的字段（空的不改），`remember` 记住「这类以后直接开」；每个任务建一个待办（`origin`、`plan_id`）、在后台开 Agent → 200 `{"plan":TaskPlan}`；已开始或不开了 409，不存在 404，只读设备 403 |
+| POST | `/api/v1/task-plans/{id}/dismiss` | 不开了 → 200 `{"plan":TaskPlan}`；已开始 409 |
+| GET | `/api/v1/assistant/conversations/{id}/feed?since=` | 对话动态：`since`（RFC3339）之后的条目，旧的在前，一次最多 500 → `{"items":[FeedItem],"plans":{"plan_…":TaskPlan}}`（`plans` 是 `plan` 条目引用的计划的当前状态） |
+| POST | `/api/v1/assistant/conversations/{id}/route` | 直接对任务说话 `{"todo_id","text"}`：hub 发给这个任务最要紧的 Agent（等你 > 工作中 > 完成未看 > 最近的），追加 `routed` 条目 → 200 `{"item":FeedItem}`；不是这段对话的任务、没有在跑的 Agent 409；只读设备 403 |
 | DELETE | `/api/v1/todos/{id}/agents/{mid}/{sid}` | 移出 Agent（软移出：置 `released_at` 和 `dismissed_at`，接口不再返回该行且不再自动挂回） → 200 `{"ok":true}`；不存在 404；只读设备 403 |
 | GET | `/api/v1/machines/{mid}/dirs?path=` | 目录浏览：`{"path","parent","entries":[{"name","path","is_git"}],"recent":[{"path","name","last_used"}]}`；path 为空时 entries 是 home |
 | GET | `/api/v1/sessions?machine_id=` | `{"sessions":[Session]}`，含运行中的（herdr）和最近 7 天的 offline 会话 |
@@ -491,6 +497,8 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | `client_hello_ack` | `heartbeat: {interval, pong_timeout}`（本次协商后实际采用的秒数） |
 | `machines` | `machines` |
 | `todos` | —：待办或关联变了就推，客户端收到后重拉 `GET /api/v1/todos` |
+| `assistant_feed` | `conversation`, `item`（`FeedItem`）：对话动态多了一条 |
+| `task_plan` | `plan`（`TaskPlan`）：计划交给用户、开始、不开了、某个任务没开起来（`tasks[i].error`） |
 | `sessions` | `machine_id`, `sessions`（该机器全量，变化时推，和上一条一模一样就不推；每个会话带 `rev` = transcript 字节数，变了就说明有新内容；可选 `suggestion`：Claude 一轮结束后在输入框里给的灰色「下一条」建议，见 `docs/claude-integration.md`） |
 | `revs` | `machine_id`, `revs`（`{session_id: rev}`，只含变了的；列表里看得见的字段没变、只是 transcript 长了时发，推给所有客户端，App 据此后台拉增量） |
 | `lark` | `feed_ids`（飞书有新消息 / 会话变化的会话；hub 跟随 lark-connector 的实时事件 `/agent/v1/events`，每 400ms 最多发一次，推给所有客户端） |
@@ -974,6 +982,30 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 - **id 冲突**：
   - 本机 socket 上的 runtime 用 `daemons.json` 里的 id 说 hello，回错误 `code: runtime_conflict`；
   - 某个 id 已被连着的 runtime 占用时，同 id 的 daemon 的 hello 也回 `runtime_conflict`，node 随后断开它，稍后再连。
+
+### 任务和对话动态
+
+从助手对话派发的任务（[unified-entry.md](unified-entry.md)）。助手用 `task_plan` 交出计划；只读的、用户记住过的直接开始，其余等手机上的「开始」。
+
+```jsonc
+// TaskPlan
+{"id":"plan_…","conversation":"<助手对话 id>","state":"open|started|dismissed","created_at":"...","updated_at":"...",
+ "tasks":[{"title":"修登录崩溃","prompt":"给 Agent 的第一条消息","machine":"<机器 id>","cwd":"/abs/path",
+           "launcher":"","model":"","permission":"acceptEdits","readonly":false,"why":"一行理由",
+           "todo_id":"todo_…",          // 开始后才有
+           "error":""}]}                 // Agent 没开起来的原因
+
+// FeedItem：hub 插进助手对话的条目，不在 transcript 里；客户端按 at 和 transcript 合在一起画
+{"id":"feed_…","conversation":"…","at":"...","kind":"plan|task|answered|receipt|routed","ref":"plan_… 或 todo_…",
+ "body":{…}}
+// plan：ref 是计划 id，没有 body；task：ref 是待办 id，没有 body
+// answered：{"question":"使用 Bash","answer":"批准了 · 以后同类不再问"}
+// receipt：{"title":"…","state":"done|failed","summary":"Agent 最后一段话","pr":"https://github.com/…/pull/N","machine":"…"}
+// routed：{"text":"…"}
+```
+
+任务卡、计划卡的实时状态不在动态里：客户端按 `ref` 读计划（`task_plan` 推送）和待办 + 挂着的 Agent 的会话状态（状态规则同 [todos.md](todos.md)）。
+任务的 Agent 的提问照常是交互，客户端按待办把它画在对话底部。
 
 ## MCP 工具（`personad mcp`）
 

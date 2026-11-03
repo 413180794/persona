@@ -68,6 +68,13 @@ type SnapshotFollowup struct {
 	Every string // "30 分钟" for a repeating one
 }
 
+// SnapshotTask is a task opened from an assistant conversation: a todo and its agents (docs/unified-entry.md).
+type SnapshotTask struct {
+	ID, Title, State string
+	Machine, Session string // its latest agent, when it has one
+	Last             string // what that agent said last, in a line
+}
+
 // Snapshot is the live context a starting assistant gets in its system prompt.
 type Snapshot struct {
 	Now           time.Time // in the user's zone
@@ -80,6 +87,7 @@ type Snapshot struct {
 	Chats         *SnapshotChats    // nil: Feishu did not answer in time
 	Calendar      *SnapshotCalendar // nil: the calendar did not answer in time
 	Followups     []SnapshotFollowup
+	Tasks         []SnapshotTask // tasks opened from assistant conversations (task_plan), newest first
 }
 
 func (s Snapshot) Up() []SnapshotMachine   { return s.machines(true) }

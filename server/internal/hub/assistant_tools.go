@@ -27,7 +27,7 @@ func assistantTools() []proto.Tool {
 		"cancel_followup", "agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft", "lark_agent_reply",
 		"kb_search", "kb_list", "kb_get", "kb_update", "jarvis_settings",
 		"conversations_list", "conversation_read", "conversation_rename", "conversation_archive", "conversation_unarchive",
-		"conversation_new", "conversation_send"}
+		"conversation_new", "conversation_send", "task_plan"}
 	tools := make([]proto.Tool, 0, len(names))
 	for _, n := range names {
 		tools = append(tools, mcpTool(n))
@@ -44,7 +44,8 @@ func mcpTool(name string) proto.Tool {
 func isAssistantTool(name string) bool {
 	switch name {
 	case "ask_user", "notify_user", "schedule_followup", "list_followups", "cancel_followup", "schedule_routine", "delete_routine",
-		"agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft", "lark_agent_reply", "jarvis_settings":
+		"agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft", "lark_agent_reply", "jarvis_settings",
+		"task_plan":
 		return true
 	}
 	return strings.HasPrefix(name, "kb_") || strings.HasPrefix(name, "conversation")
@@ -68,6 +69,8 @@ func (h *Hub) runAssistantTool(ctx context.Context, m *Machine, sessionID, name 
 		return h.toolAskUser(ctx, m, sessionID, args)
 	case "jarvis_settings":
 		return h.toolJarvisSettings(ctx, m, sessionID, args)
+	case "task_plan":
+		return h.toolTaskPlan(ctx, sessionID, args)
 	case "notify_user":
 		var a struct{ Title, Body string }
 		if err := json.Unmarshal(args, &a); err != nil || strings.TrimSpace(a.Title+a.Body) == "" {

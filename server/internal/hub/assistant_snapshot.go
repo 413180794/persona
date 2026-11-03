@@ -79,6 +79,7 @@ func (h *Hub) takeSnapshot(done chan struct{}) {
 		snap.Machines = append(snap.Machines, prompts.SnapshotMachine{Name: m.cfg.Name, ID: m.cfg.ID, Online: m.snapshot().Online})
 	}
 	snap.Needs, snap.Unread, snap.Working = h.snapshotAgents()
+	snap.Tasks = h.snapshotTasks()
 	if e := h.kb.eng; e != nil {
 		snap.KB = e.Prompt(6, 8)
 	}

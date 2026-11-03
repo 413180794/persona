@@ -119,6 +119,7 @@ type Hub struct {
 	fleet fleet     // the machines and their paths, the members' computers among them (mesh_paths.go)
 
 	todos todosState
+	tasks tasksState // tasks opened from assistant conversations (tasks.go)
 
 	connectors *connector.Registry // sources of the user's information (connectors.go)
 	// connectorsOff start switched off until the user turns them on (addConnectorOff).
@@ -212,6 +213,12 @@ type Store interface {
 	LinkTodoAgentWithSource(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError, source, via string, linkedAt time.Time) ([]string, error)
 	UnlinkTodoAgent(ctx context.Context, todoID, machineID, sessionID string) error
 	UpdateTodoAgentSnapshot(ctx context.Context, machineID, sessionID, title, startError string) error
+	CreateTaskPlan(ctx context.Context, p db.TaskPlanRow) error
+	TaskPlan(ctx context.Context, id string) (*db.TaskPlanRow, error)
+	TaskPlans(ctx context.Context, conversation string) ([]db.TaskPlanRow, error)
+	UpdateTaskPlan(ctx context.Context, id, from, to string, tasks json.RawMessage, at time.Time) (bool, error)
+	AppendFeed(ctx context.Context, f db.FeedRow) error
+	Feed(ctx context.Context, conversation string, since time.Time, limit int) ([]db.FeedRow, error)
 }
 
 type pending struct {
@@ -263,6 +270,7 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{}, interactions: map[string]*pending{},
 		calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{}, turns: newTurnTracker(),
 		todos: newTodosState(),
+		tasks: newTasksState(),
 	}
 	h.live = newLiveActivities(h)
 	h.upd = newUpdater(h)
@@ -853,11 +861,13 @@ func (h *Hub) resolve(id string, r proto.Resolution) error {
 		}
 		h.recordEnd(id, status, &kept)
 		h.finished(p)
+		go h.taskAnswered(p.ix, r, status)
 		return err
 	}
 	kept := redacted(p.ix, r)
 	h.recordEnd(id, status, &kept)
 	h.botResolution(p.ix, r)
+	go h.taskAnswered(p.ix, r, status)
 	select {
 	case p.done <- r:
 	default:

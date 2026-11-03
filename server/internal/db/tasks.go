@@ -1,0 +1,118 @@
+package db
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+)
+
+// Plans and conversation feed items for tasks dispatched from an assistant conversation (docs/unified-entry.md).
+
+var ErrTaskPlanNotFound = errors.New("task plan not found")
+
+// TaskPlanRow is a plan the assistant handed the user: Tasks is the JSON list the hub reads (hub.PlanTask).
+type TaskPlanRow struct {
+	ID           string          `json:"id"`
+	Conversation string          `json:"conversation"`
+	Tasks        json.RawMessage `json:"tasks"`
+	State        string          `json:"state"`
+	CreatedAt    time.Time       `json:"created_at"`
+	UpdatedAt    time.Time       `json:"updated_at"`
+}
+
+// FeedRow is one item the hub inserted into an assistant conversation.
+type FeedRow struct {
+	ID           string          `json:"id"`
+	Conversation string          `json:"conversation"`
+	At           time.Time       `json:"at"`
+	Kind         string          `json:"kind"`
+	Ref          string          `json:"ref"`
+	Body         json.RawMessage `json:"body"`
+}
+
+func (d *DB) CreateTaskPlan(ctx context.Context, p TaskPlanRow) error {
+	_, err := d.pool.Exec(ctx, `INSERT INTO task_plans (id, conversation, tasks, state, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+		p.ID, p.Conversation, []byte(p.Tasks), p.State, p.CreatedAt, p.UpdatedAt)
+	return err
+}
+
+func (d *DB) TaskPlan(ctx context.Context, id string) (*TaskPlanRow, error) {
+	var p TaskPlanRow
+	var tasks []byte
+	err := d.pool.QueryRow(ctx, `SELECT id, conversation, tasks, state, created_at, updated_at FROM task_plans WHERE id = $1`, id).
+		Scan(&p.ID, &p.Conversation, &tasks, &p.State, &p.CreatedAt, &p.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrTaskPlanNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	p.Tasks = tasks
+	return &p, nil
+}
+
+// TaskPlans lists a conversation's plans, oldest first.
+func (d *DB) TaskPlans(ctx context.Context, conversation string) ([]TaskPlanRow, error) {
+	rows, err := d.pool.Query(ctx, `SELECT id, conversation, tasks, state, created_at, updated_at FROM task_plans
+		WHERE conversation = $1 ORDER BY created_at`, conversation)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []TaskPlanRow
+	for rows.Next() {
+		var p TaskPlanRow
+		var tasks []byte
+		if err := rows.Scan(&p.ID, &p.Conversation, &tasks, &p.State, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, err
+		}
+		p.Tasks = tasks
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// UpdateTaskPlan moves a plan from state from to state to with its (edited) tasks; false when it was not in from
+// (someone else started or dismissed it first).
+func (d *DB) UpdateTaskPlan(ctx context.Context, id, from, to string, tasks json.RawMessage, at time.Time) (bool, error) {
+	tag, err := d.pool.Exec(ctx, `UPDATE task_plans SET state = $3, tasks = $4, updated_at = $5 WHERE id = $1 AND state = $2`,
+		id, from, to, []byte(tasks), at)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+func (d *DB) AppendFeed(ctx context.Context, f FeedRow) error {
+	body := []byte(f.Body)
+	if len(body) == 0 {
+		body = []byte("{}")
+	}
+	_, err := d.pool.Exec(ctx, `INSERT INTO assistant_feed (id, conversation, at, kind, ref, body) VALUES ($1, $2, $3, $4, $5, $6)`,
+		f.ID, f.Conversation, f.At, f.Kind, f.Ref, body)
+	return err
+}
+
+// Feed lists a conversation's items after since (zero: from the start), oldest first, at most limit.
+func (d *DB) Feed(ctx context.Context, conversation string, since time.Time, limit int) ([]FeedRow, error) {
+	rows, err := d.pool.Query(ctx, `SELECT id, conversation, at, kind, ref, body FROM assistant_feed
+		WHERE conversation = $1 AND at > $2 ORDER BY at, id LIMIT $3`, conversation, since, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []FeedRow
+	for rows.Next() {
+		var f FeedRow
+		var body []byte
+		if err := rows.Scan(&f.ID, &f.Conversation, &f.At, &f.Kind, &f.Ref, &body); err != nil {
+			return nil, err
+		}
+		f.Body = body
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}

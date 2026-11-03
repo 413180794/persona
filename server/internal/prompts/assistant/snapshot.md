@@ -5,7 +5,9 @@
 {{with .Needs}}  - 需要你：{{template "assistant/snapshot_agents" .}}
 {{end}}{{with .Unread}}  - 完成未看：{{template "assistant/snapshot_agents" .}}
 {{end}}{{with .Working}}  - 工作中：{{join (first 8 .) "；"}}{{if gt (len .) 8}} 等 {{len .}} 个{{end}}
-{{end}}{{if .PhoneOnline}}- iPhone：App 在线，phone_* 工具可用
+{{end}}{{with .Tasks}}- 从对话开的任务（task_plan；用 agent_send 对它的 Agent 说话）：
+{{range .}}  - {{.Title}}（{{.ID}}）：{{.State}}{{with .Machine}}，{{.}}{{end}}{{with .Session}} session_id={{.}}{{end}}{{with .Last}}：{{.}}{{end}}
+{{end}}{{end}}{{if .PhoneOnline}}- iPhone：App 在线，phone_* 工具可用
 {{else}}- iPhone：App 不在前台，phone_* 工具会先尝试在后台唤醒 App，失败就请他打开 App
 {{end}}{{with .KB}}- 知识库（kb_get 看详情）：
 {{indent "  " .}}{{end}}{{with .Chats}}{{if .Total}}- 飞书未读会话 {{.Total}} 个（免打扰的不算；用 lark_chats / lark_messages 看）

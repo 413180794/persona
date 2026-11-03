@@ -307,10 +307,12 @@ func (m *Machine) setSessions(list []proto.Session) {
 		switch {
 		case s.Status == proto.StatusWorking && prev != proto.StatusWorking:
 			m.hub.turns.working(key, now)
+			go m.hub.taskWorking(m.cfg.ID, s.SessionID)
 		case prev == proto.StatusWorking && (s.Status == proto.StatusDone || s.Status == proto.StatusIdle):
 			go m.notifyFinished(s.SessionID, m.hub.turns.ended(key, now))
 			go m.hub.titleAfterTurn(m, s.SessionID) // a new assistant conversation is named after its first turn
 			go m.hub.botTurnEnded(m.cfg.ID, s.SessionID)
+			go m.taskTurnEnded(s.SessionID) // a task from an assistant conversation may be done (tasks.go)
 		}
 	}
 	m.sessions = list

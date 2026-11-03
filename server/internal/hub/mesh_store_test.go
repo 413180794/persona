@@ -436,7 +436,19 @@ func (s *meshStore) CreateTodo(context.Context, db.TodoRow) error               
 func (s *meshStore) UpdateTodo(context.Context, string, *string, *string, *bool, time.Time) (*db.TodoRow, error) {
 	return nil, nil
 }
-func (s *meshStore) DeleteTodo(context.Context, string) error { return nil }
+func (s *meshStore) DeleteTodo(context.Context, string) error             { return nil }
+func (s *meshStore) CreateTaskPlan(context.Context, db.TaskPlanRow) error { return nil }
+func (s *meshStore) TaskPlan(context.Context, string) (*db.TaskPlanRow, error) {
+	return nil, db.ErrTaskPlanNotFound
+}
+func (s *meshStore) TaskPlans(context.Context, string) ([]db.TaskPlanRow, error) { return nil, nil }
+func (s *meshStore) UpdateTaskPlan(context.Context, string, string, string, json.RawMessage, time.Time) (bool, error) {
+	return false, nil
+}
+func (s *meshStore) AppendFeed(context.Context, db.FeedRow) error { return nil }
+func (s *meshStore) Feed(context.Context, string, time.Time, int) ([]db.FeedRow, error) {
+	return nil, nil
+}
 func (s *meshStore) LinkTodoSpace(context.Context, string, string, string, time.Time) (string, error) {
 	return "", nil
 }

@@ -37,14 +37,18 @@ type TodoAgent struct {
 }
 
 type Todo struct {
-	ID        string      `json:"id"`
-	Title     string      `json:"title"`
-	Notes     string      `json:"notes"`
-	DoneAt    *time.Time  `json:"done_at"`
-	CreatedAt time.Time   `json:"created_at"`
-	UpdatedAt time.Time   `json:"updated_at"`
-	Spaces    []TodoSpace `json:"spaces"`
-	Agents    []TodoAgent `json:"agents"`
+	ID        string     `json:"id"`
+	Title     string     `json:"title"`
+	Notes     string     `json:"notes"`
+	DoneAt    *time.Time `json:"done_at"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	// Origin: the assistant conversation that opened it as a task; PlanID: the plan it came from (#930,
+	// docs/unified-entry.md). Empty for a todo made by hand.
+	Origin string      `json:"origin,omitempty"`
+	PlanID string      `json:"plan_id,omitempty"`
+	Spaces []TodoSpace `json:"spaces"`
+	Agents []TodoAgent `json:"agents"`
 }
 
 type todosState struct {
@@ -125,6 +129,8 @@ func (h *Hub) loadTodosLocked(ctx context.Context) error {
 			DoneAt:    tr.DoneAt,
 			CreatedAt: tr.CreatedAt,
 			UpdatedAt: tr.UpdatedAt,
+			Origin:    tr.Origin,
+			PlanID:    tr.PlanID,
 			Spaces:    make([]TodoSpace, 0),
 			Agents:    make([]TodoAgent, 0),
 		}
@@ -177,6 +183,27 @@ func (h *Hub) initTodos(ctx context.Context) {
 	if err := h.loadTodosLocked(ctx); err != nil {
 		h.logf("todos: init load failed: %v", err)
 	}
+}
+
+// createTodo makes a todo (origin and planID set when a plan from an assistant conversation opens it as a task)
+// and tells the clients; the todos are loaded.
+func (h *Hub) createTodo(ctx context.Context, title, notes, origin, planID string) (Todo, error) {
+	now := time.Now().UTC()
+	id := "todo_" + randomHex(8)
+	if h.store != nil {
+		row := db.TodoRow{ID: id, Title: title, Notes: notes, CreatedAt: now, UpdatedAt: now, Origin: origin, PlanID: planID}
+		if err := h.store.CreateTodo(ctx, row); err != nil {
+			return Todo{}, err
+		}
+	}
+	tObj := &Todo{ID: id, Title: title, Notes: notes, CreatedAt: now, UpdatedAt: now, Origin: origin, PlanID: planID,
+		Spaces: make([]TodoSpace, 0), Agents: make([]TodoAgent, 0)}
+	h.todos.mu.Lock()
+	h.todos.todos[id] = tObj
+	out := formatTodo(copyTodoLocked(tObj))
+	h.todos.mu.Unlock()
+	h.broadcast(map[string]any{"type": "todos"})
+	return out, nil
 }
 
 func copyTodoLocked(t *Todo) Todo {
@@ -297,37 +324,11 @@ func (h *Hub) todoRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, errors.New("title cannot be empty"))
 			return
 		}
-		now := time.Now().UTC()
-		id := "todo_" + randomHex(8)
-		row := db.TodoRow{
-			ID:        id,
-			Title:     title,
-			Notes:     in.Notes,
-			CreatedAt: now,
-			UpdatedAt: now,
+		resTodo, err := h.createTodo(r.Context(), title, in.Notes, "", "")
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
 		}
-		if h.store != nil {
-			if err := h.store.CreateTodo(r.Context(), row); err != nil {
-				writeErr(w, http.StatusInternalServerError, err)
-				return
-			}
-		}
-
-		tObj := &Todo{
-			ID:        id,
-			Title:     title,
-			Notes:     in.Notes,
-			CreatedAt: now,
-			UpdatedAt: now,
-			Spaces:    make([]TodoSpace, 0),
-			Agents:    make([]TodoAgent, 0),
-		}
-		h.todos.mu.Lock()
-		h.todos.todos[id] = tObj
-		resTodo := formatTodo(copyTodoLocked(tObj))
-		h.todos.mu.Unlock()
-
-		h.broadcast(map[string]any{"type": "todos"})
 		writeJSON(w, map[string]any{"todo": resTodo})
 	})
 

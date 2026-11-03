@@ -17,6 +17,8 @@
 - `done_at` (timestamptz)：完成时间；未完成时为 `NULL`。
 - `created_at` (timestamptz, NOT NULL)：创建时间。
 - `updated_at` (timestamptz, NOT NULL)：最后修改时间。
+- `origin` (text, NOT NULL, DEFAULT '')：从哪段助手对话开的任务（会话 id），手动建的为空（[unified-entry.md](unified-entry.md)）。
+- `plan_id` (text, NOT NULL, DEFAULT '')：由哪个计划开的（`task_plans.id`）。
 
 ### 2. todo_spaces 表
 记录整组挂到待办的项目工作区（herdr workspace）：
