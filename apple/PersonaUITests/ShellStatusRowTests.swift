@@ -15,10 +15,10 @@ final class ShellStatusRowTests: XCTestCase {
 
     @MainActor private func launch(_ page: String, _ extra: [String]) {
         app = XCUIApplication()
-        app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "NO", "-tab", page, "-dev.openChat", "", "-dev.folded", ""]
+        app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "NO", "-probes", "YES", "-tab", page, "-dev.openChat", "", "-dev.folded", ""]
             + (page == "assistant" ? ["-newAssistant", "YES"] : []) + extra
         app.launchPinned()
-        XCTAssertTrue(app.descendants(matching: .any)["shell-pager-probe"].waitForExistence(timeout: 15), "no shell")
+        XCTAssertTrue(app.descendants(matching: .any)["probe.shell"].waitForExistence(timeout: 15), "no shell")
     }
 
     @MainActor private func attachScreen(_ name: String) {

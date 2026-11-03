@@ -325,7 +325,7 @@
   列表是 UICollectionView，都是 UIKit。在助手上推一页再右滑返回之后，Agents 的整页（导航栏、列表、顶栏）又回到树里，盖在助手的顶栏上面，
   看不见却「可点」：VoiceOver 会落到它上面，UI 测试按 id 取到的第一个 `shell-agents` 是它，点它的中心哪一段都不是（2026-11-01，
   `ShellSwitchTests` 四个用例）。藏起来那页的顶栏现在不在树里（`ShellBarAtRest(page:)`：横条停在另一页时不画，一开始滑就放回来、透明）；
-  列表还会漏进树里，判断哪页在显示用状态探针（`shell-pager-probe`），别用「某个控件 exists / isHittable」。
+  列表还会漏进树里，判断哪页在显示用状态探针（`probe.shell`），别用「某个控件 exists / isHittable」。
 - 把一个控件搬进 List 当第一行（Agents 的筛选条，56b2ead，为了搜索框能收起）之后，它就是一个 UICollectionViewCell：凡是「从行上起拖就让给行」
   的手势判断（`DrawerPan.onRow`，行的右滑是置顶 / 中断 / 标为已看）都会把它当成行，沿筛选条右拖翻回助手就失效了。没有自己右滑的行要显式标出来
   （`DrawerPan.NoRowSwipe`）。

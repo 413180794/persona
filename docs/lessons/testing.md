@@ -136,7 +136,7 @@
 
 - 新外壳哪页在显示原来靠截图里「全部」筛选块的颜色判断（`ShellPixels`）。筛选条搬进列表、搜索框默认收起、BeautifulUI 风格换了筛选块的画法之后，
   像素就跟着变；测试挂了，看起来像 App 坏了，其实一部分是判断方式不对（2026-11-01）。能读状态就读状态：DEBUG 里放一个 1pt 的无障碍元素
-  （`shell-pager-probe`，value 是「停在哪页 + 选中的 tab」），测试读它的 value。两者要一致才算对，这正好也能抓到 TestFlight 70 那种
+  （原来的 `shell-pager-probe`，现在是 `probe.shell`：停在哪页 + 选中的 tab），测试读它的 value。两者要一致才算对，这正好也能抓到 TestFlight 70 那种
   「切换说是 Agents、底下画的是助手」。
 - 分析挂掉的 UI 测试先确认它挂在哪一步、那一刻 App 的真实状态（`xcresulttool export attachments` 拿截图和树，或者临时加探针 + NSLog、
   `simctl spawn … log show` 拿时序），再决定是测试过时还是 App 回归：这次六个里只有一个是测试过时（搜索框默认收起是有意改的），
@@ -144,7 +144,14 @@
 
 - 测点击别用 `element.tap()` 点切换段这类两页都有的控件：无障碍树可能给出隐藏那页的副本，点到的不是手指会点的地方，
   测试过了、用户手指点却没反应（2026-11-02）。用坐标（`ShellFinger`：启动时读一次位置，之后点坐标），点完断言探针。
-  探针的 label 放最近的事件（`ShellTrace`），失败信息里直接看到「点击到了没有、路由跑了没有」，比截图快得多。
+  探针里放最近的事件（`ShellTrace`，`probe.shell` 的 `trace`，每条带时间），失败信息里直接看到「点击到了没有、路由跑了没有、时间花在哪」，比截图快得多。
+- 轮询探针别用会数全部匹配的查询：`app.probe(area, …)` 先 `matching(identifier:).count` 再取值，每次都让 App 交一份整棵无障碍树。
+  `ShellStatusRowTests` 每 0.1 秒读一次 `probe.shell` 等状态行打开，状态行占位那一刻 Agents 拉出的搜索框被导航栏收起（#413 的那种），
+  三种状态里两三种必挂；只换成 `["probe.shell"].firstMatch.value` 一次查询就全过（#499，2026-11-03）。在 App 里挪探针位置、去掉 `@State` 都没用。
+  只有一个的探针（`probe.shell`）用 `firstMatch` 读；两页都有、要按 `page` 挑的才用 `probe(_:as:page:)`，并且别在动画进行中高频轮询。
+- `.screenProbe(area, value)` 的 `value` 在没开 `-probes` 时也会在 body 里求值：读了什么，这个视图就跟着什么重画（RootView 的 `connection`
+  让整个根视图在连接状态每次变化时都重画一遍，DEBUG 才有）。值要读别的状态时写成 `ScreenProbe.enabled ? Value(…) : Value()`。
+  另外读 XCUI 元素的 `label` / `frame` 时它可能刚好消失（toast 到时、搜索框被收起），直接读会让测试当场失败；会消失的东西用 `try? e.snapshot()` 读（2026-11-02）。
 
 - 模拟器的钥匙串里留着一次 mock hub 的配对（`-pairURL`）时，`-demo.on YES` 不管用：`Keychain.serverConfig` 优先于体验模式，App 一直连那个早已停掉的
   mock，界面上「连接中…」不消失、头像是离线的灰色，列表是之前存下的快照（2026-11-02，看起来像体验模式坏了）。跑 UI 测试和截图前

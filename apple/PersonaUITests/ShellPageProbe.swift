@@ -1,27 +1,50 @@
 import XCTest
 
+/// `probe.shell` (the app's `ShellShown`, docs/ios-state.md「探针」): needs `-probes YES` at launch.
+struct ShellShown: Decodable {
+    var strip, selected, tab: String
+    var position: Double
+    var moving, lingering, drawerOpen, chatRoot, workRoot: Bool
+    var status: String
+    var opened, folded, room: Int
+    var trace: [String]
+}
+
 extension XCUIApplication {
-    /// What the shell's strip shows, from the app's probe (`ShellPagerProbe`, DEBUG builds): the page it rests on
-    /// (`assistant` / `agents`, `moving` while it slides), the page in front (what the switch shows) and the app's tab,
-    /// e.g. "agents selected=agents tab=agents position=1.00 drawer=0 chatRoot=1 workRoot=1".
+    /// The shell's state from `probe.shell` (launched with `-probes YES`).
+    /// One query for the one element (there is one shell): `probe(_:as:)` counts every match first, and the tests poll
+    /// this every 0.1 s.
+    var shellShown: ShellShown? {
+        guard let text = descendants(matching: .any)["probe.shell"].firstMatch.value as? String,
+              let obj = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any],
+              let v = obj["v"], let data = try? JSONSerialization.data(withJSONObject: v) else { return nil }
+        return try? JSONDecoder().decode(ShellShown.self, from: data)
+    }
+
+    /// What the shell's strip shows, one line: the page it rests on (`assistant` / `agents`, `moving` while it slides),
+    /// the page in front (what the switch shows) and the app's tab, then the rest,
+    /// e.g. "agents selected=agents tab=agents position=1.00 drawer=0 chatRoot=1 workRoot=1 status=none …".
     /// Both pages stay built and the hidden one can be back in the accessibility tree (its lists are UIKit), so
     /// `exists` / `isHittable` of a page's controls do not say which page is drawn. This used to be read from the
     /// pixels of the 全部 chip (`agentsDrawn`), which broke when the chip moved into the list (56b2ead).
     var shellPage: String {
-        (descendants(matching: .any)["shell-pager-probe"].firstMatch.value as? String) ?? "none"
+        guard let s = shellShown else { return "none" }
+        return "\(s.strip) selected=\(s.selected) tab=\(s.tab) position=\(String(format: "%.2f", s.position))"
+            + " drawer=\(s.drawerOpen ? 1 : 0) chatRoot=\(s.chatRoot ? 1 : 0) workRoot=\(s.workRoot ? 1 : 0)"
+            + " status=\(s.status) opened=\(s.opened) folded=\(s.folded) room=\(s.room) lingering=\(s.lingering ? 1 : 0)"
     }
 
-    /// One `key=value` of the probe's value (`room`, `status`, `opened`…).
+    /// One `key=value` of `shellPage` (`room`, `status`, `opened`…).
     func shellValue(_ key: String) -> String? {
         shellPage.split(separator: " ").first { $0.hasPrefix(key + "=") }.map { String($0.dropFirst(key.count + 1)) }
     }
 
     /// The room the status row takes at the top (points): the bars and pages are that much lower.
-    var shellRoom: CGFloat { CGFloat(Double(shellValue("room") ?? "0") ?? 0) }
+    var shellRoom: CGFloat { CGFloat(shellShown?.room ?? 0) }
 
     /// The shell's latest events (switch taps, routes, slides, settles), for a failure's message.
     var shellTrace: String {
-        "[\(shellPage)] trace: " + descendants(matching: .any)["shell-pager-probe"].firstMatch.label
+        "[\(shellPage)] trace: " + (shellShown?.trace.joined(separator: " | ") ?? "")
     }
 
     /// Whether Agents is what the strip rests on, with the switch and the app's tab on Agents too (TestFlight 70: the

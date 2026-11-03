@@ -115,30 +115,55 @@ struct ShellView: View {
 }
 
 #if DEBUG
-/// What the strip shows, for UI tests (`ShellPageProbe.swift`): a point-sized element whose value is the page the strip
-/// rests on (`assistant` / `agents`, `moving` while it slides), the page in front (`ShellState.page`, what the switch
-/// shows), the app's tab, and the drawer and the pages' roots; its label is the latest `ShellTrace`. Pixels told which
-/// page was drawn before; both pages stay built, so `exists` cannot.
+/// What the strip shows, for UI tests (`probe.shell`, docs/ios-state.md「探针」; read by `ShellPageProbe.swift`): the page
+/// the strip rests on (`assistant` / `agents` / `feishu`, `moving` while it slides), the page in front (`ShellState.page`, what the
+/// switch shows), the app's tab, the drawer and the pages' roots, the status row, and the latest `ShellTrace`. Pixels
+/// told which page was drawn before; both pages stay built, so `exists` cannot.
 private struct ShellPagerProbe: View {
     @Environment(AppModel.self) private var model
     let shell: ShellState
 
     var body: some View {
-        let pager = shell.pager
-        let page = pager.moving ? "moving" : pager.page == 2 ? "feishu" : pager.page == 1 ? "agents" : "assistant"
-        let tab = model.selectedTab == .chats ? "agents" : model.selectedTab == .assistant ? "assistant" : model.selectedTab.rawValue
-        let n = shell.notices
-        let status = switch n.shown { case .toast: "toast"; case .link: "link"; case nil: "none" }
-        let row = " status=\(status) opened=\(n.opened) folded=\(n.folded) room=\(Int(n.room.rounded()))"
         Color.clear
             .frame(width: Theme.Size.line, height: Theme.Size.line)
-            .accessibilityElement()
-            .accessibilityIdentifier("shell-pager-probe")
-            .accessibilityValue("\(page) selected=\(shell.page == 2 ? "feishu" : shell.page == 1 ? "agents" : "assistant") tab=\(tab)"
-                + " position=\(String(format: "%.2f", pager.position)) drawer=\(shell.drawer.isOpen ? 1 : 0)"
-                + " chatRoot=\(shell.chatAtRoot ? 1 : 0) workRoot=\(shell.workAtRoot ? 1 : 0)" + row)
-            .accessibilityLabel(ShellTrace.shared.events.joined(separator: " | "))
             .allowsHitTesting(false)
+            .screenProbe("shell", ScreenProbe.enabled ? ShellShown(shell, tab: model.selectedTab) : ShellShown())
+    }
+}
+
+/// `probe.shell`'s value.
+nonisolated struct ShellShown: Encodable, Equatable {
+    var strip = "", selected = "", tab = ""
+    var position = 0.0
+    var moving = false, lingering = false, drawerOpen = false, chatRoot = true, workRoot = true
+    /// The status row: `none`, `link` or `toast`, how many times it opened and folded, and its room (points).
+    var status = "none"
+    var opened = 0, folded = 0, room = 0
+    var trace: [String] = []
+
+    init() {}
+
+    @MainActor init(_ shell: ShellState, tab t: AppTab) {
+        let pager = shell.pager, n = shell.notices
+        strip = pager.moving ? "moving" : Self.name(pager.page)
+        selected = Self.name(shell.page)
+        tab = t == .chats ? "agents" : t == .assistant ? "assistant" : t.rawValue
+        position = (pager.position * 100).rounded() / 100
+        moving = pager.moving
+        lingering = pager.lingering
+        drawerOpen = shell.drawer.isOpen
+        chatRoot = shell.chatAtRoot
+        workRoot = shell.workAtRoot
+        status = switch n.shown { case .toast: "toast"; case .link: "link"; case nil: "none" }
+        opened = n.opened
+        folded = n.folded
+        room = Int(n.room.rounded())
+        trace = ShellTrace.shared.events
+    }
+
+    /// A page of the strip by name: 0 = 助手, 1 = Agents, 2 = 飞书.
+    private static func name(_ page: Int) -> String {
+        page == 2 ? "feishu" : page == 1 ? "agents" : "assistant"
     }
 }
 #endif

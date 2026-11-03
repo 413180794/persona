@@ -15,7 +15,7 @@
 
 `ShellRaceTests` 用坐标点击模拟手指（`ShellFinger`，不点无障碍元素）：Agents → 打开一个 Agent 的对话 → 返回（返回按钮 / 右滑，
 返回动画没结束就点、0.15 s、0.4 s、1 s 后点；对话正在流式输出时退出）→ 点助手 → 点 Agents。每一步读 DEBUG 探针
-（`shell-pager-probe`：横条停在哪页、选中的段、App 的 tab、抽屉、两页是否在根部）和 `ShellTrace`（最近的点击、路由、滑动事件）。
+（`probe.shell`：横条停在哪页、选中的段、App 的 tab、抽屉、两页是否在根部、状态行）和 `ShellTrace`（最近的点击、路由、滑动事件）。
 
 - 12 轮里 4 轮复现：探针是「横条停在助手，tab=agents」，Agents 段加粗，横条不动。
 - 追踪是这样的：`switch chats` → `tab assistant->chats`，之后再没有外壳的 body，也没有 `route`。也就是说，点击到了切换段，
@@ -163,8 +163,8 @@ DEBUG：`-showConnectionCycle connecting:7:4`（第 7 秒起显示连接中… 4
 
 返回动画还没结束就点，点击可能落在正在滑走的对话页上（和手指一样），这时测试允许 2.5 s，并要求随后的点击正常。
 
-和 msg-render 车道共用一套探针和断言（列表和 hub 数据比对、更新的时限、随机序列），接口由那边定；这里的 `shell-pager-probe`
-到时候迁过去，字段不变。
+和 msg-render 车道共用一套探针和断言（ScreenProbe，`docs/ios-state.md`「探针」）：外壳的状态是 `probe.shell`，启动时要 `-probes YES`；
+测试端 `ShellPageProbe.swift` 的 `shellPage` / `shellValue` / `shellRoom` / `shellTrace` 从它读（#499，原来的 `shell-pager-probe` 已删掉）。
 
 ## 测试
 

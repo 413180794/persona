@@ -287,7 +287,8 @@ App 端 `apple/Persona/App/ScreenProbe.swift`，DEBUG，`-probes YES` 才挂：
       用法见 `ShellRoomScrollTests`（#413）。
   - `connection`：`{shown, network}`；
   - `chat`：`{key}`，打开的是哪个对话（page 是它所在的页）；
-  - `shell`：live 车道，`{strip, selected, tab, position, moving, drawerOpen, chatRoot, workRoot, trace}`。
+  - `shell`：新外壳（`ShellShown`，`docs/shell.md`），`{strip, selected, tab, position, moving, lingering, drawerOpen, chatRoot, workRoot, status, opened, folded, room, trace}`：
+    横条停在哪页（滑动中为 `moving`）、切换段选中哪页、App 的 tab，状态行显示什么（`none` / `link` / `toast`）、开合了几次、让出的高度，`trace` 是最近的外壳事件。
 
 测试端 `apple/PersonaUITests/ScreenProbe.swift`：
 

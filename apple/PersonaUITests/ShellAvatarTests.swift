@@ -13,7 +13,8 @@ final class ShellAvatarTests: XCTestCase {
 
     @MainActor private func launch(_ arguments: [String]) {
         app = XCUIApplication()
-        app.launchArguments = arguments
+        // probe.shell; no chat restored from an earlier run: Agents opened on it, with no face to tap (2026-11-03).
+        app.launchArguments = arguments + ["-probes", "YES", "-dev.openChat", ""]
         app.launchPinned()
     }
 

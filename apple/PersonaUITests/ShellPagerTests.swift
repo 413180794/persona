@@ -15,7 +15,7 @@ final class ShellPagerTests: XCTestCase {
     @MainActor private func launch(_ extra: [String] = []) {
         app = XCUIApplication()
         // Not a chat an earlier test left open on Agents (it comes back when Agents is first built).
-        app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "NO", "-newAssistant", "YES", "-dev.openChat", ""] + extra
+        app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", "NO", "-probes", "YES", "-newAssistant", "YES", "-dev.openChat", ""] + extra
         app.launchPinned()
         XCTAssertTrue(app.buttons["assistant-sidebar-button"].firstMatch.waitForExistence(timeout: 15), "no shell")
         sleep(1)
