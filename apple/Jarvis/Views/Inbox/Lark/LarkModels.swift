@@ -185,8 +185,10 @@ extension APIClient {
         var hasNewer: Bool?
         var olderCursor: String?
         var newerCursor: String?
+        /// The chat is a topic group and these are its topics (the hub found out even when the request did not say so).
+        var topic: Bool?
         enum CodingKeys: String, CodingKey {
-            case messages
+            case messages, topic
             case hasOlder = "has_older", hasNewer = "has_newer", olderCursor = "older_cursor", newerCursor = "newer_cursor"
         }
     }

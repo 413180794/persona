@@ -7,6 +7,7 @@
 - lark-connector 会话列表的坑（`docs/protocol.md` 飞书 API）：`isDone` 字段不可靠（done scope 里全是 false），已完成以 scope 为准；
   置顶看 `onTopRankAt`（`settings.isShortcut` 也不准），且置顶会话分散在 inbox 和 done 两个 scope；未知 scope 会被静默当成 inbox。
 - 打开飞书会话不能用 `tail=1`（那是「回到最新」）：有未读时要 `aroundPosition=readPosition+1`，已读只上报真正上屏的消息。
+- 话题群（`chatMode: "topic"`）的 `GET /conversations/F/messages` 多半只有 position 0 的「创建了话题群」系统消息、`hasOlder=false`（实测 5 个话题群里 4 个如此，tail、around、before 都一样），内容在 `…/threads`（话题根消息，`nextOlderCursor` 往前翻），回复在 `GET /messages/ROOT/thread`。不能指望调用方带对 `topic`（人的名片进来、旧的收件箱条目、网页都没带）：hub 用 `lark.ChatPage` 自己按 chatMode 判断（会话列表里记下，没见过的查一次 `GET /conversations/F`），返回带 `topic: true`。
 - 有的网络（作者的 hub 机器）连不上 Google 的多数 IPv4 地址（`imap.gmail.com` / `smtp.gmail.com` 常解析到 173.194.x.x，所有端口超时），HTTPS 能通只是走了 IPv6。
   hub 访问 Gmail 一律走 `hub.json` 的 `google.proxy`（比如 hub 机器上的本地代理），别再加直连兜底（`docs/mail.md`）。
 - 客户端和 hub 的 JSON 形状对不上，Go 的解码器直接 400，模拟器上不点那条路径就看不出来：iOS 回复邮件时把 `references` 发成数组，

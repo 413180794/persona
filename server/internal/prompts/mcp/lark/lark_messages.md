@@ -1,4 +1,4 @@
-Read a Feishu chat (id from lark_chats or lark_search): the latest messages as text, oldest first. Pass `before` (a message position from an earlier page) to read further back. Reading does not mark anything as read.
+Read a Feishu chat (id from lark_chats or lark_search): the latest messages as text, oldest first. Pass `before` (a message position from an earlier page) to read further back. In a topic group (话题群) each line is one topic's first message with its id and reply count; pass `thread` (that id) to read the topic's replies. Reading does not mark anything as read.
 
 ```json
 {
@@ -7,6 +7,10 @@ Read a Feishu chat (id from lark_chats or lark_search): the latest messages as t
   "properties": {
     "chat_id": {
       "type": "string"
+    },
+    "thread": {
+      "type": "string",
+      "description": "a topic's message id (from a topic group's page): read the replies in that topic instead of the chat"
     },
     "limit": {
       "type": "integer",

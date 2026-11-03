@@ -174,6 +174,36 @@ nonisolated struct APIClient: Sendable {
         return try JSON.decoder.decode(UploadedFile.self, from: try checked(data, resp, requestID: requestID))
     }
 
+    func download(_ path: String, query: [String: String], to destination: URL,
+                  progress: @escaping @Sendable (Int64, Int64) -> Void) async throws {
+        if transport != nil || config.isDemo {
+            let data = try await request("GET", path, query: query)
+            try Task.checkCancellation()
+            try data.write(to: destination, options: .atomic)
+            progress(Int64(data.count), Int64(data.count))
+            return
+        }
+        var req = URLRequest(url: url(path, query: query), timeoutInterval: 120)
+        req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        let requestID = String(UUID().uuidString.prefix(8)).lowercased()
+        req.setValue(requestID, forHTTPHeaderField: "X-Client-Request-Id")
+        let (temp, response) = try await Self.uncachedSession.download(for: req, delegate: DownloadProgress(progress))
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if !(200..<300).contains(status) {
+            let handle = try FileHandle(forReadingFrom: temp)
+            defer { try? handle.close() }
+            _ = try checked(handle.read(upToCount: 64 << 10) ?? Data(), response, requestID: requestID)
+        }
+        try Task.checkCancellation()
+        let size = (try FileManager.default.attributesOfItem(atPath: temp.path)[.size] as? NSNumber)?.int64Value ?? 0
+        if response.expectedContentLength >= 0, size != response.expectedContentLength {
+            throw APIError(status: 0, message: "文件没有下载完整，请重试")
+        }
+        try FileManager.default.moveItem(at: temp, to: destination)
+        progress(size, size)
+    }
+
     func get<T: Decodable>(_ path: String, query: [String: String] = [:], as: T.Type = T.self) async throws -> T {
         try JSON.decoder.decode(T.self, from: try await request("GET", path, query: query))
     }
@@ -902,6 +932,16 @@ extension APIClient {
 extension Date {
     /// nil for Go's zero time and other placeholder dates the hub sends for "never".
     nonisolated var realDate: Date? { timeIntervalSince1970 > 946_684_800 ? self : nil }
+}
+
+private nonisolated final class DownloadProgress: NSObject, URLSessionDownloadDelegate, Sendable {
+    let report: @Sendable (Int64, Int64) -> Void
+    init(_ report: @escaping @Sendable (Int64, Int64) -> Void) { self.report = report }
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {}
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
+                    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        report(totalBytesWritten, totalBytesExpectedToWrite)
+    }
 }
 
 private nonisolated final class UploadProgress: NSObject, URLSessionTaskDelegate, Sendable {

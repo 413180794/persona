@@ -553,23 +553,37 @@ func (h *Hub) runLarkTool(ctx context.Context, name string, args json.RawMessage
 	case "lark_messages":
 		var a struct {
 			ChatID string `json:"chat_id"`
+			Thread string `json:"thread"`
 			Limit  int    `json:"limit"`
 			Before string `json:"before"`
 		}
 		_ = json.Unmarshal(args, &a)
-		if a.ChatID == "" {
+		if a.ChatID == "" && a.Thread == "" {
 			return "", fmt.Errorf("chat_id is required")
 		}
 		if a.Limit <= 0 || a.Limit > 100 {
 			a.Limit = 40
 		}
-		page, err := h.lark.Messages(ctx, a.ChatID, lark.Window{Before: a.Before}, a.Limit, false)
+		var page lark.Page
+		var err error
+		if a.Thread != "" {
+			page, err = h.lark.Thread(ctx, a.Thread, a.Before, a.Limit)
+		} else {
+			// A topic group's messages are only the 创建了话题群 notice; what was said is in its topics.
+			page, err = h.lark.ChatPage(ctx, a.ChatID, lark.Window{Before: a.Before}, a.Limit, false)
+		}
 		if err != nil {
 			return "", err
 		}
 		var b strings.Builder
-		if page.HasOlder && len(page.Messages) > 0 {
-			fmt.Fprintf(&b, "(older messages: before=%s)\n", page.Messages[0].Position)
+		if page.Topic {
+			b.WriteString("(topic group: one line per topic; read a topic's replies with thread=<its id>)\n")
+		}
+		if older := page.OlderCursor; page.HasOlder && len(page.Messages) > 0 {
+			if !page.Topic || older == "" {
+				older = page.Messages[0].Position
+			}
+			fmt.Fprintf(&b, "(older messages: before=%s)\n", older)
 		}
 		for _, msg := range page.Messages {
 			who := msg.SenderName
@@ -591,7 +605,10 @@ func (h *Hub) runLarkTool(ctx context.Context, name string, args json.RawMessage
 				fmt.Fprintf(&b, " (回复 %s：%s)", msg.ReplyTo.SenderName, clip(oneLine(msg.ReplyTo.Text), 60))
 			}
 			fmt.Fprintf(&b, "：%s", clip(text, 2000))
-			if msg.ThreadReplyCount > 0 {
+			switch {
+			case page.Topic:
+				fmt.Fprintf(&b, " (thread=%s, %d 条回复)", msg.ID, msg.ThreadReplyCount)
+			case msg.ThreadReplyCount > 0:
 				fmt.Fprintf(&b, " (话题 %d 条回复)", msg.ThreadReplyCount)
 			}
 			b.WriteString("\n")

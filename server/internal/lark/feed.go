@@ -163,6 +163,7 @@ func (c *Client) Conversations(ctx context.Context, scope, cursor string, limit 
 	}
 	out := make([]Conversation, 0, len(res.Items))
 	for _, r := range res.Items {
+		c.rememberMode(r.FeedID, r.ChatMode)
 		if r.IsHidden {
 			continue
 		}

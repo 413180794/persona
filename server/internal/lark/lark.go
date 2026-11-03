@@ -67,6 +67,7 @@ type Client struct {
 	emojis      map[string]Emoji
 	emojiGroups []EmojiGroup
 	emojisAt    time.Time
+	topics      map[string]bool // feed id → topic group or not, from the feed's chatMode or GET /conversations/FEED_ID
 }
 
 func New(cfg Config) *Client {
@@ -356,15 +357,73 @@ type Page struct {
 	HasNewer    bool      `json:"has_newer"`
 	OlderCursor string    `json:"older_cursor,omitempty"`
 	NewerCursor string    `json:"newer_cursor,omitempty"`
+	// Topic: the chat is a topic group and the page is its threads' roots (open one with Thread).
+	Topic bool `json:"topic,omitempty"`
 }
 
 // Messages returns a page of a chat. In a topic group (`topic`) the page is the thread roots, each with its
 // reply count; topic pages only page backwards.
 func (c *Client) Messages(ctx context.Context, feedID string, w Window, limit int, topic bool) (Page, error) {
 	if topic {
-		return c.page(ctx, "/conversations/"+url.PathEscape(feedID)+"/threads", Window{Before: w.Before}, limit)
+		p, err := c.page(ctx, "/conversations/"+url.PathEscape(feedID)+"/threads", Window{Before: w.Before}, limit)
+		p.Topic = err == nil
+		return p, err
 	}
 	return c.page(ctx, "/conversations/"+url.PathEscape(feedID)+"/messages", w, limit)
+}
+
+// ChatPage is Messages for a caller that may not know the chat is a topic group (`topic` false): the client
+// checks (IsTopic). A topic group's latest and older pages are its threads, as Messages gives them for topic; a
+// page around a message still reads the messages endpoint, which some topic groups fill, and falls back to the
+// threads when all it has is system notices (创建了话题群).
+func (c *Client) ChatPage(ctx context.Context, feedID string, w Window, limit int, topic bool) (Page, error) {
+	if topic || (w.Around == "" && w.After == "" && c.IsTopic(ctx, feedID)) {
+		return c.Messages(ctx, feedID, w, limit, true)
+	}
+	p, err := c.Messages(ctx, feedID, w, limit, false)
+	if err != nil || w.Around == "" || !onlyNotices(p.Messages) || !c.IsTopic(ctx, feedID) {
+		return p, err
+	}
+	return c.Messages(ctx, feedID, Window{}, limit, true)
+}
+
+func onlyNotices(ms []Message) bool {
+	for _, m := range ms {
+		if m.Type != "SYSTEM" {
+			return false
+		}
+	}
+	return true
+}
+
+// IsTopic says whether a chat is a topic group, whose messages endpoint holds only the 创建了话题群 notice: the
+// content is in its threads. The answer comes from the feed when the chat was listed, otherwise from one
+// GET /conversations/FEED_ID, and is kept (a chat's mode does not change). A failed lookup answers false, uncached.
+func (c *Client) IsTopic(ctx context.Context, feedID string) bool {
+	c.mu.Lock()
+	topic, ok := c.topics[feedID]
+	c.mu.Unlock()
+	if ok {
+		return topic
+	}
+	var r rawConversation
+	if err := c.do(ctx, "GET", "/conversations/"+url.PathEscape(feedID), nil, nil, &r); err != nil {
+		return false
+	}
+	c.rememberMode(feedID, r.ChatMode)
+	return r.ChatMode == "topic"
+}
+
+func (c *Client) rememberMode(feedID, chatMode string) {
+	if feedID == "" || chatMode == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.topics == nil {
+		c.topics = map[string]bool{}
+	}
+	c.topics[feedID] = chatMode == "topic"
 }
 
 // Thread returns the replies in one message's thread, oldest first.

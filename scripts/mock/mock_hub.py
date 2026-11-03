@@ -3177,6 +3177,13 @@ def file_kind(path):
     return "dir" if any(f.startswith(prefix) for f in FILES) else "missing"
 
 
+VIDEO_PATH = "/Users/me/code/weather/media/preview.mp4"
+if os.environ.get("MOCK_VIDEO_FILE"):
+    with open(os.environ["MOCK_VIDEO_FILE"], "rb") as video:
+        FILES[VIDEO_PATH] = video.read()
+    ITEMS[WIDGET].append(it("assistant", "text", 0, text="视频已生成：`" + VIDEO_PATH + "`。"))
+
+
 def file_read(path, cwd, offset):
     p = file_path(path, cwd)
     kind = file_kind(p) if p else "missing"
@@ -3187,7 +3194,11 @@ def file_read(path, cwd, offset):
         prefix = p.rstrip("/") + "/"
         names = sorted({f[len(prefix):].split("/")[0] + ("/" if "/" in f[len(prefix):] else "") for f in FILES if f.startswith(prefix)})
         return {"path": p, "name": name, "size": 0, "is_dir": True, "entries": names, "truncated": False}
-    data = FILES[p].encode()
+    value = FILES[p]
+    if isinstance(value, bytes):
+        return {"path": p, "name": name, "size": len(value), "mime": "video/mp4", "data": base64.b64encode(value[:FILE_PAGE]).decode(),
+                "truncated": len(value) > FILE_PAGE, "is_dir": False}
+    data = value.encode()
     page = data[offset:offset + FILE_PAGE]
     more = offset + len(page) < len(data)
     if more:
@@ -3910,6 +3921,15 @@ class H(BaseHTTPRequestHandler):
             cwd = q.get("cwd", [""])[0]
             paths = q.get("path", []) + [x for x in q.get("paths", [""])[0].split("\n") if x]
             return self.send_json({"stats": [{"path": x, "kind": file_kind(file_path(x, cwd)) if file_path(x, cwd) else "missing"} for x in paths]})
+        if p.startswith("/api/v1/machines/") and p.endswith("/file/download"):
+            value = FILES.get(file_path(q.get("path", [""])[0], q.get("cwd", [""])[0]))
+            if not isinstance(value, bytes): return self.send_json({"error": "no such video"}, 404)
+            self.send_response(200)
+            self.send_header("Content-Type", "video/mp4")
+            self.send_header("Content-Length", str(len(value)))
+            self.end_headers()
+            self.wfile.write(value)
+            return
         if p.startswith("/api/v1/machines/") and p.endswith("/file") and FILES:
             f = file_read(q.get("path", [""])[0], q.get("cwd", [""])[0], int(q.get("offset", ["0"])[0] or 0))
             if not f: return self.send_json({"error": "stat %s: no such file or directory" % q.get("path", [""])[0]}, 404)

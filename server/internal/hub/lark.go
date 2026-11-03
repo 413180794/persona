@@ -100,7 +100,9 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 	})
 	api.HandleFunc("GET /api/v1/lark/conversations/{id}/messages", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		page, err := h.lark.Messages(r.Context(), r.PathValue("id"), lark.Window{Before: q.Get("before"), After: q.Get("after"), Around: q.Get("around")},
+		// The client may not know the chat is a topic group (opened from a profile, an old inbox item): ChatPage checks,
+		// and a page of threads says topic so the client shows them as topics.
+		page, err := h.lark.ChatPage(r.Context(), r.PathValue("id"), lark.Window{Before: q.Get("before"), After: q.Get("after"), Around: q.Get("around")},
 			atoi(q.Get("limit")), q.Get("topic") == "1")
 		if err != nil {
 			writeLarkErr(w, err)

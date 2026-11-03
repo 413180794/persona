@@ -411,6 +411,8 @@ export interface LarkPage {
   has_newer?: boolean;
   older_cursor?: string;
   newer_cursor?: string;
+  /** A topic group: the messages are its topics' first messages (the hub finds out without being told). */
+  topic?: boolean;
 }
 
 /** Oldest first by position (numeric when both are), one copy per id: a later page wins. */

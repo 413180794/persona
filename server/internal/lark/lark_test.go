@@ -532,3 +532,65 @@ func TestNamedClientID(t *testing.T) {
 		t.Fatalf("NamedClientID: %s %s", a, b)
 	}
 }
+
+// A topic group's messages endpoint holds only the 创建了话题群 notice: a caller that does not know the chat's mode
+// still gets its threads, and a chat the feed listed is not looked up again.
+func TestChatPageFindsTopicGroups(t *testing.T) {
+	var lookups, threads int
+	notice := map[string]any{"id": "sys", "position": "0", "messageTypeName": "SYSTEM", "textPreview": "创建了话题群"}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/agent/v1/conversations":
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": []any{
+				map[string]any{"feedId": "listed", "name": "Topics", "isGroup": true, "chatMode": "topic"},
+				map[string]any{"feedId": "plain", "name": "Team", "isGroup": true, "chatMode": "group"},
+			}})
+		case "/agent/v1/conversations/unlisted", "/agent/v1/conversations/listed", "/agent/v1/conversations/plain":
+			lookups++
+			_ = json.NewEncoder(w).Encode(map[string]any{"feedId": "unlisted", "isGroup": true, "chatMode": "topic"})
+		case "/agent/v1/conversations/unlisted/threads", "/agent/v1/conversations/listed/threads":
+			threads++
+			if r.URL.Query().Get("aroundPosition") != "" {
+				t.Errorf("threads asked around a position: %s", r.URL.RawQuery)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"hasOlder": true, "nextOlderCursor": "5863", "items": []any{
+				map[string]any{"id": "root", "position": "5882", "messageTypeName": "TEXT", "threadReplyCount": 26, "threadMessageType": "root"},
+			}})
+		case "/agent/v1/conversations/unlisted/messages", "/agent/v1/conversations/listed/messages":
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": []any{notice}})
+		case "/agent/v1/conversations/plain/messages":
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": []any{map[string]any{"id": "m", "position": "9", "messageTypeName": "TEXT"}}})
+		default:
+			t.Errorf("unexpected %s", r.URL.Path)
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+	c := New(Config{BaseURL: srv.URL + "/agent/v1", Token: "tok"})
+	ctx := context.Background()
+
+	p, err := c.ChatPage(ctx, "unlisted", Window{}, 20, false)
+	if err != nil || !p.Topic || len(p.Messages) != 1 || p.Messages[0].ID != "root" || p.Messages[0].ThreadReplyCount != 26 || !p.HasOlder || p.OlderCursor != "5863" {
+		t.Fatalf("unlisted topic group: %+v, %v", p, err)
+	}
+	if _, err := c.ChatPage(ctx, "unlisted", Window{Before: "5863"}, 20, false); err != nil || lookups != 1 {
+		t.Fatalf("chat mode looked up %d times, want once (err %v)", lookups, err)
+	}
+	// Around a message: the messages endpoint has only the notice, so the page is the threads.
+	if p, err := c.ChatPage(ctx, "unlisted", Window{Around: "5882"}, 20, false); err != nil || !p.Topic || p.Messages[0].ID != "root" {
+		t.Fatalf("around in a topic group: %+v, %v", p, err)
+	}
+
+	if _, _, err := c.Conversations(ctx, "chats", "", 50); err != nil {
+		t.Fatal(err)
+	}
+	if p, err := c.ChatPage(ctx, "listed", Window{}, 20, false); err != nil || !p.Topic {
+		t.Fatalf("listed topic group: %+v, %v", p, err)
+	}
+	if p, err := c.ChatPage(ctx, "plain", Window{}, 20, false); err != nil || p.Topic || p.Messages[0].ID != "m" {
+		t.Fatalf("plain group: %+v, %v", p, err)
+	}
+	if lookups != 1 {
+		t.Fatalf("listed chats looked up again: %d lookups", lookups)
+	}
+}

@@ -46,7 +46,7 @@ export function LarkThread({ item }: { item: InboxItem }) {
       .then((r) => {
         if (!live) return;
         const messages = mergeMessages([], r.messages ?? []);
-        tracker.current = new LarkReadTracker(initialCursor(focus, messages, topic));
+        tracker.current = new LarkReadTracker(initialCursor(focus, messages, topic || Boolean(r.topic)));
         setPage({ ...r, messages });
       })
       .catch((e) => live && setError(errorText(e)));

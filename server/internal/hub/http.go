@@ -49,6 +49,7 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("GET /api/v1/machines/{mid}/dirs", h.proxy("dirs.list", func(r *http.Request) any {
 		return map[string]any{"path": r.URL.Query().Get("path")}
 	}))
+	api.HandleFunc("GET /api/v1/machines/{mid}/file/download", h.withMachine(h.downloadFile))
 	api.HandleFunc("GET /api/v1/machines/{mid}/file", h.proxy("file.read", func(r *http.Request) any {
 		q := r.URL.Query()
 		return map[string]any{"path": q.Get("path"), "cwd": q.Get("cwd"), "offset": atoi(q.Get("offset"))}

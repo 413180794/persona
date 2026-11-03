@@ -162,6 +162,7 @@ struct FileViewer: View {
     }
 
     private func open() async {
+        page?.video?.stop()
         let p = FileViewerModel(ref: ref, api: model.api(ref.group))
         page = p
         await p.load()
@@ -206,6 +207,8 @@ struct FileViewer: View {
                 if let data = file.data, let bytes = Data(base64Encoded: data), let doc = PDFDocument(data: bytes) {
                     PDFKitView(document: doc)
                 }
+            case .video:
+                if let video = page.video { VideoFileView(model: video) }
             case .binary:
                 EmptyStateView(symbol: Theme.Icon.missingFile, title: "无法预览",
                                message: "\(file.mime ?? "二进制文件") · \(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))")
@@ -272,6 +275,7 @@ struct FileViewer: View {
         switch (path as NSString).pathExtension.lowercased() {
         case "md", "markdown", "txt": "doc.text"
         case "png", "jpg", "jpeg", "gif", "webp", "heic": "photo"
+        case "mp4", "mov", "m4v", "mpeg", "mpg", "webm", "mkv", "avi": Theme.Icon.video
         case "pdf": "doc.richtext"
         case "json", "yml", "yaml", "toml", "plist": "curlybraces"
         case "": path.hasSuffix("/") ? Theme.Icon.folder : Theme.Icon.file
@@ -346,13 +350,14 @@ private struct MarkdownFile: View {
 /// the code document, the JSON outline or the Markdown pieces off the main thread, and fetches further pages.
 @MainActor @Observable
 final class FileViewerModel {
-    enum Kind { case directory, markdown, json, code, image, pdf, binary }
+    enum Kind { case directory, markdown, json, code, image, pdf, video, binary }
 
     let ref: FileRef
     @ObservationIgnored private let api: APIClient?
     private(set) var file: FileContent?
     private(set) var error: String?
     private(set) var kind: Kind = .code
+    private(set) var video: VideoFileModel?
     /// The source as text (code, Markdown's source, JSON before its outline or when it is not JSON).
     private(set) var code: CodeFileSource?
     private(set) var outline: JSONOutlineSource?
@@ -408,6 +413,11 @@ final class FileViewerModel {
         next = f.next ?? 0
         guard !f.isDir else {
             kind = .directory
+            return
+        }
+        if f.text == nil, VideoFileType.matches(name: f.name, mime: f.mime) {
+            kind = .video
+            video = VideoFileModel(ref: ref, file: f, api: api)
             return
         }
         guard let text = f.text else {

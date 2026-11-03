@@ -138,6 +138,7 @@ var Features = []string{
 	"terminal_control",       // terminal_subscribe with control: the phone drives the terminal at its size; terminal_input
 	"terminal_scroll",        // terminal_input with scroll: the wheel over a terminal the app drives, to herdr (docs/terminal.md)
 	"terminal_click",         // terminal_input with click: a tap on a terminal the app drives, a left click there (docs/terminal.md)
+	"file_download",          // GET /api/v1/machines/{mid}/file/download
 	"file_upload",            // POST /api/v1/machines/{mid}/files (docs/protocol.md「发送文件」)
 	"tls",                    // optional TLS listener and SPKI pin (hub-changes.md 1.1)
 	"endpoints",              // authenticated address discovery and capability-gated updates

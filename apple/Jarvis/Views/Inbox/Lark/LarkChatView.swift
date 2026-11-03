@@ -31,6 +31,8 @@ struct LarkChatView: View {
     @Environment(\.tabIsActive) private var tabActive
     var conversation: LarkConversation
     @State private var pager = LarkPager()
+    /// The hub answered with a topic group's topics for a chat opened without `isTopic` (from a profile, an old inbox item).
+    @State private var foundTopic = false
     @State private var loadingOlder = false
     @State private var loadingNewer = false
     /// The first load is on its way (the page shows a spinner when nothing was cached).
@@ -71,7 +73,7 @@ struct LarkChatView: View {
         _mentions = State(initialValue: draft.mentions ?? [])
     }
 
-    private var isTopic: Bool { conversation.isTopic == true }
+    private var isTopic: Bool { conversation.isTopic == true || foundTopic }
     /// Opens at a message (first unread / a flagged message) rather than at the bottom.
     private var opensAtMessage: Bool { conversation.focus != nil || (!isTopic && conversation.unread > 0) }
 
@@ -252,6 +254,7 @@ struct LarkChatView: View {
     // MARK: Loading
 
     private func apply(_ r: APIClient.LarkMessages) {
+        if r.topic == true { foundTopic = true }
         pager.replace(with: r)
         if !r.hasNewer.map({ $0 }).isTrue { StateCache.save("lark-chat-\(conversation.id)", Array(r.messages.suffix(80))) }
     }

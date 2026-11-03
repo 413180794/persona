@@ -690,6 +690,12 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return map[string]any{"settings": list}, err
 	case "file.upload.begin", "file.upload.chunk", "file.upload.end", "file.upload.abort":
 		return n.uploadCall(method, params)
+	case "file.chunk":
+		var chunk proto.FileChunkRequest
+		if err := json.Unmarshal(params, &chunk); err != nil {
+			return nil, err
+		}
+		return n.readFileChunk(chunk)
 	case "file.read":
 		return n.readFile(p.Path, p.Cwd, p.Offset)
 	case "port.dial":
