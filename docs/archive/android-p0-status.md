@@ -2,7 +2,7 @@
 
 核对日期：2026-10-31。基准提交：`f77a76eca205168a93015cefb26825374013ddb7`（`p0/p6-status` 工作树，基于集成分支 `feat/jolly-cerf-dfb019`）。已纳入新建会话回执、轮次用时、邮件校验与附件、elicitation、话题分页结论、外壳、收件箱、附件草稿与操作防重、请求反馈、连接错误映射、助手附件与知识库、缓存预算与 token 基线、Live Updates 各车道的合入结果；只以本工作树当前代码为准。
 
-依据：[parity.md](parity.md) 的 Android P0、[android.md](android.md) 的 A1／A2 与 [ux.md](ux.md) 的逐页要求。表格格式、编号、行顺序和优先级范围不变，P1／P2 项继续保留供排期。第 4 轮真实环境验收按 [联合验收清单](android-p0-acceptance.md) 执行。
+依据：[parity.md](../redesign/parity.md) 的 Android P0、[android.md](../redesign/android.md) 的 A1／A2 与 [ux.md](../redesign/ux.md) 的逐页要求。表格格式、编号、行顺序和优先级范围不变，P1／P2 项继续保留供排期。第 4 轮真实环境验收按 [联合验收清单](android-p0-acceptance.md) 执行。
 
 “已完成”表示静态代码已有实现且已接当前入口，不代表构建、测试或真机通过；“部分”表示仍有实现、产品确认或认可记录的缺口；“没有”表示未见实现；“依赖 hub”表示仍缺服务端契约；“依赖上游”表示外部接口缺少必要能力；“只能真机验证”表示必须由真实设备、hub 或账号验收。汇总行按所列实现范围判断，真实通过记录另列，不把后排项算作 P0 实现缺口。
 

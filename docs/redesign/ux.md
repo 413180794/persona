@@ -236,7 +236,7 @@
 | `waiting` | 已看，但 `/loop` 没到点或后台任务还在跑 | 「循环中 · 下次 11:56」/「等后台任务 · 2 个」 | 详情 |
 | （收起） | 完成未看 / 已看 / 未运行 | 不显示 | — |
 
-hub 连不上时由标题位显示（现有的 `ConnectionTitle`），状态行不重复。Claude 的转圈实况文字（`Cogitating… 12s`）要读屏才能拿到，现在只在打开终端时才读（为省 node 开销，`docs/lanes/msg-render-plan.md` C4），状态行不显示它。
+hub 连不上时由标题位显示（现有的 `ConnectionTitle`），状态行不重复。Claude 的转圈实况文字（`Cogitating… 12s`）要读屏才能拿到，现在只在打开终端时才读（为省 node 开销，`docs/archive/lanes/msg-render-plan.md` C4），状态行不显示它。
 
 ### 5.2 发出的消息
 

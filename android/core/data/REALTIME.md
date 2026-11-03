@@ -1,4 +1,4 @@
-DATA-05 续跑报告。依据为 `docs/redesign/android-p0-status.md` 的 DATA-05、7.9、N14，`android.md` 4、5.2–5.5，`ux.md` 3.2、3.3、5.1、5.4、5.6，以及 Android 对话原型。
+DATA-05 续跑报告。依据为 `docs/archive/android-p0-status.md` 的 DATA-05、7.9、N14，`android.md` 4、5.2–5.5，`ux.md` 3.2、3.3、5.1、5.4、5.6，以及 Android 对话原型。
 
 保留前次实现，补完 `HubChatRepository.kt`、`HubSessionsRepository.kt` 和 `ChatRealtimeState.kt`。delta 按整段草稿更新，空串结束后保留文字，等最终记录接替；接替时保留展示 ID，全文请求和已读回执转换回真实 ID。临时文字与屏幕行不进入缓存或连续性游标。屏幕行原位更新，清空、轮次结束或新记录到来时撤下。工具事件按调用 ID 更新已有工具行，也能等待稍后到达的记录；没有会话身份且无法匹配的调用不凭空生成行。错误只写入对应会话。
 

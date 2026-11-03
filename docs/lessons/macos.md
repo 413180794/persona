@@ -29,7 +29,7 @@
 - Mac 的推送 entitlement 叫 `com.apple.developer.aps-environment`，不是 iOS 的 `aps-environment`。App ID 开过推送就够（iPhone 和 Mac 同一个 UNIVERSAL 的 App ID），归档里写 `development`，App Store 导出时变成 `production`；本机不签名编的版本签名里没有任何 entitlement，收不到远程推送，只有本地通知（2026-11-02，`docs/mac.md`「远程推送（Mac）」）。
 - 要和扩展共用钥匙串条目，macOS 上的 `SecItem` 查询得加 `kSecUseDataProtectionKeychain: true`：不加时走老式的文件钥匙串，`kSecAttrAccessGroup` 不起作用，条目只属于创建它的那个 App，扩展读不到（iOS 一直是 data protection 钥匙串，同样的代码在手机上是好的）。Mac 的推送私钥就是这样（`PushCrypto`，#432）；App 自己用的 `Keychain.swift` 还在文件钥匙串里，没动。
 - 共用页面里碰到 `pin.list` 这类滚动视图时，iOS 上是 `UIScrollView`、Mac 上是 `NSScrollView`（`ChatPin+Mac.swift`），`isTracking`、`isDragging`、`isDecelerating` 这些 Mac 没有：用 `#if os(iOS)` 隔开，或者在 `Mac/Compat/` 补等价的。
-  2026-11-02 #243 在 `ChatView` 里加了一行 `pin.list?.isTracking`，只跑了 iOS，master 上 `JarvisMac` 编译不过（terminal 车道发现）。改了 `apple/Jarvis/Views` 的共用页面，合入前也跑一次 `JarvisMac` 的构建（`docs/mac.md`「构建、运行、截图」）。
+  2026-11-02 #243 在 `ChatView` 里加了一行 `pin.list?.isTracking`，只跑了 iOS，master 上 `JarvisMac` 编译不过（terminal 车道发现）。改了 `apple/Persona/Views` 的共用页面，合入前也跑一次 `PersonaMac` 的构建（`docs/mac.md`「构建、运行、截图」）。
 - 构建配置（`~/.config/jarvis/config.json`）没有 `app.bundle_id` 时，`Config.xcconfig` 的 `JARVIS_BUNDLE_ID` 是空的，xcodebuild 照样 BUILD SUCCEEDED，
   但 Info.plist 里没有 `CFBundleIdentifier`，Mac App 一启动就在 `applicationDidFinishLaunching` 的 `UNUserNotificationCenter.current()` 断言崩溃（SIGABRT，2026-11-02）。
   只在本机编来自己用、不发版的 Mac，可以在 xcodebuild 后面加 `JARVIS_BUNDLE_ID=<随便一个反向域名>` 覆盖，不用改配置。

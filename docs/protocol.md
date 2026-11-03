@@ -671,7 +671,7 @@ hub 还要先等小模型起完标签名（约 2 秒）。现在 `POST /api/v1/s
   （或长文本的 `[Pasted text #1 …]`）时，等它被收走（最多 2 秒）。
 - 离线会话 `--resume` 拉起后同样先读屏：Claude 起来就停在对话框上时回 `dialog_open`，不往对话框里打字。
 - Codex / TRAEX 只查对话框（`› 1.` 这样的编号选择），不查草稿：输入框里有字时消息会接在后面。旧 App 只认 `error` 字段，看到的就是拒绝原因。
-- 链路和耗时见 `docs/lanes/session-verify.md`。
+- 链路和耗时见 `docs/archive/lanes/session-verify.md`。
 
 ### 发送文件
 

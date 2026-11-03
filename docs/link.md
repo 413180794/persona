@@ -37,7 +37,7 @@ curl -fsSL <站点>/install.sh | sh -s -- --node --listen [:18663] [--addr <hub 
 
 **Mac**：装菜单栏 App「Persona Link」（`./scripts/app/mac-link.sh install`）。App 里带着 personad（`Contents/Helpers/jarvisd`），**第一次运行**就用
 `jarvis-link node install --jarvisd <App 里的>` 装好常驻 node 的 LaunchAgent `com.jarvis.node`：没有 `~/.persona/bin/personad` 时先复制过去，
-已经装了的（比如以前跑过 `scripts/node-launchd.sh install`）保持原样。之后只在菜单里提供「安装本机 node 服务」，用户删掉的不会自己装回来。
+已经装了的（比如以前跑过 `scripts/deploy/node-launchd.sh install`）保持原样。之后只在菜单里提供「安装本机 node 服务」，用户删掉的不会自己装回来。
 App 更新不替换 `~/.persona/bin/personad`（经连接器推送 node 更新是 #284）。
 
 **hub 这一侧**：主动模式的电脑在 hub.json 里是 kind `link`，被动模式的是 kind `service`（hub 那一路 #435 实现，管理界面「电脑 › 添加电脑 › hub 来连」粘贴链接）。
@@ -51,8 +51,8 @@ App 更新不替换 `~/.persona/bin/personad`（经连接器推送 node 更新�
 
   它不承担任何具体功能。
 - **node 不变**：功能都在 `personad node` 里。这台电脑要跑常驻 node（上面「装 node 服务」一起装好；单独装是 `jarvis-link node install`
-  或 `scripts/node-launchd.sh install`），jarvis-link 只把流转给它的 socket `~/.persona/node-attach.sock`。这就是 ssh 起的 `node --stdio` 原来转给它的那条路
-  （`internal/node/attach.go`）。替常驻 node 写 systemd / launchd 服务只是打包安装，不是功能：服务的内容和 `scripts/node-launchd.sh` 写的一样。
+  或 `scripts/deploy/node-launchd.sh install`），jarvis-link 只把流转给它的 socket `~/.persona/node-attach.sock`。这就是 ssh 起的 `node --stdio` 原来转给它的那条路
+  （`internal/node/attach.go`）。替常驻 node 写 systemd / launchd 服务只是打包安装，不是功能：服务的内容和 `scripts/deploy/node-launchd.sh` 写的一样。
 - **hub**：
   - hub.json 里这台的 kind 是 `link`，hub 不会 ssh 它；
   - 链路一说 hello，hub 就开一条流去连 node，流上跑的 node 协议和 ssh 完全一样（`Machine.connect`，只有拿字节流的 `Machine.dial` 分两种）；
@@ -332,7 +332,7 @@ Linux 上见下面「Linux（headless）」：编出 `jarvis-link`，`jarvis-lin
 **构建**
 - 纯 Go、不要 cgo：`cd server && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o jarvis-link ./cmd/jarvis-link`。
   `amd64`、`arm64`、32 位树莓派（`GOARCH=arm GOARM=7`）都能编；Windows 也能编了（文件锁、信号按平台分文件），但还没有托盘程序（#299）。
-- 常驻 node 用同一个提交编的 `jarvisd`（`~/.persona/bin/personad`）；`scripts/node-launchd.sh install` 在 Linux 上把它装成 systemd 用户服务 `jarvisd-node`。
+- 常驻 node 用同一个提交编的 `jarvisd`（`~/.persona/bin/personad`）；`scripts/deploy/node-launchd.sh install` 在 Linux 上把它装成 systemd 用户服务 `jarvisd-node`。
 
 **一条命令装好**
 
@@ -347,7 +347,7 @@ personad hub pair --machine nas                   # 在 hub 机器上；标准�
 1. 带 `--pair` 时先配对（同 `jarvis-link pair`；`--pair` 后面不跟链接或跟 `-` 时从标准输入读）。带 `--listen` 时改成被动模式，还没配对过就生成配对链接
    （同 `pair --listen`）；已经配对过就保持原样。两个不能一起给。
 2. 把自己复制到 `~/.persona/bin/jarvis-link`；已经是它就不复制。拿新版本再跑一次 `install` 就是升级。
-3. 常驻 node 的服务（systemd 用户服务 `jarvisd-node`，内容同 `scripts/node-launchd.sh`）还没有就装上并启动：要有 `~/.persona/bin/personad`（安装脚本会先放好），
+3. 常驻 node 的服务（systemd 用户服务 `jarvisd-node`，内容同 `scripts/deploy/node-launchd.sh`）还没有就装上并启动：要有 `~/.persona/bin/personad`（安装脚本会先放好），
    没有时用 `--jarvisd <路径>` 给一个复制过去；已经装了的保持原样；`--no-node` 不管它。
 4. 写 `~/.config/systemd/user/jarvis-link.service`（有 `XDG_CONFIG_HOME` 时在它下面），`daemon-reload`、`enable`、`restart`。
 5. 没开 linger 时提示 `sudo loginctl enable-linger <用户>`：不开的话没人登录时用户实例不在，退出登录服务就停，开机也不会起来。
@@ -418,7 +418,7 @@ WantedBy=default.target
 - 没有 systemd 的容器：`install --pair -` 配对、复制、打印替代做法（退出码 1）；照提示 `nohup … run --log …` 后 `status` 显示连上、
   `logs` 有日志；起了常驻 node 后本机 node 在线，hub 的机器列表里这台在线。
 - 有 systemd 的容器（`--privileged --cgroupns=host`，镜像要有 `libpam-systemd`，否则用户实例起不来；`loginctl enable-linger`）：
-  用 `docker exec -u` 进去（没有 `XDG_RUNTIME_DIR`）一条 `install --pair -` 装好并连上；`scripts/node-launchd.sh install` 后本机 node 在线；
+  用 `docker exec -u` 进去（没有 `XDG_RUNTIME_DIR`）一条 `install --pair -` 装好并连上；`scripts/deploy/node-launchd.sh install` 后本机 node 在线；
   重启容器（相当于开机）后自己连上；关掉 linger 后 `status` 提示开 linger；再跑一次 install（升级）、先 install 后 pair、
   uninstall、uninstall --purge 都按预期。
 - amd64 版在 amd64 模拟容器里跑了 version 和 status。没在真的树莓派 / NAS 上试过。

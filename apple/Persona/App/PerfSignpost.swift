@@ -101,7 +101,7 @@ struct PerfCountProbe: View {
 }
 
 #if os(iOS)
-/// Scrolling under the hub's pushes (`-perfCounts YES`; `ScrollUnderPushTests`, docs/lanes/live-updates.md). Every frame
+/// Scrolling under the hub's pushes (`-perfCounts YES`; `ScrollUnderPushTests`, docs/archive/lanes/live-updates.md). Every frame
 /// a scroll view is dragged or gliding, where what is on it sits on screen: its cells (a `List`), or the layers SwiftUI
 /// draws a `ScrollView`'s rows in. Under the finger and in a glide everything on screen moves together and smoothly;
 /// the counts are the frames where it did not:

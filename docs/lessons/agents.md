@@ -50,7 +50,7 @@
   Claude 窗格同理：Persona 启动过的会话的窗格绑定存在 hub 数据库里、node 重启就载回来，可能早已过时；`sessions/<pid>.json` 优先于绑定。
   改了认窗格的逻辑，部署（重启）后要再跑一次复核，重启前后的结果可能不一样。
 - herdr `agent.prompt` 先粘贴、约 300 ms 后才回车：同一会话的两次发送要串行，否则第二次读屏会把第一条当成输入框里的草稿。发送去重放在 hub 的 Postgres（`sent_messages`）：
-  node 的内存去重在重连 / hub 重启后就没了，而 App 恰恰在这时候自动重发。会话读取和发送的完整验证、每一跳的耗时见 `docs/lanes/session-verify.md`。
+  node 的内存去重在重连 / hub 重启后就没了，而 App 恰恰在这时候自动重发。会话读取和发送的完整验证、每一跳的耗时见 `docs/archive/lanes/session-verify.md`。
 - `/model <别名>` 和 `/effort` 一样会写进 `~/.claude/settings.json`（`model` / `effortLevel`）当以后新会话的默认，不只是这一个会话；
   对话已经被缓存时它先弹「Switch model?」确认（换模型要重读整段历史）。测试时别在自己常用的配置里试，试了要把这两个键改回去。
 - Claude Code 2.1.206 的 `/effort` 换成了滑块（「←/→ to adjust · Enter to confirm」，最左是 low、max 右边还有 ultracode），不再有旧列表的「for this session only」；

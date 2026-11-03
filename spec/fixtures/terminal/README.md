@@ -26,13 +26,13 @@
 
 | 简称 | 来源 |
 | --- | --- |
-| G | [TerminalGrid.swift](../../../ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift) |
-| W | [TerminalWrap.swift](../../../ios/Jarvis/Views/Session/Terminal/TerminalWrap.swift) |
-| I | [TerminalInput.swift](../../../ios/Jarvis/Views/Session/Terminal/TerminalInput.swift) |
-| M | [TerminalKeys.swift](../../../ios/Jarvis/Views/Chat/TerminalKeys.swift) |
-| GT | [TerminalGridTests.swift](../../../ios/JarvisTests/TerminalGridTests.swift) |
-| WT | [TerminalWrapTests.swift](../../../ios/JarvisTests/TerminalWrapTests.swift) |
-| TT | [TerminalTests.swift](../../../ios/JarvisTests/TerminalTests.swift) |
+| G | [TerminalGrid.swift](../../../apple/Persona/Views/Session/Terminal/TerminalGrid.swift) |
+| W | [TerminalWrap.swift](../../../apple/Persona/Views/Session/Terminal/TerminalWrap.swift) |
+| I | [TerminalInput.swift](../../../apple/Persona/Views/Session/Terminal/TerminalInput.swift) |
+| M | [TerminalKeys.swift](../../../apple/Persona/Views/Chat/TerminalKeys.swift) |
+| GT | [TerminalGridTests.swift](../../../apple/PersonaTests/TerminalGridTests.swift) |
+| WT | [TerminalWrapTests.swift](../../../apple/PersonaTests/TerminalWrapTests.swift) |
+| TT | [TerminalTests.swift](../../../apple/PersonaTests/TerminalTests.swift) |
 
 设计依据为 [终端文档](../../../docs/terminal.md) 的第七至九节、第十一节「手机上的滚动历史」及第十二节更正，[Android 方案 5.11](../../../docs/redesign/android.md)，以及[设计总纲 D1、D4、4.1](../../../docs/redesign/README.md)。
 
@@ -168,7 +168,7 @@
 
 ## 录制数据与隐私
 
-`recorded_sample_output` 取自 `ios/JarvisTests/Fixtures/terminal-observe.jsonl` 的零基帧 0、2、3，保留原始字节及尺寸。第 1 帧包含命令路径，整帧跳过，所以这一用例是派生片段，首行只剩 `$`，不声称与原录制整屏相同。
+`recorded_sample_output` 取自 `apple/PersonaTests/Fixtures/terminal-observe.jsonl` 的零基帧 0、2、3，保留原始字节及尺寸。第 1 帧包含命令路径，整帧跳过，所以这一用例是派生片段，首行只剩 `$`，不声称与原录制整屏相同。
 
 核查时先 base64 解码，再去掉 CSI 和 OSC 8 的控制部分，逐段检查可打印内容；仅放行示例构建文案、框线、中文对齐示例、emoji、重复字母以及 `https://example.com/docs`。没有路径、主机名、账号或真实对话。测试输入未复制其他录制中的会话内容。普通隐私扫描不会自动解码 base64，新增录制必须重复这一步，不能只看扫描通过。
 
@@ -185,8 +185,8 @@ import subprocess
 
 scratch = Path('/tmp/spec-term-reference')
 assert (scratch / 'main.swift').is_file(), '临时驱动程序已清理，请按下表重建'
-input_source = Path('ios/Jarvis/Views/Session/Terminal/TerminalInput.swift').read_text()
-modifier_source = Path('ios/Jarvis/Views/Chat/TerminalKeys.swift').read_text()
+input_source = Path('apple/Persona/Views/Session/Terminal/TerminalInput.swift').read_text()
+modifier_source = Path('apple/Persona/Views/Chat/TerminalKeys.swift').read_text()
 (scratch / 'InputCore.swift').write_text('import Foundation\n' + input_source[
     input_source.index('nonisolated enum TerminalInputEvent'):
     input_source.index('/// A position in the composition')])
@@ -194,8 +194,8 @@ modifier_source = Path('ios/Jarvis/Views/Chat/TerminalKeys.swift').read_text()
     modifier_source.index('enum ModifierState'):
     modifier_source.index('/// Terminal keys in one row')])
 subprocess.run([
-    'swiftc', 'ios/Jarvis/Views/Session/Terminal/TerminalGrid.swift',
-    'ios/Jarvis/Views/Session/Terminal/TerminalWrap.swift',
+    'swiftc', 'apple/Persona/Views/Session/Terminal/TerminalGrid.swift',
+    'apple/Persona/Views/Session/Terminal/TerminalWrap.swift',
     str(scratch / 'InputCore.swift'), str(scratch / 'Modifiers.swift'),
     str(scratch / 'main.swift'), '-o', str(scratch / 'check')
 ], check=True, timeout=120)

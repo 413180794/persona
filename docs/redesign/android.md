@@ -411,7 +411,7 @@ android/
 
 ### 5.16 体验模式（P1）
 
-iOS 已经有「体验模式」：App 内一个假的 hub，数据来自 `scripts/mock/mock_hub.py`，由 `scripts/make_demo_data.py` 导出成 `Demo.json`，时间相对当前。Android 复用同一份 `Demo.json`，在 `:core:hub` 下面接一个 `DemoHub`，页面里没有任何体验模式分支。三个用处：
+iOS 已经有「体验模式」：App 内一个假的 hub，数据来自 `scripts/mock/mock_hub.py`，由 `scripts/mock/make_demo_data.py` 导出成 `Demo.json`，时间相对当前。Android 复用同一份 `Demo.json`，在 `:core:hub` 下面接一个 `DemoHub`，页面里没有任何体验模式分支。三个用处：
 
 - 没有 hub 的人先看看；
 - debug 截图不用起 mock hub；

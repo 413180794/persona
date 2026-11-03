@@ -162,7 +162,7 @@
 
 ### 2.4 Persona 更强、重设计必须保留的
 
-- hub 推拉同步 + items 连续性（`history` / `from_seq` / `to_seq`，断档自愈），见 `docs/lanes/msg-render-plan.md`。
+- hub 推拉同步 + items 连续性（`history` / `from_seq` / `to_seq`，断档自愈），见 `docs/archive/lanes/msg-render-plan.md`。
 - 推送（授权和计划能在通知上直接批准）、锁屏实时活动。
 - 多机器 + 统一的状态模型：需要你 / 完成未看 / 工作中 / 待唤醒 / 已屏蔽 / 已看。
 - 对话展示：每条消息自成一段、工作行原地展开成独立的懒加载行、倒置列表精确贴底。

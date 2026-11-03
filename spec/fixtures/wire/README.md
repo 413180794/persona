@@ -30,31 +30,31 @@
 
 | 规则 | 来源 | 覆盖用例 |
 | --- | --- | --- |
-| hello 与 health 从当前 `proto.Features` 导出能力列表。 | `server/internal/hub/hello.go`：`hello`、`health`；`ios/Shared/LiveConnection.swift`：`ServerEvent.decode` | `hello_features`、`health_features` |
-| revs 是会话标识到整数版本号的映射。 | `ios/JarvisTests/SyncEventTests.swift`：`decodesRevs` | `revs_changed_sessions` |
-| 会话列表保留模式、队列、后台任务、子任务和循环信息，事件用信封中的机器标识设置会话归属。 | `server/internal/proto/proto.go`：`Session`；`ios/Shared/Models.swift`：`Session.init(from:)`；`ServerEvent.decode` | `sessions_list`、`sessions_event` |
-| 在线与离线机器使用同一类型，系统信息和版本字段可选。 | `server/internal/hub/machine.go`：`Machine.snapshot`；`ios/Shared/Models.swift`：`Machine` | `machines_list`、`machines_event` |
-| items 用 kind 区分内容块，工具输入中的自定义键名原样保留。 | `server/internal/proto/proto.go`：`Item`；`ios/Shared/Models.swift`：`Item`；`ios/Shared/JSONValue.swift`：`JSONValue` | `items_all_kinds` |
-| 工具调用与结果共用 `tool_use_id`，失败结果携带 `is_error`。 | `proto.Item`；`ios/Shared/Models.swift`：`Item` | `items_all_kinds` |
-| 懒加载图片的 `data` 仍是空字符串，并携带尺寸和 lazy 标记，普通图片保留 base64。 | `proto.Image.Placeholder`、`WithoutImageData`；`ios/Shared/Models.swift`：`ImagePayload` | `items_all_kinds`、`items_inline_image`、`items_live_lazy`、`items_http_after` |
-| 后台任务通知仍是 notice，task 区分 shell、monitor 和 agent，退出码零值也可显式出现。 | `proto.TaskNote`；`ios/Shared/Models.swift`：`TaskNote` | `items_all_kinds`、`items_task_notifications` |
-| fold 保存被折叠条目的计数和终点，展开范围分页使用 more。 | `server/internal/transcript/fold.go`：`FoldWork`；`ios/Shared/Models.swift`：`Fold`；`APIClient.foldedWork` | `items_folded_work`、`items_fold_range` |
+| hello 与 health 从当前 `proto.Features` 导出能力列表。 | `server/internal/hub/hello.go`：`hello`、`health`；`apple/Shared/LiveConnection.swift`：`ServerEvent.decode` | `hello_features`、`health_features` |
+| revs 是会话标识到整数版本号的映射。 | `apple/PersonaTests/SyncEventTests.swift`：`decodesRevs` | `revs_changed_sessions` |
+| 会话列表保留模式、队列、后台任务、子任务和循环信息，事件用信封中的机器标识设置会话归属。 | `server/internal/proto/proto.go`：`Session`；`apple/Shared/Models.swift`：`Session.init(from:)`；`ServerEvent.decode` | `sessions_list`、`sessions_event` |
+| 在线与离线机器使用同一类型，系统信息和版本字段可选。 | `server/internal/hub/machine.go`：`Machine.snapshot`；`apple/Shared/Models.swift`：`Machine` | `machines_list`、`machines_event` |
+| items 用 kind 区分内容块，工具输入中的自定义键名原样保留。 | `server/internal/proto/proto.go`：`Item`；`apple/Shared/Models.swift`：`Item`；`apple/Shared/JSONValue.swift`：`JSONValue` | `items_all_kinds` |
+| 工具调用与结果共用 `tool_use_id`，失败结果携带 `is_error`。 | `proto.Item`；`apple/Shared/Models.swift`：`Item` | `items_all_kinds` |
+| 懒加载图片的 `data` 仍是空字符串，并携带尺寸和 lazy 标记，普通图片保留 base64。 | `proto.Image.Placeholder`、`WithoutImageData`；`apple/Shared/Models.swift`：`ImagePayload` | `items_all_kinds`、`items_inline_image`、`items_live_lazy`、`items_http_after` |
+| 后台任务通知仍是 notice，task 区分 shell、monitor 和 agent，退出码零值也可显式出现。 | `proto.TaskNote`；`apple/Shared/Models.swift`：`TaskNote` | `items_all_kinds`、`items_task_notifications` |
+| fold 保存被折叠条目的计数和终点，展开范围分页使用 more。 | `server/internal/transcript/fold.go`：`FoldWork`；`apple/Shared/Models.swift`：`Fold`；`APIClient.foldedWork` | `items_folded_work`、`items_fold_range` |
 | 实时事件的 from_seq 可以是零，空 items 也能推进 to_seq。 | `Hub.itemsToSubscribers`；`ServerEvent.decode`；`docs/protocol.md`「items 的连续性」 | `items_live_lazy`、`items_empty_advance` |
 | 最新页补发携带 has_more，接续补发不携带它，达到补发上限时最后一批带 more_after。 | `Hub.sendBacklog`；`ServerEvent.decode`；`docs/protocol.md`「WebSocket」 | `items_backlog_latest`、`items_backlog_catchup`、`items_backlog_capped` |
-| HTTP 增量页携带 history、from_seq、to_seq 和 more_after。 | `Hub.sessionItems`；`ios/Shared/APIClient.swift`：`NewerResponse` | `items_http_after` |
-| question、plan、permission、screen 分别携带相应载荷，question 支持单选和多选。 | `proto.Interaction`；`ios/Shared/Models.swift`：`Interaction`、`Question` | `interaction_question`、`interaction_plan`、`interaction_permission`、`interaction_screen`、`interactions_list` |
-| 屏幕对话框携带选项和 rev，密码提示使用 secret 且不记录密码输入。 | `server/internal/screen/dialog.go`：`ParseDialog`；`secret.go`：`SecretPrompt`；`ios/Shared/Models.swift`：`ScreenDialog`、`Interaction` | `interaction_screen`、`interaction_secret` |
+| HTTP 增量页携带 history、from_seq、to_seq 和 more_after。 | `Hub.sessionItems`；`apple/Shared/APIClient.swift`：`NewerResponse` | `items_http_after` |
+| question、plan、permission、screen 分别携带相应载荷，question 支持单选和多选。 | `proto.Interaction`；`apple/Shared/Models.swift`：`Interaction`、`Question` | `interaction_question`、`interaction_plan`、`interaction_permission`、`interaction_screen`、`interactions_list` |
+| 屏幕对话框携带选项和 rev，密码提示使用 secret 且不记录密码输入。 | `server/internal/screen/dialog.go`：`ParseDialog`；`secret.go`：`SecretPrompt`；`apple/Shared/Models.swift`：`ScreenDialog`、`Interaction` | `interaction_screen`、`interaction_secret` |
 | interaction_resolved 按 id 撤回交互。 | `server/internal/hub/hub.go`：`resolve`；`ServerEvent.decode` | `interaction_resolved` |
-| Fleet 保留驼峰键名，时间使用 Unix 秒数字。 | `server/internal/hub/liveactivity.go`：`FleetState`、`buildFleet`；`ios/Shared/FleetState.swift` | `fleet_snapshot`、`fleet_event` |
-| 收件箱列表统一承载飞书和邮件，移除 context 等内部字段并保留草拟回复。 | `server/internal/hub/inbox.go`：`InboxItem.listed`；`ios/Shared/InboxModels.swift`：`InboxItem` | `inbox_list` |
-| 飞书 parts 保留 refId 和任意 metadata 键名，媒体 URL 改写到 hub。 | `server/internal/lark/lark.go`：`normalize`、`rewriteMedia`；`ios/Jarvis/Views/Inbox/Lark/LarkModels.swift`：`LarkPart` | `lark_message_parts` |
-| 401 保留字符串 error，409 的 code、delivered、draft、clearable 与 error 平铺。 | `Hub.auth`、`callErr`；`ios/Shared/APIClient.swift`：`APIError.fields(in:)`；`docs/protocol.md`「发消息」 | `unauthorized`、`conflict_input_draft`、`conflict_dialog_open`、`conflict_prompt_changed` |
-| 未知事件忽略，未知键忽略，旧 hello 缺 features 时返回空数组。 | `ios/Shared/LiveConnection.swift`：`ServerEvent.decode`、`Envelope` | `unknown_event_ignored`、`hello_unknown_field`、`hello_missing_features` |
+| Fleet 保留驼峰键名，时间使用 Unix 秒数字。 | `server/internal/hub/liveactivity.go`：`FleetState`、`buildFleet`；`apple/Shared/FleetState.swift` | `fleet_snapshot`、`fleet_event` |
+| 收件箱列表统一承载飞书和邮件，移除 context 等内部字段并保留草拟回复。 | `server/internal/hub/inbox.go`：`InboxItem.listed`；`apple/Shared/InboxModels.swift`：`InboxItem` | `inbox_list` |
+| 飞书 parts 保留 refId 和任意 metadata 键名，媒体 URL 改写到 hub。 | `server/internal/lark/lark.go`：`normalize`、`rewriteMedia`；`apple/Persona/Views/Inbox/Lark/LarkModels.swift`：`LarkPart` | `lark_message_parts` |
+| 401 保留字符串 error，409 的 code、delivered、draft、clearable 与 error 平铺。 | `Hub.auth`、`callErr`；`apple/Shared/APIClient.swift`：`APIError.fields(in:)`；`docs/protocol.md`「发消息」 | `unauthorized`、`conflict_input_draft`、`conflict_dialog_open`、`conflict_prompt_changed` |
+| 未知事件忽略，未知键忽略，旧 hello 缺 features 时返回空数组。 | `apple/Shared/LiveConnection.swift`：`ServerEvent.decode`、`Envelope` | `unknown_event_ignored`、`hello_unknown_field`、`hello_missing_features` |
 | 旧 items 事件中的 null 转为空数组，缺失的连续性字段保留为空。 | `ServerEvent.decode` | `items_legacy_null` |
-| 未知会话状态和 item kind 降级为 unknown，旧会话缺字段时采用 iOS 默认值。 | `ios/Shared/Models.swift`：`SessionStatus`、`AgentState`、`ItemKind`、`Session.init(from:)` | `session_unknown_enums`、`item_unknown_kind`、`session_missing_fields` |
-| Fleet 的未知阶段降级为空阶段，未知条目 kind 降级为 screen，错误 stats 单独丢弃。 | `ios/Shared/FleetState.swift`：`init(from:)`；`ios/JarvisTests/FleetStateTests.swift`：`lenientDecoding` | `fleet_unknown_values`、`fleet_bad_optional_stats` |
+| 未知会话状态和 item kind 降级为 unknown，旧会话缺字段时采用 iOS 默认值。 | `apple/Shared/Models.swift`：`SessionStatus`、`AgentState`、`ItemKind`、`Session.init(from:)` | `session_unknown_enums`、`item_unknown_kind`、`session_missing_fields` |
+| Fleet 的未知阶段降级为空阶段，未知条目 kind 降级为 screen，错误 stats 单独丢弃。 | `apple/Shared/FleetState.swift`：`init(from:)`；`apple/PersonaTests/FleetStateTests.swift`：`lenientDecoding` | `fleet_unknown_values`、`fleet_bad_optional_stats` |
 | 当前 iOS 会丢弃已知信封键类型错误、会话增强字段类型错误或未知交互类型的整条事件。 | `ServerEvent.decode`、`Session.init(from:)`、`InteractionKind` | `hello_wrong_known_type`、`session_bad_optional_field`、`interaction_unknown_kind` |
-| Go 零时间可解码，`isMeaningful` 仅接受严格晚于 2000 年起点的日期。 | `ios/Shared/JSONValue.swift`：`JSON.decoder`、`Date.isMeaningful` | `session_zero_time`、`date_at_cutoff` |
+| Go 零时间可解码，`isMeaningful` 仅接受严格晚于 2000 年起点的日期。 | `apple/Shared/JSONValue.swift`：`JSON.decoder`、`Date.isMeaningful` | `session_zero_time`、`date_at_cutoff` |
 
 ## JSON 结构
 
@@ -121,8 +121,8 @@ python3 /tmp/wire-extract.py
 swiftc -swift-version 6 -enable-bare-slash-regex \
   -module-cache-path /tmp/wire-swift/cache \
   -o /tmp/wire-swift/check \
-  ios/Shared/JSONValue.swift ios/Shared/Models.swift \
-  ios/Shared/FleetState.swift ios/Shared/MachineMetrics.swift \
+  apple/Shared/JSONValue.swift apple/Shared/Models.swift \
+  apple/Shared/FleetState.swift apple/Shared/MachineMetrics.swift \
   /tmp/wire-swift/Referenced.swift /tmp/wire-swift/Check.swift
 /tmp/wire-swift/check spec/fixtures/wire
 ```

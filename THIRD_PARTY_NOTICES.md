@@ -2,7 +2,7 @@
 
 ## Brand marks
 
-`apple/Jarvis/Resources/Assets.xcassets/Brands` and `apple/JarvisWatch/Assets.xcassets/Brands` hold other products' marks
+`apple/Persona/Resources/Assets.xcassets/Brands` and `apple/PersonaWatch/Assets.xcassets/Brands` hold other products' marks
 (`web/src/views/inbox/lark.svg` is a copy of `brand-lark` for the web inbox),
 shown next to the service Jarvis connects to. The marks are trademarks of their owners; using them here does not imply
 endorsement. They are drawn as published: not recolored (the one-color OS marks take the distribution's color), not
@@ -44,7 +44,7 @@ OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 
 ## JetBrains Mono
 
-The terminal font (`apple/Jarvis/Resources/Fonts/JetBrainsMono-*.ttf`, v2.304, unmodified).
+The terminal font (`apple/Persona/Resources/Fonts/JetBrainsMono-*.ttf`, v2.304, unmodified).
 
 https://github.com/JetBrains/JetBrainsMono
 

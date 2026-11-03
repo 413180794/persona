@@ -228,18 +228,18 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
 
 用户正在做的事经得起 hub 一直推更新：Agents 的 ⋯ 菜单滚到机器那里开着（不跳、不回顶）、行的长按菜单开着、列表滚到中间（行不动）、
 在搜索框里打字（字和键盘都在）、行左滑出「关闭」；对话里工作中的 Agent 的过程卡展开着、过程里的截图全屏看着（不被关掉）。
-每个用例报每轮推送的 body 次数和主线程耗时（附件和日志里的 `PERF` 行，改前改后的对比见 `docs/lanes/live-updates.md`）。
+每个用例报每轮推送的 body 次数和主线程耗时（附件和日志里的 `PERF` 行，改前改后的对比见 `docs/archive/lanes/live-updates.md`）。
 
 - mock：`PORT=18797 MOCK_AGENTS=1 MOCK_CHURN=1 python3 scripts/mock/mock_hub.py &`，`GET /mock/churn?n=12&ms=400` 推 n 轮（每轮：各机器的会话列表——工作中的换一句、
   两个工作中的轮流变成最新——、机器列表、每个打开的对话一个新步骤，每 4 轮夹一句话），`&steps=N` 每轮每个对话加 N 步，`&final=1` 推完后这一轮结束（最后一句回复、工作中的变成完成）；`/mock/churned` 看推到第几轮；`MOCK_CHURN=1` 还在第一个对话的过程里放一张截图、多加 5 台机器（菜单要能滚）；`&inbox=1` 每轮再改一条收件箱、重推等你处理的事，`&waiting=1` 每轮多一个等你的 Agent、
-  下一轮又答完（角标每轮变；真实的 hub 一直在推这两样，只推会话列表测不出角标带来的重建，`docs/lanes/live-updates.md`「又回来了」）。
+  下一轮又答完（角标每轮变；真实的 hub 一直在推这两样，只推会话列表测不出角标带来的重建，`docs/archive/lanes/live-updates.md`「又回来了」）。
 - `TEST_RUNNER_JARVIS_CHURN_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/LiveUpdateTests`。
 - 新外壳和旧布局都要跑：UI 测试默认用旧布局（`launchJarvis` 加 `-ui.oldLayout YES`），设 `TEST_RUNNER_JARVIS_LAYOUT=shell` 改用新外壳（iPhone 的默认），
   `LiveUpdateTests`、`ChatFollowTests`、`ScrollUnderPushTests` 两种都过才算。
 
 ### 滚动中推送（`ScrollUnderPushTests`）
 
-手指拖着、惯性滑着的时候 hub 照推，屏幕上的东西只跟着手指和惯性走（`docs/lanes/live-updates.md`「滚动时被迫刷新」）。
+手指拖着、惯性滑着的时候 hub 照推，屏幕上的东西只跟着手指和惯性走（`docs/archive/lanes/live-updates.md`「滚动时被迫刷新」）。
 Agents 列表、Agent 对话、Persona 对话各拖、甩约 20 秒，同时 mock 按真实 hub 的节奏推：`/mock/churn?n=10&ms=2000&inbox=1&waiting=1&real=1`，
 每 2 秒一轮。`&real=1` 让工作中的 Agent 最后一句在一行、两行之间换（行变高变矮），并让一个 Agent 每三轮完成一次、再开工（空间换名次）。
 
@@ -331,7 +331,7 @@ TEST_RUNNER_JARVIS_HUB_A=http://127.0.0.1:18760 TEST_RUNNER_JARVIS_HUB_B=http://
 
 ## iOS 兼容验证（App 不改代码，验 hub 的改动）
 
-改 hub 的配对、鉴权、WebSocket 时，用当前的 iOS App 原样连一个本机测试 hub 验一遍（2026-10-31 P0 这样验过，`docs/redesign/ios-p0-verification.md`）：
+改 hub 的配对、鉴权、WebSocket 时，用当前的 iOS App 原样连一个本机测试 hub 验一遍（2026-10-31 P0 这样验过，`docs/archive/ios-p0-verification.md`）：
 
 - 构建按模拟器 id 来（`-destination id=<udid>`，和 `scripts/sim.sh` 一样）。别加 `-sdk iphonesimulator`：它会把手表 target 也按 iPhone 模拟器编，
   两个产物都叫 `Jarvis.app`，报「Multiple commands produce」。没有签名团队时加 `CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=`。

@@ -12,7 +12,7 @@ hub 一直在推（真实 hub 实测：某台机器的会话每 2 秒一次）�
 - 分几步治，每步怎么验收；
 - 「真实、及时」怎么定义、怎么测。
 
-前因见 `docs/lanes/live-updates.md`（三次「推送打断操作」）。
+前因见 `docs/archive/lanes/live-updates.md`（三次「推送打断操作」）。
 
 ## 现在的数据流
 

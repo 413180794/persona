@@ -75,7 +75,7 @@ hub 提供给 Agent / 助手的 MCP 工具，每个一个文件：`mcp/<场景>/
 `phone_*`（通讯录、日历、提醒事项、照片、健康、位置、设备信息、剪贴板、本地通知）**不在服务端**：App 连上 hub 时把自己的工具列表
 （名字、描述、schema）发过来，hub 存进 Postgres、原样转给 Agent（`hub/http.go` 的 `setPhoneTools`，`docs/phone-tools.md`）。
 描述在 iOS 的 `apple/Persona/PhoneTools/*Tool.swift`（`PhoneToolRegistry.swift` 汇总），Android 的
-`android/app/src/main/java/jarvis/android/phone/PhoneTools.kt`，改它们要发 App 新版本。
+`android/platform/phonetools/`（`PhoneToolCatalog.kt`），改它们要发 App 新版本。
 
 ## 模板的规矩
 

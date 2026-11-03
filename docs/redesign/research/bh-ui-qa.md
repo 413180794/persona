@@ -316,7 +316,7 @@
 
 ### 4.3 Persona 的对应物【事实】
 
-- 单测：`JV:ios/JarvisTests` 下 24 个 Swift 文件，外加录制的终端帧 `terminal-*.jsonl`；服务端用 Go 测试，transcript 有脱敏样本做 golden 和语料对比（`JV:docs/testing.md:5-15`、`JV:docs/lanes/msg-render-verification.md`）。
+- 单测：`JV:ios/JarvisTests` 下 24 个 Swift 文件，外加录制的终端帧 `terminal-*.jsonl`；服务端用 Go 测试，transcript 有脱敏样本做 golden 和语料对比（`JV:docs/testing.md:5-15`、`JV:docs/archive/lanes/msg-render-verification.md`）。
 - UI 测试：`JV:ios/JarvisUITests` 下 16 个 XCUITest 文件，例如 `MessageMenuTests`、`SendSafetyTests`、`ConnectionTests`、`TerminalKeysTests`、`MachinePagesTests`、`LiveActivityShots`。
   - 多数连 `scripts/mock/mock_hub.py`。mock 用 `MOCK_*` 环境变量开场景：断网、延迟、断档、终端流、上传等；用 `GET /mock/resolved|sent|keys|uploads|hits` 读回收到了什么来做断言（`JV:docs/testing.md:79-139`）。
   - `MachinePagesTests` 按步骤截图，浅色和深色各跑一遍，失败时附截图和视图树（`:129-130`）。
@@ -383,7 +383,7 @@
 | 空 / 错 / 载 | `ServiceStatusView` 加系统 `ContentUnavailableView`；错误就近显示加重试 | `EmptyStateView` 加系统组件；取消和离线类错误不显示；先画缓存、不转圈 | 合成一个「页面状态」组件族，两端同名同参数 |
 | 待确认 | 词汇、图标、只读核对入口统一，从不自动重发 | Outbox 自动重发，靠 `client_msg_id` 幂等；一次性操作不排队 | 前提不同：Persona 有 hub 能保证幂等，所以可以自动重发。但 removed 那种「有名字的不确定状态」可以收成一个组件，比如「发送中 / 连上后发送 / 未生效」 |
 | 原型 | HTML 原型加 README（边界、验证记录） | 没有（只有 `docs/screenshots`） | 引入 |
-| 评审 | 借鉴评审 / 同机对照 / 修复清单三种文档 | 「车道」文档偏数据链路（`JV:docs/lanes/`） | 引入 UI 评审模板 |
+| 评审 | 借鉴评审 / 同机对照 / 修复清单三种文档 | 「车道」文档偏数据链路（`JV:docs/archive/lanes/`） | 引入 UI 评审模板 |
 | 验收分级 | 已开发 → 协议 → 模拟器 → 真实账号 → 真机 | 没有分级；界面清单 5 行 | 引入分级和每页清单（两端各一列） |
 | UI 自动化 | 没有 XCUITest；用进程内宿主测试，加隔离 QA 模拟器和 CUA 截图 | 16 个 XCUITest 加 mock hub，逐步截图，深浅色各一遍 | Persona 更自动化；可以补进程内的组件快照 |
 | fixture | 合成服务、`/__fixture` 控制接口、请求统计、故障开关、魔法输入、固定上游契约 | `mock_hub.py`、`MOCK_*` 开关、`/mock/*` 读回、真实样本脱敏后做 golden | 两边思路接近。Persona 可以补：mock 的契约要和真实 hub 一起测，比如在 Go 测试里校验 mock 响应的 schema |

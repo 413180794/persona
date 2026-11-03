@@ -24,6 +24,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
   因为 squash 合并直接把 PR 标题和正文当成 master 上的 commit 信息。代码注释也用英文；文档、issue 用中文；App 界面文案用中文。
 - **随时沉淀经验**：踩坑、怪异行为当场写进 `docs/lessons/<主题>.md`（索引 `docs/lessons/README.md`），设计取舍写进 `docs/<主题>.md`；
   跨模块、最常踩的再在本文件「最常踩的坑」留一行。本文件只放约定和最核心的东西，别再往里堆细节。这条规则本身也要保留。
+  一次性的车道方案、验证 / 验收报告、审计快照做完放 `docs/archive/`，不进顶层和文档索引；挪了文件同时改文档里的路径（`scripts/test/test_doc_paths.py` 会查）。
 - **质量标准**：按 App Store 榜首水准设计和测试。每个界面都要在模拟器上截图检查（深色 / 浅色），手表界面也要截图，不能只看编译通过。
 
 ### 隐私和密钥
@@ -168,7 +169,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `android/` | Kotlin + Compose 多模块：`:app` 装配，`core` 承载协议 / 网络 / 存储 / 列表 / 设计系统，`feature` 承载页面，`platform` 承载通知和手机工具；部分扩展模块尚未接入 App，见 `docs/android.md` |
 | `web/` | 网页版（Vite + React + Tailwind，Beautiful UI 的设计语言），hub 自己托管，见 `docs/web.md` |
 | `integrations/` | 接入 Agent 运行时（runtime）：`runtime-sdk/` 是通用 SDK（协议客户端、daemon 的监听模式、测试工具、echo 例子），`dsh/` 是 DSH（DeepSeek Harness）的 Web 插件，`pi/` 是 pi / pi-web 的扩展和伴随进程，见 `docs/runtimes.md`、`docs/daemons.md`、`docs/dsh.md`、`docs/pi.md` |
-| `scripts/` | 部署（`deploy/deploy.sh`）、发布 TestFlight（`release/release.sh`、`release/asc_*.py`）和公开的 personad（`deploy/publish.sh`、`deploy/install.sh`）、读配置（`persona_config.py`，旧 `jarvis_config.py` 软链兼容）、截图用的假 hub（`mock/mock_hub.py`） |
+| `scripts/` | 部署（`deploy/deploy.sh`）、发布 TestFlight（`release/release.sh`、`release/asc_*.py`）和公开的 personad（`release/publish.sh`、`deploy/install.sh`）、读配置（`persona_config.py`，旧 `jarvis_config.py` 软链兼容）、截图用的假 hub（`mock/mock_hub.py`） |
 | `config.example.json` | 构建 / 部署配置的模板（`docs/config.md`） |
 | `docs/` | 设计文档，索引见下 |
 | `deploy/docker/` | hub 的 Docker 部署：`compose.yaml`、`.env.example`、镜像的入口脚本（镜像是仓库根的 `Dockerfile`，`.github/workflows/hub-image.yml` 构建推到 ghcr），见 `docs/docker.md` |
@@ -182,6 +183,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | --- | --- |
 | `docs/collaboration.md` | 多人 / 多 Agent 协作：开工前查重、在 issue 里认领再动手、24 小时没更新视为放弃（续期 / 接手 / 放弃）、PR 必须关联 issue（Action 自动关闭没关联的），评论模板和 gh 命令 |
 | `docs/config.md` | 配置：构建 / 部署配置（config.json）、hub 运行配置（hub.json），哪些值不能写进代码 |
+| `docs/rename.md` | Jarvis → Persona 兼容迁移：哪些身份不变、新旧名字和目录的对应、防回退检查；验收和发布边界见 `docs/rename-acceptance.md`，open PR 审计快照 `docs/rename-pr-audit.md` |
 | `docs/architecture.md` | 整体架构、数据流、为什么这样设计（herdr + hooks + transcript） |
 | `docs/protocol.md` | hub HTTP / WebSocket API、hub↔node RPC、事件和交互模型（前后端契约） |
 | `docs/network.md` | 公网直连：TLS、公钥钉扎、IPv6 入站、配对、来源判断和限流 |
@@ -208,6 +210,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | --- | --- |
 | `docs/claude-integration.md` | 如何在 herdr 里启动 / 驱动 Claude、hook 回答 AskUserQuestion / ExitPlanMode 的实测结论 |
 | `docs/codex.md` | Codex 和 TRAEX（内部 Codex 分支）支持：怎么识别、rollout 格式怎么映射成对话、提问和审批卡片（读 rollout 和屏幕、各种界面状态下怎么作答）、改走 app-server 和审批 hook 的调研、还不支持什么 |
+| `docs/codex-app-server.md` | Codex app-server 多实例接入的研究：一台机器上多个已有 app-server 和 thread 怎么收进来、桌面 App 照常用、断线重连和授权边界 |
 | `docs/runtimes.md` | 接入 Agent 运行时（runtime）的规范：和宿主的区别、多机怎么汇总、driver 要实现什么、内容和交互的约定、命名、SDK、验收清单 |
 | `docs/dsh.md` | DSH（DeepSeek Harness）支持：第一个 runtime，DSH Web 插件的安装、事件映射、授权 / 提问怎么到手机、限制、端到端验证 |
 | `docs/daemons.md` | daemon：自己是常驻服务、连不上本机 runtime.sock 的 runtime（别的用户、容器、别的机器），node 按 `daemons.json` 去连它的 WebSocket 端点（token + `jarvis-runtime.v1`）：规范、配置、名字和会话 id 不撞车、隔离、SDK 的监听模式、验收 |
@@ -231,6 +234,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/mail.md` | 邮箱：IMAP/SMTP、Gmail（使用 Google 账号登录，OAuth2 + XOAUTH2）、飞书邮箱（固定 larkoffice.com 服务器）、凭据存储 |
 | `docs/lark-connector-migration.md` | 飞书迁移的授权范围：可选消息页与现有收件箱共用能力 |
 | `docs/feishu.md` | 飞书在 Persona 里的定位（不做第二个飞书）：保留哪些、lark-connector 只读代理、给 AI 用的接口速查 |
+| `docs/lark-attachments.md` | iOS 飞书聊天发图片和文件（#410）：选择、预览、发送和确认 |
 | `docs/bots.md` | 飞书机器人：私聊机器人就是和 Persona 主对话说话，回答发回飞书，提问 / 批准在飞书里点卡片，推送和主对话同步，在飞书里驱动各台电脑上的 Agent；开放平台长连接、配对、只认主人、卡片 JSON 2.0 的坑 |
 | `docs/lark-agent.md` | 飞书里自己发 `/agent …`：hub 收集所在会话 / 话题 / 引用 / 文档 / 知识库的上下文，起 Agent 处理，以我的身份回复 |
 | `docs/phone-tools.md` | 手机数据工具（phone_*）、权限、需要确认的写操作、iOS 限制 |
@@ -269,8 +273,8 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/plan-connectors.md` | 计划：连接器（先接 GitHub 和 iMessage）：能力可选的 Connector 接口、内置 / 外部进程 / node 本地三种形态、飞书邮件的迁移步骤、隐私和拍板项 |
 | `docs/plan-hub-mesh.md` | 计划：hub 互联（探测、双向链路、组内电脑去重和选路、归属）、links、多 hub 客户端、hub 管理界面（访问范围）、网页对齐；各路之间的接口约定和分工 |
 | `docs/plan-hub-center.md` | 计划第二版：有且只有一台中心 hub（其余 hub 当成员、把电脑交给中心）、电脑经预装服务接入（连接器主动 / 被动两种模式，不用 SSH）、一台电脑多条路去重选路；两路分工和被动模式协议 |
-| `docs/redesign/android-p0-status.md` | Android P0 逐项状态、代码证据与剩余工作，注明核对日期和基准提交 |
-| `docs/redesign/android-p0-acceptance.md` | Android P0 第 4 轮联合验收清单：环境准备、真实场景、采样记录与状态表回填 |
+| `docs/redesign/` | 客户端重设计与 Android 首版的方案（2026-10-30 草案）：功能对齐矩阵、交互规格、流程图、hub 改动；外观部分已被 `docs/android-design.md` 取代，调研笔记在 `research/` |
 | `docs/plan-telegram.md` | 计划：Telegram 连接器（用户自己的账号，第一版只读）：gotd/td 选型、分步登录和加密存会话、收哪些会话和增量、收件箱、只读工具、设置的开关 / 删除 / 退出，要用户定的 |
 | `docs/plan-lark-cli.md` | 计划：没有 lark-connector 时用官方 lark-cli 接飞书：能力对照和降级、两种来源并存、做成连接器、闸门认 lark-cli、收件箱收什么、分步计划和已拍板项 |
 | `docs/lessons/` | 经验（踩坑）按主题分文件：协作、Agent、助手、服务端、transcript、飞书邮件、终端、iOS、Android、macOS、测试，索引 `docs/lessons/README.md` |
+| `docs/archive/` | 已结束的车道方案、真实数据验证、阶段状态表和验收记录（实时更新打断操作、消息链路、会话读取验证、Android P0），只作证据引用，不随代码更新；新的一次性记录做完放这里 |

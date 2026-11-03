@@ -6,11 +6,11 @@
 
 下表缩写均指仓库内的只读来源：
 
-- **Store**：[ChatStore.swift](../../../ios/Shared/ChatStore.swift)，含 `ChatStore`、`Item.folds` 和 `Item.isWork`。
-- **Model**：[AppModel.swift](../../../ios/Jarvis/App/AppModel.swift)。
-- **API**：[APIClient.swift](../../../ios/Shared/APIClient.swift)。
-- **Tests**：[ChatStoreTests.swift](../../../ios/JarvisTests/ChatStoreTests.swift) 的 `TurnTests`。
-- **FoldTests**：[FoldedWorkTests.swift](../../../ios/JarvisTests/FoldedWorkTests.swift)。
+- **Store**：[ChatStore.swift](../../../apple/Shared/ChatStore.swift)，含 `ChatStore`、`Item.folds` 和 `Item.isWork`。
+- **Model**：[AppModel.swift](../../../apple/Persona/App/AppModel.swift)。
+- **API**：[APIClient.swift](../../../apple/Shared/APIClient.swift)。
+- **Tests**：[ChatStoreTests.swift](../../../apple/PersonaTests/ChatStoreTests.swift) 的 `TurnTests`。
+- **FoldTests**：[FoldedWorkTests.swift](../../../apple/PersonaTests/FoldedWorkTests.swift)。
 - **Corpus**：[continuity_corpus_test.go](../../../server/internal/transcript/continuity_corpus_test.go)。
 
 | 规则 | 来源 | 覆盖用例名 |
@@ -122,9 +122,9 @@ Go 测试保持原有 corpus 测试不变，额外直接调用原有 `simClient.
 mkdir -p /tmp/spec-cont-swift/modules
 swiftc -module-cache-path /tmp/spec-cont-swift/modules \
   -swift-version 6 -default-isolation MainActor -enable-bare-slash-regex \
-  ios/Shared/Models.swift ios/Shared/JSONValue.swift \
-  ios/Shared/MachineMetrics.swift ios/Shared/FleetState.swift \
-  ios/Shared/TextMemo.swift ios/Shared/ChatStore.swift \
+  apple/Shared/Models.swift apple/Shared/JSONValue.swift \
+  apple/Shared/MachineMetrics.swift apple/Shared/FleetState.swift \
+  apple/Shared/TextMemo.swift apple/Shared/ChatStore.swift \
   /tmp/spec-cont-swift/main.swift -o /tmp/spec-cont-swift/replay
 /tmp/spec-cont-swift/replay spec/fixtures/continuity/*.json
 ```

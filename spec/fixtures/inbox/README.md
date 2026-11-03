@@ -1,6 +1,6 @@
 # 收件箱夹具
 
-本目录固定当前 iOS 收件箱的列表行为，供 Android JUnit 和以后接入的 XCTest 共用。来源为 `docs/inbox.md`「AI 分拣」「App」、`ios/Shared/InboxModels.swift`、`ios/Jarvis/Views/Inbox/InboxView.swift`、`ios/Jarvis/App/InboxStore.swift` 和 `ios/JarvisTests/InboxTests.swift`。分拣模型、采集、发送、数据保留期限不属于本目录范围，输入视为列表已收到的数据。
+本目录固定当前 iOS 收件箱的列表行为，供 Android JUnit 和以后接入的 XCTest 共用。来源为 `docs/inbox.md`「AI 分拣」「App」、`apple/Shared/InboxModels.swift`、`apple/Persona/Views/Inbox/InboxView.swift`、`apple/Persona/App/InboxStore.swift` 和 `apple/PersonaTests/InboxTests.swift`。分拣模型、采集、发送、数据保留期限不属于本目录范围，输入视为列表已收到的数据。
 
 ## 规则与用例
 
@@ -18,9 +18,9 @@
 | 来源筛选比较 account，飞书的筛选值为 feishu，邮箱的筛选值为账号 id。 | InboxView 的 `matches`、`filters` | `inbox_filter_feishu`、`inbox_filter_mail_account`、`source_filter_compares_account` |
 | 来源与类型条件取交集，group 包含 bot，dm 不包含 bot。 | InboxView 的 `matches` | `inbox_filter_group_includes_bot`、`inbox_filter_dm_excludes_bot`、`inbox_filter_mail_kind`、`inbox_filter_mention`、`inbox_filter_incompatible_source_kind` |
 | 搜索不区分大小写，匹配 title、sender、preview、summary，不匹配 context 或 reason。 | InboxView 的 `matches` | `search_four_fields_only` |
-| 未屏蔽的待处理交互按 created_at 升序放在 action 事项之前，助手交互也参与。 | `ios/Jarvis/App/AppModel.swift` 的 `pendingInteractions`；InboxView 的 `waitingAgents`、`list` | `waiting_agents_before_items` |
+| 未屏蔽的待处理交互按 created_at 升序放在 action 事项之前，助手交互也参与。 | `apple/Persona/App/AppModel.swift` 的 `pendingInteractions`；InboxView 的 `waitingAgents`、`list` | `waiting_agents_before_items` |
 | 交互只在来源不限且类型为全部或 agent 时显示，搜索匹配 sessionTitle、summary 或计算后的 title。 | InboxView 的 `waitingAgents` | `agent_only`、`source_hides_agents`、`kind_hides_agents`、`search_agents` |
-| 空间屏蔽可由单会话 allowed 覆盖。 | AppModel 的 `isMuted`；`ios/Shared/APIClient.swift` 的 `Pins.mutes` | `agent_mute_allow_override` |
+| 空间屏蔽可由单会话 allowed 覆盖。 | AppModel 的 `isMuted`；`apple/Shared/APIClient.swift` 的 `Pins.mutes` | `agent_mute_allow_override` |
 | 段标题件数包括交互和事项，actionCount 只数所有未处理 action 事项，不受页面筛选影响。 | InboxView 的 `sectionHeader`；InboxStore 的 `actionCount` | `waiting_agents_before_items`、`source_hides_agents`、`inbox_filter_mail_account` |
 | 筛选标签当前没有数字，因此 filter_counts 为空对象。 | InboxView 的 `chip` | `inbox_filter_feishu`、`inbox_filter_mail_kind` |
 | 本任务补充同时间按 id 升序的规则，并保留当前 iOS 的对照结果。 | `CLAUDE.md`「同一时间再按 id」；InboxView 的 `shownDone`；AppModel 的 `pendingInteractions` | `equal_times_use_id_extension`、`equal_times_reversed_input` |

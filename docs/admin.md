@@ -164,7 +164,7 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
 | `install.sh`（公开版） | `curl … \| JARVIS_ADMIN_ACCESS=lan sh` 或 `sh -s -- --admin-access lan`；都没给时，有终端（`/dev/tty`）就问「这台要跑 hub 吗」再问范围，没终端打印一行提醒、不写 hub.json（不写就是 `lan`） |
 | Docker | `.env` 的 `JARVIS_ADMIN_ACCESS`（`cidrs` 时加 `JARVIS_ADMIN_CIDRS`）；没设时入口脚本打印一行提醒，用 hub.json 里的（没写就是 `lan`） |
 
-问的时候把四个选项的意思和风险都说清楚（见 `scripts/admin_access.sh`，`deploy.sh` 和 `install.sh` 共用同一段说明）。
+问的时候把四个选项的意思和风险都说清楚（见 `scripts/deploy/install.sh` 的 admin access 一段，`deploy.sh` 原样取用，公开安装器和部署问的是同一段话）。
 
 ## 安全取舍
 

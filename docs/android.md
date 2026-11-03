@@ -8,7 +8,7 @@ minSdk 31（Android 12），compileSdk 37，targetSdk 36。界面中文。
 
 ## 当前实现
 
-本页主体按 2026-10-31 的提交 `f3a13fdb7672927197cb8ac38bccb9c65671677b` 核对。当前是多模块重设计版本；逐项状态见 [Android P0 状态](redesign/android-p0-status.md)，旧版验证记录留在后文，不能代替本版验收。
+本页主体按 2026-10-31 的提交 `f3a13fdb7672927197cb8ac38bccb9c65671677b` 核对。当前是多模块重设计版本；逐项状态见 [Android P0 状态](archive/android-p0-status.md)，旧版验证记录留在后文，不能代替本版验收。
 
 #277 的后续品牌 / 输入兼容已分批合入：#745 只更新人类可见品牌，保留 `AppTab.Jarvis`、序列化值和旧系统组件；#746 注册并接收 `persona://` 与 `jarvis://`；#758 从 canonical Activity 读取 Debug launch metadata，并在权限检查和联网前统一解析完整配对链接。生成的通知链接仍用旧 scheme。各 PR 的构建和截图证据按对应车道记录；本说明不改写上面的历史核对日期，也不表示最终 open PR 全审计或冻结发布已完成。#770 的手填共用判定、#773 的环境变量 / 脚本兼容和 #786 的静态 guard 已合入，完整边界见 [兼容迁移](rename.md)。
 

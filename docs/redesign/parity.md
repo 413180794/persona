@@ -345,7 +345,7 @@
 | 22.7 | 状态色 | 一张表（App、手表、实时活动共用）：需要你红、工作中琥珀、完成未看绿、已看灰、未运行浅灰；每种 dot / text / tint 三个值；不随风格变；交互都算需要你用红 | `Shared/StatusPalette.swift`、`docs/agent-states.md` | — | Kotlin 常量直接移植 | S | P0 |
 | 22.8 | Token 与组件 | 圆角 5 档、背景灰阶 3 档、按角色的动态字体、间距；`Chip`（中性 / 着色 / 描边）、`CountBadge`、`StatusDot`（需要你呼吸、工作中静止外环）；`.surface` / `.themedButton` / `.themedPage` / `.themedRow` 统一出口 | `Shared/Theme.swift`、`Jarvis/Views/Components.swift`、`Styling.swift` | Dynamic Type | M3 `Shapes` / `Typography`（sp 跟随字体缩放）/ 自定义 `CompositionLocal` token | M | P0 |
 | 22.9 | 动效 | 状态切换 `.snappy` 0.25、布局 `.smooth` 0.3；一直在动的只有需要你圆点呼吸和系统转圈；「减少动态效果」时都停；计数 `.numericText` 过渡 | `Theme.swift`（Theme.Motion） | `accessibilityReduceMotion` | Compose 动画 spec；减少动效读 `Settings.Global.ANIMATOR_DURATION_SCALE == 0`；`AnimatedContent` 数字过渡 | S | P1 |
-| 22.10 | 图标 / 品牌 | 夜色背景 + 珊瑚光环 + 四角星（含 dark / tinted 变体）；珊瑚品牌色只给 Persona 自己的标志；能点的东西一律用当前风格主色 | `ios/Jarvis/Resources/Assets.xcassets/AppIcon.appiconset`、`scripts/make_icon.py` | iOS 18+ dark / tinted 图标 | 自适应图标 + 单色主题图标（Android 13+） | S | P0 |
+| 22.10 | 图标 / 品牌 | 夜色背景 + 珊瑚光环 + 四角星（含 dark / tinted 变体）；珊瑚品牌色只给 Persona 自己的标志；能点的东西一律用当前风格主色 | `ios/Jarvis/Resources/Assets.xcassets/AppIcon.appiconset`、`scripts/assets/make_icon.py` | iOS 18+ dark / tinted 图标 | 自适应图标 + 单色主题图标（Android 13+） | S | P0 |
 | 22.11 | 字体 | 终端打包 JetBrains Mono；其余系统字体 | `ios/Jarvis/Resources/Fonts` | — | `res/font` | S | P1 |
 
 ## 23. DEBUG 启动参数体系与开发工具
@@ -500,7 +500,7 @@ P0 的 76 项按复杂度：S 41、M 29、L 5（L：1.5 状态与对话存储、
 | # | 功能 | 一句话描述 | 出处 | Android 做法 | 复杂度 | 优先级 |
 | --- | --- | --- | --- | --- | --- | --- |
 | 26.1 | 长会话折叠（`fold_work`） | 长会话首页把一长串工作折成 fold item，显示成工作行；点开时用 `from_seq` / `through_seq` 取回步骤替换（「正在载入 N 步…」，失败可重试）；实时推送和补发不折叠 | 提交 d264477（服务端）、cfe4818（iOS）；`server/internal/proto` 的 `Fold` | `:core:domain` 处理 fold item，进 `spec/fixtures`；页请求和订阅都带 `fold_work` | M | P0 |
-| 26.2 | 体验模式 | 没配对时可以「先体验一下」：App 内的假 hub（`DemoHub`）回 `Demo.json` 里的数据（由 `scripts/make_demo_data.py` 从 mock hub 导出），页面里没有体验模式分支；发往电脑、飞书、邮件的操作提示「体验模式下不会真的发送」 | 提交 3a736a4 | 复用同一份 `Demo.json`，在 `:core:hub` 下接一个 `DemoHub`（android.md 5.16） | M | P1 |
+| 26.2 | 体验模式 | 没配对时可以「先体验一下」：App 内的假 hub（`DemoHub`）回 `Demo.json` 里的数据（由 `scripts/mock/make_demo_data.py` 从 mock hub 导出），页面里没有体验模式分支；发往电脑、飞书、邮件的操作提示「体验模式下不会真的发送」 | 提交 3a736a4 | 复用同一份 `Demo.json`，在 `:core:hub` 下接一个 `DemoHub`（android.md 5.16） | M | P1 |
 | 26.3 | 宽屏双栏 | 按宽度布局：窄屏单栏；宽屏时 Agents、收件箱、设置是列表 + 详情双栏，折叠展开时保留打开的页面；对话和 Persona 首页最大宽度 760 | 提交 5e91691、4060522 等 | Navigation 3 的列表-详情布局（android.md 5.17） | M | P2 |
 | 26.4 | Agents 列表：快速筛选 | 搜索框下「全部 / 需要你 / 未读 / 工作中」带计数；筛选下看过的行留在原位；「未读」可全部标为已读 | 提交 c3c6b4d | 同 | S | P0 |
 | 26.5 | Agents 列表：细列表、折叠空间 | 一行一个 Agent 的细列表（记住选择）；点空间标题折叠，「全部折叠 / 全部展开」，状态和机器分组也能折叠；空间页入口挪到标题的 ⋯ | 提交 c3c6b4d | 同 | S | P1 |

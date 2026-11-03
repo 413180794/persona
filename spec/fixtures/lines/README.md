@@ -163,8 +163,8 @@ def between(path, start, end):
     finish = text.index(end, begin)
     return text[begin:finish]
 
-model = 'ios/Shared/Models.swift'
-view = 'ios/Jarvis/Views/Chat/ChatView.swift'
+model = 'apple/Shared/Models.swift'
+view = 'apple/Persona/Views/Chat/ChatView.swift'
 parts = ['import Foundation\n']
 parts += [between(model, 'nonisolated enum SessionStatus:', 'nonisolated struct Session:'),
           between(model, 'nonisolated struct SessionKey:', 'nonisolated enum InteractionKind:')]
@@ -188,12 +188,12 @@ parts += ['''
     }
 }\nenum WorkLine {\n''']
 parts += [between(view, '    static func duration(from start:', '\n}\n\nprivate struct EditIndex') + '\n}\n']
-parts += [between('ios/Jarvis/Views/Chat/TaskNoteRow.swift', 'enum TaskNoteText {', '/// A background task reporting back,')]
-parts += ['struct RebuildTests {\n' + between('ios/JarvisTests/RebuildTests.swift', '    struct LCG {', '    @Test func incrementalRebuildEqualsAFullOne()') + '\n}\n']
+parts += [between('apple/Persona/Views/Chat/TaskNoteRow.swift', 'enum TaskNoteText {', '/// A background task reporting back,')]
+parts += ['struct RebuildTests {\n' + between('apple/PersonaTests/RebuildTests.swift', '    struct LCG {', '    @Test func incrementalRebuildEqualsAFullOne()') + '\n}\n']
 parts += ['enum ToolPresentation { static func symbol(_ name: String) -> String { "" } }\n']
 (tmp / 'Extracted.swift').write_text('\n'.join(parts))
 subprocess.run(['swiftc', '-parse-as-library', '-swift-version', '6', '-module-cache-path', str(tmp / 'module-cache'), '-default-isolation', 'MainActor', '-enable-bare-slash-regex', '-disable-sandbox',
-    'ios/Shared/JSONValue.swift', 'ios/Shared/TextMemo.swift', 'ios/Shared/ChatStore.swift',
+    'apple/Shared/JSONValue.swift', 'apple/Shared/TextMemo.swift', 'apple/Shared/ChatStore.swift',
     str(tmp / 'Extracted.swift'), str(tmp / 'Runner.swift'), '-o', str(tmp / 'check')],
     check=True, timeout=120)
 
@@ -481,7 +481,7 @@ struct Projection {
         for c in cases {
             var actual = try await run(c["input"] as! [String: Any])
             if c["verification"] as? String == "view_source_order" {
-                let source = try String(contentsOfFile: "ios/Jarvis/Views/Chat/ChatView.swift", encoding: .utf8)
+                let source = try String(contentsOfFile: "apple/Persona/Views/Chat/ChatView.swift", encoding: .utf8)
                 let footer = String(source.components(separatedBy: "private var mainFooter: some View {")[1].components(separatedBy: "private var pendingRecap:")[0])
                 let panel = footer.range(of: "ForEach(model.interactions(for: key)) { ix in InteractionPanel(interaction: ix) }")!
                 precondition(panel.lowerBound < footer.range(of: "Composer(key:")!.lowerBound)

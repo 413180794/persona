@@ -4,7 +4,7 @@
 
 ## 规则与用例
 
-下面的 `ChatsView` 指 `ios/Jarvis/Views/Chats/ChatsView.swift`；`Models` 指 `ios/Shared/Models.swift`。每个用例的 `source` 列出完整路径。
+下面的 `ChatsView` 指 `apple/Persona/Views/Chats/ChatsView.swift`；`Models` 指 `apple/Shared/Models.swift`。每个用例的 `source` 列出完整路径。
 
 | 规则 | 来源 | 覆盖用例 |
 | --- | --- | --- |
@@ -17,7 +17,7 @@
 | 工作中用 `state_since`，缺失时用 `updated_at`，其余状态用 `updated_at`，时间缺失排最后，同时间按 `session_id` 升序。 | Models 的 `sortDate`；ChatsView 的 `ordered`；`CLAUDE.md`「同一时间再按 id」 | `working_since_then_id`、`working_since_then_id_reversed` |
 | 本任务在排序键和 session_id 都相等时追加完整 id 比较，确保跨机器次序确定。 | `CLAUDE.md`；ChatsView 的 `ordered` | `cross_machine_same_session_id`、`cross_machine_same_session_id_reversed` |
 | 快速筛选中的组内排序跳过 rank，只比较排序时间和 session_id。 | ChatsView 的 `ordered` | `quick_filter_ignores_rank` |
-| 显式会话屏蔽优先于 allowed，allowed 优先于空间屏蔽，屏蔽的普通空闲会话仍归已看。 | `ios/Shared/APIClient.swift` 的 `Pins.mutes`；ChatsView 的 `rank` | `mute_allow_and_explicit_override`、`rank_all_states_and_mutes` |
+| 显式会话屏蔽优先于 allowed，allowed 优先于空间屏蔽，屏蔽的普通空闲会话仍归已看。 | `apple/Shared/APIClient.swift` 的 `Pins.mutes`；ChatsView 的 `rank` | `mute_allow_and_explicit_override`、`rank_all_states_and_mutes` |
 | 置顶会话按 pins.sessions 的顺序单独出现一次，离线会话也可置顶。 | ChatsView 的 `body` | `pinned_sessions_use_pin_order_once`、`pinned_offline_is_visible` |
 | 按机器分组遵循 machines 的输入顺序，缺失机器记录的会话不生成机器分组。 | ChatsView 的 `machineSections` | `machine_uses_registry_order` |
 | 空间按机器与 space_id 合并，缺失 space_id 用 `-`，缺失空间名称用目录末段。 | `SpaceGroup.build` | `active_space_uses_rank_not_slots` |
@@ -71,7 +71,7 @@
 ## 与设计文档的差异
 
 - `docs/agent-states.md` 开头写「需要你 → 工作中 → 完成未看」，但同文后段及 App 行排序都是完成未看先于工作中；夹具采用 App 的 `rank`。
-- 手表 `ios/JarvisWatch/JarvisWatchApp.swift` 使用 `AgentState.priority`，没有 App 的待唤醒和已屏蔽分档；SpaceGroup 也使用 priority，随后才由 ChatsView 调整空间和行次序，不能用一个 rank 替代所有层次。
+- 手表 `apple/PersonaWatch/PersonaWatchApp.swift` 使用 `AgentState.priority`，没有 App 的待唤醒和已屏蔽分档；SpaceGroup 也使用 priority，随后才由 ChatsView 调整空间和行次序，不能用一个 rank 替代所有层次。
 - 文档写空间里按 tab 顺序；当前 App 的活跃空间实际调用 ordered，只有空闲空间展开后保留 SpaceGroup 的槽位顺序。
 - 文档写有「最近（未运行）」；当前 ChatsView 普通分组过滤 offline，没有最近段，置顶 offline 则仍显示。
 - 已看文档按严格时间比较，hub 实现带 2 秒容差；这是状态规则常量，不是性能实测值。
@@ -99,7 +99,7 @@ SPEC_SORT_FIXTURES="$PWD/spec/fixtures" go -C server test \
 
 | 探针组成 | 从哪里提取，如何调用 |
 | --- | --- |
-| Swift 解码与状态 | 从 Models 提取 SessionStatus、Session、Subagent、LoopInfo、BackgroundTask、AgentState、SessionKey、MailAddress，以及含 isQuiet 的 Session 扩展；编译时直接加上 `ios/Shared/JSONValue.swift`；用 `JSON.decoder` 解 input.sessions。 |
+| Swift 解码与状态 | 从 Models 提取 SessionStatus、Session、Subagent、LoopInfo、BackgroundTask、AgentState、SessionKey、MailAddress，以及含 isQuiet 的 Session 扩展；编译时直接加上 `apple/Shared/JSONValue.swift`；用 `JSON.decoder` 解 input.sessions。 |
 | Swift 空间和筛选 | 从 ChatsView 提取 SpaceGroup、AgentFilter、isWaiting 扩展、`StateCounts.spoken`；从 Theme 的 AgentState 扩展提取 label。 |
 | Swift 偏好 | 从 APIClient 提取 Pins；以输入数组充当 AppModel 的数据，原文提取 pinKey、isPinned、isMuted、spaceKey 方法。 |
 | Swift 列表 | 原文提取 ChatsView 的 base、counts、stays、rank、ordered，以及 body 中从 `let base = base` 到 `SplitNavigation` 之前的数据计算块；用 settings 填充同名属性。 |
@@ -107,7 +107,7 @@ SPEC_SORT_FIXTURES="$PWD/spec/fixtures" go -C server test \
 | Go 状态 | 在 `/tmp` 建 `package hub` 的 `TestSpecSortFixtures`，循环读取 hub_state.json，把 session 解码为 proto.Session，seen_at 缺失时使用 time.Time 零值，直接断言 `agentState(session, seen) == expected.state`。 |
 | Go 虚拟测试文件 | overlay.json 的 Replace 将仓库中不存在的 `server/internal/hub/spec_sort_fixture_test.go` 绝对路径映射到 `/tmp` 的测试源码，真实目录不写文件。 |
 
-编译形式为 `swiftc -parse-as-library -module-cache-path /tmp/spec-sort-check/module-cache ios/Shared/JSONValue.swift /tmp/spec-sort-check/Reference.swift -o /tmp/spec-sort-check/check`。驱动遍历 JSON 的 cases，只比较结构化输出，不生成 expected；两个跨机器同标识用例对照 ios_expected，并另外核对 expected 的完整 id 排序和反向输入不变性；编译用 Python `subprocess.run(timeout=120)`，运行用 `timeout=60`，Go 自带 `-timeout 120s`。收件箱适配契约见[收件箱 README](../inbox/README.md)。这些时间是验证脚本的超时设置，不是性能结果。
+编译形式为 `swiftc -parse-as-library -module-cache-path /tmp/spec-sort-check/module-cache apple/Shared/JSONValue.swift /tmp/spec-sort-check/Reference.swift -o /tmp/spec-sort-check/check`。驱动遍历 JSON 的 cases，只比较结构化输出，不生成 expected；两个跨机器同标识用例对照 ios_expected，并另外核对 expected 的完整 id 排序和反向输入不变性；编译用 Python `subprocess.run(timeout=120)`，运行用 `timeout=60`，Go 自带 `-timeout 120s`。收件箱适配契约见[收件箱 README](../inbox/README.md)。这些时间是验证脚本的超时设置，不是性能结果。
 
 本次 Swift 编译和客户端对照通过；Go overlay 直接调用真实 hub 实现，全部通过。仓库服务端的 build、vet、全量 test 也通过；沙箱中默认 build 无法读取 VCS 状态，因此复跑使用 `GOFLAGS=-buildvcs=false`，未改仓库构建设置。
 

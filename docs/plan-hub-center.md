@@ -17,7 +17,7 @@
 - **hub**：装在一台常开的机器上（NAS、家里的服务器），全家只要这一台。它所在的机器本身也是一台电脑（本机 node）。
 - **node 服务**：其他每台电脑装一次，里面是常驻 node 加连接器，**一个安装命令或一个 App 装好**，配对后主动或被动连 hub（第 4 节）：
   - Linux：`install.sh` 选「node」，一条命令装好两样 systemd 用户服务并配对；
-  - Mac：Persona Link 菜单栏 App 自带 personad，首次运行就装好常驻 node（不用再单独跑 `scripts/node-launchd.sh`）；
+  - Mac：Persona Link 菜单栏 App 自带 personad，首次运行就装好常驻 node（不用再单独跑 `scripts/deploy/node-launchd.sh`）；
   - Windows：#299。
 - **多台 hub 互联**（中心 + 成员）只给少数需要的场景：比如两处各有一台常开、互相连不通的机器，或者已经装了好几台 hub 想合并。
   文档、安装器、管理界面都按「一台 hub + node 服务」引导：管理界面以「添加电脑」为主，「互联」放进「高级」；

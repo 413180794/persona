@@ -2,7 +2,7 @@
 
 `DemoHub` 实现现有的 `ChatTransport`、`MessageTransport`、`InboxAssistantTransport` 和 `HubConnection`，供正式数据仓库使用。页面不用判断体验模式，模块没有网络客户端，也不接受真实传输对象或凭据。
 
-数据来自 `scripts/mock/mock_hub.py` 经 `scripts/make_demo_data.py` 导出的 iOS `Demo.json`。Android 副本保留数据结构，把示例姓名改为角色称呼，地址统一换成 `example.com`。更新已有共享导出后，在仓库根目录运行：
+数据来自 `scripts/mock/mock_hub.py` 经 `scripts/mock/make_demo_data.py` 导出的 iOS `Demo.json`。Android 副本保留数据结构，把示例姓名改为角色称呼，地址统一换成 `example.com`。更新已有共享导出后，在仓库根目录运行：
 
 ```sh
 python3 android/core/demo/tools/export_data.py

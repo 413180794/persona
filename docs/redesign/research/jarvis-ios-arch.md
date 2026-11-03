@@ -177,7 +177,7 @@ Widgets：FleetLiveActivity 只吃 FleetState / StatusPalette
 
 **【事实】订阅 / 补洞 / 分页（在 AppModel 里）**：`subscribe` 引用计数（同一会话多个视图不互相取消，`AppModel.swift:287-308`）；
 `settle(.fill)` 先等 1.5s 再 `fill`（最多 8 页 `after_seq`，超过就 `reload` 最新页，`AppModel.swift:402-433`）；`loadOlder` 用 `before_seq`、`turns=2`（`AppModel.swift:441-452`，`APIClient.swift:218-225`）。
-与 `docs/protocol.md:240-248`「items 的连续性」一致。（`docs/lanes/msg-render-plan.md` 已对这条链路做过诊断，本文不重复，只在 §6 标出相关逻辑的位置。）
+与 `docs/protocol.md:240-248`「items 的连续性」一致。（`docs/archive/lanes/msg-render-plan.md` 已对这条链路做过诊断，本文不重复，只在 §6 标出相关逻辑的位置。）
 
 **【事实】后台同步**
 - `AgentSync`（`ios/Jarvis/App/AgentSync.swift`，148 行）：hub 推 `rev`（会话列表 / `revs` 事件），和本地 `synced`（UserDefaults `agentSync.revs`）不同就拉 `after_seq`；
@@ -413,7 +413,7 @@ Widgets：FleetLiveActivity 只吃 FleetState / StatusPalette
 | --- | --- | --- | --- | --- | --- | --- |
 | A1 | 线上类型与宽松解码（未知枚举回退、Go 零时间、纳秒时间截断、显式 CodingKeys、`state` 缺失时由 `status` 推） | `Shared/Models.swift`、`DevModels.swift`、`InboxModels.swift:5-123`、`FleetState.swift:1-161`、`MachineMetrics.swift`、`Knowledge.swift`、`JSONValue.swift:83-127`、`Views/Inbox/Lark/LarkModels.swift`、`Views/Feishu/Docs/FeishuDocsModels.swift`（类型部分） | ≈2,500 | 低 | 有（SyncEvent / FleetState / NotifyPrefs / Inbox / MachineMetrics / LarkRender / FeishuDocs / `goDates`） | 规则点：`Models.swift:3-4, 78-88, 190, 294-310`；`JSONValue.swift:112-121`；`APIClient.swift:743-746` |
 | A2 | WS 信封解码 `ServerEvent` / `TerminalEvent` | `Shared/LiveConnection.swift:4-133` | ≈130 | 低 | 部分（`SyncEventTests`） | 事件表应与 hub 对齐（§4.6 漂移） |
-| A3 | items 连续性：`covered / history / Gap`、末页替换、`hasMore` 只信末页、补洞（1.5s 后 `after_seq` 最多 8 页再 reload）、`since_seq` 重订 | `ChatStore.swift:248-264, 316-395, 500-524`；`AppModel.swift:382-452, 456-474` | ≈190 | **高** | 有，约 12 个（`ChatStoreTests.swift:218-303, 379-404`）+ Go 仿真 `continuity_corpus_test.go` | 与 `docs/lanes/msg-render-plan.md` 诊断的链路相同；建议把 Go 仿真的场景导出成 JSON 夹具三端共用 |
+| A3 | items 连续性：`covered / history / Gap`、末页替换、`hasMore` 只信末页、补洞（1.5s 后 `after_seq` 最多 8 页再 reload）、`since_seq` 重订 | `ChatStore.swift:248-264, 316-395, 500-524`；`AppModel.swift:382-452, 456-474` | ≈190 | **高** | 有，约 12 个（`ChatStoreTests.swift:218-303, 379-404`）+ Go 仿真 `continuity_corpus_test.go` | 与 `docs/archive/lanes/msg-render-plan.md` 诊断的链路相同；建议把 Go 仿真的场景导出成 JSON 夹具三端共用 |
 | A4 | items → Rows（工具调用配结果 / 图片、思考归并）→ Blocks（Turn：排队消息并入、中断收尾、compaction 不切、唤醒同一轮、recap 后重开）→ `pickAnswerAcrossWakes`；增量重建 `SettledRows` | `ChatStore.swift:1-246, 397-447, 490-498, 530-582` | ≈360 | **高** | 好：`ChatStoreTests` 8+ 个 + `RebuildTests`（40 种子性质测试、可选真实语料） | 增量 = 全量是不变量，Android 照搬同一性质测试 |
 | A5 | Blocks → 聊天「行」：按消息切段、多消息轮合并气泡、工作行（`WorkItem`/`WorkSummary`/计时）、唤醒抽屉、展开步骤、`Frozen` 冻结快照（按 `(seq, part)` 截） | `Views/Chat/ChatView.swift:42-47, 238-329, 425-436, 490-531, 593-608, 2133-2207, 2321-2350, 2426-2432` | ≈285 | **高** | **基本没有**（`chatLines` 为 private；只测了 id 形状和 `prefixCount`） | 行 id 规则（`w-`/`wt-`/`-h`/`-end`/`wk-`/`img-`/`mu-`）决定展开状态和滚动锚点，两端必须一致 |
 | A6 | 磁盘缓存裁剪（最后两轮、不切半行、超 6 MB 去图） | `ChatStore.swift:786-837` | ≈50 | 低 | 有（2） | |
@@ -556,4 +556,4 @@ App target           AppContainer（组合根）、Router（tab / 打开会话 /
 - 飞书消息 / 卡片 / 云文档、邮件、设置各页的视图逻辑只看了结构，没有逐行审；E 组行数按类型区间估算。
 - 两处缓存覆盖竞态（AgentSync ↔ ChatStore、LarkSync ↔ LarkChatView）是推断，没有构造复现。
 - removed 只看了 `Package.swift` 和组合根开头，用于对照分层（深入评估由并行调研负责）。
-- `docs/lanes/msg-render-plan.md` 没读（协调者已读）；本文 §2.3、§5 的 A3 / A5 与它诊断的是同一条链路。
+- `docs/archive/lanes/msg-render-plan.md` 没读（协调者已读）；本文 §2.3、§5 的 A3 / A5 与它诊断的是同一条链路。

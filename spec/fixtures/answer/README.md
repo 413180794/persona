@@ -80,87 +80,87 @@ macOS 需要能运行 `swiftc`；非 macOS 或未设置开关时，只跳过 Swi
 
 | 规则 | 来源 | 用例 |
 | --- | --- | --- |
-| 对话页全部放行使用 bypassPermissions。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm` | `plan_approve_all` |
-| 对话页只接受编辑使用 acceptEdits。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm` | `plan_approve_edits` |
-| 对话页打回保留意见的首尾空白。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm` | `plan_reject_preserves_whitespace` |
-| 对话页允许不填意见直接打回。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm` | `plan_reject_empty` |
-| 允许一次只发送 allow。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：PermissionForm` | `permission_allow` |
-| 当前授权面板拒绝不附带原因。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：PermissionForm` | `permission_deny` |
-| 本会话总是允许附带 always。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：PermissionForm` | `permission_always` |
-| 没有会话标识时不提供总是允许。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：PermissionForm.body` | `permission_always_without_session` |
-| 打回编辑状态下批准按钮不显示。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm.body` | `plan_rejecting_hides_approve` |
-| 取消打回后旧意见仍保留且现有批准按钮可用。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：PlanForm.body（取消只改 rejecting）` | `plan_cancel_retains_feedback_allows_approve` |
-| 通知动作映射为现有 Resolution。 | `ios/Jarvis/App/NotificationActions.swift：resolution(action:text:)` | `notification_ix_allow` |
-| 通知动作映射为现有 Resolution。 | `ios/Jarvis/App/NotificationActions.swift：resolution(action:text:)` | `notification_ix_deny` |
-| 通知动作映射为现有 Resolution。 | `ios/Jarvis/App/NotificationActions.swift：resolution(action:text:)` | `notification_ix_approve_plan` |
-| 通知动作映射为现有 Resolution。 | `ios/Jarvis/App/NotificationActions.swift：resolution(action:text:)` | `notification_ix_reject_plan` |
-| 通知打回缺少文字时发送空意见。 | `ios/Jarvis/App/NotificationActions.swift：resolution(action:text:)` | `notification_reject_without_text` |
-| 交给电脑处理发送 dismiss 而不表示拒绝。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：InteractionPanel.form`；`ios/Shared/Models.swift：Resolution.dismissed` | `dismiss_question` |
-| 交给电脑处理发送 dismiss 而不表示拒绝。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：InteractionPanel.form`；`ios/Shared/Models.swift：Resolution.dismissed` | `dismiss_plan` |
-| 交给电脑处理发送 dismiss 而不表示拒绝。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：InteractionPanel.form`；`ios/Shared/Models.swift：Resolution.dismissed` | `dismiss_permission` |
-| 交给电脑处理发送 dismiss 而不表示拒绝。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：InteractionPanel.form`；`ios/Shared/Models.swift：Resolution.dismissed` | `dismiss_screen` |
+| 对话页全部放行使用 bypassPermissions。 | `apple/Persona/Views/Interactions/InteractionViews.swift：PlanForm` | `plan_approve_all` |
+| 对话页只接受编辑使用 acceptEdits。 | `apple/Persona/Views/Interactions/InteractionViews.swift：PlanForm` | `plan_approve_edits` |
+| 对话页打回保留意见的首尾空白。 | `apple/Persona/Views/Interactions/InteractionViews.swift：PlanForm` | `plan_reject_preserves_whitespace` |
+| 对话页允许不填意见直接打回。 | `apple/Persona/Views/Interactions/InteractionViews.swift：PlanForm` | `plan_reject_empty` |
+| 允许一次只发送 allow。 | `apple/Persona/Views/Interactions/InteractionViews.swift：PermissionForm` | `permission_allow` |
+| 当前授权面板拒绝不附带原因。 | `apple/Persona/Views/Interactions/InteractionViews.swift：PermissionForm` | `permission_deny` |
+| 本会话总是允许附带 always。 | `apple/Persona/Views/Interactions/InteractionViews.swift：PermissionForm` | `permission_always` |
+| 没有会话标识时不提供总是允许。 | `apple/Persona/Views/Interactions/InteractionViews.swift：PermissionForm.body` | `permission_always_without_session` |
+| 打回编辑状态下批准按钮不显示。 | `apple/Persona/Views/Interactions/InteractionViews.swift：PlanForm.body` | `plan_rejecting_hides_approve` |
+| 取消打回后旧意见仍保留且现有批准按钮可用。 | `apple/Persona/Views/Interactions/InteractionViews.swift：PlanForm.body（取消只改 rejecting）` | `plan_cancel_retains_feedback_allows_approve` |
+| 通知动作映射为现有 Resolution。 | `apple/Persona/App/NotificationActions.swift：resolution(action:text:)` | `notification_ix_allow` |
+| 通知动作映射为现有 Resolution。 | `apple/Persona/App/NotificationActions.swift：resolution(action:text:)` | `notification_ix_deny` |
+| 通知动作映射为现有 Resolution。 | `apple/Persona/App/NotificationActions.swift：resolution(action:text:)` | `notification_ix_approve_plan` |
+| 通知动作映射为现有 Resolution。 | `apple/Persona/App/NotificationActions.swift：resolution(action:text:)` | `notification_ix_reject_plan` |
+| 通知打回缺少文字时发送空意见。 | `apple/Persona/App/NotificationActions.swift：resolution(action:text:)` | `notification_reject_without_text` |
+| 交给电脑处理发送 dismiss 而不表示拒绝。 | `apple/Persona/Views/Interactions/InteractionViews.swift：InteractionPanel.form`；`apple/Shared/Models.swift：Resolution.dismissed` | `dismiss_question` |
+| 交给电脑处理发送 dismiss 而不表示拒绝。 | `apple/Persona/Views/Interactions/InteractionViews.swift：InteractionPanel.form`；`apple/Shared/Models.swift：Resolution.dismissed` | `dismiss_plan` |
+| 交给电脑处理发送 dismiss 而不表示拒绝。 | `apple/Persona/Views/Interactions/InteractionViews.swift：InteractionPanel.form`；`apple/Shared/Models.swift：Resolution.dismissed` | `dismiss_permission` |
+| 交给电脑处理发送 dismiss 而不表示拒绝。 | `apple/Persona/Views/Interactions/InteractionViews.swift：InteractionPanel.form`；`apple/Shared/Models.swift：Resolution.dismissed` | `dismiss_screen` |
 
 ### questions.json
 
 | 规则 | 来源 | 用例 |
 | --- | --- | --- |
-| 单题单选点击后立即发送带推荐后缀的原文。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm`；`ios/Shared/Models.swift：Resolution` | `single_tap_sends_original_label` |
-| 点选单选项会清空自填答案。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm`；`ios/Shared/Models.swift：Resolution` | `single_pick_clears_other` |
-| 其他回答去掉首尾空白后发送。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm`；`ios/Shared/Models.swift：Resolution` | `other_answer_trimmed` |
-| 没有选择也没有自填答案时不能提交。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm`；`ios/Shared/Models.swift：Resolution` | `empty_answer_cannot_submit` |
-| 只有空白的其他回答不能提交。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm`；`ios/Shared/Models.swift：Resolution` | `blank_other_cannot_submit` |
-| 多选按选项原顺序拼接而非点击顺序。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm`；`ios/Shared/Models.swift：Resolution` | `multiple_picks_follow_option_order` |
-| 多选的自填答案覆盖已选项而不与选项合并。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm`；`ios/Shared/Models.swift：Resolution` | `multiple_other_overrides_picks` |
-| 空白自填内容不会覆盖已选项。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm`；`ios/Shared/Models.swift：Resolution` | `blank_other_uses_picks` |
-| 多选点击选项只更新选择而不发送。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm`；`ios/Shared/Models.swift：Resolution` | `multiple_pick_waits_for_submit` |
-| 再次点击多选项会取消选择。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm`；`ios/Shared/Models.swift：Resolution` | `multiple_pick_toggles_off` |
-| 多题提交以问题原文为键并包含全部答案。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm`；`ios/Shared/Models.swift：Resolution` | `multiple_questions_send_original_keys` |
-| 末题已答但前题漏答时跳回漏答题且不发送。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm`；`ios/Shared/Models.swift：Resolution` | `last_page_missing_answer_returns_to_gap` |
-| 多题当前题已答时下一题只翻页。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm`；`ios/Shared/Models.swift：Resolution` | `next_page_does_not_send` |
-| 全部答完后可从前一题直接提交。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm`；`ios/Shared/Models.swift：Resolution` | `all_answered_can_submit_from_earlier_page` |
-| 正在发送时选项按钮不可再点。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm`；`ios/Shared/Models.swift：Resolution` | `sending_disables_option` |
+| 单题单选点击后立即发送带推荐后缀的原文。 | `apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm`；`apple/Shared/Models.swift：Resolution` | `single_tap_sends_original_label` |
+| 点选单选项会清空自填答案。 | `apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm`；`apple/Shared/Models.swift：Resolution` | `single_pick_clears_other` |
+| 其他回答去掉首尾空白后发送。 | `apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm`；`apple/Shared/Models.swift：Resolution` | `other_answer_trimmed` |
+| 没有选择也没有自填答案时不能提交。 | `apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm`；`apple/Shared/Models.swift：Resolution` | `empty_answer_cannot_submit` |
+| 只有空白的其他回答不能提交。 | `apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm`；`apple/Shared/Models.swift：Resolution` | `blank_other_cannot_submit` |
+| 多选按选项原顺序拼接而非点击顺序。 | `apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm`；`apple/Shared/Models.swift：Resolution` | `multiple_picks_follow_option_order` |
+| 多选的自填答案覆盖已选项而不与选项合并。 | `apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm`；`apple/Shared/Models.swift：Resolution` | `multiple_other_overrides_picks` |
+| 空白自填内容不会覆盖已选项。 | `apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm`；`apple/Shared/Models.swift：Resolution` | `blank_other_uses_picks` |
+| 多选点击选项只更新选择而不发送。 | `apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm`；`apple/Shared/Models.swift：Resolution` | `multiple_pick_waits_for_submit` |
+| 再次点击多选项会取消选择。 | `apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm`；`apple/Shared/Models.swift：Resolution` | `multiple_pick_toggles_off` |
+| 多题提交以问题原文为键并包含全部答案。 | `apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm`；`apple/Shared/Models.swift：Resolution` | `multiple_questions_send_original_keys` |
+| 末题已答但前题漏答时跳回漏答题且不发送。 | `apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm`；`apple/Shared/Models.swift：Resolution` | `last_page_missing_answer_returns_to_gap` |
+| 多题当前题已答时下一题只翻页。 | `apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm`；`apple/Shared/Models.swift：Resolution` | `next_page_does_not_send` |
+| 全部答完后可从前一题直接提交。 | `apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm`；`apple/Shared/Models.swift：Resolution` | `all_answered_can_submit_from_earlier_page` |
+| 正在发送时选项按钮不可再点。 | `apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm`；`apple/Shared/Models.swift：Resolution` | `sending_disables_option` |
 
 ### recommended.json
 
 | 规则 | 来源 | 用例 |
 | --- | --- | --- |
-| 推荐标记仅按已支持的结尾格式显示，发送保留原文。 | `ios/Shared/Models.swift：QuestionOption.display`；`ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick` | `recommended_spaced` |
-| 推荐标记仅按已支持的结尾格式显示，发送保留原文。 | `ios/Shared/Models.swift：QuestionOption.display`；`ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick` | `recommended_unspaced` |
-| 推荐标记仅按已支持的结尾格式显示，发送保留原文。 | `ios/Shared/Models.swift：QuestionOption.display`；`ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick` | `recommended_chinese_fullwidth` |
-| 推荐标记仅按已支持的结尾格式显示，发送保留原文。 | `ios/Shared/Models.swift：QuestionOption.display`；`ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick` | `recommended_chinese_ascii` |
-| 推荐标记仅按已支持的结尾格式显示，发送保留原文。 | `ios/Shared/Models.swift：QuestionOption.display`；`ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick` | `recommended_trims_prefix_space` |
-| 推荐标记仅按已支持的结尾格式显示，发送保留原文。 | `ios/Shared/Models.swift：QuestionOption.display`；`ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick` | `recommended_case_sensitive` |
-| 推荐标记仅按已支持的结尾格式显示，发送保留原文。 | `ios/Shared/Models.swift：QuestionOption.display`；`ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick` | `recommended_suffix_only` |
-| 推荐标记仅按已支持的结尾格式显示，发送保留原文。 | `ios/Shared/Models.swift：QuestionOption.display`；`ios/Jarvis/Views/Interactions/InteractionViews.swift：QuestionForm.pick` | `recommended_trailing_space` |
+| 推荐标记仅按已支持的结尾格式显示，发送保留原文。 | `apple/Shared/Models.swift：QuestionOption.display`；`apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm.pick` | `recommended_spaced` |
+| 推荐标记仅按已支持的结尾格式显示，发送保留原文。 | `apple/Shared/Models.swift：QuestionOption.display`；`apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm.pick` | `recommended_unspaced` |
+| 推荐标记仅按已支持的结尾格式显示，发送保留原文。 | `apple/Shared/Models.swift：QuestionOption.display`；`apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm.pick` | `recommended_chinese_fullwidth` |
+| 推荐标记仅按已支持的结尾格式显示，发送保留原文。 | `apple/Shared/Models.swift：QuestionOption.display`；`apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm.pick` | `recommended_chinese_ascii` |
+| 推荐标记仅按已支持的结尾格式显示，发送保留原文。 | `apple/Shared/Models.swift：QuestionOption.display`；`apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm.pick` | `recommended_trims_prefix_space` |
+| 推荐标记仅按已支持的结尾格式显示，发送保留原文。 | `apple/Shared/Models.swift：QuestionOption.display`；`apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm.pick` | `recommended_case_sensitive` |
+| 推荐标记仅按已支持的结尾格式显示，发送保留原文。 | `apple/Shared/Models.swift：QuestionOption.display`；`apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm.pick` | `recommended_suffix_only` |
+| 推荐标记仅按已支持的结尾格式显示，发送保留原文。 | `apple/Shared/Models.swift：QuestionOption.display`；`apple/Persona/Views/Interactions/InteractionViews.swift：QuestionForm.pick` | `recommended_trailing_space` |
 
 ### screen.json
 
 | 规则 | 来源 | 用例 |
 | --- | --- | --- |
-| 终端普通选项按 hub 能力构造回答。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow`；`server/internal/screen/dialog.go：ParseDialog、Dialog.Option` | `hub_screen_choice` |
-| 终端自填选项按 hub 能力构造回答。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow`；`server/internal/screen/dialog.go：ParseDialog、Dialog.Option` | `hub_screen_custom` |
-| 终端转回对话选项按 hub 能力构造回答。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow`；`server/internal/screen/dialog.go：ParseDialog、Dialog.Option` | `hub_screen_chat` |
-| 终端普通选项按 hub 能力构造回答。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow`；`server/internal/screen/dialog.go：ParseDialog、Dialog.Option` | `legacy_screen_choice` |
-| 终端自填选项按 hub 能力构造回答。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow`；`server/internal/screen/dialog.go：ParseDialog、Dialog.Option` | `legacy_screen_custom` |
-| 终端转回对话选项按 hub 能力构造回答。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow`；`server/internal/screen/dialog.go：ParseDialog、Dialog.Option` | `legacy_screen_chat` |
-| 自填选项只有空白时不可发送。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.typeRow` | `screen_custom_blank_blocked` |
-| 原始终端输入按原文发送，仅空字符串禁用。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.terminal` | `raw_terminal_text` |
-| 原始终端输入按原文发送，仅空字符串禁用。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.terminal` | `raw_terminal_empty` |
-| 原始终端输入按原文发送，仅空字符串禁用。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.terminal` | `raw_terminal_whitespace` |
-| 原始终端按键按给定顺序发送。 | `ios/Jarvis/Views/Interactions/InteractionViews.swift：ScreenForm.terminal` | `raw_terminal_keys` |
-| 终端多题标签栏解析为步骤并保留选项原文。 | `ios/Shared/ChatStore.swift：ScreenParser.dialog、steps`；`ios/JarvisTests/ScreenDialogTests.swift：readsTheTabBarOfSeveralQuestions` | `screen_question_steps` |
-| 没有编号选项时不解析成对话框。 | `ios/Shared/ChatStore.swift：ScreenParser.dialog`；`ios/JarvisTests/ScreenDialogTests.swift：noDialogWithoutNumberedOptions` | `screen_without_numbered_options` |
+| 终端普通选项按 hub 能力构造回答。 | `apple/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow`；`server/internal/screen/dialog.go：ParseDialog、Dialog.Option` | `hub_screen_choice` |
+| 终端自填选项按 hub 能力构造回答。 | `apple/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow`；`server/internal/screen/dialog.go：ParseDialog、Dialog.Option` | `hub_screen_custom` |
+| 终端转回对话选项按 hub 能力构造回答。 | `apple/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow`；`server/internal/screen/dialog.go：ParseDialog、Dialog.Option` | `hub_screen_chat` |
+| 终端普通选项按 hub 能力构造回答。 | `apple/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow`；`server/internal/screen/dialog.go：ParseDialog、Dialog.Option` | `legacy_screen_choice` |
+| 终端自填选项按 hub 能力构造回答。 | `apple/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow`；`server/internal/screen/dialog.go：ParseDialog、Dialog.Option` | `legacy_screen_custom` |
+| 终端转回对话选项按 hub 能力构造回答。 | `apple/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.answer、typeRow`；`server/internal/screen/dialog.go：ParseDialog、Dialog.Option` | `legacy_screen_chat` |
+| 自填选项只有空白时不可发送。 | `apple/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.typeRow` | `screen_custom_blank_blocked` |
+| 原始终端输入按原文发送，仅空字符串禁用。 | `apple/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.terminal` | `raw_terminal_text` |
+| 原始终端输入按原文发送，仅空字符串禁用。 | `apple/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.terminal` | `raw_terminal_empty` |
+| 原始终端输入按原文发送，仅空字符串禁用。 | `apple/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.terminal` | `raw_terminal_whitespace` |
+| 原始终端按键按给定顺序发送。 | `apple/Persona/Views/Interactions/InteractionViews.swift：ScreenForm.terminal` | `raw_terminal_keys` |
+| 终端多题标签栏解析为步骤并保留选项原文。 | `apple/Shared/ChatStore.swift：ScreenParser.dialog、steps`；`apple/PersonaTests/ScreenDialogTests.swift：readsTheTabBarOfSeveralQuestions` | `screen_question_steps` |
+| 没有编号选项时不解析成对话框。 | `apple/Shared/ChatStore.swift：ScreenParser.dialog`；`apple/PersonaTests/ScreenDialogTests.swift：noDialogWithoutNumberedOptions` | `screen_without_numbered_options` |
 
 ### transport.json
 
 | 规则 | 来源 | 用例 |
 | --- | --- | --- |
-| 作答回传根据连接条件和 hub 结果保留或移除交互卡片。 | `ios/Jarvis/App/AppModel.swift：resolve(_:_:)`；`docs/redesign/ux.md §3.4、§5.3` | `resolve_no_client` |
-| 作答回传根据连接条件和 hub 结果保留或移除交互卡片。 | `ios/Jarvis/App/AppModel.swift：resolve(_:_:)`；`docs/redesign/ux.md §3.4、§5.3` | `resolve_network_down` |
-| 作答回传根据连接条件和 hub 结果保留或移除交互卡片。 | `ios/Jarvis/App/AppModel.swift：resolve(_:_:)`；`docs/redesign/ux.md §3.4、§5.3` | `resolve_success` |
-| 作答回传根据连接条件和 hub 结果保留或移除交互卡片。 | `ios/Jarvis/App/AppModel.swift：resolve(_:_:)`；`docs/redesign/ux.md §3.4、§5.3` | `resolve_gone` |
-| 作答回传根据连接条件和 hub 结果保留或移除交互卡片。 | `ios/Jarvis/App/AppModel.swift：resolve(_:_:)`；`docs/redesign/ux.md §3.4、§5.3` | `resolve_prompt_changed` |
-| 作答回传根据连接条件和 hub 结果保留或移除交互卡片。 | `ios/Jarvis/App/AppModel.swift：resolve(_:_:)`；`docs/redesign/ux.md §3.4、§5.3` | `resolve_error_restores_card` |
+| 作答回传根据连接条件和 hub 结果保留或移除交互卡片。 | `apple/Persona/App/AppModel.swift：resolve(_:_:)`；`docs/redesign/ux.md §3.4、§5.3` | `resolve_no_client` |
+| 作答回传根据连接条件和 hub 结果保留或移除交互卡片。 | `apple/Persona/App/AppModel.swift：resolve(_:_:)`；`docs/redesign/ux.md §3.4、§5.3` | `resolve_network_down` |
+| 作答回传根据连接条件和 hub 结果保留或移除交互卡片。 | `apple/Persona/App/AppModel.swift：resolve(_:_:)`；`docs/redesign/ux.md §3.4、§5.3` | `resolve_success` |
+| 作答回传根据连接条件和 hub 结果保留或移除交互卡片。 | `apple/Persona/App/AppModel.swift：resolve(_:_:)`；`docs/redesign/ux.md §3.4、§5.3` | `resolve_gone` |
+| 作答回传根据连接条件和 hub 结果保留或移除交互卡片。 | `apple/Persona/App/AppModel.swift：resolve(_:_:)`；`docs/redesign/ux.md §3.4、§5.3` | `resolve_prompt_changed` |
+| 作答回传根据连接条件和 hub 结果保留或移除交互卡片。 | `apple/Persona/App/AppModel.swift：resolve(_:_:)`；`docs/redesign/ux.md §3.4、§5.3` | `resolve_error_restores_card` |
 
 ### unified.json
 
@@ -191,4 +191,4 @@ macOS 需要能运行 `swiftc`；非 macOS 或未设置开关时，只跳过 Swi
 
 先定位当前 iOS 函数或单测，确认属于现状还是设计新增；在对应主题文件追加唯一用例，并同步本页规则表。协议字段按 Go 定义命名，不把页面状态写进 Resolution。直接搬断言填写 `from_test`；实现边界填写 `derived` 并补充 Swift／Go 对照；新设计填写 `design_change`，注明缺少现有实现的部分。
 
-执行上面的对照命令，再跑服务端要求的检查。不要用临时驱动重写另一套答案算法作为期望值来源，不修改 `ios/` 或 `android/`。提交前运行隐私扫描；数据只用编造内容和占位标识。
+执行上面的对照命令，再跑服务端要求的检查。不要用临时驱动重写另一套答案算法作为期望值来源，不修改 `apple/` 或 `android/`。提交前运行隐私扫描；数据只用编造内容和占位标识。
