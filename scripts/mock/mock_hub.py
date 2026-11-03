@@ -5551,6 +5551,12 @@ class H(BaseHTTPRequestHandler):
             n = p.split("/")[4]
             l = next((x for x in LAUNCHERS if x["name"] == n), None)
             if l: return self.send_json({"launcher": l})
+        if p.startswith("/api/v1/model-config/providers/") and p.endswith("/models"):  # 模型配置's model list (#943)
+            pid = unquote(p.split("/")[5])
+            if not pid.startswith("launcher.") or pid[len("launcher."):] not in {l["name"] for l in LAUNCHERS} | {"claude"}:
+                return self.send_json({"error": "这个供应商没有可列的模型"}, 404)
+            time.sleep(float(os.environ.get("MOCK_MODELS_SECONDS", "0.8")))
+            return self.send_json(dict(LAUNCHER_MODELS["claude"], machine="macbook"))
         if p.startswith("/api/v1/machines/") and "/launchers/" in p and p.endswith("/models"):  # 新建 Agent's model picker
             time.sleep(float(os.environ.get("MOCK_MODELS_SECONDS", "0.8")))
             return self.send_json(LAUNCHER_MODELS.get(unquote(p.split("/")[6]), {"agent": "traex", "models": []}))

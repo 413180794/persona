@@ -25,7 +25,24 @@ interface ModelConfiguration {
 
     /** `PATCH /api/v1/model-config/purposes/{id}` with the purpose's revision; another device's edit is a [ModelPurposeSave.Conflict]. */
     suspend fun save(purpose: ModelPurpose, draft: ModelConfigurationDraft): ModelPurposeSave
+
+    /**
+     * `GET /api/v1/model-config/providers/{id}/models` (#943): a launcher provider's /model list, asked on a machine that
+     * has the launcher ([machine] first: the purpose's own, where it runs). null: an older hub, or a provider with no list
+     * to ask for (plugins bring theirs, APIs have none).
+     */
+    // No default body: a wrapper that forgot to pass it on answered "no list" without a word (the DI one did).
+    suspend fun providerModels(provider: String, refresh: Boolean = false, machine: String? = null): ProviderModels?
 }
+
+/** [LauncherModels] for 模型配置, and the machine whose CLI answered. */
+@Serializable
+data class ProviderModels(
+    val agent: String = "",
+    val models: List<AgentModel> = emptyList(),
+    val locked: String? = null,
+    val machine: String = "",
+)
 
 /** The hub predates unified model configuration (its routes answer 404 without an error body). */
 class ModelConfigurationUnsupported : Exception("这个 hub 还不支持统一模型配置，请先更新服务器。")

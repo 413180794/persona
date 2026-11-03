@@ -86,7 +86,7 @@ class HttpModelConfigurationTest {
     private fun <T> withHub(block: suspend (MockWebServer, HttpModelConfiguration) -> T): T = runBlocking {
         MockWebServer().use { server ->
             val http = OkHttpClient.Builder().retryOnConnectionFailure(false).build()
-            block(server, HttpModelConfiguration { path, method, body ->
+            block(server, HttpModelConfiguration { path, method, body, _ ->
                 http.newCall(Request.Builder().url(server.url(path)).method(method, body).build()).execute()
             })
         }
@@ -115,6 +115,23 @@ class HttpModelConfigurationTest {
         server.enqueue(MockResponse().setResponseCode(409).setBody("""{"error":"revision conflict"}"""))
         assertEquals(ModelPurposeSave.Conflict, models.save(purpose, ModelConfigurationDraft(model = "next")))
         assertEquals("next", JsonCodec.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject["model"]?.jsonPrimitive?.content)
+    }
+
+    @Test fun providerModelsAskTheHubAndOlderHubsHaveNone() = withHub { server, models ->
+        server.enqueue(MockResponse().setBody("""{"agent":"claude","machine":"desk","models":[{"id":"opus","name":"Opus","default":true}]}"""))
+        val list = models.providerModels("launcher.work", refresh = true)
+        assertEquals("/api/v1/model-config/providers/launcher.work/models?refresh=1", server.takeRequest().path)
+        assertEquals("desk", list?.machine)
+        assertEquals(listOf("opus"), list?.models?.map { it.id })
+        assertTrue(list?.models?.single()?.isDefault == true)
+        server.enqueue(MockResponse().setResponseCode(404).setBody("404 page not found"))
+        assertNull(models.providerModels("launcher.work"))
+        assertEquals("/api/v1/model-config/providers/launcher.work/models", server.takeRequest().path)
+        server.enqueue(MockResponse().setBody("""{"agent":"claude","machine":"lab","models":[]}"""))
+        assertEquals("lab", models.providerModels("launcher.work", machine = "lab")?.machine)
+        assertEquals("/api/v1/model-config/providers/launcher.work/models?machine=lab", server.takeRequest().path)
+        server.enqueue(MockResponse().setResponseCode(503).setBody("""{"error":"有这个启动器的电脑都不在线，列不出模型"}"""))
+        assertEquals(503, (runCatching { models.providerModels("launcher.work") }.exceptionOrNull() as HubFailure).status)
     }
 
     @Test fun oldHubsAndMissingPurposesAreToldApart() = withHub { server, models ->

@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import persona.core.contracts.api.ModelConfiguration
 import persona.core.contracts.api.ModelPurpose
@@ -77,7 +78,9 @@ fun ModelPurposePage(models: ModelConfiguration?, purposeId: String, onBack: () 
     val scope = rememberCoroutineScope()
     val feedback = LocalAppFeedback.current
     var choosingProvider by remember { mutableStateOf(false) }
+    var pickingModel by remember { mutableStateOf(false) }
     LaunchedEffect(model) { model.load() }
+    LaunchedEffect(model, state.listProvider) { model.loadModels() }
     fun save(restore: Boolean) {
         scope.launch { model.save(restore)?.let { notice -> feedback?.notice(notice); onBack() } }
     }
@@ -90,7 +93,8 @@ fun ModelPurposePage(models: ModelConfiguration?, purposeId: String, onBack: () 
         if (purpose == null && state.busy) item("loading") { JLoading() }
         if (purpose != null) {
             effective(purpose, state)
-            form(purpose, state, onProvider = { choosingProvider = true }, onEdit = model::edit, onRestore = { save(true) })
+            form(purpose, state, onProvider = { choosingProvider = true }, onEdit = model::edit, onRestore = { save(true) },
+                onPickModel = { pickingModel = true }, onRetryModels = { scope.launch { model.loadModels(refresh = true) } })
         }
         state.error?.let { error ->
             item("error") {
@@ -101,6 +105,18 @@ fun ModelPurposePage(models: ModelConfiguration?, purposeId: String, onBack: () 
                 }
             }
         }
+    }
+    val modelList = state.modelList
+    if (pickingModel && modelList != null && modelList.locked == null) {
+        val machine = modelList.machine.ifBlank { null }?.let { " · 来自 $it" }.orEmpty()
+        JModelSheet(
+            note = "「${state.provider?.displayName.orEmpty()}」的模型，和在终端里输入 /model 看到的一样$machine。「默认」即留空：" +
+                (if (state.draft.provider.isEmpty()) "继承上一级的设置。" else "用这个供应商的默认模型。") + "没有的可以直接输入 ID。",
+            models = modelList.models, selected = state.draft.model, defaultDetail = state.defaultModelDetail,
+            loading = state.models.loading, error = state.models.error,
+            onPick = { model.edit(state.draft.copy(model = it)) }, onRefresh = { scope.launch { model.loadModels(refresh = true) } },
+            onDismiss = { pickingModel = false }, custom = true,
+        )
     }
     if (choosingProvider && purpose != null) JActionSheet(providerOptions(purpose, state.detail?.providers.orEmpty(), state.draft.provider).map { option ->
         JAction(option.label, checked = option.id == state.draft.provider, onClick = { model.edit(state.draft.choosingProvider(option.id)) })
@@ -127,6 +143,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.effective(purpose: Mo
 private fun androidx.compose.foundation.lazy.LazyListScope.form(
     purpose: ModelPurpose, state: ModelPurposeState, onProvider: () -> Unit,
     onEdit: (persona.core.contracts.api.ModelConfigurationDraft) -> Unit, onRestore: () -> Unit,
+    onPickModel: () -> Unit, onRetryModels: () -> Unit,
 ) {
     val draft = state.draft
     val editable = !state.busy
@@ -136,9 +153,34 @@ private fun androidx.compose.foundation.lazy.LazyListScope.form(
         JGroupItem(GroupPosition.Single) { JRow("模型供应商", value = label ?: "跟随默认", enabled = editable, onClick = onProvider) }
     }
     if (purpose.supports("model")) item("model") {
-        JTextField(draft.model, { onEdit(draft.copy(model = it)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m), label = "具体模型",
-            placeholder = (if (purpose.kind == "plugin") "跟随插件默认" else null) ?: state.provider?.model ?: purpose.effective.model ?: "跟随默认",
-            singleLine = true, enabled = editable)
+        if (state.picksModel) {
+            // A launcher's /model list (#943): the pick, 默认, or an id the list does not have.
+            val list = state.modelList
+            val picked = list?.models?.firstOrNull { it.id == draft.model }
+            JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
+                if (list == null) JRow("具体模型", subtitle = "正在读取「${state.provider?.displayName.orEmpty()}」的模型列表…", chevron = false,
+                    trailing = { JSpinner() })
+                // The launcher passes its own --model: a pick would not reach it (saving one fails the hub's check).
+                else if (list.locked != null) JRow("具体模型", value = draft.model.ifEmpty { "默认" }, subtitle = list.locked, subtitleLines = 3,
+                    enabled = false, chevron = false, trailing = { JIcon(PhIcons.LockSimple, "不能选择", tint = PersonaTheme.palette.ink3) })
+                else JRow("具体模型", value = picked?.label ?: draft.model.ifEmpty { "默认" },
+                    subtitle = when {
+                        picked != null -> picked.detailLine()
+                        draft.model.isNotEmpty() -> "列表里没有"
+                        else -> state.defaultModelDetail
+                    }, enabled = editable, onClick = onPickModel, trailing = if (state.models.loading) ({ JSpinner() }) else null)
+            }
+        } else {
+            JTextField(draft.model, { onEdit(draft.copy(model = it)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m), label = "具体模型",
+                placeholder = (if (purpose.kind == "plugin") "跟随插件默认" else null) ?: state.provider?.model ?: purpose.effective.model ?: "跟随默认",
+                singleLine = true, enabled = editable)
+            state.models.error?.takeIf { state.models.provider == state.listProvider && state.listProvider.isNotEmpty() }?.let { error ->
+                Row(Modifier.fillMaxWidth().padding(top = Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
+                    JInlineStatus("模型列表没读到：$error", Modifier.weight(1f), tone = InlineTone.Failed)
+                    JButton("重试", onRetryModels, enabled = editable, kind = JButtonKind.Secondary, size = JButtonSize.Small)
+                }
+            }
+        }
     }
     if (showsEffort(purpose, state.provider)) item("effort") {
         JTextField(draft.effort, { onEdit(draft.copy(effort = it)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m), label = "思考强度",

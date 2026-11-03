@@ -1,10 +1,7 @@
 package persona.feature.agents
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -42,10 +39,7 @@ internal fun LazyListScope.newAgentModelItems(state: NewAgentState, editable: Bo
     }
 }
 
-/**
- * The list behind the 模型 row: 默认 first, then every model the launcher's agent offers, searchable by name, id, the
- * model an alias stands for and description. Picking one closes it; 刷新 asks the CLI again.
- */
+/** The list behind the 模型 row (the design system's [JModelSheet]): only for this start. */
 @Composable
 internal fun NewAgentModelSheet(
     state: NewAgentState,
@@ -59,70 +53,22 @@ internal fun NewAgentModelSheet(
         LaunchedEffect(Unit) { onDismiss() }
         return
     }
-    var query by remember { mutableStateOf(initialQuery) }
-    val shown = remember(list, query) { list.models.filter { !it.isDefault && it.matches(query) } }
-    // Results start from the top: the list would otherwise keep the row it was at, and 默认 coming back in front of
-    // it once the query is cleared would stay above the viewport.
-    val scroll = rememberLazyListState()
-    LaunchedEffect(query) { scroll.scrollToItem(0) }
-    JSheet(onDismiss = onDismiss, title = "模型") {
-        Text("「${state.modelLauncher}」里 ${list.agent.ifBlank { state.agentType }.agentLabel()} 的模型，和在终端里输入 /model 看到的一样。只用于这次启动。",
-            style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
-        Spacer(Modifier.height(Tokens.Space.m))
-        JSearchField(query, { query = it }, "搜索名称或 ID")
-        Spacer(Modifier.height(Tokens.Space.m))
-        LazyColumn(Modifier.fillMaxWidth().weight(1f), scroll, contentPadding = PaddingValues(bottom = Tokens.Space.l)) {
-            state.models.error?.let { error -> item("error") { JInlineStatus("没有刷新：$error", tone = InlineTone.Failed) } }
-            if (query.isBlank()) item("default") {
-                JGroupItem(GroupPosition.Single) {
-                    ModelChoice("默认", defaultModelDetail(state), null, state.model.isEmpty()) { onPick(""); onDismiss() }
-                }
-            }
-            item("all") {
-                JSectionHeader(if (query.isBlank()) "全部模型" else "搜索结果", count = shown.size, action = {
-                    if (state.models.loading) JSpinner() else JTextButton("刷新", onRefresh, icon = PhIcons.ArrowsClockwise)
-                })
-            }
-            if (shown.isEmpty()) item("none") {
-                JEmptyState("没有找到", "换个名称或 ID 试试。", icon = PhIcons.MagnifyingGlass)
-            }
-            itemsIndexed(shown, key = { _, model -> model.id }) { index, model ->
-                JGroupItem(GroupPosition.of(index, shown.size)) {
-                    ModelChoice(model.label, modelDetail(model), model.description, model.id == state.model) { onPick(model.id); onDismiss() }
-                }
-            }
-        }
-    }
+    JModelSheet(
+        note = "「${state.modelLauncher}」里 ${list.agent.ifBlank { state.agentType }.agentLabel()} 的模型，和在终端里输入 /model 看到的一样。只用于这次启动。",
+        models = list.models, selected = state.model, defaultDetail = defaultModelDetail(state),
+        loading = state.models.loading, error = state.models.error,
+        onPick = onPick, onRefresh = onRefresh, onDismiss = onDismiss, initialQuery = initialQuery,
+    )
 }
 
-@Composable
-private fun ModelChoice(title: String, detail: String?, description: String?, selected: Boolean, onClick: () -> Unit) {
-    JRow(title, subtitle = listOfNotNull(detail, description?.takeIf { it.isNotBlank() }).joinToString("\n").ifEmpty { null },
-        subtitleLines = 3, chevron = false, onClick = onClick,
-        trailing = if (selected) ({ JIcon(PhIcons.Check, "已选", tint = PersonaTheme.palette.ink) }) else null)
-}
-
-/** A model's second line: its id when the name is another word for it, and the model an alias stands for. */
-internal fun modelDetail(model: AgentModel): String? {
-    val id = model.id.takeUnless { it.equals(model.label, ignoreCase = true) }
-    val resolved = model.resolved?.takeIf { it.isNotBlank() && !it.equals(model.label, true) && it != model.id }
-    return when {
-        id != null && resolved != null -> "$id → $resolved"
-        else -> id ?: resolved
-    }
-}
+/** A model's second line (the design system's [detailLine]). */
+internal fun modelDetail(model: AgentModel): String? = model.detailLine()
 
 /** What runs with no pick: 模型配置's model, else the one the agent defaults to. */
 internal fun defaultModelDetail(state: NewAgentState): String? {
     if (state.configuredModel.isNotEmpty()) return "模型配置：${state.configuredModel}"
     val default = state.modelList?.models?.firstOrNull { it.isDefault } ?: return null
     return default.resolved?.takeIf { it.isNotBlank() } ?: default.label
-}
-
-/** Whether [query] is in the model's name, id, resolved model or description. */
-internal fun AgentModel.matches(query: String): Boolean {
-    val q = query.trim()
-    return q.isEmpty() || listOf(name, id, resolved.orEmpty(), description.orEmpty()).any { it.contains(q, ignoreCase = true) }
 }
 
 /** The thinking efforts offered: 跟随启动器, then the levels the model that will run takes (all when not known). */

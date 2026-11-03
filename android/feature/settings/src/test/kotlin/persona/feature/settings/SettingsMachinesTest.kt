@@ -178,6 +178,52 @@ class ModelConfigurationStateTest {
         assertFalse(showsEffort(triage.copy(fields = listOf("provider", "model")), null))
     }
 
+    @Test fun aLauncherProvidersModelIsPickedFromItsList() = runBlocking {
+        var answer: ProviderModels? = ProviderModels("claude", listOf(
+            AgentModel("default", "Default", resolved = "claude-opus-5-5", isDefault = true), AgentModel("opus", "Opus 5.5", resolved = "claude-opus-5-5"),
+        ), machine = "desk")
+        var failure: Exception? = null
+        val asked = mutableListOf<Pair<String, Boolean>>()
+        var askedOn: String? = null
+        val api = object : ModelConfiguration {
+            override suspend fun catalog() = catalog
+            override suspend fun purpose(id: String) = ModelPurposeDetail(agent.copy(machineId = "lab"), providers)
+            override suspend fun save(purpose: ModelPurpose, draft: ModelConfigurationDraft): ModelPurposeSave = throw IllegalStateException()
+            override suspend fun providerModels(provider: String, refresh: Boolean, machine: String?): ProviderModels? {
+                asked += provider to refresh
+                askedOn = machine
+                failure?.let { throw it }
+                return answer
+            }
+        }
+        val model = ModelPurposeModel(api, "agent.new")
+        model.load()
+        assertEquals("launcher.claude", model.state.value.listProvider)
+        model.loadModels()
+        model.loadModels() // kept: not asked again
+        assertEquals(listOf("launcher.claude" to false), asked)
+        assertEquals("the purpose's own machine, where it runs", "lab", askedOn)
+        val state = model.state.value
+        assertTrue(state.picksModel)
+        // Nothing set here: the inherited model is what runs, not the launcher's default.
+        assertEquals("model-chat", state.defaultModelDetail)
+        model.edit(state.draft.copy(provider = "launcher.claude"))
+        assertEquals("claude-opus-5-5", model.state.value.defaultModelDetail)
+
+        // An API provider has no list; an older hub's 404 (null) or a failure leaves the plain field.
+        model.edit(model.state.value.draft.copy(provider = "api.fast"))
+        assertEquals("", model.state.value.listProvider)
+        assertFalse(model.state.value.picksModel)
+        model.edit(model.state.value.draft.copy(provider = "launcher.claude"))
+        answer = null
+        model.loadModels(refresh = true)
+        assertFalse(model.state.value.picksModel)
+        failure = HubFailure(HubError.Server, "offline", 503)
+        model.loadModels(refresh = true)
+        assertFalse(model.state.value.picksModel)
+        assertEquals("offline", model.state.value.models.error)
+    }
+
     @Test fun aConflictKeepsTheDraftAndBlocksSavingUntilReloaded() = runBlocking {
         var result: ModelPurposeSave = ModelPurposeSave.Conflict
         var sent: ModelConfigurationDraft? = null
@@ -185,6 +231,7 @@ class ModelConfigurationStateTest {
             override suspend fun catalog() = catalog
             override suspend fun purpose(id: String) = ModelPurposeDetail(agent, providers)
             override suspend fun save(purpose: ModelPurpose, draft: ModelConfigurationDraft): ModelPurposeSave { sent = draft; return result }
+            override suspend fun providerModels(provider: String, refresh: Boolean, machine: String?): ProviderModels? = null
         }
         val model = ModelPurposeModel(api, "agent.new")
         model.load()
@@ -209,6 +256,7 @@ class ModelConfigurationStateTest {
             override suspend fun catalog(): ModelCatalog = throw ModelConfigurationUnsupported()
             override suspend fun purpose(id: String): ModelPurposeDetail = throw ModelConfigurationUnsupported()
             override suspend fun save(purpose: ModelPurpose, draft: ModelConfigurationDraft): ModelPurposeSave = throw ModelConfigurationUnsupported()
+            override suspend fun providerModels(provider: String, refresh: Boolean, machine: String?): ProviderModels? = null
         })
         unsupported.load()
         assertTrue(unsupported.state.value.unsupported)
@@ -217,6 +265,7 @@ class ModelConfigurationStateTest {
             override suspend fun catalog(): ModelCatalog = throw HubFailure(HubError.Server, "boom", 500)
             override suspend fun purpose(id: String): ModelPurposeDetail = throw IllegalStateException()
             override suspend fun save(purpose: ModelPurpose, draft: ModelConfigurationDraft): ModelPurposeSave = throw IllegalStateException()
+            override suspend fun providerModels(provider: String, refresh: Boolean, machine: String?): ProviderModels? = null
         })
         broken.load()
         assertEquals("读取失败：boom", broken.state.value.error)

@@ -662,6 +662,7 @@ func (h *Hub) modelConfigRoutes(api *http.ServeMux) {
 		writeJSON(w, map[string]any{"purpose": p, "providers": providers})
 	}
 	api.HandleFunc("GET /api/v1/model-config/purposes/{id}", detail)
+	api.HandleFunc("GET /api/v1/model-config/providers/{id}/models", h.providerModels)
 	api.HandleFunc("PATCH /api/v1/model-config/purposes/{id}", func(w http.ResponseWriter, r *http.Request) {
 		var in modelPatch
 		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))

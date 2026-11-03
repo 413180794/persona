@@ -118,3 +118,53 @@ func TestSessionStartTakesPickedModel(t *testing.T) {
 		t.Fatalf("node got %+v", got)
 	}
 }
+
+// 模型配置's list for a launcher provider comes from a machine that has the launcher and is online, and says which;
+// providers without a list to ask for answer 404 (#943).
+func TestProviderModelsAsksAMachineWithTheLauncher(t *testing.T) {
+	h, mux := modelTestHub(t)
+	for _, id := range []string{"a", "c"} {
+		offline := newMachine(h, MachineConfig{ID: id})
+		h.byID[id] = offline
+		h.machines = append(h.machines, offline)
+	}
+	var asked []string
+	modelsNode(t, h, MachineConfig{ID: "b"}, func(method string, p map[string]any) (any, error) {
+		if method != "launchers.models" {
+			return map[string]any{}, nil
+		}
+		asked = append(asked, p["name"].(string))
+		return proto.LauncherModels{Agent: "claude", Models: []proto.AgentModel{{ID: "opus", Name: "Opus"}}}, nil
+	})
+	h.launchersSeen = map[string][]proto.Launcher{"a": {{Name: "work"}}, "b": {{Name: "work"}}, "c": {{Name: "elsewhere"}}}
+	get := func(path string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		return w
+	}
+
+	w := get("/api/v1/model-config/providers/launcher.work/models?machine=a") // a has it but is offline
+	var res struct {
+		proto.LauncherModels
+		Machine string `json:"machine"`
+	}
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &res) != nil || res.Machine != "b" || len(res.Models) != 1 {
+		t.Fatalf("work: %d %s", w.Code, w.Body)
+	}
+	// Claude Code 默认 runs on every machine.
+	if w := get("/api/v1/model-config/providers/launcher.claude/models"); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"machine":"b"`) {
+		t.Fatalf("claude: %d %s", w.Code, w.Body)
+	}
+	if len(asked) != 2 || asked[0] != "work" || asked[1] != "claude" {
+		t.Fatalf("asked %v", asked)
+	}
+	// Only on a machine that is not connected.
+	if w := get("/api/v1/model-config/providers/launcher.elsewhere/models"); w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("elsewhere: %d %s", w.Code, w.Body)
+	}
+	for _, id := range []string{"launcher.nothing", "plugin.voice", "legacy.ai"} {
+		if w := get("/api/v1/model-config/providers/" + id + "/models"); w.Code != http.StatusNotFound {
+			t.Fatalf("%s: %d %s", id, w.Code, w.Body)
+		}
+	}
+}

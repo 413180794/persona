@@ -40,6 +40,28 @@ export async function launcherModels(mid: string, launcher: string, opts: { refr
   }
 }
 
+/** 模型配置's list for a launcher provider (`launcher.<name>`, GET /model-config/providers/{id}/models, #943): asked on a
+ *  machine that has the launcher, which `machine` names. null: an older hub or a provider without a list (no picker). */
+export async function providerModels(provider: string, opts: { refresh?: boolean; machine?: string; signal?: AbortSignal } = {}): Promise<(LauncherModels & { machine?: string }) | null> {
+  // machine: the purpose's own (a task, 飞书 /agent run there), so the list is that machine's launcher.
+  const query = new URLSearchParams();
+  if (opts.refresh) query.set("refresh", "1");
+  if (opts.machine) query.set("machine", opts.machine);
+  try {
+    const r = await api<LauncherModels & { machine?: string }>(`/model-config/providers/${enc(provider)}/models${query.size ? `?${query}` : ""}`, { signal: opts.signal });
+    return { ...r, models: r.models ?? [] };
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
+}
+
+/** What is typed in the search, as an id to save when no model has exactly that id (模型配置 takes ids the list lacks). */
+export function customModel(models: AgentModel[], query: string): string {
+  const id = query.trim();
+  return id && !/\s/.test(id) && !models.some((m) => m.id === id) ? id : "";
+}
+
 /** The 模型配置 binding of 新建 Agent that still applies with the chosen launcher: the hub keeps its model and effort
  *  unless another launcher is picked (hub applyModel). Not following 模型配置: nothing. */
 export function followedBinding(chosen: string, effective: ModelBinding | null | undefined): ModelBinding {

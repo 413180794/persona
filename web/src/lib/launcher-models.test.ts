@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  defaultDetail, effortChoices, fitEffort, followedBinding, launcherAgent, launcherModels, modelDetail, modelRows, pickerLauncher, startPicks,
-  type AgentModel, type LauncherModels,
+  customModel, defaultDetail, effortChoices, fitEffort, followedBinding, launcherAgent, launcherModels, modelDetail, modelRows, pickerLauncher,
+  providerModels, startPicks, type AgentModel, type LauncherModels,
 } from "./launcher-models";
 
 const all = ["low", "medium", "high", "xhigh", "max"];
@@ -81,6 +81,37 @@ describe("列表", () => {
     expect(fetcher.mock.calls.map((c) => c[0]).slice(0, 2)).toEqual([
       "/api/v1/machines/desk%20top/launchers/traex/models", "/api/v1/machines/desktop/launchers/gateway%2Fx/models?refresh=1",
     ]);
+  });
+});
+
+describe("模型配置的列表（#943）", () => {
+  it("asks for a launcher provider's list and says which machine answered; none for an older hub", async () => {
+    vi.stubGlobal("localStorage", { getItem: () => "mock" });
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, text: async () => JSON.stringify({ ...claude, machine: "desktop" }) })
+      .mockResolvedValueOnce({ ok: false, status: 404, text: async () => "404 page not found" })
+      .mockResolvedValueOnce({ ok: false, status: 503, text: async () => JSON.stringify({ error: "有这个启动器的电脑都不在线，列不出模型" }) });
+    vi.stubGlobal("fetch", fetcher);
+    expect(await providerModels("launcher.work", { refresh: true })).toEqual({ ...claude, machine: "desktop" });
+    expect(await providerModels("launcher.work")).toBeNull();
+    await expect(providerModels("launcher.work")).rejects.toMatchObject({ status: 503 });
+    expect(fetcher.mock.calls[0][0]).toBe("/api/v1/model-config/providers/launcher.work/models?refresh=1");
+    expect(fetcher.mock.calls[1][0]).toBe("/api/v1/model-config/providers/launcher.work/models");
+  });
+
+  it("asks on the purpose's own machine when it has one", async () => {
+    vi.stubGlobal("localStorage", { getItem: () => "mock" });
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => JSON.stringify({ ...claude, machine: "lab box" }) });
+    vi.stubGlobal("fetch", fetcher);
+    await providerModels("launcher.work", { machine: "lab box" });
+    expect(fetcher.mock.calls[0][0]).toBe("/api/v1/model-config/providers/launcher.work/models?machine=lab+box");
+  });
+
+  it("takes an id the list does not have, typed in the search", () => {
+    expect(customModel(claude.models, "  my-gateway/model-x ")).toBe("my-gateway/model-x");
+    expect(customModel(claude.models, "opus")).toBe(""); // listed: pick the row
+    expect(customModel(claude.models, "")).toBe("");
+    expect(customModel(claude.models, "two words")).toBe(""); // a search, not an id
   });
 });
 

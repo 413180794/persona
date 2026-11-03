@@ -261,6 +261,8 @@ class OkHttpHubConnection(
         path: String, method: String = "GET", body: RequestBody? = null,
         headers: Map<String, String> = emptyMap(), buffered: Boolean = true,
         expectedRoute: HubRoute? = null,
+        /** Longer than the client's 15 s, for answers the hub waits on a machine for (a CLI starting). */
+        readTimeoutSeconds: Long? = null,
     ): Response {
         val selected = awaitRoute()
         if (expectedRoute != null && selected !== expectedRoute) throw HubFailure(HubError.NoNetwork)
@@ -271,7 +273,8 @@ class OkHttpHubConnection(
         val request = Request.Builder().url(url).apply {
             headers.forEach { (name, value) -> header(name, value) }
         }.header("Authorization", "Bearer ${owner.token}").method(method, body).build()
-        val response = http.client.newCall(request).awaitResponse(buffered)
+        val client = readTimeoutSeconds?.let { http.client.newBuilder().readTimeout(it, java.util.concurrent.TimeUnit.SECONDS).build() } ?: http.client
+        val response = client.newCall(request).awaitResponse(buffered)
         if (!response.isSuccessful) {
             val error = response.use { HubFailure.from(it) }
             // recordFailure owns revocation: it cancels the socket, clears the route and diagnostics. In a group only

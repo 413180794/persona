@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, enc, errorText } from "../../lib/api";
 import {
   chooseProvider, draftFor, modelConfiguration, modelPurpose, modelSummary, providersFor, purposeGroups, saveModelPurpose, supportsField,
-  type ModelConfigurationBody, type ModelDraft, type ModelPurposeBody,
+  type ModelBinding, type ModelConfigurationBody, type ModelDraft, type ModelPurposeBody,
 } from "../../lib/model-config";
+import { effortChoices, providerModels, takesEffort } from "../../lib/launcher-models";
+import { useStore } from "../../lib/store";
 import { Button, Dialog, IconButton, Loading, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { ModelPicker, type ModelList } from "../../ui/ModelPicker";
 import { Group, Pill, Row } from "./SettingsParts";
 
 export function ModelConfiguration({ open, onOpen, onProviders }: { open: string | null; onOpen: (id: string | null) => void; onProviders: () => void }) {
@@ -64,6 +67,15 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
   const [busy, setBusy] = useState(false);
   const [models, setModels] = useState<{ id: string; name?: string }[]>([]);
   const [modelsError, setModelsError] = useState("");
+  // A launcher provider's /model list (#943), from a machine that has it (`machine`), and the picker over it.
+  const [launcherList, setLauncherList] = useState<ModelList & { machine?: string; provider?: string }>({ status: "idle" });
+  const [picking, setPicking] = useState(false);
+  const [query, setQuery] = useState("");
+  // 重试 / 重新读取: the next load asks the CLI again (refresh) and keeps showing the list meanwhile, once.
+  const [reload, setReload] = useState(0);
+  const refreshNext = useRef(false);
+  const search = useRef<HTMLInputElement>(null);
+  const machines = useStore((s) => s.machines);
   const load = async () => {
     if (!id) return;
     try {
@@ -90,6 +102,29 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
   const candidates = p ? providersFor(p, data.providers) : [];
   const chosen = data?.providers.find((v) => v.id === (draft.provider || p?.effective?.provider));
   const effortAllowed = p && supportsField(p, "effort") && !(chosen?.kind === "api" && chosen.api !== "responses");
+  const listProvider = p?.kind !== "plugin" && chosen?.kind === "launcher" && supportsField(p!, "model") ? chosen.id : "";
+  useEffect(() => {
+    const refresh = refreshNext.current;
+    refreshNext.current = false;
+    if (!refresh) { setPicking(false); setQuery(""); } // another provider: start closed; a refresh keeps the list open
+    if (!listProvider) { setLauncherList({ status: "idle" }); return; }
+    const controller = new AbortController();
+    // Another provider's list never stays up while this one's loads (a pick would be the other provider's id).
+    setLauncherList((l) => ({ status: "loading", provider: listProvider, list: refresh && l.provider === listProvider ? l.list : undefined }));
+    providerModels(listProvider, { refresh, machine: p?.machine_id, signal: controller.signal })
+      .then((list) => setLauncherList({ status: "ready", list, machine: list?.machine, provider: listProvider }))
+      .catch((e) => { if (!controller.signal.aborted) setLauncherList({ status: "error", error: errorText(e), provider: listProvider }); });
+    return () => controller.abort();
+  }, [listProvider, reload, p?.machine_id]);
+  const reloadList = () => { refreshNext.current = true; setReload((n) => n + 1); };
+  // The picker while there is a list (or one coming); the plain field without one: an older hub, a failure.
+  const picker = launcherList.status === "loading" || (launcherList.status === "ready" && !!launcherList.list?.models.length);
+  // Left empty, the model is inherited while the provider is too (what runs now when nothing here is set); with a
+  // provider picked here it is that provider's default (the list's 默认).
+  const inherited: ModelBinding = !draft.provider && !p?.override?.model && p?.effective?.model ? { model: p.effective.model } : {};
+  const listedEfforts = launcherList.status === "ready" && launcherList.list && takesEffort(launcherList.list.agent)
+    ? effortChoices(launcherList.list, draft.model, inherited) : ["low", "medium", "high", "xhigh", "max"];
+  const listMachine = machines.find((m) => m.id === launcherList.machine)?.name ?? launcherList.machine;
   const save = async (restore = false) => {
     if (!p || busy || conflict) return;
     setBusy(true);
@@ -134,22 +169,47 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
             {candidates.map((v) => <option key={v.id} value={v.id}>{v.name}{v.hidden ? "（已隐藏）" : ""}</option>)}
           </select>
         </label>}
-        {supportsField(p, "model") && <label className="block">
+        {supportsField(p, "model") && <div className="block">
           <span className="mb-1 block text-[12px] font-medium text-ink-2">具体模型</span>
-          {p.kind === "plugin" ? <select className={inputClass} value={draft.model} disabled={busy || (!!modelsError && models.length === 0)} onChange={(e) => setDraft((d) => ({ ...d, model: e.target.value }))}>
+          {p.kind === "plugin" ? <select aria-label="具体模型" className={inputClass} value={draft.model} disabled={busy || (!!modelsError && models.length === 0)} onChange={(e) => setDraft((d) => ({ ...d, model: e.target.value }))}>
             <option value="">跟随插件默认</option>
             {draft.model && !models.some((m) => m.id === draft.model) && <option value={draft.model}>{draft.model}（当前引用）</option>}
             {models.map((m) => <option key={m.id} value={m.id}>{m.name || m.id}</option>)}
-          </select> : <input className={`${inputClass} font-mono`} value={draft.model} disabled={busy} placeholder={chosen?.model || p.effective?.model || "跟随默认"}
+          </select> : picker ? <ModelPicker
+            models={launcherList}
+            model={draft.model}
+            followed={inherited}
+            open={picking}
+            onToggle={() => setPicking((o) => !o)}
+            query={query}
+            onQuery={setQuery}
+            search={search}
+            onPick={(id) => {
+              setDraft((d) => ({ ...d, model: id }));
+              setPicking(false);
+              setQuery("");
+            }}
+            onReload={reloadList}
+            custom
+            failedNote="没读到模型列表"
+          /> : <input aria-label="具体模型" className={`${inputClass} font-mono`} value={draft.model} disabled={busy} placeholder={chosen?.model || p.effective?.model || "跟随默认"}
             spellCheck={false} autoComplete="off" onChange={(e) => setDraft((d) => ({ ...d, model: e.target.value }))} />}
-          <span className="mt-1 block text-[11px] text-ink-3">留空恢复继承；指定模型 ID 不代表已经通过真实请求验证。</span>
+          <span className="mt-1 block text-[11px] text-ink-3">
+            {picker ? `「默认」即留空：${draft.provider ? "用这个供应商的默认模型" : "继承上一级的设置"}。列表和在终端里输入 /model 看到的一样${listMachine ? `（来自 ${listMachine}）` : ""}，没有的可以直接输入 ID。` : "留空恢复继承；指定模型 ID 不代表已经通过真实请求验证。"}
+          </span>
           {modelsError && <span role="alert" className="mt-1 block text-[11px] text-red">插件模型列表未读取：{modelsError}</span>}
-        </label>}
+          {launcherList.status === "error" && (
+            <span role="alert" className="mt-1 flex items-center gap-2 text-[11px] text-ink-3">
+              <span className="min-w-0 truncate" title={launcherList.error}>模型列表未读取：{launcherList.error}</span>
+              <button type="button" onClick={reloadList} className="shrink-0 font-medium whitespace-nowrap text-accent-ink hover:underline">重试</button>
+            </span>
+          )}
+        </div>}
         {effortAllowed && <label className="block">
           <span className="mb-1 block text-[12px] font-medium text-ink-2">思考强度</span>
           <input className={inputClass} value={draft.effort} disabled={busy} placeholder={p.effective?.effort || "跟随默认"} list="model-efforts"
             onChange={(e) => setDraft((d) => ({ ...d, effort: e.target.value }))} />
-          <datalist id="model-efforts">{["low", "medium", "high", "xhigh", "max"].map((v) => <option key={v} value={v} />)}</datalist>
+          <datalist id="model-efforts">{listedEfforts.map((v) => <option key={v} value={v} />)}</datalist>
         </label>}
         <p className="text-[11.5px] leading-relaxed text-ink-3">保存只修改配置，不会发起模型请求或打断正在运行的任务。{p.kind === "plugin" && "语音模型是 Persona 的默认选择，不改变插件自己的供应商或凭据。"}</p>
       </div>}

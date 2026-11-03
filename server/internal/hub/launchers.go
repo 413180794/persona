@@ -626,30 +626,94 @@ func sessionLaunchers(discovered, configured []sessionLauncher) []sessionLaunche
 // /model menu, for 新建 Agent's model picker (node/launcher_models.go). The node keeps a list 10 minutes; ?refresh=1
 // asks the CLI again.
 func (h *Hub) launcherModels(w http.ResponseWriter, r *http.Request, m *Machine) {
-	name := r.PathValue("name")
-	params := map[string]any{"name": name, "refresh": r.URL.Query().Get("refresh") == "1"}
+	ctx, cancel := context.WithTimeout(r.Context(), 70*time.Second)
+	defer cancel()
+	res, err := h.askLauncherModels(ctx, m, r.PathValue("name"), r.URL.Query().Get("refresh") == "1")
+	if err != nil {
+		writeLauncherModelsErr(w, err)
+		return
+	}
+	writeJSON(w, res)
+}
+
+// askLauncherModels asks machine m's node for launcher name's /model list (node/launcher_models.go).
+func (h *Hub) askLauncherModels(ctx context.Context, m *Machine, name string, refresh bool) (proto.LauncherModels, error) {
+	params := map[string]any{"name": name, "refresh": refresh}
 	for _, l := range m.cfg.Launchers {
 		if l.Name == name && l.AgentType != "" {
 			params["agent_type"] = l.AgentType // what the user said it runs
 		}
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 70*time.Second)
-	defer cancel()
 	var res proto.LauncherModels
 	if err := m.call(ctx, "launchers.models", params, &res); err != nil {
-		var re *rpc.Error
-		if errors.As(err, &re) && strings.HasPrefix(re.Message, "unknown method") {
-			// 404 like an older hub: the apps leave the picker out instead of offering a retry that cannot work.
-			writeCode(w, http.StatusNotFound, proto.CodeNodeOutdated, "这台机器上的 personad 太旧，列不出模型，需要重新部署", nil)
-			return
-		}
-		callErr(w, err)
-		return
+		return res, err
 	}
 	if res.Models == nil {
 		res.Models = []proto.AgentModel{}
 	}
-	writeJSON(w, res)
+	return res, nil
+}
+
+func writeLauncherModelsErr(w http.ResponseWriter, err error) {
+	var re *rpc.Error
+	if errors.As(err, &re) && strings.HasPrefix(re.Message, "unknown method") {
+		// 404 like an older hub: the apps leave the picker out instead of offering a retry that cannot work.
+		writeCode(w, http.StatusNotFound, proto.CodeNodeOutdated, "这台机器上的 personad 太旧，列不出模型，需要重新部署", nil)
+		return
+	}
+	callErr(w, err)
+}
+
+// providerModels is GET /api/v1/model-config/providers/{id}/models: a launcher provider's /model list for 模型配置
+// (docs/model-config.md「模型配置选模型」). 模型配置 is the hub's, not one machine's, so the list comes from a machine
+// that has the launcher — ?machine= when it does, else the assistant's, the hub's own, then any online one — and the
+// answer says which. Other providers have no list to ask for: a plugin's comes with it, an API connection has none.
+func (h *Hub) providerModels(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 70*time.Second)
+	defer cancel()
+	name, ok := strings.CutPrefix(r.PathValue("id"), "launcher.")
+	if !ok || name == "" {
+		writeErr(w, http.StatusNotFound, errors.New("这个供应商没有可列的模型"))
+		return
+	}
+	found, everywhere := name == "claude", name == "claude"
+	var has []string
+	for _, v := range h.launcherViews(ctx) {
+		if v.Name != name {
+			continue
+		}
+		if v.Kind == "api" {
+			writeErr(w, http.StatusNotFound, errors.New("直接 API 接入没有可列的模型"))
+			return
+		}
+		found = true
+		everywhere = everywhere || v.Source == "jarvis" || len(v.Machines) == 0 // jarvisd launch runs on every machine
+		has = append(has, v.Machines...)
+	}
+	if !found {
+		writeErr(w, http.StatusNotFound, errors.New("没有这个供应商"))
+		return
+	}
+	if everywhere {
+		has = has[:0]
+		for _, m := range h.machinesNow() {
+			has = append(has, m.cfg.ID)
+		}
+	}
+	m := h.quotaMachine(ctx, has, r.URL.Query().Get("machine"))
+	if m == nil {
+		writeErr(w, http.StatusServiceUnavailable, errors.New("有这个启动器的电脑都不在线，列不出模型"))
+		return
+	}
+	res, err := h.askLauncherModels(ctx, m, name, r.URL.Query().Get("refresh") == "1")
+	if err != nil {
+		writeLauncherModelsErr(w, err)
+		return
+	}
+	writeJSON(w, struct {
+		proto.LauncherModels
+		Machine string `json:"machine"`
+	}{res, m.cfg.ID})
 }
 
 func (h *Hub) listLaunchers(w http.ResponseWriter, r *http.Request, m *Machine) {

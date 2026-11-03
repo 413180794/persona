@@ -11,9 +11,11 @@ import okhttp3.Response
 
 /** 设置 › 模型配置 over the pairing's connection (docs/model-config.md「接口」); 404 and 409 mean different things here. */
 class HttpModelConfiguration internal constructor(
-    private val request: suspend (String, String, RequestBody?) -> Response,
+    private val request: suspend (String, String, RequestBody?, Long?) -> Response,
 ) : ModelConfiguration {
-    constructor(connection: OkHttpHubConnection) : this({ path, method, body -> connection.request(path, method, body) })
+    constructor(connection: OkHttpHubConnection) : this({ path, method, body, timeout ->
+        connection.request(path, method, body, readTimeoutSeconds = timeout)
+    })
 
     override suspend fun catalog(): ModelCatalog = try {
         JsonCodec.decodeFromString(call(path(), "GET"))
@@ -33,6 +35,18 @@ class HttpModelConfiguration internal constructor(
         if (failure.status == 409) ModelPurposeSave.Conflict else throw missing(failure)
     }
 
+    // The hub gives the machine 70 s to start the launcher's CLI and answer (it keeps the list 10 minutes after).
+    override suspend fun providerModels(provider: String, refresh: Boolean, machine: String?): ProviderModels? = try {
+        val url = HttpUrl.Builder().scheme("https").host("example.com").addPathSegments("api/v1/model-config/providers")
+            .addPathSegment(provider).addPathSegment("models").apply {
+                if (refresh) addQueryParameter("refresh", "1")
+                if (!machine.isNullOrBlank()) addQueryParameter("machine", machine)
+            }.build()
+        JsonCodec.decodeFromString(call(url.encodedPath + (url.encodedQuery?.let { "?$it" } ?: ""), "GET", timeout = 75))
+    } catch (failure: HubFailure) {
+        if (failure.status == 404) null else throw failure
+    }
+
     /** A hub without model configuration answers 404 from its router, without the JSON error of a missing purpose. */
     private fun missing(failure: HubFailure): Exception = when {
         failure.status != 404 -> failure
@@ -40,8 +54,8 @@ class HttpModelConfiguration internal constructor(
         else -> ModelPurposeNotFound(failure.message)
     }
 
-    private suspend fun call(path: String, method: String, body: JsonObject? = null): String =
-        request(path, method, body?.toString()?.toRequestBody(json)).use {
+    private suspend fun call(path: String, method: String, body: JsonObject? = null, timeout: Long? = null): String =
+        request(path, method, body?.toString()?.toRequestBody(json), timeout).use {
             if (!it.isSuccessful) throw HubFailure.from(it)
             it.body?.string().orEmpty()
         }
