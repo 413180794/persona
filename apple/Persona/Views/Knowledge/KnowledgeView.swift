@@ -1093,12 +1093,12 @@ struct KBDayView: View {
             }
             .listStyle(.insetGrouped)
             .themedPage()
-            .navigationTitle(Self.title(day))
             .navigationBarTitleDisplayMode(.inline)
             #if os(macOS)
-            // The Mac's toolbar shows the title by the back button as well: a principal item said the day twice.
-            .navigationSubtitle(chatName)
+            // The day and its chat in the title bar's row (#855); a principal item would say the day twice.
+            .pageTitle(Self.title(day), subtitle: chatName)
             #else
+            .navigationTitle(Self.title(day))
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 0) {

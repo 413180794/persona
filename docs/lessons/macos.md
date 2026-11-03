@@ -102,3 +102,7 @@
 - Mac 的 sheet 没有导航栏，只画底栏那一排动作（2026-11-04，#743，`mac_shot.sh` 离屏实测）：`.topBarLeading`（兼容层映射成 `.navigation`）画不出来；
   `.confirmationAction` 只画一个按钮，放两个 `ToolbarItem` 或一个 `ToolbarItemGroup` 都只出第一个，另一个消失。
   要两个按钮时，「完成」放 `.cancellationAction`（Esc 关闭），另一个放 `.primaryAction`，两个都画在底栏右侧、都不是回车的默认按钮（文件查看器、「工具输出」都这样）。
+- Mac 窗口工具栏去掉了系统标题以后（#830），推进去的页面的 `navigationTitle` 没地方显示（#855）：推入页面用 `pageTitle(_:subtitle:)`（iOS 上就是 `navigationTitle`），
+  Mac 上它把标题画在这一页顶上的标题栏那一行，并用 `MacTitleRowTaken` 告诉外壳别再画分区名。左边距是标题自己量的（这一页是否贴着窗口左边缘），
+  不读 `macTitleRowLeading`：分栏详情栏里推进去的页面拿到的是整页的值，环境值加在 `navigationDestination` 外面、`NavigationStack` 外面都试过，没用。
+

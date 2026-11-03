@@ -28,7 +28,7 @@ struct AssistantProfileView: View {
 
     var body: some View {
         Group { if AppStyle.current.usesBeautifulUI { cards } else { list } }
-        .navigationTitle("Persona")
+        .pageTitle("Persona")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
@@ -368,7 +368,7 @@ struct AssistantRunsView: View {
                                        description: Text("定时任务和跟进每跑一次（包括失败和跳过的）都记在这里。"))
             }
         }
-        .navigationTitle("运行记录")
+        .pageTitle("运行记录")
         .task { await load() }
         .refreshable { await load() }
     }

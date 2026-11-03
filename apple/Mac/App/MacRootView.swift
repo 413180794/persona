@@ -173,8 +173,9 @@ private struct MacShell: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 // The section's title in the title bar's row, at this column's edge (not over the sections column):
                 // the row was left empty when the system's title went (#830). Persona's page puts its own header there.
-                .overlay(alignment: .topLeading) {
-                    if shown != .assistant {
+                // A pushed page that draws its own title there (`pageTitle`, #855) takes the row instead.
+                .overlayPreferenceValue(MacTitleRowTaken.self, alignment: .topLeading) { taken in
+                    if shown != .assistant, !taken {
                         MacPageTitle(title: shown.title, leading: sidebarHidden ? Theme.Size.macTitleAfterControls : Theme.Space.l)
                     }
                 }

@@ -219,7 +219,7 @@ struct AssistantRoutinesView: View {
                                        description: Text("点右上角的 ＋，或者在对话里说「每天 9 点给我早报」「每 30 分钟巡检一次」，让 Persona 定时做一件事。"))
             }
         }
-        .navigationTitle("定时任务")
+        .pageTitle("定时任务")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
@@ -1000,7 +1000,7 @@ struct AssistantMemoryView: View {
                                        description: Text("Persona 会把你的偏好、纠正过它的地方记在这里。"))
             }
         }
-        .navigationTitle("记忆")
+        .pageTitle("记忆")
         .confirmationDialog("删除这条记忆？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
                             titleVisibility: .visible, presenting: pendingDelete) { e in
             Button("删除", role: .destructive) { Task { await delete(e) } }
@@ -1100,7 +1100,7 @@ struct AssistantMemoryDetail: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .themedPage()
-        .navigationTitle(title ?? entry.name ?? entry.file.name)
+        .pageTitle(title ?? entry.name ?? entry.file.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if onSaved != nil {
@@ -1196,7 +1196,7 @@ struct AssistantNotesView: View {
             }
         }
         .themedPage()
-        .navigationTitle("关于我")
+        .pageTitle("关于我")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
