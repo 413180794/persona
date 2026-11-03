@@ -42,12 +42,7 @@ extension RuntimeCLI {
         /// window that takes the touch, lands in its view or in a view around it (not in a menu or sheet over it).
         /// SwiftUI's accessibility hit test cannot tell: it answers with the hidden page's elements.
         var visible: Bool {
-            guard onScreen, let v = RuntimeCLI.view(of: object), let w = v.window else { return false }
-            var l: CALayer? = v.layer
-            while let cur = l {
-                if cur.isHidden || cur.opacity < 0.01 { return false }
-                l = cur.superlayer
-            }
+            guard onScreen, let v = RuntimeCLI.view(of: object), let w = v.window, RuntimeCLI.drawn(v) else { return false }
             let screen = w.screen.bounds
             let mid = CGPoint(x: frame.intersection(screen).midX, y: frame.intersection(screen).midY)
             for top in RuntimeCLI.windows.sorted(by: { $0.windowLevel > $1.windowLevel }) where !top.isHidden {
@@ -75,6 +70,16 @@ extension RuntimeCLI {
             let f = [frame.minX, frame.minY, frame.width, frame.height].map { $0.isFinite ? (Double($0) * 10).rounded() / 10 : 0 }
             return ["id": id, "label": label, "value": value, "traits": t, "visible": visible, "onScreen": onScreen, "frame": f]
         }
+    }
+
+    /// No layer above `v` is hidden or transparent: the shell keeps the page behind in the window at opacity 0.
+    static func drawn(_ v: UIView) -> Bool {
+        var l: CALayer? = v.layer
+        while let cur = l {
+            if cur.isHidden || cur.opacity < 0.01 { return false }
+            l = cur.superlayer
+        }
+        return true
     }
 
     /// The view an accessibility element is drawn in: itself, or the first view up its containers.

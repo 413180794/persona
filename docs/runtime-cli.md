@@ -41,7 +41,7 @@ scripts/app/jarvisctl.py call <命令> k=v …           # 任何 App 认识的�
 | `refresh` | | 向 hub 拉一次（下拉刷新做的事） |
 | `wait-loaded` | `session`（`<机器>/<会话>`，不给就是屏幕上的：Agents 页打开的对话或助手的那个；只等，不会去打开它）、`timeout`（15 s） | 等这个对话第一次从 hub 拿到历史（或报错），行也重建完（300 ms 不变）；`items`、`rows`、`error`、`waited`（ms）。超时报错 |
 | `activate` | 元素过滤 | 对找到的元素做 VoiceOver 双击做的事（按钮的动作、打开菜单）；`activated` 为 false 说明它不吃（菜单项） |
-| `scroll` | `pages`（屏数，负数往上，每屏 0.8 个高度）或 `to`（top / bottom） | 屏幕上最大的那个滚动视图直接设偏移量，没有惯性；`offset`、`contentHeight` |
+| `scroll` | `pages`（屏数，负数往上，每屏 0.8 个高度）或 `to`（top / bottom） | 屏幕上最大的那个滚动视图直接设偏移量，没有惯性；只挑画出来的（外壳藏起来的那页一样大，但透明）；`offset`、`contentHeight`、`frame`（动的是哪个） |
 | `type` | `text`，可带元素过滤（先激活它拿焦点） | 往有焦点的输入框里打字 |
 | `dismiss-keyboard` | | 收起键盘 |
 | `snapshot` | `path` 或不带（回 base64），`scale` | App 窗口的 PNG（不含状态栏；要和老截图逐像素比用 `jarvisctl.py screenshot`） |

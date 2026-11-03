@@ -21,11 +21,14 @@ extension RuntimeCLI {
     }
 
     /// The largest scroll view on screen, moved by `pages` screens (negative: up; 0.8 of its height each) or `to` top /
-    /// bottom, without animation (no deceleration: what is under test is where things land, not the fling).
+    /// bottom, without animation (no deceleration: what is under test is where things land, not the fling). Only one
+    /// that is drawn: the shell's page behind has a list as large as the one on screen (`frame`: which one moved).
     private static func scroll(_ a: Args) -> Reply {
         var views: [UIScrollView] = []
         func collect(_ v: UIView) {
-            if let s = v as? UIScrollView, !s.isHidden, s.window != nil, s.contentSize.height > s.bounds.height + 1 { views.append(s) }
+            if let s = v as? UIScrollView, !s.isHidden, s.window != nil, s.contentSize.height > s.bounds.height + 1, drawn(s) {
+                views.append(s)
+            }
             v.subviews.forEach(collect)
         }
         windows.forEach(collect)
@@ -41,7 +44,9 @@ extension RuntimeCLI {
         default: y += CGFloat(a["pages"] as? Double ?? 1) * s.bounds.height * 0.8
         }
         s.setContentOffset(CGPoint(x: s.contentOffset.x, y: min(bottom, max(top, y))), animated: false)
-        return ["offset": Double(s.contentOffset.y), "contentHeight": Double(s.contentSize.height)]
+        let f = s.convert(s.bounds, to: nil)
+        return ["offset": Double(s.contentOffset.y), "contentHeight": Double(s.contentSize.height),
+                "frame": [f.minX, f.minY, f.width, f.height].map { Double($0) }]
     }
 
     private static func firstResponder() -> UIResponder? {
