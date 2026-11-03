@@ -104,6 +104,7 @@ struct ShellView: View {
                          },
                          drawer: shell.drawer,
                          openInbox: { go(.inbox) },
+                         openTodos: { go(.todos) },
                          openMachines: { go(.machines) })
     }
 

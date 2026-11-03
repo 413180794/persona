@@ -20,7 +20,7 @@ enum MacViewCommands {
 
     /// What 显示 › 刷新 (⌘R, the iPhone's pull to refresh) loads again: the key window's page when it loads its own
     /// data (`macRefreshes`: 知识库, 机器, a chat's 文件 / Git pane), else what the section shows from the hub.
-    enum RefreshTarget: Equatable { case page, hub, assistant, inbox }
+    enum RefreshTarget: Equatable { case page, hub, assistant, inbox, todos }
 
     static func refreshTarget(_ section: MacSection, page: Bool, mainWindow: Bool) -> RefreshTarget {
         if page { return .page }
@@ -28,6 +28,7 @@ enum MacViewCommands {
         guard mainWindow else { return .hub }
         return switch section {
         case .inbox: .inbox
+        case .todos: .todos
         case .assistant: .assistant
         case .agents, .knowledge, .machines, .settings: .hub
         }
@@ -66,7 +67,7 @@ struct MacViewMenu: Commands {
             Divider()
             Toggle("紧凑列表", isOn: $compact)
             Picker("分组方式", selection: $grouping) {
-                ForEach(DevGrouping.allCases) { Text($0.title).tag($0) }
+                ForEach(DevGrouping.offered(supportsTodos: TodoStore.shared.isSupported)) { Text($0.title).tag($0) }
             }
             Button("全部折叠") { MacShellState.shared.agentsList?.collapse() }
                 .disabled(MacShellState.shared.agentsList == nil)
@@ -98,6 +99,7 @@ struct MacViewMenu: Commands {
             switch MacViewCommands.refreshTarget(section, page: page != nil, mainWindow: main) {
             case .page: await page?()
             case .inbox: await InboxStore.shared.refresh()
+            case .todos: await TodoStore.shared.refresh()
             case .assistant: await model.refreshAssistant(); await model.refresh()
             case .hub: await model.refresh()
             }

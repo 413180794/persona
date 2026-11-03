@@ -335,10 +335,11 @@ nonisolated struct APIClient: Sendable {
         var async: Bool? = nil
         /// What the tab name is made from when the first message is sent as a message of its own (not `prompt`).
         var nameHint: String? = nil
+        var todoID: String? = nil
         enum CodingKeys: String, CodingKey {
             case cwd, launcher, prompt, effort, async
             case machineID = "machine_id", resumeSessionID = "resume_session_id", workspaceID = "workspace_id",
-                 permissionMode = "permission_mode", tabName = "tab_name", nameHint = "name_hint"
+                 permissionMode = "permission_mode", tabName = "tab_name", nameHint = "name_hint", todoID = "todo_id"
         }
     }
 
@@ -439,16 +440,17 @@ nonisolated struct APIClient: Sendable {
         var launcher: String?
         var clientMsgID: String?
         var clearDraft: String?
+        var todoID: String?
         enum CodingKeys: String, CodingKey {
-            case text, images, launcher, clientMsgID = "client_msg_id", clearDraft = "clear_draft"
+            case text, images, launcher, clientMsgID = "client_msg_id", clearDraft = "clear_draft", todoID = "todo_id"
         }
     }
     /// launcher switches the model of a headless (assistant) conversation from this message on. clientMsgID stays the
     /// same on a retry (the node types it once); clearDraft is the computer's draft the user agreed to clear first.
     func send(_ k: SessionKey, text: String, images: [ImagePayload] = [], launcher: String? = nil,
-              clientMsgID: String? = nil, clearDraft: String? = nil) async throws {
+              clientMsgID: String? = nil, clearDraft: String? = nil, todoID: String? = nil) async throws {
         try await post(sp(k) + "/messages", body: SendBody(text: text, images: images.isEmpty ? nil : images, launcher: launcher,
-                                                           clientMsgID: clientMsgID, clearDraft: clearDraft), timeout: 100)
+                                                           clientMsgID: clientMsgID, clearDraft: clearDraft, todoID: todoID), timeout: 100)
     }
     func interrupt(_ k: SessionKey) async throws { try await post(sp(k) + "/interrupt") }
     func attach(_ k: SessionKey) async throws { try await post(sp(k) + "/attach") }

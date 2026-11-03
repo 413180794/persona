@@ -50,7 +50,8 @@ func fakeAgentslark-connector(t *testing.T) (*httptest.Server, *[]string) {
 func agentsHub(t *testing.T) (*Hub, http.Handler, *[]string) {
 	srv, calls := fakeAgentslark-connector(t)
 	h := newTestHub(t)
-	h.lark = lark.New(lark.Config{BaseURL: srv.URL + "/agent/v1", Token: "tok"})
+	h.cfg.Lark = lark.Config{BaseURL: srv.URL + "/agent/v1", Token: "tok"}
+	h.lark = lark.New(h.cfg.Lark)
 	h.initAgents()
 	mux := http.NewServeMux()
 	h.agentRoutes(mux)
@@ -83,6 +84,27 @@ func TestAgentRoutesRead(t *testing.T) {
 	}
 	if code, _ := do(t, hd, "GET", "/api/v1/agents/sessions/"+url.PathEscape("removedbridge:nope")+"/messages", ""); code != 404 {
 		t.Fatalf("unknown session: %d", code)
+	}
+}
+
+func TestAgentRoutesWithoutlark-connector(t *testing.T) {
+	for _, cli := range []*lark.CLIConfig{nil, {}} {
+		h := newTestHub(t)
+		h.cfg.Lark = lark.Config{CLI: cli}
+		h.lark = lark.New(h.cfg.Lark)
+		h.initAgents()
+		mux := http.NewServeMux()
+		h.agentRoutes(mux)
+		for path, key := range map[string]string{
+			"/api/v1/agents":          "sources",
+			"/api/v1/agents/sessions": "sessions",
+		} {
+			code, out := do(t, mux, "GET", path, "")
+			items, ok := out[key].([]any)
+			if code != http.StatusOK || !ok || len(items) != 0 {
+				t.Fatalf("%s without lark-connector: %d %v", path, code, out)
+			}
+		}
 	}
 }
 

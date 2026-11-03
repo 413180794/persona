@@ -48,7 +48,8 @@ enum MacQuickOpen {
 
     /// The groups to list, empty ones dropped: Agent, Persona 对话, 收件箱, 前往, 动作 — unless a later group has a
     /// better kind of match (typing 设置 puts the section above an agent that merely mentions it).
-    static func sections(_ query: String, sessions: [Session], machines: [Machine], inbox: [InboxItem]) -> [Group] {
+    static func sections(_ query: String, sessions: [Session], machines: [Machine], inbox: [InboxItem],
+                         supportsTodos: Bool = true) -> [Group] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let names = Dictionary(machines.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
         var agents: [Hit] = [], conversations: [Hit] = []
@@ -77,7 +78,7 @@ enum MacQuickOpen {
             Group(title: "Agent", hits: Array(ranked(agents).prefix(agentLimit))),
             Group(title: "Persona 对话", hits: Array(ranked(conversations).prefix(otherLimit))),
             Group(title: "收件箱", hits: Array(ranked(mail).prefix(otherLimit))),
-            Group(title: "前往", hits: places(q)),
+            Group(title: "前往", hits: places(q, supportsTodos: supportsTodos)),
             Group(title: "动作", hits: actions(q)),
         ].filter { !$0.hits.isEmpty }
         let tier = { (g: Group) in (g.hits.map(\.score).max() ?? 0) / 20 }
@@ -99,16 +100,17 @@ enum MacQuickOpen {
     }
 
     /// The window's sections, with the other words they answer to.
-    private static func places(_ q: String) -> [Hit] {
+    private static func places(_ q: String, supportsTodos: Bool) -> [Hit] {
         let words: [MacSection: [String]] = [
             .assistant: ["jarvis", "assistant", "助手", "主对话"],
             .agents: ["agents", "claude", "codex", "会话"],
             .inbox: ["inbox", "mail", "lark", "邮件", "飞书"],
+            .todos: ["todo", "todos", "待办"],
             .knowledge: ["knowledge", "kb", "项目", "人", "文档", "会议"],
             .machines: ["machines", "monitor", "电脑", "监控", "cpu", "内存"],
             .settings: ["settings", "preferences", "偏好"],
         ]
-        return MacSection.allCases.compactMap { s in
+        return MacSection.visible(supportsTodos: supportsTodos).compactMap { s in
             let sc = score(title: s.title, hay: words[s] ?? [], query: q)
             guard sc > 0 else { return nil }
             return Hit(id: "p:\(s.rawValue)", title: s.title, subtitle: "", icon: s.icon, target: .section(s), score: sc)

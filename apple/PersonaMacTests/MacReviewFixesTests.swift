@@ -14,6 +14,22 @@ struct MacReviewFixesTests {
         #expect(shell.section == nil)
     }
 
+    /// A todo's Agent row opens its chat from the todos section, which must not stay on screen behind it.
+    @Test func openingATodoAgentLeavesTheTodosSection() {
+        let shell = MacShellState()
+        shell.section = .todos
+        shell.willOpen()
+        #expect(shell.section == nil)
+    }
+
+    /// The hand-off sheet opens an existing Agent through the same helper as the todo's Agent rows, so it leaves the
+    /// todos section too.
+    @Test func openingAnAgentFromTheHandOffLeavesTheTodosSection() {
+        MacShellState.shared.section = .todos
+        openTodoAgentChat(SessionKey(machineID: "m", sessionID: "s"), in: AppModel())
+        #expect(MacShellState.shared.section == nil)
+    }
+
     /// A `jarvis://pair` link is not one a click in a message may follow: it would move the app to another hub.
     @Test func pairingLinksAreNotFollowedFromMessages() {
         #expect(!LinkPolicy.opensOnMac(URL(string: "jarvis://pair?url=https://elsewhere.example&token=x")!))

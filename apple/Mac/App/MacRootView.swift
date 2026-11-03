@@ -3,11 +3,21 @@ import SwiftUI
 
 /// The window's sidebar sections: the iPhone's four tabs, plus 知识库 and 机器 (on the phone a page inside
 /// Persona, and 机器 inside Agents / 设置), which a Mac with room for a sidebar shows as sections of their own
-/// (docs/mac.md「主窗口」). ⌘1…⌘6 in this order.
+/// (docs/mac.md「主窗口」). ⌘1…⌘7: see `shortcutOrder`.
 enum MacSection: String, CaseIterable, Identifiable {
-    case assistant, agents, inbox, knowledge, machines, settings
+    case assistant, agents, todos, inbox, knowledge, machines, settings
 
     var id: String { rawValue }
+
+    /// The sections in ⌘ order. ⌘1…⌘6 stay where they were; 「待办」 (added later) takes ⌘7. The sidebar shows `allCases`
+    /// (「待办」 after Agents), so the two orders are kept apart.
+    static let shortcutOrder: [MacSection] = [.assistant, .agents, .inbox, .knowledge, .machines, .settings, .todos]
+
+    /// The ⌘ number of the section, 1-based.
+    var shortcut: Int? { MacSection.shortcutOrder.firstIndex(of: self).map { $0 + 1 } }
+
+    /// The sections the window shows: 「待办」 only when the hub has todos (an old hub answers 404, #397).
+    static func visible(supportsTodos: Bool) -> [MacSection] { allCases.filter { supportsTodos || $0 != .todos } }
 
     /// The iPhone tab it is; nil for the Mac's own sections.
     var tab: AppTab? {
@@ -16,7 +26,7 @@ enum MacSection: String, CaseIterable, Identifiable {
         case .agents: .chats
         case .inbox: .mail
         case .settings: .settings
-        case .knowledge, .machines: nil
+        case .todos, .knowledge, .machines: nil
         }
     }
 
@@ -54,6 +64,7 @@ enum MacSection: String, CaseIterable, Identifiable {
         switch self {
         case .assistant: "Persona"
         case .agents: "Agents"
+        case .todos: "待办"
         case .inbox: "收件箱"
         case .knowledge: "知识库"
         case .machines: "机器"
@@ -65,6 +76,7 @@ enum MacSection: String, CaseIterable, Identifiable {
         switch self {
         case .assistant: Theme.Icon.ai
         case .agents: Theme.Icon.agents
+        case .todos: Theme.Icon.todo
         case .inbox: Theme.Icon.inbox
         case .knowledge: Theme.Icon.knowledge
         case .machines: Theme.Icon.machines
@@ -207,6 +219,13 @@ private struct MacShell: View {
         // Something moved the tab (a notification, ⌘K, a link): its section comes to the front.
         .onChange(of: model.selectedTab) { shell.section = nil }
         .onChange(of: model.openChat) { if model.openChat != nil { shell.section = nil } }
+        .onChange(of: TodoStore.shared.isSupported) { _, supported in
+            // An old hub has no todos: a window still on the todos section (or remembering it) goes back to the tab's.
+            if !supported, shell.section == .todos {
+                shell.section = nil
+                MacSection.remember(nil)
+            }
+        }
         .onChange(of: model.assistantCurrent) { shell.section = nil }
     }
 
@@ -220,7 +239,7 @@ private struct MacShell: View {
     /// edges, up behind the traffic lights; inset from them it looked like a card on a backing board (same day).
     private var sections: some View {
         return VStack(spacing: Theme.Space.xxs) {
-            ForEach(MacSection.allCases) { section in
+            ForEach(MacSection.visible(supportsTodos: TodoStore.shared.isSupported)) { section in
                 MacSidebarRow(icon: section.icon, title: section.title, selected: section == shown, badge: badge(section),
                               identifier: "mac.section.\(section.rawValue)") { shell.go(section, model) }
             }
@@ -246,6 +265,7 @@ private struct MacShell: View {
         let n: Int
         switch section {
         case .knowledge, .machines: return nil
+        case .todos: n = TodoStore.shared.openCount
         case .assistant: n = model.badges.assistant
         case .agents: n = model.badges.agents
         case .inbox: n = InboxStore.shared.actionCount
@@ -258,6 +278,7 @@ private struct MacShell: View {
         switch shown {
         case .assistant: AssistantView() // its own headers are the title bar's row (#830, `AssistantView`)
         case .agents: ChatsView()
+        case .todos: MacTodosPage()
         case .inbox: MacInboxPage()
         case .knowledge: NavigationStack { KnowledgeView() }
         case .machines: MacMachinesPage()

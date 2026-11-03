@@ -79,7 +79,7 @@ struct AgentsListMenu: View {
             let _ = PerfTrace.body("ListMenu.content")
             #endif
             Picker("分组", selection: $grouping) {
-                ForEach(DevGrouping.allCases) { g in Label(g.title, systemImage: g.symbol).tag(g) }
+                ForEach(DevGrouping.offered(supportsTodos: TodoStore.shared.isSupported)) { g in Label(g.title, systemImage: g.symbol).tag(g) }
             }
             Picker("显示", selection: $compact) {
                 Label("卡片", systemImage: "rectangle.grid.1x2").tag(false)
@@ -155,14 +155,17 @@ struct AgentRowMenu: View, Equatable {
     @MainActor final class Actions {
         private var renameHandler: (Session) -> Void = { _ in }
         private var closeHandler: (Session) -> Void = { _ in }
+        private var linkTodoHandler: (Session) -> Void = { _ in }
 
-        func update(rename: @escaping (Session) -> Void, close: @escaping (Session) -> Void) {
+        func update(rename: @escaping (Session) -> Void, close: @escaping (Session) -> Void, linkTodo: @escaping (Session) -> Void = { _ in }) {
             renameHandler = rename
             closeHandler = close
+            linkTodoHandler = linkTodo
         }
 
         func rename(_ s: Session) { renameHandler(s) }
         func close(_ s: Session) { closeHandler(s) }
+        func linkTodo(_ s: Session) { linkTodoHandler(s) }
     }
 
     nonisolated static func == (a: Self, b: Self) -> Bool {
@@ -188,6 +191,30 @@ struct AgentRowMenu: View, Equatable {
         }
         Button { model.toggleMute(key) } label: {
             Label(muted ? "开启通知" : "屏蔽通知", systemImage: muted ? Theme.Icon.unmute : Theme.Icon.mute)
+        }
+        // TodoItem actions only for an Agent on the selected hub: the todos and their links live there.
+        if TodoStore.shared.isSupported, let current = now(),
+            TodosLogic.isOnTodosHub(sessionGroup: current.key.group, hubGroup: model.hub?.group) {
+            if let todo = current.todo {
+                Button {
+                    guard let s = now() else { return }
+                    Task {
+                        do {
+                            try await TodoStore.shared.unlinkAgent(todoID: todo.id, machineID: s.machineID, sessionID: s.sessionID)
+                        } catch {
+                            AppModel.shared.show(error)
+                        }
+                    }
+                } label: {
+                    Label("解除关联", systemImage: Theme.Icon.link)
+                }
+            } else {
+                Button {
+                    if let s = now() { actions.linkTodo(s) }
+                } label: {
+                    Label("关联到待办…", systemImage: Theme.Icon.todo)
+                }
+            }
         }
         if looping {
             Button(role: .destructive) { model.stopLoop(key) } label: { Label("停止循环", systemImage: Theme.Icon.stopLoop) }

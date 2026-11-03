@@ -21,6 +21,10 @@ struct AllSessionsReadersTests {
         "MacDockMenu.swift": (1, "the Dock menu lists the agents"),
         "MacMenuBar.swift": (2, "the menu bar extra lists the agents"),
         "MacQuickOpenPanel.swift": (1, "快速打开 searches every agent"),
+        "TodoHandoffSheet.swift": (1, "hand-off to an Agent: the agents to pick from, as InboxActions does"),
+        "TodosView.swift": (2, "the todo list shows each Agent's progress (its latest line), so it follows every Agent, like the Dock and the menu bar"),
+        "MacTodosPage.swift": (2, "the Mac todo list shows each Agent's progress (its latest line), like the Dock and the menu bar"),
+        "TodoDetailView.swift": (1, "the Agent rows show each Agent's latest line, the same way the todo list does"),
     ]
 
     private static func reads(_ text: String) -> Int {

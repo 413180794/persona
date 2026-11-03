@@ -49,7 +49,8 @@ struct MacQuickOpenPanel: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        let groups = MacQuickOpen.sections(query, sessions: model.allSessions, machines: model.machines, inbox: InboxStore.shared.items)
+        let groups = MacQuickOpen.sections(query, sessions: model.allSessions, machines: model.machines, inbox: InboxStore.shared.items,
+                                                 supportsTodos: TodoStore.shared.isSupported)
         let hits = groups.flatMap(\.hits)
         VStack(spacing: 0) {
             HStack(spacing: Theme.Space.s) {

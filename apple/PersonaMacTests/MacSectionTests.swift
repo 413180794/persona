@@ -2,11 +2,23 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// The window's sidebar: the iPhone's four tabs plus 知识库 and 机器 (docs/mac.md「主窗口」), on ⌘1…⌘6.
+/// The window's sidebar: the iPhone's four tabs plus 「知识库」, 「机器」 and 「待办」 (docs/mac.md「主窗口」). The sidebar and the
+/// ⌘ order are two orders: ⌘1…⌘6 keep their sections, 「待办」 is ⌘7.
 @MainActor
 struct MacSectionTests {
     @Test func orderAndShortcuts() {
-        #expect(MacSection.allCases.map(\.title) == ["Persona", "Agents", "收件箱", "知识库", "机器", "设置"])
+        #expect(MacSection.allCases.map(\.title) == ["Persona", "Agents", "待办", "收件箱", "知识库", "机器", "设置"])
+        #expect(MacSection.shortcutOrder.map(\.title) == ["Persona", "Agents", "收件箱", "知识库", "机器", "设置", "待办"])
+        #expect(MacSection.assistant.shortcut == 1)
+        #expect(MacSection.inbox.shortcut == 3)
+        #expect(MacSection.todos.shortcut == 7)
+    }
+
+    /// An old hub has no todos: the window does not offer the section at all.
+    @Test func todosAreOfferedOnlyWhenTheHubHasThem() {
+        #expect(!MacSection.visible(supportsTodos: false).contains(.todos))
+        #expect(MacSection.visible(supportsTodos: true).contains(.todos))
+        #expect(MacSection.visible(supportsTodos: false).count == 6)
     }
 
     @Test func tabSectionsFollowTheTab() {

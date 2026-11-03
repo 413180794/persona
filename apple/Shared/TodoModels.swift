@@ -1,0 +1,357 @@
+import Foundation
+import SwiftUI
+
+nonisolated extension TodoItem {
+    var isDone: Bool { doneAt != nil }
+}
+
+nonisolated extension TaskState {
+    var todoLabel: String {
+        switch self {
+        case .done: "已完成"
+        case .needsYou: "等你"
+        case .unread: "待查看"
+        case .working: "进行中"
+        case .followup: "待跟进"
+        case .notStarted: "未开始"
+        }
+    }
+
+    var todoRank: Int {
+        switch self {
+        case .needsYou: 0
+        case .unread: 1
+        case .working: 2
+        case .followup: 3
+        case .notStarted: 4
+        case .done: 5
+        }
+    }
+
+    var todoTone: StatusTone {
+        switch self {
+        case .done: StatusPalette.idle
+        case .needsYou: StatusPalette.needsYou
+        case .unread: StatusPalette.unread
+        case .working: StatusPalette.working
+        case .followup: StatusPalette.idle
+        case .notStarted: StatusPalette.idle
+        }
+    }
+}
+
+nonisolated struct TodoMostUrgent: Sendable {
+    var agent: TodoItem.Agent
+    var session: Session?
+    var status: AgentState
+    var isFailed: Bool
+}
+
+nonisolated struct TodoAgentGroup: Identifiable, Sendable {
+    var key: String
+    var name: String
+    var sessions: [Session]
+    var todoID: String?
+    var todoStatus: TaskState?
+
+    var id: String { key }
+}
+
+nonisolated enum TodosLogic {
+    /// Whether a session may take a todo's actions here. The todos are the selected hub's (`AppModel.hub`), so a
+    /// session on another hub group would send its request to the wrong hub and find no todo.
+    static func isOnTodosHub(sessionGroup: String, hubGroup: String?) -> Bool {
+        sessionGroup == (hubGroup ?? "")
+    }
+
+    /// The Agents of the given todos, read one by one through `session` (a view reads one session's own cell, not the
+    /// whole list). Only Agents on `hubGroup` can be linked (`isOnTodosHub`), so the keys are built on that group.
+    static func linkedSessions(of todos: [TodoItem], hubGroup: String, session: (SessionKey) -> Session?) -> [Session] {
+        todos.flatMap { todo in
+            todo.agents.compactMap { a in
+                session(SessionKey(group: hubGroup, machineID: a.machineID, sessionID: a.sessionID))
+            }
+        }
+    }
+
+    /// GET /api/v1/todos answered 404: an older hub without todos. The entrance is hidden and nothing is shown as an error.
+    public static func isOldHub(_ error: Error) -> Bool {
+        (error as? APIError)?.status == 404
+    }
+
+    public typealias SessionLookup = @Sendable (_ machineID: String, _ sessionID: String) -> Session?
+
+    public static func makeSessionLookup(_ sessions: [Session]) -> SessionLookup {
+        var map = [String: Session]()
+        for s in sessions {
+            map["\(s.machineID)/\(s.sessionID)"] = s
+        }
+        let immutableMap = map
+        return { mid, sid in immutableMap["\(mid)/\(sid)"] }
+    }
+
+    /**
+     * TodoItem status, first match wins:
+     * 1. Done (已完成): the user marked it done (done_at != nil)
+     * 2. Needs you (等你): an attached agent needs the user (a question or an approval)
+     * 3. Unread (待查看): an attached agent finished and the user has not looked yet
+     * 4. Working (进行中): an attached agent is working or starting
+     * 5. Follow-up (待跟进): every attached agent is idle (seen, not running, or failed to start)
+     * 6. Not started (未开始): no attached agent
+     */
+    public static func todoStatus(_ todo: TodoItem, lookup: SessionLookup? = nil) -> TaskState {
+        let states: [AgentState] = todo.agents.filter { $0.releasedAt == nil }.map { agent in
+            if let error = agent.startError, !error.isEmpty { return .idle }
+            guard let session = lookup?(agent.machineID, agent.sessionID) else { return .offline }
+            if session.state == .needsYou || session.state == .unread { return session.state }
+            return session.starting == true ? .working : session.state
+        }
+        return TaskState(todo: todo, agents: states)
+    }
+
+    /**
+     * Sorts the todo list:
+     * - open todos first, by status priority (needs you > unread > working > follow-up > not started)
+     * - same status: newer first, by creation time
+     * - done todos at the bottom
+     */
+    public static func sortTodos(_ todos: [TodoItem], lookup: SessionLookup? = nil) -> [TodoItem] {
+        todos.sorted { a, b in
+            let aDone = a.isDone
+            let bDone = b.isDone
+            if aDone != bDone { return !aDone }
+
+            let aStat = todoStatus(a, lookup: lookup)
+            let bStat = todoStatus(b, lookup: lookup)
+            if aStat.todoRank != bStat.todoRank { return aStat.todoRank < bStat.todoRank }
+
+            let tA = a.createdAt?.timeIntervalSince1970 ?? 0
+            let tB = b.createdAt?.timeIntervalSince1970 ?? 0
+            if tA != tB { return tA > tB }
+            return a.id < b.id
+        }
+    }
+
+    /**
+     * Finds the most urgent attached agent of a todo, with its summary
+     */
+    public static func mostUrgentAgent(_ todo: TodoItem, lookup: SessionLookup? = nil) -> TodoMostUrgent? {
+        let active = todo.agents.filter { $0.releasedAt == nil }
+        if active.isEmpty { return nil }
+
+        func score(_ st: AgentState, isFailed: Bool) -> Int {
+            if isFailed { return 1 }
+            switch st {
+            case .needsYou: return 4
+            case .unread: return 3
+            case .working: return 2
+            default: return 0
+            }
+        }
+
+        var best: TodoMostUrgent?
+        var bestScore = -1
+
+        for a in active {
+            let isFailed = a.startError.map { !$0.isEmpty } ?? false
+            let s = lookup?(a.machineID, a.sessionID)
+            let st = isFailed ? .offline : (s?.state ?? .offline)
+            let sc = score(st, isFailed: isFailed)
+            if sc > bestScore || best == nil {
+                bestScore = sc
+                best = TodoMostUrgent(agent: a, session: s, status: st, isFailed: isFailed)
+            }
+        }
+
+        return best
+    }
+
+    private static func sessionRank(_ s: Session, isMuted: (Session) -> Bool) -> Int {
+        let state = s.state
+        let waiting = (state == .idle || state == .unknown) && (s.loop != nil || !(s.background ?? []).isEmpty || (s.subagents ?? []).contains(where: \.running))
+        let muted = isMuted(s)
+        if state == .needsYou { return 0 }
+        if muted && (state == .working || state == .unread || waiting) { return 4 }
+        if state == .unread { return 1 }
+        if state == .working { return 2 }
+        if waiting { return 3 }
+        return 5
+    }
+
+    private static func byDate(_ a: Session, _ b: Session) -> Bool {
+        if a.sortDate != b.sortDate { return a.sortDate > b.sortDate }
+        if a.sessionID != b.sessionID { return a.sessionID < b.sessionID }
+        return a.machineID < b.machineID
+    }
+
+    /**
+     * Pure grouping for the Agents sidebar, by todo:
+     * - one section per open todo with attached agents; the header shows the todo title and status, and tapping it opens the todo
+     * - agents with no todo go into the last section, "没有待办"
+     * - pinning, muting and the "最近（未运行）" rules match the "按状态" grouping
+     */
+    public static func buildTodoAgentGroups(
+        sessions: [Session],
+        todos: [TodoItem],
+        isMuted: (Session) -> Bool
+    ) -> [TodoAgentGroup] {
+        let live = sessions.filter { $0.state.isLive }
+        let lookup = makeSessionLookup(live)
+
+        let openTodos = sortTodos(todos.filter { !$0.isDone }, lookup: lookup)
+
+        var liveByKey = [String: Session]()
+        for s in live {
+            liveByKey["\(s.machineID)/\(s.sessionID)"] = s
+        }
+
+        var assignedSessionKeys = Set<String>()
+        var groups: [TodoAgentGroup] = []
+
+        for todo in openTodos {
+            var todoSessions: [Session] = []
+            let activeAgents = todo.agents.filter { $0.releasedAt == nil }
+
+            for a in activeAgents {
+                let key = "\(a.machineID)/\(a.sessionID)"
+                if let s = liveByKey[key], !assignedSessionKeys.contains(key) {
+                    todoSessions.append(s)
+                    assignedSessionKeys.insert(key)
+                }
+            }
+
+            for s in live {
+                let key = "\(s.machineID)/\(s.sessionID)"
+                if s.todo?.id == todo.id, !assignedSessionKeys.contains(key) {
+                    todoSessions.append(s)
+                    assignedSessionKeys.insert(key)
+                }
+            }
+
+            if !todoSessions.isEmpty {
+                todoSessions.sort { a, b in
+                    let rA = sessionRank(a, isMuted: isMuted)
+                    let rB = sessionRank(b, isMuted: isMuted)
+                    if rA != rB { return rA < rB }
+                    return byDate(a, b)
+                }
+
+                let st = todoStatus(todo, lookup: lookup)
+                groups.append(TodoAgentGroup(
+                    key: "todo:\(todo.id)",
+                    name: todo.title,
+                    sessions: todoSessions,
+                    todoID: todo.id,
+                    todoStatus: st
+                ))
+            }
+        }
+
+        let unassigned = live.filter { !assignedSessionKeys.contains("\($0.machineID)/\($0.sessionID)") }
+        if !unassigned.isEmpty {
+            var sortedUnassigned = unassigned
+            sortedUnassigned.sort { a, b in
+                let rA = sessionRank(a, isMuted: isMuted)
+                let rB = sessionRank(b, isMuted: isMuted)
+                if rA != rB { return rA < rB }
+                return byDate(a, b)
+            }
+            groups.append(TodoAgentGroup(
+                key: "todo:none",
+                name: "没有待办",
+                sessions: sortedUnassigned,
+                todoID: nil,
+                todoStatus: nil
+            ))
+        }
+
+        return groups
+    }
+
+    /**
+     * Format of the context attached when a todo is handed to an Agent (the same as the inbox's)
+     * `<jarvis-context kind="context" title="待办 · <标题>" url="">说明</jarvis-context>`
+     */
+    public static func formatTodoContext(title: String, notes: String?) -> String {
+        let t = title
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+        let body = (notes ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return "<jarvis-context kind=\"context\" title=\"待办 · \(t)\" url=\"\">\(body)</jarvis-context>"
+    }
+}
+
+// MARK: - APIClient extensions for Todos
+
+extension APIClient {
+    struct TodoResponse: Decodable, Sendable {
+        var todo: TodoItem
+    }
+
+    public struct CreateTodoRequest: Encodable, Sendable {
+        var title: String
+        var notes: String?
+    }
+
+    public func createTodo(title: String, notes: String? = nil) async throws -> TodoItem {
+        let body = CreateTodoRequest(title: title.trimmingCharacters(in: .whitespacesAndNewlines), notes: notes?.trimmingCharacters(in: .whitespacesAndNewlines))
+        return try await post("/api/v1/todos", body: body, as: TodoResponse.self).todo
+    }
+
+    public struct UpdateTodoRequest: Encodable, Sendable {
+        var title: String?
+        var notes: String?
+        var done: Bool?
+    }
+
+    public func updateTodo(id: String, title: String? = nil, notes: String? = nil, done: Bool? = nil) async throws -> TodoItem {
+        let encId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let body = UpdateTodoRequest(title: title, notes: notes, done: done)
+        let data = try await request("PATCH", "/api/v1/todos/\(encId)", body: body)
+        return try JSON.decoder.decode(TodoResponse.self, from: data).todo
+    }
+
+    public func deleteTodo(id: String) async throws {
+        let encId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        _ = try await request("DELETE", "/api/v1/todos/\(encId)")
+    }
+
+    public func linkTodoAgent(todoID: String, machineID: String, sessionID: String) async throws {
+        let encTodo = todoID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? todoID
+        let encMid = machineID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? machineID
+        let encSid = sessionID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? sessionID
+        _ = try await request("PUT", "/api/v1/todos/\(encTodo)/agents/\(encMid)/\(encSid)")
+    }
+
+    public func unlinkTodoAgent(todoID: String, machineID: String, sessionID: String) async throws {
+        let encTodo = todoID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? todoID
+        let encMid = machineID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? machineID
+        let encSid = sessionID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? sessionID
+        _ = try await request("DELETE", "/api/v1/todos/\(encTodo)/agents/\(encMid)/\(encSid)")
+    }
+}
+
+/// The text a todo's detail page edits: its title and notes. The page takes the stored text when it shows a todo, and
+/// keeps what the user is typing, so one todo's text never lands in another todo's fields.
+nonisolated struct TodoEditorText: Equatable {
+    var title: String
+    var notes: String
+
+    init(title: String = "", notes: String = "") {
+        self.title = title
+        self.notes = notes
+    }
+
+    init(_ todo: TodoItem) {
+        title = todo.title
+        notes = todo.notes ?? ""
+    }
+
+    /// Takes the stored text of `todo`, except in a field the user is editing.
+    mutating func reseed(from todo: TodoItem, editingTitle: Bool, editingNotes: Bool) {
+        if !editingTitle { title = todo.title }
+        if !editingNotes { notes = todo.notes ?? "" }
+    }
+}

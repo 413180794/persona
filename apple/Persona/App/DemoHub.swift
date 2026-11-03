@@ -25,6 +25,7 @@ final class DemoHub {
     private var items: [String: [JSONValue]] = [:]
     private var interactions: [JSONValue] = []
     private var inbox: [JSONValue] = []
+    private var todos: [JSONValue] = []
     private var lark: [String: [JSONValue]] = [:]
     private var tasks: [JSONValue] = []
     private var modelBindings: [String: JSONValue] = [:]
@@ -78,6 +79,7 @@ final class DemoHub {
         items = (all["items"]?.object ?? [:]).compactMapValues(\.array)
         interactions = all["interactions"]?.array ?? []
         inbox = all["inbox"]?.array ?? []
+        todos = all["todos"]?.array ?? []
         lark = (all["lark"]?.object ?? [:]).compactMapValues(\.array)
         tasks = all["tasks"]?.array ?? []
         memory = all["memory"]?.array ?? []
@@ -171,6 +173,7 @@ final class DemoHub {
             return ["runs": .array(q["ref"].map { ref in runs.filter { $0["ref_id"]?.string == ref } } ?? runs)]
         case ["assistant", "memory"]: return ["files": .array(memory), "dir": "/home/me/.jarvis/assistant/memory"]
         case ["inbox"]: return ["items": .array(inbox)]
+        case ["todos"]: return ["todos": .array(todos)]
         case ["mail", "accounts"]: return ["accounts": data["mail_accounts"] ?? .array([])]
         case ["mail", "messages"]: return ["messages": .array([]), "has_more": false]
         case ["lark", "unread-count"]: return ["count": 4]
@@ -299,6 +302,19 @@ final class DemoHub {
         case ["inbox", "refresh"]: return ["items": .array(inbox)]
         case ["translate"], ["translate", "mail"]:
             throw APIError(status: 403, message: "体验模式里不翻译：连接你自己的 hub 后再试")
+        case ["todos"]:
+            made += 1
+            let newTodo: JSONValue = .object([
+                "id": .string("todo_demo\(made)"),
+                "title": body["title"] ?? "新待办",
+                "notes": body["notes"] ?? .null,
+                "done_at": .null,
+                "created_at": .string(Self.iso(.now)),
+                "updated_at": .string(Self.iso(.now)),
+                "agents": .array([])
+            ])
+            todos.insert(newTodo, at: 0)
+            return ["todo": newTodo]
         case ["pins"]:
             pins = body
             return pins
@@ -337,6 +353,40 @@ final class DemoHub {
             }
             return prefs
         case ("devices", 3): return ["ok": true] // live-activity reports
+        case ("todos", 2) where method == "PATCH":
+            guard let i = todos.firstIndex(where: { $0["id"]?.string == p[1] }), case .object(var t) = todos[i],
+                  case .object(let edit) = body else { throw notFound() }
+            if let title = edit["title"] { t["title"] = title }
+            if let notes = edit["notes"] { t["notes"] = notes }
+            if let done = edit["done"]?.bool { t["done_at"] = done ? .string(Self.iso(.now)) : .null }
+            t["updated_at"] = .string(Self.iso(.now))
+            todos[i] = .object(t)
+            return ["todo": .object(t)]
+        case ("todos", 2) where method == "DELETE":
+            todos.removeAll { $0["id"]?.string == p[1] }
+            return ["ok": true]
+        case ("todos", 5) where p[2] == "agents" && method == "PUT":
+            guard let i = todos.firstIndex(where: { $0["id"]?.string == p[1] }), case .object(var t) = todos[i] else { throw notFound() }
+            var ags = t["agents"]?.array ?? []
+            ags.removeAll { $0["machine_id"]?.string == p[3] && $0["session_id"]?.string == p[4] }
+            ags.insert(.object([
+                "machine_id": .string(p[3]),
+                "session_id": .string(p[4]),
+                "linked_at": .string(Self.iso(.now)),
+                "released_at": .null,
+                "title": .string("演示 Agent"),
+                "agent": .string("claude")
+            ]), at: 0)
+            t["agents"] = .array(ags)
+            todos[i] = .object(t)
+            return ["ok": true]
+        case ("todos", 5) where p[2] == "agents" && method == "DELETE":
+            guard let i = todos.firstIndex(where: { $0["id"]?.string == p[1] }), case .object(var t) = todos[i] else { throw notFound() }
+            var ags = t["agents"]?.array ?? []
+            ags.removeAll { $0["machine_id"]?.string == p[3] && $0["session_id"]?.string == p[4] }
+            t["agents"] = .array(ags)
+            todos[i] = .object(t)
+            return ["ok": true]
         case ("assistant", 4) where p[1] == "tasks": throw refuse() // 立即运行
         case ("assistant", 4) where p[1] == "conversations" && (p[3] == "archive" || p[3] == "unarchive"):
             edit(p[2]) { $0["archived"] = .bool(p[3] == "archive") }

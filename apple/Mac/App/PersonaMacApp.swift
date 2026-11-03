@@ -136,9 +136,11 @@ struct MacCommands: Commands {
                 .disabled(!model.isPaired)
         }
         CommandGroup(after: .sidebar) {
-            ForEach(Array(MacSection.allCases.enumerated()), id: \.element) { i, section in
-                Button(section.title) { MacShellState.shared.go(section, model) }
-                    .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: .command)
+            ForEach(Array(MacSection.shortcutOrder.enumerated()), id: \.element) { i, section in
+                if MacSection.visible(supportsTodos: TodoStore.shared.isSupported).contains(section) {
+                    Button(section.title) { MacShellState.shared.go(section, model) }
+                        .keyboardShortcut(KeyEquivalent(Character("\(i + 1)")), modifiers: .command)
+                }
             }
             Divider()
         }
@@ -272,6 +274,10 @@ enum MacLaunchArguments {
         case "settings": model.selectedTab = .settings
         case "assistant": model.selectedTab = .assistant
         default: break
+        }
+        // `-openMacSection todos`: the window opens on that sidebar section (the 待办 page, for screenshots).
+        if let raw = d.string(forKey: "openMacSection"), let section = MacSection(rawValue: raw) {
+            MacShellState.shared.section = section
         }
         if let key = sessionKey(d.string(forKey: "openSession")) {
             if d.bool(forKey: "openFromDoneNotice") {

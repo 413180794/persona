@@ -41,6 +41,7 @@ extension Theme {
         static let askFirst = "hand.raised"
         /// bypassPermissions: nothing is asked.
         static let allowEverything = "exclamationmark.shield"
+        static let permissions = "lock.shield"
         /// The two little arrows after a value that opens a menu of choices.
         static let choices = "chevron.up.chevron.down"
         static let effort = "gauge.with.dots.needle.50percent"

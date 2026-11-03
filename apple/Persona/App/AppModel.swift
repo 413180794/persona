@@ -394,6 +394,7 @@ final class AppModel {
         guard !isPaired else { return }
         DemoHub.shared.reset()
         InboxStore.shared.forget()
+        TodoStore.shared.forget()
         TasksStore.shared.forget()
         forgetDemoChats()
         chats = [:]
@@ -420,6 +421,7 @@ final class AppModel {
         links = []
         applyPersonaPalette()
         InboxStore.shared.forget()
+        TodoStore.shared.forget()
         TasksStore.shared.forget()
         forgetDemoChats()
         chats = [:]
@@ -945,6 +947,7 @@ final class AppModel {
             Task { await personas.refresh(api) }
             LarkSync.shared.reconnected()
             InboxStore.shared.reload()
+            TodoStore.shared.reload()
             TasksStore.shared.reconnected()
         }
         AgentSync.shared.schedule()
@@ -1143,6 +1146,7 @@ final class AppModel {
         case .inbox:
             if isHub { InboxStore.shared.reload() }
         case .todos:
+            if isHub { TodoStore.shared.reload() }
             if isHub { TasksStore.shared.reloadTodos() }
         case .assistantFeed(let item):
             if isHub { TasksStore.shared.received(item) }
@@ -1680,6 +1684,8 @@ final class AppModel {
         InboxStore.shared.forget()
         TasksStore.shared.forget()
         InboxStore.shared.reload()
+        TodoStore.shared.forget()
+        TodoStore.shared.reload()
         Task {
             await refreshAssistant()
             await personas.refresh(api)

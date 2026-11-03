@@ -15,6 +15,12 @@ struct NewChatView: View {
     @Environment(\.dismiss) private var dismiss
     var initialPrompt = ""
     var preset: SpacePreset?
+    var todoID: String? = nil
+    /// A todo handed to a new Agent (TodoHandoffSheet): the todo's context block goes ahead of the first message, the
+    /// session is named after the todo, and only the todo's hub's machines are offered.
+    var contextBlock: String? = nil
+    var nameHint: String? = nil
+    var onlyGroup: String? = nil
     var onStarted: (Session) -> Void
 
     @AppStorage("newChat.machine") private var machineID = ""
@@ -47,7 +53,7 @@ struct NewChatView: View {
     /// Nothing missing for 开始对话.
     private var ready: Bool {
         machine?.online == true && !cwd.isEmpty && (!launcher.isEmpty || unifiedModels)
-            && !(codex && prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            && !(codex && contextBlock == nil && prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 
     private var startingLabel: String { "正在 \(machine?.name ?? "") 上启动\(codex ? " Codex" : "")…" }
@@ -78,7 +84,7 @@ struct NewChatView: View {
                 Section {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: Theme.Space.m) {
-                            ForEach(model.machines, id: \.ref) { m in machineCard(m) }
+                            ForEach(machinesShown, id: \.ref) { m in machineCard(m) }
                         }
                         .padding(.vertical, Theme.Space.xs)
                     }
@@ -149,7 +155,7 @@ struct NewChatView: View {
                         Picker(selection: $mode) {
                             Text("跟随启动器").tag("")
                             ForEach(SessionModes.permissionModes) { o in Label(o.title, systemImage: o.symbol).tag(o.id) }
-                        } label: { Label { Text("权限模式") } icon: { Image(systemName: "lock.shield").foregroundStyle(Theme.accent) } }
+                        } label: { Label { Text("权限模式") } icon: { Image(systemName: Theme.Icon.permissions).foregroundStyle(Theme.accent) } }
                         Picker(selection: $effort) {
                             Text("跟随启动器").tag("")
                             ForEach(SessionModes.effortLevels) { o in Label(o.title, systemImage: o.symbol).tag(o.id) }
@@ -239,9 +245,18 @@ struct NewChatView: View {
         #endif
     }
 
+    /// The machines offered: this hub's when a todo is handed over (`onlyGroup`), else all of them.
+    private var machinesShown: [Machine] {
+        onlyGroup.map { g in model.machines.filter { $0.group == g } } ?? model.machines
+    }
+
+    /// The remembered machine belongs to another hub than the one the todo is on.
+    private var machineOutsideGroup: Bool { onlyGroup.map { machine?.group != $0 } ?? false }
+
     /// Remember the last machine, but fall back to the first online one (machines may arrive after the sheet opens).
     private func pickDefaultMachine() {
-        if machine == nil || machine?.online == false, let m = model.machines.first(where: \.online) ?? model.machines.first {
+        if machine == nil || machine?.online == false || machineOutsideGroup,
+           let m = machinesShown.first(where: \.online) ?? machinesShown.first {
             machineID = m.ref.path
         }
     }
@@ -310,18 +325,24 @@ struct NewChatView: View {
     }
 
     private func start() async {
-        guard let api = model.api(ref.group) else { return }
+        guard let api = model.api(ref.group) else {
+            error = "连不上这台电脑所在的 hub，请稍后再试。"
+            return
+        }
         starting = true
         error = nil
         defer { starting = false }
         do {
             let p = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
             let name = tabName.trimmingCharacters(in: .whitespacesAndNewlines)
+            // The first message: a todo's context block (when a todo is handed over), then what was typed.
+            let outgoing = contextBlock.map { p.isEmpty ? $0 : "\($0)\n\n\(p)" } ?? p
             if codex {
                 // Codex picks its thread's id once it has the first message: it goes with the start, which answers
                 // with that thread (one session, already working on it).
-                let s = try await api.start(.init(machineID: ref.id, cwd: cwd, launcher: launcher, prompt: prompt,
-                                                  workspaceID: preset?.workspaceID, tabName: name.isEmpty ? nil : name))
+                let s = try await api.start(.init(machineID: ref.id, cwd: cwd, launcher: launcher, prompt: contextBlock == nil ? prompt : outgoing,
+                                                  workspaceID: preset?.workspaceID, tabName: name.isEmpty ? nil : name,
+                                                  nameHint: nameHint ?? (p.isEmpty ? nil : p), todoID: todoID))
                 UserDefaults.standard.set(launcher, forKey: "launcher.\(machineID)")
                 UserDefaults.standard.set(cwd, forKey: "cwd.\(machineID)")
                 Haptics.success()
@@ -334,7 +355,7 @@ struct NewChatView: View {
             let s = try await api.start(.init(machineID: ref.id, cwd: cwd, launcher: launcher, prompt: nil,
                                               workspaceID: preset?.workspaceID, permissionMode: mode.isEmpty ? nil : mode,
                                               effort: effort.isEmpty ? nil : effort, tabName: name.isEmpty ? nil : name,
-                                              async: true, nameHint: p.isEmpty ? nil : p))
+                                              async: true, nameHint: nameHint ?? (p.isEmpty ? nil : p), todoID: todoID))
             if !unifiedModels {
                 UserDefaults.standard.set(launcher, forKey: "launcher.\(machineID)")
                 UserDefaults.standard.set(effort, forKey: "effort.\(machineID)")
@@ -343,7 +364,7 @@ struct NewChatView: View {
             UserDefaults.standard.set(cwd, forKey: "cwd.\(machineID)")
             Haptics.success()
             model.adopt(s)
-            if !p.isEmpty { model.sendNow(s.key, text: p) }
+            if !outgoing.isEmpty { model.sendNow(s.key, text: outgoing) }
             onStarted(s)
         } catch {
             self.error = error.shown

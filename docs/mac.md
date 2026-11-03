@@ -21,7 +21,8 @@
 - `NavigationSplitView` 三栏：**侧边栏**（来源）→ **列表** → **详情**。侧边栏可收起（⌃⌘S），列表栏宽度可拖、记住。
 - 侧边栏（`List(selection:)`，`.sidebar` 样式）分组：
   - **Persona**：主对话 + 置顶的对话；「全部对话」进列表栏看按天分组的历史。
-  - **Agents**：全部 / 需要你 / 未读 / 工作中（带数量，需要你是红色角标）；下面是置顶的空间和各台机器（点机器 = 按机器筛）。
+  - **Agents**：全部 / 需要你 / 未读 / 工作中（带数量，需要你是红色角标）；下面是置顶的空间和各台机器（点机器 = 按机器筛）。分组菜单支持「按待办」。
+  - **待办**：待办列表（左侧）与详情（右侧，⌘7 打开；旧 hub 上不显示），带未完成数量角标；新建待办、完成/重新打开、删除、交给 Agent。
   - **收件箱**：全部 / 飞书 / 各个邮箱 / @我 / 私聊 / 群聊 / 邮件 / Agent。
   - **知识库**：项目 / 会话 / 人 / 文档 / 会议 / 日程。
   - **机器**：所有机器（Agent 数和监控在一页）+ 每台机器。
@@ -39,9 +40,9 @@
 | --- | --- |
 | 文件 | 新建 Agent 对话 ⌘N、新建 Persona 对话 ⇧⌘N、在新窗口打开 ⌥⏎ / ⌘⏎（列表里）、关闭窗口 ⌘W、交给 Persona ⌘J |
 | 编辑 | 系统的拷贝 / 粘贴 / 全选 / 查找、查找下一个 ⌘G / 上一个 ⇧⌘G；拷贝会话 ID、拷贝恢复命令 |
-| 显示 | 刷新 ⌘R、显示 / 隐藏侧边栏 ⌃⌘S、显示 Inspector ⌥⌘I、紧凑列表、分组方式（项目 / 状态 / 机器）、全部折叠 / 展开、字号放大缩小 ⌘+ ⌘- ⌘0 |
+| 显示 | 刷新 ⌘R、显示 / 隐藏侧边栏 ⌃⌘S、显示 Inspector ⌥⌘I、紧凑列表、分组方式（项目 / 状态 / 机器 / 按待办）、全部折叠 / 展开、字号放大缩小 ⌘+ ⌘- ⌘0 |
 | Agent | 发送 ⏎（输入框里，⇧⏎ 换行）、中断 ⌘.、批准当前待处理 ⇧⌘⏎、拒绝 ⇧⌘⌫、回答选项 ⌥⌘1–9、重命名、屏蔽、置顶、标为已读、清空上下文、关闭 Agent… |
-| 前往 | Persona ⌘1 … 机器 ⌘5（侧边栏获焦时）、上一个 / 下一个 Agent ⌘[ ⌘]、下一个需要你的 ⌃⌘N、快速打开 ⌘K、回到最新 ⌘↓ |
+| 前往 | Persona ⌘1 … 机器 ⌘5、设置 ⌘6、待办 ⌘7（侧边栏获焦时）、上一个 / 下一个 Agent ⌘[ ⌘]、下一个需要你的 ⌃⌘N、快速打开 ⌘K、回到最新 ⌘↓ |
 | 窗口 | 系统的；每个对话可以单独开窗口（`WindowGroup(for: SessionKey.self)`），终端也可以单独开窗口 |
 
 ### 和 iOS 的对应
@@ -169,7 +170,7 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   页面的分栏在 Mac 上是三栏、第一栏空着（`SplitColumns`）：macOS 26 把分栏的侧栏画成离窗口四边一点的玻璃卡片，周围露出窗口底色
   （2026-11-02 用户：像浮在背景板上，有缺口），没有关掉的 API；内容栏是贴边的，列表放在内容栏，内容栏里的 `NavigationLink(value:)` 照样推进详情栏。
   代价：Agents、收件箱、设置的列表栏在 Mac 上不能收起（原来工具栏上的「隐藏列表」在红绿灯旁边，正好压在六项这一列上），Persona 页的历史列表照旧用顶栏的按钮收起。
-  ⌘1…⌘6 切换；`Settings` 场景（⌘,）放设置；`onOpenURL` 处理 `jarvis://pair`；App 变成活跃时 `ensureConnected` + `refresh`。
+  ⌘1…⌘7 切换；`Settings` 场景（⌘,）放设置；`onOpenURL` 处理 `jarvis://pair`；App 变成活跃时 `ensureConnected` + `refresh`。
   App 在后台不断开 WebSocket（Mac 应用常驻，hub 靠这条连接找到它）。
 - 兼容层（`Mac/Compat/`）：`UIKitTypes.swift`（UIColor / UIImage / UIFont / UIEdgeInsets 的别名，UIPasteboard、UIApplication.open、UIDevice（含电池）、
   UIGraphicsImageRenderer、haptics 空操作、UIKit 语义色）、`SwiftUICompat.swift`（iOS 专用修饰符的同名 Mac 版本：`navigationBarTitleDisplayMode` 什么都不做、
@@ -251,7 +252,7 @@ Dock 图标右键（`apple/Mac/App/MacDockMenu.swift`，有测试）：「需要
 选中的 知识库 / 机器 跨启动记住（`mac.section`；tab 由 AppModel 记）。启动参数指定了 tab / 对话（`-tab`、`-openSession`…）时以参数为准、清掉记住的选择。
 
 壳的侧边栏在 iPhone 的四个 tab 之外多两项：知识库（`KnowledgeView`，手机上在 Persona 里）、机器（`MachinesView`，手机上在抽屉 / Agents / 设置里），
-⌘1…⌘6 依次是 Persona、Agents、收件箱、知识库、机器、设置。这两项不是 AppTab：选中时记在 `MacShellState.section`，`AppModel.selectedTab` 不动；
+⌘1…⌘7 依次是 Persona、Agents、收件箱、知识库、机器、设置、待办。这两项不是 AppTab：选中时记在 `MacShellState.section`，`AppModel.selectedTab` 不动；
 通知、⌘K、链接把 tab 换走（或打开对话）时清掉，回到 tab 对应的那一项（`MacSection.shown / pick`，有测试）。DEBUG：`-macSection knowledge|machines`。
 
 ## Agent 菜单（Mac）
@@ -261,7 +262,7 @@ Dock 图标右键（`apple/Mac/App/MacDockMenu.swift`，有测试）：「需要
 下一个需要你的 ⌃⌘N（等得最久的在前，循环）、标为已读、置顶 / 取消置顶、屏蔽 / 开启通知、拷贝会话 ID、拷贝恢复命令。
 回答 ⌥⌘1…9（子菜单，2026-11-01）：只有一个问题、单选时列它的选项（最多 9 个），终端对话框列不用输入的选项；Claude 标的「(Recommended)」写成「（推荐）」，
 回传的答案还是原文（`MacAgentCommands.choices`，有测试；菜单栏图标的快捷回答同样改了）。多个问题、多选、要写字的还在卡片上。
-不用 ⌘1…9：⌘1…6 是侧边栏分区。`-openSession <m>/<s> -macMenuLog YES` 把 Agent 菜单当时的样子打进日志（锁屏下没有 key window，
+不用 ⌘1…9：⌘1…7 是侧边栏分区。`-openSession <m>/<s> -macMenuLog YES` 把 Agent 菜单当时的样子打进日志（锁屏下没有 key window，
 菜单不打开就不刷新，它先替菜单走一遍打开时的刷新）：演示里 `macbook/…0002` 的问题是「Swift Testing（推荐）⌥⌘1、XCTest ⌥⌘2」。
 交给 Persona ⌘J（和行菜单一样，把 Agent 的状态和最后的回复交给主对话）；重命名… / 清空上下文… / 关闭 Agent…：经 `MacShellState.chatRequest` 让对话页弹它自己的对话框
 （和 ⋯ 菜单、输入框的 /clear 是同一个），清空只对 herdr 里的 Claude 可点、关闭只对还在跑的。截图：`-openSession <m>/<s> -macAgentAsk rename|clear|close|inspector`。
@@ -287,7 +288,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 ## 显示 / 前往菜单（Mac）
 
-显示 › 隐藏侧边栏 / 显示侧边栏 ⌃⌘S（2026-11-01）：收起窗口最左边的分区栏（`MacShell`），跨启动记住（`mac.sidebar.hidden`），收起后 ⌘1…6 照样换分区；页面自己的列表栏不受影响（它们有自己的按钮）。快捷键测试里有它，截图：`-mac.sidebar.hidden YES`。
+显示 › 隐藏侧边栏 / 显示侧边栏 ⌃⌘S（2026-11-01）：收起窗口最左边的分区栏（`MacShell`），跨启动记住（`mac.sidebar.hidden`），收起后 ⌘1…7 照样换分区；页面自己的列表栏不受影响（它们有自己的按钮）。快捷键测试里有它，截图：`-mac.sidebar.hidden YES`。
 侧栏脚的连接状态收起时挪到页面底部（只在连不上 hub 时出现）：知识库 / 机器自己没有显示它的地方（`-macSection machines -simulateOffline YES -mac.sidebar.hidden YES` 截图看过）；Agents 页的标题位置本来也写「等待网络」，收起时两处都有，先这样。
 分区上的数量角标也跟着收起：Agents 的需要你还有 Dock 角标和菜单栏图标，收件箱的待处理数收起时就看不到了（review 第 7 轮记下，没改：收起本来就是不要这一栏）。
 
@@ -302,7 +303,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 （文件查看器的「完成」占着 Esc，不先接就会关掉整个 sheet），拼音组字时让给输入法。截图：`-openFile <路径> -macFileFind <查询>`（体验模式的 hub 在 Mac 上给一个编造的 Swift 文件）。
 查找下一个 ⌘G / 查找上一个 ⇧⌘G（2026-11-01，`MacFind.findNext`，`CodeFindNextTests`、`MacFindTests`、`MacMenuShortcutTests`）跟着 ⌘F 走：带查找栏的文本视图（diff、输出）跳它的匹配，
 代码查看器跳自己的查找栏，查找栏关着时用上次的词重新打开。没做：区分大小写 / 整词 / 正则、行内部分选择；每次输入在主线程上重搜整个文件，10 万行的文件没量过。真按键没试过（锁屏）。
-显示 › 紧凑列表、分组方式（按项目 / 状态 / 机器）、全部折叠 / 全部展开：和 Agents 列表左上 ⋯ 菜单是同一组设置（`dev.compact`、`dev.grouping`、折叠由列表登记的 `AgentsListMenu.Actions` 做）。
+显示 › 紧凑列表、分组方式（按项目 / 状态 / 机器 / 按待办）、全部折叠 / 全部展开：和 Agents 列表左上 ⋯ 菜单是同一组设置（`dev.compact`、`dev.grouping`、折叠由列表登记的 `AgentsListMenu.Actions` 做）。
 会话信息在 Mac 上是对话右侧的一栏（Agent › 显示会话信息 ⌥⌘I，或点标题；`apple/Mac/Chat/MacInspector.swift`），宽度可拖、记在 `mac.inspector.width`，
 窗口太窄时盖在对话上。没用 SwiftUI 的 `.inspector`：放在 Agents 分栏的详情页里整栏是空的；`SessionInfoSheet` 在 Mac 上也不再包 NavigationStack（会接管详情栏的导航、对话页消失）。
 回到最新 ⌘↓ 是对话页右下角 ↓ 按钮的快捷键（悬停提示同），只在往上翻过、按钮出现时有效；其余时候 ⌘↓ 还是输入框的「移到末尾」。

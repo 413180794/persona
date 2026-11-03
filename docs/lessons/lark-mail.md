@@ -31,9 +31,10 @@
 
 - 飞书消息渲染照搬 lark-connector（`docs/ios.md`「飞书消息渲染」）：hub 原样转发 `parts`，只把媒体 URL 改写到 `/api/v1/lark/media/`；
   看 lark-connector 源码直接 `git clone https://github.com/Eric-2369/lark-connector`（hub 机器上只有部署产物）。
-- 个人 Agent（lark-connector agent-bridge）默认是关的：要在 lark-connector 的部署里设置 `lark-connector_AGENT_BRIDGE=true` 并重启，否则 `/agent-bridge` 返回 `enabled:false`，
+- 个人 Agent 的来源先看 hub 的 `GET /api/v1/agents`：未配置 lark-connector 或仅配置飞书 CLI 时返回 `{"sources":[]}`，会话接口返回 `{"sessions":[]}`，均为 HTTP 200；飞书 CLI 不提供个人 Agent bridge。
+  Bridge 只在 `lark-connectorConfigured()` 为真时注册；无条件注册会使未配置时的列表请求因「lark-connector is not configured」返回 502。配置了 lark-connector 后，其 agent-bridge 默认仍是关的：要在部署里设置 `lark-connector_AGENT_BRIDGE=true` 并重启，否则 `/agent-bridge` 返回 `enabled:false`，
   会话为空；更早的 lark-connector 版本没有这个接口，hub 拿到的是 404。开了以后还要在 lark-connector 的设置里添加 Cue / Grok Bot 账号（只有主人登录的网页接口能加，
-  Agent API 只读）。排查先看 hub 的 `GET /api/v1/agents`：`setup` 是 `missing` / `disabled` / `no_accounts` 就是没配好，`lastError` 是账号同步失败。
+  Agent API 只读）。来源已注册时，`setup` 是 `missing` / `disabled` / `no_accounts` 就是没配好，`lastError` 是账号同步失败。
   lark-connector 自动更新后检查部署配置里这个开关还在不在。
 - lark-connector Agent API 的资源地址使用 `/agent/v1/media/`、`/agent/v1/messages/`；hub 改写要同时兼容这些前缀和旧的 `/api/` 地址，保留查询参数。
   只检查 HTTP 200 不够：未改写的图片路径会落入 hub 网页并返回 HTML，手机还会在解码前把它缓存。验证消息返回的新 URL、图片 MIME 和实际字节；改写为正确代理地址也会改变手机缓存键。

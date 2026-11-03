@@ -31,6 +31,7 @@ struct ChatView: View {
     @State private var macWindow: Int?
     #endif
     @State private var showInfo = false
+    @State private var showTodoDetail = false
     @State private var showLink = false
     @State private var pane: SessionPane = .chat
     @State private var git: GitStatus?
@@ -276,6 +277,14 @@ struct ChatView: View {
             }
         }
         #endif
+        .sheet(isPresented: $showTodoDetail) {
+            if let s = session, let todoID = s.todo?.id,
+                TodosLogic.isOnTodosHub(sessionGroup: s.key.group, hubGroup: model.hub?.group) {
+                NavigationStack {
+                    TodoDetailView(todoID: todoID)
+                }
+            }
+        }
         .environment(\.openFile, actions.openFile)
         .environment(\.fileScope, FileScope(machine: key.machineRef, cwd: session?.cwd ?? ""))
         .environment(\.chatImages, store.images)
@@ -1561,6 +1570,14 @@ struct ChatView: View {
 
     /// The "…" menu, in the custom header (Agents) or the system bar (assistant).
     @ViewBuilder private var moreMenuItems: some View {
+            if let s = session, let todo = s.todo,
+                TodosLogic.isOnTodosHub(sessionGroup: s.key.group, hubGroup: model.hub?.group) {
+                Button {
+                    showTodoDetail = true
+                } label: {
+                    Label(todo.title, systemImage: Theme.Icon.todo)
+                }
+            }
             if style == .dev {
                 if session?.canTerminal == true {
                     Button { showTerminal = true } label: { Label("终端", systemImage: Theme.Icon.terminal).lineLimit(1) }
@@ -2014,6 +2031,9 @@ struct ChatView: View {
                 }
             }
             if UserDefaults.standard.bool(forKey: "showInfo") { showInfo = true }
+            // `-showAgentInfo YES`: an Agent chat's own info sheet (`-showInfo` also opens the assistant's, which is mounted too).
+            if UserDefaults.standard.bool(forKey: "showAgentInfo"), session?.assistant != true { showInfo = true }
+            if UserDefaults.standard.bool(forKey: "openTodoDetail") { showTodoDetail = true }
             // `-openSendMessage <text>`: refusals (SendSafety). Once per launch: the chat appears, goes and appears again
             // while the app starts (three times in 0.2 s), and each one wrote the message anew, with its own id
             // (ConnectionTests saw it reach the hub three times; a message the user writes is written once).
@@ -2803,6 +2823,7 @@ struct SessionInfoSheet: View {
     var session: Session?
     @State private var info: APIClient.SessionInfo?
     @State private var error: String?
+    @State private var showTodo = false
 
     var body: some View {
         InfoContainer {
@@ -2829,6 +2850,15 @@ struct SessionInfoSheet: View {
                         }
                     }
                     Section("位置") {
+                        if let s = session, let todo = s.todo,
+                            TodosLogic.isOnTodosHub(sessionGroup: s.key.group, hubGroup: model.hub?.group) {
+                            Button { showTodo = true } label: {
+                                row(Theme.Icon.todo, "待办", todo.title)
+                            }
+                            .sheet(isPresented: $showTodo) {
+                                NavigationStack { TodoDetailView(todoID: todo.id) }
+                            }
+                        }
                         row(Theme.Icon.folder, "目录", Fmt.path(info.cwd ?? session?.cwd ?? "", home: model.machine(key.machineRef)?.home), mono: true)
                         if let b = info.gitBranch, !b.isEmpty { row("arrow.triangle.branch", "分支", b, mono: true) }
                     }

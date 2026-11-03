@@ -61,13 +61,24 @@ extension Session {
     }
 }
 
+extension DevGrouping {
+    /// The groupings offered: 「按待办」 needs the hub's todos (an old hub answers 404 and has none).
+    static func offered(supportsTodos: Bool) -> [DevGrouping] { allCases.filter { supportsTodos || $0 != .todo } }
+
+    /// The grouping in use: a stored 「按待办」 falls back to 「按项目」 on a hub without todos.
+    static func resolved(_ stored: DevGrouping, supportsTodos: Bool) -> DevGrouping {
+        stored == .todo && !supportsTodos ? .space : stored
+    }
+}
+
 /// How 开发 groups its agents (the menu at the top left; remembered).
 enum DevGrouping: String, CaseIterable, Identifiable {
-    case space, state, machine
+    case space, todo, state, machine
     var id: String { rawValue }
     var title: String {
         switch self {
         case .space: "按项目"
+        case .todo: "按待办"
         case .state: "按状态"
         case .machine: "按机器"
         }
@@ -75,6 +86,7 @@ enum DevGrouping: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .space: Theme.Icon.space
+        case .todo: Theme.Icon.todo
         case .state: "circle.grid.2x1"
         case .machine: Theme.Icon.machine
         }
@@ -278,7 +290,9 @@ private struct AgentsList: View {
     @AppStorage("dev.machineFilter") private var machineFilter = ""
     /// Several groups of hubs: the one the list shows ("" = all; `HubFilter`).
     @AppStorage(HubFilter.key) private var hubFilter = ""
-    @AppStorage("dev.grouping") private var grouping: DevGrouping = .space
+    @AppStorage("dev.grouping") private var storedGrouping: DevGrouping = .space
+    /// The grouping in use (`DevGrouping.resolved`).
+    private var grouping: DevGrouping { DevGrouping.resolved(storedGrouping, supportsTodos: TodoStore.shared.isSupported) }
     /// 细列表: one line per agent.
     @AppStorage("dev.compact") private var compact = false
     /// Folded sections (spaces, machines, states), one id per line.
@@ -293,6 +307,7 @@ private struct AgentsList: View {
     @State private var renamingSpace: SpaceGroup?
     @State private var renamingSession: Session?
     @State private var closingSession: Session?
+    @State private var linkingSession: Session?
     /// The long-press menu's actions on a row (not observed: see `AgentRowMenu`).
     @State private var rowActions = AgentRowMenu.Actions()
     /// The agents, the questions and the machines the list shows (`AgentsFeed`): held still while it is scrolled or
@@ -405,11 +420,18 @@ private struct AgentsList: View {
         let unreadShown = filtered.filter { $0.state == .unread }.map(\.key)
 
         // What the ⋯ menu's actions act on, kept current without making the open menu a function of the list.
-        let _ = menuActions.update(sections: grouping == .space ? active.map(\.id) : sectionIDs(unpinned),
+        let sectionsForMenu: [String] = {
+            if grouping == .space { return active.map(\.id) }
+            if grouping == .todo {
+                return TodosLogic.buildTodoAgentGroups(sessions: unpinned, todos: TodoStore.shared.todos, isMuted: model.isMuted).map(\.key)
+            }
+            return sectionIDs(unpinned)
+        }()
+        let _ = menuActions.update(sections: sectionsForMenu,
                                    foldAll: { setFolded(folding($0, true, in: folded)); expandedQuiet = [] },
                                    unfoldAll: { setFolded(Set(Self.foldedByDefault.map { "!" + $0 })) },
                                    onMachines: { openFromList(MachineListRoute()) })
-        let _ = rowActions.update(rename: { renamingSession = $0 }, close: { closingSession = $0 })
+        let _ = rowActions.update(rename: { renamingSession = $0 }, close: { closingSession = $0 }, linkTodo: { linkingSession = $0 })
 
         let list = List {
             // On a phone the filter bar is the list's first row: it scrolls with the list, so the search field can
@@ -511,7 +533,9 @@ private struct AgentsList: View {
                 }
             }
 
-            if grouping == .state {
+            if grouping == .todo {
+                todoSections(unpinned.filter { $0.state.isLive })
+            } else if grouping == .state {
                 stateSections(unpinned.filter { $0.state.isLive })
             } else if grouping == .machine {
                 machineSections(unpinned.filter { $0.state.isLive })
@@ -602,6 +626,9 @@ private struct AgentsList: View {
         .renameSpaceAlert($renamingSpace)
         .renameSessionAlert($renamingSession)
         .confirmClose($closingSession)
+        .sheet(item: $linkingSession) { s in
+            TodoLinkAgentSheet(session: s)
+        }
         .onChange(of: matching) { _, now in kept.formUnion(now) }
         .onChange(of: query.isEmpty, initial: true) { _, empty in feed.searching = !empty }
         .onChange(of: machineFilter) { _, _ in kept = [] }
@@ -811,6 +838,51 @@ private struct AgentsList: View {
                 } header: {
                     FoldButton(title: b.title, folded: isFolded(id), detail: "\(rows.count) 个") { toggleFold(id) } label: {
                         SectionHeader(title: b.title, count: rows.count, tone: b.tint)
+                    }
+                }
+                .listSectionSpacing(isFolded(id) ? .custom(0) : .default)
+            }
+        }
+    }
+
+    /// One section per todo, its agents ordered; unassigned agents go into "没有待办".
+    @ViewBuilder private func todoSections(_ live: [Session]) -> some View {
+        let todoGroups = TodosLogic.buildTodoAgentGroups(sessions: live, todos: TodoStore.shared.todos, isMuted: model.isMuted)
+        ForEach(todoGroups) { g in
+            let id = g.key
+            if !g.sessions.isEmpty {
+                listSection {
+                    if !isFolded(id) {
+                        ForEach(g.sessions) { s in slotRow(s, context: true) }
+                    }
+                } header: {
+                    FoldButton(title: g.name, folded: isFolded(id), detail: "\(g.sessions.count) 个") { toggleFold(id) } label: {
+                        HStack(spacing: Theme.Space.sm) {
+                            if compact {
+                                Text(g.name).font(CompactList.sectionTitle).foregroundStyle(Color.primary).textCase(nil).lineLimit(1)
+                            } else {
+                                Text(g.name)
+                            }
+                            if let st = g.todoStatus {
+                                CountBadge(count: g.sessions.count, look: .tone(st.todoTone))
+                            } else {
+                                CountBadge(count: g.sessions.count, look: .tone(StatusPalette.idle))
+                            }
+                            if let todoID = g.todoID,
+                                g.sessions.allSatisfy({ TodosLogic.isOnTodosHub(sessionGroup: $0.key.group, hubGroup: model.hub?.group) }) {
+                                Button {
+                                    openFromList(TodoDetailRoute(id: todoID))
+                                } label: {
+                                    Image(systemName: Theme.Icon.disclosure)
+                                        .font(compact ? CompactList.metaStrong : Theme.Font.body)
+                                        .foregroundStyle(.secondary)
+                                        .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
+                                        .contentShape(.rect)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("查看待办详情")
+                            }
+                        }
                     }
                 }
                 .listSectionSpacing(isFolded(id) ? .custom(0) : .default)
@@ -1643,6 +1715,15 @@ nonisolated struct SlotRow: View, Equatable {
                         }
                         HStack(spacing: Theme.Space.xs) {
                             metaText.lineLimit(1)
+                            if let todo = session.todo {
+                                ViewThatFits(in: .horizontal) {
+                                    Chip(text: todo.title, symbol: Theme.Icon.todo, look: .outline)
+                                    Image(systemName: Theme.Icon.todo)
+                                        .font(Theme.Font.caption)
+                                        .foregroundStyle(.secondary)
+                                        .help(todo.title)
+                                }
+                            }
                             if muted {
                                 Image(systemName: Theme.Icon.muted).font(Theme.Font.label).accessibilityLabel("已屏蔽通知")
                             }
@@ -1685,6 +1766,7 @@ nonisolated struct SlotRow: View, Equatable {
             parts.append(slot)
         }
         if let machine { parts.append(machine) }
+        if let todo = session.todo { parts.append("待办：" + todo.title) }
         return parts.joined(separator: " · ")
     }
 }
@@ -1741,6 +1823,12 @@ nonisolated struct CompactSlotRow: View, Equatable {
                 if let place, !place.isEmpty {
                     // Tail: "photo-sy…" still says where; the head cut to "…to-sync › #1".
                     Text(place).font(CompactList.meta).foregroundStyle(.secondary).lineLimit(1)
+                }
+                if let todo = session.todo {
+                    ViewThatFits(in: .horizontal) {
+                        Text(todo.title).font(CompactList.meta).foregroundStyle(Theme.accent).lineLimit(1)
+                        Image(systemName: Theme.Icon.todo).font(CompactList.meta).foregroundStyle(Theme.accent).help(todo.title)
+                    }
                 }
             }
             Spacer(minLength: Theme.Space.xs)
@@ -1997,6 +2085,7 @@ private struct AgentsDestinations: ViewModifier {
             .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(ref: r.ref).splitDetailPage() }
             .navigationDestination(for: PersonalAgentsRoute.self) { _ in PersonalAgentListView().splitDetailPage() }
             .navigationDestination(for: PersonalAgentSession.self) { s in PersonalAgentSessionView(session: s).id(s.id).splitDetailPage() }
+            .navigationDestination(for: TodoDetailRoute.self) { r in TodoDetailView(todoID: r.id).splitDetailPage() }
     }
 }
 

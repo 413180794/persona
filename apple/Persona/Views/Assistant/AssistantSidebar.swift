@@ -658,6 +658,7 @@ struct AssistantSidebar: View {
     var drawer: AssistantDrawer?
     /// The shell's drawer (docs/ios.md「新外壳」) also lists 收件箱 and 机器, and ends in 新对话 + 设置 like ChatGPT's.
     var openInbox: (() -> Void)? = nil
+    var openTodos: (() -> Void)? = nil
     var openMachines: (() -> Void)? = nil
     private var isShell: Bool { openInbox != nil }
     @State private var query = ""
@@ -825,6 +826,9 @@ struct AssistantSidebar: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("sidebar-profile")
                 action("收件箱", Theme.Icon.inbox, id: "sidebar-inbox", count: InboxStore.shared.actionCount, run: openInbox)
+                if TodoStore.shared.isSupported {
+                    action("待办", Theme.Icon.todo, id: "sidebar-todos", count: TodoStore.shared.openCount, run: { (openTodos ?? openInbox)() })
+                }
                 action("定时任务", Theme.Icon.schedule, run: openRoutines)
                 action("知识库", Theme.Icon.knowledge, run: openKnowledge)
                 action("机器", Theme.Icon.machines, id: "sidebar-machines", run: openMachines)

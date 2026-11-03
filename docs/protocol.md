@@ -1245,7 +1245,8 @@ lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 
 
 ## 个人 Agent 来源状态
 
-`GET /api/v1/agents` 返回 `{"sources":[{"source":"removedbridge","enabled","error?","setup?","providers":[…],"accounts":[…]}]}`。
+未配置 lark-connector（包括仅配置飞书 CLI）时，`GET /api/v1/agents` 返回 `{"sources":[]}`，`GET /api/v1/agents/sessions` 返回 `{"sessions":[]}`，均为 HTTP 200。
+配置了 lark-connector 时，`GET /api/v1/agents` 返回 `{"sources":[{"source":"removedbridge","enabled","error?","setup?","providers":[…],"accounts":[…]}]}`。
 `setup` 说明来源能连上、但还没有可列的东西的原因，客户端在会话列表为空时把它换成一句提示：
 `missing`（lark-connector 版本没有 agent-bridge，hub 不再把 404 当错误，会话列表返回空）、`disabled`（没设置 `lark-connector_AGENT_BRIDGE=true`）、
 `no_accounts`（开了但还没连接账号）。lark-connector 连不上之类的其他失败仍然放在 `error` 里，会话接口照常报错。

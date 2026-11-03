@@ -420,9 +420,11 @@ struct ShellDestinations: ViewModifier {
                 .navigationDestination(for: ShellRoute.self) { route in
                     switch route {
                     case .inbox: InboxPage(path: $path, accountState: accounts, embedded: true)
+                    case .todos: TodosView()
                     case .machines: MachinesView()
                     }
                 }
+                .navigationDestination(for: TodoDetailRoute.self) { r in TodoDetailView(todoID: r.id) }
                 .modifier(InboxDestinations(accounts: accounts.accounts))
                 .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(ref: r.ref) }
                 .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key) }

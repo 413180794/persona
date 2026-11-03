@@ -37,6 +37,10 @@ extension Theme.Size {
     static let macInboxListIdeal: CGFloat = 340 // 380 left no room for the item's actions column at the default size (#831)
     static let macInboxListMax: CGFloat = 520
     static let macInboxFiltersWidth: CGFloat = 190
+    /// The todos' list column on Mac.
+    static let macTodosListMin: CGFloat = 260
+    static let macTodosListIdeal: CGFloat = 340
+    static let macTodosListMax: CGFloat = 480
     /// An opened inbox item's actions column at the detail's trailing edge (#831), and the least it leaves the item:
     /// narrower than both, the actions sit over the item as a strip.
     static let macInboxActionsWidth: CGFloat = 180

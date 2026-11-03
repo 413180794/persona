@@ -20,6 +20,7 @@ struct AssistantView: View {
     @State private var showProfile = false
     @State private var showKnowledge = false
     @State private var showRoutines = false
+    @State private var showTodos = false
     /// The sidebar (历史对话, or a drag to the right anywhere on the page): docs/ios.md「Persona 顶栏和侧边栏」.
     @State private var drawer = AssistantDrawer()
     /// Regular width (iPhone Duo open): the sidebar is a column beside the conversation; 历史对话 shows or hides it.
@@ -87,7 +88,8 @@ struct AssistantView: View {
                          openRoutines: { drawer.close(); showRoutines = true },
                          openKnowledge: { drawer.close(); showKnowledge = true },
                          openSettings: column ? nil : { drawer.close(); model.selectedTab = .settings },
-                         drawer: column ? nil : drawer)
+                         drawer: column ? nil : drawer,
+                         openTodos: { drawer.close(); showTodos = true })
     }
 
     /// 历史对话: the drawer on a phone, the sidebar column beside the conversation on a wide display.
@@ -103,7 +105,7 @@ struct AssistantView: View {
 
     /// Nothing pushed on the page: the sidebar's drag only works here (pushed pages have their own back swipe).
     private var atRoot: Bool {
-        var pushed = showProfile || showKnowledge || showRoutines || !path.isEmpty
+        var pushed = showProfile || showKnowledge || showRoutines || showTodos || !path.isEmpty
         #if DEBUG
         pushed = pushed || showAvatars
         #endif
@@ -156,7 +158,9 @@ struct AssistantView: View {
             .navigationDestination(isPresented: $showProfile) { AssistantProfileView() }
             .navigationDestination(isPresented: $showKnowledge) { KnowledgeView() }
             .navigationDestination(isPresented: $showRoutines) { AssistantRoutinesView() }
+            .navigationDestination(isPresented: $showTodos) { TodosView() }
             .modifier(ShellDestinations(path: $path, enabled: shell != nil))
+            .modifier(ClassicTodoDetailDestination(enabled: shell == nil))
             // On appear too (a cold launch onto 收件箱 asks before this page exists), but each request once: the root
             // appears again after every pop, and replaying the last request pushed the inbox right back.
             .onChange(of: shell?.request?.serial, initial: true) { _, serial in
@@ -178,6 +182,7 @@ struct AssistantView: View {
                 switch UserDefaults.standard.string(forKey: "openAssistantPage") {
                 case "avatars": showAvatars = true
                 case "knowledge": showKnowledge = true
+                case "todos": showTodos = true
                 case .some(let p) where p != "assistant": showProfile = true
                 default: break
                 }
@@ -187,6 +192,7 @@ struct AssistantView: View {
                 // `-openShellPage inbox|machines|routines|knowledge|profile` (the new shell): that page pushed.
                 switch UserDefaults.standard.string(forKey: "openShellPage") {
                 case "inbox": show(.inbox)
+                case "todos": show(.todos)
                 case "machines": show(.machines)
                 case "routines": show(.routines)
                 case "knowledge": show(.knowledge)
@@ -209,6 +215,7 @@ struct AssistantView: View {
         case .routines: showRoutines = true
         case .knowledge: showKnowledge = true
         case .inbox: path.append(ShellRoute.inbox)
+        case .todos: path.append(ShellRoute.todos)
         case .machines: path.append(ShellRoute.machines)
         }
     }
@@ -218,6 +225,7 @@ struct AssistantView: View {
         showProfile = false
         showRoutines = false
         showKnowledge = false
+        showTodos = false
     }
 
     private func newConversation() {
@@ -900,3 +908,17 @@ private struct RootBarHidden: UIViewRepresentable {
     }
 }
 #endif
+
+/// The classic layout has no ShellDestinations, so nothing registers the todo detail route in this stack: a todo row
+/// pushed from the todo list (TodosView) would open nothing. The shell registers it itself (ShellHome.swift).
+private struct ClassicTodoDetailDestination: ViewModifier {
+    var enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.navigationDestination(for: TodoDetailRoute.self) { r in TodoDetailView(todoID: r.id) }
+        } else {
+            content
+        }
+    }
+}
