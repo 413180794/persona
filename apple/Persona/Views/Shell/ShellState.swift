@@ -99,21 +99,18 @@ import SwiftUI
         model.tabRouter = self
         route(model.selectedTab, in: model)
         #if os(iOS)
-        // The status row takes the toasts and the link's state as they are set, like the tab.
-        model.toastSink = notices
+        // The status row takes the link's state as it is set, like the tab (the toasts float, `ToastWindow`).
         model.connection.onShown = { [weak notices] in notices?.linkChanged($0) }
         notices.linkChanged(model.connection.shown)
-        if let toast = model.toast { model.toast = toast } // one set before the shell was up goes to the row
         #endif
     }
 
     func detach(from model: AppModel) {
-        if model.tabRouter === self { model.tabRouter = nil }
+        // Only while this shell is still the one on screen: a new one may have taken over already.
+        guard model.tabRouter === self else { return }
+        model.tabRouter = nil
         #if os(iOS)
-        if model.toastSink === notices {
-            model.toastSink = nil
-            model.connection.onShown = nil
-        }
+        model.connection.onShown = nil
         #endif
     }
 

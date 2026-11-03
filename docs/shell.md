@@ -113,21 +113,30 @@ TabView 只在显示时建 tab，没有这个问题。
 （`ShellState(page:)`，不等 `onAppear` 里的第一次路由）。`ShellLaunchTests` 按上面几种启动方式断言：启动后只有在前那页的对话出现、
 只出现一次，后面那页没有对话。
 
-## 状态行（连接提示和 toast）
+## 状态行（连接提示）和 toast
 
 原来弱网的「连接中…」药丸浮在顶栏下面，正好压在 Agents 的筛选条和拉出来的搜索框上；全局 toast 浮在窗口顶部，新外壳里盖住头像、切换和新建按钮，
-点到它就把它关掉，点切换的那一下被吞了（2026-11-02）。现在两样都进状态栏下面的同一行（`ShellStatus.swift`）：
+点到它就把它关掉，点切换的那一下被吞了（2026-11-02）。当时两样都进了状态栏下面的同一行（`ShellStatus.swift`）。
+后来用户反馈（2026-11-04，#1053）：在侧栏归档一个对话，「已归档」进了这一行，把侧栏和页面往下推一下再推回来，「需要用覆盖在上层的 toast 实现」。现在按这条分：
+
+- **持续的状态进状态行**：hub 的连接（等待网络 / 连接中… / 更新中…）。它会持续一阵、反映的是现在的情况，让位置、不压控件是对的。
+- **一次性的结果是 toast**：刚做完一件事的结果（已归档、已删除、已置顶、已复制、已提交、发送失败、部署失败……，也就是所有 `AppModel.toast`）。
+  它短（info / success 2.5 s，error 4 s），自己消失，**不占位、不推动任何布局**，浮在最上层：外壳把它画在自己的一个窗口里（`ToastWindow`，
+  在外壳窗口上面一层），所以抽屉、两页、推出的页面、外壳上弹出的 sheet 都在它下面；状态行开着时它在状态行下面，不叠在连接提示上。
+  键盘在底部，toast 在顶部，不会被挡。
+- **toast 不吞点击**：那个窗口不接任何触摸（`hitTest` 返回 nil），toast 下面的切换、按钮照常能点；所以它也不能点掉，到时间自己走。
+  因为 VoiceOver 不会移到一个不接触摸的窗口上，toast 出现时直接朗读出来（`AccessibilityNotification.Announcement`）。
+  同一时间只有一条，新的换掉旧的（和旧布局一样）。样子是设计系统的 `ToastCapsule`：液态玻璃的胶囊，BeautifulUI 风格下是它凸起的胶囊。
+
+状态行本身：
 
 - **占位置，不浮**：这一行出现时，外壳把窗口根控制器的 `additionalSafeAreaInsets.top` 加上这一行的高度（`ShellWindowHooks`），所有页面、顶栏、
   系统导航栏、列表、推出的页面、打开的抽屉一起往下让；行画在让出来的空当里。只用 SwiftUI 的 `safeAreaInset` 不行：外壳自己画的顶栏让了，
   底下 UIKit 的导航栏和列表没让，顶栏反而压到了筛选条上。
-- **同时只显示一条**：toast 在的时候盖过连接提示（连接状态是持续的，toast 是临时的），toast 走了连接提示还在，就直接换回连接提示，这一行不收起。
-  多个 toast 排队，同样的话合并成一条，队列清空前这一行一直展开。
-- **toast 只接自己的点击**：点 toast 关掉它；它不压任何控件，点下面的东西照常生效。info / success 2.5 s，error 4 s。
 - **手指在动时不展开、不收起**：窗口上一个只看不抢的手势识别器（不开始、不延迟、不取消任何触摸）记着有没有手指按着，松手后等到所有
-  滚动视图停下来。这期间展开和收起推迟（内容会在手指下平移），最多等 3 s；等待网络和 error 的 toast 不等。
-- 旧布局、iPad 不变：toast 还是 `ToastOverlay`，连接状态在标题里。外壳在的时候 `AppModel.toast` 和 `ConnectionStatus.shown` 一设就转给这一行
-  （`toastSink`、`onShown`），和 tab 一样当场做，不靠视图重画。行的高度也是当场推给窗口（`onRoom`），不经过外壳的 body：经过 body 时
+  滚动视图停下来。这期间展开和收起推迟（内容会在手指下平移），最多等 3 s；等待网络不等。
+- 旧布局、iPad、Mac：toast 是 `ToastOverlay`（同一个 `ToastCapsule`，点它关掉），连接状态在标题里。外壳在的时候 `ConnectionStatus.shown`
+  一设就转给这一行（`onShown`），和 tab 一样当场做，不靠视图重画。行的高度也是当场推给窗口（`onRoom`），不经过外壳的 body：经过 body 时
   慢了一秒多，药丸先压在了切换上。
 - 让位置时，停在顶端的列表保持在顶端（跟着整页一起移）：offset 按变化之前的值加减这一行的高度来定。
 - **还没解决（#413）**：这一行收起时，导航栈里的列表有几帧读到 inset 为 0（导航栈重新排版，四种做法都有：SwiftUI 动画、
@@ -144,10 +153,11 @@ DEBUG：`-showConnectionCycle connecting:7:4`（第 7 秒起显示连接中… 4
 
 | 项 | 定义 | 测试 |
 | --- | --- | --- |
-| 不压控件 | 连接提示、toast 和头像、切换、新建、筛选条、搜索框、输入框都不相交；三种连接状态都测 | `testTheLinkTakesItsRoomInEveryState`、`testAToastLetsTheTapsThrough`、`ShellSearchTests` |
+| 不压控件 | 连接提示和头像、切换、新建、筛选条、搜索框、输入框都不相交；三种连接状态都测 | `testTheLinkTakesItsRoomInEveryState`、`ShellSearchTests` |
 | 不跳 | 展开时顶上的控件和屏幕上的行都往下移同一个距离（这一行的高度），行的顺序不变；收起后回到原处 | `testTheLinkTakesItsRoomInEveryState` |
-| 不多收放 | 连接提示 → toast → toast → 连接提示 → 恢复，这一行只展开一次、收起一次 | `testToastsTakeTurnsWithoutFolding` |
-| 不吞点击 | toast 显示时点切换照常切；点 toast 关掉它 | `testAToastLetsTheTapsThrough` |
+| toast 不推布局 | toast 出现、消失时 Agents 列表第一行（`probe.agents-scroll`）、新建按钮、抽屉里的行都不动，状态行不展开 | `ShellToastTests` |
+| toast 不吞点击 | toast 显示时点它下面的切换、抽屉里的行照常生效 | `ShellToastTests` |
+| toast 不被键盘挡 | 键盘弹着时 toast 整个在屏幕里、和键盘不相交 | `ShellToastTests.testAToastWithTheKeyboardUpIsAboveIt` |
 | 手指优先 | 手指按着时连接中…不展开，松手后才展开；等待网络立刻展开 | `testTheRowWaitsForTheFingerUnlessUrgent` |
 
 ## 一致和及时（验收标准）

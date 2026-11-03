@@ -16,6 +16,7 @@ extension Theme {
         static let successFilled = "checkmark.circle.fill"
         static let done = "checkmark"
         static let info = "info.circle"
+        static let infoFilled = "info.circle.fill"
         static let offline = "wifi.exclamationmark"
         static let needsYou = "exclamationmark.bubble.fill"
         /// A status dot (online, unread).

@@ -74,17 +74,9 @@ final class AppModel {
     private(set) var interactions: [String: Interaction] = [:] { didSet { saveSnapshot(); countBadges() } }
     /// The machine whose engine the pairing asks for (a newly paired group's hub machine).
     var pairingEngineMachine: MachineRef?
-    /// A short message (`ToastOverlay`, or in the iPhone's shell its status row, which takes it as it is set:
-    /// `toastSink`, docs/shell.md「状态行」).
-    var toast: Toast? {
-        didSet {
-            guard let toast, let toastSink else { return }
-            toastSink.take(toast)
-            self.toast = nil
-        }
-    }
-    /// The iPhone's shell while it is on screen: it shows the toasts in its status row, one after another.
-    @ObservationIgnored weak var toastSink: (any ToastSink)?
+    /// A short message: the result of something just done, floating over the page for a moment (`ToastOverlay`; in the
+    /// iPhone's shell in a window of its own, `ToastWindow`, docs/shell.md「状态行」).
+    var toast: Toast?
     var openChat: SessionKey?
     /// A chat to open at its latest answer, like a finished one from the list (ChatView takes it): a tap on a
     /// "完成" notification. From the background the session list is stale (the agent still reads as working until the
@@ -1964,7 +1956,3 @@ nonisolated struct TabBadges: Equatable, Sendable {
     func route(_ tab: AppTab, in model: AppModel)
 }
 
-/// Who shows the app's toasts instead of `ToastOverlay` (`AppModel.toastSink`): the iPhone's shell.
-@MainActor protocol ToastSink: AnyObject {
-    func take(_ toast: Toast)
-}

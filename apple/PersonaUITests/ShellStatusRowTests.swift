@@ -1,11 +1,10 @@
 import XCTest
 
-/// The shell's status row (docs/shell.md「状态行」): 等待网络 / 连接中… / 更新中… and the toasts, in one row under the status
-/// bar that takes its room. Floating, the link's pill lay over Agents' filter chips and search field and a toast over the
-/// top bar's switch (2026-11-02). Here: nothing it shows meets a control (the filter chips, the search field, the
-/// composer, the bar's buttons); the page makes way as one piece (every control and row moves by the row's room, the
-/// rows keep their order) and comes back; toasts take turns over the link without the row folding in between; a toast
-/// takes only the taps on itself; and the row waits for a finger to let go, unless what it shows is urgent.
+/// The shell's status row (docs/shell.md「状态行」): 等待网络 / 连接中… / 更新中…, in one row under the status bar that
+/// takes its room. Floating, the link's pill lay over Agents' filter chips and search field (2026-11-02). Here: nothing
+/// it shows meets a control (the filter chips, the search field, the composer, the bar's buttons); the page makes way as
+/// one piece (every control and row moves by the row's room, the rows keep their order) and comes back; and the row
+/// waits for a finger to let go, unless what it shows is urgent. The toasts float instead (`ShellToastTests`, #1053).
 final class ShellStatusRowTests: XCTestCase {
     private var app: XCUIApplication!
 
@@ -28,7 +27,7 @@ final class ShellStatusRowTests: XCTestCase {
         add(shot)
     }
 
-    /// Waits until the row shows `status` (none / link / toast).
+    /// Waits until the row shows `status` (none / link).
     @MainActor @discardableResult private func expectRow(_ status: String, within: TimeInterval, _ what: String) -> Bool {
         let start = Date()
         while app.shellValue("status") != status, Date().timeIntervalSince(start) < within { usleep(100_000) }
@@ -126,57 +125,6 @@ final class ShellStatusRowTests: XCTestCase {
                 app.terminate()
             }
         }
-    }
-
-    /// Toasts over the link: the row opens once for the link, shows each toast in turn, goes back to the link, and folds
-    /// once when the link is fine again.
-    @MainActor func testToastsTakeTurnsWithoutFolding() {
-        launch("dev", ["-showConnectionCycle", "connecting:3:11", "-showToasts", "6:info:第一条提示;6.4:success:第二条提示"])
-        var shown: [String] = []
-        let start = Date()
-        while Date().timeIntervalSince(start) < 18 {
-            let status = app.shellValue("status") ?? "?"
-            // The toast can go between the two reads: then this read does not count (a snapshot throws where `label`
-            // fails the test).
-            let toast = app.descendants(matching: .any)["shell-toast"].firstMatch
-            let text = status == "toast" ? (try? toast.snapshot())?.label : status
-            if let text, shown.last != text { shown.append(text) }
-            if status == "none", shown.count > 2 { break }
-            usleep(150_000)
-        }
-        let toasts = shown.filter { $0.contains("提示") }
-        XCTAssertEqual(toasts.count, 2, "both toasts in turn: \(shown)")
-        XCTAssertTrue(toasts.first?.contains("第一条") == true && toasts.last?.contains("第二条") == true, "the toasts' order: \(shown)")
-        XCTAssertEqual(shown.first { !$0.contains("提示") && $0 != "none" }, "link", "the link first: \(shown)")
-        XCTAssertEqual(app.shellValue("opened"), "1", "the row folded and opened again between the link and the toasts: \(app.shellTrace)")
-        XCTAssertEqual(app.shellValue("folded"), "1", "the row folded more than once: \(app.shellTrace)")
-    }
-
-    /// A toast takes only the taps on itself: the switch under where toasts used to float works while one shows, and a
-    /// tap on the toast closes it. Whether a toast went by a tap or by its time is in the trace (`toast tapped` /
-    /// `toast time up`): on a loaded machine the first one's 4 s can run out between the taps.
-    @MainActor func testAToastLetsTheTapsThrough() {
-        // Two errors in a row: the row shows toasts for 8 s, time enough for the taps.
-        launch("assistant", ["-showToasts", "3:error:发送失败：网络不可用;3.1:error:重试也失败了"])
-        let finger = ShellFinger(app)
-        guard expectRow("toast", within: 8, "the error toasts") else { return }
-        usleep(500_000) // the room's animation
-        let toast = app.descendants(matching: .any)["shell-toast"].firstMatch
-        XCTAssertTrue(toast.label.contains("发送失败"), "the first toast first: \(toast.label)")
-        for (name, f) in frames("assistant") {
-            XCTAssertFalse(f.intersects(toast.frame), "\(name) \(f) under the toast \(toast.frame)")
-        }
-        finger.switchTo(agents: true, "Agents tapped while the toast shows")
-        XCTAssertFalse(app.shellTrace.contains("toast tapped"), "the switch's tap took the toast away: \(app.shellTrace)")
-        // A tap on the toast is the toast's: the next one, or the row folds after the last.
-        guard app.shellValue("status") == "toast" else { return XCTFail("both toasts' time ran out before the tap: \(app.shellTrace)") }
-        let shown = toast.label, f = toast.frame
-        app.windows.firstMatch.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: f.midX, dy: f.midY)).tap()
-        let start = Date()
-        while Date().timeIntervalSince(start) < 1.5, !app.shellTrace.contains("toast tapped") { usleep(100_000) }
-        XCTAssertTrue(app.shellTrace.contains("toast tapped"), "a tap on the toast did not close it: \(app.shellTrace)")
-        XCTAssertTrue(app.shellValue("status") != "toast" || toast.label != shown, "the tapped toast is still there: \(app.shellTrace)")
-        app.expectShell(agents: true, "after the toast was tapped (the tap on it is its own)")
     }
 
     /// While a finger holds the screen the row does not open for 连接中… (everything under the finger would move); it

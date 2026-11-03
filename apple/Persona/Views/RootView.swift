@@ -43,7 +43,8 @@ struct RootView: View {
         // No scroll bars anywhere (2026-10-31, the user: they look bad); the environment reaches every ScrollView,
         // List and sheet below. UIKit scroll views (MonoTextView, the terminal, web views) turn theirs off themselves.
         .scrollIndicators(.hidden)
-        .overlay(alignment: .top) { ToastOverlay() }
+        // The shell shows the toasts in a window of its own, over its sheets too (`ToastWindow`).
+        .overlay(alignment: .top) { if !usesShell { ToastOverlay() } }
         #if os(iOS)
         // 设置 › 外观 › 深浅色 on this scene's window (and any other open one) as it first shows.
         .onAppear { model.colorScheme.apply() }
@@ -182,35 +183,6 @@ private struct TabPage<Page: View>: View, Equatable {
             .equatable()
         }
         .badge(model.isDemo ? Text("体验") : nil) // 体验模式 is left from 设置
-    }
-}
-
-struct ToastOverlay: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        ZStack {
-            if let toast = model.toast {
-                HStack(spacing: Theme.Space.m) {
-                    Image(systemName: toast.style == .error ? Theme.Icon.errorFilled : toast.style == .success ? Theme.Icon.successFilled : "info.circle.fill")
-                        .foregroundStyle(toast.style == .error ? Theme.danger : toast.style == .success ? Theme.positive : Theme.accent)
-                    Text(toast.message)
-                        .font(Theme.Font.secondaryMedium)
-                        .lineLimit(3)
-                }
-                .padding(.horizontal, Theme.Space.l)
-                .padding(.vertical, Theme.Space.m)
-                .surface(in: .capsule)
-                .padding(.horizontal, Theme.Space.xl)
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .onTapGesture { model.toast = nil }
-                .task(id: toast.id) {
-                    try? await Task.sleep(for: .seconds(toast.style == .error ? 4 : 2.5))
-                    withAnimation(Theme.Motion.standard) { model.toast = nil }
-                }
-            }
-        }
-        .animation(Theme.Motion.standard, value: model.toast)
     }
 }
 

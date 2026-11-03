@@ -5,7 +5,7 @@ import Testing
 
 /// The shell's one source of the page in front (docs/shell.md): `select` and `route` change it at once and the strip
 /// and the app's tab follow; the strip's `slide` is idempotent and a slide not started yet is replaced. And the status
-/// row (`ShellNotices`): one thing at a time, toasts over the link without folding, waiting for a finger unless urgent.
+/// row (`ShellNotices`): only the link's state (the toasts float), waiting for a finger unless urgent.
 @MainActor
 struct ShellStateTests {
     @Test func selectMovesThePageTheStripAndTheTab() {
@@ -96,32 +96,28 @@ struct ShellStateTests {
         #expect(!pager.lingering, "the moving bar stayed with no finger down")
     }
 
-    @Test func theLinkOpensTheRowAndAToastHandsBackWithoutFolding() {
+    @Test func theLinkOpensTheRowAndFoldsIt() {
         let n = ShellNotices()
         n.linkChanged(.connecting)
         #expect(n.shown == .link(.connecting))
-        let toast = Toast("已复制")
-        n.take(toast)
-        #expect(n.shown == .toast(toast))
-        n.dismiss(toast)
-        #expect(n.shown == .link(.connecting), "the link did not come back after the toast")
+        n.linkChanged(.updating)
+        #expect(n.shown == .link(.updating))
         n.linkChanged(.online)
         #expect(n.shown == nil)
         #expect(n.opened == 1 && n.folded == 1, "opened \(n.opened), folded \(n.folded): the row folded in between")
     }
 
-    @Test func toastsQueueAndTheSameWordsAreOne() {
-        let n = ShellNotices()
-        let a = Toast("一"), b = Toast("二"), again = Toast("一")
-        n.take(a)
-        n.take(b)
-        n.take(again)
-        #expect(n.shown == .toast(again), "the same words again replace the one shown")
-        n.dismiss(again)
-        #expect(n.shown == .toast(b))
-        n.dismiss(b)
-        #expect(n.shown == nil)
-        #expect(n.opened == 1 && n.folded == 1)
+    /// A toast is the result of something just done: it floats (`ToastWindow`), and the row, which moves the pages,
+    /// stays as it was (#1053: 已归档 opened it and pushed the drawer down).
+    @Test func aToastLeavesTheRowAlone() {
+        let model = AppModel()
+        let shell = ShellState()
+        shell.attach(to: model)
+        defer { shell.detach(from: model) }
+        let toast = Toast("已归档", style: .success)
+        model.toast = toast
+        #expect(model.toast == toast, "the toast is the model's to show, not taken into the row")
+        #expect(shell.notices.shown == nil && shell.notices.opened == 0 && shell.notices.room == 0)
     }
 
     @Test func theRowWaitsForTheFingerUnlessUrgent() {
@@ -139,9 +135,6 @@ struct ShellStateTests {
         n.fingers(busy: true)
         n.linkChanged(.waitingForNetwork)
         #expect(n.shown == .link(.waitingForNetwork), "no network waited for the finger")
-        let error = Toast("发送失败", style: .error)
-        n.take(error)
-        #expect(n.shown == .toast(error))
     }
 }
 #endif

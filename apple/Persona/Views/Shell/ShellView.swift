@@ -137,7 +137,7 @@ nonisolated struct ShellShown: Encodable, Equatable {
     var strip = "", selected = "", tab = ""
     var position = 0.0
     var moving = false, lingering = false, drawerOpen = false, chatRoot = true, workRoot = true
-    /// The status row: `none`, `link` or `toast`, how many times it opened and folded, and its room (points).
+    /// The status row: `none` or `link` (toasts float, `ToastWindow`), how many times it opened and folded, and its room (points).
     var status = "none"
     var opened = 0, folded = 0, room = 0
     var trace: [String] = []
@@ -155,7 +155,7 @@ nonisolated struct ShellShown: Encodable, Equatable {
         drawerOpen = shell.drawer.isOpen
         chatRoot = shell.chatAtRoot
         workRoot = shell.workAtRoot
-        status = switch n.shown { case .toast: "toast"; case .link: "link"; case nil: "none" }
+        status = n.shown == nil ? "none" : "link"
         opened = n.opened
         folded = n.folded
         room = Int(n.room.rounded())

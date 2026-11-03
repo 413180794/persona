@@ -1,24 +1,23 @@
+import BeautifulUI
 import SwiftUI
 
 #if os(iOS)
-/// The shell's status row (docs/shell.md「状态行」): one line under the status bar for 等待网络 / 连接中… / 更新中… and the
-/// app's toasts, taking its room (the pages and their bars make way) instead of floating over them. Floating, the link's
-/// pill lay over Agents' filter chips and search field, and a toast over the top bar's switch, taking the tap meant
-/// for it (2026-11-02).
+/// The shell's status row (docs/shell.md「状态行」): one line under the status bar for what lasts, the hub's link
+/// (等待网络 / 连接中… / 更新中…), taking its room (the pages and their bars make way) instead of floating over them.
+/// Floating, the link's pill lay over Agents' filter chips and search field (2026-11-02).
 ///
-/// One thing at a time: a toast over the link's state while it lasts (the link is lasting, a toast brief), then the
-/// link again without folding in between. Toasts queue, and the row stays open until the last is gone. Opening and
-/// folding move everything under the finger, so they wait while a finger drags or a list still glides (at most
-/// `longestWait`), except for what must be seen at once: no network, an error.
-@MainActor @Observable final class ShellNotices: ToastSink {
+/// The app's toasts are not the row's: the result of something just done (已归档, 已复制) is brief, and opening the
+/// row for it pushed the pages and the drawer down and back (2026-11-04, #1053). They float over everything instead,
+/// in a window that takes no touches (`ToastWindow`), under the row while it is open.
+/// Opening and folding move everything under the finger, so they wait while a finger drags or a list still glides (at
+/// most `longestWait`), except for what must be seen at once: no network.
+@MainActor @Observable final class ShellNotices {
     enum Item: Equatable {
-        case toast(Toast)
         case link(ConnectionStatus.Phase)
 
         /// Shown at once even under a moving finger.
         var urgent: Bool {
             switch self {
-            case .toast(let t): t.style == .error
             case .link(let p): p == .waitingForNetwork
             }
         }
@@ -31,10 +30,7 @@ import SwiftUI
     /// What it showed last: drawn, transparent, while the row folds (a view inserted with a transition each time it
     /// opened was left transparent from the second time on, under the safe area's own animation).
     private(set) var last: Item?
-    /// The row's height with a toast in it (as drawn), and the status bar's above it (`ShellWindowHooks`).
-    var toastHeight: CGFloat = 0 {
-        didSet { if case .toast = shown { onRoom?(room, true) } }
-    }
+    /// The status bar's height above the row (`ShellWindowHooks`).
     var statusBar: CGFloat = 0
     /// The text size's scale (the link's pill grows with it).
     @ObservationIgnored var scale: CGFloat = 1 {
@@ -53,34 +49,19 @@ import SwiftUI
         switch shown {
         case nil: 0
         case .link: Self.linkHeight(scale: k)
-        case .toast: max(Self.linkHeight(scale: k), toastHeight)
         }
     }
-    /// How many times the row opened and folded (`probe.shell`: a toast after the link must not fold it in between).
+    /// How many times the row opened and folded (`probe.shell`: a toast must not open it).
     private(set) var opened = 0
     private(set) var folded = 0
-    @ObservationIgnored private var queue: [Toast] = []
     @ObservationIgnored private var link: ConnectionStatus.Phase = .online
     @ObservationIgnored private var busy = false
     @ObservationIgnored private var waitingSince: Date?
-    @ObservationIgnored private var showing: Task<Void, Never>?
     static let longestWait: Duration = .seconds(3)
 
     /// What the row should show now.
     private var wanted: Item? {
-        if let t = queue.first { return .toast(t) }
-        return link == .online ? nil : .link(link)
-    }
-
-    func take(_ toast: Toast) {
-        // The same words again (a retry failing twice) are one toast, shown for longer.
-        if let i = queue.firstIndex(where: { $0.message == toast.message && $0.style == toast.style }) {
-            if i == 0 { showing?.cancel(); showing = nil }
-            queue[i] = toast
-        } else {
-            queue.append(toast)
-        }
-        settle()
+        link == .online ? nil : .link(link)
     }
 
     func linkChanged(_ phase: ConnectionStatus.Phase) {
@@ -95,15 +76,6 @@ import SwiftUI
         #endif
         self.busy = busy
         if !busy { settle() }
-    }
-
-    /// The toast was tapped, or its time is up: the next one, or the link, or folded.
-    func dismiss(_ toast: Toast) {
-        guard queue.first?.id == toast.id else { return }
-        queue.removeFirst()
-        showing?.cancel()
-        showing = nil
-        settle()
     }
 
     /// `late`: the longest wait is up, whatever the finger does.
@@ -124,20 +96,10 @@ import SwiftUI
         if want != shown {
             if want == nil { folded += 1 } else if shown == nil { opened += 1 }
             #if DEBUG
-            ShellTrace.shared.note("row \(want.map { if case .toast = $0 { "toast" } else { "link" } } ?? "folds")\(late ? " late" : "")")
+            ShellTrace.shared.note("row \(want == nil ? "folds" : "link")\(late ? " late" : "")")
             #endif
             withAnimation(Theme.Motion.standard) { shown = want }
             onRoom?(room, true)
-        }
-        if case .toast(let t) = want, showing == nil {
-            showing = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(t.style == .error ? 4 : 2.5))
-                guard !Task.isCancelled else { return }
-                #if DEBUG
-                ShellTrace.shared.note("toast time up")
-                #endif
-                self?.dismiss(t)
-            }
         }
     }
 }
@@ -156,17 +118,6 @@ struct ShellStatusRow: View {
                         linkPill(phase)
                             .accessibilityElement(children: .combine)
                             .accessibilityIdentifier("shell-connection")
-                    case .toast(let toast):
-                        ShellToast(toast: toast) {
-                            #if DEBUG
-                            ShellTrace.shared.note("toast tapped")
-                            #endif
-                            notices.dismiss(toast)
-                        }
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
-                            let row = h + 2 * Theme.Space.xs
-                            if abs(row - notices.toastHeight) > 0.5 { notices.toastHeight = row }
-                        }
                     }
                 }
                 .padding(.vertical, Theme.Space.xs)
@@ -177,7 +128,7 @@ struct ShellStatusRow: View {
         .allowsHitTesting(open)
         .accessibilityHidden(!open)
         .animation(Theme.Motion.standard, value: notices.shown)
-        // Its own container: VoiceOver reads the link's state and the toasts.
+        // Its own container: VoiceOver reads the link's state.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("shell-status-row")
         .padding(.top, notices.statusBar)
@@ -191,32 +142,6 @@ struct ShellStatusRow: View {
             .scaledFrame(height: Theme.Size.icon)
             .modifier(ShellStatusSurface())
             .allowsHitTesting(false)
-    }
-}
-
-/// A toast in the row: tapping it (only it) dismisses it.
-private struct ShellToast: View {
-    let toast: Toast
-    let dismiss: () -> Void
-
-    var body: some View {
-        HStack(spacing: Theme.Space.s) {
-            Image(systemName: toast.style == .error ? Theme.Icon.errorFilled : toast.style == .success ? Theme.Icon.successFilled : Theme.Icon.info)
-                .foregroundStyle(toast.style == .error ? Theme.danger : toast.style == .success ? Theme.positive : Theme.accent)
-            Text(toast.message)
-                .font(Theme.Font.label)
-                .lineLimit(2)
-        }
-        .padding(.horizontal, Theme.Space.m)
-        .padding(.vertical, Theme.Space.xs)
-        .modifier(ShellStatusSurface())
-        .padding(.horizontal, Theme.Space.page)
-        .contentShape(.capsule)
-        .onTapGesture(perform: dismiss)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("shell-toast")
-        .accessibilityAddTraits(.isButton)
-        .accessibilityHint("关闭提示")
     }
 }
 
@@ -255,13 +180,17 @@ struct ShellWindowHooks: UIViewRepresentable {
         notices.scale = Theme.sizeScale(context.environment.dynamicTypeSize)
     }
 
-    static func dismantleUIView(_ v: Host, coordinator: ()) { v.setRoom(0, animated: false) }
+    static func dismantleUIView(_ v: Host, coordinator: ()) {
+        v.setRoom(0, animated: false)
+        v.toasts?.close()
+    }
 
     final class Host: UIView {
         private weak var notices: ShellNotices?
         weak var pager: ShellPager?
         private var watcher: Watcher?
         private var room: CGFloat = 0
+        private(set) var toasts: ToastWindow?
 
         func attach(_ n: ShellNotices) {
             guard notices !== n else { return }
@@ -279,6 +208,10 @@ struct ShellWindowHooks: UIViewRepresentable {
             w.touching = { [weak self] down in self?.pager?.fingers(down: down) }
             window.addGestureRecognizer(w)
             watcher = w
+            if toasts?.over !== window, let notices {
+                toasts?.close()
+                toasts = ToastWindow(over: window, notices: notices)
+            }
             noteStatusBar()
             setRoom(room, animated: false)
         }
@@ -377,6 +310,61 @@ struct ShellWindowHooks: UIViewRepresentable {
             if let s = v as? UIScrollView, s.isDecelerating { return true }
             return v.subviews.contains { !$0.isHidden && glides($0) }
         }
+    }
+}
+/// The shell's toasts (`AppModel.toast`) over everything in its scene, the drawer, the pages and a sheet over them, in a
+/// window of their own above the shell's: it takes no touches, so what is under a toast takes the tap (a toast over the
+/// top bar's switch took the tap meant for it, 2026-11-02), and it moves nothing (opening the status row for a toast
+/// pushed the pages and the drawer down and back, #1053). Under the status row while that is open; the keyboard is
+/// at the bottom, out of its way.
+@MainActor final class ToastWindow {
+    private(set) weak var over: UIWindow?
+    private var window: UIWindow?
+
+    init(over shell: UIWindow, notices: ShellNotices) {
+        over = shell
+        guard let scene = shell.windowScene else { return }
+        let w = PassThrough(windowScene: scene)
+        w.windowLevel = .normal + 1
+        w.backgroundColor = .clear
+        // 设置 › 外观 › 深浅色 reaches every window of the scene as it changes (`ColorSchemeChoice`); this one starts as the shell's.
+        w.overrideUserInterfaceStyle = shell.overrideUserInterfaceStyle
+        let host = UIHostingController(rootView: ToastWindowRoot(model: AppModel.shared, notices: notices))
+        host.view.backgroundColor = .clear
+        w.rootViewController = host
+        w.isHidden = false
+        window = w
+    }
+
+    func close() {
+        window?.isHidden = true
+        window = nil
+    }
+
+    /// Takes no touch: every one goes to the windows below.
+    private final class PassThrough: UIWindow {
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? { nil }
+    }
+}
+
+/// The toast window's content: the app's toast just below the top bars, under the status row's room while it is open,
+/// in the app's text size and look. Right under the status bar it lay on the switch (助手 / Agents unreadable while it
+/// showed) and on the drawer's title and search.
+private struct ToastWindowRoot: View {
+    @Environment(\.dynamicTypeSize) private var systemTypeSize
+    let model: AppModel
+    let notices: ShellNotices
+
+    var body: some View {
+        let size = model.textSize.applied(to: systemTypeSize)
+        ToastOverlay(tapToDismiss: false)
+            .padding(.top, notices.room + ShellNavigationClearance.needed(at: size))
+            .animation(Theme.Motion.standard, value: notices.room)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .environment(model)
+            .dynamicTypeSize(size)
+            .buiTheme(.jarvis())
+            .tint(Theme.accent)
     }
 }
 #endif

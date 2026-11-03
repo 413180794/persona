@@ -149,6 +149,11 @@
   切换器自己也读了 `pager.page`（选中的那段是 Menu 还是按钮），一样接了动画：模拟器负载高时（并行跑另一台）还是 `settle lost`，兜底一结束 `moving` 一变、切换器重画，回调 20ms 后才来。
   现在切换器只读 `moving`（动画外设置），不读 position 算出来的任何东西。规矩：各页顶栏里的东西只读 `moving` / `lingering` / `shell.page`，不读 `position` / `pager.page`。
   试过不行的：一个 0 尺寸的 `Animatable` 视图逐帧报位置（不在屏上画就不逐帧算 body）。查法：trace 里 `slide` 之后很久才 `settled`，或者有 `settle lost`（`ShellInboxAgentTests` 断言没有）。
+- 浮在最上层、又不能挡点击的东西（toast）放进 scene 里自己的一个 `UIWindow`：`windowLevel = .normal + 1`，`hitTest` 返回 nil，点击全落到下面的窗口；
+  外壳的 sheet、抽屉、推出的页面都在它下面（2026-11-04，#1053，`ToastWindow`）。放在 SwiftUI 的 overlay 里会被 sheet 盖住，`allowsHitTesting(false)` 也挡不住 UIKit 部分。
+  要自己带上的：深浅色（建窗口时抄外壳窗口的 `overrideUserInterfaceStyle`，之后 `ColorSchemeChoice` 改 scene 的所有窗口）、App 自己的字号
+  （`textSize.applied(to:)`，新窗口只跟系统）、`AppModel` 和 BeautifulUI 主题；VoiceOver 不会移到不接触摸的窗口上，出现时 `AccessibilityNotification.Announcement` 读出来。
+  XCUITest 照样能在 `app` 的树里找到它。位置别贴着状态栏：那里是外壳的顶栏，会盖住切换段；放在顶栏下面（`ShellNavigationClearance.needed(at:)`）。
 - 新外壳的两页一直建着、静止时只用 opacity 藏另一页，藏起来的那一页仍在无障碍树里（玻璃按钮、列表都是 UIKit），而且两页的切换器 id 相同：
   `exists` / `isHittable` / `firstMatch` 分不出哪一页在显示，要按像素判断（`ShellSwitchTests.agentsDrawn`），点切换器要挑可点的那个。
 - 列表的 `.searchable` 处于搜索状态时推出的页面，系统导航栏会被强制显示（隐藏导航栏的对话页出现两行标题）；推出之后再关搜索也没用。
