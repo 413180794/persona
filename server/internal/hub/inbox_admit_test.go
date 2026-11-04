@@ -1,0 +1,342 @@
+package hub
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/connector"
+)
+
+// triageModelStub is a triage model whose answer the test switches: ok (reply), fail (HTTP 500), quota (429, quota
+// used up, back after a second), slow (answers after delay). It keeps the triage requests (not the judge's).
+type triageModelStub struct {
+	mode  atomic.Value // string
+	reply atomic.Value // string
+	delay time.Duration
+	mu    sync.Mutex
+	calls []capturedCall
+}
+
+func newTriageModel(t *testing.T, mode, reply string) (*triageModelStub, *ai.Client) {
+	t.Helper()
+	m := &triageModelStub{}
+	m.mode.Store(mode)
+	m.reply.Store(reply)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			System   string `json:"system"`
+			Messages []struct {
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		if !strings.Contains(in.System, "替用户分拣") { // the judge (model 2): nothing to hand over
+			_ = json.NewEncoder(w).Encode(map[string]any{"content": []any{map[string]any{"type": "text", "text": `{"handle":false,"reason":"示例"}`}}})
+			return
+		}
+		c := capturedCall{System: in.System}
+		if len(in.Messages) > 0 {
+			c.User = in.Messages[0].Content
+		}
+		m.mu.Lock()
+		m.calls = append(m.calls, c)
+		m.mu.Unlock()
+		switch m.mode.Load().(string) {
+		case "fail":
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"error":{"type":"api_error","message":"example failure"}}`))
+			return
+		case "quota":
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"error":{"type":"rate_limit_error","code":"account_quota_exhausted","message":"Account usage limit reached"}}`))
+			return
+		case "slow":
+			time.Sleep(m.delay)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"content": []any{map[string]any{"type": "text", "text": m.reply.Load().(string)}}})
+	}))
+	t.Cleanup(srv.Close)
+	key := filepath.Join(t.TempDir(), "key")
+	_ = os.WriteFile(key, []byte("k"), 0o600)
+	return m, ai.New(ai.Config{BaseURL: srv.URL, APIKeyFile: key, Model: "m"})
+}
+
+func (m *triageModelStub) asked() []capturedCall {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]capturedCall(nil), m.calls...)
+}
+
+// savedStore is the model configuration's store that also keeps which inbox items were written.
+type savedStore struct {
+	*modelTestStore
+	mu  sync.Mutex
+	ids map[string]int
+}
+
+func (s *savedStore) PutInboxItem(_ context.Context, id string, _ []byte, _ time.Time, _ *time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ids[id]++
+	return nil
+}
+
+func (s *savedStore) saved(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ids[id] > 0
+}
+
+// admitHub is a hub with an inbox, a store that records writes, a triage model and the given connectors.
+func admitHub(t *testing.T, model *ai.Client, cs ...connector.Connector) (*Hub, *savedStore) {
+	t.Helper()
+	h := newTestHub(t)
+	st := &savedStore{modelTestStore: &modelTestStore{values: map[string]json.RawMessage{}}, ids: map[string]int{}}
+	h.store = st
+	h.inbox.init()
+	h.triageAI = model
+	h.connectors = connector.NewRegistry(nil)
+	for _, c := range cs {
+		if err := h.addConnector(c); err != nil {
+			t.Fatal(err)
+		}
+		asPlugin(t, c.ID())
+	}
+	return h, st
+}
+
+// asPlugin makes a connector one a plugin provides, for the test.
+func asPlugin(t *testing.T, id string) {
+	_, was := pluginConnectors.Load(id)
+	pluginConnectors.Store(id, true)
+	t.Cleanup(func() {
+		if !was {
+			pluginConnectors.Delete(id)
+		}
+	})
+}
+
+// collectAndAdmit is one round, and the triage of its new plugin items (in the background) done.
+func collectAndAdmit(h *Hub) {
+	h.collectInbox(context.Background(), roundPoll)
+	h.inbox.admitting.Lock()
+	h.inbox.admitting.Unlock()
+}
+
+// genericThing is a connector's thing its rules leave to the model (no tier: no fallback).
+func genericThing(thread, last, text string) connector.InboxThing {
+	return connector.InboxThing{Thread: thread, Kind: "review_requested", Title: "示例 " + thread, Sender: "bob", Preview: text,
+		Context: text, At: time.Now().Add(-time.Minute), Last: last}
+}
+
+func itemOf(h *Hub, source, thread string) *InboxItem {
+	h.inbox.mu.Lock()
+	defer h.inbox.mu.Unlock()
+	for _, it := range h.inbox.items {
+		if it.Source == source && it.Connector != nil && it.Connector.Thread == thread {
+			return it
+		}
+	}
+	return nil
+}
+
+// inboxTriageOf is GET /api/v1/inbox?sources=all: the items and the triage status.
+func inboxTriageOf(t *testing.T, h *Hub) ([]any, InboxTriage) {
+	t.Helper()
+	code, out := call(t, h.routes(), "GET", "/api/v1/inbox?sources=all", h.cfg.Token, "")
+	if code != 200 {
+		t.Fatalf("GET /api/v1/inbox: %d", code)
+	}
+	var st InboxTriage
+	raw, _ := json.Marshal(out["triage"])
+	if err := json.Unmarshal(raw, &st); err != nil {
+		t.Fatalf("triage %s: %v", raw, err)
+	}
+	items, _ := out["items"].([]any)
+	return items, st
+}
+
+// A new item the model can't sort and that has no fallback tier is not written (not listed, not stored); the status
+// says how many wait and why, recomputed each round; the next round asks again, and once the model works it comes in.
+func TestInboxHoldsNewItemsWithoutFallback(t *testing.T) {
+	model, client := newTriageModel(t, "quota", `{"tier":"action","summary":"bob 请你看 PR","reason":"请你 review"}`)
+	th := genericThing("example-org/example-repo#3", "a", "示例：请你看一下这个 PR")
+	c := &inboxConnector{things: []connector.InboxThing{th}}
+	h, st := admitHub(t, client, c)
+
+	collectAndAdmit(h)
+	if it := itemOf(h, "example", th.Thread); it != nil {
+		t.Fatalf("an untriaged item without a fallback came in: %+v", it)
+	}
+	items, status := inboxTriageOf(t, h)
+	want := InboxTriageSource{Source: "example", Name: "Example", State: triagePaused, Reason: "模型没有额度", Waiting: 1}
+	if len(items) != 0 || status.State != triagePaused || status.Reason != "模型没有额度" || status.Waiting != 1 ||
+		len(status.Sources) != 1 || status.Sources[0] != want {
+		t.Fatalf("%d items, triage %+v", len(items), status)
+	}
+	for id := range st.ids {
+		t.Fatalf("stored %s", id)
+	}
+
+	// The next round (the model still held): the same thing again, still one waiting, nothing stored.
+	collectAndAdmit(h)
+	if _, status = inboxTriageOf(t, h); status.Waiting != 1 || itemOf(h, "example", th.Thread) != nil || len(st.ids) != 0 {
+		t.Fatalf("second round: triage %+v, stored %v", status, st.ids)
+	}
+
+	// The model is back: the next round sorts it and it comes in, stored once; nothing waits.
+	model.mode.Store("ok")
+	time.Sleep(1100 * time.Millisecond) // Retry-After: 1
+	before := len(model.asked())
+	collectAndAdmit(h)
+	it := itemOf(h, "example", th.Thread)
+	if it == nil || it.Tier != TierAction || it.Summary != "bob 请你看 PR" || it.TriagedAt != it.Last || !st.saved(it.ID) {
+		t.Fatalf("after the model is back: %+v", it)
+	}
+	if n := len(model.asked()) - before; n != 1 {
+		t.Fatalf("%d triage call(s) once back", n)
+	}
+	if _, status = inboxTriageOf(t, h); status.State != "ok" || status.Waiting != 0 || len(status.Sources) != 0 {
+		t.Fatalf("after: triage %+v", status)
+	}
+}
+
+// An item with a fallback tier comes in with it when the model fails (「按规则」) and that version is final: the model
+// coming back does not sort it again. Meanwhile one without a fallback waits.
+func TestInboxFallbackIsFinal(t *testing.T) {
+	model, client := newTriageModel(t, "fail", `{"tier":"noise","summary":"示例","reason":"示例"}`)
+	now := time.Now().Add(-time.Minute)
+	lark := &pluginLark{things: []connector.InboxThing{{Thread: "chat:10", Kind: KindDM, Title: "Alice", Preview: "在吗", Context: "Alice：在吗",
+		At: now, Last: "5", CanReply: true, Extra: &connector.ThingExtra{Source: "lark", Account: "feishu", AccountName: "飞书", LegacyID: "lark:10:5",
+			Count: 1, StartedAt: now, Lark: rawJSON(InboxLark{AccountID: 1, FeedID: "10", StartPosition: "5"})}}}}
+	th := genericThing("example-org/example-repo#4", "a", "示例：PR 上的评论")
+	gen := &inboxConnector{things: []connector.InboxThing{th}}
+	h, st := admitHub(t, client, lark, gen)
+
+	collectAndAdmit(h)
+	dm := h.inbox.items["lark:10:5"]
+	if dm == nil || dm.Tier != TierAction || dm.Reason != "按规则" || dm.TriagedAt != dm.Last || !st.saved(dm.ID) {
+		t.Fatalf("the DM with a fallback: %+v", dm)
+	}
+	if itemOf(h, "example", th.Thread) != nil {
+		t.Fatal("the item without a fallback came in")
+	}
+	if _, status := inboxTriageOf(t, h); status.State != triageFailed || status.Waiting != 1 || status.Sources[0].Source != "example" {
+		t.Fatalf("triage %+v", status)
+	}
+
+	model.mode.Store("ok")
+	before := len(model.asked())
+	collectAndAdmit(h)
+	h.inbox.triaging.Lock() // the pass for items in the list runs in the background: wait for it
+	h.inbox.triaging.Unlock()
+	calls := model.asked()[before:]
+	if len(calls) != 1 || !strings.Contains(calls[0].User, "PR 上的评论") {
+		t.Fatalf("triage calls after the model is back: %+v", calls)
+	}
+	if dm.Tier != TierAction || dm.Reason != "按规则" || dm.Summary != "" {
+		t.Fatalf("the DM was sorted again: %+v", dm)
+	}
+	if it := itemOf(h, "example", th.Thread); it == nil || it.Tier != TierNoise {
+		t.Fatalf("the waiting item: %+v", it)
+	}
+}
+
+// A plugin connector's item in the list without a fallback whose new version the model can't sort keeps what it
+// shows (no silent 噪音) and is asked again by the next pass.
+func TestInboxConnectorItemIsNotSilentlyNoise(t *testing.T) {
+	model, client := newTriageModel(t, "fail", `{"tier":"fyi","summary":"示例","reason":"示例"}`)
+	h, _ := admitHub(t, client)
+	asPlugin(t, "example")
+	it := &InboxItem{ID: "example:1", Source: "example", Kind: "review_requested", Tier: TierAction, Reason: "示例", Last: "b", TriagedAt: "a",
+		Context: "示例：新评论", UpdatedAt: time.Now(), Connector: &InboxConnector{Thread: "example-org/example-repo#5"}}
+	h.inbox.items[it.ID] = it
+	if h.triageOne(context.Background(), it) || it.Tier != TierAction || it.TriagedAt != "a" {
+		t.Fatalf("after a failure: %+v", it)
+	}
+	model.mode.Store("ok")
+	if !h.triageOne(context.Background(), it) || it.Tier != TierFYI || it.TriagedAt != "b" {
+		t.Fatalf("after the model is back: %+v", it)
+	}
+}
+
+// With no model set up, an item without a fallback waits and the status says why.
+func TestInboxTriageUnconfigured(t *testing.T) {
+	th := genericThing("example-org/example-repo#6", "a", "示例")
+	h, _ := admitHub(t, nil, &inboxConnector{things: []connector.InboxThing{th}})
+	collectAndAdmit(h)
+	if _, status := inboxTriageOf(t, h); status.State != triageUnconfigured || status.Reason != "没有配置分拣模型" || status.Waiting != 1 {
+		t.Fatalf("triage %+v", status)
+	}
+}
+
+// More new items than a round sorts in its window: the ones started come in, the rest wait for the next round,
+// which is asked for at once.
+func TestInboxAdmitWindow(t *testing.T) {
+	window, timeout := admitWindow, admitTimeout
+	admitWindow, admitTimeout = 50*time.Millisecond, 5*time.Second
+	t.Cleanup(func() { admitWindow, admitTimeout = window, timeout })
+	model, client := newTriageModel(t, "slow", `{"tier":"fyi","summary":"示例","reason":"示例"}`)
+	model.delay = 300 * time.Millisecond
+	var things []connector.InboxThing
+	for _, n := range []string{"11", "12", "13", "14", "15", "16"} {
+		things = append(things, genericThing("example-org/example-repo#"+n, "a", "示例 "+n))
+	}
+	h, _ := admitHub(t, client, &inboxConnector{things: things})
+	collectAndAdmit(h)
+	if n := len(model.asked()); n != triageConcurrency {
+		t.Fatalf("%d asked in the window", n)
+	}
+	in := 0
+	for _, th := range things {
+		if itemOf(h, "example", th.Thread) != nil {
+			in++
+		}
+	}
+	if _, status := inboxTriageOf(t, h); in != triageConcurrency || status.State != triageBehind || status.Waiting != len(things)-in {
+		t.Fatalf("%d in, triage %+v", in, status)
+	}
+	select {
+	case <-h.inbox.kick:
+	default:
+		t.Fatal("the next round was not asked for")
+	}
+}
+
+// The hub's own sources (here a connector no plugin provides) go as they always did: a new item is listed at once,
+// untriaged, and the triage pass afterwards gives one without a rule tier its fallback, 噪音, when the model fails;
+// nothing is held back.
+func TestInboxBuiltinSourcesAsBefore(t *testing.T) {
+	model, client := newTriageModel(t, "fail", `{"tier":"action","summary":"示例","reason":"示例"}`)
+	th := genericThing("example-org/example-repo#7", "a", "示例：一条评论")
+	c := &inboxConnector{things: []connector.InboxThing{th}}
+	h, st := admitHub(t, client, c)
+	pluginConnectors.Delete(c.ID())
+	h.collectInbox(context.Background(), roundPoll)
+	it := itemOf(h, "example", th.Thread)
+	if it == nil || !st.saved(it.ID) {
+		t.Fatal("a built-in source's new item did not come in at once")
+	}
+	h.inbox.triaging.Lock() // the triage pass runs in the background: wait for it
+	h.inbox.triaging.Unlock()
+	h.inbox.mu.Lock()
+	tier, reason, triaged := it.Tier, it.Reason, it.TriagedAt == it.Last
+	h.inbox.mu.Unlock()
+	if tier != TierNoise || reason != "按规则" || !triaged || len(model.asked()) != 1 {
+		t.Fatalf("after the pass: tier %q reason %q triaged %v, %d call(s)", tier, reason, triaged, len(model.asked()))
+	}
+	if _, status := inboxTriageOf(t, h); status.State != "ok" || status.Waiting != 0 {
+		t.Fatalf("triage %+v", status)
+	}
+}

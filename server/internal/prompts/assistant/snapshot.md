@@ -4,6 +4,8 @@
 - Agents：需要你 {{len .Needs}} 个，完成未看 {{len .Unread}} 个，工作中 {{len .Working}} 个（详情用 agents_list）
 {{with .Needs}}  - 需要你：{{template "assistant/snapshot_agents" .}}
 {{end}}{{with .Unread}}  - 完成未看：{{template "assistant/snapshot_agents" .}}
+{{end}}{{with .Waiting}}  - 在等的（hub 到时会叫醒它们，不用管）：{{template "assistant/snapshot_agents" .}}
+{{end}}{{with .Done}}  - 做完的（24 小时内）：{{template "assistant/snapshot_agents" .}}
 {{end}}{{with .Working}}  - 工作中：{{join (first 8 .) "；"}}{{if gt (len .) 8}} 等 {{len .}} 个{{end}}
 {{end}}{{with .Tasks}}- 从对话开的任务（task_plan；用 agent_send 对它的 Agent 说话）：
 {{range .}}{{$t := .}}  - {{.Title}}（{{.ID}}）：{{.State}}{{with .Machine}}，{{.}}{{end}}{{with .Session}} session_id={{.}}{{end}}{{with .Last}}：{{.}}{{end}}{{with .Doing}}{{if $t.Last}}；{{else}}：{{end}}现在{{.}}{{with $t.DoingFor}}（{{.}}了）{{end}}{{end}}{{with .Subagents}}；子 Agent 在跑：{{join . "、"}}{{end}}

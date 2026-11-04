@@ -93,6 +93,8 @@ type InboxItem struct {
 	TriagedAt string `json:"triaged_at,omitempty"` // Last when it was triaged
 	BodyOf    string `json:"body_of,omitempty"`
 	JudgedAt  string `json:"judged_at,omitempty"` // Last when model 2 looked at it    // mail: Last when the full text was read into Preview / Context
+	// Rules are the item's own triage rules, from its connector (InboxThing.Rules): they replace inbox.rules for it.
+	Rules string `json:"rules,omitempty"`
 }
 
 type InboxLark struct {
@@ -137,7 +139,7 @@ func (it *InboxItem) open() bool { return it.DoneAt == nil }
 // listed is the item as the list shows it (no context).
 func (it *InboxItem) listed() InboxItem {
 	c := *it
-	c.Context, c.Last, c.TriagedAt, c.BodyOf, c.JudgedAt = "", "", "", "", ""
+	c.Context, c.Last, c.TriagedAt, c.BodyOf, c.JudgedAt, c.Rules = "", "", "", "", "", ""
 	c.Mutes = mutesOf(it)
 	c.Version = inboxVersion(it)
 	if it.Agent != nil { // the copy is encoded after the lock is released
@@ -187,6 +189,12 @@ type inbox struct {
 	replies     sync.Map    // item id -> *inboxReply: Feishu replies to one item, one at a time (inbox_triage.go)
 	mutes       []InboxMute // what the user muted (inbox_mutes.go)
 	mutesMu     sync.Mutex  // one read-change-save of the kept mutes at a time
+
+	// admitting is one triage of a round's new plugin items at a time (admitInbox): a round meanwhile does not start
+	// them again.
+	admitting sync.Mutex
+	batch     *inboxBatch          // while a collection runs: the items it starts, which enter once triaged
+	held      map[string]inboxHeld // by source: the new items its last collection held back (inbox_admit.go)
 }
 
 func (b *inbox) init() {
@@ -311,10 +319,14 @@ func larkItemAccount(it *InboxItem) int {
 	return max(it.Lark.AccountID, 1)
 }
 
-// collectInbox reads the sources of one round once and applies what changed.
+// collectInbox reads the sources of one round once and applies what changed. The items a plugin's connector starts
+// enter the list once triaged (admitInbox, in the background): until then nothing lists, stores or works on them.
 func (h *Hub) collectInbox(ctx context.Context, round inboxRound) {
 	h.inbox.running.Lock()
 	defer h.inbox.running.Unlock()
+	h.inbox.mu.Lock()
+	h.inbox.batch = newInboxBatch()
+	h.inbox.mu.Unlock()
 	var changed []*InboxItem
 	// The hub's own connectors (Feishu, then mail) in the order registered, then the others' generic things.
 	for _, c := range h.connectors.All() {
@@ -326,17 +338,22 @@ func (h *Hub) collectInbox(ctx context.Context, round inboxRound) {
 		changed = append(changed, h.collectConnectors(ctx)...)
 	}
 	h.inbox.mu.Lock()
+	batch := h.inbox.batch
+	h.inbox.batch = nil
 	for id, it := range h.inbox.items {
 		if it.DoneAt != nil && time.Since(*it.DoneAt) > inboxForget {
 			delete(h.inbox.items, id)
 			h.inbox.replies.Delete(id)
 		}
 	}
-	changed = append(changed, h.inbox.applyMutes(time.Now())...)
+	now := time.Now()
+	changed = append(changed, h.inbox.applyMutes(now)...)
+	changed, todo := h.inbox.sortBatch(batch, changed, now)
 	h.inbox.mu.Unlock()
 	h.saveInbox(ctx, changed)
 	h.triageInbox(ctx)
 	h.translateInbox(ctx)
+	h.admitInbox(ctx, batch, todo)
 }
 
 // saveInbox persists changed items and tells the apps.
@@ -391,19 +408,57 @@ func positionAfter(a, b string) bool {
 	return x > y
 }
 
-// openFor finds the open item of a Feishu chat / mail thread; done is the newest done one.
+// openFor finds the open item of a Feishu chat / mail thread (one this round started too); done is the newest done one.
 func (b *inbox) openFor(match func(*InboxItem) bool) (open, done *InboxItem) {
-	for _, it := range b.items {
+	b.each(func(it *InboxItem) {
 		if !match(it) {
-			continue
+			return
 		}
 		if it.open() {
 			open = it
 		} else if done == nil || it.UpdatedAt.After(done.UpdatedAt) {
 			done = it
 		}
-	}
+	})
 	return open, done
+}
+
+// each calls f for every item, and every item the running round started, under b.mu.
+func (b *inbox) each(f func(*InboxItem)) {
+	for _, it := range b.items {
+		f(it)
+	}
+	if b.batch != nil {
+		for _, it := range b.batch.items {
+			f(it)
+		}
+	}
+}
+
+// has says whether an item (or one the running round started) has id, under b.mu.
+func (b *inbox) has(id string) bool {
+	_, ok := b.items[id]
+	return ok || b.batch != nil && b.batch.items[id] != nil
+}
+
+// add keeps an item a collection starts (from: the source it came from), under b.mu. A plugin connector's, while a
+// round runs, goes to the round's batch and enters the list once triaged (admitInbox); any other straight in.
+func (b *inbox) add(from string, it *InboxItem) {
+	if b.batch == nil || !fromPlugin(from) {
+		b.items[it.ID] = it
+		return
+	}
+	b.batch.items[it.ID] = it
+	b.batch.from[it.ID] = from
+}
+
+// readSource notes that the running round read a source: its held-back count is recomputed after the round.
+func (b *inbox) readSource(id, name string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.batch != nil {
+		b.batch.read[id] = name
+	}
 }
 
 // retier: the item's tier came from the rules (no model answer) and the rules now give it another one.
@@ -424,6 +479,7 @@ func (h *Hub) collectMail(ctx context.Context) []*InboxItem {
 		h.logf("inbox: mail accounts: %v", err)
 		return nil
 	}
+	h.inbox.readSource("mail", "邮箱")
 	var changed []*InboxItem
 	for _, a := range accounts {
 		res, err := h.mail.ListMessages(ctx, mail.ListOptions{AccountID: a.ID, Limit: 40})
@@ -432,14 +488,15 @@ func (h *Hub) collectMail(ctx context.Context) []*InboxItem {
 			continue
 		}
 		changed = append(changed, h.inbox.applyMail(a, res.Messages, time.Now())...)
-		// New mail, and items collected before their text was read.
+		// New mail (the round's new items too: they are triaged on the full text), and items collected before their
+		// text was read.
 		h.inbox.mu.Lock()
 		var unread []*InboxItem
-		for _, it := range h.inbox.items {
+		h.inbox.each(func(it *InboxItem) {
 			if it.Mail != nil && it.Mail.AccountID == a.ID && it.open() && !it.Read && it.BodyOf != it.Last {
 				unread = append(unread, it)
 			}
-		}
+		})
 		h.inbox.mu.Unlock()
 		for _, it := range unread {
 			if h.readMailBody(ctx, a, it) {
@@ -555,7 +612,7 @@ func (b *inbox) applyMail(a mail.MailAccount, msgs []mail.MailSummary, now time.
 			it = &InboxItem{ID: fmt.Sprintf("mail:%s:%s:%d", a.ID, t, unseen[0].UID), Source: "mail", Kind: KindMail,
 				Account: a.ID, Mail: &InboxMail{AccountID: a.ID, Mailbox: newest.Mailbox, Thread: t}}
 			it.StartedAt, _ = time.Parse(time.RFC3339, unseen[0].Date)
-			b.items[it.ID] = it
+			b.add("mail", it)
 		}
 		it.AccountName = a.Email
 		it.Title = newest.Subject
@@ -613,9 +670,9 @@ func (h *Hub) inboxRoutes(api *http.ServeMux) {
 	h.inboxMuteRoutes(api)
 	h.inboxBulkRoutes(api)
 	// Items of connectors (GitHub…) only go to apps that draw them (?sources=all): an older app would show a PR as
-	// a mail and send a reply as one.
+	// a mail and send a reply as one. triage says how many new items wait for the model, and why (inbox_admit.go).
 	api.HandleFunc("GET /api/v1/inbox", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"items": h.inboxList(r.URL.Query().Get("sources") == "all")})
+		writeJSON(w, map[string]any{"items": h.inboxList(r.URL.Query().Get("sources") == "all"), "triage": h.inboxTriage()})
 	})
 	api.HandleFunc("GET /api/v1/inbox/{id}", func(w http.ResponseWriter, r *http.Request) {
 		h.inbox.mu.Lock()
@@ -726,7 +783,7 @@ func (h *Hub) inboxRoutes(api *http.ServeMux) {
 	})
 	api.HandleFunc("POST /api/v1/inbox/refresh", func(w http.ResponseWriter, r *http.Request) {
 		h.collectInbox(r.Context(), roundFull)
-		writeJSON(w, map[string]any{"items": h.inboxList(r.URL.Query().Get("sources") == "all")})
+		writeJSON(w, map[string]any{"items": h.inboxList(r.URL.Query().Get("sources") == "all"), "triage": h.inboxTriage()})
 	})
 }
 

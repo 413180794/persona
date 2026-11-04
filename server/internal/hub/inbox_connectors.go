@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,8 +35,12 @@ func (h *Hub) collectConnectors(ctx context.Context) []*InboxItem {
 	var changed []*InboxItem
 	for _, c := range h.connectors.All() {
 		in, ok := connector.As[connector.Inbox](c)
-		if !ok || !h.connectors.Feeds(c.ID(), connector.FeedInbox) ||
+		if !ok {
+			continue
+		}
+		if !h.connectors.Feeds(c.ID(), connector.FeedInbox) ||
 			connector.StatusOf(ctx, c).State != connector.StateOK && connector.StatusOf(ctx, c).State != connector.StateRateLimited {
+			h.inbox.readSource(c.ID(), c.Name()) // nothing of it comes in now: nothing of it waits either
 			continue
 		}
 		things, err := in.Collect(ctx)
@@ -43,6 +48,7 @@ func (h *Hub) collectConnectors(ctx context.Context) []*InboxItem {
 			h.logf("inbox: %s: %v", c.ID(), err)
 			continue
 		}
+		h.inbox.readSource(c.ID(), c.Name())
 		h.vetThings(c, things)
 		var own []connector.InboxThing // a migrated connector's things that keep the hub's own item shape
 		if isMigrated(c.ID()) {
@@ -67,12 +73,18 @@ func (h *Hub) collectConnectors(ctx context.Context) []*InboxItem {
 	return changed
 }
 
+// thingRulesMost is the most of a thing's rules the model gets (runes; the rest is cut): what the convention's
+// triage_rules setting allows (docs/plugins.md「约定的设置项」).
+const thingRulesMost = 4000
+
 // vetThings holds a connector's things to its manifest: a tier the inbox does not know is dropped (the model
-// decides), a kind it did not declare is logged once (prompts/inbox/kinds/<id>.md may not say what it means).
+// decides), a kind it did not declare is logged once (prompts/inbox/kinds/<id>.md may not say what it means); rules
+// are cut to thingRulesMost.
 func (h *Hub) vetThings(c connector.Connector, things []connector.InboxThing) {
 	kinds := c.Manifest().Kinds
 	for i := range things {
 		t := &things[i]
+		t.Rules = clip(strings.TrimSpace(t.Rules), thingRulesMost)
 		if t.Tier != "" && !t.Tier.Known() {
 			h.logf("inbox: %s: unknown tier %q", c.ID(), t.Tier)
 			t.Tier = ""
@@ -169,7 +181,7 @@ func (b *inbox) applyConnector(id, name string, things []connector.InboxThing, n
 		it := &InboxItem{ID: id + ":" + hex.EncodeToString(sum[:8]), Source: id, Account: id, AccountName: name,
 			StartedAt: t.At, Count: 1}
 		fillConnectorItem(it, t)
-		b.items[it.ID] = it
+		b.add(id, it)
 		changed = append(changed, it)
 	}
 	return changed
@@ -177,7 +189,7 @@ func (b *inbox) applyConnector(id, name string, things []connector.InboxThing, n
 
 func fillConnectorItem(it *InboxItem, t connector.InboxThing) {
 	it.Kind, it.Title, it.Sender, it.Preview, it.Context = t.Kind, t.Title, t.Sender, t.Preview, t.Context
-	it.UpdatedAt, it.Last = t.At, t.Last
+	it.UpdatedAt, it.Last, it.Rules = t.At, t.Last, t.Rules
 	it.Connector = &InboxConnector{Thread: t.Thread, Label: t.Label, URL: t.URL, OpenURL: t.OpenURL, ReplyTo: t.ReplyTo, CanReply: t.CanReply, RuleTier: string(t.Tier), Tags: t.Tags}
 	if t.Tier != "" {
 		setRuleTier(it, t)

@@ -107,6 +107,7 @@ func (h *Hub) markSeen(machine, session string) {
 	}
 	h.seen[[2]string{machine, session}] = now
 	h.mu.Unlock()
+	h.workSeen(machine, session, now)
 	if h.store != nil {
 		if err := h.store.MarkSeen(context.Background(), machine, session, now); err != nil {
 			h.logf("mark seen: %v", err)

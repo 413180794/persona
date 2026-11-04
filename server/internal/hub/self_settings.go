@@ -54,7 +54,8 @@ func (s selfSetting) actions() []string {
 func (h *Hub) selfSettings() []selfSetting {
 	out := []selfSetting{
 		{key: "inbox.rules", title: "收件箱分拣规则",
-			about: "the user's own rules for sorting the inbox (需要你 / 知悉即可 / 噪音), in their words; they win over the defaults",
+			about: "the user's own rules for sorting the inbox (需要你 / 知悉即可 / 噪音), in their words; they win over the defaults " +
+				"(a source with rules of its own, inbox.rules.<plugin>, uses those instead)",
 			value: `a string (the whole rules text; "" clears it and falls back to hub.json)`,
 			get:   func(ctx context.Context) (string, error) { return orNone(h.inboxRules(ctx)), nil },
 			set: func(ctx context.Context, v json.RawMessage) (*selfChange, error) {
@@ -81,6 +82,7 @@ func (h *Hub) selfSettings() []selfSetting {
 	if h.store != nil {
 		out = append(out, h.blockedClaudeDirsSetting())
 	}
+	out = append(out, h.sourceRulesSettings()...)
 	if h.mail != nil {
 		out = append(out, selfSetting{key: "mail.accounts", title: "邮箱",
 			about: "the user's mail accounts: Persona reads them in the inbox and mail_* use them. add connects (IMAP and SMTP) before saving; " +

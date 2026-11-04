@@ -135,6 +135,8 @@ type Config struct {
 	Inbox InboxConfig `json:"inbox"`
 	// Notify tunes when "finished" pushes go out (notify.go); which ones a device gets is its own setting.
 	Notify NotifyConfig `json:"notify,omitempty"`
+	// Agents: what the hub does on its own about agents' turns (docs/agent-work.md).
+	Agents AgentsConfig `json:"agents,omitzero"`
 	// KB is the knowledge base under ~/.jarvis/data: chat archives, compressed context, projects, tags (docs/knowledge.md).
 	KB KBConfig `json:"kb,omitempty"`
 	// Public is how the hub is reached from outside its LAN: TLS, the addresses it hands out (config_public.go).

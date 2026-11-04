@@ -16,7 +16,7 @@ func RenderInboxItem(it InboxItem) string { return render("inbox/item", it) }
 // InboxTriage is the system prompt that sorts an item into 需要你 / 知悉即可 / 噪音 (inbox/triage).
 type InboxTriage struct {
 	Owner string // "" is 你
-	Rules string // the user's own rules (hub.json inbox.rules), trimmed
+	Rules string // the user's own rules, trimmed: the item's source's (InboxThing.Rules), else inbox.rules
 }
 
 func RenderInboxTriage(t InboxTriage) string { return render("inbox/triage", t) }

@@ -568,6 +568,9 @@ func interactionPayload(ix proto.Interaction, machine string) map[string]any {
 	if ix.ToolName == "ask_user" {
 		title = "Persona 在问你"
 	}
+	if ix.ToolName == workCardTool { // the hub asks on an agent's behalf (work.go)
+		title = "等你决定"
+	}
 	name := map[string]string{"codex": "Codex", "traex": "TRAEX"}[ix.Agent]
 	if name == "" && ix.Agent != "" && ix.Agent != "claude" {
 		name = ix.AgentLabel // an agent runtime's card (docs/runtimes.md): "DSH 需要你授权"

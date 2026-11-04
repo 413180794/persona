@@ -72,6 +72,7 @@ var modelPurposes = []ModelPurpose{
 	{ID: "inbox.agent", Name: "AI 分身执行", Group: "Agents", Kind: "launcher", Parent: "agent.new"},
 	{ID: "lark.agent", Name: "飞书 /agent", Group: "Agents", Kind: "launcher", Parent: "agent.new"},
 	{ID: "inbox.judge", Name: "AI 分身判断器", Group: "信息筛选", Kind: "api", Parent: "inbox.triage"},
+	{ID: "agent.triage", Name: "会话分诊", Group: "信息筛选", Kind: "api", Parent: "inbox.triage"},
 	{ID: "inbox.draft", Name: "草拟回复", Group: "信息处理", Kind: "api", Parent: "kb"},
 	{ID: "translate", Name: "文本与邮件翻译", Group: "信息处理", Kind: "api", Parent: "kb"},
 	{ID: "kb.compress", Name: "会话压缩与打标", Group: "信息处理", Kind: "api", Parent: "kb"},

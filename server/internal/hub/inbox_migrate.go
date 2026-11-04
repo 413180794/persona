@@ -83,7 +83,7 @@ func (b *inbox) applyMigrated(id string, things []connector.InboxThing, now time
 			continue
 		}
 		itemID := t.Extra.LegacyID
-		if _, taken := b.items[itemID]; itemID == "" || taken {
+		if itemID == "" || b.has(itemID) {
 			sum := sha1.Sum([]byte(t.Thread + "\n" + t.Last))
 			itemID = id + ":" + hex.EncodeToString(sum[:8])
 		}
@@ -92,7 +92,7 @@ func (b *inbox) applyMigrated(id string, things []connector.InboxThing, now time
 			it.StartedAt = t.At
 		}
 		fillMigrated(it, t)
-		b.items[it.ID] = it
+		b.add(id, it)
 		changed = append(changed, it)
 	}
 	return changed
@@ -101,7 +101,7 @@ func (b *inbox) applyMigrated(id string, things []connector.InboxThing, now time
 // fillMigrated sets an item from a thing with Extra; an open chat item keeps where it started.
 func fillMigrated(it *InboxItem, t connector.InboxThing) {
 	it.Kind, it.Title, it.Sender, it.Preview, it.Context = t.Kind, t.Title, t.Sender, t.Preview, t.Context
-	it.UpdatedAt, it.Last = t.At, t.Last
+	it.UpdatedAt, it.Last, it.Rules = t.At, t.Last, t.Rules
 	it.Avatar, it.Count = t.Extra.Avatar, max(t.Extra.Count, 1)
 	setBlocks(it, t.Extra)
 }

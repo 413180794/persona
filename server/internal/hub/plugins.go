@@ -693,6 +693,11 @@ func (ps *plugins) spec(ctx context.Context, p *plugin.Plugin, hp *hubPlugin) (h
 		for kind, d := range c.KindDescriptions {
 			pluginKinds.Store(c.ID+"/"+kind, d)
 		}
+		if p.Record.Source == plugin.SourceBuiltin {
+			pluginConnectors.Delete(c.ID)
+		} else {
+			pluginConnectors.Store(c.ID, true)
+		}
 		conn := proc.New(proc.Config{ID: c.ID, Name: c.Name, Manifest: connectorManifest(c), Secrets: secrets, KB: kbase, Logf: ps.logf, Link: link})
 		byID[c.ID] = conn
 		hp.conns = append(hp.conns, conn)
@@ -714,6 +719,16 @@ func sameItem(a, b plugin.ConnectorItem) bool {
 
 // pluginKinds are the plugin connectors' kinds of inbox things as they describe them: "<connector>/<kind>" → words.
 var pluginKinds sync.Map
+
+// pluginConnectors are the connectors a plugin provides (installed, or from hub.json), not one built into personad
+// (Telegram's): their new inbox items are triaged before they enter (inbox_admit.go). Connector id → true.
+var pluginConnectors sync.Map
+
+// fromPlugin says whether a connector (an item's source) is provided by a plugin.
+func fromPlugin(connectorID string) bool {
+	_, ok := pluginConnectors.Load(connectorID)
+	return ok
+}
 
 // connectorManifest is a contribution to connectors as the connector registry declares it.
 func connectorManifest(c plugin.ConnectorItem) connector.Manifest {

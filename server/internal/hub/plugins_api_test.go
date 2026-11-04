@@ -229,6 +229,9 @@ func TestInstalledConnectorPlugin(t *testing.T) {
 	if st := connector.StatusOf(context.Background(), h.connectors.Get("examplenotes")); st.Account != "key k3…" {
 		t.Fatal(st)
 	}
+	if !fromPlugin("examplenotes") { // its new inbox items are triaged before they enter (inbox_admit.go)
+		t.Fatal("an installed plugin's connector is not taken as a plugin's")
+	}
 	res := h.callConnector(context.Background(), "", "examplenotes_search", json.RawMessage(`{}`))
 	if res.IsError || len(res.Content) != 1 || !strings.Contains(res.Content[0].Text, "examplenotes_search in work") {
 		t.Fatalf("%+v", res)

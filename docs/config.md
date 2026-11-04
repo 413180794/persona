@@ -305,6 +305,9 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   `api` 取 `messages`（Anthropic Messages，默认）或 `responses`（OpenAI Responses，总是流式请求，兼容只接受 `stream: true` 的转发服务）；
   `base_url` 拼上 `/v1/messages` 或 `/v1/responses`；`api_key_file` 是 hub 机器上的 key 文件（0600，调用时才读）；`model`；
   `reasoning_effort` 只对 `responses` 生效（比如 `low`）。
+- `agents.triage`：一轮停下后的分诊和自动动作（[agent-work.md](agent-work.md)，不写就全开）：`enabled`（总开关）、`auto_continue`（瞬时的模型 API 错误后自动发「继续」）、
+  `wake`（等部署 / CI / 另一个 Agent 时到点叫醒）、`decide`（要你决定的事开卡片）；`max_retries`（默认 3）、`max_wakes`（默认 6）、
+  `settle_seconds`（停下多久才分诊，默认 15）。用的模型是「设置 › 模型配置」里的「会话分诊」（`agent.triage`，默认跟收件箱分拣一样）。
 - `notify`：「做完了」推送的时机（`hub/notify.go`，不写就用默认值）：`done_delay_seconds`（做完后等多久没人看才推，默认 60）、
   `long_turn_seconds`（多长的一轮算「长任务」，默认 60）、`background_hold_minutes`（等后台任务结束最多等多久，默认 120）、
   `live_metrics_seconds`（实时活动只有数字变了时，给一台设备推送的最短间隔，默认 60；`docs/live-activity.md`「推送预算」）。
@@ -324,6 +327,7 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   `ai`（压缩和打标的模型，字段同 `ai`；不写用 `inbox.triage_ai`，再没有用 `ai`）、`extra_dirs`（hub 机器上你自己维护的笔记目录，
   比如一个记事实 / 经验的 git 仓库：`kb_search` 也搜这些目录里的 Markdown（只读，跳过 `.git` 这类点开头的目录），助手的 CLAUDE.md 会提到它们；`~/` 是那台的家目录）。
 - `inbox.rules`：收件箱 AI 分拣的个人规则（自然语言，比如「某某找我的都算需要我」「某告警群只算噪音」），附在分拣提示词最后、优先于默认判断（`docs/inbox.md`）。
+  连接器的条目带了自己的规则（`rules`，如插件设置的 `triage_rules`）时用那一份，不用这里的。
 - `bots.feishu`（可选）：在飞书里和 Persona 对话的机器人的应用凭证 `app_id`、`app_secret`、`domain`（`feishu` / `lark` / 开放平台地址），
   给不想在 App 里填的人用；App 里（设置 › 连接器 › 飞书机器人）存过的优先，开关、配对、各项功能都在 App 里（`docs/bots.md`）。
 - `plugins`：手写在 hub.json 里、hub 跑起来、转发给 App 的插件（语音对话等），`id`、`kind`、`command` + `args`（或只给 `socket`：跑在别处的插件）、`config`（插件自己的设置），见 `docs/plugins.md`「hub.json 里的插件」；用 `personad plugin install` 装的插件不写这里，登记在数据库；

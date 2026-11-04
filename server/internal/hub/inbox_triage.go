@@ -72,21 +72,11 @@ func (h *Hub) triageInbox(ctx context.Context) {
 	}()
 }
 
-// triageOne asks the model about one item; when the model fails the item gets the rule-based tier (and no summary).
-// When its connection is held the item stays untriaged.
+// triageOne asks the model about an item in the list whose content changed; when the model fails the item gets its
+// fallback tier (and no summary). When its connection is held the item stays untriaged. An item without a fallback
+// (a connector's thing its rules leave to the model) keeps what it shows until a pass gets an answer.
 func (h *Hub) triageOne(ctx context.Context, it *InboxItem) bool {
-	h.inbox.mu.Lock()
-	last, input := it.Last, triageInput(it)
-	h.inbox.mu.Unlock()
-	system := prompts.RenderInboxTriage(prompts.InboxTriage{Owner: h.cfg.Assistant.Owner, Rules: h.inboxRules(ctx)})
-	var out struct {
-		Tier    string `json:"tier"`
-		Summary string `json:"summary"`
-		Reason  string `json:"reason"`
-	}
-	cctx, cancel := context.WithTimeout(ctx, 90*time.Second)
-	err := h.triageModel().JSON(cctx, system, input, &out)
-	cancel()
+	last, v := h.askTriage(ctx, it, 90*time.Second)
 	if ctx.Err() != nil {
 		return false
 	}
@@ -95,23 +85,25 @@ func (h *Hub) triageOne(ctx context.Context, it *InboxItem) bool {
 	if it.Last != last { // new messages arrived meanwhile: the next pass sees them
 		return false
 	}
-	if ai.IsPaused(err) {
+	fallback := ruleTier(it)
+	switch {
+	case v.state == triagePaused:
 		// The model's connection is held (quota used up, busy): not triaged, so a pass after it is back asks again.
-		// Meanwhile a new item sits in its rule tier rather than in 需要你.
-		if it.Tier == "" {
-			it.Tier, it.Reason = ruleTier(it), "按规则"
+		// Meanwhile an untriaged item sits in its rule tier rather than in 需要你.
+		if it.Tier == "" && fallback != "" {
+			it.Tier, it.Reason = fallback, "按规则"
 			return true
 		}
 		return false
-	}
-	switch out.Tier {
-	case TierAction, TierFYI, TierNoise:
-		it.Tier, it.Summary, it.Reason = out.Tier, clip(oneLine(out.Summary), 80), clip(oneLine(out.Reason), 30)
+	case v.state == "":
+		it.Tier, it.Summary, it.Reason = v.tier, v.summary, v.reason
+	case fallback == "":
+		return false
 	default:
-		if err != nil {
-			h.logf("inbox: triage %s: %v", it.ID, err)
+		if v.err != nil {
+			h.logf("inbox: triage %s: %v", it.ID, v.err)
 		}
-		it.Tier, it.Reason = ruleTier(it), "按规则"
+		it.Tier, it.Reason = fallback, "按规则"
 	}
 	it.TriagedAt = last
 	// Triage can settle an item read elsewhere while it was still untriaged.
@@ -121,11 +113,74 @@ func (h *Hub) triageOne(ctx context.Context, it *InboxItem) bool {
 	return true
 }
 
-// ruleTier is the tier without a model: people talking to me need me, groups are FYI, bots and lists are noise.
+// Why the model gave no tier (a triage verdict's state, GET /api/v1/inbox triage.state), the most telling first.
+const (
+	triageUnconfigured = "unconfigured" // no model is set up for inbox.triage
+	triagePaused       = "paused"       // its connection is held: quota used up, or busy
+	triageFailed       = "error"        // it failed or answered without a tier
+	triageTimeout      = "timeout"      // too slow
+	triageBehind       = "behind"       // not asked: the round had more new items than it triages (admitInbox)
+)
+
+var triageStates = []string{triageUnconfigured, triagePaused, triageFailed, triageTimeout, triageBehind}
+
+// triageVerdict is the model's answer about one item, or (state) why there is none.
+type triageVerdict struct {
+	tier, summary, reason string
+	state                 string // "" when answered
+	why                   string // the state for people: 模型没有额度
+	err                   error
+}
+
+// askTriage asks the model about one item, under the item's own rules when its source sent some (they replace
+// inbox.rules; the default criteria stay underneath). last is the Last it asked about.
+func (h *Hub) askTriage(ctx context.Context, it *InboxItem, timeout time.Duration) (last string, v triageVerdict) {
+	h.inbox.mu.Lock()
+	last, input, rules := it.Last, triageInput(it), strings.TrimSpace(it.Rules)
+	h.inbox.mu.Unlock()
+	if rules == "" {
+		rules = h.inboxRules(ctx)
+	}
+	system := prompts.RenderInboxTriage(prompts.InboxTriage{Owner: h.cfg.Assistant.Owner, Rules: rules})
+	var out struct {
+		Tier    string `json:"tier"`
+		Summary string `json:"summary"`
+		Reason  string `json:"reason"`
+	}
+	cctx, cancel := context.WithTimeout(ctx, timeout)
+	err := h.triageModel().JSON(cctx, system, input, &out)
+	slow := errors.Is(cctx.Err(), context.DeadlineExceeded) && ctx.Err() == nil
+	cancel()
+	var paused *ai.PausedError
+	switch {
+	case errors.As(err, &paused):
+		v.state, v.why = triagePaused, "模型并发已满"
+		if paused.Reason == ai.ReasonQuota {
+			v.why = "模型没有额度"
+		}
+	case out.Tier == TierAction || out.Tier == TierFYI || out.Tier == TierNoise:
+		v.tier, v.summary, v.reason = out.Tier, clip(oneLine(out.Summary), 80), clip(oneLine(out.Reason), 30)
+	case ai.IsNotConfigured(err):
+		v.state, v.why = triageUnconfigured, "没有配置分拣模型"
+	case slow:
+		v.state, v.why = triageTimeout, "模型太慢"
+	default:
+		v.state, v.why = triageFailed, "模型出错"
+	}
+	v.err = err
+	return last, v
+}
+
+// ruleTier is the fallback tier, without a model: people talking to me need me, groups are FYI, bots and lists are
+// noise; a connector's item has the tier its rules gave, else noise; a plugin's connector's none ("": only the model
+// sorts it, inbox_admit.go).
 func ruleTier(it *InboxItem) string {
 	if it.Connector != nil {
-		if it.Connector.RuleTier != "" {
+		switch {
+		case it.Connector.RuleTier != "":
 			return it.Connector.RuleTier
+		case fromPlugin(it.Source):
+			return ""
 		}
 		return TierNoise
 	}

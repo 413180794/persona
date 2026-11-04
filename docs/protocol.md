@@ -294,6 +294,12 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
  "launcher":"cc_ds","model":"deepseek/v4.1-flash-chain","started_by_jarvis":true,"assistant":false,
  "updated_at":"...","last_text":"最后一条 assistant 文本的前 200 字",
      "turn_error":"API Error: Connection lost mid-response…（停着且最后一句是模型 API 错误时 hub 填，否则不带；它的任务算「中断了」，#1516）","pending_interactions":1,
+ "work":{"phase":"blocked","on":"external","line":"等部署跑完再跑线上测试","wait":"部署跑完","then":"跑线上测试","every_minutes":5,
+         "wake_at":"...","attempts":1,"max":6,"turn_at":"...","at":"...","by":"model"},
+     // 工作态（docs/agent-work.md）：phase working | blocked | done；blocked 的 on 是 user（等你决定，questions / link /
+     // interaction_id 是 hub 替它开的卡片）| agent（等另一个 Agent，agent:{machine_id,session_id,label}）| external（等部署、CI、时间点，
+     // 到 wake_at hub 叫醒它）| transient（模型服务暂时出错，到 wake_at hub 发「继续」）；done 带 artifacts:[{kind:pr|commit|doc|build|url,ref}]。
+     // 工作中只有 {"phase":"working"}；一轮停下后 hub 还没分诊（或看不出来）时不带。做完的、在等 hub 叫醒的，state 是 idle 不是 unread
  "activity":"在跑测试","activity_at":"...",   // 最近一步是工具调用、之后还没有新文字时才有：这一步在做什么（node 从 transcript 概括，40 字以内）和开始的时间；写出新文字或开始新一轮就没了
  "queued":["工作中输入、还没被取走的消息"],
  "subagents":[{"id":"a849e1f0…","session_id":"<id>@a849e1f0…","type":"Explore","description":"…","tool_use_id":"toolu_…",
@@ -1405,7 +1411,7 @@ hub 后台采集飞书和邮件，聚合成「件」（`docs/inbox.md`，`server
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/v1/inbox` | `{items:[InboxItem]}`：未处理的 + 3 天内处理过的，按 `updated_at` 倒序；不含 `context`。默认只有飞书和邮件；带 `?sources=all` 才有连接器（GitHub…）的条目（带 `connector` 块的），旧 App、手表、Android 不带，所以不会把 PR 当邮件画 |
+| GET | `/api/v1/inbox` | `{items:[InboxItem], triage}`：未处理的 + 3 天内处理过的，按 `updated_at` 倒序；不含 `context`。默认只有飞书和邮件；带 `?sources=all` 才有连接器（GitHub…）的条目（带 `connector` 块的），旧 App、手表、Android 不带，所以不会把 PR 当邮件画。`triage`：`{state, reason?, waiting, sources?:[{source, name, state, reason, waiting}]}`，插件连接器的新条目里因为分拣不了（又没有兜底）或这一轮没轮到、还没进收件箱的有几件、为什么；没有时 `{"state":"ok","waiting":0}`（`docs/inbox.md`「AI 分拣」，旧 hub 没有） |
 | GET | `/api/v1/inbox/{id}` | 一件，带 `context`（这段对话 / 邮件的纯文本，给 AI 用）；邮件额外带 `reply_target:{uid,version}` |
 | POST | `/api/v1/inbox/{id}/done` | `{done: bool}`：标已处理 / 移回，返回这件 |
 | POST | `/api/v1/inbox/done` | `{done: bool, items:[{id, version?}]}` → `{changed:[InboxItem], unchanged:[id], skipped:[{id, reason}]}`：一次标多件（全部标为已处理、全部看过 / 全部清除、它们的撤销），一次写库、一次推 `inbox`。`version` 是列表里这件的 `version`：标已处理时不一致（列出以后又有新消息并进来）就不标，`skipped` 里 `reason=changed`；没有这件 `reason=missing`；已经是这个状态的放进 `unchanged`、不改 `done_at`（重试、另一台设备同时点都不会重复写）。移回不比版本。最多 1000 件，多了 413；没有 `done` 400。只记在 Persona，不回写来源的已读（`docs/inbox.md`「全部标为已处理」）；旧 hub 没有这个接口（405），App 退回逐件 `/{id}/done` |
@@ -1415,7 +1421,7 @@ hub 后台采集飞书和邮件，聚合成「件」（`docs/inbox.md`，`server
 | POST | `/api/v1/inbox/{id}/draft` | `{instruction?}` → `{text}`：按用户口吻起草的回复（不发送） |
 | POST | `/api/v1/inbox/{id}/reply` | `{text, changes?, client_id?, expected_uid?, expected_version?}`：飞书发到原会话 / 邮件按回复发出 / 云文档发成评论（`doc.reply` 指的地方），并标为已处理（`done_by=replied`），返回这件。云文档的 `changes:[{ref,field,value}]` 先改状态再评论；只改状态时 `text` 可以为空。提供 `client_id` 时保存回执，飞书原样透传为上游 `clientId`；不提供时 `clientId` 由这件的 id 和文字算出（UUIDv5），hub 重启后重试也不会重复。飞书的同一件只发一次：同一件的回复排队处理；已经因回复处理掉、文字又相同的直接返回成功，不再发。文字不同照常发。飞书发到哪：私聊发进会话；`lark.thread_kind` 非空时回复 `reply_to` 并落进它的话题；群里 @我（`kind=mention`）的引用 `reply_to` 回复；其它群和没有 `reply_to` 的旧数据照旧发进会话 |
 | POST | `/api/v1/inbox/{id}/doc/status` | `{ref, field, value}`：把云文档里这一行的状态改成 `value`（必须是这一列的可选值），先读最新的再写（别人刚改过就 409 失败），返回重新读过的这件 |
-| POST | `/api/v1/inbox/refresh` | 立刻采集一次，返回列表（`?sources=all` 同上） |
+| POST | `/api/v1/inbox/refresh` | 立刻采集一次，返回列表和 `triage`（`?sources=all` 同上）；插件连接器的新条目在后台分拣完才进列表，不等它 |
 | POST | `/api/v1/translate` | `{texts:[string]≤30, target}` → `{texts}`，顺序不变，模型没给的是空串；target 是 BCP 47（zh-Hans、en、ja…，`docs/ios.md`「翻译」） |
 | POST | `/api/v1/translate/mail` | `{account_id, uid, mailbox, target}` → `{subject, text, clipped?}`：hub 读这封信自己翻，正文最多 12000 字 |
 

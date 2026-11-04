@@ -53,6 +53,9 @@ type InboxThing struct {
 	// to the model (a human's ordinary comment). Why says which rule, for people (「规则：真人 @ 你」).
 	Tier Tier   `json:"tier,omitempty"`
 	Why  string `json:"why,omitempty"`
+	// Rules are the user's own triage rules for this thing, in their words (a source's or an account's): when set
+	// the model gets them instead of the hub's inbox.rules; the default criteria stay underneath. "" uses inbox.rules.
+	Rules string `json:"rules,omitempty"`
 	// Done ends the open item (DoneRead, DoneReplied): the thread is over; Why says how when it is not obvious
 	// (「GitHub：后来成功了」).
 	Done string `json:"done,omitempty"`

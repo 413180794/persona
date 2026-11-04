@@ -808,6 +808,9 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 		if c.State == proto.StateWorking || c.State == proto.StateNeedsYou || c.PendingInteractions > 0 {
 			return
 		}
+		if w := c.Work; w != nil && w.Phase == proto.WorkBlocked && w.On == proto.WaitTransient && w.WakeAt != nil {
+			return // the hub sends 继续 itself (docs/agent-work.md): the receipt waits for how that ends
+		}
 		if c.UpdatedAt.After(last.UpdatedAt) {
 			last = c
 		}

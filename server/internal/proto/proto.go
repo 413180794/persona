@@ -599,6 +599,10 @@ type Session struct {
 	// is stopped, empty while it works or when the turn ended normally. The task it works for is interrupted, not
 	// done (docs/todos.md「状态计算规则」, #1516).
 	TurnError string `json:"turn_error,omitempty"`
+	// Work is where the session stands in its work (docs/agent-work.md): working, blocked on a named precondition, or
+	// done, with a line saying what it waits for or what it concluded. Set by the hub; absent before the hub has
+	// triaged a stopped session's turn.
+	Work *WorkState `json:"work,omitempty"`
 	// Activity says what the agent is doing when its latest step is a tool call no text came after (「在跑测试」
 	// 「在读 tasks.go」「在等 CI」, transcript.Activity), and ActivityAt when that call started: while an agent only runs
 	// tools its last_text stays put for minutes, and a task card showing it looked stuck. Empty once it writes text.
@@ -626,6 +630,68 @@ type Session struct {
 	AttentionReason string `json:"attention_reason,omitempty"`
 	// ExternalURL opens the session where it lives outside Persona (a botmux session's Feishu topic).
 	ExternalURL string `json:"external_url,omitempty"`
+}
+
+// Work phases (WorkState.Phase) and what a blocked session waits on (WorkState.On), docs/agent-work.md.
+const (
+	WorkWorking = "working"
+	WorkBlocked = "blocked"
+	WorkDone    = "done"
+
+	WaitUser      = "user"      // a decision, an answer, a link to open: the hub makes a card for it
+	WaitAgent     = "agent"     // another agent finishing: the hub wakes this one when it stops
+	WaitExternal  = "external"  // a deploy, CI, a review, a time: the hub wakes it to check
+	WaitTransient = "transient" // the model service failed for a moment: the hub sends 继续
+)
+
+// WorkState is a session's work state (Session.Work).
+type WorkState struct {
+	Phase string `json:"phase"`
+	On    string `json:"on,omitempty"`
+	// Line is one line for the lists: the conclusion when done, what it waits for when blocked.
+	Line string `json:"line,omitempty"`
+	// Wait / Then: what it waits for and what it will do then (agent, external).
+	Wait string `json:"wait,omitempty"`
+	Then string `json:"then,omitempty"`
+	// Every is how many minutes after the turn the hub first looks again for the wait (it doubles after each wake).
+	Every int `json:"every_minutes,omitempty"`
+	// WakeAt is when the hub acts next on its own: sends 继续 (transient) or wakes it to check (external, agent).
+	WakeAt *time.Time `json:"wake_at,omitempty"`
+	// Attempts the hub made for this wait so far, of at most Max.
+	Attempts int        `json:"attempts,omitempty"`
+	Max      int        `json:"max,omitempty"`
+	Agent    *WorkAgent `json:"agent,omitempty"` // the agent it waits for (on agent)
+	Link     *WorkLink  `json:"link,omitempty"`  // a link the user must open in time (on user)
+	// Artifacts are what the work produced (done): PRs, commits, documents, builds.
+	Artifacts []WorkArtifact `json:"artifacts,omitempty"`
+	// Questions are what the user is to decide (on user), as the card asks them.
+	Questions []Question `json:"questions,omitempty"`
+	// InteractionID is the card the hub made for a decision (on user), while it is pending.
+	InteractionID string `json:"interaction_id,omitempty"`
+	// TurnAt is the end of the turn this state is about (the session's updated_at then); At when it was found, By how:
+	// "rule" or "model".
+	TurnAt time.Time `json:"turn_at,omitzero"`
+	At     time.Time `json:"at,omitzero"`
+	By     string    `json:"by,omitempty"`
+}
+
+// WorkAgent names another agent (WorkState.Agent).
+type WorkAgent struct {
+	MachineID string `json:"machine_id"`
+	SessionID string `json:"session_id"`
+	Label     string `json:"label,omitempty"`
+}
+
+// WorkLink is a link to open before it expires (WorkState.Link).
+type WorkLink struct {
+	URL       string     `json:"url"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+}
+
+// WorkArtifact is something a session's work produced: kind pr, commit, doc, build or url, and its reference.
+type WorkArtifact struct {
+	Kind string `json:"kind"`
+	Ref  string `json:"ref"`
 }
 
 // TodoRef is a session's link to an active todo (docs/todos.md).

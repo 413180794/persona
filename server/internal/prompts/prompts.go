@@ -20,7 +20,7 @@ import (
 	"text/template"
 )
 
-//go:embed assistant bot channel inbox kb tools shared mcp voice todo
+//go:embed agents assistant bot channel inbox kb tools shared mcp voice todo
 var files embed.FS
 
 var tmpl = parse()

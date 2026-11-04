@@ -225,6 +225,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/daemons.md` | daemon：自己是常驻服务、连不上本机 runtime.sock 的 runtime（别的用户、容器、别的机器），node 按 `daemons.json` 去连它的 WebSocket 端点（token + `jarvis-runtime.v1`）：规范、配置、名字和会话 id 不撞车、隔离、SDK 的监听模式、验收 |
 | `docs/pi.md` | pi 和 pi-web 支持：herdr 里的 pi 是 herdr 会话（窗格归 herdr、内容和控制归扩展），pi-web 的走 pi-web；扩展 + 伴随进程，离线后去哪接着，安装、配置、映射、端到端验证 |
 | `docs/agent-states.md` | 统一的 Agent 状态（需要你 / 工作中 / 完成未看 / 已看）和 herdr 的对应，空间 / 槽位模型 |
+| `docs/agent-work.md` | Agent 的工作态（工作中 / 卡在具名的前置条件上 / 做完了）：一轮停下后 hub 分诊（规则 + 便宜模型），瞬时错误自动「继续」、等部署 / CI / 另一个 Agent 到点叫醒、要你决定的开卡片；安全边界（推代码、部署、发消息、碰别人 MR 只能问你）、不和手动操作打架、评估接口 |
 | `docs/engines.md` | 引擎（herdr / Herdr App / Orca / Paseo）：一机一引擎，怎么切换、切换后会怎样、各引擎能做什么、选不了时查什么 |
 | `docs/paseo.md` | Paseo 引擎：node 运行的桥（runtime）、怎么找到 Paseo、会话 id 和对话记录、卡片 / 新建 / 接手的映射、限制、端到端验证、排错 |
 | `docs/terminal.md` | 终端 tab 的真终端方案：herdr observe 流（不 attach、不改窗格尺寸）、续传、换行、iOS 端自写 VT 子集的选型理由 |

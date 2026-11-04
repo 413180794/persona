@@ -96,7 +96,7 @@ func (s *Service) takeSnapshot(done chan struct{}) {
 	for _, m := range devices {
 		snap.Machines = append(snap.Machines, prompts.SnapshotMachine{Name: m.Name, ID: m.ID, Online: m.Online})
 	}
-	snap.Needs, snap.Unread, snap.Working = s.snapshotAgents(ctx, devices)
+	snap.Needs, snap.Unread, snap.Waiting, snap.Done, snap.Working = s.snapshotAgents(ctx, devices)
 	snap.Tasks = s.snapshotTasks(ctx)
 	var kb struct {
 		Text string `json:"text"`
@@ -122,7 +122,9 @@ func (s *Service) ProfileChanged(context.Context) {
 	cs.mu.Unlock()
 }
 
-func (s *Service) snapshotAgents(ctx context.Context, devices []Device) (needs, unread []prompts.SnapshotAgent, working []string) {
+// snapshotAgents sorts the agents by what they need: the hub's work state (docs/agent-work.md) says what a stopped one
+// waits for or concluded.
+func (s *Service) snapshotAgents(ctx context.Context, devices []Device) (needs, unread, waiting, done []prompts.SnapshotAgent, working []string) {
 	for _, m := range devices {
 		list, _ := s.sessions(ctx, m.ID)
 		for _, c := range list {
@@ -130,19 +132,28 @@ func (s *Service) snapshotAgents(ctx context.Context, devices []Device) (needs, 
 				continue
 			}
 			a := prompts.SnapshotAgent{Label: agentLabel(c), Machine: m.ID, Session: short(c.SessionID)}
-			switch c.State {
-			case proto.StateNeedsYou:
+			w := c.Work
+			if w != nil && w.Phase != proto.WorkWorking {
+				a.Line = w.Line
+			}
+			recent := time.Since(c.UpdatedAt) < 24*time.Hour
+			switch {
+			case c.State == proto.StateNeedsYou:
 				needs = append(needs, a)
-			case proto.StateUnread:
-				if time.Since(c.UpdatedAt) < 24*time.Hour {
-					unread = append(unread, a)
-				}
-			case proto.StateWorking:
+			case c.State == proto.StateWorking:
 				working = append(working, agentLabel(c))
+			case w != nil && w.Phase == proto.WorkBlocked && w.On == proto.WaitUser && recent:
+				needs = append(needs, a) // waits for a decision the hub put no card up for
+			case w != nil && w.Phase == proto.WorkBlocked && c.State != proto.StateUnread && recent:
+				waiting = append(waiting, a) // the hub waits it out (an unread one is left for the user)
+			case w != nil && w.Phase == proto.WorkDone && recent:
+				done = append(done, a)
+			case c.State == proto.StateUnread && recent:
+				unread = append(unread, a)
 			}
 		}
 	}
-	return needs, unread, working
+	return needs, unread, waiting, done, working
 }
 
 // connectorSnapshots are the live states of the hub's signed-in connectors that keep one (connector.Snapshot: a chat

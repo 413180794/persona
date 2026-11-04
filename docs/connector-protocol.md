@@ -73,7 +73,14 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 
 `InboxThing`：`thread`（必填，这件事的稳定键）、`kind`、`label`、`title`、`sender`、`preview`、`context`、`at`、`last`（最新一步的标记，变了就算新动静）、
 `url`、`open_url`、`reply_to`、`can_reply`、`tier`（`action` / `fyi` / `noise`，空的交给模型）、`why`、`done`（`read` / `replied`：这件事结束了）、
-`read`、`tags: [{key, value, name}]`（`repo` / `chat` / `sender` 能被用户静音）、`extra`（见下）。
+`read`、`tags: [{key, value, name}]`（`repo` / `chat` / `sender` 能被用户静音）、`rules`、`extra`（见下）。
+
+- `rules`：用户给这件事定的分拣规则，原话（这个来源、这个账号的，比如插件设置里的 `triage_rules`，`docs/plugins.md`「约定的设置项」）。
+  有就**只用它**，不用 hub 的全局 `inbox.rules`；空的用全局。hub 的默认判断标准照旧在下面，用户的规则优先。可以有换行；最多 4000 字，多了截掉。和别的字段一样在 thing 的第一层，迁出 hub 的连接器（带 `extra` 的）也是。
+  旧 hub 不认这个字段，照旧用全局规则。
+- `tier` 是这件事的兜底：模型分不了（没配、没额度、出错、超时）时按它进收件箱。插件提供的连接器（不是 personad 自带的）`tier` 为空的没有兜底，
+  它的新条目先分拣再进收件箱（`docs/inbox.md`「AI 分拣」），模型分不了时**这一轮不进收件箱**，
+  hub 也不存；下一轮 `inbox.collect` 再交回来（本来就是从内存回答，不用为此做什么），模型好了就进来。hub 在 `GET /api/v1/inbox` 的 `triage` 里说有几件在等（`docs/inbox.md`「AI 分拣」）。
 
 **迁出 hub 的连接器**（`connector.MigratableConnectors`，现在是 `lark`，`docs/plugins.md`「App 接口」）：它的 thing 可以带 `extra`
 （`source`、`account`、`account_name`、`legacy_id`、`avatar`、`count`、`started_at`、`rule_tier`，以及原来条目的块之一 `lark` / `doc` / `moment`）。

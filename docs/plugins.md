@@ -113,6 +113,12 @@ hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的�
 - 开关**即时生效**，只改这一项，不等「保存」，表单里别的草稿留着。对不上任何机器的值照样列出来，可以关掉。
 - hub 加载插件时，把这类值里写成机器名、主机名的（大小写、空格、`-`、`_` 不计，只对上一台时）换成那台的 id，存回去（`plugin_machines.go`）。
 
+**约定的设置项**：hub 认得的名字，插件声明了就有额外的用处。
+- `triage_rules`（第一层的 `string`，建议 `maxLength` 不超过 4000：hub 只用前 4000 字）：这个来源的收件箱分拣规则，用户的原话。插件交条目时把它带在 `rules` 上（`docs/connector-protocol.md`），
+  hub 分拣这个来源的条目时用它代替全局的 `inbox.rules`（`docs/inbox.md`「AI 分拣」）。声明了它的插件在助手的 `jarvis_settings` 里有一项
+  `inbox.rules.<插件 id>`：读随便读，改的时候手机上弹确认（改前 → 改后），批准了才经同一条改配置的路（按 schema 校验、只改这一项、插件重启）写进去；
+  hub.json 来的插件只能读。
+
 不支持 `$ref`、`allOf` / `anyOf`、`if` / `then`、对象数组、更深的嵌套、`additionalProperties`（额外的键一律不收）。值最大 64 KB。
 `default`、`enum` 的值也按类型查。属性名像 `password` / `token` / `secret` / `api_key` 的给一条警告：配置明文存、明文显示，该放 `secrets`。
 

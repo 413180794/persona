@@ -47,6 +47,7 @@ type Hub struct {
 	byID        map[string]*Machine
 	mail        Mail
 	push        *Pusher
+	work        workBook   // where each agent stands in its work (work.go)
 	store       Store      // nil in unit tests: nothing is persisted
 	workspaceMu sync.Mutex // serializes read-only workspace discovery and snapshot commits
 	modelMu     sync.Mutex // serializes legacy writes and test stores without a database CAS
@@ -381,6 +382,7 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	h.startBots(ctx)
 	go h.agentsLoop(ctx)
 	go h.taskCloseLoop(ctx) // the agents of finished tasks (tasks_close.go)
+	go h.workLoop(ctx)
 	go h.inboxLoop(ctx)
 	go h.metricsLoop(ctx)
 	h.plugins = newPlugins(cfg.dir, cfg.Plugins, h.logf)
@@ -412,9 +414,13 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 	list := m.sessionList()
 	h.mu.Lock()
 	counts := map[string]int{}
+	asking := map[string]proto.Interaction{} // a session's card: its own before the hub's (work.go)
 	for _, p := range h.interactions {
 		if p.ix.MachineID == m.cfg.ID {
 			counts[p.ix.SessionID]++
+			if cur, ok := asking[p.ix.SessionID]; !ok || cur.ToolName == workCardTool {
+				asking[p.ix.SessionID] = p.ix
+			}
 		}
 	}
 	h.mu.Unlock()
@@ -452,6 +458,10 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 		list[i].SeenAt = seen[list[i].SessionID]
 		list[i].State = agentState(list[i], list[i].SeenAt)
 		list[i].TurnError = turnError(list[i])
+		if h.workOn() {
+			list[i].Work = h.workOf(m.cfg.ID, list[i], asking)
+			list[i].State = workState(list[i].State, list[i].Work)
+		}
 	}
 	h.todos.mu.RLock()
 	if h.todos.loaded {
@@ -920,6 +930,7 @@ func (h *Hub) writeEnded(w http.ResponseWriter, id string, r proto.Resolution, e
 	}
 	writeErrorBody(w, http.StatusGone, body)
 }
+
 var errInvalidElicitation = errors.New("elicitation requires action accept, decline or cancel")
 
 // resolve answers an interaction from the app. A screen card acts right away and its error comes back (the

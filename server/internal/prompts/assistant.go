@@ -35,6 +35,7 @@ type SnapshotMachine struct {
 
 type SnapshotAgent struct {
 	Label, Machine, Session string // Session: the short id
+	Line                    string // what it waits for, or what it concluded ("" when not known)
 }
 
 type SnapshotChat struct {
@@ -81,6 +82,9 @@ type Snapshot struct {
 	Zone          string
 	Machines      []SnapshotMachine
 	Needs, Unread []SnapshotAgent
+	// Waiting: stopped on something the hub waits out for them (a retry, a deploy, another agent); Done: finished
+	// within a day, with the conclusion (docs/agent-work.md「Persona 知道」).
+	Waiting, Done []SnapshotAgent
 	Working       []string
 	PhoneOnline   bool
 	KB            string            // RenderKBDigest, "" leaves it out

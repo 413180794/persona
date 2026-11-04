@@ -1,0 +1,11 @@
+现在：YYYY-MM-DD HH:MM Day
+Agent：修登录（示例电脑，目录 /code/app）
+
+这一轮用户给它的要求：
+把登录页的崩溃修好，提 PR
+
+它停下时最后的回复：
+修好了，PR：https://github.com/example/app/pull/7，CI 在跑，过了要我合并吗？
+
+同一台电脑上在工作的其他 Agent：
+- id=abcdef12：跑基准（在跑测试）

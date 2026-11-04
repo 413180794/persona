@@ -594,7 +594,7 @@ func (h *Hub) kbAgentDone(machine string, s proto.Session) {
 	if title == "" || title == "Claude Code" {
 		title = filepath.Base(s.Cwd)
 	}
-	line := clipRunes(strings.Join(strings.Fields(s.LastText), " "), 160)
+	line := clipRunes(strings.Join(strings.Fields(workLogLine(s)), " "), 160)
 	for _, p := range projects {
 		if _, err := e.Apply(kb.KindProject, p.Slug, kb.Update{Log: line, Source: "Agent · " + title + " · " + machine}); err != nil {
 			h.logf("kb: agent log %s: %v", p.Slug, err)

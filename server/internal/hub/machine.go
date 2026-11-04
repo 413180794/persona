@@ -349,12 +349,14 @@ func (m *Machine) setSessions(list []proto.Session) {
 		switch {
 		case s.Status == proto.StatusWorking && prev != proto.StatusWorking:
 			m.hub.turns.working(key, now)
+			go m.hub.workStarted(m.cfg.ID, s.SessionID, now)
 			go m.hub.asst().TurnStarted(context.Background(), assistantwire.SessionRef{MachineID: m.cfg.ID, SessionID: s.SessionID})
 		case prev == proto.StatusWorking && (s.Status == proto.StatusDone || s.Status == proto.StatusIdle):
 			go m.notifyFinished(s.SessionID, m.hub.turns.ended(key, now))
 			// A new assistant conversation is named after its first turn; a task from one may be done.
 			go m.hub.asst().TurnEnded(context.Background(), assistantwire.SessionRef{MachineID: m.cfg.ID, SessionID: s.SessionID})
 			go m.hub.channelTurnEnded(m.cfg.ID, s.SessionID)
+			go m.hub.workTurnEnded(m, s.SessionID) // triage the turn: done, or blocked on what (work.go)
 		}
 	}
 	m.sessions = list
@@ -645,9 +647,12 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 func (m *Machine) notifyFinished(id string, gen int) {
 	ncfg := m.hub.cfg.Notify
 	time.Sleep(ncfg.doneDelay())
-	s, ok := m.session(id)
+	s, ok := m.hub.decoratedSession(m, id)
 	if ok && !s.Assistant && s.Status != proto.StatusWorking {
 		m.hub.kbAgentDone(m.cfg.ID, s)
+	}
+	if ok && s.Work != nil && s.Work.Phase == proto.WorkBlocked && (s.Work.WakeAt != nil || s.Work.InteractionID != "") {
+		return // the hub goes on with it (继续, a wake), or its card already rang (work.go)
 	}
 	// An inbox agent's result is the draft in the inbox; a turn asked for through the bot is answered there.
 	if !ok || m.hub.isInboxAgent(id) || m.hub.channelAnswered(id) {
@@ -675,6 +680,14 @@ func (m *Machine) notifyFinished(id string, gen int) {
 	head, text := "✅ "+title, s.LastText
 	if text == "" {
 		text = "完成了"
+	}
+	if w := s.Work; w != nil && w.Line != "" {
+		switch w.Phase {
+		case proto.WorkDone:
+			text = w.Line
+		case proto.WorkBlocked:
+			head, text = "⏳ "+title, w.Line
+		}
 	}
 	if cutOff(text) { // the model service cut the turn off: no ✅ over the error (#1516)
 		head, text = "⚠️ "+title, interruptedSummary+"："+strings.TrimSpace(text)
