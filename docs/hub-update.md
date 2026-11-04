@@ -168,6 +168,8 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   - `TestNoDowngrade` 守住：清单的 build 号不比自己大就不装，等于也不装。
 - 也写 `commit`（`-X main.commit`，server/ 有没提交的改动时后面加 `-dirty`）：之后的公开版要包含这个提交才会自己装上（「防退回」）。
 - 主会话的部署脚本在仓库外，要在它的 `go build` 里加上同样的四个 `-X`（回报里会给出要加的那一行）。
+- **只从包含 master 的工作区部署**（#1314）：`deploy.sh` 先 `git fetch origin master`，当前 HEAD 不包含它就什么都不部署、退出 2（取不到 master 也一样）；
+  落后的分支部署出去会把别人刚部署的改动（hub 和网页）换回旧的。故意回滚时用 `PERSONA_DEPLOY_ANY_COMMIT=1`。见 `docs/lessons/server.md`「从落后的分支部署」。
 - hub 那台还要放 `jarvisd-telegram`（Telegram 连接器的程序，`docs/plan-telegram.md`）：`deploy.sh` 给 hub 编同一个版本、放在 personad 旁边；node 不需要。
 - 不做灰度：发布后所有 hub（包括我们的）在空闲时同时更新；出了问题靠各 hub 自己的回滚和坏版本标记。
 

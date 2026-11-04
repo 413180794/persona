@@ -379,6 +379,18 @@ sys.exit(2)
         self.assertEqual((self.state / 'web/index.html').read_text(), 'Persona fixture web')
         self.assertFalse((self.remote / '.persona').exists())
 
+    def test_a_checkout_missing_master_commits_deploys_nothing(self):
+        # merge-base --is-ancestor fails: HEAD does not contain origin/master (#1314)
+        executable(self.commands / 'git', '#!/bin/sh\ncase "$1" in merge-base) exit 1;; describe) printf "fixture-version\\n";; rev-parse) printf "fixture-commit\\n";; esac\n')
+        result = subprocess.run(['bash', str(self.repo / 'scripts/deploy/deploy.sh'), 'web'], env=self.env, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn('missing commits on origin/master', result.stderr)
+        self.assertFalse((self.state / 'web/index.html').exists())
+        env = dict(self.env, PERSONA_DEPLOY_ANY_COMMIT='1')
+        result = subprocess.run(['bash', str(self.repo / 'scripts/deploy/deploy.sh'), 'web'], env=env, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.state / 'web/index.html').read_text(), 'Persona fixture web')
+
     def test_android_apk_publish_uses_the_remote_profile_and_config_entrypoint(self):
         apk = self.base / 'fixture.apk'; apk.write_bytes(b'anonymous-signed-apk-fixture')
         self.run_script('scripts/release/publish_android_apk.sh', str(apk), '--version-code', '1', '--version-name', '1.0', '--min-sdk', '26')

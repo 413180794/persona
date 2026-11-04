@@ -276,3 +276,12 @@
 - **Go 的 `mime.TypeByExtension` 随机器而变**：它读系统的 `/etc/mime.types` 等文件，docx / xlsx / ipynb / heic 在一台机器上有、另一台上是空串，客户端按 MIME 选查看器时同一个文件在两台电脑上显示不一样。预览要用的类型在 node 里写死一张表（`node/filemime.go`），表外的再查系统、再嗅探开头字节。
 - **`qlmanage -t` 在锁屏的 Mac 上会一直卡住**（实测 30 秒还没出来），不报错。调系统工具画缩略图要带超时，而且超时一次就暂停一阵、同时只跑一个：一屏文件列表一下要几十张，每张都等超时，node 上会堆满卡住的进程。
 - **hub 和网页同源，内联文件要隔离**：`Content-Disposition: inline` 的 SVG / HTML 单独打开时，脚本以网页的身份运行，能读 localStorage 里的 token。只给图片、音视频、PDF 内联，并带 `Content-Security-Policy: sandbox`；PDF 例外，Chrome 不在沙盒里显示 PDF。
+
+## 从落后的分支部署（2026-11-04，#1314）
+
+- 现象：#1283（任务坞「全部 N」移到最前）合并并部署后，用户 13 分钟后看到的网页还是旧的任务坞。
+- 原因：hub 日志里 #1283 之后还有一次部署，版本是 `#1283 之前的提交 + -dirty`：有人在自己没 rebase 的分支 / 工作区里跑了 `deploy.sh`，
+  部署 hub 时顺带用当前目录的 `web/` 覆盖了网页。不是缓存：index.html 是 `no-cache`，资源带哈希，网页没有 Service Worker。
+- 查法：`journalctl --user -u jarvisd` 里每次启动的版本号（`git describe`），和线上 `web/index.html` 的修改时间（tar 保留了构建时间）；
+  看线上 bundle 里有没有某个 PR 独有的字符串，就知道网页是哪一版。
+- 现在 `deploy.sh` 要求 HEAD 包含 `origin/master`，否则拒绝；要故意部署旧版本用 `PERSONA_DEPLOY_ANY_COMMIT=1`。

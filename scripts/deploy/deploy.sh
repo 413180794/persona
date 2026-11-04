@@ -4,6 +4,8 @@
 #   ./scripts/deploy/deploy.sh <hub machine>   # only the hub
 #   ./scripts/deploy/deploy.sh <machine id>    # only one machine (node binary; the hub restarts its connection)
 #   ./scripts/deploy/deploy.sh web             # only the web client (web/, docs/web.md): no restart
+# The checkout must contain origin/master (it fetches it first), else nothing is deployed; PERSONA_DEPLOY_ANY_COMMIT=1
+# skips the check.
 # Who may open the hub's admin UI (docs/admin.md): --admin-access <loopback|lan|cidrs|any> [--admin-cidrs a,b] (or
 # JARVIS_ADMIN_ACCESS / JARVIS_ADMIN_CIDRS) sets it on the hub; without them a hub that never had one chosen asks on
 # a terminal, else keeps the default (lan) and says so.
@@ -29,6 +31,21 @@ if [ -n "$ADMIN_ACCESS" ] && ! admin_access_valid "$ADMIN_ACCESS" "$ADMIN_CIDRS"
   exit 2
 fi
 set -- ${ARGS[@]+"${ARGS[@]}"}
+# Only from a checkout that has everything already on master (#1314): a hub or web deploy from an older branch puts
+# back what other people deployed since (2026-11-04: one from before #1283 undid its web change 13 minutes later).
+# PERSONA_DEPLOY_ANY_COMMIT=1 deploys anyway, e.g. to roll back on purpose.
+if [ -z "${PERSONA_DEPLOY_ANY_COMMIT:-}" ]; then
+  if ! git fetch -q origin master 2>/dev/null; then
+    echo "deploy: could not fetch origin/master to check this checkout is up to date; PERSONA_DEPLOY_ANY_COMMIT=1 deploys anyway" >&2
+    exit 2
+  fi
+  if ! git merge-base --is-ancestor FETCH_HEAD HEAD; then
+    echo "deploy: this checkout ($(git rev-parse --short HEAD)) is missing commits on origin/master ($(git rev-parse --short FETCH_HEAD))." >&2
+    echo "  Deploying it would undo what was deployed from them: rebase onto origin/master (or deploy from a fresh" >&2
+    echo "  'git worktree add --detach <dir> origin/master'); PERSONA_DEPLOY_ANY_COMMIT=1 deploys it anyway." >&2
+    exit 2
+  fi
+fi
 eval "$(python3 scripts/jarvis_config.py env)"
 cd server
 # Straight from master, for when a change cannot wait for a release: the build number is the build time (UTC), so an
