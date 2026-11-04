@@ -176,10 +176,11 @@ func codexArgs(bin, key string) []string {
 
 // codexShell runs the launcher with `codex` turned into `codex <its flags> app-server <ours>`: the launcher's
 // function sets what it sets (env, -c model_provider, -m …) exactly as when it starts the TUI.
+// Use alias-safe definitions and calls: zsh expands aliases while parsing the script.
 func codexShell(launcher string) string {
 	return `__jarvis_args=("$@")
-codex() { builtin command codex "$@" app-server "${__jarvis_args[@]}"; }
-command() { if [[ "$1" == codex ]]; then shift; codex "$@"; else builtin command "$@"; fi; }
+function codex { builtin command codex "$@" app-server "${__jarvis_args[@]}"; }
+function command { if [[ "$1" == codex ]]; then shift; \codex "$@"; else builtin command "$@"; fi; }
 ` + launcher
 }
 

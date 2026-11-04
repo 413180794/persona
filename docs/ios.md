@@ -327,7 +327,7 @@ UI 测试一律用 `launchPinned()` 固定风格；布局包装在 `PersonaUITes
   拷贝后名字胶囊上盖一个「✓ 已拷贝…」3 秒（不用全局 toast：它正好压在头像上）。弱网 / 断网时胶囊里的名字换成「转圈 + 等待网络 / 连接中… / 更新中…」，
   菜单第一项变成「连接详情」。
 - 左边圆按钮 **历史对话** 打开侧边栏，右边圆按钮 **新对话**（新对话页上置灰）。两个都是纯图标。
-- **侧边栏**在主页面下面，占屏宽 82%（最宽 380pt）。主页面覆盖它，向右滑开后仍是一张等尺寸的圆角卡片（深色模式加一圈细边，否则和侧边栏分不开）；侧边栏横向固定，只在被揭开时轻微上浮 8pt（`Theme.Motion.drawerLift`），不缩放、不淡入。点卡片或往左拖关闭。
+- **侧边栏**在主页面下面，占屏宽 82%（最宽 380pt）。主页面覆盖它，向右滑开后仍是一张等尺寸的圆角卡片（深色模式加一圈细边，否则和侧边栏分不开），随拉出的进度压暗（`Theme.Fill.scrim`，浅色黑 20%、深色黑 45%，#334）；侧边栏横向固定，只在被揭开时轻微上浮 8pt（`Theme.Motion.drawerLift`），不缩放、不淡入。点卡片或往左拖关闭。
   内容（2026-10-31 照豆包的侧边栏改，用户给的截图）：顶部是大字的形象名（「Persona」）和右边一个圆的搜索按钮（点了换成搜索框 + 取消）；
   下面三行要开始的事：新对话、定时任务、知识库（图标 + 字，没有卡片）；一条分隔线；「置顶」（主对话固定在这里，显示成形象的头像 +「主对话」，
   长按别的对话可置顶，存在本机 `assistant.pinned`）和「最近」（其余按时间倒序，先显示 30 个，「查看全部」展开），每段标题右边一个灰色 ⋯
@@ -515,7 +515,7 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
 - 状态色不随风格变，只有一张表 `Shared/StatusPalette.swift`（App、手表、实时活动都编译它）：需要你红、工作中琥珀、完成未看绿、已看灰、未运行浅灰，和 herdr 侧边栏一致（`docs/agent-states.md`）。每种状态三个值：`dot`（圆点、图标、填充）、`text`（同色相加深，小字对白底 ≥ 4.5:1）、`tint`（浅底）；界面用 `AgentState.tone`。提问 / 计划 / 授权 / 终端对话框都算需要你，一律用红；工作中的转圈用琥珀，旁边的字用次要灰。不是 Agent 状态的东西不借状态色，用 `Theme` 里各自的 token：`Theme.Diff`（diff 和 Git 的 ± 符号、计数、浅底，正文保持黑字）、`caution`（连接中、过期、截断、版本不一致这类提醒，配三角图标，不画成圆点）、`ai`（✦ AI 摘要）、`loop`（循环和待唤醒）、`positive`（成功、已连接、在线、做完的待办）、`Hue`（只用来区分类别，比如记忆类型）。权限模式标签是中性的，只有「全部放行」用红。
 - Agents 列表的一行（`SlotRow`）：状态点 + 标题 + 时间；最新一句；元信息一行「需要你 · Claude · 空间 › tab · 机器」，普通字体、次要灰。只有需要你写成字（红），其余状态只看圆点（完成未看另把标题加粗）；以前 tab 名着色胶囊、状态字、描边的 Agent 种类挤在第一行，把状态说了三遍。空间标题的状态计数是彩色圆点 + 次要灰数字。
 - Token（`Theme.swift`，页面只引用）：圆角 `Theme.Radius` 五档（badge 6 / control 10 / card 14 / bubble 20 / panel 22，外加胶囊和圆）；
-  背景灰阶 `Theme.Fill` 三档（well / chip / pressed，就是系统的 quaternary / tertiary / secondary fill，深色下也看得见，别再写 `Color.primary.opacity(…)`）；
+  背景灰阶 `Theme.Fill` 三档（well / chip / pressed，就是系统的 quaternary / tertiary / secondary fill，深色下也看得见，别再写 `Color.primary.opacity(…)`），外加侧边栏拉出时盖在主页面上的遮罩 `scrim`；
   - 字体 `Theme.Font` 只有这几级（默认字号下）：display 28 粗、title 22、heading 17 粗、body 17、secondary 15、caption 13、sectionHeader 13 粗（配次要色）、
     label 12、code 13 等宽。页面里不直接写 `.subheadline` 这类系统样式，也不写死 `.system(size:)`。
     Mac 上同样这几级，换成 Mac 的一套（#779，2026-11-03 用户选「正文 13」）：display 24 粗、title 18 半粗、heading 13 粗、body 13、secondary 12、caption 11、sectionHeader 11 粗、label 11、code 11 等宽，

@@ -1406,14 +1406,17 @@ struct LarkMessageRow: View {
         if react != nil && !message.recalled {
             ControlGroup {
                 ForEach(LarkQuickReactions.bar(LarkMedia.shared.quickReactions), id: \.self) { key in
+                    // A title with the picture: the menu takes its items' names from their text (an image alone left
+                    // the item nameless, and VoiceOver and the tests found no 「爱心」).
+                    let name = LarkMedia.shared.emoji(key)?.label ?? LarkMedia.labelFallback(key, text: nil)
                     Button { react?(message, key) } label: {
-                        if let img = LarkMedia.shared.emojiImage(key, points: 28) {
-                            Image(uiImage: img).renderingMode(.original)
+                        if let img = LarkMedia.shared.emojiImage(key, points: LarkMedia.barPoints) {
+                            Label { Text(name) } icon: { Image(uiImage: img).renderingMode(.original) }
                         } else {
-                            Text(LarkMedia.labelFallback(key, text: nil))
+                            Text(name)
                         }
                     }
-                    .accessibilityLabel(LarkMedia.shared.emoji(key)?.label ?? LarkMedia.labelFallback(key, text: nil))
+                    .accessibilityLabel(name)
                     .accessibilityIdentifier("lark.quickReaction")
                 }
             }

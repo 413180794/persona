@@ -151,6 +151,9 @@ nonisolated enum Theme {
         static let well = Color(uiColor: .quaternarySystemFill)
         static let chip = Color(uiColor: .tertiarySystemFill)
         static let pressed = Color(uiColor: .secondarySystemFill)
+        /// Laid over a page pushed aside by a sidebar, so the sidebar in front reads as what is active (#334). Black in
+        /// both modes; darker in dark mode, where the page is already near black and only its text can dim.
+        static let scrim = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor.black.withAlphaComponent(0.45) : UIColor.black.withAlphaComponent(0.2) })
         #endif
     }
 

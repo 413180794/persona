@@ -72,6 +72,14 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         if d.bool(forKey: "openRecapsFresh") { d.removeObject(forKey: "closedRecaps") }
         // `-openScreenFresh YES`: no Mac's Screen Sharing sign-in remembered (ScreenPasswordTests, #1322).
         if d.bool(forKey: "openScreenFresh") { ScreenCredentials.forgetAll() }
+        // `-lark-connectorSendFresh YES`: no Feishu draft and no outbox (unsent, failed messages) from an earlier run:
+        // LarkSendTests found earlier runs' failed messages and drafts in the chat (#1627).
+        if d.bool(forKey: "lark-connectorSendFresh") {
+            StateCache.remove(LarkDrafts.stateName)
+            for dir in ["lark-outbox-v2", "lark-outbox-v1"] {
+                try? FileManager.default.removeItem(at: URL.applicationSupportDirectory.appending(path: dir))
+            }
+        }
         #if os(iOS)
         PagePerf.runIfAsked()
         #endif

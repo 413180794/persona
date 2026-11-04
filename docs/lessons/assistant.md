@@ -57,3 +57,5 @@
 - 总线上 hub 发来的事件在读循环里同步交给回调（`internal/rpc`）：处理慢了整条连接都停。助手把事件放进队列按顺序处理，`session.turn_ended`（要问模型、等任务的 Agent 停下）另起；
   测试里要「助手处理完了」就在发完事件后对它做一次调用（同一条连接，排在事件后面），再等它的队列空（`BusHub.Settle`）。
 - hub 默认用 `os.Executable() assistant` 起助手：测试里 `os.Executable()` 是测试二进制，起它等于把整个测试再跑一遍。hub 的测试在 `init` 里把 `assistantCommand` 换掉，要测子进程就让测试二进制在 `TestMain` 里认出环境变量、当助手跑。
+- `zsh -ic` 会先展开已有 alias 再执行整段脚本（#1674）：用户给 `codex` 起了同名 alias 时，`codex() { … }` 会在解析阶段失败，同串里先 `unalias` 也来不及。
+  包装函数用 `function codex { … }`，其他包装里的调用写成 `\codex`，避免 alias 再次展开造成递归；用临时 `ZDOTDIR` 配真实 zsh 回归，不读取或修改用户的 shell 配置。

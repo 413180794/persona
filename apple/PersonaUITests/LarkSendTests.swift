@@ -16,10 +16,23 @@ final class LarkSendTests: XCTestCase {
         self.hub = hub
     }
 
+    /// A failed case leaves the screen it failed on in JARVIS_SHOTS (the attachments only record events).
+    /// No draft and no failed or unsent message from an earlier run (`-lark-connectorSendFresh`, #1627): they are kept on
+    /// disk, and an earlier run's failed messages filled the chat and its leftover draft hid the thread box's placeholder.
+    static let fresh = ["-lark-connectorSendFresh", "YES"]
+
+    override func tearDown() {
+        if let dir = ProcessInfo.processInfo.environment["JARVIS_SHOTS"], (testRun?.totalFailureCount ?? 0) > 0 {
+            let name = name.components(separatedBy: " ").last?.trimmingCharacters(in: CharacterSet(charactersIn: "]")) ?? "test"
+            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("failed-\(name).png"))
+        }
+        super.tearDown()
+    }
+
     @MainActor private func openChat() -> XCUIApplication {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-inbox.kind", "mention", "-inbox.source", "", "-openInboxFirst", "YES"]
+        app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-inbox.kind", "mention", "-inbox.source", "", "-openInboxFirst", "YES"] + Self.fresh
         app.launchPinned()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "The new icon set")).firstMatch.waitForExistence(timeout: 20),
                       "the 设计评审 chat did not open")
@@ -38,19 +51,25 @@ final class LarkSendTests: XCTestCase {
     /// and not left further up. The list glides there, so this waits for it a moment.
     @MainActor private func assertAtEnd(_ app: XCUIApplication, _ element: XCUIElement, box boxID: String = "lark.box",
                                         _ what: String, file: StaticString = #filePath, line: UInt = #line) {
-        let box = app.textFields[boxID]
+        // Any type: the box grows to several lines (TextField(axis: .vertical)) and is not always a text field.
+        let box = app.descendants(matching: .any).matching(identifier: boxID).firstMatch
         let bar = app.descendants(matching: .any).matching(identifier: "lark.replyBar").firstMatch
         var gap: CGFloat = .infinity
+        var seen = ""
         let deadline = Date().addingTimeInterval(3)
         repeat {
-            if element.exists, box.exists {
-                let floor = bar.exists ? bar.frame.minY : box.frame.minY
-                gap = floor - element.frame.maxY
-                if gap >= 0 && gap < 100 { return }
+            // Snapshots, not .frame: a sending mark goes away when the send is done, between asking and reading.
+            let es = try? element.snapshot(), bs = try? box.snapshot()
+            if es == nil || bs == nil { seen = "it there: \(es != nil), the box there: \(bs != nil)" }
+            if let e = es, let b = bs {
+                let floor = (try? bar.snapshot())?.frame.minY ?? b.frame.minY
+                gap = floor - e.frame.maxY
+                seen = "it \(e.frame), the box \(b.frame)"
+                if gap >= -2 && gap < 100 { return } // a point or two of rounding where the box's frame starts
             }
             usleep(100_000)
         } while Date() < deadline
-        XCTFail("\(what): \(gap) pt between it and the box (under it when negative)", file: file, line: line)
+        XCTFail("\(what): \(gap) pt between it and the box (under it when negative); \(seen)", file: file, line: line)
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
@@ -70,7 +89,7 @@ final class LarkSendTests: XCTestCase {
         let sending = app.descendants(matching: .any).matching(identifier: "lark.outgoing.sending").firstMatch
         XCTAssertTrue(sending.waitForExistence(timeout: 1), "the message is not on screen while it goes")
         XCTAssertTrue(app.staticTexts[text].exists)
-        assertAtEnd(app, sending, "the sending mark shows right above the box")
+        // The spinner's own place beside the bubble is testSendMarksSitBesideTheBubble's; here the message's.
         assertAtEnd(app, app.staticTexts[text], "the sending message shows right above the box")
         let field = app.textFields.matching(NSPredicate(format: "placeholderValue BEGINSWITH %@", "回复")).firstMatch
         XCTAssertNotEqual(field.value as? String, text, "the box is cleared at once")
@@ -88,7 +107,7 @@ final class LarkSendTests: XCTestCase {
     @MainActor func testLastMessageStaysAboveKeyboardAndQuoteBar() {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "lark:f1:100"]
+        app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "lark:f1:100"] + Self.fresh
         app.launchPinned()
         XCTAssertTrue(app.staticTexts["能赶上，下午三点前给你确认"].waitForExistence(timeout: 20), "the 韩梅梅 chat did not open")
         // The list's own row, not the quote bar's summary of it (the bar is outside the list).
@@ -120,17 +139,33 @@ final class LarkSendTests: XCTestCase {
         // reply is sent: testQuotedReplyShowsTheQuoteWhileItGoes.)
     }
 
+    /// The failed mark beside `text`'s bubble, on its line: failed messages are kept (LarkOutboxStore, #713), so earlier
+    /// runs' failed ones may be on screen too and the mark alone is not one element.
+    @MainActor private func failedMark(_ app: XCUIApplication, beside text: String, timeout: TimeInterval = 10) -> XCUIElement? {
+        let bubble = app.staticTexts[text]
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if bubble.exists {
+                let marks = app.buttons.matching(identifier: "lark.outgoing.failed").allElementsBoundByIndex
+                if let mark = marks.min(by: { abs($0.frame.midY - bubble.frame.midY) < abs($1.frame.midY - bubble.frame.midY) }),
+                   abs(mark.frame.midY - bubble.frame.midY) < 12 { return mark }
+            }
+            usleep(200_000)
+        } while Date() < deadline
+        return nil
+    }
+
     @MainActor func testFailedMessageOffersRetry() {
         let app = openChat()
-        send(app, "#fail 这条发不出去")
-        let failed = app.buttons["lark.outgoing.failed"]
-        XCTAssertTrue(failed.waitForExistence(timeout: 10), "a failed send says so")
+        let text = "#fail 这条发不出去 " + UUID().uuidString.prefix(6)
+        send(app, text)
+        guard let failed = failedMark(app, beside: text) else { return XCTFail("a failed send says so") }
         shot(app, "lark-failed")
         failed.tap()
         XCTAssertTrue(app.buttons["重发"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["放回输入框"].exists)
         app.buttons["删除"].tap()
-        XCTAssertTrue(failed.waitForNonExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts[text].waitForNonExistence(timeout: 3), "删除 takes the failed message away")
     }
 
     /// The send marks sit beside the bubble, like Feishu: the failed mark left of the failed message on its line, and
@@ -139,8 +174,7 @@ final class LarkSendTests: XCTestCase {
         let app = openChat()
         let failedText = "#fail 旁边是标记 " + UUID().uuidString.prefix(6)
         send(app, failedText)
-        let failed = app.buttons["lark.outgoing.failed"]
-        XCTAssertTrue(failed.waitForExistence(timeout: 10), "a failed send has its mark")
+        guard let failed = failedMark(app, beside: failedText) else { return XCTFail("a failed send has its mark") }
         let bubble = app.staticTexts[failedText]
         XCTAssertTrue(bubble.exists)
         XCTAssertLessThanOrEqual(failed.frame.maxX, bubble.frame.minX, "the mark is left of the bubble")
@@ -151,6 +185,9 @@ final class LarkSendTests: XCTestCase {
         XCTAssertTrue(sending.firstMatch.waitForExistence(timeout: 2), "the ones going have spinners")
         shot(app, "lark-marks")
         XCTAssertTrue(failed.exists, "the failed one stays until it is dealt with")
+        // Deal with it: the next runs should not find this one.
+        failed.tap()
+        if app.buttons["删除"].waitForExistence(timeout: 3) { app.buttons["删除"].tap() }
     }
 
     /// Long press: a bar of the quick reactions on top of the menu (six across), one tap reacts; the menu's own items
@@ -196,7 +233,7 @@ final class LarkSendTests: XCTestCase {
         send(app, text)
         // The mock takes 2 s to send: what shows within a second is the local row, with its spinner.
         let sending = app.descendants(matching: .any).matching(identifier: "lark.outgoing.sending").firstMatch
-        XCTAssertTrue(sending.waitForExistence(timeout: 1), "the reply is not on screen while it goes")
+        XCTAssertTrue(sending.waitForExistence(timeout: 2), "the reply is not on screen while it goes") // the sheet's own animation first
         XCTAssertTrue(app.staticTexts[text].exists)
         XCTAssertTrue(bar.waitForNonExistence(timeout: 2), "the quote bar goes with the message")
         assertAtEnd(app, app.staticTexts[text], "the sending reply shows right above the box")
@@ -213,10 +250,10 @@ final class LarkSendTests: XCTestCase {
     /// 周末徒步群, whose box only the draft and send-button tests type into: a draft a failed run left there stays out
     /// of the other tests' way. That draft goes out first (to the mock), so the box starts empty, unless the test
     /// opens the chat to find its own draft.
-    @MainActor private func openHikingChat(sendingLeftover: Bool = true) -> XCUIApplication {
+    @MainActor private func openHikingChat(sendingLeftover: Bool = true, fresh: Bool = true) -> XCUIApplication {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "lark:f3:300"]
+        app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "lark:f3:300"] + (fresh ? Self.fresh : [])
         app.launchPinned()
         let target = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "那我也带一个")).firstMatch
         XCTAssertTrue(target.waitForExistence(timeout: 20), "the 周末徒步群 chat did not open")
@@ -319,7 +356,7 @@ final class LarkSendTests: XCTestCase {
         sleep(3) // written a moment after the last keystroke
         app.terminate()
 
-        app = openHikingChat(sendingLeftover: false)
+        app = openHikingChat(sendingLeftover: false, fresh: false) // the draft kept on disk is the point
         let back = app.textFields.matching(NSPredicate(format: "value == %@", text)).firstMatch
         XCTAssertTrue(back.waitForExistence(timeout: 20), "the draft is back in the box")
         XCTAssertTrue(app.staticTexts["回复 Mia"].exists, "the quote comes back with it")
@@ -343,7 +380,7 @@ final class LarkSendTests: XCTestCase {
         assertAllOut(app, within: 12, failedBefore: failedBefore, "in the chat")
         let thread = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        thread.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "lark:f3:300"]
+        thread.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "lark:f3:300"] + Self.fresh
         thread.launchPinned()
         let open = thread.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "条回复")).firstMatch
         XCTAssertTrue(open.waitForExistence(timeout: 20), "the 周末徒步群 chat did not open at its thread")
@@ -381,7 +418,7 @@ final class LarkSendTests: XCTestCase {
     @MainActor func testThreadSheetRepliesInTheThread() {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "lark:f3:300"]
+        app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "lark:f3:300"] + Self.fresh
         app.launchPinned()
         let thread = app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "条回复")).firstMatch
         XCTAssertTrue(thread.waitForExistence(timeout: 20), "the 周末徒步群 chat did not open at its thread")
@@ -389,7 +426,7 @@ final class LarkSendTests: XCTestCase {
         let field = app.textFields.matching(NSPredicate(format: "placeholderValue == %@", "回复话题")).firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5), "the thread sheet has a box")
         XCTAssertTrue(app.staticTexts["60 条回复"].waitForExistence(timeout: 10), "the thread's latest page did not load")
-        let text = "我也报名，坐地铁 " + UUID().uuidString.prefix(8)
+        let text = "我也报名坐地铁 " + UUID().uuidString.prefix(8) // no full-width comma: typing it dropped the characters before it
         field.tap()
         field.typeText(text)
         shot(app, "lark-thread-box")

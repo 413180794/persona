@@ -273,7 +273,7 @@ private struct DrawerSidebarHost<Content: View>: UIViewControllerRepresentable {
     }
 }
 
-/// The page pushed aside: a card with rounded corners, a shadow and (dark mode) an edge line, dimmed a little; a tap on
+/// The page pushed aside: a card with rounded corners, a shadow and (dark mode) an edge line, dimmed; a tap on
 /// it closes the sidebar.
 private struct DrawerPageMotion: ViewModifier {
     let drawer: AssistantDrawer
@@ -303,10 +303,10 @@ private struct DrawerPageMotion: ViewModifier {
                         .opacity(p)
                         .ignoresSafeArea()
                         .allowsHitTesting(false)
-                    // The page at the edge: dimmed a little, and a tap on it closes the sidebar. The dimming is the
-                    // card's shape: the overlay is not under the mask, and a plain rectangle grayed the sidebar's color
-                    // outside the card's rounded corners (#1247).
-                    card.fill(Color.black.opacity(0.06))
+                    // The page at the edge: dimmed as the sidebar comes out (#334), and a tap on it closes the sidebar.
+                    // The dimming is the card's shape: the overlay is not under the mask, and a plain rectangle grayed
+                    // the sidebar's color outside the card's rounded corners (#1247).
+                    card.fill(Theme.Fill.scrim)
                         .opacity(p)
                         .contentShape(.rect)
                         .ignoresSafeArea()

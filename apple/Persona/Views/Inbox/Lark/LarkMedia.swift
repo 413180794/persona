@@ -127,8 +127,14 @@ final class LarkMedia {
             emojiGroups = r.groups ?? []
             emojiVersion += 1
             if let q = try? await api.larkQuickReactions(), !q.isEmpty { quickReactions = q }
+            // The long-press bar's pictures, ahead of the first long press: a context menu is drawn once when it opens,
+            // so one opened before they loaded showed [HEART]-style codes, and only the three of them that fit (#1627).
+            for key in LarkQuickReactions.bar(quickReactions) { _ = emojiImage(key, points: LarkMedia.barPoints) }
         }
     }
+
+    /// The long-press bar's emoji size (LarkChatView's menu).
+    static let barPoints: CGFloat = 28
 
     func emoji(_ key: String) -> APIClient.LarkEmojis.Emoji? { emojis[key.lowercased()] }
 
