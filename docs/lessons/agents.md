@@ -23,6 +23,8 @@
   写之前拿 Claude 自己的配置锁（`<配置路径>.lock` 目录，10 秒算过期），否则和正在运行的 claude 同时写会丢一边的改动。
   Claude Code 2.1.317 里有 `storageV5` 配置后端（默认没开）；它变成默认后全局配置可能不再读 `.claude.json`，升级 Claude Code 时要重新确认这条还有效。
 - 用户自己起的 claude（启动器、profile 目录）没有 Persona 的 hooks，AskUserQuestion 只能靠读屏幕的卡片答。读屏卡得认得 2.1.316 的多选：`[ ]`/`[✔]` 是状态不是文字，数字只勾不交，要挪到 Submit 行按 enter 再在确认页按 1；光标在自由回答行上按数字会写进去，在 Submit 行上按数字没反应；几个键一次发会丢，一次一个（`docs/claude-integration.md`「多选提问的屏幕卡」）。
+- AskUserQuestion 的选项带预览时，数字只挪光标，要再按 enter 才选；读屏卡只按数字会「答了没生效」。按键后要看屏幕确认问题真的往下走了（`docs/claude-integration.md`「带预览的提问」）。
+- 屏幕卡因为 Agent 不再 blocked 撤掉时，数据库里也要记成结束（cancelled），不然历史里一直挂着 pending，直到 hub 重启。
 - AskUserQuestion：PreToolUse hook 返回 `permissionDecision: allow` + `updatedInput.answers` 即可代答（2.1.310 实测）。
 - ExitPlanMode：走 PermissionRequest（不走 PreToolUse）。`allow` 必须带 `updatedInput` + `updatedPermissions:[{type:setMode,...}]`
   才生效，单纯 `{behavior:allow}` 仍会弹 TUI 对话框；`deny` + `message` 会把反馈作为 tool_result 交给模型。

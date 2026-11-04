@@ -524,6 +524,7 @@ func (h *Hub) syncScreenInteractions(m *Machine, list []proto.Session) {
 	}
 	h.mu.Unlock()
 	for _, id := range stale {
+		h.recordEnd(id, "cancelled", nil) // answered at the computer, or gone: not pending in the history either
 		h.finishInteraction(id)
 	}
 	for sid, s := range blocked {

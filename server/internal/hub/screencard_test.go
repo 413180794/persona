@@ -165,3 +165,34 @@ func TestScreenCardUpgradesWhenTheDialogShows(t *testing.T) {
 		t.Fatalf("after the dialog showed: %v (dialog %v)", ids, dialog)
 	}
 }
+
+// The dialog answered on the computer: the agent moves on and its screen card goes. The history says so too
+// (cancelled), not pending until the next hub restart (2026-11-04: a card answered at the computer ten seconds after
+// it was made stayed pending in the history).
+func TestScreenCardGoneWhenTheAgentMovesOnIsRecorded(t *testing.T) {
+	h := newTestHub(t)
+	st := newMeshStore()
+	h.store = st
+	m, f := newCodexMachine(t, h)
+	f.screen = pickModel
+	blockSession(h, m, proto.Session{SessionID: "s1", Agent: "claude"})
+	got, _ := waitCards(h, 1, 2*time.Second)
+	var id string
+	for k := range got {
+		id = k
+	}
+	if id == "" {
+		t.Fatal("no card")
+	}
+	s := proto.Session{SessionID: "s1", Agent: "claude", Status: proto.StatusWorking}
+	m.mu.Lock()
+	m.sessions = []proto.Session{s}
+	m.mu.Unlock()
+	h.syncScreenInteractions(m, []proto.Session{s})
+	if len(pendingIDs(h)) != 0 {
+		t.Fatalf("card still pending: %v", pendingIDs(h))
+	}
+	if status, _, _ := st.InteractionOutcome(t.Context(), id); status != "cancelled" {
+		t.Fatalf("history says %q, want cancelled", status)
+	}
+}

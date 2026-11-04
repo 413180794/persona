@@ -81,6 +81,13 @@ var cursorRE = regexp.MustCompile(`^(\s*)❯\s+(\S.*)$`)
 // boxRE is a multi-select option's check box before its label: `[ ] 手机`, `[✔] 电脑`.
 var boxRE = regexp.MustCompile(`^\[([ ✔✓xX])\]\s*(.*)$`)
 
+// previewRE is the box beside the options of a question with previews (AskUserQuestion's preview field), from the
+// gap before it to the end of the row: `1. 可以         ┌────┐`, `2. 要改         │ 第一行 │`.
+var previewRE = regexp.MustCompile(`\s{2,}[┌│└].*$`)
+
+// previewNote is the hint under that box.
+const previewNote = "Notes: press n to add notes"
+
 // submitRE is the row under a multi-select question's options that sends them, maybe under the cursor.
 var submitRE = regexp.MustCompile(`^\s*(❯)?\s*(Submit|Next)$`)
 
@@ -136,6 +143,15 @@ func numbered(lines []string) *Dialog {
 	if len(block) < 2 {
 		return nil
 	}
+	// Options with previews: the box beside them shows the focused one's preview. It is no option's label or detail
+	// (it changes as the cursor moves), and a number only moves the cursor there: enter picks (2026-11-04: the
+	// number alone left the card answered and the question waiting).
+	preview := false
+	for k, r := range block {
+		if l := previewRE.ReplaceAllString(r.label, ""); l != r.label {
+			block[k].label, preview = l, true
+		}
+	}
 	d := &Dialog{}
 	for k, r := range block {
 		end := min(len(lines), r.i+6)
@@ -143,6 +159,9 @@ func numbered(lines []string) *Dialog {
 			end = block[k+1].i
 		}
 		o := Option{Key: strconv.Itoa(r.n), Label: r.label, Keys: []string{strconv.Itoa(r.n)}}
+		if preview {
+			o.Keys = append(o.Keys, "enter")
+		}
 		if m := boxRE.FindStringSubmatch(r.label); m != nil {
 			d.Multi = true
 			o.Label, o.Checked = strings.TrimSpace(m[2]), m[1] != " "
@@ -162,6 +181,12 @@ func numbered(lines []string) *Dialog {
 				break
 			}
 			lead := len(l) - len(strings.TrimLeft(l, " "))
+			if preview {
+				l = previewRE.ReplaceAllString(l, "")
+				if t := strings.TrimSpace(l); t != "" && (strings.ContainsRune("┌│└", []rune(t)[0]) || t == previewNote) {
+					continue
+				}
+			}
 			t := strings.TrimSpace(l)
 			if t == "" || isRule(t) || lead < r.indent-1 {
 				if len(detail) > 0 {

@@ -200,6 +200,17 @@ node 的答法（`node/dialogmulti.go`）：每一步重读屏幕，算下一步
 再到自由回答那行清空（`ctrl+e` `ctrl+u`）、写字，最后挪到 Submit / Next 按 enter；确认页上所有题都答了就按「Submit answers」并确认确认页关了。
 电脑上已经勾了的、光标停在中间或停在 Submit 上，都按当时的样子算。多个问题时单选题照旧按数字，答完最后一题出现的确认页也会提交。
 
+## 带预览的提问（2026-11-04，2.1.303 实测）
+
+AskUserQuestion 的选项带 `preview` 时，选项排在左边，右边一个方框显示光标所在选项的预览，底部提示是
+「Enter to select · ↑/↓ to navigate · n to add notes · Tab to switch questions」，没有「Type something」，「Chat about this」不带编号。
+这里**按数字只挪光标、不选**，要再按 enter：只按数字时卡片显示答过了，电脑上的问题还停着（2026-11-04 用户在手机上答第二题没生效）。
+
+- 读屏（`server/internal/screen`）认出选项行右边的方框（`┌` `│` `└`）就当成带预览的提问：方框和「Notes: press n to add notes」不进任何选项的
+  标签和说明（以前整行进了标签，预览还会跟着光标变，卡片一挪光标就 `prompt_changed`），每个选项的按键是「数字 + enter」。
+- 是最后一题时按完照常提交确认页（上面「多选提问的屏幕卡」的 `submitReview`）。
+- 改了解析，hub 和 node 要一起部署：带预览的提问两边算出的 `rev` 不一样，只更新一边会一直 `prompt_changed`。没有预览的对话框 `rev` 不变。
+
 ## 发消息、中断、按键
 
 - 发消息：`agent prompt <pane> <text>`（原子地粘贴 + 回车，尊重 bracketed paste）。claude 正在工作时发，会进入它的排队输入。

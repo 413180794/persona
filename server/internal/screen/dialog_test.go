@@ -2,6 +2,7 @@ package screen
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -246,5 +247,33 @@ func TestParseDangerousCommandPrompt(t *testing.T) {
 	other := strings.ReplaceAll(fixture(t, "claude-2.1.316-danger-rm-120.txt"), "$LAB_SCRATCH/*", "$OTHER/*")
 	if od := ParseDialog(other); od == nil || od.Rev == d.Rev {
 		t.Fatalf("another command, same rev: %+v", od)
+	}
+}
+
+// A question whose options have previews (AskUserQuestion's preview field, Claude Code 2.1.303): the options sit
+// beside a box showing the focused one's preview, and a number only moves the cursor — enter picks ("Enter to
+// select · ↑/↓ to navigate"). Pressing the number alone left the card answered and the question waiting
+// (2026-11-04). The box is not part of any label or detail, and the cursor's place does not change the revision.
+func TestQuestionWithPreviews(t *testing.T) {
+	d := ParseDialog(fixture(t, "claude-2.1.303-questions-preview-198.txt"))
+	if d == nil || d.Question != "文案可以吗？" || len(d.Options) != 3 {
+		t.Fatalf("preview question: %+v", d)
+	}
+	for k, want := range []string{"可以", "要改", "不发"} {
+		o := d.Options[k]
+		if o.Label != want || o.Detail != "" || o.Kind != "" {
+			t.Errorf("option %d = %+v, want label %q and no detail", k+1, o, want)
+		}
+		if n := strconv.Itoa(k + 1); !slices.Equal(o.Keys, []string{n, "enter"}) {
+			t.Errorf("option %d keys = %v, want [%s enter]", k+1, o.Keys, n)
+		}
+	}
+	moved := ParseDialog(fixture(t, "claude-2.1.303-questions-preview-cursor-198.txt"))
+	if moved == nil || moved.Rev != d.Rev || moved.Cursor != "2" || moved.Options[1].Label != "要改" {
+		t.Fatalf("cursor moved: %+v (rev %s, before %s)", moved, moved.Rev, d.Rev)
+	}
+	// Without previews a number still picks by itself.
+	if o := ParseDialog(fixture(t, "claude-2.1.316-questions-single-100.txt")).Options[0]; !slices.Equal(o.Keys, []string{"1"}) {
+		t.Errorf("no previews: keys %v", o.Keys)
 	}
 }
