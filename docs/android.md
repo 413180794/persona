@@ -1,7 +1,7 @@
 # Android App
 
 `android/`：Kotlin + Jetpack Compose 的 Android 客户端，连同一个 hub，接口和 iOS 一样（`docs/protocol.md`），服务端不用改。
-minSdk 31（Android 12），compileSdk 37，targetSdk 36。界面中文。
+minSdk 30（Android 11），compileSdk 37，targetSdk 36。界面中文。
 
 一句话描述：在 Android 手机上看各台电脑终端引擎（herdr、Herdr App 或 Orca，每台电脑选一个，`docs/engines.md`）里的 Agent、发消息、回答提问 / 审批计划 / 授权、按终端对话框的选项，
 不需要任何推送账号。
