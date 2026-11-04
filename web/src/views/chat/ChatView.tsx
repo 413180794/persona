@@ -524,7 +524,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           working={state === "working"}
           onSend={onSend}
           disabled={!sessionCan(session, "send")}
-          onStop={assistant || !sessionCan(session, "interrupt") ? undefined : interrupt}
+          // Persona's conversations too, the main one included (#1467): the node stops their turn like an agent's
+          onStop={sessionCan(session, "interrupt") ? interrupt : undefined}
           commands={assistant ? [] : undefined}
           suggestion={session?.suggestion}
           mention={mention}
