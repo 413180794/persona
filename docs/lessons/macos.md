@@ -91,6 +91,12 @@
   先 `sample` 看时间去哪，再决定要不要保活。
 - 别用写死的 `listRowInsets` 去对齐 `List` 里的分组标题：iOS 上分组标题的缩进是 20，Mac 上是行自带的缩进（窄得多），iOS 那套数值在 Mac 上把行往里多推一截。
   折起的空间只剩标题、画成普通一行，写死 20 时在 Mac 上比展开的空间标题左右各缩 20pt，名字被截成「weat…」（#405，2026-11-02）。Mac 上传 `nil`，用行自带的缩进。
+- 这台 Mac 的 hub 反向隧道（launchd `dev.jarvis.hub-tunnel`）断线后，hub 那台机器上死掉的 sshd 会继续占着 2232 好几小时
+  （`ClientAliveInterval 28800`）：重试全是 `remote port forwarding failed for listen port 2232`，hub 一直报 `::1:2232 timed out`，
+  打向这台 Mac 的会话、git、发送全 503，主对话在 hub 上所以看起来像「只有部分 503」（2026-11-02、2026-11-04 各一次）。
+  两处一起改：hub 那台机器的 sshd `ClientAliveInterval` 改成 60（改完 `sshd -t` 再 reload），launchd 的隧道命令换成
+  `~/.local/bin/hub-tunnel.sh`（先 ssh 过去杀掉仍在监听该端口的进程，`sort -u | xargs -r kill`，再建 `-R` 隧道）。
+  卡住时 `launchctl kickstart -k gui/$(id -u)/dev.jarvis.hub-tunnel` 让 wrapper 自己清。
 - 两个视图各往窗口工具栏的 `.navigation` 放一项（壳的侧栏按钮、Agents 列表的过滤菜单），先后顺序靠不住：详情栏里的页面一带上自己的工具栏项
   （空间页的 ⋯、机器页的 ⓘ，放在什么位置都一样），SwiftUI 重排整个工具栏，列表那项就排到了壳那项前面（#483，2026-11-02）。
   要固定顺序就放进同一个 `ToolbarItemGroup`：Mac 上过滤菜单由壳画在侧栏按钮后面（`MacShellState.agentsList`），ChatsView 自己那项只留给 iOS。
