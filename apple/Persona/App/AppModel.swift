@@ -1537,8 +1537,15 @@ final class AppModel {
         }
     }
 
-    /// After a change in 设置 › 模型: the pickers read the machines' lists again.
-    func forgetLaunchers() { launcherCache = [:] }
+    /// Moves on every change to the launchers (hide, restore, delete, save): 设置 › 模型供应商's list reloads on it, as
+    /// the page a change is made on is not the list (#1433).
+    private(set) var launchersRevision = 0
+
+    /// After a change in 设置 › 模型: the pickers read the machines' lists again, and the list of launchers reloads.
+    func launchersChanged() {
+        launcherCache = [:]
+        launchersRevision += 1
+    }
 
     func launchers(_ machine: MachineRef, refresh: Bool = false) async throws -> [Launcher] {
         if !refresh, let cached = launcherCache[machine] { return cached }

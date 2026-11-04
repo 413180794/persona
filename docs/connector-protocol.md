@@ -44,6 +44,7 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 | `hosts` | 链接所在的主机名（App 认链接） |
 | `agent_tools` | 哪些工具也给编程 Agent，按名字的通配（不写就只给助手） |
 | `unlisted` | 哪些工具和写操作不进模型的工具列表，按名字的通配：连接器自己的前端按名字调（Telegram 的 `tg` 命令行）。不是权限：按名字调照常能调，写的照常过闸门，Agent 能不能调照旧看 `agent_tools` |
+| `confirm_always` | 哪些写操作永远要用户在手机上确认，按名字的通配（可选，没写行为不变）：`connector_gate` 里命中它的 `allow` 规则（含 `*`）被钳成 `confirm`，`deny` 不变；用户本人在 App 里点发送（`Registry.Run`）不过闸门，不受影响。只加可选字段，协议版本不变 |
 | `poll_seconds` | 多久问一次 `archive.changes`，0 用 hub 的默认 |
 | `kinds` | 收件箱条目的种类；hub 收到没声明的记一行日志 |
 

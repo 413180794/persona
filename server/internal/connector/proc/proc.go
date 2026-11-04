@@ -138,7 +138,7 @@ func sameManifest(declared, said connector.Manifest) bool {
 	}
 	a, b := norm(declared), norm(said)
 	return slices.Equal(a.Capabilities, b.Capabilities) && slices.Equal(a.Hosts, b.Hosts) && slices.Equal(a.AgentTools, b.AgentTools) &&
-		slices.Equal(a.Unlisted, b.Unlisted) && a.Poll == b.Poll && slices.Equal(a.Kinds, b.Kinds)
+		slices.Equal(a.Unlisted, b.Unlisted) && slices.Equal(a.ConfirmAlways, b.ConfirmAlways) && a.Poll == b.Poll && slices.Equal(a.Kinds, b.Kinds)
 }
 
 // Status answers from memory: the program's last status, or why it is not running.

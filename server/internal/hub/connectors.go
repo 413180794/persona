@@ -592,7 +592,7 @@ const telegramPluginID = "telegram"
 func telegramManifest(h *Hub, path string) *plugin.Manifest {
 	m := spec.Manifest()
 	item := plugin.ConnectorItem{ID: spec.ID, Name: spec.Name, Hosts: m.Hosts, AgentTools: m.AgentTools, Unlisted: m.Unlisted,
-		PollSeconds: int(m.Poll / time.Second), Kinds: m.Kinds}
+		ConfirmAlways: m.ConfirmAlways, PollSeconds: int(m.Poll / time.Second), Kinds: m.Kinds}
 	for _, c := range m.Capabilities {
 		item.Capabilities = append(item.Capabilities, string(c))
 	}

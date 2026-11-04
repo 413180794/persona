@@ -81,8 +81,10 @@ type Manifest struct {
 	Hosts        []string `json:"hosts,omitempty"`
 	AgentTools   []string `json:"agent_tools,omitempty"`
 	Unlisted     []string `json:"unlisted,omitempty"`
-	PollSeconds  int      `json:"poll_seconds,omitempty"`
-	Kinds        []string `json:"kinds,omitempty"`
+	// ConfirmAlways: see connector.Manifest.
+	ConfirmAlways []string `json:"confirm_always,omitempty"`
+	PollSeconds   int      `json:"poll_seconds,omitempty"`
+	Kinds         []string `json:"kinds,omitempty"`
 }
 
 type (
@@ -475,7 +477,7 @@ func (s *server) initialize(params json.RawMessage) (any, error) {
 // ItemOf is a connector's manifest as a contribution to the connectors extension point.
 func ItemOf(m Manifest) plugin.ConnectorItem {
 	return plugin.ConnectorItem{ID: m.ID, Name: m.Name, Capabilities: m.Capabilities, Hosts: m.Hosts, AgentTools: m.AgentTools,
-		Unlisted: m.Unlisted, PollSeconds: m.PollSeconds, Kinds: m.Kinds}
+		Unlisted: m.Unlisted, ConfirmAlways: m.ConfirmAlways, PollSeconds: m.PollSeconds, Kinds: m.Kinds}
 }
 
 // init builds the connector the first time and starts its Run and Watch; a second init answers the same.
@@ -573,7 +575,7 @@ func (w *writes) do(id string, run func() (CallResult, error)) (CallResult, erro
 func ManifestOf(c connector.Connector) Manifest {
 	cm := c.Manifest()
 	m := Manifest{Protocol: Protocol, ID: c.ID(), Name: c.Name(), Capabilities: []string{}, Hosts: cm.Hosts, AgentTools: cm.AgentTools,
-		Unlisted: cm.Unlisted, PollSeconds: int(cm.Poll / time.Second), Kinds: cm.Kinds}
+		Unlisted: cm.Unlisted, ConfirmAlways: cm.ConfirmAlways, PollSeconds: int(cm.Poll / time.Second), Kinds: cm.Kinds}
 	for _, cp := range cm.Capabilities {
 		m.Capabilities = append(m.Capabilities, string(cp))
 	}
@@ -582,8 +584,8 @@ func ManifestOf(c connector.Connector) Manifest {
 
 // Of is the connector.Manifest a program sent (a proxy's: it answers for the program).
 func (m Manifest) Of() connector.Manifest {
-	out := connector.Manifest{Hosts: m.Hosts, AgentTools: m.AgentTools, Unlisted: m.Unlisted, Poll: time.Duration(m.PollSeconds) * time.Second,
-		Kinds: m.Kinds, Proxy: true}
+	out := connector.Manifest{Hosts: m.Hosts, AgentTools: m.AgentTools, Unlisted: m.Unlisted, ConfirmAlways: m.ConfirmAlways,
+		Poll: time.Duration(m.PollSeconds) * time.Second, Kinds: m.Kinds, Proxy: true}
 	for _, cp := range m.Capabilities {
 		out.Capabilities = append(out.Capabilities, connector.Capability(cp))
 	}

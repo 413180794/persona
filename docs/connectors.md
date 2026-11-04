@@ -34,6 +34,7 @@
 | `Hosts` | 链接所在的主机名（App 认链接） |
 | `AgentTools` | 哪些工具也给 Agent（不只给助手），按名字的通配（邮件是 `mail_*`） |
 | `Unlisted` | 哪些工具和写操作不进模型的工具列表，按名字的通配：连接器自己的前端按名字调（Telegram 的 `tg` 命令行和 skill，`docs/plan-telegram.md`「tg 命令行」）。不是权限 |
+| `ConfirmAlways` | 哪些写操作永远要用户在手机上确认，按名字的通配（可选）：`connector_gate` 里命中它的 `allow` 规则被钳成 `confirm`，`deny` 不变（见「闸门」）。插件清单里写 `confirm_always` |
 | `Poll` | 多久问一次 `Archive`（0 是 hub 的默认；邮件 6 分钟） |
 | `Kinds` | 收件箱条目的种类；每个种类在 `prompts/inbox/kinds/<id>.md` 里要有自己的说明（`connector.CheckKinds`，各连接器的 `TestKindsAreDescribed`），收到没声明的种类记一行日志 |
 | `Proxy` | 它替一个程序回答（子进程的 `proc.Conn`）：实现了全部接口，只有声明的那些是真的 |
@@ -73,6 +74,7 @@ hub 收到不认识的档就丢掉、交给模型分拣。
 - 闸门只管 **AI 发起的**写操作（助手的工具、`tg` 命令行 / skill、Agent，都经 node 的 `mcp.call`）：`Registry.Call` →
   `connector/gate.go` 的规则（hub.json `connector_gate`，第一条匹配的说了算）→
   `allow` 直接做、`deny` 拒绝、`confirm`（默认）在手机上弹卡片（`hub.approve`，15 分钟过期）。卡片写明做什么、全文、谁会看到。
+  连接器清单的 `ConfirmAlways` 命中的写操作，`allow` 规则（含 `*`）也钳成 `confirm`（`Decide`），`deny` 照旧；以 hub 登记的清单为准，程序自报的放不宽它。
 - **用户本人手动发起的不过闸门**（#1190，用户：「我自己发送消息还需要我自己审批？这个完全不对吧」）：会话页回复框
   （`POST …/thread/reply`）从用户自己登录的设备（手机、Mac、网页的 full 设备 token）发来，就走 `Registry.Run` 直接做，不弹卡片，
   `deny` 规则也不拦。按 hub 鉴权得到的身份判断（`hub.byOwnDevice`），不看客户端自报的字段；hub.json 的配对 token、配对码、

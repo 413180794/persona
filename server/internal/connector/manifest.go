@@ -66,6 +66,10 @@ type Manifest struct {
 	// connector's own calls them by name (Telegram's tg CLI and its skill). It is not a permission: called by name,
 	// one runs like any other (an action through the gate), and an agent only gets those AgentTools gives it.
 	Unlisted []string
+	// ConfirmAlways are the actions (patterns, path.Match: "example_send") the gate never lets a rule allow: whatever
+	// connector_gate says, the user confirms them on the phone (Decide). A deny rule still denies. It is a floor the
+	// connector sets for its writes, not a permission: the user's own sends (Registry.Run) are not gated at all.
+	ConfirmAlways []string
 	// Poll is how often the hub asks Archive for changes; 0 is the hub's default.
 	Poll time.Duration
 	// Kinds are the kinds its inbox things have (InboxThing.Kind): prompts/inbox/kinds/<id>.md tells the models what
@@ -86,6 +90,11 @@ func (m Manifest) ForAgents(name string) bool {
 
 // Listed says whether the tool name goes in the models' tool lists (Unlisted).
 func (m Manifest) Listed(name string) bool { return !slices.ContainsFunc(m.Unlisted, matching(name)) }
+
+// AlwaysConfirms says whether the action name is one the gate always has the user confirm (ConfirmAlways).
+func (m Manifest) AlwaysConfirms(name string) bool {
+	return slices.ContainsFunc(m.ConfirmAlways, matching(name))
+}
 
 // matching is whether a pattern (path.Match) matches name.
 func matching(name string) func(string) bool {

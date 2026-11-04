@@ -63,6 +63,23 @@ func TestParseExample(t *testing.T) {
 	}
 }
 
+// confirm_always is an optional list of action patterns on a connector, kept as written.
+func TestConnectorConfirmAlways(t *testing.T) {
+	m, err := Parse(with(t, func(m map[string]any) {
+		c := m["contributes"].(map[string]any)["connectors"].([]any)[0].(map[string]any)
+		c["confirm_always"] = []any{"examplenotes_send", "examplenotes_*_reply"}
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := m.Connectors()[0].ConfirmAlways; len(got) != 2 || got[0] != "examplenotes_send" || got[1] != "examplenotes_*_reply" {
+		t.Fatalf("%v", got)
+	}
+	if plain, err := Parse([]byte(exampleManifest)); err != nil || len(plain.Connectors()[0].ConfirmAlways) != 0 {
+		t.Fatalf("not declared: %v %v", plain.Connectors()[0].ConfirmAlways, err)
+	}
+}
+
 func TestParseRefuses(t *testing.T) {
 	cases := map[string]func(m map[string]any){
 		"unknown top-level field": func(m map[string]any) { m["permission"] = map[string]any{} },
@@ -91,6 +108,12 @@ func TestParseRefuses(t *testing.T) {
 		},
 		"connector field": func(m map[string]any) {
 			m["contributes"] = map[string]any{"connectors": []any{map[string]any{"id": "ex", "name": "x", "capabilities": []any{"status"}, "pol": 1}}}
+		},
+		"confirm_always pattern": func(m map[string]any) {
+			m["contributes"] = map[string]any{"connectors": []any{map[string]any{"id": "ex", "name": "x", "capabilities": []any{"status"}, "confirm_always": []any{"ex_[send"}}}}
+		},
+		"confirm_always empty": func(m map[string]any) {
+			m["contributes"] = map[string]any{"connectors": []any{map[string]any{"id": "ex", "name": "x", "capabilities": []any{"status"}, "confirm_always": []any{""}}}}
 		},
 		"connector twice": func(m map[string]any) {
 			c := map[string]any{"id": "ex", "name": "x", "capabilities": []any{"status"}}

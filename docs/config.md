@@ -267,7 +267,7 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
 - `connector_gate`（可选）：连接器写操作（`github_comment` 这类）的闸门规则，第一条匹配的说了算，没有匹配的就在手机上逐次确认：
   `[{"connector":"github","action":"github_comment","match":{"repo":"example-org/*"},"decision":"allow"}]`
   （`connector`、`action` 可用 `*` 通配；`match` 按工具参数的顶层字段匹配，字符串也可以通配；`decision` 是 `allow` / `confirm` / `deny`，
-  写错了 hub 不启动；`server/internal/connector/gate.go`，`docs/plan-connectors.md`）。
+  写错了 hub 不启动；`server/internal/connector/gate.go`，`docs/plan-connectors.md`）。插件清单里 `confirm_always` 命中的写操作，`allow` 规则也会被钳成 `confirm`（`docs/plugins.md`）。
   助手写飞书的规则也写这里：`connector` 写 `lark`，`action` 写「方法 路径」，如 `{"connector":"lark","action":"POST /conversations/*/messages","decision":"allow"}`、
   lark-cli 的 `{"connector":"lark","action":"CLI /im/+messages-send","decision":"allow"}`（路径里 `*` 一段、`**` 剩下的全部，`"*"` 是任何调用；`match` 按 body 的顶层字段）。
   它们排在老的 `lark_gate` 前面，再往后是内置规则（`docs/assistant.md`「飞书：lark-connector skill」）。

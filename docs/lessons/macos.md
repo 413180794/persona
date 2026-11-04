@@ -173,3 +173,6 @@
   现在按行上面所有裁剪的视图（`clipsToBounds` / `masksToBounds`）裁。要看滚动以后的样子用 `-macSnapshotScroll <点数>`（`mac_shot.sh` 后面加上）。
   没锁屏、终端有屏幕录制权限时，`screencapture -x -o -l <窗口号>` 能直接截体验实例的窗口（窗口号按 pid 从 `CGWindowListCopyWindowInfo` 找，宽高过滤掉菜单栏那个窗口），
   不用 computer-use 工具；实例偶尔会被激活抢一下焦点。
+- 子页面改了数据，下面那页在 Mac 上不会自己重拉（2026-11-04，#1433）：iOS 的 NavigationStack 弹回时下面那页重新出现，`.task` 会再跑一次（`ios.md` 里 NavigationStack 根视图那条）；
+  Mac 上同一份代码回到列表，`.task` 不再跑，设置 › 模型供应商在启动器详情页隐藏之后列表还是旧的。只在 iOS 上验证会漏掉这个。
+  子页面改了列表要用的数据时，在模型上加一个版本号，列表写 `.task(id: 版本号)`（`AppModel.launchersRevision`），不要指望页面重新出现。

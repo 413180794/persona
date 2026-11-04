@@ -51,4 +51,40 @@ final class LauncherSwipeTests: XCTestCase {
         (deletes.count > 0 ? deletes : app.buttons.matching(identifier: "删除")).firstMatch.tap()
         XCTAssertTrue(jv.waitForNonExistence(timeout: 5), "jv_strong is still listed")
     }
+
+    /// Hiding a launcher on its own page: back on the list it has moved under 已隐藏 (#1433, the list kept the old one).
+    @MainActor func testHidingOnItsPageUpdatesTheList() throws {
+        guard let hub = ProcessInfo.processInfo.environment["JARVIS_LAUNCHER_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py (JARVIS_LAUNCHER_HUB)")
+        }
+        // Bring cc_glm back on the mock afterwards, so the swipe test still finds it shown.
+        addTeardownBlock {
+            var req = URLRequest(url: URL(string: hub + "/api/v1/launchers/cc_glm/restore")!)
+            req.httpMethod = "POST"
+            req.setValue("Bearer mock", forHTTPHeaderField: "Authorization")
+            _ = try? await URLSession.shared.data(for: req)
+        }
+        let app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openModelLaunchers", "YES", "-dev.openChat", ""]
+        app.launchPinned()
+
+        let glm = app.cells.containing(.staticText, identifier: "cc_glm").firstMatch
+        XCTAssertTrue(glm.waitForExistence(timeout: 15), "no cc_glm:\n\(app.debugDescription)")
+        XCTAssertTrue(app.buttons["已隐藏 2 个，已折叠"].exists, "已隐藏 should start folded with 2")
+
+        glm.tap()
+        let hide = app.buttons["在 Persona 里隐藏"]
+        XCTAssertTrue(hide.waitForExistence(timeout: 5), "no 在 Persona 里隐藏 on cc_glm's page:\n\(app.debugDescription)")
+        hide.tap()
+        let confirm = app.buttons["确认隐藏"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 3), "no 确认隐藏:\n\(app.debugDescription)")
+        confirm.tap()
+
+        let folded3 = app.buttons["已隐藏 3 个，已折叠"]
+        let ok = folded3.waitForExistence(timeout: 5)
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/tmp/launcher-page-hide.png"))
+        XCTAssertTrue(ok, "back on the list, cc_glm did not move under 已隐藏:\n\(app.debugDescription)")
+        XCTAssertFalse(app.staticTexts["cc_glm"].exists, "cc_glm is still listed while 已隐藏 is folded")
+    }
 }

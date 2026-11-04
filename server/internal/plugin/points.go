@@ -35,8 +35,12 @@ type ConnectorItem struct {
 	Hosts        []string `json:"hosts,omitempty"`
 	AgentTools   []string `json:"agent_tools,omitempty"`
 	Unlisted     []string `json:"unlisted,omitempty"`
-	PollSeconds  int      `json:"poll_seconds,omitempty"`
-	Kinds        []string `json:"kinds,omitempty"`
+	// ConfirmAlways are the write actions (patterns, path.Match: "example_send") the hub's write gate never lets a
+	// connector_gate rule allow: the user confirms them on the phone whatever the rules say (a deny rule still denies).
+	// The user's own sends in the app are not gated, so not affected.
+	ConfirmAlways []string `json:"confirm_always,omitempty"`
+	PollSeconds   int      `json:"poll_seconds,omitempty"`
+	Kinds         []string `json:"kinds,omitempty"`
 	// KindDescriptions tell the models what each kind of its inbox things is ("类型：…" in the inbox's prompts), by
 	// kind: a plugin's connector says it itself (a built-in one has prompts/inbox/kinds/<id>.md).
 	KindDescriptions map[string]string `json:"kind_descriptions,omitempty"`
@@ -139,6 +143,11 @@ var Points = map[string]Point{
 		}
 		if c.PollSeconds < 0 {
 			return c.ID, errors.New("connector " + c.ID + ": poll_seconds below 0")
+		}
+		for _, p := range c.ConfirmAlways {
+			if _, err := path.Match(p, ""); err != nil || p == "" {
+				return c.ID, fmt.Errorf("connector %s: confirm_always pattern %q is not a valid action pattern (path.Match)", c.ID, p)
+			}
 		}
 		return c.ID, nil
 	}},

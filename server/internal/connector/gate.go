@@ -88,12 +88,17 @@ func larkRule(r Rule) (proto.LarkRule, bool) {
 	return lr, true
 }
 
-// Decide is what the gate says about the action name of connector id with args.
-func Decide(rules []Rule, id, name string, args json.RawMessage) string {
+// Decide is what the gate says about the action name of connector id (whose manifest is m) with args: the first
+// matching rule's decision, Confirm when none matches. An action the manifest lists in ConfirmAlways is never
+// Allow: a rule that allows it (a "*" one, say) still has the user confirm on the phone. Deny stays Deny.
+func Decide(rules []Rule, m Manifest, id, name string, args json.RawMessage) string {
 	var fields map[string]any
 	_ = json.Unmarshal(args, &fields)
 	for _, r := range rules {
 		if matches(r.Connector, id) && matches(r.Action, name) && matchFields(r.Match, fields) {
+			if r.Decision == Allow && m.AlwaysConfirms(name) {
+				return Confirm
+			}
 			return r.Decision
 		}
 	}
@@ -117,7 +122,7 @@ func card(summary string) string {
 // card's words (Describe, and who will see it) and refuses unless they allow it, Allow says nothing. A nil result
 // means run it, with the very args the card was made from.
 func gate(ctx context.Context, rules []Rule, c Connector, a Actions, name string, args json.RawMessage, ask Ask) *proto.ToolResult {
-	switch Decide(rules, c.ID(), name, args) {
+	switch Decide(rules, c.Manifest(), c.ID(), name, args) {
 	case Deny:
 		res := proto.TextResult("The hub's rules (connector_gate) do not allow "+name+".", true)
 		return &res

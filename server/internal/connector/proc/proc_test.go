@@ -454,7 +454,7 @@ func TestProgramDeclaringOtherwiseIsLogged(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cfg := program(t, &memSecrets{})
-	cfg.Manifest = connector.Manifest{Capabilities: []connector.Capability{connector.CapStatus, connector.CapLogin}}
+	cfg.Manifest = connector.Manifest{Capabilities: []connector.Capability{connector.CapStatus, connector.CapLogin}, ConfirmAlways: []string{"example_send"}}
 	var mu sync.Mutex
 	var logged []string
 	cfg.Logf = func(f string, a ...any) { mu.Lock(); logged = append(logged, fmt.Sprintf(f, a...)); mu.Unlock() }
@@ -468,6 +468,10 @@ func TestProgramDeclaringOtherwiseIsLogged(t *testing.T) {
 	}
 	if got := connector.Capabilities(c); !slices.Equal(got, []string{"status", "login"}) {
 		t.Fatalf("listed %v", got)
+	}
+	// The program says no confirm_always, but the hub's one is what the gate gets: a program cannot relax the clamp.
+	if got := c.Manifest().ConfirmAlways; !slices.Equal(got, []string{"example_send"}) {
+		t.Fatalf("confirm_always %v", got)
 	}
 	// The same declaration in another order is the same.
 	if !sameManifest(connector.Manifest{Capabilities: []connector.Capability{connector.CapLogin, connector.CapStatus}},

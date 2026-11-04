@@ -107,7 +107,8 @@ struct ModelLaunchersView: View {
         }
         #endif
         .sheet(isPresented: $adding) {
-            LauncherEditor(existing: nil) { await load() }
+            // Saving moves `launchersRevision`, which reloads this list below.
+            LauncherEditor(existing: nil) {}
         }
         #if os(macOS) && DEBUG
         .onAppear { if UserDefaults.standard.bool(forKey: "macLauncherEditor") { adding = true } } // `-macLauncherEditor YES`: 新增启动器
@@ -120,7 +121,9 @@ struct ModelLaunchersView: View {
                             titleVisibility: .visible, presenting: pendingDelete) { l in
             Button("删除", role: .destructive) { Task { await delete(l) } }
         } message: { _ in Text("hub 里存的 Key 也一起删掉，不能恢复。") }
-        .task { await load() }
+        // Again whenever a launcher changes anywhere, its own page included (hide, restore, delete): this page stays
+        // built under the one pushed on it, so without this it showed the old list when you came back (#1433).
+        .task(id: model.launchersRevision) { await load() }
         .refreshable { await load() }
         #if DEBUG
         .onAppear { if let q = UserDefaults.standard.string(forKey: "showModelSearch") { query = q } } // `-showModelSearch glm`
@@ -174,7 +177,7 @@ struct ModelLaunchersView: View {
         _ = withAnimation(Theme.Motion.standard) { launchers?.remove(at: i) }
         do {
             try await api.deleteLauncher(l.name)
-            model.forgetLaunchers()
+            model.launchersChanged()
             Haptics.success()
         } catch {
             withAnimation(Theme.Motion.standard) { launchers?.insert(l, at: min(i, launchers?.count ?? 0)) }
@@ -188,7 +191,7 @@ struct ModelLaunchersView: View {
         withAnimation(Theme.Motion.standard) { launchers?[i].hidden = hide }
         do {
             if hide { try await api.deleteLauncher(l.name) } else { try await api.restoreLauncher(l.name) }
-            model.forgetLaunchers()
+            model.launchersChanged()
             Haptics.success()
         } catch {
             withAnimation(Theme.Motion.standard) { launchers?[i].hidden = l.hidden }
@@ -431,7 +434,7 @@ struct ModelLauncherDetailView: View {
         guard let api = model.api else { return }
         do {
             try await api.deleteLauncher(name)
-            model.forgetLaunchers()
+            model.launchersChanged()
             Haptics.success()
             dismiss()
         } catch { model.show(error) }
@@ -441,7 +444,7 @@ struct ModelLauncherDetailView: View {
         guard let api = model.api else { return }
         do {
             try await api.restoreLauncher(name)
-            model.forgetLaunchers()
+            model.launchersChanged()
             Haptics.success()
             await load()
         } catch { model.show(error) }
@@ -596,7 +599,7 @@ struct LauncherEditor: View {
 
     private func savePreset() async {
         if await presets.save() {
-            model.forgetLaunchers()
+            model.launchersChanged()
             Haptics.success()
             await saved()
             dismiss()
@@ -621,7 +624,7 @@ struct LauncherEditor: View {
                                   api: kind == "api" ? protocolName : "messages")
         do {
             try await api.saveLauncher(input, isNew: isNew)
-            model.forgetLaunchers()
+            model.launchersChanged()
             Haptics.success()
             await saved()
             dismiss()

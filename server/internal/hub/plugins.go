@@ -648,7 +648,7 @@ var pluginKinds sync.Map
 // connectorManifest is a contribution to connectors as the connector registry declares it.
 func connectorManifest(c plugin.ConnectorItem) connector.Manifest {
 	m := serve.Manifest{ID: c.ID, Name: c.Name, Capabilities: slices.Clone(c.Capabilities), Hosts: c.Hosts, AgentTools: c.AgentTools,
-		Unlisted: c.Unlisted, PollSeconds: c.PollSeconds, Kinds: c.Kinds}.Of()
+		Unlisted: c.Unlisted, ConfirmAlways: c.ConfirmAlways, PollSeconds: c.PollSeconds, Kinds: c.Kinds}.Of()
 	slices.Sort(m.Capabilities)
 	return m
 }

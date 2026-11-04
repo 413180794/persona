@@ -359,3 +359,21 @@ func (s *pluginStore) DeletePluginMarket(_ context.Context, id string) error {
 	delete(s.markets, id)
 	return nil
 }
+
+// A plugin's confirm_always travels from its manifest to the gate: an allow-everything rule no longer lets the AI run
+// that action without the user, and the connectors that say nothing keep their allow.
+func TestPluginConfirmAlwaysReachesTheGate(t *testing.T) {
+	item := plugin.ConnectorItem{ID: "examplechat", Name: "Example Chat", Capabilities: []string{"status", "actions"}, ConfirmAlways: []string{"examplechat_send"}}
+	m := connectorManifest(item)
+	allow := []connector.Rule{{Connector: "*", Action: "*", Decision: connector.Allow}}
+	if got := connector.Decide(allow, m, "examplechat", "examplechat_send", nil); got != connector.Confirm {
+		t.Fatalf("send under an allow rule: %s", got)
+	}
+	if got := connector.Decide(allow, m, "examplechat", "examplechat_mark_read", nil); got != connector.Allow {
+		t.Fatalf("an action not in confirm_always: %s", got)
+	}
+	item.ConfirmAlways = nil
+	if got := connector.Decide(allow, connectorManifest(item), "examplechat", "examplechat_send", nil); got != connector.Allow {
+		t.Fatalf("not declared: %s", got)
+	}
+}
