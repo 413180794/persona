@@ -220,8 +220,12 @@ struct PluginViewModelTests {
         #expect(v.sections[1].items[3].choices?.map(\.label) == ["个人", "team"])
         #expect(page.values == ["note": "hi", "token": "", "auto": "false", "plan": "team"], "a secret is never prefilled")
         #expect(PluginUIStyle.tone("danger") == Theme.danger && PluginUIStyle.tone("bogus") == .secondary)
-        // Drawing sends no action, no values and no context.
-        #expect(try JSON.decoder.decode(JSONValue.self, from: hub.requests.last?.body ?? Data()) == .object([:]))
+        // Drawing sends no action and no values; the context says where and for whom (docs/plugins.md「UI 插槽」上下文).
+        let body = try JSON.decoder.decode(JSONValue.self, from: hub.requests.last?.body ?? Data())
+        #expect(body["action"] == nil && body["values"] == nil && body["state"] == nil)
+        #expect(body["context"]?["ui_version"] == .number(2) && body["context"]?["platform"] == .string("ios"))
+        #expect(body["context"]?["tz"]?.string == TimeZone.current.identifier && body["context"]?["locale"]?.string?.isEmpty == false)
+        #expect(body["context"]?["launcher"] == nil && body["context"]?["machine"] == nil)
     }
 
     @Test func submitTakesTheFieldsAndTheStateAlong() async throws {
@@ -237,13 +241,16 @@ struct PluginViewModelTests {
             default: return Data(Self.view.utf8)
             }
         }
-        let page = PluginViewModel(plugin: "example-gateway", ui: "home", context: ["launcher": "work"], deps: .init(api: { hub.client }))
+        let page = PluginViewModel(plugin: "example-gateway", ui: "home", context: PluginUIContext(launcher: "work"), deps: .init(api: { hub.client }))
         await page.load()
         page.values["token"] = "s3cret"
         page.values["auto"] = "true"
         let saved = await page.perform(PluginUIAction(id: "save", submit: true))
         #expect(saved == .init(toast: "已保存"))
-        #expect(bodies[1] == .object(["context": .object(["launcher": .string("work")]), "state": .string("tab=overview"), "action": .string("save"),
+        #expect(bodies[1]["context"]?["launcher"] == .string("work"))
+        var sent = bodies[1]
+        if case .object(var o) = sent { o["context"] = nil; sent = .object(o) }
+        #expect(sent == .object(["state": .string("tab=overview"), "action": .string("save"),
                                       "values": .object(["note": .string("hi"), "token": .string("s3cret"), "auto": .string("true"), "plan": .string("team")])]))
         let opened = await page.perform(PluginUIAction(id: "key:work"))
         #expect(opened.url?.absoluteString == "https://example.com/console/keys")

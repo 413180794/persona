@@ -420,6 +420,10 @@
 
 ## 系统能力与页面约定
 
+- 挂在「可能什么都不画」的视图上的 `.task` 不会跑（2026-11-04，#1517）：`Group { ForEach(空列表) }`、`if 有内容 { … }` 这样的视图没有子视图时，
+  修饰符没有东西可挂，加载它的任务永远不开始，列表就一直是空的。负责加载的任务挂在页面上一定在的视图上（或者页面持有的模型里，由页面的 `.task` 触发）；
+  依赖 hub 能力（`features`）的任务把能力放进 `task(id:)`：从启动参数直达的页面可能在 hello 之前就出现了。
+
 - 开了 HealthKit entitlement 就必须有 `NSHealthUpdateUsageDescription`（哪怕只读），否则上传报 90683。
 - WatchConnectivity 在 activate 完成前 updateApplicationContext 会被丢弃：配对信息要在 activationDidComplete 后再推。
 - `UNUserNotificationCenterDelegate` 不要用 async 版本的 didReceive / willPresent：返回时在后台执行器上，UIKit 收到非主线程的完成回调，

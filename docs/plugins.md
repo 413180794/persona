@@ -623,6 +623,17 @@ iOS（Mac 共用同一套页面）在 hub 带 `plugin_manager` 时，设置首�
   永远不预填），按钮文字单行；`confirm` 先弹确认，`submit` 带上这一页全部字段；回 `view` 就换掉，`toast` 走 App 的提示，`open_url` 和 `link`
   在 App 内的链接卡片（Mac 是侧边面板）打开，只认 https；出错有空状态和重试。画启动器那一节时插件回 404 `{"code":"unsupported"}`
   （没写 `hosts` 的会列在每个启动器上，#1339）就整节不画，也不算出错。逻辑在 `PluginUIModel.swift`（`PluginViewModel`、`PluginLauncherModel`）。
+- UI 插槽（#1517，「UI 插槽」）：hub 的 `features` 有 `plugin_ui_slots` 才问、才画。`PluginSlots`（`PluginSlots.swift`）不带 `placement` 一次拿到
+  `nav_page` 和 `overview_card`，`plugin_ui` 事件就地改角标。iPhone / iPad：设置首页头部下面先是卡片（紧凑，点卡片推 `opens` 指的页），
+  再是「插件」一节，每个 `nav_page` 一行（`icon` 换成 `Theme.Icon.plugin…`，不认识的是插件图标；角标数字用 `CountBadge`、文字用 `Chip`），
+  设置 tab 和新外壳抽屉里的设置按钮加上角标之和（只有文字时是一个点）。Mac：`nav_page` 在左边分区列的设置前面（`MacShellState.pluginPage`），
+  卡片在设置 › 插件列表上面。机器详情页在机器自己的各节后面每个 `machine_section` 一节（`PluginMachineModel`，按机器所在的 hub 组），
+  hub 回 404 就整节不画。每次画、每个动作带 `context`（`PluginUIContext`：`tz`、`locale`、`platform`、`ui_version: 2`、`size`、`launcher` / `machine`）。
+  新条目：`chart` 用 Swift Charts 画（`DataChart`：并排 / 叠起来的柱子、折线，系列没 `tone` 时取数据色，按住或悬停一列显示各系列的 `display`，
+  紧凑时不写坐标轴、只留首尾标签，标签多时隔几个写一个），`stat_grid`（`ViewThatFits`：放得下一行放全，不然一行 3 个或 2 个），`segmented`
+  （`SegmentedChoice`，选了马上发 `values: {name: 值}`）；不认识的条目跳过，不认识的 `tone` 当 `neutral`。`refresh_after` 只在页面在前台、
+  App 在前台时计时（`.pluginRefresh`，最少 30 秒），回来时过了就马上画，自动重画时正在填的字段留着。卡片和机器上的一节不在列表里画链接面板：
+  链接交给页面（Mac 的侧边面板会把整页包起来，放在一行里会把那一行压成只剩标题）。
 - 插件市场（#1328，「插件市场」）：`GET /api/v1/plugins` 回 `markets: true` 时列表最上面一行「插件市场」。目录有搜索框（停 0.3 秒再问 hub）、
   按市场筛选的 chip（`FilterChip`，两个以上市场才有）、每个插件的名字、版本、说明、标签和状态（可安装 / 可升级 / 已安装 / 装不了的原因），
   读不到的市场在上面写原因；详情列权限，「安装」「升级到 …」先 `catalog/preview`，弹出的确认页列出权限（升级时先单列「新版本多要的」），
@@ -633,8 +644,11 @@ iOS（Mac 共用同一套页面）在 hub 带 `plugin_manager` 时，设置首�
 - 截图：`MOCK_PLUGINS=1` 的假 hub 有五个状态各不相同的示例插件，另有 `example-gateway` 的页面、启动器上的一节（外加一个总回 unsupported 的）、
   两个市场和它们的目录；`-tab settings -openPlugins YES`（`-openPlugin <id>` 直接进详情，再加 `-openPluginPage <ui>` 进它的页面）、
   `-openPluginMarket YES`（目录）、`-openPluginMarkets YES`（市场管理）、`-openMarketPlugin <市场 id>/<插件 id>`、`-openLauncherPage <启动器>`。
-  UI 测试 `PluginSettingsTests`、`PluginMarketTests`（从市场装、升级预览、市场管理、插件页面里保存、启动器那一节；`TEST_RUNNER_JARVIS_PLUGINS_HUB`），
-  单元测试 `PluginsModelTests`、`PluginMarketModelTests`、`PluginViewModelTests`。
+  UI 插槽：`-tab settings` 就是卡片和入口，`-openPlugin example-gateway -openPluginPage usage` 是用量页，`-openMachines YES -openMachineDetail macbook`
+  看机器上的一节；Mac 用 `scripts/app/mac_shot.sh`（`DEMO=0` 加 `-pairURL`），`-openMacPluginPage example-gateway/usage` 打开侧栏里的那一页。
+  UI 测试 `PluginSettingsTests`、`PluginMarketTests`（从市场装、升级预览、市场管理、插件页面里保存、启动器那一节；`TEST_RUNNER_JARVIS_PLUGINS_HUB`）、
+  `PluginSlotsTests`（卡片、入口和角标、用量页的 segmented 和图、卡片点开、机器上的一节），
+  单元测试 `PluginsModelTests`、`PluginMarketModelTests`、`PluginViewModelTests`、`PluginSlotsModelTests`。
 - 网页（#1207）：设置 › 插件，同样的列表和详情（`web/src/views/settings/Plugins.tsx`、`web/src/lib/plugins.ts`，`/settings?tab=plugins&plugin=<id>`），见 `docs/web.md`「设置」。
   #1330 加上声明式 UI（`settings/PluginView.tsx`、`lib/plugin-ui.ts`：插件详情的「页面」、启动器详情里的一节）和插件市场（`settings/PluginMarket.tsx`、`lib/plugin-market.ts`：目录、详情、管理市场）。
 - Android（#1206）同样的功能，入口在设置首页的「扩展」一节，代码和截图方法见 [android.md](android.md)「插件（设置 › 插件）」；插件画的界面（插件页面、启动器页上的一节）和插件市场（#1329）见同一节下的「插件画的界面和插件市场」。

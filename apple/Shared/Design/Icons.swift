@@ -232,6 +232,15 @@ extension Theme {
         static let upgrade = "arrow.up.square"
         /// A page a plugin draws (its declarative UI).
         static let pluginPage = "chart.bar.doc.horizontal"
+        /// A plugin's main-navigation entry by the `icon` it asks for (docs/plugins.md「UI 插槽」): one meaning each,
+        /// anything else is `plugins`.
+        static let pluginChart = "chart.bar"
+        static let pluginGauge = "gauge.with.needle"
+        static let pluginList = "list.bullet"
+        static let pluginBell = "bell"
+        static let pluginDoc = "doc.text"
+        static let pluginCalendar = "calendar"
+        static let pluginMoney = "creditcard"
         static let phone = "iphone"
         static let watch = "applewatch"
         static let handoff = "iphone.and.arrow.forward"

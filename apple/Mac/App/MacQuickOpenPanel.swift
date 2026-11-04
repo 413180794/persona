@@ -10,6 +10,9 @@ import SwiftUI
     var section: MacSection? = MacSection.remembered() {
         didSet { MacSection.remember(section) }
     }
+    /// A page a plugin put in the sidebar (nav_page, docs/plugins.md「UI 插槽」) while it is picked: "<plugin>/<ui>".
+    /// Not remembered across launches (the plugin may be gone).
+    var pluginPage: String?
     /// A conversation the menus asked to open in its own window (MacWindowOpener does it).
     var chatWindow: SessionKey?
     /// An Agent's terminal the menus asked to open in its own window.
@@ -192,6 +195,7 @@ extension MacShellState {
     /// Shows a section: an iPhone tab moves the tab, 知识库 / 机器 are picked on the Mac side.
     func go(_ s: MacSection, _ model: AppModel) {
         let p = MacSection.pick(s)
+        pluginPage = nil
         section = p.override
         if let tab = p.tab { model.selectedTab = tab }
     }

@@ -279,6 +279,9 @@ enum MacLaunchArguments {
         case "assistant": model.selectedTab = .assistant
         default: break
         }
+        // `-openMacPluginPage <plugin>/<ui>`: a plugin's page in the sidebar (docs/plugins.md「UI 插槽」), shown once the
+        // hub lists it.
+        if let key = d.string(forKey: "openMacPluginPage") { MacShellState.shared.pluginPage = key }
         // `-openMacSection todos`: the window opens on that sidebar section (the 待办 page, for screenshots).
         if let raw = d.string(forKey: "openMacSection"), let section = MacSection(rawValue: raw) {
             MacShellState.shared.section = section

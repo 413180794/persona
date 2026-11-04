@@ -69,6 +69,18 @@ enum PluginUIStyle {
         t == nil || t == "neutral" ? .primary : tone(t)
     }
 
+    /// A chart series' color: a role color when the plugin names a tone, nil (the next data hue) when it does not.
+    static func series(_ t: String?) -> Color? {
+        switch t {
+        case "positive": Theme.positive
+        case "caution": Theme.caution
+        case "danger": Theme.danger
+        case nil: nil
+        // neutral, and a tone this app does not know.
+        default: Theme.Hue.gray
+        }
+    }
+
     /// A bar's fill: neutral takes the accent.
     static func bar(_ t: String?) -> Color {
         t == nil || t == "neutral" ? Theme.accent : tone(t)
@@ -85,7 +97,7 @@ enum PluginUIStyle {
 }
 
 /// One item of a plugin's View.
-private struct PluginItemRow: View {
+struct PluginItemRow: View {
     var item: PluginUIItem
     @Bindable var model: PluginViewModel
     @Binding var link: LinkTarget?
@@ -123,6 +135,10 @@ private struct PluginItemRow: View {
                 .accessibilityIdentifier("plugin-ui-link")
             }
         case "field": PluginFieldItem(item: item, model: model)
+        case "chart": PluginChartItem(item: item)
+        case "stat_grid": PluginStatGrid(stats: item.stats ?? [])
+        case "segmented": PluginSegmented(item: item, model: model, link: $link)
+        // An item this app does not know (a newer plugin's): left out, the rest drawn as usual.
         default: EmptyView()
         }
     }
@@ -172,6 +188,172 @@ private struct PluginItemRow: View {
             }
         }
         .contentShape(.rect)
+    }
+}
+
+/// A plugin's `chart`: its title, the chart (bars or lines, stacked when it says so), what it says under it. A series'
+/// tone is a role color, without one it takes the next data hue; values the plugin did not write are compact numbers
+/// with its unit. Compact (a card) when the environment says so.
+struct PluginChartItem: View {
+    var item: PluginUIItem
+    @Environment(\.pluginUICompact) private var compact
+
+    private var series: [PluginUIItem.ChartSeries] { Array((item.series ?? []).prefix(4)) }
+    /// The x axis: the first series' labels (the others line up with them).
+    private var labels: [String] { series.first?.points.map(\.label) ?? [] }
+
+    var body: some View {
+        if !labels.isEmpty {
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                if let t = item.title, !t.isEmpty {
+                    Text(t).font(compact ? Theme.Font.labelStrong : Theme.Font.secondaryStrong).foregroundStyle(compact ? .secondary : .primary).lineLimit(1)
+                }
+                DataChart(kind: item.kind == "line" ? .line : .bar, labels: labels,
+                          series: series.enumerated().map { i, s in
+                              DataChart.Series(name: s.name?.isEmpty == false ? s.name! : "系列 \(i + 1)",
+                                               color: PluginUIStyle.series(s.tone), values: s.points.map(\.value),
+                                               displays: s.points.map(\.display))
+                          },
+                          stacked: item.stacked == true, format: format, compact: compact)
+                if let d = item.detail, !d.isEmpty, !compact {
+                    Text(d).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(3)
+                }
+            }
+            .padding(.vertical, Theme.Space.xs)
+        }
+    }
+
+    private func format(_ v: Double) -> String {
+        let n = DataChart.compact(v)
+        guard let u = item.unit, !u.isEmpty else { return n }
+        return n + " " + u
+    }
+}
+
+/// A plugin's `stat_grid`: a few numbers side by side (two or three a row on an iPhone, all of them in a row when
+/// there is room), each with what it is and a line under it in its tone.
+struct PluginStatGrid: View {
+    var stats: [PluginUIItem.Stat]
+
+    var body: some View {
+        let shown = Array(stats.prefix(6))
+        ViewThatFits(in: .horizontal) {
+            row(shown, columns: shown.count)
+            grid(shown, columns: shown.count == 4 ? 2 : 3)
+            grid(shown, columns: 2)
+        }
+        .padding(.vertical, Theme.Space.xs)
+    }
+
+    private func row(_ items: [PluginUIItem.Stat], columns: Int) -> some View {
+        HStack(alignment: .top, spacing: Theme.Space.l) {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, s in cell(s).fixedSize() }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func grid(_ items: [PluginUIItem.Stat], columns: Int) -> some View {
+        Grid(alignment: .topLeading, horizontalSpacing: Theme.Space.l, verticalSpacing: Theme.Space.m) {
+            ForEach(Array(stride(from: 0, to: items.count, by: columns)), id: \.self) { start in
+                GridRow {
+                    ForEach(start..<min(start + columns, items.count), id: \.self) { i in
+                        cell(items[i]).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+        }
+    }
+
+    private func cell(_ s: PluginUIItem.Stat) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+            Text(s.label).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+            Text(s.value).font(Theme.Font.heading.monospacedDigit()).lineLimit(1).minimumScaleFactor(0.6)
+            if let d = s.detail, !d.isEmpty {
+                Text(d).font(Theme.Font.label).foregroundStyle(PluginUIStyle.tone(s.tone)).lineLimit(1).minimumScaleFactor(0.8)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A plugin's `segmented`: a few choices, one picked; picking another sends it to the plugin at once (its action, with
+/// `{name: value}`), whose answer is the view for it.
+struct PluginSegmented: View {
+    @Environment(AppModel.self) private var app
+    var item: PluginUIItem
+    var model: PluginViewModel
+    @Binding var link: LinkTarget?
+
+    private var name: String { item.name ?? "" }
+
+    var body: some View {
+        let choices = Array((item.choices ?? []).prefix(5))
+        if choices.count >= 2 {
+            SegmentedChoice(item.label ?? name, choices.map { ($0.value, $0.label) }, selection: Binding(
+                get: { model.values[name] ?? item.value ?? choices[0].value },
+                set: { v in
+                    Task {
+                        let o = await model.choose(item, v)
+                        if let e = o.error {
+                            Haptics.error()
+                            app.toast = Toast(e, style: .error)
+                        } else if let t = o.toast {
+                            app.toast = Toast(t, style: .success)
+                        }
+                        if let url = o.url { link = LinkTarget(url: url) }
+                    }
+                }))
+            // It has no label of its own (the name is the plugin's key): a Mac picker would write the key beside it.
+            .labelsHidden()
+            .disabled(model.running != nil)
+            .accessibilityIdentifier("plugin-ui-segmented-\(name)")
+            .padding(.vertical, Theme.Space.xxs)
+        }
+    }
+}
+
+extension EnvironmentValues {
+    /// A plugin's View drawn as a card (`size: compact`): charts without axis text, the rest as usual.
+    @Entry var pluginUICompact = false
+}
+
+/// A plugin's View on a page that is not a list (a machine's page, a card): each section a heading and a card of its
+/// items, a divider a line between them. The same items as `PluginViewRenderer`, drawn by `PluginItemRow`.
+struct PluginViewStack: View {
+    var view: PluginUIView
+    var model: PluginViewModel
+    /// The first section's heading when it has none of its own.
+    var heading: String? = nil
+    /// Draw the sections' cards (a page); false: the caller's card holds them (an overview card).
+    var cards = true
+    @Binding var link: LinkTarget?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: cards ? Theme.Space.l : Theme.Space.m) {
+            ForEach(Array(view.sections.enumerated()), id: \.offset) { i, s in
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    if cards, let t = (s.title?.isEmpty == false ? s.title : (i == 0 ? heading : nil)), !t.isEmpty {
+                        Text(t).font(Theme.Font.sectionHeader).foregroundStyle(.secondary).lineLimit(1)
+                            .padding(.horizontal, Theme.Space.xs)
+                    }
+                    let items = s.items
+                    if !items.isEmpty {
+                        let body = VStack(alignment: .leading, spacing: Theme.Space.m) {
+                            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                                if item.type == "divider" { Divider() } else {
+                                    PluginItemRow(item: item, model: model, link: $link)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+                        }
+                        if cards { body.card() } else { body }
+                    }
+                    if let f = s.footer, !f.isEmpty {
+                        Text(f).font(Theme.Font.label).foregroundStyle(.secondary).padding(.horizontal, Theme.Space.xs)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -333,6 +515,7 @@ struct PluginPageView: View {
         .navigationBarTitleDisplayMode(.inline)
         .pluginLinks($link)
         .task { await page.load() }
+        .pluginRefresh(page)
         .refreshable { await page.load() }
     }
 }
@@ -348,6 +531,7 @@ struct PluginLauncherSections: View {
         ForEach(page.shown) { entry in
             if let v = entry.model.view {
                 PluginViewRenderer(view: v, model: entry.model, heading: entry.place.title, link: $link)
+                    .pluginRefresh(entry.model)
             } else {
                 Section {
                     if let e = entry.model.error {

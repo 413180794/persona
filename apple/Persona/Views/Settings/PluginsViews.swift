@@ -5,9 +5,15 @@ import SwiftUI
 /// its machine or in its admin UI (/admin); the footer says how.
 struct PluginsView: View {
     @State private var page = PluginsModel()
+    @State private var cardLink: LinkTarget?
 
     var body: some View {
         SettingsForm {
+            #if os(macOS)
+            // The plugins' overview cards (docs/plugins.md「UI 插槽」): the Mac has no 总览, they lead this list (their
+            // pages are in the sidebar). The iPhone has them on 设置 itself.
+            PluginCardsSection(link: $cardLink)
+            #endif
             // 插件市场 (docs/plugins.md「插件市场」): only with a hub that has markets.
             if page.markets {
                 Section {
@@ -44,11 +50,20 @@ struct PluginsView: View {
             }
         }
         .themedPage()
+        #if os(macOS)
+        .pluginLinks($cardLink)
+        #endif
         .overlay { if page.plugins == nil && page.loading { ProgressView() } }
         .detailTitle("插件")
         .navigationBarTitleDisplayMode(.inline)
         .task { await page.load() }
-        .refreshable { await page.load() }
+        #if os(macOS)
+        .task { await PluginSlots.shared.reload() }
+        #endif
+        .refreshable {
+            await page.load()
+            await PluginSlots.shared.reload()
+        }
     }
 }
 

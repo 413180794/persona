@@ -34,6 +34,8 @@ struct RootView: View {
                 WelcomeView()
             }
         }
+        // The plugins' main-navigation entries and cards, for 设置's badge (docs/plugins.md「UI 插槽」).
+        .task(id: PluginSlots.source(model)) { await PluginSlots.shared.reload(for: PluginSlots.source(model).hub) }
         // A new style, 主题色 or persona rebuilds the whole tree (tokens are static); the open tab and chat are remembered.
         .id(model.look)
         .tint(Theme.accent)
@@ -187,7 +189,15 @@ private struct TabPage<Page: View>: View, Equatable {
             }
             .equatable()
         }
-        .badge(model.isDemo ? Text("体验") : nil) // 体验模式 is left from 设置
+        .badge(badge) // 体验模式 is left from 设置; the plugins' entries are on it (docs/plugins.md「UI 插槽」角标)
+    }
+
+    /// 体验; else what the plugins' main-navigation entries' badges add up to (only words: a dot).
+    private var badge: Text? {
+        if model.isDemo { return Text("体验") }
+        let total = PluginSlots.shared.total
+        if total.count > 0 { return Text(total.count > 99 ? "99+" : "\(total.count)") }
+        return total.dot ? Text("•") : nil
     }
 }
 

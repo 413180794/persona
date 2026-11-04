@@ -9,6 +9,8 @@ struct SettingsView: View {
     @State private var showPair = false
     @State private var storage: Int64?
     @State private var plugins: [HubPlugin]?
+    /// Where links in the plugins' cards open (docs/plugins.md「UI 插槽」).
+    @State private var pluginLink: LinkTarget?
     @AppStorage(TranslationPrefs.enabledKey) private var translating = false
     @AppStorage(TranslationPrefs.targetKey) private var translateTarget = TranslationPrefs.defaultTarget
 
@@ -19,6 +21,8 @@ struct SettingsView: View {
         if s.latest?.newer == true { return s.channel == "docker" ? "有新镜像" : "有新版本" }
         return s.version
     }
+
+    nonisolated private struct SlotsKey: Hashable, Sendable { var source: PluginSlots.Source; var depth: Int }
 
     /// 翻译's row value: off, or the target language.
     private var translationSummary: String { translating ? TranslationPrefs.name(of: translateTarget) : "关闭" }
@@ -53,6 +57,18 @@ struct SettingsView: View {
                     }
                     .padding(.vertical, Theme.Space.xs)
                 }
+                #if os(iOS)
+                // On the section that is always there: the plugins' one is empty until they are read.
+                .task(id: SlotsKey(source: PluginSlots.source(model), depth: model.settingsPath.count)) {
+                    await PluginSlots.shared.reload()
+                }
+                #endif
+
+                #if os(iOS)
+                // The plugins' cards and pages (docs/plugins.md「UI 插槽」): at the top, where the main navigation's
+                // entries are on an iPhone (the Mac has them in its sidebar).
+                PluginSlotsSettingsSection(link: $pluginLink)
+                #endif
 
                 if model.isDemo {
                     DemoSection(pair: { showPair = true })
@@ -211,6 +227,9 @@ struct SettingsView: View {
                 Button("断开", role: .destructive) { model.unpair() }
             }
             .sheet(isPresented: $showPair) { PairView() }
+            #if os(iOS)
+            .pluginLinks($pluginLink)
+            #endif
             #if os(macOS) && DEBUG
             // `-tab settings -openPairSheet YES` (体验模式, or paired: 重新配对): the 连接 hub sheet, for screenshots
             // (scripts/app/mac_shot.sh; with `-openPairSSH YES` its SSH 隧道 sheet over it).

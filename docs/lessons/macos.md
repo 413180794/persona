@@ -15,6 +15,8 @@
 
 - Persona Link 的界面和 helper 必须共用运行根（2026-11-03，#277）：只让 Go helper 支持 `PERSONA_HOME`，而界面继续固定读 `~/.jarvis/link.json`，会出现 helper 已配对、菜单却显示未配对。两端按新旧环境与默认软链解析同一目录；登录启动没有显式环境时，只从既有 `com.jarvis.node` 的环境字段恢复自定义根，并把解析结果同时传给常驻与一次性 helper。显式空的新变量不回退到旧环境或服务记录。解析器只查询路径，不读取凭据、不迁移文件、不启动真实 launchd 服务。
 
+- `pluginLinks` / `macLinkPanel` 只能挂在整页上（2026-11-04，#1517）：Mac 的链接面板用 `GeometryReader` 把内容和面板并排包起来，挂在 `Form` 里的一个
+  `Section` 上时，那一行被压成只剩第一行（插件卡片只剩标题，iPhone 上的 sheet 没这个问题）。列表里的一节只接收页面的 `Binding<LinkTarget?>`。
 - 改了 Mac 也编的共享页面（`apple/Persona/Views/…`，如助手的任务视图）只编 iOS 不够，合入前 `PersonaMac` 也要 build（2026-11-04，#1083）：
   #1080 在 `TaskViews.swift` 里用了 `contentShape(.contextMenuPreview, …)`，这个成员 `@available(macOS, unavailable)`，iOS 编过、单测和截图都正常，master 上的 Mac 却编不过了。
   长按预览的形状用 `menuPreviewShape(_:)`（iOS 设形状，Mac 什么都不做）。

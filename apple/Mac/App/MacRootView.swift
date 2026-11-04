@@ -177,8 +177,8 @@ private struct MacShell: View {
                 // the row was left empty when the system's title went (#830). Persona's page puts its own header there.
                 // A pushed page that draws its own title there (`pageTitle`, #855) takes the row instead.
                 .overlayPreferenceValue(MacTitleRowTaken.self, alignment: .topLeading) { taken in
-                    if shown != .assistant, !taken {
-                        MacPageTitle(title: shown.title, leading: sidebarHidden ? Theme.Size.macTitleAfterControls : Theme.Space.l)
+                    if shown != .assistant || pluginPlace != nil, !taken {
+                        MacPageTitle(title: pluginPlace?.title ?? shown.title, leading: sidebarHidden ? Theme.Size.macTitleAfterControls : Theme.Space.l)
                     }
                 }
                 // Pages that draw their own header in that row (Persona's) start it here.
@@ -192,6 +192,10 @@ private struct MacShell: View {
         // No toolbar band across the window: the sections column reaches up behind the traffic lights, and the bar's
         // backdrop and hairline cut it off at the toolbar (2026-11-02).
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        // The plugins' sidebar entries and cards (docs/plugins.md「UI 插槽」): with a hub that has them.
+        .task(id: PluginSlots.source(model)) { await PluginSlots.shared.reload(for: PluginSlots.source(model).hub) }
+        // A page whose plugin took it away (disabled, uninstalled) goes back to the section.
+        .onChange(of: PluginSlots.shared.pages) { if shell.pluginPage != nil, pluginPlace == nil { shell.pluginPage = nil } }
         // No page title in the bar: the system puts it after the items beside the traffic lights, over this column, and
         // a long one ran across the column's edge on a white backing (2026-11-02 user: 文字都超出去了). The selected
         // section and the selected row say where you are; the window keeps its title for the Window menu.
@@ -220,8 +224,8 @@ private struct MacShell: View {
             ToolbarSpacer(.flexible)
         }
         // Something moved the tab (a notification, ⌘K, a link): its section comes to the front.
-        .onChange(of: model.selectedTab) { shell.section = nil }
-        .onChange(of: model.openChat) { if model.openChat != nil { shell.section = nil } }
+        .onChange(of: model.selectedTab) { shell.section = nil; shell.pluginPage = nil }
+        .onChange(of: model.openChat) { if model.openChat != nil { shell.section = nil; shell.pluginPage = nil } }
         .onChange(of: TodoStore.shared.isSupported) { _, supported in
             // An old hub has no todos: a window still on the todos section (or remembering it) goes back to the tab's.
             if !supported, shell.section == .todos {
@@ -229,7 +233,7 @@ private struct MacShell: View {
                 MacSection.remember(nil)
             }
         }
-        .onChange(of: model.assistantCurrent) { shell.section = nil }
+        .onChange(of: model.assistantCurrent) { shell.section = nil; shell.pluginPage = nil }
         // Let go of the Agents list's menu actions with the section: their closures hold the list's state, and its
         // AgentsFeed went on copying and sorting every agent on each push from every other section (#1495).
         .onChange(of: shown) { _, now in if now != .agents { shell.agentsList = nil } }
@@ -246,8 +250,10 @@ private struct MacShell: View {
     private var sections: some View {
         return VStack(spacing: Theme.Space.xxs) {
             ForEach(MacSection.visible(supportsTodos: TodoStore.shared.isSupported)) { section in
-                MacSidebarRow(icon: section.icon, title: section.title, selected: section == shown, badge: badge(section),
-                              identifier: "mac.section.\(section.rawValue)") { shell.go(section, model) }
+                // The plugins' pages go with 机器 and 设置, right before 设置 (docs/plugins.md「UI 插槽」).
+                if section == .settings { pluginRows }
+                MacSidebarRow(icon: section.icon, title: section.title, selected: section == shown && shell.pluginPage == nil,
+                              badge: badge(section), identifier: "mac.section.\(section.rawValue)") { shell.go(section, model) }
             }
             Spacer(minLength: 0)
             // The sidebar's foot: while the hub is out of reach, 等待网络 / 连接中… (a click explains), as the
@@ -266,6 +272,21 @@ private struct MacShell: View {
         .transition(.move(edge: .leading))
     }
 
+    /// The plugins' main-navigation entries (nav_page): icon, title on one line, the plugin's badge.
+    private var pluginRows: some View {
+        ForEach(PluginSlots.shared.pages) { p in
+            let key = PluginSlots.key(p)
+            MacSidebarRow(icon: PluginSlots.icon(p.icon), title: p.title, selected: shell.pluginPage == key,
+                          badge: p.badge.map { Int($0.text).map(MacSidebarRow.Badge.count) ?? .word($0.text) },
+                          identifier: "mac.plugin.\(key)") { shell.pluginPage = key }
+        }
+    }
+
+    /// The plugin page picked in the sidebar, while its plugin still has it.
+    private var pluginPlace: PluginUIPlace? {
+        shell.pluginPage.flatMap { k in PluginSlots.shared.pages.first { PluginSlots.key($0) == k } }
+    }
+
     /// The iOS tab bar's badges (`RootView`).
     private func badge(_ section: MacSection) -> MacSidebarRow.Badge? {
         let n: Int
@@ -281,6 +302,18 @@ private struct MacShell: View {
     }
 
     @ViewBuilder private var page: some View {
+        if let p = pluginPlace {
+            NavigationStack {
+                PluginPageView(plugin: p.plugin, ui: p.id, title: p.title)
+                    .environment(\.macBelowTitleRow, true)
+            }
+            .id(PluginSlots.key(p))
+        } else {
+            sectionPage
+        }
+    }
+
+    @ViewBuilder private var sectionPage: some View {
         switch shown {
         case .assistant: AssistantView() // its own headers are the title bar's row (#830, `AssistantView`)
         case .agents: ChatsView()
