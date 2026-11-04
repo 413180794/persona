@@ -223,6 +223,9 @@ struct LarkThreadView: View {
         withAnimation(Theme.Motion.standard) { outgoing.removeAll { $0.id == id } }
     }
 
+    /// Replies go out in the order written: the chain holds only the send itself. Waiting for each one's copy runs on
+    /// its own, so the next reply does not wait behind the one before for its refreshes and `copyWait` (#851: the
+    /// second of three replies went out 24 s after it was sent), as the chat's outbox does.
     private func deliver(_ id: UUID) {
         let before = sendChain
         sendChain = Task {
@@ -231,17 +234,22 @@ struct LarkThreadView: View {
             do {
                 try await LarkOutbox.deliver(o, feed: feedID ?? "", api: api)
                 setState(id, .sent)
-                // Its copy replaces it (settleOutgoing) when the newest page brings it.
-                await refreshLatest()
-                try? await Task.sleep(for: .seconds(2))
-                await refreshLatest()
-                try? await Task.sleep(for: .seconds(LarkOutbox.copyWait))
-                settleOutgoing(pager.messages)
             } catch {
                 setState(id, .failed(error.shown ?? error.localizedDescription))
                 Haptics.error()
+                return
             }
+            Task { await awaitCopy() }
         }
+    }
+
+    /// The sent reply's copy replaces it (settleOutgoing) when the newest page brings it.
+    private func awaitCopy() async {
+        await refreshLatest()
+        try? await Task.sleep(for: .seconds(2))
+        await refreshLatest()
+        try? await Task.sleep(for: .seconds(LarkOutbox.copyWait))
+        settleOutgoing(pager.messages)
     }
 
     private func setState(_ id: UUID, _ state: LarkOutgoing.State) {

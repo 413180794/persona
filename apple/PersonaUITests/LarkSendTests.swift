@@ -332,6 +332,51 @@ final class LarkSendTests: XCTestCase {
         sleep(3)
     }
 
+    /// Three messages sent one after another each go out in about the send's own time (the mock's 2 s), in the order
+    /// written: none waits behind the one before for its copy (#851: the second went out after 24 s, the third after
+    /// more than 30). In the chat and in a thread sheet.
+    @MainActor func testMessagesSentInARowDoNotWaitForEachOther() {
+        let app = openChat()
+        let tag = String(UUID().uuidString.prefix(6))
+        let failedBefore = failed(app)
+        for i in 1...3 { send(app, "连发第 \(i) 条 " + tag) }
+        assertAllOut(app, within: 12, failedBefore: failedBefore, "in the chat")
+        let thread = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        thread.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "lark:f3:300"]
+        thread.launchPinned()
+        let open = thread.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "条回复")).firstMatch
+        XCTAssertTrue(open.waitForExistence(timeout: 20), "the 周末徒步群 chat did not open at its thread")
+        open.tap()
+        let field = thread.textFields.matching(NSPredicate(format: "placeholderValue == %@", "回复话题")).firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "the thread sheet has a box")
+        XCTAssertTrue(thread.staticTexts["60 条回复"].waitForExistence(timeout: 10), "the thread's latest page did not load")
+        let threadFailedBefore = failed(thread)
+        for i in 1...3 {
+            field.tap()
+            field.typeText("话题连发第 \(i) 条 " + tag)
+            thread.buttons["lark.thread.send"].tap()
+        }
+        assertAllOut(thread, within: 12, failedBefore: threadFailedBefore, "in the thread sheet")
+    }
+
+    /// Failed marks on screen (the outbox keeps failed messages of earlier runs).
+    @MainActor private func failed(_ app: XCUIApplication) -> Int {
+        app.descendants(matching: .any).matching(identifier: "lark.outgoing.failed").count
+    }
+
+    /// No message is still going `within` seconds of the last send (three in a row at 2 s each: about 6), none failed.
+    @MainActor private func assertAllOut(_ app: XCUIApplication, within seconds: TimeInterval, failedBefore: Int, _ where_: String,
+                                         file: StaticString = #filePath, line: UInt = #line) {
+        let sending = app.descendants(matching: .any).matching(identifier: "lark.outgoing.sending")
+        XCTAssertTrue(sending.firstMatch.waitForExistence(timeout: 2), "\(where_): nothing is going", file: file, line: line)
+        let start = Date()
+        while sending.count > 0, Date().timeIntervalSince(start) < seconds { usleep(250_000) }
+        XCTAssertEqual(sending.count, 0, "\(where_): still going \(Int(Date().timeIntervalSince(start))) s after the last send", file: file, line: line)
+        XCTAssertEqual(failed(app), failedBefore, "\(where_): one failed",
+                       file: file, line: line)
+    }
+
     /// The thread sheet has its own box: a reply there goes into the thread, shows at once, and its copy takes over.
     @MainActor func testThreadSheetRepliesInTheThread() {
         let app = XCUIApplication()
