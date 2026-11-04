@@ -8,6 +8,9 @@ import (
 
 // ChatBatch is one conversation's new messages, oldest first.
 type ChatBatch struct {
+	// Source is the name the conversation is filed under: "" is the connector's id, else one of its manifest's
+	// ArchiveSources (the chat is "<source>-<chat id>").
+	Source   string             `json:"source,omitempty"`
 	Chat     kb.SourceChat      `json:"chat,omitempty"`
 	Messages []kb.SourceMessage `json:"messages,omitempty"`
 }

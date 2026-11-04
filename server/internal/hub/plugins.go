@@ -623,13 +623,14 @@ func (ps *plugins) spec(ctx context.Context, p *plugin.Plugin, hp *hubPlugin) (h
 		link := &proc.Link{ID: c.ID}
 		hp.links = append(hp.links, link)
 		var secrets connector.Secrets
+		var kbase connector.KnowledgeBase
 		if ps.h != nil {
-			secrets = ps.h.secretsFor(c.ID)
+			secrets, kbase = ps.h.secretsFor(c.ID), ps.h.kbFor(c.ID)
 		}
 		for kind, d := range c.KindDescriptions {
 			pluginKinds.Store(c.ID+"/"+kind, d)
 		}
-		conn := proc.New(proc.Config{ID: c.ID, Name: c.Name, Manifest: connectorManifest(c), Secrets: secrets, Logf: ps.logf, Link: link})
+		conn := proc.New(proc.Config{ID: c.ID, Name: c.Name, Manifest: connectorManifest(c), Secrets: secrets, KB: kbase, Logf: ps.logf, Link: link})
 		byID[c.ID] = conn
 		hp.conns = append(hp.conns, conn)
 	}
@@ -654,7 +655,7 @@ var pluginKinds sync.Map
 // connectorManifest is a contribution to connectors as the connector registry declares it.
 func connectorManifest(c plugin.ConnectorItem) connector.Manifest {
 	m := serve.Manifest{ID: c.ID, Name: c.Name, Capabilities: slices.Clone(c.Capabilities), Hosts: c.Hosts, AgentTools: c.AgentTools,
-		Unlisted: c.Unlisted, ConfirmAlways: c.ConfirmAlways, PollSeconds: c.PollSeconds, Kinds: c.Kinds}.Of()
+		Unlisted: c.Unlisted, ConfirmAlways: c.ConfirmAlways, PollSeconds: c.PollSeconds, Kinds: c.Kinds, ArchiveSources: c.ArchiveSources}.Of()
 	slices.Sort(m.Capabilities)
 	return m
 }

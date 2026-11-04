@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
@@ -79,7 +80,7 @@ func (h *Hub) kbConnectors(ctx context.Context) {
 		if !due {
 			continue
 		}
-		if _, err := archiveConnector(ctx, e, c.ID(), a); err != nil {
+		if _, err := archiveConnector(ctx, e, c.ID(), a, h.archiveSources(c)...); err != nil {
 			h.logf("kb: %s: %v", c.ID(), err)
 		}
 	}
@@ -95,7 +96,10 @@ type connectorCursor struct {
 
 // archiveConnector reads a connector's changes from its cursor, ingests them and moves the cursor on (only past
 // what was ingested: a failure reads the same again next time).
-func archiveConnector(ctx context.Context, e *kb.Engine, id string, a connector.Archive) (int, error) {
+//
+// A batch filed under another name (ChatBatch.Source) goes there only when it is one of sources (the connector's
+// manifest's ArchiveSources, minus any another connector has as its id): else it is dropped and logged.
+func archiveConnector(ctx context.Context, e *kb.Engine, id string, a connector.Archive, sources ...string) (int, error) {
 	media, _ := a.(connector.ArchiveMedia)
 	src := kbConnectorSource{id: id, media: media}
 	file := filepath.Join(e.Store.Dir, "cursors", id+".json")
@@ -114,7 +118,17 @@ func archiveConnector(ctx context.Context, e *kb.Engine, id string, a connector.
 			return total, err
 		}
 		for _, b := range batches {
-			n, err := e.Ingest(ctx, src, b.Chat, b.Messages)
+			s := src
+			if b.Source != "" && b.Source != id {
+				if !slices.Contains(sources, b.Source) {
+					if e.Logf != nil {
+						e.Logf("kb: %s: a batch under %q, not one of its archive sources (dropped)", id, b.Source)
+					}
+					continue
+				}
+				s.id = b.Source
+			}
+			n, err := e.Ingest(ctx, s, b.Chat, b.Messages)
 			if err != nil {
 				return total, err
 			}
@@ -133,4 +147,16 @@ func archiveConnector(ctx context.Context, e *kb.Engine, id string, a connector.
 		}
 	}
 	return total, nil
+}
+
+// archiveSources are the other names c's archive may file conversations under: its manifest's, minus the ids of the
+// other connectors (one connector never writes into another's chats).
+func (h *Hub) archiveSources(c connector.Connector) []string {
+	var out []string
+	for _, s := range c.Manifest().ArchiveSources {
+		if other := h.connectors.Get(s); other == nil || other.ID() == c.ID() {
+			out = append(out, s)
+		}
+	}
+	return out
 }

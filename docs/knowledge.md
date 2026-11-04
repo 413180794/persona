@@ -85,6 +85,11 @@ hub.json 的 `kb.extra_dirs` 列出 hub 机器上用户自己维护的笔记目�
    - 搜索（`kb_search`）也读这些帖子，但排在所有别的内容之后，不会把会话、项目挤掉。按 `text_days` 删过期的帖子。
    - 开关在 `hub.json`：`"kb": {"moments": {"enabled": true, "interval_minutes": 30, "head_pages": 3, "pages_per_tab": 10, "comments_per_round": 150, "delay_ms": 300, "max_days": 365}}`。
      它用你的账号读全公司的removed，所以默认不开。
+   - **外部帖子**（#1444）：帖子存档是通用的，任何声明了 `archive` 的连接器都能经连接器协议的 `posts.put` 往里写（`docs/connector-protocol.md`「知识库」），
+     `posts.pending` 告诉它哪些帖子的评论要重读（读完用 `posts.comments` 交回）；帖子记着来源（`source`）和 feed 的名字（`feed`，存档标题用），别的连接器的帖子不能覆盖。
+     存档目录沿用 `moments/`（`GET /api/v1/kb/moments/{id}` 也不变）。索引、按文字保留期每天清理、挂项目（下面「项目的removed」）由 hub 统一做。
+     插件接管飞书连接器后，hub 自己的爬取停下，由插件爬（翻到哪的状态在插件自己的数据目录，第一次接手会从头往下翻一遍，已有的帖子只是「见过」）；
+     和我有关的帖子由插件照常归档成 `moments-<id>` 会话（清单 `archive_sources: ["moments"]`），第一次从 `archive.chats` 拿到知识库里每帖读到哪，接着读。
    - 只要一年内的（2026-11-01 用户要求，避免打爆上游）：`max_days`（默认 365，`kb.text_days` 更短就按它）之前的帖子不存、
      不读评论；往下翻到一整页都超过一年就当这个 tab 读完了（`done`），之后每轮只读头几页看新帖。feed 按热度排，不严格按时间，
      所以只在**整页**都旧时才停；混着新旧的页照常往下翻。每天清理一次超过 `max_days` 的存档。

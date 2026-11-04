@@ -44,6 +44,8 @@ type ConnectorItem struct {
 	// KindDescriptions tell the models what each kind of its inbox things is ("类型：…" in the inbox's prompts), by
 	// kind: a plugin's connector says it itself (a built-in one has prompts/inbox/kinds/<id>.md).
 	KindDescriptions map[string]string `json:"kind_descriptions,omitempty"`
+	// ArchiveSources are other names its archive files conversations under (connector.Manifest.ArchiveSources).
+	ArchiveSources []string `json:"archive_sources,omitempty"`
 }
 
 // VoiceItem is a contribution to voice: the voice conversation's contract (docs/plugins.md「语音」).
@@ -147,6 +149,14 @@ var Points = map[string]Point{
 		for _, p := range c.ConfirmAlways {
 			if _, err := path.Match(p, ""); err != nil || p == "" {
 				return c.ID, fmt.Errorf("connector %s: confirm_always pattern %q is not a valid action pattern (path.Match)", c.ID, p)
+			}
+		}
+		if len(c.ArchiveSources) > 4 {
+			return c.ID, errors.New("connector " + c.ID + ": more than 4 archive_sources")
+		}
+		for _, s := range c.ArchiveSources {
+			if !connectorID.MatchString(s) || s == c.ID {
+				return c.ID, fmt.Errorf("connector %s: archive source %q: lowercase letters and digits, a letter first, not its own id", c.ID, s)
 			}
 		}
 		return c.ID, nil

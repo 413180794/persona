@@ -32,6 +32,10 @@ type MomentPost struct {
 	CommentsAt   time.Time `json:"comments_at,omitempty"`
 	Mine         bool      `json:"mine,omitempty"`     // my post
 	Concerns     bool      `json:"concerns,omitempty"` // it is a chat as well (mine, or someone commented / @ed me)
+	// Source is the connector that keeps it ("" before connectors could: the hub's own crawler's); Feed is what
+	// the feed is called, for the heading ("" is 帖子).
+	Source string `json:"source,omitempty"`
+	Feed   string `json:"feed,omitempty"`
 }
 
 // MomentComment is a comment as archived.
@@ -127,7 +131,11 @@ func momentMarkdown(p *MomentPost, comments []MomentComment, zone *time.Location
 	if title == "" {
 		title = "（没有文字）"
 	}
-	fmt.Fprintf(&b, "# removed · %s\n\n", title)
+	feed := p.Feed
+	if feed == "" {
+		feed = "帖子"
+	}
+	fmt.Fprintf(&b, "# %s · %s\n\n", feed, title)
 	who := p.Author
 	if p.Anonymous || who == "" {
 		who = "匿名"

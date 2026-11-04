@@ -115,6 +115,12 @@ func TestParseRefuses(t *testing.T) {
 		"confirm_always empty": func(m map[string]any) {
 			m["contributes"] = map[string]any{"connectors": []any{map[string]any{"id": "ex", "name": "x", "capabilities": []any{"status"}, "confirm_always": []any{""}}}}
 		},
+		"connector archive source": func(m map[string]any) {
+			m["contributes"] = map[string]any{"connectors": []any{map[string]any{"id": "ex", "name": "x", "capabilities": []any{"archive"}, "archive_sources": []any{"Posts"}}}}
+		},
+		"connector archive source its own id": func(m map[string]any) {
+			m["contributes"] = map[string]any{"connectors": []any{map[string]any{"id": "ex", "name": "x", "capabilities": []any{"archive"}, "archive_sources": []any{"ex"}}}}
+		},
 		"connector twice": func(m map[string]any) {
 			c := map[string]any{"id": "ex", "name": "x", "capabilities": []any{"status"}}
 			m["contributes"] = map[string]any{"connectors": []any{c, c}}

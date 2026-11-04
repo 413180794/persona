@@ -58,7 +58,40 @@ const (
 	MSecretsLoad   = "secrets.load"
 	MSecretsSave   = "secrets.save"
 	MSecretsDelete = "secrets.delete"
+	// The knowledge base (connector.KnowledgeBase): PostsPutParams → PostsPutResult, PostsPendingParams →
+	// PostsPendingResult, ArchiveChatsParams → ArchiveChatsResult.
+	MPostsPut      = "posts.put"
+	MPostsComments = "posts.comments"
+	MPostsPending  = "posts.pending"
+	MArchiveChats  = "archive.chats"
 	EChanged       = "changed" // ChangedEvent
+)
+
+// The knowledge base's calls on the wire.
+type (
+	PostsPutParams struct {
+		Posts []connector.PostPut `json:"posts"`
+	}
+	PostsPutResult struct {
+		Statuses []string `json:"statuses"` // per post: connector.PostNew, PostChanged, PostSame, PostRefused
+	}
+	PostsCommentsParams struct {
+		ID           string                  `json:"id"`
+		CommentCount int                     `json:"comment_count"`
+		Comments     []connector.PostComment `json:"comments"`
+	}
+	PostsPendingParams struct {
+		Limit int `json:"limit,omitempty"`
+	}
+	PostsPendingResult struct {
+		Posts []connector.PendingPost `json:"posts"`
+	}
+	ArchiveChatsParams struct {
+		Source string `json:"source,omitempty"` // "" is the connector's id
+	}
+	ArchiveChatsResult struct {
+		Chats []connector.ArchivedChat `json:"chats"`
+	}
 )
 
 // Namespace is the connector extension point's (docs/plugins.md): under the plugin protocol every method above is
@@ -85,6 +118,8 @@ type Manifest struct {
 	ConfirmAlways []string `json:"confirm_always,omitempty"`
 	PollSeconds   int      `json:"poll_seconds,omitempty"`
 	Kinds         []string `json:"kinds,omitempty"`
+	// ArchiveSources: connector.Manifest.ArchiveSources.
+	ArchiveSources []string `json:"archive_sources,omitempty"`
 }
 
 type (
@@ -608,7 +643,7 @@ func ManifestOf(c connector.Connector) Manifest {
 // Of is the connector.Manifest a program sent (a proxy's: it answers for the program).
 func (m Manifest) Of() connector.Manifest {
 	out := connector.Manifest{Hosts: m.Hosts, AgentTools: m.AgentTools, Unlisted: m.Unlisted, ConfirmAlways: m.ConfirmAlways,
-		Poll: time.Duration(m.PollSeconds) * time.Second, Kinds: m.Kinds, Proxy: true}
+		Poll: time.Duration(m.PollSeconds) * time.Second, Kinds: m.Kinds, ArchiveSources: m.ArchiveSources, Proxy: true}
 	for _, cp := range m.Capabilities {
 		out.Capabilities = append(out.Capabilities, connector.Capability(cp))
 	}

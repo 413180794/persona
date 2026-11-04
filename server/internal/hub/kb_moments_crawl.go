@@ -84,7 +84,8 @@ type MomentsRound struct {
 func (h *Hub) momentsCrawlLoop(ctx context.Context, st *kb.Store, cfg MomentsCrawl, textDays int) {
 	var lastPrune time.Time
 	for {
-		if h.isMember() { // the center crawls for the group
+		// The center crawls for the group; a plugin that took Feishu over crawls through posts.put (kb_posts.go).
+		if h.isMember() || h.larkByPlugin() {
 			select {
 			case <-ctx.Done():
 				return
@@ -305,7 +306,7 @@ func (h *Hub) archiveMomentMeta(st *kb.Store, p lark.MomentFeedPost, myID string
 	old, ok := st.MomentPost(p.ID)
 	m := &kb.MomentPost{ID: p.ID, Author: p.UserName, AuthorID: p.UserID, Anonymous: p.Anonymous, Categories: p.Categories,
 		Text: p.Text, Images: p.Images, Reactions: p.Reactions, CommentCount: p.CommentCount, At: p.At.UTC(), SeenAt: time.Now().UTC(),
-		CommentsOf: -1, Mine: myID != "" && p.UserID == myID}
+		CommentsOf: -1, Mine: myID != "" && p.UserID == myID, Feed: "removed"}
 	if _, err := os.Stat(st.Path(kb.KindChat, kb.ChatID("moments", p.ID), "meta.json")); err == nil {
 		m.Concerns = true
 	}

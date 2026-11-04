@@ -69,7 +69,10 @@ type Config struct {
 	SettingsNow func() json.RawMessage
 	// Secrets is the hub's store for this connector: the program's secrets.* calls reach only this one.
 	Secrets connector.Secrets
-	Logf    func(string, ...any)
+	// KB is the knowledge base's side of the program's posts.* and archive.chats (nil: none here); only a connector
+	// declaring an archive may use it.
+	KB   connector.KnowledgeBase
+	Logf func(string, ...any)
 	// Link, when set, is the plugin process the connector runs in: Path, Args, Env, Version and Settings are then the
 	// plugin host's business, and the hub passes the program's calls and events on (Handle, Event).
 	Link *Link
@@ -411,8 +414,12 @@ func (c *Conn) logLines(r io.Reader) {
 }
 
 // fromProgram answers the program's calls: its secret, and only its own (the hub bound Secrets to this connector;
-// nothing the program sends picks another).
+// nothing the program sends picks another), and the knowledge base's (KB, bound the same way).
 func (c *Conn) fromProgram(ctx context.Context, method string, params json.RawMessage) (any, error) {
+	switch method {
+	case serve.MPostsPut, serve.MPostsComments, serve.MPostsPending, serve.MArchiveChats:
+		return c.fromProgramKB(ctx, method, params)
+	}
 	if c.cfg.Secrets == nil {
 		return nil, errors.New("no secrets store")
 	}
@@ -430,6 +437,44 @@ func (c *Conn) fromProgram(ctx context.Context, method string, params json.RawMe
 		return struct{}{}, c.cfg.Secrets.Delete(ctx)
 	}
 	return nil, fmt.Errorf("unknown method %s", method)
+}
+
+func (c *Conn) fromProgramKB(ctx context.Context, method string, params json.RawMessage) (any, error) {
+	if !c.Manifest().Has(connector.CapArchive) {
+		return nil, &rpc.Error{Code: serve.CodeNoCapability, Message: c.cfg.Name + " does not declare an archive"}
+	}
+	if c.cfg.KB == nil {
+		return nil, errors.New("no knowledge base on this hub")
+	}
+	switch method {
+	case serve.MPostsPut:
+		var p serve.PostsPutParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		st, err := c.cfg.KB.PutPosts(ctx, p.Posts)
+		return serve.PostsPutResult{Statuses: st}, err
+	case serve.MPostsComments:
+		var p serve.PostsCommentsParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		return struct{}{}, c.cfg.KB.PutComments(ctx, p.ID, p.CommentCount, p.Comments)
+	case serve.MPostsPending:
+		var p serve.PostsPendingParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		ps, err := c.cfg.KB.PendingPosts(ctx, p.Limit)
+		return serve.PostsPendingResult{Posts: ps}, err
+	default:
+		var p serve.ArchiveChatsParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		cs, err := c.cfg.KB.ArchivedChats(ctx, p.Source)
+		return serve.ArchiveChatsResult{Chats: cs}, err
+	}
 }
 
 func (c *Conn) onEvent(event string, params json.RawMessage) {

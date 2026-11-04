@@ -75,6 +75,10 @@ type Manifest struct {
 	// Kinds are the kinds its inbox things have (InboxThing.Kind): prompts/inbox/kinds/<id>.md tells the models what
 	// each means. A thing of a kind not here is still taken, and logged.
 	Kinds []string
+	// ArchiveSources are other names its archive may file conversations under (ChatBatch.Source), besides its id:
+	// one kind of conversation kept apart from the rest (a feed's posts the user is in, besides the chats), or ids
+	// the knowledge base had before a connector moved (docs/connector-protocol.md「知识库」). Same pattern as an id.
+	ArchiveSources []string
 	// Proxy: it answers for a program or a machine (connector/proc), so it implements every interface and has only
 	// what it declares. Check holds the others to "declared exactly what it implements".
 	Proxy bool

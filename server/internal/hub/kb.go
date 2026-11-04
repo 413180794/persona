@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/ai"
@@ -51,6 +52,8 @@ type kbState struct {
 	kick       chan struct{}
 	eng        *kb.Engine
 	cfg        KBConfig
+	crawls     bool        // the hub's own crawler runs (hub.json kb.moments): it prunes the archive itself
+	postsDirty atomic.Bool // posts came in since the post archive's index was written (kb_posts.go)
 }
 
 func (h *Hub) kbKick() {
@@ -122,6 +125,7 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 		if days <= 0 {
 			days = 365
 		}
+		h.kb.crawls = true
 		go h.momentsCrawlLoop(ctx, st, *m, days)
 	}
 }
@@ -186,6 +190,8 @@ func (h *Hub) kbLoop(ctx context.Context) {
 			}
 			continue
 		}
+		// The connectors come and go (a plugin taking one over, switched off): their chat sources with them.
+		e.Sources = h.kbSources()
 		run(ctx, func() {
 			h.rezoneKB(e.Store)
 			if _, err := e.Archive(ctx); err != nil {
@@ -228,12 +234,14 @@ func (h *Hub) kbLoop(ctx context.Context) {
 			lastItems = time.Now()
 			h.kbCollectItems(ctx)
 		}
-		if time.Since(lastPrune) >= 24*time.Hour {
+		daily := time.Since(lastPrune) >= 24*time.Hour
+		if daily {
 			lastPrune = time.Now()
 			if n := e.Prune(time.Now()); n > 0 {
 				h.logf("kb: pruned %d day(s)", n)
 			}
 		}
+		run(ctx, func() { h.kbPostsUpkeep(daily && !h.momentsCrawling()) })
 		select {
 		case <-ctx.Done():
 			return

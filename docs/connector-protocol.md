@@ -47,6 +47,7 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 | `confirm_always` | 哪些写操作永远要用户在手机上确认，按名字的通配（可选，没写行为不变）：`connector_gate` 里命中它的 `allow` 规则（含 `*`）被钳成 `confirm`，`deny` 不变；用户本人在 App 里点发送（`Registry.Run`）不过闸门，不受影响。只加可选字段，协议版本不变 |
 | `poll_seconds` | 多久问一次 `archive.changes`，0 用 hub 的默认 |
 | `kinds` | 收件箱条目的种类；hub 收到没声明的记一行日志 |
+| `archive_sources` | 除了自己的 id，归档还能放在哪些名字下（最多 4 个，格式同 id，不能是别的连接器的 id）：一类会话和其余的分开存（一个动态 feed 里和用户有关的帖子），或连接器迁出 hub 之前知识库里已有的会话 id（见下面「知识库」） |
 
 ## hub 调程序
 
@@ -62,7 +63,7 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 | `actions.do` | `{name, args, request_id}` → `{text}` | **只在 hub 的闸门放行之后调**，`args` 就是卡片用的那一份。`request_id` 是 hub 为这一次生成的：同一个 id 程序只做一次（再来就回第一次的结果）；hub 超时后也不重发 |
 | `inbox.collect` | `{}` → `{things: [InboxThing]}` | 从内存回答 |
 | `inbox.reply` | `{thread, item_id?, last?, text, client_id?, changes?}` → `{}` | 用户在手机上按了发送（发送本身就是确认）。`client_id`：App 这次发送的 id，重试只发一次（没有时连接器自己派生）；`changes: [{ref, field, value}]`：先改文档某一行的状态列（文档条目的「改状态」、AI 分身的提议），这时 `text` 可以为空 |
-| `archive.changes` | `{cursor, limit}` → `{batches: [{chat, messages}], next, more}` | 游标是程序自己的，hub 原样存、原样还；第一次是 `""` |
+| `archive.changes` | `{cursor, limit}` → `{batches: [{source?, chat, messages}], next, more}` | 游标是程序自己的，hub 原样存、原样还；第一次是 `""`。每批存成会话 `<source>-<chat.id>`，`source` 空着是连接器的 id，否则必须是清单 `archive_sources` 里的（别的名字整批丢掉、记日志） |
 | `archive.media` | `{ref}` → `{mime, data}` | 归档消息 `media` 里的一个 ref 对应的字节（base64），最多 20 MB；知识库把它存在会话的附件里。可选：没有时那一行只写 `[附件]` |
 | `items.list` | `{}` → `{items: [{kind, id, title, url?, at?, where?}]}` | 知识库的条目（`kind`：`docs` / `meetings` / `events`）；声明了 `items` 才调 |
 | `items.doc_title` | `{url}` → `{title}` | 会话里出现的文档链接的标题，读不到回 `""` |
@@ -95,10 +96,26 @@ hub 只对这些连接器读它：条目保持 hub 原来自己做的样子（�
 | `secrets.load` | `{}` → `{data}` | 这个连接器自己的密钥（会话、token），hub 加密存在数据库；没有时 `data` 为空 |
 | `secrets.save` | `{data}` → `{}` | |
 | `secrets.delete` | `{}` → `{}` | |
+| `posts.put` | `{posts: [{post, comments?}]}` → `{statuses}` | 把一个动态 feed 的公开帖子写进知识库的帖子存档（见下面「知识库」）。`statuses` 和 `posts` 一一对应：`new`、`changed`（评论数变了）、`""`（见过、没变）、`refused`（没有 id，或是别的连接器的帖子） |
+| `posts.comments` | `{id, comment_count, comments}` → `{}` | 换掉存档里一个帖子（这个连接器的）的评论，记下读的时候的评论数；帖子本身不动。重读 `posts.pending` 列出的帖子的评论用 |
+| `posts.pending` | `{limit?}` → `{posts: [{id, comment_count, at}]}` | 评论数变了、该重读评论的帖子（文字保留期内，新的在前，最多 500） |
+| `archive.chats` | `{source?}` → `{chats: [{id, name, cursor, last_at, messages}]}` | 知识库里这个连接器某个名字（空着是 id，或 `archive_sources` 之一）下的会话：来源那边的 id 和读到哪。接续用：连接器第一次归档时从这里接着，不重复、不漏 |
 | 事件 `changed` | `{scope}` | `chats`、`items`、`inbox`：有新东西，hub 尽快来取；不认识的 scope 被丢掉并记日志 |
 
 插件同时贡献了 `events`（`docs/plugins.md`「事件」）时，hub 发来的 `event.<名字>` 交给实现了 `serve.Listener` 的连接器（`Hear(ctx, 名字, 参数)`，
 在自己的 goroutine 里，不回应）；没实现的照旧丢掉。微信机器人用它听 `agent.needs_you`（`docs/wechat.md`）。
+
+### 知识库
+
+`posts.*` 和 `archive.chats` 只给声明了 `archive` 的连接器，用户在设置里关了它的「进知识库」时回错误。都只碰这个连接器自己的东西。
+
+- **帖子存档**（`docs/knowledge.md`「外部帖子」）：`post` 是 `{id, feed?, author?, author_id?, anonymous?, categories?, text, images?, reactions?, comment_count, at, mine?}`，
+  `feed` 是这个 feed 叫什么（存档的标题用，空着是「帖子」）；`comments` 是 `[{author?, reply_to?, text, at}]`，**带了（可以是空数组）就是这次读了评论**，
+  hub 记下读的时候的评论数；不带就只更新帖子、存档里的评论原样留着。评论数是 0 的帖子 hub 直接记成读过。评论里的「我」「匿名」由连接器写好。
+  一次最多 200 帖、一帖最多 5000 条评论，正文和每条评论最多 64 KB（超出的截断）。
+- 帖子和用户有没有关系（`concerns`）由 hub 判断：连接器在自己的某个名字下有这个帖子 id 的会话就算（用户发的、有人回复或 @ 了用户的帖子，连接器照常当会话归档）。
+- 索引、按文字保留期清理、把帖子挂到项目上（`kb.LinkMoments`）都是 hub 的事，谁写的帖子都一样。爬多少、多久爬一次、怎么翻页是连接器自己的事，
+  它自己的状态（翻到哪）放在自己那里。
 
 ## 错误
 
