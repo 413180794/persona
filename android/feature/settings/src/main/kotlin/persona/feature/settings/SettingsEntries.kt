@@ -47,11 +47,11 @@ data class SettingsServices(
     val models: ModelConfiguration? = null,
     /** 新增模型供应商 (from 模型配置) on the paired hub; null in 体验模式. */
     val providers: ProviderSetup? = null,
-    /** 设置 › 插件 on the paired hub; null in 体验模式. */
-    val plugins: PluginManagement? = null,
-    /** Where the selected hub's plugins draw (nav pages, cards, machine sections), kept by the shell; null without. */
-    val pluginSlots: PluginSlots? = null,
-    /** 设置 › 插件 › 渠道 on the paired hub; null in 体验模式. */
+    /** 设置 › 扩展 on the paired hub; null in 体验模式. */
+    val extensions: ExtensionManagement? = null,
+    /** Where the selected hub's extensions draw (nav pages, cards, machine sections), kept by the shell; null without. */
+    val extensionSlots: ExtensionSlots? = null,
+    /** 设置 › 扩展 › 渠道 on the paired hub; null in 体验模式. */
     val channels: ChannelManagement? = null,
     /** The phone's hub groups (settings › hub); null where there is no real pairing (体验模式). */
     val hubs: HubGroups? = null,

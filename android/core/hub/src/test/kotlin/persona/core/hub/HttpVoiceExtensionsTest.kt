@@ -17,32 +17,49 @@ import okio.ByteString.Companion.toByteString
 import org.junit.Assert.*
 import org.junit.Test
 
-class HttpVoicePluginsTest {
-    private fun api(server: MockWebServer, current: () -> Boolean = { true }) =
-        HttpVoicePlugins(server.url("/").toString(), "fixture-token", OkHttpClient(), current)
+class HttpVoiceExtensionsTest {
+    // A hub from before #1844 (/api/v1/plugins, the key `plugins`), unless [legacy] says otherwise.
+    private fun api(server: MockWebServer, legacy: Boolean = true, current: () -> Boolean = { true }) =
+        HttpVoiceExtensions(server.url("/").toString(), "fixture-token", OkHttpClient(), current, legacy = { legacy })
 
-    @Test fun thePluginListYieldsTheFirstRunningVoicePluginAndAnOldHubHasNone() = runBlocking {
+    @Test fun aNewHubAnswersUnderExtensions() = runBlocking {
+        MockWebServer().use { server ->
+            val api = api(server, legacy = false)
+            server.enqueue(MockResponse().setBody("""{"extensions":[{"id":"voice","name":"语音","kind":"voice","status":"running"}]}"""))
+            assertEquals("voice", api.voiceExtension()!!.id)
+            assertEquals("/api/v1/extensions", server.takeRequest().path)
+            server.enqueue(MockResponse().setBody("""{"voices":[]}"""))
+            api.voices("voice", null)
+            assertEquals("/api/v1/extensions/voice/voices", server.takeRequest().path)
+            // The model configuration's purpose kept its name.
+            server.enqueue(MockResponse().setResponseCode(404))
+            assertNull(api.modelChoice("voice"))
+            assertEquals("/api/v1/model-config/purposes/plugin.voice", server.takeRequest().path)
+        }
+    }
+
+    @Test fun theExtensionListYieldsTheFirstRunningVoiceExtensionAndAnOldHubHasNone() = runBlocking {
         MockWebServer().use { server ->
             val api = api(server)
             server.enqueue(MockResponse().setBody(
                 """{"plugins":[{"id":"notes","kind":"notes","status":"running"},{"id":"v0","kind":"voice","status":"starting"},""" +
                     """{"id":"voice","name":"语音","kind":"voice","status":"running"},{"id":"v2","kind":"voice","status":"running"}]}""",
             ))
-            val plugin = api.voicePlugin()!!
-            assertEquals("voice" to "语音", plugin.id to plugin.name)
+            val extension = api.voiceExtension()!!
+            assertEquals("voice" to "语音", extension.id to extension.name)
             val request = server.takeRequest()
             assertEquals("/api/v1/plugins", request.path)
             assertEquals("Bearer fixture-token", request.getHeader("Authorization"))
             server.enqueue(MockResponse().setBody("""{"plugins":[]}"""))
-            assertNull(api.voicePlugin())
+            assertNull(api.voiceExtension())
             server.enqueue(MockResponse().setResponseCode(404))
-            assertNull("A hub from before plugins has none", api.voicePlugin())
+            assertNull("A hub from before plugins has none", api.voiceExtension())
             server.enqueue(MockResponse().setResponseCode(500).setBody("""{"error":"boom"}"""))
-            try { api.voicePlugin(); fail("A failing hub is not one without plugins") } catch (error: HubFailure) { assertEquals(500, error.status) }
+            try { api.voiceExtension(); fail("A failing hub is not one without plugins") } catch (error: HubFailure) { assertEquals(500, error.status) }
         }
     }
 
-    @Test fun voicesFollowTheModelAndAPluginWithoutModelsHasOnlyItsOwn() = runBlocking {
+    @Test fun voicesFollowTheModelAndAExtensionWithoutModelsHasOnlyItsOwn() = runBlocking {
         MockWebServer().use { server ->
             val api = api(server)
             server.enqueue(MockResponse().setBody(
@@ -78,8 +95,8 @@ class HttpVoicePluginsTest {
             server.enqueue(MockResponse().setBody("""{"purpose":{"id":"plugin.voice","effective":{"provider":"plugin.voice","model":"deep"},"status":"未验证"},"providers":[]}"""))
             assertEquals(VoiceModelChoice("deep", null), api.modelChoice("voice"))
             assertEquals("/api/v1/model-config/purposes/plugin.voice", server.takeRequest().path)
-            server.enqueue(MockResponse().setBody("""{"purpose":{"id":"plugin.voice","effective":{},"status":" 读不到插件模型列表 "}}"""))
-            assertEquals(VoiceModelChoice(null, "读不到插件模型列表"), api.modelChoice("voice"))
+            server.enqueue(MockResponse().setBody("""{"purpose":{"id":"plugin.voice","effective":{},"status":" 读不到扩展模型列表 "}}"""))
+            assertEquals(VoiceModelChoice(null, "读不到扩展模型列表"), api.modelChoice("voice"))
             server.enqueue(MockResponse().setBody("""{"purpose":{"id":"plugin.voice","effective":{"model":""},"status":""}}"""))
             assertEquals(VoiceModelChoice(null, null), api.modelChoice("voice"))
             server.enqueue(MockResponse().setResponseCode(404))
@@ -97,13 +114,13 @@ class HttpVoicePluginsTest {
             val api = api(server) { current }
             try { api.models("../metrics"); fail("Not a plugin id") } catch (_: IllegalArgumentException) { }
             current = false
-            try { api.voicePlugin(); fail("Old pairing must be cancelled") } catch (_: CancellationException) { }
+            try { api.voiceExtension(); fail("Old pairing must be cancelled") } catch (_: CancellationException) { }
             try { api.connect("voice", Recorder()); fail("Old pairing must be cancelled") } catch (_: CancellationException) { }
             assertEquals(0, server.requestCount)
         }
     }
 
-    @Test fun theSocketCarriesTextAndAudioBothWaysAndReportsThePluginsCloseOnce() {
+    @Test fun theSocketCarriesTextAndAudioBothWaysAndReportsTheExtensionsCloseOnce() {
         MockWebServer().use { server ->
             val received = LinkedBlockingQueue<Any>()
             val hub = LinkedBlockingQueue<WebSocket>()

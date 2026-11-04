@@ -198,8 +198,8 @@ internal fun PersonaPalette.legacy() = PersonaColors(
 )
 
 /**
- * A role colour for something that is not an agent's state: good, needs a look, broken, or plain. Plugins' views
- * (docs/plugins.md「声明式 UI」) name these four and never a colour.
+ * A role colour for something that is not an agent's state: good, needs a look, broken, or plain. Extensions' views
+ * (docs/extensions.md「声明式 UI」) name these four and never a colour.
  */
 enum class Tone { Neutral, Positive, Caution, Danger }
 

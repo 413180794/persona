@@ -12,7 +12,7 @@ import persona.core.contracts.api.HubChannel
 import persona.core.contracts.parseTime
 import persona.core.designsystem.Status
 import persona.core.designsystem.failureReason
-import persona.core.navigation.PluginRoute
+import persona.core.navigation.ExtensionRoute
 import persona.core.navigation.SettingsPage
 import persona.core.navigation.SettingsPageRoute
 import kotlinx.coroutines.CancellationException
@@ -25,7 +25,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-// 设置 › 插件 › 渠道 (docs/channels.md「界面」): the words, the list's sections, where messages go, and the models of the
+// 设置 › 扩展 › 渠道 (docs/channels.md「界面」): the words, the list's sections, where messages go, and the models of the
 // list, a channel's page and its binding a step at a time. The pages are in ChannelsScreen.kt.
 
 /** What a channel is called and says in the settings (the same words as the web's lib/channels.ts). */
@@ -92,7 +92,7 @@ internal object ChannelText {
         else -> "绑定"
     }
 
-    /** Set up on this page: not hub.json's or a plugin page's, not a market's. */
+    /** Set up on this page: not hub.json's or an extension page's, not a market's. */
     fun editable(c: HubChannel): Boolean = !c.readOnly && c.source != "market"
 
     /** It has a binding step of its own (scan, pair, fill in). */
@@ -104,13 +104,13 @@ internal object ChannelText {
     fun canBind(c: HubChannel): Boolean = binds(c) && c.enabled && !isBound(c)
 
     /**
-     * The page the hub links to (`settings_url`), where Android has it: a plugin's page, 模型配置. The Feishu bot's own
+     * The page the hub links to (`settings_url`), where Android has it: an extension's page, 模型配置. The Feishu bot's own
      * settings page is iOS's and the web's only; without a page here the row is left out.
      */
     fun settingsDestination(url: String?): NavKey? {
         val path = url?.trim()?.trim('/') ?: return null
         return when {
-            path.startsWith("settings/plugins/") -> path.removePrefix("settings/plugins/").takeIf { it.matches(PluginId) }?.let(::PluginRoute)
+            path.startsWith("settings/plugins/") -> path.removePrefix("settings/plugins/").takeIf { it.matches(ExtensionId) }?.let(::ExtensionRoute)
             path == "settings/model-config" -> SettingsPageRoute(SettingsPage.ModelConfig)
             else -> null
         }
@@ -145,7 +145,7 @@ internal object ChannelText {
     /** How a failed change reads: the hub's words when it gave any. */
     fun failure(error: Throwable, verb: String = "没有改成"): String = "$verb：${failureReason(error)}"
 
-    private val PluginId = Regex("[A-Za-z0-9_-]{1,64}")
+    private val ExtensionId = Regex("[A-Za-z0-9_-]{1,64}")
 }
 
 /** A section of the list: the apps, the installed ones, those a market has. */
@@ -155,7 +155,7 @@ internal fun channelSections(list: List<HubChannel>): List<ChannelSection> = lis
     ChannelSection("Persona", "在 Persona 的哪一端说都进同一段对话，提问和批准在卡片上原地作答。", list.filter { it.kind == "app" }),
     ChannelSection("已接入", "这些地方发给机器人的消息会交给 Persona，回答和 Agent 的提问发回原处。只认绑定的那一个人。",
         list.filter { it.kind != "app" && it.source != "market" }),
-    ChannelSection("可以安装", "插件市场里提供渠道的插件：装好后在这里绑定。", list.filter { it.source == "market" }),
+    ChannelSection("可以安装", "扩展市场里提供渠道的扩展：装好后在这里绑定。", list.filter { it.source == "market" }),
 ).filter { it.channels.isNotEmpty() }
 
 /** One choice of 「消息发到」. */
@@ -196,7 +196,7 @@ internal data class ChannelListState(
     val sections: List<ChannelSection> get() = channelSections(channels.orEmpty())
 }
 
-/** 设置 › 插件 › 渠道: the list. */
+/** 设置 › 扩展 › 渠道: the list. */
 internal class ChannelListModel(private val api: ChannelManagement) {
     private val mutable = MutableStateFlow(ChannelListState())
     val state = mutable.asStateFlow()
@@ -250,7 +250,7 @@ internal data class ChannelState(
     val editable: Boolean get() = channel?.let(ChannelText::editable) == true
 }
 
-/** 设置 › 插件 › 渠道 › one: its switch, its binding, where its messages go, its features, a test message. */
+/** 设置 › 扩展 › 渠道 › one: its switch, its binding, where its messages go, its features, a test message. */
 internal class ChannelModel(private val api: ChannelManagement, private val id: String) {
     private val mutable = MutableStateFlow(ChannelState())
     val state = mutable.asStateFlow()

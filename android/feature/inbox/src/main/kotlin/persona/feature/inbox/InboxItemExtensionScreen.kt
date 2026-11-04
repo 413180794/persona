@@ -19,7 +19,7 @@ import persona.core.navigation.Navigator
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-/** The item's tier for its header (the plugin's body does not repeat it); none before triage. */
+/** The item's tier for its header (the extension's body does not repeat it); none before triage. */
 internal fun inboxHeaderTier(record: InboxRecord): InboxTier? = record.item.triage.takeIf { record.item.isTriaged }
 
 /**
@@ -33,14 +33,14 @@ internal fun inboxSourceTags(record: InboxRecord): List<String> = listOfNotNull(
 ).distinct()
 
 /**
- * An inbox item whose body its connector's plugin draws (inbox_item, #1683): the app's own header of the item (its
- * title, tier and source line, 已处理, AI 摘要, AI 草拟 / 交给 AI and the AI 分身's draft), then [body], the plugin's
+ * An inbox item whose body its connector's extension draws (inbox_item, #1683): the app's own header of the item (its
+ * title, tier and source line, 已处理, AI 摘要, AI 草拟 / 交给 AI and the AI 分身's draft), then [body], the extension's
  * view, which does not repeat them.
- * The shell builds the body (feature:settings draws plugins' views) and opens the item's own page instead when the
- * plugin cannot draw it. [title] is the view's, used only when the item has none; [loading] is the body's first read.
+ * The shell builds the body (feature:settings draws extensions' views) and opens the item's own page instead when the
+ * extension cannot draw it. [title] is the view's, used only when the item has none; [loading] is the body's first read.
  */
 @Composable
-fun InboxItemPluginScreen(
+fun InboxItemExtensionScreen(
     repository: InboxRepository,
     route: InboxItemUiRoute,
     navigator: Navigator,

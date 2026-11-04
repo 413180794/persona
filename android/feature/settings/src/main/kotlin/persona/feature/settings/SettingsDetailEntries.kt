@@ -12,16 +12,16 @@ import persona.core.navigation.EngineRoute
 import persona.core.navigation.ModelPurposeRoute
 import persona.core.navigation.Navigator
 import persona.core.navigation.LauncherRoute
-import persona.core.navigation.PluginCatalogRoute
-import persona.core.navigation.PluginMarketRoute
-import persona.core.navigation.PluginMarketsRoute
-import persona.core.navigation.PluginRoute
-import persona.core.navigation.PluginUiRoute
+import persona.core.navigation.ExtensionCatalogRoute
+import persona.core.navigation.ExtensionMarketRoute
+import persona.core.navigation.ExtensionMarketsRoute
+import persona.core.navigation.ExtensionRoute
+import persona.core.navigation.ExtensionUiRoute
 
 /**
  * Settings pages opened by key rather than from the settings list: a machine's engine (from its page in Agents) and
- * one AI use of 模型配置 (from that list, or from the voice page for its plugin's model), one plugin of 插件 and the
- * pages it draws, 插件市场 with its plugins and markets, a launcher of a machine (from the machine's page), and one channel
+ * one AI use of 模型配置 (from that list, or from the voice page for its extension's model), one extension of 扩展 and the
+ * pages it draws, 扩展市场 with its extensions and markets, a launcher of a machine (from the machine's page), and one channel
  * of 渠道.
  */
 fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, services: SettingsServices) {
@@ -34,23 +34,23 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
         ModelPurposePage(services.models.takeUnless { demo }, route.purposeId, onBack = navigator::back,
             providers = services.providers.takeUnless { demo })
     }
-    entry<PluginRoute> { route ->
-        PluginPage(services.plugins.takeUnless { demo }, route.pluginId, onBack = navigator::back,
-            onPage = { page -> navigator.navigate(PluginUiRoute(page.plugin.ifBlank { route.pluginId }, page.id, page.title.ifBlank { page.id })) },
+    entry<ExtensionRoute> { route ->
+        ExtensionPage(services.extensions.takeUnless { demo }, route.extensionId, onBack = navigator::back,
+            onPage = { page -> navigator.navigate(ExtensionUiRoute(page.extension.ifBlank { route.extensionId }, page.id, page.title.ifBlank { page.id })) },
             onChannel = { navigator.navigate(ChannelRoute(it)) })
     }
-    entry<PluginUiRoute> { route ->
-        PluginUiPage(services.plugins.takeUnless { demo }, route.pluginId, route.uiId, route.title, onBack = navigator::back)
+    entry<ExtensionUiRoute> { route ->
+        ExtensionUiPage(services.extensions.takeUnless { demo }, route.extensionId, route.uiId, route.title, onBack = navigator::back)
     }
-    entry<PluginMarketRoute> {
-        PluginMarketPage(services.plugins.takeUnless { demo }, onBack = navigator::back,
-            onPlugin = { navigator.navigate(PluginCatalogRoute(it.market, it.id)) }, onMarkets = { navigator.navigate(PluginMarketsRoute) })
+    entry<ExtensionMarketRoute> {
+        ExtensionMarketPage(services.extensions.takeUnless { demo }, onBack = navigator::back,
+            onExtension = { navigator.navigate(ExtensionCatalogRoute(it.market, it.id)) }, onMarkets = { navigator.navigate(ExtensionMarketsRoute) })
     }
-    entry<PluginCatalogRoute> { route ->
-        PluginCatalogPage(services.plugins.takeUnless { demo }, route.marketId, route.pluginId, onBack = navigator::back,
-            onInstalled = { navigator.navigate(PluginRoute(it)) })
+    entry<ExtensionCatalogRoute> { route ->
+        ExtensionCatalogPage(services.extensions.takeUnless { demo }, route.marketId, route.extensionId, onBack = navigator::back,
+            onInstalled = { navigator.navigate(ExtensionRoute(it)) })
     }
-    entry<PluginMarketsRoute> { PluginMarketsPage(services.plugins.takeUnless { demo }, onBack = navigator::back) }
+    entry<ExtensionMarketsRoute> { ExtensionMarketsPage(services.extensions.takeUnless { demo }, onBack = navigator::back) }
     entry<ChannelRoute> { route ->
         ChannelPage(services.channels.takeUnless { demo }, route.channelId, onBack = navigator::back, onOpen = navigator::navigate)
     }
@@ -60,7 +60,7 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
             services.sessions.machines.map { list -> list.associate { it.id to it.name } }.distinctUntilChanged()
         }.collectAsState(emptyMap())
         val machineName = remember(names) { { id: String -> names[id]?.takeIf { it.isNotBlank() } ?: id } }
-        LauncherPage(services.machines.takeUnless { demo }, services.plugins.takeUnless { demo }, route.machineId, route.name, onBack = navigator::back,
+        LauncherPage(services.machines.takeUnless { demo }, services.extensions.takeUnless { demo }, route.machineId, route.name, onBack = navigator::back,
             machineName = machineName)
     }
 }

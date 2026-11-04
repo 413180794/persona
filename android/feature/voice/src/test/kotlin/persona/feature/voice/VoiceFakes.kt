@@ -1,12 +1,12 @@
 package persona.feature.voice
 
-import persona.core.contracts.api.HubPlugin
+import persona.core.contracts.api.HubExtension
 import persona.core.contracts.api.VoiceModelChoice
 import persona.core.contracts.api.VoiceModelOption
 import persona.core.contracts.api.VoiceModelOptions
 import persona.core.contracts.api.VoiceOption
 import persona.core.contracts.api.VoiceOptions
-import persona.core.contracts.api.VoicePlugins
+import persona.core.contracts.api.VoiceExtensions
 import persona.core.contracts.api.VoiceSocket
 import persona.core.contracts.api.VoiceSocketListener
 
@@ -21,8 +21,8 @@ internal class FakeSocket : VoiceSocket {
     override fun close(code: Int, reason: String?) { closed = code to reason }
 }
 
-/** A hub with one voice plugin; each connect is a new [FakeSocket], its listener kept to play the plugin's part. */
-internal class FakePlugins : VoicePlugins {
+/** A hub with one voice extension; each connect is a new [FakeSocket], its listener kept to play the extension's part. */
+internal class FakeExtensions : VoiceExtensions {
     var models = VoiceModelOptions(listOf(VoiceModelOption("fast", "快"), VoiceModelOption("deep", "深")), default = "deep")
     var choice: VoiceModelChoice? = null
     var modelsError: Exception? = null
@@ -35,17 +35,17 @@ internal class FakePlugins : VoicePlugins {
     val voiceRequests = mutableListOf<String?>()
     val sockets = mutableListOf<Pair<FakeSocket, VoiceSocketListener>>()
     val socket: FakeSocket get() = sockets.last().first
-    val plugin: VoiceSocketListener get() = sockets.last().second
+    val extension: VoiceSocketListener get() = sockets.last().second
 
-    override suspend fun voicePlugin() = HubPlugin("voice", "语音", "voice", "running")
-    override suspend fun voices(pluginId: String, model: String?): VoiceOptions {
+    override suspend fun voiceExtension() = HubExtension("voice", "语音", "voice", "running")
+    override suspend fun voices(extensionId: String, model: String?): VoiceOptions {
         voiceRequests += model
         voicesError?.let { throw it }
         return voices
     }
-    override suspend fun models(pluginId: String): VoiceModelOptions = modelsError?.let { throw it } ?: models
-    override suspend fun modelChoice(pluginId: String): VoiceModelChoice? = choiceError?.let { throw it } ?: choice
-    override fun connect(pluginId: String, listener: VoiceSocketListener): VoiceSocket {
+    override suspend fun models(extensionId: String): VoiceModelOptions = modelsError?.let { throw it } ?: models
+    override suspend fun modelChoice(extensionId: String): VoiceModelChoice? = choiceError?.let { throw it } ?: choice
+    override fun connect(extensionId: String, listener: VoiceSocketListener): VoiceSocket {
         connectError?.let { throw it }
         val socket = FakeSocket()
         sockets += socket to listener

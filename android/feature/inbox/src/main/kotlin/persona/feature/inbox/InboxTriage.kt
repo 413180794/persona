@@ -15,7 +15,7 @@ import persona.core.designsystem.Status
 import persona.core.designsystem.Tokens
 import persona.core.designsystem.icons.PhIcons
 
-// New items waiting for triage (#1773): since #1644 a plugin's new items enter the inbox only once the model has
+// New items waiting for triage (#1773): since #1644 an extension's new items enter the inbox only once the model has
 // sorted them, and the hub says in GET /api/v1/inbox `triage` how many wait and why (server/internal/hub/
 // inbox_admit.go). While some wait, a banner over the list says so: the same words, place and tone on the web, iOS
 // and Android.

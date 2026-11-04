@@ -220,7 +220,7 @@ fun HubCard(
 
 /**
  * A top-level destination. [badge] counts things waiting for the user; [badgeText] replaces it (体验); [dot] is a
- * mark without a number (plugins' badges that are words, not counts).
+ * mark without a number (extensions' badges that are words, not counts).
  */
 @Immutable
 data class NavItem(val key: String, val label: String, val icon: PhIcon, val badge: Int = 0, val badgeText: String? = null, val dot: Boolean = false)

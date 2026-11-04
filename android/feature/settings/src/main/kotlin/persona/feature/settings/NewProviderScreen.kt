@@ -22,8 +22,8 @@ object NewProviderPreview {
 }
 
 /**
- * 新增模型供应商 (docs/launchers.md「从插件添加」): 自己填写 — the name, the kind (Claude Code 启动器 / 直接 API), the
- * gateway and key, the models and flags — or, when the hub's plugins offer presets, 从插件添加: a preset, then only the
+ * 新增模型供应商 (docs/launchers.md「从扩展添加」): 自己填写 — the name, the kind (Claude Code 启动器 / 直接 API), the
+ * gateway and key, the models and flags — or, when the hub's extensions offer presets, 从扩展添加: a preset, then only the
  * name, the key and maybe another of its models. [onSaved] gets the new provider's 模型配置 id.
  */
 @Composable
@@ -45,7 +45,7 @@ internal fun NewProviderPage(providers: ProviderSetup, onBack: () -> Unit, onSav
     }) {
         if (!state.loaded) item("loading") { JLoading() }
         if (state.presets.isNotEmpty()) item("source") {
-            JSegmented(listOf(JSegment("自己填写"), JSegment("从插件添加")), if (draft.fromPreset) 1 else 0,
+            JSegmented(listOf(JSegment("自己填写"), JSegment("从扩展添加")), if (draft.fromPreset) 1 else 0,
                 { model.edit(draft.copy(fromPreset = it == 1)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.s))
         }
         if (state.loaded) {
@@ -57,7 +57,7 @@ internal fun NewProviderPage(providers: ProviderSetup, onBack: () -> Unit, onSav
     val preset = state.selected
     if (choosingModel && preset != null) JActionSheet(preset.choices.map { choice ->
         JAction(choice.label, checked = choice.id == draft.presetModel, onClick = { model.edit(draft.copy(presetModel = choice.id)) })
-    }, { choosingModel = false }, title = "默认模型", note = preset.modelsError?.let { "读不到插件的模型列表（$it），这里是它声明的。" })
+    }, { choosingModel = false }, title = "默认模型", note = preset.modelsError?.let { "读不到扩展的模型列表（$it），这里是它声明的。" })
 }
 
 private fun androidx.compose.foundation.lazy.LazyListScope.nameField(state: NewProviderState, editable: Boolean, onEdit: (NewProviderDraft) -> Unit, example: String) {
@@ -77,7 +77,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.keyField(state: NewPr
     }
 }
 
-/** 从插件添加: the presets to pick from, the name, the key and the model. */
+/** 从扩展添加: the presets to pick from, the name, the key and the model. */
 private fun androidx.compose.foundation.lazy.LazyListScope.presetForm(
     state: NewProviderState, editable: Boolean, onEdit: (NewProviderDraft) -> Unit, onPick: (String) -> Unit, onModel: () -> Unit,
 ) {
@@ -91,7 +91,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.presetForm(
         }
     }
     item("presets-note") {
-        SettingsCaption("地址、接入方式和模型由插件「${preset.plugin}」提供；加好以后和自己填写的一样可以编辑。",
+        SettingsCaption("地址、接入方式和模型由扩展「${preset.extension}」提供；加好以后和自己填写的一样可以编辑。",
             Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s))
     }
     nameField(state, editable, onEdit, "jv_team")
@@ -103,12 +103,12 @@ private fun androidx.compose.foundation.lazy.LazyListScope.presetForm(
         } else {
             val picked = preset.choices.firstOrNull { it.id == state.draft.presetModel }
             JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
-                JRow("默认模型", value = picked?.label ?: state.draft.presetModel.ifEmpty { "插件默认" }, enabled = editable, onClick = onModel)
+                JRow("默认模型", value = picked?.label ?: state.draft.presetModel.ifEmpty { "扩展默认" }, enabled = editable, onClick = onModel)
             }
         }
     }
     item("preset-model-note") {
-        SettingsCaption(preset.modelsError?.takeIf { it.isNotBlank() }?.let { "读不到插件的模型列表（$it），这里是它声明的。" }
+        SettingsCaption(preset.modelsError?.takeIf { it.isNotBlank() }?.let { "读不到扩展的模型列表（$it），这里是它声明的。" }
             ?: "各用途的具体选择在「模型配置」里统一管理；未单独指定时使用这里的默认。",
             Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s))
     }

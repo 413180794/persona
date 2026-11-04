@@ -5,7 +5,7 @@ import persona.core.contracts.api.*
 import persona.core.designsystem.Status
 import persona.core.hub.HubError
 import persona.core.hub.HubFailure
-import persona.core.navigation.PluginRoute
+import persona.core.navigation.ExtensionRoute
 import persona.core.navigation.SettingsPage
 import persona.core.navigation.SettingsPageRoute
 import kotlinx.coroutines.flow.flowOf
@@ -18,7 +18,7 @@ import java.time.ZoneOffset
 private val app = HubChannel(id = "app", name = "Persona", kind = "app", source = "builtin", installed = true, enabled = true,
     state = "connected", bind = "none", readOnly = true, surfaces = listOf("iPhone", "Android", "网页"),
     capabilities = ChannelCapabilities(imagesIn = true, filesIn = true, voiceIn = true, format = "markdown", asks = "buttons", typing = true, progress = true))
-private val wechat = HubChannel(id = "wechat", name = "微信", kind = "im", source = "plugin", plugin = "wechat", installed = true, enabled = true,
+private val wechat = HubChannel(id = "wechat", name = "微信", kind = "im", source = "plugin", extension = "wechat", installed = true, enabled = true,
     state = "connected", account = ChannelAccount(name = "微信用户 a1b2c3"), bind = "qr", description = "微信里和 Persona 说话",
     capabilities = ChannelCapabilities(imagesIn = true, format = "plain", maxText = 3500, asks = "text", push = true, typing = true),
     target = ChannelTarget.Main,
@@ -27,7 +27,7 @@ private val feishu = HubChannel(id = "feishu", name = "飞书机器人", kind = 
     state = "not_connected", error = "还没配对", bind = "fields", description = "私聊飞书机器人")
 private val broken = HubChannel(id = "examplechat", name = "Example Chat", kind = "im", source = "plugin", installed = true, enabled = true,
     state = "error", error = "连不上 Example Chat", account = ChannelAccount(name = "me"), bind = "qr")
-private val market = HubChannel(id = "slackish", name = "Slackish", kind = "im", source = "market", plugin = "slackish", market = "m1",
+private val market = HubChannel(id = "slackish", name = "Slackish", kind = "im", source = "market", extension = "slackish", market = "m1",
     state = "not_installed", bind = "none", description = "在 Slackish 里和 Persona 说话")
 private val larkAgent = HubChannel(id = "lark_agent", name = "飞书 /agent", kind = "mention", source = "builtin", installed = true,
     enabled = false, state = "disabled", bind = "config", readOnly = true)
@@ -127,7 +127,7 @@ class ChannelsStateTest {
     }
 
     @Test fun moreSettingsOpensOnlyPagesAndroidHas() {
-        assertEquals(PluginRoute("wechat"), ChannelText.settingsDestination("settings/plugins/wechat"))
+        assertEquals(ExtensionRoute("wechat"), ChannelText.settingsDestination("settings/plugins/wechat"))
         assertEquals(SettingsPageRoute(SettingsPage.ModelConfig), ChannelText.settingsDestination("settings/model-config"))
         // The Feishu bot's own page is iOS's and the web's: no row.
         assertNull(ChannelText.settingsDestination("settings/connectors/feishu-bot"))

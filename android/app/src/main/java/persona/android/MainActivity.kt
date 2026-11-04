@@ -103,7 +103,7 @@ class MainActivity : ComponentActivity() {
             // Levels are ordered best first, so the lower of the two choices is the later one.
             val glassLevel = maxOf(app.appearance.deviceLevel(glassPreference), GlassThrottle.ceiling.value)
             val channels by channelDirectory.channels.collectAsStateWithLifecycle()
-            // What the selected hub offers, from its hello: Feishu through the lark-connector plugin (#1530), the main
+            // What the selected hub offers, from its hello: Feishu through the lark-connector extension (#1530), the main
             // conversation's actions (#1727).
             val features by remember(app) {
                 app.hub.flatMapLatest { it?.connection?.serverFeatures ?: flowOf(emptySet()) }.distinctUntilChanged()

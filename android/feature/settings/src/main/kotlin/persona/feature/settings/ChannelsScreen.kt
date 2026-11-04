@@ -39,13 +39,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 设置 › 插件 › 渠道 (docs/channels.md「界面」): every way of talking to Persona in three sections — Persona's own
- * apps, the ones installed (connected or not), and the ones a plugin market offers (opening the market's page).
+ * 设置 › 扩展 › 渠道 (docs/channels.md「界面」): every way of talking to Persona in three sections — Persona's own
+ * apps, the ones installed (connected or not), and the ones an extension market offers (opening the market's page).
  */
 @Composable
 internal fun ChannelsPage(
     channels: ChannelManagement?, onBack: () -> Unit, onChannel: (String) -> Unit,
-    onMarketPlugin: ((market: String, plugin: String) -> Unit)? = null,
+    onMarketExtension: ((market: String, extension: String) -> Unit)? = null,
 ) {
     if (channels == null) {
         JListPage(title = "渠道", onBack = onBack) { item { JNotice("体验模式没有 hub 的渠道。") } }
@@ -76,8 +76,8 @@ internal fun ChannelsPage(
             itemsIndexed(section.channels, key = { _, it -> "channel-${it.id}" }) { index, channel ->
                 val market = channel.source == "market"
                 val open: (() -> Unit)? = if (!market) ({ onChannel(channel.id) })
-                    else onMarketPlugin?.let { go -> channel.market?.takeIf { it.isNotBlank() }?.let { m ->
-                        channel.plugin?.takeIf { it.isNotBlank() }?.let { p -> { go(m, p) } } } }
+                    else onMarketExtension?.let { go -> channel.market?.takeIf { it.isNotBlank() }?.let { m ->
+                        channel.extension?.takeIf { it.isNotBlank() }?.let { p -> { go(m, p) } } } }
                 JGroupItem(GroupPosition.of(index, section.channels.size)) {
                     JRow(channel.label, subtitle = ChannelText.subtitle(channel), leading = { JChannelMark(channel) },
                         trailing = { ChannelStateMark(channel) }, chevron = open != null, enabled = !market || open != null,
@@ -89,7 +89,7 @@ internal fun ChannelsPage(
     }
 }
 
-/** 设置's 渠道 row, under 插件: how many are connected, in the danger colour with the broken ones when any went wrong. */
+/** 设置's 渠道 row, under 扩展: how many are connected, in the danger colour with the broken ones when any went wrong. */
 @Composable
 internal fun ChannelsSettingsRow(list: List<HubChannel>?, position: GroupPosition, selected: Boolean, onClick: () -> Unit) {
     val summary = ChannelText.listSummary(list)
@@ -110,7 +110,7 @@ private fun ChannelStateMark(channel: HubChannel) =
 private fun ChannelNote(text: String) = SettingsCaption(text, Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s))
 
 /**
- * 设置 › 插件 › 渠道 › one: how it is doing; its switch; binding it (a step at a time: fields, a QR code to scan, a
+ * 设置 › 扩展 › 渠道 › one: how it is doing; its switch; binding it (a step at a time: fields, a QR code to scan, a
  * code to send to the bot) or undoing that; where its messages go; its features; a test message; and its own fuller
  * page when Android has one ([onOpen]). Persona's own apps, /agent in Feishu and voice are set up elsewhere: only shown.
  */

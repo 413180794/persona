@@ -29,7 +29,7 @@ interface ModelConfiguration {
     /**
      * `GET /api/v1/model-config/providers/{id}/models` (#943): a launcher provider's /model list, asked on a machine that
      * has the launcher ([machine] first: the purpose's own, where it runs). null: an older hub, or a provider with no list
-     * to ask for (plugins bring theirs, APIs have none).
+     * to ask for (extensions bring theirs, APIs have none).
      */
     // No default body: a wrapper that forgot to pass it on answered "no list" without a word (the DI one did).
     suspend fun providerModels(provider: String, refresh: Boolean = false, machine: String? = null): ProviderModels?
@@ -47,7 +47,7 @@ data class ProviderModels(
 /** The hub predates unified model configuration (its routes answer 404 without an error body). */
 class ModelConfigurationUnsupported : Exception("这个 hub 还不支持统一模型配置，请先更新服务器。")
 
-/** The hub has model configuration but not this purpose (a task that was deleted, a plugin that went away). */
+/** The hub has model configuration but not this purpose (a task that was deleted, an extension that went away). */
 class ModelPurposeNotFound(message: String) : Exception(message)
 
 sealed interface ModelPurposeSave {
@@ -69,7 +69,7 @@ data class ModelBinding(
 data class ModelProvider(
     @SerialName("id") val id: String,
     @SerialName("name") val name: String = "",
-    /** launcher | api | plugin. */
+    /** launcher | api | extension. */
     @SerialName("kind") val kind: String = "launcher",
     /** messages | responses, for API providers. */
     @SerialName("api") val api: String? = null,
@@ -87,7 +87,7 @@ data class ModelPurpose(
     @SerialName("id") val id: String,
     @SerialName("name") val name: String = "",
     @SerialName("group") val group: String = "",
-    /** launcher | api | plugin. */
+    /** launcher | api | extension. */
     @SerialName("kind") val kind: String = "launcher",
     @SerialName("parent") val parent: String? = null,
     @SerialName("machine_id") val machineId: String? = null,

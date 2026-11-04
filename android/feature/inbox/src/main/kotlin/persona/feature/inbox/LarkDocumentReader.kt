@@ -50,7 +50,7 @@ internal fun LarkLinkHost(repository: InboxRepository, content: @Composable () -
     // A web page over the page: no glass may sample its WebView, here or in the page around it (LocalWebSheets).
     WebSheetShown(target != null || momentPostId != null)
     CompositionLocalProvider(LocalLarkLinkOpener provides { url, source ->
-        // Native views only while the hub has them (the lark-connector plugin's features, #1530); else a web page.
+        // Native views only while the hub has them (the lark-connector extension's features, #1530); else a web page.
         when (val native = larkNativeLink(url, lark)) {
             is LarkNativeLink.MomentsPost -> { momentPostId = native.postId; momentLink = url }
             is LarkNativeLink.Document -> larkWebUrl(url)?.let { target = LarkLink(it, source) }

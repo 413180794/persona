@@ -9,7 +9,7 @@ import persona.feature.inbox.LarkRoute
 import persona.feature.inbox.inboxOpenPage
 
 /**
- * Deep links name an inbox item or a Lark chat; open them as the inbox list would (an item whose connector's plugin
+ * Deep links name an inbox item or a Lark chat; open them as the inbox list would (an item whose connector's extension
  * draws its page opens that page, [pages]). Null means the records do not show the target yet; [loaded] says no later
  * refresh will.
  */

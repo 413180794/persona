@@ -4,7 +4,7 @@ import androidx.navigation3.runtime.NavKey
 import persona.core.navigation.InboxItemUiRoute
 
 /**
- * Feed identity is stable even when the detail was opened at another inbox boundary. A plugin's page of an item
+ * Feed identity is stable even when the detail was opened at another inbox boundary. An extension's page of an item
  * (inbox_item) is that item's.
  */
 internal fun isInboxItemSelected(detail: NavKey?, itemId: String, feedId: String?): Boolean = when (detail) {

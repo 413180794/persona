@@ -4,11 +4,11 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * A plugin of the hub (`GET /api/v1/plugins`, docs/plugins.md「hub 的接口」): the voice page looks for a running
- * `kind == "voice"` one; 设置 › 插件 shows them all. Hubs from before the plugin base send only the first five fields.
+ * An extension of the hub (`GET /api/v1/extensions`, docs/extensions.md「hub 的接口」): the voice page looks for a running
+ * `kind == "voice"` one; 设置 › 扩展 shows them all. Hubs from before the extension base send only the first five fields.
  */
 @Serializable
-data class HubPlugin(
+data class HubExtension(
     val id: String = "",
     val name: String = "",
     /** The first extension point it contributes to (`voice`, `connectors`…). */
@@ -30,7 +30,7 @@ data class HubPlugin(
     val isRunningVoice: Boolean get() = kind == "voice" && status == "running"
 }
 
-/** A voice (音色) a voice plugin offers for one model (`GET /api/v1/plugins/{id}/voices?model=`). */
+/** A voice (音色) a voice extension offers for one model (`GET /api/v1/extensions/{id}/voices?model=`). */
 @Serializable
 data class VoiceOption(
     val id: String = "",
@@ -44,7 +44,7 @@ data class VoiceOption(
 @Serializable
 data class VoiceOptions(val voices: List<VoiceOption> = emptyList(), val default: String? = null)
 
-/** A realtime model a voice plugin offers (`GET /api/v1/plugins/{id}/models`). */
+/** A realtime model a voice extension offers (`GET /api/v1/extensions/{id}/models`). */
 @Serializable
 data class VoiceModelOption(val id: String = "", val name: String? = null) {
     val label: String get() = name?.takeIf { it.isNotBlank() } ?: id
@@ -54,39 +54,39 @@ data class VoiceModelOption(val id: String = "", val name: String? = null) {
 data class VoiceModelOptions(val models: List<VoiceModelOption> = emptyList(), val default: String? = null)
 
 /**
- * What the hub's model configuration says for a voice plugin (the purpose `plugin.<id>`, docs/model-config.md): the
+ * What the hub's model configuration says for a voice extension (the purpose `plugin.<id>`, docs/model-config.md): the
  * effective model, if one is set, and the purpose's status when it is not usable as it stands (`未验证` is usable).
  */
 data class VoiceModelChoice(val model: String? = null, val status: String? = null)
 
 /**
- * The paired hub's voice plugins, on its current route with its pinned client and token. Bound to one pairing like
+ * The paired hub's voice extensions, on its current route with its pinned client and token. Bound to one pairing like
  * [MachineMetricsApi]; calls after the pairing or the route changed fail with a cancellation.
  */
-interface VoicePlugins {
-    /** The first running voice plugin, or null: a hub without plugins (404) or without a running voice one. */
-    suspend fun voicePlugin(): HubPlugin?
+interface VoiceExtensions {
+    /** The first running voice extension, or null: a hub without extensions (404) or without a running voice one. */
+    suspend fun voiceExtension(): HubExtension?
 
-    /** The voices of [model] (null: the plugin's default model). */
-    suspend fun voices(pluginId: String, model: String?): VoiceOptions
+    /** The voices of [model] (null: the extension's default model). */
+    suspend fun voices(extensionId: String, model: String?): VoiceOptions
 
-    /** The models the plugin offers; a plugin from before models could be picked (404) has only its own: empty. */
-    suspend fun models(pluginId: String): VoiceModelOptions
+    /** The models the extension offers; an extension from before models could be picked (404) has only its own: empty. */
+    suspend fun models(extensionId: String): VoiceModelOptions
 
     /**
-     * The model configuration of `plugin.<pluginId>`; null on an older hub without model configuration (404). Any
+     * The model configuration of `extension.<extensionId>`; null on an older hub without model configuration (404). Any
      * other failure is thrown: a newer hub that cannot be read is not the same as one without configuration.
      */
-    suspend fun modelChoice(pluginId: String): VoiceModelChoice?
+    suspend fun modelChoice(extensionId: String): VoiceModelChoice?
 
     /**
-     * Opens the plugin's socket (`/api/v1/plugins/{id}/ws`). The listener is called on a transport thread; closing
+     * Opens the extension's socket (`/api/v1/extensions/{id}/ws`). The listener is called on a transport thread; closing
      * the socket ends the conversation.
      */
-    fun connect(pluginId: String, listener: VoiceSocketListener): VoiceSocket
+    fun connect(extensionId: String, listener: VoiceSocketListener): VoiceSocket
 }
 
-/** One open voice conversation's socket: JSON text frames and PCM16 binary frames (docs/plugins.md「语音」). */
+/** One open voice conversation's socket: JSON text frames and PCM16 binary frames (docs/extensions.md「语音」). */
 interface VoiceSocket {
     fun send(text: String): Boolean
     fun send(bytes: ByteArray, offset: Int = 0, length: Int = bytes.size): Boolean
@@ -97,8 +97,8 @@ interface VoiceSocketListener {
     fun onOpen()
     fun onText(text: String)
     fun onBinary(bytes: ByteArray)
-    /** The plugin or the hub closed the socket; 1001 is a plugin restarting (a deploy). */
+    /** The extension or the hub closed the socket; 1001 is an extension restarting (a deploy). */
     fun onClosed(code: Int, reason: String)
-    /** The socket failed or was refused; [status] is the HTTP status of a refused upgrade (404: no such plugin). */
+    /** The socket failed or was refused; [status] is the HTTP status of a refused upgrade (404: no such extension). */
     fun onFailure(error: Throwable, status: Int?)
 }

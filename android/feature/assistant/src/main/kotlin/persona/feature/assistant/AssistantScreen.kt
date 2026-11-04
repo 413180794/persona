@@ -87,7 +87,7 @@ fun AssistantScreen(
     onOpenInbox: (() -> Unit)? = null,
     /** Pins or unpins a conversation (the hub's pins); none: the history offers no pinning. */
     onTogglePin: (suspend (SessionKey) -> Unit)? = null,
-    /** 语音对话 in the title menu, when the hub runs a voice plugin. */
+    /** 语音对话 in the title menu, when the hub runs a voice extension. */
     onVoice: (() -> Unit)? = null,
     onTodos: (() -> Unit)? = null,
     todoCount: Int = 0,

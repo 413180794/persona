@@ -345,7 +345,7 @@ data class ErrorBody(
     val code: String? = null, val retryable: Boolean? = null,
     @WireEnum("none", "unknown", "yes") val delivered: String? = null,
     val draft: String? = null, val clearable: String? = null,
-    /** The input the hub refused (a plugin setting's dotted path, `invalid_config`) and why, without the path. */
+    /** The input the hub refused (an extension setting's dotted path, `invalid_config`) and why, without the path. */
     val field: String? = null, val message: String? = null,
 )
 

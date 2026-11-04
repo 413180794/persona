@@ -128,6 +128,9 @@ type MarketIndex struct {
 	Name          string `json:"name"`
 	Description   string `json:"description,omitempty"`
 	Homepage      string `json:"homepage,omitempty"`
+	// SigningKey is the key the market says it signs with (ed25519:<base64>): only a hint, never trusted by itself
+	// (CheckSignature).
+	SigningKey string `json:"signing_key,omitempty"`
 	// Extensions are "extensions" in an index; the old key "plugins" is read too, and still the one written out (the
 	// hub keeps the index it read, which a hub rolled back to a build before #1844 reads again).
 	Extensions []MarketEntry `json:"plugins"`
@@ -364,16 +367,67 @@ func escapePath(p string) string {
 	return strings.Join(parts, "/")
 }
 
+// Fetched is a market's index as read: parsed, and its raw bytes with its signature (nil when it has none).
+type Fetched struct {
+	Index    *MarketIndex
+	Warnings []string
+	Raw, Sig []byte
+}
+
 // Fetch reads the market's index.
 func (m *Market) Fetch(ctx context.Context) (*MarketIndex, []string, error) {
+	f, err := m.FetchSigned(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return f.Index, f.Warnings, nil
+}
+
+// FetchSigned reads the market's index and its signature, <index>.sig next to it. A signature that is not there is
+// nil; one that cannot be read (the network, no rights) fails the read, so it is never taken for a missing one.
+func (m *Market) FetchSigned(ctx context.Context) (*Fetched, error) {
 	limit := marketFetchFor
 	if m.Spec.Kind == "git" {
 		limit = gitFor // a clone over SSH can be slow
 	}
 	ctx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
+	raw, sig, err := m.fetchRaw(ctx)
+	if err == nil && m.Spec.Kind == "github" && sig != nil {
+		// The index and its signature are two reads: a push in between pairs a new index with an old signature.
+		// Read both again once when they do not agree; CheckSignature has the last word.
+		var sf sigFile
+		if json.Unmarshal(sig, &sf) == nil && !signedByAny(raw, sf) {
+			raw, sig, err = m.fetchRaw(ctx)
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("读不到 %s：%w", m.Spec, err)
+	}
+	ix, warnings, err := ParseIndex(raw)
+	if err != nil {
+		return nil, err
+	}
+	return &Fetched{Index: ix, Warnings: warnings, Raw: raw, Sig: sig}, nil
+}
+
+// signedByAny is whether sig verifies raw with the key raw's own signing_key names (a cheap consistency check).
+func signedByAny(raw []byte, sf sigFile) bool {
+	var v struct {
+		SigningKey string `json:"signing_key"`
+	}
+	if json.Unmarshal(raw, &v) != nil {
+		return false
+	}
+	k, err := ParseSigningKey(v.SigningKey)
+	return err == nil && verifies(k, raw, sf)
+}
+
+// fetchRaw reads the index (its new name, else its old one) and the signature next to the one it read.
+func (m *Market) fetchRaw(ctx context.Context) ([]byte, []byte, error) {
 	var b strings.Builder
 	var err error
+	name := IndexFile
 	if m.Spec.Kind == "git" {
 		if m.Token != "" {
 			return nil, nil, errors.New("git 市场用 hub 机器自己的凭据（SSH key），不收 token")
@@ -381,25 +435,49 @@ func (m *Market) Fetch(ctx context.Context) (*MarketIndex, []string, error) {
 		if err = m.syncGit(ctx); err == nil {
 			if err = m.gitFile(IndexFile, &b, IndexMost); errors.Is(err, os.ErrNotExist) {
 				b.Reset()
+				name = LegacyIndexFile
 				err = m.gitFile(LegacyIndexFile, &b, IndexMost)
 			}
 		}
 	} else if m.Spec.Kind == "github" {
 		if err = m.get(ctx, m.contentsURL(IndexFile), "application/vnd.github.raw", &b, IndexMost); errors.As(err, new(notFound)) {
 			b.Reset()
+			name = LegacyIndexFile
 			err = m.get(ctx, m.contentsURL(LegacyIndexFile), "application/vnd.github.raw", &b, IndexMost)
 		}
 	} else {
+		name = m.Spec.URL
 		err = m.get(ctx, m.Spec.URL, "application/json", &b, IndexMost)
 		if legacy, ok := strings.CutSuffix(m.Spec.URL, "/"+IndexFile); ok && errors.As(err, new(notFound)) {
 			b.Reset()
-			err = m.get(ctx, legacy+"/"+LegacyIndexFile, "application/json", &b, IndexMost)
+			name = legacy + "/" + LegacyIndexFile
+			err = m.get(ctx, name, "application/json", &b, IndexMost)
 		}
 	}
 	if err != nil {
-		return nil, nil, fmt.Errorf("读不到 %s：%w", m.Spec, err)
+		return nil, nil, err
 	}
-	return ParseIndex([]byte(b.String()))
+	var s strings.Builder
+	switch m.Spec.Kind {
+	case "git":
+		if err = m.gitFile(name+SigSuffix, &s, sigFileMost); errors.Is(err, os.ErrNotExist) {
+			return []byte(b.String()), nil, nil
+		}
+	case "github":
+		if err = m.get(ctx, m.contentsURL(name+SigSuffix), "application/vnd.github.raw", &s, sigFileMost); errors.As(err, new(notFound)) {
+			return []byte(b.String()), nil, nil
+		}
+	default:
+		u, _ := url.Parse(name)
+		u.Path += SigSuffix
+		if err = m.get(ctx, u.String(), "application/json", &s, sigFileMost); errors.As(err, new(notFound)) {
+			return []byte(b.String()), nil, nil
+		}
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("签名：%w", err)
+	}
+	return []byte(b.String()), []byte(s.String()), nil
 }
 
 // Download fetches pkg into dir (a fresh staging directory) and checks its sha256; it returns the file and the
@@ -504,6 +582,11 @@ type MarketRecord struct {
 	Error       string          `json:"error,omitempty"`
 	FetchedAt   *time.Time      `json:"fetched_at,omitempty"`
 	AddedAt     time.Time       `json:"added_at"`
+	// SigningKey is the key the hub trusts for this market (ed25519:<base64>): the first it saw, or the one its owner
+	// accepted; "" while the market has never been signed.
+	SigningKey string `json:"-"`
+	// Signature is the state of the index last read.
+	Signature MarketSignature `json:"signature"`
 }
 
 // MarketStore keeps the markets (the hub's Postgres).

@@ -20,7 +20,7 @@ class SettingsNavigationTest {
             SettingsPage.ModelConfig to "models",
             SettingsPage.Hubs to "hubs",
             SettingsPage.Persona to "persona",
-            SettingsPage.Plugins to "plugins",
+            SettingsPage.Extensions to "plugins",
             SettingsPage.Mail to "mail",
             SettingsPage.Feishu to "feishu",
             SettingsPage.Channels to "channels",

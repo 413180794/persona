@@ -19,8 +19,8 @@ import persona.core.navigation.*
 @Composable
 internal fun MachinesScreen(
     machineId: String?, model: MachinesViewModel, navigator: Navigator, actions: MachineActionsViewModel? = null, launcherPages: Boolean = false,
-    /** What plugins draw on this machine's page, after its own sections (docs/plugins.md「UI 插槽」). */
-    pluginSections: (androidx.compose.foundation.lazy.LazyListScope.() -> Unit)? = null,
+    /** What extensions draw on this machine's page, after its own sections (docs/extensions.md「UI 插槽」). */
+    extensionSections: (androidx.compose.foundation.lazy.LazyListScope.() -> Unit)? = null,
 ) {
     val state by model.state.collectAsStateWithLifecycle()
     val machines by model.sessions.machines.collectAsStateWithLifecycle()
@@ -137,7 +137,7 @@ internal fun MachinesScreen(
             }
             item("method") { Text("CPU 为整机使用率；内存不含可回收缓存。网络只计物理网卡，磁盘沿用 node 的系统盘统计。",
                 Modifier.padding(vertical = 12.dp), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3) }
-            pluginSections?.invoke(this)
+            extensionSections?.invoke(this)
         }
     }
 }

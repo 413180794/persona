@@ -43,11 +43,11 @@ import persona.feature.inbox.InboxRepository
 import java.io.File
 
 /**
- * An inbox item whose body its connector's plugin draws (inbox_item, #1683), on the JVM with Robolectric's native
+ * An inbox item whose body its connector's extension draws (inbox_item, #1683), on the JVM with Robolectric's native
  * graphics (no emulator), in every style, light and dark: the inbox's header of the item (title, tier and source
- * line, 已处理, AI 摘要, AI 草拟 / 交给 AI) over the Feishu plugin's body of an event (people, time span, the event it
+ * line, 已处理, AI 摘要, AI 草拟 / 交给 AI) over the Feishu extension's body of an event (people, time span, the event it
  * continues, the messages, a reply field, 在会话里看). Each is checked to draw something and written as a PNG to
- * `build/inbox-item-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android.md「插件的 UI 插槽」). Pressing
+ * `build/inbox-item-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android.md「扩展的 UI 插槽」). Pressing
  * 在会话里看 brings the item's source link back to the shell.
  */
 @RunWith(AndroidJUnit4::class)
@@ -58,10 +58,10 @@ class InboxItemShotsTest {
 
     private val route = InboxItemUiRoute("lark:F1:1051", "lark-connector", "event", "周四的评审")
 
-    private class EventPlugin : PluginApiStub() {
-        override suspend fun renderUi(plugin: String, ui: String, context: PluginUiContext?, state: String?) = PluginInboxItemTest.eventView
-        override suspend fun uiAction(plugin: String, ui: String, action: String, context: PluginUiContext?, state: String?,
-            values: Map<String, String>?) = PluginUiResult(openUrl = "persona://inbox/${context?.item}/source")
+    private class EventExtension : ExtensionApiStub() {
+        override suspend fun renderUi(extension: String, ui: String, context: ExtensionUiContext?, state: String?) = ExtensionInboxItemTest.eventView
+        override suspend fun uiAction(extension: String, ui: String, action: String, context: ExtensionUiContext?, state: String?,
+            values: Map<String, String>?) = ExtensionUiResult(openUrl = "persona://inbox/${context?.item}/source")
     }
 
     /** One Feishu event in the inbox, nothing else. */
@@ -106,7 +106,7 @@ class InboxItemShotsTest {
         var run by mutableIntStateOf(0)
         var fallback: InboxItemFallback? = null
         val sources = mutableListOf<String>()
-        val slots = PluginSlots(EventPlugin(), flowOf(true), MutableSharedFlow())
+        val slots = ExtensionSlots(EventExtension(), flowOf(true), MutableSharedFlow())
         val inbox = OneItem()
         rule.setContent {
             PersonaTheme(darkTheme = dark, reduceMotion = true, style = style) {
@@ -114,7 +114,7 @@ class InboxItemShotsTest {
                     Box(Modifier.testTag("shot").width(400.dp).height(1500.dp).background(PersonaTheme.palette.background)) {
                         val body = rememberInboxItemBody(slots, route, onSource = { sources += it })
                         fallback = body.fallback
-                        InboxItemPluginScreen(inbox, route, navigator, body.title, body.loading, body.refreshing, body.refresh, body.items)
+                        InboxItemExtensionScreen(inbox, route, navigator, body.title, body.loading, body.refreshing, body.refresh, body.items)
                     }
                 }
             }
@@ -129,16 +129,16 @@ class InboxItemShotsTest {
         assertEquals(listOf("lark:F1:1051"), sources)
     }
 
-    // The item changed (new messages joined the event, it was done): the plugin draws it again; otherwise once.
+    // The item changed (new messages joined the event, it was done): the extension draws it again; otherwise once.
     @Test fun drawsAgainWhenTheItemChanges() {
         var renders = 0
-        val plugin = object : PluginApiStub() {
-            override suspend fun renderUi(plugin: String, ui: String, context: PluginUiContext?, state: String?): PluginView {
+        val extension = object : ExtensionApiStub() {
+            override suspend fun renderUi(extension: String, ui: String, context: ExtensionUiContext?, state: String?): ExtensionView {
                 renders++
-                return PluginInboxItemTest.eventView
+                return ExtensionInboxItemTest.eventView
             }
         }
-        val slots = PluginSlots(plugin, flowOf(true), MutableSharedFlow())
+        val slots = ExtensionSlots(extension, flowOf(true), MutableSharedFlow())
         var revision by mutableStateOf<Any?>(listOf("v1", 3))
         var other by mutableIntStateOf(0)
         rule.setContent {

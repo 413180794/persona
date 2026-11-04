@@ -14,12 +14,12 @@ internal object VoiceText {
     const val Speaking = "正在说，直接开口就能打断"
     const val Muted = "已静音"
     const val Ended = "对话已结束"
-    /** A tool the plugin did not name. */
+    /** A tool the extension did not name. */
     const val Working = "处理中"
     const val Restarted = "连接断了（语音服务可能刚重启，或网络不稳），点下面的按钮重新开始"
-    const val NoPlugin = "hub 上没有语音插件"
+    const val NoExtension = "hub 上没有语音扩展"
     const val Microphone = "麦克风打不开"
-    const val ModelMissing = "配置的语音模型不在插件目录中，请在模型配置里重新选择。"
+    const val ModelMissing = "配置的语音模型不在扩展目录中，请在模型配置里重新选择。"
     const val ModelUnavailable = "语音模型不可用"
     const val ConfigUnreadable = "读不到语音模型配置"
     const val AskTitle = "语音对话要用麦克风"
@@ -73,13 +73,13 @@ private val Languages = mapOf(
 
 /** Why the socket could not be used. [live]: it dropped in the middle of a conversation. */
 internal fun connectFailure(error: Throwable, status: Int?, live: Boolean): String = when {
-    status == 404 -> VoiceText.NoPlugin
-    // Mid-conversation it is nearly always the plugin or the hub restarting, or the network; say that, not the error.
+    status == 404 -> VoiceText.NoExtension
+    // Mid-conversation it is nearly always the extension or the hub restarting, or the network; say that, not the error.
     live -> VoiceText.Restarted
     else -> VoiceText.unreachable(reason(error, status))
 }
 
-/** The plugin or the hub closed the socket: 1001 is a plugin restarting (a deploy); 1000 is the end of it. */
+/** The extension or the hub closed the socket: 1001 is an extension restarting (a deploy); 1000 is the end of it. */
 internal fun closeMessage(code: Int, reason: String, live: Boolean): String? = when {
     code == 1001 -> VoiceText.Restarted
     code == 1000 -> null
@@ -88,7 +88,7 @@ internal fun closeMessage(code: Int, reason: String, live: Boolean): String? = w
     else -> null
 }
 
-/** Why the model configuration or the plugin's models could not be read; the page offers to try again. */
+/** Why the model configuration or the extension's models could not be read; the page offers to try again. */
 internal fun loadFailure(error: Throwable): String {
     val feedback = operationFeedback(error)
     return when {
@@ -111,7 +111,7 @@ internal fun voicesFailure(error: Throwable): String {
 private fun reason(error: Throwable, status: Int?): String {
     val feedback = operationFeedback(error)
     return when {
-        // The hub refuses plugins to a device that may only read and answer (docs/plugins.md); not an expired pairing.
+        // The hub refuses extensions to a device that may only read and answer (docs/extensions.md); not an expired pairing.
         status == 403 -> "这台设备不能用语音对话"
         status == 401 || feedback.action == FailureAction.PairAgain -> feedback.message
         status != null && status >= 500 -> "语音服务没有响应"
@@ -137,7 +137,7 @@ internal sealed interface VoiceSetup {
     /** The configuration could not be read: not the same as having none (docs/model-config.md「生效边界」). */
     data class Failed(val message: String) : VoiceSetup
 
-    /** Ready to talk with [model]; null: the plugin's own default. */
+    /** Ready to talk with [model]; null: the extension's own default. */
     data class Ready(val model: String?) : VoiceSetup
 
     /** Stopped before it started (the app went to the background while it was being set up). */
@@ -145,9 +145,9 @@ internal sealed interface VoiceSetup {
 }
 
 /**
- * The model of the next conversation, from the model configuration of `plugin.<id>` ([choice]) and the plugin's
- * models: an older hub without model configuration (null) gets the plugin's default; a purpose whose status says it
- * cannot be used, or a model the plugin no longer offers, is not quietly swapped for another.
+ * The model of the next conversation, from the model configuration of `plugin.<id>` ([choice]) and the extension's
+ * models: an older hub without model configuration (null) gets the extension's default; a purpose whose status says it
+ * cannot be used, or a model the extension no longer offers, is not quietly swapped for another.
  */
 internal fun resolveVoiceModel(choice: VoiceModelChoice?, models: VoiceModelOptions): VoiceSetup {
     val default = models.default?.takeIf { it.isNotBlank() }

@@ -266,6 +266,7 @@ personad extension config <id> key=value …           值能解析成 JSON 就�
 personad extension secret <id> <name> [--delete]     值从标准输入读（终端里不回显），不进命令行参数
 personad extension uninstall <id> [--keep-data]
 personad extension market list | add <spec> [--token] | remove <id> | refresh <id>
+personad extension market trust <id>                  市场换了签名的 key（或不再签名）：和发布方确认过再接受，见「扩展市场」「签名」
 personad extension search [关键词]
 personad extension install market:<市场 id>/<扩展 id>  从市场装；已装的就是升级
 personad extension auto-upgrade on|off [<id>]        市场扩展自动升级的总开关，带 id 是这一个扩展的开关
@@ -314,16 +315,17 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 
 | 接口 | 做什么 |
 | --- | --- |
-| `GET /api/v1/extensions/-/markets` | `{markets: [{id, spec, name, description, homepage, has_token, extensions（个数）, warnings, error, fetched_at, added_at}]}` |
+| `GET /api/v1/extensions/-/markets` | `{markets: [{id, spec, name, description, homepage, has_token, extensions（个数）, warnings, error, fetched_at, added_at, signature: {state, key_id?}}]}`（`signature` 见下面「签名」，老路径也带） |
 | `POST /api/v1/extensions/-/markets` `{spec, token?, token_from?}` | 先读一次索引，读不到不登记（400，`error` 说原因：地址不对、私有要 token、token 不对）；回市场。`token_from` 是另一个已登记市场的 id：用它的 token（同一个账号的 token 读几个私有仓库），调用方看不到 token，和 `token` 只能给一个；命令行 `market add <spec> --token-from=<市场 id>` |
 | `DELETE /api/v1/extensions/-/markets/{id}` | 不再读这个市场；从它装的扩展留着 |
-| `POST /api/v1/extensions/-/markets/{id}/refresh` | 现在重读索引 |
+| `POST /api/v1/extensions/-/markets/{id}/refresh` | 现在重读索引；签名不对时回 400 `market_signature`（上一份好的索引留着） |
+| `POST /api/v1/extensions/-/markets/{id}/trust` | 重读一次，接受市场的新 key（`key_changed`，新 key 要是索引里 `signing_key` 写的那把、并且验得过）或接受它不再签名；验不过的签名永远不接受（400 `market_signature`）；回市场 |
 | `PUT /api/v1/extensions/-/markets/{id}/token` `{token}` | 换 token（空串去掉）并重读 |
 | `GET /api/v1/extensions/-/catalog?q=&market=&refresh=1` | `{markets, extensions: [CatalogItem], platform}`。`q` 在 id、名字、说明、发布者、标签里找（不分大小写）；索引超过 6 小时的在后台重读，`refresh=1` 等全部重读完 |
 | `POST /api/v1/extensions/-/catalog/preview` `{market, extension}`（老字段名 `plugin` 也收） | 下载、校验，回预览（同「安装」的预览，多一个 `market`）；已装的就是升级的预览 |
 
 `CatalogItem`：`market`、`market_name`、`id`、`name`、`version`、`description`、`publisher`、`homepage`、`tags`、`contributes`（扩展点 → id）、
-`permissions`（给人看的几行，和安装前一样）、`problem`（装不了的原因：没有这台 hub 平台的包、要更新的 hub）、`installed`（已装的版本）、
+`permissions`（给人看的几行，和安装前一样）、`problem`（装不了的原因：没有这台 hub 平台的包、要更新的 hub、市场的签名不对）、`installed`（已装的版本）、
 `installed_source`、`from_this_market`、`upgradable`。
 
 **谁能做**：完整权限的设备能登记 / 删除市场；预览来自市场时能拿它安装、升级（`POST /api/v1/extensions/-/install`、`…/{id}/-/upgrade`，同样带权限摘要），
@@ -331,6 +333,39 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 包由市场索引的 sha256 钉死，装之前同样列出权限。只能读和回答的设备都不行。
 
 **发布一个市场**：仓库根目录放 `persona-extensions.json`，包放进 Release 附件（或仓库里、网站上），`sha256sum` 写进索引。扩展仓库的打包脚本顺手生成索引。
+
+### 签名
+
+（#1848）包由索引里的 sha256 钉死，索引本身由市场的 ed25519 私钥签名：仓库被人改了、换了，hub 不会照着新索引装东西。
+
+| 文件 | 内容 |
+| --- | --- |
+| `<索引>.sig`（和索引同目录：`persona-extensions.json.sig`，老名字的索引是 `persona-plugins.json.sig`） | `{"alg": "ed25519", "key_id": "<32 字节公钥的 sha256 的前 16 位 hex>", "sig": "<对索引文件原始字节的签名，base64>"}` |
+| 索引顶层 `signing_key` | `ed25519:<32 字节公钥的 base64>`：市场说自己用哪把 key，**只是提示**，hub 不凭它信任（老 hub 忽略这个字段） |
+| 仓库根 `market.pub` | 同一行公钥，给人看、给 CI 验 |
+
+签的是索引文件的原始字节（不做 JSON 规范化）。hub 读索引时一起读签名：GitHub 市场经 API 读同目录的 `.sig`（两次读之间有新推送、对不上时整对再读一次），
+git 市场读克隆里的，https 市场读索引地址加 `.sig`。签名文件 404 算没有签名；读不到（网络、权限）算这次没读成，不当成没有签名。还没记过 key 时，`.sig` 不是签名文件（对任何路径都回同一页的网站）也算没有签名；记过 key 的市场不行。
+
+**信任**：第一次读到签名就记下公钥（TOFU：登记市场时，或一直没签名的市场第一次签名时；只记验得过、并且就是索引 `signing_key` 写的那把），
+存在 `plugin_markets.signing_key`。以后：
+
+| `signature.state` | 什么时候 | hub 怎么做 |
+| --- | --- | --- |
+| `signed` | 用记下的 key 验得过 | 照常 |
+| `unsigned` | 没有签名，也从没记过 key（老市场、没签名的市场） | 照常，标成「未签名」 |
+| `invalid` | 记过 key，签名验不过（索引被改过）或签名没了 | **不更新目录**（上一份好的留着）、`error` 说原因；从这个市场**不能装、不能升级**（连上一份好的索引里的也不行，`catalog` 的 `problem` 写明），自动升级也停 |
+| `key_changed` | 签名用的是另一把 key（`key_id` 是新 key 的） | 同 `invalid`，等主人确认 |
+
+主人和发布方确认过（换 key 是发布方的事，hub 不能替人判断）后：`personad extension market trust <id>`，或管理界面 / 完整权限的设备 `POST …/markets/{id}/trust`。
+它接受两种情况：新 key（要是索引 `signing_key` 写的那把、并且验得过）；市场不再签名（忘掉记下的 key，回到 `unsigned`，下次签名时重新 TOFU）。
+签名验不过的索引永远不能 trust。改地址（`set-spec`）也按记下的 key 验，换地址不能顺便换 key。
+
+**私钥**（扩展仓库的发布方）：每个市场仓库一把，只放仓库的 GitHub Actions secret `EXTENSION_MARKET_SIGNING_KEY`，只交给 CI 里签名那一步
+（不交给跑扩展代码和测试的步骤）；另有一份离线备份由仓库的主人保存（密码管理器），不进仓库、不打日志。两个扩展仓库的 scripts 目录里有签名脚本 `sign-index.py`（只要 openssl；`sign-index.py verify` 验证），
+README 写了只用 openssl 验证的步骤。
+**轮换**（泄漏或丢了）：生成新 key（`openssl genpkey -algorithm ed25519`），换 Actions secret 和 `market.pub`，重新签索引并提交；
+登记了这个市场的 hub 变成 `key_changed`，各自的主人确认后 `market trust`。
 
 ## 自动升级
 

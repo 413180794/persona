@@ -4,23 +4,23 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * 新增模型供应商 (docs/launchers.md「接口」「从插件添加」): a provider kept by the hub (gateway, key sealed there, models),
- * typed in or taken from a plugin's preset. Bound to the active pairing, like 模型配置.
+ * 新增模型供应商 (docs/launchers.md「接口」「从扩展添加」): a provider kept by the hub (gateway, key sealed there, models),
+ * typed in or taken from an extension's preset. Bound to the active pairing, like 模型配置.
  */
 interface ProviderSetup {
-    /** `GET /api/v1/launchers/presets`: the providers the hub's plugins offer; none from a hub without them (404). */
+    /** `GET /api/v1/launchers/presets`: the providers the hub's extensions offer; none from a hub without them (404). */
     suspend fun presets(): List<ProviderPreset>
 
     /** `POST /api/v1/launchers`; the hub's refusal (a taken name, a bad address) comes back as its message. */
     suspend fun add(provider: NewProvider)
 }
 
-/** One provider a plugin offers: the address, the kind and the models come from it; the user adds a name and a key. */
+/** One provider an extension offers: the address, the kind and the models come from it; the user adds a name and a key. */
 @Serializable
 data class ProviderPreset(
-    /** `<plugin>/<provider>`. */
+    /** `<extension>/<provider>`. */
     @SerialName("id") val id: String,
-    @SerialName("plugin") val plugin: String = "",
+    @SerialName("plugin") val extension: String = "",
     @SerialName("name") val name: String = "",
     @SerialName("description") val description: String? = null,
     /** launcher | api */
@@ -32,7 +32,7 @@ data class ProviderPreset(
     @SerialName("models") val models: List<PresetModel> = emptyList(),
     /** What the key looks like or where to get one. */
     @SerialName("key_hint") val keyHint: String? = null,
-    /** Why the plugin's own list of models could not be had (the declared ones are still there). */
+    /** Why the extension's own list of models could not be had (the declared ones are still there). */
     @SerialName("models_error") val modelsError: String? = null,
 ) {
     /** The model a launcher gets when none is picked: the declared default, else the first listed. */

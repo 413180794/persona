@@ -17,7 +17,7 @@ fun SettingsPage.toInitialPage(): String = when (this) {
     SettingsPage.ModelConfig -> "models"
     SettingsPage.Hubs -> "hubs"
     SettingsPage.Persona -> "persona"
-    SettingsPage.Plugins -> "plugins"
+    SettingsPage.Extensions -> "plugins"
     SettingsPage.Mail -> "mail"
     SettingsPage.Feishu -> "feishu"
     SettingsPage.Channels -> "channels"

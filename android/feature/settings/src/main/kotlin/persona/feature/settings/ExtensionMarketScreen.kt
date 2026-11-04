@@ -18,36 +18,36 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import persona.core.contracts.api.CatalogPlugin
-import persona.core.contracts.api.PluginManagement
-import persona.core.contracts.api.PluginMarket
-import persona.core.contracts.api.PluginPermission
-import persona.core.contracts.api.PluginPreview
+import persona.core.contracts.api.CatalogExtension
+import persona.core.contracts.api.ExtensionManagement
+import persona.core.contracts.api.ExtensionMarket
+import persona.core.contracts.api.ExtensionPermission
+import persona.core.contracts.api.ExtensionPreview
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-// 设置 › 插件 › 插件市场 (docs/plugins.md「插件市场」): the catalog, one plugin of it, and the markets. The models are
-// in PluginMarketState.kt.
+// 设置 › 扩展 › 扩展市场 (docs/extensions.md「扩展市场」): the catalog, one extension of it, and the markets. The models are
+// in ExtensionMarketState.kt.
 
 private const val SearchDelayMillis = 300L
 
-/** The catalog: search, narrow to a market, each plugin's version, words, tags and how it stands here. */
+/** The catalog: search, narrow to a market, each extension's version, words, tags and how it stands here. */
 @Composable
-fun PluginMarketPage(plugins: PluginManagement?, onBack: () -> Unit, onPlugin: (CatalogPlugin) -> Unit, onMarkets: () -> Unit) {
-    if (plugins == null) {
-        JListPage(title = "插件市场", onBack = onBack) { item { JNotice("体验模式没有 hub 的插件。") } }
+fun ExtensionMarketPage(extensions: ExtensionManagement?, onBack: () -> Unit, onExtension: (CatalogExtension) -> Unit, onMarkets: () -> Unit) {
+    if (extensions == null) {
+        JListPage(title = "扩展市场", onBack = onBack) { item { JNotice("体验模式没有 hub 的扩展。") } }
         return
     }
-    val model = remember(plugins) { CatalogModel(plugins) }
+    val model = remember(extensions) { CatalogModel(extensions) }
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
     // Typing waits a moment before asking the hub; the market filter asks at once.
     LaunchedEffect(model, state.query) { if (state.catalog != null) delay(SearchDelayMillis); model.load() }
     LaunchedEffect(model, state.market) { if (state.catalog != null) model.load() }
     val catalog = state.catalog
-    JListPage(title = "插件市场", onBack = onBack, largeTitle = false,
+    JListPage(title = "扩展市场", onBack = onBack, largeTitle = false,
         actions = { JIconButton(PhIcons.SlidersHorizontal, "管理市场", onMarkets) },
         refreshing = state.loading && catalog != null, onRefresh = { scope.launch { model.load(refresh = true) } }) {
         item("search") {
@@ -64,42 +64,42 @@ fun PluginMarketPage(plugins: PluginManagement?, onBack: () -> Unit, onPlugin: (
         when {
             catalog == null && state.loading -> item("loading") { JLoading() }
             catalog != null && catalog.markets.isEmpty() -> item("no-markets") {
-                JEmptyState("还没有插件市场", "插件市场是一份插件的清单（一个网站、GitHub 仓库或 git 仓库）。添加一个市场后，就能在这里浏览、安装它提供的插件。",
+                JEmptyState("还没有扩展市场", "扩展市场是一份扩展的清单（一个网站、GitHub 仓库或 git 仓库）。添加一个市场后，就能在这里浏览、安装它提供的扩展。",
                     icon = PhIcons.Cube, action = { JButton("添加市场", onMarkets, kind = JButtonKind.Secondary, size = JButtonSize.Small) })
             }
-            catalog != null && catalog.plugins.isEmpty() -> item("empty") {
-                JEmptyState(if (state.query.isBlank()) "这个市场没有插件" else "没有找到", if (state.query.isBlank()) "市场的清单里还没有插件。"
+            catalog != null && catalog.extensions.isEmpty() -> item("empty") {
+                JEmptyState(if (state.query.isBlank()) "这个市场没有扩展" else "没有找到", if (state.query.isBlank()) "市场的清单里还没有扩展。"
                     else "换个关键词试试；搜索会查名字、说明、发布者和标签。", icon = PhIcons.MagnifyingGlass)
             }
         }
-        val list = catalog?.plugins.orEmpty()
+        val list = catalog?.extensions.orEmpty()
         if (list.isNotEmpty()) {
-            item("list-title") { JSectionHeader(if (state.query.isBlank()) "可以安装的插件" else "搜索结果", count = list.size) }
-            itemsIndexed(list, key = { _, it -> "plugin-${it.market}-${it.id}" }) { index, plugin ->
+            item("list-title") { JSectionHeader(if (state.query.isBlank()) "可以安装的扩展" else "搜索结果", count = list.size) }
+            itemsIndexed(list, key = { _, it -> "plugin-${it.market}-${it.id}" }) { index, extension ->
                 JGroupItem(GroupPosition.of(index, list.size)) {
-                    JRow(plugin.label, subtitle = catalogSubtitle(plugin, showMarket = state.market == null && state.markets.size > 1), subtitleLines = 4,
+                    JRow(extension.label, subtitle = catalogSubtitle(extension, showMarket = state.market == null && state.markets.size > 1), subtitleLines = 4,
                         leadingIcon = PhIcons.PuzzlePiece,
-                        trailing = CatalogText.badge(plugin)?.let { badge -> { JTag(badge, standingTone(plugin)) } },
-                        chevron = true, onClick = { onPlugin(plugin) })
+                        trailing = CatalogText.badge(extension)?.let { badge -> { JTag(badge, standingTone(extension)) } },
+                        chevron = true, onClick = { onExtension(extension) })
                 }
             }
             item("footer") {
-                SettingsCaption("装之前会列出它能做什么，你同意了才装。插件在 hub 所在的机器上运行，不在沙箱里。",
+                SettingsCaption("装之前会列出它能做什么，你同意了才装。扩展在 hub 所在的机器上运行，不在沙箱里。",
                     Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m))
             }
         }
     }
 }
 
-/** The lines under a catalog plugin: its words, how it stands (version, installed, why not), its tags and market. */
-private fun catalogSubtitle(p: CatalogPlugin, showMarket: Boolean): String = listOfNotNull(
+/** The lines under a catalog extension: its words, how it stands (version, installed, why not), its tags and market. */
+private fun catalogSubtitle(p: CatalogExtension, showMarket: Boolean): String = listOfNotNull(
     p.description?.takeIf { it.isNotBlank() },
     CatalogText.line(p),
     listOfNotNull(p.tags.orEmpty().takeIf { it.isNotEmpty() }?.joinToString(" · ") { "#$it" },
         p.marketName?.takeIf { showMarket && it.isNotBlank() }).joinToString("　").takeIf { it.isNotBlank() },
 ).joinToString("\n")
 
-internal fun standingTone(p: CatalogPlugin): Tone = when (CatalogText.standing(p)) {
+internal fun standingTone(p: CatalogExtension): Tone = when (CatalogText.standing(p)) {
     CatalogStanding.Upgradable -> Tone.Caution
     CatalogStanding.Installed, CatalogStanding.InstalledElsewhere -> Tone.Positive
     CatalogStanding.Unavailable -> Tone.Danger
@@ -108,7 +108,7 @@ internal fun standingTone(p: CatalogPlugin): Tone = when (CatalogText.standing(p
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun MarketFilter(markets: List<PluginMarket>, selected: String?, onSelect: (String?) -> Unit) {
+private fun MarketFilter(markets: List<ExtensionMarket>, selected: String?, onSelect: (String?) -> Unit) {
     FlowRow(Modifier.padding(top = Tokens.Space.m), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s),
         verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
         JChip("全部", selected = selected == null, onClick = { onSelect(null) })
@@ -117,7 +117,7 @@ private fun MarketFilter(markets: List<PluginMarket>, selected: String?, onSelec
 }
 
 /** A market the hub could not read, or read with entries it dropped. */
-private fun LazyListScope.marketProblems(markets: List<PluginMarket>) {
+private fun LazyListScope.marketProblems(markets: List<ExtensionMarket>) {
     markets.forEach { market ->
         market.error?.takeIf { it.isNotBlank() }?.let { error ->
             item("market-error-${market.id}") {
@@ -128,30 +128,30 @@ private fun LazyListScope.marketProblems(markets: List<PluginMarket>) {
 }
 
 /**
- * One plugin of a market: what it is, what it may do, and the way to install, upgrade or remove it. Installing and
+ * One extension of a market: what it is, what it may do, and the way to install, upgrade or remove it. Installing and
  * upgrading first fetch and check the package and list what it may do; nothing happens until the user agrees.
  */
 @Composable
-fun PluginCatalogPage(plugins: PluginManagement?, marketId: String, pluginId: String, onBack: () -> Unit, onInstalled: (String) -> Unit) {
-    if (plugins == null) {
-        JListPage(title = "插件", onBack = onBack) { item { JNotice("体验模式没有 hub 的插件。") } }
+fun ExtensionCatalogPage(extensions: ExtensionManagement?, marketId: String, extensionId: String, onBack: () -> Unit, onInstalled: (String) -> Unit) {
+    if (extensions == null) {
+        JListPage(title = "扩展", onBack = onBack) { item { JNotice("体验模式没有 hub 的扩展。") } }
         return
     }
-    val model = remember(plugins, marketId, pluginId) { CatalogPluginModel(plugins, marketId, pluginId) }
+    val model = remember(extensions, marketId, extensionId) { CatalogExtensionModel(extensions, marketId, extensionId) }
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
     val feedback = LocalAppFeedback.current
     var removing by remember { mutableStateOf(false) }
     LaunchedEffect(model) { model.load() }
-    val plugin = state.plugin
-    val actions = plugin?.let(CatalogText::actions).orEmpty()
-    JListPage(title = plugin?.label ?: "插件", onBack = onBack, largeTitle = false,
-        refreshing = state.loading && plugin != null, onRefresh = { scope.launch { model.load() } },
+    val extension = state.extension
+    val actions = extension?.let(CatalogText::actions).orEmpty()
+    JListPage(title = extension?.label ?: "扩展", onBack = onBack, largeTitle = false,
+        refreshing = state.loading && extension != null, onRefresh = { scope.launch { model.load() } },
         bottomBar = if (actions.isEmpty()) null else ({
             Column(Modifier.fillMaxWidth().padding(horizontal = pagePadding, vertical = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                 if (CatalogAction.Install in actions) JButton("安装", { scope.launch { model.preview() } }, Modifier.fillMaxWidth(),
                     loading = state.previewing, loadingText = "正在下载和检查…", enabled = !state.busy)
-                if (CatalogAction.Upgrade in actions) JButton("升级到 ${plugin?.version.orEmpty()}", { scope.launch { model.preview() } }, Modifier.fillMaxWidth(),
+                if (CatalogAction.Upgrade in actions) JButton("升级到 ${extension?.version.orEmpty()}", { scope.launch { model.preview() } }, Modifier.fillMaxWidth(),
                     loading = state.previewing, loadingText = "正在下载和检查…", enabled = !state.busy)
                 if (CatalogAction.Uninstall in actions) JButton("卸载", { removing = true }, Modifier.fillMaxWidth(),
                     kind = JButtonKind.Destructive, size = if (actions.size > 1) JButtonSize.Small else JButtonSize.Large,
@@ -159,66 +159,66 @@ fun PluginCatalogPage(plugins: PluginManagement?, marketId: String, pluginId: St
             }
         })) {
         when {
-            plugin == null && state.loading -> item("loading") { JLoading() }
-            plugin == null && state.error != null -> item("error") {
+            extension == null && state.loading -> item("loading") { JLoading() }
+            extension == null && state.error != null -> item("error") {
                 JNotice(state.error!!, Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou, actionLabel = "重试",
                     onAction = { scope.launch { model.load() } })
             }
-            plugin == null && state.missing -> item("missing") {
-                JEmptyState("市场里没有这个插件了", "市场的清单可能改了，或者这个市场已经删掉。", icon = PhIcons.Cube)
+            extension == null && state.missing -> item("missing") {
+                JEmptyState("市场里没有这个扩展了", "市场的清单可能改了，或者这个市场已经删掉。", icon = PhIcons.Cube)
             }
         }
-        if (plugin != null) catalogPluginBody(plugin, state, onOpenInstalled = { onInstalled(plugin.id) })
+        if (extension != null) catalogExtensionBody(extension, state, onOpenInstalled = { onInstalled(extension.id) })
     }
     state.preview?.let { preview ->
-        PreviewSheet(plugin, preview, busy = state.acting, onDismiss = model::dismissPreview,
+        PreviewSheet(extension, preview, busy = state.acting, onDismiss = model::dismissPreview,
             onConfirm = { scope.launch { model.confirm()?.let { feedback?.notice(it) } } })
     }
-    if (removing && plugin != null) UninstallDialog(plugin, onDismiss = { removing = false }) { keep ->
+    if (removing && extension != null) UninstallDialog(extension, onDismiss = { removing = false }) { keep ->
         removing = false
-        scope.launch { if (model.uninstall(keep)) feedback?.notice("已卸载 ${plugin.label}") }
+        scope.launch { if (model.uninstall(keep)) feedback?.notice("已卸载 ${extension.label}") }
     }
 }
 
-private fun LazyListScope.catalogPluginBody(plugin: CatalogPlugin, state: CatalogPluginState, onOpenInstalled: () -> Unit) {
+private fun LazyListScope.catalogExtensionBody(extension: CatalogExtension, state: CatalogExtensionState, onOpenInstalled: () -> Unit) {
     item("header") {
         JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.s)) {
             // Why it cannot be installed is said in red below; the header keeps to the version.
-            val line = if (CatalogText.standing(plugin) == CatalogStanding.Unavailable) plugin.version else CatalogText.line(plugin)
-            JRow(plugin.label, subtitle = line, subtitleLines = 3, leadingIcon = PhIcons.PuzzlePiece,
-                trailing = CatalogText.badge(plugin)?.let { badge -> { JTag(badge, standingTone(plugin)) } })
+            val line = if (CatalogText.standing(extension) == CatalogStanding.Unavailable) extension.version else CatalogText.line(extension)
+            JRow(extension.label, subtitle = line, subtitleLines = 3, leadingIcon = PhIcons.PuzzlePiece,
+                trailing = CatalogText.badge(extension)?.let { badge -> { JTag(badge, standingTone(extension)) } })
         }
     }
-    plugin.description?.takeIf { it.isNotBlank() }?.let { item("description") { Note(it) } }
-    plugin.tags.orEmpty().takeIf { it.isNotEmpty() }?.let { tags -> item("tags") { Tags(tags) } }
+    extension.description?.takeIf { it.isNotBlank() }?.let { item("description") { Note(it) } }
+    extension.tags.orEmpty().takeIf { it.isNotEmpty() }?.let { tags -> item("tags") { Tags(tags) } }
     state.actionError?.let { error -> item("action-error") { JInlineStatus(error, Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed) } }
     state.error?.let { error -> item("error") { JInlineStatus(error, Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed) } }
-    CatalogText.noActionReason(plugin)?.let { reason ->
+    CatalogText.noActionReason(extension)?.let { reason ->
         item("why") {
             JInlineStatus(reason, Modifier.padding(top = Tokens.Space.s),
-                tone = if (CatalogText.standing(plugin) == CatalogStanding.Unavailable) InlineTone.Failed else InlineTone.Busy)
+                tone = if (CatalogText.standing(extension) == CatalogStanding.Unavailable) InlineTone.Failed else InlineTone.Busy)
         }
     }
-    if (!plugin.installed.isNullOrBlank()) item("installed") {
+    if (!extension.installed.isNullOrBlank()) item("installed") {
         JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
-            JRow("这个插件的设置", leadingIcon = PhIcons.GearSix, value = "已装 ${plugin.installed}", onClick = onOpenInstalled)
+            JRow("这个扩展的设置", leadingIcon = PhIcons.GearSix, value = "已装 ${extension.installed}", onClick = onOpenInstalled)
         }
     }
-    permissionRows("permissions", "它可以", plugin.permissions)
+    permissionRows("permissions", "它可以", extension.permissions)
     item("permissions-note") { Note("安装前会再列一次，你同意了才装；升级时要的权限变多，会单独列出来再问。") }
-    val points = plugin.contributes.orEmpty().filterValues { it.isNotEmpty() }.toSortedMap().toList()
+    val points = extension.contributes.orEmpty().filterValues { it.isNotEmpty() }.toSortedMap().toList()
     if (points.isNotEmpty()) {
         item("contributes-title") { JSectionHeader("提供") }
         itemsIndexed(points, key = { _, it -> "point-${it.first}" }) { index, (point, ids) ->
-            JGroupItem(GroupPosition.of(index, points.size)) { JRow(PluginText.point(point), value = ids.joinToString("、")) }
+            JGroupItem(GroupPosition.of(index, points.size)) { JRow(ExtensionText.point(point), value = ids.joinToString("、")) }
         }
     }
     val about = listOfNotNull(
-        "版本" to plugin.version,
+        "版本" to extension.version,
         state.marketName?.let { "市场" to it },
-        plugin.publisher?.takeIf { it.isNotBlank() }?.let { "发布者" to it },
+        extension.publisher?.takeIf { it.isNotBlank() }?.let { "发布者" to it },
     )
-    val homepage = plugin.homepage?.takeIf { PluginViewText.isHttps(it) }
+    val homepage = extension.homepage?.takeIf { ExtensionViewText.isHttps(it) }
     item("about-title") { JSectionHeader("关于") }
     val count = about.size + if (homepage != null) 1 else 0
     about.forEachIndexed { index, (label, value) ->
@@ -235,7 +235,7 @@ private fun LazyListScope.catalogPluginBody(plugin: CatalogPlugin, state: Catalo
     item("end") { androidx.compose.foundation.layout.Spacer(Modifier.padding(top = Tokens.Space.xxl)) }
 }
 
-private fun LazyListScope.permissionRows(key: String, title: String, permissions: List<PluginPermission>) {
+private fun LazyListScope.permissionRows(key: String, title: String, permissions: List<ExtensionPermission>) {
     if (permissions.isEmpty()) return
     item("$key-title") { JSectionHeader(title) }
     itemsIndexed(permissions, key = { _, it -> "$key-${it.key}-${it.title}" }) { index, permission ->
@@ -262,8 +262,8 @@ private fun Tags(tags: List<String>) {
  * and lists the new lines alone, and its button turns red. Nothing is installed without the yes.
  */
 @Composable
-private fun PreviewSheet(plugin: CatalogPlugin?, preview: PluginPreview, busy: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit) {
-    val name = preview.manifest?.name?.takeIf { it.isNotBlank() } ?: plugin?.label ?: preview.manifest?.id.orEmpty()
+private fun PreviewSheet(extension: CatalogExtension?, preview: ExtensionPreview, busy: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    val name = preview.manifest?.name?.takeIf { it.isNotBlank() } ?: extension?.label ?: preview.manifest?.id.orEmpty()
     val more = CatalogText.asksForMore(preview)
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
@@ -277,7 +277,7 @@ private fun PreviewSheet(plugin: CatalogPlugin?, preview: PluginPreview, busy: B
             }
             PermissionList(if (preview.upgrade) "升级后它可以" else "它可以", preview.permissions)
             preview.warnings.orEmpty().forEach { JInlineStatus(it, tone = InlineTone.Caution) }
-            SettingsCaption("包已经下载并核对过 sha256。插件在 hub 所在的机器上运行，能读写 hub 的系统用户能读写的文件。" +
+            SettingsCaption("包已经下载并核对过 sha256。扩展在 hub 所在的机器上运行，能读写 hub 的系统用户能读写的文件。" +
                 (preview.expiresAt?.let(CatalogText::time)?.let { "这次预览到 $it（UTC）失效。" } ?: ""))
             JButton(CatalogText.confirmLabel(preview), onConfirm, Modifier.fillMaxWidth(),
                 kind = if (more) JButtonKind.Destructive else JButtonKind.Primary, loading = busy, enabled = !busy)
@@ -287,7 +287,7 @@ private fun PreviewSheet(plugin: CatalogPlugin?, preview: PluginPreview, busy: B
 }
 
 @Composable
-private fun PermissionList(title: String, permissions: List<PluginPermission>) {
+private fun PermissionList(title: String, permissions: List<ExtensionPermission>) {
     if (permissions.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
         Text(title, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
@@ -303,9 +303,9 @@ private fun PermissionList(title: String, permissions: List<PluginPermission>) {
 
 /** Removing stops it and deletes its settings and secrets; its data folder can stay. */
 @Composable
-private fun UninstallDialog(plugin: CatalogPlugin, onDismiss: () -> Unit, onConfirm: (Boolean) -> Unit) {
+private fun UninstallDialog(extension: CatalogExtension, onDismiss: () -> Unit, onConfirm: (Boolean) -> Unit) {
     var keep by remember { mutableStateOf(false) }
-    JDialog(onDismiss, title = "卸载 ${plugin.label}？", text = "会停掉它，删掉它的设置和密钥；它提供的连接器也一起去掉。",
+    JDialog(onDismiss, title = "卸载 ${extension.label}？", text = "会停掉它，删掉它的设置和密钥；它提供的连接器也一起去掉。",
         confirm = "卸载" to { onConfirm(keep) }, destructive = true) {
         Row(Modifier.fillMaxWidth().padding(top = Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
             JCheckbox(keep, { keep = it })
@@ -316,19 +316,19 @@ private fun UninstallDialog(plugin: CatalogPlugin, onDismiss: () -> Unit, onConf
 
 /** 管理市场: the markets the hub reads; add (an address, a token if private), refresh, change the token, remove. */
 @Composable
-fun PluginMarketsPage(plugins: PluginManagement?, onBack: () -> Unit) {
-    if (plugins == null) {
-        JListPage(title = "管理市场", onBack = onBack) { item { JNotice("体验模式没有 hub 的插件。") } }
+fun ExtensionMarketsPage(extensions: ExtensionManagement?, onBack: () -> Unit) {
+    if (extensions == null) {
+        JListPage(title = "管理市场", onBack = onBack) { item { JNotice("体验模式没有 hub 的扩展。") } }
         return
     }
-    val model = remember(plugins) { MarketsModel(plugins) }
+    val model = remember(extensions) { MarketsModel(extensions) }
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
     val feedback = LocalAppFeedback.current
     var adding by remember { mutableStateOf(false) }
-    var acting by remember { mutableStateOf<PluginMarket?>(null) }
-    var tokenFor by remember { mutableStateOf<PluginMarket?>(null) }
-    var removing by remember { mutableStateOf<PluginMarket?>(null) }
+    var acting by remember { mutableStateOf<ExtensionMarket?>(null) }
+    var tokenFor by remember { mutableStateOf<ExtensionMarket?>(null) }
+    var removing by remember { mutableStateOf<ExtensionMarket?>(null) }
     val uri = LocalUriHandler.current
     LaunchedEffect(model) { model.load() }
     val markets = state.markets
@@ -358,6 +358,7 @@ fun PluginMarketsPage(plugins: PluginManagement?, onBack: () -> Unit) {
                             trailing = when {
                                 state.working == market.id -> ({ JSpinner() })
                                 !market.error.isNullOrBlank() -> ({ JIcon(PhIcons.WarningCircle, "读不到", tint = PersonaTheme.palette.danger.dot) })
+                                market.signature?.failed == true -> ({ JIcon(PhIcons.WarningCircle, "签名不对", tint = PersonaTheme.palette.danger.dot) })
                                 else -> null
                             },
                             chevron = true, enabled = state.working == null, onClick = { acting = market })
@@ -371,6 +372,11 @@ fun PluginMarketsPage(plugins: PluginManagement?, onBack: () -> Unit) {
                         JInlineStatus("${market.label}：$error", Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed)
                     }
                 }
+                CatalogText.signatureProblem(market)?.let { problem ->
+                    item("market-signature-${market.id}") {
+                        JInlineStatus("${market.label}：$problem", Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed)
+                    }
+                }
                 market.warnings.orEmpty().forEachIndexed { w, warning ->
                     item("market-warning-${market.id}-$w") {
                         JInlineStatus("${market.label}：$warning", Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Caution)
@@ -378,7 +384,7 @@ fun PluginMarketsPage(plugins: PluginManagement?, onBack: () -> Unit) {
                 }
             }
             item("footer") {
-                SettingsCaption("删掉市场后，从它装的插件留着，只是不能再从这里升级。token 加密存在 hub 上，只发给这个市场，存好后不再显示。",
+                SettingsCaption("删掉市场后，从它装的扩展留着，只是不能再从这里升级。token 加密存在 hub 上，只发给这个市场，存好后不再显示。",
                     Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m))
             }
         }
@@ -389,7 +395,7 @@ fun PluginMarketsPage(plugins: PluginManagement?, onBack: () -> Unit) {
                 scope.launch { if (model.refresh(market.id)) feedback?.notice("已重新读取 ${market.label}") }
             }),
             JAction(if (market.hasToken) "换 token" else "设置 token", icon = PhIcons.Key, onClick = { tokenFor = market }),
-            market.homepage?.takeIf { PluginViewText.isHttps(it) }?.let { url ->
+            market.homepage?.takeIf { ExtensionViewText.isHttps(it) }?.let { url ->
                 JAction("打开主页", icon = PhIcons.ArrowSquareOut, onClick = { runCatching { uri.openUri(url) } })
             },
             JAction("删除市场", icon = PhIcons.Trash, destructive = true, separatorBefore = true, onClick = { removing = market }),
@@ -407,7 +413,7 @@ fun PluginMarketsPage(plugins: PluginManagement?, onBack: () -> Unit) {
         }
     }
     removing?.let { market ->
-        JDialog({ removing = null }, title = "删除 ${market.label}？", text = "hub 不再读这个市场。从它装的插件留着。",
+        JDialog({ removing = null }, title = "删除 ${market.label}？", text = "hub 不再读这个市场。从它装的扩展留着。",
             confirm = "删除" to {
                 removing = null
                 scope.launch { if (model.remove(market.id)) feedback?.notice("已删除市场") }
@@ -439,7 +445,7 @@ private fun AddMarketSheet(state: MarketsState, onDismiss: () -> Unit, onAdd: (S
 }
 
 @Composable
-private fun TokenSheet(market: PluginMarket, busy: Boolean, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+private fun TokenSheet(market: ExtensionMarket, busy: Boolean, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var token by remember(market.id) { mutableStateOf("") }
     JSheet(onDismiss, title = if (market.hasToken) "换 token" else "设置 token", dismissible = !busy) {
         Column(Modifier.padding(vertical = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {

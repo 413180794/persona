@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * `GET /api/v1/launchers/{name}/quota` (docs/launchers.md「额度」): what a launcher's key may still spend at its gateway, as
- * a quota plugin read it. [error] when there is nothing to read ([unsupported]: no plugin knows the gateway) or the gateway
+ * a quota extension read it. [error] when there is nothing to read ([unsupported]: no extension knows the gateway) or the gateway
  * said no; [machine] is the machine that read it (a ~/.zshrc launcher's key stays there).
  */
 @Serializable
@@ -19,7 +19,7 @@ data class LauncherQuotaAnswer(
 
 @Serializable
 data class LauncherQuota(
-    /** The gateway's id (the plugin's contribution). */
+    /** The gateway's id (the extension's contribution). */
     @SerialName("gateway") val gateway: String = "",
     /** What to call it, from the hub; an older hub leaves it out and the id is shown. */
     @SerialName("gateway_name") val gatewayName: String? = null,

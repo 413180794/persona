@@ -2,7 +2,7 @@ package persona.feature.voice
 
 import persona.core.contracts.api.VoiceModelOptions
 import persona.core.contracts.api.VoiceOptions
-import persona.core.contracts.api.VoicePlugins
+import persona.core.contracts.api.VoiceExtensions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -20,10 +20,10 @@ internal data class VoicePageState(
     val models: VoiceModelOptions = VoiceModelOptions(),
     val voices: VoiceOptions? = null,
     val voicesError: String? = null,
-    /** The voice picked on this phone for this plugin, if any. */
+    /** The voice picked on this phone for this extension, if any. */
     val voice: String? = null,
 ) {
-    /** The voice a conversation uses: the picked one while the plugin still offers it; null is the plugin's default. */
+    /** The voice a conversation uses: the picked one while the extension still offers it; null is the extension's default. */
     val chosenVoice: String? get() = voice?.takeIf { picked -> voices == null || voices.voices.any { it.id == picked } }
 
     /** The voice the 音色 sheet checks. */
@@ -43,13 +43,13 @@ internal data class VoicePageState(
  * reads the model configuration again (it applies from the next conversation, docs/model-config.md).
  */
 internal class VoicePage(
-    private val plugins: VoicePlugins,
-    private val pluginId: String,
+    private val extensions: VoiceExtensions,
+    private val extensionId: String,
     private val prefs: VoicePrefs,
     private val scope: CoroutineScope,
     private val audio: () -> VoiceAudio,
 ) {
-    private val mutable = MutableStateFlow(VoicePageState(voice = prefs.voice(pluginId)))
+    private val mutable = MutableStateFlow(VoicePageState(voice = prefs.voice(extensionId)))
     val state: StateFlow<VoicePageState> = mutable.asStateFlow()
     private val current = MutableStateFlow<VoiceSession?>(null)
 
@@ -79,8 +79,8 @@ internal class VoicePage(
     }
 
     private suspend fun prepare(): VoiceSetup = coroutineScope {
-        val models = async { plugins.models(pluginId) }
-        val choice = async { plugins.modelChoice(pluginId) }
+        val models = async { extensions.models(extensionId) }
+        val choice = async { extensions.modelChoice(extensionId) }
         val catalog = models.await()
         mutable.update { it.copy(models = catalog) }
         resolveVoiceModel(choice.await(), catalog)
@@ -89,7 +89,7 @@ internal class VoicePage(
     /** A voice list that cannot be read does not stop the conversation: the picked voice (or the default) is used. */
     private suspend fun loadVoices(model: String?) {
         try {
-            val voices = plugins.voices(pluginId, model)
+            val voices = extensions.voices(extensionId, model)
             mutable.update { it.copy(voices = voices, voicesError = null) }
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -99,16 +99,16 @@ internal class VoicePage(
     }
 
     private fun talk(model: String?) {
-        val session = VoiceSession(plugins, pluginId, state.value.chosenVoice, model, audio())
+        val session = VoiceSession(extensions, extensionId, state.value.chosenVoice, model, audio())
         current.value = session
         session.start()
     }
 
-    /** Picks [voice] for this plugin on this phone; a conversation with another voice starts again with it. */
+    /** Picks [voice] for this extension on this phone; a conversation with another voice starts again with it. */
     fun pickVoice(voice: String) {
         val before = state.value
         if (voice != before.voice) {
-            prefs.setVoice(pluginId, voice)
+            prefs.setVoice(extensionId, voice)
             mutable.update { it.copy(voice = voice) }
         }
         if (voice == before.checkedVoice) return // the voice it already speaks with

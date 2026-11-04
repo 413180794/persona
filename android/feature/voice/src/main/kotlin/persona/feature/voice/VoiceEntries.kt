@@ -9,49 +9,49 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
-import persona.core.contracts.api.HubPlugin
-import persona.core.contracts.api.VoicePlugins
+import persona.core.contracts.api.HubExtension
+import persona.core.contracts.api.VoiceExtensions
 import persona.core.navigation.Navigator
 import persona.core.navigation.VoiceRoute
 import kotlinx.coroutines.CancellationException
 
 /**
- * Registers the voice page ([VoiceRoute]) on the paired hub's [plugins]. [identity] is the pairing's (its scope path):
+ * Registers the voice page ([VoiceRoute]) on the paired hub's [extensions]. [identity] is the pairing's (its scope path):
  * the picked voices are kept with it. [onModelConfiguration] opens the model configuration of one purpose, given its
- * id (`plugin.<plugin id>`, [voicePurposeId]); without it the page offers no way there and only says why the model
+ * id (`extension.<extension id>`, [voicePurposeId]); without it the page offers no way there and only says why the model
  * cannot be used.
  */
 fun EntryProviderScope<NavKey>.voiceEntries(
     navigator: Navigator,
-    plugins: VoicePlugins,
+    extensions: VoiceExtensions,
     identity: String,
     onModelConfiguration: ((String) -> Unit)? = null,
 ) {
     entry<VoiceRoute> { route ->
         // A new pairing is a new page: nothing of the old one's conversation carries over.
-        key(plugins, identity) { VoiceScreen(route, navigator, plugins, identity, onModelConfiguration) }
+        key(extensions, identity) { VoiceScreen(route, navigator, extensions, identity, onModelConfiguration) }
     }
 }
 
-/** The model configuration purpose of a voice plugin (docs/model-config.md): `plugin.<plugin id>`. */
-fun voicePurposeId(pluginId: String): String = "plugin.$pluginId"
+/** The model configuration purpose of a voice extension (docs/model-config.md): `extension.<extension id>`. */
+fun voicePurposeId(extensionId: String): String = "plugin.$extensionId"
 
 /**
- * The hub's running voice plugin, for an entry to the voice page: read once each time [active] turns true (and again
- * when the pairing changes, a new [plugins]); null without one, on a hub without plugins, or when it cannot be read.
+ * The hub's running voice extension, for an entry to the voice page: read once each time [active] turns true (and again
+ * when the pairing changes, a new [extensions]); null without one, on a hub without extensions, or when it cannot be read.
  */
 @Composable
-fun rememberVoicePlugin(plugins: VoicePlugins?, active: Boolean): HubPlugin? {
-    var plugin by remember(plugins) { mutableStateOf<HubPlugin?>(null) }
-    LaunchedEffect(plugins, active) {
-        if (plugins == null || !active) return@LaunchedEffect
-        plugin = try {
-            plugins.voicePlugin()
+fun rememberVoiceExtension(extensions: VoiceExtensions?, active: Boolean): HubExtension? {
+    var extension by remember(extensions) { mutableStateOf<HubExtension?>(null) }
+    LaunchedEffect(extensions, active) {
+        if (extensions == null || !active) return@LaunchedEffect
+        extension = try {
+            extensions.voiceExtension()
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
             null
         }
     }
-    return plugin
+    return extension
 }

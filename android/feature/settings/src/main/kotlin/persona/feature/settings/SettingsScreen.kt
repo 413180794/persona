@@ -67,7 +67,7 @@ private fun SettingsContent(
 ) {
     var page by rememberSaveable(initialPage) { mutableStateOf(initialPage) }
     var purpose by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
-    var plugin by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
+    var extension by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     var channel by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -96,9 +96,9 @@ private fun SettingsContent(
         }
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { if (!services.demo) checkUpdate() }
-    val pluginService = services.plugins.takeUnless { services.demo }
-    val pluginsAvailable by remember(pluginService) { pluginService?.available ?: kotlinx.coroutines.flow.flowOf(false) }.collectAsState(false)
-    var pluginSummary by remember { mutableStateOf<String?>(null) }
+    val extensionService = services.extensions.takeUnless { services.demo }
+    val extensionsAvailable by remember(extensionService) { extensionService?.available ?: kotlinx.coroutines.flow.flowOf(false) }.collectAsState(false)
+    var extensionSummary by remember { mutableStateOf<String?>(null) }
     val connectorsService = services.connectors.takeUnless { services.demo }
     var mailAccounts by remember { mutableStateOf<List<MailAccount>?>(null) }
     var larkStatus by remember { mutableStateOf<LarkStatus?>(null) }
@@ -120,22 +120,22 @@ private fun SettingsContent(
         }
     }
     // The row's count, read again whenever the settings list is shown or the hub reconnects.
-    LaunchedEffect(pluginService, pluginsAvailable, page, connection) {
-        if (pluginService == null || !pluginsAvailable || page != "settings" || connection != ConnectionState.Online) return@LaunchedEffect
-        pluginSummary = try { PluginText.listSummary(pluginService.plugins()) }
-        catch (error: CancellationException) { throw error } catch (_: Exception) { pluginSummary }
+    LaunchedEffect(extensionService, extensionsAvailable, page, connection) {
+        if (extensionService == null || !extensionsAvailable || page != "settings" || connection != ConnectionState.Online) return@LaunchedEffect
+        extensionSummary = try { ExtensionText.listSummary(extensionService.extensions()) }
+        catch (error: CancellationException) { throw error } catch (_: Exception) { extensionSummary }
     }
-    // Plugins' UI slots (docs/plugins.md「UI 插槽」): read again whenever the settings list shows.
-    val slots = services.pluginSlots.takeUnless { services.demo }
-    val slotsState = slots?.state?.collectAsState()?.value ?: PluginSlotsState()
-    val slotCards = if (page == "settings" && onNavigate != null) rememberPluginCards(slots) else emptyList()
+    // Extensions' UI slots (docs/extensions.md「UI 插槽」): read again whenever the settings list shows.
+    val slots = services.extensionSlots.takeUnless { services.demo }
+    val slotsState = slots?.state?.collectAsState()?.value ?: ExtensionSlotsState()
+    val slotCards = if (page == "settings" && onNavigate != null) rememberExtensionCards(slots) else emptyList()
     LaunchedEffect(slots, page, connection) {
         if (slots != null && page == "settings" && connection == ConnectionState.Online) slots.load()
     }
     val channelService = services.channels.takeUnless { services.demo }
     val channelsAvailable by remember(channelService) { channelService?.available ?: kotlinx.coroutines.flow.flowOf(false) }.collectAsState(false)
     var channelList by remember { mutableStateOf<List<HubChannel>?>(null) }
-    // Like 插件's: read again whenever the settings list is shown or the hub reconnects.
+    // Like 扩展's: read again whenever the settings list is shown or the hub reconnects.
     LaunchedEffect(channelService, channelsAvailable, page, connection) {
         if (channelService == null || !channelsAvailable || page != "settings" || connection != ConnectionState.Online) return@LaunchedEffect
         channelList = try { channelService.channels() }
@@ -154,7 +154,7 @@ private fun SettingsContent(
         if (connectorsService == null || page != "settings" || connection != ConnectionState.Online) return@LaunchedEffect
         try {
             mailAccounts = runCatching { connectorsService.mailAccounts() }.getOrNull()
-            // 飞书's status is the lark-connector plugin's (`/api/v1/lark/status`): only asked while the hub has it.
+            // 飞书's status is the lark-connector extension's (`/api/v1/lark/status`): only asked while the hub has it.
             larkStatus = if (larkChats) runCatching { connectorsService.larkStatus() }.getOrNull() else null
             hubConnectors = runCatching { connectorsService.connectors(all = true) }.getOrDefault(emptyList())
         } catch (_: Exception) {}
@@ -185,14 +185,14 @@ private fun SettingsContent(
             ?: ModelConfigurationPage(services.models.takeUnless { services.demo }, back,
                 onPurpose = { id -> onNavigate?.invoke(persona.core.navigation.ModelPurposeRoute(id)) ?: run { purpose = id } },
                 providers = services.providers.takeUnless { services.demo })
-        "plugins" -> plugin?.let { id -> PluginPage(services.plugins.takeUnless { services.demo }, id, onBack = { plugin = null }) }
-            ?: PluginsPage(services.plugins.takeUnless { services.demo }, back,
-                onPlugin = { id -> onNavigate?.invoke(persona.core.navigation.PluginRoute(id)) ?: run { plugin = id } },
-                onMarket = onNavigate?.let { navigate -> { navigate(persona.core.navigation.PluginMarketRoute) } })
+        "plugins" -> extension?.let { id -> ExtensionPage(services.extensions.takeUnless { services.demo }, id, onBack = { extension = null }) }
+            ?: ExtensionsPage(services.extensions.takeUnless { services.demo }, back,
+                onExtension = { id -> onNavigate?.invoke(persona.core.navigation.ExtensionRoute(id)) ?: run { extension = id } },
+                onMarket = onNavigate?.let { navigate -> { navigate(persona.core.navigation.ExtensionMarketRoute) } })
         "channels" -> channel?.let { id -> ChannelPage(channelService, id, onBack = { channel = null }, onOpen = onNavigate) }
             ?: ChannelsPage(channelService, back,
                 onChannel = { id -> onNavigate?.invoke(persona.core.navigation.ChannelRoute(id)) ?: run { channel = id } },
-                onMarketPlugin = onNavigate?.let { navigate -> { market, id -> navigate(persona.core.navigation.PluginCatalogRoute(market, id)) } })
+                onMarketExtension = onNavigate?.let { navigate -> { market, id -> navigate(persona.core.navigation.ExtensionCatalogRoute(market, id)) } })
         "ready", "notify" -> {
             val preferences: LazyListScope.() -> Unit =
                 if (page == "notify") NotificationPreferences(deviceController, paired && services.deviceSettings != null) else ({})
@@ -244,10 +244,10 @@ private fun SettingsContent(
                     item { JButton("连接我的 hub", exit, Modifier.fillMaxWidth().padding(top = Tokens.Space.m)) }
                 }
             }
-            // The plugins' cards and nav pages head the list; they open by key, so only with a navigation host.
-            if (onNavigate != null) pluginSlotItems(slotsState, slotCards,
-                selected = { place -> detailKey == persona.core.navigation.PluginUiRoute(place.plugin, place.id, place.title.ifBlank { place.id }) },
-                onOpen = { place -> onNavigate(persona.core.navigation.PluginUiRoute(place.plugin, place.id, place.title.ifBlank { place.id })) })
+            // The extensions' cards and nav pages head the list; they open by key, so only with a navigation host.
+            if (onNavigate != null) extensionSlotItems(slotsState, slotCards,
+                selected = { place -> detailKey == persona.core.navigation.ExtensionUiRoute(place.extension, place.id, place.title.ifBlank { place.id }) },
+                onOpen = { place -> onNavigate(persona.core.navigation.ExtensionUiRoute(place.extension, place.id, place.title.ifBlank { place.id })) })
             item {
                 HubCard(name = "Persona hub", connected = paired && connection == ConnectionState.Online,
                     statusText = if (paired) connection.label() else "尚未配对",
@@ -275,12 +275,12 @@ private fun SettingsContent(
             item { JSectionHeader("AI") }
             item { JGroupItem(GroupPosition.of(0, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ModelConfig), title = "模型配置", leadingIcon = PhIcons.Brain, subtitle = "对话、分拣、翻译和各项 AI 功能统一选择模型", onClick = { open(SettingsPage.ModelConfig) }) } }
             item { JGroupItem(GroupPosition.of(1, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Translation), title = "翻译", leadingIcon = PhIcons.Translate, subtitle = "邮件和选中的飞书会话自动翻译", value = translationValue, onClick = { open(SettingsPage.Translation) }) } }
-            // 插件 shows only when the hub manages plugins (docs/plugins.md); its value says how many need the user.
+            // 扩展 shows only when the hub manages extensions (docs/extensions.md); its value says how many need the user.
             // 渠道 right under it while the hub has channels (docs/channels.md「界面」): how many are connected, red when one went wrong.
-            val extensions = listOfNotNull("plugins".takeIf { pluginsAvailable }, "channels".takeIf { channelsAvailable })
+            val extensions = listOfNotNull("plugins".takeIf { extensionsAvailable }, "channels".takeIf { channelsAvailable })
             if (extensions.isNotEmpty()) item { JSectionHeader("扩展") }
-            if (pluginsAvailable) {
-                item { JGroupItem(GroupPosition.of(extensions.indexOf("plugins"), extensions.size)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Plugins), title = "插件", leadingIcon = PhIcons.PuzzlePiece, subtitle = "开关、设置和密钥", value = pluginSummary, onClick = { open(SettingsPage.Plugins) }) } }
+            if (extensionsAvailable) {
+                item { JGroupItem(GroupPosition.of(extensions.indexOf("plugins"), extensions.size)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Extensions), title = "扩展", leadingIcon = PhIcons.PuzzlePiece, subtitle = "开关、设置和密钥", value = extensionSummary, onClick = { open(SettingsPage.Extensions) }) } }
             }
             if (channelsAvailable) item {
                 ChannelsSettingsRow(channelList, GroupPosition.of(extensions.indexOf("channels"), extensions.size),
@@ -392,7 +392,7 @@ private fun SettingsContent(
     if (onBack != null) BackHandler(page != "settings", onBack = onBack)
     // An AI use opened inside 模型配置 (no navigation host) closes before the page does.
     BackHandler(page == "models" && purpose != null) { purpose = null }
-    BackHandler(page == "plugins" && plugin != null) { plugin = null }
+    BackHandler(page == "plugins" && extension != null) { extension = null }
     BackHandler(page == "channels" && channel != null) { channel = null }
     BackHandler(page == "hubs-add") { page = "hubs" }
     if (confirmDisconnect) JDialog(

@@ -58,7 +58,7 @@ class HttpChannelManagementTest {
         assertEquals(listOf("asks", "pushes"), w.features.map { it.id })
         assertEquals("2026-11-04T10:00:00Z", w.lastEventAt)
         assertEquals("m1", list[2].market)
-        assertEquals("example-chat", list[2].plugin)
+        assertEquals("example-chat", list[2].extension)
     }
 
     @Test fun anOldHubWithoutChannelsSaysSo() = withHub { server, api ->

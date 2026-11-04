@@ -191,7 +191,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.form(
             }
         } else {
             JTextField(draft.model, { onEdit(draft.copy(model = it)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m), label = "具体模型",
-                placeholder = (if (purpose.kind == "plugin") "跟随插件默认" else null) ?: state.provider?.model ?: purpose.effective.model ?: "跟随默认",
+                placeholder = (if (purpose.kind == "plugin") "跟随扩展默认" else null) ?: state.provider?.model ?: purpose.effective.model ?: "跟随默认",
                 singleLine = true, enabled = editable)
             state.models.error?.takeIf { state.models.provider == state.listProvider && state.listProvider.isNotEmpty() }?.let { error ->
                 Row(Modifier.fillMaxWidth().padding(top = Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
@@ -209,7 +209,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.form(
         SettingsCaption("留空恢复继承。保存只修改配置，不发起模型请求；会话的临时选择仍可覆盖默认值。",
             Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m))
     }
-    if (purpose.kind == "plugin") item("plugin") { JNotice("只选择这个插件提供的模型；不修改插件自己的供应商或凭据。", title = "插件模型") }
+    if (purpose.kind == "plugin") item("plugin") { JNotice("只选择这个扩展提供的模型；不修改扩展自己的供应商或凭据。", title = "扩展模型") }
     item("restore") {
         JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
             JRow("恢复继承", leadingIcon = PhIcons.ArrowUUpLeft, enabled = editable && !state.conflict, chevron = false, onClick = onRestore)

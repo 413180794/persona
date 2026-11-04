@@ -84,7 +84,7 @@ internal data class ModelPurposeState(
     val provider: ModelProvider? get() = detail?.providers?.firstOrNull { it.id == (draft.provider.ifEmpty { purpose?.effective?.provider }) }
     val changed: Boolean get() = purpose?.let { draft != ModelConfigurationDraft.from(it) } == true
 
-    /** The launcher provider whose /model list 具体模型 picks from; "": a plugin's, an API's, none. */
+    /** The launcher provider whose /model list 具体模型 picks from; "": an extension's, an API's, none. */
     val listProvider: String get() = provider?.takeIf { it.kind == "launcher" && purpose?.kind != "plugin" && purpose?.supports("model") == true }?.id.orEmpty()
     /** The list for [listProvider] once it is in (the state may still hold another provider's). */
     val modelList: ProviderModels? get() = models.list?.takeIf { models.provider == listProvider && listProvider.isNotEmpty() }

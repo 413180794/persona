@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 /**
- * 新增模型供应商 (docs/launchers.md「从插件添加」): typed in, or — when the hub's plugins offer presets — taken from one,
+ * 新增模型供应商 (docs/launchers.md「从扩展添加」): typed in, or — when the hub's extensions offer presets — taken from one,
  * where only the name, the key and maybe another of its models are filled in and the hub adds the rest.
  */
 internal data class NewProviderDraft(
@@ -89,7 +89,7 @@ internal class NewProviderModel(private val api: ProviderSetup) {
     private val mutable = MutableStateFlow(NewProviderState())
     val state = mutable.asStateFlow()
 
-    /** The presets; the first is picked, and [preferPreset] opens on 从插件添加 when there are any. */
+    /** The presets; the first is picked, and [preferPreset] opens on 从扩展添加 when there are any. */
     suspend fun load(preferPreset: Boolean = false) {
         try {
             val presets = api.presets()

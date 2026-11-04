@@ -40,7 +40,7 @@ import java.io.File
 import java.time.Instant
 
 /**
- * 设置 › 插件 › 渠道 drawn on the JVM with Robolectric's native graphics (no emulator), in every style, light and dark:
+ * 设置 › 扩展 › 渠道 drawn on the JVM with Robolectric's native graphics (no emulator), in every style, light and dark:
  * the 渠道 row of the settings home, the list, WeChat's page, a QR code to scan and a pairing code to send (binding a
  * step at a time). The data is the mock hub's MOCK_CHANNELS. Each is checked to draw something and written as a PNG to
  * `build/channel-shots/` (or `-Dpersona.shots=<dir>`) to look at (docs/android.md「渠道」).
@@ -53,16 +53,16 @@ class ChannelsShotsTest {
 
     private val minutesAgo = { m: Long -> Instant.now().minusSeconds(m * 60).toString() }
     private val textCaps = ChannelCapabilities(imagesIn = true, voiceIn = true, format = "plain", maxText = 3500, asks = "text", push = true, typing = true)
-    private val pluginFeatures = listOf(
+    private val extensionFeatures = listOf(
         ChannelFeature("asks", "提问和批准", "它在驱动的对话（发到的对话、在等回答的）要你回答或批准时，发到这里", true),
         ChannelFeature("all_asks", "所有 Agent 的提问", "各台电脑上所有 Agent 的提问和批准都发到这里", false),
         ChannelFeature("pushes", "推送也发到这里", "通知推到手机的同时发一份；定时任务那段对话的回答也发", false),
         ChannelFeature("sync", "同步主对话", "主对话里不是从这里发起的一轮结束时，把回答发过来", false),
     )
-    private val wechat = HubChannel("wechat", "微信", "im", "plugin", plugin = "wechat", installed = true, enabled = true, state = "connected",
+    private val wechat = HubChannel("wechat", "微信", "im", "plugin", extension = "wechat", installed = true, enabled = true, state = "connected",
         account = ChannelAccount(name = "微信用户 a1b2c3"), bind = "qr", lastEventAt = minutesAgo(3),
         description = "在个人微信里私聊机器人：扫码绑定，消息进主对话，回答以纯文字发回", capabilities = textCaps,
-        target = ChannelTarget.Main, features = pluginFeatures)
+        target = ChannelTarget.Main, features = extensionFeatures)
     private val feishu = HubChannel("feishu", "飞书机器人", "im", "builtin", installed = true, enabled = true, state = "connected",
         account = ChannelAccount(name = "示例用户"), bind = "fields", lastEventAt = minutesAgo(12),
         description = "私聊飞书自建应用的机器人：消息进主对话，回答、进度和提问都是卡片",
@@ -78,13 +78,13 @@ class ChannelsShotsTest {
         HubChannel("lark_agent", "飞书 /agent", "mention", "builtin", installed = true, enabled = false, state = "disabled", bind = "config", readOnly = true,
             capabilities = ChannelCapabilities(format = "markdown", asks = "none"),
             description = "在飞书任何会话、文档评论里自己发「/agent …」，Agent 处理完以你的名义回复（hub.json 的 lark_agent）"),
-        HubChannel("examplechat", "Example Chat", "im", "plugin", plugin = "example-chat", installed = true, enabled = true, state = "not_connected",
-            error = "还没绑定：填机器人的令牌", bind = "fields", description = "示例聊天软件的机器人（第三方插件）",
-            capabilities = textCaps.copy(format = "markdown", maxText = 4000), target = ChannelTarget.Main, features = pluginFeatures),
-        HubChannel("examplebroken", "Example Team", "im", "plugin", plugin = "example-team", installed = true, enabled = true, state = "error",
+        HubChannel("examplechat", "Example Chat", "im", "plugin", extension = "example-chat", installed = true, enabled = true, state = "not_connected",
+            error = "还没绑定：填机器人的令牌", bind = "fields", description = "示例聊天软件的机器人（第三方扩展）",
+            capabilities = textCaps.copy(format = "markdown", maxText = 4000), target = ChannelTarget.Main, features = extensionFeatures),
+        HubChannel("examplebroken", "Example Team", "im", "plugin", extension = "example-team", installed = true, enabled = true, state = "error",
             error = "令牌失效了，重新绑定", bind = "fields", account = ChannelAccount(name = "示例团队"), description = "示例团队聊天的机器人",
-            capabilities = textCaps.copy(format = "markdown"), target = ChannelTarget.Main, features = pluginFeatures),
-        HubChannel("examplemarket", "Example Rooms", "im", "market", plugin = "example-rooms", market = "example", state = "not_installed",
+            capabilities = textCaps.copy(format = "markdown"), target = ChannelTarget.Main, features = extensionFeatures),
+        HubChannel("examplemarket", "Example Rooms", "im", "market", extension = "example-rooms", market = "example", state = "not_installed",
             bind = "none", description = "在示例聊天室里和 Persona 对话"),
     )
 
@@ -151,7 +151,7 @@ class ChannelsShotsTest {
                         .background(PersonaTheme.palette.background)) {
                         when (shot) {
                             Shot.Settings -> SettingsRows()
-                            Shot.List -> ChannelsPage(FakeChannels(), onBack = {}, onChannel = {}, onMarketPlugin = { _, _ -> })
+                            Shot.List -> ChannelsPage(FakeChannels(), onBack = {}, onChannel = {}, onMarketExtension = { _, _ -> })
                             Shot.WeChat -> ChannelPage(FakeChannels(), "wechat", onBack = {}, onOpen = {})
                             Shot.Qr -> ChannelPage(FakeChannels(setOf("wechat")), "wechat", onBack = {}, onOpen = {})
                             Shot.PairCode -> ChannelPage(FakeChannels(setOf("feishu")), "feishu", onBack = {}, onOpen = {})
@@ -176,12 +176,12 @@ class ChannelsShotsTest {
         }
     }
 
-    /** The settings home's 「扩展」 as it shows with channels: 插件, then 渠道 (once fine, once with a broken one). */
+    /** The settings home's 「扩展」 as it shows with channels: 扩展, then 渠道 (once fine, once with a broken one). */
     @Composable
     private fun SettingsRows() {
         LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = Tokens.Space.l, vertical = Tokens.Space.l)) {
             item { JSectionHeader("扩展") }
-            item { JGroupItem(GroupPosition.of(0, 2)) { JRow("插件", leadingIcon = PhIcons.PuzzlePiece, subtitle = "开关、设置和密钥", value = "6 个") } }
+            item { JGroupItem(GroupPosition.of(0, 2)) { JRow("扩展", leadingIcon = PhIcons.PuzzlePiece, subtitle = "开关、设置和密钥", value = "6 个") } }
             item { ChannelsSettingsRow(channels.filter { it.state != "error" }, GroupPosition.of(1, 2), selected = false, onClick = {}) }
             item { JSectionHeader("有一个出错时") }
             item { ChannelsSettingsRow(channels, GroupPosition.Single, selected = false, onClick = {}) }

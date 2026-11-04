@@ -10,9 +10,9 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 
-/** What the plugin says on the voice socket (docs/plugins.md「语音」), its JSON frames decoded. */
+/** What the extension says on the voice socket (docs/extensions.md「语音」), its JSON frames decoded. */
 internal sealed interface VoiceEvent {
-    /** The session is set up: record at [inputRate], play at [outputRate] (the plugin's, never assumed). */
+    /** The session is set up: record at [inputRate], play at [outputRate] (the extension's, never assumed). */
     data class Ready(val inputRate: Int, val outputRate: Int) : VoiceEvent
 
     /** Drop what has not been played yet: the user talked over it, or the answer was cancelled. */
@@ -24,13 +24,13 @@ internal sealed interface VoiceEvent {
     /** A tool in use (查知识库…) or, [done], finished. Several can be open at once. */
     data class Tool(val id: String, val label: String?, val done: Boolean) : VoiceEvent
 
-    /** Something went wrong; after a [fatal] one the plugin closes the socket. */
+    /** Something went wrong; after a [fatal] one the extension closes the socket. */
     data class Error(val message: String, val fatal: Boolean) : VoiceEvent
 
     companion object {
         private val SampleRates = 8_000..96_000
 
-        /** null for a frame this app does not know (newer plugins may add some) or cannot read. */
+        /** null for a frame this app does not know (newer extensions may add some) or cannot read. */
         fun parse(text: String): VoiceEvent? {
             val frame = runCatching { JsonCodec.parseToJsonElement(text) }.getOrNull() as? JsonObject ?: return null
             fun string(key: String) = (frame[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
@@ -65,7 +65,7 @@ internal fun List<Line>.with(t: VoiceEvent.Transcript): List<Line> {
     }.filter { it.text.isNotBlank() || !it.final }
 }
 
-/** The first frame on the socket; model and voice only when chosen (else the plugin's own). */
+/** The first frame on the socket; model and voice only when chosen (else the extension's own). */
 internal fun startFrame(voice: String?, model: String? = null): String = buildJsonObject {
     put("type", "start")
     if (!model.isNullOrEmpty()) put("model", model)
@@ -76,7 +76,7 @@ internal fun startFrame(voice: String?, model: String? = null): String = buildJs
 internal const val InterruptFrame = """{"type":"interrupt"}"""
 
 /**
- * The tools the plugin has open, in the order they started. Several can run at once (a quick lookup while something
+ * The tools the extension has open, in the order they started. Several can run at once (a quick lookup while something
  * handed to the main conversation runs on); the newest one still open is what the page says.
  */
 internal data class OpenTools(private val open: List<Pair<String, String>> = emptyList()) {

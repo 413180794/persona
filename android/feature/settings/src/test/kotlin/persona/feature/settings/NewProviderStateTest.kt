@@ -15,7 +15,7 @@ private class FakeProviders(var presets: List<ProviderPreset> = emptyList()) : P
     override suspend fun add(provider: NewProvider) { added += provider; refuse?.let { throw it } }
 }
 
-/** 新增模型供应商 (docs/launchers.md「从插件添加」): what is sent from each form, the name check, a refusal, older hubs. */
+/** 新增模型供应商 (docs/launchers.md「从扩展添加」): what is sent from each form, the name check, a refusal, older hubs. */
 class NewProviderStateTest {
     private val team = ProviderPreset("example-gateway/team", "example-gateway", "示例网关 · 团队", description = "团队共用",
         baseUrl = "https://gateway.example.com", model = "example-pro", models = listOf(PresetModel("example-mini", "Example Mini")), keyHint = "以 eg- 开头")
@@ -89,7 +89,7 @@ class NewProviderStateTest {
 
         hub.presetsFail = null
         model.load(preferPreset = true)
-        hub.refuse = HubFailure(HubError.Server, "没有这个供应商预设（提供它的插件停用或卸载了？）", 400)
+        hub.refuse = HubFailure(HubError.Server, "没有这个供应商预设（提供它的扩展停用或卸载了？）", 400)
         model.edit(model.state.value.draft.copy(name = "jv_team", apiKey = "k"))
         assertNull(model.save())
         val state = model.state.value

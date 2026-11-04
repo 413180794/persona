@@ -18,7 +18,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 
 /**
- * The phone's side of a voice conversation: the microphone going up and the plugin's voice coming down. Behind an
+ * The phone's side of a voice conversation: the microphone going up and the extension's voice coming down. Behind an
  * interface so the conversation can be tested without audio, and an emulator without a microphone can show the page
  * (debug builds, `debug.voiceAudio fake`).
  */
@@ -27,7 +27,7 @@ internal interface VoiceAudio {
         /** One 20 ms frame of PCM16 mono: [length] bytes of [pcm] (reused for the next frame) and its loudness 0…1. */
         fun onFrame(pcm: ByteArray, length: Int, level: Float)
 
-        /** Whether the plugin's voice is playing (what has arrived is still being played). */
+        /** Whether the extension's voice is playing (what has arrived is still being played). */
         fun onSpeaking(speaking: Boolean)
 
         /** The microphone stopped delivering: another app took it, or the recorder died. */
@@ -68,7 +68,7 @@ internal fun preferredRoute(types: List<Int>): Int? =
 /**
  * The real thing: `VOICE_COMMUNICATION` recording with the system's echo canceller and noise suppressor (on the
  * loudspeaker the model must not hear itself), communication mode routed to a headset or the loudspeaker, audio focus
- * for the call, and a stream player for what the plugin says. Everything is put back in [stop].
+ * for the call, and a stream player for what the extension says. Everything is put back in [stop].
  */
 internal class AndroidVoiceAudio(context: Context) : VoiceAudio {
     private val manager = context.applicationContext.getSystemService(AudioManager::class.java)

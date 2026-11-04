@@ -20,26 +20,26 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
-import persona.core.contracts.api.PluginViewAction
-import persona.core.contracts.api.PluginViewItem
+import persona.core.contracts.api.ExtensionViewAction
+import persona.core.contracts.api.ExtensionViewItem
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import kotlinx.coroutines.launch
 
-// Draws a plugin's View (docs/plugins.md「声明式 UI」「UI 插槽」) with this app's design system: each kind of item as
+// Draws an extension's View (docs/extensions.md「声明式 UI」「UI 插槽」) with this app's design system: each kind of item as
 // a component of the style in use (charts and number grids from the design system's), tones as role colours. The
-// plugin gives no colour, size or icon. A kind this app does not know is skipped.
+// extension gives no colour, size or icon. A kind this app does not know is skipped.
 
 /**
  * What the page does for a view: press a button (after its confirm), choose for a choice field, open a link, switch a
  * segmented control (its action goes at once).
  */
-internal class PluginViewHandle(
-    val press: (PluginViewItem, PluginViewAction) -> Unit,
+internal class ExtensionViewHandle(
+    val press: (ExtensionViewItem, ExtensionViewAction) -> Unit,
     val edit: (String, String) -> Unit,
-    val choose: (PluginViewItem) -> Unit,
+    val choose: (ExtensionViewItem) -> Unit,
     val open: (String) -> Unit,
-    val segment: (PluginViewItem, String) -> Unit = { _, _ -> },
+    val segment: (ExtensionViewItem, String) -> Unit = { _, _ -> },
 )
 
 /**
@@ -48,23 +48,23 @@ internal class PluginViewHandle(
  * links a page may open (an inbox item's source) before https ones go to the app's link handling.
  */
 @Composable
-internal fun rememberPluginView(model: PluginViewModel, appLink: (String) -> Boolean = { false }): PluginViewHandle {
+internal fun rememberExtensionView(model: ExtensionViewModel, appLink: (String) -> Boolean = { false }): ExtensionViewHandle {
     val scope = rememberCoroutineScope()
     val feedback = LocalAppFeedback.current
     val uri = LocalUriHandler.current
     val state by model.state.collectAsState()
-    var confirming by remember(model) { mutableStateOf<Pair<PluginViewItem, PluginViewAction>?>(null) }
-    var choosing by remember(model) { mutableStateOf<PluginViewItem?>(null) }
+    var confirming by remember(model) { mutableStateOf<Pair<ExtensionViewItem, ExtensionViewAction>?>(null) }
+    var choosing by remember(model) { mutableStateOf<ExtensionViewItem?>(null) }
     val routes by rememberUpdatedState(appLink)
-    val open: (String) -> Unit = { url -> if (!routes(url) && PluginViewText.isHttps(url)) runCatching { uri.openUri(url) } }
-    fun show(outcome: PluginActionOutcome) {
+    val open: (String) -> Unit = { url -> if (!routes(url) && ExtensionViewText.isHttps(url)) runCatching { uri.openUri(url) } }
+    fun show(outcome: ExtensionActionOutcome) {
         outcome.toast?.let { feedback?.notice(it) }
         outcome.error?.let { feedback?.notice(it) }
         outcome.openUrl?.let(open)
     }
-    fun run(action: PluginViewAction) = scope.launch { show(model.press(action)) }
+    fun run(action: ExtensionViewAction) = scope.launch { show(model.press(action)) }
     val handle = remember(model) {
-        PluginViewHandle(
+        ExtensionViewHandle(
             press = { item, action -> if (!action.confirm.isNullOrBlank()) confirming = item to action else run(action) },
             edit = model::edit,
             choose = { choosing = it },
@@ -73,8 +73,8 @@ internal fun rememberPluginView(model: PluginViewModel, appLink: (String) -> Boo
         )
     }
     confirming?.let { (item, action) ->
-        JDialog({ confirming = null }, title = PluginViewText.confirmTitle(item), text = action.confirm,
-            confirm = PluginViewText.confirmLabel(item) to { confirming = null; run(action) },
+        JDialog({ confirming = null }, title = ExtensionViewText.confirmTitle(item), text = action.confirm,
+            confirm = ExtensionViewText.confirmLabel(item) to { confirming = null; run(action) },
             destructive = item.role == "destructive")
     }
     choosing?.let { item ->
@@ -91,21 +91,21 @@ internal fun rememberPluginView(model: PluginViewModel, appLink: (String) -> Boo
  * The view's sections and items, into a page's list: [key] keeps two views on one page apart. Rows, links, switches
  * and choices that follow each other form one group; the rest stand on their own.
  */
-internal fun LazyListScope.pluginViewItems(key: String, state: PluginViewState, handle: PluginViewHandle, showTitles: Boolean = true) {
+internal fun LazyListScope.extensionViewItems(key: String, state: ExtensionViewState, handle: ExtensionViewHandle, showTitles: Boolean = true) {
     val view = state.view ?: return
     view.sections.forEachIndexed { s, section ->
         val title = section.title?.takeIf { it.isNotBlank() }
         if (title != null && showTitles) item("$key-s$s-title") { JSectionHeader(title) }
         else if (s > 0) item("$key-s$s-gap") { Spacer(Modifier.padding(top = Tokens.Space.l)) }
-        val items = section.items.filter(PluginViewText::drawable)
+        val items = section.items.filter(ExtensionViewText::drawable)
         var i = 0
         while (i < items.size) {
             val start = i
-            if (PluginViewText.grouped(items[i])) while (i < items.size && PluginViewText.grouped(items[i])) i++ else i++
+            if (ExtensionViewText.grouped(items[i])) while (i < items.size && ExtensionViewText.grouped(items[i])) i++ else i++
             val run = items.subList(start, i)
             run.forEachIndexed { index, item ->
                 item("$key-s$s-i${start + index}") {
-                    if (PluginViewText.grouped(item)) {
+                    if (ExtensionViewText.grouped(item)) {
                         JGroupItem(GroupPosition.of(index, run.size), if (index == 0 && start > 0) Modifier.padding(top = Tokens.Space.s) else Modifier) {
                             GroupedItem(item, state, handle)
                         }
@@ -121,7 +121,7 @@ internal fun LazyListScope.pluginViewItems(key: String, state: PluginViewState, 
 
 /** A row, a link, a switch or a choice: one line of a group. */
 @Composable
-private fun GroupedItem(item: PluginViewItem, state: PluginViewState, handle: PluginViewHandle) {
+private fun GroupedItem(item: ExtensionViewItem, state: ExtensionViewState, handle: ExtensionViewHandle) {
     val enabled = !state.busy
     when (item.type) {
         "row" -> {
@@ -130,7 +130,7 @@ private fun GroupedItem(item: PluginViewItem, state: PluginViewState, handle: Pl
             JRow(item.title.orEmpty(), subtitle = item.subtitle?.takeIf { it.isNotBlank() }, value = item.value?.takeIf { it.isNotBlank() },
                 trailing = when {
                     action != null && state.acting == action.id -> ({ JSpinner() })
-                    badge != null -> ({ JTag(badge.text, PluginViewText.tone(badge.tone)) })
+                    badge != null -> ({ JTag(badge.text, ExtensionViewText.tone(badge.tone)) })
                     else -> null
                 },
                 chevron = action != null, enabled = enabled || action == null,
@@ -152,7 +152,7 @@ private fun GroupedItem(item: PluginViewItem, state: PluginViewState, handle: Pl
 
 /** Text, a number, a progress bar, a button, a text field, a divider: each on its own. */
 @Composable
-private fun StandaloneItem(item: PluginViewItem, state: PluginViewState, handle: PluginViewHandle, first: Boolean) {
+private fun StandaloneItem(item: ExtensionViewItem, state: ExtensionViewState, handle: ExtensionViewHandle, first: Boolean) {
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     val top = if (first) Modifier else Modifier.padding(top = Tokens.Space.s)
@@ -169,7 +169,7 @@ private fun StandaloneItem(item: PluginViewItem, state: PluginViewState, handle:
         "metric" -> JGroupItem(GroupPosition.Single, top) {
             Column(Modifier.fillMaxWidth().padding(horizontal = rowPadding, vertical = Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xxs)) {
                 Text(item.label.orEmpty(), style = type.caption, color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                val tone = PluginViewText.tone(item.tone)
+                val tone = ExtensionViewText.tone(item.tone)
                 Text(item.value.orEmpty(), style = type.number, color = if (tone == Tone.Neutral) palette.ink else palette.tone(tone).text, maxLines = 1,
                     overflow = TextOverflow.Ellipsis)
                 item.detail?.takeIf { it.isNotBlank() }?.let { Text(it, style = type.caption, color = palette.ink3) }
@@ -180,9 +180,9 @@ private fun StandaloneItem(item: PluginViewItem, state: PluginViewState, handle:
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(item.label.orEmpty(), Modifier.weight(1f), style = type.body, color = palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.width(Tokens.Space.s))
-                    Text(PluginViewText.percent(item), style = type.micro, color = palette.ink2, maxLines = 1)
+                    Text(ExtensionViewText.percent(item), style = type.micro, color = palette.ink2, maxLines = 1)
                 }
-                JLinearProgress(PluginViewText.ratio(item), tone = PluginViewText.tone(item.tone))
+                JLinearProgress(ExtensionViewText.ratio(item), tone = ExtensionViewText.tone(item.tone))
                 item.detail?.takeIf { it.isNotBlank() }?.let { Text(it, style = type.caption, color = palette.ink3) }
             }
         }
@@ -200,7 +200,7 @@ private fun StandaloneItem(item: PluginViewItem, state: PluginViewState, handle:
         "divider" -> JDivider(top.padding(vertical = Tokens.Space.s))
         "chart" -> JGroupItem(GroupPosition.Single, top) { ChartItem(item, Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m), compact = false) }
         "stat_grid" -> JGroupItem(GroupPosition.Single, top) {
-            JStatGrid(PluginViewText.stats(item), Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m))
+            JStatGrid(ExtensionViewText.stats(item), Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m))
         }
         "segmented" -> SegmentedItem(item, state, handle, top)
     }
@@ -208,8 +208,8 @@ private fun StandaloneItem(item: PluginViewItem, state: PluginViewState, handle:
 
 /** A chart from the design system; a card's is short, with no scale. */
 @Composable
-private fun ChartItem(item: PluginViewItem, modifier: Modifier, compact: Boolean) {
-    val data = remember(item) { PluginViewText.chart(item) } ?: return
+private fun ChartItem(item: ExtensionViewItem, modifier: Modifier, compact: Boolean) {
+    val data = remember(item) { ExtensionViewText.chart(item) } ?: return
     JChart(data, modifier, compact = compact, title = item.title?.takeIf { it.isNotBlank() }, detail = item.detail?.takeIf { it.isNotBlank() })
 }
 
@@ -218,7 +218,7 @@ private fun ChartItem(item: PluginViewItem, modifier: Modifier, compact: Boolean
  * cells share it out, so it must not sit in a sideways scroll: its cells collapsed there).
  */
 @Composable
-private fun SegmentedItem(item: PluginViewItem, state: PluginViewState, handle: PluginViewHandle, modifier: Modifier) {
+private fun SegmentedItem(item: ExtensionViewItem, state: ExtensionViewState, handle: ExtensionViewHandle, modifier: Modifier) {
     val choices = item.choices.orEmpty()
     val current = state.values[item.name.orEmpty()] ?: item.value
     Box(modifier.fillMaxWidth()) {
@@ -228,17 +228,17 @@ private fun SegmentedItem(item: PluginViewItem, state: PluginViewState, handle: 
 }
 
 /**
- * A plugin's compact view (a card, `size: compact`), not lazily: its sections one under another, no fields. Rows and
+ * An extension's compact view (a card, `size: compact`), not lazily: its sections one under another, no fields. Rows and
  * links are plain rows, buttons small.
  */
 @Composable
-internal fun PluginCardContent(state: PluginViewState, handle: PluginViewHandle, modifier: Modifier = Modifier) {
+internal fun ExtensionCardContent(state: ExtensionViewState, handle: ExtensionViewHandle, modifier: Modifier = Modifier) {
     val view = state.view ?: return
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
         view.sections.forEach { section ->
-            val items = section.items.filter(PluginViewText::drawableOnCard)
+            val items = section.items.filter(ExtensionViewText::drawableOnCard)
             if (items.isEmpty() && section.footer.isNullOrBlank()) return@forEach
             section.title?.takeIf { it.isNotBlank() }?.let { Text(it, style = type.caption, color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             items.forEach { item -> CardItem(item, state, handle) }
@@ -248,19 +248,19 @@ internal fun PluginCardContent(state: PluginViewState, handle: PluginViewHandle,
 }
 
 @Composable
-private fun CardItem(item: PluginViewItem, state: PluginViewState, handle: PluginViewHandle) {
+private fun CardItem(item: ExtensionViewItem, state: ExtensionViewState, handle: ExtensionViewHandle) {
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     when (item.type) {
         "text" -> Text(item.text.orEmpty(), style = when (item.style) { "caption" -> type.caption; "secondary" -> type.callout; "code" -> type.code; else -> type.body },
             color = when (item.style) { "caption" -> palette.ink3; "secondary" -> palette.ink2; else -> palette.ink })
-        "metric" -> JStatGrid(listOf(JStat(item.label.orEmpty(), item.value.orEmpty(), item.detail, PluginViewText.tone(item.tone))))
+        "metric" -> JStatGrid(listOf(JStat(item.label.orEmpty(), item.value.orEmpty(), item.detail, ExtensionViewText.tone(item.tone))))
         "progress" -> Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(item.label.orEmpty(), Modifier.weight(1f), style = type.callout, color = palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(PluginViewText.percent(item), style = type.micro, color = palette.ink2, maxLines = 1)
+                Text(ExtensionViewText.percent(item), style = type.micro, color = palette.ink2, maxLines = 1)
             }
-            JLinearProgress(PluginViewText.ratio(item), tone = PluginViewText.tone(item.tone))
+            JLinearProgress(ExtensionViewText.ratio(item), tone = ExtensionViewText.tone(item.tone))
         }
         "row", "link" -> CardLine(item, state, handle)
         "button" -> item.action?.let { action ->
@@ -269,19 +269,19 @@ private fun CardItem(item: PluginViewItem, state: PluginViewState, handle: Plugi
         }
         "divider" -> JDivider()
         "chart" -> ChartItem(item, Modifier, compact = true)
-        "stat_grid" -> JStatGrid(PluginViewText.stats(item))
+        "stat_grid" -> JStatGrid(ExtensionViewText.stats(item))
         "segmented" -> SegmentedItem(item, state, handle, Modifier)
     }
 }
 
-/** A text, secret or number field; a secret is never filled in by the plugin and never shown. */
+/** A text, secret or number field; a secret is never filled in by the extension and never shown. */
 @Composable
-private fun FieldBox(item: PluginViewItem, state: PluginViewState, handle: PluginViewHandle, modifier: Modifier) {
+private fun FieldBox(item: ExtensionViewItem, state: ExtensionViewState, handle: ExtensionViewHandle, modifier: Modifier) {
     val name = item.name.orEmpty()
     val value = state.values[name].orEmpty()
     val secret = item.kind == "secret"
     val number = item.kind == "number"
-    JTextField(value, { text -> if (!number || PluginViewText.isNumber(text)) handle.edit(name, text) }, modifier.fillMaxWidth(),
+    JTextField(value, { text -> if (!number || ExtensionViewText.isNumber(text)) handle.edit(name, text) }, modifier.fillMaxWidth(),
         label = item.label, placeholder = item.placeholder?.takeIf { it.isNotBlank() }, singleLine = true, enabled = !state.busy,
         visualTransformation = if (secret) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, keyboardType = when {
@@ -293,7 +293,7 @@ private fun FieldBox(item: PluginViewItem, state: PluginViewState, handle: Plugi
 
 /** A row or a link on a card: on the card's own text column (a settings row would indent it a second time). */
 @Composable
-private fun CardLine(item: PluginViewItem, state: PluginViewState, handle: PluginViewHandle) {
+private fun CardLine(item: ExtensionViewItem, state: ExtensionViewState, handle: ExtensionViewHandle) {
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     val link = item.type == "link"
@@ -315,7 +315,7 @@ private fun CardLine(item: PluginViewItem, state: PluginViewState, handle: Plugi
         }
         item.badge?.takeIf { it.text.isNotBlank() && !link }?.let {
             Spacer(Modifier.width(Tokens.Space.s))
-            JTag(it.text, PluginViewText.tone(it.tone))
+            JTag(it.text, ExtensionViewText.tone(it.tone))
         }
         if (action != null && state.acting == action.id) { Spacer(Modifier.width(Tokens.Space.s)); JSpinner() }
         else if (click != null) {

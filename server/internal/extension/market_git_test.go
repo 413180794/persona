@@ -72,10 +72,19 @@ func TestGitMarket(t *testing.T) {
 	if err != nil || ix.Name != "Team plugins" || ix.Extensions[0].Parsed.Version != "1.0.0" {
 		t.Fatalf("%+v %v", ix, err)
 	}
+	if f, err := m.FetchSigned(context.Background()); err != nil || f.Sig != nil {
+		t.Fatalf("no signature in the repository: %+v %v", f, err)
+	}
 	write("1.1.0")
+	_ = os.WriteFile(filepath.Join(work, IndexFile+SigSuffix), []byte(`{"alg": "ed25519"}`), 0o644)
+	run(t, work, "add", "-A")
+	run(t, work, "commit", "-q", "-m", "signed")
 	run(t, work, "push", "-q", bare, "main")
 	if ix, _, err = m.Fetch(context.Background()); err != nil || ix.Extensions[0].Parsed.Version != "1.1.0" {
 		t.Fatalf("fetched again: %+v %v", ix, err)
+	}
+	if f, err := m.FetchSigned(context.Background()); err != nil || string(f.Sig) != `{"alg": "ed25519"}` {
+		t.Fatalf("the signature next to the index in the clone: %+v %v", f, err)
 	}
 	if _, _, err := m.Download(context.Background(), ix.Extensions[0].PackageFor("linux-amd64"), t.TempDir()); err != nil {
 		t.Fatal(err)

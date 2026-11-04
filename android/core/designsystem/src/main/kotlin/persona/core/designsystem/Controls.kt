@@ -453,7 +453,7 @@ fun JBadge(count: Int, modifier: Modifier = Modifier, text: String? = null) {
 fun JTag(text: String, modifier: Modifier = Modifier, status: Status? = null) =
     JTagColored(text, modifier, status?.let { PersonaTheme.palette.status(it) })
 
-/** A small static label in a role colour ([Tone]): a plugin's badge (有效, 快过期). */
+/** A small static label in a role colour ([Tone]): an extension's badge (有效, 快过期). */
 @Composable
 fun JTag(text: String, tone: Tone, modifier: Modifier = Modifier) =
     JTagColored(text, modifier, PersonaTheme.palette.tone(tone).takeIf { tone != Tone.Neutral })
@@ -487,7 +487,7 @@ fun JSpinner(modifier: Modifier = Modifier, color: Color = if (PersonaTheme.styl
 @Composable
 fun JLinearProgress(progress: Float?, modifier: Modifier = Modifier, tone: Tone? = null) {
     val palette = PersonaTheme.palette
-    // A toned bar (a plugin's progress) takes the role colour; otherwise the style's ink or accent.
+    // A toned bar (an extension's progress) takes the role colour; otherwise the style's ink or accent.
     val color = tone?.takeIf { it != Tone.Neutral }?.let { palette.tone(it).dot }
         ?: if (PersonaTheme.style == AppStyle.Brief) palette.ink else palette.accent
     Box(modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(palette.surfaceStrong)) {

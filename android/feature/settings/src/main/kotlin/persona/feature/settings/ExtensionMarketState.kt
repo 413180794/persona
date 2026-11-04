@@ -1,28 +1,28 @@
 package persona.feature.settings
 
-import persona.core.contracts.api.CatalogPlugin
-import persona.core.contracts.api.PluginCatalog
-import persona.core.contracts.api.PluginDetail
-import persona.core.contracts.api.PluginMarket
-import persona.core.contracts.api.PluginMarkets
-import persona.core.contracts.api.PluginPreview
+import persona.core.contracts.api.CatalogExtension
+import persona.core.contracts.api.ExtensionCatalog
+import persona.core.contracts.api.ExtensionDetail
+import persona.core.contracts.api.ExtensionMarket
+import persona.core.contracts.api.ExtensionMarkets
+import persona.core.contracts.api.ExtensionPreview
 import persona.core.designsystem.failureReason
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-// 设置 › 插件 › 插件市场 (docs/plugins.md「插件市场」): the words, the catalog, one plugin of it (preview, then install,
-// upgrade or remove) and the markets. The pages are in PluginMarketScreen.kt.
+// 设置 › 扩展 › 扩展市场 (docs/extensions.md「扩展市场」): the words, the catalog, one extension of it (preview, then install,
+// upgrade or remove) and the markets. The pages are in ExtensionMarketScreen.kt.
 
-/** Where a catalog plugin stands on this hub. */
+/** Where a catalog extension stands on this hub. */
 internal enum class CatalogStanding { Available, Installed, Upgradable, InstalledElsewhere, Unavailable }
 
-/** What the page may do with a catalog plugin. */
+/** What the page may do with a catalog extension. */
 internal enum class CatalogAction { Install, Upgrade, Uninstall }
 
 internal object CatalogText {
-    fun standing(p: CatalogPlugin): CatalogStanding = when {
+    fun standing(p: CatalogExtension): CatalogStanding = when {
         p.upgradable && p.problem.isNullOrBlank() -> CatalogStanding.Upgradable
         !p.installed.isNullOrBlank() && (p.fromThisMarket || p.installedSource == "installed") -> CatalogStanding.Installed
         !p.installed.isNullOrBlank() -> CatalogStanding.InstalledElsewhere
@@ -30,8 +30,8 @@ internal object CatalogText {
         else -> CatalogStanding.Available
     }
 
-    /** The short word beside a plugin in the catalog. */
-    fun badge(p: CatalogPlugin): String? = when (standing(p)) {
+    /** The short word beside an extension in the catalog. */
+    fun badge(p: CatalogExtension): String? = when (standing(p)) {
         CatalogStanding.Upgradable -> "可升级"
         CatalogStanding.Installed, CatalogStanding.InstalledElsewhere -> "已安装"
         CatalogStanding.Unavailable -> "装不了"
@@ -39,19 +39,19 @@ internal object CatalogText {
     }
 
     /** The line under it: the version (and the installed one), or why it cannot be installed. */
-    fun line(p: CatalogPlugin): String = when (standing(p)) {
+    fun line(p: CatalogExtension): String = when (standing(p)) {
         CatalogStanding.Upgradable -> "${p.installed} → ${p.version}"
         CatalogStanding.Installed -> "${p.version} · 已安装"
-        CatalogStanding.InstalledElsewhere -> "${p.version} · 已装 ${p.installed}（${PluginText.source(p.installedSource) ?: "别处"}）"
+        CatalogStanding.InstalledElsewhere -> "${p.version} · 已装 ${p.installed}（${ExtensionText.source(p.installedSource) ?: "别处"}）"
         CatalogStanding.Unavailable -> p.problem.orEmpty()
         CatalogStanding.Available -> p.version
     }
 
     /**
-     * Install what is not installed and can be; upgrade what is older here (a built-in or hub.json plugin the hub
+     * Install what is not installed and can be; upgrade what is older here (a built-in or hub.json extension the hub
      * marks not upgradable); remove only what came from this market (the hub refuses the rest from a phone).
      */
-    fun actions(p: CatalogPlugin): List<CatalogAction> = buildList {
+    fun actions(p: CatalogExtension): List<CatalogAction> = buildList {
         val usable = p.problem.isNullOrBlank()
         if (usable && p.installed.isNullOrBlank()) add(CatalogAction.Install)
         if (usable && p.upgradable) add(CatalogAction.Upgrade)
@@ -59,55 +59,61 @@ internal object CatalogText {
     }
 
     /** Why the page offers nothing: installed some other way (only the hub's machine changes it). */
-    fun noActionReason(p: CatalogPlugin): String? = when {
+    fun noActionReason(p: CatalogExtension): String? = when {
         actions(p).isNotEmpty() -> null
         !p.problem.isNullOrBlank() -> p.problem
         !p.installed.isNullOrBlank() && !p.fromThisMarket ->
-            "这个插件不是从这个市场装的：升级和卸载在 hub 所在的机器上（personad plugin）或 hub 的管理界面里做。"
+            "这个扩展不是从这个市场装的：升级和卸载在 hub 所在的机器上（personad extension）或 hub 的管理界面里做。"
         else -> null
     }
 
     /** The confirm button of a preview: red when an upgrade asks for more. */
-    fun confirmLabel(preview: PluginPreview): String = when {
+    fun confirmLabel(preview: ExtensionPreview): String = when {
         !preview.upgrade -> "同意并安装"
         preview.morePermissions || !preview.addedPermissions.isNullOrEmpty() -> "同意新权限并升级"
         else -> "升级"
     }
 
-    fun asksForMore(preview: PluginPreview): Boolean = preview.upgrade && (preview.morePermissions || !preview.addedPermissions.isNullOrEmpty())
+    fun asksForMore(preview: ExtensionPreview): Boolean = preview.upgrade && (preview.morePermissions || !preview.addedPermissions.isNullOrEmpty())
 
     /** What the page says once it is in. */
-    fun installed(detail: PluginDetail, upgrade: Boolean): String {
-        val missing = detail.plugin.needsSetup.orEmpty()
-        val done = if (upgrade) "已升级到 ${detail.plugin.version.orEmpty()}".trim() else "已安装"
+    fun installed(detail: ExtensionDetail, upgrade: Boolean): String {
+        val missing = detail.extension.needsSetup.orEmpty()
+        val done = if (upgrade) "已升级到 ${detail.extension.version.orEmpty()}".trim() else "已安装"
         return if (missing.isEmpty()) done else "$done，还缺：" + missing.joinToString("、")
     }
 
-    /** A market's line in the list: how many plugins, a token, when it was read. */
-    fun marketLine(m: PluginMarket): String = listOfNotNull(
-        "${m.plugins} 个插件",
+    /** A market's line in the list: how many extensions, signed or not, a token, when it was read. */
+    fun marketLine(m: ExtensionMarket): String = listOfNotNull(
+        "${m.extensions} 个扩展",
+        m.signature?.let { if (it.verified) "已签名" else if (it.unsigned) "未签名" else null },
         "有 token".takeIf { m.hasToken },
         m.fetchedAt?.let(::time)?.let { "读取于 $it" },
     ).joinToString(" · ")
+
+    /** A market whose signature fails or whose key changed: what the page says under the list (null when it checks out). */
+    fun signatureProblem(m: ExtensionMarket): String? = m.signature?.takeIf { it.failed }?.let { s ->
+        s.detail?.takeIf { it.isNotBlank() } ?: "签名对不上或换了签名 key：hub 先不从这个市场安装和升级，到 hub 所在的机器上确认后恢复。"
+    }
 
     /** `2026-11-04T06:00:00Z` → `2026-11-04 06:00` (UTC as the hub wrote it; enough to tell old from fresh). */
     fun time(iso: String): String? = Regex("^(\\d{4}-\\d{2}-\\d{2})T(\\d{2}:\\d{2})").find(iso)?.let { "${it.groupValues[1]} ${it.groupValues[2]}" }
 }
 
 internal data class CatalogState(
-    val catalog: PluginCatalog? = null,
+    val catalog: ExtensionCatalog? = null,
     val query: String = "",
     /** The market the list is narrowed to; null is all. */
     val market: String? = null,
     val loading: Boolean = false,
     val error: String? = null,
 ) {
-    val markets: List<PluginMarket> get() = catalog?.markets.orEmpty()
-    val plugins: List<CatalogPlugin> get() = catalog?.plugins.orEmpty()
+    val markets: List<ExtensionMarket> get() = catalog?.markets.orEmpty()
+    val extensions: List<CatalogExtension> get() = catalog?.extensions.orEmpty()
 }
 
-/** 插件市场: the catalog, searched and narrowed to a market by the hub. */
-internal class CatalogModel(private val api: PluginMarkets) {
+/** 扩展市场: the catalog, searched and narrowed to a market by the hub. */
+internal class CatalogModel(private val api: ExtensionMarkets) {
     private val mutable = MutableStateFlow(CatalogState())
     val state = mutable.asStateFlow()
     private var generation = 0
@@ -134,13 +140,13 @@ internal class CatalogModel(private val api: PluginMarkets) {
     }
 }
 
-internal data class CatalogPluginState(
-    val plugin: CatalogPlugin? = null,
+internal data class CatalogExtensionState(
+    val extension: CatalogExtension? = null,
     val marketName: String? = null,
     val loading: Boolean = false,
     val error: String? = null,
     /** The preview waiting for the user's yes: what it is and may do. */
-    val preview: PluginPreview? = null,
+    val preview: ExtensionPreview? = null,
     /** Downloading and checking the package. */
     val previewing: Boolean = false,
     /** Installing, upgrading or removing. */
@@ -153,9 +159,9 @@ internal data class CatalogPluginState(
     val busy: Boolean get() = loading || previewing || acting
 }
 
-/** One plugin of a market: its permissions, preview → install / upgrade, remove. */
-internal class CatalogPluginModel(private val api: PluginMarkets, private val market: String, private val id: String) {
-    private val mutable = MutableStateFlow(CatalogPluginState())
+/** One extension of a market: its permissions, preview → install / upgrade, remove. */
+internal class CatalogExtensionModel(private val api: ExtensionMarkets, private val market: String, private val id: String) {
+    private val mutable = MutableStateFlow(CatalogExtensionState())
     val state = mutable.asStateFlow()
 
     suspend fun load() {
@@ -163,10 +169,10 @@ internal class CatalogPluginModel(private val api: PluginMarkets, private val ma
         mutable.update { it.copy(loading = true) }
         try {
             val catalog = api.catalog(market = market)
-            val plugin = catalog.plugins.firstOrNull { it.market == market && it.id == id }
+            val extension = catalog.extensions.firstOrNull { it.market == market && it.id == id }
             mutable.update {
-                it.copy(plugin = plugin ?: it.plugin, missing = plugin == null, error = null,
-                    marketName = catalog.markets.firstOrNull { m -> m.id == market }?.label ?: plugin?.marketName)
+                it.copy(extension = extension ?: it.extension, missing = extension == null, error = null,
+                    marketName = catalog.markets.firstOrNull { m -> m.id == market }?.label ?: extension?.marketName)
             }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { mutable.update { it.copy(error = "读取失败：${failureReason(error)}") } }
@@ -224,7 +230,7 @@ internal class CatalogPluginModel(private val api: PluginMarkets, private val ma
 }
 
 internal data class MarketsState(
-    val markets: List<PluginMarket>? = null,
+    val markets: List<ExtensionMarket>? = null,
     val loading: Boolean = false,
     val error: String? = null,
     /** The market a call is on its way for. */
@@ -237,7 +243,7 @@ internal data class MarketsState(
 )
 
 /** 管理市场: the markets the hub reads. */
-internal class MarketsModel(private val api: PluginMarkets) {
+internal class MarketsModel(private val api: ExtensionMarkets) {
     private val mutable = MutableStateFlow(MarketsState())
     val state = mutable.asStateFlow()
 
@@ -283,7 +289,7 @@ internal class MarketsModel(private val api: PluginMarkets) {
     /** A new token, or "" to remove it; the hub reads the market again with it. */
     suspend fun setToken(id: String, token: String): Boolean = working(id, "没有换成") { replace(api.setMarketToken(id, token.trim())) }
 
-    private fun replace(market: PluginMarket) = mutable.update {
+    private fun replace(market: ExtensionMarket) = mutable.update {
         it.copy(markets = it.markets?.map { m -> if (m.id == market.id) market else m })
     }
 

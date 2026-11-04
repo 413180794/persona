@@ -18,7 +18,7 @@ class HttpProviderSetup internal constructor(
 ) : ProviderSetup {
     constructor(connection: OkHttpHubConnection) : this({ path, method, body -> connection.request(path, method, body) })
 
-    // A hub from before the plugin base has no such route (its GET /launchers/{name} answers 404 for "presets").
+    // A hub from before the extension base has no such route (its GET /launchers/{name} answers 404 for "presets").
     override suspend fun presets(): List<ProviderPreset> = try {
         val presets = JsonCodec.parseToJsonElement(call("/api/v1/launchers/presets", "GET")).jsonObject["presets"] as? JsonArray
         presets?.let { JsonCodec.decodeFromJsonElement(ListSerializer(ProviderPreset.serializer()), it) }.orEmpty()

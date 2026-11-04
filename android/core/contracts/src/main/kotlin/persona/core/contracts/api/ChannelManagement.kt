@@ -10,8 +10,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
 /**
- * 设置 › 插件 › 渠道 (docs/channels.md「接口」「界面」): every way of talking to Persona — its own apps, the Feishu bot,
- * WeChat, /agent in Feishu, voice, the chat app bots plugins contribute — with each one's switch, its binding (a step
+ * 设置 › 扩展 › 渠道 (docs/channels.md「接口」「界面」): every way of talking to Persona — its own apps, the Feishu bot,
+ * WeChat, /agent in Feishu, voice, the chat app bots extensions contribute — with each one's switch, its binding (a step
  * at a time), where its messages go, what it does and a test message. Bound to the active pairing's selected hub.
  */
 interface ChannelManagement {
@@ -51,13 +51,13 @@ interface ChannelDirectory {
 /** The hub has no channels (404 on the list: a hub from before them). */
 class ChannelsUnsupported : Exception("这台 hub 还不支持渠道，请先更新 hub")
 
-/** The hub has no channel of that id (404 `not_found`): gone with its plugin. */
+/** The hub has no channel of that id (404 `not_found`): gone with its extension. */
 class ChannelNotFound : Exception("这台 hub 上没有这个渠道了")
 
 /** The hub refused the change (400 `invalid`): [message] says why, for people. */
 class ChannelRejected(message: String) : Exception(message)
 
-/** The channel is set up elsewhere (409 `read_only`): hub.json, its plugin's page. */
+/** The channel is set up elsewhere (409 `read_only`): hub.json, its extension's page. */
 class ChannelReadOnly(message: String) : Exception(message)
 
 /** `PUT /api/v1/channels/{id}`: null and empty are left out, so only what changed is sent. */
@@ -75,10 +75,10 @@ data class HubChannel(
     val name: String = "",
     /** `app | im | mention | voice`. */
     val kind: String = "",
-    /** `builtin | plugin | market`. */
+    /** `builtin | plugin | market` (the hub's words: `plugin` is an extension's contribution). */
     val source: String = "",
-    /** The plugin that contributes it (or would, from a market). */
-    val plugin: String? = null,
+    /** The extension that contributes it (or would, from a market). */
+    @SerialName("plugin") val extension: String? = null,
     /** For a market's: the market's id. */
     val market: String? = null,
     val installed: Boolean = false,
@@ -96,7 +96,7 @@ data class HubChannel(
     /** The app channel's ends (iPhone, Mac, …), for people. */
     val surfaces: List<String> = emptyList(),
     @SerialName("last_event_at") val lastEventAt: String? = null,
-    /** Its settings are elsewhere (hub.json, the plugin's page): only shown here. */
+    /** Its settings are elsewhere (hub.json, the extension's page): only shown here. */
     @SerialName("read_only") val readOnly: Boolean = false,
 ) {
     val label: String get() = name.ifBlank { id }
@@ -165,7 +165,7 @@ data class ChannelDetail(
     val channel: HubChannel,
     val waiting: ChannelWaiting = ChannelWaiting(),
     val conversations: List<ChannelConversation> = emptyList(),
-    /** The channel's own full page: an app route (`settings/plugins/<id>`, `settings/model-config`), not a web address. */
+    /** The channel's own full page: an app route (`settings/extensions/<id>`, `settings/model-config`), not a web address. */
     val settingsUrl: String? = null,
 ) {
     @Serializable

@@ -46,8 +46,8 @@ class ShellSession(
     val agentsWiring: persona.feature.agents.AgentsWiring = persona.feature.agents.AgentsWiring.Empty,
     /** Launchers, 重新连接, 重新部署 and the engine of the hub's machines; null in 体验模式. */
     val machines: MachineManagement? = null,
-    /** The hub's voice plugins (语音对话); null in demo mode. */
-    val voice: VoicePlugins? = null,
+    /** The hub's voice extensions (语音对话); null in demo mode. */
+    val voice: VoiceExtensions? = null,
     /** The phone's hub groups; a demo has none. */
     val groups: HubGroups = HubGroups.None,
     val tasks: persona.core.domain.tasks.TasksStore? = null,
@@ -117,17 +117,18 @@ class AppServices @Inject constructor(
                 val knowledgeConnection = object : KnowledgeConnection { override val current = knowledgeState.asStateFlow() }
                 fun current() = app.hub.value === hub
                 // Like metrics: each call follows the live route with the pairing's pinned client and token.
-                val voice = object : VoicePlugins {
-                    private fun api(): VoicePlugins {
+                val voice = object : VoiceExtensions {
+                    private fun api(): VoiceExtensions {
                         if (!current()) throw CancellationException("Pairing changed")
                         val address = socket.route.value?.endpoint?.url ?: throw HubFailure(HubError.NoNetwork)
-                        return HttpVoicePlugins(address, hub.api.token, socket.http.client, ::current)
+                        return HttpVoiceExtensions(address, hub.api.token, socket.http.client, ::current,
+                            legacy = { "extensions" !in socket.serverFeatures.value })
                     }
-                    override suspend fun voicePlugin() = api().voicePlugin()
-                    override suspend fun voices(pluginId: String, model: String?) = api().voices(pluginId, model)
-                    override suspend fun models(pluginId: String) = api().models(pluginId)
-                    override suspend fun modelChoice(pluginId: String) = api().modelChoice(pluginId)
-                    override fun connect(pluginId: String, listener: VoiceSocketListener) = api().connect(pluginId, listener)
+                    override suspend fun voiceExtension() = api().voiceExtension()
+                    override suspend fun voices(extensionId: String, model: String?) = api().voices(extensionId, model)
+                    override suspend fun models(extensionId: String) = api().models(extensionId)
+                    override suspend fun modelChoice(extensionId: String) = api().modelChoice(extensionId)
+                    override fun connect(extensionId: String, listener: VoiceSocketListener) = api().connect(extensionId, listener)
                 }
                 val phoneTransport = data.credentials.deviceId?.let { HubPhoneToolsTransport(socket) }
                 val phone = phoneTransport?.let {

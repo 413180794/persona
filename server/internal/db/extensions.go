@@ -114,8 +114,8 @@ var _ extension.Store = (*DB)(nil)
 
 // PluginMarkets are the registered markets, oldest first.
 func (d *DB) ExtensionMarkets(ctx context.Context) ([]extension.MarketRecord, error) {
-	rows, err := d.pool.Query(ctx, `SELECT id, spec, name, token_sealed, index_json, warnings, error, fetched_at, added_at
-		FROM plugin_markets ORDER BY added_at, id`)
+	rows, err := d.pool.Query(ctx, `SELECT id, spec, name, token_sealed, index_json, warnings, error, fetched_at, added_at,
+		signing_key, signature FROM plugin_markets ORDER BY added_at, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -123,9 +123,15 @@ func (d *DB) ExtensionMarkets(ctx context.Context) ([]extension.MarketRecord, er
 	var out []extension.MarketRecord
 	for rows.Next() {
 		var r extension.MarketRecord
-		var index, warnings []byte
-		if err := rows.Scan(&r.ID, &r.Spec, &r.Name, &r.TokenSealed, &index, &warnings, &r.Error, &r.FetchedAt, &r.AddedAt); err != nil {
+		var index, warnings, signature []byte
+		if err := rows.Scan(&r.ID, &r.Spec, &r.Name, &r.TokenSealed, &index, &warnings, &r.Error, &r.FetchedAt, &r.AddedAt,
+			&r.SigningKey, &signature); err != nil {
 			return nil, err
+		}
+		if len(signature) > 0 && string(signature) != "null" {
+			if err := json.Unmarshal(signature, &r.Signature); err != nil {
+				return nil, err
+			}
 		}
 		if len(index) > 0 && string(index) != "null" {
 			r.Index = index
@@ -148,10 +154,16 @@ func (d *DB) PutExtensionMarket(ctx context.Context, r extension.MarketRecord) e
 	if len(r.Index) > 0 {
 		index = r.Index
 	}
-	_, err = d.pool.Exec(ctx, `INSERT INTO plugin_markets (id, spec, name, token_sealed, index_json, warnings, error, fetched_at, added_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		ON CONFLICT (id) DO UPDATE SET spec = $2, name = $3, token_sealed = $4, index_json = $5, warnings = $6, error = $7, fetched_at = $8`,
-		r.ID, r.Spec, r.Name, r.TokenSealed, index, warnings, r.Error, r.FetchedAt, r.AddedAt)
+	signature, err := json.Marshal(r.Signature)
+	if err != nil {
+		return err
+	}
+	_, err = d.pool.Exec(ctx, `INSERT INTO plugin_markets (id, spec, name, token_sealed, index_json, warnings, error, fetched_at, added_at,
+		signing_key, signature)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		ON CONFLICT (id) DO UPDATE SET spec = $2, name = $3, token_sealed = $4, index_json = $5, warnings = $6, error = $7, fetched_at = $8,
+			signing_key = $10, signature = $11`,
+		r.ID, r.Spec, r.Name, r.TokenSealed, index, warnings, r.Error, r.FetchedAt, r.AddedAt, r.SigningKey, signature)
 	return err
 }
 

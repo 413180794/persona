@@ -66,7 +66,7 @@ internal fun LazyListScope.machineControls(
 
 /**
  * 启动器 N: each launcher's name and the model it runs (the last part of a provider path). With [onLauncher] (the hub
- * manages plugins) a row opens the launcher's page, where plugins may draw a section for its gateway.
+ * manages extensions) a row opens the launcher's page, where extensions may draw a section for its gateway.
  */
 internal fun LazyListScope.machineLaunchers(online: Boolean, state: MachineActionsState, onLauncher: ((String) -> Unit)? = null) {
     val launchers = state.launchers.orEmpty()

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"slices"
@@ -49,6 +50,31 @@ type MarketView struct {
 	Error       string     `json:"error,omitempty"`
 	FetchedAt   *time.Time `json:"fetched_at,omitempty"`
 	AddedAt     time.Time  `json:"added_at"`
+	// Signature is the index's signature (docs/extensions.md「签名」): signed / unsigned / invalid / key_changed, and the
+	// key it is signed by.
+	Signature MarketSignatureView `json:"signature"`
+}
+
+// MarketSignatureView is a market's signature as the apps show it.
+type MarketSignatureView struct {
+	State string `json:"state"`
+	KeyID string `json:"key_id,omitempty"`
+}
+
+// errMarketSignature: a market's index was read but its signature refuses it (the last good one stays).
+var errMarketSignature = errors.New("market signature")
+
+// signedIndex judges what was read of market rec against the key it trusts: the record to keep and the index to use
+// (nil: keep the last good one), or why it is refused.
+func signedIndex(rec extension.MarketRecord, f *extension.Fetched, now time.Time) (extension.MarketRecord, *extension.MarketIndex, error) {
+	sig, trust, why := extension.CheckSignature(f.Raw, f.Sig, rec.SigningKey, f.Index.SigningKey)
+	rec.FetchedAt, rec.Signature, rec.SigningKey = &now, sig, trust
+	if why != "" {
+		rec.Error = why
+		return rec, nil, fmt.Errorf("%w: %s", errMarketSignature, why)
+	}
+	rec.Error, rec.Name, rec.Warnings, rec.Index = "", f.Index.Name, f.Warnings, mustJSON(f.Index)
+	return rec, f.Index, nil
 }
 
 // CatalogItem is a market's plugin as the catalog shows it, with what this hub has of it.
@@ -127,8 +153,19 @@ func (h *Hub) market(rec extension.MarketRecord) (*extension.Market, error) {
 	return mk, nil
 }
 
-// marketRead reads a market's index now and keeps it (or why it could not).
+// marketRead reads a market's index now and keeps it (or why it could not). An index its signature refuses is not
+// taken: the last good one stays, and the market says why (docs/extensions.md「签名」).
 func (h *Hub) marketRead(ctx context.Context, id string) (MarketView, error) {
+	return h.marketReadAs(ctx, id, false)
+}
+
+// marketTrust reads market id again and accepts what its signature now is: a new key (key_changed, signed by the key
+// its index names), or no signature any more. A signature that does not verify is never accepted.
+func (h *Hub) marketTrust(ctx context.Context, id string) (MarketView, error) {
+	return h.marketReadAs(ctx, id, true)
+}
+
+func (h *Hub) marketReadAs(ctx context.Context, id string, trust bool) (MarketView, error) {
 	ms := h.marketsState()
 	ms.mu.Lock()
 	s := ms.byID[id]
@@ -137,10 +174,9 @@ func (h *Hub) marketRead(ctx context.Context, id string) (MarketView, error) {
 		return MarketView{}, errNoMarket
 	}
 	mk, err := h.market(s.rec)
-	var ix *extension.MarketIndex
-	var warnings []string
+	var f *extension.Fetched
 	if err == nil {
-		ix, warnings, err = mk.Fetch(ctx)
+		f, err = mk.FetchSigned(ctx)
 	}
 	now := time.Now()
 	ms.mu.Lock()
@@ -150,19 +186,50 @@ func (h *Hub) marketRead(ctx context.Context, id string) (MarketView, error) {
 		return MarketView{}, errNoMarket
 	}
 	rec := s.rec
-	rec.FetchedAt = &now
 	if err != nil {
-		rec.Error = err.Error()
+		rec.FetchedAt, rec.Error = &now, err.Error()
 	} else {
-		rec.Error, rec.Name, rec.Warnings = "", ix.Name, warnings
-		rec.Index = mustJSON(ix)
-		s.index = ix
+		if trust {
+			sig, _, _ := extension.CheckSignature(f.Raw, f.Sig, rec.SigningKey, f.Index.SigningKey)
+			switch {
+			case sig.State == extension.SigKeyChanged && sig.Pending != "":
+				h.logf("extension market %s: its owner trusts the new key %s (was %s)", id, sig.KeyID, keyIDOf(rec.SigningKey))
+				rec.SigningKey = sig.Pending
+			case sig.State == extension.SigInvalid && sig.Unsign:
+				h.logf("extension market %s: its owner accepts it unsigned (was %s)", id, keyIDOf(rec.SigningKey))
+				rec.SigningKey = ""
+			case sig.Bad():
+				return marketView(s), errors.New("没有可以信任的新 key：签名对不上市场自己写的公钥，索引可能被改过")
+			}
+		}
+		var ix *extension.MarketIndex
+		if rec, ix, err = signedIndex(rec, f, now); ix != nil {
+			s.index = ix
+		} else {
+			h.logf("extension market %s: %v", id, err)
+		}
 	}
 	if perr := h.marketStore().PutExtensionMarket(ctx, rec); perr != nil && err == nil {
 		err = perr
 	}
 	s.rec = rec
 	return marketView(s), err
+}
+
+func keyIDOf(key string) string {
+	k, err := extension.ParseSigningKey(key)
+	if err != nil {
+		return "无"
+	}
+	return extension.KeyID(k)
+}
+
+// signatureText is a market's signature for the log.
+func signatureText(s extension.MarketSignature) string {
+	if s.State == extension.SigSigned {
+		return "signed by " + s.KeyID
+	}
+	return s.State
 }
 
 func mustJSON(v any) []byte {
@@ -177,7 +244,11 @@ func (h *Hub) marketsDir() string { return filepath.Join(h.extensions.root, "mar
 
 func marketView(s *marketState) MarketView {
 	v := MarketView{ID: s.rec.ID, Spec: s.rec.Spec, Name: s.rec.Name, HasToken: s.rec.TokenSealed != "", Warnings: s.rec.Warnings,
-		Error: s.rec.Error, FetchedAt: s.rec.FetchedAt, AddedAt: s.rec.AddedAt}
+		Error: s.rec.Error, FetchedAt: s.rec.FetchedAt, AddedAt: s.rec.AddedAt,
+		Signature: MarketSignatureView{State: s.rec.Signature.State, KeyID: s.rec.Signature.KeyID}}
+	if v.Signature.State == "" { // a market read before #1848
+		v.Signature.State = extension.SigUnsigned
+	}
 	if v.Warnings == nil {
 		v.Warnings = []string{}
 	}
@@ -226,12 +297,17 @@ func (h *Hub) marketAdd(ctx context.Context, specText, token string) (MarketView
 		return MarketView{}, errors.New("市场太多了：先删掉几个")
 	}
 	mk := &extension.Market{Spec: spec, Token: token, Client: ms.client, GitHubAPI: ms.githubAPI, Dir: h.marketsDir()}
-	ix, warnings, err := mk.Fetch(ctx)
+	f, err := mk.FetchSigned(ctx)
 	if err != nil {
 		return MarketView{}, err
 	}
 	now := time.Now()
-	rec := extension.MarketRecord{ID: id, Spec: spec.String(), Name: ix.Name, Index: mustJSON(ix), Warnings: warnings, FetchedAt: &now, AddedAt: now}
+	// The first read is trust on first use: a signed market's key is kept from now on.
+	rec, ix, err := signedIndex(extension.MarketRecord{ID: id, Spec: spec.String(), AddedAt: now}, f, now)
+	if err != nil {
+		mk.RemoveCheckout()
+		return MarketView{}, err
+	}
 	if token != "" {
 		if rec.TokenSealed, err = (hubSealer{h}).Seal(token); err != nil {
 			return MarketView{}, err
@@ -244,7 +320,7 @@ func (h *Hub) marketAdd(ctx context.Context, specText, token string) (MarketView
 	ms.mu.Lock()
 	ms.byID[id] = s
 	ms.mu.Unlock()
-	h.logf("plugin market %s added: %s (%d plugins)", id, rec.Spec, len(ix.Extensions))
+	h.logf("extension market %s added: %s (%d extensions, %s)", id, rec.Spec, len(ix.Extensions), signatureText(rec.Signature))
 	return marketView(s), nil
 }
 
@@ -304,7 +380,7 @@ func (h *Hub) marketSetSpec(ctx context.Context, id, specText string) (MarketVie
 		return MarketView{}, err
 	}
 	mk := &extension.Market{Spec: spec, Token: old.Token, Client: ms.client, GitHubAPI: ms.githubAPI, Dir: h.marketsDir()}
-	ix, warnings, err := mk.Fetch(ctx)
+	f, err := mk.FetchSigned(ctx)
 	if err != nil {
 		return MarketView{}, err
 	}
@@ -314,8 +390,15 @@ func (h *Hub) marketSetSpec(ctx context.Context, id, specText string) (MarketVie
 	if s = ms.byID[id]; s == nil {
 		return MarketView{}, errNoMarket
 	}
-	rec := s.rec
-	rec.Spec, rec.Name, rec.Index, rec.Warnings, rec.Error, rec.FetchedAt = spec.String(), ix.Name, mustJSON(ix), warnings, "", &now
+	// The new address is held to the key the market is trusted with: a move is not a way to change it.
+	rec, ix, err := signedIndex(s.rec, f, now)
+	if err != nil {
+		if old.Spec.String() != spec.String() {
+			mk.RemoveCheckout()
+		}
+		return MarketView{}, err
+	}
+	rec.Spec = spec.String()
 	if err := h.marketStore().PutExtensionMarket(ctx, rec); err != nil {
 		return MarketView{}, err
 	}
@@ -351,7 +434,9 @@ func (h *Hub) catalog(q, market string) []CatalogItem {
 			}
 			it := CatalogItem{Market: s.rec.ID, MarketName: s.rec.Name, ID: m.ID, Name: m.Name, Version: m.Version, Description: m.Description,
 				Publisher: m.Publisher, Homepage: m.Homepage, Tags: append([]string{}, e.Tags...), Contributes: m.Contributions(), Permissions: extension.Explain(m)}
-			if e.PackageFor(extension.Platform()) == nil {
+			if s.rec.Signature.Bad() {
+				it.Problem = "市场的签名不对：" + s.rec.Error
+			} else if e.PackageFor(extension.Platform()) == nil {
 				it.Problem = "没有这台 hub（" + extension.Platform() + "）能用的包"
 			} else if _, err := extension.CheckEngines(m, h.build.Number); err != nil {
 				it.Problem = err.Error()
@@ -403,6 +488,10 @@ func (h *Hub) marketEntry(market, id string) (extension.MarketRecord, *extension
 	s := ms.byID[market]
 	if s == nil {
 		return extension.MarketRecord{}, nil, errNoMarket
+	}
+	if s.rec.Signature.Bad() {
+		// Nothing is installed or upgraded from a market whose signature fails, not even from its last good index.
+		return extension.MarketRecord{}, nil, errors.New("市场的签名不对，先不从它安装或升级：" + s.rec.Error)
 	}
 	if s.index != nil {
 		for i := range s.index.Extensions {
@@ -517,8 +606,20 @@ func (h *Hub) marketRoutesAt(api *http.ServeMux, base string, allow func(w http.
 	}))
 	api.HandleFunc("POST "+base+"/markets/{mid}/refresh", gate(func(w http.ResponseWriter, r *http.Request) {
 		v, err := h.marketRead(r.Context(), r.PathValue("mid"))
+		if errors.Is(err, errMarketSignature) {
+			fail(w, err, "market_signature")
+			return
+		}
 		if err != nil {
 			fail(w, err, "market_unreachable")
+			return
+		}
+		writeJSON(w, marketOut(r, v))
+	}))
+	api.HandleFunc("POST "+base+"/markets/{mid}/trust", gate(func(w http.ResponseWriter, r *http.Request) {
+		v, err := h.marketTrust(r.Context(), r.PathValue("mid"))
+		if err != nil {
+			fail(w, err, "market_signature")
 			return
 		}
 		writeJSON(w, marketOut(r, v))

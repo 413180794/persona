@@ -3,7 +3,7 @@ package persona.core.designsystem
 import org.junit.Assert.*
 import org.junit.Test
 
-// The arithmetic behind JChart (plugins' charts, docs/plugins.md「UI 插槽」): short numbers, the range with zero and
+// The arithmetic behind JChart (extensions' charts, docs/extensions.md「UI 插槽」): short numbers, the range with zero and
 // stacked sums, round ticks, and labels that never overlap however many there are.
 class ChartMathTest {
     @Test fun compactNumbers() {

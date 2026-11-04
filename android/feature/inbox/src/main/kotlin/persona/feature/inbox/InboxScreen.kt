@@ -295,7 +295,7 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
             status = when { done -> null; record.agent?.state in setOf("running", "queued") -> Status.Working; item.triage == InboxTier.Action -> Status.NeedsYou; else -> null },
             tags = listOfNotNull(kindLabel(record).takeIf { it.isNotBlank() }, record.sourceLabel.takeIf { it.isNotBlank() && it !in setOf("飞书", "邮件") },
                 "${record.count} 条消息".takeIf { record.count > 0 }),
-            // A plugin may draw the page of its connector's items (inbox_item); the rest open their own page.
+            // An extension may draw the page of its connector's items (inbox_item); the rest open their own page.
             onClick = { navigator.navigate(pages.open(record)) }, onLongClick = { menu = true }, extra = {
                 record.localDelivery?.pendingStatus()?.let { PendingBadge(it) }
                     ?: record.localStatus?.let { InboxLocalStatus(it) }

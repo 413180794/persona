@@ -43,7 +43,7 @@ class VoiceTextTest {
     }
 
     @Test fun aSocketThatFailsSaysWhy() {
-        assertEquals("hub 上没有语音插件", connectFailure(IOException("Expected HTTP 101"), 404, live = false))
+        assertEquals("hub 上没有语音扩展", connectFailure(IOException("Expected HTTP 101"), 404, live = false))
         assertEquals("Mid-conversation it is a restart or the network", VoiceText.Restarted, connectFailure(IOException("Broken pipe"), null, live = true))
         assertEquals("连不上语音服务：连不上 hub", connectFailure(HubFailure(HubError.ConnectionRefused), null, live = false))
         assertEquals("连不上语音服务：连不上 hub", connectFailure(IOException("unexpected end of stream"), null, live = false))
@@ -79,7 +79,7 @@ class VoiceTextTest {
         assertEquals(VoiceSetup.Ready("fast"), resolveVoiceModel(VoiceModelChoice("fast", null), models))
         assertEquals("未验证 is usable", VoiceSetup.Ready("fast"), resolveVoiceModel(VoiceModelChoice("fast", "未验证"), models))
         assertEquals("Nothing chosen: the plugin's default", VoiceSetup.Ready("deep"), resolveVoiceModel(VoiceModelChoice(null, " "), models))
-        assertEquals(VoiceSetup.Unavailable("读不到插件模型列表"), resolveVoiceModel(VoiceModelChoice("fast", "读不到插件模型列表"), models))
+        assertEquals(VoiceSetup.Unavailable("读不到扩展模型列表"), resolveVoiceModel(VoiceModelChoice("fast", "读不到扩展模型列表"), models))
         assertEquals(VoiceSetup.Unavailable(VoiceText.ModelMissing), resolveVoiceModel(VoiceModelChoice("retired", null), models))
         assertEquals("A plugin without a catalog has no room for a configured model",
             VoiceSetup.Unavailable(VoiceText.ModelMissing), resolveVoiceModel(VoiceModelChoice("fast", null), VoiceModelOptions()))

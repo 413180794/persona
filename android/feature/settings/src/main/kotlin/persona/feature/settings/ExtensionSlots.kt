@@ -18,11 +18,11 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import persona.core.contracts.api.ConnectionState
 import persona.core.contracts.GroupKeys
-import persona.core.contracts.PluginUiEvent
-import persona.core.contracts.api.PluginManagement
-import persona.core.contracts.api.PluginUi
-import persona.core.contracts.api.PluginUiContext
-import persona.core.contracts.api.PluginUiPlace
+import persona.core.contracts.ExtensionUiEvent
+import persona.core.contracts.api.ExtensionManagement
+import persona.core.contracts.api.ExtensionUi
+import persona.core.contracts.api.ExtensionUiContext
+import persona.core.contracts.api.ExtensionUiPlace
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
@@ -39,26 +39,26 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-// Plugins' UI slots (docs/plugins.md「UI 插槽」) on Android: the「插件」section at the top of the settings home (the
+// Extensions' UI slots (docs/extensions.md「UI 插槽」) on Android: the「扩展」section at the top of the settings home (the
 // cards first, then a row per nav page with its icon and badge), the settings tab's badge (the nav pages' badges added
-// up), the sections plugins draw on a machine's page, and the pages they draw for their connectors' inbox items
-// (PluginInboxItem.kt). A hub without plugin_ui_slots has none of them.
+// up), the sections extensions draw on a machine's page, and the pages they draw for their connectors' inbox items
+// (ExtensionInboxItem.kt). A hub without extension_ui_slots has none of them.
 
 /** The slots this app draws; a placement it does not know is ignored. */
-internal object PluginSlotText {
+internal object ExtensionSlotText {
     const val NavPage = "nav_page"
     const val Card = "overview_card"
     const val MachineSection = "machine_section"
     const val InboxItem = "inbox_item"
     private val known = setOf(NavPage, Card, MachineSection)
 
-    fun known(place: PluginUiPlace): Boolean = place.placement in known && place.plugin.isNotEmpty() && place.id.isNotEmpty()
+    fun known(place: ExtensionUiPlace): Boolean = place.placement in known && place.extension.isNotEmpty() && place.id.isNotEmpty()
 
     /** An inbox item's page: for the items of one connector; one that names none draws for nobody's. */
-    fun inboxItem(place: PluginUiPlace): Boolean =
-        place.placement == InboxItem && place.plugin.isNotEmpty() && place.id.isNotEmpty() && !place.connector.isNullOrBlank()
+    fun inboxItem(place: ExtensionUiPlace): Boolean =
+        place.placement == InboxItem && place.extension.isNotEmpty() && place.id.isNotEmpty() && !place.connector.isNullOrBlank()
 
-    /** A nav page's icon from the few a plugin may name; anything else is the plugin's puzzle piece. */
+    /** A nav page's icon from the few an extension may name; anything else is the extension's puzzle piece. */
     fun icon(name: String?): PhIcon = when (name) {
         "chart" -> PhIcons.ChartBar
         "gauge" -> PhIcons.Gauge
@@ -73,53 +73,53 @@ internal object PluginSlotText {
     /**
      * The settings tab's badge from the nav pages': the numbers added up; when there are only words (「新」), a dot.
      */
-    fun tabBadge(places: List<PluginUiPlace>): SlotBadge {
+    fun tabBadge(places: List<ExtensionUiPlace>): SlotBadge {
         val texts = places.filter { it.placement == NavPage }.mapNotNull { it.badge?.text?.trim()?.takeIf(String::isNotEmpty) }
         val count = texts.sumOf { it.toIntOrNull()?.coerceAtLeast(0) ?: 0 }
         return SlotBadge(count, dot = count == 0 && texts.any { it.toIntOrNull() == null })
     }
 
-    /** A page's title for the row that opens it: the card's `opens` names a page of the same plugin. */
-    fun opened(places: List<PluginUiPlace>, card: PluginUiPlace): PluginUiPlace? {
+    /** A page's title for the row that opens it: the card's `opens` names a page of the same extension. */
+    fun opened(places: List<ExtensionUiPlace>, card: ExtensionUiPlace): ExtensionUiPlace? {
         val id = card.opens?.takeIf { it.isNotEmpty() } ?: return null
-        return places.firstOrNull { it.plugin == card.plugin && it.id == id }
-            ?: PluginUiPlace(plugin = card.plugin, id = id, title = card.title, placement = NavPage)
+        return places.firstOrNull { it.extension == card.extension && it.id == id }
+            ?: ExtensionUiPlace(extension = card.extension, id = id, title = card.title, placement = NavPage)
     }
 }
 
-/** A badge for the settings tab: a count, or a dot when the plugins' badges are words. */
+/** A badge for the settings tab: a count, or a dot when the extensions' badges are words. */
 data class SlotBadge(val count: Int = 0, val dot: Boolean = false)
 
-data class PluginSlotsState(
-    /** The hub has UI slots (`plugin_ui_slots`) and the list has been read at least once. */
+data class ExtensionSlotsState(
+    /** The hub has UI slots (`extension_ui_slots`) and the list has been read at least once. */
     val available: Boolean = false,
-    val places: List<PluginUiPlace> = emptyList(),
+    val places: List<ExtensionUiPlace> = emptyList(),
     val error: String? = null,
-    /** The pages plugins draw for their connectors' inbox items (`inbox_item`); none on a hub that lists none. */
-    val inboxItems: List<PluginUiPlace> = emptyList(),
-    /** [inboxItems] has been read from this hub; until then an item opened (at launch) may turn out to be a plugin's. */
+    /** The pages extensions draw for their connectors' inbox items (`inbox_item`); none on a hub that lists none. */
+    val inboxItems: List<ExtensionUiPlace> = emptyList(),
+    /** [inboxItems] has been read from this hub; until then an item opened (at launch) may turn out to be an extension's. */
     val inboxItemsKnown: Boolean = false,
 ) {
-    val navPages: List<PluginUiPlace> get() = places.filter { it.placement == PluginSlotText.NavPage }
-    val cards: List<PluginUiPlace> get() = places.filter { it.placement == PluginSlotText.Card }
-    val machineSections: List<PluginUiPlace> get() = places.filter { it.placement == PluginSlotText.MachineSection }
-    val tabBadge: SlotBadge get() = PluginSlotText.tabBadge(places)
+    val navPages: List<ExtensionUiPlace> get() = places.filter { it.placement == ExtensionSlotText.NavPage }
+    val cards: List<ExtensionUiPlace> get() = places.filter { it.placement == ExtensionSlotText.Card }
+    val machineSections: List<ExtensionUiPlace> get() = places.filter { it.placement == ExtensionSlotText.MachineSection }
+    val tabBadge: SlotBadge get() = ExtensionSlotText.tabBadge(places)
 }
 
 /**
- * Where the selected hub's plugins draw in this app, kept for the whole shell: read when the hub (with
- * `plugin_ui_slots`) is online and when the settings list shows, and the nav pages' badges changed by the hub's
- * `plugin_ui` events without reading the list again.
+ * Where the selected hub's extensions draw in this app, kept for the whole shell: read when the hub (with
+ * `extension_ui_slots`) is online and when the settings list shows, and the nav pages' badges changed by the hub's
+ * `extension_ui` events without reading the list again.
  */
-class PluginSlots internal constructor(
-    internal val api: PluginUi,
+class ExtensionSlots internal constructor(
+    internal val api: ExtensionUi,
     private val slotsAvailable: Flow<Boolean>,
-    private val events: Flow<PluginUiEvent>,
+    private val events: Flow<ExtensionUiEvent>,
 ) {
-    constructor(plugins: PluginManagement) : this(plugins, plugins.slotsAvailable, plugins.uiEvents)
+    constructor(extensions: ExtensionManagement) : this(extensions, extensions.slotsAvailable, extensions.uiEvents)
 
-    private val mutable = MutableStateFlow(PluginSlotsState())
-    val state: StateFlow<PluginSlotsState> = mutable.asStateFlow()
+    private val mutable = MutableStateFlow(ExtensionSlotsState())
+    val state: StateFlow<ExtensionSlotsState> = mutable.asStateFlow()
     private var supported = false
 
     /** Runs while the shell does: reads the slots whenever the hub says it has them and is online, applies badges. */
@@ -127,7 +127,7 @@ class PluginSlots internal constructor(
         launch { events.collect(::badge) }
         combine(slotsAvailable, online) { slots, up -> slots to up }.distinctUntilChanged().collectLatest { (slots, up) ->
             supported = slots
-            if (!slots) mutable.value = PluginSlotsState()
+            if (!slots) mutable.value = ExtensionSlotsState()
             else if (up) load()
         }
     }
@@ -139,10 +139,10 @@ class PluginSlots internal constructor(
     suspend fun load() {
         if (!supported) return
         try {
-            val places = api.uiPlaces("").filter(PluginSlotText::known)
+            val places = api.uiPlaces("").filter(ExtensionSlotText::known)
             mutable.update { it.copy(available = true, places = places, error = null) }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = "插件的入口读不到：${failureReason(error)}") } }
+        catch (error: Exception) { mutable.update { it.copy(error = "扩展的入口读不到：${failureReason(error)}") } }
         loadInboxItems()
     }
 
@@ -154,69 +154,69 @@ class PluginSlots internal constructor(
     suspend fun loadInboxItems() {
         if (!supported) return
         try {
-            val pages = api.uiPlaces(PluginSlotText.InboxItem).filter(PluginSlotText::inboxItem)
+            val pages = api.uiPlaces(ExtensionSlotText.InboxItem).filter(ExtensionSlotText::inboxItem)
             mutable.update { it.copy(inboxItems = pages, inboxItemsKnown = true) }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { /* Nothing to tell: these items open their own pages. */ }
     }
 
-    /** A `plugin_ui` event: the nav page's badge changes (none clears it). */
-    fun badge(event: PluginUiEvent) = mutable.update { s ->
-        s.copy(places = s.places.map { if (it.plugin == event.plugin && it.id == event.id && it.placement == PluginSlotText.NavPage) it.copy(badge = event.badge?.takeIf { b -> b.text.isNotBlank() }) else it })
+    /** A `extension_ui` event: the nav page's badge changes (none clears it). */
+    fun badge(event: ExtensionUiEvent) = mutable.update { s ->
+        s.copy(places = s.places.map { if (it.extension == event.extension && it.id == event.id && it.placement == ExtensionSlotText.NavPage) it.copy(badge = event.badge?.takeIf { b -> b.text.isNotBlank() }) else it })
     }
 }
 
-/** The shell's slots for the selected hub's plugins, running while the shell is composed; null in 体验模式. */
+/** The shell's slots for the selected hub's extensions, running while the shell is composed; null in 体验模式. */
 @Composable
-fun rememberPluginSlots(plugins: PluginManagement?, connection: StateFlow<ConnectionState>): PluginSlots? {
-    val slots = remember(plugins) { plugins?.let(::PluginSlots) } ?: return null
+fun rememberExtensionSlots(extensions: ExtensionManagement?, connection: StateFlow<ConnectionState>): ExtensionSlots? {
+    val slots = remember(extensions) { extensions?.let(::ExtensionSlots) } ?: return null
     LaunchedEffect(slots, connection) { slots.run(connection.map { it == ConnectionState.Online }) }
     return slots
 }
 
 /** Runs [model]'s `refresh_after` while the page is resumed (not in the background, not left for another page). */
 @Composable
-internal fun KeepFresh(model: PluginViewModel) {
+internal fun KeepFresh(model: ExtensionViewModel) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(model, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { model.keepFresh() } }
 }
 
 /**
- * The「插件」section at the top of the settings home: each card a plugin draws (`overview_card`, compact; tapping it
- * opens the page it names), then a row per nav page with its icon and badge. Nothing when no plugin draws there.
+ * The「扩展」section at the top of the settings home: each card an extension draws (`overview_card`, compact; tapping it
+ * opens the page it names), then a row per nav page with its icon and badge. Nothing when no extension draws there.
  */
-internal fun LazyListScope.pluginSlotItems(
-    state: PluginSlotsState,
-    cards: List<PluginCardSlot>,
-    selected: (PluginUiPlace) -> Boolean,
-    onOpen: (PluginUiPlace) -> Unit,
+internal fun LazyListScope.extensionSlotItems(
+    state: ExtensionSlotsState,
+    cards: List<ExtensionCardSlot>,
+    selected: (ExtensionUiPlace) -> Boolean,
+    onOpen: (ExtensionUiPlace) -> Unit,
 ) {
     val pages = state.navPages
     val shown = cards.filter { !it.state.unsupported }
     if (pages.isEmpty() && shown.isEmpty()) return
-    item("slots-title") { JSectionHeader("插件") }
+    item("slots-title") { JSectionHeader("扩展") }
     shown.forEach { card ->
-        item("slot-card-${card.place.plugin}-${card.place.id}") {
-            val opens = PluginSlotText.opened(state.places, card.place)
-            PluginCard(card.place, card.state, card.handle, onOpen = opens?.let { { onOpen(it) } }, onRetry = card.reload)
+        item("slot-card-${card.place.extension}-${card.place.id}") {
+            val opens = ExtensionSlotText.opened(state.places, card.place)
+            ExtensionCard(card.place, card.state, card.handle, onOpen = opens?.let { { onOpen(it) } }, onRetry = card.reload)
         }
     }
     pages.forEachIndexed { index, page ->
-        item("slot-page-${page.plugin}-${page.id}") {
+        item("slot-page-${page.extension}-${page.id}") {
             JGroupItem(GroupPosition.of(index, pages.size), if (index == 0 && shown.isNotEmpty()) Modifier.padding(top = Tokens.Space.xs) else Modifier) {
                 val badge = page.badge?.takeIf { it.text.isNotBlank() }
-                JRow(page.title.ifBlank { page.id }, leadingIcon = PluginSlotText.icon(page.icon), selected = selected(page),
-                    subtitle = page.pluginName?.takeIf { it.isNotBlank() && it != page.title },
-                    trailing = badge?.let { b -> { JTag(b.text, PluginViewText.tone(b.tone)) } },
+                JRow(page.title.ifBlank { page.id }, leadingIcon = ExtensionSlotText.icon(page.icon), selected = selected(page),
+                    subtitle = page.extensionName?.takeIf { it.isNotBlank() && it != page.title },
+                    trailing = badge?.let { b -> { JTag(b.text, ExtensionViewText.tone(b.tone)) } },
                     chevron = true, onClick = { onOpen(page) })
             }
         }
     }
 }
 
-/** A card a plugin draws: its title, the compact view, and a chevron when tapping it opens a page. */
+/** A card an extension draws: its title, the compact view, and a chevron when tapping it opens a page. */
 @Composable
-private fun PluginCard(place: PluginUiPlace, state: PluginViewState, handle: PluginViewHandle, onOpen: (() -> Unit)?, onRetry: () -> Unit) {
+private fun ExtensionCard(place: ExtensionUiPlace, state: ExtensionViewState, handle: ExtensionViewHandle, onOpen: (() -> Unit)?, onRetry: () -> Unit) {
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     JCard(Modifier.padding(bottom = Tokens.Space.m), onClick = onOpen) {
@@ -225,13 +225,13 @@ private fun PluginCard(place: PluginUiPlace, state: PluginViewState, handle: Plu
                 Column(Modifier.weight(1f)) {
                     Text(state.view?.title?.takeIf { it.isNotBlank() } ?: place.title.ifBlank { place.id }, style = type.headline, color = palette.ink,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    place.pluginName?.takeIf { it.isNotBlank() }?.let { Text(it, style = type.caption, color = palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    place.extensionName?.takeIf { it.isNotBlank() }?.let { Text(it, style = type.caption, color = palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 }
                 if (state.loading && state.view != null) { Spacer(Modifier.width(Tokens.Space.s)); JSpinner() }
                 if (onOpen != null) { Spacer(Modifier.width(Tokens.Space.s)); JIcon(PhIcons.CaretRight, null, size = Tokens.Space.l, tint = palette.ink3) }
             }
             when {
-                state.view != null -> PluginCardContent(state, handle)
+                state.view != null -> ExtensionCardContent(state, handle)
                 state.error != null -> Row(verticalAlignment = Alignment.CenterVertically) {
                     JInlineStatus(state.error, Modifier.weight(1f), tone = InlineTone.Failed)
                     Spacer(Modifier.width(Tokens.Space.s))
@@ -244,55 +244,55 @@ private fun PluginCard(place: PluginUiPlace, state: PluginViewState, handle: Plu
 }
 
 /** A card of the settings home as drawn now: where it is, its view, its buttons, and reading it again (重试). */
-internal class PluginCardSlot(val place: PluginUiPlace, val state: PluginViewState, val handle: PluginViewHandle, val reload: () -> Unit)
+internal class ExtensionCardSlot(val place: ExtensionUiPlace, val state: ExtensionViewState, val handle: ExtensionViewHandle, val reload: () -> Unit)
 
 /** The cards of the settings home, each drawn compact and kept fresh while settings is on screen. */
 @Composable
-internal fun rememberPluginCards(slots: PluginSlots?): List<PluginCardSlot> {
+internal fun rememberExtensionCards(slots: ExtensionSlots?): List<ExtensionCardSlot> {
     slots ?: return emptyList()
     val state by slots.state.collectAsState()
     val cards = state.cards
-    val models = remember(slots, cards.map { it.plugin to it.id }) {
-        cards.map { it to PluginViewModel(slots.api, it, PluginUiContext(size = "compact")) }
+    val models = remember(slots, cards.map { it.extension to it.id }) {
+        cards.map { it to ExtensionViewModel(slots.api, it, ExtensionUiContext(size = "compact")) }
     }
     val scope = rememberCoroutineScope()
     return models.map { (place, model) ->
-        key(place.plugin, place.id) {
+        key(place.extension, place.id) {
             LaunchedEffect(model) { model.load() }
             KeepFresh(model)
-            PluginCardSlot(place, model.state.collectAsState().value, rememberPluginView(model)) { scope.launch { model.load() } }
+            ExtensionCardSlot(place, model.state.collectAsState().value, rememberExtensionView(model)) { scope.launch { model.load() } }
         }
     }
 }
 
 /**
- * The sections plugins draw on machine [machineId]'s page (`machine_section`, after the machine's own), as a lazy
- * list's items: each with its title, kept fresh while the page is resumed. A plugin whose hub does not know the
+ * The sections extensions draw on machine [machineId]'s page (`machine_section`, after the machine's own), as a lazy
+ * list's items: each with its title, kept fresh while the page is resumed. An extension whose hub does not know the
  * machine (one of another hub) draws nothing; a failure shows with 重试.
  */
 @Composable
-fun rememberMachinePluginSections(slots: PluginSlots?, machineId: String): LazyListScope.() -> Unit {
+fun rememberMachineExtensionSections(slots: ExtensionSlots?, machineId: String): LazyListScope.() -> Unit {
     slots ?: return {}
     val state by slots.state.collectAsState()
     val places = state.machineSections
     // The hub knows its machines by their own ids (no group suffix).
-    val context = remember(machineId) { PluginUiContext(machine = GroupKeys.raw(machineId), size = "full") }
-    val models = remember(slots, context, places.map { it.plugin to it.id }) {
-        places.map { it to PluginViewModel(slots.api, it, context) }
+    val context = remember(machineId) { ExtensionUiContext(machine = GroupKeys.raw(machineId), size = "full") }
+    val models = remember(slots, context, places.map { it.extension to it.id }) {
+        places.map { it to ExtensionViewModel(slots.api, it, context) }
     }
     val scope = rememberCoroutineScope()
     val sections = models.map { (place, model) ->
-        key(place.plugin, place.id) {
+        key(place.extension, place.id) {
             LaunchedEffect(model) { model.load() }
             KeepFresh(model)
-            Triple(place to model, model.state.collectAsState().value, rememberPluginView(model))
+            Triple(place to model, model.state.collectAsState().value, rememberExtensionView(model))
         }
     }
     return {
         sections.forEach { (pair, view, handle) ->
             val (place, model) = pair
             if (view.unsupported || (view.view == null && view.error == null)) return@forEach
-            val key = "plugin-${place.plugin}-${place.id}"
+            val key = "plugin-${place.extension}-${place.id}"
             item("$key-title") { JSectionHeader(view.view?.title?.takeIf { it.isNotBlank() } ?: place.title.ifBlank { place.id }) }
             if (view.view == null && view.error != null) item("$key-error") {
                 JNotice(view.error, Modifier.padding(top = Tokens.Space.xs), status = Status.NeedsYou, actionLabel = "重试",
@@ -300,7 +300,7 @@ fun rememberMachinePluginSections(slots: PluginSlots?, machineId: String): LazyL
             } else if (view.error != null) item("$key-error") {
                 JInlineStatus(view.error, Modifier.padding(vertical = Tokens.Space.xs), tone = InlineTone.Failed)
             }
-            pluginViewItems(key, view, handle, showTitles = true)
+            extensionViewItems(key, view, handle, showTitles = true)
         }
     }
 }

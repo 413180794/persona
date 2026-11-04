@@ -33,9 +33,9 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 
-// Charts and number grids drawn from the design system (a plugin's chart and stat_grid, docs/plugins.md「UI 插槽」):
+// Charts and number grids drawn from the design system (an extension's chart and stat_grid, docs/extensions.md「UI 插槽」):
 // series colours come from the palette (the style's accent first) or a role colour (Tone); sizes, type and lines
-// from the style in use. Nothing here knows about plugins.
+// from the style in use. Nothing here knows about extensions.
 
 enum class JChartKind { Bar, Line }
 

@@ -14,7 +14,7 @@ class VoicePrefsTest {
 
     @After fun clean() { root.deleteRecursively() }
 
-    @Test fun eachPluginKeepsItsVoiceInThePairingsDirectory() {
+    @Test fun eachExtensionKeepsItsVoiceInThePairingsDirectory() {
         File(root, "hub-data/hub-1/gen-1").mkdirs()
         val prefs = VoicePrefs.of(root, "hub-1/gen-1")
         assertNull(prefs.voice("voice"))

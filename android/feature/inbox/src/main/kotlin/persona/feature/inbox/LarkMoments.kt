@@ -192,7 +192,7 @@ fun LarkMomentsScreen(
         },
         modifier = modifier,
     ) {
-        item("plugin-notice") { InboxPluginNotice(route.itemId, route) }
+        item("plugin-notice") { InboxExtensionNotice(route.itemId, route) }
         if (error != null) {
             item("error") {
                 JNotice(error ?: "加载失败", status = Status.NeedsYou, actionLabel = "重试", onAction = ::reload)

@@ -5,9 +5,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The plugin's frames, captions and the start frame (from the old app's VoiceTest), and the pieces around them. */
+/** The extension's frames, captions and the start frame (from the old app's VoiceTest), and the pieces around them. */
 class VoiceProtocolTest {
-    @Test fun parsesThePluginsFrames() {
+    @Test fun parsesTheExtensionsFrames() {
         assertEquals(VoiceEvent.Ready(16000, 24000), VoiceEvent.parse("""{"type":"ready","input_rate":16000,"output_rate":24000,"voice":null}"""))
         assertEquals(VoiceEvent.Clear, VoiceEvent.parse("""{"type":"clear"}"""))
         assertEquals(VoiceEvent.Transcript("u1", true, "你好", false), VoiceEvent.parse("""{"type":"transcript","id":"u1","role":"user","text":"你好","final":false}"""))
@@ -18,7 +18,7 @@ class VoiceProtocolTest {
         assertNull(VoiceEvent.parse("not json"))
     }
 
-    @Test fun readyRatesAreThePluginsButNeverNonsense() {
+    @Test fun readyRatesAreTheExtensionsButNeverNonsense() {
         assertEquals("Missing rates are the documented defaults", VoiceEvent.Ready(16000, 24000), VoiceEvent.parse("""{"type":"ready"}"""))
         assertEquals(VoiceEvent.Ready(48000, 16000), VoiceEvent.parse("""{"type":"ready","input_rate":48000,"output_rate":16000}"""))
         assertEquals(VoiceEvent.Ready(16000, 24000), VoiceEvent.parse("""{"type":"ready","input_rate":0,"output_rate":-1}"""))
@@ -86,8 +86,8 @@ class VoiceProtocolTest {
         assertTrue("Settles at silence", level == 0f)
     }
 
-    @Test fun theModelConfigurationIsThePluginsPurpose() {
-        // The host opens 设置 › 模型配置 at this purpose (docs/model-config.md: plugins are plugin.<id>).
+    @Test fun theModelConfigurationIsTheExtensionsPurpose() {
+        // The host opens 设置 › 模型配置 at this purpose (docs/model-config.md: extensions are plugin.<id>).
         assertEquals("plugin.voice", voicePurposeId("voice"))
     }
 }

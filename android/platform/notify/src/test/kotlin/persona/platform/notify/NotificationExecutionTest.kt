@@ -21,7 +21,7 @@ class NotificationExecutionTest {
     private val now = Instant.parse("2030-01-01T00:00:00Z")
     private val request = Interaction("request", machineId = "machine", sessionId = "session", kind = "permission")
 
-    @Test fun pluginAlertsRespectInputAndVisibilityWithoutRefreshingForSessionlessMessages() = runBlocking {
+    @Test fun extensionAlertsRespectInputAndVisibilityWithoutRefreshingForSessionlessMessages() = runBlocking {
         val center = Center(request)
         var refreshes = 0
         val sessions = object : SessionsRepository {

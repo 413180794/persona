@@ -40,7 +40,7 @@ internal fun TranslationSettingsPage(
         return
     }
     val prefs by translation.prefs.collectAsState()
-    // Feishu comes from the lark-connector plugin: without it on the hub there are no chats to pick (picked ones stay kept).
+    // Feishu comes from the lark-connector extension: without it on the hub there are no chats to pick (picked ones stay kept).
     val lark = LocalLarkFeatures.current.chats
     var model by remember { mutableStateOf<String?>(null) }
     var choosingTarget by remember { mutableStateOf(false) }

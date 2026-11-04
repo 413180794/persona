@@ -33,7 +33,7 @@ class HttpMachineManagement internal constructor(
         val path = HttpUrl.Builder().scheme("https").host("example.com").addPathSegments("api/v1/launchers").addPathSegment(name)
             .addPathSegment("quota").addQueryParameter("machine", machineId)
             .apply { if (refresh) addQueryParameter("refresh", "1") }.build().let { "${it.encodedPath}?${it.encodedQuery}" }
-        // The hub gives the plugin and the machine that has the key 45 s (a ~/.zshrc launcher is probed first).
+        // The hub gives the extension and the machine that has the key 45 s (a ~/.zshrc launcher is probed first).
         return JsonCodec.decodeFromJsonElement(call(path, "GET", timeout = 50))
     }
 

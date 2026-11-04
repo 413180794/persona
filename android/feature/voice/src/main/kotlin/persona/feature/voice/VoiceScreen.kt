@@ -27,22 +27,22 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import persona.core.contracts.api.VoicePlugins
+import persona.core.contracts.api.VoiceExtensions
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.core.navigation.Navigator
 import persona.core.navigation.VoiceRoute
 
 /**
- * 语音对话 (docs/plugins.md「语音」, docs/android.md「语音对话」): full duplex with the hub's voice plugin. It listens
- * all the time this page is open, and only then; talking over an answer stops it. The bar says the plugin, the model
+ * 语音对话 (docs/extensions.md「语音」, docs/android.md「语音对话」): full duplex with the hub's voice extension. It listens
+ * all the time this page is open, and only then; talking over an answer stops it. The bar says the extension, the model
  * and the voice; the menu opens the model configuration (when the host has it) and the voices.
  */
 @Composable
 internal fun VoiceScreen(
     route: VoiceRoute,
     navigator: Navigator,
-    plugins: VoicePlugins,
+    extensions: VoiceExtensions,
     identity: String,
     onModelConfiguration: ((String) -> Unit)?,
 ) {
@@ -63,7 +63,7 @@ internal fun VoiceScreen(
         onDispose { lifecycle.removeObserver(observer) }
     }
     if (granted) {
-        VoiceConversation(route.pluginId, title, navigator, plugins, identity, onModelConfiguration)
+        VoiceConversation(route.extensionId, title, navigator, extensions, identity, onModelConfiguration)
         return
     }
     JPage(title, onBack = navigator::back) { padding ->
@@ -90,17 +90,17 @@ internal fun VoiceScreen(
 
 @Composable
 private fun VoiceConversation(
-    pluginId: String,
+    extensionId: String,
     title: String,
     navigator: Navigator,
-    plugins: VoicePlugins,
+    extensions: VoiceExtensions,
     identity: String,
     onModelConfiguration: ((String) -> Unit)?,
 ) {
     val app = LocalContext.current.applicationContext
     val scope = rememberCoroutineScope()
-    val page = remember(plugins, pluginId, identity) {
-        VoicePage(plugins, pluginId, VoicePrefs.of(app.filesDir, identity), scope) {
+    val page = remember(extensions, extensionId, identity) {
+        VoicePage(extensions, extensionId, VoicePrefs.of(app.filesDir, identity), scope) {
             VoiceAudioOverride.factory?.invoke() ?: AndroidVoiceAudio(app)
         }
     }
@@ -135,7 +135,7 @@ private fun VoiceConversation(
         title, subtitle = state.subtitle, onBack = navigator::back, ambience = ambienceOf(talk, problem),
         actions = {
             VoiceMenu(buildList {
-                onModelConfiguration?.let { open -> add(JAction("模型配置", PhIcons.SlidersHorizontal) { open(voicePurposeId(pluginId)) }) }
+                onModelConfiguration?.let { open -> add(JAction("模型配置", PhIcons.SlidersHorizontal) { open(voicePurposeId(extensionId)) }) }
                 if (setup is VoiceSetup.Ready) add(JAction(VoiceText.Voices, PhIcons.Waveform) { picking = true })
             })
         },
@@ -158,7 +158,7 @@ private fun VoiceConversation(
         when (setup) {
             is VoiceSetup.Unavailable -> Problem(
                 VoiceText.ModelUnavailable, setup.reason, padding, page::begin,
-                onConfigure = onModelConfiguration?.let { open -> { open(voicePurposeId(pluginId)) } },
+                onConfigure = onModelConfiguration?.let { open -> { open(voicePurposeId(extensionId)) } },
             )
             is VoiceSetup.Failed -> Problem(VoiceText.ConfigUnreadable, setup.message, padding, page::begin)
             else -> Column(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
@@ -218,7 +218,7 @@ private fun Problem(title: String, text: String, padding: PaddingValues, onRetry
     }
 }
 
-/** 音色: the plugin's voices for this model as one group, the current one checked; a tap picks it and closes. */
+/** 音色: the extension's voices for this model as one group, the current one checked; a tap picks it and closes. */
 @Composable
 private fun VoiceSheet(state: VoicePageState, onPick: (String) -> Unit, onDismiss: () -> Unit) {
     val palette = PersonaTheme.palette

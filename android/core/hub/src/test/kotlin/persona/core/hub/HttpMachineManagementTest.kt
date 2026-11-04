@@ -57,7 +57,7 @@ class HttpMachineManagementTest {
         assertEquals(210552323L, q.usage.single().tokens)
 
         // ↻ reads again; nothing to read is an answer, not a failure
-        server.enqueue(MockResponse().setBody("""{"machine":"mac","checked_at":"2026-11-04T06:00:00Z","error":"这个网关没有能查的额度：没有装能读它的额度插件","unsupported":true}"""))
+        server.enqueue(MockResponse().setBody("""{"machine":"mac","checked_at":"2026-11-04T06:00:00Z","error":"这个网关没有能查的额度：没有装能读它的额度扩展","unsupported":true}"""))
         val none = machines.launcherQuota("mac", "plain", refresh = true)
         assertEquals("/api/v1/launchers/plain/quota?machine=mac&refresh=1", server.takeRequest().path)
         assertTrue(none.unsupported)

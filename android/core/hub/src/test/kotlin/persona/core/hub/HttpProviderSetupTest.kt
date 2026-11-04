@@ -53,7 +53,7 @@ class HttpProviderSetupTest {
         assertEquals(setOf("name", "api_key", "preset"), body.keys)
         assertEquals("example-gateway/team", body["preset"]!!.jsonPrimitive.content)
 
-        server.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":"没有这个供应商预设（提供它的插件停用或卸载了？）"}"""))
+        server.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":"没有这个供应商预设（提供它的扩展停用或卸载了？）"}"""))
         val refused = runCatching { providers.add(NewProvider("jv_team", "k", preset = "gone/x")) }.exceptionOrNull() as HubFailure
         assertEquals(400, refused.status)
         assertTrue(refused.message.contains("没有这个供应商预设"))

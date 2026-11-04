@@ -36,7 +36,7 @@ import java.time.Instant
 /**
  * 额度 on a launcher's page drawn on the JVM with Robolectric's native graphics: a full report (a budget, an account
  * cooling down with a used-up window, a provider's models unfolded, the key's use) and the other states (reading, no
- * plugin knows the gateway, the read failed), in every style, light and dark. Written as PNGs to
+ * extension knows the gateway, the read failed), in every style, light and dark. Written as PNGs to
  * `build/launcher-quota-shots/` (or `-Dpersona.shots=<dir>`) to look at. The gateways are the mock hub's made-up ones.
  */
 @RunWith(AndroidJUnit4::class)
@@ -64,7 +64,7 @@ class LauncherQuotaShotsTest {
 
     private val others = listOf(
         LauncherQuotaState(loading = true),
-        LauncherQuotaState(LauncherQuotaAnswer(machine = "mac", error = "这个网关没有能查的额度：没有装能读它的额度插件", unsupported = true)),
+        LauncherQuotaState(LauncherQuotaAnswer(machine = "mac", error = "这个网关没有能查的额度：没有装能读它的额度扩展", unsupported = true)),
         LauncherQuotaState(failed = "读不到额度：网关超时"),
         LauncherQuotaState(LauncherQuotaAnswer(machine = "mac", quota = LauncherQuota("example-relay", gatewayName = "示例中转",
             usage = listOf(QuotaUsage("今日", 3, 1200))))),

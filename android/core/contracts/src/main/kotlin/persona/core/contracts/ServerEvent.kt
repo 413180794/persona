@@ -4,6 +4,7 @@ package persona.core.contracts
 
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
+import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.KeepGeneratedSerializer
 import kotlinx.serialization.SerializationException
@@ -144,15 +145,16 @@ data class NotifyEvent(
 ) : ServerEvent
 
 /**
- * A plugin changed the badge of its entry on the navigation (`nav_page`, docs/plugins.md「UI 插槽」「角标」): `null`
- * clears it. The app changes the badge without reading the list again.
+ * An extension changed the badge of its entry on the navigation (`nav_page`, docs/extensions.md「UI 插槽」「角标」): `null`
+ * clears it. The event is `extension_ui`; a hub before #1844 says `plugin_ui`, and a newer one sends both (the same badge
+ * twice is no change). The app changes the badge without reading the list again.
  */
 @KeepGeneratedSerializer
-@Serializable(with = PluginUiEventSerializer::class)
-data class PluginUiEvent(
-    val plugin: String,
+@Serializable(with = ExtensionUiEventSerializer::class)
+data class ExtensionUiEvent(
+    @SerialName("extension") @JsonNames("plugin") val extension: String,
     val id: String,
-    val badge: persona.core.contracts.api.PluginViewBadge? = null,
+    val badge: persona.core.contracts.api.ExtensionViewBadge? = null,
 ) : ServerEvent
 
 /** The hub's update status changed (docs/hub-update.md「App 里」): `update` is what GET /api/v1/hub/update answers. */
@@ -183,7 +185,7 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             "client_hello_ack" -> input.json.decodeFromJsonElement<ClientHelloAck>(obj)
             "pong" -> input.json.decodeFromJsonElement<Pong>(obj)
             "notify" -> input.json.decodeFromJsonElement<NotifyEvent>(obj)
-            "plugin_ui" -> input.json.decodeFromJsonElement<PluginUiEvent>(obj)
+            "extension_ui", "plugin_ui" -> input.json.decodeFromJsonElement<ExtensionUiEvent>(obj)
             "hub_update" -> input.json.decodeFromJsonElement<HubUpdateEvent>(obj)
             "lock_test" -> input.json.decodeFromJsonElement<LockTestEvent>(obj).also {
                 require(it.testId.isNotBlank() && it.dueAt.isNotBlank() && it.sentAt.isNotBlank())
@@ -223,7 +225,7 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             is ClientHelloAck -> "client_hello_ack" to output.json.encodeToJsonElement(value)
             is Pong -> "pong" to output.json.encodeToJsonElement(value)
             is NotifyEvent -> "notify" to output.json.encodeToJsonElement(value)
-            is PluginUiEvent -> "plugin_ui" to output.json.encodeToJsonElement(value)
+            is ExtensionUiEvent -> "extension_ui" to output.json.encodeToJsonElement(value)
             is HubUpdateEvent -> "hub_update" to output.json.encodeToJsonElement(value)
             is LockTestEvent -> "lock_test" to output.json.encodeToJsonElement(value)
             is DeltaEvent -> "delta" to output.json.encodeToJsonElement(value)
@@ -258,5 +260,5 @@ object EndpointsEventSerializer : WireSerializer<EndpointsEvent>(EndpointsEvent.
 object ClientHelloAckSerializer : WireSerializer<ClientHelloAck>(ClientHelloAck.generatedSerializer())
 object PongSerializer : WireSerializer<Pong>(Pong.generatedSerializer())
 object NotifyEventSerializer : WireSerializer<NotifyEvent>(NotifyEvent.generatedSerializer())
-object PluginUiEventSerializer : WireSerializer<PluginUiEvent>(PluginUiEvent.generatedSerializer())
+object ExtensionUiEventSerializer : WireSerializer<ExtensionUiEvent>(ExtensionUiEvent.generatedSerializer())
 object HubUpdateEventSerializer : WireSerializer<HubUpdateEvent>(HubUpdateEvent.generatedSerializer())

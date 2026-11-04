@@ -1,9 +1,9 @@
 package persona.feature.settings
 
-import persona.core.contracts.api.HubPlugin
-import persona.core.contracts.api.PluginConfigRejected
-import persona.core.contracts.api.PluginDetail
-import persona.core.contracts.api.PluginManagement
+import persona.core.contracts.api.HubExtension
+import persona.core.contracts.api.ExtensionConfigRejected
+import persona.core.contracts.api.ExtensionDetail
+import persona.core.contracts.api.ExtensionManagement
 import persona.core.designsystem.Status
 import persona.core.designsystem.failureReason
 import kotlinx.coroutines.CancellationException
@@ -16,13 +16,13 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-// 设置 › 插件 (docs/plugins.md「App：设置 › 插件」): the words, the draft of a plugin's configuration, and the two
-// pages' models. The pages are in PluginsScreen.kt.
+// 设置 › 扩展 (docs/extensions.md「App：设置 › 扩展」): the words, the draft of an extension's configuration, and the two
+// pages' models. The pages are in ExtensionsScreen.kt.
 
-/** What a plugin is called and says in the settings. */
-internal object PluginText {
+/** What an extension is called and says in the settings. */
+internal object ExtensionText {
     /** Running or idle until something needs it (stopped) is all one to the user: it is on. */
-    fun state(p: HubPlugin): String = when (p.status) {
+    fun state(p: HubExtension): String = when (p.status) {
         "running", "stopped" -> "启动"
         "starting" -> "正在启动"
         "needs_setup" -> "需要设置"
@@ -32,18 +32,18 @@ internal object PluginText {
         else -> "状态未知"
     }
 
-    /** Whether an enabled plugin's program runs right now (the detail page's small print); null for any other state. */
-    fun runNote(p: HubPlugin): String? = when (p.status) {
+    /** Whether an enabled extension's program runs right now (the detail page's small print); null for any other state. */
+    fun runNote(p: HubExtension): String? = when (p.status) {
         "running" -> "正在运行"
         "stopped" -> "暂未运行，用到时自动启动"
         else -> null
     }
 
     /** Broken: drawn in the danger colour, not as a status dot. */
-    fun isProblem(p: HubPlugin): Boolean = p.status == "error" || p.status == "incompatible"
+    fun isProblem(p: HubExtension): Boolean = p.status == "error" || p.status == "incompatible"
 
     /** The dot beside the state: green on (running or idle), amber waiting on the user, blue starting, grey otherwise. */
-    fun status(p: HubPlugin): Status = when (p.status) {
+    fun status(p: HubExtension): Status = when (p.status) {
         "running", "stopped" -> Status.Unread
         "needs_setup" -> Status.NeedsYou
         "starting" -> Status.Working
@@ -71,11 +71,11 @@ internal object PluginText {
     }
 
     /** The detail's state line: the state, the version, where it came from. */
-    fun stateLine(p: HubPlugin): String =
+    fun stateLine(p: HubExtension): String =
         listOfNotNull(state(p), p.version?.takeIf { it.isNotBlank() }, source(p.source)).joinToString(" · ")
 
     /** 设置's row: how many, and how many need the user; null before the list is in. */
-    fun listSummary(list: List<HubPlugin>?): String? {
+    fun listSummary(list: List<HubExtension>?): String? {
         list ?: return null
         if (list.isEmpty()) return "没有"
         val attention = list.count { it.status == "needs_setup" || isProblem(it) }
@@ -83,17 +83,17 @@ internal object PluginText {
     }
 
     /** A field's title, marked when it must be filled and has no default. */
-    fun fieldTitle(field: persona.core.contracts.api.PluginField): String =
+    fun fieldTitle(field: persona.core.contracts.api.ExtensionField): String =
         field.label + if (field.required == true && field.fallback == null) "（必填）" else ""
 
     /** What an empty field shows: the default it falls back to, or 未设置. */
-    fun placeholder(field: persona.core.contracts.api.PluginField): String {
+    fun placeholder(field: persona.core.contracts.api.ExtensionField): String {
         val fallback = field.fallback ?: return "未设置"
         val text = field.enum?.firstOrNull { it.value == fallback }?.label ?: (fallback as? JsonPrimitive)?.content
         return if (text.isNullOrEmpty()) "未设置" else "默认：$text"
     }
 
-    fun secretState(secret: persona.core.contracts.api.PluginSecret): String = when {
+    fun secretState(secret: persona.core.contracts.api.ExtensionSecret): String = when {
         secret.set -> "已设置"
         secret.required == true -> "未设置（必填）"
         else -> "未设置"
@@ -101,7 +101,7 @@ internal object PluginText {
 }
 
 /** The configuration being edited, by dotted path ("proxy.host"); an empty group goes with its last value. */
-internal object PluginDraft {
+internal object ExtensionDraft {
     fun value(draft: JsonObject, path: List<String>): JsonElement? {
         var current: JsonElement = draft
         for (key in path) current = (current as? JsonObject)?.get(key) ?: return null
@@ -128,7 +128,7 @@ internal object PluginDraft {
     }.toMap())
 
     /** The dotted path of every field the form draws (an object's fields under its name). */
-    fun paths(form: List<persona.core.contracts.api.PluginField>): Set<String> = form.flatMap { field ->
+    fun paths(form: List<persona.core.contracts.api.ExtensionField>): Set<String> = form.flatMap { field ->
         if (field.type == "object") field.fields.orEmpty().map { "${field.name}.${it.name}" } else listOf(field.name)
     }.toSet()
 
@@ -143,17 +143,17 @@ internal object PluginDraft {
     }
 }
 
-internal data class PluginListState(
-    val plugins: List<HubPlugin>? = null,
-    /** The hub has plugin markets (`markets: true`): the list opens 插件市场. */
+internal data class ExtensionListState(
+    val extensions: List<HubExtension>? = null,
+    /** The hub has extension markets (`markets: true`): the list opens 扩展市场. */
     val markets: Boolean = false,
     val loading: Boolean = false,
     val error: String? = null,
 )
 
-/** 设置 › 插件: the list. */
-internal class PluginListModel(private val api: PluginManagement) {
-    private val mutable = MutableStateFlow(PluginListState())
+/** 设置 › 扩展: the list. */
+internal class ExtensionListModel(private val api: ExtensionManagement) {
+    private val mutable = MutableStateFlow(ExtensionListState())
     val state = mutable.asStateFlow()
 
     suspend fun load() {
@@ -161,15 +161,15 @@ internal class PluginListModel(private val api: PluginManagement) {
         mutable.update { it.copy(loading = true) }
         try {
             val listing = api.listing()
-            mutable.update { it.copy(plugins = listing.plugins, markets = listing.markets, error = null) }
+            mutable.update { it.copy(extensions = listing.extensions, markets = listing.markets, error = null) }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { mutable.update { it.copy(error = "读取失败：${failureReason(error)}") } }
         finally { mutable.update { it.copy(loading = false) } }
     }
 }
 
-internal data class PluginState(
-    val detail: PluginDetail? = null,
+internal data class ExtensionState(
+    val detail: ExtensionDetail? = null,
     /** The configuration being edited; saved as a whole (PUT replaces it). */
     val draft: JsonObject = JsonObject(emptyMap()),
     /** What number fields hold as typed, by path, until saved. */
@@ -188,35 +188,35 @@ internal data class PluginState(
     val dirty: Boolean get() = detail != null && (draft != detail.config || numberProblems.isNotEmpty())
     val canSave: Boolean get() = dirty && numberProblems.isEmpty() && !saving && !busy
 
-    fun value(path: List<String>): JsonElement? = PluginDraft.value(draft, path)
+    fun value(path: List<String>): JsonElement? = ExtensionDraft.value(draft, path)
 
     fun fieldError(path: List<String>): String? = path.joinToString(".").let { fieldErrors[it] ?: numberProblems[it] }
 }
 
-/** 设置 › 插件 › one: its switch, its form (a draft saved as a whole), its secrets. */
-internal class PluginModel(private val api: PluginManagement, private val id: String) {
-    private val mutable = MutableStateFlow(PluginState())
+/** 设置 › 扩展 › one: its switch, its form (a draft saved as a whole), its secrets. */
+internal class ExtensionModel(private val api: ExtensionManagement, private val id: String) {
+    private val mutable = MutableStateFlow(ExtensionState())
     val state = mutable.asStateFlow()
 
     suspend fun load() {
         if (state.value.loading) return
         mutable.update { it.copy(loading = true) }
-        try { run { api.plugin(id) } } finally { mutable.update { it.copy(loading = false) } }
+        try { run { api.extension(id) } } finally { mutable.update { it.copy(loading = false) } }
     }
 
     suspend fun setEnabled(on: Boolean) = busy { run { api.setEnabled(id, on) } }
 
     fun edit(path: List<String>, value: JsonElement?) = mutable.update {
         val key = path.joinToString(".")
-        it.copy(draft = PluginDraft.set(it.draft, path, value), fieldErrors = it.fieldErrors - key)
+        it.copy(draft = ExtensionDraft.set(it.draft, path, value), fieldErrors = it.fieldErrors - key)
     }
 
     /** A number field as typed: kept as text, its value put in the draft once it reads as one. */
     fun editNumber(path: List<String>, text: String, integer: Boolean) = mutable.update {
         val key = path.joinToString(".")
-        val (number, problem) = PluginDraft.number(text, integer)
+        val (number, problem) = ExtensionDraft.number(text, integer)
         it.copy(
-            draft = if (problem == null) PluginDraft.set(it.draft, path, number) else it.draft,
+            draft = if (problem == null) ExtensionDraft.set(it.draft, path, number) else it.draft,
             numberText = it.numberText + (key to text),
             numberProblems = if (problem == null) it.numberProblems - key else it.numberProblems + (key to problem),
             fieldErrors = it.fieldErrors - key,
@@ -228,7 +228,7 @@ internal class PluginModel(private val api: PluginManagement, private val id: St
         if (!state.value.canSave) return false
         mutable.update { it.copy(saving = true, fieldErrors = emptyMap(), error = null) }
         return try {
-            run(saved = true) { api.setConfig(id, PluginDraft.compact(state.value.draft)) }
+            run(saved = true) { api.setConfig(id, ExtensionDraft.compact(state.value.draft)) }
         } finally { mutable.update { it.copy(saving = false) } }
     }
 
@@ -248,9 +248,9 @@ internal class PluginModel(private val api: PluginManagement, private val id: St
 
     /**
      * Puts the hub's answer in. The draft follows it after a save, or while it holds no edit; an edit the user has
-     * not saved survives switching the plugin or setting a secret.
+     * not saved survives switching the extension or setting a secret.
      */
-    private suspend fun run(saved: Boolean = false, call: suspend () -> PluginDetail): Boolean = try {
+    private suspend fun run(saved: Boolean = false, call: suspend () -> ExtensionDetail): Boolean = try {
         val detail = call()
         mutable.update {
             val follow = saved || !it.dirty
@@ -263,10 +263,10 @@ internal class PluginModel(private val api: PluginManagement, private val id: St
         }
         true
     } catch (cancelled: CancellationException) { throw cancelled }
-    catch (refused: PluginConfigRejected) {
+    catch (refused: ExtensionConfigRejected) {
         val reason = refused.message ?: "设置不对"
         // A field the form does not draw (an older form, a whole-object rule) has nowhere to show: it goes on top.
-        val drawn = refused.field in PluginDraft.paths(state.value.detail?.form.orEmpty())
+        val drawn = refused.field in ExtensionDraft.paths(state.value.detail?.form.orEmpty())
         mutable.update {
             if (drawn) it.copy(fieldErrors = mapOf(refused.field to reason), error = null)
             else it.copy(fieldErrors = emptyMap(), error = "没有保存：" + listOf(refused.field, reason).filter { f -> f.isNotBlank() }.joinToString("："))

@@ -1,6 +1,6 @@
 package persona.feature.voice
 
-import persona.core.contracts.api.VoicePlugins
+import persona.core.contracts.api.VoiceExtensions
 import persona.core.contracts.api.VoiceSocket
 import persona.core.contracts.api.VoiceSocketListener
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -9,16 +9,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 /**
- * One voice conversation with the hub's voice plugin (docs/plugins.md「语音」). Full duplex: once the plugin is
+ * One voice conversation with the hub's voice extension (docs/extensions.md「语音」). Full duplex: once the extension is
  * ready the microphone goes up all the time, silence and muted frames too (the model decides when a turn ends), the
- * plugin's voice comes down and plays at once, and a `clear` drops what has not been played. [start] once, [stop]
+ * extension's voice comes down and plays at once, and a `clear` drops what has not been played. [start] once, [stop]
  * when the page goes away; everything after [stop] is ignored.
  *
  * The socket and the audio call in on their own threads; the state is safe to read from any.
  */
 internal class VoiceSession(
-    private val plugins: VoicePlugins,
-    private val pluginId: String,
+    private val extensions: VoiceExtensions,
+    private val extensionId: String,
     private val voice: String?,
     private val model: String?,
     private val audio: VoiceAudio,
@@ -61,7 +61,7 @@ internal class VoiceSession(
     private val microphone = object : VoiceAudio.Listener {
         override fun onFrame(pcm: ByteArray, length: Int, level: Float) {
             if (stopped) return
-            // Muted still sends: silence, so the plugin's turn taking keeps running.
+            // Muted still sends: silence, so the extension's turn taking keeps running.
             if (muted) pcm.fill(0, 0, length)
             socket?.send(pcm, 0, length)
             heard.value = smoothLevel(heard.value, if (muted) 0f else level)
@@ -76,7 +76,7 @@ internal class VoiceSession(
 
     fun start() {
         val connected = try {
-            plugins.connect(pluginId, listener)
+            extensions.connect(extensionId, listener)
         } catch (error: Exception) {
             // No route or a pairing that just changed: the same as a socket that would not open.
             end(connectFailure(error, null, live = false))
@@ -118,7 +118,7 @@ internal class VoiceSession(
         }
     }
 
-    /** The plugin is ready: only now do the microphone and the player start. */
+    /** The extension is ready: only now do the microphone and the player start. */
     private fun begin(ready: VoiceEvent.Ready) {
         synchronized(lock) {
             if (stopped || audible) return

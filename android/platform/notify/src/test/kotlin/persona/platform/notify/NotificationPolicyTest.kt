@@ -91,7 +91,7 @@ class NotificationPolicyTest {
         assertFalse(NotificationPolicy.suppressed(session, true, null))
     }
 
-    @Test fun separatePluginAlertsCoexistAndOnlyCompleteSessionKeysCanOpenAConversation() {
+    @Test fun separateExtensionAlertsCoexistAndOnlyCompleteSessionKeysCanOpenAConversation() {
         val alert = NotifyEvent("alert", "machine", "session")
         assertEquals(SessionKey("machine", "session"), NotificationPolicy.session(alert))
         for (event in listOf(alert.copy(machineId = ""), alert.copy(sessionId = ""),

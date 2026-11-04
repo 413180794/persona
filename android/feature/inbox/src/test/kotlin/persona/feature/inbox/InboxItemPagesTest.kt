@@ -1,20 +1,20 @@
 package persona.feature.inbox
 
-import persona.core.contracts.api.PluginUiPlace
+import persona.core.contracts.api.ExtensionUiPlace
 import persona.core.domain.inbox.InboxItem
 import persona.core.navigation.InboxItemUiRoute
 import org.junit.Assert.*
 import org.junit.Test
 
-// docs/plugins.md「UI 插槽」inbox_item (#1683): an item whose connector's plugin draws its page opens that page; every
+// docs/extensions.md「UI 插槽」inbox_item (#1683): an item whose connector's extension draws its page opens that page; every
 // other item, and every item on a hub that lists no such page, opens its own page as before.
 class InboxItemPagesTest {
     private val lark = InboxRecord(InboxItem("lark:F1:1051", kind = "group", title = "周四的评审"), feedId = "F1", startPosition = 1051, source = "lark")
     private val mail = InboxRecord(InboxItem("mail-1", kind = "mail", title = "订单"), source = "mail")
     private val moment = InboxRecord(InboxItem("moment-1", kind = "moment"), source = "lark", moment = InboxMomentRef(postId = "post-1"))
-    private val event = PluginUiPlace("lark-connector", "event", "事件", "inbox_item", connector = "lark")
+    private val event = ExtensionUiPlace("lark-connector", "event", "事件", "inbox_item", connector = "lark")
 
-    @Test fun aConnectorsPluginDrawsItsItems() {
+    @Test fun aConnectorsExtensionDrawsItsItems() {
         val pages = InboxItemPages(listOf(event))
         assertEquals(InboxItemUiRoute("lark:F1:1051", "lark-connector", "event", "周四的评审"), pages.route(lark))
         assertEquals(InboxItemUiRoute("lark:F1:1051", "lark-connector", "event", "周四的评审"), inboxOpenPage(lark, pages))
@@ -31,17 +31,17 @@ class InboxItemPagesTest {
         assertEquals(LarkRoute("F1", "lark:F1:1051", 1051), inboxOpenPage(lark, none))
         assertEquals(MailRoute("mail-1"), inboxOpenPage(mail, none))
         assertEquals(LarkMomentRoute("post-1", "moment-1"), inboxOpenPage(moment, none))
-        // Pages that cannot be for this item: another slot, another connector, no connector, no plugin or id.
+        // Pages that cannot be for this item: another slot, another connector, no connector, no extension or id.
         val others = InboxItemPages(listOf(event.copy(placement = "nav_page"), event.copy(connector = "github"), event.copy(connector = null),
-            event.copy(plugin = ""), event.copy(id = "")))
+            event.copy(extension = ""), event.copy(id = "")))
         assertNull(others.route(lark))
         // An item that says nothing of its source is nobody's.
         assertNull(InboxItemPages(listOf(event.copy(connector = ""))).route(lark.copy(source = "")))
     }
 
     @Test fun theFirstListedPageWins() {
-        val pages = InboxItemPages(listOf(event.copy(connector = "github"), event, event.copy(plugin = "another", id = "thread")))
-        assertEquals("lark-connector" to "event", pages.place(lark)?.let { it.plugin to it.id })
+        val pages = InboxItemPages(listOf(event.copy(connector = "github"), event, event.copy(extension = "another", id = "thread")))
+        assertEquals("lark-connector" to "event", pages.place(lark)?.let { it.extension to it.id })
     }
 
     @Test fun theOwnPageIsWhatTheListOpenedBefore() {
@@ -50,7 +50,7 @@ class InboxItemPagesTest {
         assertEquals(LarkMomentRoute("post-1", "moment-1"), inboxItemPage(moment))
     }
 
-    // persona://inbox/<id>/source from a plugin's page: that item's own page, as the list opened it before.
+    // persona://inbox/<id>/source from an extension's page: that item's own page, as the list opened it before.
     @Test fun theSourceLinkOpensTheItemsOwnPage() {
         val records = listOf(lark, mail, moment)
         assertEquals(LarkRoute("F1", "lark:F1:1051", 1051), inboxSourcePage("lark:F1:1051", records))
@@ -59,7 +59,7 @@ class InboxItemPagesTest {
         assertNull(inboxSourcePage("gone", records))
     }
 
-    // The header carries the tier (the plugin's body does not), once triaged.
+    // The header carries the tier (the extension's body does not), once triaged.
     @Test fun theHeaderSaysTheTier() {
         assertEquals(persona.core.domain.inbox.InboxTier.Action, inboxHeaderTier(lark.copy(item = lark.item.copy(tier = "action"))))
         assertEquals(persona.core.domain.inbox.InboxTier.Fyi, inboxHeaderTier(lark.copy(item = lark.item.copy(tier = "fyi"))))
@@ -75,8 +75,8 @@ class InboxItemPagesTest {
     }
 
     // At launch, before the hub's list is read, an item opens its own page and the shell hears of it; once the list
-    // comes, those pages whose connector's plugin draws them get the plugin's page in their place.
-    @Test fun anItemOpenedBeforeTheListIsKnownTurnsIntoThePluginsPage() {
+    // comes, those pages whose connector's extension draws them get the extension's page in their place.
+    @Test fun anItemOpenedBeforeTheListIsKnownTurnsIntoTheExtensionsPage() {
         val heard = mutableListOf<androidx.navigation3.runtime.NavKey>()
         val unknown = InboxItemPages(known = false, provisional = { heard += it })
         assertEquals(LarkRoute("F1", "lark:F1:1051", 1051), unknown.open(lark))
@@ -92,7 +92,7 @@ class InboxItemPagesTest {
         val chatLink = LarkRoute("F1", "lark:F1:1051", 1051).copy(startPosition = 1060)
         val stack = listOf(persona.core.navigation.InboxRoute, LarkRoute("F1", "lark:F1:1051", 1051), MailRoute("mail-1"), chatLink)
         val provisional = setOf(LarkRoute("F1", "lark:F1:1051", 1051), MailRoute("mail-1"))
-        // The Feishu item becomes the plugin's page; the mail has no plugin; a chat link was never provisional.
+        // The Feishu item becomes the extension's page; the mail has no extension; a chat link was never provisional.
         assertEquals(listOf(LarkRoute("F1", "lark:F1:1051", 1051) to InboxItemUiRoute("lark:F1:1051", "lark-connector", "event", "周四的评审")),
             known.swaps(stack, provisional, listOf(lark, mail, moment)))
         // An older hub lists no pages: nothing changes.
@@ -101,7 +101,7 @@ class InboxItemPagesTest {
         assertTrue(known.swaps(listOf(persona.core.navigation.InboxRoute), provisional, listOf(lark)).isEmpty())
     }
 
-    @Test fun theListMarksTheItemItsPluginPageShows() {
+    @Test fun theListMarksTheItemItsExtensionPageShows() {
         val shown = InboxItemUiRoute("lark:F1:1051", "lark-connector", "event")
         assertTrue(isInboxItemSelected(shown, "lark:F1:1051", "F1"))
         assertFalse(isInboxItemSelected(shown, "lark:F1:1200", "F1"))

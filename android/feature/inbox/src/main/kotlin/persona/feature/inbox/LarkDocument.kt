@@ -25,8 +25,8 @@ sealed interface LarkNativeLink {
 }
 
 /**
- * The native view [url] opens in while the hub has what it reads ([lark], the lark-connector plugin's features, #1530);
- * null: an ordinary web page, as every Feishu link is on a hub without the plugin.
+ * The native view [url] opens in while the hub has what it reads ([lark], the lark-connector extension's features, #1530);
+ * null: an ordinary web page, as every Feishu link is on a hub without the extension.
  */
 fun larkNativeLink(url: String, lark: LarkFeatures): LarkNativeLink? = when {
     lark.chats && isLarkDocumentUrl(url) -> LarkNativeLink.Document(url)

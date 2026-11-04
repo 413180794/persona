@@ -1,7 +1,7 @@
 package persona.android.navigation
 
 import androidx.navigation3.runtime.NavKey
-import persona.core.contracts.api.PluginUiPlace
+import persona.core.contracts.api.ExtensionUiPlace
 import persona.core.domain.inbox.InboxItem
 import persona.core.navigation.*
 import persona.feature.inbox.InboxItemPages
@@ -69,12 +69,12 @@ class ShellRoutesTest {
         assertNull(inboxDestination(InboxRoute, records, true))
     }
 
-    // inbox_item (#1683): a link to an item whose connector's plugin draws its page opens that page, as the list does;
+    // inbox_item (#1683): a link to an item whose connector's extension draws its page opens that page, as the list does;
     // a chat link is still the chat.
-    @Test fun inboxLinksOpenThePluginsPageOfAnItem() {
+    @Test fun inboxLinksOpenTheExtensionsPageOfAnItem() {
         val lark = InboxRecord(InboxItem("lark-item", kind = "group", title = "评审"), feedId = "chat", startPosition = 42, source = "lark")
         val mail = InboxRecord(InboxItem("mail-item", kind = "mail"), source = "mail")
-        val pages = InboxItemPages(listOf(PluginUiPlace("lark-connector", "event", "事件", "inbox_item", connector = "lark")))
+        val pages = InboxItemPages(listOf(ExtensionUiPlace("lark-connector", "event", "事件", "inbox_item", connector = "lark")))
         assertEquals(InboxDestination.Open(InboxItemUiRoute("lark-item", "lark-connector", "event", "评审")),
             inboxDestination(InboxItemRoute("lark-item"), listOf(lark, mail), false, pages))
         assertEquals(InboxDestination.Open(MailRoute("mail-item")), inboxDestination(InboxItemRoute("mail-item"), listOf(lark, mail), false, pages))

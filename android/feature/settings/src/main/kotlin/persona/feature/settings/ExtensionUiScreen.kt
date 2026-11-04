@@ -11,46 +11,46 @@ import androidx.compose.ui.Modifier
 import persona.core.contracts.GroupKeys
 import persona.core.contracts.api.AgentLauncher
 import persona.core.contracts.api.MachineManagement
-import persona.core.contracts.api.PluginManagement
-import persona.core.contracts.api.PluginUiContext
-import persona.core.contracts.api.PluginUiPlace
+import persona.core.contracts.api.ExtensionManagement
+import persona.core.contracts.api.ExtensionUiContext
+import persona.core.contracts.api.ExtensionUiPlace
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-// The places a plugin's View is drawn (docs/plugins.md「声明式 UI」): a page of its own (plugin_page, from the
-// plugin's page in 设置 › 插件; nav_page, from the「插件」section of the settings home) and a section on a launcher's
-// page (launcher_section). The UI slots of the settings home and a machine's page are in PluginSlots.kt.
+// The places an extension's View is drawn (docs/extensions.md「声明式 UI」): a page of its own (extension_page, from the
+// extension's page in 设置 › 扩展; nav_page, from the「扩展」section of the settings home) and a section on a launcher's
+// page (launcher_section). The UI slots of the settings home and a machine's page are in ExtensionSlots.kt.
 
-/** 设置 › 插件 › one › a page it draws, or a nav page opened from the settings home. */
+/** 设置 › 扩展 › one › a page it draws, or a nav page opened from the settings home. */
 @Composable
-fun PluginUiPage(plugins: PluginManagement?, pluginId: String, uiId: String, title: String, onBack: () -> Unit) {
-    if (plugins == null) {
-        JListPage(title = title, onBack = onBack) { item { JNotice("体验模式没有 hub 的插件。") } }
+fun ExtensionUiPage(extensions: ExtensionManagement?, extensionId: String, uiId: String, title: String, onBack: () -> Unit) {
+    if (extensions == null) {
+        JListPage(title = title, onBack = onBack) { item { JNotice("体验模式没有 hub 的扩展。") } }
         return
     }
-    val model = remember(plugins, pluginId, uiId) { PluginViewModel(plugins, pluginId, uiId) }
+    val model = remember(extensions, extensionId, uiId) { ExtensionViewModel(extensions, extensionId, uiId) }
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
-    val handle = rememberPluginView(model)
+    val handle = rememberExtensionView(model)
     LaunchedEffect(model) { model.load() }
-    // A view with refresh_after is drawn again while this page is on screen (docs/plugins.md「UI 插槽」「刷新」).
+    // A view with refresh_after is drawn again while this page is on screen (docs/extensions.md「UI 插槽」「刷新」).
     KeepFresh(model)
     val view = state.view
     JListPage(title = view?.title?.takeIf { it.isNotBlank() } ?: title, onBack = onBack, largeTitle = false,
         refreshing = state.loading && view != null, onRefresh = { scope.launch { model.load() } }) {
         viewStatus("page", state, onRetry = { scope.launch { model.load() } })
-        if (view != null && view.sections.none { it.items.any(PluginViewText::drawable) }) item("page-empty") {
-            JEmptyState("这里还没有内容", "插件现在没有要显示的东西，过一会儿再下拉刷新看看。", icon = PhIcons.PuzzlePiece)
+        if (view != null && view.sections.none { it.items.any(ExtensionViewText::drawable) }) item("page-empty") {
+            JEmptyState("这里还没有内容", "扩展现在没有要显示的东西，过一会儿再下拉刷新看看。", icon = PhIcons.PuzzlePiece)
         }
-        pluginViewItems("page", state, handle)
+        extensionViewItems("page", state, handle)
         item("page-end") { Spacer(Tokens.Space.xxl) }
     }
 }
 
 /** Loading, an error with 重试 when there is nothing to show yet, or the error above what is shown. */
-private fun LazyListScope.viewStatus(key: String, state: PluginViewState, onRetry: () -> Unit) {
+private fun LazyListScope.viewStatus(key: String, state: ExtensionViewState, onRetry: () -> Unit) {
     when {
         state.view == null && state.error != null -> item("$key-error") {
             JNotice(state.error, Modifier.padding(top = Tokens.Space.m), status = Status.NeedsYou, actionLabel = "重试", onAction = onRetry)
@@ -65,8 +65,8 @@ private fun LazyListScope.viewStatus(key: String, state: PluginViewState, onRetr
 @Composable
 private fun Spacer(height: androidx.compose.ui.unit.Dp) = androidx.compose.foundation.layout.Spacer(Modifier.padding(top = height))
 
-/** The pages a plugin draws, listed on its page: a row each into it. */
-internal fun LazyListScope.pluginPages(pages: List<PluginUiPlace>, onOpen: (PluginUiPlace) -> Unit) {
+/** The pages an extension draws, listed on its page: a row each into it. */
+internal fun LazyListScope.extensionPages(pages: List<ExtensionUiPlace>, onOpen: (ExtensionUiPlace) -> Unit) {
     if (pages.isEmpty()) return
     item("pages-title") { JSectionHeader("页面") }
     itemsIndexed(pages, key = { _, it -> "page-${it.id}" }) { index, page ->
@@ -78,11 +78,11 @@ internal fun LazyListScope.pluginPages(pages: List<PluginUiPlace>, onOpen: (Plug
 
 /**
  * A launcher of a machine (opened from its row on the machine's page): what it runs, its 额度 at its gateway, and the
- * sections plugins draw for the gateway. A section whose plugin says the gateway is not its own is left out without a word.
+ * sections extensions draw for the gateway. A section whose extension says the gateway is not its own is left out without a word.
  * [machineName] names the machine that read the quota.
  */
 @Composable
-fun LauncherPage(machines: MachineManagement?, plugins: PluginManagement?, machineId: String, name: String, onBack: () -> Unit,
+fun LauncherPage(machines: MachineManagement?, extensions: ExtensionManagement?, machineId: String, name: String, onBack: () -> Unit,
                  machineName: (String) -> String = { it }) {
     val scope = rememberCoroutineScope()
     var launcher by remember(machineId, name) { mutableStateOf<AgentLauncher?>(null) }
@@ -98,18 +98,18 @@ fun LauncherPage(machines: MachineManagement?, plugins: PluginManagement?, machi
     val quota = remember(machines, machineId, name) { machines?.let { LauncherQuotaModel(it, machineId, name) } }
     val quotaState = quota?.state?.collectAsState()?.value
     LaunchedEffect(quota) { quota?.load() }
-    // The plugin calls go to the hub, which knows its machines by their own ids (no group prefix).
-    val context = remember(machineId, name) { PluginUiContext(launcher = name, machine = GroupKeys.raw(machineId)) }
-    val places = remember(plugins, context) { plugins?.let { PluginPlacesModel(it, "launcher_section", context) } }
-    val placesState = places?.state?.collectAsState()?.value ?: PluginPlacesState()
-    val models = remember(plugins, placesState.places) {
-        plugins?.let { api -> placesState.places.orEmpty().map { place -> place to PluginViewModel(api, place, context) } }.orEmpty()
+    // The extension calls go to the hub, which knows its machines by their own ids (no group prefix).
+    val context = remember(machineId, name) { ExtensionUiContext(launcher = name, machine = GroupKeys.raw(machineId)) }
+    val places = remember(extensions, context) { extensions?.let { ExtensionPlacesModel(it, "launcher_section", context) } }
+    val placesState = places?.state?.collectAsState()?.value ?: ExtensionPlacesState()
+    val models = remember(extensions, placesState.places) {
+        extensions?.let { api -> placesState.places.orEmpty().map { place -> place to ExtensionViewModel(api, place, context) } }.orEmpty()
     }
     LaunchedEffect(places) { places?.load() }
     val sections = models.map { (place, model) ->
-        key(place.plugin, place.id) {
+        key(place.extension, place.id) {
             LaunchedEffect(model) { model.load() }
-            Triple(place, model.state.collectAsState().value, rememberPluginView(model))
+            Triple(place, model.state.collectAsState().value, rememberExtensionView(model))
         }
     }
     fun reload() = scope.launch {
@@ -129,7 +129,7 @@ fun LauncherPage(machines: MachineManagement?, plugins: PluginManagement?, machi
         launcher?.let { l ->
             val rows = listOfNotNull(
                 launcherModel(l)?.let { "模型" to it },
-                PluginViewText.host(l.baseUrl)?.let { "网关" to it },
+                ExtensionViewText.host(l.baseUrl)?.let { "网关" to it },
                 "类型" to if (l.agentType == "codex") "Codex" else "Claude Code",
             )
             item("about-title") { JSectionHeader("启动器") }
@@ -137,9 +137,9 @@ fun LauncherPage(machines: MachineManagement?, plugins: PluginManagement?, machi
                 JGroupItem(GroupPosition.of(index, rows.size)) { JRow(label, value = value) }
             }
         }
-        // How much is left comes before the plugins' sections, as on iOS and the web.
+        // How much is left comes before the extensions' sections, as on iOS and the web.
         if (quota != null && quotaState != null) launcherQuotaItems(quotaState, machineName, onRefresh = { scope.launch { quota.load(refresh = true) } })
-        if (plugins != null) {
+        if (extensions != null) {
             placesState.error?.let { error ->
                 item("places-error") {
                     Column(Modifier.padding(top = Tokens.Space.l), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
@@ -151,12 +151,12 @@ fun LauncherPage(machines: MachineManagement?, plugins: PluginManagement?, machi
             }
             sections.forEach { (place, state, handle) ->
                 if (state.unsupported) return@forEach
-                val key = "ui-${place.plugin}-${place.id}"
-                // The heading waits for the view: a plugin that turns out not to know this gateway never shows one.
+                val key = "ui-${place.extension}-${place.id}"
+                // The heading waits for the view: an extension that turns out not to know this gateway never shows one.
                 if (state.view == null && state.error == null) return@forEach
-                item("$key-title") { JSectionHeader(state.view?.title?.takeIf { it.isNotBlank() } ?: place.title.ifBlank { place.plugin }) }
+                item("$key-title") { JSectionHeader(state.view?.title?.takeIf { it.isNotBlank() } ?: place.title.ifBlank { place.extension }) }
                 viewStatus(key, state, onRetry = { scope.launch { models.firstOrNull { it.first == place }?.second?.load() } })
-                pluginViewItems(key, state, handle)
+                extensionViewItems(key, state, handle)
             }
             if (placesState.places == null && placesState.loading || sections.any { it.second.view == null && it.second.loading }) {
                 item("places-loading") { JLoading() }

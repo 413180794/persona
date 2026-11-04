@@ -47,6 +47,8 @@ const extensionUsage = `usage: personad extension <command> (also: personad ext,
   market set-spec <id> <spec>       the market moved (a renamed repository): same id, so what was installed from it
                                     stays its own
   market remove <id> | refresh <id>
+  market trust <id>                 accept a market's new signing key (or that it stopped signing) after checking
+                                    with its publisher; a signature that does not verify is never accepted
   search [words]                    the markets' extensions
   install market:<market>/<id>      install (or upgrade) one of a market's extensions
   auto-upgrade on|off [<id>]        market extensions upgrade themselves (all of them, or one)
@@ -179,7 +181,7 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 				fmt.Fprintln(stdout, "没有登记扩展市场")
 			}
 			for _, m := range out.Markets {
-				line := fmt.Sprintf("%-10s %-24s %3d 个扩展  %s", m.ID, m.Name, m.Extensions, m.Spec)
+				line := fmt.Sprintf("%-10s %-24s %3d 个扩展  %-12s %s", m.ID, m.Name, m.Extensions, signatureLabel(m.Signature), m.Spec)
 				if m.Error != "" {
 					line += "（" + m.Error + "）"
 				}
@@ -221,6 +223,16 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 				return err
 			}
 			fmt.Fprintf(stdout, "%s：%s，%d 个扩展（%s）\n", m.ID, m.Name, m.Extensions, m.Spec)
+			return nil
+		case "trust":
+			if err := need(2); err != nil {
+				return err
+			}
+			var m MarketView
+			if err := c.do(ctx, "POST", "/api/v1/extensions/-/markets/"+url.PathEscape(positional[1])+"/trust", nil, &m); err != nil {
+				return err
+			}
+			fmt.Fprintf(stdout, "%s：%s，%s\n", m.ID, m.Name, signatureLabel(m.Signature))
 			return nil
 		case "remove", "refresh":
 			if err := need(2); err != nil {
@@ -566,4 +578,17 @@ func printUpgrades(w io.Writer, v upgradesView) {
 	if !any {
 		fmt.Fprintln(w, "从扩展市场装的扩展都是最新的")
 	}
+}
+
+// signatureLabel is a market's signature in a line of the command line.
+func signatureLabel(s MarketSignatureView) string {
+	switch s.State {
+	case extension.SigSigned:
+		return "已签名 " + s.KeyID
+	case extension.SigInvalid:
+		return "签名不对"
+	case extension.SigKeyChanged:
+		return "换了 key " + s.KeyID
+	}
+	return "未签名"
 }

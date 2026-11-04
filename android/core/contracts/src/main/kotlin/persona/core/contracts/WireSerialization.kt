@@ -30,6 +30,9 @@ abstract class WireSerializer<T>(private val generated: KSerializer<T>) : KSeria
     override fun serialize(encoder: Encoder, value: T) = generated.serialize(encoder, value)
 }
 
+private fun alternatives(descriptor: SerialDescriptor, index: Int): List<String> =
+    descriptor.getElementAnnotations(index).filterIsInstance<JsonNames>().flatMap { it.names.asList() }
+
 private fun clean(value: JsonElement, descriptor: SerialDescriptor): JsonElement {
     if (value == JsonNull) {
         if (descriptor.isNullable) return value
@@ -43,7 +46,8 @@ private fun clean(value: JsonElement, descriptor: SerialDescriptor): JsonElement
             buildJsonObject {
                 for (index in 0 until descriptor.elementsCount) {
                     val name = descriptor.getElementName(index)
-                    val field = obj[name] ?: continue
+                    // A key renamed on the wire keeps its old name as an alternative (@JsonNames: `plugin` before #1844).
+                    val field = obj[name] ?: alternatives(descriptor, index).firstNotNullOfOrNull { obj[it] } ?: continue
                     try {
                         val child = descriptor.getElementDescriptor(index)
                         var cleaned = clean(field, child)
@@ -66,7 +70,8 @@ private fun clean(value: JsonElement, descriptor: SerialDescriptor): JsonElement
                     }
                 }
                 for (index in 0 until descriptor.elementsCount) {
-                    if (!descriptor.isElementOptional(index) && descriptor.getElementName(index) !in obj) {
+                    if (!descriptor.isElementOptional(index) && descriptor.getElementName(index) !in obj &&
+                        alternatives(descriptor, index).none { it in obj }) {
                         throw SerializationException("Missing ${descriptor.getElementName(index)}")
                     }
                 }

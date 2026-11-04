@@ -7,7 +7,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WireCompatibilityTest {
-    @Test fun pluginAlertsPreserveTheirKindWithAndWithoutASession() {
+    @Test fun extensionAlertsPreserveTheirKindWithAndWithoutASession() {
         for ((machine, session) in listOf("machine" to "session", "" to "")) {
             val event = ServerEvent.decode("""{"type":"notify","kind":"alert","machine_id":"$machine","session_id":"$session","title":"任务提醒","body":"任务需要查看"}""") as NotifyEvent
             assertEquals("alert", event.kind)

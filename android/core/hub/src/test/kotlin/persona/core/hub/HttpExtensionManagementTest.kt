@@ -1,9 +1,9 @@
 package persona.core.hub
 
-import persona.core.contracts.api.PluginConfigRejected
-import persona.core.contracts.api.PluginPreview
-import persona.core.contracts.api.PluginUiContext
-import persona.core.contracts.api.PluginUiUnsupported
+import persona.core.contracts.api.ExtensionConfigRejected
+import persona.core.contracts.api.ExtensionPreview
+import persona.core.contracts.api.ExtensionUiContext
+import persona.core.contracts.api.ExtensionUiUnsupported
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 import okhttp3.OkHttpClient
@@ -13,18 +13,58 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
 import org.junit.Test
 
-class HttpPluginManagementTest {
-    private fun <T> withHub(block: suspend (MockWebServer, HttpPluginManagement) -> T): T = runBlocking {
+class HttpExtensionManagementTest {
+    // Most of these talk to a hub from before #1844 (/api/v1/plugins and the old keys), the one the routes were first
+    // written for; aNewHubAnswersUnderExtensions is the same calls on a newer hub.
+    private fun <T> withHub(legacy: Boolean = true, block: suspend (MockWebServer, HttpExtensionManagement) -> T): T = runBlocking {
         MockWebServer().use { server ->
             val http = OkHttpClient.Builder().retryOnConnectionFailure(false).build()
-            block(server, HttpPluginManagement({ path, method, body ->
+            block(server, HttpExtensionManagement({ path, method, body ->
                 http.newCall(Request.Builder().url(server.url(path)).method(method, body).build()).execute()
-            }, device = { device }))
+            }, device = { device }, legacy = legacy))
+        }
+    }
+
+    @Test fun aNewHubAnswersUnderExtensions() = withHub(legacy = false) { server, api ->
+        server.enqueue(MockResponse().setBody("""{"extensions":[{"id":"removed","name":"removed","kind":"ui","status":"running"}],
+            "can_install":true,"markets":true}"""))
+        val listing = api.listing()
+        assertEquals("/api/v1/extensions", server.takeRequest().path)
+        assertEquals(listOf("removed"), listing.extensions.map { it.id })
+        assertTrue(listing.canInstall && listing.markets)
+
+        server.enqueue(MockResponse().setBody("""{"ui":[{"extension":"removed","extension_name":"removed","id":"usage","title":"用量",
+            "placement":"nav_page"}]}"""))
+        val place = api.uiPlaces("").single()
+        assertEquals("/api/v1/extensions/-/ui", server.takeRequest().path)
+        assertEquals("removed", place.extension)
+        assertEquals("removed", place.extensionName)
+
+        server.enqueue(MockResponse().setBody(detail))
+        api.extension("example-notes")
+        assertEquals("/api/v1/extensions/example-notes/-/", server.takeRequest().path)
+
+        server.enqueue(MockResponse().setBody("""{"markets":[{"id":"m1","spec":"github:example/team","name":"团队","extensions":3,
+            "signature":{"state":"verified","key_id":"32ed46cdbe349656"}}]}"""))
+        val market = api.markets().single()
+        assertEquals("/api/v1/extensions/-/markets", server.takeRequest().path)
+        assertEquals(3, market.extensions)
+        assertTrue(market.signature!!.verified)
+
+        server.enqueue(MockResponse().setBody("""{"markets":[],"extensions":[{"market":"m1","id":"linuxdo","name":"LINUX DO","version":"0.1.0"}]}"""))
+        assertEquals(listOf("linuxdo"), api.catalog("").extensions.map { it.id })
+        assertEquals("/api/v1/extensions/-/catalog", server.takeRequest().path)
+
+        server.enqueue(MockResponse().setBody("""{"preview_id":"pv1","permissions_digest":"d1","market":"m1"}"""))
+        api.previewFromMarket("m1", "linuxdo")
+        server.takeRequest().let {
+            assertEquals("/api/v1/extensions/-/catalog/preview", it.path)
+            assertEquals("""{"market":"m1","extension":"linuxdo"}""", it.body.readUtf8())
         }
     }
 
     // What the phone says of itself in every view's context; a fixed one so the bodies are exact.
-    private val device = PluginUiContext(tz = "Asia/Shanghai", locale = "zh-Hans-CN", platform = "android", uiVersion = 2)
+    private val device = ExtensionUiContext(tz = "Asia/Shanghai", locale = "zh-Hans-CN", platform = "android", uiVersion = 2)
     private val deviceJson = """"tz":"Asia/Shanghai","locale":"zh-Hans-CN","platform":"android","ui_version":2"""
 
     private val detail = """{"id":"example-notes","name":"Example Notes","kind":"connectors","status":"needs_setup","version":"1.2.0",
@@ -40,13 +80,13 @@ class HttpPluginManagementTest {
         "permissions":[{"key":"runs_code","title":"在 hub 机器上运行程序","detail":"不在沙箱里"}],
         "unknown_key":1}"""
 
-    @Test fun listsThePluginsWithTheNewFieldsAndToleratesAnOlderHub() = withHub { server, api ->
+    @Test fun listsTheExtensionsWithTheNewFieldsAndToleratesAnOlderHub() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"plugins":[
             {"id":"voice","name":"语音","kind":"voice","status":"running"},
             {"id":"example-notes","name":"Example Notes","kind":"connectors","status":"needs_setup","source":"installed",
              "enabled":true,"needs_setup":["密钥「API Key」"],"contributes":{"connectors":["examplenotes"]},"warnings":["w"]}],
             "can_install":true}"""))
-        val list = api.plugins()
+        val list = api.extensions()
         assertEquals("/api/v1/plugins", server.takeRequest().path)
         assertEquals(listOf("voice", "example-notes"), list.map { it.id })
         assertNull(list[0].source)
@@ -58,9 +98,9 @@ class HttpPluginManagementTest {
 
     @Test fun decodesTheDetailFromOneObject() = withHub { server, api ->
         server.enqueue(MockResponse().setBody(detail))
-        val d = api.plugin("example-notes")
+        val d = api.extension("example-notes")
         assertEquals("/api/v1/plugins/example-notes/-/", server.takeRequest().path)
-        assertEquals("Example Notes", d.plugin.name)
+        assertEquals("Example Notes", d.extension.name)
         assertEquals("1.1.0", d.previousVersion)
         assertFalse(d.readOnly)
         assertEquals(listOf("base_url", "mode", "tags", "proxy"), d.form.map { it.name })
@@ -74,9 +114,9 @@ class HttpPluginManagementTest {
         assertEquals("runs_code", d.permissions.single().key)
     }
 
-    @Test fun aHubJsonPluginHasNoConfigOrSecrets() = withHub { server, api ->
+    @Test fun aHubJsonExtensionHasNoConfigOrSecrets() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"id":"voice","name":"语音","kind":"voice","status":"running","source":"hub.json","read_only":true}"""))
-        val d = api.plugin("voice")
+        val d = api.extension("voice")
         assertTrue(d.readOnly)
         assertTrue(d.form.isEmpty() && d.config.isEmpty() && d.secrets.isEmpty())
     }
@@ -106,8 +146,8 @@ class HttpPluginManagementTest {
         server.enqueue(MockResponse().setResponseCode(400).setBody(
             """{"error":"proxy.host: 要是主机名","code":"invalid_config","field":"proxy.host","message":"要是主机名"}"""))
         val refused = runCatching { api.setConfig("example-notes", JsonObject(emptyMap())) }.exceptionOrNull()
-        assertTrue(refused is PluginConfigRejected)
-        assertEquals("proxy.host", (refused as PluginConfigRejected).field)
+        assertTrue(refused is ExtensionConfigRejected)
+        assertEquals("proxy.host", (refused as ExtensionConfigRejected).field)
         assertEquals("要是主机名", refused.message)
         server.takeRequest()
 
@@ -123,21 +163,21 @@ class HttpPluginManagementTest {
     @Test fun aRefusedFieldSurvivesTheConnectionThrowingFirst() = runBlocking {
         MockWebServer().use { server ->
             val http = OkHttpClient.Builder().retryOnConnectionFailure(false).build()
-            val api = HttpPluginManagement({ path, method, body ->
+            val api = HttpExtensionManagement({ path, method, body ->
                 val response = http.newCall(Request.Builder().url(server.url(path)).method(method, body).build()).execute()
                 if (!response.isSuccessful) throw response.use { HubFailure.from(it) }
                 response
-            })
+            }, legacy = true)
             server.enqueue(MockResponse().setResponseCode(400).setBody(
                 """{"error":"base_url: 要是一个网址","code":"invalid_config","field":"base_url","message":"要是一个网址"}"""))
-            val refused = runCatching { api.setConfig("example-notes", JsonObject(emptyMap())) }.exceptionOrNull() as PluginConfigRejected
+            val refused = runCatching { api.setConfig("example-notes", JsonObject(emptyMap())) }.exceptionOrNull() as ExtensionConfigRejected
             assertEquals("base_url", refused.field)
             assertEquals("要是一个网址", refused.message)
         }
     }
 
     @Test fun refusesIdsAndNamesThatWouldBecomeAnotherPath() = withHub { server, api ->
-        assertTrue(runCatching { api.plugin("..") }.exceptionOrNull() is IllegalArgumentException)
+        assertTrue(runCatching { api.extension("..") }.exceptionOrNull() is IllegalArgumentException)
         assertTrue(runCatching { api.setSecret("example-notes", "..", "x") }.exceptionOrNull() is IllegalArgumentException)
         assertTrue(runCatching { api.clearSecret("a/b", "api_key") }.exceptionOrNull() is IllegalArgumentException)
         assertEquals(0, server.requestCount)
@@ -145,9 +185,9 @@ class HttpPluginManagementTest {
 
     @Test fun anUnreadableAnswerIsAProtocolError() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"nope":true}"""))
-        assertEquals(HubError.Protocol, (runCatching { api.plugins() }.exceptionOrNull() as HubFailure).kind)
+        assertEquals(HubError.Protocol, (runCatching { api.extensions() }.exceptionOrNull() as HubFailure).kind)
         server.enqueue(MockResponse().setBody("not json"))
-        assertEquals(HubError.Protocol, (runCatching { api.plugin("x") }.exceptionOrNull() as HubFailure).kind)
+        assertEquals(HubError.Protocol, (runCatching { api.extension("x") }.exceptionOrNull() as HubFailure).kind)
     }
 
     @Test fun theListSaysWhetherTheHubHasMarkets() = withHub { server, api ->
@@ -158,19 +198,19 @@ class HttpPluginManagementTest {
         assertFalse(api.listing().markets)
     }
 
-    // Its pages are its plugin_page and nav_page UI (both whole pages); a launcher's section or a card is not one.
+    // Its pages are its extension_page and nav_page UI (both whole pages); a launcher's section or a card is not one.
     @Test fun theDetailListsItsPagesOnly() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"id":"example-gateway","name":"网关","status":"running","origin":"market:3f2a9c1d0b/example-gateway",
             "ui":[{"plugin":"example-gateway","id":"home","title":"概况","placement":"plugin_page"},
                   {"plugin":"example-gateway","id":"panel","title":"面板","placement":"launcher_section"},
                   {"plugin":"example-gateway","id":"usage","title":"用量","placement":"nav_page","icon":"chart"},
                   {"plugin":"example-gateway","id":"today","title":"今天","placement":"overview_card","opens":"usage"}]}"""))
-        val d = api.plugin("example-gateway")
+        val d = api.extension("example-gateway")
         assertEquals(listOf("home", "usage"), d.ui.map { it.id })
         assertTrue(d.fromMarket)
     }
 
-    @Test fun asksWherePluginsDrawAndDrawsWithTheContext() = withHub { server, api ->
+    @Test fun asksWhereExtensionsDrawAndDrawsWithTheContext() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"ui":[{"plugin":"example-gateway","id":"panel","title":"Example 网关","placement":"launcher_section"}]}"""))
         val places = api.uiPlaces("launcher_section", "work key", "workstation")
         assertEquals("/api/v1/plugins/-/ui?placement=launcher_section&launcher=work%20key&machine=workstation", server.takeRequest().path)
@@ -184,7 +224,7 @@ class HttpPluginManagementTest {
             {"type":"field","name":"plan","label":"套餐","kind":"choice","value":"team","choices":[{"value":"solo","title":"个人"},{"value":"team"}]},
             {"type":"link","title":"后台","url":"https://example.com"},{"type":"divider"},{"type":"text","text":"x","style":"code"},
             {"type":"newer_kind","whatever":1}]}]}}"""))
-        val view = api.renderUi("example-gateway", "panel", PluginUiContext("work", "workstation"), state = null)
+        val view = api.renderUi("example-gateway", "panel", ExtensionUiContext("work", "workstation"), state = null)
         server.takeRequest().let {
             assertEquals("POST", it.method)
             assertEquals("/api/v1/plugins/example-gateway/-/ui/panel", it.path)
@@ -209,7 +249,7 @@ class HttpPluginManagementTest {
         assertNull(result.view)
     }
 
-    // docs/plugins.md「UI 插槽」: without a placement the hub lists every slot but launcher sections, with badges.
+    // docs/extensions.md「UI 插槽」: without a placement the hub lists every slot but launcher sections, with badges.
     @Test fun listsTheSlotsAtOnce() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"ui":[
             {"plugin":"example-gateway","plugin_name":"Example 网关面板","id":"usage","title":"用量","placement":"nav_page","size":"full",
@@ -219,7 +259,7 @@ class HttpPluginManagementTest {
         val places = api.uiPlaces("")
         assertEquals("/api/v1/plugins/-/ui", server.takeRequest().path)
         assertEquals(listOf("nav_page", "overview_card", "machine_section"), places.map { it.placement })
-        assertEquals("Example 网关面板", places[0].pluginName)
+        assertEquals("Example 网关面板", places[0].extensionName)
         assertEquals("chart", places[0].icon)
         assertEquals("3", places[0].badge?.text)
         assertEquals("danger", places[0].badge?.tone)
@@ -231,15 +271,15 @@ class HttpPluginManagementTest {
     // A card asks for the compact size, a machine's section names the machine; the phone's own context goes along.
     @Test fun drawsASlotWithItsContext() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"view":{"sections":[],"refresh_after":300}}"""))
-        val view = api.renderUi("example-gateway", "today", PluginUiContext(size = "compact"))
+        val view = api.renderUi("example-gateway", "today", ExtensionUiContext(size = "compact"))
         assertEquals("""{"context":{"size":"compact",$deviceJson}}""", server.takeRequest().body.readUtf8())
         assertEquals(300, view.refreshAfter)
         server.enqueue(MockResponse().setBody("""{"view":{"sections":[]}}"""))
-        api.renderUi("example-gateway", "gpu", PluginUiContext(machine = "workstation"), state = "range=7d")
+        api.renderUi("example-gateway", "gpu", ExtensionUiContext(machine = "workstation"), state = "range=7d")
         assertEquals("""{"context":{"machine":"workstation",$deviceJson},"state":"range=7d"}""", server.takeRequest().body.readUtf8())
         // A segmented choice: the action with {name: value}.
         server.enqueue(MockResponse().setBody("""{}"""))
-        api.uiAction("example-gateway", "usage", "range", PluginUiContext(size = "full"), values = mapOf("range" to "30d"))
+        api.uiAction("example-gateway", "usage", "range", ExtensionUiContext(size = "full"), values = mapOf("range" to "30d"))
         assertEquals("""{"context":{"size":"full",$deviceJson},"action":"range","values":{"range":"30d"}}""", server.takeRequest().body.readUtf8())
     }
 
@@ -254,7 +294,7 @@ class HttpPluginManagementTest {
         assertEquals("event", places.single().id)
 
         server.enqueue(MockResponse().setBody("""{"view":{"title":"周四的评审","sections":[{"items":[{"type":"text","text":"x"}]}],"state":"s"}}"""))
-        val view = api.renderUi("lark-connector", "event", PluginUiContext(item = "lark:F1:1051"))
+        val view = api.renderUi("lark-connector", "event", ExtensionUiContext(item = "lark:F1:1051"))
         server.takeRequest().let {
             assertEquals("/api/v1/plugins/lark-connector/-/ui/event", it.path)
             assertEquals("""{"context":{"item":"lark:F1:1051",$deviceJson}}""", it.body.readUtf8())
@@ -264,7 +304,7 @@ class HttpPluginManagementTest {
         // 在会话里看: the item's source, the one app link the hub lets this slot answer.
         server.enqueue(MockResponse().setBody("""{"open_url":"persona://inbox/lark:F1:1051/source"}"""))
         assertEquals("persona://inbox/lark:F1:1051/source",
-            api.uiAction("lark-connector", "event", "open_chat", PluginUiContext(item = "lark:F1:1051"), state = "s").openUrl)
+            api.uiAction("lark-connector", "event", "open_chat", ExtensionUiContext(item = "lark:F1:1051"), state = "s").openUrl)
         assertEquals("""{"context":{"item":"lark:F1:1051",$deviceJson},"state":"s","action":"open_chat"}""", server.takeRequest().body.readUtf8())
 
         server.enqueue(MockResponse().setBody("""{"ui":[]}"""))
@@ -272,13 +312,13 @@ class HttpPluginManagementTest {
 
         // A device that may only read and answer is refused (403): the item opens its own page.
         server.enqueue(MockResponse().setResponseCode(403).setBody("""{"error":"this device can only read and answer"}"""))
-        val refused = runCatching { api.renderUi("lark-connector", "event", PluginUiContext(item = "lark:F1:1051")) }.exceptionOrNull()
-        assertTrue(refused is persona.core.contracts.api.PluginUiForbidden)
+        val refused = runCatching { api.renderUi("lark-connector", "event", ExtensionUiContext(item = "lark:F1:1051")) }.exceptionOrNull()
+        assertTrue(refused is persona.core.contracts.api.ExtensionUiForbidden)
         assertEquals("this device can only read and answer", refused?.message)
     }
 
     @Test fun theDeviceContextIsThePhones() {
-        val context = HttpPluginManagement.deviceContext()
+        val context = HttpExtensionManagement.deviceContext()
         assertEquals("android", context.platform)
         assertEquals(2, context.uiVersion)
         assertEquals(java.util.TimeZone.getDefault().id, context.tz)
@@ -312,21 +352,21 @@ class HttpPluginManagementTest {
         assertEquals("positive", chart.series!![1].tone)
     }
 
-    // #1339: a plugin that says the launcher's gateway is not its own answers 404 unsupported; any other 404 is an error.
+    // #1339: an extension that says the launcher's gateway is not its own answers 404 unsupported; any other 404 is an error.
     @Test fun anUnsupportedGatewayIsItsOwnFailure() = withHub { server, api ->
         server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"not my gateway","code":"unsupported"}"""))
-        assertTrue(runCatching { api.renderUi("example-gateway", "other", PluginUiContext("work")) }.exceptionOrNull() is PluginUiUnsupported)
+        assertTrue(runCatching { api.renderUi("example-gateway", "other", ExtensionUiContext("work")) }.exceptionOrNull() is ExtensionUiUnsupported)
         server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"not my gateway","code":"unsupported"}"""))
-        assertTrue(runCatching { api.uiAction("example-gateway", "other", "refresh") }.exceptionOrNull() is PluginUiUnsupported)
+        assertTrue(runCatching { api.uiAction("example-gateway", "other", "refresh") }.exceptionOrNull() is ExtensionUiUnsupported)
         server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"no such plugin","code":"gone"}"""))
         val other = runCatching { api.renderUi("gone", "home") }.exceptionOrNull()
         assertTrue(other is HubFailure && other.status == 404)
         // A machine's section for a machine this hub does not know.
         server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"没有这台机器","code":"not_found"}"""))
-        assertTrue(runCatching { api.renderUi("example-gateway", "gpu", PluginUiContext(machine = "elsewhere")) }.exceptionOrNull()
-            is persona.core.contracts.api.PluginUiNotFound)
-        server.enqueue(MockResponse().setResponseCode(502).setBody("""{"error":"插件画的界面这个 hub 画不了","code":"plugin_failed"}"""))
-        assertEquals("插件画的界面这个 hub 画不了", (runCatching { api.renderUi("x", "home") }.exceptionOrNull() as HubFailure).message)
+        assertTrue(runCatching { api.renderUi("example-gateway", "gpu", ExtensionUiContext(machine = "elsewhere")) }.exceptionOrNull()
+            is persona.core.contracts.api.ExtensionUiNotFound)
+        server.enqueue(MockResponse().setResponseCode(502).setBody("""{"error":"扩展画的界面这个 hub 画不了","code":"plugin_failed"}"""))
+        assertEquals("扩展画的界面这个 hub 画不了", (runCatching { api.renderUi("x", "home") }.exceptionOrNull() as HubFailure).message)
     }
 
     @Test fun marketsAndTheirTokens() = withHub { server, api ->
@@ -373,8 +413,8 @@ class HttpPluginManagementTest {
         val catalog = api.catalog("网关 面板", "m1", refresh = true)
         assertEquals("/api/v1/plugins/-/catalog?q=%E7%BD%91%E5%85%B3%20%E9%9D%A2%E6%9D%BF&market=m1&refresh=1", server.takeRequest().path)
         assertEquals("linux-amd64", catalog.platform)
-        assertTrue(catalog.plugins[0].upgradable && catalog.plugins[0].fromThisMarket)
-        assertEquals("没有包", catalog.plugins[1].problem)
+        assertTrue(catalog.extensions[0].upgradable && catalog.extensions[0].fromThisMarket)
+        assertEquals("没有包", catalog.extensions[1].problem)
         server.enqueue(MockResponse().setBody("""{"markets":[],"plugins":[]}"""))
         api.catalog()
         assertEquals("/api/v1/plugins/-/catalog", server.takeRequest().path)
@@ -395,7 +435,7 @@ class HttpPluginManagementTest {
             assertEquals("""{"preview_id":"pv1","permissions_digest":"d1"}""", it.body.readUtf8())
         }
         server.enqueue(MockResponse().setBody(detail))
-        api.install(PluginPreview("pv2", permissionsDigest = "d2"))
+        api.install(ExtensionPreview("pv2", permissionsDigest = "d2"))
         server.takeRequest().let {
             assertEquals("/api/v1/plugins/-/install", it.path)
             assertEquals("""{"preview_id":"pv2","permissions_digest":"d2"}""", it.body.readUtf8())

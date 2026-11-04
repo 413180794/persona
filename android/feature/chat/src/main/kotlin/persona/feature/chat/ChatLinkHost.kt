@@ -219,7 +219,7 @@ fun ChatLinkHost(
                         }
                     }
                     if (!view.gone) key(view) {
-                        // Feishu documents in the native reader while the hub has it (the lark-connector plugin, #1530).
+                        // Feishu documents in the native reader while the hub has it (the lark-connector extension, #1530).
                         if (larkNativeLink(target, lark) is LarkNativeLink.Document) LarkDocumentLink(target, Modifier.fillMaxWidth().weight(1f)) {
                             AndroidView(factory = { view }, modifier = Modifier.fillMaxSize(), onRelease = { pool.release(it) })
                         } else JPage(title = "网页", modifier = Modifier.fillMaxWidth().weight(1f), topBar = {}) { padding ->

@@ -192,17 +192,18 @@ func detailOut(r *http.Request, d ExtensionDetail) any {
 
 // legacyMarketView is MarketView as the old paths have always answered it.
 type legacyMarketView struct {
-	ID          string     `json:"id"`
-	Spec        string     `json:"spec"`
-	Name        string     `json:"name"`
-	Description string     `json:"description,omitempty"`
-	Homepage    string     `json:"homepage,omitempty"`
-	HasToken    bool       `json:"has_token"`
-	Extensions  int        `json:"plugins"`
-	Warnings    []string   `json:"warnings"`
-	Error       string     `json:"error,omitempty"`
-	FetchedAt   *time.Time `json:"fetched_at,omitempty"`
-	AddedAt     time.Time  `json:"added_at"`
+	ID          string              `json:"id"`
+	Spec        string              `json:"spec"`
+	Name        string              `json:"name"`
+	Description string              `json:"description,omitempty"`
+	Homepage    string              `json:"homepage,omitempty"`
+	HasToken    bool                `json:"has_token"`
+	Extensions  int                 `json:"plugins"`
+	Warnings    []string            `json:"warnings"`
+	Error       string              `json:"error,omitempty"`
+	FetchedAt   *time.Time          `json:"fetched_at,omitempty"`
+	AddedAt     time.Time           `json:"added_at"`
+	Signature   MarketSignatureView `json:"signature"`
 }
 
 // marketOut is v for r: the old keys under an old path.

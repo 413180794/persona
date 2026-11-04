@@ -10,20 +10,20 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
 /**
- * The voice (音色) picked on this phone for each voice plugin, kept with the pairing: one small file in the pairing's
+ * The voice (音色) picked on this phone for each voice extension, kept with the pairing: one small file in the pairing's
  * own directory (`hub-data/<pairing>/voice.json`), erased with it when the phone is unpaired or paired again. The
  * model is not here: it belongs to the hub's model configuration (docs/model-config.md).
  */
 internal class VoicePrefs(private val file: File) {
     @Synchronized
-    fun voice(plugin: String): String? = read()[plugin]
+    fun voice(extension: String): String? = read()[extension]
 
     /** Writes only while the pairing's directory exists: never recreates a pairing that was just erased. */
     @Synchronized
-    fun setVoice(plugin: String, voice: String) {
+    fun setVoice(extension: String, voice: String) {
         val directory = file.parentFile ?: return
         if (!directory.isDirectory) return
-        val voices = read() + (plugin to voice)
+        val voices = read() + (extension to voice)
         val text = JsonObject(voices.mapValues { JsonPrimitive(it.value) }).toString()
         val temporary = File(directory, "${file.name}.tmp")
         try {
