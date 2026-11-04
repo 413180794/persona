@@ -517,7 +517,7 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | `todos` | —：待办或关联变了就推，客户端收到后重拉 `GET /api/v1/todos` |
 | `assistant_feed` | `conversation`, `item`（`FeedItem`）：对话动态多了一条 |
 | `task_plan` | `plan`（`TaskPlan`）：计划交给用户、开始、不开了、某个任务没开起来（`tasks[i].error`） |
-| `sessions` | `machine_id`, `sessions`（该机器全量，变化时推，和上一条一模一样就不推；每个会话带 `rev` = transcript 字节数，变了就说明有新内容；可选 `suggestion`：Claude 一轮结束后在输入框里给的灰色「下一条」建议，见 `docs/claude-integration.md`） |
+| `sessions` | `machine_id`, `sessions`（该机器全量，变化时推，和上一条一模一样就不推；每个会话带 `rev` = transcript 字节数，变了就说明有新内容；可选 `suggestion`：Claude 一轮结束后在输入框里给的灰色「下一条」建议，见 `docs/claude-integration.md`；可选 `attention_reason`：会话在「需要你」时，宿主说的原因（botmux 的 attention reason）；可选 `external_url`：在 Persona 之外打开它的地方（botmux 会话的飞书话题），见 `docs/engines.md`「botmux」） |
 | `revs` | `machine_id`, `revs`（`{session_id: rev}`，只含变了的；列表里看得见的字段没变、只是 transcript 长了时发，推给所有客户端，App 据此后台拉增量） |
 | `lark` | `feed_ids`（飞书有新消息 / 会话变化的会话）；`settings_changed`（可选布尔值，默认 false，本批包含消息展示设置变化，与会话 ID 独立；客户端同时重读设置）。hub 跟随 lark-connector 的实时事件 `/agent/v1/events`，每 400ms 最多发一次，推给所有客户端。 |
 | `items` | `machine_id`, `session_id`, `items`，以及这批在 transcript 里的位置（见下「items 的连续性」）：`history`, `to_seq`, `from_seq`（接续的批次才有）。只推给订阅了该会话的客户端；没有 item 的行（ai-title 之类）也会推一条空的 `items`，让 App 知道这几行已经看过 |

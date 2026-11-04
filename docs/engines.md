@@ -82,6 +82,9 @@ node 所在的电脑 PATH 上有 `botmux` 时，node 在所选引擎的宿主之
   挂起的会话 botmux 自己续上（不会在 herdr 里另起一个 `claude --resume`；挂起超过 7 天、不在列表里的也一样），回答照常发回飞书话题。
   dashboard 的 token 由 node 跑 `botmux dashboard current` 取，只存在内存里，只连本机 127.0.0.1。消息在 Claude 那边带着 botmux 的任务标签和一段「外部事件」说明。
 - **做不到**：读屏、按键、回答对话框（在飞书里答）、关闭、改名、新建、实时终端；App 按能力隐藏或提示。
+- **为什么等你、在飞书打开**：botmux 举手（`botmux send --attention`）时带的原因，会话在「需要你」时放进 `attention_reason`，
+  App 在列表行和对话页顶上显示；observe 原始数据里的话题链接（`feishuThreadLink`，只认 https）放进 `external_url`，对话页的「在飞书打开」用它。
+  两个都是 botmux 的原始字段，不是稳定接口：没有就不显示。
 - **不重复**：botmux 用 herdr 后端时，它的会话本来就是 herdr 的窗格，botmux 宿主不再列；Codex / TRAEX 的 botmux 会话第一期不列。
 - **同一个会话两边都有**：它也开在 herdr 等引擎的窗格里（以前从手机 `--resume` 过）时，以在跑的窗格为准，botmux 的挂起记录让开。
 - **检测时机**：node 连上 hub、知道这台要不要列 botmux 时（见下一条），以及切换引擎时找 `botmux`：PATH 上的，没有就是 botmux 安装时写的 `~/.botmux/bin/botmux`（launchd 常驻的 node 只有系统的 PATH）；之后才装 botmux 的，重启那台电脑的 personad 才会显示。

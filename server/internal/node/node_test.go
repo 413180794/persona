@@ -274,6 +274,13 @@ func TestListKeyIgnoresSmallTimeChurn(t *testing.T) {
 	if listKey([]proto.Session{base}) == listKey([]proto.Session{withSpawn}) {
 		t.Fatal("a spawn_from change must be visible in listKey (#873)")
 	}
+	withReason, withLink := base, base
+	withReason.AttentionReason = "本轮执行失败，再发一条消息继续"
+	withLink.ExternalURL = "https://applink.example.com/thread/t1"
+	if listKey([]proto.Session{base}) == listKey([]proto.Session{withReason}) ||
+		listKey([]proto.Session{base}) == listKey([]proto.Session{withLink}) {
+		t.Fatal("an attention reason or topic link that changes alone must be visible in listKey (#1225)")
+	}
 }
 
 func TestLastLines(t *testing.T) {

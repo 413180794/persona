@@ -186,8 +186,11 @@ type botmuxRow struct {
 	Raw              struct {
 		Title          string `json:"title"`
 		AgentAttention *struct {
-			Kind string `json:"kind"`
+			Kind   string `json:"kind"`
+			Reason string `json:"reason"`
 		} `json:"agentAttention"`
+		// FeishuThreadLink opens the session's topic in Feishu (a raw field: shown when present).
+		FeishuThreadLink string `json:"feishuThreadLink"`
 	} `json:"raw"`
 }
 
@@ -269,6 +272,9 @@ func (r botmuxRow) agent() (host.Agent, bool) {
 		return host.Agent{}, false
 	case r.TUIPromptActive || (r.Raw.AgentAttention != nil && r.Raw.AgentAttention.Kind != ""):
 		a.AgentStatus = proto.StatusBlocked
+		if r.Raw.AgentAttention != nil {
+			a.Attention = botmuxTitle(r.Raw.AgentAttention.Reason)
+		}
 	default:
 		a.AgentStatus = botmuxTurns[r.Turn]
 		if a.AgentStatus == "" {
@@ -276,6 +282,9 @@ func (r botmuxRow) agent() (host.Agent, bool) {
 		}
 	}
 	a.Title = a.Name
+	if strings.HasPrefix(r.Raw.FeishuThreadLink, "https://") {
+		a.ExternalURL = r.Raw.FeishuThreadLink
+	}
 	return a, true
 }
 

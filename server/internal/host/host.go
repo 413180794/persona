@@ -221,6 +221,10 @@ type Agent struct {
 	RawTitle string
 	// Tokens are metadata tokens reported by herdr (#762).
 	Tokens map[string]string
+	// Attention is why the host says the agent waits for the user (botmux's attention reason), "" when it says nothing.
+	Attention string
+	// ExternalURL opens the agent where the host shows it (a botmux session's Feishu topic), "" when there is none.
+	ExternalURL string
 }
 
 // SessionID is the session id the host reported, "" when none. A reported file names its session: pi's are

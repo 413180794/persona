@@ -2390,6 +2390,37 @@ struct StartingNote: View {
     }
 }
 
+/// Why a session waits for the user, in its host's words (a botmux attention), with its Feishu topic one tap away.
+struct AttentionNote: View {
+    var reason: String
+    var link: URL?
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+            Image(systemName: Theme.Icon.needsYou).font(Theme.Font.labelStrong).foregroundStyle(Theme.caution)
+            Text(reason).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(3)
+            Spacer(minLength: 0)
+            if let link { FeishuLink(url: link).font(Theme.Font.secondaryStrong) }
+        }
+        .padding(.horizontal, Theme.Space.m)
+        .padding(.vertical, Theme.Space.s)
+        .surface(tint: Theme.caution.opacity(0.06), in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("chat.attention")
+    }
+}
+
+/// 在飞书打开: the system opens it (Feishu takes its own links), not the chat's in-app web sheet.
+struct FeishuLink: View {
+    var url: URL
+
+    var body: some View {
+        Link(destination: url) { Label("在飞书打开", systemImage: Theme.Icon.openExternal).lineLimit(1) }
+            .environment(\.openURL, OpenURLAction { _ in .systemAction })
+            .accessibilityIdentifier("chat.openFeishu")
+    }
+}
+
 struct SuggestionPill: View {
     var text: String
     var fill: () -> Void
@@ -2535,6 +2566,9 @@ struct Composer: View, Equatable {
         VStack(spacing: Theme.Space.s) {
             if let s = model.session(key), s.starting == true || s.startError != nil {
                 StartingNote(error: s.startError, agent: s.agentLabel)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if let s = model.session(key), let reason = s.attentionReason, !reason.isEmpty, s.state == .needsYou {
+                AttentionNote(reason: reason, link: s.externalLink)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if let suggestion {
@@ -2969,6 +3003,7 @@ struct SessionInfoSheet: View {
                 Section { header }
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 4, trailing: 4))
+                if let link = session?.externalLink { Section { FeishuLink(url: link) } }
                 if let info {
                     Section("运行") {
                         row(Theme.Icon.model, "模型", Fmt.model(info.model) ?? info.model)

@@ -485,6 +485,22 @@ if os.environ.get("MOCK_TREE"):
                                  minutes, "「%s」这一步做完了，结果写在最后一条回复里。" % title, **extra))
             if title == "调学习率预热":
                 TREE_MUTED.append("%s/%s" % (mid, sid))
+# MOCK_BOTMUX=1: a botmux session (docs/engines.md「botmux」) that needs you, with botmux's reason and its Feishu topic
+# (attention_reason, external_url), and a working one with only the topic.
+BOTMUX_BLOCKED = "b0700000-0000-4000-8000-000000000001"
+BOTMUX_WORKING = "b0700000-0000-4000-8000-000000000002"
+if os.environ.get("MOCK_BOTMUX"):
+    _bmx = dict(space_kind="botmux", space_id="dir:/home/me/code/report", space_name="report", space_index=9,
+                slot_id=None, slot_name=None, slot_index=None, tab_id=None, workspace_id="dir:/home/me/code/report")
+    SESSIONS += [
+        sess("server", BOTMUX_BLOCKED, "1104 | 修复 | 周报导出", "/home/me/code/report", "blocked", "needs_you", "", 0, "", 0, 2,
+             "导出脚本改好了，正在跑全量。", **_bmx, pane_id="botmux:" + BOTMUX_BLOCKED,
+             attention_reason="⚠️ 本轮执行失败，且不能安全自动续跑。请检查 Web 终端和模型服务状态后，再发一条消息继续。",
+             external_url="https://applink.example.com/client/thread/open?chat=demo&thread=t1"),
+        sess("server", BOTMUX_WORKING, "1104 | 功能 | 看板筛选", "/home/me/code/report", "working", "working", "", 0, "", 0, 1,
+             "筛选条件加好了，在补测试。", **_bmx, pane_id="botmux:" + BOTMUX_WORKING,
+             external_url="https://applink.example.com/client/thread/open?chat=demo&thread=t2"),
+    ]
 # MOCK_SOURCES=1: sessions that do not live in a terminal engine (docs/protocol.md「Codex 来源与能力」): a live Codex
 # app-server thread the phone can write to and join (POST …/attach; joining lets it approve), a Codex history thread it
 # can only read, and an agent runtime's session (DSH: agent_label, no terminal) whose permission card has no
@@ -4062,6 +4078,9 @@ if os.environ.get("MOCK_CARDS") == "1":
             _card({"type": "pie", "segments": [{"label": "a", "value": 1}]}),
         ])),
     ]
+if os.environ.get("MOCK_BOTMUX"):
+    ITEMS[BOTMUX_BLOCKED] = [it("user", "text", 5, text="把周报导出改成按部门分 sheet")] + [
+        it("assistant", "text", 3, text="导出脚本改好了，正在跑全量。")]
 if os.environ.get("MOCK_API_ERRORS") == "1":
     _gpu = ("API Error: 502 upstream stream error: rpc error: code = 13 desc = Req 202610302115A1B2C3D4E5F6 "
             "Session 1ebd0000:7e470000 streamingcall loadbalance failed (target=default, roles=ROLE_DECODE,ROLE_PREFILL): "

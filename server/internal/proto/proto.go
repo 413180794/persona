@@ -551,6 +551,10 @@ type Session struct {
 	Todo *TodoRef `json:"todo,omitempty"`
 	// SpawnFrom is persona_from reported by node for todo derivation (#762), stripped by hub before client push.
 	SpawnFrom string `json:"spawn_from,omitempty"`
+	// AttentionReason is why the session waits for the user, in the host's words (a botmux attention's reason).
+	AttentionReason string `json:"attention_reason,omitempty"`
+	// ExternalURL opens the session where it lives outside Persona (a botmux session's Feishu topic).
+	ExternalURL string `json:"external_url,omitempty"`
 }
 
 // TodoRef is a session's link to an active todo (docs/todos.md).

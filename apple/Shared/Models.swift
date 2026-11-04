@@ -442,6 +442,10 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var startError: String? = nil
     /// The todo this session is linked to, filled by the hub (docs/protocol.md).
     var todo: SessionTodoRef? = nil
+    /// Why it waits for the user, in its host's words (a botmux attention's reason); only while it needs you.
+    var attentionReason: String? = nil
+    /// Where it lives outside Persona (a botmux session's Feishu topic): 在飞书打开.
+    var externalURL: String? = nil
     /// The group of paired hubs it came from (docs/multi-hub.md); nil for the default group. The app's own.
     var hubGroup: String? = nil
 
@@ -511,7 +515,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, subagents, ports,
              updatedAt = "updated_at", lastText = "last_text", activity, activityAt = "activity_at", pendingInteractions = "pending_interactions", rev, suggestion,
-             starting, startError = "start_error", todo, hubGroup = "app_hub_group"
+             starting, startError = "start_error", todo, hubGroup = "app_hub_group",
+             attentionReason = "attention_reason", externalURL = "external_url"
     }
 
     init(from decoder: Decoder) throws {
@@ -568,6 +573,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         starting = try c.decodeIfPresent(Bool.self, forKey: .starting)
         startError = try c.decodeIfPresent(String.self, forKey: .startError)
         todo = try c.decodeIfPresent(SessionTodoRef.self, forKey: .todo)
+        attentionReason = try c.decodeIfPresent(String.self, forKey: .attentionReason)
+        externalURL = try c.decodeIfPresent(String.self, forKey: .externalURL)
         hubGroup = try c.decodeIfPresent(String.self, forKey: .hubGroup)
     }
 }
@@ -699,6 +706,16 @@ extension Session {
     }
 
     var displayTitle: String { title.isEmpty || title == "Claude Code" ? folderName : title }
+    /// The line a list row shows under the title: why it waits for you when its host says so, else the last words.
+    var listPreview: String? {
+        if state == .needsYou, let r = attentionReason, !r.isEmpty { return r } // a stale reason (offline, seen) stays out
+        return lastText.flatMap { $0.isEmpty ? nil : Fmt.plain($0) }
+    }
+    /// 在飞书打开: the session's place outside Persona, a web link only.
+    var externalLink: URL? {
+        guard let s = externalURL, let u = URL(string: s), u.scheme?.lowercased() == "https" else { return nil }
+        return u
+    }
 
     /// Idle or unclassified: folded away in busy spaces.
     var isQuiet: Bool { state == .idle || state == .unknown }

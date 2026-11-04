@@ -194,6 +194,33 @@ func TestBotmuxListsClaudeSessions(t *testing.T) {
 	}
 }
 
+// A session botmux raised attention on says why, and each session links to its Feishu topic when botmux gives one
+// (an https link only); a session that is not waiting for the user carries no reason.
+func TestBotmuxAttentionReasonAndTopicLink(t *testing.T) {
+	n, f, _, home := bmxNode(t)
+	const topic = "https://applink.example.com/client/thread/open?chat=c1&thread=t1"
+	blocked := bmxRow(sidA, "claude-code", "alive", "idle", false, "stuck")
+	blocked["raw"] = map[string]any{"title": "stuck", "feishuThreadLink": topic,
+		"agentAttention": map[string]any{"kind": "blocked", "reason": "⚠️ 本轮执行失败，\n 请检查后再发一条消息继续。"}}
+	working := bmxRow(sidB, "claude-code", "alive", "working", false, "busy")
+	working["raw"] = map[string]any{"title": "busy", "feishuThreadLink": "javascript:alert(1)"}
+	prompt := bmxRow(sidC, "claude-code", "alive", "idle", true, "asks")
+	f.rows = []map[string]any{blocked, working, prompt}
+	for _, id := range []string{sidA, sidB, sidC} {
+		writeTranscript(t, home, bmxCwd, id, time.Now().Add(-time.Minute), `{"type":"user","message":{"role":"user","content":"hi"}}`)
+	}
+	m := byID(listSessions(t, n))
+	if s := m[sidA]; s.Status != proto.StatusBlocked || s.AttentionReason != "⚠️ 本轮执行失败， 请检查后再发一条消息继续。" || s.ExternalURL != topic {
+		t.Errorf("blocked: status %s reason %q url %q", s.Status, s.AttentionReason, s.ExternalURL)
+	}
+	if s := m[sidB]; s.AttentionReason != "" || s.ExternalURL != "" {
+		t.Errorf("working: reason %q url %q", s.AttentionReason, s.ExternalURL)
+	}
+	if s := m[sidC]; s.Status != proto.StatusBlocked || s.AttentionReason != "" {
+		t.Errorf("tui prompt: status %s reason %q", s.Status, s.AttentionReason)
+	}
+}
+
 // One observe answers the refreshes of a moment; botmux not running is no sessions, not a failure.
 func TestBotmuxObserveIsReusedAndOfflineIsEmpty(t *testing.T) {
 	_, f, _, _ := bmxNode(t)

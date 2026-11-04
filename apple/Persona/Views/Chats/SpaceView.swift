@@ -427,8 +427,8 @@ struct SlotCard: View {
             Text(session.state.label + (pending > 0 ? " · \(pending) 件待处理" : ""))
                 .font(Theme.Font.labelStrong)
                 .foregroundStyle(tone.text)
-            if let t = session.lastText, !t.isEmpty {
-                Text(Fmt.plain(t)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(3)
+            if let t = session.listPreview {
+                Text(t).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(3)
             }
             Spacer(minLength: 0)
             if let m = Fmt.model(session.model) { Text(m).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1) }

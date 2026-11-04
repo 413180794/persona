@@ -1720,7 +1720,7 @@ nonisolated struct SlotRow: View, Equatable {
         Group {
             if AppStyle.current.usesBeautifulUI {
                 TaskRow(TaskItem(id: session.key.sessionID, title: session.displayTitle,
-                                 subtitle: session.lastText.flatMap { $0.isEmpty ? nil : Fmt.plain($0) }, footnote: meta,
+                                 subtitle: session.listPreview, footnote: meta,
                                  status: .pending(step: 0)),
                         shape: taskShape(), accessory: surface == .none ? .none : .disclosure, titleLines: 2, subtitleLines: 1) {
                     if dot { AgentStateBadge(state: session.state).padding(.leading, indented ? Theme.Space.l : 0) }
@@ -1747,7 +1747,7 @@ nonisolated struct SlotRow: View, Equatable {
                             Spacer(minLength: 4)
                             AgentTimeText(time: time, fallback: session.updatedAt, font: Theme.Font.label)
                         }
-                        if let last = session.lastText.flatMap({ $0.isEmpty ? nil : Fmt.plain($0) }) {
+                        if let last = session.listPreview {
                             Text(last).font(Theme.Font.secondary).lineHeight(.secondary).foregroundStyle(.secondary).lineLimit(2)
                         }
                         HStack(spacing: Theme.Space.xs) {

@@ -478,6 +478,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 		s := proto.Session{
 			SessionID: id, Cwd: a.Cwd, Status: a.AgentStatus, PaneID: a.PaneID, TabID: a.TabID,
 			WorkspaceID: a.WorkspaceID, AgentName: a.Name, Title: a.Title, Agent: a.Agent,
+			ExternalURL: a.ExternalURL,
 		}
 		switch a.Agent {
 		case "codex":
@@ -497,6 +498,9 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 			s.Status = proto.StatusIdle
 		}
 		n.mu.Unlock()
+		if s.Status == proto.StatusBlocked { // only while it still waits (not once the phone drives it)
+			s.AttentionReason = a.Attention
+		}
 		s.Suggestion = n.noteStatus(id, a.Agent, a.PaneID, s.Status) // suggestion.go
 		if p := n.transcriptPath(id); p != "" {
 			if st, err := os.Stat(p); err == nil {
@@ -1199,6 +1203,7 @@ func listKey(list []proto.Session) string {
 		if s.Activity != "" { // a new step shows at once, not with the next 10 s of updated_at
 			fmt.Fprintf(&b, "activity:%s/%d\n", s.Activity, unixOf(s.ActivityAt))
 		}
+		fmt.Fprintf(&b, "attention:%q/%s\n", s.AttentionReason, s.ExternalURL) // a new reason or link alone is a change
 		fmt.Fprintf(&b, "source:%s/%s/%s/%s/%v/%v/%s/%s\n", s.SourceKind, s.SourceThreadID, s.SourceInstanceID, s.ReadOnlyReason, s.Capabilities, s.Attached, s.CodexRoute, s.CodexRouteNote)
 		for _, t := range s.Background {
 			b.WriteString(t.ID + ",")
