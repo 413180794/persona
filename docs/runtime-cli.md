@@ -243,6 +243,7 @@ JARVISCTL_UDID=<udid> HUB=… scripts/app/cli-tests/agents_list.py 1 quick_filte
 ```
 
 每一轮每个用例一行 `PASS` / `FAIL`、耗时、失败原因，最后一行一个用例的汇总；有失败退出码不为 0。`CLITEST_LOG=<文件>` 再追加一份 tab 分隔的结果。
+失败的那一轮当场存下现场：`CLITEST_OUT`（默认 `<临时目录>/clitest`）下这次运行的 `<时间>/<用例>-<轮>/`，有 `why.txt`（原因和脚本停在哪一行）、`snapshot.png`、`tree.json`、`state.json`，`FAIL` 那行末尾给出目录；App 已经答不了（崩了）时只留 `why.txt` 和 `dump-errors.txt`。3 次挂 1 次的失败不一定重跑得出来，先看这里。
 要先装好 `idb`（菜单项、滑动、长按是真实触摸）。
 
 | CLI 用例 | 对应的 XCUITest |

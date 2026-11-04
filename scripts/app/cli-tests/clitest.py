@@ -2,12 +2,15 @@
 
 A case is a function taking a `T`. `run(cases, setup, runs, launch)` launches the app once, calls `setup(t)` before each
 case (no relaunch: the mock is reset and the app moved back to where the case starts), times every case, prints one line
-per run and a summary, and exits non-zero when any run failed. docs/runtime-cli.md「用 CLI 写的 UI 用例」.
+per run and a summary, and exits non-zero when any run failed. A failed run leaves the screen as it was then in
+CLITEST_OUT (default <tmp>/clitest)/<time>/<case>-<run>/: `dump`. docs/runtime-cli.md「用 CLI 写的 UI 用例」.
 """
+import base64
 import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 import traceback
 import urllib.request
@@ -123,29 +126,67 @@ def to_agents(t):
     t.see("the Agents list", timeout=5, id="agents.filter.all")
 
 
+def dump(c, d, why, trace):
+    """What there was to see when a run failed, in directory `d`: why.txt (the reason and where the script stopped),
+    snapshot.png, tree.json, state.json. Re-running is the only other way to look, and a failure 1 time in 3 may not
+    come back (`the row is gone`). What the app cannot answer (it crashed, 5 s each) is written to dump-errors.txt."""
+    d = os.path.abspath(d)  # the app writes snapshot.png: a relative path would be the app's own directory
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, "why.txt"), "w") as f:
+        f.write(why + "\n\n" + trace)
+    errors = []
+
+    def snapshot():
+        if not c.via_hub:  # the simulator's files are the Mac's: the app writes it
+            return c.call("snapshot", _timeout=5, path=os.path.join(d, "snapshot.png"))
+        with open(os.path.join(d, "snapshot.png"), "wb") as f:
+            f.write(base64.b64decode(c.call("snapshot", _timeout=5)["png"]))
+
+    def save(name, value):
+        with open(os.path.join(d, name), "w") as f:
+            json.dump(value, f, ensure_ascii=False, indent=1)
+
+    steps = {"snapshot.png": snapshot,
+             "tree.json": lambda: save("tree.json", c.call("tree", _timeout=5)["elements"]),
+             "state.json": lambda: save("state.json", c.call("state", _timeout=5))}
+    for name, do in steps.items():
+        try:
+            do()
+        except Exception as e:  # whatever goes wrong here, the run goes on to the next case
+            errors.append(f"{name}: {e}")
+    if errors:
+        with open(os.path.join(d, "dump-errors.txt"), "w") as f:
+            f.write("\n".join(errors) + "\n")
+    return d
+
+
 def run(cases, setup, runs, launch):
     """`launch(ctl)` once, then every case `runs` times, each after `setup(t)`. CLITEST_LOG: one tab-separated line per
     run appended there (case, run, ok, seconds, why)."""
     c = Ctl()
     t = T(c)
     t0 = time.time()
+    dumps = os.path.join(os.environ.get("CLITEST_OUT") or os.path.join(tempfile.gettempdir(), "clitest"),
+                         time.strftime("%Y%m%d-%H%M%S"))  # a run of its own: nothing left from an earlier one
     launch(c)
     allow_alerts(c)
     out = []
     for r in range(runs):
         for case in cases:
             s = time.time()
-            ok, why = True, ""
+            ok, why, trace, saved = True, "", "", ""
             try:
                 setup(t)
                 case(t)
             except (Fail, CtlError) as e:
-                ok, why = False, str(e)
+                ok, why, trace = False, str(e), traceback.format_exc()
             except Exception as e:  # a bug in the script itself
-                ok, why = False, "".join(traceback.format_exception_only(type(e), e)).strip()
+                ok, why, trace = False, "".join(traceback.format_exception_only(type(e), e)).strip(), traceback.format_exc()
             d = time.time() - s
+            if not ok:
+                saved = "\t" + dump(c, os.path.join(dumps, f"{case.__name__}-{r + 1}"), why, trace)
             out.append((case.__name__, r + 1, ok, d, why))
-            print(f"{case.__name__}\trun {r + 1}\t{'PASS' if ok else 'FAIL'}\t{d:.1f} s\t{why}", flush=True)
+            print(f"{case.__name__}\trun {r + 1}\t{'PASS' if ok else 'FAIL'}\t{d:.1f} s\t{why}{saved}", flush=True)
     print(f"total {time.time() - t0:.1f} s")
     for case in cases:
         rows = [o for o in out if o[0] == case.__name__]
