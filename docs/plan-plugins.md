@@ -65,7 +65,7 @@
 - [ ] 第 2 步（App，#1259，进行中）：额度的网关名用 hub 给的 `gateway_name`（不再写死），假 hub 的示例网关换成中性的；设置 › 模型供应商 › 新增「从插件添加」。
 - [x] 两个额度插件已在私有插件仓库，装在用户的 hub 上实测：经 node 代发查到 `~/.zshrc` 启动器的额度，不认识的网关回「查不了」。
 - [x] 第 3 步（服务端）：lark-connector 整条飞书链路（含公司圈）迁成私有插件，hub 自己的那份已删（3c，#1520），见下面「第 3 步的方案」「第 3 步做下来」。TRAEX 留在开源仓库（已拍板）。
-- [ ] 第 3 步（客户端，3d，#1530）：飞书界面按 `features` 显示，「公司圈」的通用叫法（网页已做）。
+- [x] 第 3 步（客户端，3d，#1530）：飞书界面按 `features` 的 `lark` / `lark_moments` 显示（网页 #1542、iOS / Mac #1575、Android #1622），「公司圈」的通用叫法，帖子标题用存档的 feed 名。
 - [x] **第 4 步（服务端，#1284）**：扩展点 `ui`（`plugin_page` / `launcher_section`，`ui.render` / `ui.action`，View 是几种固定的条目，hub 按 `plugin.CheckView` 把关；
   启动器页的一节经 `gateway.http` 用 Key 访问网关，插件看不到 Key）和 `events`（`inbox.changed`、`agent.needs_you`、`agent.finished`，只通知，订阅随权限一起同意）。
   规格在 `docs/plugins.md`「声明式 UI」「事件」。
