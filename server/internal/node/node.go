@@ -32,6 +32,10 @@ type Node struct {
 	Version string
 	updater *nodeupdate.Manager // resident-owned, shared across attach connections
 
+	// bootAt: when this node started. A session whose record says it was started in a pane before this ran in the
+	// previous herdr server, so the restart is what ended it (interrupted.go).
+	bootAt time.Time
+
 	home string
 	dir  string // ~/.jarvis
 	bin  string // absolute path of this executable
@@ -164,6 +168,7 @@ func New(version string) (*Node, error) {
 	}
 	n := &Node{
 		Version:  version,
+		bootAt:   time.Now().UTC(), // sessions started before this were the previous herdr server's (interrupted.go)
 		home:     home,
 		dir:      dir,
 		bin:      bin,

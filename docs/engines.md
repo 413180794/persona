@@ -136,8 +136,12 @@ herdr server 重启后会恢复工作区、标签页、窗格，**客户端 atta
 - 这一版之前起的、node 重启前起的 Persona 会话（node 的会话记录里有它的启动器）：node 刷新时看到它在 herdr 里跑，就补报一次。
 - Claude 在窗格里换了会话（`/clear`），Persona 的 SessionStart hook 到时重报一次新 id：herdr 不会自己跟着改（v0.9.5 实测）。
 - 恢复命令不带权限模式、思考强度；路径里有单引号的（herdr 不收带 `'` 的参数）不报，退回 herdr 自己的恢复。
-- node 拉起的 headless server 没有客户端 attach，herdr 不会自己续 agent：要等有人 attach（电脑上打开 herdr）。从手机「继续」一个未运行的会话照常可用；
-  「被重启中断」的标记和「全部继续」是后续（#1879）。
+- node 拉起的 headless server 没有客户端 attach，herdr 不会自己续 agent：要等有人 attach（电脑上打开 herdr）。从手机「继续」一个未运行的会话照常可用。
+- **被重启中断**（#1917）：重启前在跑的会话，重启后列成 `interrupted`（`docs/agent-states.md`），带「继续」。判定是 node 记着「这个会话在哪个窗格里起过、
+  什么时候起的」（hub 的 settings 里的会话记录），而那个时刻早于本次 node 启动、现在又没有活着的 agent。node 自己开的会话（启动时刻晚于本次启动）不算，
+  用户的终端里自己开的也不算（记录里没有窗格）。默认不自动续：重启可能落在一次工具调用的中间，接不接着跑由用户决定。点「继续」走的是普通的
+  `session.start {resume}`，在新的窗格里用启动器 `--resume` 起来。
+- 一次「全部继续」还没有（要按机器批量起，客户端那一半）。
 
 ## 选不了某个引擎时
 

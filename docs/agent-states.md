@@ -12,6 +12,7 @@ App、手表、推送都只认这一套状态（`proto.Session.state`，hub 计�
 | `unread` 完成未看 | 一轮做完，结果还没看 | `done`（herdr 没被聚焦过） | 且 App 里在它完成之后没看过 | 绿 |
 | `idle` 已看 | 做完且看过，等输入 | `idle`（herdr 里看过） | 或 herdr 还是 `done` 但 App 里看过 | 灰 |
 | `offline` 未运行 | 不在宿主里，只有 transcript，发消息会 `--resume` | — | — | 浅灰 |
+| `interrupted` 被重启中断 | 重启前在跑，重启把 herdr 的窗格一起带走了（#1917） | — | 记录里有窗格、启动时刻早于本次 node 启动，且现在没有活着的 agent | 浅灰，带「继续」 |
 | `unknown` 未知 | 宿主认出了 agent 但判断不了状态 | `unknown` | — | 灰 |
 
 排序优先级：需要你 → 工作中 → 完成未看 → 已看 → 未知 → 未运行。

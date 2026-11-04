@@ -640,7 +640,9 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 	for _, s := range n.codexSessions(seen) {
 		out = append(out, s)
 	}
-	for _, s := range n.offline(seen) {
+	offlineRows := n.offline(seen)
+	n.markInterrupted(offlineRows, seen) // the restart cut these off (#1917)
+	for _, s := range offlineRows {
 		n.decorate(&s)
 		out = append(out, s)
 	}
@@ -750,7 +752,7 @@ func (n *Node) scanOffline() []proto.Session {
 		n.setGuessedPath(id, c.path)
 		s := proto.Session{
 			SessionID: id, Title: m.title, Cwd: m.cwd, Status: proto.StatusOffline, Model: m.model,
-			Agent: "claude",
+			Agent:    "claude",
 			LastText: snippet(m.lastText), UpdatedAt: lastUsed(m, c.st), Rev: c.st.Size(),
 		}
 		s.Activity, s.ActivityAt = m.activityOf()

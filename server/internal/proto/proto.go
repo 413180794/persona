@@ -522,6 +522,10 @@ const (
 	StatusDone    = "done"
 	StatusUnknown = "unknown"
 	StatusOffline = "offline"
+	// StatusInterrupted: it was running in a pane when the node restarted, which took herdr's panes with it. The
+	// conversation is still resumable (session.start with resume) but nothing carries it on until the user says so
+	// (#1917, interrupted.go in the node).
+	StatusInterrupted = "interrupted"
 )
 
 // Unified agent states (docs/agent-states.md).
