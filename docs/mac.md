@@ -99,6 +99,15 @@
     要从 AppKit 那边 `NSToolbarItem.isHidden`）。原型在本地分支 `wip/390-tabview-keepalive`，没合。
     量法：cua-driver 点无障碍元素会让 App 一直维护无障碍树（每次点击另有几十毫秒），按快捷键要用 `background` 投递
     （`foreground` 每次把窗口切到前台再切回去，活跃 / 不活跃各重画一遍）；`sample` 主线程看去向。
+    **更正（2026-11-04，#1141）**：`background` 发的菜单快捷键（⌘1…⌘6、⌘]）到不了菜单，cua 改走无障碍去按菜单项，
+    App 为此把所有菜单「模拟打开」一遍（`NSMenu _simulateOpening`、`_populateWithEventRef`），每按一次多花 60–300 ms，上面的数都偏大。
+    现在的量法：先 `bring_to_front` 把副本放到最前，再用 `foreground` 发快捷键（App 已经在前面，不来回切换活跃状态，是真的按键事件），
+    `ps -o cputime` 量按键后 1.2–1.5 秒的进程 CPU（按键前后各读一次相减；cua 的命令行 `cua-driver hotkey` 本身要 1 秒多，CPU 不算在 App 上）。
+    同一个 Debug 副本、同一个假 hub（2026-11-04，master 28b593fb）：
+    - 切分区（真按键 / 无障碍路线）：Persona 约 170 / 290、Agents 约 240 / 370、收件箱约 200 / 330、知识库约 120 / 260、机器约 440 / 520、设置约 140 / 230 ms；
+      机器页里迷你曲线（每张卡 3 个 Swift Charts、每个点一个 mark）占约 150 ms：换成空视图后切过去约 280 ms。
+    - 点开对话（⌘] 下一个 Agent）：真按键有缓存的 120–190 ms、第一次打开 180–360 ms（`MOCK_LONG_HISTORY=1` 的长对话也在内）；无障碍路线 350–450 ms。
+      11-02 记的「点开一个对话 450–950 ms」是无障碍路线量的，真按键在「首屏 < 200 ms」的目标以内。没测过真实 hub 上很长的对话。
   - 空闲 CPU（锁屏时起体验实例，`ps -o cputime` 量 20 秒）：停在 Agents 页（`-tab dev`）什么都不动占一个核的 14%；
     停在体验模式默认打开的收件箱是 0。来源是「需要你」圆点的呼吸圈（`StatusDot`）：iOS 用 30 Hz 的 `TimelineView` 画，
     Mac 上每一帧都让托管视图重新算约束、整个窗口重新布局。Mac 改成 Core Animation 画同一个圈（`Mac/Design/MacBreathingRing.swift`，
