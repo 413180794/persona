@@ -21,6 +21,24 @@
 - **没有「前台进程组」和「挂起」**：Orca 宿主在 Windows 上把「父进程链上没有同一窗格的 agent 进程」的 claude / codex 当作在前台，见 [windows.md](../windows.md)「Orca」。
 - **pid 会很快复用、也不递增**：按 pid 大小排「包装在前」在 Windows 上不成立，按启动时间排；顺着父进程链找祖先时要求祖先比自己先启动。
 
+## 计划任务（开机自启）
+
+`jarvis-link install` 在 Windows 上注册计划任务（[windows.md](../windows.md)「安装和开机自启」）。都是 2026-11-04 在 Windows 11 真机上试出来的：
+
+- **标准用户注册不了「不管是否登录都运行」的任务**：`LogonType` 用 S4U（不存密码）时 `Register-ScheduledTask` 报拒绝访问（没提权的管理员账号也一样）。
+  只能 `InteractiveToken`，跟着登录会话跑。
+- **「失败后重启」不管程序退出**：`RestartOnFailure` 只在任务起不来时重启；程序以退出码 1 结束后 4 分钟都没再起。要看护就加一个每几分钟一次的触发，
+  多实例策略 `IgnoreNew`（在跑就什么都不做）。
+- **登录触发器上的「重复」要到下次登录才开始**：刚装好、没重新登录前它不会每 5 分钟起一次。看护用单独的时间触发（`StartBoundary` 写安装那一刻），重启后照样按时触发。
+- **控制台程序会弹窗口**：用户会话里的任务起控制台程序，会给它开一个控制台窗口（默认终端是 Windows Terminal 时是 Windows Terminal 的窗口）。
+  任务改起 GUI 子系统的程序（把 PE 头的 Subsystem 从 3 改成 2 的一份副本），由它用 `CREATE_NO_WINDOW` 起控制台程序：有控制台、没窗口。
+- **默认值要改**：`ExecutionTimeLimit` 默认 72 小时，到点结束任务（写 `PT0S`）；`Priority` 默认 7 是「低于正常」（写 5）；默认用电池时不启动、拔电源就停。
+- **schtasks 的输出是系统代码页**（中文系统是 GBK），`/Query` 的状态列是本地化的字（Running / 正在运行）：只拿来显示，不解析。
+  XML 文件写成 UTF-16LE 带 BOM，用户名、路径里有中文也不会乱。
+- **结束任务只杀守护进程本身**：它起的子进程会留下来。守护进程把自己放进 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` 的 Job（之后起的进程自动在里面），
+  它一没（`/End`、崩溃、被杀）子进程跟着没。
+- 跑着的 `.exe` 不能覆盖也不能删：重装前先 `/End` 任务、等 jarvis-link 放开运行锁；卸载时守护进程的文件可能要等一下才删得掉。
+
 ## Orca
 
 - **Windows 版 Orca 的 runtime 走命名管道**：`orca-runtime.json` 的 `transports` 是 `named-pipe`（`\\.\pipe\orca-<pid>-…`）和 `websocket`，没有 `unix`。

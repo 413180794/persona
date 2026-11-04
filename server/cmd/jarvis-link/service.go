@@ -147,7 +147,7 @@ func install(e *env, args []string) error {
 		return errors.New("--pair（我去连 hub）和 --listen（让 hub 来连）只能选一个")
 	}
 	switch e.goos {
-	case "linux":
+	case "linux", "windows":
 	case "darwin":
 		return errors.New("Mac 上不用 install：装菜单栏 App「Persona Link」（scripts/mac-link.sh install），它带着 jarvis-link 和 jarvisd、" +
 			"管着它们，登录时启动在它的菜单里勾")
@@ -176,6 +176,9 @@ func install(e *env, args []string) error {
 		} else if err != nil {
 			return err
 		}
+	}
+	if e.goos == "windows" {
+		return installTask(e, withNode, jarvisd, invite) // winservice.go
 	}
 	bin, copied, err := e.installBinary()
 	if err != nil {
@@ -221,10 +224,16 @@ func install(e *env, args []string) error {
 	if !e.lingering() {
 		fmt.Fprintf(e.stdout, "注意：没开 linger，退出登录后服务就停、开机也不会自己起来。让它一直跑：sudo loginctl enable-linger %s\n", e.userOr("$USER"))
 	}
+	return waitStarted(e, started, oldPID, invite)
+}
+
+// waitStarted is install's end once the service is (re)started: wait for the link (passive mode: for it to listen,
+// then print the pairing link for the hub), or say how to pair when it is not paired yet.
+func waitStarted(e *env, started time.Time, oldPID int, invite *link.PairInvite) error {
 	if c, _ := link.Read(e.configPath()); c.CurrentMode() == link.ModePassive {
 		err := waitConnected(e, started, oldPID)
 		printInvite(e, invite)
-		fmt.Fprintln(e.stdout, firewallHint(c.Passive.ListenAddr()))
+		fmt.Fprintln(e.stdout, firewallHint(e.goos, c.Passive.ListenAddr()))
 		return err
 	}
 	if _, err := link.Load(e.configPath()); err != nil {
@@ -368,6 +377,8 @@ func uninstall(e *env, args []string) error {
 	}
 	unit := e.unitPath()
 	switch {
+	case e.goos == "windows":
+		uninstallTask(e) // winservice.go
 	case e.goos != "linux":
 	case fileExists(unit):
 		if why := e.systemdMissing(); why == "" {
@@ -394,8 +405,12 @@ func uninstall(e *env, args []string) error {
 	}
 	cfg := e.configPath()
 	var gone []string
-	for _, p := range []string{cfg, cfg + ".lock", cfg + ".run", cfg + ".tmp", link.StatusPath(cfg), link.StatusPath(cfg) + ".tmp",
-		e.logPath(), e.logPath() + ".1", e.binPath()} {
+	files := []string{cfg, cfg + ".lock", cfg + ".run", cfg + ".tmp", link.StatusPath(cfg), link.StatusPath(cfg) + ".tmp",
+		e.logPath(), e.logPath() + ".1", e.binPath()}
+	if e.goos == "windows" { // the supervisor's (winservice.go); a running jarvis-link.exe cannot remove itself
+		files = append(files, e.serviceLog(), e.serviceLog()+".1", filepath.Join(e.jarvisDir(), "link-service.run"))
+	}
+	for _, p := range files {
 		if err := os.Remove(p); err == nil {
 			gone = append(gone, p)
 		}
@@ -412,7 +427,11 @@ func uninstall(e *env, args []string) error {
 	} else {
 		fmt.Fprintf(e.stdout, "删掉了：%s\n", strings.Join(gone, "、"))
 	}
-	fmt.Fprintln(e.stdout, "hub 那边这台的凭据在 App 的「设置 › 设备」里撤销（被动模式的在 hub 管理界面的「电脑」里删掉这台）。常驻 node 的服务留着：jarvis-link node uninstall。")
+	nodeLine := "常驻 node 的服务留着：jarvis-link node uninstall。"
+	if e.goos == "windows" {
+		nodeLine = "常驻 node 随计划任务一起停了，" + e.nodeBin() + " 留着。"
+	}
+	fmt.Fprintln(e.stdout, "hub 那边这台的凭据在 App 的「设置 › 设备」里撤销（被动模式的在 hub 管理界面的「电脑」里删掉这台）。"+nodeLine)
 	return nil
 }
 

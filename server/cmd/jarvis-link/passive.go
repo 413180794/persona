@@ -27,12 +27,14 @@ func pairListen(e *env, listen string, addrs []string) error {
 	if before != nil && before.Passive.Paired() {
 		fmt.Fprintf(w, "现在配对的是 hub%s；别的 hub 用这条链接配对以后，它就连不进来了。\n", passiveHubText(before.Passive))
 	}
-	fmt.Fprintln(w, firewallHint(inv.Listen))
+	fmt.Fprintln(w, firewallHint(e.goos, inv.Listen))
 	switch {
 	case link.Running(e.configPath()):
 		fmt.Fprintln(w, "在运行的 jarvis-link 一两秒内就开始监听，不用重启。")
 	case e.goos == "linux":
 		fmt.Fprintln(w, "接下来：jarvis-link install --listen（装成 systemd 用户服务，一直监听），或者前台跑 jarvis-link run。")
+	case e.goos == "windows":
+		fmt.Fprintln(w, "接下来：jarvis-link install --listen（装成登录时启动的计划任务，一直监听），或者前台跑 jarvis-link run。")
 	default:
 		fmt.Fprintln(w, "接下来让 jarvis-link 跑起来（Mac 上是菜单栏 App「Persona Link」；也可以前台跑 jarvis-link run）。")
 	}
@@ -40,10 +42,15 @@ func pairListen(e *env, listen string, addrs []string) error {
 }
 
 // firewallHint says which port to open, and to whom.
-func firewallHint(listen string) string {
+func firewallHint(goos, listen string) string {
 	_, port, err := net.SplitHostPort(listen)
 	if err != nil {
 		port = strings.TrimPrefix(listen, ":")
+	}
+	if goos == "windows" {
+		return fmt.Sprintf("防火墙：只对 hub 放行 TCP %s，别对所有人开（Windows 防火墙，在管理员的 PowerShell 里："+
+			"New-NetFirewallRule -DisplayName 'Persona Link' -Direction Inbound -Protocol TCP -LocalPort %s -RemoteAddress <hub 的地址> -Action Allow）。"+
+			"hub 经代理连进来时放行的是代理的地址。", port, port)
 	}
 	return fmt.Sprintf("防火墙：只对 hub 放行 TCP %s，别对所有人开（例如 ufw：sudo ufw allow from <hub 的地址> to any port %s proto tcp；"+
 		"firewalld、nftables、路由器同理）。hub 经代理连进来时放行的是代理的地址。", port, port)
@@ -114,7 +121,7 @@ func modeCmd(e *env, args []string) error {
 		fmt.Fprintln(e.stdout, "主动模式还没配对：jarvis-link pair '<jarvisd hub pair --machine <这台的 id> 给的链接>'。")
 	}
 	if mode == link.ModePassive {
-		fmt.Fprintln(e.stdout, firewallHint(c.Passive.ListenAddr()))
+		fmt.Fprintln(e.stdout, firewallHint(e.goos, c.Passive.ListenAddr()))
 	}
 	if link.Running(e.configPath()) {
 		fmt.Fprintln(e.stdout, "在运行的 jarvis-link 一两秒内就换过去。")

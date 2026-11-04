@@ -8,7 +8,7 @@ hub 在别处（WSL2 / Docker / 另一台机器）。需求和分步见 #1090，
 | 能力 | Windows（Orca） | 说明 |
 | --- | --- | --- |
 | 编译 | ✅ | `GOOS=windows go build ./...`；进程组、信号、文件锁、CPU 时间在 `internal/osproc` 和各包的 `_windows.go` |
-| 常驻 node、jarvis-link 主动模式 | ✅ | 手动在前台跑（下面「怎么跑」）；开机自启、安装器还没有（#1090 第三步） |
+| 常驻 node、jarvis-link 主动模式 | ✅ | `jarvis-link install` 装成登录时启动的计划任务，退出了自动重启、不弹窗口（下面「安装和开机自启」）；没有一键安装脚本和安装包（#1179） |
 | 列出 Orca 会话、状态 | ✅ | 和 macOS 一样每秒一次快照 |
 | 读对话记录、会话信息 | ✅ | `%USERPROFILE%\.claude\projects\<编码后的目录>\<id>.jsonl`，目录编码规则和 Claude Code 一样（非字母数字都换成 `-`，`C:\Users\…` → `C--Users-…`） |
 | 发消息（多行一整条）、按键、打断 | ✅ | ConPTY 下括号粘贴照常 |
@@ -17,8 +17,66 @@ hub 在别处（WSL2 / Docker / 另一台机器）。需求和分步见 #1090，
 | 从手机新建会话、继续未运行的会话 | ❌ | Orca 引擎在所有平台上都还不支持（[plan-orca-support.md](plan-orca-support.md)「第二期」），不是 Windows 的问题 |
 | 端口转发、机器监控、Codex / TRAEX 发现 | ❌ | 依赖 `ps` / `lsof` / `/proc`，Windows 上安静地不可用（#1179） |
 | node 自己起的进程：受管启动器、`codex` 启动、自更新 | ❌ | 用 `syscall.Exec`，Windows 上能编译但跑不通；Orca 引擎用不到 |
+| 经 hub 更新常驻 node（[node-update.md](node-update.md)） | ❌ | node 报告不支持（「常驻 node 未由 launchd/systemd 管理」），App 里看得到原因；升级是再跑一次 `jarvis-link install --jarvisd <新的 personad.exe>` |
+| 被动模式（hub 来连这台） | 没验证 | 能编译、`install --listen` 走同一条路；Windows 防火墙要自己放行端口（`install` 打印 `New-NetFirewallRule` 的写法） |
+
+## 安装和开机自启
+
+```powershell
+cd server
+go build -o personad.exe .\cmd\personad
+go build -o jarvis-link.exe .\cmd\jarvis-link
+.\jarvis-link.exe install --jarvisd .\personad.exe --pair '<hub 给的 jarvis://link?… 链接>'   # 配对过的不用 --pair
+```
+
+不要管理员。`install` 在 Windows 上依次做：
+
+1. 带 `--pair` 先配对，`--listen` 改成被动模式（同 Linux，见 [link.md](link.md)「Linux（headless）」）。
+2. 计划任务在跑就先结束它（跑着的程序文件换不掉），等 jarvis-link 放开运行锁。还有别的 jarvis-link 在跑（比如前台的 `jarvis-link run`）时提示停掉它。
+3. 把自己复制成 `~/.persona/bin/jarvis-link.exe`；`--jarvisd` 给的 personad 复制成 `~/.persona/bin/jarvisd.exe`。和 Linux 不同，给了就换：
+   Windows 上还没有经 hub 更新 node，再跑一次 `install` 就是升级。没给又没有 `jarvisd.exe` 时只装 jarvis-link（`--no-node` 同）。
+4. 再放一份 `~/.persona/bin/jarvis-link-service.exe`：同一个程序，只把 PE 头里的子系统从控制台改成 GUI（`guicopy.go`）。
+5. 写 `~/.persona/jarvis-link-task.xml`（UTF-16），`schtasks /Create /XML` 注册计划任务「Persona Link」，`schtasks /Run` 启动，等连上 hub（同 Linux，最多 20 秒）。
+
+计划任务「Persona Link」：
+
+- **当前用户，跟着登录会话跑**（`InteractiveToken`）。标准用户注册不了「不管是否登录都运行」的任务（S4U，真机上拒绝访问；存密码的那种要管理员），
+  node 也得在用户会话里才看得到 Orca 和它的 agent。代价：没登录 Windows 时不在，注销就停，再登录时自己起来。
+- **触发**：登录时；外加从安装那一刻起每 5 分钟一次。多实例策略是「忽略新的」：守护进程在跑时什么都不做，没了 5 分钟内拉回来。
+  不用计划任务自己的「失败后重启」：它只管任务起不来，程序以非 0 退出不算（真机上试过）。登录触发器上的「重复」要到下次登录才开始，所以另加时间触发。
+- 不限运行时间（默认 72 小时就结束任务）、用电池也跑、空闲结束也不停、正常优先级（默认 7 是「低于正常」，CPU 和磁盘都低）。
+- **跑的是守护进程** `jarvis-link-service.exe supervise`（`supervise_windows.go`）：以 `CREATE_NO_WINDOW` 拉起 jarvis-link（`run --log ~/.persona/link.log`）
+  和常驻 node（`jarvisd.exe node --attach`，日志 `~/.persona/node-attach.log`，满 10 MB 挪到 `.1`），谁退出了分别 5 秒、10 秒后重启（同 Linux 两个单元的 `RestartSec`）；
+  它自己干了什么写 `~/.persona/link-service.log`（jarvis-link 崩溃时的输出也在这里）。一台电脑只跑一个守护进程（`~/.persona/link-service.run` 的文件锁）。
+- 守护进程把自己放进一个「最后一个句柄关掉就杀掉里面所有进程」的 Job：守护进程没了（结束任务、再 install / uninstall、注销、崩溃），
+  jarvis-link 和 node 跟着没，计划任务再拉起它时不会和留下的旧进程抢。
+
+**为什么要一份 GUI 子系统的副本**：计划任务在用户会话里起控制台程序，会给它开一个控制台窗口（默认终端是 Windows Terminal 时开一个 Windows Terminal 窗口），
+一直挂在桌面上；GUI 子系统的程序没有窗口，它再用 `CREATE_NO_WINDOW` 起的控制台程序有控制台、没有窗口。复制而不是另编一个：不管 `jarvis-link.exe`
+是发布的还是自己 `go build` 的，守护进程都是同一个程序。没用的办法：`conhost --headless`（没有文档）、VBScript 包一层（VBScript 正在被 Windows 移除）、
+`powershell -WindowStyle Hidden`（还是会闪一下窗口）。
+
+| 命令 | Windows 上 |
+| --- | --- |
+| `jarvis-link status` | 多一行「后台服务：计划任务「Persona Link」· 状态 · 登录时启动」，状态是 schtasks 按系统语言给的（Running / 正在运行…），只显示不解析 |
+| `jarvis-link uninstall [--purge]` | 结束并删掉计划任务（node 一起停），删 `jarvis-link-task.xml` 和 `jarvis-link-service.exe`；`--purge` 同 Linux，另删守护进程的日志和锁 |
+| `jarvis-link node install` / `node uninstall` | 不单独装：node 在同一个计划任务里，用 `install`（带 node）/ `install --no-node` |
+| `jarvis-link node status [--json]` | 计划任务里有没有 node，任务的状态 |
+
+## hub 在这台电脑的 Docker Desktop 里
+
+验收时 hub 和 node 在同一台 Windows 上：hub 用 Docker Desktop（WSL 2）跑，node 和 jarvis-link 在 Windows 这边。
+
+- WSL 开了镜像网络（`.wslconfig` 里 `networkingMode=mirrored`）时，Docker 发布的端口只在 Windows 的 `127.0.0.1` 上能连，局域网和 Tailscale 的地址都连不上
+  （要放开得改 Hyper-V 防火墙，要管理员）。
+- 本机的 jarvis-link 连 `127.0.0.1`：hub 广告的候选地址里没有回环地址时手动加 `jarvis-link address add https://127.0.0.1:<hub 的 TLS 端口>`。
+- 手机经 Tailscale 连：这台把 tailnet 上的端口转到本机，`tailscale serve --bg --tcp <端口> tcp://127.0.0.1:<端口>`（TCP 原样转发，TLS 仍由 hub 自己做，
+  钉的还是 hub 的证书），hub.json 的 `public.advertise` 写上 `https://<这台的 Tailscale 地址>:<端口>`。
+- 给手机配对新 hub 用 App 的「设置 › hub › 添加 hub」，不要点根配对链接：那会替换掉手机上原有的配对（[lessons/android.md](lessons/android.md)）。
 
 ## 怎么跑（手动，开发和验收用）
+
+装了计划任务的机器先 `schtasks /End /TN "Persona Link"`（或者 `jarvis-link uninstall`），否则前台的和计划任务里的两个 jarvis-link、两个 node 会抢。
 
 ```powershell
 cd server
@@ -56,6 +114,17 @@ node 的 `node.sock`、`runtime.sock`、`node-attach.sock` 在 Windows 上照旧
 node 在 Windows 上跑启动器探测、`claude --version` 这类 shell 脚本时用 Git for Windows 的 bash（`loginShellProgram`：`CLAUDE_CODE_GIT_BASH_PATH`，
 否则从 `git` 的位置和常见安装目录找），和 Claude Code 自己在 Windows 上一样。不用裸的 `bash`：服务拿到的 PATH 里 `System32\bash.exe` 在前，它是 WSL。
 找不到 Git Bash 时这些命令起不来（机器信息里没有 Claude 版本），不会跑到 WSL 里去。
+
+## 验证记录：安装和开机自启（2026-11-04，同一台 Windows 11 真机）
+
+- 用 `jarvis-link install --jarvisd personad.exe` 换掉之前手工加的注册表 Run 项：计划任务注册、启动，几秒内连上 hub、本机 node 在线；
+  hub 的 `GET /api/v1/machines` 里这台在线、引擎 Orca，`GET /api/v1/sessions` 里有 Orca 的 10 个窗格。
+- 进程：svchost（计划任务）→ `jarvis-link-service.exe supervise` → `jarvis-link.exe run`、`jarvisd.exe node --attach`；两个子进程各有一个隐藏的 conhost，桌面上没有窗口。
+- 杀掉 jarvis-link，5 秒后回来；杀掉 node，11 秒后回来；杀掉守护进程，2 秒内 jarvis-link 和 node 都没了，下一次 5 分钟的时间触发把它们一起拉回来，hub 那边这台重新上线。
+- 之前用一个探测任务确认过：非管理员能注册 `InteractiveToken` 的任务、注册不了 S4U；GUI 子系统的副本和它用 `CREATE_NO_WINDOW` 起的子进程都没有控制台窗口，
+  都在用户的会话里；退出码 1 的程序 `RestartOnFailure` 不会重启。
+- 测试：`go test ./cmd/jarvis-link/` 在 Windows 和 Linux（`golang:1.27` 容器）上都过；`supervise_windows_test.go` 去掉 Job 时失败（子进程活过了守护进程）。
+- 没验证：真的注销再登录时的登录触发（会关掉这台机器上在用的 Orca 和 Claude 会话；任务注册时登录触发器被接受了）；被动模式；手机界面（手机锁着，用的是 App 调的同一套 hub 接口；App 界面在下面第二步时验过）。
 
 ## 验证记录（2026-11-03，Windows 11 真机）
 

@@ -206,6 +206,7 @@ func TestInstallPassive(t *testing.T) {
 }
 
 func TestNodeServiceLinux(t *testing.T) {
+	linuxPaths(t)
 	f := newFakeEnv(t)
 	jarvisd := filepath.Join(t.TempDir(), "jarvisd")
 	_ = os.WriteFile(jarvisd, []byte("#!/bin/sh\n# jarvisd\n"), 0o755)

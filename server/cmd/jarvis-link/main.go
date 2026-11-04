@@ -40,7 +40,9 @@ const usage = `用法：
                                                  Linux：装成 systemd 用户服务并启动，等它连上 hub（被动模式：等它开始监听）；
                                                  --pair 先配对（主动），--listen 改成被动模式、还没配对时打印配对链接；
                                                  常驻 node 的服务没装时一起装上（--no-node 不装）。
-                                                 没有 systemd 时告诉你别的办法
+                                                 没有 systemd 时告诉你别的办法。
+                                                 Windows：装成登录时启动的计划任务「Persona Link」，常驻 node 和
+                                                 jarvis-link 都在里面，退出了重启；--jarvisd 给的 personad.exe 每次都换上
   jarvis-link node install [--jarvisd <路径>] | status [--json] | uninstall
                                                  常驻 node（jarvisd node --attach）的服务：Linux systemd 用户服务
                                                  jarvisd-node，Mac launchd 的 com.jarvis.node；已经装了的保持原样；
@@ -49,7 +51,7 @@ const usage = `用法：
   jarvis-link status [--json]                    模式、链路、hub、本机 node、后台服务的状态；连着（被动模式：在监听）时
                                                  退出码 0，否则 1
   jarvis-link logs [-f] [-n <行数>]              看日志（~/.jarvis/link.log）；-f 一直跟着
-  jarvis-link uninstall [--purge]                停掉并删掉 systemd 用户服务；--purge 连凭据、状态、日志、
+  jarvis-link uninstall [--purge]                停掉并删掉 systemd 用户服务（Windows：计划任务）；--purge 连凭据、状态、日志、
                                                  连接器的 TLS 身份和 ~/.jarvis/bin/jarvis-link 一起删
   jarvis-link run [--parent] [--log <文件>]      保持链路（前台），状态一行一个 JSON 打到标准输出；
                                                  --parent：标准输入关掉就退出（菜单栏 App 这样启动它）；
@@ -100,6 +102,8 @@ func main() {
 		err = logs(e, args)
 	case "run":
 		err = run(args)
+	case "supervise": // what the Windows scheduled task runs (supervise_windows.go); not for people
+		err = supervise(e, args)
 	case "address":
 		err = address(args)
 	case "version", "--version", "-v":

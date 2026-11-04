@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -66,6 +67,15 @@ func newFakeEnv(t *testing.T) *fakeEnv {
 	return f
 }
 
+// linuxPaths skips a test that looks for this computer's paths in a systemd unit or a shell line: on Windows they are
+// C:\ paths, which the unit escapes and the shell quotes. The Windows install has its own tests (winservice_test.go).
+func linuxPaths(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("looks for Linux paths in a systemd unit or a shell line")
+	}
+}
+
 func (f *fakeEnv) pairHere(t *testing.T) {
 	t.Helper()
 	err := link.Update(f.configPath(), func(c *link.Config) error {
@@ -122,6 +132,7 @@ func TestUnitFile(t *testing.T) {
 }
 
 func TestInstallWritesTheUnitStartsItAndWaitsForTheLink(t *testing.T) {
+	linuxPaths(t)
 	f := newFakeEnv(t)
 	f.pairHere(t)
 	// The service that was running before: install restarts it and does not take its last words for the new one's.
@@ -217,6 +228,7 @@ func TestInstallBeforePairing(t *testing.T) {
 }
 
 func TestInstallWithoutSystemd(t *testing.T) {
+	linuxPaths(t)
 	f := newFakeEnv(t)
 	f.systemd = false
 	err := install(f.env, nil)
@@ -254,9 +266,9 @@ func TestInstallElsewhere(t *testing.T) {
 	if err := install(f.env, nil); err == nil || !strings.Contains(err.Error(), "菜单栏 App") {
 		t.Fatalf("mac: %v", err)
 	}
-	f.goos = "windows"
+	f.goos = "freebsd" // Windows has its scheduled task (winservice_test.go)
 	if err := install(f.env, nil); err == nil || !strings.Contains(err.Error(), "jarvis-link run") {
-		t.Fatalf("windows: %v", err)
+		t.Fatalf("freebsd: %v", err)
 	}
 	if fileExists(f.binPath()) || len(f.calls) != 0 {
 		t.Fatal("did something")

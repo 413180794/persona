@@ -80,7 +80,7 @@ func (e *env) stdinIsTerminal() bool { return e.terminal }
 func (e *env) jarvisDir() string  { return identity.DataDir(e.home) }
 func (e *env) configPath() string { return filepath.Join(e.jarvisDir(), "link.json") }
 func (e *env) logPath() string    { return filepath.Join(e.jarvisDir(), "link.log") }
-func (e *env) binPath() string    { return filepath.Join(e.jarvisDir(), "bin", "jarvis-link") }
+func (e *env) binPath() string    { return filepath.Join(e.jarvisDir(), "bin", e.exeName("jarvis-link")) }
 func (e *env) aliasPath() string  { return filepath.Join(e.jarvisDir(), "bin", newName) }
 
 // isLinkAlias says path is what install.sh's binary_alias made for persona-link: a symlink to jarvis-link, or (where

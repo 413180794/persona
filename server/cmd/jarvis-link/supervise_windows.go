@@ -1,0 +1,127 @@
+//go:build windows
+
+package main
+
+import (
+	"context"
+	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sync"
+	"syscall"
+	"time"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+
+	"github.com/nwverse/persona/server/internal/link"
+)
+
+// Restart delays, as the Linux units have them (RestartSec): jarvis-link 5 s, the node 10 s.
+var linkRestart, nodeRestart = 5 * time.Second, 10 * time.Second
+
+// supervise is `jarvis-link supervise [--no-node]`, what the scheduled task runs (winservice.go), from the
+// console-less copy jarvis-link-service.exe. It keeps jarvis-link (`run --log`) and, unless --no-node, the resident
+// node (`node --attach`) running: each started with CREATE_NO_WINDOW, so it has a console but no window, and started
+// again a few seconds after it exits, however it exits. Both are in a job that kills them when the supervisor ends:
+// ending the task (install, uninstall, signing out) ends them too, and a supervisor the task starts again never finds
+// the old ones still running. It writes what it does to link-service.log, jarvis-link's own errors included; the
+// node's log goes to node-attach.log, as on Linux.
+func supervise(e *env, args []string) error {
+	withNode := true
+	for _, a := range args {
+		if a != "--no-node" {
+			return errUsage
+		}
+		withNode = false
+	}
+	root := e.jarvisDir()
+	release, err := link.LockRun(filepath.Join(root, "link-service")) // one supervisor per computer
+	if err != nil {
+		return err
+	}
+	defer release()
+	slog, err := openRotating(e.serviceLog(), logMax)
+	if err != nil {
+		return err
+	}
+	defer slog.Close()
+	logger := log.New(slog, "", log.LstdFlags)
+	logger.Printf("supervisor %s started (pid %d)", version, os.Getpid())
+	if err := killWithMe(); err != nil {
+		logger.Printf("job object: %v (what it starts may outlive it)", err)
+	}
+	vars := append(os.Environ(), "PERSONA_HOME="+root, "JARVIS_HOME="+root)
+	ctx := context.Background()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		keepRunning(ctx, logger, "jarvis-link", linkRestart, func() *exec.Cmd {
+			cmd := exec.Command(e.binPath(), "run", "--log", e.logPath())
+			cmd.Env, cmd.Stderr = vars, slog // its log goes to link.log; what reaches stderr is a crash
+			return cmd
+		})
+	}()
+	if withNode {
+		nlog, err := openRotating(e.nodeLog(), nodeLogMax)
+		if err != nil {
+			return err
+		}
+		defer nlog.Close()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			keepRunning(ctx, logger, "node", nodeRestart, func() *exec.Cmd {
+				cmd := exec.Command(e.nodeBin(), "node", "--attach")
+				cmd.Env, cmd.Stderr = vars, nlog
+				return cmd
+			})
+		}()
+	}
+	wg.Wait() // never: the task ends the supervisor
+	return nil
+}
+
+// keepRunning starts what mk makes, waits for it to exit and starts it again delay later, until ctx ends (the
+// supervisor's never does). Its stdout goes nowhere: jarvis-link's status lines are for the menu bar app.
+func keepRunning(ctx context.Context, logger *log.Logger, name string, delay time.Duration, mk func() *exec.Cmd) {
+	for ctx.Err() == nil {
+		cmd := mk()
+		cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NO_WINDOW}
+		began := time.Now()
+		err := cmd.Start()
+		if err == nil {
+			logger.Printf("%s started (pid %d)", name, cmd.Process.Pid)
+			err = cmd.Wait()
+		}
+		logger.Printf("%s ended after %s: %v; starting it again in %s", name, time.Since(began).Round(time.Second), err, delay)
+		select {
+		case <-ctx.Done():
+		case <-time.After(delay):
+		}
+	}
+}
+
+// killWithMe puts this process in a job that kills every process in it when the last handle to it closes, which is
+// when this process ends; what it starts from then on is in the job too.
+func killWithMe() error {
+	job, err := windows.CreateJobObject(nil, nil)
+	if err != nil {
+		return err
+	}
+	info := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{
+		BasicLimitInformation: windows.JOBOBJECT_BASIC_LIMIT_INFORMATION{LimitFlags: windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE},
+	}
+	if _, err := windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation,
+		uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info))); err != nil {
+		windows.CloseHandle(job)
+		return err
+	}
+	if err := windows.AssignProcessToJobObject(job, windows.CurrentProcess()); err != nil {
+		windows.CloseHandle(job)
+		return err
+	}
+	return nil // the handle stays open until this process ends
+}

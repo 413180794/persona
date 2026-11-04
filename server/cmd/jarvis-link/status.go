@@ -49,13 +49,13 @@ type passiveReport struct {
 	FP          string     `json:"fp,omitempty"`           // the connector's pin (public: anyone reaching the port sees the key)
 }
 
-// serviceState is the systemd user service (Linux).
+// serviceState is the systemd user service (Linux) or the scheduled task (Windows).
 type serviceState struct {
-	Manager   string `json:"manager"` // systemd
-	Unit      string `json:"unit"`
+	Manager   string `json:"manager"` // systemd, schtasks
+	Unit      string `json:"unit"`    // the unit, the task's name
 	File      string `json:"file"`
 	Installed bool   `json:"installed"`
-	Active    string `json:"active,omitempty"`  // systemctl --user is-active
+	Active    string `json:"active,omitempty"`  // systemctl --user is-active; the task's status as schtasks words it
 	Enabled   string `json:"enabled,omitempty"` // systemctl --user is-enabled
 	Linger    bool   `json:"linger"`
 	Missing   string `json:"missing,omitempty"` // why there is no systemd user instance here
@@ -99,6 +99,9 @@ func gather(e *env) report {
 			s.Active, s.Enabled = firstLine(s.Active), firstLine(s.Enabled)
 		}
 		r.Service = s
+	}
+	if e.goos == "windows" {
+		r.Service = e.taskState() // winservice.go
 	}
 	return r
 }
@@ -284,9 +287,11 @@ func (r report) passiveText(line func(string, ...any), now time.Time, live bool)
 	}
 }
 
-// serviceText is the report's line about the systemd user service.
+// serviceText is the report's line about the systemd user service or the scheduled task.
 func (r report) serviceText(line func(string, ...any), user string) {
-	if s := r.Service; s != nil {
+	if s := r.Service; s != nil && s.Manager == "schtasks" {
+		taskText(s, line)
+	} else if s != nil {
 		switch {
 		case strings.HasPrefix(s.Missing, noUserInstance) && s.Installed && !s.Linger:
 			line("后台服务：装了 %s，但%s（%s）；没开 linger 时没人登录它就不在：sudo loginctl enable-linger %s",

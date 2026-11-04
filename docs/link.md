@@ -45,6 +45,10 @@ curl -fsSL <站点>/install.sh | sh -s -- --node --listen [:18663] [--addr <hub 
 已经装了的（比如以前跑过 `scripts/deploy/node-launchd.sh install`）保持原样。之后只在菜单里提供「安装本机 node 服务」，用户删掉的不会自己装回来。
 App 更新不替换已安装的常驻 node。支持更新协议的 node 可以由 hub 经现有连接远程更新，含备份、回滚和上线确认；旧 node 首次本机升级、进度和安装边界见 [node-update.md](node-update.md)（#1158）。
 
+**Windows**（Orca 引擎，[windows.md](windows.md)「安装和开机自启」）：`jarvis-link install --jarvisd <personad.exe> [--pair '<链接>']`，不要管理员。
+注册当前用户的计划任务「Persona Link」：登录时启动，另外每 5 分钟看一次；任务跑的是不带窗口的守护进程（`jarvis-link supervise`），由它拉起
+jarvis-link 和常驻 node、退出了重启，两个都在一个任务里（没有单独的 `node install`）。没有一键安装脚本和安装包（#1179）。
+
 **hub 这一侧**：主动模式的电脑在 hub.json 里是 kind `link`，被动模式的是 kind `service`（hub 那一路 #435 实现，管理界面「电脑 › 添加电脑 › hub 来连」粘贴链接）。
 
 ## 分工
@@ -63,7 +67,8 @@ App 更新不替换已安装的常驻 node。支持更新协议的 node 可以�
   - 链路一说 hello，hub 就开一条流去连 node，流上跑的 node 协议和 ssh 完全一样（`Machine.connect`，只有拿字节流的 `Machine.dial` 分两种）；
   - 链路一断，这台马上离线。
 - **Mac** 上是菜单栏 App「Persona Link」（`apple/PersonaLink/`）：jarvis-link 作为 helper 打包在 App 里，由 App 启动和看护。
-  **Linux**（服务器、NAS、树莓派，不要图形界面）上 `jarvis-link install` 把它自己装成 systemd 用户服务，见「Linux（headless）」。
+  **Linux**（服务器、NAS、树莓派，不要图形界面）上 `jarvis-link install` 把它自己装成 systemd 用户服务，见「Linux（headless）」；
+  **Windows** 上装成登录时启动的计划任务，连常驻 node 一起看护，见 [windows.md](windows.md)「安装和开机自启」。
 
 ## 链路（主动模式）
 
@@ -338,8 +343,9 @@ Linux 上见下面「Linux（headless）」：编出 `jarvis-link`，`jarvis-lin
 
 **构建**
 - 纯 Go、不要 cgo：`cd server && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o jarvis-link ./cmd/jarvis-link`。
-  `amd64`、`arm64`、32 位树莓派（`GOARCH=arm GOARM=7`）都能编；Windows 也能编了（文件锁、信号按平台分文件），但还没有托盘程序（#299）。
-- `personad` 也能为 Windows 编译（`GOOS=windows go build ./...`；进程组、信号、文件锁、CPU 时间按平台分文件，在 `internal/osproc` 和各包的 `_windows.go` 里），Windows 上的常驻 node 配 Orca 引擎能用了（手动在前台跑，安装和自启还没有），见 [windows.md](windows.md)。
+  `amd64`、`arm64`、32 位树莓派（`GOARCH=arm GOARM=7`）都能编；Windows 也能编（文件锁、信号按平台分文件），还没有托盘程序（#299）。
+- `personad` 也能为 Windows 编译（`GOOS=windows go build ./...`；进程组、信号、文件锁、CPU 时间按平台分文件，在 `internal/osproc` 和各包的 `_windows.go` 里），
+  Windows 上的常驻 node 配 Orca 引擎能用；`jarvis-link install` 在 Windows 上装的是登录时启动的计划任务（下面「装 node 服务」的 Windows 一段），见 [windows.md](windows.md)。
 - 常驻 node 用同一个提交编的 `jarvisd`（`~/.persona/bin/personad`）；`scripts/deploy/node-launchd.sh install` 在 Linux 上把它装成 systemd 用户服务 `jarvisd-node`。
 
 **一条命令装好**
@@ -409,7 +415,7 @@ WantedBy=default.target
 | `jarvis-link pair` | 不给链接或给 `-` 时从标准输入读；在终端里提示粘贴，回车就读那一行 |
 | `jarvis-link pair --listen [<监听地址>] [--addr <地址>]…` | 被动模式的配对链接（标准输出只有链接，方便管道） |
 | `jarvis-link mode [active\|passive] [--listen <地址>]` | 看 / 换模式，两种模式的配对都留着 |
-| `jarvis-link node install [--jarvisd <路径>]` / `node status [--json]` / `node uninstall` | 常驻 node 的服务（Linux systemd `jarvisd-node`，Mac launchd `com.jarvis.node`）；已经有的不动；`uninstall` 不删 personad |
+| `jarvis-link node install [--jarvisd <路径>]` / `node status [--json]` / `node uninstall` | 常驻 node 的服务（Linux systemd `jarvisd-node`，Mac launchd `com.jarvis.node`）；已经有的不动；`uninstall` 不删 personad。Windows 上 node 在 jarvis-link 的计划任务里，只有 `node status` |
 | `jarvis-link discover [--wait <秒>] [--json]` | 局域网里听到的 hub（mDNS），只看不配对；听到了退出码 0 |
 
 `status` 的依据：
@@ -474,4 +480,4 @@ WantedBy=default.target
 - `jarvis-link discover` 在局域网里听到了一个临时广播的假 hub（mDNS，测完就停了）。
 - Mac 菜单栏和配对窗口的被动模式截图（深浅色，`mac-link.sh snapshot`）。App 第一次运行装常驻 node 的那段**没在真机上跑过**：这台开发机上有真实在用的
   `com.jarvis.node`，不能碰；`node install` 在 Mac 上的命令序列（`launchctl bootout` / `bootstrap`）只在假命令里测过，plist 过了 `plutil -lint`。
-- 没测：真的 hub 拨号侧（#435 在做）、经 SOCKS 代理、Windows（只编译）、公网 IPv6 入站。
+- 没测：真的 hub 拨号侧（#435 在做）、经 SOCKS 代理、Windows 上的被动模式（只编译；Windows 的主动模式和计划任务见 [windows.md](windows.md)）、公网 IPv6 入站。

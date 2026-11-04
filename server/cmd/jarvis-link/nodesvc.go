@@ -24,7 +24,7 @@ const (
 	nodeLabel    = "com.jarvis.node"      // launchd agent (Mac), likewise
 )
 
-func (e *env) nodeBin() string { return filepath.Join(e.jarvisDir(), "bin", "jarvisd") }
+func (e *env) nodeBin() string { return filepath.Join(e.jarvisDir(), "bin", e.exeName("jarvisd")) }
 func (e *env) nodeLog() string { return filepath.Join(e.jarvisDir(), "node-attach.log") }
 
 func (e *env) nodeUnitPath() string { return filepath.Join(filepath.Dir(e.unitPath()), nodeUnitName) }
@@ -39,6 +39,8 @@ func (e *env) nodeServiceFile() string {
 		return e.nodeUnitPath()
 	case "darwin":
 		return e.nodePlistPath()
+	case "windows":
+		return e.taskFile() // the node is part of jarvis-link's scheduled task (winservice.go)
 	}
 	return ""
 }
@@ -84,6 +86,9 @@ func nodePlist(bin, logPath string) string {
 // nodeInstall sets up the resident node service unless it is there already: jarvisd at ~/.jarvis/bin/jarvisd (copied
 // from from when there is none yet), then the service, started.
 func nodeInstall(e *env, from string) error {
+	if e.goos == "windows" {
+		return errors.New(windowsNodeHint)
+	}
 	file := e.nodeServiceFile()
 	if file == "" {
 		return fmt.Errorf("%s 上还装不了常驻 node 的服务（#299）", e.goos)
@@ -148,6 +153,9 @@ type nodeState struct {
 func nodeStatus(e *env) nodeState {
 	st := nodeState{File: e.nodeServiceFile(), Bin: e.nodeBin(), HasBin: fileExists(e.nodeBin())}
 	st.Installed = st.File != "" && fileExists(st.File)
+	if e.goos == "windows" {
+		st.Installed = e.taskRunsNode()
+	}
 	if !st.Installed {
 		return st
 	}
@@ -164,6 +172,8 @@ func nodeStatus(e *env) nodeState {
 		} else {
 			st.Running = "not loaded"
 		}
+	case "windows":
+		st.Running, _ = e.taskStatus()
 	}
 	return st
 }
@@ -197,6 +207,8 @@ func nodeCmd(e *env, args []string) error {
 		switch {
 		case st.File == "":
 			fmt.Fprintf(e.stdout, "常驻 node：%s 上还没有服务可装（#299）\n", e.goos)
+		case !st.Installed && e.goos == "windows":
+			fmt.Fprintf(e.stdout, "常驻 node：不在计划任务「%s」里（jarvis-link install [--jarvisd <personad.exe 的路径>]）\n", taskName)
 		case !st.Installed:
 			fmt.Fprintf(e.stdout, "常驻 node：服务没装（jarvis-link node install）\n")
 		default:
@@ -210,6 +222,9 @@ func nodeCmd(e *env, args []string) error {
 		}
 		return exitCode(1)
 	case "uninstall":
+		if e.goos == "windows" {
+			return errors.New(windowsNodeHint)
+		}
 		file := e.nodeServiceFile()
 		if file == "" || !fileExists(file) {
 			fmt.Fprintln(e.stdout, "常驻 node 的服务没装。")
