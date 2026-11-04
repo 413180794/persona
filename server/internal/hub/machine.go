@@ -41,14 +41,17 @@ type Machine struct {
 	// replaces it (keepComputer).
 	computer   *proto.Computer
 	computerAt time.Time
-	online     bool
-	err        string
-	lastSeen   time.Time
-	sessions   []proto.Session
-	watchers   map[string]int // session id -> subscribed clients
-	lastSeq    map[string]int // session id -> highest item seq seen
-	hooked     map[string]bool
-	kick       chan struct{}
+	// browser, browserAt: the same for ego lite (browser.status, the plugin ego; browser.go).
+	browser   *proto.Browser
+	browserAt time.Time
+	online    bool
+	err       string
+	lastSeen  time.Time
+	sessions  []proto.Session
+	watchers  map[string]int // session id -> subscribed clients
+	lastSeq   map[string]int // session id -> highest item seq seen
+	hooked    map[string]bool
+	kick      chan struct{}
 	// deploying: the hub is sending this machine its node build (deploy.go); deployErr: why the last try failed.
 	deploying   bool
 	deployErr   string
@@ -107,6 +110,7 @@ func newMachine(h *Hub, cfg MachineConfig) *Machine {
 func (m *Machine) snapshot() proto.Machine {
 	engine := m.hub.engineOf(m.cfg.ID) // before m.mu: it may read settings
 	computer := m.hub.computerOf(m)    // before m.mu: it takes it
+	browser := m.hub.browserOf(m)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	engines := []proto.Engine{} // what the node found: none while offline
@@ -127,7 +131,7 @@ func (m *Machine) snapshot() proto.Machine {
 		CanDeploy: &canDeploy, DeployReason: deployReason, DeployPhase: m.deployPhase,
 		System:    m.hub.metrics.system(m.cfg.ID),
 		Transport: m.via, TailcatPath: m.path, Tailcat: m.cfg.TailcatAddr != "",
-		Engine: engine, Engines: engines, Computer: computer, Link: linkInfo(m.link),
+		Engine: engine, Engines: engines, Computer: computer, Browser: browser, Link: linkInfo(m.link),
 	}
 }
 
@@ -588,6 +592,9 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		}
 		if p.Assistant && isComputerTool(p.Name) {
 			return m.hub.callComputerTool(ctx, p.SessionID, p.Name, p.Args), nil
+		}
+		if p.Assistant && isBrowserTool(p.Name) {
+			return m.hub.callBrowserTool(ctx, p.SessionID, p.Name, p.Args), nil
 		}
 		if p.Assistant && isAssistantTool(p.Name) {
 			return m.hub.callAssistantTool(ctx, m, p.SessionID, p.Name, p.Args), nil

@@ -19,6 +19,7 @@ enum ToolPresentation {
         case "conversation_unarchive": return Theme.Icon.unarchive
         case "conversations_list", "conversation_read", "conversation_new", "conversation_send": return Theme.Icon.conversation
         case "computer_state", "computer_run": return Theme.Icon.machine
+        case "browser_run", "browser_look": return "globe"
         case "Bash", "BashOutput", "KillShell", "KillBash": return "terminal"
         case "Read": return "doc.text"
         case "Edit", "MultiEdit", "NotebookEdit": return "pencil.line"
@@ -54,6 +55,8 @@ enum ToolPresentation {
         // Operating a Mac through Cua Driver (docs/computer-use.md).
         case "computer_state": return "看电脑"
         case "computer_run": return "操控电脑"
+        case "browser_run": return "用浏览器"
+        case "browser_look": return "看浏览器"
         case "Bash": return "运行"
         case "Read": return "读取"
         case "Edit", "MultiEdit": return "编辑"
@@ -95,6 +98,8 @@ enum ToolPresentation {
         case "conversation_read", "conversation_archive", "conversation_unarchive": return String((s("id") ?? "").prefix(8))
         case "ToolSearch": return s("query") ?? ""
         case "computer_state": return [s("machine"), s("app") ?? "整个屏幕"].compactMap { $0 }.joined(separator: " · ")
+        case "browser_look": return s("machine") ?? ""
+        case "browser_run": return [s("machine"), s("script").map { firstLine($0.trimmingCharacters(in: .whitespacesAndNewlines)) }].compactMap { $0 }.joined(separator: " · ")
         case "computer_run":
             let steps = i["steps"]?.array?.count
             return [s("machine"), steps.map { "\($0) 步" } ?? s("script").map(firstLine)].compactMap { $0 }.joined(separator: " · ")

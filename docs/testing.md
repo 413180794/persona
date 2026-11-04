@@ -64,6 +64,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 - 首页问候按模拟器的真实时间（「晚上好」），状态栏时间也用当前时间，别固定成 9:41。
 - 深色：`xcrun simctl ui $SIM appearance dark`。
 - 操控电脑（docs/computer-use.md）：`MOCK_COMPUTER=ready|permissions|both|locked|missing` 是插件 `cua` 打开、MacBook 已打开（就绪 / 缺屏幕录制权限 / 两项都缺 / 锁屏 / 没装：「安装 Cua Driver」按钮按时间走完下载、校验、关统计、授权、点了允许，每步 `MOCK_COMPUTER_STEP` 秒，默认 2）；加 `MOCK_WEB=web/dist`（先 `npm run build`）托管网页的看画面页，并把 MacBook 的 5900 转到这台 Mac 自己的屏幕共享（UI 测试带 `TEST_RUNNER_JARVIS_COMPUTER_SCREEN=1` 才跑这一条），Mac Studio 还没打开；`=off` 是插件开着、哪台都没打开。再加 `MOCK_PLUGINS=1`，插件列表里有「操控电脑（Cua）」，它的「能操控的电脑」跟着各台 Mac 的 `computer.enabled` 双向同步（`-tab settings -openPlugin cua` 直接打开）。`-tab settings -openMachines YES -openMachineDetail macbook` 直接打开 MacBook 的机器页。
+- 浏览器（docs/plan-ego-browser.md）：`MOCK_BROWSER=missing|setup|ready` 是插件 `ego` 打开、MacBook 已打开（没装 / 装了没做首次设置 / 就绪，统计开着；`MOCK_BROWSER_ANALYTICS=off` 是关着），Mac Studio 没打开、没装；「安装 ego lite」「打开 ego lite」按时间往前走（每步 `MOCK_COMPUTER_STEP` 秒）。加 `MOCK_PLUGINS=1`，插件列表里有「浏览器（ego lite）」（`-tab settings -openPlugin ego`）。
 - 主对话统一入口（docs/unified-entry.md）：`MOCK_TASKS=1` 启动 mock，主对话里有开始了的计划、在做 / 等你 / 做完的三个任务、一个 Agent 没开起来的任务（红色卡片和回执，#1077）、
   答过的问题、回执、直接对任务说的话和最后一张待开始的计划卡；`MOCK_TASKS_AT=<分钟>` 把对话截到那么多分钟以前（更新的条目不要），
   不用滑动就能在屏幕底部看到更早的部分。`MOCK_TASKS_NO_ASKS=1` 让任务的 Agent 不提问，输入框上方不再被问题卡占住。`MOCK_TASKS_DOCK=2` 只留两个在做的任务（任务坞两个任务胶囊，后面还有两个手动开的 Agent），`=pair` 只留一个任务和一个等你的手动 Agent（两个胶囊），`=many` 再加四个任务（任务坞比屏幕宽，看「全部」固定在最左边）；不设时是四个没做完的任务加两个手动开的 Agent（#1113）。`-showTaskDetail <待办 id>`（如 `todo_task_widget`）打开任务详情，`-showTaskBoard YES` 打开任务板。

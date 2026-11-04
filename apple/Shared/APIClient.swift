@@ -325,6 +325,20 @@ nonisolated struct APIClient: Sendable {
         try JSON.decoder.decode(MachineComputer.self, from: await request("POST", "/api/v1/machines/\(machine)/computer/\(action)"))
     }
 
+    /// What the Mac has of ego lite now; 404 while the hub's plugin ego is off.
+    func browser(machine: String) async throws -> MachineBrowser {
+        try JSON.decoder.decode(MachineBrowser.self, from: await request("GET", "/api/v1/machines/\(machine)/browser"))
+    }
+    /// The machine page's 允许助手用这台的浏览器.
+    func setBrowser(machine: String, enabled: Bool) async throws -> MachineBrowser {
+        struct Body: Encodable { var enabled: Bool }
+        return try JSON.decoder.decode(MachineBrowser.self, from: await request("PUT", "/api/v1/machines/\(machine)/browser", body: Body(enabled: enabled)))
+    }
+    /// 安装 ego lite, 打开 ego lite, 取消: `install`, `open`, `cancel`.
+    func browserJob(machine: String, _ action: String) async throws -> MachineBrowser {
+        try JSON.decoder.decode(MachineBrowser.self, from: await request("POST", "/api/v1/machines/\(machine)/browser/\(action)"))
+    }
+
     /// The group on what the hub returned (docs/multi-hub.md).
     func stamp(_ list: [Machine]) -> [Machine] { group.isEmpty ? list : list.map { var m = $0; m.group = group; return m } }
     func stamp(_ list: [Session]) -> [Session] { group.isEmpty ? list : list.map { var s = $0; s.group = group; return s } }

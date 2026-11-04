@@ -282,6 +282,7 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	m.hub.broadcastMachines()
 	m.hub.connectors.MachineOnline(m.cfg.ID)
 	go m.hub.refreshComputer(ctx, m)   // only when the plugin cua is on for it (computer.go)
+	go m.hub.refreshBrowser(ctx, m)    // and ego (browser.go)
 	m.hub.learnUID(p, info.MachineUID) // the paths reaching the same computer become one machine (mesh_paths.go)
 	sctx, scancel := context.WithCancel(ctx)
 	defer scancel()

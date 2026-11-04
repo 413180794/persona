@@ -331,6 +331,16 @@ var Points = map[string]Point{
 		}
 		return v.ID, nil
 	}},
+	"browser": {Name: "browser", Namespace: "browser", Version: 1, Item: func(raw json.RawMessage) (string, error) {
+		var c ComputerItem // the same contribution: an id and a name
+		if err := strict(raw, &c); err != nil {
+			return "", err
+		}
+		if !idPattern.MatchString(c.ID) {
+			return c.ID, fmt.Errorf("browser id %q: a-z0-9_-", c.ID)
+		}
+		return c.ID, nil
+	}},
 	"computer": {Name: "computer", Namespace: "computer", Version: 1, Item: func(raw json.RawMessage) (string, error) {
 		var c ComputerItem
 		if err := strict(raw, &c); err != nil {

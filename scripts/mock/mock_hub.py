@@ -6000,6 +6000,53 @@ if MOCK_COMPUTER:
         if _m.get("os") == "darwin":
             _m["computer"] = computer_of(_m["id"], _m["id"] == "macbook" and MOCK_COMPUTER != "off")
 
+# MOCK_BROWSER=missing|setup|ready (docs/plan-ego-browser.md): the plugin ego is on and MacBook is turned on, with ego
+# lite not installed / installed but its first-run setup not done / ready (its usage statistics still on);
+# MOCK_BROWSER_ANALYTICS=off has them off. 安装 ego lite and 打开 ego lite move on by the clock (MOCK_COMPUTER_STEP
+# seconds a step); an open setup is done a few steps later. Mac Studio is a Mac it is not on for, not installed.
+MOCK_BROWSER = os.environ.get("MOCK_BROWSER", "")
+BROWSER_JOBS = {}  # machine id -> {"kind": install|open, "at": started, "started": iso, "cancelled": bool}
+BROWSER_INSTALL_STEPS = ["下载 ego lite", "校验签名和公证", "装进「应用程序」"]
+
+
+def browser_state(state):
+    analytics = os.environ.get("MOCK_BROWSER_ANALYTICS", "on")
+    return {
+        "missing": {"installed": False, "set_up": False, "ready": False, "note": "这台 Mac 上没有装 ego lite", "screen_sharing": True},
+        "setup": {"installed": True, "version": "0.6.2", "set_up": False, "ready": False, "note": "ego lite 还没做完首次设置",
+                  "analytics": "unknown", "screen_sharing": True},
+        "ready": {"installed": True, "version": "0.6.2", "set_up": True, "imported": True, "analytics": analytics, "ready": True,
+                  "screen_sharing": True},
+    }[state]
+
+
+def browser_of(machine_id, enabled):
+    return {"enabled": enabled, **browser_state(MOCK_BROWSER if machine_id == "macbook" and MOCK_BROWSER in ("missing", "setup", "ready") else "missing")}
+
+
+def browser_now(machine):
+    """machine["browser"] as the node would say it now, the clock having moved an install or an open on."""
+    b = machine["browser"]
+    job = BROWSER_JOBS.get(machine["id"])
+    if not b.get("enabled") or not job:
+        return b
+    t = (time.time() - job["at"]) / COMPUTER_STEP
+    if job["kind"] == "install":
+        if job.get("cancelled"):
+            return {**b, "job": {"kind": "install", "state": "cancelled", "started": job["started"]}}
+        if t < len(BROWSER_INSTALL_STEPS):
+            return {**b, "job": {"kind": "install", "state": "running", "step": BROWSER_INSTALL_STEPS[int(t)], "started": job["started"]}}
+        return {"enabled": True, **browser_state("setup"), "job": {"kind": "install", "state": "done", "started": job["started"]}}
+    if t < 3:  # opened on the Mac: its setup goes on there
+        return {"enabled": True, **browser_state("setup"), "job": {"kind": "open", "state": "done", "started": job["started"]}}
+    return {"enabled": True, **browser_state("ready"), "job": {"kind": "open", "state": "done", "started": job["started"]}}
+
+
+if MOCK_BROWSER:
+    for _m in MACHINES:
+        if _m.get("os") == "darwin":
+            _m["browser"] = browser_of(_m["id"], _m["id"] == "macbook")
+
 # Every fixture, including machines added by optional modes, follows the engine contract.
 for _m in MACHINES:
     _m["engine"] = "herdr"
@@ -6133,6 +6180,19 @@ if MOCK_COMPUTER:
                           {"name": "confirm", "type": "boolean", "title": "操作前在手机上确认", "default": False,
                            "description": "打开后，助手每次点击、输入、按键、打开或关闭 App 之前先在手机上问你；关着时直接做，记进 hub 的日志"}]},
                       "config": {}, "secrets": [], "permissions": []}
+
+
+if MOCK_BROWSER:
+    PLUGINS["ego"] = {"id": "ego", "name": "浏览器（ego lite）", "kind": "browser", "status": "running", "version": "202611041200",
+                      "source": "builtin", "enabled": True, "contributes": {"browser": ["ego"]},
+                      "description": "让助手在你的 Mac 上用 ego lite 打开网页、点按、填表、截图，用的是你在 ego 里登录过的网站。要在那台 Mac 上装好 ego lite 并做完它的首次设置。",
+                      "form": {"fields": [
+                          {"name": "machines", "type": "array", "title": "能用的浏览器", "unique_items": True,
+                           "description": "打开的 Mac 上，助手才能用 ego lite。开关即时生效，和它机器页上的「允许助手用这台的浏览器」是同一个",
+                           "items": {"name": "items", "type": "string", "format": "machine", "os": ["darwin"]}},
+                          {"name": "confirm", "type": "boolean", "title": "操作前在手机上确认", "default": False,
+                           "description": "打开后，助手每次在浏览器里跑脚本（打开网页、点按、填表）之前先在手机上问你；关着时直接做，记进 hub 的日志"}]},
+                      "config": {"machines": ["macbook"]}, "secrets": [], "permissions": []}
 
 
 def cua_config(pl):
@@ -6358,6 +6418,13 @@ def plugins_route(handler, p, body):
             handler.send_json({"error": "base_url: 要是一个网址", "code": "invalid_config", "field": "base_url", "message": "要是一个网址"}, 400)
             return True
         pl["config"] = cfg
+        if pl["id"] == "ego":  # the same for ego lite
+            for m in MACHINES:
+                if "browser" in m:
+                    m["browser"] = {**m["browser"], "enabled": m["id"] in (cfg.get("machines") or [])}
+            for send, _ in list(LIVE):
+                try: send({"type": "machines", "machines": out_machines()})
+                except Exception: pass
         if pl["id"] == "cua":  # the Macs it is on for follow, and the machine list goes out again
             for m in MACHINES:
                 if "computer" in m:
@@ -6372,6 +6439,9 @@ def plugins_route(handler, p, body):
         handler.send_json({"error": "not found"}, 404)
         return True
     if pl["id"] == "cua": cua_config(pl)
+    if pl["id"] == "ego":
+        machines = [m["id"] for m in MACHINES if m.get("browser", {}).get("enabled")]
+        pl["config"] = {**{k: v for k, v in pl["config"].items() if k != "machines"}, **({"machines": machines} if machines else {})}
     handler.send_json({k: v for k, v in _plugin_needs(pl).items() if v is not None})
     return True
 
@@ -6672,6 +6742,11 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/hub/update/history": return self.send_json({"history": hub_update_history()})
         if p == "/api/v1/skills": return self.send_json({"machine_id": "macbook", "machine": "MacBook", "skills": MOCK_SKILLS})
         if p == "/api/v1/machines": return self.send_json({"machines": out_machines()})
+        if p.startswith("/api/v1/machines/") and p.endswith("/browser"):  # the plugin ego (MOCK_BROWSER)
+            machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
+            if machine is None or "browser" not in machine:
+                return self.send_json({"error": "浏览器插件没打开，或这台不是 Mac"}, 404)
+            return self.send_json(browser_now(machine))
         if p.startswith("/api/v1/machines/") and p.endswith("/computer"):  # the plugin cua (MOCK_COMPUTER)
             machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
             if machine is None or "computer" not in machine:
@@ -7423,6 +7498,24 @@ class H(BaseHTTPRequestHandler):
         if self.command == "DELETE" and p == "/api/v1/imessage/data":  # what the hub kept, once 交给 Jarvis is off
             if IMESSAGE_STATUS.get("ai"): return self.send_json({"error": "先关掉「交给 Jarvis」再删除", "code": "ai_on"}, 409)
             return self.send_json({"chats": 6, "people": 9, "inbox": 1})
+        if p.startswith("/api/v1/machines/") and (p.endswith("/browser") or "/browser/" in p):  # the plugin ego (MOCK_BROWSER)
+            machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
+            if machine is None or "browser" not in machine:
+                return self.send_json({"error": "浏览器插件没打开，或这台不是 Mac"}, 404)
+            if self.command == "PUT":
+                machine["browser"] = {**machine["browser"], "enabled": bool(json.loads(self.last_body or b"{}").get("enabled"))}
+                for send, _ in list(LIVE):
+                    try: send({"type": "machines", "machines": out_machines()})
+                    except Exception: pass
+            elif self.command == "POST":
+                action = p.rsplit("/", 1)[1]
+                if action == "cancel":
+                    if machine["id"] in BROWSER_JOBS: BROWSER_JOBS[machine["id"]]["cancelled"] = True
+                elif action in ("install", "open"):
+                    BROWSER_JOBS[machine["id"]] = {"kind": action, "at": time.time(), "started": ago()}
+                else:
+                    return self.send_json({"error": "unknown action"}, 404)
+            return self.send_json(browser_now(machine))
         if self.command == "POST" and p.startswith("/api/v1/machines/") and "/computer/" in p:  # 安装 / 去授权 / 取消
             machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
             action = p.rsplit("/", 1)[1]

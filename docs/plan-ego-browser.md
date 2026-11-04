@@ -51,9 +51,9 @@ github.com/citrolabs/ego-lite（MIT，外部代码只读，不进仓库）。以
 - **「安装 ego lite」**（`browser.install`，和 Cua 的安装一样是后台任务，回报进度）：
   1. 按芯片下载 DMG 到临时目录，用 `hdiutil attach -readonly -nobrowse` 挂载。
   2. **校验**：`codesign --verify --deep`（不加 `--strict`）、Team ID 必须是 `JGQLC6YQYJ`、`spctl -a -t exec` 必须是公证过的。不满足就不装。
-  3. 用 `ditto` 装进 `/Applications`，**保留 quarantine**（公证过的 App 不需要去掉，系统会照常检查）。
+  3. 用 `ditto` 装进 `/Applications`，装好后再校验一遍。node 自己下载的文件没有 quarantine 属性（和 `curl` 下的一样），所以不靠系统首次打开时再查：上面的 `spctl` 就是 Gatekeeper 的同一项检查，装前装后各做一次。
   4. 卸载挂载的盘，删掉临时文件。
-  - 推广码用官方 README 里的那个，写在 hub 的配置里，不写死在代码里。
+  - 链接用官方 README 给的那个（里面的推广码是 README 公开的，不是谁的账号），第一步写在 node 里（`egoDMG`）；以后要换再挪进 hub 的配置。
   - 做不到的：**第一次打开**时，macOS 的「从互联网下载的 App」确认和 ego 的首次设置，都要人在那台 Mac 上点。所以装完给「去完成首次设置」：
     - node 执行 `open -a "ego lite"`，在那台 Mac 上打开设置窗口；
     - 机器页显示分步说明；屏幕共享开着时，可以经「看画面」（#1184）远程点完。
@@ -124,10 +124,46 @@ cookies 就是登录凭据：拿到就等于登录了。下面每一步都按「
 2. 来源 a 不用这条路：ego 自己的 `import` 直接读 Chrome。
 3. 用户正在接管那个任务空间时，ego 不让脚本用 CDP（`EGO_TASK_SPACE_USER_IN_CONTROL`）：提示用户先交还，再导入。
 
+## 第一步做了什么（#1304，2026-11-04）
+
+用户拍板：分步、先定时截图、cookies 导进默认 profile、上传的 cookies 手机解析后经 hub 直转（hub 不落盘）、另一台电脑先不做、统计能关就自动关。第一步做了插件、发现、安装、首次设置引导、就绪和两个助手工具；看浏览器和 cookies 是后面几步。
+
+- **插件 `ego`**：内置、纯声明、默认关，贡献扩展点 `browser`。配置 `machines`（`format: machine`、`x-os: ["darwin"]`，插件页每台 Mac 一个开关）和 `confirm`。机器页的「允许助手用这台的浏览器」是同一个值。
+- **node `browser.status`**（插件开着时 hub 问所有在线的 Mac）：
+  - 装没装：`/Applications/ego lite.app`，版本取自 Info.plist。
+  - 首次设置：`Local State` 的 `ego.welcome_page_shown`，加上 `~/.local/bin/ego-browser` 在不在。导没导入数据：`ego.onboarding_imported_browser_data`。
+  - 统计：Chromium 的 `Consent To Send Stats` 文件在，就是开着。
+  - 就绪：设置做完后跑一次只读探测（`listTaskSpaces()`，不碰任何页面），结果留一分钟。
+  - 最后打 `checked`（hub 按它排先后，见 #1387）。
+- **安装**（`browser.install`）：下载 README 给的官方 DMG，只读挂载后校验（`fetchEgo`），装进「应用程序」后再校验一遍。node 下载的文件没有 quarantine 属性，Gatekeeper 的检查由 `spctl` 在装前装后各做一次。
+  - 校验：`codesign --verify --deep`；`codesign -dv` 的 TeamIdentifier 是 `JGQLC6YQYJ`；`spctl` 是 accepted 并且 Notarized。不加 `--strict`，会因为一个 FinderInfo 失败。
+  - 实测：这台 Mac 上装好的 0.6.2 通过这三项。
+- **打开**（`browser.open`）：`open` 那个 App，在那台 Mac 上开始首次设置。机器页每 2 秒问一次，做完就变成就绪。
+- **首次设置引导**（机器页）：
+  1. 点「打开 ego lite」，或者「看画面」在手机上操作；
+  2. 选从 Chrome（或别的浏览器）导入数据，macOS 会多次要钥匙串密码，每次都输；可以跳过；
+  3. 做完首次设置（会装上 ego-browser）；
+  4. 「再检查一次」。
+
+  实测：除了钥匙串，首次设置不要别的授权（不要辅助功能、屏幕录制）。
+- **就绪**是绿色。下面打勾列出：首次设置、导没导入数据、使用统计。
+  - 统计开着时提示去关：在 ego 的「设置 › 同步和服务」里关掉「Automatically sends usage statistics and crash reports to Citro Labs」。
+  - **没做成自动关**：这一项在设置页里藏在收起的分组里，不是标准的开关组件，用脚本点它不稳；ego 运行时改它的偏好文件又会被覆盖。所以退回到引导里提示。
+- **助手的工具**（`prompts/mcp/browser/`）：
+  - `browser_run {machine, script}`：在对话自己的任务空间（`persona-<对话 id 前 8 位>`）里跑一段 JS，手边有 `task` 和 `page`（标签 p1）；返回值、地址、标题、截图一起回来。
+  - `browser_look {machine, full?}`：快照（带 `[ref=N]`）加截图。
+  - 写操作默认放行，hub 日志只记字节数；打开「操作前在手机上确认」后先弹卡片。
+- **实测**（`TestEgoEndToEnd`，`PERSONA_EGO_E2E=1`，只碰 example.com）：
+  - 状态就绪；
+  - 打开 example.com，「看浏览器」拿回快照和 1920×849 的截图；
+  - 测试结束关掉任务空间。
+  - 打开页面约 0.3 秒，快照加截图约 0.1 秒。
+- **踩到的坑**：脚本打印的内容里只要有一个 NUL 字符，ego 就把那次的输出整段丢掉。结果行改用可见的标记 `@@persona-browser@@`。
+
 ## 分步
 
 1. **插件和发现**：插件 `ego`，`browser.status`，机器页状态，「去完成首次设置」引导。
-2. **安装**：下载、校验、装进「应用程序」，保留 quarantine。
+2. **安装**：下载、校验、装进「应用程序」，装后再校验。
 3. **助手工具**：`browser_run`、`browser_look`，确认开关，日志。
 4. **看浏览器**：b 定时截图加点一下接管；入口在机器页和工具详情。
 5. **cookies**：列出和清除、从 Chrome 导入（a）、上传文件（b）、指定域名（d）；另一台电脑（c）放最后。

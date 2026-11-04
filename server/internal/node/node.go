@@ -807,6 +807,22 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "computer.cancel":
 		cancelJob()
 		return computerStatus(ctx), nil
+	case "browser.status": // ego lite on this Mac, asked only while the user has the plugin on (browser.go)
+		return browserStatus(ctx), nil
+	case "browser.install", "browser.open": // background jobs; their state comes back with browser.status
+		run := installEgo
+		if method == "browser.open" {
+			run = openEgo
+		}
+		if err := egoJob.start(strings.TrimPrefix(method, "browser."), run, nil); err != nil {
+			return nil, err
+		}
+		return browserStatus(ctx), nil
+	case "browser.cancel":
+		egoJob.cancelInstall()
+		return browserStatus(ctx), nil
+	case "browser.call":
+		return browserCall(ctx, params)
 	case "fs.stat":
 		return map[string]any{"stats": n.statPaths(p.Paths, p.Cwd)}, nil
 	case "space.rename":

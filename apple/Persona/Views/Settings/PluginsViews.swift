@@ -384,8 +384,10 @@ private struct PluginMachineSwitches: View {
         return model.machines.filter { $0.group.isEmpty && (os.isEmpty || os.contains($0.os ?? "")) }
     }
     private var unknown: [String] { items.filter { id in !model.machines.contains { $0.group.isEmpty && $0.id == id } } }
-    /// A plugin for operating computers (extension point computer): the rows say how Cua Driver is there too.
+    /// A plugin for operating computers (extension point computer) or their browsers (browser): the rows say how Cua
+    /// Driver or ego lite is there too.
     private var computers: Bool { page.detail?.plugin.contributes?["computer"] != nil }
+    private var browsers: Bool { page.detail?.plugin.contributes?["browser"] != nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -395,7 +397,7 @@ private struct PluginMachineSwitches: View {
                     .font(Theme.Font.secondary).foregroundStyle(.secondary)
             }
             ForEach(machines) { m in
-                row(m.id, name: m.name, status: Self.status(m, computers: computers))
+                row(m.id, name: m.name, status: browsers ? Self.browserStatus(m) : Self.status(m, computers: computers))
             }
             ForEach(unknown, id: \.self) { id in
                 row(id, name: id, status: "找不到这台机器")
@@ -415,6 +417,19 @@ private struct PluginMachineSwitches: View {
             }
         }
         .disabled(page.saving)
+    }
+
+    /// 在线 / 离线, then how ego lite is on it (就绪 is the switch worth turning on).
+    static func browserStatus(_ m: Machine) -> String {
+        var parts = [m.online ? "在线" : "离线"]
+        if m.online, let b = m.browser, b.checked {
+            if b.job?.running == true { parts.append(b.job?.kind == "install" ? "ego 安装中" : "ego 首次设置中") }
+            else if !b.installed { parts.append("ego 没装") }
+            else if !b.setUp { parts.append("ego 没做完首次设置") }
+            else if b.ready { parts.append("ego 就绪") }
+            else { parts.append("ego 没跑通") }
+        }
+        return parts.joined(separator: " · ")
     }
 
     /// 在线 / 离线, then for a computer plugin how Cua Driver is on it, once its node has said (every Mac's while the

@@ -31,6 +31,8 @@ nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
     var engines: [DetectedEngine] = []
     /// Operating it through Cua Driver; nil while the hub's plugin cua is off or it is not a Mac.
     var computer: MachineComputer? = nil
+    /// Its ego lite for the assistant; nil while the hub's plugin ego is off or it is not a Mac.
+    var browser: MachineBrowser? = nil
     /// Hub mesh (docs/plan-hub-mesh.md 2.6): the hub that owns the computer in its group, its name, the computer's own
     /// id across hubs, and how the hub reaches it. nil from hubs before the mesh.
     var hubID: String? = nil
@@ -44,7 +46,7 @@ nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
     var groupLabel: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case id, name, kind, icon, online, error, hostname, os, arch, home, system, engine, engines, computer, route
+        case id, name, kind, icon, online, error, hostname, os, arch, home, system, engine, engines, computer, browser, route
         case sshHost = "ssh_host", herdrVersion = "herdr_version", claudeVersion = "claude_version", lastSeen = "last_seen"
         case nodeMismatch = "node_mismatch", nodeVersion = "node_version", deploying, deployError = "deploy_error"
         case hubID = "hub_id", hubName = "hub_name", machineUID = "machine_uid", hubGroup = "app_hub_group",
@@ -86,6 +88,7 @@ extension Machine {
         engine = try c.decodeIfPresent(MachineEngine.self, forKey: .engine) ?? .herdr
         engines = try c.decodeIfPresent([DetectedEngine].self, forKey: .engines) ?? []
         computer = try? c.decodeIfPresent(MachineComputer.self, forKey: .computer)
+        browser = try? c.decodeIfPresent(MachineBrowser.self, forKey: .browser)
         hubID = try? c.decodeIfPresent(String.self, forKey: .hubID)
         hubName = try? c.decodeIfPresent(String.self, forKey: .hubName)
         machineUID = try? c.decodeIfPresent(String.self, forKey: .machineUID)
@@ -263,6 +266,59 @@ nonisolated struct MachineComputer: Codable, Hashable, Sendable {
     var missingPermissions: [String] {
         [(accessibility, "辅助功能"), (screenRecording, "屏幕录制")].compactMap { $0.0 == "missing" ? $0.1 : nil }
     }
+}
+
+/// A Mac's ego lite, the browser the assistant drives (the hub's plugin ego, docs/plan-ego-browser.md). `enabled`: the
+/// user turned it on for this machine; the rest is what its node found when last asked.
+nonisolated struct MachineBrowser: Codable, Hashable, Sendable {
+    var enabled = false
+    var installed = false
+    var version: String? = nil
+    /// Its first-run setup is done; `imported`, that setup took another browser's data.
+    var setUp = false
+    var imported = false
+    /// Chromium's usage statistics: on | off | unknown.
+    var analytics: String? = nil
+    var ready = false
+    var note: String? = nil
+    var screenSharing = false
+    var job: ComputerJob? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case enabled, installed, version, imported, analytics, ready, note, job
+        case setUp = "set_up", screenSharing = "screen_sharing"
+    }
+
+    init(enabled: Bool = false, installed: Bool = false, version: String? = nil, setUp: Bool = false, imported: Bool = false,
+         analytics: String? = nil, ready: Bool = false, note: String? = nil, screenSharing: Bool = false, job: ComputerJob? = nil) {
+        self.enabled = enabled
+        self.installed = installed
+        self.version = version
+        self.setUp = setUp
+        self.imported = imported
+        self.analytics = analytics
+        self.ready = ready
+        self.note = note
+        self.screenSharing = screenSharing
+        self.job = job
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        installed = try c.decodeIfPresent(Bool.self, forKey: .installed) ?? false
+        version = try c.decodeIfPresent(String.self, forKey: .version)
+        setUp = try c.decodeIfPresent(Bool.self, forKey: .setUp) ?? false
+        imported = try c.decodeIfPresent(Bool.self, forKey: .imported) ?? false
+        analytics = try c.decodeIfPresent(String.self, forKey: .analytics)
+        ready = try c.decodeIfPresent(Bool.self, forKey: .ready) ?? false
+        note = try c.decodeIfPresent(String.self, forKey: .note)
+        screenSharing = try c.decodeIfPresent(Bool.self, forKey: .screenSharing) ?? false
+        job = try? c.decodeIfPresent(ComputerJob.self, forKey: .job)
+    }
+
+    /// The node has said how it is.
+    var checked: Bool { ready || installed || !(note ?? "").isEmpty }
 }
 
 /// One install or grant the node runs for the machine page (docs/computer-use.md「一键安装」).

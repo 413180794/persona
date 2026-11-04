@@ -261,6 +261,9 @@ func (h *Hub) attachPlugins(ctx context.Context) {
 	if err := reg.AddBuiltin(cuaManifest(h), "", false); err != nil { // off until the user turns it on (computer.go)
 		h.logf("plugin cua: %v", err)
 	}
+	if err := reg.AddBuiltin(egoManifest(h), "", false); err != nil { // the same, for ego lite (browser.go)
+		h.logf("plugin ego: %v", err)
+	}
 	if err := reg.Load(ctx); err != nil {
 		h.logf("plugins: %v", err)
 	}
@@ -310,6 +313,9 @@ func (ps *plugins) changed(c plugin.Change) {
 	ps.apply(ctx, c.ID)
 	if c.ID == cuaPluginID && ps.h != nil {
 		ps.h.computerChanged(ctx)
+	}
+	if c.ID == egoPluginID && ps.h != nil {
+		ps.h.browserChanged(ctx)
 	}
 	if c.Kind == "removed" && c.Old != nil && ps.h != nil {
 		for _, id := range c.Old.Manifest.Items("connectors") {

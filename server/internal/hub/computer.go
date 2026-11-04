@@ -46,11 +46,14 @@ type cuaSettings struct {
 	Confirm  bool     `json:"confirm"`
 }
 
-func (h *Hub) cua() cuaSettings {
+func (h *Hub) cua() cuaSettings { return h.machinePlugin(cuaPluginID) }
+
+// machinePlugin is a built-in plugin that is turned on per Mac (cua, ego): on or not, its Macs, whether to ask first.
+func (h *Hub) machinePlugin(id string) cuaSettings {
 	if h.plugins == nil || h.plugins.reg == nil {
 		return cuaSettings{}
 	}
-	p := h.plugins.reg.Get(cuaPluginID)
+	p := h.plugins.reg.Get(id)
 	if p == nil || !p.Record.Enabled {
 		return cuaSettings{}
 	}
@@ -168,21 +171,27 @@ func (h *Hub) putComputer(w http.ResponseWriter, r *http.Request, m *Machine) {
 		writeErr(w, http.StatusNotFound, errors.New("操控电脑的插件没打开，或这台不是 Mac"))
 		return
 	}
-	s := h.cua()
-	machines := slices.DeleteFunc(slices.Clone(s.Machines), func(id string) bool { return id == m.cfg.ID })
-	if in.Enabled {
-		machines = append(machines, m.cfg.ID)
-	}
-	p := h.plugins.reg.Get(cuaPluginID)
-	cfg := map[string]any{}
-	_ = json.Unmarshal(h.plugins.reg.Config(p), &cfg)
-	cfg["machines"] = machines
-	raw, _ := json.Marshal(cfg)
-	if err := h.plugins.reg.SetConfig(r.Context(), cuaPluginID, raw, "app"); err != nil {
+	if err := h.setPluginMachine(r.Context(), cuaPluginID, m.cfg.ID, in.Enabled); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, h.refreshComputer(r.Context(), m))
+}
+
+// setPluginMachine turns a per-Mac plugin on or off for a machine: its config's machines (the machine page's switch,
+// the same as the plugin page's).
+func (h *Hub) setPluginMachine(ctx context.Context, plugin, machine string, on bool) error {
+	s := h.machinePlugin(plugin)
+	machines := slices.DeleteFunc(slices.Clone(s.Machines), func(id string) bool { return id == machine })
+	if on {
+		machines = append(machines, machine)
+	}
+	p := h.plugins.reg.Get(plugin)
+	cfg := map[string]any{}
+	_ = json.Unmarshal(h.plugins.reg.Config(p), &cfg)
+	cfg["machines"] = machines
+	raw, _ := json.Marshal(cfg)
+	return h.plugins.reg.SetConfig(ctx, plugin, raw, "app")
 }
 
 // postComputerJob: POST /api/v1/machines/{mid}/computer/{install|grant|cancel}, the machine page's 安装 Cua Driver,

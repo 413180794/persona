@@ -55,6 +55,8 @@ type Machine struct {
 	Engines []Engine `json:"engines"`
 	// Computer: operating it through Cua Driver, while the plugin cua is on and it is a Mac (Computer).
 	Computer *Computer `json:"computer,omitempty"`
+	// Browser: its ego lite, while the plugin ego is on and it is a Mac (Browser).
+	Browser *Browser `json:"browser,omitempty"`
 	// Hub mesh (docs/mesh.md): the hub that connects to this machine (its owner), its name, the machine's own id
 	// (~/.jarvis/machine-uid, empty for an old node or one never reached) and how the hub the client talks to gets
 	// there. A hub without peers fills them in for its own machines too.
@@ -148,9 +150,31 @@ type Computer struct {
 	Job *ComputerJob `json:"job,omitempty"`
 }
 
+// Browser is a Mac's ego lite, the agent browser the assistant may drive (the built-in plugin ego,
+// docs/plan-ego-browser.md). In proto.Machine only while the plugin is on, and only for a Mac; Enabled: the user turned
+// it on for this machine. The rest is what the node found when last asked (browser.status).
+type Browser struct {
+	Enabled bool `json:"enabled"`
+	// Installed: /Applications/ego lite.app is there; Version, its version.
+	Installed bool   `json:"installed"`
+	Version   string `json:"version,omitempty"`
+	// SetUp: its first-run setup is done (it registers ego-browser and records it in its Local State); Imported: that
+	// setup imported another browser's data (sign-ins, cookies…).
+	SetUp    bool `json:"set_up"`
+	Imported bool `json:"imported"`
+	// Analytics: Chromium's usage statistics, on | off | unknown.
+	Analytics string `json:"analytics,omitempty"`
+	// Ready: a read-only call through ego-browser worked a moment ago. Note: what is missing, in Chinese for the app.
+	Ready         bool         `json:"ready"`
+	Note          string       `json:"note,omitempty"`
+	ScreenSharing bool         `json:"screen_sharing"`
+	Job           *ComputerJob `json:"job,omitempty"`
+	Checked       time.Time    `json:"checked,omitempty"`
+}
+
 // ComputerJob is one install or grant the node runs in the background (docs/computer-use.md「一键安装」).
 type ComputerJob struct {
-	Kind  string `json:"kind"`  // install | grant
+	Kind  string `json:"kind"`  // install | grant | open
 	State string `json:"state"` // running | done | failed | cancelled
 	// Step: what it does now, in Chinese for the app; Error: why it failed (the installer's last lines).
 	Step    string    `json:"step,omitempty"`

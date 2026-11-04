@@ -35,43 +35,50 @@ const cuaScriptMost = 2 << 20
 // installOS is the OS the node installs on (tests say darwin).
 var installOS = runtime.GOOS
 
-var jobTimeout = map[string]time.Duration{"install": 15 * time.Minute, "grant": 10 * time.Minute}
+var jobTimeout = map[string]time.Duration{"install": 15 * time.Minute, "grant": 10 * time.Minute, "open": time.Minute}
 
-// cuaJob is the node's one install or grant: the running one, or the last.
-var cuaJob struct {
+// jobVerbs say a job's kind in Chinese, for 「正在…，等它做完」.
+var jobVerbs = map[string]string{"install": "安装", "grant": "请求授权", "open": "打开"}
+
+// jobSlot is one background job at a time (an install, a grant…): the running one, or the last. Cua Driver and ego
+// lite each have their own (cuaJob, egoJob).
+type jobSlot struct {
 	mu     sync.Mutex
 	job    *proto.ComputerJob
 	cancel context.CancelFunc
 }
 
-func currentJob() *proto.ComputerJob {
-	cuaJob.mu.Lock()
-	defer cuaJob.mu.Unlock()
-	if cuaJob.job == nil {
+// cuaJob is the node's install or grant of Cua Driver.
+var cuaJob jobSlot
+
+func (s *jobSlot) current() *proto.ComputerJob {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.job == nil {
 		return nil
 	}
-	j := *cuaJob.job
+	j := *s.job
 	return &j
 }
 
-// startJob runs run in the background as the node's job of kind; one at a time.
-func startJob(kind string, run func(ctx context.Context, step func(string)) error) error {
-	cuaJob.mu.Lock()
-	defer cuaJob.mu.Unlock()
-	if j := cuaJob.job; j != nil && j.State == "running" {
-		return fmt.Errorf("正在%s，等它做完", map[string]string{"install": "安装", "grant": "请求授权"}[j.Kind])
+// start runs run in the background as the slot's job of kind; one at a time. then, when set, runs after a success.
+func (s *jobSlot) start(kind string, run func(ctx context.Context, step func(string)) error, then func()) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if j := s.job; j != nil && j.State == "running" {
+		return fmt.Errorf("正在%s，等它做完", jobVerbs[j.Kind])
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), jobTimeout[kind])
 	job := &proto.ComputerJob{Kind: kind, State: "running", Started: time.Now().UTC()}
-	cuaJob.job, cuaJob.cancel = job, cancel
+	s.job, s.cancel = job, cancel
 	go func() {
 		defer cancel()
-		err := run(ctx, func(s string) {
-			cuaJob.mu.Lock()
-			job.Step = s
-			cuaJob.mu.Unlock()
+		err := run(ctx, func(step string) {
+			s.mu.Lock()
+			job.Step = step
+			s.mu.Unlock()
 		})
-		cuaJob.mu.Lock()
+		s.mu.Lock()
 		switch {
 		case errors.Is(ctx.Err(), context.Canceled):
 			job.State, job.Step = "cancelled", ""
@@ -83,24 +90,38 @@ func startJob(kind string, run func(ctx context.Context, step func(string)) erro
 		default:
 			job.State, job.Step = "done", ""
 		}
-		cuaJob.mu.Unlock()
-		if kind == "install" && err == nil {
-			_ = startJob("grant", grantCua) // installed: ask for the permissions straight away
+		s.mu.Unlock()
+		if err == nil && then != nil {
+			then()
 		}
 	}()
 	return nil
 }
 
-// cancelJob stops a running install (a grant waits on the Mac's own dialogs: closing those is the user's).
-func cancelJob() bool {
-	cuaJob.mu.Lock()
-	defer cuaJob.mu.Unlock()
-	if j := cuaJob.job; j == nil || j.State != "running" || j.Kind != "install" {
+// cancelInstall stops a running install (a grant or an open waits on the Mac's own windows: closing those is the
+// user's).
+func (s *jobSlot) cancelInstall() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if j := s.job; j == nil || j.State != "running" || j.Kind != "install" {
 		return false
 	}
-	cuaJob.cancel()
+	s.cancel()
 	return true
 }
+
+func currentJob() *proto.ComputerJob { return cuaJob.current() }
+
+// startJob runs a Cua Driver job; an install that worked asks for the permissions straight away.
+func startJob(kind string, run func(ctx context.Context, step func(string)) error) error {
+	var then func()
+	if kind == "install" {
+		then = func() { _ = startJob("grant", grantCua) }
+	}
+	return cuaJob.start(kind, run, then)
+}
+
+func cancelJob() bool { return cuaJob.cancelInstall() }
 
 // installCua downloads Cua's installer, checks it, and runs it: into /Applications and ~/.local/bin, the shell's rc
 // files left alone, with its usage statistics off (also for the install itself).
