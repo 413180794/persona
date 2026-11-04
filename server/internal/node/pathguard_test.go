@@ -101,6 +101,35 @@ func TestPathGuard(t *testing.T) {
 	}
 }
 
+// A home reached through a link (macOS /var -> /private/var, a Linux /home on another disk) still guards its secret
+// folders: following links lands on the physical path, which is home all the same.
+func TestPathGuardHomeBehindALink(t *testing.T) {
+	dir := t.TempDir()
+	real := filepath.Join(dir, "disk", "me")
+	if err := os.MkdirAll(filepath.Join(real, ".ssh"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(real, ".ssh", "config"), []byte("Host x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.MkdirAll(filepath.Join(real, "code"), 0o700)
+	home := filepath.Join(dir, "me")
+	if err := os.Symlink(real, home); err != nil {
+		t.Skip("symlinks:", err)
+	}
+	_ = os.Symlink("../.ssh", filepath.Join(real, "code", "keys"))
+	n := &Node{home: home}
+	if _, err := n.listDir("~/code/keys", ""); !errors.Is(err, errOffLimits) {
+		t.Errorf("list ~/.ssh through a link: %v", err)
+	}
+	if _, err := n.readFile("~/code/keys/config", "", 0, false); !errors.Is(err, errOffLimits) {
+		t.Errorf("read ~/.ssh/config through a link: %v", err)
+	}
+	if _, err := n.listDir("~/code", ""); err != nil {
+		t.Errorf("list ~/code: %v", err)
+	}
+}
+
 func TestRealPathLoop(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.Symlink("b", filepath.Join(dir, "a")); err != nil {

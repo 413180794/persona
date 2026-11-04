@@ -13,7 +13,7 @@ struct MacListBeside<ListContent: View, Page: View>: View {
     let list: ListContent
     let page: Page
     /// The list's width, remembered across launches.
-    @AppStorage private var width: Double
+    @StoredValue private var width: Double
     /// The width while the divider is being dragged.
     @State private var dragging: CGFloat?
     /// The whole width, list and page.
@@ -23,7 +23,7 @@ struct MacListBeside<ListContent: View, Page: View>: View {
         self.listShown = listShown
         self.list = list()
         self.page = page()
-        _width = AppStorage(wrappedValue: Double(Theme.Size.sidebar), widthKey)
+        _width = StoredValue(wrappedValue: Double(Theme.Size.sidebar), widthKey)
     }
 
     static func clamped(_ w: CGFloat) -> CGFloat { min(max(w, Theme.Size.sidebarMin), Theme.Size.sidebarMax) }

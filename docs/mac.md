@@ -286,7 +286,7 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   （每台机器的会话、机器列表的心跳；`steps=0` 时只有每 4 轮对话里多一句话），报这几秒里每个视图的 body 算了几次（`PerfCount`）、每次推送主线程忙多久。
   对话页为什么重算：加 `-showPerfChanges YES`，日志里有 `ChatView` 每次的 `_printChanges()`（哪个 `@State`、哪个被观察的属性变了）。
 - `-showPerfRun sections|chats`：一个一个切侧栏分区 / 打开对话，量动作到下一帧能开始的时间（主线程被占了多久）。
-- `-showPerfRun resize`：窗口宽度在最宽和最窄之间来回拉（同拖窗口边），`-showPerfRun launch`：进程启动到窗口第一帧。
+- `-showPerfRun resize`：窗口宽度在最宽和最窄之间来回拉（同拖窗口边；加 `-perfCounts YES` 报这几秒里各个 body 算了几次），`-showPerfRun launch`：进程启动到窗口第一帧。
 - `-showPerfOut <json> -showPerfQuit YES`，`-showPerfDelay <秒>`。构建：Release 配置（`-O`、整模块）加 `SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG PERF_SIGNPOST'`
   （带 DEBUG 的启动参数，好配对 mock、打开页面），单独的 derivedData。窗口要在最前面（被挡住的窗口 AppKit 不画，数字会偏好看）。
 - 主线程在忙什么：跑的时候 `sample <pid> 5 1 -file x.txt`（系统自带），按主线程的调用树统计；`sample` 会暂停进程，那一轮的帧数据不算。
@@ -326,6 +326,10 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
 - 连上 hub 时注册手机工具（2026-11-05，#1337）：`PhoneToolRegistry.enabledSpecs` 在主线程上按工具逐个问 EventKit 的授权，每次都是一次同步的 XPC（第一次还要建连接）。
   改成在后台问 EventKit、每个来源只问一次（`CalendarAccess.statusesOffMain`）：冷启动的主线程采样里 `enabledSpecs` 145–195 → 37–48 ms，
   其中 EventKit 107–157 → 11–16 ms（各 3 次交替跑，负载 75–125，首帧时间跟着负载乱跳，不拿它比）。iPhone 共用这段，同样受益。
+- 拖窗口时设置页、收件箱还在每帧整页重算（2026-11-05，#1337）：`-showPerfRun resize -perfCounts YES` 报出 `SettingsView` 的 body 一帧两次，
+  因为它和收件箱、View 菜单、检查器、旁边的列表还拿着 `@AppStorage`，分栏每帧写一次 UserDefaults。改成 `@StoredValue` 后（负载 16–42，各 2 次交替）：
+  设置页每帧主线程 19.0 / 22.0 → 5.7 / 6.0 ms，卡顿 288–292 ms/s → 0（60 fps）；收件箱 17.7 / 19.6 → 12.9 / 11.7 ms，卡顿 264–338 → 78 ms/s；
+  对话页不变（约 28 ms、约 500 ms/s，大头在别处）。还拿着 `@AppStorage` 的文件只能减少（`AppStorageRatchetTests`）。
 - 外壳读 `MacTitleRowTaken` 这个 preference（打开对话时调用树里约 9.4%）：这一块大多是页面自己的更新在合并 preference 时被拉着算，拿掉不一定省这么多，要量过再改。
 
 ## SSH 隧道（Mac）

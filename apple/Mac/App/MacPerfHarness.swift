@@ -301,6 +301,7 @@ func round1(_ v: Double) -> Double { (v * 10).rounded() / 10 }
         let start = w.frame
         let seconds = 4.0, span = max(0, start.width - Theme.Size.macWindowMinWidth)
         let cpu0 = macPerfMainThreadCPU()
+        let bodies0 = PerfCount.bodies // `-perfCounts YES`: which bodies the resize evaluates, and how often
         defaults.start()
         let t0 = CACurrentMediaTime()
         clock.onTick = { [weak self] now in
@@ -313,6 +314,11 @@ func round1(_ v: Double) -> Double { (v * 10).rounded() / 10 }
                 var r = self.clock.stats(from: t0, to: t1)
                 r["run"] = "resize"
                 r["mainCPUMsPerS"] = round1((macPerfMainThreadCPU() - cpu0) / (t1 - t0))
+                if PerfCount.enabled {
+                    var bodies: [String: Int] = [:]
+                    for (k, v) in PerfCount.bodies where v - (bodies0[k] ?? 0) > 0 { bodies[k] = v - (bodies0[k] ?? 0) }
+                    r["bodies"] = bodies
+                }
                 r.merge(self.defaults.stop()) { $1 }
                 MacPerfHarness.finish(r)
                 return

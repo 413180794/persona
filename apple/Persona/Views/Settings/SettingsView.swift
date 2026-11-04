@@ -11,8 +11,8 @@ struct SettingsView: View {
     @State private var plugins: [HubPlugin]?
     /// Where links in the plugins' cards open (docs/plugins.md「UI 插槽」).
     @State private var pluginLink: LinkTarget?
-    @AppStorage(TranslationPrefs.enabledKey) private var translating = false
-    @AppStorage(TranslationPrefs.targetKey) private var translateTarget = TranslationPrefs.defaultTarget
+    @StoredValue(TranslationPrefs.enabledKey) private var translating = false
+    @StoredValue(TranslationPrefs.targetKey) private var translateTarget = TranslationPrefs.defaultTarget
 
     /// The hub row's value: an update out or under way, else its version.
     private var hubSummary: String {
@@ -913,9 +913,9 @@ struct ClaudeSettingsView: View {
     @Environment(AppModel.self) private var model
     var agent: AgentSettingsKind = .claude
     /// The machine id, "group|id" for another group of hubs (`MachineRef.path`).
-    @AppStorage("claudeSettings.machine") private var machineID = ""
+    @StoredValue("claudeSettings.machine") private var machineID = ""
     private var ref: MachineRef { MachineRef(path: machineID) }
-    @AppStorage("claudeSettings.applyAll") private var applyAll = true
+    @StoredValue("claudeSettings.applyAll") private var applyAll = true
     @State private var settings: [APIClient.ClaudeSetting] = []
     @State private var loading = false
     @State private var error: String?

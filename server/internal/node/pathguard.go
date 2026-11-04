@@ -70,8 +70,7 @@ func (n *Node) offLimits(path string) error {
 	if n.home == "" {
 		return nil
 	}
-	home := fold(filepath.Clean(n.home))
-	rel, ok := strings.CutPrefix(p, home+"/")
+	rel, ok := homeRel(p, n.home)
 	if !ok {
 		return nil
 	}
@@ -86,6 +85,19 @@ func (n *Node) offLimits(path string) error {
 		}
 	}
 	return nil
+}
+
+// homeRel is the folded path p relative to home, home as written or with its links followed: realPath hands over
+// the physical path, so a home behind a link (/var -> /private/var) is matched both ways.
+func homeRel(p, home string) (string, bool) {
+	home = filepath.Clean(home)
+	if rel, ok := strings.CutPrefix(p, fold(home)+"/"); ok {
+		return rel, true
+	}
+	if real, err := filepath.EvalSymlinks(home); err == nil && real != home {
+		return strings.CutPrefix(p, fold(real)+"/")
+	}
+	return "", false
 }
 
 // realPath follows the links in an absolute, clean path one component at a time, checking each step with offLimits

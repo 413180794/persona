@@ -38,9 +38,9 @@ enum MacViewCommands {
 struct MacViewMenu: Commands {
     let model: AppModel
     // The same settings as the Agents list's ⋯ menu (AgentsListMenu).
-    @AppStorage("dev.grouping") private var grouping: DevGrouping = .space
-    @AppStorage("dev.compact") private var compact = false
-    @AppStorage(MacSection.sidebarHiddenKey) private var sidebarHidden = false
+    @StoredValue("dev.grouping") private var grouping: DevGrouping = .space
+    @StoredValue("dev.compact") private var compact = false
+    @StoredValue(MacSection.sidebarHiddenKey) private var sidebarHidden = false
 
     var body: some Commands {
         CommandGroup(after: .toolbar) {

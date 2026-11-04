@@ -210,3 +210,10 @@
 - 量这种「连上之后才发生」的事别只看首帧时间：负载一高首帧乱跳；冷启动时 `sample` 主线程 6 秒，按函数统计采样数前后比。
 - 新编出来的包头一两次启动会慢很多（LaunchServices、签名检查），A/B 之前每个包先启动一次扔掉。
 
+## 拖窗口卡：先数 body，再看采样（2026-11-05，#1337）
+
+- 采样只看得到 AppKit / SwiftUI 的整窗布局，分不出是哪一页。`-showPerfRun resize -perfCounts YES` 一跑就看到设置页的 body 一帧两次：
+  还拿着 `@AppStorage` 的视图在分栏每帧写 UserDefaults 时整页重算（#1473 只换了外壳和 Agents 列表）。剩下的都换成 `@StoredValue`，
+  `AppStorageRatchetTests` 管着不再新加。
+- 看「每帧主线程 CPU」（`mainCPUMsPerS ÷ fps`）比看卡顿稳：卡顿跟着机器负载乱跳，每帧 CPU 在负载几十时还算稳。
+

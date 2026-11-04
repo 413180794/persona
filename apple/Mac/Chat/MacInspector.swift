@@ -12,7 +12,7 @@ extension View {
 private struct MacInspectorHost<Panel: View>: ViewModifier {
     @Binding var shown: Bool
     let panel: () -> Panel
-    @AppStorage("mac.inspector.width") private var width: Double = Theme.Size.macInspector
+    @StoredValue("mac.inspector.width") private var width: Double = Theme.Size.macInspector
     @State private var dragging: Double?
 
     func body(content: Content) -> some View {

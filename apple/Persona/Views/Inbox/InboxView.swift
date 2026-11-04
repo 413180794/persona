@@ -41,8 +41,8 @@ struct InboxPage: View {
     @Binding var path: NavigationPath
     @ObservedObject var accountState: InboxAccountState
     var embedded = false
-    @AppStorage("inbox.source") private var source = "" // "" all, "feishu", or a mail account id
-    @AppStorage("inbox.kind") private var kind = ""     // "" all, agent, dm, mention, group, mail
+    @StoredValue("inbox.source") private var source = "" // "" all, "feishu", or a mail account id
+    @StoredValue("inbox.kind") private var kind = ""     // "" all, agent, dm, mention, group, mail
     @State private var query = ""
     private var accounts: [MailAccount] {
         get { accountState.accounts }
@@ -406,8 +406,8 @@ struct InboxRow: View {
     var send: ((String) -> Void)?
     var edit: (() -> Void)?
 
-    @AppStorage(TranslationPrefs.targetKey) private var translateTarget = TranslationPrefs.defaultTarget
-    @AppStorage(TranslationPrefs.enabledKey) private var translating = false
+    @StoredValue(TranslationPrefs.targetKey) private var translateTarget = TranslationPrefs.defaultTarget
+    @StoredValue(TranslationPrefs.enabledKey) private var translating = false
 
     /// 设置 › 翻译: the hub's translation of foreign mail, done as it came in (subject and preview).
     private var translated: InboxItem.Translated? { translating && TranslationPrefs.mail ? item.translated(translateTarget) : nil }
