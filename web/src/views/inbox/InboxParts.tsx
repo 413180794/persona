@@ -1,4 +1,4 @@
-// Small pieces the inbox pages share: avatars (chat, mail, document, removed) with their source mark, tags, counts,
+// Small pieces the inbox pages share: avatars (chat, mail, document, 公司圈) with their source mark, tags, counts,
 // the AI 分身's draft card, a document row's status menu, and the few glyphs the shared icon set does not have.
 import type { CSSProperties, ReactNode } from "react";
 import {
@@ -73,7 +73,7 @@ export function Monogram({ name, size = 40, square, neutral, src }: { name: stri
   );
 }
 
-/** The 40px avatar of a row: chat / sender, or a tinted square for a document or a removed post; a small mark of
+/** The 40px avatar of a row: chat / sender, or a tinted square for a document or a 公司圈 post; a small mark of
  * where it came from in the corner (飞书's own, mail a neutral gray). */
 export function ItemAvatar({ it, size = 40 }: { it: InboxItem; size?: number }) {
   const icon = Math.round(size * 0.45);

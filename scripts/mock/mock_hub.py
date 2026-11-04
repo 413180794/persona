@@ -5923,6 +5923,83 @@ def png(w, h, rgb):
             + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
 
 
+# MOCK_SCREEN=fake (#1322): the live screen's 5900 goes to a Screen Sharing of the mock's own instead of this Mac's: it
+# signs in with VeNCrypt Plain (noVNC asks for an account and a password, as for macOS's), takes FAKE_SCREEN's account
+# and password (GET /mock/screen-password?p=… changes the password: the Mac's was changed), then shows one frame.
+FAKE_SCREEN = {"account": "me", "password": "mock-pass", "port": 0, "signins": []}
+
+
+def fake_screen_sharing():
+    """Listens on 127.0.0.1 and serves RFB 3.8 with VeNCrypt Plain; its port is FAKE_SCREEN["port"]."""
+    import socket
+
+    def exact(c, n):
+        b = b""
+        while len(b) < n:
+            got = c.recv(n - len(b))
+            if not got: raise OSError("closed")
+            b += got
+        return b
+
+    def serve(c):
+        try:
+            c.sendall(b"RFB 003.008\n"); exact(c, 12)
+            c.sendall(bytes([1, 19])); exact(c, 1)                      # one security type: VeNCrypt
+            c.sendall(bytes([0, 2])); exact(c, 2); c.sendall(bytes([0]))  # its version 0.2, agreed
+            c.sendall(bytes([1]) + struct.pack(">I", 256)); exact(c, 4)  # one subtype: Plain
+            ulen, plen = struct.unpack(">II", exact(c, 8))
+            user, pw = exact(c, ulen).decode(), exact(c, plen).decode()
+            ok = user == FAKE_SCREEN["account"] and pw == FAKE_SCREEN["password"]
+            FAKE_SCREEN["signins"].append({"account": user, "ok": ok})  # never the password
+            if not ok:
+                why = b"Authentication failed"
+                c.sendall(struct.pack(">I", 1) + struct.pack(">I", len(why)) + why); return
+            c.sendall(struct.pack(">I", 0)); exact(c, 1)                   # SecurityResult ok; ClientInit
+            w, h = 480, 300
+            fmt = struct.pack(">BBBBHHHBBB3x", 32, 24, 0, 1, 255, 255, 255, 16, 8, 0)
+            name = b"Mock Mac"
+            c.sendall(struct.pack(">HH", w, h) + fmt + struct.pack(">I", len(name)) + name)
+            sent = False
+            while True:  # SetPixelFormat 20, SetEncodings 4 + 4n, FramebufferUpdateRequest 10, key 8, pointer 6
+                kind = exact(c, 1)[0]
+                if kind == 0: exact(c, 19)
+                elif kind == 2: exact(c, 1); n = struct.unpack(">H", exact(c, 2))[0]; exact(c, 4 * n)
+                elif kind == 3:
+                    exact(c, 9)
+                    if sent: continue
+                    sent = True  # one frame: a desktop with a window on it, as the client's 32-bit little-endian RGB
+                    px = bytearray()
+                    for y in range(h):
+                        for x in range(w):
+                            inside = 60 <= x < 420 and 50 <= y < 250
+                            bar = inside and y < 74
+                            r, g, b = (236, 236, 238) if bar else (250, 250, 252) if inside else (40 + y // 6, 90 + y // 8, 160)
+                            px += bytes([r, g, b, 0])
+                    c.sendall(struct.pack(">BxH", 0, 1) + struct.pack(">HHHHi", 0, 0, w, h, 0) + bytes(px))
+                elif kind == 4: exact(c, 7)
+                elif kind == 5: exact(c, 5)
+                elif kind == 6: exact(c, 7); exact(c, struct.unpack(">I", exact(c, 4))[0])
+                else: return
+        except OSError:
+            pass
+        finally:
+            c.close()
+
+    srv = socket.socket(); srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("127.0.0.1", 0)); srv.listen(8)
+    FAKE_SCREEN["port"] = srv.getsockname()[1]
+
+    def accept():
+        while True:
+            c, _ = srv.accept()
+            threading.Thread(target=serve, args=(c,), daemon=True).start()
+    threading.Thread(target=accept, daemon=True).start()
+
+
+if os.environ.get("MOCK_SCREEN") == "fake":
+    fake_screen_sharing()
+
+
 def calculator_png(w=230, h=408):
     """A made-up Calculator window showing 42, drawn here (stdlib only): the screenshot computer_state brings back."""
     import zlib
@@ -7048,6 +7125,9 @@ class H(BaseHTTPRequestHandler):
             if "mode" in q:
                 GIT_PULL_STATE.update(behind=28, mode=q["mode"][0], pulls=0)
             return self.send_json(GIT_PULL_STATE)
+        if p == "/mock/screen-password":  # MOCK_SCREEN=fake: the Mac's password changed; and who signed in how
+            if "p" in q: FAKE_SCREEN["password"] = q["p"][0]
+            return self.send_json({"signins": FAKE_SCREEN["signins"]})
         if p == "/mock/churn":
             CHURN["rounds"] = 0
             threading.Thread(target=churn, args=(int(q.get("n", ["20"])[0]), int(q.get("ms", ["300"])[0]),
@@ -8567,7 +8647,8 @@ class H(BaseHTTPRequestHandler):
         listed = listed or (port == 5900 and machine.get("computer", {}).get("enabled"))
         if not listed: return self.send_json({"error": "port %d is not an agent's and was not opened" % port}, 403)
         try:
-            tcp = socket.create_connection(("127.0.0.1", port), timeout=3)
+            to = FAKE_SCREEN["port"] if port == 5900 and FAKE_SCREEN["port"] else port
+            tcp = socket.create_connection(("127.0.0.1", to), timeout=3)
             tcp.settimeout(None)
         except OSError:
             return self.send_json({"error": "nothing is listening on port %d" % port}, 404)

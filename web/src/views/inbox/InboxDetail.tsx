@@ -1,5 +1,5 @@
 // One item opened: what it is and where from, 已处理 on the right; the AI's summary with AI 草拟回复 / 交给 AI; then
-// the thing itself — the Feishu chat at its first new message, the mail, the document's rows, the removed post.
+// the thing itself — the Feishu chat at its first new message, the mail, the document's rows, the 公司圈 post.
 import { useEffect, useState } from "react";
 import { agentDraft, agentWorking, canDraft, isDone, kindLabel, labelIsUrgent, openTitle, openURL, setDone, shortTime, sourceLine, type InboxItem } from "../../lib/inbox";
 import { navigate } from "../../lib/router";

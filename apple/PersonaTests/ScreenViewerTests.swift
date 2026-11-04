@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import Testing
 @testable import Jarvis
 
@@ -27,5 +28,31 @@ struct ScreenViewerTests {
         }
         let plain = try #require(ScreenViewer.url(page, token: "jd_cafe00a1", name: nil))
         #expect(plain.absoluteString == "http://127.0.0.1:18660/screen/macstudio#token=jd_cafe00a1&embed=1")
+        let kept = try #require(ScreenViewer.url(page, token: "jd_cafe00a1", name: nil, keep: "phone"))
+        #expect(read(kept)["keep"] == "phone", "this device remembers the Mac's sign-in (#1322)")
+    }
+
+    /// The Mac's Screen Sharing sign-in, kept on this device (#1322): by machine, readable only while it is unlocked,
+    /// never synced; forgotten for good.
+    @Test func theSignInStaysOnThisDevice() throws {
+        let ref = MachineRef(group: "", id: "unit-test-mac")
+        ScreenCredentials.forget(ref)
+        #expect(ScreenCredentials.load(ref) == nil)
+        #expect(ScreenCredentials.save(.init(account: "me", password: "p+w/ord"), for: ref))
+        #expect(ScreenCredentials.load(ref) == .init(account: "me", password: "p+w/ord"))
+        #expect(ScreenCredentials.load(MachineRef(group: "other", id: "unit-test-mac")) == nil, "another hub's Mac is another")
+
+        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: ScreenCredentials.service,
+                                kSecAttrAccount as String: ScreenCredentials.key(ref), kSecReturnAttributes as String: true,
+                                kSecMatchLimit as String: kSecMatchLimitOne]
+        var out: AnyObject?
+        #expect(SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess)
+        let attributes = try #require(out as? [String: Any])
+        #expect(attributes[kSecAttrAccessible as String] as? String == kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String)
+        #expect((attributes[kSecAttrSynchronizable as String] as? Bool ?? false) == false)
+
+        #expect(!ScreenCredentials.save(.init(account: "me", password: ""), for: ref), "nothing to keep")
+        ScreenCredentials.forget(ref)
+        #expect(ScreenCredentials.load(ref) == nil)
     }
 }

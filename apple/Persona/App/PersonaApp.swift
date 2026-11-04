@@ -70,6 +70,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
         // `-openRecapsFresh YES`: no away recap closed yet, so the newest shows open again (RecapInFlowTests).
         if d.bool(forKey: "openRecapsFresh") { d.removeObject(forKey: "closedRecaps") }
+        // `-openScreenFresh YES`: no Mac's Screen Sharing sign-in remembered (ScreenPasswordTests, #1322).
+        if d.bool(forKey: "openScreenFresh") { ScreenCredentials.forgetAll() }
         #if os(iOS)
         PagePerf.runIfAsked()
         #endif

@@ -14,6 +14,8 @@ struct ComputerSection: View {
     @State private var saving = false
     @State private var asking = false
     @State private var checking = false
+    /// This device remembers the Mac's Screen Sharing sign-in (#1322).
+    @State private var screenKept = false
 
     private var shown: MachineComputer { fresh ?? computer }
 
@@ -52,6 +54,7 @@ struct ComputerSection: View {
                 await refresh()
             }
         }
+        .task(id: model.screenOpen == nil) { screenKept = ScreenCredentials.load(ref) != nil } // the drawer may have saved it
     }
 
     // MARK: State
@@ -89,7 +92,14 @@ struct ComputerSection: View {
         } else if c.ready {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 line("现在可以操控" + (c.version.map { " · Cua Driver \($0)" } ?? ""), ok: true)
-                if c.screenSharing { look(prominent: false) } else { Self.noScreenSharing }
+                if c.screenSharing {
+                    HStack(spacing: Theme.Space.s) {
+                        look(prominent: false)
+                        if screenKept { ScreenForgetButton(ref: ref, kept: $screenKept) }
+                    }
+                } else {
+                    Self.noScreenSharing
+                }
             }
         } else {
             line(c.note ?? "还不知道能不能操控", ok: false)

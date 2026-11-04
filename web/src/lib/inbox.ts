@@ -1,4 +1,4 @@
-// The unified inbox (docs/inbox.md): the hub's items (Feishu chats, mail threads, Feishu documents, removed posts, and
+// The unified inbox (docs/inbox.md): the hub's items (Feishu chats, mail threads, Feishu documents, 公司圈 posts, and
 // the connectors' threads: GitHub, Telegram…, drawn from their generic `connector` block),
 // kept in one module-level list so the sidebar's badge and the page share it. Pulled on first use, again on `inbox`
 // pushes and on (re)connect. Marking done applies at once and is sent in the background; a failure puts it back.
@@ -187,7 +187,7 @@ export function kindLabel(it: InboxItem): string | undefined {
     case "doc":
       return it.doc?.notice === "comment" || it.doc?.notice === "reply" ? "评论" : "@我";
     case "moment":
-      return it.moment?.notice?.startsWith("atIn") ? "@我" : "removed";
+      return it.moment?.notice?.startsWith("atIn") ? "@我" : "公司圈";
     default:
       return undefined;
   }
@@ -231,7 +231,7 @@ export function fromLine(it: InboxItem, preview?: string): string {
 /** Where it came from, for the detail page's subtitle. */
 export function sourceLine(it: InboxItem): string {
   if (it.doc) return [docTypeName(it.doc.type), it.preview].filter(Boolean).join(" · ");
-  if (it.moment) return it.moment.my_post ? "removed · 你的帖子" : "removed";
+  if (it.moment) return it.moment.my_post ? "公司圈 · 你的帖子" : "公司圈";
   if (it.connector) return [it.account_name || it.source, connectorReference(it)].filter(Boolean).join(" · ");
   // 飞书 · <name> while the hub reads more than one Feishu account
   if (isLark(it)) return [it.account_name?.startsWith("飞书 · ") ? it.account_name : "飞书", it.lark?.is_group ? "群聊" : it.kind === "bot" ? "机器人" : "私聊"].join(" · ");
@@ -572,7 +572,7 @@ export function cardText(meta: Record<string, unknown> | undefined): { title: st
   return { title, lines: lines.filter((l, i) => l !== title && l !== lines[i - 1]) };
 }
 
-// ── removed ───────────────────────────────────────────────
+// ── 公司圈 ───────────────────────────────────────────────
 
 export interface MomentContent {
   text?: string;

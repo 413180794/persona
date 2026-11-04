@@ -5,8 +5,9 @@
 
 import { getToken } from "../lib/api";
 
-/** `name`: the machine as the app calls it (Mac Studio), shown until the hub says; else its id. */
-export type ScreenTarget = { mid: string; token: string; embedded: boolean; name: string };
+/** `name`: the machine as the app calls it (Mac Studio), shown until the hub says; else its id. `keep`: the app that
+ * opened it remembers the Mac's sign-in (#1322: "phone" | "mac"), "" in a browser. */
+export type ScreenTarget = { mid: string; token: string; embedded: boolean; name: string; keep: "" | "phone" | "mac" };
 
 /** /screen/<mid> → mid; anything else is not the live screen. */
 export function screenMachine(pathname: string): string | null {
@@ -22,12 +23,15 @@ export function screenTarget(href: string, stored: () => string = getToken): { t
   const token = hash.get("token")?.trim() ?? "";
   const embedded = hash.get("embed") === "1";
   const name = hash.get("name")?.trim() || "";
+  const kept = hash.get("keep");
+  const keep = embedded && (kept === "phone" || kept === "mac") ? kept : "";
   hash.delete("token");
   hash.delete("embed");
   hash.delete("name");
+  hash.delete("keep");
   const rest = u.pathname + u.search + (hash.toString() ? "#" + hash.toString() : "");
   if (!mid) return { target: null, rest };
-  return { target: { mid, token: token || stored(), embedded, name: name || mid }, rest };
+  return { target: { mid, token: token || stored(), embedded, name: name || mid, keep }, rest };
 }
 
 /** The WebSocket that carries the Mac's VNC (its port 5900) through the hub's port relay (docs/ports.md). */
@@ -40,4 +44,15 @@ export function screenSocket(location: { protocol: string; host: string }, mid: 
 export function accountOf(home: string | undefined): string {
   const m = /^\/Users\/([^/]+)\/?$/.exec(home ?? "");
   return m ? m[1] : "";
+}
+
+/** The sign-in's 记住 box: where the app keeps the account and password. */
+export function keepLabel(keep: ScreenTarget["keep"]): string {
+  return keep === "mac" ? "在这台 Mac 上记住" : "在这台手机上记住";
+}
+
+/** What the page tells the app that opened it (its WKScriptMessageHandler "screen"); nothing in a browser. */
+export function toApp(message: Record<string, unknown>): void {
+  const w = window as unknown as { webkit?: { messageHandlers?: { screen?: { postMessage(m: unknown): void } } } };
+  w.webkit?.messageHandlers?.screen?.postMessage(message);
 }

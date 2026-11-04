@@ -19,7 +19,7 @@ import { Spark } from "./InboxParts";
 const changeKey = (c: DocChange) => `${c.ref}|${c.field}`;
 
 export function draftTitle(it: InboxItem): string {
-  if (it.moment) return "评论removed";
+  if (it.moment) return "评论公司圈";
   if (it.doc) return `评论 ${it.title}`;
   if (it.connector) {
     // A pull request / issue is commented on (评论 #12); a chat is answered.

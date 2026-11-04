@@ -1,11 +1,12 @@
 // The knowledge page's dialogs: 打标 (importance, relevance, tags, a project's kind and status), one day of a chat's
-// archive opened at a found message, and one archived removed post.
+// archive opened at a found message, and one archived 公司圈 post.
 import { useEffect, useRef, useState } from "react";
 import { api, enc, errorText, isAbort } from "../../lib/api";
 import {
   dayTitle,
   dropTitle,
   IMPORTANCE,
+  momentFeed,
   parseMessageLine,
   PROJECT_KINDS,
   PROJECT_STATUSES,
@@ -229,7 +230,7 @@ export function DayDialog({ chat, chatName, day, focus, query, onClose }: { chat
   );
 }
 
-/** One archived removed post: its text and every comment as the crawler kept them. */
+/** One archived post (公司圈, or the feed it names): its text and every comment as they were archived. */
 export function MomentDialog({ moment, onClose }: { moment: KBMomentRef | null; onClose: () => void }) {
   const [md, setMd] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -244,7 +245,7 @@ export function MomentDialog({ moment, onClose }: { moment: KBMomentRef | null; 
     return () => ac.abort();
   }, [moment]);
   return (
-    <Dialog open={Boolean(moment)} onClose={onClose} width={600} title="removed">
+    <Dialog open={Boolean(moment)} onClose={onClose} width={600} title={moment ? momentFeed(moment) : "公司圈"}>
       <div className="-mx-4 max-h-[65vh] overflow-y-auto px-4 pb-1">
         {moment?.note && (
           <p className="mb-3 flex items-center gap-1.5 text-[12.5px] font-medium text-accent-ink">

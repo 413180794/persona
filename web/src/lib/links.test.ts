@@ -61,9 +61,16 @@ describe("where a link opens", () => {
     expect(opensInApp("https://example.com/docx/AbC")).toBe(false);
   });
 
-  it("reads removed share links as the post", () => {
+  it("reads 公司圈 share links as the post", () => {
     expect(linkRoute("https://example.feishu.cn/client/moments/detail?postId=12345")).toEqual({ kind: "moments", id: "12345" });
     expect(linkRoute("https://example.feishu.cn/client/moments/detail?postId=abc").kind).toBe("web");
+  });
+
+  it("opens Feishu documents and 公司圈 posts as ordinary pages on a hub without lark", () => {
+    expect(linkRoute("https://example.feishu.cn/docx/AbC", false).kind).toBe("web");
+    expect(linkRoute("https://example.feishu.cn/client/moments/detail?postId=12345", false).kind).toBe("web");
+    expect(linkRoute("https://example.feishu.cn/docx/AbC", true)).toEqual({ kind: "doc", doc: "doc" });
+    expect(linkRoute("jarvis://session/macbook/abc-1", false).kind).toBe("session");
   });
 
   it("moves to a conversation for jarvis://session links, and gives them an in-app href", () => {

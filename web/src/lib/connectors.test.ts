@@ -39,6 +39,8 @@ describe("连接器的状态", () => {
   it("leaves mail and Feishu to their own groups", () => {
     const list = [conn("ok", { id: "lark" }), conn("ok", { id: "mail" }), conn("ok"), conn("ok", { id: "telegram" })];
     expect(otherConnectors(list).map((c) => c.id)).toEqual(["github", "telegram"]);
+    // no 飞书 group (a hub without lark): a connector named lark is listed with the rest
+    expect(otherConnectors(list, false).map((c) => c.id)).toEqual(["lark", "github", "telegram"]);
   });
 
   it("has a mark only for the connectors that have one; the rest draw the generic icon", () => {

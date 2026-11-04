@@ -23,7 +23,7 @@ struct ScreenDrawer: View {
                 if let a = model.computerActivities[ref], a.shown(at: ctx.date) { stepLine(a) }
             }
             if let url = ScreenViewer.url(model, ref) {
-                ScreenWebView(url: url, control: control, page: page)
+                ScreenWebView(url: url, control: control, page: page, machine: ref)
                     .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
                     .padding(.horizontal, Theme.Space.s)
             } else {
@@ -110,19 +110,26 @@ struct ScreenDrawer: View {
 enum ScreenViewer {
     @MainActor static func url(_ model: AppModel, _ ref: MachineRef) -> URL? {
         guard let api = model.api(ref.group) else { return nil }
-        return url(api.url("/screen/\(ref.id)"), token: api.config.token, name: model.machine(ref)?.name)
+        #if os(macOS)
+        let keep = "mac"
+        #else
+        let keep = "phone"
+        #endif
+        return url(api.url("/screen/\(ref.id)"), token: api.config.token, name: model.machine(ref)?.name, keep: keep)
     }
 
     /// RFC 3986's unreserved characters, the only ones that go into the fragment as they are.
     nonisolated static let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
 
-    /// The page with this device's token and the Mac's name in its fragment (`#token=…&name=…&embed=1`), each value
-    /// percent-encoded once: the page reads them back with URLSearchParams. Set as the encoded fragment, since
-    /// `URLComponents.fragment` encodes a second time (a `jd_` token arrived as `jd%5F`, #1498).
-    nonisolated static func url(_ page: URL, token: String, name: String?) -> URL? {
+    /// The page with this device's token and the Mac's name in its fragment (`#token=…&name=…&keep=phone&embed=1`),
+    /// each value percent-encoded once: the page reads them back with URLSearchParams. Set as the encoded fragment,
+    /// since `URLComponents.fragment` encodes a second time (a `jd_` token arrived as `jd%5F`, #1498). `keep`: this
+    /// device remembers the Mac's sign-in (phone | mac, #1322), the page offers 「在这台手机上记住」.
+    nonisolated static func url(_ page: URL, token: String, name: String?, keep: String? = nil) -> URL? {
         func encoded(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: unreserved) ?? "" }
         var parts = ["token=" + encoded(token)]
         if let name, !name.isEmpty { parts.append("name=" + encoded(name)) }
+        if let keep { parts.append("keep=" + encoded(keep)) }
         parts.append("embed=1")
         var c = URLComponents(url: page, resolvingAgainstBaseURL: false)
         c?.percentEncodedFragment = parts.joined(separator: "&")
@@ -172,12 +179,38 @@ extension View {
 /// The page in a web view that stores nothing; it posts its phase (`screen` message), and 只看 / 接管 is passed in.
 private final class ScreenBridge: NSObject, WKScriptMessageHandler {
     let page: ScreenPageState
-    init(page: ScreenPageState) { self.page = page }
+    let machine: MachineRef
+    init(page: ScreenPageState, machine: MachineRef) {
+        self.page = page
+        self.machine = machine
+    }
 
+    /// The page's phase, and the Mac's sign-in (#1322): asked for when the Mac wants one (answered from the keychain,
+    /// or null for the form), handed over once it worked and 「在这台手机上记住」 was on, or forgotten when it was off.
     func userContentController(_ c: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard let body = message.body as? [String: Any], let raw = body["phase"] as? String,
-              let phase = ScreenPageState.Phase(rawValue: raw) else { return }
-        MainActor.assumeIsolated { page.phase = phase }
+        MainActor.assumeIsolated {
+            guard let body = message.body as? [String: Any] else { return }
+            if let raw = body["phase"] as? String, let phase = ScreenPageState.Phase(rawValue: raw) { page.phase = phase }
+            switch body["credentials"] as? String {
+            case "wanted":
+                message.webView?.evaluateJavaScript("window.personaScreen && window.personaScreen.signIn(\(Self.script(ScreenCredentials.load(machine))))")
+            case "worked":
+                if let account = body["account"] as? String, let password = body["password"] as? String {
+                    ScreenCredentials.save(.init(account: account, password: password), for: machine)
+                }
+            case "forget":
+                ScreenCredentials.forget(machine)
+            default:
+                break
+            }
+        }
+    }
+
+    /// Saved as a JavaScript value: a JSON object, or null.
+    static func script(_ saved: ScreenCredentials.Saved?) -> String {
+        guard let saved, let data = try? JSONSerialization.data(withJSONObject: ["account": saved.account, "password": saved.password]),
+              let json = String(data: data, encoding: .utf8) else { return "null" }
+        return json
     }
 
     static func configuration(_ bridge: ScreenBridge) -> WKWebViewConfiguration {
@@ -197,8 +230,9 @@ private struct ScreenWebView: UIViewRepresentable {
     let url: URL
     var control: Bool
     let page: ScreenPageState
+    let machine: MachineRef
 
-    func makeCoordinator() -> ScreenBridge { ScreenBridge(page: page) }
+    func makeCoordinator() -> ScreenBridge { ScreenBridge(page: page, machine: machine) }
 
     func makeUIView(context: Context) -> WKWebView {
         let v = WKWebView(frame: .zero, configuration: ScreenBridge.configuration(context.coordinator))
@@ -227,8 +261,9 @@ private struct ScreenWebView: NSViewRepresentable {
     let url: URL
     var control: Bool
     let page: ScreenPageState
+    let machine: MachineRef
 
-    func makeCoordinator() -> ScreenBridge { ScreenBridge(page: page) }
+    func makeCoordinator() -> ScreenBridge { ScreenBridge(page: page, machine: machine) }
 
     func makeNSView(context: Context) -> WKWebView {
         let v = WKWebView(frame: .zero, configuration: ScreenBridge.configuration(context.coordinator))

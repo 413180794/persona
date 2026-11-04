@@ -1,11 +1,12 @@
 // A link opened in the side panel (CLAUDE.md「链接在 App 内打开」, docs/web.md「链接」): Feishu documents in a reader
-// (the phone's FeishuDocReader), removed posts as the post; any other page belongs in a browser tab (lib/links.ts says
+// (the phone's FeishuDocReader), 公司圈 posts as the post, while the hub reads Feishu (feature `lark`); any other page belongs in a browser tab (lib/links.ts says
 // why), so one that lands here says so and opens the tab. Text selected in the reader can go to the agent:
 // 「作为上下文」 rides along with the next message, 「AI 修改」 asks for a change at once (<jarvis-context>).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, enc, getToken } from "../../lib/api";
 import { ago } from "../../lib/format";
 import { DOC_LABEL, docKind, linkRoute, newContext, type ContextRef } from "../../lib/links";
+import { useLarkOn } from "../../lib/store";
 import { Button, copyText, cx, Dialog, EASE, IconButton, Menu, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { PanelHeader } from "../SidePanel";
@@ -15,7 +16,8 @@ import { giveContext, giveEdit, handoffLabel } from "./handoff";
 import { QuoteIcon } from "./QuoteIcon";
 
 export function LinkPanel({ url, title, onClose }: { url: string; title?: string; onClose: () => void }) {
-  const r = linkRoute(url);
+  // a panel opened before the hub said what it has turns into the ordinary page once it says it has no Feishu
+  const r = linkRoute(url, useLarkOn());
   if (r.kind === "doc") return <DocPanel url={url} title={title} onClose={onClose} />;
   if (r.kind === "moments") return <MomentsPanel id={r.id} url={url} onClose={onClose} />;
   return <WebPanel url={url} title={title} onClose={onClose} />;
@@ -247,7 +249,7 @@ function Skeleton({ title }: { title?: string }) {
   );
 }
 
-// ── removed posts ──
+// ── 公司圈 posts ──
 
 interface MomentsPost {
   userName?: string;
@@ -294,7 +296,7 @@ function MomentsPanel({ id, url, onClose }: { id: string; url: string; onClose: 
     };
   }, [id, round]);
 
-  const name = post?.userName ? `removed · ${post.userName}` : "removed";
+  const name = post?.userName ? `公司圈 · ${post.userName}` : "公司圈";
   const pick = (text: string, k: ContextRef["kind"]) => {
     const ref = newContext(k, name, url, text);
     if (k === "edit") setEditing(ref);
@@ -370,7 +372,7 @@ function MomentsPanel({ id, url, onClose }: { id: string; url: string; onClose: 
 // ── any other page ──
 
 function WebPanel({ url, title, onClose }: { url: string; title?: string; onClose: () => void }) {
-  const web = linkRoute(url).kind === "web";
+  const web = linkRoute(url, false).kind === "web";
   return (
     <>
       <PanelHeader icon="web" title={title || host(url)} subtitle={host(url)} onClose={onClose} actions={<MoreMenu url={url} />} />

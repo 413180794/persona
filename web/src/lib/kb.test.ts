@@ -10,6 +10,7 @@ import {
   factsOf,
   formatAt,
   groupEntries,
+  momentFeed,
   groupResults,
   hitView,
   initial,
@@ -177,6 +178,12 @@ describe("search", () => {
 });
 
 describe("detail", () => {
+  it("names a post's feed as archived, else 公司圈", () => {
+    expect(momentFeed({ feed: "内部圈" })).toBe("内部圈");
+    expect(momentFeed({ feed: " " })).toBe("公司圈");
+    expect(momentFeed({})).toBe("公司圈");
+  });
+
   it("reads the timeline newest first", () => {
     expect(parseLogLine("- 2026-10-28 11:02 · Agent · 数据层 · MacBook · 数据层复用逐小时预报")).toEqual({
       when: "2026-10-28 11:02",

@@ -1,7 +1,8 @@
 // Where a link opens (CLAUDE.md「链接在 App 内打开」, docs/web.md「链接」). In a browser the browser is the app:
 // ordinary pages open in a new tab (most sites refuse to be framed and the page cannot tell it was refused, so a
-// framed panel would just be blank), Feishu documents and removed posts open in the side panel's reader (the same links
-// the phone reads natively, FeishuLinks.route), and jarvis://session links move to that conversation.
+// framed panel would just be blank), Feishu documents and 公司圈 posts open in the side panel's reader (the same links
+// the phone reads natively, FeishuLinks.route) when the hub reads Feishu (feature `lark`; otherwise they are ordinary
+// pages), and jarvis://session links move to that conversation.
 //
 // Also the hand-off between the reader and the composers: text picked in the panel goes to the composer the user is
 // writing in, as <jarvis-context> tags in the next message (docs/protocol.md「消息里的标签」).
@@ -9,13 +10,14 @@ import { useSyncExternalStore } from "react";
 import { uuid } from "./format";
 import { openPanel } from "./panel";
 import { navigate } from "./router";
+import { larkOn } from "./store";
 
 /** What a Feishu document link points at, from the link alone (FeishuDocsKind.from). A wiki link does not say. */
 export type DocKind = "doc" | "sheet" | "bitable" | "mindnote" | "file" | "slides" | "wiki" | "page" | "whiteboard" | "other";
 
 export type LinkRoute =
   | { kind: "doc"; doc: DocKind } // a Feishu cloud document: the panel's reader
-  | { kind: "moments"; id: string } // a removed post: the panel
+  | { kind: "moments"; id: string } // a 公司圈 post: the panel
   | { kind: "session"; mid: string; sid: string } // jarvis://session/<machine>/<session>: that conversation
   | { kind: "web" } // any other http(s) page: a new tab
   | { kind: "system" } // mailto: / tel:: the browser hands it to the system
@@ -83,14 +85,15 @@ export const DOC_LABEL: Record<DocKind, string> = {
   other: "文档",
 };
 
-/** A removed share link's post id (LarkMoments.postID). */
+/** A 公司圈 share link's post id (LarkMoments.postID). */
 function momentsPostID(u: URL): string | null {
   if (!u.pathname.endsWith("/moments/detail")) return null;
   const id = u.searchParams.get("postId") ?? "";
   return /^\d+$/.test(id) ? id : null;
 }
 
-export function linkRoute(url: string): LinkRoute {
+/** Where `url` opens. `lark`: whether the hub reads Feishu (store.larkOn); without it Feishu links are web pages. */
+export function linkRoute(url: string, lark = larkOn()): LinkRoute {
   const u = parse(url.trim());
   if (!u) return { kind: "none" };
   const scheme = u.protocol.toLowerCase();
@@ -102,7 +105,7 @@ export function linkRoute(url: string): LinkRoute {
   }
   if (scheme === "mailto:" || scheme === "tel:") return { kind: "system" };
   if (scheme !== "http:" && scheme !== "https:") return { kind: "none" };
-  if (isFeishuHost(u.hostname)) {
+  if (lark && isFeishuHost(u.hostname)) {
     const first = u.pathname.split("/").filter(Boolean)[0] ?? "";
     if (DOC_PATHS.includes(first)) return { kind: "doc", doc: docKind(url) };
     const post = momentsPostID(u);

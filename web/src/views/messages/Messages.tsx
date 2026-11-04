@@ -1,5 +1,5 @@
 // 消息 (docs/lark-connector-migration.md「入口」, #392's narrow exception): every Feishu private and group chat, for a browser
-// that turned on 设置 › 连接器 › 飞书 › 首页显示消息. Not a second Feishu: one list and the inbox's own chat view
+// that turned on 设置 › 连接器 › 飞书 › 首页显示消息, on a hub that reads Feishu (feature `lark`). Not a second Feishu: one list and the inbox's own chat view
 // (LarkThread: reading, sending, Pins), no contacts or workbench. Wide: the list (380px) and the chat side by side;
 // narrow: the chat takes the list's place, with a way back. The pinned chats sit on top as a row of faces.
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -10,7 +10,7 @@ import {
   type LarkConversation,
 } from "../../lib/lark-chats";
 import { href, navigate, onLinkClick } from "../../lib/router";
-import { onHubEvent } from "../../lib/store";
+import { onHubEvent, useLarkOn } from "../../lib/store";
 import { Button, cx, IconButton, Loading, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Chip, Count, Monogram } from "../inbox/InboxParts";
@@ -19,7 +19,9 @@ import { LarkThread } from "../inbox/LarkThread";
 const SETTINGS = "/settings?tab=connectors";
 
 export function Messages({ id, onToggleSidebar }: { id?: string; onToggleSidebar: () => void }) {
-  const on = useLarkHome();
+  const lark = useLarkOn();
+  const larkSwitch = useLarkHome();
+  const on = lark && larkSwitch;
   const accounts = useLarkAccounts();
   // The chosen Feishu account's list (docs/feishu.md「多账号」): each account keeps its own.
   const larkChats = larkChatsFor(accounts.request);
@@ -69,9 +71,18 @@ export function Messages({ id, onToggleSidebar }: { id?: string; onToggleSidebar
         </header>
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
           <span className="flex size-10 items-center justify-center rounded-full bg-field text-ink-3"><Icon name="chat" size={18} /></span>
-          <p className="text-[13.5px] font-medium text-ink">消息页没有打开</p>
-          <p className="max-w-[340px] text-[12.5px] text-ink-3">在设置 › 连接器 › 飞书里打开「首页显示消息」，这个浏览器的侧边栏会多一个「消息」。</p>
-          <Button tone="secondary" icon="gear" className="mt-2" onClick={() => navigate(SETTINGS)}>打开飞书设置</Button>
+          {lark ? (
+            <>
+              <p className="text-[13.5px] font-medium text-ink">消息页没有打开</p>
+              <p className="max-w-[340px] text-[12.5px] text-ink-3">在设置 › 连接器 › 飞书里打开「首页显示消息」，这个浏览器的侧边栏会多一个「消息」。</p>
+              <Button tone="secondary" icon="gear" className="mt-2" onClick={() => navigate(SETTINGS)}>打开飞书设置</Button>
+            </>
+          ) : (
+            <>
+              <p className="text-[13.5px] font-medium text-ink">hub 没有接入飞书消息</p>
+              <p className="max-w-[340px] text-[12.5px] text-ink-3">hub 装好提供飞书的插件后，这里会列出全部私聊和群聊。</p>
+            </>
+          )}
         </div>
       </div>
     );

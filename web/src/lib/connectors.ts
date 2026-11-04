@@ -161,9 +161,10 @@ export function isStarting(c?: HubConnector | null): boolean {
   return !!c && isEnabled(c) && undescribed(c);
 }
 
-/** The connectors that get rows of their own after 邮箱 and 飞书 (those two keep their own groups). */
-export function otherConnectors(list: HubConnector[]): HubConnector[] {
-  return list.filter((c) => c.id !== "mail" && c.id !== "lark");
+/** The connectors that get rows of their own after 邮箱 and 飞书 (those two keep their own groups; 飞书's only shows on a
+ * hub with feature `lark`, `larkGroup`, so without it a connector named lark is listed like any other). */
+export function otherConnectors(list: HubConnector[], larkGroup = true): HubConnector[] {
+  return list.filter((c) => c.id !== "mail" && !(larkGroup && c.id === "lark"));
 }
 
 // ── brand and wording, by id ─────────────────────────────

@@ -134,7 +134,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   编辑浮层改重复方式、提示词、运行方式（全部放行先确认），保存 / 删除 / 立即运行（跳到那段对话）/ 下次开新对话；「新建」可选模板，浮层只有「取消 / 添加」；
   右栏「接下来」和按天分组的运行记录。真实 hub 的 `PUT /assistant/tasks/{id}` 整体替换字段，所以连开关也带完整任务；
   启动器、思考强度只在这次改过才发（统一模型配置那边存的值不被盖回去，`docs/model-config.md`），hub 有统一模型配置时给一个跳过去的链接。
-- **收件箱**（`/inbox`、`/inbox/<件>`，`src/views/inbox/`，`src/lib/inbox.ts`，`docs/inbox.md`）：飞书、邮件、云文档、removed和连接器（GitHub、Telegram、信息、插件的）一个列表，
+- **收件箱**（`/inbox`、`/inbox/<件>`，`src/views/inbox/`，`src/lib/inbox.ts`，`docs/inbox.md`）：飞书、邮件、云文档、公司圈和连接器（GitHub、Telegram、信息、插件的）一个列表，
   需要你 / 知悉即可（全部看过）/ 已折叠（全部清除）/ 已处理（收起，可移回）四段；筛选全部 / 飞书 / 每个邮箱 / 每个有条目的连接器 | @我 / 私聊 / 群聊 / 邮件 / Agent，搜标题、发件人、内容、摘要。
   - **连接器的条目**（#1324，`?sources=all` 拉列表，按条目的 `connector` 块画，不认具体来源）：标签是 `connector.label`，第二行「example-org/example-repo#12 · 谁：内容」，头像角上是连接器自己的标志（GitHub、Telegram）或灰色的通用标。
     详情（`ConnectorThread.tsx`）先读 `/connectors/<id>/thread`：GitHub 的 PR / issue 画成 GitHub 的时间线（状态、分支、标签、描述、评论、review、代码行评论带 diff、CI 结果和失败日志），
@@ -144,7 +144,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   等你的 Agent（待处理交互，屏蔽的除外）排在需要你最前，点了进那个对话。悬停一行出现「已处理 / 移回」（网页没有左滑），先改本地、失败恢复。
   AI 分身草拟好的行下面是草稿卡片（发送 / 修改），处理中写「AI 分身正在处理：…」。宽时左列表右详情，窄时详情盖住列表；按页面自己的宽度切（容器查询），开着侧边面板也不挤。
   详情：飞书会话只读（停在第一条新消息，「以下是新消息」分隔，可加载更早 / 更新，`lark` 推送命中时刷新；不做表情、资料卡、群设置——不做第二个飞书）；
-  邮件的 HTML 放在不允许脚本的沙箱 iframe 里（`allow-same-origin` 只为量高度、拦链接）；云文档列出提到我的行和状态菜单（`/doc/status`）；removed是帖子和评论。
+  邮件的 HTML 放在不允许脚本的沙箱 iframe 里（`allow-same-origin` 只为量高度、拦链接）；云文档列出提到我的行和状态菜单（`/doc/status`）；公司圈是帖子和评论。
   操作条：✦ 摘要、「AI 草拟回复」（起草、「让 AI 改」重写、发送走 `/reply`）、「交给 AI」（Persona 新对话或最近 8 个在跑的 Agent，默认同时标已处理）。
   侧边栏角标 = 未处理里需要你（含还没分拣的）的件数；`inbox` 推送和重连时重拉。
   - **飞书可见即读**（#433，`lib/lark-read.ts`，照 iOS `LarkPager.readReport`）：消息至少一半在列表里、页面在前台、首屏定位好了、没有对话框盖着才算看到，最后一条看到后 450 ms 合并上报
@@ -161,7 +161,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     消息悬停条的「Pin」（hub 给的 `can_pin`，撤回 / 删除 / 发送中的不给）先确认再 `POST …/pins`，带当前飞书账号；列表里有 `can_unpin` 的可移除（行内确认）。
     写入结果不明（超时、`lark_pin_result_unknown`）不重试，先重新读列表；换号 / 退出登录清空并停住。旧 hub（没有这个路由的 404 / 405）提示升级 Hub，旧 lark-connector 的 426 提示升级 lark-connector，原消息不存在不误报。
 - **消息**（`/messages`、`/messages/<会话>`，`src/views/messages/`，`src/lib/lark-chats.ts`，`docs/lark-connector-migration.md`「入口」）：#392 的窄例外，
-  只在这个浏览器打开了「设置 › 连接器 › 飞书 › 首页显示消息」（默认关，存 `localStorage` 的 `lark.homeMessages`，和 iOS 存在本机一样，不同步到 hub）时侧边栏才有「消息」。
+  只在这个浏览器打开了「设置 › 连接器 › 飞书 › 首页显示消息」（默认关，存 `localStorage` 的 `lark.homeMessages`，和 iOS 存在本机一样，不同步到 hub）时侧边栏才有「消息」；hub 的 features 里还要有 `lark`（#1530）。
   浏览全部私聊和群聊：`GET /lark/conversations?scope=chats&account_bound=1`（60 条一页，滚到底加载更多）和 `GET /lark/pinned?account_bound=1`（置顶一排头像，顺序和未读跟服务端）；
   点进去复用收件箱的飞书聊天页（`LarkThread`：消息流、回复、可见即读、Pin）。搜索只搜已加载的会话。`lark` 推送后重读已加载的分页窗口，整批成功才替换（退出的会话这时消失），失败保留原列表；
   hub 说账号换了就立刻丢掉旧账号的行、迟到的回复不合并。列表只在这个标签页的内存里，不落盘。宽窄同收件箱；右上角进飞书设置。关着时打开这个地址只提示去设置里打开。
@@ -339,7 +339,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 
 CLAUDE.md 要求链接在 App 内打开；网页上浏览器本身就是「App」，按链接分：
 
-- **飞书文档 / 知识库 / 表格 / 思维笔记 / 幻灯片 / 文件、removed帖子**：在侧边面板里用原生阅读器打开（判断规则照 iOS 的 `FeishuLinks`），
+- **飞书文档 / 知识库 / 表格 / 思维笔记 / 幻灯片 / 文件、公司圈帖子**：hub 的 features 有 `lark` 时在侧边面板里用原生阅读器打开（判断规则照 iOS 的 `FeishuLinks`；没有 `lark` 时当普通网页开新标签页），
   `GET /lark/raw/documents/read?format=markdown`，作者禁止导出或格式不支持时改取节点树（`format=json`）。指针停在链接上就预读，最近 12 篇缓存在内存里。
   头部：作为上下文（整篇）、在新标签页打开、拷贝链接、重新载入；读不了时分别说明（hub 没接飞书、没登录、没权限、不存在）。多维表格直接开新标签页（iOS 也只是一页「暂不支持」）。
 - **其他网页**：新标签页。大多数站点用 X-Frame-Options / CSP 禁止被嵌进 iframe，页面又判断不出被拦了，嵌进面板只会是白屏。
@@ -377,7 +377,7 @@ CLAUDE.md 要求链接在 App 内打开；网页上浏览器本身就是「App�
 页面回到前台、网络恢复时也重连；连不上时顶部出现「连不上 hub，正在重试…」。重连后已打开的对话重新订阅，带 `since_seq`（本地连续拿到的最后一行），
 `from_seq` 接不上时 1.5 秒后按 `after_seq` 补洞（`docs/protocol.md`「items 的连续性」），`history` 变了就整页重取。
 store 自己不存的推送（`inbox`、`lark`、`terminal`、`terminal_control`、`assistant_schedule`……）由用到的页面按类型订阅（`onHubEvent(type, fn)`，`src/lib/store.ts`）；
-hello 的 `features`、`hub_name`、`mesh` 存在 store 里。
+hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector 的飞书由插件提供（feature `lark`，公司圈 `lark_moments`）：依赖 `/api/v1/lark/…` 的地方——「消息」页和侧边栏入口、设置 › 连接器 › 飞书、翻译里的飞书会话、飞书文档 / 公司圈帖子的阅读器——都按 `store.larkOn()` / `useLarkOn()` 显示；hub 还没说 features（hello 之前）时照旧显示。收件箱里带 `lark` / `doc` / `moment` 块的条目照常画（只有插件在时才有）。知识库的帖子存档带 `feed` 时用它当帖子页标题，没有时叫「公司圈」（#1530）。
 
 ## 细节约定
 
@@ -455,7 +455,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。
 
 | 手机端的功能 | 网页 | 轮次 | 说明 |
 | --- | --- | --- | --- |
-| 一个列表：飞书 / 邮件 / 云文档 / removed，AI 分拣三档，已处理，筛选，搜索 | 有 | #297 | |
+| 一个列表：飞书 / 邮件 / 云文档 / 公司圈，AI 分拣三档，已处理，筛选，搜索 | 有 | #297 | |
 | 等你的 Agent 并进「需要你」 | 有 | #297 | |
 | AI 草拟回复、交给 AI、AI 分身的草稿卡片 | 有 | #297 | |
 | 飞书会话页：消息流与直接回复 | 有 | #297, #950 | 支持直接打字回复、引用某条消息、拷贝、让 Persona 总结；乐观上屏与重试；表情回应、资料卡、群设置不做（不做第二个飞书） |
@@ -466,7 +466,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。
 | 写新邮件、手动回复、打开后标已读 | 有 | #433 | 纯文本、不带附件、草稿只在页面内存（同 iOS） |
 | 邮件翻译、飞书消息翻译 | 有 | #433 | 语言判断是启发式的（浏览器没有 NaturalLanguage） |
 | 云文档提到我的行和改状态 | 有 | #297 | |
-| removed帖子和评论 | 有 | #297 | 只读 |
+| 公司圈帖子和评论 | 有 | #297 | 只读 |
 | 连接器的条目（GitHub、Telegram、信息、插件）：来源筛选、会话页、回复或「在 X 里打开」、交给 AI | 有 | #1324 | GitHub 时间线和 Telegram 气泡只读加回复；表情回应、转发、下载附件不做 |
 
 ### 机器和设置

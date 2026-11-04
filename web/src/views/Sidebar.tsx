@@ -16,7 +16,7 @@ import { toneOf } from "../lib/plugin-ui";
 import { BADGE_TONE, navIcon, pageRoute } from "./plugins/PluginSlots";
 import { href, navigate, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
-import { reset, refresh, refreshTodos, useStore } from "../lib/store";
+import { reset, refresh, refreshTodos, useLarkOn, useStore } from "../lib/store";
 import { buildTodoAgentGroups, findTodoForSpace, openTodoFromTag, TODO_STATUS_INFO, unlinkAgentFromTodo, type TodoStatus } from "../lib/todos";
 import type { Machine, Session } from "../lib/types";
 import { Collapse, cx, EASE, Kbd, Menu, StatusDot, toast, useMenu, type MenuItem } from "../ui/atoms";
@@ -108,7 +108,10 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const onSpaceMenu = (sp: Space, anchor: HTMLElement) => setSpaceMenu((m) => (m?.anchor === anchor ? null : { sp, anchor }));
   const counts = useCounts();
   const inbox = useInboxBadge();
-  const larkHome = useLarkHome();
+  const larkSwitch = useLarkHome();
+  const lark = useLarkOn();
+  // 消息 needs the hub to read Feishu (feature `lark`) as well as this browser's switch
+  const larkHome = larkSwitch && lark;
   const pluginPages = usePluginSlot("nav_page");
   const nav = useRef<HTMLDivElement>(null);
   const rows = useRef(new Map<string, HTMLElement>());

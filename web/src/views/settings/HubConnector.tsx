@@ -4,7 +4,7 @@
 // wrong (with the steps to fix it); one the user signs in to here (`login`) also gets its switch, the sign-in a step
 // at a time (fields the hub asks for, or GitHub's device code), 进知识库 / 进收件箱, sign-out and delete. GitHub adds
 // where its token comes from (a computer's gh, or the device flow), the scopes it lacks, and its inbox options.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorText } from "../../lib/api";
 import {
   canSendStep, CI_MODES, connectorBrand, connectorLogin, connectorLogout, connectorState, connectorSummary, connectorTone, deleteConnectorArchive,
@@ -14,6 +14,7 @@ import {
   type ConnectorPrompt, type ConnectorTone, type GitHubAuth, type GitHubInboxOptions, type HubConnector,
 } from "../../lib/connectors";
 import { ago } from "../../lib/format";
+import { useLarkOn } from "../../lib/store";
 import { Button, cx, Dialog, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
 import { BrandMark } from "../../ui/BrandMark";
 import { Icon } from "../../ui/icons";
@@ -42,13 +43,15 @@ function Mark({ id, size }: { id: string; size: number }) {
 // ── the rows on 设置 › 连接器 ────────────────────────────
 
 export function ConnectorList({ onOpen }: { onOpen: (id: string) => void }) {
-  const [list, setList] = useState<HubConnector[] | null>(null);
+  const [all, setAll] = useState<HubConnector[] | null>(null);
   const [error, setError] = useState("");
+  const lark = useLarkOn();
   useEffect(() => {
     listConnectors()
-      .then((l) => (setList(otherConnectors(l)), setError("")))
+      .then((l) => (setAll(l), setError("")))
       .catch((e) => setError(errorText(e)));
   }, []);
+  const list = useMemo(() => all && otherConnectors(all, lark), [all, lark]);
   if (list?.length === 0) return null;
   return (
     <Group title="更多连接器" footer="GitHub、Telegram 和插件提供的连接器：点进去看状态、登录和设置。">

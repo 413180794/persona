@@ -50,7 +50,7 @@ describe("一件事", () => {
     expect(badgeCount([dm, mention, doc, mail, group, done, doneLater, bot])).toBe(4);
   });
 
-  it("类型标签：@我 红色，@所有人、评论、removed、机器人", () => {
+  it("类型标签：@我 红色，@所有人、评论、公司圈、机器人", () => {
     expect([dm, mention, atAll, bot, doc, comment, moment, mail].map(kindLabel)).toEqual(["私聊", "@我", "@所有人", "机器人", "@我", "评论", "@我", undefined]);
     expect(labelIsUrgent(mention)).toBe(true);
     expect(labelIsUrgent(doc)).toBe(true);
@@ -93,7 +93,7 @@ describe("筛选和分段", () => {
     expect(sections(items, { ...all, source: "acc2" }).tiers.action).toEqual([]);
   });
 
-  it("@我 含文档和 @我 的removed，群聊含机器人，Agent 不含任何一件", () => {
+  it("@我 含文档和 @我 的公司圈，群聊含机器人，Agent 不含任何一件", () => {
     const m = sections(items, { ...all, kind: "mention" });
     expect([...ids(m.tiers.action), ...ids(m.tiers.fyi)].sort()).toEqual([atAll.id, comment.id, doc.id, mention.id, moment.id].sort());
     const g = sections(items, { ...all, kind: "group" });

@@ -1,10 +1,12 @@
 // 设置 › 翻译 (docs/ios.md「翻译」, the app's TranslationSettingsView): on / off, the target language, and what gets
-// translated: mail (on), and the Feishu chats picked here (none: Feishu has too many messages to translate them all).
+// translated: mail (on), and the Feishu chats picked here (none: Feishu has too many messages to translate them all;
+// only on a hub that reads Feishu, feature `lark`).
 // Kept in this browser. The hub translates new mail ahead of time for the phones that ask; here a mail is translated
 // when it is opened.
 import { useEffect, useMemo, useState } from "react";
 import { errorText, getToken } from "../../lib/api";
 import { modelPurpose, modelSummary, type ModelPurposeBody } from "../../lib/model-config";
+import { useLarkOn } from "../../lib/store";
 import { LANGUAGES, larkChatChoices, setTranslatePrefs, useTranslatePrefs, type TranslateChat } from "../../lib/translate";
 import { Button, cx, Dialog, IconButton, Loading } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -17,6 +19,7 @@ export function TranslationSettings({ onConfigure }: { onConfigure: () => void }
   const prefs = useTranslatePrefs();
   const [model, setModel] = useState<ModelPurposeBody | null>(null);
   const [picking, setPicking] = useState(false);
+  const lark = useLarkOn();
 
   useEffect(() => {
     modelPurpose("translate").then(setModel, () => {});
@@ -39,15 +42,17 @@ export function TranslationSettings({ onConfigure }: { onConfigure: () => void }
               </select>
             </Row>
           </Group>
-          <Group title="翻译范围" footer="飞书消息很多，默认不翻译；只翻译这里选中的会话里别人发的消息。">
+          <Group title="翻译范围" footer={lark ? "飞书消息很多，默认不翻译；只翻译这里选中的会话里别人发的消息。" : undefined}>
             <Row label={<span className="flex items-center gap-2"><Icon name="mail" size={14} className="text-ink-3" />邮件</span>}>
               <Switch on={prefs.mail} onChange={(on) => setTranslatePrefs({ mail: on })} label="翻译邮件" />
             </Row>
-            <Row label={<span className="flex items-center gap-2"><Icon name="chat" size={14} className="text-ink-3" />飞书会话</span>} onClick={() => setPicking(true)}>
-              <span className="text-ink-3">{prefs.chats.length ? `${prefs.chats.length} 个会话` : "不翻译"}</span>
-            </Row>
+            {lark && (
+              <Row label={<span className="flex items-center gap-2"><Icon name="chat" size={14} className="text-ink-3" />飞书会话</span>} onClick={() => setPicking(true)}>
+                <span className="text-ink-3">{prefs.chats.length ? `${prefs.chats.length} 个会话` : "不翻译"}</span>
+              </Row>
+            )}
           </Group>
-          {prefs.chats.length > 0 && (
+          {lark && prefs.chats.length > 0 && (
             <Group title="要翻译的飞书会话">
               {prefs.chats.map((c) => (
                 <Row key={c.id} label={c.name}>
@@ -61,7 +66,7 @@ export function TranslationSettings({ onConfigure }: { onConfigure: () => void }
       <p className="px-1 text-[11.5px] leading-relaxed text-ink-3">
         这些设置只存在这个浏览器里。手机上的翻译设置是手机自己的：hub 会按手机的设置提前翻好新邮件，网页打开邮件时如果已经有译文就直接用。
       </p>
-      {picking && <ChatPicker selected={prefs.chats} onClose={() => setPicking(false)} onSave={(chats) => setTranslatePrefs({ chats })} />}
+      {lark && picking && <ChatPicker selected={prefs.chats} onClose={() => setPicking(false)} onSave={(chats) => setTranslatePrefs({ chats })} />}
     </>
   );
 }

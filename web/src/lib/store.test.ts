@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getState, refresh, refreshTodos, reset, setSpacesSupported } from "./store";
+import { getState, hubHas, larkOn, refresh, refreshTodos, reset, setSpacesSupported } from "./store";
 
 describe("待办 store 与 404 兼容 (C2)", () => {
   beforeEach(() => {
@@ -133,5 +133,20 @@ describe("待办 store 与 404 兼容 (C2)", () => {
     await refreshTodos();
     expect(getState().todosSupported).toBe(true);
     expect(getState().spacesSupported).toBe(false);
+  });
+});
+
+describe("hub features", () => {
+  it("answers `unknown` until the hub names any", () => {
+    expect(hubHas([], "lark", true)).toBe(true);
+    expect(hubHas([], "connectors")).toBe(false);
+    expect(hubHas(["terminal_stream"], "lark", true)).toBe(false);
+    expect(hubHas(["terminal_stream", "lark"], "lark")).toBe(true);
+  });
+
+  it("has Feishu through lark-connector only with lark, as before while the hub has not said", () => {
+    expect(larkOn({ features: [] })).toBe(true);
+    expect(larkOn({ features: ["plugins", "lark_attachments", "lark_native_encryption"] })).toBe(false);
+    expect(larkOn({ features: ["plugins", "lark", "lark_moments"] })).toBe(true);
   });
 });

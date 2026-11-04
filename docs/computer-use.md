@@ -242,6 +242,17 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - 底下：「只看 / 接管」，经 WebView 的桥（`personaScreen.setControl`）切网页的 `viewOnly`；网页在 `embed=1` 时不画自己的顶栏，阶段经 `webkit.messageHandlers.screen` 报给 App。
   - 里面一个 WKWebView 打开 hub 上的 `/screen/<机器>#token=…&embed=1`，走 App 连 hub 的同一条路（SSH 隧道时经隧道）。网页数据用不落盘的存储（`nonPersistent`），页面的滚动关掉了，手势都交给远端画面。
   - 只有一个抽屉，挂在 `RootView`（`AppModel.screenOpen`）：从哪里打开都是同一个。
+- **记住登录**（#1322）：
+  - 登录框多一个「在这台手机上记住」（Mac 上是「在这台 Mac 上记住」），默认勾着。浏览器里打开的页面没有这一项，表单标好 `username` / `current-password`，交给浏览器自己的密码管理。
+  - 存什么、存哪里：账号和密码按机器存在设备钥匙串（`ScreenCredentials`），用自己的 service。iOS 上是 `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`，不同步 iCloud 钥匙串；Mac 上在登录钥匙串里。不上传 hub，不进日志。
+  - 什么时候存：那台 Mac 接受了这次登录才存。没勾「记住」就删掉原来记住的。
+  - 怎么用上：
+    1. 那台 Mac 要求登录时，页面先问 App（`{credentials: "wanted"}`）。
+    2. App 从钥匙串取出来，经 `personaScreen.signIn(…)` 交给页面内存，页面直接登录，不出表单。没有记住的就回 null，出表单。
+    3. 页面不存，不写 localStorage。
+  - 密码不对了（那台 Mac 改过密码）：表单回来，写「记住的密码不对了」，账号已填好。输入新的、连上以后替换掉记住的。
+  - 机器页「操控电脑」里，记住了的时候「看画面」旁边有「忘记屏幕共享密码」。
+  - 一键解锁（上面方案 a-2）以后用同一份。
 - **从哪里打开**：
   - **正在操作的条**：对话里最近一次操作电脑的工具（助手的 `computer_*`，Agent 的 `mcp__cua-driver__*`）还在跑、或刚结束 6 秒内，输入框上面的任务条最前面多一个「正在操作 MacBook · 点 …」（`ComputerActivityPill`），点它打开那台的画面。
   - **··· 菜单**：助手顶栏和 Agent 对话页的 ··· 里有「看画面 · <机器>」（`ScreenMenu`），列出插件开着、屏幕共享开着的 Mac，这个对话最近操作的那台排第一。

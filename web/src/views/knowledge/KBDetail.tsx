@@ -1,5 +1,5 @@
 // One knowledge entry (/kb/<kind>/<id>): its tile, name, badges, one line and tags, 问 Persona; then the places a
-// search found, the Agents on a project, the timeline, the profile, removed, related entries by kind, code directories,
+// search found, the Agents on a project, the timeline, the profile, 公司圈, related entries by kind, code directories,
 // a chat's last 7 days and the folder (docs/ios.md 信息架构 知识库). 打标 in the header.
 import { useEffect, useState } from "react";
 import { api, enc, errorText, isAbort } from "../../lib/api";
@@ -45,7 +45,7 @@ import { Badges, Card, KBIcon, Marked, MoreRow, onPlainClick, SectionTitle, Tile
 
 /** Timeline lines shown before 显示全部. */
 const LOG_SHOWN = 6;
-/** Related entries of one kind (and removed posts) shown before 全部. */
+/** Related entries of one kind (and 公司圈 posts) shown before 全部. */
 const LINKS_SHOWN = 4;
 /** Search matches shown before 显示全部. */
 const MATCHES_SHOWN = 5;
@@ -293,7 +293,7 @@ export function EntryDetail({
 
               {moments.length > 0 && (
                 <section>
-                  <SectionTitle title="相关removed" count={moments.length} />
+                  <SectionTitle title="相关公司圈" count={moments.length} />
                   <Card>
                     {(allMoments ? moments : moments.slice(0, LINKS_SHOWN)).map((m) => (
                       <button key={m.id} type="button" onClick={() => setMoment(m)} className="block w-full px-4 py-2.5 text-left transition-colors hover:bg-hover">

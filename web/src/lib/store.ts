@@ -107,6 +107,30 @@ export function useStore<T>(select: (s: State) => T): T {
   return useSyncExternalStore(subscribe, get, get); // the third: static rendering (tests)
 }
 
+// ── what the hub can do (hello `features`) ───────────────
+
+/**
+ * Whether the hub has `feature`. `unknown` is the answer until the hub has named any (before hello, or a hub that
+ * sends no features): for something the web always used to do, that keeps the old behavior until the hub says.
+ */
+export function hubHas(features: string[], feature: string, unknown = false): boolean {
+  return features.length ? features.includes(feature) : unknown;
+}
+
+/**
+ * Feishu through lark-connector (feature `lark`, which a plugin brings): /api/v1/lark/…, the 消息 page, the 飞书 settings,
+ * the side panel's readers for Feishu documents and 公司圈 posts. Without it those links are ordinary links.
+ */
+export const LARK_FEATURE = "lark";
+
+export function larkOn(s: Pick<State, "features"> = state): boolean {
+  return hubHas(s.features, LARK_FEATURE, true);
+}
+
+export function useLarkOn(): boolean {
+  return useStore(larkOn);
+}
+
 // ── item stream (subscribed sessions) ───────────────────
 
 export interface ItemsEvent {

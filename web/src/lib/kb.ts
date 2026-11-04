@@ -49,6 +49,13 @@ export interface KBMomentRef {
   at?: string;
   comments: number;
   note?: string;
+  /** The name of the feed the post came from (whoever archived it says); none: 公司圈. */
+  feed?: string;
+}
+
+/** What to call a post's feed: its archived name, else 公司圈. */
+export function momentFeed(m: Pick<KBMomentRef, "feed">): string {
+  return m.feed?.trim() || "公司圈";
 }
 
 export interface KBDetail {

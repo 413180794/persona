@@ -1,5 +1,5 @@
 // The bodies of an opened item besides a Feishu chat: a mail (its HTML in a sandboxed frame), a Feishu document's
-// rows about you (status menus write into the document), a removed post with its comments.
+// rows about you (status menus write into the document), a 公司圈 post with its comments.
 import { useEffect, useRef, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
 import { bytes, clock } from "../../lib/format";
@@ -239,7 +239,7 @@ export function DocBody({ item }: { item: InboxItem }) {
   );
 }
 
-// ── removed ───────────────────────────────────────────────
+// ── 公司圈 ───────────────────────────────────────────────
 
 export function MomentBody({ item }: { item: InboxItem }) {
   const id = item.moment!.post_id;

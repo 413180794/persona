@@ -7,7 +7,7 @@ import { api, ApiError, errorText } from "../lib/api";
 import { cx, Spinner } from "../ui/atoms";
 import "../views/theme"; // follows the system's light / dark while open (index.html picked the first one)
 import { ensureSubtleAES } from "./aes";
-import { accountOf, screenSocket, type ScreenTarget } from "./screen";
+import { accountOf, keepLabel, screenSocket, toApp, type ScreenTarget } from "./screen";
 
 type Phase =
   | { kind: "checking" }
@@ -18,6 +18,8 @@ type Phase =
   | { kind: "closed"; why: string };
 
 type Computer = { enabled?: boolean; screen_sharing?: boolean };
+/** A sign-in sent to the Mac: typed (and to keep or not), or the one the app kept (saved). */
+type Credentials = { account: string; password: string; remember: boolean; saved: boolean };
 type MachineRow = { id: string; name: string; home?: string; online: boolean };
 
 export function ScreenView({ target }: { target: ScreenTarget }) {
@@ -27,6 +29,13 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
   const [password, setPassword] = useState("");
   const [control, setControl] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  // The app keeps the Mac's sign-in (#1322): 「在这台手机上记住」, on unless unticked.
+  const canKeep = target.embedded && target.keep !== "";
+  const [remember, setRemember] = useState(true);
+  const queued = useRef<Credentials | null>(null); // typed while there was no connection waiting: sent on the next
+  const sent = useRef<Credentials | null>(null); // sent on this connection, until the Mac says yes or no
+  const waiting = useRef(false); // this connection asked for a sign-in and has none yet
+  const answer = useRef<((c: Credentials) => void) | null>(null);
   // Set once the hub says there is a screen to connect to: the connection lives from then on, whatever the page
   // shows (asking to sign in is part of it), until 重新连接 or the page goes.
   const [go, setGo] = useState(false);
@@ -74,11 +83,50 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
     r.scaleViewport = true;
     r.resizeSession = false;
     r.background = "transparent";
-    r.addEventListener("connect", () => setPhase({ kind: "live" }));
-    r.addEventListener("credentialsrequired", () => setPhase((p) => (p.kind === "signin" ? p : { kind: "signin" })));
+    waiting.current = false;
+    sent.current = null;
+    let askedApp = false;
+    let appSilent: ReturnType<typeof setTimeout> | undefined;
+    const send = (c: Credentials) => {
+      waiting.current = false;
+      sent.current = c;
+      r.sendCredentials({ username: c.account, password: c.password });
+      setPhase({ kind: "connecting" });
+    };
+    const showForm = () => setPhase((p) => (p.kind === "signin" ? p : { kind: "signin" }));
+    answer.current = (c) => {
+      clearTimeout(appSilent);
+      if (waiting.current) send(c);
+    };
+    r.addEventListener("connect", () => {
+      setPhase({ kind: "live" });
+      const c = sent.current;
+      sent.current = null;
+      // What worked goes to the app's keychain when 记住 was on; off, what it kept goes.
+      if (c && canKeep && !c.saved) toApp(c.remember ? { credentials: "worked", account: c.account, password: c.password } : { credentials: "forget" });
+    });
+    r.addEventListener("credentialsrequired", () => {
+      waiting.current = true;
+      const q = queued.current;
+      queued.current = null;
+      if (q) return send(q);
+      if (canKeep && !askedApp) {
+        // The app answers with what it kept (personaScreen.signIn), or null for the form; the form if it says nothing.
+        askedApp = true;
+        appSilent = setTimeout(showForm, 1500);
+        return toApp({ credentials: "wanted" });
+      }
+      showForm();
+    });
     r.addEventListener("securityfailure", (e) => {
       const reason = (e as CustomEvent<{ reason?: string }>).detail?.reason;
-      setPhase({ kind: "signin", failed: reason ? `没登录上：${reason}` : "账号或密码不对" });
+      const kept = sent.current?.saved ? sent.current : null;
+      sent.current = null;
+      if (kept) setAccount(kept.account);
+      setPhase({
+        kind: "signin",
+        failed: kept ? "记住的密码不对了（那台 Mac 可能改过密码）：重新输入，连上后替换记住的那个" : reason ? `没登录上：${reason}` : "账号或密码不对",
+      });
     });
     r.addEventListener("disconnect", (e) => {
       const clean = (e as CustomEvent<{ clean: boolean }>).detail?.clean;
@@ -86,10 +134,12 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
     });
     rfb.current = r;
     return () => {
+      clearTimeout(appSilent);
+      answer.current = null;
       rfb.current = null;
       r.disconnect();
     };
-  }, [go, attempt, target]);
+  }, [go, attempt, target, canKeep]);
 
   useEffect(() => {
     if (rfb.current) rfb.current.viewOnly = !control;
@@ -99,27 +149,42 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
   // says 接管 through window.personaScreen.
   useEffect(() => {
     if (!target.embedded) return;
-    const w = window as unknown as { webkit?: { messageHandlers?: { screen?: { postMessage(m: unknown): void } } } };
-    w.webkit?.messageHandlers?.screen?.postMessage({ phase: phase.kind });
+    toApp({ phase: phase.kind });
   }, [target.embedded, phase.kind]);
   useEffect(() => {
     if (!target.embedded) return;
-    (window as unknown as { personaScreen?: unknown }).personaScreen = { setControl: (on: boolean) => setControl(on) };
+    (window as unknown as { personaScreen?: unknown }).personaScreen = {
+      setControl: (on: boolean) => setControl(on),
+      // The app's answer to { credentials: "wanted" }: the Mac's sign-in it kept, or null (the form).
+      signIn: (kept: { account?: string; password?: string } | null) => {
+        if (kept?.account && kept.password) {
+          setAccount(kept.account);
+          answer.current?.({ account: kept.account, password: kept.password, remember: true, saved: true });
+        } else {
+          answer.current = null;
+          setPhase((p) => (p.kind === "signin" ? p : { kind: "signin" }));
+        }
+      },
+    };
   }, [target.embedded]);
 
   const signIn = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      if (!rfb.current) {
-        setAttempt((n) => n + 1);
-        setPhase({ kind: "connecting" });
-        return;
-      }
-      rfb.current.sendCredentials({ username: account.trim(), password });
+      const c: Credentials = { account: account.trim(), password, remember: canKeep && remember, saved: false };
       setPassword("");
       setPhase({ kind: "connecting" });
+      if (rfb.current && waiting.current) {
+        waiting.current = false;
+        sent.current = c;
+        rfb.current.sendCredentials({ username: c.account, password: c.password });
+        return;
+      }
+      // A refused sign-in closes the connection: a new one takes this when it asks.
+      queued.current = c;
+      setAttempt((n) => n + 1);
     },
-    [account, password],
+    [account, password, canKeep, remember],
   );
 
   const reconnect = () => {
@@ -169,7 +234,9 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
               <form onSubmit={signIn} className="flex w-full max-w-[340px] flex-col gap-3 rounded-card bg-surface p-5 shadow-card">
                 <div>
                   <p className="text-[14px] font-medium">登录这台 Mac 的屏幕共享</p>
-                  <p className="mt-1 text-[12.5px] text-ink-2">用 {name} 上的 macOS 账号和密码。只发给那台 Mac，不保存。</p>
+                  <p className="mt-1 text-[12.5px] text-ink-2">
+                    用 {name} 上的 macOS 账号和密码。只发给那台 Mac{canKeep && remember ? "；记住的话存在这台设备的钥匙串里，不上传。" : "，不保存。"}
+                  </p>
                 </div>
                 {phase.failed && <p className="text-[12.5px] text-red">{phase.failed}</p>}
                 <input
@@ -188,6 +255,12 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
                   autoComplete="current-password"
                   className="h-9 rounded-control bg-field px-3 text-[13px] outline-none focus:ring-2 focus:ring-accent/40"
                 />
+                {canKeep && (
+                  <label className="flex items-center gap-2 whitespace-nowrap text-[12.5px] text-ink-2">
+                    <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="size-3.5 shrink-0 accent-[var(--accent)]" />
+                    {keepLabel(target.keep)}
+                  </label>
+                )}
                 <button
                   type="submit"
                   disabled={!account.trim() || !password}
