@@ -11,6 +11,7 @@ import {
   draftPlaceholder,
   field,
   getFeedState,
+  receiptState,
   isToday,
   later,
   removeTask,
@@ -27,7 +28,8 @@ import {
   type TaskPlan,
   type TodayBody,
 } from "../../lib/feed";
-import { dockAgents, isRemovable, makeSessionLookup, mostUrgentAgent, todoStatus, TODO_STATUS_INFO, type SessionLookup, type Todo, type TodoStatus } from "../../lib/todos";
+import { dockAgents, interruption, isRemovable, makeSessionLookup, mostUrgentAgent, todoStatus, TODO_STATUS_INFO, type SessionLookup, type Todo, type TodoStatus } from "../../lib/todos";
+import { parseAPIError } from "../../lib/api-errors";
 import { navigate } from "../../lib/router";
 import { openPanel } from "../../lib/panel";
 import { plainMarkdown } from "../../lib/plain-markdown";
@@ -87,7 +89,7 @@ function useTaskMenu(todo: Todo | undefined, status: TodoStatus | undefined) {
 
 /** The task's state as an agent state, for its dot and tone. */
 function dotState(st: TodoStatus): AgentState {
-  return st === "needs_you" ? "needs_you" : st === "working" || st === "not_started" ? "working" : st === "unread" ? "unread" : st === "follow_up" ? "idle" : "offline"; // done, failed
+  return st === "needs_you" || st === "interrupted" ? "needs_you" : st === "working" || st === "not_started" ? "working" : st === "unread" ? "unread" : st === "follow_up" ? "idle" : "offline"; // done, failed
 }
 
 const TONE: Record<string, string> = {
@@ -99,7 +101,7 @@ const TONE: Record<string, string> = {
 };
 
 function TaskMark({ status, size = 9 }: { status: TodoStatus; size?: number }) {
-  if (status === "failed") return <Icon name="info" size={size + 4} stroke={2.4} className="text-red" />;
+  if (status === "failed" || status === "interrupted") return <Icon name="info" size={size + 4} stroke={2.4} className="text-red" />;
   if (status === "done" || status === "unread")
     return <Icon name="check" size={size + 4} stroke={2.4} className={status === "done" ? "text-ink-3" : "text-green"} />;
   return <StatusDot state={dotState(status)} size={size} />;
@@ -143,10 +145,12 @@ if (import.meta.env.DEV && typeof location !== "undefined") {
   if (t) setTimeout(() => openTask(t), 0);
 }
 
-/** 重试 on a task that did not start (lib/feed retryTask), saying why when the hub refused (the machine offline…). */
-export function retryTaskNow(todo: Todo) {
-  retryTask(todo).catch((e) => toast(`没重试：${e instanceof Error ? e.message : e}`, "error"));
+/** 重试 on a task that did not start, or 继续 on one the model service cut off (lib/feed retryTask), saying why when the
+ *  hub refused (the machine offline…). */
+export function retryTaskNow(todo: Todo, verb = "重试") {
+  retryTask(todo).catch((e) => toast(`没${verb}：${e instanceof Error ? e.message : e}`, "error"));
 }
+
 
 /** A task's 重试 is on its way to the hub. */
 export function useRetrying(todoId: string | undefined): boolean {
@@ -245,10 +249,13 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
   const lead = mostUrgentAgent(todo, lookup)?.session;
   const info = TODO_STATUS_INFO[status];
   const startError = todo.agents?.find((a) => a.start_error)?.start_error;
+  const cut = status === "interrupted" ? interruption(lead) : undefined;
   const now =
     status === "needs_you"
       ? "有事等你回答"
-      : status === "failed"
+      : cut
+        ? `模型服务出错，中断了：${cut.reason}`
+        : status === "failed"
         ? `没开起来：${startFailure(todo, plans) ?? "原因不明"}`
         : plainMarkdown(lead?.last_text) || (startError ? `没开起来：${startError}` : status === "not_started" ? "正在开 Agent" : "还没有动静");
   return (
@@ -266,8 +273,8 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
         {status !== "done" && status !== "failed" && <span className="shrink-0 text-[12px] text-ink-3">{since(todo.created_at)}</span>}
       </div>
       <div className="truncate text-[12px] text-ink-2">{place(todo, lead)}</div>
-      <div className={cx("flex items-start gap-2 rounded-control bg-field px-3 py-2 text-[13px]", (status === "needs_you" || status === "failed") && "text-red")}>
-        <Icon name={status === "needs_you" ? "hand" : status === "failed" ? "info" : "terminal"} size={13} className="mt-0.5 shrink-0 text-ink-2" />
+      <div className={cx("flex items-start gap-2 rounded-control bg-field px-3 py-2 text-[13px]", (status === "needs_you" || status === "failed" || cut) && "text-red")}>
+        <Icon name={status === "needs_you" ? "hand" : status === "failed" || cut ? "info" : "terminal"} size={13} className="mt-0.5 shrink-0 text-ink-2" />
         <span className="line-clamp-2">{now}</span>
       </div>
       {status !== "done" && (
@@ -302,17 +309,34 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
               </button>
             </span>
           ) : (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setRoute(conversation, todo.id);
-              }}
-              className="inline-flex items-center gap-1 font-semibold text-accent hover:underline"
-            >
-              <Icon name="send" size={12} />
-              说一句
-            </button>
+            <span className="flex items-center gap-4">
+              {cut?.canContinue && (
+                // The model service cut its turn off: 继续 tells its agent to go on, as the chat's 重试 does (#1516).
+                <button
+                  type="button"
+                  disabled={retrying}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    retryTaskNow(todo, "继续");
+                  }}
+                  className="inline-flex items-center gap-1 whitespace-nowrap font-semibold text-accent hover:underline disabled:opacity-50 disabled:hover:no-underline"
+                >
+                  <Icon name="retry" size={12} />
+                  继续
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setRoute(conversation, todo.id);
+                }}
+                className="inline-flex items-center gap-1 whitespace-nowrap font-semibold text-accent hover:underline"
+              >
+                <Icon name="send" size={12} />
+                说一句
+              </button>
+            </span>
           )}
         </div>
       )}
@@ -423,7 +447,52 @@ export function AnsweredLine({ item, title, onOpenTask }: { item: FeedItem; titl
 }
 
 function ReceiptCard({ item }: { item: FeedItem }) {
-  const failed = field(item, "state") === "failed";
+  const state = receiptState(item);
+  if (state === "interrupted") return <InterruptedReceipt item={item} />;
+  return <OutcomeReceipt item={item} failed={state === "failed"} />;
+}
+
+/** A task the model service cut off (#1516): red, why in words, 继续 while it is still cut off; once its agent went on,
+ *  a quiet line that opens the task (a later receipt says how it ended). */
+function InterruptedReceipt({ item }: { item: FeedItem }) {
+  const todo = useTodo(item.ref);
+  const lookup = useTaskLookup();
+  const plans = useFeed((s) => s.plans);
+  const retrying = useRetrying(todo?.id);
+  const status = todo ? statusOf(todo, lookup, plans) : undefined;
+  const title = field(item, "title") ?? "任务";
+  if (todo && status && status !== "interrupted") {
+    return (
+      <button type="button" onClick={() => openTask(todo.id)} className="flex items-center gap-1.5 self-start text-left text-[13px] text-ink-2 hover:text-ink">
+        <Icon name={status === "done" ? "check" : "retry"} size={13} />
+        「{title}」{status === "done" ? "已完成" : "中断后继续了"}
+      </button>
+    );
+  }
+  const cut = todo ? interruption(mostUrgentAgent(todo, lookup)?.session) : undefined;
+  const raw = field(item, "error") ?? field(item, "summary");
+  const reason = cut?.reason ?? parseAPIError(raw)?.reason;
+  const canContinue = todo && (cut ? cut.canContinue : true);
+  return (
+    <div className="flex gap-3 rounded-card bg-red-tint p-4">
+      <Icon name="info" size={18} stroke={2.4} className="text-red" />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="text-[14.5px] font-semibold">{title} 中断了</div>
+        <div className="line-clamp-4 text-[13px] text-ink-2">{reason ? `模型服务出错，中断了：${reason}` : "模型服务出错，中断了"}</div>
+        <div className="mt-1 flex gap-2">
+          {canContinue && (
+            <Button icon="retry" busy={retrying} disabled={retrying} onClick={() => retryTaskNow(todo, "继续")}>
+              继续
+            </Button>
+          )}
+          {item.ref && <Button onClick={() => openTask(item.ref!)}>看看</Button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OutcomeReceipt({ item, failed }: { item: FeedItem; failed: boolean }) {
   // A failed start's banner follows its task: 重试 while it is still failed (with its latest error), a quiet line once
   // it was started again, so no stale error stays in the conversation (#1396).
   const todo = useTodo(failed ? item.ref : undefined);
@@ -656,7 +725,7 @@ export function TaskDock({ conversation }: { conversation: string }) {
   const mine = todos.filter((t) => t.origin === conversation);
   if (mine.length === 0 && agents.length === 0) return null;
   // Failed, done and stopped tasks are not in the dock.
-  const rank: Partial<Record<TodoStatus, number>> = { needs_you: 0, working: 1, not_started: 1, unread: 2 };
+  const rank: Partial<Record<TodoStatus, number>> = { needs_you: 0, interrupted: 0, working: 1, not_started: 1, unread: 2 };
   const going = mine
     .map((t) => ({ t, st: statusOf(t, lookup, plans) }))
     .filter((x) => rank[x.st] !== undefined)
@@ -689,11 +758,12 @@ export function TaskDock({ conversation }: { conversation: string }) {
                 e.preventDefault();
                 setMenuFor({ todo: t, el: e.currentTarget });
               }}
-              className={cx(pill, st === "needs_you" ? "bg-red-tint text-red" : "bg-field text-ink hover:bg-hover")}
+              className={cx(pill, st === "needs_you" || st === "interrupted" ? "bg-red-tint text-red" : "bg-field text-ink hover:bg-hover")}
             >
               <TaskMark status={st} size={8} />
               <span className="truncate">{t.title}</span>
               {st === "needs_you" && <span className="shrink-0">等你</span>}
+              {st === "interrupted" && <span className="shrink-0">中断了</span>}
             </button>
           ))}
           {agents.map(({ session: s, state }) => (

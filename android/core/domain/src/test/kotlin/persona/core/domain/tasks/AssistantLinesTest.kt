@@ -6,12 +6,16 @@ import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 import persona.core.contracts.AgentState
 import persona.core.contracts.FeedItem
 import persona.core.contracts.Item
+import persona.core.contracts.JsonCodec
+import persona.core.contracts.Session
 import persona.core.contracts.Todo
 import persona.core.domain.lines.ChatLine
 import persona.core.domain.lines.ChatRow
@@ -68,6 +72,30 @@ class AssistantLinesTest {
         assertEquals(TaskState.Failed, TaskState.of(failed, emptyList()))
         assertEquals("没开起来", TaskState.Failed.label)
         assertEquals(TaskState.NotStarted, TaskState.of(failed.copy(doneAt = null, startError = null), emptyList()))
+    }
+
+    @Test fun aTaskCutOffByTheModelServiceIsInterrupted() {
+        // #1516: its agent's turn ended in an API error — not done; going on is in progress again.
+        val todo = Todo("t", "t")
+        assertEquals(TaskState.Interrupted, TaskState.of(todo, listOf(AgentState.Unread), interrupted = true))
+        assertEquals(TaskState.NeedsYou, TaskState.of(todo, listOf(AgentState.NeedsYou, AgentState.Unread), interrupted = true))
+        assertEquals(TaskState.Working, TaskState.of(todo, listOf(AgentState.Working)))
+        assertEquals(TaskState.Unread, TaskState.of(todo, listOf(AgentState.Unread)))
+        assertEquals("中断了", TaskState.Interrupted.label)
+        val cut = "API Error: Connection lost mid-response. The response above may be incomplete."
+        fun s(state: String, turnError: String?) = Session(machineId = "m", sessionId = "s", state = state, turnError = turnError)
+        assertTrue(s("unread", cut).interrupted)
+        assertTrue(s("idle", cut).interrupted)
+        assertFalse(s("working", cut).interrupted)
+        assertFalse(s("unread", null).interrupted)
+        assertEquals(Interruption("连不上模型服务", true), Interruption.of(s("unread", cut)))
+        assertEquals(Interruption("登录过期了，要在电脑上重新 /login", false), Interruption.of(s("unread", "API Error: 401 authentication_error")))
+        assertNull(Interruption.of(s("working", cut)))
+        fun receipt(body: String) = FeedItem("r", kind = "receipt", body = JsonCodec.parseToJsonElement(body))
+        assertEquals("interrupted", receiptState(receipt("""{"state":"interrupted","summary":"模型服务出错，中断了"}""")))
+        assertEquals("interrupted", receiptState(receipt("""{"state":"done","summary":"$cut"}""")))
+        assertEquals("done", receiptState(receipt("""{"state":"done","summary":"修好了 API Error: Connection lost 时的崩溃"}""")))
+        assertEquals("failed", receiptState(receipt("""{"state":"failed","summary":"没开起来：x"}""")))
     }
 
     @Test fun dayLabels() {

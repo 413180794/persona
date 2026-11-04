@@ -1,4 +1,5 @@
 import { api, ApiError, enc } from "./api";
+import { parseAPIError, retryable } from "./api-errors";
 import { stateOf } from "./format";
 import { splitAgentSessions, type AgentGroup, type AgentMutes } from "./agent-groups";
 import type { AgentState, Machine, Session } from "./types";
@@ -46,21 +47,23 @@ export interface Todo {
   start_error?: string;
 }
 
-export type TodoStatus = "done" | "needs_you" | "unread" | "working" | "follow_up" | "not_started" | "failed";
+export type TodoStatus = "done" | "needs_you" | "interrupted" | "unread" | "working" | "follow_up" | "not_started" | "failed";
 
 export const TODO_STATUS_RANK: Record<TodoStatus, number> = {
   needs_you: 0,
-  unread: 1,
-  working: 2,
-  follow_up: 3,
-  not_started: 4,
-  done: 5,
-  failed: 6,
+  interrupted: 1,
+  unread: 2,
+  working: 3,
+  follow_up: 4,
+  not_started: 5,
+  done: 6,
+  failed: 7,
 };
 
 export const TODO_STATUS_INFO: Record<TodoStatus, { label: string; tone: "red" | "green" | "amber" | "idle" | "off" }> = {
   done: { label: "已完成", tone: "off" },
   needs_you: { label: "等你", tone: "red" },
+  interrupted: { label: "中断了", tone: "red" },
   unread: { label: "待查看", tone: "green" },
   working: { label: "进行中", tone: "amber" },
   follow_up: { label: "待跟进", tone: "idle" },
@@ -99,6 +102,7 @@ export function makeSessionLookup(sessions: Session[] | Record<string, Session[]
  * 0. 没开起来：从对话开的任务 Agent 没启动起来，hub 把它结束了（start_error，#1077）
  * 1. 已完成：用户点了完成（done_at != null）
  * 2. 等你：有挂着的 Agent 需要你（提问、审批）
+ * 2.5 中断了：有挂着的 Agent 这一轮以模型 API 错误结束（turn_error，#1516），没做完，等你让它继续
  * 3. 待查看：有挂着的 Agent 完成了你还没看
  * 4. 进行中：有挂着的 Agent 在工作或正在启动
  * 5. 待跟进：挂着的 Agent 都停着（已看、未运行、启动失败）
@@ -111,6 +115,7 @@ export function todoStatus(todo: Todo, lookup?: SessionLookup): TodoStatus {
   if (active.length === 0) return "not_started";
 
   let hasNeedsYou = false;
+  let hasInterrupted = false;
   let hasUnread = false;
   let hasWorking = false;
 
@@ -125,14 +130,31 @@ export function todoStatus(todo: Todo, lookup?: SessionLookup): TodoStatus {
       hasNeedsYou = true;
       break;
     }
-    if (st === "unread") hasUnread = true;
+    if (interruptedAgent(s)) hasInterrupted = true;
+    else if (st === "unread") hasUnread = true;
     else if (st === "working" || s?.starting) hasWorking = true;
   }
 
   if (hasNeedsYou) return "needs_you";
+  if (hasInterrupted) return "interrupted";
   if (hasUnread) return "unread";
   if (hasWorking) return "working";
   return "follow_up";
+}
+
+/** The agent stopped on a model API error (the hub's turn_error): cut off, not finished (#1516). */
+export function interruptedAgent(s?: Session): boolean {
+  if (!s?.turn_error) return false;
+  const st = stateOf(s);
+  return st === "unread" || st === "idle";
+}
+
+/** Why the model service cut the agent off (#1516), in words, and whether 继续 can help (a login or a bad request is
+ *  not fixed by going on); undefined when it was not cut off. */
+export function interruption(s?: Session): { reason: string; canContinue: boolean } | undefined {
+  if (!interruptedAgent(s)) return undefined;
+  const info = parseAPIError(s?.turn_error);
+  return { reason: info?.reason ?? "模型请求失败", canContinue: !info || retryable(info) };
 }
 
 /**
@@ -170,7 +192,8 @@ export function mostUrgentAgent(
   const active = (todo.agents ?? []).filter((a) => !a.released_at);
   if (active.length === 0) return null;
 
-  const score = (st: AgentState | "failed") => {
+  const score = (st: AgentState | "failed", s?: Session) => {
+    if (interruptedAgent(s)) return 3.5; // after one waiting on the user, before one done
     switch (st) {
       case "needs_you":
         return 4;
@@ -191,7 +214,7 @@ export function mostUrgentAgent(
   for (const a of active) {
     const s = lookup?.(a.machine_id, a.session_id);
     const st: AgentState | "failed" = a.start_error ? "failed" : s ? stateOf(s) : "offline";
-    const sc = score(st);
+    const sc = score(st, s);
     if (sc > bestScore || !best) {
       bestScore = sc;
       best = { agent: a, session: s, status: st };

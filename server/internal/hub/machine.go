@@ -650,12 +650,15 @@ func (m *Machine) notifyFinished(id string, gen int) {
 			place += " › " + s.SlotName
 		}
 	}
-	text := s.LastText
+	head, text := "✅ "+title, s.LastText
 	if text == "" {
 		text = "完成了"
 	}
+	if cutOff(text) { // the model service cut the turn off: no ✅ over the error (#1516)
+		head, text = "⚠️ "+title, interruptedSummary+"："+strings.TrimSpace(text)
+	}
 	long := ncfg.longTurn()
-	m.hub.notifyDone("done", m.cfg.ID, place, id, "✅ "+title, text, pushWants{Kind: "done", Took: took, Long: long})
+	m.hub.notifyDone("done", m.cfg.ID, place, id, head, text, pushWants{Kind: "done", Took: took, Long: long})
 }
 
 // nodeMismatch: the node's jarvisd is another build than the hub's. Builds are named <commit>[-dirty]-<time>

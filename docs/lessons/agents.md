@@ -150,3 +150,6 @@ claude 刚出来 7 秒就判了超时；标签页留在那里，里面的 claude
 本身没问题。现在分两段计：shell 跑起 claude（herdr 认出 claude 或出现信任对话框）最多 3 分钟，之后等输入框最多 1 分钟；超时的报错分得出是哪一段
 （`claude did not start within 3m0s: the tab's shell had not run it yet` / `… did not become ready within 1m0s of starting`），失败时把这次开的标签页关掉，
 重试不会再留一个空等的 claude。hub 那边等启动的上限跟着放宽（任务启动 5 分钟，启动中 / 要恢复的会话的发送 5 分钟）。
+- Claude Code 一轮以模型 API 错误结束（「API Error: Connection lost mid-response…」、过载、限流、登录过期）在 herdr 里和正常做完一样是 done，hub 也就算成 unread：
+  task_plan 的任务曾因此显示绿色「完成」卡片、摘要就是错误原文，快照里写「做完了」（#1516）。区分它只能看最后一句：hub 在会话停着、`last_text` 以这些错误开头时填 `turn_error`（只认开头，
+  回复里提到「API Error」不算），任务判「中断了」、不自动关、回执写 `interrupted`；普通 Agent 的推送也不再是 ✅。

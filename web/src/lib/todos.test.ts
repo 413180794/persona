@@ -10,6 +10,7 @@ import {
   findTodoForSpace,
   formatAgentSource,
   formatTodoContext,
+  interruption,
   isSpacesSupported,
   makeSessionLookup,
   mostUrgentAgent,
@@ -613,5 +614,48 @@ describe("主对话任务坞里的手动 Agent (dockAgents)", () => {
       mockSession("mac-1", "ask", "needs_you", { state_since: "2026-11-04T07:00:00Z" }),
     ];
     expect(dockAgents(s, [], "main", "main").map((x) => x.session.session_id)).toEqual(["ask", "new", "old"]);
+  });
+});
+
+describe("模型服务出错中断的任务 (#1516)", () => {
+  const cut = "API Error: Connection lost mid-response. The response above may be incomplete.";
+  const todo: Todo = {
+    id: "t1",
+    title: "任务完成卡片摘要渲染 Markdown",
+    created_at: "2026-11-02T10:00:00Z",
+    updated_at: "2026-11-02T10:00:00Z",
+    origin: "conv1",
+    agents: [{ machine_id: "mac-1", session_id: "s1", linked_at: "2026-11-02T10:00:00Z" }],
+  };
+
+  it("这一轮以 API 错误结束：中断了，不是待查看", () => {
+    const s = mockSession("mac-1", "s1", "unread", { last_text: cut, turn_error: cut });
+    expect(todoStatus(todo, makeSessionLookup([s]))).toBe("interrupted");
+    expect(TODO_STATUS_INFO.interrupted).toEqual({ label: "中断了", tone: "red" });
+    expect(isRemovable("interrupted")).toBe(true);
+    // 用户看过了也还是中断（没做完）
+    expect(todoStatus(todo, makeSessionLookup([mockSession("mac-1", "s1", "idle", { turn_error: cut })]))).toBe("interrupted");
+  });
+
+  it("重新跑起来回到进行中；正常做完是待查看", () => {
+    expect(todoStatus(todo, makeSessionLookup([mockSession("mac-1", "s1", "working", { last_text: cut, turn_error: cut })]))).toBe("working");
+    expect(todoStatus(todo, makeSessionLookup([mockSession("mac-1", "s1", "unread", { last_text: "修好了" })]))).toBe("unread");
+  });
+
+  it("等你优先于中断；中断排在待查看前面", () => {
+    const two: Todo = { ...todo, agents: [...todo.agents!, { machine_id: "mac-1", session_id: "s2", linked_at: "" }] };
+    const sCut = mockSession("mac-1", "s1", "unread", { turn_error: cut });
+    expect(todoStatus(two, makeSessionLookup([sCut, mockSession("mac-1", "s2", "needs_you")]))).toBe("needs_you");
+    expect(todoStatus(two, makeSessionLookup([sCut, mockSession("mac-1", "s2", "unread")]))).toBe("interrupted");
+    expect(mostUrgentAgent(two, makeSessionLookup([sCut, mockSession("mac-1", "s2", "unread")]))?.agent.session_id).toBe("s1");
+  });
+
+  it("说清为什么中断、继续有没有用", () => {
+    expect(interruption(mockSession("mac-1", "s1", "unread", { turn_error: cut }))).toEqual({ reason: "连不上模型服务", canContinue: true });
+    expect(interruption(mockSession("mac-1", "s1", "unread", { turn_error: "API Error: 401 authentication_error" }))).toEqual({
+      reason: "登录过期了，要在电脑上重新 /login",
+      canContinue: false,
+    });
+    expect(interruption(mockSession("mac-1", "s1", "unread", { last_text: "修好了" }))).toBeUndefined();
   });
 });

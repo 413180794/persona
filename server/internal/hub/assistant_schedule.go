@@ -1196,10 +1196,13 @@ func (h *Hub) lastTurnAPIError(ctx context.Context, m *Machine, sid string) stri
 	return ""
 }
 
+// apiErrorMarkers start what Claude Code answers when the model call itself failed (an error card in the app).
+var apiErrorMarkers = []string{"API Error:", "There's an issue with the selected model", "Failed to authenticate",
+	"OAuth token has expired", "Invalid API key"}
+
 // apiErrorText: what Claude Code answers when the model call itself failed (an error card in the app).
 func apiErrorText(text string) bool {
-	for _, marker := range []string{"API Error:", "There's an issue with the selected model", "Failed to authenticate",
-		"OAuth token has expired", "Invalid API key"} {
+	for _, marker := range apiErrorMarkers {
 		if strings.Contains(text, marker) {
 			return true
 		}

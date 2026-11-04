@@ -558,6 +558,11 @@ type Session struct {
 	Ports     []Port    `json:"ports,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
 	LastText  string    `json:"last_text,omitempty"`
+	// TurnError: the agent's latest turn ended in a model API error (the connection lost mid-response, overloaded,
+	// rate limited, the model service down…), as Claude Code writes it ("API Error: …"); set by the hub while the agent
+	// is stopped, empty while it works or when the turn ended normally. The task it works for is interrupted, not
+	// done (docs/todos.md「状态计算规则」, #1516).
+	TurnError string `json:"turn_error,omitempty"`
 	// Activity says what the agent is doing when its latest step is a tool call no text came after (「在跑测试」
 	// 「在读 tasks.go」「在等 CI」, transcript.Activity), and ActivityAt when that call started: while an agent only runs
 	// tools its last_text stays put for minutes, and a task card showing it looked stuck. Empty once it writes text.

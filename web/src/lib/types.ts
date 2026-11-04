@@ -103,6 +103,8 @@ export interface Session {
   updated_at?: string;
   seen_at?: string;
   last_text?: string;
+  /** Its latest turn ended in a model API error (the hub sets it while it is stopped, #1516): its task is interrupted. */
+  turn_error?: string;
   pending_interactions?: number;
   queued?: string[];
   subagents?: Subagent[];

@@ -86,7 +86,7 @@ func (h *Hub) ensureToday(ctx context.Context, conversation string) (FeedItem, b
 		slices.SortFunc(mine, func(a, b Todo) int { return a.CreatedAt.Compare(b.CreatedAt) })
 		for _, t := range mine {
 			switch taskState(t, h.taskAgents(t)) {
-			case "needs_you":
+			case "needs_you", "interrupted":
 				body.Waiting = append(body.Waiting, todayTask{ID: t.ID, Title: t.Title})
 			case "working":
 				body.Working++

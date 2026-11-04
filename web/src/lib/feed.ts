@@ -3,6 +3,7 @@
 // the quick results. A task is a todo whose `origin` is the conversation; its state is the todo's (lib/todos.ts).
 import { useSyncExternalStore } from "react";
 import { api, enc } from "./api";
+import { parseAPIError } from "./api-errors";
 import { onHubEvent, putTodo, refreshTodos } from "./store";
 import { deleteTodo, type Todo } from "./todos";
 import { itemPath } from "./inbox";
@@ -57,6 +58,14 @@ export interface TodayBody {
 export function field(it: FeedItem, key: string): string | undefined {
   const v = it.body?.[key];
   return typeof v === "string" ? v : undefined;
+}
+
+/** A receipt's outcome: an `interrupted` one (#1516), or a `done` one from a hub before it whose summary is the API
+ *  error that cut the turn off, is not done. */
+export function receiptState(it: FeedItem): "done" | "failed" | "interrupted" {
+  const st = field(it, "state");
+  if (st === "failed" || st === "interrupted") return st;
+  return parseAPIError(field(it, "summary")) ? "interrupted" : "done";
 }
 
 /** One question of an answered card and what the user answered. */
@@ -222,7 +231,8 @@ export const retryKey = (todoId: string) => `retry:${todoId}`;
 /**
  * 重试 on a task whose agent did not start (#1396): the hub starts the same task again (its plan's machine, directory,
  * prompt, launcher, model and permission) in the same todo, which it reopens at once — the card shows it starting
- * where it was. Taps while one is on its way do nothing; the hub starts one agent however many arrive.
+ * where it was. Taps while one is on its way do nothing; the hub starts one agent however many arrive. On a task the
+ * model service cut off (#1516) it is 继续: the hub tells its agent to go on, once.
  */
 export async function retryTask(todo: Todo) {
   const key = retryKey(todo.id);

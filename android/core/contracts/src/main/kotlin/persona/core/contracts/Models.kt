@@ -183,6 +183,8 @@ data class Session(
     @SerialName("loop") val loop: LoopInfo? = null,
     @WireTime @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("last_text") val lastText: String? = null,
+    /** Its latest turn ended in a model API error (the hub sets it while it is stopped, #1516): its task is interrupted. */
+    @SerialName("turn_error") val turnError: String? = null,
     @SerialName("pending_interactions") val pendingInteractions: Int = 0,
     @SerialName("rev") val rev: Long? = null,
     @SerialName("suggestion") val suggestion: String? = null,
@@ -193,6 +195,8 @@ data class Session(
 ) {
     val key: SessionKey get() = SessionKey(machineId, sessionId)
     val agentState: AgentState get() = AgentState.of(state, status)
+    /** Stopped on a model API error ([turnError]): cut off, not finished (#1516). */
+    val interrupted: Boolean get() = !turnError.isNullOrBlank() && (agentState == AgentState.Unread || agentState == AgentState.Idle)
     val folderName: String get() = cwd.trimEnd('/').substringAfterLast('/')
     val displayTitle: String get() = if (title.isEmpty() || title == "Claude Code") folderName.ifEmpty { sessionId.take(8) } else title
     /** Codex in a terminal, or a thread from a Codex app-server / Codex history. */

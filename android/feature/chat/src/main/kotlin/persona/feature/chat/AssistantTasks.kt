@@ -68,7 +68,10 @@ import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.tasks.AssistantExtra
 import persona.core.domain.tasks.AssistantLines
 import persona.core.domain.tasks.QuickResult
+import persona.core.domain.tasks.Interruption
 import persona.core.domain.tasks.TaskState
+import persona.core.domain.tasks.receiptState
+import persona.core.domain.lines.ApiErrorInfo
 import persona.core.domain.tasks.TasksStore
 
 // The unified entry in the assistant's conversation (docs/unified-entry.md; iOS Views/Assistant/Tasks, web
@@ -87,7 +90,7 @@ internal class AssistantTaskHost(
 )
 
 private fun TaskState.status(): Status = when (this) {
-    TaskState.NeedsYou -> Status.NeedsYou
+    TaskState.NeedsYou, TaskState.Interrupted -> Status.NeedsYou
     TaskState.Working, TaskState.NotStarted -> Status.Working
     TaskState.Unread -> Status.Unread
     TaskState.Followup -> Status.Idle
@@ -97,7 +100,7 @@ private fun TaskState.status(): Status = when (this) {
 
 @Composable
 private fun TaskMark(state: TaskState) {
-    if (state == TaskState.Failed) {
+    if (state == TaskState.Failed || state == TaskState.Interrupted) {
         JIcon(PhIcons.WarningCircle, decorative = true, size = Tokens.Space.l, tint = PersonaTheme.palette.danger.dot)
     } else if (state == TaskState.Done || state == TaskState.Unread) {
         JIcon(PhIcons.CheckCircle, decorative = true, size = Tokens.Space.l,
@@ -262,8 +265,10 @@ private fun TaskCard(todo: Todo, host: AssistantTaskHost) {
     val state = host.tasks.stateOf(todo, host.sessions)
     val lead = host.tasks.lead(todo, host.sessions)
     val busy by host.tasks.busy.collectAsStateWithLifecycle()
+    val cut = if (state == TaskState.Interrupted) Interruption.of(lead) else null
     val now = when {
         state == TaskState.NeedsYou -> "有事等你回答"
+        cut != null -> "模型服务出错，中断了：" + cut.reason
         state == TaskState.Failed -> "没开起来：" + todo.startError.orEmpty().trim()
         !lead?.lastText.isNullOrBlank() -> lead?.lastText.orEmpty().trim()
         todo.agents.any { !it.startError.isNullOrBlank() } -> "没开起来：" + todo.agents.first { !it.startError.isNullOrBlank() }.startError
@@ -282,7 +287,7 @@ private fun TaskCard(todo: Todo, host: AssistantTaskHost) {
             Text(now, Modifier.fillMaxWidth().clip(PersonaTheme.shapes.controlShape).background(PersonaTheme.palette.sunken)
                 .padding(horizontal = Tokens.Space.m, vertical = Tokens.Space.s), style = PersonaTheme.type.callout, maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                color = if (state == TaskState.NeedsYou || state == TaskState.Failed) PersonaTheme.palette.status(Status.NeedsYou).text
+                color = if (state == TaskState.NeedsYou || state == TaskState.Failed || cut != null) PersonaTheme.palette.status(Status.NeedsYou).text
                 else PersonaTheme.palette.ink)
             if (state != TaskState.Done) Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(state.label, Modifier.weight(1f), style = PersonaTheme.type.caption, color = PersonaTheme.palette.status(state.status()).text)
@@ -292,8 +297,13 @@ private fun TaskCard(todo: Todo, host: AssistantTaskHost) {
                         icon = PhIcons.ArrowClockwise, loading = TasksStore.retryKey(todo.id) in busy)
                     JButton("移除", { host.tasks.removeTask(todo, host.onError) }, kind = JButtonKind.Destructive, size = JButtonSize.Small,
                         icon = PhIcons.Trash)
-                } else JButton("说一句", { host.tasks.setRoute(host.conversation, todo.id) }, kind = JButtonKind.Quiet, size = JButtonSize.Small,
-                    icon = PhIcons.PaperPlaneTilt)
+                } else {
+                    // The model service cut its turn off: 继续 tells its agent to go on, as the chat's 重试 does (#1516).
+                    if (cut?.canContinue == true) JButton("继续", { host.tasks.retryTask(todo, host.onError) }, kind = JButtonKind.Quiet,
+                        size = JButtonSize.Small, icon = PhIcons.ArrowClockwise, loading = TasksStore.retryKey(todo.id) in busy)
+                    JButton("说一句", { host.tasks.setRoute(host.conversation, todo.id) }, kind = JButtonKind.Quiet, size = JButtonSize.Small,
+                        icon = PhIcons.PaperPlaneTilt)
+                }
             }
         }
     }
@@ -314,7 +324,9 @@ private fun TaskLine(todo: Todo, host: AssistantTaskHost) {
 
 @Composable
 private fun ReceiptCard(item: FeedItem, host: AssistantTaskHost, todos: List<Todo>) {
-    val failed = item.field("state") == "failed"
+    val outcome = receiptState(item)
+    if (outcome == "interrupted") return InterruptedReceipt(item, host, todos)
+    val failed = outcome == "failed"
     val todo = todos.firstOrNull { it.id == item.ref }
     val title = item.field("title") ?: "任务"
     // A failed start's banner follows its task: 重试 while it is still failed (with its latest error), a quiet line once
@@ -367,6 +379,44 @@ private fun ReceiptSummary(md: String) {
         }
     }
     Text(text, style = type.callout, color = palette.ink2, maxLines = 4, overflow = TextOverflow.Ellipsis)
+}
+
+/** A task the model service cut off (#1516): red, why in words, 继续 while it is still cut off; once its agent went on,
+ *  a quiet line that opens the task (a later receipt says how it ended). */
+@Composable
+private fun InterruptedReceipt(item: FeedItem, host: AssistantTaskHost, todos: List<Todo>) {
+    val todo = todos.firstOrNull { it.id == item.ref }
+    val title = item.field("title") ?: "任务"
+    val state = todo?.let { host.tasks.stateOf(it, host.sessions) }
+    if (todo != null && state != TaskState.Interrupted) {
+        Row(Modifier.clip(PersonaTheme.shapes.controlShape).clickable { openTask(host, todo) }.padding(vertical = Tokens.Space.xs),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+            JIcon(if (state == TaskState.Done) PhIcons.Check else PhIcons.ArrowClockwise, decorative = true, size = Tokens.Space.m,
+                tint = PersonaTheme.palette.ink2)
+            Text("「$title」" + if (state == TaskState.Done) "已完成" else "中断后继续了", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1,
+                overflow = TextOverflow.Ellipsis)
+        }
+        return
+    }
+    val busy by host.tasks.busy.collectAsStateWithLifecycle()
+    val cut = todo?.let { Interruption.of(host.tasks.lead(it, host.sessions)) }
+    val reason = cut?.reason ?: ApiErrorInfo.parse(item.field("error") ?: item.field("summary"))?.reason
+    val tone = PersonaTheme.palette.danger
+    Row(Modifier.fillMaxWidth().clip(PersonaTheme.shapes.cardShape).background(tone.tint).padding(Tokens.Space.l),
+        horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
+        JIcon(PhIcons.WarningCircle, decorative = true, tint = tone.dot)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+            Text("$title 中断了", style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
+            Text(if (reason != null) "模型服务出错，中断了：$reason" else "模型服务出错，中断了", style = PersonaTheme.type.callout,
+                color = PersonaTheme.palette.ink2, maxLines = 4, overflow = TextOverflow.Ellipsis)
+            Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+                if (todo != null && cut?.canContinue != false) JButton("继续", { host.tasks.retryTask(todo, host.onError) },
+                    kind = JButtonKind.Secondary, size = JButtonSize.Small, icon = PhIcons.ArrowClockwise,
+                    loading = TasksStore.retryKey(todo.id) in busy)
+                if (todo != null) JButton("看看", { openTask(host, todo) }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
+            }
+        }
+    }
 }
 
 @Composable
@@ -492,12 +542,16 @@ internal fun AssistantTaskBar(host: AssistantTaskHost) {
     val routes by host.tasks.routes.collectAsStateWithLifecycle()
     val mine = todos.filter { it.origin == host.conversation }
     val going = mine.map { it to host.tasks.stateOf(it, host.sessions) }
-        .filter { (_, s) -> s == TaskState.NeedsYou || s == TaskState.Working || s == TaskState.NotStarted || s == TaskState.Unread }
+        .filter { (_, s) -> s == TaskState.NeedsYou || s == TaskState.Interrupted || s == TaskState.Working || s == TaskState.NotStarted || s == TaskState.Unread }
         .sortedWith(compareBy({ it.second.rank }, { it.first.createdAt?.let { c -> -(AssistantLines.time(c)?.toEpochMilli() ?: 0) } ?: 0 }))
     Column(Modifier.padding(horizontal = Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
         if (going.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
             going.forEach { (todo, state) ->
-                JChip(if (state == TaskState.NeedsYou) "${todo.title} · 等你" else todo.title, onClick = { openTask(host, todo) }, status = state.status())
+                JChip(when (state) {
+                    TaskState.NeedsYou -> "${todo.title} · 等你"
+                    TaskState.Interrupted -> "${todo.title} · 中断了"
+                    else -> todo.title
+                }, onClick = { openTask(host, todo) }, status = state.status())
             }
         }
         val routed = routes[host.conversation]?.let { id -> mine.firstOrNull { it.id == id } }

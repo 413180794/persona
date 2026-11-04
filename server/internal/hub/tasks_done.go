@@ -18,8 +18,8 @@ import (
 // Closing a finished task (docs/todos.md「自动完成」, #1092). When a task's agents have all stopped and its receipt
 // went out, the judge model reads the task's title, the prompt it was handed out with and what its agents said last,
 // and only "done" closes the todo (done_by auto, with why). Anything else — not finished, waiting on someone,
-// needing the user, unsure, no model, a model error — leaves it open. A todo the user reopened is not closed again
-// by the same stretch of work.
+// needing the user, unsure, no model, a model error, an agent whose turn the model service cut off (#1516) — leaves
+// it open. A todo the user reopened is not closed again by the same stretch of work.
 
 const (
 	verdictDone      = "done"
@@ -163,6 +163,12 @@ func (h *Hub) judgeTaskDone(ctx context.Context, t Todo) (taskDoneCheck, error) 
 	if len(replies) == 0 {
 		c.Verdict, c.Reason = verdictUnsure, "没读到 Agent 的回复"
 		return c, nil
+	}
+	for _, r := range replies {
+		if cutOff(r.Text) { // its turn was cut off by the model service: not finished, whatever came before (#1516)
+			c.Verdict, c.Reason = verdictNotDone, interruptedSummary
+			return c, nil
+		}
 	}
 	system := prompts.RenderTaskDone(prompts.TaskDone{Owner: h.ownerName()})
 	input := prompts.RenderTaskDoneInput(prompts.TaskDoneInput{Title: t.Title, Prompt: clipMiddle(strings.TrimSpace(t.Notes), 1500),

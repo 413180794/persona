@@ -1439,6 +1439,19 @@ if MOCK_TASKS:
         + tool("mcp__jarvis__task_plan", {"tasks": []}, "Plan plan_mock_3 is on the user's screen as a card.", 2)
         + [it("assistant", "text", 1.9, text="这个要改代码，计划在下面，你点开始就开。")]
     )
+    # MOCK_TASKS_CUT=1: the model service cut the release-notes task off (#1516): its agent's last words are the API
+    # error (the hub's turn_error) and its receipt is interrupted; 继续 (POST …/retry) makes it work and then finish.
+    if os.environ.get("MOCK_TASKS_CUT") == "1":
+        _cut_text = "API Error: Connection lost mid-response. The response above may be incomplete."
+        for _s in SESSIONS:
+            if _s["session_id"] == RELEASE:
+                _s.update(last_text=_cut_text, turn_error=_cut_text)
+        ITEMS[RELEASE] = ITEMS.get(RELEASE, []) + [it("assistant", "text", 3, text=_cut_text)]
+        CUT_SESSION = copy.deepcopy(next(x for x in SESSIONS if x["session_id"] == RELEASE))  # GET /mock/cut puts it back
+        for _f in TASK_FEED[ASK1]:
+            if _f["id"] == "feed_m7":
+                _f["body"] = {"title": "整理发布说明", "state": "interrupted", "machine": "MacBook",
+                              "summary": "模型服务出错，中断了", "error": _cut_text}
     # MOCK_TASKS_AT=<minutes>: the conversation as it was that many minutes ago (newer items and feed left out), to
     # see its earlier parts at the bottom of the screen without scrolling.
     _cut = float(os.environ.get("MOCK_TASKS_AT") or 0)
@@ -1461,6 +1474,22 @@ def retry_task(h, tid):
     if not t:
         return h.send_json({"error": "todo not found"}, 404)
     mode = RETRY_MODE["mode"]
+    cut = [x for x in SESSIONS if x.get("turn_error") and any(a["session_id"] == x["session_id"] for a in t.get("agents", []))]
+    if cut and not t.get("done_at"):
+        # 继续 on a task the model service cut off (#1516): its agent works, and a moment later finishes.
+        s0 = cut[0]
+        s0.pop("turn_error", None)
+        s0.update(status="working", state="working", last_text="接着整理发布说明。", updated_at=ago())
+        push_machine(s0["machine_id"])
+
+        def finished():
+            time.sleep(2)
+            s0.update(status="done", state="unread", updated_at=ago(),
+                      last_text="整理好了：这周合并了 7 个 PR，写在 docs/release-notes.md 里。")
+            push_machine(s0["machine_id"])
+
+        threading.Thread(target=finished, daemon=True).start()
+        return h.send_json({"todo": format_todo(t)})
     if not t.get("start_error"):
         if t.get("done_at") or not t.get("plan_id"):
             return h.send_json({"error": "只有助手派出、没开起来的任务能重试"}, 409)
@@ -1544,6 +1573,11 @@ def tasks_area(h, method, p, raw):
         return True
     if method == "POST" and p.startswith("/api/v1/todos/") and p.endswith("/retry"):
         retry_task(h, p.split("/")[4])
+        return True
+    if p == "/mock/cut" and os.environ.get("MOCK_TASKS_CUT") == "1":
+        SESSIONS[:] = [copy.deepcopy(CUT_SESSION) if x["session_id"] == RELEASE else x for x in SESSIONS]
+        push_machine("macbook")
+        h.send_json({"ok": True})
         return True
     if p == "/mock/retry":
         RETRY_MODE["mode"] = parse_qs(urlparse(h.path).query).get("mode", [""])[0]

@@ -136,7 +136,7 @@ hub 往对话里插的条目，不进 Claude 的 transcript（插进去会多跑
 | `plan` | `task_plan` 交给你一个计划 | 计划 id |
 | `task` | 一个任务开始 | 待办 id |
 | `answered` | 任务的交互被处理 | 待办 id；一行摘要（问题、你的回答），和逐个问题的完整问答 `items` |
-| `receipt` | 任务做完 / 失败 | 待办 id；摘要、改动文件数、测试、PR |
+| `receipt` | 任务做完 / 没开起来 / 被模型服务出错打断（`interrupted`，#1516） | 待办 id；摘要、改动文件数、测试、PR；打断的带错误原文 `error` |
 | `routed` | 你直接对任务说了一句 | 待办 id；原文 |
 | `message` | 收件箱里一条和任务有关的消息，AI 分身起草好了回复 | 收件箱条目 id；任务、来源、会话、谁、原话、草稿 |
 | `today` | 当天第一次打开这段对话（App 调 `POST …/today`） | 日期；夜里做完的任务、等你的任务、在做几个、飞书今天接下来的会、@我 的会话、其他未读数 |
@@ -147,7 +147,8 @@ hub 往对话里插的条目，不进 Claude 的 transcript（插进去会多跑
 ### 钩子
 
 - **做完**：`Machine.setSessions` 发现挂在带 `origin` 的待办上的 Agent 从 working 变成 done / idle、没有待处理的交互时（和 `notifyFinished` 同一处），
-  写 `receipt`。同一个任务的几个 Agent 都停了才算任务做完。
+  写 `receipt`。同一个任务的几个 Agent 都停了才算任务做完。有 Agent 停在模型 API 错误上（`turn_error`）时写 `interrupted` 回执、不判断做完（#1516）；
+  卡片上的「继续」走 `POST /api/v1/todos/{id}/retry`，hub 给那个 Agent 发「继续」，它跑起来任务就回到在做，这一轮正常结束再发一条 done 回执。
 - **等你**：不写动态。App 直接用待办挂着的 Agent 的 `pending_interactions`；处理后（`resolve`）写 `answered`。
 - **对任务说话**：`POST /api/v1/assistant/conversations/{id}/route {todo_id, text}`：hub 用 `session.send` 发给那个任务最要紧的 Agent，写 `routed`。
 - **Persona 知道**：实时快照多一节「这段对话开的任务」：每个任务的状态、最近一句、和上一份比的变化（做完了、在等你）。不额外触发一轮。

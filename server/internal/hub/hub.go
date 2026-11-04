@@ -435,6 +435,7 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 		}
 		list[i].SeenAt = seen[list[i].SessionID]
 		list[i].State = agentState(list[i], list[i].SeenAt)
+		list[i].TurnError = turnError(list[i])
 	}
 	h.todos.mu.RLock()
 	if h.todos.loaded {

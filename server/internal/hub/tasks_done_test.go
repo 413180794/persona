@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -336,5 +337,165 @@ func TestTaskDoneReadsTheLatestTurn(t *testing.T) {
 	if !sameRequest("<jarvis-context kind=\"context\">x</jarvis-context>\niPad 横屏时登录页崩溃，修好并补测试", "iPad 横屏时登录页崩溃，修好并补测试") ||
 		sameRequest("再把「全部 N」挪到最左边", "iPad 横屏时登录页崩溃，修好并补测试") {
 		t.Fatal("sameRequest")
+	}
+}
+
+// A turn the model service cut off (#1516) is no end of the work: the receipt says the task was interrupted (not the
+// error as its summary), nothing judges or closes it, the snapshot and the today card say it waits for the user, and
+// 重试 tells its agent 「继续」 once however many taps come in. Once the agent works again the task is in progress, and
+// a turn that ends normally is a done receipt and closes it as before.
+func TestTaskInterruptedByAPIError(t *testing.T) {
+	h, tn := newTaskHub(t)
+	js := stubJudge(t, h, http.StatusOK, `{"verdict":"done","reason":"修好了"}`)
+	todo := startedTask(t, h)
+	time.Sleep(50 * time.Millisecond)
+	before := js.calls.Load() // naming the agent's tab may ask the model too
+	cut := "API Error: Connection lost mid-response. The response above may be incomplete."
+	runTurn(h, cut)
+	waitFor(t, "a receipt", func() bool { return receipts(h) == 1 })
+	items, _, _ := h.feed(context.Background(), "conv1", time.Time{})
+	var rb receiptBody
+	_ = json.Unmarshal(items[len(items)-1].Body, &rb)
+	if rb.State != "interrupted" || rb.Summary != interruptedSummary || rb.Error != cut || rb.PR != "" {
+		t.Fatalf("receipt = %+v", rb)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if got := todoNow(h, todo.ID); got.DoneAt != nil || js.calls.Load() != before {
+		t.Fatalf("todo = %+v, %d judge calls", got, js.calls.Load()-before)
+	}
+	stateNow := func() string { return taskState(todoNow(h, todo.ID), h.taskAgents(todoNow(h, todo.ID))) }
+	if st := stateNow(); st != "interrupted" {
+		t.Fatalf("state = %q", st)
+	}
+	var label string
+	for _, st := range h.snapshotTasks() {
+		if st.ID == todo.ID {
+			label = st.State
+		}
+	}
+	if label != taskStateLabel("interrupted") || !strings.Contains(label, "中断") {
+		t.Fatalf("snapshot state = %q", label)
+	}
+	inbox := false
+	for _, it := range h.inboxTasks() {
+		inbox = inbox || it.ID == todo.ID
+	}
+	if !inbox {
+		t.Fatal("an interrupted task is not going on for the inbox")
+	}
+	today, _, err := h.ensureToday(context.Background(), "conv1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tb todayBody
+	_ = json.Unmarshal(today.Body, &tb)
+	if len(tb.Waiting) != 1 || len(tb.Done) != 0 {
+		t.Fatalf("today = %+v", tb)
+	}
+
+	// 重试: 「继续」 to the agent, once for eight taps; the todo is answered as it is.
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if w := retryReq(h, todo.ID); w.Code != http.StatusOK {
+				t.Errorf("retry: %d %s", w.Code, w.Body)
+			}
+		}()
+	}
+	wg.Wait()
+	_, sends := tn.calls()
+	if len(sends) != 1 || sends[0]["session_id"] != "s1" || sends[0]["text"] != continueText {
+		t.Fatalf("sends = %v", sends)
+	}
+
+	m := h.byID["box"]
+	m.setSessions([]proto.Session{{SessionID: "s1", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, LastText: cut, UpdatedAt: time.Now()}})
+	if st := stateNow(); st != "working" {
+		t.Fatalf("state after 继续 = %q", st)
+	}
+	time.Sleep(20 * time.Millisecond)
+	m.setSessions([]proto.Session{{SessionID: "s1", Cwd: "/code/app", Agent: "claude", Status: proto.StatusDone, LastText: "修好了，补了测试", UpdatedAt: time.Now()}})
+	waitFor(t, "auto done", func() bool { return todoNow(h, todo.ID).DoneAt != nil })
+	items, _, _ = h.feed(context.Background(), "conv1", time.Time{})
+	rb = receiptBody{}
+	_ = json.Unmarshal(items[len(items)-1].Body, &rb)
+	if receipts(h) != 2 || rb.State != "done" || rb.Summary != "修好了，补了测试" || rb.Error != "" {
+		t.Fatalf("%d receipts, last = %+v", receipts(h), rb)
+	}
+}
+
+// 重试 on an interrupted task whose machine is offline is refused and sends nothing; one that is not interrupted (in
+// progress) is answered as it is.
+func TestTaskContinueRefusedOrNotNeeded(t *testing.T) {
+	h, tn := newTaskHub(t)
+	todo := startedTask(t, h)
+	m := h.byID["box"]
+	m.setSessions([]proto.Session{{SessionID: "s1", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, UpdatedAt: time.Now()}})
+	if w := retryReq(h, todo.ID); w.Code != http.StatusOK {
+		t.Fatalf("retry of a working task: %d %s", w.Code, w.Body)
+	}
+	m.setSessions([]proto.Session{{SessionID: "s1", Cwd: "/code/app", Agent: "claude", Status: proto.StatusDone, LastText: "API Error: 529 Overloaded", UpdatedAt: time.Now()}})
+	m.mu.Lock()
+	p := m.peer
+	m.peer = nil
+	m.mu.Unlock()
+	if w := retryReq(h, todo.ID); w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "离线") {
+		t.Fatalf("retry offline: %d %s", w.Code, w.Body)
+	}
+	m.mu.Lock()
+	m.peer = p
+	m.mu.Unlock()
+	if _, sends := tn.calls(); len(sends) != 0 {
+		t.Fatalf("sends = %v", sends)
+	}
+	// Back online, 重试 goes through (the refusal left no claim behind).
+	if w := retryReq(h, todo.ID); w.Code != http.StatusOK {
+		t.Fatalf("retry: %d %s", w.Code, w.Body)
+	}
+	if _, sends := tn.calls(); len(sends) != 1 {
+		t.Fatalf("sends = %v", sends)
+	}
+}
+
+// The judge does not close a task whose agent's latest answer is the error that cut its turn off (as the done-check
+// route asks it), and does not ask the model.
+func TestTaskDoneJudgeSkipsACutOffTurn(t *testing.T) {
+	h, tn := newTaskHub(t)
+	js := stubJudge(t, h, http.StatusOK, `{"verdict":"done","reason":"做完了"}`)
+	todo := startedTask(t, h)
+	time.Sleep(50 * time.Millisecond)
+	before := js.calls.Load() // naming the agent's tab may ask the model too
+	tn.mu.Lock()
+	tn.items = []proto.Item{
+		{Kind: proto.KindText, Role: "assistant", Text: "改好了一半"},
+		{Kind: proto.KindText, Role: "assistant", Text: "API Error: Connection lost mid-response. The response above may be incomplete."},
+	}
+	tn.mu.Unlock()
+	c, err := h.judgeTaskDone(context.Background(), todo)
+	if err != nil || c.Verdict != verdictNotDone || c.WouldClose || js.calls.Load() != before {
+		t.Fatalf("check = %+v, %v, %d calls", c, err, js.calls.Load()-before)
+	}
+}
+
+// Only an answer that is the error cuts a turn off, and only once the agent stopped.
+func TestTurnError(t *testing.T) {
+	for _, tc := range []struct {
+		state, text string
+		cut         bool
+	}{
+		{proto.StateUnread, "API Error: Connection lost mid-response.", true},
+		{proto.StateIdle, "  API Error: 529 Overloaded", true},
+		{proto.StateUnread, "There's an issue with the selected model (x). It may not exist.", true},
+		{proto.StateUnread, "修好了 API Error: Connection lost 时的崩溃", false},
+		{proto.StateUnread, "修好了", false},
+		{proto.StateWorking, "API Error: Connection lost mid-response.", false},
+		{proto.StateNeedsYou, "API Error: Connection lost mid-response.", false},
+	} {
+		got := turnError(proto.Session{State: tc.state, LastText: tc.text})
+		if (got != "") != tc.cut {
+			t.Errorf("turnError(%s, %q) = %q", tc.state, tc.text, got)
+		}
 	}
 }

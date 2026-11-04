@@ -499,7 +499,7 @@ func (h *Hub) startPlanTask(planID, conversation string, i int, t PlanTask, retr
 }
 
 var (
-	errTaskNotRetryable = errors.New("只有助手派出、没开起来的任务能重试")
+	errTaskNotRetryable = errors.New("只有没开起来、或被模型服务出错打断的任务能重试")
 	errTaskNotInPlan    = errors.New("找不到这个任务的计划，没法照原样再开一次")
 	errMachineOffline   = errors.New("现在离线，等它连上再重试")
 )
@@ -508,7 +508,8 @@ var (
 // directory, prompt, launcher, model, permission, title), in the same todo — reopened, its error and the plan's
 // cleared — so the task shows as starting where it was, not as a second one. A task already starting again, or
 // started since, is answered as it is: a double tap starts one agent. A machine that is offline is refused before
-// anything changes.
+// anything changes. A task that is open is not started again: one whose agent the model service cut off is told to
+// go on (continueTask).
 func (h *Hub) retryTask(ctx context.Context, todoID string) (Todo, error) {
 	if err := h.ensureTodosLoaded(ctx); err != nil {
 		return Todo{}, err
@@ -519,6 +520,9 @@ func (h *Hub) retryTask(ctx context.Context, todoID string) (Todo, error) {
 	}
 	if cur.PlanID == "" || cur.Origin == "" {
 		return Todo{}, errTaskNotRetryable
+	}
+	if cur.DoneAt == nil {
+		return h.continueTask(ctx, cur)
 	}
 	h.tasks.mu.Lock()
 	busy := h.tasks.retrying[todoID]
@@ -590,6 +594,62 @@ func (h *Hub) retryTask(ctx context.Context, todoID string) (Todo, error) {
 		h.startPlanTask(p.ID, p.Conversation, i, t, true)
 	}()
 	return out, nil
+}
+
+// continueText is what goes on a cut-off turn: what the chat's 重试 on an API error card sends.
+const continueText = "继续"
+
+// continueHold bounds how long a sent 继续 keeps further taps from sending another while the agent takes it up.
+var continueHold = 30 * time.Second
+
+// continueTask tells the agent of a task whose latest turn the model service cut off (#1516) to go on, as the chat's
+// 重试 on the error card does; the task shows as in progress again once the agent works. One 继续 per cut: taps while
+// one is on its way, or before the agent took it up, answer the todo as it is, as does a task with no agent cut off.
+// The agent's machine offline is refused.
+func (h *Hub) continueTask(ctx context.Context, cur Todo) (Todo, error) {
+	var cut proto.Session
+	for _, s := range h.taskAgents(cur) {
+		if s.TurnError != "" && (cut.SessionID == "" || s.UpdatedAt.After(cut.UpdatedAt)) {
+			cut = s
+		}
+	}
+	if cut.SessionID == "" {
+		return formatTodo(cur), nil
+	}
+	m := h.localMachine(cut.MachineID)
+	if m == nil || !m.reachable() {
+		name := cut.MachineID
+		if m != nil {
+			name = m.cfg.Name
+		}
+		return Todo{}, fmt.Errorf("「%s」%w", name, errMachineOffline)
+	}
+	h.tasks.mu.Lock()
+	busy := h.tasks.retrying[cur.ID]
+	h.tasks.retrying[cur.ID] = true
+	h.tasks.mu.Unlock()
+	if busy {
+		return formatTodo(cur), nil
+	}
+	release := func() {
+		h.tasks.mu.Lock()
+		delete(h.tasks.retrying, cur.ID)
+		h.tasks.mu.Unlock()
+	}
+	if err := m.call(ctx, "session.send", map[string]any{"session_id": cut.SessionID, "text": continueText}, nil); err != nil {
+		release()
+		return Todo{}, err
+	}
+	h.logf("task %s: told %s/%s to go on after: %s", cur.ID, m.cfg.ID, cut.SessionID, clip(oneLine(cut.TurnError), 120))
+	go func() {
+		defer release()
+		for end := time.Now().Add(continueHold); time.Now().Before(end); time.Sleep(200 * time.Millisecond) {
+			if s, ok := m.session(cut.SessionID); !ok || s.Status == proto.StatusWorking || strings.TrimSpace(s.LastText) != cut.TurnError {
+				return // it took it up (or is gone): a later cut may be continued again
+			}
+		}
+	}()
+	return formatTodo(cur), nil
 }
 
 // todoNow is a copy of todo id as the hub has it.
@@ -765,11 +825,16 @@ func (h *Hub) taskWorking(mid, sid string) {
 
 type receiptBody struct {
 	Title   string `json:"title"`
-	State   string `json:"state"` // done, failed
+	State   string `json:"state"` // done, failed, interrupted
 	Summary string `json:"summary,omitempty"`
 	PR      string `json:"pr,omitempty"`
 	Machine string `json:"machine,omitempty"`
+	// Error: what the model service answered when the turn was cut off (interrupted), for the card's detail.
+	Error string `json:"error,omitempty"`
 }
+
+// interruptedSummary is an interrupted task's receipt: the error itself is no conclusion (#1516).
+const interruptedSummary = "模型服务出错，中断了"
 
 var prLink = regexp.MustCompile(`https://github\.com/[\w.-]+/[\w.-]+/pull/\d+`)
 
@@ -783,13 +848,16 @@ func (m *Machine) taskTurnEnded(sid string) {
 		return
 	}
 	agents := h.taskAgents(t)
-	var last proto.Session
+	var last, cut proto.Session
 	for _, s := range agents {
 		if s.State == proto.StateWorking || s.State == proto.StateNeedsYou || s.PendingInteractions > 0 {
 			return
 		}
 		if s.UpdatedAt.After(last.UpdatedAt) {
 			last = s
+		}
+		if s.TurnError != "" && (cut.SessionID == "" || s.UpdatedAt.After(cut.UpdatedAt)) {
+			cut = s
 		}
 	}
 	h.tasks.mu.Lock()
@@ -805,6 +873,17 @@ func (m *Machine) taskTurnEnded(sid string) {
 	h.tasks.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	if cut.SessionID != "" {
+		// A turn cut off by the model service is no end of the work: an interrupted receipt (with 继续 on the card),
+		// and nothing to judge or close (#1516).
+		h.logf("task %s: interrupted: %s", t.ID, clip(oneLine(cut.TurnError), 200))
+		body := receiptBody{Title: t.Title, State: "interrupted", Summary: interruptedSummary, Machine: m.cfg.Name,
+			Error: clip(strings.TrimSpace(cut.TurnError), 300)}
+		if _, err := h.appendFeed(ctx, t.Origin, feedReceipt, t.ID, body); err != nil {
+			h.logf("task %s: receipt: %v", t.ID, err)
+		}
+		return
+	}
 	// The whole last reply, as Markdown: the session list's last_text is one line cut at 200 characters.
 	text := strings.TrimSpace(last.LastText)
 	if lm := h.localMachine(last.MachineID); lm != nil {
@@ -1107,12 +1186,16 @@ func taskState(t Todo, agents []proto.Session) string {
 		return "done"
 	}
 	has := map[string]bool{}
+	interrupted := false
 	for _, s := range agents {
 		has[s.State] = true
+		interrupted = interrupted || s.TurnError != ""
 	}
 	switch {
 	case has[proto.StateNeedsYou]:
 		return "needs_you"
+	case interrupted: // stopped on a model API error: not done, waiting for 继续 (#1516)
+		return "interrupted"
 	case has[proto.StateUnread]:
 		return "unread"
 	case has[proto.StateWorking]:
@@ -1124,7 +1207,8 @@ func taskState(t Todo, agents []proto.Session) string {
 }
 
 func taskStateLabel(st string) string {
-	return map[string]string{"done": "已完成", "auto_done": "已完成（hub 判断做完了，自动关的）", "failed": "没开起来", "needs_you": "等用户", "unread": "做完了（用户还没看）", "working": "在做",
+	return map[string]string{"done": "已完成", "auto_done": "已完成（hub 判断做完了，自动关的）", "failed": "没开起来", "needs_you": "等用户",
+		"interrupted": "模型服务出错，中断了（没做完，等用户让它继续）", "unread": "做完了（用户还没看）", "working": "在做",
 		"followup": "停着", "not_started": "还没开始"}[st]
 }
 

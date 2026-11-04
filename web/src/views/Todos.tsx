@@ -313,7 +313,7 @@ function TodoListItem({
   }[statusInfo.tone];
 
   const dotState =
-    status === "needs_you"
+    status === "needs_you" || status === "interrupted"
       ? "needs_you"
       : status === "unread"
         ? "unread"
@@ -511,7 +511,7 @@ function TodoDetail({
   }[statusInfo.tone];
 
   const dotState =
-    status === "needs_you"
+    status === "needs_you" || status === "interrupted"
       ? "needs_you"
       : status === "unread"
         ? "unread"

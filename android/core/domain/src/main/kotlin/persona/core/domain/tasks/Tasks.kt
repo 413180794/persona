@@ -26,6 +26,7 @@ import persona.core.contracts.draftPlaceholder
 import persona.core.contracts.api.ConnectionState
 import persona.core.contracts.api.HubConnection
 import persona.core.contracts.api.TasksApi
+import persona.core.domain.lines.ApiErrorInfo
 import persona.core.domain.lines.ChatLine
 import persona.core.domain.lines.ToolCall
 import persona.core.domain.lines.WorkItem
@@ -35,19 +36,42 @@ import persona.core.domain.lines.WorkItem
 
 /** Where a task is, from its todo and its agents' states (docs/todos.md「状态计算规则」). */
 enum class TaskState(val label: String, val rank: Int) {
-    NeedsYou("等你", 0), Working("在做", 1), NotStarted("正在开", 1), Unread("做完了", 2), Followup("停着", 3), Done("完成", 4),
+    NeedsYou("等你", 0),
+    /** An agent's turn was cut off by the model service (#1516): not done; 继续 tells it to go on. */
+    Interrupted("中断了", 0),
+    Working("在做", 1), NotStarted("正在开", 1), Unread("做完了", 2), Followup("停着", 3), Done("完成", 4),
     /** Its agent did not start (#1077): the hub ended it with why; 重试 starts it again (#1396). */
     Failed("没开起来", 4);
 
     companion object {
-        fun of(todo: Todo, agents: List<AgentState>): TaskState = when {
+        /** [interrupted]: one of its agents stopped on a model API error (`Session.interrupted`). */
+        fun of(todo: Todo, agents: List<AgentState>, interrupted: Boolean = false): TaskState = when {
             todo.doneAt != null && !todo.startError.isNullOrBlank() -> Failed
             todo.doneAt != null -> Done
             AgentState.NeedsYou in agents -> NeedsYou
+            interrupted -> Interrupted
             AgentState.Unread in agents -> Unread
             AgentState.Working in agents -> Working
             agents.isNotEmpty() -> Followup
             else -> NotStarted
+        }
+    }
+}
+
+/** A receipt's outcome: "interrupted" (#1516) also for a "done" one from an older hub whose summary is the API error
+ *  that cut the turn off; "failed"; else "done". */
+fun receiptState(item: FeedItem): String = when (val st = item.field("state")) {
+    "failed", "interrupted" -> st
+    else -> if (ApiErrorInfo.parse(item.field("summary")) != null) "interrupted" else "done"
+}
+
+/** Why the model service cut the agent off (#1516), in words, and whether 继续 can help; null when it was not. */
+data class Interruption(val reason: String, val canContinue: Boolean) {
+    companion object {
+        fun of(s: Session?): Interruption? {
+            if (s?.interrupted != true) return null
+            val info = ApiErrorInfo.parse(s.turnError)
+            return Interruption(info?.reason ?: "模型请求失败", info?.needsAction != true)
         }
     }
 }
@@ -249,11 +273,13 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
     fun agentsOf(todo: Todo, sessions: List<Session>): List<Session> =
         todo.activeAgents.mapNotNull { a -> sessions.firstOrNull { it.machineId == a.machineId && it.sessionId == a.sessionId } }
 
-    fun stateOf(todo: Todo, sessions: List<Session>): TaskState = TaskState.of(todo, agentsOf(todo, sessions).map { it.agentState })
+    fun stateOf(todo: Todo, sessions: List<Session>): TaskState =
+        agentsOf(todo, sessions).let { a -> TaskState.of(todo, a.map { it.agentState }, a.any { it.interrupted }) }
 
-    /** The agent to open first: the one waiting for the user, then working, then the latest. */
+    /** The agent to open first: the one waiting for the user, then one cut off (#1516), then working, then the latest. */
     fun lead(todo: Todo, sessions: List<Session>): Session? =
-        agentsOf(todo, sessions).minWithOrNull(compareBy<Session> { it.agentState.priority }.thenByDescending { it.updatedAt.orEmpty() })
+        agentsOf(todo, sessions).minWithOrNull(compareBy<Session>({ it.agentState != AgentState.NeedsYou }, { !it.interrupted },
+            { it.agentState.priority }).thenByDescending { it.updatedAt.orEmpty() })
 
     fun startPlan(plan: TaskPlan, remember: Boolean, onError: (Throwable) -> Unit) = act(plan.id, onError) {
         val p = api.startPlan(plan.id, remember); _plans.update { it + (p.id to p) }; reloadTodos()
@@ -266,7 +292,8 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
     /**
      * 重试 on a task whose agent did not start (#1396): the hub starts the same task again in the same todo, which it
      * answers reopened — put in at once, so its card shows it starting where it was. Taps while one is on its way do
-     * nothing ([busy] under [retryKey]); the hub starts one agent however many arrive.
+     * nothing ([busy] under [retryKey]); the hub starts one agent however many arrive. On a task the model service cut
+     * off (#1516) it is 继续: the hub tells its agent to go on, once.
      */
     fun retryTask(todo: Todo, onError: (Throwable) -> Unit) = act(retryKey(todo.id), onError) {
         val t = api.retryTask(todo.id)

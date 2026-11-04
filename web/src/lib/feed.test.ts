@@ -8,6 +8,7 @@ import {
   getFeedState,
   mergeInto,
   quickResult,
+  receiptState,
   removeTask,
   retryKey,
   retryTask,
@@ -224,5 +225,16 @@ describe("a message card's 发送 (#1519)", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(ok({})));
     await sendMessage(card("m2"), "今晚修好");
     expect(cardSent(getFeedState().feeds.c1!.find((i) => i.id === "m2")!)?.text).toBe("今晚修好");
+  });
+});
+
+describe("a receipt's outcome (#1516)", () => {
+  const receipt = (body: Record<string, unknown>): FeedItem => ({ id: "r", conversation: "c1", at: ago(1), kind: "receipt", ref: "t", body });
+  it("interrupted when the hub says so, or when an older hub's done receipt has the API error as its summary", () => {
+    expect(receiptState(receipt({ state: "interrupted", summary: "模型服务出错，中断了", error: "API Error: 529 Overloaded" }))).toBe("interrupted");
+    expect(receiptState(receipt({ state: "done", summary: "API Error: Connection lost mid-response. The response above may be incomplete." }))).toBe("interrupted");
+    expect(receiptState(receipt({ state: "done", summary: "修好了 API Error: Connection lost 时的崩溃" }))).toBe("done");
+    expect(receiptState(receipt({ state: "failed", summary: "没开起来：x" }))).toBe("failed");
+    expect(receiptState(receipt({}))).toBe("done");
   });
 });

@@ -289,7 +289,8 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
  "pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1","agent_name":"j-3f2a",
  "agent":"claude","agent_label":"",   // agent_label 只在 App 不认识的 Agent 上有：runtime 的叫法（「DSH」，见「Runtime ↔ node」）
  "launcher":"cc_ds","model":"deepseek/v4.1-flash-chain","started_by_jarvis":true,"assistant":false,
- "updated_at":"...","last_text":"最后一条 assistant 文本的前 200 字","pending_interactions":1,
+ "updated_at":"...","last_text":"最后一条 assistant 文本的前 200 字",
+     "turn_error":"API Error: Connection lost mid-response…（停着且最后一句是模型 API 错误时 hub 填，否则不带；它的任务算「中断了」，#1516）","pending_interactions":1,
  "activity":"在跑测试","activity_at":"...",   // 最近一步是工具调用、之后还没有新文字时才有：这一步在做什么（node 从 transcript 概括，40 字以内）和开始的时间；写出新文字或开始新一轮就没了
  "queued":["工作中输入、还没被取走的消息"],
  "subagents":[{"id":"a849e1f0…","session_id":"<id>@a849e1f0…","type":"Explore","description":"…","tool_use_id":"toolu_…",
@@ -412,7 +413,7 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | PUT | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | 整组挂工作区项目到待办 → 200 `{"ok":true,"linked":N}`；`space` 为 URL 编码的项目名（通配接住）；已完成 409，不存在 404，只读设备 403 |
 | DELETE | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | 解除整组挂（物理删除待办下该项目的 space 关联 Agents） → 200 `{"ok":true}`；不存在 404，只读设备 403 |
 | PUT | `/api/v1/todos/{id}/agents/{mid}/{sid}` | 关联已有 Agent → 200 `{"ok":true}`；同一 Agent 原挂在别处标 released，清掉 dismissed，已完成 409，不存在 404，只读设备 403 |
-| POST | `/api/v1/todos/{id}/retry` | 重试没开起来的任务（#1396）：照计划里的这个任务（机器、目录、提示词、启动器 / 模型、权限、标题）在同一个待办上再开 Agent；待办马上重新打开（`done_at`、`start_error` 清空，`reopened_at` 记下），计划里这个任务的 `error` 清空并推 `task_plan`，Agent 在后台开 → 200 `{"todo":Todo}`。已经在重开或已经开起来了也是 200（原样返回，不再开一次）；再失败照常写回 `done_at` + `start_error`、更新计划的 `error`，不追加第二条回执。目标机器离线 409 `「某电脑」现在离线，等它连上再重试`（待办不变），不是助手派出的任务或不是启动失败（比如手动完成的）409，不存在 404，只读设备 403 |
+| POST | `/api/v1/todos/{id}/retry` | 重试没开起来的任务（#1396）：照计划里的这个任务（机器、目录、提示词、启动器 / 模型、权限、标题）在同一个待办上再开 Agent；待办马上重新打开（`done_at`、`start_error` 清空，`reopened_at` 记下），计划里这个任务的 `error` 清空并推 `task_plan`，Agent 在后台开 → 200 `{"todo":Todo}`。已经在重开或已经开起来了也是 200（原样返回，不再开一次）；再失败照常写回 `done_at` + `start_error`、更新计划的 `error`，不追加第二条回执。目标机器离线 409 `「某电脑」现在离线，等它连上再重试`（待办不变），不是助手派出的任务或不是启动失败（比如手动完成的）409，不存在 404，只读设备 403。**未完成的任务**不重开：有 Agent 停在模型 API 错误上（`turn_error`，#1516）时给它发「继续」，200 原样返回待办，同一次打断连点只发一次；那台电脑离线 409；没有被打断的 Agent（在做、等你……）200 原样返回、什么都不发 |
 | GET | `/api/v1/task-plans/{id}` | 一个计划（`TaskPlan`，见下面「任务和对话动态」） → 200 `{"plan":TaskPlan}`；不存在 404 |
 | POST | `/api/v1/task-plans/{id}/start` | 开始计划 `{"tasks"?:[PlanTask],"remember"?:bool}`：`tasks` 按下标覆盖用户在卡片上改过的字段（空的不改），`remember` 记住「这类以后直接开」；每个任务建一个待办（`origin`、`plan_id`）、在后台开 Agent → 200 `{"plan":TaskPlan}`；已开始或不开了 409，不存在 404，只读设备 403 |
 | POST | `/api/v1/task-plans/{id}/dismiss` | 不开了 → 200 `{"plan":TaskPlan}`；已开始 409 |
@@ -1089,7 +1090,8 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 //   忽略的写「忽略了」；计划审批带计划正文和拒绝理由 / 批准后的模式，工具批准带工具、摘要和原因，
 //   屏幕对话框带选中的选项和在选项里输入的文字，表单字段写「标签：值」。单段 4000 字、整条 12000 字、最多 20 个，超出截断。
 //   密码字段（Field.secret、屏幕的 secret、MCP 表单的 password / writeOnly、名字像口令 / token 的）只写「（已填写，不保存）」，值不落库。
-// receipt：{"title":"…","state":"done|failed","summary":"Agent 最后一条回复（Markdown，按行截到约 600 字，不截在标记中间）","pr":"https://github.com/…/pull/N","machine":"…"}
+// receipt：{"title":"…","state":"done|failed|interrupted","summary":"Agent 最后一条回复（Markdown，按行截到约 600 字，不截在标记中间）","pr":"https://github.com/…/pull/N","machine":"…"}
+//   interrupted（#1516）：Agent 这一轮被模型服务出错打断，summary 是「模型服务出错，中断了」，error 是错误原文；客户端画成红色、带「继续」
 // routed：{"text":"…"}
 // message：ref 是收件箱条目 id；AI 分身给一条和任务有关的消息起草了回复：
 //         {"todo_id","source":"lark|mail|…","account","chat","sender","text":"原话（截断）","draft":"草稿"}；发送走收件箱的发送接口

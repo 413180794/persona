@@ -153,6 +153,7 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 | 0 | 没开起来 | 从对话开的任务 Agent 没启动起来，hub 把待办结束掉（`done_at` + `start_error`，#1077）；客户端显示失败、能移除，不算进行中 |
 | 1 | 已完成 | 用户点击了完成，或 hub 判断从对话派出去的任务已经做完（`done_at != null`；`done_by = "auto"` 时客户端标「自动完成」） |
 | 2 | 等你 | 有挂着的活跃 Agent 处于 `needs_you` 状态（等待用户回答提问、审批计划或授权） |
+| 2.5 | 中断了 | 有挂着的活跃 Agent 停着（`unread` / `idle`）且带 `turn_error`：这一轮被模型服务出错打断（连接中断、过载、限流、登录过期……），没做完（#1516）；红色，卡片上「继续」= 给它发「继续」 |
 | 3 | 待查看 | 有挂着的活跃 Agent 处于 `unread` 状态（任务完成，用户尚未查看） |
 | 4 | 进行中 | 有挂着的活跃 Agent 处于 `working` 状态（工作中或正在启动） |
 | 5 | 待跟进 | 挂着的活跃 Agent 均停滞（`idle` 已查看、`offline` 未运行或启动失败） |
@@ -179,6 +180,7 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 
 - 附带说明不影响完成：没截图的平台、没实测的环境、提醒用户的事都不算没做完；交付以后例行的等待（TestFlight 外部组的 Beta 审核、CI 重跑）也不算在等；处理 App Store / Mac App Store 审核意见、提交后在等审核结论的算 `waiting`。
 - 宁可不关：模型不可用、超时、回复不是合法 JSON、结论不是 `done`，都不动待办，只记日志；回执照发。
+- 被模型服务打断的一轮不判断（#1516）：任务的某个 Agent 停在 API 错误上（会话的 `turn_error`，也就是它最后一句是 Claude Code 的「API Error: …」等），回执写 `state: "interrupted"`（摘要「模型服务出错，中断了」，错误原文放 `error`），不调判断模型、不关待办；`done-check` 读到的最后一句是这种错误时直接答 `not_done`。
 - 便宜的线索：最后的回复里有 GitHub PR 链接且提到合并（merged / 已合并 / 合入），或提到 TestFlight 加构建号，hub 把这两个线索写进输入，只作提示，不能单凭它判完成。
 - 提示词在 `server/internal/prompts/assistant/task_done.md`、`task_done_input.md`（`docs/prompts.md`）。
 

@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/proto"
@@ -32,6 +33,30 @@ func agentState(s proto.Session, seenAt time.Time) string {
 		return proto.StateOffline
 	}
 	return proto.StateUnknown
+}
+
+// turnError is s's last words when they are a model API error and it has stopped (unread or idle): its latest turn
+// was cut off by the model service, not finished (#1516). Only an answer that starts with the error counts: a reply
+// that talks about one ("修好了 API Error: … 时的崩溃") is a reply.
+func turnError(s proto.Session) string {
+	if s.State != proto.StateUnread && s.State != proto.StateIdle {
+		return ""
+	}
+	if text := strings.TrimSpace(s.LastText); cutOff(text) {
+		return text
+	}
+	return ""
+}
+
+// cutOff: an agent's answer is the model API error that ended its turn.
+func cutOff(answer string) bool {
+	answer = strings.TrimSpace(answer)
+	for _, marker := range apiErrorMarkers {
+		if strings.HasPrefix(answer, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 type stateMark struct {
