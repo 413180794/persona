@@ -24,6 +24,7 @@
           "home": "/home/user",
           "last_seen": "2026-01-02T03:04:05Z",
           "node_version": "fixture-version",
+          "can_deploy": true,
           "system": {
             "os": "linux",
             "distro": "linux",
@@ -45,6 +46,8 @@
           "ssh_host": "example.com",
           "online": false,
           "last_seen": "0001-01-01T00:00:00Z",
+          "can_deploy": false,
+          "deploy_reason": "这台电脑不在线，连上以后再更新",
           "engine": "herdr",
           "engines": []
         }
@@ -83,6 +86,7 @@
           "home": "/home/user",
           "last_seen": "2026-01-02T03:04:05Z",
           "node_version": "fixture-version",
+          "can_deploy": true,
           "system": {
             "os": "linux",
             "distro": "linux",
@@ -104,6 +108,8 @@
           "ssh_host": "example.com",
           "online": false,
           "last_seen": "0001-01-01T00:00:00Z",
+          "can_deploy": false,
+          "deploy_reason": "这台电脑不在线，连上以后再更新",
           "engine": "herdr",
           "engines": []
         }

@@ -43,7 +43,7 @@ curl -fsSL <站点>/install.sh | sh -s -- --node --listen [:18663] [--addr <hub 
 **Mac**：装菜单栏 App「Persona Link」（`./scripts/app/mac-link.sh install`，给别人看的一步步指南在 [persona-link-install.md](persona-link-install.md)）。App 里带着 personad（`Contents/Helpers/jarvisd`），**第一次运行**就用
 `jarvis-link node install --jarvisd <App 里的>` 装好常驻 node 的 LaunchAgent `com.jarvis.node`：没有 `~/.persona/bin/personad` 时先复制过去，
 已经装了的（比如以前跑过 `scripts/deploy/node-launchd.sh install`）保持原样。之后只在菜单里提供「安装本机 node 服务」，用户删掉的不会自己装回来。
-App 更新不替换 `~/.persona/bin/personad`（经连接器推送 node 更新是 #284）。
+App 更新不替换已安装的常驻 node。支持更新协议的 node 可以由 hub 经现有连接远程更新，含备份、回滚和上线确认；旧 node 首次本机升级、进度和安装边界见 [node-update.md](node-update.md)（#1158）。
 
 **hub 这一侧**：主动模式的电脑在 hub.json 里是 kind `link`，被动模式的是 kind `service`（hub 那一路 #435 实现，管理界面「电脑 › 添加电脑 › hub 来连」粘贴链接）。
 

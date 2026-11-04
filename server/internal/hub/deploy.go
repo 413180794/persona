@@ -49,30 +49,32 @@ func (m *Machine) startDeploy() error {
 		m.mu.Unlock()
 		return nil
 	}
-	online, goos, arch := m.online, m.info.OS, m.info.Arch
+	allowed, reason := m.canDeployLocked()
+	goos, arch, linked := m.info.OS, m.info.Arch, m.rpcDeploymentLocked()
 	m.mu.Unlock()
-	if m.cfg.Kind == "local" {
-		return errors.New("hub 所在的机器跟着 hub 一起部署")
-	}
-	switch {
-	case m.cfg.Kind == kindLink, m.cfg.Kind == kindService, m.derived: // no ssh to it: its links only carry node streams
-		return errors.New("hub 没法给这台电脑装 node：到这台电脑上更新 node 服务（~/.jarvis/bin/jarvisd），再重启常驻 node")
-	}
-	if !online {
-		return errors.New("这台电脑不在线，连上以后再部署")
+	if !allowed {
+		return errors.New(reason)
 	}
 	bin, err := nodeBinary(goos, arch)
 	if err != nil {
 		return err
 	}
+	if linked {
+		return m.startRPCDeployment(bin, nil)
+	}
 	m.mu.Lock()
-	m.deploying, m.deployErr = true, ""
+	if m.deploying {
+		m.mu.Unlock()
+		return nil
+	}
+	m.deploying, m.deployErr, m.deployPhase = true, "", "transferring"
 	m.mu.Unlock()
 	m.hub.broadcastMachines()
 	go func() {
-		err := m.deploy(context.Background(), bin)
+		ctx := m.hub.deployContext()
+		err := m.deploy(ctx, bin)
 		m.mu.Lock()
-		m.deploying = false
+		m.deploying, m.deployPhase = false, ""
 		if err != nil {
 			m.deployErr = err.Error()
 		}

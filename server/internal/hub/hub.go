@@ -30,6 +30,7 @@ import (
 )
 
 type Hub struct {
+	deployCtx     context.Context // canceled with the hub; accepted node updates resume from Postgres
 	nodeWorkers   sync.WaitGroup
 	shutdown      *shutdownBudget
 	wsStopping    bool // guarded by mu; prevents new WaitGroup additions during shutdown
@@ -270,7 +271,8 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	defer cancel()
 
 	h := &Hub{
-		shutdown: budget, cfg: cfg, version: b.Version, build: b, logger: log.New(os.Stderr, "", log.LstdFlags),
+		deployCtx: ctx,
+		shutdown:  budget, cfg: cfg, version: b.Version, build: b, logger: log.New(os.Stderr, "", log.LstdFlags),
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{}, interactions: map[string]*pending{},
 		calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{}, turns: newTurnTracker(),
 		todos: newTodosState(),

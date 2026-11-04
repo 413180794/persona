@@ -1,0 +1,72 @@
+package node
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"strings"
+	"testing"
+)
+
+func TestUpdateRestartsOnlyAfterSuccessfulRPCResponseWrite(t *testing.T) {
+	reply := []byte(`{"id":"h1","result":{"accepted":true,"id":"upload-1"}}` + "\n")
+	for _, tc := range []struct {
+		name    string
+		writer  io.Writer
+		want    int
+		wantErr bool
+	}{
+		{"written", new(bytes.Buffer), 1, false},
+		{"failed", updateFailWriter{}, 0, true},
+		{"short", updateShortWriter{}, 0, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			w := updateResponseWriter{Writer: tc.writer, responseWritten: func(id string) {
+				calls++
+				if id != "upload-1" {
+					t.Fatal("wrong transaction acknowledged")
+				}
+				if b, ok := tc.writer.(*bytes.Buffer); ok && !bytes.Equal(b.Bytes(), reply) {
+					t.Fatal("restart signaled before complete reply reached transport")
+				}
+			}}
+			_, err := w.Write(reply)
+			if (err != nil) != tc.wantErr || calls != tc.want {
+				t.Fatalf("write error=%v restart calls=%d", err, calls)
+			}
+		})
+	}
+}
+func TestUpdateResponseWriterIgnoresEventsErrorsAndOrdinaryResults(t *testing.T) {
+	for _, reply := range []string{
+		`{"event":"event","params":{"accepted":true,"id":"upload-1"}}`,
+		`{"id":"h1","error":{"message":"bad"},"result":{"accepted":true,"id":"upload-1"}}`,
+		`{"id":"h1","result":{"accepted":false,"id":"upload-1"}}`,
+		`{"id":"h1","result":{"ok":true}}`,
+	} {
+		w := updateResponseWriter{Writer: io.Discard, responseWritten: func(string) { t.Fatalf("nonacceptance signaled resident restart: %s", reply) }}
+		if _, err := w.Write([]byte(reply + "\n")); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+func TestStdioNodeRefusesRemoteUpdateWithoutResidentManager(t *testing.T) {
+	n := &Node{}
+	for _, method := range []string{"node.update.begin", "node.update.chunk", "node.update.commit", "node.update.abort", "node.update.confirm"} {
+		_, err := n.handle(context.Background(), method, json.RawMessage(`{}`))
+		if err == nil || !strings.Contains(err.Error(), "unavailable") {
+			t.Fatalf("%s: %v", method, err)
+		}
+	}
+}
+
+type updateFailWriter struct{}
+
+func (updateFailWriter) Write([]byte) (int, error) { return 0, errors.New("disconnected") }
+
+type updateShortWriter struct{}
+
+func (updateShortWriter) Write(p []byte) (int, error) { return len(p) - 1, nil }

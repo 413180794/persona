@@ -45,8 +45,9 @@ type Machine struct {
 	hooked   map[string]bool
 	kick     chan struct{}
 	// deploying: the hub is sending this machine its node build (deploy.go); deployErr: why the last try failed.
-	deploying bool
-	deployErr string
+	deploying   bool
+	deployErr   string
+	deployPhase string
 	// via is how the connection runs (local | ssh | tailcat), path how tailcat's packets go (direct | relay).
 	via, path string
 	// directFailed: when ssh last failed to connect and tailcat was tried instead; switchedBack: when the hub last
@@ -110,12 +111,14 @@ func (m *Machine) snapshot() proto.Machine {
 	if icon == "" {
 		icon = "laptop"
 	}
+	canDeploy, deployReason := m.canDeployLocked()
 	return proto.Machine{
 		ID: m.cfg.ID, Name: m.cfg.Name, Kind: m.cfg.Kind, Icon: icon, SSHHost: m.cfg.SSHHost, Online: m.online, Error: m.err,
 		Hostname: m.info.Hostname, OS: m.info.OS, Arch: m.info.Arch, Home: m.info.Home,
 		HerdrVersion: m.info.HerdrVersion, ClaudeVersion: m.info.ClaudeVersion, LastSeen: m.lastSeen,
 		NodeVersion: m.info.Version, NodeMismatch: m.online && nodeMismatch(m.hub.version, m.info.Version),
 		Deploying: m.deploying, DeployError: m.deployErr,
+		CanDeploy: &canDeploy, DeployReason: deployReason, DeployPhase: m.deployPhase,
 		System:    m.hub.metrics.system(m.cfg.ID),
 		Transport: m.via, TailcatPath: m.path, Tailcat: m.cfg.TailcatAddr != "",
 		Engine: engine, Engines: engines, Link: linkInfo(m.link),

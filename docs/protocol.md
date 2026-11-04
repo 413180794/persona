@@ -44,6 +44,8 @@
 
 `POST /api/v1/machines/{id}/deploy`：hub 把自己这次部署的 node（`deploy.sh` 留在 hub 机器的 `~/.persona/bin/nodes/jarvisd-<os>-<arch>`）经 ssh 装到那台电脑（正走 tailcat 时经 tailcat 发给常驻 node，它换掉自己后退出、由 launchd / systemd 重启），杀掉常驻 node（launchd 用新二进制重启；ssh 里的 `launchctl kickstart` 不总生效）、重新连接，后台做，立即回 `{ok}`（不能开始时 409 + 原因）。过程在机器列表里：`deploying`（进行中）、`deploy_error`（上一次为什么没成）；成功后 `node_mismatch` 消失。App 在「设置 › 机器」里提示并给一个「重新部署」按钮。
 
+Persona Link 的主动 `link` / 被动 `service` 机器，以及经成员 hub 转发的 node，支持更新协议时经现有 node RPC 更新，不要求 SSH。`node.info` 的 `node_update` / `node_update_reason` 表示本机更新能力；机器列表的 `can_deploy` / `deploy_reason` 表示该入口当前能否使用，`deploy_phase` 为 `waiting_idle` / `transferring` / `restarting` / `confirming`。旧 node 先在本机升级一次。部署任务存 Postgres，支持等待空闲、校验安装、常驻进程重启、本地回滚与重新上线确认；详细 RPC 和恢复约定见 [node-update.md](node-update.md)。
+
 ### 临时配对
 
 `POST /api/v1/auth/pair-codes` 只接受**回环来源 + 主 token**，无须请求体；请求体 `{"machine":"<id>"}` 生成给这台 link 机器的

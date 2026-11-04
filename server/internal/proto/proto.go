@@ -36,6 +36,10 @@ type Machine struct {
 	// Deploying: the hub is installing its own node build there (POST …/deploy); DeployError: why the last one failed.
 	Deploying   bool   `json:"deploying,omitempty"`
 	DeployError string `json:"deploy_error,omitempty"`
+	// CanDeploy is explicit so clients can distinguish an older hub without capability reporting.
+	CanDeploy    *bool  `json:"can_deploy,omitempty"`
+	DeployReason string `json:"deploy_reason,omitempty"`
+	DeployPhase  string `json:"deploy_phase,omitempty"`
 	// System: OS and hardware, from the node's last connection (kept across hub restarts).
 	System *System `json:"system,omitempty"`
 	// Link: kind link, while the computer's jarvis-link is connected (docs/link.md).
@@ -190,6 +194,8 @@ type UploadedFile struct {
 }
 
 type NodeInfo struct {
+	NodeUpdate         bool    `json:"node_update,omitempty"`
+	NodeUpdateReason   string  `json:"node_update_reason,omitempty"`
 	ModelConfiguration bool    `json:"model_configuration,omitempty"`
 	Hostname           string  `json:"hostname"`
 	OS                 string  `json:"os"`

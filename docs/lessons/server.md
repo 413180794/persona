@@ -93,6 +93,11 @@
 
 ## jarvis-link 被动模式和 node 服务（docs/link.md「被动模式」「装 node 服务」，2026-11-02）
 
+- Link 只转发 node 流，远程更新应走 node RPC（#1158，`docs/node-update.md`）。每次 attach 都创建新的 `Node`，更新互斥和安装事务必须属于常驻进程；只关当前 RPC 不会重启常驻 node。成功响应真正写出后才关闭常驻服务，独立恢复进程负责新版起不来时回滚。旧 node 不认识更新协议，必须先本机升级一次，不能仅凭版本不一致就显示可用的部署按钮。
+
+- Linux 的 `setsid` 只能脱离进程组，不能脱离 systemd 的服务 cgroup：node 启动失败时，服务管理器会一起清理同 cgroup 的回滚进程（#1158）。恢复进程必须用独立的 transient 用户服务运行，准备成功才替换程序；就绪握手要在进入更新目录锁之前完成，否则父进程持锁等就绪、恢复进程等锁，双方死等。测试使用假的 `systemd-run`，不能在开发机真的安装恢复服务。
+- macOS 上对已执行过的带签名 Mach-O 暂存文件再以 `O_RDWR` 打开，后续自检重试可能被系统 `SIGKILL`（#1158）。校验完成后的 `fsync` 用只读句柄，不为同步再声明写权限；已取消的提交在执行自检前返回。更新器的忙碌 / 取消重试连续验证五次，避免只测首次执行。
+- macOS 的 UNIX socket 路径长度很短；测试用例名和默认长 `TMPDIR` 相加可能超限（#1158）。套接字夹具用短的独立 `/tmp` 根，或在隔离环境用 `TMPDIR=/tmp`；不要把这种失败当作更新器本身失败或去改生产 socket。
 - **launchd 的 label 不跟着 HOME 走**：测 `jarvis-link node install` 时换了临时 HOME 也没用，`launchctl bootout gui/<uid>/com.jarvis.node` 停的就是这台 Mac
   上真实在用的常驻 node。Mac 上的服务安装只在假命令（`env.command`）里测，绝不在开发机上真的跑；要真跑就换一个 label。
 - Docker 容器里的 `eth0` 在 sysfs 里是 `/sys/devices/virtual/net/eth0`，netaddr 把它当虚拟网卡：按「不要虚拟网卡」挑配对链接里的地址，容器里一个都挑不出来，

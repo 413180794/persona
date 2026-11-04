@@ -32,12 +32,14 @@ import {
   type MetricRange,
 } from "../../lib/machine-detail";
 import { hubLabel, routeText } from "../../lib/mesh";
+import { machineDeployment } from "../../lib/machine-deploy";
 import { href, onLinkClick } from "../../lib/router";
 import { getState, refresh, useStore } from "../../lib/store";
 import type { Session } from "../../lib/types";
 import { Button, cx, EASE, IconButton, Loading, StatePill, StatusDot, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { MetricChart, type ChartSeries } from "./MetricChart";
+import { MachineDeploy } from "./MachineDeploy";
 
 interface MachineLauncher {
   name: string;
@@ -59,6 +61,7 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
   const sessions = useStore((s) => s.sessions[mid] ?? NO_SESSIONS);
   const m = machines.find((x) => x.id === mid);
   const online = m?.online ?? false;
+  const expectedDisconnect = m ? machineDeployment(m).expectedDisconnect : false;
 
   const [range, setRangeState] = useState<MetricRange>(initialRange);
   const [data, setData] = useState<{ metrics: DetailMetrics; range: MetricRange; at: number } | null>(null);
@@ -146,14 +149,6 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
     const err = getState().machines.find((x) => x.id === mid)?.error;
     toast(`还没连上${err ? `：${err}` : ""}`, "error");
   };
-  // The hub installs its own build there; the machine list says when it is done (deploying / deploy_error).
-  const deploy = async () => {
-    try {
-      await api(`/machines/${enc(mid)}/deploy`, { method: "POST" });
-    } catch (e) {
-      toast(`部署失败：${errorText(e)}`, "error");
-    }
-  };
 
   const groups = useMemo(() => (online ? agentsBySpace(sessions) : []), [online, sessions]);
   const agentCount = groups.reduce((n, g) => n + g.sessions.length, 0);
@@ -207,27 +202,20 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
             </p>
             {route && <p className="mt-0.5 truncate text-[11.5px] text-ink-3" title="hub 怎么连到这台电脑">线路：{route}</p>}
           </div>
-          {!online && (
+          {!online && !expectedDisconnect && (
             <Button tone="secondary" icon="retry" busy={reconnecting} onClick={() => void reconnect()}>
               {reconnecting ? "正在连接" : "重新连接"}
             </Button>
           )}
         </div>
-        {!online && (
+        {!online && !expectedDisconnect && (
           <div className="mx-4 mb-3.5 rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red">
             <p className="break-words">{m.error || "hub 连不上这台电脑"}</p>
             <p className="mt-0.5 text-red/80">{[m.last_seen && ago(m.last_seen) && `最后在线：${ago(m.last_seen)}`, connectionText(m)].filter(Boolean).join(" · ")}</p>
           </div>
         )}
         {online && m.error && <p className="mx-4 mb-3.5 rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red">{m.error}</p>}
-        {(m.node_mismatch || m.deploying) && (
-          <div className="mx-4 mb-3.5 flex items-center gap-2 rounded-[8px] bg-orange-tint py-1.5 pr-1.5 pl-2.5 text-[12px] text-orange">
-            <p className="min-w-0 flex-1">{m.deploying ? "正在把 hub 这一版的 jarvisd 装到这台电脑…" : m.deploy_error ? `上次部署没成：${m.deploy_error}` : "这台电脑上的 jarvisd 和 hub 不是同一版。"}</p>
-            <Button tone="secondary" icon="retry" busy={m.deploying} disabled={m.deploying} onClick={() => void deploy()}>
-              {m.deploying ? "部署中" : "重新部署"}
-            </Button>
-          </div>
-        )}
+        <MachineDeploy machine={m} className="mb-3.5" />
       </section>
 
       {/* agents */}

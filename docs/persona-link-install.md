@@ -79,14 +79,15 @@ echo '<配对链接>' | "/Applications/Jarvis Link.app/Contents/Helpers/jarvis-l
 git pull && ./scripts/app/mac-link.sh install
 ```
 
-升级 App 不会替换常驻 node 用的那份 personad（`jarvis-link node status --json` 里的 `bin`，一般是 `~/.persona/bin/jarvisd`）。要连它一起更新：
+升级 App 不会替换常驻 node 用的那份 personad。支持更新协议的 node 可以直接在 Persona 的机器页点「重新部署」，沿用现有连接更新，不必重装菜单栏 App。
+
+旧 node 首次需要在本机升级一次。先查看真实服务的二进制路径和状态：
 
 ```bash
-L="/Applications/Jarvis Link.app/Contents/Helpers"
-"$L/jarvis-link" node uninstall
-rm "$("$L/jarvis-link" node status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["bin"])')"
-"$L/jarvis-link" node install --jarvisd "$L/jarvisd"
+"/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" node status --json
 ```
+
+按原安装 / 部署渠道替换 `bin` 指向的服务二进制并重启 `com.jarvis.node`，保留已有运行根、启动参数和配对。不要先卸载再查询路径，也不要把升级 App 当成常驻 node 已升级。首次迁移和失败恢复的完整说明见 [node-update.md](node-update.md)。
 
 ## 卸载
 

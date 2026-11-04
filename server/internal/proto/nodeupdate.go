@@ -1,0 +1,35 @@
+package proto
+
+const CodeNodeUpdateBusy = "node_update_busy"
+
+// NodeUpdateBeginParams describes the uncompressed executable, never an archive.
+type NodeUpdateBeginParams struct {
+	Size    int64  `json:"size"`
+	SHA256  string `json:"sha256"`
+	Version string `json:"version"`
+}
+type NodeUpdateBeginResult struct {
+	ID     string `json:"id"`
+	Offset int64  `json:"offset"`
+}
+type NodeUpdateChunkParams struct {
+	ID     string `json:"id"`
+	Offset int64  `json:"offset"`
+	Data   []byte `json:"data"`
+}
+type NodeUpdateChunkResult struct {
+	Offset int64 `json:"offset"`
+}
+type NodeUpdateCommitParams struct {
+	ID string `json:"id"`
+}
+type NodeUpdateCommitResult struct {
+	Accepted bool   `json:"accepted"`
+	ID       string `json:"id"`
+}
+type NodeUpdateAbortParams struct {
+	ID string `json:"id"`
+}
+type NodeUpdateConfirmParams struct {
+	Version string `json:"version"`
+}

@@ -342,7 +342,14 @@ func (u *updater) updateNodes(ctx context.Context, staged string) {
 	for _, m := range u.h.machinesNow() {
 		m.mu.Lock()
 		need := m.cfg.Kind != "local" && m.online && nodeMismatch(u.h.version, m.info.Version)
+		offlineLinked := !m.online && m.rpcDeploymentLocked()
 		m.mu.Unlock()
+		if offlineLinked {
+			if err := m.queueOfflineNodeUpdate(ctx); err != nil {
+				u.h.logf("update: [%s] queue node update: %v", m.cfg.ID, err)
+			}
+			continue
+		}
 		if !need {
 			continue
 		}

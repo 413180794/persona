@@ -294,6 +294,7 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	}
 	if err := c.peer.Call(ctx, "sessions.list", map[string]any{}, &list); err == nil {
 		m.setSessions(list.Sessions)
+		m.nodeUpdateConnected(ctx, c.peer, info)
 	}
 	for id, since := range rewatch {
 		_ = c.peer.Call(ctx, "session.watch", map[string]any{"session_id": id, "since_seq": since}, nil)

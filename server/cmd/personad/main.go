@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"syscall"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/nwverse/persona/server/internal/hub"
 	"github.com/nwverse/persona/server/internal/mcpserver"
 	"github.com/nwverse/persona/server/internal/node"
+	"github.com/nwverse/persona/server/internal/nodeupdate"
 	"github.com/nwverse/persona/server/internal/relay"
 	"github.com/nwverse/persona/server/internal/sysmon"
 	"github.com/nwverse/persona/server/internal/tgcli"
@@ -107,6 +109,10 @@ func main() {
 		}
 	case "release":
 		err = runRelease(os.Args[2:])
+	case "node-update-check":
+		err = json.NewEncoder(os.Stdout).Encode(nodeupdate.Check{Version: version, OS: runtime.GOOS, Arch: runtime.GOARCH})
+	case "node-update-watch":
+		err = runNodeUpdateWatch(ctx, os.Args[2:])
 	case "update-watch": // the old binary watching an update come up (hub/selfupdate.go)
 		err = runUpdateWatch(ctx, os.Args[2:])
 	case "hub":
@@ -231,8 +237,15 @@ func runResident(ctx context.Context) error {
 	// tailcat stops only after Attach has closed the hub's connection: torn down first, the close would never reach
 	// the hub, which would then take the dead connection for a live one until its pings went unanswered.
 	tctx, tstop := context.WithCancel(context.Background())
+	defer tstop()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	restart := make(chan struct{})
+	updater := nodeupdate.New(version, func() { close(restart); cancel() })
+	defer updater.Close()
+	if updater.RestartRequired() {
+		return syscall.Exec(updater.Executable(), os.Args, os.Environ())
+	}
 	logger := log.New(os.Stderr, "", log.LstdFlags)
 	conns, stopped, err := node.ServeTailcat(tctx, logger, func() {
 		logger.Printf("tailcat: a new jarvisd is installed; exiting so it starts")
@@ -243,10 +256,21 @@ func runResident(ctx context.Context) error {
 	}
 	// The runtime socket is the resident node's, not one connection's: runtimes (DSH…) stay connected while the hub
 	// reconnects, and connect before it does (node/runtimehost.go).
-	err = node.Attach(ctx, func() (*node.Node, error) { return node.New(version) }, conns, node.NewRuntimeHost(version, ""))
+	err = node.Attach(ctx, func() (*node.Node, error) {
+		n, err := node.New(version)
+		if err == nil {
+			n.SetUpdater(updater)
+		}
+		return n, err
+	}, conns, node.NewRuntimeHost(version, ""))
 	tstop()
 	<-stopped
-	return err
+	select {
+	case <-restart:
+		return syscall.Exec(updater.Executable(), os.Args, os.Environ())
+	default:
+		return err
+	}
 }
 
 // runNodeTailcat is `jarvisd node tailcat init|addr`.

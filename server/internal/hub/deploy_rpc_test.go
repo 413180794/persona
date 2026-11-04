@@ -1,0 +1,371 @@
+package hub
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
+)
+
+type updatingNode struct {
+	mu          sync.Mutex
+	machine     *Machine
+	data        []byte
+	expected    []byte
+	begin       int
+	commits     int
+	confirms    int
+	aborts      int
+	resume      int64
+	badOffset   bool
+	busyCommit  bool
+	busySession bool
+	background  bool
+	installErr  error
+	stayOld     bool
+	committed   chan struct{}
+}
+
+func (n *updatingNode) handle(_ context.Context, method string, params json.RawMessage) (any, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	switch method {
+	case "sessions.list":
+		if n.background {
+			return map[string]any{"sessions": []proto.Session{{SessionID: "background", Status: proto.StatusIdle, Background: []proto.BackgroundTask{{ID: "task", Kind: "shell"}}}}}, nil
+		}
+		if n.busySession {
+			return map[string]any{"sessions": []proto.Session{{SessionID: "busy", Status: proto.StatusWorking}}}, nil
+		}
+		return map[string]any{"sessions": []proto.Session{}}, nil
+	case "node.update.begin":
+		var p struct {
+			Size    int64  `json:"size"`
+			SHA256  string `json:"sha256"`
+			Version string `json:"version"`
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		sum := sha256.Sum256(n.expected)
+		if p.Size != int64(len(n.expected)) || p.SHA256 != hex.EncodeToString(sum[:]) || p.Version != "new-build" {
+			return nil, errors.New("wrong update metadata")
+		}
+		n.begin++
+		n.data = append([]byte{}, n.expected[:n.resume]...)
+		return map[string]any{"id": "update-one", "offset": n.resume}, nil
+	case "node.update.chunk":
+		var p struct {
+			ID     string `json:"id"`
+			Offset int64  `json:"offset"`
+			Data   []byte `json:"data"`
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		if p.ID != "update-one" || p.Offset != int64(len(n.data)) || len(p.Data) > proto.UploadChunkBytes {
+			return nil, errors.New("wrong chunk position or size")
+		}
+		n.data = append(n.data, p.Data...)
+		offset := len(n.data)
+		if n.badOffset {
+			offset++
+		}
+		return map[string]any{"offset": offset}, nil
+	case "node.update.commit":
+		n.commits++
+		if n.busyCommit && n.commits == 1 {
+			return nil, &rpc.Error{Code: "node_update_busy", Message: "node is busy"}
+		}
+		if n.installErr != nil {
+			return nil, n.installErr
+		}
+		if !bytes.Equal(n.data, n.expected) {
+			return nil, errors.New("commit before all bytes arrived")
+		}
+		if !n.stayOld {
+			n.machine.mu.Lock()
+			n.machine.info.Version = "new-build"
+			n.machine.mu.Unlock()
+		}
+		if n.committed != nil {
+			close(n.committed)
+		}
+		return map[string]any{"accepted": true}, nil
+	case "node.update.confirm":
+		var p struct{ Version string }
+		_ = json.Unmarshal(params, &p)
+		if p.Version != "new-build" {
+			return nil, errors.New("wrong confirmation version")
+		}
+		n.confirms++
+		return map[string]any{"ok": true}, nil
+	case "node.update.abort":
+		n.aborts++
+		return map[string]any{"ok": true}, nil
+	}
+	return nil, errors.New("unexpected method " + method)
+}
+
+func linkedDeployFixture(t *testing.T, kind string) (*Hub, *Machine, *updatingNode, string) {
+	t.Helper()
+	h := newTestHub(t)
+	h.version = "new-build"
+	m := newMachine(h, MachineConfig{ID: "example-node", Name: "Example node", Kind: kind})
+	m.online = true
+	m.info = proto.NodeInfo{OS: "linux", Arch: "amd64", Version: "old-build", NodeUpdate: true}
+	h.machines, h.byID[m.cfg.ID] = []*Machine{m}, m
+	n := &updatingNode{machine: m, expected: bytes.Repeat([]byte("a-binary-block"), proto.UploadChunkBytes/4)}
+	toNode, nodeIn := io.Pipe()
+	toHub, hubIn := io.Pipe()
+	m.peer = rpc.New("hub", nodeIn)
+	nodePeer := rpc.New("node", hubIn)
+	nodePeer.OnRequest = n.handle
+	ctx, cancel := context.WithCancel(context.Background())
+	h.deployCtx = ctx
+	t.Cleanup(func() { cancel(); toNode.Close(); toHub.Close() })
+	go m.peer.Serve(ctx, toHub)
+	go nodePeer.Serve(ctx, toNode)
+	bin := filepath.Join(t.TempDir(), "jarvisd-linux-amd64")
+	if err := os.WriteFile(bin, n.expected, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return h, m, n, bin
+}
+
+func TestLinkedDeployCapabilities(t *testing.T) {
+	for _, kind := range []string{kindLink, kindService} {
+		t.Run(kind, func(t *testing.T) {
+			_, m, _, _ := linkedDeployFixture(t, kind)
+			m.info.NodeUpdate = false
+			if s := m.snapshot(); s.CanDeploy == nil || *s.CanDeploy || !strings.Contains(s.DeployReason, "升级一次") {
+				t.Fatalf("old node: %+v", s)
+			}
+			if err := m.startDeploy(); err == nil || !strings.Contains(err.Error(), "升级一次") {
+				t.Fatalf("old node start: %v", err)
+			}
+			m.info.NodeUpdate = true
+			if s := m.snapshot(); s.CanDeploy == nil || !*s.CanDeploy {
+				t.Fatalf("capable node: %+v", s)
+			}
+			m.online = false
+			if s := m.snapshot(); *s.CanDeploy || !strings.Contains(s.DeployReason, "不在线") {
+				t.Fatalf("offline node: %+v", s)
+			}
+		})
+	}
+}
+
+func TestLinkedDeployTransfersAndConfirms(t *testing.T) {
+	for _, kind := range []string{kindLink, kindService} {
+		for _, resume := range []int64{0, 23} {
+			t.Run(fmt.Sprintf("%s/resume-%d", kind, resume), func(t *testing.T) {
+				_, m, n, bin := linkedDeployFixture(t, kind)
+				n.resume = resume
+				record := nodeDeployRecord{Target: "new-build", State: "queued"}
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := m.performRPCDeployment(ctx, bin, &record); err != nil {
+					t.Fatal(err)
+				}
+				n.mu.Lock()
+				defer n.mu.Unlock()
+				if n.begin != 1 || n.commits != 1 || n.confirms != 1 || n.aborts != 0 || !bytes.Equal(n.data, n.expected) {
+					t.Fatalf("begin=%d commits=%d confirms=%d aborts=%d bytes=%d", n.begin, n.commits, n.confirms, n.aborts, len(n.data))
+				}
+			})
+		}
+	}
+}
+
+func TestLinkedDeployAbortOnBadAcknowledgment(t *testing.T) {
+	_, m, n, bin := linkedDeployFixture(t, kindLink)
+	n.badOffset = true
+	record := nodeDeployRecord{Target: "new-build", State: "queued"}
+	if err := m.performRPCDeployment(context.Background(), bin, &record); err == nil || !strings.Contains(err.Error(), "传输位置") {
+		t.Fatalf("error = %v", err)
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.aborts != 1 || n.commits != 0 || n.confirms != 0 {
+		t.Fatalf("aborts=%d commits=%d confirms=%d", n.aborts, n.commits, n.confirms)
+	}
+}
+
+func TestLinkedDeployWaitsAgainWhenCommitBecomesBusy(t *testing.T) {
+	_, m, n, bin := linkedDeployFixture(t, kindLink)
+	n.busyCommit = true
+	record := nodeDeployRecord{Target: "new-build", State: "queued"}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := m.performRPCDeployment(ctx, bin, &record); err != nil {
+		t.Fatal(err)
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.begin != 2 || n.commits != 2 || n.aborts != 1 || n.confirms != 1 {
+		t.Fatalf("begin=%d commits=%d aborts=%d confirms=%d", n.begin, n.commits, n.aborts, n.confirms)
+	}
+}
+
+func TestLinkedDeployDoesNotTransferWhileBusy(t *testing.T) {
+	_, m, n, bin := linkedDeployFixture(t, kindLink)
+	n.busySession = true
+	record := nodeDeployRecord{Target: "new-build", State: "queued"}
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
+	defer cancel()
+	if err := m.performRPCDeployment(ctx, bin, &record); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v", err)
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.begin != 0 || n.commits != 0 {
+		t.Fatal("updated a busy node")
+	}
+}
+
+func TestLinkedDeployRequiresTargetVersion(t *testing.T) {
+	_, m, n, bin := linkedDeployFixture(t, kindLink)
+	n.stayOld, n.committed = true, make(chan struct{})
+	record := nodeDeployRecord{Target: "new-build", State: "queued"}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	go func() {
+		select {
+		case <-n.committed:
+			cancel() // transfer completed, but the old version never became the target
+		case <-ctx.Done():
+		}
+	}()
+	if err := m.performRPCDeployment(ctx, bin, &record); !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v", err)
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.commits != 1 || n.confirms != 0 {
+		t.Fatalf("commits=%d confirms=%d", n.commits, n.confirms)
+	}
+}
+
+func TestLinkedDeployResumesAfterHubRestart(t *testing.T) {
+	h, m, n, _ := linkedDeployFixture(t, kindService)
+	h.store = newKeepStore()
+	m.info.Version = "new-build"
+	if err := m.saveDeployRecord(context.Background(), nodeDeployRecord{Target: h.version, State: "queued", Phase: "confirming"}); err != nil {
+		t.Fatal(err)
+	}
+	m.nodeUpdateConnected(context.Background(), m.peer, m.info)
+	waitMachine(t, m, 5*time.Second, func(s proto.Machine) bool { return !s.Deploying })
+	var saved nodeDeployRecord
+	if found, err := h.store.Setting(context.Background(), m.deployRecordKey(), &saved); err != nil || !found || saved.State != "succeeded" {
+		t.Fatalf("record=%+v found=%v err=%v", saved, found, err)
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.begin != 0 || n.confirms < 1 {
+		t.Fatalf("begin=%d confirms=%d", n.begin, n.confirms)
+	}
+}
+
+func TestLinkedDeployStopsStaleDesiredVersion(t *testing.T) {
+	h, m, n, _ := linkedDeployFixture(t, kindLink)
+	h.store = newKeepStore()
+	if err := m.saveDeployRecord(context.Background(), nodeDeployRecord{Target: "previous-hub-build", State: "queued"}); err != nil {
+		t.Fatal(err)
+	}
+	m.nodeUpdateConnected(context.Background(), m.peer, m.info)
+	if s := m.snapshot(); s.Deploying || !strings.Contains(s.DeployError, "hub 版本已变化") {
+		t.Fatalf("snapshot: %+v", s)
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.begin != 0 {
+		t.Fatal("started a stale update")
+	}
+}
+
+func TestUpdateNodesQueuesOfflineLinkedMachine(t *testing.T) {
+	h, m, _, _ := linkedDeployFixture(t, kindLink)
+	h.store = newKeepStore()
+	m.online = false
+	h.upd.updateNodes(context.Background(), "")
+	var saved nodeDeployRecord
+	if found, err := h.store.Setting(context.Background(), m.deployRecordKey(), &saved); err != nil || !found || saved.State != "queued" || saved.Target != h.version {
+		t.Fatalf("record=%+v found=%v err=%v", saved, found, err)
+	}
+	if m.snapshot().Deploying {
+		t.Fatal("started transferring to an offline node")
+	}
+}
+
+func TestLinkedDeployWaitsForBackgroundTasks(t *testing.T) {
+	_, m, n, bin := linkedDeployFixture(t, kindLink)
+	n.background = true
+	record := nodeDeployRecord{Target: "new-build", State: "queued"}
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
+	defer cancel()
+	if err := m.performRPCDeployment(ctx, bin, &record); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v", err)
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.begin != 0 {
+		t.Fatal("transferred while a background task was running")
+	}
+}
+
+func TestLinkedDeployPersistsRejectedInstallation(t *testing.T) {
+	h, m, n, bin := linkedDeployFixture(t, kindService)
+	h.store = newKeepStore()
+	n.installErr = &rpc.Error{Code: "invalid_update", Message: "binary self-check failed"}
+	record := nodeDeployRecord{Target: h.version, State: "queued"}
+	m.runRPCDeployment(context.Background(), bin, record)
+	var saved nodeDeployRecord
+	_, err := h.store.Setting(context.Background(), m.deployRecordKey(), &saved)
+	if err != nil || saved.State != "failed" || !strings.Contains(saved.Error, "binary self-check failed") {
+		t.Fatalf("record=%+v error=%v", saved, err)
+	}
+	if s := m.snapshot(); s.Deploying || s.DeployError == "" || s.NodeVersion != "old-build" {
+		t.Fatalf("snapshot=%+v", s)
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.confirms != 0 || n.aborts != 1 {
+		t.Fatalf("confirms=%d aborts=%d", n.confirms, n.aborts)
+	}
+}
+
+func TestLinkedDeployDoesNotRepeatRolledBackInstall(t *testing.T) {
+	h, m, n, _ := linkedDeployFixture(t, kindLink)
+	h.store = newKeepStore()
+	if err := m.saveDeployRecord(context.Background(), nodeDeployRecord{Target: h.version, State: "queued", Phase: "confirming"}); err != nil {
+		t.Fatal(err)
+	}
+	m.nodeUpdateConnected(context.Background(), m.peer, m.info)
+	if s := m.snapshot(); s.Deploying || !strings.Contains(s.DeployError, "可能已回滚") {
+		t.Fatalf("snapshot=%+v", s)
+	}
+	var saved nodeDeployRecord
+	_, _ = h.store.Setting(context.Background(), m.deployRecordKey(), &saved)
+	if saved.State != "failed" {
+		t.Fatalf("record=%+v", saved)
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.begin != 0 {
+		t.Fatal("automatically installed a possibly rolled-back build again")
+	}
+}

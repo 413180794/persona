@@ -19,6 +19,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantskills"
 	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/nodeupdate"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 	"github.com/nwverse/persona/server/internal/streams"
@@ -27,6 +28,7 @@ import (
 
 type Node struct {
 	Version string
+	updater *nodeupdate.Manager // resident-owned, shared across attach connections
 
 	home string
 	dir  string // ~/.jarvis
@@ -191,6 +193,9 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	if err := n.writeClaudeConfig(); err != nil {
 		n.logger.Printf("write claude config: %v", err)
 	}
+	if n.updater != nil {
+		w = &updateResponseWriter{Writer: w, responseWritten: n.updater.ResponseWritten}
+	}
 	n.peer = rpc.New("n", w)
 	n.peer.OnRequest = n.handle
 	n.streams = streams.New(n.peer.Notify)
@@ -297,6 +302,9 @@ func (n *Node) writeClaudeConfig() error {
 }
 
 func (n *Node) handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
+	if strings.HasPrefix(method, "node.update.") {
+		return n.handleUpdate(ctx, method, params)
+	}
 	var p struct {
 		Path             string          `json:"path"`
 		Paths            []string        `json:"paths"`
@@ -877,7 +885,10 @@ func nonNil(items []proto.Item) []proto.Item {
 func (n *Node) info(ctx context.Context) proto.NodeInfo {
 	host, _ := os.Hostname()
 	hv := n.herdrVersion(ctx)
+	canUpdate, updateReason := n.updater.Capability()
 	return proto.NodeInfo{
+		NodeUpdate:         canUpdate,
+		NodeUpdateReason:   updateReason,
 		ModelConfiguration: true,
 		Hostname:           host,
 		OS:                 runtime.GOOS,

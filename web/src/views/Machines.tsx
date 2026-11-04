@@ -3,12 +3,14 @@ import { useEffect, useState } from "react";
 import { api, errorText } from "../lib/api";
 import { bytes, stateOf } from "../lib/format";
 import { hubLabel, routeText } from "../lib/mesh";
+import { machineDeployment } from "../lib/machine-deploy";
 import { href, onLinkClick } from "../lib/router";
 import { useAgentSessions } from "../lib/sessions";
 import { useStore } from "../lib/store";
 import type { MachineMetrics, MetricPoint } from "../lib/types";
 import { Button, cx, EASE, IconButton, Loading, toast } from "../ui/atoms";
 import { Icon } from "../ui/icons";
+import { MachineDeploy } from "./machines/MachineDeploy";
 
 export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const machines = useStore((s) => s.machines);
@@ -38,14 +40,6 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       toast(`重连失败：${errorText(e)}`, "error");
     }
   };
-  // The hub installs its own build there; the machine list says when it is done (deploying / deploy_error).
-  const deploy = async (id: string) => {
-    try {
-      await api(`/machines/${encodeURIComponent(id)}/deploy`, { method: "POST" });
-    } catch (e) {
-      toast(`部署失败：${errorText(e)}`, "error");
-    }
-  };
 
   return (
     <div className="flex h-full flex-col">
@@ -68,6 +62,7 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             const hub = hubLabel(m, machines);
             const route = routeText(m, machines);
             const detail = { name: "machine" as const, mid: m.id };
+            const { expectedDisconnect } = machineDeployment(m);
             return (
               <section key={m.id} className="overflow-hidden rounded-card bg-surface shadow-card" style={{ animation: `fade-up 420ms ${EASE} ${i * 60}ms both` }}>
                 <div className="flex items-start gap-3 px-4 pt-3.5">
@@ -90,23 +85,14 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                     </div>
                     <p className="truncate text-[11.5px] text-ink-3">{[m.system?.name || m.os, m.system?.model, m.system?.cpu].filter(Boolean).join(" · ") || m.hostname}</p>
                   </a>
-                  {!m.online && (
+                  {!m.online && !expectedDisconnect && (
                     <Button tone="secondary" icon="retry" onClick={() => reconnect(m.id)}>
                       重连
                     </Button>
                   )}
                 </div>
                 {m.online && m.error && <p className="mx-4 mt-2 rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red">{m.error}</p>}
-                {(m.node_mismatch || m.deploying) && (
-                  <div className="mx-4 mt-2 flex items-center gap-2 rounded-[8px] bg-orange-tint py-1.5 pl-2.5 pr-1.5 text-[12px] text-orange">
-                    <p className="min-w-0 flex-1">
-                      {m.deploying ? "正在把 hub 这一版的 jarvisd 装到这台电脑…" : m.deploy_error ? `上次部署没成：${m.deploy_error}` : "这台电脑上的 jarvisd 和 hub 不是同一版。"}
-                    </p>
-                    <Button tone="secondary" icon="retry" busy={m.deploying} disabled={m.deploying} onClick={() => deploy(m.id)}>
-                      {m.deploying ? "部署中" : "重新部署"}
-                    </Button>
-                  </div>
-                )}
+                <MachineDeploy machine={m} className="mt-2" />
                 <div className="grid grid-cols-3 gap-px px-4 pt-3">
                   <Stat label="CPU" value={l?.cpu !== undefined ? `${Math.round(l.cpu)}%` : "—"} warn={(l?.cpu ?? 0) > 85} />
                   <Stat label="内存" value={memPct !== undefined ? `${Math.round(memPct)}%` : "—"} sub={l?.mem_used ? `${bytes(l.mem_used)} / ${bytes(l.mem_total)}` : undefined} warn={(memPct ?? 0) > 90} />
@@ -116,7 +102,7 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                   <Spark points={mm?.points ?? []} />
                 </div>
                 <div className="flex items-center justify-between border-t border-line px-4 py-2 text-[11.5px] text-ink-3">
-                  <span>{!m.online ? "连不上这台电脑" : agents.length ? `${agents.length} 个 Agent${working ? `，${working} 个在工作` : ""}` : "没有在跑的 Agent"}</span>
+                  <span>{!m.online ? expectedDisconnect ? "等待 node 重新连接" : "连不上这台电脑" : agents.length ? `${agents.length} 个 Agent${working ? `，${working} 个在工作` : ""}` : "没有在跑的 Agent"}</span>
                   <span className="flex min-w-0 items-center gap-3">
                     <span className="truncate font-mono">{[m.claude_version && `claude ${m.claude_version}`, m.herdr_version && `herdr ${m.herdr_version}`].filter(Boolean).join(" · ")}</span>
                     <a href={href(detail)} onClick={(e) => onLinkClick(e, detail)} className="shrink-0 whitespace-nowrap text-ink-2 hover:text-ink">详情 ›</a>

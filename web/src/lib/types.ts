@@ -13,6 +13,9 @@ export interface Machine {
   herdr_version?: string;
   node_mismatch?: boolean;
   deploying?: boolean;
+  can_deploy?: boolean;
+  deploy_reason?: string;
+  deploy_phase?: "waiting_idle" | "transferring" | "restarting" | "confirming";
   deploy_error?: string;
   system?: { name?: string; model?: string; cpu?: string; cores?: number; memory?: number };
   engine?: string;
