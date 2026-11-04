@@ -37,6 +37,14 @@ class HubSessionFilesTest {
         assertEquals("30", ("https://example.com" + requests.last()).toHttpUrl().queryParameter("skip"))
         body = """{"commit":{"hash":"abc"},"files":null,"diff":""}"""
         assertEquals("abc", api.show("machine", "/workspace", "abc").commit.hash)
+        body = """{"stats":[{"path":"src/a.kt","kind":"file","size":12},{"path":"~/x y/","kind":"dir"},{"path":"/gone/a.md"}]}"""
+        val stats = api.stat("machine", "/workspace", listOf("src/a.kt", "~/x y/", "/gone/a.md")).stats
+        assertEquals(listOf("file", "dir", "missing"), stats.map { it.kind })
+        assertEquals(12L, stats.first().size)
+        val statUrl = ("https://example.com" + requests.last()).toHttpUrl()
+        assertEquals("/api/v1/machines/machine/stat", statUrl.encodedPath)
+        assertEquals("src/a.kt\n~/x y/\n/gone/a.md", statUrl.queryParameter("paths"))
+        assertEquals("/workspace", statUrl.queryParameter("cwd"))
         status = 404
         body = """{"error":"not found","code":"not_found"}"""
         try { api.file("machine", "/workspace", "missing"); fail("Expected HTTP failure") }

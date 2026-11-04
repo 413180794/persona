@@ -1,0 +1,112 @@
+package persona.feature.chat
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.UriHandler
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
+import persona.core.designsystem.PersonaTheme
+import persona.core.domain.PathRef
+import persona.core.domain.PathRefs
+import java.net.URLDecoder
+import java.net.URLEncoder
+
+/**
+ * Paths in messages as links (docs/android.md「对话内容」, the 文件路径 item): those there on the session's machine
+ * ([PathPresence]) open in the files pane. A user's plain text gets clickable spans ([messageLinkAnnotations]); a
+ * reply's Markdown gets `[path](persona-path:…)` links ([markdown]), which [handler] opens instead of the page's
+ * link host. The files pane opens the file, not at its line.
+ */
+internal object PathLinks {
+    const val SCHEME = "persona-path:"
+
+    fun uri(path: String): String = SCHEME + URLEncoder.encode(path, "UTF-8").replace("+", "%20")
+
+    fun pathOf(uri: String): String? =
+        if (uri.startsWith(SCHEME)) runCatching { URLDecoder.decode(uri.removePrefix(SCHEME), "UTF-8") }.getOrNull() else null
+
+    /** The paths to ask the machine about for a message's text (as written: Markdown's code spans are its backticks). */
+    fun asked(text: String): List<String> = PathRefs.unique(PathRefs.find(text))
+
+    // Where a path is not to become a link: code blocks (fenced, also unclosed while streaming; indented after a blank
+    // line), Markdown links and images, <autolinks> and HTML.
+    private val blocked = Regex(
+        "```[\\s\\S]*?(?:```|$)|~~~[\\s\\S]*?(?:~~~|$)|(?:(?<=\\n\\n)|\\A)(?:(?: {4}|\\t)[^\\n]*(?:\\n|$))+|!?\\[[^\\]\\n]*]\\([^\\n]*?\\)|<[^>\\n]*>",
+    )
+    private val codeSpan = Regex("`([^`\\n]+)`")
+    private val special = Regex("[\\\\`*_\\[\\]<>]")
+
+    /** A reply's Markdown with the paths in [linkable] (as asked: [asked]) written as links. */
+    fun markdown(text: String, linkable: Set<String>): String {
+        if (linkable.isEmpty()) return text
+        val closed = blocked.findAll(text).map { it.range }.toMutableList()
+        closed += ChatLinks.matches(text).map { it.start until it.end }
+        val edits = ArrayList<Pair<IntRange, String>>()
+        for (m in codeSpan.findAll(text)) {
+            if (closed.any { m.range.first in it }) continue
+            val ref = PathRefs.codePath(m.groupValues[1])
+            if (ref != null && ref.path in linkable) edits += m.range to "[${m.value}](${uri(ref.path)})"
+            closed += m.range
+        }
+        for (ref in PathRefs.findAscii(text)) {
+            val range = ref.start until ref.end
+            if (ref.path !in linkable || closed.any { it.first <= range.last && range.first <= it.last }) continue
+            edits += range to "[${special.replace(text.substring(ref.start, ref.end)) { "\\" + it.value }}](${uri(ref.path)})"
+        }
+        if (edits.isEmpty()) return text
+        edits.sortBy { it.first.first }
+        return buildString {
+            var at = 0
+            for ((range, link) in edits) {
+                if (range.first < at) continue
+                append(text, at, range.first); append(link); at = range.last + 1
+            }
+            append(text, at, text.length)
+        }
+    }
+
+    /** Opens `persona-path:` links with [open]; every other link goes on to [outer] (the page's link host). */
+    fun handler(outer: UriHandler, open: (String) -> Unit): UriHandler = object : UriHandler {
+        override fun openUri(uri: String) {
+            val path = pathOf(uri)
+            if (path != null) open(path) else outer.openUri(uri)
+        }
+    }
+
+    /** The refs of [refs] to link in plain text: there on the machine, not inside a web link, none overlapping. */
+    fun plainLinks(text: String, refs: List<PathRef>, linkable: (String) -> Boolean): List<PathRef> {
+        val urls = ChatLinks.matches(text)
+        return PathRefs.split(refs.filter { r -> urls.none { r.start < it.end && it.start < r.end } }, linkable)
+    }
+}
+
+/**
+ * A message's plain text with its web links and the paths there on the session's machine linked (a user's bubble).
+ * Without a way to ask or open (no files pane), only web links, as [chatLinkAnnotations].
+ */
+@Composable
+internal fun messageLinkAnnotations(text: String): AnnotatedString {
+    val actions = LocalChatRowActions.current
+    val presence = actions?.paths
+    val open = actions?.openPath
+    if (presence == null || open == null) return chatLinkAnnotations(text)
+    val refs = remember(text) { PathRefs.find(text) }
+    val asked = remember(refs) { PathRefs.unique(refs) }
+    LaunchedEffect(presence, asked) { presence.ask(asked) }
+    val linked = PathLinks.plainLinks(text, refs, presence::linkable) // reads the answers: redraws when they come
+    val color = PersonaTheme.palette.accent
+    val urls = remember(text) { ChatLinks.matches(text) }
+    return remember(text, color, linked, open) {
+        val style = TextLinkStyles(SpanStyle(color = color, textDecoration = TextDecoration.Underline))
+        buildAnnotatedString {
+            append(text)
+            urls.forEach { addLink(LinkAnnotation.Url(it.url, style), it.start, it.end) }
+            linked.forEach { ref -> addLink(LinkAnnotation.Clickable(ref.path, style) { open(ref.path) }, ref.start, ref.end) }
+        }
+    }
+}

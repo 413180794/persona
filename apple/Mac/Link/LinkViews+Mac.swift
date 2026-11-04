@@ -63,9 +63,10 @@ struct PooledWebView: NSViewRepresentable {
     }
 }
 
-/// A paragraph in a selectable text view; right-click on a selection offers AI 修改 and 作为上下文.
+/// A paragraph in a selectable text view; right-click on a selection offers `actions` (AI 修改 and 作为上下文 by default).
 struct PickTextView: NSViewRepresentable {
     var text: String
+    var actions = PickAction.ai
     var pick: (String, String) -> Void
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -73,11 +74,11 @@ struct PickTextView: NSViewRepresentable {
         let t = scroll.documentView as? MenuTextView
         t?.string = text
         let coordinator = context.coordinator
+        let actions = actions
         t?.selectionItems = { selected in
-            UIMenu(options: .displayInline, children: [
-                UIAction(title: "AI 修改", image: UIImage(systemName: Theme.Icon.ai)) { _ in coordinator.pick(selected, "edit") },
-                UIAction(title: "作为上下文", image: UIImage(systemName: Theme.Icon.addContext)) { _ in coordinator.pick(selected, "context") },
-            ]).children.map { $0.nsMenuItem() }
+            UIMenu(options: .displayInline, children: actions.map { a in
+                UIAction(title: a.title, image: UIImage(systemName: a.icon)) { _ in coordinator.pick(selected, a.kind) }
+            }).children.map { $0.nsMenuItem() }
         }
         return scroll
     }

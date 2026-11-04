@@ -469,15 +469,28 @@ struct DocPickMenu: View {
     }
 }
 
-/// The paragraph in a text view where any span can be selected; its selection menu has AI 修改 and 作为上下文.
+/// What a selection's menu offers in `PickTextView`: a title, its icon, and the kind `pick` gets with the text.
+struct PickAction: Hashable, Sendable {
+    var title: String
+    var icon: String
+    var kind: String
+
+    /// The chat's link sheet: AI 修改 and 作为上下文.
+    static let ai = [PickAction(title: "AI 修改", icon: Theme.Icon.ai, kind: "edit"),
+                     PickAction(title: "作为上下文", icon: Theme.Icon.addContext, kind: "context")]
+}
+
+/// The paragraph in a text view where any span can be selected; its selection menu has `actions` (AI 修改 and
+/// 作为上下文 by default).
 struct PickTextSheet: View {
     @Environment(\.dismiss) private var dismiss
     var text: String
+    var actions = PickAction.ai
     var pick: (String, String) -> Void
 
     var body: some View {
         NavigationStack {
-            PickTextView(text: text) { t, kind in
+            PickTextView(text: text, actions: actions) { t, kind in
                 dismiss()
                 pick(t, kind)
             }
@@ -492,6 +505,7 @@ struct PickTextSheet: View {
 #if os(iOS)
 struct PickTextView: UIViewRepresentable {
     var text: String
+    var actions = PickAction.ai
     var pick: (String, String) -> Void
 
     func makeUIView(context: Context) -> UITextView {
@@ -507,21 +521,27 @@ struct PickTextView: UIViewRepresentable {
         return v
     }
 
-    func updateUIView(_ v: UITextView, context: Context) { context.coordinator.pick = pick }
+    func updateUIView(_ v: UITextView, context: Context) {
+        context.coordinator.pick = pick
+        context.coordinator.actions = actions
+    }
 
-    func makeCoordinator() -> Coordinator { Coordinator(pick: pick) }
+    func makeCoordinator() -> Coordinator { Coordinator(pick: pick, actions: actions) }
 
     final class Coordinator: NSObject, UITextViewDelegate {
         var pick: (String, String) -> Void
-        init(pick: @escaping (String, String) -> Void) { self.pick = pick }
+        var actions: [PickAction]
+        init(pick: @escaping (String, String) -> Void, actions: [PickAction]) {
+            self.pick = pick
+            self.actions = actions
+        }
 
         func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
             let selected = (textView.text as NSString).substring(with: range).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !selected.isEmpty else { return UIMenu(children: suggestedActions) }
-            let ours = UIMenu(options: .displayInline, children: [
-                UIAction(title: "AI 修改", image: UIImage(systemName: Theme.Icon.ai)) { [weak self] _ in self?.pick(selected, "edit") },
-                UIAction(title: "作为上下文", image: UIImage(systemName: Theme.Icon.addContext)) { [weak self] _ in self?.pick(selected, "context") },
-            ])
+            let ours = UIMenu(options: .displayInline, children: actions.map { a in
+                UIAction(title: a.title, image: UIImage(systemName: a.icon)) { [weak self] _ in self?.pick(selected, a.kind) }
+            })
             return UIMenu(children: [ours] + suggestedActions)
         }
     }

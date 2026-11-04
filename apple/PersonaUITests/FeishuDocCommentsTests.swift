@@ -93,4 +93,39 @@ final class FeishuDocCommentsTests: XCTestCase {
                        ["/api/v1/lark/documents/comments/c1/resolve", "/api/v1/lark/documents/comments/c1/resolve"])
         XCTAssertEqual(sent.suffix(2).map { ($0["body"] as? [String: Any])?["resolved"] as? Bool }, [true, false])
     }
+
+    /// 评论这段: a long press on a paragraph offers it (with 拷贝, the text selection's place), the comments open with
+    /// the box on that passage, and the new comment goes out quoting it.
+    @MainActor func testCommentOnAPassage() throws {
+        let before = try writes().count
+        let app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-openSession", "studio/a1f3c2d4-0000-4000-8000-000000000003",
+                               "-openLinkURL", "https://example.feishu.cn/docx/AbC123"]
+        app.launchPinned()
+
+        let paragraph = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "这一版统一了圆角和描边")).firstMatch
+        XCTAssertTrue(paragraph.waitForExistence(timeout: 30), "the document did not open:\n\(app.debugDescription)")
+        paragraph.press(forDuration: 1.2)
+        let commentHere = app.buttons["评论这段"]
+        XCTAssertTrue(commentHere.waitForExistence(timeout: 5), "no 评论这段 in the long press")
+        XCTAssertTrue(app.buttons["拷贝"].exists && app.buttons["选一段评论…"].exists)
+        try shot(app, "passage-menu")
+        commentHere.tap()
+
+        let bar = app.descendants(matching: .any)["docComments.box.quote"]
+        XCTAssertTrue(bar.waitForExistence(timeout: 10), "the box is not on the passage")
+        try shot(app, "passage-box")
+        let box = app.textFields["docComments.box"]
+        box.tap()
+        box.typeText("ok")
+        app.buttons["docComments.send"].tap()
+        XCTAssertTrue(bar.waitForNonExistence(timeout: 10), "the box still comments on the passage")
+        let sent = try writes().dropFirst(before)
+        let body = sent.last?["body"] as? [String: Any]
+        XCTAssertEqual(sent.last?["path"] as? String, "/api/v1/lark/documents/comments")
+        XCTAssertEqual(body?["quote"] as? String, "这一版统一了圆角和描边，深色模式单独调了对比度。")
+        XCTAssertEqual(body?["content"] as? String, "ok")
+        try shot(app, "passage-sent")
+    }
 }

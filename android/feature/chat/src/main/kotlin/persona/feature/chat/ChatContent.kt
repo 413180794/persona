@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.FirstBaseline
@@ -82,10 +83,20 @@ internal fun ChatMarkdown(text: String, id: String = text,
 @Composable
 private fun ChatMarkdownBody(text: String, id: String, bodyStyle: TextStyle, color: Color) {
     val cache = LocalChatMarkdownCache.current ?: remember { ChatMarkdownCache() }
-    val parsed by produceState(cache.cached(id, text), id, text, cache) { value = cache.parse(id, text) }
+    // The paths there on the session's machine become links that open the files pane (PathLinks.kt).
+    val actions = LocalChatRowActions.current
+    val presence = actions?.paths
+    val open = actions?.openPath
+    val asked = remember(text, presence) { if (presence == null) emptyList() else PathLinks.asked(text) }
+    if (presence != null && asked.isNotEmpty()) LaunchedEffect(presence, asked) { presence.ask(asked) }
+    val linkable = if (presence == null || open == null) emptySet() else asked.filterTo(LinkedHashSet(), presence::linkable)
+    val source = remember(text, linkable) { PathLinks.markdown(text, linkable) }
+    val parsed by produceState(cache.cached(id, source), id, source, cache) { value = cache.parse(id, source) }
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
-    run {
+    val outer = LocalUriHandler.current
+    val uriHandler = remember(outer, open) { if (open == null) outer else PathLinks.handler(outer, open) }
+    CompositionLocalProvider(LocalUriHandler provides uriHandler) {
         if (parsed == null) ChatLinkText(text, Modifier.fillMaxWidth(), bodyStyle.copy(color = color))
         else Markdown(parsed!!, modifier = Modifier.fillMaxWidth(),
             colors = markdownColor(text = color, codeBackground = palette.sunken,

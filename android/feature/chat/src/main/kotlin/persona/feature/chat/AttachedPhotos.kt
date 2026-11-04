@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
@@ -119,15 +120,21 @@ private fun AttachedPhoto(path: String, photos: AttachedPhotos?, single: Boolean
 
 /**
  * The file paths of a message as chips under it (iOS `FileChips`): a tap opens the file on the session's machine.
- * Nothing when the page cannot open files (no files pane, e.g. Persona' own conversations).
+ * Only those there once the machine answers. Nothing when the page cannot open files (no files pane, e.g. Persona' own conversations).
  */
 @Composable
 internal fun FileChips(paths: List<String>, alignEnd: Boolean) {
-    val open = LocalChatRowActions.current?.openPath ?: return
+    val actions = LocalChatRowActions.current
+    val open = actions?.openPath ?: return
     if (paths.isEmpty()) return
+    // Only the paths there on the machine (PathPresence): a path another machine's, or deleted, only failed to open.
+    val presence = actions.paths
+    if (presence != null) LaunchedEffect(presence, paths) { presence.ask(paths) }
+    val shown = if (presence == null) paths else paths.filter(presence::linkable)
+    if (shown.isEmpty()) return
     Box(Modifier.fillMaxWidth().padding(top = Tokens.Space.xs), contentAlignment = if (alignEnd) Alignment.CenterEnd else Alignment.CenterStart) {
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            paths.forEach { path -> PathChip(fileLabel(path), fileIcon(path), onClick = { open(path) }) }
+            shown.forEach { path -> PathChip(fileLabel(path), fileIcon(path), onClick = { open(path) }) }
         }
     }
 }

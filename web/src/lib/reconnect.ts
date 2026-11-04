@@ -53,9 +53,10 @@ export interface EventCursor {
 export const NO_CURSOR: EventCursor = { stream: "", seq: 0 };
 
 /** The WebSocket's query: the token, plus where to resume from once a hello gave a stream. */
-export function wsQuery(token: string, c: EventCursor): string {
+export function wsQuery(token: string, c: EventCursor, features: string[] = []): string {
   let q = `token=${encodeURIComponent(token)}`;
   if (c.stream) q += `&event_stream=${encodeURIComponent(c.stream)}&event_seq=${c.seq}`;
+  if (features.length) q += `&features=${features.map(encodeURIComponent).join(",")}`;
   return q;
 }
 

@@ -31,6 +31,8 @@ class HubSessionFiles internal constructor(
     }
     override suspend fun show(machineId: String, cwd: String, hash: String) =
         get<SessionGitShow>(machineId, "git/show", cwd, "hash" to hash)
+    override suspend fun stat(machineId: String, cwd: String, paths: List<String>) =
+        get<SessionPathStats>(machineId, "stat", cwd, "paths" to paths.joinToString("\n"))
 
     private suspend inline fun <reified T> get(
         machineId: String, operation: String, cwd: String, vararg query: Pair<String, String>,

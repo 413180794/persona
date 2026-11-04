@@ -61,7 +61,7 @@ private fun MessageParts(parts: List<MessagePart>, user: Boolean, id: String, on
     val bottomPadding = with(LocalDensity.current) { Tokens.Space.m.roundToPx() }
     parts.forEachIndexed { index, part ->
         when (part) {
-            is MessagePart.Text -> if (user) Text(chatLinkAnnotations(part.text), style = PersonaTheme.type.body, color = PersonaTheme.palette.ink,
+            is MessagePart.Text -> if (user) Text(messageLinkAnnotations(part.text), style = PersonaTheme.type.body, color = PersonaTheme.palette.ink,
                 onTextLayout = { layout ->
                     if (index == parts.lastIndex && layout.lineCount > 0)
                         onLastLine?.invoke((layout.size.height - layout.getLineTop(layout.lineCount - 1)).toInt() + bottomPadding)

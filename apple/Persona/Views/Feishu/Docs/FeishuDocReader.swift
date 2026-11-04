@@ -100,6 +100,8 @@ struct FeishuDocReader: View {
     @State private var showTitle = false
     @State private var showOutline = false
     @State private var showComments = false
+    /// The passage 评论这段 is about: the comments open with the box on it (#1290).
+    @State private var passage: FeishuDocsPassage?
     @State private var summaryExpanded = false
     @State private var gallery: FeishuDocsGallery?
     @State private var jump: String?
@@ -119,9 +121,12 @@ struct FeishuDocReader: View {
                                     .id(chunk.id)
                             } else {
                                 Markdown(Links.markdown(chunk.text))
+                                    // Inside the theme: an environment set closer to the view wins, and the theme replaces
+                                    // the whole of it, paragraph style and all.
+                                    .modifier(FeishuDocsMarkdownComments(comment: comment, copyable: copyAllowed))
                                     .markdownTheme(.feishuDocs)
                                     .markdownImageProvider(FeishuDocsImageProvider(open: { openImage($0, in: body.images) }))
-                                    .modifier(FeishuDocsSelectable(enabled: copyAllowed))
+                                    .modifier(FeishuDocsSelectable(enabled: copyAllowed && comment == nil))
                                     .id(chunk.id)
                             }
                         }
@@ -180,6 +185,7 @@ struct FeishuDocReader: View {
         }
         .environment(\.openURL, OpenURLAction { link in handle(link) })
         .environment(\.feishuDocsContext, FeishuDocsRenderContext(images: images, selectable: copyAllowed, openImage: { openImage($0, in: images) }))
+        .environment(\.feishuDocComment, comment)
         .sheet(isPresented: $showOutline) {
             FeishuDocsOutlineSheet(items: outline) { item in
                 showOutline = false
@@ -192,6 +198,13 @@ struct FeishuDocReader: View {
         }
         .sheet(isPresented: $showComments) {
             NavigationStack { FeishuDocsCommentsView(url: url, title: docTitle) }
+                .presentationDetents([.large])
+                #if os(macOS)
+                .macSheet()
+                #endif
+        }
+        .sheet(item: $passage) { p in
+            NavigationStack { FeishuDocsCommentsView(url: url, title: docTitle, passage: .passage(quote: p.quote, blockID: p.blockID)) }
                 .presentationDetents([.large])
                 #if os(macOS)
                 .macSheet()
@@ -434,6 +447,42 @@ struct FeishuDocsGallery: Identifiable {
     var urls: [String]
     var index: Int
     var id: String { urls.joined() + "#\(index)" }
+}
+
+/// 评论这段 where the plugin can write comments (`LarkFeatures.docComments`); nil elsewhere.
+extension FeishuDocReader {
+    var comment: ((String, String?) -> Void)? {
+        guard app.larkFeatures.docComments else { return nil }
+        return { [$passage] quote, block in
+            let q = quote.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !q.isEmpty { $passage.wrappedValue = FeishuDocsPassage(quote: q, blockID: block) }
+        }
+    }
+}
+
+/// A passage to comment on: its text and the block it is in, when the reader knows (the JSON tree's).
+struct FeishuDocsPassage: Identifiable, Hashable {
+    var quote: String
+    var blockID: String?
+    var id: String { (blockID ?? "") + "\n" + quote }
+}
+
+/// The Markdown's paragraphs (list items' too) commentable (`FeishuDocsCommentable`); the theme's paragraph as it is.
+private struct FeishuDocsMarkdownComments: ViewModifier {
+    var comment: ((String, String?) -> Void)?
+    var copyable: Bool
+
+    func body(content: Content) -> some View {
+        if let comment {
+            content.markdownBlockStyle(\.paragraph) { config in
+                // MarkdownUI.Theme.jarvis's paragraph (the reader's theme keeps it), with the long press.
+                config.label.fixedSize(horizontal: false, vertical: true).relativeLineSpacing(.em(0.26)).markdownMargin(top: 0, bottom: 10)
+                    .modifier(FeishuDocsCommentable(text: config.content.renderPlainText(), blockID: nil, copyable: copyable, comment: comment))
+            }
+        } else {
+            content
+        }
+    }
 }
 
 private struct FeishuDocsSelectable: ViewModifier {

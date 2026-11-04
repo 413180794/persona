@@ -11,7 +11,18 @@ interface SessionFiles {
     suspend fun diff(machineId: String, cwd: String, path: String, staged: Boolean): SessionGitDiff
     suspend fun log(machineId: String, cwd: String, skip: Int, limit: Int = 50): SessionGitLog
     suspend fun show(machineId: String, cwd: String, hash: String): SessionGitShow
+    /**
+     * Which of the paths a conversation names are there on the machine (`GET …/stat`, relative ones in [cwd]): the
+     * chat links only those. A source that cannot say throws, and the paths stay plain text.
+     */
+    suspend fun stat(machineId: String, cwd: String, paths: List<String>): SessionPathStats =
+        throw UnsupportedOperationException("stat")
 }
+
+/** `GET /api/v1/machines/{id}/stat`: each path as asked, `file`, `dir`, `denied` (macOS keeps it from the node) or `missing`. */
+@Serializable data class SessionPathStats(val stats: List<SessionPathStat> = emptyList())
+
+@Serializable data class SessionPathStat(val path: String, val kind: String = "missing", val size: Long = 0)
 
 @Serializable data class SessionDirectory(
     val path: String,

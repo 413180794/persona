@@ -26,6 +26,9 @@ struct LarkComposer: View {
     var focused: FocusState<Bool>.Binding
     var replyTo: LarkReplyTo? = nil
     var cancelReply: () -> Void = {}
+    /// Another quote over the field, where there is no message being answered (a document's passage being commented on):
+    /// its heading, what it quotes, and what × does.
+    var quote: (heading: String, summary: String, removeLabel: String, remove: () -> Void)? = nil
     /// Tell the chat's box from a thread sheet's (UI tests; the chat stays behind the sheet). The field's placeholder
     /// goes once it holds text, so tests find it by its id.
     var boxID = "lark.box"
@@ -91,6 +94,14 @@ struct LarkComposer: View {
                 VStack(alignment: .leading, spacing: 0) {
                     if let replyTo {
                         LarkReplyBar(reply: replyTo, cancel: cancelReply)
+                            .padding(.leading, Theme.Space.l)
+                            .padding(.trailing, Theme.Space.xs)
+                            .padding(.top, Theme.Space.s)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else if let quote {
+                        QuoteBarRow(heading: quote.heading, summary: quote.summary, lines: 1, tint: LarkColor.blue,
+                                    removeLabel: quote.removeLabel, remove: quote.remove)
+                            .accessibilityIdentifier(boxID + ".quote")
                             .padding(.leading, Theme.Space.l)
                             .padding(.trailing, Theme.Space.xs)
                             .padding(.top, Theme.Space.s)

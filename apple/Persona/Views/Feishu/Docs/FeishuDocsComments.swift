@@ -101,23 +101,13 @@ struct FeishuDocsCommentsView: View {
 
     @ViewBuilder private func composer(_ model: FeishuDocsCommentsModel) -> some View {
         @Bindable var model = model
-        VStack(alignment: .leading, spacing: 0) {
-            if case .passage(let quote, _) = model.target {
-                QuoteBarRow(heading: "评论这段", summary: quote, lines: 1, tint: LarkColor.blue, removeLabel: "不评论这段") {
-                    model.target = .document
-                }
-                .padding(.horizontal, Theme.Space.l)
-                .padding(.bottom, Theme.Space.s)
-                .accessibilityIdentifier("docComments.passage")
-            }
-            LarkComposer(placeholder: placeholder(model.target), text: $model.draft, focused: $focused,
-                         replyTo: replyBar(model.target), cancelReply: { model.target = .document },
-                         boxID: "docComments.box", sendID: "docComments.send",
-                         findPeople: { [model] q in try await model.people(q) }, mentions: $model.mentions) {
-                Task { await model.send() }
-            }
-            .disabled(model.sending)
+        LarkComposer(placeholder: placeholder(model.target), text: $model.draft, focused: $focused,
+                     replyTo: replyBar(model.target), cancelReply: { model.target = .document },
+                     quote: passageBar(model), boxID: "docComments.box", sendID: "docComments.send",
+                     findPeople: { [model] q in try await model.people(q) }, mentions: $model.mentions) {
+            Task { await model.send() }
         }
+        .disabled(model.sending)
         .padding(.top, Theme.Space.s)
     }
 
@@ -127,6 +117,12 @@ struct FeishuDocsCommentsView: View {
         case .thread: "回复"
         case .passage: "评论这段"
         }
+    }
+
+    /// 评论这段 over the box while it comments on a passage; × goes back to commenting on the document.
+    private func passageBar(_ model: FeishuDocsCommentsModel) -> (heading: String, summary: String, removeLabel: String, remove: () -> Void)? {
+        guard case .passage(let quote, _) = model.target else { return nil }
+        return ("评论这段", quote, "不评论这段", { model.target = .document })
     }
 
     private func replyBar(_ t: FeishuDocsCommentsModel.Target) -> LarkReplyTo? {
@@ -245,5 +241,40 @@ struct FeishuDocsThreadCard: View {
             out += s
         }
         return out
+    }
+}
+
+// MARK: - Commenting on a passage
+
+extension EnvironmentValues {
+    /// The reader's 评论这段 (#1290): opens the comments with the box on that passage (its text, the block it is in when
+    /// the reader knows). Nil where comments cannot be written.
+    @Entry var feishuDocComment: ((String, String?) -> Void)? = nil
+}
+
+/// A paragraph of a document the user can comment on: a long press offers 拷贝 (when the document lets its text be
+/// copied), 评论这段 and 选一段评论… (the paragraph in a text view, where 评论 comments on the selected words). It takes
+/// the place of the text selection, whose menu takes no items of ours.
+struct FeishuDocsCommentable: ViewModifier {
+    var text: String
+    var blockID: String?
+    var copyable: Bool
+    var comment: (String, String?) -> Void
+    @State private var picking = false
+
+    func body(content: Content) -> some View {
+        content
+            .contextMenu {
+                if copyable {
+                    Button { UIPasteboard.general.string = text; Haptics.success() } label: { Label("拷贝", systemImage: Theme.Icon.copy) }
+                }
+                Button { comment(text, blockID) } label: { Label("评论这段", systemImage: Theme.Icon.conversation) }
+                Button { picking = true } label: { Label("选一段评论…", systemImage: Theme.Icon.select) }
+            }
+            .sheet(isPresented: $picking) {
+                PickTextSheet(text: text, actions: [PickAction(title: "评论", icon: Theme.Icon.conversation, kind: "comment")]) { picked, _ in
+                    comment(picked, blockID)
+                }
+            }
     }
 }

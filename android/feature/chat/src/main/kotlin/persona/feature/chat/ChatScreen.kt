@@ -348,11 +348,19 @@ private fun ChatPage(
     // A 「继续」 already on its way counts as working: the card offers no second one.
     val retryId = retryLine(projection.lines, session?.status == "working" || messages.isNotEmpty(), !readOnly && canSend)
     val currentOpenPath by rememberUpdatedState(chrome.onOpenPath)
+    // Paths in messages link only when there on the machine (PathLinks.kt): asked of the session's directory.
+    val pathPresence = remember(chrome.files, key, session?.cwd, chrome.onOpenPath != null) {
+        val files = chrome.files
+        val cwd = session?.cwd.orEmpty()
+        if (files == null || cwd.isBlank() || chrome.onOpenPath == null) null
+        else PathPresence(scope, { paths -> files.stat(key.machineId, cwd, paths) })
+    }
     val currentSend by rememberUpdatedState<(String) -> Unit>({ send(it) })
     // Stays the same object while the conversation streams: rows read it, and a new one would redraw them all.
-    val rowActions = remember(key, repository, photos, retryId, chrome.onOpenPath != null) {
+    val rowActions = remember(key, repository, photos, retryId, chrome.onOpenPath != null, pathPresence) {
         ChatRowActions(key, fullText = { item -> repository.fullText(key, item.id) },
             openPath = if (chrome.onOpenPath != null) ({ path -> currentOpenPath?.invoke(path) }) else null,
+            paths = pathPresence,
             photos = photos, pictures = { chatViewerImages(key, currentItems, repository) },
             openImages = { images, index -> viewer = ViewerRequest(images, index) },
             menu = messageMenu, retryLineId = retryId, onRetry = { currentSend("继续") })

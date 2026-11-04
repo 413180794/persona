@@ -3,6 +3,7 @@
 
 import { useRef, useSyncExternalStore } from "react";
 import { agentsChanged, refreshAgentPrefs, refreshAgentSessions, resetAgents } from "./agents";
+import { applySessionDelta, SESSIONS_DELTA_FEATURE, sessionRefreshed, sessionSnapshot } from "./sessions-delta";
 import { api, ApiError, getToken } from "./api";
 import type { AgentMutes } from "./agent-groups";
 import { stateOf } from "./format";
@@ -130,6 +131,14 @@ export function hubHas(features: string[], feature: string, unknown = false): bo
 }
 
 /**
+ * Whether this connection gets the session list as deltas. The page asks for it on every connect, so a hub that has
+ * it says so in hello; one that does not never sends `sessions_delta` and keeps sending the whole list.
+ */
+function deltaOn(): boolean {
+  return state.features.includes(SESSIONS_DELTA_FEATURE);
+}
+
+/**
  * Feishu through lark-connector (feature `lark`, which a plugin brings): /api/v1/lark/…, the 消息 page, the 飞书 settings,
  * the side panel's readers for Feishu documents and 公司圈 posts. Without it those links are ordinary links.
  */
@@ -217,7 +226,7 @@ export function connect() {
   clearTimeout(retryTimer);
   ws?.close();
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  const sock = new WebSocket(`${proto}//${location.host}/api/v1/ws?${wsQuery(getToken(), cursor)}`);
+  const sock = new WebSocket(`${proto}//${location.host}/api/v1/ws?${wsQuery(getToken(), cursor, [SESSIONS_DELTA_FEATURE])}`);
   ws = sock;
   restartNotice = false;
   if (state.conn !== "online") set({ conn: "connecting" });
@@ -326,8 +335,21 @@ function onMessage(msg: Record<string, unknown>) {
       break;
     case "sessions": {
       const mid = msg.machine_id as string;
-      set({ sessions: { ...state.sessions, [mid]: (msg.sessions as Session[]) ?? [] } });
-      syncAssistant(mid, (msg.sessions as Session[]) ?? []);
+      // A delta hub's list has no Codex history (the page has that from GET /sessions): keep what it already has.
+      const list = sessionSnapshot((msg.sessions as Session[]) ?? [], state.sessions[mid] ?? [], deltaOn());
+      set({ sessions: { ...state.sessions, [mid]: list } });
+      syncAssistant(mid, list);
+      break;
+    }
+    case "sessions_delta": {
+      const mid = msg.machine_id as string;
+      const list = applySessionDelta(
+        state.sessions[mid] ?? [],
+        (msg.upsert as Session[]) ?? [],
+        (msg.remove as string[]) ?? [],
+      );
+      set({ sessions: { ...state.sessions, [mid]: list } });
+      syncAssistant(mid, list);
       break;
     }
     case "session": {
@@ -498,6 +520,11 @@ export async function refresh() {
   if (sessions.status === "fulfilled") {
     const by: Record<string, Session[]> = {};
     for (const s of sessions.value.sessions ?? []) (by[s.machine_id] ??= []).push(s);
+    if (deltaOn()) {
+      // What the socket pushed is newer than this answer (the request went out before): keep it, take only the Codex
+      // history the answer has and the page does not.
+      for (const [mid, old] of Object.entries(state.sessions)) by[mid] = sessionRefreshed(by[mid] ?? [], old, true);
+    }
     patch.sessions = by;
   }
   if (interactions.status === "fulfilled") patch.interactions = mergeInteractions(interactions.value.interactions ?? [], before);

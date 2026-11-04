@@ -725,6 +725,7 @@ Agent blocked 而没有 hook 交互时，hub 读一次屏幕（`session.screen`�
 - 兼容：老 App 不带 `features`，照旧收整表（一模一样的不发）；老 hub 不认 `features`，照旧发整表，App 的 `hello.features` 里没有 `sessions_delta`，按整表处理。
   mock（`scripts/mock/mock_hub.py`）同样支持，`MOCK_WHOLE_LISTS=1` 当老 hub。
 - 回放（真实 hub 录的 19 分钟）：会话推送每分钟 2605 KB → 79 KB，连上时的快照 602 KB → 227 KB（`docs/testing.md`「推送回放」）。
+- 网页同样用它（`web/src/lib/sessions-delta.ts`，与 `SessionPatch` 同一套规则）：`wsQuery` 每次连接都带 `features=sessions_delta`，`store.ts` 按 `upsert` / `remove` 合并，`refresh()` 在连着增量 hub 时只从 `GET /api/v1/sessions` 取 Codex 历史。此前网页不带 `features`，实测每个连接每秒收约 3 MB 整表、把后面的小事件拖慢（#1707）。
 
 ### 新建会话
 

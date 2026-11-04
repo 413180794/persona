@@ -285,7 +285,7 @@ struct FeishuDocsBlock: View {
     // MARK: Text
 
     private func inline(_ nodes: [FeishuDocsNode]) -> some View {
-        FeishuDocsText(text: FeishuDocsInline.attributed(nodes))
+        FeishuDocsText(text: FeishuDocsInline.attributed(nodes), blockID: node.attrs?["id"]?.string)
     }
 
     @ViewBuilder private var paragraph: some View {
@@ -304,7 +304,7 @@ struct FeishuDocsBlock: View {
         let level = Int(node.number("level") ?? 1)
         // Persona' levels: the first heading is a title, the rest headings, told apart by the space above them.
         let font: Font = level == 1 ? Theme.Font.title : Theme.Font.heading
-        return FeishuDocsText(text: FeishuDocsInline.attributed(node.children))
+        return FeishuDocsText(text: FeishuDocsInline.attributed(node.children), blockID: node.attrs?["id"]?.string)
             .font(font)
             .frame(maxWidth: .infinity, alignment: alignment)
             .padding(.top, level <= 2 ? 10 : 4)
@@ -397,11 +397,15 @@ struct FeishuDocsBlock: View {
 }
 
 /// Selectable text when the document allows copying. Inside the chat's link sheet (`docPick` set) a long press
-/// offers AI 修改 / 作为上下文 for the paragraph instead (SwiftUI's selection menu takes no custom items).
+/// offers AI 修改 / 作为上下文 for the paragraph instead (SwiftUI's selection menu takes no custom items); where
+/// comments can be written (`feishuDocComment`), 评论这段 (`FeishuDocsCommentable`, #1290). `blockID`: the block the
+/// text is in (a comment on it is anchored there).
 struct FeishuDocsText: View {
     var text: AttributedString
+    var blockID: String? = nil
     @Environment(\.feishuDocsContext) private var context
     @Environment(\.docPick) private var docPick
+    @Environment(\.feishuDocComment) private var comment
     @State private var selecting = false
 
     var body: some View {
@@ -410,6 +414,8 @@ struct FeishuDocsText: View {
             let plain = String(text.characters)
             t.contextMenu { DocPickMenu(text: plain, pick: docPick, selecting: $selecting) }
                 .sheet(isPresented: $selecting) { PickTextSheet(text: plain, pick: docPick) }
+        } else if let comment, !text.characters.isEmpty {
+            t.modifier(FeishuDocsCommentable(text: String(text.characters), blockID: blockID, copyable: context.selectable, comment: comment))
         } else if context.selectable {
             t.textSelection(.enabled)
         } else {

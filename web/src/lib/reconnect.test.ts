@@ -45,6 +45,9 @@ describe("event cursor", () => {
   it("adds the resume point to the socket's query only once there is a stream", () => {
     expect(wsQuery("t k", NO_CURSOR)).toBe("token=t%20k");
     expect(wsQuery("t", { stream: "s1", seq: 42 })).toBe("token=t&event_stream=s1&event_seq=42");
+    // The session list comes as deltas, not the whole list every half second.
+    expect(wsQuery("t", { stream: "s1", seq: 42 }, ["sessions_delta"])).toBe("token=t&event_stream=s1&event_seq=42&features=sessions_delta");
+    expect(wsQuery("t", NO_CURSOR, [])).toBe("token=t");
   });
 
   it("follows numbered broadcasts, ignores the rest and older numbers", () => {
