@@ -2,6 +2,11 @@
 
 踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
 
+- GitHub 的设备码登录不在 API 的域名上（2026-11-04，#1106）：取码和轮询是 `github.com/login/device/code`、`github.com/login/oauth/access_token`，
+  API 是 `api.github.com`。有的网络里 hub 机器连 `api.github.com` 正常、连 `github.com` 超时，于是 GitHub 连接器（用电脑的 gh 登录时）一切正常，
+  一换设备码登录就 502「dial tcp …:443: connection timed out」。验证设备码登录要经 personad 真的调一次 `POST /api/v1/connectors/github/login`，
+  别只拿 curl 测 API；连不上就配 `github.proxy`（`docs/config.md`）。
+
 - 不能把任意 `EnvironmentFile` 都当作不可恢复的根目录配置（2026-11-03，#277）：旧服务可能只在文件里保存其他运行字段，直接拒绝会让本来使用默认根的升级失败。只提取 HOME 赋值，保留同名文件字段对 unit 内赋值的覆盖、后文件优先、可选文件和 `UnsetEnvironment` 最后生效；其他字段不返回、不记录，也不执行 shell 展开。多行的其他字段里即使出现 HOME 文本，也不能被当成新赋值。必需文件缺失仍应停止，不能默默切到空的新根。
 
 - 改运行根目录不能只修常驻服务的环境（2026-11-03，#277）：SSH 登录不继承 systemd / launchd 的 `PERSONA_HOME`，部署、配对脚本或测试仍读固定 `~/.jarvis` 时，会写错二进制、漏读旧配置，甚至重写服务启动路径。公共解析器先尊重新旧显式环境（新变量为空也优先），没有显式值时只从对应角色的既有用户服务读取根目录字段，并尊重 `Environment=` 清空与按顺序覆盖的 drop-in；同机 hub、node 和 link 的独立根不能互相借用。写入与查找用户 unit 都遵守 `XDG_CONFIG_HOME`。远端在自己的 HOME 中解析，不把开发机目录复制过去。默认软链、并发初始化和词法路径与 Go / SDK 保持一致，不能让另一份脚本重新制造两个存储目录。用临时 HOME、假 SSH / systemctl 执行实际部署入口，检查二进制、网页和 APK 都落在原服务根；不会因此运行真实服务或创建新凭据。

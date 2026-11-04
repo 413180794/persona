@@ -27,6 +27,9 @@ type Config struct {
 	Auth AuthConfig `json:"auth"`
 	// Inbox: the defaults of what comes into the inbox until the user chooses in the app (rules.go).
 	Inbox InboxOptions `json:"inbox,omitempty"`
+	// Egress gives github.proxy: an http:// proxy for everything sent to GitHub (the device flow on its web host,
+	// the REST API, CI logs), for networks that cannot reach github.com directly; empty is direct.
+	connector.Egress
 }
 
 // AuthConfig: whose gh login the hub reads, and for which host. Host is github.com when empty; a GitHub Enterprise
@@ -53,7 +56,24 @@ var (
 	ErrNodeTooOld  = errors.New("the machine's jarvisd is too old")
 	ErrNoGh        = errors.New("gh is not installed")
 	ErrNotSignedIn = errors.New("gh is not signed in")
+	// errBadProxy: hub.json's github.proxy cannot be used; every request fails with it rather than going direct.
+	errBadProxy = errors.New("github.proxy")
 )
+
+// refuse is the transport of a connector whose proxy is malformed.
+type refuse struct{ err error }
+
+func (r refuse) RoundTrip(*http.Request) (*http.Response, error) { return nil, r.err }
+
+// httpClient is the connector's client: through github.proxy when set, direct when not.
+func httpClient(cfg Config) *http.Client {
+	const timeout = 30 * time.Second
+	cl, err := cfg.HTTPClient(timeout)
+	if err != nil {
+		return &http.Client{Timeout: timeout, Transport: refuse{fmt.Errorf("%w: %v", errBadProxy, err)}}
+	}
+	return cl
+}
 
 // TokenSource asks the machine for its gh login's token for host.
 type TokenSource func(ctx context.Context, host string) (string, error)
@@ -124,7 +144,7 @@ func New(cfg Config, machine string, fetch TokenSource) *Connector {
 		waiting, source = notSignedIn, SourceDevice
 	}
 	return &Connector{cfg: cfg, machine: machine, machineID: cfg.Auth.FromMachine, fetch: fetch, source: source, api: api,
-		web: "https://" + cfg.host(), client: &http.Client{Timeout: 30 * time.Second}, opts: cfg.Inbox,
+		web: "https://" + cfg.host(), client: httpClient(cfg), opts: cfg.Inbox,
 		status: connector.Status{State: connector.StateNotSignedIn, Error: waiting}, poke: make(chan struct{}, 1)}
 }
 
@@ -226,6 +246,8 @@ const notSignedIn = "还没登录 GitHub：在下面选一台电脑上的 gh 登
 func (c *Connector) explain(err error) (string, string) {
 	m := c.machine
 	switch {
+	case errors.Is(err, errBadProxy):
+		return connector.StateNotConfigured, "hub.json 的 github.proxy 不对（要 http://[用户名:密码@]主机:端口）"
 	case errors.Is(err, errUnauthorized) && c.source == SourceDevice:
 		return connector.StateNotSignedIn, "设备码登录失效了（在 GitHub 上撤销了授权？）：重新登录"
 	case errors.Is(err, errNoDeviceLogin):
@@ -307,6 +329,9 @@ func (c *Connector) request(ctx context.Context, method, path string, hdr http.H
 	}
 	for attempt := 0; ; attempt++ {
 		resp, err := c.send(ctx, method, path, hdr, body, tok)
+		if errors.Is(err, errBadProxy) {
+			return 0, nil, err // names the setting, not the token: nothing to scrub, and explain must see it
+		}
 		if err != nil {
 			return 0, nil, errors.New(Scrub(err.Error()))
 		}

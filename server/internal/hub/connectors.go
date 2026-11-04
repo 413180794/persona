@@ -502,6 +502,9 @@ func (h *Hub) registerConnectors() {
 	if h.cfg.GitHub != nil {
 		gh = *h.cfg.GitHub
 	}
+	if _, err := gh.HTTPClient(0); err != nil {
+		h.logf("github: %v (every GitHub request fails until it is fixed)", err)
+	}
 	var ghc *github.Connector
 	if gh.Configured() {
 		name := gh.Auth.FromMachine

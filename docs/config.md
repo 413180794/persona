@@ -274,6 +274,9 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   状态看 设置 › 连接器 › GitHub。这里的 `from_machine` 只是默认值：每个 hub 都有 GitHub，在 设置 › 连接器 › GitHub 的「从哪里登录」里
   可以换一台电脑的 gh 登录，或者用设备码登录（用内置的 GitHub CLI Client ID，用户不用注册 OAuth App，授权页上显示的是「GitHub CLI」，见 `docs/connectors.md`「二 · 7」）；
   App 里选过以后以 App 的为准（存在 hub 的设置里）。连接器要 `repo` 权限：gh 的默认登录就有，少了时页面会提示 `gh auth refresh -s repo`。
+  `github.proxy`（可选）：发往 GitHub 的全部请求（设备码登录的取码和轮询在 `github.com`，API 在 `api.github.com`，还有 CI 日志）走的 HTTP 代理，
+  `http://[用户名:密码@]主机:端口`，和 `google.proxy` 同一格式；不填就直连（不读进程的 `HTTPS_PROXY`）。有的网络只通 `api.github.com`、不通 `github.com`，
+  这时设备码登录拿不到验证码，就要配它。填错了不会退回直连：GitHub 的每个请求都失败，设置页写明「hub.json 的 github.proxy 不对」。具体地址只写在 hub 自己的 hub.json 里。
   `github.inbox`（可选）是收件箱的默认规则（App 里改过以 App 为准，`docs/inbox.md`「降噪」）：`ci`（`off` / `default_branch` / `mine`（默认）/ `all`）、
   `muted_repos`（`["owner/name"]`）、`ignore_branches`（不提醒的分支，`path.Match` 模式，默认 `["train/*"]`）。
 - `imessage`（可选）：信息连接器。`{"machine": "<机器 id>"}`：App 里能看哪台 Mac 的「信息」（经那台 Mac 的 node 只读 `~/Library/Messages/chat.db`，

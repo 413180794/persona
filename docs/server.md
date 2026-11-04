@@ -432,7 +432,7 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 
 | 文件 | 内容 |
 | --- | --- |
-| `hub.json` | `listen`、`token`、`public_url`、`public`（TLS / 候选地址）、`security`（来源信任 / 鉴权限流，逐项见 [network.md](network.md#hubjson-网络配置)）、`name`（hub 的显示名）、`admin`（管理界面的访问范围，[admin.md](admin.md)）、`hook_timeout_minutes`、`database_url`、`machines`、`google.client_id`（Gmail 用 Google 账号登录的 iOS OAuth 客户端）、`google.proxy`（Gmail 流量走的 HTTP 代理，如 `http://127.0.0.1:<端口>`），见 `docs/mail.md`；`notify`（推送时机，`docs/config.md`） |
+| `hub.json` | `listen`、`token`、`public_url`、`public`（TLS / 候选地址）、`security`（来源信任 / 鉴权限流，逐项见 [network.md](network.md#hubjson-网络配置)）、`name`（hub 的显示名）、`admin`（管理界面的访问范围，[admin.md](admin.md)）、`hook_timeout_minutes`、`database_url`、`machines`、`google.client_id`（Gmail 用 Google 账号登录的 iOS OAuth 客户端）、`google.proxy`（Gmail 流量走的 HTTP 代理，如 `http://127.0.0.1:<端口>`），见 `docs/mail.md`；`github.proxy`（GitHub 连接器的全部请求走的 HTTP 代理，同一格式，见 `docs/config.md`）；`notify`（推送时机，`docs/config.md`） |
 | `tls/hub.key`、`tls/hub.crt` | 自动管理的 ECDSA P-256 身份密钥和自签证书；目录 0700，文件 0600，私钥不进数据库；换密钥后设备重新配对 |
 | `secret.key` | 邮箱凭据的加密密钥（32 字节） |
 | `apns.json`、`apns_key.p8` | 推送配置和 key；有就直连 APNs，没有就经每台手机登记的推送中继（`docs/push-relay.md`），手机也没登记中继就不推 |

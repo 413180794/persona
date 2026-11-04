@@ -102,6 +102,9 @@ App 用这份列表画整节：飞书、邮箱画成原来的行（状态还读�
 3. 写操作只做成 `Actions`，`Describe` 的卡片写明谁会看到。
 4. 状态 `Status` 只从内存回答（每次列工具都要问），出错时 `Error` 一句话、能自己修的给 `Guide`。
 5. 日志、错误里不出现正文、号码、token。
+6. 要连外部服务的，配置里嵌入 `connector.Egress`（`connector/egress.go`），就有了 `proxy` 键（`http://[用户名:密码@]主机:端口`，空的直连），
+   HTTP client 一律用 `Egress.HTTPClient` 建：配了走代理、没配直连，填错了报错而不是悄悄直连。`github.proxy` 就是这样来的（#1106）；
+   代理地址的解析在 `netproxy`，`google.proxy` 也用它。还没接上的：Telegram（MTProto 不是 HTTP）、子进程 / 第三方连接器（要把代理传给程序），见 #1106。
 
 ## 二、v2 设计
 

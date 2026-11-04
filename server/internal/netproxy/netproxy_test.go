@@ -1,0 +1,92 @@
+package netproxy
+
+import (
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+func TestParse(t *testing.T) {
+	for _, ok := range []string{"http://127.0.0.1:8080", " http://user:pass@proxy.example:3128 ", "http://[::1]:8080/"} {
+		if u, err := Parse(ok); err != nil || u == nil {
+			t.Errorf("%q: %v %v", ok, u, err)
+		}
+	}
+	if u, err := Parse("  "); u != nil || err != nil {
+		t.Errorf("blank: %v %v", u, err)
+	}
+	for _, bad := range []string{"socks5://127.0.0.1:1080", "127.0.0.1:8080", "http://", "http://h:1/x", "http://h:1?a=b", "https://h:1"} {
+		if _, err := Parse(bad); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+	// A password never shows in the error.
+	for _, bad := range []string{"socks5://user:s3cret@h:1", "http://user:s3cret@h:1/x", "http://user:s3cret@h:%zz"} {
+		if _, err := Parse(bad); err == nil || strings.Contains(err.Error(), "s3cret") {
+			t.Errorf("%q: %v", bad, err)
+		}
+	}
+}
+
+// With a proxy every request (http and https alike) goes to the proxy; without one it goes straight to the server,
+// even when the environment names a proxy.
+func TestHTTPClient(t *testing.T) {
+	var proxied atomic.Int32
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		proxied.Add(1)
+		if r.Method == http.MethodConnect {
+			w.WriteHeader(http.StatusForbidden) // enough to know the client came here; no tunnel needed
+			return
+		}
+		_, _ = io.WriteString(w, "via proxy "+r.URL.String())
+	}))
+	t.Cleanup(proxy.Close)
+	var direct atomic.Int32
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		direct.Add(1)
+		_, _ = io.WriteString(w, "direct")
+	}))
+	t.Cleanup(origin.Close)
+
+	u, err := Parse(proxy.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := HTTPClient(u, 5*time.Second)
+	resp, err := c.Get("http://github.example/login/device/code")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if string(body) != "via proxy http://github.example/login/device/code" {
+		t.Fatalf("http through the proxy: %q", body)
+	}
+	if _, err := c.Get("https://api.github.example/user"); err == nil {
+		t.Fatal("https got through a proxy that refuses CONNECT")
+	}
+	if proxied.Load() != 2 || direct.Load() != 0 {
+		t.Fatalf("proxied %d, direct %d", proxied.Load(), direct.Load())
+	}
+
+	t.Setenv("HTTP_PROXY", proxy.URL)
+	t.Setenv("HTTPS_PROXY", proxy.URL)
+	t.Setenv("NO_PROXY", "")
+	c = HTTPClient(nil, 5*time.Second)
+	resp, err = c.Get(origin.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ = io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if string(body) != "direct" || proxied.Load() != 2 || direct.Load() != 1 {
+		t.Fatalf("no proxy: %q, proxied %d, direct %d", body, proxied.Load(), direct.Load())
+	}
+	if c.Timeout != 5*time.Second {
+		t.Fatalf("timeout %v", c.Timeout)
+	}
+}

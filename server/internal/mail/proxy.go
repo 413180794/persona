@@ -9,10 +9,11 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/emersion/go-smtp"
+
+	"github.com/nwverse/persona/server/internal/netproxy"
 )
 
 // Gmail traffic can go through an HTTP proxy (hub.json google.proxy): some networks reach only some of Google's
@@ -21,17 +22,16 @@ import (
 
 // SetGoogleProxy routes Gmail accounts and Google's OAuth / Gmail API through an http:// proxy ("" = direct).
 func (s *Service) SetGoogleProxy(raw string) error {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
+	u, err := netproxy.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("mail: google.proxy: %w", err)
+	}
+	if u == nil {
 		s.googleProxy, s.googleHTTP = nil, httpClient
 		return nil
 	}
-	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "http" || u.Host == "" {
-		return fmt.Errorf("mail: google.proxy must be http://[user:pass@]host:port, got %q", raw)
-	}
 	s.googleProxy = u
-	s.googleHTTP = &http.Client{Timeout: networkTimeout, Transport: &http.Transport{Proxy: http.ProxyURL(u)}}
+	s.googleHTTP = netproxy.HTTPClient(u, networkTimeout)
 	return nil
 }
 
