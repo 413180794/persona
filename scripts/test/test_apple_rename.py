@@ -37,6 +37,7 @@ class AppleRenameTests(unittest.TestCase):
         targets = blocks(TARGETS)
         expected = {
             "Persona": "Jarvis", "PersonaMac": "Jarvis", "PersonaWatch": "Jarvis",
+            "PersonaVision": "Jarvis",
             "PersonaWidgets": "JarvisWidgets", "PersonaNotify": "JarvisNotify",
             "PersonaMacNotify": "JarvisNotify",
         }
@@ -48,6 +49,14 @@ class AppleRenameTests(unittest.TestCase):
         self.assertIn("TEST_TARGET_NAME: Persona\n", targets["PersonaUITests"])
         self.assertIn('Persona.app/Persona"', targets["PersonaTests"])
         self.assertIn('Persona.app/Contents/MacOS/Persona"', targets["PersonaMacTests"])
+
+    def test_vision_target_keeps_canonical_source_and_scheme(self):
+        target = blocks(TARGETS)["PersonaVision"]
+        self.assertIn("platform: visionOS\n", target)
+        self.assertIn("- path: Vision\n", target)
+        self.assertIn("PRODUCT_NAME: Persona\n", target)
+        self.assertTrue((APPLE / "Vision").is_dir())
+        self.assertIn("PersonaVision: all\n", blocks(SCHEMES)["PersonaVision"])
 
     def test_legacy_schemes_build_the_same_targets(self):
         schemes = blocks(SCHEMES)

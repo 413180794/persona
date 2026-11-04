@@ -242,6 +242,12 @@
 - 数 body 的测试（`RenderBudgetTests`）要等页面停下来再开始量（2026-11-03，#475）：启动后对话还在加载历史、排版，第一个量的推送（`rev`）
   就把这些气泡算到了自己头上，看着像「屏幕上什么都没变的推送重画了 6 个气泡」，换个顺序或多量一次就没了。现在先等计数 1 秒不变（`settled()`）。
 
+## 新平台要同步登记静态兼容检查（#1997）
+
+`apple/project.yml` 新增 `PersonaVision` 后，`test_apple_rename.py` 的固定 target 集合仍只有原来的平台，合法的 visionOS target 因此被判断为重命名回归。新增平台时，要把它的 target 和 module 身份一起登记到兼容表，并验证规范源码目录及 scheme；只补允许列表而不检查 module，会漏掉身份回退。
+
+保留完整 target 集合、原有 module、产物路径及旧 scheme 的严格检查，不改为子集包含、不跳过新平台。visionOS 的 target 是 `PersonaVision`，源码在 `apple/Vision/`，共享 module 仍为 `Jarvis`。
+
 ## 要 macOS 自带命令的 Go 测试（2026-11-02）
 
 - 信息连接器读 `chat.db` 用的是 macOS 的 `/usr/bin/sqlite3`（jarvisd 不带 cgo），hub 机器（Linux）上没有 `sqlite3`，那几个测试在 hub 上会跳过。
