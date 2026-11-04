@@ -30,6 +30,7 @@ func computerMac(t *testing.T, h *Hub, id string) (*Machine, func() (statuses in
 	hubSide, nodeSide := rpc.New("h", h2nW), rpc.New("n", n2hW)
 	var mu sync.Mutex
 	statuses, calls := 0, []computerCallSeen{}
+	var job *proto.ComputerJob // the node's install or grant, as computer.status says it
 	nodeSide.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -37,7 +38,14 @@ func computerMac(t *testing.T, h *Hub, id string) (*Machine, func() (statuses in
 		case "computer.status":
 			statuses++
 			return proto.Computer{Installed: true, Version: "0.38.0", Daemon: true, Accessibility: "granted", ScreenRecording: "granted",
-				Desktop: "active", Ready: true}, nil
+				Desktop: "active", Ready: true, Job: job}, nil
+		case "computer.install", "computer.grant", "computer.cancel":
+			calls = append(calls, computerCallSeen{Tool: method})
+			job = &proto.ComputerJob{Kind: strings.TrimPrefix(method, "computer."), State: "running", Step: "下载安装器"}
+			if method == "computer.cancel" {
+				job = &proto.ComputerJob{Kind: "install", State: "cancelled"}
+			}
+			return proto.Computer{Job: job}, nil
 		case "computer.call":
 			var c computerCallSeen
 			_ = json.Unmarshal(params, &c)
@@ -212,5 +220,77 @@ func TestComputerResultCutsLongOutput(t *testing.T) {
 	}
 	if strings.ContainsRune(text, '�') {
 		t.Fatal("cut inside a character")
+	}
+}
+
+// The machine page's 安装 Cua Driver, 去授权 and 取消 start and stop the node's job; its state comes back on the machine.
+func TestComputerJobs(t *testing.T) {
+	h, _ := pluginTestHub(t)
+	ctx := context.Background()
+	mux := h.routes()
+	mac, seen := computerMac(t, h, "mac")
+	if code, _ := call(t, mux, "POST", "/api/v1/machines/mac/computer/install", h.cfg.Token, ""); code != 404 {
+		t.Fatalf("the plugin off: %d", code)
+	}
+	if err := h.plugins.reg.SetEnabled(ctx, cuaPluginID, true, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := call(t, mux, "POST", "/api/v1/machines/mac/computer/install", h.cfg.Token, ""); code != 404 {
+		t.Fatalf("not on for this Mac: %d", code)
+	}
+	if err := h.plugins.reg.SetConfig(ctx, cuaPluginID, json.RawMessage(`{"machines": ["mac"]}`), "test"); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := call(t, mux, "POST", "/api/v1/machines/mac/computer/reboot", h.cfg.Token, ""); code != 404 {
+		t.Fatalf("only the three: %d", code)
+	}
+	code, out := call(t, mux, "POST", "/api/v1/machines/mac/computer/install", h.cfg.Token, "")
+	job, _ := out["job"].(map[string]any)
+	if code != 200 || out["enabled"] != true || job["kind"] != "install" || job["state"] != "running" || job["step"] != "下载安装器" {
+		t.Fatalf("%d %v", code, out)
+	}
+	if c := mac.snapshot().Computer; c == nil || c.Job == nil || c.Job.State != "running" {
+		t.Fatalf("the machine list says it: %+v", c)
+	}
+	if _, out = call(t, mux, "POST", "/api/v1/machines/mac/computer/cancel", h.cfg.Token, ""); out["job"].(map[string]any)["state"] != "cancelled" {
+		t.Fatalf("%v", out)
+	}
+	call(t, mux, "POST", "/api/v1/machines/mac/computer/grant", h.cfg.Token, "")
+	var asked []string
+	_, calls := seen()
+	for _, c := range calls {
+		asked = append(asked, c.Tool)
+	}
+	if strings.Join(asked, " ") != "computer.install computer.cancel computer.grant" {
+		t.Fatalf("%v", asked)
+	}
+	same := proto.Computer{Job: &proto.ComputerJob{Kind: "install", State: "running"}}
+	again := proto.Computer{Job: &proto.ComputerJob{Kind: "install", State: "running"}}
+	if !sameComputer(same, again) || sameComputer(same, proto.Computer{}) {
+		t.Fatal("jobs compare by value")
+	}
+	mac.mu.Lock()
+	mac.online = false
+	mac.mu.Unlock()
+	if code, _ := call(t, mux, "POST", "/api/v1/machines/mac/computer/install", h.cfg.Token, ""); code != 409 {
+		t.Fatalf("offline: %d", code)
+	}
+}
+
+// An answer to an older question never replaces a newer one: a page's refresh can land after the install it raced.
+func TestKeepComputerKeepsTheNewest(t *testing.T) {
+	h := newTestHub(t)
+	m := newMachine(h, MachineConfig{ID: "mac", Name: "mac"})
+	early, late := time.Now(), time.Now().Add(time.Second)
+	running := proto.Computer{Job: &proto.ComputerJob{Kind: "install", State: "running"}}
+	cancelled := proto.Computer{Job: &proto.ComputerJob{Kind: "install", State: "cancelled"}}
+	if !h.keepComputer(m, cancelled, late) || h.keepComputer(m, running, early) {
+		t.Fatal("the late answer to the early question is dropped")
+	}
+	if m.computer.Job.State != "cancelled" {
+		t.Fatalf("%+v", m.computer.Job)
+	}
+	if h.keepComputer(m, cancelled, late.Add(time.Second)) {
+		t.Fatal("the same again is no change")
 	}
 }

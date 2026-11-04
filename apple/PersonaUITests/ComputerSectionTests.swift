@@ -2,23 +2,60 @@ import XCTest
 
 /// 操控电脑 on a Mac's page (docs/computer-use.md), against scripts/mock/mock_hub.py with `MOCK_COMPUTER=<state>`
 /// (TEST_RUNNER_JARVIS_COMPUTER_HUB=http://127.0.0.1:<port>, TEST_RUNNER_JARVIS_COMPUTER_STATE=<state>): the section
-/// says the state, and its switch turns it off and on. JARVIS_SHOTS saves the screenshots there too.
+/// says the state, and its switch turns it off and on; not installed, it installs and asks for the permissions. JARVIS_SHOTS
+/// saves the screenshots there too.
 final class ComputerSectionTests: XCTestCase {
-    @MainActor func testTheSwitchAndTheState() throws {
+    private var state: String { ProcessInfo.processInfo.environment["JARVIS_COMPUTER_STATE"] ?? "ready" }
+
+    /// The page, scrolled to the section: its switch and its state line.
+    @MainActor private func open() throws -> (XCUIApplication, toggle: XCUIElement, status: XCUIElement) {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_COMPUTER_HUB"] else {
             throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_COMPUTER (JARVIS_COMPUTER_HUB)")
         }
-        let state = ProcessInfo.processInfo.environment["JARVIS_COMPUTER_STATE"] ?? "ready"
         continueAfterFailure = false
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "macbook"]
         app.launchPinned()
-
         let toggle = app.switches["computer-switch"].firstMatch
         XCTAssertTrue(toggle.waitForExistence(timeout: 30), "no 操控电脑 switch:\n\(app.debugDescription)")
-        for _ in 0..<6 where !toggle.isHittable || toggle.frame.maxY > app.frame.height * 0.6 { app.swipeUp() }
-        let status = app.descendants(matching: .any)["computer-status"].firstMatch
+        for _ in 0..<6 where !toggle.isHittable || toggle.frame.maxY > app.frame.height * 0.5 { app.swipeUp() }
+        return (app, toggle, app.descendants(matching: .any)["computer-status"].firstMatch)
+    }
+
+    /// Not installed (#1183): 安装 Cua Driver shows the node's steps, then the grant waits on the Mac's dialogs, then it
+    /// can be operated. MOCK_COMPUTER=missing.
+    @MainActor func testInstallThenGrant() throws {
+        guard state == "missing" else { throw XCTSkip("MOCK_COMPUTER=missing") }
+        let (app, _, status) = try open()
+        let install = app.buttons["computer-install"].firstMatch
+        XCTAssertTrue(install.waitForExistence(timeout: 10) && status.label.contains("还没有装"), "\(status.label)")
+        shot(app, "computer-missing")
+        install.tap()
+        XCTAssertTrue(waitFor(status, label: "下载"), "the node's steps: \(status.label)")
+        XCTAssertTrue(app.buttons["computer-cancel"].exists, "an install can be stopped")
+        shot(app, "computer-installing")
+        XCTAssertTrue(waitFor(status, label: "在它的屏幕上点「允许」", timeout: 30), "then the grant: \(status.label)")
+        shot(app, "computer-granting")
+        XCTAssertTrue(waitFor(status, label: "现在可以操控", timeout: 30), "allowed on the Mac: \(status.label)")
+        shot(app, "computer-granted")
+    }
+
+    @MainActor func testAnInstallCanBeCancelled() throws {
+        guard state == "missing" else { throw XCTSkip("MOCK_COMPUTER=missing") }
+        let (app, _, status) = try open()
+        let install = app.buttons["computer-install"].firstMatch
+        XCTAssertTrue(install.waitForExistence(timeout: 10))
+        install.tap()
+        let cancel = app.buttons["computer-cancel"].firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10))
+        cancel.tap()
+        XCTAssertTrue(install.waitForExistence(timeout: 10) && waitFor(status, label: "还没有装"), "back to 安装: \(status.label)")
+    }
+
+    @MainActor func testTheSwitchAndTheState() throws {
+        guard state != "missing" else { throw XCTSkip("MOCK_COMPUTER=missing is the install's") }
+        let (app, toggle, status) = try open()
         if state == "off" {
             XCTAssertEqual(toggle.value as? String, "0")
             XCTAssertFalse(status.exists, "nothing to say until it is on")
@@ -28,6 +65,7 @@ final class ComputerSectionTests: XCTestCase {
         XCTAssertEqual(toggle.value as? String, "1")
         let says = state == "ready" ? "现在可以操控 · Cua Driver 0.38.0" : state == "locked" ? "锁屏" : "屏幕录制权限"
         XCTAssertTrue(status.waitForExistence(timeout: 10) && status.label.contains(says), "\(status.label)")
+        if state == "permissions" { XCTAssertTrue(app.buttons["computer-grant"].exists, "去授权 in place of a command to run") }
         shot(app, "computer-\(state)")
 
         toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
@@ -40,6 +78,12 @@ final class ComputerSectionTests: XCTestCase {
     private func waitFor(_ e: XCUIElement, value: String) -> Bool {
         let deadline = Date.now.addingTimeInterval(10)
         while Date.now < deadline { if e.value as? String == value { return true }; usleep(200_000) }
+        return false
+    }
+
+    private func waitFor(_ e: XCUIElement, label: String, timeout: TimeInterval = 10) -> Bool {
+        let deadline = Date.now.addingTimeInterval(timeout)
+        while Date.now < deadline { if e.exists, e.label.contains(label) { return true }; usleep(200_000) }
         return false
     }
 

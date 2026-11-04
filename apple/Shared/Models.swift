@@ -217,14 +217,16 @@ nonisolated struct MachineComputer: Codable, Hashable, Sendable {
     var ready = false
     /// What is missing and what to do, in Chinese.
     var note: String? = nil
+    /// Installing Cua Driver or asking for its permissions (the page's buttons): the running one, or the last.
+    var job: ComputerJob? = nil
 
     enum CodingKeys: String, CodingKey {
-        case enabled, installed, version, daemon, accessibility, desktop, ready, note
+        case enabled, installed, version, daemon, accessibility, desktop, ready, note, job
         case screenRecording = "screen_recording"
     }
 
     init(enabled: Bool = false, installed: Bool = false, version: String? = nil, daemon: Bool = false, accessibility: String? = nil,
-         screenRecording: String? = nil, desktop: String? = nil, ready: Bool = false, note: String? = nil) {
+         screenRecording: String? = nil, desktop: String? = nil, ready: Bool = false, note: String? = nil, job: ComputerJob? = nil) {
         self.enabled = enabled
         self.installed = installed
         self.version = version
@@ -234,6 +236,7 @@ nonisolated struct MachineComputer: Codable, Hashable, Sendable {
         self.desktop = desktop
         self.ready = ready
         self.note = note
+        self.job = job
     }
 
     init(from decoder: Decoder) throws {
@@ -247,7 +250,25 @@ nonisolated struct MachineComputer: Codable, Hashable, Sendable {
         desktop = try c.decodeIfPresent(String.self, forKey: .desktop)
         ready = try c.decodeIfPresent(Bool.self, forKey: .ready) ?? false
         note = try c.decodeIfPresent(String.self, forKey: .note)
+        job = try? c.decodeIfPresent(ComputerJob.self, forKey: .job)
     }
+
+    /// The macOS permissions it still lacks, by their names in System Settings.
+    var missingPermissions: [String] {
+        [(accessibility, "辅助功能"), (screenRecording, "屏幕录制")].compactMap { $0.0 == "missing" ? $0.1 : nil }
+    }
+}
+
+/// One install or grant the node runs for the machine page (docs/computer-use.md「一键安装」).
+nonisolated struct ComputerJob: Codable, Hashable, Sendable {
+    /// install | grant
+    var kind: String
+    /// running | done | failed | cancelled
+    var state: String
+    var step: String? = nil
+    var error: String? = nil
+
+    var running: Bool { state == "running" }
 }
 
 extension Machine {

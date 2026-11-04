@@ -36,16 +36,18 @@ type Machine struct {
 	peer    *rpc.Peer
 	streams *streams.Mux // the forwarded ports' connections on peer (ports.go)
 	info    proto.NodeInfo
-	// computer: what the node last said of Cua Driver (computer.status), while the plugin cua is on for it (computer.go).
-	computer *proto.Computer
-	online   bool
-	err      string
-	lastSeen time.Time
-	sessions []proto.Session
-	watchers map[string]int // session id -> subscribed clients
-	lastSeq  map[string]int // session id -> highest item seq seen
-	hooked   map[string]bool
-	kick     chan struct{}
+	// computer: what the node last said of Cua Driver (computer.status), while the plugin cua is on for it (computer.go);
+	// computerAsked: when that was asked, so an answer to an older question never replaces it (keepComputer).
+	computer      *proto.Computer
+	computerAsked time.Time
+	online        bool
+	err           string
+	lastSeen      time.Time
+	sessions      []proto.Session
+	watchers      map[string]int // session id -> subscribed clients
+	lastSeq       map[string]int // session id -> highest item seq seen
+	hooked        map[string]bool
+	kick          chan struct{}
 	// deploying: the hub is sending this machine its node build (deploy.go); deployErr: why the last try failed.
 	deploying   bool
 	deployErr   string

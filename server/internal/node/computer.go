@@ -85,6 +85,7 @@ func computerStatus(ctx context.Context) proto.Computer {
 		c.Desktop = parseConsole(string(out), os.Getuid())
 	}
 	c.Ready, c.Note = computerReady(c)
+	c.Job = currentJob()
 	return c
 }
 

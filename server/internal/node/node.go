@@ -768,6 +768,18 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return computerStatus(ctx), nil
 	case "computer.call":
 		return computerCall(ctx, params)
+	case "computer.install", "computer.grant": // background jobs; their state comes back with computer.status
+		run := installCua
+		if method == "computer.grant" {
+			run = grantCua
+		}
+		if err := startJob(strings.TrimPrefix(method, "computer."), run); err != nil {
+			return nil, err
+		}
+		return computerStatus(ctx), nil
+	case "computer.cancel":
+		cancelJob()
+		return computerStatus(ctx), nil
 	case "fs.stat":
 		return map[string]any{"stats": n.statPaths(p.Paths, p.Cwd)}, nil
 	case "space.rename":

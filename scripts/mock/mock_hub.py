@@ -5420,7 +5420,37 @@ COMPUTER_STATES = {
                     "note": "Cua Driver 还没有屏幕录制权限：在这台 Mac 上运行 cua-driver permissions grant，在弹出的窗口里允许"},
     "locked": {"installed": True, "version": "0.38.0", "daemon": True, "accessibility": "granted",
                "screen_recording": "granted", "desktop": "locked", "ready": False, "note": "这台 Mac 锁屏了，解锁后才能操控"},
+    "missing": {"installed": False, "daemon": False, "ready": False, "note": "这台 Mac 上没有装 Cua Driver"},
 }
+# 安装 Cua Driver and 去授权 (#1183) move on by the clock: each step MOCK_COMPUTER_STEP seconds (default 2), then the
+# grant's dialogs, then 允许 is clicked on the Mac.
+COMPUTER_STEP = float(os.environ.get("MOCK_COMPUTER_STEP", "2"))
+COMPUTER_JOBS = {}  # machine id -> {"kind": install|grant, "at": time started, "cancelled": bool}
+INSTALL_STEPS = ["下载安装器", "下载并校验 Cua Driver，装进「应用程序」", "关闭 Cua 的使用统计"]
+
+
+def computer_now(machine):
+    """machine["computer"] as the node would say it now, the clock having moved any install or grant on."""
+    c = machine["computer"]
+    job = COMPUTER_JOBS.get(machine["id"])
+    if not c.get("enabled") or not job:
+        return c
+    t = (time.time() - job["at"]) / COMPUTER_STEP
+    missing = {"installed": True, "version": "0.38.0", "daemon": True, "accessibility": "missing",
+               "screen_recording": "missing", "desktop": "active", "ready": False,
+               "note": "Cua Driver 还没有辅助功能、屏幕录制权限：在这台 Mac 上运行 cua-driver permissions grant，在弹出的窗口里允许"}
+    if job["kind"] == "install":
+        if job.get("cancelled"):
+            return {**c, "job": {"kind": "install", "state": "cancelled", "started": job["started"]}}
+        if t < len(INSTALL_STEPS):
+            return {**c, "job": {"kind": "install", "state": "running", "step": INSTALL_STEPS[int(t)], "started": job["started"]}}
+        t -= len(INSTALL_STEPS)  # installed: the node asks for the permissions straight away
+    if t < 1.5:
+        return {"enabled": True, **missing, "job": {"kind": "grant", "state": "running", "step": "等你在那台 Mac 上点「允许」",
+                                                     "started": job["started"]}}
+    if t < 3:
+        return {"enabled": True, **missing, "job": {"kind": "grant", "state": "done", "started": job["started"]}}
+    return {"enabled": True, **COMPUTER_STATES["ready"], "job": {"kind": "grant", "state": "done", "started": job["started"]}}
 
 
 def computer_of(machine_id, enabled):
@@ -5879,7 +5909,7 @@ class H(BaseHTTPRequestHandler):
             machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
             if machine is None or "computer" not in machine:
                 return self.send_json({"error": "操控电脑的插件没打开，或这台不是 Mac"}, 404)
-            return self.send_json(machine["computer"])
+            return self.send_json(computer_now(machine))
         if p == "/api/v1/metrics":
             return self.send_json({"machines": [machine_metrics(m["id"], 3600, 60) for m in MACHINES if kept(m["id"])], "step": 60})
         if p.startswith("/api/v1/machines/") and p.endswith("/metrics"):
@@ -6604,6 +6634,18 @@ class H(BaseHTTPRequestHandler):
         if self.command == "DELETE" and p == "/api/v1/imessage/data":  # what the hub kept, once 交给 Jarvis is off
             if IMESSAGE_STATUS.get("ai"): return self.send_json({"error": "先关掉「交给 Jarvis」再删除", "code": "ai_on"}, 409)
             return self.send_json({"chats": 6, "people": 9, "inbox": 1})
+        if self.command == "POST" and p.startswith("/api/v1/machines/") and "/computer/" in p:  # 安装 / 去授权 / 取消
+            machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
+            action = p.rsplit("/", 1)[1]
+            if machine is None or not machine.get("computer", {}).get("enabled"):
+                return self.send_json({"error": "操控电脑没有对这台打开"}, 404)
+            if action == "cancel":
+                if machine["id"] in COMPUTER_JOBS: COMPUTER_JOBS[machine["id"]]["cancelled"] = True
+            elif action in ("install", "grant"):
+                COMPUTER_JOBS[machine["id"]] = {"kind": action, "at": time.time(), "started": ago()}
+            else:
+                return self.send_json({"error": "unknown action"}, 404)
+            return self.send_json(computer_now(machine))
         if self.command == "PUT" and p.startswith("/api/v1/machines/") and p.endswith("/computer"):  # the plugin cua
             machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
             if machine is None or "computer" not in machine:

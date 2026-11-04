@@ -6,7 +6,7 @@ Persona 助手经 [Cua Driver](https://github.com/trycua/cua)（`libs/cua-driver
 | 块 | issue | 状态 |
 | --- | --- | --- |
 | 接入：能力发现、助手的 `computer_state` / `computer_run`、截图 | #1182 | 本文「接入」 |
-| 手机上一键安装、引导授权 | #1183 | 计划，见「一键安装」 |
+| 手机上一键安装、引导授权 | #1183 | 本文「一键安装」 |
 | 实时画面：Agent 操作电脑时在手机、网页上看，必要时接管 | #1184 | 计划，见「实时画面」 |
 
 ## 开关
@@ -121,20 +121,51 @@ node 的探测：
 - 截图只在助手的 transcript 里（和发给助手的照片一样）。不进 hub 日志，也不进插件审计（`plugin_audit` 只记开关、改了配置，不记值）。
 - Cua Driver 自己的 telemetry：一键安装时会关掉（`cua-driver telemetry disable`，#1183）；手动装的由用户自己决定。
 
-## 一键安装（#1183，计划）
+## 一键安装（#1183）
 
-插件打开、机器页显示这台 Mac 没装时，多一个「安装 Cua」：
+插件对一台 Mac 打开后，机器页「操控电脑」按状态给按钮，不再让人去那台 Mac 上敲命令：
 
-1. **hub → node `computer.install`**：
-   - 把 Cua 官方安装器下载到临时目录，按发布页给的 sha256 校验后运行，带 `--no-modify-path`。
-   - 装完执行 `cua-driver telemetry disable`。
-   - 进度一行一行推给 App（下载、校验、安装、关 telemetry），走 hub 的事件流。机器页显示进度，可以取消。
-2. **授权**：装完由 node 执行 `cua-driver permissions grant`。它经 LaunchServices 打开 CuaDriver.app，弹出辅助功能、屏幕录制两个系统窗口。
-   - **这一步只能在那台 Mac 的桌面上点**，App 做不到替用户点。
-   - 所以装完直接在手机上打开那台机器的实时画面（下一节），用户在画面里点「允许」。
-   - 机器页一直显示权限状态，缺哪项就有「去授权」：再执行一次 `permissions grant`，并打开实时画面。
-3. **做不到的**：如果那台 Mac 的屏幕共享也没开（实时画面用不了），第一次授权必须本人在机器前操作。之后都能远程。
-4. 卸载按钮不是必须的。要做时：`cua-driver` 的卸载步骤，加删掉 CuaDriver.app 和它在 `~/Library/Caches/cua-driver` 的文件。
+| 状态 | 机器页 |
+| --- | --- |
+| 没装 | 「这台 Mac 上还没有装 Cua Driver」+「安装 Cua Driver」 |
+| 正在安装 | 转圈 + 当前步骤 +「取消」 |
+| 装失败 | 「没装上：<安装器最后几行>」+「重新安装」 |
+| 缺权限 | 「Cua Driver 还没有辅助功能、屏幕录制权限」+「去授权」 |
+| 请求授权中，或请求过还缺 | 「那台 Mac 上弹出了授权窗口：在它的屏幕上点「允许」」，请求过的再给「再请求一次」 |
+| 就绪 | 「现在可以操控 · Cua Driver 0.38.0」 |
+
+页面在有任务、或请求过授权还在等「允许」时每 2 秒问一次。
+
+### 怎么装（node 的 `computer.install`）
+
+一次只跑一个后台任务，状态随 `computer.status` 的 `job` 回来（`{kind: install|grant, state: running|done|failed|cancelled, step, error}`）：
+
+1. **下载安装器**：Cua 官方的 `install.sh` 只是转交给 `_install-rust.sh`，后者再 source `_install-common.sh`。
+   - 三个脚本先全部从 `https://cua.ai/driver/` 下载到一个新的临时目录，**从磁盘运行**：`install.sh` 优先用同目录的 helper，helper 优先 source 同目录的 common。所以运行时不会再从网上取别的代码。
+   - 运行前检查（`checkScript`）：两个要执行的是 bash 脚本；被 source 的是 shell 文件；`_install-rust.sh` 里还有对照 SHA256SUMS 的校验。不满足就不运行。
+   - Cua 没有给安装脚本本身公布哈希，所以这一步只能做到「来自 cua.ai 的 HTTPS、像是它的安装器」，记在这里，别当成签名校验。
+2. **下载并校验 Cua Driver，装进「应用程序」**：`/bin/bash install.sh --no-modify-path`，不改 shell 的 rc 文件。
+   - 安装器自己把发布包对照 release 的 SHA256SUMS 校验。机器上有 `cosign` 时再加 `--require-signature`（校验 Sigstore 签名）。
+   - 不需要 sudo：用 `ditto` 装进 `/Applications`，所以要是管理员账户；`~/.local/bin/cua-driver` 链到 app 里。
+   - 已经装着同一个 app 时会替换它：安装器先停掉 daemon，签名要求不变就保留授权。所以已经装好的机器不给「安装」。
+3. **关闭 Cua 的使用统计**：
+   - 安装时带 `CUA_DRIVER_RS_TELEMETRY_ENABLED=0`，安装器连「装了一次」都不上报。
+   - 装完执行 `cua-driver telemetry disable`，持久关掉。
+4. 装好以后 node 立刻开始授权任务。
+
+### 授权（node 的 `computer.grant`）
+
+- node 执行 `cua-driver permissions grant`：它经 LaunchServices 打开 CuaDriver.app，弹出辅助功能、屏幕录制的系统窗口。
+- **这一步只能在那台 Mac 的屏幕上点「允许」**，App 替不了。实时画面（下一节）做好后，这里会多一个「看画面」，在手机上远程点。
+- **做不到的**：那台 Mac 的屏幕共享也没开时，第一次授权必须本人在机器前操作。之后都能远程。
+- 卸载按钮没做，不是必须的。要卸载就运行 Cua 自己的 `https://cua.ai/driver/uninstall.sh`。
+
+### 接口
+
+`POST /api/v1/machines/{mid}/computer/{install|grant|cancel}` → 200 `Computer`（带 `job`）。
+- 插件没对这台打开：404。
+- 离线、已经有任务在跑、node 太旧：409 `{"error"}`。
+- 「取消」只停安装；授权等的是 Mac 上的系统窗口，那是用户的事。
 
 ## 实时画面（#1184，计划）
 
@@ -187,13 +218,15 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 
 - **单元测试**：
   - `server/internal/node/computer_test.go`：解析、就绪判断、用假的 cua-driver 脚本跑 `computer.call`（参数、会话名、截图、拒绝的工具）。
+  - `server/internal/node/computer_install_test.go`：假的下载源和安装器，验证三个脚本从磁盘运行、参数和环境变量、关统计、接着授权、不像安装器的不运行、取消。
+    `PERSONA_CUA_INSTALLER_CHECK=1` 时对真的 cua.ai 只下载、只检查（2026-11-04 通过）。
   - `server/internal/hub/computer_test.go`：插件默认关、按机器开、工具出现和消失、经假 node 调用、确认被拒。
   - `apple/PersonaTests/ComputerTests.swift`：机器的 `computer` 字段、工具的中文名。
 - **真机（node 一侧）**：在装好 Cua Driver 的 Mac 上跑 node 包的 `TestCuaEndToEnd`。
   - 打开方式：`PERSONA_CUA_E2E=1`，可选 `PERSONA_CUA_SHOT=<图片路径>`；测试二进制用 `GOOS=darwin go test -c` 编好拷过来。
   - 内容：用 `run_steps` 在计算器里算 6×7，再读窗口，断言有 42，并写出截图。
   - 2026-11-04 实测：就绪、42、230×408 的 JPEG。会动这台 Mac 的计算器。
-- **截图**：mock 的 `MOCK_COMPUTER=ready|permissions|locked|off`（[testing.md](testing.md)），配合 `-tab settings -openMachines YES -openMachineDetail macbook`。
+- **截图**：mock 的 `MOCK_COMPUTER=ready|permissions|locked|missing|off`（[testing.md](testing.md)），配合 `-tab settings -openMachines YES -openMachineDetail macbook`。
 - **部署后验收**：
   1. 在「设置 › 插件」打开「操控电脑（Cua）」。
   2. 在那台 Mac 的机器页打开开关。

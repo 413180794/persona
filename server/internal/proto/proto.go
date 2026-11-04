@@ -140,6 +140,19 @@ type Computer struct {
 	Ready   bool      `json:"ready"`
 	Note    string    `json:"note,omitempty"`
 	Checked time.Time `json:"checked,omitempty"`
+	// Job: installing Cua Driver or asking for its permissions from the app (computer.install / computer.grant),
+	// the one running or the last one since the node started.
+	Job *ComputerJob `json:"job,omitempty"`
+}
+
+// ComputerJob is one install or grant the node runs in the background (docs/computer-use.md「一键安装」).
+type ComputerJob struct {
+	Kind  string `json:"kind"`  // install | grant
+	State string `json:"state"` // running | done | failed | cancelled
+	// Step: what it does now, in Chinese for the app; Error: why it failed (the installer's last lines).
+	Step    string    `json:"step,omitempty"`
+	Error   string    `json:"error,omitempty"`
+	Started time.Time `json:"started"`
 }
 
 // ComputerResult is what one Cua Driver tool answered (node computer.call): its JSON (Output), or Text when it was not

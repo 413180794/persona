@@ -96,6 +96,7 @@ func (h *Hub) refreshComputer(ctx context.Context, m *Machine) *proto.Computer {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	asked := time.Now()
 	var c proto.Computer
 	if err := m.call(ctx, "computer.status", map[string]any{}, &c); err != nil {
 		if !strings.Contains(err.Error(), "unknown method") {
@@ -103,19 +104,29 @@ func (h *Hub) refreshComputer(ctx context.Context, m *Machine) *proto.Computer {
 		}
 		c = proto.Computer{Note: "这台电脑上的 personad 太旧，还不会操控电脑：重新部署它"}
 	}
-	m.mu.Lock()
-	old := m.computer
-	m.computer = &c
-	m.mu.Unlock()
-	if old == nil || !sameComputer(*old, c) {
+	if h.keepComputer(m, c, asked) {
 		h.broadcastMachines()
 	}
 	return h.computerOf(m)
 }
 
+// keepComputer stores what m's node answered to a question asked at asked, unless a newer question's answer is in
+// already (a page's refresh and an install's start overlap); true when what is kept changed.
+func (h *Hub) keepComputer(m *Machine, c proto.Computer, asked time.Time) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if asked.Before(m.computerAsked) {
+		return false
+	}
+	old := m.computer
+	m.computer, m.computerAsked = &c, asked
+	return old == nil || !sameComputer(*old, c)
+}
+
 func sameComputer(a, b proto.Computer) bool {
-	a.Checked, b.Checked = time.Time{}, time.Time{}
-	return a == b
+	aj, bj := a.Job, b.Job
+	a.Checked, b.Checked, a.Job, b.Job = time.Time{}, time.Time{}, nil, nil
+	return a == b && (aj == nil) == (bj == nil) && (aj == nil || *aj == *bj)
 }
 
 // computerChanged: the plugin was turned on or off, or its machines changed: ask the machines it is on for now.
@@ -173,6 +184,41 @@ func (h *Hub) putComputer(w http.ResponseWriter, r *http.Request, m *Machine) {
 		m.mu.Unlock()
 	}
 	writeJSON(w, h.refreshComputer(r.Context(), m))
+}
+
+// postComputerJob: POST /api/v1/machines/{mid}/computer/{install|grant|cancel}, the machine page's 安装 Cua Driver,
+// 去授权 and 取消. The node runs the job in the background; its state comes back as Computer.job (the page asks
+// again while it runs).
+func (h *Hub) postComputerJob(w http.ResponseWriter, r *http.Request, m *Machine) {
+	action := r.PathValue("action")
+	if action != "install" && action != "grant" && action != "cancel" {
+		writeErr(w, http.StatusNotFound, errors.New("unknown action"))
+		return
+	}
+	if c := h.computerOf(m); c == nil || !c.Enabled {
+		writeErr(w, http.StatusNotFound, errors.New("操控电脑没有对这台打开"))
+		return
+	}
+	if !m.isOnline() {
+		writeErr(w, http.StatusConflict, errors.New("机器离线"))
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	asked := time.Now()
+	var c proto.Computer
+	if err := m.call(ctx, "computer."+action, map[string]any{}, &c); err != nil {
+		if strings.Contains(err.Error(), "unknown method") {
+			err = errors.New("这台电脑上的 personad 太旧，还不会安装 Cua Driver：重新部署它")
+		}
+		writeErr(w, http.StatusConflict, err)
+		return
+	}
+	h.logf("[%s] computer %s", m.cfg.ID, action)
+	if h.keepComputer(m, c, asked) {
+		h.broadcastMachines()
+	}
+	writeJSON(w, h.computerOf(m))
 }
 
 // ---- the assistant's tools ----

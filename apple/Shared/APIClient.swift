@@ -298,6 +298,11 @@ nonisolated struct APIClient: Sendable {
         return try JSON.decoder.decode(MachineComputer.self, from: await request("PUT", "/api/v1/machines/\(machine)/computer", body: Body(enabled: enabled)))
     }
 
+    /// The machine page's 安装 Cua Driver, 去授权 and 取消: `install`, `grant`, `cancel`.
+    func computerJob(machine: String, _ action: String) async throws -> MachineComputer {
+        try JSON.decoder.decode(MachineComputer.self, from: await request("POST", "/api/v1/machines/\(machine)/computer/\(action)"))
+    }
+
     /// The group on what the hub returned (docs/multi-hub.md).
     func stamp(_ list: [Machine]) -> [Machine] { group.isEmpty ? list : list.map { var m = $0; m.group = group; return m } }
     func stamp(_ list: [Session]) -> [Session] { group.isEmpty ? list : list.map { var s = $0; s.group = group; return s } }
