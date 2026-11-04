@@ -106,12 +106,10 @@ nonisolated enum VideoPrep {
     /// progress gets how far the current export is (0…1).
     static func fit(_ url: URL, limit: Int64 = limit, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
         guard size(url) > limit else { return url }
-        let asset = AVURLAsset(url: url)
         var estimates: [(preset: String, bytes: Int64)] = []
         for preset in presets {
-            guard let session = AVAssetExportSession(asset: asset, presetName: preset) else { continue }
-            session.outputFileType = .mp4
-            estimates.append((preset, (try? await session.estimatedOutputFileLengthInBytes) ?? 0))
+            guard let bytes = await estimate(url, preset: preset) else { continue }
+            estimates.append((preset, bytes))
         }
         let dir = url.deletingLastPathComponent().appending(path: "compressed")
         let out = dir.appending(path: ((url.lastPathComponent as NSString).deletingPathExtension) + ".mp4")
@@ -124,6 +122,14 @@ nonisolated enum VideoPrep {
         }
         try? FileManager.default.removeItem(at: dir)
         throw Failure.tooLong
+    }
+
+    /// The MP4 size preset is estimated to come out at (0 when not known); nil when the video cannot be exported at it.
+    /// @concurrent: the Xcode 26.0 SDK's estimate getter is nonisolated, so the session must not start in the caller's isolation.
+    @concurrent private static func estimate(_ url: URL, preset: String) async -> Int64? {
+        guard let session = AVAssetExportSession(asset: AVURLAsset(url: url), presetName: preset) else { return nil }
+        session.outputFileType = .mp4
+        return (try? await session.estimatedOutputFileLengthInBytes) ?? 0
     }
 
     /// asset as H.264 MP4 at preset's size, its index up front (the machine may stream it).
