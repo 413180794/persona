@@ -118,6 +118,9 @@ final class ComputerSectionTests: XCTestCase {
             XCTAssertTrue(screen.label.contains("录屏与系统录音") && screen.label.contains("Cua Driver"), screen.label)
             if state == "both" { XCTAssertTrue(accessibility.label.contains("系统设置 › 隐私与安全性 › 辅助功能"), accessibility.label) }
         }
+        if state == "locked" { // 解锁 opens its live screen, where the lock screen takes the password
+            XCTAssertTrue(app.buttons["computer-unlock"].exists, "解锁:\n\(app.debugDescription)")
+        }
         shot(app, "computer-\(state)")
 
         toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()

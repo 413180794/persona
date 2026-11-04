@@ -323,14 +323,14 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 - `-t`：时长（秒）；
 - `-w <pid>`：那个进程退出就撤。
 
-- **「Agent 操作期间保持唤醒」**：默认开。
-  - 什么时候持有 `caffeinate -dimsu -t 600`：
-    - 助手的 `computer_*` 调用；
-    - 屏幕转发（5900）开着的时候，就是有人在看画面。只看不点不算本地活动，不持有的话看着看着就锁了；
-    - 那台 Mac 上有 Agent 正在用自己的 Cua MCP。node 从会话里看得到 `mcp__cua-driver__*` 的调用。
-  - 每次有新操作就重新开始计时；最后一次之后 10 分钟，或者看画面的流关掉，就撤掉。
-  - node 只留一个 caffeinate 进程，带 `-w <node 的 pid>`，node 没了它也跟着没。
-  - 和 Cua 自己的断言叠在一起也没关系。
+- **「操作和看画面时保持唤醒」**（已做，插件 `cua` 的 `keep_awake`，默认开）：
+  - 做成插件里的一个总开关，不按 Mac 分开。插件页按机器的开关没法默认开；它又只在操作、看画面期间生效，过后自己撤，按机器分开意义不大。按机器的只有下面的「不自动锁屏」。
+  - node 持有 `caffeinate -dimsu -t <秒> -w <node 的 pid>`（`node/awake.go`），同一时间只有一个：
+    - 助手的 `computer_*` 调用：hub 在 `computer.call` 里带 `keep_awake`，最后一次之后 10 分钟撤；
+    - 有人在看画面：hub 在 5900 的 `port.dial` 里带 `keep_awake`，流开着就一直续（快到期时换一个新的，中间不断），流关了就撤。只看不点不算本地活动，以前看着看着就锁了。
+  - Agent 自己的 Cua MCP（`mcp__cua-driver__*`）不经 node。Cua 0.37 起每次调用后自己保持 10 分钟，所以 node 不去扫会话。
+  - 只在 Mac 上。实测（`TestAwakeOnThisMac`，`PERSONA_AWAKE_E2E=1`）：`pmset -g assertions` 里有这个 caffeinate 的 `PreventUserIdleDisplaySleep`，撤掉后就没了。
+- **锁着时的「解锁」入口**（已做）：机器页「操控电脑」在那台锁屏时写「这台 Mac 锁屏了，解锁后才能操控」。屏幕共享开着时，给「解锁」打开实时画面：切到「接管」，在锁屏上输登录密码。node 的说明也改成「屏幕共享开着时，可以在它的画面上输登录密码解锁」。
 - **「插件开着时不自动锁屏」**：默认关，打开时在手机上确认。
   - 插件对这台开着、开关也开着时，node 一直持有 `caffeinate -dims -w <node 的 pid>`。
   - 没有 `-u`，所以不会去点亮已经关了的显示器。

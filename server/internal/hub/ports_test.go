@@ -32,8 +32,9 @@ func portNode(t *testing.T, h *Hub, sessions []proto.Session) *Machine {
 	return portNodeAt(t, h, sessions, func(port int) string { return "127.0.0.1:" + strconv.Itoa(port) })
 }
 
-// portNodeAt is portNode whose ports are at addr(port) (the live screen's 5900 at a stand-in for Screen Sharing).
-func portNodeAt(t *testing.T, h *Hub, sessions []proto.Session, addr func(port int) string) *Machine {
+// portNodeAt is portNode whose ports are at addr(port) (the live screen's 5900 at a stand-in for Screen Sharing);
+// seen, when given, hears each request.
+func portNodeAt(t *testing.T, h *Hub, sessions []proto.Session, addr func(port int) string, seen ...func(method string, params json.RawMessage)) *Machine {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	h2nR, h2nW := io.Pipe()
@@ -48,6 +49,9 @@ func portNodeAt(t *testing.T, h *Hub, sessions []proto.Session, addr func(port i
 			Port int    `json:"port"`
 		}
 		_ = json.Unmarshal(params, &p)
+		for _, f := range seen {
+			f(method, params)
+		}
 		c, err := net.DialTimeout("tcp", addr(p.Port), 2*time.Second)
 		switch method {
 		case "port.probe":
@@ -322,11 +326,19 @@ func TestTheLiveScreenTakesTheAppsDeviceToken(t *testing.T) {
 			go func() { _, _ = io.Copy(io.Discard, c); c.Close() }()
 		}
 	}()
+	var dials atomic.Int32 // port.dial asking the node to keep the Mac awake while it is watched
 	mac := portNodeAt(t, h, nil, func(port int) string {
 		if port == screenPort {
 			return vnc.Addr().String()
 		}
 		return "127.0.0.1:1"
+	}, func(method string, params json.RawMessage) {
+		var p struct {
+			KeepAwake bool `json:"keep_awake"`
+		}
+		if method == "port.dial" && json.Unmarshal(params, &p) == nil && p.KeepAwake {
+			dials.Add(1)
+		}
 	})
 	mac.mu.Lock()
 	mac.info = proto.NodeInfo{OS: "darwin"}
@@ -366,6 +378,9 @@ func TestTheLiveScreenTakesTheAppsDeviceToken(t *testing.T) {
 	defer cancel()
 	if _, b, err := c.Read(rctx); err != nil || string(b) != "RFB 003.889\n" {
 		t.Fatalf("Screen Sharing's greeting through the relay: %q %v", b, err)
+	}
+	if dials.Load() != 1 {
+		t.Fatal("someone is watching: the node keeps the Mac awake (「操作和看画面时保持唤醒」, on unless turned off)")
 	}
 
 	before := dialed.Load()

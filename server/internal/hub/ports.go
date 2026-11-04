@@ -181,7 +181,11 @@ func (h *Hub) connectPort(w http.ResponseWriter, r *http.Request, m *Machine) {
 		return
 	}
 	dctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	err = m.call(dctx, "port.dial", map[string]any{"id": id, "port": port}, nil)
+	dial := map[string]any{"id": id, "port": port}
+	if port == screenPort && h.cua().awake() {
+		dial["keep_awake"] = true // someone is watching the Mac: it stays awake until this closes (node/awake.go)
+	}
+	err = m.call(dctx, "port.dial", dial, nil)
 	cancel()
 	if err != nil {
 		mux.Abort(id, err)

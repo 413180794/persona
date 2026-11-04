@@ -15,9 +15,10 @@ import (
 
 // computerCall is one computer.call a fake node got.
 type computerCallSeen struct {
-	Session string         `json:"session"`
-	Tool    string         `json:"tool"`
-	Args    map[string]any `json:"args"`
+	Session   string         `json:"session"`
+	Tool      string         `json:"tool"`
+	Args      map[string]any `json:"args"`
+	KeepAwake bool           `json:"keep_awake"`
 }
 
 // computerMac is a Mac whose node answers computer.status and computer.call as a node with Cua Driver set up does, and
@@ -196,6 +197,18 @@ func TestComputerToolsCallTheNode(t *testing.T) {
 	_, calls = seen()
 	if run := calls[len(calls)-1]; run.Tool != "run_steps" || len(run.Args["steps"].([]any)) != 2 || run.Session != "persona-conv1234" {
 		t.Fatalf("steps go to run_steps: %+v", run)
+	}
+	for _, c := range calls {
+		if !c.KeepAwake {
+			t.Fatalf("「操作和看画面时保持唤醒」 is on unless turned off: %+v", c)
+		}
+	}
+	if err := h.plugins.reg.SetConfig(ctx, cuaPluginID, json.RawMessage(`{"machines": ["mac"], "keep_awake": false}`), "test"); err != nil {
+		t.Fatal(err)
+	}
+	h.callComputerTool(ctx, "conv1234-5678", "computer_run", json.RawMessage(`{"machine": "mac", "steps": `+steps+`}`))
+	if _, calls = seen(); calls[len(calls)-1].KeepAwake {
+		t.Fatal("turned off: the node keeps nothing awake")
 	}
 	if got := stepActions(json.RawMessage(steps)); strings.Join(got, " ") != "click press_key" {
 		t.Fatalf("the log names the actions only: %v", got)

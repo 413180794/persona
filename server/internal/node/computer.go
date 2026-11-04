@@ -194,7 +194,7 @@ func computerReady(c proto.Computer) (bool, string) {
 	case c.Accessibility != "granted" || c.ScreenRecording != "granted":
 		return false, "读不到 Cua Driver 的权限"
 	case c.Desktop == "locked":
-		return false, "这台 Mac 锁屏了，解锁后才能操控"
+		return false, "这台 Mac 锁屏了：解锁后才能操控。屏幕共享开着时，可以在它的画面上输登录密码解锁"
 	case c.Desktop == "away":
 		return false, "这台 Mac 现在没有你登录的桌面（退出登录或切到了别的用户），操控不了"
 	}
@@ -219,12 +219,17 @@ func computerCall(ctx context.Context, params json.RawMessage) (*proto.ComputerR
 		Session string          `json:"session"`
 		Tool    string          `json:"tool"`
 		Args    json.RawMessage `json:"args"`
+		// The Mac stays awake for a while after (awake.go), as the plugin's 「操作和看画面时保持唤醒」 says.
+		KeepAwake bool `json:"keep_awake"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
 		return nil, err
 	}
 	if !computerTools[p.Tool] {
 		return nil, fmt.Errorf("computer.call: %q is not a tool the hub may call", p.Tool)
+	}
+	if p.KeepAwake {
+		awake.operated()
 	}
 	bin := cuaBin()
 	if bin == "" {

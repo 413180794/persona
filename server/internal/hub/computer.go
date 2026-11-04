@@ -27,7 +27,8 @@ const cuaConfig = `{
   "type": "object",
   "properties": {
     "machines": {"type": "array", "title": "能操控的电脑", "description": "打开的 Mac，助手才能操控。开关即时生效，和它机器页上的「允许助手操控这台电脑」是同一个", "items": {"type": "string", "format": "machine", "x-os": ["darwin"]}, "uniqueItems": true},
-    "confirm": {"type": "boolean", "title": "操作前在手机上确认", "description": "打开后，助手每次点击、输入、按键、打开或关闭 App 之前先在手机上问你；关着时直接做，记进 hub 的日志", "default": false}
+    "confirm": {"type": "boolean", "title": "操作前在手机上确认", "description": "打开后，助手每次点击、输入、按键、打开或关闭 App 之前先在手机上问你；关着时直接做，记进 hub 的日志", "default": false},
+    "keep_awake": {"type": "boolean", "title": "操作和看画面时保持唤醒", "description": "助手操作那台 Mac、或有人在看它的画面时，它不睡、不因空闲锁屏；最后一次操作 10 分钟后、画面关掉后就撤掉，不改系统设置", "default": true}
   }
 }`
 
@@ -44,7 +45,12 @@ type cuaSettings struct {
 	On       bool     `json:"-"`
 	Machines []string `json:"machines"`
 	Confirm  bool     `json:"confirm"`
+	// KeepAwake: 「操作和看画面时保持唤醒」, on unless turned off (nil); the node holds caffeinate (node/awake.go).
+	KeepAwake *bool `json:"keep_awake"`
 }
+
+// awake: a Mac it operates, or whose live screen is open, is kept awake.
+func (s cuaSettings) awake() bool { return s.KeepAwake == nil || *s.KeepAwake }
 
 func (h *Hub) cua() cuaSettings { return h.machinePlugin(cuaPluginID) }
 
@@ -380,7 +386,7 @@ func (h *Hub) computerState(ctx context.Context, m *Machine, session, app, query
 // computerCall runs one Cua Driver tool on m's node.
 func (h *Hub) computerCall(ctx context.Context, m *Machine, session, tool string, args map[string]any) (*proto.ComputerResult, error) {
 	var res proto.ComputerResult
-	if err := m.call(ctx, "computer.call", map[string]any{"session": session, "tool": tool, "args": args}, &res); err != nil {
+	if err := m.call(ctx, "computer.call", map[string]any{"session": session, "tool": tool, "args": args, "keep_awake": h.cua().awake()}, &res); err != nil {
 		return nil, err
 	}
 	return &res, nil

@@ -618,6 +618,8 @@ func (n *Node) portDial(ctx context.Context, params json.RawMessage) (any, error
 	var p struct {
 		ID   string `json:"id"`
 		Port int    `json:"port"`
+		// The live screen (5900) is being watched: the Mac stays awake until it closes (awake.go).
+		KeepAwake bool `json:"keep_awake"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil || p.ID == "" || p.Port <= 0 || p.Port > 65535 {
 		return nil, errors.New("port.dial: need id and port")
@@ -636,6 +638,9 @@ func (n *Node) portDial(ctx context.Context, params json.RawMessage) (any, error
 	if err := n.streams.Open(p.ID); err != nil {
 		_ = c.Close()
 		return nil, err
+	}
+	if p.KeepAwake {
+		c = &watchedConn{Conn: c, done: awake.watch()}
 	}
 	n.streams.Start(p.ID, c)
 	return map[string]any{}, nil

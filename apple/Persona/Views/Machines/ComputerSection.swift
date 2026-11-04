@@ -87,6 +87,24 @@ struct ComputerSection: View {
                     .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 action(c.job?.state == "failed" ? "重新安装" : "安装 Cua Driver", "install", prominent: true, identifier: "computer-install")
             }
+        } else if c.desktop == "locked" {
+            // Locked: nothing gets through to its apps (Cua refuses, screen_locked), so unlocking comes first. Its live
+            // screen shows the lock screen, where the password is typed (docs/computer-use.md「锁屏」).
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                line("这台 Mac 锁屏了，解锁后才能操控", ok: false)
+                if c.screenSharing {
+                    Text("点「解锁」打开它的画面，切到「接管」，在锁屏上输那台 Mac 的登录密码。")
+                        .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Button { model.openScreen(ref) } label: {
+                        Label("解锁", systemImage: Theme.Icon.screen).font(Theme.Font.labelStrong).lineLimit(1)
+                    }
+                    .themedButton(prominent: true)
+                    .accessibilityIdentifier("computer-unlock")
+                } else {
+                    Text("在那台 Mac 上解锁；打开它的「屏幕共享」后，也能在这里看画面、远程解锁。")
+                        .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
         } else if c.daemon, !c.missingPermissions.isEmpty {
             grantGuide(c, asking: false)
         } else if c.ready {

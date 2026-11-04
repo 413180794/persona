@@ -6323,7 +6323,8 @@ COMPUTER_STATES = {
              "screen_recording": "missing", "desktop": "active", "ready": False, "screen_sharing": True,
              "note": "Cua Driver 还没有辅助功能、屏幕录制权限：在这台 Mac 上运行 cua-driver permissions grant，在弹出的窗口里允许"},
     "locked": {"installed": True, "version": "0.38.0", "daemon": True, "accessibility": "granted",
-               "screen_recording": "granted", "desktop": "locked", "ready": False, "note": "这台 Mac 锁屏了，解锁后才能操控"},
+               "screen_recording": "granted", "desktop": "locked", "ready": False, "screen_sharing": True,
+               "note": "这台 Mac 锁屏了：解锁后才能操控。屏幕共享开着时，可以在它的画面上输登录密码解锁"},
     "missing": {"installed": False, "daemon": False, "ready": False, "note": "这台 Mac 上没有装 Cua Driver"},
 }
 # 安装 Cua Driver and 去授权 (#1183) move on by the clock: each step MOCK_COMPUTER_STEP seconds (default 2), then the
@@ -6555,7 +6556,9 @@ if MOCK_COMPUTER:
                            "description": "打开的 Mac，助手才能操控。开关即时生效，和它机器页上的「允许助手操控这台电脑」是同一个",
                            "items": {"name": "items", "type": "string", "format": "machine", "os": ["darwin"]}},
                           {"name": "confirm", "type": "boolean", "title": "操作前在手机上确认", "default": False,
-                           "description": "打开后，助手每次点击、输入、按键、打开或关闭 App 之前先在手机上问你；关着时直接做，记进 hub 的日志"}]},
+                           "description": "打开后，助手每次点击、输入、按键、打开或关闭 App 之前先在手机上问你；关着时直接做，记进 hub 的日志"},
+                          {"name": "keep_awake", "type": "boolean", "title": "操作和看画面时保持唤醒", "default": True,
+                           "description": "助手操作那台 Mac、或有人在看它的画面时，它不睡、不因空闲锁屏；最后一次操作 10 分钟后、画面关掉后就撤掉，不改系统设置"}]},
                       "config": {}, "secrets": [], "permissions": []}
 
 
