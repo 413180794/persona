@@ -48,12 +48,31 @@ func (n *Node) managedLauncher(name string) (proto.ManagedLauncher, bool) {
 }
 
 // launcherCommand is what starts claude for a launcher name in a shell: the name itself (a ~/.zshrc function, or
-// claude), or `jarvisd launch <name>` for a managed one.
+// claude), or `jarvisd launch <name>` for a managed one. Plain claude gets the machine's claude_start_dir as its
+// CLAUDE_CONFIG_DIR when one is set: a computer whose claude is logged in under a profile directory, not ~/.claude,
+// would otherwise answer every agent with 「Not logged in」 (#1459).
 func (n *Node) launcherCommand(name string) string {
 	if _, ok := n.managedLauncher(name); ok {
 		return shellQuote(n.bin) + " launch " + name
 	}
+	if name == "claude" {
+		if d := n.claudeStartDir.Load(); d != nil && *d != "" {
+			return "CLAUDE_CONFIG_DIR=" + shellDir(*d) + " " + name
+		}
+	}
 	return name
+}
+
+// shellDir quotes a directory for a shell command, keeping a leading ~/ as "$HOME"/ so it is the home of the shell that
+// runs it.
+func shellDir(p string) string {
+	if p == "~" {
+		return `"$HOME"`
+	}
+	if rest, ok := strings.CutPrefix(p, "~/"); ok {
+		return `"$HOME"/` + shellQuote(rest)
+	}
+	return shellQuote(p)
 }
 
 // managedEnv is the environment a managed launcher sets: the gateway, its key, the model for every tier, and the

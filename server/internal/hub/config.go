@@ -57,6 +57,11 @@ type MachineConfig struct {
 	// Botmux false: the machine's node does not list botmux's sessions and never runs botmux (docs/engines.md「botmux」);
 	// unset lists them, as before.
 	Botmux *bool `json:"botmux,omitempty"`
+
+	// ClaudeStartDir is the CLAUDE_CONFIG_DIR the agents Persona starts with plain claude use on this machine, for a
+	// computer whose claude is logged in under a profile directory rather than ~/.claude (#1459); "~/" is the remote
+	// home. Unset, claude uses its default. Launchers (a ~/.zshrc alias, a managed one) keep their own.
+	ClaudeStartDir string `json:"claude_start_dir,omitempty"`
 }
 
 // GoogleConfig is a Google Cloud OAuth client of type iOS (no secret: the client ID is public), plus the proxy

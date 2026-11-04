@@ -81,3 +81,39 @@ func TestRedactSecrets(t *testing.T) {
 		t.Fatalf("where a key comes from and other settings stay: %s", got)
 	}
 }
+
+// Plain claude starts in the machine's claude_start_dir (node.configure) when one is set: a computer logged in under
+// a profile directory, not ~/.claude, answers 「Not logged in」 otherwise (#1459). Other launchers keep their own, a
+// call that says nothing of it leaves it, and "" clears it.
+func TestPlainClaudeStartsInTheConfiguredDir(t *testing.T) {
+	n, _ := testNode(t)
+	n.bin = "/opt/jarvisd"
+	n.setManaged([]proto.ManagedLauncher{{Name: "jv_strong", BaseURL: "http://gw.example.com"}})
+	if got := n.launcherCommand("claude"); got != "claude" {
+		t.Fatalf("unset: %q", got)
+	}
+	for _, c := range []struct{ dir, want string }{
+		{"~/.config/claude-code/profiles/work", `CLAUDE_CONFIG_DIR="$HOME"/.config/claude-code/profiles/work claude`},
+		{"/Users/me/My Claude", `CLAUDE_CONFIG_DIR='/Users/me/My Claude' claude`},
+		{"~", `CLAUDE_CONFIG_DIR="$HOME" claude`},
+	} {
+		configureNode(t, n, map[string]any{"claude_start_dir": c.dir})
+		if got := n.launcherCommand("claude"); got != c.want {
+			t.Errorf("%s: %q, want %q", c.dir, got, c.want)
+		}
+	}
+	if got := n.launcherCommand("cc_kiro"); got != "cc_kiro" {
+		t.Errorf("a ~/.zshrc launcher keeps its own: %q", got)
+	}
+	if got := n.launcherCommand("jv_strong"); got != "/opt/jarvisd launch jv_strong" {
+		t.Errorf("a managed launcher keeps its own: %q", got)
+	}
+	configureNode(t, n, map[string]any{"botmux": true})
+	if got := n.launcherCommand("claude"); got != `CLAUDE_CONFIG_DIR="$HOME" claude` {
+		t.Errorf("a call without it changed it: %q", got)
+	}
+	configureNode(t, n, map[string]any{"claude_start_dir": ""})
+	if got := n.launcherCommand("claude"); got != "claude" {
+		t.Errorf("cleared: %q", got)
+	}
+}

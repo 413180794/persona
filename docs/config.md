@@ -234,6 +234,10 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   比如 `["~/.config/claude-code/profiles/work"]`，`~/` 是那台机器的 home）。正在跑的 claude 用的目录 node 自己会找到并记进数据库，
   这里只需要写「平时不开、但想在列表里看到它的历史会话」的目录。反过来，不想看到的目录（自动化脚本自己的 `CLAUDE_CONFIG_DIR`）
   在 App 的设置 › Claude Code ›「屏蔽的配置目录」里屏蔽，存在数据库，不写 hub.json（`docs/claude-integration.md`「屏蔽配置目录」）。
+- `machines[].claude_start_dir`（可选）：Persona 用 `claude` 启动器在这台机器上开 Agent（新建 Agent、待办派发、助手的 agent_start、助手对话）时带的
+  `CLAUDE_CONFIG_DIR`，比如 `"~/.config/claude-code/profiles/work"`（`~/` 是那台机器的 home）。给「claude 登录在某个 profile 目录、不在 `~/.claude`」的电脑用：
+  不写的话 Persona 开的 claude 用默认目录，那里没登录，一开口就回 `Not logged in · Please run /login`（#1459）。只管 `claude` 这一个启动器，
+  `~/.zshrc` 的 alias / 函数和 Persona 管理的启动器照旧用它们自己的设置；这个目录也会自动加进上面找会话的目录。node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
 - `machines[].botmux`（可选）：写 `false` 时那台电脑的 node 不列 botmux 的会话，也不跑 botmux（不跑 `botmux observe`、`botmux dashboard current`）；
   不写就和以前一样，装了 botmux 就列（`docs/engines.md`「botmux」）。node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
 - `microsoft`（可选）：Outlook 的「使用 Microsoft 账号登录」（`docs/mail.md`「Outlook 接入方式」）。`client_id` 是默认的 client ID

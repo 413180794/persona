@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantskills"
@@ -43,6 +44,10 @@ type Node struct {
 	engEpoch uint64
 	peer     *rpc.Peer
 	logger   *log.Logger
+
+	// claudeStartDir: the CLAUDE_CONFIG_DIR plain `claude` is started with (hub.json machines[].claude_start_dir,
+	// managed.go); "" leaves claude to its default.
+	claudeStartDir atomic.Pointer[string]
 
 	mu      sync.Mutex
 	state   *stateFile
@@ -446,6 +451,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			// Botmux: list botmux's sessions (hub.json machines[].botmux); nil (a call that says nothing of it, an
 			// older hub) leaves it as it is (useBotmux).
 			Botmux *bool `json:"botmux"`
+			// ClaudeStartDir: the CLAUDE_CONFIG_DIR plain `claude` starts with (hub.json machines[].claude_start_dir);
+			// nil (an older hub) leaves it as it is, "" clears it.
+			ClaudeStartDir *string `json:"claude_start_dir"`
 		}
 		if err := json.Unmarshal(params, &c); err != nil {
 			return nil, err
@@ -470,6 +478,10 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		if c.Botmux != nil {
 			n.useBotmux(*c.Botmux, false)
+		}
+		if c.ClaudeStartDir != nil {
+			d := strings.TrimSpace(*c.ClaudeStartDir)
+			n.claudeStartDir.Store(&d)
 		}
 		return map[string]any{"claude_dirs": n.claudeConfigDirs()}, nil
 	case "launchers.list":

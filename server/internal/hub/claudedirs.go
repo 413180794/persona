@@ -41,6 +41,10 @@ func (m *Machine) nodeHome() string {
 // claudeDirs: the directories the node is told to look in — configured, then remembered — without blocked ones.
 func (m *Machine) claudeDirs(ctx context.Context) []string {
 	dirs := slices.Clone(m.cfg.ClaudeConfigDirs)
+	// Where Persona's own claudes keep their sessions is looked in too, even before one of them runs.
+	if d := m.cfg.ClaudeStartDir; d != "" && !slices.Contains(dirs, d) {
+		dirs = append(dirs, d)
+	}
 	if m.hub.store != nil {
 		var seen []string
 		if ok, err := m.hub.store.Setting(ctx, claudeDirsKey(m.cfg.ID), &seen); ok && err == nil {
@@ -63,7 +67,7 @@ func (m *Machine) botmux() bool { return m.cfg.Botmux == nil || *m.cfg.Botmux }
 func (m *Machine) configureNode(ctx context.Context, peer *rpc.Peer) {
 	_ = peer.Call(ctx, "node.configure", map[string]any{"machine_id": m.cfg.ID, "codex": m.codexConfig(ctx),
 		"claude_dirs": m.claudeDirs(ctx), "claude_dirs_blocked": m.blockedClaudeDirs(ctx),
-		"keep_sessions": m.hub.keptSessions(ctx, m.cfg.ID), "botmux": m.botmux()}, nil)
+		"keep_sessions": m.hub.keptSessions(ctx, m.cfg.ID), "botmux": m.botmux(), "claude_start_dir": m.cfg.ClaudeStartDir}, nil)
 	m.sendManaged(ctx, func(ctx context.Context, method string, params, out any) error {
 		return peer.Call(ctx, method, params, out)
 	})

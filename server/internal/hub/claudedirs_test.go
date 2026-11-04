@@ -276,3 +276,22 @@ func TestConfigureNodeSaysBotmux(t *testing.T) {
 		t.Fatalf("botmux in node.configure: %v", f.configure)
 	}
 }
+
+// hub.json machines[].claude_start_dir reaches the node on connect (#1459), and its sessions are looked for there.
+func TestConfigureNodeSaysClaudeStartDir(t *testing.T) {
+	_, _, m, _ := dirsHub(t)
+	f := connectDirsNode(t, m)
+	ctx := context.Background()
+	m.configureNode(ctx, m.peer)
+	m.cfg.ClaudeStartDir = "~/.config/claude-code/profiles/work"
+	m.configureNode(ctx, m.peer)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.configure) != 2 || string(f.configure[0]["claude_start_dir"]) != `""` ||
+		string(f.configure[1]["claude_start_dir"]) != `"~/.config/claude-code/profiles/work"` {
+		t.Fatalf("claude_start_dir in node.configure: %v", f.configure)
+	}
+	if !slices.Contains(m.claudeDirs(ctx), "~/.config/claude-code/profiles/work") {
+		t.Fatalf("not looked in: %v", m.claudeDirs(ctx))
+	}
+}
