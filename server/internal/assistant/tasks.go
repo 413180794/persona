@@ -507,6 +507,9 @@ func (s *Service) startPlanTask(planID, conversation string, i int, t PlanTask, 
 	}
 	_, _ = s.appendFeed(ctx, conversation, feedReceipt, t.TodoID, receiptBody{Title: t.Title, State: "failed",
 		Summary: "没开起来：" + reason})
+	if todo, ok, err := s.todo(ctx, t.TodoID); err == nil && ok {
+		s.quietNotify(ctx, todo, t.Machine, "failed", "", reason)
+	}
 }
 
 var (
@@ -844,6 +847,7 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 		if _, err := s.appendFeed(cctx, t.Origin, feedReceipt, t.ID, body); err != nil {
 			s.logf("task %s: receipt: %v", t.ID, err)
 		}
+		s.quietNotify(cctx, t, name, "interrupted", "", body.Error)
 		return
 	}
 	// The whole last reply, as Markdown: the session list's last_text is one line cut at 200 characters.
@@ -861,6 +865,7 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 	if _, err := s.appendFeed(cctx, t.Origin, feedReceipt, t.ID, body); err != nil {
 		s.logf("task %s: receipt: %v", t.ID, err)
 	}
+	s.quietNotify(cctx, t, name, "done", "", clipMarkdown(text, 1500))
 	s.autoFinishTask(t, since, worked) // the work may be finished: then the todo is done (done.go)
 }
 

@@ -144,7 +144,8 @@ const (
 	AppTodos = "todos"
 	// TodosLoad: {} → {}, or why the todos can't be read.
 	TodosLoad = "todos.load"
-	// TodosCreate: {title, notes, origin, plan_id} → {todo}.
+	// TodosCreate: {title, notes, origin, plan_id, if_quiet} → {todo}; if_quiet: only a todo that would be quiet
+	// (#1731), else {todo: null}.
 	TodosCreate = "todos.create"
 	// TodosLinkAgent: {todo_id, machine_id, session_id, title, cwd} → {}, the agent works for the todo from now on.
 	TodosLinkAgent = "todos.link_agent"
@@ -182,6 +183,9 @@ type Todo struct {
 	DoneReason string      `json:"done_reason,omitempty"`
 	ReopenedAt *time.Time  `json:"reopened_at,omitempty"`
 	Agents     []TodoAgent `json:"agents"`
+	// Quiet: the main conversation opened it while the user wanted those told only there (#1731): the hub pushes
+	// nothing about it; the assistant tells the main conversation (quiet.go).
+	Quiet bool `json:"quiet,omitempty"`
 }
 
 // TodoAgent is one agent that works or worked for a todo.
@@ -347,6 +351,12 @@ type InteractionResolved struct {
 	Status      string            `json:"status"`
 }
 
+// InteractionRaised is interaction.raised's params: an agent of a quiet task (#1731) asks the user something; the
+// hub sends no push for it, the main conversation is told instead. The card carries its task's title.
+type InteractionRaised struct {
+	Interaction proto.Interaction `json:"interaction"`
+}
+
 // InboxMessage is inbox.message's params: the inbox item and its card in the task's conversation.
 type InboxMessage struct {
 	ItemID  string      `json:"item_id"`
@@ -448,6 +458,7 @@ const (
 	EventTurnEnded           = "session.turn_ended"
 	EventSessionsChanged     = "sessions.changed"
 	EventInteractionResolved = "interaction.resolved"
+	EventInteractionRaised   = "interaction.raised"
 	EventInboxMessage        = "inbox.message"
 	EventUpdated             = "manager.updated" // Hello again: the profile or where the assistant runs changed
 	EventResync              = "manager.resync"  // {}: report the whole snapshot again

@@ -140,6 +140,8 @@ data class Todo(
     @WireTime @SerialName("reopened_at") val reopenedAt: String? = null,
     /** Why the task's agent did not start (#1077): the hub ended the todo with it; 重试 clears it (#1396). */
     @SerialName("start_error") val startError: String? = null,
+    /** Opened from the main conversation while 主对话派的任务只在主对话里通知 was on (#1731): not in the 待办 badge. */
+    val quiet: Boolean = false,
     val agents: List<TodoAgent> = emptyList(),
     val spaces: List<TodoSpace>? = null,
 ) {

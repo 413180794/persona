@@ -465,12 +465,14 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 	}
 	h.todos.mu.RLock()
 	if h.todos.loaded {
+		quiet := h.quietSessionsLocked()
 		for i := range list {
 			if tid, ok := h.todos.activeBySession[[2]string{m.cfg.ID, list[i].SessionID}]; ok {
 				if t, ok := h.todos.todos[tid]; ok && t.DoneAt == nil {
 					list[i].Todo = &proto.TodoRef{ID: t.ID, Title: t.Title}
 				}
 			}
+			list[i].Quiet = quiet[[2]string{m.cfg.ID, list[i].SessionID}]
 		}
 	}
 	h.todos.mu.RUnlock()
@@ -752,6 +754,11 @@ func (h *Hub) announce(ix proto.Interaction) {
 	h.broadcast(map[string]any{"type": "interaction", "interaction": h.withTask(ix)})
 	if m := h.localMachine(ix.MachineID); m != nil {
 		h.broadcastSessions(m, h.decorated(m))
+	}
+	if h.quietSession(ix.MachineID, ix.SessionID) {
+		// A quiet task's question is no push, bot card or channel message: the main conversation is told (#1731).
+		h.quietInteraction(ix)
+		return
 	}
 	if !h.muted(ix.MachineID, ix.SessionID) {
 		h.notifyInteraction(ix, h.machineName(ix.MachineID))

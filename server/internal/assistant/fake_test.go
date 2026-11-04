@@ -47,7 +47,9 @@ type fakeHub struct {
 	judged    int // models.json calls (the done judge)
 	judge     string
 
-	// The hub's todos app.
+	// The hub's todos app. quietOff: 主对话派的任务只在主对话里通知 is off (tasks from the main conversation are quiet
+	// otherwise, #1731).
+	quietOff  bool
 	todos     map[string]*Todo
 	active    map[[2]string]string // (machine, session) → the open todo it works for
 	todosMade int
@@ -393,16 +395,21 @@ func (f *fakeHub) todosCall(method string, params json.RawMessage) (json.RawMess
 		SessionID string    `json:"session_id"`
 		Reason    string    `json:"reason"`
 		Work      time.Time `json:"work"`
+		IfQuiet   bool      `json:"if_quiet"`
 	}
 	_ = json.Unmarshal(params, &a)
 	now := time.Now().UTC()
+	quiet := a.Origin != "" && a.Origin == f.hello.Assistant.Main && !f.quietOff
 	switch method {
 	case TodosLoad:
 		return json.RawMessage(`{}`), nil
 	case TodosCreate:
+		if a.IfQuiet && !quiet {
+			return json.RawMessage(`{"todo":null}`), nil
+		}
 		f.todosMade++
 		t := &Todo{ID: fmt.Sprintf("todo_%d", f.todosMade), Title: a.Title, Notes: a.Notes, Origin: a.Origin, PlanID: a.PlanID,
-			CreatedAt: now, UpdatedAt: now, Agents: []TodoAgent{}}
+			Quiet: quiet, CreatedAt: now, UpdatedAt: now, Agents: []TodoAgent{}}
 		f.todos[t.ID] = t
 		return json.Marshal(map[string]any{"todo": t})
 	case TodosLinkAgent:

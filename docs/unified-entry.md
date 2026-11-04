@@ -116,6 +116,23 @@
 - 早报（定时任务「早报」）发进主对话，画成「今天」卡片：夜里做完的任务、日程、要你回的消息、提醒，每行一个动作。
 - 收件箱里和正在做的任务有关的消息，由 Persona 带上任务进度起草回复，在对话里出一张消息卡（引用原话、挂着那个任务、草稿、「发送」）。
 
+### 安静的任务（#1731）
+
+设置 › 助手 › 「主对话派的任务只在主对话里通知」（settings `assistant` 的 `main_tasks_quiet`，`jarvis_settings` 的 `assistant.main_tasks_quiet`，**默认开**）。
+开着时，从主对话派出去的任务（`task_plan`；`agent_start` 也算，见下）是**安静的**：待办 `quiet: true`，建的时候定下、存进 `todos.quiet`，之后改设置不影响已有的任务。
+
+- **不打扰**：hub 不为它的 Agent 发任务推送（做完、需要你、出错），`notify` 事件也不发，飞书机器人 / 渠道不贴卡片；不进 Live Activity / 灵动岛（`liveActivities.snapshot` 跳过）；
+  会话列表给它的 Agent 标 `quiet: true`（任务做完了也一直带着），各端据此不进全局角标：网页侧边栏「总览」「待办」、安卓「Agents」标签和抽屉「待办」、安卓的提醒（旧 hub 发来的也拦下）。
+  Agents 页、主对话里的任务卡、任务坞、问题卡和实时快照都照常。
+- **改由主对话说**：做完 / 被打断（`taskTurnEnded`）、没开起来（`startPlanTask`）、在等用户（hub 发 `interaction.raised`）时，助手往主对话投一条通知
+  （`prompts/assistant/task_notice.md`：「🔔 任务「xx」做完了（电脑）」、Agent 最后说的或它在问什么，再说明这是任务通知、由你决定怎么告诉用户），
+  主对话据此回答，回答照常推送到手机。
+- **合并**：同一个任务第一次变化后等 15 秒（`quietNoticeDelay`），这期间的变化只留最新的，通知里写「这期间它还等过用户」；
+  等用户的通知发出前用户已经答了，就不发。主对话正在跑时，通知排进对话之间的队列（和 `conversation_send` 同一个，输入框上方显示「任务「xx」的通知」），这一轮结束再投；
+  队列里已经有同一个任务的通知就原地换成新的，不再排第二条。实现在 `server/internal/assistant/quiet.go`。
+- **`agent_start`**：从主对话调用、设置开着时，hub 给它建一个安静的待办（`origin` = 主对话，没有计划）并挂上这个 Agent，对话里插任务卡，之后和 `task_plan` 的任务一样；
+  设置关着或从别的对话调用，照旧是一个单独的 Agent。
+
 ## 数据和接口（hub）
 
 ### 任务 = 待办

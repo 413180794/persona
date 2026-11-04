@@ -30,7 +30,7 @@
 | 派发任务 | `task_plan`：把要 Agent 干的活交给用户，一个任务一个待办（`origin` = 这段对话）；只读的、用户记住过的直接开，其余在对话里成计划卡等用户「开始」，不阻塞这一轮。任务的进展在实时快照的「从对话开的任务」里，完成回执、答过的问题、直接对任务说的话进对话动态（[unified-entry.md](unified-entry.md)，`assistant/tasks.go`） |
 | Telegram | 只读 MCP `telegram_chats` / `telegram_messages` / `telegram_search`；更灵活的读和写用内置的 telegram skill（Bash 里 `tg …`，经 hub，写操作手机上确认），只在 Telegram 登录着时装（`docs/plan-telegram.md`「tg 命令行」） |
 | 飞书 | 主要用 lark-connector 自带的 lark-connector skill（Bash 里 `ol METHOD PATH [JSON]`，读写都能做），见下「飞书：lark-connector skill」；高频结构化的查询仍有 MCP `lark_chats` / `lark_messages` / `lark_search`（hub 的 lark-connector 客户端）。原来的 `lark_api`（只读）和 `lark_send` 去掉了，和 skill 重复 |
-| 操作 Persona 自己 | `jarvis_settings`（先 `list`）：读写分拣规则（全局的 `inbox.rules`，和设置里声明了 `triage_rules` 的插件来源各自的 `inbox.rules.<插件>`，有就代替全局的）、AI 分身规则、关于我、默认启动器、各台机器屏蔽的 Claude 配置目录（`agents.blocked_claude_dirs`），以及添加 / 删除邮箱。修改先弹手机确认卡片；加邮箱的密码 / 授权码在手机卡片里填，不经过模型，也不进对话或交互历史。批准后 hub 测试 IMAP / SMTP，都通才加密保存。Gmail 只能在 App 里用 Google 账号登录；启动器写进统一模型配置，保留已有模型和思考等级 |
+| 操作 Persona 自己 | `jarvis_settings`（先 `list`）：读写分拣规则（全局的 `inbox.rules`，和设置里声明了 `triage_rules` 的插件来源各自的 `inbox.rules.<插件>`，有就代替全局的）、AI 分身规则、关于我、默认启动器、「主对话派的任务只在主对话里通知」（`assistant.main_tasks_quiet`）、各台机器屏蔽的 Claude 配置目录（`agents.blocked_claude_dirs`），以及添加 / 删除邮箱。修改先弹手机确认卡片；加邮箱的密码 / 授权码在手机卡片里填，不经过模型，也不进对话或交互历史。批准后 hub 测试 IMAP / SMTP，都通才加密保存。Gmail 只能在 App 里用 Google 账号登录；启动器写进统一模型配置，保留已有模型和思考等级 |
 | 实时快照 | 每条发给助手的消息开头一个 `<jarvis-context>` 块（不进系统提示，见下面「实时快照和前缀缓存」）：时间（手机时区）、在线电脑、需要你 / 完成未看 / 工作中的 Agent、飞书未读和 @我、今天接下来的飞书会议、已安排的跟进。只带和这段对话上一份比变了的部分（时间每次都带）。hub 每个来源 3 秒超时，45 秒内复用上次读的，消息最多等 1.5 秒新的 |
 | 更快 | App 显示新对话页时 `POST /api/v1/assistant/warm`，node 先起一个备用进程（`spare`，10 分钟内有效）；新对话直接用它。助手进程带 `ENABLE_TOOL_SEARCH=false`，Persona 工具不再延迟加载 |
 | 记忆 | 就是 Claude Code 的 auto memory（`~/.claude/projects/<编码后的目录>/memory/*.md`）；App 设置里能看、改、删（node `assistant.memory`）。跑在 Codex、DSH 上时读写的也是这一份（下面「Codex」「Agent 运行时（DSH）」两节），换启动器记忆不丢 |
@@ -68,7 +68,7 @@ hub 只是通道：助手是自己的一个进程（`personad assistant`），�
 
 **hub 找助手只经** `assistant.Handler`（`assistant/handler.go`；hub 那头是 `assistantRemote`，同一组消息），每个方法是一条消息：App 的请求（助手的路由 `assistantwire.Routes`，经总线是 `http.request`，hub 原样转过去，调用方的角色放在 `X-Persona-Role`，客户端自己带的会被盖掉）、
 `assistant.tools`（hub 把它们和自己的工具一起列给助手的对话）、`assistant.tool`、`assistant.context`（node 每条消息前要的实时快照）、`manager.action`（用户回答了助手的提问）、`assistant.tasks`（收件箱的判断要链接到正在做的任务）、`assistant.card_sent`（消息卡片上的「发送」只发一次：hub 按卡片加锁，先问它这张发过没有）、`assistant.cards_sent`（某个收件箱条目的回复发出去了，卡片记下）、
-hub 看到的事（`conversation.started`、`conversation.renamed`、`session.user_spoke`、`session.turn_started`、`session.turn_ended`、`sessions.changed`、`interaction.resolved` 用户处理了某个 Agent 的卡片、`inbox.message` 收件箱给某个任务的消息拟好了回复、`manager.updated` 握手的回答变了），
+hub 看到的事（`conversation.started`、`conversation.renamed`、`session.user_spoke`、`session.turn_started`、`session.turn_ended`、`sessions.changed`、`interaction.resolved` 用户处理了某个 Agent 的卡片、`interaction.raised` 安静的任务的 Agent 在问（#1731）、`inbox.message` 收件箱给某个任务的消息拟好了回复、`manager.updated` 握手的回答变了），
 以及 `manager.resync`（hub 还没有快照或只有一份不完整的：hub 刚起来、数据库没答）。hub 的错误带码过总线（`no_device`、`machine_offline`、`node_closed`、`stale_snapshot`、`model_paused`），助手认回原来的错误，判断照旧。App 看到的路由、事件、字段和推送都和以前一样。
 
 **状态**经助手自己的 `assistant.Store`（`assistant/store.go`）：settings 的 `assistant.titles`、`assistant.archived`、`assistant.relay`、`assistant.tasks`、`assistant.runs`、`tasks.trust`（旧的 `assistant.routines` / `assistant.followups` 照旧只在第一次读时搬），表 `task_plans`、`assistant_feed`。
@@ -80,7 +80,7 @@ hub 看到的事（`conversation.started`、`conversation.renamed`、`session.us
 
 **还留在 hub 的**（后续再挪）：
 
-- settings `assistant`（助手在哪台机器、主对话、启动器、时区、关于我）：飞书机器人、AI 分身、`/agent`、模型配置、`jarvis_settings` 都读写这一条，助手经 `manager.hello` 读。用户的时区（`userLocation`，`hub/usertz.go`）同理。
+- settings `assistant`（助手在哪台机器、主对话、启动器、时区、关于我、`main_tasks_quiet`）：飞书机器人、AI 分身、`/agent`、模型配置、`jarvis_settings` 都读写这一条，助手经 `manager.hello` 读。用户的时区（`userLocation`，`hub/usertz.go`）同理。
 - 主对话在列表里叫「Persona」（`mainTitle`），App 的重命名接口（`renameSession`，改完告诉助手），`GET/PUT /api/v1/assistant`、预热、记忆、新对话的接口和起对话（`POST /api/v1/assistant/conversations`；`startAssistant` / `prepareAssistant` 在 `device.call assistant.start` 后面：CLAUDE.md 还是用 hub 的状态写的）。收件箱的 AI 分身照旧直接用 `prepareAssistant` 在助手目录里起 Claude，不经过助手。
 - 待办本身（`todos.go`）：助手经 `app.call todos` 读写；交互卡片上标出任务（`withTask`）、收件箱拟的回复做成任务的卡片（`messageCardOf`）这两处只读待办，还在 hub（`hub/assistant_todos.go`）。
 - 只给助手用、但做的是 hub 的事的工具：`kb_*`、`inbox_draft`、`jarvis_settings` 经 `app.tool` 回到 hub 执行；飞书的工具是飞书插件（连接器）的，本来就不是助手的。

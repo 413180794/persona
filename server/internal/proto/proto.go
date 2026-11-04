@@ -624,6 +624,10 @@ type Session struct {
 	StartError string `json:"start_error,omitempty"`
 	// Todo is the active (uncompleted, unreleased) todo this session is linked to (hub/todos.go).
 	Todo *TodoRef `json:"todo,omitempty"`
+	// Quiet: the agent works (or worked) for a quiet task, one the main conversation opened while the user wanted
+	// those told only there (#1731): set by the hub, also once the task is done. Clients leave it out of task
+	// notifications and global badges; the Agents page shows it as always.
+	Quiet bool `json:"quiet,omitempty"`
 	// SpawnFrom is persona_from reported by node for todo derivation (#762), stripped by hub before client push.
 	SpawnFrom string `json:"spawn_from,omitempty"`
 	// AttentionReason is why the session waits for the user, in the host's words (a botmux attention's reason).

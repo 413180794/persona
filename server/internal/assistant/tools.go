@@ -192,6 +192,10 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		if err := s.call(sctx, am.ID, DeviceSessionStart, params, &res); err != nil {
 			return "", err
 		}
+		if s.quietAgentTask(ctx, self, am, a.Cwd, a.Prompt, params["tab_name"], res.Session.SessionID) {
+			return fmt.Sprintf("Started on %s in %s: session %s, a task of this conversation (its card is in the conversation; "+
+				"you are told here when it is done or waits for the user, nothing else notifies the user).", am.Name, a.Cwd, res.Session.SessionID), nil
+		}
 		return fmt.Sprintf("Started on %s in %s: session %s. It shows up in the app's Agents tab.", am.Name, a.Cwd, res.Session.SessionID), nil
 	}
 	return "", fmt.Errorf("unknown tool %s", name)

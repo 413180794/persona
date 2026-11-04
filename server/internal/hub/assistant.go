@@ -32,6 +32,9 @@ type AssistantConfig struct {
 	Notes *string `json:"notes,omitempty"`
 	// Main is the main conversation (the Persona tab opens it): one long-running conversation, the others are side ones.
 	Main string `json:"main,omitempty"`
+	// MainTasksQuiet: tasks the main conversation opens are told only there, not pushed, on the Live Activity or in
+	// task badges (#1731). nil is on (the default); the view always says what is in effect.
+	MainTasksQuiet *bool `json:"main_tasks_quiet,omitempty"`
 }
 
 func (h *Hub) assistantConfig(ctx context.Context) AssistantConfig {
@@ -68,7 +71,7 @@ func (h *Hub) assistantConfigLegacy(ctx context.Context) AssistantConfig {
 			if saved.Launcher != "" {
 				cfg.Launcher = saved.Launcher
 			}
-			cfg.Timezone, cfg.Notes, cfg.Main = saved.Timezone, saved.Notes, saved.Main
+			cfg.Timezone, cfg.Notes, cfg.Main, cfg.MainTasksQuiet = saved.Timezone, saved.Notes, saved.Main, saved.MainTasksQuiet
 		}
 	}
 	return cfg
@@ -81,6 +84,13 @@ func (h *Hub) assistantNotes(ctx context.Context) string {
 	}
 	return strings.TrimSpace(h.cfg.Assistant.Notes)
 }
+
+// mainTasksQuiet: a task opened from the main conversation now is quiet (assistant.main_tasks_quiet, on by default).
+func (h *Hub) mainTasksQuiet(ctx context.Context) bool {
+	return quietOn(h.assistantConfigLegacy(ctx).MainTasksQuiet)
+}
+
+func quietOn(v *bool) bool { return v == nil || *v }
 
 // assistantCwd is the assistant directory on a machine, or "" while the machine has not reported its home.
 func (m *Machine) assistantCwd() string {
@@ -155,13 +165,15 @@ type assistantView struct {
 	AssistantConfig
 	Cwd            string          `json:"cwd"`
 	Conversations  []proto.Session `json:"conversations"`
-	NotesEffective string          `json:"notes_effective"` // what the assistant is told about the user
+	NotesEffective string          `json:"notes_effective"`  // what the assistant is told about the user
+	MainTasksQuiet bool            `json:"main_tasks_quiet"` // in effect (the config's own is omitted while unset)
 }
 
 // assistantState is GET /api/v1/assistant; withArchived lists archived conversations too (flagged `archived`).
 func (h *Hub) assistantState(ctx context.Context, withArchived bool) assistantView {
 	cfg := h.assistantConfig(ctx)
-	v := assistantView{AssistantConfig: cfg, Conversations: []proto.Session{}, NotesEffective: h.assistantNotes(ctx)}
+	v := assistantView{AssistantConfig: cfg, Conversations: []proto.Session{}, NotesEffective: h.assistantNotes(ctx),
+		MainTasksQuiet: quietOn(cfg.MainTasksQuiet)}
 	if m := h.localMachine(cfg.MachineID); m != nil {
 		v.Cwd = m.assistantCwd()
 		for _, s := range h.decorated(m) {
@@ -228,6 +240,9 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 		}
 		if in.Notes != nil {
 			cfg.Notes = in.Notes
+		}
+		if in.MainTasksQuiet != nil {
+			cfg.MainTasksQuiet = in.MainTasksQuiet
 		}
 		if h.store == nil {
 			writeErr(w, http.StatusServiceUnavailable, errors.New("no database"))

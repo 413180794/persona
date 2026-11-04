@@ -46,6 +46,8 @@ type Handler interface {
 	TurnEnded(ctx context.Context, s SessionRef)
 	// InteractionResolved is interaction.resolved: the user dealt with an agent's card (any agent's).
 	InteractionResolved(ctx context.Context, r InteractionResolved)
+	// InteractionRaised is interaction.raised: an agent of a quiet task asks the user something (#1731).
+	InteractionRaised(ctx context.Context, r InteractionRaised)
 	// InboxMessage is inbox.message: the inbox's AI 分身 drafted a reply to a message about one of the user's tasks.
 	InboxMessage(ctx context.Context, m InboxMessage)
 	// ProfileChanged is manager.updated: the owner's profile changed (the time zone): what was read in the old one goes.

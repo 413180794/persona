@@ -380,6 +380,12 @@ func (b *BusHub) event(ctx context.Context, ev busEvent) error {
 			return err
 		}
 		s.InteractionResolved(ctx, p)
+	case assistantwire.EventInteractionRaised:
+		var p InteractionRaised
+		if err := decode(&p); err != nil {
+			return err
+		}
+		s.InteractionRaised(ctx, p)
 	case assistantwire.EventInboxMessage:
 		var p InboxMessage
 		if err := decode(&p); err != nil {

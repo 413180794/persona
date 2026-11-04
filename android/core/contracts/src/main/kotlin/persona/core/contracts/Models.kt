@@ -208,6 +208,11 @@ data class Session(
      */
     @SerialName("channels") val channels: List<String> = emptyList(),
     val todo: SessionTodo? = null,
+    /**
+     * Works (or worked) for a quiet task (#1731): the main conversation opened it while 主对话派的任务只在主对话里通知
+     * was on. No alerts or global badges for it; the main conversation tells the user. Older hubs never send it.
+     */
+    val quiet: Boolean = false,
 ) {
     val key: SessionKey get() = SessionKey(machineId, sessionId)
     val agentState: AgentState get() = AgentState.of(state, status)

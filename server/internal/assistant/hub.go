@@ -61,6 +61,7 @@ type (
 	Action              = assistantwire.Action
 	ActionResult        = assistantwire.ActionResult
 	InteractionResolved = assistantwire.InteractionResolved
+	InteractionRaised   = assistantwire.InteractionRaised
 	InboxMessage        = assistantwire.InboxMessage
 	MessageCard         = assistantwire.MessageCard
 	CardSentParams      = assistantwire.CardSentParams
@@ -129,6 +130,7 @@ const (
 	EventTurnEnded           = assistantwire.EventTurnEnded
 	EventSessionsChanged     = assistantwire.EventSessionsChanged
 	EventInteractionResolved = assistantwire.EventInteractionResolved
+	EventInteractionRaised   = assistantwire.EventInteractionRaised
 	EventInboxMessage        = assistantwire.EventInboxMessage
 	EventUpdated             = assistantwire.EventUpdated
 	EventResync              = assistantwire.EventResync

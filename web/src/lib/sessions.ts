@@ -21,17 +21,23 @@ export function useSpaces(): { spaces: Space[]; loose: Session[]; recent: Sessio
   }, [all, machines]);
 }
 
+/** The agents by state. `badge` is the sidebar's 需要你 count: without quiet tasks' agents, which the main conversation
+ * tells about (#1731). */
+export function stateCounts(all: Session[]) {
+  const c = { needs: 0, working: 0, unread: 0, badge: 0 };
+  for (const s of all) {
+    const st = stateOf(s);
+    if (st === "needs_you") {
+      c.needs++;
+      if (!s.quiet) c.badge++;
+    } else if (st === "working") c.working++;
+    else if (st === "unread") c.unread++;
+  }
+  return c;
+}
+
 export function useCounts() {
   const all = useAgentSessions();
   const interactions = useStore((s) => s.interactions.length);
-  return useMemo(() => {
-    const c = { needs: 0, working: 0, unread: 0 };
-    for (const s of all) {
-      const st = stateOf(s);
-      if (st === "needs_you") c.needs++;
-      else if (st === "working") c.working++;
-      else if (st === "unread") c.unread++;
-    }
-    return { ...c, interactions };
-  }, [all, interactions]);
+  return useMemo(() => ({ ...stateCounts(all), interactions }), [all, interactions]);
 }

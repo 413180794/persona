@@ -56,7 +56,8 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const loaded = useStore((s) => s.loaded);
   const todos = useStore((s) => s.todos);
   const todosSupported = useStore((s) => s.todosSupported);
-  const uncompletedTodosCount = useMemo(() => todos.filter((t) => !t.done_at).length, [todos]);
+  // Quiet tasks (#1731) are told about in the main conversation, not counted here.
+  const uncompletedTodosCount = useMemo(() => todos.filter((t) => !t.done_at && !t.quiet).length, [todos]);
   const launches = useStore((s) => Object.values(s.launches).filter((launch) => launch.phase !== "ready"));
   const [grouping, setGrouping] = useState(() => agentGrouping(localStorage.getItem("jarvis.agentGrouping")));
   const groupingMenu = useMenu();
@@ -164,7 +165,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const convs = otherConversations(assistant?.conversations ?? [], assistant?.main);
   const mainConversation = assistant?.main ? assistant.conversations.find((c) => c.session_id === assistant.main) : undefined;
   const pages: Record<(typeof NAV_PAGES)[number], React.ReactNode> = {
-    home: <NavRow k="home" reg={reg} hover={setHovered} active={activeKey === "home"} to={{ name: "home" }} go={go} icon="home" label="总览" badge={counts.needs || undefined} badgeTone="red" />,
+    home: <NavRow k="home" reg={reg} hover={setHovered} active={activeKey === "home"} to={{ name: "home" }} go={go} icon="home" label="总览" badge={counts.badge || undefined} badgeTone="red" />,
     inbox: <NavRow k="inbox" reg={reg} hover={setHovered} active={activeKey === "inbox"} to={{ name: "inbox" }} go={go} icon="inbox" label="收件箱" badge={inbox || undefined} badgeTone="red" />,
     messages: larkHome && <NavRow k="messages" reg={reg} hover={setHovered} active={activeKey === "messages"} to={{ name: "messages" }} go={go} icon="chat" label="消息" />,
     "workspace-board": <NavRow k="workspace-board" reg={reg} hover={setHovered} active={activeKey === "workspace-board"} to={{ name: "workspace-board" }} go={go} icon="layers" label="工作流看板" />,

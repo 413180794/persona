@@ -56,6 +56,10 @@ type Todo struct {
 	ReopenedAt *time.Time  `json:"reopened_at,omitempty"`
 	Spaces     []TodoSpace `json:"spaces"`
 	Agents     []TodoAgent `json:"agents"`
+	// Quiet: a task from the main conversation while assistant.main_tasks_quiet was on (#1731,
+	// docs/unified-entry.md「安静的任务」): no pushes, Live Activity or task badges for its agents; the main
+	// conversation is told instead. Set when it is made, never changed.
+	Quiet bool `json:"quiet"`
 }
 
 type todosState struct {
@@ -159,6 +163,7 @@ func (h *Hub) loadTodosLocked(ctx context.Context) error {
 			DoneBy:     tr.DoneBy,
 			DoneReason: tr.DoneReason,
 			ReopenedAt: tr.ReopenedAt,
+			Quiet:      tr.Quiet,
 			Spaces:     make([]TodoSpace, 0),
 			Agents:     make([]TodoAgent, 0),
 		}
@@ -214,17 +219,19 @@ func (h *Hub) initTodos(ctx context.Context) {
 }
 
 // createTodo makes a todo (origin and planID set when a plan from an assistant conversation opens it as a task)
-// and tells the clients; the todos are loaded.
+// and tells the clients; the todos are loaded. A task from the main conversation is quiet while the user wants those
+// told only there (mainTasksQuiet, #1731).
 func (h *Hub) createTodo(ctx context.Context, title, notes, origin, planID string) (Todo, error) {
 	now := time.Now().UTC()
 	id := "todo_" + randomHex(8)
+	quiet := origin != "" && h.isMain(ctx, origin) && h.mainTasksQuiet(ctx)
 	if h.store != nil {
-		row := db.TodoRow{ID: id, Title: title, Notes: notes, CreatedAt: now, UpdatedAt: now, Origin: origin, PlanID: planID}
+		row := db.TodoRow{ID: id, Title: title, Notes: notes, CreatedAt: now, UpdatedAt: now, Origin: origin, PlanID: planID, Quiet: quiet}
 		if err := h.store.CreateTodo(ctx, row); err != nil {
 			return Todo{}, err
 		}
 	}
-	tObj := &Todo{ID: id, Title: title, Notes: notes, CreatedAt: now, UpdatedAt: now, Origin: origin, PlanID: planID,
+	tObj := &Todo{ID: id, Title: title, Notes: notes, CreatedAt: now, UpdatedAt: now, Origin: origin, PlanID: planID, Quiet: quiet,
 		Spaces: make([]TodoSpace, 0), Agents: make([]TodoAgent, 0)}
 	h.todos.mu.Lock()
 	h.todos.todos[id] = tObj

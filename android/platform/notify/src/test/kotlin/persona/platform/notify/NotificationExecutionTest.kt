@@ -224,6 +224,24 @@ class NotificationExecutionTest {
         assertEquals(2, posted)
     }
 
+    @Test fun quietTaskAgentsGetNoAlerts() = runBlocking {
+        val center = Center(request)
+        val sessions = object : SessionsRepository {
+            override val machines = MutableStateFlow<List<Machine>>(emptyList())
+            override val sessions = MutableStateFlow(listOf(Session(machineId = "machine", sessionId = "session", quiet = true)))
+            override suspend fun refresh() = Unit
+        }
+        var posted = 0
+        val delivery = NotificationDelivery(center, sessions, { false }, { posted++ }, { posted++ }, {})
+        val notice = NotifyEvent("interaction", "machine", "session", interactionId = request.id)
+        delivery.accept(notice)
+        delivery.accept(notice.copy(kind = "done"))
+        assertEquals(0, posted)
+        sessions.sessions.value = listOf(Session(machineId = "machine", sessionId = "session"))
+        delivery.accept(notice.copy(kind = "done"))
+        assertEquals(1, posted)
+    }
+
     private class Center(request: Interaction) : InteractionCenter {
         override val pending = MutableStateFlow(listOf(request))
         var remote: Interaction? = request

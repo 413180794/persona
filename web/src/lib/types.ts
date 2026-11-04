@@ -128,6 +128,8 @@ export interface Session {
   /** The channels messages came into it from, newest first (docs/channels.md「来源标记」). */
   channels?: string[];
   todo?: { id: string; title: string };
+  /** Works (or worked) for a quiet task (#1731): not in the global badge; the main conversation tells about it. */
+  quiet?: boolean;
 }
 
 /** A /loop: Claude re-runs a prompt on its own, scheduling each wakeup ("wakeup") or by cron ("cron"). */

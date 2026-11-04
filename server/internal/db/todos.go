@@ -31,6 +31,9 @@ type TodoRow struct {
 	DoneBy     string     `json:"done_by"`
 	DoneReason string     `json:"done_reason"`
 	ReopenedAt *time.Time `json:"reopened_at"`
+	// Quiet: a task from the main conversation while assistant.main_tasks_quiet was on (#1731): no pushes, Live
+	// Activity or task badges; the main conversation hears about it instead. Set once, when it is made.
+	Quiet bool `json:"quiet"`
 }
 
 // DoneByAuto marks a todo the hub closed because its task's work was judged finished (docs/todos.md「自动完成」).
@@ -58,7 +61,7 @@ type TodoAgentRow struct {
 	DismissedAt *time.Time `json:"dismissed_at"`
 }
 
-const todoColumns = `id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error, done_by, done_reason, reopened_at`
+const todoColumns = `id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error, done_by, done_reason, reopened_at, quiet`
 
 // ListTodos returns all todos ordered by created_at DESC.
 func (d *DB) ListTodos(ctx context.Context) ([]TodoRow, error) {
@@ -70,7 +73,7 @@ func (d *DB) ListTodos(ctx context.Context) ([]TodoRow, error) {
 	var out []TodoRow
 	for rows.Next() {
 		var r TodoRow
-		if err := rows.Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError, &r.DoneBy, &r.DoneReason, &r.ReopenedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError, &r.DoneBy, &r.DoneReason, &r.ReopenedAt, &r.Quiet); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -118,7 +121,7 @@ func (d *DB) ListAllTodoAgents(ctx context.Context) ([]TodoAgentRow, error) {
 func (d *DB) GetTodo(ctx context.Context, id string) (*TodoRow, error) {
 	var r TodoRow
 	err := d.pool.QueryRow(ctx, `SELECT `+todoColumns+` FROM todos WHERE id = $1`, id).
-		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError, &r.DoneBy, &r.DoneReason, &r.ReopenedAt)
+		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError, &r.DoneBy, &r.DoneReason, &r.ReopenedAt, &r.Quiet)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTodoNotFound
 	}
@@ -130,8 +133,8 @@ func (d *DB) GetTodo(ctx context.Context, id string) (*TodoRow, error) {
 
 // CreateTodo inserts a new todo.
 func (d *DB) CreateTodo(ctx context.Context, t TodoRow) error {
-	_, err := d.pool.Exec(ctx, `INSERT INTO todos (id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error, done_by, done_reason, reopened_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-		t.ID, t.Title, t.Notes, t.DoneAt, t.CreatedAt, t.UpdatedAt, t.Origin, t.PlanID, t.StartError, t.DoneBy, t.DoneReason, t.ReopenedAt)
+	_, err := d.pool.Exec(ctx, `INSERT INTO todos (id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error, done_by, done_reason, reopened_at, quiet) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+		t.ID, t.Title, t.Notes, t.DoneAt, t.CreatedAt, t.UpdatedAt, t.Origin, t.PlanID, t.StartError, t.DoneBy, t.DoneReason, t.ReopenedAt, t.Quiet)
 	return err
 }
 
@@ -147,7 +150,7 @@ func (d *DB) UpdateTodo(ctx context.Context, id string, title *string, notes *st
 	err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
 		var cur TodoRow
 		err := tx.QueryRow(ctx, `SELECT `+todoColumns+` FROM todos WHERE id = $1 FOR UPDATE`, id).
-			Scan(&cur.ID, &cur.Title, &cur.Notes, &cur.DoneAt, &cur.CreatedAt, &cur.UpdatedAt, &cur.Origin, &cur.PlanID, &cur.StartError, &cur.DoneBy, &cur.DoneReason, &cur.ReopenedAt)
+			Scan(&cur.ID, &cur.Title, &cur.Notes, &cur.DoneAt, &cur.CreatedAt, &cur.UpdatedAt, &cur.Origin, &cur.PlanID, &cur.StartError, &cur.DoneBy, &cur.DoneReason, &cur.ReopenedAt, &cur.Quiet)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrTodoNotFound
 		}
@@ -198,7 +201,7 @@ func (d *DB) FailTodo(ctx context.Context, id, startError string, at time.Time) 
 	var r TodoRow
 	err := d.pool.QueryRow(ctx, `UPDATE todos SET done_at = COALESCE(done_at, $2), start_error = $3, updated_at = $2 WHERE id = $1
 		RETURNING `+todoColumns, id, at, startError).
-		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError, &r.DoneBy, &r.DoneReason, &r.ReopenedAt)
+		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError, &r.DoneBy, &r.DoneReason, &r.ReopenedAt, &r.Quiet)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTodoNotFound
 	}
@@ -215,7 +218,7 @@ func (d *DB) RetryTodo(ctx context.Context, id string, at time.Time) (*TodoRow, 
 	err := d.pool.QueryRow(ctx, `UPDATE todos SET done_at = NULL, start_error = '', done_by = '', done_reason = '',
 		reopened_at = $2, updated_at = $2 WHERE id = $1 AND done_at IS NOT NULL AND start_error <> ''
 		RETURNING `+todoColumns, id, at).
-		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError, &r.DoneBy, &r.DoneReason, &r.ReopenedAt)
+		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError, &r.DoneBy, &r.DoneReason, &r.ReopenedAt, &r.Quiet)
 	if errors.Is(err, pgx.ErrNoRows) {
 		if _, gerr := d.GetTodo(ctx, id); gerr != nil {
 			return nil, false, gerr
@@ -235,7 +238,7 @@ func (d *DB) AutoDoneTodo(ctx context.Context, id, reason string, at, workSince 
 	err := d.pool.QueryRow(ctx, `UPDATE todos SET done_at = $2, done_by = $3, done_reason = $4, updated_at = $2
 		WHERE id = $1 AND done_at IS NULL AND (reopened_at IS NULL OR reopened_at < $5)
 		RETURNING `+todoColumns, id, at, DoneByAuto, reason, workSince).
-		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError, &r.DoneBy, &r.DoneReason, &r.ReopenedAt)
+		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError, &r.DoneBy, &r.DoneReason, &r.ReopenedAt, &r.Quiet)
 	if errors.Is(err, pgx.ErrNoRows) {
 		if _, gerr := d.GetTodo(ctx, id); gerr != nil {
 			return nil, false, gerr

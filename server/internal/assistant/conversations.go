@@ -347,16 +347,28 @@ func (s *Service) queuedRelays() (map[string][]string, bool) {
 	out := map[string][]string{}
 	for id, q := range b.st.Queue {
 		for _, msg := range q {
+			if msg.Tool == noticeTool { // a quiet task's notice (quiet.go): its title is enough
+				out[id] = append(out[id], msg.FromTitle+"的通知")
+				continue
+			}
 			out[id] = append(out[id], "来自「"+msg.FromTitle+"」："+msg.Text)
 		}
 	}
 	return out, true
 }
 
-// deliverRelay sends one message into an assistant conversation and notes the hop it is working on.
+// deliverRelay sends one message into an assistant conversation and notes the hop it is working on. A quiet task's
+// notice (quiet.go) is its own text, and the work it starts is not a hop of any chain.
 func (s *Service) deliverRelay(ctx context.Context, machine, to string, msg relayMsg) error {
-	if err := s.call(ctx, machine, DeviceAssistantSend, map[string]any{"session_id": to, "text": relayText(msg), "resume_only": true}, nil); err != nil {
+	text := relayText(msg)
+	if msg.Tool == noticeTool {
+		text = msg.Text
+	}
+	if err := s.call(ctx, machine, DeviceAssistantSend, map[string]any{"session_id": to, "text": text, "resume_only": true}, nil); err != nil {
 		return err
+	}
+	if msg.Tool == noticeTool {
+		return nil
 	}
 	b := &s.relays
 	b.mu.Lock()

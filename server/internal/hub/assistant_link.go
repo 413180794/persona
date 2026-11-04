@@ -701,6 +701,10 @@ func (a assistantRemote) InteractionResolved(_ context.Context, r assistantwire.
 	a.notify(assistantwire.EventInteractionResolved, r)
 }
 
+func (a assistantRemote) InteractionRaised(_ context.Context, r assistantwire.InteractionRaised) {
+	a.notify(assistantwire.EventInteractionRaised, r)
+}
+
 func (a assistantRemote) InboxMessage(_ context.Context, m assistantwire.InboxMessage) {
 	a.notify(assistantwire.EventInboxMessage, m)
 }
@@ -726,6 +730,12 @@ func (h *Hub) callAssistantTool(ctx context.Context, m *Machine, sessionID, name
 // (interaction.resolved).
 func (h *Hub) taskAnswered(ix proto.Interaction, r proto.Resolution, status string) {
 	h.asst().InteractionResolved(context.Background(), assistantwire.InteractionResolved{Interaction: ix, Resolution: r, Status: status})
+}
+
+// quietInteraction: an agent of a quiet task asks something; the assistant tells the main conversation
+// (interaction.raised, #1731).
+func (h *Hub) quietInteraction(ix proto.Interaction) {
+	h.asst().InteractionRaised(context.Background(), assistantwire.InteractionRaised{Interaction: h.withTask(ix)})
 }
 
 // inboxTasks are the tasks going on, as the inbox's judge and AI 分身 see them (assistant.tasks).

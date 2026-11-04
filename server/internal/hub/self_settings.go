@@ -73,6 +73,15 @@ func (h *Hub) selfSettings() []selfSetting {
 			value: "a string (Markdown; the whole text)",
 			get:   func(ctx context.Context) (string, error) { return orNone(h.assistantNotes(ctx)), nil },
 			set:   h.setAssistantNotes},
+		{key: "assistant.main_tasks_quiet", title: "主对话派的任务只在主对话里通知",
+			about: "on (the default): tasks the main conversation opens (task_plan, agent_start) send no pushes, stay off the Live Activity and " +
+				"task badges, and the main conversation is told when one is done, waits for the user or fails instead; off: they notify like any agent. " +
+				"Applies to tasks opened from now on",
+			value: "true or false",
+			get: func(ctx context.Context) (string, error) {
+				return fmt.Sprint(h.mainTasksQuiet(ctx)), nil
+			},
+			set: h.setMainTasksQuiet},
 		{key: "assistant.launcher", title: "Persona 的启动器",
 			about: "which launcher (model) new Persona conversations start with by default",
 			value: "a launcher name from this setting's get",
@@ -244,6 +253,31 @@ func (h *Hub) setAssistantNotes(ctx context.Context, v json.RawMessage) (*selfCh
 			}
 			h.assistantUpdated()
 			return "关于我 updated; new conversations read it (this one keeps what it started with).", nil
+		}}, nil
+}
+
+func (h *Hub) setMainTasksQuiet(ctx context.Context, v json.RawMessage) (*selfChange, error) {
+	var on bool
+	if err := json.Unmarshal(v, &on); err != nil {
+		return nil, errors.New("value must be true or false")
+	}
+	before := h.mainTasksQuiet(ctx)
+	if on == before {
+		return &selfChange{summary: "「主对话派的任务只在主对话里通知」没有变化"}, nil
+	}
+	if h.store == nil {
+		return nil, errors.New("no database on this hub")
+	}
+	word := map[bool]string{true: "开", false: "关"}
+	return &selfChange{summary: fmt.Sprintf("「主对话派的任务只在主对话里通知」：%s → %s", word[before], word[on]),
+		apply: func(ctx context.Context, _ map[string]string) (string, error) {
+			cfg := h.assistantConfigLegacy(ctx)
+			cfg.MainTasksQuiet = &on
+			if err := h.store.PutSetting(ctx, "assistant", cfg); err != nil {
+				return "", err
+			}
+			h.assistantUpdated()
+			return fmt.Sprintf("assistant.main_tasks_quiet is %v for tasks opened from now on (existing ones keep theirs).", on), nil
 		}}, nil
 }
 

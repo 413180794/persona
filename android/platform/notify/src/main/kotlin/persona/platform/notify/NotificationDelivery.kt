@@ -25,7 +25,7 @@ internal class NotificationDelivery(
             is InteractionResolvedEvent -> retract(event.id)
             is NotifyEvent -> {
                 val session = NotificationPolicy.session(event)
-                if (session != null && suppressed(session)) return
+                if (session != null && (suppressed(session) || quiet(session))) return
                 if (event.kind != "interaction" && NotificationPolicy.channel(event) == null) return
                 val settings = preferences() ?: return
                 if ((event.kind == "interaction" || event.kind == "alert") && !settings.input) return
@@ -43,4 +43,7 @@ internal class NotificationDelivery(
             else -> Unit
         }
     }
+
+    /** A quiet task's agent (#1731): the hub sends no alert for it; one from an older hub is not shown either. */
+    private fun quiet(session: SessionKey) = sessions.sessions.value.any { it.key == session && it.quiet }
 }

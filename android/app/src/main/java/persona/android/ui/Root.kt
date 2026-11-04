@@ -202,7 +202,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
     val preferences by session.preferences.snapshots.collectAsStateWithLifecycle(AgentsPreferencesSnapshot())
     val todos by (session.tasks?.todos ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsStateWithLifecycle()
     val todosSupported by (session.tasks?.todosSupported ?: kotlinx.coroutines.flow.MutableStateFlow(false)).collectAsStateWithLifecycle()
-    val uncompletedTodosCount = remember(todos) { todos.count { !it.isDone } }
+    val uncompletedTodosCount = remember(todos) { todos.count { !it.isDone && !it.quiet } }
     fun kind(key: SessionKey): ConversationKind? = when {
         key == assistant.mainSession || assistant.conversations.any { it.key == key } -> ConversationKind.Assistant
         else -> sessions.firstOrNull { it.key == key }?.let { if (it.assistant) ConversationKind.Assistant else ConversationKind.Agent }
@@ -302,10 +302,12 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
     } }
     val assistantRequests = pending.filter { currentKind(SessionKey(it.machineId, it.sessionId)) == ConversationKind.Assistant }
     val agentRequests = pending - assistantRequests.toSet()
+    // A quiet task's request (#1731) is told in the main conversation, not counted on the tab.
     val agentNeeds = agentRequests.count { request ->
         val key = SessionKey(request.machineId, request.sessionId)
-        val space = sessions.firstOrNull { it.key == key }?.spaceName?.let { "${key.machineId}/$it" }
-        !preferences.mutes.mutes(key.path, space)
+        val session = sessions.firstOrNull { it.key == key }
+        val space = session?.spaceName?.let { "${key.machineId}/$it" }
+        session?.quiet != true && !preferences.mutes.mutes(key.path, space)
     }
     // Only when what the count reads changed: the shell recomposes on every push, and the whole list is built to count
     // one group. Of the sessions it reads only which space each is in (for mutes), not their state or activity.

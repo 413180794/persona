@@ -440,6 +440,9 @@ func (la *liveActivities) snapshot() FleetState {
 	var agents []fleetInput
 	for _, m := range h.machinesNow() {
 		for _, s := range h.decorated(m) {
+			if s.Quiet { // a quiet task's agent: the main conversation tells about it (#1731)
+				continue
+			}
 			agents = append(agents, fleetInput{
 				Machine: m.cfg.Name, Session: s, Muted: h.muted(m.cfg.ID, s.SessionID),
 				TurnStart: h.turns.startOf(m.cfg.ID + "/" + s.SessionID),

@@ -158,6 +158,18 @@ func RenderLostTasks(tasks []string) string {
 	return render("assistant/lost_tasks", struct{ Tasks []string }{tasks})
 }
 
+// TaskNotice tells the main conversation about one of its quiet tasks (#1731): it was done, waits for the user, was
+// cut off by the model service or did not start. The assistant decides what to tell the user.
+type TaskNotice struct {
+	Title, Machine string
+	State          string   // done | needs | interrupted | failed
+	Earlier        []string // what else it went through since the last notice ("在等用户", "做完了"), oldest first
+	Ask            string   // needs: what it asks
+	Text           string   // what its agent said last, or why it did not start
+}
+
+func RenderTaskNotice(n TaskNotice) string { return render("assistant/task_notice", n) }
+
 // Relay is a message one assistant conversation sends another (conversation_send / conversation_new): what was
 // written, behind a note saying where it comes from and how many hops it is from the user's own message.
 type Relay struct {

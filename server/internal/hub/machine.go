@@ -654,8 +654,9 @@ func (m *Machine) notifyFinished(id string, gen int) {
 	if ok && s.Work != nil && s.Work.Phase == proto.WorkBlocked && (s.Work.WakeAt != nil || s.Work.InteractionID != "") {
 		return // the hub goes on with it (继续, a wake), or its card already rang (work.go)
 	}
-	// An inbox agent's result is the draft in the inbox; a turn asked for through the bot is answered there.
-	if !ok || m.hub.isInboxAgent(id) || m.hub.channelAnswered(id) {
+	// An inbox agent's result is the draft in the inbox; a turn asked for through the bot is answered there; a quiet
+	// task's is told in the main conversation (the assistant's taskTurnEnded, #1731).
+	if !ok || m.hub.isInboxAgent(id) || m.hub.channelAnswered(id) || m.hub.quietSession(m.cfg.ID, id) {
 		return
 	}
 	m.hub.mu.Lock()

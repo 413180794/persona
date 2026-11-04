@@ -12,7 +12,7 @@ import { refreshAssistant, useStore } from "../../lib/store";
 import { Button, cx, Dialog, Loading, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
-import { Group, Pill, Row } from "../settings/SettingsParts";
+import { Group, Pill, Row, Switch } from "../settings/SettingsParts";
 import { SkillsGroup } from "./Skills";
 import { Tag, textareaClass } from "../assistant/parts";
 import { PersonaAvatar, usePersona } from "../assistant/Persona";
@@ -25,6 +25,8 @@ interface AssistantState {
   /** Only once saved here (or in the app); `notes_effective` is what Persona is told (hub.json's otherwise). */
   notes?: string;
   notes_effective?: string;
+  /** 主对话派的任务只在主对话里通知 (#1731): on by default; tasks opened from now on follow it. */
+  main_tasks_quiet?: boolean;
 }
 
 export function AssistantSettings({ bare }: { /** Without its header (the profile page has its own). */ bare?: boolean } = {}) {
@@ -36,6 +38,21 @@ export function AssistantSettings({ bare }: { /** Without its header (the profil
   const [files, setFiles] = useState<MemoryFile[] | null>(null);
   const [memoryError, setMemoryError] = useState("");
   const [open, setOpen] = useState<{ file: MemoryFile; index?: boolean } | null>(null);
+  const [quietBusy, setQuietBusy] = useState(false);
+
+  const setQuiet = async (on: boolean) => {
+    setQuietBusy(true);
+    setInfo((i) => (i ? { ...i, main_tasks_quiet: on } : i));
+    try {
+      const r = await api<AssistantState>("/assistant", { method: "PUT", json: { main_tasks_quiet: on } });
+      setInfo((i) => (i ? { ...i, main_tasks_quiet: r.main_tasks_quiet ?? on } : i));
+    } catch (e) {
+      setInfo((i) => (i ? { ...i, main_tasks_quiet: !on } : i));
+      toast(`没改成：${errorText(e)}`, "error");
+    } finally {
+      setQuietBusy(false);
+    }
+  };
 
   const loadMemory = async () => {
     try {
@@ -89,6 +106,12 @@ export function AssistantSettings({ bare }: { /** Without its header (the profil
           onClick={() => navigate({ name: "routines" })}
         >
           {tasks !== null && <span>{on === 0 ? "未开启" : `${on} 个开启`}</span>}
+        </Row>
+      </Group>
+
+      <Group title="通知" footer="开着时，从主对话派出去的任务不单独推送，也不进灵动岛和任务角标；做完、等你回答或出错时，Persona 在主对话里告诉你。只影响之后派的任务。">
+        <Row label="主对话派的任务只在主对话里通知">
+          <Switch on={info?.main_tasks_quiet ?? true} onChange={(on) => void setQuiet(on)} disabled={!info || quietBusy} label="主对话派的任务只在主对话里通知" />
         </Row>
       </Group>
 

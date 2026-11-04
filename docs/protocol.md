@@ -310,6 +310,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
  "ports":[{"port":5173,"addr":"127.0.0.1","pid":4242,"process":"node","title":"Vite + React"}],
  // 关联的未完成待办（docs/todos.md）：只在当前有关联（未 released）且待办未完成时出现，由 hub 补齐
  "todo":{"id":"todo_…","title":"天气 App 发 1.3 版"},
+ "quiet":true,   // 给安静的任务干活（干过）的 Agent（#1731，docs/unified-entry.md「安静的任务」）：不进任务通知和全局角标，任务做完后也一直带着
  "background":[{"id":"b85polnoj","kind":"shell|agent","description":"…","command":"…",   // 还没回报的后台命令 / 子代理
                 "output_file":"/private/tmp/…/b85polnoj.output","started_at":"..."}]}
 
@@ -318,6 +319,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
  "created_at":"...","updated_at":"...",
  "origin":"<助手对话 id>","plan_id":"plan_…",   // 只有从助手对话开的任务才有（docs/unified-entry.md）
  "start_error":"rpc: connection closed",         // 任务的 Agent 没开起来：hub 同时写 done_at，任务到此结束；重新打开时清空（#1077）
+ "quiet":true,   // 主对话派的、当时开着「主对话派的任务只在主对话里通知」：建的时候定下、不再变（#1731）
  "spaces":[{"machine_id":"…","space":"group/alpha","linked_at":"..."}],
  "agents":[{"machine_id":"…","session_id":"…","linked_at":"...","released_at":null,
            "title":"…","cwd":"…","agent":"claude","start_error":"","source":"manual|space|spawned","via":""}]}
@@ -515,8 +517,8 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | GET | `/api/v1/machines/{mid}/git/log?cwd=&skip=&limit=` | `{"commits":[…]}` 分页 |
 | POST | `/api/v1/sessions/{mid}/{sid}/close` | 退出 claude 并关闭 tab（herdr 里的任何 Agent，手动启动的也行；分屏的 tab 只关它自己的窗格） |
 | DELETE | `/api/v1/sessions/{mid}/{sid}` | 删除对话：只是从各端的会话列表里移除（hub 在 settings `sessions.deleted` 记下时间，`sessions` 推送和 `GET /api/v1/sessions` 都不再带它），电脑上的 transcript 不动；之后这个会话再被用到（`updated_at` 晚于删除时间，或又运行起来）会重新出现。启动失败的（`start_error`）也能删，立即消失。→ `{"ok":true}`；正在运行或还在启动 409，助手的对话 400（用归档），没有这个会话 404，只读设备 403 |
-| GET | `/api/v1/assistant` | `{"machine_id","launcher","cwd","timezone","notes"?,"notes_effective","main"?,"conversations":[Session]}`：`notes` 只在 App 里保存过时有，`main` 是主对话的会话 id（在 `machine_id` 那台机器上）；已归档的对话默认不列，`?archived=1` 一起列（`archived: true`） |
-| PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?,"timezone"?,"notes"?,"main"?}`，存 Postgres settings（`docs/assistant.md`）；只改带了的字段，`notes` 为空串也算改；`main` 为 `"-"` 时清掉主对话（换机器时 App 一起发） |
+| GET | `/api/v1/assistant` | `{"machine_id","launcher","cwd","timezone","notes"?,"notes_effective","main"?,"main_tasks_quiet","conversations":[Session]}`：`notes` 只在 App 里保存过时有，`main_tasks_quiet` 是「主对话派的任务只在主对话里通知」的生效值（没改过时是 `true`，#1731），`main` 是主对话的会话 id（在 `machine_id` 那台机器上）；已归档的对话默认不列，`?archived=1` 一起列（`archived: true`） |
+| PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?,"timezone"?,"notes"?,"main"?,"main_tasks_quiet"?}`，存 Postgres settings（`docs/assistant.md`）；只改带了的字段，`notes` 为空串也算改；`main` 为 `"-"` 时清掉主对话（换机器时 App 一起发） |
 | POST | `/api/v1/assistant/conversations` | `{"prompt","images"?,"purpose"?,"machine_id"?}` → `{"session"}`：写好 CLAUDE.md 后在助手目录新开会话。`purpose`：用哪个模型用途（hub 认识的，如 `lark.agent`，不认识回 400；空着是 `assistant`）；`machine_id`：在 hub 的哪台机器上跑（空着是助手那台；没有这台回 400）。插件的 /agent 用这两个（#1484） |
 | POST | `/api/v1/assistant/conversations/{id}/archive` | 归档助手的一段对话（只是不在列表里，数据保留）→ `{"ok","archived":true}`；主对话 400。会话列表（`sessions` 推送）里它带 `archived: true`，App 收在「已归档」；用户再给它发消息（`POST …/messages`）自动取消归档（`docs/assistant.md`「管理自己的对话」） |
 | POST | `/api/v1/assistant/conversations/{id}/unarchive` | 取消归档 → `{"ok","archived":false}` |
@@ -1159,7 +1161,7 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
 - hub → 助手，调用：`http.request`（下面的转发）、`manager.action`（App 回答了它的提问）、`assistant.tools {}` → `{tools:[…]}`（hub 在它每次连上时要一次、记着，断开后也留着）、
   `assistant.tool {name,arguments,machine_id,session_id}` → `{content,is_error}`、`assistant.context {session_id}` → `{text,…}`（node 每条消息前要）、`assistant.tasks {}` → `{tasks:[…]}`、
   `assistant.card_sent {card_id,item_id}` → `{sent}`（收件箱从消息卡片「发送」前问：发过的不再发）、`assistant.cards_sent {item_id,at,text?}` → `{}`（这个条目的回复发出去了，它的卡片记下、告诉 App）。
-- hub → 助手，单向事件：`conversation.started`、`conversation.renamed`、`session.user_spoke`、`session.turn_started`、`session.turn_ended`、`sessions.changed`、`interaction.resolved`、`inbox.message`、
+- hub → 助手，单向事件：`conversation.started`、`conversation.renamed`、`session.user_spoke`、`session.turn_started`、`session.turn_ended`、`sessions.changed`、`interaction.resolved`、`interaction.raised`（安静的任务的 Agent 在问，#1731）、`inbox.message`、
   `manager.updated`（上面的握手）、`manager.resync {}`（hub 还没有它的快照或只有不完整的一份，要它报整份：最多 5 秒一次）。助手按到达的顺序一条一条处理，`session.turn_ended` 另起（要问模型、等任务的 Agent 停下）。
 - 助手没连着时：转发的接口回 `503 {"code":"assistant_offline","error":"助手暂时连不上，稍后再试"}`，助手的工具同样失败（`is_error`，同一句话），`assistant.context` 也失败（node 那条消息不带实时快照）；
   给它的事件不发（它连上后报整份快照，要的东西现问）。hub 留着它最后报的快照，会话列表照常显示标题和归档。

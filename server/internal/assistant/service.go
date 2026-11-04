@@ -42,6 +42,7 @@ type Service struct {
 	titles    titleBook    // titles.go
 	archived  archiveBook  // conversations.go
 	relays    relayBook    // conversations.go
+	quiet     quietBook    // quiet.go
 	sched     schedule     // schedule.go
 	tasks     tasksState   // tasks.go
 	questions questions    // tools.go (ask_user)

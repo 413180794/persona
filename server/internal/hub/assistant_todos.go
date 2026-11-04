@@ -31,6 +31,8 @@ func (h *Hub) todosCall(ctx context.Context, method string, params json.RawMessa
 		Cwd       string    `json:"cwd"`
 		Reason    string    `json:"reason"`
 		Work      time.Time `json:"work"`
+		// IfQuiet: make it only when it would be quiet (agent_start from the main conversation, #1731).
+		IfQuiet bool `json:"if_quiet"`
 	}
 	if len(params) > 0 {
 		if err := json.Unmarshal(params, &a); err != nil {
@@ -41,6 +43,9 @@ func (h *Hub) todosCall(ctx context.Context, method string, params json.RawMessa
 	case assistantwire.TodosLoad:
 		return map[string]any{}, h.ensureTodosLoaded(ctx)
 	case assistantwire.TodosCreate:
+		if a.IfQuiet && !(a.Origin != "" && h.isMain(ctx, a.Origin) && h.mainTasksQuiet(ctx)) {
+			return map[string]any{"todo": nil}, nil
+		}
 		t, err := h.createTodo(ctx, a.Title, a.Notes, a.Origin, a.PlanID)
 		if err != nil {
 			return nil, err
@@ -144,6 +149,36 @@ func (h *Hub) taskOf(mid, sid string) (Todo, bool) {
 		return Todo{}, false
 	}
 	return copyTodoLocked(t), true
+}
+
+// quietSessionsLocked are the agents (machine, session) of quiet tasks (#1731), done ones too: a quiet task's agent
+// stays out of pushes and badges after the task is closed, unless it now works for another todo that is not quiet.
+// h.todos.mu is held (read).
+func (h *Hub) quietSessionsLocked() map[[2]string]bool {
+	out := map[[2]string]bool{}
+	for _, t := range h.todos.todos {
+		if !t.Quiet {
+			continue
+		}
+		for _, a := range t.Agents {
+			if a.DismissedAt == nil {
+				out[[2]string{a.MachineID, a.SessionID}] = true
+			}
+		}
+	}
+	for key, id := range h.todos.activeBySession {
+		if t := h.todos.todos[id]; out[key] && t != nil && !t.Quiet {
+			delete(out, key)
+		}
+	}
+	return out
+}
+
+// quietSession: mid/sid works (or worked) for a quiet task: the main conversation hears about it, nothing else does.
+func (h *Hub) quietSession(mid, sid string) bool {
+	h.todos.mu.RLock()
+	defer h.todos.mu.RUnlock()
+	return h.quietSessionsLocked()[[2]string{mid, sid}]
 }
 
 // withTask names, on an interaction sent to clients, the task its agent works for (the watch and the cards show it).

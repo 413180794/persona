@@ -43,6 +43,8 @@ export interface Todo {
   done_reason?: string;
   /** When the user last reopened it after it was done. */
   reopened_at?: string | null;
+  /** Opened from the main conversation while 主对话派的任务只在主对话里通知 was on (#1731). */
+  quiet?: boolean;
   /** The task's agent did not start, and why: the hub ended it there (done_at is set too, #1077). */
   start_error?: string;
 }
