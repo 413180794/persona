@@ -161,7 +161,7 @@ struct TerminalKeyBar: View {
             Haptics.tap()
             up.wrappedValue.toggle()
         } label: {
-            KeyCap(symbol: up.wrappedValue ? "keyboard.chevron.compact.down" : Theme.Icon.keyboard, state: .off)
+            KeyCap(symbol: up.wrappedValue ? Theme.Icon.dismissKeyboard : Theme.Icon.keyboard, state: .off)
         }
         .buttonStyle(.plain)
         // A double tap is return (as in Moshi); a single one waits for it not to be one.
