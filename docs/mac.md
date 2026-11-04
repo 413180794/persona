@@ -323,6 +323,9 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   标签条读 `siblings(of:)`，它在里面读 `allSessions`。改成 `namedMachine(_:)`、每个空间一个格子之后，mock 推 20 轮心跳（`steps=0`）：
   `ChatView` 30 → 10 次（剩下的是那 5 句新话），气泡和正文 365 → 125 个，每次推送主线程 4.2 → 1.2 ms；带新步骤的推送 7.9 → 3.9 ms。
   还剩：对话里来了新内容，屏幕上的每一行都重算一遍（每句新话 12 个气泡、13 段正文）。
+- 连上 hub 时注册手机工具（2026-11-05，#1337）：`PhoneToolRegistry.enabledSpecs` 在主线程上按工具逐个问 EventKit 的授权，每次都是一次同步的 XPC（第一次还要建连接）。
+  改成在后台问 EventKit、每个来源只问一次（`CalendarAccess.statusesOffMain`）：冷启动的主线程采样里 `enabledSpecs` 145–195 → 37–48 ms，
+  其中 EventKit 107–157 → 11–16 ms（各 3 次交替跑，负载 75–125，首帧时间跟着负载乱跳，不拿它比）。iPhone 共用这段，同样受益。
 - 外壳读 `MacTitleRowTaken` 这个 preference（打开对话时调用树里约 9.4%）：这一块大多是页面自己的更新在合并 preference 时被拉着算，拿掉不一定省这么多，要量过再改。
 
 ## SSH 隧道（Mac）

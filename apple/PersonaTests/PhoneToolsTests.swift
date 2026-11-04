@@ -100,6 +100,22 @@ struct PhoneToolsTests {
         #expect(PhoneToolRegistry.enabledSpecs().contains { $0.name == "phone_device_info" })
     }
 
+    /// The registration asks EventKit off the main thread and passes its answers in (#1337): they decide calendar's and
+    /// reminders' tools, the switches still count.
+    @Test func enabledSpecsTakeEventKitsAnswers() {
+        let calendar = PhoneDataSource.calendar, reminders = PhoneDataSource.reminders
+        let before = (calendar.isEnabled, reminders.isEnabled)
+        defer { calendar.isEnabled = before.0; reminders.isEnabled = before.1 }
+        calendar.isEnabled = true
+        reminders.isEnabled = true
+        let names = PhoneToolRegistry.enabledSpecs(eventKit: (events: .denied, reminders: .granted)).map(\.name)
+        #expect(!names.contains("phone_calendar_events") && !names.contains("phone_calendar_create_event"))
+        #expect(names.contains("phone_reminders_list") && names.contains("phone_reminders_complete"))
+        reminders.isEnabled = false
+        #expect(!PhoneToolRegistry.enabledSpecs(eventKit: (events: .granted, reminders: .granted)).contains { $0.name.hasPrefix("phone_reminders") })
+        #expect(PhoneToolRegistry.enabledSpecs(eventKit: (events: .granted, reminders: .granted)).contains { $0.name == "phone_calendar_events" })
+    }
+
     @Test func disabledSourceMeansError() async {
         let source = PhoneDataSource.clipboard
         let previous = source.isEnabled

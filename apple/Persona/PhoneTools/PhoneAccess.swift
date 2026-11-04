@@ -51,6 +51,15 @@ enum CalendarAccess {
         classify(EKEventStore.authorizationStatus(for: .reminder))
     }
 
+    /// Both, asked off the main thread: each is a synchronous call to EventKit's daemon, and asking them as the app
+    /// connected held the main thread 50–150 ms on a Mac (the first call opens the connection, #1337).
+    static func statusesOffMain() async -> (events: PhoneAuthStatus, reminders: PhoneAuthStatus) {
+        let (events, reminders) = await Task.detached {
+            (EKEventStore.authorizationStatus(for: .event), EKEventStore.authorizationStatus(for: .reminder))
+        }.value
+        return (classify(events), classify(reminders))
+    }
+
     static func requestEvents() async -> PhoneAuthStatus {
         let store = EKEventStore()
         do {

@@ -202,3 +202,11 @@
   截图别把 App 强行拉到前台（`osascript … set frontmost`、每张都重启 App）：用户在这台 Mac 上干活，一直被打断；要活动窗口的图就请用户自己把窗口切到前面。
 - `Button(role: .destructive)` 在 Mac 的 grouped `Form` 里画成主题色（蓝），不像 iPhone 的列表那样自动变红（2026-11-04，#1512 截图发现）。
   要红就 `.tint(Theme.danger)`（Form 里的按钮）或 `.foregroundStyle(Theme.danger)`（borderless 按钮）；确认框（`confirmationDialog`）里的不用管，系统按 role 画。
+
+## 系统权限的「现在是什么状态」别在主线程上问（2026-11-05，#1337）
+
+- `EKEventStore.authorizationStatus(for:)` 是一次同步的 XPC（Mac 上第一次还要建到日历守护进程的连接）。连上 hub 时注册手机工具，
+  日历、提醒的 5 个工具各问一次，主线程被占 100–150 ms。只去重不够：大头是第一次建连接。改成在后台问、主线程只拿结果（`CalendarAccess.statusesOffMain`）。
+- 量这种「连上之后才发生」的事别只看首帧时间：负载一高首帧乱跳；冷启动时 `sample` 主线程 6 秒，按函数统计采样数前后比。
+- 新编出来的包头一两次启动会慢很多（LaunchServices、签名检查），A/B 之前每个包先启动一次扔掉。
+

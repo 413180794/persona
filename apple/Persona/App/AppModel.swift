@@ -1100,6 +1100,9 @@ final class AppModel {
     private static func catchUpPart(_ key: SessionKey) -> String { "chat:\(key.path)" }
     private static func interactionsPart(_ group: String) -> String { group.isEmpty ? "interactions" : "interactions:\(group)" }
 
+    /// Each group's latest phone registration: the one whose answer is sent (registerPhone).
+    @ObservationIgnored private var phoneRegistrations: [String: Int] = [:]
+
     /// Offers this phone's tools to every group's hub (their assistants may call them).
     func registerPhone() {
         for link in links { registerPhone(link) }
@@ -1107,7 +1110,18 @@ final class AppModel {
 
     private func registerPhone(_ link: HubLink) {
         if link.isDemo { return } // nobody would call the phone's tools
-        var tools = PhoneToolRegistry.enabledSpecs()
+        phoneRegistrations[link.group, default: 0] += 1
+        let mine = phoneRegistrations[link.group]
+        Task {
+            // EventKit is asked off the main thread (#1337); a newer registration (a switch turned meanwhile) wins.
+            let eventKit = await CalendarAccess.statusesOffMain()
+            guard phoneRegistrations[link.group] == mine else { return }
+            sendPhoneRegistration(link, tools: PhoneToolRegistry.enabledSpecs(eventKit: eventKit))
+        }
+    }
+
+    private func sendPhoneRegistration(_ link: HubLink, tools: [ToolSpec]) {
+        var tools = tools
         #if DEBUG
         // Simulator automation (scripts/app/sim.sh) must not take the real iPhone's phone_* tool calls.
         let automation = UserDefaults.standard.string(forKey: "pairURL") != nil

@@ -83,9 +83,22 @@ enum PhoneToolRegistry {
         #endif
     }
 
-    /// The tool definitions announced to the hub in `register_phone`.
-    static func enabledSpecs() -> [ToolSpec] {
-        all.filter { $0.source.isActive }.map(\.spec)
+    /// The tool definitions announced to the hub in `register_phone`; `eventKit`: calendar's and reminders'
+    /// authorizations asked already (off the main thread, `CalendarAccess.statusesOffMain`). Each source is asked once.
+    static func enabledSpecs(eventKit: (events: PhoneAuthStatus, reminders: PhoneAuthStatus)? = nil) -> [ToolSpec] {
+        var active: [PhoneDataSource: Bool] = [:]
+        func usable(_ source: PhoneDataSource) -> Bool {
+            if let known = active[source] { return known }
+            let status = switch (source, eventKit) {
+            case (.calendar, let ek?): ek.events
+            case (.reminders, let ek?): ek.reminders
+            default: PhoneAuthorization.status(source)
+            }
+            let now = source.isEnabled && status.isUsable
+            active[source] = now
+            return now
+        }
+        return all.filter { usable($0.source) }.map(\.spec)
     }
 
     /// Current permission state of one data source, for the settings screen.
