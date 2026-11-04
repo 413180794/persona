@@ -349,6 +349,10 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var ports: [ListeningPort]? = nil
     var updatedAt: Date?
     var lastText: String?
+    /// What it is doing when its latest step is a tool call no words came after (「在跑测试」「在读 tasks.go」), and since
+    /// when; nil once it writes again. The hub's `activity` / `activity_at` (docs/protocol.md); older hubs send neither.
+    var activity: String? = nil
+    var activityAt: Date? = nil
     var pendingInteractions: Int
     /// Changes whenever the transcript does: the app pulls sessions whose rev it has not synced (`AgentSync`).
     var rev: Int64?
@@ -428,7 +432,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, archived, state,
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, subagents, ports,
-             updatedAt = "updated_at", lastText = "last_text", pendingInteractions = "pending_interactions", rev, suggestion,
+             updatedAt = "updated_at", lastText = "last_text", activity, activityAt = "activity_at", pendingInteractions = "pending_interactions", rev, suggestion,
              starting, startError = "start_error", todo, hubGroup = "app_hub_group"
     }
 
@@ -478,6 +482,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         state = try c.decodeIfPresent(AgentState.self, forKey: .state) ?? AgentState(status: status)
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
         lastText = try c.decodeIfPresent(String.self, forKey: .lastText)
+        activity = try c.decodeIfPresent(String.self, forKey: .activity)
+        activityAt = try c.decodeIfPresent(Date.self, forKey: .activityAt)
         pendingInteractions = try c.decodeIfPresent(Int.self, forKey: .pendingInteractions) ?? 0
         rev = try c.decodeIfPresent(Int64.self, forKey: .rev)
         suggestion = try c.decodeIfPresent(String.self, forKey: .suggestion)
@@ -588,9 +594,18 @@ nonisolated extension Session {
     }
 
     /// The same as far as views about this one session show it (`AppModel.session(_:)`: its chat, its top bar, its
-    /// menus): apart from the ticks and the last line, which only the lists show (docs/ios-state.md「第 3 步」).
+    /// menus): apart from the ticks and the last line and step, which only the lists and the task cards show
+    /// (docs/ios-state.md「第 3 步」).
     static func sameForItsPage(_ a: Session?, _ b: Session?) -> Bool {
-        sameApartFromTicks(a.map { var x = $0; x.lastText = nil; return x }, b.map { var x = $0; x.lastText = nil; return x })
+        sameApartFromTicks(a.map(\.withoutLine), b.map(\.withoutLine))
+    }
+
+    private var withoutLine: Session {
+        var x = self
+        x.lastText = nil
+        x.activity = nil
+        x.activityAt = nil
+        return x
     }
 }
 

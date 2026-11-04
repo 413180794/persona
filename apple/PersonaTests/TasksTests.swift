@@ -39,6 +39,46 @@ struct TasksTests {
         #expect(hand.origin == nil && hand.agents.isEmpty)
     }
 
+    private func lead(state: String, lastText: String?, activity: String?, at: String? = nil) throws -> Session {
+        var fields = [#""machine_id":"box","session_id":"s1","title":"t","cwd":"/code/app","status":"working","state":"\#(state)""#]
+        if let lastText { fields.append(#""last_text":"\#(lastText)""#) }
+        if let activity { fields.append(#""activity":"\#(activity)""#) }
+        if let at { fields.append(#""activity_at":"\#(at)""#) }
+        return try decode("{" + fields.joined(separator: ",") + "}", as: Session.self)
+    }
+
+    /// An agent that only runs tools (reads code, runs tests, waits for CI) writes no new words for minutes: the card
+    /// shows the step it is on and since when, not the line it wrote before them.
+    @Test func aCardFollowsAnAgentThatOnlyRunsTools() throws {
+        let busy = try lead(state: "working", lastText: "先看一下登录的代码", activity: "在跑测试", at: "2026-11-04T01:20:13.174Z")
+        #expect(busy.activity == "在跑测试" && abs((busy.activityAt ?? .distantPast).timeIntervalSince1970 - 1793755213.174) < 0.01)
+        #expect(TaskNow(lead: busy, working: true) == .step("在跑测试", since: busy.activityAt))
+        // Only tool calls since it started: nothing said yet, still something to show.
+        let silent = try lead(state: "working", lastText: nil, activity: "在读 tasks.go", at: "2026-11-04T01:20:13Z")
+        #expect(TaskNow(lead: silent, working: true)?.text == "在读 tasks.go")
+        // New words: the hub drops the step and the words show again.
+        let spoke = try lead(state: "working", lastText: "测试过了，在提 PR", activity: nil)
+        #expect(TaskNow(lead: spoke, working: true) == .words("测试过了，在提 PR"))
+        // Stopped on a tool call (cut short): its last words, not a step it is no longer on.
+        let stopped = try lead(state: "unread", lastText: "改好了", activity: "在跑测试", at: "2026-11-04T01:20:13Z")
+        #expect(TaskNow(lead: stopped, working: false) == .words("改好了"))
+        let stoppedSilent = try lead(state: "idle", lastText: nil, activity: "在跑测试", at: "2026-11-04T01:20:13Z")
+        #expect(TaskNow(lead: stoppedSilent, working: false) == .step("在跑测试", since: nil))
+        // An older hub sends no step: the words, as before.
+        let old = try lead(state: "working", lastText: "在看", activity: nil)
+        #expect(TaskNow(lead: old, working: true)?.text == "在看")
+        #expect(TaskNow(lead: try lead(state: "working", lastText: nil, activity: nil), working: true) == nil)
+        #expect(TaskNow(lead: nil, working: true) == nil)
+    }
+
+    /// A step's time reads in minutes and is drawn again often enough for them.
+    @Test func aStepSaysHowLongItHasGoneOn() {
+        let start = Date(timeIntervalSince1970: 1_793_755_213)
+        #expect(TaskClock.since(start, now: start.addingTimeInterval(20)) == "刚开始")
+        #expect(TaskClock.since(start, now: start.addingTimeInterval(7 * 60 + 5)) == "7 分钟")
+        #expect(TaskClock.tick <= 60)
+    }
+
     @Test func stateFollowsTheAgents() {
         let todo = TodoItem(id: "t", title: "t")
         #expect(TaskState(todo: todo, agents: []) == .notStarted)

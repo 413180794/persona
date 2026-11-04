@@ -56,6 +56,7 @@ final class AppModel {
             }
             sessionIndex = index
             for (key, cell) in sessionCells where !Session.sameForItsPage(cell.value, index[key]) { cell.value = index[key] }
+            for (key, cell) in sessionLineCells where !Session.sameApartFromTicks(cell.value, index[key]) { cell.value = index[key] }
             countBadges()
             saveSnapshot()
         }
@@ -70,6 +71,8 @@ final class AppModel {
     /// when that session changes, not on every push about any of them (the open chat and the tab badges were redrawn
     /// for each machine's list, 2026-10-31). `allSessions` is still there for views about all of them.
     @ObservationIgnored private var sessionCells: [SessionKey: SessionCell] = [:]
+    /// The same for views that show a session's last line and step (`sessionWithLine(_:)`, the task cards).
+    @ObservationIgnored private var sessionLineCells: [SessionKey: SessionCell] = [:]
     /// Pending interactions by `uid` (the hub's id, with the group for another group).
     private(set) var interactions: [String: Interaction] = [:] { didSet { saveSnapshot(); countBadges() } }
     /// The machine whose engine the pairing asks for (a newly paired group's hub machine).
@@ -505,6 +508,16 @@ final class AppModel {
         if let cell = sessionCells[key] { return cell.value }
         let cell = SessionCell(sessionIndex[key])
         sessionCells[key] = cell
+        return cell.value
+    }
+
+    /// One session for a view that shows what it says or does now (a task card): like `session(_:)`, and also drawn again
+    /// when its last line or step changes; only `rev` and `updatedAt` may be older than the list's. `session(_:)` leaves
+    /// those out on purpose, and a task card reading it kept an agent's line of minutes ago until its state changed.
+    func sessionWithLine(_ key: SessionKey) -> Session? {
+        if let cell = sessionLineCells[key] { return cell.value }
+        let cell = SessionCell(sessionIndex[key])
+        sessionLineCells[key] = cell
         return cell.value
     }
 

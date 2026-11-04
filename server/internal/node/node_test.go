@@ -2,6 +2,8 @@ package node
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -295,5 +297,56 @@ func TestParseClaudeVersion(t *testing.T) {
 		if got := parseClaudeVersion(out); got != want {
 			t.Errorf("%q: %q, want %q", out, got, want)
 		}
+	}
+}
+
+// A new step shows at once: an agent that only runs tools changes no text, and its updated_at only every 10 s bucket.
+func TestListKeySeesANewStep(t *testing.T) {
+	at := time.Date(2026, 11, 4, 1, 20, 13, 0, time.UTC)
+	base := proto.Session{SessionID: "s1", Status: proto.StatusWorking, Title: "t", UpdatedAt: at, LastText: "先看代码",
+		Activity: "在读 tasks.go", ActivityAt: &at}
+	next := base
+	next.Activity = "在跑测试"
+	if listKey([]proto.Session{base}) == listKey([]proto.Session{next}) {
+		t.Fatal("a new step must be pushed")
+	}
+	later := at.Add(3 * time.Second)
+	again := base
+	again.ActivityAt = &later // the same kind of step again (another file read)
+	if listKey([]proto.Session{base}) == listKey([]proto.Session{again}) {
+		t.Fatal("the same step started again must be pushed (its time resets on the card)")
+	}
+}
+
+// The list's activity is the latest tool call no text came after, read off the transcript's tail.
+func TestQuickMetaActivityWhileOnlyToolsRun(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	lines := []string{
+		`{"type":"user","timestamp":"2026-11-04T01:19:57Z","message":{"role":"user","content":"修一下登录"}}`,
+		`{"type":"assistant","timestamp":"2026-11-04T01:20:00Z","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"先看代码"}]}}`,
+		`{"type":"assistant","timestamp":"2026-11-04T01:20:01Z","message":{"id":"m2","role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/a/tasks.go"}}]}}`,
+		`{"type":"user","timestamp":"2026-11-04T01:20:02Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"` + strings.Repeat("x", 20<<10) + `"}]}}`,
+		`{"type":"assistant","timestamp":"2026-11-04T01:20:13Z","message":{"id":"m3","role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"go test ./..."}}]}}`,
+	}
+	write := func() os.FileInfo {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		st, _ := os.Stat(path)
+		return st
+	}
+	m := readQuickMeta(path, write())
+	if m.lastText != "先看代码" || m.doing != "在跑测试" || !m.doingAt.Equal(time.Date(2026, 11, 4, 1, 20, 13, 0, time.UTC)) {
+		t.Fatalf("doing %q at %v, last text %q", m.doing, m.doingAt, m.lastText)
+	}
+	doing, at := m.activityOf()
+	if doing != "在跑测试" || at == nil || !at.Equal(m.doingAt) {
+		t.Fatalf("activityOf %q %v", doing, at)
+	}
+	lines = append(lines, `{"type":"assistant","timestamp":"2026-11-04T01:24:05Z","message":{"id":"m4","role":"assistant","content":[{"type":"text","text":"测试过了"}]}}`)
+	m = readQuickMeta(path, write())
+	if doing, at := m.activityOf(); doing != "" || at != nil || m.lastText != "测试过了" {
+		t.Fatalf("words come first again: %q %v %q", doing, at, m.lastText)
 	}
 }

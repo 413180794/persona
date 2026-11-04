@@ -124,11 +124,12 @@ final class TasksStore {
         }
     }
 
-    /// The task's agents as the app knows them now (the Agents page's sessions).
+    /// The task's agents as the app knows them now (the Agents page's sessions), with their last line and step: a card
+    /// follows each new step of an agent that only runs tools (`AppModel.sessionWithLine(_:)`).
     func sessions(_ todo: TodoItem) -> [Session] {
         let model = AppModel.shared
         let group = model.hub?.group ?? ""
-        return todo.activeAgents.compactMap { model.session(SessionKey(group: group, machineID: $0.machineID, sessionID: $0.sessionID)) }
+        return todo.activeAgents.compactMap { model.sessionWithLine(SessionKey(group: group, machineID: $0.machineID, sessionID: $0.sessionID)) }
     }
 
     func state(_ todo: TodoItem) -> TaskState {

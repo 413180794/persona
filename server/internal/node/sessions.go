@@ -122,6 +122,9 @@ type quickMeta struct {
 	cwd      string
 	model    string
 	lastText string
+	// doing / doingAt: what the agent's latest tool call does, when no text came after it (transcript.Activity).
+	doing    string
+	doingAt  time.Time
 	wake     bool // the latest turn was a background task waking the agent
 	readAt   time.Time
 	mode     string
@@ -210,6 +213,9 @@ func readQuickMeta(path string, st os.FileInfo) quickMeta {
 				if ts := lineTime(line); ts.After(tm.LastActivity) {
 					tm.LastActivity = ts
 				}
+				if !bytes.Contains(line, []byte(`"tool_result"`)) {
+					tm.LastTool = nil // a long prompt: a new turn
+				}
 				continue
 			}
 			transcript.ParseLine(0, line, &tm)
@@ -217,6 +223,9 @@ func readQuickMeta(path string, st os.FileInfo) quickMeta {
 	}
 	m.title, m.cwd, m.model, m.lastText, m.first, m.activity, m.queue = tm.Title, tm.Cwd, tm.Model, tm.LastText, first, tm.LastActivity, tm.Queue
 	m.wake, m.turnClosed = tm.LastTurnWake, tm.TurnClosed
+	if t := tm.LastTool; t != nil {
+		m.doing, m.doingAt = transcript.Activity(t.Name, t.Input), t.At
+	}
 	m.mode, m.modeAt, m.effort, m.effortAt, m.sandbox = tm.PermissionMode, tm.ModeAt, tm.Effort, tm.EffortAt, tm.CodexSandbox
 	return m
 }
@@ -497,6 +506,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 					untitled(&s, m)
 				}
 				s.Model, s.LastText, s.UpdatedAt, s.Rev = m.model, snippet(m.lastText), lastUsed(m, st), st.Size()
+				s.Activity, s.ActivityAt = m.activityOf()
 				if a.Agent != "codex" && a.Agent != traexAgent {
 					s.PermissionMode, s.Effort = n.currentModes(id, m)
 				}
@@ -656,6 +666,18 @@ func (n *Node) scanOffline() []proto.Session {
 		out = append(out, s)
 	}
 	return out
+}
+
+// activityOf is the session's activity for the list: what its latest tool call does, and since when.
+func (m quickMeta) activityOf() (string, *time.Time) {
+	if m.doing == "" {
+		return "", nil
+	}
+	if m.doingAt.IsZero() {
+		return m.doing, nil
+	}
+	at := m.doingAt.UTC()
+	return m.doing, &at
 }
 
 // lastUsed is when the session was last really used: its last exchange, or the file time for transcripts
@@ -1163,6 +1185,9 @@ func listKey(list []proto.Session) string {
 	var b strings.Builder
 	for _, s := range list {
 		fmt.Fprintf(&b, "%s|%s|%s|%s|%s|%s|%s|%d|%q|%s|%s\n", s.SessionID, s.Status, s.Title, s.PaneID, s.SpaceName, s.SlotName, s.LastText, s.UpdatedAt.Unix()/10, s.Queued, s.Suggestion, s.SpawnFrom)
+		if s.Activity != "" { // a new step shows at once, not with the next 10 s of updated_at
+			fmt.Fprintf(&b, "activity:%s/%d\n", s.Activity, unixOf(s.ActivityAt))
+		}
 		fmt.Fprintf(&b, "source:%s/%s/%s/%s/%v/%v/%s/%s\n", s.SourceKind, s.SourceThreadID, s.SourceInstanceID, s.ReadOnlyReason, s.Capabilities, s.Attached, s.CodexRoute, s.CodexRouteNote)
 		for _, t := range s.Background {
 			b.WriteString(t.ID + ",")
@@ -1178,6 +1203,13 @@ func listKey(list []proto.Session) string {
 		}
 	}
 	return b.String()
+}
+
+func unixOf(t *time.Time) int64 {
+	if t == nil {
+		return 0
+	}
+	return t.Unix()
 }
 
 var launcherCache struct {

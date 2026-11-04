@@ -507,6 +507,12 @@
 拿它显示没问题（读它的页面本来就不显示这几样），拿它**发出去**就会发旧的。点下去要把会话现在的样子发出去（交给 Persona 带最后一句、按 `rev` 拉 transcript）
 一律读 `model.latest(key)` 或整份列表（`allSessions`），别读格子。
 
+## 任务卡片停在几分钟前那句话（2026-11-04，#1108）
+
+任务卡片原来经 `TasksStore.sessions` → `model.session(key)` 读会话，格子不跟最后一句，卡片上的文字要等状态变了才换；再加上 Agent 只跑工具时
+`last_text` 本来就不动，看着像卡住了。**显示「它现在在说 / 在做什么」的视图读 `model.sessionWithLine(key)`**（只忽略 `rev`、`updated_at`），
+这一步取 `activity`（`TaskNow`，`docs/unified-entry.md`「任务卡」）。格子 `session(_:)` 和 `sameForItsPage` 照旧不跟 `activity`，对话页不会每一步都重画。
+
 ## 飞书草稿与发件箱（2026-11-03，#688）
 
 - Swift 6.2 对较长的 SwiftUI modifier 链会出现类型检查超时；把聊天内容和导航/生命周期拆成独立的 `@ViewBuilder` 属性。新编译器能过不能代替 Xcode 26.0 验证。

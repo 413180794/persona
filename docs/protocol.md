@@ -288,6 +288,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
  "agent":"claude","agent_label":"",   // agent_label 只在 App 不认识的 Agent 上有：runtime 的叫法（「DSH」，见「Runtime ↔ node」）
  "launcher":"cc_ds","model":"deepseek/v4.1-flash-chain","started_by_jarvis":true,"assistant":false,
  "updated_at":"...","last_text":"最后一条 assistant 文本的前 200 字","pending_interactions":1,
+ "activity":"在跑测试","activity_at":"...",   // 最近一步是工具调用、之后还没有新文字时才有：这一步在做什么（node 从 transcript 概括，40 字以内）和开始的时间；写出新文字或开始新一轮就没了
  "queued":["工作中输入、还没被取走的消息"],
  "subagents":[{"id":"a849e1f0…","session_id":"<id>@a849e1f0…","type":"Explore","description":"…","tool_use_id":"toolu_…",
                 "running":true,"background":true,"started_at":"...","updated_at":"...","last_text":"…"}],   // 子 Agent 当会话读

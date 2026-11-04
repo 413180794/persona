@@ -464,6 +464,11 @@ type Session struct {
 	Ports     []Port    `json:"ports,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
 	LastText  string    `json:"last_text,omitempty"`
+	// Activity says what the agent is doing when its latest step is a tool call no text came after (「在跑测试」
+	// 「在读 tasks.go」「在等 CI」, transcript.Activity), and ActivityAt when that call started: while an agent only runs
+	// tools its last_text stays put for minutes, and a task card showing it looked stuck. Empty once it writes text.
+	Activity   string     `json:"activity,omitempty"`
+	ActivityAt *time.Time `json:"activity_at,omitempty"`
 	// Rev changes whenever the transcript does (its size): the app pulls new items for every session whose rev
 	// differs from what it has, without opening it. Changes travel as the light `revs` event.
 	Rev int64 `json:"rev,omitempty"`

@@ -386,6 +386,8 @@ ASK4 = "b2e4d6f8-0000-4000-8000-000000000004"  # a long one (the top bar must no
 SESSIONS = [
     sess("macbook", WIDGET, "给天气 App 加主屏幕小组件", "/Users/me/code/weather", "working", "working", "weather", 1, "widget", 1, 0,
          "小组件的时间线已经能按小时刷新了，正在跑测试确认降雨概率的格式化没问题。", permission_mode="acceptEdits",
+         # Only tool calls since that line (#1108): the task card shows this step and how long it has gone on.
+         activity="在跑测试", activity_at=ago(minutes=4),
          loop={"kind": "wakeup", "prompt": "/loop 每 30 分钟检查 CI，红了就修", "interval_seconds": 1800,
                "next_at": (datetime.now(timezone.utc) + timedelta(minutes=17)).isoformat().replace("+00:00", "Z"), "ticks": 3},
          background=[{"id": "b1", "kind": "shell", "description": "跑小组件快照测试",

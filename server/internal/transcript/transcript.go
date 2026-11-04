@@ -145,6 +145,9 @@ type Meta struct {
 	// LastTurnWake: the latest turn was started by a background task reporting back, not by a message (no
 	// "finished" push for it).
 	LastTurnWake bool
+	// LastTool: the latest tool call no assistant text or new prompt came after (activity.go), nil when the agent's
+	// last word is newer.
+	LastTool *ToolCall
 	// bashInput is the last "! cmd" typed in Claude Code, for the Bash call its output line turns into.
 	bashInput string
 	// notified holds the background-task notifications already shown: one is often recorded twice (as a user line and
@@ -189,6 +192,7 @@ func ParseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		if it.Role != "system" && !it.TS.IsZero() && it.TS.After(meta.LastActivity) {
 			meta.LastActivity = it.TS
 		}
+		meta.trackActivity(it)
 		switch {
 		case it.Wake:
 			meta.LastTurnWake = true

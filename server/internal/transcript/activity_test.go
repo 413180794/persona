@@ -1,0 +1,101 @@
+package transcript
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestActivitySaysWhatAToolCallDoes(t *testing.T) {
+	cases := []struct {
+		name, input, want string
+	}{
+		{"Bash", `{"command":"cd server && go test ./internal/hub/..."}`, "在跑测试"},
+		{"Bash", `{"command":"./scripts/test/test-server.sh"}`, "在跑测试"},
+		{"Bash", `{"command":"xcodebuild test -scheme Persona -destination id=X"}`, "在跑测试"},
+		{"Bash", `{"command":"cd web && npm test && npm run build"}`, "在跑测试"},
+		{"Bash", `{"command":"gh pr checks 123 --watch"}`, "在等 CI"},
+		{"Bash", `{"command":"gh run watch 99 --exit-status"}`, "在等 CI"},
+		{"Bash", `{"command":"go build -o /tmp/personad ./cmd/personad"}`, "在编译"},
+		{"Bash", `{"command":"go vet ./..."}`, "在检查代码"},
+		{"Bash", `{"command":"golangci-lint run"}`, "在检查代码"},
+		{"Bash", `{"command":"git push -u origin fix/1-x"}`, "在推送代码"},
+		{"Bash", `{"command":"git add a.go && git commit -m 'fix: x'"}`, "在提交代码"},
+		{"Bash", `{"command":"gh pr create --title x --body y"}`, "在提 PR"},
+		{"Bash", `{"command":"gh pr merge 12 --squash"}`, "在合并 PR"},
+		{"Bash", `{"command":"./scripts/deploy/deploy.sh box1"}`, "在部署"},
+		{"Bash", `{"command":"./scripts/release/release.sh"}`, "在发版"},
+		{"Bash", `{"command":"sleep 40 && date"}`, "在等待"},
+		{"Bash", `{"command":"ls -la","description":"List files"}`, "在跑 List files"},
+		{"Bash", `{"command":"\n  uname   -a\n"}`, "在跑 uname -a"},
+		{"Bash", `{}`, "在跑命令"},
+		{"Read", `{"file_path":"/code/app/server/internal/hub/tasks.go"}`, "在读 tasks.go"},
+		{"Edit", `{"file_path":"/code/app/TaskViews.swift","old_string":"a","new_string":"b"}`, "在改 TaskViews.swift"},
+		{"Write", `{"file_path":"/tmp/notes.md","content":"x"}`, "在写 notes.md"},
+		{"Grep", `{"pattern":"lastText"}`, "在搜 lastText"},
+		{"Glob", `{"pattern":"**/*.swift"}`, "在找文件 **/*.swift"},
+		{"WebFetch", `{"url":"https://example.com/docs/a"}`, "在看网页 example.com"},
+		{"WebSearch", `{"query":"swift timelineview"}`, "在搜网页 swift timelineview"},
+		{"Agent", `{"description":"Find the push path"}`, "在派子任务 Find the push path"},
+		{"TodoWrite", `{"todos":[]}`, "在更新计划"},
+		{"Skill", `{"skill":"code-review"}`, "在用技能 code-review"},
+		{"ScheduleWakeup", `{"delaySeconds":270}`, "在等待"},
+		{"mcp__persona__phone_calendar_events", `{}`, "在调用 phone_calendar_events"},
+		{"SomethingNew", `{}`, "在调用 SomethingNew"},
+	}
+	for _, c := range cases {
+		if got := Activity(c.name, json.RawMessage(c.input)); got != c.want {
+			t.Errorf("Activity(%s, %s) = %q, want %q", c.name, c.input, got, c.want)
+		}
+	}
+	long := Activity("Grep", json.RawMessage(`{"pattern":"`+strings.Repeat("x", 100)+`"}`))
+	if r := []rune(long); len(r) != activityLen || !strings.HasSuffix(long, "…") {
+		t.Fatalf("a long activity is clipped to one line: %q", long)
+	}
+}
+
+// The latest tool call is the activity until the agent writes text again or a new prompt starts a turn.
+func TestLastToolFollowsTheLatestStep(t *testing.T) {
+	var m Meta
+	parse := func(line string) {
+		t.Helper()
+		ParseLine(0, []byte(line), &m)
+	}
+	parse(`{"type":"user","timestamp":"2026-11-04T01:19:57Z","message":{"role":"user","content":"修一下登录"}}`)
+	parse(`{"type":"assistant","timestamp":"2026-11-04T01:20:00Z","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"先看代码"}]}}`)
+	if m.LastTool != nil {
+		t.Fatalf("no tool call yet: %+v", m.LastTool)
+	}
+	parse(`{"type":"assistant","timestamp":"2026-11-04T01:20:01Z","message":{"id":"m2","role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/a/tasks.go"}}]}}`)
+	parse(`{"type":"user","timestamp":"2026-11-04T01:20:02Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"..."}]}}`)
+	parse(`{"type":"assistant","timestamp":"2026-11-04T01:20:13Z","message":{"id":"m3","role":"assistant","content":[{"type":"thinking","thinking":"run the tests"},{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"go test ./..."}}]}}`)
+	parse(`{"type":"user","timestamp":"2026-11-04T01:24:00Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","content":"ok"}]}}`)
+	if m.LastTool == nil || m.LastTool.Name != "Bash" || !m.LastTool.At.Equal(time.Date(2026, 11, 4, 1, 20, 13, 0, time.UTC)) {
+		t.Fatalf("the latest step is the test run, from when it started: %+v", m.LastTool)
+	}
+	if got := Activity(m.LastTool.Name, m.LastTool.Input); got != "在跑测试" {
+		t.Fatalf("activity %q", got)
+	}
+	if m.LastText != "先看代码" {
+		t.Fatalf("the last text stays the old line: %q", m.LastText)
+	}
+	parse(`{"type":"assistant","timestamp":"2026-11-04T01:24:05Z","message":{"id":"m4","role":"assistant","content":[{"type":"text","text":"测试过了"}]}}`)
+	if m.LastTool != nil {
+		t.Fatalf("new words come first again: %+v", m.LastTool)
+	}
+	parse(`{"type":"assistant","timestamp":"2026-11-04T01:24:06Z","message":{"id":"m5","role":"assistant","content":[{"type":"tool_use","id":"t3","name":"Bash","input":{"command":"gh pr checks 1 --watch"}}]}}`)
+	parse(`{"type":"user","timestamp":"2026-11-04T01:30:00Z","message":{"role":"user","content":"再改一下"}}`)
+	if m.LastTool != nil {
+		t.Fatalf("a new prompt starts a turn: %+v", m.LastTool)
+	}
+}
+
+// Codex: a command it ran is a step too.
+func TestLastToolFromACodexRollout(t *testing.T) {
+	var m Meta
+	ParseLine(1, []byte(`{"timestamp":"2026-10-26T05:06:02.000Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"e1","command":["/bin/zsh","-lc","go test ./..."],"status":"completed","aggregated_output":"ok\n","exit_code":0}}}`), &m)
+	if m.LastTool == nil || Activity(m.LastTool.Name, m.LastTool.Input) != "在跑测试" {
+		t.Fatalf("codex command: %+v", m.LastTool)
+	}
+}

@@ -268,6 +268,34 @@ nonisolated enum TaskState: String, Sendable, CaseIterable {
     var isRemovable: Bool { self != .working && self != .needsYou }
 }
 
+/// What a task's card says its agent is on now (docs/unified-entry.md「任务卡片的进度」): its latest words, or — while it
+/// only runs tools (reads code, runs tests, waits for CI) and its words stay put for minutes — the step it is on and
+/// since when. New words win again as soon as they come (the hub drops the step then).
+nonisolated enum TaskNow: Equatable, Sendable {
+    case words(String)
+    case step(String, since: Date?)
+
+    /// From the task's lead agent; nil when it has said and done nothing yet. A working agent's step comes before its
+    /// words (the hub only sends a step newer than them); once it stopped, its words do (a turn cut short on a tool call).
+    init?(lead: Session?, working: Bool) {
+        let words = lead?.lastText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let step = lead?.activity?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !step.isEmpty, working || words.isEmpty {
+            self = .step(step, since: working ? lead?.activityAt : nil)
+        } else if !words.isEmpty {
+            self = .words(words)
+        } else {
+            return nil
+        }
+    }
+
+    var text: String {
+        switch self {
+        case .words(let s), .step(let s, _): s
+        }
+    }
+}
+
 // MARK: - Endpoints
 
 nonisolated extension APIClient {

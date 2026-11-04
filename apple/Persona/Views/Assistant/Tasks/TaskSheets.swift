@@ -188,7 +188,7 @@ struct TaskBoardSheet: View {
         let lead = store.leadSession(todo)
         let place = TaskPlace.line(todo, lead: lead)
         if let failure = store.startFailure(todo) { return place.isEmpty ? failure : place + " · " + failure }
-        guard let last = lead?.lastText?.trimmingCharacters(in: .whitespacesAndNewlines), !last.isEmpty else { return place }
-        return place + " · " + last
+        guard let now = TaskNow(lead: lead, working: store.state(todo) == .working) else { return place }
+        return place + " · " + now.text
     }
 }

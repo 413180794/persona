@@ -90,6 +90,9 @@ struct TaskRemoveMenuItem: View {
 
 /// "12 分钟", "1 小时 5 分" since a date.
 enum TaskClock {
+    /// How often a running step's time is drawn again: it shows minutes.
+    static let tick: TimeInterval = 30
+
     static func since(_ date: Date?, now: Date = .now) -> String? {
         guard let date, date.isMeaningful else { return nil }
         let m = max(0, Int(now.timeIntervalSince(date) / 60))
@@ -365,7 +368,8 @@ struct TaskCard: View {
     }
 }
 
-/// What the task's agent is doing or said last, in a well: waiting for the user in its tone.
+/// What the task's agent is doing or said last, in a well: waiting for the user in its tone; while it only runs tools,
+/// the step it is on and how long it has been at it (`TaskNow`).
 struct TaskNowLine: View {
     var todo: TodoItem
     var state: TaskState
@@ -374,14 +378,17 @@ struct TaskNowLine: View {
     private var store: TasksStore { .shared }
 
     var body: some View {
+        let now = TaskNow(lead: lead, working: state == .working)
         let text: String = {
             if state == .needsYou { return "有事等你回答" }
             if state == .failed { return "没开起来：\(store.startFailure(todo) ?? "原因不明")" }
-            if let s = lead?.lastText?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty { return s }
+            if let now { return now.text }
             if let e = todo.agents.first?.startError, !e.isEmpty { return "没开起来：\(e)" }
             return state == .notStarted ? "正在开 Agent" : "还没有动静"
         }()
         let tint: Color? = state == .needsYou ? state.agentState.tone.text : state == .failed ? Theme.danger : nil
+        let since: Date? = if state != .needsYou, state != .failed, case .step(_, let at)? = now { at } else { nil }
+        let isStep: Bool = if state != .needsYou, state != .failed, case .step? = now { true } else { false }
         // What the agent says starts at the well's edge; only a question for the user keeps its mark.
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
             if state == .needsYou {
@@ -391,9 +398,17 @@ struct TaskNowLine: View {
             }
             Text(text)
                 .font(Theme.Font.secondary)
-                .foregroundStyle(tint ?? .primary)
-                .lineLimit(2)
+                .foregroundStyle(tint ?? (isStep ? .secondary : .primary))
+                .lineLimit(isStep ? 1 : 2)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            if let since {
+                // How long the step has gone on: a long test run or CI wait reads as one, not as a stuck card.
+                TimelineView(.periodic(from: .now, by: TaskClock.tick)) { context in
+                    if let t = TaskClock.since(since, now: context.date) {
+                        Text(t).font(Theme.Font.caption).foregroundStyle(.tertiary).lineLimit(1).fixedSize()
+                    }
+                }
+            }
         }
         .padding(.horizontal, Theme.Space.m)
         .padding(.vertical, Theme.Space.s)
@@ -524,7 +539,7 @@ struct MessageCard: View {
                     HStack(spacing: Theme.Space.s) {
                         TaskMark(state: state).scaledFrame(width: Theme.Size.markM)
                         Text(todo.title).font(Theme.Font.captionStrong).lineLimit(1)
-                        Text(store.leadSession(todo)?.lastText ?? state.label)
+                        Text(TaskNow(lead: store.leadSession(todo), working: state == .working)?.text ?? state.label)
                             .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                         Spacer(minLength: 0)
                         Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)

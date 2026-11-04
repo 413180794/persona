@@ -134,7 +134,10 @@ import Testing
         b.rev = 7
         b.updatedAt = Date(timeIntervalSince1970: 900)
         b.lastText = "a new line"
+        b.activity = "在跑测试"
+        b.activityAt = Date(timeIntervalSince1970: 880)
         #expect(Session.sameForItsPage(a, b))
+        #expect(!Session.sameApartFromTicks(a, b)) // the task cards (sessionWithLine) do draw a new step
         var c = b
         c.permissionMode = "plan"
         #expect(!Session.sameForItsPage(a, c))
