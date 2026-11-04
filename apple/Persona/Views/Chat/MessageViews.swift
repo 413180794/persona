@@ -41,15 +41,12 @@ extension MarkdownUI.Theme {
                 // A card the assistant drew in numbers (#886); one the app cannot read stays a code block.
                 if config.language == PersonaCard.language, let card = PersonaCard.parse(config.content) {
                     PersonaCardView(card: card).markdownMargin(top: 4, bottom: 12)
+                } else if let kind = RenderedFence.kind(config.language) {
+                    // A formula or a diagram (docs/ios.md「公式和图」); the code block when it cannot be drawn.
+                    RenderedBlock(kind: kind, source: config.content.trimmingCharacters(in: .whitespacesAndNewlines)) { plainCodeBlock(config) }
+                        .markdownMargin(top: 4, bottom: 12)
                 } else {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        config.label
-                            .relativeLineSpacing(.em(0.2))
-                            .markdownTextStyle { FontFamilyVariant(.monospaced); FontSize(.em(Theme.Level.code.size / Theme.Level.body.size)) }
-                            .padding(Theme.Space.m)
-                    }
-                    .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
-                    .markdownMargin(top: 4, bottom: 12)
+                    plainCodeBlock(config).markdownMargin(top: 4, bottom: 12)
                 }
             }
             .blockquote { config in
@@ -60,6 +57,30 @@ extension MarkdownUI.Theme {
             }
             .table { config in FittedTable(config: config) } // fits the width it gets; scrolls only when it cannot
             .tableCell { config in FittedTableCell(config: config) }
+    }
+}
+
+extension MarkdownUI.Theme {
+    /// A fenced code block: monospaced, scrolling sideways, on the code background.
+    @MainActor static func plainCodeBlock(_ config: CodeBlockConfiguration) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            config.label
+                .relativeLineSpacing(.em(0.2))
+                .markdownTextStyle { FontFamilyVariant(.monospaced); FontSize(.em(Theme.Level.code.size / Theme.Level.body.size)) }
+                .padding(Theme.Space.m)
+        }
+        .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+    }
+}
+
+/// The fences drawn as pictures: ```math (also latex, tex, katex) and ```mermaid.
+nonisolated enum RenderedFence {
+    static func kind(_ language: String?) -> MarkdownRenderer.Kind? {
+        switch language?.lowercased() {
+        case MathMarkdown.fence, "latex", "tex", "katex": .displayMath
+        case "mermaid": .mermaid
+        default: nil
+        }
     }
 }
 
@@ -922,7 +943,7 @@ struct RecapDrawer: View {
                                 Text((n == 0 && items.count > 1 ? "最新 · " : "") + "写于 " + Fmt.relative(ts))
                                     .font(Theme.Font.caption).foregroundStyle(.secondary)
                             }
-                            Markdown(Links.markdown(item.text ?? ""))
+                            Markdown(Links.markdown(MathMarkdown.rewrite(item.text ?? "")))
                                 .markdownTheme(.jarvis)
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1034,7 +1055,7 @@ nonisolated enum WebLinks {
 /// Parsed Markdown per text: MarkdownUI parses (cmark) in `Markdown.init`, on every redraw of the row.
 nonisolated enum MarkdownMemo {
     private static let memo = TextMemo<MarkdownContent>(limit: 128)
-    static func content(_ text: String) -> MarkdownContent { memo(text) { MarkdownContent(Links.markdown($0)) } }
+    static func content(_ text: String) -> MarkdownContent { memo(text) { MarkdownContent(Links.markdown(MathMarkdown.rewrite($0))) } }
 }
 
 /// What a chat row derives from its message (parsed Markdown, paths, links, the shown text), computed once per
@@ -1077,7 +1098,7 @@ nonisolated struct AssistantRowText {
     let markdown: MarkdownContent
     let files: [String]
     init(_ text: String) {
-        markdown = MarkdownContent(Links.markdown(text)) // links end where `Links` says, not at the next space
+        markdown = MarkdownContent(Links.markdown(MathMarkdown.rewrite(text))) // links end where `Links` says, not at the next space; formulas as pictures
         files = FilePaths.find(in: text)
     }
 }

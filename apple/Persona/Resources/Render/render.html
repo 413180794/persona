@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- Formulas and diagrams for the app (docs/ios.md「公式和图」): only this bundle's scripts, styles and fonts; nothing
+     from the network. What to draw arrives as arguments of renderMath / renderMermaid, never as markup. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src data:; img-src data:">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="katex.min.css">
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; }
+  /* Away from the page's edge: what KaTeX draws above or left of its box still lands in the page. */
+  #out { position: absolute; left: 64px; top: 64px; display: inline-block; white-space: nowrap; }
+  #out.block { padding: 2px 4px; }
+  #out svg { display: block; }
+  .katex { font-size: 1em; }
+</style>
+<script src="katex.min.js"></script>
+<script src="mermaid.min.js"></script>
+<script src="render.js"></script>
+</head>
+<body><div id="out"></div></body>
+</html>

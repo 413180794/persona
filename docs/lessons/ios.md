@@ -703,3 +703,12 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
   这次改了 `-fromSeq` → `-showFromSeq`、`-openFile` → `-openFilePath`、`-openTerminal` → `-openTerminalPane`、`-openWork` → `-openAllWork`，侧边栏的 `openMachines` → `onMachines`。
 - 走过的弯路：先以为是参数没给值（改成可选 + `needsValueError`，结果在快捷指令里变成「内部错误」），又以为是 iOS 27 的结果卡片
   （`ShowsSnippetView`）；这两条在 Release 下都复现过、都不是原因，已撤回。崩溃查不清时先在模拟器上用 Release 配置复现，再用 dSYM 解栈。
+
+## 藏起来的 WKWebView 截图：透明、错位、字不出来（2026-11-04，#1295）
+
+公式和图（`MarkdownRenderer`，`docs/ios.md`「公式和图」）靠一个看不见的 WKWebView 画完再 `takeSnapshot`，前后踩了三个坑，症状都是「图是空的」：
+- **视图的 alpha 会进截图**：为了藏起来设 `alpha = 0.01`，截出来的图几乎全透明，当模板图用就什么都看不见。改成 alpha 1、放在窗口最底层、frame 挪到屏幕外。不在任何窗口里的 web view 截不出内容。
+- **在窗口里会被加安全区的 content inset**：页面整体往下挪了约 80 pt，按 `getBoundingClientRect` 算的截图框里只剩公式顶上一截。`scrollView.contentInsetAdjustmentBehavior = .never`。
+- **`file://` 页面加载不了包里的字体**：字体请求走 CORS，file 页面的来源是不透明的，KaTeX 的 woff2 一直没加载，字体的 block 期间字是隐形的（Mermaid 用系统字体所以正常）。把字体以 data: URL 内联进 CSS（`font-src data:`）。另外 KaTeX 用相对定位把分子、上下标挪到自己的框外面，截图框要取所有子元素框的并集，内容也别贴着页面左上角画。
+- **Mac 上屏幕外的窗口里没有 `requestAnimationFrame`**：页面等两帧再量尺寸，在 Mac 上永远等不到，每张图都转圈。等帧要和一个短的 `setTimeout` 赛跑；截图也不等屏幕刷新（`afterScreenUpdates = false`）。
+- 截图缓存要带版本号（`MarkdownRenderer.version`）：调这些的时候，坏图已经存进了模拟器的缓存目录，不改键就一直读到旧的空图。

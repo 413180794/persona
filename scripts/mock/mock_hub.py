@@ -5603,6 +5603,19 @@ if os.environ.get("MOCK_OFFICE"):
         _ext = os.path.splitext(_name)[1]
         MOCK_TREE[MOCK_REPO + "/docs/" + _name] = _body if isinstance(_body, str) else _body.decode() if _ext == ".rtf" else (
             MOCK_MIMES[_ext], base64.b64encode(_body).decode())
+# MOCK_RENDER=1: formulas and a diagram (docs/ios.md「公式和图」): the last turn of the release-notes conversation, and docs/算法.md.
+RENDER_MD = ("降雨概率按逻辑回归估：$p = \\sigma(w^\\top x + b)$，其中 \\(\\sigma(z) = 1/(1+e^{-z})\\)。损失是交叉熵：\n\n"
+             "$$\nL = -\\frac{1}{n}\\sum_{i=1}^{n} \\big[y_i \\log p_i + (1-y_i)\\log(1-p_i)\\big]\n$$\n\n"
+             "刷新流程：\n\n```mermaid\nflowchart LR\n  A[小组件请求] --> B{缓存新鲜?}\n  B -- 是 --> C[读缓存]\n"
+             "  B -- 否 --> D[请求预报 API]\n  D --> E[写缓存]\n  E --> C\n```\n\n"
+             "费用大约 $5 到 $10 一个月（这不是公式）。写错的公式会显示原文：$\\frac{1}{$。")
+if os.environ.get("MOCK_RENDER"):
+    ITEMS[RELEASE] = ITEMS.get(RELEASE, []) + [it("user", "text", 1, text="用公式讲讲降雨概率是怎么算的，再画一下刷新流程"),
+                                               it("assistant", "text", 0, text=RENDER_MD)]
+    MOCK_TREE[MOCK_REPO + "/docs/"] = None
+    MOCK_TREE[MOCK_REPO + "/docs/算法.md"] = "# 降雨预报的算法\n\n" + RENDER_MD + (
+        "\n\n## 时序\n\n```mermaid\nsequenceDiagram\n  participant W as 小组件\n  participant A as App\n  participant S as 服务器\n"
+        "  W->>A: 时间线请求\n  A->>S: GET /v1/forecast\n  S-->>A: 6 小时预报\n  A-->>W: Timeline\n```\n")
 MOCK_TREE["Desktop/"] = None  # listed, but macOS keeps it from jarvisd (mock_denied)
 MOCK_COMMITS[2]["refs"] = "tag: v0.1.0"
 TIME_OFFSET = os.environ.get("MOCK_TIME_OFFSET", "")

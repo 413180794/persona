@@ -1,3 +1,4 @@
+import MarkdownUI
 import BeautifulUI
 import SwiftUI
 
@@ -43,6 +44,7 @@ struct RootView: View {
         // No scroll bars anywhere (2026-10-31, the user: they look bad); the environment reaches every ScrollView,
         // List and sheet below. UIKit scroll views (MonoTextView, the terminal, web views) turn theirs off themselves.
         .scrollIndicators(.hidden)
+        .markdownInlineImageProvider(MathInlineImages()) // inline formulas in every Markdown (MathMarkdown)
         // The shell shows the toasts in a window of its own, over its sheets too (`ToastWindow`).
         .overlay(alignment: .top) { if !usesShell { ToastOverlay() } }
         #if os(iOS)

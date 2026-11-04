@@ -591,7 +591,7 @@ final class FileViewerModel {
     private func renderMarkdown() async {
         let text = text_.joined()
         chunks = await Task.detached(priority: .userInitiated) {
-            MarkdownChunks.split(Links.markdown(MarkdownHTML.simplify(text))).enumerated().map {
+            MarkdownChunks.split(Links.markdown(MathMarkdown.rewrite(MarkdownHTML.simplify(text)))).enumerated().map {
                 MarkdownChunk(id: $0.offset, content: MarkdownContent($0.element))
             }
         }.value

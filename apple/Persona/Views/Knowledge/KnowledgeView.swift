@@ -538,7 +538,7 @@ struct KnowledgeDetailView: View {
                 // Empty once the header's parts are taken out (a summary that is just the one line): no blank card.
                 if let sum = d.summary, case let profile = Self.profile(sum, oneLine: shown.oneLine), !profile.isEmpty {
                     Section("档案") {
-                        Markdown(Links.markdown(profile)).markdownTheme(.jarvis).textSelection(.enabled)
+                        Markdown(Links.markdown(MathMarkdown.rewrite(profile))).markdownTheme(.jarvis).textSelection(.enabled)
                             .padding(.vertical, Theme.Space.sm)
                     }
                 }
