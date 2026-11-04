@@ -1,6 +1,8 @@
 package node
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -43,6 +45,24 @@ func TestManagedEnvSubagentAndCustomModel(t *testing.T) {
 		if !slices.Contains(env, want) {
 			t.Errorf("env lacks %s: %v", want, env)
 		}
+	}
+}
+
+// A node started by launchd has a minimal PATH: a claude installed outside it must still be found.
+func TestClaudeExecutableFallsBackToInstallLocations(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", t.TempDir())
+	want := filepath.Join(home, ".local", "bin", "claude")
+	if err := os.MkdirAll(filepath.Dir(want), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(want, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, err := claudeExecutable()
+	if err != nil || got != want {
+		t.Fatalf("got %q %v, want %q", got, err, want)
 	}
 }
 

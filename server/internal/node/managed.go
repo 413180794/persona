@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -95,6 +96,22 @@ func managedEnv(l proto.ManagedLauncher) []string {
 var launchEnvRemoved = []string{"ANTHROPIC_", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY",
 	"CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_SUBAGENT_MODEL"}
 
+// claudeExecutable finds claude: PATH first, then the usual install spots. A node started by launchd (macOS) has a
+// minimal PATH that misses /opt/homebrew/bin, and nothing in `jarvisd launch`'s own path adds it.
+func claudeExecutable() (string, error) {
+	if p, err := exec.LookPath("claude"); err == nil {
+		return p, nil
+	}
+	home, _ := os.UserHomeDir()
+	for _, p := range []string{filepath.Join(home, ".local", "bin", "claude"), "/opt/homebrew/bin/claude",
+		"/usr/local/bin/claude", filepath.Join(home, ".claude", "local", "claude")} {
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			return p, nil
+		}
+	}
+	return "", errors.New("claude not found in PATH or the usual install locations")
+}
+
 // Launch is `jarvisd launch <name> [claude args…]`: the managed launcher's settings from the local node, then claude.
 func Launch(ctx context.Context, name string, args []string) error {
 	line, err := DialSocket(ctx, sockRequest{Kind: "launcher.env", Name: name})
@@ -112,9 +129,9 @@ func Launch(ctx context.Context, name string, args []string) error {
 	if resp.Error != "" {
 		return errors.New("jarvisd launch " + name + ": " + resp.Error)
 	}
-	claude, err := exec.LookPath("claude")
+	claude, err := claudeExecutable()
 	if err != nil {
-		return fmt.Errorf("jarvisd launch: claude not found in PATH: %w", err)
+		return fmt.Errorf("jarvisd launch: %w", err)
 	}
 	var env []string
 	for _, kv := range os.Environ() {
