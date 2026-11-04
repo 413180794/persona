@@ -117,7 +117,7 @@ private struct LarkConversationsPage: View {
                 }
                 if old == .interacting && phase != .interacting && phase != .tracking {
                     updatePins(offset)
-                    withAnimation(Theme.Motion.standard) { _ = pins.endDrag(canExpand: canExpandPins && query.isEmpty) }
+                    withAnimation(Theme.Motion.expand) { _ = pins.endDrag(canExpand: canExpandPins && query.isEmpty) }
                 } else if old == .tracking && phase != .interacting { pins.cancelDrag() }
             }
             .themedPage()

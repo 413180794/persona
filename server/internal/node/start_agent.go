@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/host"
@@ -59,17 +58,9 @@ func otherAgentCommand(launcher, resume, prompt string) string {
 // resume is set, with the first message as its argument) and waits until the host reports an agent of that kind in
 // the tab with a session id that was not running before (or the one resumed).
 func (n *Node) startOtherAgent(ctx context.Context, launch host.Launcher, cwd, launcher, kind, prompt, resume, ws, tabName string) (*proto.Session, error) {
-	var created *host.Created
-	var err error
-	if ws == "" {
-		if created, err = launch.CreateSpace(ctx, cwd, filepath.Base(cwd)); err == nil && created.SlotID != "" {
-			_ = renameSlot(ctx, launch, created.SlotID, tabLabel(tabName, nil))
-		}
-	} else {
-		created, err = launch.CreateSlot(ctx, ws, cwd, tabLabel(tabName, n.tabLabels(ctx, launch, ws)))
-	}
+	created, err := n.newTab(ctx, launch, cwd, ws, tabName) // retire.go
 	if err != nil {
-		return nil, fmt.Errorf("create herdr tab: %w", err)
+		return nil, err
 	}
 	pane := created.Pane.String()
 	// Exclude existing sessions when the normal scan has to infer a Codex rollout.

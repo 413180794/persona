@@ -125,16 +125,9 @@ func (n *Node) startCodex(ctx context.Context, launch host.Launcher, cwd, launch
 	if err := os.WriteFile(file, b, 0o600); err != nil {
 		return nil, err
 	}
-	var created *host.Created
-	if ws == "" {
-		if created, err = launch.CreateSpace(ctx, cwd, filepath.Base(cwd)); err == nil && created.SlotID != "" {
-			_ = renameSlot(ctx, launch, created.SlotID, tabLabel(tabName, nil))
-		}
-	} else {
-		created, err = launch.CreateSlot(ctx, ws, cwd, tabLabel(tabName, n.tabLabels(ctx, launch, ws)))
-	}
+	created, err := n.newTab(ctx, launch, cwd, ws, tabName) // retire.go
 	if err != nil {
-		return nil, fmt.Errorf("create herdr tab: %w", err)
+		return nil, err
 	}
 	pane := created.Pane.String()
 	n.mu.Lock()

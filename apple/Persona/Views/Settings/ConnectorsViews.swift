@@ -184,6 +184,13 @@ nonisolated struct ConnectorPrompt: Codable, Equatable, Sendable {
     var polls: Bool { isDeviceCode || isQRCode || isPairCode }
     /// What the polling follows: a new code starts it over.
     var pollKey: String? { isDeviceCode || isPairCode ? userCode : isQRCode ? qr?.rows.joined() : nil }
+    /// A step this app cannot draw (#1693): a kind it does not know (a newer hub's), a code or QR code that came
+    /// without the code, or a form with no fields. Drawn as a form it was an empty card with a 下一步 that could never
+    /// light up; the page says so instead, with 重新开始.
+    var cannotDraw: Bool {
+        if isDeviceCode || isQRCode || isPairCode { return false }
+        return !(kind ?? "").isEmpty || (fields ?? []).isEmpty
+    }
 }
 
 /// Where a hub connector's things go besides the assistant's tools, each switched on its page.

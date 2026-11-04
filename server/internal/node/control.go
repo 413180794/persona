@@ -109,16 +109,9 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	if id == "" {
 		id = newUUID()
 	}
-	var created *host.Created
-	if ws == "" {
-		if created, err = launch.CreateSpace(ctx, cwd, filepath.Base(cwd)); err == nil && created.SlotID != "" {
-			_ = renameSlot(ctx, launch, created.SlotID, tabLabel(tabName, nil)) // its first tab
-		}
-	} else {
-		created, err = launch.CreateSlot(ctx, ws, cwd, tabLabel(tabName, n.tabLabels(ctx, launch, ws)))
-	}
+	created, err := n.newTab(ctx, launch, cwd, ws, tabName) // retire.go
 	if err != nil {
-		return nil, fmt.Errorf("create herdr tab: %w", err)
+		return nil, err
 	}
 	pane := created.Pane.String()
 	if name := n.starts.tabCreated(id, created.SlotID); name != "" { // named while the tab was being made
@@ -516,7 +509,7 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 	n.dropSuggestion(id)
 	pane, err := n.paneFor(ctx, id)
 	if err != nil && (n.codexPath(id) != "" || n.traexPath(id) != "") {
-		return fmt.Errorf("这个 Agent 已经退出：Codex / TRAEX 的会话要在电脑上重新打开")
+		return n.resumeOther(ctx, id, text, images) // retire.go
 	}
 	kind := "claude"
 	if err == nil {
@@ -552,8 +545,9 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 				}
 			}
 		}
-		mode, effort := n.modesOf(id) // resume with what it ran with
-		s, err := n.start(ctx, cwd, launcher, "", id, "", mode, effort, "", "", "")
+		mode, effort := n.modesOf(id) // resume with what it ran with: modes, model, and the tab's name from its title
+		s, err := n.start(ctx, cwd, launcher, "", id, "", mode, effort, n.resumeTabName(id), "", "",
+			modelExecution{Model: st.Model, Fingerprint: st.ModelFingerprint})
 		if err != nil {
 			return err
 		}

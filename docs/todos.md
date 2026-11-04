@@ -212,6 +212,29 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 
 `skip` 不为空时表示这次自动流程不会判断它（`not_a_task` 手建的待办、`done` 已经完成、`reopened` 重新打开后还没有新一轮工作），但接口照样给出模型的结论，方便看。
 
+## 做完的任务关掉 Agent
+
+从助手对话派出去的任务（`origin` 不为空）完成以后——用户点的完成或 hub 的自动完成都算——它的 Agent 不再留在 herdr 里占一个标签页：
+hub 每分钟看一遍（`hub/tasks_close.go`），任务完成且 Agent 静止都满 3 分钟（`taskCloseIdle`，从完成时间和 Agent 最后一次活动里取较晚的算）就让 node 关掉它（`session.retire`，`node/retire.go`）：
+关的是它的窗格（标签页里只有它时关整个标签页，和手机上「关闭」一样），Agent 进程随之退出。
+
+**保留什么**：待办里的 Agent 记录（机器、会话 id、目录）不动，不算 released；node 记的启动信息（启动器、目录、模型，hub 的 `node_sessions`）和会话记录都在。
+读结果照常从会话记录读（回执、`agent_read`、聊天页），「完成未看」的也可以关。
+
+**怎么接着用**：给已关闭的 Agent 发消息——`agent_send`、任务卡片上直接发给任务（`route`）、聊天页——node 先用原来的启动器在原目录、原工作区开一个新标签页恢复会话（标签名取会话标题），再把消息发进去：
+
+| Agent | 恢复方式 |
+| --- | --- |
+| Claude Code | `<启动器> --resume <id>`，带上原来的权限模式、思考强度和模型 |
+| Codex | 启动器的参数（换上原来的模型）`resume <id> -- <消息>`，经 `personad codex-start` 执行，消息作为参数传进去，不经过 shell、不上屏 |
+| TRAEX | `<启动器> resume <id> <消息>` |
+
+恢复要等启动器起来，`route` 和聊天页的发送一样不跟着手机断开而取消，最多等 5 分钟。完成的待办不因为这条消息重新打开；恢复后再次静止满 3 分钟会再被关掉。
+
+**不关**：在工作、等用户（提问、计划、权限、任何对话框、待处理的卡片）、引擎看不出状态的；有排队的消息、后台 shell、在跑的子 Agent、`/loop`、在监听端口（开着开发服务器）的；还挂在别的未完成待办上的；助手对话；别的工具管的会话（外部 Codex app-server、runtime、daemon、pi）；不是 Persona 开的（不知道怎么恢复）；引擎不能新开标签页的（Orca、herdr-core）；Claude 没有会话记录、Codex / TRAEX 不知道启动器的。
+这些由 node 拒绝（`not_retirable`），hub 记下来，Agent 有变化以前不再问；不认识 `session.retire` 的旧 node 同样当作拒绝，所以 hub 先升级、node 后升级也不会误关。
+没挂在任何任务上的 Agent（用户自己开的、`agent_start` 开的、herdr-leader 之类的巡检会话）不归这里管。
+
 ## 决策记录
 
 长程任务里最贵的错误是 Agent 忘了用户已经拍过的板：重复问同一件事，或悄悄推翻之前的决定（#1618）。决策散在各个 Agent 的对话里，换一个 Agent 或压缩一次就丢了，所以按待办收在一处：

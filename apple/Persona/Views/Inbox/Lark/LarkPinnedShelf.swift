@@ -20,7 +20,7 @@ struct LarkPinnedShelf: View {
                   alignment: .leading, spacing: Theme.Space.l) {
             ForEach(conversations.prefix(firstCount)) { pin($0) }
             if canExpand {
-                Button { withAnimation(Theme.Motion.standard) { interaction.toggle() } } label: {
+                Button { withAnimation(Theme.Motion.expand) { interaction.toggle() } } label: {
                     VStack(spacing: Theme.Space.xs) {
                         Image(systemName: interaction.isExpanded ? Theme.Icon.collapse : Theme.Icon.expand)
                             .font(Theme.Font.heading).foregroundStyle(.secondary)

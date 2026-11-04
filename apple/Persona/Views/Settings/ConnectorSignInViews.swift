@@ -45,6 +45,12 @@ struct ConnectorDeps {
 
     func start() async { await send(step: "", values: [:]) }
 
+    /// From the first step again (a step this app cannot draw: maybe the hub sends another kind the next time).
+    func restart() async {
+        cancel()
+        await start()
+    }
+
     /// Sends the step on screen; the answer is the next one, the same one with what was wrong, or done.
     @discardableResult
     func next() async -> Bool {
@@ -369,6 +375,10 @@ struct ConnectorSignInSteps: View {
                     deviceCode(p)
                 } else if p.isQRCode {
                     qrCode(p)
+                } else if p.cannotDraw {
+                    Text(Self.cannotDrawNote(p, name: name))
+                        .font(Theme.Font.secondary).foregroundStyle(Theme.cautionText)
+                        .accessibilityIdentifier("connector.cannotDraw")
                 } else {
                     ForEach(p.fields ?? []) { f in
                         field(f)
@@ -405,6 +415,17 @@ struct ConnectorSignInSteps: View {
                     }
                 } else if p.isPairCode {
                     EmptyView() // nothing to press: the code goes to the bot from the chat app
+                } else if p.cannotDraw {
+                    FormAction {
+                        Button {
+                            Task { await model.restart() }
+                        } label: {
+                            Text("重新开始").lineLimit(1).formActionWidth()
+                        }
+                        .formButton(prominent: true)
+                        .disabled(model.busy)
+                        .accessibilityIdentifier("connector.restart")
+                    }
                 } else if p.isQRCode {
                     if let image = model.qrImage {
                         FormAction {
@@ -451,6 +472,13 @@ struct ConnectorSignInSteps: View {
                 Text(footer)
             }
         }
+    }
+
+    /// Why a step is not drawn and what to do: update the app; a QR code can also be scanned from the hub's web page,
+    /// which draws it (设置 › 连接器, #1693).
+    static func cannotDrawNote(_ p: ConnectorPrompt, name: String) -> String {
+        let note = "这一步这个版本的 App 显示不了。更新 App 后点「重新开始」再试"
+        return p.kind == "qr" ? note + "，或在 hub 的网页版 设置 › 连接器 › \(name) 里扫码。" : note + "。"
     }
 
     /// The code to enter on the sign-in page (GitHub's device flow): large, copyable; the page asks the hub again on

@@ -405,6 +405,9 @@ nonisolated enum Theme {
         /// Opening and closing things (a work card, a menu, a section): a state change, 0.25 s (it was the system's
         /// default snappy, 0.5 s, which trailed behind the finger).
         static let standard = state
+        /// A block of content unfolding in place, its height growing (the Feishu pinned shelf's rows): slower than a
+        /// state change so the eye can follow the rows coming in. `standard` read faster than Feishu's own (2026-11-04).
+        static let expand = Animation.smooth(duration: 0.4)
         /// One way of a blink (the built-in persona's eyes): a blink is shut and open again, well under a quarter second.
         static let blink = Animation.easeInOut(duration: 0.07)
         /// What opens in the chat shows itself (a mask growing down from its header, and a fade); its height does not

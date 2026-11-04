@@ -31,6 +31,9 @@ type taskNode struct {
 	gate chan struct{}
 	// items: what session.items answers (the agent's latest turn).
 	items []proto.Item
+	// retires: the sessions session.retire was asked to close; retireErr: what it answers instead.
+	retires   []string
+	retireErr error
 }
 
 func (tn *taskNode) calls() (starts, sends []map[string]any) {
@@ -72,6 +75,12 @@ func connectTaskNode(t *testing.T, h *Hub, id string) *taskNode {
 			tn.sends = append(tn.sends, p)
 		case "session.items":
 			return map[string]any{"items": tn.items}, nil
+		case "session.retire":
+			tn.retires = append(tn.retires, p["session_id"].(string))
+			if tn.retireErr != nil {
+				return nil, tn.retireErr
+			}
+			return map[string]any{"closed": true}, nil
 		}
 		return map[string]any{}, nil
 	}

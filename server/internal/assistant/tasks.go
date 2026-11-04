@@ -896,10 +896,18 @@ func (s *Service) routeToTask(ctx context.Context, conversation, todoID, text st
 	if _, ok := s.device(ctx, c.MachineID); !ok {
 		return FeedItem{}, errors.New("那台电脑不在线")
 	}
-	if err := s.call(ctx, c.MachineID, DeviceSessionSend, map[string]any{"session_id": c.SessionID, "text": text}, nil); err != nil {
+	// An agent closed after its task was done (hub tasks_close.go) is resumed first: that can take minutes, and goes
+	// on when the phone stops waiting, as a send from the chat does.
+	wait := 90 * time.Second
+	if c.Status == proto.StatusOffline {
+		wait = 5 * time.Minute
+	}
+	sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), wait)
+	defer cancel()
+	if err := s.call(sctx, c.MachineID, DeviceSessionSend, map[string]any{"session_id": c.SessionID, "text": text}, nil); err != nil {
 		return FeedItem{}, err
 	}
-	return s.appendFeed(ctx, conversation, feedRouted, todoID, map[string]string{"text": text})
+	return s.appendFeed(sctx, conversation, feedRouted, todoID, map[string]string{"text": text})
 }
 
 // ---- messages about a task ----

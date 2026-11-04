@@ -149,10 +149,20 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		if strings.TrimSpace(a.Text) == "" {
 			return "", fmt.Errorf("text is empty")
 		}
-		if err := s.call(ctx, am.ID, DeviceSessionSend, map[string]any{"session_id": c.SessionID, "text": a.Text}, nil); err != nil {
+		if c.Status != proto.StatusOffline {
+			if err := s.call(ctx, am.ID, DeviceSessionSend, map[string]any{"session_id": c.SessionID, "text": a.Text}, nil); err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("Sent to %s on %s.", agentLabel(c), am.Name), nil
+		}
+		// Not running (a finished task's agent is closed: hub tasks_close.go): its node resumes it first, which can
+		// take minutes and goes on if this call stops waiting.
+		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
+		defer cancel()
+		if err := s.call(sctx, am.ID, DeviceSessionSend, map[string]any{"session_id": c.SessionID, "text": a.Text}, nil); err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("Sent to %s on %s.", agentLabel(c), am.Name), nil
+		return fmt.Sprintf("Resumed %s on %s (same session, directory and launcher) and sent.", agentLabel(c), am.Name), nil
 	case "agent_start":
 		var a struct {
 			Machine  string `json:"machine"`

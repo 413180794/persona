@@ -1005,6 +1005,7 @@ hub → node 请求：
 | `session.item` | `{session_id, item_id}` → `Item`（全文，不带图片） |
 | `session.watch` / `session.unwatch` | `{session_id, since_seq?}`；watch 后 node 每 250ms 读一次新行，推 `session.items`（带 `history` / `from_seq` / `to_seq`）；有 `since_seq` 时先按 500 条一页补发其后的全部内容 |
 | `session.close` | `{session_id}` |
+| `session.retire` | `{session_id}` → `{closed}`：做完的任务的 Agent 停着且以后能恢复时关掉它的窗格（同 `session.close`），没在运行时 `closed: false`；在工作、等用户、恢复不了的回 `code: not_retirable`；旧 node 报 unknown method（hub 当作拒绝）。见 `docs/todos.md`「做完的任务关掉 Agent」 |
 | `file.upload.begin` | `{name, size}` → `{upload_id, chunk_bytes}`（超过上限报 `too_large`） |
 | `file.upload.chunk` | `{upload_id, offset, data}`（data 是 base64，offset 必须接着已收到的）→ `{received}`；出错整个上传作废 |
 | `file.upload.end` / `file.upload.abort` | `{upload_id}`；end 核对大小、改名 → `{path, name, size}` |

@@ -193,7 +193,7 @@ Telegram 会话页的回复框（`ConnectorThreadReplyTests`，#1190）：发出
 
 扫码登录（`QRSignInTests`，#1351）：`MOCK_WECHAT=signed_out PORT=<独立端口> python3 scripts/mock/mock_hub.py &`，
 `TEST_RUNNER_JARVIS_MOCK_HUB_QR=http://127.0.0.1:<端口> xcodebuild test … -only-testing:PersonaUITests/QRSignInTests`：设置 › 微信 › 登录出二维码和「保存二维码」，
-mock 第六次问时确认，页面自己变成已连接。mock 的登录状态留在进程里，再跑一次（比如换深色）先重启 mock；`MOCK_WECHAT_WAIT=1` 让它一直停在二维码，方便截图。`MOCK_WECHAT_QR=link` 只去掉点阵（只剩链接），`none` 连链接也去掉（画不了的步骤，#1693）。
+mock 第六次问时确认，页面自己变成已连接。mock 的登录状态留在进程里，再跑一次（比如换深色）先重启 mock；`MOCK_WECHAT_WAIT=1` 让它一直停在二维码，方便截图。`MOCK_WECHAT_QR=link` 只去掉点阵（只剩链接），`none` 连链接也去掉（画不了的步骤，#1693）。App 画不了的步骤（`testAStepItCannotDrawSaysSo`）：再起一个 `MOCK_WECHAT=signed_out MOCK_WECHAT_QR=none` 的 mock，带 `TEST_RUNNER_JARVIS_MOCK_HUB_QR_NONE=http://127.0.0.1:<端口>`，页面说明画不了、给「重新开始」，没有「下一步」。
 用户自己的回复不弹卡片是 hub 定的（mock 不分设备），hub 一侧见 `TestConnectorThreadReplyFromTheUsersDevice`。
 
 填密钥的框不弹「保存密码？」（`SecretFieldTests`，#1598）：`MOCK_PLUGINS=1 MOCK_BOT=off MOCK_SCREEN_SECRET=1 PORT=<独立端口> python3 scripts/mock/mock_hub.py &`，

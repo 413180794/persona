@@ -380,6 +380,7 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	go h.superviseAssistant(ctx) // the assistant, its own process on the bus (assistant_process.go)
 	h.startBots(ctx)
 	go h.agentsLoop(ctx)
+	go h.taskCloseLoop(ctx) // the agents of finished tasks (tasks_close.go)
 	go h.inboxLoop(ctx)
 	go h.metricsLoop(ctx)
 	h.plugins = newPlugins(cfg.dir, cfg.Plugins, h.logf)

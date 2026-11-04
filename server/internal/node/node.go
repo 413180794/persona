@@ -409,6 +409,10 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return ok(n.interruptCodex(ctx, p.SessionID))
 		}
 	}
+	if method == "session.retire" { // before the runtimes: a session another tool owns is refused, not handed on
+		closed, err := n.retire(ctx, p.SessionID)
+		return map[string]any{"closed": closed}, err
+	}
 	// A session of a runtime (runtimes.go): the runtime answers every call about it, also for an older session it no
 	// longer lists; one whose runtime is away is refused, never resumed in a terminal as a Claude session. An
 	// assistant conversation a runtime runs is the assistant's to send to, stop and set modes on (its snapshot and
