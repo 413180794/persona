@@ -53,9 +53,6 @@ func (n *Node) resolvePath(path, cwd string) string {
 	return filepath.Clean(path)
 }
 
-// inICloud: iCloud Drive hangs on a locked Mac; never touch it.
-func inICloud(path string) bool { return strings.Contains(path, "/Library/Mobile Documents") }
-
 // readFile reads a file for the phone's viewer, a text file maxFileBytes at a time from offset (the page before's
 // `next`): a page that stops short of the end stops after a line's end. Directories are listed, binary files sent
 // whole up to the cap (they are not paged), or with stream only described: the client fetches them from
@@ -69,17 +66,14 @@ func (n *Node) readFile(path, cwd string, offset int64, stream bool) (*FileConte
 	if path == "" {
 		path = filepath.Clean(asked) // relative with no cwd: as the node's own working directory sees it
 	}
-	if inICloud(path) {
-		return nil, fmt.Errorf("iCloud Drive files are not readable remotely")
-	}
-	st, err := os.Stat(path)
+	real, st, err := n.statSafe(path)
 	if err != nil {
 		return nil, explainDenied(path, n.home, err)
 	}
 	fc := &FileContent{Path: path, Name: filepath.Base(path), Size: st.Size()}
 	if st.IsDir() {
 		fc.IsDir = true
-		ents, err := os.ReadDir(path)
+		ents, err := os.ReadDir(real)
 		if err != nil {
 			return nil, explainDenied(path, n.home, err)
 		}
@@ -99,7 +93,7 @@ func (n *Node) readFile(path, cwd string, offset int64, stream bool) (*FileConte
 	if offset < 0 || offset > st.Size() {
 		return nil, fmt.Errorf("offset %d is outside the file (%d bytes)", offset, st.Size())
 	}
-	f, err := os.Open(path)
+	f, err := os.Open(real)
 	if err != nil {
 		return nil, explainDenied(path, n.home, err)
 	}
@@ -159,29 +153,68 @@ type PathStat struct {
 	Size int64  `json:"size,omitempty"`
 }
 
+// statTimeout bounds one fs.stat: a path on a mount that does not answer (a network share, a sleeping disk) is
+// left "missing" rather than holding up the rest; statWorkers look at paths side by side.
+var statTimeout = 3 * time.Second
+
+const statWorkers = 8
+
+// statOne looks at one path (a variable for the test of a stat that hangs).
+var statOne = (*Node).statPath
+
 // statPaths answers fs.stat: the phone links only the paths that are there (a path in a message may be another
-// machine's, or gone).
+// machine's, or gone). Secrets and iCloud Drive count as missing (pathguard.go).
 func (n *Node) statPaths(paths []string, cwd string) []PathStat {
 	if len(paths) > maxStatPaths {
 		paths = paths[:maxStatPaths]
 	}
-	out := make([]PathStat, 0, len(paths))
-	for _, asked := range paths {
-		s := PathStat{Path: asked, Kind: "missing"}
-		if p := n.resolvePath(asked, cwd); p != "" && !inICloud(p) {
-			st, err := os.Stat(p)
-			switch {
-			case err == nil && st.IsDir():
-				s.Kind = "dir"
-			case err == nil:
-				s.Kind, s.Size = "file", st.Size()
-			case errors.Is(err, fs.ErrPermission):
-				s.Kind = "denied"
-			}
+	out := make([]PathStat, len(paths))
+	for i, asked := range paths {
+		out[i] = PathStat{Path: asked, Kind: "missing"}
+	}
+	type answer struct {
+		i int
+		s PathStat
+	}
+	// Buffered for every path, so a stat that answers after the deadline does not block its goroutine.
+	answers := make(chan answer, len(paths))
+	slots := make(chan struct{}, statWorkers)
+	for i, asked := range paths {
+		go func() {
+			slots <- struct{}{}
+			defer func() { <-slots }()
+			answers <- answer{i, statOne(n, asked, cwd)}
+		}()
+	}
+	deadline := time.NewTimer(statTimeout)
+	defer deadline.Stop()
+	for range paths {
+		select {
+		case a := <-answers:
+			out[a.i] = a.s
+		case <-deadline.C:
+			return out
 		}
-		out = append(out, s)
 	}
 	return out
+}
+
+func (n *Node) statPath(asked, cwd string) PathStat {
+	s := PathStat{Path: asked, Kind: "missing"}
+	p := n.resolvePath(asked, cwd)
+	if p == "" {
+		return s
+	}
+	_, st, err := n.statSafe(p)
+	switch {
+	case err == nil && st.IsDir():
+		s.Kind = "dir"
+	case err == nil:
+		s.Kind, s.Size = "file", st.Size()
+	case errors.Is(err, fs.ErrPermission):
+		s.Kind = "denied"
+	}
+	return s
 }
 
 // protectedDirs are the folders macOS keeps from programs the user has not allowed (TCC): jarvisd, started over ssh,
@@ -243,10 +276,11 @@ func (n *Node) listDir(path, cwd string) (map[string]any, error) {
 		return nil, fmt.Errorf("empty path")
 	}
 	path = filepath.Clean(path)
-	if strings.Contains(path, "/Library/Mobile Documents") {
-		return nil, fmt.Errorf("iCloud Drive files are not readable remotely")
+	real, err := n.realPath(absPath(path))
+	if err != nil {
+		return nil, explainDenied(path, n.home, err)
 	}
-	ents, err := os.ReadDir(path)
+	ents, err := os.ReadDir(real)
 	if err != nil {
 		return nil, explainDenied(path, n.home, err)
 	}
@@ -259,8 +293,8 @@ func (n *Node) listDir(path, cwd string) (map[string]any, error) {
 		if info, err := e.Info(); err == nil {
 			d.Size, d.ModTime = info.Size(), info.ModTime()
 		}
-		if d.Symlink { // follow links so linked directories open like directories
-			if st, err := os.Stat(filepath.Join(path, d.Name)); err == nil {
+		if d.Symlink { // follow links so linked directories open like directories (not into iCloud Drive)
+			if _, st, err := n.statSafe(filepath.Join(real, d.Name)); err == nil {
 				d.Dir = st.IsDir()
 			}
 		}

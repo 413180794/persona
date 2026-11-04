@@ -30,8 +30,23 @@ struct PluginsModelTests {
         await page.load()
         #expect(page.error == nil && page.plugins?.count == 2)
         #expect(PluginText.listSummary(page.plugins) == "2 个 · 1 个要处理")
-        #expect(PluginText.summary(page.plugins![0]) == "运行中")
+        #expect(PluginText.summary(page.plugins![0]) == "启动")
         #expect(PluginText.listSummary([]) == "没有")
+    }
+
+    /// On or off to the user (#1684): running and idle are both 启动, and only the detail's small print tells them apart;
+    /// the other states keep their words.
+    @Test func statesReadAsOnOrOff() throws {
+        func plugin(_ status: String) throws -> HubPlugin {
+            try JSON.decoder.decode(HubPlugin.self, from: Data(#"{"id":"p","name":"P","kind":"connectors","status":"\#(status)"}"#.utf8))
+        }
+        let words = try ["running", "stopped", "disabled", "starting", "needs_setup", "incompatible", "error", "new"].map { try PluginText.state(plugin($0)) }
+        #expect(words == ["启动", "启动", "停用", "正在启动", "需要设置", "这台 hub 用不了", "出错了", "状态未知"])
+        #expect(try PluginText.runNote(plugin("running")) == "正在运行")
+        #expect(try PluginText.runNote(plugin("stopped")) == "暂未运行，用到时自动启动")
+        for status in ["disabled", "starting", "needs_setup", "incompatible", "error"] {
+            #expect(try PluginText.runNote(plugin(status)) == nil)
+        }
     }
 
     @Test func detailDecodesTheForm() async throws {

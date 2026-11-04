@@ -747,8 +747,10 @@ func (n *Node) scanOffline() []proto.Session {
 		n.setGuessedPath(id, c.path)
 		s := proto.Session{
 			SessionID: id, Title: m.title, Cwd: m.cwd, Status: proto.StatusOffline, Model: m.model,
+			Agent: "claude",
 			LastText: snippet(m.lastText), UpdatedAt: lastUsed(m, c.st), Rev: c.st.Size(),
 		}
+		s.Activity, s.ActivityAt = m.activityOf()
 		s.PermissionMode, s.Effort = n.currentModes(id, m)
 		untitled(&s, m)
 		out = append(out, s)
@@ -930,7 +932,89 @@ func (n *Node) lookAt(ctx context.Context, h host.Host, epoch uint64) (agents []
 	n.layouts[h.Kind()] = l
 	n.mu.Unlock()
 	// Panes running an agent the host does not detect (TRAEX) become agents of our own.
-	return append(snap.Agents, n.traexAgents(ctx, snap.Panes, snap.Agents)...), true, nil
+	agents = append(snap.Agents, n.traexAgents(ctx, snap.Panes, snap.Agents)...)
+	// Retain active Claude agents when Herdr temporarily drops agent detection during tool or subshell execution (#1641).
+	return append(agents, n.claudeGraceAgents(snap.Panes, agents)...), true, nil
+}
+
+// claudeGraceAgents recovers live Claude agents whose terminal panes are still open in snap.Panes
+// but were temporarily omitted from snap.Agents because the host's foreground process detection
+// flapped to a child tool process or subshell (#1641).
+func (n *Node) claudeGraceAgents(panes, agents []host.Agent) []host.Agent {
+	if len(panes) == 0 {
+		return nil
+	}
+	hasAgent := make(map[string]bool, len(agents))
+	claimedSessions := make(map[string]bool, len(agents))
+	for _, a := range agents {
+		if a.PaneID != "" {
+			hasAgent[a.PaneID] = true
+		}
+		if id := a.SessionID(); id != "" {
+			claimedSessions[id] = true
+		}
+	}
+
+	panesByID := make(map[string]host.Agent, len(panes))
+	for _, p := range panes {
+		if p.PaneID != "" {
+			panesByID[p.PaneID] = p
+		}
+	}
+
+	claudes := n.liveClaudes()
+	liveSessions := make(map[string]bool, len(claudes))
+	for _, c := range claudes {
+		if c.SessionID != "" && c.Kind != "bg" {
+			liveSessions[c.SessionID] = true
+		}
+	}
+	if len(liveSessions) == 0 {
+		return nil
+	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	var out []host.Agent
+	for id, prev := range n.agents {
+		if prev.Agent != "claude" || prev.PaneID == "" {
+			continue
+		}
+		if hasAgent[prev.PaneID] || claimedSessions[id] {
+			continue
+		}
+		if !liveSessions[id] {
+			continue
+		}
+		p, ok := panesByID[prev.PaneID]
+		if !ok {
+			continue
+		}
+		retained := prev
+		retained.WorkspaceID = p.WorkspaceID
+		retained.TabID = p.TabID
+		if p.Cwd != "" {
+			retained.Cwd = p.Cwd
+		}
+		if p.Title != "" {
+			retained.Title = p.Title
+			retained.RawTitle = p.RawTitle
+		}
+		if p.Tokens != nil {
+			retained.Tokens = p.Tokens
+		}
+		if retained.AgentSession == nil {
+			retained.AgentSession = &host.AgentSession{Kind: "id", Value: id}
+		}
+		if retained.AgentStatus == "" {
+			retained.AgentStatus = proto.StatusWorking
+		}
+		out = append(out, retained)
+		hasAgent[prev.PaneID] = true
+		claimedSessions[id] = true
+	}
+	return out
 }
 
 // placeIn fills the space / slot fields of a live session.

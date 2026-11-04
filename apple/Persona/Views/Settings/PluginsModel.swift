@@ -186,20 +186,31 @@ extension APIClient {
 
 /// What a plugin is called and says in the settings.
 enum PluginText {
+    /// To the user a plugin is on or off (#1684, as the web and Android since #1670): an idle one starts by itself when
+    /// it is used, so running and idle are both 启动; whether it runs right now is the detail page's small print
+    /// (`runNote`). hub's `status` values are unchanged.
     static func state(_ p: HubPlugin) -> String {
         switch p.status {
-        case "running": "运行中"
-        case "stopped": "空闲，用到时启动"
+        case "running", "stopped": "启动"
         case "starting": "正在启动"
         case "needs_setup": "需要设置"
-        case "disabled": "已停用"
+        case "disabled": "停用"
         case "incompatible": "这台 hub 用不了"
         case "error": "出错了"
         default: "状态未知"
         }
     }
 
-    /// The tone of the state's dot: red for broken, yellow for waiting on the user, green running, gray otherwise.
+    /// Whether an enabled plugin's program runs right now, under its description; nil for any other state.
+    static func runNote(_ p: HubPlugin) -> String? {
+        switch p.status {
+        case "running": "正在运行"
+        case "stopped": "暂未运行，用到时自动启动"
+        default: nil
+        }
+    }
+
+    /// Broken: the state's dot is red (`PluginStateDot`: yellow waiting on the user, green on, gray otherwise).
     static func isProblem(_ p: HubPlugin) -> Bool { p.status == "error" || p.status == "incompatible" }
 
     static func source(_ s: String?) -> String? {

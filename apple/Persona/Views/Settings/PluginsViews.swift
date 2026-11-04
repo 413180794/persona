@@ -105,7 +105,7 @@ private struct PluginStateDot: View {
         guard let p else { return .secondary }
         if PluginText.isProblem(p) { return Theme.danger }
         switch p.status {
-        case "running": return Theme.positive
+        case "running", "stopped": return Theme.positive // on, running or idle (#1684)
         case "needs_setup": return Theme.caution
         default: return .secondary
         }
@@ -189,8 +189,17 @@ struct PluginDetailView: View {
                 if page.loading && page.detail == nil { ProgressView() }
             }
             .padding(.vertical, Theme.Space.xs)
-            if let text = page.detail?.plugin.description, !text.isEmpty {
-                Text(text).font(Theme.Font.secondary).foregroundStyle(.secondary)
+            let text = page.detail?.plugin.description ?? ""
+            let note = page.detail.flatMap { PluginText.runNote($0.plugin) }
+            if !text.isEmpty || note != nil {
+                // Whether it runs right now is small print under what it is, in the same row (#1684).
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                    if !text.isEmpty { Text(text).font(Theme.Font.secondary).foregroundStyle(.secondary) }
+                    if let note {
+                        Text(note).font(Theme.Font.label).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("plugin-run-note")
+                    }
+                }
             }
             if let needs = page.detail?.plugin.needsSetup, !needs.isEmpty {
                 Text("还缺：" + needs.joined(separator: "、")).font(Theme.Font.label).foregroundStyle(Theme.caution)

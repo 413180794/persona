@@ -1,7 +1,7 @@
 // Files a message carries as <jarvis-file> tags (docs/protocol.md「发送视频」; iOS draws the same cards), and files an
 // answer names by path that exist on the machine: videos and audio play in place, other files open in the file viewer.
-import { useEffect, useState } from "react";
-import { api, enc } from "../../lib/api";
+import { useMemo, useState } from "react";
+import { usePathLinks } from "../../lib/path-presence";
 import { bytes } from "../../lib/format";
 import { openPanel } from "../../lib/panel";
 import { formatDuration, mediaKindOf, replyPaths, type AttachedFile } from "../../lib/turns";
@@ -48,28 +48,18 @@ function FileCard({ f, mid }: { f: AttachedFile; mid: string }) {
   );
 }
 
-const statCache = new Map<string, Promise<AttachedFile[]>>();
-
 /** Files an answer names by absolute path that are there on the machine, as cards under it (iOS links the same). */
 export function ReplyFiles({ text, mid, cwd }: { text: string; mid: string; cwd?: string }) {
-  const [files, setFiles] = useState<AttachedFile[]>([]);
-  useEffect(() => {
-    const paths = replyPaths(text);
-    if (!paths.length) return setFiles([]);
-    const key = `${mid}\n${cwd ?? ""}\n${paths.join("\n")}`;
-    let p = statCache.get(key);
-    if (!p) {
-      p = api<{ stats: { path: string; kind: string; size?: number }[] }>(`/machines/${enc(mid)}/stat?paths=${enc(paths.join("\n"))}&cwd=${enc(cwd ?? "")}`)
-        .then((r) => r.stats.filter((s) => s.kind === "file").map((s) => ({ kind: mediaKindOf(s.path), path: s.path, name: s.path.split("/").pop() || s.path, size: s.size })))
-        .catch(() => []);
-      statCache.set(key, p);
-    }
-    let live = true;
-    void p.then((f) => live && setFiles(f));
-    return () => {
-      live = false;
-    };
-  }, [text, mid, cwd]);
+  const paths = useMemo(() => replyPaths(text), [text]);
+  const { stat, key } = usePathLinks(mid, cwd, paths);
+  const files = useMemo<AttachedFile[]>(
+    () =>
+      paths.flatMap((p) => {
+        const s = stat(p);
+        return s?.kind === "file" ? [{ kind: mediaKindOf(p), path: p, name: p.split("/").pop() || p, size: s.size }] : [];
+      }),
+    [paths, key], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   return files.length ? (
     <div className="mt-2">
       <FileCards files={files} mid={mid} align="start" />

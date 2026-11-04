@@ -13,6 +13,7 @@ import { LoopTick, MergedBubble, PeerMessage } from "./Messages";
 import { ContextGroup } from "./ContextGroup";
 import { FileCards, ReplyFiles } from "./FileCards";
 import { MessageActions } from "./MessageActions";
+import { PathText } from "../../ui/PathLinks";
 import { Thumb, WorkRow } from "./Steps";
 
 export function UserBubble({ msg, mid, sid, pending }: { msg: UserMessage; mid: string; sid: string; pending?: boolean }) {
@@ -32,7 +33,7 @@ export function UserBubble({ msg, mid, sid, pending }: { msg: UserMessage; mid: 
       ) : (
         <MessageActions text={msg.text} isUser ts={msg.ts} side className="max-w-full">
           <div className="max-w-full rounded-[14px] bg-user-bubble px-3.5 py-2 text-[14px] leading-[1.55] whitespace-pre-wrap text-ink [overflow-wrap:anywhere]" title={clock(msg.ts)}>
-            {msg.text}
+            <PathText text={msg.text} mid={mid} cwd={getSession(mid, sid)?.cwd} />
           </div>
         </MessageActions>
       ))}
@@ -60,7 +61,7 @@ export function Answer({ item, streaming, mid, sid }: { item?: Item; streaming?:
   if (streaming !== undefined) {
     return (
       <div>
-        <Markdown text={text} mid={mid} cwd={mid && sid ? getSession(mid, sid)?.cwd : undefined} />
+        <Markdown text={text} mid={mid} cwd={mid && sid ? getSession(mid, sid)?.cwd : undefined} streaming />
         <span className="stream-caret" aria-hidden />
       </div>
     );

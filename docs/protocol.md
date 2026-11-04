@@ -499,7 +499,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | GET | `/api/v1/machines/{mid}/file/thumb?path=&cwd=&size=` | 文件的缩略图（hub 特性 `file_thumb`，node `file.thumb`）：长边最多 `size` 像素（默认 256，32–1024），不透明的给 JPEG、带透明的给 PNG；`ETag` 是「文件版本-尺寸」，带 `If-None-Match` 回 304，`Cache-Control: private, max-age=86400`。画不了回 404 `no_thumbnail`（客户端显示图标），旧 node 409 `node_outdated` |
 | GET | `/api/v1/machines/{mid}/file/convert?path=&cwd=&to=pdf` | 用那台电脑的 LibreOffice 把文档转成 PDF（hub 特性 `file_convert`，node `file.convert`，网页的 Office 回退，#1345）：回 `{"path","size","mime"}`，`path` 是 node 缓存里的 PDF，再用 `/file/download?path=<它>&inline=1` 读。按文件版本缓存，7 天后清；一次只转一个，90 秒超时；输入先拷成固定文件名、用临时配置目录，不和用户自己开着的 LibreOffice 抢。没装 404 `no_converter`，旧 node 409 `node_outdated` |
 | GET | `/api/v1/machines/{mid}/git/blob?cwd=&path=&rev=` | 文件在某个版本的内容（hub 特性 `git_blob`，node `git.blob`，网页的对比用，#1437）：`rev` 是 `HEAD`、`INDEX`（暂存区）、提交哈希或「哈希^」（它的父提交），`path` 相对仓库根。回 `{"path","size"}`，`path` 是 node 缓存里按 blob id 命名的文件（带原扩展名），再用 `/file/download` 读；那个版本没有这个文件回 `{"missing":true}`。最大 200 MB，7 天清理 |
-| GET | `/api/v1/machines/{mid}/stat?paths=&cwd=` | 会话里提到的路径在这台机器上在不在：`paths` 一行一个（也收 `path=a&path=b`），最多 200 个 → `{"stats":[{"path"(原样),"kind":"file"\|"dir"\|"denied"\|"missing","size"?}]}`。`denied` 是 macOS 不让 personad 读的文件夹（打开时会说怎么授权）；相对路径没有 `cwd`、iCloud 里的路径一律 `missing`。手机只给 file / dir / denied 的路径做可点的文件块 |
+| GET | `/api/v1/machines/{mid}/stat?paths=&cwd=` | 会话里提到的路径在这台机器上在不在：`paths` 一行一个（也收 `path=a&path=b`），最多 200 个 → `{"stats":[{"path"(原样),"kind":"file"\|"dir"\|"denied"\|"missing","size"?}]}`。`denied` 是 macOS 不让 personad 读的文件夹（打开时会说怎么授权）；相对路径没有 `cwd`、iCloud 里的路径、敏感文件（见下）一律 `missing`；一次最多等 3 秒，没答上的（挂住的网络盘）也是 `missing`。手机只给 file / dir / denied 的路径做可点的文件块，网页内联成链接 |
 | GET | `/api/v1/machines/{mid}/fs?path=&cwd=` | 文件树：`{"path","entries":[{"name","dir","symlink","size","mtime"}],"truncated"}`，目录在前，最多 2000 项；拒绝 iCloud |
 | GET | `/api/v1/machines/{mid}/git/status?cwd=` | `{"is_repo","root","branch","head","upstream","ahead","behind","files":[{"path","orig_path","index","worktree","added","deleted","binary"}],"stashes","commits":[最近 30 条]}`（只读，`GIT_OPTIONAL_LOCKS=0`） |
 | POST | `/api/v1/machines/{mid}/git/pull` | `{"cwd"}` → `{"status": GitStatus, "updated": bool}`；只允许有上游的普通分支与干净工作区，执行 `git pull --ff-only --no-rebase --no-autostash --no-recurse-submodules`。分叉、未提交改动、无上游、认证失败或超时均报错，不自动 stash / 合并 / 变基；pull 命令最多 60 秒，node 总计 75 秒、hub 90 秒。仅 full 角色可调用 |
@@ -548,6 +548,12 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | GET | `/api/v1/machines/{mid}/ports/{port}/connect` | 端口转发：升级成 WebSocket，二进制消息就是一条 TCP 连接的字节（手机本地监听，浏览器每开一条连接就连一次）。端口必须是这台机器某个会话 `ports` 里的或点开过的，否则 403；没在听 404；只读设备 403；机器离线 503；一台机器同时超过 64 条 429 |
 | POST | `/api/v1/phone/runtime-cli` | `{cmd, args, timeout}`：让手机上的 DEBUG 包执行一条 Runtime CLI 命令（`docs/runtime-cli.md`「经 hub 连真机」），回 App 的原样回答 `{"ok": …}`。只给 `full` 设备凭据（只读设备 403）；没有登记了 `phone_runtime_cli` 的 App 在线 503 `phone_offline`（不唤醒）；`timeout` 秒内（最多 120）没回答 504；App 说这次调用失败 502。每次调用 hub 记一行日志（命令、调用方设备 id、状态、耗时），不记参数和回答 |
 | 任意 | `/api/v1/plugins/{id}/{path…}` | 原样转发给插件的 `/{path…}`（`/-/` 开头的不转发）（WebSocket 也是），去掉 `Authorization` 和 `token`；只读设备 403。语音插件的契约见 `docs/plugins.md`「语音」 |
+
+**按路径读文件的边界**（`file`、`file/download`、`file/thumb`、`file/convert`、`stat`、`fs`，node 的 `pathguard.go`）：只给已认证的客户端（设备 token）。路径逐段解析符号链接，**每一段在看之前**先检查，所以经链接指过去的也拦得住、且根本不碰目标：
+- **iCloud**（任何一段含 `Library/Mobile Documents`，不分大小写）：没解锁的 Mac 上一碰就卡住，`stat` 当不存在，读取拒绝。
+- **敏感文件**：home 下的 `.ssh`、`.gnupg`、`.aws`、`.azure`、`.kube`、`.docker`、`.password-store`、`Library/Keychains`、`.local/share/keyrings`、`.config/gcloud`、`.config/gh` 整个目录，
+  `.netrc`、`.git-credentials`、`.npmrc`、`.pypirc`、`.pgpass`、`.claude/.credentials.json`、`.codex/auth.json`，任何地方叫 `id_rsa` / `id_ed25519` 等的私钥，`.persona` / `.jarvis` 里的 `hub.json`（连备份 `hub.json.*`）、`apns*` 和 `.key` / `.p8` / `.pem` / `.crt`（知识库 `data/` 照常能读）。`stat` 当不存在，读取、列目录、下载都拒绝。
+- 链接最多跟 40 层（环就停）。这是基本防护，不是沙箱：设备 token 本来就能让 Agent 读这些文件。
 
 邮件见下文「邮件 API」。HTTP 错误格式和可选字段见上文「错误体」。
 

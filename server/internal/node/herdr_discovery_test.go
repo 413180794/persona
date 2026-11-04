@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -403,4 +404,81 @@ func TestHerdrPollPushesChangedThenRevs(t *testing.T) {
 	}
 	assertTrace(t, f.trace(), []string{call("session.snapshot", nil), call("session.snapshot", nil)})
 	stop()
+}
+
+// Active Claude sessions in Herdr panes are retained when Herdr's foreground process detection
+// temporarily omits the agent during a tool or subshell execution, as long as the pane is still alive
+// and the Claude process is running (#1641).
+func TestHerdrActiveClaudeRetainedWhenAgentFlaps(t *testing.T) {
+	n, f, home := herdrNode(t)
+	cwd := "/tmp/repo"
+	// Write live session file so liveClaudes sees the session's process alive.
+	pid := os.Getpid()
+	dir := filepath.Join(home, ".claude", "sessions")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	procFile := filepath.Join(dir, strconv.Itoa(pid)+".json")
+	procBody, _ := json.Marshal(map[string]any{"pid": pid, "sessionId": sidA, "cwd": cwd, "kind": "interactive", "entrypoint": "cli"})
+	if err := os.WriteFile(procFile, procBody, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(procFile)
+
+	writeTranscript(t, home, cwd, sidA, time.Now(),
+		`{"type":"custom-title","customTitle":"fixing bug","sessionId":"`+sidA+`"}`,
+		`{"type":"user","timestamp":"2026-11-04T12:46:00Z","cwd":"`+cwd+`","message":{"role":"user","content":"run tests"}}`,
+		strings.Repeat(" ", 4096))
+
+	// Snapshot 1: Herdr sees the Claude agent in pane w1:p1.
+	f.reply("session.snapshot", snapshot(
+		[]any{map[string]any{"workspace_id": "w1", "label": "repo", "number": 1}},
+		[]any{map[string]any{"tab_id": "w1:t1", "workspace_id": "w1", "label": "task", "number": 1}},
+		[]any{claudeAgent(sidA, proto.StatusWorking, "w1:p1", "w1:t1", "w1", cwd, "fixing bug")},
+		[]any{map[string]any{"pane_id": "w1:p1", "tab_id": "w1:t1", "workspace_id": "w1", "cwd": cwd, "terminal_title": "fixing bug"}},
+	))
+	list1 := listSessions(t, n)
+	m1 := byID(list1)
+	s1, ok := m1[sidA]
+	if !ok || s1.Status != proto.StatusWorking || s1.Agent != "claude" || s1.PaneID != "w1:p1" {
+		t.Fatalf("snapshot 1: unexpected session %+v", s1)
+	}
+
+	// Snapshot 2: Herdr foreground process flapped to a child process (agent=None).
+	// agents is empty, but panes still has w1:p1.
+	f.reset()
+	f.reply("session.snapshot", snapshot(
+		[]any{map[string]any{"workspace_id": "w1", "label": "repo", "number": 1}},
+		[]any{map[string]any{"tab_id": "w1:t1", "workspace_id": "w1", "label": "task", "number": 1}},
+		[]any{},
+		[]any{map[string]any{"pane_id": "w1:p1", "tab_id": "w1:t1", "workspace_id": "w1", "cwd": cwd, "terminal_title": "cat test.go"}},
+	))
+	list2 := listSessions(t, n)
+	m2 := byID(list2)
+	s2, ok := m2[sidA]
+	if !ok {
+		t.Fatalf("snapshot 2: session lost from list: %+v", list2)
+	}
+	if s2.Status != proto.StatusWorking || s2.Agent != "claude" || s2.PaneID != "w1:p1" {
+		t.Fatalf("snapshot 2: session fell through or degraded: %+v", s2)
+	}
+
+	// Snapshot 3: Claude process exited (proc file removed).
+	_ = os.Remove(procFile)
+	f.reset()
+	f.reply("session.snapshot", snapshot(
+		[]any{map[string]any{"workspace_id": "w1", "label": "repo", "number": 1}},
+		[]any{map[string]any{"tab_id": "w1:t1", "workspace_id": "w1", "label": "task", "number": 1}},
+		[]any{},
+		[]any{map[string]any{"pane_id": "w1:p1", "tab_id": "w1:t1", "workspace_id": "w1", "cwd": cwd, "terminal_title": "zsh"}},
+	))
+	list3 := listSessions(t, n)
+	m3 := byID(list3)
+	s3, ok := m3[sidA]
+	if !ok {
+		t.Fatalf("snapshot 3: offline session missing from list: %+v", list3)
+	}
+	if s3.Status != proto.StatusOffline || s3.Agent != "claude" || s3.PaneID != "" {
+		t.Fatalf("snapshot 3: session should be offline without pane: %+v", s3)
+	}
 }

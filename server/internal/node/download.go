@@ -50,21 +50,15 @@ func (n *Node) readFileChunk(p proto.FileChunkRequest) (*proto.FileChunk, error)
 }
 
 // openRegular opens a regular file a client asked for by its conversation path (download, thumbnail), following
-// links but never into iCloud Drive. path is the resolved path before links.
+// links but never into iCloud Drive or a secret (pathguard.go). path is the resolved path before links.
 func (n *Node) openRegular(asked, cwd string) (path string, f *os.File, st os.FileInfo, err error) {
 	path = n.resolvePath(asked, cwd)
 	if path == "" {
 		return "", nil, nil, fmt.Errorf("path cannot be resolved")
 	}
-	if inICloud(path) {
-		return "", nil, nil, fmt.Errorf("iCloud Drive files are not readable remotely")
-	}
-	resolved, err := filepath.EvalSymlinks(path)
+	resolved, err := n.realPath(absPath(path))
 	if err != nil {
 		return "", nil, nil, explainDenied(path, n.home, err)
-	}
-	if inICloud(resolved) {
-		return "", nil, nil, fmt.Errorf("iCloud Drive files are not readable remotely")
 	}
 	before, err := os.Stat(resolved)
 	if err != nil {

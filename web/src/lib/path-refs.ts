@@ -1,0 +1,101 @@
+// Paths a message names (docs/web.md「消息里的文件路径」): what looks like a file on the agent's machine, so the page
+// can ask the machine which are there (lib/path-presence.ts) and link only those. The same rules as iOS's FilePaths,
+// plus a line: path:12, path:12:5, path:12-20, path#L12.
+//
+// - ~/x, /x/y (two parts at least: /tmp alone is a word), or relative with a folder and an extension (src/a.ts; a
+//   letter-led extension, so deepseek/v4.1 is not a file).
+// - Outside backticks a path is ASCII: Chinese text or full-width punctuation right after it ends it (/tmp/a.md里).
+//   A path in backticks is whole, whatever it is written in: `~/报告/第四季度.docx`.
+// - Not inside a URL or a longer word; a sentence's full stop after it is not part of it.
+
+export type PathRef = {
+  /** Where it is in the text: [start, end) covers the path and its line. */
+  start: number;
+  end: number;
+  /** The path as written, without the line (what fs.stat is asked about). */
+  path: string;
+  line?: number;
+  col?: number;
+};
+
+const SEG = "[A-Za-z0-9_.@+\\-]+";
+const LINE = String.raw`(?::(\d{1,7})(?::(\d{1,5}))?(?:[-–]\d{1,7})?|#L(\d{1,7})(?:-L?\d{1,7})?)?`;
+const ASCII = new RegExp(
+  String.raw`(?<![A-Za-z0-9_/:.\-~])(~(?:/${SEG})+/?|/${SEG}(?:/${SEG})+/?|[A-Za-z0-9_.@\-]+(?:/${SEG})+\.[A-Za-z][A-Za-z0-9]{0,7})${LINE}(?![A-Za-z0-9_/\-])`,
+  "g",
+);
+const CODE_SPAN = /`([^`\n]+)`/g;
+// A whole code span that is a path: ~/ or / then anything but a backtick (non-ASCII names too), and a line.
+const WHOLE = new RegExp(String.raw`^(~?/[^\s\`]+(?: [^\s\`]+)*?)${LINE}$`);
+
+/**
+ * The paths in plain text, in order, at most `limit`. A code span is a candidate whole and also for the ASCII paths
+ * in it (`/a.md 和 /b.md`): `splitAtRefs` takes the first that is there, the longer one at the same place.
+ */
+export function findPathRefs(text: string, limit = 40): PathRef[] {
+  const out: PathRef[] = [];
+  for (const m of text.matchAll(CODE_SPAN)) {
+    const start = m.index + 1;
+    const ref = codePathRef(m[1]);
+    if (ref) out.push({ ...ref, start: start + ref.start, end: start + ref.end });
+  }
+  for (const m of text.matchAll(ASCII)) {
+    const ref = fromMatch(m, m.index);
+    if (ref && !out.some((r) => r.start === ref.start && r.end === ref.end)) out.push(ref);
+  }
+  out.sort((a, b) => a.start - b.start || b.end - a.end);
+  return out.slice(0, limit);
+}
+
+/** The path a whole code span is (`/tmp/a.md`, `src/a.ts:12`, `~/报告/第四季度.docx`), or undefined. */
+export function codePathRef(code: string): PathRef | undefined {
+  const lead = code.length - code.trimStart().length;
+  const t = code.trim();
+  if (!t || t.startsWith("//") || t.includes("://")) return undefined;
+  const w = WHOLE.exec(t);
+  if (w) {
+    const ref = fromMatch(w, 0);
+    if (ref && ref.path.split("/").filter(Boolean).length >= (ref.path.startsWith("~") ? 1 : 2)) return shift(ref, lead);
+  }
+  for (const m of t.matchAll(ASCII)) {
+    if (m.index !== 0 || m[0].length !== t.length) break;
+    const ref = fromMatch(m, 0);
+    if (ref) return shift(ref, lead);
+  }
+  return undefined;
+}
+
+function shift(r: PathRef, by: number): PathRef {
+  return { ...r, start: r.start + by, end: r.end + by };
+}
+
+function fromMatch(m: RegExpMatchArray, at: number): PathRef | undefined {
+  let path = m[1];
+  const lineText = m[0].slice(path.length);
+  // A sentence's full stop (or an ellipsis) is not part of the path, unless the path is only dots.
+  if (!lineText) path = path.replace(/(?<=[^./])\.+$/, "");
+  if (!path || path === "~" || path === "/" || /^~?\/+$/.test(path)) return undefined;
+  const num = (s?: string) => (s ? Number(s) : undefined);
+  const line = num(m[2] ?? m[4]);
+  return { start: at, end: at + (lineText ? m[0].length : path.length), path, line: line || undefined, col: line ? num(m[3]) : undefined };
+}
+
+/** Each path once, in order, for asking the machine. */
+export function uniquePaths(refs: PathRef[], limit = 24): string[] {
+  const out: string[] = [];
+  for (const r of refs) if (!out.includes(r.path) && out.length < limit) out.push(r.path);
+  return out;
+}
+
+/** Text cut at the refs that `linkable` says yes to: strings between, refs at odd places. */
+export function splitAtRefs(text: string, refs: PathRef[], linkable: (path: string) => boolean): (string | PathRef)[] {
+  const out: (string | PathRef)[] = [];
+  let at = 0;
+  for (const r of refs) {
+    if (r.start < at || !linkable(r.path)) continue;
+    out.push(text.slice(at, r.start), r);
+    at = r.end;
+  }
+  out.push(text.slice(at));
+  return out;
+}

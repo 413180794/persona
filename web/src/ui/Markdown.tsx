@@ -13,6 +13,8 @@ import "katex/contrib/mhchem";
 import { copyText } from "./atoms";
 import { Icon } from "./icons";
 import { MermaidBlock } from "./Mermaid";
+import { rehypePathLinks, textPaths, writtenText } from "./PathLinks";
+import { usePathLinks } from "../lib/path-presence";
 
 // A link ends at whitespace or any non-ASCII character (Chinese text, full-width punctuation), without trailing
 // .,;:!? or an unbalanced ) ] (docs/lessons/ios.md: where a link ends). GFM's autolinks only end at whitespace, so
@@ -319,18 +321,20 @@ export function markdownUrl(url: string): string {
 
 // A link opens where it belongs (lib/links.ts): Feishu documents in the side panel, conversations in place, pages in
 // a new tab. ⌘ / Ctrl / middle click is always the browser's new tab.
-function Link({ href, children, mid, cwd }: { href?: string; children?: React.ReactNode; mid?: string; cwd?: string }) {
+// `line`: a path a message names at a line (src/a.ts:12, PathLinks.tsx) opens there.
+function Link({ href, children, mid, cwd, line, title: hover }: { href?: string; children?: React.ReactNode; mid?: string; cwd?: string; line?: number; title?: string }) {
   const title = textOf(children).trim();
   const path = mid && href && isMachineRef(href) ? resolveRef(cwd ?? "", href) : "";
   return (
     <a
       href={path && mid ? fileDownloadURL(mid, path, cwd, { inline: true }) : href ? linkHref(href) : undefined}
+      title={hover}
       target="_blank"
       rel="noreferrer noopener"
       onClick={(e) => {
         if (path && mid && !e.defaultPrevented && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
           e.preventDefault();
-          openPanel({ kind: "file", mid, path, cwd });
+          openPanel({ kind: "file", mid, path, cwd, line });
         } else clickLink(e, href, title && title !== href ? title : undefined);
       }}
       onPointerEnter={() => prefetchLink(href)}
@@ -378,14 +382,25 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
 
 // `compact`: a few lines inside a card (a task's receipt): body size in the card's color, headings as bold body text,
 // tight blocks, so a parent's line-clamp shows as much as it can.
-export const Markdown = memo(function Markdown({ text, small, compact, mid, cwd }: { text: string; small?: boolean; compact?: boolean; mid?: string; cwd?: string }) {
+// With `mid` (a conversation's machine) the paths the text names that are there link to the file panel; while
+// `streaming`, not the last word (a path still being written would be asked about at every step of it).
+export const Markdown = memo(function Markdown({ text, small, compact, mid, cwd, streaming }: { text: string; small?: boolean; compact?: boolean; mid?: string; cwd?: string; streaming?: boolean }) {
   const components = useMemo<Components>(() => mid ? {
     ...markdownComponents,
-    a: ({ href, children }) => <Link href={href} mid={mid} cwd={cwd}>{children}</Link>,
+    a: ({ href, children, node }) => {
+      const line = Number(node?.properties?.dataLine) || undefined;
+      const title = typeof node?.properties?.title === "string" ? node.properties.title : undefined;
+      return <Link href={href} mid={mid} cwd={cwd} line={line} title={title}>{children}</Link>;
+    },
   } : markdownComponents, [mid, cwd]);
+  const settled = streaming ? writtenText(text) : text;
+  const paths = useMemo(() => (mid ? textPaths(settled) : []), [settled, mid]);
+  const { linkable, key } = usePathLinks(mid, cwd, paths);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const rehypePlugins = useMemo(() => (key ? [rehypeKatex, rehypePathLinks(linkable)] : [rehypeKatex]), [key]);
   return (
     <div className={`prose-j ${small ? "prose-sm" : ""} ${compact ? "prose-compact" : ""}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={components} urlTransform={markdownUrl}>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={rehypePlugins} components={components} urlTransform={markdownUrl}>
         {linkify(normalizeMath(text), { math: true })}
       </ReactMarkdown>
     </div>

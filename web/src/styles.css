@@ -189,6 +189,9 @@ button:disabled { cursor: default; }
 .prose-j li { margin: .2em 0; } .prose-j li::marker { color: var(--ink-3); }
 .prose-j a { color: var(--accent-ink); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 3px; transition: text-decoration-color .15s; }
 .prose-j a:hover { text-decoration-color: currentColor; }
+/* A path a message names that is there on the machine (ui/PathLinks.tsx): a link like the answer's, in a user's bubble too. */
+.path-link { color: var(--accent-ink); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 3px; transition: text-decoration-color .15s; }
+.path-link:hover { text-decoration-color: currentColor; }
 .prose-j strong { font-weight: 600; }
 .prose-j blockquote { margin: .7em 0; padding: .1em 0 .1em .9em; border-left: 2px solid var(--line-strong); color: var(--ink-2); }
 .prose-j hr { border: 0; border-top: 1px solid var(--line); margin: 1.2em 0; }

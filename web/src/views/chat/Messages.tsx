@@ -1,10 +1,12 @@
 // Messages that are not plain bubbles (iOS MergedUserBubble / PeerMessage / LoopTickRow): a finished exchange's several
 // messages in one bubble, a message another Claude session sent, and a /loop waking the agent again.
 import { clock } from "../../lib/format";
+import { getSession } from "../../lib/store";
 import type { UserMessage } from "../../lib/turns";
 import { Icon } from "../../ui/icons";
 import { FileCards } from "./FileCards";
 import { MessageActions } from "./MessageActions";
+import { PathText } from "../../ui/PathLinks";
 import { Thumb } from "./Steps";
 
 export function MergedBubble({ msg, mid, sid }: { msg: UserMessage; mid: string; sid: string }) {
@@ -24,7 +26,9 @@ export function MergedBubble({ msg, mid, sid }: { msg: UserMessage; mid: string;
           {parts.map((t, i) => (
             <div key={i} className="flex flex-col gap-2">
               {i > 0 && <span aria-hidden className="mx-auto h-[2px] w-6 rounded-full bg-ink/20" />}
-              <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{t}</span>
+              <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">
+                <PathText text={t} mid={mid} cwd={getSession(mid, sid)?.cwd} />
+              </span>
             </div>
           ))}
         </div>
