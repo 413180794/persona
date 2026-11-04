@@ -399,6 +399,10 @@ final class ChatStore {
     var pending: [PendingMessage] = []
     /// A pending message's real copy arrived and its bubble went (the app saves its outbox).
     @ObservationIgnored var onArrived: (() -> Void)?
+    /// Sent messages whose transcript copy has arrived (gone from `pending`) while the rows with that copy are still
+    /// being built: still drawn as they were until those rows are in, the same pass. Dropped at once, the message was
+    /// off the screen for a pass, the first one of a new conversation with it (#1911).
+    private(set) var arriving: [PendingMessage] = []
 
     @ObservationIgnored private var ids = Set<String>()
     /// The version of the transcript the items come from (`ItemSpan.history`). Another one means the file was replaced
@@ -504,7 +508,7 @@ final class ChatStore {
         if !pending.isEmpty { // the real message arrived: drop the local copy, one per message
             let before = pending.count
             for it in added {
-                if let i = pending.firstIndex(where: { PendingMessage.arrived($0, as: it) }) { pending.remove(at: i) }
+                if let i = pending.firstIndex(where: { PendingMessage.arrived($0, as: it) }) { arriving.append(pending.remove(at: i)) }
             }
             if pending.count != before { onArrived?() }
         }
@@ -636,6 +640,8 @@ final class ChatStore {
                 guard revision == self.rebuildRevision else { continue }
                 self.rows = built.rows
                 self.blocks = built.blocks
+                // The sent messages' rows are in: their local copies go in the same pass.
+                if !self.arriving.isEmpty { self.arriving = [] }
                 // The streamed message's row is in: its live copy goes in the same pass (a newer one that started
                 // meanwhile stays).
                 if let ended = self.liveEnds {

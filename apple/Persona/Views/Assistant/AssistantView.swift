@@ -273,6 +273,36 @@ struct PendingStart: Equatable {
     var imageCount: Int
 }
 
+/// The first message of a new conversation while it spins up, laid out as the chat will lay it out the moment it takes
+/// over: the day, the message in the chat's own bubble, then a typing line, at the bottom over the composer, in the
+/// chat's margins. It used to sit at the top of the new-conversation page and jump to the bottom when the chat came in
+/// (#1911). `bottom`: the space the chat leaves between its newest row and the composer.
+struct FirstMessagePending: View {
+    var pending: PendingStart
+    var name: String
+    var shell: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.l) { // the chat's rows' spacing
+            DayLine(date: .now)
+            VStack(alignment: .trailing, spacing: Theme.Space.sm) {
+                if pending.imageCount > 0 {
+                    Label("\(pending.imageCount) 张图片", systemImage: Theme.Icon.photo).font(Theme.Font.label).foregroundStyle(.secondary)
+                }
+                HStack {
+                    Spacer(minLength: 48)
+                    UserBubbleBody(quotes: [], text: pending.text, shell: shell)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            TypingIndicator(text: "\(name) 正在准备…")
+        }
+        .padding(.horizontal, Theme.Space.l) // the chat's list margins
+        .frame(maxWidth: ChatView.readableWidth)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    }
+}
+
 /// The old layout's new conversation: `AssistantWelcome` (greeting, what Persona can reach, one-tap suggestions); while
 /// a conversation spins up it shows the first message and a typing indicator so the send feels instant.
 struct AssistantHome: View {
@@ -289,33 +319,21 @@ struct AssistantHome: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Theme.Space.xl) {
-                if let pending {
-                    HStack {
-                        Spacer(minLength: 48)
-                        VStack(alignment: .trailing, spacing: Theme.Space.sm) {
-                            if pending.imageCount > 0 {
-                                Label("\(pending.imageCount) 张图片", systemImage: Theme.Icon.photo).font(Theme.Font.label).foregroundStyle(.secondary)
-                            }
-                            // The same bubble as a sent message (white on the light-blue bubble was 1.2:1).
-                            Text(pending.text)
-                                .foregroundStyle(Theme.userBubbleText)
-                                .padding(.horizontal, Theme.Space.l)
-                                .padding(.vertical, Theme.Space.m)
-                                .background(Theme.userBubbleFill, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
-                        }
-                    }
-                    .padding(.top, Theme.Space.m)
-                    TypingIndicator(text: "Persona 正在准备…")
-                } else {
+            if let pending {
+                FirstMessagePending(pending: pending, name: model.persona.name, shell: false)
+                    // The page's height inside its margins, the message at its bottom (a long one runs up out of it, as the
+                    // chat shows its newest end).
+                    .containerRelativeFrame(.vertical, alignment: .bottom)
+            } else {
+                VStack(alignment: .leading, spacing: Theme.Space.xl) {
                     AssistantWelcome(error: error, send: send)
                 }
+                .padding(.horizontal, Theme.Space.xl)
+                .padding(.bottom, Theme.Space.xl)
+                // The conversation's measure on a wide display (iPhone Duo open).
+                .frame(maxWidth: ChatView.readableWidth)
+                .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, Theme.Space.xl)
-            .padding(.bottom, Theme.Space.xl)
-            // The conversation's measure on a wide display (iPhone Duo open).
-            .frame(maxWidth: ChatView.readableWidth)
-            .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
         .dismissesKeyboardOnTap()
@@ -324,7 +342,7 @@ struct AssistantHome: View {
         // the top bar's height tall, over the suggestion cards.
         .contentMargins(.top, AssistantTopBar.height, for: .scrollContent)
         // Room to scroll the last suggestions clear of the fade over the chips (as ShellHome).
-        .contentMargins(.bottom, Self.fade, for: .scrollContent)
+        .contentMargins(.bottom, pending == nil ? Self.fade : ChatView.newestGap, for: .scrollContent)
         .themedGroupedPage()
         .safeAreaInset(edge: .bottom, spacing: 0) {
             // The chips' row a step off the field (2026-11-04: with Theme.Space.s it sat right on it, and the
@@ -567,6 +585,9 @@ struct StarterComposer: View {
         // recording placeholder.
         guard !videos.busy, !t.isEmpty || !images.isEmpty || !files.isEmpty || !recordingContexts.isEmpty else { return }
         let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? (files.isEmpty ? "参考录音内容。" : "请看视频") : "请看图片") : t, files: files)
+        // The keyboard goes down with the send: the conversation that takes over has a field of its own, and the keyboard
+        // coming back up and going down again on the way moved the first message up and down with it (#1911).
+        focused = false
         send(recordingContexts.isEmpty ? body : recordingContexts.map(\.xml).joined(separator: "\n") + "\n\n" + body, images.map(\.1))
         text = ""
         images = []

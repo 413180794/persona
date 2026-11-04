@@ -1056,6 +1056,13 @@ struct ChatView: View {
     /// Streamed words are drawn after the lines (`ChatLiveText`'s rule: not once the message is in the rows).
     private var liveShown: Bool { ChatLiveText.shows(store) }
 
+    /// A message of yours is the newest thing and the agent has not begun on it: no turn running yet, the session at
+    /// work or starting up.
+    private func startingTurn(_ pending: [PendingMessage]) -> Bool {
+        guard !pending.isEmpty, liveTurnID == nil else { return false }
+        return status.isActive || session?.starting == true
+    }
+
     private var liveTurnID: String? {
         guard status.isActive, case .turn(let t) = store.blocks.last else { return nil }
         return t.id
@@ -1450,7 +1457,7 @@ struct ChatView: View {
         let rows = store.rows
         let lines = currentLines()
         let queued = session?.queued ?? []
-        let pending = store.pending.filter { p in !queued.contains { PendingMessage.same($0, p.text) } }
+        let pending = (store.arriving + store.pending).filter { p in !queued.contains { PendingMessage.same($0, p.text) } }
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: Theme.Space.l) {
                 // Newest first (the list is drawn upside down): the end sentinel, live text, unsent messages, lines.
@@ -1463,12 +1470,23 @@ struct ChatView: View {
                 // Streamed text, the typing line and unsent messages sit at the newest end too: while you read
                 // history they wait with the rest, as they were drawn then (`Frozen`).
                 if style == .assistant { ChatLiveText(store: store, held: frozen?.text) }
+                // Sent, and the agent not on it yet: the line the new-conversation page showed under the first message
+                // (`FirstMessagePending`), where the turn's work line comes in. Without it the chat that took over showed
+                // the message a line lower, then pushed it up when the turn began (#1911).
+                if frozen == nil, startingTurn(pending) {
+                    TypingIndicator(text: "\(style == .assistant ? model.persona.name : (session?.agentLabel ?? "Claude")) 正在准备…")
+                        .flippedBack()
+                        .id("starting-turn")
+                }
                 // Sent from here, not in the transcript yet (ones Claude queued show in the queue strip instead).
                 ForEach((frozen.map { f in pending.filter { f.pending.contains($0.id) } } ?? pending).reversed()) { msg in
                     PendingBubble(msg: msg, retry: { model.retry(key, msg) }, discard: { model.discard(key, msg) })
                         .flippedBack()
                         .id(msg.id.uuidString)
                 }
+                // The first message of a conversation, not in the transcript yet: its day over it, as the new-conversation
+                // page drew it (`FirstMessagePending`) and the transcript's lines will (#1911).
+                if style == .assistant, lines.isEmpty, !pending.isEmpty { DayLine(date: .now).flippedBack() }
                 // Every message, timer line, tool count and answer is its own lazy row (a running turn can hold
                 // hundreds of steps; one stack of them froze the page).
                 // The oldest dozen lines start loading the page before them: by the time you reach the top it is
@@ -1515,7 +1533,7 @@ struct ChatView: View {
         // (Content top = the composer side on screen, content bottom = the navigation side.)
         // The header floats over the list (Agents): the oldest end leaves its full height free, so nothing hides
         // under it; the list's own frame never changes as it folds, so folding never moves the messages.
-        .contentMargins(.top, 10, for: .scrollContent)
+        .contentMargins(.top, Self.newestMargin, for: .scrollContent)
         .contentMargins(.bottom, headerRoom + 10, for: .scrollContent)
         .scrollIndicators(.hidden)
         // iOS 26's soft edge blur works out its region on the unflipped view and fogged the whole list.
@@ -2008,6 +2026,11 @@ struct ChatView: View {
     /// Back: out of files / Git to the chat first, then off the page.
     /// The widest the conversation gets: lines longer than this are hard to read.
     static let readableWidth: CGFloat = 760
+    /// The list's margin at its newest end (over the composer; the list is upside down, so its top margin).
+    static let newestMargin: CGFloat = 10
+    /// From the newest row's bottom to the composer: the margin, the end marker and the rows' spacing. The first message
+    /// of a new conversation is laid out with it before the chat takes over (`FirstMessagePending`, #1911).
+    static let newestGap: CGFloat = newestMargin + Theme.Size.line + Theme.Space.l
 
     /// An Agents chat whose actions are in the system's side column (no header of its own).
     private var sideBars: Bool { style == .dev && barsVertical }

@@ -30,38 +30,26 @@ struct ShellHome: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Theme.Space.xl) {
-                if let pending {
-                    HStack {
-                        Spacer(minLength: Theme.Size.avatarXL)
-                        VStack(alignment: .trailing, spacing: Theme.Space.sm) {
-                            if pending.imageCount > 0 {
-                                Label("\(pending.imageCount) 张图片", systemImage: Theme.Icon.photo).font(Theme.Font.label).foregroundStyle(.secondary)
-                            }
-                            Text(pending.text)
-                                .font(Theme.Font.body)
-                                .foregroundStyle(Color.primary)
-                                .padding(.horizontal, Theme.Space.l)
-                                .padding(.vertical, Theme.Space.m)
-                                .background(Theme.Shell.userBubble, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
-                        }
-                    }
-                    .padding(.top, Theme.Space.m)
-                    TypingIndicator(text: "\(model.persona.name) 正在准备…")
-                } else {
+            if let pending {
+                FirstMessagePending(pending: pending, name: model.persona.name, shell: true)
+                    // The page's height inside its margins, the message at its bottom (a long one runs up out of it, as the
+                    // chat shows its newest end).
+                    .containerRelativeFrame(.vertical, alignment: .bottom)
+            } else {
+                VStack(alignment: .leading, spacing: Theme.Space.xl) {
                     // Its errors stay over the composer, where the send was.
                     AssistantWelcome(send: send)
                 }
+                .padding(.horizontal, Theme.Space.l)
+                .frame(maxWidth: ChatView.readableWidth)
+                .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, Theme.Space.l)
-            .frame(maxWidth: ChatView.readableWidth)
-            .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
         .dismissesKeyboardOnTap()
         .contentMargins(.top, AssistantTopBar.height, for: .scrollContent)
         // Room to scroll the last things to ask clear of the fade.
-        .contentMargins(.bottom, Self.fade, for: .scrollContent)
+        .contentMargins(.bottom, pending == nil ? Self.fade : ChatView.newestGap, for: .scrollContent)
         .onPreferenceChange(WelcomeFold.self) { room.fold = $0 }
         .background(Theme.pageBackground.ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {

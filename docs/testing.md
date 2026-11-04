@@ -511,6 +511,12 @@ async 提问（空输入框、电脑上有草稿、0.163 的提问面板展开�
   测试用隔离 HOME/Git 配置的临时仓库验证真实提交钩子、暂存区与工作树差异，不操作主工作区的暂存区或历史。
 - hooksPath 是每个克隆的本地配置；新克隆仍需运行上面的 `git config` 命令，不能因为仓库里有 hooks 文件就以为它已经生效。
 
+## 新对话的第一条消息（`FirstMessageTests`）
+
+发出后每 50 ms 记一次消息到输入框的距离（`FIRST <用例> <秒> <距离>`），断言不变（#1911）：助手的新对话（「新对话」页 → 对话页接手）、
+Agents 的新会话（空会话里发第一条，`MOCK_START_SECONDS` 后 Claude 才起来），再流一段回复。mock：`MOCK_ASSISTANT_START_SECONDS=2 MOCK_ECHO_SENT=1`。
+录屏对比用 `simctl io recordVideo` 和 `scripts/diag/stream-scroll/vidpick.swift` 取帧。
+
 ## 流式时的滚动（`StreamingScrollTests`，录屏逐帧量）
 
 看「流式时稳不稳」，截图和探针都不够（探针读的是 SwiftUI 的位置，会和屏幕差一拍，docs/lessons/ios.md）：录模拟器的屏，逐帧量。
