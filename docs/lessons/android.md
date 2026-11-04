@@ -55,6 +55,11 @@
 
 ## 测试
 
+- 2026-11-05，#1881：只验证契约模块或扫描硬编码 token，不能证明新增页面能编译。Agents 的 hub 提示行同时出现 `Set.takeLast` 和不存在的尺寸 token；修好生产编译后，原测试夹具还因引用旧接口和继承 final 类而不能编译。
+  有序去重集合先转成列表再截取最近 8 项，验证重复键不会增长或重排历史；加载圈沿用 `JSpinner` 与已有设计系统尺寸，不造页面里的数值或修改生成的 token 文件。Fake 按当前接口实现，`AgentsPreferences` 用真实构造函数和内存 DataStore，不把正式类型改成 open。
+  `WhileSubscribed` 的 StateFlow 要有活跃收集者；测试安装 Main dispatcher，先启动订阅再发送不重放的 hello，并推进调度器后检查状态；结束时取消模型／订阅并恢复 dispatcher。实际模拟器还暴露了尚未收到 hello 时误报「hub 版本太旧」的时序问题：没有 hello 不是协议为零，调用方要等 hello 到达后再判断兼容性；真正收到旧协议仍提示。
+  保留原断言，另用原生绘制和实际 App 截图检查三种风格 × 深浅色，最后跑完整 Android 测试和 APK 构建。原失败日志与退出码单独保留，不能把测试编译失败写成已运行的测试失败。
+
 - 读取仓库源码的 JVM 测试不要把 `File(".")` 当仓库根目录（2026-11-04，#1672）：Gradle 的 `:app:testDebugUnitTest` 在 `android/app` 下运行，重复拼接 `android/app/...` 会在文件存在检查处失败，真正的契约断言根本没有执行。沿当前目录的父目录寻找约定的源码文件，用合成目录验证仓库根、Android 根、App 模块三种入口以及缺失文件／同名目录；不全局改测试工作目录、不跳过原契约断言。原发布失败记录保留，修复后真实运行 Gradle 测试和打包。
 
 - `RealInboxRepository` 构造时在作用域里起一个收集当前配对的协程，它第一次运行会把列表清空（换配对时的清场）。`runTest` 里构造完直接 `refresh()`，清场排在第一次挂起之后跑，刚读到的列表又被清掉：先等 `snapshot.first { it.contentSource != null }` 再刷新（`InboxHandOffRepositoryTest`）。

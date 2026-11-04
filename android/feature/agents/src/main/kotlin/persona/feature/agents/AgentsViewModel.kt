@@ -83,7 +83,7 @@ internal class AgentsViewModel(
             protocolVersion = hello?.protocol,
             minAppBuild = hello?.minAppBuild,
             appBuild = appBuild,
-            connected = connState == ConnectionState.Online,
+            connected = connState == ConnectionState.Online && hello != null,
         )
         HubNotice.of(update, compat, dismissed)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
