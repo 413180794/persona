@@ -46,6 +46,7 @@ func (h *Hub) adminDeviceRoutes(mux *http.ServeMux) {
 			return
 		}
 		h.revoked(id)
+		h.sendRevocations(newlyReachable(nil, h.meshView()))
 		h.logf("admin: device token %s revoked", id)
 		writeJSON(w, map[string]any{"ok": true})
 	})

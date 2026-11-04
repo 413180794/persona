@@ -307,6 +307,7 @@ func (h *Hub) tokenRoutes(api *http.ServeMux) {
 			return
 		}
 		h.revoked(id)
+		h.sendRevocations(newlyReachable(nil, h.meshView()))
 		writeJSON(w, map[string]any{"ok": true})
 	})
 }

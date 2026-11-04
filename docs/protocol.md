@@ -933,6 +933,7 @@ hub 连不进去的电脑（笔记本）由 jarvis-link 主动连 hub 的 TLS �
 - `GET /api/v1/peer`（WebSocket，只走 TLS，`role: peer` 的凭据，permessage-deflate）：二进制消息，内容是上面 hub ↔ node 那套 JSON 行 RPC 的字节流：
   - 调用：`hello {hub_id,name,version,epoch}`（两边各一次）、`stream.open {id}`（流上是一条到对方 peer 服务器的 HTTP/1.1 连接）、
     `relay {to,from,ttl,method,params}`（`creds.import {tokens:[{id,name,kind,role,created_at,last_seen,hash}]}` → `{added}`：成员把凭据交给中心；
+    `creds.revoked {tokens:[{id,name,kind,role,hash}]}`（其余字段不用）→ `{revoked}`：把已撤销的凭据告诉组里的 hub；
     `pair.code {}` → 配对码：成员上的 `personad hub pair`）、`unpair {}`；
   - 单向：`rec`（hub 的记录：链路、`center`、`term`、hub.json 里的电脑）、`stream.data` / `stream.ack` / `stream.close`。
   - 关闭码：4011 重复的链路、4012 断开了互联、4013 发不过来、1001 hub 停机。两边每 10 秒 ping，5 秒没 pong 断开（配置值）。

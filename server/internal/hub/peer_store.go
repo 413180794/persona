@@ -32,10 +32,15 @@ type centerStore interface {
 	SaveMeshGroup(ctx context.Context, self, center string, term int64) error
 	AppTokens(ctx context.Context) ([]db.ExportedToken, error)
 	ImportDeviceTokens(ctx context.Context, list []db.ExportedToken) (int, error)
+	RevokedAppTokens(ctx context.Context) ([]db.ExportedToken, error)
+	ApplyRevokedTokens(ctx context.Context, list []db.ExportedToken) ([]string, error)
 	ConnectorCredential(ctx context.Context, machine string) (*db.ConnectorCredential, error)
 	SaveConnectorCredential(ctx context.Context, c db.ConnectorCredential) error
 	DeleteConnectorCredential(ctx context.Context, machine string) (bool, error)
 }
+
+// Asserted here because centerStore() finds out at run time: a method gone astray would turn the whole of it off.
+var _ centerStore = (*db.DB)(nil)
 
 func (h *Hub) centerStore() centerStore {
 	cs, _ := h.store.(centerStore)

@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ type meshStore struct {
 	settings   map[string][]byte
 	tokens     map[string]db.DeviceToken // hash -> token
 	revoked    map[string]bool
+	applyFails int // ApplyRevokedTokens fails this many times more
 	devices    map[string]db.Device
 	ixs        map[string]*db.InteractionRecord
 	seen       map[[2]string]time.Time
@@ -371,6 +373,40 @@ func (s *meshStore) AppTokens(context.Context) ([]db.ExportedToken, error) {
 		}
 	}
 	return out, nil
+}
+
+func (s *meshStore) RevokedAppTokens(context.Context) ([]db.ExportedToken, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []db.ExportedToken
+	for hash, t := range s.tokens {
+		if s.revoked[t.ID] && (t.Role == roleFull || t.Role == roleAnswer) {
+			out = append(out, db.ExportedToken{DeviceToken: t, Hash: hash})
+		}
+	}
+	return out, nil
+}
+
+func (s *meshStore) ApplyRevokedTokens(_ context.Context, list []db.ExportedToken) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.applyFails > 0 {
+		s.applyFails--
+		return nil, errors.New("the database is having a moment")
+	}
+	var ids []string
+	for _, e := range list {
+		t, ok := s.tokens[e.Hash]
+		switch {
+		case !ok:
+			s.tokens[e.Hash] = e.DeviceToken
+			s.revoked[e.ID] = true
+		case !s.revoked[t.ID] && (t.Role == roleFull || t.Role == roleAnswer):
+			s.revoked[t.ID] = true
+			ids = append(ids, t.ID)
+		}
+	}
+	return ids, nil
 }
 
 func (s *meshStore) ImportDeviceTokens(_ context.Context, list []db.ExportedToken) (int, error) {

@@ -307,13 +307,19 @@ func (h *Hub) meshRebuild() {
 	}
 }
 
-// viewLoop acts on the newest picture whenever it changes (meshViewChanged), one change at a time.
+// viewLoop acts on the newest picture whenever it changes (meshViewChanged), one change at a time, and repeats the
+// revoked credentials now and then.
 func (h *Hub) viewLoop(ctx context.Context) {
 	ms := &h.mesh
+	resend := time.NewTicker(revocationResendEvery)
+	defer resend.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-resend.C:
+			h.sendRevocations(newlyReachable(nil, ms.view.Load()))
+			continue
 		case <-ms.kick:
 		}
 		v := ms.view.Load()
@@ -323,14 +329,26 @@ func (h *Hub) viewLoop(ctx context.Context) {
 	}
 }
 
-// meshViewChanged acts on a new picture: the paths to the computers the members offer, the link's group size, and
-// handing this hub's credentials to the center once it can be reached.
+// meshViewChanged acts on a new picture: the paths to the computers the members offer, the link's group size, handing
+// this hub's credentials to the center once it can be reached, and telling a hub that is back what was revoked.
 func (h *Hub) meshViewChanged(old, v *meshView) {
 	if reachableHubs(old) != reachableHubs(v) {
 		h.sendLinkEndpoints() // jarvis-link shows how many hubs the group has
 	}
 	h.fleetRegroup() // the members' computers (mesh_paths.go)
 	h.handOverCredentials()
+	h.sendRevocations(newlyReachable(old, v))
+}
+
+// newlyReachable is the other hubs v can reach and old could not.
+func newlyReachable(old, v *meshView) []string {
+	var out []string
+	for _, id := range v.reachableIDs() {
+		if id != v.self && !old.reachable(id) {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // reachableHubs is how many hubs of the group are online, this one included.

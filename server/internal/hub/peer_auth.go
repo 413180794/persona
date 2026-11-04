@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/db"
@@ -11,7 +12,7 @@ import (
 
 // Calls between hubs of a group (docs/mesh.md「调用」): a call for a hub the caller has no link to goes hop by hop along
 // the route (relay). What one hub may ask another: the center takes over a member's device credentials (creds.import,
-// plan-hub-center.md 3「设备凭据」).
+// plan-hub-center.md 3「设备凭据」); a revocation reaches every copy of a credential (creds.revoked, docs/mesh.md).
 
 // meshRelayReq is a call to another hub of the group, passed along the way to it.
 type meshRelayReq struct {
@@ -107,6 +108,32 @@ func (h *Hub) meshLocalCall(ctx context.Context, from, method string, params jso
 		}
 		return map[string]any{"added": n}, nil
 	}
+	if method == "creds.revoked" {
+		var p struct {
+			Tokens []db.ExportedToken `json:"tokens"`
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		cs := h.centerStore()
+		if cs == nil {
+			return nil, errors.New("no database")
+		}
+		var keep []db.ExportedToken
+		for _, t := range p.Tokens {
+			if len(t.Hash) == 64 && (t.Role == roleFull || t.Role == roleAnswer) && t.ID != "" {
+				keep = append(keep, t)
+			}
+		}
+		ids, err := cs.ApplyRevokedTokens(ctx, keep)
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range ids {
+			h.revoked(id)
+		}
+		return map[string]any{"revoked": len(ids)}, nil
+	}
 	if method == "pair.code" { // a member's `jarvisd hub pair`: the app pairs with the center
 		if !h.isCenter() {
 			return nil, errors.New("this hub is not the center")
@@ -114,6 +141,42 @@ func (h *Hub) meshLocalCall(ctx context.Context, from, method string, params jso
 		return h.newPairCode(ctx, "")
 	}
 	return nil, errors.New("unknown mesh call " + method)
+}
+
+// revocationResendEvery is how often a hub repeats the revoked credentials to the hubs it can reach: whatever a lost
+// message, a change viewLoop did not see or a failed write left behind.
+var revocationResendEvery = 5 * time.Minute
+
+// sendRevocations tells these hubs which app credentials this one knows to be revoked. Every hub keeps its own copy of a
+// credential it issued or was handed, and a revocation that stayed on one hub would end the day another became the
+// center. Sent when a credential is revoked, when a hub can be reached again and every revocationResendEvery; the whole
+// list each time, it is short and taking it twice changes nothing.
+func (h *Hub) sendRevocations(to []string) {
+	cs := h.centerStore()
+	if cs == nil || len(to) == 0 {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		list, err := cs.RevokedAppTokens(ctx)
+		cancel()
+		if err != nil {
+			h.logf("mesh: the revoked credentials: %v", err)
+			return
+		}
+		if len(list) == 0 {
+			return
+		}
+		for _, id := range to {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			err := h.meshCall(ctx, id, "creds.revoked", map[string]any{"tokens": list}, nil)
+			cancel()
+			// A hub from before this cannot take it until it is updated.
+			if err != nil && !errors.Is(err, errHubUnreachable) && !strings.Contains(err.Error(), "unknown mesh call") {
+				h.logf("mesh: tell %s about the revoked credentials: %v", h.hubLabel(id), err)
+			}
+		}
+	}()
 }
 
 // recordOf is the newest record of a hub (nil when none is held).

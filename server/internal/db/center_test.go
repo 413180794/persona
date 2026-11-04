@@ -2,7 +2,9 @@ package db
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestMeshGroupAndConnectors(t *testing.T) {
@@ -98,5 +100,121 @@ func TestAppTokensMoveToTheCenter(t *testing.T) {
 	}
 	if tok, _ := d.DeviceTokenByHash(ctx, "ct-hash-watch"); tok == nil || tok.Role != "answer" || tok.ID != "dev_ct_watch" {
 		t.Fatalf("imported %+v", tok)
+	}
+}
+
+// A credential revoked on another hub dies here too, and one this hub never saw stays revoked when a copy arrives later.
+func TestRevokedTokensFollowToOtherHubs(t *testing.T) {
+	d := open(t)
+	ctx := context.Background()
+	if _, err := d.pool.Exec(ctx, `DELETE FROM device_tokens WHERE id LIKE 'dev_rv_%'`); err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range []struct {
+		t    DeviceToken
+		hash string
+	}{
+		{DeviceToken{ID: "dev_rv_phone", Name: "iPhone", Kind: "phone", Role: "full"}, "rv-hash-phone"},
+		{DeviceToken{ID: "dev_rv_done", Name: "old", Kind: "phone", Role: "full"}, "rv-hash-done"},
+		{DeviceToken{ID: "dev_rv_link", Name: "link", Kind: "link", Role: "link", MachineID: "mac"}, "rv-hash-link"},
+	} {
+		if err := d.CreateDeviceToken(ctx, x.t, x.hash); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := d.RevokeDeviceToken(ctx, "dev_rv_done"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.UpsertDevice(ctx, Device{DeviceID: "rv-push", Kind: "phone", CredentialID: "dev_rv_phone"}); err != nil {
+		t.Fatal(err)
+	}
+	unknown := ExportedToken{DeviceToken: DeviceToken{ID: "dev_rv_unknown", Name: "elsewhere", Kind: "phone", Role: "full"}, Hash: "rv-hash-unknown"}
+	ids, err := d.ApplyRevokedTokens(ctx, []ExportedToken{
+		{DeviceToken: DeviceToken{ID: "dev_rv_phone", Role: "full"}, Hash: "rv-hash-phone"},
+		{DeviceToken: DeviceToken{ID: "dev_rv_done", Role: "full"}, Hash: "rv-hash-done"},
+		{DeviceToken: DeviceToken{ID: "dev_rv_link", Role: "full"}, Hash: "rv-hash-link"},  // the role here is what counts
+		{DeviceToken: DeviceToken{ID: "dev_rv_done", Role: "full"}, Hash: "rv-hash-other"}, // a known id under another hash
+		unknown,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 1 || ids[0] != "dev_rv_phone" {
+		t.Fatalf("newly revoked: %v (want only the phone)", ids)
+	}
+	if tok, _ := d.DeviceTokenByHash(ctx, "rv-hash-phone"); tok != nil {
+		t.Fatalf("the phone's credential still works: %+v", tok)
+	}
+	if tok, _ := d.DeviceTokenByHash(ctx, "rv-hash-link"); tok == nil {
+		t.Fatal("a jarvis-link credential was revoked")
+	}
+	var devices int
+	if err := d.pool.QueryRow(ctx, `SELECT count(*) FROM devices WHERE credential_id = 'dev_rv_phone'`).Scan(&devices); err != nil || devices != 0 {
+		t.Fatalf("the phone's push registrations: %d %v", devices, err)
+	}
+	if n, err := d.ImportDeviceTokens(ctx, []ExportedToken{unknown}); err != nil || n != 0 {
+		t.Fatalf("a copy of a revoked credential handed over: %d %v", n, err)
+	}
+	if tok, _ := d.DeviceTokenByHash(ctx, "rv-hash-unknown"); tok != nil {
+		t.Fatalf("a revoked credential came back: %+v", tok)
+	}
+	shown, err := d.DeviceTokens(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range shown {
+		if x.ID == "dev_rv_unknown" {
+			t.Fatalf("a credential this hub only knows as revoked elsewhere is in the device list: %+v", x)
+		}
+	}
+	list, err := d.RevokedAppTokens(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, e := range list {
+		if strings.HasPrefix(e.ID, "dev_rv_") {
+			got[e.ID] = e.Hash
+		}
+	}
+	if len(got) != 3 || got["dev_rv_phone"] != "rv-hash-phone" || got["dev_rv_done"] != "rv-hash-done" || got["dev_rv_unknown"] != "rv-hash-unknown" {
+		t.Fatalf("revoked app credentials: %v", got)
+	}
+}
+
+// A revocation that arrives while the credential's import is still open waits for it and revokes it.
+func TestRevocationDuringImportWins(t *testing.T) {
+	d := open(t)
+	ctx := context.Background()
+	if _, err := d.pool.Exec(ctx, `DELETE FROM device_tokens WHERE id = 'dev_rv_race'`); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `INSERT INTO device_tokens (id, name, kind, role, token_hash) VALUES ('dev_rv_race', 'p', 'phone', 'full', 'rv-hash-race')`); err != nil {
+		t.Fatal(err)
+	}
+	type result struct {
+		ids []string
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		ids, err := d.ApplyRevokedTokens(ctx, []ExportedToken{{DeviceToken: DeviceToken{ID: "dev_rv_race", Name: "p", Kind: "phone", Role: "full"}, Hash: "rv-hash-race"}})
+		done <- result{ids, err}
+	}()
+	time.Sleep(200 * time.Millisecond) // it is waiting on the open insert by now
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	r := <-done
+	if r.err != nil {
+		t.Fatal(r.err)
+	}
+	if tok, _ := d.DeviceTokenByHash(ctx, "rv-hash-race"); tok != nil {
+		t.Fatalf("the credential came through its revocation: %+v (newly revoked: %v)", tok, r.ids)
 	}
 }

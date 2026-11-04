@@ -68,6 +68,60 @@ func (d *DB) ImportDeviceTokens(ctx context.Context, list []ExportedToken) (int,
 	return n, err
 }
 
+// RevokedAppTokens is every revoked credential of an app, for the other hubs of the group: each keeps its own copy.
+func (d *DB) RevokedAppTokens(ctx context.Context) ([]ExportedToken, error) {
+	rows, err := d.pool.Query(ctx, `SELECT id, name, kind, role, token_hash FROM device_tokens
+		WHERE revoked_at IS NOT NULL AND role IN ('full', 'answer') ORDER BY created_at`)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (ExportedToken, error) {
+		var t ExportedToken
+		err := r.Scan(&t.ID, &t.Name, &t.Kind, &t.Role, &t.Hash)
+		return t, err
+	})
+}
+
+// tombstoneKind marks a credential this hub only knows as revoked elsewhere. It keeps a copy handed over later dead
+// (ImportDeviceTokens leaves known ones as they are) and is no device of this hub's, so DeviceTokens leaves it out.
+const tombstoneKind = "tombstone"
+
+// ApplyRevokedTokens revokes this hub's copies of credentials another hub revoked and returns the ids of those that were
+// live here. One it does not know is kept as a tombstone. Only an app's credential is touched, whatever the list says
+// its role is. One statement, not an UPDATE and then an INSERT: a copy being imported right now is waited for and
+// revoked, where those two would both miss it. An entry whose id is taken under another hash is skipped: it can only be a
+// hub's mistake, and failing on it would block every revocation after it. The times are this hub's.
+func (d *DB) ApplyRevokedTokens(ctx context.Context, list []ExportedToken) ([]string, error) {
+	var ids []string
+	err := pgx.BeginFunc(ctx, d.pool, func(tx pgx.Tx) error {
+		for _, t := range list {
+			var id string
+			var tombstone bool
+			err := tx.QueryRow(ctx, `INSERT INTO device_tokens (id, name, kind, role, token_hash, revoked_at)
+				SELECT $1::text, $2::text, $3::text, $4::text, $5::text, now()
+				WHERE NOT EXISTS (SELECT 1 FROM device_tokens WHERE id = $1 AND token_hash <> $5)
+				ON CONFLICT (token_hash) DO UPDATE SET revoked_at = now()
+				WHERE device_tokens.revoked_at IS NULL AND device_tokens.role IN ('full', 'answer')
+				RETURNING id, kind = $3`, t.ID, t.Name, tombstoneKind, t.Role, t.Hash).Scan(&id, &tombstone)
+			if errors.Is(err, pgx.ErrNoRows) { // already revoked, not an app's, or that id is taken
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if tombstone {
+				continue
+			}
+			if err := dropDeviceRows(ctx, tx, id); err != nil {
+				return err
+			}
+			ids = append(ids, id)
+		}
+		return nil
+	})
+	return ids, err
+}
+
 // ConnectorCredential is what pairing with a computer's connector left (kind service, hub/service.go).
 type ConnectorCredential struct {
 	MachineID string

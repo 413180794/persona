@@ -784,7 +784,7 @@ func (d *DB) DeviceTokenByHash(ctx context.Context, hash string) (*DeviceToken, 
 
 func (d *DB) DeviceTokens(ctx context.Context) ([]DeviceToken, error) {
 	rows, err := d.pool.Query(ctx, `SELECT id, name, kind, role, created_at, last_seen, revoked_at, COALESCE(machine_id, '')
-		FROM device_tokens ORDER BY revoked_at IS NOT NULL, created_at DESC`)
+		FROM device_tokens WHERE kind <> $1 ORDER BY revoked_at IS NOT NULL, created_at DESC`, tombstoneKind)
 	if err != nil {
 		return nil, err
 	}
@@ -805,15 +805,20 @@ func (d *DB) RevokeDeviceToken(ctx context.Context, id string) (bool, error) {
 		}
 		revoked = tag.RowsAffected() > 0
 		if revoked {
-			_, err = tx.Exec(ctx, `DELETE FROM devices WHERE credential_id = $1 OR device_id = $1`, id)
-			if err != nil {
-				return err
-			}
-			_, err = tx.Exec(ctx, `DELETE FROM phone_tools WHERE credential_id = $1 OR device_id = $1`, id)
+			err = dropDeviceRows(ctx, tx, id)
 		}
 		return err
 	})
 	return revoked, err
+}
+
+// dropDeviceRows removes what a revoked credential registered.
+func dropDeviceRows(ctx context.Context, tx pgx.Tx, id string) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM devices WHERE credential_id = $1 OR device_id = $1`, id); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `DELETE FROM phone_tools WHERE credential_id = $1 OR device_id = $1`, id)
+	return err
 }
 
 func (d *DB) TouchDeviceToken(ctx context.Context, id string) error {

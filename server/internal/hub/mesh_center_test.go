@@ -23,6 +23,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -295,6 +296,166 @@ func TestCenterSetAndOldCenterReturns(t *testing.T) {
 	b2.waitCenter(t, hubA)
 	if a.h.centerID() != hubA || b2.h.group().Term != aTerm {
 		t.Fatalf("after B came back: A has %s, B has %+v (term %d)", a.h.centerID(), b2.h.group(), aTerm)
+	}
+}
+
+// A credential revoked on the center stays revoked when the center moves to a hub that still had a copy.
+func TestCenterRevocationSurvivesCenterMove(t *testing.T) {
+	center := startTestHub(t, hubB, "Office", nil, nil)
+	member := startTestHub(t, hubA, "家里", nil, nil)
+	tok, id := member.deviceToken(t, roleFull) // paired with the member before it joined
+	admin, _ := center.deviceToken(t, roleFull)
+	joinHubs(t, member, center)
+	member.waitCenter(t, hubB)
+	eventually(t, 10*time.Second, "the credential handed over", func() bool {
+		st, _ := center.do(t, http.MethodGet, "/api/v1/machines", tok, "")
+		return st == http.StatusOK
+	})
+	if st, b := center.do(t, http.MethodDelete, "/api/v1/auth/tokens/"+id, admin, ""); st != http.StatusOK {
+		t.Fatalf("revoke: %d %s", st, b)
+	}
+	eventually(t, 10*time.Second, "the member's copy revoked", func() bool {
+		dt, err := member.store.DeviceTokenByHash(context.Background(), hashToken(tok))
+		return err == nil && dt == nil
+	})
+	if _, err := center.h.setCenter(context.Background(), hubA, false); err != nil {
+		t.Fatal(err)
+	}
+	member.waitCenter(t, hubA)
+	center.waitCenter(t, hubA)
+	if st, _ := member.do(t, http.MethodGet, "/api/v1/machines", tok, ""); st != http.StatusUnauthorized {
+		t.Fatalf("a revoked credential on the new center: %d, want 401", st)
+	}
+}
+
+// A member that was away when a credential was revoked hears of it when it is back.
+func TestCenterRevocationReachesHubThatWasAway(t *testing.T) {
+	aStore, aDir := newMeshStore(), t.TempDir()
+	center := startTestHub(t, hubB, "Office", nil, nil)
+	member := startTestHubWith(t, hubA, "家里", aStore, aDir, nil, nil)
+	tok, id := member.deviceToken(t, roleFull)
+	admin, _ := center.deviceToken(t, roleFull)
+	joinHubs(t, member, center)
+	member.waitCenter(t, hubB)
+	eventually(t, 10*time.Second, "the credential handed over", func() bool {
+		st, _ := center.do(t, http.MethodGet, "/api/v1/machines", tok, "")
+		return st == http.StatusOK
+	})
+	member.stop()
+	eventually(t, 10*time.Second, "the center sees the member gone", func() bool { return !center.h.meshView().reachable(hubA) })
+	if st, b := center.do(t, http.MethodDelete, "/api/v1/auth/tokens/"+id, admin, ""); st != http.StatusOK {
+		t.Fatalf("revoke: %d %s", st, b)
+	}
+	if dt, _ := aStore.DeviceTokenByHash(context.Background(), hashToken(tok)); dt == nil {
+		t.Fatal("the member heard while it was away")
+	}
+	startTestHubWith(t, hubA, "家里", aStore, aDir, nil, nil)
+	eventually(t, 15*time.Second, "the member's copy revoked", func() bool {
+		dt, err := aStore.DeviceTokenByHash(context.Background(), hashToken(tok))
+		return err == nil && dt == nil
+	})
+}
+
+// A center that took over without hearing of a revocation (the old one went away before it got out) takes the
+// credential until the old one is back; then it dies there, and its live connection with it (docs/mesh.md
+// 「没做的 / 已知限制」).
+func TestCenterRevocationCatchesUpWhenOldCenterReturns(t *testing.T) {
+	bStore, bDir := newMeshStore(), t.TempDir()
+	center := startTestHubWith(t, hubB, "Office", bStore, bDir, nil, nil)
+	member := startTestHub(t, hubA, "家里", nil, nil)
+	tok, id := member.deviceToken(t, roleFull)
+	joinHubs(t, member, center)
+	member.waitCenter(t, hubB)
+	eventually(t, 10*time.Second, "the credential handed over", func() bool {
+		st, _ := center.do(t, http.MethodGet, "/api/v1/machines", tok, "")
+		return st == http.StatusOK
+	})
+	center.stop()
+	if ok, err := bStore.RevokeDeviceToken(context.Background(), id); err != nil || !ok {
+		t.Fatalf("revoke: %v %v", ok, err)
+	}
+	eventually(t, 10*time.Second, "the member sees the center gone", func() bool { return !member.h.centerReachable() })
+	if _, err := member.h.setCenter(context.Background(), hubA, true); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := member.do(t, http.MethodGet, "/api/v1/machines", tok, ""); st != http.StatusOK {
+		t.Fatalf("the credential on a center that never heard: %d, want 200", st)
+	}
+	conn := dialApp(t, member, tok)
+	back := startTestHubWith(t, hubB, "Office", bStore, bDir, nil, nil)
+	back.waitCenter(t, hubA)
+	eventually(t, 15*time.Second, "the revocation on the new center", func() bool {
+		st, _ := member.do(t, http.MethodGet, "/api/v1/machines", tok, "")
+		return st == http.StatusUnauthorized
+	})
+	select {
+	case <-conn.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the revoked credential's connection stayed open")
+	}
+}
+
+// A message that did not take is sent again without waiting for a hub to go away and come back.
+func TestCenterRevocationResent(t *testing.T) {
+	was := revocationResendEvery
+	revocationResendEvery = 200 * time.Millisecond
+	t.Cleanup(func() { revocationResendEvery = was })
+	center := startTestHub(t, hubB, "Office", nil, nil)
+	member := startTestHub(t, hubA, "家里", nil, nil)
+	tok, id := member.deviceToken(t, roleFull)
+	admin, _ := center.deviceToken(t, roleFull)
+	joinHubs(t, member, center)
+	member.waitCenter(t, hubB)
+	eventually(t, 10*time.Second, "the credential handed over", func() bool {
+		st, _ := center.do(t, http.MethodGet, "/api/v1/machines", tok, "")
+		return st == http.StatusOK
+	})
+	member.store.mu.Lock()
+	member.store.applyFails = 2
+	member.store.mu.Unlock()
+	if st, b := center.do(t, http.MethodDelete, "/api/v1/auth/tokens/"+id, admin, ""); st != http.StatusOK {
+		t.Fatalf("revoke: %d %s", st, b)
+	}
+	eventually(t, 10*time.Second, "the member's copy revoked", func() bool {
+		dt, err := member.store.DeviceTokenByHash(context.Background(), hashToken(tok))
+		return err == nil && dt == nil
+	})
+}
+
+// What a hub takes from another: only an app's credential. One it does not know stays revoked, so a copy handed over
+// later does not bring it back.
+func TestCredsRevokedTakesOnlyAppCredentials(t *testing.T) {
+	center := startTestHub(t, hubB, "Office", nil, nil)
+	member := startTestHub(t, hubA, "家里", nil, nil)
+	joinHubs(t, member, center)
+	member.waitCenter(t, hubB)
+	center.waitCenter(t, hubB)
+	ctx := context.Background()
+	hash := func(s string) string { return hashToken(s) }
+	linkDT := db.DeviceToken{ID: "dev_link", Name: "link", Kind: "link", Role: roleLink, MachineID: "mac"}
+	if err := center.store.CreateDeviceToken(ctx, linkDT, hash("link")); err != nil {
+		t.Fatal(err)
+	}
+	send := func(from string, list ...db.ExportedToken) error {
+		raw, _ := json.Marshal(map[string]any{"tokens": list})
+		_, err := center.h.meshLocalCall(ctx, from, "creds.revoked", raw)
+		return err
+	}
+	gone := db.ExportedToken{DeviceToken: db.DeviceToken{ID: "dev_gone", Name: "old", Kind: "phone", Role: roleFull}, Hash: hash("gone")}
+	asLink := db.ExportedToken{DeviceToken: linkDT, Hash: hash("link")}
+	asFull := asLink
+	asFull.Role = roleFull // a hub's word for the role does not reach a credential that is not an app's
+	if err := send(hubA, asLink, asFull, gone); err != nil {
+		t.Fatal(err)
+	}
+	if dt, _ := center.store.DeviceTokenByHash(ctx, hash("link")); dt == nil {
+		t.Fatal("a jarvis-link credential was revoked")
+	}
+	if n, err := center.store.ImportDeviceTokens(ctx, []db.ExportedToken{gone}); err != nil || n != 0 {
+		t.Fatalf("handing over a revoked credential: %d %v", n, err)
+	}
+	if dt, _ := center.store.DeviceTokenByHash(ctx, hash("gone")); dt != nil {
+		t.Fatal("a copy handed over brought a revoked credential back")
 	}
 }
 
