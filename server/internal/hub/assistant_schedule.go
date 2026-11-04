@@ -156,6 +156,8 @@ type ScheduleRun struct {
 	Manual    bool      `json:"manual,omitempty"` // 立即运行
 	MachineID string    `json:"machine_id,omitempty"`
 	SessionID string    `json:"session_id,omitempty"`
+	// Retried: this run is the automatic retry after a failure (so a retry that fails again does not retry forever).
+	Retried bool `json:"retried,omitempty"`
 	// of is when the scheduler started this run (the task's LastRun then; 立即运行's tap): a run that finishes after a
 	// newer one started is history only, it does not overwrite the newer one's status (recordRun).
 	of time.Time
@@ -910,7 +912,7 @@ func (h *Hub) runDue(ctx context.Context, now time.Time) {
 		s.inflight.Add(1)
 		go func() {
 			defer s.inflight.Done()
-			_, _ = h.runTask(d.t, d.due, now, false)
+			_, _ = h.runTask(d.t, d.due, now, false, false)
 		}()
 	}
 }
@@ -918,12 +920,12 @@ func (h *Hub) runDue(ctx context.Context, now time.Time) {
 // recordRun appends to the history, and sets the task's last status unless a newer run has started since this one
 // (r.of before the task's LastRun): runs record when they end, and a slow one — an assistant that takes a minute to
 // give up — must not overwrite the status of the run or skip that came after it (#556).
-func (h *Hub) recordRun(r ScheduleRun) {
+func (h *Hub) recordRun(r ScheduleRun) string {
 	r.ID = "run_" + randomHex(4)
 	s, err := h.lockedSchedule(context.Background())
 	if err != nil {
 		h.logf("schedule run %s %s not recorded: %v", r.Kind, r.RefID, err)
-		return
+		return ""
 	}
 	s.runs = append(s.runs, r)
 	if len(s.runs) > maxRuns {
@@ -946,6 +948,35 @@ func (h *Hub) recordRun(r ScheduleRun) {
 	}
 	s.mu.Unlock()
 	h.broadcastSchedule()
+	return r.ID
+}
+
+// updateRun rewrites a recorded run's outcome (a run that was sent but whose turn ended in an API error) and the
+// task's last status when this run is still the newest.
+func (h *Hub) updateRun(r ScheduleRun, status, errText string) {
+	s, err := h.lockedSchedule(context.Background())
+	if err != nil {
+		return
+	}
+	i := slices.IndexFunc(s.runs, func(x ScheduleRun) bool { return x.ID == r.ID })
+	if i < 0 {
+		s.mu.Unlock()
+		return
+	}
+	s.runs[i].Status, s.runs[i].Error = status, errText
+	if j := s.indexLocked(r.RefID); j >= 0 && (r.of.IsZero() || !s.tasks[j].LastRun.After(r.of)) {
+		s.tasks[j].LastStatus, s.tasks[j].LastError = status, errText
+	}
+	h.saveLocked(s)
+	if h.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := h.store.PutSetting(ctx, runsKey, s.runs); err != nil {
+			h.logf("save schedule runs: %v", err)
+		}
+		cancel()
+	}
+	s.mu.Unlock()
+	h.broadcastSchedule()
 }
 
 // errTaskBusy: the task's last run is still going; this one is skipped (and recorded) rather than queued behind it.
@@ -959,12 +990,12 @@ var errTaskBusy = errors.New("上一轮还在运行，这次跳过")
 // A repeating task whose own conversation is still on its last run (working, or waiting on the user) is skipped,
 // not queued: two runs stacked in one conversation answer twice in a row, and the second one only sees the first
 // half done. The skip is in the history like a missed one. A one-off still goes in (it would be lost otherwise).
-func (h *Hub) runTask(t Task, due, now time.Time, manual bool) (proto.Session, error) {
+func (h *Hub) runTask(t Task, due, now time.Time, manual, retried bool) (proto.Session, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	loc, kb := h.userLocation(), h.kb.eng != nil
 	run := ScheduleRun{Kind: t.kind(), RefID: t.ID, Title: t.label(), Due: due.UTC(), At: time.Now().UTC(), Manual: manual, Status: runOK,
-		of: now.UTC()}
+		Retried: retried, of: now.UTC()}
 	if !h.sched.begin(t.ID) { // the same task is being sent right now (立即运行 as it came due)
 		return proto.Session{}, h.skipRun(run, errTaskBusy)
 	}
@@ -979,7 +1010,7 @@ func (h *Hub) runTask(t Task, due, now time.Time, manual bool) (proto.Session, e
 			if err == nil {
 				run.MachineID, run.SessionID = t.MachineID, t.SessionID
 				h.logf("task %s ran %s after its time", t.ID, lateness(due, time.Now()))
-				h.recordRun(run)
+				h.startScheduledRun(run, t, m)
 				return proto.Session{MachineID: t.MachineID, SessionID: t.SessionID}, nil
 			}
 			h.logf("task %s into %s: %v; starting a new conversation", t.ID, t.SessionID, err)
@@ -1013,7 +1044,7 @@ func (h *Hub) runTask(t Task, due, now time.Time, manual bool) (proto.Session, e
 			if err == nil {
 				run.MachineID, run.SessionID = t.RunMachineID, t.RunSessionID
 				h.logf("task %s ran %s after its time (its conversation %s)", t.ID, lateness(due, time.Now()), short(t.RunSessionID))
-				h.recordRun(run)
+				h.startScheduledRun(run, t, m)
 				return proto.Session{MachineID: t.RunMachineID, SessionID: t.RunSessionID}, nil
 			}
 			h.logf("task %s into its conversation %s: %v; starting a new one", t.ID, short(t.RunSessionID), err)
@@ -1030,7 +1061,7 @@ func (h *Hub) runTask(t Task, due, now time.Time, manual bool) (proto.Session, e
 	h.logf("task %s ran %s after its time (new conversation %s, kept for the next runs)", t.ID, lateness(due, time.Now()), short(sess.SessionID))
 	h.adoptConversation(t.ID, sess.MachineID, sess.SessionID, sess.Launcher)
 	h.titleNew(sess.MachineID, sess.SessionID, time.Now(), t.label()) // 「MMDD | 定时 | 任务名」, the same for every run in it
-	h.recordRun(run)
+	h.startScheduledRun(run, t, h.localMachine(sess.MachineID))
 	return *sess, nil
 }
 
@@ -1044,6 +1075,120 @@ func (h *Hub) skipRun(run ScheduleRun, why error) error {
 	run.Status, run.Error = runSkipped, why.Error()
 	h.recordRun(run)
 	return why
+}
+
+const runWatchTimeout = 30 * time.Minute
+
+// runRetryDelay is how long after a failed run the automatic retry goes (a var: tests shorten it).
+var runRetryDelay = 3 * time.Minute
+
+// startRun records a sent run and follows its turn. The node accepts `assistant.send` before the model answers, so a
+// run whose turn ends in an API error (quota, no such model, upstream 503) used to stay "ok" and the user was never
+// told; the watcher records it as failed, pushes it, and retries once.
+func (h *Hub) startScheduledRun(run ScheduleRun, t Task, m *Machine) {
+	run.ID = h.recordRun(run)
+	if m == nil || run.ID == "" {
+		return
+	}
+	go h.watchScheduledRun(run, t, m)
+}
+
+func (h *Hub) watchScheduledRun(run ScheduleRun, t Task, m *Machine) {
+	ctx, cancel := context.WithTimeout(context.Background(), runWatchTimeout)
+	defer cancel()
+	if !h.waitTurnEnd(ctx, m, run.SessionID) {
+		return
+	}
+	text := h.lastTurnAPIError(ctx, m, run.SessionID)
+	if text == "" {
+		return
+	}
+	text = clip(oneLine(text), 300)
+	h.logf("task %s run %s failed: %s", t.ID, run.ID, text)
+	h.updateRun(run, runFailed, text)
+	machine := m.cfg.Name
+	h.notifyDone("assistant", m.cfg.ID, machine, run.SessionID, "定时任务失败："+t.label(), text, pushWants{})
+	if run.Retried {
+		return
+	}
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(runRetryDelay):
+	}
+	if _, err := h.runTask(t, time.Now(), time.Now(), false, true); err != nil {
+		h.logf("task %s retry: %v", t.ID, err)
+	}
+}
+
+// waitTurnEnd waits until the session ran a turn and is idle again; false when it never started or ctx ended.
+func (h *Hub) waitTurnEnd(ctx context.Context, m *Machine, sid string) bool {
+	ran := false
+	idle := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(2 * time.Second):
+		}
+		s, ok := m.session(sid)
+		if !ok {
+			if ran {
+				return true
+			}
+			continue
+		}
+		if s.Status == proto.StatusWorking || s.State == proto.StateWorking || s.State == proto.StateNeedsYou {
+			ran, idle = true, 0
+			if s.State == proto.StateNeedsYou {
+				return true // waiting on the user counts as ended
+			}
+			continue
+		}
+		if ran {
+			if idle++; idle >= 2 {
+				return true
+			}
+		}
+	}
+}
+
+// lastTurnAPIError is the text of the turn's last answer when it is a model API error; "" otherwise.
+func (h *Hub) lastTurnAPIError(ctx context.Context, m *Machine, sid string) string {
+	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	var res struct {
+		Items []proto.Item `json:"items"`
+	}
+	if err := m.call(cctx, "session.items", map[string]any{"session_id": sid, "limit": 8, "lazy_images": true}, &res); err != nil {
+		return ""
+	}
+	for i := len(res.Items) - 1; i >= 0; i-- {
+		it := res.Items[i]
+		if it.Role != "assistant" && it.Kind != "" && it.Kind != "text" {
+			continue
+		}
+		text := strings.TrimSpace(it.Text)
+		if text == "" {
+			continue
+		}
+		if apiErrorText(text) {
+			return text
+		}
+		return ""
+	}
+	return ""
+}
+
+// apiErrorText: what Claude Code answers when the model call itself failed (an error card in the app).
+func apiErrorText(text string) bool {
+	for _, marker := range []string{"API Error:", "There's an issue with the selected model", "Failed to authenticate",
+		"OAuth token has expired", "Invalid API key"} {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // begin marks task id as being sent; false when it already is. end clears the mark.
@@ -1406,7 +1551,7 @@ func (h *Hub) runTaskRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.broadcastSchedule()
-	sess, err := h.runTask(t, now, now, true)
+	sess, err := h.runTask(t, now, now, true, false)
 	if errors.Is(err, errTaskBusy) {
 		writeErr(w, http.StatusConflict, errors.New("上一轮还在运行，等它跑完再试"))
 		return

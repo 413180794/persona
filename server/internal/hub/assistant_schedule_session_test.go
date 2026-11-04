@@ -111,7 +111,7 @@ func runNow(t *testing.T, h *Hub, id string) (proto.Session, error) {
 		t.Fatalf("no task %s", id)
 	}
 	now := time.Date(2026, 11, 2, 1, 0, 0, 0, time.UTC)
-	return h.runTask(task, now, now, false)
+	return h.runTask(task, now, now, false, false)
 }
 
 // The user's ask (2026-11-01): 「同一个定时任务，用同一个 session 跑」. The first run starts the task's own
@@ -295,4 +295,60 @@ func scheduleMux(h *Hub) *http.ServeMux {
 	mux := http.NewServeMux()
 	h.scheduleRoutes(mux)
 	return mux
+}
+
+// A run the node accepts and whose turn then ends in an API error (503 / no such model) is failed, pushed and retried
+// once — the node reports the send as accepted, so it used to stay "ok" and the user was never told.
+func TestTaskTurnEndingInAPIErrorFailsAndRetriesOnce(t *testing.T) {
+	h := newTestHub(t)
+	n := newAssistantNode(t, h)
+	old := runRetryDelay
+	runRetryDelay = 50 * time.Millisecond
+	t.Cleanup(func() { runRetryDelay = old })
+	n.items = []proto.Item{{Role: "assistant", Kind: "text", Text: "API Error: 503 upstream attempt budget is exhausted"}}
+	setTasks(h, Task{ID: "p", Title: "值守", Prompt: "go", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
+
+	// The turn runs, then ends: the watcher sees working and then idle.
+	n.m.mu.Lock()
+	n.m.sessions = []proto.Session{{SessionID: "s1", Status: proto.StatusWorking, State: proto.StateWorking, Assistant: true,
+		Cwd: "/home/me/.jarvis/assistant"}}
+	n.m.mu.Unlock()
+	go func() {
+		time.Sleep(3 * time.Second)
+		n.m.mu.Lock()
+		for i := range n.m.sessions {
+			n.m.sessions[i].Status, n.m.sessions[i].State = proto.StatusOffline, proto.StateIdle
+		}
+		n.m.mu.Unlock()
+	}()
+
+	if _, err := runNow(t, h, "p"); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		s := h.loadSchedule(context.Background())
+		s.mu.Lock()
+		failed := len(s.runs) > 0 && slices.ContainsFunc(s.runs, func(r ScheduleRun) bool {
+			return r.RefID == "p" && r.Status == runFailed && strings.Contains(r.Error, "503")
+		})
+		s.mu.Unlock()
+		if failed {
+			// and the retry went, marked as such
+			for time.Now().Before(deadline) {
+				if n.sent() >= 2 {
+					s.mu.Lock()
+					retried := slices.ContainsFunc(s.runs, func(r ScheduleRun) bool { return r.RefID == "p" && r.Retried })
+					s.mu.Unlock()
+					if retried {
+						return
+					}
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("the failed run was not recorded")
 }
