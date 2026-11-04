@@ -68,7 +68,7 @@ func cuaRun(ctx context.Context, bin string, args ...string) (string, error) {
 
 // computerStatus is what this Mac has of Cua Driver now (proto.Computer; Enabled is the hub's to say).
 func computerStatus(ctx context.Context) proto.Computer {
-	c := proto.Computer{Checked: time.Now().UTC()}
+	c := proto.Computer{}
 	if bin := cuaBin(); bin != "" {
 		c.Installed = true
 		if out, err := cuaRun(ctx, bin, "--version"); err == nil {
@@ -89,6 +89,9 @@ func computerStatus(ctx context.Context) proto.Computer {
 	c.ScreenSharing = screenSharing(ctx)
 	c.Ready, c.Note = computerReady(c)
 	c.Job = currentJob()
+	// Last, after the job was read: the hub keeps the answer with the latest checked, whatever order the answers of
+	// questions asked at once arrive in.
+	c.Checked = time.Now().UTC()
 	return c
 }
 

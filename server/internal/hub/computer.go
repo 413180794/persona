@@ -108,16 +108,21 @@ func (h *Hub) refreshComputer(ctx context.Context, m *Machine) *proto.Computer {
 	return h.computerOf(m)
 }
 
-// keepComputer stores what m's node answered to a question asked at asked, unless a newer question's answer is in
-// already (a page's refresh and an install's start overlap); true when what is kept changed.
+// keepComputer stores what m's node answered, unless what is kept is newer: by when the node answered (its checked,
+// set last), so a status asked after an install but answered before it does not undo it; an older node's answers,
+// which have none, by when they were asked. True when what is kept changed.
 func (h *Hub) keepComputer(m *Machine, c proto.Computer, asked time.Time) bool {
+	when := c.Checked
+	if when.IsZero() {
+		when = asked
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if asked.Before(m.computerAsked) {
+	if when.Before(m.computerAt) {
 		return false
 	}
 	old := m.computer
-	m.computer, m.computerAsked = &c, asked
+	m.computer, m.computerAt = &c, when
 	return old == nil || !sameComputer(*old, c)
 }
 

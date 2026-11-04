@@ -38,14 +38,14 @@ func computerMac(t *testing.T, h *Hub, id string) (*Machine, func() (statuses in
 		case "computer.status":
 			statuses++
 			return proto.Computer{Installed: true, Version: "0.38.0", Daemon: true, Accessibility: "granted", ScreenRecording: "granted",
-				Desktop: "active", Ready: true, Job: job}, nil
+				Desktop: "active", Ready: true, Job: job, Checked: time.Now()}, nil
 		case "computer.install", "computer.grant", "computer.cancel":
 			calls = append(calls, computerCallSeen{Tool: method})
 			job = &proto.ComputerJob{Kind: strings.TrimPrefix(method, "computer."), State: "running", Step: "下载安装器"}
 			if method == "computer.cancel" {
 				job = &proto.ComputerJob{Kind: "install", State: "cancelled"}
 			}
-			return proto.Computer{Job: job}, nil
+			return proto.Computer{Job: job, Checked: time.Now()}, nil
 		case "computer.call":
 			var c computerCallSeen
 			_ = json.Unmarshal(params, &c)
@@ -299,5 +299,16 @@ func TestKeepComputerKeepsTheNewest(t *testing.T) {
 	}
 	if h.keepComputer(m, cancelled, late.Add(time.Second)) {
 		t.Fatal("the same again is no change")
+	}
+
+	// The node's own time decides when it says one: a status asked after an install but answered before it.
+	m2 := newMachine(h, MachineConfig{ID: "mac2", Name: "mac2"})
+	installing := proto.Computer{Job: &proto.ComputerJob{Kind: "install", State: "running"}, Checked: early.Add(2 * time.Second)}
+	before := proto.Computer{Checked: early.Add(time.Second)}
+	if !h.keepComputer(m2, installing, early) || h.keepComputer(m2, before, late) {
+		t.Fatal("the answer the node gave first is the older one, however late it was asked")
+	}
+	if m2.computer.Job == nil {
+		t.Fatal("the install's answer is kept")
 	}
 }

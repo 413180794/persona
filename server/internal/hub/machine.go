@@ -37,17 +37,18 @@ type Machine struct {
 	streams *streams.Mux // the forwarded ports' connections on peer (ports.go)
 	info    proto.NodeInfo
 	// computer: what the node last said of Cua Driver (computer.status), while the plugin cua is on for it (computer.go);
-	// computerAsked: when that was asked, so an answer to an older question never replaces it (keepComputer).
-	computer      *proto.Computer
-	computerAsked time.Time
-	online        bool
-	err           string
-	lastSeen      time.Time
-	sessions      []proto.Session
-	watchers      map[string]int // session id -> subscribed clients
-	lastSeq       map[string]int // session id -> highest item seq seen
-	hooked        map[string]bool
-	kick          chan struct{}
+	// computerAt: when the node answered it (or, from an older node, when it was asked), so an older answer never
+	// replaces it (keepComputer).
+	computer   *proto.Computer
+	computerAt time.Time
+	online     bool
+	err        string
+	lastSeen   time.Time
+	sessions   []proto.Session
+	watchers   map[string]int // session id -> subscribed clients
+	lastSeq    map[string]int // session id -> highest item seq seen
+	hooked     map[string]bool
+	kick       chan struct{}
 	// deploying: the hub is sending this machine its node build (deploy.go); deployErr: why the last try failed.
 	deploying   bool
 	deployErr   string
