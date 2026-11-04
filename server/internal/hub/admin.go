@@ -4,7 +4,6 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
-	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"io/fs"
 	"net/http"
@@ -14,8 +13,10 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/osproc"
 )
 
 // The hub admin UI (docs/admin.md): /admin and /api/v1/admin/, signed in with the administrator's password, reachable
@@ -298,5 +299,5 @@ func (h *Hub) restartHub() {
 		return
 	}
 	h.logf("admin: restart requested from the admin UI")
-	_ = syscall.Kill(os.Getpid(), syscall.SIGTERM)
+	osproc.TerminateSelf()
 }

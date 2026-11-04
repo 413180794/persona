@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"log"
 	"os"
@@ -16,6 +15,9 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/osproc"
 
 	"github.com/nwverse/persona/server/internal/hub"
 	"github.com/nwverse/persona/server/internal/mcpserver"
@@ -334,8 +336,7 @@ func runSysmon(ctx context.Context, n int) {
 	fmt.Printf("system info: %v\n", time.Since(start).Round(time.Millisecond))
 	c := sysmon.NewCollector(ctx)
 	defer c.Close()
-	var ru0, ru1 syscall.Rusage
-	_ = syscall.Getrusage(syscall.RUSAGE_SELF, &ru0)
+	cpu0 := osproc.CPUTime()
 	began := time.Now()
 	var took time.Duration
 	for i := 0; i <= n && ctx.Err() == nil; i++ {
@@ -347,8 +348,7 @@ func runSysmon(ctx context.Context, n int) {
 		took += time.Since(t)
 		_ = enc.Encode(s)
 	}
-	_ = syscall.Getrusage(syscall.RUSAGE_SELF, &ru1)
-	cpu := time.Duration(ru1.Utime.Nano()+ru1.Stime.Nano()-ru0.Utime.Nano()-ru0.Stime.Nano()) * time.Nanosecond
+	cpu := osproc.CPUTime() - cpu0
 	wall := time.Since(began)
 	fmt.Printf("%d samples: %v each; jarvisd CPU %v over %v (%.3f%%), not counting iostat / vm_stat on macOS\n",
 		n+1, (took / time.Duration(n+1)).Round(time.Microsecond), cpu.Round(time.Millisecond), wall.Round(time.Second),

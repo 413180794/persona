@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,10 +12,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/osproc"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -92,10 +91,7 @@ func (n *Node) traexOwners() map[int]string {
 	return out
 }
 
-func alive(pid int) bool {
-	err := syscall.Kill(pid, 0)
-	return err == nil || errors.Is(err, syscall.EPERM)
-}
+func alive(pid int) bool { return osproc.Alive(pid) }
 
 // paneEnvRe finds a host's pane variable (host.PaneEnv) in a process's environment, NUL- (Linux) or space-separated
 // (ps -E).

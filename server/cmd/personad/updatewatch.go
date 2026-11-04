@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/osproc"
 	"github.com/nwverse/persona/server/internal/update"
 )
 
@@ -55,7 +56,7 @@ func restartHub(p update.Pending) error {
 	if log != nil {
 		cmd.Stdout, cmd.Stderr = log, log
 	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd.SysProcAttr = osproc.DetachedAttr()
 	return cmd.Start()
 }
 

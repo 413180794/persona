@@ -12,7 +12,7 @@ struct TranslationSettingsView: View {
     private var chats: [TranslationPrefs.Chat] { TranslationPrefs.chats(chatsRaw) }
 
     var body: some View {
-        List {
+        SettingsForm {
             Section {
                 Toggle(isOn: $enabled) { Label("自动翻译", systemImage: Theme.Icon.translate) }
                 ModelConfigurationLink(title: "翻译模型", purposeID: "translate")
@@ -42,7 +42,17 @@ struct TranslationSettingsView: View {
                 }
                 if !chats.isEmpty {
                     Section("要翻译的飞书会话") {
-                        ForEach(chats) { c in Text(c.name).lineLimit(1) }
+                        ForEach(chats) { c in
+                            Text(c.name).lineLimit(1)
+                                #if os(macOS)
+                                // A Mac form has no swipe to delete: the row's menu takes it off (#1221).
+                                .contextMenu {
+                                    Button("不再翻译", role: .destructive) {
+                                        chatsRaw = TranslationPrefs.encode(chats.filter { $0.id != c.id })
+                                    }
+                                }
+                                #endif
+                        }
                             .onDelete { idx in
                                 var list = chats
                                 list.remove(atOffsets: idx)

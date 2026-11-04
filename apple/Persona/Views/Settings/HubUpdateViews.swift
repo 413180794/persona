@@ -89,7 +89,7 @@ struct HubSettingsPage: View {
     init(model: HubUpdateModel = HubUpdateModel()) { _model = State(initialValue: model) }
 
     var body: some View {
-        List {
+        SettingsForm {
             if model.unsupported {
                 Section {
                     Text("这个 hub 的版本太旧，不支持在 App 里查看和更新版本。在 hub 所在的机器上用 install.sh 更新一次以后就可以了。")
@@ -166,6 +166,15 @@ struct HubSettingsPage: View {
                 if s.working {
                     progressRows(s)
                 } else {
+                    #if os(macOS)
+                    // A standard button at the group's trailing end, not a bar the width of the form (#1221).
+                    HStack {
+                        Spacer(minLength: 0)
+                        Button { Task { await model.update(now: false) } } label: { Text("更新 hub").lineLimit(1) }
+                            .formButton(prominent: true)
+                            .accessibilityIdentifier("hub.update")
+                    }
+                    #else
                     Button {
                         Task { await model.update(now: false) }
                     } label: {
@@ -174,6 +183,7 @@ struct HubSettingsPage: View {
                     .themedButton(prominent: true)
                     .listRowBackground(Color.clear)
                     .accessibilityIdentifier("hub.update")
+                    #endif
                 }
             } else if s.working {
                 progressRows(s)
@@ -419,7 +429,7 @@ struct SkillsPage: View {
     init(model: SkillsModel = SkillsModel()) { _model = State(initialValue: model) }
 
     var body: some View {
-        List {
+        SettingsForm {
             if model.loaded && model.skills.isEmpty {
                 Section {
                     EmptyStateView(symbol: Theme.Icon.skills, title: model.error == nil ? "还没有 skill" : "读不到 skill",

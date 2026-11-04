@@ -13,7 +13,7 @@ struct HubsView: View {
     @State private var removingHub: PairedHub?
 
     var body: some View {
-        List {
+        SettingsForm {
             ForEach(model.groupIDs, id: \.self) { g in
                 Section {
                     groupRows(g)
@@ -24,12 +24,20 @@ struct HubsView: View {
                 }
             }
             Section {
+                #if os(macOS)
+                HStack {
+                    Spacer(minLength: 0)
+                    Button("添加 hub…") { showPair = true }.lineLimit(1).formButton().accessibilityIdentifier("hubs.add")
+                }
+                .listRowBackground(Color.clear) // a button under the groups, not a group of its own
+                #else
                 Button { showPair = true } label: {
                     SettingsRow(title: "添加 hub", symbol: Theme.Icon.add, tint: Theme.accent)
                 }
                 .modifier(SettingsButtonLook())
                 .accessibilityIdentifier("hubs.add")
                 .bareListRow()
+                #endif
             } footer: {
                 Text("添加的 hub 和已有的 hub 互联时自动并进那一组；不互联的单独成一组，列表里合在一起显示、标明来自哪一组。")
             }
@@ -77,14 +85,31 @@ struct HubsView: View {
             meshRow(m, inUse: model.isLive(g) && on.map { cfg in m.endpoints?.contains { $0.hasPrefix(cfg.url.absoluteString) } == true } == true)
         }
         Group {
-            // Each paired hub's SSH tunnel (docs/network.md「经 SSH 隧道连 hub」).
-            ForEach(members) { h in
+            // Each paired hub's SSH tunnel (docs/network.md「经 SSH 隧道连 hub」). Keyed apart from the hub rows above: the
+            // same ids twice in one section, and the Mac showed only one of the two sets of rows (#1221).
+            ForEach(members, id: \.sshRowID) { h in
                 NavigationLink(value: SettingsPage.sshTunnel(h.id)) {
                     SettingsRow(title: members.count > 1 ? "SSH 隧道 · \(h.displayName)" : "SSH 隧道", symbol: Theme.Icon.sshTunnel,
                                 tint: Theme.Hue.green, value: sshValue(h), look: .oneLine)
                 }
                 .accessibilityIdentifier("hubs.ssh.\(h.id)")
             }
+            #if os(macOS)
+            // Standard buttons side by side at the group's trailing end, as a Mac form has them, not rows the width of
+            // the form (#1221).
+            HStack(spacing: Theme.Space.s) {
+                Spacer(minLength: 0)
+                if model.isMultiHub, model.hub?.group != g {
+                    Button("设为当前 hub") { model.selectHub(g) }.lineLimit(1).formButton()
+                }
+                Button("改名…") { newName = model.registry.groupNames[g] ?? ""; renaming = g }
+                    .lineLimit(1).formButton()
+                    .accessibilityIdentifier("hubs.rename.\(g)")
+                Button(model.groupIDs.count > 1 ? "断开这一组…" : "断开并忘记服务器…", role: .destructive) { removingGroup = g }
+                    .lineLimit(1).formButton()
+                    .accessibilityIdentifier("hubs.remove.\(g)")
+            }
+            #else
             if model.isMultiHub, model.hub?.group != g {
                 Button { model.selectHub(g) } label: {
                     SettingsRow(title: "设为当前 hub", symbol: Theme.Icon.successFilled, tint: Theme.positive)
@@ -101,6 +126,7 @@ struct HubsView: View {
             }
             .modifier(SettingsButtonLook())
             .accessibilityIdentifier("hubs.remove.\(g)")
+            #endif
         }
         .bareListRow()
     }
@@ -182,4 +208,9 @@ struct HubsView: View {
         }
         .accessibilityElement(children: .combine)
     }
+}
+
+private extension PairedHub {
+    /// The SSH tunnel row's identity, apart from the hub's own row in the same section.
+    var sshRowID: String { "ssh." + id }
 }

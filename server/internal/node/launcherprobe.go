@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/osproc"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -245,12 +245,12 @@ func indexOf(list []string, want ...string) int {
 // killGroupOnCancel: on timeout kill everything the shell started (a token script, a hung network call) and stop
 // waiting for its output soon after; killing only the shell left Output() waiting on the children's open pipe.
 func killGroupOnCancel(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = osproc.GroupAttr()
 	cmd.Cancel = func() error {
 		if cmd.Process == nil {
 			return nil
 		}
-		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		return osproc.StopGroup(cmd.Process.Pid, true)
 	}
 	cmd.WaitDelay = 2 * time.Second
 }

@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 )
 
 // AdminConfig is hub.json's "admin": who may open the admin UI and how long a sign-in lasts (docs/admin.md).
@@ -313,19 +312,4 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 		d.Close()
 	}
 	return nil
-}
-
-func lockDir(path string) (func(), error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
-		f.Close()
-		return nil, err
-	}
-	return func() {
-		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-		f.Close()
-	}, nil
 }

@@ -15,11 +15,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/coder/websocket"
+
+	"github.com/nwverse/persona/server/internal/osproc"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 var errCodexNoOwner = errors.New("没有可共享的 app-server 运行入口")
@@ -96,8 +97,7 @@ func validateCodexEndpoint(endpoint string) (string, *http.Client, error) {
 			if err != nil {
 				return "", nil, errors.New("Unix 入口不可访问")
 			}
-			stat, ok := st.Sys().(*syscall.Stat_t)
-			if !ok || stat.Uid != uint32(os.Getuid()) || st.Mode()&os.ModeSymlink != 0 || st.Mode().Perm()&0077 != 0 {
+			if !osproc.OwnedByMe(st) || st.Mode()&os.ModeSymlink != 0 || st.Mode().Perm()&0077 != 0 {
 				return "", nil, errors.New("Unix 入口或目录不属于当前用户，或权限过宽")
 			}
 			if p == path && st.Mode()&os.ModeSocket == 0 {
@@ -136,7 +136,7 @@ func codexSocketPath(path string) (string, error) {
 	}
 	if pst, err := os.Stat(parent); err != nil {
 		return "", errors.New("Unix 入口不可访问")
-	} else if stat, ok := pst.Sys().(*syscall.Stat_t); !ok || stat.Uid != uint32(os.Getuid()) || pst.Mode().Perm()&0o022 != 0 {
+	} else if !osproc.OwnedByMe(pst) || pst.Mode().Perm()&0o022 != 0 {
 		return "", errors.New("Unix 入口所在目录不属于当前用户，或别人能改")
 	}
 	tmp, err := filepath.EvalSymlinks("/tmp")

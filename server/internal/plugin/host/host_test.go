@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/osproc"
 	"github.com/nwverse/persona/server/internal/plugin"
 	"github.com/nwverse/persona/server/internal/plugin/serve"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -119,7 +119,7 @@ func pid(t *testing.T, p *Proc) int {
 	return n
 }
 
-func alive(pid int) bool { return syscall.Kill(pid, 0) == nil }
+func alive(pid int) bool { return osproc.Alive(pid) }
 
 func TestStartedByCallsStopsWhenIdle(t *testing.T) {
 	t.Setenv("HOST_TEST_HUB_SECRET", "the hub's own")

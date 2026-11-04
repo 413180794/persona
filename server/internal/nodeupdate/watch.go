@@ -12,8 +12,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/osproc"
 )
 
 type pending struct {
@@ -182,7 +183,7 @@ func startWatchdog(backup, path, id string) error {
 	defer r.Close()
 	defer w.Close()
 	cmd := exec.Command(backup, "node-update-watch", path, id)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd.SysProcAttr = osproc.DetachedAttr()
 	cmd.ExtraFiles = []*os.File{w}
 	if err := cmd.Start(); err != nil {
 		return err
@@ -350,7 +351,7 @@ func Watch(ctx context.Context, path, id string, ready io.Writer) error {
 			// PID survives exec. A service restart records its replacement PID on
 			// startup. The birth time prevents killing an unrelated reused PID.
 			if birth, err := processStart(p.PID); err == nil && birth == p.ProcessStart && birth != "" {
-				if err := syscall.Kill(p.PID, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
+				if err := osproc.Kill(p.PID); err != nil {
 					return err
 				}
 			}

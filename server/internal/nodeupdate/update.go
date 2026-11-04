@@ -19,7 +19,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/proto"
@@ -563,16 +562,12 @@ func syncDir(dir string) error {
 	return f.Sync()
 }
 
-// Lock the existing executable directory, leaving no persistent lock/state file.
+// locked runs fn holding the lock on the executable's directory (lockDir).
 func locked(exe string, fn func() error) error {
-	f, err := os.Open(filepath.Dir(exe))
+	unlock, err := lockDir(filepath.Dir(exe))
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
-		return err
-	}
-	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+	defer unlock()
 	return fn()
 }

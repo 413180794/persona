@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"os"
 	"os/exec"
@@ -15,8 +14,10 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/osproc"
 
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -424,7 +425,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	// Persona's own tools are few and used all the time: load them up front instead of behind ToolSearch.
 	cmd.Env = identity.Environment(os.Environ(), "PERSONA_ASSISTANT=1", "ENABLE_TOOL_SEARCH=false", "CLAUDE_CODE_AUTO_COMPACT_WINDOW="+assistantCompactWindow)
 	cmd.Env = identity.Environment(cmd.Env, n.assistantLarkEnv(cwd)...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // so stop() can kill the whole group
+	cmd.SysProcAttr = osproc.GroupAttr() // so stop() can kill the whole group
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -658,12 +659,12 @@ func (n *Node) stopAssistant(id string) {
 func (p *assistantProc) stop() {
 	_ = p.stdin.Close()
 	if p.cmd.Process != nil {
-		_ = syscall.Kill(-p.cmd.Process.Pid, syscall.SIGTERM)
+		_ = osproc.StopGroup(p.cmd.Process.Pid, false)
 		go func() {
 			select {
 			case <-p.exited:
 			case <-time.After(5 * time.Second):
-				_ = syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL)
+				_ = osproc.StopGroup(p.cmd.Process.Pid, true)
 			}
 		}()
 	}

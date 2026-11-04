@@ -219,7 +219,8 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
 - 表单里的按钮用 `formButton(prominent:)`：iPhone 上是 `themedButton`，Mac 上是系统的标准按钮（`.bordered` / `.borderedProminent`），不画有色胶囊；整行宽的按钮在 Mac 上改成靠右的标准按钮。
 - Mac 的表单把输入框的标题画在左边、框在右边：标题写字段名，要填什么写进 `prompt`；标题本身就是提示的（屏蔽目录、Claude 设置的文本项）在 Mac 上 `.labelsHidden()`。
 - 单选在 Mac 上用 `.radioGroup`；空的分组在 Mac 上不画（表单里会留一块空白）。
-- 已经换的页：通知、Claude Code 设置、Codex 设置、飞书机器人（第一批）；其余逐页换，见 #1221。
+- 页尾单独一个按钮（添加 hub、清除全部缓存）在 Mac 上去掉那一行的底色，像按钮放在分组下面，不单独成一个空卡片。
+- 已经换的页：通知、Claude Code 设置、Codex 设置、飞书机器人（第一批）；设备、翻译、存储空间、hub、hub 列表、Skills（第二批）；其余逐页换，见 #1221。
 
 ## SSH 隧道（Mac）
 

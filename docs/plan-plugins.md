@@ -57,13 +57,40 @@
 - [x] **1b：App「设置 › 插件」**（iOS，Mac 共用页面）：列表、详情（权限、贡献、关于）、按 `form.fields` 画的配置表单、只写的密钥、开关；
   假 hub `MOCK_PLUGINS=1`、UI 测试和单元测试，默认 / BeautifulUI 风格 × 深浅色截图看过（`docs/plugins.md`「App：设置 › 插件」）。
 - [x] 管理界面的「插件」页（#1208）：列表、开关、安装（目录 / 包 / https / 上传 / remote，先预览）、升级（权限变多明确提示）、回滚、卸载（可留数据）。
-- [ ] Android、网页的插件页。
+- [x] 网页的插件页（#1207）。
+- [ ] Android 的插件页（#1206，进行中）。
 - [x] **第 2 步（服务端）**：扩展点 `quota`（插件看不到 Key：`quota.query` + 经 hub / node 代发的 `quota.http`，占位符 `${launcher_key}`、同源限制，权限 `launcher_keys`）、
   `providers`（声明供应商，`GET /api/v1/launchers/presets`，新增启动器带 `preset`）；node 的 `launchers.quota` 换成 `launchers.http`；`server/internal/quota` 只留通用部分，
   两家网关的读法迁到私有插件仓库（归属见 `CLAUDE.local.md`）。规格在 `docs/plugins.md`「额度」「模型供应商」。
-- [ ] 第 2 步（App）：额度的网关名用 hub 给的 `gateway_name`（不再写死），假 hub 的示例网关换成中性的；设置 › 模型供应商 › 新增「从插件添加」。
-- [ ] 第 3 步：连接器、链接识别等散落的内部逻辑迁成私有插件，开源仓库里清干净。
+- [ ] 第 2 步（App，#1259，进行中）：额度的网关名用 hub 给的 `gateway_name`（不再写死），假 hub 的示例网关换成中性的；设置 › 模型供应商 › 新增「从插件添加」。
+- [x] 两个额度插件已在私有插件仓库，装在用户的 hub 上实测：经 node 代发查到 `~/.zshrc` 启动器的额度，不认识的网关回「查不了」。
+- [ ] 第 3 步：lark-connector 整条飞书链路（含公司圈）迁成私有插件，见下面「第 3 步的方案」。TRAEX 留在开源仓库（已拍板）。
 - [ ] 第 4 步：声明式 UI（`ui.render` / `ui.action`）和事件钩子（`event.*`，只通知）。
+
+## 第 3 步的方案：lark-connector 迁成插件
+
+审计（2026-11-04）：开源仓库里只对特定服务有意义的东西，最大的一块是经 **lark-connector**（第三方、非官方的飞书网页客户端，以用户身份登录）接的整条飞书链路：
+`server/internal/lark` 包（约 3000 行）、hub 的 `lark*.go`、公司圈（飞书 Moments）的收件箱 / 知识库爬取和关联、`lark-connector` 工具、`skills/lark-connector`、node 的写闸门、
+一批提示词和 golden，以及客户端按 lark-connector 的数据形状画的飞书聊天页。已拍板：**整条迁到私有插件仓库**；开源版保留官方 `lark-cli`、飞书机器人、飞书邮箱这些公开能力。
+
+目标：装上插件，飞书在 App 里和现在一模一样；不装，开源版没有 lark-connector 相关的任何东西（代码、提示词、文档、测试数据），飞书只走 `lark-cli`。
+
+### 新扩展点（开源仓库，通用）
+
+| 扩展点 | 插件提供 | hub 做什么 |
+| --- | --- | --- |
+| `api`（版本 1） | `{id, prefix, features?, events?}`：一段 App 用的 HTTP 接口，在插件的 HTTP 一侧 | 把 `/api/v1/<prefix>/…` 转给插件（鉴权在 hub 做完，同 `/api/v1/plugins/<id>/…`）；`prefix` 不能和 hub 自己的接口撞；`features` 加进 hello / `/health` 的 `features`（客户端靠它决定显不显示）；插件发 `api.broadcast {type, …}` 推给在线的客户端，`type` 只能是 `events` 里声明的 |
+| `connectors`（已有，补两项） | 收件箱种类的说明（`kinds` 带 `{kind, description}`，给模型分拣用，替代开源仓库里的 `prompts/inbox/kinds/<id>.md`）；知识库条目（`items`）已有 | 照旧 |
+| `assistant`（版本 1） | 技能目录（包里的 `skills/<name>/`）、助手说明的片段（markdown）、给编程 Agent 的工具说明 | 技能随助手的其他技能一起下发到各台电脑；片段接在助手的 CLAUDE.md 后面（提示词 golden 照旧守开源部分） |
+
+### 分阶段
+
+1. **3a 扩展点**（开源仓库）：`api`、`assistant`、连接器的种类说明；hub 里飞书相关的入口改成走注册表（没有提供 `lark` 的插件时，飞书相关的接口、工具、收件箱来源都不出现，App 按 `features` 不显示）。
+2. **3b 插件**（私有插件仓库 `lark-connector/`）：把 `internal/lark` 和 hub 里 lark-connector 的逻辑搬过去，做成进程插件：`api`（现有 `/api/v1/lark/…` 接口原样，数据形状不变，App 不用改）、`connectors`（工具、收件箱、知识库归档和条目、实时事件）、`assistant`（lark-connector 技能和说明、写闸门规则）、`/agent`（经 `hub_api`）。对着用户 hub 上的真实 lark-connector 验证。
+3. **3c 清理**（开源仓库）：删掉 `internal/lark` 里 lark-connector 的部分、hub 的 `lark*.go` / 公司圈、提示词和 golden、`skills/lark-connector`、node 的写闸门、同步脚本、文档和测试数据里的相关内容；`lark-cli`、飞书机器人、飞书邮箱留着。部署，在用户的 hub 上装插件，确认飞书收件箱、聊天、知识库、助手都和以前一样。
+4. **3d 客户端**：飞书聊天页按 `features` 显示（插件提供时）；公司圈的界面改成通用的「飞书公司圈（Moments）」，名字和分组来自插件，不写死任何租户的名称。
+
+每一阶段一个 PR；3b、3c 互相依赖，3c 在插件装好验证后再合。
 
 ## 五、现有的两套怎么迁上来
 

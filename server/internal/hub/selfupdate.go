@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/nwverse/persona/server/internal/identity"
 	"net"
 	"net/http"
 	"os"
@@ -17,6 +16,9 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/osproc"
 
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/update"
@@ -138,7 +140,7 @@ func startWatchdog(prev, pendingPath string) error {
 	defer log.Close()
 	cmd := exec.Command(prev, "update-watch", pendingPath)
 	cmd.Stdout, cmd.Stderr = log, log
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd.SysProcAttr = osproc.DetachedAttr()
 	if err := cmd.Start(); err != nil {
 		return err
 	}

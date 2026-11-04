@@ -17,10 +17,10 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/osproc"
 	"github.com/nwverse/persona/server/internal/plugin"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -662,7 +662,7 @@ func (p *Proc) spawn(ctx context.Context) (*child, io.Reader, error) {
 		base = basics(base)
 	}
 	cmd.Env = identity.Environment(base, p.spec.Env...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // so stopping it takes its children too
+	cmd.SysProcAttr = osproc.GroupAttr() // so stopping it takes its children too
 	ch := &child{cmd: cmd, exited: make(chan error, 1)}
 	var out io.Reader
 	if p.spec.RPC {
@@ -722,16 +722,16 @@ func (p *Proc) end(ch *child, peer *rpc.Peer) {
 		_ = ch.stdin.Close()
 		select {
 		case <-ch.exited:
-			_ = syscall.Kill(-pid, syscall.SIGTERM) // its children, if it left any
+			_ = osproc.StopGroup(pid, false) // its children, if it left any
 			return
 		case <-time.After(StopGrace):
 		}
 	}
-	_ = syscall.Kill(-pid, syscall.SIGTERM)
+	_ = osproc.StopGroup(pid, false)
 	select {
 	case <-ch.exited:
 	case <-time.After(StopGrace):
-		_ = syscall.Kill(-pid, syscall.SIGKILL)
+		_ = osproc.StopGroup(pid, true)
 		<-ch.exited
 	}
 }

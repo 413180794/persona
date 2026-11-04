@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"os"
 	"os/exec"
@@ -16,9 +15,11 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 	"unicode"
+
+	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/osproc"
 
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -199,7 +200,7 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 	cmd.Dir = cwd
 	cmd.Env = identity.Environment(os.Environ(), "PERSONA_ASSISTANT=1")
 	cmd.Env = identity.Environment(cmd.Env, n.assistantLarkEnv(cwd)...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = osproc.GroupAttr()
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err

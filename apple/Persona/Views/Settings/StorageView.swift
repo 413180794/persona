@@ -193,7 +193,7 @@ struct StorageView: View {
     private var clearableTotal: Int64 { StorageKind.allCases.filter(\.clearable).reduce(0) { $0 + (usage?[$1] ?? 0) } }
 
     var body: some View {
-        List {
+        SettingsForm {
             Section {
                 VStack(alignment: .leading, spacing: Theme.Space.m) {
                     HStack(alignment: .firstTextBaseline) {
@@ -221,6 +221,18 @@ struct StorageView: View {
             }
 
             Section {
+                #if os(macOS)
+                // A standard button at the trailing end, not a bar the width of the form (#1221).
+                HStack(spacing: Theme.Space.s) {
+                    Spacer(minLength: 0)
+                    if clearing != nil { ProgressView().controlSize(.small) }
+                    Button("清除全部缓存…", role: .destructive) { confirmAll = true }
+                        .lineLimit(1)
+                        .formButton()
+                        .disabled(usage == nil || clearing != nil || clearableTotal == 0)
+                }
+                .listRowBackground(Color.clear) // a button under the groups, not a group of its own
+                #else
                 Button(role: .destructive) { confirmAll = true } label: {
                     HStack {
                         Spacer()
@@ -229,6 +241,7 @@ struct StorageView: View {
                     }
                 }
                 .disabled(usage == nil || clearing != nil || clearableTotal == 0)
+                #endif
             }
         }
         .themedPage()

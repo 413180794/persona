@@ -75,7 +75,7 @@ struct DevicesView: View {
     @State private var revoking: APIClient.DeviceToken?
 
     var body: some View {
-        List {
+        SettingsForm {
             Section {
                 ForEach(tokens.filter { $0.revokedAt == nil }) { t in row(t) }
             } footer: {

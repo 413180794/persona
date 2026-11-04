@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/proto"
@@ -1133,14 +1132,6 @@ func (f *File) RefreshSpan() ([]proto.Item, Span, error) {
 	}
 	f.partial = append([]byte(nil), data...)
 	return fresh, Span{f.history(), from, f.lines}, nil
-}
-
-// inode is the file's inode number (0 where the platform does not say).
-func inode(st os.FileInfo) uint64 {
-	if sys, ok := st.Sys().(*syscall.Stat_t); ok {
-		return uint64(sys.Ino)
-	}
-	return 0
 }
 
 // before returns the index of the first item with seq >= beforeSeq (0 = len, the end). Callers hold f.mu.
