@@ -101,7 +101,7 @@ func TestChoosingASource(t *testing.T) {
 	if scopes, _ := c.Scopes(); len(MissingScopes(scopes)) == 0 {
 		t.Fatalf("public_repo only and nothing missing: %v", scopes)
 	}
-	if string(sec.data) != `{"client_id":"Ov23liExample"}` {
+	if string(sec.data) != `{}` {
 		t.Fatalf("the device token stayed: %s", sec.data)
 	}
 	c.UseDevice()

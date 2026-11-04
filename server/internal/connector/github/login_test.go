@@ -35,27 +35,31 @@ func (m *memSecrets) Delete(context.Context) error {
 	return nil
 }
 
-// The device flow against a made-up GitHub: the client ID once, the code, waiting, slowing down, the token; it is
-// kept sealed and used before a computer's gh login; signing out forgets it and keeps the client ID.
+// The device flow against a made-up GitHub: straight to the code with the GitHub CLI's client ID (no step asks for
+// one), waiting, slowing down, the token; it is kept sealed and used before a computer's gh login; signing out
+// forgets it.
 func TestDeviceLogin(t *testing.T) {
 	ctx := context.Background()
 	var mu sync.Mutex
-	polls := 0
+	polls, codes := 0, 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 		mu.Lock()
 		defer mu.Unlock()
 		switch r.URL.Path {
 		case "/login/device/code":
-			if r.Form.Get("client_id") != "Ov23liExample" {
-				_, _ = w.Write([]byte(`{"error":"unauthorized_client"}`))
-				return
+			codes++
+			if r.Form.Get("client_id") != "178c6fc778ccc68e1d6a" {
+				t.Errorf("device code asked with client_id %q", r.Form.Get("client_id"))
 			}
-			if r.Form.Get("scope") != deviceScopes {
+			if r.Form.Get("scope") != "repo" {
 				t.Errorf("scope %q", r.Form.Get("scope"))
 			}
 			_, _ = w.Write([]byte(`{"device_code":"dc1","user_code":"ABCD-1234","verification_uri":"https://github.com/login/device","expires_in":900,"interval":5}`))
 		case "/login/oauth/access_token":
+			if r.Form.Get("client_id") != "178c6fc778ccc68e1d6a" {
+				t.Errorf("token asked with client_id %q", r.Form.Get("client_id"))
+			}
 			polls++
 			switch polls {
 			case 1:
@@ -89,15 +93,15 @@ func TestDeviceLogin(t *testing.T) {
 	}
 
 	p, err := c.LoginStep(ctx, "", nil)
-	if err != nil || p.Step != "client_id" || len(p.Fields) != 1 {
+	if err != nil || p.Step != "device" || p.Kind != connector.PromptDeviceCode || len(p.Fields) != 0 ||
+		p.UserCode != "ABCD-1234" || p.URL != "https://github.com/login/device" || p.Interval != 5 {
 		t.Fatalf("first step %+v %v", p, err)
 	}
-	if p, _ = c.LoginStep(ctx, "client_id", map[string]string{"client_id": "wrong"}); p.Step != "client_id" || p.Error == "" {
-		t.Fatalf("a client id GitHub refuses: %+v", p)
+	if !strings.Contains(p.Hint, "GitHub CLI") {
+		t.Fatalf("the hint does not say the page shows GitHub CLI: %q", p.Hint)
 	}
-	p, err = c.LoginStep(ctx, "client_id", map[string]string{"client_id": " Ov23liExample "})
-	if err != nil || p.Kind != connector.PromptDeviceCode || p.UserCode != "ABCD-1234" || p.URL != "https://github.com/login/device" || p.Interval != 5 {
-		t.Fatalf("device step %+v %v", p, err)
+	if _, err := c.LoginStep(ctx, "client_id", map[string]string{"client_id": "Ov23liExample"}); err == nil {
+		t.Fatal("a client_id step is still taken")
 	}
 	if p, _ = c.LoginStep(ctx, "device", nil); p.Step != "device" || p.Error != "" || p.Interval != 5 {
 		t.Fatalf("pending %+v", p)
@@ -113,8 +117,8 @@ func TestDeviceLogin(t *testing.T) {
 	}
 	var kept deviceLogin
 	_ = json.Unmarshal(sec.data, &kept)
-	if kept.ClientID != "Ov23liExample" || kept.Token != "gho_example" {
-		t.Fatalf("kept %+v", kept)
+	if kept.Token != "gho_example" || strings.Contains(string(sec.data), "client_id") {
+		t.Fatalf("kept %s", sec.data)
 	}
 
 	// A hub started again signs in from what it kept.
@@ -131,17 +135,80 @@ func TestDeviceLogin(t *testing.T) {
 	}
 	kept = deviceLogin{}
 	_ = json.Unmarshal(sec.data, &kept)
-	if kept.Token != "" || kept.ClientID != "Ov23liExample" {
+	if kept.Token != "" {
 		t.Fatalf("after logout %+v", kept)
 	}
 	if st := c.Status(ctx); st.State != connector.StateNotSignedIn {
 		t.Fatalf("signed out: %+v", st)
 	}
-	// Signing in again starts at the code: the client ID is kept.
+	// Signing in again starts at the code.
 	if p, _ = c.LoginStep(ctx, "", nil); p.Kind != connector.PromptDeviceCode {
 		t.Fatalf("again %+v", p)
 	}
+	mu.Lock()
+	if codes != 2 {
+		t.Errorf("device codes asked %d times, want 2", codes)
+	}
+	mu.Unlock()
 	if strings.Contains(string(sec.data), "dc1") {
 		t.Fatal("the device code was kept")
+	}
+}
+
+// A hub from before #1089 kept the user's own OAuth App's client ID next to the token: the token still signs in, the
+// client ID is never sent (a new sign-in uses the GitHub CLI's), and the next save drops it.
+func TestDeviceLoginOldClientID(t *testing.T) {
+	ctx := context.Background()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		switch r.URL.Path {
+		case "/login/device/code":
+			if got := r.Form.Get("client_id"); got != ghCLIClientID {
+				t.Errorf("client_id %q", got)
+			}
+			_, _ = w.Write([]byte(`{"device_code":"dc2","user_code":"WXYZ-9876","verification_uri":"https://github.com/login/device","expires_in":900,"interval":5}`))
+		case "/user":
+			if r.Header.Get("Authorization") != "Bearer gho_old" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			_, _ = w.Write([]byte(`{"login":"example-user"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	sec := &memSecrets{data: []byte(`{"client_id":"Ov23liExample","token":"gho_old"}`)}
+	c := New(Config{}, "", nil)
+	c.web, c.api = srv.URL, srv.URL
+	c.UseSecrets(sec)
+	c.check(ctx)
+	if st := c.Status(ctx); st.State != connector.StateOK || st.Account != "example-user" {
+		t.Fatalf("the old token: %+v", st)
+	}
+	if err := c.Logout(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(sec.data), "Ov23liExample") {
+		t.Fatalf("the old client ID stayed: %s", sec.data)
+	}
+	p, err := c.LoginStep(ctx, "", nil)
+	if err != nil || p.UserCode != "WXYZ-9876" {
+		t.Fatalf("sign in again %+v %v", p, err)
+	}
+}
+
+// GitHub refusing to give a code is an error, not a step that asks for something.
+func TestDeviceLoginRefused(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"error":"unauthorized_client"}`))
+	}))
+	t.Cleanup(srv.Close)
+	c := New(Config{}, "", nil)
+	c.web, c.api = srv.URL, srv.URL
+	c.UseSecrets(&memSecrets{})
+	p, err := c.LoginStep(context.Background(), "", nil)
+	if err == nil || !strings.Contains(err.Error(), "unauthorized_client") || p.Step != "" || len(p.Fields) != 0 {
+		t.Fatalf("refused: %+v %v", p, err)
 	}
 }

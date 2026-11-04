@@ -1,7 +1,7 @@
 import SwiftUI
 
 // 设置 › 连接器 › GitHub's sign-in (docs/connectors.md「二 · 7」): where the token comes from — one of the user's
-// computers' gh login, or the device flow with the user's own OAuth App — chosen here and kept on the hub (hub.json's
+// computers' gh login, or the device flow with the GitHub CLI's built-in OAuth App — chosen here and kept on the hub (hub.json's
 // github.auth.from_machine is only the default). Choosing one leaves the other, so there is no 退出登录. When the token
 // in use lacks a scope the connector needs, the page says which and what does not work.
 
@@ -83,7 +83,7 @@ struct GitHubConnectorSections: View {
                         choose(machine: m.id)
                     }
                 }
-                row(key: "device", icon: Theme.Icon.deviceCode, title: "设备码登录", subtitle: "不用电脑：用你自己的 GitHub OAuth App 授权",
+                row(key: "device", icon: Theme.Icon.deviceCode, title: "设备码登录", subtitle: "不用电脑：在 GitHub 上输入验证码授权",
                     warn: false, selected: auth.source == "device") {
                     choose(machine: nil)
                 }

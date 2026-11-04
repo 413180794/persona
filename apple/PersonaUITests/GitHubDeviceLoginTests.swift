@@ -1,7 +1,7 @@
 import XCTest
 
-/// 设置 › 连接器 › GitHub signed in from the app with GitHub's device flow (docs/connectors.md「二 · 7」): the user's
-/// OAuth App's client ID, then the code to enter at github.com/login/device, then signed in on its own (the page asks
+/// 设置 › 连接器 › GitHub signed in from the app with GitHub's device flow (docs/connectors.md「二 · 7」): straight to
+/// the code to enter at github.com/login/device (no client ID to fill in), then signed in on its own (the page asks
 /// the hub again every interval); which computer's gh login it uses; what its token lacks. Against
 /// scripts/mock/mock_hub.py (JARVIS_MOCK_HUB) with MOCK_GITHUB=device (testDeviceFlow), MOCK_GITHUB_LOGIN=1
 /// (testChooseAMachine) or MOCK_GITHUB=scopes (testMissingScopes).
@@ -34,15 +34,9 @@ final class GitHubDeviceLoginTests: XCTestCase {
         sleep(1)
         shot(app, "github signed out")
         signIn.tap()
-        let field = app.textFields["connector.field.client_id"]
-        XCTAssertTrue(field.waitForExistence(timeout: 10), "no client ID field:\n\(app.debugDescription)")
-        sleep(1)
-        shot(app, "github client id")
-        field.tap()
-        field.typeText("Ov23liExample")
-        app.buttons["connector.next"].tap()
         let code = app.staticTexts["connector.userCode"]
         XCTAssertTrue(code.waitForExistence(timeout: 10), "no code:\n\(app.debugDescription)")
+        XCTAssertFalse(app.textFields["connector.field.client_id"].exists, "a client ID is still asked for")
         XCTAssertEqual(code.label, "ABCD-1234")
         XCTAssertTrue(app.buttons["connector.openVerification"].exists || app.links["connector.openVerification"].exists, "no 打开 GitHub")
         shot(app, "github device code")

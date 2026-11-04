@@ -2234,8 +2234,9 @@ LEGACY_CONNECTORS = [{"id": "lark", "name": "飞书", "status": "ok", "capabilit
 # hub started, so it lists no capabilities (and has no sign-in, 409) until switched on and started (TELEGRAM_START
 # seconds; meanwhile 进程还没启动). A hub from #669 on lists Telegram's declared capabilities from the start.
 # MOCK_GITHUB=device: GitHub signed in neither way, its device-flow sign-in from the app (connector/github/login.go):
-# client ID Ov23liExample, code ABCD-1234; the code is entered after two asks (one second apart).
-GITHUB_DEVICE = {"client_id": "", "polls": 0}
+# straight to the code ABCD-1234 (the hub uses the GitHub CLI's client ID); it is entered after two asks (one second
+# apart).
+GITHUB_DEVICE = {"polls": 0}
 if os.environ.get("MOCK_GITHUB_LOGIN") or os.environ.get("MOCK_GITHUB") == "scopes":
     # a hub from V6 on: GitHub signed in through a computer's gh, and it can sign in here
     GITHUB_CONNECTOR["capabilities"] = GITHUB_CONNECTOR["capabilities"] + ["login"]
@@ -2289,7 +2290,7 @@ def set_github_auth(body):
     return True
 if os.environ.get("MOCK_GITHUB") == "device":
     GITHUB_CONNECTOR = {"id": "github", "name": "GitHub", "status": "not_signed_in", "enabled": True,
-                        "error": "还没登录 GitHub：在这里用设备码登录（要你自己的 GitHub OAuth App 的 Client ID）",
+                        "error": "还没登录 GitHub：在下面选一台电脑上的 gh 登录，或者用设备码登录",
                         "capabilities": ["status", "tools", "actions", "events", "hosts", "inbox", "archive", "login", "options"],
                         "hosts": ["github.com"], "options": {"ci": "mine", "muted_repos": [], "ignore_branches": ["train/*"]}}
 
@@ -2304,20 +2305,13 @@ def github_area(h, method, p, raw):
         return False
     global GITHUB_CONNECTOR
     if p.endswith("/logout"):
-        GITHUB_CONNECTOR.update(status="not_signed_in", error="还没登录 GitHub：在这里用设备码登录（要你自己的 GitHub OAuth App 的 Client ID）")
+        GITHUB_CONNECTOR.update(status="not_signed_in", error="还没登录 GitHub：在下面选一台电脑上的 gh 登录，或者用设备码登录")
         GITHUB_CONNECTOR.pop("account", None); GITHUB_CONNECTOR.pop("via", None)
         return h.send_json({"ok": True}) or True
     body = json.loads(raw or b"{}")
-    step, v, d = body.get("step") or "", body.get("values") or {}, GITHUB_DEVICE
-    client = {"step": "client_id", "fields": [{"name": "client_id", "label": "Client ID", "placeholder": "你的 OAuth App 的 Client ID"}],
-              "hint": "在 GitHub 的 Settings › Developer settings › OAuth Apps 注册一个 OAuth App，勾上 Enable Device Flow，把它的 Client ID 填在这里（不用 client secret）。"}
+    step, d = body.get("step") or "", GITHUB_DEVICE
     device = {"step": "device", "kind": "device_code", "url": "https://github.com/login/device", "user_code": "ABCD-1234", "interval": 1,
-              "hint": "在 GitHub 的验证页输入这个验证码并授权；授权后这里会自动继续。"}
-    if step == "client_id":
-        if (v.get("client_id") or "").strip() != "Ov23liExample":
-            return h.send_json(dict(client, error="GitHub 不认这个 Client ID，或者这个 OAuth App 没有勾上 Enable Device Flow")) or True
-        d["client_id"], d["polls"] = "Ov23liExample", 0
-        return h.send_json(device) or True
+              "hint": "在 GitHub 的验证页输入这个验证码并授权（授权页上显示的是「GitHub CLI」）；授权后这里会自动继续。"}
     if step == "device":
         d["polls"] += 1
         if d["polls"] < 3 or os.environ.get("MOCK_GITHUB_WAIT"):
@@ -2326,7 +2320,10 @@ def github_area(h, method, p, raw):
                                 last_sync=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
         GITHUB_CONNECTOR.pop("error", None)
         return h.send_json({"done": True, "account": "example-user"}) or True
-    return h.send_json(client if not d["client_id"] else device) or True
+    if step:
+        return h.send_json({"error": "unknown step %r" % step}, 502) or True
+    d["polls"] = 0
+    return h.send_json(device) or True
 
 
 TELEGRAM_MODE = os.environ.get("MOCK_TELEGRAM", "")
