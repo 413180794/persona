@@ -74,14 +74,32 @@ struct InboxTests {
         let doc = try #require(URL(string: "https://open.feishu.cn/docx/ExampleDocument
         let post = try #require(URL(string: "https://applink.larkoffice.com/client/moments/detail?postId=7000000000000000001"))
         let minutes = try #require(URL(string: "https://open.feishu.cn/docx/ExampleDocument
-        #expect(FeishuLinks.route(doc) == .doc(url: doc.absoluteString, title: nil))
-        #expect(FeishuLinks.route(post) == .momentsPost(id: "7000000000000000001"))
-        #expect(FeishuLinks.route(minutes) == nil) // a web page in the link sheet
+        #expect(FeishuLinks.route(doc, lark: .all) == .doc(url: doc.absoluteString, title: nil))
+        #expect(FeishuLinks.route(post, lark: .all) == .momentsPost(id: "7000000000000000001"))
+        #expect(FeishuLinks.route(minutes, lark: .all) == nil) // a web page in the link sheet
+    }
+
+    /// Without the lark-connector plugin (no `lark` in the hub's features) the native readers have nothing to read:
+    /// Feishu documents and company-feed posts are ordinary web pages in the link sheet (#1530).
+    @Test func feishuLinksWithoutThePluginAreWebPages() throws {
+        let doc = try #require(URL(string: "https://open.feishu.cn/docx/ExampleDocument
+        let post = try #require(URL(string: "https://applink.larkoffice.com/client/moments/detail?postId=7000000000000000001"))
+        #expect(FeishuLinks.route(doc, lark: .none) == nil)
+        #expect(FeishuLinks.route(post, lark: .none) == nil)
+        #expect(FeishuLinks.target(doc, lark: .none) == .sheet)
+        #expect(FeishuLinks.target(post, lark: .none) == .sheet)
+        // Chats but no company feed: documents open natively, posts on the web.
+        let chatsOnly = LarkFeatures(chats: true, moments: false)
+        #expect(FeishuLinks.route(doc, lark: chatsOnly) == .doc(url: doc.absoluteString, title: nil))
+        #expect(FeishuLinks.target(post, lark: chatsOnly) == .sheet)
+        // From the hub's hello.
+        #expect(FeishuLinks.route(post, lark: LarkFeatures(hub: ["tls", "lark", "lark_moments"])) == .momentsPost(id: "7000000000000000001"))
+        #expect(FeishuLinks.route(doc, lark: LarkFeatures(hub: ["tls", "connectors"])) == nil)
     }
 
     @Test func feishuLinkTargets() throws {
-        func target(_ s: String) throws -> FeishuLinks.Target { FeishuLinks.target(try #require(URL(string: s))) }
-        // Feishu docs and removed posts: the native views.
+        func target(_ s: String) throws -> FeishuLinks.Target { FeishuLinks.target(try #require(URL(string: s)), lark: .all) }
+        // Feishu docs and 公司圈 posts: the native views.
         #expect(try target("https://open.feishu.cn/docx/ExampleDocument == .route(.doc(url: "https://open.feishu.cn/docx/ExampleDocument title: nil)))
         #expect(try target("https://applink.larkoffice.com/client/moments/detail?postId=7000000000000000001") == .route(.momentsPost(id: "7000000000000000001")))
         // Any other web page, Feishu's own included: the in-app link sheet.

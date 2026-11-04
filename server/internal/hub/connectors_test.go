@@ -14,7 +14,6 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/github"
 	"github.com/nwverse/persona/server/internal/connector/imessage"
-	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -75,7 +74,7 @@ func TestConnectorsShadowNoBuiltinTool(t *testing.T) {
 	h := newTestHub(t)
 	h.connectors = connector.NewRegistry(nil)
 	for _, c := range []toolConnector{{"kb", []string{"kb_search"}}, {"phone", []string{"phone_contacts"}},
-		{"lark", []string{"lark_agent_reply"}}, {"agent", []string{"agent_send"}}} {
+		{"agent", []string{"agent_send"}}} {
 		if err := h.addConnector(c); err == nil {
 			t.Errorf("connector %q offering %v was registered", c.id, c.tools)
 		}
@@ -85,9 +84,6 @@ func TestConnectorsShadowNoBuiltinTool(t *testing.T) {
 	}
 	if err := h.addConnector(namedConnector("lark")); err != nil {
 		t.Fatal(err)
-	}
-	if h.connectors.Offers("lark_agent_reply") {
-		t.Fatal("a lark connector without tools took over lark_agent_reply")
 	}
 	_, out := call(t, h.routes(), "GET", "/api/v1/connectors", h.cfg.Token, "")
 	if list := out["connectors"].([]any); len(list) != 1 || list[0].(map[string]any)["id"] != "example" {
@@ -185,7 +181,6 @@ func TestConnectorsEndpoint(t *testing.T) {
 func TestConnectorsListTheSameCapabilities(t *testing.T) {
 	h := newTestHub(t)
 	h.mail = (*mail.Service)(nil)
-	h.lark = lark.New(lark.Config{BaseURL: "http://127.0.0.1:1", Token: "t"})
 	h.connectors = connector.NewRegistry(nil)
 	h.registerConnectors()
 	for _, c := range []connector.Connector{imessage.NewRemote(imessage.Config{Machine: "mac"}, "Mac", nil),
@@ -199,7 +194,6 @@ func TestConnectorsListTheSameCapabilities(t *testing.T) {
 		got = append(got, fmt.Sprintf("%s %s hosts=%v options=%v", info.ID, strings.Join(info.Capabilities, ","), info.Hosts, info.Options != nil))
 	}
 	want := []string{
-		"lark tools,chats,items hosts=[] options=false",
 		"mail tools,actions,archive hosts=[] options=false",
 		"github status,tools,actions,events,hosts,inbox,archive,login,options,threads hosts=[github.com] options=true",
 		"imessage status,tools,events,inbox,archive hosts=[] options=false",

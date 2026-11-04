@@ -135,7 +135,7 @@ func withFakeHub(t *testing.T, n *Node) *fakeHub {
 	hub.OnRequest = func(ctx context.Context, method string, params json.RawMessage) (any, error) {
 		switch method {
 		case "assistant.lark":
-			return proto.AssistantLark{Base: "http://lark.example:8443/agent/v1", Token: "t"}, nil
+			return proto.AssistantLark{}, nil
 		case "assistant.context":
 			return map[string]any{"text": "snapshot"}, nil
 		case "assistant.model":
@@ -306,7 +306,7 @@ func TestCodexApprovals(t *testing.T) {
 	n := codexTestNode(t)
 	fh := withFakeHub(t, n)
 	n.mu.Lock()
-	n.larkCfg, n.larkCfgAt = olCfg(), time.Now().Add(time.Hour) // lark-connector's ol as the hub hands it over
+	n.larkCfg, n.larkCfgAt = olCfg(), time.Now().Add(time.Hour) // a plugin's gated command as the hub hands it over
 	n.mu.Unlock()
 	cwd := t.TempDir()
 	p, c, f := newFakeCodex(t, n, cwd)
@@ -319,19 +319,19 @@ func TestCodexApprovals(t *testing.T) {
 		return d
 	}
 
-	// Bypass: everything runs, but Feishu writes still go to the phone.
+	// Bypass: everything runs, but a gated command's writes still go to the phone.
 	n.noteModes(testThread, proto.ModeBypass, "")
 	if d := command(1, "rm -rf build"); d != "accept" || len(fh.interactions()) != 0 {
 		t.Fatalf("bypass command: %s, asked %d", d, len(fh.interactions()))
 	}
-	if d := command(2, "ol GET /me"); d != "accept" || len(fh.interactions()) != 0 {
-		t.Fatalf("Feishu read: %s, asked %d", d, len(fh.interactions()))
+	if d := command(2, "ex GET /me"); d != "accept" || len(fh.interactions()) != 0 {
+		t.Fatalf("a gated read: %s, asked %d", d, len(fh.interactions()))
 	}
-	if d := command(3, `ol POST /conversations/7123/messages {"text":"hi"}`); d != "accept" {
-		t.Fatalf("Feishu write the phone allowed: %s", d)
+	if d := command(3, `ex POST /conversations/7123/messages {"text":"hi"}`); d != "accept" {
+		t.Fatalf("a gated write the phone allowed: %s", d)
 	}
-	if ix := fh.interactions(); len(ix) != 1 || ix[0].ToolName != "飞书" || ix[0].SessionID != testThread {
-		t.Fatalf("Feishu write not confirmed on the phone: %+v", ix)
+	if ix := fh.interactions(); len(ix) != 1 || ix[0].ToolName != "示例" || ix[0].SessionID != testThread {
+		t.Fatalf("a gated write not confirmed on the phone: %+v", ix)
 	}
 
 	// Default: other commands are asked about; a refusal with words goes back to the model.

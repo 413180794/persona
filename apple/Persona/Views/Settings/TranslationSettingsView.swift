@@ -3,6 +3,7 @@ import SwiftUI
 /// 设置 › 翻译 (docs/ios.md「翻译」): on / off, the target language, and what gets translated: mail (on), and the
 /// Feishu chats picked here (none: Feishu has too many messages to translate them all).
 struct TranslationSettingsView: View {
+    @Environment(AppModel.self) private var model
     @AppStorage(TranslationPrefs.enabledKey) private var enabled = false
     @AppStorage(TranslationPrefs.targetKey) private var target = TranslationPrefs.defaultTarget
     @AppStorage(TranslationPrefs.mailKey) private var mail = true
@@ -10,6 +11,7 @@ struct TranslationSettingsView: View {
     @State private var picking = false
 
     private var chats: [TranslationPrefs.Chat] { TranslationPrefs.chats(chatsRaw) }
+    private var larkChats: Bool { model.larkFeatures.chats }
 
     var body: some View {
         SettingsForm {
@@ -27,20 +29,23 @@ struct TranslationSettingsView: View {
                 }
                 Section {
                     Toggle(isOn: $mail) { Label("邮件", systemImage: Theme.Icon.mail) }
-                    Button { picking = true } label: {
-                        LabeledContent {
-                            Text(chats.isEmpty ? "不翻译" : "\(chats.count) 个会话").foregroundStyle(.secondary).lineLimit(1)
-                        } label: {
-                            Label { Text("飞书会话").foregroundStyle(Color.primary) } icon: { Image(systemName: Theme.Icon.conversation) }
+                    // Feishu chats are picked from the hub's (`/api/v1/lark/…`, the lark-connector plugin's).
+                    if larkChats {
+                        Button { picking = true } label: {
+                            LabeledContent {
+                                Text(chats.isEmpty ? "不翻译" : "\(chats.count) 个会话").foregroundStyle(.secondary).lineLimit(1)
+                            } label: {
+                                Label { Text("飞书会话").foregroundStyle(Color.primary) } icon: { Image(systemName: Theme.Icon.conversation) }
+                            }
                         }
+                        .accessibilityHint("选择要翻译的飞书会话")
                     }
-                    .accessibilityHint("选择要翻译的飞书会话")
                 } header: {
                     Text("翻译范围")
                 } footer: {
-                    Text("飞书消息很多，默认不翻译；只翻译这里选中的会话里别人发的消息。")
+                    if larkChats { Text("飞书消息很多，默认不翻译；只翻译这里选中的会话里别人发的消息。") }
                 }
-                if !chats.isEmpty {
+                if larkChats, !chats.isEmpty {
                     Section("要翻译的飞书会话") {
                         ForEach(chats) { c in
                             Text(c.name).lineLimit(1)

@@ -7,16 +7,13 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
-	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/plugin"
-	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -262,8 +259,7 @@ func (ps *plugins) assistantSummary(ctx context.Context, title, summary string) 
 }
 
 // assistantLark is what the assistant's machine gets for its skills' commands (proto.AssistantLark): lark-cli's
-// settings and rules, the plugins' command gates, and lark-connector's own when the hub still talks to it itself and no
-// plugin's gate has its command.
+// settings and rules, and the plugins' command gates.
 func (h *Hub) assistantLark(ctx context.Context) (proto.AssistantLark, error) {
 	lc := h.cfg.Lark
 	larkRules := connector.LarkRules(h.cfg.ConnectorGate, h.cfg.LarkGate)
@@ -277,16 +273,5 @@ func (h *Hub) assistantLark(ctx context.Context) (proto.AssistantLark, error) {
 		}
 		return connector.GateRules(h.cfg.ConnectorGate, id)
 	})
-	if h.lark == nil || !lc.lark-connectorConfigured() || slices.ContainsFunc(out.Gates, func(g proto.CommandGate) bool { return g.Command == "ol" }) {
-		return out, nil
-	}
-	base, token, err := h.lark.AgentAccess(ctx)
-	if err != nil {
-		return out, err
-	}
-	g := lark.AssistantGate(base, token, h.lark.Account(), larkRules)
-	t := prompts.Tool("lark-connector")
-	g.Tool = &proto.GateTool{Name: t.Name, Description: t.Description}
-	out.Gates = append(out.Gates, g)
 	return out, nil
 }

@@ -12,7 +12,7 @@ struct ShellView: View {
     @Environment(AppModel.self) private var model
     /// Opens on the app's tab: the page behind is built when it is first selected or dragged in.
     @State private var shell = ShellState(page: ShellState.index(for: AppModel.shared.selectedTab),
-                                          pageCount: LarkHomePreference.shared.enabled ? 3 : 2)
+                                          pageCount: LarkHomePreference.shared.shows ? 3 : 2)
 
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
@@ -29,7 +29,7 @@ struct ShellView: View {
                     .environment(\.shell, shell)
                     .id(model.look)
             }
-            .onChange(of: LarkHomePreference.shared.enabled, initial: true) { _, enabled in
+            .onChange(of: LarkHomePreference.shared.shows, initial: true) { _, enabled in
                 shell.setPageCount(enabled ? 3 : 2)
             }
             // The shell takes the app's tab as it is set (`ShellState.route`): not an onChange here, which was skipped now
@@ -71,7 +71,7 @@ struct ShellView: View {
                     ChatsView()
                         .modifier(ShellPageSlide(shell: shell, index: 1))
                 }
-                if LarkHomePreference.shared.enabled, shell.feishuBuilt {
+                if LarkHomePreference.shared.shows, shell.feishuBuilt {
                     LarkConversationsView()
                         .modifier(ShellPageSlide(shell: shell, index: 2))
                 }

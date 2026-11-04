@@ -19,11 +19,8 @@ func (h *Hub) initAgents() {
 	if h.store != nil {
 		kv = h.store
 	}
-	var sources []agents.Source
-	if h.cfg.Lark.lark-connectorConfigured() {
-		sources = append(sources, agents.Bridge{API: h.lark})
-	}
-	h.agents = agents.NewService(kv, h.agentsChanged, h.logf, sources...)
+	// The sources come from plugins (agent_sources, plugin_agents.go).
+	h.agents = agents.NewService(kv, h.agentsChanged, h.logf)
 }
 
 // agentsChanged tells the apps which agent sessions to re-pull, like {"type":"lark"} does for chats.

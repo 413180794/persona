@@ -245,12 +245,13 @@ nonisolated enum ConnectorRow: Hashable, Identifiable {
         }
     }
 
-    /// A hub that lists Feishu (it always has it) says whether it has mail; one that does not (from before M6, or no
-    /// list yet) gets both rows, as before.
-    static func rows(_ list: [HubConnector]) -> [ConnectorRow] {
+    /// A hub that lists Feishu says whether it has mail; one that does not (from before M6, or no list yet) gets both
+    /// rows, as before. Feishu's row (its page reads `/api/v1/lark/…`) is there only while the hub has Feishu chats
+    /// (`LarkFeatures`, the lark-connector plugin).
+    static func rows(_ list: [HubConnector], lark: Bool = true) -> [ConnectorRow] {
         let listed = list.contains { $0.id == "lark" }
         let legacy: [ConnectorRow] = listed ? (list.contains { $0.id == "mail" } ? [.mail, .lark] : [.lark]) : [.mail, .lark]
-        return legacy + list.filter { $0.id != "mail" && $0.id != "lark" }.map(ConnectorRow.hub)
+        return legacy.filter { lark || $0 != .lark } + list.filter { $0.id != "mail" && $0.id != "lark" }.map(ConnectorRow.hub)
     }
 }
 
@@ -271,7 +272,7 @@ struct ConnectorsSection: View {
                     ConnectorRowLabel(title: ConnectorText.device, symbol: Theme.Icon.thisDevice, value: ConnectorText.deviceSummary())
                 }
                 #endif
-                ForEach(ConnectorRow.rows(hubConnectors)) { row in
+                ForEach(ConnectorRow.rows(hubConnectors, lark: model.larkFeatures.chats)) { row in
                     switch row {
                     case .mail:
                         NavigationLink(value: SettingsPage.mail) {
@@ -303,7 +304,7 @@ struct ConnectorsSection: View {
     private func load() async {
         guard let api = model.api else { return }
         async let a = try? api.mailAccounts()
-        async let l = try? api.larkStatus()
+        async let l = model.larkFeatures.chats ? try? api.larkStatus() : nil
         // An older hub has no connectors (feature "connectors"): its list stays as it was.
         async let c = model.hubFeatures.contains("connectors") ? try? api.connectors(all: true) : nil
         async let b = try? api.feishuBot()

@@ -17,7 +17,6 @@ func TestAssistantLarkWithLarkCLIOnly(t *testing.T) {
 	h.cfg.Lark = lark.Config{CLI: &lark.CLIConfig{Bin: "/opt/lark/bin/lark-cli", Profile: "work"}, Prefer: "cli"}
 	h.cfg.ConnectorGate = []connector.Rule{{Connector: "lark", Action: "CLI /im/+messages-send", Decision: "allow"}}
 	h.cfg.LarkGate = []proto.LarkRule{{Method: "CLI", Path: "/docs/**", Action: "deny"}}
-	h.lark = lark.New(h.cfg.Lark)
 	m := newMachine(h, MachineConfig{ID: "server", Name: "服务器", Kind: "local"})
 	h.machines, h.byID["server"] = []*Machine{m}, m
 
@@ -33,8 +32,8 @@ func TestAssistantLarkWithLarkCLIOnly(t *testing.T) {
 	if want := []proto.LarkRule{{Method: "CLI", Path: "/im/+messages-send", Action: "allow"}, h.cfg.LarkGate[0]}; !reflect.DeepEqual(got.Rules, want) {
 		t.Fatalf("rules: %+v, want %+v", got.Rules, want)
 	}
-	if got.Base != "" || got.Token != "" {
-		t.Fatalf("no lark-connector, no token: %+v", got)
+	if len(got.Gates) != 0 {
+		t.Fatalf("no plugin, no gated command: %+v", got.Gates)
 	}
 }
 

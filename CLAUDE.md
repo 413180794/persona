@@ -49,11 +49,11 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 ### 产品和界面
 
 - **不做第二个飞书**：App 是把各处信息收到一起交给 AI，不是把飞书的功能页面搬过来。飞书只保留
-  消息（进收件箱）、链接在 App 内渲染（文档、removed单帖），其余能力只做在 hub / AI 侧（搜索、读取作为上下文），见 `docs/feishu.md`。
+  消息（进收件箱）、链接在 App 内渲染（文档、公司圈单帖），其余能力只做在 hub / AI 侧（搜索、读取作为上下文），见 `docs/feishu.md`。
   用户明确允许的窄例外（#392）：飞书设置里默认关闭的「首页显示消息」开关，开启后增加「消息」页，浏览全部私聊和群聊；
   复用收件箱的账号、聊天页、发件箱和同步，不另做客户端，不恢复通讯录、工作台等页面。见 `docs/lark-connector-migration.md`。
   别的数据源同理：不要为某个来源做一套浏览页面。
-- **链接在 App 内打开**：会话里出现的任何链接（飞书文档、removed、网页……）都在当前 App 里打开，参考 Telegram：
+- **链接在 App 内打开**：会话里出现的任何链接（飞书文档、公司圈、网页……）都在当前 App 里打开，参考 Telegram：
   底部浮起的卡片，打开即铺满屏幕（不是半屏），下拉到 0.6 时不挡 Agent 的操作（对话照常滚动、输入），再下拉关闭。打开速度和顺滑优先，不在乎本地空间：预加载、本地缓存、
   复用 WebView 等手段都要用上。页面里选中文字可以「AI 修改」（选中内容 + 修改提示发给 Agent）或「作为上下文」（作为下一条消息的关联上下文），
   上下文用 XML 标签带在消息里，客户端解析这些标签做相应的 UI。
@@ -241,13 +241,13 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/inbox.md` | 收件箱：飞书和邮件合成一个列表，一行一件事，AI 分拣、已处理、交给 AI；AI 分身（分拣 → 判断 → Agent 处理并草拟回复，点一下发送） |
 | `docs/mail.md` | 邮箱：IMAP/SMTP、Gmail（使用 Google 账号登录，OAuth2 + XOAUTH2）、飞书邮箱（固定 larkoffice.com 服务器）、凭据存储 |
 | `docs/lark-connector-migration.md` | 飞书迁移的授权范围：可选消息页与现有收件箱共用能力 |
-| `docs/feishu.md` | 飞书在 Persona 里的定位（不做第二个飞书）：保留哪些、lark-connector 只读代理、给 AI 用的接口速查 |
+| `docs/feishu.md` | 飞书在 Persona 里的定位（不做第二个飞书）：保留哪些、经插件的飞书（`/api/v1/lark/…` 由插件提供）、给 AI 用的接口速查 |
 | `docs/lark-attachments.md` | iOS 飞书聊天发图片和文件（#410）：选择、预览、发送和确认 |
 | `docs/channels.md` | 渠道（channel）：所有和 Persona 对话的入口（App、微信、飞书机器人、飞书 /agent、语音）的盘点和统一抽象：渠道的接口和能力、hub 的统一管线（进对话、跟踪这一轮、答案发回、文字 / 卡片提问、去重、来源标记）、插件的 `channel` 扩展点和协议、兼容迁移、`/api/v1/channels`、设置 › 插件 › 渠道 |
 | `docs/bots.md` | 飞书机器人：私聊机器人就是和 Persona 主对话说话，回答发回飞书，提问 / 批准在飞书里点卡片，推送和主对话同步，在飞书里驱动各台电脑上的 Agent；开放平台长连接、配对、只认主人、卡片 JSON 2.0 的坑 |
 | `docs/wechat.md` | 微信机器人（内置插件 `jarvisd-wechat`，腾讯 iLink）：扫码绑定，私聊机器人就是和主对话说话，回答发回微信，提问 / 批准用文字往返；插件只管和微信说话（`channel` 扩展点），其余走 hub 的渠道管线；和飞书机器人比 |
 | `docs/wechat-connector.md` | 微信（wechat-connector）连接器接入手册（#1420）：把 wechat-connector 当外部 API 服务接入，个人微信作为数据来源进收件箱与知识库；前置条件（服务地址、应用密钥范围、允许来源、事件推送）、插件包安装（`file:` / 管理界面上传）、登录、设置项与隐私默认、发送的三道锁、闸门示例、状态含义、已知限制、故障排查 |
-| `docs/lark-agent.md` | 飞书里自己发 `/agent …`：hub 收集所在会话 / 话题 / 引用 / 文档 / 知识库的上下文，起 Agent 处理，以我的身份回复 |
+| `docs/lark-agent.md` | 飞书里自己发 `/agent …`（由接飞书的插件做，hub 提供开对话、知识库上下文的接口）：收集所在会话 / 话题 / 引用 / 文档 / 知识库的上下文，起 Agent 处理，以我的身份回复 |
 | `docs/phone-tools.md` | 手机数据工具（phone_*）、权限、需要确认的写操作、iOS 限制 |
 | `docs/computer-use.md` | 操控电脑：内置插件 `cua`（默认关、按机器开），助手经 hub → node → Cua Driver 看窗口、点按、截图（`computer_state` / `computer_run`），能力发现、会话、截图、写操作的日志和确认；一键安装和实时画面（屏幕共享经 hub 隧道）的方案 |
 | `docs/office.md` | 生成 Word / PowerPoint / Excel（`personad office`，M9）：Markdown 生成 docx / pptx，JSON / CSV 生成 xlsx（写时算好公式的值），check 读回结构；为什么做进 personad、支持什么、QuickLook 的限制 |

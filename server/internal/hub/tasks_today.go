@@ -93,10 +93,6 @@ func (h *Hub) ensureToday(ctx context.Context, conversation string) (FeedItem, b
 			}
 		}
 	}
-	if h.lark == nil { // no Feishu here (unit tests): the card has the tasks only
-		it, err := h.appendFeedAt(ctx, conversation, feedToday, date, body, day)
-		return it, true, err
-	}
 	if cal := h.snapshotCalendar(ctx, now); cal != nil {
 		for _, e := range cal.Events {
 			body.Meetings = append(body.Meetings, todayMeeting{Start: e.Start, End: e.End, Title: e.Title})

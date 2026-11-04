@@ -21,12 +21,8 @@ type AssistantClaudeMD struct {
 	StateDir     string
 	KnowledgeDir string
 	OnHub        bool
-	lark-connector     bool // the assistant's machine has the lark-connector skill (~/.jarvis/skills/lark-connector): ol is on its PATH
-	// LarkCLI: hub.json configures lark-cli (docs/plan-lark-cli.md), on the assistant's PATH; lark-connectorConfigured: Open
-	// Lark is configured too (lark.token / lark.container); LarkPrefer: "cli" when lark-cli is the primary source.
-	LarkCLI            bool
-	lark-connectorConfigured bool
-	LarkPrefer         string
+	// LarkCLI: hub.json configures lark-cli (docs/plan-lark-cli.md), on the assistant's PATH.
+	LarkCLI bool
 }
 
 func RenderAssistantClaudeMD(d AssistantClaudeMD) string { return render("assistant/claude_md", d) }
@@ -179,12 +175,18 @@ type CodexMemory struct {
 func RenderCodexMemory(m CodexMemory) string { return render("assistant/codex_memory", m) }
 
 // RuntimeInstructions is what the assistant on an agent runtime (DSH…) gets with a new conversation's first message
-// (assistant/runtime_instructions): the shared memory, and Feishu through the lark-connector tool when the skill is there.
+// (assistant/runtime_instructions): the shared memory, and the skills' gated commands it runs as tools.
 type RuntimeInstructions struct {
 	Dir       string
 	Index     string // MEMORY.md, trimmed
 	Truncated bool   // Index is the start of a longer one
-	lark-connector  bool   // the lark-connector skill is on the assistant's machine
+	// Gates are the skills' gated commands this machine runs as tools (a plugin's assistant.gate with a tool).
+	Gates []RuntimeGate
+}
+
+// RuntimeGate is one gated command as a runtime's tool: what the card calls it, the command, the tool.
+type RuntimeGate struct {
+	Title, Command, Tool string
 }
 
 func RenderRuntimeInstructions(r RuntimeInstructions) string {

@@ -6,14 +6,12 @@ import (
 	"errors"
 	"net/http"
 	"testing"
-
-	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // memSource is an agents.Source held in memory, as a plugin's would be.
 type memSource struct {
 	name     string
-	sessions []lark.AgentSession
+	sessions []AgentSession
 	listN    int
 	fail     error
 	during   func() // runs while Sessions is being answered
@@ -50,10 +48,10 @@ func (m *memSource) MarkRead(context.Context, string) error              { retur
 // A source added while the hub runs is listed after the hub's own and reached by its ids; one by a taken name is
 // refused; a removed one is gone with what was cached of it, and the apps are told.
 func TestAddAndRemoveSources(t *testing.T) {
-	f := &fakeBridge{sessions: []lark.AgentSession{{SessionKey: key, Provider: "grok_bot", CanSend: true}}}
+	f := &fakeBridge{sessions: []AgentSession{{SessionKey: key, Provider: "grok_bot", CanSend: true}}}
 	s, changes := newSvc(f, nil)
 	ctx := context.Background()
-	plug := &memSource{name: "grokbot", sessions: []lark.AgentSession{{SessionKey: "s1", Provider: "grok_bot", CanSend: true}}}
+	plug := &memSource{name: "grokbot", sessions: []AgentSession{{SessionKey: "s1", Provider: "grok_bot", CanSend: true}}}
 
 	if !s.Add(plug) {
 		t.Fatal("a new source is added")
@@ -101,7 +99,7 @@ func TestAddAndRemoveSources(t *testing.T) {
 // A source that fails (its plugin crashed, timed out) is left out of the lists of all of them so the others are still
 // there; asked for by name, or when it is the only one, its error is the answer.
 func TestFailingSourceDoesNotHideOthers(t *testing.T) {
-	f := &fakeBridge{sessions: []lark.AgentSession{{SessionKey: key, Provider: "grok_bot", CanSend: true}}}
+	f := &fakeBridge{sessions: []AgentSession{{SessionKey: key, Provider: "grok_bot", CanSend: true}}}
 	s, _ := newSvc(f, nil)
 	ctx := context.Background()
 	down := errors.New("plugin not running")
@@ -126,13 +124,13 @@ func TestFailingSourceDoesNotHideOthers(t *testing.T) {
 func TestRemovedSourceAnswerNotCached(t *testing.T) {
 	s, changes := newSvc(&fakeBridge{}, nil)
 	ctx := context.Background()
-	old := &memSource{name: "grokbot", sessions: []lark.AgentSession{{SessionKey: "old"}}}
+	old := &memSource{name: "grokbot", sessions: []AgentSession{{SessionKey: "old"}}}
 	old.during = func() { s.Remove("grokbot") } // removed while its list is being answered
 	s.Add(old)
 	if _, err := s.Sessions(ctx, "grokbot", ""); err != nil {
 		t.Fatal(err)
 	}
-	fresh := &memSource{name: "grokbot", sessions: []lark.AgentSession{{SessionKey: "new"}}}
+	fresh := &memSource{name: "grokbot", sessions: []AgentSession{{SessionKey: "new"}}}
 	s.Add(fresh)
 	list, err := s.Sessions(ctx, "grokbot", "")
 	if err != nil || len(list) != 1 || list[0].SessionKey != "new" || fresh.listN != 1 {

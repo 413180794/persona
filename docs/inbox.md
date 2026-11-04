@@ -20,7 +20,7 @@
 
 ## 云文档：表格、多维表格、文档里 @我（2026-10-31）
 
-`server/internal/hub/inbox_docs.go`。飞书在文档、表格、多维表格里 @我、评论我，不会进 IM 的会话列表，只在**文档通知中心**
+由接飞书的插件做（原来在 hub 的 inbox_docs.go）。飞书在文档、表格、多维表格里 @我、评论我，不会进 IM 的会话列表，只在**文档通知中心**
 （lark-connector `GET /documents/notifications`）：每份文档一张卡片，只有最新一条动态（`summary` 像「张三提及了你」）、`atMe`、`url`、`type`
 （drive 对象类型：3 表格、8 多维表格、22 docx、2 旧文档、16 wiki）。每次采集飞书时读一次。
 
@@ -62,9 +62,9 @@
 - 每件只在内容变了（`last` 变了）时重新分拣；后台并发 4 个，一轮跑完才开下一轮。分拣前的事在界面上算「需要你」。
 - 2026-10-27 第一次跑：51 件里 3 件需要你、29 件噪音（全是营销邮件），摘要像「Sample Contact问 codex 代码是否已合入 1013，等你确认答复」。
 
-## removed（2026-11-01）
+## 公司圈（2026-11-01）
 
-removed（飞书 Moments，以前叫头条圈）里和我有关的事也进收件箱（`server/internal/hub/inbox_moments.go`）：有人评论了我的帖子、
+公司圈（飞书 Moments，以前叫头条圈）里和我有关的事也进收件箱（由接飞书的插件做，原来在 hub 的 inbox_moments.go）：有人评论了我的帖子、
 回复了我的评论、在帖子或评论里 @ 了我。点赞、新关注不算事，不进来。不做 feed（`docs/feishu.md`「不做第二个飞书」），只收和我有关的。
 
 - 来源：lark-connector 的 `moments/notifications?category=message`，跟着飞书一起每 2 分钟采一次（一次调用，最新 50 条）；7 天前的不算。
@@ -75,8 +75,8 @@ removed（飞书 Moments，以前叫头条圈）里和我有关的事也进收�
 - **发送**是在帖子下发评论（`POST /moments/posts/:id/comments`）：回复最新那条和我有关的评论，@ 在帖子本身的就评论帖子。
   代写和 AI 分身的提示词都提醒：全公司可见，只说能公开说的。
 - 自己已经在别处回了（帖子最新一条评论是我、在这件事之后）就算处理完（`done_by=replied`）；通知在飞书里都读过了、又不是「需要你」的，算 `read`。
-- App：行的图标是removed的、标签「removed」（@ 我的是「@我」，也出现在「@我」筛选里）；点开就是帖子和评论（`LarkMomentsPostView`，`pushed`）。
-  DEBUG：`-openInboxItem <id>` 打开某一件（截removed详情用）；mock 里有一件 `moment:mp1:mn1`。
+- App：行的图标是公司圈的、标签「公司圈」（@ 我的是「@我」，也出现在「@我」筛选里）；点开就是帖子和评论（`LarkMomentsPostView`，`pushed`）。
+  DEBUG：`-openInboxItem <id>` 打开某一件（截公司圈详情用）；mock 里有一件 `moment:mp1:mn1`。
 
 ## 连接器：GitHub（2026-11-02）
 
@@ -128,7 +128,7 @@ hub 合成条目（`server/internal/hub/inbox_connectors.go`），规则和飞�
 
 - **hub**（`hub/inbox_mutes.go`）：静音存在设置 `inbox_mutes`（来源 + 标签 + 值 + 名字）。每次收集收件箱都把被覆盖的打开条目收掉，所以以后来的
   新消息进来就直接是已处理。条目能按什么静音（`mutes`）：连接器条目来自它的 `InboxThing.Tags`（`repo`、`chat`、`sender`），飞书的是会话（`lark.feed_id`）
-  和群里最新发言的人（`lark.sender_id`），邮件的是发件人地址（小写）；飞书的云文档和removed条目没有。
+  和群里最新发言的人（`lark.sender_id`），邮件的是发件人地址（小写）；飞书的云文档和公司圈条目没有。
 - **GitHub 的「静音的仓库」**：原来存在 GitHub 连接器的设置里（`muted_repos`），现在就是来源 `github`、标签 `repo` 的静音。hub 启动时把旧的搬过来、
   从 GitHub 的设置里清掉；设置 › 连接器 › GitHub 的列表（和旧 App）照旧读写 `muted_repos`，hub 在中间换成静音，所以两处看到的是同一份。
 
@@ -162,7 +162,7 @@ hub 合成条目（`server/internal/hub/inbox_connectors.go`），规则和飞�
 ## 生命周期
 
 - hub 后台采集（`server/internal/hub/inbox.go`）：飞书实时事件来了 3 秒后采一次，这一轮只读飞书会话；每 2 分钟一轮再读文档通知、
-  removed和其它连接器（连接器自己的事件、改设置也触发这种轮）；邮件每 3 分钟。以前每个飞书事件都把这些全读一遍（#674）。下拉刷新
+  公司圈和其它连接器（连接器自己的事件、改设置也触发这种轮）；邮件每 3 分钟。以前每个飞书事件都把这些全读一遍（#674）。下拉刷新
   （`POST /api/v1/inbox/refresh`）立刻采全部。有变化就存库（`inbox_items`）并推 `{"type":"inbox"}`，App 再拉列表。
 - **已处理**只记在 Persona（`done_at`，`done_by=user`），不回写飞书已读、不改邮件的已读。已处理的保留 3 天（列表底部可移回），
   8 天后从库里删掉（期间用来挡住「飞书里一直未读」的旧消息重新冒出来）。

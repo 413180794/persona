@@ -13,8 +13,6 @@ import (
 	"sync"
 	"time"
 	"unicode/utf16"
-
-	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // Error is a refusal with the HTTP status the hub should answer.
@@ -29,16 +27,12 @@ func fail(status int, format string, args ...any) error {
 	return &Error{Status: status, Msg: fmt.Sprintf(format, args...)}
 }
 
-// HTTPStatus maps an error from the service to a status: its own refusals keep theirs, lark-connector's 4xx pass
-// through (403 read-only token, 404, 409 account unavailable…), anything else is a bad gateway.
+// HTTPStatus maps an error from the service to a status: its own refusals (and a plugin source's, mapped to them)
+// keep theirs, anything else is a bad gateway.
 func HTTPStatus(err error) int {
 	var e *Error
 	if errors.As(err, &e) {
 		return e.Status
-	}
-	var ae *lark.APIError
-	if errors.As(err, &ae) && ae.Status >= 400 && ae.Status < 500 && ae.Status != 401 {
-		return ae.Status
 	}
 	return http.StatusBadGateway
 }
@@ -157,10 +151,10 @@ func (s *Service) Statuses(ctx context.Context) []Status {
 	for _, src := range s.all() {
 		st, _ := src.Status(ctx)
 		if st.Providers == nil {
-			st.Providers = []lark.AgentProvider{}
+			st.Providers = []AgentProvider{}
 		}
 		if st.Accounts == nil {
-			st.Accounts = []lark.AgentAccount{}
+			st.Accounts = []AgentAccount{}
 		}
 		out = append(out, st)
 	}
@@ -334,8 +328,8 @@ func (s *Service) Send(ctx context.Context, id, clientID, text, origin string) (
 	if strings.TrimSpace(text) == "" {
 		return nil, fail(http.StatusBadRequest, "agents: text is empty")
 	}
-	if n := TextLen(text); n > lark.AgentMaxText {
-		return nil, fail(http.StatusRequestEntityTooLarge, "agents: text is %d characters, the limit is %d", n, lark.AgentMaxText)
+	if n := TextLen(text); n > AgentMaxText {
+		return nil, fail(http.StatusRequestEntityTooLarge, "agents: text is %d characters, the limit is %d", n, AgentMaxText)
 	}
 	if clientID == "" {
 		clientID = NewClientID()

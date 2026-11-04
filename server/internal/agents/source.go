@@ -8,20 +8,18 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
-
-	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // Unified models: the bridge's shapes are already the right ones, so they are reused, with the public id added.
 type (
-	Block   = lark.AgentBlock
-	Message = lark.AgentMessage
+	Block   = AgentBlock
+	Message = AgentMessage
 )
 
 type Session struct {
 	ID     string `json:"id"` // <source>:<sessionKey>
 	Source string `json:"source"`
-	lark.AgentSession
+	AgentSession
 	// AvatarURL is lark-connector's avatar (data: or https URL); only its presence and version go to the apps, which load
 	// the image from /api/v1/agents/sessions/{id}/avatar.
 	AvatarURL     string `json:"-"`
@@ -39,7 +37,7 @@ type MessagePage struct {
 type SearchHit struct {
 	ID     string `json:"id"`
 	Source string `json:"source"`
-	lark.AgentSearchHit
+	AgentSearchHit
 }
 
 // Status is one source's health and the agents it serves.
@@ -49,9 +47,9 @@ type Status struct {
 	Error   string `json:"error,omitempty"`
 	// Setup is why a reachable source has nothing to list yet (SetupMissing / SetupDisabled / SetupNoAccounts); the
 	// apps say what to do about it.
-	Setup     string               `json:"setup,omitempty"`
-	Providers []lark.AgentProvider `json:"providers"`
-	Accounts  []lark.AgentAccount  `json:"accounts"`
+	Setup     string          `json:"setup,omitempty"`
+	Providers []AgentProvider `json:"providers"`
+	Accounts  []AgentAccount  `json:"accounts"`
 }
 
 // Status.Setup values.

@@ -188,7 +188,7 @@ extension Theme {
         static let slides = "rectangle.on.rectangle.angled"
         /// A database table (Feishu 多维表格).
         static let base = "square.grid.3x2"
-        /// A removed (Feishu Moments) post in the inbox: the company's public feed.
+        /// A 公司圈 (Feishu Moments) post in the inbox: the company's public feed.
         static let moments = "rectangle.3.group.bubble"
         static let folder = "folder"
         static let folderFilled = "folder.fill"

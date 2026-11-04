@@ -69,7 +69,7 @@ struct RootView: View {
         .sendRefusalAlert(model)
         .screenDrawer(model) // a Mac's live screen, from wherever it was asked for (#1343)
         #if os(iOS)
-        .onChange(of: LarkHomePreference.shared.enabled) { _, enabled in
+        .onChange(of: LarkHomePreference.shared.shows) { _, enabled in
             if !enabled, model.selectedTab == .feishu { model.selectedTab = .assistant }
         }
         #endif
@@ -88,7 +88,7 @@ struct RootView: View {
             AssistantRootTab()
             AgentsRootTab()
             #if os(iOS)
-            if LarkHomePreference.shared.enabled { FeishuRootTab() }
+            if LarkHomePreference.shared.shows { FeishuRootTab() }
             #endif
             InboxRootTab()
             SettingsRootTab()

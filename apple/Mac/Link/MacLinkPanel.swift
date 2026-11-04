@@ -5,8 +5,9 @@ import WebKit
 // Links open inside the app (CLAUDE.md). On the iPhone that is a card rising from the bottom; on the Mac it is a panel
 // sliding in at the detail column's trailing edge, beside what it came from (docs/mac.md「和 iOS 的对应」): the page
 // stays usable, the panel's width is dragged and remembered, ⌘W closes it, 「在浏览器打开」 hands it to the default
-// browser, and 「在单独窗口打开」 moves it into a window of its own. Feishu documents and removed posts open in the native
-// views (FeishuRouteView), the rest in a WKWebView from the shared pool (`WebViewPool`, preloaded, reused).
+// browser, and 「在单独窗口打开」 moves it into a window of its own. Feishu documents and company-feed posts open in the
+// native views (FeishuRouteView) while the hub has them (`LarkFeatures`), the rest in a WKWebView from the shared pool
+// (`WebViewPool`, preloaded, reused).
 
 extension View {
     /// Shows `link` in a panel at the trailing edge. `key` is the conversation 「AI 修改」 / 「作为上下文」 go to; without
@@ -112,8 +113,9 @@ struct MacLinkPanel: View {
     @State private var editing: ContextRef?
     @State private var instruction = ""
 
-    private var isFeishuDoc: Bool { FeishuLinks.isDoc(target.url) }
-    private var feishuRoute: FeishuRoute? { FeishuLinks.route(target.url) }
+    /// Feishu links with a native view (documents, company-feed posts), while the hub has them (`LarkFeatures`).
+    private var feishuRoute: FeishuRoute? { FeishuLinks.route(target.url, lark: model.larkFeatures) }
+    private var isFeishuDoc: Bool { if case .doc = feishuRoute { true } else { false } }
     /// Where 「AI 修改」 and 「作为上下文」 go: the conversation the link came from, else Persona' main one.
     private var destination: SessionKey? { key ?? model.assistantMain ?? model.assistantCurrent }
 
@@ -143,7 +145,7 @@ struct MacLinkPanel: View {
     }
 
     private var shownTitle: String {
-        title.isEmpty ? (isFeishuDoc ? "飞书文档" : feishuRoute != nil ? "removed" : target.url.host ?? "网页") : title
+        title.isEmpty ? (isFeishuDoc ? "飞书文档" : feishuRoute != nil ? "公司圈" : target.url.host ?? "网页") : title
     }
 
     private var header: some View {

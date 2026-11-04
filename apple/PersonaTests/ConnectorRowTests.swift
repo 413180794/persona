@@ -21,4 +21,12 @@ import Testing
     @Test func aHubWithoutMail() {
         #expect(ConnectorRow.rows([c("lark"), c("github")]).map(\.id) == ["lark", "github"])
     }
+
+    /// Feishu's page reads `/api/v1/lark/…`: without the lark-connector plugin (no `lark` in the features) it has no row,
+    /// whatever the list says (#1530).
+    @Test func noFeishuRowWithoutThePlugin() {
+        #expect(ConnectorRow.rows([], lark: false).map(\.id) == ["mail"])
+        #expect(ConnectorRow.rows([c("lark"), c("mail"), c("github")], lark: false).map(\.id) == ["mail", "github"])
+        #expect(ConnectorRow.rows([c("lark"), c("github")], lark: false).map(\.id) == ["github"])
+    }
 }

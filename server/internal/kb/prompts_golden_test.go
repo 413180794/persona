@@ -153,7 +153,7 @@ func TestGoldenProject(t *testing.T) {
 				_ = e.Store.PutSummary(KindChat, id, sum)
 			}
 			p.Chats = append(p.Chats, "lark-none")
-			// Two linked removed posts (the more commented first), one gone from the archive.
+			// Two linked 公司圈 posts (the more commented first), one gone from the archive.
 			_ = e.Store.PutMomentPost(&MomentPost{ID: "m1", Author: "王五", Text: "示例发布的新功能好用吗", CommentCount: 3, At: at}, nil)
 			_ = e.Store.PutMomentPost(&MomentPost{ID: "m2", Anonymous: true, Text: "灰度后卡顿\n第二行", CommentCount: 12, At: at.Add(time.Hour)}, nil)
 			p.Moments = []ProjectMoment{{ID: "m1", Note: "用户提问", At: at}, {ID: "m2", Note: "用户反馈卡顿", At: at}, {ID: "gone", At: at}}

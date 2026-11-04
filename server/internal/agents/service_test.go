@@ -8,13 +8,11 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"github.com/nwverse/persona/server/internal/lark"
 )
 
 type fakeBridge struct {
 	mu       sync.Mutex
-	sessions []lark.AgentSession
+	sessions []AgentSession
 	sends    []string // clientIds
 	sendErr  error
 	reads    []string
@@ -22,30 +20,30 @@ type fakeBridge struct {
 	avatars  map[string]string
 }
 
-func (f *fakeBridge) AgentBridgeStatus(context.Context) (*lark.AgentBridgeState, error) {
-	return &lark.AgentBridgeState{Enabled: true}, nil
+func (f *fakeBridge) AgentBridgeStatus(context.Context) (*AgentBridgeState, error) {
+	return &AgentBridgeState{Enabled: true}, nil
 }
-func (f *fakeBridge) AgentBridgeFeed(context.Context) (*lark.AgentFeed, error) {
+func (f *fakeBridge) AgentBridgeFeed(context.Context) (*AgentFeed, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	feed := &lark.AgentFeed{Enabled: true}
+	feed := &AgentFeed{Enabled: true}
 	for k, v := range f.avatars {
 		b, _ := json.Marshal(map[string]string{"feedId": k, "avatarUrl": v})
 		feed.Items = append(feed.Items, b)
 	}
 	return feed, nil
 }
-func (f *fakeBridge) AgentSessions(context.Context) ([]lark.AgentSession, error) {
+func (f *fakeBridge) AgentSessions(context.Context) ([]AgentSession, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.listN++
-	return append([]lark.AgentSession(nil), f.sessions...), nil
+	return append([]AgentSession(nil), f.sessions...), nil
 }
-func (f *fakeBridge) AgentSessionSearch(context.Context, string) ([]lark.AgentSearchHit, error) {
-	return []lark.AgentSearchHit{{SessionKey: "k"}}, nil
+func (f *fakeBridge) AgentSessionSearch(context.Context, string) ([]AgentSearchHit, error) {
+	return []AgentSearchHit{{SessionKey: "k"}}, nil
 }
-func (f *fakeBridge) AgentMessages(_ context.Context, key, cursor string, _ int) (*lark.AgentMessagePage, error) {
-	return &lark.AgentMessagePage{Session: &lark.AgentSession{SessionKey: key}, NextCursor: cursor + "x"}, nil
+func (f *fakeBridge) AgentMessages(_ context.Context, key, cursor string, _ int) (*AgentMessagePage, error) {
+	return &AgentMessagePage{Session: &AgentSession{SessionKey: key}, NextCursor: cursor + "x"}, nil
 }
 func (f *fakeBridge) AgentSend(_ context.Context, _, clientID, _ string) (json.RawMessage, error) {
 	f.mu.Lock()
@@ -80,7 +78,7 @@ const id = "removedbridge:" + key
 func newSvc(f *fakeBridge, kv KV) (*Service, *[][]string) {
 	var changes [][]string
 	var mu sync.Mutex
-	s := NewService(kv, func(ids []string) { mu.Lock(); changes = append(changes, ids); mu.Unlock() }, nil, Bridge{API: f})
+	s := NewService(kv, func(ids []string) { mu.Lock(); changes = append(changes, ids); mu.Unlock() }, nil, testBridge{API: f})
 	return s, &changes
 }
 
@@ -88,7 +86,7 @@ func status(err error) int { return HTTPStatus(err) }
 
 func TestSendIdempotentByClientID(t *testing.T) {
 	FollowUps = nil
-	f := &fakeBridge{sessions: []lark.AgentSession{{SessionKey: key, CanSend: true}}}
+	f := &fakeBridge{sessions: []AgentSession{{SessionKey: key, CanSend: true}}}
 	kv := &memKV{m: map[string][]byte{}}
 	s, _ := newSvc(f, kv)
 	ctx := context.Background()
@@ -117,7 +115,7 @@ func TestSendIdempotentByClientID(t *testing.T) {
 
 func TestSendRetriesFailedWithSameClientID(t *testing.T) {
 	FollowUps = nil
-	f := &fakeBridge{sessions: []lark.AgentSession{{SessionKey: key, CanSend: true}}, sendErr: errors.New("down")}
+	f := &fakeBridge{sessions: []AgentSession{{SessionKey: key, CanSend: true}}, sendErr: errors.New("down")}
 	s, _ := newSvc(f, nil)
 	ctx := context.Background()
 	if _, err := s.Send(ctx, id, "", "hi", "app"); err == nil {
@@ -136,7 +134,7 @@ func TestSendRetriesFailedWithSameClientID(t *testing.T) {
 
 func TestSendRefusals(t *testing.T) {
 	FollowUps = nil
-	f := &fakeBridge{sessions: []lark.AgentSession{{SessionKey: key, CanSend: false}, {SessionKey: "ok", CanSend: true}}}
+	f := &fakeBridge{sessions: []AgentSession{{SessionKey: key, CanSend: false}, {SessionKey: "ok", CanSend: true}}}
 	s, _ := newSvc(f, nil)
 	ctx := context.Background()
 	cases := []struct {
@@ -169,14 +167,15 @@ func TestSendRefusals(t *testing.T) {
 	}
 }
 
-func TestUpstreamStatusPassesThrough(t *testing.T) {
-	if HTTPStatus(&lark.APIError{Status: 403}) != 403 || HTTPStatus(&lark.APIError{Status: 401}) != 502 || HTTPStatus(errors.New("x")) != 502 {
+// A source's refusal keeps its status (a plugin's codes are mapped to *Error); anything else is a bad gateway.
+func TestHTTPStatus(t *testing.T) {
+	if HTTPStatus(&Error{Status: 404}) != 404 || HTTPStatus(errors.New("x")) != 502 {
 		t.Fatal("mapping")
 	}
 }
 
 func TestPollReportsChangedSessionsOnly(t *testing.T) {
-	f := &fakeBridge{sessions: []lark.AgentSession{{SessionKey: "a", RankTimeMs: 1}, {SessionKey: "b", RankTimeMs: 1}}}
+	f := &fakeBridge{sessions: []AgentSession{{SessionKey: "a", RankTimeMs: 1}, {SessionKey: "b", RankTimeMs: 1}}}
 	s, changes := newSvc(f, nil)
 	ctx := context.Background()
 	s.PollOnce(ctx)
@@ -184,7 +183,7 @@ func TestPollReportsChangedSessionsOnly(t *testing.T) {
 		t.Fatalf("baseline reported %v", *changes)
 	}
 	f.sessions[1].UnreadCount = 3
-	f.sessions = append(f.sessions, lark.AgentSession{SessionKey: "c"})
+	f.sessions = append(f.sessions, AgentSession{SessionKey: "c"})
 	s.PollOnce(ctx)
 	if len(*changes) != 1 || strings.Join((*changes)[0], ",") != "removedbridge:b,removedbridge:c" {
 		t.Fatalf("changes %v", *changes)
@@ -192,7 +191,7 @@ func TestPollReportsChangedSessionsOnly(t *testing.T) {
 }
 
 func TestCacheInvalidatedByUpdate(t *testing.T) {
-	f := &fakeBridge{sessions: []lark.AgentSession{{SessionKey: key, CanSend: true}}}
+	f := &fakeBridge{sessions: []AgentSession{{SessionKey: key, CanSend: true}}}
 	s, changes := newSvc(f, nil)
 	ctx := context.Background()
 	for i := 0; i < 2; i++ {

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
-	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // pluginLark stands in for a plugin's connector "lark": an inbox that records replies.
@@ -32,27 +31,25 @@ func rawJSON(v any) json.RawMessage {
 	return b
 }
 
-// A plugin takes the hub's own Feishu connector over and gives it back: the id stays, the hub's comes back when the
-// plugin's goes.
+// A plugin's connector takes the id lark (the hub has none of its own any more); gone with the plugin.
 func TestPluginTakesOverLark(t *testing.T) {
 	h := newTestHub(t)
-	h.lark = lark.New(lark.Config{Token: "t"})
 	h.connectors = connector.NewRegistry(nil)
 	h.registerConnectors()
-	if _, own := h.connectors.Get("lark").(larkConnector); !own || h.larkByPlugin() {
-		t.Fatal("the hub's own Feishu connector first")
+	if h.connectors.Get("lark") != nil {
+		t.Fatal("the hub has a Feishu connector of its own")
 	}
 	p := &pluginLark{}
 	h.yieldOwnConnector("lark")
 	if err := h.addConnector(p); err != nil {
 		t.Fatal(err)
 	}
-	if h.connectors.Get("lark") != p || !h.larkByPlugin() {
+	if h.connectors.Get("lark") != p {
 		t.Fatal("the plugin's is the one now")
 	}
 	h.removePluginConnector("lark")
-	if _, own := h.connectors.Get("lark").(larkConnector); !own || h.larkByPlugin() {
-		t.Fatal("the hub's own is back")
+	if h.connectors.Get("lark") != nil {
+		t.Fatal("still there after the plugin went")
 	}
 	h.yieldOwnConnector("github") // not migratable: stays
 	if h.connectors.Get("github") == nil {
@@ -67,11 +64,8 @@ func TestMigratedInbox(t *testing.T) {
 	ctx := context.Background()
 	h := newTestHub(t)
 	h.inbox.init()
-	h.lark = lark.New(lark.Config{Token: "t"})
 	h.connectors = connector.NewRegistry(nil)
-	h.registerConnectors()
 	p := &pluginLark{}
-	h.yieldOwnConnector("lark")
 	if err := h.addConnector(p); err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +114,7 @@ func TestMigratedInbox(t *testing.T) {
 	if _, err := h.replyInbox(ctx, "lark:10:3", "在的"); err != nil {
 		t.Fatal(err)
 	}
-	want := lark.NamedClientID("lark:10:3" + "\n" + "在的")
+	want := namedClientID("lark:10:3" + "\n" + "在的")
 	if len(p.got) != 1 || p.got[0].Thread != "chat:10" || p.got[0].ClientID != want || p.got[0].Text != "在的" || old.DoneBy != "replied" {
 		t.Fatalf("reply: %+v, item done by %q", p.got, old.DoneBy)
 	}

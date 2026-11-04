@@ -76,7 +76,7 @@ func TestSyncMovesTheOldCopy(t *testing.T) {
 	if st, err := os.Lstat(filepath.Join(dir, "lark-connector")); err != nil || st.Mode()&os.ModeSymlink == 0 {
 		t.Fatalf("not linked back: %v", err)
 	}
-	if _, err := os.Stat(OlScript(dir)); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "lark-connector", "scripts", "ol.sh")); err != nil {
 		t.Fatalf("ol.sh is not reachable where the node looks: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, legacyStamp)); !os.IsNotExist(err) {

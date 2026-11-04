@@ -87,7 +87,7 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
                 WaitingBadge()
             }
             #if os(iOS)
-            if LarkHomePreference.shared.enabled {
+            if LarkHomePreference.shared.shows {
                 button("消息", .feishu, id: "shell-feishu")
             }
             #endif
@@ -190,7 +190,7 @@ private struct WaitingBadge: View {
     @Environment(AppModel.self) private var model
     private var offset: CGSize {
         #if os(iOS)
-        if LarkHomePreference.shared.enabled { return CGSize(width: -Theme.Space.s, height: -Theme.Space.l) }
+        if LarkHomePreference.shared.shows { return CGSize(width: -Theme.Space.s, height: -Theme.Space.l) }
         #endif
         return CGSize(width: Theme.Space.s, height: -Theme.Space.sm)
     }

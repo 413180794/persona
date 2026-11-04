@@ -8,10 +8,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
-	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // The inbox of a connector a plugin took over from the hub (connectors_migrate.go): its things carry the items' own
@@ -151,8 +151,8 @@ func (h *Hub) replyMigrated(ctx context.Context, in connector.Inbox, r inboxRepl
 	clientID := ""
 	if it.Lark != nil {
 		clientID = r.clientID
-		if !lark.ValidClientID(clientID) {
-			clientID = lark.NamedClientID(r.id + "\n" + r.text)
+		if !validClientID(clientID) {
+			clientID = namedClientID(r.id + "\n" + r.text)
 		}
 		h.inbox.mu.Lock()
 		sent := r.live.DoneBy == "replied" && r.once.clientID == clientID
@@ -194,3 +194,40 @@ func (h *Hub) migratedDocStatus(ctx context.Context, in connector.Inbox, it *Inb
 }
 
 func isMigrated(id string) bool { return slices.Contains(connector.MigratableConnectors, id) }
+
+// The client ids a Feishu reply goes with (the same the plugin, and the hub before it, derive): lark-connector drops a
+// repeat with the same id.
+// clientIDNamespace is the UUIDv5 namespace of namedClientID. Fixed forever: changing it would let a retry of an
+// already delivered message post again.
+var clientIDNamespace = [16]byte{0xa5, 0x1e, 0x3f, 0x21, 0xe1, 0xd7, 0x4c, 0xcd, 0x89, 0xbf, 0xcb, 0x02, 0x7f, 0x8c, 0xb8, 0xdc}
+
+// namedClientID is a UUIDv5 clientId derived from name: the same name always gives the same id, so the same
+// message sent again (after a timeout, from another device, after a hub restart) posts once.
+func namedClientID(name string) string {
+	h := sha1.New()
+	h.Write(clientIDNamespace[:])
+	h.Write([]byte(name))
+	b := h.Sum(nil)[:16]
+	b[6], b[8] = b[6]&0x0f|0x50, b[8]&0x3f|0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// validClientID reports whether s is a UUID lark-connector accepts as a clientId (version 1-8, RFC variant, any case).
+// validClientID reports whether s is a UUID lark-connector accepts as a clientId (version 1-8, RFC variant, any case).
+func validClientID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		switch {
+		case i == 8 || i == 13 || i == 18 || i == 23:
+			if ch != '-' {
+				return false
+			}
+		case !('0' <= ch && ch <= '9' || 'a' <= ch && ch <= 'f' || 'A' <= ch && ch <= 'F'):
+			return false
+		}
+	}
+	return '1' <= s[14] && s[14] <= '8' && strings.ContainsRune("89abAB", rune(s[19]))
+}

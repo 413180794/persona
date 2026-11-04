@@ -1,10 +1,14 @@
 # 飞书里的 /agent
 
+> **2026-11-04 起（#1520，插件第 3 步 3c）**：经 lark-connector 接飞书的整条链路（App 的 `/api/v1/lark/…`、收件箱和知识库的飞书来源、公司圈、
+> 助手的 `ol` 闸门和凭据、/agent、个人 Agent）不在开源仓库里了，由接飞书的插件提供（`docs/plugins.md`，`docs/plan-plugins.md`「第 3 步」）。
+> 下文描述的行为由插件照原样提供；文中提到的 hub 源文件（`hub/lark*.go`、`internal/lark` 的客户端……）已删。开源版只留官方 lark-cli、飞书机器人、飞书邮箱。
+
 在飞书任何会话里（群聊、私聊、话题群的话题、普通群里的话题回复）或文档评论里，**自己发**一条以 `/agent` 开头的消息，hub 立刻起一个 Agent 处理，
 做完以我的身份回复那条消息（话题里就回在话题里），末尾带一行引用「> 🤖」。（2026-10-31 用户要求：把 herdr 里手动开的
 「监听 /Agent …」做成系统功能；那种监听本身就在一个有上下文的会话里，这里的请求可能来自任何群，所以 hub 要先把上下文收集好再交给 Agent。）
 
-代码：`server/internal/hub/lark_agent.go`；配置 `hub.json` 的 `lark_agent`。
+代码在接飞书的插件里（原来是 hub 的 lark_agent.go）；配置是插件的 `agent`、`agent_launcher`、`agent_machine`（原来 `hub.json` 的 `lark_agent`）。
 
 ## 什么算请求
 
@@ -46,7 +50,7 @@
   （`editorType: markdown`，话题里 `replyMode: thread`）。Agent 这一轮结束却没调它，hub 把它最后一段回复发出去；
   超过 `timeout_minutes`（默认 30）没答完，回一句「这次 N 分钟内没处理完」。
 - 同一个话题里再发 `/agent`，接着用上次那个对话（`--resume`），它记得之前说过什么。
-- 提示词在 `server/internal/prompts/lark/`（`chat_agent.md` / `doc_agent.md` 和对应的 `*_context.md`，`docs/prompts.md`）；要求它**不替我做承诺**：回复是以我的名义发的，只写已经做完的事，没做的写成建议。（2026-10-31 第一次真实使用，
+- 提示词在插件里（原来是 hub 的 prompts/lark，`chat_agent.md` / `doc_agent.md` 和对应的 `*_context.md`）；要求它**不替我做承诺**：回复是以我的名义发的，只写已经做完的事，没做的写成建议。（2026-10-31 第一次真实使用，
   它在回复里写了「我这边下掉这个旧泳道的 orchestrator」，其实没做。）
 - 记录存在 settings 表的 `lark_agent.runs`（3 天）。
 

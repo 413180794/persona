@@ -2,23 +2,21 @@ package hub
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 // The snapshot goes with every message now: it says the time of the message, and a slow source doesn't hold the
 // message up once there is an earlier snapshot to go on.
 func TestSnapshotIsNowAndDoesNotWait(t *testing.T) {
-	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { time.Sleep(4 * time.Second) }))
-	t.Cleanup(slow.Close)
 	h := snapshotHub(t, false)
-	h.lark = lark.New(lark.Config{BaseURL: slow.URL, Token: "t"})
+	if err := h.addConnector(slowSnapshot{}); err != nil {
+		t.Fatal(err)
+	}
 	loc := h.userLocation()
 	old := time.Now().Add(-10 * time.Minute).In(loc)
 	h.snap = &prompts.Snapshot{Now: old, Zone: loc.String(), Chats: &prompts.SnapshotChats{AtMe: []prompts.SnapshotChat{{Name: "发布群", Unread: 2}}}}
@@ -36,4 +34,21 @@ func TestSnapshotIsNowAndDoesNotWait(t *testing.T) {
 	if !strings.Contains(got, "发布群（2 条）") {
 		t.Fatalf("the earlier snapshot's chats are gone:\n%s", got)
 	}
+}
+
+// slowSnapshot is a connector whose live state takes longer than the snapshot waits.
+type slowSnapshot struct{}
+
+func (slowSnapshot) ID() string   { return "slow" }
+func (slowSnapshot) Name() string { return "Slow" }
+func (slowSnapshot) Manifest() connector.Manifest {
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapSnapshot}}
+}
+func (slowSnapshot) Snapshot(ctx context.Context, _ string) (connector.SnapshotData, error) {
+	select {
+	case <-ctx.Done():
+		return connector.SnapshotData{}, ctx.Err()
+	case <-time.After(4 * time.Second):
+	}
+	return connector.SnapshotData{Chats: &connector.SnapshotChats{}}, nil
 }

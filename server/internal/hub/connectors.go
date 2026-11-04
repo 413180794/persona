@@ -45,7 +45,7 @@ func (h *Hub) addConnector(c connector.Connector) error {
 // them now (the phone's by their prefix: they come and go with the app).
 func (h *Hub) builtinTools() []string {
 	names := []string{"phone_"}
-	for _, t := range h.ownAssistantTools() {
+	for _, t := range assistantTools() {
 		names = append(names, t.Name)
 	}
 	return names
@@ -524,14 +524,8 @@ func (h *Hub) startConnectors(ctx context.Context) {
 	h.connectors.Start(ctx, h.connectorChanged, h.logf)
 }
 
-// registerConnectors registers Feishu (first: the knowledge base reads its sources in this order) and the
-// connectors hub.json sets up.
+// registerConnectors registers the connectors hub.json sets up.
 func (h *Hub) registerConnectors() {
-	if h.lark != nil {
-		if err := h.addConnector(larkConnector{h}); err != nil {
-			h.logf("lark connector: %v", err)
-		}
-	}
 	if h.mail != nil {
 		if err := h.addConnector(mailConnector{h}); err != nil {
 			h.logf("mail connector: %v", err)

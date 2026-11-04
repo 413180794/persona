@@ -6,8 +6,8 @@ import UIKit
 import WebKit
 
 // Links open inside the app, Telegram-style (CLAUDE.md): a sheet that rises to 60%, drags up to full screen and down
-// to close, with the chat behind it still usable. Feishu docs open in the native reader and removed links as the post
-// (FeishuLinks.route); any other page in a
+// to close, with the chat behind it still usable. Feishu docs open in the native reader and company-feed links as the
+// post while the hub has them (FeishuLinks.route, LarkFeatures); any other page in a
 // WKWebView taken from a pool that preloads the links of the latest answers. Text selected on a page can go to the
 // agent as an edit request (AI 修改) or ride along with the next message (作为上下文), both as <jarvis-context>.
 
@@ -109,9 +109,9 @@ struct LinkSheet: View {
     /// Opens full screen (2026-10-28: half a screen was too little to read); pull down to 0.6 to see the chat again.
     @State private var detent: PresentationDetent = .large
 
-    private var isFeishuDoc: Bool { FeishuLinks.isDoc(target.url) }
-    /// Feishu links with a native view (documents, removed posts).
-    private var feishuRoute: FeishuRoute? { FeishuLinks.route(target.url) }
+    /// Feishu links with a native view (documents, company-feed posts), while the hub has them.
+    private var feishuRoute: FeishuRoute? { FeishuLinks.route(target.url, lark: model.larkFeatures) }
+    private var isFeishuDoc: Bool { if case .doc = feishuRoute { true } else { false } }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -146,7 +146,7 @@ struct LinkSheet: View {
     private var header: some View {
         HStack(spacing: Theme.Space.m) {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                Text(title.isEmpty ? (isFeishuDoc ? "飞书文档" : feishuRoute != nil ? "removed" : (target.forwarded != nil ? nil : target.url.host) ?? "网页") : title)
+                Text(title.isEmpty ? (isFeishuDoc ? "飞书文档" : feishuRoute != nil ? "公司圈" : (target.forwarded != nil ? nil : target.url.host) ?? "网页") : title)
                     .font(Theme.Font.secondaryStrong).lineLimit(1)
                 Text(target.forwarded ?? target.url.host ?? target.url.absoluteString).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
@@ -247,9 +247,10 @@ final class WebViewPool {
     /// The view for this url if the pool has one (nothing is loaded).
     func existing(for url: URL) -> SelectableWebView? { views[url.absoluteString] }
 
-    /// Starts loading links that may be opened soon.
+    /// Starts loading links that may be opened soon (not the ones a native Feishu view opens).
     func preload(_ urls: [URL]) {
-        for u in urls.prefix(3) where views[u.absoluteString] == nil && FeishuLinks.route(u) == nil { _ = view(for: u) }
+        let lark = AppModel.shared.larkFeatures
+        for u in urls.prefix(3) where views[u.absoluteString] == nil && FeishuLinks.route(u, lark: lark) == nil { _ = view(for: u) }
     }
 
     private func touch(_ key: String) {

@@ -137,9 +137,6 @@ type Config struct {
 	Admin AdminConfig `json:"admin,omitempty"`
 	// Plugins are processes the hub runs to add things to the app, e.g. the voice conversation (docs/plugins.md).
 	Plugins []PluginConfig `json:"plugins,omitempty"`
-	// LarkAgent: a message of the user's starting with /agent anywhere in Feishu starts an agent with the context of
-	// where it was asked, and its answer is posted as the reply (lark_agent.go, docs/lark-agent.md).
-	LarkAgent LarkAgentConfig `json:"lark_agent,omitempty"`
 	// Tailcat tunes reaching machines over tailcat (tailcat.go).
 	Tailcat TailcatConfig `json:"tailcat,omitempty"`
 	// Bots: talking to Persona through a chat app's bot (bots.go, docs/bots.md); switched on in the app.

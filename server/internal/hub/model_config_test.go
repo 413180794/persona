@@ -150,7 +150,6 @@ func TestModelConfigurationPreservesLegacyBaselines(t *testing.T) {
 	h.cfg.Inbox.JudgeAI = &ai.Config{Model: "judge"}
 	h.cfg.KB.AI = &ai.Config{Model: "knowledge"}
 	h.cfg.Assistant.Launcher = "conversation"
-	h.cfg.LarkAgent.Launcher = "slash"
 	h.cfg.Inbox.Agent.Launcher = "delegate"
 	for id, want := range map[string]string{"inbox.triage": "triage", "inbox.judge": "triage", "translate": "knowledge", "kb.compress": "knowledge", "assistant.title": "knowledge"} {
 		b, err := h.resolveModel(ctx, id)

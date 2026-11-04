@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
-	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -61,9 +60,8 @@ func TestAgentsListAndFind(t *testing.T) {
 
 func TestAssistantToolsOnlyForAssistant(t *testing.T) {
 	h := newTestHub(t)
-	h.lark = lark.New(lark.Config{})
 	h.connectors = connector.NewRegistry(nil)
-	h.registerConnectors() // Feishu's read tools come from its connector
+	h.registerConnectors()
 	for _, tool := range h.mcpTools(false) {
 		if isAssistantTool(tool.Name) || strings.HasPrefix(tool.Name, "lark_") {
 			t.Fatalf("%s leaked to ordinary sessions", tool.Name)
@@ -77,7 +75,7 @@ func TestAssistantToolsOnlyForAssistant(t *testing.T) {
 			t.Fatalf("%s schema: %v", tool.Name, err)
 		}
 	}
-	for _, want := range []string{"ask_user", "notify_user", "schedule_followup", "agents_list", "agent_read", "lark_chats", "lark_search"} {
+	for _, want := range []string{"ask_user", "notify_user", "schedule_followup", "agents_list", "agent_read"} {
 		if !names[want] {
 			t.Fatalf("assistant is missing %s", want)
 		}
@@ -102,8 +100,8 @@ func TestAssistantPromptUsesReportedStorageRoots(t *testing.T) {
 	m.info = proto.NodeInfo{Home: "/home/example", DataDir: "/var/lib/assistant-state"}
 	h.machines = append(h.machines, m)
 	h.byID["server"] = m
-	text := h.assistantClaudeMD(context.Background(), false)
-	for _, want := range []string{"/var/lib/assistant-state/assistant", "/var/lib/assistant-state/skills/lark-connector", "/var/lib/hub state/data"} {
+	text := h.assistantClaudeMD(context.Background())
+	for _, want := range []string{"/var/lib/assistant-state/assistant", "/var/lib/hub state/data"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("reported storage root missing: %s", want)
 		}
@@ -115,7 +113,7 @@ func TestAssistantPromptUsesReportedStorageRoots(t *testing.T) {
 		t.Fatal("a local assistant was not allowed to read its local knowledge directory")
 	}
 	m.cfg.Kind = "link"
-	text = h.assistantClaudeMD(context.Background(), false)
+	text = h.assistantClaudeMD(context.Background())
 	if strings.Contains(text, "也可以用文件工具直接读取此目录") || !strings.Contains(text, "通过 `kb_*` 工具读取") {
 		t.Fatal("a remote assistant was told to read the hub's local files directly")
 	}
@@ -136,7 +134,7 @@ func TestAssistantMachinesFromWhereItRuns(t *testing.T) {
 			h.byID[mc.ID] = m
 		}
 		out := map[string]string{}
-		for _, line := range strings.Split(h.assistantClaudeMD(context.Background(), false), "\n") {
+		for _, line := range strings.Split(h.assistantClaudeMD(context.Background()), "\n") {
 			for _, mc := range machines {
 				if strings.HasPrefix(line, "  - "+mc.Name) {
 					out[mc.ID] = line

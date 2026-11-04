@@ -171,12 +171,23 @@ func TestPluginAgentSource(t *testing.T) {
 	}
 }
 
-// ownBridge stands for the hub's own removedbridge source.
-type ownBridge struct{ agents.Bridge }
+// ownBridge stands for a source the hub registered itself under a migratable name.
+type ownBridge struct{}
 
+func (ownBridge) Name() string { return agents.OLKBridge }
 func (ownBridge) Status(context.Context) (agents.Status, error) {
 	return agents.Status{Source: agents.OLKBridge, Enabled: true, Setup: "hub"}, nil
 }
+func (ownBridge) Sessions(context.Context) ([]agents.Session, error)         { return nil, nil }
+func (ownBridge) Search(context.Context, string) ([]agents.SearchHit, error) { return nil, nil }
+func (ownBridge) Messages(context.Context, string, string, int) (*agents.MessagePage, error) {
+	return &agents.MessagePage{}, nil
+}
+func (ownBridge) Send(context.Context, string, string, string) (json.RawMessage, error) {
+	return nil, nil
+}
+func (ownBridge) DeleteMessage(context.Context, string, string) error { return nil }
+func (ownBridge) MarkRead(context.Context, string) error              { return nil }
 
 // A plugin's removedbridge takes the hub's own over while it runs (same session ids); turned off, the hub's is back.
 func TestPluginTakesOverOLKBridge(t *testing.T) {

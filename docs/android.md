@@ -580,7 +580,7 @@ Claude 调 `phone_*` 时 hub 把同名工具合并成一份定义（说明更长
 - 曲线的纵轴按字节时要按 1024 取整（`ChartMath.yTicks(binary = true)`），按十进制取整的刻度显示出来是「1.91 MB/s」「3.81 MB/s」；数值标签的宽度按最宽的那个量，固定宽度会被裁掉。
 - 假 hub（`scripts/mock/mock_hub.py`）的 WebSocket 连上时不推待处理的交互：进 App 后下拉刷新一次才拿到交互。
 - 飞书页面的截图（`LarkShots`）要 `MOCK_LARK=1` 的假 hub（会话里各种消息、表情库、图片）：图片在后台解码，第一帧拍不到。先用同一个名字拍一次让页面把要的图都发出去，等 `LarkMedia.settle()`（没有在下载的图），再拍真的；链接预览这种「拿回来的东西里还有图」的要来回两三次。默认的假 hub 里 f2、f3 是另一份数据（iOS 的截图、TranslationTests 和 f3 那段画全了的会话用），`MOCK_LARK=1` 时这几个会话换成这一份，两份互不影响。
-- 收件箱的详情是 `JSheet`（ModalBottomSheet，单独的窗口），链接卡片和看图盖不上去：会话这种要点链接、看图的页面推成页面画在列表上面，不放进浮层；浮层里的资料卡、话题、removed帖子点链接或图片时先关掉自己（`LarkActions.closing`）。
+- 收件箱的详情是 `JSheet`（ModalBottomSheet，单独的窗口），链接卡片和看图盖不上去：会话这种要点链接、看图的页面推成页面画在列表上面，不放进浮层；浮层里的资料卡、话题、公司圈帖子点链接或图片时先关掉自己（`LarkActions.closing`）。
 
 ## App 外壳与页面直达
 
@@ -933,6 +933,6 @@ Agent 对话页 ⋯「文件」「Git · N」打开会话目录的文件和 Git�
 - 邮件阅读和写信（旧 App #320）：**读信已有**，`feature/inbox/MailScreen.kt`：线程按「第 N 封 / 最新一封」切换、锁住的 WebView + jsoup 清洗渲染 HTML（`MailHtml.kt`）、附件下载、手动标已读 / 未读、AI 摘要、AI 草拟回复、交给 AI、已处理。**缺**写信（新邮件、回复全部、转发、抄送 / 密送、信里的 `mailto:`）、「显示图片」（现在远程图片一律屏蔽）、打开即已读、星标 → #816。
 - 设置 › 连接器（旧 App #320）：**没有**，设置里只有单独的「手机数据」页；邮箱的添加 / 测试 / 删除、Gmail 登录（`android.google_oauth_scheme`、`OAuthRedirectActivity`）、飞书 lark-connector 状态都没有 → #817（按 iOS 当前的连接器分组做，hub 后来还加了通用的 `/api/v1/connectors` 和 Microsoft 登录）。
 - 飞书会话（旧 App #365）：**会话页已有**，`feature/inbox/LarkScreen.kt` 等：按 `start_position` 打开、上下翻页、可见即上报已读、`lark` 事件刷新、窗口缓存、跳到 @我、引用、撤回 / 系统消息、话题浮层（`feature/inbox/LARK_THREAD.md`）、图片和文件、卡片的静态展示、发送。**缺**表情回应、富文本（现在按纯文本 + 链接）、合并转发 / 语音 / 视频 / 表情包（现在是「在飞书中打开」）、卡片按钮回调（现在禁用）、名片、媒体的磁盘缓存、飞书色板的设计 token → #818。
-- removed（旧 App #365）：**没有**，`InboxItem` 不解析 `moment`，收件箱里removed那件打不开帖子 → #819。
+- 公司圈（旧 App #365）：**没有**，`InboxItem` 不解析 `moment`，收件箱里公司圈那件打不开帖子 → #819。
 - 收件箱：别处已读的 @我 / @所有人 不再显示 @ 标签（旧 App #246，#821）：**已有**，`RealInboxRepository` 把 hub 的 `read` 带进 `InboxRecord`，已读的 `mention` 在行内显示「群聊」；未读的继续显示「@我」/「@所有人」。客户端保留原来的 kind 和分层，和 `docs/inbox.md` 的已读规则一致。
 - 脚本目录调整（#505）：已经跟上，本文档统一写成 `scripts/app/android.sh`、`scripts/mock/mock_hub.py`。

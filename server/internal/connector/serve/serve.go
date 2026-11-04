@@ -52,6 +52,8 @@ const (
 	MItems        = "items.list"
 	MDocTitle     = "items.doc_title"
 	MArchiveMedia = "archive.media"
+	// The live state for the assistant's snapshot (connector.Snapshot): SnapshotParams → connector.SnapshotData.
+	MSnapshot = "snapshot.get"
 )
 
 // Methods the program calls on the hub, and its event.
@@ -80,6 +82,9 @@ type (
 		ID           string                  `json:"id"`
 		CommentCount int                     `json:"comment_count"`
 		Comments     []connector.PostComment `json:"comments"`
+	}
+	SnapshotParams struct {
+		TZ string `json:"tz,omitempty"` // the user's time zone ("" the program's own)
 	}
 	PostsPendingParams struct {
 		Limit int `json:"limit,omitempty"`
@@ -555,6 +560,16 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 			return nil, err
 		}
 		return th.Thread(ctx, p.Thread, p.Before, min(max(p.Limit, 1), connector.ThreadMost))
+	case MSnapshot:
+		sn, ok := connector.As[connector.Snapshot](c)
+		if !ok {
+			return nil, noCapability(c, "snapshot")
+		}
+		var p SnapshotParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		return sn.Snapshot(ctx, p.TZ)
 	case MItems:
 		is, ok := connector.As[connector.Items](c)
 		if !ok {

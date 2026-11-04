@@ -13,7 +13,7 @@
 ## {{.ID}}
 {{.Summary}}
 {{end}}{{with .Moments}}
-# 相关removed
+# 相关公司圈
 {{range .}}
 - {{.At}} · {{.Author}} · 评论 {{.Comments}}{{with .Note}} · {{.}}{{end}}
   {{.Text}}

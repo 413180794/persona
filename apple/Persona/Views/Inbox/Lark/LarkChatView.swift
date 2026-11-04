@@ -540,7 +540,7 @@ struct LarkChatView: View {
             // `-larkProfile <userId>` opens that person's card, `-larkPicker YES` the reaction picker on the last message.
             if let uid = UserDefaults.standard.string(forKey: "larkProfile") { person = LarkPersonRef(id: uid, name: "", feedID: conversation.id) }
             if UserDefaults.standard.bool(forKey: "larkPicker"), let last = pager.messages.last(where: { !$0.isSystem }) { debugPick = last }
-            // `-larkMoments <postId>` opens that removed post.
+            // `-larkMoments <postId>` opens that 公司圈 post.
             if let post = UserDefaults.standard.string(forKey: "larkMoments") { debugPost = post }
             #endif
         } catch {

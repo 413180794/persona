@@ -96,7 +96,9 @@ final class LarkSync {
     func reconnected() {
         for l in listeners.values where l.key == nil { l.cont.yield() }
         Task {
-            guard let api = AppModel.shared.api, let r = try? await api.larkConversations() else { return }
+            // A hub without Feishu chats (no lark-connector plugin, `LarkFeatures`) has nothing to pull.
+            guard AppModel.shared.larkFeatures.chats, let api = AppModel.shared.api,
+                  let r = try? await api.larkConversations() else { return }
             know(r.conversations)
             let stale = r.conversations.prefix(Self.reconnectCount).filter { c in
                 guard let at = c.updatedAt else { return false }

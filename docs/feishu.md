@@ -1,8 +1,12 @@
 # 飞书在 Persona 里的定位
 
+> **2026-11-04 起（#1520，插件第 3 步 3c）**：经 lark-connector 接飞书的整条链路（App 的 `/api/v1/lark/…`、收件箱和知识库的飞书来源、公司圈、
+> 助手的 `ol` 闸门和凭据、/agent、个人 Agent）不在开源仓库里了，由接飞书的插件提供（`docs/plugins.md`，`docs/plan-plugins.md`「第 3 步」）。
+> 下文描述的行为由插件照原样提供；文中提到的 hub 源文件（`hub/lark*.go`、`internal/lark` 的客户端……）已删。开源版只留官方 lark-cli、飞书机器人、飞书邮箱。
+
 **Persona 不是第二个飞书。** App 的出发点是把生活和工作里的信息收到一起、交给 AI 去处理；飞书只是信息来源之一。
 （2026-10-27 用户纠正：之前照着飞书 iOS 客户端做了一整套「工作台」——搜索、云文档、日历、会议、妙记、任务、审批、OKR、通讯录、
-removed feed、飞书邮箱、收藏、话题、会话信息、今日——全部删除。）不恢复这些功能页面。
+公司圈 feed、飞书邮箱、收藏、话题、会话信息、今日——全部删除。）不恢复这些功能页面。
 
 **#392 的明确例外**：用户要求在飞书设置增加默认关闭的「首页显示消息」开关，开启后首页增加「消息」，浏览全部私聊与群聊。
 它与收件箱共用账号、聊天页、发件箱和同步，不增加第二套实现；其他飞书功能页仍不迁入。详见 [飞书能力整合](lark-connector-migration.md)。
@@ -13,13 +17,13 @@ removed feed、飞书邮箱、收藏、话题、会话信息、今日——全�
 | --- | --- | --- |
 | 飞书消息 | 「收件箱」（`docs/inbox.md`）及可选的「消息」页 | 未读 / @我 / 私聊和邮件混在一个列表，按件聚合，AI 分拣；点开是这段对话（`LarkChatView`） |
 | 飞书文档链接 | `FeishuDocReader`（`Views/Feishu/Docs/`） | 任何地方点飞书文档链接都在 App 内原生渲染（链接卡片 `LinkSheet`、飞书消息里的链接） |
-| removed链接 | `LarkMomentsCard` / `LarkMomentsPostView` | 消息里的分享显示预览卡，点开看单条帖子和评论；没有 feed，不能刷 |
-| removed里和我有关的 | 收件箱（`hub/inbox_moments.go`）、知识库 | 评论我的帖子、回复我、@ 我：一个帖子一件事，AI 分拣、起草评论，点发送评论回去（`docs/inbox.md`「removed」） |
+| 公司圈链接 | `LarkMomentsCard` / `LarkMomentsPostView` | 消息里的分享显示预览卡，点开看单条帖子和评论；没有 feed，不能刷 |
+| 公司圈里和我有关的 | 收件箱（`hub/inbox_moments.go`）、知识库 | 评论我的帖子、回复我、@ 我：一个帖子一件事，AI 分拣、起草评论，点发送评论回去（`docs/inbox.md`「公司圈」） |
 | 其他飞书链接 | `LinkSheet` 的 WebView | 妙记、日程、任务、审批等链接在 App 内的网页卡片里打开 |
-| AI 的飞书能力 | hub（`server/internal/lark`、助手的 `lark_api` 工具） | 搜索 / 读取消息、文档、removed、日程、妙记…… 全部只读，作为 AI 的上下文 |
+| AI 的飞书能力 | hub（`server/internal/lark`、助手的 `lark_api` 工具） | 搜索 / 读取消息、文档、公司圈、日程、妙记…… 全部只读，作为 AI 的上下文 |
 | 在飞书里找 Persona | 飞书机器人（`docs/bots.md`） | 私聊自建应用的机器人 = 和主对话说话；不是飞书功能的搬运，是 Persona 多一个入口 |
 
-链接分流在 `FeishuLinks.route(_:)`：文档 → `.doc`，removed分享（`…/client/moments/detail?postId=`）→ `.momentsPost`，其余返回 nil 走网页。
+链接分流在 `FeishuLinks.route(_:)`：文档 → `.doc`，公司圈分享（`…/client/moments/detail?postId=`）→ `.momentsPost`，其余返回 nil 走网页。
 `FeishuRoute` 只剩 chat / doc / profile / momentsPost 四种，都是「从一条消息或一个链接点进去」的落点。
 
 ## 数据通道
@@ -114,9 +118,9 @@ Persona 都读（#1321，之前只读 `lark.account` 一个）：
 - `approvals?tab=todo|done|initiated|ccUnread|ccRead&cursor&q`、`approvals/detail?instanceId`（外部系统审批 502 `APPROVAL_DETAIL_UNREADABLE`）。
 - `okr/people`、`okr/owners/:ownerId/periods`、`okr/:okrId`。
 
-### 人 / removed / 飞书邮箱
+### 人 / 公司圈 / 飞书邮箱
 - `users/:id`（资料卡）、`contacts/org`、`contacts/departments/:id`、`search/people?q=`。
-- removed：`moments/posts/:id`、`/comments`（hub 专用路由），`moments/feed?tabId=`、`moments/notifications`。
+- 公司圈：`moments/posts/:id`、`/comments`（hub 专用路由），`moments/feed?tabId=`、`moments/notifications`。
 - 飞书邮箱：`mail/threads?label=INBOX&cursor…`（label 必填）、`mail/messages/:id(/html)`；id 是 base64，路径里必须正好编码一次（`%2F`）。
 
 ### 会话

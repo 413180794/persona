@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -63,9 +64,18 @@ private fun MailDetail(
     var replying by rememberSaveable { mutableStateOf(false) }
     var confirmSend by remember { mutableStateOf(false) }
     var handingOff by remember { mutableStateOf(false) }
+    var composeDraft by remember { mutableStateOf<MailDraft?>(null) }
+    var allowImages by rememberSaveable(selected, route.itemId) { mutableStateOf(false) }
+    var accounts by remember { mutableStateOf<List<MailAccount>>(emptyList()) }
     val composers = rememberReplyComposers(repository)
     val composer = composers.get(ReplyTarget.Inbox(route.itemId))
     val reply by composer.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(transport) {
+        if (transport != null) {
+            runCatching { accounts = transport.accounts() }
+        }
+    }
 
     suspend fun syncInbox() {
         if (flagsChanged) {
@@ -86,6 +96,32 @@ private fun MailDetail(
         }
     }
     BackHandler { leave() }
+
+    fun toggleFlagged(mail: MailMessage) {
+        if (busy || transport == null || reference == null) return
+        val targetFlag = !mail.flagged
+        scope.launch {
+            try {
+                transport.setFlagged(requireNotNull(reference), mail.uid, targetFlag)
+                flagsChanged = true
+                message = message?.copy(flagged = targetFlag)
+                syncInbox()
+                error = null
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { error = "星标状态未能更新，请重试" }
+        }
+    }
+
+    fun handleLink(url: String) {
+        if (url.startsWith("mailto:", ignoreCase = true)) {
+            composeDraft = MailCompose.parseMailto(url, message?.accountId.orEmpty())
+        } else if (onOpenLink != null) {
+            onOpenLink(url)
+        } else {
+            error = "应用内网页入口尚未接入"
+        }
+    }
+
     LaunchedEffect(transport, route.itemId, selected, reload) {
         if (transport == null) return@LaunchedEffect
         loading = true
@@ -97,7 +133,18 @@ private fun MailDetail(
             reference = ref
             loadedTarget = item.replyTarget
             val uid = selected?.takeIf { it in ref.uids } ?: ref.uids.last()
-            message = transport.message(ref, uid)
+            val loaded = transport.message(ref, uid)
+            message = loaded
+            // 打开即已读
+            if (!loaded.seen) {
+                scope.launch {
+                    try {
+                        transport.setSeen(ref, loaded.uid, true)
+                        flagsChanged = true
+                        message = message?.copy(seen = true)
+                    } catch (_: Exception) {}
+                }
+            }
         } catch (e: CancellationException) { throw e }
         catch (_: Exception) { error = "邮件加载失败，邮件可能已移动或删除，请刷新重试" }
         finally { loading = false }
@@ -120,6 +167,17 @@ private fun MailDetail(
 
     JListPage(title = message?.subject?.ifBlank { "无主题" } ?: "邮件详情", onBack = ::leave,
         refreshing = loading, onRefresh = { if (!busy && !reply.sending && transport != null) reload++ },
+        actions = {
+            message?.let { mail ->
+                JIconButton(
+                    PhIcons.Star,
+                    if (mail.flagged) "取消星标" else "加星标",
+                    onClick = { toggleFlagged(mail) },
+                    selected = mail.flagged,
+                    tint = if (mail.flagged) PersonaTheme.palette.caution else PersonaTheme.palette.ink3,
+                )
+            }
+        },
         bottomBar = {
             message?.let { mail ->
                 val canReply = !busy && !loading && mail.uid == reference?.uids?.lastOrNull()
@@ -153,6 +211,30 @@ private fun MailDetail(
                     }
                 }
             }
+            item("mail-actions") {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = Tokens.Space.xs),
+                    horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val me = accounts.firstOrNull { it.id == mail.accountId }?.email
+                    JButton("回复全部", onClick = {
+                        composeDraft = MailCompose.reply(mail, mail.accountId, me, all = true)
+                    }, kind = JButtonKind.Secondary, size = JButtonSize.Small, enabled = !busy && !loading)
+                    JButton("转发", onClick = {
+                        composeDraft = MailCompose.forward(mail, mail.accountId)
+                    }, kind = JButtonKind.Secondary, size = JButtonSize.Small, enabled = !busy && !loading)
+                    Spacer(Modifier.weight(1f))
+                    JButton(
+                        if (mail.flagged) "取消星标" else "加星标",
+                        onClick = { toggleFlagged(mail) },
+                        kind = if (mail.flagged) JButtonKind.Primary else JButtonKind.Secondary,
+                        size = JButtonSize.Small,
+                        icon = PhIcons.Star,
+                        enabled = !busy && !loading,
+                    )
+                }
+            }
             // The hub's AI summary and the AI 分身's draft come first: they are what to act on.
             record?.item?.summary?.takeIf { it.isNotBlank() }?.let { summary ->
                 item("summary") { JNotice(summary, Modifier.padding(top = Tokens.Space.m), title = "AI 摘要", icon = PhIcons.Sparkle) }
@@ -172,31 +254,52 @@ private fun MailDetail(
                 }
             }
             item("read-state") {
-                JRow(title = if (mail.seen) "已读" else "未读", trailing = {
-                    JButton(if (mail.seen) "标为未读" else "标为已读", kind = JButtonKind.Secondary, size = JButtonSize.Small,
-                        enabled = !busy && !reply.sending, onClick = {
-                        busy = true
-                        scope.launch {
-                            try {
-                                requireNotNull(transport).setSeen(ref, mail.uid, !mail.seen)
-                                flagsChanged = true
-                                message = transport.message(ref, mail.uid)
-                                syncInbox()
-                                error = null
-                            } catch (e: CancellationException) { throw e }
-                            catch (_: Exception) { error = "已读状态未能确认，请刷新重试" }
-                            finally { busy = false }
-                        }
-                    })
-                })
+                JRow(
+                    title = if (mail.seen) "已读" else "未读",
+                    subtitle = if (mail.flagged) "已加星标" else null,
+                    trailing = {
+                        JButton(if (mail.seen) "标为未读" else "标为已读", kind = JButtonKind.Secondary, size = JButtonSize.Small,
+                            enabled = !busy && !reply.sending, onClick = {
+                            busy = true
+                            scope.launch {
+                                try {
+                                    requireNotNull(transport).setSeen(ref, mail.uid, !mail.seen)
+                                    flagsChanged = true
+                                    message = transport.message(ref, mail.uid)
+                                    syncInbox()
+                                    error = null
+                                } catch (e: CancellationException) { throw e }
+                                catch (_: Exception) { error = "已读状态未能确认，请刷新重试" }
+                                finally { busy = false }
+                            }
+                        })
+                    },
+                )
             }
             item("body") {
                 when {
                     mail.html.isNotBlank() -> {
-                        Text("已屏蔽远程图片和嵌入内容", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
-                        Spacer(Modifier.height(Tokens.Space.m))
-                        MailHtml(mail.html) { url ->
-                            if (onOpenLink != null) onOpenLink(url) else error = "应用内网页入口尚未接入"
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = Tokens.Space.s),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                if (allowImages) "已放行远程图片" else "已屏蔽远程图片和嵌入内容",
+                                style = PersonaTheme.type.caption,
+                                color = PersonaTheme.palette.ink3,
+                            )
+                            if (!allowImages) {
+                                JButton(
+                                    "显示图片",
+                                    onClick = { allowImages = true },
+                                    kind = JButtonKind.Secondary,
+                                    size = JButtonSize.Small,
+                                )
+                            }
+                        }
+                        MailHtml(mail.html, allowImages = allowImages) { url ->
+                            handleLink(url)
                         }
                     }
                     mail.text.isNotBlank() -> SelectionContainer { Text(mail.text, style = PersonaTheme.type.body, color = PersonaTheme.palette.ink) }
@@ -259,6 +362,15 @@ private fun MailDetail(
     if (handingOff && mail != null) InboxHandOffSheet(repository, record ?: mailRecord(route.itemId, mail), navigator,
         onDismiss = { handingOff = false }, context = mailContextText(mail),
         onHandedOff = { target -> if (target == null) onAskAi?.invoke(MailAiContext(route.itemId, mail, mailAiText(mail))) })
+    composeDraft?.let { draft ->
+        if (transport != null) {
+            ComposeMailDialog(
+                transport = transport,
+                draft = draft,
+                onDone = { composeDraft = null },
+            )
+        }
+    }
 }
 
 /** An item opened before the list had it: enough of one, from the message itself, to hand it to AI. */

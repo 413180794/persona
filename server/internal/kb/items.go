@@ -182,7 +182,7 @@ func (e *Engine) Search(query string, messages bool, limit int) []Hit {
 		}
 		switch {
 		case strings.Contains(p, sep+"moments"+sep+"posts"+sep):
-			// The removed archive (moments.go): thousands of posts, read after everything else so they never crowd it out.
+			// The 公司圈 archive (moments.go): thousands of posts, read after everything else so they never crowd it out.
 			if strings.HasSuffix(p, ".md") {
 				moments = append(moments, p)
 			}

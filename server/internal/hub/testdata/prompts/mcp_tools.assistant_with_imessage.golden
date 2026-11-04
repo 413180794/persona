@@ -458,21 +458,6 @@
     }
   },
   {
-    "name": "lark_agent_reply",
-    "description": "Answer the Feishu /agent request this conversation was started for: the hub posts `text` (Markdown) as the user's reply to the request, in its thread if it was asked in one, with a footer saying an agent wrote it. Call it once, at the end, with the answer for the people in that chat.",
-    "input_schema": {
-      "type": "object",
-      "required": [
-        "text"
-      ],
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      }
-    }
-  },
-  {
     "name": "kb_search",
     "description": "Search the knowledge base (~/.jarvis/data): summaries and metadata of chats, people, projects, docs, meetings, events, project timelines, the notes directories the user added (hits with an absolute path) and, with messages=true, the full message archive (newest days first). All words must match.",
     "input_schema": {
@@ -916,87 +901,6 @@
               }
             }
           }
-        }
-      }
-    }
-  },
-  {
-    "name": "lark_chats",
-    "description": "The user's Feishu (Lark) chats from their own account: unread ones by default, or the ones that @mention them, or the latest. Each line has the chat id (for lark_messages; the lark-connector skill calls it feedId), name, unread count, @me, muted, last message preview and time.",
-    "input_schema": {
-      "type": "object",
-      "properties": {
-        "filter": {
-          "type": "string",
-          "enum": [
-            "unread",
-            "at_me",
-            "recent"
-          ],
-          "description": "default unread"
-        },
-        "limit": {
-          "type": "integer",
-          "description": "default 30"
-        }
-      }
-    }
-  },
-  {
-    "name": "lark_messages",
-    "description": "Read a Feishu chat (id from lark_chats or lark_search): the latest messages as text, oldest first. Pass `before` (a message position from an earlier page) to read further back. In a topic group (话题群) each line is one topic's first message with its id and reply count; pass `thread` (that id) to read the topic's replies. Reading does not mark anything as read.",
-    "input_schema": {
-      "type": "object",
-      "required": [
-        "chat_id"
-      ],
-      "properties": {
-        "chat_id": {
-          "type": "string"
-        },
-        "thread": {
-          "type": "string",
-          "description": "a topic's message id (from a topic group's page): read the replies in that topic instead of the chat"
-        },
-        "limit": {
-          "type": "integer",
-          "description": "default 40, max 100"
-        },
-        "before": {
-          "type": "string"
-        },
-        "account": {
-          "type": "integer",
-          "description": "the Feishu account (lark-connector account number) the chat is in, when an inbox item names one; omit for the default account"
-        }
-      }
-    }
-  },
-  {
-    "name": "lark_search",
-    "description": "Search the user's Feishu: messages, docs, people, chats, calendar events, meeting minutes, tasks, mail.",
-    "input_schema": {
-      "type": "object",
-      "required": [
-        "query"
-      ],
-      "properties": {
-        "query": {
-          "type": "string"
-        },
-        "kind": {
-          "type": "string",
-          "enum": [
-            "messages",
-            "docs",
-            "people",
-            "chats",
-            "calendar",
-            "minutes",
-            "todos",
-            "mail"
-          ],
-          "description": "default messages"
         }
       }
     }

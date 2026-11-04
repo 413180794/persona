@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// removed for projects (docs/knowledge.md「项目的removed」). The archive (moments/, the crawler) is never summarized post
+// 公司圈 for projects (docs/knowledge.md「项目的公司圈」). The archive (moments/, the crawler) is never summarized post
 // by post; a project finds its posts instead: its keywords (from the project rewrite) pick candidates out of the
 // posts of the last year, and the model keeps the ones really about it. Keyword hits alone are noise (165 posts say
 // "codex", hardly any about the project named so). Every post judged for a project is remembered
@@ -65,7 +65,7 @@ func (s *Store) judged(slug string) map[string]bool {
 	return out
 }
 
-// LinkMoments looks for removed posts for at most max projects (the most relevant live ones with keywords and posts
+// LinkMoments looks for 公司圈 posts for at most max projects (the most relevant live ones with keywords and posts
 // not judged yet). Returns how many posts were linked.
 func (e *Engine) LinkMoments(ctx context.Context, max int) int {
 	if e.Model == nil {
@@ -219,7 +219,7 @@ func (e *Engine) judgeMoments(ctx context.Context, p *Project, cands []*MomentPo
 	for _, m := range added {
 		if time.Since(m.At) < 14*24*time.Hour {
 			post := byID[m.ID]
-			_ = e.Store.AppendLog(cur.Slug, m.At, "removed · "+momentForPrompt(post, "", 0, e.Store.Zone()).Author,
+			_ = e.Store.AppendLog(cur.Slug, m.At, "公司圈 · "+momentForPrompt(post, "", 0, e.Store.Zone()).Author,
 				firstNonEmpty(m.Note, clip(oneLine(post.Text), 60)))
 			cur.Dirty = true
 		}

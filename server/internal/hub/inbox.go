@@ -17,7 +17,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/mail"
 )
 
@@ -77,7 +76,7 @@ type InboxItem struct {
 	Doc         *InboxDoc  `json:"doc,omitempty"` // a Feishu document's @me / comment (inbox_docs.go)
 	// Translations by target language: new foreign mail, translated before it is opened (inbox_translate.go).
 	Translations map[string]*InboxTranslation `json:"translations,omitempty"`
-	Moment       *InboxMoment                 `json:"moment,omitempty"` // a removed post's comments / @me (inbox_moments.go)
+	Moment       *InboxMoment                 `json:"moment,omitempty"` // a 公司圈 post's comments / @me (inbox_moments.go)
 	// Connector: a thread of a connector's (GitHub…), Source being its id (inbox_connectors.go).
 	Connector *InboxConnector `json:"connector,omitempty"`
 	// Agent is the AI 分身's work on the item: judged by model 2, handled and drafted by the agent (inbox_agent.go).
@@ -122,19 +121,6 @@ const (
 	LarkThreadTopic  = "topic"
 	LarkThreadThread = "thread"
 )
-
-// larkThreadKind is InboxLark.ThreadKind for message m of chat c: a topic group (lark-connector chatMode "topic") lists
-// topics, so every item there is in one; in a normal group a thread reply shown in the chat has threadMessageType
-// "reply". A thread root is a plain message in the chat.
-func larkThreadKind(c lark.Conversation, m lark.Message) string {
-	switch {
-	case c.IsTopic:
-		return LarkThreadTopic
-	case c.IsGroup && m.ThreadKind == "reply":
-		return LarkThreadThread
-	}
-	return ""
-}
 
 type InboxMail struct {
 	AccountID string       `json:"account_id"`
@@ -198,7 +184,6 @@ type inbox struct {
 	triaging    sync.Mutex  // one triage pass at a time (inbox_triage.go)
 	handing     sync.Mutex  // one judge / agent pass at a time (inbox_agent.go)
 	translating sync.Mutex  // one translation pass at a time (inbox_translate.go)
-	me          lark.Me     // the Feishu account (who @me is in documents), read once
 	replies     sync.Map    // item id -> *inboxReply: Feishu replies to one item, one at a time (inbox_triage.go)
 	mutes       []InboxMute // what the user muted (inbox_mutes.go)
 	mutesMu     sync.Mutex  // one read-change-save of the kept mutes at a time
@@ -215,7 +200,7 @@ func (b *inbox) init() {
 type inboxRound int
 
 const (
-	// roundChats follows a Feishu realtime event: the Feishu chats only. Document and removed notices and the other
+	// roundChats follows a Feishu realtime event: the Feishu chats only. Document and 公司圈 notices and the other
 	// connectors wait for the next poll; reading them on every event was most of the hub's lark-connector calls in a
 	// busy group (#674).
 	roundChats inboxRound = iota
@@ -287,11 +272,6 @@ func (h *Hub) inboxLoop(ctx context.Context) {
 
 func (h *Hub) loadInbox(ctx context.Context) {
 	h.loadInboxMutes(ctx)
-	if h.lark != nil {
-		h.inbox.mu.Lock()
-		h.inbox.larkAccount = h.lark.Account()
-		h.inbox.mu.Unlock()
-	}
 	if h.store == nil {
 		return
 	}
@@ -305,9 +285,6 @@ func (h *Hub) loadInbox(ctx context.Context) {
 	for _, raw := range rows {
 		var it InboxItem
 		if json.Unmarshal(raw, &it) == nil && it.ID != "" {
-			// Saved before the hub proxied lark-connector's /agent/v1 media paths, a chat's avatar stays such a path until
-			// its next message (applyLark): map it like a fresh one; a proxied or other URL is left as it is.
-			it.Avatar = lark.MediaURL(it.Avatar)
 			h.inbox.larkRequestAccount(&it)
 			h.inbox.items[it.ID] = &it
 		}
@@ -396,89 +373,12 @@ func (h *Hub) saveInbox(ctx context.Context, changed []*InboxItem) {
 	h.broadcast(map[string]any{"type": "inbox"})
 }
 
-// ---- Feishu ----
-
-// collectLark reads every signed-in Feishu account (docs/feishu.md「多账号」). lark.account's error is the
-// collection's, as before there were several; another account's is only logged and leaves its items as they were.
-func (h *Hub) collectLark(ctx context.Context) ([]*InboxItem, error) {
-	accounts := h.larkSignedIn(ctx)
-	var changed []*InboxItem
-	for i, a := range accounts {
-		got, err := h.collectLarkAccount(ctx, h.lark.ForAccount(a.ID), larkInboxAccount{ID: a.ID, Label: larkAccountLabel(a, len(accounts) > 1)})
-		if err != nil {
-			if i == 0 {
-				return changed, err
-			}
-			h.logf("inbox: feishu account %d: %v", a.ID, err)
-		}
-		changed = append(changed, got...)
-	}
-	return changed, nil
-}
+// ---- helpers ----
 
 // larkInboxAccount is the account a round of Feishu chats is read from and the source line of its items.
 type larkInboxAccount struct {
 	ID    int
 	Label string
-}
-
-func (h *Hub) collectLarkAccount(ctx context.Context, c *lark.Client, acct larkInboxAccount) ([]*InboxItem, error) {
-	// Feishu's 未读 (muted chats left out) plus @me anywhere, muted groups included.
-	var convs []lark.Conversation
-	seen := map[string]bool{}
-	for _, scope := range []string{"unread", "mentions"} {
-		cursor := ""
-		for page := 0; page < 3; page++ {
-			list, next, err := c.Conversations(ctx, scope, cursor, 100)
-			if err != nil {
-				return nil, err
-			}
-			for _, c := range list {
-				if !seen[c.ID] {
-					seen[c.ID] = true
-					convs = append(convs, c)
-				}
-			}
-			if next == "" {
-				break
-			}
-			cursor = next
-		}
-	}
-	fetch := func(conv lark.Conversation, n int) ([]lark.Message, error) {
-		p, err := c.Messages(ctx, conv.ID, lark.Window{}, n, conv.IsTopic)
-		return p.Messages, err
-	}
-	changed := h.inbox.applyLarkFor(acct, convs, fetch, time.Now(), h.userLocation())
-	// Open items whose chat is no longer unread: read in Feishu (or here). An item that needs the user stays
-	// until they reply or tick it off; the rest are done.
-	changed = append(changed, h.inbox.settleLarkFor(acct.ID, convs, func(feed string, topic bool) (*lark.Message, error) {
-		p, err := c.Messages(ctx, feed, lark.Window{}, 1, topic)
-		if err != nil || len(p.Messages) == 0 {
-			return nil, err
-		}
-		return &p.Messages[len(p.Messages)-1], nil
-	}, time.Now())...)
-	return changed, nil
-}
-
-// larkKind says how a chat with unread messages enters the inbox; "" keeps it out (a muted group nobody @'d me in).
-func larkKind(c lark.Conversation) string {
-	if !c.IsGroup {
-		for _, t := range c.Tags {
-			if t == "机器人" || t == "AI" {
-				return KindBot
-			}
-		}
-		return KindDM
-	}
-	if c.AtMe || c.AtAll || c.MentionAt != "" {
-		return KindMention
-	}
-	if c.Muted {
-		return ""
-	}
-	return KindGroup
 }
 
 // positionAfter reports whether position a comes after b (positions are numbers as strings).
@@ -506,164 +406,6 @@ func (b *inbox) openFor(match func(*InboxItem) bool) (open, done *InboxItem) {
 	return open, done
 }
 
-// applyLark turns the unread chats into items: one open item per chat collects its new messages until it is done;
-// messages after that start a new one.
-// loc is the user's time zone: the context gives each message's time in it.
-func (b *inbox) applyLark(convs []lark.Conversation, fetch func(lark.Conversation, int) ([]lark.Message, error), now time.Time, loc *time.Location) []*InboxItem {
-	return b.applyLarkFor(larkInboxAccount{ID: max(b.larkAccount, 1), Label: "飞书"}, convs, fetch, now, loc)
-}
-
-// applyLarkFor is applyLark for the chats of one account: its items are apart from another account's of the same
-// chat.
-func (b *inbox) applyLarkFor(acct larkInboxAccount, convs []lark.Conversation, fetch func(lark.Conversation, int) ([]lark.Message, error), now time.Time, loc *time.Location) []*InboxItem {
-	var changed []*InboxItem
-	for _, c := range convs {
-		if c.Unread == 0 && !c.MarkedUnread {
-			continue
-		}
-		if !c.UpdatedAt.IsZero() && now.Sub(c.UpdatedAt) > inboxWindow {
-			continue
-		}
-		kind := larkKind(c)
-		if kind == "" {
-			continue
-		}
-		b.mu.Lock()
-		open, done := b.openFor(func(it *InboxItem) bool {
-			return it.Lark != nil && it.Lark.FeedID == c.ID && larkItemAccount(it) == acct.ID
-		})
-		unchanged := open != nil && open.UpdatedAt.Equal(c.UpdatedAt) && open.Count >= c.Unread && !open.Read ||
-			open == nil && done != nil && !c.UpdatedAt.After(done.UpdatedAt) // done here, still unread in Feishu
-		if unchanged && open != nil && lark-connector.ReadPosition != c.ReadPosition {
-			// Read further elsewhere with nothing new: only the read position moves.
-			lark-connector.ReadPosition = c.ReadPosition
-			changed = append(changed, open)
-		}
-		b.mu.Unlock()
-		if unchanged {
-			continue
-		}
-		msgs, err := fetch(c, min(max(c.Unread, 1), inboxMessages))
-		if err != nil || len(msgs) == 0 {
-			continue
-		}
-		// The unread ones are the newest; a done item already covered what came before its last message.
-		if c.Unread > 0 && len(msgs) > c.Unread {
-			msgs = msgs[len(msgs)-c.Unread:]
-		}
-		b.mu.Lock()
-		if open != nil && !open.open() {
-			// Filed while the messages were read (by hand, or a bulk 已处理): what is new starts a new item instead of
-			// going unseen into the done one.
-			open, done = nil, open
-		}
-		if open == nil && done != nil {
-			var fresh []lark.Message
-			for _, m := range msgs {
-				if positionAfter(m.Position, done.Last) {
-					fresh = append(fresh, m)
-				}
-			}
-			msgs = fresh
-		}
-		var others []lark.Message // what others wrote: my own messages don't make a chat need me
-		for _, m := range msgs {
-			if !m.IsMine {
-				others = append(others, m)
-			}
-		}
-		if len(others) == 0 {
-			b.mu.Unlock()
-			continue
-		}
-		it := open
-		if it == nil {
-			id := "lark:" + c.ID + ":" + others[0].Position
-			if acct.ID != 1 {
-				id = fmt.Sprintf("lark:account:%d:%s:%s", acct.ID, c.ID, others[0].Position)
-			}
-			it = &InboxItem{ID: id, Source: "lark", Account: "feishu",
-				StartedAt: others[0].CreatedAt, Lark: &InboxLark{AccountID: acct.ID, FeedID: c.ID, StartPosition: others[0].Position}}
-			b.items[it.ID] = it
-		}
-		last := others[len(others)-1]
-		it.Kind = kind
-		if it.Kind != KindMention && open != nil && open.Kind == KindMention {
-			it.Kind = KindMention // an @me stays an @me while the item is open
-		}
-		it.Title, it.Avatar, it.AccountName = c.Name, c.Avatar, acct.Label
-		b.larkRequestAccount(it)
-		it.Lark.IsGroup, it.Lark.IsTopic, it.Lark.AtAll = c.IsGroup, c.IsTopic, c.AtAll
-		it.Lark.AtMe = c.AtMe || open != nil && lark-connector.AtMe
-		it.Lark.ReadPosition = c.ReadPosition
-		it.Lark.ReplyTo, it.Lark.ThreadKind, it.Lark.SenderID = last.ID, larkThreadKind(c, last), last.SenderID
-		if c.MentionAt != "" {
-			it.Lark.MentionPosition = c.MentionAt
-		}
-		it.Sender, it.Preview = last.SenderName, clip(oneLine(last.Text), 200)
-		it.Count = max(c.Unread, len(others))
-		it.UpdatedAt = c.UpdatedAt
-		if it.UpdatedAt.IsZero() || last.CreatedAt.After(it.UpdatedAt) {
-			it.UpdatedAt = last.CreatedAt
-		}
-		it.Read = false
-		it.Last = last.Position
-		it.Context = larkContext(c, others, loc)
-		changed = append(changed, it)
-		b.mu.Unlock()
-	}
-	return changed
-}
-
-// settleLark closes what was read elsewhere: an open item whose chat has no unread messages any more.
-func (b *inbox) settleLark(convs []lark.Conversation, latest func(feed string, topic bool) (*lark.Message, error), now time.Time) []*InboxItem {
-	return b.settleLarkFor(max(b.larkAccount, 1), convs, latest, now)
-}
-
-// settleLarkFor is settleLark for the chats of one account: convs are that account's.
-func (b *inbox) settleLarkFor(account int, convs []lark.Conversation, latest func(feed string, topic bool) (*lark.Message, error), now time.Time) []*InboxItem {
-	unread := map[string]bool{}
-	for _, c := range convs {
-		if c.Unread > 0 || c.MarkedUnread {
-			unread[c.ID] = true
-		}
-	}
-	b.mu.Lock()
-	var stale []*InboxItem
-	for _, it := range b.items {
-		// Items already marked read come back once when they still show a count or sit in a rule tier the rules no
-		// longer give them (read before those fixes).
-		if it.Lark != nil && larkItemAccount(it) == account && it.open() && !unread[it.Lark.FeedID] && (!it.Read || it.Count != 0 || retier(it)) {
-			stale = append(stale, it)
-		}
-	}
-	b.mu.Unlock()
-	var changed []*InboxItem
-	for _, it := range stale {
-		replied := false
-		if it.Tier == TierAction || it.Tier == "" {
-			if m, err := latest(it.Lark.FeedID, it.Lark.IsTopic); err == nil && m != nil && m.IsMine && positionAfter(m.Position, it.Last) {
-				replied = true
-			}
-		}
-		b.mu.Lock()
-		// Nothing in the chat is unread any more: drop the count so the row stops showing the old badge.
-		it.Read, it.Count = true, 0
-		if retier(it) {
-			it.Tier = ruleTier(it)
-		}
-		switch {
-		case replied:
-			it.done(now, "replied")
-		case it.Tier != TierAction && it.Tier != "":
-			it.done(now, "read")
-		}
-		b.mu.Unlock()
-		changed = append(changed, it)
-	}
-	return changed
-}
-
 // retier: the item's tier came from the rules (no model answer) and the rules now give it another one.
 func retier(it *InboxItem) bool {
 	return it.Reason == "按规则" && it.Tier != "" && ruleTier(it) != it.Tier
@@ -672,23 +414,6 @@ func retier(it *InboxItem) bool {
 func (it *InboxItem) done(at time.Time, by string) {
 	t := at
 	it.DoneAt, it.DoneBy = &t, by
-}
-
-func larkContext(c lark.Conversation, msgs []lark.Message, loc *time.Location) string {
-	var b strings.Builder
-	if c.IsGroup {
-		fmt.Fprintf(&b, "飞书群「%s」的新消息：\n", c.Name)
-	} else {
-		fmt.Fprintf(&b, "飞书私聊（%s）的新消息：\n", c.Name)
-	}
-	for _, m := range msgs {
-		at := ""
-		if m.AtMe {
-			at = "（@了我）"
-		}
-		fmt.Fprintf(&b, "[%s] %s%s：%s\n", m.CreatedAt.In(loc).Format("01-02 15:04"), m.SenderName, at, clip(oneLine(m.Text), inboxText))
-	}
-	return strings.TrimSpace(b.String())
 }
 
 // ---- mail ----
@@ -954,10 +679,8 @@ func (h *Hub) inboxRoutes(api *http.ServeMux) {
 			return
 		}
 		if principalOf(r.Context()).Role != roleFull {
-			// Posted as the user, a "/agent …" comes back as their request and starts an agent (lark_agent.go).
-			cfg := h.larkAgentCfg()
-			_, asksAgent := larkAgentRequest(in.Text, cfg.prefix())
-			if len(in.Changes) > 0 || cfg.Enabled && asksAgent {
+			// Posted as the user, a "/agent …" comes back as their request and starts an agent (docs/lark-agent.md).
+			if len(in.Changes) > 0 || asksAgent(in.Text) {
 				writeErr(w, http.StatusForbidden, errors.New("this device can only reply with text"))
 				return
 			}

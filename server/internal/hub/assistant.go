@@ -112,7 +112,7 @@ func isAssistant(s proto.Session, dir string) bool {
 // connectors signed in (rate limited counts: still signed in), whose built-in skills it puts in the directory (the
 // telegram skill and tg, node/clicall.go) or takes out.
 func (h *Hub) assistantPrepare(ctx context.Context, m *Machine) map[string]any {
-	return map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx, h.hasSkill(ctx, m, "lark-connector")) + h.plugins.pluginInstructions(),
+	return map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx) + h.plugins.pluginInstructions(),
 		"connectors": h.signedInConnectors(ctx), "plugin_skills": h.plugins.pluginSkillsFor(m.cfg.ID)}
 }
 
@@ -127,15 +127,10 @@ func (h *Hub) signedInConnectors(ctx context.Context) []string {
 	return out
 }
 
-func (h *Hub) assistantClaudeMD(ctx context.Context, lark-connector bool) string {
+func (h *Hub) assistantClaudeMD(ctx context.Context) string {
 	lc := h.cfg.Lark
-	if lc.CLI != nil && !lc.lark-connectorConfigured() {
-		// lark-cli only: an lark-connector skill left on the machine (an older jarvisd copied it in) has no lark-connector to talk
-		// to, so ol is not offered.
-		lark-connector = false
-	}
 	d := prompts.AssistantClaudeMD{Owner: strings.TrimSpace(h.cfg.Assistant.Owner), Notes: h.assistantNotes(ctx), ExtraDirs: h.kb.cfg.ExtraDirs,
-		lark-connector: lark-connector, LarkCLI: lc.CLI != nil, lark-connectorConfigured: lc.lark-connectorConfigured(), LarkPrefer: lc.Prefer}
+		LarkCLI: lc.CLI != nil}
 	here := h.assistantConfig(ctx).MachineID
 	onHub := h.localMachine(here) != nil && h.localMachine(here).cfg.Kind == "local"
 	d.OnHub = onHub

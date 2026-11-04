@@ -67,11 +67,11 @@ nonisolated struct KBDetail: Decodable, Sendable {
     var log: [String]?
     var recent: String?
     var links: [KBEntry]?
-    /// A project's removed posts (the hub's LinkMoments), newest first.
+    /// A project's 公司圈 posts (the hub's LinkMoments), newest first.
     var moments: [KBMomentRef]?
 }
 
-/// A removed post a project shows: who, when, how many comments, the text clipped, how it bears on the project.
+/// A 公司圈 post a project shows: who, when, how many comments, the text clipped, how it bears on the project.
 nonisolated struct KBMomentRef: Decodable, Identifiable, Hashable, Sendable {
     var id: String
     var author: String
@@ -79,11 +79,35 @@ nonisolated struct KBMomentRef: Decodable, Identifiable, Hashable, Sendable {
     var at: Date?
     var comments: Int
     var note: String?
+    /// What the feed it is from is called, when the hub says (`KBMoments.feedName`).
+    var feed: String?
 }
 
-/// One archived removed post: the crawler's Markdown (text and every comment).
+/// One archived 公司圈 post: the crawler's Markdown (text and every comment), and what the archive knows of it.
 nonisolated struct KBMomentPost: Decodable, Sendable {
     var markdown: String
+    var post: Meta?
+
+    nonisolated struct Meta: Decodable, Sendable {
+        /// What the feed it is from is called (the connector that keeps it says); nil or empty: 公司圈.
+        var feed: String?
+    }
+}
+
+/// What the company feed is called on a page: the archive's name for it, else 公司圈 (no tenant's own name is built in).
+nonisolated enum KBMoments {
+    static let defaultName = "公司圈"
+
+    static func feedName(_ feed: String?) -> String {
+        let f = feed?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return f.isEmpty ? defaultName : f
+    }
+
+    /// The name of the feed a project's posts are from: theirs when they all say the same, else 公司圈.
+    static func feedName(_ moments: [KBMomentRef]) -> String {
+        let names = Set(moments.map { feedName($0.feed) })
+        return names.count == 1 ? names.first! : defaultName
+    }
 }
 
 nonisolated struct KBDetailResponse: Decodable, Sendable {

@@ -28,7 +28,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     /// New foreign mail translated by the hub as it came in, by target language (subject and preview here; the body
     /// comes with the mail).
     var translations: [String: Translated]?
-    /// A removed post where someone commented on, replied to or @ed the user (docs/inbox.md「removed」).
+    /// A 公司圈 post where someone commented on, replied to or @ed the user (docs/inbox.md「公司圈」).
     var moment: Moment?
     /// Only in GET /api/v1/inbox/{id}: the conversation as text.
     var context: String?
@@ -266,7 +266,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
         case "mention": read == true ? nil : lark?.atAll == true ? "@所有人" : "@我"
         case "bot": "机器人"
         case "doc": doc?.notice == "comment" || doc?.notice == "reply" ? "评论" : "@我"
-        case "moment": moment?.notice?.hasPrefix("atIn") == true ? "@我" : "removed"
+        case "moment": moment?.notice?.hasPrefix("atIn") == true ? "@我" : "公司圈"
         default: nil
         }
     }

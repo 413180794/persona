@@ -309,7 +309,7 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
   迁完后 hub 的那份删掉。
 - 连接器同理：正在迁出 hub 的连接器（`connector.MigratableConnectors`，现在是 `lark`）不预留，插件贡献同一个 id 时，插件启用期间 hub 自己的那个让出注册表、
   插件停用或卸载后放回（`hub/connectors_migrate.go`）。id 不变，知识库的会话（`lark-<feed>`）、收件箱的来源和静音、连接器设置都接得上；
-  hub 自己那份的实时推送和收件箱 / 知识库刷新同时停下（插件做），`/agent`、个人 Agent、removed全量爬取照旧在 hub。它的收件箱条目怎么保持原样见
+  3c（#1520）之后 hub 没有自己的那份了，迁出的 id 只是不预留。它的收件箱条目怎么保持原样见
   `docs/connector-protocol.md`「迁出 hub 的连接器」。
 - `features` 加进 hello 和 `/health` 的 `features`：客户端照旧按 features 决定显示什么，插件停用后就没有了。
 - 插件发事件 `api.broadcast {type, …}`：hub 原样推给在线的客户端（去掉 `contribution`），`type` 必须在 `events` 里，不然丢掉并记日志。
@@ -567,7 +567,7 @@ View 带 `refresh_after`（秒）：这个 View 在屏幕上时，App 过这么�
   插件贡献同名来源时，插件跑着期间 hub 自己的让出，停用、卸载后放回；会话 id 不变（`removedbridge:<sessionKey>`），App 里的会话、未读、缓存接得上。插件启用、开始跑就进 Agents 页，停用、卸载、升级时先拿掉
   （App 收到 `{"type":"agents"}` 重新拉）。进程崩溃、超时、没起来时来源还在：它的 `status` 带错误，列全部会话、搜索时跳过它（别的来源照常），
   只问它的时候才回错误。
-- **hub 调插件**（`agentsrc.<方法>`，参数带 `contribution`；字段和 lark-connector agent-bridge 返回的一样，`server/internal/lark/agent_bridge.go`）：
+- **hub 调插件**（`agentsrc.<方法>`，参数带 `contribution`；字段见 `server/internal/agents/wire.go`）：
 
 | 方法 | 参数 | 回 |
 | --- | --- | --- |

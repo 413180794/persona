@@ -16,18 +16,19 @@ type Capability string
 // Capabilities and the interface each stands for. The names are the ones GET /api/v1/connectors lists (except
 // CapSettle, which only the hub uses).
 const (
-	CapStatus  Capability = "status"  // Accounts
-	CapTools   Capability = "tools"   // ReadTools
-	CapActions Capability = "actions" // Actions
-	CapEvents  Capability = "events"  // Events
-	CapInbox   Capability = "inbox"   // Inbox
-	CapSettle  Capability = "settle"  // InboxSettler
-	CapArchive Capability = "archive" // Archive
-	CapChats   Capability = "chats"   // Chats
-	CapItems   Capability = "items"   // Items
-	CapLogin   Capability = "login"   // Login
-	CapOptions Capability = "options" // Options
-	CapThreads Capability = "threads" // Threads
+	CapStatus   Capability = "status"   // Accounts
+	CapTools    Capability = "tools"    // ReadTools
+	CapActions  Capability = "actions"  // Actions
+	CapEvents   Capability = "events"   // Events
+	CapInbox    Capability = "inbox"    // Inbox
+	CapSettle   Capability = "settle"   // InboxSettler
+	CapArchive  Capability = "archive"  // Archive
+	CapChats    Capability = "chats"    // Chats
+	CapItems    Capability = "items"    // Items
+	CapLogin    Capability = "login"    // Login
+	CapOptions  Capability = "options"  // Options
+	CapThreads  Capability = "threads"  // Threads
+	CapSnapshot Capability = "snapshot" // Snapshot
 )
 
 type capability struct {
@@ -51,6 +52,7 @@ var capabilities = []capability{
 	{CapLogin, reflect.TypeFor[Login](), true},
 	{CapOptions, reflect.TypeFor[Options](), true},
 	{CapThreads, reflect.TypeFor[Threads](), true},
+	{CapSnapshot, reflect.TypeFor[Snapshot](), true},
 }
 
 // Manifest is what a connector says it is and does, in one place (docs/connectors.md「二 · 1」): read whenever the

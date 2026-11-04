@@ -74,7 +74,7 @@ func (e *Engine) Compress(ctx context.Context, c *Chat) error {
 	from := c.CoveredUntil
 	if from.IsZero() {
 		from = c.Created.AddDate(0, 0, -30)
-		// A removed post is archived when it first concerns me, often long after it was written: the 30 days before
+		// A 公司圈 post is archived when it first concerns me, often long after it was written: the 30 days before
 		// that held none of it, so 20 of 21 posts were settled without a model call (2026-11-01). The whole post,
 		// back to a year before it was archived.
 		if c.Kind == "moment" {

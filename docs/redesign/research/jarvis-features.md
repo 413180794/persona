@@ -140,7 +140,7 @@
 | 7.34 | 文件页 | 从会话目录开始逐级进入，面包屑跳回任意一级；目录在前、显示大小和修改时间、Git 改动标记（目录里有改动显示圆点）；隐藏文件默认不显示（菜单切换）；点文件用查看器打开 | `Jarvis/Views/Session/FilesPane.swift`、`docs/ios.md`「会话页的终端、文件、Git」 | — | LazyColumn + 面包屑 LazyRow | M | P1 |
 | 7.35 | 文件查看器 | 在会话所在机器上读取（`GET /machines/{mid}/file`，最多 2 MB，拒绝 iCloud 目录）：Markdown 渲染（机器上的相对路径图片、常见 HTML 标签转 Markdown）、代码带行号不换行双向滚动、图片、PDF、目录浏览；拷贝路径 / 内容、分享 | `FileViewer.swift`（FileViewer、CodeText、PDFKitView、MachineImageProvider）、`Jarvis/Views/Chat/MonoTextView.swift` | PDFKit；UIScrollView 里放不滚动的 UITextView（避开 TextKit 2 强制折行） | `PdfRenderer`（或 androidx.pdf）；等宽文本用 `horizontalScroll` + `verticalScroll` / 按行 LazyColumn（Compose 没有 TextKit 的折行坑） | M | P1 |
 | 7.36 | Git 页 | 分支、上游 ↑↓、暂存数；改动列表（状态字母、+/− 行数、已暂存 / 部分暂存）→ diff（新旧行号、红绿底、不换行横滑，同时有暂存和未暂存时可切换）；提交历史（分页加载更早）→ 提交说明 + 每个文件的 diff；全部只读 | `Jarvis/Views/Session/GitPane.swift` | MonoTextView | 同 7.35 的等宽大文本组件 | M | P1 |
-| 7.37 | 链接在 App 内打开 | 对话里的 http(s) 链接都拦截到 App 内链接浮层（11 节），飞书文档 / removed走原生阅读器 | `ChatView.swift`（`openURL` 拦截） | `OpenURLAction` | 统一 `LocalUriHandler` 拦截 | S | P0 |
+| 7.37 | 链接在 App 内打开 | 对话里的 http(s) 链接都拦截到 App 内链接浮层（11 节），飞书文档 / 公司圈走原生阅读器 | `ChatView.swift`（`openURL` 拦截） | `OpenURLAction` | 统一 `LocalUriHandler` 拦截 | S | P0 |
 
 ## 8. 终端（对话页右上角 / 收起细条 / 工作行的终端按钮）
 
@@ -193,8 +193,8 @@
 | 10.9 | 长按菜单 | 表情回复、拷贝、查看 <某人> 的资料 | `LarkChatView.swift`（menu） | `contextMenu` | 长按 DropdownMenu | S | P1 |
 | 10.10 | 资料卡 | 点头像或名字：封面、头像、名字、状态、签名、「发消息」（打开 / 建私聊）、信息行（前 5 行 +「查看更多信息」，可拷贝），上级行打开上级的资料卡 | `Lark/LarkPeople.swift`（LarkProfileView） | sheet | ModalBottomSheet | M | P2 |
 | 10.11 | 话题群 | `is_topic` 的群显示话题列表，「N 条回复」点开看话题里的全部回复 | `LarkChatView.swift`（LarkThreadView） | — | 同 | M | P2 |
-| 10.12 | removed分享 | 消息里的removed分享链接渲染成预览卡（标题、作者、摘要、计数），点开看帖子全文、图片、回应和评论（没有 feed） | `Lark/LarkReactionsMoments.swift`（LarkMomentsCard、LarkMomentsPostView）、`docs/feishu.md` | — | 同 | M | P2 |
-| 10.13 | 飞书路由 | 链接分流：文档 → 原生阅读器，removed帖子 → 帖子页，其余 → 网页；`FeishuRoute` 只有 chat / doc / profile / momentsPost 四种落点（不做第二个飞书） | `Jarvis/Views/Feishu/Foundation/FeishuFoundation.swift`、`docs/feishu.md` | — | 同 | S | P1 |
+| 10.12 | 公司圈分享 | 消息里的公司圈分享链接渲染成预览卡（标题、作者、摘要、计数），点开看帖子全文、图片、回应和评论（没有 feed） | `Lark/LarkReactionsMoments.swift`（LarkMomentsCard、LarkMomentsPostView）、`docs/feishu.md` | — | 同 | M | P2 |
+| 10.13 | 飞书路由 | 链接分流：文档 → 原生阅读器，公司圈帖子 → 帖子页，其余 → 网页；`FeishuRoute` 只有 chat / doc / profile / momentsPost 四种落点（不做第二个飞书） | `Jarvis/Views/Feishu/Foundation/FeishuFoundation.swift`、`docs/feishu.md` | — | 同 | S | P1 |
 
 ## 11. 飞书文档阅读器 / 链接浮层 / WebView 池
 

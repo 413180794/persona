@@ -36,7 +36,7 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `kb/items.md`、`items_input.md` | 文档 / 会议 / 日程打标 | `kb/items.go` |
 | `kb/known_projects.md` | 「已知项目」列表（名字、别称、一句话），压缩和打标共用 | 同上 |
 | `kb/dedupe.md`、`dedupe_input.md`、`dedupe_side.md` | 两个项目是不是同一件事（项目去重） | `kb/dedupe.go` |
-| `kb/moments_link.md`、`moments_link_input.md` | 关键词搜到的removed帖子里哪些在说这个项目 | `kb/moments_link.go` |
+| `kb/moments_link.md`、`moments_link_input.md` | 关键词搜到的公司圈帖子里哪些在说这个项目 | `kb/moments_link.go` |
 | `kb/digest.md` | 快照里的知识库重点（`Engine.Prompt`） | `kb/items.go` |
 | `kb/readme.md` | 知识库目录的 README.md（给读这个目录的 AI 看） | `kb/store.go` |
 | `tools/tab_name.md` | 给新 Agent 的 herdr 标签页起名 | `hub/tabname.go` |

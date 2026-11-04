@@ -13,6 +13,7 @@ class MailHtmlTest {
             <form action="https://example.com"><input value="secret"></form>
             <p style="color:white;background:white" onclick="alert(1)">正文<strong>重点</strong></p>
             <a href="javascript:alert(1)">危险链接</a><a href="https://example.com/help">查看</a>
+            <a href="mailto:support@example.com?subject=Help">联系我们</a>
             <table><tr><td>附件说明</td></tr></table>
         """.trimIndent(), "#eeeeee", "#111111", "#aabbff")
         val doc = Jsoup.parse(html)
@@ -20,10 +21,34 @@ class MailHtmlTest {
         assertFalse(html.contains("javascript:"))
         assertFalse(html.contains("file:///"))
         assertEquals("正文重点", doc.selectFirst("p")?.text())
-        assertEquals("https://example.com/help", doc.select("a[href]").single().attr("href"))
+        val links = doc.select("a[href]")
+        assertEquals("https://example.com/help", links[0].attr("href"))
+        assertEquals("mailto:support@example.com?subject=Help", links[1].attr("href"))
         assertEquals("附件说明", doc.selectFirst("td")?.text())
         assertTrue(html.contains("default-src 'none'"))
         assertTrue(html.contains("background:#111111;color:#eeeeee"))
+    }
+
+    @Test fun allowsImagesWhenEnabled() {
+        val html = safeMailHtml("""
+            <p>图片内容</p>
+            <img src="https://example.com/photo.png" alt="照片" width="300">
+            <img src="data:image/png;base64,abc">
+            <img src="file:///etc/passwd">
+            <script>alert(1)</script>
+        """.trimIndent(), "#eeeeee", "#111111", "#aabbff", allowImages = true)
+        val doc = Jsoup.parse(html)
+        assertTrue(doc.select("script").isEmpty())
+        assertFalse(html.contains("file:///"))
+        val images = doc.select("img[src]")
+        assertEquals(2, images.size)
+        assertEquals("https://example.com/photo.png", images[0].attr("src"))
+        assertEquals("照片", images[0].attr("alt"))
+        assertEquals("data:image/png;base64,abc", images[1].attr("src"))
+        val allImages = doc.select("img")
+        assertEquals(3, allImages.size)
+        assertFalse(allImages[2].hasAttr("src"))
+        assertTrue(html.contains("img-src http: https: data:"))
     }
 
     @Test fun mailDetailsShowReadableSizesAndLocalTimes() {

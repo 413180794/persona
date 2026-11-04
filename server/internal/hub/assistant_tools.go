@@ -4,15 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"path"
-	"slices"
 	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
 
-	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -25,7 +22,7 @@ import (
 // prompts/mcp (docs/prompts.md).
 func assistantTools() []proto.Tool {
 	names := []string{"ask_user", "notify_user", "schedule_followup", "schedule_routine", "delete_routine", "list_followups",
-		"cancel_followup", "agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft", "lark_agent_reply",
+		"cancel_followup", "agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft",
 		"kb_search", "kb_list", "kb_get", "kb_update", "jarvis_settings",
 		"conversations_list", "conversation_read", "conversation_rename", "conversation_archive", "conversation_unarchive",
 		"conversation_new", "conversation_send", "task_plan"}
@@ -34,21 +31,6 @@ func assistantTools() []proto.Tool {
 		tools = append(tools, mcpTool(n))
 	}
 	return tools
-}
-
-// ownAssistantTools are assistantTools as this hub offers them now: while a plugin serves Feishu, its /agent answers
-// with its own lark_agent_reply (a connector tool), so the hub's steps aside (connectors_migrate.go).
-func (h *Hub) ownAssistantTools() []proto.Tool {
-	tools := assistantTools()
-	if h.larkByPlugin() {
-		tools = slices.DeleteFunc(tools, func(t proto.Tool) bool { return t.Name == "lark_agent_reply" })
-	}
-	return tools
-}
-
-// isOwnAssistantTool is isAssistantTool for this hub now (ownAssistantTools).
-func (h *Hub) isOwnAssistantTool(name string) bool {
-	return isAssistantTool(name) && !(name == "lark_agent_reply" && h.larkByPlugin())
 }
 
 // mcpTool is one tool's definition from prompts/mcp.
@@ -60,7 +42,7 @@ func mcpTool(name string) proto.Tool {
 func isAssistantTool(name string) bool {
 	switch name {
 	case "ask_user", "notify_user", "schedule_followup", "list_followups", "cancel_followup", "schedule_routine", "delete_routine",
-		"agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft", "lark_agent_reply", "jarvis_settings",
+		"agents_list", "agent_read", "agent_send", "agent_start", "inbox_draft", "jarvis_settings",
 		"task_plan":
 		return true
 	}
@@ -129,8 +111,6 @@ func (h *Hub) runAssistantTool(ctx context.Context, m *Machine, sessionID, name 
 		return "Cancelled.", nil
 	case "inbox_draft":
 		return h.toolInboxDraft(ctx, sessionID, args)
-	case "lark_agent_reply":
-		return h.toolLarkAgentReply(ctx, sessionID, args)
 	case "kb_search", "kb_list", "kb_get", "kb_update":
 		return h.runKBTool(name, args)
 	case "conversations_list":
@@ -501,169 +481,6 @@ func toolSummary(name string, input json.RawMessage) string {
 }
 
 // ---- Feishu ----
-
-func (h *Hub) runLarkTool(ctx context.Context, name string, args json.RawMessage) (string, error) {
-	switch name {
-	case "lark_chats":
-		var a struct {
-			Filter string `json:"filter"`
-			Limit  int    `json:"limit"`
-		}
-		_ = json.Unmarshal(args, &a)
-		if a.Limit <= 0 || a.Limit > 100 {
-			a.Limit = 30
-		}
-		convs, _, err := h.lark.Conversations(ctx, "inbox", "", 100)
-		if err != nil {
-			return "", err
-		}
-		var b strings.Builder
-		n := 0
-		for _, c := range convs {
-			switch a.Filter {
-			case "recent":
-			case "at_me":
-				if !c.AtMe && !c.AtAll {
-					continue
-				}
-			default:
-				if c.Unread == 0 && !c.MarkedUnread {
-					continue
-				}
-			}
-			if n >= a.Limit {
-				break
-			}
-			n++
-			fmt.Fprintf(&b, "- %s (chat_id=%s", c.Name, c.ID)
-			if c.IsGroup {
-				b.WriteString(", 群")
-			}
-			if c.Unread > 0 {
-				fmt.Fprintf(&b, ", 未读 %d", c.Unread)
-			}
-			if c.AtMe {
-				b.WriteString(", @我")
-			} else if c.AtAll {
-				b.WriteString(", @所有人")
-			}
-			if c.Muted {
-				b.WriteString(", 免打扰")
-			}
-			if len(c.Tags) > 0 {
-				b.WriteString(", " + strings.Join(c.Tags, "/"))
-			}
-			fmt.Fprintf(&b, ") %s", ago(c.UpdatedAt))
-			if c.Preview != "" {
-				who := c.PreviewSender
-				if c.IsMine {
-					who = "我"
-				}
-				if who != "" {
-					who += "："
-				}
-				fmt.Fprintf(&b, "\n    %s%s", who, clip(oneLine(c.Preview), 160))
-			}
-			b.WriteString("\n")
-		}
-		if n == 0 {
-			return "No chats match.", nil
-		}
-		return b.String(), nil
-	case "lark_messages":
-		var a struct {
-			ChatID  string `json:"chat_id"`
-			Thread  string `json:"thread"`
-			Limit   int    `json:"limit"`
-			Before  string `json:"before"`
-			Account int    `json:"account"`
-		}
-		_ = json.Unmarshal(args, &a)
-		if a.ChatID == "" && a.Thread == "" {
-			return "", fmt.Errorf("chat_id is required")
-		}
-		if a.Limit <= 0 || a.Limit > 100 {
-			a.Limit = 40
-		}
-		var page lark.Page
-		var err error
-		c := h.lark.ForAccount(a.Account)
-		if a.Thread != "" {
-			page, err = c.Thread(ctx, a.Thread, a.Before, a.Limit)
-		} else {
-			// A topic group's messages are only the 创建了话题群 notice; what was said is in its topics.
-			page, err = c.ChatPage(ctx, a.ChatID, lark.Window{Before: a.Before}, a.Limit, false)
-		}
-		if err != nil {
-			return "", err
-		}
-		var b strings.Builder
-		if page.Topic {
-			b.WriteString("(topic group: one line per topic; read a topic's replies with thread=<its id>)\n")
-		}
-		if older := page.OlderCursor; page.HasOlder && len(page.Messages) > 0 {
-			if !page.Topic || older == "" {
-				older = page.Messages[0].Position
-			}
-			fmt.Fprintf(&b, "(older messages: before=%s)\n", older)
-		}
-		for _, msg := range page.Messages {
-			who := msg.SenderName
-			if msg.IsMine {
-				who = "我"
-			}
-			text := msg.Text
-			if msg.Recalled {
-				text = "(撤回了一条消息)"
-			}
-			if text == "" {
-				text = "[" + strings.ToLower(msg.Type) + "]"
-			}
-			fmt.Fprintf(&b, "[%s] %s", msg.CreatedAt.In(h.userLocation()).Format("01-02 15:04"), who)
-			if msg.AtMe {
-				b.WriteString(" (@我)")
-			}
-			if msg.ReplyTo != nil {
-				fmt.Fprintf(&b, " (回复 %s：%s)", msg.ReplyTo.SenderName, clip(oneLine(msg.ReplyTo.Text), 60))
-			}
-			fmt.Fprintf(&b, "：%s", clip(text, 2000))
-			switch {
-			case page.Topic:
-				fmt.Fprintf(&b, " (thread=%s, %d 条回复)", msg.ID, msg.ThreadReplyCount)
-			case msg.ThreadReplyCount > 0:
-				fmt.Fprintf(&b, " (话题 %d 条回复)", msg.ThreadReplyCount)
-			}
-			b.WriteString("\n")
-		}
-		return b.String(), nil
-	case "lark_search":
-		var a struct{ Query, Kind string }
-		_ = json.Unmarshal(args, &a)
-		if strings.TrimSpace(a.Query) == "" {
-			return "", fmt.Errorf("query is required")
-		}
-		route := map[string]string{
-			"": "search", "messages": "search", "docs": "search/documents", "people": "search/people", "calendar": "calendar/search",
-			"minutes": "minutes/search", "todos": "todos/search", "mail": "mail/search",
-		}[a.Kind]
-		if a.Kind == "chats" {
-			raw, err := h.lark.Read(ctx, "POST", "/search/page", nil, map[string]any{"tab": "groups", "query": a.Query, "limit": 20})
-			if err != nil {
-				return "", err
-			}
-			return compactJSON(raw, 30000), nil
-		}
-		if route == "" {
-			return "", fmt.Errorf("unknown kind %q", a.Kind)
-		}
-		raw, err := h.lark.Read(ctx, "GET", "/"+route, url.Values{"q": {a.Query}}, nil)
-		if err != nil {
-			return "", err
-		}
-		return compactJSON(raw, 30000), nil
-	}
-	return "", fmt.Errorf("unknown tool %s", name)
-}
 
 // compactJSON drops media / avatar noise and cuts long answers so they fit in the model's context.
 func compactJSON(raw json.RawMessage, max int) string {

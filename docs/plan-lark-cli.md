@@ -43,7 +43,7 @@
 | 条目上下文、我回过没有（`Messages` / `threads` + `isMine`） | `+chat-messages-list`、`+threads-messages-list`，发送者是我 | 能做 |
 | 文档通知：@我、评论、分享（`documents/notifications`） | 无 | 第一版不做 |
 | 文档、表格、多维表格的读写和评论回复（`documents/*`） | `docs`、`sheets`、`base`、`drive` 评论 | 能做，适配层重写 |
-| removed（`moments/*`） | 无 | 不做 |
+| 公司圈（`moments/*`） | 无 | 不做 |
 | 发送确认过的回复（`Send` / `Reply`） | `+messages-send` / `+messages-reply` | 能做 |
 
 ### 知识库（`hub/kb*.go`）
@@ -55,7 +55,7 @@
 | 附件（`media`） | `+messages-resources-download` | 能做 |
 | 人、群（来自发送者和会话名） | 同左，`contact` 补全 | 能做 |
 | 日程、会议、文档标题（`calendar/week`、`meetings`、`documents/read`） | `calendar +agenda`、`vc +search`、`minutes +search`、`docs +fetch` | 能做 |
-| removed | 无 | 不做 |
+| 公司圈 | 无 | 不做 |
 
 ### 实时事件（`hub/lark_events.go`）
 
@@ -90,7 +90,7 @@
 | 会话页：消息、话题、发送、回复、表情、成员、媒体 | 都有对应命令 | 适配成现在的 JSON，App 不改 |
 | 未读数、标签、置顶、已读位置、`read-states` | 无 | 这个来源下不显示 |
 | 文档阅读器（`raw/documents/*`） | `docs +fetch --doc-format markdown` | 只有 markdown，没有 JSON 树、摘要 |
-| removed、`url-preview`、表情列表、个人 Agent 桥（`agent-bridge`） | 无 | 不做；表情用本地的静态表 |
+| 公司圈、`url-preview`、表情列表、个人 Agent 桥（`agent-bridge`） | 无 | 不做；表情用本地的静态表 |
 
 ## 形态
 
@@ -103,7 +103,7 @@
     两边的 id 不同（开放平台是 `oc_` / `om_`，lark-connector 是 feed id 和 position）：知识库按来源分 id 前缀（lark-connector 照旧，lark-cli 用 `larkcli`），不会相互覆盖；
     切换来源期间的同一条消息按「会话 + 发送者 + 发送时间 + 正文」去重。同一个会话能不能对上两边的 id（lark-connector 的会话信息里有没有开放平台的 `chat_id`）L3 先查，
     对得上就合成一个会话。
-  - **助手两个都给**：lark-connector skill 和 lark-cli 都装着时，提示词说明各自擅长什么（lark-connector：未读、feed、removed；lark-cli：开放平台的文档、日程、妙记、审批…），闸门两个都认。
+  - **助手两个都给**：lark-connector skill 和 lark-cli 都装着时，提示词说明各自擅长什么（lark-connector：未读、feed、公司圈；lark-cli：开放平台的文档、日程、妙记、审批…），闸门两个都认。
 - **调 CLI，不直接调开放平台**：hub 以子进程跑 `lark-cli … --as user --format json`。凭据和刷新都留在 lark-cli 自己的存储里，hub 不碰应用密钥和 token；
   一次调用 100–300 ms，轮询的量够用。所有调用和 JSON 适配集中在一个包（`internal/larkcli`），用录下的 JSON 做契约测试，固定支持的最低版本。
 - **装在哪**：hub 所在的机器（也是助手跑的机器）。`lark-cli auth login` 由用户自己在那台机器上做，hub 只读 `auth status`。
@@ -169,7 +169,7 @@ Codex 的 app-server 审批走同一个 `larkCheck`。
 - [ ] **L3 知识库**：`Archive`（会话、消息、人、群：搜索轮询 + 往回补；附件）、`Items`（日程、会议、妙记、文档标题）。验收：知识库里有飞书会话和人，格式和 lark-connector 来源一样。
 - [ ] **L4 收件箱**：`Inbox`：@我、私聊、我参与的话题的回复（「收件箱收什么」）；和 lark-connector 并存时只从主来源收；回复走 `Actions`，经闸门和手机卡片。
 - [ ] **L5 `/agent`**：搜索轮询认请求、表情、上下文、回复；文档评论里的 `/agent` 不做。
-- [ ] **L6 App**：会话页的消息、发送、回复、表情、媒体接到 lark-cli（同样的 JSON）；文档阅读器用 markdown；未读、标签、removed在这个来源下隐藏。
+- [ ] **L6 App**：会话页的消息、发送、回复、表情、媒体接到 lark-cli（同样的 JSON）；文档阅读器用 markdown；未读、标签、公司圈在这个来源下隐藏。
 
 每一步一个 PR，配了 lark-connector 的 hub 现有测试全过。
 

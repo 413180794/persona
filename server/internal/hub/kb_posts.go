@@ -221,6 +221,3 @@ func clipBytes(s string, n int) string {
 	}
 	return s
 }
-
-// momentsCrawling: the hub's own crawler is at work (it prunes by its own max_days); not while a plugin crawls.
-func (h *Hub) momentsCrawling() bool { return h.kb.crawls && !h.larkByPlugin() }

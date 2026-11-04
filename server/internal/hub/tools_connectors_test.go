@@ -9,17 +9,15 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
-	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The coding agents get mail's tools and not Feishu's (nor can they call them); a mail_send that could not be sent
 // is refused before the user is asked.
-func TestMailAndFeishuToolsThroughTheirConnectors(t *testing.T) {
+func TestMailToolsThroughItsConnector(t *testing.T) {
 	h := newTestHub(t)
 	h.mail = (*mail.Service)(nil)
-	h.lark = lark.New(lark.Config{BaseURL: "http://127.0.0.1:1", Token: "t"})
 	h.connectors = connector.NewRegistry(nil)
 	h.registerConnectors()
 	var agent []string

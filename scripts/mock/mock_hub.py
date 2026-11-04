@@ -2234,7 +2234,7 @@ INBOX = [
     {"id": "moment:mp1:mn1", "source": "lark", "kind": "moment", "account": "feishu", "account_name": "飞书",
      "title": "换新电脑以后大家都怎么迁移数据", "sender": "林小雨", "preview": "我用的迁移助手，一晚上就好了，你是不是开了 FileVault",
      "count": 3, "started_at": ago(hours=2), "updated_at": ago(minutes=25), "tier": "fyi",
-     "summary": "林小雨在你的removed帖子下回复了迁移数据的办法", "reason": "评论你的帖子",
+     "summary": "林小雨在你的公司圈帖子下回复了迁移数据的办法", "reason": "评论你的帖子",
      "moment": {"post_id": "mp1", "notice": "comment", "reply_to": "mc3", "my_post": True, "post_text": "换新电脑以后大家都怎么迁移数据？迁移助手跑了一下午还没好"}},
     {"id": "mail:acc1:t1:501", "source": "mail", "kind": "mail", "account": "acc1", "account_name": "个人邮箱",
      "title": "下周的分享能不能提前到周二？", "sender": "Lucy Wang", "preview": "Hi，周四我临时要出差，分享能不能挪到周二下午……",
@@ -3416,10 +3416,10 @@ def lark_window(msgs, q, default_limit=40):
     page = msgs[start:end]
     return {"messages": page, "has_older": start > 0, "has_newer": end < len(msgs),
             "older_cursor": page[0]["position"] if page else "", "newer_cursor": page[-1]["position"] if page else ""}
-# ---------- area: feishu chat page (Android's Feishu chat and removed pages; made-up data only) ----------
+# ---------- area: feishu chat page (Android's Feishu chat and 公司圈 pages; made-up data only) ----------
 # MOCK_LARK=1: the chats behind the inbox's Feishu items (f1 / f2 / f3) have messages covering every kind of part the
 # chat page draws (rich post, mentions, links, emoji, pictures, a file, voice, video, a sticker, cards with columns and
-# buttons, a table and a chart, merge-forward, a removed share, reactions, replies, a thread, system lines), with paging
+# buttons, a table and a chart, merge-forward, a 公司圈 share, reactions, replies, a thread, system lines), with paging
 # (before / after / around), people's cards, the emoji catalogue and the media (made-up PNGs, Range answered). Off by
 # default: the iOS screenshots and TranslationTests read the plainer f2 above. What the app sends is kept: GET
 # /mock/lark (sent / reads / reactions / card actions); POST /mock/lark/incoming?feed=f1 adds a message from someone
@@ -3549,7 +3549,7 @@ FS_MESSAGES = {
                                                                 "metadata": {"size": "245760", "extension": "pdf"}}]),
         _fsm("f1", 94, "韩梅梅", "[语音]", 60, kind="MEDIA",
              parts=[{"kind": "media", "url": "/api/v1/lark/media/voice-1", "metadata": {"mime": "audio/opus", "duration": 9000}}]),
-        _fsm("f1", 95, "韩梅梅", "[removed]", 40, parts=[{"kind": "link", "text": "removed动态", "url": FS_MOMENTS_LINK}]),
+        _fsm("f1", 95, "韩梅梅", "[公司圈]", 40, parts=[{"kind": "link", "text": "公司圈动态", "url": FS_MOMENTS_LINK}]),
         _fsm("f1", 100, "韩梅梅", "周五的发布能赶上吗？下午我要和客户确认时间", 20,
              reply_to={"id": "lm_f1_91", "sender_name": "我", "text": "按计划，今天把最后两个问题合进去"}),
         _fsm("f1", 101, "韩梅梅", "顺便看一下这个", 18, parts=[_fst("顺便看一下 "), {"kind": "docs", "text": "客户沟通记录", "url": "https://example.com/docx/abc"},
@@ -3720,7 +3720,7 @@ def fs_get(h, p, q):
         root = fs_find(mid)
         h.send_json({"messages": ([root] if root else []) + FS_THREADS.get(mid, []), "has_older": False}); return True
     if p.startswith("/api/v1/lark/messages/") and p.endswith("/url-preview"):
-        h.send_json({"title": "removed", "card": {"author": "Tom", "avatarUrl": "/api/v1/lark/media/avatar-u_tom", "subtitle": "工程效率",
+        h.send_json({"title": "公司圈", "card": {"author": "Tom", "avatarUrl": "/api/v1/lark/media/avatar-u_tom", "subtitle": "工程效率",
                                                  "body": "周末徒步回来，顺手整理了一份新人上手清单，欢迎补充。", "footer": "12 赞 · 1 评论"}})
         return True
     # The inbox's own post (mp1) is the plainer one above; a post shared in a chat is this one.
@@ -3816,7 +3816,7 @@ MODEL_DEFINITIONS = [
     ("kb.project", "项目档案重写", "信息处理", "api"),
     ("kb.dedupe", "项目去重", "信息处理", "api"),
     ("kb.items", "事项提取与打标", "信息处理", "api"),
-    ("kb.moments", "removed关联", "信息处理", "api"),
+    ("kb.moments", "公司圈关联", "信息处理", "api"),
     ("assistant.title", "对话标题", "信息处理", "api"),
     ("agent.title", "Agent 标签名", "信息处理", "api"),
     ("schedule", "定时任务", "主对话", "launcher"),
@@ -3935,7 +3935,7 @@ LAUNCHER_PRESETS = [
      "models_error": "插件读模型列表超时"},
 ]
 
-# The removed post behind the inbox's moment item (LarkMomentsPostView reads these).
+# The 公司圈 post behind the inbox's moment item (LarkMomentsPostView reads these).
 def _ms(minutes): return int((datetime.now(timezone.utc) - timedelta(minutes=minutes)).timestamp() * 1000)
 MOMENT_POST = {"id": "mp1", "userName": "我", "userId": "me", "commentCount": 3, "reactionCount": 12, "createTime": _ms(150),
                "content": {"text": "换新电脑以后大家都怎么迁移数据？迁移助手跑了一下午还没好", "segments": [{"kind": "text", "text": "换新电脑以后大家都怎么迁移数据？迁移助手跑了一下午还没好"}]},
@@ -7744,8 +7744,9 @@ class H(BaseHTTPRequestHandler):
                 tag = (q.get("tag") or [""])[0]
                 items = [e for e in KB.get(kind, []) if not tag or tag in (e.get("tags") or [])]
                 return self.send_json({"items": items, "tags": kb_tags(kind)})
-            if kind == "moments" and len(parts) == 2:  # one archived removed post
-                return self.send_json({"post": {"id": parts[1]}, "markdown": "# removed · 帖子\n\n王五 · 2026-10-30 10:00 · 评论 2\n\n有人在用天气小组件吗？中号的降雨条看不太清\n\n## 评论（2）\n\n- 赵六: 同感，颜色太浅\n- 我: 在改了"})
+            if kind == "moments" and len(parts) == 2:  # one archived 公司圈 post
+                feed = os.environ.get("MOCK_MOMENTS_FEED", "")  # the feed's name as the archive keeps it ("": none, 公司圈)
+                return self.send_json({"post": {"id": parts[1], **({"feed": feed} if feed else {})}, "markdown": "# " + (feed or "公司圈") + " · 帖子\n\n王五 · 2026-10-30 10:00 · 评论 2\n\n有人在用天气小组件吗？中号的降雨条看不太清\n\n## 评论（2）\n\n- 赵六: 同感，颜色太浅\n- 我: 在改了"})
             if kind == "chats" and len(parts) == 4 and parts[2] == "days":
                 days = sorted(KB_DAYS.get(parts[1], {}))
                 if parts[3] not in days: return self.send_json({"error": "not found"}, 404)
@@ -9322,6 +9323,43 @@ def features():
 MOCK_HELP.append("MOCK_CHANNELS=1  设置 › 插件 › 渠道：App、飞书机器人和微信已连接、飞书 /agent 只读、一个待绑定（令牌 example-token）、一个出错、一个在市场里；主对话第一条来自微信")
 
 
+
+
+# ---------- area: Feishu through the lark-connector plugin (#1530) ----------
+# The plugin adds `lark` (the 消息 page, the chats, the native readers of documents and 公司圈 posts, /api/v1/lark/…) and
+# `lark_moments` (公司圈) to the features, its `lark_attachments` / `lark_native_encryption` with them. MOCK_NO_LARK=1: a
+# hub without the plugin: none of those features, /api/v1/lark/… 404 and no 飞书 connector.
+NO_LARK = os.environ.get("MOCK_NO_LARK") == "1"
+LARK_PLUGIN_FEATURES = ("lark", "lark_moments", "lark_attachments", "lark_native_encryption")
+
+_features_without_lark = features
+
+
+def features():
+    f = _features_without_lark()
+    if NO_LARK:
+        return [x for x in f if x not in LARK_PLUGIN_FEATURES]
+    return f + [x for x in ("lark", "lark_moments") if x not in f]
+
+
+if NO_LARK:
+    LEGACY_CONNECTORS[:] = [c for c in LEGACY_CONNECTORS if c["id"] != "lark"]
+    _get_with_lark, _post_with_lark = H.do_GET, H.do_POST
+
+    def _no_lark(handler, rest):
+        if urlparse(handler.path).path.startswith("/api/v1/lark/"):
+            return handler.send_json({"error": "not found"}, 404)
+        return rest(handler)
+
+    H.do_GET = lambda self: _no_lark(self, _get_with_lark)
+    H.do_POST = H.do_PUT = H.do_DELETE = H.do_PATCH = lambda self: _no_lark(self, _post_with_lark)
+
+if os.environ.get("MOCK_MOMENTS_FEED"):  # the project's posts say which feed they are from
+    for _d in KB_DETAIL.values():
+        for _m in _d.get("moments") or []:
+            _m["feed"] = os.environ["MOCK_MOMENTS_FEED"]
+MOCK_HELP.append("MOCK_MOMENTS_FEED=<名字>  知识库的公司圈帖子带 feed（项目的「相关<名字>」和存档帖子页的标题用它；不设时叫「公司圈」）")
+MOCK_HELP.append("MOCK_NO_LARK=1  没装 lark-connector 插件的 hub：features 里没有 lark / lark_moments / lark_attachments，/api/v1/lark/… 404，连接器里没有飞书")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="用于客户端测试的 mock hub")

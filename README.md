@@ -139,7 +139,7 @@ hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑�
 | --- | --- |
 | Agent | Claude Code、Codex；pi、DSH 等运行时经 [runtime SDK](docs/runtimes.md) 接入 |
 | 终端引擎 | herdr（默认）、Herdr App、Orca，每台电脑选一个（[docs/engines.md](docs/engines.md)） |
-| 飞书 | 消息进收件箱、知识库，群里或文档评论里发 `/agent …` 起一个 Agent；私聊机器人就是和 Persona 主对话说话。需要自己部署 [lark-connector](https://github.com/nwverse/lark-connector)，没有时助手可以用官方 lark-cli |
+| 飞书 | 私聊机器人就是和 Persona 主对话说话；助手可以用官方 lark-cli。消息进收件箱和知识库、群里或文档评论里发 `/agent …` 起 Agent、App 里的飞书聊天，由接飞书的插件提供（`docs/plugins.md`） |
 | 邮件 | 任意 IMAP / SMTP；Gmail 和 Outlook 用账号登录授权（[docs/mail.md](docs/mail.md)） |
 | GitHub | 收件箱、搜索和读取；评论、review 过确认闸门 |
 | iMessage | 读 Mac 上的「信息」，要给那台 Mac 上的 personad 完全磁盘访问权限 |

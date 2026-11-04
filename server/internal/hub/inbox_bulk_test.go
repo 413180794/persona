@@ -7,8 +7,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/nwverse/persona/server/internal/lark"
 )
 
 func bulkBody(done bool, targets ...inboxBulkTarget) string {
@@ -109,51 +107,6 @@ func TestInboxBulkDoneBadRequests(t *testing.T) {
 	}
 	if code, out := call(t, mux, "POST", "/api/v1/inbox/done", h.cfg.Token, `{"done":true,"items":[]}`); code != 200 || len(out["changed"].([]any)) != 0 {
 		t.Fatalf("nothing to do: %d %v", code, out)
-	}
-}
-
-// New Feishu messages around a bulk 已处理: merged into the item before it (its version moved), the item stays
-// open; arriving while the collection reads them (the item filed meanwhile), they open a new item.
-func TestInboxBulkDoneWithNewMessages(t *testing.T) {
-	h := muteHub(t)
-	now := time.Now()
-	chat := []lark.Message{larkMsg("11", "张三", false, now.Add(-3*time.Minute)), larkMsg("12", "张三", false, now.Add(-2*time.Minute))}
-	fetch := func(c lark.Conversation, n int) ([]lark.Message, error) { return chat[max(0, len(chat)-n):], nil }
-	conv := lark.Conversation{ID: "f1", Name: "张三", Unread: 2, UpdatedAt: now.Add(-2 * time.Minute)}
-	h.inbox.applyLark([]lark.Conversation{conv}, fetch, now, testUserZone)
-	id := "lark:f1:11"
-	seenVersion := listedVersion(h, id) // what the phone drew
-
-	// A message merges in before the request: not filed.
-	chat = append(chat, larkMsg("13", "张三", false, now.Add(-time.Minute)))
-	conv.Unread, conv.UpdatedAt = 3, now.Add(-time.Minute)
-	h.inbox.applyLark([]lark.Conversation{conv}, fetch, now, testUserZone)
-	res := h.setInboxDoneBulk(context.Background(), []inboxBulkTarget{{id, seenVersion}}, true, now)
-	if len(res.Changed) != 0 || len(res.Skipped) != 1 || res.Skipped[0].Reason != bulkSkipChanged || !h.inbox.items[id].open() {
-		t.Fatalf("an item with a message the user had not seen was filed: %+v", res)
-	}
-
-	// Filed with what it shows now, while the next collection reads a new message: that message opens a new item.
-	current := listedVersion(h, id)
-	chat = append(chat, larkMsg("14", "李四", false, now))
-	conv.Unread, conv.UpdatedAt = 4, now
-	var once sync.Once
-	filing := func(c lark.Conversation, n int) ([]lark.Message, error) {
-		once.Do(func() {
-			if r := h.setInboxDoneBulk(context.Background(), []inboxBulkTarget{{id, current}}, true, now); len(r.Changed) != 1 {
-				t.Errorf("not filed: %+v", r)
-			}
-		})
-		return fetch(c, n)
-	}
-	h.inbox.applyLark([]lark.Conversation{conv}, filing, now, testUserZone)
-	old := h.inbox.items[id]
-	if old.open() || old.Last != "13" {
-		t.Fatalf("the filed item took the new message: open=%v last=%s", old.open(), old.Last)
-	}
-	fresh := h.inbox.items["lark:f1:14"]
-	if fresh == nil || !fresh.open() || fresh.Lark.StartPosition != "14" || strings.Contains(fresh.Context, "hi 13") {
-		t.Fatalf("the new message did not open a new item: %+v", fresh)
 	}
 }
 

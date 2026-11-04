@@ -88,6 +88,8 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     var showFilters by remember { mutableStateOf(false) }
     var filterPage by remember { mutableStateOf<String?>(null) }
     var handingOff by remember { mutableStateOf<String?>(null) }
+    var composeDraft by remember { mutableStateOf<MailDraft?>(null) }
+    val mailTransport by repository.mailTransport.collectAsStateWithLifecycle()
 
     fun refresh(collectNow: Boolean = true) {
         if (refreshing) return
@@ -179,6 +181,11 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
             onTitleClick = if (connection == ConnectionState.Online) null else ({ navigator.navigate(ConnectionSettingsRoute) }),
             state = scroll, refreshing = refreshing, onRefresh = { refresh() },
             actions = {
+                if (mailTransport != null) {
+                    JIconButton(PhIcons.PencilSimple, "写邮件", {
+                        composeDraft = MailDraft(accountId = "")
+                    })
+                }
                 JIconButton(PhIcons.FunnelSimple, "筛选", { showFilters = true }, badge = source.isNotEmpty() || kind.isNotEmpty())
                 JIconButton(PhIcons.DotsThree, "更多", { showMore = true })
             },
@@ -244,6 +251,15 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     }
     handingOff?.let { id -> records[id] }?.let { record ->
         InboxHandOffSheet(repository, record, navigator, onDismiss = { handingOff = null })
+    }
+    composeDraft?.let { draft ->
+        mailTransport?.let { transport ->
+            ComposeMailDialog(
+                transport = transport,
+                draft = draft,
+                onDone = { composeDraft = null },
+            )
+        }
     }
 }
 

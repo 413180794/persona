@@ -374,7 +374,7 @@ extension APIClient {
         try await post("/api/v1/lark/messages/\(message)/card-actions/\(action)")
     }
 
-    // MARK: People, reactions, link previews, removed
+    // MARK: People, reactions, link previews, 公司圈
 
     func larkProfile(_ userID: String, feedID: String? = nil) async throws -> LarkProfile {
         try await get("/api/v1/lark/users/\(userID)", query: ["feed_id": feedID ?? ""])
@@ -441,7 +441,7 @@ nonisolated struct LarkProfile: Decodable, Sendable {
     var actions: [Action]?
 }
 
-/// The card Feishu shows under a link (a removed post: author, excerpt, counts).
+/// The card Feishu shows under a link (a 公司圈 post: author, excerpt, counts).
 nonisolated struct LarkURLPreview: Decodable, Sendable {
     struct Card: Decodable, Sendable {
         var author: String?
@@ -456,7 +456,7 @@ nonisolated struct LarkURLPreview: Decodable, Sendable {
     var card: Card?
 }
 
-/// One removed post.
+/// One 公司圈 post.
 nonisolated struct LarkMomentsPost: Decodable, Sendable {
     struct Segment: Decodable, Sendable { var kind: String?; var text: String?; var key: String?; var emojiKey: String? }
     struct Content: Decodable, Sendable { var text: String?; var segments: [Segment]? }

@@ -61,13 +61,38 @@ class HttpMailTransportTest {
             val flags = server.takeRequest()
             assertEquals("/api/v1/mail/messages/account%2F1/7/flags", flags.path)
             assertEquals("""{"mailbox":"Archive & work","seen":true}""", flags.body.readUtf8())
+
+            server.enqueue(MockResponse().setBody("""{"ok":true}"""))
+            transport.setFlagged(ref, 7, true)
+            val flagReq = server.takeRequest()
+            assertEquals("/api/v1/mail/messages/account%2F1/7/flags", flagReq.path)
+            assertEquals("""{"mailbox":"Archive & work","flagged":true}""", flagReq.body.readUtf8())
+
+            server.enqueue(MockResponse().setBody("""{"accounts":[{"id":"acc/1","email":"user@example.com"}]}"""))
+            val accounts = transport.accounts()
+            assertEquals(1, accounts.size)
+            assertEquals("acc/1", accounts[0].id)
+            assertEquals("user@example.com", accounts[0].email)
+            assertEquals("/api/v1/mail/accounts", server.takeRequest().path)
+
+            server.enqueue(MockResponse().setBody("""{"ok":true}"""))
+            transport.sendMail(persona.core.contracts.api.SendMailRequest(
+                accountId = "acc/1",
+                to = listOf(persona.core.contracts.api.MailAddress("Alice", "alice@example.com")),
+                subject = "Test",
+                text = "Body",
+            ))
+            val send = server.takeRequest()
+            assertEquals("/api/v1/mail/send", send.path)
+            assertTrue(send.body.readUtf8().contains("\"account_id\":\"acc/1\""))
+
             server.enqueue(MockResponse().setBody("""{"items":[]}"""))
             transport.refreshInbox()
             assertEquals("/api/v1/inbox/refresh", server.takeRequest().path)
             current = false
             try { transport.item("item/1"); fail("Stale pairing must not send requests") }
             catch (_: CancellationException) { }
-            assertEquals(4, server.requestCount)
+            assertEquals(7, server.requestCount)
         }
     }
 }

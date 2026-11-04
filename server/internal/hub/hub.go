@@ -13,14 +13,12 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/agents"
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/db"
-	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -55,10 +53,7 @@ type Hub struct {
 	triageAI, judgeAI *ai.Client
 	translations      translateCache // translate.go
 	quotas            quotaCache     // launcherquota.go
-	lark              *lark.Client
 	agents            *agents.Service
-	larkAccounts      larkAccountList // the lark-connector's accounts, as last read (lark_accounts.go)
-	larkLastEvent     atomic.Int64    // Unix seconds of the last realtime event from lark-connector (设置 › 连接器 › 飞书)
 
 	terms terminals // the terminal tab's live streams (terminal.go)
 
@@ -104,8 +99,6 @@ type Hub struct {
 	relays   relayBook
 	inbox    inbox   // the unified inbox (inbox.go)
 	kb       kbState // the knowledge base under ~/.jarvis/data (kb.go)
-	// larkAgent: /agent requests from Feishu and what became of them (lark_agent.go).
-	larkAgent larkAgents
 	// bots: the chat apps' bots the user talks to Persona through (bots.go).
 	bots     botHub
 	channels channelsHub
@@ -336,8 +329,10 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	if c := cfg.Inbox.JudgeAI; c != nil {
 		h.judgeAI = ai.New(c.Over(cfg.AI))
 	}
-	h.lark = lark.New(cfg.Lark)
-	h.inbox.larkAccount = h.lark.Account()
+	h.inbox.larkAccount = cfg.Lark.Account // the lark-connector account the Feishu items of a plugin came to (older configs)
+	if cfg.Lark.lark-connectorConfigured() {
+		h.logf("hub.json lark.container / token / base_url are not read any more: Feishu through lark-connector is a plugin's now; set them in its settings (docs/feishu.md)")
+	}
 	h.push.hubID = h.hubID
 	h.initAgents()
 	h.initTodos(ctx)
@@ -361,8 +356,6 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	go h.terminalKeepalive(ctx)
 	go h.live.run(ctx)
 	go h.scheduleLoop(ctx)
-	go h.larkEvents(ctx)
-	go h.larkAgentLoop(ctx)
 	h.startBots(ctx)
 	go h.agentsLoop(ctx)
 	go h.inboxLoop(ctx)
@@ -408,7 +401,7 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 		}
 	}
 	h.mu.Unlock()
-	titles, named := h.agentConversationTitles(), h.conversationTitles()
+	named := h.conversationTitles()
 	via := h.channelsOfConversations()
 	archived, relayed := h.archivedIDs(), h.queuedRelays()
 	main := h.mainConversation(m.cfg.ID, list, dir)
@@ -418,8 +411,6 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 		list[i].Assistant = isAssistant(list[i], dir)
 		if list[i].Assistant && list[i].SessionID == main {
 			list[i].Title = mainTitle // never its first message, a model's name or a rename (#1313)
-		} else if t := titles[list[i].SessionID]; t != "" && list[i].Assistant {
-			list[i].Title = t // not the first line of the prompt the hub wrote for it
 		} else if t := named[list[i].SessionID]; t != "" && list[i].Assistant {
 			list[i].Title = t // 「MMDD | 类型 | 主题」 or the user's own (assistant_titles.go)
 		}
@@ -1115,7 +1106,7 @@ func (h *Hub) mcpTools(assistant bool) []proto.Tool {
 	ctx := context.Background()
 	tools = append(tools, h.connectors.ToolsFor(ctx, true)...)
 	if assistant {
-		tools = append(tools, h.ownAssistantTools()...)
+		tools = append(tools, assistantTools()...)
 		tools = append(tools, h.computerTools()...)
 		tools = append(tools, h.browserTools()...)
 		tools = append(tools, h.connectors.ToolsFor(ctx, false)...)

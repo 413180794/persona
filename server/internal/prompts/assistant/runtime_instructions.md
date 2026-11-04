@@ -23,10 +23,9 @@
 当前的索引（`MEMORY.md`）：
 {{if .Index}}{{.Index}}{{if .Truncated}}
 …（索引太长，后面的没放进来，要看就读这个文件）{{end}}{{else}}（还没有记忆）{{end}}
-{{if .lark-connector}}
-## 飞书
+{{range .Gates}}
+## {{.Title}}
 
-lark-connector skill 讲的 `ol` 命令，在这里用 `lark-connector` 工具来跑：`args` 就是 `ol` 后面的那些参数（比如 `["GET", "/me"]`、
-`["POST", "/conversations/FEED_ID/messages", "{\"text\":\"hi\"}"]`）。在 shell 里直接跑 `ol` 或 `ol.sh` 拿不到 token；
-会被别人看到的写操作，工具会先在手机上请用户确认。
+技能里讲的 `{{.Command}}` 命令，在这里用 `{{.Tool}}` 工具来跑：`args` 就是 `{{.Command}}` 后面的那些参数（比如 `["GET", "/me"]`）。
+在 shell 里直接跑 `{{.Command}}` 拿不到凭据；会被别人看到的写操作，工具会先在手机上请用户确认。
 {{end}}</jarvis-context>

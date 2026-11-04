@@ -6,11 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
-	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,7 +15,6 @@ import (
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/kb"
-	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -33,8 +28,6 @@ type KBConfig struct {
 	// ExtraDirs are directories on the hub's machine that kb_search also reads (Markdown, read only), e.g. a
 	// repository of notes the user keeps; "~/" is the home there (docs/knowledge.md).
 	ExtraDirs []string `json:"extra_dirs,omitempty"`
-	// Moments archives the whole removed feed under <data>/moments (kb_moments_crawl.go); off unless enabled.
-	Moments *MomentsCrawl `json:"moments,omitempty"`
 }
 
 const (
@@ -52,7 +45,6 @@ type kbState struct {
 	kick       chan struct{}
 	eng        *kb.Engine
 	cfg        KBConfig
-	crawls     bool        // the hub's own crawler runs (hub.json kb.moments): it prunes the archive itself
 	postsDirty atomic.Bool // posts came in since the post archive's index was written (kb_posts.go)
 }
 
@@ -109,7 +101,7 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 	}
 	h.kb.eng, h.kb.cfg, h.kb.kick = e, cfg, make(chan struct{}, 1)
 	// Projects from before keywords existed get them at their next rewrite: the active ones are rewritten now (a
-	// few a run), so their removed posts can be found.
+	// few a run), so their 公司圈 posts can be found.
 	if n := e.SeedKeywords(60 * 24 * time.Hour); n > 0 {
 		h.logf("kb: %d project(s) to be rewritten for their keywords", n)
 	}
@@ -120,18 +112,10 @@ func (h *Hub) startKB(ctx context.Context, cfg KBConfig, dir string) {
 		h.logf("kb: %d mail chat(s) queued to be tagged again under the current rules", n)
 	}
 	go h.kbLoop(ctx)
-	if m := cfg.Moments; m != nil && m.Enabled && h.lark != nil {
-		days := cfg.TextDays
-		if days <= 0 {
-			days = 365
-		}
-		h.kb.crawls = true
-		go h.momentsCrawlLoop(ctx, st, *m, days)
-	}
 }
 
 // kbSources are where the knowledge base archives chats from, chat by chat: every connector's (Feishu's chats and
-// removed posts), in the order they were registered.
+// 公司圈 posts), in the order they were registered.
 func (h *Hub) kbSources() []kb.Source {
 	var out []kb.Source
 	for _, c := range h.connectors.All() {
@@ -211,7 +195,7 @@ func (h *Hub) kbLoop(ctx context.Context) {
 			}
 		}
 		e.RefreshProjects(ctx, 3)
-		// Same work under two names, and the removed posts about each project: a few model calls every half hour.
+		// Same work under two names, and the 公司圈 posts about each project: a few model calls every half hour.
 		if time.Since(lastLinks) >= kbItemsPoll {
 			lastLinks = time.Now()
 			run(ctx, func() {
@@ -219,7 +203,7 @@ func (h *Hub) kbLoop(ctx context.Context) {
 					h.logf("kb: merged %d duplicate project(s)", n)
 				}
 				if n := e.LinkMoments(ctx, 3); n > 0 {
-					h.logf("kb: linked %d removed post(s) to projects", n)
+					h.logf("kb: linked %d 公司圈 post(s) to projects", n)
 				}
 			})
 		}
@@ -241,7 +225,7 @@ func (h *Hub) kbLoop(ctx context.Context) {
 				h.logf("kb: pruned %d day(s)", n)
 			}
 		}
-		run(ctx, func() { h.kbPostsUpkeep(daily && !h.momentsCrawling()) })
+		run(ctx, func() { h.kbPostsUpkeep(daily) })
 		select {
 		case <-ctx.Done():
 			return
@@ -264,229 +248,11 @@ func run(ctx context.Context, f func()) {
 	}
 }
 
-// --- Feishu ---
-
-type larkSource struct{ c *lark.Client }
-
-func (s *larkSource) Name() string { return "lark" }
-
-func (s *larkSource) Chats(ctx context.Context, limit int) ([]kb.SourceChat, error) {
-	var out []kb.SourceChat
-	cursor := ""
-	for len(out) < limit {
-		page, next, err := s.c.Conversations(ctx, "chats", cursor, min(100, limit-len(out)))
-		if err != nil {
-			return out, err
-		}
-		for _, c := range page {
-			kind := "group"
-			if !c.IsGroup {
-				kind = "dm"
-				if larkKind(c) == KindBot {
-					kind = "bot"
-				}
-			}
-			out = append(out, kb.SourceChat{ID: c.ID, Name: c.Name, Kind: kind, Topic: c.IsTopic, UpdatedAt: c.UpdatedAt})
-		}
-		if next == "" {
-			break
-		}
-		cursor = next
-	}
-	return out, nil
-}
-
-var larkMediaRe = regexp.MustCompile(`"(/api/v1/lark/(?:media|messages)/[^"]+)"`)
-
-func (s *larkSource) Messages(ctx context.Context, c kb.SourceChat, after string, limit int) ([]kb.SourceMessage, string, bool, error) {
-	if !larkPosition(after) {
-		after = "" // a cursor lark-connector rejects (one came back as "-3"): read the newest page; older lines are skipped by time
-	}
-	w := lark.Window{After: after}
-	if c.Topic {
-		w = lark.Window{}
-	}
-	p, err := s.c.Messages(ctx, c.ID, w, limit, c.Topic)
-	if err != nil {
-		return nil, "", false, err
-	}
-	out := make([]kb.SourceMessage, 0, len(p.Messages))
-	for _, m := range p.Messages {
-		if m.Recalled {
-			continue
-		}
-		sm := kb.SourceMessage{ID: m.ID, Position: m.Position, SenderID: m.SenderID, SenderName: m.SenderName, Mine: m.IsMine,
-			Type: m.Type, Text: m.Text, At: m.CreatedAt, SenderHandles: larkHandles(m.SenderID)}
-		if m.ReplyTo != nil && m.ReplyTo.Text != "" {
-			sm.Text = fmt.Sprintf("（回复 %s：%s）%s", m.ReplyTo.SenderName, clipRunes(m.ReplyTo.Text, 60), sm.Text)
-		}
-		if m.Type == "IMAGE" || m.Type == "FILE" || m.Type == "POST" {
-			for _, mm := range larkMediaRe.FindAllStringSubmatch(string(m.Parts), 4) {
-				sm.Media = append(sm.Media, mm[1])
-			}
-		}
-		out = append(out, sm)
-	}
-	newer := p.NewerCursor
-	if c.Topic || !larkPosition(newer) {
-		newer = ""
-	}
-	return out, newer, p.HasNewer, nil
-}
-
-// larkPosition: a message position lark-connector takes back as a cursor, a non-negative integer (or none). Once it handed
-// out "-3" for a chat; kept as the archive cursor, every later read of that chat failed with INVALID_CURSOR.
-func larkPosition(p string) bool {
-	if p == "" {
-		return true
-	}
-	n, err := strconv.ParseInt(p, 10, 64)
-	return err == nil && n >= 0 && n <= 1<<53-1
-}
-
 func clipRunes(s string, n int) string {
 	if r := []rune(s); len(r) > n {
 		return string(r[:n]) + "…"
 	}
 	return s
-}
-
-const kbMaxAttachment = 20 << 20
-
-func (s *larkSource) Download(ctx context.Context, media, dst string) error {
-	u, err := url.Parse(media)
-	if err != nil {
-		return err
-	}
-	path, ok := strings.CutPrefix(u.Path, "/api/v1/lark")
-	if !ok {
-		return errors.New("not a Feishu media path")
-	}
-	if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(dst+".part", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-	if err != nil {
-		return err
-	}
-	w := &fileResponse{f: f, h: http.Header{}}
-	err = s.c.Media(ctx, w, path, u.Query(), http.Header{})
-	f.Close()
-	if err == nil && w.over {
-		err = errors.New("attachment over 20 MB")
-	}
-	if err != nil {
-		os.Remove(dst + ".part")
-		return err
-	}
-	return os.Rename(dst+".part", dst)
-}
-
-// fileResponse is an http.ResponseWriter that writes the body to a file, up to kbMaxAttachment.
-type fileResponse struct {
-	f    *os.File
-	h    http.Header
-	n    int64
-	over bool
-}
-
-func (w *fileResponse) Header() http.Header { return w.h }
-func (w *fileResponse) WriteHeader(int)     {}
-func (w *fileResponse) Write(p []byte) (int, error) {
-	if w.n+int64(len(p)) > kbMaxAttachment {
-		w.over = true
-		return 0, errors.New("too large")
-	}
-	w.n += int64(len(p))
-	return w.f.Write(p)
-}
-
-// calendarWindow is what the knowledge base reads of the calendar: from the user's yesterday to a week after their
-// today, midnight to midnight where they are, as UTC instants (it was the hub's UTC date with a Z: up to a day off).
-func calendarWindow(now time.Time, loc *time.Location) (start, end string) {
-	y, m, d := now.In(loc).Date()
-	today := time.Date(y, m, d, 0, 0, 0, 0, loc)
-	return today.AddDate(0, 0, -1).UTC().Format(time.RFC3339), today.AddDate(0, 0, 8).UTC().Format(time.RFC3339)
-}
-
-// loc is the user's time zone (calendarWindow).
-type larkItems struct {
-	c   *lark.Client
-	loc *time.Location
-}
-
-func (s *larkItems) Items(ctx context.Context) ([]kb.Item, error) {
-	var out []kb.Item
-	start, end := calendarWindow(time.Now(), s.loc)
-	q := url.Values{"start": {start}, "end": {end}}
-	if raw, err := s.c.Read(ctx, "GET", "/calendar/week", q, nil); err == nil {
-		var cal struct {
-			Events []struct {
-				ID, SourceID, Title string
-				StartAt             time.Time
-				IsFree              bool
-			}
-		}
-		if json.Unmarshal(raw, &cal) == nil {
-			for _, ev := range cal.Events {
-				if ev.Title == "" || ev.IsFree {
-					continue
-				}
-				id := ev.SourceID
-				if id == "" {
-					id = ev.ID
-				}
-				out = append(out, kb.Item{Kind: kb.KindEvent, ID: id, Title: ev.Title, At: ev.StartAt, Where: "calendar"})
-			}
-		}
-	} else {
-		return nil, err
-	}
-	if raw, err := s.c.Read(ctx, "GET", "/meetings", url.Values{"count": {"30"}}, nil); err == nil {
-		var ms struct {
-			Items []struct {
-				HistoryID string    `json:"historyId"`
-				Topic     string    `json:"topic"`
-				SortedAt  time.Time `json:"sortedAt"`
-				Kind      string    `json:"kind"`
-			}
-		}
-		if json.Unmarshal(raw, &ms) == nil {
-			for _, m := range ms.Items {
-				if m.Topic == "" || m.Kind != "" && m.Kind != "meeting" {
-					continue
-				}
-				out = append(out, kb.Item{Kind: kb.KindMeeting, ID: m.HistoryID, Title: m.Topic, At: m.SortedAt, Where: "meetings"})
-			}
-		}
-	}
-	return out, nil
-}
-
-// DocTitle reads the Markdown export's first line ("# 标题").
-func (s *larkItems) DocTitle(ctx context.Context, u string) string {
-	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	raw, err := s.c.Read(cctx, "GET", "/documents/read", url.Values{"url": {u}, "format": {"markdown"}}, nil)
-	if err != nil {
-		return ""
-	}
-	var doc struct {
-		Markdown string `json:"markdown"`
-		Content  string `json:"content"`
-		Title    string `json:"title"`
-	}
-	text := ""
-	if json.Unmarshal(raw, &doc) == nil {
-		if doc.Title != "" {
-			return doc.Title
-		}
-		text = doc.Markdown + doc.Content
-	} else {
-		text = string(raw)
-	}
-	first, _, _ := strings.Cut(strings.TrimSpace(text), "\n")
-	return clipRunes(strings.TrimSpace(strings.TrimPrefix(first, "#")), 120)
 }
 
 // --- mail ---
@@ -561,7 +327,7 @@ func (h *Hub) runKBTool(name string, args json.RawMessage) (string, error) {
 			fmt.Fprintf(&b, "\nlog.md (latest):\n%s\n", strings.Join(d.Log, "\n"))
 		}
 		if len(d.Moments) > 0 {
-			b.WriteString("\nremoved posts about it (full text: moments/posts/<id>.md):\n")
+			b.WriteString("\n公司圈 posts about it (full text: moments/posts/<id>.md):\n")
 			for _, m := range d.Moments {
 				fmt.Fprintf(&b, "- %s %s · %d comments · %s — %s\n", m.ID, m.At.In(h.userLocation()).Format("2006-01-02"), m.Comments, m.Note, m.Text)
 			}
@@ -671,7 +437,7 @@ func (h *Hub) kbRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"items": list, "tags": kb.KindTags(all, 30)})
 	})
-	// One archived removed post (a project's 相关removed): what the crawler kept, text and comments as Markdown.
+	// One archived 公司圈 post (a project's 相关公司圈): what the crawler kept, text and comments as Markdown.
 	api.HandleFunc("GET /api/v1/kb/moments/{id}", func(w http.ResponseWriter, r *http.Request) {
 		e := engine(w)
 		if e == nil {
@@ -834,28 +600,4 @@ func (h *Hub) kbAgentDone(machine string, s proto.Session) {
 			h.logf("kb: agent log %s: %v", p.Slug, err)
 		}
 	}
-}
-
-func (s *larkSource) Older(ctx context.Context, c kb.SourceChat, before string, limit int) ([]kb.SourceMessage, string, bool, error) {
-	p, err := s.c.Messages(ctx, c.ID, lark.Window{Before: before}, limit, c.Topic)
-	if err != nil {
-		return nil, "", false, err
-	}
-	out := make([]kb.SourceMessage, 0, len(p.Messages))
-	for _, m := range p.Messages {
-		if m.Recalled {
-			continue
-		}
-		out = append(out, kb.SourceMessage{ID: m.ID, Position: m.Position, SenderID: m.SenderID, SenderName: m.SenderName,
-			Mine: m.IsMine, Type: m.Type, Text: m.Text, At: m.CreatedAt, SenderHandles: larkHandles(m.SenderID)})
-	}
-	return out, p.OlderCursor, p.HasOlder, nil
-}
-
-// larkHandles is a Feishu sender's identity hint (kb/handles.go): their user id.
-func larkHandles(senderID string) []kb.Handle {
-	if senderID == "" {
-		return nil
-	}
-	return []kb.Handle{{Kind: kb.HandleLark, Value: senderID}}
 }

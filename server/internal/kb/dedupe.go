@@ -216,7 +216,7 @@ func (e *Engine) judgeDuplicate(ctx context.Context, c dedupeCandidate) (same, k
 }
 
 // MergeProjects folds drop into keep: drop's name and aliases become keep's aliases; people, chats, documents,
-// code directories, keywords and removed posts are joined; the timelines are interleaved; the chats, people and items
+// code directories, keywords and 公司圈 posts are joined; the timelines are interleaved; the chats, people and items
 // that named drop name keep. drop stays on disk as merged (merged_into), hidden from lists, so it can be undone by
 // hand. keep is marked dirty: its profile is rewritten from both.
 func (e *Engine) MergeProjects(keepSlug, dropSlug, why string) error {

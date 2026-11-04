@@ -678,9 +678,9 @@ struct KnowledgeDetailView: View {
         }
     }
 
-    // MARK: removed
+    // MARK: 公司圈
 
-    /// Posts in removed about this project (the hub finds them by the project's keywords and has the model keep the
+    /// Posts in 公司圈 about this project (the hub finds them by the project's keywords and has the model keep the
     /// ones really about it): who, when, comments, how it bears on the project; open one for the text and comments.
     private func momentsSection(_ moments: [KBMomentRef]) -> some View {
         let shownMoments = allMoments ? moments : Array(moments.prefix(Self.linksShown))
@@ -694,7 +694,7 @@ struct KnowledgeDetailView: View {
                     Text(allMoments ? "收起" : "全部 \(moments.count) 条").font(Theme.Font.secondaryMedium).lineLimit(1)
                 }
             }
-        } header: { sectionHeader("相关removed", moments.count) }
+        } header: { sectionHeader("相关" + KBMoments.feedName(moments), moments.count) }
     }
 
     /// A project merged into another (same work under two names): where it went.
@@ -883,7 +883,7 @@ struct KnowledgeDetailView: View {
     }
 }
 
-/// A removed post in a project: author, day and comments on a line, how it bears on the project, then the text.
+/// A 公司圈 post in a project: author, day and comments on a line, how it bears on the project, then the text.
 struct KBMomentRow: View {
     var moment: KBMomentRef
 
@@ -913,12 +913,14 @@ struct KBMomentRow: View {
     }
 }
 
-/// One archived removed post: its text and every comment as the crawler kept them, long ones in chunks.
+/// One archived 公司圈 post: its text and every comment as the crawler kept them, long ones in chunks.
 struct KBMomentView: View {
     @Environment(AppModel.self) private var model
     var ref: KBMomentRef
     @State private var chunks: [String]?
     @State private var error: String?
+    /// The archive's name for the feed, once loaded (the project's row may not have said).
+    @State private var feed: String?
 
     var body: some View {
         ScrollView {
@@ -940,7 +942,7 @@ struct KBMomentView: View {
             .padding(.vertical, Theme.Space.m)
         }
         .themedPage()
-        .navigationTitle("removed")
+        .navigationTitle(KBMoments.feedName(feed ?? ref.feed))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
     }
@@ -949,6 +951,7 @@ struct KBMomentView: View {
         guard let api = model.api else { return }
         do {
             let post = try await api.kbMoment(ref.id)
+            if let f = post.post?.feed, !f.isEmpty { feed = f }
             chunks = MarkdownChunks.split(Links.markdown(KBMomentView.dropTitle(post.markdown)), lines: 40)
             error = nil
         } catch {
@@ -956,7 +959,7 @@ struct KBMomentView: View {
         }
     }
 
-    /// The archive's "# removed · title" line: the page title says it.
+    /// The archive's "# <feed> · title" line: the page title says it.
     static func dropTitle(_ md: String) -> String {
         KnowledgeDetailView.dropTitle(md).trimmingCharacters(in: .whitespacesAndNewlines)
     }

@@ -7,7 +7,7 @@
 
 ## 背景：现在各接各的
 
-| 管道 | 飞书 | removed | 邮件 |
+| 管道 | 飞书 | 公司圈 | 邮件 |
 | --- | --- | --- | --- |
 | 知识库归档 | `larkSource`（`kb.Source` + `kb.Backfiller`，`hub/kb.go`） | `momentsSource`（同上，`Older` 是空的） | `mailSource` 是空壳；真正的归档是 `hub.kbMail` 自己一个循环，游标在 `mail-cursors.json`，调 `kb.Engine.Ingest` |
 | 文档 / 会议 / 日程 | `larkItems`（`kb.ItemSource`） | — | — |
@@ -17,7 +17,7 @@
 | AI 的读工具 | `lark_chats` / `lark_messages` / `lark_search`（`assistantTools(withLark, withMail)` 写死名字），lark-connector skill | 走 lark-connector skill | `mail_*`（`mail/mcp.go`） |
 | 写操作的闸门 | node 的 Bash 闸门（`node/larkgate.go`，hub.json `lark_gate` 规则） | 同左 | `hub.approve`（`mail_send` 自己调） |
 | 实时 | lark-connector 事件 WebSocket（`lark_events.go`）踢收件箱和归档 | 跟飞书一起轮询 | 轮询（收件箱 3 分钟、归档 6 分钟） |
-| App 链接 | `FeishuLinks.route` → 文档 / removed原生，其余 `LinkSheet` 网页 | 同左 | — |
+| App 链接 | `FeishuLinks.route` → 文档 / 公司圈原生，其余 `LinkSheet` 网页 | 同左 | — |
 | 设置 › 连接器 | `FeishuConnectorView`（`GET /api/v1/lark/status`） | — | 邮箱页 |
 
 每接一个来源，就要在这六七处各写一套，还要记得在每个 `switch` 里加一支。客户端也写死了来源：iOS 的 `InboxItem.isLark`、Android 的 `source == "lark"`，
@@ -33,7 +33,7 @@
 ## 一、Connector 接口
 
 代码放 `server/internal/connector`（接口、`Registry`、通用的闸门和状态），各内置连接器一个子包（`connector/github`、`connector/imessage`），
-飞书、removed、邮件迁移时先留在 `hub` 里用适配器包一层，避免一次搬太多。`connector` 依赖 `kb` 的数据类型（`SourceChat`、`SourceMessage`、`Item`），
+飞书、公司圈、邮件迁移时先留在 `hub` 里用适配器包一层，避免一次搬太多。`connector` 依赖 `kb` 的数据类型（`SourceChat`、`SourceMessage`、`Item`），
 不依赖 `hub`；`hub` 持有 `Registry`。
 
 核心只有身份：
@@ -82,7 +82,7 @@ type Credentials interface {
 增量有两种天然的单位，都要支持：
 
 ```go
-// 按会话的游标（飞书、removed）：就是现在的 kb.Source + kb.Backfiller，原样搬过来。
+// 按会话的游标（飞书、公司圈）：就是现在的 kb.Source + kb.Backfiller，原样搬过来。
 type ChatSource interface {
     Chats(ctx, limit) ([]kb.SourceChat, error)
     Messages(ctx, chat kb.SourceChat, after string, limit int) (msgs []kb.SourceMessage, newer string, more bool, err error)
@@ -103,7 +103,7 @@ type ChatBatch struct {
 type Attachments interface { Download(ctx, media, dst string) error } // 现在 kb.Source 里的 Download 拆出来
 ```
 
-- 一个连接器可以有几路会话（飞书连接器 = 飞书会话 + removed帖子），所以是 `ChatSources() []ChatSource` / `Streams() []StreamSource`，
+- 一个连接器可以有几路会话（飞书连接器 = 飞书会话 + 公司圈帖子），所以是 `ChatSources() []ChatSource` / `Streams() []StreamSource`，
   每路有自己的 `Name()`（`lark`、`moments`），它是知识库 id 的前缀（`chats/lark-…`、`chats/moments-…`），**迁移时不能变**。
 - 流式游标存在知识库目录 `cursors/<connector>-<stream>.json`（现在 `mail-cursors.json` 迁过去，读旧文件兼容一版）；按会话的游标照旧在每个会话的 `meta.json`。
 - `kb.Engine.Archive` 对 `ChatSource` 照旧；对 `StreamSource` 调 `Changes` 后逐批 `Ingest`。回填对两种都只用 `Backfiller`，按相关性挑会话不变。
@@ -211,7 +211,7 @@ Registry ──┬─ ChatSources / Streams / Backfiller / Attachments → kb.En
 
 ### 内置（Go，在 hub 里）
 
-飞书、removed、邮件、GitHub。直接实现上面的接口，跟 personad 一起发布，提示词在本仓库、受 golden 测试管。
+飞书、公司圈、邮件、GitHub。直接实现上面的接口，跟 personad 一起发布，提示词在本仓库、受 golden 测试管。
 
 ### 外部进程（沿用插件机制，代码在别的仓库）
 
@@ -263,7 +263,7 @@ node → hub 事件：`connector.changed {id, scope}`。
 
 一个连接器只认**一台**机器（配置里写 `imessage.machine`），不在多台 Mac 上各读一份（iCloud 同步的数据是同一份，读两遍只会重复）。
 
-## 三、迁移：飞书、removed、邮件搬到新接口（只重构，不改行为）
+## 三、迁移：飞书、公司圈、邮件搬到新接口（只重构，不改行为）
 
 每一步一个 PR，合入前同一组验证：
 
@@ -315,7 +315,7 @@ M1–M6 合完、部署后在 hub 上看一天日志（归档行数、收件箱�
 - **会话**：一个 PR / issue 一个会话 `chats/github-<owner>-<repo>-<号>`（`kind: pr | issue`），描述是第一条，后面是 issue 评论、review（「alice 批准了」「bob 要求修改：…」）、
   行内评论（带文件名:行号）按时间排；机器人（`[bot]` 账号、CI 评论）的标成机器人，`HasPeople` 不把它们算真人。
 - **哪些进**：只收「和我有关」的线程（通知里出现过的 + 搜索 `involves:@me` 最近 30 天更新过的），不爬整个仓库。游标是线程的 `updated_at`
-  + 每类评论的 `since`（`StreamSource`），往回补就是第一次读全部评论（和removed一样，不需要 `Older`）。
+  + 每类评论的 `since`（`StreamSource`），往回补就是第一次读全部评论（和公司圈一样，不需要 `Older`）。
 - **仓库挂项目**：项目的 `dirs`（`<机器>:<路径>`）是代码目录；node 的 `git.status` 加一个可选字段 `remotes`（旧 node 没有就跳过），
   hub 把 `github.com/<owner>/<repo>`（或配置的 GHE 主机）对上项目，存进项目 `meta.json` 的 `repos`。这个仓库的 PR 会话压缩时把项目直接给模型（不用它猜），
   时间线记「GitHub · PR #号 · 一句话」。没对上项目的仓库照常由模型按内容挂。

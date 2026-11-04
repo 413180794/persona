@@ -127,7 +127,7 @@ func (h *Hub) pluginChannel(id string) (pluginChannel, bool) {
 
 // channelList is every channel: the apps, the hub's own, the plugins', then the markets' not installed.
 func (h *Hub) channelList(ctx context.Context) []channel.View {
-	out := []channel.View{appChannel(), h.feishuChannel(ctx), h.larkAgentChannel()}
+	out := []channel.View{appChannel(), h.feishuChannel(ctx)}
 	if v, ok := h.voiceChannel(ctx); ok {
 		out = append(out, v)
 	}
@@ -226,26 +226,6 @@ func (h *Hub) feishuChannel(ctx context.Context) channel.View {
 		{ID: "pushes", Title: "推送也发到飞书", Description: "推到手机的同时发一份；定时任务那段对话的回答也发", On: f.Pushes},
 		{ID: "sync", Title: "同步主对话", Description: "主对话里不是从飞书发起的一轮结束时，把回答发到飞书", On: f.Sync},
 		{ID: "agents", Title: "驱动 Agent", Description: "/agents 列出各台电脑上的 Agent，选一个之后的消息发给它", On: f.Agents},
-	}
-	return out
-}
-
-func (h *Hub) larkAgentChannel() channel.View {
-	out := channel.View{ID: channel.LarkAgent, Name: "飞书 /agent", Kind: channel.KindMention, Source: channel.SourceBuiltin, Installed: true,
-		Bind: channel.BindConfig, ReadOnly: true, Capabilities: channel.Capabilities{Format: channel.FormatMarkdown, Asks: channel.AsksNone},
-		Description: "在飞书任何会话、文档评论里自己发「/agent …」，Agent 处理完以你的名义回复（hub.json 的 lark_agent）"}
-	if h.cfg == nil || !h.cfg.LarkAgent.Enabled {
-		out.State = channel.StateDisabled
-		return out
-	}
-	out.Enabled = true
-	out.State = channel.StateConnected
-	if c := h.connectors.Get("lark"); c != nil {
-		if st := connector.StatusOf(context.Background(), c); st.State != connector.StateOK {
-			out.State, out.Error = channel.StateError, "飞书（lark-connector）没登录或连不上："+st.Error
-		} else if st.Account != "" {
-			out.Account = &channel.Account{Name: st.Account}
-		}
 	}
 	return out
 }
@@ -400,8 +380,6 @@ func (h *Hub) channelDetail(ctx context.Context, id string) (channel.Detail, boo
 		b.mu.Lock()
 		d.Waiting.Asks = len(b.cards)
 		b.mu.Unlock()
-	case channel.LarkAgent:
-		d.SettingsURL = "settings/model-config"
 	case channel.App:
 	default:
 		if v.Source == channel.SourcePlugin && v.Plugin != "" {

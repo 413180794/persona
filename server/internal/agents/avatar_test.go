@@ -8,8 +8,6 @@ import (
 	"image/png"
 	"net/http"
 	"testing"
-
-	"github.com/nwverse/persona/server/internal/lark"
 )
 
 const svgCircle = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M50 8a42 42 0 1 1 0 84a42 42 0 0 1 0-84z" fill="#FF309B"/></svg>`
@@ -17,10 +15,10 @@ const svgCircle = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"
 func TestAvatarMergedFromFeedAndRasterized(t *testing.T) {
 	svgURL := "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString([]byte(svgCircle))
 	f := &fakeBridge{
-		sessions: []lark.AgentSession{{SessionKey: "agent:grok_bot:a:1"}, {SessionKey: "agent:grok_bot:a:2"}},
+		sessions: []AgentSession{{SessionKey: "agent:grok_bot:a:1"}, {SessionKey: "agent:grok_bot:a:2"}},
 		avatars:  map[string]string{"agent:grok_bot:a:1": svgURL},
 	}
-	s := NewService(nil, nil, nil, Bridge{API: f})
+	s := NewService(nil, nil, nil, testBridge{API: f})
 	ctx := context.Background()
 	list, err := s.Sessions(ctx, "", "")
 	if err != nil || len(list) != 2 {

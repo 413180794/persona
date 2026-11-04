@@ -9,7 +9,6 @@ import (
 	"slices"
 
 	"github.com/nwverse/persona/server/internal/agents"
-	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/plugin"
 	"github.com/nwverse/persona/server/internal/plugin/host"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -62,10 +61,10 @@ func agentSourceError(err error) error {
 // Status: the plugin's own words on top of what the manifest says (the id is always the contribution's).
 func (s *pluginAgentSource) Status(ctx context.Context) (agents.Status, error) {
 	var st struct {
-		Enabled   *bool                `json:"enabled"`
-		Setup     string               `json:"setup"`
-		Providers []lark.AgentProvider `json:"providers"`
-		Accounts  []lark.AgentAccount  `json:"accounts"`
+		Enabled   *bool                  `json:"enabled"`
+		Setup     string                 `json:"setup"`
+		Providers []agents.AgentProvider `json:"providers"`
+		Accounts  []agents.AgentAccount  `json:"accounts"`
 	}
 	err := s.call(ctx, "status", nil, &st)
 	out := agents.Status{Source: s.item.ID, Enabled: true, Setup: st.Setup, Providers: st.Providers, Accounts: st.Accounts}
@@ -78,7 +77,7 @@ func (s *pluginAgentSource) Status(ctx context.Context) (agents.Status, error) {
 	}
 	if out.Providers == nil {
 		for _, p := range s.item.Providers {
-			out.Providers = append(out.Providers, lark.AgentProvider{Provider: p, Connection: "server", Available: true})
+			out.Providers = append(out.Providers, agents.AgentProvider{Provider: p, Connection: "server", Available: true})
 		}
 	}
 	return out, nil
@@ -88,7 +87,7 @@ func (s *pluginAgentSource) Status(ctx context.Context) (agents.Status, error) {
 func (s *pluginAgentSource) Sessions(ctx context.Context) ([]agents.Session, error) {
 	var res struct {
 		Sessions []struct {
-			lark.AgentSession
+			agents.AgentSession
 			AvatarURL string `json:"avatarUrl"`
 		} `json:"sessions"`
 	}
@@ -107,7 +106,7 @@ func (s *pluginAgentSource) Sessions(ctx context.Context) ([]agents.Session, err
 
 func (s *pluginAgentSource) Search(ctx context.Context, q string) ([]agents.SearchHit, error) {
 	var res struct {
-		Hits []lark.AgentSearchHit `json:"hits"`
+		Hits []agents.AgentSearchHit `json:"hits"`
 	}
 	err := s.call(ctx, "search", map[string]any{"q": q}, &res)
 	var ae *agents.Error
@@ -125,7 +124,7 @@ func (s *pluginAgentSource) Search(ctx context.Context, q string) ([]agents.Sear
 }
 
 func (s *pluginAgentSource) Messages(ctx context.Context, key, cursor string, limit int) (*agents.MessagePage, error) {
-	var p lark.AgentMessagePage
+	var p agents.AgentMessagePage
 	if err := s.call(ctx, "messages", map[string]any{"session_key": key, "cursor": cursor, "limit": limit}, &p); err != nil {
 		return nil, err
 	}

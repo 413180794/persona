@@ -179,7 +179,7 @@ struct InboxDraftSheet: View {
 
     // Spelled out instead of one nested ternary: Swift 6.2 (Xcode 26.0) cannot type-check that in reasonable time.
     private var title: String {
-        if item.moment != nil { return "评论removed" }
+        if item.moment != nil { return "评论公司圈" }
         if item.doc != nil { return "评论 " + item.title }
         if let connector = item.connector {
             return "评论 " + (connector.reference?.split(separator: "/").last.map(String.init) ?? item.title)

@@ -49,11 +49,11 @@ func (h *Hub) removePluginConnector(id string) {
 	h.restoreOwnConnector(id)
 }
 
-// larkByPlugin: a plugin serves Feishu now; the hub's own realtime events, /agent and Moments crawl stand down.
+// larkByPlugin: a plugin serves Feishu (its connector "lark" is registered): Feishu items keep their blocks and go
+// back to it (inbox_migrate.go).
 func (h *Hub) larkByPlugin() bool {
 	if h.connectors == nil {
 		return false
 	}
-	_, taken := h.migrated.Load("lark")
-	return taken
+	return h.connectors.Get("lark") != nil // the hub has none of its own any more
 }

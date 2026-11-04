@@ -2,60 +2,23 @@ package hub
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
-	"sync"
 	"testing"
 
-	"github.com/nwverse/persona/server/internal/agents"
 	"github.com/nwverse/persona/server/internal/lark"
 )
 
 const bridgeKey = "agent:grok_bot:a6094fe692a7b:8f798b0c-5cb9-4d5f-bdf5-fde194dbe5a3/"
 
-// fakelark-connector answers the agent-bridge routes and records the calls.
-func fakeAgentslark-connector(t *testing.T) (*httptest.Server, *[]string) {
-	var mu sync.Mutex
-	var calls []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		calls = append(calls, r.Method+" "+r.URL.EscapedPath())
-		mu.Unlock()
-		p := strings.TrimPrefix(r.URL.EscapedPath(), "/agent/v1")
-		esc := url.PathEscape(bridgeKey)
-		switch {
-		case p == "/agent-bridge":
-			io.WriteString(w, `{"enabled":true,"mixIntoInbox":true,"providers":[],"accounts":[{"accountId":"a6094fe692a7b","provider":"grok_bot","sessionCount":1}]}`)
-		case p == "/agent-sessions":
-			io.WriteString(w, `{"sessions":[{"sessionKey":"`+bridgeKey+`","provider":"grok_bot","title":"jarvis","kind":"main","canSend":true,"unreadCount":2,"rankTimeMs":5},
-			{"sessionKey":"agent:muse:x:main","provider":"muse","canSend":false}]}`)
-		case p == "/agent-sessions/"+esc+"/messages" && r.Method == "GET":
-			io.WriteString(w, `{"messages":[{"externalId":"e","role":"assistant","blocks":[{"type":"text","text":"hi"}]}],"hasMore":true,"nextCursor":"c2"}`)
-		case p == "/agent-sessions/"+esc+"/messages" && r.Method == "POST":
-			io.WriteString(w, `{}`)
-		case p == "/agent-sessions/"+esc+"/read":
-			io.WriteString(w, `{}`)
-		default:
-			w.WriteHeader(404)
-			io.WriteString(w, `{"error":{"code":"NOT_FOUND","message":"nope"}}`)
-		}
-	}))
-	t.Cleanup(srv.Close)
-	return srv, &calls
-}
-
+// agentsHub is a hub with no personal agents sources (they come from plugins: plugin_agents_test.go).
 func agentsHub(t *testing.T) (*Hub, http.Handler, *[]string) {
-	srv, calls := fakeAgentslark-connector(t)
 	h := newTestHub(t)
-	h.cfg.Lark = lark.Config{BaseURL: srv.URL + "/agent/v1", Token: "tok"}
-	h.lark = lark.New(h.cfg.Lark)
 	h.initAgents()
 	mux := http.NewServeMux()
 	h.agentRoutes(mux)
-	return h, mux, calls
+	return h, mux, &[]string{}
 }
 
 func do(t *testing.T, hd http.Handler, method, path, body string) (int, map[string]any) {
@@ -67,31 +30,11 @@ func do(t *testing.T, hd http.Handler, method, path, body string) (int, map[stri
 	return rec.Code, out
 }
 
-func TestAgentRoutesRead(t *testing.T) {
-	_, hd, _ := agentsHub(t)
-	if code, out := do(t, hd, "GET", "/api/v1/agents", ""); code != 200 || out["sources"].([]any)[0].(map[string]any)["enabled"] != true {
-		t.Fatalf("%d %v", code, out)
-	}
-	code, out := do(t, hd, "GET", "/api/v1/agents/sessions?provider=grok_bot", "")
-	ss := out["sessions"].([]any)
-	if code != 200 || len(ss) != 1 || ss[0].(map[string]any)["id"] != "removedbridge:"+bridgeKey {
-		t.Fatalf("%d %v", code, out)
-	}
-	id := url.PathEscape("removedbridge:" + bridgeKey)
-	code, out = do(t, hd, "GET", "/api/v1/agents/sessions/"+id+"/messages?limit=5", "")
-	if code != 200 || out["nextCursor"] != "c2" || len(out["messages"].([]any)) != 1 {
-		t.Fatalf("%d %v", code, out)
-	}
-	if code, _ := do(t, hd, "GET", "/api/v1/agents/sessions/"+url.PathEscape("removedbridge:nope")+"/messages", ""); code != 404 {
-		t.Fatalf("unknown session: %d", code)
-	}
-}
-
-func TestAgentRoutesWithoutlark-connector(t *testing.T) {
+// Without a plugin's source the Agents tab is empty, not an error (lark-cli or not).
+func TestAgentRoutesWithoutSources(t *testing.T) {
 	for _, cli := range []*lark.CLIConfig{nil, {}} {
 		h := newTestHub(t)
 		h.cfg.Lark = lark.Config{CLI: cli}
-		h.lark = lark.New(h.cfg.Lark)
 		h.initAgents()
 		mux := http.NewServeMux()
 		h.agentRoutes(mux)
@@ -102,49 +45,9 @@ func TestAgentRoutesWithoutlark-connector(t *testing.T) {
 			code, out := do(t, mux, "GET", path, "")
 			items, ok := out[key].([]any)
 			if code != http.StatusOK || !ok || len(items) != 0 {
-				t.Fatalf("%s without lark-connector: %d %v", path, code, out)
+				t.Fatalf("%s without sources: %d %v", path, code, out)
 			}
 		}
-	}
-}
-
-func TestAgentRoutesSend(t *testing.T) {
-	_, hd, calls := agentsHub(t)
-	id := url.PathEscape("removedbridge:" + bridgeKey)
-	agents.FollowUps = nil
-	cid := agents.NewClientID()
-	for i := 0; i < 3; i++ {
-		code, out := do(t, hd, "POST", "/api/v1/agents/sessions/"+id+"/messages", `{"clientId":"`+cid+`","text":"hello"}`)
-		if code != 200 || out["duplicate"] != (i > 0) {
-			t.Fatalf("send %d: %d %v", i, code, out)
-		}
-	}
-	code, out := do(t, hd, "POST", "/api/v1/agents/sessions/"+id+"/messages", `{"text":"x"}`)
-	gen, _ := out["outbox"].(map[string]any)["clientId"].(string)
-	if code != 200 || len(gen) != 36 {
-		t.Fatalf("generated clientId: %d %v", code, out)
-	}
-	muse := url.PathEscape("removedbridge:agent:muse:x:main")
-	if code, _ := do(t, hd, "POST", "/api/v1/agents/sessions/"+muse+"/messages", `{"text":"x"}`); code != 409 {
-		t.Fatalf("canSend=false: %d", code)
-	}
-	if code, _ := do(t, hd, "POST", "/api/v1/agents/sessions/"+id+"/messages", `{"text":"`+strings.Repeat("a", 20001)+`"}`); code != 413 {
-		t.Fatalf("too long: %d", code)
-	}
-	if code, _ := do(t, hd, "POST", "/api/v1/agents/sessions/"+id+"/read", ``); code != 200 {
-		t.Fatalf("read: %d", code)
-	}
-	posts := 0
-	for _, c := range *calls {
-		if strings.HasPrefix(c, "POST") && strings.HasSuffix(c, "/messages") {
-			posts++
-		}
-	}
-	if posts != 2 {
-		t.Fatalf("lark-connector got %d sends, want 2: %v", posts, *calls)
-	}
-	if code, out := do(t, hd, "GET", "/api/v1/agents/outbox", ""); code != 200 || len(out["outbox"].([]any)) != 2 {
-		t.Fatalf("outbox %d %v", code, out)
 	}
 }
 

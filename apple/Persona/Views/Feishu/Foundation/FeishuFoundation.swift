@@ -25,8 +25,8 @@ extension APIClient {
 
 // MARK: - Routes
 
-/// What a Feishu view can open from another: a chat, a document, a person, a removed post. Persona is not a second
-/// Feishu: there are no browsing screens, only what a link or a message leads to. The navigation stack that owns a
+/// What a Feishu view can open from another: a chat, a document, a person, a company-feed (公司圈) post. Persona is
+/// not a second Feishu: there are no browsing screens, only what a link or a message leads to. The navigation stack that owns a
 /// Feishu view resolves these with `.feishuRoutes()`.
 enum FeishuRoute: Hashable {
     case chat(LarkConversation)
@@ -47,7 +47,8 @@ extension View {
     }
 
     /// Links inside Feishu views stay in the app (CLAUDE.md「链接在 App 内打开」): doc / wiki links open in the native
-    /// reader and removed links as the post, other web pages in the link sheet; mailto, tel and the like go to the system.
+    /// reader and company-feed links as the post (while the hub has them, `LarkFeatures`), other web pages in the link
+    /// sheet; mailto, tel and the like go to the system.
     func feishuHandlesLinks(_ open: ((FeishuRoute) -> Void)?) -> some View {
         modifier(FeishuLinkHandling(open: open))
     }
@@ -61,7 +62,7 @@ private struct FeishuLinkHandling: ViewModifier {
     func body(content: Content) -> some View {
         #if os(macOS)
         content.environment(\.openURL, OpenURLAction { url in
-            if let open, case .route(let route) = FeishuLinks.target(url) {
+            if let open, case .route(let route) = FeishuLinks.target(url, lark: model.larkFeatures) {
                 open(route)
                 return .handled
             }
@@ -70,7 +71,7 @@ private struct FeishuLinkHandling: ViewModifier {
         #else
         content
             .environment(\.openURL, OpenURLAction { url in
-                switch FeishuLinks.target(url) {
+                switch FeishuLinks.target(url, lark: model.larkFeatures) {
                 case .route(let route) where open != nil:
                     open?(route)
                     return .handled
@@ -108,17 +109,18 @@ nonisolated enum FeishuLinks {
         return ["docx", "wiki", "docs", "sheets", "base", "mindnotes", "file", "slides"].contains(first)
     }
 
-    /// The native view a Feishu link opens in, if there is one.
-    static func route(_ url: URL) -> FeishuRoute? {
-        if isDoc(url) { return .doc(url: url.absoluteString, title: nil) }
-        if let id = LarkMoments.postID(url.absoluteString) { return .momentsPost(id: id) }
+    /// The native view a Feishu link opens in, if there is one and the hub has what it reads (`LarkFeatures`):
+    /// without it the link is an ordinary web page.
+    static func route(_ url: URL, lark: LarkFeatures) -> FeishuRoute? {
+        if lark.chats, isDoc(url) { return .doc(url: url.absoluteString, title: nil) }
+        if lark.moments, let id = LarkMoments.postID(url.absoluteString) { return .momentsPost(id: id) }
         return nil
     }
 
     typealias Target = FeishuLinkTarget
 
-    static func target(_ url: URL) -> Target {
-        if let route = route(url) { return .route(route) }
+    static func target(_ url: URL, lark: LarkFeatures) -> Target {
+        if let route = route(url, lark: lark) { return .route(route) }
         guard ["http", "https"].contains(url.scheme?.lowercased() ?? ""), !(url.host ?? "").isEmpty else { return .system }
         return .sheet
     }

@@ -10,6 +10,16 @@ interface MailTransport {
     suspend fun item(itemId: String): MailInboxItem
     suspend fun message(ref: MailReference, uid: Long): MailMessage
     suspend fun setSeen(ref: MailReference, uid: Long, seen: Boolean)
+    suspend fun setFlagged(ref: MailReference, uid: Long, flagged: Boolean) {
+        setFlags(ref, uid, flagged = flagged)
+    }
+    suspend fun setFlags(ref: MailReference, uid: Long, seen: Boolean? = null, flagged: Boolean? = null) {
+        if (seen != null) setSeen(ref, uid, seen)
+    }
+    suspend fun accounts(): List<MailAccount> = emptyList()
+    suspend fun sendMail(request: SendMailRequest) {
+        throw UnsupportedOperationException("Sending mail unavailable")
+    }
     suspend fun refreshInbox()
     suspend fun downloadAttachment(ref: MailReference, uid: Long, attachmentId: String, output: OutputStream,
         offset: Long = 0, progress: (Long, Long?) -> Unit = { _, _ -> }): Unit =
@@ -33,6 +43,18 @@ data class MailReplyTarget(val uid: Long, val version: String)
 class MailReplyTargetChanged : java.io.IOException("邮件回复对象已变化，请查看最新邮件后确认发送")
 
 @Serializable
+data class SendMailRequest(
+    @SerialName("account_id") val accountId: String,
+    val to: List<MailAddress>,
+    val cc: List<MailAddress> = emptyList(),
+    val bcc: List<MailAddress> = emptyList(),
+    val subject: String = "",
+    val text: String = "",
+    @SerialName("in_reply_to") val inReplyTo: String? = null,
+    val references: String? = null,
+)
+
+@Serializable
 data class MailAddress(val name: String = "", val email: String = "") {
     fun display(): String = if (name.isBlank()) email else "$name <$email>"
 }
@@ -51,7 +73,11 @@ data class MailMessage(
     val cc: List<MailAddress> = emptyList(),
     val date: String = "",
     val seen: Boolean = false,
+    val flagged: Boolean = false,
     val text: String = "",
     val html: String = "",
     val attachments: List<MailAttachment> = emptyList(),
+    @SerialName("message_id") val messageId: String = "",
+    @SerialName("in_reply_to") val inReplyTo: String = "",
+    val references: List<String> = emptyList(),
 )

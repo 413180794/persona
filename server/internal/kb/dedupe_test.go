@@ -144,7 +144,7 @@ func TestLinkMoments(t *testing.T) {
 	if len(p.Moments) != 1 || p.Moments[0].ID != "m1" || p.Moments[0].Note != "用户反馈" || !p.Dirty {
 		t.Fatalf("project = %+v", p)
 	}
-	if log := st.Log("p", 5); len(log) != 1 || !strings.Contains(log[0], "removed · 王五") {
+	if log := st.Log("p", 5); len(log) != 1 || !strings.Contains(log[0], "公司圈 · 王五") {
 		t.Fatalf("log = %v", log)
 	}
 	j := st.judged("p")
@@ -167,12 +167,12 @@ func TestLinkMoments(t *testing.T) {
 	}
 }
 
-// A removed post archived long after it was written is compressed whole (back to a year), not only its last 30 days.
+// A 公司圈 post archived long after it was written is compressed whole (back to a year), not only its last 30 days.
 func TestCompressAnOldMomentChat(t *testing.T) {
 	m := &scriptModel{replies: []string{`{"summary":"## 这是什么\n帖子","one_line":"一条帖子","importance":"P2","relevance":40}`}}
 	e := testEngine(t, m)
 	created := time.Date(2026, 10, 31, 12, 0, 0, 0, time.Local)
-	c := &Chat{ID: "moments-p1", Source: "moments", Kind: "moment", Name: "removed · 帖子", Created: created, LastAt: created.AddDate(0, -3, 0), Pending: 3}
+	c := &Chat{ID: "moments-p1", Source: "moments", Kind: "moment", Name: "公司圈 · 帖子", Created: created, LastAt: created.AddDate(0, -3, 0), Pending: 3}
 	_ = e.Store.PutChat(c)
 	_ = e.Store.AppendMessages(c, []Line{{At: created.AddDate(0, -3, 0), Sender: "王五", Text: "（发帖）三个月前的帖子"}})
 	if err := e.Compress(context.Background(), c); err != nil {

@@ -51,7 +51,8 @@
 
 > **2026-11-04 起（#1468）**：闸门是通用的「命令闸门」：命令名、脚本、凭据、规则都由插件的 `assistant.gate` 给（`docs/plugins.md`「助手」），
 > node 里不再有 lark-connector 的默认规则；装了经 lark-connector 接飞书的插件时 `ol` 的闸门和凭据来自插件，没装时 hub 自己的 lark-connector 合成同样的闸门（3c 删掉）。
-> 下面说的行为（读放行、别人看得到的写在手机上确认、拒绝 token / 直接 curl）不变。
+> 下面说的行为（读放行、别人看得到的写在手机上确认、拒绝 token / 直接 curl）不变。3c（#1520）之后 hub 不再合成这个闸门，lark-connector 技能、
+> 闸门规则和凭据只来自插件；仓库里的 `skills/lark-connector` 副本和同步脚本已删。
 
 用户要求：「lark-connector 自带 skill……现在只走我们的 MCP lark_* 工具，自由度低」「skill 弄一个副本就行，不搞整个 lark-connector 仓库丢进去」。
 
@@ -92,7 +93,7 @@
   并把 lark-cli 所在目录放进 PATH（npm 的 lark-cli 是 `env node` 的脚本，要找得到 node）。没配 `lark.cli` 或找不到 lark-cli 就不写。
   lark-cli 的凭据留在它自己的 `~/.lark-cli`，hub 和 node 都不碰。
 - **说明书**：不往助手目录拷 skill。CLAUDE.md（`prompts/assistant/claude_md.md`）多一段，让它先 `lark-cli skills read lark-<领域>` 读 lark-cli 自带、
-  跟版本走的领域说明，参数用 `--help` / `lark-cli schema`。只有 lark-cli 时说明没有未读和removed、`lark_*` MCP 工具用不了，找要处理的消息用
+  跟版本走的领域说明，参数用 `--help` / `lark-cli schema`。只有 lark-cli 时说明没有未读和公司圈、`lark_*` MCP 工具用不了，找要处理的消息用
   `im +messages-search --is-at-me / --chat-type p2p`；两个都有时按 `lark.prefer` 分工（golden `assistant_claude_md.lark_cli`、`.both`）。
   发消息、回复消息让它用应用的机器人（`--as bot`）：用户身份要应用开 `im:message.send_as_user`，默认的应用没有（2026-11-04 实测）；其余读写用用户身份。
   只配了 lark-cli 时，机器上留着的 lark-connector skill（旧版 jarvisd 拷进助手目录的）不算：没有 lark-connector 可连，CLAUDE.md 里不提 `ol`

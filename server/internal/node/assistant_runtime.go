@@ -156,9 +156,16 @@ func (n *Node) runtimeStartWith(ctx context.Context, h *runtimeConn, params map[
 }
 
 // runtimeInstructions is the first message's instructions for an assistant on a runtime: the memory it shares with
-// Claude and Codex (memory.go), and Feishu through lark-connector when the lark-connector skill is on this machine.
+// Claude and Codex (memory.go), and the skills' gated commands it runs as tools here.
 func (n *Node) runtimeInstructions(cwd, memDir string) string {
-	r := prompts.RuntimeInstructions{Dir: memDir, lark-connector: n.gateScript(cwd, n.gateTool("lark-connector")) != ""}
+	r := prompts.RuntimeInstructions{Dir: memDir}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for _, g := range n.assistantLark(ctx).Gates {
+		if g.Tool != nil && n.gateScript(cwd, &g) != "" {
+			r.Gates = append(r.Gates, prompts.RuntimeGate{Title: g.Title, Command: g.Command, Tool: g.Tool.Name})
+		}
+	}
 	index, _ := os.ReadFile(filepath.Join(memDir, "MEMORY.md"))
 	if len(index) > 24*1024 {
 		r.Index, r.Truncated = strings.TrimLeftFunc(string(index[:24*1024]), unicode.IsSpace), true

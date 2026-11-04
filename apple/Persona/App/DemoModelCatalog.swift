@@ -21,7 +21,7 @@ enum DemoModelCatalog {
             ("kb.project", "项目档案重写", "知识处理", "api"),
             ("kb.dedupe", "项目去重", "知识处理", "api"),
             ("kb.items", "事项提取与打标", "知识处理", "api"),
-            ("kb.moments", "removed关联", "知识处理", "api"),
+            ("kb.moments", "公司圈关联", "知识处理", "api"),
             ("assistant.title", "对话标题", "辅助功能", "api"),
             ("agent.title", "Agent 标签名", "辅助功能", "api"),
             ("schedule", "定时任务默认模型", "定时任务", "launcher")

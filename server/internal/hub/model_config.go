@@ -78,7 +78,7 @@ var modelPurposes = []ModelPurpose{
 	{ID: "kb.project", Name: "项目档案重写", Group: "信息处理", Kind: "api", Parent: "kb"},
 	{ID: "kb.dedupe", Name: "项目去重", Group: "信息处理", Kind: "api", Parent: "kb"},
 	{ID: "kb.items", Name: "事项提取与打标", Group: "信息处理", Kind: "api", Parent: "kb"},
-	{ID: "kb.moments", Name: "removed关联", Group: "信息处理", Kind: "api", Parent: "kb"},
+	{ID: "kb.moments", Name: "公司圈关联", Group: "信息处理", Kind: "api", Parent: "kb"},
 	{ID: "assistant.title", Name: "对话标题", Group: "信息处理", Kind: "api", Parent: "kb"},
 	{ID: "agent.title", Name: "Agent 标签名", Group: "信息处理", Kind: "api", Parent: "kb"},
 	// Scheduled tasks (早报…) run in the assistant's directory with its instructions, memory and tools: they are the
@@ -120,9 +120,6 @@ func (h *Hub) modelPurposeDef(ctx context.Context, id string) (ModelPurpose, err
 				p.MachineID = h.assistantConfigLegacy(ctx).MachineID
 			}
 			if h.cfg != nil {
-				if p.ID == "lark.agent" && h.localMachine(h.cfg.LarkAgent.Machine) != nil {
-					p.MachineID = h.cfg.LarkAgent.Machine
-				}
 				if p.ID == "inbox.agent" && h.localMachine(h.cfg.Inbox.Agent.Machine) != nil {
 					p.MachineID = h.cfg.Inbox.Agent.Machine
 				}

@@ -312,8 +312,8 @@ func TestChannelList(t *testing.T) {
 	if fb := byID["feishu"]; fb == nil || fb["state"] == "connected" || fb["bind"] != "fields" { // not paired
 		t.Fatalf("feishu %v", fb)
 	}
-	if la := byID["lark_agent"]; la == nil || la["read_only"] != true {
-		t.Fatalf("lark_agent %v", la)
+	if byID["lark_agent"] != nil {
+		t.Fatal("the hub's own /agent channel is a plugin's now")
 	}
 }
 

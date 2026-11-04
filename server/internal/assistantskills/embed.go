@@ -12,12 +12,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/nwverse/persona/server/internal/identity"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/nwverse/persona/server/internal/identity"
 )
 
 //go:embed all:builtin
@@ -356,6 +357,3 @@ func description(md string) string {
 	}
 	return strings.Join(folded, " ")
 }
-
-// OlScript is the lark-connector helper's path once the skill is in dir.
-func OlScript(dir string) string { return filepath.Join(dir, "lark-connector", "scripts", "ol.sh") }

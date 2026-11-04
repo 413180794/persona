@@ -133,7 +133,7 @@ struct InboxPage: View {
                         for _ in 0..<20 where store.open.isEmpty { try? await Task.sleep(for: .milliseconds(500)) }
                         if let first = openItems.first { path = NavigationPath([first]) }
                     }
-                    // `-openInboxItem <id>`: open that item (a kind's detail, e.g. a removed one).
+                    // `-openInboxItem <id>`: open that item (a kind's detail, e.g. a 公司圈 one).
                     if let id = UserDefaults.standard.string(forKey: "openInboxItem") {
                         for _ in 0..<20 where !store.items.contains(where: { $0.id == id }) { try? await Task.sleep(for: .milliseconds(500)) }
                         if let it = store.items.first(where: { $0.id == id }) { path = NavigationPath([it]) }
@@ -695,7 +695,7 @@ struct InboxDetailView: View {
         } else if current.connector != nil {
             InboxConnectorDetailView(item: current)
         } else if let m = current.moment {
-            LarkMomentsPostView(postID: m.postID, pushed: true) // the post and its comments, as a shared removed card opens
+            LarkMomentsPostView(postID: m.postID, pushed: true) // the post and its comments, as a shared 公司圈 card opens
         } else if let c = item.larkConversation {
             LarkChatView(conversation: c)
         } else if let m = item.mailSummary {

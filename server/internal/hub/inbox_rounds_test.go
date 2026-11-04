@@ -6,10 +6,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
-	"github.com/nwverse/persona/server/internal/lark"
 )
 
 // countingConnector counts its inbox collections.
@@ -55,44 +53,6 @@ func diffCalls(after, before map[string]int) map[string]int {
 		}
 	}
 	return out
-}
-
-// A Feishu event collects the Feishu chats only: documents, removed and the other connectors wait for the poll.
-func TestFeishuEventCollectsOnlyChats(t *testing.T) {
-	base := time.Now().Add(-24 * time.Hour).Truncate(time.Hour)
-	srv, requests := baselineLark(t, base)
-	h := newTestHub(t)
-	h.inbox.init()
-	h.lark = lark.New(lark.Config{BaseURL: srv.URL, Token: "t"})
-	h.connectors = connector.NewRegistry(nil)
-	h.registerConnectors()
-	other := &countingConnector{}
-	if err := h.addConnector(other); err != nil {
-		t.Fatal(err)
-	}
-	ctx := context.Background()
-	collect := func(r inboxRound) map[string]int {
-		before := lark-connectorCalls(requests())
-		h.collectInbox(ctx, r)
-		h.inbox.triaging.Lock() // triage runs in the background
-		h.inbox.triaging.Unlock()
-		return diffCalls(lark-connectorCalls(requests()), before)
-	}
-
-	event := collect(roundChats)
-	if event["/conversations"] == 0 || event["/documents"] != 0 || event["/moments"] != 0 || other.n.Load() != 0 {
-		t.Fatalf("event round read %v, the other connector %d times; want the chats only", event, other.n.Load())
-	}
-	poll := collect(roundPoll)
-	if poll["/documents"] == 0 || poll["/moments"] == 0 || other.n.Load() != 1 {
-		t.Fatalf("poll round read %v, the other connector %d times; want documents, removed and the connector", poll, other.n.Load())
-	}
-	// The same chats again: what an event costs from now on, against what it cost when every event was a poll.
-	again, pollAgain := collect(roundChats), collect(roundPoll)
-	t.Logf("lark-connector calls per Feishu event: %d (was %d); first rounds: event %v, poll %v", again["all"], pollAgain["all"], event, poll)
-	if again["/documents"] != 0 || again["/moments"] != 0 || again["all"] >= pollAgain["all"] {
-		t.Fatalf("event round %v, poll round %v", again, pollAgain)
-	}
 }
 
 // Feishu's kicks ask for the chats; a connector's kick (or one meanwhile) still asks for every source.

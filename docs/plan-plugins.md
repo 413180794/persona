@@ -64,7 +64,8 @@
   两家网关的读法迁到私有插件仓库（归属见 `CLAUDE.local.md`）。规格在 `docs/plugins.md`「额度」「模型供应商」。
 - [ ] 第 2 步（App，#1259，进行中）：额度的网关名用 hub 给的 `gateway_name`（不再写死），假 hub 的示例网关换成中性的；设置 › 模型供应商 › 新增「从插件添加」。
 - [x] 两个额度插件已在私有插件仓库，装在用户的 hub 上实测：经 node 代发查到 `~/.zshrc` 启动器的额度，不认识的网关回「查不了」。
-- [ ] 第 3 步：lark-connector 整条飞书链路（含公司圈）迁成私有插件，见下面「第 3 步的方案」。TRAEX 留在开源仓库（已拍板）。
+- [x] 第 3 步（服务端）：lark-connector 整条飞书链路（含公司圈）迁成私有插件，hub 自己的那份已删（3c，#1520），见下面「第 3 步的方案」「第 3 步做下来」。TRAEX 留在开源仓库（已拍板）。
+- [ ] 第 3 步（客户端，3d，#1530）：飞书界面按 `features` 显示，「公司圈」的通用叫法（网页已做）。
 - [x] **第 4 步（服务端，#1284）**：扩展点 `ui`（`plugin_page` / `launcher_section`，`ui.render` / `ui.action`，View 是几种固定的条目，hub 按 `plugin.CheckView` 把关；
   启动器页的一节经 `gateway.http` 用 Key 访问网关，插件看不到 Key）和 `events`（`inbox.changed`、`agent.needs_you`、`agent.finished`，只通知，订阅随权限一起同意）。
   规格在 `docs/plugins.md`「声明式 UI」「事件」。
@@ -101,6 +102,37 @@
 4. **3d 客户端**：飞书聊天页按 `features` 显示（插件提供时）；公司圈的界面改成通用的「飞书公司圈（Moments）」，名字和分组来自插件，不写死任何租户的名称。
 
 每一阶段一个 PR；3b、3c 互相依赖，3c 在插件装好验证后再合。
+
+### 第 3 步做下来（2026-11-04）
+
+插件接管的过程中 hub 补了这些通用能力（每条一个 issue / PR；规格在 `docs/plugins.md`、`docs/connector-protocol.md`）：
+
+| 缺口 | 做法 |
+| --- | --- |
+| 连接器 id `lark` 被 hub 预留，插件装不上 | 可迁出的连接器 id（`connector.MigratableConnectors`）：插件启用时 hub 的让出、停用时放回；3c 之后 hub 没有自己的了，只是不预留（#1320） |
+| 转发插件 HTTP：`Cache-Control` 叠成两份、`%2F` 被拆开 | 缓存头以插件的为准；转义的路径原样到插件（#1320） |
+| 收件箱条目原有的块（聊天、文档的行、公司圈帖子）和旧条目接续 | 连接器的 thing 带 `extra`，hub 只对可迁出的连接器读；旧条目按块对到 thread 上，新条目用插件给的 `legacy_id`；回复和改状态经 `inbox.reply` 的 `client_id`、`changes`（#1320） |
+| 知识库的日程 / 会议 / 文档标题、会话里的附件 | 协议加 `items.list`、`items.doc_title`、`archive.media`（#1372） |
+| 公司圈全量进知识库、和我有关的帖子 | 程序调 hub 的 `posts.put` / `posts.comments` / `posts.pending`、`archive.chats`，清单 `archive_sources`；帖子存档、清理、挂项目在 hub（#1444） |
+| 助手的写闸门和凭据 | `assistant.gate`（包里的闸门文件）+ `assistant.credentials` / `assistant.summary`；node 的闸门、命令包装、运行时工具按 hub 给的闸门走（#1468） |
+| /agent | 开对话带 `purpose`、`machine_id`；`GET /api/v1/kb/chats/{id}/context`；插件接管时 hub 的 `lark_agent_reply` 和 /agent 让出（#1484） |
+| 个人 Agent（Agents 页的一个来源） | `agent_sources` 扩展点（#1400）+ 可迁出的来源 id，会话 id 不变（#1497） |
+| 发送回执、hub 互联的角色、两份实时事件 | `api` 的 `receipts`；`initialize` 的 `hub.role`，角色变了重启插件；插件接管时 hub 的事件循环停下（#1503） |
+| 助手快照和「今天」卡片里的未读会话、今天的会 | 连接器能力 `snapshot`（`snapshot.get`）（#1520） |
+| 客户端按插件显示飞书 | 插件的 `api` 报 features `lark`、`lark_moments`（#1530） |
+
+经验：
+
+- **先补能力、在真实 hub 上让插件接管并验证，再删 hub 自己的**：接管期间两份并存，每一处 hub 自己的循环（实时事件、/agent、爬取、个人 Agent）都要有「插件接管时让出」的判断，
+  漏一处就会出现两份（/agent 的事件处理就漏过：判断写在了处理之后）。
+- **数据的接续靠 id 不变**：连接器 id、知识库的会话 id（`<来源>-<id>`）、收件箱条目 id、个人 Agent 的会话 id、发送回执的派生 id 都照原样，
+  插件第一次接手时从 hub 已有的状态接着（`archive.chats`、旧条目按块对上），不重读、不重复、不漏。
+- **插件仓库里的代码可以有内部细节，开源仓库只留扩展点**：闸门规则、提示词、技能、客户端数据形状里只对一个服务有意义的部分都放进插件包，hub 只认通用的格式。
+- 没装插件时，开源版和「没配 lark-connector」时一样：飞书只走 lark-cli 和机器人；hub.json 里旧的 `lark.container / token / base_url`、`lark_agent`、`kb.moments` 不再读，
+  有的话 hub 启动时记一行日志，迁到插件配置（容器名、地址、账号、/agent 开关和启动器、公司圈全量）的步骤见下。
+
+hub.json 的旧配置迁到插件：装上插件后在 设置 › 插件（或 `personad plugin config <id> key=value`）填容器名（或地址 + 密钥里的 token）、账号；
+`lark_agent.enabled` / `launcher` / `machine` 对应插件的 `agent` / `agent_launcher` / `agent_machine`；`kb.moments.enabled` 对应 `moments_crawl`。确认插件接管后再删 hub.json 里的这几段。
 
 ## 五、现有的两套怎么迁上来
 

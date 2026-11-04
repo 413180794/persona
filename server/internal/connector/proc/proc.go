@@ -687,4 +687,12 @@ var (
 	_ connector.Runner       = (*Conn)(nil)
 	_ connector.Items        = (*Conn)(nil)
 	_ connector.ArchiveMedia = (*Conn)(nil)
+	_ connector.Snapshot     = (*Conn)(nil)
 )
+
+// Snapshot is the program's live state (snapshot.get).
+func (c *Conn) Snapshot(ctx context.Context, tz string) (connector.SnapshotData, error) {
+	var out connector.SnapshotData
+	err := c.call(ctx, serve.MSnapshot, serve.SnapshotParams{TZ: tz}, &out)
+	return out, err
+}

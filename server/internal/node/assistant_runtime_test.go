@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -230,23 +229,23 @@ func TestAssistantToolsOnlyForTheAssistantsConversations(t *testing.T) {
 	}
 }
 
-func Testlark-connectorToolGoesThroughTheGate(t *testing.T) {
+func TestGatedToolGoesThroughTheGate(t *testing.T) {
 	n, hub := runtimeNode(t)
 	assistantHub(hub)
 	skills := filepath.Join(n.home, ".jarvis", "skills")
 	t.Setenv("JARVIS_SKILLS_DIR", skills)
 	n.dir = filepath.Join(n.home, ".jarvis")
-	script := filepath.Join(skills, "lark-connector", "scripts", "ol.sh")
+	script := filepath.Join(skills, "example", "scripts", "ex.sh")
 	_ = os.MkdirAll(filepath.Dir(script), 0o755)
-	_ = os.WriteFile(filepath.Join(skills, "lark-connector", "SKILL.md"), []byte("---\nname: lark-connector\n---\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(skills, "example", "SKILL.md"), []byte("---\nname: example\n---\n"), 0o644)
 	ran := filepath.Join(n.home, "ran")
 	_ = os.WriteFile(script, []byte("#!/bin/bash\necho \"$*\" >> "+shellQuote(ran)+"\necho done \"$*\"\n"), 0o755)
-	g := lark.AssistantGate("", "", 0, nil)
-	g.Tool = &proto.GateTool{Name: "lark-connector", Description: "lark-connector's ol"}
+	g := exampleGate("")
+	g.Tool = &proto.GateTool{Name: "example_api", Description: "Run ex."}
 	n.mu.Lock()
 	n.larkCfg, n.larkCfgAt = proto.AssistantLark{Gates: []proto.CommandGate{g}}, time.Now().Add(time.Hour)
 	n.mu.Unlock()
-	const lark-connectorTool = "lark-connector"
+	const lark-connectorTool = "example_api"
 	host := dialRuntime(t, n, assistantRuntimeHello())
 	sid := startedAssistant(t, n, host)
 
@@ -288,13 +287,13 @@ func Testlark-connectorToolGoesThroughTheGate(t *testing.T) {
 	if got := strings.TrimSpace(string(b)); got != "GET /me" {
 		t.Fatalf("ol ran %q", got)
 	}
-	// Not the assistant's conversation: lark-connector is not run here (it goes to the hub, which has no such tool).
+	// Not the assistant's conversation: the gated tool is not run here (it goes to the hub, which has no such tool).
 	var res proto.ToolResult
 	if err := host.peer.Call(context.Background(), "mcp.call", map[string]any{"name": lark-connectorTool, "args": map[string]any{"args": []string{"GET", "/other"}}, "session_id": "session-other", "assistant": true}, &res); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := os.ReadFile(ran); strings.Contains(string(b), "/other") {
-		t.Fatal("lark-connector ran for a conversation that is not the assistant's")
+		t.Fatal("the gated tool ran for a conversation that is not the assistant's")
 	}
 }
 

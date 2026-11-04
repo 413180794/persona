@@ -1,12 +1,9 @@
 package hub
 
 import (
-	"slices"
 	"testing"
 
-	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/kb"
-	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // What a plugin's /agent asks of the hub: a chat's knowledge-base context (read only), a new conversation under a
@@ -38,19 +35,4 @@ func TestAgentAPIForPlugins(t *testing.T) {
 		t.Fatalf("unknown machine %d %v", code, out)
 	}
 
-	names := func() []string {
-		var out []string
-		for _, tl := range h.ownAssistantTools() {
-			out = append(out, tl.Name)
-		}
-		return out
-	}
-	if !slices.Contains(names(), "lark_agent_reply") || !h.isOwnAssistantTool("lark_agent_reply") {
-		t.Fatal("the hub's own /agent reply tool")
-	}
-	h.connectors = connector.NewRegistry(nil)
-	h.migrated.Store("lark", proto.Session{}) // a plugin took Feishu over
-	if slices.Contains(names(), "lark_agent_reply") || h.isOwnAssistantTool("lark_agent_reply") || slices.Contains(h.builtinTools(), "lark_agent_reply") {
-		t.Fatal("the hub's lark_agent_reply stays while a plugin serves Feishu")
-	}
 }

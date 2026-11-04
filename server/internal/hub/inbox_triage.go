@@ -195,7 +195,7 @@ type inboxReply struct {
 }
 
 // replyInbox sends text as the user's reply through the connector the item belongs to — in the Feishu chat, a
-// document's comments, a removed post, a reply to the newest mail of the thread, a GitHub comment… — and files the item
+// document's comments, a 公司圈 post, a reply to the newest mail of the thread, a GitHub comment… — and files the item
 // as done.
 func (h *Hub) replyInbox(ctx context.Context, id, text string, changes ...DocChange) (InboxItem, error) {
 	return h.replyInboxAs(ctx, id, text, "", changes...)
@@ -274,26 +274,6 @@ func (h *Hub) replyInboxAs(ctx context.Context, id, text, clientID string, chang
 	// The item's cards in the assistant's conversations show it sent, wherever it was sent from.
 	h.markCardsSent(ctx, id, now, text, true)
 	return out, nil
-}
-
-// sendLarkReply posts the reply to a Feishu item where the other side will see it: into the thread or topic the
-// newest message is in, quoting that message when I was @'d in a group, else as a new message in the chat (a DM;
-// a group where it is not clear which message the reply answers; an item collected before reply_to existed).
-func (h *Hub) sendLarkReply(ctx context.Context, it InboxItem, text, clientID string) error {
-	l := it.Lark
-	c := h.lark.ForAccount(larkItemAccount(&it)) // as the account the messages came to
-	var err error
-	switch {
-	case !l.IsGroup || l.ReplyTo == "":
-		_, err = c.Send(ctx, l.FeedID, text, clientID)
-	case l.ThreadKind != "":
-		_, err = c.Reply(ctx, l.ReplyTo, text, true, false, clientID)
-	case it.Kind == KindMention:
-		_, err = c.Reply(ctx, l.ReplyTo, text, false, false, clientID)
-	default:
-		_, err = c.Send(ctx, l.FeedID, text, clientID)
-	}
-	return err
 }
 
 // mailReply is a reply to orig: Re: subject, threading headers, the original quoted below.

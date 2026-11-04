@@ -8,7 +8,6 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/github"
 	"github.com/nwverse/persona/server/internal/connector/imessage"
-	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/mail"
 )
 
@@ -28,9 +27,6 @@ func TestGoldenMCPTools(t *testing.T) {
 		h.connectors = connector.NewRegistry(nil)
 		h.registerConnectors()
 	}
-	register()
-	golden(t, "mcp_tools.assistant_without_lark", show(h.mcpTools(true)))
-	h.lark = lark.New(lark.Config{BaseURL: "http://127.0.0.1:1", Token: "t"})
 	register()
 	golden(t, "mcp_tools.assistant", show(h.mcpTools(true)))
 	golden(t, "mcp_tools.agent", show(h.mcpTools(false)))

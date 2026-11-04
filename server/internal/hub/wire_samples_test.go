@@ -18,7 +18,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -135,8 +134,6 @@ func wireDecodeGo(t *testing.T, c wireSample) {
 		target = &struct {
 			Items []InboxItem `json:"items"`
 		}{}
-	case "lark":
-		target = &lark.Page{}
 	case "event":
 		target = &struct {
 			Type        string             `json:"type"`
@@ -380,7 +377,6 @@ func wireSamples(t *testing.T) map[string][]wireSample {
 	inboxMail := InboxItem{ID: "mail:account_example:thread_example:11", Source: "mail", Kind: KindMail, Account: "account_example", AccountName: "user@example.com", Title: "示例邮件", Preview: "示例已确认。", Count: 1, StartedAt: now, UpdatedAt: now, DoneAt: &now, DoneBy: "user", Read: true, Mail: &InboxMail{AccountID: "account_example", Mailbox: "INBOX", UIDs: []uint32{11}, MessageID: "message_example", From: mail.Address{Name: "小王", Email: "sender@example.com"}, Thread: "thread_example", Direct: true}}
 	add("inbox", "inbox_list", "收件箱列表包含飞书和邮件条目，并移除内部上下文。", "inbox", httpJSON(map[string]any{"items": []InboxItem{inboxLark.listed(), inboxMail.listed()}}), map[string]any{"/items/0/source": "lark", "/items/0/context": nil, "/items/0/agent/draft": "已收到示例。", "/items/1/source": "mail", "/items/1/mail/uids/0": 11, "/items/1/done_by": "user"}, "server/internal/hub/inbox.go: InboxItem.listed, Hub.inboxRoutes", "apple/Shared/InboxModels.swift: InboxItem")
 	wireFeed(add, httpJSON, now)
-	wireLark(t, add)
 	wireErrors(t, add)
 	wireCompatibility(t, files, add, ws, httpJSON, now)
 	return files
@@ -520,24 +516,6 @@ func wireItemEvents(t *testing.T, add wireAdder, now time.Time, items []proto.It
 	add("items", "items_fold_range", "展开折叠的分页使用 more 表示范围尚未读完。", "items_range", wireBody(t, w, 200),
 		map[string]any{"/items/0/id": "entry_text#0", "/more": true},
 		"server/internal/hub/http.go: Hub.sessionItems", "apple/Shared/APIClient.swift: APIClient.foldedWork.Range")
-}
-
-func wireLark(t *testing.T, add wireAdder) {
-	// A local upstream supplies invented data; the production client normalizes it and rewrites media URLs.
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/conversations/feed_example/messages" {
-			http.NotFound(w, r)
-			return
-		}
-		_, _ = io.WriteString(w, `{"items":[{"id":"message_example","position":"10","senderName":"小王","senderId":"user_example","messageTypeName":"POST","textPreview":"示例消息","createdAt":"2026-01-02T03:04:05Z","parts":[{"kind":"text","text":"示例消息"},{"kind":"image","url":"/api/media/image_example","refId":"image_example","metadata":{"width":2,"height":1}},{"kind":"card","metadata":{"custom_Key":{"keep_snake_case":true}}}],"replyTo":{"id":"reply_example","senderName":"小王","textPreview":"示例引用","parts":[{"kind":"text","text":"示例引用"}]},"reactions":[{"key":"THUMBSUP","count":1,"isMine":true}]}],"hasOlder":true,"hasNewer":false}`)
-	}))
-	defer upstream.Close()
-	h := &Hub{lark: lark.New(lark.Config{BaseURL: upstream.URL, Token: "fixture-placeholder"})}
-	mux := http.NewServeMux()
-	h.larkRoutes(mux)
-	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/lark/conversations/feed_example/messages", nil))
-	add("lark", "lark_message_parts", "飞书消息保留 parts 和嵌套键名，并将媒体地址改写到 hub。", "lark", wireBody(t, w, 200), map[string]any{"/messages/0/parts/0/kind": "text", "/messages/0/parts/1/url": "/api/v1/lark/media/image_example", "/messages/0/parts/1/refId": "image_example", "/messages/0/parts/2/metadata/custom_Key/keep_snake_case": true, "/has_older": true, "/has_newer": false, "/older_cursor": "10", "/newer_cursor": "10"}, "server/internal/hub/lark.go: Hub.larkRoutes", "server/internal/lark/lark.go: Client.Messages, rawMessage.normalize, rewriteMedia", "apple/Persona/Views/Inbox/Lark/LarkModels.swift: LarkMessage, LarkPart")
 }
 
 func wireErrors(t *testing.T, add wireAdder) {

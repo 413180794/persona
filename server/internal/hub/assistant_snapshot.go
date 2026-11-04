@@ -2,12 +2,11 @@ package hub
 
 import (
 	"context"
-	"encoding/json"
-	"net/url"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -124,62 +123,79 @@ func short(id string) string {
 	return id
 }
 
-// snapshotChats is the unread Feishu chats, nil when lark-connector does not answer in time.
-func (h *Hub) snapshotChats(ctx context.Context) *prompts.SnapshotChats {
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-	convs, _, err := h.lark.Conversations(ctx, "inbox", "", 100)
-	if err != nil {
+// connectorSnapshots are the live states of the signed-in connectors that keep one (connector.Snapshot: a chat service
+// through a plugin), asked at once and waited for 3 seconds; those that do not answer in time are left out.
+func (h *Hub) connectorSnapshots(ctx context.Context) []connector.SnapshotData {
+	if h.connectors == nil {
 		return nil
 	}
-	var out prompts.SnapshotChats
-	for _, c := range convs {
-		if c.Unread == 0 && !c.MarkedUnread && !c.AtMe { // an @me can outlive the unread count (read elsewhere, not answered)
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	var out []connector.SnapshotData
+	tz := h.userLocation().String()
+	for _, c := range h.connectors.All() {
+		sn, ok := connector.As[connector.Snapshot](c)
+		if !ok || connector.StatusOf(ctx, c).State != connector.StateOK {
 			continue
 		}
-		if c.Muted && !c.AtMe {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			d, err := sn.Snapshot(ctx, tz)
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			out = append(out, d)
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	return out
+}
+
+// snapshotChats is the unread chats the connectors know of, nil when none answers.
+func (h *Hub) snapshotChats(ctx context.Context) *prompts.SnapshotChats {
+	var out *prompts.SnapshotChats
+	for _, d := range h.connectorSnapshots(ctx) {
+		if d.Chats == nil {
 			continue
 		}
-		if c.AtMe {
+		if out == nil {
+			out = &prompts.SnapshotChats{}
+		}
+		for _, c := range d.Chats.AtMe {
 			out.AtMe = append(out.AtMe, prompts.SnapshotChat{Name: c.Name, Unread: c.Unread, Preview: clip(oneLine(c.Preview), 40)})
-		} else {
+		}
+		for _, c := range d.Chats.Other {
 			out.Other = append(out.Other, prompts.SnapshotChat{Name: c.Name, Unread: c.Unread})
 		}
 	}
-	return &out
+	return out
 }
 
-// snapshotCalendar is the rest of today's meetings, nil when lark-connector does not answer in time.
+// snapshotCalendar is the rest of today's meetings the connectors know of, nil when none answers.
 func (h *Hub) snapshotCalendar(ctx context.Context, now time.Time) *prompts.SnapshotCalendar {
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	q := url.Values{"start": {day.UTC().Format("2006-01-02T15:04:05Z")}, "end": {day.AddDate(0, 0, 1).UTC().Format("2006-01-02T15:04:05Z")}}
-	raw, err := h.lark.Read(ctx, "GET", "/calendar/week", q, nil)
-	if err != nil {
-		return nil
-	}
-	var res struct {
-		Events []struct {
-			Title              string    `json:"title"`
-			StartAt            time.Time `json:"startAt"`
-			EndAt              time.Time `json:"endAt"`
-			AllDay             bool      `json:"allDay"`
-			SelfAttendeeStatus int       `json:"selfAttendeeStatus"`
-		} `json:"events"`
-	}
-	if json.Unmarshal(raw, &res) != nil {
-		return nil
-	}
-	sort.Slice(res.Events, func(i, j int) bool { return res.Events[i].StartAt.Before(res.Events[j].StartAt) })
-	var out prompts.SnapshotCalendar
-	for _, e := range res.Events {
-		if e.AllDay || e.SelfAttendeeStatus == 4 || !e.EndAt.After(now) { // declined or over
+	var out *prompts.SnapshotCalendar
+	for _, d := range h.connectorSnapshots(ctx) {
+		if d.Meetings == nil {
 			continue
 		}
-		out.Events = append(out.Events, prompts.SnapshotEvent{Start: e.StartAt.In(now.Location()), End: e.EndAt.In(now.Location()), Title: e.Title})
+		if out == nil {
+			out = &prompts.SnapshotCalendar{}
+		}
+		for _, m := range d.Meetings {
+			if m.End.After(now) {
+				out.Events = append(out.Events, prompts.SnapshotEvent{Start: m.Start.In(now.Location()), End: m.End.In(now.Location()), Title: m.Title})
+			}
+		}
 	}
-	return &out
+	if out != nil {
+		sort.SliceStable(out.Events, func(i, j int) bool { return out.Events[i].Start.Before(out.Events[j].Start) })
+	}
+	return out
 }
 
 func (h *Hub) snapshotSchedule(ctx context.Context, loc *time.Location) []prompts.SnapshotFollowup {

@@ -454,7 +454,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   知识库详情 › 打标弹出的 sheet 没继承 `macLook` 的 grouped，还是两列（设置里推入页面弹出的新建定时任务却继承了，原因没查清），这类 sheet 自己套 `macSheet()`：打标（`-showKnowledgeEntry projects/weather-app -showKBEditor YES` 截图看过，标签、滑块占满一行）、新建对话（知识库 › 开 Agent 那条路径没截到）。
 - 链接面板 `.macLinkPanel($link, key:)`：详情栏右侧并排（页面变窄、不被盖住；窗口太窄放不下两边时盖在上面），宽度拖、记在 `mac.linkPanel.width`；
   头部：后退 / 前进、标题和域名、重新载入、⋯（在浏览器打开、在单独窗口打开、拷贝链接、分享）、关闭（⌘W，面板开着时先关面板）。
-  网页来自 `WebViewPool`（和 iOS 同一个池，预加载、复用），右键选中文字有「AI 修改」「作为上下文」；飞书文档 / removed在面板里用原生阅读器（右上「把这篇文档作为上下文」）。
+  网页来自 `WebViewPool`（和 iOS 同一个池，预加载、复用），右键选中文字有「AI 修改」「作为上下文」；飞书文档 / 公司圈在面板里用原生阅读器（右上「把这篇文档作为上下文」）。
   `key` 是对话（对话页）；收件箱、知识库里没有，「作为上下文」进 Persona 主对话的输入框、「AI 修改」直接问 Persona。
   `.macOpensLinksInPanel($link)` 把一块视图里的 `openURL` / `openLink` 接到面板上（收件箱详情用；邮件 HTML 里的链接仍交给浏览器）。对话页、知识库在 Mac 上也换成了面板（`#if os(macOS)`）。
 - 单独的窗口：`WindowGroup(id: "link", for: URL.self)`（`MacLinkWindow`）、`WindowGroup(id: "inbox-item", for: String.self)`（`MacInboxItemWindow`）。
@@ -848,7 +848,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Full-text search, merged per entry, highlighted hits — KnowledgeView.swift (KBHitRow)
   - Mac（2026-11-01 核对）截图（`-showKnowledgeSearch 小组件`）：按 项目 1 / 会话 1 / 人 1 分组，一条一行带命中数（4 处、6 处），每行命中里「小组件」都加粗。
 - [x] Detail: header, 问 Persona / 开 Agent, agents, timeline, profile, relations, code dirs, last 7 days messages, path; search matches — KnowledgeView.swift (KnowledgeDetailView, KBMatchRow, KBTimelineRow, KBLinkRow, KBMessageText)
-  - Mac（2026-11-01 核对）：截图里 P0 / 短期项目 / 相关 92、标签、开 Agent、在做的 Agent、时间线、档案、相关removed、搜索匹配行、目录路径都对；「问 Persona」按钮的位置是空白（白字加醒目玻璃底，离屏画不出），没看到，要到 Mac 前看一眼。
+  - Mac（2026-11-01 核对）：截图里 P0 / 短期项目 / 相关 92、标签、开 Agent、在做的 Agent、时间线、档案、相关公司圈、搜索匹配行、目录路径都对；「问 Persona」按钮的位置是空白（白字加醒目玻璃底，离屏画不出），没看到，要到 Mac 前看一眼。
   - Mac 真窗口（2026-11-04，执行者跑）：天气 App 的详情顶部「问 Persona」（主题色底白字）和「开 Agent」（浅主题色底、主题色字）两个按钮都画出来了、看得清；头部 P0 / 短期项目 / 相关 92。
 - [x] Day view of chat messages with prev/next — KnowledgeView.swift (KBDayView)
   - 要到 Mac 前看：点底部「‹ 前一天」，前一天加载出来、再能翻回来。`-showKnowledgeDay YES` 截图里当天 8 条消息、命中的那条高亮、前一天链接都对。
@@ -881,7 +881,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Summary cards (merge forward, share chat/user, meeting, calendar, vote) — Views/Inbox/Lark/LarkSummaryCards.swift
 - [x] Media: authenticated image cache, gallery, video player, Quick Look files — Views/Inbox/Lark/LarkMedia.swift
 - [x] Profile card (发消息) — Views/Inbox/Lark/LarkPeople.swift
-- [x] Reaction picker, removed (Moments) card + post view — Views/Inbox/Lark/LarkReactionsMoments.swift
+- [x] Reaction picker, 公司圈 (Moments) card + post view — Views/Inbox/Lark/LarkReactionsMoments.swift
 - [x] Translation line under messages — LarkChatView.swift (LarkTranslationLine)
 - [x] 「让 Persona 总结」 action — LarkChatView.swift
 - [x] Time / name tag — Views/Inbox/Lark/LarkTime.swift; models — Views/Inbox/Lark/LarkModels.swift

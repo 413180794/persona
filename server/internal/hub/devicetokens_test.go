@@ -247,12 +247,8 @@ func TestAnswerRoleAnswersCardsWithoutTyping(t *testing.T) {
 	if code, _ := call(t, mux, "POST", "/api/v1/inbox/ix_x/reply", watchTok, `{"text":"t"}`); code == http.StatusForbidden {
 		t.Errorf("an answer-only device replies: %d", code)
 	}
-	// With /agent on, a reply posted as the user would come back as their request to start an agent.
-	if code, _ := call(t, mux, "POST", "/api/v1/inbox/ix_x/reply", watchTok, `{"text":"/agent do it"}`); code == http.StatusForbidden {
-		t.Errorf("/agent off, an answer-only device's reply: %d", code)
-	}
-	h.cfg.LarkAgent.Enabled = true
-	for _, text := range []string{"/agent do it", "/AGENT：do it", "  /agent"} {
+	// A reply posted as the user may come back as their request to start an agent (a plugin's /agent).
+	for _, text := range []string{"/agent do it", "  /agent"} {
 		body, _ := json.Marshal(map[string]string{"text": text})
 		if code, _ := call(t, mux, "POST", "/api/v1/inbox/ix_x/reply", watchTok, string(body)); code != http.StatusForbidden {
 			t.Errorf("an answer-only device replies %q: %d", text, code)

@@ -53,10 +53,33 @@ class HttpMailTransport(
         }
     }
 
-    override suspend fun setSeen(ref: MailReference, uid: Long, seen: Boolean) {
+    override suspend fun setFlags(ref: MailReference, uid: Long, seen: Boolean?, flagged: Boolean?) {
         require(uid in 1..4294967295L && uid in ref.uids && ref.accountId.isNotBlank())
-        request(url("api", "v1", "mail", "messages", ref.accountId, uid.toString(), "flags"),
-            buildJsonObject { put("mailbox", ref.mailbox); put("seen", seen) })
+        val body = buildJsonObject {
+            put("mailbox", ref.mailbox)
+            seen?.let { put("seen", it) }
+            flagged?.let { put("flagged", it) }
+        }
+        request(url("api", "v1", "mail", "messages", ref.accountId, uid.toString(), "flags"), body)
+    }
+
+    override suspend fun setSeen(ref: MailReference, uid: Long, seen: Boolean) {
+        setFlags(ref, uid, seen = seen)
+    }
+
+    override suspend fun setFlagged(ref: MailReference, uid: Long, flagged: Boolean) {
+        setFlags(ref, uid, flagged = flagged)
+    }
+
+    override suspend fun accounts(): List<MailAccount> {
+        val response = request(url("api", "v1", "mail", "accounts"))
+        val accountsElement = response["accounts"] ?: return emptyList()
+        return codec.decodeFromJsonElement<List<MailAccount>>(accountsElement)
+    }
+
+    override suspend fun sendMail(request: SendMailRequest) {
+        require(request.accountId.isNotBlank())
+        request(url("api", "v1", "mail", "send"), codec.encodeToJsonElement(request).jsonObject)
     }
 
     override suspend fun refreshInbox() {

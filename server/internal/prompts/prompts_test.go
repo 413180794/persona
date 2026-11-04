@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 // Each prompt's output is pinned by the golden tests of the package that uses it (hub, kb, node: *_golden_test.go);
@@ -74,20 +73,6 @@ func TestSmallPrompts(t *testing.T) {
 		if got != want {
 			t.Errorf("got %q, want %q", got, want)
 		}
-	}
-}
-
-func TestLarkTranscriptKeepsTheNewestThatFit(t *testing.T) {
-	at := time.Date(2026, 10, 31, 9, 0, 0, 0, time.UTC)
-	lines := []LarkLine{{At: at, Who: "张三", Text: "早"}, {At: at.Add(time.Minute), Who: "我", Mine: true, Text: "/agent 看下", Request: true}}
-	if got, want := RenderLarkTranscript(lines, 1000), "10-31 09:00 张三：早\n10-31 09:01 我（我）：/agent 看下  ← 请求\n"; got != want {
-		t.Fatalf("got %q, want %q", got, want)
-	}
-	if got := RenderLarkTranscript(lines, 60); strings.Contains(got, "张三") || !strings.Contains(got, "← 请求") {
-		t.Fatalf("a short limit keeps the newest: %q", got)
-	}
-	if got := RenderLarkTranscript(nil, 50); got != "\n" {
-		t.Fatalf("no lines: %q", got)
 	}
 }
 

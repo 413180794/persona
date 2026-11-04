@@ -553,12 +553,9 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 			return nil, err
 		}
 		p.Interaction.MachineID = m.cfg.ID
-		// A write through a skill's gated command (node/larkgate.go): its plugin names what the ids are; Feishu's own
-		// (the hub's lark-connector, lark-cli) names the chats it goes to.
+		// A write through a skill's gated command (node/larkgate.go): its plugin names what the ids are.
 		if s, ok := m.hub.plugins.assistantSummary(ctx, p.Interaction.ToolName, p.Interaction.Summary); ok {
 			p.Interaction.Summary = s
-		} else if p.Interaction.ToolName == "飞书" {
-			p.Interaction.Summary = m.hub.larkChatNames(ctx, p.Interaction.Summary)
 		}
 		return m.hub.waitInteraction(ctx, p.Interaction)
 	case "assistant.lark":
@@ -602,7 +599,7 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		if p.Assistant && isBrowserTool(p.Name) {
 			return m.hub.callBrowserTool(ctx, p.SessionID, p.Name, p.Args), nil
 		}
-		if p.Assistant && m.hub.isOwnAssistantTool(p.Name) {
+		if p.Assistant && isAssistantTool(p.Name) {
 			return m.hub.callAssistantTool(ctx, m, p.SessionID, p.Name, p.Args), nil
 		}
 		return m.hub.callTool(ctx, m.cfg.ID, p.Name, p.Args), nil
@@ -641,9 +638,8 @@ func (m *Machine) notifyFinished(id string, gen int) {
 	if ok && !s.Assistant && s.Status != proto.StatusWorking {
 		m.hub.kbAgentDone(m.cfg.ID, s)
 	}
-	// An inbox agent's result is the draft in the inbox; a /agent request's is its reply in Feishu; a turn asked for
-	// through the bot is answered there.
-	if !ok || m.hub.isInboxAgent(id) || m.hub.isLarkAgent(id) || m.hub.channelAnswered(id) {
+	// An inbox agent's result is the draft in the inbox; a turn asked for through the bot is answered there.
+	if !ok || m.hub.isInboxAgent(id) || m.hub.channelAnswered(id) {
 		return
 	}
 	m.hub.mu.Lock()

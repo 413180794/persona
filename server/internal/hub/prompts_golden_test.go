@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/mail"
@@ -98,55 +99,28 @@ func goldenCall(t *testing.T, name string, c capturedCall) {
 	golden(t, name+".user", c.User)
 }
 
-// fakelark-connector serves the lark-connector reads the prompts are built from.
-func fakelark-connector(t *testing.T) *lark.Client {
-	t.Helper()
-	at := func(s string) string { return s } // times are RFC 3339 literals below
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /conversations", func(w http.ResponseWriter, r *http.Request) {
-		preview := func(s string) map[string]any {
-			return map[string]any{"digest": map[string]any{"elements": []any{map[string]any{"kind": "text", "content": s}}}}
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"items": []any{
-			map[string]any{"feedId": "f1", "name": "发布群", "isGroup": true, "unreadCount": 3, "hasUnreadAtMe": true, "preview": preview("@我 周五灰度能不能提前到周四？这条预览很长很长很长很长很长很长很长很长很长很长很长")},
-			map[string]any{"feedId": "f2", "name": "张三", "unreadCount": 1, "preview": preview("在吗")},
-			map[string]any{"feedId": "f3", "name": "闲聊群", "isGroup": true, "unreadCount": 40, "isMuted": true},
-			map[string]any{"feedId": "f4", "name": "已读群", "isGroup": true},
-			map[string]any{"feedId": "f5", "name": "李四", "isMarkedUnread": true},
-		}})
-	})
-	mux.HandleFunc("GET /calendar/week", func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"events": []any{
-			map[string]any{"title": "周会", "startAt": at("2099-01-01T11:00:00+08:00"), "endAt": at("2099-01-01T12:00:00+08:00")},
-			map[string]any{"title": "评审", "startAt": at("2099-01-01T09:30:00+08:00"), "endAt": at("2099-01-01T10:00:00+08:00")},
-			map[string]any{"title": "早就开完的会", "startAt": at("2000-01-01T09:00:00+08:00"), "endAt": at("2000-01-01T10:00:00+08:00")},
-			map[string]any{"title": "拒绝了的会", "startAt": at("2099-01-01T13:00:00+08:00"), "endAt": at("2099-01-01T14:00:00+08:00"), "selfAttendeeStatus": 4},
-			map[string]any{"title": "全天", "startAt": at("2099-01-01T00:00:00+08:00"), "endAt": at("2099-01-02T00:00:00+08:00"), "allDay": true},
-		}})
-	})
-	msgs := []any{
-		map[string]any{"id": "m1", "senderName": "张三", "messageTypeName": "TEXT", "textPreview": "构建挂了，看下 https://example.feishu.cn/docx/AbC123 里的步骤", "createdAt": at("2026-10-31T09:00:00+08:00")},
-		map[string]any{"id": "m2", "senderName": "李四", "messageTypeName": "TEXT", "textPreview": "我也遇到了", "createdAt": at("2026-10-31T09:01:00+08:00"), "isRecalled": true},
-		map[string]any{"id": "m0", "messageTypeName": "SYSTEM", "textPreview": "张三 加入了群", "createdAt": at("2026-10-31T08:00:00+08:00")},
-	}
-	mux.HandleFunc("GET /conversations/{feed}/messages", func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"items": msgs})
-	})
-	mux.HandleFunc("GET /messages/{id}/thread", func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"items": append(append([]any{}, msgs...),
-			map[string]any{"id": "req", "senderName": "我", "isMine": true, "messageTypeName": "TEXT", "textPreview": "/agent 看下怎么修", "createdAt": at("2026-10-31T09:05:00+08:00")})})
-	})
-	mux.HandleFunc("GET /documents/read", func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Query().Get("url"), "Broken") {
-			w.WriteHeader(http.StatusNotFound)
-			_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"code": "NOT_FOUND", "message": "document not found"}})
-			return
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"title": "构建手册", "markdown": "# 构建手册\n\n1. 清缓存\n2. 重跑"})
-	})
-	srv := httptest.NewServer(mux)
-	t.Cleanup(srv.Close)
-	return lark.New(lark.Config{BaseURL: srv.URL, Token: "t"})
+// goldenSnapshot is a chat service's connector with a live state (connector.Snapshot): what a plugin serving Feishu
+// hands the assistant's snapshot.
+type goldenSnapshot struct{}
+
+func (goldenSnapshot) ID() string   { return "chatservice" }
+func (goldenSnapshot) Name() string { return "Chat service" }
+func (goldenSnapshot) Manifest() connector.Manifest {
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapSnapshot}}
+}
+func (goldenSnapshot) Snapshot(context.Context, string) (connector.SnapshotData, error) {
+	at := func(s string) time.Time { t, _ := time.Parse(time.RFC3339, s); return t }
+	return connector.SnapshotData{
+		Chats: &connector.SnapshotChats{
+			AtMe:  []connector.SnapshotChat{{Name: "发布群", Unread: 3, Preview: "@我 周五灰度能不能提前到周四？这条预览很长很长很长很长很长很长很长很长很长很长很长"}},
+			Other: []connector.SnapshotChat{{Name: "张三", Unread: 1}, {Name: "李四"}},
+		},
+		Meetings: []connector.SnapshotMeeting{
+			{Title: "周会", Start: at("2099-01-01T11:00:00+08:00"), End: at("2099-01-01T12:00:00+08:00")},
+			{Title: "评审", Start: at("2099-01-01T09:30:00+08:00"), End: at("2099-01-01T10:00:00+08:00")},
+			{Title: "早就开完的会", Start: at("2000-01-01T09:00:00+08:00"), End: at("2000-01-01T10:00:00+08:00")},
+		},
+	}, nil
 }
 
 // goldenKB is a knowledge base with one chat, its summary and two projects.
@@ -191,32 +165,23 @@ func goldenMachines(h *Hub) {
 }
 
 func TestGoldenAssistantClaudeMD(t *testing.T) {
-	instructions := func(h *Hub, lark-connector bool) string {
-		return strings.ReplaceAll(h.assistantClaudeMD(context.Background(), lark-connector), h.cfg.dir, "<hub>")
+	instructions := func(h *Hub) string {
+		return strings.ReplaceAll(h.assistantClaudeMD(context.Background()), h.cfg.dir, "<hub>")
 	}
 	h := newTestHub(t)
 	goldenMachines(h)
 	h.cfg.Assistant.Owner = "示例用户"
 	h.cfg.Assistant.Notes = "  我在示例公司做后端。\n常用 skills：demo-skill。  "
 	h.kb.cfg.ExtraDirs = []string{"/home/me/notes", "/home/me/facts"}
-	golden(t, "assistant_claude_md.full", instructions(h, true))
+	golden(t, "assistant_claude_md.full", instructions(h))
 
 	bare := newTestHub(t)
 	m := newMachine(bare, MachineConfig{ID: "server", Name: "服务器", Kind: "local"})
 	bare.machines, bare.byID["server"] = []*Machine{m}, m
-	golden(t, "assistant_claude_md.bare", instructions(bare, true))
-	// No lark-connector skill on the assistant's machine (~/.jarvis/skills): no ol, Feishu through the MCP tools.
-	golden(t, "assistant_claude_md.no_lark-connector", instructions(bare, false))
-	// lark-cli only (docs/plan-lark-cli.md): no lark-connector configured, no lark-connector skill.
+	golden(t, "assistant_claude_md.bare", instructions(bare))
+	// lark-cli (docs/plan-lark-cli.md).
 	bare.cfg.Lark.CLI = &lark.CLIConfig{}
-	golden(t, "assistant_claude_md.lark_cli", instructions(bare, false))
-	// An lark-connector skill left on the machine changes nothing without lark-connector: no ol to offer.
-	if got := instructions(bare, true); got != instructions(bare, false) {
-		t.Error("lark-cli only: the lark-connector skill alone should not bring ol back")
-	}
-	// Both sources, lark-cli preferred.
-	bare.cfg.Lark.Token, bare.cfg.Lark.Prefer = "test-token", "cli"
-	golden(t, "assistant_claude_md.both", instructions(bare, true))
+	golden(t, "assistant_claude_md.lark_cli", instructions(bare))
 }
 
 var (
@@ -237,11 +202,13 @@ func snapshotHub(t *testing.T, full bool) *Hub {
 	h := newTestHub(t)
 	h.userTZ = "Asia/Shanghai"
 	goldenMachines(h)
-	h.lark = fakelark-connector(t)
-	if !full {
-		h.lark = lark.New(lark.Config{BaseURL: "http://127.0.0.1:1", Token: "t"}) // unreachable: chats and calendar left out
+	h.connectors = connector.NewRegistry(nil)
+	if !full { // no live state: chats and calendar left out
 		h.sched.loaded = true
 		return h
+	}
+	if err := h.addConnector(goldenSnapshot{}); err != nil {
+		t.Fatal(err)
 	}
 	h.byID["server"].online = true
 	h.byID["laptop"].online = true
@@ -332,51 +299,6 @@ func TestGoldenDefaultRoutines(t *testing.T) {
 	for _, r := range defaultRoutines() {
 		golden(t, "routine."+r.ID, r.Prompt)
 	}
-}
-
-func TestGoldenLarkAgentPrompts(t *testing.T) {
-	ctxText := "<jarvis-context kind=\"context\" title=\"请求的位置\">\n位置：群聊「发布群」\n</jarvis-context>\n"
-	golden(t, "lark_agent.chat_new", larkAgentPrompt("示例用户", "发布群", "/agent", "看下构建为什么挂了", ctxText, false))
-	golden(t, "lark_agent.chat_resumed_notask", larkAgentPrompt("", "发布群", "/agent", "", ctxText, true))
-	golden(t, "lark_agent.doc_new", larkAgentDocPrompt("示例用户", "构建手册", "/agent", "这段对吗", ctxText, false))
-	golden(t, "lark_agent.doc_resumed_notask", larkAgentDocPrompt("", "构建手册", "/agent", "", ctxText, true))
-}
-
-func TestGoldenLarkAgentContext(t *testing.T) {
-	ctx := context.Background()
-	h := newTestHub(t)
-	h.lark = fakelark-connector(t)
-	h.userTZ = "Asia/Shanghai" // the hub itself runs in UTC; times read in the user's zone
-	at := time.Date(2026, 10, 31, 1, 5, 0, 0, time.UTC)
-	req := lark.Message{ID: "req", Position: "9", Text: "/agent 看下怎么修 https://example.feishu.cn/wiki/Broken1", CreatedAt: at,
-		ReplyTo: &lark.ReplyTo{SenderName: "张三", Text: "构建挂了"}}
-	// No knowledge base, not in a thread: the messages before it.
-	chat, text := h.larkAgentContext(ctx, LarkAgentConfig{}, "f1", req)
-	golden(t, "lark_context.plain", chat+"\n---\n"+text)
-
-	// With the knowledge base, in a thread.
-	h.kb.eng = goldenKB(t)
-	req.ThreadKind, req.ThreadID, req.ReplyTo = "reply", "th1", nil
-	chat, text = h.larkAgentContext(ctx, LarkAgentConfig{}, "f1", req)
-	golden(t, "lark_context.kb_thread", chat+"\n---\n"+text)
-}
-
-func TestGoldenLarkAgentDocContext(t *testing.T) {
-	ctx := context.Background()
-	h := newTestHub(t)
-	h.lark = fakelark-connector(t)
-	h.userTZ = "Asia/Shanghai"
-	at := time.Date(2026, 10, 31, 1, 0, 0, 0, time.UTC)
-	reply := func(name string, mine bool, text string, min int) lark.CommentReply {
-		r := lark.CommentReply{Content: []lark.CommentSegment{{Kind: "text", Text: text}}, Mine: mine, CreatedAt: at.Add(time.Duration(min) * time.Minute)}
-		r.Author.Name = name
-		return r
-	}
-	th := lark.CommentThread{ID: "c1", Quote: "第二步重跑", Replies: []lark.CommentReply{
-		reply("张三", false, "这一步要先清缓存吧", 0), reply("我", true, "/agent 这段对吗", 1), reply("李四", false, "后面的", 2)}}
-	golden(t, "lark_doc_context.sheet", h.larkAgentDocContext(ctx, lark.RecentDoc{Title: "构建手册", URL: "https://example.feishu.cn/sheets/AbC", Type: 3}, th, 1))
-	th.Whole = true
-	golden(t, "lark_doc_context.broken_whole", h.larkAgentDocContext(ctx, lark.RecentDoc{Title: "坏文档", URL: "https://example.feishu.cn/docx/Broken", Type: 99}, th, 0))
 }
 
 func goldenItems() map[string]*InboxItem {
@@ -591,11 +513,11 @@ func TestGoldenInboxTask(t *testing.T) {
 func TestGoldenTaskDone(t *testing.T) {
 	golden(t, "task_done", prompts.RenderTaskDone(prompts.TaskDone{Owner: "示例用户"}))
 	golden(t, "task_done_input.hints", prompts.RenderTaskDoneInput(prompts.TaskDoneInput{Title: "修登录崩溃",
-		Prompt: "iPad 横屏时登录页崩溃，修好并补测试，走 PR 合并后发 TestFlight",
-		Replies: []prompts.TaskDoneReply{{Machine: "box", Text: "修好了，PR https://github.com/o/r/pull/901 已合并，TestFlight 构建号 202611041200"}},
+		Prompt:   "iPad 横屏时登录页崩溃，修好并补测试，走 PR 合并后发 TestFlight",
+		Replies:  []prompts.TaskDoneReply{{Machine: "box", Text: "修好了，PR https://github.com/o/r/pull/901 已合并，TestFlight 构建号 202611041200"}},
 		MergedPR: true, Build: true}))
 	golden(t, "task_done_input.two_agents", prompts.RenderTaskDoneInput(prompts.TaskDoneInput{Title: "用新 logo 设计默认形象",
-		Prompt: "按新 logo 重画默认形象的全部表情",
+		Prompt:  "按新 logo 重画默认形象的全部表情",
 		Replies: []prompts.TaskDoneReply{{Machine: "box", Text: "没有全改完，还差三个表情"}, {Machine: "mac", Text: "预览图放在 /tmp/preview.png"}}}))
 	golden(t, "task_done_input.follow_up", prompts.RenderTaskDoneInput(prompts.TaskDoneInput{Title: "修任务启动失败",
 		Prompt: "任务启动失败时一直显示正在开，修好",
