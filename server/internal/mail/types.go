@@ -26,7 +26,7 @@ const (
 const (
 	ProviderGmail  = "gmail"
 	ProviderIMAP   = "imap"
-	ProviderFeishu = "feishu" // Feishu / Lark mail on a company domain: fixed larkoffice.com servers
+	ProviderFeishu = "feishu" // Feishu / Lark mail on a company domain: larkoffice.com or feishu.cn servers, whichever signs in first
 )
 
 // Mailbox roles. The values match the role field in docs/protocol.md.

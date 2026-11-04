@@ -175,12 +175,15 @@ App 的「添加邮箱」页去掉了「AI 一键添加」（粘贴一段文字�
 
 ## 飞书邮箱
 
-App 里选「飞书」，只填邮箱和密码（`provider: "feishu"`）。邮箱在公司自己的域名上，按域名猜不出服务器，所以服务器固定：
+App 里选「飞书」，只填邮箱和密码（`provider: "feishu"`）。邮箱在公司自己的域名上，按域名猜不出服务器。飞书邮箱有两组服务器，端口相同（IMAP 993、SMTP 465，都是 SSL）：
 
-| | 服务器 | 端口 |
+| | 海外 | 国内 |
 | --- | --- | --- |
-| 收信 IMAP | `imap.larkoffice.com` | 993，SSL |
-| 发信 SMTP | `smtp.larkoffice.com` | 465，SSL |
+| 收信 IMAP | `imap.larkoffice.com` | `imap.feishu.cn` |
+| 发信 SMTP | `smtp.larkoffice.com` | `smtp.feishu.cn` |
+
+`larkoffice.com` 解析到海外，从中国大陆连过去 TLS 握手要几秒、经常超时；`feishu.cn` 在海外反过来（#1720）。所以添加账号时两组**同时**连一遍，保存先登录成功的那组（`pickFeishuServers`），国内的 hub 自然落到 `feishu.cn`，海外的落到 `larkoffice.com`，不用用户选。两组都失败时，优先报连上了的那组的错（比如授权码不对），两组都连不上才把两边的错误一起报出来。
+海外 Lark 账号能不能登录国内服务器没有验证过，所以不把默认直接换成 `feishu.cn`。已经加好的账号不会自动换组；在国内慢的话删掉重新添加一次。
 
 选了飞书时，请求里带的 host / port 会被忽略。密码是飞书邮箱设置里为第三方客户端生成的登录密码（服务器叫它「授权码」，填错会报 `wrong authorization code`）。
 

@@ -71,13 +71,25 @@ var presets = map[string]*preset{
 	},
 }
 
-// providerPresets are chosen explicitly in the app because the address is on the company's own domain.
-var providerPresets = map[string]*preset{
-	// Feishu / Lark mail: SSL on both, account + password only.
-	ProviderFeishu: {
+// feishuServers are Feishu / Lark mail's two server sets: larkoffice.com resolves
+// overseas and is slow or times out from mainland China, feishu.cn is the reverse.
+// Adding an account tries both and keeps the one that signs in first
+// (pickFeishuServers); the first entry is the default for buildAccount.
+var feishuServers = []*preset{
+	{
 		Provider: ProviderFeishu, IMAPHost: "imap.larkoffice.com", IMAPPort: 993,
 		SMTPHost: "smtp.larkoffice.com", SMTPPort: 465, SMTPSecurity: "tls",
 	},
+	{
+		Provider: ProviderFeishu, IMAPHost: "imap.feishu.cn", IMAPPort: 993,
+		SMTPHost: "smtp.feishu.cn", SMTPPort: 465, SMTPSecurity: "tls",
+	},
+}
+
+// providerPresets are chosen explicitly in the app because the address is on the company's own domain.
+var providerPresets = map[string]*preset{
+	// Feishu / Lark mail: SSL on both, account + password only.
+	ProviderFeishu: feishuServers[0],
 }
 
 // presetFor returns the server preset for an email address, or nil when the
