@@ -29,12 +29,12 @@ export interface Machine {
   hub_name?: string;
   machine_uid?: string;
   route?: { via: string; hops: number; rtt_ms?: number };
-  /** Operating it through Cua Driver (the hub's plugin cua, docs/computer-use.md): only while the plugin is on and it is a Mac. */
+  /** Operating it through Cua Driver (the hub's extension cua, docs/computer-use.md): only while the extension is on and it is a Mac. */
   computer?: {
     enabled: boolean; installed?: boolean; daemon?: boolean; ready?: boolean; accessibility?: string; screen_recording?: string;
     desktop?: string; screen_sharing?: boolean; note?: string;
   };
-  /** ego lite (the hub's plugin ego, docs/plan-ego-browser.md): only while the plugin is on and it is a Mac. */
+  /** ego lite (the hub's extension ego, docs/plan-ego-browser.md): only while the extension is on and it is a Mac. */
   browser?: { enabled: boolean; installed?: boolean; set_up?: boolean; ready?: boolean; note?: string };
 }
 

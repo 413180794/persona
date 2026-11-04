@@ -1,4 +1,4 @@
-// A launcher's quota at its gateway (GET /api/v1/launchers/{name}/quota, docs/launchers.md「额度」), as a quota plugin
+// A launcher's quota at its gateway (GET /api/v1/launchers/{name}/quota, docs/launchers.md「额度」), as a quota extension
 // read it, and how its numbers read (iOS LauncherQuotaSection / QuotaText).
 
 export interface QuotaWindow {
@@ -29,7 +29,7 @@ export interface QuotaUsage {
 }
 
 export interface LauncherQuota {
-  /** The gateway's id (the plugin's contribution). */
+  /** The gateway's id (the extension's contribution). */
   gateway: string;
   /** What to call it, from the hub (an older hub leaves it out: the id is shown). */
   gateway_name?: string;
@@ -40,7 +40,7 @@ export interface LauncherQuota {
   note?: string;
 }
 
-/** `error` when there is nothing to read (`unsupported`: no plugin knows the gateway) or the gateway said no. */
+/** `error` when there is nothing to read (`unsupported`: no extension knows the gateway) or the gateway said no. */
 export interface LauncherQuotaAnswer {
   machine?: string;
   checked_at?: string;

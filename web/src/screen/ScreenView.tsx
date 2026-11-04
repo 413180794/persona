@@ -58,7 +58,7 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
           setAccount((a) => a || accountOf(m.home));
         }
         if (m && !m.online) throw new Error(`${m.name} 离线，连上后再看。`);
-        // The plugin cua or ego, on for this Mac, lets its screen through (#1507); each asked fresh, 404 while off.
+        // The extension cua or ego, on for this Mac, lets its screen through (#1507); each asked fresh, 404 while off.
         const fresh = async (what: "computer" | "browser") => {
           try {
             return await api<Computer>(`/machines/${encodeURIComponent(target.mid)}/${what}`, { token: target.token });
@@ -70,7 +70,7 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
         const c = await fresh("computer");
         const b = c?.enabled ? null : await fresh("browser");
         const on = c?.enabled ? c : b?.enabled ? b : null;
-        if (!c && !b) throw new Error("操控电脑和浏览器（ego lite）的插件都没打开，或这台不是 Mac。");
+        if (!c && !b) throw new Error("操控电脑和浏览器（ego lite）的扩展都没打开，或这台不是 Mac。");
         if (!on) throw new Error("这台 Mac 还没有打开「操控电脑」或「浏览器」：在它的机器页打开。");
         if (!on.screen_sharing) throw new Error("这台 Mac 的屏幕共享没开：在它的「系统设置 › 通用 › 共享」里打开「屏幕共享」。");
         if (!gone) {

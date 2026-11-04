@@ -4,7 +4,9 @@ import type { Page } from "./nav";
 import { NAV } from "./nav";
 
 export function pageOf(pathname: string): Page {
-  const seg = pathname.replace(/^\/admin\/?/, "").split("/")[0];
+  let seg = pathname.replace(/^\/admin\/?/, "").split("/")[0];
+  if (seg === "plugins") seg = "extensions"; // a bookmark from before #1845
+
   return NAV.find((n) => n.page === seg)?.page ?? "overview";
 }
 

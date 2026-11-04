@@ -1,5 +1,5 @@
 // Pure helpers behind the admin pages, kept apart so they can be tested without a browser.
-import type { Access, AdminMachine, AdminPlugin, Device, DoctorItem, MeshHub, MeshView, Peer, PeerProbe, Restart } from "./types";
+import type { Access, AdminMachine, AdminExtension, Device, DoctorItem, MeshHub, MeshView, Peer, PeerProbe, Restart } from "./types";
 
 // ── access scope (docs/admin.md「访问范围」) ──────────────
 
@@ -327,10 +327,10 @@ export function memberNotice(mesh: MeshView | null | undefined): { title: string
   };
 }
 
-// ── plugins ──
+// ── extensions ──
 
-// pluginStatus: the state's words (as the app's 设置 › 插件 says them) and tone.
-export function pluginStatus(p: Pick<AdminPlugin, "status">): { tone: "green" | "red" | "orange" | "gray"; label: string } {
+// extensionStatus: the state's words (as the app's 设置 › 扩展 says them) and tone.
+export function extensionStatus(p: Pick<AdminExtension, "status">): { tone: "green" | "red" | "orange" | "gray"; label: string } {
   switch (p.status) {
     // Running or idle until something needs it (stopped): both are on, as the switch says.
     case "running":
@@ -350,12 +350,12 @@ export function pluginStatus(p: Pick<AdminPlugin, "status">): { tone: "green" | 
   return { tone: "gray", label: "状态未知" };
 }
 
-// pluginRunNote: whether an enabled plugin's program runs right now (the details' small print); "" otherwise.
-export function pluginRunNote(p: Pick<AdminPlugin, "status">): string {
+// extensionRunNote: whether an enabled extension's program runs right now (the details' small print); "" otherwise.
+export function extensionRunNote(p: Pick<AdminExtension, "status">): string {
   return p.status === "running" ? "正在运行" : p.status === "stopped" ? "暂未运行，用到时自动启动" : "";
 }
 
-export function pluginSourceLabel(source?: string): string {
+export function extensionSourceLabel(source?: string): string {
   return ({ builtin: "内置", "hub.json": "hub.json", installed: "已安装" } as Record<string, string>)[source ?? ""] ?? source ?? "";
 }
 
@@ -364,12 +364,12 @@ export function pointLabel(point: string): string {
 }
 
 // canUpgrade: only what was installed (built-in ones come with personad, hub.json's are changed there).
-export function canUpgrade(p: AdminPlugin): boolean {
+export function canUpgrade(p: AdminExtension): boolean {
   return p.source === "installed";
 }
 
-// canRollBack: an installed package with the version before its last upgrade still kept (a remote plugin has none).
-export function canRollBack(p: AdminPlugin): boolean {
+// canRollBack: an installed package with the version before its last upgrade still kept (a remote extension has none).
+export function canRollBack(p: AdminExtension): boolean {
   return p.source === "installed" && Boolean(p.previous_version) && !(p.origin ?? "").startsWith("remote:");
 }
 

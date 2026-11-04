@@ -1,6 +1,6 @@
 // 设置 › 连接器 (iOS ConnectorsSection, docs/mail.md): where Persona's data comes from — the mail accounts (list, add
 // one with a password or 授权码, delete), 飞书 (lark-connector through the hub, feature `lark`: read-only status), and the hub's other connectors
-// (GitHub, Telegram, a plugin's: GET /api/v1/connectors), each with a page of its own (HubConnector.tsx, `&connector=`).
+// (GitHub, Telegram, an extension's: GET /api/v1/connectors), each with a page of its own (HubConnector.tsx, `&connector=`).
 // 这台 iPhone (phone_* tools) is the phone's own and has no place in a browser; Gmail signs in with Google through the
 // phone app (its OAuth client is an iOS one whose callback only the app can catch), so the web form leaves it to the phone.
 import { useEffect, useState } from "react";

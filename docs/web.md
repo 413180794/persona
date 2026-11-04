@@ -11,7 +11,7 @@
 - **由 hub 自己托管**：hub 把 `<hub 数据目录>/web`（默认 `~/.persona/web`）当静态站，和 API 同一个端口（hub 的 `listen`，默认 `:18660`，即所有网卡）。
   同源，所以没有 CORS，WebSocket 和图片也用同一个 token。没有这个目录时非 `/api/` 路径照旧 404。
   不是文件的路径都回 `index.html`（前端路由：`/`（Persona 主对话）、`/overview`（总览）、`/s/<机器>/<会话>`、`/t/<机器>/<空间>/<tab>[/<会话>]`（herdr 的一个 tab，#1963）、`/j`、`/j/<会话>`、`/j/new`、`/history`、`/inbox`、`/inbox/<件>`、`/messages`、`/messages/<会话>`、`/routines`、
-  `/kb`、`/kb/<类型>/<条目>`、`/workspace-board`（工作流看板）、`/machines`、`/machines/<机器>`、`/assistant`（助手资料页）、`/settings`、`/plugin/<插件>/<页面>`（插件的整页））；
+  `/kb`、`/kb/<类型>/<条目>`、`/workspace-board`（工作流看板）、`/machines`、`/machines/<机器>`、`/assistant`（助手资料页）、`/settings`、`/extension/<扩展>/<页面>`（扩展的整页））；
   `/assets/` 下是带内容哈希的文件，永久缓存，`index.html` 不缓存（`server/internal/hub/web.go`）。
 - 部署：`./scripts/deploy/deploy.sh web`（只构建、传网页，不重启 hub）；部署 hub 时也会顺带部署网页：网页和 Go 二进制一起先编好，编不过就打出编译输出（含隐私扫描的命中行）、什么都不装；hub 重启之后再上传。
 - 本地开发：`cd web && npm ci && npm run dev`，Vite 把 `/api` 代理到 `JARVIS_HUB_URL`（`eval "$(python3 ../scripts/persona_config.py env)"`）。
@@ -48,7 +48,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 - **工作流看板**（`/workspace-board`，#1646）：从侧边栏进入，绑定已有工作区或在线机器的真实目录，手工管理列、卡片顺序、置顶和归档；详情关联同目录的 Agents，并打开文件、Git 或显式新建 Agent。卡片和列状态存 Postgres，Agent 状态不迁列，离线保留卡片。操作、权限、升级和来源见 [工作区看板](workspace-board.md)。
 
 - **侧边栏**（宽屏常驻，窄屏是抽屉，两者同一份）：连接状态和在线电脑数、⌘K 搜索；第一项是 **Persona**（形象头像、加粗，打开主对话，主对话在工作 / 需要你时带状态点或件数），
-  下面是总览 / 收件箱（「需要你」的件数）/ 待办 / 定时任务 / 知识库 / 机器 /（插件的页面，见「设置」里的「UI 插槽」）/ 设置；再下面「Persona 对话」（除主对话外最近 5 段，末尾「全部对话」；
+  下面是总览 / 收件箱（「需要你」的件数）/ 待办 / 定时任务 / 知识库 / 机器 /（扩展的页面，见「设置」里的「UI 插槽」）/ 设置；再下面「Persona 对话」（除主对话外最近 5 段，末尾「全部对话」；
   标题右边「+」开一次性的新对话 `/j/new`）、个人 Agent、Agents（标题右边「+」是新建 Agent，⌘K 面板里也有）。
   **为什么默认落在 Persona**（#1239）：和 iOS 一致（App 打开是「助手」，Agents 是第二个 tab），主对话本身带任务坞和「需要你」（#930），
   要处理的事在这里就能看到、能交代；总览更像 Agents 的仪表盘，挪到 `/overview`。主对话只有一个入口：`/`、旧的 `/j`、`/persona`、`/j/<主对话 id>` 都选中 Persona 这一行，
@@ -157,7 +157,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   编辑浮层改重复方式、提示词、运行方式（全部放行先确认），保存 / 删除 / 立即运行（跳到那段对话）/ 下次开新对话；「新建」可选模板，浮层只有「取消 / 添加」；
   右栏「接下来」和按天分组的运行记录。真实 hub 的 `PUT /assistant/tasks/{id}` 整体替换字段，所以连开关也带完整任务；
   启动器、思考强度只在这次改过才发（统一模型配置那边存的值不被盖回去，`docs/model-config.md`），hub 有统一模型配置时给一个跳过去的链接。
-- **收件箱**（`/inbox`、`/inbox/<件>`，`src/views/inbox/`，`src/lib/inbox.ts`，`docs/inbox.md`）：飞书、邮件、云文档、公司圈和连接器（GitHub、Telegram、信息、插件的）一个列表，
+- **收件箱**（`/inbox`、`/inbox/<件>`，`src/views/inbox/`，`src/lib/inbox.ts`，`docs/inbox.md`）：飞书、邮件、云文档、公司圈和连接器（GitHub、Telegram、信息、扩展的）一个列表，
   需要你 / 知悉即可（全部看过）/ 已折叠（全部清除）/ 已处理（收起，可移回）四段；筛选全部 / 飞书 / 每个邮箱 / 每个有条目的连接器 | @我 / 私聊 / 群聊 / 邮件 / Agent，搜标题、发件人、内容、摘要。
   - **等分拣的横幅**（#1773，`views/inbox/TriageBanner.tsx`，文案 `lib/inbox.ts` 的 `triageBanner`，规则见 `docs/inbox.md`「等分拣的横幅」）：列表回包的 `triage` 存在收件箱的 store 里，
     筛选下面、第一段上面一条 `bg-orange-tint` 的横幅（`role="status"`，时钟图标）；「去配置」打开 `/settings?tab=model-config&purpose=inbox.triage`（网页总是完整权限的设备，按钮总在）。
@@ -169,7 +169,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     `can_reply` 的才有「AI 草拟回复」（回复走 `/inbox/<件>/reply`，弹窗里写明回复会到哪、谁能看到）；不能回复的有 `open_url` 就换成「在 Telegram 里回复」「在信息里回复」（`sms:` 带上 AI 分身的草稿），都没有就只有「交给 AI」。交给 AI 的标题是「连接器名 · 标题」，正文带上它的链接。
   等你的 Agent（待处理交互，屏蔽的除外）排在需要你最前，点了进那个对话。悬停一行出现「已处理 / 移回」（网页没有左滑），先改本地、失败恢复。
   AI 分身草拟好的行下面是草稿卡片（发送 / 修改），处理中写「AI 分身正在处理：…」。宽时左列表右详情，窄时详情盖住列表；按页面自己的宽度切（容器查询），开着侧边面板也不挤。
-  详情：插件的连接器收进来的事，插件有 `inbox_item` 时正文由插件画（见下面「设置」的「UI 插槽」）；其余照旧。
+  详情：扩展的连接器收进来的事，扩展有 `inbox_item` 时正文由扩展画（见下面「设置」的「UI 插槽」）；其余照旧。
   飞书会话只读（停在第一条新消息，「以下是新消息」分隔，可加载更早 / 更新，`lark` 推送命中时刷新；不做表情、资料卡、群设置——不做第二个飞书）；
   邮件的 HTML 放在不允许脚本的沙箱 iframe 里（`allow-same-origin` 只为量高度、拦链接）；云文档列出提到我的行和状态菜单（`/doc/status`）；公司圈是帖子和评论。
   操作条：✦ 摘要、「AI 草拟回复」（起草、「让 AI 改」重写、发送走 `/reply`）、「交给 AI」（Persona 新对话或最近 8 个在跑的 Agent，默认同时标已处理）。
@@ -207,7 +207,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 
   ![网页版侧边栏的个人 Agent：按来源分组，带头像、未读数、搜索和筛选按钮](screenshots/web-personal-agents.png)
 
-- **设置**（`/settings`，侧边栏和左上角菜单进入，`src/views/Settings.tsx`）：十个分类（hub 带 `plugin_manager` 时十一个），和 App 的设置同一套接口。
+- **设置**（`/settings`，侧边栏和左上角菜单进入，`src/views/Settings.tsx`）：十个分类（hub 带 `extension_manager` 或老的 `plugin_manager` 时十一个），和 App 的设置同一套接口。
   「通用」是外观（跟随系统 / 浅色 / 深色）、形象、Persona 助手的运行位置（模型在「模型配置」tab，#1291）、这个浏览器（hub 地址、hub 名、互联的 hub、断开）；
   「助手」（`settings/AssistantSettings.tsx`）：主动做事（进定时任务）、关于我（`PUT /assistant {notes}`，点保存或离开时存）、
   记忆（`/assistant/memory`：标题先取 MEMORY.md 索引里的中文标题，查看 / 编辑整个文件 / 删除，索引只读）、Skills（`GET /skills`，跑助手那台电脑上的 skill，只读，`settings/Skills.tsx`）、运行在哪（只读；没有模型入口，模型在「模型配置 › 主对话」）；
@@ -217,63 +217,66 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   飞书（`/lark/status` 只读）、飞书机器人（`settings/FeishuBot.tsx`，逻辑 `lib/feishu-bot.ts`，`docs/bots.md`；一行状态，点开是弹窗（`?tab=connectors&connector=feishu-bot` 直接打开）：开关、应用凭证「验证并保存」、
   配对码和倒计时（等配对时每 3 秒刷新）、测试消息、解除配对先确认、「能做什么」六个开关、飞书里聊过的 Agent、怎么建机器人；同 iOS `FeishuBotView`）；
   hub 带 `connectors` 时下面是「更多连接器」（`settings/HubConnector.tsx`，逻辑 `lib/connectors.ts`，`&connector=<id>` 直接进详情，#1324）：
-  GitHub、Telegram、信息和插件提供的连接器，一行一个（标志、名字、状态圆点和账号）。详情照 iOS `HubConnectorView`：状态、登录来源、最近一次同步、错误（限流时灰字）和「怎么修好」的步骤；
+  GitHub、Telegram、信息和扩展提供的连接器，一行一个（标志、名字、状态圆点和账号）。详情照 iOS `HubConnectorView`：状态、登录来源、最近一次同步、错误（限流时灰字）和「怎么修好」的步骤；
   能在这里登录的（`login`）有「同步 X」开关、分步登录（按 hub 给的字段填，`secret` 的是密码框；GitHub 的设备码大字显示、可复制、按 `interval` 自动再问；微信这类 `kind: qr` 画 hub 给的二维码、能「保存二维码」、按 `interval` 自动再问，二维码和渠道页共用 `settings/LoginSteps.tsx`；只缺点阵时给可复制的链接；画不了的步骤（不认识的 `kind`、没点阵也没链接、没有字段）说明画不了和下一步、给「重新开始」，不留灰掉的「下一步」，#1693）、进知识库 / 进收件箱、
   删除已存的知识库内容、退出登录、删除已存的数据（都先确认）；刚打开、进程还没报能力的每秒再问一次（最多 15 秒）。GitHub 另有「从哪里登录」（各台电脑上的 gh 或设备码，`/connectors/github/auth`）、
   权限不够时缺哪些 scope 和影响什么、收件箱选项（CI 失败档位、静音仓库，`PUT …/github/settings {options}`）。信息（iMessage）只看状态，「交给 Persona」和删除在手机上；「这台 iPhone」只在手机上有；
   「hub」（`settings/HubSettings.tsx`，逻辑 `lib/hub-update.ts`，`docs/hub-update.md`「App 里」）：版本、渠道、上次检查、检查更新，新版本和说明、回滚过 / 自动更新不装的提示、
   「更新 hub」，等空闲时列出在忙的 Agent 和「现在就更新…」（先确认），Docker 部署给要改的镜像和命令（可复制），自动更新开关、首次「已开启」提示、各台电脑上的 personad 版本、更新记录；
   跟着 `hub_update` 推送刷新，旧 hub（没有这个接口）只显示一句说明；
-  「插件」（`settings/Plugins.tsx`，逻辑 `lib/plugins.ts`，`?tab=plugins`，`&plugin=<id>` 直接进详情；hub 的 features 有 `plugin_manager` 才出现，#1207）：
-  和 iOS 同一套（`docs/extensions.md`「App：设置 › 插件」）。列表是名字、状态圆点和文字、还缺什么 / 错误，标题旁写个数和几个要处理；详情是状态 · 版本 · 来源、描述、还缺、错误，
+  「扩展」（`settings/Extensions.tsx`，逻辑 `lib/extensions.ts`，`?tab=extensions`，`&extension=<id>` 直接进详情；hub 的 features 有 `extension_manager`（老 hub 是 `plugin_manager`）才出现，#1207；老链接 `?tab=plugins&plugin=<id>` 照样打开）：
+  和 iOS 同一套（`docs/extensions.md`「App：设置 › 扩展」）。列表是名字、状态圆点和文字、还缺什么 / 错误，标题旁写个数和几个要处理；详情是状态 · 版本 · 来源、描述、还缺、错误，
   「启用」开关（立即 `PUT …/-/enabled`），按 `form.fields` 画的表单（文字、数字、开关、选择、文字列表 / 多选，对象单独一组），改了底部浮出「还原 / 保存」，整份 `PUT …/-/config`，
   hub 回 `invalid_config` 时把原因写在那一项下面、草稿留着，数字不是数时不能保存；有未保存的改动时点返回先问。密钥每项只显示已设置 / 未设置，点开在弹窗里输入（`type=password`，不回显），
   已设置的可以清除（再点一次确认）；「提供」「它可以」「关于」（版本、上一个版本、来源、安装自、发布者、https 的主页、警告）。hub.json 来的只读：没有开关、表单、密钥。
-  装、升级、卸载在 hub 的管理界面（`/admin`）或 hub 机器上（`personad plugin`）；hub 有插件市场（列表回 `markets: true`）时也能从市场装（下面）。截图用 `MOCK_PLUGINS=1` 的假 hub。
-  **渠道**（#1466，`settings/Channels.tsx`，逻辑 `lib/channels.ts`，[channels.md](channels.md)；hub 的 features 有 `channels` 才出现）：插件列表顶上一行「渠道」（几个已连接、几个出错），
-  点进 `&plugin=-channels`：分「Persona」（各端）、「已接入」、「可以安装」（市场里的，点了进市场的详情）三组，每行是渠道的标志（飞书用自己的，其余按种类的图标）、名字、账号或说明、状态圆点和文字。
-  单个渠道 `&plugin=-channels/<id>`：状态、账号、最近一条；「启用」；没绑时「绑定」按 `bind` 分步走（填字段、扫码时画 hub 给的二维码并能「保存二维码」、配对码时大字显示并轮询），绑了是账号和「解除绑定」（先确认）；
+  装、升级、卸载在 hub 的管理界面（`/admin`）或 hub 机器上（`personad extension`）；hub 有扩展市场（列表回 `markets: true`）时也能从市场装（下面）。截图用 `MOCK_PLUGINS=1` 的假 hub。
+  **新老接口**（#1845，`lib/extension-api.ts`，[extensions.md](extensions.md)「命名和兼容」）：hello 的 features 有 `extensions` 时问 `/api/v1/extensions/…`（字段 `extensions` / `extension` / `extension_name`），
+  没有（老 hub，或 hello 之前）问 `/api/v1/plugins/…`（`plugins` / `plugin` / `plugin_name`），两套字段都读；市场预览 `{market, extension, plugin}` 两个键都带。
+  事件收 `extension_ui`；hub 有新接口时它也会发一份老的 `plugin_ui` 给老 App，网页只在老 hub 上读 `plugin_ui`。市场的签名状态（#1848 的 `signature`）写在市场那一行（「签名已验证」「未签名」……）。
+  **渠道**（#1466，`settings/Channels.tsx`，逻辑 `lib/channels.ts`，[channels.md](channels.md)；hub 的 features 有 `channels` 才出现）：扩展列表顶上一行「渠道」（几个已连接、几个出错），
+  点进 `&extension=-channels`：分「Persona」（各端）、「已接入」、「可以安装」（市场里的，点了进市场的详情）三组，每行是渠道的标志（飞书用自己的，其余按种类的图标）、名字、账号或说明、状态圆点和文字。
+  单个渠道 `&extension=-channels/<id>`：状态、账号、最近一条；「启用」；没绑时「绑定」按 `bind` 分步走（填字段、扫码时画 hub 给的二维码并能「保存二维码」、配对码时大字显示并轮询），绑了是账号和「解除绑定」（先确认）；
   「消息发到」（主对话 / 新对话 / 选一段助手的对话）；按 `features` 画的开关；在等几个回答和提问、最近进过的对话；它能做什么；「发一条测试消息」（只发给自己）；有 `settings_url` 的多一行「更多设置」（飞书机器人进原来的弹窗）。
   只读的（Persona、飞书 /agent、语音）只显示信息。连接器页的微信、飞书机器人顶上有一行链到这里。对话页里从渠道来的消息（`client_msg_id` 是 `<渠道>-…`）气泡下面一行「来自 微信」，
   对话列表在标题旁画最近那个渠道（会话的 `channels`）的小标志。截图用 `MOCK_CHANNELS=1` 的假 hub。
 
-  ![设置 › 插件 › 渠道（浅色）](screenshots/web-channels-light.png)
+  ![设置 › 扩展 › 渠道（浅色）](screenshots/web-channels-light.png)
 
   ![微信渠道的设置（深色）](screenshots/web-channel-wechat-dark.png)
 
   ![扫码绑定微信（浅色）](screenshots/web-channel-bind-qr-light.png)
 
   ![对话页里来自微信的消息（深色）](screenshots/web-channel-source-dark.png)
-  **声明式 UI**（#1330，`settings/PluginView.tsx`，逻辑 `lib/plugin-ui.ts`，`docs/extensions.md`「声明式 UI」）：插件详情多一组「页面」（它的 `ui`），点进去是 `&plugin=<id>/ui/<页面>`，
+  **声明式 UI**（#1330，`settings/ExtensionView.tsx`，逻辑 `lib/extension-ui.ts`，`docs/extensions.md`「声明式 UI」）：扩展详情多一组「页面」（它的 `ui`），点进去是 `&extension=<id>/ui/<页面>`，
   一个组件画全部八种条目：text（四种样式）、metric（连着的几个并排）、progress、row（徽标、可点）、button（连着的放一行，destructive 是红字，submit 是主按钮）、link（只认 https，`openLink` 打开）、field（文字、密钥不回显、数字、开关、选择）、divider；
   tone 换成角色色（neutral → accent / 正文色，positive → green，caution → orange，danger → red）。按钮有 `confirm` 先弹确认框，`submit` 带上这一页全部 field 的值（开关是 `"true"` / `"false"`，数字不是数就不发），
   回答里的新 view 换上、`toast` 弹出、`open_url` 用网页的链接打开方式，什么都没有就重画；画不出来是空状态加「重试」。
-  「模型供应商」的启动器详情里，hub 带 `plugin_manager` 时按 `GET /plugins/-/ui?placement=launcher_section&launcher=<名字>[&machine=<第一台在线的电脑>]` 每个插件加一节（标题是插件给的名字）；
-  画的时候插件回 404 `{"code": "unsupported"}`（不写 `hosts` 的一节会列在每个启动器上，插件说这不是它的网关，#1339）就把这一节整个藏掉，不算出错、不显示错误。
-  **UI 插槽**（#1451，`docs/extensions.md`「UI 插槽」；列表和角标 `lib/plugin-slots.ts`，三处的画法 `views/plugins/PluginSlots.tsx`，图 `views/plugins/PluginChart.tsx`，逻辑 `lib/plugin-ui.ts`）：
-  hub 的 features 有 `plugin_ui_slots` 才问。`GET /plugins/-/ui`（不带 placement）一次拿齐，重连（hello）、在这里启用 / 停用 / 改设置 / 装 / 升级 / 卸载插件后、标签页隔一分钟以上回到前台时再拿；
-  `nav_page` 是侧边栏「机器」和「设置」之间一页一行（固定的八个图标换成网页的，不认识的画成插件图标；角标按 tone 上色，收到 `plugin_ui` 事件就地改，不重拉），点进 `/plugin/<插件>/<页面>`；
+  「模型供应商」的启动器详情里，hub 带扩展底座时按 `GET /extensions/-/ui?placement=launcher_section&launcher=<名字>[&machine=<第一台在线的电脑>]` 每个扩展加一节（标题是扩展给的名字）；
+  画的时候扩展回 404 `{"code": "unsupported"}`（不写 `hosts` 的一节会列在每个启动器上，扩展说这不是它的网关，#1339）就把这一节整个藏掉，不算出错、不显示错误。
+  **UI 插槽**（#1451，`docs/extensions.md`「UI 插槽」；列表和角标 `lib/extension-slots.ts`，三处的画法 `views/extensions/ExtensionSlots.tsx`，图 `views/extensions/ExtensionChart.tsx`，逻辑 `lib/extension-ui.ts`）：
+  hub 的 features 有 `extension_ui_slots`（老 hub 是 `plugin_ui_slots`）才问。`GET /extensions/-/ui`（不带 placement）一次拿齐，重连（hello）、在这里启用 / 停用 / 改设置 / 装 / 升级 / 卸载扩展后、标签页隔一分钟以上回到前台时再拿；
+  `nav_page` 是侧边栏「机器」和「设置」之间一页一行（固定的八个图标换成网页的，不认识的画成扩展图标；角标按 tone 上色，收到 `extension_ui` 事件（老 hub 是 `plugin_ui`）就地改，不重拉），点进 `/extension/<扩展>/<页面>`；
   `overview_card` 是总览问候语下面一排卡片（一张占满，多张两列），紧凑画法（`context.size: compact`），点卡片空白处或标题打开 `opens`，卡片里的按钮、行、图照常能点；
-  `machine_section` 是机器页最后（启动器后面）每个插件一节，带 `context.machine`。每次画、每个动作都带 `context: {tz, locale, platform: "web", ui_version: 2, …}`；
+  `machine_section` 是机器页最后（启动器后面）每个扩展一节，带 `context.machine`。每次画、每个动作都带 `context: {tz, locale, platform: "web", ui_version: 2, …}`；
   不认识的条目跳过、被它们清空的一节拿掉（有 footer 的留着），只有整个 View 读不出来才显示出错。`chart` 是 SVG 柱状图（并排 / 堆叠，柱宽不超过 24px、圆角在自由端、堆叠段之间 2px 间隙）和折线图，
   悬停或方向键看这个标签下每个系列的值，横轴标签隔几个写一个、不重叠，紧凑时只画首尾标签；没 tone 的系列按 `--series-1…4`（第一个是主色，避开 green / orange / red 三个角色色，深浅色两套）取色。
   `stat_grid` 窄时一行 2 个、够宽 3 个、很宽一行放全；`segmented` 选了马上发 `ui.action`（`values: {name: 选的值}`）。`refresh_after` 只在页面可见、组件还在时按时重画，回到前台已经过点就马上画。
   截图用 `MOCK_PLUGINS=1` 的假 hub（`example-gateway` 的用量页、今天的用量卡片、机器页的「网关调用」）。
   `inbox_item`（#1681，`docs/extensions.md`「收件箱条目」）：同一个缓存的列表里带 `connector` 的那几项，打开一件事时按条目的 `source` 找（`useInboxItemPlace`），不另外问 hub；
-  找到了就由 `views/inbox/InboxPluginBody.tsx` 在详情的头部下面画插件的 View（`context.item` 是条目 id），条目的 `version` 变了（来了新消息）就重画、正在填的字段留着；
-  hub 回 403 / 404（只读设备、条目没了、连接器不归它）直接画原来的正文，插件出错时也画原来的正文，上面一行「…的详情没画出来」和「重试」。
-  插件画的时候头部不出 Pin（Pin 作用在原来的会话页上）。按钮回 `open_url: persona://inbox/<这一条>/source`（「在会话里看」）时，正文换成原来的会话页
-  （飞书停在这件事的第一条），上面一行「回到<页面标题>」，插件的页藏起来不卸载、回去原样；别的条目的、别的 `persona:` 链接不打开（`lib/plugin-ui.ts` 的 `outcome` / `inboxSourceItem`）。
-  截图用 `MOCK_PLUGINS=1 MOCK_INBOX_ITEM_UI=1`：飞书的条目由 `example-chat` 画（回复、在会话里看），群聊的条目插件出错（看回退）。
-  **插件市场**（`settings/PluginMarket.tsx`，逻辑 `lib/plugin-market.ts`，`docs/extensions.md`「插件市场」）：插件列表下面「插件市场」一组两行。
-  「浏览插件市场」（`&plugin=-market`）：搜索（停顿 250 ms 后查 hub）、按市场筛选的 chip、重新读取全部，读不到的市场在顶上写原因；每行名字、版本、说明、市场、标签和状态（未安装 / 可升级到 x / 已装 x / hub 自带 / 装不了和原因）。
-  点进是详情（`&plugin=-market/<市场>/<插件>`）：说明、标签、「它可以」、「提供」、「关于」；「安装」/「升级到 x」先 `POST …/catalog/preview`，弹出预览（权限、升级的 `旧 → 新`、权限变多时的红色提示和「新增」、剩几分钟，过期就不能点），
-  「同意并安装」/「升级」/「同意新权限并升级」带着预览的 id 和摘要调 `/plugins/-/install` / `/plugins/<id>/-/upgrade`，装好跳到这个插件的详情；从这个市场装的有「卸载」（可留数据），插件详情里也有（`origin` 是 `market:` 的）。
-  「管理市场」（`&plugin=-markets`）：每个市场的名字、token、地址、几个插件 · 多久前读过、说明、读不到的原因和警告；重新读取、填 / 换 / 去掉 token（只写；`git:` 的市场没有这个按钮）、删除（就地确认）；「添加市场」填地址和可选 token，占位文字和说明写三种写法（https、`github:owner/repo`、`git:…`，#1373），
+  找到了就由 `views/inbox/InboxExtensionBody.tsx` 在详情的头部下面画扩展的 View（`context.item` 是条目 id），条目的 `version` 变了（来了新消息）就重画、正在填的字段留着；
+  hub 回 403 / 404（只读设备、条目没了、连接器不归它）直接画原来的正文，扩展出错时也画原来的正文，上面一行「…的详情没画出来」和「重试」。
+  扩展画的时候头部不出 Pin（Pin 作用在原来的会话页上）。按钮回 `open_url: persona://inbox/<这一条>/source`（「在会话里看」）时，正文换成原来的会话页
+  （飞书停在这件事的第一条），上面一行「回到<页面标题>」，扩展的页藏起来不卸载、回去原样；别的条目的、别的 `persona:` 链接不打开（`lib/extension-ui.ts` 的 `outcome` / `inboxSourceItem`）。
+  截图用 `MOCK_PLUGINS=1 MOCK_INBOX_ITEM_UI=1`：飞书的条目由 `example-chat` 画（回复、在会话里看），群聊的条目扩展出错（看回退）。
+  **扩展市场**（`settings/ExtensionMarket.tsx`，逻辑 `lib/extension-market.ts`，`docs/extensions.md`「扩展市场」）：扩展列表下面「扩展市场」一组两行。
+  「浏览扩展市场」（`&extension=-market`）：搜索（停顿 250 ms 后查 hub）、按市场筛选的 chip、重新读取全部，读不到的市场在顶上写原因；每行名字、版本、说明、市场、标签和状态（未安装 / 可升级到 x / 已装 x / hub 自带 / 装不了和原因）。
+  点进是详情（`&extension=-market/<市场>/<扩展>`）：说明、标签、「它可以」、「提供」、「关于」；「安装」/「升级到 x」先 `POST …/catalog/preview`，弹出预览（权限、升级的 `旧 → 新`、权限变多时的红色提示和「新增」、剩几分钟，过期就不能点），
+  「同意并安装」/「升级」/「同意新权限并升级」带着预览的 id 和摘要调 `/extensions/-/install` / `/extensions/<id>/-/upgrade`，装好跳到这个扩展的详情；从这个市场装的有「卸载」（可留数据），扩展详情里也有（`origin` 是 `market:` 的）。
+  「管理市场」（`&extension=-markets`）：每个市场的名字、token、地址、几个扩展 · 多久前读过、说明、读不到的原因和警告；重新读取、填 / 换 / 去掉 token（只写；`git:` 的市场没有这个按钮）、删除（就地确认）；「添加市场」填地址和可选 token，占位文字和说明写三种写法（https、`github:owner/repo`、`git:…`，#1373），
   页面不查地址的写法，原样交给 hub，hub 读不到时原因写在对话框里；`git:` 的市场用 hub 机器自己的 SSH 凭据，token 一栏不能填。逻辑和文字（`MARKET_SPEC_HINT`）网页和管理界面共用。
   「模型供应商」是全部接入（搜索；Persona 管理 / 来自 ~/.zshrc / 已隐藏），点开是弹窗：按电脑分组的真实参数（`docs/launchers.md`）、
   「额度 · <网关名>」（非直接 API 的，#1326，`settings/LauncherQuota.tsx`，逻辑 `lib/quota.ts`，照 iOS `LauncherQuotaSection`：预算、各账号 / 供应商的窗口和进度条（≥ 70% 橙、≥ 90% 或用完红）、按模型折叠、这个 Key 的用量，右上刷新带 `refresh=1`，`docs/launchers.md`「额度」）、
-  测试可用性、函数原文（折叠）、编辑、删除 / 隐藏；新增支持启动器或直接 API（Messages / Responses），hub 的插件有供应商预设时多一个「从插件添加」（`docs/launchers.md`「从插件添加」）；
+  测试可用性、函数原文（折叠）、编辑、删除 / 隐藏；新增支持启动器或直接 API（Messages / Responses），hub 的扩展有供应商预设时多一个「从扩展添加」（`docs/launchers.md`「从扩展添加」）；
   「模型配置」按 hub 的真实用途目录分组/搜索，编辑供应商、具体模型和支持的思考强度，显示继承与当前生效值。保存失败保留草稿，revision 冲突需重新加载（`docs/model-config.md`）；
   「翻译」（`settings/TranslationSettings.tsx`，`?tab=translate`）：自动翻译、翻译模型（跳到模型配置的 `translate` 用途）、目标语言、翻译范围（邮件、选中的飞书会话），
   存在当前浏览器（键名同 iOS 的 AppStorage）。不同步到 hub：hub 的翻译偏好挂在手机的推送设备 id 上（`/devices/{id}/prefs`，iOS 和 Android 都会发，hub 按它收信时预翻），网页没有这个 id；
@@ -286,7 +289,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   整段没数据时只给一张卡片和「看最近 24 小时」），只在页面可见时刷新（1 小时档 10 秒、另两档每分钟，照 iOS）；系统信息、启动器。引擎切换在 #254。
   #433 加了「负载（1 分钟）」曲线（四张图 2×2，虚线标出核数，颜色 token `--chart-load` 取 iOS `MetricColor.load`）和「每个核心」柱状图（`latest.cores` 有两个以上且在线时，即 Linux 的 node，
   右上「最忙 X%」，悬停看每核数值）。
-  「操控电脑」（#1326，`machines/ComputerSection.tsx`，逻辑 `lib/computer.ts`，照 iOS `ComputerSection`，[computer-use.md](computer-use.md)）：hub 的插件 cua 打开、这台是 Mac 时（机器带 `computer`）
+  「操控电脑」（#1326，`machines/ComputerSection.tsx`，逻辑 `lib/computer.ts`，照 iOS `ComputerSection`，[computer-use.md](computer-use.md)）：hub 的扩展 cua 打开、这台是 Mac 时（机器带 `computer`）
   在 Agent 下面多一节：开关「允许助手操控这台电脑」（`PUT …/computer`，离线时不能改），打开后按状态给一行说明和下一步：没装时「安装 Cua Driver」（先弹窗确认）、
   安装中的步骤和「取消」、缺权限时「去授权」、授权窗口弹出后「再请求一次」、可以操控时版本；那台 Mac 开着屏幕共享时有「VNC」（新标签页打开 `/screen/<机器>`），
   没开时提示去哪里打开。打开页面时 `GET …/computer` 问一次，安装 / 授权进行中每 2 秒再问。hub 没有重启这类动作（`…/computer/reboot` 是 404），这里也没有。
@@ -377,7 +380,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   来源有两处：展开着的工作里带 `tool_use_id` 的 image item，和折起来的工作的 `fold.images`（`docs/protocol.md`「折叠的工作」：`item_id` 走 items/{id}/image，没有的只有 `path` 走 `file/thumb`）。同一路径一次，没路径的按 mime + 大小 + 宽高去重，按第一次出现排。
   只有缩略图，不加标题或说明文字：多张是高 60px 的横滑条，宽度按图的比例（方到 16:9 之间），超出时边缘渐隐；一张就是一个略大的缩略图（高 88px）。名字（文件名或「截图 · 机器」）和尺寸只在悬停和画廊里出现。点开是画廊：← / → 和底部缩略图切换，Esc 关，下载、拷贝路径、在文件页打开。
   缩略图懒加载；条的高度固定、每张有自己的 key，工作中新图追加在末尾，不让上面的内容移动。
-- **浏览器登录**（#1304，`machines/BrowserLogins.tsx`、`lib/cookies.ts`）：插件 ego 打开、这台 Mac 的 ego lite 做完首次设置后，机器页列出 ego 里有登录的网站（条数、最晚过期，不显示内容），可按网站或全部清除，可导入 cookies.txt / JSON（页面里解析，勾选网站后经 hub 直转那台 Mac，hub 不保存），见 `docs/plan-ego-browser.md`。
+- **浏览器登录**（#1304，`machines/BrowserLogins.tsx`、`lib/cookies.ts`）：扩展 ego 打开、这台 Mac 的 ego lite 做完首次设置后，机器页列出 ego 里有登录的网站（条数、最晚过期，不显示内容），可按网站或全部清除，可导入 cookies.txt / JSON（页面里解析，勾选网站后经 hub 直转那台 Mac，hub 不保存），见 `docs/plan-ego-browser.md`。
 - **链接**：见下面「链接在页面里打开」。
 
 ### 链接在页面里打开
@@ -422,7 +425,7 @@ CLAUDE.md 要求链接在 App 内打开；网页上浏览器本身就是「App�
 页面回到前台、网络恢复时也重连；连不上时顶部出现「连不上 hub，正在重试…」。重连后已打开的对话重新订阅，带 `since_seq`（本地连续拿到的最后一行），
 `from_seq` 接不上时 1.5 秒后按 `after_seq` 补洞（`docs/protocol.md`「items 的连续性」），`history` 变了就整页重取。
 store 自己不存的推送（`inbox`、`lark`、`terminal`、`terminal_control`、`assistant_schedule`……）由用到的页面按类型订阅（`onHubEvent(type, fn)`，`src/lib/store.ts`）；
-hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector 的飞书由插件提供（feature `lark`，公司圈 `lark_moments`）：依赖 `/api/v1/lark/…` 的地方——「消息」页和侧边栏入口、设置 › 连接器 › 飞书、翻译里的飞书会话、飞书文档 / 公司圈帖子的阅读器——都按 `store.larkOn()` / `useLarkOn()` 显示；hub 还没说 features（hello 之前）时照旧显示。收件箱里带 `lark` / `doc` / `moment` 块的条目照常画（只有插件在时才有）。知识库的帖子存档带 `feed` 时用它当帖子页标题，没有时叫「公司圈」（#1530）。
+hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector 的飞书由扩展提供（feature `lark`，公司圈 `lark_moments`）：依赖 `/api/v1/lark/…` 的地方——「消息」页和侧边栏入口、设置 › 连接器 › 飞书、翻译里的飞书会话、飞书文档 / 公司圈帖子的阅读器——都按 `store.larkOn()` / `useLarkOn()` 显示；hub 还没说 features（hello 之前）时照旧显示。收件箱里带 `lark` / `doc` / `moment` 块的条目照常画（只有扩展在时才有）。知识库的帖子存档带 `feed` 时用它当帖子页标题，没有时叫「公司圈」（#1530）。
 
 ## 安装成 App（PWA，#1772）
 
@@ -535,7 +538,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | 邮件翻译、飞书消息翻译 | 有 | #433 | 语言判断是启发式的（浏览器没有 NaturalLanguage） |
 | 云文档提到我的行和改状态 | 有 | #297 | |
 | 公司圈帖子和评论 | 有 | #297 | 只读 |
-| 连接器的条目（GitHub、Telegram、信息、插件）：来源筛选、会话页、回复或「在 X 里打开」、交给 AI | 有 | #1324 | GitHub 时间线和 Telegram 气泡只读加回复；表情回应、转发、下载附件不做 |
+| 连接器的条目（GitHub、Telegram、信息、扩展）：来源筛选、会话页、回复或「在 X 里打开」、交给 AI | 有 | #1324 | GitHub 时间线和 Telegram 气泡只读加回复；表情回应、转发、下载附件不做 |
 
 ### 机器和设置
 
@@ -562,9 +565,9 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | hub 版本和更新（检查、更新、现在就更新、自动更新、记录、Docker 的命令） | 有 | #1325 | 设置 › hub；Agents 列表上方那行 hub 提示没做，提示在设置 › hub 顶部 |
 | 助手的 Skills | 有 | #1325 | 设置 › 助手，只读（同 iOS） |
 | 连接器：GitHub（登录来源、设备码登录、权限、收件箱选项） | 有 | #1324 | |
-| 连接器：Telegram、插件提供的连接器（开关、分步登录、进知识库 / 进收件箱、退出、删除） | 有 | #1324、#1425 | 品牌、页脚、「在 X 里回复」按连接器 id 查 `lib/connectors.ts` 的一张表；表里没有的插件连接器用通用图标和通用文案（带它自己的名字）；微信的品牌图未定，先用通用图标 |
+| 连接器：Telegram、扩展提供的连接器（开关、分步登录、进知识库 / 进收件箱、退出、删除） | 有 | #1324、#1425 | 品牌、页脚、「在 X 里回复」按连接器 id 查 `lib/connectors.ts` 的一张表；表里没有的扩展连接器用通用图标和通用文案（带它自己的名字）；微信的品牌图未定，先用通用图标 |
 | 连接器：信息（iMessage） | 部分 | #1324 | 只看状态；「交给 Persona」开关和删除数据只在手机上 |
-| 插件（列表、开关、按 schema 的表单、只写的密钥） | 有 | #1207 | 安装、升级、卸载在 hub 机器上（同 iOS） |
+| 扩展（列表、开关、按 schema 的表单、只写的密钥） | 有 | #1207 | 安装、升级、卸载在 hub 机器上（同 iOS） |
 | 翻译 | 有 | #433 | 存在当前浏览器、不同步到 hub：hub 的翻译偏好挂在手机的推送设备 id 上，网页没有；网页打开时按需翻 |
 | 设备（token 列表、撤销） | 有 | — | |
 | 扫码连新设备 | 另有 PR | — | #241 |

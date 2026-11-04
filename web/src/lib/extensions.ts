@@ -1,16 +1,17 @@
-// 设置 › 插件 (docs/plugins.md「hub 的接口」「App：设置 › 插件」, iOS PluginsModel): the hub's plugins, each one's
+// 设置 › 扩展 (docs/extensions.md「hub 的接口」「App：设置 › 扩展」, iOS ExtensionsModel): the hub's extensions, each one's
 // switch, its configuration as a form drawn from its schema (`form.fields`), and its secrets, write-only. Installing,
-// upgrading and removing happen on the hub's machine (`personad plugin`), never here.
+// upgrading and removing happen on the hub's machine (`personad extension`), never here.
 import { api, ApiError, enc } from "./api";
 import type { Machine } from "./types";
-import type { UIPlace } from "./plugin-ui";
-import { refreshPluginPlaces } from "./plugin-slots";
+import { placeOf, type UIPlace } from "./extension-ui";
+import { extRoot, listOf } from "./extension-api";
+import { refreshExtensionPlaces } from "./extension-slots";
 
 export type Json = string | number | boolean | null | Json[] | { [k: string]: Json };
 export type JsonObject = { [k: string]: Json };
 
-/** One of GET /api/v1/plugins. */
-export interface HubPlugin {
+/** One of GET /api/v1/extensions. */
+export interface HubExtension {
   id: string;
   name: string;
   kind: string;
@@ -27,15 +28,15 @@ export interface HubPlugin {
   /** What it still needs before it runs, in words. */
   needs_setup?: string[];
   warnings?: string[];
-  /** A plugin from a market (a hub with plugin_auto_upgrade): its own auto-upgrade switch, its newer version and what
-   *  happened last with an upgrade (docs/plugins.md「自动升级」). */
+  /** An extension from a market (a hub with plugin_auto_upgrade): its own auto-upgrade switch, its newer version and what
+   *  happened last with an upgrade (docs/extensions.md「自动升级」). */
   auto_upgrade?: boolean;
-  upgrade?: PluginUpgrade;
-  upgrade_note?: PluginUpgradeNote;
+  upgrade?: ExtensionUpgrade;
+  upgrade_note?: ExtensionUpgradeNote;
 }
 
-/** A market plugin's newer version and where it stands. */
-export interface PluginUpgrade {
+/** A market extension's newer version and where it stands. */
+export interface ExtensionUpgrade {
   id: string;
   name?: string;
   market: string;
@@ -43,12 +44,12 @@ export interface PluginUpgrade {
   to: string;
   /** available | waiting_idle | needs_permission | off | skipped | failed | incompatible */
   state: string;
-  added_permissions?: PluginPermission[];
+  added_permissions?: ExtensionPermission[];
   detail?: string;
 }
 
-/** What happened last with a plugin's upgrade. */
-export interface PluginUpgradeNote {
+/** What happened last with an extension's upgrade. */
+export interface ExtensionUpgradeNote {
   /** upgraded | rolled_back | needs_permission | failed */
   kind: string;
   from: string;
@@ -57,13 +58,13 @@ export interface PluginUpgradeNote {
   at: string;
 }
 
-export interface PluginChoice {
+export interface ExtensionChoice {
   value: Json;
   title?: string;
 }
 
 /** One field of the form: the hub's reading of the manifest's JSON Schema subset. */
-export interface PluginField {
+export interface ExtensionField {
   name: string;
   /** string | integer | number | boolean | array | object */
   type: string;
@@ -71,7 +72,7 @@ export interface PluginField {
   description?: string;
   default?: Json;
   required?: boolean;
-  enum?: PluginChoice[];
+  enum?: ExtensionChoice[];
   format?: string;
   pattern?: string;
   min_length?: number;
@@ -79,18 +80,18 @@ export interface PluginField {
   minimum?: number;
   maximum?: number;
   /** A list's items; format machine: the hub's machines by id (of the systems in os), drawn as a switch each. */
-  items?: { type: string; enum?: PluginChoice[]; format?: string; os?: string[] };
+  items?: { type: string; enum?: ExtensionChoice[]; format?: string; os?: string[] };
   min_items?: number;
   max_items?: number;
   unique_items?: boolean;
   /** An object's fields (a group of the form). */
-  fields?: PluginField[];
-  /** x-confirm: what to ask before a switch of it is turned on (the plugin cua's 「插件开着时不自动锁屏」). */
+  fields?: ExtensionField[];
+  /** x-confirm: what to ask before a switch of it is turned on (the extension cua's 「扩展开着时不自动锁屏」). */
   confirm?: string;
 }
 
 /** A declared secret and whether it has a value (never the value). */
-export interface PluginSecret {
+export interface ExtensionSecret {
   name: string;
   title: string;
   description?: string;
@@ -98,54 +99,62 @@ export interface PluginSecret {
   set: boolean;
 }
 
-/** A line of what a plugin may do. */
-export interface PluginPermission {
+/** A line of what an extension may do. */
+export interface ExtensionPermission {
   key: string;
   title: string;
   detail?: string;
 }
 
-/** GET /api/v1/plugins/{id}/-/: the plugin with its form, settings, secrets and permissions. */
-export interface HubPluginDetail extends HubPlugin {
+/** GET /api/v1/extensions/{id}/-/: the extension with its form, settings, secrets and permissions. */
+export interface HubExtensionDetail extends HubExtension {
   publisher?: string;
   homepage?: string;
   origin?: string;
   previous_version?: string;
   /** hub.json's: switched and set up there only. */
   read_only?: boolean;
-  form?: { fields?: PluginField[] };
+  form?: { fields?: ExtensionField[] };
   config?: JsonObject;
-  secrets?: PluginSecret[];
-  permissions?: PluginPermission[];
-  /** The pages it draws in its settings (placement plugin_page, docs/plugins.md「声明式 UI」). */
+  secrets?: ExtensionSecret[];
+  permissions?: ExtensionPermission[];
+  /** The pages it draws in its settings (placement plugin_page, docs/extensions.md「声明式 UI」). */
   ui?: UIPlace[];
 }
 
 // ── the hub ─────────────────────────────────────────────
 
-const base = (id: string) => `/plugins/${enc(id)}/-`;
+const base = (id: string) => `${extRoot()}/${enc(id)}/-`;
 
-export const listPlugins = () => api<{ plugins?: HubPlugin[]; can_install?: boolean }>("/plugins").then((r) => r.plugins ?? []);
-/** The list with what this hub allows: installing at all (a database), and markets (docs/plugins.md「插件市场」). */
-export const listPluginsInfo = () =>
-  api<{ plugins?: HubPlugin[]; can_install?: boolean; markets?: boolean }>("/plugins").then((r) => ({
-    plugins: r.plugins ?? [],
+type ListAnswer = { extensions?: HubExtension[]; plugins?: HubExtension[]; can_install?: boolean; markets?: boolean };
+
+export const listExtensions = () => api<ListAnswer>(extRoot()).then((r) => listOf(r));
+/** The list with what this hub allows: installing at all (a database), and markets (docs/extensions.md「扩展市场」). */
+export const listExtensionsInfo = () =>
+  api<ListAnswer>(extRoot()).then((r) => ({
+    extensions: listOf(r),
     canInstall: !!r.can_install,
     markets: !!r.markets,
   }));
-export const pluginDetail = (id: string) => api<HubPluginDetail>(`${base(id)}/`);
-/** After a change that can start, stop or reconfigure a plugin: its entries, cards and sections are asked for again. */
-export const changed = <T>(r: T): T => (refreshPluginPlaces(), r);
-export const setPluginEnabled = (id: string, enabled: boolean) => api<HubPluginDetail>(`${base(id)}/enabled`, { method: "PUT", json: { enabled } }).then(changed);
-export const setPluginAutoUpgrade = (id: string, auto: boolean) => api<HubPluginDetail>(`${base(id)}/auto-upgrade`, { method: "PUT", json: { auto } });
-/** The auto-upgrade switch for all market plugins; a hub from before it has no route (null). */
-export const pluginUpgrades = () =>
-  api<{ auto: boolean; upgrades?: PluginUpgrade[] }>("/plugins/-/upgrades").then((r) => r.auto, () => null);
-export const setPluginUpgrades = (auto: boolean) => api<{ auto: boolean }>("/plugins/-/upgrades", { method: "PUT", json: { auto } }).then((r) => r.auto);
-export const setPluginConfig = (id: string, config: JsonObject) => api<HubPluginDetail>(`${base(id)}/config`, { method: "PUT", json: { config } }).then(changed);
-export const setPluginSecret = (id: string, name: string, value: string) =>
-  api<HubPluginDetail>(`${base(id)}/secrets/${enc(name)}`, { method: "PUT", json: { value } });
-export const clearPluginSecret = (id: string, name: string) => api<HubPluginDetail>(`${base(id)}/secrets/${enc(name)}`, { method: "DELETE" });
+/** A detail as either kind of hub sends it, its pages' places read with the new keys. */
+export const detailOf = (d: HubExtensionDetail): HubExtensionDetail => (d.ui ? { ...d, ui: d.ui.map(placeOf) } : d);
+export const extensionDetail = (id: string) => api<HubExtensionDetail>(`${base(id)}/`).then(detailOf);
+/** After a change that can start, stop or reconfigure an extension: its entries, cards and sections are asked for again. */
+export const changed = <T>(r: T): T => (refreshExtensionPlaces(), r);
+export const setExtensionEnabled = (id: string, enabled: boolean) =>
+  api<HubExtensionDetail>(`${base(id)}/enabled`, { method: "PUT", json: { enabled } }).then(detailOf).then(changed);
+export const setExtensionAutoUpgrade = (id: string, auto: boolean) =>
+  api<HubExtensionDetail>(`${base(id)}/auto-upgrade`, { method: "PUT", json: { auto } }).then(detailOf);
+/** The auto-upgrade switch for all market extensions; a hub from before it has no route (null). */
+export const extensionUpgrades = () =>
+  api<{ auto: boolean; upgrades?: ExtensionUpgrade[] }>(`${extRoot()}/-/upgrades`).then((r) => r.auto, () => null);
+export const setExtensionUpgrades = (auto: boolean) => api<{ auto: boolean }>(`${extRoot()}/-/upgrades`, { method: "PUT", json: { auto } }).then((r) => r.auto);
+export const setExtensionConfig = (id: string, config: JsonObject) =>
+  api<HubExtensionDetail>(`${base(id)}/config`, { method: "PUT", json: { config } }).then(detailOf).then(changed);
+export const setExtensionSecret = (id: string, name: string, value: string) =>
+  api<HubExtensionDetail>(`${base(id)}/secrets/${enc(name)}`, { method: "PUT", json: { value } }).then(detailOf);
+export const clearExtensionSecret = (id: string, name: string) =>
+  api<HubExtensionDetail>(`${base(id)}/secrets/${enc(name)}`, { method: "DELETE" }).then(detailOf);
 
 /** A 400 invalid_config: the field the hub refused (its dotted path, "" when it names none) and why. */
 export function configError(e: unknown): { field: string; message: string } | null {
@@ -168,15 +177,15 @@ const STATES: Record<string, string> = {
   error: "出错了",
 };
 
-export const pluginState = (p: HubPlugin) => STATES[p.status] ?? "状态未知";
+export const extensionState = (p: HubExtension) => STATES[p.status] ?? "状态未知";
 
-/** Whether an enabled plugin's program runs right now (the detail page's small print); "" for any other state. */
-export const runNote = (p: HubPlugin) => (p.status === "running" ? "正在运行" : p.status === "stopped" ? "暂未运行，用到时自动启动" : "");
+/** Whether an enabled extension's program runs right now (the detail page's small print); "" for any other state. */
+export const runNote = (p: HubExtension) => (p.status === "running" ? "正在运行" : p.status === "stopped" ? "暂未运行，用到时自动启动" : "");
 
-export const isProblem = (p: HubPlugin) => p.status === "error" || p.status === "incompatible";
+export const isProblem = (p: HubExtension) => p.status === "error" || p.status === "incompatible";
 
-/** The tone of a plugin's dot: red broken, orange waiting on the user, green on (running or idle), gray otherwise. */
-export function pluginTone(p?: HubPlugin | null): "red" | "orange" | "green" | "idle" {
+/** The tone of an extension's dot: red broken, orange waiting on the user, green on (running or idle), gray otherwise. */
+export function extensionTone(p?: HubExtension | null): "red" | "orange" | "green" | "idle" {
   if (!p) return "idle";
   if (isProblem(p)) return "red";
   if (p.status === "needs_setup") return "orange";
@@ -192,12 +201,12 @@ export function pointText(name: string): string {
 }
 
 /** The detail's line under the name: state · version · source. */
-/** The 升级 group's line for a newer version: what happens to it (the App's PluginText.upgradeDetail). */
-export function upgradeDetail(u: PluginUpgrade): string {
+/** The 升级 group's line for a newer version: what happens to it (the App's ExtensionText.upgradeDetail). */
+export function upgradeDetail(u: ExtensionUpgrade): string {
   const why = u.detail ? "：" + u.detail : "";
   switch (u.state) {
     case "needs_permission": return morePermissions(u.added_permissions ?? []);
-    case "waiting_idle": return "插件空闲时自动升级";
+    case "waiting_idle": return "扩展空闲时自动升级";
     case "available": return "稍后自动升级";
     case "off": return "自动升级关着";
     case "skipped": return `上次升级后起不来，已回到 ${u.from}，不再自动升级到这个版本`;
@@ -208,13 +217,13 @@ export function upgradeDetail(u: PluginUpgrade): string {
 }
 
 /** When the line asks something of the user, what its button says (it opens the upgrade in the market). */
-export function upgradeAction(u: PluginUpgrade): string | null {
+export function upgradeAction(u: ExtensionUpgrade): string | null {
   if (u.state === "needs_permission") return "去确认";
   return ["off", "skipped", "failed"].includes(u.state) ? "去升级" : null;
 }
 
 /** What a newer version asks for more, as the hub says it in its notice. */
-export function morePermissions(added: PluginPermission[]): string {
+export function morePermissions(added: ExtensionPermission[]): string {
   if (!added.length) return "要的权限有变化";
   const count = ["", "一", "两", "三", "四", "五"];
   const lines = added.map((p) => p.title + (p.detail ? `（${p.detail}）` : ""));
@@ -222,31 +231,31 @@ export function morePermissions(added: PluginPermission[]): string {
 }
 
 /** The last upgrade, when it is news of its own (asking and failing are the newer version's line). */
-export function upgradeNote(n: PluginUpgradeNote): string | null {
+export function upgradeNote(n: ExtensionUpgradeNote): string | null {
   if (n.kind === "upgraded") return `已自动升级到 ${n.to}（原来是 ${n.from}）`;
   if (n.kind === "rolled_back") return `${n.to} 起不来，已回到 ${n.from}`;
   return null;
 }
 
-export const stateLine = (p: HubPlugin) => [pluginState(p), p.version, sourceText(p.source)].filter(Boolean).join(" · ");
+export const stateLine = (p: HubExtension) => [extensionState(p), p.version, sourceText(p.source)].filter(Boolean).join(" · ");
 
 /** How many, and how many need the user. */
-export function listSummary(list?: HubPlugin[] | null): string {
+export function listSummary(list?: HubExtension[] | null): string {
   if (!list) return "";
   if (!list.length) return "没有";
   const attention = list.filter((p) => p.status === "needs_setup" || isProblem(p)).length;
   return attention ? `${list.length} 个 · ${attention} 个要处理` : `${list.length} 个`;
 }
 
-export const fieldLabel = (f: PluginField) => f.title || f.name;
+export const fieldLabel = (f: ExtensionField) => f.title || f.name;
 
 /** The title with 「（必填）」 when it has to be filled in and has no default to fall back to. */
-export const fieldTitle = (f: PluginField) => fieldLabel(f) + (f.required && f.default === undefined ? "（必填）" : "");
+export const fieldTitle = (f: ExtensionField) => fieldLabel(f) + (f.required && f.default === undefined ? "（必填）" : "");
 
-export const choiceLabel = (c: PluginChoice) => c.title || (typeof c.value === "string" ? c.value : JSON.stringify(c.value));
+export const choiceLabel = (c: ExtensionChoice) => c.title || (typeof c.value === "string" ? c.value : JSON.stringify(c.value));
 
 /** What shows when a field is empty: the default it falls back to, or 未设置. */
-export function placeholder(f: PluginField): string {
+export function placeholder(f: ExtensionField): string {
   if (f.default !== undefined && f.default !== null) {
     const choice = f.enum?.find((c) => same(c.value, f.default!));
     const text = choice ? choiceLabel(choice) : typeof f.default === "object" ? "" : String(f.default);
@@ -255,7 +264,7 @@ export function placeholder(f: PluginField): string {
   return "未设置";
 }
 
-export const secretState = (s: PluginSecret) => (s.set ? "已设置" : s.required ? "未设置（必填）" : "未设置");
+export const secretState = (s: ExtensionSecret) => (s.set ? "已设置" : s.required ? "未设置（必填）" : "未设置");
 
 // ── the draft, by path ──────────────────────────────────
 
@@ -335,17 +344,17 @@ export function numberProblems(typed: Record<string, { text: string; integer: bo
 export const isDirty = (draft: JsonObject, config: JsonObject | undefined) => !same(compact(draft), compact(config ?? {}));
 
 /** The items of a list field: the draft's, else the default. */
-export function listItems(draft: JsonObject, path: string[], f: PluginField): string[] {
+export function listItems(draft: JsonObject, path: string[], f: ExtensionField): string[] {
   const v = valueAt(draft, path) ?? f.default;
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
 
-/** A machine on a plugin's machine list (format machine): online or not, and for a plugin that operates computers how
+/** A machine on an extension's machine list (format machine): online or not, and for an extension that operates computers how
  *  Cua Driver is there (known once it is turned on). */
 export function machineStatus(m: Machine, computers: boolean): string {
   const parts = [m.online ? "在线" : "离线"];
   const c = m.computer;
-  // Every Mac's while the plugin is on, once its node has said (a never-asked one has neither a verdict nor a note).
+  // Every Mac's while the extension is on, once its node has said (a never-asked one has neither a verdict nor a note).
   if (computers && m.online && c && (c.ready || c.note)) {
     const missing = c.accessibility === "missing" || c.screen_recording === "missing";
     parts.push(!c.installed ? "Cua 没装" : !c.daemon ? "Cua 没在运行" : missing ? "Cua 缺权限" : c.desktop === "locked" ? "锁屏了" : c.ready ? "Cua 可以用" : "Cua 已装");
@@ -354,10 +363,10 @@ export function machineStatus(m: Machine, computers: boolean): string {
 }
 
 /** Under the form: which switches take effect at once (lists of machines) and that the rest waits for 保存. */
-export function saveFooter(fields: PluginField[]): string {
+export function saveFooter(fields: ExtensionField[]): string {
   const all = fields.flatMap((f) => (f.type === "object" ? (f.fields ?? []) : [f]));
   const now = all.filter((f) => f.items?.format === "machine").map((f) => `「${f.title || f.name}」`);
-  if (!now.length) return "改完点「保存」；保存后插件会重新启动。留空的项用插件的默认值。";
+  if (!now.length) return "改完点「保存」；保存后扩展会重新启动。留空的项用扩展的默认值。";
   if (now.length === all.length) return `${now.join("、")}的开关即时生效，不用保存。`;
-  return `${now.join("、")}的开关即时生效；其他项改完点「保存」，保存后插件会重新启动。留空的项用插件的默认值。`;
+  return `${now.join("、")}的开关即时生效；其他项改完点「保存」，保存后扩展会重新启动。留空的项用扩展的默认值。`;
 }

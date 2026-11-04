@@ -1,11 +1,12 @@
-// A plugin's declarative UI (docs/plugins.md「声明式 UI」): the plugin sends a View (a few fixed kinds of items), the
-// web draws it with its own design system, and buttons go back to the plugin. No plugin code runs here, no plugin
-// colors, sizes or icons: a tone becomes one of the theme's role colors. The checks match server/internal/plugin/ui.go
+// An extension's declarative UI (docs/extensions.md「声明式 UI」): the extension sends a View (a few fixed kinds of items), the
+// web draws it with its own design system, and buttons go back to the extension. No extension code runs here, no extension
+// colors, sizes or icons: a tone becomes one of the theme's role colors. The checks match server/internal/extension/ui.go
 // (the hub refuses a bad view before it gets here; the web still draws only what it knows). UI version 2
-// (docs/plugins.md「UI 插槽」) adds the slots (nav_page, overview_card, machine_section), chart, stat_grid, segmented,
+// (docs/extensions.md「UI 插槽」) adds the slots (nav_page, overview_card, machine_section), chart, stat_grid, segmented,
 // refresh_after and the render context; an item type the web does not know is skipped, never a white page. An
-// inbox_item (docs/plugins.md「收件箱条目」) draws the body of an inbox item from the plugin's own connector.
+// inbox_item (docs/extensions.md「收件箱条目」) draws the body of an inbox item from the extension's own connector.
 import { api, ApiError, enc } from "./api";
+import { extRoot } from "./extension-api";
 
 /** The UI version the web draws (context.ui_version). */
 export const UI_VERSION = 2;
@@ -88,17 +89,17 @@ export interface UISection {
 export interface UIView {
   title?: string;
   sections: UISection[];
-  /** The plugin's own, sent back as it is. */
+  /** The extension's own, sent back as it is. */
   state?: string;
   /** Draw again after this many seconds while on screen (30 at least, a day at most; 0 never). */
   refresh_after?: number;
 }
 
-/** Where a plugin draws (GET /api/v1/plugins/-/ui, and a plugin detail's `ui`). */
+/** Where an extension draws (GET /api/v1/extensions/-/ui, and an extension detail's `ui`). */
 export interface UIPlace {
-  plugin: string;
-  /** The plugin's name (UI version 2). */
-  plugin_name?: string;
+  extension: string;
+  /** The extension's name (UI version 2). */
+  extension_name?: string;
   id: string;
   title: string;
   placement: "plugin_page" | "launcher_section" | "nav_page" | "overview_card" | "machine_section" | "inbox_item" | string;
@@ -106,7 +107,7 @@ export interface UIPlace {
   size?: "compact" | "full" | string;
   /** A nav_page's icon, from UI_ICONS. */
   icon?: string;
-  /** The page (nav_page or plugin_page of the same plugin) an overview_card opens. */
+  /** The page (nav_page or plugin_page of the same extension) an overview_card opens. */
   opens?: string;
   /** On a nav_page's entry; updated by the plugin_ui event. */
   badge?: UIBadge | null;
@@ -134,7 +135,7 @@ export interface UIContext {
   size?: "compact" | "full";
 }
 
-/** What the web says with every render and action (docs/plugins.md「上下文」): time zone, language, platform, UI version. */
+/** What the web says with every render and action (docs/extensions.md「上下文」): time zone, language, platform, UI version. */
 export interface UIContextSent extends UIContext {
   tz?: string;
   locale?: string;
@@ -163,29 +164,36 @@ export function uiContext(context?: UIContext): UIContextSent {
 
 // ── the hub ─────────────────────────────────────────────
 
-/** The plugins' places of a placement; no placement: every slot's but launcher sections' (nav, overview, machines). */
+/** The extensions' places of a placement; no placement: every slot's but launcher sections' (nav, overview, machines). */
 export function uiPlaces(placement: string, launcher?: string, machine?: string): Promise<UIPlace[]> {
   const q = new URLSearchParams(placement ? { placement } : {});
   if (launcher) q.set("launcher", launcher);
   if (machine) q.set("machine", machine);
-  return api<{ ui?: UIPlace[] }>(`/plugins/-/ui${q.size ? `?${q}` : ""}`).then((r) => (Array.isArray(r.ui) ? r.ui : []));
+  return api<{ ui?: UIPlace[] }>(`${extRoot()}/-/ui${q.size ? `?${q}` : ""}`).then((r) => (Array.isArray(r.ui) ? r.ui.map(placeOf) : []));
 }
 
-const uiPath = (plugin: string, ui: string) => `/plugins/${enc(plugin)}/-/ui/${enc(ui)}`;
+/** A place as either kind of hub lists it: the extension's id and name under the new keys (an older hub says plugin,
+ *  plugin_name). */
+export function placeOf(u: UIPlace & { plugin?: string; plugin_name?: string }): UIPlace {
+  const { plugin, plugin_name, ...rest } = u;
+  return { ...rest, extension: u.extension ?? plugin ?? "", ...((u.extension_name ?? plugin_name) ? { extension_name: u.extension_name ?? plugin_name } : {}) };
+}
+
+const uiPath = (extension: string, ui: string) => `${extRoot()}/${enc(extension)}/-/ui/${enc(ui)}`;
 
 /** Draws the view (no action). A view that does not read at all is an error; unknown items are left out. */
-export const renderUI = (plugin: string, ui: string, context?: UIContext, state?: string) =>
-  api<{ view: unknown }>(uiPath(plugin, ui), { method: "POST", json: { context: uiContext(context), ...(state ? { state } : {}) } }).then((r) => readView(r.view));
+export const renderUI = (extension: string, ui: string, context?: UIContext, state?: string) =>
+  api<{ view: unknown }>(uiPath(extension, ui), { method: "POST", json: { context: uiContext(context), ...(state ? { state } : {}) } }).then((r) => readView(r.view));
 
 /** A press of a button (or a row): the action's id, the view's state, and the fields' values when it submits. */
-export const actUI = (plugin: string, ui: string, action: string, opts: { context?: UIContext; state?: string; values?: Record<string, string> } = {}) =>
-  api<UIActionResult>(uiPath(plugin, ui), {
+export const actUI = (extension: string, ui: string, action: string, opts: { context?: UIContext; state?: string; values?: Record<string, string> } = {}) =>
+  api<UIActionResult>(uiPath(extension, ui), {
     method: "POST",
     json: { context: uiContext(opts.context), ...(opts.state ? { state: opts.state } : {}), action, ...(opts.values ? { values: opts.values } : {}) },
   }).then((r) => ({ ...r, view: r.view ? readView(r.view) : undefined }));
 
 /**
- * The plugin said this is not its gateway (a launcher_section without `hosts` is listed on every launcher; docs/plugins.md
+ * The extension said this is not its gateway (a launcher_section without `hosts` is listed on every launcher; docs/extensions.md
  * 「声明式 UI」): 404 {code: "unsupported"}. The section is hidden, not an error.
  */
 export const isUnsupported = (e: unknown) => e instanceof ApiError && e.status === 404 && e.code === "unsupported";
@@ -197,7 +205,7 @@ const TONES: readonly string[] = ["neutral", "positive", "caution", "danger"];
 /** A tone the web knows, else neutral. */
 export const toneOf = (t?: string): UITone => (t && TONES.includes(t) ? (t as UITone) : "neutral");
 
-/** A ratio as a percentage the bar can draw: 0…100, whatever the plugin sent. */
+/** A ratio as a percentage the bar can draw: 0…100, whatever the extension sent. */
 export function percent(ratio?: number): number {
   if (typeof ratio !== "number" || !Number.isFinite(ratio)) return 0;
   return Math.round(Math.min(1, Math.max(0, ratio)) * 1000) / 10;
@@ -213,7 +221,7 @@ export function isHttps(url?: string): boolean {
   }
 }
 
-/** The fields of a view, by name, as they start: what the plugin filled in (never a secret's), toggles "true" / "false". */
+/** The fields of a view, by name, as they start: what the extension filled in (never a secret's), toggles "true" / "false". */
 export function fieldValues(view: UIView | null | undefined): Record<string, string> {
   const out: Record<string, string> = {};
   for (const s of view?.sections ?? []) {
@@ -275,7 +283,7 @@ export function outcome(r: UIActionResult, item?: string): { view?: UIView; relo
 
 /**
  * The item an inbox item's source link names (persona://inbox/<item>/source, the id escaped as one path segment, as
- * docs/plugins.md「收件箱条目」 says); undefined for any other link.
+ * docs/extensions.md「收件箱条目」 says); undefined for any other link.
  */
 export function inboxSourceItem(url: string): string | undefined {
   const m = /^persona:\/\/inbox\/([^/?#]+)\/source$/.exec(url);
@@ -289,7 +297,7 @@ export function inboxSourceItem(url: string): string | undefined {
 
 // ── reading what the hub sent (UI version 2) ─────────────
 
-/** The item types the web draws; any other is skipped (a plugin newer than the web). */
+/** The item types the web draws; any other is skipped (an extension newer than the web). */
 export const KNOWN_ITEMS: readonly string[] = ["text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented"];
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -316,7 +324,7 @@ function drawable(it: unknown): it is UIItem {
  * stays), like the hub does for an older app. Only a view that does not read at all is an error.
  */
 export function readView(raw: unknown): UIView {
-  if (!isObject(raw) || !Array.isArray(raw.sections)) throw new Error("插件画的界面读不出来");
+  if (!isObject(raw) || !Array.isArray(raw.sections)) throw new Error("扩展画的界面读不出来");
   const sections: UISection[] = [];
   for (const s of raw.sections) {
     if (!isObject(s)) continue;
@@ -342,14 +350,15 @@ export function refreshDelay(view: UIView | null | undefined): number {
 
 // ── slots ───────────────────────────────────────────────
 
-/** A nav_page's icons (docs/plugins.md「UI 插槽」); each app draws its own. */
-export const UI_ICONS = ["plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money"] as const;
+/** A nav_page's icons (docs/extensions.md「UI 插槽」); each app draws its own. `plugin` is `extension` under its name
+ *  before #1844 (the hub still sends it). */
+export const UI_ICONS = ["extension", "plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money"] as const;
 export type UIIcon = (typeof UI_ICONS)[number];
 
-/** An icon the web knows, else plugin. */
-export const uiIcon = (name?: string): UIIcon => ((UI_ICONS as readonly string[]).includes(name ?? "") ? (name as UIIcon) : "plugin");
+/** An icon the web knows, else extension. */
+export const uiIcon = (name?: string): UIIcon => ((UI_ICONS as readonly string[]).includes(name ?? "") ? (name as UIIcon) : "extension");
 
-/** The slots the web draws, besides a plugin's own pages in its settings. */
+/** The slots the web draws, besides an extension's own pages in its settings. */
 export const SLOTS = ["nav_page", "overview_card", "machine_section", "inbox_item"] as const;
 export type SlotName = (typeof SLOTS)[number];
 
@@ -357,7 +366,7 @@ export type SlotName = (typeof SLOTS)[number];
 export const placesOf = (list: readonly UIPlace[], placement: SlotName) => list.filter((u) => u.placement === placement);
 
 /**
- * The plugin page that draws an inbox item's body (inbox_item): the one whose connector brought the item in (its
+ * The extension page that draws an inbox item's body (inbox_item): the one whose connector brought the item in (its
  * `source`). None: the item's own detail.
  */
 export const inboxItemPlace = (list: readonly UIPlace[], source?: string): UIPlace | undefined =>
@@ -365,7 +374,7 @@ export const inboxItemPlace = (list: readonly UIPlace[], source?: string): UIPla
 
 /** The plugin_ui event: a nav_page's badge changed (null clears it). */
 export interface BadgeEvent {
-  plugin: string;
+  extension: string;
   id: string;
   badge?: UIBadge | null;
 }
@@ -375,7 +384,7 @@ export function applyBadge(list: UIPlace[], ev: BadgeEvent): UIPlace[] {
   const badge = ev.badge && typeof ev.badge.text === "string" && ev.badge.text ? { text: ev.badge.text, ...(ev.badge.tone ? { tone: ev.badge.tone } : {}) } : null;
   let changed = false;
   const out = list.map((u) => {
-    if (u.plugin !== ev.plugin || u.id !== ev.id) return u;
+    if (u.extension !== ev.extension || u.id !== ev.id) return u;
     if ((u.badge?.text ?? "") === (badge?.text ?? "") && (u.badge?.tone ?? "") === (badge?.tone ?? "")) return u;
     changed = true;
     return { ...u, badge };
@@ -401,7 +410,7 @@ export function compactNumber(v: number): string {
   return sign + short(a);
 }
 
-/** A point's value as the chart writes it: the plugin's display, else a short number with the unit. */
+/** A point's value as the chart writes it: the extension's display, else a short number with the unit. */
 export const pointText = (p: ChartPoint, unit?: string) => p.display || `${compactNumber(p.value)}${unit ? ` ${unit}` : ""}`;
 
 /** A linear scale from a domain to a range. */

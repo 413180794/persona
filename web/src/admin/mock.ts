@@ -7,12 +7,12 @@
 // paths, a service computer, one to pair again, one only a member has, an old ssh one) · member / member-offline (a
 // member hub, its center reachable or not; member-stale: the page still thinks the center is up, the hub knows better
 // and answers set-center with confirm_required) · empty (nothing but the hub's own machine). Adding computers works in every
-// signed-in scenario: a connector link containing "fail" fails to pair. Plugins: a built-in one, two installed (one
+// signed-in scenario: a connector link containing "fail" fails to pair. Extensions: a built-in one, two installed (one
 // upgraded, one waiting for its key), a broken hub.json one; a source containing "fail" does not preview, an upgrade
 // asks for one more host.
 import { setTransport } from "./api";
-import type { CatalogItem, Market } from "../lib/plugin-market";
-import type { AdminMachine, AdminPlugin, AdminState, Device, DiscoveredHub, MeshView, NetworkView, Overview, Peer, PermissionLine, PluginPreview } from "./types";
+import type { CatalogItem, Market } from "../lib/extension-market";
+import type { AdminMachine, AdminExtension, AdminState, Device, DiscoveredHub, MeshView, NetworkView, Overview, Peer, PermissionLine, ExtensionPreview } from "./types";
 
 const SELF = "0d9e8f7a-6b5c-4d3e-8f2a-1b0c9d8e7f6a";
 const OFFICE = "6f1c2a9e-0b7d-4c55-9e3a-2b8f41d07c11";
@@ -168,7 +168,7 @@ export function installMock(scenario: string) {
   const RUNS: PermissionLine = { key: "runs_code", title: "在 hub 机器上运行程序", detail: "以 hub 的系统用户运行，能读写这个用户能读写的文件；不在沙箱里" };
   const net = (hosts: string) => ({ key: "network", title: "访问网络", detail: `${hosts}（hub 暂不拦截别的地址）` });
   const keys = (names: string) => ({ key: "secrets", title: "使用你填的密钥", detail: names });
-  let plugins: AdminPlugin[] =
+  let extensions: AdminExtension[] =
     scenario === "empty"
       ? []
       : [
@@ -176,14 +176,14 @@ export function installMock(scenario: string) {
             contributes: { connectors: ["examplecal"] }, needs_setup: ["API Key"], origin: "upload:example-calendar-0.3.0.tar.gz", publisher: "example",
             permissions: [RUNS, net("calendar.example.com"), keys("API Key")], secrets: [{ name: "api_key", title: "API Key", required: true, set: false }] },
           { id: "example-notes", name: "Example Notes", kind: "connectors", status: "running", version: "1.2.0", source: "installed", enabled: true, description: "把 Example Notes 的笔记同步进知识库，并给助手一个搜索工具",
-            contributes: { connectors: ["examplenotes"] }, previous_version: "1.1.0", origin: `https://example.com/example-notes-1.2.0.tar.gz#sha256=${"9f2c".repeat(16)}`, publisher: "example", homepage: "https://example.com/persona-plugin",
+            contributes: { connectors: ["examplenotes"] }, previous_version: "1.1.0", origin: `https://example.com/example-notes-1.2.0.tar.gz#sha256=${"9f2c".repeat(16)}`, publisher: "example", homepage: "https://example.com/persona-extension",
             permissions: [RUNS, net("notes.example.com"), keys("API Key")], secrets: [{ name: "api_key", title: "API Key", required: true, set: true }] },
           { id: "telegram", name: "Telegram", kind: "connectors", status: "stopped", version: VERSION, source: "builtin", enabled: true, description: "用你自己的 Telegram 账号收消息（只读）",
             contributes: { connectors: ["telegram"] }, permissions: [RUNS, net("*.telegram.org")] },
           { id: "voice", name: "语音", kind: "voice", status: "error", error: "连不上 socket：/run/persona/voice.sock", source: "hub.json", enabled: true, read_only: true, contributes: { voice: ["voice"] }, permissions: [] },
         ];
-  const previewOf = (source: string, upgrade?: string): PluginPreview => {
-    const cur = plugins.find((p) => p.id === upgrade);
+  const previewOf = (source: string, upgrade?: string): ExtensionPreview => {
+    const cur = extensions.find((p) => p.id === upgrade);
     const base = { preview_id: `pv_${Date.now()}`, permissions_digest: "d1c3".repeat(16), expires_at: later(10) };
     if (cur)
       return {
@@ -199,13 +199,13 @@ export function installMock(scenario: string) {
       ...base,
       manifest: { id: "example-weather", name: "Example Weather", version: "2.0.1", description: "给助手一个查天气的工具，结果按城市缓存", publisher: "example", contributes: { connectors: [{}] } },
       permissions: [RUNS, net("api.weather.example.com"), { key: "hub_api", title: "完整使用 hub", detail: "拿到 hub 的地址和 token，能做 hub 主人能做的一切：读知识库、驱动各台电脑上的 Agent……" }, keys("API Key")],
-      warnings: [source.startsWith("upload:") ? "这个插件要求的 hub 版本比现在的新，部分功能可能不生效" : "配置里的 token 是明文存的：应该放在 secrets 里"],
+      warnings: [source.startsWith("upload:") ? "这个扩展要求的 hub 版本比现在的新，部分功能可能不生效" : "配置里的 token 是明文存的：应该放在 secrets 里"],
     };
   };
-  let pending: PluginPreview | null = null;
+  let pending: ExtensionPreview | null = null;
 
-  // Markets (docs/plugins.md「插件市场」): a public site and a private GitHub repository (token set, one warning); the
-  // catalog has a plugin to install, two installed ones with an upgrade, a built-in one, and one this hub cannot install.
+  // Markets (docs/extensions.md「扩展市场」): a public site and a private GitHub repository (token set, one warning); the
+  // catalog has an extension to install, two installed ones with an upgrade, a built-in one, and one this hub cannot install.
   // A spec containing "fail" is not read; "private" without a token asks for one.
   const MA = "3f2a9c1d0b";
   const MB = "8e01b7c4a2";
@@ -213,14 +213,14 @@ export function installMock(scenario: string) {
     scenario === "empty"
       ? []
       : [
-          { id: MA, spec: "https://plugins.example.com/persona/", name: "Example 插件", description: "Example 官方维护的插件", has_token: false, plugins: 4, warnings: [], fetched_at: iso(42), added_at: iso(60 * 72) },
-          { id: MB, spec: "github:example/team-plugins", name: "团队插件", has_token: true, plugins: 2, warnings: ["第 3 个插件：没有 manifest，跳过"], fetched_at: iso(95), added_at: iso(60 * 48) },
+          { id: MA, spec: "https://extensions.example.com/persona/", name: "Example 扩展", description: "Example 官方维护的扩展", has_token: false, extensions: 4, warnings: [], fetched_at: iso(42), added_at: iso(60 * 72) },
+          { id: MB, spec: "github:example/team-extensions", name: "团队扩展", has_token: true, extensions: 2, warnings: ["第 3 个扩展：没有 manifest，跳过"], fetched_at: iso(95), added_at: iso(60 * 48) },
         ];
   const catalogItems = (): CatalogItem[] => {
     const raw: CatalogItem[] = [
       { market: MA, market_name: "", id: "example-notes", name: "Example Notes", version: "1.3.0", description: "把 Example Notes 的笔记同步进知识库，并给助手一个搜索工具", publisher: "example", tags: ["笔记", "连接器"],
         contributes: { connectors: ["examplenotes"] }, permissions: [RUNS, net("files.example.com、notes.example.com"), keys("API Key")] },
-      { market: MA, market_name: "", id: "example-translate", name: "Example 翻译", version: "0.9.0", description: "给助手一个翻译工具，按术语表翻", publisher: "example", homepage: "https://plugins.example.com/translate", tags: ["翻译", "助手"],
+      { market: MA, market_name: "", id: "example-translate", name: "Example 翻译", version: "0.9.0", description: "给助手一个翻译工具，按术语表翻", publisher: "example", homepage: "https://extensions.example.com/translate", tags: ["翻译", "助手"],
         contributes: { assistant: ["translate"] }, permissions: [RUNS, net("api.translate.example.com"), keys("API Key")] },
       { market: MA, market_name: "", id: "example-calendar", name: "Example Calendar", version: "0.4.0", description: "把日程同步进知识库", publisher: "example", tags: ["日历"],
         contributes: { connectors: ["examplecal"] }, permissions: [RUNS, net("calendar.example.com"), keys("API Key")] },
@@ -233,7 +233,7 @@ export function installMock(scenario: string) {
     return raw
       .filter((c) => markets.some((m) => m.id === c.market))
       .map((c) => {
-        const pl = plugins.find((p) => p.id === c.id);
+        const pl = extensions.find((p) => p.id === c.id);
         const it: CatalogItem = { ...c, market_name: markets.find((m) => m.id === c.market)?.name ?? "" };
         if (pl) {
           it.installed = pl.version;
@@ -262,7 +262,7 @@ export function installMock(scenario: string) {
   const wait = (ms = 220) => new Promise((r) => setTimeout(r, ms));
   let failures = 0;
 
-  setTransport(async (url, init) => {
+  const answer = async (url: string, init: RequestInit): Promise<Response> => {
     await wait();
     const path = url.replace(/^\/api\/v1\/admin/, "");
     const method = init.method ?? "GET";
@@ -340,43 +340,43 @@ export function installMock(scenario: string) {
         setTimeout(() => Object.assign(m, { online: true, transport: "service", node_version: VERSION, os: "linux", paths: [{ via: "service", hub_id: SELF, id: body.id, ok: true, rtt_ms: 11, active: true }] }), 3000);
         return json({ machine: m, restart });
       }
-      case "GET /plugins":
-        return json({ plugins, can_install: scenario !== "nopeers", upload_most: 200 << 20 });
-      case "POST /plugins/preview": {
+      case "GET /extensions":
+        return json({ extensions, can_install: scenario !== "nopeers", upload_most: 200 << 20 });
+      case "POST /extensions/preview": {
         await wait(700);
         const source = String(body.source ?? "");
-        if (source.includes("fail")) return fail(400, "invalid_plugin", "包里没有 persona-plugin.json（根目录或唯一的顶层目录里）");
+        if (source.includes("fail")) return fail(400, "invalid_plugin", "包里没有 persona-extension.json（根目录或唯一的顶层目录里）");
         pending = previewOf(source, body.upgrade);
         return json(pending);
       }
-      case "POST /plugins/upload": {
+      case "POST /extensions/upload": {
         await wait(900);
         const q = new URLSearchParams(url.split("?")[1] ?? "");
         pending = previewOf(`upload:${q.get("name")}`, q.get("upgrade") ?? undefined);
         return json(pending);
       }
-      case "POST /plugins/install": {
+      case "POST /extensions/install": {
         if (!pending || body.preview_id !== pending.preview_id) return fail(400, "install_failed", "预览过期了，重新预览一次");
         const m = pending.manifest;
-        const p: AdminPlugin = { id: m.id, name: m.name, kind: "connectors", status: "needs_setup", version: m.version, source: "installed", enabled: true, description: m.description,
-          contributes: { connectors: ["exampleweather"] }, needs_setup: ["API Key"], origin: pending.market ? `market:${pending.market}/${m.id}` : "dir:/opt/removed/example-weather", publisher: m.publisher, permissions: pending.permissions };
-        plugins = [...plugins, p].sort((a, b) => a.id.localeCompare(b.id));
+        const p: AdminExtension = { id: m.id, name: m.name, kind: "connectors", status: "needs_setup", version: m.version, source: "installed", enabled: true, description: m.description,
+          contributes: { connectors: ["exampleweather"] }, needs_setup: ["API Key"], origin: pending.market ? `market:${pending.market}/${m.id}` : "dir:/opt/persona-extensions/example-weather", publisher: m.publisher, permissions: pending.permissions };
+        extensions = [...extensions, p].sort((a, b) => a.id.localeCompare(b.id));
         pending = null;
         return json(p);
       }
-      case "GET /plugins/-/markets":
+      case "GET /extensions/-/markets":
         return json({ markets });
-      case "POST /plugins/-/markets": {
+      case "POST /extensions/-/markets": {
         await wait(800);
         const spec = String(body.spec ?? "").trim();
         if (!/^(https:\/\/|github:|git:|git@)/.test(spec)) return fail(400, "market_failed", "市场的地址是 https://…、github:owner/repo 或 git:<地址>");
         if (spec.includes("fail")) return fail(400, "market_failed", `读不到 ${spec}：找不到（404）：地址不对，或者是私有的，要填 token`);
         if (spec.includes("private") && !body.token) return fail(400, "market_failed", `读不到 ${spec}：要 token（401）`);
-        const m: Market = { id: `m${Date.now().toString(16).slice(-8)}`, spec, name: spec.replace(/^(github|git):/, "").replace(/\.git(#.*)?$/, "").split(/[/:]/).filter(Boolean).pop() ?? spec, has_token: Boolean(body.token), plugins: 0, warnings: [], fetched_at: iso(0), added_at: iso(0) };
+        const m: Market = { id: `m${Date.now().toString(16).slice(-8)}`, spec, name: spec.replace(/^(github|git):/, "").replace(/\.git(#.*)?$/, "").split(/[/:]/).filter(Boolean).pop() ?? spec, has_token: Boolean(body.token), extensions: 0, warnings: [], fetched_at: iso(0), added_at: iso(0) };
         markets = [...markets, m];
         return json(m);
       }
-      case "GET /plugins/-/catalog": {
+      case "GET /extensions/-/catalog": {
         const q = new URLSearchParams(url.split("?")[1] ?? "");
         if (q.get("refresh") === "1") await wait(700);
         const words = (q.get("q") ?? "").toLowerCase();
@@ -384,13 +384,13 @@ export function installMock(scenario: string) {
         const items = catalogItems().filter(
           (c) => (!only || c.market === only) && (!words || [c.id, c.name, c.description ?? "", c.publisher ?? "", ...(c.tags ?? [])].join("\n").toLowerCase().includes(words)),
         );
-        return json({ markets, plugins: items, platform: "linux-amd64" });
+        return json({ markets, extensions: items, platform: "linux-amd64" });
       }
-      case "POST /plugins/-/catalog/preview": {
+      case "POST /extensions/-/catalog/preview": {
         await wait(700);
-        const c = catalogItems().find((x) => x.market === body.market && x.id === body.plugin);
-        if (!c || c.problem) return fail(400, "invalid_plugin", c?.problem ?? `这个市场里没有插件 ${body.plugin}`);
-        const cur = plugins.find((p) => p.id === c.id && p.source === "installed");
+        const c = catalogItems().find((x) => x.market === body.market && x.id === body.extension);
+        if (!c || c.problem) return fail(400, "invalid_plugin", c?.problem ?? `这个市场里没有扩展 ${body.extension}`);
+        const cur = extensions.find((p) => p.id === c.id && p.source === "installed");
         const base = { preview_id: `pv_${Date.now()}`, permissions_digest: "a7e2".repeat(16), expires_at: later(10), market: c.market, permissions: c.permissions ?? [] };
         const manifest = { id: c.id, name: c.name, version: c.version, description: c.description, publisher: c.publisher, contributes: Object.fromEntries(Object.entries(c.contributes ?? {}).map(([k, v]) => [k, v.map(() => ({}))])) };
         pending = cur
@@ -462,7 +462,7 @@ export function installMock(scenario: string) {
       if (m[2] === "/reconnect") return json({ ok: true });
       if (m[2] === "/link-pair") return json({ pair_url: `jarvis://link?url=https%3A%2F%2Fhub.example.com%3A18662&machine=${id}&token=jp_mock`, expires_at: later(10), command: `jarvis-link pair 'jarvis://link?…&machine=${id}'` });
     }
-    const mk = /^\/plugins\/-\/markets\/([^/?]+)(\/[a-z]+)?$/.exec(path);
+    const mk = /^\/extensions\/-\/markets\/([^/?]+)(\/[a-z]+)?$/.exec(path);
     if (mk) {
       const m = markets.find((x) => x.id === decodeURIComponent(mk[1]));
       if (!m) return fail(404, "not_found", "没有这个市场");
@@ -476,15 +476,15 @@ export function installMock(scenario: string) {
       markets = markets.map((x) => (x.id === m.id ? read : x));
       return json(read);
     }
-    const pl = /^\/plugins\/([^/?]+)(\/[a-z]+)?$/.exec(path);
+    const pl = /^\/extensions\/([^/?]+)(\/[a-z]+)?$/.exec(path);
     if (pl) {
-      const i = plugins.findIndex((x) => x.id === decodeURIComponent(pl[1]));
-      if (i < 0) return fail(404, "not_found", "没有这个插件");
-      const p = plugins[i];
-      const put = (np: AdminPlugin) => ((plugins = plugins.map((x, j) => (j === i ? np : x))), json(np));
+      const i = extensions.findIndex((x) => x.id === decodeURIComponent(pl[1]));
+      if (i < 0) return fail(404, "not_found", "没有这个扩展");
+      const p = extensions[i];
+      const put = (np: AdminExtension) => ((extensions = extensions.map((x, j) => (j === i ? np : x))), json(np));
       if (method === "DELETE") {
-        if (p.source !== "installed") return fail(409, "uninstall_failed", `${p.id} 是内置的插件，只能停用`);
-        plugins = plugins.filter((x) => x.id !== p.id);
+        if (p.source !== "installed") return fail(409, "uninstall_failed", `${p.id} 是内置的扩展，只能停用`);
+        extensions = extensions.filter((x) => x.id !== p.id);
         return json({ ok: true });
       }
       if (pl[2] === "/enabled") return put({ ...p, enabled: body.enabled, status: body.enabled ? "running" : "disabled" });
@@ -521,5 +521,26 @@ export function installMock(scenario: string) {
       return json(mesh);
     }
     return fail(404, "not_found", "404 page not found");
+  };
+
+  // A page from before #1845 asks /api/v1/admin/plugins…: the same answers under the keys it reads (docs/extensions.md
+  // 「命名和兼容」).
+  setTransport(async (url, init) => {
+    const legacy = /^\/api\/v1\/admin\/plugins(?=[/?]|$)/.test(url);
+    const res = await answer(legacy ? url.replace("/api/v1/admin/plugins", "/api/v1/admin/extensions") : url, init);
+    if (!legacy) return res;
+    return json(legacyKeys(await res.json()), res.status);
   });
+}
+
+/** An answer under the old keys: the list (`extensions` → `plugins`) and each market's count. */
+function legacyKeys(body: unknown): unknown {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return body;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(body)) {
+    if (k === "extensions") out[Array.isArray(v) || typeof v === "number" ? "plugins" : k] = v;
+    else if (k === "markets" && Array.isArray(v)) out[k] = v.map(legacyKeys);
+    else out[k] = v;
+  }
+  return out;
 }

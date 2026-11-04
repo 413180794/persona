@@ -12,10 +12,10 @@ import { useLarkHome } from "../lib/lark-chats";
 import { machineWithHub } from "../lib/mesh";
 import { ago, baseName, sessionDeletable, sessionPreview, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
 import { agentKey, isSpacePinned, pinnedSessions } from "../lib/pins";
-import { NAV_PAGES, otherConversations, pluginNavKey, sidebarActiveKey } from "../lib/persona-nav";
-import { usePluginSlot } from "../lib/plugin-slots";
-import { toneOf } from "../lib/plugin-ui";
-import { BADGE_TONE, navIcon, pageRoute } from "./plugins/PluginSlots";
+import { NAV_PAGES, otherConversations, extensionNavKey, sidebarActiveKey } from "../lib/persona-nav";
+import { useExtensionSlot } from "../lib/extension-slots";
+import { toneOf } from "../lib/extension-ui";
+import { BADGE_TONE, navIcon, pageRoute } from "./extensions/ExtensionSlots";
 import { href, navigate, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { reset, refresh, refreshTodos, useLarkOn, useStore } from "../lib/store";
@@ -117,7 +117,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const lark = useLarkOn();
   // 消息 needs the hub to read Feishu (feature `lark`) as well as this browser's switch
   const larkHome = larkSwitch && lark;
-  const pluginPages = usePluginSlot("nav_page");
+  const extensionPages = useExtensionSlot("nav_page");
   const nav = useRef<HTMLDivElement>(null);
   const rows = useRef(new Map<string, HTMLElement>());
   const [hovered, setHovered] = useState<string | null>(null);
@@ -203,11 +203,11 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
           <PersonaRow reg={reg} hover={setHovered} active={activeKey === "persona"} go={go} main={mainConversation} />
           {NAV_PAGES.map((k) => (
             <Fragment key={k}>
-              {/* the plugins' pages (docs/plugins.md「UI 插槽」 nav_page): one row each, right before 设置 */}
+              {/* the extensions' pages (docs/extensions.md「UI 插槽」 nav_page): one row each, right before 设置 */}
               {k === "settings" &&
-                pluginPages.map((u) => {
-                  const key = pluginNavKey(u.plugin, u.id);
-                  return <NavRow key={key} k={key} reg={reg} hover={setHovered} active={activeKey === key} to={pageRoute(u.plugin, u.id)} go={go} icon={navIcon(u.icon)} label={u.title} badge={u.badge?.text || undefined} badgeTone={BADGE_TONE[toneOf(u.badge?.tone)]} title={u.plugin_name ? `${u.title} · ${u.plugin_name}` : u.title} />;
+                extensionPages.map((u) => {
+                  const key = extensionNavKey(u.extension, u.id);
+                  return <NavRow key={key} k={key} reg={reg} hover={setHovered} active={activeKey === key} to={pageRoute(u.extension, u.id)} go={go} icon={navIcon(u.icon)} label={u.title} badge={u.badge?.text || undefined} badgeTone={BADGE_TONE[toneOf(u.badge?.tone)]} title={u.extension_name ? `${u.title} · ${u.extension_name}` : u.title} />;
                 })}
               {pages[k]}
             </Fragment>

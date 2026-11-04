@@ -1,9 +1,9 @@
 // One item opened: what it is and where from, 已处理 on the right; the AI's summary with AI 草拟回复 / 交给 AI; then
 // the thing itself — the Feishu chat at its first new message, the mail, the document's rows, the 公司圈 post — or,
-// when the plugin whose connector brought the item in draws its page (inbox_item), the plugin's View.
+// when the extension whose connector brought the item in draws its page (inbox_item), the extension's View.
 import { useEffect, useState } from "react";
 import { agentDraft, agentWorking, canDraft, isDone, kindLabel, labelIsUrgent, openTitle, openURL, setDone, shortTime, sourceLine, type InboxItem } from "../../lib/inbox";
-import { useInboxItemPlace } from "../../lib/plugin-slots";
+import { useInboxItemPlace } from "../../lib/extension-slots";
 import { navigate } from "../../lib/router";
 import { hubTranslation, useTranslatePrefs } from "../../lib/translate";
 import { Button, cx, IconButton, Loading } from "../../ui/atoms";
@@ -12,7 +12,7 @@ import { ConnectorBody, openSystem } from "./ConnectorThread";
 import { DocBody, MailBody, MomentBody } from "./InboxBodies";
 import { DraftDialog, HandOffDialog } from "./InboxDialogs";
 import { AgentWorking, ItemAvatar, Spark, Tag } from "./InboxParts";
-import { InboxPluginBody } from "./InboxPluginBody";
+import { InboxExtensionBody } from "./InboxExtensionBody";
 import { chatOfItem, LarkThread } from "./LarkThread";
 
 export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolean }) {
@@ -21,7 +21,7 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
   useEffect(() => setPins(false), [item?.id]);
   const prefs = useTranslatePrefs();
   const place = useInboxItemPlace(item?.source);
-  const [ownShown, setOwnShown] = useState(false); // under a plugin's page: it fell back to the item's own body
+  const [ownShown, setOwnShown] = useState(false); // under an extension's page: it fell back to the item's own body
   if (!item) {
     return (
       <div className="flex h-full items-center justify-center p-6">
@@ -88,7 +88,7 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
           </div>
         </div>
       </div>
-      {place ? <InboxPluginBody key={`${item.id}/${place.plugin}/${place.id}`} item={item} place={place} own={own} onOwn={setOwnShown} /> : own()}
+      {place ? <InboxExtensionBody key={`${item.id}/${place.extension}/${place.id}`} item={item} place={place} own={own} onOwn={setOwnShown} /> : own()}
       {dialog === "draft" && <DraftDialog item={item} onClose={() => setDialog("")} />}
       {dialog === "handoff" && <HandOffDialog item={item} onClose={() => setDialog("")} />}
     </div>

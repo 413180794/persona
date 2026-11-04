@@ -64,7 +64,7 @@ describe("a channel's page", () => {
 
   it("opens its own page in the settings", () => {
     expect(settingsTarget("settings/connectors/feishu-bot")).toEqual({ tab: "connectors", sub: "feishu-bot" });
-    expect(settingsTarget("settings/plugins/wechat")).toEqual({ tab: "plugins", sub: "wechat" });
+    expect(settingsTarget("settings/plugins/wechat")).toEqual({ tab: "extensions", sub: "wechat" });
     expect(settingsTarget("settings/model-config")).toEqual({ tab: "model-config", sub: null });
     expect(settingsTarget("https://example.com")).toBeNull();
   });

@@ -30,8 +30,8 @@ import { Messages } from "./views/messages/Messages";
 import { Knowledge } from "./views/knowledge/Knowledge";
 import { MachineDetail } from "./views/machines/MachineDetail";
 import { TodosView } from "./views/Todos";
-import { PluginNavPage } from "./views/plugins/PluginSlots";
-import { usePluginPlace } from "./lib/plugin-slots";
+import { ExtensionNavPage } from "./views/extensions/ExtensionSlots";
+import { useExtensionPlace } from "./lib/extension-slots";
 
 // A link with the hub's token (`?token=…` or `#token=…`) signs in without the form. The token leaves the address bar
 // before anything else runs (history, bookmarks, a copied link), and is traded for this browser's own one.
@@ -149,11 +149,11 @@ function Shell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [at]);
 
-  const pluginTitle = usePluginPlace(route.name === "plugin" ? route.plugin : "", route.name === "plugin" ? route.ui : "")?.title;
+  const extensionTitle = useExtensionPlace(route.name === "extension" ? route.extension : "", route.name === "extension" ? route.ui : "")?.title;
   const title =
     pane ? "Agent" : route.name === "jarvis" ? "Persona" : route.name === "persona-new" ? "新对话" : route.name === "history" ? "Persona 的对话" : route.name === "profile" ? "Persona 的资料" : route.name === "inbox" ? "收件箱" : route.name === "messages" ? "消息"
       : route.name === "routines" ? "定时任务" : route.name === "kb" ? "知识库" : route.name === "workspace-board" ? "工作流看板" : route.name === "todos" ? "待办" : route.name === "machines" || route.name === "machine" ? "机器" : route.name === "settings" ? "设置"
-      : route.name === "agents" ? "个人 Agent" : route.name === "plugin" ? pluginTitle || "插件" : "总览";
+      : route.name === "agents" ? "个人 Agent" : route.name === "extension" ? extensionTitle || "扩展" : "总览";
   useEffect(() => {
     document.title = title === "Persona" ? title : `${title} · Persona`;
   }, [title]);
@@ -208,8 +208,8 @@ function Shell() {
     case "settings":
       main = <Settings onToggleSidebar={toggle} />;
       break;
-    case "plugin":
-      main = <PluginNavPage key={`${route.plugin}/${route.ui}`} plugin={route.plugin} ui={route.ui} onToggleSidebar={toggle} />;
+    case "extension":
+      main = <ExtensionNavPage key={`${route.extension}/${route.ui}`} extension={route.extension} ui={route.ui} onToggleSidebar={toggle} />;
       break;
     default:
       main = <Home onNewAgent={() => setNewAgent(true)} onToggleSidebar={toggle} />;

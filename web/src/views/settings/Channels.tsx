@@ -1,4 +1,4 @@
-// 设置 › 插件 › 渠道 (docs/channels.md「界面」, iOS ChannelsView): every way of talking to Persona, connected or not, and
+// 设置 › 扩展 › 渠道 (docs/channels.md「界面」, iOS ChannelsView): every way of talking to Persona, connected or not, and
 // each one's page — its switch, binding a step at a time (a QR code to scan in the chat app, a pairing code to send the
 // bot, credentials), where its messages go, what it does, a test message to the owner — and, for a market's, the way
 // to install it. Read-only ones (the apps, /agent, voice) say where they are set up.
@@ -45,7 +45,7 @@ export function ChannelLink({ id, onOpen }: { id: string; onOpen: (id: string) =
         label={
           <span className="flex items-center gap-2">
             <ChannelMark c={c} size={18} />
-            在 设置 › 插件 › 渠道 里设置{c.name}
+            在 设置 › 扩展 › 渠道 里设置{c.name}
           </span>
         }
         onClick={() => onOpen(id)}
@@ -54,9 +54,9 @@ export function ChannelLink({ id, onOpen }: { id: string; onOpen: (id: string) =
   );
 }
 
-// ── the row on 设置 › 插件 ───────────────────────────────
+// ── the row on 设置 › 扩展 ───────────────────────────────
 
-/** The 渠道 row at the top of 设置 › 插件: how many are connected, and the way in. */
+/** The 渠道 row at the top of 设置 › 扩展: how many are connected, and the way in. */
 export function ChannelsEntry({ onOpen }: { onOpen: () => void }) {
   const [list, setList] = useState<Channel[] | null>(null);
   useEffect(() => {
@@ -99,7 +99,7 @@ export function ChannelList({ onOpen, onBack, onMarketItem }: { onOpen: (id: str
   return (
     <>
       <div className="mb-3 flex items-center gap-2">
-        <Button tone="quiet" icon="chevronLeft" onClick={onBack} className="-ml-2">插件</Button>
+        <Button tone="quiet" icon="chevronLeft" onClick={onBack} className="-ml-2">扩展</Button>
         <span className="flex-1" />
         <IconButton icon="retry" label="刷新渠道" onClick={load} disabled={loading} />
       </div>
@@ -136,7 +136,7 @@ export function ChannelList({ onOpen, onBack, onMarketItem }: { onOpen: (id: str
               <div className="min-w-0 flex-1">
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="truncate text-[13px] text-ink">{c.name}</span>
-                  {c.source === "plugin" && c.kind === "im" && <Pill>插件</Pill>}
+                  {c.source === "plugin" && c.kind === "im" && <Pill>扩展</Pill>}
                 </div>
                 {channelSubtitle(c) && (
                   <div className={cx("mt-0.5 truncate text-[11.5px]", c.state === "error" ? "text-red" : "text-ink-3")}>{channelSubtitle(c)}</div>

@@ -1,33 +1,33 @@
-// 设置 › 插件 (docs/plugins.md「App：设置 › 插件」, iOS PluginsView / PluginDetailView): the hub's plugins (built in,
-// from hub.json, installed on the hub's machine) and their states; a plugin's page has its switch, its settings as a
+// 设置 › 扩展 (docs/extensions.md「App：设置 › 扩展」, iOS ExtensionsView / ExtensionDetailView): the hub's extensions (built in,
+// from hub.json, installed on the hub's machine) and their states; an extension's page has its switch, its settings as a
 // form drawn from its schema (`form.fields`, saved as a whole), its secrets (typed in, never shown again), what it
-// contributes, what it may do and where it came from. A plugin written in hub.json is only looked at here. Installing,
-// upgrading and removing are done on the hub's side (`personad plugin` on its machine, or its admin UI at /admin).
+// contributes, what it may do and where it came from. An extension written in hub.json is only looked at here. Installing,
+// upgrading and removing are done on the hub's side (`personad extension` on its machine, or its admin UI at /admin).
 import { useEffect, useMemo, useState } from "react";
 import { errorText } from "../../lib/api";
 import { useStore } from "../../lib/store";
-import { marketOf, pluginsRoute, routeSub } from "../../lib/plugin-market";
+import { marketOf, extensionsRoute, routeSub } from "../../lib/extension-market";
 import { ago } from "../../lib/format";
 import {
-  choiceLabel, clearPluginSecret, compact, configError, fieldLabel, fieldTitle, isDirty, listItems, listPluginsInfo, listSummary, numberProblems,
-  placeholder, pluginDetail, pluginState, pluginTone, pointText, readNumber, runNote, same, secretState, setAt, setPluginConfig, setPluginEnabled,
-  machineStatus, saveFooter, setPluginAutoUpgrade, setPluginSecret, sourceText, stateLine, upgradeAction, upgradeDetail, upgradeNote, valueAt,
-  type HubPlugin, type HubPluginDetail, type Json, type JsonObject, type PluginField, type PluginSecret,
-} from "../../lib/plugins";
+  choiceLabel, clearExtensionSecret, compact, configError, fieldLabel, fieldTitle, isDirty, listItems, listExtensionsInfo, listSummary, numberProblems,
+  placeholder, extensionDetail, extensionState, extensionTone, pointText, readNumber, runNote, same, secretState, setAt, setExtensionConfig, setExtensionEnabled,
+  machineStatus, saveFooter, setExtensionAutoUpgrade, setExtensionSecret, sourceText, stateLine, upgradeAction, upgradeDetail, upgradeNote, valueAt,
+  type HubExtension, type HubExtensionDetail, type Json, type JsonObject, type ExtensionField, type ExtensionSecret,
+} from "../../lib/extensions";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
-import { MarketCatalog, MarketItem, Markets, UninstallDialog } from "./PluginMarket";
-import { PluginUI } from "./PluginView";
+import { MarketCatalog, MarketItem, Markets, UninstallDialog } from "./ExtensionMarket";
+import { ExtensionUI } from "./ExtensionView";
 import { ChannelList, ChannelPage, ChannelsEntry } from "./Channels";
 import { settingsTarget } from "../../lib/channels";
 import { Group, Pill, Row, Switch } from "./SettingsParts";
 
 /**
- * The tab's pages, by its `plugin` parameter (lib/plugin-market.ts pluginsRoute): the list, a plugin, a page a plugin
- * draws, and the market (its catalog, one plugin of it, the markets).
+ * The tab's pages, by its `extension` parameter (lib/extension-market.ts extensionsRoute): the list, an extension, a page an extension
+ * draws, and the market (its catalog, one extension of it, the markets).
  */
-export function Plugins({ open, onOpen, onTab }: { open: string | null; onOpen: (id: string | null) => void; onTab?: (tab: string, sub: string | null) => void }) {
-  const r = pluginsRoute(open);
+export function Extensions({ open, onOpen, onTab }: { open: string | null; onOpen: (id: string | null) => void; onTab?: (tab: string, sub: string | null) => void }) {
+  const r = extensionsRoute(open);
   const go = (to: Parameters<typeof routeSub>[0]) => onOpen(routeSub(to));
   switch (r.kind) {
     case "channels":
@@ -40,14 +40,14 @@ export function Plugins({ open, onOpen, onTab }: { open: string | null; onOpen: 
           onBack={() => go({ kind: "channels" })}
           onSettings={(url) => {
             const t = settingsTarget(url);
-            if (t?.tab === "plugins") onOpen(t.sub);
+            if (t?.tab === "extensions") onOpen(t.sub);
             else if (t) onTab?.(t.tab, t.sub);
           }}
         />
       );
-    case "plugin":
+    case "extension":
       return (
-        <PluginDetail
+        <ExtensionDetail
           key={r.id}
           id={r.id}
           onBack={() => onOpen(null)}
@@ -56,24 +56,24 @@ export function Plugins({ open, onOpen, onTab }: { open: string | null; onOpen: 
         />
       );
     case "page":
-      return <PluginPage key={open} id={r.id} ui={r.ui} onBack={() => go({ kind: "plugin", id: r.id })} />;
+      return <ExtensionPage key={open} id={r.id} ui={r.ui} onBack={() => go({ kind: "extension", id: r.id })} />;
     case "catalog":
       return <MarketCatalog onBack={() => onOpen(null)} onOpen={(it) => go({ kind: "item", market: it.market, id: it.id })} onMarkets={() => go({ kind: "markets" })} />;
     case "item":
-      return <MarketItem key={open} market={r.market} id={r.id} onBack={() => go({ kind: "catalog" })} onInstalled={(id) => go({ kind: "plugin", id })} />;
+      return <MarketItem key={open} market={r.market} id={r.id} onBack={() => go({ kind: "catalog" })} onInstalled={(id) => go({ kind: "extension", id })} />;
     case "markets":
       return <Markets onBack={() => go({ kind: "catalog" })} />;
     default:
-      return <PluginList onOpen={onOpen} onMarket={() => go({ kind: "catalog" })} onMarkets={() => go({ kind: "markets" })} onChannels={() => go({ kind: "channels" })} />;
+      return <ExtensionList onOpen={onOpen} onMarket={() => go({ kind: "catalog" })} onMarkets={() => go({ kind: "markets" })} onChannels={() => go({ kind: "channels" })} />;
   }
 }
 
-/** A page a plugin draws (placement plugin_page), under the plugin's name. */
-function PluginPage({ id, ui, onBack }: { id: string; ui: string; onBack: () => void }) {
-  const [d, setD] = useState<HubPluginDetail | null>(null);
+/** A page an extension draws (placement plugin_page), under the extension's name. */
+function ExtensionPage({ id, ui, onBack }: { id: string; ui: string; onBack: () => void }) {
+  const [d, setD] = useState<HubExtensionDetail | null>(null);
   const [n, setN] = useState(0);
   useEffect(() => {
-    pluginDetail(id).then(setD, () => {});
+    extensionDetail(id).then(setD, () => {});
   }, [id]);
   const title = d?.ui?.find((u) => u.id === ui)?.title;
   return (
@@ -85,35 +85,35 @@ function PluginPage({ id, ui, onBack }: { id: string; ui: string; onBack: () => 
         <span className="flex-1" />
         <IconButton icon="retry" label="重新画" onClick={() => setN((x) => x + 1)} />
       </div>
-      <PluginUI key={n} plugin={id} ui={ui} title={title} />
+      <ExtensionUI key={n} extension={id} ui={ui} title={title} />
     </>
   );
 }
 
-const DOT: Record<ReturnType<typeof pluginTone>, string> = { red: "bg-red", orange: "bg-orange", green: "bg-green", idle: "bg-line-strong" };
-const TILE: Record<ReturnType<typeof pluginTone>, string> = {
+const DOT: Record<ReturnType<typeof extensionTone>, string> = { red: "bg-red", orange: "bg-orange", green: "bg-green", idle: "bg-line-strong" };
+const TILE: Record<ReturnType<typeof extensionTone>, string> = {
   red: "bg-red-tint text-red",
   orange: "bg-orange-tint text-orange",
   green: "bg-accent-tint text-accent-ink",
   idle: "bg-inset text-ink-3 shadow-hairline",
 };
 
-function StateDot({ plugin }: { plugin?: HubPlugin | null }) {
-  return <span aria-hidden className={cx("size-1.5 shrink-0 rounded-full", DOT[pluginTone(plugin)])} />;
+function StateDot({ extension }: { extension?: HubExtension | null }) {
+  return <span aria-hidden className={cx("size-1.5 shrink-0 rounded-full", DOT[extensionTone(extension)])} />;
 }
 
 // ── the list ────────────────────────────────────────────
 
-function PluginList({ onOpen, onMarket, onMarkets, onChannels }: { onOpen: (id: string) => void; onMarket: () => void; onMarkets: () => void; onChannels: () => void }) {
+function ExtensionList({ onOpen, onMarket, onMarkets, onChannels }: { onOpen: (id: string) => void; onMarket: () => void; onMarkets: () => void; onChannels: () => void }) {
   const hasChannels = useStore((s) => s.features.includes("channels"));
-  const [plugins, setPlugins] = useState<HubPlugin[] | null>(null);
+  const [extensions, setExtensions] = useState<HubExtension[] | null>(null);
   const [markets, setMarkets] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const load = () => {
     setLoading(true);
-    listPluginsInfo()
-      .then((r) => (setPlugins(r.plugins), setMarkets(r.markets), setError("")))
+    listExtensionsInfo()
+      .then((r) => (setExtensions(r.extensions), setMarkets(r.markets), setError("")))
       .catch((e) => setError(errorText(e)))
       .finally(() => setLoading(false));
   };
@@ -122,42 +122,42 @@ function PluginList({ onOpen, onMarket, onMarkets, onChannels }: { onOpen: (id: 
   return (
     <>
       <p className="mb-5 px-1 text-[12.5px] leading-relaxed text-ink-3">
-        插件给 Persona 加上新的连接器、语音对话等能力：hub 自带的、写在 hub.json 里的和装在 hub 机器上的都列在这里。
+        扩展给 Persona 加上新的连接器、语音对话等能力：hub 自带的、写在 hub.json 里的和装在 hub 机器上的都列在这里。
       </p>
       {hasChannels && <ChannelsEntry onOpen={onChannels} />}
       <Group
         title={
           <span className="flex items-center gap-2">
-            插件
-            {plugins && <span className="font-normal">{listSummary(plugins)}</span>}
+            扩展
+            {extensions && <span className="font-normal">{listSummary(extensions)}</span>}
           </span>
         }
-        right={<IconButton icon="retry" label="刷新插件" onClick={load} disabled={loading} size={24} iconSize={13} className="-mb-1" />}
-        footer="插件在 hub 的管理界面（/admin）或 hub 所在的机器上（personad plugin）安装、升级和卸载，这里可以开关、改设置、填密钥。"
+        right={<IconButton icon="retry" label="刷新扩展" onClick={load} disabled={loading} size={24} iconSize={13} className="-mb-1" />}
+        footer="扩展在 hub 的管理界面（/admin）或 hub 所在的机器上（personad extension）安装、升级和卸载，这里可以开关、改设置、填密钥。"
       >
-        {!plugins && !error && (
+        {!extensions && !error && (
           <div className="px-4 py-3">
             <Loading />
           </div>
         )}
         {error && (
           <div className="flex items-center gap-3 px-4 py-3">
-            <p className="min-w-0 flex-1 text-[12.5px] break-words text-red">读不到插件：{error}</p>
+            <p className="min-w-0 flex-1 text-[12.5px] break-words text-red">读不到扩展：{error}</p>
             <Button tone="secondary" icon="retry" onClick={load} busy={loading}>
               重试
             </Button>
           </div>
         )}
-        {plugins?.length === 0 && (
+        {extensions?.length === 0 && (
           <div className="flex flex-col items-center gap-2 px-6 py-8 text-center">
             <span className="flex size-10 items-center justify-center rounded-[10px] bg-inset text-ink-3 shadow-hairline">
-              <Icon name="plugin" size={18} />
+              <Icon name="extension" size={18} />
             </span>
-            <p className="text-[13px] font-medium text-ink">没有插件</p>
-            <p className="max-w-[420px] text-[12px] leading-relaxed text-ink-3">插件在 hub 的管理界面（/admin）或 hub 所在的机器上用 personad plugin install 安装，装好后在这里开关和设置。</p>
+            <p className="text-[13px] font-medium text-ink">没有扩展</p>
+            <p className="max-w-[420px] text-[12px] leading-relaxed text-ink-3">扩展在 hub 的管理界面（/admin）或 hub 所在的机器上用 personad extension install 安装，装好后在这里开关和设置。</p>
           </div>
         )}
-        {plugins?.map((p, i) => (
+        {extensions?.map((p, i) => (
           <button
             key={p.id}
             type="button"
@@ -165,8 +165,8 @@ function PluginList({ onOpen, onMarket, onMarkets, onChannels }: { onOpen: (id: 
             className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-hover"
             style={{ animation: `fade-up 320ms ${EASE} ${Math.min(i, 8) * 30}ms both` }}
           >
-            <span className={cx("flex size-8 shrink-0 items-center justify-center rounded-[8px]", TILE[pluginTone(p)])}>
-              <Icon name="plugin" size={15} />
+            <span className={cx("flex size-8 shrink-0 items-center justify-center rounded-[8px]", TILE[extensionTone(p)])}>
+              <Icon name="extension" size={15} />
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-center gap-2">
@@ -180,8 +180,8 @@ function PluginList({ onOpen, onMarket, onMarkets, onChannels }: { onOpen: (id: 
               )}
             </div>
             <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[12px] text-ink-2">
-              <StateDot plugin={p} />
-              {pluginState(p)}
+              <StateDot extension={p} />
+              {extensionState(p)}
               {p.upgrade?.state === "needs_permission" && " · 新版本待确认"}
             </span>
             <Icon name="chevronRight" size={12} stroke={2} className="shrink-0 text-ink-3" />
@@ -189,12 +189,12 @@ function PluginList({ onOpen, onMarket, onMarkets, onChannels }: { onOpen: (id: 
         ))}
       </Group>
       {markets && (
-        <Group title="插件市场" footer="市场是网站或 GitHub 仓库发布的插件索引：在这里搜索、安装、升级，从市场装的也能在这里卸载。">
+        <Group title="扩展市场" footer="市场是网站或 GitHub 仓库发布的扩展索引：在这里搜索、安装、升级，从市场装的也能在这里卸载。">
           <Row
             label={
               <span className="flex items-center gap-2">
                 <Icon name="search" size={13} className="shrink-0 text-ink-3" />
-                浏览插件市场
+                浏览扩展市场
               </span>
             }
             onClick={onMarket}
@@ -214,16 +214,16 @@ function PluginList({ onOpen, onMarket, onMarkets, onChannels }: { onOpen: (id: 
   );
 }
 
-// ── one plugin ──────────────────────────────────────────
+// ── one extension ──────────────────────────────────────────
 
 /** A number field as typed, by dotted path, until it reads as one. */
 type Typed = Record<string, { text: string; integer: boolean }>;
 
 /**
- * A market plugin's upgrades (docs/plugins.md「自动升级」): its own switch, its newer version (opening the market's
+ * A market extension's upgrades (docs/extensions.md「自动升级」): its own switch, its newer version (opening the market's
  * upgrade when it waits for the user) or what happened last. The App's 升级 section.
  */
-function UpgradeGroup({ p, busy, onToggle, onUpgrade }: { p: HubPlugin; busy: boolean; onToggle: (on: boolean) => void; onUpgrade: (market: string, id: string) => void }) {
+function UpgradeGroup({ p, busy, onToggle, onUpgrade }: { p: HubExtension; busy: boolean; onToggle: (on: boolean) => void; onUpgrade: (market: string, id: string) => void }) {
   const u = p.upgrade;
   const note = !u && p.upgrade_note ? upgradeNote(p.upgrade_note) : null;
   const action = u ? upgradeAction(u) : null;
@@ -234,7 +234,7 @@ function UpgradeGroup({ p, busy, onToggle, onUpgrade }: { p: HubPlugin; busy: bo
     </div>
   );
   return (
-    <Group title="升级" footer="插件市场里出了新版本，插件空闲时自动装上；新版本要的权限变多时先问你。装上后起不来的会退回原来的版本。">
+    <Group title="升级" footer="扩展市场里出了新版本，扩展空闲时自动装上；新版本要的权限变多时先问你。装上后起不来的会退回原来的版本。">
       <div className="flex items-center gap-3 px-4 py-2.5">
         <span className="min-w-0 flex-1 truncate text-[13px] text-ink">自动升级</span>
         <Switch on={p.auto_upgrade ?? true} onChange={onToggle} disabled={busy} label="自动升级" />
@@ -254,9 +254,9 @@ function UpgradeGroup({ p, busy, onToggle, onUpgrade }: { p: HubPlugin; busy: bo
   );
 }
 
-function PluginDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack: () => void; onPage: (ui: string) => void; onUpgrade: (market: string, id: string) => void }) {
+function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack: () => void; onPage: (ui: string) => void; onUpgrade: (market: string, id: string) => void }) {
   const [removing, setRemoving] = useState(false);
-  const [detail, setDetail] = useState<HubPluginDetail | null>(null);
+  const [detail, setDetail] = useState<HubExtensionDetail | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState<JsonObject>({});
@@ -265,17 +265,17 @@ function PluginDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack: (
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
-  const [secret, setSecret] = useState<PluginSecret | null>(null);
+  const [secret, setSecret] = useState<ExtensionSecret | null>(null);
   const [leaving, setLeaving] = useState(false);
 
-  const apply = (d: HubPluginDetail) => {
+  const apply = (d: HubExtensionDetail) => {
     setDetail(d);
     setDraft(d.config ?? {});
     setError("");
   };
   const load = () => {
     setLoading(true);
-    pluginDetail(id)
+    extensionDetail(id)
       .then((d) => (apply(d), setTyped({}), setFieldErrors({})))
       .catch((e) => setError(errorText(e)))
       .finally(() => setLoading(false));
@@ -311,9 +311,9 @@ function PluginDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack: (
     setSaving(true);
     setFieldErrors({});
     try {
-      apply(await setPluginConfig(id, compact(draft)));
+      apply(await setExtensionConfig(id, compact(draft)));
       setTyped({});
-      toast("已保存，插件会重新启动", "ok");
+      toast("已保存，扩展会重新启动", "ok");
     } catch (e) {
       const ce = configError(e);
       if (ce) setFieldErrors({ [ce.field]: ce.message });
@@ -326,7 +326,7 @@ function PluginDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack: (
   const toggleAutoUpgrade = async (on: boolean) => {
     setToggling(true);
     try {
-      setDetail(await setPluginAutoUpgrade(id, on));
+      setDetail(await setExtensionAutoUpgrade(id, on));
       toast(on ? "已打开自动升级" : "已关掉自动升级", "ok");
     } catch (e) {
       toast(`没有${on ? "打开" : "关掉"}自动升级：${errorText(e)}`, "error");
@@ -338,7 +338,7 @@ function PluginDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack: (
   const toggle = async (on: boolean) => {
     setToggling(true);
     try {
-      const d = await setPluginEnabled(id, on);
+      const d = await setExtensionEnabled(id, on);
       // the switch is its own call: an unsaved draft of the form stays
       setDetail(d);
       toast(on ? `已启用 ${d.name}` : `已停用 ${d.name}`, "ok");
@@ -355,7 +355,7 @@ function PluginDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack: (
     const saved = detail.config ?? {};
     setDraft((d) => setAt(d, path, value));
     try {
-      const d = await setPluginConfig(id, compact(setAt(saved, path, value)));
+      const d = await setExtensionConfig(id, compact(setAt(saved, path, value)));
       setDetail(d);
       setDraft((cur) => setAt(cur, path, valueAt(d.config ?? {}, path)));
     } catch (e) {
@@ -366,7 +366,7 @@ function PluginDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack: (
   const computers = !!detail?.contributes?.computer;
 
   // A secret's answer is a whole detail too; keep the form's draft as it is.
-  const secretDone = (d: HubPluginDetail) => setDetail(d);
+  const secretDone = (d: HubExtensionDetail) => setDetail(d);
 
   const back = () => (dirty ? setLeaving(true) : onBack());
   const p = detail;
@@ -375,7 +375,7 @@ function PluginDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack: (
     <div className={cx(dirty && "pb-16")}>
       <div className="relative mb-3 flex items-center gap-2">
         <Button tone="quiet" icon="chevronLeft" onClick={back} className="-ml-2">
-          插件
+          扩展
         </Button>
         {leaving && (
           <span className="absolute top-full left-0 z-10 mt-1 flex items-center gap-1 rounded-control bg-surface p-1 shadow-overlay" style={{ animation: `pop-in 160ms ${EASE} both` }}>
@@ -395,13 +395,13 @@ function PluginDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack: (
       {/* what it is and how it is doing */}
       <section className="mb-6 overflow-hidden rounded-card bg-surface shadow-card">
         <div className="flex items-center gap-3 px-4 py-3.5">
-          <span className={cx("flex size-11 shrink-0 items-center justify-center rounded-[11px]", TILE[pluginTone(p)])}>
-            <Icon name="plugin" size={20} />
+          <span className={cx("flex size-11 shrink-0 items-center justify-center rounded-[11px]", TILE[extensionTone(p)])}>
+            <Icon name="extension" size={20} />
           </span>
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-[15px] font-semibold text-ink">{p?.name ?? id}</h2>
             <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12px] text-ink-3">
-              <StateDot plugin={p} />
+              <StateDot extension={p} />
               <span className="truncate">{p ? stateLine(p) : loading ? "正在读取…" : "读不到"}</span>
             </div>
           </div>
@@ -413,7 +413,7 @@ function PluginDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack: (
             {p && runNote(p) && <p className="text-[11.5px] text-ink-3">{runNote(p)}</p>}
             {!!p?.needs_setup?.length && <p className="text-[12px] text-orange">还缺：{p.needs_setup.join("、")}</p>}
             {p?.error && <p className="text-[12px] break-words text-red select-text">{p.error}</p>}
-            {error && <p className="text-[12px] break-words text-red select-text">读不到这个插件：{error}</p>}
+            {error && <p className="text-[12px] break-words text-red select-text">读不到这个扩展：{error}</p>}
           </div>
         )}
       </section>
@@ -424,7 +424,7 @@ function PluginDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack: (
             <Group title="开关和设置">
               <div className="flex items-start gap-3 px-4 py-3">
                 <Icon name="lock" size={14} className="mt-0.5 shrink-0 text-ink-3" />
-                <p className="text-[12.5px] leading-relaxed text-ink-2">这个插件写在 hub.json 里：开关和设置在 hub 所在的机器上改（hub.json 或管理界面），改完重启 hub。</p>
+                <p className="text-[12.5px] leading-relaxed text-ink-2">这个扩展写在 hub.json 里：开关和设置在 hub 所在的机器上改（hub.json 或管理界面），改完重启 hub。</p>
               </div>
             </Group>
           ) : (
@@ -440,7 +440,7 @@ function PluginDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack: (
           {p.auto_upgrade !== undefined && <UpgradeGroup p={p} busy={toggling} onToggle={(on) => void toggleAutoUpgrade(on)} onUpgrade={onUpgrade} />}
 
           {!!p.ui?.length && (
-            <Group title="页面" footer="这些页面由插件画，按钮的动作交给插件处理。">
+            <Group title="页面" footer="这些页面由扩展画，按钮的动作交给扩展处理。">
               {p.ui.map((u) => (
                 <Row
                   key={u.id}
@@ -481,7 +481,7 @@ function PluginDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack: (
           )}
 
           {editable && !!p.secrets?.length && (
-            <Group title="密钥" footer="密钥加密存在 hub 上，只交给这个插件；存好后不再显示，只能换新的或清除。">
+            <Group title="密钥" footer="密钥加密存在 hub 上，只交给这个扩展；存好后不再显示，只能换新的或清除。">
               {p.secrets.map((s) => (
                 <Row
                   key={s.name}
@@ -526,7 +526,7 @@ function PluginDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack: (
           <About d={p} />
 
           {marketOf(p.origin) && (
-            <Group footer="这个插件是从插件市场装的：卸载后可以在市场里重新安装。">
+            <Group footer="这个扩展是从扩展市场装的：卸载后可以在市场里重新安装。">
               <button type="button" onClick={() => setRemoving(true)} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[13px] whitespace-nowrap text-red transition-colors hover:bg-red-tint">
                 <Icon name="trash" size={13} className="shrink-0" />
                 卸载
@@ -551,12 +551,12 @@ function PluginDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack: (
         </div>
       )}
 
-      {secret && <SecretDialog plugin={id} secret={secret} onClose={() => setSecret(null)} onDone={secretDone} />}
+      {secret && <SecretDialog extension={id} secret={secret} onClose={() => setSecret(null)} onDone={secretDone} />}
     </div>
   );
 }
 
-function About({ d }: { d: HubPluginDetail }) {
+function About({ d }: { d: HubExtensionDetail }) {
   const source = sourceText(d.source);
   let home = "";
   try {
@@ -599,7 +599,7 @@ function About({ d }: { d: HubPluginDetail }) {
 const inputClass = "h-8 w-full rounded-control bg-field px-2.5 text-[12.5px] text-ink outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-60";
 
 interface FieldProps {
-  field: PluginField;
+  field: ExtensionField;
   path: string[];
   draft: JsonObject;
   typed: Typed;
@@ -609,7 +609,7 @@ interface FieldProps {
   onType: (path: string[], text: string, integer: boolean) => void;
   /** Saves one field at once (a machine's switch). */
   onSaveNow: (path: string[], value: Json | undefined) => void;
-  /** The plugin operates computers: machine rows say how Cua Driver is there. */
+  /** The extension operates computers: machine rows say how Cua Driver is there. */
   computers: boolean;
 }
 
@@ -619,7 +619,7 @@ function FieldRow(props: FieldProps) {
   const key = path.join(".");
   const err = errors[key] ?? problems[key];
   const title = fieldTitle(f);
-  const id = `plugin-field-${key}`;
+  const id = `extension-field-${key}`;
   const below = (
     <>
       {f.description && <p className="mt-1 text-[11.5px] leading-snug text-ink-3">{f.description}</p>}
@@ -825,7 +825,7 @@ function ListControl({ field: f, path, draft, onEdit, id, ring }: Pick<FieldProp
 // ── a secret ────────────────────────────────────────────
 
 /** Sets one secret: typed in hidden, saved to the hub, never shown again; one that is set can be cleared. */
-function SecretDialog({ plugin, secret, onClose, onDone }: { plugin: string; secret: PluginSecret; onClose: () => void; onDone: (d: HubPluginDetail) => void }) {
+function SecretDialog({ extension, secret, onClose, onDone }: { extension: string; secret: ExtensionSecret; onClose: () => void; onDone: (d: HubExtensionDetail) => void }) {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState<"" | "save" | "clear">("");
   const [error, setError] = useState("");
@@ -836,7 +836,7 @@ function SecretDialog({ plugin, secret, onClose, onDone }: { plugin: string; sec
     setBusy(kind);
     setError("");
     try {
-      const d = kind === "save" ? await setPluginSecret(plugin, secret.name, v) : await clearPluginSecret(plugin, secret.name);
+      const d = kind === "save" ? await setExtensionSecret(extension, secret.name, v) : await clearExtensionSecret(extension, secret.name);
       onDone(d);
       toast(kind === "save" ? `已保存「${secret.title}」` : `已清除「${secret.title}」`, "ok");
       onClose();
@@ -899,7 +899,7 @@ function SecretDialog({ plugin, secret, onClose, onDone }: { plugin: string; sec
           disabled={!!busy}
           className={cx(inputClass, "h-9 font-mono shadow-inset-field")}
         />
-        <p className="text-[11.5px] leading-relaxed text-ink-3">{secret.description || "存在 hub 上，只交给这个插件。"}</p>
+        <p className="text-[11.5px] leading-relaxed text-ink-3">{secret.description || "存在 hub 上，只交给这个扩展。"}</p>
         {error && <p className="rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] break-words text-red">没有保存：{error}</p>}
         <button type="submit" hidden />
       </form>

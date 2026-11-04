@@ -16,15 +16,15 @@ export function sidebarActiveKey(route: Route, main?: string): string {
       return "machines";
     case "agents":
       return route.id ? `a:${route.id}` : "agents";
-    case "plugin":
-      return pluginNavKey(route.plugin, route.ui);
+    case "extension":
+      return extensionNavKey(route.extension, route.ui);
     default:
       return route.name;
   }
 }
 
-/** A plugin page's sidebar row (docs/plugins.md「UI 插槽」 nav_page). */
-export const pluginNavKey = (plugin: string, ui: string) => `p:${plugin}/${ui}`;
+/** An extension page's sidebar row (docs/extensions.md「UI 插槽」 nav_page). */
+export const extensionNavKey = (extension: string, ui: string) => `p:${extension}/${ui}`;
 
 /** The conversations listed under「Persona 对话」: the most recent ones, without the main one (it has its own row). */
 export function otherConversations(conversations: readonly Session[], main: string | undefined, limit = 5): Session[] {
@@ -35,5 +35,5 @@ export function otherConversations(conversations: readonly Session[], main: stri
 }
 
 /** The page entries under Persona, in the sidebar's order (the app's 助手 first, then the rest of its drawer). 消息 shows
- * only in a browser that turned on 首页显示消息 (lark-chats.ts), on a hub with feature `lark`. The plugins' pages (nav_page) go right before 设置. */
+ * only in a browser that turned on 首页显示消息 (lark-chats.ts), on a hub with feature `lark`. The extensions' pages (nav_page) go right before 设置. */
 export const NAV_PAGES = ["home", "inbox", "messages", "workspace-board", "todos", "routines", "kb", "machines", "settings"] as const;

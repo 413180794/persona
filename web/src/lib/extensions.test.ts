@@ -1,36 +1,47 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "./api";
 import {
-  clearPluginSecret, compact, configError, fieldTitle, isDirty, listItems, listPlugins, listSummary, numberProblems, placeholder, pluginDetail,
-  machineStatus, pluginState, pluginTone, readNumber, runNote, same, secretState, setAt, setPluginConfig, setPluginEnabled, setPluginSecret, sourceText,
-  stateLine, valueAt, morePermissions, pluginUpgrades, setPluginAutoUpgrade, setPluginUpgrades, upgradeAction, upgradeDetail, upgradeNote,
-  type HubPlugin, type PluginField, type PluginUpgrade,
-} from "./plugins";
+  clearExtensionSecret, compact, configError, fieldTitle, isDirty, listItems, listExtensions, listSummary, numberProblems, placeholder, extensionDetail,
+  machineStatus, extensionState, extensionTone, readNumber, runNote, same, secretState, setAt, setExtensionConfig, setExtensionEnabled, setExtensionSecret, sourceText,
+  stateLine, valueAt, morePermissions, extensionUpgrades, setExtensionAutoUpgrade, setExtensionUpgrades, upgradeAction, upgradeDetail, upgradeNote,
+  type HubExtension, type ExtensionField, type ExtensionUpgrade,
+} from "./extensions";
 
-const plugin = (status: string, extra: Partial<HubPlugin> = {}): HubPlugin => ({ id: `p-${status}`, name: status, kind: "connectors", status, ...extra });
+const extension = (status: string, extra: Partial<HubExtension> = {}): HubExtension => ({ id: `p-${status}`, name: status, kind: "connectors", status, ...extra });
 
-afterEach(() => vi.unstubAllGlobals());
+// The hub's features as the extension routes read them (lib/extension-api.ts): a hub with the new routes, unless a test
+// says otherwise.
+const hub = vi.hoisted(() => ({ features: ["extensions"] as string[] }));
+vi.mock("./store", async (importOriginal) => {
+  const m = await importOriginal<typeof import("./store")>();
+  return { ...m, getState: () => ({ ...m.getState(), features: hub.features }) };
+});
 
-describe("插件的文字", () => {
+afterEach(() => {
+  vi.unstubAllGlobals();
+  hub.features = ["extensions"];
+});
+
+describe("扩展的文字", () => {
   it("says each state, its tone, and the list's summary", () => {
     // Running or idle until something needs it: both are just on to the user.
-    expect(["running", "stopped", "disabled", "starting", "needs_setup"].map((s) => pluginState(plugin(s)))).toEqual([
+    expect(["running", "stopped", "disabled", "starting", "needs_setup"].map((s) => extensionState(extension(s)))).toEqual([
       "启动", "启动", "停用", "正在启动", "需要设置",
     ]);
-    expect(pluginState(plugin("weird"))).toBe("状态未知");
-    expect(["running", "needs_setup", "error", "incompatible", "disabled", "stopped"].map((s) => pluginTone(plugin(s)))).toEqual([
+    expect(extensionState(extension("weird"))).toBe("状态未知");
+    expect(["running", "needs_setup", "error", "incompatible", "disabled", "stopped"].map((s) => extensionTone(extension(s)))).toEqual([
       "green", "orange", "red", "red", "idle", "green",
     ]);
-    expect(["running", "stopped", "disabled", "error"].map((s) => runNote(plugin(s)))).toEqual(["正在运行", "暂未运行，用到时自动启动", "", ""]);
-    expect(pluginTone(null)).toBe("idle");
+    expect(["running", "stopped", "disabled", "error"].map((s) => runNote(extension(s)))).toEqual(["正在运行", "暂未运行，用到时自动启动", "", ""]);
+    expect(extensionTone(null)).toBe("idle");
     expect(listSummary(null)).toBe("");
     expect(listSummary([])).toBe("没有");
-    expect(listSummary([plugin("running"), plugin("needs_setup"), plugin("error"), plugin("disabled")])).toBe("4 个 · 2 个要处理");
-    expect(listSummary([plugin("running")])).toBe("1 个");
+    expect(listSummary([extension("running"), extension("needs_setup"), extension("error"), extension("disabled")])).toBe("4 个 · 2 个要处理");
+    expect(listSummary([extension("running")])).toBe("1 个");
   });
   it("puts the state, version and source on one line", () => {
-    expect(stateLine(plugin("running", { version: "1.2.0", source: "installed" }))).toBe("启动 · 1.2.0 · 已安装");
-    expect(stateLine(plugin("running", { source: "hub.json" }))).toBe("启动 · hub.json");
+    expect(stateLine(extension("running", { version: "1.2.0", source: "installed" }))).toBe("启动 · 1.2.0 · 已安装");
+    expect(stateLine(extension("running", { source: "hub.json" }))).toBe("启动 · hub.json");
     expect(sourceText("other")).toBeUndefined();
   });
   it("marks required fields without a default, and shows the default as a placeholder", () => {
@@ -74,34 +85,48 @@ describe("草稿", () => {
     expect(numberProblems({ every: { text: "x", integer: true }, port: { text: "80", integer: true } })).toEqual({ every: "要是一个数" });
   });
   it("lists a list field's items, falling back to the default", () => {
-    const f: PluginField = { name: "tags", type: "array", default: ["a"] };
+    const f: ExtensionField = { name: "tags", type: "array", default: ["a"] };
     expect(listItems({}, ["tags"], f)).toEqual(["a"]);
     expect(listItems({ tags: ["b", 3] }, ["tags"], f)).toEqual(["b"]);
   });
 });
 
-describe("插件的接口", () => {
+describe("扩展的接口", () => {
   it("calls the hub's reserved paths", async () => {
     const calls: { url: string; method: string; body?: string }[] = [];
     vi.stubGlobal("localStorage", { getItem: () => "t", setItem: () => {}, removeItem: () => {} });
     vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
       calls.push({ url, method: init.method ?? "GET", body: init.body as string | undefined });
-      return new Response(JSON.stringify(url.endsWith("/plugins") ? { plugins: [plugin("running")] } : { id: "a b", name: "x", kind: "k", status: "running" }));
+      return new Response(JSON.stringify(url.endsWith("/extensions") ? { extensions: [extension("running")] } : { id: "a b", name: "x", kind: "k", status: "running" }));
     });
-    expect((await listPlugins()).map((p) => p.status)).toEqual(["running"]);
-    await pluginDetail("a b");
-    await setPluginEnabled("a b", false);
-    await setPluginConfig("a b", { x: 1 });
-    await setPluginSecret("a b", "api_key", "v");
-    await clearPluginSecret("a b", "api_key");
+    expect((await listExtensions()).map((p) => p.status)).toEqual(["running"]);
+    await extensionDetail("a b");
+    await setExtensionEnabled("a b", false);
+    await setExtensionConfig("a b", { x: 1 });
+    await setExtensionSecret("a b", "api_key", "v");
+    await clearExtensionSecret("a b", "api_key");
     expect(calls.map((c) => `${c.method} ${c.url} ${c.body ?? ""}`.trim())).toEqual([
-      "GET /api/v1/plugins",
-      "GET /api/v1/plugins/a%20b/-/",
-      'PUT /api/v1/plugins/a%20b/-/enabled {"enabled":false}',
-      'PUT /api/v1/plugins/a%20b/-/config {"config":{"x":1}}',
-      'PUT /api/v1/plugins/a%20b/-/secrets/api_key {"value":"v"}',
-      "DELETE /api/v1/plugins/a%20b/-/secrets/api_key",
+      "GET /api/v1/extensions",
+      "GET /api/v1/extensions/a%20b/-/",
+      'PUT /api/v1/extensions/a%20b/-/enabled {"enabled":false}',
+      'PUT /api/v1/extensions/a%20b/-/config {"config":{"x":1}}',
+      'PUT /api/v1/extensions/a%20b/-/secrets/api_key {"value":"v"}',
+      "DELETE /api/v1/extensions/a%20b/-/secrets/api_key",
     ]);
+  });
+  it("calls a hub from before #1844 on its old routes, and reads its old keys", async () => {
+    hub.features = ["plugins", "plugin_manager"];
+    const calls: string[] = [];
+    vi.stubGlobal("localStorage", { getItem: () => "t", setItem: () => {}, removeItem: () => {} });
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      calls.push(`${init.method ?? "GET"} ${url}`);
+      if (url.endsWith("/plugins")) return new Response(JSON.stringify({ plugins: [extension("running")], can_install: true }));
+      return new Response(JSON.stringify({ id: "a", name: "x", kind: "k", status: "running", ui: [{ plugin: "a", plugin_name: "A", id: "usage", title: "用量", placement: "plugin_page" }] }));
+    });
+    expect((await listExtensions()).map((p) => p.status)).toEqual(["running"]);
+    const d = await extensionDetail("a");
+    expect(d.ui).toEqual([{ extension: "a", extension_name: "A", id: "usage", title: "用量", placement: "plugin_page" }]);
+    expect(calls).toEqual(["GET /api/v1/plugins", "GET /api/v1/plugins/a/-/"]);
   });
   it("reads the field the hub refused", () => {
     expect(configError(new ApiError(400, "base_url: 要是一个网址", { code: "invalid_config", field: "base_url", message: "要是一个网址" }))).toEqual({
@@ -113,9 +138,9 @@ describe("插件的接口", () => {
   });
 });
 
-describe("a plugin's machine switches", () => {
+describe("an extension's machine switches", () => {
   const mac = { id: "macbook", name: "MacBook", online: true, os: "darwin" };
-  it("say online or not, and for a computer plugin how Cua Driver is", () => {
+  it("say online or not, and for a computer extension how Cua Driver is", () => {
     const note = "…";
     expect(machineStatus({ ...mac, online: false, computer: { enabled: true, installed: false, note } }, true)).toBe("离线");
     expect(machineStatus({ ...mac, computer: { enabled: false, installed: false, note } }, true)).toBe("在线 · Cua 没装");
@@ -127,14 +152,14 @@ describe("a plugin's machine switches", () => {
   });
 });
 
-describe("auto-upgrade (docs/plugins.md「自动升级」)", () => {
-  const up = (state: string, extra: Partial<PluginUpgrade> = {}): PluginUpgrade => ({ id: "p", market: "m1", from: "1.0.0", to: "1.1.0", state, ...extra });
+describe("auto-upgrade (docs/extensions.md「自动升级」)", () => {
+  const up = (state: string, extra: Partial<ExtensionUpgrade> = {}): ExtensionUpgrade => ({ id: "p", market: "m1", from: "1.0.0", to: "1.1.0", state, ...extra });
 
   it("says what happens to a newer version, and what the user does about it", () => {
     const ask = up("needs_permission", { added_permissions: [{ key: "network", title: "访问更多网络", detail: "status.example.com" }] });
     expect(upgradeDetail(ask)).toBe("要多一项权限：访问更多网络（status.example.com）");
     expect(upgradeAction(ask)).toBe("去确认");
-    expect(upgradeDetail(up("waiting_idle"))).toBe("插件空闲时自动升级");
+    expect(upgradeDetail(up("waiting_idle"))).toBe("扩展空闲时自动升级");
     expect(upgradeAction(up("waiting_idle"))).toBeNull();
     expect([upgradeDetail(up("off")), upgradeAction(up("off"))]).toEqual(["自动升级关着", "去升级"]);
     expect(upgradeDetail(up("skipped"))).toBe("上次升级后起不来，已回到 1.0.0，不再自动升级到这个版本");
@@ -156,19 +181,19 @@ describe("auto-upgrade (docs/plugins.md「自动升级」)", () => {
     vi.stubGlobal("localStorage", { getItem: () => "t", setItem: () => {}, removeItem: () => {} });
     vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url, init });
-      if (url.endsWith("/plugins/-/upgrades")) {
-        if (!has) return new Response(JSON.stringify({ error: "no such plugin", code: "not_found" }), { status: 404, headers: { "Content-Type": "application/json" } });
+      if (url.endsWith("/extensions/-/upgrades")) {
+        if (!has) return new Response(JSON.stringify({ error: "no such extension", code: "not_found" }), { status: 404, headers: { "Content-Type": "application/json" } });
         return new Response(JSON.stringify({ auto: init?.method === "PUT" ? JSON.parse(String(init.body)).auto : true, upgrades: [] }), { headers: { "Content-Type": "application/json" } });
       }
       return new Response(JSON.stringify({ id: "p", name: "P", kind: "ui", status: "running", auto_upgrade: false }), { headers: { "Content-Type": "application/json" } });
     }));
-    expect(await pluginUpgrades()).toBeNull();
+    expect(await extensionUpgrades()).toBeNull();
     has = true;
-    expect(await pluginUpgrades()).toBe(true);
-    expect(await setPluginUpgrades(false)).toBe(false);
-    expect((await setPluginAutoUpgrade("p", false)).auto_upgrade).toBe(false);
+    expect(await extensionUpgrades()).toBe(true);
+    expect(await setExtensionUpgrades(false)).toBe(false);
+    expect((await setExtensionAutoUpgrade("p", false)).auto_upgrade).toBe(false);
     const last = calls[calls.length - 1];
-    expect(last.url).toContain("/plugins/p/-/auto-upgrade");
+    expect(last.url).toContain("/extensions/p/-/auto-upgrade");
     expect(last.init?.method).toBe("PUT");
     expect(JSON.parse(String(last.init?.body))).toEqual({ auto: false });
   });

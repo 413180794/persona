@@ -3,9 +3,20 @@ import { ApiError } from "./api";
 import {
   actUI, applyBadge, barSpans, blocks, chartExtent, compactNumber, edgeLabels, fieldValues, inboxItemPlace, inboxSourceItem, isHttps, isUnsupported, labelWidth, linear, niceTicks, numberProblem, outcome,
   percent, placesOf, pointText, readView, refreshDelay, renderUI, seriesColors, submitValues, thinLabels, toneOf, uiContext, uiIcon, uiPlaces, UI_VERSION, type UIPlace, type UIView,
-} from "./plugin-ui";
+} from "./extension-ui";
 
-afterEach(() => vi.unstubAllGlobals());
+// The hub's features as the extension routes read them (lib/extension-api.ts): a hub with the new routes, unless a test
+// says otherwise.
+const hub = vi.hoisted(() => ({ features: ["extensions"] as string[] }));
+vi.mock("./store", async (importOriginal) => {
+  const m = await importOriginal<typeof import("./store")>();
+  return { ...m, getState: () => ({ ...m.getState(), features: hub.features }) };
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  hub.features = ["extensions"];
+});
 
 const view: UIView = {
   title: "概况",
@@ -51,7 +62,7 @@ describe("画一页", () => {
     ]);
     expect(blocks([])).toEqual([]);
   });
-  it("starts the fields as the plugin filled them in, never a secret", () => {
+  it("starts the fields as the extension filled them in, never a secret", () => {
     expect(fieldValues(view)).toEqual({ note: "hi", token: "", auto: "true", off: "false", plan: "solo", limit: "20" });
     expect(fieldValues(null)).toEqual({});
   });
@@ -68,9 +79,9 @@ describe("画一页", () => {
     expect(outcome({ open_url: "https://example.com/keys" })).toMatchObject({ reload: false, url: "https://example.com/keys" });
     expect(outcome({ open_url: "http://example.com/keys" })).toMatchObject({ reload: false, url: undefined });
   });
-  it("hides a section the plugin says is not its gateway (404 unsupported), and only that", () => {
+  it("hides a section the extension says is not its gateway (404 unsupported), and only that", () => {
     expect(isUnsupported(new ApiError(404, "not my gateway", { code: "unsupported" }))).toBe(true);
-    expect(isUnsupported(new ApiError(404, "no such plugin", { code: "not_found" }))).toBe(false);
+    expect(isUnsupported(new ApiError(404, "no such extension", { code: "not_found" }))).toBe(false);
     expect(isUnsupported(new ApiError(502, "x", { code: "unsupported" }))).toBe(false);
     expect(isUnsupported(new Error("unsupported"))).toBe(false);
   });
@@ -83,7 +94,7 @@ describe("声明式 UI 的接口", () => {
     vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
       calls.push(`${init.method ?? "GET"} ${url} ${(init.body as string) ?? ""}`.trim());
       if (url.includes("unsupported")) return new Response(JSON.stringify({ error: "not my gateway", code: "unsupported" }), { status: 404 });
-      return new Response(JSON.stringify(url.includes("placement") ? { ui: [{ plugin: "p", id: "panel", title: "面板", placement: "launcher_section" }] } : { view, toast: "ok" }));
+      return new Response(JSON.stringify(url.includes("placement") ? { ui: [{ extension: "p", id: "panel", title: "面板", placement: "launcher_section" }] } : { view, toast: "ok" }));
     });
     expect((await uiPlaces("launcher_section", "work cc", "mac 1")).map((u) => u.id)).toEqual(["panel"]);
     await uiPlaces("plugin_page");
@@ -95,13 +106,13 @@ describe("声明式 UI 的接口", () => {
     expect(isUnsupported(err)).toBe(true);
     const ctx = (c?: object) => JSON.stringify(uiContext(c));
     expect(calls).toEqual([
-      "GET /api/v1/plugins/-/ui?placement=launcher_section&launcher=work+cc&machine=mac+1",
-      "GET /api/v1/plugins/-/ui?placement=plugin_page",
-      `POST /api/v1/plugins/a%20b/-/ui/home {"context":${ctx()}}`,
-      `POST /api/v1/plugins/p/-/ui/panel {"context":${ctx({ launcher: "work" })},"state":"tab=1"}`,
-      `POST /api/v1/plugins/p/-/ui/home {"context":${ctx()},"state":"tab=1","action":"save","values":{"note":"x"}}`,
-      `POST /api/v1/plugins/p/-/ui/home {"context":${ctx()},"action":"refresh"}`,
-      `POST /api/v1/plugins/p/-/ui/unsupported {"context":${ctx({ launcher: "other" })}}`,
+      "GET /api/v1/extensions/-/ui?placement=launcher_section&launcher=work+cc&machine=mac+1",
+      "GET /api/v1/extensions/-/ui?placement=plugin_page",
+      `POST /api/v1/extensions/a%20b/-/ui/home {"context":${ctx()}}`,
+      `POST /api/v1/extensions/p/-/ui/panel {"context":${ctx({ launcher: "work" })},"state":"tab=1"}`,
+      `POST /api/v1/extensions/p/-/ui/home {"context":${ctx()},"state":"tab=1","action":"save","values":{"note":"x"}}`,
+      `POST /api/v1/extensions/p/-/ui/home {"context":${ctx()},"action":"refresh"}`,
+      `POST /api/v1/extensions/p/-/ui/unsupported {"context":${ctx({ launcher: "other" })}}`,
     ]);
   });
 });
@@ -160,40 +171,40 @@ describe("UI 版本 2：上下文", () => {
     vi.stubGlobal("localStorage", { getItem: () => "t", setItem: () => {}, removeItem: () => {} });
     vi.stubGlobal("fetch", async (url: string) => (urls.push(url), new Response(JSON.stringify({ ui: "nope" }))));
     expect(await uiPlaces("")).toEqual([]);
-    expect(urls).toEqual(["/api/v1/plugins/-/ui"]);
+    expect(urls).toEqual(["/api/v1/extensions/-/ui"]);
   });
 });
 
 describe("UI 插槽", () => {
   const list: UIPlace[] = [
-    { plugin: "g", id: "usage", title: "用量", placement: "nav_page", icon: "chart", badge: { text: "3", tone: "danger" } },
-    { plugin: "g", id: "today", title: "今天", placement: "overview_card", opens: "usage" },
-    { plugin: "g", id: "gpu", title: "显卡", placement: "machine_section" },
-    { plugin: "g", id: "x", title: "以后的", placement: "session_action" },
+    { extension: "g", id: "usage", title: "用量", placement: "nav_page", icon: "chart", badge: { text: "3", tone: "danger" } },
+    { extension: "g", id: "today", title: "今天", placement: "overview_card", opens: "usage" },
+    { extension: "g", id: "gpu", title: "显卡", placement: "machine_section" },
+    { extension: "g", id: "x", title: "以后的", placement: "session_action" },
   ];
   it("sorts places by slot and ignores ones it does not know", () => {
     expect(placesOf(list, "nav_page").map((u) => u.id)).toEqual(["usage"]);
     expect(placesOf(list, "overview_card").map((u) => u.id)).toEqual(["today"]);
     expect(placesOf(list, "machine_section").map((u) => u.id)).toEqual(["gpu"]);
   });
-  it("draws an icon it does not know as the plugin's", () => {
-    expect(["chart", "money", "doc", "rocket", undefined, ""].map(uiIcon)).toEqual(["chart", "money", "doc", "plugin", "plugin", "plugin"]);
+  it("draws an icon it does not know as the extension's", () => {
+    expect(["chart", "money", "doc", "rocket", undefined, ""].map(uiIcon)).toEqual(["chart", "money", "doc", "extension", "extension", "extension"]);
   });
   it("changes a badge in place from the plugin_ui event; null clears it", () => {
-    const a = applyBadge(list, { plugin: "g", id: "usage", badge: { text: "5", tone: "caution" } });
+    const a = applyBadge(list, { extension: "g", id: "usage", badge: { text: "5", tone: "caution" } });
     expect(a[0].badge).toEqual({ text: "5", tone: "caution" });
     expect(a[1]).toBe(list[1]);
-    expect(applyBadge(a, { plugin: "g", id: "usage", badge: null })[0].badge).toBeNull();
-    expect(applyBadge(list, { plugin: "g", id: "usage", badge: { text: "3", tone: "danger" } })).toBe(list);
-    expect(applyBadge(list, { plugin: "other", id: "usage", badge: { text: "1" } })).toBe(list);
+    expect(applyBadge(a, { extension: "g", id: "usage", badge: null })[0].badge).toBeNull();
+    expect(applyBadge(list, { extension: "g", id: "usage", badge: { text: "3", tone: "danger" } })).toBe(list);
+    expect(applyBadge(list, { extension: "other", id: "usage", badge: { text: "1" } })).toBe(list);
   });
 });
 
 describe("收件箱条目（inbox_item）", () => {
   const list: UIPlace[] = [
-    { plugin: "g", id: "usage", title: "用量", placement: "nav_page" },
-    { plugin: "chat", id: "event", title: "事件", placement: "inbox_item", size: "full", connector: "examplechat" },
-    { plugin: "odd", id: "nothing", title: "没写连接器", placement: "inbox_item" },
+    { extension: "g", id: "usage", title: "用量", placement: "nav_page" },
+    { extension: "chat", id: "event", title: "事件", placement: "inbox_item", size: "full", connector: "examplechat" },
+    { extension: "odd", id: "nothing", title: "没写连接器", placement: "inbox_item" },
   ];
   it("finds the page of the connector that brought the item in; none: the item's own detail", () => {
     expect(placesOf(list, "inbox_item").map((u) => u.id)).toEqual(["event", "nothing"]);
@@ -222,7 +233,7 @@ describe("收件箱条目（inbox_item）", () => {
     vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
       calls.push(`${init.method ?? "GET"} ${url} ${(init.body as string) ?? ""}`.trim());
       if (url.includes("placement")) return new Response(JSON.stringify({ ui: [list[1]] }));
-      if (String(init.body).includes(`"item":"mail:1"`)) return new Response(JSON.stringify({ error: "这一条不是这个插件的连接器收进来的", code: "forbidden" }), { status: 403 });
+      if (String(init.body).includes(`"item":"mail:1"`)) return new Response(JSON.stringify({ error: "这一条不是这个扩展的连接器收进来的", code: "forbidden" }), { status: 403 });
       return new Response(JSON.stringify({ view, toast: "已处理" }));
     });
     expect(await uiPlaces("inbox_item")).toEqual([list[1]]);
@@ -235,9 +246,9 @@ describe("收件箱条目（inbox_item）", () => {
     expect([err.status, err.code, isUnsupported(err)]).toEqual([403, "forbidden", false]);
     const ctx = JSON.stringify(uiContext({ item: "examplechat:1" }));
     expect(calls.slice(0, 3)).toEqual([
-      "GET /api/v1/plugins/-/ui?placement=inbox_item",
-      `POST /api/v1/plugins/chat/-/ui/event {"context":${ctx}}`,
-      `POST /api/v1/plugins/chat/-/ui/event {"context":${ctx},"action":"done"}`,
+      "GET /api/v1/extensions/-/ui?placement=inbox_item",
+      `POST /api/v1/extensions/chat/-/ui/event {"context":${ctx}}`,
+      `POST /api/v1/extensions/chat/-/ui/event {"context":${ctx},"action":"done"}`,
     ]);
   });
 });

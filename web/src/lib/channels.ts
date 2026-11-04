@@ -1,5 +1,5 @@
-// 设置 › 插件 › 渠道 (docs/channels.md): every way of talking to Persona — the apps, the Feishu bot, WeChat, /agent in
-// Feishu, voice, and the chat app bots plugins contribute — as GET /api/v1/channels lists them; one channel's page
+// 设置 › 扩展 › 渠道 (docs/channels.md): every way of talking to Persona — the apps, the Feishu bot, WeChat, /agent in
+// Feishu, voice, and the chat app bots extensions contribute — as GET /api/v1/channels lists them; one channel's page
 // (its switch, binding a step at a time, where its messages go, what it does, a test message), and the source mark on
 // a message that came from one (its client_msg_id is `<channel>-<message id>`).
 //
@@ -142,7 +142,7 @@ export function channelSections(list: Channel[]): { title: string; footer?: stri
   return [
     { title: "Persona", footer: "在 Persona 的哪一端说都进同一段对话，提问和批准在卡片上原地作答。", channels: apps },
     { title: "已接入", footer: "这些地方发给机器人的消息会交给 Persona，回答和 Agent 的提问发回原处。只认绑定的那一个人。", channels: installed },
-    { title: "可以安装", footer: "插件市场里提供渠道的插件：装好后在这里绑定。", channels: market },
+    { title: "可以安装", footer: "扩展市场里提供渠道的扩展：装好后在这里绑定。", channels: market },
   ].filter((s) => s.channels.length > 0);
 }
 
@@ -206,7 +206,14 @@ export function isPolled(p?: ChannelPrompt | null): boolean {
 /** Where a channel's settings_url ("settings/connectors/feishu-bot") opens in the settings page: its tab and sub-page. */
 export function settingsTarget(url: string): { tab: string; sub: string | null } | null {
   const m = /^settings\/([a-z-]+)(?:\/(.+))?$/.exec(url);
-  return m ? { tab: m[1], sub: m[2] ?? null } : null;
+  return m ? { tab: settingsTab(m[1]), sub: m[2] ?? null } : null;
+}
+
+/** A settings tab by its name now: `plugins` (a hub or a link from before #1844 / #1845) is `extensions`. */
+export function settingsTab(tab: string): string;
+export function settingsTab(tab: string | null): string | null;
+export function settingsTab(tab: string | null): string | null {
+  return tab === "plugins" ? "extensions" : tab;
 }
 
 // ── where a message came from ────────────────────────────
@@ -226,7 +233,7 @@ export function conversationChannel(ids: string[] | undefined, list: Pick<Channe
   return id ? list.find((c) => c.id === id) ?? { id, name: id } : undefined;
 }
 
-// The list, fetched once per hub (it changes when a plugin comes or goes: the settings page reloads it), for the
+// The list, fetched once per hub (it changes when an extension comes or goes: the settings page reloads it), for the
 // source marks in conversations.
 let cached: { key: string; list: Channel[] } | null = null;
 let inflight: Promise<Channel[]> | null = null;

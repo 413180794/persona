@@ -1,7 +1,7 @@
 // The admin API client (docs/admin.md「接口」): a session cookie, not the web client's bearer token. Writes carry the
 // session's CSRF token, which lives in memory only (GET state hands it out again after a reload).
-import { catalogQuery, type Catalog, type Market } from "../lib/plugin-market";
-import type { AddedMachine, AdminPlugin, AdminPlugins, ConnectorRepair, LinkPair, MeshView, PluginPreview } from "./types";
+import { catalogOf, catalogQuery, marketView, type Catalog, type Market } from "../lib/extension-market";
+import type { AddedMachine, AdminExtension, AdminExtensions, ConnectorRepair, LinkPair, MeshView, ExtensionPreview } from "./types";
 
 export class AdminError extends Error {
   status: number;
@@ -48,8 +48,8 @@ export async function adminApi<T>(path: string, method: Method = "GET", json?: u
   return answer<T>(await transport(`/api/v1/admin${path}`, { method, headers, body, credentials: "same-origin", cache: "no-store" }));
 }
 
-// adminUpload posts a file as it is (application/octet-stream): the one admin write whose body is not JSON (a plugin
-// package, docs/admin.md「插件」). query carries what the body cannot.
+// adminUpload posts a file as it is (application/octet-stream): the one admin write whose body is not JSON (an extension
+// package, docs/admin.md「扩展」). query carries what the body cannot.
 export async function adminUpload<T>(path: string, file: Blob, query: Record<string, string>): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/octet-stream" };
   if (csrf) headers["X-Jarvis-CSRF"] = csrf;
@@ -109,11 +109,11 @@ const MESSAGES: Record<string, string> = {
   invalid_address: "地址格式不对，例如 https://192.0.2.20:18662",
   unreachable: "连不上这个地址，检查地址、端口和对方的防火墙",
   invalid_code: "这不是一个有效的互联码",
-  no_plugins: "这台 hub 没有启用插件",
-  busy: "正在预览另一个插件，等它结束再试",
+  no_plugins: "这台 hub 没有启用扩展",
+  busy: "正在预览另一个扩展，等它结束再试",
   too_large: "包太大了",
   confirm_required: "先看过它能做什么，确认后再装",
-  no_markets: "这台 hub 读不了插件市场（没有数据库）",
+  no_markets: "这台 hub 读不了扩展市场（没有数据库）",
 };
 
 // errorText is what a person reads for a failed call. Codes not listed here (pair_failed, member_hub,
@@ -150,35 +150,78 @@ export const linkPair = (id: string) => adminApi<LinkPair>(`/machines/${enc(id)}
 export const repairConnector = (id: string, pairLink: string, address?: string) =>
   adminApi<ConnectorRepair>(`/machines/${enc(id)}/connector`, "POST", { pair_link: pairLink, address: address || undefined });
 
-// ── plugins (docs/admin.md「插件」): install, upgrade, roll back, uninstall, switch ──
+// ── extensions (docs/admin.md「扩展」): install, upgrade, roll back, uninstall, switch ──
 
-export const getPlugins = () => adminApi<AdminPlugins>("/plugins");
+// The routes' root: /extensions, or /plugins on a hub from before #1844 (docs/extensions.md「命名和兼容」). Found out once,
+// by the list: a 404 there means the older hub, and every call after uses its routes.
+type Root = "/extensions" | "/plugins";
+type ListAnswer = AdminExtensions & { plugins?: AdminExtension[] };
+let rootFound: Promise<{ root: Root; list?: ListAnswer }> | null = null;
 
-// previewPlugin stages source (dir: / file: / https://…#sha256= / remote:) on the hub: what it may do, before anything
-// installs. upgrade: the installed plugin's id when this is its new version.
-export const previewPlugin = (source: string, upgrade?: string) => adminApi<PluginPreview>("/plugins/preview", "POST", { source, upgrade: upgrade || undefined });
+function findRoot(): Promise<{ root: Root; list?: ListAnswer }> {
+  rootFound ??= adminApi<ListAnswer>("/extensions").then(
+    (list) => ({ root: "/extensions" as Root, list }),
+    (e) => {
+      if (e instanceof AdminError && e.status === 404) return { root: "/plugins" as Root };
+      rootFound = null; // not an answer about the routes (logged out, offline): ask again next time
+      throw e;
+    },
+  );
+  return rootFound;
+}
 
-export const uploadPlugin = (file: File, upgrade?: string) => adminUpload<PluginPreview>("/plugins/upload", file, { name: file.name, upgrade: upgrade ?? "" });
+/** The routes' root, for the calls below. */
+const extRoot = () => findRoot().then((f) => f.root);
 
-export const installPlugin = (pv: PluginPreview) => adminApi<AdminPlugin>("/plugins/install", "POST", { preview_id: pv.preview_id, permissions_digest: pv.permissions_digest });
+/** Only for tests: forget which routes the hub has. */
+export function resetExtensionRoot() {
+  rootFound = null;
+}
 
-export const upgradePlugin = (id: string, pv: PluginPreview) =>
-  adminApi<AdminPlugin>(`/plugins/${enc(id)}/upgrade`, "POST", { preview_id: pv.preview_id, permissions_digest: pv.permissions_digest });
+export async function getExtensions(): Promise<AdminExtensions> {
+  const read = (r: ListAnswer): AdminExtensions => ({ ...r, extensions: r.extensions ?? r.plugins ?? [] });
+  const found = await findRoot();
+  // the probe's own answer serves the first call; later ones (after a change) ask again
+  if (found.list) {
+    const list = found.list;
+    rootFound = Promise.resolve({ root: found.root });
+    return read(list);
+  }
+  return read(await adminApi<ListAnswer>(found.root));
+}
 
-export const rollbackPlugin = (id: string) => adminApi<AdminPlugin>(`/plugins/${enc(id)}/rollback`, "POST");
+// previewExtension stages source (dir: / file: / https://…#sha256= / remote:) on the hub: what it may do, before anything
+// installs. upgrade: the installed extension's id when this is its new version.
+export const previewExtension = async (source: string, upgrade?: string) =>
+  adminApi<ExtensionPreview>(`${await extRoot()}/preview`, "POST", { source, upgrade: upgrade || undefined });
 
-export const setPluginEnabled = (id: string, enabled: boolean) => adminApi<AdminPlugin>(`/plugins/${enc(id)}/enabled`, "PUT", { enabled });
+export const uploadExtension = async (file: File, upgrade?: string) =>
+  adminUpload<ExtensionPreview>(`${await extRoot()}/upload`, file, { name: file.name, upgrade: upgrade ?? "" });
 
-export const uninstallPlugin = (id: string, keepData: boolean) => adminApi<{ ok: boolean }>(`/plugins/${enc(id)}`, "DELETE", { keep_data: keepData });
+export const installExtension = async (pv: ExtensionPreview) =>
+  adminApi<AdminExtension>(`${await extRoot()}/install`, "POST", { preview_id: pv.preview_id, permissions_digest: pv.permissions_digest });
 
-// ── plugin markets (docs/plugins.md「插件市场」): the apps' routes under /plugins/-/, behind the admin session. Installing
-// and upgrading from a market's preview go through installPlugin / upgradePlugin above (the preview's id and digest).
+export const upgradeExtension = async (id: string, pv: ExtensionPreview) =>
+  adminApi<AdminExtension>(`${await extRoot()}/${enc(id)}/upgrade`, "POST", { preview_id: pv.preview_id, permissions_digest: pv.permissions_digest });
 
-export const getMarkets = () => adminApi<{ markets?: Market[] }>("/plugins/-/markets").then((r) => r.markets ?? []);
-export const addMarket = (spec: string, token?: string) => adminApi<Market>("/plugins/-/markets", "POST", token ? { spec, token } : { spec });
-export const removeMarket = (id: string) => adminApi<{ ok: boolean }>(`/plugins/-/markets/${enc(id)}`, "DELETE");
-export const refreshMarket = (id: string) => adminApi<Market>(`/plugins/-/markets/${enc(id)}/refresh`, "POST");
-export const setMarketToken = (id: string, token: string) => adminApi<Market>(`/plugins/-/markets/${enc(id)}/token`, "PUT", { token });
-export const getCatalog = (q?: string, market?: string, refresh?: boolean) =>
-  adminApi<Catalog>(`/plugins/-/catalog${catalogQuery(q, market, refresh)}`).then((c) => ({ ...c, markets: c.markets ?? [], plugins: c.plugins ?? [] }));
-export const previewFromMarket = (market: string, plugin: string) => adminApi<PluginPreview>("/plugins/-/catalog/preview", "POST", { market, plugin });
+export const rollbackExtension = async (id: string) => adminApi<AdminExtension>(`${await extRoot()}/${enc(id)}/rollback`, "POST");
+
+export const setExtensionEnabled = async (id: string, enabled: boolean) => adminApi<AdminExtension>(`${await extRoot()}/${enc(id)}/enabled`, "PUT", { enabled });
+
+export const uninstallExtension = async (id: string, keepData: boolean) =>
+  adminApi<{ ok: boolean }>(`${await extRoot()}/${enc(id)}`, "DELETE", { keep_data: keepData });
+
+// ── extension markets (docs/extensions.md「扩展市场」): the apps' routes under /extensions/-/, behind the admin session. Installing
+// and upgrading from a market's preview go through installExtension / upgradeExtension above (the preview's id and digest).
+
+const markets = async () => `${await extRoot()}/-/markets`;
+export const getMarkets = async () => adminApi<{ markets?: Market[] }>(await markets()).then((r) => (r.markets ?? []).map(marketView));
+export const addMarket = async (spec: string, token?: string) => adminApi<Market>(await markets(), "POST", token ? { spec, token } : { spec }).then(marketView);
+export const removeMarket = async (id: string) => adminApi<{ ok: boolean }>(`${await markets()}/${enc(id)}`, "DELETE");
+export const refreshMarket = async (id: string) => adminApi<Market>(`${await markets()}/${enc(id)}/refresh`, "POST").then(marketView);
+export const setMarketToken = async (id: string, token: string) => adminApi<Market>(`${await markets()}/${enc(id)}/token`, "PUT", { token }).then(marketView);
+export const getCatalog = async (q?: string, market?: string, refresh?: boolean) =>
+  adminApi<Catalog>(`${await extRoot()}/-/catalog${catalogQuery(q, market, refresh)}`).then(catalogOf);
+/** Both keys: a hub from before #1844 reads `plugin`, a newer one `extension` (or `plugin`). */
+export const previewFromMarket = async (market: string, extension: string) =>
+  adminApi<ExtensionPreview>(`${await extRoot()}/-/catalog/preview`, "POST", { market, extension, plugin: extension });

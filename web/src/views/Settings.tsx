@@ -6,6 +6,8 @@ import { splitDevices } from "../lib/devices";
 import { ago } from "../lib/format";
 import { install, useInstall, type InstallState } from "../lib/pwa";
 import { reset, useStore } from "../lib/store";
+import { settingsTab } from "../lib/channels";
+import { hubHasExt } from "../lib/extension-api";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from "../ui/atoms";
 import { Icon, type IconName } from "../ui/icons";
 import { setTheme, useTheme, type Theme } from "./theme";
@@ -19,10 +21,10 @@ import { BuiltinFace, PersonaPicker } from "./assistant/Persona";
 import { Connectors } from "./settings/Connectors";
 import { TriageSettings } from "./settings/TriageSettings";
 import { TranslationSettings } from "./settings/TranslationSettings";
-import { Plugins } from "./settings/Plugins";
+import { Extensions } from "./settings/Extensions";
 import { HubSettings } from "./settings/HubSettings";
 import { LauncherQuota } from "./settings/LauncherQuota";
-import { LauncherPluginSections } from "./settings/PluginView";
+import { LauncherExtensionSections } from "./settings/ExtensionView";
 import { launcherNameProblem, loadPresets, presetBody, presetChoices, presetDefaultModel, presetModelLabel, presetSubtitle, type LauncherPreset } from "../lib/launcher-presets";
 import { Segmented } from "./assistant/parts";
 
@@ -96,24 +98,26 @@ export function tokens(n: number): string {
 
 // ── page ────────────────────────────────────────────────
 
-type Tab = "general" | "assistant" | "models" | "model-config" | "claude" | "codex" | "connectors" | "plugins" | "translate" | "devices" | "hub";
-const TABS: Tab[] = ["general", "assistant", "models", "model-config", "claude", "codex", "connectors", "plugins", "translate", "devices", "hub"];
+type Tab = "general" | "assistant" | "models" | "model-config" | "claude" | "codex" | "connectors" | "extensions" | "translate" | "devices" | "hub";
+const TABS: Tab[] = ["general", "assistant", "models", "model-config", "claude", "codex", "connectors", "extensions", "translate", "devices", "hub"];
 // The tab whose page opens one of its items, and the query parameter that names it.
-const SUB: Partial<Record<Tab, string>> = { "model-config": "purpose", plugins: "plugin", connectors: "connector" };
+const SUB: Partial<Record<Tab, string>> = { "model-config": "purpose", extensions: "extension", connectors: "connector" };
 
 export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const [tab, setTab] = useState<Tab>(() => {
-    const t = new URLSearchParams(location.search).get("tab");
+    const t = settingsTab(new URLSearchParams(location.search).get("tab"));
     return TABS.includes(t as Tab) ? (t as Tab) : "general";
   });
-  // The purpose (模型配置) or plugin (插件) the tab has open.
+  // The purpose (模型配置) or extension (扩展) the tab has open.
   const [sub, setSub] = useState<string | null>(() => {
     const q = new URLSearchParams(location.search);
-    const param = SUB[q.get("tab") as Tab];
-    return param ? q.get(param) : null;
+    const t = settingsTab(q.get("tab")) as Tab;
+    const param = SUB[t];
+    // ?tab=plugins&plugin=<id>: a link from before #1845
+    return param ? (q.get(param) ?? (t === "extensions" ? q.get("plugin") : null)) : null;
   });
-  // 插件 only on a hub with the plugin base (docs/plugins.md「hub 的接口」); a link to it still opens it.
-  const hasPlugins = useStore((s) => s.features.includes("plugin_manager"));
+  // 扩展 only on a hub with the extension base (docs/extensions.md「hub 的接口」); a link to it still opens it.
+  const hasExtensions = useStore((s) => hubHasExt(s.features, "manager"));
   const tabs: { k: Tab; label: string; icon: IconName }[] = [
     { k: "general", label: "通用", icon: "gear" },
     { k: "assistant", label: "助手", icon: "spark" },
@@ -122,7 +126,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     { k: "claude", label: "Claude Code", icon: "terminal" },
     { k: "codex", label: "Codex", icon: "terminal" },
     { k: "connectors", label: "连接器", icon: "link" },
-    ...(hasPlugins || tab === "plugins" ? [{ k: "plugins" as Tab, label: "插件", icon: "plugin" as IconName }] : []),
+    ...(hasExtensions || tab === "extensions" ? [{ k: "extensions" as Tab, label: "扩展", icon: "extension" as IconName }] : []),
     { k: "translate", label: "翻译", icon: "translate" },
     { k: "devices", label: "设备", icon: "key" },
     { k: "hub", label: "hub", icon: "hub" },
@@ -163,8 +167,8 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           {tab === "model-config" && <ModelConfiguration open={sub} onOpen={(id) => pick("model-config", id)} onProviders={() => pick("models")} />}
           {tab === "assistant" && <AssistantSettings />}
           {(tab === "claude" || tab === "codex") && <AgentSettings key={tab} agent={tab} />}
-          {tab === "connectors" && <Connectors open={sub} onOpen={(id) => pick("connectors", id)} onChannel={(id) => pick("plugins", `-channels/${id}`)} />}
-          {tab === "plugins" && <Plugins open={sub} onOpen={(id) => pick("plugins", id)} onTab={(t, id) => TABS.includes(t as Tab) && pick(t as Tab, id)} />}
+          {tab === "connectors" && <Connectors open={sub} onOpen={(id) => pick("connectors", id)} onChannel={(id) => pick("extensions", `-channels/${id}`)} />}
+          {tab === "extensions" && <Extensions open={sub} onOpen={(id) => pick("extensions", id)} onTab={(t, id) => TABS.includes(t as Tab) && pick(t as Tab, id)} />}
           {tab === "translate" && <TranslationSettings onConfigure={() => pick("model-config", "translate")} />}
           {tab === "devices" && <Devices />}
           {tab === "hub" && <HubSettings />}
@@ -409,8 +413,8 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
   const [confirm, setConfirm] = useState(false);
   const [showDef, setShowDef] = useState(false);
   const mname = (id: string) => machines.find((m) => m.id === id)?.name ?? id;
-  // plugins draw a section here (docs/plugins.md「声明式 UI」 launcher_section)
-  const hasPlugins = useStore((s) => s.features.includes("plugin_manager"));
+  // extensions draw a section here (docs/extensions.md「声明式 UI」 launcher_section)
+  const hasExtensions = useStore((s) => hubHasExt(s.features, "manager"));
 
   useEffect(() => {
     setL(null);
@@ -571,7 +575,7 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
             </KV>
           )}
 
-          {hasPlugins && <LauncherPluginSections launcher={l.name} machine={l.source === "jarvis" ? undefined : testOn[0] || undefined} />}
+          {hasExtensions && <LauncherExtensionSections launcher={l.name} machine={l.source === "jarvis" ? undefined : testOn[0] || undefined} />}
 
           {groups.map((g) => (
             <DetailBlock key={g.ids.join()} d={g.d} place={groups.length > 1 ? g.ids.map(mname).join("、") : undefined} />
@@ -668,13 +672,13 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
   const [f, setF] = useState({ name: "", base_url: "", api_key: "", model: "", small_model: "", subagent_model: "", custom_model: "", custom_model_name: "", custom_model_description: "", args: "", kind: "launcher", api: "messages", auth: "api_key" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  // 从插件添加 (docs/plugins.md「模型供应商」): only when adding, and only when the hub's plugins offer providers.
+  // 从扩展添加 (docs/extensions.md「模型供应商」): only when adding, and only when the hub's extensions offer providers.
   const [presets, setPresets] = useState<LauncherPreset[]>([]);
-  const [source, setSource] = useState<"manual" | "plugin">("manual");
+  const [source, setSource] = useState<"manual" | "extension">("manual");
   const [pick, setPick] = useState("");
   const [pf, setPf] = useState({ name: "", api_key: "", model: "" });
   const preset = presets.find((p) => p.id === pick);
-  const fromPlugin = isNew && source === "plugin" && !!preset;
+  const fromExtension = isNew && source === "extension" && !!preset;
 
   useEffect(() => {
     if (!isNew) return;
@@ -707,13 +711,13 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
   // The Responses API always takes the key as Bearer: nothing to choose.
   const responses = f.kind === "api" && f.api === "responses";
-  const ready = fromPlugin ? presetReady : f.name.trim() && f.base_url.trim() && f.model.trim() && (!isNew || f.api_key.trim());
+  const ready = fromExtension ? presetReady : f.name.trim() && f.base_url.trim() && f.model.trim() && (!isNew || f.api_key.trim());
   const save = async () => {
     if (busy || !ready) return;
     setBusy(true);
     setError("");
     try {
-      if (fromPlugin && preset) {
+      if (fromExtension && preset) {
         const body = presetBody(preset, pf.name, pf.api_key, pf.model);
         await api("/launchers", { method: "POST", json: body });
         toast(`已新增 ${body.name}`, "ok");
@@ -775,14 +779,14 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
         }}
       >
         {isNew && presets.length > 0 && (
-          <Segmented<"manual" | "plugin">
+          <Segmented<"manual" | "extension">
             label="来源"
             value={source}
             onChange={setSource}
-            options={[{ v: "manual", label: "自己填写" }, { v: "plugin", label: "从插件添加" }]}
+            options={[{ v: "manual", label: "自己填写" }, { v: "extension", label: "从扩展添加" }]}
           />
         )}
-        {fromPlugin && preset ? (
+        {fromExtension && preset ? (
           <PresetFields presets={presets} preset={preset} onPick={choose} pf={pf} setPf={setPf} nameProblem={nameProblem} />
         ) : (
         <>
@@ -836,7 +840,7 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
   );
 }
 
-/** 从插件添加: pick one of the plugins' providers, then only the name, the key and maybe another of its models. */
+/** 从扩展添加: pick one of the extensions' providers, then only the name, the key and maybe another of its models. */
 function PresetFields({ presets, preset, onPick, pf, setPf, nameProblem }: {
   presets: LauncherPreset[];
   preset: LauncherPreset;
@@ -870,7 +874,7 @@ function PresetFields({ presets, preset, onPick, pf, setPf, nameProblem }: {
             </button>
           ))}
         </div>
-        <span className="mt-1 block text-[11px] text-ink-3">地址、接入方式和模型由插件「{preset.plugin}」提供；加好以后和自己填写的一样可以编辑。</span>
+        <span className="mt-1 block text-[11px] text-ink-3">地址、接入方式和模型由扩展「{preset.plugin}」提供；加好以后和自己填写的一样可以编辑。</span>
       </div>
       <label className="block">
         <span className="mb-1 block text-[12px] font-medium text-ink-2">名字</span>
@@ -896,7 +900,7 @@ function PresetFields({ presets, preset, onPick, pf, setPf, nameProblem }: {
           <input value={pf.model} onChange={(e) => setPf((x) => ({ ...x, model: e.target.value }))} placeholder="主模型" autoComplete="off" spellCheck={false} className={cx(input, "font-mono")} />
         )}
         <span className="mt-1 block text-[11px] text-ink-3">
-          {preset.models_error ? `读不到插件的模型列表（${preset.models_error}），这里是它声明的。` : "各用途的具体选择在「模型配置」里统一管理；未单独指定时使用这里的默认。"}
+          {preset.models_error ? `读不到扩展的模型列表（${preset.models_error}），这里是它声明的。` : "各用途的具体选择在「模型配置」里统一管理；未单独指定时使用这里的默认。"}
         </span>
       </label>
     </>

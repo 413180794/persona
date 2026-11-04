@@ -1,10 +1,10 @@
-// A plugin's chart (docs/plugins.md「UI 插槽」「新条目」 chart): bars (side by side or stacked) or lines, drawn with the
+// An extension's chart (docs/extensions.md「UI 插槽」「新条目」 chart): bars (side by side or stacked) or lines, drawn with the
 // web's own colors (a tone is a role color, no tone the series palette in order). Thin marks with a rounded free end,
 // a 2px surface gap between touching bars, hairline grid, short numbers on the right; labels thinned so they never
 // overlap. Hovering (or the arrow keys) shows the label and every series' value. A compact chart (a card) draws no
-// axis text: only the marks and the first / last label. The geometry is in lib/plugin-ui.ts.
+// axis text: only the marks and the first / last label. The geometry is in lib/extension-ui.ts.
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { barSpans, chartExtent, compactNumber, edgeLabels, labelWidth, linear, niceTicks, pointText, seriesColors, thinLabels, type UIItem } from "../../lib/plugin-ui";
+import { barSpans, chartExtent, compactNumber, edgeLabels, labelWidth, linear, niceTicks, pointText, seriesColors, thinLabels, type UIItem } from "../../lib/extension-ui";
 import { cx } from "../../ui/atoms";
 
 const FONT = 10.5; // axis text, px
@@ -36,7 +36,7 @@ function barPath(x: number, w: number, base: number, end: number, r: number, rou
   return `M${x},${base}V${end - rr}Q${x},${end} ${x + rr},${end}H${x + w - rr}Q${x + w},${end} ${x + w},${end - rr}V${base}Z`;
 }
 
-export function PluginChart({ item, compact }: { item: UIItem; compact?: boolean }) {
+export function ExtensionChart({ item, compact }: { item: UIItem; compact?: boolean }) {
   const series = item.series ?? [];
   const kind = item.kind === "line" ? "line" : "bar";
   const stacked = kind === "bar" && !!item.stacked && series.length > 1;

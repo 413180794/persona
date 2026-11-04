@@ -3,8 +3,8 @@ import {
   canChoose,
   canRollBack,
   canUpgrade,
-  pluginRunNote,
-  pluginStatus,
+  extensionRunNote,
+  extensionStatus,
   sourceProblem,
   uploadProblem,
   canRemove,
@@ -287,23 +287,23 @@ describe("the group", () => {
   });
 });
 
-describe("plugins", () => {
+describe("extensions", () => {
   it("says each state", () => {
-    expect(pluginStatus({ status: "running" })).toEqual({ tone: "green", label: "启动" });
-    expect(pluginStatus({ status: "stopped" })).toEqual({ tone: "green", label: "启动" });
-    expect(pluginStatus({ status: "disabled" })).toEqual({ tone: "gray", label: "停用" });
-    expect([pluginRunNote({ status: "running" }), pluginRunNote({ status: "stopped" }), pluginRunNote({ status: "error" })]).toEqual([
+    expect(extensionStatus({ status: "running" })).toEqual({ tone: "green", label: "启动" });
+    expect(extensionStatus({ status: "stopped" })).toEqual({ tone: "green", label: "启动" });
+    expect(extensionStatus({ status: "disabled" })).toEqual({ tone: "gray", label: "停用" });
+    expect([extensionRunNote({ status: "running" }), extensionRunNote({ status: "stopped" }), extensionRunNote({ status: "error" })]).toEqual([
       "正在运行", "暂未运行，用到时自动启动", "",
     ]);
-    expect(pluginStatus({ status: "needs_setup" }).tone).toBe("orange");
-    expect(pluginStatus({ status: "incompatible" }).tone).toBe("red");
-    expect(pluginStatus({ status: "whatever" }).label).toBe("状态未知");
+    expect(extensionStatus({ status: "needs_setup" }).tone).toBe("orange");
+    expect(extensionStatus({ status: "incompatible" }).tone).toBe("red");
+    expect(extensionStatus({ status: "whatever" }).label).toBe("状态未知");
   });
 
   it("checks a source before asking the hub", () => {
     expect(sourceProblem("")).toBe("");
-    expect(sourceProblem("dir:/opt/plugins/notes")).toBe("");
-    expect(sourceProblem("~/plugins/notes.tar.gz")).toBe("");
+    expect(sourceProblem("dir:/opt/extensions/notes")).toBe("");
+    expect(sourceProblem("~/extensions/notes.tar.gz")).toBe("");
     expect(sourceProblem("file:relative.tar.gz")).not.toBe("");
     expect(sourceProblem("http://example.com/p.tar.gz")).toBe("只收 https 链接");
     expect(sourceProblem("https://example.com/p.tar.gz")).toContain("sha256");

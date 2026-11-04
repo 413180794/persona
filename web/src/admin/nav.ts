@@ -3,13 +3,13 @@
 // computer); the navigation shows these under「高级」.
 import type { AdminIconName } from "./icons";
 
-export type Page = "overview" | "machines" | "peers" | "devices" | "plugins" | "network";
+export type Page = "overview" | "machines" | "peers" | "devices" | "extensions" | "network";
 
 export const NAV: { page: Page; label: string; icon: AdminIconName; advanced?: boolean }[] = [
   { page: "overview", label: "概览", icon: "gauge" },
   { page: "machines", label: "电脑", icon: "machine" },
   { page: "devices", label: "设备", icon: "phone" },
-  { page: "plugins", label: "插件", icon: "puzzle" },
+  { page: "extensions", label: "扩展", icon: "puzzle" },
   { page: "network", label: "网络与访问", icon: "shield" },
   { page: "peers", label: "互联", icon: "mesh", advanced: true },
 ];

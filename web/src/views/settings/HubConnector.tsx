@@ -1,5 +1,5 @@
 // 设置 › 连接器's hub connectors (iOS ConnectorsSection's rows, HubConnectorView, ConnectorSignInSections,
-// GitHubConnectorSections, GitHubInboxSettings; docs/connectors.md): GitHub, Telegram and any plugin's connector, as
+// GitHubConnectorSections, GitHubInboxSettings; docs/connectors.md): GitHub, Telegram and any extension's connector, as
 // GET /api/v1/connectors lists them. A page shows how one is doing, as whom, where its sign-in comes from and what is
 // wrong (with the steps to fix it); one the user signs in to here (`login`) also gets its switch, the sign-in a step
 // at a time (fields the hub asks for, GitHub's device code, or a QR code to scan), 进知识库 / 进收件箱, sign-out and delete. GitHub adds
@@ -56,7 +56,7 @@ export function ConnectorList({ onOpen }: { onOpen: (id: string) => void }) {
   const list = useMemo(() => all && otherConnectors(all, lark), [all, lark]);
   if (list?.length === 0) return null;
   return (
-    <Group title="更多连接器" footer="hub 自带的和插件提供的连接器：点进去看状态、登录和设置。">
+    <Group title="更多连接器" footer="hub 自带的和扩展提供的连接器：点进去看状态、登录和设置。">
       {!list && !error && <div className="px-4 py-3"><Loading /></div>}
       {error && <p className="px-4 py-3 text-[12.5px] text-red">读不到连接器：{error}</p>}
       {list?.map((c) => (
@@ -309,7 +309,7 @@ function Confirm({ open, title, message, action, busy, onClose, onConfirm }: {
 
 // ── signing in, a step at a time ─────────────────────────
 
-/** A connector the user signs in to here (Telegram, a plugin's): switch, sign-in, feeds, sign-out and delete. */
+/** A connector the user signs in to here (Telegram, an extension's): switch, sign-in, feeds, sign-out and delete. */
 function SignInSections({ c, reload }: { c: HubConnector; reload: () => Promise<void> }) {
   const a = useActions(c.id, reload);
   return (
@@ -336,7 +336,7 @@ function SignInSteps({ c, reload, footer }: { c: HubConnector; reload: () => Pro
     live.current = true; // again after StrictMode's extra unmount in development
     return () => void (live.current = false);
   }, []);
-  // Also a channel (WeChat): a step this page cannot draw can be done in 设置 › 插件 › 渠道 instead.
+  // Also a channel (WeChat): a step this page cannot draw can be done in 设置 › 扩展 › 渠道 instead.
   const isChannel = useChannels().some((x) => x.id === c.id);
 
   /** True when signing in is done. */
@@ -440,7 +440,7 @@ export function SignInStep({ name, prompt, values, busy, isChannel, onChange, on
       ) : view === "qr_link" ? (
         <QRLinkStep url={prompt.url!} app={name} onCancel={onCancel} />
       ) : view === "unsupported" ? (
-        <UnsupportedStep elsewhere={isChannel ? `也可以到 设置 › 插件 › 渠道 › ${name} 里绑定。` : undefined} onRestart={onRestart} onCancel={onCancel} />
+        <UnsupportedStep elsewhere={isChannel ? `也可以到 设置 › 扩展 › 渠道 › ${name} 里绑定。` : undefined} onRestart={onRestart} onCancel={onCancel} />
       ) : (
         <form
           className="flex flex-col"

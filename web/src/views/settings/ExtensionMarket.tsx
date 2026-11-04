@@ -1,16 +1,16 @@
-// 设置 › 插件 › 插件市场 (docs/plugins.md「插件市场」): the catalog of the markets this hub reads (search, a market at a
-// time), one plugin of it (what it may do; preview → install / upgrade; uninstall when this market installed it), and
+// 设置 › 扩展 › 扩展市场 (docs/extensions.md「扩展市场」): the catalog of the markets this hub reads (search, a market at a
+// time), one extension of it (what it may do; preview → install / upgrade; uninstall when this market installed it), and
 // the markets themselves (add with an optional write-only token, remove, read again, change the token). Logic in
-// lib/plugin-market.ts.
+// lib/extension-market.ts.
 import { useEffect, useRef, useState } from "react";
 import { errorText } from "../../lib/api";
 import { ago } from "../../lib/format";
 import {
   addMarket, agreeLabel, canUninstall, getCatalog, installPreview, isGitMarket, itemLine, itemState, listMarkets, MARKET_SPEC_HINT, MARKET_SPEC_PLACEHOLDER, marketKind, marketLine, previewFromMarket,
-  previewVersion, refreshMarket, removeMarket, setMarketToken, specLabel, uninstallPlugin, upgradePreview,
+  previewVersion, refreshMarket, removeMarket, setMarketToken, specLabel, uninstallExtension, upgradePreview,
   type Catalog, type CatalogItem, type Market, type MarketPreview,
-} from "../../lib/plugin-market";
-import { pluginUpgrades, pointText, setPluginUpgrades, type PluginPermission } from "../../lib/plugins";
+} from "../../lib/extension-market";
+import { extensionUpgrades, pointText, setExtensionUpgrades, type ExtensionPermission } from "../../lib/extensions";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast, useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Group, Pill, Row, Switch } from "./SettingsParts";
@@ -72,7 +72,7 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
   return (
     <>
       <Back
-        label="插件"
+        label="扩展"
         onBack={onBack}
         right={
           <>
@@ -83,8 +83,8 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
           </>
         }
       />
-      <h2 className="mb-1 px-1 text-[15px] font-semibold text-ink">插件市场</h2>
-      <p className="mb-4 px-1 text-[12.5px] leading-relaxed text-ink-3">这台 hub 登记的市场里的插件。装之前先看它能做什么，同意了才装；包按市场写的 sha256 校验。</p>
+      <h2 className="mb-1 px-1 text-[15px] font-semibold text-ink">扩展市场</h2>
+      <p className="mb-4 px-1 text-[12.5px] leading-relaxed text-ink-3">这台 hub 登记的市场里的扩展。装之前先看它能做什么，同意了才装；包按市场写的 sha256 校验。</p>
 
       <div className="mb-3 flex items-center gap-2 rounded-control bg-surface px-2.5 shadow-card">
         <Icon name="search" size={14} className="shrink-0 text-ink-3" />
@@ -92,7 +92,7 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="搜索名字、说明、发布者、标签"
-          aria-label="搜索插件"
+          aria-label="搜索扩展"
           spellCheck={false}
           className="h-9 min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
         />
@@ -128,29 +128,29 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
         </p>
       ))}
 
-      <Group title={data ? `${data.plugins.length} 个插件` : "插件"}>
+      <Group title={data ? `${data.extensions.length} 个扩展` : "扩展"}>
         {!data && !error && (
           <div className="px-4 py-3">
             <Loading />
           </div>
         )}
-        {error && <Problem text={`读不到插件市场：${error}`} onRetry={() => load()} busy={loading} />}
+        {error && <Problem text={`读不到扩展市场：${error}`} onRetry={() => load()} busy={loading} />}
         {data && markets.length === 0 && (
           <div className="flex flex-col items-center gap-2 px-6 py-8 text-center">
             <span className="flex size-10 items-center justify-center rounded-[10px] bg-inset text-ink-3 shadow-hairline">
-              <Icon name="plugin" size={18} />
+              <Icon name="extension" size={18} />
             </span>
             <p className="text-[13px] font-medium text-ink">还没有市场</p>
-            <p className="max-w-[420px] text-[12px] leading-relaxed text-ink-3">市场是一个网站或 GitHub 仓库发布的插件索引（persona-plugins.json）。添加一个，就能在这里浏览和安装它的插件。</p>
+            <p className="max-w-[420px] text-[12px] leading-relaxed text-ink-3">市场是一个网站或 GitHub 仓库发布的扩展索引（persona-extensions.json）。添加一个，就能在这里浏览和安装它的扩展。</p>
             <Button tone="primary" icon="plus" onClick={onMarkets}>
               添加市场
             </Button>
           </div>
         )}
-        {data && markets.length > 0 && data.plugins.length === 0 && (
-          <p className="px-4 py-6 text-center text-[12.5px] text-ink-3">{q ? `没有找到「${q.trim()}」` : "这个市场还没有插件"}</p>
+        {data && markets.length > 0 && data.extensions.length === 0 && (
+          <p className="px-4 py-6 text-center text-[12.5px] text-ink-3">{q ? `没有找到「${q.trim()}」` : "这个市场还没有扩展"}</p>
         )}
-        {data?.plugins.map((it, i) => {
+        {data?.extensions.map((it, i) => {
           const st = itemState(it);
           return (
             <button
@@ -161,7 +161,7 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
               style={{ animation: `fade-up 320ms ${EASE} ${Math.min(i, 8) * 30}ms both` }}
             >
               <span className={cx("flex size-9 shrink-0 items-center justify-center rounded-[9px]", it.installed ? "bg-accent-tint text-accent-ink" : "bg-inset text-ink-3 shadow-hairline")}>
-                <Icon name="plugin" size={16} />
+                <Icon name="extension" size={16} />
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex min-w-0 items-center gap-2">
@@ -189,7 +189,7 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
   );
 }
 
-// ── one plugin of a market ──────────────────────────────
+// ── one extension of a market ──────────────────────────────
 
 export function MarketItem({ market, id, onBack, onInstalled }: { market: string; id: string; onBack: () => void; onInstalled: (id: string) => void }) {
   const [it, setIt] = useState<CatalogItem | null>(null);
@@ -202,9 +202,9 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
     setLoading(true);
     getCatalog("", market)
       .then((c) => {
-        const found = c.plugins.find((x) => x.id === id) ?? null;
+        const found = c.extensions.find((x) => x.id === id) ?? null;
         setIt(found);
-        setError(found ? "" : "这个市场里没有这个插件了");
+        setError(found ? "" : "这个市场里没有这个扩展了");
       })
       .catch((e) => setError(errorText(e)))
       .finally(() => setLoading(false));
@@ -232,11 +232,11 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
 
   return (
     <>
-      <Back label="插件市场" onBack={onBack} right={<IconButton icon="retry" label="重新读取" onClick={load} disabled={loading} />} />
+      <Back label="扩展市场" onBack={onBack} right={<IconButton icon="retry" label="重新读取" onClick={load} disabled={loading} />} />
       <section className="mb-6 overflow-hidden rounded-card bg-surface shadow-card">
         <div className="flex items-center gap-3 px-4 py-3.5">
           <span className={cx("flex size-11 shrink-0 items-center justify-center rounded-[11px]", it?.installed ? "bg-accent-tint text-accent-ink" : "bg-inset text-ink-3 shadow-hairline")}>
-            <Icon name="plugin" size={20} />
+            <Icon name="extension" size={20} />
           </span>
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-[15px] font-semibold text-ink">{it?.name ?? id}</h2>
@@ -346,7 +346,7 @@ export function MarketItem({ market, id, onBack, onInstalled }: { market: string
   );
 }
 
-export function PermissionRow({ p, tone }: { p: PluginPermission; tone?: "orange" }) {
+export function PermissionRow({ p, tone }: { p: ExtensionPermission; tone?: "orange" }) {
   return (
     <div className="flex items-start gap-2.5 px-4 py-2.5">
       <Icon name={p.key === "network" ? "web" : p.key === "secrets" || p.key === "launcher_keys" ? "key" : p.key === "hub_api" ? "hub" : p.key === "runs_code" ? "terminal" : "info"} size={14} className={cx("mt-0.5 shrink-0", tone === "orange" ? "text-orange" : "text-ink-3")} />
@@ -397,7 +397,7 @@ export function PreviewDialog({ pv, onClose, onAgree }: { pv: MarketPreview; onC
       <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
         <div className="flex items-start gap-3">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-[11px] bg-accent-tint text-accent-ink">
-            <Icon name="plugin" size={18} />
+            <Icon name="extension" size={18} />
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-baseline gap-x-2">
@@ -445,7 +445,7 @@ export function PreviewDialog({ pv, onClose, onAgree }: { pv: MarketPreview; onC
   );
 }
 
-/** Uninstalling a plugin a market installed; its data can stay for a later install. */
+/** Uninstalling an extension a market installed; its data can stay for a later install. */
 export function UninstallDialog({ id, name, onClose, onDone }: { id: string; name: string; onClose: () => void; onDone: () => void }) {
   const [keep, setKeep] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -454,7 +454,7 @@ export function UninstallDialog({ id, name, onClose, onDone }: { id: string; nam
     setBusy(true);
     setError("");
     try {
-      await uninstallPlugin(id, keep);
+      await uninstallExtension(id, keep);
       toast(`已卸载「${name}」`, "ok");
       onDone();
     } catch (e) {
@@ -503,15 +503,15 @@ export function Markets({ onBack }: { onBack: () => void }) {
   const [tokenFor, setTokenFor] = useState<Market | null>(null);
   const [busy, setBusy] = useState<Record<string, "refresh" | "remove">>({});
   const [confirm, setConfirm] = useState("");
-  // The switch for all market plugins (docs/plugins.md「自动升级」); null: a hub without it.
+  // The switch for all market extensions (docs/extensions.md「自动升级」); null: a hub without it.
   const [auto, setAuto] = useState<boolean | null>(null);
   const [savingAuto, setSavingAuto] = useState(false);
-  useEffect(() => void pluginUpgrades().then(setAuto), []);
+  useEffect(() => void extensionUpgrades().then(setAuto), []);
   const flipAuto = async (on: boolean) => {
     setSavingAuto(true);
     try {
-      setAuto(await setPluginUpgrades(on));
-      toast(on ? "已打开插件自动升级" : "已关掉插件自动升级", "ok");
+      setAuto(await setExtensionUpgrades(on));
+      toast(on ? "已打开扩展自动升级" : "已关掉扩展自动升级", "ok");
     } catch (e) {
       toast(`没有改：${errorText(e)}`, "error");
     } finally {
@@ -536,7 +536,7 @@ export function Markets({ onBack }: { onBack: () => void }) {
       } else {
         await removeMarket(m.id);
         setList((l) => (l ?? []).filter((x) => x.id !== m.id));
-        toast(`已删除「${m.name}」，从它装的插件留着`, "ok");
+        toast(`已删除「${m.name}」，从它装的扩展留着`, "ok");
       }
     } catch (e) {
       toast(`${kind === "refresh" ? "读不到" : "没有删除"}「${m.name}」：${errorText(e)}`, "error");
@@ -550,7 +550,7 @@ export function Markets({ onBack }: { onBack: () => void }) {
   return (
     <>
       <Back
-        label="插件市场"
+        label="扩展市场"
         onBack={onBack}
         right={
           <Button tone="primary" icon="plus" onClick={() => setAdding(true)}>
@@ -560,20 +560,20 @@ export function Markets({ onBack }: { onBack: () => void }) {
       />
       <h2 className="mb-1 px-1 text-[15px] font-semibold text-ink">管理市场</h2>
       <p className="mb-4 px-1 text-[12.5px] leading-relaxed text-ink-3">
-        hub 读这些市场的索引（persona-plugins.json）。私有的 https / GitHub 市场填一个只读 token：加密存在 hub 上，只发给这个市场自己，填了以后不再显示；git: 的市场用 hub 机器自己的 SSH 凭据。
+        hub 读这些市场的索引（persona-extensions.json）。私有的 https / GitHub 市场填一个只读 token：加密存在 hub 上，只发给这个市场自己，填了以后不再显示；git: 的市场用 hub 机器自己的 SSH 凭据。
       </p>
       {auto !== null && !!list?.length && (
         <Group
           footer={
             auto
-              ? "从这些市场装的插件出了新版本，插件空闲时 hub 自动装上；要的权限变多时先问你。每个插件也可以在自己的页面里单独关掉。"
-              : "关着：有新版本时只在插件的页面里提示，你自己去升级。"
+              ? "从这些市场装的扩展出了新版本，扩展空闲时 hub 自动装上；要的权限变多时先问你。每个扩展也可以在自己的页面里单独关掉。"
+              : "关着：有新版本时只在扩展的页面里提示，你自己去升级。"
           }
         >
           <div className="flex items-center gap-3 px-4 py-2.5">
-            <span className="min-w-0 flex-1 truncate text-[13px] text-ink">自动升级插件</span>
+            <span className="min-w-0 flex-1 truncate text-[13px] text-ink">自动升级扩展</span>
             {savingAuto && <Spinner />}
-            <Switch on={auto} onChange={(on) => void flipAuto(on)} disabled={savingAuto} label="自动升级插件" />
+            <Switch on={auto} onChange={(on) => void flipAuto(on)} disabled={savingAuto} label="自动升级扩展" />
           </div>
         </Group>
       )}

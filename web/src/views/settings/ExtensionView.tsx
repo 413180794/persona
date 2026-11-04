@@ -1,17 +1,17 @@
-// A plugin's View (docs/plugins.md「声明式 UI」「UI 插槽」), drawn with the web's design system: a plugin page in
-// 设置 › 插件 or from the sidebar, a section on a launcher's or a machine's page, a card on 总览. Every kind of item
+// An extension's View (docs/extensions.md「声明式 UI」「UI 插槽」), drawn with the web's design system: an extension page in
+// 设置 › 扩展 or from the sidebar, a section on a launcher's or a machine's page, a card on 总览. Every kind of item
 // (text, metric, progress, row, button, link, field, divider, chart, stat_grid, segmented); an unknown one is left out.
 // A tone becomes a role color; a button's confirm asks first, submit sends the fields' values, a segmented acts when
 // chosen, and what the press answers (a new view, a word, a link) is carried out. A view with refresh_after is drawn
-// again while it is on screen. Logic in lib/plugin-ui.ts.
+// again while it is on screen. Logic in lib/extension-ui.ts.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, errorText } from "../../lib/api";
 import { openLink } from "../../lib/links";
 import {
   actUI, blocks, fieldValues, isHttps, isUnsupported, numberProblem, outcome, percent, refreshDelay, renderUI, submitValues, toneOf, uiPlaces,
   type UIAction, type UIContext, type UIItem, type UIPlace, type UISection, type UITone, type UIView,
-} from "../../lib/plugin-ui";
-import { PluginChart } from "../plugins/PluginChart";
+} from "../../lib/extension-ui";
+import { ExtensionChart } from "../extensions/ExtensionChart";
 import { Button, cx, Dialog, EASE, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Pill, Switch } from "./SettingsParts";
@@ -24,7 +24,7 @@ const inputClass =
   "h-8 w-full rounded-control bg-field px-2.5 text-[12.5px] text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-60";
 
 /**
- * Draws again while the view is on screen (docs/plugins.md「刷新」): `delay` ms after it was last drawn, never while the
+ * Draws again while the view is on screen (docs/extensions.md「刷新」): `delay` ms after it was last drawn, never while the
  * page is hidden; coming back after the delay draws at once.
  */
 function useRefresh(delay: number, drawnAt: number, draw: () => void) {
@@ -50,17 +50,17 @@ function useRefresh(delay: number, drawnAt: number, draw: () => void) {
 }
 
 /**
- * Loads and draws one of a plugin's views. `embedded`: inside another page (a launcher's), lighter, and gone when the
- * plugin says the launcher is not its (404 unsupported) instead of showing an error. `compact`: a card (总览), no
+ * Loads and draws one of an extension's views. `embedded`: inside another page (a launcher's), lighter, and gone when the
+ * extension says the launcher is not its (404 unsupported) instead of showing an error. `compact`: a card (总览), no
  * chrome of its own, small charts. `bare`: no heading of its own (the page around it has one). `onFailed`: the first
  * draw failed (no view yet), and the page around it shows something else instead of the error. `revision`: what it is
  * drawn for changed (an inbox item took new messages): drawn again, the fields typed into kept. `onOpenSource`: a press
  * opened the inbox item's own source page (persona://inbox/<context.item>/source).
  */
-export function PluginUI({
-  plugin, ui, context, embedded, compact, bare, title, onUnsupported, onMissing, onFailed, revision, onOpenSource,
+export function ExtensionUI({
+  extension, ui, context, embedded, compact, bare, title, onUnsupported, onMissing, onFailed, revision, onOpenSource,
 }: {
-  plugin: string; ui: string; context?: UIContext; embedded?: boolean; compact?: boolean; bare?: boolean; title?: string;
+  extension: string; ui: string; context?: UIContext; embedded?: boolean; compact?: boolean; bare?: boolean; title?: string;
   onUnsupported?: () => void; onMissing?: () => void; onFailed?: (e: unknown) => void; revision?: string; onOpenSource?: () => void;
 }) {
   const [view, setView] = useState<UIView | null>(null);
@@ -87,7 +87,7 @@ export function PluginUI({
   };
   const load = useCallback((keep?: boolean) => {
     setLoading(true);
-    renderUI(plugin, ui, context, stateRef.current)
+    renderUI(extension, ui, context, stateRef.current)
       .then((v) => show(v, keep === true))
       .catch((e) => {
         if (isUnsupported(e)) (setUnsupported(true), onUnsupported?.());
@@ -100,7 +100,7 @@ export function PluginUI({
       })
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plugin, ui, ctxKey]);
+  }, [extension, ui, ctxKey]);
   useEffect(() => load(), [load]);
   useRefresh(refreshDelay(view), drawnAt, () => {
     if (!busy) load();
@@ -123,7 +123,7 @@ export function PluginUI({
     }
     setBusy(action.id);
     try {
-      const r = outcome(await actUI(plugin, ui, action.id, { context, state: stateRef.current, values: sent }), context?.item);
+      const r = outcome(await actUI(extension, ui, action.id, { context, state: stateRef.current, values: sent }), context?.item);
       if (r.view) show(r.view);
       if (r.toast) toast(r.toast, "ok");
       if (r.url) openLink(r.url);
@@ -150,7 +150,7 @@ export function PluginUI({
 
   if (unsupported) {
     return embedded || compact ? null : (
-      <p className="rounded-card bg-surface px-4 py-6 text-center text-[12.5px] text-ink-3 shadow-card">这个插件在这里没有要显示的内容。</p>
+      <p className="rounded-card bg-surface px-4 py-6 text-center text-[12.5px] text-ink-3 shadow-card">这个扩展在这里没有要显示的内容。</p>
     );
   }
 
@@ -172,7 +172,7 @@ export function PluginUI({
       {error && compact && (
         <div className="flex items-center gap-2 px-4 py-2.5">
           <p className="min-w-0 flex-1 truncate text-[12px] text-red" title={error}>
-            {view ? "没有更新：" : "插件没画出来："}
+            {view ? "没有更新：" : "扩展没画出来："}
             {error}
           </p>
           <Button tone="quiet" icon="retry" busy={loading} onClick={() => load()}>
@@ -183,9 +183,9 @@ export function PluginUI({
       {error && !compact && (
         <div className={cx("flex flex-col items-center gap-2 px-6 text-center", embedded ? "rounded-control bg-inset py-4 shadow-hairline" : "rounded-card bg-surface py-8 shadow-card")}>
           <span className="flex size-9 items-center justify-center rounded-[10px] bg-red-tint text-red">
-            <Icon name="plugin" size={16} />
+            <Icon name="extension" size={16} />
           </span>
-          <p className="text-[13px] font-medium text-ink">{view ? "没有更新" : "插件没画出来"}</p>
+          <p className="text-[13px] font-medium text-ink">{view ? "没有更新" : "扩展没画出来"}</p>
           <p className="max-w-[420px] text-[12px] leading-relaxed break-words text-ink-3 select-text">{error}</p>
           <Button tone="secondary" icon="retry" busy={loading} onClick={() => load()}>
             重试
@@ -301,7 +301,7 @@ function ItemButton({ item, busy, onPress }: { item: UIItem; busy: string; onPre
 function Item({ item: it, compact, values, setValue, busy, onPress, onChoose }: Omit<SectionProps, "section" | "embedded"> & { item: UIItem }) {
   switch (it.type) {
     case "chart":
-      return <PluginChart item={it} compact={compact} />;
+      return <ExtensionChart item={it} compact={compact} />;
     case "stat_grid":
       return <StatGrid item={it} compact={compact} />;
     case "segmented":
@@ -458,7 +458,7 @@ function Segmented({ item, value, busy, pending, onChoose }: { item: UIItem; val
 }
 
 function Field({ item: it, value, onChange }: { item: UIItem; value: string; onChange: (v: string) => void }) {
-  const id = `plugin-ui-${it.name}`;
+  const id = `extension-ui-${it.name}`;
   if (it.kind === "toggle")
     return (
       <div className="flex items-center gap-3 px-4 py-2.5">
@@ -534,17 +534,17 @@ function Field({ item: it, value, onChange }: { item: UIItem; value: string; onC
 }
 
 /**
- * The plugins' sections on a launcher's page (placement launcher_section): one per plugin whose gateway matches. A
- * plugin that says this launcher is not its gateway (404 unsupported) leaves no trace; nothing listed, nothing drawn.
+ * The extensions' sections on a launcher's page (placement launcher_section): one per extension whose gateway matches. A
+ * extension that says this launcher is not its gateway (404 unsupported) leaves no trace; nothing listed, nothing drawn.
  */
-export function LauncherPluginSections({ launcher, machine }: { launcher: string; machine?: string }) {
+export function LauncherExtensionSections({ launcher, machine }: { launcher: string; machine?: string }) {
   const [places, setPlaces] = useState<UIPlace[]>([]);
   useEffect(() => {
     let live = true;
     setPlaces([]);
     uiPlaces("launcher_section", launcher, machine).then(
       (l) => live && setPlaces(l),
-      () => {}, // an older hub, or no plugins: no section
+      () => {}, // an older hub, or no extensions: no section
     );
     return () => {
       live = false;
@@ -553,7 +553,7 @@ export function LauncherPluginSections({ launcher, machine }: { launcher: string
   return (
     <>
       {places.map((u) => (
-        <LauncherSection key={`${u.plugin}/${u.id}`} place={u} launcher={launcher} machine={machine} />
+        <LauncherSection key={`${u.extension}/${u.id}`} place={u} launcher={launcher} machine={machine} />
       ))}
     </>
   );
@@ -564,12 +564,12 @@ function LauncherSection({ place, launcher, machine }: { place: UIPlace; launche
   const context = useMemo(() => ({ launcher, machine }), [launcher, machine]);
   if (gone) return null;
   return (
-    <div data-plugin-section={`${place.plugin}/${place.id}`}>
+    <div data-extension-section={`${place.extension}/${place.id}`}>
       <div className="mb-1 flex items-center gap-1.5 text-[11.5px] font-medium text-ink-3">
-        <Icon name="plugin" size={11} className="shrink-0" />
+        <Icon name="extension" size={11} className="shrink-0" />
         {place.title}
       </div>
-      <PluginUI plugin={place.plugin} ui={place.id} context={context} embedded onUnsupported={() => setGone(true)} />
+      <ExtensionUI extension={place.extension} ui={place.id} context={context} embedded onUnsupported={() => setGone(true)} />
     </div>
   );
 }

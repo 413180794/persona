@@ -9,7 +9,7 @@ import type { AgentState, Interaction, Session } from "../lib/types";
 import { Button, cx, EASE, IconButton, Loading, StatusDot, useNow } from "../ui/atoms";
 import { Icon } from "../ui/icons";
 import { MarkSeenDialog } from "./AgentMenus";
-import { OverviewCards } from "./plugins/PluginSlots";
+import { OverviewCards } from "./extensions/ExtensionSlots";
 
 const KIND: Record<Interaction["kind"], string> = { question: "提问", plan: "计划待批准", permission: "需要授权", screen: "终端对话框" };
 
@@ -52,7 +52,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
             </p>
           </div>
 
-          {/* the plugins' cards (docs/plugins.md「UI 插槽」 overview_card), under the agents' summary */}
+          {/* the extensions' cards (docs/extensions.md「UI 插槽」 overview_card), under the agents' summary */}
           <OverviewCards />
 
           {!loaded && <Loading label="加载中" />}

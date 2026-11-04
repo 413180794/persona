@@ -80,7 +80,7 @@ export function Messages({ id, onToggleSidebar }: { id?: string; onToggleSidebar
           ) : (
             <>
               <p className="text-[13.5px] font-medium text-ink">hub 没有接入飞书消息</p>
-              <p className="max-w-[340px] text-[12.5px] text-ink-3">hub 装好提供飞书的插件后，这里会列出全部私聊和群聊。</p>
+              <p className="max-w-[340px] text-[12.5px] text-ink-3">hub 装好提供飞书的扩展后，这里会列出全部私聊和群聊。</p>
             </>
           )}
         </div>

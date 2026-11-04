@@ -235,7 +235,7 @@ button:disabled { cursor: default; }
 .mochi-rock { animation: mochi-rock .9s ease-in-out infinite; }
 .mochi-pulse { animation: mochi-pulse 1.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .mochi-blink, .mochi-spin, .mochi-rock, .mochi-pulse { animation: none; } }
-/* Plugins' charts (docs/plugins.md「UI 插槽」 chart): the series colors, in order, for series without a tone. The first
+/* Extensions' charts (docs/extensions.md「UI 插槽」 chart): the series colors, in order, for series without a tone. The first
  * is the accent; the others keep clear of the role colors (green / orange / red say positive / caution / danger).
  * Checked as a set (adjacent pairs, light and dark) with the dataviz palette validator. */
 :root { --series-1: #0285ff; --series-2: #1baf7a; --series-3: #6250d6; --series-4: #e87ba4; }

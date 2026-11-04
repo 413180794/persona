@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { addLinkMachine, addServiceMachine, adminApi, AdminError, errorText, handleLoginRequired, installPlugin, linkPair, previewPlugin, repairConnector, setCenter, setCsrf, setTransport, uninstallPlugin, uploadPlugin } from "./api";
+import { addLinkMachine, addServiceMachine, adminApi, AdminError, errorText, handleLoginRequired, getExtensions, getMarkets, installExtension, linkPair, previewExtension, repairConnector, resetExtensionRoot, setCenter, setCsrf, setTransport, uninstallExtension, uploadExtension } from "./api";
 
 type Call = { url: string; init: RequestInit };
 
@@ -13,6 +13,7 @@ function stub(status: number, body: unknown, headers: Record<string, string> = {
 }
 
 afterEach(() => {
+  resetExtensionRoot();
   setCsrf("");
   handleLoginRequired(() => {});
 });
@@ -122,30 +123,50 @@ describe("the center and connectors", () => {
   });
 });
 
-describe("plugins", () => {
+describe("extensions", () => {
   it("uploads the package as it is, with the CSRF token and its name in the query", async () => {
     setCsrf("tok");
     const calls = stub(200, { preview_id: "p" });
     const file = new File([new Uint8Array([1, 2, 3])], "notes 1.0.tar.gz");
-    await uploadPlugin(file, "example-notes");
-    expect(calls[0].url).toBe("/api/v1/admin/plugins/upload?name=notes+1.0.tar.gz&upgrade=example-notes");
-    const h = calls[0].init.headers as Record<string, string>;
+    await uploadExtension(file, "example-notes");
+    // the first call finds out which routes the hub has (the list)
+    expect(calls[0].url).toBe("/api/v1/admin/extensions");
+    expect(calls[1].url).toBe("/api/v1/admin/extensions/upload?name=notes+1.0.tar.gz&upgrade=example-notes");
+    const h = calls[1].init.headers as Record<string, string>;
     expect(h["Content-Type"]).toBe("application/octet-stream");
     expect(h["X-Jarvis-CSRF"]).toBe("tok");
-    expect(calls[0].init.body).toBe(file);
-    await uploadPlugin(file);
-    expect(calls[1].url).toBe("/api/v1/admin/plugins/upload?name=notes+1.0.tar.gz");
+    expect(calls[1].init.body).toBe(file);
+    await uploadExtension(file);
+    expect(calls[2].url).toBe("/api/v1/admin/extensions/upload?name=notes+1.0.tar.gz");
   });
 
   it("installs what was previewed, with its digest", async () => {
     const calls = stub(200, {});
-    await previewPlugin("dir:/opt/p");
-    await installPlugin({ preview_id: "p1", permissions_digest: "d1", manifest: { id: "x", name: "X", version: "1" }, permissions: [], expires_at: "" });
-    await uninstallPlugin("x", true);
-    expect(calls[0].init.body).toBe('{"source":"dir:/opt/p"}');
-    expect(calls[1].init.body).toBe('{"preview_id":"p1","permissions_digest":"d1"}');
-    expect(calls[2].url).toBe("/api/v1/admin/plugins/x");
-    expect(calls[2].init.method).toBe("DELETE");
-    expect(calls[2].init.body).toBe('{"keep_data":true}');
+    await previewExtension("dir:/opt/p");
+    await installExtension({ preview_id: "p1", permissions_digest: "d1", manifest: { id: "x", name: "X", version: "1" }, permissions: [], expires_at: "" });
+    await uninstallExtension("x", true);
+    expect(calls[1].init.body).toBe('{"source":"dir:/opt/p"}');
+    expect(calls[2].init.body).toBe('{"preview_id":"p1","permissions_digest":"d1"}');
+    expect(calls[3].url).toBe("/api/v1/admin/extensions/x");
+    expect(calls[3].init.method).toBe("DELETE");
+    expect(calls[3].init.body).toBe('{"keep_data":true}');
+  });
+
+  it("reads the list once to find the routes, and uses a hub's old ones before #1844", async () => {
+    let calls = stub(200, { extensions: [{ id: "a" }], can_install: true, upload_most: 1 });
+    expect((await getExtensions()).extensions.map((e) => e.id)).toEqual(["a"]);
+    expect(calls.map((c) => c.url)).toEqual(["/api/v1/admin/extensions"]);
+
+    resetExtensionRoot();
+    calls = [];
+    setTransport(async (url, init) => {
+      calls.push({ url, init });
+      if (url.startsWith("/api/v1/admin/extensions")) return new Response(JSON.stringify({ error: "not found" }), { status: 404 });
+      if (url.endsWith("/markets")) return new Response(JSON.stringify({ markets: [{ id: "m1", plugins: 2 }] }));
+      return new Response(JSON.stringify({ plugins: [{ id: "b" }], can_install: true, upload_most: 1 }));
+    });
+    expect((await getExtensions()).extensions.map((e) => e.id)).toEqual(["b"]);
+    expect((await getMarkets()).map((m) => m.extensions)).toEqual([2]);
+    expect(calls.map((c) => c.url)).toEqual(["/api/v1/admin/extensions", "/api/v1/admin/plugins", "/api/v1/admin/plugins/-/markets"]);
   });
 });

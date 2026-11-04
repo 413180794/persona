@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, enc, errorText } from "../../lib/api";
+import { extRoot } from "../../lib/extension-api";
 import {
   chooseProvider, draftFor, modelConfiguration, modelPurpose, modelSummary, providersFor, purposeGroups, saveModelPurpose, supportsField,
   type ModelBinding, type ModelConfigurationBody, type ModelDraft, type ModelPurposeBody,
@@ -92,7 +93,7 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
   useEffect(() => {
     if (!id?.startsWith("plugin.")) return;
     const controller = new AbortController();
-    api<{ models: { id: string; name?: string }[] }>(`/plugins/${enc(id.slice("plugin.".length))}/models`, { signal: controller.signal })
+    api<{ models: { id: string; name?: string }[] }>(`${extRoot()}/${enc(id.slice("plugin.".length))}/models`, { signal: controller.signal })
       .then((r) => setModels(r.models ?? []))
       .catch((e) => { if (!controller.signal.aborted) setModelsError(errorText(e)); });
     return () => controller.abort();
@@ -172,7 +173,7 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
         {supportsField(p, "model") && <div className="block">
           <span className="mb-1 block text-[12px] font-medium text-ink-2">具体模型</span>
           {p.kind === "plugin" ? <select aria-label="具体模型" className={inputClass} value={draft.model} disabled={busy || (!!modelsError && models.length === 0)} onChange={(e) => setDraft((d) => ({ ...d, model: e.target.value }))}>
-            <option value="">跟随插件默认</option>
+            <option value="">跟随扩展默认</option>
             {draft.model && !models.some((m) => m.id === draft.model) && <option value={draft.model}>{draft.model}（当前引用）</option>}
             {models.map((m) => <option key={m.id} value={m.id}>{m.name || m.id}</option>)}
           </select> : picker ? <ModelPicker
@@ -197,7 +198,7 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
           <span className="mt-1 block text-[11px] text-ink-3">
             {picker ? `「默认」即留空：${draft.provider ? "用这个供应商的默认模型" : "继承上一级的设置"}。列表和在终端里输入 /model 看到的一样${listMachine ? `（来自 ${listMachine}）` : ""}，没有的可以直接输入 ID。` : "留空恢复继承；指定模型 ID 不代表已经通过真实请求验证。"}
           </span>
-          {modelsError && <span role="alert" className="mt-1 block text-[11px] text-red">插件模型列表未读取：{modelsError}</span>}
+          {modelsError && <span role="alert" className="mt-1 block text-[11px] text-red">扩展模型列表未读取：{modelsError}</span>}
           {launcherList.status === "error" && (
             <span role="alert" className="mt-1 flex items-center gap-2 text-[11px] text-ink-3">
               <span className="min-w-0 truncate" title={launcherList.error}>模型列表未读取：{launcherList.error}</span>
@@ -211,7 +212,7 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
             onChange={(e) => setDraft((d) => ({ ...d, effort: e.target.value }))} />
           <datalist id="model-efforts">{listedEfforts.map((v) => <option key={v} value={v} />)}</datalist>
         </label>}
-        <p className="text-[11.5px] leading-relaxed text-ink-3">保存只修改配置，不会发起模型请求或打断正在运行的任务。{p.kind === "plugin" && "语音模型是 Persona 的默认选择，不改变插件自己的供应商或凭据。"}</p>
+        <p className="text-[11.5px] leading-relaxed text-ink-3">保存只修改配置，不会发起模型请求或打断正在运行的任务。{p.kind === "plugin" && "语音模型是 Persona 的默认选择，不改变扩展自己的供应商或凭据。"}</p>
       </div>}
       {error && <p role="alert" className="mt-3 text-[12px] text-red">{error}</p>}
       {(conflict || (!p && error)) && <Button tone="secondary" disabled={busy} onClick={() => void load()}>{conflict ? "重新加载（丢弃编辑）" : "重试"}</Button>}

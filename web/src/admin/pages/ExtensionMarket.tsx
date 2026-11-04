@@ -1,20 +1,20 @@
-// 插件 › 插件市场 (docs/admin.md「插件」, docs/plugins.md「插件市场」): the markets this hub reads (add with an optional
+// 扩展 › 扩展市场 (docs/admin.md「扩展」, docs/extensions.md「扩展市场」): the markets this hub reads (add with an optional
 // write-only token, read again, change the token, remove) and their catalog (search, a market at a time). Installing
-// or upgrading from it previews first (POST plugins/-/catalog/preview) and goes through the page's own install /
+// or upgrading from it previews first (POST extensions/-/catalog/preview) and goes through the page's own install /
 // upgrade with that preview's id and permissions digest: nothing installs before the user agreed to exactly that.
 import { useEffect, useRef, useState } from "react";
 import { ago } from "../../lib/format";
-import { canUninstall, isGitMarket, itemState, MARKET_SPEC_HINT, MARKET_SPEC_PLACEHOLDER, marketKind, marketLine, specLabel, type CatalogItem, type Catalog, type Market } from "../../lib/plugin-market";
+import { canUninstall, isGitMarket, itemState, MARKET_SPEC_HINT, MARKET_SPEC_PLACEHOLDER, marketKind, marketLine, specLabel, type CatalogItem, type Catalog, type Market } from "../../lib/extension-market";
 import { Button, cx, Dialog, IconButton, toast } from "../../ui/atoms";
-import { addMarket, AdminError, errorText, getCatalog, getMarkets, installPlugin, previewFromMarket, refreshMarket, removeMarket, setMarketToken, upgradePlugin } from "../api";
+import { addMarket, AdminError, errorText, getCatalog, getMarkets, installExtension, previewFromMarket, refreshMarket, removeMarket, setMarketToken, upgradeExtension } from "../api";
 import { AdminIcon } from "../icons";
 import { devDialog } from "../router";
-import type { PluginPreview } from "../types";
+import type { ExtensionPreview } from "../types";
 import { Card, ConfirmButton, EmptyState, ErrorBox, Field, Loader, Segmented, Tag } from "../parts";
-import { PreviewBody } from "./Plugins";
+import { PreviewBody } from "./Extensions";
 
-/** The markets and their catalog; `onChanged` when a plugin was installed or upgraded (the list above reloads). */
-export function PluginMarkets({ onChanged }: { onChanged: () => void }) {
+/** The markets and their catalog; `onChanged` when an extension was installed or upgraded (the list above reloads). */
+export function ExtensionMarkets({ onChanged }: { onChanged: () => void }) {
   const [markets, setMarkets] = useState<Market[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [gone, setGone] = useState(false);
@@ -27,7 +27,7 @@ export function PluginMarkets({ onChanged }: { onChanged: () => void }) {
     getMarkets().then(
       (l) => (setMarkets(l), setError(null)),
       (e) => {
-        // a hub without markets (older: 404; no plugin base or database: 503): no section at all
+        // a hub without markets (older: 404; no extension base or database: 503): no section at all
         if (e instanceof AdminError && (e.status === 404 || e.status === 503)) setGone(true);
         else setError(e);
       },
@@ -52,7 +52,7 @@ export function PluginMarkets({ onChanged }: { onChanged: () => void }) {
   const remove = async (m: Market) => {
     try {
       await removeMarket(m.id);
-      toast(`已删除「${m.name}」，从它装的插件留着`, "ok");
+      toast(`已删除「${m.name}」，从它装的扩展留着`, "ok");
       changed();
     } catch (e) {
       toast(errorText(e), "error");
@@ -63,20 +63,20 @@ export function PluginMarkets({ onChanged }: { onChanged: () => void }) {
   return (
     <>
       <Card
-        title="插件市场"
+        title="扩展市场"
         right={
           <Button tone="quiet" className="h-7 px-2" onClick={() => setAdding(true)}>
             <AdminIcon name="plus" size={13} />
             添加市场
           </Button>
         }
-        footer="市场是网站或 git / GitHub 仓库发布的插件索引（persona-plugins.json）。私有的 https / GitHub 市场填一个只读 token：加密存在 hub 上，只发给这个市场自己，填了以后不再显示；git: 的市场用 hub 机器自己的 SSH 凭据。删除市场不影响从它装的插件。"
+        footer="市场是网站或 git / GitHub 仓库发布的扩展索引（persona-extensions.json）。私有的 https / GitHub 市场填一个只读 token：加密存在 hub 上，只发给这个市场自己，填了以后不再显示；git: 的市场用 hub 机器自己的 SSH 凭据。删除市场不影响从它装的扩展。"
       >
         {!markets ? (
           error ? <ErrorBox error={error} onRetry={() => void load()} /> : <Loader />
         ) : markets.length === 0 ? (
           <EmptyState icon="puzzle" title="还没有市场" action={<Button onClick={() => setAdding(true)}>添加市场</Button>}>
-            填一个 https 地址、<span className="font-mono">github:owner/repo</span> 或 <span className="font-mono">git:…</span>，hub 读到它的索引后，这里就能浏览和安装里面的插件。
+            填一个 https 地址、<span className="font-mono">github:owner/repo</span> 或 <span className="font-mono">git:…</span>，hub 读到它的索引后，这里就能浏览和安装里面的扩展。
           </EmptyState>
         ) : (
           markets.map((m) => (
@@ -142,8 +142,8 @@ function MarketCatalog({ markets, onChanged }: { markets: Market[]; onChanged: (
         setData(c);
         setError(null);
         setLoading(false);
-        // Dev only (screenshots): ?dialog=market previews the first plugin it can upgrade or install.
-        if (devDialog() === "market" && !picked && !q && !market) setPicked(c.plugins.find((x) => itemState(x).kind === "upgrade") ?? c.plugins.find((x) => itemState(x).kind === "install") ?? null);
+        // Dev only (screenshots): ?dialog=market previews the first extension it can upgrade or install.
+        if (devDialog() === "market" && !picked && !q && !market) setPicked(c.extensions.find((x) => itemState(x).kind === "upgrade") ?? c.extensions.find((x) => itemState(x).kind === "install") ?? null);
       },
       (e) => n === seq.current && (setError(e), setLoading(false)),
     );
@@ -156,9 +156,9 @@ function MarketCatalog({ markets, onChanged }: { markets: Market[]; onChanged: (
 
   return (
     <Card
-      title={data ? `市场里的 ${data.plugins.length} 个插件` : "市场里的插件"}
+      title={data ? `市场里的 ${data.extensions.length} 个扩展` : "市场里的扩展"}
       right={<IconButton icon="retry" label="重新读取所有市场" onClick={() => load(true)} disabled={loading} size={24} iconSize={13} className="-mb-1" />}
-      footer="装插件就是在 hub 机器上运行一个新程序：点「安装」先看它能做什么，同意了才装；包按市场写的 sha256 校验。从市场装的插件在上面的列表里升级、回滚、卸载。"
+      footer="装扩展就是在 hub 机器上运行一个新程序：点「安装」先看它能做什么，同意了才装；包按市场写的 sha256 校验。从市场装的扩展在上面的列表里升级、回滚、卸载。"
     >
       <div className="flex flex-wrap items-center gap-2 px-4 py-3">
         <label className="flex h-9 min-w-[220px] flex-1 items-center gap-2 rounded-control bg-inset px-3 shadow-hairline">
@@ -167,7 +167,7 @@ function MarketCatalog({ markets, onChanged }: { markets: Market[]; onChanged: (
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="搜索名字、说明、发布者、标签"
-            aria-label="搜索插件"
+            aria-label="搜索扩展"
             spellCheck={false}
             className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
           />
@@ -178,10 +178,10 @@ function MarketCatalog({ markets, onChanged }: { markets: Market[]; onChanged: (
       </div>
       {!data ? (
         error ? <ErrorBox error={error} onRetry={() => load()} /> : <Loader />
-      ) : data.plugins.length === 0 ? (
-        <p className="px-4 py-6 text-center text-[12.5px] text-ink-3">{q.trim() ? `没有找到「${q.trim()}」` : "这里还没有插件"}</p>
+      ) : data.extensions.length === 0 ? (
+        <p className="px-4 py-6 text-center text-[12.5px] text-ink-3">{q.trim() ? `没有找到「${q.trim()}」` : "这里还没有扩展"}</p>
       ) : (
-        data.plugins.map((it) => {
+        data.extensions.map((it) => {
           const st = itemState(it);
           return (
             <div key={`${it.market}/${it.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
@@ -223,9 +223,9 @@ function MarketCatalog({ markets, onChanged }: { markets: Market[]; onChanged: (
   );
 }
 
-/** Previews a catalog plugin, then installs or upgrades exactly that preview. */
+/** Previews a catalog extension, then installs or upgrades exactly that preview. */
 function MarketInstallDialog({ item, onClose, onDone }: { item: CatalogItem | null; onClose: () => void; onDone: () => void }) {
-  const [pv, setPv] = useState<PluginPreview | null>(null);
+  const [pv, setPv] = useState<ExtensionPreview | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const look = () => {
@@ -243,7 +243,7 @@ function MarketInstallDialog({ item, onClose, onDone }: { item: CatalogItem | nu
     setBusy(true);
     setError("");
     try {
-      const p = pv.upgrade ? await upgradePlugin(item.id, pv) : await installPlugin(pv);
+      const p = pv.upgrade ? await upgradeExtension(item.id, pv) : await installExtension(pv);
       toast(pv.upgrade ? `「${p.name}」已升级到 ${p.version}` : `已安装「${p.name}」`, "ok");
       onDone();
     } catch (e) {
@@ -310,7 +310,7 @@ function AddMarketDialog({ open, onClose, onAdded }: { open: boolean; onClose: (
     <Dialog
       open={open}
       onClose={onClose}
-      title="添加插件市场"
+      title="添加扩展市场"
       width={500}
       footer={
         <>

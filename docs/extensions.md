@@ -870,15 +870,15 @@ iOS（Mac 共用同一套页面）在 hub 带 `extension_manager` 时，设置�
   UI 测试 `PluginSettingsTests`、`PluginMarketTests`（从市场装、升级预览、市场管理、扩展页面里保存、启动器那一节；`TEST_RUNNER_JARVIS_PLUGINS_HUB`）、
   `PluginSlotsTests`（卡片、入口和角标、用量页的 segmented 和图、卡片点开、机器上的一节），
   单元测试 `PluginsModelTests`、`PluginMarketModelTests`、`PluginViewModelTests`、`PluginSlotsModelTests`。
-- 网页（#1207）：设置 › 扩展，同样的列表和详情（`web/src/views/settings/Plugins.tsx`、`web/src/lib/plugins.ts`，`/settings?tab=plugins&plugin=<id>`），见 `docs/web.md`「设置」。
-  #1330 加上声明式 UI（`settings/PluginView.tsx`、`lib/plugin-ui.ts`：扩展详情的「页面」、启动器详情里的一节）和扩展市场（`settings/PluginMarket.tsx`、`lib/plugin-market.ts`：目录、详情、管理市场）。
-  #1699 加上自动升级（「自动升级」）：市场扩展的详情里一组「升级」（开关、新版本那一行和「去确认」、上次的结果，`UpgradeGroup`），管理市场最上面是全部扩展的总开关，和 App 同样的文字（`lib/plugins.ts` 的 `upgradeDetail` 等）。
-  #1681 加上 `inbox_item`（`inbox/InboxPluginBody.tsx`：收件箱详情的正文；列表来自 `lib/plugin-slots.ts` 的缓存），见 `docs/web.md`「设置」的「UI 插槽」。
+- 网页（#1207）：设置 › 扩展，同样的列表和详情（`web/src/views/settings/Extensions.tsx`、`web/src/lib/extensions.ts`，`/settings?tab=extensions&extension=<id>`；老链接 `?tab=plugins&plugin=<id>` 照样打开），见 `docs/web.md`「设置」。
+  #1330 加上声明式 UI（`settings/ExtensionView.tsx`、`lib/extension-ui.ts`：扩展详情的「页面」、启动器详情里的一节）和扩展市场（`settings/ExtensionMarket.tsx`、`lib/extension-market.ts`：目录、详情、管理市场）。
+  #1699 加上自动升级（「自动升级」）：市场扩展的详情里一组「升级」（开关、新版本那一行和「去确认」、上次的结果，`UpgradeGroup`），管理市场最上面是全部扩展的总开关，和 App 同样的文字（`lib/extensions.ts` 的 `upgradeDetail` 等）。
+  #1681 加上 `inbox_item`（`inbox/InboxExtensionBody.tsx`：收件箱详情的正文；列表来自 `lib/extension-slots.ts` 的缓存），见 `docs/web.md`「设置」的「UI 插槽」。
 - Android（#1206）同样的功能，入口在设置首页的「扩展」一节，代码和截图方法见 [android.md](android.md)「扩展（设置 › 扩展）」；扩展画的界面（扩展页面、启动器页上的一节）和扩展市场（#1329）见同一节下的「扩展画的界面和扩展市场」。
 
 ## 管理界面：扩展
 
-hub 管理界面（[admin.md](admin.md)）的「扩展」页（`web/src/admin/pages/Plugins.tsx`）管安装这一半，设置和密钥仍在 App 里填：
+hub 管理界面（[admin.md](admin.md)）的「扩展」页（`web/src/admin/pages/Extensions.tsx`）管安装这一半，设置和密钥仍在 App 里填：
 
 - 列表：名字、版本、来源（内置 / hub.json / 已安装）、状态（和 App 同一套说法）、描述、「还缺：…」和错误；展开看「现在」（是否在跑）、「它可以」、提供什么、上一个版本、安装自、发布者、主页、警告。
   已安装的有「升级」「回滚」（有上一个版本、不是远端时）「卸载」；除了 hub.json 来的都有开关。
@@ -887,7 +887,7 @@ hub 管理界面（[admin.md](admin.md)）的「扩展」页（`web/src/admin/pa
 - 升级：同样先预览（版本 `旧 → 新`）；权限变多时顶部红色提示「新版本要的权限变多了」，单列「新增」几项，按钮变成红色的「同意新权限并升级」，不同意就不升；没变多是普通的「升级」。
 - 回滚、卸载都要在对话框里确认；卸载可以勾「保留它的数据」（`~/.persona/extensions/data/<id>/`）。
 - 扩展市场（#1330）：列表下面登记市场（添加、删除、重新读取、换 token）和市场的目录（搜索、按市场筛选），从目录安装 / 升级先预览、同意后走上面的安装 / 升级，见 [admin.md](admin.md)「扩展」。
-- 截图：`cd web && npx vite`，`/admin/plugins?mock=app&theme=dark`，`?dialog=install|upload|preview|upgrade|uninstall|details|market|market-add`（`web/src/admin/mock.ts`）。
+- 截图：`cd web && npx vite`，`/admin/extensions?mock=app&theme=dark`，`?dialog=install|upload|preview|upgrade|uninstall|details|market|market-add`（`web/src/admin/mock.ts`）。
 
 ![管理界面的扩展页（浅色）：列表、展开的「它可以」和关于](screenshots/admin-plugins-light.png)
 

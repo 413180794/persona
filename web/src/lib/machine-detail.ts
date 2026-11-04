@@ -60,7 +60,7 @@ export interface DetailMetrics {
 }
 
 /** What the machine list carries beyond types.ts's Machine (the detail page reads these too). */
-/** computer: only while the hub's plugin cua is on, and only for a Mac (docs/computer-use.md). */
+/** computer: only while the hub's extension cua is on, and only for a Mac (docs/computer-use.md). */
 export type DetailMachine = Machine & { ssh_host?: string; node_version?: string; system?: SystemInfo; computer?: MachineComputer };
 
 // ── ranges ──

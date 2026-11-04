@@ -1,4 +1,4 @@
-// The hub's connectors (docs/connectors.md, docs/protocol.md「连接器 API」): GitHub, Telegram, a plugin's, as
+// The hub's connectors (docs/connectors.md, docs/protocol.md「连接器 API」): GitHub, Telegram, an extension's, as
 // GET /api/v1/connectors lists them, their sign-in a step at a time, their switches, and the threads their inbox items
 // open as (GET /api/v1/connectors/{id}/thread). Mail and Feishu keep their own pages (settings/Connectors.tsx).
 // iOS: ConnectorsViews.swift, ConnectorSignInViews.swift, GitHubAuthViews.swift, GitHubInboxSettings.swift,
@@ -195,7 +195,7 @@ export function otherConnectors(list: HubConnector[], larkGroup = true): HubConn
 export type BrandId = "github" | "telegram" | "lark";
 
 /** What this client knows about one connector by id. Everything is optional: a connector that is not in the table (any
- * plugin's) gets the generic icon and the generic wording, built from its own `name`. Whether a plugin may bring its own
+ * plugin's) gets the generic icon and the generic wording, built from its own `name`. Whether an extension may bring its own
  * wording in its manifest is a protocol question, not settled here. */
 interface ConnectorProfile {
   brand?: BrandId;
@@ -209,7 +209,7 @@ interface ConnectorProfile {
   logoutEndsRemoteSession?: boolean;
 }
 
-// A Map, not an object: a plugin's id may be `constructor` or `valueOf`.
+// A Map, not an object: an extension's id may be `constructor` or `valueOf`.
 const PROFILES = new Map<string, ConnectorProfile>([
   ["github", { brand: "github" }],
   ["lark", { brand: "lark" }],
@@ -250,7 +250,7 @@ export function signInFooter(c: HubConnector): string {
 }
 
 /** The sign-out confirmation. Only a connector known to end the remote session says so; every other one (GitHub's device
- * token, a plugin's key such as wechat-connector's) only has the hub forget its copy, so it says the authorization stays. */
+ * token, an extension's key such as wechat-connector's) only has the hub forget its copy, so it says the authorization stays. */
 export function logoutMessage(c: HubConnector): string {
   if (PROFILES.get(c.id)?.logoutEndsRemoteSession) return `hub 上存的 API 凭据和登录状态都会删掉，${c.name} 那边这个设备会话也会结束。再用要重新登录。`;
   return "hub 上存的凭据和登录状态会删掉，再用要重新登录。对方服务里的授权不会自动撤销，需要的话到那边撤销。";

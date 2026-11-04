@@ -1,7 +1,7 @@
 // 机器详情 (/machines/<id>, docs/machines.md「App」, iOS MachineDetailView): one page, the most used on top — how the
 // computer is (online, system, which hub when there are several), its agents by herdr space (a row opens the chat),
 // its values now, CPU / memory / network / load over 1, 6 or 24 hours (hover a chart to read a moment, all follow) and
-// each core now (Linux), the system, the launchers. A Mac the hub's plugin cua is on for gets 操控电脑 after its agents. The metrics refresh only while the page is visible.
+// each core now (Linux), the system, the launchers. A Mac the hub's extension cua is on for gets 操控电脑 after its agents. The metrics refresh only while the page is visible.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, enc, errorText, isAbort } from "../../lib/api";
 import { ago, sessionPreview, sessionTitle, stateOf } from "../../lib/format";
@@ -42,7 +42,7 @@ import { MetricChart, type ChartSeries } from "./MetricChart";
 import { MachineDeploy } from "./MachineDeploy";
 import { BrowserLogins } from "./BrowserLogins";
 import { ComputerSection } from "./ComputerSection";
-import { MachinePluginSections } from "../plugins/PluginSlots";
+import { MachineExtensionSections } from "../extensions/ExtensionSlots";
 
 interface MachineLauncher {
   name: string;
@@ -339,8 +339,8 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
         </div>
       </section>
 
-      {/* the plugins' sections (docs/plugins.md「UI 插槽」 machine_section), after the machine's own */}
-      <MachinePluginSections mid={mid} heading={(title, right) => <Heading title={title} right={right} />} />
+      {/* the extensions' sections (docs/extensions.md「UI 插槽」 machine_section), after the machine's own */}
+      <MachineExtensionSections mid={mid} heading={(title, right) => <Heading title={title} right={right} />} />
     </Page>
   );
 }

@@ -1,4 +1,4 @@
-// Pieces the two step-by-step sign-ins share (设置 › 连接器's login card in HubConnector.tsx, 设置 › 插件 › 渠道's
+// Pieces the two step-by-step sign-ins share (设置 › 连接器's login card in HubConnector.tsx, 设置 › 扩展 › 渠道's
 // binding in Channels.tsx; docs/connectors.md「登录」): the QR code drawn from the hub's modules, saving it as a picture,
 // asking a step again every interval until it is scanned / entered, and the note for a step this page cannot draw.
 import { useEffect } from "react";

@@ -10,7 +10,7 @@ import { navigate, pathOf, usePage } from "./router";
 import { refreshMesh, share, useShared } from "./store";
 import type { Overview } from "./types";
 import { Devices } from "./pages/Devices";
-import { Plugins } from "./pages/Plugins";
+import { Extensions } from "./pages/Extensions";
 import { Machines } from "./pages/Machines";
 import { Network } from "./pages/Network";
 import { OverviewPage } from "./pages/Overview";
@@ -98,7 +98,7 @@ export function Shell({ hubName, onLogout }: { hubName: string; onLogout: () => 
             {page === "machines" && <Machines />}
             {page === "peers" && <Peers />}
             {page === "devices" && <Devices />}
-            {page === "plugins" && <Plugins />}
+            {page === "extensions" && <Extensions />}
             {page === "network" && <Network />}
           </div>
         </div>

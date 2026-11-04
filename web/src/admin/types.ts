@@ -229,7 +229,7 @@ export interface PeerProbe {
   version?: string;
 }
 
-// ── plugins (docs/plugins.md「hub 的接口」, docs/admin.md「插件」) ──
+// ── extensions (docs/extensions.md「hub 的接口」, docs/admin.md「扩展」) ──
 
 export interface PermissionLine {
   key: string; // runs_code | network | hub_api | launcher_keys | secrets
@@ -237,7 +237,7 @@ export interface PermissionLine {
   detail?: string;
 }
 
-export interface AdminPlugin {
+export interface AdminExtension {
   id: string;
   name: string;
   kind: string;
@@ -259,13 +259,13 @@ export interface AdminPlugin {
   permissions: PermissionLine[];
 }
 
-export interface AdminPlugins {
-  plugins: AdminPlugin[];
+export interface AdminExtensions {
+  extensions: AdminExtension[];
   can_install: boolean;
   upload_most: number;
 }
 
-export interface PluginPreview {
+export interface ExtensionPreview {
   preview_id: string;
   manifest: { id: string; name: string; version: string; description?: string; publisher?: string; homepage?: string; contributes?: Record<string, unknown[]> };
   permissions: PermissionLine[];
@@ -276,6 +276,6 @@ export interface PluginPreview {
   from?: string;
   more_permissions?: boolean;
   added_permissions?: PermissionLine[];
-  /** The market it comes from, when previewed from one (docs/plugins.md「插件市场」). */
+  /** The market it comes from, when previewed from one (docs/extensions.md「扩展市场」). */
   market?: string;
 }

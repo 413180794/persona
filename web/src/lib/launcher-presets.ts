@@ -1,5 +1,5 @@
-// 设置 › 模型 › 新增供应商 › 从插件添加 (docs/plugins.md「模型供应商」, iOS LauncherPresetModel): the model providers the
-// hub's plugins offer (GET /api/v1/launchers/presets). A launcher added from one sends only its name, its key, the preset
+// 设置 › 模型 › 新增供应商 › 从扩展添加 (docs/extensions.md「模型供应商」, iOS LauncherPresetModel): the model providers the
+// hub's extensions offer (GET /api/v1/launchers/presets). A launcher added from one sends only its name, its key, the preset
 // and maybe another of the provider's models; the hub fills in the address, the kind and the rest.
 import { api, ApiError } from "./api";
 
@@ -23,7 +23,7 @@ export interface LauncherPreset {
   models_error?: string;
 }
 
-/** The plugins' providers; none from a hub without the plugin base (404). */
+/** The extensions' providers; none from a hub without the extension base (404). */
 export async function loadPresets(): Promise<LauncherPreset[]> {
   try {
     return (await api<{ presets?: LauncherPreset[] }>("/launchers/presets")).presets ?? [];
