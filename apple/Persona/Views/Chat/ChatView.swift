@@ -2526,8 +2526,8 @@ struct Composer: View, Equatable {
     }
 
     /// The model button's title; with nothing to show or pick, no button.
-    private var modesTitle: String? {
-        SessionModesMenu.title(model.session(key), setsModes: setsModes) ?? (setsModes || canPickModel ? "模型" : nil)
+    private var modesTitle: SessionModes.ComposerTitle? {
+        SessionModesMenu.title(model.session(key), setsModes: setsModes) ?? (setsModes || canPickModel ? .init(model: "模型") : nil)
     }
 
     /// The @ menu: files this chat's tools touched, then other agents' sessions.
@@ -2578,7 +2578,6 @@ struct Composer: View, Equatable {
                                  hasAttachments: hasAttachments,
                                  stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
                                  modesTitle: modesTitle,
-                                 modesWarn: model.session(key)?.permissionMode == "bypassPermissions",
                                  quotes: contexts,
                                  send: { Task { await sendText(text) } }) {
                     Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }

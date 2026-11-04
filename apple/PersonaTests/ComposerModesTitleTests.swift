@@ -18,9 +18,11 @@ struct ComposerModesTitleTests {
     }
 
     @Test func titles() {
-        #expect(SessionModes.composerTitle(model: "Opus 5.5", effort: "高") == "Opus 5.5 · 高")
-        #expect(SessionModes.composerTitle(model: "gpt-5.5", effort: nil) == "gpt-5.5")
-        #expect(SessionModes.composerTitle(model: nil, effort: "很高") == "思考很高")
+        #expect(SessionModes.composerTitle(model: "Opus 5.5", effort: "高") == .init(model: "Opus 5.5", effort: "高"))
+        #expect(SessionModes.composerTitle(model: "Opus 5.5", effort: "高")?.spoken == "Opus 5.5 高") // no 「·」 (#1117)
+        #expect(SessionModes.composerTitle(model: "gpt-5.5", effort: nil) == .init(model: "gpt-5.5"))
+        #expect(SessionModes.composerTitle(model: "gpt-5.5", effort: nil)?.spoken == "gpt-5.5")
+        #expect(SessionModes.composerTitle(model: nil, effort: "很高") == .init(model: "思考", effort: "很高"))
         #expect(SessionModes.composerTitle(model: nil, effort: nil) == nil)
     }
 }

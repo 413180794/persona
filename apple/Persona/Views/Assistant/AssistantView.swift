@@ -568,7 +568,6 @@ struct StarterComposer: View {
                 ShellComposerBar(placeholder: "问 \(model.persona.name)", text: $text, selection: $selection, focused: $focused,
                                  canSend: canSend, hasAttachments: !images.isEmpty || !videos.items.isEmpty || !recordingContexts.isEmpty,
                                  modesTitle: StarterModesMenu.title(modes: shell, launchers: launchers, model: model),
-                                 modesWarn: shell.mode == "bypassPermissions",
                                  quotes: $recordingContexts, send: submit) {
                     attachments
                 } modes: {
@@ -849,7 +848,7 @@ struct StarterModesMenu: View {
     var launchers: [Launcher]
 
     /// The button's title: the launcher's model (its name when it names none) and the effort picked.
-    @MainActor static func title(modes: StarterComposer.ShellModes, launchers: [Launcher], model: AppModel) -> String? {
+    @MainActor static func title(modes: StarterComposer.ShellModes, launchers: [Launcher], model: AppModel) -> SessionModes.ComposerTitle? {
         let name = modes.launcher ?? model.assistantConfig?.launcher
         let launcher = launchers.first { $0.name == name }
         return SessionModes.composerTitle(model: SessionModes.modelName(launcher?.model) ?? launcher?.name ?? name,

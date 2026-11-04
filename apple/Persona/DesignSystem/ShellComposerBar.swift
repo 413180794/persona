@@ -16,10 +16,9 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     var hasAttachments = false
     /// Set while the agent works: a stop button takes send's place while nothing is typed.
     var stop: (() -> Void)?
-    /// What the model button says, ChatGPT's compact "Opus 5.5 · 高" (`SessionModes.composerTitle`); nil: no button.
-    var modesTitle: String?
-    /// The permission mode warns (全部放行): the button is red, with the shield.
-    var modesWarn = false
+    /// What the model button says, ChatGPT's "6.1 Sol 中": the model, then the effort (`SessionModes.composerTitle`);
+    /// nil: no button. Its menu says what needs saying about the permission mode (全部放行), not the button (#1117).
+    var modesTitle: SessionModes.ComposerTitle?
     /// What goes with the message, quoted at the top of the card (#986); quotes keep it open (`hasAttachments`).
     var quotes: Binding<[ContextRef]>? = nil
     var send: () -> Void
@@ -80,7 +79,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                             .menuStyle(.button)
                             .buttonStyle(.plain)
                             .accessibilityLabel("模型和思考强度")
-                            .accessibilityValue(modesWarn ? "\(modesTitle)，全部放行" : modesTitle)
+                            .accessibilityValue(modesTitle.spoken)
                             .accessibilityIdentifier("shell-composer-modes")
                     }
                     mic
@@ -123,19 +122,25 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
         .accessibilityIdentifier("shell-composer-add")
     }
 
-    /// The model button's face: the gauge (the shield while everything is allowed), then the model and the effort, one
-    /// line, cut at the end when the row is short.
-    private func modesLabel(_ title: String) -> some View {
+    /// The model button's face, ChatGPT's: the model in the text's ink, a little bold, then the effort in the quieter
+    /// ink, a space apart, on one line; a long model name is cut at its end, the effort stays. Its trailing room is the
+    /// round button's, so the gap to the mic matches the mic's to send / stop (#1117).
+    private func modesLabel(_ title: SessionModes.ComposerTitle) -> some View {
         HStack(spacing: Theme.Space.xs) {
-            Image(systemName: modesWarn ? Theme.Icon.allowEverything : Theme.Icon.effort)
-                .font(Theme.Font.labelStrong)
-            Text(title)
-                .font(Theme.Font.secondaryMedium)
-                .lineLimit(1)
+            Text(title.model)
+                .font(Theme.Font.secondaryStrong)
+                .foregroundStyle(AppStyle.current.usesBeautifulUI ? theme.colors.ink : Color.primary)
                 .truncationMode(.tail)
+            if let effort = title.effort {
+                Text(effort)
+                    .font(Theme.Font.secondary)
+                    .foregroundStyle(AppStyle.current.usesBeautifulUI ? theme.colors.ink2 : Color.secondary)
+                    .fixedSize()
+            }
         }
-        .foregroundStyle(modesWarn ? Theme.danger : ink)
-        .padding(.horizontal, Theme.Space.s)
+        .lineLimit(1)
+        .padding(.leading, Theme.Space.s)
+        .padding(.trailing, Theme.Space.xs)
         .scaledFrame(minHeight: Theme.Size.tapTarget)
         .contentShape(.capsule)
     }

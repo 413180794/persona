@@ -43,13 +43,20 @@ nonisolated enum SessionModes {
     static func modeLabel(_ id: String?) -> String? { id.map { mode($0)?.title ?? $0 } }
     static func effortLabel(_ id: String?) -> String? { id.map { effort($0)?.title ?? $0 } }
 
-    /// The shell composer's model button (#1091), ChatGPT's "6.1 Sol 中": "Opus 5.5 · 高"; the model alone, or
-    /// "思考高" with no model known; nil with neither.
-    static func composerTitle(model: String?, effort: String?) -> String? {
+    /// The shell composer's model button's two words (#1091, #1117), ChatGPT's "6.1 Sol 中": the model, drawn in the text's
+    /// ink, and the effort, in the quieter ink after it.
+    struct ComposerTitle: Equatable, Sendable {
+        var model: String
+        var effort: String?
+        /// For VoiceOver and the UI tests: "Opus 5.5 高".
+        var spoken: String { effort.map { "\(model) \($0)" } ?? model }
+    }
+
+    /// "Opus 5.5" + "高"; the model alone; "思考" + "高" with no model known; nil with neither.
+    static func composerTitle(model: String?, effort: String?) -> ComposerTitle? {
         switch (model, effort) {
-        case let (m?, e?): "\(m) · \(e)"
-        case let (m?, nil): m
-        case let (nil, e?): "思考\(e)"
+        case let (m?, e): ComposerTitle(model: m, effort: e)
+        case let (nil, e?): ComposerTitle(model: "思考", effort: e)
         case (nil, nil): nil
         }
     }
@@ -147,7 +154,7 @@ struct SessionModesMenu: View {
     var setsModes = true
 
     /// The button's title for this conversation.
-    static func title(_ session: Session?, setsModes: Bool) -> String? {
+    static func title(_ session: Session?, setsModes: Bool) -> SessionModes.ComposerTitle? {
         SessionModes.composerTitle(model: SessionModes.modelName(session?.model),
                                    effort: setsModes ? SessionModes.effortLabel(session?.effort) : nil)
     }
@@ -155,6 +162,11 @@ struct SessionModesMenu: View {
     var body: some View {
         let mode = session?.permissionMode
         let effort = session?.effort
+        // 全部放行 is said here, not on the composer's button (#1117). First: a menu opening upward from the button puts
+        // its first item next to it, where a menu too tall for the screen is never cut off.
+        if setsModes, mode == "bypassPermissions" {
+            Section { BypassWarning() }
+        }
         Section("模型") {
             if picksModel {
                 Picker("模型", selection: Binding(get: { PromptItems.claudeModelID(session?.model) }, set: { id in
@@ -193,6 +205,23 @@ struct SessionModesMenu: View {
     private func change(mode: String? = nil, effort: String? = nil) {
         guard mode != session?.permissionMode || effort != session?.effort else { return }
         Task { await model.setModes(key, permissionMode: mode, effort: effort) }
+    }
+}
+
+/// The model menu's warning while everything is allowed (全部放行): red (a destructive item: its words and its shield),
+/// as the composer's button used to be. Picking it does nothing; the permission mode is chosen a few rows up.
+struct BypassWarning: View {
+    var body: some View {
+        Button(role: .destructive) {} label: {
+            Label {
+                Text("全部放行")
+                Text("改文件、跑命令都不问你")
+            } icon: {
+                // A menu draws its images in the accent unless they carry their own colors.
+                Image(systemName: Theme.Icon.allowEverything).symbolRenderingMode(.palette).foregroundStyle(Theme.danger)
+            }
+        }
+        .tint(Theme.danger)
     }
 }
 
