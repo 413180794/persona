@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/plugin"
+	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -15,10 +15,10 @@ import (
 func sourcesHub(t *testing.T) *Hub {
 	t.Helper()
 	h := newTestHub(t)
-	reg := plugin.NewRegistry(t.TempDir(), nil, nil, 0)
+	reg := extension.NewRegistry(t.TempDir(), nil, nil, 0)
 	add := func(id, name, schema string) {
-		m := &plugin.Manifest{ManifestVersion: plugin.ManifestVersion, ID: id, Name: name, Version: "1.0.0",
-			Engines: plugin.Engines{PluginProtocol: plugin.Protocol}, Configuration: json.RawMessage(schema)}
+		m := &extension.Manifest{ManifestVersion: extension.ManifestVersion, ID: id, Name: name, Version: "1.0.0",
+			Engines: extension.Engines{ExtensionProtocol: extension.Protocol}, Configuration: json.RawMessage(schema)}
 		if err := reg.AddBuiltin(m, "/opt/example", true); err != nil {
 			t.Fatal(err)
 		}
@@ -29,8 +29,8 @@ func sourcesHub(t *testing.T) *Hub {
 	if err := reg.Load(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	h.plugins = newPlugins(t.TempDir(), nil, h.logf)
-	h.plugins.reg = reg
+	h.extensions = newExtensions(t.TempDir(), nil, h.logf)
+	h.extensions.reg = reg
 	if err := reg.SetConfig(context.Background(), "example-chat", json.RawMessage(`{"account":2}`), "test"); err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestSelfSettingsSourceTriageRules(t *testing.T) {
 	}
 	config := func() map[string]any {
 		var c map[string]any
-		_ = json.Unmarshal(h.plugins.reg.Get("example-chat").Record.Config, &c)
+		_ = json.Unmarshal(h.extensions.reg.Get("example-chat").Record.Config, &c)
 		return c
 	}
 

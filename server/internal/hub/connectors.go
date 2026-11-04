@@ -16,9 +16,9 @@ import (
 	"github.com/nwverse/persona/server/internal/connector/github"
 	"github.com/nwverse/persona/server/internal/connector/proc"
 	"github.com/nwverse/persona/server/internal/connector/telegram/spec"
+	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/extension/host"
 	"github.com/nwverse/persona/server/internal/kb"
-	"github.com/nwverse/persona/server/internal/plugin"
-	"github.com/nwverse/persona/server/internal/plugin/host"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -518,7 +518,7 @@ func (s connectorSecrets) Delete(ctx context.Context) error {
 // startConnectors registers the connectors, applies the user's switches and runs them.
 func (h *Hub) startConnectors(ctx context.Context) {
 	h.registerConnectors()
-	h.attachPlugins(ctx) // the plugins' connectors (Telegram's), after the hub's own: those ids are taken
+	h.attachExtensions(ctx) // the plugins' connectors (Telegram's), after the hub's own: those ids are taken
 	h.restoreConnectorSwitches(ctx)
 	h.restoreGitHubSource(ctx)
 	h.githubMutes(ctx)
@@ -583,22 +583,22 @@ func siblingProgram(name string) string {
 }
 
 // telegramPluginID is the built-in plugin the Telegram connector runs in.
-const telegramPluginID = "telegram"
+const telegramExtensionID = "telegram"
 
 // telegramManifest is the Telegram connector as a built-in plugin (docs/plan-telegram.md, docs/plugins.md): the
 // program at path, contributing the connector with what it declares (spec), known before it ever runs: switched
 // off, it still lists its capabilities and signs in and out. It runs while the connector is on.
-func telegramManifest(h *Hub, path string) *plugin.Manifest {
+func telegramManifest(h *Hub, path string) *extension.Manifest {
 	m := spec.Manifest()
-	item := plugin.ConnectorItem{ID: spec.ID, Name: spec.Name, Hosts: m.Hosts, AgentTools: m.AgentTools, Unlisted: m.Unlisted,
+	item := extension.ConnectorItem{ID: spec.ID, Name: spec.Name, Hosts: m.Hosts, AgentTools: m.AgentTools, Unlisted: m.Unlisted,
 		ConfirmAlways: m.ConfirmAlways, PollSeconds: int(m.Poll / time.Second), Kinds: m.Kinds}
 	for _, c := range m.Capabilities {
 		item.Capabilities = append(item.Capabilities, string(c))
 	}
-	items, _ := json.Marshal([]plugin.ConnectorItem{item})
-	return &plugin.Manifest{ManifestVersion: plugin.ManifestVersion, ID: telegramPluginID, Name: spec.Name, Version: h.version,
-		Description: "Telegram 连接器（personad 自带）", Engines: plugin.Engines{PluginProtocol: plugin.Protocol},
-		Runtime: &plugin.Runtime{Command: plugin.Command{Path: filepath.Base(path)}}, Contributes: map[string]json.RawMessage{"connectors": items}}
+	items, _ := json.Marshal([]extension.ConnectorItem{item})
+	return &extension.Manifest{ManifestVersion: extension.ManifestVersion, ID: telegramExtensionID, Name: spec.Name, Version: h.version,
+		Description: "Telegram 连接器（personad 自带）", Engines: extension.Engines{ExtensionProtocol: extension.Protocol},
+		Runtime: &extension.Runtime{Command: extension.Command{Path: filepath.Base(path)}}, Contributes: map[string]json.RawMessage{"connectors": items}}
 }
 
 // sameBuild holds a built-in plugin's program (named name, for people) to the hub's build: the two come from one
@@ -626,13 +626,13 @@ func sameBuild(h *Hub, name, path string) func(context.Context) error {
 // telegramConnector is the program at path as the hub's connector, run as the built-in plugin: what the plugin
 // registry does for it, for one that is not registered (tests).
 func (h *Hub) telegramConnector(path string) *proc.Conn {
-	ps := newPlugins(h.dataDirOrTemp(), nil, h.logf)
+	ps := newExtensions(h.dataDirOrTemp(), nil, h.logf)
 	ps.h, ps.ctx = h, context.Background()
 	if err := ps.reg.AddBuiltin(telegramManifest(h, path), filepath.Dir(path), true); err != nil {
 		h.logf("telegram: %v", err)
 	}
-	p := ps.reg.Get(telegramPluginID)
-	hp := &hubPlugin{id: telegramPluginID}
+	p := ps.reg.Get(telegramExtensionID)
+	hp := &hubExtension{id: telegramExtensionID}
 	s, err := ps.spec(context.Background(), p, hp)
 	if err != nil {
 		h.logf("telegram: %v", err)

@@ -22,8 +22,8 @@ import (
 
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
-	"github.com/nwverse/persona/server/internal/plugin"
-	progconf "github.com/nwverse/persona/server/internal/plugin/conformance"
+	"github.com/nwverse/persona/server/internal/extension"
+	progconf "github.com/nwverse/persona/server/internal/extension/conformance"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -42,9 +42,9 @@ func fixture(t testing.TB, name string) json.RawMessage {
 	return raw
 }
 
-func fixtureManifest(t testing.TB) *plugin.Manifest {
+func fixtureManifest(t testing.TB) *extension.Manifest {
 	t.Helper()
-	m, err := plugin.Parse(fixture(t, "persona-plugin.json"))
+	m, err := extension.Parse(fixture(t, "persona-plugin.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func Testwechat-connectorWireFixtures(t *testing.T) {
 		t.Fatal(err)
 	}
 	checks := map[string]func(json.RawMessage) error{
-		"persona-plugin.json": func(raw json.RawMessage) error { _, err := plugin.Parse(raw); return err },
+		"persona-plugin.json": func(raw json.RawMessage) error { _, err := extension.Parse(raw); return err },
 		"initialize.json":     func(raw json.RawMessage) error { return checkInitialize(m, items, raw) },
 		"status.json":         ignore(checkStatus),
 		"tools.list.json": ignore(func(raw json.RawMessage) ([]proto.Tool, error) {
@@ -137,7 +137,7 @@ func (f *fixtureProgram) answer(t testing.TB, name string) json.RawMessage {
 }
 
 func (f *fixtureProgram) secrets(ctx context.Context, method string, data []byte) {
-	params, _ := plugin.Targeted(serve.SecretData{Data: data}, "wechat-connector")
+	params, _ := extension.Targeted(serve.SecretData{Data: data}, "wechat-connector")
 	_ = f.peerCaller.Call(ctx, serve.InPlugin(method), params, nil)
 }
 
@@ -150,7 +150,7 @@ func (f *fixtureProgram) handle(t testing.TB) rpc.Handler {
 		}
 		_ = json.Unmarshal(params, &args)
 		switch method {
-		case plugin.MInitialize:
+		case extension.MInitialize:
 			return f.answer(t, "initialize.json"), nil
 		case "connector.status":
 			f.announced.Do(func() { _ = f.peerCaller.Notify("connector.changed", f.answer(t, "changed.json")) })
@@ -238,7 +238,7 @@ func (f *fixtureProgram) check(t *testing.T, opts ...ProgramOption) string {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		CheckProgram(rec, fixtureManifest(t), run, plugin.InitializeParams{},
+		CheckProgram(rec, fixtureManifest(t), run, extension.InitializeParams{},
 			append([]ProgramOption{WithLogin(map[string]string{"base_url": "https://wechat-connector.example.com", "app_key": goodKey}), RequireData()}, opts...)...)
 	}()
 	select {
@@ -299,7 +299,7 @@ func TestCheckProgramReportsARefusedSignIn(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		CheckProgram(rec, fixtureManifest(t), run, plugin.InitializeParams{}, WithLogin(map[string]string{"base_url": "https://wechat-connector.example.com", "app_key": "wcpat_wrong"}))
+		CheckProgram(rec, fixtureManifest(t), run, extension.InitializeParams{}, WithLogin(map[string]string{"base_url": "https://wechat-connector.example.com", "app_key": "wcpat_wrong"}))
 	}()
 	<-done
 	if got := strings.Join(rec.msgs, "\n"); !strings.Contains(got, "cannot go on") {
@@ -326,18 +326,18 @@ func Testwechat-connectorProgramLive(t *testing.T) {
 	login := startFixtureServer(t, server)
 	// The package is what the program sits in: persona-plugin.json next to bin/.
 	pkg := filepath.Dir(filepath.Dir(program))
-	raw, err := os.ReadFile(filepath.Join(pkg, plugin.ManifestFile))
+	raw, err := os.ReadFile(filepath.Join(pkg, extension.ManifestFile))
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, err := plugin.Parse(raw)
+	m, err := extension.Parse(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	start := func() (progconf.Run, plugin.InitializeParams) {
+	start := func() (progconf.Run, extension.InitializeParams) {
 		data := t.TempDir()
 		t.Setenv("PERSONA_PLUGIN_DATA", data) // what the hub gives a plugin: its own directory, empty at first
-		return progconf.Program(t, program), plugin.InitializeParams{Plugin: plugin.PluginInfo{Dir: pkg, DataDir: data}}
+		return progconf.Program(t, program), extension.InitializeParams{Extension: extension.ExtensionInfo{Dir: pkg, DataDir: data}}
 	}
 
 	run, init := start()

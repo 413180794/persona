@@ -139,8 +139,8 @@ func (h *Hub) modelPurposeDef(ctx context.Context, id string) (ModelPurpose, err
 			}
 		}
 	}
-	if strings.HasPrefix(id, "plugin.") && h.plugins != nil {
-		for _, p := range h.plugins.list() {
+	if strings.HasPrefix(id, "plugin.") && h.extensions != nil {
+		for _, p := range h.extensions.list() {
 			if id == "plugin."+p.ID && p.Kind == "voice" {
 				return ModelPurpose{ID: id, Name: p.Name, Group: "插件", Kind: "plugin"}, nil
 			}
@@ -208,10 +208,10 @@ func (h *Hub) modelProviders(ctx context.Context) []ModelProvider {
 	if !slices.ContainsFunc(out, func(p ModelProvider) bool { return p.ID == "launcher.claude" }) {
 		out = append(out, ModelProvider{ID: "launcher.claude", Name: "Claude Code 默认", Kind: "launcher"})
 	}
-	if h.plugins != nil {
-		for _, p := range h.plugins.list() {
+	if h.extensions != nil {
+		for _, p := range h.extensions.list() {
 			if p.Kind == "voice" {
-				models, err := h.pluginModelChoices(ctx, "plugin."+p.ID)
+				models, err := h.extensionModelChoices(ctx, "plugin."+p.ID)
 				provider := ModelProvider{ID: "plugin." + p.ID, Name: p.Name, Kind: "plugin", Model: models.Default, Models: models.Models}
 				if err != nil {
 					provider.Status = err.Error()
@@ -594,7 +594,7 @@ func (h *Hub) validateModel(ctx context.Context, p ModelPurpose, b ModelBinding,
 			return errors.New("插件不支持思考等级")
 		}
 		if b.Model != "" {
-			models, err := h.pluginModelChoices(ctx, p.ID)
+			models, err := h.extensionModelChoices(ctx, p.ID)
 			if err != nil {
 				return err
 			}

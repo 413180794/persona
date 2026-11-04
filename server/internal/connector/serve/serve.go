@@ -25,8 +25,8 @@ import (
 
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/kb"
-	"github.com/nwverse/persona/server/internal/plugin"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -354,7 +354,7 @@ func (s *server) channelCall(ctx context.Context, method string, params json.Raw
 		chid = c.ID()
 	}
 	if want := contributionOf(params); want != "" && want != chid {
-		return nil, &rpc.Error{Code: plugin.CodeNoContribution, Message: "no channel " + want}
+		return nil, &rpc.Error{Code: extension.CodeNoContribution, Message: "no channel " + want}
 	}
 	t, ok := c.(channel.Transport)
 	if !ok {
@@ -433,7 +433,7 @@ func (r *sentRefs) do(ref string, send func() (channel.SendResult, error)) (chan
 }
 
 func (s *server) handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
-	if method == plugin.MInitialize {
+	if method == extension.MInitialize {
 		return s.initialize(params)
 	}
 	if rest, ok := strings.CutPrefix(method, channel.Namespace+"."); ok {
@@ -445,14 +445,14 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 		s.mu.Unlock()
 		if c != nil {
 			if want := contributionOf(params); want != "" && want != c.ID() {
-				return nil, &rpc.Error{Code: plugin.CodeNoContribution, Message: "no connector " + want}
+				return nil, &rpc.Error{Code: extension.CodeNoContribution, Message: "no connector " + want}
 			}
 		}
 		if rest == MInit {
 			return nil, &rpc.Error{Code: CodeUnknownMethod, Message: "unknown method " + method}
 		}
 		method = rest
-	} else if method == plugin.MPing {
+	} else if method == extension.MPing {
 		s.mu.Lock()
 		c := s.c
 		s.mu.Unlock()
@@ -666,7 +666,7 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 
 // contributionOf is the contribution a namespaced call names ("" when it names none).
 func contributionOf(params json.RawMessage) string {
-	var t plugin.Target
+	var t extension.Target
 	_ = json.Unmarshal(params, &t)
 	return t.Contribution
 }
@@ -675,12 +675,12 @@ func contributionOf(params json.RawMessage) string {
 // plugin the hub started (a first-party program is the hub's build: it takes the id and version it is given) and
 // contributes the connector.
 func (s *server) initialize(params json.RawMessage) (any, error) {
-	var p plugin.InitializeParams
+	var p extension.InitializeParams
 	if err := json.Unmarshal(params, &p); err != nil {
 		return nil, err
 	}
-	if p.Protocol != plugin.Protocol {
-		return nil, &rpc.Error{Code: plugin.CodeWrongProtocol, Message: fmt.Sprintf("plugin protocol %d, not %d", p.Protocol, plugin.Protocol)}
+	if p.Protocol != extension.Protocol {
+		return nil, &rpc.Error{Code: extension.CodeWrongProtocol, Message: fmt.Sprintf("plugin protocol %d, not %d", p.Protocol, extension.Protocol)}
 	}
 	s.mu.Lock()
 	if s.c == nil {
@@ -693,18 +693,18 @@ func (s *server) initialize(params json.RawMessage) (any, error) {
 		}
 	}
 	s.mu.Unlock()
-	m, err := s.init(Init{Config: p.Config, Declared: p.Secrets, DataDir: p.Plugin.DataDir, Channel: channelHub{s}})
+	m, err := s.init(Init{Config: p.Config, Declared: p.Secrets, DataDir: p.Extension.DataDir, Channel: channelHub{s}})
 	if err != nil {
 		return nil, err
 	}
-	item, _ := json.Marshal([]plugin.ConnectorItem{ItemOf(m)})
-	return plugin.InitializeResult{Protocol: plugin.Protocol, ID: p.Plugin.ID, Version: p.Plugin.Version,
+	item, _ := json.Marshal([]extension.ConnectorItem{ItemOf(m)})
+	return extension.InitializeResult{Protocol: extension.Protocol, ID: p.Extension.ID, Version: p.Extension.Version,
 		Contributes: map[string]json.RawMessage{"connectors": item}}, nil
 }
 
 // ItemOf is a connector's manifest as a contribution to the connectors extension point.
-func ItemOf(m Manifest) plugin.ConnectorItem {
-	return plugin.ConnectorItem{ID: m.ID, Name: m.Name, Capabilities: m.Capabilities, Hosts: m.Hosts, AgentTools: m.AgentTools,
+func ItemOf(m Manifest) extension.ConnectorItem {
+	return extension.ConnectorItem{ID: m.ID, Name: m.Name, Capabilities: m.Capabilities, Hosts: m.Hosts, AgentTools: m.AgentTools,
 		Unlisted: m.Unlisted, ConfirmAlways: m.ConfirmAlways, PollSeconds: m.PollSeconds, Kinds: m.Kinds, MetaDescription: m.MetaDescription}
 }
 
@@ -867,7 +867,7 @@ func (x *secrets) call(ctx context.Context, method string, params, out any) erro
 	if p := x.s.cid.Load(); p != nil {
 		id = *p
 	}
-	p, err := plugin.Targeted(params, id)
+	p, err := extension.Targeted(params, id)
 	if err != nil {
 		return err
 	}

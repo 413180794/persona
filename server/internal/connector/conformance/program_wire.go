@@ -15,7 +15,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
-	"github.com/nwverse/persona/server/internal/plugin"
+	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -88,27 +88,27 @@ func checkKeys(v any, at string, is *issues) {
 
 // checkInitialize holds the answer to initialize to the manifest: who the program is, and the connectors it contributes
 // the way the manifest says (the hub goes by the manifest's and logs a difference).
-func checkInitialize(m *plugin.Manifest, items []plugin.ConnectorItem, raw json.RawMessage) error {
-	var res plugin.InitializeResult
+func checkInitialize(m *extension.Manifest, items []extension.ConnectorItem, raw json.RawMessage) error {
+	var res extension.InitializeResult
 	if err := decodeWire(raw, &res); err != nil {
 		return err
 	}
 	var is issues
-	if res.Protocol != plugin.Protocol || res.ID != m.ID || res.Version != m.Version {
-		is.add("answered protocol %d, id %q, version %q; the manifest says %d, %q, %q", res.Protocol, res.ID, res.Version, plugin.Protocol, m.ID, m.Version)
+	if res.Protocol != extension.Protocol || res.ID != m.ID || res.Version != m.Version {
+		is.add("answered protocol %d, id %q, version %q; the manifest says %d, %q, %q", res.Protocol, res.ID, res.Version, extension.Protocol, m.ID, m.Version)
 	}
 	var listed []json.RawMessage
 	if err := json.Unmarshal(res.Contributes["connectors"], &listed); err != nil {
 		is.add("contributes.connectors: a list of the connectors")
 	}
-	got := map[string]plugin.ConnectorItem{}
+	got := map[string]extension.ConnectorItem{}
 	for _, one := range listed {
-		id, err := plugin.Points["connectors"].Item(one)
+		id, err := extension.Points["connectors"].Item(one)
 		if err != nil {
 			is.add("contributes.connectors: %v", err)
 			continue
 		}
-		var it plugin.ConnectorItem
+		var it extension.ConnectorItem
 		_ = json.Unmarshal(one, &it)
 		got[id] = it
 	}
@@ -123,7 +123,7 @@ func checkInitialize(m *plugin.Manifest, items []plugin.ConnectorItem, raw json.
 }
 
 // sameItem says whether two contributions are the same, capabilities in any order.
-func sameItem(a, b plugin.ConnectorItem) bool {
+func sameItem(a, b extension.ConnectorItem) bool {
 	a.Capabilities, b.Capabilities = slices.Sorted(slices.Values(a.Capabilities)), slices.Sorted(slices.Values(b.Capabilities))
 	ja, _ := json.Marshal(a)
 	jb, _ := json.Marshal(b)
@@ -432,13 +432,13 @@ func checkItems(raw json.RawMessage) (serve.ItemsResult, error) {
 
 // checkChanged is the params of a changed event: from one of the plugin's connectors that declares events, with a scope
 // the hub knows (it drops the rest).
-func checkChanged(items []plugin.ConnectorItem, raw json.RawMessage) error {
+func checkChanged(items []extension.ConnectorItem, raw json.RawMessage) error {
 	var e serve.ChangedEvent
 	if err := decodeWire(raw, &e); err != nil {
 		return err
 	}
 	var is issues
-	i := slices.IndexFunc(items, func(it plugin.ConnectorItem) bool { return it.ID == e.Contribution })
+	i := slices.IndexFunc(items, func(it extension.ConnectorItem) bool { return it.ID == e.Contribution })
 	switch {
 	case i < 0:
 		is.add("contribution %q is none of the connectors", e.Contribution)

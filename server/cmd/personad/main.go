@@ -238,7 +238,7 @@ func main() {
 	case "voice":
 		err = voice.Run(ctx)
 	case "plugin":
-		err = hub.PluginCommand(ctx, os.Args[2:], os.Stdin, os.Stdout, os.Stderr)
+		err = hub.ExtensionCommand(ctx, os.Args[2:], os.Stdin, os.Stdout, os.Stderr)
 	case "sysmon":
 		n := 3
 		if len(os.Args) > 2 {

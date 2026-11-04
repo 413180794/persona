@@ -51,8 +51,8 @@
 
 ## 四、分步
 
-- [x] **1a：服务端底座**：`internal/plugin`（清单、schema 子集、权限、版本范围、包的暂存和解包、注册表）、`plugin/host`（进程宿主、按需激活、退避、超时、ping、HTTP、远端 socket）、
-  `plugin/serve`（程序一侧）、`plugin/conformance`；迁移 `0291`；hub 的接口和 `personad plugin`；语音（hub.json）和 Telegram（内置）迁上来；
+- [x] **1a：服务端底座**：`internal/extension`（清单、schema 子集、权限、版本范围、包的暂存和解包、注册表）、`extension/host`（进程宿主、按需激活、退避、超时、ping、HTTP、远端 socket）、
+  `extension/serve`（程序一侧）、`extension/conformance`；迁移 `0291`；hub 的接口和 `personad plugin`；语音（hub.json）和 Telegram（内置）迁上来；
   `connector/serve` 认插件开头，`connector/proc` 能经插件进程说话（`Link`）；文档 `docs/plugins.md`、`docs/connector-protocol.md`。
 - [x] **1b：App「设置 › 插件」**（iOS，Mac 共用页面）：列表、详情（权限、贡献、关于）、按 `form.fields` 画的配置表单、只写的密钥、开关；
   假 hub `MOCK_PLUGINS=1`、UI 测试和单元测试，默认 / BeautifulUI 风格 × 深浅色截图看过（`docs/plugins.md`「App：设置 › 插件」）。
@@ -66,7 +66,7 @@
 - [x] 两个额度插件已在私有插件仓库，装在用户的 hub 上实测：经 node 代发查到 `~/.zshrc` 启动器的额度，不认识的网关回「查不了」。
 - [x] 第 3 步（服务端）：lark-connector 整条飞书链路（含公司圈）迁成私有插件，hub 自己的那份已删（3c，#1520），见下面「第 3 步的方案」「第 3 步做下来」。TRAEX 留在开源仓库（已拍板）。
 - [x] 第 3 步（客户端，3d，#1530）：飞书界面按 `features` 的 `lark` / `lark_moments` 显示（网页 #1542、iOS / Mac #1575、Android #1622），「公司圈」的通用叫法，帖子标题用存档的 feed 名。
-- [x] **第 4 步（服务端，#1284）**：扩展点 `ui`（`plugin_page` / `launcher_section`，`ui.render` / `ui.action`，View 是几种固定的条目，hub 按 `plugin.CheckView` 把关；
+- [x] **第 4 步（服务端，#1284）**：扩展点 `ui`（`plugin_page` / `launcher_section`，`ui.render` / `ui.action`，View 是几种固定的条目，hub 按 `extension.CheckView` 把关；
   启动器页的一节经 `gateway.http` 用 Key 访问网关，插件看不到 Key）和 `events`（`inbox.changed`、`agent.needs_you`、`agent.finished`，只通知，订阅随权限一起同意）。
   规格在 `docs/plugins.md`「声明式 UI」「事件」。
 - [ ] 第 4 步（客户端）：iOS / Mac、Android、网页画 View（插件详情里的页面、启动器页上的一节）。
@@ -144,7 +144,7 @@ hub.json 的旧配置迁到插件：装上插件后在 设置 › 插件（或 `
   唯一的变化是退避上限从 60 秒变成 5 分钟。
 - `GET /api/v1/plugins` 的老字段不变（Android 的语音入口按 `kind == "voice"` 和 `status == "running"` 找），只多字段。
 - 语音的配置（`providers` 是对象数组）超出表单的子集，第 1 步不进注册表的配置，照旧在 hub.json；以后子集支持对象数组了再说。
-- 现有的 `server/internal/hub/plugins_test.go` 不改断言，照旧要过。
+- 现有的 `server/internal/hub/extensions_test.go` 不改断言，照旧要过。
 
 ### Telegram（连接器 v2）
 

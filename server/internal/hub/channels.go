@@ -13,8 +13,8 @@ import (
 
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/connector"
-	"github.com/nwverse/persona/server/internal/plugin"
-	"github.com/nwverse/persona/server/internal/plugin/host"
+	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/extension/host"
 )
 
 // Channels (docs/channels.md): every way of talking to Persona in one list — the apps, the Feishu bot, /agent in
@@ -97,32 +97,32 @@ func (h *Hub) channelPrefLocked(id string) *channelPrefs {
 }
 
 // pluginChannel is a channel a plugin contributes, as the registry has it now.
-type pluginChannel struct {
-	item   channel.Item
-	plugin *plugin.Plugin
+type extensionChannel struct {
+	item      channel.Item
+	extension *extension.Extension
 }
 
 // pluginChannels are the channels the installed plugins contribute (switched off ones too), by id.
-func (h *Hub) pluginChannels() []pluginChannel {
-	if h.plugins == nil {
+func (h *Hub) extensionChannels() []extensionChannel {
+	if h.extensions == nil {
 		return nil
 	}
-	var out []pluginChannel
-	for _, p := range h.plugins.reg.List() {
+	var out []extensionChannel
+	for _, p := range h.extensions.reg.List() {
 		for _, it := range p.Manifest.Channels() {
-			out = append(out, pluginChannel{item: it, plugin: p})
+			out = append(out, extensionChannel{item: it, extension: p})
 		}
 	}
 	return out
 }
 
-func (h *Hub) pluginChannel(id string) (pluginChannel, bool) {
-	for _, pc := range h.pluginChannels() {
+func (h *Hub) extensionChannel(id string) (extensionChannel, bool) {
+	for _, pc := range h.extensionChannels() {
 		if pc.item.ID == id {
 			return pc, true
 		}
 	}
-	return pluginChannel{}, false
+	return extensionChannel{}, false
 }
 
 // channelList is every channel: the apps, the hub's own, the plugins', then the markets' not installed.
@@ -131,8 +131,8 @@ func (h *Hub) channelList(ctx context.Context) []channel.View {
 	if v, ok := h.voiceChannel(ctx); ok {
 		out = append(out, v)
 	}
-	for _, pc := range h.pluginChannels() {
-		out = append(out, h.pluginChannelView(ctx, pc))
+	for _, pc := range h.extensionChannels() {
+		out = append(out, h.extensionChannelView(ctx, pc))
 	}
 	out = append(out, h.marketChannels(out)...)
 	order := func(v channel.View) int {
@@ -153,7 +153,7 @@ func (h *Hub) channelList(ctx context.Context) []channel.View {
 // channelIDs are the ids of the channels there are (what a client_msg_id's prefix is matched against).
 func (h *Hub) channelIDs() []string {
 	ids := []string{channel.Feishu}
-	for _, pc := range h.pluginChannels() {
+	for _, pc := range h.extensionChannels() {
 		ids = append(ids, pc.item.ID)
 	}
 	return ids
@@ -233,11 +233,11 @@ func (h *Hub) feishuChannel(ctx context.Context) channel.View {
 // voiceChannel is the first voice plugin, as a channel (it talks with its own model, so it does not use the hub's
 // pipeline: listed, set up on its plugin's page).
 func (h *Hub) voiceChannel(ctx context.Context) (channel.View, bool) {
-	if h.plugins == nil {
+	if h.extensions == nil {
 		return channel.View{}, false
 	}
-	for _, p := range h.plugins.reg.List() {
-		v := h.plugins.view(ctx, p)
+	for _, p := range h.extensions.reg.List() {
+		v := h.extensions.view(ctx, p)
 		if v.Kind != "voice" {
 			continue
 		}
@@ -245,7 +245,7 @@ func (h *Hub) voiceChannel(ctx context.Context) (channel.View, bool) {
 			Enabled: p.Record.Enabled, Bind: channel.BindNone, ReadOnly: true, Description: "在 App 里和 Persona 语音对话；要做的事交给主对话",
 			Capabilities: channel.Capabilities{VoiceIn: true, Format: channel.FormatPlain, Asks: channel.AsksNone}}
 		switch v.Status {
-		case pluginDisabled:
+		case extensionDisabled:
 			out.State = channel.StateDisabled
 		case host.StateRunning, host.StateStopped, host.StateStarting:
 			out.State = channel.StateConnected
@@ -257,8 +257,8 @@ func (h *Hub) voiceChannel(ctx context.Context) (channel.View, bool) {
 	return channel.View{}, false
 }
 
-func (h *Hub) pluginChannelView(ctx context.Context, pc pluginChannel) channel.View {
-	it, p := pc.item, pc.plugin
+func (h *Hub) extensionChannelView(ctx context.Context, pc extensionChannel) channel.View {
+	it, p := pc.item, pc.extension
 	caps := it.Capabilities.Normalized()
 	out := channel.View{ID: it.ID, Name: it.Name, Kind: it.Kind, Source: channel.SourcePlugin, Plugin: p.Record.ID, Installed: true,
 		Description: firstNonEmpty(it.Description, p.Manifest.Description), Capabilities: caps, Bind: channel.BindNone}
@@ -490,7 +490,7 @@ func (h *Hub) channelRoutes(api *http.ServeMux) {
 			return
 		}
 		if err := h.updateChannel(r.Context(), v, in.Enabled, in.Target, in.Features); err != nil {
-			writePluginErr(w, http.StatusBadRequest, "invalid", err)
+			writeExtensionErr(w, http.StatusBadRequest, "invalid", err)
 			return
 		}
 		d, _ := h.channelDetail(r.Context(), v.ID)
@@ -566,13 +566,13 @@ func (h *Hub) updateChannel(ctx context.Context, v channel.View, enabled *bool, 
 	if v.ID == channel.Feishu {
 		return h.updateFeishuChannel(ctx, enabled, target, features)
 	}
-	pc, ok := h.pluginChannel(v.ID)
+	pc, ok := h.extensionChannel(v.ID)
 	if !ok {
 		return fmt.Errorf("%s 不在这里设置", v.Name)
 	}
 	if enabled != nil {
-		if *enabled && !pc.plugin.Record.Enabled {
-			if err := h.plugins.reg.SetEnabled(ctx, pc.plugin.Record.ID, true, actorOf(ctx)); err != nil {
+		if *enabled && !pc.extension.Record.Enabled {
+			if err := h.extensions.reg.SetEnabled(ctx, pc.extension.Record.ID, true, actorOf(ctx)); err != nil {
 				return err
 			}
 		}
@@ -581,7 +581,7 @@ func (h *Hub) updateChannel(ctx context.Context, v channel.View, enabled *bool, 
 				return err
 			}
 		} else if !*enabled {
-			if err := h.plugins.reg.SetEnabled(ctx, pc.plugin.Record.ID, false, actorOf(ctx)); err != nil {
+			if err := h.extensions.reg.SetEnabled(ctx, pc.extension.Record.ID, false, actorOf(ctx)); err != nil {
 				return err
 			}
 		}
@@ -671,7 +671,7 @@ func (h *Hub) bindChannel(ctx context.Context, v channel.View, step string, valu
 	if v.ID == channel.Feishu {
 		return h.bindFeishu(ctx, step, values)
 	}
-	pc, ok := h.pluginChannel(v.ID)
+	pc, ok := h.extensionChannel(v.ID)
 	if !ok || pc.item.Connector == "" {
 		return connector.Prompt{}, fmt.Errorf("%s 不用绑定", v.Name)
 	}
@@ -740,7 +740,7 @@ func (h *Hub) unbindChannel(ctx context.Context, v channel.View) error {
 		h.unpairBot(ctx)
 		return nil
 	}
-	pc, ok := h.pluginChannel(v.ID)
+	pc, ok := h.extensionChannel(v.ID)
 	if !ok || pc.item.Connector == "" {
 		return fmt.Errorf("%s 没有绑定", v.Name)
 	}

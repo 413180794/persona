@@ -13,8 +13,8 @@ import (
 
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
-	"github.com/nwverse/persona/server/internal/plugin"
-	progconf "github.com/nwverse/persona/server/internal/plugin/conformance"
+	"github.com/nwverse/persona/server/internal/extension"
+	progconf "github.com/nwverse/persona/server/internal/extension/conformance"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -66,7 +66,7 @@ func RequireData() ProgramOption { return func(o *programOptions) { o.data = tru
 // It never calls actions.do or inbox.reply (a write only ever runs after the hub's gate, and a reply is the user's),
 // sends actions.describe empty arguments (a program refuses them or answers well), and calls logout only after
 // WithLogin signed in. How the program starts, and stops with the hub, is plugin/conformance.Check's.
-func CheckProgram(t testing.TB, m *plugin.Manifest, run progconf.Run, init plugin.InitializeParams, opts ...ProgramOption) {
+func CheckProgram(t testing.TB, m *extension.Manifest, run progconf.Run, init extension.InitializeParams, opts ...ProgramOption) {
 	t.Helper()
 	items, err := connectorItems(m)
 	if err != nil {
@@ -93,8 +93,8 @@ func CheckProgram(t testing.TB, m *plugin.Manifest, run progconf.Run, init plugi
 }
 
 // connectorItems are the connectors m contributes.
-func connectorItems(m *plugin.Manifest) ([]plugin.ConnectorItem, error) {
-	var items []plugin.ConnectorItem
+func connectorItems(m *extension.Manifest) ([]extension.ConnectorItem, error) {
+	var items []extension.ConnectorItem
 	if err := json.Unmarshal(m.Contributes["connectors"], &items); err != nil || len(items) == 0 {
 		return nil, fmt.Errorf("contributes no connectors (%v)", err)
 	}
@@ -118,7 +118,7 @@ type probe struct {
 
 	// Only the goroutine of CheckProgram reads and writes these: the connector being checked, whether its status said
 	// ok (the hub asks nothing of one that is not), its actions, and the secret values the sign-in was given.
-	item     plugin.ConnectorItem
+	item     extension.ConnectorItem
 	signedIn bool
 	actions  []proto.Tool
 	watch    []string
@@ -182,7 +182,7 @@ func (p *probe) said(what string) {
 
 // secretCall is the program's call for its secret: the connector it is for, and the data to keep.
 type secretCall struct {
-	plugin.Target
+	extension.Target
 	serve.SecretData
 }
 
@@ -190,7 +190,7 @@ type secretCall struct {
 func (p *probe) fromProgram(_ context.Context, method string, params json.RawMessage) (any, error) {
 	rest, ok := strings.CutPrefix(method, serve.Namespace+".")
 	if !ok || !slices.Contains([]string{serve.MSecretsLoad, serve.MSecretsSave, serve.MSecretsDelete}, rest) {
-		return nil, &rpc.Error{Code: plugin.CodeUnknownMethod, Message: "unknown method " + method}
+		return nil, &rpc.Error{Code: extension.CodeUnknownMethod, Message: "unknown method " + method}
 	}
 	var c secretCall
 	if err := decodeStrict(params, &c); err != nil {
@@ -226,12 +226,12 @@ func (p *probe) stored(id string) int {
 }
 
 // initialize opens the plugin protocol and holds what the program contributes to the manifest.
-func (p *probe) initialize(m *plugin.Manifest, items []plugin.ConnectorItem, init plugin.InitializeParams) {
+func (p *probe) initialize(m *extension.Manifest, items []extension.ConnectorItem, init extension.InitializeParams) {
 	p.t.Helper()
-	init.Protocol = plugin.Protocol
-	init.Plugin.ID, init.Plugin.Version = m.ID, m.Version
+	init.Protocol = extension.Protocol
+	init.Extension.ID, init.Extension.Version = m.ID, m.Version
 	if init.Hub.ExtensionPoints == nil {
-		init.Hub.ExtensionPoints = plugin.PointVersions()
+		init.Hub.ExtensionPoints = extension.PointVersions()
 	}
 	if init.Active == nil {
 		init.Active = map[string][]string{"connectors": p.ids}
@@ -239,7 +239,7 @@ func (p *probe) initialize(m *plugin.Manifest, items []plugin.ConnectorItem, ini
 	ctx, cancel := context.WithTimeout(p.ctx, programCallTimeout)
 	defer cancel()
 	var raw json.RawMessage
-	if err := p.hub.Call(ctx, plugin.MInitialize, init, &raw); err != nil {
+	if err := p.hub.Call(ctx, extension.MInitialize, init, &raw); err != nil {
 		p.fatalf("initialize: %v", err)
 	}
 	if err := checkInitialize(m, items, raw); err != nil {
@@ -251,7 +251,7 @@ func (p *probe) initialize(m *plugin.Manifest, items []plugin.ConnectorItem, ini
 // gone or silent ends the test.
 func (p *probe) call(method string, params any) (raw json.RawMessage, rejected *rpc.Error) {
 	p.t.Helper()
-	wire, err := plugin.Targeted(params, p.item.ID)
+	wire, err := extension.Targeted(params, p.item.ID)
 	if err != nil {
 		p.fatalf("%s: %v", method, err)
 	}
@@ -268,7 +268,7 @@ func (p *probe) call(method string, params any) (raw json.RawMessage, rejected *
 		switch {
 		case re.Message == "":
 			p.failf("%s: an error answer without a message (it is for people)", method)
-		case slices.Contains([]string{serve.CodeUnknownMethod, serve.CodeNoCapability, serve.CodeNotInitialized, plugin.CodeNoContribution}, re.Code):
+		case slices.Contains([]string{serve.CodeUnknownMethod, serve.CodeNoCapability, serve.CodeNotInitialized, extension.CodeNoContribution}, re.Code):
 			p.failf("%s: answered %s for what its manifest declares", method, re.Code)
 		}
 		return nil, re
@@ -303,7 +303,7 @@ func (p *probe) need(method string, n int) {
 	}
 }
 
-func (p *probe) checkConnector(it plugin.ConnectorItem) {
+func (p *probe) checkConnector(it extension.ConnectorItem) {
 	p.t.Helper()
 	p.mu.Lock()
 	p.item = it
@@ -356,7 +356,7 @@ func (p *probe) checkConnector(it plugin.ConnectorItem) {
 }
 
 // checkManifest holds a connector's declaration to what the hub accepts of a program's (connector.Check).
-func (p *probe) checkManifest(it plugin.ConnectorItem) {
+func (p *probe) checkManifest(it extension.ConnectorItem) {
 	for i, c := range it.Capabilities {
 		switch {
 		case !slices.Contains(programCaps, connector.Capability(c)):
@@ -587,7 +587,7 @@ func (p *probe) archive() {
 }
 
 // report fails the test with what the run found; the events the program sent are held to the protocol.
-func (p *probe) report(items []plugin.ConnectorItem) {
+func (p *probe) report(items []extension.ConnectorItem) {
 	p.t.Helper()
 	for _, e := range p.snapshot() {
 		if e.name != serve.InPlugin(serve.EChanged) {

@@ -15,10 +15,10 @@ import (
 
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
+	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/extension/host"
+	pserve "github.com/nwverse/persona/server/internal/extension/serve"
 	"github.com/nwverse/persona/server/internal/kb"
-	"github.com/nwverse/persona/server/internal/plugin"
-	"github.com/nwverse/persona/server/internal/plugin/host"
-	pserve "github.com/nwverse/persona/server/internal/plugin/serve"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -224,8 +224,8 @@ func linked(t *testing.T, s connector.Secrets) *Conn {
 	var c *Conn
 	p := host.Start(context.Background(), host.Spec{ID: "example-plugin", Name: "Example", Command: exe, RPC: true,
 		Env: []string{"JARVIS_PROC_CHILD=1"}, CallTimeout: callTimeout, Logf: t.Logf,
-		Init: func(context.Context) (plugin.InitializeParams, error) {
-			return plugin.InitializeParams{Plugin: plugin.PluginInfo{ID: "example-plugin", Version: "1.0.0"},
+		Init: func(context.Context) (extension.InitializeParams, error) {
+			return extension.InitializeParams{Extension: extension.ExtensionInfo{ID: "example-plugin", Version: "1.0.0"},
 				Active: map[string][]string{"connectors": {"example"}}}, nil
 		},
 		Handle: func(ctx context.Context, method string, params json.RawMessage) (any, error) {

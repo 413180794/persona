@@ -136,8 +136,8 @@ func (h *Hub) assistantPrepare(ctx context.Context, m *Machine) map[string]any {
 			clis[c.Manifest().CLI] = id
 		}
 	}
-	return map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx) + h.plugins.pluginInstructions(),
-		"connectors": signedIn, "clis": clis, "plugin_skills": h.plugins.pluginSkillsFor(m.cfg.ID)}
+	return map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx) + h.extensions.extensionInstructions(),
+		"connectors": signedIn, "clis": clis, "plugin_skills": h.extensions.extensionSkillsFor(m.cfg.ID)}
 }
 
 // signedInConnectors are the connectors that are ok or rate limited (switched on and signed in).

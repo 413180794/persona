@@ -302,8 +302,8 @@ func TestForwardedPortRefusals(t *testing.T) {
 func TestTheLiveScreenTakesTheAppsDeviceToken(t *testing.T) {
 	ctx := context.Background()
 	h := newTestHub(t)
-	h.store = &marketTestStore{pluginStore: newPluginStore(), tokens: &tokenStore{memStore: *newMemStore(), rows: map[string]db.DeviceToken{}, rev: map[string]bool{}}}
-	startTestPlugins(t, h)
+	h.store = &marketTestStore{extensionStore: newExtensionStore(), tokens: &tokenStore{memStore: *newMemStore(), rows: map[string]db.DeviceToken{}, rev: map[string]bool{}}}
+	startTestExtensions(t, h)
 	phone, watch := "jd_"+randomHex(24), "jd_"+randomHex(24)
 	_ = h.store.CreateDeviceToken(ctx, db.DeviceToken{ID: "dev_phone", Name: "iPhone", Kind: "phone", Role: roleFull}, hashToken(phone))
 	_ = h.store.CreateDeviceToken(ctx, db.DeviceToken{ID: "dev_watch", Name: "Watch", Kind: "watch", Role: roleAnswer}, hashToken(watch))
@@ -346,10 +346,10 @@ func TestTheLiveScreenTakesTheAppsDeviceToken(t *testing.T) {
 	h.mu.Lock()
 	h.machines = append(h.machines, mac)
 	h.mu.Unlock()
-	if err := h.plugins.reg.SetEnabled(ctx, cuaPluginID, true, "test"); err != nil {
+	if err := h.extensions.reg.SetEnabled(ctx, cuaExtensionID, true, "test"); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.plugins.reg.SetConfig(ctx, cuaPluginID, json.RawMessage(`{"machines": ["m1"]}`), "test"); err != nil {
+	if err := h.extensions.reg.SetConfig(ctx, cuaExtensionID, json.RawMessage(`{"machines": ["m1"]}`), "test"); err != nil {
 		t.Fatal(err)
 	}
 

@@ -52,7 +52,7 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `tools/launcher_check.md` | 设置 › 模型「测试可用性」发的那一句 | `node/launchercheck.go` |
 | `voice/instructions.md` | 内置语音插件的实时模型的 instructions（称呼、说话方式、有没有函数工具、重连时断之前说过的话） | `voice/session.go` |
 | `voice/delegated.md`、`report.md`、`handoff.md` | 语音里交给主对话的消息、做完后告诉语音模型的话、交出去时先回的那句 | `voice/session.go`、`delegate.go` |
-| `channel/message.md` | 主人在插件渠道（微信等，`docs/channels.md`）里发给机器人的消息进 Persona 对话时的样子：回答发回哪里、什么格式（纯文字或 Markdown）、能不能在那儿答提问，引用的消息、转发的聊天记录、存到电脑上的附件、机器人转不了的东西 | `hub/channels_plugin.go` |
+| `channel/message.md` | 主人在插件渠道（微信等，`docs/channels.md`）里发给机器人的消息进 Persona 对话时的样子：回答发回哪里、什么格式（纯文字或 Markdown）、能不能在那儿答提问，引用的消息、转发的聊天记录、存到电脑上的附件、机器人转不了的东西 | `hub/channels_extension.go` |
 | `shared/kb_blocks.md` | 会话档案 + 项目档案的 `<jarvis-context>` 块（飞书 /agent 和 AI 分身共用） | |
 | `shared/user_rules.md` | 「用户自己定的规则」段（分拣、判断共用） | |
 

@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
-	"github.com/nwverse/persona/server/internal/plugin"
-	"github.com/nwverse/persona/server/internal/plugin/conformance"
+	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/extension/conformance"
 )
 
 // notes is a connector that reads its secret while it is built (the program must not hold its lock then).
@@ -27,7 +27,7 @@ func (n notes) Status(context.Context) connector.Status {
 
 // A connector program opened with initialize is a plugin program like any: plugin/conformance holds it to that.
 func TestConnectorProgramIsAPlugin(t *testing.T) {
-	m, err := plugin.Parse([]byte(`{"manifest_version": 1, "id": "example-notes", "name": "Example Notes", "version": "1.0.0",
+	m, err := extension.Parse([]byte(`{"manifest_version": 1, "id": "example-notes", "name": "Example Notes", "version": "1.0.0",
 		"engines": {"plugin_protocol": 1}, "runtime": {"command": "bin/notes"},
 		"contributes": {"connectors": [{"id": "examplenotes", "name": "Example Notes", "capabilities": ["status"], "hosts": ["notes.example.com"]}]}}`))
 	if err != nil {
@@ -44,8 +44,8 @@ func TestConnectorProgramIsAPlugin(t *testing.T) {
 		_ = progW.Close()
 	}()
 	res := conformance.Check(t, m, conformance.Run{ToProgram: hubW, FromProgram: hubR, Exited: exited},
-		plugin.InitializeParams{Active: map[string][]string{"connectors": {"examplenotes"}}})
-	var items []plugin.ConnectorItem
+		extension.InitializeParams{Active: map[string][]string{"connectors": {"examplenotes"}}})
+	var items []extension.ConnectorItem
 	_ = json.Unmarshal(res.Contributes["connectors"], &items)
 	if len(items) != 1 || items[0].ID != "examplenotes" || items[0].Hosts[0] != "notes.example.com" {
 		t.Fatalf("%+v", res)

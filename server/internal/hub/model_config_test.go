@@ -83,9 +83,9 @@ func TestModelConfigurationReadFailureIsNotAnOldHub(t *testing.T) {
 	}
 }
 
-func TestModelConfigurationPluginFailureIsVisible(t *testing.T) {
+func TestModelConfigurationExtensionFailureIsVisible(t *testing.T) {
 	h, mux := modelTestHub(t)
-	h.plugins = newPlugins(t.TempDir(), []PluginConfig{{ID: "voice", Name: "Voice", Kind: "voice", Socket: "/nonexistent/model-test.sock"}}, t.Logf)
+	h.extensions = newExtensions(t.TempDir(), []ExtensionConfig{{ID: "voice", Name: "Voice", Kind: "voice", Socket: "/nonexistent/model-test.sock"}}, t.Logf)
 	r := modelRequest(mux, "GET", "plugin.voice", "")
 	if r.Code != http.StatusOK {
 		t.Fatalf("%d %s", r.Code, r.Body.String())

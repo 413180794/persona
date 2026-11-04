@@ -7,14 +7,14 @@ import (
 
 // The Mac's clipboard through its node, for a Mac whose screen the app may show; not before.
 func TestComputerClipboard(t *testing.T) {
-	h, _ := pluginTestHub(t)
+	h, _ := extensionTestHub(t)
 	ctx := context.Background()
 	mux := h.routes()
 	computerMac(t, h, "mac")
 	if code, _ := call(t, mux, "GET", "/api/v1/machines/mac/computer/clipboard", h.cfg.Token, ""); code != 404 {
 		t.Fatalf("the plugin off: %d", code)
 	}
-	if err := h.plugins.reg.SetEnabled(ctx, cuaPluginID, true, "test"); err != nil {
+	if err := h.extensions.reg.SetEnabled(ctx, cuaExtensionID, true, "test"); err != nil {
 		t.Fatal(err)
 	}
 	if code, _ := call(t, mux, "PUT", "/api/v1/machines/mac/computer", h.cfg.Token, `{"enabled": true}`); code != 200 {

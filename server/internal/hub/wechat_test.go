@@ -13,8 +13,8 @@ import (
 
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
-	"github.com/nwverse/persona/server/internal/plugin"
-	"github.com/nwverse/persona/server/internal/plugin/conformance"
+	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/extension/conformance"
 	"github.com/nwverse/persona/server/internal/wechat"
 	wechatspec "github.com/nwverse/persona/server/internal/wechat/spec"
 )
@@ -23,7 +23,7 @@ import (
 // and its channel; no hub token and no events any more (the hub's pipeline does that part).
 func TestWeChatBuiltin(t *testing.T) {
 	h := newTestHub(t)
-	reg := plugin.NewRegistry(t.TempDir(), nil, nil, 0)
+	reg := extension.NewRegistry(t.TempDir(), nil, nil, 0)
 	if err := reg.AddBuiltin(wechatManifest(h, "/opt/persona/jarvisd-wechat"), "/opt/persona", true); err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +31,7 @@ func TestWeChatBuiltin(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := reg.Get(wechatspec.ID)
-	if p == nil || p.Problem != "" || !p.Record.Enabled || p.Record.Source != plugin.SourceBuiltin {
+	if p == nil || p.Problem != "" || !p.Record.Enabled || p.Record.Source != extension.SourceBuiltin {
 		t.Fatalf("%+v", p)
 	}
 	conns := p.Manifest.Connectors()
@@ -55,7 +55,7 @@ func TestWeChatBuiltin(t *testing.T) {
 }
 
 // jarvisd-wechat's program, held to the plugin protocol against the manifest the hub registers it with.
-func TestWeChatProgramIsAPlugin(t *testing.T) {
+func TestWeChatProgramIsAnExtension(t *testing.T) {
 	h := newTestHub(t)
 	m := wechatManifest(h, "/opt/persona/jarvisd-wechat")
 	progR, hubW := io.Pipe()
@@ -68,8 +68,8 @@ func TestWeChatProgramIsAPlugin(t *testing.T) {
 		_ = progW.Close()
 	}()
 	res := conformance.Check(t, m, conformance.Run{ToProgram: hubW, FromProgram: hubR, Exited: exited},
-		plugin.InitializeParams{Plugin: plugin.PluginInfo{ID: m.ID, Version: m.Version}, Active: map[string][]string{"connectors": {"wechat"}, "channel": {"wechat"}}})
-	var items []plugin.ConnectorItem
+		extension.InitializeParams{Extension: extension.ExtensionInfo{ID: m.ID, Version: m.Version}, Active: map[string][]string{"connectors": {"wechat"}, "channel": {"wechat"}}})
+	var items []extension.ConnectorItem
 	_ = json.Unmarshal(res.Contributes["connectors"], &items)
 	if len(items) != 1 || items[0].ID != "wechat" {
 		t.Fatalf("%+v", res)
@@ -90,5 +90,5 @@ func TestWeChatProgramIsAChannel(t *testing.T) {
 		_ = progW.Close()
 	}()
 	chconf.Check(t, m, conformance.Run{ToProgram: hubW, FromProgram: hubR, Exited: exited},
-		plugin.InitializeParams{Active: map[string][]string{"connectors": {"wechat"}, "channel": {"wechat"}}})
+		extension.InitializeParams{Active: map[string][]string{"connectors": {"wechat"}, "channel": {"wechat"}}})
 }

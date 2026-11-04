@@ -197,7 +197,7 @@ hub 只对这些连接器读它：条目保持 hub 原来自己做的样子（�
 
 `conformance.Check(t, c)` 把一个 Go 连接器放在协议的程序一侧（`serve.Serve`，经一对管道），对清单声明的每个能力既直接调、也经协议调，
 两边的结果编成 JSON 必须一字不差：字段在线上丢了、类型变了都会挂。两种开头各跑一遍（`init` + 原方法名，`initialize` + `connector.*`）；
-插件开头那一遍还查 `initialize` 回的贡献和清单一致、不认识的连接器回 `no_contribution`。程序整体是否守插件协议，由 `plugin/conformance` 查（`docs/plugins.md`「一致性测试」）。GitHub、信息、Telegram 的测试里都跑它；`TestWireTypesAreTagged` 检查
+插件开头那一遍还查 `initialize` 回的贡献和清单一致、不认识的连接器回 `no_contribution`。程序整体是否守插件协议，由 `extension/conformance` 查（`docs/plugins.md`「一致性测试」）。GitHub、信息、Telegram 的测试里都跑它；`TestWireTypesAreTagged` 检查
 线上的每个字段都有明确的 snake_case 名字。用 Go 写的第三方程序可以照着 `serve.Serve` 的接法，用同一份测试检查自己。
 
 ### 别的语言写的程序：`CheckProgram`
@@ -228,10 +228,10 @@ hub 只对这些连接器读它：条目保持 hub 原来自己做的样子（�
 （那是用户按的发送）。选项：`WithLogin(values)` 按字段名填登录的每一步，之后程序必须是 `ok`（只给装在夹具上的后端用，别给真账号的密钥），回应里出现了给它的密钥就挂；
 `RequireData()` 让 `inbox.collect`、`thread.page`、`archive.changes` 回空也算挂，免得什么都不回的程序也过。
 
-给自己的程序用：先用 `plugin/conformance` 查它作为插件的起停和握手，再用一份新起的程序跑 `CheckProgram`（`internal/` 包挡住了别的仓库的导入，所以测试放在这个仓库里）：
+给自己的程序用：先用 `extension/conformance` 查它作为插件的起停和握手，再用一份新起的程序跑 `CheckProgram`（`internal/` 包挡住了别的仓库的导入，所以测试放在这个仓库里）：
 
 ```go
-m, _ := plugin.Parse(manifestJSON)                                // persona-plugin.json
+m, _ := extension.Parse(manifestJSON)                                // persona-plugin.json
 progconf.Check(t, m, progconf.Program(t, "bin/my-connector"), plugin.InitializeParams{})
 conformance.CheckProgram(t, m, progconf.Program(t, "bin/my-connector"), plugin.InitializeParams{},
 	conformance.WithLogin(map[string]string{"token": fixtureToken}), conformance.RequireData())
@@ -255,4 +255,4 @@ go test ./internal/connector/conformance -run wechat-connector -v
 
 程序所在的包里 `persona-plugin.json` 在 `bin/` 的上一级。夹具服务起来后在 stdout 打印**一行** JSON：`base_url`、`outbound_sends_enabled`，和 `accounts`（每个账号的 `key` 是读取 + 事件的应用密钥，另有带发送范围的 `send_key`）。
 测试用 `base_url` 和第一个账号的 `key`，按字段名 `base_url`、`app_key` 填程序的登录那一步；`send_key` 从不用。`base_url` 不在回环地址上，或这一行没说外发是关的（`outbound_sends_enabled` 不是 `false`），测试就拒绝登录。
-夹具服务上外发保持关闭，测试只用它给的合成账号和测试密钥，不碰真账号。先对程序跑 `plugin/conformance.Check`（起停、握手、错误码），再用一份新起的程序跑 `CheckProgram`。
+夹具服务上外发保持关闭，测试只用它给的合成账号和测试密钥，不碰真账号。先对程序跑 `extension/conformance.Check`（起停、握手、错误码），再用一份新起的程序跑 `CheckProgram`。

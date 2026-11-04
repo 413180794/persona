@@ -15,11 +15,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/plugin"
+	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-const egoPluginID = "ego"
+const egoExtensionID = "ego"
 
 const egoConfig = `{
   "type": "object",
@@ -29,9 +29,9 @@ const egoConfig = `{
   }
 }`
 
-func egoManifest(h *Hub) *plugin.Manifest {
-	items, _ := json.Marshal([]plugin.ComputerItem{{ID: egoPluginID, Name: "ego lite"}})
-	return &plugin.Manifest{ManifestVersion: plugin.ManifestVersion, ID: egoPluginID, Name: "浏览器（ego lite）", Version: h.version,
+func egoManifest(h *Hub) *extension.Manifest {
+	items, _ := json.Marshal([]extension.ComputerItem{{ID: egoExtensionID, Name: "ego lite"}})
+	return &extension.Manifest{ManifestVersion: extension.ManifestVersion, ID: egoExtensionID, Name: "浏览器（ego lite）", Version: h.version,
 		Description: "让助手在你的 Mac 上用 ego lite 打开网页、点按、填表、截图，用的是你在 ego 里登录过的网站。要在那台 Mac 上装好 ego lite 并做完它的首次设置。",
 		Homepage:    "https://lite.ego.app", Contributes: map[string]json.RawMessage{"browser": items},
 		Configuration: json.RawMessage(egoConfig)}
@@ -40,7 +40,7 @@ func egoManifest(h *Hub) *plugin.Manifest {
 // browserOf is m's proto.Machine.Browser: nil unless the plugin is on and m is a Mac; else the last status its node
 // gave (every Mac's while the plugin is on), with Enabled when the plugin is on for m.
 func (h *Hub) browserOf(m *Machine) *proto.Browser {
-	s := h.machinePlugin(egoPluginID)
+	s := h.machineExtension(egoExtensionID)
 	m.mu.Lock()
 	darwin, last := m.info.OS == "darwin", m.browser
 	m.mu.Unlock()
@@ -134,7 +134,7 @@ func (h *Hub) putBrowser(w http.ResponseWriter, r *http.Request, m *Machine) {
 		writeErr(w, http.StatusNotFound, errors.New("浏览器插件没打开，或这台不是 Mac"))
 		return
 	}
-	if err := h.setPluginMachine(r.Context(), egoPluginID, m.cfg.ID, in.Enabled); err != nil {
+	if err := h.setExtensionMachine(r.Context(), egoExtensionID, m.cfg.ID, in.Enabled); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -178,7 +178,7 @@ func (h *Hub) postBrowserJob(w http.ResponseWriter, r *http.Request, m *Machine)
 // ---- the assistant's tools ----
 
 func (h *Hub) browserTools() []proto.Tool {
-	if s := h.machinePlugin(egoPluginID); !s.On || len(s.Machines) == 0 {
+	if s := h.machineExtension(egoExtensionID); !s.On || len(s.Machines) == 0 {
 		return nil
 	}
 	return []proto.Tool{mcpTool("browser_run"), mcpTool("browser_look")}
@@ -211,7 +211,7 @@ func (h *Hub) callBrowserTool(ctx context.Context, sessionID, name string, args 
 		}
 		in["script"], in["screenshot"], in["timeout_ms"] = a.Script, true, a.TimeoutMS
 		first, _, _ := strings.Cut(strings.TrimSpace(a.Script), "\n")
-		if h.machinePlugin(egoPluginID).Confirm && !h.approve(ctx, m.cfg.ID, name, "在「"+m.cfg.Name+"」的浏览器里运行脚本："+first, args) {
+		if h.machineExtension(egoExtensionID).Confirm && !h.approve(ctx, m.cfg.ID, name, "在「"+m.cfg.Name+"」的浏览器里运行脚本："+first, args) {
 			h.logf("[%s] browser_run declined on the phone (%d bytes)", m.cfg.ID, len(a.Script))
 			return proto.TextResult("The user declined this on the phone. Do not retry it unless they ask.", true)
 		}
@@ -230,7 +230,7 @@ func (h *Hub) callBrowserTool(ctx context.Context, sessionID, name string, args 
 // browserMachine is the Mac the assistant named, when the plugin is on for it and it is online.
 func (h *Hub) browserMachine(name string) (*Machine, error) {
 	m := h.machineByName(strings.TrimSpace(name))
-	ids := strings.Join(h.machinePlugin(egoPluginID).Machines, ", ")
+	ids := strings.Join(h.machineExtension(egoExtensionID).Machines, ", ")
 	if ids == "" {
 		ids = "none"
 	}

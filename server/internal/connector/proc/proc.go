@@ -24,9 +24,9 @@ import (
 
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
+	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/extension/host"
 	"github.com/nwverse/persona/server/internal/kb"
-	"github.com/nwverse/persona/server/internal/plugin"
-	"github.com/nwverse/persona/server/internal/plugin/host"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -39,7 +39,7 @@ type Link struct {
 }
 
 func (l Link) call(ctx context.Context, method string, params, out any) error {
-	p, err := plugin.Targeted(params, l.ID)
+	p, err := extension.Targeted(params, l.ID)
 	if err != nil {
 		return err
 	}

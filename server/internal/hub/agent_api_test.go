@@ -9,7 +9,7 @@ import (
 // What a plugin's /agent asks of the hub: a chat's knowledge-base context (read only), a new conversation under a
 // purpose the hub knows on one of its machines (anything else is refused before starting), and the hub's own
 // lark_agent_reply out of the way while a plugin serves Feishu.
-func TestAgentAPIForPlugins(t *testing.T) {
+func TestAgentAPIForExtensions(t *testing.T) {
 	h := newTestHub(t)
 	st, err := kb.NewStore(t.TempDir())
 	if err != nil {

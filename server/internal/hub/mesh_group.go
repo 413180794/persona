@@ -135,11 +135,11 @@ func (h *Hub) groupChanged(oldCenter, newCenter string) {
 	case oldCenter == self && newCenter != self:
 		h.logf("mesh: this hub is a member now: its apps go to the center, its computers too")
 		h.becameMember()
-		go h.plugins.roleChanged(context.Background())
+		go h.extensions.roleChanged(context.Background())
 	case oldCenter != self && newCenter == self:
 		h.logf("mesh: this hub is the center now")
 		h.becameCenter()
-		go h.plugins.roleChanged(context.Background())
+		go h.extensions.roleChanged(context.Background())
 	case oldCenter != newCenter:
 		h.dropAppConnections("the group has another center") // passing on to the old one: reconnect to the new one
 	}

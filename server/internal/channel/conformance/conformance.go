@@ -12,14 +12,14 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/channel"
-	"github.com/nwverse/persona/server/internal/plugin"
-	pconf "github.com/nwverse/persona/server/internal/plugin/conformance"
+	"github.com/nwverse/persona/server/internal/extension"
+	pconf "github.com/nwverse/persona/server/internal/extension/conformance"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // Check opens the program with initialize (init, its id and version from m) and holds each of m's channels to the
 // protocol. Received are the channel.receive calls the program made meanwhile (a program may hand over nothing).
-func Check(t testing.TB, m *plugin.Manifest, run pconf.Run, init plugin.InitializeParams) (received []channel.ReceiveParams) {
+func Check(t testing.TB, m *extension.Manifest, run pconf.Run, init extension.InitializeParams) (received []channel.ReceiveParams) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -36,10 +36,10 @@ func Check(t testing.TB, m *plugin.Manifest, run pconf.Run, init plugin.Initiali
 	}
 	go func() { _ = hub.Serve(ctx, run.FromProgram) }()
 	defer run.ToProgram.Close()
-	init.Protocol = plugin.Protocol
-	init.Plugin.ID, init.Plugin.Version = m.ID, m.Version
-	var res plugin.InitializeResult
-	if err := hub.Call(ctx, plugin.MInitialize, init, &res); err != nil {
+	init.Protocol = extension.Protocol
+	init.Extension.ID, init.Extension.Version = m.ID, m.Version
+	var res extension.InitializeResult
+	if err := hub.Call(ctx, extension.MInitialize, init, &res); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
 	code := func(err error) string {
@@ -68,11 +68,11 @@ func Check(t testing.TB, m *plugin.Manifest, run pconf.Run, init plugin.Initiali
 		}
 	}
 	err := hub.Call(ctx, channel.InPlugin(channel.MSend), channel.SendParams{Contribution: "nochannel", Ref: "r", Text: "x"}, nil)
-	if code(err) != plugin.CodeNoContribution {
-		t.Errorf("channel.send to a channel it does not have: %v, want %s", err, plugin.CodeNoContribution)
+	if code(err) != extension.CodeNoContribution {
+		t.Errorf("channel.send to a channel it does not have: %v, want %s", err, extension.CodeNoContribution)
 	}
-	if err := hub.Call(ctx, channel.InPlugin("nosuch"), map[string]any{}, nil); code(err) != plugin.CodeUnknownMethod {
-		t.Errorf("an unknown channel method: %v, want %s", err, plugin.CodeUnknownMethod)
+	if err := hub.Call(ctx, channel.InPlugin("nosuch"), map[string]any{}, nil); code(err) != extension.CodeUnknownMethod {
+		t.Errorf("an unknown channel method: %v, want %s", err, extension.CodeUnknownMethod)
 	}
 	return received
 }

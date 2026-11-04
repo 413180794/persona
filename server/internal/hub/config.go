@@ -146,7 +146,7 @@ type Config struct {
 	// Admin is who may open the admin UI (docs/admin.md).
 	Admin AdminConfig `json:"admin,omitempty"`
 	// Plugins are processes the hub runs to add things to the app, e.g. the voice conversation (docs/plugins.md).
-	Plugins []PluginConfig `json:"plugins,omitempty"`
+	Extensions []ExtensionConfig `json:"plugins,omitempty"`
 	// Tailcat tunes reaching machines over tailcat (tailcat.go).
 	Tailcat TailcatConfig `json:"tailcat,omitempty"`
 	// Bots: talking to Persona through a chat app's bot (bots.go, docs/bots.md); switched on in the app.

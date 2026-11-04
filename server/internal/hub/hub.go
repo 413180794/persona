@@ -113,7 +113,7 @@ type Hub struct {
 	devtok        devTokens   // device token lookups (devicetokens.go)
 	public        publicState // TLS identity, listener and advertised addresses (public.go)
 	sends         sendLog     // messages being / just sent, by client_msg_id (send.go)
-	plugins       *plugins    // the plugin registry and what runs of it (plugins.go, docs/plugins.md)
+	extensions    *extensions // the plugin registry and what runs of it (plugins.go, docs/plugins.md)
 	admin         adminState  // the admin UI (admin.go, docs/admin.md)
 
 	mesh  meshState // the other hubs of the mesh group (mesh.go)
@@ -387,13 +387,13 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	go h.inboxLoop(ctx)
 	go h.metricsLoop(ctx)
 	go h.noLockLoop(ctx) // 「插件开着时不自动锁屏」 said again to its Macs (computer_nolock.go)
-	h.plugins = newPlugins(cfg.dir, cfg.Plugins, h.logf)
+	h.extensions = newExtensions(cfg.dir, cfg.Extensions, h.logf)
 	h.startConnectors(ctx) // the plugins' connectors join here (attachPlugins)
 	h.upd.start(ctx)
 	h.startKB(ctx, cfg.KB, cfg.dir)
-	h.startPlugins(ctx)
+	h.startExtensions(ctx)
 	// Market plugins' newer versions (plugin_autoupgrade.go).
-	go h.pluginUpgradeLoop(ctx)
+	go h.extensionUpgradeLoop(ctx)
 	go h.adminStartup(ctx) // the admin UI's first-run setup code, while it has no password (admin_setupcode.go)
 	if err := h.startPublic(ctx); err != nil {
 		return err

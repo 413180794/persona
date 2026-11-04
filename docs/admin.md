@@ -4,7 +4,7 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
 接口前缀 `/api/v1/admin/`，和 App 的接口**分开鉴权**（管理员密码 + 会话 cookie，不认 App 的 token）。
 方案见 [plan-hub-mesh.md](plan-hub-mesh.md) 第 5 节，总览 #293，issue #296。以后一键安装（#287）、hub 版本更新（#284）也落在这里。
 
-代码：服务端 `server/internal/hub/admin*.go`（插件 `admin_plugins.go`）、`server/internal/db/admin.go`（迁移 `0161_admin.sql`），
+代码：服务端 `server/internal/hub/admin*.go`（插件 `admin_extensions.go`）、`server/internal/db/admin.go`（迁移 `0161_admin.sql`），
 网页 `web/admin/index.html` + `web/src/admin/`（和网页操作页同一个工程、同一套设计 token，单独一个入口）。
 
 ## 访问范围 `admin.access`
@@ -156,7 +156,7 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
 | `POST peers/{hub_id}/center` `{"confirm"}` | 设为中心（hub_id 可以是自己）；409 `confirm_required`（原中心连不上，要确认）/ `unreachable`，404 `not_in_group` |
 | `…/peers`、`…/routes` | 互联：配过对的 hub（每项 `role`）、发现的 hub、互联码、断开、路由（[mesh.md](mesh.md)「管理接口和命令行」） |
 | 成员上的 `devices*` | 409 `member_hub`：设备由中心管 |
-| `GET plugins` | `{"plugins": [PluginDetail], "can_install", "upload_most"}`：每项是 App 接口的详情（[plugins.md](plugins.md)「hub 的接口」），`upload_most` 是上传的上限（字节） |
+| `GET plugins` | `{"plugins": [ExtensionDetail], "can_install", "upload_most"}`：每项是 App 接口的详情（[plugins.md](plugins.md)「hub 的接口」），`upload_most` 是上传的上限（字节） |
 | `GET plugins/{id}` | 一个插件的详情；404 `not_found` |
 | `POST plugins/preview` `{"source", "upgrade"?}` | 预览（来源写法同 `personad plugin install`），回预览（含 `permissions_digest`、升级时的 `more_permissions` / `added_permissions`）；400 `invalid_plugin`（`error` 是给人看的原因）、409 `busy`、429 `rate_limited` |
 | `POST plugins/upload?name=<文件名>&upgrade=<id>` | 请求体是 `.tar.gz` / `.tgz` / `.zip` 本身（`Content-Type: application/octet-stream`，唯一不是 JSON 的写操作，照样要 CSRF 头），最大 200 MB，回预览；413 `too_large`，别的同上 |

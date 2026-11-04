@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/channel"
-	"github.com/nwverse/persona/server/internal/plugin"
+	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -112,18 +112,18 @@ func newChannelWorld(t *testing.T) *channelWorld {
 	t.Helper()
 	w := newBotWorld(t)
 	raw, _ := json.Marshal([]channel.Item{exampleChannel})
-	m := &plugin.Manifest{ManifestVersion: plugin.ManifestVersion, ID: "example-chat", Name: "Example Chat", Version: "1.0.0",
-		Engines: plugin.Engines{PluginProtocol: plugin.Protocol}, ActivationEvents: []string{plugin.OnStartup},
-		Runtime: &plugin.Runtime{Command: plugin.Command{Path: "example-chat"}}, Contributes: map[string]json.RawMessage{"channel": raw}}
-	reg := plugin.NewRegistry(t.TempDir(), nil, nil, 0)
+	m := &extension.Manifest{ManifestVersion: extension.ManifestVersion, ID: "example-chat", Name: "Example Chat", Version: "1.0.0",
+		Engines: extension.Engines{ExtensionProtocol: extension.Protocol}, ActivationEvents: []string{extension.OnStartup},
+		Runtime: &extension.Runtime{Command: extension.Command{Path: "example-chat"}}, Contributes: map[string]json.RawMessage{"channel": raw}}
+	reg := extension.NewRegistry(t.TempDir(), nil, nil, 0)
 	if err := reg.AddBuiltin(m, "/opt/example", true); err != nil {
 		t.Fatal(err)
 	}
 	if err := reg.Load(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	w.h.plugins = newPlugins(t.TempDir(), nil, w.h.logf)
-	w.h.plugins.reg = reg
+	w.h.extensions = newExtensions(t.TempDir(), nil, w.h.logf)
+	w.h.extensions.reg = reg
 	ch := &fakeChannel{}
 	w.h.channels.call = ch.call
 	w.h.channels.statuses = map[string]*channel.StatusParams{"examplechat": {State: channel.StateConnected, Account: &channel.Account{Name: "示例账号"}}}
@@ -134,7 +134,7 @@ func newChannelWorld(t *testing.T) *channelWorld {
 func (w *channelWorld) receive(t *testing.T, id, text string) {
 	t.Helper()
 	p, _ := json.Marshal(channel.ReceiveParams{Contribution: "examplechat", Message: channel.Message{ID: id, Text: text}})
-	if _, err := w.h.pluginChannelCall("example-chat", channel.MReceive, p); err != nil {
+	if _, err := w.h.extensionChannelCall("example-chat", channel.MReceive, p); err != nil {
 		t.Fatal(err)
 	}
 }

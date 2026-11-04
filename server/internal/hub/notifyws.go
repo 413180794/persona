@@ -27,14 +27,14 @@ func (w pushWants) fn() func(NotifyPrefs) bool {
 // devices: a member's computers are the center's machines.
 func (h *Hub) notifyDone(kind, machineID, machine, sessionID, title, text string, wants pushWants) {
 	payload := donePayload(machineID, machine, sessionID, title, text)
-	h.plugins.emit("agent.finished", map[string]any{"machine_id": machineID, "machine": machine, "session_id": sessionID, "title": title})
+	h.extensions.emit("agent.finished", map[string]any{"machine_id": machineID, "machine": machine, "session_id": sessionID, "title": title})
 	h.push.send(payload, "", wants.fn())
 	h.notifyWS(kind, payload, wants.fn())
 }
 
 func (h *Hub) notifyInteraction(ix proto.Interaction, machine string) {
 	payload := interactionPayload(ix, machine)
-	h.plugins.emit("agent.needs_you", map[string]any{"machine_id": ix.MachineID, "machine": machine, "session_id": ix.SessionID,
+	h.extensions.emit("agent.needs_you", map[string]any{"machine_id": ix.MachineID, "machine": machine, "session_id": ix.SessionID,
 		"interaction_id": ix.ID, "kind": ix.Kind, "summary": ix.Summary})
 	wants := pushWants{Kind: "input"}
 	if ix.Kind == proto.IxElicitation {

@@ -131,8 +131,8 @@ func (h *Hub) sinkFor(id string) channelSink {
 	if id == feishuChannelID {
 		return feishuSink{h}
 	}
-	if _, ok := h.pluginChannel(id); ok {
-		return pluginSink{h: h, id: id}
+	if _, ok := h.extensionChannel(id); ok {
+		return extensionSink{h: h, id: id}
 	}
 	return nil
 }
@@ -637,7 +637,7 @@ func (h *Hub) channelTurnEnded(machine, session string) {
 	}
 	if len(ids) == 0 && !h.channelAnswered(session) {
 		h.botMirror(machine, session)
-		h.pluginMirror(machine, session)
+		h.extensionMirror(machine, session)
 	}
 }
 
@@ -664,7 +664,7 @@ func (h *Hub) sinkReady(id string) bool {
 		api, _ := h.botAPI()
 		return api != nil
 	}
-	_, ok := h.pluginChannel(id)
+	_, ok := h.extensionChannel(id)
 	return ok
 }
 

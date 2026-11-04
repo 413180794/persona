@@ -77,13 +77,13 @@ func egoMac(t *testing.T, h *Hub, id string) (*Machine, func() []browserCallSeen
 }
 
 // Off until turned on, then Mac by Mac: the tools, the machine's state, the jobs and the calls.
-func TestEgoPlugin(t *testing.T) {
-	h, _ := pluginTestHub(t)
+func TestEgoExtension(t *testing.T) {
+	h, _ := extensionTestHub(t)
 	ctx := context.Background()
 	mux := h.routes()
 	mac, seen := egoMac(t, h, "mac")
 
-	if p := h.plugins.reg.Get(egoPluginID); p == nil || p.Record.Enabled {
+	if p := h.extensions.reg.Get(egoExtensionID); p == nil || p.Record.Enabled {
 		t.Fatalf("built in and off: %+v", p)
 	}
 	if mac.snapshot().Browser != nil || strings.Contains(toolNames(h.mcpTools(true)), "browser_") {
@@ -94,7 +94,7 @@ func TestEgoPlugin(t *testing.T) {
 		t.Fatal("the node is not asked while it is off")
 	}
 
-	if err := h.plugins.reg.SetEnabled(ctx, egoPluginID, true, "test"); err != nil {
+	if err := h.extensions.reg.SetEnabled(ctx, egoExtensionID, true, "test"); err != nil {
 		t.Fatal(err)
 	}
 	if h.browserTools() != nil {
@@ -147,7 +147,7 @@ func TestEgoPlugin(t *testing.T) {
 	}
 
 	// Asked first, when the user set it: unanswered, nothing runs.
-	if err := h.plugins.reg.SetConfig(ctx, egoPluginID, json.RawMessage(`{"machines": ["mac"], "confirm": true}`), "test"); err != nil {
+	if err := h.extensions.reg.SetConfig(ctx, egoExtensionID, json.RawMessage(`{"machines": ["mac"], "confirm": true}`), "test"); err != nil {
 		t.Fatal(err)
 	}
 	before := len(seen())
@@ -163,7 +163,7 @@ func TestEgoPlugin(t *testing.T) {
 		}
 	}
 
-	if err := h.plugins.reg.SetEnabled(ctx, egoPluginID, false, "test"); err != nil {
+	if err := h.extensions.reg.SetEnabled(ctx, egoExtensionID, false, "test"); err != nil {
 		t.Fatal(err)
 	}
 	if mac.snapshot().Browser != nil || h.browserTools() != nil || h.portAllowed(mac, screenPort) {

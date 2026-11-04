@@ -179,7 +179,7 @@ func ruleTier(it *InboxItem) string {
 		switch {
 		case it.Connector.RuleTier != "":
 			return it.Connector.RuleTier
-		case fromPlugin(it.Source):
+		case fromExtension(it.Source):
 			return ""
 		}
 		return TierNoise
@@ -215,7 +215,7 @@ func promptItem(it *InboxItem) prompts.InboxItem {
 	p := prompts.InboxItem{Kind: it.Kind, MailDirect: it.Mail != nil && it.Mail.Direct, Context: it.Context}
 	if it.Connector != nil {
 		p.Source = it.Source
-		if d, ok := pluginKinds.Load(it.Source + "/" + it.Kind); ok {
+		if d, ok := extensionKinds.Load(it.Source + "/" + it.Kind); ok {
 			p.Described = d.(string)
 		}
 	}

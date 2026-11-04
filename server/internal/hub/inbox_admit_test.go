@@ -111,18 +111,18 @@ func admitHub(t *testing.T, model *ai.Client, cs ...connector.Connector) (*Hub, 
 		if err := h.addConnector(c); err != nil {
 			t.Fatal(err)
 		}
-		asPlugin(t, c.ID())
+		asExtension(t, c.ID())
 	}
 	return h, st
 }
 
 // asPlugin makes a connector one a plugin provides, for the test.
-func asPlugin(t *testing.T, id string) {
-	_, was := pluginConnectors.Load(id)
-	pluginConnectors.Store(id, true)
+func asExtension(t *testing.T, id string) {
+	_, was := extensionConnectors.Load(id)
+	extensionConnectors.Store(id, true)
 	t.Cleanup(func() {
 		if !was {
-			pluginConnectors.Delete(id)
+			extensionConnectors.Delete(id)
 		}
 	})
 }
@@ -217,7 +217,7 @@ func TestInboxHoldsNewItemsWithoutFallback(t *testing.T) {
 func TestInboxFallbackIsFinal(t *testing.T) {
 	model, client := newTriageModel(t, "fail", `{"tier":"noise","summary":"示例","reason":"示例"}`)
 	now := time.Now().Add(-time.Minute)
-	lark := &pluginLark{things: []connector.InboxThing{{Thread: "chat:10", Kind: KindDM, Title: "Alice", Preview: "在吗", Context: "Alice：在吗",
+	lark := &extensionLark{things: []connector.InboxThing{{Thread: "chat:10", Kind: KindDM, Title: "Alice", Preview: "在吗", Context: "Alice：在吗",
 		At: now, Last: "5", CanReply: true, Extra: &connector.ThingExtra{Source: "lark", Account: "feishu", AccountName: "飞书", LegacyID: "lark:10:5",
 			Count: 1, StartedAt: now, Lark: rawJSON(InboxLark{AccountID: 1, FeedID: "10", StartPosition: "5"})}}}}
 	th := genericThing("example-org/example-repo#4", "a", "示例：PR 上的评论")
@@ -258,7 +258,7 @@ func TestInboxFallbackIsFinal(t *testing.T) {
 func TestInboxConnectorItemIsNotSilentlyNoise(t *testing.T) {
 	model, client := newTriageModel(t, "fail", `{"tier":"fyi","summary":"示例","reason":"示例"}`)
 	h, _ := admitHub(t, client)
-	asPlugin(t, "example")
+	asExtension(t, "example")
 	it := &InboxItem{ID: "example:1", Source: "example", Kind: "review_requested", Tier: TierAction, Reason: "示例", Last: "b", TriagedAt: "a",
 		Context: "示例：新评论", UpdatedAt: time.Now(), Connector: &InboxConnector{Thread: "example-org/example-repo#5"}}
 	h.inbox.items[it.ID] = it
@@ -322,7 +322,7 @@ func TestInboxBuiltinSourcesAsBefore(t *testing.T) {
 	th := genericThing("example-org/example-repo#7", "a", "示例：一条评论")
 	c := &inboxConnector{things: []connector.InboxThing{th}}
 	h, st := admitHub(t, client, c)
-	pluginConnectors.Delete(c.ID())
+	extensionConnectors.Delete(c.ID())
 	h.collectInbox(context.Background(), roundPoll)
 	it := itemOf(h, "example", th.Thread)
 	if it == nil || !st.saved(it.ID) {

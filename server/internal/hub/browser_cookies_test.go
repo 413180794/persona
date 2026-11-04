@@ -12,7 +12,7 @@ import (
 
 // Sign-ins in ego: only the user's own apps, passed straight to the node, logged without a value.
 func TestBrowserCookies(t *testing.T) {
-	h, _ := pluginTestHub(t)
+	h, _ := extensionTestHub(t)
 	ctx := context.Background()
 	mac, seen := egoMac(t, h, "mac")
 	var logged bytes.Buffer
@@ -36,7 +36,7 @@ func TestBrowserCookies(t *testing.T) {
 	if code, _ := do("GET", "", "", true); code != 404 {
 		t.Fatalf("plugin off: %d", code)
 	}
-	if err := h.plugins.reg.SetEnabled(ctx, egoPluginID, true, "test"); err != nil {
+	if err := h.extensions.reg.SetEnabled(ctx, egoExtensionID, true, "test"); err != nil {
 		t.Fatal(err)
 	}
 	for _, m := range []string{"GET", "POST", "DELETE"} {

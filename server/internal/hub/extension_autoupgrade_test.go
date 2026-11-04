@@ -1,0 +1,408 @@
+package hub
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/extension"
+)
+
+// upgradeMarket is a site market serving one plugin's versions: the index lists the last one published.
+type upgradeMarket struct {
+	t     *testing.T
+	mu    sync.Mutex
+	index []byte
+	pkgs  map[string][]byte
+	reads int
+	down  bool
+	srv   *httptest.Server
+}
+
+func newUpgradeMarket(t *testing.T) *upgradeMarket {
+	mk := &upgradeMarket{t: t, pkgs: map[string][]byte{}}
+	mk.srv = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mk.mu.Lock()
+		defer mk.mu.Unlock()
+		switch {
+		case mk.down:
+			http.Error(w, "down", http.StatusBadGateway)
+		case r.URL.Path == "/plugins/persona-plugins.json":
+			mk.reads++
+			_, _ = w.Write(mk.index)
+		case mk.pkgs[strings.TrimPrefix(r.URL.Path, "/plugins/pkg/")] != nil:
+			_, _ = w.Write(mk.pkgs[strings.TrimPrefix(r.URL.Path, "/plugins/pkg/")])
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(mk.srv.Close)
+	return mk
+}
+
+// publish makes dir the market's newest version of its plugin.
+func (mk *upgradeMarket) publish(dir string) {
+	b, _ := os.ReadFile(filepath.Join(dir, extension.ManifestFile))
+	var m struct {
+		Version string `json:"version"`
+	}
+	_ = json.Unmarshal(b, &m)
+	pkg := tarDir(mk.t, dir)
+	mk.mu.Lock()
+	defer mk.mu.Unlock()
+	mk.pkgs[m.Version+".tar.gz"] = pkg
+	mk.index = marketIndex(mk.t, "Example plugins", marketEntry(mk.t, dir, "pkg/"+m.Version+".tar.gz", pkg))
+}
+
+func (mk *upgradeMarket) readCount() int {
+	mk.mu.Lock()
+	defer mk.mu.Unlock()
+	return mk.reads
+}
+
+// setUIVersion makes example-ui's package in dir version v (the program says so at initialize).
+func setUIVersion(t *testing.T, dir, v string) {
+	setVersion(t, dir, v)
+	self, _ := os.Executable()
+	_ = os.WriteFile(filepath.Join(dir, "bin", "ui"), []byte("#!/bin/sh\nEXAMPLE_UI_VERSION="+v+" JARVIS_TEST_PLUGIN=ui exec "+self+" \"$@\"\n"), 0o755)
+}
+
+// editManifest changes dir's manifest.
+func editManifest(t *testing.T, dir string, f func(m map[string]any)) {
+	p := filepath.Join(dir, extension.ManifestFile)
+	b, _ := os.ReadFile(p)
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	f(m)
+	b, _ = json.Marshal(m)
+	_ = os.WriteFile(p, b, 0o644)
+}
+
+// upgradeHub is a hub with the market mk registered and example-ui 1.0.0 installed from it.
+func upgradeHub(t *testing.T) (h *Hub, mux http.Handler, phone string, mk *upgradeMarket, dir, mid string) {
+	h, phone, _ = marketHub(t)
+	mux = h.routes()
+	mk = newUpgradeMarket(t)
+	h.extensions.markets.client = mk.srv.Client()
+	dir = uiPackage(t)
+	mk.publish(dir)
+	code, out := call(t, mux, "POST", "/api/v1/plugins/-/markets", phone, fmt.Sprintf(`{"spec": %q}`, mk.srv.URL+"/plugins/"))
+	if code != 200 {
+		t.Fatalf("market: %d %v", code, out)
+	}
+	mid = out["id"].(string)
+	_, pv := call(t, mux, "POST", "/api/v1/plugins/-/catalog/preview", phone, fmt.Sprintf(`{"market": %q, "plugin": "example-ui"}`, mid))
+	if code, out := call(t, mux, "POST", "/api/v1/plugins/-/install", phone, fmt.Sprintf(`{"preview_id": %q, "permissions_digest": %q}`, pv["preview_id"], pv["permissions_digest"])); code != 200 {
+		t.Fatalf("install: %d %v", code, out)
+	}
+	waitLong(t, "example-ui running", func() bool {
+		return h.extensions.view(context.Background(), h.extensions.reg.Get("example-ui")).Status == "running"
+	})
+	return h, mux, phone, mk, dir, mid
+}
+
+func installedVersion(h *Hub) string { return h.extensions.reg.Get("example-ui").Record.Version }
+
+func upgradeOf(t *testing.T, mux http.Handler, token string) map[string]any {
+	t.Helper()
+	code, out := call(t, mux, "GET", "/api/v1/plugins/-/upgrades", token, "")
+	if code != 200 {
+		t.Fatalf("upgrades: %d %v", code, out)
+	}
+	for _, x := range out["upgrades"].([]any) {
+		if up := x.(map[string]any); up["id"] == "example-ui" {
+			return up
+		}
+	}
+	return nil
+}
+
+// A newer version asking for nothing more goes in by itself (audited as 自动升级), not while the plugin is in use, not
+// while it is switched off (for it, or for all); the user sees what happened on the plugin.
+func TestExtensionAutoUpgrade(t *testing.T) {
+	h, mux, phone, mk, dir, mid := upgradeHub(t)
+	ctx := context.Background()
+	u := h.extensionUpgrades()
+
+	setUIVersion(t, dir, "1.1.0")
+	mk.publish(dir)
+	if _, err := h.marketRead(ctx, mid); err != nil {
+		t.Fatal(err)
+	}
+	if up := upgradeOf(t, mux, phone); up == nil || up["state"] != upgradeAvailable || up["to"] != "1.1.0" {
+		t.Fatalf("not available: %v", up)
+	}
+
+	// Switched off for it: it stays; and for all, with it switched back on.
+	if code, out := call(t, mux, "PUT", "/api/v1/plugins/example-ui/-/auto-upgrade", phone, `{"auto": false}`); code != 200 || out["auto_upgrade"] != false {
+		t.Fatalf("switch: %d %v", code, out)
+	}
+	u.upgrade(ctx)
+	if v := installedVersion(h); v != "1.0.0" {
+		t.Fatalf("upgraded while switched off: %s", v)
+	}
+	if up := upgradeOf(t, mux, phone); up["state"] != upgradeOff {
+		t.Fatalf("%v", up)
+	}
+	call(t, mux, "PUT", "/api/v1/plugins/example-ui/-/auto-upgrade", phone, `{"auto": true}`)
+	if code, out := call(t, mux, "PUT", "/api/v1/plugins/-/upgrades", phone, `{"auto": false}`); code != 200 || out["auto"] != false {
+		t.Fatalf("global switch: %d %v", code, out)
+	}
+	u.upgrade(ctx)
+	if v := installedVersion(h); v != "1.0.0" {
+		t.Fatalf("upgraded while all are switched off: %s", v)
+	}
+	call(t, mux, "PUT", "/api/v1/plugins/-/upgrades", phone, `{"auto": true}`)
+
+	// In use (a request open): it waits, and goes in once nothing uses it.
+	end, err := h.extensions.get("example-ui").proc.BeginHTTP(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.upgrade(ctx)
+	if v := installedVersion(h); v != "1.0.0" {
+		t.Fatalf("upgraded while in use: %s", v)
+	}
+	if up := upgradeOf(t, mux, phone); up["state"] != upgradeWaitingIdle {
+		t.Fatalf("%v", up)
+	}
+	end()
+	u.upgrade(ctx)
+	if v := installedVersion(h); v != "1.1.0" {
+		t.Fatalf("not upgraded once idle: %s", v)
+	}
+	var d map[string]any
+	defer func() {
+		if t.Failed() {
+			t.Logf("last: %v", d)
+		}
+	}()
+	waitLong(t, "the note", func() bool {
+		_, d = call(t, mux, "GET", "/api/v1/plugins/example-ui/-/", phone, "")
+		n, _ := d["upgrade_note"].(map[string]any)
+		return n["kind"] == "upgraded" && n["to"] == "1.1.0" && d["upgrade"] == nil && d["auto_upgrade"] == true
+	})
+	st := h.store.(*marketTestStore).extensionStore
+	st.mu.Lock()
+	audited := slices.Contains(st.audit, "example-ui upgrade "+extensionUpgradeActor)
+	st.mu.Unlock()
+	if !audited {
+		t.Fatalf("not audited: %v", st.audit)
+	}
+	if up := upgradeOf(t, mux, phone); up != nil {
+		t.Fatalf("still listed: %v", up)
+	}
+	// Remembered across a restart of the hub.
+	var s extensionUpgradeSettings
+	if ok, _ := h.store.Setting(ctx, extensionUpgradesKey, &s); !ok || s.Last["example-ui"].Kind != "upgraded" {
+		t.Fatalf("%+v", s)
+	}
+}
+
+// One asking for more waits for the user (told once), who confirms it with the digest as for any upgrade.
+func TestExtensionAutoUpgradeMorePermissions(t *testing.T) {
+	h, mux, phone, mk, dir, mid := upgradeHub(t)
+	ctx := context.Background()
+	u := h.extensionUpgrades()
+
+	setUIVersion(t, dir, "1.2.0")
+	editManifest(t, dir, func(m map[string]any) {
+		m["permissions"] = map[string]any{"launcher_keys": true, "network": []string{"api.example.com"}}
+	})
+	mk.publish(dir)
+	_, _ = h.marketRead(ctx, mid)
+	u.upgrade(ctx)
+	u.upgrade(ctx)
+	if v := installedVersion(h); v != "1.0.0" {
+		t.Fatalf("upgraded to more permissions: %s", v)
+	}
+	up := upgradeOf(t, mux, phone)
+	if up["state"] != upgradeNeedsConsent || !strings.Contains(fmt.Sprint(up["added_permissions"]), "api.example.com") {
+		t.Fatalf("%v", up)
+	}
+	_, d := call(t, mux, "GET", "/api/v1/plugins/example-ui/-/", phone, "")
+	n, _ := d["upgrade_note"].(map[string]any)
+	if n["kind"] != upgradeNeedsConsent || n["detail"] != "要多一项权限：访问更多网络（api.example.com）" {
+		t.Fatalf("%v", d["upgrade_note"])
+	}
+	var s extensionUpgradeSettings
+	_, _ = h.store.Setting(ctx, extensionUpgradesKey, &s)
+	if s.Notified["example-ui"] != "1.2.0" {
+		t.Fatalf("%+v", s)
+	}
+
+	_, pv := call(t, mux, "POST", "/api/v1/plugins/-/catalog/preview", phone, fmt.Sprintf(`{"market": %q, "plugin": "example-ui"}`, mid))
+	if code, out := call(t, mux, "POST", "/api/v1/plugins/example-ui/-/upgrade", phone, fmt.Sprintf(`{"preview_id": %q, "permissions_digest": %q}`, pv["preview_id"], pv["permissions_digest"])); code != 200 {
+		t.Fatalf("confirm: %d %v", code, out)
+	}
+	waitLong(t, "the note cleared", func() bool {
+		u.upgrade(ctx)
+		_, d := call(t, mux, "GET", "/api/v1/plugins/example-ui/-/", phone, "")
+		return d["version"] == "1.2.0" && d["upgrade_note"] == nil && d["upgrade"] == nil
+	})
+}
+
+// One that does not come up is rolled back, skipped from then on, and the user is told.
+func TestExtensionAutoUpgradeRollsBack(t *testing.T) {
+	h, mux, phone, mk, dir, mid := upgradeHub(t)
+	ctx := context.Background()
+	u := h.extensionUpgrades()
+
+	setVersion(t, dir, "1.3.0")
+	_ = os.WriteFile(filepath.Join(dir, "bin", "ui"), []byte("#!/bin/sh\nexit 3\n"), 0o755)
+	mk.publish(dir)
+	_, _ = h.marketRead(ctx, mid)
+	u.upgrade(ctx)
+	waitLong(t, "the rollback", func() bool {
+		_, d := call(t, mux, "GET", "/api/v1/plugins/example-ui/-/", phone, "")
+		n, _ := d["upgrade_note"].(map[string]any)
+		return d["version"] == "1.0.0" && n["kind"] == "rolled_back" && n["to"] == "1.3.0"
+	})
+	if up := upgradeOf(t, mux, phone); up["state"] != upgradeSkipped {
+		t.Fatalf("%v", up)
+	}
+	u.upgrade(ctx)
+	st := h.store.(*marketTestStore).extensionStore
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	upgrades := 0
+	for _, a := range st.audit {
+		if a == "example-ui upgrade "+extensionUpgradeActor {
+			upgrades++
+		}
+	}
+	if upgrades != 1 || !slices.Contains(st.audit, "example-ui rollback hub") {
+		t.Fatalf("%v", st.audit)
+	}
+}
+
+// Installed from a directory on the hub's machine: never upgraded by the hub, nor switched.
+func TestExtensionAutoUpgradeOnlyMarketExtensions(t *testing.T) {
+	h, phone, _ := marketHub(t)
+	mux := h.routes()
+	ctx := context.Background()
+	mk := newUpgradeMarket(t)
+	h.extensions.markets.client = mk.srv.Client()
+	dir := uiPackage(t)
+	_, pv := call(t, mux, "POST", "/api/v1/plugins/-/preview", h.cfg.Token, `{"source": "dir:`+dir+`"}`)
+	call(t, mux, "POST", "/api/v1/plugins/-/install", h.cfg.Token, fmt.Sprintf(`{"preview_id": %q, "permissions_digest": %q}`, pv["preview_id"], pv["permissions_digest"]))
+	newer := uiPackage(t)
+	setVersion(t, newer, "2.0.0")
+	mk.publish(newer)
+	call(t, mux, "POST", "/api/v1/plugins/-/markets", phone, fmt.Sprintf(`{"spec": %q}`, mk.srv.URL+"/plugins/"))
+	h.extensionUpgrades().check(ctx)
+	h.extensionUpgrades().upgrade(ctx)
+	if v := installedVersion(h); v != "1.0.0" {
+		t.Fatalf("a directory's plugin was upgraded from a market: %s", v)
+	}
+	if up := upgradeOf(t, mux, phone); up != nil {
+		t.Fatalf("%v", up)
+	}
+	_, d := call(t, mux, "GET", "/api/v1/plugins/example-ui/-/", phone, "")
+	if _, ok := d["auto_upgrade"]; ok {
+		t.Fatalf("%v", d)
+	}
+	if code, _ := call(t, mux, "PUT", "/api/v1/plugins/example-ui/-/auto-upgrade", phone, `{"auto": true}`); code != 400 {
+		t.Fatalf("switched a directory's plugin: %d", code)
+	}
+	if code, _ := call(t, mux, "PUT", "/api/v1/plugins/voice/-/auto-upgrade", phone, `{"auto": true}`); code != 404 {
+		t.Fatalf("%d", code)
+	}
+}
+
+// The markets are read when due (marketStale after the last read); one that fails is tried again after a backoff and
+// logged once, when it stops answering and when it answers again.
+func TestExtensionMarketReadsWhenDue(t *testing.T) {
+	h, _, _, mk, _, mid := upgradeHub(t)
+	ctx := context.Background()
+	var logs bytes.Buffer
+	var logMu sync.Mutex
+	h.logger = log.New(writerFunc(func(b []byte) (int, error) { logMu.Lock(); defer logMu.Unlock(); return logs.Write(b) }), "", 0)
+	u := h.extensionUpgrades()
+	age := func(d time.Duration) {
+		ms := h.marketsState()
+		ms.mu.Lock()
+		at := time.Now().Add(-d)
+		ms.byID[mid].rec.FetchedAt = &at
+		ms.mu.Unlock()
+	}
+	n := mk.readCount()
+	u.check(ctx)
+	if mk.readCount() != n {
+		t.Fatal("read a fresh index")
+	}
+	age(marketStale + marketJitter)
+	u.check(ctx)
+	if mk.readCount() != n+1 {
+		t.Fatal("did not read a stale index")
+	}
+
+	mk.mu.Lock()
+	mk.down = true
+	mk.mu.Unlock()
+	age(marketStale + marketJitter)
+	u.check(ctx)
+	u.check(ctx)
+	age(marketBackoff + time.Minute) // a second failure doubles the wait
+	u.check(ctx)
+	age(marketBackoff + time.Minute)
+	u.check(ctx)
+	logMu.Lock()
+	failedLines := strings.Count(logs.String(), "plugin market "+mid+":")
+	logMu.Unlock()
+	if failedLines != 1 {
+		t.Fatalf("logged %d times:\n%s", failedLines, logs.String())
+	}
+	if u.fails[mid] != 2 {
+		t.Fatalf("tried %d times", u.fails[mid])
+	}
+	mk.mu.Lock()
+	mk.down = false
+	mk.mu.Unlock()
+	age(2*marketBackoff + time.Minute)
+	u.check(ctx)
+	logMu.Lock()
+	defer logMu.Unlock()
+	if !strings.Contains(logs.String(), "answering again") || u.fails[mid] != 0 {
+		t.Fatalf("%s %d", logs.String(), u.fails[mid])
+	}
+}
+
+type writerFunc func([]byte) (int, error)
+
+func (f writerFunc) Write(b []byte) (int, error) { return f(b) }
+
+func TestPrintUpgrades(t *testing.T) {
+	var b strings.Builder
+	printUpgrades(&b, upgradesView{Auto: true, Upgrades: []ExtensionUpgrade{
+		{ID: "example-a", From: "1.0.0", To: "1.1.0", State: upgradeWaitingIdle, Detail: "插件正在用"},
+		{ID: "example-b", Market: "m1", From: "0.6.0", To: "0.7.0", State: upgradeNeedsConsent,
+			AddedPermissions: []extension.PermissionLine{{Title: "访问更多网络", Detail: "api.example.com"}}},
+		{ID: "example-c", From: "2.0.0", To: "2.1.0", State: upgradeSkipped},
+	}})
+	out := b.String()
+	for _, want := range []string{"插件自动升级：开", "可升级：", "example-a", "等空闲：插件正在用", "等你确认：",
+		"要多一项权限：访问更多网络（api.example.com）", "market:m1/example-b", "已跳过：", "回滚过"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("no %q in:\n%s", want, out)
+		}
+	}
+	b.Reset()
+	printUpgrades(&b, upgradesView{})
+	if !strings.Contains(b.String(), "都是最新的") {
+		t.Fatal(b.String())
+	}
+}

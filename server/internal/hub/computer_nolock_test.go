@@ -9,11 +9,11 @@ import (
 // 「插件开着时不自动锁屏」: turned on for a Mac from its page, the node is told to hold it (and again by noLockLoop);
 // off, or the plugin off, it is told to let go.
 func TestNoAutoLock(t *testing.T) {
-	h, _ := pluginTestHub(t)
+	h, _ := extensionTestHub(t)
 	ctx := context.Background()
 	mux := h.routes()
 	mac, _ := computerMac(t, h, "mac")
-	if err := h.plugins.reg.SetEnabled(ctx, cuaPluginID, true, "test"); err != nil {
+	if err := h.extensions.reg.SetEnabled(ctx, cuaExtensionID, true, "test"); err != nil {
 		t.Fatal(err)
 	}
 	if code, out := call(t, mux, "PUT", "/api/v1/machines/mac/computer", h.cfg.Token, `{"enabled": true}`); code != 200 || out["no_auto_lock"] == true {
@@ -31,7 +31,7 @@ func TestNoAutoLock(t *testing.T) {
 		t.Fatalf("turned on, the Mac's switch left as it was: %d %v", code, out)
 	}
 	var cfg map[string]any
-	_ = json.Unmarshal(h.plugins.reg.Config(h.plugins.reg.Get(cuaPluginID)), &cfg)
+	_ = json.Unmarshal(h.extensions.reg.Config(h.extensions.reg.Get(cuaExtensionID)), &cfg)
 	if l, _ := cfg["no_auto_lock"].([]any); len(l) != 1 || l[0] != "mac" || !h.noLockOn(mac) {
 		t.Fatalf("in the plugin's settings: %v", cfg)
 	}
@@ -45,7 +45,7 @@ func TestNoAutoLock(t *testing.T) {
 		t.Fatalf("off: let go: %v", on)
 	}
 	call(t, mux, "PUT", "/api/v1/machines/mac/computer", h.cfg.Token, `{"no_auto_lock": true}`)
-	if err := h.plugins.reg.SetEnabled(ctx, cuaPluginID, false, "test"); err != nil {
+	if err := h.extensions.reg.SetEnabled(ctx, cuaExtensionID, false, "test"); err != nil {
 		t.Fatal(err)
 	}
 	h.tellNoLock(ctx, mac)

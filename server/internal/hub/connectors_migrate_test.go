@@ -10,18 +10,20 @@ import (
 )
 
 // pluginLark stands in for a plugin's connector "lark": an inbox that records replies.
-type pluginLark struct {
+type extensionLark struct {
 	things []connector.InboxThing
 	got    []connector.InboxReply
 }
 
-func (*pluginLark) ID() string   { return "lark" }
-func (*pluginLark) Name() string { return "飞书" }
-func (*pluginLark) Manifest() connector.Manifest {
+func (*extensionLark) ID() string   { return "lark" }
+func (*extensionLark) Name() string { return "飞书" }
+func (*extensionLark) Manifest() connector.Manifest {
 	return connector.Manifest{Capabilities: []connector.Capability{connector.CapInbox}, Kinds: []string{KindDM, KindDoc}}
 }
-func (c *pluginLark) Collect(context.Context) ([]connector.InboxThing, error) { return c.things, nil }
-func (c *pluginLark) Reply(_ context.Context, r connector.InboxReply) error {
+func (c *extensionLark) Collect(context.Context) ([]connector.InboxThing, error) {
+	return c.things, nil
+}
+func (c *extensionLark) Reply(_ context.Context, r connector.InboxReply) error {
 	c.got = append(c.got, r)
 	return nil
 }
@@ -32,14 +34,14 @@ func rawJSON(v any) json.RawMessage {
 }
 
 // A plugin's connector takes the id lark (the hub has none of its own any more); gone with the plugin.
-func TestPluginTakesOverLark(t *testing.T) {
+func TestExtensionTakesOverLark(t *testing.T) {
 	h := newTestHub(t)
 	h.connectors = connector.NewRegistry(nil)
 	h.registerConnectors()
 	if h.connectors.Get("lark") != nil {
 		t.Fatal("the hub has a Feishu connector of its own")
 	}
-	p := &pluginLark{}
+	p := &extensionLark{}
 	h.yieldOwnConnector("lark")
 	if err := h.addConnector(p); err != nil {
 		t.Fatal(err)
@@ -47,7 +49,7 @@ func TestPluginTakesOverLark(t *testing.T) {
 	if h.connectors.Get("lark") != p {
 		t.Fatal("the plugin's is the one now")
 	}
-	h.removePluginConnector("lark")
+	h.removeExtensionConnector("lark")
 	if h.connectors.Get("lark") != nil {
 		t.Fatal("still there after the plugin went")
 	}
@@ -65,7 +67,7 @@ func TestMigratedInbox(t *testing.T) {
 	h := newTestHub(t)
 	h.inbox.init()
 	h.connectors = connector.NewRegistry(nil)
-	p := &pluginLark{}
+	p := &extensionLark{}
 	if err := h.addConnector(p); err != nil {
 		t.Fatal(err)
 	}

@@ -254,7 +254,7 @@ func (h *Hub) routes() http.Handler {
 	h.todoRoutes(api)
 	h.connectorRoutes(api)
 	h.translateRoutes(api)
-	h.pluginRoutes(api)
+	h.extensionRoutes(api)
 	api.HandleFunc("GET /api/v1/ws", h.serveWS)
 	if h.mail != nil {
 		api.Handle("/api/v1/mail/", h.mail.Handler())
@@ -269,7 +269,7 @@ func (h *Hub) routes() http.Handler {
 	h.runtimeCLIRoutes(api)
 	// What the center serves: its own apps' requests and those the members pass on (peer_http.go), whose source the
 	// member judged (no gate here for them). A member passes everything but its own few routes on (memberForward).
-	centerAPI := h.auth(h.pluginAPIs(jsonRouteErrors(api), api))
+	centerAPI := h.auth(h.extensionAPIs(jsonRouteErrors(api), api))
 	h.mesh.centerAPI.Store(centerAPI)
 	appAPI := h.gate(h.memberForward(centerAPI))
 	h.busRoutes(mux)

@@ -569,7 +569,7 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		}
 		p.Interaction.MachineID = m.cfg.ID
 		// A write through a skill's gated command (node/larkgate.go): its plugin names what the ids are.
-		if s, ok := m.hub.plugins.assistantSummary(ctx, p.Interaction.ToolName, p.Interaction.Summary); ok {
+		if s, ok := m.hub.extensions.assistantSummary(ctx, p.Interaction.ToolName, p.Interaction.Summary); ok {
 			p.Interaction.Summary = s
 		}
 		return m.hub.waitInteraction(ctx, p.Interaction)

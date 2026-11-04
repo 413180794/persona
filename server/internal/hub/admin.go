@@ -40,7 +40,7 @@ type adminState struct {
 	failures       authLimiter // failed sign-ins per source
 	publicFailures authLimiter // failed sign-ins from outside the LAN, all together
 	doctorMu       sync.Mutex
-	plugins        pluginGate // plugin previews (admin_plugins.go)
+	extensions     extensionGate // plugin previews (admin_plugins.go)
 
 	ifCache       []ifacePrefix
 	ifCached      time.Time
@@ -127,7 +127,7 @@ func (h *Hub) adminRoutes(mux *http.ServeMux, api, web http.Handler) http.Handle
 	h.adminMachineRoutes(closed)
 	h.adminDeviceRoutes(closed)
 	h.adminNetworkRoutes(closed)
-	h.adminPluginRoutes(closed)
+	h.adminExtensionRoutes(closed)
 	// Hub mesh (docs/plan-hub-mesh.md 2.7): /peers and /routes, from the mesh's own file.
 	h.registerPeerAdmin(closed)
 	h.peerCLIRoutes(open) // jarvisd hub pair --peer, jarvisd hub peer … (peer_admin.go)

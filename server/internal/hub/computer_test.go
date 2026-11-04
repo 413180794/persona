@@ -130,8 +130,8 @@ func toolNames(tools []proto.Tool) string {
 
 // The plugin is off until the user turns it on, then machine by machine: until then no node is asked, the assistant
 // has no tools for it and the machines say nothing of it.
-func TestComputerPluginIsOffUntilTurnedOnForAMachine(t *testing.T) {
-	h, _ := pluginTestHub(t)
+func TestComputerExtensionIsOffUntilTurnedOnForAMachine(t *testing.T) {
+	h, _ := extensionTestHub(t)
 	ctx := context.Background()
 	mux := h.routes()
 	mac, seen := computerMac(t, h, "mac")
@@ -139,7 +139,7 @@ func TestComputerPluginIsOffUntilTurnedOnForAMachine(t *testing.T) {
 	box.online, box.info = true, proto.NodeInfo{OS: "linux"}
 	h.machines, h.byID["box"] = append(h.machines, box), box
 
-	if p := h.plugins.reg.Get(cuaPluginID); p == nil || p.Record.Enabled {
+	if p := h.extensions.reg.Get(cuaExtensionID); p == nil || p.Record.Enabled {
 		t.Fatalf("the built-in plugin is there and off: %+v", p)
 	}
 	if mac.snapshot().Computer != nil || strings.Contains(toolNames(h.mcpTools(true)), "computer_") {
@@ -153,7 +153,7 @@ func TestComputerPluginIsOffUntilTurnedOnForAMachine(t *testing.T) {
 		t.Fatal("the node is not asked while the plugin is off")
 	}
 
-	if err := h.plugins.reg.SetEnabled(ctx, cuaPluginID, true, "test"); err != nil {
+	if err := h.extensions.reg.SetEnabled(ctx, cuaExtensionID, true, "test"); err != nil {
 		t.Fatal(err)
 	}
 	if c := mac.snapshot().Computer; c == nil || c.Enabled {
@@ -191,7 +191,7 @@ func TestComputerPluginIsOffUntilTurnedOnForAMachine(t *testing.T) {
 	if code != 200 || out["enabled"] != false || h.computerTools() != nil {
 		t.Fatalf("off again: %d %v", code, out)
 	}
-	if err := h.plugins.reg.SetEnabled(ctx, cuaPluginID, false, "test"); err != nil {
+	if err := h.extensions.reg.SetEnabled(ctx, cuaExtensionID, false, "test"); err != nil {
 		t.Fatal(err)
 	}
 	if mac.snapshot().Computer != nil {
@@ -205,17 +205,17 @@ func TestComputerPluginIsOffUntilTurnedOnForAMachine(t *testing.T) {
 // computer_state and computer_run reach the node as Cua Driver calls under the conversation's session label; the
 // screenshot comes back as an image beside the JSON.
 func TestComputerToolsCallTheNode(t *testing.T) {
-	h, _ := pluginTestHub(t)
+	h, _ := extensionTestHub(t)
 	ctx := context.Background()
 	_, seen := computerMac(t, h, "mac")
-	if err := h.plugins.reg.SetEnabled(ctx, cuaPluginID, true, "test"); err != nil {
+	if err := h.extensions.reg.SetEnabled(ctx, cuaExtensionID, true, "test"); err != nil {
 		t.Fatal(err)
 	}
 	if res := h.callComputerTool(ctx, "conv1234-5678", "computer_state", json.RawMessage(`{"machine": "mac"}`)); !res.IsError ||
 		!strings.Contains(res.Content[0].Text, "not turned on") {
 		t.Fatalf("not on for the Mac yet: %+v", res)
 	}
-	if err := h.plugins.reg.SetConfig(ctx, cuaPluginID, json.RawMessage(`{"machines": ["mac"], "app_approval": false}`), "test"); err != nil {
+	if err := h.extensions.reg.SetConfig(ctx, cuaExtensionID, json.RawMessage(`{"machines": ["mac"], "app_approval": false}`), "test"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -246,7 +246,7 @@ func TestComputerToolsCallTheNode(t *testing.T) {
 			t.Fatalf("「操作或开着 VNC 时保持唤醒」 is on unless turned off: %+v", c)
 		}
 	}
-	if err := h.plugins.reg.SetConfig(ctx, cuaPluginID, json.RawMessage(`{"machines": ["mac"], "keep_awake": false, "app_approval": false}`), "test"); err != nil {
+	if err := h.extensions.reg.SetConfig(ctx, cuaExtensionID, json.RawMessage(`{"machines": ["mac"], "keep_awake": false, "app_approval": false}`), "test"); err != nil {
 		t.Fatal(err)
 	}
 	h.callComputerTool(ctx, "conv1234-5678", "computer_run", json.RawMessage(`{"machine": "mac", "steps": `+steps+`}`))
@@ -261,7 +261,7 @@ func TestComputerToolsCallTheNode(t *testing.T) {
 	}
 
 	// Asking first, when the user set it: unanswered (or declined), nothing runs.
-	if err := h.plugins.reg.SetConfig(ctx, cuaPluginID, json.RawMessage(`{"machines": ["mac"], "confirm": true, "app_approval": false}`), "test"); err != nil {
+	if err := h.extensions.reg.SetConfig(ctx, cuaExtensionID, json.RawMessage(`{"machines": ["mac"], "confirm": true, "app_approval": false}`), "test"); err != nil {
 		t.Fatal(err)
 	}
 	_, before := seen()
@@ -288,20 +288,20 @@ func TestComputerResultCutsLongOutput(t *testing.T) {
 
 // The machine page's 安装 Cua Driver, 去授权 and 取消 start and stop the node's job; its state comes back on the machine.
 func TestComputerJobs(t *testing.T) {
-	h, _ := pluginTestHub(t)
+	h, _ := extensionTestHub(t)
 	ctx := context.Background()
 	mux := h.routes()
 	mac, seen := computerMac(t, h, "mac")
 	if code, _ := call(t, mux, "POST", "/api/v1/machines/mac/computer/install", h.cfg.Token, ""); code != 404 {
 		t.Fatalf("the plugin off: %d", code)
 	}
-	if err := h.plugins.reg.SetEnabled(ctx, cuaPluginID, true, "test"); err != nil {
+	if err := h.extensions.reg.SetEnabled(ctx, cuaExtensionID, true, "test"); err != nil {
 		t.Fatal(err)
 	}
 	if code, _ := call(t, mux, "POST", "/api/v1/machines/mac/computer/install", h.cfg.Token, ""); code != 404 {
 		t.Fatalf("not on for this Mac: %d", code)
 	}
-	if err := h.plugins.reg.SetConfig(ctx, cuaPluginID, json.RawMessage(`{"machines": ["mac"]}`), "test"); err != nil {
+	if err := h.extensions.reg.SetConfig(ctx, cuaExtensionID, json.RawMessage(`{"machines": ["mac"]}`), "test"); err != nil {
 		t.Fatal(err)
 	}
 	if code, _ := call(t, mux, "POST", "/api/v1/machines/mac/computer/reboot", h.cfg.Token, ""); code != 404 {

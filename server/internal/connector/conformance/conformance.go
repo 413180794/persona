@@ -15,7 +15,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
-	"github.com/nwverse/persona/server/internal/plugin"
+	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -51,7 +51,7 @@ func check(t testing.TB, c connector.Connector, inPlugin bool) {
 		if !inPlugin {
 			return method, params
 		}
-		p, err := plugin.Targeted(params, c.ID())
+		p, err := extension.Targeted(params, c.ID())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -78,24 +78,24 @@ func check(t testing.TB, c connector.Connector, inPlugin bool) {
 		}
 		same(t, "manifest", want, man)
 	} else {
-		var res plugin.InitializeResult
-		init := plugin.InitializeParams{Protocol: plugin.Protocol, Plugin: plugin.PluginInfo{ID: "conformance", Version: "1.0.0"},
+		var res extension.InitializeResult
+		init := extension.InitializeParams{Protocol: extension.Protocol, Extension: extension.ExtensionInfo{ID: "conformance", Version: "1.0.0"},
 			Active: map[string][]string{"connectors": {c.ID()}}}
-		if err := hub.Call(ctx, plugin.MInitialize, init, &res); err != nil {
+		if err := hub.Call(ctx, extension.MInitialize, init, &res); err != nil {
 			t.Fatalf("initialize: %v", err)
 		}
-		var items []plugin.ConnectorItem
+		var items []extension.ConnectorItem
 		_ = json.Unmarshal(res.Contributes["connectors"], &items)
-		if res.Protocol != plugin.Protocol || res.ID != "conformance" || len(items) != 1 {
+		if res.Protocol != extension.Protocol || res.ID != "conformance" || len(items) != 1 {
 			t.Fatalf("initialize answered %+v", res)
 		}
 		same(t, "manifest", serve.ItemOf(want), items[0])
 		var re *rpc.Error
 		if err := hub.Call(ctx, serve.InPlugin(serve.MStatus), map[string]string{"contribution": "nosuchconnector"}, nil); !errors.As(err, &re) ||
-			re.Code != plugin.CodeNoContribution {
+			re.Code != extension.CodeNoContribution {
 			t.Fatalf("a connector the program does not have: %v", err)
 		}
-		if err := hub.Call(ctx, plugin.MPing, struct{}{}, nil); err != nil {
+		if err := hub.Call(ctx, extension.MPing, struct{}{}, nil); err != nil {
 			t.Fatalf("ping: %v", err)
 		}
 	}

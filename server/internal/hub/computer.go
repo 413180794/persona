@@ -15,11 +15,11 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/nwverse/persona/server/internal/plugin"
+	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-const cuaPluginID = "cua"
+const cuaExtensionID = "cua"
 
 // cuaConfig is the plugin's settings: the machines it is on for (turned on and off on each machine's page) and
 // whether the assistant asks on the phone before it acts.
@@ -36,9 +36,9 @@ const cuaConfig = `{
   }
 }`
 
-func cuaManifest(h *Hub) *plugin.Manifest {
-	items, _ := json.Marshal([]plugin.ComputerItem{{ID: cuaPluginID, Name: "Cua Driver"}})
-	return &plugin.Manifest{ManifestVersion: plugin.ManifestVersion, ID: cuaPluginID, Name: "操控电脑（Cua）", Version: h.version,
+func cuaManifest(h *Hub) *extension.Manifest {
+	items, _ := json.Marshal([]extension.ComputerItem{{ID: cuaExtensionID, Name: "Cua Driver"}})
+	return &extension.Manifest{ManifestVersion: extension.ManifestVersion, ID: cuaExtensionID, Name: "操控电脑（Cua）", Version: h.version,
 		Description: "让助手经 Cua Driver 操控你的 Mac：看窗口和屏幕、点按、输入、截图。要在那台 Mac 上装好 Cua Driver 并给它辅助功能和屏幕录制权限。",
 		Homepage:    "https://github.com/trycua/cua", Contributes: map[string]json.RawMessage{"computer": items},
 		Configuration: json.RawMessage(cuaConfig)}
@@ -67,19 +67,19 @@ func (s cuaSettings) cursor() bool { return s.ShowCursor == nil || *s.ShowCursor
 // awake: a Mac it operates, or whose live screen is open, is kept awake.
 func (s cuaSettings) awake() bool { return s.KeepAwake == nil || *s.KeepAwake }
 
-func (h *Hub) cua() cuaSettings { return h.machinePlugin(cuaPluginID) }
+func (h *Hub) cua() cuaSettings { return h.machineExtension(cuaExtensionID) }
 
 // machinePlugin is a built-in plugin that is turned on per Mac (cua, ego): on or not, its Macs, whether to ask first.
-func (h *Hub) machinePlugin(id string) cuaSettings {
-	if h.plugins == nil || h.plugins.reg == nil {
+func (h *Hub) machineExtension(id string) cuaSettings {
+	if h.extensions == nil || h.extensions.reg == nil {
 		return cuaSettings{}
 	}
-	p := h.plugins.reg.Get(id)
+	p := h.extensions.reg.Get(id)
 	if p == nil || !p.Record.Enabled {
 		return cuaSettings{}
 	}
 	s := cuaSettings{On: true}
-	_ = json.Unmarshal(h.plugins.reg.Config(p), &s)
+	_ = json.Unmarshal(h.extensions.reg.Config(p), &s)
 	return s
 }
 
@@ -198,13 +198,13 @@ func (h *Hub) putComputer(w http.ResponseWriter, r *http.Request, m *Machine) {
 		return
 	}
 	if in.Enabled != nil {
-		if err := h.setPluginMachine(r.Context(), cuaPluginID, m.cfg.ID, *in.Enabled); err != nil {
+		if err := h.setExtensionMachine(r.Context(), cuaExtensionID, m.cfg.ID, *in.Enabled); err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
 	}
 	if in.NoAutoLock != nil {
-		if err := h.setPluginList(r.Context(), cuaPluginID, "no_auto_lock", m.cfg.ID, *in.NoAutoLock); err != nil {
+		if err := h.setExtensionList(r.Context(), cuaExtensionID, "no_auto_lock", m.cfg.ID, *in.NoAutoLock); err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
@@ -215,18 +215,18 @@ func (h *Hub) putComputer(w http.ResponseWriter, r *http.Request, m *Machine) {
 
 // setPluginMachine turns a per-Mac plugin on or off for a machine: its config's machines (the machine page's switch,
 // the same as the plugin page's).
-func (h *Hub) setPluginMachine(ctx context.Context, plugin, machine string, on bool) error {
-	return h.setPluginList(ctx, plugin, "machines", machine, on)
+func (h *Hub) setExtensionMachine(ctx context.Context, extension, machine string, on bool) error {
+	return h.setExtensionList(ctx, extension, "machines", machine, on)
 }
 
 // setPluginList puts machine in, or takes it out of, the plugin's machine list key.
-func (h *Hub) setPluginList(ctx context.Context, plugin, key, machine string, on bool) error {
-	p := h.plugins.reg.Get(plugin)
+func (h *Hub) setExtensionList(ctx context.Context, extension, key, machine string, on bool) error {
+	p := h.extensions.reg.Get(extension)
 	if p == nil {
-		return errors.New("no plugin " + plugin)
+		return errors.New("no plugin " + extension)
 	}
 	cfg := map[string]any{}
-	_ = json.Unmarshal(h.plugins.reg.Config(p), &cfg)
+	_ = json.Unmarshal(h.extensions.reg.Config(p), &cfg)
 	var list []string
 	if raw, err := json.Marshal(cfg[key]); err == nil {
 		_ = json.Unmarshal(raw, &list)
@@ -237,7 +237,7 @@ func (h *Hub) setPluginList(ctx context.Context, plugin, key, machine string, on
 	}
 	cfg[key] = list
 	raw, _ := json.Marshal(cfg)
-	return h.plugins.reg.SetConfig(ctx, plugin, raw, "app")
+	return h.extensions.reg.SetConfig(ctx, extension, raw, "app")
 }
 
 // postComputerJob: POST /api/v1/machines/{mid}/computer/{install|grant|cancel}, the machine page's 安装 Cua Driver,

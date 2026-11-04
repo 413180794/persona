@@ -60,7 +60,7 @@ func (h *Hub) launcherQuota(ctx context.Context, name, machine string, refresh b
 	e.machine = gw.machine
 	base, send := gw.base, gw.send
 	if err == nil {
-		e.report, err = h.plugins.quota(ctx, base, h.userTZName(), send)
+		e.report, err = h.extensions.quota(ctx, base, h.userTZName(), send)
 	}
 	if err != nil {
 		e.err = err.Error()

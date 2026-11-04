@@ -135,7 +135,7 @@ Persona 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧�
 地址、接入方式、API、小模型由 hub 从预设补上。预设的 `key_hint` 写在 Key 下面，`models_error` 写在模型下面。加好以后和自己填写的一样能编辑。
 
 新建 Agent 选模型时（`GET /api/v1/machines/{mid}/launchers/{name}/models`），走插件网关的启动器除了 Claude Code `/model` 自己列的几项，
-还列出预设的全部模型（`hub/plugin_providers.go` 的 `presetModels`）：Persona 管理的按它记着的预设，没记的（插件之前自己填写的）和 ~/.zshrc 的
+还列出预设的全部模型（`hub/extension_providers.go` 的 `presetModels`）：Persona 管理的按它记着的预设，没记的（插件之前自己填写的）和 ~/.zshrc 的
 按网关地址对上预设（大小写、末尾的 `/` 不算）。只认 `kind: launcher` 的预设、只给 Claude Code 的启动器；`/model` 已有的同名项不重复，
 补上的项 `description` 是预设的名字。这样一个网关一个启动器就能选到它的所有模型，不用一个模型建一个；插件的 `dynamic_models` 更新了，选择器跟着变。
 
@@ -148,7 +148,7 @@ Persona 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧�
 ## 额度
 
 启动器页的「额度」读启动器的 Key 在网关那边还剩多少。**读哪些网关、怎么读是额度插件的事**（`docs/plugins.md`「额度」）：开源仓库里不带任何网关的读法，
-没装额度插件时这一节说明查不了，不报错。代码：通用部分 `server/internal/quota`（报告的形状、代发请求），hub 一侧 `hub/launcherquota.go`、`hub/plugin_quota.go`，
+没装额度插件时这一节说明查不了，不报错。代码：通用部分 `server/internal/quota`（报告的形状、代发请求），hub 一侧 `hub/launcherquota.go`、`hub/extension_quota.go`，
 node 一侧 `node/launcherquota.go`。
 
 - 插件**看不到 Key**：它回答 `quota.query`，要发的请求经 `quota.http` 交给手里有 Key 的那一方去发，请求里的 `${launcher_key}` 由那一方换成 Key；

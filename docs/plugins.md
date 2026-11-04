@@ -2,8 +2,8 @@
 
 Persona 的插件底座（#1101）：开源仓库只放通用能力和**扩展点**，只对某个公司、某个服务有意义的东西做成插件，装上就有，不装也能跑。
 骨架学 VS Code（清单 + `contributes` + 按需激活 + 独立进程），权限学 Chrome（显式声明、安装时展示），WordPress 只借事件通知、不借 filter。
-设计取舍、分步和还没做的在 `docs/plan-plugins.md`。代码：清单、schema 子集、权限、注册表 `server/internal/plugin`，进程宿主 `plugin/host`，
-程序一侧 `plugin/serve`，一致性测试 `plugin/conformance`；hub 里的接线 `server/internal/hub/plugins.go`、`plugin_routes.go`、`plugin_cli.go`，管理界面的接口 `admin_plugins.go`。
+设计取舍、分步和还没做的在 `docs/plan-plugins.md`。代码：清单、schema 子集、权限、注册表 `server/internal/extension`，进程宿主 `extension/host`，
+程序一侧 `extension/serve`，一致性测试 `extension/conformance`；hub 里的接线 `server/internal/hub/extensions.go`、`extension_routes.go`、`extension_cli.go`，管理界面的接口 `admin_extensions.go`。
 
 插件从三个地方来，App 和接口里是同一个列表：
 
@@ -113,7 +113,7 @@ hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的�
 - 一列这种值（`{"type": "array", "items": {"type": "string", "format": "machine", "x-os": ["darwin"]}}`）在 App 和网页的设置页画成**每台机器一个开关**：机器名、在线与否，操控电脑一类的插件（贡献 `computer`）再加 Cua 的状态。`x-os` 只列这些系统的机器。
 - 开关**即时生效**，只改这一项，不等「保存」，表单里别的草稿留着。对不上任何机器的值照样列出来，可以关掉。
 - 这一列带 `x-confirm`（一句话）时，打开某台的开关前先问这句话，确认了才存；关掉不问（App 是确认框，网页是 `window.confirm`）。插件 `cua` 的「插件开着时不自动锁屏」用它（#1507）。
-- hub 加载插件时，把这类值里写成机器名、主机名的（大小写、空格、`-`、`_` 不计，只对上一台时）换成那台的 id，存回去（`plugin_machines.go`）。
+- hub 加载插件时，把这类值里写成机器名、主机名的（大小写、空格、`-`、`_` 不计，只对上一台时）换成那台的 id，存回去（`extension_machines.go`）。
 
 **约定的设置项**：hub 认得的名字，插件声明了就有额外的用处。
 - `triage_rules`（第一层的 `string`，建议 `maxLength` 不超过 4000：hub 只用前 4000 字）：这个来源的收件箱分拣规则，用户的原话。插件交条目时把它带在 `rules` 上（`docs/connector-protocol.md`），
@@ -232,7 +232,7 @@ personad plugin upgrades                          有新版本的市场插件：
 ## 插件市场
 
 一个仓库或网站发布一份**索引** `persona-plugins.json`，声明它提供的所有插件；hub 登记这个市场以后，App、网页、管理界面和命令行都能浏览、搜索、
-安装、升级、卸载里面的插件。开源仓库不带任何市场，也不预置。代码在 `server/internal/plugin/market.go`（索引、下载、校验）和 `server/internal/hub/plugin_market.go`（登记、目录、接口）。
+安装、升级、卸载里面的插件。开源仓库不带任何市场，也不预置。代码在 `server/internal/extension/market.go`（索引、下载、校验）和 `server/internal/hub/extension_market.go`（登记、目录、接口）。
 
 **市场的地址**：
 
@@ -292,7 +292,7 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 ## 自动升级
 
 从插件市场装的插件（来源 `market:<市场 id>/<插件 id>`），市场里出了新版本时 hub 自己升级（#1699）。内置的、hub.json 里的、从别处装的
-（`dir:`、`file:`、`https://…`、`remote:`）一律不参与。代码在 `server/internal/hub/plugin_autoupgrade.go`。
+（`dir:`、`file:`、`https://…`、`remote:`）一律不参与。代码在 `server/internal/hub/extension_autoupgrade.go`。
 
 - **读市场**：hub 每分钟看一次哪些市场该读了：上次读过 6 小时（每个市场再加一个 0–30 分钟的随机量，错开）；读失败的按 15 分钟、30 分钟……翻倍退避，最多 6 小时。
   日志只在一个市场读不到时记一行、恢复时记一行，不每次都记。App 打开目录（`catalog`）时照旧会在后台重读超过 6 小时的。
@@ -303,11 +303,11 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
   **回滚过的版本记为跳过**，以后不再自动装（不管当初是谁升级的）；市场出了更高的版本再说。装失败（下载、校验不过）的这个版本等市场下次读到新索引再试。
 - **权限变多**：不升级，只告诉用户一次（「Example UI 1.2.0 要多一项权限：访问更多网络（api.example.com），去确认」），用户在 App 里确认
   （走市场的预览和升级，带权限摘要）后才升级。
-- **告诉用户**：升级成功、回滚、等确认、装失败都记在插件上（`PluginView.upgrade_note`），在线的 App 收到 `{"type": "plugin_upgrade", "plugin", "note"}`；
+- **告诉用户**：升级成功、回滚、等确认、装失败都记在插件上（`ExtensionView.upgrade_note`），在线的 App 收到 `{"type": "plugin_upgrade", "plugin", "note"}`；
   前三种另发一条安静的推送（`thread-id` `plugin_upgrade`、`interruption-level` `passive`，带 `plugin_upgrade: {plugin, kind, version}`）。
 - **存在哪**：hub 的设置 `plugin_upgrades`（总开关、关掉的插件、跳过的版本、告诉过的版本、每个插件最后一次的结果），不加表。
 
-`PluginView` 对市场插件多三个字段：`auto_upgrade`（这个插件的开关）、`upgrade`（有新版本时：`{id, name, market, from, to, state, added_permissions?, detail?}`，
+`ExtensionView` 对市场插件多三个字段：`auto_upgrade`（这个插件的开关）、`upgrade`（有新版本时：`{id, name, market, from, to, state, added_permissions?, detail?}`，
 `state` 是 `available` 下次检查时装 / `waiting_idle` 等空闲 / `needs_permission` 等你确认 / `off` 开关关着 / `skipped` 回滚过 / `failed` 没装上 / `incompatible` 装不了）、
 `upgrade_note`（`{kind: upgraded | rolled_back | needs_permission | failed, from, to, detail?, at}`）。
 
@@ -358,8 +358,8 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 
 | 接口 | 谁能调 | 说明 |
 | --- | --- | --- |
-| `GET /api/v1/plugins` | 任何设备 | `{"plugins": [PluginView], "can_install"}`。`PluginView`：老的 `id`、`name`、`kind`（第一个扩展点；语音插件仍是 `voice`，连接器是 `connectors`）、`status`、`error`，加上 `version`、`source`、`enabled`、`description`、`contributes`（扩展点 → id）、`needs_setup`（还缺什么，给人看的）、`warnings` |
-| `GET /api/v1/plugins/{id}/-/` | 完整权限的设备 | 详情：`PluginView` 加 `publisher`、`homepage`、`origin`、`previous_version`、`read_only`、`form`（`{fields: [{name, type, title, description, default, required, enum: [{value, title}], format, pattern, min_length, max_length, minimum, maximum, items, min_items, max_items, unique_items, fields}]}`）、`config`、`secrets: [{name, title, description, required, set}]`、`permissions`（给人看的几行）。hub.json 来的不回 `config`、`secrets` |
+| `GET /api/v1/plugins` | 任何设备 | `{"plugins": [ExtensionView], "can_install"}`。`ExtensionView`：老的 `id`、`name`、`kind`（第一个扩展点；语音插件仍是 `voice`，连接器是 `connectors`）、`status`、`error`，加上 `version`、`source`、`enabled`、`description`、`contributes`（扩展点 → id）、`needs_setup`（还缺什么，给人看的）、`warnings` |
+| `GET /api/v1/plugins/{id}/-/` | 完整权限的设备 | 详情：`ExtensionView` 加 `publisher`、`homepage`、`origin`、`previous_version`、`read_only`、`form`（`{fields: [{name, type, title, description, default, required, enum: [{value, title}], format, pattern, min_length, max_length, minimum, maximum, items, min_items, max_items, unique_items, fields}]}`）、`config`、`secrets: [{name, title, description, required, set}]`、`permissions`（给人看的几行）。hub.json 来的不回 `config`、`secrets` |
 | `PUT /api/v1/plugins/{id}/-/enabled` `{enabled}` | 完整权限的设备 | 回详情；用收件箱又没有兜底的插件在「信息筛选」调不了时打开，回 409 `needs_triage_model`（上面「收件箱的通用规则」）；安装、升级同样 |
 | `PUT /api/v1/plugins/{id}/-/config` `{config}` | 完整权限的设备 | 整份替换；不合 schema 回 400 `{code: "invalid_config", field, message}` |
 | `PUT /api/v1/plugins/{id}/-/secrets/{name}` `{value}`、`DELETE …` | 完整权限的设备 | 最多 16 KB；值不回显、不进日志和审计 |
@@ -437,7 +437,7 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 ## 声明式 UI
 
 插件**不在 App 里跑代码**：它回一份 View（几种固定的条目），iOS、Mac、Android、网页用各自的设计系统画出来（每种界面风格、深浅色都对），
-按钮的动作回到插件。View 的定义和检查在 `server/internal/plugin/ui.go`。
+按钮的动作回到插件。View 的定义和检查在 `server/internal/extension/ui.go`。
 
 **放在哪**（贡献 `ui` 的 `placement`）：见下一节「UI 插槽」的插槽表。最早的两个：
 
@@ -457,7 +457,7 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
   它的连接器现在不归这个插件（没注册上）回 404 `unsupported`；插件出错、View 画不了回 502 `plugin_failed`。
 
 **hub 调插件**：`ui.render {contribution, state, placement, size, ui_version, tz?, locale?, platform?, machine?, launcher?, item?}` → View；
-`ui.action {…同上, action, values}` → `{view?, toast?, open_url?}`（参数是 `plugin.UIParams`，各项见「UI 插槽」「上下文」）。
+`ui.action {…同上, action, values}` → `{view?, toast?, open_url?}`（参数是 `extension.UIParams`，各项见「UI 插槽」「上下文」）。
 `launcher` 是 `{name, base_url, query_id}`：`launcher_section` 才有，插件拿 `query_id` 调 hub 的 `gateway.http`（和「额度」的 `quota.http` 一样：
 `${launcher_key}` 由手里有 Key 的一方换上，只发到这个网关，一次最多 16 个请求），画完就失效。
 
@@ -486,7 +486,7 @@ hub 不认识的 `type`（给更新的 hub 写的插件）和 App 画不了的�
 
 ## UI 插槽
 
-插件能画东西的地方叫**插槽**：hub 有一张允许的插槽表（`plugin.UISlots`，`server/internal/plugin/ui.go`），插件在清单 `contributes.ui[].placement` 里说插在哪；
+插件能画东西的地方叫**插槽**：hub 有一张允许的插槽表（`extension.UISlots`，`server/internal/extension/ui.go`），插件在清单 `contributes.ui[].placement` 里说插在哪；
 表里没有的位置装不上。插件仍然不在 App 里跑代码：每个插槽画的都是上面的声明式 View，各端用自己的设计系统画；插件改变的只是这些位置的
 **入口**（导航上多一项）、**角标**、**卡片**和按钮的**动作**，不能改 App 自己的页面和行为。（#1451）
 
@@ -535,7 +535,7 @@ hub 不认识的 `type`（给更新的 hub 写的插件）和 App 画不了的�
 
 ### 上下文
 
-App 画一个插槽时在 `context` 里说清楚是给谁画、画在哪，hub 核对后交给插件（`ui.render` / `ui.action` 的参数 `plugin.UIParams`）：
+App 画一个插槽时在 `context` 里说清楚是给谁画、画在哪，hub 核对后交给插件（`ui.render` / `ui.action` 的参数 `extension.UIParams`）：
 
 | 字段 | App 发 | 插件收到 |
 | --- | --- | --- |
@@ -676,7 +676,7 @@ View 带 `refresh_after`（秒）：这个 View 在屏幕上时，App 过这么�
   这是预期的：要用它的插件在 `engines.persona` 里写上带这个插槽的 hub 构建号，或者把它放进单独的版本。
 
 **一致性测试**：`conformance.Check` 对清单里的每个 `ui` 贡献按它的插槽调一次 `ui.render`（带上一份示例上下文；`inbox_item` 是它连接器的一条示例条目，`meta` 为 `null`）：回了 View 就必须是 App 在那个插槽画得了的
-（`plugin.Fit` 通过、没有不认识的条目、键是 snake_case）；回错误也行（测试里连不上插件自己的服务），但不能是 `unknown_method` / `no_contribution`。
+（`extension.Fit` 通过、没有不认识的条目、键是 snake_case）；回错误也行（测试里连不上插件自己的服务），但不能是 `unknown_method` / `no_contribution`。
 
 ## 个人 Agent 来源
 
@@ -705,8 +705,8 @@ View 带 `refresh_after`（秒）：这个 View 在屏幕上时，App 过这么�
 - **插件发给 hub 的事件** `agentsrc.updated {contribution?, session_keys?}`：这些会话变了（新消息、未读、标题），没有 `session_keys` 就是列表变了。
   hub 清掉缓存、推 `{"type":"agents","session_ids":[…]}`，App 立刻重拉。只认这个插件自己的来源。hub 自己的发送之后也会推，并在 4 / 15 / 45 秒再推一次；
   hub 每 60 秒还会兜底重新列一遍各来源。
-- 实现：`server/internal/hub/plugin_agents.go`；测试 `TestPluginAgentSource`（`plugin_agents_test.go`，假插件经协议走一遍）、
-  `agents.TestAddAndRemoveSources`、`TestPluginTakesOverOLKBridge`（接管和放回）。
+- 实现：`server/internal/hub/extension_agents.go`；测试 `TestExtensionAgentSource`（`extension_agents_test.go`，假插件经协议走一遍）、
+  `agents.TestAddAndRemoveSources`、`TestExtensionTakesOverOLKBridge`（接管和放回）。
 
 ## 事件
 
@@ -719,7 +719,7 @@ View 带 `refresh_after`（秒）：这个 View 在屏幕上时，App 过这么�
 | `agent.needs_you` | `machine_id`、`machine`、`session_id`、`interaction_id`、`kind`、`summary`：有 Agent 在等你回答或批准 |
 | `agent.finished` | `machine_id`、`machine`、`session_id`、`title`：有 Agent 做完了 |
 
-用 `plugin/serve` 写的程序在 `Namespaces["event"]` 里收（方法名是事件名）。
+用 `extension/serve` 写的程序在 `Namespaces["event"]` 里收（方法名是事件名）。
 
 ## 模型供应商
 
@@ -838,11 +838,11 @@ hub 管理界面（[admin.md](admin.md)）的「插件」页（`web/src/admin/pa
 **错误码**：`not_initialized`、`unknown_method`、`wrong_protocol`、`no_capability`、`no_contribution`（没有这个贡献）、`permission_denied`、`timeout`（hub 本地生成）。
 其余错误只有 `message`，是给人看的一句话，不带密钥和正文。改了字段的意思或删了字段就加协议版本；只加可选字段不加。
 
-用 Go 写插件可以直接用 `plugin/serve`（`serve.Serve(ctx, os.Stdin, os.Stdout, serve.Program{…})`）；连接器程序用 `connector/serve.MainWith`，它同时认两种开头。
+用 Go 写插件可以直接用 `extension/serve`（`serve.Serve(ctx, os.Stdin, os.Stdout, serve.Program{…})`）；连接器程序用 `connector/serve.MainWith`，它同时认两种开头。
 
 ## 一致性测试
 
-`plugin/conformance.Check(t, manifest, run, init)` 把一个插件程序放在协议的另一头检查：`initialize` 前 `ping` 回 `not_initialized`、别的协议版本回
+`extension/conformance.Check(t, manifest, run, init)` 把一个插件程序放在协议的另一头检查：`initialize` 前 `ping` 回 `not_initialized`、别的协议版本回
 `wrong_protocol`、`initialize` 回的 id / 版本和清单一致、`contributes` 是清单的子集、回应的键都是 snake_case、不认识的方法回 `unknown_method`、
 不认识的贡献回 `no_contribution`、每个 `ui` 贡献画出来的 View 在它的插槽画得了（见「UI 插槽」「兼容」）、关掉 stdin 后 5 秒内退出。任何语言写的程序用 `conformance.Program(t, path, args…)` 跑，Go 的用 `conformance.Serve`。
 连接器的 `connector/conformance.Check` 对每个连接器两种开头各跑一遍（直接调 / 经协议，结果一字不差）。

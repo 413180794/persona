@@ -374,7 +374,7 @@ func (h *Hub) saveInbox(ctx context.Context, changed []*InboxItem) {
 		if i == 50 {
 			break // a first round's hundreds: the plugin reads the inbox if it wants them all
 		}
-		h.plugins.emit("inbox.changed", map[string]any{"id": it.ID, "source": it.Source, "kind": it.Kind, "title": it.Title})
+		h.extensions.emit("inbox.changed", map[string]any{"id": it.ID, "source": it.Source, "kind": it.Kind, "title": it.Title})
 	}
 	h.inbox.mu.Lock()
 	type row struct {
@@ -453,7 +453,7 @@ func (b *inbox) has(id string) bool {
 // add keeps an item a collection starts (from: the source it came from), under b.mu. A plugin connector's, while a
 // round runs, goes to the round's batch and enters the list once triaged (admitInbox); any other straight in.
 func (b *inbox) add(from string, it *InboxItem) {
-	if b.batch == nil || !fromPlugin(from) {
+	if b.batch == nil || !fromExtension(from) {
 		b.items[it.ID] = it
 		return
 	}

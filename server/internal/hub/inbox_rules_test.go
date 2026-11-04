@@ -61,7 +61,7 @@ func TestInboxTriageRulesPerSource(t *testing.T) {
 		}
 	}
 	// A migrated connector's things (Feishu through a plugin: they carry extra) bring theirs too, line breaks kept.
-	lark := &pluginLark{}
+	lark := &extensionLark{}
 	dm := connector.InboxThing{Thread: "chat:10", Kind: KindDM, Title: "Alice", Context: "Alice：在吗", At: now, Last: "5",
 		Rules: "示例：私聊都需要我\n示例：机器人都算噪音\n", Extra: &connector.ThingExtra{Source: "lark", LegacyID: "lark:10:5",
 			Lark: rawJSON(InboxLark{AccountID: 1, FeedID: "10"})}}

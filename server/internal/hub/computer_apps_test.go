@@ -53,14 +53,14 @@ func answerCard(t *testing.T, h *Hub, allow, always bool) proto.Interaction {
 // The first time an app is operated on a Mac the phone is asked; 一直允许 keeps it (by bundle id) until removed. A
 // terminal is asked about every time, with no 一直允许, and so is a script whose apps cannot all be read.
 func TestComputerAppsAreAskedOnce(t *testing.T) {
-	h, _ := pluginTestHub(t)
+	h, _ := extensionTestHub(t)
 	ctx := context.Background()
 	mux := h.routes()
 	_, seen := computerMac(t, h, "mac")
-	if err := h.plugins.reg.SetEnabled(ctx, cuaPluginID, true, "test"); err != nil {
+	if err := h.extensions.reg.SetEnabled(ctx, cuaExtensionID, true, "test"); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.plugins.reg.SetConfig(ctx, cuaPluginID, json.RawMessage(`{"machines": ["mac"]}`), "test"); err != nil {
+	if err := h.extensions.reg.SetConfig(ctx, cuaExtensionID, json.RawMessage(`{"machines": ["mac"]}`), "test"); err != nil {
 		t.Fatal(err)
 	}
 	run := func(steps string) chan proto.ToolResult {
@@ -112,7 +112,7 @@ func TestComputerAppsAreAskedOnce(t *testing.T) {
 	answerCard(t, h, true, false)
 	<-done
 
-	if err := h.plugins.reg.SetConfig(ctx, cuaPluginID, json.RawMessage(`{"machines": ["mac"], "app_approval": false}`), "test"); err != nil {
+	if err := h.extensions.reg.SetConfig(ctx, cuaExtensionID, json.RawMessage(`{"machines": ["mac"], "app_approval": false}`), "test"); err != nil {
 		t.Fatal(err)
 	}
 	_, before := seen()

@@ -137,7 +137,7 @@ func blocksDiffer(it *InboxItem, x *connector.ThingExtra) bool {
 
 // migratedConnector is the plugin's inbox for a Feishu item, when a plugin took Feishu over (nil otherwise).
 func (h *Hub) migratedConnector(it *InboxItem) connector.Inbox {
-	if it.Connector != nil || migratedThread(it) == "" || !h.larkByPlugin() {
+	if it.Connector != nil || migratedThread(it) == "" || !h.larkByExtension() {
 		return nil
 	}
 	in, _ := connector.As[connector.Inbox](h.connectors.Get("lark"))

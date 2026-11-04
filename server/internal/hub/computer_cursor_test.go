@@ -9,10 +9,10 @@ import (
 // 显示 Agent 的光标 and 点击音效 (#1507 d): the Macs the plugin is on for are told the cursor's setting, any other Mac
 // on; a call carries the click sound for the node to play.
 func TestTheCursorAndTheClickSound(t *testing.T) {
-	h, _ := pluginTestHub(t)
+	h, _ := extensionTestHub(t)
 	ctx := context.Background()
 	mac, seen := computerMac(t, h, "mac")
-	if err := h.plugins.reg.SetEnabled(ctx, cuaPluginID, true, "test"); err != nil {
+	if err := h.extensions.reg.SetEnabled(ctx, cuaExtensionID, true, "test"); err != nil {
 		t.Fatal(err)
 	}
 	told := func() bool {
@@ -31,7 +31,7 @@ func TestTheCursorAndTheClickSound(t *testing.T) {
 	}
 	config := func(c string) {
 		t.Helper()
-		if err := h.plugins.reg.SetConfig(ctx, cuaPluginID, json.RawMessage(c), "test"); err != nil {
+		if err := h.extensions.reg.SetConfig(ctx, cuaExtensionID, json.RawMessage(c), "test"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -55,7 +55,7 @@ func TestTheCursorAndTheClickSound(t *testing.T) {
 		t.Fatal("a Mac the plugin is not on for: on (undoing this hub's off)")
 	}
 	config(`{"machines": ["mac"], "show_cursor": false}`)
-	if err := h.plugins.reg.SetEnabled(ctx, cuaPluginID, false, "test"); err != nil {
+	if err := h.extensions.reg.SetEnabled(ctx, cuaExtensionID, false, "test"); err != nil {
 		t.Fatal(err)
 	}
 	if !told() {

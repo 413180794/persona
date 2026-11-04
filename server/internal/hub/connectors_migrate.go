@@ -22,7 +22,7 @@ func (h *Hub) yieldOwnConnector(id string) {
 	if own == nil {
 		return
 	}
-	if _, isPlugin := own.(*proc.Conn); isPlugin {
+	if _, isExtension := own.(*proc.Conn); isExtension {
 		return
 	}
 	h.migrated.Store(id, own)
@@ -44,14 +44,14 @@ func (h *Hub) restoreOwnConnector(id string) {
 }
 
 // removePluginConnector takes a plugin's connector out, and gives a migratable id back to the hub.
-func (h *Hub) removePluginConnector(id string) {
+func (h *Hub) removeExtensionConnector(id string) {
 	h.connectors.Remove(id)
 	h.restoreOwnConnector(id)
 }
 
 // larkByPlugin: a plugin serves Feishu (its connector "lark" is registered): Feishu items keep their blocks and go
 // back to it (inbox_migrate.go).
-func (h *Hub) larkByPlugin() bool {
+func (h *Hub) larkByExtension() bool {
 	if h.connectors == nil {
 		return false
 	}

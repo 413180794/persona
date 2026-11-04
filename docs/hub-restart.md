@@ -29,7 +29,7 @@
 | 进行中的 HTTP 请求 | `Shutdown` 最多等 2 s，超过就强关；这 1.3 s 里新发的请求被拒绝 | `public.go:198-208` |
 | 各台电脑的 node | hub 的 ctx 一取消就杀掉 `jarvisd node --stdio` / `ssh` 子进程（SIGKILL，`machine.go:220` 的 `WaitDelay` 2 s），**同时**把机器标成离线、广播 `machines`、结束这台机器上不可续的交互（`machine_conn.go:408-439`），这些广播客户端在被断开前就收到了 | `hub/machine.go:157-269` |
 | 本机 node | 是 hub 的子进程（`node --stdio`），和 hub 一起被 systemd 的 cgroup 杀掉 | `machine.go:157-178` |
-| 插件（lark-connector 插件、removed 等） | hub 的子进程（stdio RPC），随 hub 的 cgroup 被杀，新 hub 再拉起；登录态在插件自己的目录里，重启只丢 hub 侧的会话和就绪状态 | `plugin/host/host.go:658-738` |
+| 插件（lark-connector 插件、removed 等） | hub 的子进程（stdio RPC），随 hub 的 cgroup 被杀，新 hub 再拉起；登录态在插件自己的目录里，重启只丢 hub 侧的会话和就绪状态 | `extension/host/host.go:658-738` |
 | 连接器程序（telegram、wechat） | 同上，退避 5 s 起 | `connector/proc/proc.go:162-199` |
 | jarvis-link（kind link 的电脑） | 收到 1001，1–60 s 指数退避重连，状态文字「hub 重启了」 | `link/client.go:368-377, 602` |
 
@@ -55,7 +55,7 @@ Mac 上的 ssh 机器离线 2–8 s，列表里它的会话先消失再出现。
 ### hub 里正在进行的工作
 
 - 助手（Persona tab 主对话、副对话、定时任务、AI 分身、飞书 /agent、机器人、频道插件，`hub/assistant*.go`、`inbox_agent.go:246`、`lark_agent.go:283`、
-  `bots_chat.go:416`、`channels_plugin.go:371`）都走 `assistant.send`，由**助手所在机器的 node** 起无头 claude：
+  `bots_chat.go:416`、`channels_extension.go:371`）都走 `assistant.send`，由**助手所在机器的 node** 起无头 claude：
   `zsh -ic "<启动器> \"$@\"" … -p --input-format stream-json --output-format stream-json --include-partial-messages`（`node/assistant.go:394-490`），
   独立进程组（`Setpgid`），stdin / stdout 是管道。
 - 流式输出：`readAssistant` 把 `text_delta` 攒在内存的 `p.partial`，每 80 ms 发一次 `session.delta`（`node/assistant.go:497-641`），hub 转给订阅者
