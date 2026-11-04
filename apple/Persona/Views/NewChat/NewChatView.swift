@@ -28,11 +28,20 @@ struct NewChatView: View {
     @State private var launcher = ""
     @State private var unifiedModels = false
     @State private var defaultLauncher = ""
+    /// 模型配置 › 新建 Agent's model: what runs with no pick when its launcher does.
+    @State private var configuredModel = ""
     @State private var mode = ""   // "" = whatever the launcher uses
     @State private var effort = ""
     @State private var prompt = ""
     @State private var tabName = ""
     @State private var launchers: [Launcher] = []
+    /// The models of the launcher that will run (`runLauncher`), for `modelsFor`; nil: none to pick (not loaded, an
+    /// older hub). `pickedModel` "": the default.
+    @State private var models: LauncherModels?
+    @State private var modelsFor = ""
+    @State private var modelsLoading = false
+    @State private var modelsError: String?
+    @State private var pickedModel = ""
     @State private var recent: [RecentDir] = []
     @State private var loading = false
     /// Machine whose saved defaults were applied; `.task` re-runs when a pushed picker pops, which must not clobber picks.
@@ -45,8 +54,21 @@ struct NewChatView: View {
     private var ref: MachineRef { MachineRef(path: machineID) }
     private var machine: Machine? { model.machine(ref) }
 
+    /// The launcher that will run: the one picked, or 模型配置's.
+    private var runLauncher: String { launcher.isEmpty && unifiedModels ? defaultLauncher : launcher }
+
     /// The launcher runs Codex: it starts with its first message (Codex makes the thread then) and the start waits for it.
-    private var codex: Bool { launchers.first(where: { $0.name == (launcher.isEmpty && unifiedModels ? defaultLauncher : launcher) })?.isCodex == true }
+    private var codex: Bool { launchers.first(where: { $0.name == runLauncher })?.isCodex == true }
+
+    private var modelChoice: LauncherModelChoice? {
+        models.map { LauncherModelChoice(list: $0, picked: pickedModel, configured: unifiedModels && runLauncher == defaultLauncher ? configuredModel : "") }
+    }
+
+    /// The efforts the model that will run takes (all of them when that is not known).
+    private var effortOptions: [SessionModes.Option] {
+        guard let efforts = modelChoice?.efforts else { return SessionModes.effortLevels }
+        return SessionModes.effortLevels.filter { efforts.contains($0.id) }
+    }
 
     private var promptHint: String { codex ? "想让 Codex 做什么？（必填：Codex 收到第一条消息才建会话）" : "想让 Claude 做什么？（可以留空）" }
 
@@ -146,8 +168,10 @@ struct NewChatView: View {
                         }
                     }
                     .accessibilityIdentifier("newChat.launcher")
-                } header: { Text("启动器（本次覆盖）") } footer: {
-                    Text(unifiedModels ? "默认使用「模型配置 › 新建 Agent」的设置。手动选择只影响这次会话，不改变全局默认。" : "来自这台机器的 Claude Code / Codex 启动器，会在终端引擎里新开一个标签页运行。")
+                    modelRow
+                } header: { Text(models?.models.isEmpty == false ? "启动器与模型（本次覆盖）" : "启动器（本次覆盖）") } footer: {
+                    Text((unifiedModels ? "默认使用「模型配置 › 新建 Agent」的设置。手动选择只影响这次会话，不改变全局默认。" : "来自这台机器的 Claude Code / Codex 启动器，会在终端引擎里新开一个标签页运行。")
+                         + (modelChoice?.canPick == true ? "模型和在终端里输入 /model 看到的一样。" : ""))
                 }
 
                 if !codex { // Claude Code's modes; a Codex keeps its own
@@ -156,12 +180,15 @@ struct NewChatView: View {
                             Text("跟随启动器").tag("")
                             ForEach(SessionModes.permissionModes) { o in Label(o.title, systemImage: o.symbol).tag(o.id) }
                         } label: { Label { Text("权限模式") } icon: { Image(systemName: Theme.Icon.permissions).foregroundStyle(Theme.accent) } }
-                        Picker(selection: $effort) {
-                            Text("跟随启动器").tag("")
-                            ForEach(SessionModes.effortLevels) { o in Label(o.title, systemImage: o.symbol).tag(o.id) }
-                        } label: { Label { Text("思考强度") } icon: { Image(systemName: Theme.Icon.effort).foregroundStyle(Theme.accent) } }
+                        if !effortOptions.isEmpty {
+                            Picker(selection: $effort) {
+                                Text("跟随启动器").tag("")
+                                ForEach(effortOptions) { o in Label(o.title, systemImage: o.symbol).tag(o.id) }
+                            } label: { Label { Text("思考强度") } icon: { Image(systemName: Theme.Icon.effort).foregroundStyle(Theme.accent) } }
+                        }
                     } header: { Text("权限与思考") } footer: {
-                        Text(SessionModes.mode(mode)?.detail ?? "权限模式和思考强度在对话里也能随时改。")
+                        Text(SessionModes.mode(mode)?.detail
+                             ?? (effortOptions.isEmpty ? "这个模型不能调思考强度。权限模式在对话里也能随时改。" : "权限模式和思考强度在对话里也能随时改。"))
                     }
                     .pickerStyle(.menu)
                     .tint(Theme.accent)
@@ -230,6 +257,10 @@ struct NewChatView: View {
                 .padding(.bottom, Theme.Space.s)
             }
             .task(id: machineID) { await loadMachine() }
+            .task(id: "\(machineID)|\(runLauncher)|\(machine?.online == true)|\(defaultsFor)") { await loadModels() }
+            .onChange(of: effortOptions.map(\.id)) { _, ids in
+                if !effort.isEmpty, !ids.contains(effort) { effort = "" } // the picked model does not take it
+            }
             .onAppear {
                 if prompt.isEmpty { prompt = initialPrompt }
                 if let preset { machineID = preset.machineID; cwd = preset.cwd } else { pickDefaultMachine() }
@@ -296,6 +327,7 @@ struct NewChatView: View {
             do {
                 let purpose = try await api.modelPurpose("agent.new").purpose
                 defaultLauncher = purpose.effective.provider.map { $0.hasPrefix("launcher.") ? String($0.dropFirst("launcher.".count)) : $0 } ?? ""
+                configuredModel = purpose.effective.model ?? ""
                 unifiedModels = true
             } catch let e as APIError where e.status == 404 {
                 unifiedModels = false
@@ -324,6 +356,79 @@ struct NewChatView: View {
         }
     }
 
+    /// 新建 Agent's 模型 row: loading, the pick (into the list), why it cannot be picked, or what went wrong.
+    @ViewBuilder private var modelRow: some View {
+        if let modelsError {
+            HStack(spacing: Theme.Space.m) {
+                Image(systemName: Theme.Icon.error).foregroundStyle(Theme.cautionText)
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                    Text("读不到模型列表").font(Theme.Font.heading).lineLimit(1)
+                    Text(modelsError).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(3)
+                }
+                Spacer(minLength: Theme.Space.s)
+                Button { Task { await loadModels(refresh: true) } } label: { Image(systemName: Theme.Icon.retry) }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("重试")
+            }
+            .accessibilityIdentifier("newChat.model.error")
+        } else if let c = modelChoice, !c.list.models.isEmpty {
+            if c.canPick {
+                NavigationLink {
+                    LauncherModelPicker(choice: c, picked: $pickedModel) { await loadModels(refresh: true) }
+                } label: {
+                    modelLabel(title: c.selected?.name ?? "默认模型", detail: c.detail, trailing: nil)
+                }
+                .accessibilityIdentifier("newChat.model")
+            } else {
+                modelLabel(title: "默认模型", detail: c.list.locked, trailing: Theme.Icon.locked)
+                    .accessibilityIdentifier("newChat.model.locked")
+            }
+        } else if modelsLoading {
+            modelLabel(title: "模型", detail: "正在读取 \(runLauncher) 的模型列表…", trailing: nil)
+                .accessibilityIdentifier("newChat.model.loading")
+        }
+    }
+
+    private func modelLabel(title: String, detail: String?, trailing: String?) -> some View {
+        HStack {
+            Image(systemName: Theme.Icon.ai).foregroundStyle(Theme.accent)
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                Text(title).font(Theme.Font.heading).lineLimit(1)
+                if let detail {
+                    Text(detail).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2).truncationMode(.middle)
+                }
+            }
+            Spacer()
+            if modelsLoading { ProgressView().controlSize(.small) }
+            if let trailing { Image(systemName: trailing).foregroundStyle(.secondary) }
+        }
+    }
+
+    /// The model list of the launcher that will run. Again only when that launcher (or machine) changed, or refresh:
+    /// `.task` runs again when a pushed list pops.
+    private func loadModels(refresh: Bool = false) async {
+        let key = "\(machineID)|\(runLauncher)"
+        if !refresh, modelsFor == key, models != nil || modelsLoading { return }
+        if modelsFor != key { pickedModel = ""; models = nil }
+        modelsFor = key
+        modelsError = nil
+        // Only once this machine's launchers are in: before that `launcher` is still the last machine's.
+        guard defaultsFor == machineID, launchers.contains(where: { $0.name == runLauncher }), machine?.online == true,
+              let api = model.api(ref.group) else { return }
+        modelsLoading = true
+        defer { if modelsFor == key { modelsLoading = false } }
+        do {
+            let list = try await api.launcherModels(machine: ref.id, launcher: runLauncher, refresh: refresh)
+            guard modelsFor == key else { return }
+            models = list
+            if !pickedModel.isEmpty, !list.models.contains(where: { $0.id == pickedModel }) { pickedModel = "" }
+        } catch {
+            guard modelsFor == key, !Task.isCancelled else { return }
+            if let e = error as? APIError, e.status == 404 { return } // an older hub: no list, as before
+            modelsError = error.shown
+        }
+    }
+
     private func start() async {
         guard let api = model.api(ref.group) else {
             error = "连不上这台电脑所在的 hub，请稍后再试。"
@@ -341,7 +446,7 @@ struct NewChatView: View {
                 // Codex picks its thread's id once it has the first message: it goes with the start, which answers
                 // with that thread (one session, already working on it).
                 let s = try await api.start(.init(machineID: ref.id, cwd: cwd, launcher: launcher, prompt: contextBlock == nil ? prompt : outgoing,
-                                                  workspaceID: preset?.workspaceID, tabName: name.isEmpty ? nil : name,
+                                                  workspaceID: preset?.workspaceID, model: modelChoice?.sent, tabName: name.isEmpty ? nil : name,
                                                   nameHint: nameHint ?? (p.isEmpty ? nil : p), todoID: todoID))
                 UserDefaults.standard.set(launcher, forKey: "launcher.\(machineID)")
                 UserDefaults.standard.set(cwd, forKey: "cwd.\(machineID)")
@@ -354,7 +459,7 @@ struct NewChatView: View {
             // message (on screen right away, typed in once claude is ready).
             let s = try await api.start(.init(machineID: ref.id, cwd: cwd, launcher: launcher, prompt: nil,
                                               workspaceID: preset?.workspaceID, permissionMode: mode.isEmpty ? nil : mode,
-                                              effort: effort.isEmpty ? nil : effort, tabName: name.isEmpty ? nil : name,
+                                              effort: effort.isEmpty ? nil : effort, model: modelChoice?.sent, tabName: name.isEmpty ? nil : name,
                                               async: true, nameHint: nameHint ?? (p.isEmpty ? nil : p), todoID: todoID))
             if !unifiedModels {
                 UserDefaults.standard.set(launcher, forKey: "launcher.\(machineID)")

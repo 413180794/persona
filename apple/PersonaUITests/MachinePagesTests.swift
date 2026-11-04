@@ -307,6 +307,77 @@ final class MachinePagesTests: XCTestCase {
         shot("new-chat-started")
     }
 
+    /// 新建会话's 模型 (#794): the list the launcher's CLI shows in /model, searchable; the pick goes with the start,
+    /// and only the picked model's efforts are offered.
+    @MainActor func testNewSessionPicksAModel() throws {
+        launch(["-tab", "dev", "-cwd.macbook", "/Users/me/code/blog"])
+        see(app.buttons["新建会话"], "新建会话", timeout: 15).tap()
+        see(button("MacBook"), "MacBook card").tap()
+        // 模型配置's launcher (claude in the mock) runs; with nothing picked, so does its model.
+        let row = see(app.buttons["newChat.model"], "模型 row", timeout: 15)
+        XCTAssertTrue(row.label.contains("默认模型") && row.label.contains("模型配置：model-chat"), row.label)
+        shot("new-chat-model")
+        row.tap()
+        see(app.navigationBars["模型"], "model picker")
+        see(app.buttons["newChat.model.default"], "默认 first")
+        see(app.buttons["newChat.model.opus"], "an alias")
+        shot("model-picker")
+        let search = see(app.searchFields.firstMatch, "the search field")
+        search.tap()
+        search.typeText("glm")
+        XCTAssertFalse(app.buttons["newChat.model.opus"].waitForExistence(timeout: 1), "the search leaves out what does not match")
+        shot("model-picker-search")
+        see(app.buttons["newChat.model.gateway/glm-5.3"], "a gateway model").tap()
+        let picked = see(app.buttons["newChat.model"], "模型 row")
+        XCTAssertTrue(picked.label.contains("glm-5.3"), picked.label)
+
+        // glm-5.3 takes low / medium / high only.
+        let effort = button("思考强度")
+        for _ in 0..<4 where !effort.isHittable { app.swipeUp() }
+        see(effort, "the effort picker").tap()
+        see(app.buttons["高"], "high, which it takes")
+        XCTAssertFalse(app.buttons["很高"].exists, "an effort the model does not take")
+        app.buttons["高"].tap()
+        shot("new-chat-model-picked")
+        see(button("开始对话"), "开始对话").tap()
+        wait("POST /api/v1/sessions sent") { !((mock("started")["started"] as? [[String: Any]]) ?? []).isEmpty }
+        let body = ((mock("started")["started"] as? [[String: Any]]) ?? []).last ?? [:]
+        XCTAssertEqual(body["model"] as? String, "gateway/glm-5.3")
+        XCTAssertEqual(body["effort"] as? String, "high")
+    }
+
+    /// A launcher passing its own --model says why its model cannot be picked; a Codex launcher's list picks with no
+    /// effort sent.
+    @MainActor func testNewSessionModelLockedAndCodex() throws {
+        launch(["-tab", "dev", "-cwd.macbook", "/Users/me/code/blog"])
+        see(app.buttons["新建会话"], "新建会话", timeout: 15).tap()
+        see(button("MacBook"), "MacBook card").tap()
+        see(app.buttons["newChat.launcher"], "launcher row").tap()
+        see(button("sonnetcc"), "a launcher with its own --model").tap()
+        let locked = see(app.descendants(matching: .any)["newChat.model.locked"], "the locked model row", timeout: 15)
+        XCTAssertTrue(locked.label.contains("固定"), locked.label)
+        XCTAssertFalse(app.buttons["newChat.model"].exists, "no list to open")
+        shot("new-chat-model-locked")
+
+        see(app.buttons["newChat.launcher"], "launcher row").tap()
+        see(button("codex"), "codex launcher").tap()
+        see(app.buttons["newChat.model"], "模型 row", timeout: 15).tap()
+        see(app.buttons["newChat.model.gpt-5.5-codex"], "a Codex model").tap()
+        let picked = see(app.buttons["newChat.model"], "模型 row")
+        XCTAssertTrue(picked.label.contains("GPT-5.5-Codex"), picked.label)
+        let prompt = app.textViews["newChat.prompt"].exists ? app.textViews["newChat.prompt"] : app.textFields["newChat.prompt"]
+        for _ in 0..<4 where !prompt.isHittable { app.swipeUp() }
+        see(prompt, "the first message field").tap()
+        prompt.typeText("整理 README")
+        shot("new-chat-model-codex")
+        see(button("开始对话"), "开始对话").tap()
+        wait("POST /api/v1/sessions sent") { !((mock("started")["started"] as? [[String: Any]]) ?? []).isEmpty }
+        let body = ((mock("started")["started"] as? [[String: Any]]) ?? []).last ?? [:]
+        XCTAssertEqual(body["launcher"] as? String, "codex")
+        XCTAssertEqual(body["model"] as? String, "gpt-5.5-codex")
+        XCTAssertNil(body["effort"], "a Codex start takes no effort")
+    }
+
     /// A Codex launcher (docs/codex.md「从手机新建」): marked Codex in the picker; picked, Claude's modes go, the first
     /// message is required and goes with the start as typed (Codex makes its thread from it), and the chat that opens
     /// is that session.

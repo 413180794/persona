@@ -1,0 +1,87 @@
+import Foundation
+import Testing
+@testable import Jarvis
+
+/// 新建 Agent's model: the launcher's list as the hub sends it and what a start sends (docs/model-config.md「新建 Agent 选模型」).
+@MainActor struct LauncherModelChoiceTests {
+    private func list(_ json: String) throws -> LauncherModels {
+        try JSON.decoder.decode(LauncherModels.self, from: Data(json.utf8))
+    }
+
+    private var claude: LauncherModels {
+        get throws {
+            try list("""
+            {"agent":"claude","models":[
+              {"id":"default","name":"Default (recommended)","resolved":"claude-opus-5-5","default":true,"efforts":["low","medium","high","xhigh","max"]},
+              {"id":"opus","name":"Opus 5.5","resolved":"claude-opus-5-5","efforts":["low","medium","high","xhigh","max"]},
+              {"id":"haiku","name":"Haiku 5.5","resolved":"claude-haiku-5-5"},
+              {"id":"gateway/glm-5.3","name":"glm-5.3","description":"From gateway","efforts":["low","medium","high"]}
+            ]}
+            """)
+        }
+    }
+
+    @Test func decodesWhatTheHubSends() throws {
+        let l = try claude
+        #expect(l.agent == "claude" && l.locked == nil && l.models.count == 4)
+        #expect(l.models[0].isDefault && l.models[0].resolved == "claude-opus-5-5")
+        #expect(!l.models[2].isDefault && l.models[2].efforts == nil)
+        // Only id is required: a newer CLI's entry without a name still lists.
+        let bare = try list(#"{"agent":"codex","models":[{"id":"model-a","default_effort":"medium"}],"locked":"fixed"}"#)
+        #expect(bare.models[0].name == "model-a" && bare.models[0].defaultEffort == "medium" && bare.locked == "fixed")
+    }
+
+    @Test func theDefaultSendsNoModel() throws {
+        var c = LauncherModelChoice(list: try claude)
+        #expect(c.canPick && c.sent == nil && c.title == "默认" && c.detail == "claude-opus-5-5")
+        #expect(c.choices.map(\.id) == ["opus", "haiku", "gateway/glm-5.3"])
+        c.picked = "gateway/glm-5.3"
+        #expect(c.sent == "gateway/glm-5.3" && c.title == "glm-5.3" && c.detail == "gateway/glm-5.3")
+        c.picked = "opus"
+        #expect(c.detail == "opus → claude-opus-5-5")
+        c.picked = "default" // the default entry picked by id is still no model
+        #expect(c.sent == nil)
+        c.picked = "gone" // a pick that is no longer listed
+        #expect(c.sent == nil && c.title == "默认")
+    }
+
+    @Test func aLockedLauncherSendsNothing() throws {
+        var l = try claude
+        l.locked = "启动器固定了模型参数，不能覆盖具体模型"
+        let c = LauncherModelChoice(list: l, picked: "opus")
+        #expect(!c.canPick && c.sent == nil)
+        #expect(!LauncherModelChoice(list: LauncherModels(agent: "traex", models: [])).canPick)
+    }
+
+    @Test func effortsFollowTheModelThatRuns() throws {
+        var c = LauncherModelChoice(list: try claude)
+        #expect(c.efforts == ["low", "medium", "high", "xhigh", "max"]) // the default's
+        c.picked = "haiku"
+        #expect(c.efforts == [])
+        c.picked = "gateway/glm-5.3"
+        #expect(c.efforts == ["low", "medium", "high"])
+        // 模型配置's model runs when nothing is picked.
+        c.picked = ""
+        c.configured = "gateway/glm-5.3"
+        #expect(c.efforts == ["low", "medium", "high"] && c.detail == "模型配置：gateway/glm-5.3")
+        c.configured = "not-listed"
+        #expect(c.efforts == nil)
+    }
+
+    @Test func searchMatchesNameIdResolvedAndDescription() throws {
+        let c = LauncherModelChoice(list: try claude)
+        #expect(c.matching("").count == 3)
+        #expect(c.matching("GLM").map(\.id) == ["gateway/glm-5.3"])
+        #expect(c.matching("haiku-5").map(\.id) == ["haiku"])
+        #expect(c.matching("from gateway").map(\.id) == ["gateway/glm-5.3"])
+        #expect(c.matching("nothing").isEmpty)
+    }
+
+    @Test func aStartCarriesThePick() throws {
+        let req = APIClient.StartRequest(machineID: "box", cwd: "/code", launcher: "claude", model: "opus")
+        let body = try JSONSerialization.jsonObject(with: JSONEncoder().encode(req)) as? [String: Any]
+        #expect(body?["model"] as? String == "opus")
+        let none = try JSONSerialization.jsonObject(with: JSONEncoder().encode(APIClient.StartRequest(machineID: "box", cwd: "/code", launcher: "claude"))) as? [String: Any]
+        #expect(none?["model"] == nil)
+    }
+}

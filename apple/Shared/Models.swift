@@ -375,6 +375,58 @@ extension Launcher {
     }
 }
 
+/// What a launcher's agent offers in its own /model menu (`GET /api/v1/machines/{id}/launchers/{name}/models`,
+/// docs/model-config.md「新建 Agent 选模型」): Claude Code's aliases and its gateway's models, or Codex's model/list.
+nonisolated struct LauncherModels: Codable, Hashable, Sendable {
+    /// What the launcher runs: claude, codex, traex, a runtime's.
+    var agent: String
+    /// Empty: its agent has no list to ask for.
+    var models: [AgentModel]
+    /// Why a picked model would not reach the agent (the launcher passes its own --model); nil: it would.
+    var locked: String?
+}
+
+nonisolated struct AgentModel: Codable, Hashable, Sendable, Identifiable {
+    /// What a start sends as `model` (Claude's aliases too: opus, sonnet…).
+    var id: String
+    var name: String
+    var description: String?
+    /// The model an alias stands for with this launcher's settings (opus → its model id).
+    var resolved: String?
+    /// What the agent runs when no model is given: picking it is picking none.
+    var isDefault: Bool = false
+    /// The thinking efforts it takes, weakest first; nil or empty: none.
+    var efforts: [String]?
+    var defaultEffort: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, description, resolved, efforts
+        case isDefault = "default", defaultEffort = "default_effort"
+    }
+
+    init(id: String, name: String, description: String? = nil, resolved: String? = nil, isDefault: Bool = false,
+         efforts: [String]? = nil, defaultEffort: String? = nil) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.resolved = resolved
+        self.isDefault = isDefault
+        self.efforts = efforts
+        self.defaultEffort = defaultEffort
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? id
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        resolved = try c.decodeIfPresent(String.self, forKey: .resolved)
+        isDefault = try c.decodeIfPresent(Bool.self, forKey: .isDefault) ?? false
+        efforts = try c.decodeIfPresent([String].self, forKey: .efforts)
+        defaultEffort = try c.decodeIfPresent(String.self, forKey: .defaultEffort)
+    }
+}
+
 nonisolated struct DirEntry: Codable, Hashable, Sendable, Identifiable {
     var name: String
     var path: String

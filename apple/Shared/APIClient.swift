@@ -380,6 +380,12 @@ nonisolated struct APIClient: Sendable {
     func launchers(machine: String) async throws -> [Launcher] {
         try await get("/api/v1/machines/\(machine)/launchers", as: LaunchersResponse.self).launchers
     }
+    /// The models the launcher's agent lists in its /model menu (新建 Agent's model picker). The node starts the CLI to
+    /// ask (a few seconds, kept 10 minutes); refresh asks it again.
+    func launcherModels(machine: String, launcher: String, refresh: Bool = false) async throws -> LauncherModels {
+        let path = "/api/v1/machines/\(machine)/launchers/\(launcher.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? launcher)/models"
+        return try JSON.decoder.decode(LauncherModels.self, from: await request("GET", path, query: refresh ? ["refresh": "1"] : [:], timeout: 75))
+    }
     func dirs(machine: String, path: String) async throws -> DirList {
         try await get("/api/v1/machines/\(machine)/dirs", query: ["path": path])
     }
@@ -412,6 +418,8 @@ nonisolated struct APIClient: Sendable {
         var workspaceID: String?
         var permissionMode: String? = nil
         var effort: String? = nil
+        /// The model picked in 新建 Agent for this start (`LauncherModels`); nil: the launcher's, or 模型配置's.
+        var model: String? = nil
         /// The herdr tab's name; nil: the hub makes one from the first message (else agent-<n>).
         var tabName: String? = nil
         /// Answer at once with the session it is going to be and start it in the background (docs/protocol.md「新建会话」).
@@ -420,7 +428,7 @@ nonisolated struct APIClient: Sendable {
         var nameHint: String? = nil
         var todoID: String? = nil
         enum CodingKeys: String, CodingKey {
-            case cwd, launcher, prompt, effort, async
+            case cwd, launcher, prompt, effort, async, model
             case machineID = "machine_id", resumeSessionID = "resume_session_id", workspaceID = "workspace_id",
                  permissionMode = "permission_mode", tabName = "tab_name", nameHint = "name_hint", todoID = "todo_id"
         }

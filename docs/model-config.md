@@ -53,7 +53,6 @@ API 类用途（分拣、判断、草拟、翻译、知识处理、标题）没�
 ## 新建 Agent 选模型（#794）
 
 新建 Agent 选好启动器之后，可以在「模型」里从列表选这一次用哪个模型；列表就是这台电脑上这个启动器跑 Claude Code / Codex 时，在终端里输入 `/model` 看到的那份。
-网页和安卓已经有了；iOS / Mac 的还没合（#794）。
 
 - **列表从 CLI 要，不读配置文件**：settings.json、config.toml、启动器的环境变量里只有默认模型和网关地址，列表是 CLI 把自己的别名和网关 `/models` 的回答拼出来的，自己解析配置会漏掉 ~/.zshrc 启动器设的变量和别名映射。node 按启动器原样起一次 CLI（`node/launcher_models.go`）：Claude Code 用无界面的流式 JSON 模式发 `initialize` 控制请求，回包里的 `models` 就是 `/model` 菜单（default / opus / sonnet / haiku 按这个启动器的设置解析成实际模型，加上网关的全部模型）；Codex 用 `codex app-server` 的 `model/list`（翻页，`hidden` 的不列）。拿到就杀掉整个进程组，不发任何消息、不调模型；Claude 这次带 `disableAllHooks`（和启动器自己的 `--settings` 合并），Persona 和用户的 hook 都不会以为有会话开始。
 - **缓存**：node 按「启动器 + 托管启动器的设置」存 10 分钟，同时来的几个请求只起一次 CLI；`?refresh=1`（App 里下拉刷新、出错重试）重新问。实测 Claude Code 约 4 秒、Codex 不到 1 秒。

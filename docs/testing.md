@@ -231,7 +231,7 @@ mock 的开关：`GET /mock/down?s=<秒>`（这段时间里 WebSocket 全断、�
 
 把机器相关的每个入口真点一遍：设置 › 机器（列表、下拉刷新、卡片 → 详情、详情里的 Agent → 对话、36 个 Agent 的「显示全部」、离线机器的说明、重新连接）、
 Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、项目页的机器名 → 机器的项目页（项目 → 项目页、ⓘ → 详情、离线时的空状态）、
-新对话（离线机器不能选、目录浏览、最近目录、启动器、开始后 POST 的内容、失败时错误显示在按钮上方）。
+新对话（离线机器不能选、目录浏览、最近目录、启动器、开始后 POST 的内容、失败时错误显示在按钮上方；模型：`/model` 列表、搜索、选中后只列它支持的思考强度、写死 `--model` 的启动器锁住、Codex 选模型不带思考强度，mock 的 `…/launchers/{name}/models` 见 `MOCK_MODELS_SECONDS`）。
 
 - mock：`PORT=18773 MOCK_MACHINES=1 python3 scripts/mock/mock_hub.py &`（多一台离线的「实验室主机」，`POST …/reconnect` 后变在线；
   Mac Studio 有 36 个 Agent；`GET /mock/hits`、`/mock/reconnects`、`/mock/started`，`/mock/reset` 恢复初始状态；cwd 以 `/broken` 结尾的新会话回 502），
