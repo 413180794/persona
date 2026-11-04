@@ -765,6 +765,12 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return nil, err
 		}
 		return n.readFileChunk(chunk)
+	case "file.convert":
+		var c proto.FileConvertRequest
+		if err := json.Unmarshal(params, &c); err != nil {
+			return nil, err
+		}
+		return n.convertFile(ctx, c)
 	case "file.thumb":
 		var t proto.FileThumbRequest
 		if err := json.Unmarshal(params, &t); err != nil {

@@ -34,6 +34,16 @@ func (f *downloadNode) handle(ctx context.Context, method string, params json.Ra
 	if f.old {
 		return nil, errors.New("unknown method " + method)
 	}
+	if method == "file.convert" {
+		var p proto.FileConvertRequest
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		if strings.HasSuffix(p.Path, ".key") {
+			return nil, &rpc.Error{Code: proto.CodeNoConverter, Message: "LibreOffice is not installed on this machine"}
+		}
+		return proto.FileConverted{Path: "/cache/convert/ab.pdf", Size: 9, Mime: "application/pdf"}, nil
+	}
 	if method == "file.thumb" {
 		var p proto.FileThumbRequest
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -87,6 +97,7 @@ func downloadHub(t *testing.T, f *downloadNode) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/machines/{mid}/file/download", h.withMachine(h.downloadFile))
 	mux.HandleFunc("GET /api/v1/machines/{mid}/file/thumb", h.withMachine(h.fileThumb))
+	mux.HandleFunc("GET /api/v1/machines/{mid}/file/convert", h.withMachine(h.fileConvert))
 	return mux
 }
 
@@ -235,5 +246,25 @@ func TestThumbnailCachesAndExplainsWhatItCannotDraw(t *testing.T) {
 	downloadHub(t, &downloadNode{old: true}).ServeHTTP(rec, httptest.NewRequest("GET", "/api/v1/machines/m1/file/thumb?path=a.png", nil))
 	if rec.Code != 409 || !strings.Contains(rec.Body.String(), proto.CodeNodeOutdated) {
 		t.Fatalf("old node: %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestConvertNamesThePDFOrSaysWhatIsMissing(t *testing.T) {
+	for _, test := range []struct {
+		f      *downloadNode
+		query  string
+		code   int
+		answer string
+	}{
+		{&downloadNode{}, "?path=old.doc&to=pdf", 200, "/cache/convert/ab.pdf"},
+		{&downloadNode{}, "?path=deck.key", 404, proto.CodeNoConverter},
+		{&downloadNode{old: true}, "?path=old.doc", 409, proto.CodeNodeOutdated},
+		{&downloadNode{}, "", 400, "path is required"},
+	} {
+		rec := httptest.NewRecorder()
+		downloadHub(t, test.f).ServeHTTP(rec, httptest.NewRequest("GET", "/api/v1/machines/m1/file/convert"+test.query, nil))
+		if rec.Code != test.code || !strings.Contains(rec.Body.String(), test.answer) {
+			t.Fatalf("%s: %d %s", test.query, rec.Code, rec.Body)
+		}
 	}
 }

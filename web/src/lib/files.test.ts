@@ -147,12 +147,19 @@ describe("viewer", () => {
     expect(viewKind(file("Book.xlsx", { stream: true, mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }))).toBe("sheet");
     expect(viewKind(file("old.xls", { data: "AA==" }))).toBe("sheet");
     expect(viewKind(file("clip.mp4", { stream: true, mime: "video/mp4" }))).toBe("binary");
+    expect(viewKind(file("Report.docx", { stream: true }))).toBe("office");
+    expect(viewKind(file("deck.pptx", { data: "AA==" }))).toBe("office");
+    expect(viewKind(file("old.doc", { stream: true }))).toBe("office");
+    expect(viewKind(file("notes.rtf", { text: "{\\rtf1 hi}" }))).toBe("office");
+    expect(viewKind(file("id.key", { text: "-----BEGIN PRIVATE KEY-----" }))).toBe("code"); // a PEM key, not Keynote
+    expect(viewKind(file("Talk.key", { stream: true }))).toBe("office");
     expect(viewKind(file("docs", { is_dir: true, entries: ["icon.png"] }))).toBe("directory");
     expect(glyphOf("icon.png")).toBe("image");
     expect(glyphOf("Package.swift")).toBe("code");
     expect(glyphOf("config.yaml")).toBe("data");
     expect(glyphOf("export.csv")).toBe("sheet");
     expect(glyphOf("Budget.xlsx")).toBe("sheet");
+    expect(glyphOf("Report.docx")).toBe("doc");
   });
 
   it("counts columns with wide characters taking two", () => {

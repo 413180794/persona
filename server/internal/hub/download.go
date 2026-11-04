@@ -165,3 +165,30 @@ func (f *remoteFileReader) Seek(offset int64, whence int) (int64, error) {
 	}
 	return f.pos, nil
 }
+
+// fileConvert asks the machine's LibreOffice for a PDF of a document (node file.convert): 404 no_converter when it
+// has none, 409 node_outdated for an older node. The answer names the PDF on the machine, read with file/download.
+func (h *Hub) fileConvert(w http.ResponseWriter, r *http.Request, m *Machine) {
+	q := r.URL.Query()
+	p := proto.FileConvertRequest{Path: q.Get("path"), Cwd: q.Get("cwd"), To: q.Get("to")}
+	if strings.TrimSpace(p.Path) == "" {
+		writeErr(w, http.StatusBadRequest, errors.New("path is required"))
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+	defer cancel()
+	var out proto.FileConverted
+	if err := m.call(ctx, "file.convert", p, &out); err != nil {
+		var re *rpc.Error
+		switch {
+		case errors.As(err, &re) && strings.HasPrefix(re.Message, "unknown method"):
+			writeCode(w, http.StatusConflict, proto.CodeNodeOutdated, "这台机器上的 jarvisd 太旧，不能转换文档，需要重新部署", nil)
+		case errors.As(err, &re) && re.Code == proto.CodeNoConverter:
+			writeCode(w, http.StatusNotFound, proto.CodeNoConverter, re.Message, nil)
+		default:
+			callErr(w, err)
+		}
+		return
+	}
+	writeJSON(w, out)
+}

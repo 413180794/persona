@@ -10,6 +10,7 @@ import {
   columns,
   dirName,
   extendStates,
+  extOf,
   fileName,
   isMachineRef,
   joinPath,
@@ -33,6 +34,7 @@ import { Markdown } from "../../../ui/Markdown";
 import { Lightbox } from "../../chat/Steps";
 import { PanelHeader } from "../../SidePanel";
 import { BackHeader, Empty, FileGlyph, Segmented, useWindow } from "./parts";
+import { OfficeView } from "./OfficeView";
 import { SheetView } from "./SheetView";
 
 const LH = 20; // px per code line
@@ -294,8 +296,10 @@ export function FileView({
     body = <ImageView file={f} src={inlineSrc(mid, f, cwd)} />;
   } else if (kind === "pdf") {
     body = <PdfView file={f} src={f.stream ? inlineSrc(mid, f, cwd) : ""} />;
+  } else if (kind === "office") {
+    body = <OfficeView mid={mid} cwd={cwd} file={f} onDownload={download} />;
   } else if (kind === "sheet" && mode === "rendered") {
-    body = <SheetLoader mid={mid} cwd={cwd} doc={doc} file={f} />;
+    body = <SheetLoader mid={mid} cwd={cwd} doc={doc} file={f} onDownload={download} />;
   } else if (kind === "binary") {
     body = (
       <Empty
@@ -543,7 +547,7 @@ function MarkdownView({ doc, file, mid, onOpenPath }: { doc: FileDoc; file: File
 // ── tables ────────────────────────────────────────────────
 
 /** Reads a table file whole (a CSV's remaining pages, a workbook's bytes) and parses it off the main thread. */
-function SheetLoader({ mid, cwd, doc, file }: { mid: string; cwd?: string; doc: FileDoc; file: FileContent }) {
+function SheetLoader({ mid, cwd, doc, file, onDownload }: { mid: string; cwd?: string; doc: FileDoc; file: FileContent; onDownload: () => void }) {
   const [state, setState] = useState<{ sheets?: Sheet[]; error?: string; note?: string }>({});
   const { all } = doc;
   useEffect(() => {
@@ -568,6 +572,8 @@ function SheetLoader({ mid, cwd, doc, file }: { mid: string; cwd?: string; doc: 
     });
     return () => ac.abort();
   }, [mid, cwd, file, all]);
+  // a Numbers file SheetJS cannot read still has the preview Numbers wrote into it
+  if (state.error && extOf(file.name) === "numbers") return <OfficeView mid={mid} cwd={cwd} file={file} onDownload={onDownload} />;
   if (state.error) return <Empty icon="info" title="表格打不开" detail={state.error} />;
   if (!state.sheets)
     return (

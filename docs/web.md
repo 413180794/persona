@@ -256,6 +256,17 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   - **SheetJS 用官方包**：npm 上的 `xlsx` 停在 0.18.5（有原型污染、ReDoS 的公开漏洞），官方新版只从 cdn.sheetjs.com 发 tarball（Apache-2.0）。
     隐私扫描只认 npm 官方源或仓库里的相对路径，所以放在 `web/vendor/xlsx-0.20.3.tgz`，`package.json` 写 `file:vendor/…`；Docker 构建先拷 `web/vendor/` 再 `npm ci`。升级：下载新 tarball 换掉旧的、`npm i ./vendor/<新文件>`。
   - Worker 那块 SheetJS 约 500 KB，只在打开表格时才加载。
+- **Office**（#1345，`session/files/OfficeView.tsx`、`lib/pptx.ts`；iOS / Mac 走 QuickLook，是 #1293）：docx / docm / dotx 用 docx-preview（Apache-2.0）排成分页版面（页眉页脚、表格、图片、脚注），
+  pptx / pptm / ppsx / potx 用自己写的 `lib/pptx.ts`：幻灯片尺寸、主题色（含亮度调整）、占位符从版式和母版继承位置和字号、母版上的图形、背景、文字（字号、粗斜体、下划线、颜色、对齐、项目符号和级别）、
+  形状（填充、边框、矩形 / 圆角 / 椭圆 / 三角 / 线）、图片、表格（合并、底色）、组合、隐藏页、备注；
+  图表从图表部件的缓存里读出系列，柱形 / 条形（含堆积）/ 折线 / 面积 / 饼 / 圆环自己画成 SVG（标题、坐标、图例，字号随图表大小），散点、雷达、组合图等画不了的框里写「这张图表在这里看不了，点右上角『转成 PDF』查看」，SmartArt 同理。顶部写页数，「转成 PDF」随时可点。
+  - **字体回退**：文档点名的字体本机常常没有（Calibri、等线），浏览器就退到默认字体，中文是发粗的宋体。docx-preview 写出的每个 `font-family` 后面都补上回退（`lib/fonts.ts`）：点名的是衬线字体（Times、宋体、仿宋、楷体……）才补衬线，否则补系统无衬线（PingFang SC / Hiragino Sans GB / Noto Sans CJK / sans-serif）；文档没写字体的地方也用这套无衬线。
+  - **iWork**：.pages / .key 先显示文件里 Apple 软件自己存的预览（`QuickLook/Preview.pdf` 是每一页的 PDF；新格式只有第一页的 `preview.jpg` / `QuickLook/Thumbnail.jpg`），按 HTTP Range 只读 zip 的末尾（中央目录）和那一项（`lib/zip-range.ts`，几百 MB 的 Keynote 也只取几百 KB），取不到再交给 LibreOffice。
+    .numbers 照旧先用 SheetJS 打开成表格（比一张图有用），读不了再显示自带预览。
+  doc / ppt / rtf / odt / odp 以及渲染失败、没有自带预览的，交给那台电脑上的 LibreOffice 转 PDF（`file/convert`，`docs/protocol.md`「文件预览」），用浏览器的 PDF 查看器打开；没装就写清楚装什么，并给下载。
+  - **隔离**：渲染结果放进 `srcdoc` 的 iframe，`sandbox` 只给弹出窗口（网页链接在新标签打开），没有 `allow-scripts` 和 `allow-same-origin`，再加 CSP `default-src 'none'; img-src data:`：文件里的东西不能跑脚本、拿不到网页的 token、也不能联网（外链图片、跟踪像素都加载不了）。
+    图片用 data URL（docx-preview 的 `useBase64URL`），因为 iframe 读不了本页的 blob URL；非 http(s) 链接去掉。页宽按文档自己的宽度排，再把整个 iframe 缩小到面板宽（只缩不放）。
+  - **为什么不用 pptx-preview**：npm 包是 ISC，但源码不公开、README 另加了源码使用限制，而且它在页面里直接写 `innerHTML`，审不了。自己写的只输出转义过的文字和校验过的颜色、数字、自己生成的 data URL。
 - **链接**：见下面「链接在页面里打开」。
 
 ### 链接在页面里打开

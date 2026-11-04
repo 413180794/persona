@@ -256,7 +256,11 @@ export function splitDiff(diff: string): Record<string, string> {
 
 // ── the viewer ────────────────────────────────────────────
 
-export type ViewKind = "directory" | "markdown" | "json" | "code" | "image" | "pdf" | "sheet" | "binary";
+export type ViewKind = "directory" | "markdown" | "json" | "code" | "image" | "pdf" | "sheet" | "office" | "binary";
+
+/** Office documents drawn in the browser (docx-preview, lib/pptx.ts); the rest go through the machine's LibreOffice. */
+export const OFFICE_RENDERED = ["docx", "docm", "dotx", "pptx", "pptm", "ppsx", "potx"];
+const OFFICE_CONVERTED = ["doc", "dot", "ppt", "pps", "rtf", "odt", "odp", "pages", "key", "wps", "wpd"];
 
 /** Tables: delimited text, and workbooks SheetJS reads (lib/sheets.ts). */
 const DELIMITED_EXTS = ["csv", "tsv", "tab"];
@@ -276,9 +280,11 @@ export function viewKind(f: FileContent): ViewKind {
     if (mime.startsWith("image/")) return "image";
     if (mime === "application/pdf" || extOf(f.name) === "pdf") return "pdf";
     if (WORKBOOK_EXTS.includes(extOf(f.name))) return "sheet";
+    if ([...OFFICE_RENDERED, ...OFFICE_CONVERTED].includes(extOf(f.name))) return "office";
     return "binary";
   }
   const ext = extOf(f.name);
+  if (ext === "rtf") return "office"; // RTF is text, but its source is markup nobody reads
   if (DELIMITED_EXTS.includes(ext) || mime === "text/csv" || mime === "text/tab-separated-values") return "sheet";
   if (["md", "markdown", "mdx", "mkd"].includes(ext) || mime === "text/markdown") return ext ? "markdown" : "code";
   if (["json", "jsonc", "json5", "geojson", "webmanifest"].includes(ext) || (mime.includes("json") && !["jsonl", "ndjson"].includes(ext))) return "json";
@@ -292,6 +298,7 @@ export function glyphOf(name: string): "image" | "doc" | "data" | "sheet" | "pdf
   if (["md", "markdown", "txt", "rst", "log", "rtf"].includes(ext)) return "doc";
   if (["json", "jsonl", "yml", "yaml", "toml", "plist", "xml", "ini", "env", "lock"].includes(ext)) return "data";
   if ([...DELIMITED_EXTS, ...WORKBOOK_EXTS].includes(ext)) return "sheet";
+  if ([...OFFICE_RENDERED, ...OFFICE_CONVERTED].includes(ext)) return "doc";
   if (ext === "pdf") return "pdf";
   if (!ext) return "file";
   return "code";

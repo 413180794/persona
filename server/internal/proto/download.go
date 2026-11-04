@@ -47,3 +47,19 @@ type FileThumb struct {
 	NotModified bool   `json:"not_modified,omitempty"`
 	Data        []byte `json:"data,omitempty"`
 }
+
+// Converting a document for the web's viewer (GET /api/v1/machines/{mid}/file/convert → node file.convert): the
+// machine's LibreOffice writes a PDF into the node's cache, which the client then reads like any file.
+const CodeNoConverter = "no_converter" // the machine has no LibreOffice (404)
+
+type FileConvertRequest struct {
+	Path string `json:"path"`
+	Cwd  string `json:"cwd"`
+	To   string `json:"to"` // "pdf"
+}
+
+type FileConverted struct {
+	Path string `json:"path"` // absolute, on the machine
+	Size int64  `json:"size"`
+	Mime string `json:"mime"`
+}

@@ -55,6 +55,7 @@ func (h *Hub) routes() http.Handler {
 	}))
 	api.HandleFunc("GET /api/v1/machines/{mid}/file/download", h.withMachine(h.downloadFile))
 	api.HandleFunc("GET /api/v1/machines/{mid}/file/thumb", h.withMachine(h.fileThumb))
+	api.HandleFunc("GET /api/v1/machines/{mid}/file/convert", h.withMachine(h.fileConvert))
 	// stream=1: a binary file comes back described (stream, revision), its bytes from file/download.
 	api.HandleFunc("GET /api/v1/machines/{mid}/file", h.proxy("file.read", func(r *http.Request) any {
 		q := r.URL.Query()

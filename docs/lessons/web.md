@@ -164,3 +164,11 @@
 - 用 `useState(() => new XxxModel())` 建、在 effect 里 `refresh()`、清理时 `stop()` 的模型，开发版的 StrictMode 会「挂上 → 清理 → 再挂上」：第二次挂上时模型已经 stop 了，
   列表永远是空的，生产构建却正常。effect 里先 `start()` 再读；被作废的那次读取回来时不能直接 `return`，要接着跑排队的那次刷新，否则 `loading` 一直卡住。
 - 无头 Chromium 截中文是方块：这台机器没装中文字体。拿一个 Noto Sans CJK 放进临时目录，写一份 `fonts.conf`（include 系统的再加这个目录），`FONTCONFIG_FILE=…` 启动浏览器。
+
+## Office 预览（2026-11-04，#1345）
+
+- **沙盒 iframe 里跑不了网页自己的 JS**：`sandbox="allow-scripts"` 不带 `allow-same-origin` 时 iframe 是不透明源，模块脚本按 CORS 取，hub 不给 `Access-Control-Allow-Origin` 就加载失败。所以不在 iframe 里跑渲染库，而是在本页的游离节点里渲染，再把结果（data URL 的图、转义过的文字）放进不带脚本的 `srcdoc` iframe。
+- **游离节点里的 `innerHTML` 也会执行事件属性**：`<img src=x onerror=…>` 写进一个没挂到文档上的 div，图片照样加载、`onerror` 照样跑。所以不能用在本页里拿文件内容拼 `innerHTML` 的库（pptx-preview 就是，且源码不公开）；docx-preview 用 `createElement` 建节点，图片从包里读，不联网。
+- **中文的「发粗宋体」是字体回退**：docx 点名的字体（Calibri、等线）本机没有时，浏览器退到自己的默认字体，中文是宋体。不能只给外层设无衬线：docx-preview 在样式表和元素上都直接写了 `font-family`，要给每一处补上回退列表；衬线只跟着文档点名的衬线字体。
+- **iWork 文件是 zip，预览在里面**：新格式（2013 以后）有 `preview.jpg` 等第一页的图，旧一点的有 `QuickLook/Preview.pdf`（每一页）。zip 的目录在文件末尾，按 Range 读末尾 64 KiB 找到中央目录、再读那一项，不用下载整个文件；预览一般是不压缩存的。
+- **Playwright 的 `addInitScript` 会注入每个 frame**，包括沙盒 iframe：截图日志里的「document is sandboxed and lacks the allow-same-origin flag」是测试脚本自己读 localStorage 报的，不是页面的错。

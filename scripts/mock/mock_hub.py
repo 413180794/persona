@@ -4533,9 +4533,209 @@ def quarterly_xlsx():
     return buf.getvalue()
 
 
+def _zip(files):
+    import io, zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, data in files.items():
+            z.writestr(name, data)
+    return buf.getvalue()
+
+
+_PNG_DOT = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
+
+
+def _bar_png(w=360, h=150):
+    """A small bar chart as a PNG (zlib, no imaging library): pictures inside the mock's Word and PowerPoint files."""
+    import zlib
+    bars = [(40, 0.45), (110, 0.62), (180, 0.78), (250, 0.93)]
+    rows = []
+    for y in range(h):
+        row = bytearray([0])
+        for x in range(w):
+            c = (255, 255, 255)
+            for bx, frac in bars:
+                if bx <= x < bx + 50 and y >= h - int(frac * (h - 10)):
+                    c = (31, 111, 235) if bx != 250 else (237, 125, 49)
+            if y == h - 1:
+                c = (120, 120, 120)
+            row += bytes(c)
+        rows.append(bytes(row))
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(b"".join(rows))) + chunk(b"IEND", b"")
+
+
+def _page_png(w=420, h=560):
+    """A picture of a document's first page (title bar, lines of text): the preview inside the mock's .pages."""
+    import zlib
+    rows = []
+    for y in range(h):
+        row = bytearray([0])
+        for x in range(w):
+            c = (255, 255, 255)
+            if 40 <= y < 70 and 40 <= x < 300:
+                c = (31, 56, 100)
+            elif y >= 100 and (y - 100) % 22 < 8 and 40 <= x < (w - 40 if (y - 100) // 22 % 4 != 3 else 260) and y < h - 60:
+                c = (200, 204, 210)
+            row += bytes(c)
+        rows.append(bytes(row))
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(b"".join(rows))) + chunk(b"IEND", b"")
+
+
+def office_docx():
+    """A Word document for the web's Office viewer (#1345), written by hand: a title, headings, a list, a table, a
+    picture and a footer, with direct formatting (no styles part)."""
+    from xml.sax.saxutils import escape
+    W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"'
+
+    def para(text, size=22, bold=False, color=None, align=None, space=120):
+        ppr = '<w:pPr><w:spacing w:after="%d"/>%s</w:pPr>' % (space, '<w:jc w:val="%s"/>' % align if align else "")
+        rpr = "<w:rPr>%s%s<w:sz w:val=\"%d\"/></w:rPr>" % ("<w:b/>" if bold else "", '<w:color w:val="%s"/>' % color if color else "", size)
+        return "<w:p>%s<w:r>%s<w:t xml:space=\"preserve\">%s</w:t></w:r></w:p>" % (ppr, rpr, escape(text))
+
+    def cell(text, fill=None, bold=False, width=2400):
+        shd = '<w:shd w:val="clear" w:color="auto" w:fill="%s"/>' % fill if fill else ""
+        return '<w:tc><w:tcPr><w:tcW w:w="%d" w:type="dxa"/>%s</w:tcPr>%s</w:tc>' % (width, shd, para(text, 20, bold, space=40))
+    rows = [("区域", "第三季度", "环比"), ("华东", "1,203,400", "+10.2%"), ("华北", "987,150", "+7.1%"), ("海外", "642,800", "+2.3%")]
+    table = ('<w:tbl><w:tblPr><w:tblW w:w="7200" w:type="dxa"/><w:tblBorders>' + "".join('<w:%s w:val="single" w:sz="4" w:color="BFBFBF"/>' % b for b in ("top", "left", "bottom", "right", "insideH", "insideV"))
+             + "</w:tblBorders></w:tblPr><w:tblGrid>" + '<w:gridCol w:w="2400"/>' * 3 + "</w:tblGrid>"
+             + "".join("<w:tr>" + "".join(cell(t, "DDEBF7" if i == 0 else None, i == 0) for t in r) + "</w:tr>" for i, r in enumerate(rows)) + "</w:tbl>")
+    emu_w, emu_h = 360 * 9525, 150 * 9525
+    picture = ('<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:drawing><wp:inline><wp:extent cx="%d" cy="%d"/><wp:docPr id="1" name="chart"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+               '<pic:pic><pic:nvPicPr><pic:cNvPr id="1" name="chart.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rIdImg"/></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="%d" cy="%d"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr></pic:pic>'
+               '</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>') % (emu_w, emu_h, emu_w, emu_h)
+    body = "".join([
+        para("天气 App 第三季度报告", 44, True, "1F3864", "center", 240),
+        para("示例数据，仅用于演示文档预览。", 20, False, "7F7F7F", "center", 360),
+        para("一、概览", 30, True, "2E74B5"),
+        para("本季度小组件的日活增长明显，主屏幕小组件上线后，留存比上一季度提高了 6 个百分点。下面是各区域的收入和环比变化。"),
+        table,
+        para("", 12),
+        picture,
+        para("图 1  各月收入（示例）", 18, False, "7F7F7F", "center"),
+        para("二、下一步", 30, True, "2E74B5"),
+        para("• 中号小组件加入逐小时降雨概率；"),
+        para("• 锁屏小组件适配深色壁纸；"),
+        para("• 海外区域接入本地天气数据源。"),
+        '<w:sectPr><w:footerReference w:type="default" r:id="rIdFoot"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/></w:sectPr>',
+    ])
+    footer = '<w:ftr %s>%s</w:ftr>' % (W, para("天气 App · 内部示例文档", 16, False, "A6A6A6", "center"))
+    return _zip({
+        "[Content_Types].xml": '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+                               '<Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/>'
+                               '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+                               '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>',
+        "_rels/.rels": '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+        "word/document.xml": '<?xml version="1.0" encoding="UTF-8"?><w:document %s><w:body>%s</w:body></w:document>' % (W, body),
+        "word/_rels/document.xml.rels": '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                                        '<Relationship Id="rIdImg" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/chart.png"/>'
+                                        '<Relationship Id="rIdFoot" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/></Relationships>',
+        "word/footer1.xml": '<?xml version="1.0" encoding="UTF-8"?>' + footer,
+        "word/media/chart.png": _bar_png(),
+    })
+
+
+def office_pptx():
+    """A PowerPoint deck for the web's Office viewer (#1345), written by hand: a theme, a master with a colored bar, a
+    layout with title / body placeholders, a title slide, a bullet slide with a picture and shapes, a table and a chart."""
+    from xml.sax.saxutils import escape
+    NS = 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"'
+    R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+    E = 9525
+
+    def rels(items):
+        return '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + "".join(
+            '<Relationship Id="%s" Type="%s%s" Target="%s"/>' % (i, R, t, g) for i, t, g in items) + "</Relationships>"
+
+    def xfrm(x, y, w, h):
+        return '<a:xfrm><a:off x="%d" y="%d"/><a:ext cx="%d" cy="%d"/></a:xfrm>' % (x * E, y * E, w * E, h * E)
+
+    def ph(kind, idx, paras, box=None):
+        t = ' type="%s"' % kind if kind else ""
+        i = ' idx="%s"' % idx if idx is not None else ""
+        return ('<p:sp><p:nvSpPr><p:cNvPr id="%d" name="ph"/><p:cNvSpPr/><p:nvPr><p:ph%s%s/></p:nvPr></p:nvSpPr><p:spPr>%s</p:spPr><p:txBody><a:bodyPr/>%s</p:txBody></p:sp>'
+                % (abs(hash((kind, idx))) % 1000 + 10, t, i, xfrm(*box) if box else "", paras))
+
+    def p(text, lvl=0, extra=""):
+        return '<a:p>%s<a:r><a:rPr lang="zh-CN"%s/><a:t>%s</a:t></a:r></a:p>' % ('<a:pPr lvl="%d"/>' % lvl if lvl else "", extra, escape(text))
+
+    def shape(x, y, w, h, fill, geom="rect", text="", color="FFFFFF", size=1800):
+        tx = '<p:txBody><a:bodyPr anchor="ctr"/><a:p><a:pPr algn="ctr"/><a:r><a:rPr sz="%d" b="1"><a:solidFill><a:srgbClr val="%s"/></a:solidFill></a:rPr><a:t>%s</a:t></a:r></a:p></p:txBody>' % (size, color, escape(text)) if text else ""
+        return '<p:sp><p:nvSpPr><p:cNvPr id="40" name="s"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>%s<a:prstGeom prst="%s"/><a:solidFill>%s</a:solidFill></p:spPr>%s</p:sp>' % (
+            xfrm(x, y, w, h), geom, fill, tx)
+    theme = ('<a:theme %s name="t"><a:themeElements><a:clrScheme name="t"><a:dk1><a:srgbClr val="1F2328"/></a:dk1><a:lt1><a:srgbClr val="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="1F3864"/></a:dk2><a:lt2><a:srgbClr val="EEF2F7"/></a:lt2>'
+             '<a:accent1><a:srgbClr val="1F6FEB"/></a:accent1><a:accent2><a:srgbClr val="ED7D31"/></a:accent2><a:accent3><a:srgbClr val="2DA44E"/></a:accent3><a:accent4><a:srgbClr val="BF8700"/></a:accent4>'
+             '<a:accent5><a:srgbClr val="8250DF"/></a:accent5><a:accent6><a:srgbClr val="CF222E"/></a:accent6><a:hlink><a:srgbClr val="0563C1"/></a:hlink><a:folHlink><a:srgbClr val="954F72"/></a:folHlink></a:clrScheme></a:themeElements></a:theme>') % NS
+    master = ('<p:sldMaster %s><p:cSld><p:bg><p:bgPr><a:solidFill><a:schemeClr val="bg1"/></a:solidFill></p:bgPr></p:bg><p:spTree>' % NS
+              + ph("title", None, "", (60, 40, 1160, 100)) + ph("body", "1", "", (60, 170, 1160, 480))
+              + shape(0, 700, 1280, 20, '<a:schemeClr val="accent1"/>')
+              + '</p:spTree></p:cSld><p:txStyles><p:titleStyle><a:lvl1pPr><a:defRPr sz="4000" b="1"><a:solidFill><a:schemeClr val="tx2"/></a:solidFill></a:defRPr></a:lvl1pPr></p:titleStyle>'
+              '<p:bodyStyle><a:lvl1pPr><a:buChar char="•"/><a:defRPr sz="2400"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill></a:defRPr></a:lvl1pPr><a:lvl2pPr><a:buChar char="–"/><a:defRPr sz="2000"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="75000"/><a:lumOff val="25000"/></a:schemeClr></a:solidFill></a:defRPr></a:lvl2pPr></p:bodyStyle></p:txStyles></p:sldMaster>')
+    layout = '<p:sldLayout %s><p:cSld><p:spTree>%s%s</p:spTree></p:cSld></p:sldLayout>' % (NS, ph("title", None, ""), ph(None, "1", ""))
+    title_layout = ('<p:sldLayout %s showMasterSp="0"><p:cSld><p:bg><p:bgPr><a:solidFill><a:schemeClr val="tx2"/></a:solidFill></p:bgPr></p:bg><p:spTree>' % NS
+                    + ph("ctrTitle", None, "", (100, 230, 1080, 140)) + ph("subTitle", "1", "", (100, 390, 1080, 80)) + "</p:spTree></p:cSld></p:sldLayout>")
+    s1 = ('<p:sld %s><p:cSld><p:spTree>' % NS
+          + ph("ctrTitle", None, '<a:p><a:pPr algn="ctr"/><a:r><a:rPr sz="5400" b="1"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:rPr><a:t>天气 App · 第三季度回顾</a:t></a:r></a:p>')
+          + ph("subTitle", "1", '<a:p><a:pPr algn="ctr"><a:buNone/></a:pPr><a:r><a:rPr sz="2400"><a:solidFill><a:srgbClr val="C9D7F0"/></a:solidFill></a:rPr><a:t>产品组 · 示例演示文稿</a:t></a:r></a:p>')
+          + "</p:spTree></p:cSld></p:sld>")
+    s2 = ('<p:sld %s><p:cSld><p:spTree>' % NS
+          + ph("title", None, p("主屏幕小组件上线后"))
+          + ph(None, "1", p("日活提高 18%，留存提高 6 个百分点") + p("中号小组件使用最多", 1) + p("下一步：逐小时降雨概率") + p("锁屏小组件适配深色壁纸", 1), (60, 170, 640, 480))
+          + '<p:pic><p:nvPicPr><p:cNvPr id="30" name="chart"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rIdImg"/></p:blipFill><p:spPr>%s<a:prstGeom prst="rect"/></p:spPr></p:pic>' % xfrm(740, 190, 480, 200)
+          + shape(740, 430, 140, 140, '<a:schemeClr val="accent1"/>', "ellipse", "+18%")
+          + shape(910, 430, 140, 140, '<a:schemeClr val="accent3"/>', "ellipse", "+6pt")
+          + shape(1080, 430, 140, 140, '<a:schemeClr val="accent2"/>', "roundRect", "4.8★", size=2000)
+          + "</p:spTree></p:cSld></p:sld>")
+    cell = lambda t, fill="": '<a:tc><a:txBody><a:bodyPr/><a:p><a:r><a:rPr sz="1800"%s/><a:t>%s</a:t></a:r></a:p></a:txBody><a:tcPr>%s</a:tcPr></a:tc>' % (
+        ' b="1"' if fill else "", escape(t), '<a:solidFill><a:srgbClr val="%s"/></a:solidFill>' % fill if fill else "")
+    rows = [("区域", "7 月", "8 月", "9 月"), ("华东", "120,000", "128,000", "141,000"), ("华北", "151,337", "157,011", "168,133"), ("海外", "245,348", "244,044", "249,532")]
+    table = ('<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="50" name="t"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="%d" y="%d"/><a:ext cx="%d" cy="%d"/></p:xfrm>' % (60 * E, 180 * E, 700 * E, 240 * E)
+             + '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblGrid>' + ('<a:gridCol w="%d"/>' % (175 * E)) * 4 + "</a:tblGrid>"
+             + "".join('<a:tr h="%d">' % (60 * E) + "".join(cell(t, "DDEBF7" if i == 0 else "") for t in r) + "</a:tr>" for i, r in enumerate(rows)) + "</a:tbl></a:graphicData></a:graphic></p:graphicFrame>")
+    chart = ('<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="51" name="c"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="%d" y="%d"/><a:ext cx="%d" cy="%d"/></p:xfrm>' % (800 * E, 180 * E, 420 * E, 300 * E)
+             + '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" r:id="rIdC"/></a:graphicData></a:graphic></p:graphicFrame>')
+    C = 'xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
+    def cache(kind, vals):
+        tag = "strRef><c:strCache" if kind == "s" else "numRef><c:numCache"
+        end = "strCache></c:strRef" if kind == "s" else "numCache></c:numRef"
+        return "<c:%s><c:ptCount val=\"%d\"/>%s</c:%s>" % (tag, len(vals), "".join("<c:pt idx=\"%d\"><c:v>%s</c:v></c:pt>" % (i, escape(str(v))) for i, v in enumerate(vals)), end)
+    months = ["7 月", "8 月", "9 月"]
+    sers = "".join('<c:ser><c:idx val="%d"/><c:order val="%d"/><c:tx>%s</c:tx><c:cat>%s</c:cat><c:val>%s</c:val></c:ser>' % (i, i, cache("s", [r[0]]), cache("s", months), cache("n", [int(v.replace(",", "")) for v in r[1:]]))
+                   for i, r in enumerate(rows[1:]))
+    chart_xml = ('<c:chartSpace %s><c:chart><c:title><c:tx><c:rich><a:bodyPr/><a:p><a:r><a:t>各区域月收入</a:t></a:r></a:p></c:rich></c:tx></c:title><c:autoTitleDeleted val="0"/><c:plotArea>'
+                 '<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/>%s</c:barChart></c:plotArea></c:chart></c:chartSpace>') % (C, sers)
+    s3 = '<p:sld %s><p:cSld><p:spTree>%s%s%s</p:spTree></p:cSld></p:sld>' % (NS, ph("title", None, p("各区域收入")), table, chart)
+    notes = ('<p:notes %s><p:cSld><p:spTree><p:sp><p:nvSpPr><p:cNvPr id="2" name="n"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/>%s</p:txBody></p:sp></p:spTree></p:cSld></p:notes>'
+             % (NS, p("先讲华东的增长，再说海外持平的原因。")))
+    files = {
+        "[Content_Types].xml": '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/></Types>',
+        "_rels/.rels": rels([("rId1", "officeDocument", "ppt/presentation.xml")]),
+        "ppt/presentation.xml": '<p:presentation %s><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rIdM"/></p:sldMasterIdLst><p:sldIdLst><p:sldId id="256" r:id="rId1"/><p:sldId id="257" r:id="rId2"/><p:sldId id="258" r:id="rId3"/></p:sldIdLst><p:sldSz cx="12192000" cy="6858000"/></p:presentation>' % NS,
+        "ppt/_rels/presentation.xml.rels": rels([("rId1", "slide", "slides/slide1.xml"), ("rId2", "slide", "slides/slide2.xml"), ("rId3", "slide", "slides/slide3.xml"), ("rIdM", "slideMaster", "slideMasters/slideMaster1.xml")]),
+        "ppt/theme/theme1.xml": theme,
+        "ppt/slideMasters/slideMaster1.xml": master,
+        "ppt/slideMasters/_rels/slideMaster1.xml.rels": rels([("rId1", "theme", "../theme/theme1.xml")]),
+        "ppt/slideLayouts/slideLayout1.xml": title_layout,
+        "ppt/slideLayouts/slideLayout2.xml": layout,
+        "ppt/slideLayouts/_rels/slideLayout1.xml.rels": rels([("rId1", "slideMaster", "../slideMasters/slideMaster1.xml")]),
+        "ppt/slideLayouts/_rels/slideLayout2.xml.rels": rels([("rId1", "slideMaster", "../slideMasters/slideMaster1.xml")]),
+        "ppt/slides/slide1.xml": s1, "ppt/slides/slide2.xml": s2, "ppt/slides/slide3.xml": s3,
+        "ppt/slides/_rels/slide1.xml.rels": rels([("rId1", "slideLayout", "../slideLayouts/slideLayout1.xml")]),
+        "ppt/slides/_rels/slide2.xml.rels": rels([("rId1", "slideLayout", "../slideLayouts/slideLayout2.xml"), ("rIdImg", "image", "../media/chart.png"), ("rIdN", "notesSlide", "../notesSlides/notesSlide2.xml")]),
+        "ppt/slides/_rels/slide3.xml.rels": rels([("rId1", "slideLayout", "../slideLayouts/slideLayout2.xml"), ("rIdC", "chart", "../charts/chart1.xml")]),
+        "ppt/charts/chart1.xml": chart_xml,
+        "ppt/notesSlides/notesSlide2.xml": notes,
+        "ppt/media/chart.png": _bar_png(480, 200),
+    }
+    return _zip(files)
+
+
 # What the hub (node filemime.go) calls a binary file by its name; others are video/mp4 as before.
 MOCK_MIMES = {".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xls": "application/vnd.ms-excel",
-              ".pdf": "application/pdf", ".png": "image/png", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              ".pdf": "application/pdf", ".doc": "application/msword", ".pages": "application/vnd.apple.pages", ".png": "image/png", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
               ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation", ".mp3": "audio/mpeg", ".m4a": "audio/mp4"}
 
 
@@ -5199,6 +5399,15 @@ if os.environ.get("MOCK_SHEETS"):  # the table viewer's files (#1310), in the br
     MOCK_TREE[MOCK_REPO + "/data/stations.csv"] = stations_csv()
     MOCK_TREE.setdefault(MOCK_REPO + "/reports/", None)
     MOCK_TREE[MOCK_REPO + "/reports/季度报告.xlsx"] = (MOCK_MIMES[".xlsx"], base64.b64encode(quarterly_xlsx()).decode())
+if os.environ.get("MOCK_OFFICE"):  # the Office viewer's files (#1345): rendered in the browser, or converted by "LibreOffice"
+    MOCK_TREE.setdefault(MOCK_REPO + "/reports/", None)
+    MOCK_TREE[MOCK_REPO + "/reports/季度报告.docx"] = (MOCK_MIMES[".docx"], base64.b64encode(office_docx()).decode())
+    MOCK_TREE[MOCK_REPO + "/reports/季度回顾.pptx"] = (MOCK_MIMES[".pptx"], base64.b64encode(office_pptx()).decode())
+    MOCK_TREE[MOCK_REPO + "/reports/旧版说明.doc"] = ("application/msword", base64.b64encode(b"\xd0\xcf\x11\xe0 old word").decode())
+    # Pages keeps a picture of the first page inside; this Keynote file has none, so it goes to "LibreOffice"
+    MOCK_TREE[MOCK_REPO + "/reports/路线图.pages"] = ("application/vnd.apple.pages", base64.b64encode(_zip({"Index/Document.iwa": b"\x00" * 2048, "QuickLook/Thumbnail.png": _page_png()})).decode())
+    MOCK_TREE[MOCK_REPO + "/reports/发布会.key"] = ("application/vnd.apple.keynote", base64.b64encode(_zip({"Index/Document.iwa": b"\x00" * 2048})).decode())
+    FILES["/Users/me/Library/Caches/persona/convert/mock.pdf"] = base64.b64decode(mock_pdf())
 MOCK_TREE["Desktop/"] = None  # listed, but macOS keeps it from jarvisd (mock_denied)
 MOCK_COMMITS[2]["refs"] = "tag: v0.1.0"
 TIME_OFFSET = os.environ.get("MOCK_TIME_OFFSET", "")
@@ -6436,6 +6645,11 @@ class H(BaseHTTPRequestHandler):
             cwd = q.get("cwd", [""])[0]
             paths = q.get("path", []) + [x for x in q.get("paths", [""])[0].split("\n") if x]
             return self.send_json({"stats": [{"path": x, "kind": file_kind(file_path(x, cwd)) if file_path(x, cwd) else "missing"} for x in paths]})
+        if p.startswith("/api/v1/machines/") and p.endswith("/file/convert"):  # node file.convert (LibreOffice → PDF)
+            src = q.get("path", [""])[0]
+            if src.endswith((".pages", ".key")):
+                return self.send_json({"error": "LibreOffice is not installed on this machine", "code": "no_converter"}, 404)
+            return self.send_json({"path": "/Users/me/Library/Caches/persona/convert/mock.pdf", "size": len(FILES.get("/Users/me/Library/Caches/persona/convert/mock.pdf", b"")), "mime": "application/pdf"})
         if p.startswith("/api/v1/machines/") and p.endswith("/file/download"):
             value = FILES.get(file_path(q.get("path", [""])[0], q.get("cwd", [""])[0]))
             if not isinstance(value, bytes): return self.send_json({"error": "no such video"}, 404)
@@ -6449,6 +6663,11 @@ class H(BaseHTTPRequestHandler):
             f = file_read(q.get("path", [""])[0], q.get("cwd", [""])[0], int(q.get("offset", ["0"])[0] or 0), q.get("stream", [""])[0] == "1")
             if not f: return self.send_json({"error": "stat %s: no such file or directory" % q.get("path", [""])[0]}, 404)
             return self.send_json(f)
+        # lark-connector's personal agents (hub agents.go): none here, as on a hub without lark-connector; the web's sidebar hid
+        # the section only after these answered, and showed 「个人 Agent 加载失败」 on the 404 instead.
+        if p == "/api/v1/agents": return self.send_json({"sources": []})
+        if p == "/api/v1/agents/sessions": return self.send_json({"sessions": [], "items": []})
+        if p == "/api/v1/agents/prefs": return self.send_json({"pins": [], "view": {}, "sections": [], "assign": {}})
         if p == "/api/v1/personas": return self.send_json({"personas": personas()})
         if p.startswith("/api/v1/personas/"):
             f = persona_file(p[len("/api/v1/personas/"):])
