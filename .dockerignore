@@ -8,6 +8,8 @@
 !integrations/paseo/
 !integrations/pi/
 !integrations/runtime-sdk/
+# the extension SDK's wire types: server/go.mod replaces its module with ../sdk/go (Dockerfile)
+!sdk/go/
 integrations/**/node_modules/
 server/bin/
 server/internal/hub/webdist/*
