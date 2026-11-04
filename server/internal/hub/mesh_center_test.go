@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"sync"
@@ -194,6 +195,58 @@ func TestCenterUnreachable(t *testing.T) {
 	// Its own routes still answer.
 	if code, _ := member.do(t, "GET", "/api/v1/health", "", ""); code != 200 {
 		t.Fatalf("health: %d", code)
+	}
+}
+
+// The headers a hub opens a node stream with mean nothing from outside: a request that carries them is still an app's,
+// and without a credential a member answers it 401 like any other (docs/mesh.md「安全边界」).
+func TestCenterMemberDropsNodeStreamHeaders(t *testing.T) {
+	box := newMeshNode("uid-box", "box", "s1")
+	lap := newMeshNode("uid-lap", "lap", "s2")
+	box.resident, lap.resident = true, true
+	center := startTestHub(t, hubB, "Office", []MachineConfig{{ID: "box", Name: "Box", Kind: "ssh"}}, []*meshNode{box})
+	member := startTestHub(t, hubA, "家里", []MachineConfig{{ID: "lap", Name: "Laptop", Kind: "link"}}, []*meshNode{lap})
+	joinHubs(t, member, center)
+	member.waitCenter(t, hubB)
+	center.waitCenter(t, hubB)
+	tok, _ := center.deviceToken(t, roleFull)
+	// The way to both computers is there: a refusal below is not a route still settling.
+	eventually(t, 15*time.Second, "both machines online on the center", func() bool {
+		ms := center.machines(t, tok)
+		return ms["box"].Online && ms["lap"].Online
+	})
+	for _, target := range []string{hubA + "/lap", hubB + "/box"} {
+		req, err := http.NewRequest(http.MethodGet, member.srv.URL+"/api/v1/anything", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Connection", "Upgrade")
+		req.Header.Set("Upgrade", nodeUpgrade)
+		req.Header.Set(hdrPeerNode, target)
+		req.Header.Set(hdrPeerFrom, hubB)
+		resp, err := insecureClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("no credential, node stream headers for %s: %d, want 401", target, resp.StatusCode)
+		}
+	}
+}
+
+// A member from before the headers were dropped still passes them on, naming the center as the opener: the center knows
+// it opened no such stream.
+func TestCenterRefusesNodeStreamNamingItAsOpener(t *testing.T) {
+	center := startTestHub(t, hubB, "Office", nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/anything", nil)
+	req.Header.Set(hdrPeerTTL, "8")
+	req.Header.Set(hdrPeerNode, hubA+"/lap")
+	req.Header.Set(hdrPeerFrom, hubB)
+	rec := httptest.NewRecorder()
+	center.h.servePeerHTTP(rec, req)
+	if rec.Code != http.StatusLoopDetected {
+		t.Fatalf("got %d, want 508", rec.Code)
 	}
 }
 

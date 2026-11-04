@@ -189,6 +189,13 @@ func (h *Hub) servePeerHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	r = r.WithContext(context.WithValue(r.Context(), meshTTLKey{}, ttl))
 	if target := r.Header.Get(hdrPeerNode); target != "" {
+		// A node stream starts at the hub in hdrPeerFrom and goes away from it. One that arrives there either bounced back
+		// while the routes change, and its opener tries again, or is a client's, passed on by a member from before
+		// memberForward dropped these. The two look the same, and neither should open.
+		if r.Header.Get(hdrPeerFrom) == h.hubID() {
+			writeCode(w, http.StatusLoopDetected, "mesh_loop", "转发的次数太多（hub 之间的路由在变）", nil)
+			return
+		}
 		hub, mid, _ := strings.Cut(target, "/")
 		if hub != h.hubID() {
 			if !h.meshForwardTo(w, r, hub) {
@@ -310,6 +317,9 @@ func (h *Hub) memberForward(next http.Handler) http.Handler {
 			tlsWord = "tls"
 		}
 		r2 := r.Clone(r.Context())
+		// A hub's word, never a client's: with these the center would open a node stream without asking for a credential.
+		r2.Header.Del(hdrPeerNode)
+		r2.Header.Del(hdrPeerFrom)
 		r2.Header.Set(hdrPeerSource, kind+" "+ip.Unmap().String()+" "+tlsWord)
 		cw := &codeWriter{ResponseWriter: w}
 		done := h.trackProxied(r2)
