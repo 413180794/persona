@@ -417,7 +417,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 2026-11-01 全部过了一遍：分 5 组并行，每组用离屏截图（体验模式和 `scripts/mock/mock_hub.py` 的假数据，深浅色）和单元测试（`JarvisMacTests`）逐条核对，顺手修了能修的；再由一个 reviewer 逐条试着推翻打的勾，推翻了的不勾，写清看到了什么、没看到什么。
 核对后 106 条 [x]、118 条 [ ]。没勾的每条下面都写了原因：「要到 Mac 前看」是要解锁后在 Mac 上点、按、看的，「没做」是还没做的，「Mac 上没有」是 Mac 上本来就不该有的。
-2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 146 条 [x]、76 条 [ ]。
+2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 149 条 [x]、73 条 [ ]。
 待你确认：`-showSampleScreen` 的示例「终端在问你」里原来有像内部工具 / 服务的名字，已在提交「chore: the sample terminal dialog uses made-up names only」里全换成编造的名字；以前拍的截图里可能还是旧文字。
 
 ### 真窗口验收怎么分工（2026-11-03 起）
@@ -775,9 +775,10 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] 机器 (one page since 2026-11-01): N/M online, per-machine card with agents (需要你 / 工作中 / 空闲), CPU/mem/net now + 1h sparklines, alert rings, version-mismatch 重新部署, what needs a look first, 10s polling — Views/Machines/MachinesView.swift (MachinesView, MachineCard, MachineConcern, DeployRow)（Mac：侧边栏「机器」⌘5，`MacMachinesPage`）
   - 合并前的「机器」列表和「机器监控」总览在 Mac 上都核对过（2026-11-01）；合并后的页面 Mac 只编译通过，没截图。
   - Mac（2026-11-02 Mac mini 核对）真窗口 + 假 hub 离屏截图（深浅色）：N/M 台在线、用量偏高、需要你的 Agent 数；离线的排最前（带 ssh 错误），告警的那台红框 + CPU 高 / 内存紧张 / 负载高；每张卡片有需要你 / 工作中 / 空闲、CPU / 内存 / 网络和 1 小时曲线；`MOCK_NODE_MISMATCH=1` 的那台底部是「这台电脑上的 Persona 和 hub 不是同一次部署」+「重新部署」（没点）。⌘R 见上面 Pull to refresh。
-- [ ] Machine detail: agents (open the chat), 引擎, 1/6/24h CPU/mem/net/load charts with shared scrub, per-core bars, system facts, gaps, launchers, reconnect — Views/Machines/MachineDetailView.swift, Views/Machines/MetricCharts.swift (Swift Charts)
+- [x] Machine detail: agents (open the chat), 引擎, 1/6/24h CPU/mem/net/load charts with shared scrub, per-core bars, system facts, gaps, launchers, reconnect — Views/Machines/MachineDetailView.swift, Views/Machines/MetricCharts.swift (Swift Charts)
   - 原来的监控页在 Mac 上看过 1 / 24 小时、告警卡片、CPU 和内存图（`-macSection machines -openMonitor <id>`，现在打开的是合并后的机器页）。要到 Mac 前看：往下滚看网络、负载图、每核条、系统信息、断档，用鼠标拖图看两张图一起动，点一个 Agent 进对话。
   - Mac（2026-11-02 核对）：假 hub 离屏截图（1280×1600 被屏幕截到约 970 高）：Agent 4 个、引擎 herdr、监控 CPU / 内存 / 网络 / 负载 / 磁盘 / 交换。下面的图表、每核条、系统信息要滚动，等真窗口。
+  - Mac 真窗口（2026-11-04，执行者跑）：服务器详情从上到下 头部、Agent、引擎 herdr、监控数值、1 / 6 / 24 小时切换（切 24 小时图跟着变）、CPU / 内存 / 网络 / 负载图、16 核的每核条、系统信息、启动器、重新连接；在图上拖动，几张图同一时刻一起出竖线和数值；点 Agent 进它的对话。
 - [x] OS badge — Views/Machines/OSBadge.swift; model — Shared/MachineMetrics.swift
   - Mac（2026-11-01 核对）：总览卡片上 Ubuntu、两台 Apple、Debian 的标志，详情和监控页头部也有；`MachineMetricsTests` 在 JarvisMacTests 里通过。
 
@@ -838,10 +839,12 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-01 核对）假 hub 截图（`-openModelLaunchers YES`）：Persona 管理（空的提示）、来自 ~/.zshrc 3 个（模型 chip、网关、机器）、已隐藏 ›、工具栏 + 和搜索；`-showModelSearch <词>` 筛到只剩一个。
 - [ ] Detail: per-machine params, function source (masked), 测试可用性, delete/hide with popover confirm, restore — ModelLaunchersView.swift (ModelLauncherDetailView, LauncherDetailSections, LauncherCheckRow)
   - 要到 Mac 前看：在真启动器上看函数源码一节（key 打码），点「在 Persona 里隐藏」（Persona 管理的点删除）看确认浮层，再从已隐藏里恢复显示。来源 / Base URL / 模型 / 电脑、可用性检测和再测一次、恢复显示截图看过。
+  - Mac 真窗口（2026-11-04，复核）：#1281 之前的副本里列表行点不进详情，#1281（分组表单）之后可以；「在 Persona 里隐藏」弹出「确认隐藏」浮层，确认后回到列表——列表没刷新（#1433，已修），修后进「已隐藏」，从详情「恢复显示」回到原来的分组。假 hub 的启动器没有函数源码，那一节没看到。
 - [x] Editor (name, base URL, API key, model, small model, args) — ModelLaunchersView.swift (LauncherEditor)
   - Mac（2026-11-01 核对）sheet 截图（`-macLauncherEditor YES`）：名字、网关 + API Key、模型 + 小模型、额外参数和说明、取消和置灰的保存。
-- [ ] Quota section (pools/windows, colors ≥70/90%, refresh) — Views/Settings/LauncherQuotaViews.swift
+- [x] Quota section (pools/windows, colors ≥70/90%, refresh) — Views/Settings/LauncherQuotaViews.swift
   - 要到 Mac 前看：在激活的窗口里，77% / 86% 的条是橙色、用完的是红色、42% 是默认色，点刷新重新加载。截图里额度池、窗口、数字和红 / 橙文字都对，条全是灰的（离屏窗口不是 key，多半是截图问题，没确认）。
+  - Mac 真窗口（2026-11-04，复核）：cc_kiro 的额度 62%、64% 默认蓝，77% 橙，「已用完」红；cc_team 42% 蓝、86% 橙。刷新按钮在，没点。
 - [x] Config models — Shared/LauncherConfig.swift
   - Mac（2026-11-01 核对）：假 hub 的列表、详情、额度响应在 Mac 上解成这些模型并画出来（截图）；这个文件两边都没有单独的单元测试。
 
@@ -950,8 +953,9 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-01 核对）：假 hub 断开再恢复后截图里 App 回到在线、没有横幅；hub 日志里 `since=` 重订阅那一行只有口述，日志没留下、复现不了，`LiveConnection` 只是原样共用。
 - [x] Outbox: offline messages persisted, auto-send in order after catch-up — App/Outbox.swift
   - Mac（2026-11-01 核对）：假 hub 断开时发一条，显示待发气泡「连上后自动发送」，退出、hub 恢复后再开，气泡变成正常发出（两张截图）。为此修了 `-pairURL` 启动不恢复 outbox（截图不读钥匙串，init 里没有配置），`MacLaunchArguments` 现在调 `restoreOutbox()`，只影响 DEBUG；hub 只收到一次是口述，没留证据。
-- [ ] One-shot actions not queued; blue 「刚才的操作没有生效」 — AppModel.show / resolve
+- [x] One-shot actions not queued; blue 「刚才的操作没有生效」 — AppModel.show / resolve
   - 要到 Mac 前看：假 hub `/mock/down?s=20` 时点授权卡的「允许」，出蓝色「刚才的操作没有生效」、不进队列。
+  - Mac 真窗口（2026-11-04，执行者跑）：`/mock/down?s=25` 时点授权卡「允许」，顶部蓝色「连不上 hub，刚才的操作没有生效」，卡片还在；连接恢复后卡片仍在，没有自动补发。
 - [ ] Background delta sync for agents (rev/after_seq, 40 sessions, concurrency 3) — App/AgentSync.swift
   - Mac（2026-11-01 核对）：只读了代码：`App/AgentSync.swift` 没有 `#if`、编进 JarvisMac、没被替换；Mac 上没量过，没有运行证据。
 - [ ] State cache for machines/sessions/interactions/inbox/mail accounts/lark chats — Shared/StateCache.swift
