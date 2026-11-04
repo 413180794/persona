@@ -258,4 +258,433 @@ struct TodosLogicTests {
         #expect(agent.linkedAt != nil && agent.releasedAt != nil)
     }
 
+    @Test func spacesCapabilityDistinguishesMissingNullAndEmpty() throws {
+        func decode(_ extra: String) throws -> TodoItem {
+            try JSON.decoder.decode(TodoItem.self, from: Data("{\"id\":\"t\",\"title\":\"T\"\(extra)}".utf8))
+        }
+        let legacy = try decode("")
+        let null = try decode(",\"spaces\":null")
+        let modern = try decode(",\"spaces\":[]")
+        #expect(legacy.spaces == nil && null.spaces == nil)
+        #expect(modern.spaces == [])
+        #expect(TodosLogic.supportsSpaces([]))
+        #expect(!TodosLogic.supportsSpaces([legacy, null]))
+        #expect(TodosLogic.supportsSpaces([legacy, modern]))
+        let restored = try JSON.decoder.decode([TodoItem].self, from: JSON.encoder.encode([legacy, modern]))
+        #expect(restored == [legacy, modern])
+        #expect(restored[0].agents.isEmpty)
+    }
+
+    @Test func spacesAndAgentOriginsDecodeWithoutChangingExistingFields() throws {
+        let data = Data(#"""
+        {"id":"t","title":"T","origin":"conversation","plan_id":"plan",
+         "spaces":[{"machine_id":"m","space":"项目/a b","linked_at":"2026-01-01T00:00:00Z"}],
+         "agents":[{"machine_id":"m","session_id":"s","source":"space","via":"m/项目/a b"},
+                   {"machine_id":"m","session_id":"old"}]}
+        """#.utf8)
+        let todo = try JSON.decoder.decode(TodoItem.self, from: data)
+        #expect(todo.origin == "conversation" && todo.planID == "plan")
+        #expect(todo.spaces?.first?.space == "项目/a b")
+        #expect(todo.spaces?.first?.linkedAt != nil)
+        #expect(todo.agents[0].source == "space" && todo.agents[0].via == "m/项目/a b")
+        #expect(todo.agents[1].source == nil && todo.agents[1].via == nil)
+    }
+
+    @Test func projectsMatchBothMachineAndExactNameAndIgnoreDoneTodos() {
+        let space = TodoItem.Space(machineID: "m", space: "项目/a b")
+        let done = TodoItem(id: "done", title: "Done", doneAt: Date(), spaces: [space])
+        let open = TodoItem(id: "open", title: "Open", spaces: [space])
+        #expect(TodosLogic.findTodoForSpace([done, open], machineID: "m", space: "项目/a b")?.id == "open")
+        #expect(TodosLogic.findTodoForSpace([open], machineID: "other", space: "项目/a b") == nil)
+        #expect(TodosLogic.findTodoForSpace([open], machineID: "m", space: "项目/a") == nil)
+        #expect(TodosLogic.findTodoForSpace([open], machineID: "", space: "项目/a b") == nil)
+        #expect(TodosLogic.findTodoForSpace([open], machineID: "m", space: "") == nil)
+    }
+
+    @Test func projectPathsEncodeSpacesSlashesAndChineseOnce() async throws {
+        let path = "/api/v1/todos/t%2F1/spaces/m%20one/%E4%B8%AD%E6%96%87%20a%2Fb"
+        #expect(TodosLogic.spacePath(todoID: "t/1", machineID: "m one", space: "中文 a/b") == path)
+        #expect(APIClient.encodedPath(path) == path)
+        let hub = FakeHub()
+        hub.on("PUT", path, json: "{}")
+        hub.on("DELETE", path, json: "{}")
+        try await hub.client.linkTodoSpace(todoID: "t/1", machineID: "m one", space: "中文 a/b")
+        try await hub.client.unlinkTodoSpace(todoID: "t/1", machineID: "m one", space: "中文 a/b")
+        #expect(hub.sent("PUT", path).count == 1)
+        #expect(hub.sent("DELETE", path).count == 1)
+    }
+
+    @Test func projectOriginUsesOnlyViaAndNeverAnotherProject() {
+        var unrelated = session("s", state: .working)
+        unrelated.spaceName = "wrong-project"
+        let lookup = TodosLogic.makeSessionLookup([unrelated])
+        var agent = TodoItem.Agent(machineID: "m", sessionID: "s", source: "space", via: "m/project/sub")
+        #expect(TodosLogic.agentSource(agent, lookup: lookup) == "随项目 project/sub")
+        agent.via = "project"
+        #expect(TodosLogic.agentSource(agent, lookup: lookup) == "随项目 project")
+        agent.via = nil
+        #expect(TodosLogic.agentSource(agent, lookup: lookup) == "随项目")
+        agent.via = "m/"
+        #expect(TodosLogic.agentSource(agent, lookup: lookup) == "随项目")
+        agent.source = "manual"
+        #expect(TodosLogic.agentSource(agent, lookup: lookup) == nil)
+        agent.source = nil
+        #expect(TodosLogic.agentSource(agent, lookup: lookup) == nil)
+    }
+
+    @Test func spawnedOriginUsesTheParentOrSaysDerived() {
+        var parent = session("parent", state: .offline)
+        parent.machineID = "remote"
+        parent.title = "Parent task"
+        let lookup = TodosLogic.makeSessionLookup([parent])
+        var agent = TodoItem.Agent(machineID: "m", sessionID: "child", source: "spawned", via: "remote/parent")
+        #expect(TodosLogic.agentSource(agent, lookup: lookup) == "由 Parent task 派出")
+        agent.via = "remote/missing"
+        #expect(TodosLogic.agentSource(agent, lookup: lookup) == "派生")
+        agent.via = nil
+        #expect(TodosLogic.agentSource(agent, lookup: lookup) == "派生")
+    }
+
+    @Test func projectWithoutALiveAgentRemainsVisibleAsEmpty() {
+        let project = TodoItem.Space(machineID: "m", space: "project")
+        var active = session("s", state: .working)
+        active.spaceName = "project"
+        #expect(TodosLogic.hasLiveAgent(in: project, sessions: [active]))
+        active.state = .offline
+        #expect(!TodosLogic.hasLiveAgent(in: project, sessions: [active]))
+        #expect(!TodosLogic.hasLiveAgent(in: project, sessions: []))
+    }
+
+    @Test func projectPresenceUsesAllOnlineSessionsAndTheHubKey() {
+        let project = TodoItem.Space(machineID: "m", space: "project")
+        var active = session("s", state: .working)
+        active.spaceID = "project"
+        active.spaceName = ""
+        active.todo = SessionTodoRef(id: "other", title: "Other")
+        #expect(TodosLogic.hasLiveAgent(in: project, sessions: [active]))
+        active.spaceName = nil
+        #expect(TodosLogic.hasLiveAgent(in: project, sessions: [active]))
+        active.machineID = "other"
+        #expect(!TodosLogic.hasLiveAgent(in: project, sessions: [active]))
+        active.machineID = "m"
+        active.state = .offline
+        #expect(!TodosLogic.hasLiveAgent(in: project, sessions: [active]))
+    }
+
+    @Test func sessionMarkerControlsUnlinkAndCurrentHighlightWithoutTheList() {
+        let target = TodoLinkTarget.agent(machineID: "m", sessionID: "s", currentTodoID: "from-session")
+        #expect(target.currentTodoID(in: []) == "from-session")
+        #expect(target.currentTodoID(in: [TodoItem(id: "other", title: "Other")]) == "from-session")
+        var draft = TodoLinkDraft()
+        draft.reset(currentTodoID: target.currentTodoID(in: []))
+        #expect(draft.selectedTodoID == "from-session")
+    }
+
+    @Test func linkDraftResetsOnEachOpeningAndProjectChange() {
+        let first = TodoLinkTarget.space(.init(machineID: "m", space: "first"))
+        let second = TodoLinkTarget.space(.init(machineID: "m", space: "second"))
+        #expect(first.id != second.id)
+        var draft = TodoLinkDraft(selectedTodoID: "old", creating: true, newTitle: "stale", busy: true)
+        draft.reset(currentTodoID: "current")
+        #expect(draft == TodoLinkDraft(selectedTodoID: "current"))
+        draft.newTitle = "typed again"
+        draft.creating = true
+        draft.reset(currentTodoID: second.currentTodoID(in: []))
+        #expect(draft == TodoLinkDraft())
+    }
+
+    @Test func spaces404HidesEntriesAndRefreshRecomputesSupport() async throws {
+        let hub = FakeHub()
+        let store = TodoStore.shared
+        store.forget()
+        #expect(!store.spacesSupported)
+        hub.on("GET", "/api/v1/todos", json: #"{"todos":[]}"#)
+        await store.refresh(api: hub.client)
+        #expect(store.spacesSupported)
+        hub.on("GET", "/api/v1/todos", json: #"{"todos":[{"id":"t","title":"T","spaces":[]}]}"#)
+        await store.refresh(api: hub.client)
+        #expect(store.spacesSupported)
+        let original = store.todos
+        let routeError = hubResponseError(#"{"error":"Not Found","code":"not_found","retryable":false}"#)
+        hub.on("PUT", "/api/v1/todos/t/spaces/m/p") { _ in throw routeError }
+        await #expect(throws: APIError.self) {
+            try await store.setSpace(todoID: "t", space: .init(machineID: "m", space: "p"), linked: true, api: hub.client)
+        }
+        #expect(!store.spacesSupported)
+        #expect(store.error == "这台 hub 还不支持整组挂，升级 hub 后再试")
+        #expect(store.todos == original)
+        await store.refresh(api: hub.client)
+        #expect(store.spacesSupported)
+        hub.on("GET", "/api/v1/todos", json: #"{"todos":[{"id":"t","title":"Legacy"}]}"#)
+        await store.refresh(api: hub.client)
+        #expect(!store.spacesSupported)
+    }
+
+    @Test func spaceWriteIsOptimisticAndRollsBackWithAnError() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/todos", json: #"{"todos":[{"id":"t","title":"T","spaces":[]}]}"#)
+        let store = TodoStore.shared
+        await store.refresh(api: hub.client)
+        let original = store.todos
+        var client = hub.client
+        client.transport = { request in
+            if request.method == "PUT" {
+                await MainActor.run {
+                    #expect(TodosLogic.findTodoForSpace(store.todos, machineID: "m", space: "p")?.id == "t")
+                    #expect(store.changingSpaces)
+                }
+                throw APIError(status: 500, message: "write failed")
+            }
+            return try await hub.client.transport!(request)
+        }
+        await #expect(throws: APIError.self) {
+            try await store.setSpace(todoID: "t", space: .init(machineID: "m", space: "p"), linked: true, api: client)
+        }
+        #expect(store.todos == original)
+        #expect(store.error?.contains("write failed") == true)
+        #expect(!store.changingSpaces)
+    }
+
+    @Test func successfulSpaceWritesReloadAndUnlinkKeepsManualAndSpawnedAgents() async throws {
+        let hub = FakeHub()
+        let before = #"{"todos":[{"id":"t","title":"T","spaces":[{"machine_id":"m","space":"p"}],"agents":[{"machine_id":"m","session_id":"space","source":"space","via":"m/p"},{"machine_id":"m","session_id":"manual","source":"manual"},{"machine_id":"m","session_id":"child","source":"spawned","via":"m/parent"}]}]}"#
+        let after = #"{"todos":[{"id":"t","title":"T","spaces":[],"agents":[{"machine_id":"m","session_id":"manual","source":"manual"},{"machine_id":"m","session_id":"child","source":"spawned","via":"m/parent"}]}]}"#
+        hub.on("GET", "/api/v1/todos", json: before)
+        let store = TodoStore.shared
+        await store.refresh(api: hub.client)
+        var client = hub.client
+        client.transport = { request in
+            if request.method == "DELETE" {
+                await MainActor.run {
+                    #expect(store.todos[0].spaces == [])
+                    #expect(store.todos[0].agents.map(\.sessionID) == ["manual", "child"])
+                }
+                hub.on("GET", "/api/v1/todos", json: after)
+                return Data("{}".utf8)
+            }
+            return try await hub.client.transport!(request)
+        }
+        #expect(try await store.setSpace(todoID: "t", space: .init(machineID: "m", space: "p"), linked: false, api: client))
+        #expect(store.todos[0].spaces == [])
+        #expect(store.todos[0].agents.map(\.sessionID) == ["manual", "child"])
+        #expect(hub.sent("GET", "/api/v1/todos").count == 2)
+    }
+
+    @Test func createdTodoSurvivesALinkFailureAndTheMessageSaysSo() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/todos", json: #"{"todos":[]}"#)
+        hub.on("POST", "/api/v1/todos") { _ in
+            hub.on("GET", "/api/v1/todos", json: #"{"todos":[{"id":"new","title":"Created","spaces":[]}]}"#)
+            return Data(#"{"todo":{"id":"new","title":"Created","spaces":[]}}"#.utf8)
+        }
+        hub.on("PUT", "/api/v1/todos/new/spaces/m/p") { _ in throw APIError(status: 500, message: "link failed") }
+        let store = TodoStore.shared
+        await store.refresh(api: hub.client)
+        let message = try await store.createAndLink(title: "Created", target: .space(.init(machineID: "m", space: "p")), api: hub.client)
+        #expect(store.todo(id: "new")?.title == "Created")
+        #expect(message == "待办已创建，但挂到待办失败：link failed")
+    }
+
+    /// Reproduce request(_:_:)'s checked response mapping, including the hub's mixed-type JSON bodies.
+    private func hubResponseError(_ body: String, status: Int = 404) -> APIError {
+        let data = Data(body.utf8)
+        return APIError(status: status,
+                        message: APIError.message(in: data) ?? HTTPURLResponse.localizedString(forStatusCode: status),
+                        fields: APIError.fields(in: data))
+    }
+
+    @Test(arguments: [500, 0]) func refreshKeepsSpacesSupportDuringRequestsAndOrdinaryFailures(_ status: Int) async {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/todos", json: #"{"todos":[{"id":"t","title":"T","spaces":[]}]}"#)
+        let store = TodoStore.shared
+        store.forget()
+        #expect(!store.spacesSupported)
+        await store.refresh(api: hub.client)
+        #expect(store.spacesSupported)
+        let original = store.todos
+        var client = hub.client
+        client.transport = { _ in
+            await MainActor.run {
+                #expect(store.loading)
+                #expect(store.spacesSupported)
+                #expect(store.todos == original)
+            }
+            if status == 500 { throw APIError(status: 500, message: "refresh failed") }
+            throw URLError(.timedOut)
+        }
+        await store.refresh(api: client)
+        #expect(store.spacesSupported)
+        #expect(store.isSupported)
+        #expect(store.todos == original)
+        #expect(!store.loading)
+    }
+
+    @Test func get404AndForgetStillClearSpacesSupport() async {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/todos", json: #"{"todos":[]}"#)
+        let store = TodoStore.shared
+        store.forget()
+        #expect(!store.spacesSupported)
+        await store.refresh(api: hub.client)
+        #expect(store.spacesSupported)
+        let routeError = hubResponseError(#"{"error":"Not Found","code":"not_found","retryable":false}"#)
+        hub.on("GET", "/api/v1/todos") { _ in throw routeError }
+        await store.refresh(api: hub.client)
+        #expect(!store.isSupported && !store.spacesSupported)
+        #expect(store.error == nil)
+        hub.on("GET", "/api/v1/todos", json: #"{"todos":[]}"#)
+        await store.refresh(api: hub.client)
+        #expect(store.spacesSupported)
+        store.forget()
+        #expect(!store.spacesSupported)
+    }
+
+    @Test func spacesRouteDetectionUsesRawHubFieldsNotTheDisplayMessage() {
+        var legacy = hubResponseError(#"{"error":"Not Found","code":"not_found","retryable":false}"#)
+        #expect(legacy.fields == ["error": "Not Found", "code": "not_found", "retryable": "false"])
+        legacy.message = "localized display text"
+        #expect(TodosLogic.isLegacySpacesRoute(legacy))
+        var business = hubResponseError(#"{"error":"todo not found","code":"not_found","retryable":false}"#)
+        #expect(business.fields["error"] == "todo not found")
+        business.message = "Not Found"
+        #expect(!TodosLogic.isLegacySpacesRoute(business))
+        let plain = hubResponseError("404 page not found\n")
+        #expect(plain.fields.isEmpty)
+        #expect(TodosLogic.isLegacySpacesRoute(plain))
+        #expect(!TodosLogic.isLegacySpacesRoute(APIError(status: 500, message: "Not Found")))
+        #expect(!TodosLogic.isLegacySpacesRoute(URLError(.timedOut)))
+    }
+
+    @Test(arguments: [true, false]) func plainTextSpaces404RollsBackAndRequestsAnUpgrade(_ linked: Bool) async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/todos", json: #"{"todos":[{"id":"t","title":"T","spaces":[{"machine_id":"m","space":"p"}]}]}"#)
+        let store = TodoStore.shared
+        await store.refresh(api: hub.client)
+        let original = store.todos
+        let error = hubResponseError("404 page not found\n")
+        hub.on(linked ? "PUT" : "DELETE", "/api/v1/todos/t/spaces/m/p") { _ in throw error }
+        await #expect(throws: APIError.self) {
+            try await store.setSpace(todoID: "t", space: .init(machineID: "m", space: "p"), linked: linked, api: hub.client)
+        }
+        #expect(!store.spacesSupported)
+        #expect(store.error == "这台 hub 还不支持整组挂，升级 hub 后再试")
+        #expect(store.todos == original)
+    }
+
+    @Test(arguments: [true, false]) func businessSpaces404PreservesSupportAndShowsTheError(_ linked: Bool) async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/todos", json: #"{"todos":[{"id":"t","title":"T","spaces":[{"machine_id":"m","space":"p"}]}]}"#)
+        let store = TodoStore.shared
+        await store.refresh(api: hub.client)
+        let original = store.todos
+        let error = hubResponseError(#"{"error":"todo not found","code":"not_found","retryable":false}"#)
+        hub.on(linked ? "PUT" : "DELETE", "/api/v1/todos/t/spaces/m/p") { _ in throw error }
+        await #expect(throws: APIError.self) {
+            try await store.setSpace(todoID: "t", space: .init(machineID: "m", space: "p"), linked: linked, api: hub.client)
+        }
+        #expect(store.spacesSupported)
+        #expect(store.error != nil)
+        #expect(store.error == error.shown)
+        #expect(store.todos == original)
+    }
+
+    @Test func createdTodoRemainsWhenTheSpacesRouteNeedsAnUpgrade() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/todos", json: #"{"todos":[]}"#)
+        hub.on("POST", "/api/v1/todos", json: #"{"todo":{"id":"new","title":"Created"}}"#)
+        let error = hubResponseError(#"{"error":"Not Found","code":"not_found","retryable":false}"#)
+        hub.on("PUT", "/api/v1/todos/new/spaces/m/p") { _ in throw error }
+        let store = TodoStore.shared
+        await store.refresh(api: hub.client)
+        #expect(store.spacesSupported)
+        let message = try await store.createAndLink(title: "Created", target: .space(.init(machineID: "m", space: "p")), api: hub.client)
+        #expect(message == "待办已创建，但挂到待办失败：这台 hub 还不支持整组挂，升级 hub 后再试")
+        #expect(store.todo(id: "new")?.title == "Created")
+        #expect(!store.spacesSupported)
+    }
+
+    @Test func businessSpaceFailureRefreshesTheAuthoritativeList() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/todos", json: #"{"todos":[{"id":"t","title":"Stale","spaces":[{"machine_id":"m","space":"p"}]}]}"#)
+        let store = TodoStore.shared
+        await store.refresh(api: hub.client)
+        let failure = hubResponseError(#"{"error":"todo not found","code":"not_found","retryable":false}"#)
+        hub.on("DELETE", "/api/v1/todos/t/spaces/m/p") { _ in
+            hub.on("GET", "/api/v1/todos", json: #"{"todos":[{"id":"fresh","title":"Fresh","spaces":[]}]}"#)
+            throw failure
+        }
+        await #expect(throws: APIError.self) {
+            try await store.setSpace(todoID: "t", space: .init(machineID: "m", space: "p"), linked: false, api: hub.client)
+        }
+        #expect(store.todos.map(\.id) == ["fresh"])
+        #expect(store.spacesSupported)
+        #expect(store.error == failure.shown)
+        #expect(hub.sent("GET", "/api/v1/todos").count == 2)
+    }
+
+    @Test func missingSpaceRouteDoesNotRefreshAndReenableControls() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/todos", json: #"{"todos":[]}"#)
+        let store = TodoStore.shared
+        await store.refresh(api: hub.client)
+        let failure = hubResponseError(#"{"error":"Not Found","code":"not_found","retryable":false}"#)
+        hub.on("PUT", "/api/v1/todos/t/spaces/m/p") { _ in throw failure }
+        await #expect(throws: APIError.self) {
+            try await store.setSpace(todoID: "t", space: .init(machineID: "m", space: "p"), linked: true, api: hub.client)
+        }
+        #expect(hub.sent("GET", "/api/v1/todos").count == 1)
+        #expect(!store.spacesSupported)
+    }
+
+    @Test func createdTodoAndItsFailureMessageSurviveALinkTimeout() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/todos", json: #"{"todos":[]}"#)
+        hub.on("POST", "/api/v1/todos") { _ in
+            hub.on("GET", "/api/v1/todos", json: #"{"todos":[{"id":"new","title":"Created","spaces":[]}]}"#)
+            return Data(#"{"todo":{"id":"new","title":"Created","spaces":[]}}"#.utf8)
+        }
+        hub.on("PUT", "/api/v1/todos/new/spaces/m/p") { _ in throw URLError(.timedOut) }
+        let store = TodoStore.shared
+        await store.refresh(api: hub.client)
+        let message = try await store.createAndLink(title: "Created", target: .space(.init(machineID: "m", space: "p")), api: hub.client)
+        #expect(message == "待办已创建，但挂到待办失败：\(URLError(.timedOut).localizedDescription)")
+        #expect(store.todo(id: "new")?.title == "Created")
+    }
+
+    @Test func projectCreationChecksAnInFlightMembershipWriteBeforePosting() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/todos", json: #"{"todos":[]}"#)
+        let store = TodoStore.shared
+        var client = hub.client
+        client.transport = { request in
+            if request.method == "PUT" {
+                do {
+                    _ = try await store.createAndLink(title: "Blocked", target: .space(.init(machineID: "m", space: "other")), api: hub.client)
+                    Issue.record("A second project creation must be rejected before POST")
+                } catch let error as APIError {
+                    #expect(error.status == 409)
+                    #expect(error.message == "正在更新项目，请稍后再试")
+                }
+                #expect(hub.sent("POST", "/api/v1/todos").isEmpty)
+                return Data("{}".utf8)
+            }
+            return try await hub.client.transport!(request)
+        }
+        try await store.setSpace(todoID: "t", space: .init(machineID: "m", space: "p"), linked: true, api: client)
+        #expect(hub.sent("POST", "/api/v1/todos").isEmpty)
+    }
+
+    @Test(arguments: [true, false]) func failedAgentMembershipWritesRefreshBeforeThrowing(_ linked: Bool) async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/todos", json: #"{"todos":[{"id":"fresh","title":"Fresh"}]}"#)
+        let failure = APIError(status: 500, message: "write failed")
+        hub.on(linked ? "PUT" : "DELETE", "/api/v1/todos/t/agents/m/s") { _ in throw failure }
+        let store = TodoStore.shared
+        await #expect(throws: APIError.self) {
+            if linked { try await store.linkAgent(todoID: "t", machineID: "m", sessionID: "s", api: hub.client) }
+            else { try await store.unlinkAgent(todoID: "t", machineID: "m", sessionID: "s", api: hub.client) }
+        }
+        #expect(store.todos.map(\.id) == ["fresh"])
+        #expect(hub.sent("GET", "/api/v1/todos").count == 1)
+    }
 }

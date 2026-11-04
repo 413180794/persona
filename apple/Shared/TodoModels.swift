@@ -61,6 +61,63 @@ nonisolated struct TodoAgentGroup: Identifiable, Sendable {
 }
 
 nonisolated enum TodosLogic {
+    /// A successfully loaded empty list allows creating the first todo; nonempty lists need an explicit array.
+    /// The store keeps support unknown until its first successful response.
+    static func supportsSpaces(_ todos: [TodoItem]) -> Bool {
+        todos.isEmpty || todos.contains { $0.spaces != nil }
+    }
+
+    /// Modern hub JSON errors always carry a code; older hubs without this route return plain-text 404s.
+    /// Use raw fields: message parsing can fall back when the response also includes non-string retryable.
+    static func isLegacySpacesRoute(_ error: Error) -> Bool {
+        guard let api = error as? APIError, api.status == 404 else { return false }
+        let code = api.fields["code"] ?? ""
+        return code.isEmpty || (code == "not_found" && api.fields["error"] == "Not Found")
+    }
+
+    static func findTodoForSpace(_ todos: [TodoItem], machineID: String, space: String) -> TodoItem? {
+        guard !machineID.isEmpty, !space.isEmpty else { return nil }
+        return todos.first { todo in
+            !todo.isDone && (todo.spaces ?? []).contains { $0.machineID == machineID && $0.space == space }
+        }
+    }
+
+    /// Each path component follows encodeURIComponent, including slashes inside a project name.
+    static func spacePath(todoID: String, machineID: String, space: String) -> String {
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()")
+        func encoded(_ value: String) -> String { value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value }
+        return "/api/v1/todos/\(encoded(todoID))/spaces/\(encoded(machineID))/\(encoded(space))"
+    }
+
+    static func agentSource(_ agent: TodoItem.Agent, lookup: SessionLookup? = nil) -> String? {
+        switch agent.source {
+        case "space":
+            let via = agent.via ?? ""
+            let name = via.firstIndex(of: "/").map { String(via[via.index(after: $0)...]) } ?? via
+            return name.isEmpty ? "随项目" : "随项目 \(name)"
+        case "spawned":
+            if let via = agent.via, let slash = via.firstIndex(of: "/"),
+               let parent = lookup?(String(via[..<slash]), String(via[via.index(after: slash)...])),
+               !parent.title.isEmpty {
+                return "由 \(parent.title) 派出"
+            }
+            return "派生"
+        default: return nil
+        }
+    }
+
+    static func hasLiveAgent(in space: TodoItem.Space, sessions: [Session]) -> Bool {
+        sessions.contains { session in
+            guard session.machineID == space.machineID, session.state.isLive else { return false }
+            let name = session.spaceName.flatMap { $0.isEmpty ? nil : $0 } ?? session.spaceID
+            return name == space.space
+        }
+    }
+
+    static func createdLinkFailure(_ error: Error, isSpace: Bool) -> String {
+        "待办已创建，但\(isSpace ? "挂到待办" : "关联")失败：\(error.localizedDescription)"
+    }
+
     /// Whether a session may take a todo's actions here. The todos are the selected hub's (`AppModel.hub`), so a
     /// session on another hub group would send its request to the wrong hub and find no todo.
     static func isOnTodosHub(sessionGroup: String, hubGroup: String?) -> Bool {
@@ -293,6 +350,14 @@ extension APIClient {
         var todo: TodoItem
     }
 
+    func linkTodoSpace(todoID: String, machineID: String, space: String) async throws {
+        _ = try await request("PUT", TodosLogic.spacePath(todoID: todoID, machineID: machineID, space: space))
+    }
+
+    func unlinkTodoSpace(todoID: String, machineID: String, space: String) async throws {
+        _ = try await request("DELETE", TodosLogic.spacePath(todoID: todoID, machineID: machineID, space: space))
+    }
+
     public struct CreateTodoRequest: Encodable, Sendable {
         var title: String
         var notes: String?
@@ -356,5 +421,38 @@ nonisolated struct TodoEditorText: Equatable {
     mutating func reseed(from todo: TodoItem, editingTitle: Bool, editingNotes: Bool) {
         if !editingTitle { title = todo.title }
         if !editingNotes { notes = todo.notes ?? "" }
+    }
+}
+
+/// The session marker remains authoritative even before the todo list is available.
+nonisolated enum TodoLinkTarget: Equatable, Sendable {
+    case agent(machineID: String, sessionID: String, currentTodoID: String?)
+    case space(TodoItem.Space)
+
+    var id: String {
+        switch self {
+        case .agent(let machine, let session, _): "agent/\(machine)/\(session)"
+        case .space(let project): "space/\(project.machineID)/\(project.space)"
+        }
+    }
+
+    var isSpace: Bool { if case .space = self { true } else { false } }
+
+    func currentTodoID(in todos: [TodoItem]) -> String? {
+        switch self {
+        case .agent(_, _, let current): current
+        case .space(let project): TodosLogic.findTodoForSpace(todos, machineID: project.machineID, space: project.space)?.id
+        }
+    }
+}
+
+nonisolated struct TodoLinkDraft: Equatable {
+    var selectedTodoID = ""
+    var creating = false
+    var newTitle = ""
+    var busy = false
+
+    mutating func reset(currentTodoID: String?) {
+        self = TodoLinkDraft(selectedTodoID: currentTodoID ?? "")
     }
 }

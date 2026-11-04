@@ -127,6 +127,17 @@ nonisolated struct TodayBody: Codable, Hashable, Sendable {
 
 /// A todo (docs/todos.md); a task is one whose `origin` is an assistant conversation.
 nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
+    nonisolated struct Space: Codable, Hashable, Sendable {
+        var machineID: String
+        var space: String
+        var linkedAt: Date?
+
+        enum CodingKeys: String, CodingKey {
+            case space
+            case machineID = "machine_id", linkedAt = "linked_at"
+        }
+    }
+
     nonisolated struct Agent: Codable, Hashable, Sendable {
         var machineID: String
         var sessionID: String
@@ -136,9 +147,11 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
         var startError: String?
         var releasedAt: Date?
         var linkedAt: Date?
+        var source: String?
+        var via: String?
 
         enum CodingKeys: String, CodingKey {
-            case title, cwd, agent
+            case title, cwd, agent, source, via
             case machineID = "machine_id", sessionID = "session_id", startError = "start_error",
                  releasedAt = "released_at", linkedAt = "linked_at"
         }
@@ -157,14 +170,15 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
     /// The task's agent did not start, and why: the hub ended the todo there (it is done, #1077).
     var startError: String?
     var agents: [Agent]
+    var spaces: [Space]?
 
     enum CodingKeys: String, CodingKey {
-        case id, title, notes, origin, agents
+        case id, title, notes, origin, agents, spaces
         case doneAt = "done_at", createdAt = "created_at", updatedAt = "updated_at", planID = "plan_id", startError = "start_error"
     }
 
     init(id: String, title: String, notes: String? = nil, doneAt: Date? = nil, createdAt: Date? = nil, updatedAt: Date? = nil,
-         origin: String? = nil, planID: String? = nil, startError: String? = nil, agents: [Agent] = []) {
+         origin: String? = nil, planID: String? = nil, startError: String? = nil, agents: [Agent] = [], spaces: [Space]? = nil) {
         self.id = id
         self.title = title
         self.notes = notes
@@ -175,6 +189,7 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
         self.planID = planID
         self.startError = startError
         self.agents = agents
+        self.spaces = spaces
     }
 
     init(from decoder: Decoder) throws {
@@ -189,6 +204,7 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
         planID = try c.decodeIfPresent(String.self, forKey: .planID)
         startError = try c.decodeIfPresent(String.self, forKey: .startError)
         agents = try c.decodeIfPresent([Agent].self, forKey: .agents) ?? []
+        spaces = try c.decodeIfPresent([Space].self, forKey: .spaces)
     }
 
     var activeAgents: [Agent] { agents.filter(\.isActive) }

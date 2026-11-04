@@ -12,6 +12,8 @@ struct SpaceGroup: Identifiable {
     var name: String
     var index: Int
     var sessions: [Session] // in tab order
+    /// The hub project key for whole-space todo links; nil outside a herdr workspace.
+    var todoSpace: String? = nil
 
     var state: AgentState { sessions.map(\.state).min { $0.priority < $1.priority } ?? .idle }
     var updatedAt: Date { sessions.compactMap(\.updatedAt).max() ?? .distantPast }
@@ -34,8 +36,14 @@ struct SpaceGroup: Identifiable {
             let spaceID = s.spaceID ?? "-"
             let key = "\(s.machineRef.path)/\(spaceID)"
             if groups[key] == nil {
+                let todoSpace: String?
+                if let id = s.spaceID, !id.isEmpty {
+                    todoSpace = s.spaceName.flatMap { $0.isEmpty ? nil : $0 } ?? id
+                } else {
+                    todoSpace = nil
+                }
                 groups[key] = SpaceGroup(id: key, machineID: s.machineID, spaceID: spaceID, group: s.group,
-                                         name: s.spaceName ?? s.folderName, index: s.spaceIndex ?? 0, sessions: [])
+                                         name: s.spaceName ?? s.folderName, index: s.spaceIndex ?? 0, sessions: [], todoSpace: todoSpace)
             }
             groups[key]!.sessions.append(s)
         }
@@ -309,6 +317,7 @@ private struct AgentsList: View {
     @State private var renamingSession: Session?
     @State private var closingSession: Session?
     @State private var linkingSession: Session?
+    @State private var linkingSpace: SpaceGroup?
     /// The long-press menu's actions on a row (not observed: see `AgentRowMenu`).
     @State private var rowActions = AgentRowMenu.Actions()
     /// The agents, the questions and the machines the list shows (`AgentsFeed`): held still while it is scrolled or
@@ -633,6 +642,11 @@ private struct AgentsList: View {
         .sheet(item: $linkingSession) { s in
             TodoLinkAgentSheet(session: s)
         }
+        .sheet(item: $linkingSpace) { group in
+            if let space = group.todoSpace {
+                TodoLinkAgentSheet(space: TodoItem.Space(machineID: group.machineID, space: space))
+            }
+        }
         .onChange(of: matching) { _, now in kept.formUnion(now) }
         .onChange(of: query.isEmpty, initial: true) { _, empty in feed.searching = !empty }
         .onChange(of: machineFilter) { _, _ in kept = [] }
@@ -789,7 +803,11 @@ private struct AgentsList: View {
                             pinned: model.isPinned(g), muted: model.isMuted(g), folded: isFolded)
             }
             .buttonStyle(.plain)
-            Menu { SpaceHeaderMenu(group: g, rename: { renamingSpace = g }, open: { openFromList(SpaceRoute(id: g.id)) }).equatable() } label: {
+            TodoSpaceTag(group: g) { todoID in openFromList(TodoDetailRoute(id: todoID)) }
+            Menu {
+                SpaceHeaderMenu(group: g, rename: { renamingSpace = g }, open: { openFromList(SpaceRoute(id: g.id)) },
+                                linkTodo: { linkingSpace = g }).equatable()
+            } label: {
                 Image(systemName: compact ? Theme.Icon.more : Theme.Icon.moreMenu)
                     .font(compact ? CompactList.metaStrong : Theme.Font.body)
                     .foregroundStyle(.secondary)
@@ -1977,6 +1995,7 @@ struct SpaceMenuItems: View {
     var rename: (() -> Void)? = nil
     /// 打开空间 (the Agents list: its header folds the space instead).
     var open: (() -> Void)? = nil
+    var linkTodo: (() -> Void)? = nil
 
     var body: some View {
         if let open {
@@ -1988,6 +2007,9 @@ struct SpaceMenuItems: View {
         }
         if let rename, group.spaceID != "-" {
             Button(action: rename) { Label("重命名空间", systemImage: Theme.Icon.edit) }
+        }
+        if let linkTodo {
+            SpaceTodoMenu(group: group, link: linkTodo)
         }
         Button { model.togglePin(group) } label: {
             Label(model.isPinned(group) ? "取消置顶空间" : "置顶空间", systemImage: model.isPinned(group) ? Theme.Icon.unpin : Theme.Icon.pin)

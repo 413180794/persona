@@ -15,6 +15,21 @@ import Testing
         catch { fatalError("bad fixture: \(error)") }
     }
 
+    @Test func todoSpaceUsesOnlyWorkspaceIDsAndTheHubProjectKey() {
+        var s = session("s", state: "working")
+        s.spaceID = nil
+        #expect(SpaceGroup.build([s]).first?.todoSpace == nil)
+        s.spaceID = ""
+        #expect(SpaceGroup.build([s]).first?.todoSpace == nil)
+        s.spaceID = "workspace"
+        s.spaceName = "Project"
+        #expect(SpaceGroup.build([s]).first?.todoSpace == "Project")
+        s.spaceName = nil
+        #expect(SpaceGroup.build([s]).first?.todoSpace == "workspace")
+        s.spaceName = ""
+        #expect(SpaceGroup.build([s]).first?.todoSpace == "workspace")
+    }
+
     @Test func eachFilterKeepsItsState() {
         let all = [session("a", state: "needs_you"), session("b", state: "unread"), session("c", state: "unread"),
                    session("d", state: "working"), session("e", state: "idle")]

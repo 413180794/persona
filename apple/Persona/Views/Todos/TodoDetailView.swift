@@ -91,7 +91,8 @@ struct TodoDetailView: View {
     }
 
     private func content(_ todo: TodoItem) -> some View {
-        let lookup = TodosLogic.makeSessionLookup(model.allSessions)
+        let sessions = model.allSessions
+        let lookup = TodosLogic.makeSessionLookup(sessions)
         let status = TodosLogic.todoStatus(todo, lookup: lookup)
         let activeAgents = todo.agents.filter { $0.releasedAt == nil }
         let releasedAgents = todo.agents.filter { $0.releasedAt != nil }
@@ -179,6 +180,8 @@ struct TodoDetailView: View {
                 .padding(.vertical, Theme.Space.xs)
             }
 
+            TodoSpacesSection(todo: todo, sessions: sessions, machineName: machineName)
+
             Section {
                 if activeAgents.isEmpty {
                     Text("暂无运行中的 Agent，点击下方「交给 Agent」指派。")
@@ -222,7 +225,7 @@ struct TodoDetailView: View {
         model.machine(model.hubRef(id))?.title ?? id
     }
 
-    private func agentRow(_ a: TodoItem.Agent, todo: TodoItem, isReleased: Bool, lookup: TodosLogic.SessionLookup) -> some View {
+    private func agentRow(_ a: TodoItem.Agent, todo: TodoItem, isReleased: Bool, lookup: @escaping TodosLogic.SessionLookup) -> some View {
         let key = SessionKey(group: model.hub?.group ?? "", machineID: a.machineID, sessionID: a.sessionID)
         let s = lookup(a.machineID, a.sessionID)
         let isFailed = a.startError.map { !$0.isEmpty } ?? false
@@ -271,6 +274,13 @@ struct TodoDetailView: View {
                     let place = [machineName(a.machineID), s?.spaceName, s?.slotLabel].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
                     if !place.isEmpty {
                         Text(place)
+                            .font(Theme.Font.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    if let source = TodosLogic.agentSource(a, lookup: lookup) {
+                        Text(source)
                             .font(Theme.Font.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)

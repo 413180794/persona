@@ -249,18 +249,20 @@ struct SpaceHeaderMenu: View, Equatable {
     var group: SpaceGroup
     var rename: () -> Void
     var open: () -> Void
+    var linkTodo: (() -> Void)?
 
-    init(group: SpaceGroup, rename: @escaping () -> Void, open: @escaping () -> Void) {
-        id = group.id + "|" + group.spaceID
+    init(group: SpaceGroup, rename: @escaping () -> Void, open: @escaping () -> Void, linkTodo: (() -> Void)? = nil) {
+        id = group.id + "|" + group.spaceID + "|" + group.name
         unread = group.sessions.filter { $0.state == .unread }.map(\.key)
         self.group = group
         self.rename = rename
         self.open = open
+        self.linkTodo = linkTodo
     }
 
     nonisolated static func == (a: Self, b: Self) -> Bool { a.id == b.id && a.unread == b.unread }
 
     var body: some View {
-        SpaceMenuItems(group: group, rename: rename, open: open)
+        SpaceMenuItems(group: group, rename: rename, open: open, linkTodo: linkTodo)
     }
 }
