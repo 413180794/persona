@@ -46,8 +46,9 @@ func (s *Service) claudeMD(ctx context.Context, here string, larkCLI bool) strin
 	if err := s.appCall(ctx, AppKB, KBDirs, map[string]any{}, &dirs); err != nil {
 		s.logf("assistant: knowledge base directories: %v", err)
 	}
-	d := prompts.AssistantClaudeMD{Owner: strings.TrimSpace(s.hello(ctx).Owner), Notes: s.notes(ctx), ExtraDirs: dirs.ExtraDirs,
-		KnowledgeDir: dirs.KnowledgeDir, LarkCLI: larkCLI}
+	hello := s.hello(ctx)
+	d := prompts.AssistantClaudeMD{Owner: strings.TrimSpace(hello.Owner), Notes: s.notes(ctx), ExtraDirs: dirs.ExtraDirs,
+		KnowledgeDir: dirs.KnowledgeDir, LarkCLI: larkCLI, PersonaView: hello.PersonaView}
 	devices := s.devices(ctx)
 	if i := slices.IndexFunc(devices, func(d Device) bool { return d.ID == here }); i >= 0 {
 		d.OnHub = devices[i].Kind == "local"

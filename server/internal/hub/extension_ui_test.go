@@ -13,7 +13,9 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/extension"
 	pserve "github.com/nwverse/persona/server/internal/extension/serve"
 	"github.com/nwverse/persona/server/internal/quota"
@@ -40,6 +42,31 @@ func serveUIExtensionForTest() {
 		switch {
 		case method == "action" && p.Action == "save":
 			return map[string]any{"toast": "存好了：" + p.Values["note"]}, nil
+		case method == "action" && p.Action == "invalidate":
+			_ = hub.Notify("ui.invalidate", map[string]any{"contribution": "list"})
+			_ = hub.Notify("ui.invalidate", map[string]any{"contribution": "nav"})
+			_ = hub.Notify("ui.invalidate", map[string]any{"contribution": "list"})
+			return map[string]any{"toast": "ok"}, nil
+		case method == "action" && p.Action == "save-detail":
+			return map[string]any{"toast": "存好了", "pop": true}, nil
+		case method == "action" && p.Action == "push-card":
+			return map[string]any{"push": map[string]any{"ui": "card"}}, nil
+		case p.Contribution == "list":
+			return map[string]any{"title": "笔记 " + c.State,
+				"search": map[string]any{"placeholder": "搜索", "action": map[string]any{"id": "search"}},
+				"filter": map[string]any{"name": "folder", "value": "all", "action": map[string]any{"id": "folder"},
+					"choices": []any{map[string]any{"value": "all", "title": "全部"}, map[string]any{"value": "work", "title": "工作"}}},
+				"sections": []any{map[string]any{"title": "最近", "more": map[string]any{"action": map[string]any{"id": "more"}}, "items": []any{
+					map[string]any{"type": "row", "key": "n1", "title": "周会", "icon": "doc",
+						"action": map[string]any{"id": "open", "push": map[string]any{"ui": "nav", "state": "n1"}}},
+					map[string]any{"type": "markdown", "text": "**粗体** 和 [链接](https://example.com)"},
+					map[string]any{"type": "table", "columns": []any{map[string]any{"title": "日"}, map[string]any{"title": "数"}},
+						"rows": []any{[]any{"11-01", "3"}, []any{"11-02", "4"}}},
+					map[string]any{"type": "empty", "title": "没有附件", "button": map[string]any{"title": "上传", "action": map[string]any{"id": "upload"}}},
+					map[string]any{"type": "loading"}}}}}, nil
+		case p.Contribution == "badpush":
+			return map[string]any{"sections": []any{map[string]any{"items": []any{map[string]any{"type": "row", "title": "x",
+				"action": map[string]any{"id": "x", "push": map[string]any{"ui": "card"}}}}}}}, nil
 		case method == "action" && p.Action == "badge":
 			_ = hub.Notify("ui.badge", map[string]any{"contribution": "nav", "text": p.Values["n"], "tone": "danger"})
 			return map[string]any{"toast": "ok"}, nil
@@ -114,7 +141,9 @@ func uiPackage(t *testing.T) string {
 			       {"id": "nav", "title": "用量", "placement": "nav_page", "icon": "chart"},
 			       {"id": "card", "title": "用量", "placement": "overview_card", "opens": "nav"},
 			       {"id": "bigcard", "title": "太大的卡片", "placement": "overview_card"},
-			       {"id": "box", "title": "这台机器", "placement": "machine_section"}],
+			       {"id": "box", "title": "这台机器", "placement": "machine_section"},
+			       {"id": "list", "title": "笔记", "placement": "extension_page"},
+			       {"id": "badpush", "title": "乱跳", "placement": "extension_page"}],
 			"events": [{"id": "agents", "subscribe": ["agent.finished"]}]},
 		"permissions": {"launcher_keys": true}}`, runtime.GOOS+"-"+runtime.GOARCH)
 	_ = os.WriteFile(filepath.Join(dir, extension.ManifestFile), []byte(manifest), 0o644)
@@ -148,8 +177,8 @@ func TestExtensionUIAndEvents(t *testing.T) {
 
 	h.notifyDone("done", "mac", "Mac", "s1", "✅ 完成了", "", pushWants{Kind: "done"})
 	_, detail := call(t, mux, "GET", "/api/v1/plugins/example-ui/-/", master, "")
-	if ui, _ := detail["ui"].([]any); len(ui) != 3 {
-		t.Fatalf("its pages (plugin_page and nav_page): %v", detail["ui"])
+	if ui, _ := detail["ui"].([]any); len(ui) != 5 || strings.Contains(fmt.Sprint(ui), "extension_page") {
+		t.Fatalf("its pages (plugin_page, as the old paths call extension_page, and nav_page): %v", detail["ui"])
 	}
 	var view map[string]any
 	waitLong(t, "the event to be counted", func() bool {
@@ -266,6 +295,104 @@ func TestExtensionUISlots(t *testing.T) {
 	})
 }
 
+// UI version 3: the new components, search, filter and more reach an app that draws them; an older one gets them
+// drawn with what it knows; pushes go to the extension's own whole pages only; ui.invalidate reaches the apps once a
+// second, as extension_ui and never plugin_ui; extension_page is plugin_page under the old paths.
+func TestExtensionUIVersion3(t *testing.T) {
+	h, _ := extensionTestHub(t)
+	mux := h.routes()
+	master := h.cfg.Token
+	phone := &client{out: make(chan []byte, 256), subs: map[[2]string]bool{}, role: roleFull}
+	h.mu.Lock()
+	h.clients[phone] = struct{}{}
+	h.mu.Unlock()
+	defer func(w time.Duration) { invalidateWait = w }(invalidateWait)
+	invalidateWait = 50 * time.Millisecond
+	_, pv := call(t, mux, "POST", "/api/v1/extensions/-/preview", master, `{"source": "dir:`+uiPackage(t)+`"}`)
+	call(t, mux, "POST", "/api/v1/extensions/-/install", master, fmt.Sprintf(`{"preview_id": %q, "permissions_digest": %q}`, pv["preview_id"], pv["permissions_digest"]))
+	waitLong(t, "the extension up", func() bool {
+		hp := h.extensions.get("example-ui")
+		return hp != nil && hp.proc != nil && hp.proc.Ready()
+	})
+
+	_, cur := call(t, mux, "GET", "/api/v1/extensions/-/ui?placement=extension_page", master, "")
+	_, old := call(t, mux, "GET", "/api/v1/plugins/-/ui?placement=plugin_page", master, "")
+	if c, o := fmt.Sprint(cur["ui"]), fmt.Sprint(old["ui"]); !strings.Contains(c, "id:list") || !strings.Contains(c, "id:home") ||
+		strings.Contains(c, "plugin_page") || !strings.Contains(o, "id:list") || strings.Contains(o, "extension_page") {
+		t.Fatalf("one slot under both names, each path answering its own:\n%s\n%s", c, o)
+	}
+
+	_, out := call(t, mux, "POST", "/api/v1/extensions/example-ui/-/ui/list", master, `{"context": {"ui_version": 3}, "state": "p1"}`)
+	view := fmt.Sprint(out["view"])
+	for _, want := range []string{"type:markdown", "type:table", "type:empty", "type:loading", "search:map", "filter:map", "more:map",
+		"icon:doc", "key:n1", "push:map[state:n1 ui:nav]"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("an app of UI version 3 gets %s: %s", want, view)
+		}
+	}
+	_, out = call(t, mux, "POST", "/api/v1/plugins/example-ui/-/ui/list", master, `{"context": {"ui_version": 2}}`)
+	view = fmt.Sprint(out["view"])
+	for _, gone := range []string{"markdown", "type:table", "type:empty", "type:loading", "search", "filter", "more:", "icon:", "key:", "push"} {
+		if strings.Contains(view, gone) {
+			t.Fatalf("an app of UI version 2 does not get %s: %s", gone, view)
+		}
+	}
+	for _, want := range []string{"type:segmented", "title:11-01 type:row value:3", "title:上传 type:button", "title:加载更多 type:button", "加载中…", "**粗体**"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("an app of UI version 2 gets %s instead: %s", want, view)
+		}
+	}
+	_, out = call(t, mux, "POST", "/api/v1/plugins/example-ui/-/ui/list", master, `{}`)
+	if view = fmt.Sprint(out["view"]); strings.Contains(view, "segmented") || !strings.Contains(view, "加载更多") {
+		t.Fatalf("an app of UI version 1: no segmented for the filter, the rest as for 2: %s", view)
+	}
+
+	if code, out := call(t, mux, "POST", "/api/v1/extensions/example-ui/-/ui/badpush", master, `{"context": {"ui_version": 3}}`); code != 502 || !strings.Contains(fmt.Sprint(out["error"]), "不是一整页") {
+		t.Fatalf("a push to a card is refused: %d %v", code, out)
+	}
+	if code, out := call(t, mux, "POST", "/api/v1/extensions/example-ui/-/ui/list", master, `{"context": {"ui_version": 3}, "action": "push-card"}`); code != 502 {
+		t.Fatalf("an answer pushing a card is refused: %d %v", code, out)
+	}
+	_, out = call(t, mux, "POST", "/api/v1/extensions/example-ui/-/ui/list", master, `{"context": {"ui_version": 3}, "action": "save-detail"}`)
+	if out["pop"] != true || out["toast"] != "存好了" {
+		t.Fatalf("pop: %v", out)
+	}
+	_, out = call(t, mux, "POST", "/api/v1/extensions/example-ui/-/ui/list", master, `{"context": {"ui_version": 2}, "action": "save-detail"}`)
+	if _, has := out["pop"]; has {
+		t.Fatalf("no pop for an app that does not know it: %v", out)
+	}
+
+	for len(phone.out) > 0 {
+		<-phone.out
+	}
+	call(t, mux, "POST", "/api/v1/extensions/example-ui/-/ui/list", master, `{"action": "invalidate"}`)
+	var got []map[string]any
+	deadline := time.After(10 * time.Second)
+	for len(got) < 2 {
+		select {
+		case b := <-phone.out:
+			var m map[string]any
+			_ = json.Unmarshal(b, &m)
+			if t, _ := m["type"].(string); strings.HasPrefix(t, "plugin_ui") || strings.HasPrefix(t, "extension_ui") {
+				delete(m, "event_seq")
+				got = append(got, m)
+			}
+		case <-deadline:
+			t.Fatalf("invalidations told: %v", got)
+		}
+	}
+	time.Sleep(200 * time.Millisecond)
+	if len(phone.out) > 0 {
+		b := <-phone.out
+		if strings.Contains(string(b), "invalidate") {
+			t.Fatalf("three ui.invalidate of two pages in a second are two messages: %v and %s", got, b)
+		}
+	}
+	if fmt.Sprint(got) != "[map[extension:example-ui id:list invalidate:true type:extension_ui] map[extension:example-ui id:nav invalidate:true type:extension_ui]]" {
+		t.Fatalf("one extension_ui per page, no plugin_ui: %v", got)
+	}
+}
+
 func TestCheckView(t *testing.T) {
 	ratio := 0.4
 	ok := extension.View{Sections: []extension.Section{{Items: []extension.UIElem{
@@ -303,6 +430,27 @@ func TestCheckView(t *testing.T) {
 		"segment act":   {Type: "segmented", Name: "r", Choices: []extension.UIChoice{{Value: "a"}, {Value: "b"}}, Value: "a"},
 		"stats empty":   {Type: "stat_grid"},
 		"stats many":    {Type: "stat_grid", Stats: make([]extension.Stat, extension.StatsMost+1)},
+		"table cells":   {Type: "table", Columns: []wire.TableColumn{{Title: "a"}, {Title: "b"}}, Rows: [][]string{{"1"}}},
+		"row pictures":  {Type: "row", Title: "x", Icon: "doc", Avatar: &wire.Avatar{Text: "A"}},
+		"avatar empty":  {Type: "row", Title: "x", Avatar: &wire.Avatar{}},
+		"md http link":  {Type: "markdown", Text: "[x](http://example.com)"},
+		"md image":      {Type: "markdown", Text: "![x](https://example.com/a.png)"},
+		"md too long":   {Type: "markdown", Text: strings.Repeat("长", extension.MarkdownMost+1)},
+		"empty button":  {Type: "empty", Title: "x", Button: &wire.EmptyButton{Title: "y"}},
+		"push state":    {Type: "row", Title: "x", Action: &extension.UIAction{ID: "x", Push: &extension.Push{State: strings.Repeat("s", extension.StateMost+1)}}},
+	}
+	md := extension.View{Sections: []extension.Section{{Items: []extension.UIElem{{Type: "markdown", Text: "a `![not](an image)` b, [ok](https://example.com)"}}}}}
+	if err := extension.CheckView(&md); err != nil {
+		t.Errorf("an https link: %v", err)
+	}
+	twice := extension.View{Sections: []extension.Section{{Items: []extension.UIElem{{Type: "text", Text: "a", Key: "k"}, {Type: "text", Text: "b", Key: "k"}}}}}
+	if extension.CheckView(&twice) == nil {
+		t.Error("a key twice: drawn")
+	}
+	filter := extension.View{Sections: []extension.Section{}, Filter: &wire.Filter{Name: "f", Value: "z", Action: extension.UIAction{ID: "f"},
+		Choices: []extension.UIChoice{{Value: "a"}, {Value: "b"}}}}
+	if extension.CheckView(&filter) == nil {
+		t.Error("a filter's value not among its choices: drawn")
 	}
 	for name, e := range bad {
 		if err := extension.CheckView(&extension.View{Sections: []extension.Section{{Items: []extension.UIElem{e}}}}); err == nil {

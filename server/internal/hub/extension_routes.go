@@ -50,7 +50,7 @@ func (ps *extensions) detail(ctx context.Context, p *extension.Extension) Extens
 		d.Permissions = []extension.PermissionLine{}
 	}
 	for _, u := range ps.uiPlaces("", "") {
-		if u.Extension == p.Record.ID && (u.Placement == "plugin_page" || u.Placement == "nav_page") {
+		if u.Extension == p.Record.ID && extension.FullPage(u.Placement) {
 			d.UI = append(d.UI, u)
 		}
 	}

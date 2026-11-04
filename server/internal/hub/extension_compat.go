@@ -159,6 +159,9 @@ type legacyUIPlace struct {
 func legacyUIPlaces(us []UIPlace) []legacyUIPlace {
 	out := make([]legacyUIPlace, 0, len(us))
 	for _, u := range us {
+		if extension.PageSlot(u.Placement) {
+			u.Placement = "plugin_page" // the name the apps out there ask for
+		}
 		out = append(out, legacyUIPlace(u))
 	}
 	return out

@@ -111,6 +111,7 @@ func (l assistantLink) Hello(context.Context) (assistantwire.Hello, error) {
 	out.Assistant = assistantwire.Placement{MachineID: h.defaultAssistantMachine(), Launcher: h.cfg.Assistant.Launcher, Standby: h.isMember()}
 	out.Assistant.Machines = h.machineIDs()
 	out.DoneDelayMS = taskSettleDelay(h.cfg.Notify).Milliseconds()
+	out.PersonaView = h.cfg.Assistant.PersonaView
 	return out, nil
 }
 

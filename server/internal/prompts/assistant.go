@@ -23,6 +23,9 @@ type AssistantClaudeMD struct {
 	OnHub        bool
 	// LarkCLI: hub.json configures lark-cli (docs/plan-lark-cli.md), on the assistant's PATH.
 	LarkCLI bool
+	// PersonaView: every app draws ```persona-view (hub.json assistant.persona_view); else the assistant writes
+	// ```persona-card, which they all draw.
+	PersonaView bool
 }
 
 func RenderAssistantClaudeMD(d AssistantClaudeMD) string { return render("assistant/claude_md", d) }

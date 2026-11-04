@@ -279,6 +279,7 @@ var Features = []string{
 	"extension_ui_slots",     // UI slots under /api/v1/extensions/-/ui, extension_ui events
 	"extension_auto_upgrade", // /api/v1/extensions/-/upgrades, …/{id}/-/auto-upgrade, extension_upgrade events
 	"extension_market_spec",  // PUT /api/v1/extensions/-/markets/{id} {spec}: a market moves, keeping its id
+	"extension_ui_v3",        // UI version 3 (markdown, table, empty, loading, search, filter, more, push / pop) and extension_ui {invalidate} (docs/extensions.md「UI 版本 3」)
 	"desktops",               // register_desktop, the desktops event, NotifyPrefs.mute_while_desktop (手机静音)
 	"sessions_delta",         // ?features=sessions_delta on the WebSocket: a snapshot, then sessions_delta (docs/protocol.md「会话增量」)
 	"connectors",             // GET /api/v1/connectors (docs/plan-connectors.md)

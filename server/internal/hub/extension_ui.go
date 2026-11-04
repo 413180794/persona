@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
@@ -73,7 +75,7 @@ func (ps *extensions) uiPlaces(placement, base string) []UIPlace {
 				continue
 			case placement == "" && u.Placement == "launcher_section":
 				continue
-			case placement != "" && u.Placement != placement:
+			case placement != "" && u.Placement != placement && !(extension.PageSlot(placement) && extension.PageSlot(u.Placement)):
 				continue
 			case u.Placement == "launcher_section" && (host == "" || (len(u.Hosts) > 0 && !hostMatches(host, u.Hosts)) || !p.Record.Granted.LauncherKeys):
 				continue
@@ -82,6 +84,9 @@ func (ps *extensions) uiPlaces(placement, base string) []UIPlace {
 			}
 			place := UIPlace{Extension: p.Record.ID, ExtensionName: p.Manifest.Name, ID: u.ID, Title: u.Title, Placement: u.Placement,
 				Size: slot.Size, Icon: u.Icon, Opens: u.Opens, Connector: u.Connector}
+			if extension.PageSlot(u.Placement) {
+				place.Placement = "extension_page" // the old paths answer plugin_page (legacyUIPlaces)
+			}
 			if slot.Badge {
 				if b, ok := ps.badges.Load(p.Record.ID + "/" + u.ID); ok {
 					badge := b.(extension.Badge)
@@ -308,6 +313,9 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (extens
 		if err := fit(&v); err != nil {
 			return res, err
 		}
+		if err := checkPushes(p.Manifest, *item, &v, nil); err != nil {
+			return res, err
+		}
 		res.View = &v
 		return res, nil
 	}
@@ -319,10 +327,46 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (extens
 			return extension.ActionResult{}, err
 		}
 	}
+	if err := checkPushes(p.Manifest, *item, res.View, res.Push); err != nil {
+		return extension.ActionResult{}, err
+	}
+	if params.UIVersion < 3 {
+		res.Push, res.Pop = nil, false // an older app knows neither: it draws the view it got, or draws again
+	}
 	if err := checkOpenURL(*item, in.Context.Item, res.OpenURL); err != nil {
 		return extension.ActionResult{}, err
 	}
 	return res, nil
+}
+
+// checkPushes holds the pages a view's actions (and an action's answer) push to the extension's own whole pages: a
+// push names one of its ui contributions that is an extension_page or a nav_page, or none for the one drawing (which
+// must then be a whole page itself: a card or a machine's section opens a page by name).
+func checkPushes(m *extension.Manifest, from extension.UIItem, v *extension.View, also *extension.Push) error {
+	pushes := []*extension.Push{also}
+	for _, a := range extension.Actions(v) {
+		pushes = append(pushes, a.Push)
+	}
+	for _, p := range pushes {
+		if p == nil {
+			continue
+		}
+		if len(p.State) > extension.StateMost {
+			return fmt.Errorf("扩展要打开的页面带的 state 超过 %d 字节", extension.StateMost)
+		}
+		target := from
+		if p.UI != "" {
+			i := slices.IndexFunc(m.UIs(), func(u extension.UIItem) bool { return u.ID == p.UI })
+			if i < 0 {
+				return fmt.Errorf("扩展要打开的页面 %s 不是它的界面", p.UI)
+			}
+			target = m.UIs()[i]
+		}
+		if !extension.FullPage(target.Placement) {
+			return fmt.Errorf("扩展要打开的 %s 不是一整页（只能打开 extension_page 或 nav_page）", target.ID)
+		}
+	}
+	return nil
 }
 
 // checkOpenURL holds what an action opens to https; an inbox_item may also open its item's own source page
@@ -435,6 +479,62 @@ func (ps *extensions) setBadge(id string, params json.RawMessage) {
 	}
 	if ps.h != nil {
 		ps.h.broadcastExtension("ui", id, map[string]any{"id": ev.Contribution, "badge": badge})
+	}
+}
+
+// invalidations are ui.invalidate events waiting for their second: what each extension said changed, told to the
+// apps together (extension_ui {invalidate}) a second after the first, so an extension changing a lot at once is one
+// redraw. Only the new event: the apps that know plugin_ui take it for a badge.
+type invalidations struct {
+	mu      sync.Mutex
+	pending map[string]map[string]bool // extension → its ui ids ("" all of them)
+}
+
+// invalidateWait is how long ui.invalidate events are gathered before the apps are told.
+var invalidateWait = time.Second
+
+// invalidate takes an extension's ui.invalidate: what it draws changed, so the apps showing it draw it again.
+func (ps *extensions) invalidate(id string, params json.RawMessage) {
+	p := ps.reg.Get(id)
+	var ev extension.InvalidateEvent
+	if p == nil || (len(params) > 0 && string(params) != "null" && json.Unmarshal(params, &ev) != nil) {
+		return
+	}
+	if ev.Contribution != "" && !slices.ContainsFunc(p.Manifest.UIs(), func(u extension.UIItem) bool { return u.ID == ev.Contribution }) {
+		ps.logf("extension %s: ui.invalidate for %q, which it does not have: dropped", id, ev.Contribution)
+		return
+	}
+	in := &ps.invalid
+	in.mu.Lock()
+	defer in.mu.Unlock()
+	if in.pending == nil {
+		in.pending = map[string]map[string]bool{}
+	}
+	ids, waiting := in.pending[id]
+	if !waiting {
+		ids = map[string]bool{}
+		in.pending[id] = ids
+		time.AfterFunc(invalidateWait, func() { ps.tellInvalid(id) })
+	}
+	ids[ev.Contribution] = true
+}
+
+// tellInvalid tells the apps what extension id said changed in the last second.
+func (ps *extensions) tellInvalid(id string) {
+	in := &ps.invalid
+	in.mu.Lock()
+	ids := in.pending[id]
+	delete(in.pending, id)
+	in.mu.Unlock()
+	if ps.h == nil || len(ids) == 0 {
+		return
+	}
+	if ids[""] {
+		ps.h.broadcast(map[string]any{"type": "extension_ui", "extension": id, "invalidate": true})
+		return
+	}
+	for _, ui := range slices.Sorted(maps.Keys(ids)) {
+		ps.h.broadcast(map[string]any{"type": "extension_ui", "extension": id, "id": ui, "invalidate": true})
 	}
 }
 

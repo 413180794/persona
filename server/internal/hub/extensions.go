@@ -130,6 +130,8 @@ type extensions struct {
 	upgrades extensionUpgrades
 	// badges are the plugins' badges on their nav_pages' entries ("<plugin>/<ui>" → plugin.Badge; plugin_ui.go).
 	badges sync.Map
+	// invalid are the extensions' ui.invalidate waiting to be told to the apps (extension_ui.go), at most one a second.
+	invalid invalidations
 	// nodes are plugins' programs on computers (extension_nodes.go).
 	nodes extensionNodes
 }
@@ -715,6 +717,10 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 		}
 		if event == "ui.badge" {
 			ps.setBadge(id, params)
+			return
+		}
+		if event == "ui.invalidate" {
+			ps.invalidate(id, params)
 			return
 		}
 		if rest, ok := strings.CutPrefix(event, serve.Namespace+"."); ok {

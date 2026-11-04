@@ -151,6 +151,11 @@
       },
       "required": ["contribution"]
     },
+    "InvalidateEvent": {
+      "description": "ui.invalidate, sent by an extension (UI version 3): what it draws changed; the apps on screen draw it again (contribution: one ui; empty: all of the extension's).",
+      "type": "object",
+      "properties": {"contribution": {"type": "string"}}
+    },
     "UIContext": {
       "description": "What an app says when it draws a slot: for whom and where (the hub checks it and hands the extension UIParams).",
       "type": "object",

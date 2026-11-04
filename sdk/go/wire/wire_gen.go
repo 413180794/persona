@@ -362,6 +362,12 @@ type BadgeEvent struct {
 	Tone         string `json:"tone,omitempty"`
 }
 
+// InvalidateEvent: ui.invalidate, sent by an extension (UI version 3): what it draws changed; the apps on screen draw
+// it again (contribution: one ui; empty: all of the extension's).
+type InvalidateEvent struct {
+	Contribution string `json:"contribution,omitempty"`
+}
+
 // UIContext: what an app says when it draws a slot: for whom and where (the hub checks it and hands the extension
 // UIParams).
 type UIContext struct {
@@ -456,7 +462,8 @@ const (
 // ButtonRoles are the values of ButtonRole, in order.
 var ButtonRoles = []string{"normal", "destructive"}
 
-// Placement: A slot in the apps an extension draws at (docs「UI 插槽」).
+// Placement: A slot in the apps an extension draws at (docs「UI 插槽」). extension_page is plugin_page's new name (UI
+// version 3): the hub takes both and answers the new API with extension_page, the old one with plugin_page.
 const (
 	PlacementPluginPage      = "plugin_page"
 	PlacementLauncherSection = "launcher_section"
@@ -464,10 +471,11 @@ const (
 	PlacementOverviewCard    = "overview_card"
 	PlacementMachineSection  = "machine_section"
 	PlacementInboxItem       = "inbox_item"
+	PlacementExtensionPage   = "extension_page"
 )
 
 // Placements are the values of Placement, in order.
-var Placements = []string{"plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item"}
+var Placements = []string{"plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page"}
 
 // Values of Size.
 const (
@@ -489,20 +497,35 @@ const (
 // Platforms are the values of Platform, in order.
 var Platforms = []string{"ios", "mac", "android", "web"}
 
-// NavIcon: A nav_page's icon; each app draws its own for the meaning. An unknown icon draws as plugin.
+// NavIcon: the fixed icon set: a nav_page's icon, a row's, an empty state's (UI version 3 for the last two and the
+// icons after money). Each app draws its own icon for the meaning; an unknown one draws as the default (extension;
+// plugin is its old name).
 const (
-	NavIconPlugin   = "plugin"
-	NavIconChart    = "chart"
-	NavIconGauge    = "gauge"
-	NavIconList     = "list"
-	NavIconBell     = "bell"
-	NavIconDoc      = "doc"
-	NavIconCalendar = "calendar"
-	NavIconMoney    = "money"
+	NavIconPlugin    = "plugin"
+	NavIconChart     = "chart"
+	NavIconGauge     = "gauge"
+	NavIconList      = "list"
+	NavIconBell      = "bell"
+	NavIconDoc       = "doc"
+	NavIconCalendar  = "calendar"
+	NavIconMoney     = "money"
+	NavIconExtension = "extension"
+	NavIconPerson    = "person"
+	NavIconChat      = "chat"
+	NavIconMail      = "mail"
+	NavIconLink      = "link"
+	NavIconFolder    = "folder"
+	NavIconStar      = "star"
+	NavIconCheck     = "check"
+	NavIconWarning   = "warning"
+	NavIconClock     = "clock"
+	NavIconTag       = "tag"
+	NavIconSearch    = "search"
+	NavIconSettings  = "settings"
 )
 
 // NavIcons are the values of NavIcon, in order.
-var NavIcons = []string{"plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money"}
+var NavIcons = []string{"plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings"}
 
 type View struct {
 	Title    string    `json:"title,omitempty"`
@@ -510,30 +533,38 @@ type View struct {
 	// The extension's own, sent back with the next render or action; at most 16 KB.
 	State string `json:"state,omitempty"`
 	// Draw again after this many seconds while on screen (30 at least; 0 never).
-	RefreshAfter int `json:"refresh_after,omitempty"`
+	RefreshAfter int     `json:"refresh_after,omitempty"`
+	Search       *Search `json:"search,omitempty"`
+	Filter       *Filter `json:"filter,omitempty"`
 }
 
 type Section struct {
 	Title  string      `json:"title,omitempty"`
 	Footer string      `json:"footer,omitempty"`
 	Items  []Component `json:"items"`
+	More   *More       `json:"more,omitempty"`
 }
 
 // Component: one component of a view, told apart by type. A type an app does not know is skipped and the rest drawn.
 // One struct for every variant: type says which fields mean something.
 type Component struct {
-	Type        string        `json:"type"`
-	Text        string        `json:"text,omitempty"`
-	Style       string        `json:"style,omitempty"`
-	Label       string        `json:"label,omitempty"`
-	Value       string        `json:"value,omitempty"`
-	Detail      string        `json:"detail,omitempty"`
-	Tone        string        `json:"tone,omitempty"`
-	Ratio       *float64      `json:"ratio,omitempty"`
-	Title       string        `json:"title,omitempty"`
-	Subtitle    string        `json:"subtitle,omitempty"`
-	Badge       *Badge        `json:"badge,omitempty"`
-	Action      *Action       `json:"action,omitempty"`
+	Type     string   `json:"type"`
+	Key      string   `json:"key,omitempty"`
+	Text     string   `json:"text,omitempty"`
+	Style    string   `json:"style,omitempty"`
+	Label    string   `json:"label,omitempty"`
+	Value    string   `json:"value,omitempty"`
+	Detail   string   `json:"detail,omitempty"`
+	Tone     string   `json:"tone,omitempty"`
+	Ratio    *float64 `json:"ratio,omitempty"`
+	Title    string   `json:"title,omitempty"`
+	Subtitle string   `json:"subtitle,omitempty"`
+	Badge    *Badge   `json:"badge,omitempty"`
+	Action   *Action  `json:"action,omitempty"`
+	// At most one of icon, avatar and thumbnail.
+	Icon        string        `json:"icon,omitempty"`
+	Avatar      *Avatar       `json:"avatar,omitempty"`
+	Thumbnail   *Thumbnail    `json:"thumbnail,omitempty"`
 	Role        string        `json:"role,omitempty"`
 	URL         string        `json:"url,omitempty"`
 	Name        string        `json:"name,omitempty"`
@@ -544,6 +575,10 @@ type Component struct {
 	Unit        string        `json:"unit,omitempty"`
 	Stacked     bool          `json:"stacked,omitempty"`
 	Stats       []Stat        `json:"stats,omitempty"`
+	Columns     []TableColumn `json:"columns,omitempty"`
+	Rows        [][]string    `json:"rows,omitempty"`
+	Caption     string        `json:"caption,omitempty"`
+	Button      *EmptyButton  `json:"button,omitempty"`
 }
 
 // Component types.
@@ -559,13 +594,17 @@ const (
 	ComponentChart     = "chart"
 	ComponentStatGrid  = "stat_grid"
 	ComponentSegmented = "segmented"
+	ComponentMarkdown  = "markdown"
+	ComponentTable     = "table"
+	ComponentEmpty     = "empty"
+	ComponentLoading   = "loading"
 )
 
 // ComponentTypes are the types of Component, in order.
-var ComponentTypes = []string{"text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented"}
+var ComponentTypes = []string{"text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading"}
 
 // ComponentSince is the UI version that brought each type.
-var ComponentSince = map[string]int{"text": 1, "metric": 1, "progress": 1, "row": 1, "button": 1, "link": 1, "field": 1, "divider": 1, "chart": 2, "stat_grid": 2, "segmented": 2}
+var ComponentSince = map[string]int{"text": 1, "metric": 1, "progress": 1, "row": 1, "button": 1, "link": 1, "field": 1, "divider": 1, "chart": 2, "stat_grid": 2, "segmented": 2, "markdown": 3, "table": 3, "empty": 3, "loading": 3}
 
 // Action: what a row, a button or a segmented does: ui.action with its id. An object, so later kinds of action (push
 // or pop a page) are fields added here.
@@ -575,6 +614,84 @@ type Action struct {
 	Confirm string `json:"confirm,omitempty"`
 	// Send the page's fields as values.
 	Submit bool `json:"submit,omitempty"`
+	// Open a page on top of this one instead of calling ui.action (an app of UI version 3; an older one calls ui.action
+	// with id).
+	Push *Push `json:"push,omitempty"`
+}
+
+// Push: A page pushed on the navigation stack: ui.render of the extension's ui (this one when empty; a full page:
+// extension_page, plugin_page or nav_page) with state. title is shown until the view comes.
+type Push struct {
+	UI    string `json:"ui,omitempty"`
+	State string `json:"state,omitempty"`
+	Title string `json:"title,omitempty"`
+}
+
+// Search: A search box on top of the page (UI version 3): the app calls ui.action with action and values {"q": the
+// text}, 0.3 s after the user stops typing.
+type Search struct {
+	Placeholder string `json:"placeholder,omitempty"`
+	Value       string `json:"value,omitempty"`
+	Action      Action `json:"action"`
+}
+
+// Filter: A drop-down beside the search box (UI version 3): choosing calls ui.action with action and values {name:
+// the value} (and the search's q).
+type Filter struct {
+	Name    string   `json:"name"`
+	Title   string   `json:"title,omitempty"`
+	Choices []Choice `json:"choices"`
+	Value   string   `json:"value"`
+	Action  Action   `json:"action"`
+}
+
+// More: A section's last row, 加载更多 (UI version 3): reaching it (or tapping it) calls ui.action with action once; the
+// extension answers the whole view, longer.
+type More struct {
+	Title  string `json:"title,omitempty"`
+	Action Action `json:"action"`
+}
+
+// Avatar: A person's or a chat's picture: an https image, else up to two characters drawn as the app's initials
+// avatar.
+type Avatar struct {
+	URL  string `json:"url,omitempty"`
+	Text string `json:"text,omitempty"`
+}
+
+// Thumbnail: A small picture at the row's start: an https image the app loads without any credentials.
+type Thumbnail struct {
+	URL    string `json:"url"`
+	Aspect string `json:"aspect,omitempty"`
+}
+
+// Values of ThumbnailAspect.
+const (
+	ThumbnailAspectSquare = "square"
+	ThumbnailAspectWide   = "wide"
+)
+
+// ThumbnailAspects are the values of ThumbnailAspect, in order.
+var ThumbnailAspects = []string{"square", "wide"}
+
+// Values of TableAlign.
+const (
+	TableAlignStart = "start"
+	TableAlignEnd   = "end"
+)
+
+// TableAligns are the values of TableAlign, in order.
+var TableAligns = []string{"start", "end"}
+
+type TableColumn struct {
+	Title string `json:"title"`
+	Align string `json:"align,omitempty"`
+}
+
+// EmptyButton: an empty state's one button.
+type EmptyButton struct {
+	Title  string `json:"title"`
+	Action Action `json:"action"`
 }
 
 type Badge struct {
@@ -609,11 +726,16 @@ type Stat struct {
 	Tone   string `json:"tone,omitempty"`
 }
 
-// ActionResult: what ui.action answers: a new view, a short message, an https link to open, or nothing (draw again).
+// ActionResult: what ui.action answers: a new view, a short message, an https link to open, a page to push or to pop
+// (UI version 3), or nothing (draw again).
 type ActionResult struct {
 	View    *View  `json:"view,omitempty"`
 	Toast   string `json:"toast,omitempty"`
 	OpenURL string `json:"open_url,omitempty"`
+	// Then open this page on top (after a submit: list, detail, edit).
+	Push *Push `json:"push,omitempty"`
+	// Then go back a page; the page below is drawn again.
+	Pop bool `json:"pop,omitempty"`
 }
 
 // Values of PersonaCardKind.
@@ -685,6 +807,7 @@ var newDef = map[string]func() any{
 	"UILauncher":          func() any { return new(UILauncher) },
 	"UIInboxItem":         func() any { return new(UIInboxItem) },
 	"BadgeEvent":          func() any { return new(BadgeEvent) },
+	"InvalidateEvent":     func() any { return new(InvalidateEvent) },
 	"UIContext":           func() any { return new(UIContext) },
 	"UIRequest":           func() any { return new(UIRequest) },
 	"UIPlace":             func() any { return new(UIPlace) },
@@ -693,6 +816,14 @@ var newDef = map[string]func() any{
 	"Section":             func() any { return new(Section) },
 	"Component":           func() any { return new(Component) },
 	"Action":              func() any { return new(Action) },
+	"Push":                func() any { return new(Push) },
+	"Search":              func() any { return new(Search) },
+	"Filter":              func() any { return new(Filter) },
+	"More":                func() any { return new(More) },
+	"Avatar":              func() any { return new(Avatar) },
+	"Thumbnail":           func() any { return new(Thumbnail) },
+	"TableColumn":         func() any { return new(TableColumn) },
+	"EmptyButton":         func() any { return new(EmptyButton) },
 	"Badge":               func() any { return new(Badge) },
 	"Choice":              func() any { return new(Choice) },
 	"ChartSeries":         func() any { return new(ChartSeries) },

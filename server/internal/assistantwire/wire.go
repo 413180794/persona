@@ -25,6 +25,8 @@ type Hello struct {
 	// DoneDelayMS is how long a finished turn stays still before it counts as the end (hub.json notify): a task's
 	// agents are followed with the same patience as the hub's own pushes.
 	DoneDelayMS int64 `json:"done_delay_ms"`
+	// PersonaView is hub.json's assistant.persona_view: teach ```persona-view rather than ```persona-card (#1850).
+	PersonaView bool `json:"persona_view,omitempty"`
 }
 
 // Placement is the hub's defaults for where the assistant runs.

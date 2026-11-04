@@ -352,9 +352,9 @@ func (m *Manifest) Validate() error {
 					bad("contributes.ui: %s sits on launchers' pages and reaches their gateways: permissions.launcher_keys", u.ID)
 				}
 				if u.Opens != "" && !slices.ContainsFunc(uis, func(o UIItem) bool {
-					return o.ID == u.Opens && (o.Placement == "nav_page" || o.Placement == "plugin_page")
+					return o.ID == u.Opens && FullPage(o.Placement)
 				}) {
-					bad("contributes.ui: %s opens %q, which is not a nav_page or plugin_page of this plugin", u.ID, u.Opens)
+					bad("contributes.ui: %s opens %q, which is not a nav_page or extension_page of this extension", u.ID, u.Opens)
 				}
 				if u.Placement != "inbox_item" || u.Connector == "" {
 					continue

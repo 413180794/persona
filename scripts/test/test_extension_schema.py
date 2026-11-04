@@ -140,6 +140,18 @@ class ExtensionSchemaTests(unittest.TestCase):
             with self.subTest(example=f.name):
                 self.assertNotEqual(self.v.validate(f.name.split(".")[0], json.loads(f.read_text())), [])
 
+    def test_persona_card_cases_hold_to_the_schema(self):
+        # examples/persona-card/<case>.json: a persona-card and the view every app turns it into (null: not drawn,
+        # it stays a code block); sdk/go/wire/personacard.go is the reference (TestPersonaCardCases).
+        cases = sorted((SCHEMA_DIR / "examples" / "persona-card").glob("*.json"))
+        self.assertGreater(len(cases), 5)
+        for f in cases:
+            with self.subTest(case=f.name):
+                c = json.loads(f.read_text())
+                self.assertEqual(self.v.validate("PersonaCard", c["card"]), [])
+                if c["view"] is not None:
+                    self.assertEqual(self.v.validate("View", c["view"]), [])
+
     def test_every_component_has_an_example(self):
         view = self.v.files["view.schema.json"]["$defs"]
         tags = {view[o["$ref"].split("/")[-1]]["properties"]["type"]["const"] for o in view["Component"]["oneOf"]}

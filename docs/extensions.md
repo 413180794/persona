@@ -573,8 +573,8 @@ hub 先按 schema 查（`wire.Validate`，`sdk/go/wire`），再查 schema 说�
 `launcher` 是 `{name, base_url, query_id}`：`launcher_section` 才有，扩展拿 `query_id` 调 hub 的 `gateway.http`（和「额度」的 `quota.http` 一样：
 `${launcher_key}` 由手里有 Key 的一方换上，只发到这个网关，一次最多 16 个请求），画完就失效。
 
-**View**：`{title?, sections: [{title?, footer?, items: [条目]}], state?, refresh_after?}`。`state` 是扩展自己的（第几页、哪个标签），App 下次画、点按钮时原样带回，最多 16 KB。
-`refresh_after` 见「UI 插槽」「刷新」。
+**View**：`{title?, sections: [{title?, footer?, items: [条目], more?}], state?, refresh_after?, search?, filter?}`。`state` 是扩展自己的（第几页、哪个标签），App 下次画、点按钮时原样带回，最多 16 KB。
+`refresh_after` 见「UI 插槽」「刷新」；`search`、`filter`、`more` 见下面「UI 版本 3」。
 
 | 条目 `type` | 字段 | 画成 |
 | --- | --- | --- |
@@ -589,11 +589,17 @@ hub 先按 schema 查（`wire.Validate`，`sdk/go/wire`），再查 schema 说�
 | `chart`（UI 版本 2） | `kind`（`bar` / `line`）、`series`、`title?`、`unit?`、`stacked?`、`detail?` | 柱状图 / 折线图，见「UI 插槽」「新条目」 |
 | `stat_grid`（UI 版本 2） | `stats: [{label, value, detail?, tone?}]`（1–6 个） | 并排的几个数，见「UI 插槽」「新条目」 |
 | `segmented`（UI 版本 2） | `name`、`choices: [{value, title?}]`（2–5 个）、`value`、`action` | 分段选择（时间范围这类），选了马上走 `action`，见「UI 插槽」「新条目」 |
+| `markdown`（UI 版本 3） | `text`（最多 2 万字） | 安全子集的 Markdown，见下面「UI 版本 3」 |
+| `table`（UI 版本 3） | `columns: [{title, align?}]`（1–8 列）、`rows: [[文字]]`（最多 100 行）、`caption?` | 表格 |
+| `empty`（UI 版本 3） | `title`、`detail?`、`icon?`、`button?: {title, action}` | 空状态 |
+| `loading`（UI 版本 3） | `title?` | 加载中 |
 
-`tone` 只有 `neutral` / `positive` / `caution` / `danger`，App 换成自己的角色色；扩展不能给颜色、字号、图标。`action` 是 `{id, confirm?, submit?}`：
+每个条目都可以带 `key`（UI 版本 3，同一页里不重复）：重画时各端用它保持滚动位置、展开状态和动画。`row` 在 UI 版本 3 还可以带 `icon` / `avatar: {url?, text?}` / `thumbnail: {url, aspect?}` 之一。
+
+`tone` 只有 `neutral` / `positive` / `caution` / `danger`，App 换成自己的角色色；扩展不能给颜色、字号，图标只能从固定的图标集里挑。`action` 是 `{id, confirm?, submit?, push?}`：
 `confirm` 有字就先让用户确认，`submit` 时把这一页所有 `field` 的值作为 `values`（名字 → 字符串，开关是 `"true"` / `"false"`）带上。
 限制：一页最多 300 个条目，每个字符串最多 2000 个字符；`tone` 不在上面四个里、不是 https 的链接、认识的条目缺字段，整页拒绝（不画一半）。
-hub 不认识的 `type`（给更新的 hub 写的扩展）和 App 画不了的（老 App）从 View 里拿掉、照常画其余的，见「UI 插槽」「兼容」。
+hub 不认识的 `type`（给更新的 hub 写的扩展）从 View 里拿掉、照常画其余的；App 画不了的（老 App）换成它画得了的或拿掉，见「UI 插槽」「兼容」和「UI 版本 3」「兼容」。
 `open_url` 也只能是 https；唯一的例外是 `inbox_item` 打开这一条自己的来源页（`persona://inbox/<条目 id>/source`，见「UI 插槽」「收件箱条目」）。
 
 ## UI 插槽
@@ -606,7 +612,7 @@ hub 不认识的 `type`（给更新的 hub 写的扩展）和 App 画不了的�
 
 | placement | 出现在 | 尺寸 | 上下文 | 角标 | 安装时展示 | UI 版本 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `plugin_page` | 设置 › 扩展 › 这个扩展，一行进入一页 | full | — | — | — | 1 |
+| `extension_page`（老名字 `plugin_page`） | 设置 › 扩展 › 这个扩展，一行进入一页 | full | — | — | — | 1 |
 | `launcher_section` | 启动器详情页的一节（见上面「声明式 UI」） | full | `launcher` | — | 已由 `launcher_keys` 展示 | 1 |
 | `nav_page` | **主导航上的一个入口**，点进去是一整页 | full | — | 有 | 主导航上的入口 | 2 |
 | `overview_card` | **「总览」上的一张卡片**，点卡片打开 `opens` 指的页 | compact | — | — | 总览上的卡片 | 2 |
@@ -772,7 +778,7 @@ View 带 `refresh_after`（秒）：这个 View 在屏幕上时，App 过这么�
 
 ### 兼容
 
-**UI 版本**：1 是最早的八种条目、两个插槽；2 加了三个插槽、`chart` / `stat_grid` / `segmented`、`refresh_after`、上下文。扩展点 `ui` 的版本跟着变成 2（`initialize` 的 `hub.extension_points.ui`）。
+**UI 版本**：1 是最早的八种条目、两个插槽；2 加了三个插槽、`chart` / `stat_grid` / `segmented`、`refresh_after`、上下文；3 见上面「UI 版本 3」。扩展点 `ui` 的版本跟着变（`initialize` 的 `hub.extension_points.ui`，现在是 3）。
 
 - **老 App 遇到新插槽**：它只按 `placement` 问自己认识的插槽，看不到新插槽，不出错。`nav_page` 同时出现在扩展详情的 `ui` 里，老 App（网页）在设置 › 扩展 › 这个扩展 里照样能点进去；
   所以重要的内容放 `nav_page` 就行，`plugin_page` 可以不要。
@@ -789,6 +795,77 @@ View 带 `refresh_after`（秒）：这个 View 在屏幕上时，App 过这么�
 
 **一致性测试**：`conformance.Check` 对清单里的每个 `ui` 贡献按它的插槽调一次 `ui.render`（带上一份示例上下文；`inbox_item` 是它连接器的一条示例条目，`meta` 为 `null`）：回了 View 就必须是 App 在那个插槽画得了的
 （`extension.Fit` 通过、没有不认识的条目、键是 snake_case）；回错误也行（测试里连不上扩展自己的服务），但不能是 `unknown_method` / `no_contribution`。
+
+## UI 版本 3（#1850）
+
+UI 版本 3 加了几种组件、列表的搜索 / 筛选 / 加载更多、页面跳转和 `ui.invalidate`，并让助手的卡片用同一套组件。App 在 `context.ui_version` 里发 `3`，
+hub 的 `features` 有 `extension_ui_v3`；`initialize` 的 `hub.extension_points.ui` 是 `3`。字段的定义以 `schema/extension/view.schema.json` 为准。
+
+### 新组件
+
+- **`markdown`**：安全子集：1–3 级标题、段落、有序 / 无序列表、粗体、斜体、行内代码、代码块、引用、链接。链接只认 https（App 内打开）；**不支持** HTML（当成文字）、
+  图片、表格（表格用 `table`）。hub 拒绝写了图片或非 https 链接的（代码里的不算）。最多 2 万字。
+- **`table`**：`columns` 1–8 列（`align` 是 `start` / `end`，数字列用 `end`），`rows` 最多 100 行、每行的格数和列数一样，`caption` 写在表下。窄屏横向滚动，格子里不换行挤压。
+- **`empty`**：空状态：一句 `title`、一句 `detail`、一个图标、最多一个按钮（`button: {title, action}`）。各端用自己的空状态组件画。
+- **`loading`**：加载中。扩展数据还没到时先回它（比如 `{"sections":[{"items":[{"type":"loading"}]}]}`），数据到了发 `ui.invalidate` 让 App 重画。
+- **行的图标 / 头像 / 缩略图**：`row` 可以带其中一个：`icon`（固定图标集：`extension`（默认，老名字 `plugin`）、`chart`、`gauge`、`list`、`bell`、`doc`、`calendar`、
+  `money`、`person`、`chat`、`mail`、`link`、`folder`、`star`、`check`、`warning`、`clock`、`tag`、`search`、`settings`，各端换成自己设计系统里同一个意思的图标，不认识的画默认）、
+  `avatar: {url?, text?}`（https 的图；没图时 1–2 个字画成首字母头像）、`thumbnail: {url, aspect?: square | wide}`。图片只认 https，App 直接加载、不带任何凭据，加载失败画占位。
+  `nav_page` 的 `icon` 和 `empty` 的 `icon` 也用这张图标集。
+- **`key`**：任何组件都能带，同一页里不重复。
+
+### 搜索、筛选、加载更多
+
+- View 的 `search: {placeholder?, value?, action}`：页面顶上一个搜索框。用户停 0.3 秒后 App 调 `ui.action`，`action` 是它的 `id`，`values: {"q": 文字}`；扩展回新的 View（把 `q` 放进 `state`）。
+- View 的 `filter: {name, title?, choices: [{value, title?}]（2–20 个）, value, action}`：搜索框旁的下拉筛选。选了马上调 `ui.action`，`values: {name: 值}`（有搜索框时带上现在的 `q`）。
+  `name` 不能和页面里的字段同名，也不能是 `q`。
+- 节的 `more: {title?, action}`：节尾一行（默认「加载更多」）。滚到底自动触发一次（等回答，不重复触发），也能点。扩展回**完整的**新 View（`state` 里记游标），App 按 `key` 保持滚动位置。
+- 卡片（`compact`）不能有这三样（hub 回 502）：要搜索就 `opens` 一整页。
+
+### 页面跳转（push / pop）
+
+- `action.push: {ui?, state?, title?}`：点了**不调 `ui.action`**，直接在当前导航栈上推一页：App 调 `ui.render`（同一个扩展的 `ui` 贡献，不写就是现在这个），带这个 `state`；
+  `title` 是新页在 View 回来之前的标题。目标必须是一整页（`extension_page` / `nav_page`）：卡片、机器页的一节要跳就写明 `ui`。hub 查每个 View 的 push 目标，不合规整页拒绝（502）。
+- `ui.action` 的回答可以带 `push`（同上，比如保存后去详情）和 `pop: true`（返回上一页，下面那页重新画一次）：「列表 → 详情 → 编辑 → 保存 → 返回」。
+- 栈最多 8 层（App 不再往上推）。`push` 带的 `state` 和 View 的一样最多 16 KB。
+
+### `ui.invalidate`
+
+扩展的数据变了，主动让 App 重画，不只靠 `refresh_after` 轮询：
+
+```json
+{"event": "ui.invalidate", "params": {"contribution": "notes"}}
+```
+
+不写 `contribution` 是这个扩展的全部界面。hub 把一个扩展 1 秒内的 `ui.invalidate` 合成一次，推 WebSocket `{"type": "extension_ui", "extension", "id"?, "invalidate": true}`
+（`id` 是哪个界面，没有就是全部；**不发**老的 `plugin_ui`：老 App 会把它当成角标更新）。App 只重画正在显示的那些页（带当前的 `state`、搜索、筛选，正在填的字段留着）；
+不在屏幕上的记下来，出现时再画。
+
+### 助手的卡片：`persona-view` 和 `persona-card`
+
+助手回答里的卡片和扩展的 View 是同一套组件、同一个渲染器（只是不能点：助手的卡片里 `action`、`push`、`field`、`search`、`filter`、`more` 不生效，链接照常）。
+
+- **```` ```persona-view ````**：代码块里一个 View（`{"sections": […]}`），或直接一个组件（`{"type": "metric", …}`）。hub.json 的 `assistant.persona_view: true` 时助手的提示词教它写这种
+  （`prompts/assistant/claude_md.md`）；默认关，等各端都画得了 UI 版本 3 再开。
+- **```` ```persona-card ````**（#886，老写法）照样能画：各端把它**转成组件**再画，规则见 `sdk/go/wire/personacard.go`（Go 的参考实现）的说明，四端一致；
+  `schema/extension/examples/persona-card/` 是用例（卡片 → 应该得到的 View，`null` 是画不了、照旧显示成代码块），各端的测试拿它对照：
+  - 画不了的：`stat` 没有 `value`；`stacked_bar` 没有部分、有负数或加起来是 0；`line` 少于两个点；`bar` 没有点。
+  - 一节；卡片的 `title` 是节标题（`stat` 的 `title` 是它的 `metric` 的 `label`）；`subtitle` 是最前面的一段次要文字。数写成千分位、最多一位小数（`2,250`、`7.5`），后面空一格接单位。
+  - `stat` → `metric {label: title 或「数值」, value, detail: note}`。
+  - `stacked_bar` → `metric {label: 合计, value: total（没有就是各部分之和）, detail: note}`；一个叠起来的柱状图，每部分一个系列（超过 4 部分时前三个加「其他」，`rest` 和「其他」是 `neutral`），
+    每个系列一个点、标签是 `title` 或「合计」；再每部分一行 `row {title: label, subtitle: note, value}`。单位用 `total` 的，没有就用卡片的。
+  - `line` / `bar` → 有 `value` 时先一个 `metric {label: 当前, value}`；一个这种图，一个系列（最后 120 个点），`detail` 是 `note`。
+
+### 兼容
+
+- **老 App（`ui_version` 1 或 2）**：hub 把新的东西换成它画得了的（`extension.Fit`）：`markdown` → `text`（截到 2000 字）；`table` → 每行一个 `row`（第一格是标题、其余用「 · 」连起来）加
+  `caption` 的小字；`empty` → 一段次要文字加按钮；`loading` → 一段「加载中…」；节的 `more` → 节尾一个「加载更多」按钮（老 App 点了调 `ui.action`，扩展回更长的 View）；
+  `filter` → 一个 `segmented`（版本 2、不超过 5 个选项、每个不超过 12 个字时；否则拿掉）；`search`、`key`、行的 `icon` / `avatar` / `thumbnail`、动作的 `push`、回答的 `push` / `pop` 拿掉。
+  动作的 `id` 留着：老 App 点一个 push 的行会调 `ui.action`，扩展要自己处理（回目标页的 View；官方 SDK 在 `ui_version < 3` 时替它做）。
+- **新 App 连老 hub**：`features` 没有 `extension_ui_v3` 时照样发 `ui_version: 3`，老 hub 按自己的版本截到 2，扩展看到的是 2。
+- **插槽名**：`plugin_page` 改叫 `extension_page`，hub 两个都认（`?placement=` 写哪个都一样），新接口回 `extension_page`、老接口（`/api/v1/plugins/…`）回 `plugin_page`；
+  扩展在 `ui.render` 的 `placement` 里收到的是它清单里写的那个。清单写 `extension_page` 的扩展装不到老 hub 上（清单严格读），要在 `engines.persona` 里写上带 UI 版本 3 的 hub 构建号。
+- **扩展比 hub 新**：照旧（不认识的组件拿掉、记一行日志）。
 
 ## 个人 Agent 来源
 
@@ -986,6 +1063,16 @@ node 照做（`node/plugins.go`）。什么时候对齐：这台电脑连上时�
   电脑上的程序发的事件，hub 以 `node.event {machine_id, event, params}` 转给 hub 上的程序。电脑上的程序调 hub 的方法一律 `unknown_method`。
 - **状态**：扩展列表里每个有 `node` 段的扩展带 `nodes: [{machine_id, version, state, error?}]`，`state` 是 `running` / `starting` / `error` /
   `missing`（那台没有这个版本的包）/ `lease_expired` / `offline` / `outdated`（那台的 personad 太旧，不认 `plugin.node.*`）。
+
+## schema 和四端的类型
+
+清单、进程协议、View 和组件的定义只有一份：`schema/extension/` 的 JSON Schema（#1849）。四端的类型从它生成，别手写：
+Go `sdk/go/wire`（hub 直接用，`server/go.mod` 用 `replace` 指向 `../sdk/go`）、TypeScript `sdk/ts/src/wire.ts` 和网页的 `web/src/lib/extension-wire.ts`、
+Swift `apple/Shared/Generated/ExtensionWire.swift`、Kotlin `android/core/contracts/.../generated/ExtensionWire.kt`。
+
+- 改 schema 后 `python3 scripts/gen/extension_schema.py` 重新生成，`--check` 只比对（`scripts/test/test_extension_schema.py` 跑它，也查 `examples/` 下的例子和反例）。
+- hub 查扩展画的 View、一致性测试查 `initialize` 的回答，都先按 schema 查（`wire.Validate`），再查 schema 说不清的（`extension.CheckView`）。
+- 加组件、字段：先写进 schema、加例子、生成，再在各端的渲染器里画；生成器认的 schema 子集、各语言的样子、加一个组件的步骤见 [schema/extension/README.md](../schema/extension/README.md)。
 
 ## 一致性测试
 

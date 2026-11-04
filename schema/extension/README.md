@@ -60,4 +60,4 @@ hub 查扩展画的 View（`extension.CheckView`）、一致性测试查 `initia
 4. `python3 scripts/gen/extension_schema.py`，四端的类型就有了；再在各端的渲染器里画它（不认识的组件各端本来就跳过）。
 
 动作（`Action`）是一个对象，以后的页面跳转（push / pop）、新的上下文（`UIContext`）、新的插槽（`Placement` 的值）都是往已有的定义里加字段或值，老的 App 不认识就忽略。
-3b（#1850）的新组件（markdown、列表、表格、空状态、加载中、行图标 / 头像 / 缩略图）、`persona-card` 并进组件、`ui.invalidate` 照上面的步骤加。
+3b（#1850）就是这样加的：`markdown` / `table` / `empty` / `loading`、行的图标 / 头像 / 缩略图、`key`、View 的 `search` / `filter`、节的 `more`、`Action.push`、`ActionResult.push` / `pop`、`InvalidateEvent`（UI 版本 3，`docs/extensions.md`「UI 版本 3」）。`persona-card` 转成组件的规则和用例在 `sdk/go/wire/personacard.go`、`examples/persona-card/`。

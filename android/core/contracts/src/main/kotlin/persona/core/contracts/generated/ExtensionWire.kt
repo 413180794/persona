@@ -455,6 +455,15 @@ data class ExtensionBadgeEvent(
 )
 
 /**
+ * ui.invalidate, sent by an extension (UI version 3): what it draws changed; the apps on screen draw it again
+ * (contribution: one ui; empty: all of the extension's).
+ */
+@Serializable
+data class ExtensionInvalidateEvent(
+    val contribution: String? = null,
+)
+
+/**
  * What an app says when it draws a slot: for whom and where (the hub checks it and hands the extension UIParams).
  */
 @Serializable
@@ -558,7 +567,8 @@ object ExtensionButtonRole {
 }
 
 /**
- * A slot in the apps an extension draws at (docs「UI 插槽」).
+ * A slot in the apps an extension draws at (docs「UI 插槽」). extension_page is plugin_page's new name (UI version 3):
+ * the hub takes both and answers the new API with extension_page, the old one with plugin_page.
  */
 object ExtensionPlacement {
     const val PLUGIN_PAGE = "plugin_page"
@@ -567,7 +577,8 @@ object ExtensionPlacement {
     const val OVERVIEW_CARD = "overview_card"
     const val MACHINE_SECTION = "machine_section"
     const val INBOX_ITEM = "inbox_item"
-    val ALL = listOf("plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item")
+    const val EXTENSION_PAGE = "extension_page"
+    val ALL = listOf("plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page")
 }
 
 /**
@@ -591,7 +602,9 @@ object ExtensionPlatform {
 }
 
 /**
- * A nav_page's icon; each app draws its own for the meaning. An unknown icon draws as plugin.
+ * The fixed icon set: a nav_page's icon, a row's, an empty state's (UI version 3 for the last two and the icons after
+ * money). Each app draws its own icon for the meaning; an unknown one draws as the default (extension; plugin is its
+ * old name).
  */
 object ExtensionNavIcon {
     const val PLUGIN = "plugin"
@@ -602,7 +615,20 @@ object ExtensionNavIcon {
     const val DOC = "doc"
     const val CALENDAR = "calendar"
     const val MONEY = "money"
-    val ALL = listOf("plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money")
+    const val EXTENSION = "extension"
+    const val PERSON = "person"
+    const val CHAT = "chat"
+    const val MAIL = "mail"
+    const val LINK = "link"
+    const val FOLDER = "folder"
+    const val STAR = "star"
+    const val CHECK = "check"
+    const val WARNING = "warning"
+    const val CLOCK = "clock"
+    const val TAG = "tag"
+    const val SEARCH = "search"
+    const val SETTINGS = "settings"
+    val ALL = listOf("plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings")
 }
 
 @Serializable
@@ -617,6 +643,8 @@ data class ExtensionView(
      * Draw again after this many seconds while on screen (30 at least; 0 never).
      */
     @SerialName("refresh_after") val refreshAfter: Int? = null,
+    val search: ExtensionSearch? = null,
+    val filter: ExtensionFilter? = null,
 )
 
 @Serializable
@@ -624,6 +652,7 @@ data class ExtensionSection(
     val title: String? = null,
     val footer: String? = null,
     val items: List<ExtensionComponent> = emptyList(),
+    val more: ExtensionMore? = null,
 )
 
 /**
@@ -637,8 +666,8 @@ sealed interface ExtensionComponent {
     data class Unknown(override val type: String, val raw: JsonObject = JsonObject(emptyMap())) : ExtensionComponent
 
     companion object {
-        val TYPES = listOf("text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented")
-        val SINCE = mapOf("text" to 1, "metric" to 1, "progress" to 1, "row" to 1, "button" to 1, "link" to 1, "field" to 1, "divider" to 1, "chart" to 2, "stat_grid" to 2, "segmented" to 2)
+        val TYPES = listOf("text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading")
+        val SINCE = mapOf("text" to 1, "metric" to 1, "progress" to 1, "row" to 1, "button" to 1, "link" to 1, "field" to 1, "divider" to 1, "chart" to 2, "stat_grid" to 2, "segmented" to 2, "markdown" to 3, "table" to 3, "empty" to 3, "loading" to 3)
     }
 }
 
@@ -663,6 +692,10 @@ object ExtensionComponentSerializer : KSerializer<ExtensionComponent> {
                 "chart" -> input.json.decodeFromJsonElement(ExtensionChartComponent.serializer(), obj)
                 "stat_grid" -> input.json.decodeFromJsonElement(ExtensionStatGridComponent.serializer(), obj)
                 "segmented" -> input.json.decodeFromJsonElement(ExtensionSegmentedComponent.serializer(), obj)
+                "markdown" -> input.json.decodeFromJsonElement(ExtensionMarkdownComponent.serializer(), obj)
+                "table" -> input.json.decodeFromJsonElement(ExtensionTableComponent.serializer(), obj)
+                "empty" -> input.json.decodeFromJsonElement(ExtensionEmptyComponent.serializer(), obj)
+                "loading" -> input.json.decodeFromJsonElement(ExtensionLoadingComponent.serializer(), obj)
                 else -> ExtensionComponent.Unknown(tag, obj)
             }
         } catch (_: SerializationException) {
@@ -686,6 +719,10 @@ object ExtensionComponentSerializer : KSerializer<ExtensionComponent> {
             is ExtensionChartComponent -> output.json.encodeToJsonElement(ExtensionChartComponent.serializer(), value) as JsonObject
             is ExtensionStatGridComponent -> output.json.encodeToJsonElement(ExtensionStatGridComponent.serializer(), value) as JsonObject
             is ExtensionSegmentedComponent -> output.json.encodeToJsonElement(ExtensionSegmentedComponent.serializer(), value) as JsonObject
+            is ExtensionMarkdownComponent -> output.json.encodeToJsonElement(ExtensionMarkdownComponent.serializer(), value) as JsonObject
+            is ExtensionTableComponent -> output.json.encodeToJsonElement(ExtensionTableComponent.serializer(), value) as JsonObject
+            is ExtensionEmptyComponent -> output.json.encodeToJsonElement(ExtensionEmptyComponent.serializer(), value) as JsonObject
+            is ExtensionLoadingComponent -> output.json.encodeToJsonElement(ExtensionLoadingComponent.serializer(), value) as JsonObject
             is ExtensionComponent.Unknown -> value.raw
         }
         output.encodeJsonElement(JsonObject(obj + ("type" to JsonPrimitive(value.type))))
@@ -698,6 +735,7 @@ object ExtensionComponentSerializer : KSerializer<ExtensionComponent> {
 @Serializable
 data class ExtensionTextComponent(
     override val type: String = "text",
+    val key: String? = null,
     val text: String = "",
     val style: String? = null,
 ) : ExtensionComponent
@@ -708,6 +746,7 @@ data class ExtensionTextComponent(
 @Serializable
 data class ExtensionMetricComponent(
     override val type: String = "metric",
+    val key: String? = null,
     val label: String = "",
     val value: String = "",
     val detail: String? = null,
@@ -720,6 +759,7 @@ data class ExtensionMetricComponent(
 @Serializable
 data class ExtensionProgressComponent(
     override val type: String = "progress",
+    val key: String? = null,
     val label: String = "",
     val ratio: Double = 0.0,
     val detail: String? = null,
@@ -732,11 +772,18 @@ data class ExtensionProgressComponent(
 @Serializable
 data class ExtensionRowComponent(
     override val type: String = "row",
+    val key: String? = null,
     val title: String = "",
     val subtitle: String? = null,
     val value: String? = null,
     val badge: ExtensionBadge? = null,
     val action: ExtensionAction? = null,
+    /**
+     * At most one of icon, avatar and thumbnail.
+     */
+    val icon: String? = null,
+    val avatar: ExtensionAvatar? = null,
+    val thumbnail: ExtensionThumbnail? = null,
 ) : ExtensionComponent
 
 /**
@@ -745,6 +792,7 @@ data class ExtensionRowComponent(
 @Serializable
 data class ExtensionButtonComponent(
     override val type: String = "button",
+    val key: String? = null,
     val title: String = "",
     val action: ExtensionAction = ExtensionAction(),
     val role: String? = null,
@@ -756,6 +804,7 @@ data class ExtensionButtonComponent(
 @Serializable
 data class ExtensionLinkComponent(
     override val type: String = "link",
+    val key: String? = null,
     val title: String = "",
     val url: String = "",
 ) : ExtensionComponent
@@ -766,6 +815,7 @@ data class ExtensionLinkComponent(
 @Serializable
 data class ExtensionFieldComponent(
     override val type: String = "field",
+    val key: String? = null,
     val name: String = "",
     val label: String = "",
     val kind: String = "",
@@ -780,6 +830,7 @@ data class ExtensionFieldComponent(
 @Serializable
 data class ExtensionDividerComponent(
     override val type: String = "divider",
+    val key: String? = null,
 ) : ExtensionComponent
 
 /**
@@ -788,6 +839,7 @@ data class ExtensionDividerComponent(
 @Serializable
 data class ExtensionChartComponent(
     override val type: String = "chart",
+    val key: String? = null,
     val kind: String = "",
     val series: List<ExtensionChartSeries> = emptyList(),
     val title: String? = null,
@@ -802,6 +854,7 @@ data class ExtensionChartComponent(
 @Serializable
 data class ExtensionStatGridComponent(
     override val type: String = "stat_grid",
+    val key: String? = null,
     val stats: List<ExtensionStat> = emptyList(),
 ) : ExtensionComponent
 
@@ -811,10 +864,60 @@ data class ExtensionStatGridComponent(
 @Serializable
 data class ExtensionSegmentedComponent(
     override val type: String = "segmented",
+    val key: String? = null,
     val name: String = "",
     val choices: List<ExtensionChoice> = emptyList(),
     val value: String = "",
     val action: ExtensionAction = ExtensionAction(),
+) : ExtensionComponent
+
+/**
+ * Text in a safe subset of Markdown: headings (1 to 3), paragraphs, lists, bold, italics, inline code, code blocks,
+ * quotes, https links (opened in the app). No HTML, no images, no tables (a table is a table component). An older app
+ * gets it as plain text.
+ */
+@Serializable
+data class ExtensionMarkdownComponent(
+    override val type: String = "markdown",
+    val key: String? = null,
+    val text: String = "",
+) : ExtensionComponent
+
+/**
+ * A table: 1 to 8 columns, at most 100 rows, each with as many cells as there are columns. Narrow screens scroll it
+ * sideways; cells never squeeze. An older app gets a row per line.
+ */
+@Serializable
+data class ExtensionTableComponent(
+    override val type: String = "table",
+    val key: String? = null,
+    val columns: List<ExtensionTableColumn> = emptyList(),
+    val rows: List<List<String>> = emptyList(),
+    val caption: String? = null,
+) : ExtensionComponent
+
+/**
+ * An empty state: nothing here yet, and maybe one thing to do about it. An older app gets a text and a button.
+ */
+@Serializable
+data class ExtensionEmptyComponent(
+    override val type: String = "empty",
+    val key: String? = null,
+    val title: String = "",
+    val detail: String? = null,
+    val icon: String? = null,
+    val button: ExtensionEmptyButton? = null,
+) : ExtensionComponent
+
+/**
+ * Loading: the extension answers it while its data comes, then sends ui.invalidate to be drawn again. An older app
+ * gets a quiet text.
+ */
+@Serializable
+data class ExtensionLoadingComponent(
+    override val type: String = "loading",
+    val key: String? = null,
+    val title: String? = null,
 ) : ExtensionComponent
 
 /**
@@ -832,6 +935,107 @@ data class ExtensionAction(
      * Send the page's fields as values.
      */
     val submit: Boolean? = null,
+    /**
+     * Open a page on top of this one instead of calling ui.action (an app of UI version 3; an older one calls
+     * ui.action with id).
+     */
+    val push: ExtensionPush? = null,
+)
+
+/**
+ * A page pushed on the navigation stack: ui.render of the extension's ui (this one when empty; a full page:
+ * extension_page, plugin_page or nav_page) with state. title is shown until the view comes.
+ */
+@Serializable
+data class ExtensionPush(
+    val ui: String? = null,
+    val state: String? = null,
+    val title: String? = null,
+)
+
+/**
+ * A search box on top of the page (UI version 3): the app calls ui.action with action and values {"q": the text}, 0.3
+ * s after the user stops typing.
+ */
+@Serializable
+data class ExtensionSearch(
+    val placeholder: String? = null,
+    val value: String? = null,
+    val action: ExtensionAction = ExtensionAction(),
+)
+
+/**
+ * A drop-down beside the search box (UI version 3): choosing calls ui.action with action and values {name: the value}
+ * (and the search's q).
+ */
+@Serializable
+data class ExtensionFilter(
+    val name: String = "",
+    val title: String? = null,
+    val choices: List<ExtensionChoice> = emptyList(),
+    val value: String = "",
+    val action: ExtensionAction = ExtensionAction(),
+)
+
+/**
+ * A section's last row, 加载更多 (UI version 3): reaching it (or tapping it) calls ui.action with action once; the
+ * extension answers the whole view, longer.
+ */
+@Serializable
+data class ExtensionMore(
+    val title: String? = null,
+    val action: ExtensionAction = ExtensionAction(),
+)
+
+/**
+ * A person's or a chat's picture: an https image, else up to two characters drawn as the app's initials avatar.
+ */
+@Serializable
+data class ExtensionAvatar(
+    val url: String? = null,
+    val text: String? = null,
+)
+
+/**
+ * A small picture at the row's start: an https image the app loads without any credentials.
+ */
+@Serializable
+data class ExtensionThumbnail(
+    val url: String = "",
+    val aspect: String? = null,
+)
+
+/**
+ * Values of ThumbnailAspect.
+ */
+object ExtensionThumbnailAspect {
+    const val SQUARE = "square"
+    const val WIDE = "wide"
+    val ALL = listOf("square", "wide")
+}
+
+/**
+ * Values of TableAlign.
+ */
+object ExtensionTableAlign {
+    const val START = "start"
+    const val END = "end"
+    val ALL = listOf("start", "end")
+}
+
+@Serializable
+data class ExtensionTableColumn(
+    val title: String = "",
+    val align: String? = null,
+)
+
+/**
+ * An empty state's one button.
+ */
+@Serializable
+data class ExtensionEmptyButton(
+    val title: String = "",
+    val action: ExtensionAction = ExtensionAction(),
 )
 
 @Serializable
@@ -875,13 +1079,22 @@ data class ExtensionStat(
 )
 
 /**
- * What ui.action answers: a new view, a short message, an https link to open, or nothing (draw again).
+ * What ui.action answers: a new view, a short message, an https link to open, a page to push or to pop (UI version
+ * 3), or nothing (draw again).
  */
 @Serializable
 data class ExtensionActionResult(
     val view: ExtensionView? = null,
     val toast: String? = null,
     @SerialName("open_url") val openUrl: String? = null,
+    /**
+     * Then open this page on top (after a submit: list, detail, edit).
+     */
+    val push: ExtensionPush? = null,
+    /**
+     * Then go back a page; the page below is drawn again.
+     */
+    val pop: Boolean? = null,
 )
 
 /**

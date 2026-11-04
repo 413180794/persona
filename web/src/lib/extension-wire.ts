@@ -342,6 +342,14 @@ export interface BadgeEvent {
 }
 
 /**
+ * ui.invalidate, sent by an extension (UI version 3): what it draws changed; the apps on screen draw it again
+ * (contribution: one ui; empty: all of the extension's).
+ */
+export interface InvalidateEvent {
+  contribution?: string;
+}
+
+/**
  * What an app says when it draws a slot: for whom and where (the hub checks it and hands the extension UIParams).
  */
 export interface UIContext {
@@ -407,10 +415,11 @@ export type ButtonRole = "normal" | "destructive" | (string & {});
 export const BUTTON_ROLES = ["normal", "destructive"] as const;
 
 /**
- * A slot in the apps an extension draws at (docs「UI 插槽」).
+ * A slot in the apps an extension draws at (docs「UI 插槽」). extension_page is plugin_page's new name (UI version 3):
+ * the hub takes both and answers the new API with extension_page, the old one with plugin_page.
  */
-export type Placement = "plugin_page" | "launcher_section" | "nav_page" | "overview_card" | "machine_section" | "inbox_item" | (string & {});
-export const PLACEMENTS = ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item"] as const;
+export type Placement = "plugin_page" | "launcher_section" | "nav_page" | "overview_card" | "machine_section" | "inbox_item" | "extension_page" | (string & {});
+export const PLACEMENTS = ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page"] as const;
 
 export type Size = "compact" | "full" | (string & {});
 export const SIZES = ["compact", "full"] as const;
@@ -419,10 +428,12 @@ export type Platform = "ios" | "mac" | "android" | "web" | (string & {});
 export const PLATFORMS = ["ios", "mac", "android", "web"] as const;
 
 /**
- * A nav_page's icon; each app draws its own for the meaning. An unknown icon draws as plugin.
+ * The fixed icon set: a nav_page's icon, a row's, an empty state's (UI version 3 for the last two and the icons after
+ * money). Each app draws its own icon for the meaning; an unknown one draws as the default (extension; plugin is its
+ * old name).
  */
-export type NavIcon = "plugin" | "chart" | "gauge" | "list" | "bell" | "doc" | "calendar" | "money" | (string & {});
-export const NAV_ICONS = ["plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money"] as const;
+export type NavIcon = "plugin" | "chart" | "gauge" | "list" | "bell" | "doc" | "calendar" | "money" | "extension" | "person" | "chat" | "mail" | "link" | "folder" | "star" | "check" | "warning" | "clock" | "tag" | "search" | "settings" | (string & {});
+export const NAV_ICONS = ["plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings"] as const;
 
 export interface View {
   title?: string;
@@ -431,12 +442,15 @@ export interface View {
   state?: string;
   /** Draw again after this many seconds while on screen (30 at least; 0 never). */
   refresh_after?: number;
+  search?: Search;
+  filter?: Filter;
 }
 
 export interface Section {
   title?: string;
   footer?: string;
   items: Component[];
+  more?: More;
 }
 
 /**
@@ -453,15 +467,20 @@ export type Component =
   | DividerComponent
   | ChartComponent
   | StatGridComponent
-  | SegmentedComponent;
-export const COMPONENT_TYPES = ["text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented"] as const;
-export const COMPONENT_SINCE: Record<string, number> = { text: 1, metric: 1, progress: 1, row: 1, button: 1, link: 1, field: 1, divider: 1, chart: 2, stat_grid: 2, segmented: 2 };
+  | SegmentedComponent
+  | MarkdownComponent
+  | TableComponent
+  | EmptyComponent
+  | LoadingComponent;
+export const COMPONENT_TYPES = ["text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented", "markdown", "table", "empty", "loading"] as const;
+export const COMPONENT_SINCE: Record<string, number> = { text: 1, metric: 1, progress: 1, row: 1, button: 1, link: 1, field: 1, divider: 1, chart: 2, stat_grid: 2, segmented: 2, markdown: 3, table: 3, empty: 3, loading: 3 };
 
 /**
  * A paragraph.
  */
 export interface TextComponent {
   type: "text";
+  key?: string;
   text: string;
   style?: TextStyle;
 }
@@ -471,6 +490,7 @@ export interface TextComponent {
  */
 export interface MetricComponent {
   type: "metric";
+  key?: string;
   label: string;
   value: string;
   detail?: string;
@@ -482,6 +502,7 @@ export interface MetricComponent {
  */
 export interface ProgressComponent {
   type: "progress";
+  key?: string;
   label: string;
   ratio: number;
   detail?: string;
@@ -493,11 +514,16 @@ export interface ProgressComponent {
  */
 export interface RowComponent {
   type: "row";
+  key?: string;
   title: string;
   subtitle?: string;
   value?: string;
   badge?: Badge;
   action?: Action;
+  /** At most one of icon, avatar and thumbnail. */
+  icon?: NavIcon;
+  avatar?: Avatar;
+  thumbnail?: Thumbnail;
 }
 
 /**
@@ -505,6 +531,7 @@ export interface RowComponent {
  */
 export interface ButtonComponent {
   type: "button";
+  key?: string;
   title: string;
   action: Action;
   role?: ButtonRole;
@@ -515,6 +542,7 @@ export interface ButtonComponent {
  */
 export interface LinkComponent {
   type: "link";
+  key?: string;
   title: string;
   url: string;
 }
@@ -524,6 +552,7 @@ export interface LinkComponent {
  */
 export interface FieldComponent {
   type: "field";
+  key?: string;
   name: string;
   label: string;
   kind: FieldKind;
@@ -537,6 +566,7 @@ export interface FieldComponent {
  */
 export interface DividerComponent {
   type: "divider";
+  key?: string;
 }
 
 /**
@@ -544,6 +574,7 @@ export interface DividerComponent {
  */
 export interface ChartComponent {
   type: "chart";
+  key?: string;
   kind: ChartKind;
   series: ChartSeries[];
   title?: string;
@@ -557,6 +588,7 @@ export interface ChartComponent {
  */
 export interface StatGridComponent {
   type: "stat_grid";
+  key?: string;
   stats: Stat[];
 }
 
@@ -565,10 +597,56 @@ export interface StatGridComponent {
  */
 export interface SegmentedComponent {
   type: "segmented";
+  key?: string;
   name: string;
   choices: Choice[];
   value: string;
   action: Action;
+}
+
+/**
+ * Text in a safe subset of Markdown: headings (1 to 3), paragraphs, lists, bold, italics, inline code, code blocks,
+ * quotes, https links (opened in the app). No HTML, no images, no tables (a table is a table component). An older app
+ * gets it as plain text.
+ */
+export interface MarkdownComponent {
+  type: "markdown";
+  key?: string;
+  text: string;
+}
+
+/**
+ * A table: 1 to 8 columns, at most 100 rows, each with as many cells as there are columns. Narrow screens scroll it
+ * sideways; cells never squeeze. An older app gets a row per line.
+ */
+export interface TableComponent {
+  type: "table";
+  key?: string;
+  columns: TableColumn[];
+  rows: (string[])[];
+  caption?: string;
+}
+
+/**
+ * An empty state: nothing here yet, and maybe one thing to do about it. An older app gets a text and a button.
+ */
+export interface EmptyComponent {
+  type: "empty";
+  key?: string;
+  title: string;
+  detail?: string;
+  icon?: NavIcon;
+  button?: EmptyButton;
+}
+
+/**
+ * Loading: the extension answers it while its data comes, then sends ui.invalidate to be drawn again. An older app
+ * gets a quiet text.
+ */
+export interface LoadingComponent {
+  type: "loading";
+  key?: string;
+  title?: string;
 }
 
 /**
@@ -581,6 +659,87 @@ export interface Action {
   confirm?: string;
   /** Send the page's fields as values. */
   submit?: boolean;
+  /**
+   * Open a page on top of this one instead of calling ui.action (an app of UI version 3; an older one calls ui.action
+   * with id).
+   */
+  push?: Push;
+}
+
+/**
+ * A page pushed on the navigation stack: ui.render of the extension's ui (this one when empty; a full page:
+ * extension_page, plugin_page or nav_page) with state. title is shown until the view comes.
+ */
+export interface Push {
+  ui?: string;
+  state?: string;
+  title?: string;
+}
+
+/**
+ * A search box on top of the page (UI version 3): the app calls ui.action with action and values {"q": the text}, 0.3
+ * s after the user stops typing.
+ */
+export interface Search {
+  placeholder?: string;
+  value?: string;
+  action: Action;
+}
+
+/**
+ * A drop-down beside the search box (UI version 3): choosing calls ui.action with action and values {name: the value}
+ * (and the search's q).
+ */
+export interface Filter {
+  name: string;
+  title?: string;
+  choices: Choice[];
+  value: string;
+  action: Action;
+}
+
+/**
+ * A section's last row, 加载更多 (UI version 3): reaching it (or tapping it) calls ui.action with action once; the
+ * extension answers the whole view, longer.
+ */
+export interface More {
+  title?: string;
+  action: Action;
+}
+
+/**
+ * A person's or a chat's picture: an https image, else up to two characters drawn as the app's initials avatar.
+ */
+export interface Avatar {
+  url?: string;
+  text?: string;
+}
+
+/**
+ * A small picture at the row's start: an https image the app loads without any credentials.
+ */
+export interface Thumbnail {
+  url: string;
+  aspect?: ThumbnailAspect;
+}
+
+export type ThumbnailAspect = "square" | "wide" | (string & {});
+export const THUMBNAIL_ASPECTS = ["square", "wide"] as const;
+
+export type TableAlign = "start" | "end" | (string & {});
+export const TABLE_ALIGNS = ["start", "end"] as const;
+
+export interface TableColumn {
+  title: string;
+  align?: TableAlign;
+}
+
+/**
+ * An empty state's one button.
+ */
+export interface EmptyButton {
+  title: string;
+  action: Action;
 }
 
 export interface Badge {
@@ -619,12 +778,17 @@ export interface Stat {
 }
 
 /**
- * What ui.action answers: a new view, a short message, an https link to open, or nothing (draw again).
+ * What ui.action answers: a new view, a short message, an https link to open, a page to push or to pop (UI version
+ * 3), or nothing (draw again).
  */
 export interface ActionResult {
   view?: View;
   toast?: string;
   open_url?: string;
+  /** Then open this page on top (after a submit: list, detail, edit). */
+  push?: Push;
+  /** Then go back a page; the page below is drawn again. */
+  pop?: boolean;
 }
 
 export type PersonaCardKind = "stat" | "stacked_bar" | "line" | "bar" | (string & {});

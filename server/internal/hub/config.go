@@ -90,6 +90,9 @@ type AssistantProfile struct {
 	// External: the assistant's process (personad assistant) runs elsewhere and connects with a token of its own
 	// (personad hub assistant-token); the hub does not start one (assistant_process.go).
 	External bool `json:"external,omitempty"`
+	// PersonaView: the assistant is taught ```persona-view (a View of the extensions' components, #1850) instead of
+	// ```persona-card. Off until every app the user has draws it (UI version 3); a persona-card draws on all of them.
+	PersonaView bool `json:"persona_view,omitempty"`
 }
 
 // MicrosoftConfig is Outlook's "Sign in with Microsoft" (docs/mail.md「Outlook 接入方式」): an optional default client

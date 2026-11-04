@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -23,15 +24,16 @@ import (
 type UIItem struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
-	// Placement is one of UISlots: plugin_page (a page opened from the plugin's settings), launcher_section (a section
+	// Placement is one of UISlots: extension_page (a page opened from the extension's settings; plugin_page is its old
+	// name, the extension is told the one it wrote), launcher_section (a section
 	// on the page of a launcher whose gateway is one of Hosts, or of any launcher when there are none: the plugin then
 	// answers unsupported for gateways not its own; it may send requests there with the key, as quota does), nav_page,
 	// overview_card, machine_section, inbox_item.
 	Placement string   `json:"placement"`
 	Hosts     []string `json:"hosts,omitempty"`
-	// Icon is a nav_page's icon, from UIIcons (each app draws its own); plugin when empty.
+	// Icon is a nav_page's icon, from UIIcons (each app draws its own); the default when empty.
 	Icon string `json:"icon,omitempty"`
-	// Opens is the ui (a nav_page or plugin_page of the same plugin) an overview_card opens when tapped.
+	// Opens is the ui (a nav_page or extension_page of the same extension) an overview_card opens when tapped.
 	Opens string `json:"opens,omitempty"`
 	// Connector is the connector an inbox_item draws the items of: one of the plugin's own connectors.
 	Connector string `json:"connector,omitempty"`
@@ -56,6 +58,8 @@ type UISlot struct {
 // UISlots are the places this hub lets plugins draw, in the order the apps list them.
 var UISlots = []UISlot{
 	{Name: "plugin_page", Size: SizeFull, Since: 1},
+	// extension_page is plugin_page's new name: the same slot (PageSlot).
+	{Name: "extension_page", Size: SizeFull, Since: 3},
 	{Name: "launcher_section", Size: SizeFull, Context: "launcher", Since: 1},
 	{Name: "nav_page", Size: SizeFull, Badge: true, Shown: "主导航上的入口", Since: 2},
 	{Name: "overview_card", Size: SizeCompact, Shown: "总览上的卡片", Since: 2},
@@ -82,13 +86,24 @@ const (
 
 var (
 	UIPlatforms = []string{"ios", "mac", "android", "web"}
-	UIIcons     = []string{"plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money"}
+	// UIIcons is the fixed icon set (a nav_page's, a row's, an empty state's): the schema's NavIcon.
+	UIIcons = wire.NavIcons
 )
 
 // UIVersion is the version of the UI this hub knows: 1 the first eight items and two slots; 2 the slots of UISlots,
-// chart and stat_grid, refresh_after and the render context. An app says which it draws (context.ui_version, 1 when
-// it says nothing); the hub leaves out of a View what the app does not know (Fit).
-const UIVersion = 2
+// chart and stat_grid, refresh_after and the render context; 3 markdown, table, empty and loading, a row's icon, avatar
+// and thumbnail, components' keys, a view's search and filter, a section's more, pushing and popping pages,
+// ui.invalidate. An app says which it draws (context.ui_version, 1 when it says nothing); the hub leaves out of a View
+// what the app does not know, or draws it with what it knows (Fit).
+const UIVersion = 3
+
+// PageSlot says whether placement is the extension's own page: extension_page, or plugin_page as it was called.
+func PageSlot(placement string) bool {
+	return placement == "extension_page" || placement == "plugin_page"
+}
+
+// FullPage says whether placement is a whole page a push may open: an extension_page or a nav_page.
+func FullPage(placement string) bool { return PageSlot(placement) || placement == "nav_page" }
 
 // UIMachine is the machine a machine_section is drawn for.
 type UIMachine struct {
@@ -195,8 +210,13 @@ type (
 	// UIAction is what a row, a button or a segmented does: ui.action with its ID (and the fields' values when Submit).
 	UIAction = wire.Action
 	UIChoice = wire.Choice
-	// ActionResult is what ui.action answers: a new View, a short message, a link to open, or nothing (draw again).
+	// ActionResult is what ui.action answers: a new View, a short message, a link to open, a page to push or pop, or
+	// nothing (draw again).
 	ActionResult = wire.ActionResult
+	// Push is a page an action opens on top: one of the extension's whole pages, with a state.
+	Push = wire.Push
+	// InvalidateEvent is ui.invalidate, sent by an extension: what it draws changed (one ui, or all).
+	InvalidateEvent = wire.InvalidateEvent
 )
 
 // InboxSourceURL is the one link besides https an action may open, and only on an inbox_item, for the item it is
@@ -220,6 +240,12 @@ const (
 	// A compact view (an overview_card) has at most CompactSections sections and CompactItems items, and no fields.
 	CompactSections = 2
 	CompactItems    = 12
+	// A view has at most StackMost pages pushed on its own (the apps keep no more).
+	StackMost = 8
+	// A markdown has at most MarkdownMost characters; a table at most TableColumnsMost columns and TableRowsMost rows.
+	MarkdownMost     = 20000
+	TableColumnsMost = 8
+	TableRowsMost    = 100
 	// RefreshLeast and RefreshMost bound refresh_after, in seconds.
 	RefreshLeast = 30
 	RefreshMost  = 24 * 3600
@@ -248,14 +274,38 @@ func CheckView(v *View) error {
 	if len(v.State) > StateMost {
 		return fmt.Errorf("state: more than %d bytes", StateMost)
 	}
+	for _, a := range Actions(v) {
+		if a.Push != nil && len(a.Push.State) > StateMost {
+			return fmt.Errorf("action %s: the state it pushes is more than %d bytes", a.ID, StateMost)
+		}
+	}
 	n := 0
 	names := map[string]bool{}
+	keys := map[string]bool{}
+	if v.Search != nil {
+		names["q"] = true
+	}
+	if f := v.Filter; f != nil {
+		if names[f.Name] {
+			return fmt.Errorf("filter: field %q twice (q is the search's)", f.Name)
+		}
+		names[f.Name] = true
+		if !slices.ContainsFunc(f.Choices, func(c UIChoice) bool { return c.Value == f.Value }) {
+			return errors.New("filter: value is one of its choices")
+		}
+	}
 	for i, s := range v.Sections {
 		for j, e := range s.Items {
 			if n++; n > ItemsMost {
 				return fmt.Errorf("more than %d items", ItemsMost)
 			}
 			var err error
+			if e.Key != "" {
+				if keys[e.Key] {
+					err = fmt.Errorf("key %q twice", e.Key)
+				}
+				keys[e.Key] = true
+			}
 			switch e.Type {
 			case "link":
 				if u, perr := url.Parse(e.URL); perr != nil || u.Scheme != "https" || u.Host == "" {
@@ -285,6 +335,21 @@ func CheckView(v *View) error {
 				err = checkChart(e)
 			case "stat_grid":
 				err = checkStats(e.Stats)
+			case "row":
+				if (e.Icon != "") && (e.Avatar != nil || e.Thumbnail != nil) || e.Avatar != nil && e.Thumbnail != nil {
+					err = errors.New("a row has at most one of icon, avatar and thumbnail")
+				} else if a := e.Avatar; a != nil && a.URL == "" && a.Text == "" {
+					err = errors.New("an avatar has a url or a text")
+				}
+			case "table":
+				for k, r := range e.Rows {
+					if len(r) != len(e.Columns) {
+						err = fmt.Errorf("row %d has %d cells for %d columns", k, len(r), len(e.Columns))
+						break
+					}
+				}
+			case "markdown":
+				err = checkMarkdown(e.Text)
 			}
 			if err != nil {
 				return fmt.Errorf("section %d item %d (%s): %v", i, j, e.Type, err)
@@ -359,6 +424,60 @@ func checkStats(stats []Stat) error {
 	return nil
 }
 
+// mdImage is a Markdown image: ![text](target.
+var mdImage = regexp.MustCompile(`!\[[^\]]*\]\(`)
+
+// mdLink is a Markdown link's or image's target: [text](target "title").
+var mdLink = regexp.MustCompile(`\]\(\s*<?([^)\s>]*)`)
+
+// mdCode is Markdown's code, a block or a span: what looks like a link in it is text.
+var mdCode = regexp.MustCompile("(?s)```.*?(```|$)|`[^`\n]*`")
+
+// checkMarkdown holds a markdown to its subset where it matters: links are https (the apps open nothing else), no
+// images. HTML is drawn as the text it is.
+func checkMarkdown(text string) error {
+	text = mdCode.ReplaceAllString(text, "")
+	if mdImage.MatchString(text) {
+		return errors.New("markdown has no images")
+	}
+	for _, m := range mdLink.FindAllStringSubmatch(text, -1) {
+		if u, err := url.Parse(m[1]); err != nil || u.Scheme != "https" || u.Host == "" {
+			return fmt.Errorf("markdown links are https: %q", m[1])
+		}
+	}
+	return nil
+}
+
+// Actions are a view's actions (its components', its search's, filter's and sections' more) and where each is.
+func Actions(v *View) []*UIAction {
+	var out []*UIAction
+	if v == nil {
+		return nil
+	}
+	if v.Search != nil {
+		out = append(out, &v.Search.Action)
+	}
+	if v.Filter != nil {
+		out = append(out, &v.Filter.Action)
+	}
+	for i := range v.Sections {
+		s := &v.Sections[i]
+		for j := range s.Items {
+			e := &s.Items[j]
+			if e.Action != nil {
+				out = append(out, e.Action)
+			}
+			if e.Button != nil {
+				out = append(out, &e.Button.Action)
+			}
+		}
+		if s.More != nil {
+			out = append(out, &s.More.Action)
+		}
+	}
+	return out
+}
+
 // ParseView reads and checks a View a plugin answered with.
 func ParseView(raw json.RawMessage) (*View, error) {
 	var v View
@@ -377,15 +496,20 @@ func ParseView(raw json.RawMessage) (*View, error) {
 }
 
 // Fit makes a View a plugin drew into one an app that draws UI version uiVersion can draw at slot: items of types
-// this hub does not know (a plugin written for a newer hub) and those newer than the app are left out, a section they
-// emptied with them; refresh_after is held to its bounds. Then it is checked (CheckView), a compact one to its limits.
-// It says what types it left out.
+// this hub does not know (a plugin written for a newer hub) are left out, a section they emptied with them; those
+// newer than the app are drawn with what it knows where that says the same (a markdown as text, a table as rows, an
+// empty state as a text and a button, a section's more as a button, a filter as a segmented), left out where it does
+// not; refresh_after is held to its bounds. Then it is checked (CheckView), a compact one to its limits. It says what
+// types it left out.
 func Fit(v *View, slot UISlot, uiVersion int) (dropped []string, err error) {
 	if v == nil {
 		return nil, errors.New("no view")
 	}
 	if v.Sections == nil {
 		v.Sections = []Section{}
+	}
+	if uiVersion < 3 {
+		downgrade(v, uiVersion)
 	}
 	sections := v.Sections[:0]
 	for _, s := range v.Sections {
@@ -421,6 +545,9 @@ func Fit(v *View, slot UISlot, uiVersion int) (dropped []string, err error) {
 		return dropped, err
 	}
 	if slot.Size == SizeCompact {
+		if v.Search != nil || v.Filter != nil || slices.ContainsFunc(v.Sections, func(s Section) bool { return s.More != nil }) {
+			return dropped, errors.New("a card has no search, filter or more: open a page for them")
+		}
 		n := 0
 		for _, s := range v.Sections {
 			n += len(s.Items)
@@ -435,4 +562,69 @@ func Fit(v *View, slot UISlot, uiVersion int) (dropped []string, err error) {
 		}
 	}
 	return dropped, nil
+}
+
+// downgrade draws v3's components and fields with those of uiVersion (1 or 2), in place: what an older app gets.
+func downgrade(v *View, uiVersion int) {
+	var filter []UIElem
+	if f := v.Filter; f != nil && uiVersion >= 2 && len(f.Choices) <= SegmentsMost &&
+		!slices.ContainsFunc(f.Choices, func(c UIChoice) bool { return utf8.RuneCountInString(cmp.Or(c.Title, c.Value)) > 12 }) {
+		filter = []UIElem{{Type: "segmented", Name: f.Name, Choices: f.Choices, Value: f.Value, Action: &f.Action}}
+	}
+	v.Search, v.Filter = nil, nil
+	if len(filter) > 0 {
+		v.Sections = append([]Section{{Items: filter}}, v.Sections...)
+	}
+	for i := range v.Sections {
+		s := &v.Sections[i]
+		items := make([]UIElem, 0, len(s.Items))
+		for _, e := range s.Items {
+			e.Key, e.Icon, e.Avatar, e.Thumbnail = "", "", nil, nil
+			if e.Action != nil {
+				a := *e.Action
+				a.Push = nil
+				e.Action = &a
+			}
+			switch e.Type {
+			case "markdown":
+				items = append(items, UIElem{Type: "text", Text: clip(e.Text, StringMost)})
+			case "table":
+				for _, r := range e.Rows {
+					if len(r) == 0 {
+						continue
+					}
+					items = append(items, UIElem{Type: "row", Title: cmp.Or(clip(r[0], StringMost), "—"), Value: clip(strings.Join(r[1:], " · "), StringMost)})
+				}
+				if e.Caption != "" {
+					items = append(items, UIElem{Type: "text", Text: e.Caption, Style: "caption"})
+				}
+			case "empty":
+				items = append(items, UIElem{Type: "text", Text: clip(strings.TrimSpace(e.Title+"\n"+e.Detail), StringMost), Style: "secondary"})
+				if b := e.Button; b != nil {
+					a := b.Action
+					a.Push = nil
+					items = append(items, UIElem{Type: "button", Title: b.Title, Action: &a})
+				}
+			case "loading":
+				items = append(items, UIElem{Type: "text", Text: cmp.Or(e.Title, "加载中…"), Style: "secondary"})
+			default:
+				items = append(items, e)
+			}
+		}
+		if m := s.More; m != nil {
+			a := m.Action
+			a.Push = nil
+			items = append(items, UIElem{Type: "button", Title: cmp.Or(m.Title, "加载更多"), Action: &a})
+		}
+		s.More, s.Items = nil, items
+	}
+}
+
+// clip is s cut to at most n characters, an ellipsis ending one that was longer.
+func clip(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	r := []rune(s)
+	return string(r[:n-1]) + "…"
 }

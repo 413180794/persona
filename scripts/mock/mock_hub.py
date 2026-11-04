@@ -7339,14 +7339,16 @@ PLUGINS = {
 }
 PLUGINS["example-gateway"] = {
     "id": "example-gateway", "name": "Example 网关面板", "kind": "ui", "status": "running", "version": "1.0.0", "source": "installed",
-    "enabled": True, "description": "在启动器页上显示 Example 网关的余额、Key 和用量。", "contributes": {"ui": ["home", "panel", "usage", "today", "gpu"]},
+    "enabled": True, "description": "在启动器页上显示 Example 网关的余额、Key 和用量。", "contributes": {"ui": ["home", "panel", "usage", "today", "gpu", "notes"]},
     "publisher": "example", "origin": "market:3f2a9c1d0b/example-gateway", "form": {"fields": []}, "config": {}, "secrets": [],
     "permissions": [_RUNS, {"key": "launcher_keys", "title": "用启动器的 Key 访问它的网关", "detail": "查额度、画启动器页上的面板；它看不到 Key：hub 或有这个启动器的电脑替它发请求，只发到启动器自己的网关"},
                     {"key": "ui_surfaces", "title": "在 App 里显示自己的界面",
                      "detail": "主导航上的入口：用量；总览上的卡片：今天的用量；机器详情页里的一节（会知道是哪台机器）：网关调用"}],
     "ui": [{"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "home", "title": "概况", "placement": "plugin_page", "size": "full"},
            {"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "usage", "title": "用量", "placement": "nav_page", "size": "full",
-            "icon": "chart", "badge": {"text": "3", "tone": "danger"}}]}
+            "icon": "chart", "badge": {"text": "3", "tone": "danger"}},
+           # UI version 3's components and pages (docs/extensions.md「UI 版本 3」): -openPlugin example-gateway -openPluginPage notes
+           {"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "notes", "title": "笔记（组件 v3）", "placement": "plugin_page", "size": "full"}]}
 # The UI slots (docs/extensions.md「UI 插槽」): example-gateway's nav_page, overview_card and machine_section.
 _SLOT_UI = [{"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "today", "title": "今天的用量", "placement": "overview_card",
              "size": "compact", "opens": "usage"},
@@ -7491,6 +7493,107 @@ def _ui_view(ui, launcher=""):
         {"items": [
             {"type": "link", "title": "打开网关后台", "url": "https://example.com/console"},
             {"type": "text", "text": "GET /v1/usage → 200", "style": "code"}]}]}
+
+
+# "notes" draws UI version 3 (docs/extensions.md「UI 版本 3」): a list with a search box, a filter and 加载更多, rows
+# with an icon, an avatar and a thumbnail pushing a detail page (markdown, a table), whose 编辑 pushes a form that
+# saves and pops; an empty state and loading. An older app gets what the hub would draw it (_fit_v3).
+_NOTES = [{"id": "n%d" % i, "title": t, "folder": f, "when": w} for i, (t, f, w) in enumerate([
+    ("周会纪要", "work", "昨天 18:02"), ("和 Alex 的对话", "work", "昨天 11:20"), ("白板截图", "work", "11-03"),
+    ("周末采购", "home", "11-02"), ("读书笔记：系统设计", "home", "11-01"), ("季度目标", "work", "10-30"),
+    ("旅行清单", "home", "10-28"), ("面试反馈", "work", "10-27"), ("装修预算", "home", "10-25"), ("周报草稿", "work", "10-24"),
+    ("体检报告", "home", "10-20"), ("发布检查单", "work", "10-18")], 1)]
+
+
+def _notes_view(state):
+    import json as _json
+    st = _json.loads(state or "{}") if (state or "").startswith("{") else {}
+    page = st.get("page", "list")
+    if page == "detail" or page == "edit":
+        n = next((x for x in _NOTES if x["id"] == st.get("id")), _NOTES[0])
+        if page == "edit":
+            return {"title": "编辑", "state": state, "sections": [{"items": [
+                {"type": "field", "name": "title", "label": "标题", "kind": "text", "value": n["title"]},
+                {"type": "button", "title": "保存", "action": {"id": "save", "submit": True}}]}]}
+        return {"title": n["title"], "state": state, "sections": [
+            {"items": [{"type": "markdown", "key": "body", "text": "## 结论\n\n- 下周一上线，**先灰度 10%**\n- 风险：接口限流，见 [说明](https://example.com/doc)\n\n"
+                        "> 记录人：示例用户\n\n```\nretry: 3\ntimeout: 30s\n```"}]},
+            {"title": "数", "items": [{"type": "table", "caption": "按天的请求", "columns": [{"title": "日期"}, {"title": "请求", "align": "end"}, {"title": "失败", "align": "end"}],
+                                      "rows": [["11-01", "1,204", "3"], ["11-02", "980", "0"], ["11-03", "1,530", "12"]]}]},
+            {"items": [{"type": "button", "title": "编辑", "action": {"id": "edit", "push": {"state": _json.dumps({"page": "edit", "id": n["id"]}), "title": "编辑"}}}]}]}
+    q, folder, shown = st.get("q", ""), st.get("folder", "all"), st.get("n", 5)
+    hits = [x for x in _NOTES if (folder == "all" or x["folder"] == folder) and q.lower() in x["title"].lower()]
+    rows = []
+    for i, x in enumerate(hits[:shown]):
+        row = {"type": "row", "key": x["id"], "title": x["title"], "subtitle": x["when"],
+               "action": {"id": "open:" + x["id"], "push": {"state": _json.dumps({"page": "detail", "id": x["id"]}), "title": x["title"]}}}
+        if i % 3 == 0: row["icon"] = "doc"
+        elif i % 3 == 1: row["avatar"] = {"text": x["title"][:1]}
+        else: row["thumbnail"] = {"url": "https://picsum.photos/seed/%s/120/80" % x["id"], "aspect": "wide"}
+        rows.append(row)
+    if not rows:
+        rows = [{"type": "empty", "title": "没有找到笔记", "detail": "换个关键词，或者看看全部文件夹", "icon": "search",
+                 "button": {"title": "清除搜索", "action": {"id": "clear"}}}]
+    sec = {"title": "最近", "items": rows}
+    if len(hits) > shown:
+        sec["more"] = {"action": {"id": "more"}}
+    return {"title": "笔记", "state": _json.dumps({"q": q, "folder": folder, "n": shown}),
+            "search": {"placeholder": "搜索笔记", "action": {"id": "search"}, **({"value": q} if q else {})},
+            "filter": {"name": "folder", "title": "文件夹", "value": folder, "action": {"id": "folder"},
+                       "choices": [{"value": "all", "title": "全部"}, {"value": "work", "title": "工作"}, {"value": "home", "title": "生活"}]},
+            "sections": [sec, {"title": "同步", "items": [{"type": "loading", "title": "正在同步云端的笔记"}]}]}
+
+
+def _notes_action(state, action, values):
+    import json as _json
+    st = _json.loads(state or "{}") if (state or "").startswith("{") else {}
+    values = values or {}
+    if action == "search":
+        st.update(q=values.get("q", ""), n=5)
+    elif action == "folder":
+        st.update(folder=values.get("folder", "all"), n=5)
+        if "q" in values: st["q"] = values["q"]
+    elif action == "more":
+        st["n"] = st.get("n", 5) + 5
+    elif action == "clear":
+        st = {}
+    elif action == "save":
+        n = next((x for x in _NOTES if x["id"] == st.get("id")), None)
+        if n and values.get("title"): n["title"] = values["title"]
+        return {"toast": "已保存", "pop": True}
+    elif action.startswith("open:"):  # an older app taps a row: no push, the detail replaces the list
+        return {"view": _notes_view(_json.dumps({"page": "detail", "id": action[5:]}))}
+    elif action == "edit":
+        return {"view": _notes_view(_json.dumps({"page": "edit", "id": st.get("id")}))}
+    return {"view": _notes_view(_json.dumps(st))}
+
+
+def _fit_v3(view, ui_version):
+    """What the hub does for an app below UI version 3 (extension.Fit): v3 drawn with what it knows."""
+    out = dict(view, sections=[])
+    f = view.get("filter")
+    out.pop("search", None); out.pop("filter", None)
+    if f and ui_version >= 2 and len(f["choices"]) <= 5:
+        out["sections"].append({"items": [{"type": "segmented", "name": f["name"], "value": f["value"], "action": f["action"], "choices": f["choices"]}]})
+    for sec in view["sections"]:
+        items = []
+        for it in sec["items"]:
+            it = {k: v for k, v in it.items() if k not in ("key", "icon", "avatar", "thumbnail")}
+            if "action" in it: it["action"] = {k: v for k, v in it["action"].items() if k != "push"}
+            t = it["type"]
+            if t == "markdown": items.append({"type": "text", "text": it["text"][:2000]})
+            elif t == "table":
+                items += [{"type": "row", "title": r[0] or "—", "value": " · ".join(r[1:])} for r in it["rows"] if r]
+                if it.get("caption"): items.append({"type": "text", "text": it["caption"], "style": "caption"})
+            elif t == "empty":
+                items.append({"type": "text", "text": (it["title"] + "\n" + it.get("detail", "")).strip(), "style": "secondary"})
+                if it.get("button"): items.append({"type": "button", "title": it["button"]["title"], "action": it["button"]["action"]})
+            elif t == "loading": items.append({"type": "text", "text": it.get("title") or "加载中…", "style": "secondary"})
+            else: items.append(it)
+        if sec.get("more"):
+            items.append({"type": "button", "title": sec["more"].get("title") or "加载更多", "action": sec["more"]["action"]})
+        out["sections"].append(dict({k: v for k, v in sec.items() if k != "more"}, items=items))
+    return _fit_v1(out) if ui_version < 2 else out
 
 
 def _ui_action(ui, action, values):
@@ -7703,6 +7806,13 @@ def markets_route(handler, p, body):
             if (ctx.get("ui_version") or 1) < 2:
                 view = _fit_v1(view)
             handler.send_json({"view": view}); return True
+        if parts[7] == "notes":
+            v3 = ctx.get("ui_version") or 1
+            out = _notes_action(req.get("state", ""), req["action"], req.get("values")) if req.get("action") else {"view": _notes_view(req.get("state", ""))}
+            if v3 < 3:
+                out.pop("pop", None); out.pop("push", None)
+                if out.get("view"): out["view"] = _fit_v3(out["view"], v3)
+            handler.send_json(out); return True
         if req.get("action"):
             handler.send_json(_ui_action(parts[7], req["action"], req.get("values"))); return True
         handler.send_json({"view": _ui_view(parts[7], launcher)}); return True
@@ -7712,7 +7822,7 @@ _features_without_plugins = features
 
 
 def features():
-    return _features_without_plugins() + (["plugins", "plugin_manager", "plugin_ui_slots", "plugin_auto_upgrade"] if PLUGINS_MODE else [])
+    return _features_without_plugins() + (["plugins", "plugin_manager", "plugin_ui_slots", "plugin_auto_upgrade", "extension_ui_v3"] if PLUGINS_MODE else [])
 
 
 def _plugin_needs(pl):
