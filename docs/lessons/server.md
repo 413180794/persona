@@ -14,6 +14,10 @@
 - 连接器模式监听不能只记启动时的文件时间，等以后变化才核对模式（2026-11-03，#748）：运行循环先选 active/passive，再异步启动监听；用户在监听 goroutine 起跑前切换时，新配置会被当成初始快照，从此漏掉第一次切换。采样初始时间后立即核对实际模式，不同就取消旧模式。双向回归直接模拟“配置已变、监听才开始”，不延长等待掩盖；观察到初始状态不等于后台监听已就绪。
 
 - 将用途模型收敛成分类默认时，不能只隐藏列表或让 resolver 忽略旧记录（2026-11-03，#697）：任务新建运行、续自己的会话、回来源会话仍可能把旧 `Launcher/Model/Effort` 放回执行参数，`applyModel` 又会把它们认作显式选择。执行入口必须停止传这些旧用途参数，续聊是否换 launcher 也只比较分类结果；回归同时验证三条路径的真实 RPC 参数、权限不变、旧用途 PATCH 拒绝和原始记录保留。
+- 往一段已有的助手对话里发东西的入口（手机发消息、定时跟进发回原对话）不能各自选启动器（2026-11-04，#1518）：跟进按 Agents 分类解析，默认是裸 Claude Code，
+  一到点就把主对话 `--resume` 到了 hub 机器上没登录的 claude 上；主对话发消息又改成了沿用「正在跑的」启动器，于是再也回不来，每条都报
+  `Prompt is too long · automatic compaction failed: Not logged in`（上下文按新启动器的窗口算超了，压缩又要调 API）。往助手对话发东西一律走 `assistantSendModel`；
+  主对话每条都按「主对话」配置，别从会话状态里继承。看到这条报错先看 `node_sessions.launcher` 和 hub 日志里的 `is not in <launcher>'s list`。
 - ssh 会话读不了 macOS 的登录钥匙串：hub 经 ssh 起的 node 再起的 claude，如果 API key 从钥匙串取，会报 401（herdr 里的 Agent 没事，herdr 在登录会话里）。
   在那台 Mac 上装常驻 node（`scripts/deploy/node-launchd.sh install`，`docs/server.md`「常驻 node」）。
 - Go 的 `UnixListener.Close()` 默认会删掉 socket 文件：重新部署时旧 node 退出会把新 node 的 `~/.jarvis/node.sock` 删掉，

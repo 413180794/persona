@@ -389,3 +389,57 @@ func TestTaskFailingBeforeTheWatcherSeesItWorking(t *testing.T) {
 	}
 	t.Fatal("the failure before the first working poll was not recorded")
 }
+
+// A follow-up the assistant scheduled for itself goes into its conversation on that conversation's launcher, not the
+// Agents one (#1518): the main conversation on 模型配置 › 主对话 (even when it last ran on another launcher), another
+// of its conversations on what it runs. On the Agents launcher (plain claude by default) a follow-up moved the main
+// conversation off its launcher, and every message after stayed there.
+func TestAFollowUpKeepsItsConversationsLauncher(t *testing.T) {
+	h, _ := modelTestHub(t)
+	n := newAssistantNode(t, h)
+	ctx := context.Background()
+	if err := h.store.PutSetting(ctx, "assistant", AssistantConfig{MachineID: "server", Main: "main"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.saveModelRecord(ctx, "assistant", 0, ModelBinding{Provider: "launcher.conv", Effort: "high"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.saveModelRecord(ctx, "agent.new", 0, ModelBinding{Provider: "launcher.agents"}); err != nil {
+		t.Fatal(err)
+	}
+	n.m.mu.Lock()
+	n.m.sessions = []proto.Session{
+		{SessionID: "main", Launcher: "claude", Model: "stale", Assistant: true, Status: proto.StatusOffline},
+		{SessionID: "side", Launcher: "side-l", Model: "side-m", Assistant: true, Status: proto.StatusOffline},
+	}
+	n.m.mu.Unlock()
+	setTasks(h,
+		Task{ID: "fu_main", Prompt: "会前准备", Repeat: repeatOnce, Enabled: true, MachineID: "server", SessionID: "main", CreatedBy: "assistant"},
+		Task{ID: "fu_side", Prompt: "再看一眼", Repeat: repeatOnce, Enabled: true, MachineID: "server", SessionID: "side", CreatedBy: "assistant"},
+		Task{ID: "own", Prompt: "早报", Repeat: repeatDaily, Time: "09:00", Enabled: true})
+	for _, c := range []struct{ task, session, launcher, model, effort string }{
+		{"fu_main", "main", "conv", "", "high"},
+		{"fu_side", "side", "side-l", "side-m", ""},
+	} {
+		got, err := runNow(t, h, c.task)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p := n.lastSend(t)
+		model, _ := p["model"].(string)
+		effort, _ := p["effort"].(string)
+		if got.SessionID != c.session || p["session_id"] != c.session || p["launcher"] != c.launcher || model != c.model || effort != c.effort {
+			t.Errorf("%s: into %s with %v, want %s on %s %q %q", c.task, got.SessionID, p, c.session, c.launcher, c.model, c.effort)
+		}
+		if fp, _ := p["model_fingerprint"].(string); fp == "" {
+			t.Errorf("%s: no model fingerprint: %v", c.task, p)
+		}
+	}
+	// A task with no conversation of its own to go back to is an Agents task (#697): its own conversation, on that launcher.
+	if _, err := runNow(t, h, "own"); err != nil {
+		t.Fatal(err)
+	}
+	if p := n.lastSend(t); p["launcher"] != "agents" {
+		t.Fatalf("a task's own conversation runs on the Agents launcher: %v", p)
+	}
+}

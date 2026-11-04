@@ -79,7 +79,10 @@ func TestModelUsesAreReadOnlyAndIgnoreDeprecatedOverrides(t *testing.T) {
 	}
 }
 
-func TestScheduledExecutionUsesAgentsCategoryOnEveryPath(t *testing.T) {
+// A task's own conversation (started, then continued) runs on the Agents category, never on the task's old fields;
+// delivery into the conversation it came from is a turn of that conversation (#1518): its launcher, still none of the
+// task's old fields, the task's permission mode.
+func TestScheduledExecutionUsesAgentsCategoryAndNoOldOverrides(t *testing.T) {
 	h, _ := modelTestHub(t)
 	n := newAssistantNode(t, h)
 	ctx := context.Background()
@@ -110,8 +113,8 @@ func TestScheduledExecutionUsesAgentsCategoryOnEveryPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := n.lastSend(t)
-	if p["session_id"] != "source" || p["launcher"] != "claude" || p["model"] != "category-model" || p["effort"] != "high" {
-		t.Fatalf("source conversation overrode the Agents category: %+v", p)
+	if p["session_id"] != "source" || p["launcher"] != "old-source" || p["model"] != nil || p["effort"] != nil || p["permission_mode"] != "bypassPermissions" {
+		t.Fatalf("delivery into the source conversation changed its launcher or kept an old override: %+v", p)
 	}
 }
 

@@ -28,8 +28,9 @@ func (s *assistantStore) Setting(_ context.Context, key string, out any) (bool, 
 }
 
 // A message to Persona' main conversation without a launcher goes out on 设置 › 助手's launcher (it used to keep the
-// one it started with, so switching seemed to do nothing); a launcher the app picked wins; other conversations are
-// left alone.
+// one it started with, so switching seemed to do nothing), also when it last ran on another one (#1518: a follow-up
+// had moved it onto plain claude, and every message after stayed there); a launcher the app picked wins; other
+// conversations are left alone.
 func TestMainConversationFollowsTheAssistantLauncher(t *testing.T) {
 	h := newTestHub(t)
 	h.store = &assistantStore{memStore: newMemStore(), cfg: AssistantConfig{MachineID: "box", Launcher: "ccc", Main: "main-1"}}
@@ -63,7 +64,8 @@ func TestMainConversationFollowsTheAssistantLauncher(t *testing.T) {
 	m.mu.Unlock()
 
 	m.mu.Lock()
-	m.sessions = []proto.Session{{SessionID: "side-2", Launcher: "sss", Assistant: true, Cwd: "/home/u/.jarvis/assistant"},
+	m.sessions = []proto.Session{{SessionID: "main-1", Launcher: "claude", Model: "stale", Assistant: true, Cwd: "/home/u/.jarvis/assistant"},
+		{SessionID: "side-2", Launcher: "sss", Assistant: true, Cwd: "/home/u/.jarvis/assistant"},
 		{SessionID: "side-3", Launcher: "gone", Assistant: true, Cwd: "/home/u/.jarvis/assistant"}}
 	m.mu.Unlock()
 
@@ -71,6 +73,7 @@ func TestMainConversationFollowsTheAssistantLauncher(t *testing.T) {
 	for _, c := range []struct{ sid, body, want, wantModel string }{
 		{"main-1", `{"text":"hi"}`, "ccc", ""},
 		{"main-1", `{"text":"hi","launcher":"other"}`, "other", ""},
+		{"main-1", `{"text":"hi","model":"m3"}`, "ccc", "m3"},
 		{"side-2", `{"text":"hi"}`, "sss", ""},
 		// The chat's menu: the app sends both; a model alone keeps the conversation's launcher.
 		{"side-2", `{"text":"hi","launcher":"other","model":"m2"}`, "other", "m2"},
