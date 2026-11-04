@@ -2,8 +2,9 @@ import { byAttention, stateOf } from "./format";
 import { hubLabel } from "./mesh";
 import type { AgentState, Machine, Session } from "./types";
 
-export type AgentGrouping = "space" | "state" | "machine" | "todo";
+export type AgentGrouping = "repo" | "space" | "state" | "machine" | "todo";
 export const AGENT_GROUPINGS: { key: AgentGrouping; label: string }[] = [
+  { key: "repo", label: "按仓库" },
   { key: "space", label: "按项目" },
   { key: "state", label: "按状态" },
   { key: "machine", label: "按机器" },
@@ -11,7 +12,7 @@ export const AGENT_GROUPINGS: { key: AgentGrouping; label: string }[] = [
 ];
 
 export function agentGrouping(value: string | null): AgentGrouping {
-  return AGENT_GROUPINGS.find((g) => g.key === value)?.key ?? "space";
+  return AGENT_GROUPINGS.find((g) => g.key === value)?.key ?? "repo";
 }
 
 export interface AgentMutes {

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """End-to-end check of the web sidebar's folding groups (#1417): 「其他 Agent」 (agents outside any space) folds from its
 title like every other group, shows what wants a look while folded, and stays folded after a reload; under every
-grouping (按项目 / 按状态 / 按机器 / 按待办) each group's title folds it; on a touch screen the fold arrow shows.
+grouping (按仓库 / 按项目 / 按状态 / 按机器 / 按待办) each group's title folds it; on a touch screen the fold arrow shows.
 
 Needs a running web page against the fake hub with sources outside any space (MOCK_SOURCES=1) and Playwright for
 Python (it drives the installed Chrome):
@@ -121,7 +121,7 @@ def run(browser, base, token, shots):
     page.evaluate("localStorage.setItem('jarvis.theme', 'light')")
 
     # 4. Under every grouping each group's title folds and opens it.
-    for grouping in ("space", "state", "machine", "todo"):
+    for grouping in ("repo", "space", "state", "machine", "todo"):
         page.evaluate(f"localStorage.setItem('jarvis.agentGrouping', '{grouping}')")
         page.reload()
         heads = page.locator(HEADERS)

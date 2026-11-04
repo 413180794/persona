@@ -20,7 +20,7 @@
   `python3 scripts/test/web_sidebar_e2e.py <网页地址> [--shots <目录>]`，用法见脚本开头，`--shots` 顺带拍浅色 / 深色 / 窄屏截图。
   任务「重试」的端到端检查（#1396：卡片、失败回执、计划卡红字、连点、再失败、离线；桌面 / 手机宽度 × 浅色 / 深色）：假 hub 带 `MOCK_TASKS=1` 起，
   跑 `python3 scripts/test/web_task_retry_e2e.py <网页地址> --hub <假 hub 地址> [--shots <目录>]`（假 hub 的 `GET /mock/retry?mode=|fail|offline` 复原失败的任务、选重试的结果）。
-  侧栏分组收起的端到端检查（「其他 Agent」收起 / 展开 / 刷新后保持，四种分组方式下每组都能收起，触屏常显箭头，#1417）：假 hub 带 `MOCK_SOURCES=1` 起，再跑
+  侧栏分组收起的端到端检查（「其他 Agent」收起 / 展开 / 刷新后保持，五种分组方式下每组都能收起，触屏常显箭头，#1417）：假 hub 带 `MOCK_SOURCES=1` 起，再跑
   `python3 scripts/test/web_sidebar_fold_e2e.py <网页地址> [--shots <目录>]`。
   对话停在最新处的端到端检查（首次打开、刷新、侧栏切换、内容一块块进来、输入框变高、往上翻了不被拉回、慢网分页，主对话和 Agent 对话、宽屏和窄屏，#1340）：
   假 hub 带 `MOCK_TASKS=1 MOCK_LONG_ASSISTANT=1 MOCK_LONG_HISTORY=1` 起，再跑 `python3 scripts/test/web_chat_scroll_e2e.py <网页地址> [--hub <假 hub 地址>] [--shots <目录>]`。
@@ -55,7 +55,8 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   标题右边是件数，收起时换成里面「需要你 / 完成未看 / 工作中」的状态点，收起不会把要看的藏掉。
   「其他 Agent」（不在任何空间里的 Agent，比如 Codex、DSH 的会话）按空间的规则决定默认：多于 3 个且都没什么要看的（已看、在等）时默认收起，否则展开。
   不照「空闲的空间」一律收起，是因为没用 herdr 的人所有 Agent 都在这一组，一律收起等于把工作中的也藏了。iOS 没有这一组，空间外的 Agent 按电脑归成一个空间，同样能收起。
-  Agents 标题右侧可切换「按项目 / 按状态 / 按机器 / 按待办」，默认按项目，选择和各组折叠状态保存在当前浏览器。
+  Agents 标题右侧可切换「按仓库 / 按项目 / 按状态 / 按机器 / 按待办」，默认按仓库，选择和各组折叠状态保存在当前浏览器。
+  - **按仓库**（默认，照着 Orca 的「项目」侧栏）：按机器内的仓库聚合，仓库下面是它的工作树，工作树下面才是 Agent。仓库和工作树都从 cwd 推断（协议不带仓库，`src/lib/agent-repos.ts`）：`.worktrees/`、`.claude/worktrees/`、`.herdr/worktrees/` 前面的那一段是仓库，`~/.worktrees/<仓库>/<工作树>` 这种集中布局取标记后的第一段做仓库，其余路径本身就是仓库。主工作树带 home 图标排第一，没有在跑的 Agent 的工作树写上「空闲」并默认收起；只有一个主工作树的仓库省掉工作树这一层，Agent 直接挂在仓库下面。
   - **按项目**保留原来的 herdr 顺序（机器 → workspace → tab），没有动静的空间收进「空闲的空间」；有 loop、后台工作、运行中子 Agent 的空间不会被收起。
   - **按状态**对齐 iOS `AgentListOrder`：需要你 → 完成未看 → 工作中 → 待唤醒 → 已屏蔽 → 已看，只显示非空组，已看默认折叠。
     屏蔽来自 hub `/mutes`，需要你不受屏蔽降级，普通已看仍归已看；项目内单独开启通知的 Agent 不算屏蔽。

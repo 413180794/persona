@@ -16,10 +16,10 @@ const ids = (sessions: Session[]) => sessions.map((s) => s.session_id);
 const mutes: AgentMutes = { spaces: ["machine-a/项目"], sessions: ["machine-a/muted-working", "machine-a/muted-needs", "machine-a/muted-idle", "machine-a/muted-waiting"], allowed: ["machine-a/allowed"] };
 
 describe("Agent 分组偏好", () => {
-  it("默认按项目，并兼容丢失或未知的偏好", () => {
-    expect(agentGrouping(null)).toBe("space");
-    expect(agentGrouping("invalid")).toBe("space");
-    for (const value of ["space", "state", "machine", "todo"]) expect(agentGrouping(value)).toBe(value);
+  it("默认按仓库，并兼容丢失或未知的偏好", () => {
+    expect(agentGrouping(null)).toBe("repo");
+    expect(agentGrouping("invalid")).toBe("repo");
+    for (const value of ["repo", "space", "state", "machine", "todo"]) expect(agentGrouping(value)).toBe(value);
   });
 });
 

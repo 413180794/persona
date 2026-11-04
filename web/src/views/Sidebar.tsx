@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AGENT_FILTERS, agentFilter, applyFilter, arrangeSpaces, filterCounts, isSpaceMuted, matchingKeys, shownFilters, unreadOf, type AgentFilter, type FilterCounts } from "../lib/agent-filter";
 import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, buildSpaces, isQuiet, splitAgentSessions, type AgentGroup, type Space } from "../lib/agent-groups";
+import { buildRepoTree, type RepoTree, type RepoWorktree } from "../lib/agent-repos";
 import { addSection, arrangeSessions, assignSection, GROUP_LABEL, isDefaultView, providerLabel, removeSection, resetView, setView, SHOW_LABEL, SORT_LABEL, toggleProvider, togglePin, totalUnread, updateAgentPrefs, useAgentList, useAgentPrefs, viewOf, type AgentPrefs, type AgentSession, type GroupBy, type ShowMode, type SortBy } from "../lib/agents";
 import { api, errorText, setToken } from "../lib/api";
 import { useInboxBadge } from "../lib/inbox";
@@ -87,10 +88,11 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const recent = useMemo(() => (filtered ? [] : offline.filter((s) => !pinnedAgents.some((p) => agentKey(p) === agentKey(s)))), [filtered, offline, pinnedAgents]);
   const { spaces, loose } = useMemo(() => buildSpaces(unpinned, machines), [unpinned, machines]);
   const groups = useMemo(() => {
-    if (grouping === "space") return [];
+    if (grouping === "space" || grouping === "repo") return [];
     if (grouping === "todo") return buildTodoAgentGroups(unpinned, machines, todos, mutes);
     return buildAgentGroups(unpinned, machines, grouping, mutes);
   }, [unpinned, machines, grouping, mutes, todos]);
+  const repoTree = useMemo(() => (grouping === "repo" ? buildRepoTree(unpinned, machines) : []), [unpinned, machines, grouping]);
   const unreadShown = filter === "unread" ? unreadOf(shown) : [];
   const choose = (f: AgentFilter) => {
     localStorage.setItem("jarvis.agentFilter", f);
@@ -277,7 +279,9 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
 
         {loose.length > 0 && <LooseSection sessions={loose} reg={reg} hover={setHovered} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} />}
 
-        </> : groups.map((group) => (
+        </> : grouping === "repo" ? repoTree.map((tree) => (
+          <RepoSection key={tree.key} tree={tree} machines={machines} reg={reg} hover={setHovered} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} />
+        )) : groups.map((group) => (
           <AgentSection key={group.key} group={group} machines={machines} byMachine={grouping === "machine"} byTodo={grouping === "todo"} reg={reg} hover={setHovered} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} onNavigate={onNavigate} />
         ))}
 
@@ -524,6 +528,48 @@ function AgentSection({ group, machines, byMachine, byTodo, reg, hover, activeKe
         <Collapse open={showIdle}><div inert={!showIdle || undefined}>{idle.map(row)}</div></Collapse>
       </>}
     </Section>
+  );
+}
+
+/** One repository on one machine (按仓库): its working trees under it, the main checkout marked and first. */
+function RepoSection({ tree, machines, reg, hover, activeKey, go, onRowMenu, onSessionMenu }: { tree: RepoTree; machines: Machine[]; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn; onSessionMenu?: (s: Session, el: HTMLElement) => void }) {
+  const [folded, toggle] = useFolded(tree.key, false);
+  const row = (s: Session, hint: string) => {
+    const key = `s:${s.machine_id}/${s.session_id}`;
+    return <SessionRow key={key} s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={hint} onMenu={onRowMenu} onContextMenu={(el) => onSessionMenu?.(s, el)} />;
+  };
+  const machine = machines.length > 1 ? machineWithHub(tree.machineId, machines) : "";
+  // A repository with only its main checkout needs no working-tree level: its agents sit right under the repository.
+  const flat = tree.worktrees.length === 1 && tree.worktrees[0]!.main;
+  return (
+    <Section
+      title={<span className="flex min-w-0 items-center gap-1.5"><Icon name="folder" size={12} stroke={2} className="shrink-0 text-ink-3" /><span className="truncate">{tree.name}</span>{machine && <span className="shrink-0 truncate font-normal normal-case tracking-normal">{machine}</span>}</span>}
+      folded={folded}
+      onToggle={toggle}
+      right={<span className="text-[10.5px] text-ink-3 tabular-nums">{tree.count}</span>}
+    >
+      {flat ? tree.worktrees[0]!.sessions.map((s) => row(s, tree.name)) : tree.worktrees.map((w) => <RepoWorktreeRows key={w.key} w={w} repo={tree.name} row={row} />)}
+    </Section>
+  );
+}
+
+/** One working tree's agents under its own folding row: the main checkout wears a home mark, and a tree with nothing
+ * running says so. */
+function RepoWorktreeRows({ w, repo, row }: { w: RepoWorktree; repo: string; row: (s: Session, hint: string) => React.ReactNode }) {
+  const [folded, toggle] = useFolded(w.key, w.sessions.length === 0);
+  const running = w.sessions.filter((s) => !isQuiet(s)).length;
+  return (
+    <div className="mt-px">
+      <button type="button" aria-expanded={!folded} onClick={toggle} className="relative z-10 flex w-full min-w-0 items-center gap-1.5 whitespace-nowrap rounded-control py-1 pl-3 pr-2 text-left text-[11.5px] text-ink-2 hover:bg-hover">
+        <Icon name="chevron" size={9} stroke={2.4} className="shrink-0 opacity-60 transition-transform" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
+        {w.main && <Icon name="home" size={11} stroke={2} className="shrink-0 text-ink-3" />}
+        <span className="min-w-0 truncate">{w.name}</span>
+        <span className="ml-auto shrink-0 text-[10.5px] text-ink-3 tabular-nums">{running > 0 ? `${w.sessions.length} 个智能体` : "空闲"}</span>
+      </button>
+      <Collapse open={!folded}>
+        <div className="flex flex-col gap-px pl-2" inert={folded || undefined}>{w.sessions.map((s) => row(s, `${repo} › ${w.name}`))}</div>
+      </Collapse>
+    </div>
   );
 }
 
