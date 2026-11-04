@@ -33,7 +33,6 @@ GENERATED = {
 
 # Quoted on purpose though not at the repository root: paths in another project or in the mock hub's fake file tree.
 ELSEWHERE = {
-    "docs/api-key-self-usage.md",  # relay-history's own repository (docs/launchers.md)
     "docs/guide.pdf",  # mock_hub.py's fake browse tree (docs/android.md)
     "docs/icon.png",  # a file the mock hub does not have (docs/mac.md)
     "scripts/ol.sh",  # inside skills/lark-connector/ (docs/assistant.md)

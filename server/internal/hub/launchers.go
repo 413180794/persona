@@ -42,6 +42,7 @@ const (
 type storedLauncher struct {
 	proto.ManagedLauncher
 	KeySealed string    `json:"key_sealed,omitempty"`
+	Preset    string    `json:"preset,omitempty"` // the plugin's provider it was added from
 	Created   time.Time `json:"created"`
 	Updated   time.Time `json:"updated"`
 }
@@ -320,7 +321,11 @@ type launcherInput struct {
 	SmallModel string   `json:"small_model"`
 	Args       []string `json:"args"`
 	APIKey     *string  `json:"api_key"` // nil or "" on an update keeps the key
+	// Preset is a plugin's provider it is added from (GET /api/v1/launchers/presets): what is left empty is filled in.
+	Preset string `json:"preset,omitempty"`
 }
+
+var errNoPreset = errors.New("没有这个供应商预设（提供它的插件停用或卸载了？）")
 
 func (in launcherInput) check() error {
 	if in.Kind != "" && in.Kind != "api" && in.Kind != "launcher" {
@@ -335,7 +340,7 @@ func (in launcherInput) check() error {
 	if in.Kind == "api" && (len(in.Args) != 0 || in.SmallModel != "") {
 		return errors.New("直接 API 接入不能设置启动参数或小模型")
 	}
-	if !managedLauncherName.MatchString(in.Name) || in.Name == "claude" {
+	if !managedLauncherName.MatchString(in.Name) || in.Name == "claude" || in.Name == "presets" {
 		return errors.New("名字只能用字母、数字、_ 和 -，以字母或 _ 开头（不能叫 claude）")
 	}
 	u, err := url.Parse(strings.TrimSpace(in.BaseURL))
@@ -358,6 +363,7 @@ func (in launcherInput) check() error {
 
 func (h *Hub) launcherRoutes(api *http.ServeMux) {
 	h.launcherQuotaRoutes(api)
+	h.launcherPresetRoutes(api)
 	api.HandleFunc("GET /api/v1/launchers", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
@@ -417,6 +423,10 @@ func (h *Hub) launcherRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/v1/launchers", func(w http.ResponseWriter, r *http.Request) {
 		var in launcherInput
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := h.presetFill(r.Context(), &in); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
@@ -544,6 +554,9 @@ func (h *Hub) saveLauncher(w http.ResponseWriter, r *http.Request, in launcherIn
 		strings.TrimSpace(in.Model), strings.TrimSpace(in.SmallModel)
 	s.Kind, s.API = in.Kind, in.API
 	s.Args = in.Args
+	if in.Preset != "" {
+		s.Preset = in.Preset
+	}
 	if in.APIKey != nil && strings.TrimSpace(*in.APIKey) != "" {
 		sealed, err := h.sealKey(strings.TrimSpace(*in.APIKey))
 		if err != nil {

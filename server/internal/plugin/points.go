@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
 )
 
@@ -47,6 +48,41 @@ type ComputerItem struct {
 	Name string `json:"name,omitempty"`
 }
 
+// QuotaItem is a contribution to quota: a gateway whose launchers' quota the plugin reads (docs/plugins.md「额度」).
+type QuotaItem struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Hosts are the gateways' host names it reads ("*.example.com" allowed); empty: it is asked about any gateway and
+	// answers unsupported for one that is not its.
+	Hosts []string `json:"hosts,omitempty"`
+}
+
+// ProviderItem is a contribution to providers: a model provider the user can add a launcher from (设置 › 模型供应商),
+// its address and models filled in (docs/plugins.md「模型供应商」).
+type ProviderItem struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	// Kind: launcher (Claude Code through it, the default) or api (the hub calls it directly).
+	Kind string `json:"kind,omitempty"`
+	// API: messages (Anthropic's, the default) or responses (OpenAI's), for an api provider.
+	API        string          `json:"api,omitempty"`
+	BaseURL    string          `json:"base_url"`
+	Model      string          `json:"model,omitempty"`
+	SmallModel string          `json:"small_model,omitempty"`
+	Models     []ProviderModel `json:"models,omitempty"`
+	// DynamicModels: the plugin lists the models itself (provider.models), on top of Models.
+	DynamicModels bool `json:"dynamic_models,omitempty"`
+	// KeyHint says where to get a key ("在控制台 › API Keys 里创建").
+	KeyHint string `json:"key_hint,omitempty"`
+}
+
+// ProviderModel is one model of a provider.
+type ProviderModel struct {
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+}
+
 // Points are the extension points this hub has, by name.
 var Points = map[string]Point{
 	"connectors": {Name: "connectors", Namespace: "connector", Version: 2, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
@@ -67,6 +103,53 @@ var Points = map[string]Point{
 			return c.ID, errors.New("connector " + c.ID + ": poll_seconds below 0")
 		}
 		return c.ID, nil
+	}},
+	"quota": {Name: "quota", Namespace: "quota", Version: 1, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
+		var q QuotaItem
+		if err := strict(raw, &q); err != nil {
+			return "", err
+		}
+		if !idPattern.MatchString(q.ID) {
+			return q.ID, fmt.Errorf("quota id %q: a-z0-9_-", q.ID)
+		}
+		if q.Name == "" {
+			return q.ID, errors.New("quota " + q.ID + ": no name")
+		}
+		for _, h := range q.Hosts {
+			if !hostPattern.MatchString(h) {
+				return q.ID, fmt.Errorf("quota %s: %q is not a host name", q.ID, h)
+			}
+		}
+		return q.ID, nil
+	}},
+	"providers": {Name: "providers", Namespace: "provider", Version: 1, Item: func(raw json.RawMessage) (string, error) {
+		var p ProviderItem
+		if err := strict(raw, &p); err != nil {
+			return "", err
+		}
+		if !idPattern.MatchString(p.ID) {
+			return p.ID, fmt.Errorf("provider id %q: a-z0-9_-", p.ID)
+		}
+		if p.Name == "" {
+			return p.ID, errors.New("provider " + p.ID + ": no name")
+		}
+		if u, err := url.Parse(p.BaseURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+			return p.ID, fmt.Errorf("provider %s: base_url is an http(s) URL", p.ID)
+		}
+		if p.Kind != "" && p.Kind != "launcher" && p.Kind != "api" {
+			return p.ID, fmt.Errorf("provider %s: kind is launcher or api", p.ID)
+		}
+		if p.API != "" && p.API != "messages" && p.API != "responses" {
+			return p.ID, fmt.Errorf("provider %s: api is messages or responses", p.ID)
+		}
+		seen := map[string]bool{}
+		for _, m := range p.Models {
+			if m.ID == "" || seen[m.ID] {
+				return p.ID, fmt.Errorf("provider %s: a model without an id, or twice", p.ID)
+			}
+			seen[m.ID] = true
+		}
+		return p.ID, nil
 	}},
 	"voice": {Name: "voice", Namespace: "voice", Version: 1, NeedsHTTP: true, Item: func(raw json.RawMessage) (string, error) {
 		var v VoiceItem

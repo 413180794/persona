@@ -21,6 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/host"
 	"github.com/nwverse/persona/server/internal/nodeupdate"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/quota"
 	"github.com/nwverse/persona/server/internal/rpc"
 	"github.com/nwverse/persona/server/internal/streams"
 	"github.com/nwverse/persona/server/internal/transcript"
@@ -306,48 +307,50 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return n.handleUpdate(ctx, method, params)
 	}
 	var p struct {
-		Path             string          `json:"path"`
-		Paths            []string        `json:"paths"`
-		Offset           int64           `json:"offset"`
-		SessionID        string          `json:"session_id"`
-		Cwd              string          `json:"cwd"`
-		Launcher         string          `json:"launcher"`
-		AgentType        string          `json:"agent_type"`
-		Model            string          `json:"model"`
-		ModelFingerprint string          `json:"model_fingerprint"`
-		Prompt           string          `json:"prompt"`
-		ResumeSessionID  string          `json:"resume_session_id"`
-		WorkspaceID      string          `json:"workspace_id"`
-		Text             string          `json:"text"`
-		Images           []proto.Image   `json:"images"`
-		PreKeys          []string        `json:"pre_keys"`
-		Keys             []string        `json:"keys"`
-		Lines            int             `json:"lines"`
-		BeforeSeq        int             `json:"before_seq"`
-		AfterSeq         *int            `json:"after_seq"`
-		Limit            int             `json:"limit"`
-		SinceSeq         int             `json:"since_seq"`
-		Source           string          `json:"source"`
-		Format           string          `json:"format"`
-		Staged           bool            `json:"staged"`
-		Hash             string          `json:"hash"`
-		Skip             int             `json:"skip"`
-		Turns            int             `json:"turns"`
-		LazyImages       bool            `json:"lazy_images"`
-		FoldWork         bool            `json:"fold_work"`
-		FromSeq          int             `json:"from_seq"`
-		ThroughSeq       int             `json:"through_seq"`
-		Name             string          `json:"name"`
-		TabName          *string         `json:"tab_name"`
-		TZ               string          `json:"tz"` // the user's time zone (launchers.quota)
-		Async            bool            `json:"async"`
-		Title            *string         `json:"title"`
-		PermissionMode   string          `json:"permission_mode"`
-		Effort           string          `json:"effort"`
-		ResumeOnly       bool            `json:"resume_only"`
-		Refresh          bool            `json:"refresh"`    // launchers.models: ask again, not the kept list
-		Configured       bool            `json:"configured"` // launchers.models: hub.json names this launcher
-		Raw              json.RawMessage `json:"-"`
+		Path             string        `json:"path"`
+		Paths            []string      `json:"paths"`
+		Offset           int64         `json:"offset"`
+		SessionID        string        `json:"session_id"`
+		Cwd              string        `json:"cwd"`
+		Launcher         string        `json:"launcher"`
+		AgentType        string        `json:"agent_type"`
+		Model            string        `json:"model"`
+		ModelFingerprint string        `json:"model_fingerprint"`
+		Prompt           string        `json:"prompt"`
+		ResumeSessionID  string        `json:"resume_session_id"`
+		WorkspaceID      string        `json:"workspace_id"`
+		Text             string        `json:"text"`
+		Images           []proto.Image `json:"images"`
+		PreKeys          []string      `json:"pre_keys"`
+		Keys             []string      `json:"keys"`
+		Lines            int           `json:"lines"`
+		BeforeSeq        int           `json:"before_seq"`
+		AfterSeq         *int          `json:"after_seq"`
+		Limit            int           `json:"limit"`
+		SinceSeq         int           `json:"since_seq"`
+		Source           string        `json:"source"`
+		Format           string        `json:"format"`
+		Staged           bool          `json:"staged"`
+		Hash             string        `json:"hash"`
+		Skip             int           `json:"skip"`
+		Turns            int           `json:"turns"`
+		LazyImages       bool          `json:"lazy_images"`
+		FoldWork         bool          `json:"fold_work"`
+		FromSeq          int           `json:"from_seq"`
+		ThroughSeq       int           `json:"through_seq"`
+		Name             string        `json:"name"`
+		TabName          *string       `json:"tab_name"`
+		TZ               string        `json:"tz"` // the user's time zone
+		// HTTP is a quota plugin's request to send to a launcher's gateway (launchers.http); nil asks for the gateway.
+		HTTP           *quota.Request  `json:"http,omitempty"`
+		Async          bool            `json:"async"`
+		Title          *string         `json:"title"`
+		PermissionMode string          `json:"permission_mode"`
+		Effort         string          `json:"effort"`
+		ResumeOnly     bool            `json:"resume_only"`
+		Refresh        bool            `json:"refresh"`    // launchers.models: ask again, not the kept list
+		Configured     bool            `json:"configured"` // launchers.models: hub.json names this launcher
+		Raw            json.RawMessage `json:"-"`
 	}
 	if len(params) > 0 {
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -485,9 +488,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return nil, fmt.Errorf("unknown launcher %q", p.Name)
 		}
 		return n.launcherModels(ctx, p.Name, p.AgentType, p.Refresh)
-	case "launchers.quota":
-		r, err := n.launcherQuota(ctx, p.Name, p.TZ)
-		return map[string]any{"quota": r}, err
+	case "launchers.http":
+		return n.launcherHTTP(ctx, p.Name, p.HTTP)
 	case "dirs.list":
 		return n.dirs(p.Path)
 	case "sessions.list":

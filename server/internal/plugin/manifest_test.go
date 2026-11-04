@@ -131,17 +131,17 @@ func TestParseRefuses(t *testing.T) {
 
 func TestLintWarnsUnknownPointAndSecretLookingConfig(t *testing.T) {
 	m, err := Parse(with(t, func(m map[string]any) {
-		m["contributes"].(map[string]any)["quota"] = []any{map[string]any{"id": "q"}}
+		m["contributes"].(map[string]any)["kb_sources"] = []any{map[string]any{"id": "q"}}
 		m["configuration"] = map[string]any{"type": "object", "properties": map[string]any{"api_token": map[string]any{"type": "string"}}}
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	w := strings.Join(m.Lint(), "\n")
-	if !strings.Contains(w, "contributes.quota") || !strings.Contains(w, "api_token") {
+	if !strings.Contains(w, "contributes.kb_sources") || !strings.Contains(w, "api_token") {
 		t.Fatal(w)
 	}
-	if _, ok := m.Contributions()["quota"]; ok {
+	if _, ok := m.Contributions()["kb_sources"]; ok {
 		t.Fatal("an unknown point does not take effect")
 	}
 }
@@ -251,5 +251,72 @@ func TestTargeted(t *testing.T) {
 	}
 	if _, err := Targeted([]int{1}, "notes"); err == nil {
 		t.Fatal("not an object")
+	}
+}
+
+func TestQuotaAndProviders(t *testing.T) {
+	quota := func(perm bool, item map[string]any) []byte {
+		return with(t, func(m map[string]any) {
+			m["contributes"] = map[string]any{"quota": []any{item}}
+			m["permissions"] = map[string]any{"launcher_keys": perm}
+		})
+	}
+	ok := map[string]any{"id": "example-gw", "name": "Example 网关", "hosts": []any{"gw.example.com", "*.example.net"}}
+	m, err := Parse(quota(true, ok))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q := m.Quotas(); len(q) != 1 || q[0].Hosts[1] != "*.example.net" || m.Kind() != "quota" {
+		t.Fatalf("%+v", q)
+	}
+	lines := Explain(m)
+	if lines[len(lines)-2].Key != "launcher_keys" {
+		t.Fatal(lines)
+	}
+	if _, err := Parse(quota(false, ok)); err == nil || !strings.Contains(err.Error(), "launcher_keys") {
+		t.Fatal("quota without launcher_keys:", err)
+	}
+	if _, err := Parse(quota(true, map[string]any{"id": "x", "name": "x", "hosts": []any{"https://x"}})); err == nil {
+		t.Fatal("a host with a scheme")
+	}
+	provider := func(item map[string]any, runtime bool) []byte {
+		return with(t, func(m map[string]any) {
+			m["contributes"] = map[string]any{"providers": []any{item}}
+			delete(m, "permissions")
+			if !runtime {
+				delete(m, "runtime")
+				delete(m, "activation_events")
+				delete(m, "engines")
+			}
+		})
+	}
+	p := map[string]any{"id": "example-ai", "name": "Example AI", "kind": "api", "api": "responses", "base_url": "https://api.example.com/v1",
+		"models": []any{map[string]any{"id": "example-large", "name": "Large"}, map[string]any{"id": "example-small"}}, "model": "example-large"}
+	m, err = Parse(provider(p, false))
+	if err != nil {
+		t.Fatal("a declarative provider:", err)
+	}
+	if pr := m.Providers(); len(pr) != 1 || len(pr[0].Models) != 2 || m.Runtime != nil {
+		t.Fatalf("%+v", pr)
+	}
+	for name, change := range map[string]func(map[string]any){
+		"base_url":        func(i map[string]any) { i["base_url"] = "ftp://x" },
+		"kind":            func(i map[string]any) { i["kind"] = "proxy" },
+		"api":             func(i map[string]any) { i["api"] = "chat" },
+		"model twice":     func(i map[string]any) { i["models"] = []any{map[string]any{"id": "a"}, map[string]any{"id": "a"}} },
+		"dynamic, no rpc": func(i map[string]any) { i["dynamic_models"] = true },
+	} {
+		item := map[string]any{}
+		for k, v := range p {
+			item[k] = v
+		}
+		change(item)
+		if _, err := Parse(provider(item, false)); err == nil {
+			t.Errorf("%s: parsed", name)
+		}
+	}
+	p["dynamic_models"] = true
+	if _, err := Parse(provider(p, true)); err != nil {
+		t.Fatal("dynamic models with a program:", err)
 	}
 }

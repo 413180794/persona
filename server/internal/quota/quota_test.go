@@ -2,209 +2,89 @@ package quota
 
 import (
 	"context"
-	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
-	"time"
 )
 
-// The shapes relay-history's /me/usage and FAKEMODEL's /api/quota answered with (2026-10-31), values made up.
-const asterSample = `{"service":"relay-history","protocol":"relay-history-self-usage","api_key":"cc_demo",
- "today":{"requests":287,"billed_tokens":210552323,"cost_usd":123.12},"week":{"requests":10432,"billed_tokens":3359748900,"cost_usd":1109.02},
- "month":{"requests":20000,"billed_tokens":6000000000,"cost_usd":2100.5},
- "budget":{"limit_usd":3000,"spent_usd":2100.5,"exhausted":false,"weekly":{"limit_usd":800,"spent_usd":800,"exhausted":true,"resets_at":"2026-11-02T00:00:00+08:00"}},
- "account_quota_shared":true,
- "accounts":[{"account_id":"aaaa-111111","provider":"kiro","plan":"unknown","state":"available","available_at":null,
-   "windows":[{"kind":"monthly","scope":"account","used_ratio":0.64,"remaining":3600,"limit":10000,"resets_at":"2026-11-01T00:00:00Z"},
-              {"kind":"five_hour","scope":"model","scoped_model":"x","used_ratio":0.1}]},
-  {"account_id":"bbbb-222222","provider":"claude","plan":"max","state":"cooldown","available_at":"2026-10-31T15:00:00Z",
-   "windows":[{"kind":"weekly","scope":"account","used_ratio":0.3},{"kind":"five_hour","scope":"account","used_ratio":1}]}]}`
-
-const fmSample = `{"data":[
- {"provider_name":"火山 · Agent Plan","provider_type":"volcano-ark","status":"ok","limits":[
-   {"key":"week","label":"每周额度","unit":"percent","limit":100,"used":100,"resets_at":"2026-11-02T00:00:00+08:00","source":"upstream"},
-   {"key":"5h","label":"5 小时额度","unit":"percent","limit":100,"used":42,"resets_at":"2026-10-31T10:00:00Z","source":"upstream"},
-   {"key":"rpm","label":"RPM","unit":"requests","limit":null,"used":5,"source":"gateway"}],
-  "models":[{"model_id":"deepseek","limits":[{"key":"tpm","label":"TPM","unit":"tokens","limit":500000,"used":8400,"source":"mixed"}]},
-            {"model_id":"other","limits":[{"key":"rpm","label":"RPM","unit":"requests","limit":null,"used":1,"source":"gateway"}]}]},
- {"provider_name":"modelhub","provider_type":"provider-ark","status":"unsupported","limits":[{"key":"5h","label":"近 5 小时","unit":"tokens","limit":null,"used":320000,"source":"gateway"}],"models":[]}]}`
-
-// userZone: the report gives times in the user's zone, whatever the machine running the test is in.
-var userZone = func() *time.Location {
-	l, err := time.LoadLocation("Asia/Shanghai")
-	if err != nil {
-		panic(err)
-	}
-	return l
-}()
-
-func Testrelay-historyReport(t *testing.T) {
-	var a asterReport
-	if err := json.Unmarshal([]byte(asterSample), &a); err != nil {
-		t.Fatal(err)
-	}
-	r := relay-historyReport(a, time.Now(), userZone)
-	if r.Gateway != "relay-history" || r.KeyName != "cc_demo" || len(r.Usage) != 3 || r.Usage[0].Label != "今日" || r.Usage[0].Tokens != 210552323 {
-		t.Fatalf("usage: %+v", r)
-	}
-	if len(r.Budget) != 2 || !r.Budget[1].Exhausted || *r.Budget[0].Limit != 3000 {
-		t.Fatalf("budget: %+v", r.Budget)
-	}
-	if len(r.Pools) != 2 {
-		t.Fatalf("pools: %+v", r.Pools)
-	}
-	kiro := r.Pools[0]
-	// The plan "unknown" is not shown; the per-model window is left out; the account's credits are used / limit.
-	if kiro.Name != "kiro" || len(kiro.Windows) != 1 || kiro.Windows[0].Label != "每月" || *kiro.Windows[0].Used != 6400 || kiro.Windows[0].Unit != "credits" {
-		t.Fatalf("kiro: %+v %+v", kiro, kiro.Windows)
-	}
-	claude := r.Pools[1]
-	if claude.Name != "claude · max" || claude.State != "cooldown" || !strings.Contains(claude.Detail, "冷却中") || !strings.Contains(claude.Detail, "23:00") {
-		t.Fatalf("claude: %+v", claude)
-	}
-	// 5 小时 before 每周, and a full window is exhausted.
-	if claude.Windows[0].Label != "5 小时" || !claude.Windows[0].Exhausted || claude.Windows[1].Label != "每周" {
-		t.Fatalf("order: %+v", claude.Windows)
-	}
-
-	hidden := asterReport{Service: "relay-history", AccountQuotaShared: new(bool)}
-	if r := relay-historyReport(hidden, time.Now(), userZone); r.Note == "" || len(r.Pools) != 0 {
-		t.Fatalf("not shared: %+v", r)
-	}
-}
-
-func TestFakemodelReport(t *testing.T) {
-	var q fmQuota
-	if err := json.Unmarshal([]byte(fmSample), &q); err != nil {
-		t.Fatal(err)
-	}
-	r := FakemodelReport(q, time.Now())
-	if len(r.Pools) != 2 {
-		t.Fatalf("%+v", r.Pools)
-	}
-	ark := r.Pools[0]
-	// Only windows with a limit; 5 小时 first; the full week is exhausted.
-	if len(ark.Windows) != 2 || ark.Windows[0].Label != "5 小时额度" || *ark.Windows[0].UsedRatio != 0.42 || !ark.Windows[1].Exhausted {
-		t.Fatalf("ark windows: %+v", ark.Windows)
-	}
-	if len(ark.Models) != 1 || ark.Models[0].Model != "deepseek" {
-		t.Fatalf("ark models: %+v", ark.Models)
-	}
-	if mh := r.Pools[1]; len(mh.Windows) != 0 || mh.Detail == "" {
-		t.Fatalf("unsupported provider: %+v", mh)
-	}
-}
-
-func TestFetchTalksToBoth(t *testing.T) {
-	var loggedIn bool
-	var asked string // the timezone the usage request carried
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/me/usage":
-			if r.Header.Get("Authorization") != "Bearer sk-aster" {
-				w.WriteHeader(401)
-				return
-			}
-			asked = r.URL.Query().Get("timezone")
-			_, _ = w.Write([]byte(asterSample))
-		case "/auth/key-login":
-			var in struct{ Key string }
-			_ = json.NewDecoder(r.Body).Decode(&in)
-			if in.Key != "fm_key" {
-				w.WriteHeader(401)
-				_, _ = w.Write([]byte(`{"error":{"message":"invalid_api_key"}}`))
-				return
-			}
-			loggedIn = true
-			http.SetCookie(w, &http.Cookie{Name: "fm", Value: "s", Path: "/"})
-			_, _ = w.Write([]byte(`{"workspace_id":"ws"}`))
-		case "/api/quota":
-			if c, err := r.Cookie("fm"); err != nil || c.Value != "s" {
-				w.WriteHeader(401)
-				return
-			}
-			_, _ = w.Write([]byte(fmSample))
-		case "/auth/logout":
-		default:
-			w.WriteHeader(404)
-		}
+// A plugin's request goes to the launcher's own gateway with the key put in, and the key never comes back.
+func TestDoPutsTheKeyInAndTakesItOut(t *testing.T) {
+	var got struct{ auth, path, query, body string }
+	gw := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		got.auth, got.path, got.query, got.body = r.Header.Get("Authorization"), r.URL.Path, r.URL.RawQuery, string(b)
+		w.Header().Set("Set-Cookie", "session=s1")
+		w.Header().Set("X-Echo", r.Header.Get("Authorization"))
+		_, _ = io.WriteString(w, `{"key":"`+strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")+`","ok":true}`)
 	}))
-	defer srv.Close()
-	ctx := context.Background()
-	// The gateway counts its daily windows in the user's zone, and is not told one it does not know.
-	if r, err := Fetch(ctx, nil, srv.URL+"/v1", "sk-aster", "America/Los_Angeles"); err != nil || r.Gateway != "relay-history" || asked != "America/Los_Angeles" {
-		t.Fatalf("relay-history: %+v %v, timezone %q", r, err, asked)
+	defer gw.Close()
+	key := "sk-example-123"
+	resp, err := Do(context.Background(), nil, gw.URL+"/v1", key, Request{Method: "post", URL: "/me/usage?k=" + KeyPlaceholder + "&tz=Asia/Shanghai",
+		Headers: map[string]string{"Authorization": "Bearer " + KeyPlaceholder, "Host": "elsewhere.example.com"}, Body: `{"key":"` + KeyPlaceholder + `"}`})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := Fetch(ctx, nil, srv.URL+"/v1", "sk-aster", ""); err != nil || asked != "" {
-		t.Fatalf("relay-history without a zone: %v, timezone %q", err, asked)
+	if got.auth != "Bearer "+key || got.path != "/me/usage" || !strings.Contains(got.query, "k="+key) || got.body != `{"key":"`+key+`"}` {
+		t.Fatalf("the gateway got %+v", got)
 	}
-	if r, err := Fetch(ctx, nil, srv.URL, "fm_key", ""); err != nil || r.Gateway != "fakemodel" || !loggedIn {
-		t.Fatalf("fakemodel: %+v %v", r, err)
+	if strings.Contains(resp.Body, key) || strings.Contains(strings.Join(resp.Headers["X-Echo"], ""), key) {
+		t.Fatalf("the key came back: %+v", resp)
 	}
-	if _, err := Fetch(ctx, nil, srv.URL, "fm_wrong", ""); err == nil || !strings.Contains(err.Error(), "invalid_api_key") {
-		t.Fatalf("bad fakemodel key: %v", err)
+	if resp.Status != 200 || resp.Headers["Set-Cookie"][0] != "session=s1" || !strings.Contains(resp.Body, KeyPlaceholder) {
+		t.Fatalf("%+v", resp)
 	}
-	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(404) }))
+}
+
+// The key goes nowhere it did not already go: another host, scheme or a redirect off the gateway is refused.
+func TestDoStaysOnTheGateway(t *testing.T) {
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("the key reached another host: %s", r.Header.Get("Authorization"))
+	}))
 	defer other.Close()
-	if _, err := Fetch(ctx, nil, other.URL, "sk-x", ""); err != ErrUnsupported {
-		t.Fatalf("other gateway: %v", err)
+	gw := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/hop" {
+			http.Redirect(w, r, other.URL+"/steal", http.StatusFound)
+			return
+		}
+		if r.URL.Path == "/here" {
+			http.Redirect(w, r, "/landed", http.StatusFound)
+			return
+		}
+		_, _ = io.WriteString(w, r.URL.Path)
+	}))
+	defer gw.Close()
+	h := map[string]string{"Authorization": "Bearer " + KeyPlaceholder}
+	for _, u := range []string{other.URL + "/x", "//" + strings.TrimPrefix(other.URL, "http://") + "/x", "https://" + strings.TrimPrefix(gw.URL, "http://") + "/x",
+		"http://user@" + strings.TrimPrefix(gw.URL, "http://") + "/x"} {
+		if _, err := Do(context.Background(), nil, gw.URL, "k", Request{URL: u, Headers: h}); err == nil {
+			t.Errorf("%s: sent", u)
+		}
+	}
+	if _, err := Do(context.Background(), nil, gw.URL, "k", Request{URL: "/hop", Headers: h}); err == nil {
+		t.Error("followed a redirect off the gateway")
+	}
+	r, err := Do(context.Background(), nil, gw.URL, "k", Request{URL: "/here"})
+	if err != nil || r.Body != "/landed" {
+		t.Fatal(r, err)
+	}
+	if r, err := Do(context.Background(), nil, gw.URL, "k", Request{URL: gw.URL + "/abs"}); err != nil || r.Body != "/abs" {
+		t.Fatal(r, err)
+	}
+	if _, err := Do(context.Background(), nil, gw.URL, "k", Request{Method: "PATCH", URL: "/x"}); err == nil {
+		t.Error("PATCH is not allowed")
+	}
+	if _, err := Do(context.Background(), nil, "ftp://x", "k", Request{URL: "/x"}); err == nil {
+		t.Error("an ftp gateway")
 	}
 }
 
-// JARVIS_LIVE_QUOTA=<env file with ANTHROPIC_BASE_URL and the key>[,<another>] go test -run QuotaLive -v ./internal/quota
-// (the env files a launcher probe writes; keys are read from them, never printed).
-func TestQuotaLive(t *testing.T) {
-	files := os.Getenv("JARVIS_LIVE_QUOTA")
-	if files == "" {
-		t.Skip("JARVIS_LIVE_QUOTA not set")
-	}
-	for _, f := range strings.Split(files, ",") {
-		raw, err := os.ReadFile(f)
-		if err != nil {
-			t.Fatal(err)
+func TestRoot(t *testing.T) {
+	for in, want := range map[string]string{"https://gw.example.com/v1": "https://gw.example.com", "https://gw.example.com/api/v1/": "https://gw.example.com/api",
+		"http://127.0.0.1:8080": "http://127.0.0.1:8080"} {
+		if u, err := Root(in); err != nil || u.String() != want {
+			t.Errorf("%s: %v %v", in, u, err)
 		}
-		env := map[string]string{}
-		for _, l := range strings.Split(string(raw), "\n") {
-			if k, v, ok := strings.Cut(l, "="); ok {
-				env[k] = v
-			}
-		}
-		key := env["ANTHROPIC_AUTH_TOKEN"]
-		if key == "" {
-			key = env["ANTHROPIC_API_KEY"]
-		}
-		r, err := Fetch(context.Background(), nil, env["ANTHROPIC_BASE_URL"], key, "")
-		if err != nil {
-			t.Fatalf("%s: %v", f, err)
-		}
-		b, _ := json.Marshal(r)
-		if strings.Contains(string(b), key) {
-			t.Fatalf("%s: the key is in the report", f)
-		}
-		t.Logf("%s: %s pools=%d usage=%d %s", f, r.Gateway, len(r.Pools), len(r.Usage), string(b)[:min(len(b), 600)])
-	}
-}
-
-func TestSameNamedAccountsGetTheirIDs(t *testing.T) {
-	var a asterReport
-	_ = json.Unmarshal([]byte(`{"service":"relay-history","accounts":[{"account_id":"x-2328da","provider":"kiro"},{"account_id":"y-d975aa","provider":"kiro"},{"account_id":"z-1","provider":"claude"}]}`), &a)
-	r := relay-historyReport(a, time.Now(), userZone)
-	if r.Pools[0].Name != "kiro #2328da" || r.Pools[1].Name != "kiro #d975aa" || r.Pools[2].Name != "claude" {
-		t.Fatalf("%+v", r.Pools)
-	}
-}
-
-func TestWindowsDedupedAndNamed(t *testing.T) {
-	var a asterReport
-	_ = json.Unmarshal([]byte(`{"service":"relay-history","accounts":[{"account_id":"x","provider":"claude","plan":"max","windows":[
-	  {"kind":"five_hour","scope":"account"},{"kind":"five_hour","scope":"account","used_ratio":0.2},
-	  {"kind":"weekly","scope":"account","used_ratio":0.77},{"kind":"weekly","scope":"account","used_ratio":0.77},
-	  {"kind":"traex_weekly","scope":"account","used_ratio":0.01},{"kind":"monthly","scope":"account"}]}]}`), &a)
-	ws := relay-historyReport(a, time.Now(), userZone).Pools[0].Windows
-	if len(ws) != 2 || ws[0].Label != "5 小时" || *ws[0].UsedRatio != 0.2 || ws[1].Label != "每周" {
-		t.Fatalf("%+v", ws)
 	}
 }

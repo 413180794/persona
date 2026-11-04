@@ -836,7 +836,7 @@ struct ClaudeSettingsView: View {
     @State private var strings: [String: String] = [:]
 
     var body: some View {
-        List {
+        SettingsForm {
             Section {
                 Picker("机器", selection: $machineID) {
                     ForEach(model.machines.filter(\.online), id: \.ref) { m in Text(m.title).tag(m.ref.path) }
@@ -848,9 +848,14 @@ struct ClaudeSettingsView: View {
             if let error {
                 Section { Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption) }
             }
+            #if os(macOS)
+            // An empty group draws as a blank gap in a Mac form (while loading, or a machine with nothing to set).
+            if !settings.isEmpty { Section { ForEach(settings) { s in row(s) } } }
+            #else
             Section {
                 ForEach(settings) { s in row(s) }
             }
+            #endif
             if agent == .claude, !machineID.isEmpty { ClaudeDirsSection(ref: ref) }
         }
         .themedPage()
@@ -879,6 +884,9 @@ struct ClaudeSettingsView: View {
                           text: Binding(get: { strings[s.key] ?? value?.string ?? "" }, set: { strings[s.key] = $0 }))
                     .onSubmit { Task { await set(s.key, .string(strings[s.key] ?? "")) } }
                     .submitLabel(.done)
+                    #if os(macOS)
+                    .labelsHidden() // a Mac form shows a field's title as its label; here it is the prompt (#1221)
+                    #endif
             }
         }
         .padding(.vertical, Theme.Space.xxs)

@@ -105,18 +105,17 @@ Persona 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧�
 `kind: api` 由 hub 直接发请求，不下发给 node，也不会出现在新建 Agent 的启动器列表中；小模型和 CLI 额外参数不用于这类接入。
 认证仍使用原有的加密 Key 存储，不需要把 API Key 放进用途配置。原有 `/launchers` 接口与供应商名称保持兼容。
 
-## 额度（2026-10-31）
+## 额度
 
-启动器页的「额度」读启动器的 Key 在网关那边还剩多少，支持 **relay-history** 和 **FAKEMODEL**（`server/internal/quota`）：
+启动器页的「额度」读启动器的 Key 在网关那边还剩多少。**读哪些网关、怎么读是额度插件的事**（`docs/plugins.md`「额度」）：开源仓库里不带任何网关的读法，
+没装额度插件时这一节说明查不了，不报错。代码：通用部分 `server/internal/quota`（报告的形状、代发请求），hub 一侧 `hub/launcherquota.go`、`hub/plugin_quota.go`，
+node 一侧 `node/launcherquota.go`。
 
-- relay-history：`GET <网关>/me/usage?timezone=Asia/Shanghai`，用 Key 本身鉴权（relay-history 的 `docs/api-key-self-usage.md`），回 `service: relay-history` 才算。
-  取 Key 的预算（`budget`：累计 / 每周美元上限）、它能用的每个账号的窗口（5 小时 / 每周 / 每月…，按模型的窗口不列），和 Key 自己今日 / 本周 / 本月的用量。
-  同一 provider 的几个席位名字一样，用账号 ID 的后 6 位区分；同名窗口只留读数最全的那个（一个账号会报两遍 5 小时）；`traex_weekly` 这类带前缀的叫「每周」。
-  Key 的「额度可见性」是「不开放」时只显示这一句。
-- FAKEMODEL（Key 以 `fm_` 开头）：`POST /auth/key-login {"key"}` 换一个只读会话，`GET /api/quota`，用完 `POST /auth/logout`。
-  每个供应商只列**有上限**的窗口（网关自己的计数没有上限，说明不了还剩多少），按模型的放在「按模型 N」里。
-- 其他网关、没设网关地址（官方接口、codex）：说明查不了，不报错。
-- 谁去读：Persona 管理的启动器由 hub 用解封的 Key 读；~/.zshrc 的由**有这个启动器的那台电脑**读（node 的 `launchers.quota`：跑一遍探测拿到地址和 Key，就地请求网关），
-  Key 不离开那台电脑，地址也是那台电脑能到的地址。优先 hub 自己那台。
-- App：`LauncherQuotaSection`，放在「可用性」上面；用量比例 ≥ 70% 橙色、≥ 90% 或用完红色；右上角刷新。mock：`scripts/mock/mock_hub.py` 的 `cc_kiro` / `example-cli` / `cc_glm`，
-  DEBUG `-openLauncherPage <名字>` 直接打开。实测：`TestQuotaLive`（`JARVIS_LIVE_QUOTA=<探测写出的 env 文件>`）。
+- 插件**看不到 Key**：它回答 `quota.query`，要发的请求经 `quota.http` 交给手里有 Key 的那一方去发，请求里的 `${launcher_key}` 由那一方换成 Key；
+  只能发到这个启动器自己的网关（同源，跟随重定向也不出这个源），回答里出现 Key 的地方换回占位符。
+- 谁去发：Persona 管理的启动器由 hub 用解封的 Key 发；~/.zshrc 的由**有这个启动器的那台电脑**发（node 的 `launchers.http`：跑一遍探测拿到地址和 Key，就地请求网关），
+  Key 不离开那台电脑，地址也是那台电脑能到的地址。优先 hub 自己那台。旧 node 没有 `launchers.http` 时说「node 太旧」。
+- 几个额度插件时：声明了 `hosts` 且对得上网关主机名的先问，再问没声明 `hosts` 的；回 `unsupported` 的跳过，第一个回答的为准。都不认识就是「查不了」。
+- 结果缓存一分钟（`refresh=1` 重读）。报告的 `gateway` 是插件贡献的 id，`gateway_name` 是给人看的名字。
+- App：`LauncherQuotaSection`，放在「可用性」上面；用量比例 ≥ 70% 橙色、≥ 90% 或用完红色；右上角刷新。DEBUG `-openLauncherPage <名字>` 直接打开。
+

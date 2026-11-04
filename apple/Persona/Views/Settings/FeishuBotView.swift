@@ -7,7 +7,7 @@ struct FeishuBotView: View {
     @State private var confirmUnpair = false
 
     var body: some View {
-        List {
+        SettingsForm {
             statusSection
             credentialsSection
             if model.status?.hasSecret == true {
@@ -78,22 +78,39 @@ struct FeishuBotView: View {
 
     private var credentialsSection: some View {
         Section {
+            #if os(macOS)
+            // A Mac form puts the title on the left and the field on the right: the title stays the field's name, what
+            // to type goes in the prompt (#1221).
+            TextField("App ID", text: $model.appID, prompt: Text("必填")).autocorrectionDisabled()
+            SecureField("App Secret", text: $model.appSecret, prompt: Text(model.status?.hasSecret == true ? "已保存，留空不改" : "必填"))
+            #else
             TextField("App ID", text: $model.appID)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                 .font(Theme.Font.code)
             SecureField(model.status?.hasSecret == true ? "App Secret（已保存，留空不改）" : "App Secret", text: $model.appSecret)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
+            #endif
             Picker("平台", selection: $model.domain) {
                 Text("飞书").tag("feishu")
                 Text("Lark").tag("lark")
                 if model.domain != "feishu" && model.domain != "lark" { Text(model.domain).tag(model.domain) }
             }
+            #if os(macOS)
+            // A standard button at the group's trailing end, not a bar the width of the form (#1221).
+            HStack {
+                Spacer(minLength: 0)
+                Button { Task { await model.saveCredentials() } } label: { Text("验证并保存").lineLimit(1) }
+                    .formButton(prominent: true)
+                    .disabled(!model.credentialsChanged || model.appID.isEmpty || model.saving)
+            }
+            #else
             Button {
                 Task { await model.saveCredentials() }
             } label: {
                 Text("验证并保存").lineLimit(1).frame(maxWidth: .infinity)
             }
             .disabled(!model.credentialsChanged || model.appID.isEmpty || model.saving)
+            #endif
         } header: {
             Text("应用凭证")
         } footer: {

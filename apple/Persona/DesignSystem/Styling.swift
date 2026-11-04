@@ -97,6 +97,16 @@ extension View {
         #endif
     }
 
+    /// A button in a settings form (`SettingsForm`): the phone's themed button; on the Mac the system's standard push
+    /// button (prominent: the default-looking one), as System Settings has them, not a tinted capsule (#1221).
+    @ViewBuilder func formButton(prominent: Bool = false) -> some View {
+        #if os(macOS)
+        if prominent { buttonStyle(.borderedProminent) } else { buttonStyle(.bordered) }
+        #else
+        themedButton(prominent: prominent)
+        #endif
+    }
+
     /// Glass buttons in the glass styles, bordered ones in 飞书, soft raised pills in 黏土 / Island. Picks the system
     /// style directly: wrapping `Button(configuration)` in a PrimitiveButtonStyle that re-styles it recursed until the
     /// stack overflowed (crash on opening a chat in the glass styles).

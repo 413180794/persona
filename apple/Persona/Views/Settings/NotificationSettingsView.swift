@@ -16,8 +16,8 @@ struct NotificationSettingsView: View {
     @State private var debugIsland = false
 
     var body: some View {
-        List {
-            if let system, system != .authorized && system != .provisional && !Self.ephemeral(system) {
+        SettingsForm {
+            if systemOff {
                 Section {
                     Label {
                         VStack(alignment: .leading, spacing: Theme.Space.xs) {
@@ -58,7 +58,11 @@ struct NotificationSettingsView: View {
                 } label: {
                     Label("Agent 做完时", systemImage: Theme.Icon.success)
                 }
+                #if os(macOS)
+                .pickerStyle(.radioGroup) // a Mac form's one-of-several (#1221)
+                #else
                 .pickerStyle(.inline)
+                #endif
                 .labelsHidden() // the section header says it
             } header: {
                 Text("Agent 做完时")
@@ -119,11 +123,12 @@ struct NotificationSettingsView: View {
             }
             #endif
 
-            Section {
-                openSystemSettings
-            } footer: {
-                Text("声音、锁屏显示、专注模式在系统设置里改。")
-            }
+            // The Mac had the button twice while notifications were off (#1224 A5): the warning above has it then.
+            #if os(macOS)
+            if !systemOff { systemSettingsSection }
+            #else
+            systemSettingsSection
+            #endif
         }
         .themedPage()
         .navigationTitle("通知")
@@ -156,6 +161,20 @@ struct NotificationSettingsView: View {
         #else
         false
         #endif
+    }
+
+    /// Notifications are not allowed for the app (the system's switch): the page says so first.
+    private var systemOff: Bool {
+        guard let system else { return false }
+        return system != .authorized && system != .provisional && !Self.ephemeral(system)
+    }
+
+    private var systemSettingsSection: some View {
+        Section {
+            openSystemSettings
+        } footer: {
+            Text("声音、锁屏显示、专注模式在系统设置里改。")
+        }
     }
 
     private var openSystemSettings: some View {

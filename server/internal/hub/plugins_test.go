@@ -31,6 +31,10 @@ func TestMain(m *testing.M) {
 		serveConnectorPluginForTest()
 		return
 	}
+	if os.Getenv("JARVIS_TEST_PLUGIN") == "quota" {
+		serveQuotaPluginForTest()
+		return
+	}
 	os.Exit(dbtest.Main(m))
 }
 

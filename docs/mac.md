@@ -211,6 +211,16 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   `SwipeTo`、Agent 间的双指滑动在 Mac 上不做事；代码行只有整行选择；对话页的玻璃按钮、浮层菜单没有按 Mac 习惯调；
   字号跟随设置里的小 / 标准 / 大，但 Mac 没有动态字体：`Theme.Font` 每一级（不小于 11：「小」时 caption / label / code 停在 11）、Markdown 的基础字号乘 `Theme.Font.scale`（`AppModel.textSize` 设），图标框、行距、飞书正文按兼容层的 `UIFontMetrics`（Mac 自己的表 `macBody`，正文 12 / 13 / 14）换算，两边同一个比例（#833）。
 
+## 设置子页的样子（Mac）
+
+2026-11-04 用户定（#1169 B1，#1221）：设置的子页在 Mac 上是系统设置那样的分组表单（圆角分组、开关在右边、页脚换行），iPhone 不变。
+- 页面的根用 `SettingsForm { … }`（`Persona/DesignSystem/SettingsForm.swift`）：iPhone 上是原来的 `List`，Mac 上是 `Form` + `.grouped`。
+  Mac 的 `List` 页脚只排一行、后面是省略号，侧栏样式干脆不显示页脚（#1212，`fixedSize` / `lineLimit` 都没用，见 `docs/lessons/macos.md`），分组表单里才正常换行。
+- 表单里的按钮用 `formButton(prominent:)`：iPhone 上是 `themedButton`，Mac 上是系统的标准按钮（`.bordered` / `.borderedProminent`），不画有色胶囊；整行宽的按钮在 Mac 上改成靠右的标准按钮。
+- Mac 的表单把输入框的标题画在左边、框在右边：标题写字段名，要填什么写进 `prompt`；标题本身就是提示的（屏蔽目录、Claude 设置的文本项）在 Mac 上 `.labelsHidden()`。
+- 单选在 Mac 上用 `.radioGroup`；空的分组在 Mac 上不画（表单里会留一块空白）。
+- 已经换的页：通知、Claude Code 设置、Codex 设置、飞书机器人（第一批）；其余逐页换，见 #1221。
+
 ## SSH 隧道（Mac）
 
 和 iOS 同一套（`apple/Packages/PersonaSSH`，见 [network.md「经 SSH 隧道连 hub」](network.md#经-ssh-隧道连-hub直连不通时的后备)、[ios.md「SSH 隧道」](ios.md#ssh-隧道直连不通时的后备891)）：设置 › hub › SSH 隧道，配对页的「经 SSH 隧道连接」。

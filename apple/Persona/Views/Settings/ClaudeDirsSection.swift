@@ -84,6 +84,11 @@ struct ClaudeDirsSection: View {
     @State private var loading = false
 
     private typealias L = ClaudeDirsLogic
+    #if os(macOS)
+    private static let fieldTitle = "要屏蔽的目录"
+    #else
+    private static let fieldTitle = "~/.automation/* 或具体路径"
+    #endif
 
     var body: some View {
         Section {
@@ -91,7 +96,7 @@ struct ClaudeDirsSection: View {
                 Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption)
                 if state == nil {
                     Button { Task { await load() } } label: { Label("重试", systemImage: Theme.Icon.retry).lineLimit(1) }
-                        .themedButton()
+                        .formButton()
                         .disabled(loading)
                 }
             }
@@ -104,7 +109,7 @@ struct ClaudeDirsSection: View {
                                 Task { await save(L.toggled(state, d), key: d.path, done: d.blocked == true ? "已取消屏蔽 \(d.blockedBy ?? label)" : "已屏蔽 \(label)") }
                             }
                             .lineLimit(1)
-                            .themedButton()
+                            .formButton()
                             .disabled(busy != nil)
                         }
                     }
@@ -115,7 +120,7 @@ struct ClaudeDirsSection: View {
                             Task { await save(state.blocked.filter { $0 != p }, key: p, done: "已删除规则 \(p)") }
                         }
                         .lineLimit(1)
-                        .themedButton()
+                        .formButton()
                         .disabled(busy != nil)
                     }
                 }
@@ -155,7 +160,11 @@ struct ClaudeDirsSection: View {
         let problem = L.problem(input, existing: state.blocked)
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             HStack(spacing: Theme.Space.m) {
-                TextField("~/.automation/* 或具体路径", text: $input)
+                // A Mac form would show the title as the row's label, the field empty beside it (#1221).
+                TextField(Self.fieldTitle, text: $input, prompt: Text(verbatim: "~/.automation/* 或具体路径"))
+                    #if os(macOS)
+                    .labelsHidden()
+                    #endif
                     .font(Theme.Font.code)
                     .autocorrectionDisabled()
                     #if os(iOS)
@@ -166,7 +175,7 @@ struct ClaudeDirsSection: View {
                 Button { Task { await add(state) } } label: {
                     Label("屏蔽", systemImage: Theme.Icon.add).lineLimit(1)
                 }
-                .themedButton()
+                .formButton()
                 .disabled(input.isEmpty || problem != nil || busy != nil)
             }
             if !input.isEmpty, let problem {

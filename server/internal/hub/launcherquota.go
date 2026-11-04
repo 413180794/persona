@@ -12,9 +12,10 @@ import (
 	"github.com/nwverse/persona/server/internal/quota"
 )
 
-// A launcher's quota at its gateway (docs/launchers.md「额度」): relay-history and FAKEMODEL keys. A launcher added in
-// Persona is read here with its sealed key; a ~/.zshrc one by the machine that has it (node/launcherquota.go), so the
-// key stays on that machine. Answers are kept a minute: the page opens often, the gateways count every read.
+// A launcher's quota at its gateway (docs/launchers.md「额度」), read by the quota plugins (docs/plugins.md「额度」). A
+// plugin never sees the key: it says what to send, and whoever holds the key sends it — the hub for a launcher added in
+// Persona (its sealed key), the machine for a ~/.zshrc one (node/launcherquota.go), so that key stays on that machine.
+// Answers are kept a minute: the page opens often, the gateways count every read.
 
 const quotaFresh = time.Minute
 
@@ -63,6 +64,8 @@ func (h *Hub) launcherQuota(ctx context.Context, name, machine string, refresh b
 	}
 	e := quotaEntry{at: time.Now()}
 	var err error
+	var base string
+	var send quotaSender
 	if view.Source == "jarvis" {
 		for _, s := range h.storedLaunchers(ctx) {
 			if s.Name != name {
@@ -72,8 +75,14 @@ func (h *Hub) launcherQuota(ctx context.Context, name, machine string, refresh b
 			if kerr != nil {
 				return quotaEntry{}, kerr
 			}
-			e.machine = h.localMachineID()
-			e.report, err = quota.Fetch(ctx, &http.Client{Timeout: 25 * time.Second}, s.BaseURL, key, h.userTZName())
+			e.machine, base = h.localMachineID(), s.BaseURL
+			client := &http.Client{Timeout: 25 * time.Second}
+			send = func(ctx context.Context, r quota.Request) (quota.Response, error) {
+				return quota.Do(ctx, client, base, key, r)
+			}
+		}
+		if base == "" {
+			err = errors.New("这个启动器没有设网关地址（用的是默认的官方接口）")
 		}
 	} else {
 		m := h.quotaMachine(ctx, view.Machines, machine)
@@ -81,11 +90,22 @@ func (h *Hub) launcherQuota(ctx context.Context, name, machine string, refresh b
 			return quotaEntry{}, errOffline
 		}
 		e.machine = m.cfg.ID
-		var res struct {
-			Quota quota.Report `json:"quota"`
+		var gw struct {
+			BaseURL string `json:"base_url"`
 		}
-		err = m.call(ctx, "launchers.quota", map[string]any{"name": name, "tz": h.userTZName()}, &res)
-		e.report = res.Quota
+		if err = m.call(ctx, "launchers.http", map[string]any{"name": name}, &gw); err == nil {
+			base = gw.BaseURL
+			send = func(ctx context.Context, r quota.Request) (quota.Response, error) {
+				var resp quota.Response
+				err := m.call(ctx, "launchers.http", map[string]any{"name": name, "http": r}, &resp)
+				return resp, err
+			}
+		} else if strings.Contains(err.Error(), "unknown method") {
+			err = errors.New(m.cfg.Name + " 上的 node 太旧：更新后才能查额度")
+		}
+	}
+	if err == nil {
+		e.report, err = h.plugins.quota(ctx, base, h.userTZName(), send)
 	}
 	if err != nil {
 		e.err = err.Error()

@@ -25,6 +25,8 @@ Persona 的插件底座（#1101）：开源仓库只放通用能力和**扩展�
 | `connectors`（版本 2） | `connector.` | 连接器协议的清单字段：`id`（`^[a-z][a-z0-9]*$`）、`name`、`capabilities`、`hosts`、`agent_tools`、`unlisted`、`poll_seconds`、`kinds` | 进程说协议 | 连接器注册表（设置 › 连接器、收件箱、知识库、助手的工具），方法见 `docs/connector-protocol.md` |
 | `voice`（版本 1） | — | `id`、`name?` | `runtime.http` | App 的语音对话，契约见下面「语音」 |
 | `computer`（版本 1） | — | `id`、`name?` | — | 助手操控电脑的工具和机器页的开关（只有内置的 `cua`），见 [computer-use.md](computer-use.md) |
+| `quota`（版本 1） | `quota.` | `id`、`name`、`hosts?`（网关主机名，可 `*.` 开头） | 进程说协议，权限 `launcher_keys` | 启动器页的「额度」，见下面「额度」 |
+| `providers`（版本 1） | `provider.` | `id`、`name`、`description?`、`kind?`（`launcher` / `api`）、`api?`（`messages` / `responses`）、`base_url`、`model?`、`small_model?`、`models?: [{id, name?}]`、`dynamic_models?`、`key_hint?` | 纯声明即可；`dynamic_models` 要进程说协议 | 设置 › 模型供应商的「从插件添加」，见下面「模型供应商」 |
 
 hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的），这一项不生效，预览和列表里有一条警告。以后每一步加自己的扩展点（模型供应商、额度、知识库来源、
 助手能力、事件钩子、链接识别、声明式 UI），在这张表里加一行。
@@ -112,6 +114,7 @@ hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的�
 | 运行程序（有 `runtime` 就有） | — | 在 hub 机器上以 hub 的系统用户运行，能读写这个用户能读写的文件 | 只展示：**没有沙箱** |
 | `network` | 主机名列表，可以 `*.` 开头，小写，不带协议、端口、路径 | 会访问哪些地方 | 只展示和记录；hub 暂不拦截别的地址 |
 | `hub_api` | `true` | 拿到 hub 的地址和完整 token（`PERSONA_HUB_URL`、`PERSONA_HUB_TOKEN`），能做 hub 主人能做的一切 | 没接受就不给这两个变量 |
+| `launcher_keys` | `true` | 用启动器的 Key 查额度（贡献 `quota` 必须有） | 插件看不到 Key：hub 或那台电脑替它发请求，只发到启动器自己的网关；没接受就不问它 |
 | 密钥（有 `secrets` 就有） | — | 用你填的密钥 | 每个插件只拿到自己的 |
 
 后面的扩展点会加细的权限（`kb.read`、`inbox.read`、`agents.control`……），按接受的权限放行 hub 提供给插件的方法，没接受回 `permission_denied`。
@@ -208,6 +211,27 @@ personad plugin uninstall <id> [--keep-data]
 | `POST /api/v1/plugins/{id}/-/rollback` | 同上 | |
 | `DELETE /api/v1/plugins/{id}/-/` `?keep_data=1` | 同上 | |
 | 任意 `/api/v1/plugins/{id}/{path…}` | 完整权限的设备 | 转发给插件的 HTTP（WebSocket 也是），去掉 App 的 `Authorization` 和 `token`；按需起的插件先起好 |
+
+## 额度
+
+额度插件贡献 `quota`，回答启动器的额度（`docs/launchers.md`「额度」）。它**看不到启动器的 Key**：
+
+1. hub 发 `quota.query {contribution, query_id, base_url, tz}`：`base_url` 是网关的根（去掉 `/v1`），`tz` 是用户的时区（可能为空）。
+2. 插件要读网关时调 hub 的 `quota.http {query_id, method, url, headers?, body?}`：`url` 是网关同源的绝对地址或以 `/` 开头的路径；
+   `${launcher_key}` 出现在地址、请求头或请求体里，由手里有 Key 的那一方（hub，或有这个启动器的电脑）换成 Key。回 `{status, headers, body}`，
+   回答里出现 Key 的地方换回 `${launcher_key}`。只在这次查询进行中、只对被问的那个插件有效（别的 `query_id` 回 `permission_denied`），一次查询最多 16 个请求；
+   方法只有 GET / POST / PUT / DELETE / HEAD，请求体最大 1 MB，回答最大 4 MB，重定向只跟到同一个源。
+3. 插件回 `{report}`（`server/internal/quota` 的 `Report`：`key_name`、`usage`、`budget`、`pools`、`note`…；`gateway` / `gateway_name` 不写时用贡献的 id / 名字），
+   不是它的网关就回错误码 `unsupported`，hub 去问下一个。
+
+开源仓库不带任何具体网关的额度插件。
+
+## 模型供应商
+
+插件贡献 `providers`，声明模型供应商：地址、接入类型、模型。可以是纯声明的插件（不跑程序）。`GET /api/v1/launchers/presets` 列出所有启用插件的供应商
+（`{presets: [{id: "<插件>/<供应商>", plugin, name, description, kind, api, base_url, model, small_model, models, key_hint, models_error?}]}`）；
+`dynamic_models` 的由 hub 调插件的 `provider.models {contribution}` → `{models: [{id, name?}]}`，和声明的合在一起（读不到时声明的照旧，`models_error` 说原因）。
+新增启动器 `POST /api/v1/launchers` 带 `preset` 时，没填的 Base URL、接入类型、API、模型、小模型从预设补上，用户只填名字和 Key；启动器记着它来自哪个预设。
 
 ## App：设置 › 插件
 

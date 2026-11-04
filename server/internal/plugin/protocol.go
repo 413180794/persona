@@ -36,6 +36,8 @@ const (
 	CodeNoContribution   = "no_contribution"
 	CodePermissionDenied = "permission_denied"
 	CodeTimeout          = "timeout"
+	// CodeUnsupported: not this contribution's (a quota plugin asked about a gateway it does not read).
+	CodeUnsupported = "unsupported"
 )
 
 // InitializeParams is what the hub sends first.

@@ -56,7 +56,10 @@
 - [x] **1b：App「设置 › 插件」**（iOS，Mac 共用页面）：列表、详情（权限、贡献、关于）、按 `form.fields` 画的配置表单、只写的密钥、开关；
   假 hub `MOCK_PLUGINS=1`、UI 测试和单元测试，默认 / BeautifulUI 风格 × 深浅色截图看过（`docs/plugins.md`「App：设置 › 插件」）。
 - [ ] Android、网页的插件页，管理界面的安装页。
-- [ ] 第 2 步：试点额度 + 模型供应商两个扩展点（`quota.query`、`provider.models`），把写死的供应商额度查询迁成插件。开始前先在这里补两个扩展点的接口。
+- [x] **第 2 步（服务端）**：扩展点 `quota`（插件看不到 Key：`quota.query` + 经 hub / node 代发的 `quota.http`，占位符 `${launcher_key}`、同源限制，权限 `launcher_keys`）、
+  `providers`（声明供应商，`GET /api/v1/launchers/presets`，新增启动器带 `preset`）；node 的 `launchers.quota` 换成 `launchers.http`；`server/internal/quota` 只留通用部分，
+  两家网关的读法迁到私有插件仓库（归属见 `CLAUDE.local.md`）。规格在 `docs/plugins.md`「额度」「模型供应商」。
+- [ ] 第 2 步（App）：额度的网关名用 hub 给的 `gateway_name`（不再写死），假 hub 的示例网关换成中性的；设置 › 模型供应商 › 新增「从插件添加」。
 - [ ] 第 3 步：连接器、链接识别等散落的内部逻辑迁成私有插件，开源仓库里清干净。
 - [ ] 第 4 步：声明式 UI（`ui.render` / `ui.action`）和事件钩子（`event.*`，只通知）。
 

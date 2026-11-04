@@ -19,6 +19,9 @@ type Permissions struct {
 	Network []string `json:"network,omitempty"`
 	// HubAPI: it gets the hub's address and full token (PERSONA_HUB_URL, PERSONA_HUB_TOKEN).
 	HubAPI bool `json:"hub_api,omitempty"`
+	// LauncherKeys: it reads launchers' quota with their keys — never seeing them: the hub (or the machine with the
+	// launcher) sends its requests, to the launcher's own gateway only (docs/plugins.md「额度」).
+	LauncherKeys bool `json:"launcher_keys,omitempty"`
 }
 
 var hostPattern = regexp.MustCompile(`^(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
@@ -44,7 +47,7 @@ func (p Permissions) normalized() Permissions {
 
 // Covers says whether p grants everything q asks (an upgrade asking for no more needs no new consent).
 func (p Permissions) Covers(q Permissions) bool {
-	if q.HubAPI && !p.HubAPI {
+	if q.HubAPI && !p.HubAPI || q.LauncherKeys && !p.LauncherKeys {
 		return false
 	}
 	for _, h := range q.Network {
@@ -75,7 +78,7 @@ type PermissionLine struct {
 
 // Explain is every line the user is shown before installing m.
 func Explain(m *Manifest) []PermissionLine {
-	var out []PermissionLine
+	out := []PermissionLine{} // never null on the wire: nothing to agree to is an empty list
 	if m.Runtime != nil {
 		out = append(out, PermissionLine{Key: "runs_code", Title: "在 hub 机器上运行程序",
 			Detail: "以 hub 的系统用户运行，能读写这个用户能读写的文件；不在沙箱里"})
@@ -87,6 +90,10 @@ func Explain(m *Manifest) []PermissionLine {
 	if m.Permissions.HubAPI {
 		out = append(out, PermissionLine{Key: "hub_api", Title: "完整使用 hub",
 			Detail: "拿到 hub 的地址和 token，能做 hub 主人能做的一切：读知识库、驱动各台电脑上的 Agent……"})
+	}
+	if m.Permissions.LauncherKeys {
+		out = append(out, PermissionLine{Key: "launcher_keys", Title: "用启动器的 Key 查额度",
+			Detail: "它看不到 Key：hub 或有这个启动器的电脑替它发请求，只发到启动器自己的网关"})
 	}
 	if len(m.Secrets) > 0 {
 		names := make([]string, 0, len(m.Secrets))

@@ -135,3 +135,6 @@
   同时它会去压别处能压的东西（分区列的图标被压没了）。定宽的列表要量整页的宽度（`onGeometryChange`），给旁边的页面留出 `macDetailMin` 再定自己的宽度；
   窗口的最小宽度按各列最小值之和定。分栏（`NavigationSplitView`）的内容栏在窗口变窄时不会自己缩到它的 `min`，详情栏的 `navigationSplitViewColumnWidth(min:)` 也压不动它，
   所以窗口最小宽度要按内容栏的理想宽度留余地（920 时 Agents 的对话约 308 宽，排得开）。
+- Mac 上 SwiftUI `List` 的分组页脚只排一行，后面是省略号；`.listStyle(.sidebar)` 干脆不显示页脚（2026-11-04，#1212，单独写了个最小程序在真窗口里试过）。
+  `fixedSize(horizontal: false, vertical: true)`、`lineLimit(nil)`、`lineLimit(5)`、套一层 `VStack`、`.plain` / `.bordered` / `.inset` 样式都一样。
+  只有 `Form` + `.formStyle(.grouped)` 的页脚会换行（或者把说明当成一行内容放进分组里）。设置的子页因此在 Mac 上用 `SettingsForm`（分组表单）。

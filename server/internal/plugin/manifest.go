@@ -229,6 +229,16 @@ func (m *Manifest) Validate() error {
 		if p.NeedsHTTP && (m.Runtime == nil || !m.Runtime.HTTP) {
 			bad("contributes.%s needs runtime.http", name)
 		}
+		if name == "quota" && !m.Permissions.LauncherKeys {
+			bad("contributes.quota needs permissions.launcher_keys (the user agrees that it reads quota with launchers' keys)")
+		}
+		if name == "providers" {
+			for _, it := range m.Providers() {
+				if it.DynamicModels && !m.Runtime.SpeaksRPC() {
+					bad("contributes.providers: %s lists its models itself (dynamic_models) but the plugin runs no program that speaks the protocol", it.ID)
+				}
+			}
+		}
 	}
 	if len(m.Configuration) > 0 {
 		if _, err := ParseSchema(m.Configuration); err != nil {
@@ -344,6 +354,20 @@ func (m *Manifest) Connectors() []ConnectorItem {
 	return out
 }
 
+// Quotas are the manifest's contributions to quota.
+func (m *Manifest) Quotas() []QuotaItem {
+	var out []QuotaItem
+	_ = json.Unmarshal(m.Contributes["quota"], &out)
+	return out
+}
+
+// Providers are the manifest's contributions to providers.
+func (m *Manifest) Providers() []ProviderItem {
+	var out []ProviderItem
+	_ = json.Unmarshal(m.Contributes["providers"], &out)
+	return out
+}
+
 // Contributions are the ids by extension point, the points this hub has only.
 func (m *Manifest) Contributions() map[string][]string {
 	out := map[string][]string{}
@@ -358,7 +382,7 @@ func (m *Manifest) Contributions() map[string][]string {
 // Kind is the first extension point the plugin contributes to, by a fixed order: what GET /api/v1/plugins has always
 // said as "kind" (voice for a voice plugin).
 func (m *Manifest) Kind() string {
-	for _, name := range []string{"voice", "connectors"} {
+	for _, name := range []string{"voice", "connectors", "quota", "providers"} {
 		if len(m.Items(name)) > 0 {
 			return name
 		}
