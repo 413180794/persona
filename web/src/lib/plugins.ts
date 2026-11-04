@@ -57,6 +57,8 @@ export interface PluginField {
   unique_items?: boolean;
   /** An object's fields (a group of the form). */
   fields?: PluginField[];
+  /** x-confirm: what to ask before a switch of it is turned on (the plugin cua's 「插件开着时不自动锁屏」). */
+  confirm?: string;
 }
 
 /** A declared secret and whether it has a value (never the value). */

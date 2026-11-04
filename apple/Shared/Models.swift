@@ -228,10 +228,12 @@ nonisolated struct MachineComputer: Codable, Hashable, Sendable {
     var job: ComputerJob? = nil
     /// macOS's Screen Sharing answers on the Mac: its live screen can be shown (VNC).
     var screenSharing = false
+    /// 「插件开着时不自动锁屏」 is on for it (#1507 b2).
+    var noAutoLock = false
 
     enum CodingKeys: String, CodingKey {
         case enabled, installed, version, daemon, accessibility, desktop, ready, note, job
-        case screenRecording = "screen_recording", screenSharing = "screen_sharing"
+        case screenRecording = "screen_recording", screenSharing = "screen_sharing", noAutoLock = "no_auto_lock"
     }
 
     init(enabled: Bool = false, installed: Bool = false, version: String? = nil, daemon: Bool = false, accessibility: String? = nil,
@@ -261,6 +263,7 @@ nonisolated struct MachineComputer: Codable, Hashable, Sendable {
         note = try c.decodeIfPresent(String.self, forKey: .note)
         job = try? c.decodeIfPresent(ComputerJob.self, forKey: .job)
         screenSharing = try c.decodeIfPresent(Bool.self, forKey: .screenSharing) ?? false
+        noAutoLock = try c.decodeIfPresent(Bool.self, forKey: .noAutoLock) ?? false
     }
 
     /// The node has said how it is (a never-asked one has neither a verdict nor a note).

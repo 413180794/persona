@@ -18,6 +18,8 @@ struct ComputerSection: View {
     @State private var screenKept = false
     @State private var oneTap = false
     @State private var askOneTap = false
+    /// 「插件开着时不自动锁屏」 asked about before it is turned on (#1507 b2).
+    @State private var askNoLock = false
     /// The apps always allowed for the assistant here (#1507).
     @State private var apps: [ComputerApp] = []
 
@@ -148,6 +150,7 @@ struct ComputerSection: View {
                     Self.noScreenSharing
                 }
                 if c.screenSharing, screenKept { unlockRow(locked: false) }
+                noLockRow(c)
                 if !apps.isEmpty { allowedApps }
             }
         } else {
@@ -282,6 +285,41 @@ struct ComputerSection: View {
             }
         }
         .padding(.top, Theme.Space.xs)
+    }
+
+    static let noLockWarning = "打开后这台 Mac 在插件开着时一直不会因为空闲锁屏，坐在它前面的人能直接用它。和 hub 断开 30 分钟后自动恢复。"
+
+    /// 插件开着时不自动锁屏 for this Mac (the plugin's no_auto_lock; asked about first): its node holds caffeinate.
+    private func noLockRow(_ c: MachineComputer) -> some View {
+        Toggle(isOn: Binding(get: { c.noAutoLock }, set: { on in
+            if on { askNoLock = true } else { Task { await setNoLock(false) } }
+        })) {
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                Text("插件开着时不自动锁屏").font(Theme.Font.body).lineLimit(1).minimumScaleFactor(0.8)
+                Text("不改系统设置，和 hub 断开 30 分钟后自动恢复").font(Theme.Font.label).foregroundStyle(.secondary)
+            }
+        }
+        .disabled(saving)
+        .accessibilityIdentifier("computer-no-lock")
+        .padding(.top, Theme.Space.xs)
+        .confirmationDialog("打开「插件开着时不自动锁屏」？", isPresented: $askNoLock, titleVisibility: .visible) {
+            Button("打开") { Task { await setNoLock(true) } }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text(Self.noLockWarning)
+        }
+    }
+
+    private func setNoLock(_ on: Bool) async {
+        guard let api = model.api(ref.group) else { return }
+        saving = true
+        defer { saving = false }
+        do {
+            fresh = try await api.setComputerNoAutoLock(machine: ref.id, on)
+            Haptics.success()
+        } catch {
+            if let m = error.shown { model.toast = Toast((on ? "打开" : "关掉") + "失败：\(m)", style: .error) }
+        }
     }
 
     /// Face ID (or the passcode), then the live screen signs in and types the kept password on the lock screen.

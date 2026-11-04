@@ -13,6 +13,12 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
+// fakeNoLock is what each fake Mac (computerMac) was told by computer.nolock, by machine id.
+var (
+	fakeNoLockMu sync.Mutex
+	fakeNoLock   = map[string][]bool{}
+)
+
 // computerCall is one computer.call a fake node got.
 type computerCallSeen struct {
 	Session   string         `json:"session"`
@@ -51,6 +57,15 @@ func computerMac(t *testing.T, h *Hub, id string) (*Machine, func() (statuses in
 				return map[string]any{"ok": true}, nil
 			}
 			return map[string]any{"text": board}, nil
+		case "computer.nolock": // kept apart (fakeNoLock): the plugin's changes send it to every Mac
+			var p struct {
+				On bool `json:"on"`
+			}
+			_ = json.Unmarshal(params, &p)
+			fakeNoLockMu.Lock()
+			fakeNoLock[id] = append(fakeNoLock[id], p.On)
+			fakeNoLockMu.Unlock()
+			return map[string]any{"held": p.On}, nil
 		case "computer.lock":
 			calls = append(calls, computerCallSeen{Tool: method})
 			return proto.Computer{Installed: true, Daemon: true, Desktop: "locked", Checked: time.Now()}, nil

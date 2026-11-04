@@ -163,3 +163,49 @@ func (c *watchedConn) Close() error {
 	c.done()
 	return c.Conn.Close()
 }
+
+// noLockFor: how long 「插件开着时不自动锁屏」 holds without the hub saying so again (it does every few minutes,
+// computer.nolock), so the Mac goes back to locking by itself that long after the hub is gone.
+var noLockFor = 30 * time.Minute
+
+// lockHold is caffeinate -dims for noLockFor (no -u: a display already off stays off), renewed by each computer.nolock
+// with on, let go with off.
+type lockHold struct {
+	mu   sync.Mutex
+	proc *exec.Cmd
+}
+
+var noLock lockHold
+
+func (l *lockHold) set(on bool) {
+	if installOS != "darwin" {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	old := l.proc
+	l.proc = nil
+	if on {
+		cmd := exec.Command(caffeinatePath, "-dims", "-t", strconv.Itoa(int(noLockFor/time.Second)), "-w", strconv.Itoa(os.Getpid()))
+		if cmd.Start() == nil {
+			l.proc = cmd
+			go func() {
+				_ = cmd.Wait()
+				l.mu.Lock()
+				if l.proc == cmd {
+					l.proc = nil
+				}
+				l.mu.Unlock()
+			}()
+		}
+	}
+	if old != nil && old.Process != nil {
+		_ = old.Process.Kill()
+	}
+}
+
+func (l *lockHold) held() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.proc != nil
+}

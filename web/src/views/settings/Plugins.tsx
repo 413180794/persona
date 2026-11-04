@@ -667,6 +667,7 @@ function MachineSwitches({ field: f, path, draft, onSaveNow, computers, id }: Pi
   const machines = all.filter((m) => !os.length || os.includes(m.os ?? ""));
   const unknown = items.filter((x) => !all.some((m) => m.id === x));
   const flip = (mid: string, on: boolean) => {
+    if (on && f.confirm && !window.confirm(f.confirm)) return; // x-confirm: asked before it is turned on
     const next = items.filter((x) => x !== mid);
     if (on) next.push(mid);
     onSaveNow(path, next.length ? next : undefined);

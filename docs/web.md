@@ -255,7 +255,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   测试可用性、函数原文（折叠）、编辑、删除 / 隐藏；新增支持启动器或直接 API（Messages / Responses），hub 的插件有供应商预设时多一个「从插件添加」（`docs/launchers.md`「从插件添加」）；
   「模型配置」按 hub 的真实用途目录分组/搜索，编辑供应商、具体模型和支持的思考强度，显示继承与当前生效值。保存失败保留草稿，revision 冲突需重新加载（`docs/model-config.md`）；
   「翻译」（`settings/TranslationSettings.tsx`，`?tab=translate`）：自动翻译、翻译模型（跳到模型配置的 `translate` 用途）、目标语言、翻译范围（邮件、选中的飞书会话），
-  存在当前浏览器（键名同 iOS 的 AppStorage）。不同步到 hub：hub 的翻译偏好挂在手机的推送设备 id 上（`/devices/{id}/prefs`，按它收信时预翻），网页没有这个 id；
+  存在当前浏览器（键名同 iOS 的 AppStorage）。不同步到 hub：hub 的翻译偏好挂在手机的推送设备 id 上（`/devices/{id}/prefs`，iOS 和 Android 都会发，hub 按它收信时预翻），网页没有这个 id；
   网页打开时按需翻，hub 预翻好的直接用。
   「设备」列出各设备的 token（这个浏览器排第一），撤销同样就地确认；hub 连已撤销的一起返回（带 `revoked_at`），它们不算进「设备 N」，
   放在下面的「已撤销」里，灰色、写撤销时间、不能再撤销，和 iOS 一样（#1764）。分类记在 `?tab=`；旧 `?tab=models` 仍打开供应商，新分类为 `?tab=model-config`。

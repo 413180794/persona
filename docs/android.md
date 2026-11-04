@@ -442,7 +442,7 @@ Android 用一个判断（`core/contracts` 的 `LarkFeatures.of(features)`，和
 
 - 设置 › 连接器的「飞书」一行（它的页读 `/api/v1/lark/status`）只在 `chats` 时出现，也只在这时去读状态（`connectorRows`）。
 - 对话里的链接（`ChatLinkHost`）和收件箱 / 飞书会话里的链接（`LarkLinkHost`）经 `larkNativeLink(url, lark)` 决定：飞书文档要 `chats` 才进原生阅读器，公司圈帖子要 `moments` 才进帖子浮层、会话里才画成公司圈卡片；没有时照普通网页打开。
-- 收件箱里带 `lark` / `doc` / `moment` 的事项只有插件给，照常画，点开照旧进飞书会话 / 公司圈帖子页。Android 没有「消息」页、翻译设置和后台拉飞书会话，知识库也不显示存档的公司圈帖子，这几处 iOS / 网页有的开关这里没有对应。
+- 收件箱里带 `lark` / `doc` / `moment` 的事项只有插件给，照常画，点开照旧进飞书会话 / 公司圈帖子页。Android 没有「消息」页和后台拉飞书会话，知识库也不显示存档的公司圈帖子，这几处 iOS / 网页有的开关这里没有对应。
 - 「removed」一律叫「公司圈」。单测 `LarkFeaturesTest`（`core:contracts`）、`LarkNativeLinkTest`（`feature:inbox`）、`SettingsConnectorsTest.feishuRowOnlyWhileTheHubHasFeishu`；截图用 `MOCK_NO_LARK=1` 的假 hub 对比设置页。
 
 ## 常驻通知和桌面入口（2026-11-02 从主线旧 App 移植）
@@ -886,6 +886,18 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
 ![设置 › hub 版本：自动更新不装的新版本（Glass，浅色）](screenshots/android-hub-update-light.png)
 
 ![设置 › hub 版本：已是最新和更新记录（Board，深色）](screenshots/android-hub-update-dark.png)
+
+## 翻译（设置 › 翻译，#1744）
+
+和 iOS（`docs/ios.md`「翻译」）、网页（`docs/web.md`）同一套：开了「自动翻译」以后，不是目标语言（默认简体中文）的内容由 hub 的翻译模型（模型配置的 `translate` 用途）翻译。范围是邮件（默认开）和设置里选中的飞书会话（默认一个都不翻，只翻别人发的）。
+
+- 设置存在这台手机上，不跟 hub 走，重新配对也留着：`core:contracts` 的 `TranslationSettings` / `TranslationPrefs`（目标语言的列表同 hub `translate.go` 的 `languageNames`，不认识的目标回到默认值），`app` 的 `StoredTranslationSettings`（SharedPreferences `persona-translate`，键名同 iOS 的 `translate.*`；选中的会话连名字一起存成 JSON，读不懂就当没有）。
+- 同步到 hub：`WiredDeviceSettings` 每次连上时读设备偏好（`GET /api/v1/devices/{id}/prefs` 的 `translate`），和本机的 `enabled / target / mail` 不同就 `PUT {"translate":{…}}`（三个字段都写，false 也写），之后每次改设置再发；读不到 hub 已有的就当它没有、照样发；发失败了等下次改或下次连上再发（`syncTranslation`）。hub 按它收信时提前翻好新邮件（`inbox_translate.go`），存在收件箱条目的 `translations[目标语言]` 里。选中的飞书会话只留在手机上。
+- 页面：`feature:settings` 的 `TranslationSettingsPage`（设置首页「AI」一节，在「模型配置」下面，右边写目标语言或「关闭」）：自动翻译开关、翻译模型（读 `translate` 用途的摘要，点进它的模型配置页）；开着时目标语言（底部面板选）、翻译范围（邮件开关、飞书会话「N 个会话 / 不翻译」）、选中会话的列表（右边 ✕ 移除）。选会话是底部面板：先列已选的（不在最近里也能取消），再列置顶和最近的会话（`ConnectorsManagement.larkChatChoices`：`/api/v1/lark/pinned`，老 hub 没有就跳过，再 `/api/v1/lark/conversations?scope=chats&limit=60`），可按名字搜。hub 没有飞书插件（`LocalLarkFeatures.chats` 为假）时不显示飞书会话这部分。体验模式只显示一句说明。
+- 收件箱里显示译文（邮件列表、邮件页、飞书消息）见 #1745。
+- 调试直达：`--es debug.openPage translate`，加 `--es debug.translateChats 1` 打开时直接弹出选会话的面板；也可以 `--es debug.openLink 'jarvis://open?target=settings&page=translation'`。
+- 单测：`core:hub` 的 `HttpDeviceSettingsTest`（读 `translate`、只写 `translate` 且三个字段都在、老 hub 没有）、`HttpConnectorsManagementTest`（置顶在前、去重、没名字用 id、老 hub 没有置顶），`app` 的 `StoredTranslationSettingsTest`（默认值、重启后还在、清空会话删键、读不懂的值）和 `TranslationSyncTest`（hub 已有的不发、会话不发、老 hub / 失败后下次再发），`feature:settings` 的 `TranslationSettingsShotsTest`（打开开关出现范围、选语言、关邮件、选会话保留名字、移除、选会话面板的排序和搜索）。
+- **截图（不用模拟器）**：`./gradlew :feature:settings:testDebugUnitTest --tests '*TranslationSettingsShotsTest*'`，三种风格 × 深浅色：关着、开着并选了两个会话、选会话面板的内容（面板是单独的窗口，Robolectric 拍不到，所以把面板里的内容直接画在页面底色上）。PNG 在 `android/feature/settings/build/translation-shots/`。
 
 ## 语音对话（hub 语音插件）
 

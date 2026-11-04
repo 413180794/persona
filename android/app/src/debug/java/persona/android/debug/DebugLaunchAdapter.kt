@@ -29,6 +29,7 @@ private val pages = mapOf(
     "voice" to ResolvedRoute(AppTab.Jarvis, persona.core.navigation.VoiceRoute("voice", "语音")),
     "channels" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Channels)),
     "hub-update" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.HubUpdate)),
+    "translate" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Translation)),
 )
 
 class DebugLaunchAdapter : LaunchAdapter {
@@ -65,6 +66,7 @@ class DebugLaunchAdapter : LaunchAdapter {
         arguments.remove("debug.assistantSettings")?.let { persona.feature.assistant.settings.AssistantSettingsPreview.open = it }
         // 模型配置 opens 新增模型供应商 (manual | preset) with jarvis://open?target=settings&page=modelconfig.
         arguments.remove("debug.newProvider")?.let { persona.feature.settings.NewProviderPreview.open = it }
+        arguments.remove("debug.translateChats")?.let { persona.feature.settings.TranslationPreview.picking = it == "1" }
         // 新建会话 (debug.openPage new-agent) takes steps once loaded: launcher:<name>, effort:<level>, model:<id>, models[:<query>].
         arguments.remove("debug.newAgent")?.let { persona.feature.agents.NewAgentPreview.steps = it }
         // 语音对话 on an emulator without audio (-no-audio): silence up, nothing played, a made-up level for the orb.

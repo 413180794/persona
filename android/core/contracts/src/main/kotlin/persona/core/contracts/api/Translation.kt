@@ -1,0 +1,61 @@
+package persona.core.contracts.api
+
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.Serializable
+
+// 设置 › 翻译 (docs/android.md「翻译」, the iOS Translator.swift, the web's lib/translate.ts): when it is on, content not
+// in the target language is translated by the hub's translation model: mail (on by default) and the Feishu chats picked
+// in settings (none by default: there are too many messages).
+
+/** A Feishu chat whose messages are translated; its name is kept for the settings list. */
+@Serializable
+data class TranslateChat(val id: String, val name: String)
+
+/** One target the hub can translate into. */
+data class TranslateLanguage(val code: String, val name: String)
+
+data class TranslationPrefs(
+    val enabled: Boolean = false,
+    val target: String = DEFAULT_TARGET,
+    val mail: Boolean = true,
+    val chats: List<TranslateChat> = emptyList(),
+) {
+    /** Mail gets translated now. */
+    val translatesMail: Boolean get() = enabled && mail
+
+    /** Messages of this Feishu chat get translated now. */
+    fun translates(chat: String?): Boolean = enabled && chat != null && chats.any { it.id == chat }
+
+    /** What the hub keeps for this device, so it translates new mail as it comes in. */
+    val hubCopy: HubTranslatePrefs get() = HubTranslatePrefs(enabled, target, mail)
+
+    companion object {
+        const val DEFAULT_TARGET = "zh-Hans"
+
+        /** The targets the hub knows (translate.go `languageNames`), in the order the other apps list them. */
+        val languages: List<TranslateLanguage> = listOf(
+            TranslateLanguage("zh-Hans", "简体中文"), TranslateLanguage("zh-Hant", "繁體中文"), TranslateLanguage("en", "English"),
+            TranslateLanguage("ja", "日本語"), TranslateLanguage("ko", "한국어"), TranslateLanguage("fr", "Français"),
+            TranslateLanguage("de", "Deutsch"), TranslateLanguage("es", "Español"), TranslateLanguage("ru", "Русский"),
+            TranslateLanguage("pt", "Português"),
+        )
+
+        fun languageName(code: String): String = languages.firstOrNull { it.code == code }?.name ?: code
+
+        /** A stored target the hub no longer knows falls back to the default. */
+        fun knownTarget(code: String?): String = code?.takeIf { c -> languages.any { it.code == c } } ?: DEFAULT_TARGET
+    }
+}
+
+/** The `translate` field of a device's prefs on the hub (`PUT /api/v1/devices/{id}/prefs`). */
+@Serializable
+data class HubTranslatePrefs(val enabled: Boolean = false, val target: String = "", val mail: Boolean = false)
+
+/** 设置 › 翻译 on this phone: kept on the device (not per hub, like iOS), sent to the paired hub (the selected group's). */
+interface TranslationSettings {
+    val prefs: StateFlow<TranslationPrefs>
+    fun update(transform: (TranslationPrefs) -> TranslationPrefs)
+}
+
+/** A Feishu chat to pick for translation (the pinned ones, then the recent ones). */
+data class LarkChatChoice(val id: String, val name: String, val avatar: String? = null, val isGroup: Boolean = true)

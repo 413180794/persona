@@ -29,6 +29,7 @@ const cuaConfig = `{
     "machines": {"type": "array", "title": "能操控的电脑", "description": "打开的 Mac，助手才能操控。开关即时生效，和它机器页上的「允许助手操控这台电脑」是同一个", "items": {"type": "string", "format": "machine", "x-os": ["darwin"]}, "uniqueItems": true},
     "confirm": {"type": "boolean", "title": "操作前在手机上确认", "description": "打开后，助手每次点击、输入、按键、打开或关闭 App 之前先在手机上问你；关着时直接做，记进 hub 的日志", "default": false},
     "app_approval": {"type": "boolean", "title": "第一次操作一个 App 时先问", "description": "助手第一次在一台 Mac 上操作某个 App（或看整个屏幕）时在手机上问一次，选「一直允许」后记住，在机器页可以移除；终端、系统设置、钥匙串访问、密码管理器和 Persona 每次都问", "default": true},
+    "no_auto_lock": {"type": "array", "title": "插件开着时不自动锁屏", "description": "打开的 Mac 在插件开着时一直不因空闲锁屏（node 持有 caffeinate，不改系统设置）；和 hub 断开 30 分钟后自动恢复。手动锁屏、合盖照常", "items": {"type": "string", "format": "machine", "x-os": ["darwin"]}, "uniqueItems": true, "x-confirm": "打开后这台 Mac 在插件开着时一直不会因为空闲锁屏，坐在它前面的人能直接用它。和 hub 断开 30 分钟后自动恢复。"},
     "keep_awake": {"type": "boolean", "title": "操作或开着 VNC 时保持唤醒", "description": "助手操作那台 Mac、或有人在看它的画面时，它不睡、不因空闲锁屏；最后一次操作 10 分钟后、画面关掉后就撤掉，不改系统设置", "default": true}
   }
 }`
@@ -50,6 +51,8 @@ type cuaSettings struct {
 	KeepAwake *bool `json:"keep_awake"`
 	// AppApproval: 「第一次操作一个 App 时先问」, on unless turned off (computer_apps.go).
 	AppApproval *bool `json:"app_approval"`
+	// NoAutoLock: the Macs 「插件开着时不自动锁屏」 is on for (computer_nolock.go).
+	NoAutoLock []string `json:"no_auto_lock"`
 }
 
 // awake: a Mac it operates, or whose live screen is open, is kept awake.
@@ -95,6 +98,7 @@ func (h *Hub) computerOf(m *Machine) *proto.Computer {
 		c = *last
 	}
 	c.Enabled = slices.Contains(s.Machines, m.cfg.ID)
+	c.NoAutoLock = c.Enabled && slices.Contains(s.NoAutoLock, m.cfg.ID)
 	return &c
 }
 
@@ -151,6 +155,7 @@ func (h *Hub) computerChanged(ctx context.Context) {
 		if c := h.computerOf(m); c != nil && m.isOnline() {
 			go h.refreshComputer(ctx, m)
 		}
+		go h.tellNoLock(ctx, m) // on, or off again (also once the plugin is off)
 	}
 	h.broadcastMachines()
 }
@@ -170,7 +175,9 @@ func (h *Hub) getComputer(w http.ResponseWriter, r *http.Request, m *Machine) {
 // plugin's machines.
 func (h *Hub) putComputer(w http.ResponseWriter, r *http.Request, m *Machine) {
 	var in struct {
-		Enabled bool `json:"enabled"`
+		Enabled *bool `json:"enabled"`
+		// 「插件开着时不自动锁屏」 for this Mac (the app asked first).
+		NoAutoLock *bool `json:"no_auto_lock"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, http.StatusBadRequest, fmt.Errorf("bad body: %w", err))
@@ -180,9 +187,18 @@ func (h *Hub) putComputer(w http.ResponseWriter, r *http.Request, m *Machine) {
 		writeErr(w, http.StatusNotFound, errors.New("操控电脑的插件没打开，或这台不是 Mac"))
 		return
 	}
-	if err := h.setPluginMachine(r.Context(), cuaPluginID, m.cfg.ID, in.Enabled); err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
+	if in.Enabled != nil {
+		if err := h.setPluginMachine(r.Context(), cuaPluginID, m.cfg.ID, *in.Enabled); err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+	}
+	if in.NoAutoLock != nil {
+		if err := h.setPluginList(r.Context(), cuaPluginID, "no_auto_lock", m.cfg.ID, *in.NoAutoLock); err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		h.logf("[%s] no auto lock %v", m.cfg.ID, *in.NoAutoLock)
 	}
 	writeJSON(w, h.refreshComputer(r.Context(), m))
 }
@@ -190,15 +206,26 @@ func (h *Hub) putComputer(w http.ResponseWriter, r *http.Request, m *Machine) {
 // setPluginMachine turns a per-Mac plugin on or off for a machine: its config's machines (the machine page's switch,
 // the same as the plugin page's).
 func (h *Hub) setPluginMachine(ctx context.Context, plugin, machine string, on bool) error {
-	s := h.machinePlugin(plugin)
-	machines := slices.DeleteFunc(slices.Clone(s.Machines), func(id string) bool { return id == machine })
-	if on {
-		machines = append(machines, machine)
-	}
+	return h.setPluginList(ctx, plugin, "machines", machine, on)
+}
+
+// setPluginList puts machine in, or takes it out of, the plugin's machine list key.
+func (h *Hub) setPluginList(ctx context.Context, plugin, key, machine string, on bool) error {
 	p := h.plugins.reg.Get(plugin)
+	if p == nil {
+		return errors.New("no plugin " + plugin)
+	}
 	cfg := map[string]any{}
 	_ = json.Unmarshal(h.plugins.reg.Config(p), &cfg)
-	cfg["machines"] = machines
+	var list []string
+	if raw, err := json.Marshal(cfg[key]); err == nil {
+		_ = json.Unmarshal(raw, &list)
+	}
+	list = slices.DeleteFunc(list, func(id string) bool { return id == machine })
+	if on {
+		list = append(list, machine)
+	}
+	cfg[key] = list
 	raw, _ := json.Marshal(cfg)
 	return h.plugins.reg.SetConfig(ctx, plugin, raw, "app")
 }

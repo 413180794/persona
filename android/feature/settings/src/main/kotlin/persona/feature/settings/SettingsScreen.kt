@@ -103,6 +103,12 @@ private fun SettingsContent(
     var mailAccounts by remember { mutableStateOf<List<MailAccount>?>(null) }
     var larkStatus by remember { mutableStateOf<LarkStatus?>(null) }
     val larkChats = LocalLarkFeatures.current.chats
+    val translationPrefs = services.translation?.prefs?.collectAsState()?.value
+    val translationValue = when {
+        services.demo || translationPrefs == null -> null
+        translationPrefs.enabled -> TranslationPrefs.languageName(translationPrefs.target)
+        else -> "关闭"
+    }
     var hubConnectors by remember { mutableStateOf<List<HubConnector>>(emptyList()) }
     val phoneOn = remember(page) {
         listOf(
@@ -221,6 +227,9 @@ private fun SettingsContent(
             item { Action("管理权限") { PhoneReadiness.open(context, listOf(appDetails)) } }
             item { deviceFeedback() }
         }
+        "translate" -> TranslationSettingsPage(services.translation.takeUnless { services.demo }, services.models.takeUnless { services.demo },
+            connectorsService, onBack = back, pickingAtStart = TranslationPreview.take(),
+            onModel = { onNavigate?.invoke(persona.core.navigation.ModelPurposeRoute("translate")) ?: run { purpose = "translate"; page = "models" } })
         "mail" -> MailAccountsPage(connectorsService, onBack = back, onAdd = { page = "mail-add" })
         "mail-add" -> AddMailAccountPage(connectorsService, onBack = { page = "mail" }, onAdded = { page = "mail" })
         "feishu" -> FeishuConnectorPage(connectorsService, onBack = back, onAgentModel = {
@@ -264,7 +273,8 @@ private fun SettingsContent(
                 item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Assistant), title = "Persona", leadingIcon = PhIcons.Sparkle, subtitle = "在哪台机器上运行、关于我、记忆和时区", onClick = { open(SettingsPage.Assistant) }) } }
             }
             item { JSectionHeader("AI") }
-            item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ModelConfig), title = "模型配置", leadingIcon = PhIcons.Brain, subtitle = "对话、分拣、翻译和各项 AI 功能统一选择模型", onClick = { open(SettingsPage.ModelConfig) }) } }
+            item { JGroupItem(GroupPosition.of(0, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ModelConfig), title = "模型配置", leadingIcon = PhIcons.Brain, subtitle = "对话、分拣、翻译和各项 AI 功能统一选择模型", onClick = { open(SettingsPage.ModelConfig) }) } }
+            item { JGroupItem(GroupPosition.of(1, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Translation), title = "翻译", leadingIcon = PhIcons.Translate, subtitle = "邮件和选中的飞书会话自动翻译", value = translationValue, onClick = { open(SettingsPage.Translation) }) } }
             // 插件 shows only when the hub manages plugins (docs/plugins.md); its value says how many need the user.
             // 渠道 right under it while the hub has channels (docs/channels.md「界面」): how many are connected, red when one went wrong.
             val extensions = listOfNotNull("plugins".takeIf { pluginsAvailable }, "channels".takeIf { channelsAvailable })

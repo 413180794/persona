@@ -433,6 +433,8 @@ private struct PluginMachineSwitches: View {
     @Bindable var page: PluginModel
 
     private var items: [String] { page.value(path)?.array?.compactMap(\.string) ?? [] }
+    /// A machine waiting on the field's x-confirm before it is turned on.
+    @State private var asking: String?
     /// The page's hub's machines (the app's first group), of the systems asked for.
     private var machines: [Machine] {
         let os = field.items?.os ?? []
@@ -458,13 +460,27 @@ private struct PluginMachineSwitches: View {
                 row(id, name: id, status: "找不到这台机器")
             }
         }
+        .confirmationDialog("打开「\(title)」？", isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } }),
+                            titleVisibility: .visible) {
+            Button("打开") {
+                if let id = asking { save(id, on: true) }
+                asking = nil
+            }
+            Button("取消", role: .cancel) { asking = nil }
+        } message: {
+            Text(field.confirm ?? "")
+        }
+    }
+
+    private func save(_ id: String, on: Bool) {
+        var next = items.filter { $0 != id }
+        if on { next.append(id) }
+        Task { await page.saveNow(next.isEmpty ? nil : .array(next.map(JSONValue.string)), at: path) }
     }
 
     private func row(_ id: String, name: String, status: String) -> some View {
         Toggle(isOn: Binding(get: { items.contains(id) }, set: { on in
-            var next = items.filter { $0 != id }
-            if on { next.append(id) }
-            Task { await page.saveNow(next.isEmpty ? nil : .array(next.map(JSONValue.string)), at: path) }
+            if on, let ask = field.confirm, !ask.isEmpty { asking = id } else { save(id, on: on) }
         })) {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(name).lineLimit(1)

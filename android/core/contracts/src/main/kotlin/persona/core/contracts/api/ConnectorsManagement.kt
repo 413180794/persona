@@ -153,4 +153,7 @@ interface ConnectorsManagement {
     // Lark API
     suspend fun larkStatus(): LarkStatus
     suspend fun larkAccounts(): LarkAccounts?
+
+    /** 设置 › 翻译's chat picker: `GET /api/v1/lark/pinned` (when the hub has it), then `/api/v1/lark/conversations?scope=chats`. */
+    suspend fun larkChatChoices(): List<LarkChatChoice>
 }

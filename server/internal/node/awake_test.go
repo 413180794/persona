@@ -148,3 +148,31 @@ func TestLockScreen(t *testing.T) {
 		t.Fatal("only a Mac")
 	}
 }
+
+// 「插件开着时不自动锁屏」: held for its window, renewed by each word from the hub, let go when off, by itself when the
+// hub says nothing more.
+func TestNoLockHoldsUntilLetGoOrRunOut(t *testing.T) {
+	log := fakeCaffeinate(t)
+	old := noLockFor
+	noLockFor = 2 * time.Second
+	t.Cleanup(func() { noLockFor = old; noLock.set(false) })
+	noLock.set(true)
+	if !noLock.held() {
+		t.Fatal("held")
+	}
+	noLock.set(true)
+	for deadline := time.Now().Add(3 * time.Second); strings.Count(readFile(t, log), "\n") < 2 && time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+	}
+	if calls := readFile(t, log); !strings.Contains(calls, "-dims -t 2 -w "+strconv.Itoa(os.Getpid())) || strings.Contains(calls, "-u") {
+		t.Fatalf("caffeinate %q: -dims, no -u, its window, tied to node", calls)
+	}
+	noLock.set(false)
+	if noLock.held() {
+		t.Fatal("off: let go")
+	}
+	noLock.set(true)
+	time.Sleep(noLockFor + time.Second)
+	if noLock.held() {
+		t.Fatal("not said again: run out by itself")
+	}
+}

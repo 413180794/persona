@@ -55,12 +55,14 @@ nonisolated struct PluginField: Codable, Hashable, Sendable, Identifiable {
     var uniqueItems: Bool?
     /// An object's fields (a group of the form).
     var fields: [PluginField]?
+    /// What to ask before a switch of it is turned on (x-confirm; the plugin cua's 「插件开着时不自动锁屏」).
+    var confirm: String?
 
     var id: String { name }
     var label: String { title?.isEmpty == false ? title! : name }
 
     enum CodingKeys: String, CodingKey {
-        case name, type, title, description, `default`, required, `enum`, format, pattern, minimum, maximum, items, fields
+        case name, type, title, description, `default`, required, `enum`, format, pattern, minimum, maximum, items, fields, confirm
         case minLength = "min_length", maxLength = "max_length", minItems = "min_items", maxItems = "max_items"
         case uniqueItems = "unique_items"
     }

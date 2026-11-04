@@ -341,6 +341,11 @@ nonisolated struct APIClient: Sendable {
         struct Body: Encodable { var enabled: Bool }
         return try JSON.decoder.decode(MachineComputer.self, from: await request("PUT", "/api/v1/machines/\(machine)/computer", body: Body(enabled: enabled)))
     }
+    /// 「插件开着时不自动锁屏」 for this Mac (#1507 b2; asked on the phone first).
+    func setComputerNoAutoLock(machine: String, _ on: Bool) async throws -> MachineComputer {
+        struct Body: Encodable { var no_auto_lock: Bool }
+        return try JSON.decoder.decode(MachineComputer.self, from: await request("PUT", "/api/v1/machines/\(machine)/computer", body: Body(no_auto_lock: on)))
+    }
 
     /// The machine page's 安装 Cua Driver, 去授权 and 取消: `install`, `grant`, `cancel`.
     func computerJob(machine: String, _ action: String) async throws -> MachineComputer {

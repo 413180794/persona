@@ -2,6 +2,7 @@ package persona.core.hub
 
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.api.DoneNotification
+import persona.core.contracts.api.HubTranslatePrefs
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -50,6 +51,32 @@ class HttpDeviceSettingsTest {
             try { api.preferences(); fail("Redirect must be rejected") } catch (_: HubFailure) { }
             server.takeRequest()
             assertEquals(5, server.requestCount)
+        }
+    }
+
+    @Test fun translatePrefsAreReadAndWrittenWithEveryField() = runBlocking {
+        MockWebServer().use { server ->
+            val api = HttpDeviceSettings(server.url("/").toString(), "example-token", "phone", OkHttpClient())
+            server.enqueue(MockResponse().setBody("""{"input":true,"done":"long","translate":{"enabled":true,"target":"en","mail":true}}"""))
+            assertEquals(HubTranslatePrefs(true, "en", true), api.preferences().translate)
+            server.takeRequest()
+            server.enqueue(MockResponse().setBody("""{"input":true,"done":"long","translate":{"enabled":false,"target":"zh-Hans","mail":false}}"""))
+            assertEquals(HubTranslatePrefs(false, "zh-Hans", false), api.saveTranslatePrefs(HubTranslatePrefs(false, "zh-Hans", false)))
+            val put = server.takeRequest()
+            assertEquals("PUT", put.method)
+            val body = JsonCodec.parseToJsonElement(put.body.readUtf8()).jsonObject
+            assertEquals(setOf("translate"), body.keys)
+            val translate = body.getValue("translate").jsonObject
+            assertEquals(setOf("enabled", "target", "mail"), translate.keys)
+            assertFalse(translate.getValue("enabled").jsonPrimitive.boolean)
+        }
+    }
+
+    @Test fun anOlderHubHasNoTranslatePrefs() = runBlocking {
+        MockWebServer().use { server ->
+            val api = HttpDeviceSettings(server.url("/").toString(), "example-token", "phone", OkHttpClient())
+            server.enqueue(MockResponse().setBody("""{"input":true,"done":"long"}"""))
+            assertNull(api.preferences().translate)
         }
     }
 }

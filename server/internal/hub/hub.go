@@ -385,6 +385,7 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	go h.workLoop(ctx)
 	go h.inboxLoop(ctx)
 	go h.metricsLoop(ctx)
+	go h.noLockLoop(ctx) // 「插件开着时不自动锁屏」 said again to its Macs (computer_nolock.go)
 	h.plugins = newPlugins(cfg.dir, cfg.Plugins, h.logf)
 	h.startConnectors(ctx) // the plugins' connectors join here (attachPlugins)
 	h.upd.start(ctx)

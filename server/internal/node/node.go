@@ -861,6 +861,13 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return computerStatus(ctx), nil
 	case "computer.clipboard": // the live screen's 剪贴板: text RFB cannot carry (Chinese), and reading it (clipboard.go)
 		return macClipboard(ctx, params)
+	case "computer.nolock": // 「插件开着时不自动锁屏」, said again by the hub every few minutes (awake.go)
+		var p struct {
+			On bool `json:"on"`
+		}
+		_ = json.Unmarshal(params, &p)
+		noLock.set(p.On)
+		return map[string]any{"held": noLock.held()}, nil
 	case "computer.lock": // 锁上 from the app, after a one-tap unlock (awake.go)
 		if err := lockScreen(ctx); err != nil {
 			return nil, err

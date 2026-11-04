@@ -80,6 +80,19 @@ class HttpDeviceSettings(
         }))
     }
 
+    /** Tells the hub this device's 设置 › 翻译 (only that field: the rest of its prefs stay as they are). */
+    suspend fun saveTranslatePrefs(prefs: HubTranslatePrefs): HubTranslatePrefs? {
+        require(preferenceDeviceId.isNotBlank())
+        return decode(request("devices", preferenceDeviceId, "prefs", method = "PUT", body = buildJsonObject {
+            // Every field, false ones too: the hub merges into what it has, and the codec drops defaults.
+            put("translate", buildJsonObject {
+                put("enabled", prefs.enabled)
+                put("target", prefs.target)
+                put("mail", prefs.mail)
+            })
+        })).translate
+    }
+
     private fun decode(data: JsonObject) = DeviceNotificationPreferences(
         input = data["input"]?.jsonPrimitive?.boolean ?: throw HubFailure(HubError.Protocol),
         done = DoneNotification.entries.firstOrNull { it.wire == data.text("done") } ?: throw HubFailure(HubError.Protocol),
@@ -87,6 +100,9 @@ class HttpDeviceSettings(
         longTurnSeconds = data["long_turn_seconds"]?.jsonPrimitive?.intOrNull,
         doneDelaySeconds = data["done_delay_seconds"]?.jsonPrimitive?.intOrNull,
         liveActivity = data["live_activity"]?.jsonPrimitive?.booleanOrNull ?: true,
+        translate = (data["translate"] as? JsonObject)?.let {
+            runCatching { JsonCodec.decodeFromJsonElement(HubTranslatePrefs.serializer(), it) }.getOrNull()
+        },
     )
 
     private fun JsonObject.text(key: String) = this[key]?.jsonPrimitive?.contentOrNull

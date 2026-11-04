@@ -86,6 +86,19 @@ class HttpConnectorsManagement internal constructor(
         null
     }
 
+    override suspend fun larkChatChoices(): List<LarkChatChoice> {
+        fun rows(body: String) = ((parse(body) as? JsonObject)?.get("conversations") as? JsonArray).orEmpty().mapNotNull { row ->
+            val o = row as? JsonObject ?: return@mapNotNull null
+            fun text(key: String) = (o[key] as? JsonPrimitive)?.contentOrNull?.takeIf(String::isNotBlank)
+            val id = text("id") ?: return@mapNotNull null
+            LarkChatChoice(id, text("name") ?: id, text("avatar"), (o["is_group"] as? JsonPrimitive)?.booleanOrNull ?: true)
+        }
+        // Pinned chats are optional (an older hub has none); the recent ones are not.
+        val pinned = try { rows(call("/api/v1/lark/pinned", "GET")) } catch (_: HubFailure) { emptyList() }
+        val recent = rows(call("/api/v1/lark/conversations?scope=chats&limit=60", "GET"))
+        return (pinned + recent).distinctBy { it.id }
+    }
+
     private fun <T> read(body: String, serializer: KSerializer<T>): T =
         decode { JsonCodec.decodeFromJsonElement(serializer, parse(body)) }
 

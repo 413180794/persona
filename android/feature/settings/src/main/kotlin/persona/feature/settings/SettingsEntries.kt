@@ -61,6 +61,8 @@ data class SettingsServices(
     val connectors: ConnectorsManagement? = null,
     /** 设置 › hub 版本 (the hub's version and its updating itself) on the paired hub; null in 体验模式. */
     val hubUpdates: HubUpdates? = null,
+    /** 设置 › 翻译, kept on this phone; null in 体验模式. */
+    val translation: TranslationSettings? = null,
 )
 
 fun EntryProviderScope<NavKey>.settingsEntries(navigator: Navigator, services: SettingsServices? = null) {

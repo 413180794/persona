@@ -24,6 +24,28 @@ class HttpConnectorsManagementTest {
     }
 
     @Test
+    fun larkChatChoicesArePinnedThenRecentWithoutRepeats() = withHub { server, api ->
+        server.enqueue(MockResponse().setBody("""{"conversations":[{"id":"c1","name":"设计评审","is_group":true}]}"""))
+        server.enqueue(MockResponse().setBody("""{"conversations":[
+            {"id":"c1","name":"设计评审"},{"id":"c2","name":"","avatar":"https://example.com/a.png","is_group":false},{"name":"no id"}
+        ]}"""))
+        val list = api.larkChatChoices()
+        assertEquals("/api/v1/lark/pinned", server.takeRequest().path)
+        assertEquals("/api/v1/lark/conversations?scope=chats&limit=60", server.takeRequest().path)
+        assertEquals(listOf("c1", "c2"), list.map { it.id })
+        assertEquals("c2", list[1].name) // a nameless chat shows its id
+        assertFalse(list[1].isGroup)
+        assertEquals("https://example.com/a.png", list[1].avatar)
+    }
+
+    @Test
+    fun larkChatChoicesWithoutPinnedOnAnOlderHub() = withHub { server, api ->
+        server.enqueue(MockResponse().setResponseCode(404))
+        server.enqueue(MockResponse().setBody("""{"conversations":[{"id":"c3","name":"周会"}]}"""))
+        assertEquals(listOf("c3"), api.larkChatChoices().map { it.id })
+    }
+
+    @Test
     fun listConnectors() = withHub { server, api ->
         server.enqueue(
             MockResponse().setBody(

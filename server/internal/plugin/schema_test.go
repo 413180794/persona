@@ -133,6 +133,23 @@ func TestSchemaRefusesOutsideTheSubset(t *testing.T) {
 	}
 }
 
+// x-confirm: what a form asks before turning a switch on, on any field; it must be a string.
+func TestSchemaConfirm(t *testing.T) {
+	s, err := ParseSchema(json.RawMessage(`{"type": "object", "properties": {
+	  "nolock": {"type": "array", "items": {"type": "string", "format": "machine"}, "x-confirm": "它会一直不锁屏"},
+	  "on": {"type": "boolean", "x-confirm": "确定？"}
+	}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Fields[0].Confirm != "它会一直不锁屏" || s.Fields[1].Confirm != "确定？" {
+		t.Fatalf("%+v", s.Fields)
+	}
+	if _, err := ParseSchema(json.RawMessage(`{"type": "object", "properties": {"on": {"type": "boolean", "x-confirm": true}}}`)); err == nil {
+		t.Fatal("x-confirm is words")
+	}
+}
+
 // A list of the hub's machines (format machine): the form draws a switch per machine, of the systems x-os names.
 func TestSchemaMachines(t *testing.T) {
 	s, err := ParseSchema(json.RawMessage(`{"type": "object", "properties": {

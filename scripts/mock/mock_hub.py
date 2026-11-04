@@ -6965,6 +6965,10 @@ if MOCK_COMPUTER:
                            "description": "打开后，助手每次点击、输入、按键、打开或关闭 App 之前先在手机上问你；关着时直接做，记进 hub 的日志"},
                           {"name": "app_approval", "type": "boolean", "title": "第一次操作一个 App 时先问", "default": True,
                            "description": "助手第一次在一台 Mac 上操作某个 App（或看整个屏幕）时在手机上问一次，选「一直允许」后记住，在机器页可以移除；终端、系统设置、钥匙串访问、密码管理器和 Persona 每次都问"},
+                          {"name": "no_auto_lock", "type": "array", "title": "插件开着时不自动锁屏", "unique_items": True,
+                           "description": "打开的 Mac 在插件开着时一直不因空闲锁屏（node 持有 caffeinate，不改系统设置）；和 hub 断开 30 分钟后自动恢复。手动锁屏、合盖照常",
+                           "confirm": "打开后这台 Mac 在插件开着时一直不会因为空闲锁屏，坐在它前面的人能直接用它。和 hub 断开 30 分钟后自动恢复。",
+                           "items": {"name": "items", "type": "string", "format": "machine", "os": ["darwin"]}},
                           {"name": "keep_awake", "type": "boolean", "title": "操作或开着 VNC 时保持唤醒", "default": True,
                            "description": "助手操作那台 Mac、或有人在看它的画面时，它不睡、不因空闲锁屏；最后一次操作 10 分钟后、画面关掉后就撤掉，不改系统设置"}]},
                       "config": {}, "secrets": [], "permissions": []}
@@ -7292,7 +7296,8 @@ def plugins_route(handler, p, body):
         if pl["id"] == "cua":  # the Macs it is on for follow, and the machine list goes out again
             for m in MACHINES:
                 if "computer" in m:
-                    m["computer"] = computer_of(m["id"], m["id"] in (cfg.get("machines") or []))
+                    m["computer"] = {**computer_of(m["id"], m["id"] in (cfg.get("machines") or [])),
+                                     "no_auto_lock": m["id"] in (cfg.get("no_auto_lock") or [])}  # #1507 b2
             for send, _ in list(LIVE):
                 try: send({"type": "machines", "machines": out_machines()})
                 except Exception: pass
@@ -8495,7 +8500,11 @@ class H(BaseHTTPRequestHandler):
             machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
             if machine is None or "computer" not in machine:
                 return self.send_json({"error": "操控电脑的插件没打开，或这台不是 Mac"}, 404)
-            machine["computer"] = computer_of(machine["id"], bool(json.loads(self.last_body or b"{}").get("enabled")))
+            body = json.loads(self.last_body or b"{}")
+            if "enabled" in body:
+                machine["computer"] = {**computer_of(machine["id"], bool(body["enabled"])), "no_auto_lock": machine["computer"].get("no_auto_lock", False)}
+            if "no_auto_lock" in body:  # 「插件开着时不自动锁屏」 (#1507 b2)
+                machine["computer"] = {**machine["computer"], "no_auto_lock": bool(body["no_auto_lock"]) and machine["computer"].get("enabled", False)}
             for send, _ in list(LIVE):
                 try: send({"type": "machines", "machines": out_machines()})
                 except Exception: pass

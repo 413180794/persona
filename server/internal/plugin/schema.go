@@ -34,7 +34,10 @@ type Field struct {
 	Enum        []Choice        `json:"enum,omitempty"`
 	Format      string          `json:"format,omitempty"` // uri | email | hostname | machine
 	// OS, for format machine: only machines of these systems (x-os: darwin, linux, windows); none, any.
-	OS          []string `json:"os,omitempty"`
+	OS []string `json:"os,omitempty"`
+	// Confirm (x-confirm): what a form asks before a switch is turned on (a boolean, or a machine of a machine list),
+	// for settings with a cost the user should agree to (the plugin cua's 「插件开着时不自动锁屏」, #1507).
+	Confirm     string   `json:"confirm,omitempty"`
 	Pattern     string   `json:"pattern,omitempty"`
 	MinLength   *int     `json:"min_length,omitempty"`
 	MaxLength   *int     `json:"max_length,omitempty"`
@@ -56,7 +59,7 @@ type Choice struct {
 }
 
 var (
-	describing = []string{"title", "description", "default"}
+	describing = []string{"title", "description", "default", "x-confirm"}
 	keysFor    = map[string][]string{
 		"string":  {"enum", "oneOf", "format", "x-os", "pattern", "minLength", "maxLength"},
 		"integer": {"enum", "oneOf", "minimum", "maximum"},
@@ -214,7 +217,7 @@ func parseField(name string, raw json.RawMessage, at string, depth int) (Field, 
 		return &v, nil
 	}
 	var errs []error
-	errs = append(errs, str("title", &f.Title), str("description", &f.Description), str("format", &f.Format), str("pattern", &f.Pattern))
+	errs = append(errs, str("title", &f.Title), str("description", &f.Description), str("format", &f.Format), str("pattern", &f.Pattern), str("x-confirm", &f.Confirm))
 	var err error
 	if f.MinLength, err = count("minLength"); err != nil {
 		errs = append(errs, err)

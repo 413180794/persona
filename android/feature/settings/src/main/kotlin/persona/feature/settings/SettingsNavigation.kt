@@ -22,6 +22,7 @@ fun SettingsPage.toInitialPage(): String = when (this) {
     SettingsPage.Feishu -> "feishu"
     SettingsPage.Channels -> "channels"
     SettingsPage.HubUpdate -> "hub-update"
+    SettingsPage.Translation -> "translate"
 }
 
 /** The root and unknown page names have no detail destination. */

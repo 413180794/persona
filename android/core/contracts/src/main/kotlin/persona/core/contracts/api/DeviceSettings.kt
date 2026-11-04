@@ -27,6 +27,8 @@ data class DeviceNotificationPreferences(
     val longTurnSeconds: Int? = null,
     val doneDelaySeconds: Int? = null,
     val liveActivity: Boolean = true,
+    /** What the hub has of this device's 设置 › 翻译; null from a hub without it. */
+    val translate: HubTranslatePrefs? = null,
 )
 
 /** Bound to one pairing; preferenceDeviceId is the ID used by notification registration. */

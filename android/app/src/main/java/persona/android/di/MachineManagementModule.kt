@@ -131,5 +131,6 @@ object MachineManagementModule {
         override suspend fun googleSignInFinish(finish: GoogleFinish) = api().googleSignInFinish(finish)
         override suspend fun larkStatus() = api().larkStatus()
         override suspend fun larkAccounts() = api().larkAccounts()
+        override suspend fun larkChatChoices() = api().larkChatChoices()
     }
 }

@@ -20,6 +20,7 @@ final class ComputerSectionTests: XCTestCase {
         let toggle = app.switches["computer-switch"].firstMatch
         XCTAssertTrue(toggle.waitForExistence(timeout: 30), "no 操控电脑 switch:\n\(app.debugDescription)")
         for _ in 0..<6 where !toggle.isHittable || toggle.frame.maxY > app.frame.height * 0.5 { app.swipeUp() }
+        usleep(800_000) // the page coasts on after a swipe, and a tap then only stops it
         return (app, toggle, app.descendants(matching: .any)["computer-status"].firstMatch)
     }
 
@@ -103,6 +104,53 @@ final class ComputerSectionTests: XCTestCase {
         calc.buttons["computer-app-remove"].firstMatch.tap()
         XCTAssertTrue(waitGone(calc), "taken back")
         XCTAssertTrue(screen.exists, "the other stays")
+    }
+
+    /// 插件开着时不自动锁屏 (#1507 b2): off by default; turning it on asks first (取消 leaves it off, 打开 turns it on),
+    /// turning it off does not ask. MOCK_COMPUTER=ready.
+    @MainActor func testNoAutoLockAsksFirst() throws {
+        guard state == "ready" else { throw XCTSkip("MOCK_COMPUTER=ready") }
+        let (app, _, status) = try open()
+        XCTAssertTrue(status.waitForExistence(timeout: 10))
+        let noLock = app.switches["computer-no-lock"].firstMatch
+        XCTAssertTrue(noLock.waitForExistence(timeout: 10), "the switch:\n\(app.debugDescription)")
+        for _ in 0..<4 where !noLock.isHittable { app.swipeUp() }
+        usleep(800_000)
+        XCTAssertEqual(noLock.value as? String, "0", "off by default")
+        let flip = { noLock.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap() }
+        let turnOn = app.buttons["打开"].firstMatch
+        flip()
+        XCTAssertTrue(turnOn.waitForExistence(timeout: 5), "asked first:\n\(app.debugDescription)")
+        let warning = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "坐在它前面的人能直接用它")).firstMatch
+        XCTAssertTrue(warning.exists, "what it means:\n\(app.debugDescription)")
+        shot(app, "computer-no-lock-ask")
+        cancelDialog(app)
+        XCTAssertTrue(waitGone(turnOn))
+        XCTAssertEqual(noLock.value as? String, "0", "取消: still off")
+        flip()
+        XCTAssertTrue(turnOn.waitForExistence(timeout: 5))
+        turnOn.tap()
+        XCTAssertTrue(waitValue(noLock, "1"), "on")
+        shot(app, "computer-no-lock-on")
+        flip()
+        XCTAssertTrue(waitValue(noLock, "0"), "off")
+        XCTAssertFalse(turnOn.exists, "turning it off does not ask")
+    }
+
+    /// 取消 the dialog: its button where it has one, else a tap outside it (iOS 26 shows it as a popover by the switch,
+    /// with no 取消).
+    @MainActor private func cancelDialog(_ app: XCUIApplication) {
+        let cancel = app.buttons["取消"].firstMatch
+        let outside = app.otherElements["PopoverDismissRegion"].firstMatch
+        if cancel.exists { cancel.tap() } else if outside.exists { outside.tap() } else {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.04, dy: 0.5)).tap()
+        }
+    }
+
+    private func waitValue(_ e: XCUIElement, _ value: String) -> Bool {
+        let deadline = Date.now.addingTimeInterval(10)
+        while Date.now < deadline { if e.value as? String == value { return true }; usleep(250_000) }
+        return false
     }
 
     @MainActor func testAnInstallCanBeCancelled() throws {

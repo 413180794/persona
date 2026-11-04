@@ -145,6 +145,8 @@ type Computer struct {
 	// ScreenSharing: macOS's Screen Sharing answers on 127.0.0.1:5900, so the app can show this Mac's live screen
 	// (docs/computer-use.md「实时画面」). Not needed to operate it.
 	ScreenSharing bool `json:"screen_sharing"`
+	// NoAutoLock: 「插件开着时不自动锁屏」 is on for this Mac (the hub's, from the plugin's settings).
+	NoAutoLock bool `json:"no_auto_lock,omitempty"`
 	// Ready: all of the above in place. Note says what is missing and what to do, in Chinese for the app.
 	Ready   bool      `json:"ready"`
 	Note    string    `json:"note,omitempty"`

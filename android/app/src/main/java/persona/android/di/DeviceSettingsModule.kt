@@ -23,7 +23,11 @@ object DeviceSettingsModule {
 
 /** Rebuilds the adapter for each pairing and verified route; retains no former hub snapshot. */
 @Singleton
-class WiredDeviceSettings @Inject constructor(application: Application, private val runtime: ConnectionRuntime) :
+class WiredDeviceSettings @Inject constructor(
+    application: Application,
+    private val runtime: ConnectionRuntime,
+    private val translation: TranslationSettings,
+) :
     NotificationPreferencesSource {
     private val app = application as PersonaApp
     private val mutableBinding = MutableStateFlow<SettingsBinding?>(null)
@@ -46,7 +50,7 @@ class WiredDeviceSettings @Inject constructor(application: Application, private 
                         fun current() = runtime.scopedData.value === data && connection.route.value === route
                         val http = HttpDeviceSettings(address, data.credentials.deviceToken, id,
                             connection.http.client, ::current)
-                        object : DeviceSettings {
+                        object : TranslationSyncedSettings {
                             suspend fun <T> checked(block: suspend () -> T): T {
                                 if (!current()) throw CancellationException("Pairing changed")
                                 try {
@@ -63,13 +67,19 @@ class WiredDeviceSettings @Inject constructor(application: Application, private 
                             override suspend fun preferences() = checked { http.preferences() }.also { mutablePreferences.value = it }
                             override suspend fun savePreferences(preferences: DeviceNotificationPreferences) =
                                 checked { http.savePreferences(preferences) }.also { mutablePreferences.value = it }
+                            override suspend fun saveTranslation(prefs: HubTranslatePrefs) = checked { http.saveTranslatePrefs(prefs) }
                         }
                     }
                     mutableBinding.value = SettingsBinding(data.scope.path, adapter, address)
                     if (adapter != null) connection.state.collectLatest { state ->
-                        if (state == ConnectionState.Online) try { adapter.preferences() }
+                        if (state != ConnectionState.Online) return@collectLatest
+                        // Unread (the notification prefs retry at the next ready state): send ours as if the hub had none.
+                        val hubHas = try { adapter.preferences().translate }
                         catch (error: CancellationException) { throw error }
-                        catch (_: Exception) { /* Retry at the next ready state or notification. */ }
+                        catch (_: Exception) { null }
+                        // 设置 › 翻译 goes to the hub (on connect and when it changes), so it translates new mail as it
+                        // comes in for this phone (docs/android.md「翻译」).
+                        syncTranslation(translation.prefs, hubHas, adapter::saveTranslation)
                     }
                 }
             }
@@ -77,4 +87,27 @@ class WiredDeviceSettings @Inject constructor(application: Application, private 
     }
 
     override suspend fun refreshPreferences(): DeviceNotificationPreferences? = binding.value?.deviceSettings?.preferences()
+}
+
+/** The paired hub's device settings, which also take this phone's 设置 › 翻译. */
+private interface TranslationSyncedSettings : DeviceSettings {
+    suspend fun saveTranslation(prefs: HubTranslatePrefs): HubTranslatePrefs?
+}
+
+/**
+ * Sends this phone's 设置 › 翻译 to the hub whenever it differs from what the hub was last known to have ([hubHas] at
+ * connect, then each answer). A failed save is tried again at the next change or connection. Runs until cancelled.
+ */
+internal suspend fun syncTranslation(
+    prefs: Flow<TranslationPrefs>,
+    hubHas: HubTranslatePrefs?,
+    save: suspend (HubTranslatePrefs) -> HubTranslatePrefs?,
+) {
+    var known = hubHas
+    prefs.map { it.hubCopy }.distinctUntilChanged().collect { mine ->
+        if (mine == known) return@collect
+        known = try { save(mine) ?: mine }
+        catch (error: CancellationException) { throw error }
+        catch (_: Exception) { known }
+    }
 }

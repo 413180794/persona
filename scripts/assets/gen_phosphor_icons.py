@@ -21,7 +21,7 @@ globe-simple hand hand-palm hard-drives hash hourglass-medium house image info k
 link-simple list-checks lock-simple magnifying-glass map-pin microphone microphone-slash monitor moon moon-stars note-pencil paper-plane-right
 paper-plane-tilt paperclip pause pencil-simple phone-disconnect play plugs-connected plus power prohibit push-pin puzzle-piece qr-code question quotes
 robot rocket-launch scan seal-question share-network shield-check shield-warning sidebar-simple sliders-horizontal sparkle
-spinner-gap squares-four stack stop sun terminal terminal-window thermometer timer trash tray tree-structure user
+spinner-gap squares-four stack stop sun terminal terminal-window thermometer timer translate trash tray tree-structure user
 user-circle warning warning-circle waveform wifi-high wifi-slash wrench x x-circle
 """.split()
 

@@ -18,4 +18,5 @@ internal abstract class ConnectorsApiStub : ConnectorsManagement {
     override suspend fun googleSignInFinish(finish: GoogleFinish): MailAccount = unused()
     override suspend fun larkStatus(): LarkStatus = unused()
     override suspend fun larkAccounts(): LarkAccounts? = unused()
+    override suspend fun larkChatChoices(): List<LarkChatChoice> = unused()
 }
