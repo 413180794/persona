@@ -284,6 +284,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/redesign/` | 客户端重设计与 Android 首版的方案（2026-10-30 草案）：功能对齐矩阵、交互规格、流程图、hub 改动；外观部分已被 `docs/android-design.md` 取代，调研笔记在 `research/` |
 | `docs/plan-telegram.md` | 计划：Telegram 连接器（用户自己的账号，第一版只读）：gotd/td 选型、分步登录和加密存会话、收哪些会话和增量、收件箱、只读工具、设置的开关 / 删除 / 退出，要用户定的 |
 | `docs/plan-lark-cli.md` | 计划：没有 lark-connector 时用官方 lark-cli 接飞书：能力对照和降级、两种来源并存、做成连接器、闸门认 lark-cli、收件箱收什么、分步计划和已拍板项 |
+| `docs/plan-ego-browser.md` | 计划：ego lite 浏览器插件（#1304）：照 Cua 插件的模式接入（默认关、按 Mac 开、安装校验、首次设置引导），助手的 `browser_*` 工具和 Agent 用自带 skill 的分工，看浏览器（实时画面 / 定时截图 / CDP 投屏），导入 cookies 的来源、存储与安全、写入方式，要拍板的 |
 | `docs/plan-plugins.md` | 计划：插件系统（#1101）：关键取舍（只在 hub 机器上装、权限不是沙箱、表单子集）、实现和方案的出入、分步进度（1a 服务端底座已做，1b App 设置页、第 2–4 步待做）、语音和连接器 v2 怎么迁上来 |
 | `docs/lessons/` | 经验（踩坑）按主题分文件：协作、Agent、助手、服务端、transcript、飞书邮件、终端、iOS、Android、macOS、测试，索引 `docs/lessons/README.md` |
 | `docs/archive/` | 已结束的车道方案、真实数据验证、阶段状态表和验收记录（实时更新打断操作、消息链路、会话读取验证、Android P0），只作证据引用，不随代码更新；新的一次性记录做完放这里 |
