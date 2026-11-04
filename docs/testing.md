@@ -375,6 +375,13 @@ Agents 列表、Agent 对话、Persona 对话各拖、甩约 20 秒，同时 moc
   而且一次只拖三分之一屏（`swipeUp` 会甩过头）。
 - 对话页有两个「终端」按钮（展开的页头在时钟下面、折叠后的小页头里），取 `frame.minY > 40` 且能点的那个。
 
+### 助手的 HTML 卡片（`HTMLCardTests`、`AssistantHTMLCardTests`，#2025）
+
+不用 hub：`-showSampleHTMLCard YES` 打开两张示例卡片（一张等「运行」、一张自己运行），截图看深浅色。
+`xcodebuild test … -only-testing:PersonaUITests/HTMLCardTests` 点网页里的「选 B」：先弹原生确认框、框里是要发的原文，发送后再点不再弹（一张卡片只发一次），「运行」「停止」换得过来。
+单元测试 `AssistantHTMLCardTests` 真起一个沙箱 WKWebView：本机开一个端口，页面的 fetch、XHR、图片、样式表、iframe、WebSocket、beacon、`window.open`、跳走都打不到它，
+`document.cookie` 是空的，`window.persona` 改不掉，只认主 frame 发给 `persona` 的 `reply` / `open`；另有不进沙箱的对照（同一个页面能打到端口），证明这项检查是真的。
+
 ### 多 hub（`MultiHubTests`，[multi-hub.md](multi-hub.md)）
 
 三台假 hub 模拟「两组、其中一组两台」：A 单独一组（家里）；B、C 互联成一组（公司），C 拥有 MacBook。两组都有同 id 的机器、会话和交互，
