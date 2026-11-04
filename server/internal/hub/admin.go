@@ -39,6 +39,7 @@ type adminState struct {
 	failures       authLimiter // failed sign-ins per source
 	publicFailures authLimiter // failed sign-ins from outside the LAN, all together
 	doctorMu       sync.Mutex
+	plugins        pluginGate // plugin previews (admin_plugins.go)
 
 	ifCache       []ifacePrefix
 	ifCached      time.Time
@@ -125,6 +126,7 @@ func (h *Hub) adminRoutes(mux *http.ServeMux, api, web http.Handler) http.Handle
 	h.adminMachineRoutes(closed)
 	h.adminDeviceRoutes(closed)
 	h.adminNetworkRoutes(closed)
+	h.adminPluginRoutes(closed)
 	// Hub mesh (docs/plan-hub-mesh.md 2.7): /peers and /routes, from the mesh's own file.
 	h.registerPeerAdmin(closed)
 	h.peerCLIRoutes(open) // jarvisd hub pair --peer, jarvisd hub peer … (peer_admin.go)
@@ -187,9 +189,12 @@ func adminPath(p string) bool {
 }
 
 // adminWriteCheck refuses writes a browser would only send for another site: JSON only (a cross-site form cannot
-// send it without a preflight, which nothing here answers), same-origin fetch metadata, an Origin of this host.
+// send it without a preflight, which nothing here answers; a plugin upload is application/octet-stream, which needs
+// one too), same-origin fetch metadata, an Origin of this host.
 func adminWriteCheck(r *http.Request) (string, error) {
-	if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(strings.ToLower(strings.TrimSpace(ct)), "application/json") {
+	ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+	upload := r.Method == http.MethodPost && path.Clean(r.URL.Path) == adminUploadPath && strings.HasPrefix(ct, "application/octet-stream")
+	if !strings.HasPrefix(ct, "application/json") && !upload {
 		return "csrf", errors.New("writes must be application/json")
 	}
 	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" && site != "none" {

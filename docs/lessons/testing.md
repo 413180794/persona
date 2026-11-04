@@ -328,3 +328,10 @@
 - 做法：先等页面自己的元素（页头），再按行的 identifier（`github.entry.<id>`）一边往上滑一边找；截图前把目标滑到屏幕上半，
   否则「刚好露出一行就算找到」，几张截图拍的是同一屏。
 - mock 记 `/mock/sent` 时别借用别的测试要找的键（这次把引用回复记成了 `"item": "github:review12"`，收件箱的测试读到了它）。
+
+## 无头 Chrome 截窄屏（2026-11-04，#1208）
+
+- `Google Chrome --headless=new --window-size=390,844 --screenshot=…` 不会按 390 宽排版：窗口最窄大约 500px，截出来是 500 宽的页面被裁到 390，
+  看起来像「页面横向溢出」（管理界面的设备页、插件页都是这样），其实不是页面的问题。窄屏截 `--window-size=500,…`，要真 390 宽用 DevTools 的设备模拟。
+- 管理界面的截图不用起 hub：`cd web && npx vite --port <空闲端口>`，打开 `/admin/<页面>?mock=app&theme=dark`（`?dialog=…` 直接打开对话框，见 `web/src/admin/mock.ts`）。
+  `--user-data-dir` 指到 `/tmp` 下自己的目录，不碰用户的 Chrome。

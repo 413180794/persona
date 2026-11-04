@@ -1,5 +1,5 @@
 // Pure helpers behind the admin pages, kept apart so they can be tested without a browser.
-import type { Access, AdminMachine, Device, DoctorItem, MeshHub, MeshView, Peer, PeerProbe, Restart } from "./types";
+import type { Access, AdminMachine, AdminPlugin, Device, DoctorItem, MeshHub, MeshView, Peer, PeerProbe, Restart } from "./types";
 
 // ── access scope (docs/admin.md「访问范围」) ──────────────
 
@@ -325,4 +325,65 @@ export function memberNotice(mesh: MeshView | null | undefined): { title: string
       : "设备、互联等去中心的管理界面。",
     offline,
   };
+}
+
+// ── plugins ──
+
+// pluginStatus: the state's words (as the app's 设置 › 插件 says them) and tone.
+export function pluginStatus(p: Pick<AdminPlugin, "status">): { tone: "green" | "red" | "orange" | "gray"; label: string } {
+  switch (p.status) {
+    case "running":
+      return { tone: "green", label: "运行中" };
+    case "stopped":
+      return { tone: "gray", label: "空闲，用到时启动" };
+    case "starting":
+      return { tone: "orange", label: "正在启动" };
+    case "needs_setup":
+      return { tone: "orange", label: "需要设置" };
+    case "disabled":
+      return { tone: "gray", label: "已停用" };
+    case "incompatible":
+      return { tone: "red", label: "这台 hub 用不了" };
+    case "error":
+      return { tone: "red", label: "出错了" };
+  }
+  return { tone: "gray", label: "状态未知" };
+}
+
+export function pluginSourceLabel(source?: string): string {
+  return ({ builtin: "内置", "hub.json": "hub.json", installed: "已安装" } as Record<string, string>)[source ?? ""] ?? source ?? "";
+}
+
+export function pointLabel(point: string): string {
+  return ({ connectors: "连接器", voice: "语音对话" } as Record<string, string>)[point] ?? point;
+}
+
+// canUpgrade: only what was installed (built-in ones come with personad, hub.json's are changed there).
+export function canUpgrade(p: AdminPlugin): boolean {
+  return p.source === "installed";
+}
+
+// canRollBack: an installed package with the version before its last upgrade still kept (a remote plugin has none).
+export function canRollBack(p: AdminPlugin): boolean {
+  return p.source === "installed" && Boolean(p.previous_version) && !(p.origin ?? "").startsWith("remote:");
+}
+
+// sourceProblem says what is wrong with a typed source before asking the hub, "" when it may be right (the hub checks
+// the rest: whether the path exists, the download's hash).
+export function sourceProblem(raw: string): string {
+  const s = raw.trim();
+  if (!s) return "";
+  if (s.startsWith("http://")) return "只收 https 链接";
+  if (s.startsWith("https://")) return /#sha256=[0-9a-fA-F]{64}$/.test(s) ? "" : "链接后面要带 #sha256=<64 位 hex>，下载后校验";
+  if (s.startsWith("remote:")) return /^remote:(?:(?:rpc|http)=[^,]+)(?:,(?:rpc|http)=[^,]+)?$/.test(s) ? "" : "写成 remote:rpc=<socket>,http=<socket>（至少一个）";
+  if (/^(?:dir|file):/.test(s)) return /^(?:dir|file):(?:\/|~\/)/.test(s) ? "" : "写 hub 机器上的绝对路径";
+  if (s.startsWith("/") || s.startsWith("~/")) return "";
+  return "写 hub 机器上的路径、带 sha256 的 https 链接，或 remote:";
+}
+
+// uploadProblem: a file the hub would refuse, before sending it ("" when fine).
+export function uploadProblem(file: { name: string; size: number }, most: number): string {
+  if (!/\.(?:tar\.gz|tgz|zip)$/i.test(file.name)) return "只能上传 .tar.gz、.tgz 或 .zip";
+  if (most > 0 && file.size > most) return `包超过 ${Math.floor(most / (1 << 20))} MB`;
+  return "";
 }

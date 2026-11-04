@@ -38,7 +38,8 @@
 
 ## 三、实现时和方案的出入（1a）
 
-- **管理界面的安装页没做**：安装、升级、回滚、卸载只认主 token 经回环（`personad plugin`）；管理会话那条路等做安装页时一起加。
+- **管理界面的安装页后补（#1208）**：1a 时安装、升级、回滚、卸载只认主 token 经回环（`personad plugin`）；之后加了管理会话那条路
+  （`/api/v1/admin/plugins…`，CSRF、预览一次一个 + 10 分钟 10 次，审计记 `admin UI`），还多了浏览器上传（`upload:<文件名>`）和升级预览的 `added_permissions`。
 - **协议多了一个基础方法 `manifest`**：`initialize` 只回 id、版本和贡献，装跑在别处的插件时要完整清单（权限、配置、密钥），所以加了 `manifest`
   （`initialize` 之前也能调；hub 从包里起的插件可以不回）。只有 HTTP 的远端插件回 `GET /manifest`。
 - **贡献了连接器的插件由连接器的开关持有**：它的 `on_call` 不算数（否则「关着时登录」会把程序拉起来，和现在的行为不一样）；`on_startup` 照样常驻。
@@ -55,7 +56,8 @@
   `connector/serve` 认插件开头，`connector/proc` 能经插件进程说话（`Link`）；文档 `docs/plugins.md`、`docs/connector-protocol.md`。
 - [x] **1b：App「设置 › 插件」**（iOS，Mac 共用页面）：列表、详情（权限、贡献、关于）、按 `form.fields` 画的配置表单、只写的密钥、开关；
   假 hub `MOCK_PLUGINS=1`、UI 测试和单元测试，默认 / BeautifulUI 风格 × 深浅色截图看过（`docs/plugins.md`「App：设置 › 插件」）。
-- [ ] Android、网页的插件页，管理界面的安装页。
+- [x] 管理界面的「插件」页（#1208）：列表、开关、安装（目录 / 包 / https / 上传 / remote，先预览）、升级（权限变多明确提示）、回滚、卸载（可留数据）。
+- [ ] Android、网页的插件页。
 - [x] **第 2 步（服务端）**：扩展点 `quota`（插件看不到 Key：`quota.query` + 经 hub / node 代发的 `quota.http`，占位符 `${launcher_key}`、同源限制，权限 `launcher_keys`）、
   `providers`（声明供应商，`GET /api/v1/launchers/presets`，新增启动器带 `preset`）；node 的 `launchers.quota` 换成 `launchers.http`；`server/internal/quota` 只留通用部分，
   两家网关的读法迁到私有插件仓库（归属见 `CLAUDE.local.md`）。规格在 `docs/plugins.md`「额度」「模型供应商」。

@@ -3,7 +3,7 @@
 Persona 的插件底座（#1101）：开源仓库只放通用能力和**扩展点**，只对某个公司、某个服务有意义的东西做成插件，装上就有，不装也能跑。
 骨架学 VS Code（清单 + `contributes` + 按需激活 + 独立进程），权限学 Chrome（显式声明、安装时展示），WordPress 只借事件通知、不借 filter。
 设计取舍、分步和还没做的在 `docs/plan-plugins.md`。代码：清单、schema 子集、权限、注册表 `server/internal/plugin`，进程宿主 `plugin/host`，
-程序一侧 `plugin/serve`，一致性测试 `plugin/conformance`；hub 里的接线 `server/internal/hub/plugins.go`、`plugin_routes.go`、`plugin_cli.go`。
+程序一侧 `plugin/serve`，一致性测试 `plugin/conformance`；hub 里的接线 `server/internal/hub/plugins.go`、`plugin_routes.go`、`plugin_cli.go`，管理界面的接口 `admin_plugins.go`。
 
 插件从三个地方来，App 和接口里是同一个列表：
 
@@ -123,8 +123,13 @@ hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的�
 
 ## 安装、升级、回滚、卸载
 
-装插件就是在 hub 机器上跑一个新程序，所以**只能在 hub 机器上装**：`personad plugin …` 读 hub.json 里的主 token，经回环调下面的接口。
-手机（设备凭据）能看列表、开关、改配置、填密钥，不能装、升级、回滚、卸载。管理界面的安装页是以后的事。
+装插件就是在 hub 机器上跑一个新程序，所以只有 hub 的主人能装，两条路：
+
+- **hub 机器上的命令行**：`personad plugin …` 读 hub.json 里的主 token，经回环调下面的接口。
+- **管理界面**（`/admin` 的「插件」页，[admin.md](admin.md)「插件」）：管理员密码登录的会话，过访问范围、CSRF 和预览限流，接口在 `/api/v1/admin/plugins…`。
+  管理界面本来就能加电脑、发凭据，和装插件一样要紧，所以同一把密码；审计里记成 `admin UI`。
+
+手机（设备凭据）能看列表、开关、改配置、填密钥，不能装、升级、回滚、卸载。
 
 插件包：一个目录，或一个 `.tar.gz` / `.tgz` / `.zip`（根目录或唯一的顶层目录里有清单）。最大 200 MB、2 万个文件；解包时拒绝绝对路径、`..`、指向包外的链接、
 设备文件，zip 里不能有链接；文件权限只留「可执行或不可执行」。
@@ -135,11 +140,13 @@ hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的�
 | hub 机器上的包 | `file:/path/to/plugin.tar.gz`（或直接写路径） |
 | 网址 | `https://…/plugin.tar.gz#sha256=<64 位 hex>`：必须带 sha256，下载后校验；不收 http |
 | 跑在别处 | `remote:rpc=<socket>,http=<socket>`（至少一个）：不拷文件；清单问插件要（说协议的回 `manifest`，只有 HTTP 的回 `GET /manifest`） |
+| 浏览器上传（只有管理界面） | `.tar.gz` / `.tgz` / `.zip` 文件本身：最大 200 MB，直接写进这次预览的暂存目录再解包，来源记成 `upload:<文件名>`，其余和 hub 机器上的包一样 |
 
 私有插件：在 hub 机器上 clone 私有仓库再 `dir:` 装，或者私有仓库的 CI 出一个带 sha256 的包。
 
 1. **预览**：包放进 `~/.persona/plugins/staging/<预览 id>/`，解析和校验清单、查程序在不在包里、查 `engines`、查贡献的 id 有没有被占，
-   回 `{preview_id, manifest, permissions（给人看的几行）, permissions_digest, warnings, expires_at, upgrade?, from?, more_permissions?}`。10 分钟后清掉。
+   回 `{preview_id, manifest, permissions（给人看的几行）, permissions_digest, warnings, expires_at, upgrade?, from?, more_permissions?, added_permissions?}`。10 分钟后清掉。
+   `added_permissions` 只在升级时有：新版本比已装的多出来的那几项（多运行程序、多的主机、多的密钥、要 hub 的 token、要用启动器的 Key），升级页用它说清「变多了什么」。
 2. **安装**：带 `preview_id` 和 `permissions_digest`；包挪到 `~/.persona/plugins/installed/<id>/<version>/`，写数据库。必填的密钥没填、配置不合 schema 时状态是 `needs_setup`，不启动。
 3. **升级**：同样先预览，版本必须更高。旧进程停，新版本起；新版本 30 秒内起不来（握手失败、退出）就自动回滚到旧版本。只留当前和上一个版本的目录。配置、密钥留着。
 4. **回滚**：回到上一个版本（只能回一步）。
@@ -147,7 +154,8 @@ hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的�
 6. **卸载**：停进程，删数据库里的行和密钥、包目录、数据目录（`--keep-data` 留数据目录），它贡献的连接器在 `connector_secrets` 和连接器设置里的那几行也删。
    内置的和 hub.json 来的不能卸载。
 
-每一步都记进 `plugin_audit`（谁、什么时候、从哪个版本到哪个），不记配置的值和密钥。
+每一步都记进 `plugin_audit`（谁、什么时候、从哪个版本到哪个），不记配置的值和密钥。谁：`personad plugin`（命令行）、`admin UI`（管理界面）、
+`hub token` / `device:<id>`（App 的开关、配置、密钥）。
 
 ### 命令行
 
@@ -210,6 +218,7 @@ personad plugin uninstall <id> [--keep-data]
 | `POST /api/v1/plugins/{id}/-/upgrade` `{preview_id, permissions_digest?}` | 同上 | 权限变多时要摘要 |
 | `POST /api/v1/plugins/{id}/-/rollback` | 同上 | |
 | `DELETE /api/v1/plugins/{id}/-/` `?keep_data=1` | 同上 | |
+| `/api/v1/admin/plugins…` | 管理界面的会话 | 同样的预览 / 安装 / 升级 / 回滚 / 卸载 / 开关，外加浏览器上传；见 [admin.md](admin.md)「接口」 |
 | 任意 `/api/v1/plugins/{id}/{path…}` | 完整权限的设备 | 转发给插件的 HTTP（WebSocket 也是），去掉 App 的 `Authorization` 和 `token`；按需起的插件先起好 |
 
 ## 额度
@@ -245,6 +254,22 @@ iOS（Mac 共用同一套页面）在 hub 带 `plugin_manager` 时，设置首�
 - 截图：`MOCK_PLUGINS=1` 的假 hub 有五个状态各不相同的示例插件；`-tab settings -openPlugins YES`（`-openPlugin <id>` 直接进详情）。
   UI 测试 `PluginSettingsTests`（`TEST_RUNNER_JARVIS_PLUGINS_HUB`），单元测试 `PluginsModelTests`。
 - 网页（#1207）：设置 › 插件，同样的列表和详情（`web/src/views/settings/Plugins.tsx`、`web/src/lib/plugins.ts`，`/settings?tab=plugins&plugin=<id>`），见 `docs/web.md`「设置」。Android 的插件页还没做。
+
+## 管理界面：插件
+
+hub 管理界面（[admin.md](admin.md)）的「插件」页（`web/src/admin/pages/Plugins.tsx`）管安装这一半，设置和密钥仍在 App 里填：
+
+- 列表：名字、版本、来源（内置 / hub.json / 已安装）、状态（和 App 同一套说法）、描述、「还缺：…」和错误；展开看「它可以」、提供什么、上一个版本、安装自、发布者、主页、警告。
+  已安装的有「升级」「回滚」（有上一个版本、不是远端时）「卸载」；除了 hub.json 来的都有开关。
+- 安装：选来源（hub 机器上的路径、带 sha256 的 https 链接、上传文件、跑在别处的 socket），页面先查一遍写法，再「看看它能做什么」：
+  拿到预览才显示名字、版本、发布者、描述、「它可以」逐项、提供什么、警告和预览剩几分钟，**点「同意并安装」才带着预览的 `permissions_digest` 安装**。
+- 升级：同样先预览（版本 `旧 → 新`）；权限变多时顶部红色提示「新版本要的权限变多了」，单列「新增」几项，按钮变成红色的「同意新权限并升级」，不同意就不升；没变多是普通的「升级」。
+- 回滚、卸载都要在对话框里确认；卸载可以勾「保留它的数据」（`~/.persona/plugins/data/<id>/`）。
+- 截图：`cd web && npx vite`，`/admin/plugins?mock=app&theme=dark`，`?dialog=install|upload|preview|upgrade|uninstall|details`（`web/src/admin/mock.ts`）。
+
+![管理界面的插件页（浅色）：列表、展开的「它可以」和关于](screenshots/admin-plugins-light.png)
+
+![管理界面升级插件（深色）：权限变多时的红色提示和「新增」](screenshots/admin-plugins-upgrade-dark.png)
 
 ## 进程插件协议（plugin protocol 1）
 

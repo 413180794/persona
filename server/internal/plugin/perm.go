@@ -76,24 +76,27 @@ type PermissionLine struct {
 	Detail string `json:"detail,omitempty"`
 }
 
+var (
+	runsCode     = PermissionLine{Key: "runs_code", Title: "在 hub 机器上运行程序", Detail: "以 hub 的系统用户运行，能读写这个用户能读写的文件；不在沙箱里"}
+	launcherKeys = PermissionLine{Key: "launcher_keys", Title: "用启动器的 Key 查额度", Detail: "它看不到 Key：hub 或有这个启动器的电脑替它发请求，只发到启动器自己的网关"}
+	hubAPI       = PermissionLine{Key: "hub_api", Title: "完整使用 hub", Detail: "拿到 hub 的地址和 token，能做 hub 主人能做的一切：读知识库、驱动各台电脑上的 Agent……"}
+)
+
 // Explain is every line the user is shown before installing m.
 func Explain(m *Manifest) []PermissionLine {
 	out := []PermissionLine{} // never null on the wire: nothing to agree to is an empty list
 	if m.Runtime != nil {
-		out = append(out, PermissionLine{Key: "runs_code", Title: "在 hub 机器上运行程序",
-			Detail: "以 hub 的系统用户运行，能读写这个用户能读写的文件；不在沙箱里"})
+		out = append(out, runsCode)
 	}
 	if len(m.Permissions.Network) > 0 {
 		out = append(out, PermissionLine{Key: "network", Title: "访问网络",
 			Detail: strings.Join(m.Permissions.normalized().Network, "、") + "（hub 暂不拦截别的地址）"})
 	}
 	if m.Permissions.HubAPI {
-		out = append(out, PermissionLine{Key: "hub_api", Title: "完整使用 hub",
-			Detail: "拿到 hub 的地址和 token，能做 hub 主人能做的一切：读知识库、驱动各台电脑上的 Agent……"})
+		out = append(out, hubAPI)
 	}
 	if m.Permissions.LauncherKeys {
-		out = append(out, PermissionLine{Key: "launcher_keys", Title: "用启动器的 Key 查额度",
-			Detail: "它看不到 Key：hub 或有这个启动器的电脑替它发请求，只发到启动器自己的网关"})
+		out = append(out, launcherKeys)
 	}
 	if len(m.Secrets) > 0 {
 		names := make([]string, 0, len(m.Secrets))
@@ -101,6 +104,40 @@ func Explain(m *Manifest) []PermissionLine {
 			names = append(names, s.Title)
 		}
 		out = append(out, PermissionLine{Key: "secrets", Title: "使用你填的密钥", Detail: strings.Join(names, "、")})
+	}
+	return out
+}
+
+// Added is what upgrading from old to m adds to what the plugin may do, in Explain's words: running a program when old
+// ran none, the hosts and secrets old did not have, the hub's token or launchers' keys when old did not get them. Nil when nothing is added.
+func Added(old, m *Manifest) []PermissionLine {
+	var out []PermissionLine
+	if m.Runtime != nil && old.Runtime == nil {
+		out = append(out, runsCode)
+	}
+	var hosts []string
+	for _, h := range m.Permissions.normalized().Network {
+		if !slices.Contains(old.Permissions.Network, h) {
+			hosts = append(hosts, h)
+		}
+	}
+	if len(hosts) > 0 {
+		out = append(out, PermissionLine{Key: "network", Title: "访问更多网络", Detail: strings.Join(hosts, "、")})
+	}
+	if m.Permissions.HubAPI && !old.Permissions.HubAPI {
+		out = append(out, hubAPI)
+	}
+	if m.Permissions.LauncherKeys && !old.Permissions.LauncherKeys {
+		out = append(out, launcherKeys)
+	}
+	var names []string
+	for _, s := range m.Secrets {
+		if !slices.ContainsFunc(old.Secrets, func(o SecretSpec) bool { return o.Name == s.Name }) {
+			names = append(names, s.Title)
+		}
+	}
+	if len(names) > 0 {
+		out = append(out, PermissionLine{Key: "secrets", Title: "使用更多密钥", Detail: strings.Join(names, "、")})
 	}
 	return out
 }

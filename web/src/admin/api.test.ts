@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { addLinkMachine, addServiceMachine, adminApi, AdminError, errorText, handleLoginRequired, linkPair, repairConnector, setCenter, setCsrf, setTransport } from "./api";
+import { addLinkMachine, addServiceMachine, adminApi, AdminError, errorText, handleLoginRequired, installPlugin, linkPair, previewPlugin, repairConnector, setCenter, setCsrf, setTransport, uninstallPlugin, uploadPlugin } from "./api";
 
 type Call = { url: string; init: RequestInit };
 
@@ -119,5 +119,33 @@ describe("the center and connectors", () => {
     expect(errorText(await adminApi("/devices").catch((e) => e))).toContain("中心 hub「书房」");
     stub(400, { error: "no ssh", code: "ssh_unsupported" });
     expect(errorText(await addLinkMachine({ id: "a", name: "a", icon: "laptop" }).catch((e) => e))).toContain("电脑来连");
+  });
+});
+
+describe("plugins", () => {
+  it("uploads the package as it is, with the CSRF token and its name in the query", async () => {
+    setCsrf("tok");
+    const calls = stub(200, { preview_id: "p" });
+    const file = new File([new Uint8Array([1, 2, 3])], "notes 1.0.tar.gz");
+    await uploadPlugin(file, "example-notes");
+    expect(calls[0].url).toBe("/api/v1/admin/plugins/upload?name=notes+1.0.tar.gz&upgrade=example-notes");
+    const h = calls[0].init.headers as Record<string, string>;
+    expect(h["Content-Type"]).toBe("application/octet-stream");
+    expect(h["X-Jarvis-CSRF"]).toBe("tok");
+    expect(calls[0].init.body).toBe(file);
+    await uploadPlugin(file);
+    expect(calls[1].url).toBe("/api/v1/admin/plugins/upload?name=notes+1.0.tar.gz");
+  });
+
+  it("installs what was previewed, with its digest", async () => {
+    const calls = stub(200, {});
+    await previewPlugin("dir:/opt/p");
+    await installPlugin({ preview_id: "p1", permissions_digest: "d1", manifest: { id: "x", name: "X", version: "1" }, permissions: [], expires_at: "" });
+    await uninstallPlugin("x", true);
+    expect(calls[0].init.body).toBe('{"source":"dir:/opt/p"}');
+    expect(calls[1].init.body).toBe('{"preview_id":"p1","permissions_digest":"d1"}');
+    expect(calls[2].url).toBe("/api/v1/admin/plugins/x");
+    expect(calls[2].init.method).toBe("DELETE");
+    expect(calls[2].init.body).toBe('{"keep_data":true}');
   });
 });

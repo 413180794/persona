@@ -114,7 +114,7 @@ func (h *Hub) pluginRoutes(api *http.ServeMux) {
 	owner := func(f http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			if !h.fromThisMachine(r) {
-				writeErrCode(w, http.StatusForbidden, "this_machine_only", errors.New("插件只能在 hub 机器上装、升级和卸载（personad plugin …）"))
+				writeErrCode(w, http.StatusForbidden, "this_machine_only", errors.New("插件只能在 hub 机器上（personad plugin …）或 hub 的管理界面里装、升级和卸载"))
 				return
 			}
 			if ps() == nil {

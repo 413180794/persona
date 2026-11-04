@@ -228,3 +228,52 @@ export interface PeerProbe {
   fp: string;
   version?: string;
 }
+
+// ── plugins (docs/plugins.md「hub 的接口」, docs/admin.md「插件」) ──
+
+export interface PermissionLine {
+  key: string; // runs_code | network | hub_api | launcher_keys | secrets
+  title: string;
+  detail?: string;
+}
+
+export interface AdminPlugin {
+  id: string;
+  name: string;
+  kind: string;
+  status: string; // running | stopped | starting | needs_setup | disabled | incompatible | error
+  error?: string;
+  version?: string;
+  source?: string; // builtin | hub.json | installed
+  enabled: boolean;
+  description?: string;
+  contributes?: Record<string, string[]>;
+  needs_setup?: string[];
+  warnings?: string[];
+  publisher?: string;
+  homepage?: string;
+  origin?: string;
+  previous_version?: string;
+  read_only?: boolean;
+  secrets?: { name: string; title: string; required?: boolean; set: boolean }[];
+  permissions: PermissionLine[];
+}
+
+export interface AdminPlugins {
+  plugins: AdminPlugin[];
+  can_install: boolean;
+  upload_most: number;
+}
+
+export interface PluginPreview {
+  preview_id: string;
+  manifest: { id: string; name: string; version: string; description?: string; publisher?: string; homepage?: string; contributes?: Record<string, unknown[]> };
+  permissions: PermissionLine[];
+  permissions_digest: string;
+  warnings?: string[];
+  expires_at: string;
+  upgrade?: boolean;
+  from?: string;
+  more_permissions?: boolean;
+  added_permissions?: PermissionLine[];
+}

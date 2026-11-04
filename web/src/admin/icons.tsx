@@ -16,9 +16,11 @@ const P = {
   unlink: <g><path d="M18.84 12.25l1.72-1.71a5 5 0 0 0-7.07-7.07l-1.72 1.71M5.17 11.75l-1.71 1.71a5 5 0 0 0 7.07 7.07l1.71-1.71M8 2v3M2 8h3M16 22v-3M22 16h-3" /></g>,
   radar: <g><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><path d="M12 12l6-6" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /></g>,
   pencil: <path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" />,
+  puzzle: <path d="M9 3.5a2 2 0 0 1 4 0V5h3.5A1.5 1.5 0 0 1 18 6.5V10h1.5a2 2 0 0 1 0 4H18v3.5a1.5 1.5 0 0 1-1.5 1.5H13v-1.5a2 2 0 0 0-4 0V19H5.5A1.5 1.5 0 0 1 4 17.5V14h1.5a2 2 0 0 0 0-4H4V6.5A1.5 1.5 0 0 1 5.5 5H9z" />,
+  upload: <g><path d="M12 15V3M7 8l5-5 5 5" /><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" /></g>,
 } satisfies Record<string, React.ReactNode>;
 
-const SHARED = ["machine", "copy", "plus", "x", "check", "retry", "key", "logout", "sun", "moon", "monitor", "menu", "web", "terminal", "chevronRight", "spark", "external", "info"] as const;
+const SHARED = ["machine", "copy", "plus", "x", "check", "retry", "key", "logout", "sun", "moon", "monitor", "menu", "web", "terminal", "chevronRight", "spark", "external", "info", "chevron", "undo", "up", "folder"] as const;
 
 export type AdminIconName = keyof typeof P | (typeof SHARED)[number];
 

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -261,6 +262,9 @@ type Preview struct {
 	Upgrade         bool   `json:"upgrade,omitempty"`
 	From            string `json:"from,omitempty"`
 	MorePermissions bool   `json:"more_permissions,omitempty"`
+	// AddedPermissions are the lines of what the new version may do that the installed one may not (only what is
+	// new: the added hosts, the added secrets), for the upgrade screen.
+	AddedPermissions []PermissionLine `json:"added_permissions,omitempty"`
 
 	source  Source
 	root    string // the staged package
@@ -283,9 +287,28 @@ func (r *Registry) Preview(ctx context.Context, source, upgrade string) (*Previe
 	if err != nil {
 		return nil, err
 	}
+	return r.preview(ctx, src, upgrade, func(dir string) (string, error) { return Stage(ctx, src, dir) })
+}
+
+// PreviewUpload is Preview for a package uploaded in the browser (the admin UI): body is the .tar.gz / .zip named
+// name, written into the preview's staging directory (at most PackageMost bytes) and unpacked there.
+func (r *Registry) PreviewUpload(ctx context.Context, name string, body io.Reader, upgrade string) (*Preview, error) {
+	if r.store == nil {
+		return nil, errors.New("没有数据库：装不了插件")
+	}
+	name, err := UploadName(name)
+	if err != nil {
+		return nil, err
+	}
+	return r.preview(ctx, Source{Kind: "upload", Path: name}, upgrade, func(dir string) (string, error) { return StageUpload(body, name, dir) })
+}
+
+// preview checks what stage put into a fresh staging directory (or what a remote plugin says of itself).
+func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stage func(dir string) (string, error)) (*Preview, error) {
 	r.expire()
 	pv := &Preview{ID: newID(), source: src, ExpiresAt: r.now().Add(previewFor)}
 	var m *Manifest
+	var err error
 	if src.Kind == "remote" {
 		if r.RemoteManifest == nil {
 			return nil, errors.New("this hub cannot reach remote plugins")
@@ -298,7 +321,7 @@ func (r *Registry) Preview(ctx context.Context, source, upgrade string) (*Previe
 		}
 	} else {
 		pv.staging = filepath.Join(r.dir, "staging", pv.ID)
-		root, err := Stage(ctx, src, pv.staging)
+		root, err := stage(pv.staging)
 		if err != nil {
 			_ = os.RemoveAll(pv.staging)
 			return nil, err
@@ -350,6 +373,7 @@ func (r *Registry) Preview(ctx context.Context, source, upgrade string) (*Previe
 	if upgrade != "" {
 		pv.Upgrade, pv.From = true, cur.Record.Version
 		pv.MorePermissions = !cur.Record.Granted.Covers(m.Permissions) || (m.Runtime != nil && cur.Manifest.Runtime == nil)
+		pv.AddedPermissions = Added(cur.Manifest, m)
 	}
 	r.previews[pv.ID] = pv
 	return pv, nil

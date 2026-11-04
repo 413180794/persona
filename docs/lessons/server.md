@@ -216,6 +216,7 @@
 - 两边同时拨号时，被拒的那一条在拨的一方看到的可能是 4011，也可能是 hello 的 `rpc: connection closed`（对方先完成了自己的 hello 再关）：两种都只是「已有链路」，
   拨号循环回到开头等那条断了再说，别当成错误刷日志。
 - 管理界面的 `/api/v1/admin/` 写操作只收 `Content-Type: application/json`（CSRF 防护），不带 body 的 DELETE 也要带这个头，命令行走 `/api/v1/admin/cli/` 时同样。
+  唯一的例外是插件上传 `POST /api/v1/admin/plugins/upload`（`application/octet-stream`，包本身就是请求体，#1208）；别的写操作照旧，加新的例外要同样带 CSRF 头。
 - 本机测互联用两台临时 hub（各自的临时 HOME、端口、测试库里各自的 schema：`database_url` 加 `&search_path=<schema>`）：回环地址不进候选地址，
   互联码里会没有地址，要在 hub.json 的 `public.advertise` 写 `https://localhost:<TLS 端口>`。
 - **只该有一份的状态要按 hub_id 存**（2026-11-03）：`mesh_group` 起初是单行表，hub 的测试和 db 的测试共用一个测试库，db 测试写进去的「中心是 hub-a」让后面一台毫不相干的测试 hub 以为自己是成员，客户端全部拿到 `503 center_unreachable`。改成以 hub_id 为主键：恢复到别的机器的备份同理。共用库的测试写完要清掉自己写的行。

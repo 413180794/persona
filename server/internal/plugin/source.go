@@ -27,8 +27,8 @@ const (
 
 // Source is where a package comes from (docs/plan-plugins.md「来源」).
 type Source struct {
-	Kind string // dir | file | https | remote
-	Path string // dir, file: a path on the hub's machine; https: the URL without the fragment
+	Kind string // dir | file | https | remote | upload
+	Path string // dir, file: a path on the hub's machine; https: the URL without the fragment; upload: the file's name
 	// SHA256 is what an https download must hash to.
 	SHA256 string
 	// RPCSocket / HTTPSocket: a remote plugin's sockets.
@@ -49,6 +49,8 @@ func (s Source) String() string {
 			parts = append(parts, "http="+s.HTTPSocket)
 		}
 		return "remote:" + strings.Join(parts, ",")
+	case "upload":
+		return "upload:" + s.Path
 	}
 	return s.Kind + ":" + s.Path
 }
@@ -132,6 +134,51 @@ var Fetch = func(ctx context.Context, rawURL string, w io.Writer) error {
 		err = fmt.Errorf("more than %d bytes", PackageMost)
 	}
 	return err
+}
+
+// UploadName is a browser upload's file name as kept (its base name, without control characters, at most 128
+// bytes), or an error when it is not a package (.tar.gz, .tgz, .zip).
+func UploadName(name string) (string, error) {
+	name = filepath.Base(strings.ReplaceAll(strings.TrimSpace(name), "\\", "/"))
+	name = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, name)
+	if len(name) > 128 {
+		name = name[len(name)-128:]
+	}
+	switch n := strings.ToLower(name); {
+	case strings.HasSuffix(n, ".tar.gz"), strings.HasSuffix(n, ".tgz"), strings.HasSuffix(n, ".zip"):
+		return name, nil
+	}
+	return "", errors.New("上传的包只能是 .tar.gz、.tgz 或 .zip")
+}
+
+// StageUpload writes an uploaded package (at most PackageMost bytes) into dir (made fresh) and unpacks it there,
+// like Stage does a file on the hub's machine. It returns the package's root.
+func StageUpload(body io.Reader, name, dir string) (string, error) {
+	name, err := UploadName(name)
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	file := filepath.Join(dir, "upload")
+	if err := writeFile(file, io.LimitReader(body, PackageMost+1), 0o600, -1); err != nil {
+		return "", err
+	}
+	if fi, err := os.Stat(file); err != nil || fi.Size() > PackageMost {
+		return "", fmt.Errorf("包超过 %d MB", PackageMost>>20)
+	}
+	out := filepath.Join(dir, "pkg")
+	if err := unpackAs(file, name, out); err != nil {
+		return "", err
+	}
+	_ = os.Remove(file)
+	return packageRoot(out)
 }
 
 // Stage puts the package src points at into dir (made fresh): a copy, never a link, so changing the original later

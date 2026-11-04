@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   canChoose,
+  canRollBack,
+  canUpgrade,
+  pluginStatus,
+  sourceProblem,
+  uploadProblem,
   canRemove,
   centerName,
   countdown,
@@ -278,5 +283,42 @@ describe("the group", () => {
   it("names the center even when the hub did not", () => {
     expect(centerName(mesh({ center: { hub_id: OFFICE, name: "", online: true } }))).toBe("公司");
     expect(centerName(mesh({ center: { hub_id: "abcdef0123", name: "", online: true }, hubs: [] }))).toBe("abcdef01");
+  });
+});
+
+describe("plugins", () => {
+  it("says each state", () => {
+    expect(pluginStatus({ status: "running" })).toEqual({ tone: "green", label: "运行中" });
+    expect(pluginStatus({ status: "needs_setup" }).tone).toBe("orange");
+    expect(pluginStatus({ status: "incompatible" }).tone).toBe("red");
+    expect(pluginStatus({ status: "whatever" }).label).toBe("状态未知");
+  });
+
+  it("checks a source before asking the hub", () => {
+    expect(sourceProblem("")).toBe("");
+    expect(sourceProblem("dir:/opt/plugins/notes")).toBe("");
+    expect(sourceProblem("~/plugins/notes.tar.gz")).toBe("");
+    expect(sourceProblem("file:relative.tar.gz")).not.toBe("");
+    expect(sourceProblem("http://example.com/p.tar.gz")).toBe("只收 https 链接");
+    expect(sourceProblem("https://example.com/p.tar.gz")).toContain("sha256");
+    expect(sourceProblem(`https://example.com/p.tar.gz#sha256=${"a".repeat(64)}`)).toBe("");
+    expect(sourceProblem("remote:rpc=/run/p.sock,http=/run/p-http.sock")).toBe("");
+    expect(sourceProblem("remote:")).not.toBe("");
+    expect(sourceProblem("notes")).not.toBe("");
+  });
+
+  it("checks an upload before sending it", () => {
+    expect(uploadProblem({ name: "p.tar.gz", size: 10 }, 100)).toBe("");
+    expect(uploadProblem({ name: "p.ZIP", size: 10 }, 100)).toBe("");
+    expect(uploadProblem({ name: "p.tar", size: 10 }, 100)).not.toBe("");
+    expect(uploadProblem({ name: "p.tgz", size: 300 << 20 }, 200 << 20)).toBe("包超过 200 MB");
+  });
+
+  it("offers upgrade and rollback only for installed packages", () => {
+    const base = { id: "x", name: "X", kind: "connectors", status: "running", enabled: true, permissions: [] };
+    expect(canUpgrade({ ...base, source: "builtin" })).toBe(false);
+    expect(canRollBack({ ...base, source: "installed", previous_version: "1.0.0", origin: "dir:/p" })).toBe(true);
+    expect(canRollBack({ ...base, source: "installed", previous_version: "1.0.0", origin: "remote:rpc=/s" })).toBe(false);
+    expect(canRollBack({ ...base, source: "installed" })).toBe(false);
   });
 });

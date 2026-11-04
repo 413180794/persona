@@ -7,9 +7,11 @@
 // paths, a service computer, one to pair again, one only a member has, an old ssh one) · member / member-offline (a
 // member hub, its center reachable or not; member-stale: the page still thinks the center is up, the hub knows better
 // and answers set-center with confirm_required) · empty (nothing but the hub's own machine). Adding computers works in every
-// signed-in scenario: a connector link containing "fail" fails to pair.
+// signed-in scenario: a connector link containing "fail" fails to pair. Plugins: a built-in one, two installed (one
+// upgraded, one waiting for its key), a broken hub.json one; a source containing "fail" does not preview, an upgrade
+// asks for one more host.
 import { setTransport } from "./api";
-import type { AdminMachine, AdminState, Device, DiscoveredHub, MeshView, NetworkView, Overview, Peer } from "./types";
+import type { AdminMachine, AdminPlugin, AdminState, Device, DiscoveredHub, MeshView, NetworkView, Overview, Peer, PermissionLine, PluginPreview } from "./types";
 
 const SELF = "0d9e8f7a-6b5c-4d3e-8f2a-1b0c9d8e7f6a";
 const OFFICE = "6f1c2a9e-0b7d-4c55-9e3a-2b8f41d07c11";
@@ -162,6 +164,45 @@ export function installMock(scenario: string) {
     restart,
   };
 
+  const RUNS: PermissionLine = { key: "runs_code", title: "在 hub 机器上运行程序", detail: "以 hub 的系统用户运行，能读写这个用户能读写的文件；不在沙箱里" };
+  const net = (hosts: string) => ({ key: "network", title: "访问网络", detail: `${hosts}（hub 暂不拦截别的地址）` });
+  const keys = (names: string) => ({ key: "secrets", title: "使用你填的密钥", detail: names });
+  let plugins: AdminPlugin[] =
+    scenario === "empty"
+      ? []
+      : [
+          { id: "example-calendar", name: "Example Calendar", kind: "connectors", status: "needs_setup", version: "0.3.0", source: "installed", enabled: true, description: "把日程同步进知识库",
+            contributes: { connectors: ["examplecal"] }, needs_setup: ["API Key"], origin: "upload:example-calendar-0.3.0.tar.gz", publisher: "example",
+            permissions: [RUNS, net("calendar.example.com"), keys("API Key")], secrets: [{ name: "api_key", title: "API Key", required: true, set: false }] },
+          { id: "example-notes", name: "Example Notes", kind: "connectors", status: "running", version: "1.2.0", source: "installed", enabled: true, description: "把 Example Notes 的笔记同步进知识库，并给助手一个搜索工具",
+            contributes: { connectors: ["examplenotes"] }, previous_version: "1.1.0", origin: `https://example.com/example-notes-1.2.0.tar.gz#sha256=${"9f2c".repeat(16)}`, publisher: "example", homepage: "https://example.com/persona-plugin",
+            permissions: [RUNS, net("notes.example.com"), keys("API Key")], secrets: [{ name: "api_key", title: "API Key", required: true, set: true }] },
+          { id: "telegram", name: "Telegram", kind: "connectors", status: "stopped", version: VERSION, source: "builtin", enabled: true, description: "用你自己的 Telegram 账号收消息（只读）",
+            contributes: { connectors: ["telegram"] }, permissions: [RUNS, net("*.telegram.org")] },
+          { id: "voice", name: "语音", kind: "voice", status: "error", error: "连不上 socket：/run/persona/voice.sock", source: "hub.json", enabled: true, read_only: true, contributes: { voice: ["voice"] }, permissions: [] },
+        ];
+  const previewOf = (source: string, upgrade?: string): PluginPreview => {
+    const cur = plugins.find((p) => p.id === upgrade);
+    const base = { preview_id: `pv_${Date.now()}`, permissions_digest: "d1c3".repeat(16), expires_at: later(10) };
+    if (cur)
+      return {
+        ...base,
+        manifest: { id: cur.id, name: cur.name, version: "1.3.0", description: cur.description, publisher: cur.publisher, contributes: { connectors: [{}] } },
+        permissions: [RUNS, net("files.example.com、notes.example.com"), keys("API Key")],
+        upgrade: true,
+        from: cur.version,
+        more_permissions: true,
+        added_permissions: [{ key: "network", title: "访问更多网络", detail: "files.example.com" }],
+      };
+    return {
+      ...base,
+      manifest: { id: "example-weather", name: "Example Weather", version: "2.0.1", description: "给助手一个查天气的工具，结果按城市缓存", publisher: "example", contributes: { connectors: [{}] } },
+      permissions: [RUNS, net("api.weather.example.com"), { key: "hub_api", title: "完整使用 hub", detail: "拿到 hub 的地址和 token，能做 hub 主人能做的一切：读知识库、驱动各台电脑上的 Agent……" }, keys("API Key")],
+      warnings: [source.startsWith("upload:") ? "这个插件要求的 hub 版本比现在的新，部分功能可能不生效" : "配置里的 token 是明文存的：应该放在 secrets 里"],
+    };
+  };
+  let pending: PluginPreview | null = null;
+
   const overview = (): Overview => ({
     hub: { hub_id: SELF, name: state.hub_name, name_set: true, default_name: "server", version: state.version, started_at: startedAt, os: "linux", arch: "amd64", container: false, can_restart: true },
     listen: network.listen,
@@ -183,7 +224,7 @@ export function installMock(scenario: string) {
     await wait();
     const path = url.replace(/^\/api\/v1\/admin/, "");
     const method = init.method ?? "GET";
-    const body = init.body ? JSON.parse(String(init.body)) : {};
+    const body = typeof init.body === "string" && init.body ? JSON.parse(init.body) : {};
     const key = `${method} ${path.split("?")[0]}`;
     if (key === "GET /state") return json(state);
     if (key === "POST /setup") {
@@ -257,6 +298,30 @@ export function installMock(scenario: string) {
         setTimeout(() => Object.assign(m, { online: true, transport: "service", node_version: VERSION, os: "linux", paths: [{ via: "service", hub_id: SELF, id: body.id, ok: true, rtt_ms: 11, active: true }] }), 3000);
         return json({ machine: m, restart });
       }
+      case "GET /plugins":
+        return json({ plugins, can_install: scenario !== "nopeers", upload_most: 200 << 20 });
+      case "POST /plugins/preview": {
+        await wait(700);
+        const source = String(body.source ?? "");
+        if (source.includes("fail")) return fail(400, "invalid_plugin", "包里没有 persona-plugin.json（根目录或唯一的顶层目录里）");
+        pending = previewOf(source, body.upgrade);
+        return json(pending);
+      }
+      case "POST /plugins/upload": {
+        await wait(900);
+        const q = new URLSearchParams(url.split("?")[1] ?? "");
+        pending = previewOf(`upload:${q.get("name")}`, q.get("upgrade") ?? undefined);
+        return json(pending);
+      }
+      case "POST /plugins/install": {
+        if (!pending || body.preview_id !== pending.preview_id) return fail(400, "install_failed", "预览过期了，重新预览一次");
+        const m = pending.manifest;
+        const p: AdminPlugin = { id: m.id, name: m.name, kind: "connectors", status: "needs_setup", version: m.version, source: "installed", enabled: true, description: m.description,
+          contributes: { connectors: ["exampleweather"] }, needs_setup: ["API Key"], origin: "dir:/opt/removed/example-weather", publisher: m.publisher, permissions: pending.permissions };
+        plugins = [...plugins, p].sort((a, b) => a.id.localeCompare(b.id));
+        pending = null;
+        return json(p);
+      }
       case "GET /mesh":
         return scenario === "nopeers" ? fail(501, "not_implemented") : json(mesh);
       case "GET /devices":
@@ -320,6 +385,27 @@ export function installMock(scenario: string) {
       }
       if (m[2] === "/reconnect") return json({ ok: true });
       if (m[2] === "/link-pair") return json({ pair_url: `jarvis://link?url=https%3A%2F%2Fhub.example.com%3A18662&machine=${id}&token=jp_mock`, expires_at: later(10), command: `jarvis-link pair 'jarvis://link?…&machine=${id}'` });
+    }
+    const pl = /^\/plugins\/([^/?]+)(\/[a-z]+)?$/.exec(path);
+    if (pl) {
+      const i = plugins.findIndex((x) => x.id === decodeURIComponent(pl[1]));
+      if (i < 0) return fail(404, "not_found", "没有这个插件");
+      const p = plugins[i];
+      const put = (np: AdminPlugin) => ((plugins = plugins.map((x, j) => (j === i ? np : x))), json(np));
+      if (method === "DELETE") {
+        if (p.source !== "installed") return fail(409, "uninstall_failed", `${p.id} 是内置的插件，只能停用`);
+        plugins = plugins.filter((x) => x.id !== p.id);
+        return json({ ok: true });
+      }
+      if (pl[2] === "/enabled") return put({ ...p, enabled: body.enabled, status: body.enabled ? "running" : "disabled" });
+      if (pl[2] === "/rollback") return put({ ...p, version: p.previous_version, previous_version: undefined });
+      if (pl[2] === "/upgrade") {
+        await wait(600);
+        if (!pending?.upgrade) return fail(400, "upgrade_failed", "预览过期了，重新预览一次");
+        const np = { ...p, previous_version: p.version, version: pending.manifest.version, permissions: pending.permissions };
+        pending = null;
+        return put(np);
+      }
     }
     const d = /^\/devices\/([^/]+)$/.exec(path);
     if (d && method === "DELETE") {

@@ -140,10 +140,20 @@ func notesPackage(t *testing.T, version string) string {
 
 func pluginTestHub(t *testing.T) (*Hub, *pluginStore) {
 	h := newTestHub(t)
-	store := &pluginStore{keepStore: newKeepStore(), rows: map[string]plugin.Record{}, secrets: map[string]map[string]string{}}
+	store := newPluginStore()
 	h.store = store
+	startTestPlugins(t, h)
+	return h, store
+}
+
+func newPluginStore() *pluginStore {
+	return &pluginStore{keepStore: newKeepStore(), rows: map[string]plugin.Record{}, secrets: map[string]map[string]string{}}
+}
+
+// startTestPlugins starts h's connectors and plugins (hub.json's cfgs) on h.store, stopping them when the test ends.
+func startTestPlugins(t *testing.T, h *Hub, cfgs ...PluginConfig) {
 	h.connectors = connector.NewRegistry(nil)
-	h.plugins = newPlugins(h.cfg.dir, nil, h.logf)
+	h.plugins = newPlugins(h.cfg.dir, cfgs, h.logf)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(func() {
 		cancel()
@@ -155,7 +165,6 @@ func pluginTestHub(t *testing.T) (*Hub, *pluginStore) {
 	})
 	h.startConnectors(ctx)
 	h.startPlugins(ctx)
-	return h, store
 }
 
 func waitLong(t *testing.T, what string, ok func() bool) {

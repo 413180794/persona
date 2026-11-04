@@ -1,6 +1,6 @@
 // The admin API client (docs/admin.md「接口」): a session cookie, not the web client's bearer token. Writes carry the
 // session's CSRF token, which lives in memory only (GET state hands it out again after a reload).
-import type { AddedMachine, ConnectorRepair, LinkPair, MeshView } from "./types";
+import type { AddedMachine, AdminPlugin, AdminPlugins, ConnectorRepair, LinkPair, MeshView, PluginPreview } from "./types";
 
 export class AdminError extends Error {
   status: number;
@@ -44,7 +44,19 @@ export async function adminApi<T>(path: string, method: Method = "GET", json?: u
     body = JSON.stringify(json ?? {});
     if (csrf) headers["X-Jarvis-CSRF"] = csrf;
   }
-  const res = await transport(`/api/v1/admin${path}`, { method, headers, body, credentials: "same-origin", cache: "no-store" });
+  return answer<T>(await transport(`/api/v1/admin${path}`, { method, headers, body, credentials: "same-origin", cache: "no-store" }));
+}
+
+// adminUpload posts a file as it is (application/octet-stream): the one admin write whose body is not JSON (a plugin
+// package, docs/admin.md「插件」). query carries what the body cannot.
+export async function adminUpload<T>(path: string, file: Blob, query: Record<string, string>): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/octet-stream" };
+  if (csrf) headers["X-Jarvis-CSRF"] = csrf;
+  const q = new URLSearchParams(Object.entries(query).filter(([, v]) => v)).toString();
+  return answer<T>(await transport(`/api/v1/admin${path}?${q}`, { method: "POST", headers, body: file, credentials: "same-origin", cache: "no-store" }));
+}
+
+async function answer<T>(res: Response): Promise<T> {
   const text = await res.text();
   let data: Record<string, unknown> = {};
   try {
@@ -96,6 +108,10 @@ const MESSAGES: Record<string, string> = {
   invalid_address: "地址格式不对，例如 https://192.0.2.20:18662",
   unreachable: "连不上这个地址，检查地址、端口和对方的防火墙",
   invalid_code: "这不是一个有效的互联码",
+  no_plugins: "这台 hub 没有启用插件",
+  busy: "正在预览另一个插件，等它结束再试",
+  too_large: "包太大了",
+  confirm_required: "先看过它能做什么，确认后再装",
 };
 
 // errorText is what a person reads for a failed call. Codes not listed here (pair_failed, member_hub,
@@ -131,3 +147,24 @@ export const linkPair = (id: string) => adminApi<LinkPair>(`/machines/${enc(id)}
 
 export const repairConnector = (id: string, pairLink: string, address?: string) =>
   adminApi<ConnectorRepair>(`/machines/${enc(id)}/connector`, "POST", { pair_link: pairLink, address: address || undefined });
+
+// ── plugins (docs/admin.md「插件」): install, upgrade, roll back, uninstall, switch ──
+
+export const getPlugins = () => adminApi<AdminPlugins>("/plugins");
+
+// previewPlugin stages source (dir: / file: / https://…#sha256= / remote:) on the hub: what it may do, before anything
+// installs. upgrade: the installed plugin's id when this is its new version.
+export const previewPlugin = (source: string, upgrade?: string) => adminApi<PluginPreview>("/plugins/preview", "POST", { source, upgrade: upgrade || undefined });
+
+export const uploadPlugin = (file: File, upgrade?: string) => adminUpload<PluginPreview>("/plugins/upload", file, { name: file.name, upgrade: upgrade ?? "" });
+
+export const installPlugin = (pv: PluginPreview) => adminApi<AdminPlugin>("/plugins/install", "POST", { preview_id: pv.preview_id, permissions_digest: pv.permissions_digest });
+
+export const upgradePlugin = (id: string, pv: PluginPreview) =>
+  adminApi<AdminPlugin>(`/plugins/${enc(id)}/upgrade`, "POST", { preview_id: pv.preview_id, permissions_digest: pv.permissions_digest });
+
+export const rollbackPlugin = (id: string) => adminApi<AdminPlugin>(`/plugins/${enc(id)}/rollback`, "POST");
+
+export const setPluginEnabled = (id: string, enabled: boolean) => adminApi<AdminPlugin>(`/plugins/${enc(id)}/enabled`, "PUT", { enabled });
+
+export const uninstallPlugin = (id: string, keepData: boolean) => adminApi<{ ok: boolean }>(`/plugins/${enc(id)}`, "DELETE", { keep_data: keepData });
