@@ -196,6 +196,8 @@ button:disabled { cursor: default; }
 .prose-j tr:last-child td { border-bottom: 0; }
 .prose-j input[type=checkbox] { margin-right: .4em; accent-color: var(--ink); }
 .prose-j img { max-width: 100%; border-radius: 8px; }
+/* KaTeX's display math doesn't wrap: a wide matrix or equation scrolls in place instead of widening the column. */
+.prose-j .katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: .1em 0; }
 .prose-sm { font-size: 13px; line-height: 1.65; }
 
 /* 团子, the default persona (views/assistant/MochiFace.tsx): the app icon's colors, not the page's accent. */

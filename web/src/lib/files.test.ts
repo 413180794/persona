@@ -286,6 +286,18 @@ describe("markdown", () => {
     }
     expect(markdownChunks("short", 4)).toEqual(["short"]);
   });
+
+  it("never cuts inside display math", () => {
+    const para = (n: number) => Array.from({ length: n }, (_, i) => `line ${i}`).join("\n");
+    const md = `${para(5)}\n\n$$\na\n\nb\n\nc\n$$\n\n${para(5)}\n\n\\[\nx\n\ny\n\nz\n\\]\n\n${para(5)}`;
+    const chunks = markdownChunks(md, 4);
+    expect(chunks.length).toBeGreaterThan(2);
+    for (const c of chunks) {
+      expect((c.match(/\$\$/g) ?? []).length % 2).toBe(0);
+      expect((c.match(/\\\[/g) ?? []).length).toBe((c.match(/\\\]/g) ?? []).length);
+    }
+    expect(chunks.some((c) => c.includes("$$\na\n\nb\n\nc\n$$"))).toBe(true);
+  });
 });
 
 describe("tool steps", () => {

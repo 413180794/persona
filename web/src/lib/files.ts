@@ -676,8 +676,8 @@ function captures(re: RegExp, s: string): string[] {
 
 /**
  * A long Markdown file cut between top-level blocks into pieces of about `target` lines, so the page lays out only
- * what is on screen. Never inside a code fence, before an indented line (a list item's continuation, indented code)
- * or a table's rows; link definitions go with every piece so references still resolve. (iOS MarkdownChunks)
+ * what is on screen. Never inside a code fence or display math, before an indented line (a list item's continuation,
+ * indented code) or a table's rows; link definitions go with every piece so references still resolve. (iOS MarkdownChunks)
  */
 export function markdownChunks(text: string, target = 40): string[] {
   const lines = text.split("\n");
@@ -686,13 +686,19 @@ export function markdownChunks(text: string, target = 40): string[] {
   const out: string[] = [];
   let cur: string[] = [];
   let fence: string | null = null;
+  // The delimiter that ends an open display formula ($$ … $$ or \[ … \]), which may hold blank lines.
+  let math: string | null = null;
   lines.forEach((line, i) => {
     const t = line.trim();
     if (fence) {
       if (t.startsWith(fence)) fence = null;
+    } else if (math) {
+      if (t.includes(math)) math = null;
     } else if (t.startsWith("```") || t.startsWith("~~~")) fence = t.slice(0, 3);
+    else if ((t.match(/(?<!\\)\$\$/g) ?? []).length % 2) math = "$$";
+    else if (/(?<!\\)\\\[/.test(t) && !t.slice(t.lastIndexOf("\\[")).includes("\\]")) math = "\\]";
     cur.push(line);
-    if (fence || cur.length < target || t || i + 1 >= lines.length) return;
+    if (fence || math || cur.length < target || t || i + 1 >= lines.length) return;
     const next = lines[i + 1];
     if (next.startsWith(" ") || next.startsWith("\t") || !next.trim()) return;
     out.push(cur.join("\n"));
