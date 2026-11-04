@@ -138,6 +138,10 @@ type quickMeta struct {
 
 const offlineWindow = 7 * 24 * time.Hour
 
+// quickTail: how much of a transcript's end readQuickMeta reads for its title and last words. One line can fill it:
+// Claude Code writes its api-request-blob lines whole (300–500 KB each, 2026-11).
+const quickTail = 384 * 1024
+
 // metaMinInterval: how stale a growing transcript's title / last text / background tasks may get in the list.
 const metaMinInterval = 3 * time.Second
 
@@ -195,8 +199,7 @@ func readQuickMeta(path string, st os.FileInfo) quickMeta {
 		nr, _ = f.ReadAt(head, 0)
 	}
 	first := tm.FirstUser
-	const tail = 384 * 1024
-	off := max(st.Size()-tail, 0)
+	off := max(st.Size()-quickTail, 0)
 	buf := make([]byte, st.Size()-off)
 	if _, err := f.ReadAt(buf, off); err == nil || len(buf) > 0 {
 		lines := bytes.Split(buf, []byte("\n"))
@@ -653,8 +656,12 @@ func (n *Node) scanOffline() []proto.Session {
 		}
 		listed[id] = true
 		m := n.meta(c.path, c.st)
-		if m.lastText == "" && m.title == "" {
-			continue // sessions that never produced output (e.g. hook probes)
+		// Sessions that never produced output (hook probes): small files read whole with no title and no words. A bigger
+		// one only had its tail read, and a tail of tool calls under one huge line says nothing; the main conversation is
+		// listed whatever its tail holds. Dropping it left the app and the web with no session for 主对话, and its composer
+		// disabled (#1163: its last turn stopped mid tool call, under a 377 KB line).
+		if m.lastText == "" && m.title == "" && !keep[id] && c.st.Size() <= quickTail {
+			continue
 		}
 		n.setGuessedPath(id, c.path)
 		s := proto.Session{

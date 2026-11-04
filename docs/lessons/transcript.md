@@ -41,3 +41,10 @@
 - 往前翻页有解析预算，但前面还有内容时不能回空页：空页 + `has_more: true` 让 App 没有 seq 可以接着取，更早的历史就再也看不到（大 Codex rollout 两轮之间夹着几十 MB 不出条目的行）。
 - `<jarvis-context>` 的解析不能假定属性齐全、顺序固定（2026-11-03，#876）：iOS 曾只认 `kind` `title` `url` 三个都在的，飞书 /agent 的上下文没有 `url`，标签没被认出，气泡里留下整段提示词和大片空白。
   分页截断用户消息也要避开标签：从中间截断会留下没闭合的 `<jarvis-context`，各端都会把半截标签当正文显示（`transcript/contexts.go` 的 `lightContexts` 只削减各块的正文）。
+
+## 尾部窗口里可能一句话都没有（2026-11-04，#1163）
+
+node 列离线会话只读 transcript 最后 384 KB（`quickTail`）取标题和最后一句。Claude Code 现在把 `api-request-blob` 整行写进 transcript，一行 300–500 KB，
+一行就能占满尾部窗口；最后一轮要是停在工具调用中间（thinking → tool_use → tool_result），读到的尾部就没有任何文字。`scanOffline` 以前把
+「没有标题也没有最后一句」一律当成 hook 探针跳过，连 kept 的主对话也跳了：主对话从所有列表里消失，App 和网页找不到会话，输入框整个点不动。
+现在只跳过整个文件都读过（不大于尾部窗口）、确实没有输出的小文件；主对话不论尾部是什么都列。按尾部内容做「过滤」时，先想清楚尾部可能被一行大数据占满。
