@@ -139,4 +139,68 @@ import Testing
         p.add(p.refresh(with: page([11, 12]).replies(of: "m1")))
         #expect(p.messages.map(\.position) == ["10", "11", "12"])
     }
+
+    // MARK: 回到最新 (#1034)
+
+    @Test func movingAwayKeepsTheNewestForGoingBackWithoutTheNetwork() {
+        var p = LarkPager()
+        p.replace(with: page([40, 41, 42], older: true))
+        p.replace(with: page([10, 11], older: true, newer: true)) // a jump to an older message
+        let back = p.toTail(cached: [])
+        #expect(back)
+        #expect(p.messages.map(\.position) == ["40", "41", "42"])
+        #expect(!p.hasNewer && p.hasOlder && p.olderRequest == "40" && p.newerRequest == "42")
+        let again = p.toTail(cached: [])
+        #expect(!again, "already at the newest")
+    }
+
+    @Test func theCacheServesWhenItReachesFurtherOrNothingWasKept() {
+        var p = LarkPager()
+        p.replace(with: page([10, 11], older: true, newer: true)) // opened at a message: nothing kept
+        let cached = page([30, 31]).messages
+        let fromCache = p.toTail(cached: cached)
+        #expect(fromCache && p.messages.map(\.position) == ["30", "31"])
+
+        var q = LarkPager()
+        q.replace(with: page([40, 41], older: true))
+        q.replace(with: page([10, 11], older: true, newer: true))
+        let newer = q.toTail(cached: page([50, 51]).messages)
+        #expect(newer && q.messages.last?.position == "51", "the cache went on while away")
+
+        var r = LarkPager()
+        r.replace(with: page([10, 11], older: true, newer: true))
+        let none = r.toTail(cached: [])
+        #expect(!none && r.messages.map(\.position) == ["10", "11"], "nothing here: wait for the hub")
+    }
+
+    @Test func theLatestPageJoinsUpOrLeavesAGap() {
+        var p = LarkPager()
+        p.replace(with: page([40, 41], older: true))
+        // Joined up: starts right after the last loaded.
+        let next = p.latest(page([42, 43], older: true))
+        #expect(next == .fresh(page([42, 43]).messages))
+        // Overlapping is joined up too.
+        let overlap = p.latest(page([41, 42], older: true))
+        #expect(overlap == .fresh(page([42]).messages))
+        // The whole chat in one page: nothing can be missing.
+        let whole = p.latest(page([60, 61], older: false))
+        #expect(whole == .fresh(page([60, 61]).messages))
+        // Messages missing in between.
+        let gap = p.latest(page([60, 61], older: true))
+        #expect(gap == .gap)
+        #expect(p.messages.map(\.position) == ["40", "41"], "a gap changes nothing by itself")
+    }
+
+    @Test func aGapLoadsTheNewerPagesInOrderFromTheBottom() {
+        var p = LarkPager()
+        p.replace(with: page([40, 41], older: true))
+        p.markGap()
+        #expect(p.hasNewer && p.catchingUp && p.newerRequest == "41")
+        let back = p.toTail(cached: [])
+        #expect(!back, "catching up is the newest window already")
+        p.append(page([42, 43], newer: true), from: "41")
+        #expect(p.catchingUp)
+        p.append(page([44], newer: false), from: "43")
+        #expect(!p.hasNewer && !p.catchingUp && p.messages.map(\.position) == ["40", "41", "42", "43", "44"])
+    }
 }

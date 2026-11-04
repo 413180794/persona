@@ -276,7 +276,7 @@ final class LarkHistoryFlowTests: XCTestCase {
 
     @MainActor func testTopicGroupKeepsTheManualButton() async throws {
         let app = try await open(["topic": true])
-        let load = app.buttons["加载更早的消息"]
+        let load = app.buttons["加载更早的话题"] // a topic group's own wording (#1827)
         for _ in 0..<8 where !load.isHittable { app.scrollViews.firstMatch.swipeDown(velocity: .slow) }
         XCTAssertTrue(load.waitForExistence(timeout: 10))
         try await Task.sleep(for: .seconds(1.5))

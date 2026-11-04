@@ -7016,7 +7016,7 @@ CHAT_PINS_FIXTURE = None
 HISTORY_FIXTURE = None
 if os.environ.get("MOCK_LARK_HISTORY"):
     from lark_history import HistoryFixture
-    HISTORY_FIXTURE = HistoryFixture(LARK_ACCOUNT_ID, lark_window, fs_push)
+    HISTORY_FIXTURE = HistoryFixture(LARK_ACCOUNT_ID, lark_window, fs_push, LARK_CHATS, ago)
     # Read chats open at their newest message, where paging back starts.
     for _c in LARK_CHATS:
         if _c["id"] in ("f1", "f2"):

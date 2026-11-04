@@ -13,6 +13,20 @@ struct LarkPager: Equatable {
     var readCursor: String?
     /// Positions that reached the screen.
     var seen: Set<String> = []
+    /// The newest messages loaded before the window moved away from them (opened at a message, a jump, a Pin):
+    /// 回到最新 goes back to them at once, with no network (#1034).
+    private(set) var kept: [LarkMessage]?
+    /// The window is the newest this device has, and the hub has more after it than its latest page joins up with:
+    /// the newer pages load from the bottom, in order.
+    private(set) var catchingUp = false
+
+    /// How the hub's latest page meets what is loaded.
+    enum Latest: Equatable {
+        /// It joins up: these are newer than the last loaded (the view adds them).
+        case fresh([LarkMessage])
+        /// Messages are missing in between.
+        case gap
+    }
 
     /// Where the next older / newer page starts.
     var olderRequest: String? { olderCursor ?? messages.first?.position }
@@ -20,6 +34,13 @@ struct LarkPager: Equatable {
 
     /// A whole page in place of what was loaded (opening, jumping to a message, back to the newest).
     mutating func replace(with r: APIClient.LarkMessages) {
+        if r.hasNewer == true {
+            // Moving away from the newest: keep them for 回到最新.
+            if !hasNewer, !messages.isEmpty { kept = Array(messages.suffix(Self.keptMost)) }
+        } else {
+            kept = nil
+        }
+        catchingUp = false
         messages = r.messages
         hasOlder = r.hasOlder
         hasNewer = r.hasNewer ?? false
@@ -40,6 +61,7 @@ struct LarkPager: Equatable {
         let have = Set(messages.map(\.id))
         messages += r.messages.filter { !have.contains($0.id) }
         hasNewer = r.hasNewer ?? false
+        if !hasNewer { catchingUp = false; kept = nil }
         newerCursor = r.newerCursor ?? r.messages.last?.position ?? cursor
     }
 
@@ -53,6 +75,49 @@ struct LarkPager: Equatable {
             !messages.contains { $0.id == m.id } && (messages.last.map { LarkPosition.less($0.position, m.position) } ?? true)
         }
     }
+
+    /// 回到最新 with no network: back to the newest messages this device has, the ones kept when the window moved away or
+    /// `cached` (the chat's cache), whichever reaches further. False when the window is the newest already, the newer
+    /// pages are catching up, or there are none.
+    mutating func toTail(cached: [LarkMessage]) -> Bool {
+        guard hasNewer, !catchingUp else { return false }
+        let mine = kept ?? []
+        let tail: [LarkMessage]
+        if let newest = cached.last, mine.last.map({ LarkPosition.less($0.position, newest.position) }) ?? true {
+            tail = cached
+        } else {
+            tail = mine
+        }
+        guard let first = tail.first, let last = tail.last else { return false }
+        messages = tail
+        hasOlder = true // a final empty page says otherwise (LarkHistoryPaging)
+        olderCursor = first.position
+        hasNewer = false
+        newerCursor = last.position
+        kept = nil
+        return true
+    }
+
+    /// The hub's latest page against the newest loaded. Joined up (it starts at or before the message after the last
+    /// loaded one, or it is the whole chat): cards that changed update in place and the newer ones come back. Else
+    /// messages are missing in between; nothing changes (the view replaces the window or calls `markGap`).
+    mutating func latest(_ r: APIClient.LarkMessages) -> Latest {
+        if let last = messages.last, let first = r.messages.first, r.hasOlder,
+           LarkPosition.less(LarkPosition.next(last.position), first.position) {
+            return .gap
+        }
+        return .fresh(refresh(with: r))
+    }
+
+    /// Missing messages after the last loaded: the newer pages load from the bottom (`append`), in order.
+    mutating func markGap() {
+        guard let last = messages.last else { return }
+        hasNewer = true
+        newerCursor = last.position
+        catchingUp = true
+    }
+
+    static let keptMost = 80
 
     /// Two refreshes can be in flight at once (a push and a send's own): both return the same new message, it goes in once.
     mutating func add(_ fresh: [LarkMessage]) {
@@ -103,4 +168,8 @@ final class LarkChatBook {
     var receipts = LarkReadReceipts()
     var reportTask: Task<Void, Never>?
     var receiptTask: Task<Void, Never>?
+    /// How many times the user's finger took the list: 回到最新 tells a reader who went back up from one who did not.
+    var drags = 0
+    /// The newer-messages spinner at the bottom is on screen.
+    var newerVisible = false
 }

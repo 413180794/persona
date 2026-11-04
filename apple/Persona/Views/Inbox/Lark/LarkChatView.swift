@@ -64,6 +64,8 @@ struct LarkChatView: View {
     /// The one message that reports where it is while a page goes in above it.
     @State private var historyAnchor: String?
     @State private var loadingNewer = false
+    /// 回到最新 is waiting for the hub (none of the newest messages on this device).
+    @State private var jumping = false
     /// The first load is on its way (the page shows a spinner when nothing was cached).
     @State private var loading = true
     /// Why the last load failed: the page's placeholder when there is nothing to show, a line on top otherwise.
@@ -281,10 +283,14 @@ struct LarkChatView: View {
                     .id(m.id)
                 }
                 if pager.hasNewer {
+                    // Loads while it is on screen; still on screen after a page (at the newest end, catching up), it asks
+                    // for the next one (onAppear did not; a task keyed on the cursor ran off screen too, to the end). A
+                    // topic group's stack lays out every row at once, so on screen is the only signal that holds there too.
                     ProgressView().controlSize(.small).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.tapTarget)
-                        .onAppear { if !isTopic { Task { await loadNewer() } } }
-                        // A topic group's stack lays out every row at once: newer topics only once this is on screen
-                        .onScrollVisibilityChange(threshold: 0.01) { if isTopic && $0 { Task { await loadNewer() } } }
+                        .onScrollVisibilityChange(threshold: 0.01) { visible in
+                            book.newerVisible = visible
+                            if visible { Task { await loadNewer() } }
+                        }
                 } else {
                     outgoingRows
                 }
@@ -306,6 +312,11 @@ struct LarkChatView: View {
             g.visibleRect.maxY - g.contentInsets.bottom >= g.contentSize.height - 80
         } action: { _, v in atBottom = v }
         .onScrollTargetVisibilityChange(idType: String.self) { historyHold.visible = $0 }
+        .onScrollPhaseChange { old, phase in
+            // A drag starts (some go straight to interacting): counted once.
+            let finger: [ScrollPhase] = [.tracking, .interacting]
+            if finger.contains(phase), !finger.contains(old) { book.drags += 1 }
+        }
         // With the content's height in it, the first layout reports too: a list too short to scroll is near its top
         // from the start, and the change-only callback never said so (measured: no request at all).
         .onScrollGeometryChange(for: LarkHistoryReach.self) { g in
@@ -501,7 +512,8 @@ struct LarkChatView: View {
             let n = unseenNew
             Button { Task { await jumpToLatest() } } label: {
                 HStack(spacing: Theme.Space.sm) {
-                    Image(systemName: Theme.Icon.expand).font(.system(size: 13, weight: .bold))
+                    if jumping { ProgressView().controlSize(.small) }
+                    else { Image(systemName: Theme.Icon.expand).font(.system(size: 13, weight: .bold)) }
                     if n > 0 { Text("\(n > 99 ? "99+" : "\(n)") 条新消息").font(Theme.Font.captionMedium).lineLimit(1) }
                 }
                 .foregroundStyle(LarkColor.blue)
@@ -514,6 +526,8 @@ struct LarkChatView: View {
             .padding(.trailing, Theme.Space.l)
             .padding(.bottom, Theme.Space.s)
             .accessibilityLabel(n > 0 ? "\(n) 条新消息，回到最新" : "回到最新")
+            .accessibilityValue(jumping ? "正在加载" : "")
+            .accessibilityIdentifier("lark.jumpLatest")
             .transition(.scale.combined(with: .opacity))
         }
     }
@@ -652,13 +666,28 @@ struct LarkChatView: View {
     }
 
     /// Polls the tail while it is loaded: new messages append, cards that changed (alert status…) update in place.
-    private func refreshLatest() async {
-        guard !pager.hasNewer, let api = chatAPI, let r = try? await api.larkMessages(conversation.id, topic: isTopic) else { return }
+    /// `untouchedSince`: 回到最新 took the list to its end with the drag count at this; the finger has not taken it since,
+    /// so it is still at the end even when the geometry just after the window changed says otherwise.
+    private func refreshLatest(untouchedSince: Int? = nil) async {
+        guard !pager.hasNewer, let api = chatAPI, let r = try? await api.larkMessages(conversation.id, topic: isTopic),
+              !pager.hasNewer else { return } // (the window may have moved away meanwhile)
         problem = nil // it answers again (lark-connector signed in again, the network is back)
-        let fresh = pager.refresh(with: r)
-        guard !fresh.isEmpty else { return }
-        if atBottom { following = true } // near the end: the new ones come into view (larkFollowsEnd)
-        withAnimation(Theme.Motion.standard) { pager.add(fresh) }
+        switch pager.latest(r) {
+        case .fresh(let fresh):
+            guard !fresh.isEmpty else { return }
+            if atBottom { following = true } // near the end: the new ones come into view (larkFollowsEnd)
+            withAnimation(Theme.Motion.standard) { pager.add(fresh) }
+        case .gap:
+            // Messages are missing between the last loaded and the latest page (many came while away). At the newest
+            // end the latest page takes the window (the list stays at its end); reading further up nothing moves, and
+            // the newer pages load in order when the bottom is reached.
+            if following || atBottom || untouchedSince == book.drags {
+                following = true
+                apply(r)
+            } else {
+                pager.markGap()
+            }
+        }
     }
 
     private static let historyLog = Logger(subsystem: "jarvis", category: "lark-history")
@@ -767,16 +796,35 @@ struct LarkChatView: View {
         defer { loadingNewer = false }
         guard let r = try? await api.larkMessages(conversation.id, after: cursor) else { return }
         pager.append(r, from: cursor)
+        // Let the page lay out: the spinner still on screen means the next one.
+        try? await Task.sleep(for: .milliseconds(150))
+        if pager.hasNewer, book.newerVisible { Task { await loadNewer() } }
     }
 
-    /// 回到最新: the latest page; the new-messages line goes away.
+    /// 回到最新: at once to the newest messages this device has (kept from before the window moved away, or the chat's
+    /// cache), then quietly up to date (#1034); the new-messages line goes away. Only with none of them here does it
+    /// wait for the hub, and the button says so.
     private func jumpToLatest() async {
-        if pager.hasNewer, let api = chatAPI, let r = try? await api.larkMessages(conversation.id, topic: isTopic) {
-            apply(r)
-            anchor = nil
+        let drags = book.drags
+        if pager.hasNewer, !pager.catchingUp {
+            if pager.toTail(cached: LarkMessage.loadCached(LarkMessage.cacheName(conversation)) ?? []) {
+                resetHistory()
+                anchor = nil
+                following = true
+                position.scrollTo(edge: .bottom) // not animated: it is another window
+                await refreshLatest(untouchedSince: drags)
+                return
+            }
+            jumping = true
+            defer { jumping = false }
+            if let api = chatAPI, let r = try? await api.larkMessages(conversation.id, topic: isTopic) {
+                apply(r)
+                anchor = nil
+            }
         }
         following = true
         withAnimation(Theme.Motion.standard) { position.scrollTo(edge: .bottom) }
+        await refreshLatest(untouchedSince: drags)
     }
 
     /// 有人@你: to the mention, loading the page around it if needed.
