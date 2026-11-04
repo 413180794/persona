@@ -446,8 +446,6 @@ nonisolated enum Theme {
         static let inkText = Color(light: 0xFFFFFF, dark: 0x0D0D0D)
         /// The drawer behind the page.
         static let drawer = Color(light: 0xF9F9F9, dark: 0x171717)
-        /// The 新对话 pill at the drawer's foot.
-        static let newChat = Color(light: 0x2F6FED, dark: 0x3B7BF2)
         /// The composer: its field's corner when it is one line (a capsule) and when it has grown into a card.
         static let composerRadius: CGFloat = 32
         /// The switch's segments: width of each, and its height.

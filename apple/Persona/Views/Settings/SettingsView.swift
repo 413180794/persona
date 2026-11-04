@@ -540,17 +540,30 @@ private struct SourceIcon: View {
 }
 
 struct AppGlyph: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var pageLook
     var size: CGFloat
     var body: some View {
-        // Persona's mark beside its name (设置's header, the welcome page) is the app icon itself, in the screen's look:
-        // the default icon's preview (any / dark), so it changes with the icon (#709).
+        // Persona's mark beside its name (设置's header, the welcome page) is the app icon itself: the one picked in
+        // 设置 › 外观 › App 图标, in the look the home screen shows it in (#1312).
+        let icon = model.appIcon.current
         let shape = RoundedRectangle(cornerRadius: Theme.Radius.appIcon(size), style: .continuous)
-        Image(AppIconChoice.standard.preview)
+        Image(icon.preview)
             .resizable()
             .interpolation(.high)
             .frame(width: size, height: size)
+            .environment(\.colorScheme, icon.homeScreenLook(model.colorScheme, system: systemLook))
             .clipShape(shape)
             .overlay(shape.stroke(Theme.cardStroke, lineWidth: Theme.Size.line))
+    }
+
+    /// Under 跟随系统 the page's look (read here so the glyph redraws when the system's changes); else the screen's.
+    private var systemLook: ColorScheme {
+        #if os(iOS)
+        model.colorScheme == .system ? pageLook : AppIconChoice.systemLook
+        #else
+        pageLook
+        #endif
     }
 }
 

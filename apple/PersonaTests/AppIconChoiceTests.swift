@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 import UIKit
 @testable import Jarvis
@@ -76,6 +77,20 @@ import UIKit
         let n = AppIconModel(system: other)
         await n.follow(.dark)
         #expect(other.calls.isEmpty && n.current == .aura)
+    }
+
+    /// The look an icon is drawn in (设置's header and the picker, #1312): 纸色 / 蜜桃 take a set 深浅色, the others
+    /// and 跟随系统 the system's.
+    @Test func homeScreenLook() {
+        for c in [AppIconChoice.standard, .peach] {
+            #expect(c.homeScreenLook(.light, system: .dark) == .light)
+            #expect(c.homeScreenLook(.dark, system: .light) == .dark)
+            #expect(c.homeScreenLook(.system, system: .dark) == .dark)
+        }
+        for c in [AppIconChoice.didot, .aura] {
+            #expect(c.homeScreenLook(.light, system: .dark) == .dark)
+            #expect(c.homeScreenLook(.dark, system: .light) == .light)
+        }
     }
 
     @Test func startsOnAnyOfTheSets() {

@@ -80,6 +80,17 @@ nonisolated enum AppIconChoice: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// The look the home screen shows it in: 纸色 / 蜜桃 under 浅色 / 深色 take that look; the others, and 跟随系统,
+    /// the system's (`system`).
+    func homeScreenLook(_ scheme: ColorSchemeChoice, system: ColorScheme) -> ColorScheme {
+        guard followsScheme else { return system }
+        switch scheme {
+        case .system: return system
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+
     /// The alternate icon sets the choice can be on (all of them ship); the primary icon is not one.
     var iconNames: [String] { [iconName, fixedLooks?.light, fixedLooks?.dark].compactMap { $0 } }
 
@@ -167,6 +178,16 @@ extension UIApplication: AppIconSetting {}
         }
     }
 }
+
+#if os(iOS)
+extension AppIconChoice {
+    /// The system's look, the home screen's: read off the screen, as the window carries the app's own 深浅色.
+    @MainActor static var systemLook: ColorScheme {
+        let screen = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.screen }.first
+        return screen?.traitCollection.userInterfaceStyle == .dark ? .dark : .light
+    }
+}
+#endif
 
 extension AppIconModel {
     /// The app's own: UIApplication on iPhone and iPad, nothing on the Mac.

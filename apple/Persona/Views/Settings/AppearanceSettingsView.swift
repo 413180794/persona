@@ -259,18 +259,6 @@ struct AppIconSettingsPage: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    /// The look the home screen shows a choice in: 纸色 / 蜜桃 under 浅色 / 深色 take that look (#710); the others, and
-    /// 跟随系统, the system's. Read off the screen: the window carries the app's own 深浅色.
-    private func homeScreenLook(_ c: AppIconChoice) -> ColorScheme {
-        switch (c.followsScheme, model.colorScheme) {
-        case (true, .light): return .light
-        case (true, .dark): return .dark
-        default:
-            let screen = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.screen }.first
-            return screen?.traitCollection.userInterfaceStyle == .dark ? .dark : .light
-        }
-    }
-
     private func tile(_ c: AppIconChoice, icons: AppIconModel) -> some View {
         let selected = c == icons.current
         let side = Theme.Size.box80
@@ -285,7 +273,7 @@ struct AppIconSettingsPage: View {
                     .resizable()
                     .interpolation(.high)
                     .frame(width: side, height: side)
-                    .environment(\.colorScheme, homeScreenLook(c))
+                    .environment(\.colorScheme, c.homeScreenLook(model.colorScheme, system: AppIconChoice.systemLook))
                     .clipShape(shape)
                     .overlay(shape.stroke(Theme.cardStroke, lineWidth: Theme.Size.line))
                     .overlay {

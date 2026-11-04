@@ -1126,7 +1126,7 @@ struct AssistantSidebar: View {
         if isShell { shellFooter } else { profileFooter }
     }
 
-    /// The shell's foot, ChatGPT's: a 新对话 pill on the left, 设置 in a glass circle on the right.
+    /// The shell's foot, ChatGPT's: a 新对话 pill in the 主题色 on the left (#1312), 设置 in a glass circle on the right.
     private var shellFooter: some View {
         HStack(spacing: Theme.Space.m) {
             Button(action: newConversation) {
@@ -1136,7 +1136,7 @@ struct AssistantSidebar: View {
                     .lineLimit(1)
                     .padding(.horizontal, Theme.Space.xl)
                     .scaledFrame(height: Theme.Size.avatarL)
-                    .background(Theme.Shell.newChat, in: .capsule)
+                    .background(Theme.accent, in: .capsule)
                     .contentShape(.capsule)
             }
             .buttonStyle(.plain)
