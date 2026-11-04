@@ -2350,7 +2350,7 @@ def telegram_connector():
     t = TELEGRAM
     described = telegram_described()
     c = {"id": "telegram", "name": "Telegram", "enabled": t["enabled"],
-         "capabilities": ["status", "login", "archive", "inbox", "tools", "events"] if described else []}
+         "capabilities": ["status", "tools", "actions", "events", "inbox", "archive", "login", "threads"] if described else []}
     if described:  # 进知识库 / 进收件箱 (#989)
         c.update(archive=t["archive"], inbox=t["inbox"])
     if not t["enabled"]:
@@ -2386,12 +2386,157 @@ def telegram_prompt(step, error=""):
     return p
 
 
+# The inbox's Telegram conversations as the app's conversation page (#1054): made-up people, groups, pictures.
+def tg_rgba(w, h, pixel):
+    """A w×h RGBA PNG; pixel(x, y) gives (r, g, b, a)."""
+    import zlib
+    raw = b"".join(b"\0" + b"".join(bytes(pixel(x, y)) for x in range(w)) for y in range(h))
+    def chunk(t, d): return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
+def tg_photo(w, h, top, bottom, sun=True):
+    """A made-up landscape: a sky from top to bottom color, a sun, a hill."""
+    def px(x, y):
+        f = y / max(h - 1, 1)
+        c = [int(top[i] + (bottom[i] - top[i]) * f) for i in range(3)]
+        if sun and (x - w * 0.72) ** 2 + (y - h * 0.3) ** 2 < (h * 0.12) ** 2:
+            c = [255, 214, 120]
+        if y > h * 0.68 + (h * 0.08) * ((x / w - 0.4) ** 2 * 4):
+            c = [70, 130, 90]
+        return (*c, 255)
+    return tg_rgba(w, h, px)
+
+
+def tg_sticker(n=180):
+    """A made-up sticker: a round yellow face on transparency."""
+    r = n * 0.45
+    def px(x, y):
+        dx, dy = x - n / 2, y - n / 2
+        if dx * dx + dy * dy > r * r:
+            return (0, 0, 0, 0)
+        if ((dx + r * 0.35) ** 2 + (dy + r * 0.2) ** 2 < (r * 0.12) ** 2) or ((dx - r * 0.35) ** 2 + (dy + r * 0.2) ** 2 < (r * 0.12) ** 2):
+            return (60, 40, 20, 255)
+        if dy > r * 0.25 and abs(dx) < r * 0.45 and (dx * dx) / (r * 0.45) ** 2 + ((dy - r * 0.25) ** 2) / (r * 0.3) ** 2 < 1:
+            return (120, 50, 30, 255)
+        return (255, 205, 60, 255)
+    return tg_rgba(n, n, px)
+
+
+TG_AVATAR_COLORS = {"u1": (88, 160, 230), "u7": (230, 140, 90), "u8": (150, 110, 210), "c2": (90, 190, 150)}
+
+
+def tg_media(ref):
+    """The bytes a made-up media ref names (refs as the connector makes them: a.<peer>.<photo>, m.<chat>.<id>.f|t)."""
+    parts = ref.split(".")
+    if parts[0] == "a" and len(parts) == 3 and parts[1] in TG_AVATAR_COLORS:
+        return png(96, 96, TG_AVATAR_COLORS[parts[1]])
+    if ref == "m.u1.34.f":
+        return tg_photo(400, 300, (110, 170, 235), (210, 230, 250))
+    if ref == "m.u1.31.f":
+        return tg_sticker()
+    if ref == "m.c2.9.t":
+        return tg_photo(320, 180, (40, 50, 80), (120, 90, 140), sun=False)
+    return None
+
+
+def tg_thread_messages(thread):
+    now = datetime.now(timezone.utc)
+    def at(days=0, h=0, m=0):
+        d = (now - timedelta(days=days)).replace(hour=h, minute=m, second=0, microsecond=0)
+        return d.isoformat().replace("+00:00", "Z")
+    me = {"name": "我"}
+    you = {"id": "u1", "name": "示例用户", "avatar": "a.u1.501"}
+    if thread == "u1":
+        out = []
+        for i in range(1, 29):  # the older page: yesterday's
+            out.append({"id": str(i), "at": at(1, 9 + i * 5 // 60, i * 5 % 60), "sender": you if i % 3 else me, "mine": not i % 3,
+                        "text": "示例消息 %d：周末的计划再对一下" % i if i % 3 else "好的，示例回复 %d" % i})
+        out += [
+            {"id": "29", "at": at(0, 9, 12), "sender": you, "text": "周末的示例活动还去吗？"},
+            {"id": "30", "at": at(0, 9, 13), "sender": me, "mine": True, "text": "去，九点在示例公园门口见"},
+            {"id": "31", "at": at(0, 9, 14), "sender": you, "media": [{"kind": "sticker", "ref": "m.u1.31.f", "emoji": "😄", "width": 512, "height": 512}]},
+            {"id": "32", "at": at(0, 9, 40), "sender": you, "media": [{"kind": "voice", "duration": 12, "mime": "audio/ogg"}]},
+            {"id": "33", "at": at(0, 9, 41), "sender": you, "text": "路线发你了", "media": [{"kind": "file", "name": "示例路线.pdf", "size": 284000,
+                                                                                         "mime": "application/pdf"}]},
+            {"id": "34", "at": at(0, 9, 41), "sender": you, "text": "上次拍的", "media": [{"kind": "image", "ref": "m.u1.34.f", "width": 1200, "height": 900}]},
+            {"id": "35", "at": at(0, 9, 42), "sender": me, "mine": True, "text": "天气真好，这次也带上相机",
+             "reply_to": {"id": "34", "from": "示例用户", "text": "上次拍的"}},
+            {"id": "36", "at": at(0, 9, 43), "sender": you, "text": "九点见，别迟到", "edited": True,
+             "reply_to": {"id": "30", "from": "我", "text": "去，九点在示例公园门口见"}},
+        ]
+        return {"id": "u1", "name": "示例用户", "kind": "dm", "avatar": "a.u1.501", "reply": "telegram_send"}, out
+    if thread == "c2":
+        other = {"id": "u7", "name": "另一个示例用户", "avatar": "a.u7.507"}
+        third = {"id": "u8", "name": "第三个示例用户", "avatar": "a.u8.508"}
+        out = [
+            {"id": "1", "at": at(0, 8, 30), "sender": {"name": "示例群"}, "event": True, "text": "第三个示例用户 进群"},
+            {"id": "2", "at": at(0, 8, 31), "sender": third, "text": "大家好，我是新来的示例用户"},
+            {"id": "3", "at": at(0, 8, 31), "sender": third, "text": "以后多关照"},
+            {"id": "4", "at": at(0, 9, 2), "sender": other, "text": "@example 这个示例方案你怎么看？"},
+            {"id": "5", "at": at(0, 9, 3), "sender": you, "text": "我觉得第二版更清楚"},
+            {"id": "6", "at": at(0, 9, 5), "sender": me, "mine": True, "text": "同意，第二版的结构更好", "reply_to": {"id": "4", "from": "另一个示例用户",
+                                                                                                         "text": "@example 这个示例方案你怎么看？"}},
+            {"id": "7", "at": at(0, 9, 6), "sender": other, "text": "那就按第二版来"},
+            {"id": "8", "at": at(0, 9, 30), "sender": third, "text": "演示的录屏放这里了"},
+            {"id": "9", "at": at(0, 9, 30), "sender": third, "media": [{"kind": "video", "thumb": "m.c2.9.t", "duration": 65, "width": 1280, "height": 720}]},
+        ]
+        return {"id": "c2", "name": "示例群", "kind": "group", "avatar": "a.c2.900", "members": 12, "reply": "telegram_send"}, out
+    return None, []
+
+
+TG_SENT = {}
+
+
+def tg_thread(thread, before, limit):
+    chat, msgs = tg_thread_messages(thread)
+    if chat is None:
+        return None
+    msgs = msgs + TG_SENT.get(thread, [])
+    if before:
+        msgs = [m for m in msgs if int(m["id"]) < int(before)]
+    page = msgs[-limit:]
+    out = {"chat": chat, "messages": page}
+    if len(msgs) > limit:
+        out["before"] = page[0]["id"]
+    return out
+
+
 def telegram_area(h, method, p, raw):
     """Telegram's connector routes; True when it answered."""
     if not TELEGRAM_MODE or not p.startswith("/api/v1/connectors/telegram/"):
         return False
     t, body = TELEGRAM, json.loads(raw or b"{}")
     what = p.rsplit("/", 1)[1]
+    q = parse_qs(urlparse(h.path).query)
+    if what == "thread" and method == "GET":
+        if t["limited"]:
+            return h.send_json({"error": "Telegram 限流：还要 248 秒（14:10:02 恢复）。这期间不发任何请求。", "code": "rate_limited"}, 429) or True
+        page = tg_thread(q.get("thread", [""])[0], q.get("before", [""])[0], int(q.get("limit", ["30"])[0]))
+        if page:
+            h.send_json(page)
+        else:
+            h.send_json({"error": "没有叫这个的会话"}, 502)
+        return True
+    if what == "media" and method == "GET":
+        data = tg_media(q.get("ref", [""])[0])
+        if data is None:
+            return h.send_json({"error": "不认识这个媒体"}, 502) or True
+        h.send_response(200)
+        h.send_header("Content-Type", "image/png"); h.send_header("Content-Length", str(len(data)))
+        h.send_header("Cache-Control", "private, max-age=31536000, immutable")
+        h.end_headers(); h.wfile.write(data)
+        return True
+    if p.endswith("/thread/reply") and method == "POST":  # the real hub asks on the phone first (connector_gate)
+        thread = body.get("thread", "")
+        sent = TG_SENT.setdefault(thread, [])
+        m = {"id": str(100 + len(sent)), "at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"), "sender": {"name": "我"},
+             "mine": True, "text": body.get("text", "")}
+        if body.get("reply_to"):
+            m["reply_to"] = {"id": body["reply_to"]}
+        sent.append(m)
+        return h.send_json({"ok": True, "result": {"sent": {"id": int(m["id"])}}}) or True
     if what in ("login", "logout") and not telegram_described():
         return h.send_json({"error": "Telegram has no sign-in"}, 409) or True
     if what == "login" and method == "POST":
@@ -5533,6 +5678,7 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"error": "邮件不存在"}, 404)
         if p == "/api/v1/mail/messages": return self.send_json({"messages": [], "has_more": False})
         if p == "/api/v1/lark/unread-count": return self.send_json({"count": 4})
+        if telegram_area(self, "GET", p, b""): return
         if github_area(self, "GET", p, b""): return
         if p == "/api/v1/connectors":  # 设置 › 连接器 › GitHub; MOCK_GITHUB=signed_out: its gh login has expired
             listed = [GITHUB_CONNECTOR, {k: v for k, v in IMESSAGE_CONNECTOR.items() if v is not None}] + ([telegram_connector()] if TELEGRAM_MODE else [])

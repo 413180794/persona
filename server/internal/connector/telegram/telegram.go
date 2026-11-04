@@ -70,6 +70,15 @@ type client interface {
 	// Members are a group's members, at most limit, and how many it has (one request).
 	Members(ctx context.Context, d dialog, limit int) ([]member, int, error)
 
+	// Page is a conversation's limit messages before the id before (0: the newest), oldest first, as the app's page
+	// draws them, and the peers they name (with the access hashes their pictures need): one request.
+	Page(ctx context.Context, d dialog, before, limit int) ([]pageMessage, map[string]peer, error)
+	// Locate reads message id of d again for where its picture is (thumb: the smaller one), when the page that
+	// listed it is gone (a restart).
+	Locate(ctx context.Context, d dialog, id int, thumb bool) (*fileLoc, error)
+	// Fetch is a picture's bytes, at most most of them: a part (512 KB) a request.
+	Fetch(ctx context.Context, f *fileLoc, most int) ([]byte, error)
+
 	// The writes: only ever from an action the hub's gate let through (cli.go).
 
 	// Send sends text, as a reply to the message replyTo unless it is 0, and says the sent message's id. random is

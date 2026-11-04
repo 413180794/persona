@@ -31,7 +31,8 @@ type dialog struct {
 	Mentions int // unread messages that @ me
 	ReadMax  int // the newest message read in this account
 	Muted    bool
-	Archived bool // in the archive folder
+	Archived bool  // in the archive folder
+	Photo    int64 // the chat's (person's, group's) picture, 0 without one
 	// What the archive leaves out: a bot, the account's own chat (Saved Messages), a broadcast channel.
 	Bot, Self, Broadcast bool
 }
@@ -65,4 +66,28 @@ type member struct {
 	Name     string
 	Username string
 	Bot      bool
+}
+
+// pageMessage is a message as the app's conversation page draws it (cli.go's thread): its words without the media's
+// placeholder, who wrote it with their picture, and its media with where to fetch them.
+type pageMessage struct {
+	message
+	Caption   string // the words: a forward's origin and the caption, or the placeholder of what has no media of its own
+	FromPeer  peer   // the sender, with the access hash its picture needs
+	FromPhoto int64  // the sender's picture, 0 without one
+	Edited    bool
+	Event     bool // a group event: a line of its own
+	Media     *pageMedia
+}
+
+// pageMedia is a message's media: what it is, and the pictures that can be fetched (Full: the media itself, a photo
+// or a static sticker; Thumb: a smaller picture of it, a video's or an animated sticker's).
+type pageMedia struct {
+	Kind          string // image | sticker | video | voice | file
+	Mime, Name    string
+	Size          int64
+	Duration      int
+	Width, Height int
+	Emoji         string
+	Full, Thumb   *fileLoc
 }

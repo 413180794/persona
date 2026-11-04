@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 	"github.com/nwverse/persona/server/internal/connector"
 )
@@ -78,6 +79,11 @@ type fakeTelegram struct {
 	infos   map[string]chatInfo
 	members map[string][]member
 	writes  []string
+	// The conversation page's (thread_test.go): people's pictures by peer key, messages' media by "<chat>/<id>", and
+	// the bytes of every picture by its key.
+	photos map[string]int64
+	media  map[string]*pageMedia
+	files  map[string][]byte
 }
 
 type sentRequest struct {
@@ -361,6 +367,81 @@ func (f *fakeTelegram) written() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.writes...)
+}
+
+func (f *fakeTelegram) pageOf(chat string, m message) pageMessage {
+	pm := pageMessage{message: m, Caption: m.Text, Event: m.Type == "SYSTEM", Edited: false}
+	if m.FromKey != "" {
+		var p peer
+		fmt.Sscanf(m.FromKey[1:], "%d", &p.ID)
+		p.Kind, p.Hash = m.FromKey[0], p.ID*11
+		pm.FromPeer, pm.FromPhoto = p, f.photos[m.FromKey]
+	}
+	if md := f.media[fmt.Sprintf("%s/%d", chat, m.ID)]; md != nil {
+		pm.Media, pm.Caption = md, strings.TrimSpace(strings.TrimSuffix(m.Text, "[图片]"))
+	}
+	return pm
+}
+
+func (c *fakeClient) Page(ctx context.Context, d dialog, before, limit int) ([]pageMessage, map[string]peer, error) {
+	if err := c.rpc(ctx, "Page"); err != nil {
+		return nil, nil, err
+	}
+	c.f.mu.Lock()
+	defer c.f.mu.Unlock()
+	var out []pageMessage
+	peers := map[string]peer{}
+	for _, m := range c.f.history[d.Peer.key()] {
+		if before == 0 || m.ID < before {
+			pm := c.f.pageOf(d.Peer.key(), m)
+			out = append(out, pm)
+			if pm.FromPeer.ID != 0 {
+				peers[pm.FromPeer.key()] = pm.FromPeer
+			}
+		}
+	}
+	if len(out) > limit {
+		out = out[len(out)-limit:]
+	}
+	return out, peers, nil
+}
+
+func (c *fakeClient) Locate(ctx context.Context, d dialog, id int, thumb bool) (*fileLoc, error) {
+	if err := c.rpc(ctx, "Locate"); err != nil {
+		return nil, err
+	}
+	c.f.mu.Lock()
+	defer c.f.mu.Unlock()
+	md := c.f.media[fmt.Sprintf("%s/%d", d.Peer.key(), id)]
+	switch {
+	case md == nil:
+		return nil, errMediaGone
+	case thumb && md.Thumb != nil:
+		return md.Thumb, nil
+	case !thumb && md.Full != nil:
+		return md.Full, nil
+	}
+	return nil, errMediaGone
+}
+
+func (c *fakeClient) Fetch(ctx context.Context, f *fileLoc, most int) ([]byte, error) {
+	if err := c.rpc(ctx, "Fetch"); err != nil {
+		return nil, err
+	}
+	c.f.mu.Lock()
+	defer c.f.mu.Unlock()
+	key := f.key
+	if l, ok := f.loc.(*tg.InputPeerPhotoFileLocation); ok && key == "" { // an avatar: the connector made its location
+		key = fmt.Sprintf("avatar %d", l.PhotoID)
+	}
+	b, ok := c.f.files[key]
+	if !ok {
+		return nil, errors.New("FILE_REFERENCE_EXPIRED")
+	}
+	if len(b) > most {
+		return nil, fmt.Errorf("more than %d bytes", most)
+	}
+	return b, nil
 }
 
 func (c *fakeClient) LogOut(ctx context.Context) error {

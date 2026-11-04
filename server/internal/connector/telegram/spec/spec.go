@@ -23,11 +23,12 @@ var (
 	CLIActions = []string{"telegram_send", "telegram_forward", "telegram_react", "telegram_mark_read"}
 )
 
-// Manifest: the assistant's read tools, the CLI's reads and its writes (actions: each through the hub's gate).
+// Manifest: the assistant's read tools, the CLI's reads and its writes (actions: each through the hub's gate), and the
+// inbox's conversations as the app's conversation page (threads).
 func Manifest() connector.Manifest {
 	return connector.Manifest{
 		Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapActions, connector.CapEvents,
-			connector.CapInbox, connector.CapArchive, connector.CapLogin},
+			connector.CapInbox, connector.CapArchive, connector.CapLogin, connector.CapThreads},
 		Unlisted: append(slices.Clone(CLITools), CLIActions...),
 		Kinds:    []string{"dm", "mention"},
 	}

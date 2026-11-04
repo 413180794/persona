@@ -279,6 +279,8 @@ extension Theme {
         static let attachment = "paperclip"
         static let video = "video"
         static let voiceMessage = "waveform"
+        /// A video's thumbnail: it plays elsewhere (the chat app).
+        static let playMedia = "play.circle.fill"
         /// Send someone a message.
         static let message = "bubble.left.fill"
         static let credentials = "key"

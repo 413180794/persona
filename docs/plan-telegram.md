@@ -95,6 +95,21 @@ gotd 让二进制大 35 MB，所以 Telegram 不编进 personad，单独一个�
 
 描述放 `server/internal/prompts/mcp/telegram/`，golden 加一种「有 Telegram」的工具列表。已经归档的内容也能用知识库的工具查（`kb_*`）。
 
+## 会话页（#1054）
+
+用户要求：「github&Telegram 的 UI，都支持丰富一下，参考飞书的对话页面」。收件箱点开 Telegram 条目，不再是一块纯文本，而是原生的会话页
+（`apple/Persona/Views/Inbox/ConnectorThread/`，和飞书会话页一样：对方在左、带头像，群里显示名字；我的在右；隔 5 分钟或换天出时间；
+引用块点了跳到原消息，不在已加载的里就往前翻几页找）。
+
+- **数据**：连接器的 `threads` 能力（`docs/connectors.md`，和 ovis 对过，GitHub 共用）。`Thread` 一页一个请求（`messages.getHistory`），
+  被回复的消息不在这一页时，整页合起来再查一次（`messages.getMessages`）。打开页面只读最新一页（30 条），往上翻再读下一页。
+- **媒体**：头像和图片按需拉，App 显示到哪个才拉哪个。经 hub 的 `/media`，hub 存磁盘、App 也缓存，同一张不再问 Telegram；每个分片（512 KB）都走闸门。
+  - 头像：`a.<会话>.<照片 id>`，不需要 file reference。
+  - 消息里的：`m.<会话>.<消息 id>.f|t`，位置记在内存里；程序重启后再读一次那条消息，拿新的 file reference。
+  - 照片取长边不超过 1280 的那一档。静态贴纸取本身（WebP）；动的贴纸、视频取缩略图。语音只显示时长，文件只显示名字和大小。
+- **限流**：页面和媒体都走 #965 的闸门；限流中直接回「Telegram 限流中，N 秒后再试」，App 在页面上方提示，或者退回 hub 收集的文本。
+- **回复**：页面底部有回复框，长按气泡「回复」引用那一条；发送走 `telegram_send`，过 `connector_gate`，默认在手机上确认，卡片写明发给谁、全文。
+
 ## tg 命令行和 telegram skill（#988）
 
 用户要求：「参考 feishu-cli 的 cli 设计……再制作一个 skill 来让 agent 在 hub 对接了 telegram 之后，支持用 skill 更灵活地操作（对接成功了才有 skill）」。

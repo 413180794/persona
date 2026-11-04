@@ -1,0 +1,293 @@
+import Foundation
+
+// A connector's inbox thread as a conversation (GET /api/v1/connectors/{id}/thread, docs/protocol.md「连接器 API」):
+// a page of messages at a time, newest page first, their pictures through the hub, a reply through the connector's
+// action behind the gate. Telegram's chats draw as bubbles (ConnectorThreadView); GitHub's pull requests and issues
+// as GitHub's thread (its own page), by `ThreadChat.kind`.
+
+nonisolated struct ThreadPage: Codable, Sendable {
+    var chat: ThreadChat
+    var messages: [ThreadMessage]
+    /// Goes back one more page; nil: the thread's start.
+    var before: String?
+}
+
+nonisolated struct ThreadChat: Codable, Hashable, Sendable {
+    var id: String
+    var name: String
+    var kind: String
+    var url: String?
+    var avatar: String?
+    var members: Int?
+    /// The action that answers here; nil: read-only.
+    var reply: String?
+    // A pull request's or issue's (GitHub).
+    var state: String?
+    var author: ThreadPerson?
+    var labels: [Label]?
+    var branch: Branch?
+    var body: String?
+    var bodyFormat: String?
+
+    nonisolated struct Label: Codable, Hashable, Sendable {
+        var name: String
+        var color: String?
+    }
+
+    nonisolated struct Branch: Codable, Hashable, Sendable {
+        var head: String
+        var base: String
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, kind, url, avatar, members, reply, state, author, labels, branch, body
+        case bodyFormat = "body_format"
+    }
+
+    /// A chat app's conversation, drawn as bubbles (others on the left, mine on the right).
+    var isChat: Bool { ["dm", "group", "channel"].contains(kind) }
+    var isGroup: Bool { kind != "dm" }
+}
+
+nonisolated struct ThreadPerson: Codable, Hashable, Sendable {
+    var id: String?
+    var name: String
+    var avatar: String?
+}
+
+nonisolated struct ThreadMedia: Codable, Hashable, Sendable {
+    var kind: String // image | sticker | video | voice | file
+    var ref: String?
+    var thumb: String?
+    var mime: String?
+    var name: String?
+    var size: Int64?
+    var duration: Int?
+    var width: Int?
+    var height: Int?
+    var emoji: String?
+
+    /// The picture to show: the media itself, else its thumbnail.
+    var picture: String? { ref ?? thumb }
+}
+
+nonisolated struct ThreadQuote: Codable, Hashable, Sendable {
+    var id: String
+    var from: String?
+    var text: String?
+}
+
+nonisolated struct ThreadMessage: Codable, Hashable, Sendable, Identifiable {
+    var id: String
+    var at: Date
+    var sender: ThreadPerson
+    var mine: Bool?
+    var event: Bool?
+    var text: String?
+    var format: String?
+    var media: [ThreadMedia]?
+    var replyTo: ThreadQuote?
+    var edited: Bool?
+    var url: String?
+    // GitHub's.
+    var kind: String?
+    var review: String?
+    var code: Code?
+    var check: Check?
+
+    nonisolated struct Code: Codable, Hashable, Sendable {
+        var path: String
+        var line: Int?
+        var hunk: String?
+    }
+
+    nonisolated struct Check: Codable, Hashable, Sendable {
+        var name: String
+        var state: String
+        var url: String?
+        var log: String?
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, at, sender, mine, event, text, format, media, edited, url, kind, review, code, check
+        case replyTo = "reply_to"
+    }
+
+    var isMine: Bool { mine == true }
+    var isEvent: Bool { event == true }
+
+    /// What the message says, for a quote and for 拷贝: its words, else what its media is.
+    var summary: String {
+        if let t = text?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty { return t }
+        guard let m = media?.first else { return "" }
+        return ThreadMediaText.describe(m)
+    }
+}
+
+/// What a media is, in a few words: 图片, 贴纸 👍, 语音 0:12, 视频 1:05, 文件 名字.
+nonisolated enum ThreadMediaText {
+    static func describe(_ m: ThreadMedia) -> String {
+        switch m.kind {
+        case "image": "[图片]"
+        case "sticker": "[贴纸\(m.emoji.map { " " + $0 } ?? "")]"
+        case "voice": "[语音 \(duration(m.duration ?? 0))]"
+        case "video": "[视频 \(duration(m.duration ?? 0))]"
+        default: "[文件 \(m.name ?? "")]"
+        }
+    }
+
+    /// 0:12, 1:05, 1:02:03.
+    static func duration(_ seconds: Int) -> String {
+        let s = max(seconds, 0)
+        return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
+    }
+}
+
+extension APIClient {
+    func connectorThread(_ connector: String, thread: String, before: String? = nil, limit: Int = 30) async throws -> ThreadPage {
+        var q = ["thread": thread, "limit": String(limit)]
+        if let before { q["before"] = before }
+        return try await getDecodedOffMain("/api/v1/connectors/\(connector)/thread", query: q)
+    }
+
+    /// A reply through the thread's action: the hub asks the user on the phone first (connector_gate), so it can take
+    /// as long as the card lasts.
+    func connectorThreadReply(_ connector: String, thread: String, action: String, text: String, replyTo: String?) async throws {
+        struct Body: Encodable {
+            var thread, action, text: String
+            var replyTo: String?
+            enum CodingKeys: String, CodingKey {
+                case thread, action, text
+                case replyTo = "reply_to"
+            }
+        }
+        _ = try await post("/api/v1/connectors/\(connector)/thread/reply", body: Body(thread: thread, action: action, text: text, replyTo: replyTo),
+                           timeout: 16 * 60)
+    }
+}
+
+/// A connector's media through the hub, for the image loader (LarkMedia reads hub-relative URLs, keeps them on disk).
+nonisolated enum ConnectorMedia {
+    static func url(_ connector: String, ref: String) -> String {
+        var c = URLComponents()
+        c.path = "/api/v1/connectors/\(connector)/media"
+        c.queryItems = [URLQueryItem(name: "ref", value: ref)]
+        return c.string ?? ""
+    }
+}
+
+/// Where a conversation breaks up, as the Feishu chat does (LarkChatLayout): a time between messages after a pause or
+/// on a new day, and one avatar and name for a run of messages from the same person.
+nonisolated enum ThreadLayout {
+    /// The run's first message shows its sender; a time separator goes above a new day or `LarkChatLayout.separatorGap`
+    /// of quiet.
+    static func separates(_ m: ThreadMessage, after prev: ThreadMessage?, calendar: Calendar = .current) -> Bool {
+        guard let prev else { return true }
+        return !calendar.isDate(m.at, inSameDayAs: prev.at) || m.at.timeIntervalSince(prev.at) >= LarkChatLayout.separatorGap
+    }
+
+    /// Same sender as the message before, with no separator between them: no second avatar or name.
+    static func continues(_ m: ThreadMessage, after prev: ThreadMessage?, calendar: Calendar = .current) -> Bool {
+        guard let prev, !m.isEvent, !prev.isEvent, !separates(m, after: prev, calendar: calendar) else { return false }
+        if m.isMine || prev.isMine { return m.isMine == prev.isMine }
+        if let a = m.sender.id, let b = prev.sender.id, !a.isEmpty, !b.isEmpty { return a == b }
+        return m.sender.name == prev.sender.name
+    }
+}
+
+/// One thread opened: its pages (oldest first on screen), going back a page at a time, a quote's message found by
+/// going back further, a reply.
+@MainActor @Observable final class ConnectorThreadModel {
+    let connector: String
+    let thread: String
+    private(set) var chat: ThreadChat?
+    private(set) var messages: [ThreadMessage] = []
+    private(set) var before: String?
+    private(set) var loaded = false
+    private(set) var loadingOlder = false
+    /// Why the last load failed (a rate limit says how long to wait); nil while it went fine.
+    private(set) var failure: String?
+    /// The first page could not be read: the caller shows what the hub collected instead.
+    private(set) var unavailable = false
+    private(set) var sending = false
+    @ObservationIgnored private let api: () -> APIClient?
+
+    /// Pages a jump to a quote's message reads back at most before giving up.
+    static let jumpPages = 3
+
+    init(connector: String, thread: String, api: @escaping () -> APIClient? = { AppModel.shared.api }) {
+        self.connector = connector
+        self.thread = thread
+        self.api = api
+    }
+
+    var hasOlder: Bool { before != nil }
+
+    func load() async {
+        guard let api = api() else { return }
+        do {
+            let page = try await api.connectorThread(connector, thread: thread)
+            (chat, messages, before, failure, unavailable) = (page.chat, page.messages, page.before, nil, false)
+        } catch {
+            if error.isCancellation { return }
+            failure = Self.said(error)
+            unavailable = messages.isEmpty
+        }
+        loaded = true
+    }
+
+    /// The page before the oldest shown; false when there is none or it could not be read.
+    @discardableResult
+    func loadOlder() async -> Bool {
+        guard let before, !loadingOlder, let api = api() else { return false }
+        loadingOlder = true
+        defer { loadingOlder = false }
+        do {
+            let page = try await api.connectorThread(connector, thread: thread, before: before)
+            let have = Set(messages.map(\.id))
+            messages.insert(contentsOf: page.messages.filter { !have.contains($0.id) }, at: 0)
+            self.before = page.before
+            failure = nil
+            return true
+        } catch {
+            if !error.isCancellation { failure = Self.said(error) }
+            return false
+        }
+    }
+
+    /// Reads back (a few pages at most) until message id is shown; whether it is.
+    func reach(_ id: String) async -> Bool {
+        for _ in 0..<Self.jumpPages where !messages.contains(where: { $0.id == id }) {
+            guard await loadOlder() else { break }
+        }
+        return messages.contains { $0.id == id }
+    }
+
+    /// Sends a reply (the user allows it on the phone first), then reads the newest page again; whether it was sent.
+    func reply(_ text: String, to quote: ThreadMessage?) async -> Bool {
+        guard let action = chat?.reply, let api = api(), !sending else { return false }
+        sending = true
+        defer { sending = false }
+        do {
+            try await api.connectorThreadReply(connector, thread: thread, action: action, text: text, replyTo: quote?.id)
+            failure = nil
+        } catch {
+            if !error.isCancellation { failure = Self.said(error) }
+            return false
+        }
+        if let page = try? await api.connectorThread(connector, thread: thread) {
+            let fresh = Set(page.messages.map(\.id))
+            messages = messages.filter { !fresh.contains($0.id) && $0.at < (page.messages.first?.at ?? .distantFuture) } + page.messages
+            chat = page.chat
+        }
+        return true
+    }
+
+    /// A failure in words: a rate limit's says how long to wait (the hub's), a declined reply says so.
+    private static func said(_ error: Error) -> String {
+        if let e = error as? APIError {
+            return e.status == 403 ? "没有发送：在手机上取消了，或者 hub 的规则不允许" : e.message
+        }
+        return error.shown ?? "读不到"
+    }
+}

@@ -4,10 +4,34 @@ import SwiftUI
 // `connector` block (docs/plan-connectors.md「六、App 侧」). No pages for browsing the source: the thread as the hub
 // read it, and the page itself in the app's link sheet.
 
-/// A connector's item opened: what it is about (the description and the newest comments, as the hub read them for
-/// triage) and 在 GitHub 打开. The action bar above it drafts the reply, which goes where `reply_to` says.
+/// A connector's item opened: a chat app's conversation as its own page (ConnectorThreadView, a connector with
+/// `threads`: Telegram); otherwise, or while that cannot be read, what the hub collected about it.
 struct InboxConnectorDetailView: View {
     var item: InboxItem
+    @State private var thread: ConnectorThreadModel
+
+    init(item: InboxItem) {
+        self.item = item
+        _thread = State(initialValue: ConnectorThreadModel(connector: item.source, thread: item.connector?.thread ?? ""))
+    }
+
+    var body: some View {
+        if thread.loaded && (thread.unavailable || thread.chat?.isChat == false) {
+            InboxConnectorTextView(item: item, problem: thread.failure)
+        } else {
+            ConnectorThreadView(model: thread)
+                .navigationTitle(thread.chat?.name ?? item.title)
+                .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+/// What the hub collected about a connector's item (the description and the newest comments, read for triage) and
+/// 在 GitHub 打开. The action bar above it drafts the reply, which goes where `reply_to` says.
+struct InboxConnectorTextView: View {
+    var item: InboxItem
+    /// Why the conversation page could not be read (a rate limit), said over the text.
+    var problem: String? = nil
     @Environment(AppModel.self) private var model
     @State private var context: String?
     @State private var failure: String?
@@ -40,6 +64,11 @@ struct InboxConnectorDetailView: View {
             } footer: {
                 if let to = connector?.replyTo, connector?.canReply == true {
                     Text("回复会" + to + "。")
+                }
+            }
+            if let problem, !problem.isEmpty, item.source == "telegram" {
+                Section {
+                    Label(problem, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(.secondary)
                 }
             }
             Section("内容") {

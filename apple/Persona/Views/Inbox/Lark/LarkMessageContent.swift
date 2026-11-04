@@ -519,7 +519,7 @@ struct LarkVoicePart: View {
         let ms = part.meta("duration")?.double ?? 0
         Button { playing = true } label: {
             HStack(spacing: Theme.Space.s) {
-                Image(systemName: "play.circle.fill").font(Theme.Font.title).foregroundStyle(LarkColor.blue)
+                Image(systemName: Theme.Icon.playMedia).font(Theme.Font.title).foregroundStyle(LarkColor.blue)
                 HStack(spacing: Theme.Space.xxs) {
                     ForEach(0..<min(18, max(5, Int(ms / 1500))), id: \.self) { i in
                         Capsule().fill(Color.primary.opacity(0.35)).frame(width: Theme.Size.ruleWide, height: [8, 14, 10, 18, 12, 6][i % 6])
