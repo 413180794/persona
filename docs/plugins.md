@@ -793,6 +793,7 @@ iOS（Mac 共用同一套页面）在 hub 带 `plugin_manager` 时，设置首�
   单元测试 `PluginsModelTests`、`PluginMarketModelTests`、`PluginViewModelTests`、`PluginSlotsModelTests`。
 - 网页（#1207）：设置 › 插件，同样的列表和详情（`web/src/views/settings/Plugins.tsx`、`web/src/lib/plugins.ts`，`/settings?tab=plugins&plugin=<id>`），见 `docs/web.md`「设置」。
   #1330 加上声明式 UI（`settings/PluginView.tsx`、`lib/plugin-ui.ts`：插件详情的「页面」、启动器详情里的一节）和插件市场（`settings/PluginMarket.tsx`、`lib/plugin-market.ts`：目录、详情、管理市场）。
+  #1699 加上自动升级（「自动升级」）：市场插件的详情里一组「升级」（开关、新版本那一行和「去确认」、上次的结果，`UpgradeGroup`），管理市场最上面是全部插件的总开关，和 App 同样的文字（`lib/plugins.ts` 的 `upgradeDetail` 等）。
   #1681 加上 `inbox_item`（`inbox/InboxPluginBody.tsx`：收件箱详情的正文；列表来自 `lib/plugin-slots.ts` 的缓存），见 `docs/web.md`「设置」的「UI 插槽」。
 - Android（#1206）同样的功能，入口在设置首页的「扩展」一节，代码和截图方法见 [android.md](android.md)「插件（设置 › 插件）」；插件画的界面（插件页面、启动器页上的一节）和插件市场（#1329）见同一节下的「插件画的界面和插件市场」。
 

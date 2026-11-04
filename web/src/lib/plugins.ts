@@ -27,6 +27,34 @@ export interface HubPlugin {
   /** What it still needs before it runs, in words. */
   needs_setup?: string[];
   warnings?: string[];
+  /** A plugin from a market (a hub with plugin_auto_upgrade): its own auto-upgrade switch, its newer version and what
+   *  happened last with an upgrade (docs/plugins.md「自动升级」). */
+  auto_upgrade?: boolean;
+  upgrade?: PluginUpgrade;
+  upgrade_note?: PluginUpgradeNote;
+}
+
+/** A market plugin's newer version and where it stands. */
+export interface PluginUpgrade {
+  id: string;
+  name?: string;
+  market: string;
+  from: string;
+  to: string;
+  /** available | waiting_idle | needs_permission | off | skipped | failed | incompatible */
+  state: string;
+  added_permissions?: PluginPermission[];
+  detail?: string;
+}
+
+/** What happened last with a plugin's upgrade. */
+export interface PluginUpgradeNote {
+  /** upgraded | rolled_back | needs_permission | failed */
+  kind: string;
+  from: string;
+  to: string;
+  detail?: string;
+  at: string;
 }
 
 export interface PluginChoice {
@@ -109,6 +137,11 @@ export const pluginDetail = (id: string) => api<HubPluginDetail>(`${base(id)}/`)
 /** After a change that can start, stop or reconfigure a plugin: its entries, cards and sections are asked for again. */
 export const changed = <T>(r: T): T => (refreshPluginPlaces(), r);
 export const setPluginEnabled = (id: string, enabled: boolean) => api<HubPluginDetail>(`${base(id)}/enabled`, { method: "PUT", json: { enabled } }).then(changed);
+export const setPluginAutoUpgrade = (id: string, auto: boolean) => api<HubPluginDetail>(`${base(id)}/auto-upgrade`, { method: "PUT", json: { auto } });
+/** The auto-upgrade switch for all market plugins; a hub from before it has no route (null). */
+export const pluginUpgrades = () =>
+  api<{ auto: boolean; upgrades?: PluginUpgrade[] }>("/plugins/-/upgrades").then((r) => r.auto, () => null);
+export const setPluginUpgrades = (auto: boolean) => api<{ auto: boolean }>("/plugins/-/upgrades", { method: "PUT", json: { auto } }).then((r) => r.auto);
 export const setPluginConfig = (id: string, config: JsonObject) => api<HubPluginDetail>(`${base(id)}/config`, { method: "PUT", json: { config } }).then(changed);
 export const setPluginSecret = (id: string, name: string, value: string) =>
   api<HubPluginDetail>(`${base(id)}/secrets/${enc(name)}`, { method: "PUT", json: { value } });
@@ -159,6 +192,42 @@ export function pointText(name: string): string {
 }
 
 /** The detail's line under the name: state · version · source. */
+/** The 升级 group's line for a newer version: what happens to it (the App's PluginText.upgradeDetail). */
+export function upgradeDetail(u: PluginUpgrade): string {
+  const why = u.detail ? "：" + u.detail : "";
+  switch (u.state) {
+    case "needs_permission": return morePermissions(u.added_permissions ?? []);
+    case "waiting_idle": return "插件空闲时自动升级";
+    case "available": return "稍后自动升级";
+    case "off": return "自动升级关着";
+    case "skipped": return `上次升级后起不来，已回到 ${u.from}，不再自动升级到这个版本`;
+    case "failed": return "没装上" + why;
+    case "incompatible": return "这台 hub 装不了" + why;
+    default: return "";
+  }
+}
+
+/** When the line asks something of the user, what its button says (it opens the upgrade in the market). */
+export function upgradeAction(u: PluginUpgrade): string | null {
+  if (u.state === "needs_permission") return "去确认";
+  return ["off", "skipped", "failed"].includes(u.state) ? "去升级" : null;
+}
+
+/** What a newer version asks for more, as the hub says it in its notice. */
+export function morePermissions(added: PluginPermission[]): string {
+  if (!added.length) return "要的权限有变化";
+  const count = ["", "一", "两", "三", "四", "五"];
+  const lines = added.map((p) => p.title + (p.detail ? `（${p.detail}）` : ""));
+  return (added.length < count.length ? `要多${count[added.length]}项权限：` : `要多 ${added.length} 项权限：`) + lines.join("、");
+}
+
+/** The last upgrade, when it is news of its own (asking and failing are the newer version's line). */
+export function upgradeNote(n: PluginUpgradeNote): string | null {
+  if (n.kind === "upgraded") return `已自动升级到 ${n.to}（原来是 ${n.from}）`;
+  if (n.kind === "rolled_back") return `${n.to} 起不来，已回到 ${n.from}`;
+  return null;
+}
+
 export const stateLine = (p: HubPlugin) => [pluginState(p), p.version, sourceText(p.source)].filter(Boolean).join(" · ");
 
 /** How many, and how many need the user. */

@@ -7,10 +7,11 @@ import { useEffect, useMemo, useState } from "react";
 import { errorText } from "../../lib/api";
 import { useStore } from "../../lib/store";
 import { marketOf, pluginsRoute, routeSub } from "../../lib/plugin-market";
+import { ago } from "../../lib/format";
 import {
   choiceLabel, clearPluginSecret, compact, configError, fieldLabel, fieldTitle, isDirty, listItems, listPluginsInfo, listSummary, numberProblems,
   placeholder, pluginDetail, pluginState, pluginTone, pointText, readNumber, runNote, same, secretState, setAt, setPluginConfig, setPluginEnabled,
-  machineStatus, saveFooter, setPluginSecret, sourceText, stateLine, valueAt,
+  machineStatus, saveFooter, setPluginAutoUpgrade, setPluginSecret, sourceText, stateLine, upgradeAction, upgradeDetail, upgradeNote, valueAt,
   type HubPlugin, type HubPluginDetail, type Json, type JsonObject, type PluginField, type PluginSecret,
 } from "../../lib/plugins";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
@@ -45,7 +46,15 @@ export function Plugins({ open, onOpen, onTab }: { open: string | null; onOpen: 
         />
       );
     case "plugin":
-      return <PluginDetail key={r.id} id={r.id} onBack={() => onOpen(null)} onPage={(ui) => go({ kind: "page", id: r.id, ui })} />;
+      return (
+        <PluginDetail
+          key={r.id}
+          id={r.id}
+          onBack={() => onOpen(null)}
+          onPage={(ui) => go({ kind: "page", id: r.id, ui })}
+          onUpgrade={(market, id) => go({ kind: "item", market, id })}
+        />
+      );
     case "page":
       return <PluginPage key={open} id={r.id} ui={r.ui} onBack={() => go({ kind: "plugin", id: r.id })} />;
     case "catalog":
@@ -173,6 +182,7 @@ function PluginList({ onOpen, onMarket, onMarkets, onChannels }: { onOpen: (id: 
             <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[12px] text-ink-2">
               <StateDot plugin={p} />
               {pluginState(p)}
+              {p.upgrade?.state === "needs_permission" && " · 新版本待确认"}
             </span>
             <Icon name="chevronRight" size={12} stroke={2} className="shrink-0 text-ink-3" />
           </button>
@@ -209,7 +219,42 @@ function PluginList({ onOpen, onMarket, onMarkets, onChannels }: { onOpen: (id: 
 /** A number field as typed, by dotted path, until it reads as one. */
 type Typed = Record<string, { text: string; integer: boolean }>;
 
-function PluginDetail({ id, onBack, onPage }: { id: string; onBack: () => void; onPage: (ui: string) => void }) {
+/**
+ * A market plugin's upgrades (docs/plugins.md「自动升级」): its own switch, its newer version (opening the market's
+ * upgrade when it waits for the user) or what happened last. The App's 升级 section.
+ */
+function UpgradeGroup({ p, busy, onToggle, onUpgrade }: { p: HubPlugin; busy: boolean; onToggle: (on: boolean) => void; onUpgrade: (market: string, id: string) => void }) {
+  const u = p.upgrade;
+  const note = !u && p.upgrade_note ? upgradeNote(p.upgrade_note) : null;
+  const action = u ? upgradeAction(u) : null;
+  const line = (title: string, detail: string, attention: boolean) => (
+    <div className="min-w-0 flex-1">
+      <div className="text-[13px] text-ink">{title}</div>
+      {detail && <div className={cx("mt-0.5 text-[11.5px] leading-snug", attention ? "text-orange" : "text-ink-3")}>{detail}</div>}
+    </div>
+  );
+  return (
+    <Group title="升级" footer="插件市场里出了新版本，插件空闲时自动装上；新版本要的权限变多时先问你。装上后起不来的会退回原来的版本。">
+      <div className="flex items-center gap-3 px-4 py-2.5">
+        <span className="min-w-0 flex-1 truncate text-[13px] text-ink">自动升级</span>
+        <Switch on={p.auto_upgrade ?? true} onChange={onToggle} disabled={busy} label="自动升级" />
+      </div>
+      {u &&
+        (action ? (
+          <button type="button" onClick={() => onUpgrade(u.market, u.id)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-hover">
+            {line(`有新版本 ${u.to}`, upgradeDetail(u), u.state === "needs_permission" || u.state === "skipped")}
+            <span className="shrink-0 whitespace-nowrap text-[12.5px] text-accent-ink">{action}</span>
+            <Icon name="chevronRight" size={12} stroke={2} className="shrink-0 text-ink-3" />
+          </button>
+        ) : (
+          <div className="flex items-center gap-3 px-4 py-2.5">{line(`有新版本 ${u.to}`, upgradeDetail(u), false)}</div>
+        ))}
+      {note && p.upgrade_note && <div className="flex items-center gap-3 px-4 py-2.5">{line(note, ago(p.upgrade_note.at), p.upgrade_note.kind === "rolled_back")}</div>}
+    </Group>
+  );
+}
+
+function PluginDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack: () => void; onPage: (ui: string) => void; onUpgrade: (market: string, id: string) => void }) {
   const [removing, setRemoving] = useState(false);
   const [detail, setDetail] = useState<HubPluginDetail | null>(null);
   const [error, setError] = useState("");
@@ -275,6 +320,18 @@ function PluginDetail({ id, onBack, onPage }: { id: string; onBack: () => void; 
       else toast(`没有保存：${errorText(e)}`, "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const toggleAutoUpgrade = async (on: boolean) => {
+    setToggling(true);
+    try {
+      setDetail(await setPluginAutoUpgrade(id, on));
+      toast(on ? "已打开自动升级" : "已关掉自动升级", "ok");
+    } catch (e) {
+      toast(`没有${on ? "打开" : "关掉"}自动升级：${errorText(e)}`, "error");
+    } finally {
+      setToggling(false);
     }
   };
 
@@ -379,6 +436,8 @@ function PluginDetail({ id, onBack, onPage }: { id: string; onBack: () => void; 
               </div>
             </Group>
           )}
+
+          {p.auto_upgrade !== undefined && <UpgradeGroup p={p} busy={toggling} onToggle={(on) => void toggleAutoUpgrade(on)} onUpgrade={onUpgrade} />}
 
           {!!p.ui?.length && (
             <Group title="页面" footer="这些页面由插件画，按钮的动作交给插件处理。">

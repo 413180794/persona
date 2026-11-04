@@ -3,8 +3,8 @@ import { ApiError } from "./api";
 import {
   clearPluginSecret, compact, configError, fieldTitle, isDirty, listItems, listPlugins, listSummary, numberProblems, placeholder, pluginDetail,
   machineStatus, pluginState, pluginTone, readNumber, runNote, same, secretState, setAt, setPluginConfig, setPluginEnabled, setPluginSecret, sourceText,
-  stateLine, valueAt,
-  type HubPlugin, type PluginField,
+  stateLine, valueAt, morePermissions, pluginUpgrades, setPluginAutoUpgrade, setPluginUpgrades, upgradeAction, upgradeDetail, upgradeNote,
+  type HubPlugin, type PluginField, type PluginUpgrade,
 } from "./plugins";
 
 const plugin = (status: string, extra: Partial<HubPlugin> = {}): HubPlugin => ({ id: `p-${status}`, name: status, kind: "connectors", status, ...extra });
@@ -124,5 +124,52 @@ describe("a plugin's machine switches", () => {
     expect(machineStatus({ ...mac, computer: { enabled: true, installed: true, daemon: true, ready: true } }, true)).toBe("在线 · Cua 可以用");
     expect(machineStatus({ ...mac, computer: { enabled: false } }, true)).toBe("在线");
     expect(machineStatus({ ...mac, computer: { enabled: true, ready: true } }, false)).toBe("在线");
+  });
+});
+
+describe("auto-upgrade (docs/plugins.md「自动升级」)", () => {
+  const up = (state: string, extra: Partial<PluginUpgrade> = {}): PluginUpgrade => ({ id: "p", market: "m1", from: "1.0.0", to: "1.1.0", state, ...extra });
+
+  it("says what happens to a newer version, and what the user does about it", () => {
+    const ask = up("needs_permission", { added_permissions: [{ key: "network", title: "访问更多网络", detail: "status.example.com" }] });
+    expect(upgradeDetail(ask)).toBe("要多一项权限：访问更多网络（status.example.com）");
+    expect(upgradeAction(ask)).toBe("去确认");
+    expect(upgradeDetail(up("waiting_idle"))).toBe("插件空闲时自动升级");
+    expect(upgradeAction(up("waiting_idle"))).toBeNull();
+    expect([upgradeDetail(up("off")), upgradeAction(up("off"))]).toEqual(["自动升级关着", "去升级"]);
+    expect(upgradeDetail(up("skipped"))).toBe("上次升级后起不来，已回到 1.0.0，不再自动升级到这个版本");
+    expect(upgradeDetail(up("failed", { detail: "下载失败" }))).toBe("没装上：下载失败");
+    expect(morePermissions([])).toBe("要的权限有变化");
+    expect(morePermissions([{ key: "a", title: "甲" }, { key: "b", title: "乙", detail: "x" }])).toBe("要多两项权限：甲、乙（x）");
+  });
+
+  it("tells of the last upgrade only when it is news of its own", () => {
+    const at = "2026-11-04T14:34:21.439310005Z";
+    expect(upgradeNote({ kind: "upgraded", from: "0.9.0", to: "1.0.0", at })).toBe("已自动升级到 1.0.0（原来是 0.9.0）");
+    expect(upgradeNote({ kind: "rolled_back", from: "1.0.0", to: "1.1.0", at })).toBe("1.1.0 起不来，已回到 1.0.0");
+    expect(upgradeNote({ kind: "needs_permission", from: "1.0.0", to: "1.1.0", at })).toBeNull();
+  });
+
+  it("puts the switches to the hub; a hub without the route has no global switch", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    let has = false;
+    vi.stubGlobal("localStorage", { getItem: () => "t", setItem: () => {}, removeItem: () => {} });
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      if (url.endsWith("/plugins/-/upgrades")) {
+        if (!has) return new Response(JSON.stringify({ error: "no such plugin", code: "not_found" }), { status: 404, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ auto: init?.method === "PUT" ? JSON.parse(String(init.body)).auto : true, upgrades: [] }), { headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ id: "p", name: "P", kind: "ui", status: "running", auto_upgrade: false }), { headers: { "Content-Type": "application/json" } });
+    }));
+    expect(await pluginUpgrades()).toBeNull();
+    has = true;
+    expect(await pluginUpgrades()).toBe(true);
+    expect(await setPluginUpgrades(false)).toBe(false);
+    expect((await setPluginAutoUpgrade("p", false)).auto_upgrade).toBe(false);
+    const last = calls[calls.length - 1];
+    expect(last.url).toContain("/plugins/p/-/auto-upgrade");
+    expect(last.init?.method).toBe("PUT");
+    expect(JSON.parse(String(last.init?.body))).toEqual({ auto: false });
   });
 });

@@ -10,10 +10,10 @@ import {
   previewVersion, refreshMarket, removeMarket, setMarketToken, specLabel, uninstallPlugin, upgradePreview,
   type Catalog, type CatalogItem, type Market, type MarketPreview,
 } from "../../lib/plugin-market";
-import { pointText, type PluginPermission } from "../../lib/plugins";
+import { pluginUpgrades, pointText, setPluginUpgrades, type PluginPermission } from "../../lib/plugins";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast, useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
-import { Group, Pill, Row } from "./SettingsParts";
+import { Group, Pill, Row, Switch } from "./SettingsParts";
 
 const inputClass =
   "h-8 w-full rounded-control bg-field px-2.5 text-[12.5px] text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-60";
@@ -503,6 +503,21 @@ export function Markets({ onBack }: { onBack: () => void }) {
   const [tokenFor, setTokenFor] = useState<Market | null>(null);
   const [busy, setBusy] = useState<Record<string, "refresh" | "remove">>({});
   const [confirm, setConfirm] = useState("");
+  // The switch for all market plugins (docs/plugins.md「自动升级」); null: a hub without it.
+  const [auto, setAuto] = useState<boolean | null>(null);
+  const [savingAuto, setSavingAuto] = useState(false);
+  useEffect(() => void pluginUpgrades().then(setAuto), []);
+  const flipAuto = async (on: boolean) => {
+    setSavingAuto(true);
+    try {
+      setAuto(await setPluginUpgrades(on));
+      toast(on ? "已打开插件自动升级" : "已关掉插件自动升级", "ok");
+    } catch (e) {
+      toast(`没有改：${errorText(e)}`, "error");
+    } finally {
+      setSavingAuto(false);
+    }
+  };
   const load = () => {
     setLoading(true);
     listMarkets()
@@ -547,6 +562,21 @@ export function Markets({ onBack }: { onBack: () => void }) {
       <p className="mb-4 px-1 text-[12.5px] leading-relaxed text-ink-3">
         hub 读这些市场的索引（persona-plugins.json）。私有的 https / GitHub 市场填一个只读 token：加密存在 hub 上，只发给这个市场自己，填了以后不再显示；git: 的市场用 hub 机器自己的 SSH 凭据。
       </p>
+      {auto !== null && !!list?.length && (
+        <Group
+          footer={
+            auto
+              ? "从这些市场装的插件出了新版本，插件空闲时 hub 自动装上；要的权限变多时先问你。每个插件也可以在自己的页面里单独关掉。"
+              : "关着：有新版本时只在插件的页面里提示，你自己去升级。"
+          }
+        >
+          <div className="flex items-center gap-3 px-4 py-2.5">
+            <span className="min-w-0 flex-1 truncate text-[13px] text-ink">自动升级插件</span>
+            {savingAuto && <Spinner />}
+            <Switch on={auto} onChange={(on) => void flipAuto(on)} disabled={savingAuto} label="自动升级插件" />
+          </div>
+        </Group>
+      )}
       <Group title={list ? `${list.length} 个市场` : "市场"} right={<IconButton icon="retry" label="刷新" onClick={load} disabled={loading} size={24} iconSize={13} className="-mb-1" />}>
         {!list && !error && (
           <div className="px-4 py-3">
