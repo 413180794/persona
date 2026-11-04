@@ -241,6 +241,8 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   `~/.zshrc` 的 alias / 函数和 Persona 管理的启动器照旧用它们自己的设置；这个目录也会自动加进上面找会话的目录。node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
 - `machines[].botmux`（可选）：写 `false` 时那台电脑的 node 不列 botmux 的会话，也不跑 botmux（不跑 `botmux observe`、`botmux dashboard current`）；
   不写就和以前一样，装了 botmux 就列（`docs/engines.md`「botmux」）。node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
+- `machines[].herdr_autostart`（可选）：写 `false` 时那台电脑的 node 不在 herdr 没运行时自己拉起它的 server；不写是开
+  （`docs/engines.md`「herdr 没在运行时」）。手改 hub.json 要重启 hub，重连时生效。
 - `microsoft`（可选）：Outlook 的「使用 Microsoft 账号登录」（`docs/mail.md`「Outlook 接入方式」）。`client_id` 是默认的 client ID
   （一般不用写：用户在 App 里填自己在 Microsoft Entra 注册的那个，加密存 hub，优先于这里）；`redirect_uri` 默认
   `jarvis-mail-oauth://outlook`，改了要和 Entra 里登记的一致。

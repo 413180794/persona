@@ -29,6 +29,16 @@ func startCmd(launcher, args, dir string) string {
 		" --mcp-config " + shellQuote(filepath.Join(dir, "mcp.json"))
 }
 
+// resumeHeld are the two reports that give herdr the pane's resume command (herdrresume.go): the pane held as
+// Persona's, then the session with eval of cmd as its resume_argv.
+func resumeHeld(pane, id, cmd string) [2]string {
+	return [2]string{
+		call("pane.report_agent", map[string]any{"pane_id": pane, "source": resumeSource, "agent": "claude", "state": "idle", "seq": 7}),
+		call("pane.report_agent_session", map[string]any{"pane_id": pane, "source": resumeSource, "agent": "claude", "seq": 8,
+			"agent_session_id": id, "resume_argv": []string{"eval", cmd}}),
+	}
+}
+
 func readVisible(pane string) string {
 	return call("pane.read", map[string]any{"pane_id": pane, "source": "visible", "lines": 60})
 }
@@ -108,6 +118,8 @@ func TestHerdrStartInTheProjectsWorkspace(t *testing.T) {
 		readVisible("w1:p2"), agentGet("w1:p2"), // ready once…
 		readVisible("w1:p2"), agentGet("w1:p2"), // …and twice
 		call("agent.rename", map[string]any{"target": "w1:p2", "name": "j-0e0000"}),
+		resumeHeld("w1:p2", startID, startCmd("claude", "--resume "+startID, jarvisDir(home)))[0],
+		resumeHeld("w1:p2", startID, startCmd("claude", "--resume "+startID, jarvisDir(home)))[1],
 		call("agent.prompt", map[string]any{"target": "w1:p2", "text": "fix the build"}),
 		call("session.snapshot", nil), // sessionFor
 	})
@@ -154,6 +166,8 @@ func TestHerdrStartCreatesTheWorkspaceAndResumes(t *testing.T) {
 		readVisible("w7:p1"), agentGet("w7:p1"),
 		readVisible("w7:p1"), agentGet("w7:p1"),
 		call("agent.rename", map[string]any{"target": "w7:p1", "name": "j-0e0000"}),
+		resumeHeld("w7:p1", startID, startCmd("work_claude", "--resume "+startID, jarvisDir(home)))[0],
+		resumeHeld("w7:p1", startID, startCmd("work_claude", "--resume "+startID, jarvisDir(home)))[1],
 		call("session.snapshot", nil),
 	})
 }
@@ -207,6 +221,13 @@ func TestHerdrStartIntoAGivenWorkspaceReturnsOnABlockedClaude(t *testing.T) {
 				" --mcp-config " + shellQuote(filepath.Join(jarvisDir(home), "mcp.json"))}),
 		readVisible("w2:p5"), agentGet("w2:p5"),
 		call("agent.rename", map[string]any{"target": "w2:p5", "name": "j-0e0000"}),
+		// herdr's restore resumes it through the launcher too, not with a bare `claude --resume` (#1879).
+		resumeHeld("w2:p5", startID, "/tmp/jarvis-test/jarvisd launch work_gw --resume "+startID+" --settings "+
+			filepath.Join(jarvisDir(home), "launcher-settings", "work_gw-claude-settings.json")+
+			" --mcp-config "+filepath.Join(jarvisDir(home), "mcp.json"))[0],
+		resumeHeld("w2:p5", startID, "/tmp/jarvis-test/jarvisd launch work_gw --resume "+startID+" --settings "+
+			filepath.Join(jarvisDir(home), "launcher-settings", "work_gw-claude-settings.json")+
+			" --mcp-config "+filepath.Join(jarvisDir(home), "mcp.json"))[1],
 		call("agent.prompt", map[string]any{"target": "w2:p5", "text": "hello"}),
 		call("session.snapshot", nil),
 	})
@@ -245,6 +266,8 @@ func TestHerdrStartNamesTheTabOnceItExists(t *testing.T) {
 		readVisible("w2:p6"), agentGet("w2:p6"),
 		readVisible("w2:p6"), agentGet("w2:p6"),
 		call("agent.rename", map[string]any{"target": "w2:p6", "name": "j-0e0000"}),
+		resumeHeld("w2:p6", startID, startCmd("claude", "--resume "+startID, jarvisDir(home)))[0],
+		resumeHeld("w2:p6", startID, startCmd("claude", "--resume "+startID, jarvisDir(home)))[1],
 		call("session.snapshot", nil),
 	})
 }
@@ -478,6 +501,8 @@ func TestHerdrSendResumesAnOfflineSession(t *testing.T) {
 		readVisible("w7:p1"), agentGet("w7:p1"),
 		readVisible("w7:p1"), agentGet("w7:p1"),
 		call("agent.rename", map[string]any{"target": "w7:p1", "name": "j-0d0000"}),
+		resumeHeld("w7:p1", sidA, startCmd("claude", "--resume "+sidA, jarvisDir(home)))[0],
+		resumeHeld("w7:p1", sidA, startCmd("claude", "--resume "+sidA, jarvisDir(home)))[1],
 		call("session.snapshot", nil),
 		readANSI("w7:p1"), // the pane checked again
 		call("agent.prompt", map[string]any{"target": "w7:p1", "text": "go on"}),

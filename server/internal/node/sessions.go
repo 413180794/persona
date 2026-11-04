@@ -901,6 +901,7 @@ func (n *Node) refreshHosts(ctx context.Context, only ...host.Host) error {
 	if !n.setAgentsAt(union, epoch) {
 		return errEngineChanged
 	}
+	n.backfillResume(union) // herdrresume.go
 	if snapped {
 		n.panesChanged()
 	}

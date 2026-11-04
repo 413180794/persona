@@ -277,6 +277,23 @@ func TestConfigureNodeSaysBotmux(t *testing.T) {
 	}
 }
 
+// Connecting tells the node whether it may start herdr's server when it is not running (#1879): yes unless hub.json
+// says machines[].herdr_autostart false.
+func TestConfigureNodeSaysHerdrAutostart(t *testing.T) {
+	_, _, m, _ := dirsHub(t)
+	f := connectDirsNode(t, m)
+	ctx := context.Background()
+	m.configureNode(ctx, m.peer)
+	off := false
+	m.cfg.HerdrAutostart = &off
+	m.configureNode(ctx, m.peer)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.configure) != 2 || string(f.configure[0]["herdr_autostart"]) != "true" || string(f.configure[1]["herdr_autostart"]) != "false" {
+		t.Fatalf("herdr_autostart in node.configure: %v", f.configure)
+	}
+}
+
 // hub.json machines[].claude_start_dir reaches the node on connect (#1459), and its sessions are looked for there.
 func TestConfigureNodeSaysClaudeStartDir(t *testing.T) {
 	_, _, m, _ := dirsHub(t)

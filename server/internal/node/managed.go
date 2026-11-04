@@ -51,13 +51,16 @@ func (n *Node) managedLauncher(name string) (proto.ManagedLauncher, bool) {
 // claude), or `jarvisd launch <name>` for a managed one. Plain claude gets the machine's claude_start_dir as its
 // CLAUDE_CONFIG_DIR when one is set: a computer whose claude is logged in under a profile directory, not ~/.claude,
 // would otherwise answer every agent with 「Not logged in」 (#1459).
-func (n *Node) launcherCommand(name string) string {
+func (n *Node) launcherCommand(name string) string { return n.launcherCommandQ(name, shellQuote) }
+
+// launcherCommandQ is launcherCommand quoting with q (herdrresume.go quotes without apostrophes).
+func (n *Node) launcherCommandQ(name string, q func(string) string) string {
 	if _, ok := n.managedLauncher(name); ok {
-		return shellQuote(n.bin) + " launch " + name
+		return q(n.bin) + " launch " + name
 	}
 	if name == "claude" {
 		if d := n.claudeStartDir.Load(); d != nil && *d != "" {
-			return "CLAUDE_CONFIG_DIR=" + shellDir(*d) + " " + name
+			return "CLAUDE_CONFIG_DIR=" + shellDirQ(*d, q) + " " + name
 		}
 	}
 	return name
@@ -65,14 +68,16 @@ func (n *Node) launcherCommand(name string) string {
 
 // shellDir quotes a directory for a shell command, keeping a leading ~/ as "$HOME"/ so it is the home of the shell that
 // runs it.
-func shellDir(p string) string {
+func shellDir(p string) string { return shellDirQ(p, shellQuote) }
+
+func shellDirQ(p string, q func(string) string) string {
 	if p == "~" {
 		return `"$HOME"`
 	}
 	if rest, ok := strings.CutPrefix(p, "~/"); ok {
-		return `"$HOME"/` + shellQuote(rest)
+		return `"$HOME"/` + q(rest)
 	}
-	return shellQuote(p)
+	return q(p)
 }
 
 // managedEnv is the environment a managed launcher sets: the gateway, its key, the model for every tier, the

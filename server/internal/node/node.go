@@ -40,6 +40,7 @@ type Node struct {
 	managed managedLaunchers
 	hosts   *host.Registry // the terminal hosts, by kind (hosts.go): the one of the machine's engine
 	eng     engineState    // which engine, and its change stream (engine.go)
+	hstart  herdrStarter   // starting herdr's server when it is not running (herdrstart.go)
 	// engEpoch counts engine switches (n.mu): a refresh applies its result only when no switch happened meanwhile.
 	engEpoch uint64
 	peer     *rpc.Peer
@@ -59,6 +60,7 @@ type Node struct {
 	// lastPanes: the pane each session was last seen live in (it is no longer live when its agent exits or is
 	// suspended), to tell the two apart when a send finds it gone on a host that cannot resume it.
 	lastPanes map[string]string
+	launches  map[string]claudeLaunch    // herdr pane -> how Persona started its Claude, for herdr's restore (herdrresume.go)
 	panes     map[string]string          // pane id -> session id (learned from hooks)
 	layouts   map[string]layout          // host kind -> space / slot names from its last snapshot
 	procs     map[string]*assistantProc  // headless assistant conversations (assistant.go)
@@ -476,6 +478,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			// ClaudeStartDir: the CLAUDE_CONFIG_DIR plain `claude` starts with (hub.json machines[].claude_start_dir);
 			// nil (an older hub) leaves it as it is, "" clears it.
 			ClaudeStartDir *string `json:"claude_start_dir"`
+			// HerdrAutostart: start herdr's server when it is not running (hub.json machines[].herdr_autostart,
+			// herdrstart.go); nil (an older hub) leaves it on.
+			HerdrAutostart *bool `json:"herdr_autostart"`
 		}
 		if err := json.Unmarshal(params, &c); err != nil {
 			return nil, err
@@ -504,6 +509,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		if c.ClaudeStartDir != nil {
 			d := strings.TrimSpace(*c.ClaudeStartDir)
 			n.claudeStartDir.Store(&d)
+		}
+		if c.HerdrAutostart != nil {
+			n.setHerdrAutostart(*c.HerdrAutostart)
 		}
 		return map[string]any{"claude_dirs": n.claudeConfigDirs()}, nil
 	case "launchers.list":

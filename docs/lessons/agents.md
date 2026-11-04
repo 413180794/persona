@@ -179,3 +179,17 @@ claude 刚出来 7 秒就判了超时；标签页留在那里，里面的 claude
   只有「Not logged in · Please run /login」。用户在「新建 Agent」里选过能用的启动器，就该用它（hub 带给 node，node 只在前两种都没有时用）。
 - 恢复时沿用会话原来的模型（`sessionState.Model`）：只在用 hub 选的启动器时换成「新建 Agent」的模型。
 
+## herdr 重启和恢复（v0.9.5，2026-11-04，#1879）
+
+- `herdr server` 是前台运行的 headless server，不会自己转后台；socket 在 `$XDG_CONFIG_HOME/herdr/herdr.sock`（或 `HERDR_SOCKET_PATH`）。
+  在 herdr 窗格里跑的进程（包括这台机器上的 Agent）都继承了 `HERDR_SOCKET_PATH` 指向用户正在用的 server：联调、跑测试时一律 `env -i` 加独立的 HOME / XDG_CONFIG_HOME，
+  否则 herdr 命令会打到用户的 server 上。
+- 原生恢复（`resume_agents_on_restore`）只在**客户端 attach 之后**才跑，headless server 自己不会续 agent；socket API 里没有触发它的方法。
+  测试时用 `script -q /dev/null herdr` 给它一个 pty 来 attach。
+- 恢复 Claude 用的是内置的裸 `claude --resume <id>`，启动器、`--settings`、`--mcp-config` 全丢（2026-11-04 用户打开 herdr 后 8 个 Persona 会话换成了自己的订阅、
+  丢了 MCP 和 hooks，没有 transcript 的那个弹出 Login）。没有按窗格关掉恢复的开关，但有按窗格的恢复命令：`pane.report_agent_session` 的 `resume_argv`。
+  - 要先 `pane.report_agent` 占住窗格，否则报 `resume_not_accepted`；窗格里得真的有被识别出来的 agent 进程，空 shell 占不住。
+  - 占住后 herdr 仍按屏幕识别状态（报的 `idle` 不会把 working 盖掉）。
+  - herdr 把 argv 敲进窗格的 shell：只给需要的元素加引号（第一个元素是 alias 也能展开），元素里不能有单引号。
+  - 官方 integration 之后再报同一个 / 另一个 session id，herdr 都留着原来的 `resume_argv`：会话换了 id 必须自己重报，否则恢复到旧会话。
+

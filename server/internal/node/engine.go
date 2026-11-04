@@ -68,6 +68,7 @@ func (n *Node) startWhenConfigured(ctx context.Context) {
 	case <-ctx.Done():
 		return
 	}
+	go n.herdrAtStart(ctx)
 	go n.pollAgents(ctx)
 	go n.watchCodexCards(ctx)
 	n.watchEngine(ctx)

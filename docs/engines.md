@@ -16,7 +16,7 @@
 
 | 引擎 | 在 App 里叫 | 你的 Claude 开在哪 | 怎么认出来 |
 | --- | --- | --- | --- |
-| `herdr` | herdr | 终端里运行 `herdr`，在它的窗格里开 `claude` / `codex` | herdr 的 socket 能连上，或装了 `herdr` 命令 |
+| `herdr` | herdr | 终端里运行 `herdr`，在它的窗格里开 `claude` / `codex`（没在运行时 node 按需拉起，见「herdr 没在运行时」） | herdr 的 socket 能连上，或装了 `herdr` 命令 |
 | `herdr-core` | Herdr App | Herdr 桌面 App 里开的终端（App 背后的 herdr-core） | herdr-core 的 socket 有回应 |
 | `herdr-both` | herdr + Herdr App | 上面两个同时在用 | 两个运行时都检测得到 |
 | `orca` | Orca | Orca 桌面 App 里开的终端 | Orca 在运行，而且它的版本 Persona 认得 |
@@ -96,6 +96,41 @@ node 所在的电脑 PATH 上有 `botmux` 时，node 在所选引擎的宿主之
   关掉后，botmux 用 tmux 跑的会话照旧凭对话记录按「未运行」列出，在手机上回它会在引擎里 `claude --resume`，可能和 botmux 自己的那个撞上：这类会话去飞书里回。
 - **待办**：按会话 id 挂，和别的会话一样；按项目整组挂时，项目是 botmux 会话的工作目录。
 - 实测：`go test -tags botmuxlive -run BotmuxLive ./internal/node/ -v`（只读列表，加一次 dry run 投递：botmux 校验并渲染，不派发）。
+
+## herdr 没在运行时
+
+电脑重启后 launchd / systemd 会拉起 node，但没人打开终端运行 `herdr`，经典 herdr 的 server 不在（#1879）。node 会在需要时自己把它拉起来：
+
+- **什么时候**：node 启动时（等 hub 在 `node.configure` 里说了开关，旧 hub 不说就等 10 秒后当作开），以及从手机新建会话、继续未运行的会话之前。
+  只在引擎是 herdr 或 herdr + Herdr App（并列）时，只拉经典 herdr；Herdr App 的 herdr-core 有自己的生命周期，不碰。node 不在轮询里拉：
+  拉起只发生在上面这两个时机。
+- **怎么起**：`herdr server`（v0.9.5 的 headless server，前台运行），node 把它放进单独的会话（`setsid`）里，node 重启不会带走它；
+  Linux 上 node 在 systemd 用户实例下时改用 `systemd-run --user --unit=persona-herdr-server`（停 node 的单元会杀整个 cgroup）。
+  等 socket 能连上（最多 20 秒）再接着新建 / 继续。
+- **环境要干净**：herdr server 的环境会传给每个窗格和里面的 claude。node 用 `env -i` 只带 `HOME`、`USER`、`LOGNAME`、`TMPDIR`、语言、
+  `XDG_*`、`HERDR_SOCKET_PATH`，再用用户的登录 shell（`$SHELL -l -c 'exec herdr server'`，launchd 下没有 `SHELL` 时读账户的登录 shell）起：
+  PATH 是登录 shell 的，node 和启动器的 `ANTHROPIC_*`、代理变量一个都不带。herdr 命令先在 node 的 PATH 里找，找不到再问登录 shell。
+- **只起一个**：node 内一把锁，外加对 herdr 配置目录的 `flock`（同一账户上另一个 node），拿到锁后再确认一次 socket。
+- **开关**：hub.json 的 `machines[].herdr_autostart` 写 `false` 时，node 完全不拉（手动 `herdr server stop` 后就一直停着），不写是开。
+  App 里「设置 › 机器 › 引擎」下的「需要时自动启动 herdr」开关是后续（#1879 里拆出去的那一项），现在只能改 hub.json。
+- **起不来**：仍然是 `engine_missing`。没装 herdr 时文案和以前一样；装了但起不来时说「自动启动也没成功」，原因（herdr 的退出码和输出的最后几行，
+  输出在 `$TMPDIR/persona-herdr-server.log`）放在详情里，也写进 node 的日志。Windows 上不拉，行为和以前一样。
+
+### 重启后续上 Persona 起的会话
+
+herdr server 重启后会恢复工作区、标签页、窗格，**客户端 attach 之后**再用它内置的命令续上 agent（`session.resume_agents_on_restore`，默认开），
+对 Claude Code 就是裸的 `claude --resume <id>`。Persona 起的 Claude 用的是启动器（`jarvisd launch <名字>`、~/.zshrc 里的函数）加
+`--settings`、`--mcp-config`、Persona 的 hooks，裸 `claude --resume` 把这些全丢了：网关换成了用户自己的订阅，Persona 的 MCP 和 hooks 也没了。
+
+所以 Persona 在 herdr 里起 Claude 时，给那个窗格报一个自己的恢复命令（herdr 的 `resume_argv`，只对这个窗格生效）：
+`eval "<Persona 起它时的那条命令，--resume <id>>"`。herdr 恢复时把它敲进窗格的 shell，~/.zshrc 的启动器照样能用。
+
+- 用户在终端里自己开的 claude 不报，herdr 照原样恢复；用户的 herdr 配置（`config.toml`）不改。
+- 这一版之前起的、node 重启前起的 Persona 会话（node 的会话记录里有它的启动器）：node 刷新时看到它在 herdr 里跑，就补报一次。
+- Claude 在窗格里换了会话（`/clear`），Persona 的 SessionStart hook 到时重报一次新 id：herdr 不会自己跟着改（v0.9.5 实测）。
+- 恢复命令不带权限模式、思考强度；路径里有单引号的（herdr 不收带 `'` 的参数）不报，退回 herdr 自己的恢复。
+- node 拉起的 headless server 没有客户端 attach，herdr 不会自己续 agent：要等有人 attach（电脑上打开 herdr）。从手机「继续」一个未运行的会话照常可用；
+  「被重启中断」的标记和「全部继续」是后续（#1879）。
 
 ## 选不了某个引擎时
 

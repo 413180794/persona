@@ -222,6 +222,9 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 	if host.ParsePane(req.Pane).Kind != host.Orca || n.engine() == proto.EngineOrca {
 		n.bindPane(req.Pane, in.SessionID)
 	}
+	if in.HookEventName == "SessionStart" {
+		n.resumeOnSessionStart(req.Pane, in.SessionID) // herdr's restore follows it to the new session (herdrresume.go)
+	}
 	if in.TranscriptPath != "" && validID(in.SessionID) {
 		n.mu.Lock()
 		n.paths[in.SessionID] = in.TranscriptPath

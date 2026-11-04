@@ -125,20 +125,8 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	}
 	// Persona's hooks: a plugin, or in --settings for a claude that loads none (hooksplugin.go).
 	settings, hooks := n.claudeStartSettings(ctx, launcher, "claude", cwd)
-	cmd := n.launcherCommand(launcher) + " " + args + modeFlags(mode, effort)
-	if settings != "" {
-		cmd += " --settings " + shellQuote(settings)
-	}
-	cmd += " --mcp-config " + shellQuote(filepath.Join(n.dir, "mcp.json"))
-	if execution.Model != "" {
-		cmd += " --model " + shellQuote(execution.Model)
-	}
-	if n.claudeLoadsPlugins(ctx) {
-		cmd += " --plugin-dir " + shellQuote(n.pluginDir()) + " --allowedTools " + shellQuote(officeRule(n.agentOfficeScript()))
-	}
-	if hooks != "" {
-		cmd += " --plugin-dir " + shellQuote(hooks)
-	}
+	spec := claudeLaunch{Launcher: launcher, Settings: settings, Hooks: hooks, Model: execution.Model, Plugins: n.claudeLoadsPlugins(ctx)}
+	cmd := n.claudeCommandLine(spec, args+modeFlags(mode, effort), shellQuote)
 	st := sessionState{Pane: pane, Launcher: launcher, Cwd: cwd, StartedAt: time.Now().UTC(), Model: execution.Model, ModelFingerprint: execution.Fingerprint}
 	if prev, ok := n.state.get(id); ok && resume != "" {
 		st.StartedAt = prev.StartedAt
@@ -168,6 +156,7 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	}
 	n.bindPane(pane, id)
 	_ = launch.NameAgent(ctx, created.Pane, "j-"+id[:6])
+	n.holdResume(ctx, launch, pane, id, spec) // herdr's restore resumes it through the launcher (herdrresume.go)
 	if prompt != "" {
 		if err := n.hostPrompt(ctx, pane, prompt); err != nil {
 			return nil, fmt.Errorf("send first message: %w", err)
@@ -245,14 +234,23 @@ func tabLabel(name string, taken map[string]bool) string {
 
 // workspaceFor reuses the workspace named after the project directory (the user keeps one workspace per project).
 func (n *Node) workspaceFor(ctx context.Context, launch host.Launcher, cwd string) (string, error) {
+	var startErr error
+	if _, ok := launch.(*herdrHost); ok {
+		startErr = n.ensureHerdr(ctx, "start or resume a session") // herdrstart.go
+	}
 	wss, err := launch.Spaces(ctx)
 	if err != nil {
 		// Nothing was started or typed: say so, and what to do, instead of herdr's own words (the app showed
 		// "herdr workspace list: exec: \"herdr\": executable file not found").
 		name := n.defaultEngineName()
-		return "", refusal(engineMissing, fmt.Sprintf("这台电脑上的 %s 没在运行（或没装），不能在这里新开或接着会话，这次没有发送。"+
-			"要从手机接着电脑上开着的会话，在那边继续；要从手机新开，先在这台电脑上装好并打开 %s。", name, name),
-			map[string]any{"detail": "herdr is not running on this machine: " + err.Error()})
+		msg := fmt.Sprintf("这台电脑上的 %s 没在运行（或没装），不能在这里新开或接着会话，这次没有发送。"+
+			"要从手机接着电脑上开着的会话，在那边继续；要从手机新开，先在这台电脑上装好并打开 %s。", name, name)
+		if startErr != nil && !errors.Is(startErr, errHerdrNotInstalled) {
+			msg = fmt.Sprintf("这台电脑上的 %s 没在运行，自动启动也没成功，不能在这里新开或接着会话，这次没有发送。"+
+				"请在这台电脑上打开 %s 再试；原因见详情。", name, name)
+		}
+		return "", refusal(engineMissing, msg,
+			map[string]any{"detail": herdrMissingDetail(err, startErr)})
 	}
 	base := filepath.Base(cwd)
 	for _, w := range wss {
