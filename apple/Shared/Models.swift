@@ -581,6 +581,9 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     /// The channels messages came into it from, newest first ("wechat", "feishu"; docs/channels.md「来源标记」): the
     /// sidebar draws the latest one's mark. Nil from hubs without channels.
     var channels: [String]? = nil
+    /// The last compaction the user asked for in an assistant conversation (POST …/compact, #1727): running, done or
+    /// failed. Nil from hubs without `assistant_compact`, and before the first one.
+    var compaction: CompactionRun? = nil
     /// The group of paired hubs it came from (docs/multi-hub.md); nil for the default group. The app's own.
     var hubGroup: String? = nil
 
@@ -655,7 +658,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, subagents, ports,
              updatedAt = "updated_at", lastText = "last_text", activity, activityAt = "activity_at", pendingInteractions = "pending_interactions", rev, suggestion,
              starting, startError = "start_error", todo, quiet, hubGroup = "app_hub_group",
-             attentionReason = "attention_reason", externalURL = "external_url", channels
+             attentionReason = "attention_reason", externalURL = "external_url", channels, compaction
     }
 
     init(from decoder: Decoder) throws {
@@ -716,6 +719,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         attentionReason = try c.decodeIfPresent(String.self, forKey: .attentionReason)
         externalURL = try c.decodeIfPresent(String.self, forKey: .externalURL)
         channels = try c.decodeIfPresent([String].self, forKey: .channels)
+        compaction = try? c.decodeIfPresent(CompactionRun.self, forKey: .compaction) // an odd one never drops the session
         hubGroup = try c.decodeIfPresent(String.self, forKey: .hubGroup)
     }
 }
@@ -1079,6 +1083,36 @@ nonisolated struct Compaction: Codable, Hashable, Sendable {
         case "idle": "空闲时"
         default: nil
         }
+    }
+}
+
+/// A compaction the user asked for (`Session.compaction`, the hub's proto.Compaction): its state, why it failed, and
+/// when it started and finished. Not a turn: the session's status stays as it was.
+nonisolated struct CompactionRun: Codable, Hashable, Sendable {
+    enum State: String, Codable, Sendable { case running, done, failed }
+    var state: State
+    var error: String?
+    var startedAt: Date?
+    var finishedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case state, error
+        case startedAt = "started_at", finishedAt = "finished_at"
+    }
+
+    init(state: State, error: String? = nil, startedAt: Date? = nil, finishedAt: Date? = nil) {
+        self.state = state
+        self.error = error
+        self.startedAt = startedAt
+        self.finishedAt = finishedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        state = try c.decode(State.self, forKey: .state)
+        error = try c.decodeIfPresent(String.self, forKey: .error)
+        startedAt = try? c.decodeIfPresent(Date.self, forKey: .startedAt)
+        finishedAt = try? c.decodeIfPresent(Date.self, forKey: .finishedAt)
     }
 }
 

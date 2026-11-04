@@ -159,6 +159,14 @@ final class AppModel {
     /// Bumped whenever another page hands the user to a Persona conversation (`askJarvis`): the Persona tab goes back
     /// to its conversation even when it is the one already shown (a pushed 知识库 page would otherwise stay on top).
     var assistantReveal = 0
+    /// 压缩上下文 asked here, and when: the chat says 正在压缩 until the hub's word on it arrives (#1762).
+    var compactionRequests: [SessionKey: Date] = [:]
+    /// The failed compaction the user closed, per conversation (`MainConversationActions.key`).
+    var compactionDismissed: [SessionKey: String] = [:]
+    /// What the composer's note shows for a conversation's compaction (`CompactionTracker` works it out).
+    var compactionShown: [SessionKey: MainConversationActions.Shown] = [:]
+    /// 新建主对话… was picked (the top bar's menu, the sidebar's): the Persona page asks before doing it.
+    var newMainAsked = false
 
     @ObservationIgnored private(set) var chats: [SessionKey: ChatStore] = [:]
     @ObservationIgnored var flushingOutbox = false

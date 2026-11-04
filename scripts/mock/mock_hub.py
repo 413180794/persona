@@ -30,7 +30,8 @@ def features():
     return ["error_codes", "client_hello", "heartbeat", "app_ping", "client_msg_id", "send_refusals",
             "screen_dialog", "resumable_interactions", "secret_prompts", "request_id", "file_upload",
             "tls", "endpoints", "connectors", "lark_attachments", "file_stream", "file_thumb", "git_blob"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (
-                ["terminal_control", "terminal_scroll", "terminal_click"] if TERMINAL_CONTROL else [])
+                ["terminal_control", "terminal_scroll", "terminal_click"] if TERMINAL_CONTROL else []) + (
+                ["assistant_compact", "assistant_main_new"] if os.environ.get("MOCK_MAIN_ACTIONS") == "1" else [])
 
 
 def identity():
@@ -1641,6 +1642,75 @@ def tasks_area(h, method, p, raw):
         h.send_json({"item": item})
         return True
     return False
+
+
+# MOCK_MAIN_ACTIONS=1: the hub can compact the main conversation and start a new one (#1727, the apps' side #1762):
+# the features assistant_compact / assistant_main_new; POST …/compact runs for MOCK_COMPACT_SECONDS (default 3) and
+# ends done (MOCK_COMPACT_FAIL=1: failed); POST /api/v1/assistant/main/new archives the main one (409 main_changed when
+# `expect` is not it). MOCK_COMPACTION=running|done|failed: the main conversation starts in that state (screenshots).
+MAIN_ACTIONS = os.environ.get("MOCK_MAIN_ACTIONS") == "1"
+
+
+def utc_now():
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def set_compaction(sid, state, error=""):
+    for s in ASSISTANT:
+        if s["session_id"] != sid:
+            continue
+        c = {"state": state, "started_at": (s.get("compaction") or {}).get("started_at") if state != "running" else utc_now()}
+        if state != "running":
+            c["finished_at"] = utc_now()
+        if error:
+            c["error"] = error
+        s["compaction"] = c
+        push_machine(s["machine_id"])
+
+
+def main_actions_area(h, method, p, raw):
+    if not MAIN_ACTIONS or method != "POST":
+        return False
+    if p.startswith("/api/v1/assistant/conversations/") and p.endswith("/compact"):
+        sid = p.split("/")[5]
+        s = next((x for x in ASSISTANT if x["session_id"] == sid), None)
+        if s is None:
+            h.send_json({"code": "gone", "error": "这段对话的记录不在了"}, 409)
+            return True
+        if (s.get("compaction") or {}).get("state") == "running":
+            h.send_json({"code": "compacting", "error": "已经在压缩了"}, 409)
+            return True
+        set_compaction(sid, "running")
+        fail = os.environ.get("MOCK_COMPACT_FAIL") == "1"
+        threading.Timer(float(os.environ.get("MOCK_COMPACT_SECONDS", "3")), lambda: set_compaction(
+            sid, "failed" if fail else "done", "Claude Code 没有写下压缩的结果" if fail else "")).start()
+        h.send_json({"ok": True})
+        return True
+    if p == "/api/v1/assistant/main/new":
+        body = json.loads(raw or b"{}")
+        old = ASSISTANT_CONFIG["main"]
+        if not old or body.get("expect") != old:
+            h.send_json({"code": "main_changed", "error": "主对话已经在别的设备上换过了"}, 409)
+            return True
+        today = datetime.now()
+        for s in ASSISTANT:
+            if s["session_id"] == old:
+                s.update(title="旧主对话 · 至 %d月%d日" % (today.month, today.day), archived=True)
+                push_machine(s["machine_id"])
+        ASSISTANT_CONFIG["main"] = None
+        h.send_json({"ok": True, "archived": old, "carried": body.get("carry") == "summary"})
+        return True
+    return False
+
+
+if MAIN_ACTIONS and os.environ.get("MOCK_COMPACTION") in ("running", "done", "failed"):
+    _state = os.environ["MOCK_COMPACTION"]
+    _c = {"state": _state, "started_at": utc_now()}
+    if _state != "running":
+        _c["finished_at"] = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat().replace("+00:00", "Z")  # still recent once the app is up
+    if _state == "failed":
+        _c["error"] = "Claude Code 没有写下压缩的结果"
+    next(x for x in ASSISTANT if x["session_id"] == ASK1)["compaction"] = _c
 
 
 ITEMS[ASK2] = [it("user", "text", 60 * 5, text="⏰ 早报")] + [it("assistant", "text", 60 * 5, text="早上好！今天 2 个会议，3 封邮件需要回复。")]
@@ -8474,6 +8544,7 @@ class H(BaseHTTPRequestHandler):
         if mail_area(self, self.command, p, parse_qs(urlparse(self.path).query)): return
         if MOCK_LARK and fs_post(self, p, parse_qs(urlparse(self.path).query), self.last_body): return  # area: feishu chat page
         if tasks_area(self, self.command, p, self.last_body): return
+        if main_actions_area(self, self.command, p, self.last_body): return
         if p == "/api/v1/todos" and self.command == "POST":
             if is_read_only(self): return self.send_json({"error": "只读角色不能修改待办"}, 403)
             body = json.loads(self.last_body or b"{}")

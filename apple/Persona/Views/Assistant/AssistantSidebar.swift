@@ -1086,6 +1086,7 @@ struct AssistantSidebar: View {
         .background { if !isMain { SwipeRowMark() } } // the drawer leaves a drag to the left on it to the row
         #endif
         .contextMenu {
+            if isMain { MainConversationMenu(key: s.key) } // 压缩上下文, 新建主对话… (#1762)
             if !isMain {
                 Button { togglePin(s) } label: {
                     isPinned(s) ? Label("取消置顶", systemImage: Theme.Icon.unpin) : Label("置顶", systemImage: Theme.Icon.pin)

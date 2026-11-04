@@ -1,0 +1,107 @@
+import Foundation
+
+/// Compacting the main conversation on demand and starting a new one (#1727, docs/assistant.md「手动压缩」「新建主对话」):
+/// the hub's features, what the chat shows while a compaction runs, and the words the actions use.
+nonisolated enum MainConversationActions {
+    /// The hub can compact an assistant conversation (POST …/compact).
+    static let compactFeature = "assistant_compact"
+    /// The hub can archive the main conversation and leave none (POST /api/v1/assistant/main/new).
+    static let newMainFeature = "assistant_main_new"
+
+    /// A done compaction shows when this page saw it finish, or when it finished this recently.
+    static let doneRecent: TimeInterval = 60
+    /// A failed one shows when this page saw it fail, or when it failed this recently (until it is closed).
+    static let failedRecent: TimeInterval = 10 * 60
+    /// How long 已压缩上下文 stays.
+    static let doneShown: TimeInterval = 4
+    /// How long the note says 正在压缩 after asking, before the hub's word on it arrives.
+    static let requestGrace: TimeInterval = 15
+
+    /// What the chat shows for a conversation's compaction.
+    enum Shown: Hashable, Sendable {
+        case running
+        case done(key: String)
+        case failed(key: String, error: String)
+    }
+
+    /// The same compaction's state, whatever its times: what a failure the user closed is remembered by.
+    static func key(_ c: CompactionRun) -> String {
+        "\(c.startedAt?.timeIntervalSince1970 ?? 0)|\(c.state.rawValue)"
+    }
+
+    /// Running while it runs; done / failed only for a change this page saw (`seen`, the state it saw before) or one
+    /// that just finished, never an old one on every open. `dismissed`: the key of a failure the user closed.
+    static func shown(_ c: CompactionRun?, seen: CompactionRun.State?, now: Date, dismissed: String? = nil) -> Shown? {
+        guard let c else { return nil }
+        let key = key(c)
+        let age = c.finishedAt.map { now.timeIntervalSince($0) } ?? .infinity
+        let sawIt = seen == .running
+        switch c.state {
+        case .running: return .running
+        case .done: return sawIt || age <= doneRecent ? .done(key: key) : nil
+        case .failed:
+            guard dismissed != key, sawIt || age <= failedRecent else { return nil }
+            let e = (c.error ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return .failed(key: key, error: e.isEmpty ? "未知错误" : e)
+        }
+    }
+
+    /// The title the hub gives the archived main conversation: 旧主对话 · 至 11月4日.
+    static func archivedTitle(_ now: Date = Date(), calendar: Calendar = .current) -> String {
+        let d = calendar.dateComponents([.month, .day], from: now)
+        return "旧主对话 · 至 \(d.month ?? 1)月\(d.day ?? 1)日"
+    }
+}
+
+nonisolated extension Compaction {
+    /// The divider's words, as the web and Android draw it: 以上内容已压缩 · 手动 · 压缩前 18.1 万 token (the parts known).
+    var dividerTitle: String {
+        var parts = ["以上内容已压缩"]
+        if let source { parts.append(source) }
+        if let t = preTokens, t > 0 { parts.append("压缩前 \(Self.tokens(t)) token") }
+        return parts.joined(separator: " · ")
+    }
+
+    /// 18.1 万, 8,500.
+    static func tokens(_ n: Int) -> String {
+        if n >= 10_000 {
+            let s = String(format: "%.1f", Double(n) / 10_000)
+            return (s.hasSuffix(".0") ? String(s.dropLast(2)) : s) + " 万"
+        }
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.locale = Locale(identifier: "en_US")
+        return f.string(from: NSNumber(value: n)) ?? String(n)
+    }
+}
+
+/// The answer to POST /api/v1/assistant/main/new: the archived conversation and whether its summary goes along.
+nonisolated struct NewMainResult: Decodable, Sendable {
+    var archived: String?
+    var carried: Bool?
+}
+
+extension APIClient {
+    private struct CompactBody: Encodable {
+        var machineID: String?
+        enum CodingKeys: String, CodingKey { case machineID = "machine_id" }
+    }
+
+    private struct NewMainBody: Encodable {
+        var carry: String
+        var expect: String
+    }
+
+    /// Starts compacting an assistant conversation; its progress comes on the session (`compaction`). A 409 says why
+    /// not (`busy`, `compacting`, `gone`, `unsupported`), in words to show the user.
+    func compactConversation(_ id: String, machineID: String?) async throws {
+        try await post("/api/v1/assistant/conversations/\(id)/compact", body: CompactBody(machineID: machineID?.isEmpty == false ? machineID : nil))
+    }
+
+    /// Archives the main conversation `expect` (renamed 旧主对话 · 至 M月D日) and leaves none: the next message to the
+    /// main conversation starts a new one, with the old one's summary in front of it when `carry`. 409 `main_changed`:
+    /// another device replaced it already; `busy`: it is answering or compacting.
+    func newMainConversation(carry: Bool, expect: String) async throws -> NewMainResult {
+        try await post("/api/v1/assistant/main/new", body: NewMainBody(carry: carry ? "summary" : "none", expect: expect))
+    }
+}

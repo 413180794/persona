@@ -624,8 +624,9 @@ struct ThinkingRow: View {
     }
 }
 
-/// Where Claude Code compacted the context (`Item.compact`): a hairline across the chat, 「已压缩上下文」 in the middle with
-/// where it came from (手动 / 自动 / 空闲时, when known) and when. A tap shows the notes that came with it.
+/// Where Claude Code compacted the context (`Item.compact`): a hairline across the chat, 「以上内容已压缩」 in the middle with
+/// where it came from (手动 / 自动 / 空闲时) and the size before it, when known, as the web and Android write it (#1762).
+/// A tap shows the notes that came with it and when.
 struct CompactDivider: View {
     var item: Item
     @State private var open = false
@@ -633,14 +634,11 @@ struct CompactDivider: View {
     @State private var notesBottom: CGFloat = 0
     @Environment(\.chatPin) private var pin
 
-    private var title: String {
-        [String?("已压缩上下文"), item.compact?.source, item.ts.map { $0.formatted(date: .omitted, time: .shortened) }]
-            .compactMap { $0 }.joined(separator: " · ")
-    }
+    private var title: String { (item.compact ?? Compaction()).dividerTitle }
 
     private var notes: [String] {
         var n = item.compact?.notes ?? [item.text ?? ""]
-        if let t = item.compact?.preTokens, t > 0 { n.append("压缩前约 \(t / 1000)k token") }
+        if let ts = item.ts { n.append("压缩于 " + ts.formatted(date: .abbreviated, time: .shortened)) }
         return n.filter { !$0.isEmpty }
     }
 

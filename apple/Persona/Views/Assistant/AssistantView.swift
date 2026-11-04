@@ -202,6 +202,13 @@ struct AssistantView: View {
             }
             #endif
             .task { await model.refreshAssistant() }
+            // 新建主对话… from the top bar's menu or the sidebar's (#1762).
+            .sheet(isPresented: Binding(get: { model.newMainAsked }, set: { model.newMainAsked = $0 })) { NewMainSheet() }
+            #if DEBUG
+            .task { // `-showNewMain YES`: the question up, for screenshots
+                if UserDefaults.standard.bool(forKey: "showNewMain") { try? await Task.sleep(for: .seconds(3)); model.newMainAsked = true }
+            }
+            #endif
         }
     }
 

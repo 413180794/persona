@@ -2740,6 +2740,7 @@ struct Composer: View, Equatable {
                 AttentionNote(reason: reason, link: s.externalLink)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+            CompactionSlot(key: key) // an assistant conversation's 压缩上下文 (#1762)
             if let suggestion {
                 SuggestionPill(text: suggestion) {
                     text = suggestion
@@ -2846,6 +2847,7 @@ struct Composer: View, Equatable {
         .animation(Theme.Motion.standard, value: suggestion)
         .onChange(of: focused) { _, f in onFocus?(f) }
         .onDisappear { if focused { onFocus?(false) } } // gone with the keyboard (a subagent opened, another pane)
+        .modifier(CompactionTracking(key: key))
         .onChange(of: model.composerFocus) { _, k in
             guard k == key else { return }
             model.composerFocus = nil

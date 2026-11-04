@@ -1,6 +1,6 @@
 import XCTest
 
-/// Where the context was compacted, the chat draws one divider (「已压缩上下文 · 来源 · 时间」), not the two notices and
+/// Where the context was compacted, the chat draws one divider (「以上内容已压缩 · 来源 · 压缩前 N 万 token」, as the web and Android, #1762), not the two notices and
 /// the idle note in a work line of their own (2026-11-04, the user's screenshot); a tap shows the notes.
 ///   PORT=18797 MOCK_COMPACT=1 python3 scripts/mock/mock_hub.py &
 ///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/CompactDividerTests
@@ -49,8 +49,8 @@ final class CompactDividerTests: XCTestCase {
         divider.tap()
         XCTAssertTrue(summary.waitForExistence(timeout: 3), "a tap shows the notes")
         // All of them in view, the last one too: opened as the chat's last row, they grew past the composer (2026-11-04).
-        let size = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "压缩前约")).firstMatch
-        XCTAssertTrue(size.waitForExistence(timeout: 3), "the size before")
+        let size = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "压缩于")).firstMatch
+        XCTAssertTrue(size.waitForExistence(timeout: 3), "when it was compacted, the last note")
         sleep(1)
         shot(name + "-open")
         XCTAssertTrue(size.isHittable, "the last note is in view")
@@ -71,7 +71,7 @@ final class CompactDividerTests: XCTestCase {
         let d = dividers.firstMatch
         if !d.waitForExistence(timeout: 8) { print("TREE " + app.debugDescription.replacingOccurrences(of: "\n", with: "\nTREE ")); shot("jarvis-missing") }
         XCTAssertTrue(d.exists, "the divider")
-        XCTAssertTrue(d.label.hasPrefix("已压缩上下文 · 空闲时"), d.label)
+        XCTAssertTrue(d.label.hasPrefix("以上内容已压缩 · 空闲时 · 压缩前 15.1 万 token"), d.label)
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "后台通知")).firstMatch.exists, "no work line of notices")
         checkNotes(d, "jarvis", last: true)
     }
@@ -79,14 +79,14 @@ final class CompactDividerTests: XCTestCase {
     /// An Agents chat: /compact, then a compaction in the middle of a later turn's work.
     func testAgentsManualAndMidTurn() {
         launch(["-app.tab", "chats", "-tab", "dev", "-dev.openChat", "macbook/a1f3c2d4-0000-4000-8000-000000000006"])
-        let manual = dividers.matching(NSPredicate(format: "label BEGINSWITH %@", "已压缩上下文 · 手动")).firstMatch
+        let manual = dividers.matching(NSPredicate(format: "label BEGINSWITH %@", "以上内容已压缩 · 手动")).firstMatch
         XCTAssertTrue(manual.waitForExistence(timeout: 20), "the /compact divider")
         checkNotes(manual, "agents")
         // The later turn's work line, opened: its compaction is one divider among the steps.
         let work = app.buttons.matching(identifier: "work-head").allElementsBoundByIndex.last { $0.isHittable }
         XCTAssertNotNil(work, "the later turn's work line")
         if work?.label == "展开过程" { work?.tap() }
-        let mid = dividers.matching(NSPredicate(format: "label BEGINSWITH %@", "已压缩上下文 · 自动")).firstMatch
+        let mid = dividers.matching(NSPredicate(format: "label BEGINSWITH %@", "以上内容已压缩 · 自动")).firstMatch
         XCTAssertTrue(mid.waitForExistence(timeout: 5), "the compaction in the work line")
         shot("agents-midturn")
     }

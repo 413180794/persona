@@ -148,6 +148,8 @@ extension Theme {
         static let unmute = "bell"
         static let collapseAll = "rectangle.compress.vertical"
         static let newConversation = "plus.bubble"
+        /// Compact a conversation's context on demand (压缩上下文, #1727).
+        static let compactContext = "arrow.down.and.line.horizontal.and.arrow.up"
         static let keyboard = "keyboard"
         /// Puts the keyboard away (the chat's composer, beside the mode chips).
         static let dismissKeyboard = "keyboard.chevron.compact.down"

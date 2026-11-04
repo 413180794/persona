@@ -297,6 +297,9 @@ struct AssistantTopBar: View {
                 Button { copy(key.sessionID, "已拷贝会话 ID") } label: { Label("拷贝会话 ID", systemImage: Theme.Icon.id) }
             }
         }
+        if model.canCompact(key) || model.canStartNewMain(key) {
+            Section { MainConversationMenu(key: key) } // 压缩上下文, 新建主对话… (#1762)
+        }
         if let key {
             Section {
                 Menu {

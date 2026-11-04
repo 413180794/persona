@@ -294,6 +294,11 @@ hub 看到的事（`conversation.started`、`conversation.renamed`、`session.us
   换对话会丢的是这段对话里的结论和还在进行的事，正是压缩摘要。没压缩过的只带最近几条，确认框里提示可以先压缩再新建。
 - **旧的不删**：归档只是不在列表里，用户再给它发消息就自动回到列表（`unarchiveOnSend`）。
 
+iOS / macOS（#1762）：主对话顶栏头像的菜单（Mac 同一个菜单，侧栏主对话那行的右键菜单也有）加「压缩上下文」「新建主对话…」，hub 的 features 带 `assistant_compact` / `assistant_main_new` 才显示。
+输入框上方一条状态（`MainConversationActionsView.swift`）：压缩中「正在压缩上下文…」，`done` 显示 4 秒「已压缩上下文」，`failed`「压缩失败：…」可以关掉；
+`done` / `failed` 只在这个页面看着它从 `running` 变过来、或刚结束（1 分钟 / 10 分钟内）时显示，打开页面不会提示很久以前的结果（判断在 `MainConversationActions.shown`，和网页一致）。
+新建前的确认是一个表单 sheet，「带上旧对话的摘要」默认开；成功后回到空的主对话页，第一条消息照「还没有主对话」的流程开新的。分隔线文案和网页、安卓统一。
+
 ## 定时任务（2026-10-31 合成一张表）
 
 以前是两套：定时任务（routines，每天几点）和跟进（follow-ups，助手用 `schedule_followup` 安排的一次性唤醒），分存在两个 settings 里，
