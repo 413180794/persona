@@ -102,12 +102,33 @@ class LoopbackTests(unittest.TestCase):
                 self.assertIn(brand + "-private-word", words)
 
     def test_loopback_values(self):
-        for value in ["127.0.0.1", "127.1.2.3", "::1", "[::1]", "0:0:0:0:0:0:0:1"]:
+        for value in ["127.0.0.1", "127.1.2.3", "::1", "[::1]", "0:0:0:0:0:0:0:1",
+                      "127.0.0.1:18661", "http://127.0.0.1:18660", "http://127.0.0.1:18660/x", "https://127.0.0.1/",
+                      "[::1]:18660", "http://[::1]:18660/", "localhost:8080", "http://localhost:8080/x",
+                      " 127.0.0.1:18661 "]:
             with self.subTest(value=value):
                 self.assertTrue(pc.loopback(value))
-        for value in [PRIVATE_IP, "192.0.2.1", "0.0.0.0", "127.0.0.1:18660", "hub-host", ""]:
+        for value in [PRIVATE_IP, "192.0.2.1", "0.0.0.0", "hub-host", "", PRIVATE_IP + ":8080",
+                      "http://" + PRIVATE_IP + ":9000", "http://" + PRIVATE_IP + ":9000/x", "[fd00::1]:18660",
+                      "hub-host:18660", "http://hub-host:18660", "127.0.0.1:port", "127.0.0.1:99999",
+                      "user@127.0.0.1", "ssh://user@127.0.0.1:22", "localhost.example.com:8080"]:
             with self.subTest(value=value):
                 self.assertFalse(pc.loopback(value))
+
+    def test_local_notes_loopback_with_port_is_not_a_word(self):
+        with tempfile.TemporaryDirectory(prefix="privacy-check-test-") as temp:
+            home = Path(temp)
+            spans = ["127.0.0.1:18661", "http://127.0.0.1:18660", "[::1]:18660", PRIVATE_IP + ":8080",
+                     "http://" + PRIVATE_IP + ":9000"]
+            (home / "CLAUDE.local.md").write_text("".join("- `" + span + "`\n" for span in spans))
+            with patch.object(pc, "HOME", str(home)), patch.object(pc, "ROOT", str(home)):
+                words, _ = pc.terms()
+        for span in spans[:3]:
+            self.assertNotIn(span, words)
+        self.assertIn(PRIVATE_IP + ":8080", words)
+        self.assertIn("http://" + PRIVATE_IP + ":9000", words)
+        self.assertEqual(pc.problems("db at 127.0.0.1:18661, hub at http://127.0.0.1:18660/admin", words), [])
+        self.assertTrue(pc.problems("db at " + PRIVATE_IP + ":8080", words))
 
     def test_config_loopback_is_not_a_word(self):
         with tempfile.TemporaryDirectory(prefix="privacy-check-test-") as temp:
@@ -273,6 +294,22 @@ class PrivacyCheckIntegrationTests(unittest.TestCase):
         output = result.stdout + result.stderr
         self.assertIn("hosts.md:1: private IP", output)
         self.assertNotIn("notes.md", output)
+        self.assertNotIn(PRIVATE_IP, output)
+
+    def test_local_notes_loopback_with_port_is_not_flagged_but_private_address_is(self):
+        (self.repo / "CLAUDE.local.md").write_text("- `127.0.0.1:18661`\n- `http://127.0.0.1:18660`\n- `[::1]:18660`\n"
+                                                   "- `" + PRIVATE_IP + ":8080`\n")
+        (self.repo / "db.sh").write_text("# default: 127.0.0.1:18661, hub http://127.0.0.1:18660/admin, [::1]:18660\n")
+        self.git("add", "db.sh")
+        result = self.scan()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        (self.repo / "hosts.md").write_text("The other machine is " + PRIVATE_IP + ":8080.\n")
+        self.git("add", "hosts.md")
+        result = self.scan()
+        self.assertNotEqual(result.returncode, 0)
+        output = result.stdout + result.stderr
+        self.assertIn("hosts.md:1:", output)
+        self.assertNotIn("db.sh", output)
         self.assertNotIn(PRIVATE_IP, output)
 
     def test_staged_unsafe_worktree_safe(self):

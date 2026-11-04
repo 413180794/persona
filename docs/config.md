@@ -64,7 +64,8 @@ Bundle ID、App Group、钥匙串组、签名 profile、App Store 记录、数�
    ]
    ```
 
-   `ssh` 是**开发机** SSH 到这台的主机名；`os` 决定装哪个二进制；`hostnames` 只在部署脚本就跑在这台上时有用（直接本地拷贝，不走 SSH）。
+   `ssh` 是**开发机** SSH 到这台的主机名；`os` 决定装哪个二进制；`hostnames` 是这台自己的主机名（`hostname -s`，macOS 上也可以写 LocalHostName），部署脚本跑在这台上时据此直接本地拷贝、不走 SSH。
+   **在哪台上跑部署，就给哪台写上 `hostnames`**：没写的机器一律当成远端经 SSH 安装（跑部署的这台没写，就 SSH 连自己）。
    开发机连不上、只有另一台（通常是 hub 机器）连得上的电脑（密钥只在那台上、路由不通）写 `"via": "<那台的 id>"`：
    部署时先拷到那台、再从那台装过去，这时 `ssh` 是**那台**上的主机名。
 
@@ -141,7 +142,7 @@ Bundle ID、App Group、钥匙串组、签名 profile、App Store 记录、数�
 | `app_store.*` | `release.sh` / `asc*.py`（`asc_cli.py` 把它们交给 App Store Connect CLI，`docs/release.md`「用 asc 发版」）：API key（`key_id`、`issuer_id`、`key_path`）、App 记录的数字 ID、内部测试员、TestFlight 反馈邮箱；`external` 是外部测试（群组名、公开链接开关和人数上限（`public_link_limit`，0 为不限）、隐私政策地址、另外按邮箱邀请的测试员、Beta App Review 联系人和备注，`docs/release.md`）。环境变量 `ASC_KEY_ID` 等仍可覆盖（key 文件路径 `ASC_KEY_PATH` 或 `ASC_PRIVATE_KEY_PATH`） |
 | `hub.machine` | hub 跑在哪台机器（`machines` 里的 id）：`deploy.sh` 在它上面起 Postgres 和 systemd 服务，`test-server.sh` 在它上面跑测试，`sim.sh` 从它上面读 token |
 | `hub.url` | `sim.sh` 配对模拟器用的地址；示例中的 HTTP 仅用于内网 / VPN，公网入口另配 `hub.json` 的 `public` |
-| `machines[]` | `deploy.sh` 要装 `personad` 的机器：`ssh` 是 ssh 主机名，`os` 决定装哪个二进制（`linux` / `darwin`），`hostnames` 是这台机器自己的主机名（在它上面跑部署时直接拷贝，不走 ssh） |
+| `machines[]` | `deploy.sh` 要装 `personad` 的机器：`ssh` 是 ssh 主机名，`os` 决定装哪个二进制（`linux` / `darwin`），`hostnames` 是这台机器自己的主机名（在它上面跑部署时直接拷贝，不走 ssh；跑部署的那台要写上，没写的一律走 ssh） |
 | `simulator` | `sim.sh` 默认的模拟器 UDID（`SIM=<udid>` 覆盖） |
 | `publish.site_url` | `publish.sh` 把 `personad` 和 `install.sh` 发布到哪（`site/` 那个 worker 的域名，`docs/release.md`「发布 personad」）；不写就不发布 |
 | `publish.wrangler` | 部署那个 worker 用的 wrangler 命令（比如包了鉴权的脚本）；不写就 `npx wrangler` |

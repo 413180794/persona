@@ -65,10 +65,25 @@ web_deps() {
   npm ci --no-audit --no-fund && printf '%s\n' "$want" > node_modules/.persona-lock-sha256
 }
 
-# The web client is replaced atomically within the hub's selected state root.
-deploy_web() {
+# build_web: the web client's dependencies and build (web/dist), before any machine is touched (#1728): when it fails
+# nothing is installed, and its output is printed (the prebuild privacy scan prints its hits on stdout).
+build_web() {
   [ -f ../web/package.json ] || return 0
-  (cd ../web && web_deps && npm run build) >/dev/null
+  local log
+  log=$(mktemp)
+  if ! (cd ../web && web_deps && npm run build) >"$log" 2>&1; then
+    cat "$log" >&2
+    rm -f "$log"
+    echo "web: build failed (output above); nothing was deployed" >&2
+    exit 1
+  fi
+  rm -f "$log"
+  echo "built web"
+}
+
+# upload_web: the built web client (build_web) replaces the old one atomically within the hub's selected state root.
+upload_web() {
+  [ -f ../web/package.json ] || return 0
   # macOS tar packs each file's extended attributes (build output carries com.apple.provenance), useless on the hub:
   # COPYFILE_DISABLE stops the ._<name> AppleDouble entries GNU tar unpacks as files, --no-xattrs the LIBARCHIVE.xattr
   # pax headers GNU tar drops with a warning per file. GNU tar takes --no-xattrs too.
@@ -79,7 +94,7 @@ deploy_web() {
   COPYFILE_DISABLE=1 tar --no-xattrs -C ../web/dist -czf - . | ssh "$JARVIS_HUB_SSH" "$script"
   echo "web: deployed to the hub state root"
 }
-if [ "${TARGETS[*]}" = web ]; then deploy_web; exit 0; fi
+if [ "${TARGETS[*]}" = web ]; then build_web; upload_web; exit 0; fi
 HUB="$JARVIS_HUB_MACHINE"
 # Other machines first, the hub (restart) last: the hub only picks up a new node binary when it reconnects.
 ORDERED=()
@@ -106,11 +121,19 @@ go generate ./internal/runtimepkg
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o bin/jarvisd-linux-amd64 ./cmd/personad
 GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o bin/jarvisd-darwin-arm64 ./cmd/personad
 echo "built $VERSION"
+# The web client goes with the hub: built here with the binaries, uploaded after the hub restarts.
+if [[ " ${TARGETS[*]} " == *" $HUB "* ]]; then build_web; fi
 
-# is_here <machine id>: the config lists this computer's host name for it.
+# is_here <machine id>: the config lists this computer's host name for it. Only non-empty names count (#1725): a
+# machine without hostnames is remote, and an empty `hostname -s` or scutil (none on Linux) matches nothing.
 is_here() {
-  local here=" $(field "$1" hostnames) "
-  [[ "$here" == *" $(hostname -s) "* || "$here" == *" $(scutil --get LocalHostName 2>/dev/null) "* ]]
+  local here name
+  here=" $(field "$1" hostnames) "
+  [[ "$here" == *[![:space:]]* ]] || return 1
+  for name in "$(hostname -s 2>/dev/null)" "$(scutil --get LocalHostName 2>/dev/null)"; do
+    [ -n "$name" ] && [[ "$here" == *" $name "* ]] && return 0
+  done
+  return 1
 }
 
 install_bin() { # machine-id binary
@@ -213,7 +236,7 @@ for t in "${TARGETS[@]}"; do
       hub_admin_access
       python3 ../scripts/persona_identity.py --service hub --prepare --prefix ../scripts/deploy/hub-systemd.sh | ssh "$JARVIS_HUB_SSH" 'bash -s'
       echo "$t: hub restarted"
-      deploy_web ;;
+      upload_web ;;
     *)
       [[ " $JARVIS_MACHINES " == *" $t "* ]] || { echo "unknown machine $t (not in the config)" >&2; exit 2; }
       os=$(field "$t" os); os=${os:-darwin}

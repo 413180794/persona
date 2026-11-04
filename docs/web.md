@@ -13,7 +13,7 @@
   不是文件的路径都回 `index.html`（前端路由：`/`（Persona 主对话）、`/overview`（总览）、`/s/<机器>/<会话>`、`/j`、`/j/<会话>`、`/j/new`、`/history`、`/inbox`、`/inbox/<件>`、`/messages`、`/messages/<会话>`、`/routines`、
   `/kb`、`/kb/<类型>/<条目>`、`/workspace-board`（工作流看板）、`/machines`、`/machines/<机器>`、`/assistant`（助手资料页）、`/settings`、`/plugin/<插件>/<页面>`（插件的整页））；
   `/assets/` 下是带内容哈希的文件，永久缓存，`index.html` 不缓存（`server/internal/hub/web.go`）。
-- 部署：`./scripts/deploy/deploy.sh web`（只构建、传网页，不重启 hub）；部署 hub 时也会顺带部署网页。
+- 部署：`./scripts/deploy/deploy.sh web`（只构建、传网页，不重启 hub）；部署 hub 时也会顺带部署网页：网页和 Go 二进制一起先编好，编不过就打出编译输出（含隐私扫描的命中行）、什么都不装；hub 重启之后再上传。
 - 本地开发：`cd web && npm ci && npm run dev`，Vite 把 `/api` 代理到 `JARVIS_HUB_URL`（`eval "$(python3 ../scripts/persona_config.py env)"`）。
   测试 `npm test`（vitest，`src/lib/*.test.ts`），类型检查 `npm run typecheck`。
   侧边栏入口的端到端检查（Persona 进主对话、两个「+」、老链接、窄屏抽屉；Python Playwright 驱动本机 Chrome）：起假 hub 和 `npx vite` 后跑

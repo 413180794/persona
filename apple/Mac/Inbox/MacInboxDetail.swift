@@ -159,7 +159,9 @@ struct MacInboxPage: View {
                 .modifier(MacBelowTitleRow())
                 .frame(width: Theme.Size.macInboxFiltersWidth)
                 .frame(maxHeight: .infinity)
-            Divider()
+            // Up into the title bar's row, as the shell's divider: the list reaches up there and the filters do not,
+            // so a divider stopping under the row left a step between them (#1736, as #830).
+            Divider().ignoresSafeArea(.container, edges: .top)
             MacInboxList()
                 .frame(width: listShown)
             MacPanelResizeHandle { delta in

@@ -10,8 +10,9 @@ What counts as private comes from this machine, never from the repo: the values 
 internal project names, people, anything else) and CLAUDE.local.md's `code spans`. On top of that, any private IPv4
 address and any email outside example.* domains. Install as a hook: scripts/hooks/pre-commit (docs/testing.md).
 
-Not private: loopback addresses (127.0.0.0/8, ::1) even when the config holds one, values config.example.json ships
-as defaults, the repo's own Go module path (it names the GitHub owner),
+Not private: loopback addresses (127.0.0.0/8, ::1, also with a port or as a URL's host) even when the config or
+CLAUDE.local.md holds one, values config.example.json ships as defaults, the repo's own Go module path (it names the
+GitHub owner),
 CLAUDE.local.md spans that only name repo files, commands or config keys, and in site/ the contact address and domain
 the App Store and the OAuth consent screen publish anyway.
 """
@@ -125,9 +126,25 @@ def word_list():
 
 
 def loopback(value):
-    """127.0.0.0/8 and ::1 are every machine's own address, not anybody's private value."""
+    """127.0.0.0/8, ::1 and localhost are every machine's own address, not anybody's private value: bare, as host:port
+    or [IPv6]:port, or as a URL's host (http://127.0.0.1:18660/x)."""
+    value = value.strip()
     try:
         return ipaddress.ip_address(value.strip("[]")).is_loopback
+    except ValueError:
+        pass
+    try:
+        parts = urlsplit(value if "://" in value else "//" + value)
+        parts.port  # raises ValueError on a port that is not a number in range
+    except ValueError:
+        return False
+    host = parts.hostname or ""
+    if parts.username is not None or not host:
+        return False
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
     except ValueError:
         return False
 

@@ -11,8 +11,8 @@ struct AnsweredTests {
     }
 
     @Test func questionMapsQuestionsToAnswers() {
-        let q1 = Question(question: "发吗？", options: [])
-        let q2 = Question(question: "改哪些？", options: [])
+        let q1 = Question(question: "发吗？", header: nil, multiSelect: false, options: [])
+        let q2 = Question(question: "改哪些？", header: nil, multiSelect: true, options: [])
         let ix = Interaction(id: "ix2", machineID: "m", sessionID: "s", kind: .question, questions: [q1, q2])
         let r = Resolution(answers: ["发吗？": "发", "改哪些？": "A, B"])
         let lines = Answered.answerLines(ix, r)
@@ -54,13 +54,13 @@ struct AnsweredTests {
         let d = ScreenDialog(header: "选择", question: "选哪项？", options: [
             ScreenDialog.Option(key: "1", label: "Yes"),
             ScreenDialog.Option(key: "2", label: "No")
-        ])
+        ], rev: "r1")
         let ix = Interaction(id: "ix5", machineID: "m", sessionID: "s", kind: .screen, dialog: d, secret: false)
 
         let r1 = Resolution(option: "2")
         #expect(Answered.answerLines(ix, r1) == [AnswerLine(label: "", answer: "No")])
 
-        let r2 = Resolution(options: ["1", "2"], text: "还有")
+        let r2 = Resolution(text: "还有", options: ["1", "2"])
         #expect(Answered.answerLines(ix, r2) == [AnswerLine(label: "", answer: "Yes，No，还有")])
 
         let r3 = Resolution(text: "<redacted>")

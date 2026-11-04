@@ -482,7 +482,7 @@ async 提问（空输入框、电脑上有草稿、0.163 的提问面板展开�
 主机、hub 地址、机器名、Apple 的各种 ID、邮箱，`~/.config/persona/private-words.txt`（一行一个：内部项目名、人名、内部工具名，
 自己维护）和 `CLAUDE.local.md` 里反引号括起来的值；另外任何私网 IPv4（文档网段 192.0.2.0/24 等除外）和真实域名下的邮箱
 （`example.*`、公共邮箱、`site/` 里公开的联系邮箱除外）。命中只报类型不报值（免得值进日志）。
-不算私有值的：回环地址（`127.0.0.0/8`、`::1`，config 里写了也不算，比如 hub 地址是 `http://127.0.0.1:<端口>`）、`config.example.json` 里本来就有的默认值（比如外部测试群组名）、仓库自己的 Go 模块路径（里面带 GitHub 用户名）、
+不算私有值的：回环地址（`127.0.0.0/8`、`::1`、`localhost`，带端口、带协议的也一样，config 或 `CLAUDE.local.md` 里写了也不算，比如 hub 地址是 `http://127.0.0.1:<端口>`、数据库是 `127.0.0.1:<端口>`；私网地址带端口照报）、`config.example.json` 里本来就有的默认值（比如外部测试群组名）、仓库自己的 Go 模块路径（里面带 GitHub 用户名）、
 `CLAUDE.local.md` 里只是仓库路径 / 命令 / 配置键名的反引号内容（只有像 ID、主机、邮箱、IP 的才算），以及 `site/` 里的联系邮箱和站点域名
 （`app_store.feedback_email`、`privacy_url`，App Store 和 OAuth 同意屏幕本来就公开）。文档里说到机器用「hub 机器」「另一台 Mac」，
 示例里的机器 id 用 `server` / `laptop` 这类占位符。`release.sh` 打包前跑一遍；
