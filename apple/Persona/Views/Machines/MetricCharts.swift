@@ -61,40 +61,112 @@ extension Array where Element == MetricPoint {
 }
 
 /// A tiny line with its wash, no axes: the dashboard's cards.
+///
+/// Drawn on a canvas, not as a Swift Charts chart: the Machines page shows a dozen of these, and each chart's own
+/// layout cost about 130 ms whenever the page came up on the Mac (#390; vectorized plots were no cheaper, the cost is
+/// per chart, not per point). The look is the chart's it replaced: each series a monotone line (one run per stretch
+/// between gaps), over a wash down to 0 when there is one series; x over `domain`, y from 0 to the larger of `yMax`
+/// and the largest value; nothing drawn past the edges.
 struct Sparkline: View {
     var points: [MetricPoint]
     var series: [ChartSeries]
     var domain: ClosedRange<Date>
     var yMax: Double?
+    /// Read so that a change of appearance while the page is up draws the canvas again in the new colors (the
+    /// renderer resolves them, but nothing in it depends on the appearance).
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        Chart {
-            ForEach(series.indices, id: \.self) { i in
-                let s = series[i]
-                ForEach(points.chartValues(s)) { v in
-                    if series.count == 1 {
-                        AreaMark(x: .value("时间", v.date), y: .value(s.name, v.value), series: .value("段", v.series))
-                            .foregroundStyle(s.color.opacity(0.12))
-                            .interpolationMethod(.monotone)
-                    }
-                    LineMark(x: .value("时间", v.date), y: .value(s.name, v.value), series: .value("段", v.series))
-                        .foregroundStyle(s.color)
-                        .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
-                        .interpolationMethod(.monotone)
+        let _ = colorScheme
+        let lines = series.map { (color: $0.color, values: points.chartValues($0)) }
+        let top = max(yMax ?? 0, lines.flatMap { $0.values.map(\.value) }.max() ?? 0, 1e-9)
+        let wash = series.count == 1
+        Canvas { context, size in
+            for line in lines {
+                let runs = SparklineGeometry.runs(line.values, domain: domain, top: top, size: size)
+                if wash {
+                    for run in runs { context.fill(SparklineGeometry.wash(run, bottom: size.height), with: .color(line.color.opacity(0.12))) }
+                }
+                for run in runs {
+                    context.stroke(SparklineGeometry.line(run), with: .color(line.color),
+                                   style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
                 }
             }
         }
-        .chartXScale(domain: domain)
-        .chartYScale(domain: 0...max(yMax ?? 0, maxValue, 1e-9))
-        .chartPlotStyle { $0.clipped() } // a point a step before the range would draw past the edge
-        .chartXAxis(.hidden)
-        .chartYAxis(.hidden)
-        .chartLegend(.hidden)
+        .clipped() // a point a step before the range would draw past the edge
         .accessibilityHidden(true) // the numbers beside it say it
     }
+}
 
-    private var maxValue: Double {
-        series.flatMap { s in points.compactMap { s.value($0) } }.max() ?? 0
+/// Where a sparkline's points go, and the monotone curve through them.
+enum SparklineGeometry {
+    /// Each run of values (consecutive values of one `series`, split at gaps) as points in `size`: x over `domain`,
+    /// y from 0 at the bottom to `top` at the top. A run of one point has nothing to draw and is left out.
+    static func runs(_ values: [ChartValue], domain: ClosedRange<Date>, top: Double, size: CGSize) -> [[CGPoint]] {
+        let start = domain.lowerBound.timeIntervalSince1970
+        let span = max(domain.upperBound.timeIntervalSince1970 - start, 1e-9)
+        var out: [[CGPoint]] = []
+        var current: [CGPoint] = []
+        var id: String?
+        for v in values {
+            if v.series != id {
+                if current.count > 1 { out.append(current) }
+                current = []
+                id = v.series
+            }
+            current.append(CGPoint(x: size.width * (v.date.timeIntervalSince1970 - start) / span,
+                                   y: size.height * (1 - v.value / top)))
+        }
+        if current.count > 1 { out.append(current) }
+        return out
+    }
+
+    /// A monotone cubic through the points (Steffen's tangents, as d3's monotoneX; it looks the same as the charts'
+    /// `.monotone`): it never overshoots a point, so a flat stretch stays flat and a step stays a step.
+    static func line(_ p: [CGPoint]) -> Path {
+        Path { path in
+            guard let first = p.first else { return }
+            path.move(to: first)
+            let t = tangents(p)
+            for i in p.indices.dropLast() {
+                let dx = (p[i + 1].x - p[i].x) / 3
+                path.addCurve(to: p[i + 1], control1: CGPoint(x: p[i].x + dx, y: p[i].y + dx * t[i]),
+                              control2: CGPoint(x: p[i + 1].x - dx, y: p[i + 1].y - dx * t[i + 1]))
+            }
+        }
+    }
+
+    /// The line closed down to `bottom` (the value 0): the wash under it.
+    static func wash(_ p: [CGPoint], bottom: CGFloat) -> Path {
+        var path = line(p)
+        guard let first = p.first, let last = p.last else { return path }
+        path.addLine(to: CGPoint(x: last.x, y: bottom))
+        path.addLine(to: CGPoint(x: first.x, y: bottom))
+        path.closeSubpath()
+        return path
+    }
+
+    /// The slope at each point: 0 where the neighbours turn, never steeper than keeps the curve between them.
+    static func tangents(_ p: [CGPoint]) -> [CGFloat] {
+        let n = p.count
+        guard n > 1 else { return Array(repeating: 0, count: n) }
+        func slope(_ a: CGPoint, _ b: CGPoint) -> CGFloat { b.x == a.x ? 0 : (b.y - a.y) / (b.x - a.x) }
+        guard n > 2 else { let s = slope(p[0], p[1]); return [s, s] }
+        func sign(_ x: CGFloat) -> CGFloat { x < 0 ? -1 : 1 }
+        var t = [CGFloat](repeating: 0, count: n)
+        for i in 1..<(n - 1) {
+            let h0 = p[i].x - p[i - 1].x, h1 = p[i + 1].x - p[i].x
+            let s0 = slope(p[i - 1], p[i]), s1 = slope(p[i], p[i + 1])
+            let weighted = h0 + h1 == 0 ? 0 : (s0 * h1 + s1 * h0) / (h0 + h1)
+            t[i] = (sign(s0) + sign(s1)) * min(abs(s0), abs(s1), abs(weighted) / 2)
+        }
+        // The ends: the one-sided slope that makes the end piece a parabola (d3's slope2).
+        func endSlope(_ a: CGPoint, _ b: CGPoint, _ inner: CGFloat) -> CGFloat {
+            b.x == a.x ? inner : (3 * slope(a, b) - inner) / 2
+        }
+        t[0] = endSlope(p[0], p[1], t[1])
+        t[n - 1] = endSlope(p[n - 2], p[n - 1], t[n - 2])
+        return t
     }
 }
 

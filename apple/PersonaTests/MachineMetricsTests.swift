@@ -65,4 +65,38 @@ struct MachineMetricsTests {
         #expect(pts.nearest(Date(timeIntervalSince1970: 12), step: 10)?.t == 10)
         #expect(pts.nearest(Date(timeIntervalSince1970: 300), step: 10) == nil) // in the gap: nothing to read
     }
+
+    // MARK: The dashboard's sparkline (drawn on a canvas, #390)
+
+    @Test @MainActor func sparklineRunsSplitAtGapsAndMapTheDomain() {
+        let t0 = Date(timeIntervalSince1970: 1_790_000_000)
+        let points = [MetricPoint(t: 1_790_000_000, cpu: 0), MetricPoint(t: 1_790_000_600, cpu: 50),
+                      MetricPoint(t: 1_790_001_200, gap: true), MetricPoint(t: 1_790_001_800, cpu: 100),
+                      MetricPoint(t: 1_790_002_400, gap: true), MetricPoint(t: 1_790_003_000, cpu: 25), MetricPoint(t: 1_790_003_600, cpu: 25)]
+        let values = points.chartValues(ChartSeries(name: "CPU", color: .blue) { $0.cpu })
+        let runs = SparklineGeometry.runs(values, domain: t0...t0.addingTimeInterval(3600), top: 100, size: CGSize(width: 60, height: 20))
+        // Three runs between the gaps; the one-point run in the middle has nothing to draw.
+        #expect(runs.count == 2)
+        #expect(runs[0] == [CGPoint(x: 0, y: 20), CGPoint(x: 10, y: 10)]) // 0 at the bottom, 50 halfway
+        #expect(runs[1] == [CGPoint(x: 50, y: 15), CGPoint(x: 60, y: 15)])
+    }
+
+    @Test @MainActor func sparklineCurveNeverOvershoots() {
+        // A step: flat, up, flat. The tangents at the corners are 0, so the curve stays between the levels.
+        let step = [CGPoint(x: 0, y: 10), CGPoint(x: 1, y: 10), CGPoint(x: 2, y: 0), CGPoint(x: 3, y: 0)]
+        let t = SparklineGeometry.tangents(step)
+        #expect(t[1] == 0 && t[2] == 0)
+        // A peak is flat at the top.
+        #expect(SparklineGeometry.tangents([CGPoint(x: 0, y: 5), CGPoint(x: 1, y: 0), CGPoint(x: 2, y: 5)])[1] == 0)
+        // A straight run stays straight, ends included.
+        #expect(SparklineGeometry.tangents([CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 2), CGPoint(x: 2, y: 4)]) == [2, 2, 2])
+        // Two points: a straight line.
+        #expect(SparklineGeometry.tangents([CGPoint(x: 0, y: 0), CGPoint(x: 2, y: 1)]) == [0.5, 0.5])
+        // Every control point of the step's curve lies between its levels.
+        var ys: [CGFloat] = []
+        SparklineGeometry.line(step).forEach { e in
+            if case .curve(let to, let c1, let c2) = e { ys += [to.y, c1.y, c2.y] }
+        }
+        #expect(!ys.isEmpty && ys.allSatisfy { (0...10).contains($0) })
+    }
 }

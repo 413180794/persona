@@ -298,6 +298,8 @@
 - Swift Charts 的线要在空档处断开：给每段一个不同的 `series:` 值（「指标#段号」），同一个 series 的点总会连起来。
   `AxisValueLabel` 不显式给颜色时，日期刻度会染成 App 的 tint（蓝色），要写 `.foregroundStyle(Color(.secondaryLabel))`。
   落在 `chartXScale(domain:)` 之外的点照样画（线会伸出纵轴、卡片边），要 `.chartPlotStyle { $0.clipped() }`。
+- 一页上十几个小图表时别用 Swift Charts（2026-11-04，#390）：每个 `Chart` 自己的布局（比例尺、绘图区）就很贵，Mac 上机器页 12 个迷你曲线每次进页面多花约 130 ms；
+  换成向量化的 `LinePlot` / `AreaPlot` 一点没省（开销按图表算，不按点数）。没有坐标轴、不用交互的小图在 `Canvas` 上自己画（`Sparkline`）。
 - SwiftUI `Menu` 的 label 上挂的东西（`.overlay`、`.surface` 玻璃）都会变成菜单按钮的一部分：玻璃铺满整个 label（头像连名字套进一个大玻璃框），
   overlay 里的文字 XCUITest 也找不到（按钮只报它第一次的 label）。要临时盖在按钮上的提示放在和 Menu 并列的 ZStack 里（`AssistantTopBar.face`）。
 - 自己画的浮动顶栏要盖住状态栏的雾，背景用 GeometryReader 读 `safeAreaInsets.top` 往上偏移，直接 `ignoresSafeArea` 的背景高度会被算短。

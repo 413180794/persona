@@ -92,7 +92,7 @@
     macOS 26 上实测不崩、状态保留）之后六个分区合计 3750 ms，和原来的 3730 一样：机器页快了约 480 ms（Swift Charts 的迷你曲线不用重建），
     别的页反而慢了一点。时间花在每次都要做的事上：新页面重新进窗口后的 AppKit 布局（`List` 行自动算高、约束、`NSHostingView` 量尺寸）、
     工具栏的项整批换一遍（每个都是一个 SwiftUI 托管视图；Agents ↔ 知识库来回切平均每次约 115 ms）、菜单栏图标重画（`MenuBarExtra`，每次约 25 ms），
-    采样里还有一截在查本地化表（`Locale`、`mostPreferredLanguageOf`）。所以没有一个改了就快的地方，要按页、按项减：机器页的迷你曲线、Agents 的工具栏项、菜单栏图标不跟着分区重画。
+    采样里还有一截在查本地化表（`Locale`、`mostPreferredLanguageOf`）。所以没有一个改了就快的地方，要按页、按项减：机器页的迷你曲线（2026-11-04 已改，见下面）、Agents 的工具栏项、菜单栏图标不跟着分区重画。
     保活的几条路都试过：`ZStack` 里藏起来，隐藏页的 `.searchable`、`.toolbar` 照样往窗口工具栏注册，两个搜索框直接崩
     （`NSInternalInconsistencyException`）；每页一个 `NSHostingController` 轮流桥接工具栏，根视图的工具栏项被挤掉、切换时 `NSRangeException`；
     `TabView` 能用但不快（上面），它在工具栏正中的分段选择器 SwiftUI 也藏不掉（`.defaultVisibility(.hidden, for: .tabBar)`、`.hidden()` 都不行，
@@ -105,7 +105,8 @@
     `ps -o cputime` 量按键后 1.2–1.5 秒的进程 CPU（按键前后各读一次相减；cua 的命令行 `cua-driver hotkey` 本身要 1 秒多，CPU 不算在 App 上）。
     同一个 Debug 副本、同一个假 hub（2026-11-04，master 28b593fb）：
     - 切分区（真按键 / 无障碍路线）：Persona 约 170 / 290、Agents 约 240 / 370、收件箱约 200 / 330、知识库约 120 / 260、机器约 440 / 520、设置约 140 / 230 ms；
-      机器页里迷你曲线（每张卡 3 个 Swift Charts、每个点一个 mark）占约 150 ms：换成空视图后切过去约 280 ms。
+      机器页里迷你曲线（每张卡 3 个 Swift Charts、每个点一个 mark）占约 130–150 ms：换成空视图后切过去约 280 ms。
+      改成向量化的 `LinePlot` / `AreaPlot` 不变（约 420 ms，开销在每个图表）；改成 `Canvas` 自己画（#390）后约 290 ms，样子不变。
     - 点开对话（⌘] 下一个 Agent）：真按键有缓存的 120–190 ms、第一次打开 180–360 ms（`MOCK_LONG_HISTORY=1` 的长对话也在内）；无障碍路线 350–450 ms。
       11-02 记的「点开一个对话 450–950 ms」是无障碍路线量的，真按键在「首屏 < 200 ms」的目标以内。没测过真实 hub 上很长的对话。
   - 空闲 CPU（锁屏时起体验实例，`ps -o cputime` 量 20 秒）：停在 Agents 页（`-tab dev`）什么都不动占一个核的 14%；
