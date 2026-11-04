@@ -7,6 +7,8 @@
 #   ./scripts/app/android.sh apk        # debug APK only (android/app/build/outputs/apk/debug/app-debug.apk)
 # shots takes optional environment variables for repeatable, pixel-comparable captures (docs/android.md):
 #   SHOTS_STYLE=glass|brief|board  pass debug.style on every launch
+#   SHOTS_PLUGINS=1                the mock hub serves MOCK_PLUGINS (设置 › 插件) and the plugin pages are captured too;
+#                                  off by default because its running voice plugin adds the voice button to Persona
 #   SHOTS_MOCK_PORT=<port>         run the mock hub on this port instead of a random one
 #   SHOTS_FROZEN=<ISO time>        e.g. 2026-11-02T04:00:00+00:00: freeze the mock hub's and the emulator's clock,
 #                                  turn animations off, put the status bar in demo mode (needs adb root) and
@@ -55,6 +57,7 @@ if [ "$COMMAND" = shots ]; then
   case "$SERIAL" in emulator-*) ;; *) echo "shots 必须用 -s 指定专用模拟器。" >&2; exit 2 ;; esac
   [ "$("$ADB" -s "$SERIAL" shell getprop ro.kernel.qemu | tr -d '\r')" = 1 ] || { echo "指定设备不是已启动的模拟器。" >&2; exit 2; }
   case "${SHOTS_STYLE:-}" in ""|glass|brief|board) ;; *) echo "SHOTS_STYLE 只能是 glass、brief 或 board。" >&2; exit 2 ;; esac
+  case "${SHOTS_PLUGINS:-}" in ""|0|1) ;; *) echo "SHOTS_PLUGINS 只能是 1 或 0。" >&2; exit 2 ;; esac
   if [ -n "${SHOTS_MOCK_PORT:-}" ]; then
     if ! [[ "$SHOTS_MOCK_PORT" =~ ^[0-9]+$ ]] || [ "$SHOTS_MOCK_PORT" -lt 1024 ] || [ "$SHOTS_MOCK_PORT" -gt 65535 ]; then
       echo "SHOTS_MOCK_PORT 必须是 1024 到 65535 之间的端口号。" >&2; exit 2
@@ -166,7 +169,9 @@ case "$COMMAND" in
       CLOCK_PID=$!
     fi
     cd ..
-    PORT=${SHOTS_MOCK_PORT:-0} MOCK_FROZEN=${SHOTS_FROZEN:-} python3 -u - >"$OUTPUT/mock-hub.log" 2>&1 <<'MOCK_PY' &
+    PLUGINS_MODE=""
+    [ "${SHOTS_PLUGINS:-}" != 1 ] || PLUGINS_MODE=1
+    PORT=${SHOTS_MOCK_PORT:-0} MOCK_FROZEN=${SHOTS_FROZEN:-} MOCK_PLUGINS=$PLUGINS_MODE python3 -u - >"$OUTPUT/mock-hub.log" 2>&1 <<'MOCK_PY' &
 import ast, os, re, sys, types
 from pathlib import Path
 if os.environ.get('MOCK_FROZEN'):
@@ -311,6 +316,11 @@ SHOTS_PY
       capture "$theme" diagnostics --es debug.openDiagnostics true
       for page in notifications readiness; do capture "$theme" "settings-$page" --es debug.openLink "'jarvis://open?target=settings&page=$page'"; done
       for page in machines knowledge phone catalog; do capture "$theme" "$page" --es debug.openPage "$page"; done
+      if [ -n "$PLUGINS_MODE" ]; then
+        # 设置 › 插件 and three of the mock's plugins: one to set up (every kind of field), hub.json's, a broken one.
+        capture "$theme" settings-plugins --es debug.openLink "'jarvis://open?target=settings&page=plugins'"
+        for id in example-notes voice example-weather; do capture "$theme" "plugin-$id" --es debug.openPage "plugin:$id"; done
+      fi
     done
     echo "截图已输出到：$OUTPUT"
     ;;

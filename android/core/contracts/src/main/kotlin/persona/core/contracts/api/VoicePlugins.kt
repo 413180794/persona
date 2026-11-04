@@ -1,16 +1,31 @@
 package persona.core.contracts.api
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-/** A plugin of the hub (`GET /api/v1/plugins`, docs/plugins.md); only `kind == "voice"` means anything to the app. */
+/**
+ * A plugin of the hub (`GET /api/v1/plugins`, docs/plugins.md「hub 的接口」): the voice page looks for a running
+ * `kind == "voice"` one; 设置 › 插件 shows them all. Hubs from before the plugin base send only the first five fields.
+ */
 @Serializable
 data class HubPlugin(
     val id: String = "",
     val name: String = "",
+    /** The first extension point it contributes to (`voice`, `connectors`…). */
     val kind: String = "",
-    /** `starting | running | error | disabled`. */
+    /** `disabled | needs_setup | incompatible | stopped | starting | running | error`. */
     val status: String = "",
     val error: String? = null,
+    val version: String? = null,
+    /** `builtin | hub.json | installed`; null from an older hub. */
+    val source: String? = null,
+    val enabled: Boolean? = null,
+    val description: String? = null,
+    /** The extension points it contributes to, with the ids. */
+    val contributes: Map<String, List<String>>? = null,
+    /** What it still needs before it runs, in words. */
+    @SerialName("needs_setup") val needsSetup: List<String>? = null,
+    val warnings: List<String>? = null,
 ) {
     val isRunningVoice: Boolean get() = kind == "voice" && status == "running"
 }

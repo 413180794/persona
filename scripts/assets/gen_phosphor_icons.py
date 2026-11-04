@@ -17,9 +17,9 @@ calendar-check caret-down caret-left caret-right caret-up chart-bar chart-line c
 chat-teardrop-text chats chats-circle check check-circle checks circle-dashed circle-notch clock clock-countdown cloud
 cloud-check code command copy cpu cube cursor-text desktop device-mobile dots-three dots-three-vertical envelope-simple
 eye file file-text files fingerprint flag folder folder-simple funnel-simple gauge gear gear-six git-branch git-diff
-globe-simple hand hand-palm hard-drives hash hourglass-medium house image info kanban keyboard laptop lightbulb lightning
+globe-simple hand hand-palm hard-drives hash hourglass-medium house image info kanban key keyboard laptop lightbulb lightning
 link-simple list-checks lock-simple magnifying-glass map-pin microphone microphone-slash monitor moon moon-stars note-pencil paper-plane-right
-paper-plane-tilt paperclip pause pencil-simple phone-disconnect play plugs-connected plus power prohibit push-pin qr-code question quotes
+paper-plane-tilt paperclip pause pencil-simple phone-disconnect play plugs-connected plus power prohibit push-pin puzzle-piece qr-code question quotes
 robot rocket-launch scan seal-question share-network shield-check shield-warning sidebar-simple sliders-horizontal sparkle
 spinner-gap squares-four stack stop sun terminal terminal-window thermometer timer trash tray tree-structure user
 user-circle warning warning-circle waveform wifi-high wifi-slash wrench x x-circle

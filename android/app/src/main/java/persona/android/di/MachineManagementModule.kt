@@ -8,14 +8,24 @@ import persona.core.contracts.GroupKeys
 import persona.core.contracts.api.*
 import persona.core.hub.HttpMachineManagement
 import persona.core.hub.HttpModelConfiguration
+import persona.core.hub.HttpPluginManagement
 import persona.core.hub.HubError
 import persona.core.hub.HubFailure
 import persona.core.hub.OkHttpHubConnection
+import android.app.Application
+import persona.android.PersonaApp
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.JsonObject
 import javax.inject.Singleton
 
 /**
- * Machine management (机器页, 引擎, Claude Code 设置) and 模型配置. Machine management goes to the hub group of the
- * machine it names; 模型配置 to the selected group. Either way the connection waits for its route, adds the device token
+ * Machine management (机器页, 引擎, Claude Code 设置), 模型配置 and 插件. Machine management goes to the hub group of the
+ * machine it names; 模型配置 and 插件 to the selected group. Either way the connection waits for its route, adds the device token
  * and drops calls of a pairing that has gone.
  */
 @Module
@@ -39,5 +49,21 @@ object MachineManagementModule {
         override suspend fun purpose(id: String) = api().purpose(id)
         override suspend fun save(purpose: ModelPurpose, draft: ModelConfigurationDraft) = api().save(purpose, draft)
         override suspend fun providerModels(provider: String, refresh: Boolean, machine: String?) = api().providerModels(provider, refresh, machine)
+    }
+
+    // A hub-level page too: the selected group's plugins.
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Provides @Singleton fun plugins(runtime: ConnectionRuntime, application: Application): PluginManagement = object : PluginManagement {
+        // The selected hub's features, from its hello: the settings row shows while it says plugin_manager.
+        override val available: Flow<Boolean> = (application as PersonaApp).hub
+            .flatMapLatest { hub -> hub?.connection?.serverFeatures ?: flowOf(emptySet()) }
+            .map { "plugin_manager" in it }.distinctUntilChanged()
+        private fun api() = HttpPluginManagement(runtime.connection(), available)
+        override suspend fun plugins() = api().plugins()
+        override suspend fun plugin(id: String) = api().plugin(id)
+        override suspend fun setEnabled(id: String, enabled: Boolean) = api().setEnabled(id, enabled)
+        override suspend fun setConfig(id: String, config: JsonObject) = api().setConfig(id, config)
+        override suspend fun setSecret(id: String, name: String, value: String) = api().setSecret(id, name, value)
+        override suspend fun clearSecret(id: String, name: String) = api().clearSecret(id, name)
     }
 }

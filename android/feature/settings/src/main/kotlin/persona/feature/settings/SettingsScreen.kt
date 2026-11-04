@@ -67,6 +67,7 @@ private fun SettingsContent(
 ) {
     var page by rememberSaveable(initialPage) { mutableStateOf(initialPage) }
     var purpose by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
+    var plugin by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val connection by services.connection.state.collectAsState()
@@ -94,6 +95,15 @@ private fun SettingsContent(
         }
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { if (!services.demo) checkUpdate() }
+    val pluginService = services.plugins.takeUnless { services.demo }
+    val pluginsAvailable by remember(pluginService) { pluginService?.available ?: kotlinx.coroutines.flow.flowOf(false) }.collectAsState(false)
+    var pluginSummary by remember { mutableStateOf<String?>(null) }
+    // The row's count, read again whenever the settings list is shown or the hub reconnects.
+    LaunchedEffect(pluginService, pluginsAvailable, page, connection) {
+        if (pluginService == null || !pluginsAvailable || page != "settings" || connection != ConnectionState.Online) return@LaunchedEffect
+        pluginSummary = try { PluginText.listSummary(pluginService.plugins()) }
+        catch (error: CancellationException) { throw error } catch (_: Exception) { pluginSummary }
+    }
     val back: () -> Unit = onBack ?: { page = "settings" }
     BackHandler(page != "settings" && onBack == null, onBack = back)
     val detailKey = LocalDetailKey.current
@@ -115,6 +125,9 @@ private fun SettingsContent(
         "models" -> purpose?.let { id -> ModelPurposePage(services.models.takeUnless { services.demo }, id, onBack = { purpose = null }) }
             ?: ModelConfigurationPage(services.models.takeUnless { services.demo }, back,
                 onPurpose = { id -> onNavigate?.invoke(persona.core.navigation.ModelPurposeRoute(id)) ?: run { purpose = id } })
+        "plugins" -> plugin?.let { id -> PluginPage(services.plugins.takeUnless { services.demo }, id, onBack = { plugin = null }) }
+            ?: PluginsPage(services.plugins.takeUnless { services.demo }, back,
+                onPlugin = { id -> onNavigate?.invoke(persona.core.navigation.PluginRoute(id)) ?: run { plugin = id } })
         "ready", "notify" -> {
             val preferences: LazyListScope.() -> Unit =
                 if (page == "notify") NotificationPreferences(deviceController, paired && services.deviceSettings != null) else ({})
@@ -179,6 +192,11 @@ private fun SettingsContent(
             }
             item { JSectionHeader("AI") }
             item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ModelConfig), title = "模型配置", leadingIcon = PhIcons.Brain, subtitle = "对话、分拣、翻译和各项 AI 功能统一选择模型", onClick = { open(SettingsPage.ModelConfig) }) } }
+            // 插件 shows only when the hub manages plugins (docs/plugins.md); its value says how many need the user.
+            if (pluginsAvailable) {
+                item { JSectionHeader("扩展") }
+                item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Plugins), title = "插件", leadingIcon = PhIcons.PuzzlePiece, subtitle = "开关、设置和密钥", value = pluginSummary, onClick = { open(SettingsPage.Plugins) }) } }
+            }
             item { JSectionHeader("电脑") }
             item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ClaudeCode), title = "Claude Code 设置", leadingIcon = PhIcons.TerminalWindow, subtitle = "各台电脑上的常用选项，可以一起改", onClick = { open(SettingsPage.ClaudeCode) }) } }
             item { JSectionHeader("交给 AI 的手机数据") }
@@ -228,6 +246,7 @@ private fun SettingsContent(
     if (onBack != null) BackHandler(page != "settings", onBack = onBack)
     // An AI use opened inside 模型配置 (no navigation host) closes before the page does.
     BackHandler(page == "models" && purpose != null) { purpose = null }
+    BackHandler(page == "plugins" && plugin != null) { plugin = null }
     BackHandler(page == "hubs-add") { page = "hubs" }
     if (confirmDisconnect) JDialog(
         onDismiss = { confirmDisconnect = false }, title = "断开配对？",

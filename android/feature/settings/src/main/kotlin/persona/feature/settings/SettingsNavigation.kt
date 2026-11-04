@@ -17,6 +17,7 @@ fun SettingsPage.toInitialPage(): String = when (this) {
     SettingsPage.ModelConfig -> "models"
     SettingsPage.Hubs -> "hubs"
     SettingsPage.Persona -> "persona"
+    SettingsPage.Plugins -> "plugins"
 }
 
 /** The root and unknown page names have no detail destination. */

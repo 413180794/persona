@@ -58,7 +58,7 @@
   假 hub `MOCK_PLUGINS=1`、UI 测试和单元测试，默认 / BeautifulUI 风格 × 深浅色截图看过（`docs/plugins.md`「App：设置 › 插件」）。
 - [x] 管理界面的「插件」页（#1208）：列表、开关、安装（目录 / 包 / https / 上传 / remote，先预览）、升级（权限变多明确提示）、回滚、卸载（可留数据）。
 - [x] 网页的插件页（#1207）。
-- [ ] Android 的插件页（#1206，进行中）。
+- [x] Android 的插件页（#1206，`docs/android.md`「插件（设置 › 插件）」）。
 - [x] **第 2 步（服务端）**：扩展点 `quota`（插件看不到 Key：`quota.query` + 经 hub / node 代发的 `quota.http`，占位符 `${launcher_key}`、同源限制，权限 `launcher_keys`）、
   `providers`（声明供应商，`GET /api/v1/launchers/presets`，新增启动器带 `preset`）；node 的 `launchers.quota` 换成 `launchers.http`；`server/internal/quota` 只留通用部分，
   两家网关的读法迁到私有插件仓库（归属见 `CLAUDE.local.md`）。规格在 `docs/plugins.md`「额度」「模型供应商」。

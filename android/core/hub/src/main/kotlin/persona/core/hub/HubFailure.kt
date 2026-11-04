@@ -26,6 +26,9 @@ class HubFailure(
     val delivered: String? = null,
     val retryAfterSeconds: Long? = null,
     cause: Throwable? = null,
+    /** The input the hub refused (`field` of its error body) and its reason (`message`), when it names one. */
+    val field: String? = null,
+    val detail: String? = null,
 ) : IOException(message, cause) {
     companion object {
         fun from(error: Throwable): HubFailure {
@@ -69,6 +72,7 @@ class HubFailure(
                 retryable = !terminal && (body?.retryable ?: (response.code >= 500 || response.code in setOf(408, 429))),
                 delivered = body?.delivered,
                 retryAfterSeconds = response.header("Retry-After")?.toLongOrNull()?.coerceAtLeast(0),
+                field = body?.field, detail = body?.message,
             )
         }
     }
