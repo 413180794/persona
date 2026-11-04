@@ -13,6 +13,9 @@ export interface ScrollAnchor {
   at: number;
   /** The list was at the end when it was clicked: keep the end in view. */
   follow: boolean;
+  /** Folding from inside a trace: the furthest down the element's top may come on screen (#1486). Holding the end
+   *  brings the header down from above; it stops here instead of going on past the view's bottom. */
+  topLimit?: number;
 }
 
 export interface ScrollMetrics {
@@ -43,7 +46,17 @@ export function anchoredScroll(a: ScrollAnchor, m: ScrollMetrics): { scrollTop: 
     if (m.elTop - move >= floor || m.elTop < floor) return { scrollTop: max, follow: true };
     return { scrollTop: Math.min(max, Math.max(0, m.scrollTop + (m.elTop - floor))), follow: false };
   }
-  return { scrollTop: Math.min(max, Math.max(0, m.scrollTop + (m.edgeAt - a.at))), follow: false };
+  let move = m.edgeAt - a.at;
+  if (a.topLimit !== undefined) move = Math.max(move, m.elTop - a.topLimit);
+  return { scrollTop: Math.min(max, Math.max(0, m.scrollTop + move)), follow: false };
+}
+
+/** How far down a work row's header may come when it folds from inside (its 收起 at the end, the hairline on its
+ *  left), #1486. A header on screen stays where it is; one above the view comes down to where the reader clicked,
+ *  kept inside the view. */
+export function foldTopLimit(m: { rowTop: number; click: number; viewTop: number; viewBottom: number; header: number }): number {
+  if (m.rowTop >= m.viewTop) return m.rowTop;
+  return Math.max(m.viewTop + FOLLOW_MARGIN, Math.min(m.click, m.viewBottom - m.header - FOLLOW_MARGIN));
 }
 
 /** What a collapse renders: lazy ones mount their children when they open and keep them while the height runs back to

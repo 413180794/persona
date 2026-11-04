@@ -18,7 +18,7 @@ import { unlinkAgentFromTodo } from "../../lib/todos";
 import { LinkTodoDialog } from "../LinkTodoDialog";
 import { chatLines, openRecap, parseUserText, segments, type UserMessage } from "../../lib/turns";
 import type { Item, Session, Subagent } from "../../lib/types";
-import { anchoredScroll, followsAfterScroll, READER_WINDOW, type ScrollAnchor } from "../../lib/disclosure";
+import { anchoredScroll, foldTopLimit, followsAfterScroll, READER_WINDOW, type ScrollAnchor } from "../../lib/disclosure";
 import { Button, copyText, cx, Dialog, IconButton, Loading, Menu, StatePill, StatusDot, toast, useMenu, useNow, type MenuItem } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Composer, type Outgoing } from "./Composer";
@@ -151,8 +151,9 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   }, [tr.items, pending, outbox, tr.streaming, interactions.length]);
 
   // A row that unfolds or folds stays where it was on screen while its height runs (#1124, lib/disclosure.ts): the
-  // clicked header's top, or a work row's end when it folds from its 收起 button. At the end it keeps following.
-  // Held until the sizes stop changing for a moment, or the reader scrolls.
+  // clicked header's top, or a work row's end when it folds from inside (its 收起 button, its hairline), the header
+  // coming down into view. At the end it keeps following. Held until the sizes stop changing for a moment, or the
+  // reader scrolls.
   const anchor = useRef<(ScrollAnchor & { el: Element; quiet: number }) | null>(null);
   useEffect(() => {
     const sc = scroller.current;
@@ -168,7 +169,11 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       if (!el || !sc.contains(el)) return;
       drop();
       const r = el.getBoundingClientRect();
-      anchor.current = { el, edge: fromEnd ? "bottom" : "top", at: fromEnd ? r.bottom : r.top, follow: atEnd.current, quiet: window.setTimeout(drop, 1000) };
+      // a header above the view comes down to where the reader clicked (#1486); a key press has no point, the button's
+      const v = sc.getBoundingClientRect();
+      const click = e.detail > 0 ? e.clientY : (t?.closest("button")?.getBoundingClientRect().top ?? r.bottom);
+      const topLimit = fromEnd ? foldTopLimit({ rowTop: r.top, click, viewTop: v.top, viewBottom: v.bottom, header: el.firstElementChild?.getBoundingClientRect().height ?? 0 }) : undefined;
+      anchor.current = { el, edge: fromEnd ? "bottom" : "top", at: fromEnd ? r.bottom : r.top, follow: atEnd.current, topLimit, quiet: window.setTimeout(drop, 1000) };
     };
     sc.addEventListener("click", onClick, true);
     for (const ev of ["wheel", "touchstart", "keydown"]) sc.addEventListener(ev, drop, { passive: true });

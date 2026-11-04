@@ -1,6 +1,6 @@
 // The work of a segment: one row that folds tools, thoughts, notices and intermediate replies (Beautiful UI's
 // Thinking / Tool Chips grammar), expanding in place into a trace with a hairline on the left.
-import { memo, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { imageURL } from "../../lib/api";
 import { toolFile } from "../../lib/files";
@@ -36,6 +36,7 @@ export function WorkRow({
 }) {
   const [open, setOpen] = useState(false);
   const [loadingFolds, setLoadingFolds] = useState(false);
+  const header = useRef<HTMLButtonElement>(null);
   const summary = workSummary(seg);
   const start = Date.parse(seg.start ?? "");
   const end = live ? now : Date.parse(seg.end ?? "");
@@ -59,10 +60,18 @@ export function WorkRow({
     }
   };
 
+  // folding from inside (the 收起 at the end, the hairline): ChatView brings the header back into view (#1486), and
+  // focus goes to it rather than to the page as the button goes away
+  const foldFromEnd = () => {
+    setOpen(false);
+    header.current?.focus({ preventScroll: true });
+  };
+
   const last = seg.steps[seg.steps.length - 1];
   return (
     <div className="flex flex-col" data-work-row>
       <button
+        ref={header}
         type="button"
         aria-expanded={open}
         onClick={toggle}
@@ -91,19 +100,43 @@ export function WorkRow({
         )}
       </Collapse>
       <Collapse open={open} lazy>
-        <div className="relative mt-1 ml-[5px] pl-3.5">
-          <span aria-hidden className="absolute top-0 bottom-2 left-0 w-px bg-line" />
-          <div className="flex flex-col gap-0.5 py-0.5">
-            {seg.steps.map((st, i) => <StepRow key={st.id} step={st} live={live && i === seg.steps.length - 1} mid={mid} sid={sid} />)}
-            {seg.steps.length > 8 && (
-              // folding from the end keeps the row's end where it is: the header comes down to here (ChatView)
-              <button type="button" data-fold-from-end onClick={() => setOpen(false)} className="mt-1 w-fit rounded-[6px] px-1.5 py-0.5 text-[12px] whitespace-nowrap text-ink-3 transition-colors hover:bg-hover hover:text-ink-2">
-                收起 {seg.steps.length} 步
-              </button>
-            )}
-          </div>
-        </div>
+        <WorkTrace seg={seg} live={live} mid={mid} sid={sid} onFold={foldFromEnd} />
       </Collapse>
+    </div>
+  );
+}
+
+/** An open work row's trace: its steps on a hairline, which folds it, and 收起 at the end (#1486). */
+export function WorkTrace({ seg, live, mid, sid, onFold }: { seg: Segment; live: boolean; mid: string; sid: string; onFold: () => void }) {
+  return (
+    <div className="relative mt-1 ml-[5px] pl-3.5">
+      {/* the hairline folds the trace too: an 11 px strip around it, so it is not a one-pixel target */}
+      <button
+        type="button"
+        data-fold-from-end
+        tabIndex={-1}
+        aria-label="收起执行过程"
+        aria-expanded
+        onClick={onFold}
+        className="group/rail absolute top-0 bottom-2 -left-[5px] flex w-[11px] cursor-pointer justify-center"
+      >
+        <span className="h-full w-px bg-line transition-colors duration-100 group-hover/rail:bg-ink-3" />
+      </button>
+      <div className="flex flex-col gap-0.5 py-0.5">
+        {seg.steps.map((st, i) => <StepRow key={st.id} step={st} live={live && i === seg.steps.length - 1} mid={mid} sid={sid} />)}
+        {/* folding from the end holds the row's end: a header above the view comes down into it (ChatView) */}
+        <button
+          type="button"
+          data-fold-from-end
+          aria-label="收起执行过程"
+          aria-expanded
+          onClick={onFold}
+          className="mt-1 -ml-[3px] flex w-fit items-center gap-1 rounded-[6px] px-[3px] py-0.5 text-[12px] whitespace-nowrap text-ink-3 transition-colors hover:bg-hover hover:text-ink-2"
+        >
+          收起
+          <Icon name="chevron" size={12} stroke={2.2} className="shrink-0" style={{ transform: "rotate(180deg)" }} />
+        </button>
+      </div>
     </div>
   );
 }

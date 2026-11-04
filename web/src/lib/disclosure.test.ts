@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { anchoredScroll, collapseMounted, followsAfterScroll, FOLLOW_MARGIN, FOLLOW_STEP } from "./disclosure";
+import { anchoredScroll, collapseMounted, foldTopLimit, followsAfterScroll, FOLLOW_MARGIN, FOLLOW_STEP } from "./disclosure";
 
 // A 1000 px tall list in an 800 px view at the top of the window.
 const view = { clientHeight: 800, viewTop: 0 };
@@ -17,6 +17,17 @@ describe("anchoredScroll", () => {
     // 2000 px of trace above the end went away this frame: the end moved up 2000, the offset goes back with it
     const r = anchoredScroll({ edge: "bottom", at: 600, follow: false }, { ...view, scrollTop: 4000, scrollHeight: 9000, edgeAt: -1400, elTop: -1440 });
     expect(r.scrollTop).toBe(2000);
+  });
+
+  it("folding from inside a long trace brings the header down no further than its limit (#1486)", () => {
+    const a = { edge: "bottom" as const, at: 1500, follow: false, topLimit: 400 };
+    // early on the header is still far above: the end holds, the header comes down
+    expect(anchoredScroll(a, { ...view, scrollTop: 4000, scrollHeight: 9000, edgeAt: 1450, elTop: -900 }).scrollTop).toBe(3950);
+    // holding the end would take the header to 400 + 30: it stops at 400, and the end goes up instead
+    expect(anchoredScroll(a, { ...view, scrollTop: 4000, scrollHeight: 9000, edgeAt: 1100, elTop: 30 }).scrollTop).toBe(3630);
+    // a header held on screen does not move while the trace below it folds
+    const held = { edge: "bottom" as const, at: 700, follow: false, topLimit: 200 };
+    expect(anchoredScroll(held, { ...view, scrollTop: 4000, scrollHeight: 9000, edgeAt: 680, elTop: 200 }).scrollTop).toBe(4000);
   });
 
   it("cannot scroll past the ends: near the end a fold rests on the end", () => {
@@ -44,6 +55,21 @@ describe("anchoredScroll", () => {
     expect(r).toEqual({ scrollTop: 1000, follow: false });
     // just under the limit still follows
     expect(anchoredScroll({ edge: "top", at: 250, follow: true }, { ...view, scrollTop: 1000, scrollHeight: 1800 + FOLLOW_STEP, edgeAt: 250, elTop: 250 }).follow).toBe(true);
+  });
+});
+
+describe("foldTopLimit (#1486)", () => {
+  const v = { viewTop: 0, viewBottom: 800, header: 28 };
+  it("keeps a header that is on screen where it is", () => {
+    expect(foldTopLimit({ ...v, rowTop: 120, click: 600 })).toBe(120);
+    expect(foldTopLimit({ ...v, rowTop: 0, click: 600 })).toBe(0);
+  });
+  it("brings a header above the view down to where the reader clicked, inside the view", () => {
+    expect(foldTopLimit({ ...v, rowTop: -2000, click: 500 })).toBe(500);
+    // clicked at the very bottom: the header still fits above the view's bottom
+    expect(foldTopLimit({ ...v, rowTop: -2000, click: 795 })).toBe(800 - 28 - FOLLOW_MARGIN);
+    // at the very top: not under the view's edge
+    expect(foldTopLimit({ ...v, rowTop: -2000, click: 2 })).toBe(FOLLOW_MARGIN);
   });
 });
 
