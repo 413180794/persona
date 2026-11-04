@@ -8,7 +8,10 @@ import Observation
 final class TodoStore {
     static let shared = TodoStore()
 
-    private(set) var todos: [TodoItem] = []
+    private(set) var todos: [TodoItem] = [] {
+        didSet { byID = Self.index(todos) }
+    }
+    private(set) var byID: [String: TodoItem] = [:]
     private(set) var loading = false
     /// false when GET /api/v1/todos returned 404 (old hub without todos)
     private(set) var isSupported = true
@@ -17,30 +20,63 @@ final class TodoStore {
     var error: String?
 
     @ObservationIgnored private var reloading: Task<Void, Never>?
+    @ObservationIgnored private var reloadAgain = false
+    @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var lastPushed: [String: TodoItem]
+    @ObservationIgnored private let cacheWriter: (@MainActor ([TodoItem]) -> Void)?
+    @ObservationIgnored private let hubListChanged: @MainActor () -> Void
     @ObservationIgnored private let saver = Debouncer(.seconds(1))
     private static let stateName = "todo-items"
 
-    private init() {
-        todos = StateCache.load(Self.stateName, as: [TodoItem].self) ?? []
+    init(cachedTodos: [TodoItem]? = nil,
+         cacheWriter: (@MainActor ([TodoItem]) -> Void)? = { StateCache.save(TodoStore.stateName, $0) },
+         hubListChanged: @escaping @MainActor () -> Void = {
+        WatchSync.shared.push(summary: AppModel.shared.watchSummary()) // its questions name their tasks
+    }) {
+        let initial = cachedTodos ?? StateCache.load(Self.stateName, as: [TodoItem].self) ?? []
+        let initialIndex = Self.index(initial)
+        todos = initial
+        byID = initialIndex
+        lastPushed = initialIndex
+        self.cacheWriter = cacheWriter
+        self.hubListChanged = hubListChanged
+    }
+
+    private static func index(_ list: [TodoItem]) -> [String: TodoItem] {
+        var result: [String: TodoItem] = [:]
+        for todo in list { result[todo.id] = todo }
+        return result
     }
 
     var openTodos: [TodoItem] { todos.filter { !$0.isDone } }
     var openCount: Int { openTodos.count }
 
     func forget() {
+        generation += 1
+        loading = false
         todos = []
         error = nil
         isSupported = true
         spacesSupported = false
-        saver.run { StateCache.save(Self.stateName, [TodoItem]()) }
+        persist([])
     }
 
-    func reload() {
-        guard reloading == nil else { return }
-        reloading = Task {
-            defer { reloading = nil }
-            await fetch()
+    /// Requests arriving during a fetch share one follow-up fetch, so the latest event is not lost.
+    @discardableResult
+    func reload(api: APIClient? = nil) -> Task<Void, Never> {
+        if let reloading {
+            reloadAgain = true
+            return reloading
         }
+        let task = Task {
+            repeat {
+                reloadAgain = false
+                await fetch(api: api)
+            } while reloadAgain
+            reloading = nil
+        }
+        reloading = task
+        return task
     }
 
     /// `api` is the client to read through (tests pass a fake hub's); the app reads the current hub connection.
@@ -50,20 +86,28 @@ final class TodoStore {
 
     private func fetch(api injected: APIClient? = nil) async {
         guard let api = injected ?? AppModel.shared.api else { return }
+        let requestedGeneration = generation
         loading = true
-        defer { loading = false }
+        defer { if generation == requestedGeneration { loading = false } }
         do {
             let list = try await api.todos()
+            guard generation == requestedGeneration else { return }
             isSupported = true
             spacesSupported = TodosLogic.supportsSpaces(list)
             apply(list)
             error = nil
+            if byID != lastPushed {
+                lastPushed = byID
+                hubListChanged()
+            }
         } catch let apiErr where TodosLogic.isOldHub(apiErr) {
+            guard generation == requestedGeneration else { return }
             // Older hub without todos: hide entrance without error
             isSupported = false
             spacesSupported = false
             error = nil
         } catch {
+            guard generation == requestedGeneration else { return }
             if let shown = error.shown { self.error = shown }
         }
     }
@@ -71,12 +115,16 @@ final class TodoStore {
     private func apply(_ list: [TodoItem]) {
         guard list != todos else { return }
         todos = list
-        let snapshot = list
-        saver.run { StateCache.save(Self.stateName, snapshot) }
+        persist(list)
+    }
+
+    private func persist(_ list: [TodoItem]) {
+        guard let cacheWriter else { return }
+        saver.run { cacheWriter(list) }
     }
 
     func todo(id: String) -> TodoItem? {
-        todos.first { $0.id == id }
+        byID[id]
     }
 
     func create(title: String, notes: String? = nil, api injected: APIClient? = nil) async throws -> TodoItem {
@@ -122,8 +170,8 @@ final class TodoStore {
         }
     }
 
-    func delete(id: String) async throws {
-        guard let api = AppModel.shared.api else { throw APIError(status: 0, message: "未连接 hub") }
+    func delete(id: String, api injected: APIClient? = nil) async throws {
+        guard let api = injected ?? AppModel.shared.api else { throw APIError(status: 0, message: "未连接 hub") }
         try await api.deleteTodo(id: id)
         var updated = todos
         updated.removeAll { $0.id == id }

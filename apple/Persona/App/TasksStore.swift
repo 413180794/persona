@@ -1,15 +1,15 @@
 import Foundation
 import Observation
 
-/// Tasks from the hub-level group's assistant conversations (docs/unified-entry.md): the todos that are tasks, the
-/// plans and each conversation's feed. Pulled when a conversation shows and on (re)connect, kept up to date by the
-/// hub's `todos`, `assistant_feed` and `task_plan` events. What a task's agents are doing comes from `AppModel`'s
+/// Task presentation for the hub-level group's assistant conversations (docs/unified-entry.md): todos come from
+/// TodoStore's shared index; plans and each conversation's feed stay here. Feeds refresh when shown and on
+/// reconnect, with assistant_feed and task_plan events keeping them current. A task's agents come from AppModel's
 /// sessions and interactions, so a card follows them like the Agents page does.
 @MainActor @Observable
 final class TasksStore {
     static let shared = TasksStore()
 
-    private(set) var todos: [String: TodoItem] = [:]
+    var todos: [String: TodoItem] { todoStore.byID }
     private(set) var plans: [String: TaskPlan] = [:]
     /// Conversation id → its feed, oldest first.
     private(set) var feeds: [String: [FeedItem]] = [:]
@@ -32,16 +32,15 @@ final class TasksStore {
     private(set) var busyPlans: Set<String> = []
     var error: String?
 
-    @ObservationIgnored private var reloadingTodos: Task<Void, Never>?
+    @ObservationIgnored private let todoStore: TodoStore
     @ObservationIgnored private var loading: [String: Task<Void, Never>] = [:]
     /// Conversation id → the day its 今天 card was asked for (once a day).
     @ObservationIgnored private var todayAsked: [String: String] = [:]
 
-    private init() {}
+    init(todoStore: TodoStore = .shared) { self.todoStore = todoStore }
 
     /// Entering or leaving 体验模式, or another hub: nothing of the other side may show.
     func forget() {
-        todos = [:]
         plans = [:]
         feeds = [:]
         routes = [:]
@@ -53,38 +52,31 @@ final class TasksStore {
 
     // MARK: Loading
 
-    func reloadTodos() {
-        guard reloadingTodos == nil, let api = AppModel.shared.api else { return }
-        reloadingTodos = Task {
-            defer { reloadingTodos = nil }
-            if let list = try? await api.todos() {
-                var map: [String: TodoItem] = [:]
-                for t in list { map[t.id] = t }
-                if map != todos {
-                    todos = map
-                    WatchSync.shared.push(summary: AppModel.shared.watchSummary()) // its questions name their tasks
-                }
-            }
-        }
+    func reloadTodos(api: APIClient? = nil) {
+        todoStore.reload(api: api)
     }
 
     /// Pulls a conversation's feed (what came since the newest item it has) and the todos.
-    func load(_ conversation: String) {
-        guard loading[conversation] == nil, let api = AppModel.shared.api else { return }
-        reloadTodos()
+    @discardableResult
+    func load(_ conversation: String, refreshTodos: Bool = true, api injected: APIClient? = nil) -> Task<Void, Never>? {
+        if let task = loading[conversation] { return task }
+        guard let api = injected ?? AppModel.shared.api else { return nil }
+        if refreshTodos { reloadTodos(api: injected) }
         let since = feeds[conversation]?.last?.at
-        loading[conversation] = Task {
+        let task = Task {
             defer { loading[conversation] = nil }
             guard let res = try? await api.feed(conversation: conversation, since: since) else { return }
             for (id, plan) in res.plans ?? [:] where plans[id] != plan { plans[id] = plan }
             merge(res.items, into: conversation)
         }
+        loading[conversation] = task
+        return task
     }
 
     /// The (re)connect: every conversation shown so far, again.
-    func reconnected() {
-        reloadTodos()
-        for c in feeds.keys { load(c) }
+    @discardableResult
+    func reconnected(api: APIClient? = nil) -> [Task<Void, Never>] {
+        feeds.keys.compactMap { load($0, refreshTodos: false, api: api) }
     }
 
     func received(_ item: FeedItem) {
@@ -264,8 +256,7 @@ final class TasksStore {
     func remove(_ todo: TodoItem) async {
         guard let api = AppModel.shared.api else { return }
         do {
-            try await api.deleteTodo(id: todo.id)
-            todos[todo.id] = nil
+            try await todoStore.delete(id: todo.id, api: api)
             for (conversation, id) in routes where id == todo.id { routes[conversation] = nil }
             if detailTask == todo.id { detailTask = nil }
             Haptics.success()

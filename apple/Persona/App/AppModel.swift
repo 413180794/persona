@@ -1165,7 +1165,6 @@ final class AppModel {
             if isHub { InboxStore.shared.reload() }
         case .todos:
             if isHub { TodoStore.shared.reload() }
-            if isHub { TasksStore.shared.reloadTodos() }
         case .assistantFeed(let item):
             if isHub { TasksStore.shared.received(item) }
         case .taskPlan(let plan):

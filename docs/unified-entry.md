@@ -168,7 +168,8 @@ hub 往对话里插的条目，不进 Claude 的 transcript（插进去会多跑
 | 部分 | 在哪 |
 | --- | --- |
 | 数据类型（计划、对话动态、待办、任务状态）和接口 | `apple/Shared/Tasks.swift` |
-| 状态：待办、计划、每段对话的动态，路由到哪个任务、打开哪个任务 | `apple/Persona/App/TasksStore.swift`（`todos` / `assistant_feed` / `task_plan` 事件，连上时重拉） |
+| 待办列表、本地缓存与按 id 索引 | `apple/Persona/App/TodoStore.swift`（`todos` 事件与重连统一刷新，在途刷新合并补拉） |
+| 计划、每段对话的动态，路由到哪个任务、打开哪个任务 | `apple/Persona/App/TasksStore.swift`（待办从 `TodoStore` 索引读取，`assistant_feed` / `task_plan` 事件更新计划与动态，重连时重拉各对话的动态） |
 | 计划卡、任务卡、回执、答过的问题、路由气泡、任务坞、问题卡、路由标签、`@` 列表 | `apple/Persona/Views/Assistant/Tasks/TaskViews.swift` |
 | 任务详情（嵌 Agent 的对话页）、任务板 | `apple/Persona/Views/Assistant/Tasks/TaskSheets.swift` |
 | 对话动态排进对话：放在它发生的那一轮末尾（下一条消息之前） | `ChatLines.mergeFeed`，`ChatLine.Content.feed` |
