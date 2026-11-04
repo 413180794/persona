@@ -2,7 +2,7 @@
 // from hub.json, installed on the hub's machine) and their states; a plugin's page has its switch, its settings as a
 // form drawn from its schema (`form.fields`, saved as a whole), its secrets (typed in, never shown again), what it
 // contributes, what it may do and where it came from. A plugin written in hub.json is only looked at here. Installing,
-// upgrading and removing are done on the hub's machine (`personad plugin`).
+// upgrading and removing are done on the hub's side (`personad plugin` on its machine, or its admin UI at /admin).
 import { useEffect, useMemo, useState } from "react";
 import { errorText } from "../../lib/api";
 import {
@@ -59,7 +59,7 @@ function PluginList({ onOpen }: { onOpen: (id: string) => void }) {
           </span>
         }
         right={<IconButton icon="retry" label="刷新插件" onClick={load} disabled={loading} size={24} iconSize={13} className="-mb-1" />}
-        footer="插件只能在 hub 所在的机器上安装、升级和卸载（personad plugin），这里可以开关、改设置、填密钥。"
+        footer="插件在 hub 的管理界面（/admin）或 hub 所在的机器上（personad plugin）安装、升级和卸载，这里可以开关、改设置、填密钥。"
       >
         {!plugins && !error && (
           <div className="px-4 py-3">
@@ -80,7 +80,7 @@ function PluginList({ onOpen }: { onOpen: (id: string) => void }) {
               <Icon name="plugin" size={18} />
             </span>
             <p className="text-[13px] font-medium text-ink">没有插件</p>
-            <p className="max-w-[420px] text-[12px] leading-relaxed text-ink-3">插件在 hub 所在的机器上用 personad plugin install 安装，装好后在这里开关和设置。</p>
+            <p className="max-w-[420px] text-[12px] leading-relaxed text-ink-3">插件在 hub 的管理界面（/admin）或 hub 所在的机器上用 personad plugin install 安装，装好后在这里开关和设置。</p>
           </div>
         )}
         {plugins?.map((p, i) => (

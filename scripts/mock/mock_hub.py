@@ -3628,10 +3628,10 @@ LAUNCHER_MODELS = {
 LAUNCHER_MODELS["sonnetcc"] = dict(LAUNCHER_MODELS["claude"], locked="启动器固定了模型参数，不能覆盖具体模型")
 
 
-# 设置 › 模型供应商: two ~/.zshrc launchers, one through relay-history and one through FAKEMODEL, with their quota.
+# 设置 › 模型供应商: ~/.zshrc launchers, two of them through made-up example gateways a quota plugin can read.
 LAUNCHERS = [
-    {"name": "cc_kiro", "source": "zshrc", "base_url": "http://gateway.example.com:18000", "model": "kiro/claude-opus-5-5", "machines": ["macbook"]},
-    {"name": "example-cli", "source": "zshrc", "base_url": "http://fakemodel.example.com", "model": "gpt-6.1-sol", "machines": ["macbook"]},
+    {"name": "cc_main", "source": "zshrc", "base_url": "http://gateway.example.com:18000", "model": "claude-opus-5-5", "machines": ["macbook"]},
+    {"name": "cc_team", "source": "zshrc", "base_url": "https://relay.example.net", "model": "example-pro", "machines": ["macbook"]},
     {"name": "cc_glm", "source": "zshrc", "base_url": "https://open.bigmodel.example.com/api/anthropic", "model": "glm-5.3", "machines": ["macbook"]},
     {"name": "cc_old", "source": "zshrc", "base_url": "https://relay.example.com", "model": "claude-opus-4-7", "machines": ["macbook"], "hidden": True},
     {"name": "cc_test", "source": "zshrc", "base_url": "https://relay.example.com", "model": "model_api/experimental", "machines": ["macbook"], "hidden": True},
@@ -3646,23 +3646,33 @@ def _w(label, ratio=None, used=None, limit=None, unit="percent", resets=None, ex
     if resets: w["resets_at"] = resets
     if exhausted: w["exhausted"] = True
     return w
-LAUNCHER_QUOTAS = {
-    "cc_kiro": {"gateway": "relay-history", "key_name": "cc_kiro",
+LAUNCHER_QUOTAS = {  # as a quota plugin would answer (docs/plugins.md「额度」); gateway_name is what the app shows
+    "cc_main": {"gateway": "example-gateway", "gateway_name": "示例网关", "key_name": "cc_main",
         "budget": [_w("每周预算", 0.62, 496, 800, "usd", later(hours=60))],
         "pools": [
-            {"name": "kiro #2328da", "state": "available", "detail": "可用", "windows": [_w("每月", 0.64, 6401, 10000, "credits", later(hours=11))]},
-            {"name": "claude · max", "state": "cooldown", "detail": "冷却中，23:00 恢复",
+            {"name": "账号 A", "state": "available", "detail": "可用", "windows": [_w("每月", 0.64, 6401, 10000, "credits", later(hours=11))]},
+            {"name": "账号 B · 订阅", "state": "cooldown", "detail": "冷却中，23:00 恢复",
              "windows": [_w("5 小时", 1.0, resets=later(hours=2), exhausted=True), _w("每周", 0.77, resets=later(hours=70))]}],
         "usage": [{"label": "今日", "requests": 287, "tokens": 210552323, "cost_usd": 123.12},
                   {"label": "本周", "requests": 10432, "tokens": 3359748900, "cost_usd": 1109.02},
                   {"label": "本月", "requests": 20004, "tokens": 6012000000, "cost_usd": 2190.4}]},
-    "example-cli": {"gateway": "fakemodel",
+    "cc_team": {"gateway": "example-relay", "gateway_name": "示例中转",
         "pools": [
-            {"name": "火山 · Agent Plan", "state": "ok", "windows": [_w("5 小时额度", 0.42, 42, 100, "percent", later(hours=3)),
+            {"name": "供应商 A · 编码套餐", "state": "ok", "windows": [_w("5 小时额度", 0.42, 42, 100, "percent", later(hours=3)),
                                                                    _w("每周额度", 0.86, 86, 100, "percent", later(hours=50))],
-             "models": [{"model": "deepseek-v4.1-flash", "windows": [_w("TPM", 0.02, 8400, 500000, "tokens")]}]},
-            {"name": "modelhub", "state": "unsupported", "detail": "上游没有额度接口，只有网关统计"}]},
+             "models": [{"model": "example-flash", "windows": [_w("TPM", 0.02, 8400, 500000, "tokens")]}]},
+            {"name": "供应商 B", "state": "unsupported", "detail": "上游没有额度接口，只有网关统计"}]},
 }
+# 新增供应商 › 从插件添加 (docs/plugins.md「模型供应商」): the providers made-up plugins offer (GET /api/v1/launchers/presets).
+LAUNCHER_PRESETS = [
+    {"id": "example-gateway/team", "plugin": "example-gateway", "name": "示例网关 · 团队", "description": "团队共用的 Claude Code 网关，按 Key 计费",
+     "kind": "launcher", "base_url": "https://gateway.example.com", "model": "claude-opus-5-5", "small_model": "claude-haiku-5-5",
+     "models": [{"id": "claude-opus-5-5", "name": "Opus 5.5"}, {"id": "claude-sonnet-5-5", "name": "Sonnet 5.5"}],
+     "key_hint": "在网关的「我的 Key」页面创建，以 eg- 开头。"},
+    {"id": "example-gateway/api", "plugin": "example-gateway", "name": "示例网关 · 直接 API", "kind": "api", "api": "responses",
+     "base_url": "https://api.example.com/v1", "models": [{"id": "example-pro"}, {"id": "example-flash"}],
+     "models_error": "插件读模型列表超时"},
+]
 
 # The removed post behind the inbox's moment item (LarkMomentsPostView reads these).
 def _ms(minutes): return int((datetime.now(timezone.utc) - timedelta(minutes=minutes)).timestamp() * 1000)
@@ -6195,11 +6205,12 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/machines/") and p.endswith("/dirs"):
             return self.send_json(mock_dirs(p.split("/")[4], (q.get("path") or [""])[0]))
         if p == "/api/v1/launchers": return self.send_json({"launchers": [dict(l) for l in LAUNCHERS]})
+        if p == "/api/v1/launchers/presets": return self.send_json({"presets": LAUNCHER_PRESETS})
         if p.startswith("/api/v1/launchers/") and p.endswith("/quota"):
             n = p.split("/")[4]
             q = LAUNCHER_QUOTAS.get(n)
             return self.send_json({"machine": "macbook", "checked_at": ago(minutes=0), **({"quota": q} if q else
-                {"error": "这个网关没有能查的额度（只支持 relay-history 和 FAKEMODEL）", "unsupported": True})})
+                {"error": "没有额度插件认识这个网关", "unsupported": True})})
         if p.startswith("/api/v1/launchers/"):
             n = p.split("/")[4]
             l = next((x for x in LAUNCHERS if x["name"] == n), None)
@@ -7002,6 +7013,23 @@ class H(BaseHTTPRequestHandler):
             if t is None: return self.send_json({"error": "这个定时任务已经不在了"}, 404)
             for k in ("run_machine_id", "run_session_id", "run_launcher"): t.pop(k, None)
             return self.send_json({"task": t})
+        if p == "/api/v1/launchers" and self.command == "POST":  # 新增供应商 (from a plugin's preset: the rest filled in)
+            b = json.loads(self.last_body or b"{}")
+            name = (b.get("name") or "").strip()
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_-]*$", name) or name in ("claude", "presets"):
+                return self.send_json({"error": "名字只能用字母、数字、_ 和 -，以字母或 _ 开头（不能叫 claude）"}, 400)
+            if any(l["name"] == name for l in LAUNCHERS): return self.send_json({"error": "已经有叫 %s 的启动器" % name}, 409)
+            if b.get("preset"):
+                pr = next((x for x in LAUNCHER_PRESETS if x["id"] == b["preset"]), None)
+                if pr is None: return self.send_json({"error": "没有这个供应商预设（提供它的插件停用或卸载了？）"}, 400)
+                for k in ("kind", "api", "base_url", "small_model"): b[k] = b.get(k) or pr.get(k, "")
+                b["model"] = b.get("model") or pr.get("model") or (pr.get("models") or [{}])[0].get("id", "")
+            if not b.get("base_url") or not b.get("model"): return self.send_json({"error": "要填 Base URL 和模型"}, 400)
+            l = {"name": name, "source": "jarvis", "base_url": b["base_url"], "model": b["model"], "has_key": bool(b.get("api_key"))}
+            for k in ("kind", "api", "small_model", "args"):
+                if b.get(k): l[k] = b[k]
+            LAUNCHERS.insert(0, l)
+            return self.send_json({"launcher": l})
         if p.startswith("/api/v1/launchers/") and (self.command == "DELETE" or p.endswith("/restore")):  # hide / bring back
             l = next((l for l in LAUNCHERS if l["name"] == p.split("/")[4]), None)
             if l is None: return self.send_json({"error": "没有这个启动器"}, 404)

@@ -91,7 +91,8 @@ Persona 管理的左滑是「删除」，连 hub 里存的 Key 一起删、不�
 | `GET /api/v1/launchers` | 全部（先同步各台电脑的 ~/.zshrc） |
 | `GET /api/v1/launchers/{name}` | 一个；~/.zshrc 的带 `definitions`（每台电脑的函数，打码）和 `details`（跑一遍得到的参数） |
 | `POST /api/v1/launchers/{name}/check?machine=` | 测试可用性 |
-| `POST /api/v1/launchers` | 新增 `{name, base_url, model, small_model?, subagent_model?, custom_model?, custom_model_name?, custom_model_description?, args?, api_key}` |
+| `POST /api/v1/launchers` | 新增 `{name, base_url, model, small_model?, subagent_model?, custom_model?, custom_model_name?, custom_model_description?, args?, api_key, preset?}`；带 `preset` 时没填的从预设补上（见下面「从插件添加」） |
+| `GET /api/v1/launchers/presets` | 插件提供的供应商预设（`docs/plugins.md`「模型供应商」）；旧 hub 回 404，App 当成没有 |
 | `PUT /api/v1/launchers/{name}` | 改（`api_key` 不填就不变）；只对 Persona 管理的 |
 | `DELETE /api/v1/launchers/{name}` | Persona 管理的删除；~/.zshrc 的隐藏 |
 | `POST /api/v1/launchers/{name}/restore` | 取消隐藏 |
@@ -106,6 +107,18 @@ Persona 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧�
 `kind: api` 由 hub 直接发请求，不下发给 node，也不会出现在新建 Agent 的启动器列表中；小模型、子 Agent 模型、自定义模型项和 CLI 额外参数不用于这类接入。
 认证仍使用原有的加密 Key 存储，不需要把 API Key 放进用途配置。原有 `/launchers` 接口与供应商名称保持兼容。
 
+## 从插件添加
+
+插件贡献的模型供应商（`docs/plugins.md`「模型供应商」）在「设置 › 模型供应商 › 新增」里多一个「从插件添加」：hub 的 `GET /api/v1/launchers/presets`
+有预设时，新增页顶上是「自己填写 / 从插件添加」的切换（没有预设就和以前一样只有自己填写）。从插件添加：选一个预设（名字、描述、接入方式和地址），
+只填名字和 Key，默认模型从预设的 `models` 里选（不选就是预设的默认）；`POST /api/v1/launchers` 只带 `name`、`api_key`、`preset`，选了别的模型才带 `model`，
+地址、接入方式、API、小模型由 hub 从预设补上。预设的 `key_hint` 写在 Key 下面，`models_error` 写在模型下面。加好以后和自己填写的一样能编辑。
+
+- iOS：`LauncherPresetModel`（`apple/Persona/Views/Settings/LauncherPresetModel.swift`，单元测试 `LauncherPresetModelTests`）、`LauncherPresetViews.swift`；
+  DEBUG `-tab settings -openModelLaunchers YES -openLauncherEditor preset` 直接打开从插件添加（`-openLauncherEditor YES` 打开新增页）。
+- 网页：`web/src/lib/launcher-presets.ts`（测试同名 `.test.ts`），新增弹窗里同样的切换。Android 还没有新增供应商的页面，没做。
+- 截图：假 hub 自带两个示例预设（`example-gateway/team`、`example-gateway/api`），`POST /api/v1/launchers` 在内存里补全并加进列表。
+
 ## 额度
 
 启动器页的「额度」读启动器的 Key 在网关那边还剩多少。**读哪些网关、怎么读是额度插件的事**（`docs/plugins.md`「额度」）：开源仓库里不带任何网关的读法，
@@ -118,5 +131,7 @@ node 一侧 `node/launcherquota.go`。
   Key 不离开那台电脑，地址也是那台电脑能到的地址。优先 hub 自己那台。旧 node 没有 `launchers.http` 时说「node 太旧」。
 - 几个额度插件时：声明了 `hosts` 且对得上网关主机名的先问，再问没声明 `hosts` 的；回 `unsupported` 的跳过，第一个回答的为准。都不认识就是「查不了」。
 - 结果缓存一分钟（`refresh=1` 重读）。报告的 `gateway` 是插件贡献的 id，`gateway_name` 是给人看的名字。
-- App：`LauncherQuotaSection`，放在「可用性」上面；用量比例 ≥ 70% 橙色、≥ 90% 或用完红色；右上角刷新。DEBUG `-openLauncherPage <名字>` 直接打开。
+- App：`LauncherQuotaSection`，放在「可用性」上面；标题是「额度 · <网关名>」，网关名用报告的 `gateway_name`（旧 hub 没有时显示 `gateway`），App 里不写死任何网关的名字。
+  用量比例 ≥ 70% 橙色、≥ 90% 或用完红色；右上角刷新。DEBUG `-openLauncherPage <名字>` 直接打开。
+  假 hub 的 `cc_main`、`cc_team` 带两个示例网关的额度（`示例网关`、`示例中转`），截图用。
 

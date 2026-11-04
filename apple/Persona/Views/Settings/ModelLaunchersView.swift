@@ -97,6 +97,10 @@ struct ModelLaunchersView: View {
         #if os(macOS) && DEBUG
         .onAppear { if UserDefaults.standard.bool(forKey: "macLauncherEditor") { adding = true } } // `-macLauncherEditor YES`: 新增启动器
         #endif
+        #if DEBUG
+        // `-openLauncherEditor YES` opens 新增供应商, `-openLauncherEditor preset` on 从插件添加.
+        .onAppear { if UserDefaults.standard.string(forKey: "openLauncherEditor") != nil { adding = true } }
+        #endif
         .confirmationDialog("删除启动器「\(pendingDelete?.name ?? "")」？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
                             titleVisibility: .visible, presenting: pendingDelete) { l in
             Button("删除", role: .destructive) { Task { await delete(l) } }
@@ -104,7 +108,7 @@ struct ModelLaunchersView: View {
         .task { await load() }
         .refreshable { await load() }
         #if DEBUG
-        .onAppear { if let q = UserDefaults.standard.string(forKey: "showModelSearch") { query = q } } // `-showModelSearch kiro`
+        .onAppear { if let q = UserDefaults.standard.string(forKey: "showModelSearch") { query = q } } // `-showModelSearch glm`
         #endif
     }
 
@@ -451,62 +455,36 @@ struct LauncherEditor: View {
     @State private var error: String?
     /// The fields as the sheet opened: 取消 asks first once they differ (Mac).
     @State private var opened: [String]?
+    /// 从插件添加: the providers the hub's plugins offer (only when adding, and only when there are some).
+    @State private var presets = LauncherPresetModel()
+    @State private var fromPlugin = false
 
     private var isNew: Bool { existing == nil }
-    private var fields: [String] { [name, baseURL, apiKey, modelName, smallModel, args, kind, protocolName] }
+    private var usesPreset: Bool { isNew && fromPlugin && !presets.presets.isEmpty }
+    /// What was typed in either form (a preset's model is filled in as it loads, so it does not count).
+    private var fields: [String] {
+        [name, baseURL, apiKey, modelName, smallModel, subagentModel, customModel, customModelName, customModelDescription, args, kind,
+         protocolName, presets.name, presets.apiKey]
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    TextField("名字，比如 jv_strong", text: $name)
-                        .font(Theme.Font.body.monospaced())
-                        .textInputAutocapitalization(.never).autocorrectionDisabled()
-                        .disabled(!isNew)
-                } header: { Text("名字") } footer: { Text("字母、数字、_ 和 -；按这个名字选择供应商。") }
-                Section {
-                    Picker("接入方式", selection: $kind) {
-                        Text("Claude Code 启动器").tag("launcher")
-                        Text("直接 API").tag("api")
-                    }
-                    if kind == "api" {
-                        Picker("API 协议", selection: $protocolName) {
-                            Text("Messages").tag("messages")
-                            Text("Responses").tag("responses")
+                if isNew, !presets.presets.isEmpty {
+                    Section {
+                        Picker("来源", selection: $fromPlugin) {
+                            Text("自己填写").tag(false)
+                            Text("从插件添加").tag(true)
                         }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .accessibilityIdentifier("launcher.source")
                     }
-                } footer: {
-                    Text(kind == "api" ? "hub 直接请求模型，供分拣、翻译和知识处理等用途选择。" : "在你的电脑上启动 Claude Code，供对话和 Agent 等用途选择。")
                 }
-                Section {
-                    TextField("https://…", text: $baseURL)
-                        .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    SecureField(isNew || existing?.hasKey != true ? "API Key" : "API Key（不改就留空）", text: $apiKey)
-                } header: { Text("网关") } footer: { Text("填写所选协议兼容的地址。Key 加密存在 hub，不会返回到客户端。") }
-                Section {
-                    TextField("默认模型", text: $modelName).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    if kind == "launcher" {
-                        TextField("小模型（可选，默认同上）", text: $smallModel).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        TextField("子 Agent 模型（可选，默认同上）", text: $subagentModel)
-                            .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    }
-                } header: { Text("默认模型") } footer: { Text("各用途的具体选择在「模型配置」里统一管理；未单独指定时使用这里的默认。子 Agent 模型用于 workflow 等多 Agent 运行。") }
-                if kind == "launcher" {
-                    Section {
-                        TextField("自定义模型（可选）", text: $customModel)
-                            .textInputAutocapitalization(.never).autocorrectionDisabled()
-                        TextField("显示名（可选）", text: $customModelName)
-                        TextField("说明（可选）", text: $customModelDescription)
-                    } header: { Text("自定义模型项（可选）") } footer: { Text("在 /model 里多一个可选项，模型 ID 以网关为准。") }
-                }
-                if kind == "launcher" {
-                    Section {
-                        TextField("比如 --dangerously-skip-permissions", text: $args)
-                            .font(Theme.Font.body.monospaced()).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    } header: { Text("额外参数（可选）") } footer: { Text("加在 claude 后面，空格分隔，每个都以 - 开头。") }
-                }
-                if let error {
-                    Section { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger) }
+                if usesPreset {
+                    LauncherPresetSections(model: presets)
+                } else {
+                    manualSections
                 }
             }
             .navigationTitle(isNew ? "新增供应商" : "编辑 \(existing?.name ?? "")")
@@ -514,9 +492,17 @@ struct LauncherEditor: View {
             .sheetCancel(unsaved: opened.map { $0 != fields } ?? false) { dismiss() }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { Task { await save() } }.lineLimit(1)
-                        .disabled(saving || name.isEmpty || baseURL.isEmpty || modelName.isEmpty || (isNew && apiKey.isEmpty))
+                    Button("保存") { Task { usesPreset ? await savePreset() : await save() } }.lineLimit(1)
+                        .disabled(usesPreset ? !presets.canSave
+                                  : saving || name.isEmpty || baseURL.isEmpty || modelName.isEmpty || (isNew && apiKey.isEmpty))
                 }
+            }
+            .task {
+                guard isNew else { return }
+                await presets.load()
+                #if DEBUG
+                if UserDefaults.standard.string(forKey: "openLauncherEditor") == "preset" { fromPlugin = true }
+                #endif
             }
             .onAppear {
                 defer { if opened == nil { opened = fields } }
@@ -537,6 +523,71 @@ struct LauncherEditor: View {
         #if os(macOS)
         .macSheet()
         #endif
+    }
+
+    /// 自己填写: the name, the kind, the gateway and key, the models, the flags.
+    @ViewBuilder private var manualSections: some View {
+        Section {
+            TextField("名字，比如 jv_strong", text: $name)
+                .font(Theme.Font.body.monospaced())
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                .disabled(!isNew)
+        } header: { Text("名字") } footer: { Text("字母、数字、_ 和 -；按这个名字选择供应商。") }
+        Section {
+            Picker("接入方式", selection: $kind) {
+                Text("Claude Code 启动器").tag("launcher")
+                Text("直接 API").tag("api")
+            }
+            if kind == "api" {
+                Picker("API 协议", selection: $protocolName) {
+                    Text("Messages").tag("messages")
+                    Text("Responses").tag("responses")
+                }
+            }
+        } footer: {
+            Text(kind == "api" ? "hub 直接请求模型，供分拣、翻译和知识处理等用途选择。" : "在你的电脑上启动 Claude Code，供对话和 Agent 等用途选择。")
+        }
+        Section {
+            TextField("https://…", text: $baseURL)
+                .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+            SecureField(isNew || existing?.hasKey != true ? "API Key" : "API Key（不改就留空）", text: $apiKey)
+        } header: { Text("网关") } footer: { Text("填写所选协议兼容的地址。Key 加密存在 hub，不会返回到客户端。") }
+        Section {
+            TextField("默认模型", text: $modelName).textInputAutocapitalization(.never).autocorrectionDisabled()
+            if kind == "launcher" {
+                TextField("小模型（可选，默认同上）", text: $smallModel).textInputAutocapitalization(.never).autocorrectionDisabled()
+                TextField("子 Agent 模型（可选，默认同上）", text: $subagentModel)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+            }
+        } header: { Text("默认模型") } footer: { Text("各用途的具体选择在「模型配置」里统一管理；未单独指定时使用这里的默认。子 Agent 模型用于 workflow 等多 Agent 运行。") }
+        if kind == "launcher" {
+            Section {
+                TextField("自定义模型（可选）", text: $customModel)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                TextField("显示名（可选）", text: $customModelName)
+                TextField("说明（可选）", text: $customModelDescription)
+            } header: { Text("自定义模型项（可选）") } footer: { Text("在 /model 里多一个可选项，模型 ID 以网关为准。") }
+        }
+        if kind == "launcher" {
+            Section {
+                TextField("比如 --dangerously-skip-permissions", text: $args)
+                    .font(Theme.Font.body.monospaced()).textInputAutocapitalization(.never).autocorrectionDisabled()
+            } header: { Text("额外参数（可选）") } footer: { Text("加在 claude 后面，空格分隔，每个都以 - 开头。") }
+        }
+        if let error {
+            Section { Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger) }
+        }
+    }
+
+    private func savePreset() async {
+        if await presets.save() {
+            model.forgetLaunchers()
+            Haptics.success()
+            await saved()
+            dismiss()
+        } else {
+            Haptics.error()
+        }
     }
 
     private func save() async {

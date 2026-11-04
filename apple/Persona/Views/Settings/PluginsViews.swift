@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// 设置 › 插件: every plugin of the hub's (built in, from hub.json, installed on the hub's machine), its state, and
-/// the way to its page. Plugins are installed on the hub's machine only (docs/plugins.md「安装」): the footer says how.
+/// the way to its page. Plugins are installed on the hub's side only (docs/plugins.md「安装」): with `personad plugin` on
+/// its machine or in its admin UI (/admin); the footer says how.
 struct PluginsView: View {
     @State private var page = PluginsModel()
 
@@ -10,7 +11,7 @@ struct PluginsView: View {
             if let plugins = page.plugins, plugins.isEmpty {
                 Section {
                     EmptyStateView(symbol: Theme.Icon.plugins, title: "没有插件",
-                                   message: "插件在 hub 所在的机器上用 personad plugin install 安装，装好后在这里开关和设置。")
+                                   message: "插件在 hub 的管理界面（/admin）或 hub 所在的机器上用 personad plugin install 安装，装好后在这里开关和设置。")
                         .listRowBackground(Color.clear)
                 }
             } else if let plugins = page.plugins {
@@ -23,7 +24,7 @@ struct PluginsView: View {
                     }
                     .bareListRow()
                 } footer: {
-                    Text("插件只能在 hub 所在的机器上安装、升级和卸载（personad plugin），这里可以开关、改设置、填密钥。")
+                    Text("插件在 hub 的管理界面（/admin）或 hub 所在的机器上（personad plugin）安装、升级和卸载，这里可以开关、改设置、填密钥。")
                 }
             }
             if let error = page.error {

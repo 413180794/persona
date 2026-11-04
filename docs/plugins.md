@@ -253,7 +253,7 @@ personad plugin uninstall <id> [--keep-data]
    `${launcher_key}` 出现在地址、请求头或请求体里，由手里有 Key 的那一方（hub，或有这个启动器的电脑）换成 Key。回 `{status, headers, body}`，
    回答里出现 Key 的地方换回 `${launcher_key}`。只在这次查询进行中、只对被问的那个插件有效（别的 `query_id` 回 `permission_denied`），一次查询最多 16 个请求；
    方法只有 GET / POST / PUT / DELETE / HEAD，请求体最大 1 MB，回答最大 4 MB，重定向只跟到同一个源。
-3. 插件回 `{report}`（`server/internal/quota` 的 `Report`：`key_name`、`usage`、`budget`、`pools`、`note`…；`gateway` / `gateway_name` 不写时用贡献的 id / 名字），
+3. 插件回 `{report}`（`server/internal/quota` 的 `Report`：`key_name`、`usage`、`budget`、`pools`、`note`…；`gateway` / `gateway_name` 不写时用贡献的 id / 名字；App 显示 `gateway_name`），
    不是它的网关就回错误码 `unsupported`，hub 去问下一个。
 
 开源仓库不带任何具体网关的额度插件。
@@ -264,13 +264,14 @@ personad plugin uninstall <id> [--keep-data]
 （`{presets: [{id: "<插件>/<供应商>", plugin, name, description, kind, api, base_url, model, small_model, models, key_hint, models_error?}]}`）；
 `dynamic_models` 的由 hub 调插件的 `provider.models {contribution}` → `{models: [{id, name?}]}`，和声明的合在一起（读不到时声明的照旧，`models_error` 说原因）。
 新增启动器 `POST /api/v1/launchers` 带 `preset` 时，没填的 Base URL、接入类型、API、模型、小模型从预设补上，用户只填名字和 Key；启动器记着它来自哪个预设。
+App 里是「设置 › 模型供应商 › 新增」的「从插件添加」（iOS 和网页；有预设时才出现），见 `docs/launchers.md`「从插件添加」。
 
 ## App：设置 › 插件
 
 iOS（Mac 共用同一套页面）在 hub 带 `plugin_manager` 时，设置首页连接器下面多一行「插件」（个数，和几个要处理）。代码在
 `apple/Persona/Views/Settings/PluginsModel.swift`（数据、接口、视图模型）和 `PluginsViews.swift`。
 
-- 列表：每个插件的名字和状态（运行中 / 空闲，用到时启动 / 正在启动 / 需要设置 / 已停用 / 这台 hub 用不了 / 出错了），点进详情；页脚写明只能在 hub 机器上装。
+- 列表：每个插件的名字和状态（运行中 / 空闲，用到时启动 / 正在启动 / 需要设置 / 已停用 / 这台 hub 用不了 / 出错了），点进详情；页脚写明在 hub 的管理界面（`/admin`）或 hub 机器上（`personad plugin`）装。
 - 详情：状态、版本、来源、描述、「还缺：…」和错误；「启用」开关；「设置」是按 `form.fields` 画的表单（文字、数字、开关、选择、文字列表 / 多选，
   对象是单独一节），右上角「保存」整份提交，hub 拒绝的字段把原因显示在那一项下面、草稿留着；「密钥」每项只显示已设置 / 未设置，点开在单独的表单里输入（不回显），
   已设置的可以清除；「提供」「它可以」「关于」（版本、上一个版本、来源、安装自、发布者、主页、警告）。hub.json 来的只能看，不显示开关和表单。

@@ -17,6 +17,8 @@ import { Connectors } from "./settings/Connectors";
 import { TranslationSettings } from "./settings/TranslationSettings";
 import { Plugins } from "./settings/Plugins";
 import { modelPurpose, modelSummary, type ModelPurpose } from "../lib/model-config";
+import { launcherNameProblem, loadPresets, presetBody, presetChoices, presetDefaultModel, presetModelLabel, presetSubtitle, type LauncherPreset } from "../lib/launcher-presets";
+import { Segmented } from "./assistant/parts";
 
 // ── types (docs/launchers.md) ───────────────────────────
 
@@ -620,6 +622,36 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
   const [f, setF] = useState({ name: "", base_url: "", api_key: "", model: "", small_model: "", subagent_model: "", custom_model: "", custom_model_name: "", custom_model_description: "", args: "", kind: "launcher", api: "messages" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // 从插件添加 (docs/plugins.md「模型供应商」): only when adding, and only when the hub's plugins offer providers.
+  const [presets, setPresets] = useState<LauncherPreset[]>([]);
+  const [source, setSource] = useState<"manual" | "plugin">("manual");
+  const [pick, setPick] = useState("");
+  const [pf, setPf] = useState({ name: "", api_key: "", model: "" });
+  const preset = presets.find((p) => p.id === pick);
+  const fromPlugin = isNew && source === "plugin" && !!preset;
+
+  useEffect(() => {
+    if (!isNew) return;
+    setSource("manual");
+    setPf({ name: "", api_key: "", model: "" });
+    let live = true;
+    loadPresets()
+      .then((list) => {
+        if (!live) return;
+        setPresets(list);
+        setPick(list[0]?.id ?? "");
+        setPf((x) => ({ ...x, model: list[0] ? presetDefaultModel(list[0]) : "" }));
+      })
+      .catch(() => live && setPresets([]));
+    return () => void (live = false);
+  }, [existing]);
+
+  const choose = (p: LauncherPreset) => {
+    setPick(p.id);
+    setPf((x) => ({ ...x, model: presetDefaultModel(p) }));
+  };
+  const nameProblem = launcherNameProblem(pf.name);
+  const presetReady = !!preset && !!pf.name.trim() && !nameProblem && !!pf.api_key.trim();
 
   useEffect(() => {
     setError("");
@@ -627,12 +659,20 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
   }, [existing]);
 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
-  const ready = f.name.trim() && f.base_url.trim() && f.model.trim() && (!isNew || f.api_key.trim());
+  const ready = fromPlugin ? presetReady : f.name.trim() && f.base_url.trim() && f.model.trim() && (!isNew || f.api_key.trim());
   const save = async () => {
     if (busy || !ready) return;
     setBusy(true);
     setError("");
     try {
+      if (fromPlugin && preset) {
+        const body = presetBody(preset, pf.name, pf.api_key, pf.model);
+        await api("/launchers", { method: "POST", json: body });
+        toast(`已新增 ${body.name}`, "ok");
+        onSaved();
+        onClose();
+        return;
+      }
       const body = { name: f.name.trim(), kind: f.kind, api: f.kind === "api" ? f.api : "messages", base_url: f.base_url.trim(), model: f.model.trim(), small_model: f.kind === "api" ? "" : f.small_model.trim(), subagent_model: f.kind === "api" ? "" : f.subagent_model.trim(), custom_model: f.kind === "api" ? "" : f.custom_model.trim(), custom_model_name: f.kind === "api" ? "" : f.custom_model_name.trim(), custom_model_description: f.kind === "api" ? "" : f.custom_model_description.trim(), args: f.kind === "api" ? [] : f.args.split(/\s+/).filter(Boolean), api_key: f.api_key || undefined };
       await api(isNew ? "/launchers" : enLauncher(body.name), { method: isNew ? "POST" : "PUT", json: body });
       toast(isNew ? `已新增 ${body.name}` : `已保存 ${body.name}`, "ok");
@@ -686,6 +726,18 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
           if (ready) void save();
         }}
       >
+        {isNew && presets.length > 0 && (
+          <Segmented<"manual" | "plugin">
+            label="来源"
+            value={source}
+            onChange={setSource}
+            options={[{ v: "manual", label: "自己填写" }, { v: "plugin", label: "从插件添加" }]}
+          />
+        )}
+        {fromPlugin && preset ? (
+          <PresetFields presets={presets} preset={preset} onPick={choose} pf={pf} setPf={setPf} nameProblem={nameProblem} />
+        ) : (
+        <>
         <label className="block">
           <span className="mb-1 block text-[12px] font-medium text-ink-2">接入方式</span>
           <select value={f.kind} onChange={(e) => setF((x) => ({ ...x, kind: e.target.value, api: "messages" }))} disabled={!isNew}
@@ -718,10 +770,79 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
         )}
         {f.kind !== "api" && field("custom_model_description", "自定义模型说明（可选）", { hint: "在 /model 里多一个可选项；说明要配一个名字。" })}
         {f.kind !== "api" && field("args", "额外参数（可选）", { placeholder: "--dangerously-skip-permissions", hint: "加在 claude 后面，空格分隔，每个都以 - 开头。", mono: true })}
+        </>
+        )}
         {error && <p className="text-[12px] text-red">{error}</p>}
         <button type="submit" hidden />
       </form>
     </Dialog>
+  );
+}
+
+/** 从插件添加: pick one of the plugins' providers, then only the name, the key and maybe another of its models. */
+function PresetFields({ presets, preset, onPick, pf, setPf, nameProblem }: {
+  presets: LauncherPreset[];
+  preset: LauncherPreset;
+  onPick: (p: LauncherPreset) => void;
+  pf: { name: string; api_key: string; model: string };
+  setPf: React.Dispatch<React.SetStateAction<{ name: string; api_key: string; model: string }>>;
+  nameProblem: string;
+}) {
+  const input = "h-9 w-full rounded-control bg-field px-3 text-[13px] text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)]";
+  const choices = presetChoices(preset);
+  return (
+    <>
+      <div>
+        <span className="mb-1 block text-[12px] font-medium text-ink-2">供应商</span>
+        <div role="radiogroup" aria-label="供应商" className="overflow-hidden rounded-control bg-field shadow-inset-field">
+          {presets.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              role="radio"
+              aria-checked={p.id === preset.id}
+              onClick={() => onPick(p)}
+              className="flex w-full items-center gap-3 border-b border-line px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-hover"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[13px] font-medium text-ink">{p.name}</div>
+                {p.description && <div className="line-clamp-2 text-[11.5px] text-ink-2">{p.description}</div>}
+                <div className="truncate text-[11px] text-ink-3">{presetSubtitle(p)}</div>
+              </div>
+              {p.id === preset.id && <Icon name="check" size={13} stroke={2.2} className="shrink-0 text-accent" />}
+            </button>
+          ))}
+        </div>
+        <span className="mt-1 block text-[11px] text-ink-3">地址、接入方式和模型由插件「{preset.plugin}」提供；加好以后和自己填写的一样可以编辑。</span>
+      </div>
+      <label className="block">
+        <span className="mb-1 block text-[12px] font-medium text-ink-2">名字</span>
+        <input value={pf.name} onChange={(e) => setPf((x) => ({ ...x, name: e.target.value }))} placeholder="比如 jv_team" autoComplete="off" spellCheck={false} className={cx(input, "font-mono")} />
+        <span className={cx("mt-1 block text-[11px]", nameProblem ? "text-red" : "text-ink-3")}>{nameProblem || "字母、数字、_ 和 -；在模型配置中按这个名字选。"}</span>
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-[12px] font-medium text-ink-2">API Key</span>
+        <input value={pf.api_key} onChange={(e) => setPf((x) => ({ ...x, api_key: e.target.value }))} type="password" autoComplete="off" spellCheck={false} className={input} />
+        <span className="mt-1 block text-[11px] text-ink-3">{preset.key_hint ? `${preset.key_hint} ` : ""}加密存在 hub，接口不会再返回。</span>
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-[12px] font-medium text-ink-2">默认模型</span>
+        {choices.length ? (
+          <select value={pf.model} onChange={(e) => setPf((x) => ({ ...x, model: e.target.value }))} className={cx(input, "font-mono")}>
+            {choices.map((m) => (
+              <option key={m.id} value={m.id}>
+                {presetModelLabel(m)}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input value={pf.model} onChange={(e) => setPf((x) => ({ ...x, model: e.target.value }))} placeholder="主模型" autoComplete="off" spellCheck={false} className={cx(input, "font-mono")} />
+        )}
+        <span className="mt-1 block text-[11px] text-ink-3">
+          {preset.models_error ? `读不到插件的模型列表（${preset.models_error}），这里是它声明的。` : "各用途的具体选择在「模型配置」里统一管理；未单独指定时使用这里的默认。"}
+        </span>
+      </label>
+    </>
   );
 }
 

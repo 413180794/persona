@@ -158,9 +158,9 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   「启用」开关（立即 `PUT …/-/enabled`），按 `form.fields` 画的表单（文字、数字、开关、选择、文字列表 / 多选，对象单独一组），改了底部浮出「还原 / 保存」，整份 `PUT …/-/config`，
   hub 回 `invalid_config` 时把原因写在那一项下面、草稿留着，数字不是数时不能保存；有未保存的改动时点返回先问。密钥每项只显示已设置 / 未设置，点开在弹窗里输入（`type=password`，不回显），
   已设置的可以清除（再点一次确认）；「提供」「它可以」「关于」（版本、上一个版本、来源、安装自、发布者、https 的主页、警告）。hub.json 来的只读：没有开关、表单、密钥。
-  装、升级、卸载只在 hub 机器上（`personad plugin`）。截图用 `MOCK_PLUGINS=1` 的假 hub。
+  装、升级、卸载在 hub 的管理界面（`/admin`）或 hub 机器上（`personad plugin`）。截图用 `MOCK_PLUGINS=1` 的假 hub。
   「模型供应商」是全部接入（搜索；Persona 管理 / 来自 ~/.zshrc / 已隐藏），点开是弹窗：按电脑分组的真实参数（`docs/launchers.md`）、
-  测试可用性、函数原文（折叠）、编辑、删除 / 隐藏；新增支持启动器或直接 API（Messages / Responses）；
+  测试可用性、函数原文（折叠）、编辑、删除 / 隐藏；新增支持启动器或直接 API（Messages / Responses），hub 的插件有供应商预设时多一个「从插件添加」（`docs/launchers.md`「从插件添加」）；
   「模型配置」按 hub 的真实用途目录分组/搜索，编辑供应商、具体模型和支持的思考强度，显示继承与当前生效值。保存失败保留草稿，revision 冲突需重新加载（`docs/model-config.md`）；
   「翻译」（`settings/TranslationSettings.tsx`，`?tab=translate`）：自动翻译、翻译模型（跳到模型配置的 `translate` 用途）、目标语言、翻译范围（邮件、选中的飞书会话），
   存在当前浏览器（键名同 iOS 的 AppStorage）。不同步到 hub：hub 的翻译偏好挂在手机的推送设备 id 上（`/devices/{id}/prefs`，按它收信时预翻），网页没有这个 id；

@@ -92,11 +92,54 @@ nonisolated struct LauncherInput: Encodable, Sendable {
     var apiKey: String?
     var kind: String? = nil
     var api: String? = nil
+    /// A plugin's provider it is added from (`<plugin>/<provider>`): the hub fills in what is left empty.
+    var preset: String? = nil
     enum CodingKeys: String, CodingKey {
-        case name, model, args, kind, api
+        case name, model, args, kind, api, preset
         case baseURL = "base_url", smallModel = "small_model", apiKey = "api_key"
         case subagentModel = "subagent_model", customModel = "custom_model"
         case customModelName = "custom_model_name", customModelDescription = "custom_model_description"
+    }
+}
+
+/// A model provider a plugin offers (GET /api/v1/launchers/presets, docs/plugins.md「模型供应商」): a launcher added from
+/// it takes the address, kind and models from here; the user fills in only the name and the key.
+nonisolated struct LauncherPreset: Decodable, Hashable, Sendable, Identifiable {
+    nonisolated struct Model: Decodable, Hashable, Sendable, Identifiable {
+        var id: String
+        var name: String?
+        var label: String { name?.isEmpty == false ? name! : id }
+    }
+    /// `<plugin>/<provider>`.
+    var id: String
+    var plugin: String
+    var name: String
+    var description: String?
+    /// launcher | api
+    var kind: String
+    var api: String?
+    var baseURL: String
+    var model: String?
+    var smallModel: String?
+    var models: [Model]?
+    /// What the key looks like or where to get one.
+    var keyHint: String?
+    /// Why the plugin's own list of models could not be had (the declared ones are still there).
+    var modelsError: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, plugin, name, description, kind, api, model, models
+        case baseURL = "base_url", smallModel = "small_model", keyHint = "key_hint", modelsError = "models_error"
+    }
+
+    /// The model a launcher gets when none is picked: the declared default, else the first listed.
+    var defaultModel: String { model?.isEmpty == false ? model! : models?.first?.id ?? "" }
+    /// What can be picked: the listed models, with the default first when it is not among them.
+    var choices: [Model] {
+        let listed = models ?? []
+        let d = defaultModel
+        if d.isEmpty || listed.contains(where: { $0.id == d }) { return listed }
+        return [Model(id: d)] + listed
     }
 }
 
@@ -115,6 +158,16 @@ extension APIClient {
         _ = try await request(isNew ? "POST" : "PUT", isNew ? "/api/v1/launchers" : "/api/v1/launchers/\(input.name)", body: input)
     }
     /// A launcher added in Persona is deleted; a ~/.zshrc one is hidden in Persona (the file is not touched).
+    /// The providers plugins offer; none from a hub without the plugin base (it answers 404).
+    func launcherPresets() async throws -> [LauncherPreset] {
+        struct R: Decodable { var presets: [LauncherPreset]? }
+        do {
+            let r: R = try await get("/api/v1/launchers/presets")
+            return r.presets ?? []
+        } catch let e as APIError where e.status == 404 {
+            return []
+        }
+    }
     func deleteLauncher(_ name: String) async throws {
         _ = try await request("DELETE", "/api/v1/launchers/\(name)")
     }
@@ -128,8 +181,8 @@ extension APIClient {
     }
 }
 
-/// A launcher's quota at its gateway (GET /api/v1/launchers/{name}/quota, docs/launchers.md「额度」): relay-history or
-/// FAKEMODEL; `error` when there is nothing to read (`unsupported`) or the gateway said no.
+/// A launcher's quota at its gateway (GET /api/v1/launchers/{name}/quota, docs/launchers.md「额度」), as a quota plugin
+/// read it; `error` when there is nothing to read (`unsupported`, no plugin knows the gateway) or the gateway said no.
 nonisolated struct LauncherQuotaAnswer: Decodable, Hashable, Sendable {
     var machine: String?
     var checkedAt: Date?
@@ -141,16 +194,25 @@ nonisolated struct LauncherQuotaAnswer: Decodable, Hashable, Sendable {
 }
 
 nonisolated struct LauncherQuota: Decodable, Hashable, Sendable {
+    /// The gateway's id (the plugin's contribution).
     var gateway: String
+    /// What to call it, from the hub (an older hub leaves it out: the id is shown).
+    var gatewayLabel: String?
     var keyName: String?
     var usage: [Usage]?
     var budget: [Window]?
     var pools: [Pool]?
     var note: String?
 
-    enum CodingKeys: String, CodingKey { case gateway, usage, budget, pools, note; case keyName = "key_name" }
+    enum CodingKeys: String, CodingKey {
+        case gateway, usage, budget, pools, note
+        case keyName = "key_name", gatewayLabel = "gateway_name"
+    }
 
-    var gatewayName: String { gateway == "relay-history" ? "relay-history" : gateway == "fakemodel" ? "FAKEMODEL" : gateway }
+    var gatewayName: String {
+        if let n = gatewayLabel?.trimmingCharacters(in: .whitespaces), !n.isEmpty { return n }
+        return gateway.isEmpty ? "gateway" : gateway
+    }
 
     nonisolated struct Usage: Decodable, Hashable, Sendable {
         var label: String
