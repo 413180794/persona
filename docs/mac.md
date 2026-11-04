@@ -453,7 +453,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 2026-11-01 全部过了一遍：分 5 组并行，每组用离屏截图（体验模式和 `scripts/mock/mock_hub.py` 的假数据，深浅色）和单元测试（`JarvisMacTests`）逐条核对，顺手修了能修的；再由一个 reviewer 逐条试着推翻打的勾，推翻了的不勾，写清看到了什么、没看到什么。
 核对后 106 条 [x]、118 条 [ ]。没勾的每条下面都写了原因：「要到 Mac 前看」是要解锁后在 Mac 上点、按、看的，「没做」是还没做的，「Mac 上没有」是 Mac 上本来就不该有的。
-2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 149 条 [x]、73 条 [ ]。
+2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 151 条 [x]、71 条 [ ]。
 待你确认：`-showSampleScreen` 的示例「终端在问你」里原来有像内部工具 / 服务的名字，已在提交「chore: the sample terminal dialog uses made-up names only」里全换成编造的名字；以前拍的截图里可能还是旧文字。
 
 ### 真窗口验收怎么分工（2026-11-03 起）
@@ -653,8 +653,9 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac 上没有：Mac 没有 tab 栏，`hidesTabBarWhenShown` 在兼容层（`Mac/Compat/NavigationCompat.swift`）里什么都不做。
 - [ ] Side-vertical toolbar (iPhone Duo) layout — ChatView.swift (sideBarItems, sideHeader)
   - Mac 上没有：这是 iPhone Duo 的布局，`VerticalBarsReader` 只在 iOS 编译。
-- [ ] Live status strip (spinner line, output preview, → terminal) — SessionPanes.swift (ActivityChips, ActivitySheet)
+- [x] Live status strip (spinner line, output preview, → terminal) — SessionPanes.swift (ActivityChips, ActivitySheet)
   - 要到 Mac 前看：点对话页顶上的状态 chip 打开 ActivitySheet，看转圈行、输出预览和 → 终端。chip 截图里有，浮层要点开（加截图开关得改 ChatView.swift，这次没动）。
+  - Mac 真窗口（2026-11-04，执行者跑）：点「循环与后台任务」chip，弹出的内容里有转圈行「循环中 · 每 30 分钟 正在执行这一轮」、后台任务和「看输出」；对话里的状态折叠条展开是步骤输出预览，「打开终端」打开终端查看器。
 - [x] Loop strip (interval, next wake, task, 停止循环 confirm) + loop tick rows — SessionPanes.swift (LoopStrip, LoopTickRow)
   - Mac（2026-11-02 Mac mini 真窗口核对）：点「循环与后台任务」chip → ActivitySheet：循环中 · 每 30 分钟、下次唤醒（还有 N 分钟）、任务、「停止循环」→ 确认框「停止这个循环？」（取消 / 停止循环）；对话里 `/loop …` 的消息画成「⟳ 循环唤醒 时间 任务」小胶囊。
 - [x] Background tasks strip (N 个后台任务, open output file) — SessionPanes.swift (BackgroundTasksStrip)
@@ -774,10 +775,13 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   mock_hub 的 /file 里没有图片（`docs/icon.png` stat 失败），要截查看器的图片 / PDF 得先加一条假数据。
 - [ ] Files pane: breadcrumbs, dirs first, size/mtime, git markers, hidden toggle, 拷贝路径, 2000 limit — Views/Session/FilesPane.swift
   - Mac（2026-11-01 核对）：mock hub（`MOCK_FILES=1`）`-openPane files` 截图：面包屑 + ⋯、文件夹在前、大小和修改时间、git 标记，工具栏有刷新按钮（对话面板上没有）。隐藏文件开关只看到 ⋯、没看到开关本身，拷贝路径、2000 条上限没看到。
+  - Mac 真窗口（2026-11-04，执行者跑）：⋯ 菜单是「显示隐藏文件」「拷贝路径」，开关切出 / 收起 .gitignore；文件右键「拷贝路径」拷的是完整路径。还剩 2000 条上限（假 hub 的目录没那么多文件）。
 - [ ] Git pane: branch, upstream ↑↓, stashes, changes (staged/unstaged switch), diff sheet, commit history paging, commit sheet, copy diff/path — Views/Session/GitPane.swift
   - Mac（2026-11-01 核对）mock hub 截图：分支、↑1、暂存、改动 +4 −1、带 ref 的历史；diff sheet 的未暂存 / 已暂存切换和真 diff，提交 sheet 的标题、正文、作者、hash、文件。↓、历史翻页、拷贝 diff / 路径的右键菜单没看到。
+  - Mac 真窗口（2026-11-04，执行者跑）：main、↑1 ↓0、暂存 1、改动 5 个文件；历史底部「加载更早的提交」从 Tweak #26 加载到 Tweak #39。改动行的右键菜单只有「拷贝路径」，「拷贝 diff」在 diff sheet 的 ⋯ 菜单里（代码），这次没点开。
 - [ ] FileViewer: code (syntax, line numbers, copy line/all), JSON outline (fold, copy value/path, expand/collapse all), Markdown rendered/source, images, PDF, directories, share — Views/Chat/FileViewer.swift
   - 要到 Mac 前看：图片和 PDF（mock 没有图片假数据）、分享、拷贝一行 / 全部、JSON 全部展开 / 收起和拷贝值 / 路径、Markdown 渲染 / 源码切换。代码（语法色、行号，深浅色）、JSON 大纲、渲染的 Markdown、目录截图看过。
+  - Mac 真窗口（2026-11-04，执行者跑 + 复核）：README.md 的 ⋯ 里「查看源文件」/「渲染 Markdown」来回切；「拷贝内容」拷出全文；「分享」弹系统分享菜单。代码和图片看不到：sheet 只有 470 × 80（#1502，#813 之后最小尺寸被链接面板的 `GeometryReader` 挡住），修后 1216 × 705，代码有行号和语法色。还剩拷贝一行、JSON 全部展开 / 收起和拷贝值 / 路径、PDF。
 - [x] Paged file fetch (2 MB pages) — Code/CodeFileSource.swift
   - Mac（2026-11-01 核对）截图：2.3 MB 的 forecast.json（超过一页 2 MB）完整打开，大纲数出 6000 项。
 - [ ] Line splitting, background highlighting (2000-line chunks, caps) — Code/CodeDocument.swift
@@ -977,8 +981,9 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - 要到 Mac 前看：用真链接配对，退出后不带 `-pairURL` 重开，看是否还是已配对（弹钥匙串授权就允许）。DEBUG 的截图和测试不读钥匙串（锁屏时读别的构建写的条目会卡住），离屏没碰过钥匙串。
 - [ ] Device token exchange, 设置 › 设备 list + revoke — App/DeviceCredentials.swift (DevicesView)
   - Mac（2026-11-01 核对）：设备列表、本机 / 只能回答 chip、撤销、已撤销分组截图看过（假 hub）；Mac 原来按 kind "phone" 换凭据、被列成 iPhone，现在要 "desktop"（`MacDeviceCredentialTests`），hub 存成 "other"。要到 Mac 前看：真配对一次，设置 › 设备 里这台 Mac 显示电脑图标、撤销会确认（`-pairURL` 启动不换凭据，截图里看不到）。
-- [ ] 重新配对, 断开并忘记服务器 — SettingsView.swift
+- [x] 重新配对, 断开并忘记服务器 — SettingsView.swift
   - 要到 Mac 前看：点「重新配对」看 sheet 弹出；点「断开并忘记服务器」确认后回到欢迎页。两个按钮在设置 › 服务器 的截图里。
+  - Mac 真窗口（2026-11-04，执行者跑）：「重新配对」弹出「连接 hub」sheet（粘贴配对链接、服务器地址、Token、经 SSH 隧道连接、取消 / 连接），取消关掉；「断开并忘记服务器」先确认（「断开后需要重新扫码配对。」，取消 / 断开），断开后回到欢迎页。
 - [x] Sync to Apple Watch (WCSession) — Shared/WatchSync.swift, SettingsView.swift; watch app — PersonaWatch/PersonaWatchApp.swift (macOS: n/a)
   - Mac（2026-11-01 核对）：Mac 不和手表配对，`WatchSync` 是空的；设置里原来还显示「同步到 Apple Watch」、点了提示已发送，现在只在 iOS 显示（深浅色截图看过）。
 
