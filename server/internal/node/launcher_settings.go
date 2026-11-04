@@ -26,7 +26,7 @@ func (n *Node) claudeSettings(ctx context.Context, launcher, ours, cwd string) s
 		// A managed launcher has no settings file of its own, but its gateway and key must beat the user's global
 		// settings env (another gateway): put them in ours.
 		if path, err := n.mergeManagedSettings(launcher, m, ours); err != nil {
-			n.logger.Printf("launcher %s: its gateway not merged with Persona's settings: %v", launcher, err)
+			n.logf("launcher %s: its gateway not merged with Persona's settings: %v", launcher, err)
 			return ours
 		} else {
 			return path
@@ -39,7 +39,7 @@ func (n *Node) claudeSettings(ctx context.Context, launcher, ours, cwd string) s
 	path, err := n.mergeLauncherSettings(launcher, own, ours, cwd)
 	if err != nil {
 		// Not the value: an inline --settings '{…}' can hold a token.
-		n.logger.Printf("launcher %s: its own --settings not merged with Persona's, it will be ignored: %v", launcher, err)
+		n.logf("launcher %s: its own --settings not merged with Persona's, it will be ignored: %v", launcher, err)
 		return ours
 	}
 	return path
