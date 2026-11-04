@@ -63,7 +63,7 @@ struct TranslationSettingsView: View {
             }
         }
         .themedGroupedPage()
-        .navigationTitle("翻译")
+        .detailTitle("翻译")
         .navigationBarTitleDisplayMode(.inline)
         .animation(Theme.Motion.state, value: enabled)
         // The hub translates new mail before it is opened: it needs to know.

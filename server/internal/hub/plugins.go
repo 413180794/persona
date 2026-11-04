@@ -567,7 +567,7 @@ func (ps *plugins) spec(ctx context.Context, p *plugin.Plugin, hp *hubPlugin) (h
 			}
 			return c.Handle(ctx, rest, params)
 		}
-		if method == "quota.http" {
+		if method == "quota.http" || method == "gateway.http" {
 			return ps.quotaHTTP(ctx, id, params)
 		}
 		return nil, &rpc.Error{Code: plugin.CodeUnknownMethod, Message: "unknown method " + method}

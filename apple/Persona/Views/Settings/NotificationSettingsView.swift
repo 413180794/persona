@@ -131,7 +131,7 @@ struct NotificationSettingsView: View {
             #endif
         }
         .themedPage()
-        .navigationTitle("通知")
+        .detailTitle("通知")
         .navigationBarTitleDisplayMode(.inline)
         .disabled(prefs == nil)
         .overlay { if prefs == nil { ProgressView() } }

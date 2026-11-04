@@ -859,7 +859,7 @@ struct ClaudeSettingsView: View {
             if agent == .claude, !machineID.isEmpty { ClaudeDirsSection(ref: ref) }
         }
         .themedPage()
-        .navigationTitle(agent.title)
+        .detailTitle(agent.title)
         .onAppear { if machineID.isEmpty { machineID = model.hubRef(model.hubMachineID).path } } // first visit: the hub's machine
         .overlay { if loading && settings.isEmpty { ProgressView() } }
         .task(id: machineID) { await load() }

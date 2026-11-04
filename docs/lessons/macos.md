@@ -146,3 +146,7 @@
   只有 `Form` + `.formStyle(.grouped)` 的页脚会换行（或者把说明当成一行内容放进分组里）。设置的子页因此在 Mac 上用 `SettingsForm`（分组表单）。
 - Mac 分组表单（`Form` + `.grouped`）里 `.listRowBackground(Color.clear)` 不起作用，那一行的圆角卡片还在（2026-11-04，#1221，真窗口看过；我在第二批里写了「去掉底色」，是错的，第三批改正）。
   单独一个按钮的行在 Mac 上就是卡片里靠右的标准按钮。Mac 表单里输入框的标题画在左边当标签：标题本身就是提示的（「添加一项」「默认：…」「静音仓库：owner/name」）要 `.labelsHidden()`，否则左边一串提示、右边一个空框。
+- 窗口工具栏里的 `.primaryAction`（兼容层的 `.topBarTrailing`）在我们这种自己拼的分栏里不跟着栏走（2026-11-04，#1223，真窗口 920 / 1280 / 1800 宽对比）：
+  它的位置约是「窗口宽度的一半减几十点」，列表栏的按钮在宽窗口里跑到对话栏中间；页面有 `.searchable` 时右端被搜索框占了，按钮被排到窗口中间。
+  改成 `.automatic` 也一样。要钉在某一栏上的按钮，画在那一栏自己的标题行里（`overlay` + `ignoresSafeArea(.container, edges: .top)`，那一行能点），或者放进页面内容。
+  另外：macOS 26 上 `.toolbar { }` 的内容在某个平台分支里为空会编不过（`EmptyView` 当 `ToolbarContent` 要 macOS 27），整个 `.toolbar` 用 `#if` 包起来。

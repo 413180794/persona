@@ -29,9 +29,10 @@ Persona 的插件底座（#1101）：开源仓库只放通用能力和**扩展�
 | `providers`（版本 1） | `provider.` | `id`、`name`、`description?`、`kind?`（`launcher` / `api`）、`api?`（`messages` / `responses`）、`base_url`、`model?`、`small_model?`、`models?: [{id, name?}]`、`dynamic_models?`、`key_hint?` | 纯声明即可；`dynamic_models` 要进程说协议 | 设置 › 模型供应商的「从插件添加」，见下面「模型供应商」 |
 | `api`（版本 1） | `api.` | `id`、`prefix`（一段路径）、`features?`、`events?` | `runtime.http`，`on_startup`；有 `events` 要进程说协议 | App 用的一段接口 `/api/v1/<prefix>/…`，见下面「App 接口」 |
 | `assistant`（版本 1） | — | `id`、`skills?`（包里的目录，各有 `SKILL.md`）、`instructions?`（包里的 `.md`） | 包里有这些文件 | 助手的技能和说明，见下面「助手」 |
+| `ui`（版本 1） | `ui.` | `id`、`title`、`placement`（`plugin_page` / `launcher_section`）、`hosts?`（`launcher_section` 必须有，网关主机名，可 `*.` 开头） | 进程说协议；`launcher_section` 要权限 `launcher_keys` | 插件详情里的页面、启动器页上的一节，见下面「声明式 UI」 |
+| `events`（版本 1） | `event.` | `id`、`subscribe`（事件名的列表，见「事件」） | 进程说协议，`on_startup` | 只是告诉插件 hub 上发生了什么，见下面「事件」 |
 
-hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的），这一项不生效，预览和列表里有一条警告。以后每一步加自己的扩展点（模型供应商、额度、知识库来源、
-助手能力、事件钩子、链接识别、声明式 UI），在这张表里加一行。
+hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的），这一项不生效，预览和列表里有一条警告。以后加扩展点（知识库来源、链接识别……），在这张表里加一行。
 
 ## 清单 `persona-plugin.json`
 
@@ -116,7 +117,7 @@ hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的�
 | 运行程序（有 `runtime` 就有） | — | 在 hub 机器上以 hub 的系统用户运行，能读写这个用户能读写的文件 | 只展示：**没有沙箱** |
 | `network` | 主机名列表，可以 `*.` 开头，小写，不带协议、端口、路径 | 会访问哪些地方 | 只展示和记录；hub 暂不拦截别的地址 |
 | `hub_api` | `true` | 拿到 hub 的地址和完整 token（`PERSONA_HUB_URL`、`PERSONA_HUB_TOKEN`），能做 hub 主人能做的一切 | 没接受就不给这两个变量 |
-| `launcher_keys` | `true` | 用启动器的 Key 查额度（贡献 `quota` 必须有） | 插件看不到 Key：hub 或那台电脑替它发请求，只发到启动器自己的网关；没接受就不问它 |
+| `launcher_keys` | `true` | 用启动器的 Key 访问它的网关（贡献 `quota`、`launcher_section` 的 `ui` 必须有） | 插件看不到 Key：hub 或那台电脑替它发请求，只发到启动器自己的网关；没接受就不问它 |
 | 密钥（有 `secrets` 就有） | — | 用你填的密钥 | 每个插件只拿到自己的 |
 
 后面的扩展点会加细的权限（`kb.read`、`inbox.read`、`agents.control`……），按接受的权限放行 hub 提供给插件的方法，没接受回 `permission_denied`。
@@ -257,6 +258,60 @@ personad plugin uninstall <id> [--keep-data]
    不是它的网关就回错误码 `unsupported`，hub 去问下一个。
 
 开源仓库不带任何具体网关的额度插件。
+
+## 声明式 UI
+
+插件**不在 App 里跑代码**：它回一份 View（几种固定的条目），iOS、Mac、Android、网页用各自的设计系统画出来（每种界面风格、深浅色都对），
+按钮的动作回到插件。View 的定义和检查在 `server/internal/plugin/ui.go`。
+
+**放在哪**（贡献 `ui` 的 `placement`）：
+
+| placement | 出现在 | 额外 |
+| --- | --- | --- |
+| `plugin_page` | 设置 › 插件 › 这个插件，一行进入一页 | — |
+| `launcher_section` | 启动器的详情页，网关主机名在 `hosts` 里的启动器 | 像额度一样能用这个启动器的 Key 访问网关（插件看不到 Key），要权限 `launcher_keys` |
+
+**hub 的接口**（完整权限的设备）：
+
+- `GET /api/v1/plugins/-/ui?placement=<p>[&launcher=<名字>&machine=<机器>]` → `{ui: [{plugin, id, title, placement}]}`：启用、在跑的插件在这里画什么；
+  `launcher_section` 要带 `launcher`，只列网关对得上的。插件详情里也有 `ui`（它的 `plugin_page`）。
+- `POST /api/v1/plugins/{id}/-/ui/{ui}` `{context?: {launcher, machine}, state?, action?, values?}`：不带 `action` 是画（回 `{view}`），
+  带 `action` 是点了按钮（回 `{view?, toast?, open_url?}`；什么都没有就重新画一次）。插件不在、没启用回 404；插件出错、View 画不了回 502 `plugin_failed`。
+
+**hub 调插件**：`ui.render {contribution, state, launcher?}` → View；`ui.action {contribution, state, action, values, launcher?}` → `{view?, toast?, open_url?}`。
+`launcher` 是 `{name, base_url, query_id}`：`launcher_section` 才有，插件拿 `query_id` 调 hub 的 `gateway.http`（和「额度」的 `quota.http` 一样：
+`${launcher_key}` 由手里有 Key 的一方换上，只发到这个网关，一次最多 16 个请求），画完就失效。
+
+**View**：`{title?, sections: [{title?, footer?, items: [条目]}], state?}`。`state` 是插件自己的（第几页、哪个标签），App 下次画、点按钮时原样带回，最多 16 KB。
+
+| 条目 `type` | 字段 | 画成 |
+| --- | --- | --- |
+| `text` | `text`、`style?`（`body` / `secondary` / `caption` / `code`） | 一段字 |
+| `metric` | `label`、`value`、`detail?`、`tone?` | 一个数，带说明 |
+| `progress` | `label`、`ratio`（0…1）、`detail?`、`tone?` | 进度条 |
+| `row` | `title`、`subtitle?`、`value?`、`badge?: {text, tone?}`、`action?` | 列表的一行；有 `action` 可点 |
+| `button` | `title`、`action`、`role?`（`normal` / `destructive`） | 按钮（文字不换行） |
+| `link` | `title`、`url`（只能 https） | 在 App 里打开的链接 |
+| `field` | `name`、`label`、`kind`（`text` / `secret` / `number` / `toggle` / `choice`）、`value?`、`choices?: [{value, title?}]`、`placeholder?` | 输入；`secret` 不回显、插件也不能预填 |
+| `divider` | — | 分隔线 |
+
+`tone` 只有 `neutral` / `positive` / `caution` / `danger`，App 换成自己的角色色；插件不能给颜色、字号、图标。`action` 是 `{id, confirm?, submit?}`：
+`confirm` 有字就先让用户确认，`submit` 时把这一页所有 `field` 的值作为 `values`（名字 → 字符串，开关是 `"true"` / `"false"`）带上。
+限制：一页最多 300 个条目，每个字符串最多 2000 个字符；不认识的 `type`、`tone`、不是 https 的链接，整页拒绝（不画一半）。
+`open_url` 也只能是 https。
+
+## 事件
+
+插件贡献 `events`，订阅 hub 上发生的事。只是**告诉**它（事件 `event.<名字>`，不等回答），它不能借此拦住或改动什么；要做事就用自己有的权限
+（比如 `hub_api`）。订阅的事件和权限一样在安装前列出来，升级时多订了也要重新同意。插件必须 `on_startup`（事件只发给在跑的插件，不为一个事件拉起进程）。
+
+| 事件 | 参数 |
+| --- | --- |
+| `inbox.changed` | `id`、`source`、`kind`、`title`：收件箱里新的或更新了的条目（一次存入超过 50 条只发前 50 条） |
+| `agent.needs_you` | `machine_id`、`machine`、`session_id`、`interaction_id`、`kind`、`summary`：有 Agent 在等你回答或批准 |
+| `agent.finished` | `machine_id`、`machine`、`session_id`、`title`：有 Agent 做完了 |
+
+用 `plugin/serve` 写的程序在 `Namespaces["event"]` 里收（方法名是事件名）。
 
 ## 模型供应商
 

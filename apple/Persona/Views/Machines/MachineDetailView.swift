@@ -80,7 +80,7 @@ struct MachineDetailView: View {
             .padding(Theme.Space.l)
         }
         .themedGroupedPage()
-        .navigationTitle(machine?.name ?? machineID)
+        .detailTitle(machine?.name ?? machineID)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable {
             await model.refresh()

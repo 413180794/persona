@@ -108,7 +108,7 @@ struct HubSettingsPage: View {
             }
         }
         .themedPage()
-        .navigationTitle("hub")
+        .detailTitle("hub")
         .task { await model.load() }
         .refreshable { await model.check() }
         .onChange(of: app.hubUpdate) { _, s in
@@ -455,7 +455,7 @@ struct SkillsPage: View {
             }
         }
         .themedPage()
-        .navigationTitle("Skills")
+        .detailTitle("Skills")
         .task { await model.load() }
         .refreshable { await model.load() }
     }

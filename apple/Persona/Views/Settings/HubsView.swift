@@ -42,7 +42,7 @@ struct HubsView: View {
             }
         }
         .themedPage()
-        .navigationTitle("hub")
+        .detailTitle("hub")
         .sheet(isPresented: $showPair) { PairView() }
         .alert("给这一组起个名字", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("名字", text: $newName)

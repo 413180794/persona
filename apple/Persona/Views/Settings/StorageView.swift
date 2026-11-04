@@ -244,7 +244,7 @@ struct StorageView: View {
             }
         }
         .themedPage()
-        .navigationTitle("存储空间")
+        .detailTitle("存储空间")
         .navigationBarTitleDisplayMode(.inline)
         .task { await measure() }
         .refreshable { await measure() }

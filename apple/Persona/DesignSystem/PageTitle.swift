@@ -15,3 +15,17 @@ extension View {
         #endif
     }
 }
+
+extension View {
+    /// A page's title in a split's detail column (设置's pages, #1224 B2). The phone shows it in its navigation bar as
+    /// before (`navigationTitle`); the Mac's window has no title in its bar (#830), so the page hands it to the column's
+    /// title row (`MacDetailBack` draws it after the ‹, where there is one), without taking the shell's section name
+    /// away as `pageTitle` does: the list beside still shows its section's name.
+    @ViewBuilder func detailTitle(_ title: String) -> some View {
+        #if os(macOS)
+        navigationTitle(title).preference(key: MacDetailTitle.self, value: title)
+        #else
+        navigationTitle(title)
+        #endif
+    }
+}

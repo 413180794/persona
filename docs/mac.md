@@ -171,6 +171,8 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   知识库的筛选 chip 在 Mac 上不放进 Section（Mac 的 inset 列表给它留了一条空的分组头和一条线）。
   白色凸起：分区列右边的分隔线原来停在这一行下面，页面的白底在那里越过了这一列几个点；分隔线现在画到顶。侧栏按钮也不画系统的玻璃圆底（`.sharedBackgroundVisibility(.hidden)`）。
   还没做：推进去的页面（Persona 里的档案、定时任务，知识库的某一天）的标题，系统的标题去掉以后它们没有地方显示。
+  Agents 列表栏的「个人 Agent」「新建会话」在 Mac 上画在列表栏自己的标题行右端（`MacTitleRowButton`，#1223）：放在窗口工具栏里时它们跟着窗口中线走，
+  920 宽时在列表中间，1800 宽时跑到对话栏中间。模型供应商页的「+」在 Mac 上是「Persona 管理」那组里的「新增供应商…」：这页有搜索框，工具栏右端被它占了，「+」被排到窗口中间、压在设置列表上。
   在 Agents 分区，它后面紧跟着列表的 ≡ 菜单（分组、显示、折叠、机器）：两个放在壳的同一个 `ToolbarItemGroup` 里。以前 ≡ 是列表自己的工具栏项，
   详情栏打开空间页、机器页（页面带自己的 ⋯ / ⓘ）时就排到了侧栏按钮前面（2026-11-02，`docs/lessons/macos.md`）。
   按钮（`themedButton`）在 Mac 上是自己画的胶囊（`Mac/Design/MacCapsuleButton.swift`）：主要的是主题色底白字，其余是主题色字配一层浅的主题色底，
@@ -222,6 +224,9 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
 - 页尾单独一个按钮（添加 hub、清除全部缓存、登录某个连接器）在 Mac 上是一张卡片里靠右的标准按钮（同系统设置）；`.listRowBackground(Color.clear)` 在 Mac 的分组表单里不起作用，卡片去不掉（`FormAction`）。
 - 已经换的页：通知、Claude Code 设置、Codex 设置、飞书机器人（第一批）；设备、翻译、存储空间、hub、hub 列表、Skills（第二批）；邮箱、飞书、GitHub / Telegram、信息、插件和插件详情（第三批）；模型配置和用途、模型供应商和某个供应商、形象、主题色、界面风格（第四批）。
   助手（`AssistantProfileView`）、机器（卡片）、信息 › 会话 这类不是表单的页面不换。
+
+- 设置子页的标题（#1224 B2）：页面用 `detailTitle("…")`（iPhone 上就是 `navigationTitle`），Mac 上由详情栏的 `MacDetailBack` 画在这一栏标题行的左边，
+  第二层前面是 ‹（「‹ SSH 隧道」「‹ MacBook」），同系统设置。不用 `pageTitle`：那个会告诉外壳标题行被占了，左边列表栏的「设置」两个字就没了。
 
 ## SSH 隧道（Mac）
 

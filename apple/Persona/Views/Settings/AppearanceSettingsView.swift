@@ -79,7 +79,7 @@ struct PersonaSettingsPage: View {
             }
         }
         .themedGroupedPage()
-        .navigationTitle("形象")
+        .detailTitle("形象")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -96,7 +96,7 @@ struct ThemeColorSettingsPage: View {
             }
         }
         .themedGroupedPage()
-        .navigationTitle("主题色")
+        .detailTitle("主题色")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -142,7 +142,7 @@ struct StyleSettingsPage: View {
             }
         }
         .themedGroupedPage()
-        .navigationTitle("界面风格")
+        .detailTitle("界面风格")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

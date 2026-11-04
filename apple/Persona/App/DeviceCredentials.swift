@@ -95,7 +95,7 @@ struct DevicesView: View {
             }
         }
         .themedPage()
-        .navigationTitle("设备")
+        .detailTitle("设备")
         .task { await load() }
         .refreshable { await load() }
         .confirmationDialog(revoking.map { "撤销「\($0.name)」？" } ?? "", isPresented: Binding(

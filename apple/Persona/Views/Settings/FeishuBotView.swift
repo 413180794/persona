@@ -24,7 +24,7 @@ struct FeishuBotView: View {
             setupSection
         }
         .themedPage()
-        .navigationTitle("飞书机器人")
+        .detailTitle("飞书机器人")
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load() }
         .refreshable { await model.load() }

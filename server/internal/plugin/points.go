@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode/utf8"
 )
 
 // Point is an extension point: a place in the hub a plugin contributes to (docs/plan-plugins.md「contributes」).
@@ -228,6 +229,48 @@ var Points = map[string]Point{
 			}
 		}
 		return a.ID, nil
+	}},
+	"ui": {Name: "ui", Namespace: "ui", Version: 1, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
+		var u UIItem
+		if err := strict(raw, &u); err != nil {
+			return "", err
+		}
+		if !idPattern.MatchString(u.ID) {
+			return u.ID, fmt.Errorf("ui id %q: a-z0-9_-", u.ID)
+		}
+		if u.Title == "" || utf8.RuneCountInString(u.Title) > 40 {
+			return u.ID, fmt.Errorf("ui %s: title, 1 to 40 characters", u.ID)
+		}
+		if !slices.Contains(UIPlacements, u.Placement) {
+			return u.ID, fmt.Errorf("ui %s: placement is %s", u.ID, strings.Join(UIPlacements, " or "))
+		}
+		if u.Placement == "launcher_section" && len(u.Hosts) == 0 {
+			return u.ID, fmt.Errorf("ui %s: a launcher_section names the gateways' hosts", u.ID)
+		}
+		for _, h := range u.Hosts {
+			if !hostPattern.MatchString(h) {
+				return u.ID, fmt.Errorf("ui %s: %q is not a host name", u.ID, h)
+			}
+		}
+		return u.ID, nil
+	}},
+	"events": {Name: "events", Namespace: "event", Version: 1, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
+		var e EventsItem
+		if err := strict(raw, &e); err != nil {
+			return "", err
+		}
+		if !idPattern.MatchString(e.ID) {
+			return e.ID, fmt.Errorf("events id %q: a-z0-9_-", e.ID)
+		}
+		if len(e.Subscribe) == 0 {
+			return e.ID, fmt.Errorf("events %s: subscribes to nothing", e.ID)
+		}
+		for _, t := range e.Subscribe {
+			if _, ok := EventTopics[t]; !ok {
+				return e.ID, fmt.Errorf("events %s: no event %q", e.ID, t)
+			}
+		}
+		return e.ID, nil
 	}},
 	"voice": {Name: "voice", Namespace: "voice", Version: 1, NeedsHTTP: true, Item: func(raw json.RawMessage) (string, error) {
 		var v VoiceItem

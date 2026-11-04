@@ -11,7 +11,7 @@ struct HubSSHTunnelPage: View {
             SSHTunnelForm(saved: hub.ssh, onSave: { model.setSSH($0, hub: hubID) }) {
                 if hub.ssh?.isUsable == true { status(hub) }
             }
-            .navigationTitle("SSH 隧道")
+            .detailTitle("SSH 隧道")
         } else {
             EmptyStateView(symbol: Theme.Icon.sshTunnel, title: "这台 hub 已经断开", message: "回到 设置 › hub 重新配对。")
         }

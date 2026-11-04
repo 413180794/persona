@@ -33,7 +33,7 @@ struct PluginsView: View {
         }
         .themedPage()
         .overlay { if page.plugins == nil && page.loading { ProgressView() } }
-        .navigationTitle("插件")
+        .detailTitle("插件")
         .navigationBarTitleDisplayMode(.inline)
         .task { await page.load() }
         .refreshable { await page.load() }
@@ -118,7 +118,7 @@ struct PluginDetailView: View {
             }
         }
         .themedPage()
-        .navigationTitle(page.detail?.plugin.name ?? "插件")
+        .detailTitle(page.detail?.plugin.name ?? "插件")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if page.detail?.readOnly == false && !(page.detail?.form.isEmpty ?? true) {

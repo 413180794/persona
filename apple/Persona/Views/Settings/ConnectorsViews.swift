@@ -383,7 +383,7 @@ struct FeishuConnectorView: View {
             }
         }
         .themedPage()
-        .navigationTitle("飞书")
+        .detailTitle("飞书")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
@@ -499,7 +499,7 @@ struct HubConnectorView: View {
             }
         }
         .themedPage()
-        .navigationTitle(title)
+        .detailTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         // Again once paired (opened at launch, before the hub's address is known) or paired to another hub.
         .task(id: model.config) { await load() }

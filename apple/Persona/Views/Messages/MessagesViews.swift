@@ -92,7 +92,7 @@ struct MessagesConnectorView: View {
             Text("知识库里的信息会话和人、收件箱里的信息条目都会删掉；那台 Mac 上的消息不受影响。")
         }
         .themedPage()
-        .navigationTitle("信息")
+        .detailTitle("信息")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
@@ -191,7 +191,7 @@ struct MessagesChatListView: View {
                                message: query.isEmpty ? "那台 Mac 上的「信息」还没有会话。" : "换个名字或号码试试。")
             }
         }
-        .navigationTitle("会话")
+        .detailTitle("会话")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: "搜索名字或号码")
         .task { if !page.loaded { await page.load() } }

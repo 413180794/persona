@@ -51,6 +51,7 @@ func Serve(ctx context.Context, in io.Reader, out io.Writer, prog Program) error
 	peer := rpc.New("p", out)
 	s := &server{prog: prog, hub: &Hub{peer: peer}, ctx: ctx}
 	peer.OnRequest = s.handle
+	peer.OnEvent = s.event
 	return peer.Serve(ctx, in)
 }
 
@@ -89,6 +90,17 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 		return nil, &rpc.Error{Code: plugin.CodeUnknownMethod, Message: "unknown method " + method}
 	}
 	return h(ctx, rest, params)
+}
+
+// event hands an event the hub tells (event.<topic>) to its namespace's handler; nothing is answered.
+func (s *server) event(method string, params json.RawMessage) {
+	s.mu.Lock()
+	ok := s.initialized
+	s.mu.Unlock()
+	ns, rest, found := strings.Cut(method, ".")
+	if h := s.prog.Namespaces[ns]; ok && found && h != nil {
+		go func() { _, _ = h(s.ctx, rest, params) }()
+	}
 }
 
 func (s *server) initialize(raw json.RawMessage) (any, error) {

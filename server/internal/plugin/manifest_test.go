@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -364,5 +365,67 @@ func TestAPIAndAssistantPoints(t *testing.T) {
 		if _, err := Parse(with(t, change)); err == nil {
 			t.Errorf("%s: parsed", name)
 		}
+	}
+}
+
+func TestUIAndEventsPoints(t *testing.T) {
+	m, err := Parse(with(t, func(m map[string]any) {
+		m["permissions"] = map[string]any{"launcher_keys": true}
+		m["contributes"] = map[string]any{
+			"ui": []any{map[string]any{"id": "home", "title": "概况", "placement": "plugin_page"},
+				map[string]any{"id": "panel", "title": "面板", "placement": "launcher_section", "hosts": []any{"gw.example.com"}}},
+			"events": []any{map[string]any{"id": "e", "subscribe": []any{"agent.finished", "inbox.changed"}}}}
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.UIs()) != 2 || len(m.Topics()) != 2 {
+		t.Fatalf("%+v %v", m.UIs(), m.Topics())
+	}
+	if !strings.Contains(fmt.Sprint(Explain(m)), "收到 hub 的事件") {
+		t.Fatal("the events are explained")
+	}
+	if Digest(m) == Digest(mustParse(t)(with(t, func(m map[string]any) {
+		m["permissions"] = map[string]any{"launcher_keys": true}
+		m["contributes"] = map[string]any{"events": []any{map[string]any{"id": "e", "subscribe": []any{"agent.finished"}}}}
+	}))) {
+		t.Fatal("the topics are in the digest")
+	}
+	for name, change := range map[string]func(m map[string]any){
+		"placement": func(m map[string]any) {
+			m["contributes"] = map[string]any{"ui": []any{map[string]any{"id": "x", "title": "x", "placement": "sidebar"}}}
+		},
+		"section without hosts": func(m map[string]any) {
+			m["permissions"] = map[string]any{"launcher_keys": true}
+			m["contributes"] = map[string]any{"ui": []any{map[string]any{"id": "x", "title": "x", "placement": "launcher_section"}}}
+		},
+		"section without keys": func(m map[string]any) {
+			m["contributes"] = map[string]any{"ui": []any{map[string]any{"id": "x", "title": "x", "placement": "launcher_section", "hosts": []any{"gw.example.com"}}}}
+		},
+		"ui without rpc": func(m map[string]any) {
+			m["runtime"].(map[string]any)["rpc"] = "none"
+			m["contributes"] = map[string]any{"ui": []any{map[string]any{"id": "x", "title": "x", "placement": "plugin_page"}}}
+		},
+		"unknown topic": func(m map[string]any) {
+			m["contributes"] = map[string]any{"events": []any{map[string]any{"id": "e", "subscribe": []any{"mail.sent"}}}}
+		},
+		"events not on startup": func(m map[string]any) {
+			m["activation_events"] = []any{"on_call"}
+			m["contributes"] = map[string]any{"events": []any{map[string]any{"id": "e", "subscribe": []any{"agent.finished"}}}}
+		},
+	} {
+		if _, err := Parse(with(t, change)); err == nil {
+			t.Errorf("%s: parsed", name)
+		}
+	}
+}
+
+func mustParse(t *testing.T) func(b []byte) *Manifest {
+	return func(b []byte) *Manifest {
+		m, err := Parse(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
 	}
 }

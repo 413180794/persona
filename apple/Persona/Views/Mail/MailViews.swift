@@ -462,7 +462,7 @@ struct MailAccountsView: View {
                 }
             }
             .themedPage()
-            .navigationTitle("邮箱")
+            .detailTitle("邮箱")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $adding, onDismiss: { Task { await load() } }) { AddMailAccountView() }
             .task { await load() }

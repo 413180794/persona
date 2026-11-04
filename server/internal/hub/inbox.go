@@ -359,6 +359,12 @@ func (h *Hub) saveInbox(ctx context.Context, changed []*InboxItem) {
 	if len(changed) == 0 {
 		return
 	}
+	for i, it := range changed {
+		if i == 50 {
+			break // a first round's hundreds: the plugin reads the inbox if it wants them all
+		}
+		h.plugins.emit("inbox.changed", map[string]any{"id": it.ID, "source": it.Source, "kind": it.Kind, "title": it.Title})
+	}
 	h.inbox.mu.Lock()
 	type row struct {
 		id      string

@@ -38,10 +38,23 @@ struct ModelLaunchersView: View {
                 }
                 if query.isEmpty || !managed.isEmpty { Section {
                     if managed.isEmpty {
+                        #if os(macOS)
+                        Text("还没有。用下面的「新增供应商…」添加接入方式、网关、Key 和默认模型，再在「模型配置」里按用途选择。")
+                            .font(Theme.Font.label).foregroundStyle(.secondary)
+                        #else
                         Text("还没有。点右上角 + 添加接入方式、网关、Key 和默认模型，再在「模型配置」里按用途选择。")
                             .font(Theme.Font.label).foregroundStyle(.secondary)
+                        #endif
                     }
                     ForEach(managed) { row($0) }
+                    #if os(macOS)
+                    // In the group it adds to, as a Mac settings pane has its add button (#1223): in the window's toolbar
+                    // the search field took the trailing end and the + went to the window's middle, over the settings list.
+                    HStack {
+                        Spacer(minLength: 0)
+                        Button("新增供应商…") { adding = true }.lineLimit(1).formButton()
+                    }
+                    #endif
                 } header: { header("Persona 管理", managed.count) } footer: {
                     if !managed.isEmpty { Text("Key 加密存在 hub，启动时才交给那台电脑，不写进文件。") }
                 } }
@@ -83,14 +96,16 @@ struct ModelLaunchersView: View {
                 Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl) }.listRowBackground(Color.clear)
             }
         }
-        .navigationTitle("模型供应商")
+        .detailTitle("模型供应商")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "名字、模型、网关或电脑")
+        #if os(iOS)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { adding = true } label: { Image(systemName: Theme.Icon.add) }.accessibilityLabel("新增供应商")
             }
         }
+        #endif
         .sheet(isPresented: $adding) {
             LauncherEditor(existing: nil) { await load() }
         }
@@ -333,7 +348,7 @@ struct ModelLauncherDetailView: View {
                 Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl) }.listRowBackground(Color.clear)
             }
         }
-        .navigationTitle(name)
+        .detailTitle(name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if launcher?.managed == true {

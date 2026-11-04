@@ -56,7 +56,7 @@ struct ModelConfigurationView: View {
             }
         }
         .themedPage()
-        .navigationTitle("模型配置")
+        .detailTitle("模型配置")
         .navigationBarTitleDisplayMode(.inline)
         .task { await page.load() }
         .refreshable { await page.load() }
@@ -200,7 +200,7 @@ struct ModelPurposeEditorView: View {
             }
         }
         .themedPage()
-        .navigationTitle(page.purpose?.name ?? "模型配置")
+        .detailTitle(page.purpose?.name ?? "模型配置")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             #if os(macOS)

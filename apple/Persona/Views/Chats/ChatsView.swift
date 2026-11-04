@@ -186,13 +186,14 @@ struct ChatsView: View {
                     query = ""
                     DispatchQueue.main.async { query = q }
                 }
+                // The Mac's buttons are in the list column's own title row (below); the shell is the phone's.
+                #if os(iOS)
                 .toolbar {
                     if shell != nil {
                         // The shell's own bar floats over this one (AgentsTopBar): the bar stays for the search field.
                         ToolbarItem(placement: .principal) { Color.clear.frame(width: Theme.Size.hairline) }
                             .sharedBackgroundVisibility(.hidden)
                     } else {
-                        #if os(iOS)
                         // Not on the Mac (#907): the connection state is at the foot of the window's sections column (and
                         // the page's while that is hidden), and holding the bar's middle this empty item pushed 新建会话
                         // out of the list column, an empty stretch to its left over the conversation. Without it the
@@ -200,7 +201,6 @@ struct ChatsView: View {
                         ToolbarItem(placement: .principal) { ConnectionTitle() }
                         // On the Mac the shell shows it, next to its sidebar button (MacShell).
                         ToolbarItem(placement: .topBarLeading) { AgentsListMenu(actions: menuActions) }
-                        #endif
                         ToolbarItem(placement: .topBarTrailing) {
                             Button { openFromList(PersonalAgentsRoute()) } label: { Label("个人 Agent", systemImage: Theme.Icon.personalAgents) }
                         }
@@ -209,6 +209,21 @@ struct ChatsView: View {
                         }
                     }
                 }
+                #else
+                // In the list column's own title row, at its trailing edge (#1223): as window toolbar items they followed
+                // the window's middle, not the column (in the middle of the list at 920 wide, over the chat at 1800).
+                .overlay(alignment: .topTrailing) {
+                    if shell == nil { // always on the Mac: its window is not the phone's shell
+                        HStack(spacing: Theme.Space.s) {
+                            MacTitleRowButton("个人 Agent", symbol: Theme.Icon.personalAgents) { openFromList(PersonalAgentsRoute()) }
+                            MacTitleRowButton("新建会话", symbol: Theme.Icon.compose) { showNew = true }
+                        }
+                        .padding(.trailing, Theme.Space.l)
+                        .frame(height: Theme.Size.macToolbarHeight)
+                        .ignoresSafeArea(.container, edges: .top)
+                    }
+                }
+                #endif
                 .sheet(isPresented: $showNew) {
                     NewChatView { session in
                         showNew = false

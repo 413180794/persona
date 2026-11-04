@@ -52,58 +52,13 @@ func (h *Hub) launcherQuota(ctx context.Context, name, machine string, refresh b
 	if e, ok := h.quotas.get(name); ok && !refresh && (machine == "" || machine == e.machine) {
 		return e, nil
 	}
-	var view *LauncherView
-	for _, v := range h.launcherViews(ctx) {
-		if v.Name == name {
-			v := v
-			view = &v
-		}
-	}
-	if view == nil {
-		return quotaEntry{}, errors.New("no such launcher")
-	}
 	e := quotaEntry{at: time.Now()}
-	var err error
-	var base string
-	var send quotaSender
-	if view.Source == "jarvis" {
-		for _, s := range h.storedLaunchers(ctx) {
-			if s.Name != name {
-				continue
-			}
-			key, kerr := h.openKey(s.KeySealed)
-			if kerr != nil {
-				return quotaEntry{}, kerr
-			}
-			e.machine, base = h.localMachineID(), s.BaseURL
-			client := &http.Client{Timeout: 25 * time.Second}
-			send = func(ctx context.Context, r quota.Request) (quota.Response, error) {
-				return quota.Do(ctx, client, base, key, r)
-			}
-		}
-		if base == "" {
-			err = errors.New("这个启动器没有设网关地址（用的是默认的官方接口）")
-		}
-	} else {
-		m := h.quotaMachine(ctx, view.Machines, machine)
-		if m == nil {
-			return quotaEntry{}, errOffline
-		}
-		e.machine = m.cfg.ID
-		var gw struct {
-			BaseURL string `json:"base_url"`
-		}
-		if err = m.call(ctx, "launchers.http", map[string]any{"name": name}, &gw); err == nil {
-			base = gw.BaseURL
-			send = func(ctx context.Context, r quota.Request) (quota.Response, error) {
-				var resp quota.Response
-				err := m.call(ctx, "launchers.http", map[string]any{"name": name, "http": r}, &resp)
-				return resp, err
-			}
-		} else if strings.Contains(err.Error(), "unknown method") {
-			err = errors.New(m.cfg.Name + " 上的 node 太旧：更新后才能查额度")
-		}
+	gw, err := h.launcherGateway(ctx, name, machine)
+	if errors.Is(err, errOffline) || errors.Is(err, errNoLauncher) {
+		return quotaEntry{}, err
 	}
+	e.machine = gw.machine
+	base, send := gw.base, gw.send
 	if err == nil {
 		e.report, err = h.plugins.quota(ctx, base, h.userTZName(), send)
 	}
@@ -167,4 +122,70 @@ func (h *Hub) launcherQuotaRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, out)
 	})
+}
+
+var errNoLauncher = errors.New("no such launcher")
+
+// launcherGateway is where a launcher's gateway is and how to send to it with the key (quota, and plugins' launcher
+// sections): the hub for a launcher added in Persona, the machine (machine, or one that has it) for a ~/.zshrc one.
+type launcherGatewayInfo struct {
+	base    string
+	machine string
+	send    quotaSender
+}
+
+func (h *Hub) launcherGateway(ctx context.Context, name, machine string) (launcherGatewayInfo, error) {
+	var out launcherGatewayInfo
+	var view *LauncherView
+	for _, v := range h.launcherViews(ctx) {
+		if v.Name == name {
+			v := v
+			view = &v
+		}
+	}
+	if view == nil {
+		return out, errNoLauncher
+	}
+	if view.Source == "jarvis" {
+		for _, s := range h.storedLaunchers(ctx) {
+			if s.Name != name {
+				continue
+			}
+			key, err := h.openKey(s.KeySealed)
+			if err != nil {
+				return out, err
+			}
+			base := s.BaseURL
+			out.machine, out.base = h.localMachineID(), base
+			client := &http.Client{Timeout: 25 * time.Second}
+			out.send = func(ctx context.Context, r quota.Request) (quota.Response, error) {
+				return quota.Do(ctx, client, base, key, r)
+			}
+		}
+		if out.base == "" {
+			return out, errors.New("这个启动器没有设网关地址（用的是默认的官方接口）")
+		}
+		return out, nil
+	}
+	m := h.quotaMachine(ctx, view.Machines, machine)
+	if m == nil {
+		return out, errOffline
+	}
+	out.machine = m.cfg.ID
+	var gw struct {
+		BaseURL string `json:"base_url"`
+	}
+	if err := m.call(ctx, "launchers.http", map[string]any{"name": name}, &gw); err != nil {
+		if strings.Contains(err.Error(), "unknown method") {
+			return out, errors.New(m.cfg.Name + " 上的 node 太旧：更新后才能查额度")
+		}
+		return out, err
+	}
+	out.base = gw.BaseURL
+	out.send = func(ctx context.Context, r quota.Request) (quota.Response, error) {
+		var resp quota.Response
+		err := m.call(ctx, "launchers.http", map[string]any{"name": name, "http": r}, &resp)
+		return resp, err
+	}
+	return out, nil
 }

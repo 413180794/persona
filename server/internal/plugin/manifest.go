@@ -242,6 +242,16 @@ func (m *Manifest) Validate() error {
 				}
 			}
 		}
+		if name == "events" && !slices.Contains(m.Activation(), OnStartup) {
+			bad("contributes.events: events are told to a plugin that runs: activation_events on_startup")
+		}
+		if name == "ui" {
+			for _, u := range m.UIs() {
+				if u.Placement == "launcher_section" && !m.Permissions.LauncherKeys {
+					bad("contributes.ui: %s sits on launchers' pages and reaches their gateways: permissions.launcher_keys", u.ID)
+				}
+			}
+		}
 		if name == "providers" {
 			for _, it := range m.Providers() {
 				if it.DynamicModels && !m.Runtime.SpeaksRPC() {
@@ -378,6 +388,34 @@ func (m *Manifest) Assistants() []AssistantItem {
 	return out
 }
 
+// UIs are the manifest's contributions to ui.
+func (m *Manifest) UIs() []UIItem {
+	var out []UIItem
+	_ = json.Unmarshal(m.Contributes["ui"], &out)
+	return out
+}
+
+// Events are the manifest's contributions to events.
+func (m *Manifest) Events() []EventsItem {
+	var out []EventsItem
+	_ = json.Unmarshal(m.Contributes["events"], &out)
+	return out
+}
+
+// Topics are the events the plugin is told about, each once.
+func (m *Manifest) Topics() []string {
+	var out []string
+	for _, e := range m.Events() {
+		for _, t := range e.Subscribe {
+			if !slices.Contains(out, t) {
+				out = append(out, t)
+			}
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 // Quotas are the manifest's contributions to quota.
 func (m *Manifest) Quotas() []QuotaItem {
 	var out []QuotaItem
@@ -406,7 +444,7 @@ func (m *Manifest) Contributions() map[string][]string {
 // Kind is the first extension point the plugin contributes to, by a fixed order: what GET /api/v1/plugins has always
 // said as "kind" (voice for a voice plugin).
 func (m *Manifest) Kind() string {
-	for _, name := range []string{"voice", "connectors", "api", "quota", "providers", "assistant"} {
+	for _, name := range []string{"voice", "connectors", "api", "quota", "providers", "assistant", "ui", "events"} {
 		if len(m.Items(name)) > 0 {
 			return name
 		}

@@ -28,6 +28,8 @@ type PluginDetail struct {
 	Config          json.RawMessage         `json:"config,omitempty"`
 	Secrets         []PluginSecretView      `json:"secrets,omitempty"`
 	Permissions     []plugin.PermissionLine `json:"permissions"`
+	// UI are the pages it draws in its settings (plugin_page; POST /api/v1/plugins/{id}/-/ui/{ui}).
+	UI []UIPlace `json:"ui,omitempty"`
 }
 
 // PluginSecretView is a declared secret and whether it has a value (never the value).
@@ -45,6 +47,11 @@ func (ps *plugins) detail(ctx context.Context, p *plugin.Plugin) PluginDetail {
 		PreviousVersion: p.Record.PreviousVersion, ReadOnly: p.ReadOnly(), Form: p.Schema, Permissions: plugin.Explain(m)}
 	if d.Permissions == nil {
 		d.Permissions = []plugin.PermissionLine{}
+	}
+	for _, u := range ps.uiPlaces("plugin_page", "") {
+		if u.Plugin == p.Record.ID {
+			d.UI = append(d.UI, u)
+		}
 	}
 	if !p.ReadOnly() { // hub.json's settings may hold keys: never sent
 		d.Config = p.Record.Config
@@ -84,6 +91,7 @@ func readPluginJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 }
 
 func (h *Hub) pluginRoutes(api *http.ServeMux) {
+	h.pluginUIRoutes(api)
 	ps := func() *plugins { return h.plugins }
 	api.HandleFunc("GET /api/v1/plugins", func(w http.ResponseWriter, r *http.Request) {
 		if ps() == nil {
