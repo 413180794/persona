@@ -49,7 +49,7 @@ export function PlanCard({ id, todos, live }: { id?: string; todos: Todo[]; live
   return (
     <div className="flex w-full" data-plan-card data-plan-id={id}>
       <div className="max-w-full min-w-0 overflow-hidden rounded-[12px] border border-line bg-surface">
-        <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex w-full min-w-0 cursor-pointer items-center gap-2 px-[14px] py-[10px] transition-opacity select-none hover:opacity-80">
+        <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex w-full min-w-0 cursor-pointer items-center gap-2 px-[14px] py-[10px] transition-opacity select-none hover:opacity-80 [@media(pointer:coarse)]:min-h-10">
           <Icon name={open ? "chevron" : "chevronRight"} size={14} stroke={2.2} className="shrink-0 text-tool-ink" />
           <Icon name="todo" size={16} className="shrink-0 text-ink" />
           <span className="shrink-0 font-mono text-[13px] leading-none font-medium text-ink tabular-nums">

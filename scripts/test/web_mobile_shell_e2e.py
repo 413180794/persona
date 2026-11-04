@@ -1,0 +1,440 @@
+#!/usr/bin/env python3
+"""End-to-end check of the phone shell (#1996): the sidebar drawer dragged open and shut with real touches (CDP
+Input.dispatchTouchEvent), Esc and Back closing it, its focus and inert, the drawer's first screen reaching the Agents,
+「助手 | Agents」 with the buttons in the same place on both pages, the pane tabs sharing the width, an old /s/ link
+becoming its /t/, the pages that load on demand, the offline empty state, and a landscape notch clear of the drawer.
+
+Needs a running web page against the fake hub with split tabs (MOCK_SPLIT_TABS=1) and Playwright for Python (it
+drives the installed Chrome):
+
+    MOCK_SPLIT_TABS=1 PORT=18963 python3 scripts/mock/mock_hub.py &
+    (cd web && PERSONA_HUB_URL=http://127.0.0.1:18963 npx vite --port 5963 --strictPort &)
+    uv run --no-project --with playwright==1.58.0 python3 scripts/test/web_mobile_shell_e2e.py http://127.0.0.1:5963 [--shots <dir>]
+
+Prints one line per check and a verdict; exits 1 on the first failure. --shots saves the drawer, both pages, the pane
+tabs and the offline page at 390 × 844, 360 × 740 and 844 × 390, light and dark.
+"""
+import argparse
+import os
+import sys
+from urllib.parse import quote
+
+from playwright.sync_api import expect, sync_playwright
+
+UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+CODEX = "5b1170b5-0000-4000-8000-000000000002"
+TAB1 = "/t/server/w1/" + quote("w1:t1", safe="")
+SIZES = [(390, 844), (360, 740), (844, 390)]
+
+
+def ok(msg):
+    print("ok  " + msg, flush=True)
+
+
+def phone(browser, w=390, h=844, theme="light"):
+    ctx = browser.new_context(viewport={"width": w, "height": h}, device_scale_factor=3, is_mobile=True, has_touch=True, user_agent=UA, color_scheme=theme)
+    page = ctx.new_page()
+    page.set_default_timeout(15000)
+    return ctx, page
+
+
+def sign_in(page, base, token, theme="light", grouping="machine"):
+    page.goto(base + "/overview?token=" + token)
+    # signed in (the link's token traded for this browser's) before going anywhere else
+    expect(page.locator("aside")).to_be_attached(timeout=30000)
+    page.evaluate(f"Object.keys(localStorage).filter(k => k.startsWith('fold:')).forEach(k => localStorage.removeItem(k)); localStorage.setItem('jarvis.theme', '{theme}'); localStorage.setItem('jarvis.agentGrouping', '{grouping}')")
+
+
+class Touch:
+    """Real touch drags through CDP: a start, moves every ~16 ms, an end."""
+
+    def __init__(self, page):
+        self.page = page
+        self.cdp = page.context.new_cdp_session(page)
+
+    def drag(self, x0, y0, x1, y1, steps=12, ms=16):
+        send = self.cdp.send
+        send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": x0, "y": y0}]})
+        for i in range(1, steps + 1):
+            self.page.wait_for_timeout(ms)
+            send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [{"x": x0 + (x1 - x0) * i / steps, "y": y0 + (y1 - y0) * i / steps}]})
+        send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+        self.page.wait_for_timeout(450)  # the drawer settles (300 ms)
+
+
+def drawer_x(page):
+    # the drawer's left edge: 0 open, minus its width shut
+    return page.evaluate("() => document.querySelector('aside').parentElement.getBoundingClientRect().left")
+
+
+def is_open(page):
+    return drawer_x(page) > -2
+
+
+def side_button(page):
+    return page.locator("main header").get_by_role("button", name="侧边栏").first
+
+
+def gestures(browser, base, token):
+    ctx, page = phone(browser)
+    sign_in(page, base, token)
+    page.goto(base + "/overview")
+    expect(side_button(page)).to_be_visible()
+    t = Touch(page)
+    assert not is_open(page)
+
+    # a drag to the right from the middle of the page, 30° off horizontal, opens it
+    t.drag(120, 420, 300, 316)
+    assert is_open(page), drawer_x(page)
+    ok("a 30° drag to the right from the middle of the page opens the drawer")
+    # open, focus is in it, the page under it is inert, and it is a modal dialog
+    assert page.evaluate("() => document.querySelector('aside').parentElement.contains(document.activeElement)"), "focus not in the drawer"
+    assert page.evaluate("() => document.querySelector('main').inert"), "page not inert"
+    assert page.evaluate("() => document.querySelector('aside').parentElement.getAttribute('aria-modal')") == "true"
+    ok("open: focus moved into it, aria-modal, the page under it inert")
+
+    # a drag to the left closes it
+    t.drag(250, 500, 60, 520)
+    assert not is_open(page), drawer_x(page)
+    ok("a drag to the left closes it")
+
+    # a short slow drag snaps back; a quick flick of the same length opens
+    t.drag(100, 400, 200, 400, steps=20, ms=30)
+    assert not is_open(page), "a slow drag short of half opened it"
+    t.drag(100, 400, 200, 400, steps=4, ms=16)
+    assert is_open(page), "a flick did not open it"
+    t.drag(250, 400, 60, 400)
+    ok("letting go: slow and short of half snaps back, a flick of the same length opens")
+
+    # steep: the page scrolls, the drawer stays shut
+    t.drag(200, 600, 240, 300)
+    assert not is_open(page)
+    ok("a steep drag (> 45°) is the page's, not the drawer's")
+
+    # while dragging, the drawer follows the finger
+    cdp = t.cdp
+    cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": 40, "y": 400}]})
+    for x in (55, 80, 110, 140):
+        page.wait_for_timeout(16)
+        cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [{"x": x, "y": 402}]})
+    mid = drawer_x(page)
+    cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+    page.wait_for_timeout(450)
+    assert -284 < mid < 0, mid
+    t.drag(250, 400, 60, 400) if is_open(page) else None
+    ok(f"the drawer follows the finger (at {mid:.0f}px mid-drag)")
+
+    # shut: inert, Tab never lands in the sidebar
+    assert page.evaluate("() => document.querySelector('aside').parentElement.inert")
+    page.keyboard.press("Tab")
+    for _ in range(12):
+        page.keyboard.press("Tab")
+        assert not page.evaluate("() => !!document.activeElement?.closest('aside')"), "Tab went into the shut drawer"
+    ok("shut: the drawer is inert, Tab doesn't land in it")
+
+    # the button opens it; Esc closes it and gives focus back to the button
+    side_button(page).focus()
+    page.keyboard.press("Enter")
+    page.wait_for_timeout(400)
+    assert is_open(page)
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(400)
+    assert not is_open(page)
+    assert page.evaluate("() => document.activeElement?.getAttribute('aria-label')") == "侧边栏"
+    ok("Esc closes it and focus goes back to the button that opened it")
+
+    # Back closes it first, and stays on the page
+    side_button(page).tap()
+    page.wait_for_timeout(400)
+    assert is_open(page)
+    page.go_back()
+    page.wait_for_timeout(400)
+    assert not is_open(page)
+    assert page.evaluate("location.pathname") == "/overview"
+    ok("Back closes the drawer first and stays on the page")
+
+    # the scrim fades out (it is still there, going transparent, right after closing)
+    side_button(page).tap()
+    page.wait_for_timeout(400)
+    page.mouse.click(370, 400)
+    op = page.evaluate("() => getComputedStyle(document.querySelector('main').previousElementSibling).opacity")
+    page.wait_for_timeout(400)
+    assert not is_open(page) and float(op) > 0, op
+    ok(f"tapping the scrim closes it, fading out (opacity {op} the moment after)")
+
+    # a sideways scroller under the finger scrolls first: the pane tabs of a tab with many panes, a code block
+    page.goto(base + TAB1)
+    expect(page.locator("[role=tablist]")).to_be_visible()
+    page.evaluate("() => { const s = document.createElement('div'); s.id = 'wide'; s.style.cssText = 'position:fixed;left:0;top:300px;width:300px;overflow-x:auto;z-index:5'; s.innerHTML = '<div style=\"width:1200px;height:80px\"></div>'; document.querySelector('main').append(s); s.scrollLeft = 200; }")
+    # no move over it is cancelled, not even the first ones while the direction is undecided: on iOS a cancelled first
+    # touchmove takes the scroller's own pan away for the whole touch (the drawer's handler runs before window's)
+    page.evaluate("() => { window.__cancelled = 0; addEventListener('touchmove', (e) => { if (e.defaultPrevented) window.__cancelled++; }, { passive: true }); }")
+    t.drag(100, 340, 250, 340)
+    assert not is_open(page), "the drawer opened over a scroller that could scroll"
+    cancelled = page.evaluate("window.__cancelled")
+    assert cancelled == 0, f"{cancelled} touchmoves over the scroller were cancelled"
+    left = page.evaluate("document.getElementById('wide').scrollLeft")
+    assert left < 200, left
+    page.evaluate("document.getElementById('wide').scrollLeft = 0")
+    t.drag(100, 340, 250, 340)
+    assert is_open(page), "at its left edge the drag should go to the drawer"
+    t.drag(250, 400, 60, 400)
+    page.evaluate("document.getElementById('wide').remove()")
+    ok("a sideways scroller scrolls first; at its left edge the drag opens the drawer")
+    ctx.close()
+
+
+def reduced(browser, base, token):
+    ctx, page = phone(browser)
+    ctx.new_cdp_session(page).send("Emulation.setEmulatedMedia", {"features": [{"name": "prefers-reduced-motion", "value": "reduce"}]})
+    sign_in(page, base, token)
+    page.goto(base + "/overview")
+    side_button(page).tap()
+    page.wait_for_timeout(60)
+    assert is_open(page), drawer_x(page)
+    ok("reduced motion: the drawer is there at once")
+    ctx.close()
+
+
+def drawer_screen(browser, base, token, shots):
+    for w, h in SIZES:
+        for theme in ("light", "dark"):
+            ctx, page = phone(browser, w, h, theme)
+            sign_in(page, base, token, theme)
+            page.goto(base + "/overview")
+            side_button(page).tap()
+            page.wait_for_timeout(500)
+            agents = page.locator("aside").get_by_text("Agents", exact=True)
+            first_machine = page.locator("aside .group\\/sec > button[aria-expanded]").first
+            if h > w:
+                expect(agents).to_be_in_viewport()
+                box = first_machine.bounding_box()
+                assert box and box["y"] + box["height"] <= h, (w, h, box)
+            # every page is one tap away, in the grid
+            grid = page.locator('aside nav[aria-label="页面"] a')
+            assert grid.count() >= 8, grid.count()
+            if shots:
+                page.screenshot(path=os.path.join(shots, f"drawer-{w}x{h}-{theme}.png"))
+            ctx.close()
+        if h > w:
+            ok(f"{w}×{h}: the drawer's first screen shows AGENTS and the first machine, the pages in a grid")
+
+
+def landscape_notch(browser, base, token, shots):
+    for theme in ("light", "dark"):
+        ctx, page = phone(browser, 844, 390, theme)
+        sign_in(page, base, token, theme)
+        page.goto(base + "/overview")
+        # a notch on the left: the safe area the browser would give in landscape
+        page.add_style_tag(content=":root{--sal:47px} #root{padding-left:47px!important} .max-lg\\:pl-\\[env\\(safe-area-inset-left\\)\\]{padding-left:47px!important} .max-lg\\:w-\\[calc\\(284px\\+env\\(safe-area-inset-left\\)\\)\\]{width:331px!important}")
+        side_button(page).tap()
+        page.wait_for_timeout(500)
+        x = page.locator("aside").bounding_box()["x"]
+        assert x >= 47, x
+        assert page.locator("aside").bounding_box()["width"] >= 283
+        if shots:
+            page.screenshot(path=os.path.join(shots, f"landscape-notch-{theme}.png"))
+        ctx.close()
+    ok("landscape: the drawer's content starts right of the notch (safe area injected)")
+
+
+def switch_pages(browser, base, token, shots):
+    for w, h in SIZES:
+        for theme in ("light", "dark"):
+            ctx, page = phone(browser, w, h, theme)
+            sign_in(page, base, token, theme)
+            page.goto(base + "/")
+            sw = page.locator('main header nav[aria-label="切换页面"]')
+            expect(sw).to_be_visible()
+            page.wait_for_timeout(600)
+
+            def places():
+                hdr = page.locator("main header").first
+                btns = hdr.locator("button:visible")
+                return [tuple(round(v) for v in (b["x"], b["y"], b["width"], b["height"])) for b in (btns.nth(0).bounding_box(), btns.nth(btns.count() - 1).bounding_box())], tuple(round(v) for v in sw.bounding_box().values())
+
+            a_buttons, a_switch = places()
+            if shots:
+                page.screenshot(path=os.path.join(shots, f"assistant-{w}x{h}-{theme}.png"))
+            sw.get_by_role("link", name="Agents").tap()
+            page.wait_for_function("location.pathname === '/agents'")
+            expect(page.locator("main span", has_text="Agents").first).to_be_visible()
+            expect(page.locator("main .group\\/sec > button[aria-expanded]").first).to_be_visible()
+            page.wait_for_timeout(400)
+            g_buttons, g_switch = places()
+            if shots:
+                page.screenshot(path=os.path.join(shots, f"agents-{w}x{h}-{theme}.png"))
+            assert a_buttons == g_buttons, (a_buttons, g_buttons)
+            assert abs(a_switch[0] - g_switch[0]) <= 1, (a_switch, g_switch)
+            sw.get_by_role("link", name="助手").tap()
+            page.wait_for_function("location.pathname === '/'")
+            ctx.close()
+        ok(f"{w}×{h}:「助手 | Agents」switches pages, the side buttons and the switch stay in place")
+
+    # a row on the Agents page opens its conversation
+    ctx, page = phone(browser)
+    sign_in(page, base, token)
+    page.goto(base + "/agents")
+    page.locator(f'main a[href="{TAB1}"]').tap()
+    page.wait_for_function(f"location.pathname.startsWith({TAB1!r})")
+    ok("a row on the Agents page opens its conversation")
+    ctx.close()
+
+    # wide: /agents opens the same list as a page titled Agents, no switch
+    ctx = browser.new_context(viewport={"width": 1280, "height": 820})
+    page = ctx.new_page()
+    sign_in(page, base, token)
+    page.goto(base + "/agents")
+    expect(page.locator("main h1", has_text="Agents")).to_be_visible()
+    expect(page.locator('main nav[aria-label="切换页面"]')).to_be_hidden()
+    expect(page.locator("main .group\\/sec > button[aria-expanded]").first).to_be_visible()
+    # and the wide sidebar is the list it was, rows not a grid
+    expect(page.locator('aside nav[aria-label="页面"]')).to_have_count(0)
+    expect(page.locator('aside a[href="/settings"]')).to_have_text("设置")
+    ok("wide: /agents is a page titled Agents (no switch); the sidebar keeps its rows")
+    ctx.close()
+
+
+def row_menu(browser, base, token):
+    ctx, page = phone(browser)
+    sign_in(page, base, token)
+    page.goto(base + "/overview")
+    side_button(page).tap()
+    page.wait_for_timeout(400)
+    more = page.locator("aside").get_by_role("button", name="Agent 的操作").first
+    box = more.bounding_box()
+    assert box and box["width"] >= 44 and box["height"] >= 44, box
+    more.tap()
+    expect(page.get_by_role("menuitem", name="关联到待办…")).to_be_visible()
+    ok("a row's ⋯ is 44 × 44 and has 关联到待办… (no long press needed)")
+    ctx.close()
+
+
+def pane_tabs(browser, base, token, shots):
+    for theme in ("light", "dark"):
+        ctx, page = phone(browser, theme=theme)
+        sign_in(page, base, token, theme)
+        page.goto(base + TAB1)
+        tabs = page.locator("[role=tablist] [role=tab]")
+        expect(tabs.first).to_be_visible()
+        n = tabs.count()
+        assert n == 2, n
+        widths = [tabs.nth(i).bounding_box()["width"] for i in range(n)]
+        bar = page.locator("[role=tablist]").bounding_box()["width"]
+        assert abs(widths[0] - widths[1]) <= 1 and sum(widths) > bar - 40, (widths, bar)
+        if shots:
+            page.screenshot(path=os.path.join(shots, f"pane-tabs-{theme}.png"))
+        ctx.close()
+    ok(f"two pane tabs share the width ({widths[0]:.0f} + {widths[1]:.0f} of {bar:.0f})")
+
+    # on its side the bar is one short row, and a tap 4px past a tab's edge still lands on it (touch-hit)
+    ctx, page = phone(browser, 844, 390)
+    sign_in(page, base, token)
+    page.goto(base + TAB1)
+    tab = page.locator("[role=tablist] [role=tab]").nth(1)
+    expect(tab).to_be_visible()
+    bar_h = page.locator("[role=tablist]").bounding_box()["height"]
+    assert bar_h <= 38, bar_h
+    b = tab.bounding_box()
+    hit = page.evaluate(f"() => document.elementFromPoint({b['x'] + b['width'] / 2}, {b['y'] + b['height'] + 3})?.closest('[role=tab]') === document.querySelectorAll('[role=tablist] [role=tab]')[1]")
+    assert hit, "a tap just below the tab missed it"
+    if shots:
+        page.screenshot(path=os.path.join(shots, "pane-tabs-landscape.png"))
+    ctx.close()
+    ok(f"landscape: the pane tabs are one {bar_h:.0f}px row, their taps still reach 44")
+
+    # an old /s/ link of a pane in a tab becomes its /t/ (replaced, Back doesn't come back to it)
+    ctx, page = phone(browser)
+    sign_in(page, base, token)
+    page.goto(base + "/overview")
+    page.goto(base + f"/s/server/{CODEX}")
+    page.wait_for_function(f"location.pathname === {TAB1 + '/' + CODEX!r}")
+    page.go_back()
+    page.wait_for_function("location.pathname === '/overview'")
+    ok("an old /s/ link opens as its tab's /t/, in place")
+    ctx.close()
+
+
+def lazy_pages(browser, base, token):
+    ctx, page = phone(browser)
+    sign_in(page, base, token)
+    for path, text in (("/settings", "设置"), ("/inbox", "收件箱"), ("/kb", "知识库"), ("/machines", "机器"), ("/workspace-board", "看板"), ("/routines", "定时任务"), ("/todos", "待办"), ("/history", "对话")):
+        page.goto(base + path)
+        expect(page.locator("main").get_by_text(text).first).to_be_visible()
+    # and in-app navigation to one that has not loaded yet
+    page.goto(base + "/overview")
+    side_button(page).tap()
+    page.locator('aside nav[aria-label="页面"] a[href="/settings"]').tap()
+    expect(page.locator("main").get_by_text("设置").first).to_be_visible()
+    ok("the pages loaded on demand open, by link and from the drawer")
+    ctx.close()
+
+
+# The hub can't be reached: every socket to it fails at once (window.__hubDown, before the page's own scripts), and its
+# API requests fail. (Playwright's route_web_socket handlers deadlock the sync API when they close a socket.)
+HUB_DOWN = """
+window.__hubDown = true;
+const Real = window.WebSocket;
+window.WebSocket = function (url, protocols) {
+  if (window.__hubDown && String(url).includes('/api/v1/ws')) url = 'ws://127.0.0.1:9/closed';
+  return new Real(url, protocols);
+};
+window.WebSocket.prototype = Real.prototype;
+Object.assign(window.WebSocket, { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 });
+"""
+
+
+def offline(browser, base, token, shots):
+    for theme in ("light", "dark"):
+        ctx, page = phone(browser, theme=theme)
+        sign_in(page, base, token, theme)
+        page.add_init_script(HUB_DOWN)
+        page.route("**/api/v1/**", lambda r: r.abort())
+        page.reload()
+        expect(page.locator("main").get_by_text("离线", exact=True)).to_be_visible(timeout=20000)
+        retry = page.locator("main").get_by_role("button", name="重试")
+        expect(retry).to_be_visible()
+        expect(page.locator("main").get_by_text("加载中")).to_have_count(0)
+        if shots:
+            page.wait_for_timeout(300)
+            page.screenshot(path=os.path.join(shots, f"offline-{theme}.png"))
+        # back online: a tap on 重试 brings the page back
+        page.unroute("**/api/v1/**")
+        page.evaluate("window.__hubDown = false")
+        retry.tap()
+        expect(page.locator("main").get_by_text("离线", exact=True)).to_have_count(0, timeout=20000)
+        expect(page.locator("main header").first).to_be_visible()
+        ctx.close()
+    ok("unreachable: 离线 with 重试 instead of loading forever; 重试 brings the page back")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("base")
+    ap.add_argument("--shots")
+    ap.add_argument("--token", default="mock")
+    a = ap.parse_args()
+    base = a.base.rstrip("/")
+    if a.shots:
+        os.makedirs(a.shots, exist_ok=True)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(channel="chrome")
+        gestures(browser, base, a.token)
+        reduced(browser, base, a.token)
+        drawer_screen(browser, base, a.token, a.shots)
+        landscape_notch(browser, base, a.token, a.shots)
+        switch_pages(browser, base, a.token, a.shots)
+        row_menu(browser, base, a.token)
+        pane_tabs(browser, base, a.token, a.shots)
+        lazy_pages(browser, base, a.token)
+        offline(browser, base, a.token, a.shots)
+        browser.close()
+    print("PASS web mobile shell e2e")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:  # one line of verdict on any failure
+        print(f"FAIL web mobile shell e2e: {e}", file=sys.stderr)
+        sys.exit(1)

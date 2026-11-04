@@ -1,37 +1,47 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, errorText, getToken, handleUnauthorized, setToken } from "./lib/api";
 import { pair, takeToken } from "./lib/auth";
+import { useCloseOnBack } from "./lib/back-close";
+import { PageBoundary } from "./views/PageBoundary";
+import { drawerA11y, focusBack, useDrawerDrag } from "./lib/drawer";
 import { acceptHubs, rememberHub, takeHubs } from "./lib/hubs";
 import { closePanel, getPanel } from "./lib/panel";
-import { resolveTab, tabPagePane } from "./lib/herdr-tree";
+import { resolveTab, tabOfSessionLink, tabPagePane } from "./lib/herdr-tree";
 import { href, navigate, useRoute } from "./lib/router";
-import { useKeyboardFrame } from "./lib/viewport";
+import { unreachable } from "./lib/shell";
+import { NARROW, useKeyboardFrame, useMedia } from "./lib/viewport";
 import { connect, disconnect, reset, useStore } from "./lib/store";
-import { cx, EASE, Loading, Spinner, Toasts } from "./ui/atoms";
-import { AgentsView } from "./views/agents/AgentsView";
+import { Button, cx, EASE, IconButton, Loading, Spinner, Toasts } from "./ui/atoms";
+import { focusables, trapTab } from "./ui/overlay";
+import { Empty } from "./views/session/files/parts";
+import { AgentsPage } from "./views/AgentsPage";
 import { ChatView } from "./views/chat/ChatView";
-import { WorkspaceBoard } from "./views/WorkspaceBoard";
 import { Home } from "./views/Home";
 import { PersonaAssistant } from "./views/PersonaAssistant";
 import { Login } from "./views/Login";
-import { Machines } from "./views/Machines";
 import { NewAgent } from "./views/NewAgent";
 import { onOpenNewAgent, type NewAgentPreset } from "./lib/new-agent";
 import { StartingAgent } from "./views/StartingAgent";
 import { Palette } from "./views/Palette";
-import { Settings } from "./views/Settings";
 import { Sidebar } from "./views/Sidebar";
 import { SidePanel } from "./views/SidePanel";
-import { History } from "./views/assistant/History";
-import { Profile } from "./views/assistant/Profile";
-import { Routines } from "./views/assistant/Routines";
-import { Inbox } from "./views/inbox/Inbox";
-import { Messages } from "./views/messages/Messages";
-import { Knowledge } from "./views/knowledge/Knowledge";
-import { MachineDetail } from "./views/machines/MachineDetail";
-import { TodosView } from "./views/Todos";
 import { ExtensionNavPage } from "./views/extensions/ExtensionSlots";
 import { useExtensionPlace } from "./lib/extension-slots";
+
+// The pages a first screen doesn't need load when they are opened (#1996); 对话, Persona and 总览 stay in the main
+// bundle (the extensions' page too: the sidebar already has ExtensionSlots for its icons).
+const AgentsView = lazy(() => import("./views/agents/AgentsView").then((m) => ({ default: m.AgentsView })));
+const WorkspaceBoard = lazy(() => import("./views/WorkspaceBoard").then((m) => ({ default: m.WorkspaceBoard })));
+const Machines = lazy(() => import("./views/Machines").then((m) => ({ default: m.Machines })));
+const MachineDetail = lazy(() => import("./views/machines/MachineDetail").then((m) => ({ default: m.MachineDetail })));
+const Settings = lazy(() => import("./views/Settings").then((m) => ({ default: m.Settings })));
+const History = lazy(() => import("./views/assistant/History").then((m) => ({ default: m.History })));
+const Profile = lazy(() => import("./views/assistant/Profile").then((m) => ({ default: m.Profile })));
+const Routines = lazy(() => import("./views/assistant/Routines").then((m) => ({ default: m.Routines })));
+const Inbox = lazy(() => import("./views/inbox/Inbox").then((m) => ({ default: m.Inbox })));
+const Messages = lazy(() => import("./views/messages/Messages").then((m) => ({ default: m.Messages })));
+const Knowledge = lazy(() => import("./views/knowledge/Knowledge").then((m) => ({ default: m.Knowledge })));
+const TodosView = lazy(() => import("./views/Todos").then((m) => ({ default: m.TodosView })));
 
 // A link with the hub's token (`?token=…` or `#token=…`) signs in without the form. The token leaves the address bar
 // before anything else runs (history, bookmarks, a copied link), and is traded for this browser's own one.
@@ -100,11 +110,17 @@ function Shell() {
   const hubName = useStore((s) => s.hubName);
   useEffect(() => void rememberHub(location.origin, hubName), [hubName]);
   // the conversation on the page: a session's (`/s/…`), or the pane a tab (`/t/…`) opens on
-  const tabSessions = useStore((s) => (route.name === "tab" ? s.sessions[route.mid] : undefined));
+  const tabSessions = useStore((s) => (route.name === "tab" || route.name === "session" ? s.sessions[route.mid] : undefined));
   const loaded = useStore((s) => s.loaded);
-  const tabPath = route.name === "tab" ? href(route) : "";
+  const path = href(route);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `route` is parsed anew each render; its path says it all
-  const tabPane = useMemo(() => (route.name === "tab" ? resolveTab(tabSessions ?? [], route) : undefined), [tabSessions, tabPath]);
+  const tabPane = useMemo(() => (route.name === "tab" ? resolveTab(tabSessions ?? [], route) : undefined), [tabSessions, path]);
+  // an old `/s/…` link of a pane in a tab becomes that tab's `/t/…` (in place: Back doesn't come here again)
+  const tabLink = route.name === "session" ? tabOfSessionLink(tabSessions ?? [], route) : undefined;
+  const tabLinkPath = tabLink ? href(tabLink) : "";
+  useEffect(() => {
+    if (tabLinkPath) navigate(tabLinkPath, true);
+  }, [tabLinkPath]);
   const pane = route.name === "session" ? { mid: route.mid, sid: route.sid }
     : route.name === "tab" ? tabPagePane(tabPane, route, loaded)
     : undefined;
@@ -125,8 +141,67 @@ function Shell() {
     setPreset(p);
     setNewAgent(true);
   }), []);
+  const openNewAgent = useCallback(() => setNewAgent(true), []);
+
+  // ── the sidebar: a column on a wide screen, a drawer over the page on a narrow one (#1996) ──
+  const narrow = useMedia(NARROW);
   const [drawer, setDrawer] = useState(false);
   const toggle = useCallback(() => setDrawer((d) => !d), []);
+  const close = useCallback(() => setDrawer(false), []);
+  const drawerBox = useRef<HTMLDivElement>(null);
+  const scrim = useRef<HTMLDivElement>(null);
+  const mainBox = useRef<HTMLElement>(null);
+  const a11y = drawerA11y(narrow, drawer);
+  useEffect(() => {
+    if (!narrow) setDrawer(false);
+  }, [narrow]);
+  // dragged out and back with a finger anywhere on the page or the drawer (not on a full-screen side panel)
+  useDrawerDrag({
+    root: shell,
+    drawer: drawerBox,
+    scrim,
+    open: drawer,
+    setOpen: setDrawer,
+    enabled: narrow,
+    scope: (t) => [mainBox, drawerBox, scrim].some((r) => r.current?.contains(t)),
+  });
+  // Back closes it first
+  useCloseOnBack(drawer, close, narrow);
+  // Esc closes it (a menu or a dialog over it closes first); Tab stays in it, like a dialog's
+  useEffect(() => {
+    if (!a11y.modal) return;
+    const key = (e: KeyboardEvent) => {
+      if (document.querySelector("[role=menu]") || document.querySelectorAll("[role=dialog]").length > 1) return;
+      if (e.key === "Tab" && drawerBox.current) {
+        const list = focusables(drawerBox.current);
+        const to = trapTab(list.length, list.indexOf(document.activeElement as HTMLElement), e.shiftKey);
+        if (to === null) return;
+        e.preventDefault();
+        list[to]?.focus();
+        return;
+      }
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    };
+    addEventListener("keydown", key, true);
+    return () => removeEventListener("keydown", key, true);
+  }, [a11y.modal, close]);
+  // open, focus moves into it; shut, back to what opened it
+  const opener = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const box = drawerBox.current;
+    if (!box || !narrow) return;
+    if (drawer) {
+      opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      focusables(box)[0]?.focus({ preventScroll: true });
+      return;
+    }
+    const back = focusBack(opener.current, document.activeElement, box.contains(document.activeElement), document.body);
+    opener.current = null;
+    back?.focus({ preventScroll: true });
+  }, [drawer, narrow]);
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -153,13 +228,18 @@ function Shell() {
   const title =
     pane ? "Agent" : route.name === "jarvis" ? "Persona" : route.name === "persona-new" ? "新对话" : route.name === "history" ? "Persona 的对话" : route.name === "profile" ? "Persona 的资料" : route.name === "inbox" ? "收件箱" : route.name === "messages" ? "消息"
       : route.name === "routines" ? "定时任务" : route.name === "kb" ? "知识库" : route.name === "workspace-board" ? "工作流看板" : route.name === "todos" ? "待办" : route.name === "machines" || route.name === "machine" ? "机器" : route.name === "settings" ? "设置"
-      : route.name === "agents" ? "个人 Agent" : route.name === "extension" ? extensionTitle || "扩展" : "总览";
+      : route.name === "agents" ? "个人 Agent" : route.name === "agent-list" ? "Agents" : route.name === "extension" ? extensionTitle || "扩展" : "总览";
   useEffect(() => {
     document.title = title === "Persona" ? title : `${title} · Persona`;
   }, [title]);
 
+  // never reached the hub: say so with a way to try again, instead of pages loading forever (kept through a retry)
+  const [away, setAway] = useState(false);
+  const offline = unreachable(away, conn, loaded);
+  if (offline !== away) setAway(offline);
   let main: React.ReactNode;
-  switch (route.name) {
+  if (offline) main = <Offline onToggleSidebar={toggle} trying={conn === "connecting"} />;
+  else switch (route.name) {
     case "session":
     case "tab":
       main = !pane ? (loaded ? <TabGone onToggleSidebar={toggle} /> : <Loading />)
@@ -199,6 +279,9 @@ function Shell() {
     case "agents":
       main = <AgentsView key={route.id ?? ""} id={route.id} onToggleSidebar={toggle} />;
       break;
+    case "agent-list":
+      main = <AgentsPage route={route} onToggleSidebar={toggle} onNewAgent={openNewAgent} />;
+      break;
     case "machines":
       main = <Machines onToggleSidebar={toggle} />;
       break;
@@ -212,25 +295,36 @@ function Shell() {
       main = <ExtensionNavPage key={`${route.extension}/${route.ui}`} extension={route.extension} ui={route.ui} onToggleSidebar={toggle} />;
       break;
     default:
-      main = <Home onNewAgent={() => setNewAgent(true)} onToggleSidebar={toggle} />;
+      main = <Home onNewAgent={openNewAgent} onToggleSidebar={toggle} />;
   }
 
   return (
     // #root is 100dvh (index.html); with a soft keyboard up (iOS) the shell is only the part above it (lib/viewport.ts)
     <div ref={shell} className="flex h-full overflow-hidden bg-page">
-      {/* wide: a fixed column; narrow: a drawer over the page */}
+      {/* wide: a fixed column; narrow: a drawer over the page, clear of a landscape notch and the home indicator */}
       <div
+        ref={drawerBox}
+        role={a11y.modal ? "dialog" : undefined}
+        aria-modal={a11y.modal || undefined}
+        aria-label={a11y.modal ? "侧边栏" : undefined}
+        inert={a11y.inert || undefined}
         className={cx(
-          "fixed inset-y-0 left-0 z-30 w-[284px] border-r border-line transition-transform duration-300 lg:static lg:z-auto lg:translate-x-0 lg:shadow-none",
+          "fixed inset-y-0 left-0 z-30 w-[284px] border-r border-line transition-transform duration-300 max-lg:w-[calc(284px+env(safe-area-inset-left))] max-lg:bg-canvas max-lg:pb-[env(safe-area-inset-bottom)] max-lg:pl-[env(safe-area-inset-left)] lg:static lg:z-auto lg:translate-x-0 lg:shadow-none",
           drawer ? "translate-x-0 shadow-overlay" : "-translate-x-full",
         )}
         style={{ transitionTimingFunction: EASE }}
       >
-        <Sidebar route={route} onSearch={() => setPalette(true)} onNewAgent={() => setNewAgent(true)} onNavigate={() => setDrawer(false)} />
+        <Sidebar route={route} onSearch={() => setPalette(true)} onNewAgent={openNewAgent} onNavigate={close} />
       </div>
-      {drawer && <div className="fixed inset-0 z-20 bg-black/20 lg:hidden" style={{ animation: "fade-in 150ms ease-out both" }} onClick={() => setDrawer(false)} />}
-      <main className="relative min-w-0 flex-1">
-        {conn === "offline" && (
+      {/* the scrim fades out as well as in; a drag sets its opacity as it goes (lib/drawer.ts) */}
+      <div
+        ref={scrim}
+        aria-hidden
+        className={cx("fixed inset-0 z-20 bg-black/20 transition-opacity duration-200 lg:hidden", drawer ? "opacity-100" : "pointer-events-none opacity-0")}
+        onClick={close}
+      />
+      <main ref={mainBox} inert={a11y.modal || undefined} className="relative min-w-0 flex-1">
+        {conn === "offline" && !offline && (
           <div className="absolute inset-x-0 top-14 z-10 flex justify-center px-4 pt-2" style={{ animation: `slide-up 220ms ${EASE} both` }}>
             <div className="flex items-center gap-2 rounded-full bg-tooltip-bg px-3 py-1.5 text-[12px] text-tooltip-fg shadow-overlay">
               <span className="size-1.5 rounded-full bg-red" />
@@ -238,14 +332,34 @@ function Shell() {
             </div>
           </div>
         )}
-        {main}
+        <PageBoundary page={href(route)}><Suspense fallback={<div className="flex h-full items-center justify-center"><Loading /></div>}>{main}</Suspense></PageBoundary>
       </main>
       <SidePanel />
-      <Palette open={palette} onClose={() => setPalette(false)} onNewAgent={() => setNewAgent(true)} />
+      <Palette open={palette} onClose={() => setPalette(false)} onNewAgent={openNewAgent} />
       <NewAgent open={newAgent} preset={preset} onClose={() => {
         setNewAgent(false);
         setPreset(null);
       }} />
+    </div>
+  );
+}
+
+// The hub was never reached (offline, or it is down): an empty state that says so and tries again on a tap, instead of
+// every page loading forever. The socket keeps retrying on its own as well; once in, the page comes back by itself.
+function Offline({ onToggleSidebar, trying }: { onToggleSidebar: () => void; trying: boolean }) {
+  return (
+    <div className="flex h-full flex-col">
+      <header className="flex h-14 shrink-0 items-center px-3 sm:px-4">
+        <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
+      </header>
+      <div className="flex min-h-0 flex-1 flex-col pb-[10vh]" role="status">
+        <Empty
+          icon="hub"
+          title="离线"
+          detail="连不上 hub。检查网络，或者确认 hub 所在的机器开着。"
+          action={<Button tone="secondary" icon="retry" busy={trying} onClick={connect}>{trying ? "正在连接…" : "重试"}</Button>}
+        />
+      </div>
     </div>
   );
 }

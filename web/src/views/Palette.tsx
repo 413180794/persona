@@ -95,7 +95,10 @@ export function Palette({ open, onClose, onNewAgent }: { open: boolean; onClose:
             placeholder="搜索会话、目录、空间、机器…"
             className="min-w-0 flex-1 bg-transparent text-[14px] text-ink outline-none placeholder:text-ink-3"
           />
-          <Kbd>Esc</Kbd>
+          {/* the key hints are for a keyboard: a touch screen has none (#1996) */}
+          <span className="contents [@media(pointer:coarse)]:hidden">
+            <Kbd>Esc</Kbd>
+          </span>
         </label>
         <div ref={list} className="relative max-h-[52vh] overflow-y-auto p-1.5" onMouseLeave={() => {}}>
           <span aria-hidden className="pointer-events-none absolute inset-x-1.5 rounded-[8px] bg-hover" style={{ top: box?.top ?? 0, height: box?.height ?? 0, opacity: box ? 1 : 0, transition: `top 180ms ${EASE}, height 180ms ${EASE}` }} />
@@ -144,7 +147,7 @@ export function Palette({ open, onClose, onNewAgent }: { open: boolean; onClose:
             </div>
           )}
         </div>
-        <div className="flex items-center gap-3 border-t border-line bg-inset px-4 py-2 text-[11px] text-ink-3">
+        <div className="flex items-center gap-3 border-t border-line bg-inset px-4 py-2 text-[11px] text-ink-3 [@media(pointer:coarse)]:hidden">
           <span className="flex items-center gap-1">
             <Kbd>↑</Kbd>
             <Kbd>↓</Kbd> 选择

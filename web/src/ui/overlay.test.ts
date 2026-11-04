@@ -1,0 +1,52 @@
+import { describe, expect, it } from "vitest";
+import { placeMenu, trapTab } from "./overlay";
+
+describe("Tab inside a dialog", () => {
+  it("wraps from the last control to the first and back", () => {
+    expect(trapTab(3, 2, false)).toBe(0);
+    expect(trapTab(3, 0, true)).toBe(2);
+  });
+  it("leaves the browser's order alone between two controls", () => {
+    expect(trapTab(3, 0, false)).toBeNull();
+    expect(trapTab(3, 1, true)).toBeNull();
+  });
+  it("brings a focus that is on the dialog itself (or got out) to its first or last control", () => {
+    expect(trapTab(3, -1, false)).toBe(0);
+    expect(trapTab(3, -1, true)).toBe(2);
+  });
+  it("keeps it on the dialog when there is nothing to land on", () => {
+    expect(trapTab(0, -1, false)).toBe(-1);
+  });
+});
+
+const wide = { width: 208, align: "left" as const, side: "bottom" as const, screenW: 1280, screenH: 800 };
+
+describe("menu placement", () => {
+  it("opens under the anchor on a wide screen, as before", () => {
+    expect(placeMenu({ left: 100, right: 130, top: 50, bottom: 80 }, 200, wide)).toEqual({ left: 100, top: 86, width: 208 });
+  });
+  it("flips above when there is no room below, and never above the window's top", () => {
+    expect(placeMenu({ left: 100, right: 130, top: 700, bottom: 730 }, 200, wide).top).toBe(494);
+    expect(placeMenu({ left: 100, right: 130, top: 100, bottom: 130 }, 760, wide).top).toBe(8);
+  });
+  it("keeps to the screen's width and the right edge for a right-aligned one", () => {
+    expect(placeMenu({ left: 300, right: 380, top: 0, bottom: 30 }, 100, { ...wide, align: "right", screenW: 390 })).toMatchObject({ left: 172, width: 208 });
+    expect(placeMenu({ left: 0, right: 30, top: 0, bottom: 30 }, 100, { ...wide, screenW: 200 }).width).toBe(184);
+  });
+  it("on a phone keeps above the keyboard: inside the visible viewport, capped to its height", () => {
+    // the keyboard leaves the top 400px; the anchor is near its bottom
+    const p = placeMenu({ left: 10, right: 40, top: 360, bottom: 390 }, 300, { ...wide, screenW: 390, screenH: 844, view: { top: 0, height: 400 } });
+    expect(p.maxHeight).toBe(384);
+    expect(p.top).toBe(54); // above the anchor: 360 - 300 - 6
+    const tall = placeMenu({ left: 10, right: 40, top: 200, bottom: 230 }, 600, { ...wide, screenW: 390, screenH: 844, view: { top: 0, height: 400 } });
+    expect(tall.top).toBe(8);
+    expect(tall.top + Math.min(600, tall.maxHeight!)).toBeLessThanOrEqual(392);
+  });
+  it("follows the visible viewport when iOS scrolled it down (offsetTop)", () => {
+    const p = placeMenu({ left: 10, right: 40, top: 310, bottom: 340 }, 100, { ...wide, screenW: 390, screenH: 844, view: { top: 300, height: 380 } });
+    expect(p.top).toBe(346);
+    const up = placeMenu({ left: 10, right: 40, top: 600, bottom: 630 }, 100, { ...wide, side: "top", screenW: 390, screenH: 844, view: { top: 300, height: 300 } });
+    expect(up.top).toBeGreaterThanOrEqual(308);
+    expect(up.top + 100).toBeLessThanOrEqual(592);
+  });
+});

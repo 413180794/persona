@@ -1,5 +1,5 @@
 import { Button, cx, EASE } from "../../ui/atoms";
-import { Icon } from "../../ui/icons";
+import { Icon, type IconName } from "../../ui/icons";
 
 export function Group({ title, footer, children, right }: { title?: React.ReactNode; footer?: React.ReactNode; children: React.ReactNode; right?: React.ReactNode }) {
   return (
@@ -39,9 +39,14 @@ export function RowConfirm({ open, trigger, confirm, busy, onCancel, onConfirm }
   );
 }
 
-export function Row({ label, hint, children, onClick, mono }: { label: React.ReactNode; hint?: React.ReactNode; children?: React.ReactNode; onClick?: () => void; mono?: boolean }) {
+export function Row({ label, hint, children, onClick, mono, icon }: { label: React.ReactNode; hint?: React.ReactNode; children?: React.ReactNode; onClick?: () => void; mono?: boolean; icon?: IconName }) {
   const body = (
     <>
+      {icon && (
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-control bg-inset text-ink-2 shadow-hairline">
+          <Icon name={icon} size={14} />
+        </span>
+      )}
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13px] text-ink">{label}</div>
         {hint && <div className="mt-0.5 truncate text-[11.5px] text-ink-3">{hint}</div>}
@@ -51,7 +56,7 @@ export function Row({ label, hint, children, onClick, mono }: { label: React.Rea
     </>
   );
   return onClick ? (
-    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 whitespace-nowrap px-4 py-2.5 text-left transition-colors hover:bg-hover">
+    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 whitespace-nowrap px-4 py-2.5 text-left transition-colors hover:bg-hover pointer-coarse:min-h-11">
       {body}
     </button>
   ) : (
@@ -81,7 +86,7 @@ export function Switch({ on, onChange, disabled, label }: { on: boolean; onChang
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!on)}
-      className={cx("relative inline-flex h-[22px] w-[38px] shrink-0 items-center rounded-full transition-colors duration-200 disabled:opacity-50", on ? "bg-accent" : "bg-hover-2")}
+      className={cx("touch-hit relative inline-flex h-[22px] w-[38px] shrink-0 items-center rounded-full transition-colors duration-200 disabled:opacity-50", on ? "bg-accent" : "bg-hover-2")}
     >
       <span className="absolute left-[2px] size-[18px] rounded-full bg-white shadow-btn transition-transform duration-200" style={{ transform: on ? "translateX(16px)" : "none", transitionTimingFunction: EASE }} />
     </button>

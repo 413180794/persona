@@ -1,0 +1,31 @@
+{
+  "manifest_version": 1,
+  "id": "{{id}}",
+  "name": "{{name}}",
+  "version": "0.1.0",
+  "description": "{{name}}：从模板生成的扩展。",
+  "engines": {"extension_protocol": 1, "plugin_protocol": 1},
+  "runtime": {
+    "command": {
+      "linux-amd64": "bin/{{id}}-linux-amd64",
+      "linux-arm64": "bin/{{id}}-linux-arm64",
+      "darwin-amd64": "bin/{{id}}-darwin-amd64",
+      "darwin-arm64": "bin/{{id}}-darwin-arm64"
+    }
+  },
+  "contributes": {
+    "ui": [
+      {"id": "home", "title": "{{name}}", "placement": "nav_page", "icon": "list"},
+      {"id": "today", "title": "{{name}} 今天", "placement": "overview_card", "opens": "home"}
+    ]
+  },
+  "configuration": {
+    "type": "object",
+    "properties": {
+      "greeting": {"type": "string", "title": "问候语", "description": "页面顶上的一句话", "default": "你好", "maxLength": 40}
+    }
+  },
+  "secrets": [
+    {"name": "api_key", "title": "API Key", "description": "示例：服务的密钥（只写不读，扩展在 initialize 里拿到）"}
+  ]
+}

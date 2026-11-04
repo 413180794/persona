@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import katex from "katex";
-import { linkify, normalizeMath, splitCode } from "./Markdown";
+import { hasMath, linkify, normalizeMath, splitCode } from "./Markdown";
 
 describe("normalizeMath", () => {
   it("rewrites \\( \\) to inline dollars", () => {
@@ -70,11 +70,37 @@ describe("normalizeMath", () => {
   });
 });
 
+// In this order: KaTeX is loaded once per module, the first tests see the page before it is (#1996).
 describe("KaTeX", () => {
-  it("renders what normalizeMath writes and mhchem", () => {
+  it("knows which text has a formula, so only that loads KaTeX", () => {
+    for (const md of ["$x^2$", "\\(a+b\\)", "前文\n\n\\[\nE=mc^2\n\\]", "$$\\frac12$$"]) expect(hasMath(normalizeMath(md))).toBe(true);
+    for (const md of ["$5 和 $10", "US$5", "`$x$`", "```\n$x$\n```", "没有公式"]) expect(hasMath(normalizeMath(md))).toBe(false);
+  });
+
+  it("shows a formula as its TeX until KaTeX is in", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+    const { Markdown } = await import("./Markdown");
+    const html = renderToStaticMarkup(createElement(Markdown, { text: "面积 $\\pi r^2$\n\n$$\nE=mc^2\n$$" }));
+    expect(html).not.toContain('class="katex');
+    expect(html).toContain('<span data-math-pending="inline">$\\pi r^2$</span>');
+    expect(html).toMatch(/data-math-pending="display">\$\$\nE=mc\^2\n\$\$/);
+    // an ordinary code span is still code
+    expect(renderToStaticMarkup(createElement(Markdown, { text: "`a_b`" }))).toContain("<code>a_b</code>");
+  });
+
+  it("renders what normalizeMath writes and mhchem once loaded", async () => {
+    const { loadMath } = await import("./stream/math");
+    await loadMath();
     for (const tex of ['\\text{售价 {\\char"24}5}', "\\ce{H2O}", "\\pu{123 kJ/mol}", "\\vert{}x\\vert{}"]) {
       expect(() => katex.renderToString(tex, { throwOnError: true })).not.toThrow();
     }
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+    const { Markdown } = await import("./Markdown");
+    const html = renderToStaticMarkup(createElement(Markdown, { text: "面积 $\\pi r^2$" }));
+    expect(html).toContain('class="katex"');
+    expect(html).not.toContain("data-math-pending");
   });
 });
 
@@ -154,6 +180,17 @@ describe("Mermaid blocks", () => {
     expect(html.match(/data-mermaid/g)?.length).toBe(1);
     expect(html).toContain("graph TD; A--&gt;B"); // its source shows until the diagram is drawn
     expect(html).toContain("let a = 1");
+  });
+
+  it("code and diagram buttons show without hover on a touch screen, with a finger-sized target (#1996)", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+    const { Markdown } = await import("./Markdown");
+    for (const text of ["```js\nlet a = 1\n```", "```mermaid\ngraph TD; A-->B\n```"]) {
+      const html = renderToStaticMarkup(createElement(Markdown, { text }));
+      expect(html).toContain("[@media(hover:none)]:opacity-100");
+      expect(html).toMatch(/aria-label="拷贝代码"[^>]*touch-hit/);
+    }
   });
 
   it("errors read in Chinese with the line, Mermaid's text kept", async () => {

@@ -8,10 +8,6 @@ import { fileDownloadURL } from "../lib/api";
 import { isMachineRef, resolveRef } from "../lib/files";
 import { openPanel } from "../lib/panel";
 import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
-import "katex/dist/katex.min.css";
-// \ce{…} / \pu{…} for chemistry; registers its macros on the katex that rehype-katex uses.
-import "katex/contrib/mhchem";
 import { copyText } from "./atoms";
 import { Icon } from "./icons";
 import { MermaidBlock } from "./Mermaid";
@@ -21,6 +17,7 @@ import { usePathLinks } from "../lib/path-presence";
 import { StreamChunk } from "./stream/Chunk";
 import { splitChunks } from "./stream/chunks";
 import { hasLanguageFence, useHighlight } from "./stream/highlight";
+import { useMath } from "./stream/math";
 import { useReplyMotion } from "./stream/motion";
 import { repairStreamingMarkdown } from "./stream/repair";
 import { useThrottledText } from "./stream/throttle";
@@ -355,22 +352,46 @@ function Link({ href, children, mid, cwd, line, title: hover }: { href?: string;
   );
 }
 
+// A formula KaTeX has not drawn yet (it loads when a reply first has one, ui/stream/math.ts): remark-math leaves it as a
+// <code class="math-inline"> / <pre><code class="math-display">, shown as the TeX it was written in. Once KaTeX is in,
+// rehype-katex turns those into formulas before they get here.
+const hasClass = (cls: string | undefined, name: string) => (cls ?? "").split(/\s+/).includes(name);
+
 export const markdownComponents: Components = {
   a: ({ href, children }) => <Link href={href}>{children}</Link>,
   pre: ({ children }) => {
+    const code = () => textOf(children).replace(/\n$/, "");
+    if (hasClass(codeClass(children), "math-display")) return <div className="whitespace-pre-wrap" data-math-pending="display">{`$$\n${code()}\n$$`}</div>;
     const lang = codeLanguage(children);
-    if (lang === "mermaid") return <MermaidBlock code={textOf(children).replace(/\n$/, "")} />;
+    if (lang === "mermaid") return <MermaidBlock code={code()} />;
     // the assistant's cards (#1850): drawn with the extensions' components; a block that does not read stays code
     if (CARD_LANGUAGES.includes(lang)) return <AssistantCard lang={lang} code={textOf(children)} fallback={<CodeBlock>{children}</CodeBlock>} />;
     return <CodeBlock>{children}</CodeBlock>;
   },
+  code: ({ className, children, node: _node, ...rest }) =>
+    hasClass(className, "math-inline") ? (
+      <span data-math-pending="inline">${children}$</span>
+    ) : (
+      <code className={className} {...rest}>
+        {children}
+      </code>
+    ),
 };
+
+/** The class of a block's <code>. */
+function codeClass(children: React.ReactNode): string {
+  const code = Array.isArray(children) ? children[0] : children;
+  return code && typeof code === "object" && "props" in code ? String((code as { props: { className?: string } }).props.className ?? "") : "";
+}
 
 /** The language a fenced block names (```mermaid → "mermaid"), from its <code>'s class. */
 function codeLanguage(children: React.ReactNode): string {
-  const code = Array.isArray(children) ? children[0] : children;
-  const cls = code && typeof code === "object" && "props" in code ? String((code as { props: { className?: string } }).props.className ?? "") : "";
-  return /(?:^|\s)language-([\w-]+)/.exec(cls)?.[1]?.toLowerCase() ?? "";
+  return /(?:^|\s)language-([\w-]+)/.exec(codeClass(children))?.[1]?.toLowerCase() ?? "";
+}
+
+/** Whether text normalizeMath wrote has a formula: a $ it left unescaped outside code (lone ones it wrote as \$). */
+export function hasMath(md: string): boolean {
+  return md.includes("$") && splitCode(md).some((part, i) => i % 2 === 0 && /(?<!\\)\$/.test(part));
 }
 
 function textOf(node: React.ReactNode): string {
@@ -389,7 +410,7 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
         aria-label="拷贝代码"
         title="拷贝"
         onClick={() => copyText(textOf(children).replace(/\n$/, ""))}
-        className="absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded-[6px] bg-surface text-ink-3 opacity-0 shadow-btn transition-opacity duration-150 group-hover/code:opacity-100 hover:text-ink focus-visible:opacity-100"
+        className="absolute top-1.5 right-1.5 flex size-6 touch-hit items-center justify-center rounded-[6px] bg-surface text-ink-3 opacity-0 shadow-btn transition-opacity duration-150 group-hover/code:opacity-100 hover:text-ink focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
       >
         <Icon name="copy" size={13} />
       </button>
@@ -421,12 +442,14 @@ export const Markdown = memo(function Markdown({ text: raw, small, compact, mid,
   const paths = useMemo(() => (mid ? textPaths(settled) : []), [settled, mid]);
   const { linkable, key } = usePathLinks(mid, cwd, paths);
   const highlight = useHighlight(useMemo(() => hasLanguageFence(text), [text]));
-  const rehypePlugins = useMemo<PluggableList>(
-    () => [rehypeKatex, ...(highlight ? [highlight] : []), ...(key ? [rehypePathLinks(linkable)] : [])],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [key, highlight],
-  );
   const md = useMemo(() => linkify(normalizeMath(streaming ? repairStreamingMarkdown(text) : text), { math: true }), [text, streaming]);
+  const wantsMath = useMemo(() => hasMath(md), [md]);
+  const katex = useMath(wantsMath);
+  const rehypePlugins = useMemo<PluggableList>(
+    () => [...(katex ? [katex] : []), ...(highlight ? [highlight] : []), ...(key ? [rehypePathLinks(linkable)] : [])],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [key, highlight, katex],
+  );
   const chunks = useMemo(() => (streaming ? splitChunks(md) : wordFade ? [{ start: 0, content: md }] : null), [md, streaming, wordFade]);
   return (
     <div className={`prose-j ${small ? "prose-sm" : ""} ${compact ? "prose-compact" : ""}`}>

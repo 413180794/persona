@@ -38,6 +38,16 @@ export interface Runtime {
   env?: Record<string, string>;
   rpc?: string;
   http?: boolean;
+  resources?: Resources;
+}
+
+/**
+ * The most a program may use when the hub runs it in a sandbox (docs/extensions.md「沙箱」): memory in MB, CPU in percent
+ * of one core. Unset: 1024 MB, 100%.
+ */
+export interface Resources {
+  memory_mb?: number;
+  cpu_percent?: number;
 }
 
 /**
@@ -80,6 +90,7 @@ export interface Contributes {
   agent_sources?: AgentSourceItem[];
   channel?: ChannelItem[];
   events?: EventsItem[];
+  shortcuts?: ShortcutItem[];
 }
 
 /**
@@ -166,10 +177,14 @@ export interface UIItem {
   hosts?: string[];
   /** nav_page only. */
   icon?: NavIcon;
-  /** overview_card only: a nav_page or plugin_page of the same extension. */
+  /** overview_card and widget only: a nav_page or extension_page of the same extension. */
   opens?: string;
   /** inbox_item only: one of the extension's own connectors. */
   connector?: string;
+  /** widget only (and needed there): the sizes it can be drawn at. */
+  families?: WidgetFamily[];
+  /** widget only: how often the widget is drawn again on its own (30 when not said). */
+  refresh_minutes?: number;
 }
 
 export interface AgentSourceItem {
@@ -205,6 +220,34 @@ export interface EventsItem {
   id: string;
   subscribe: string[];
 }
+
+/**
+ * An action of the extension the system runs (docs「系统级位置」): Shortcuts and Siri on iPhone, Mac and Apple Watch. The
+ * hub asks the extension shortcut.run with the values.
+ */
+export interface ShortcutItem {
+  id: string;
+  title: string;
+  description?: string;
+  params?: ShortcutParam[];
+  /** A whole page of the same extension (nav_page or extension_page) the app opens to show more of the result. */
+  ui?: string;
+}
+
+/**
+ * A value the shortcut asks for; it reaches the extension as a string (a toggle's "true" / "false").
+ */
+export interface ShortcutParam {
+  name: string;
+  title: string;
+  kind: ShortcutParamKind;
+  /** choice only. */
+  choices?: Choice[];
+  required?: boolean;
+}
+
+export type ShortcutParamKind = "text" | "number" | "toggle" | "choice" | (string & {});
+export const SHORTCUT_PARAM_KINDS = ["text", "number", "toggle", "choice"] as const;
 
 /**
  * One line: a request {id, method, params}, an answer {id, result} or {id, error}, or an event {event, params}.
@@ -397,6 +440,135 @@ export interface UIPlaces {
 }
 
 /**
+ * A widget an extension draws outside the app (GET …/extensions/-/widgets; docs「系统级位置」).
+ */
+export interface WidgetPlace {
+  extension: string;
+  extension_name?: string;
+  id: string;
+  title: string;
+  families: WidgetFamily[];
+  refresh_minutes: number;
+  opens?: string;
+}
+
+export interface WidgetPlaces {
+  widgets: WidgetPlace[];
+}
+
+/**
+ * An app's POST …/extensions/{id}/-/widget/{ui}: context.size is the family it draws (WidgetFamily).
+ */
+export interface WidgetRequest {
+  context?: UIContext;
+}
+
+/**
+ * A widget's view, held to what the family draws, and until when the hub keeps it (the app's timeline's next entry).
+ */
+export interface WidgetAnswer {
+  view: View;
+  expires_at: string;
+}
+
+/**
+ * A widget a device has on a screen (PUT /api/v1/devices/{id}/widgets): the hub wakes that device when it changes.
+ */
+export interface DeviceWidget {
+  extension: string;
+  id: string;
+  family: WidgetFamily;
+}
+
+export interface DeviceWidgets {
+  widgets: DeviceWidget[];
+}
+
+/**
+ * extension_widget in a background push (content-available): a widget the device has changed; the app reloads its
+ * timelines.
+ */
+export interface WidgetPush {
+  extension: string;
+  id: string;
+}
+
+/**
+ * An extension's action the system runs (GET …/extensions/-/shortcuts).
+ */
+export interface ShortcutPlace {
+  extension: string;
+  extension_name?: string;
+  id: string;
+  title: string;
+  description?: string;
+  params?: ShortcutParam[];
+  ui?: string;
+}
+
+export interface ShortcutPlaces {
+  shortcuts: ShortcutPlace[];
+}
+
+/**
+ * An app's POST …/extensions/{id}/-/shortcut/{sid}: the params' values (strings) and the context (tz, locale,
+ * platform, ui_version).
+ */
+export interface ShortcutRequest {
+  values?: Record<string, string>;
+  context?: UIContext;
+}
+
+/**
+ * shortcut.run's parameters: which shortcut, its values, for whom.
+ */
+export interface ShortcutRunParams {
+  contribution: string;
+  values: Record<string, string>;
+  ui_version: number;
+  tz?: string;
+  locale?: string;
+  platform?: Platform;
+}
+
+/**
+ * What shortcut.run answers (and the app gets): a sentence Siri says or shows, and a view held to the large widget's
+ * subset (the result card).
+ */
+export interface ShortcutResult {
+  text?: string;
+  view?: View;
+}
+
+/**
+ * A button on an extension's notification (POST /api/v1/notify actions, at most 3). A tap runs ui.action on the
+ * notification's ui with this id; input asks for a line of text first (values.text).
+ */
+export interface NotifyAction {
+  id: string;
+  title: string;
+  role?: ButtonRole;
+  /** Open the app to run it; otherwise it runs in the background and its toast is shown as a notification. */
+  foreground?: boolean;
+  input?: NotifyActionInput;
+}
+
+export interface NotifyActionInput {
+  placeholder?: string;
+}
+
+/**
+ * extension_notification in an extension's alert push: whose it is, the page a tap opens (ui with state) and its
+ * buttons (category ext.<extension>.<hash of the action ids>, registered by the app as it meets it).
+ */
+export interface ExtensionNotification {
+  extension: string;
+  ui?: string;
+  state?: string;
+  actions?: NotifyAction[];
+}
+
+/**
  * A role color the app picks, never one of the extension's own. An unknown tone draws as neutral.
  */
 export type Tone = "neutral" | "positive" | "caution" | "danger" | (string & {});
@@ -418,11 +590,22 @@ export const BUTTON_ROLES = ["normal", "destructive"] as const;
  * A slot in the apps an extension draws at (docs「UI 插槽」). extension_page is plugin_page's new name (UI version 3):
  * the hub takes both and answers the new API with extension_page, the old one with plugin_page.
  */
-export type Placement = "plugin_page" | "launcher_section" | "nav_page" | "overview_card" | "machine_section" | "inbox_item" | "extension_page" | (string & {});
-export const PLACEMENTS = ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page"] as const;
+export type Placement = "plugin_page" | "launcher_section" | "nav_page" | "overview_card" | "machine_section" | "inbox_item" | "extension_page" | "widget" | (string & {});
+export const PLACEMENTS = ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget"] as const;
 
-export type Size = "compact" | "full" | (string & {});
-export const SIZES = ["compact", "full"] as const;
+/**
+ * How much room a view has: compact (a card), full (a page, a section), or for a widget the family it is drawn for
+ * (WidgetFamily).
+ */
+export type Size = "compact" | "full" | "small" | "medium" | "large" | "accessory_circular" | "accessory_rectangular" | "accessory_inline" | (string & {});
+export const SIZES = ["compact", "full", "small", "medium", "large", "accessory_circular", "accessory_rectangular", "accessory_inline"] as const;
+
+/**
+ * A widget's size outside the app (docs「系统级位置」): a home screen widget's small / medium / large, a Lock Screen or
+ * watch face complication's accessory_*.
+ */
+export type WidgetFamily = "small" | "medium" | "large" | "accessory_circular" | "accessory_rectangular" | "accessory_inline" | (string & {});
+export const WIDGET_FAMILIES = ["small", "medium", "large", "accessory_circular", "accessory_rectangular", "accessory_inline"] as const;
 
 export type Platform = "ios" | "mac" | "android" | "web" | (string & {});
 export const PLATFORMS = ["ios", "mac", "android", "web"] as const;

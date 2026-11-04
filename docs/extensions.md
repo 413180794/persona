@@ -73,10 +73,11 @@ hub 给老路径的每次调用按路由计数（`extension_compat.go` 的 `lega
 | `providers`（版本 1） | `provider.` | `id`、`name`、`description?`、`kind?`（`launcher` / `api`）、`api?`（`messages` / `responses`）、`base_url`、`model?`、`small_model?`、`models?: [{id, name?}]`、`dynamic_models?`、`key_hint?` | 纯声明即可；`dynamic_models` 要进程说协议 | 设置 › 模型供应商的「从扩展添加」，见下面「模型供应商」 |
 | `api`（版本 1） | `api.` | `id`、`prefix`（一段路径）、`features?`、`events?`、`receipts?`（`[{method, path, kind}]`：要发送回执的写） | `runtime.http`，`on_startup`；有 `events` 要进程说协议 | App 用的一段接口 `/api/v1/<prefix>/…`，见下面「App 接口」 |
 | `assistant`（版本 1） | `assistant.` | `id`、`skills?`（包里的目录，各有 `SKILL.md`）、`instructions?`（包里的 `.md`）、`gate?`（包里的 `.json`：技能里一个命令的闸门） | 包里有这些文件；`gate` 要有 `skills`，要凭据时进程说协议 | 助手的技能、说明和命令闸门，见下面「助手」 |
-| `ui`（版本 2） | `ui.` | `id`、`title`、`placement`（插槽，见「UI 插槽」：`plugin_page` / `launcher_section` / `nav_page` / `overview_card` / `machine_section` / `inbox_item`）、`hosts?`（只有 `launcher_section` 能写：网关主机名，可 `*.` 开头；不写就是任何启动器，扩展自己判断）、`icon?`（只有 `nav_page`）、`opens?`（只有 `overview_card`）、`connector?`（只有 `inbox_item`，而且必须写：扩展自己贡献的一个连接器的 id） | 进程说协议；`launcher_section` 要权限 `launcher_keys` | 扩展详情里的页面、启动器页上的一节、主导航、总览、机器详情、收件箱条目的详情，见下面「声明式 UI」「UI 插槽」 |
+| `ui`（版本 2） | `ui.` | `id`、`title`、`placement`（插槽，见「UI 插槽」：`extension_page`（老名字 `plugin_page`） / `launcher_section` / `nav_page` / `overview_card` / `machine_section` / `inbox_item` / `widget`）、`hosts?`（只有 `launcher_section` 能写：网关主机名，可 `*.` 开头；不写就是任何启动器，扩展自己判断）、`icon?`（只有 `nav_page`）、`opens?`（只有 `overview_card` 和 `widget`）、`connector?`（只有 `inbox_item`，而且必须写：扩展自己贡献的一个连接器的 id）、`families` / `refresh_minutes?`（只有 `widget`，`families` 必须写，见「系统级位置」） | 进程说协议；`launcher_section` 要权限 `launcher_keys` | 扩展详情里的页面、启动器页上的一节、主导航、总览、机器详情、收件箱条目的详情、App 外的小组件和表盘，见下面「声明式 UI」「UI 插槽」「系统级位置」 |
 | `agent_sources`（版本 1） | `agentsrc.` | `id`（`a-z0-9_-`，也是会话 id 的来源段 `<id>:<sessionKey>`）、`name`、`providers?`（`a-z0-9_`，如 `grok_bot`） | 进程说协议，`on_startup` | Agents 页的个人 Agent，和 hub 自己的 lark-connector 来源并列，见下面「个人 Agent 来源」 |
 | `channel`（版本 1） | `channel.` | `id`（`^[a-z][a-z0-9_]{0,31}$`，不能是 8 位十六进制）、`name`、`kind`（`im`）、`connector?`（绑定和状态来自同一个扩展的这个连接器）、`bind?`（`qr` / `code` / `fields`）、`description?`、`capabilities`（收图片 / 文件 / 语音、`format`、`max_text`、`asks`、`push`、`typing`、`progress`、`threads`） | 进程说协议；没有 `connector` 时 `on_startup` | 和 Persona 对话的渠道：hub 跑统一管线（进对话、跟踪这一轮、答案发回、提问），扩展只管和 IM 说话，见 [channels.md](channels.md) |
 | `events`（版本 1） | `event.` | `id`、`subscribe`（事件名的列表，见「事件」） | 进程说协议，`on_startup` | 只是告诉扩展 hub 上发生了什么，见下面「事件」 |
+| `shortcuts`（版本 1） | `shortcut.` | `id`、`title`（1–40 字）、`description?`（≤ 200 字）、`params?`（≤ 8 个 `{name, title, kind: text / number / toggle / choice, choices?, required?}`）、`ui?`（同一个扩展的整页） | 进程说协议 | 快捷指令和 Siri 里的动作（iPhone、Mac、Apple Watch），见下面「系统级位置」 |
 
 hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的），这一项不生效，预览和列表里有一条警告。以后加扩展点（知识库来源、链接识别……），在这张表里加一行。
 
@@ -199,8 +200,8 @@ hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的�
 
 | 权限 | 写法 | 意思 | hub 怎么守 |
 | --- | --- | --- | --- |
-| 运行程序（有 `runtime` 就有） | — | 在 hub 机器上以 hub 的系统用户运行，能读写这个用户能读写的文件 | 只展示：**没有沙箱** |
-| `network` | 主机名列表，可以 `*.` 开头，小写，不带协议、端口、路径 | 会访问哪些地方 | 只展示和记录；hub 暂不拦截别的地址 |
+| 运行程序（有 `runtime` 就有） | — | 在 hub 机器上以 hub 的系统用户运行 | 装在 hub 上的扩展默认在**沙箱**里跑（只能读写自己的包和数据目录，内存 / CPU 有上限），受信任市场来的默认不开，见下面「沙箱」 |
+| `network` | 主机名列表，可以 `*.` 开头（只配下面的子域名，不配它自己），小写，不带协议、端口、路径；IP 地址只能原样列出 | 会访问哪些地方 | 在沙箱里的扩展只能经 hub 的出网代理出去，代理只放这些主机，见下面「出网」；不在沙箱里的照旧只展示和记录 |
 | `hub` | 范围的列表，见下面「hub 的接口：范围」 | 用 hub 的哪几部分接口（读知识库、驱动 Agent……） | 扩展拿到的 token 只开这些范围的路由，别的回 403 `permission_denied` |
 | `hub_api`（旧写法） | `true` | 拿到 hub 的地址和完整 token（`PERSONA_HUB_URL`、`PERSONA_HUB_TOKEN`），能做 hub 主人能做的一切 | 没接受就不给这两个变量；安装页写成「完整权限（旧写法）」并给警告。同时写了 `hub` 的以 `hub` 为准 |
 | `launcher_keys` | `true` | 用启动器的 Key 访问它的网关（贡献 `quota`、`launcher_section` 的 `ui` 必须有） | 扩展看不到 Key：hub 或那台电脑替它发请求，只发到启动器自己的网关；没接受就不问它 |
@@ -244,6 +245,57 @@ hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的�
 - **兼容**：`hub_api: true` 的老扩展照旧拿 hub 的完整 token（只在环境变量里），装、升级时多一条警告「hub_api 是旧写法」；hub.json 里的扩展照旧拿完整 token。
   完整 token 涵盖所有范围：从 `hub_api` 升级到只要几个范围的新版本不用重新同意；反过来要。
 - 权限摘要算上范围（规范化：排序、去重）；没有 `hub` 的扩展摘要和以前一样。升级时多了范围要重新同意，`added_permissions` 里是「使用 hub 的更多功能」。
+
+### 出网（#1856）
+
+hub 里有一个**出网代理**（`server/internal/extension/egress`），第一次有扩展要用时起，只听本机：
+
+- **谁经过它**：在沙箱里的扩展（下面「沙箱」）只有它一条路出网；沙箱开着、但这台机器上没有沙箱的，环境变量也指向它（守规矩的程序会经过它，不守的拦不住，状态里写明）。
+  沙箱关着的扩展、内置的、hub.json 里的照旧，不经过它。
+- **放谁**：只放这个扩展 `permissions.network` 里的主机（`*.example.com` 是它下面的子域名；IP 地址只有原样列出的才放），别的回 403「`<主机>` is not in this extension's
+  permissions.network」并记一行日志、按扩展计数（放行 / 拒绝的次数、最后一次拒绝的主机，在扩展详情的 `sandbox.egress` 里；也记进「运行情况」的计数 `egress.allowed` / `egress.denied`）。
+  名字解析到本机回环、链路本地地址（云上的元数据服务）的不放，除非原样列的就是那个 IP。端口不限。
+- **hub 自己的接口**：拿到 hub token 的扩展（`hub` 范围或旧的 `hub_api`）在沙箱里用 `http://hub.persona.internal` 访问 hub（`PERSONA_HUB_URL` 和 `initialize` 的 `hub.url` 就是它），
+  代理把它接到 hub 本机的端口；沙箱里的回环不是 hub 的回环。
+- **认谁**：本机的 TCP 端口按代理凭据认扩展（`HTTP(S)_PROXY=http://ext:<凭据>@127.0.0.1:<端口>`，每次启动换新，停用、卸载即失效）；Linux 沙箱另有每个扩展一个 unix socket
+  （`~/.persona/extensions/run/<id>/proxy.sock`），socket 就说明了是谁。
+- **hub 自己的上游代理**：hub 环境里有 `HTTPS_PROXY` / `HTTP_PROXY`（`NO_PROXY` 照算）时，代理经它出网（CONNECT），扩展不用知道。
+- 环境变量：`HTTP_PROXY`、`HTTPS_PROXY`、`http_proxy`、`https_proxy`、`ALL_PROXY`、`all_proxy` 指向代理，`NO_PROXY` 为空。Go、Node（要自己用代理的库）、Python、curl 都认；
+  只认 `HTTPS_PROXY` 的老客户端在沙箱里照样出不去，这是要的效果。
+
+### 沙箱（#1856）
+
+**谁在沙箱里**：只管 hub 从包里运行的**已安装**扩展（不管内置的、hub.json 里的、跑在别处的 `remote:`）。
+
+| | 默认 |
+| --- | --- |
+| 从**受信任的市场**装的：市场记下的签名公钥（「签名」）是官方两个市场的（`persona-extensions`、`persona-removed`），或在 hub.json 的 `trusted_extension_markets` 里（key id，或 `market.pub` 那一行 `ed25519:…`） | 不开 |
+| 别的：其他市场（没签名的也算）、`dir:`、`file:`、`https://…`、上传 | 开 |
+| **#1856 部署前已经装好的**（hub 第一次带着沙箱起来时） | 记成「不开」，照原样跑；要开用下面的命令 |
+
+主人可以改每一个（`personad extension sandbox <id> on|off|default`，或管理界面 `PUT /api/v1/admin/extensions/{id}/sandbox`，或 hub 机器上主 token 经回环的
+`PUT /api/v1/extensions/{id}/-/sandbox` `{"enabled": true|false|null}`，`null` 回到默认）。手机改不了（关沙箱等于放大信任，和装扩展一样只在 hub 机器和管理界面做）。
+改了就重启这个扩展，审计里记 `sandbox`。选择存在 hub 的设置 `extension_sandbox`；卸载时删掉，重新装从默认开始。
+
+**Linux**：`bwrap`（bubblewrap）+ `systemd-run --user --scope`（`server/internal/extension/sandbox`）：
+
+- 新的用户、PID、网络、IPC、UTS 命名空间；系统目录（`/usr`、`/bin`、`/lib*`、`/etc`、`/opt`）只读，沙箱自己的根也只读，`/tmp` 是私有的空目录，**家目录看不到**（连同它的路径也写不进去）；
+  包目录只读，自己的数据目录（`PERSONA_EXTENSION_DATA`，也是 `HOME`）和运行目录（`~/.persona/extensions/run/<id>/`：它的 HTTP socket、代理的 socket）可写。
+- 网络命名空间里只有回环：沙箱的第一个进程是 `personad __sandbox-run`（personad 只读挂在 `/run/persona/personad`），把沙箱自己回环上的 `127.0.0.1:3128` 转到代理的
+  unix socket，再运行扩展的程序（stdin / stdout / stderr 原样、信号转交、退出码照传）。所以任何语言的 HTTP 客户端只要认 `HTTP(S)_PROXY` 就能用，SDK 不用改。
+- `systemd-run --user --scope` 给它上限：`MemoryMax`（默认 1024 MB）、`MemorySwapMax=0`、`CPUQuota`（默认 100%，即一个核）。清单可以申请别的：
+  `runtime.resources: {"memory_mb": 64–8192, "cpu_percent": 10–800}`（老 hub 严格读清单，用它的扩展在 `engines.persona` 里写上带 #1856 的构建号）。
+  用不了 `systemd-run --user` 时（没有用户的 systemd）只有 bwrap，没有上限。
+- hub 起来后第一次用时探一次：`bwrap` 在不在、能不能建网络命名空间，`systemd-run --user --scope` 能不能用。
+
+**macOS**：`sandbox-exec`，profile 是：默认放行，再拒绝所有出站网络（只放 hub 代理的本机端口和自己运行目录里的 unix socket）、拒绝所有写（只放数据目录、运行目录、`/dev`）、
+拒绝读家目录（只放包、数据、运行目录）。没有网络命名空间，所以代理用本机 TCP 端口加凭据；没有资源上限。2026-11-05 在 macOS 27.2 上实测：写数据可以、写 / 读家目录不行、
+只连得上代理的端口、直连外网不行，包放在家目录下照样能读自己的包。
+
+**这台机器没有沙箱**（没装 bwrap、内核不让建用户命名空间、别的系统）：沙箱开着的扩展照样跑，只是指向出网代理；扩展的 `sandbox.active` 是 `false`、`sandbox.why`
+和列表的 `warnings` 写「没有沙箱：机器上没有 bwrap（bubblewrap）」。装 bwrap：Debian / Ubuntu `apt install bubblewrap`，没有 root 时可以把静态编译的 bwrap 放进 hub 的 `PATH`。
+
+**接口**：已安装扩展的 `ExtensionView`（列表和详情）多一个 `sandbox`：`{enabled, default, chosen, active, why?, trusted?, egress: {allowed, denied, last_denied?, denied_at?}}`。
 
 **权限摘要**：`permissions`（规范化后）加上「运行不运行程序」的 sha256；有 `node` 的再加上它的系统、node 侧权限和发给电脑的密钥名（没有 `node` 的扩展摘要和以前一样，已装的不用重新同意）。安装要回传预览给的摘要；升级时权限变多了也要（没变多不用重新同意，但仍要明确执行升级）。
 接受的那一份存在 `plugins.granted`。
@@ -317,6 +369,7 @@ personad extension install <source> [--yes]          先打印它能做什么，
 personad extension upgrade <id> <source> [--yes]
 personad extension rollback <id>
 personad extension enable <id> | disable <id>
+personad extension sandbox <id> on|off|default  在沙箱里跑不跑（default：受信任市场的不开，别的开），见「沙箱」
 personad extension contributions <id>                 每个贡献和它的开关
 personad extension contribution <id> <point>/<cid> on|off   单独开关一个贡献（连接器的就是连接器的开关）
 personad extension config <id> key=value …           值能解析成 JSON 就按 JSON，否则当文字；key= 删掉这一项
@@ -328,6 +381,12 @@ personad extension search [关键词]
 personad extension install market:<市场 id>/<扩展 id>  从市场装；已装的就是升级
 personad extension auto-upgrade on|off [<id>]        市场扩展自动升级的总开关，带 id 是这一个扩展的开关
 personad extension upgrades                          有新版本的市场扩展：可升级 / 等你确认 / 已跳过
+
+# 写扩展（见「写扩展：SDK、模板和命令行」）
+personad extension new <id> [--template go|ts] [--name <名字>] [--dir <目录>]
+personad extension dev [<目录>]                      挂到这台 hub 上试，改了自动重建、重启
+personad extension test [<目录>]                     构建后用 hub 的检查跑一遍
+personad extension pack [<目录>] [--platforms …] [--out dist] [--split]
 ```
 
 ## 扩展市场
@@ -473,7 +532,7 @@ README 写了只用 openssl 验证的步骤。
 - 停进程：先关 stdin，5 秒后对进程组 SIGTERM，再 5 秒 SIGKILL（不说协议的直接 SIGTERM）。子进程跟着一起结束。
 - 一个扩展出事只影响它自己的贡献；hub 启动从不等扩展。stderr（不说协议的连 stdout）逐行进 hub 的日志，前缀 `plugin <id>:`，单行截到 4 KB；
   同时进这个扩展自己的日志（下面「运行情况」），管理界面里按扩展看。
-- 不限 CPU / 内存，没有沙箱（见 `docs/plan-extensions.md`「十」）。
+- 已安装的扩展默认在沙箱里跑，内存 / CPU 有上限（Linux），见「权限」下的「沙箱」「出网」。
 
 ## 运行情况（#1857）
 
@@ -526,6 +585,7 @@ hub 按扩展记它跑得怎么样，管理界面的扩展页看（[admin.md](ad
 | `PUT /api/v1/extensions/{id}/-/config` `{config}` | 完整权限的设备 | 整份替换；不合 schema 回 400 `{code: "invalid_config", field, message}` |
 | `PUT /api/v1/extensions/{id}/-/secrets/{name}` `{value}`、`DELETE …` | 完整权限的设备 | 最多 16 KB；值不回显、不进日志和审计 |
 | `POST /api/v1/extensions/-/preview` `{source, upgrade?}` | 主 token 经回环 | 回预览；别处来的 403 `this_machine_only` |
+| `POST /api/v1/extensions/-/dev` `{dir, config?, secrets?}`、`POST …/{id}/-/dev/restart`、`DELETE …/{id}/-/dev`、`GET …/{id}/-/dev/logs` | 同上 | 开发中的扩展（`personad extension dev`），见「写扩展」「dev」 |
 | `POST /api/v1/extensions/-/install` `{preview_id, permissions_digest}` | 同上 | 回详情 |
 | `POST /api/v1/extensions/{id}/-/upgrade` `{preview_id, permissions_digest?}` | 同上 | 权限变多时要摘要 |
 | `POST /api/v1/extensions/{id}/-/rollback` | 同上 | |
@@ -669,6 +729,7 @@ hub 不认识的 `type`（给更新的 hub 写的扩展）从 View 里拿掉、�
 | `overview_card` | **「总览」上的一张卡片**，点卡片打开 `opens` 指的页 | compact | — | — | 总览上的卡片 | 2 |
 | `machine_section` | **机器详情页里的一节**，在机器自己的各节后面 | full | `machine` | — | 机器详情页里的一节（会知道是哪台机器） | 2 |
 | `inbox_item` | **收件箱里一件事的详情正文**：`connector` 收进来的条目，App 自己的头部下面（见下面「收件箱条目」） | full | `item` | — | 收件箱里它的连接器的条目详情（会读到那一条的标题、总结和分级） | 2 |
+| `widget` | **App 外**：主屏幕小组件、锁屏和表盘的复杂功能（见下面「系统级位置」）；不在 `GET …/-/ui` 里，单独列 | `families` 里的一个 | — | — | 主屏幕小组件和表盘（在 App 外显示） | 3 |
 
 各端放在哪：
 
@@ -917,6 +978,114 @@ hub 的 `features` 有 `extension_ui_v3`；`initialize` 的 `hub.extension_point
 - **插槽名**：`plugin_page` 改叫 `extension_page`，hub 两个都认（`?placement=` 写哪个都一样），新接口回 `extension_page`、老接口（`/api/v1/plugins/…`）回 `plugin_page`；
   扩展在 `ui.render` 的 `placement` 里收到的是它清单里写的那个。清单写 `extension_page` 的扩展装不到老 hub 上（清单严格读），要在 `engines.persona` 里写上带 UI 版本 3 的 hub 构建号。
 - **扩展比 hub 新**：照旧（不认识的组件拿掉、记一行日志）。
+
+## 系统级位置（#1858）
+
+扩展的东西放到 **App 外**：主屏幕小组件、锁屏和 Apple Watch 表盘上的复杂功能（`ui` 的插槽 `widget`），快捷指令和 Siri 里的动作（扩展点 `shortcuts`），
+以及扩展发的通知上的按钮。扩展仍然不在 App 里跑代码：小组件画的是声明式 View 的一个子集，按钮和快捷指令的动作回到扩展。
+服务端的实现在 `server/internal/hub/extension_system.go`（小组件、快捷指令、设备的小组件）和 `server/internal/extension/ui.go` 的 `FitWidget`；
+schema 在 `schema/extension/`（`WidgetFamily`、`WidgetPlace`、`WidgetAnswer`、`DeviceWidget`、`ShortcutItem`、`ShortcutResult`、`NotifyAction`、`ExtensionNotification`），
+四端的类型由它生成。**Apple 端怎么做见 #1862**；安卓的主屏幕小组件（Glance）以后可以照同一套接口做，这次不做。
+
+`features` 里有 `extension_widgets` / `extension_shortcuts` 时才有对应的接口（`extension_notify_actions` 等通知接口合并后再报，见下面「通知按钮」）。
+
+### 小组件和表盘（`widget`）
+
+清单：
+
+```json
+"contributes": {"ui": [
+  {"id": "usage", "title": "用量", "placement": "nav_page", "icon": "chart"},
+  {"id": "today", "title": "今天的用量", "placement": "widget",
+   "families": ["small", "medium", "accessory_rectangular", "accessory_inline"], "refresh_minutes": 30, "opens": "usage"}
+]}
+```
+
+- `families`（必须写，至少一个，不重复）：`small` / `medium` / `large`（主屏幕、Mac 的桌面和通知中心），`accessory_circular` / `accessory_rectangular` / `accessory_inline`（锁屏和表盘）。
+- `refresh_minutes`：15–1440，不写是 30。小组件按它的时间线自己刷新；扩展发 `ui.invalidate` 时提前刷新（下面「刷新」）。
+- `opens`：点小组件打开的整页（同一个扩展的 `nav_page` / `extension_page`），不写就是打开 App。小组件里没有能点的东西。
+- 安装前的「它可以」里是「主屏幕小组件和表盘（在 App 外显示）：今天的用量」，算进权限摘要：升级时新加一个小组件要重新同意（和 `nav_page` 一样）。
+
+**画什么**：hub 调扩展的 `ui.render`，`placement` 是 `widget`、`size` 是这次的 family（`small`……），其余上下文同页面（`tz`、`locale`、`platform`、`ui_version`）。
+扩展回的 View 先照常检查（`Fit`），再由 `FitWidget` 裁成这个尺寸画得了的（**裁掉，不拒绝**，裁掉了什么记一行日志）：
+
+| family | 能有什么 |
+| --- | --- |
+| `small` / `medium` / `large` | `metric`、`stat_grid`（`small` 最多 2 个数，其余最多 4 个）、`progress`、`chart`、`text`（最多 3 行、200 字）、`row`（最多 4 行，不能点）；最多 2 节，`small` 4 个、`medium` 6 个、`large` 12 个条目。`markdown` 当文字、`empty` / `loading` 当一行次要文字；`button`、`link`、`field`、`segmented`、`table`、`divider`、`search`、`filter`、`more`、动作、头像、缩略图都拿掉，`refresh_after` 不用 |
+| `accessory_circular` / `accessory_rectangular` | 第一个 `metric`、`progress` 或 `text`（`rectangular` 的文字最多 3 行，`circular` 1 行） |
+| `accessory_inline` | 第一个 `metric` 或一行 `text`（不画进度） |
+
+一个能画的都没有时回 502。建议直接按 `size` 画：小的一个 `metric` 加一个 `stat_grid`，中的再加一个 compact 的 `chart`，表盘一个 `progress` 或一句话。
+
+**接口**（完整权限的设备和手表的只读回答设备都能调；扩展的 token 不能）：
+
+| 接口 | 做什么 |
+| --- | --- |
+| `GET /api/v1/extensions/-/widgets` | `{widgets: [{extension, extension_name, id, title, families, refresh_minutes, opens?}]}`：启用、在跑的扩展的全部小组件。**不在** `GET …/-/ui` 里（老 App 不会看到） |
+| `POST /api/v1/extensions/{id}/-/widget/{ui}` `{context: {size: <family>, tz, locale, platform, ui_version}}` | `{view, expires_at}`：`expires_at` 是现在加 `refresh_minutes`，App 拿它做时间线的下一项。hub 按（扩展、小组件、family、时区、语言、平台、UI 版本）缓存到 `expires_at`，后台刷新、几台设备一起要时不重复问扩展。`size` 不在 `families` 里回 400；不是 `widget` 的贡献回 400；用 `…/-/ui/{ui}` 画小组件也回 400 |
+| `PUT /api/v1/devices/{id}/widgets` `{widgets: [{extension, id, family}]}` | 这台设备（`id` 是 App 自己的设备 id，同 `…/prefs`）屏幕上有哪些小组件，**整份替换**（空列表就是都没了），最多 64 个；回存下的那份。App 在小组件增减时报（iOS：`WidgetCenter.getCurrentConfigurations`，App 进前台时对一遍）；存在 hub 的设置 `extension_widgets` 里，hub 重启照旧 |
+
+**刷新**：
+
+- 平时：App 按 `expires_at` 排时间线，系统到点让小组件扩展来要新的（hub 有缓存时直接给）。
+- 扩展说变了：扩展发 `ui.invalidate {contribution: <小组件的 id>}`（不写 `contribution` 是它的全部）。hub 丢掉这个小组件的缓存；在线的 App 照常收到 `extension_ui {invalidate}`（在前台的 App 自己 `reloadTimelines`）；
+  另外给**报过有这个小组件**的设备发一条后台推送：`{"aps": {"content-available": 1}, "extension_widget": {"extension", "id"}}`（`apns-push-type: background`、优先级 5），
+  **同一台设备、同一个小组件 15 分钟最多一条**（iOS 给后台推送和小组件刷新都有预算）。App 收到后 `WidgetCenter.shared.reloadTimelines(ofKind:)`。
+- 小组件扩展、表盘扩展读不了钥匙串（真机上；模拟器上却可以，见 CLAUDE.md「最常踩的坑」）：hub 地址和设备凭据按 App Group 的现有做法给它们。
+
+### 快捷指令（扩展点 `shortcuts`）
+
+清单：
+
+```json
+"contributes": {"shortcuts": [
+  {"id": "usage_today", "title": "今天用了多少", "description": "说出今天的用量", "ui": "usage"},
+  {"id": "set_budget", "title": "设预算", "params": [
+    {"name": "amount", "title": "金额", "kind": "number", "required": true},
+    {"name": "period", "title": "周期", "kind": "choice", "choices": [{"value": "day", "title": "每天"}, {"value": "month", "title": "每月"}]}]}
+]}
+```
+
+- `params` 最多 8 个，`name` 是 `^[a-z][a-z0-9_]{0,31}$`、不重复；`kind` 是 `text` / `number` / `toggle` / `choice`，只有 `choice` 有 `choices`（1–50 个）。
+- `ui`：同一个扩展的整页（`nav_page` / `extension_page`），App 在结果卡片上给一个「打开」。
+- 安装前的「它可以」里是「快捷指令和 Siri 里的动作：今天用了多少、设预算」，算进权限摘要。
+
+**接口**（完整权限的设备和手表；扩展的 token 不能）：
+
+| 接口 | 做什么 |
+| --- | --- |
+| `GET /api/v1/extensions/-/shortcuts` | `{shortcuts: [{extension, extension_name, id, title, description?, params?, ui?}]}`：启用、在跑的扩展的全部快捷指令 |
+| `POST /api/v1/extensions/{id}/-/shortcut/{sid}` `{values: {名字: 字符串}, context: {tz, locale, platform, ui_version}}` | hub 先查值：只能是声明过的参数，`required` 的要有，数要能解析，开关是 `"true"` / `"false"`，选择是它的一个值，不对回 400 `bad_request`；然后调扩展的 `shortcut.run {contribution, values, ui_version, tz?, locale?, platform?}`（20 秒超时），回 `{text?, view?}`：`text` 是 Siri 说出来 / 显示的一句话（最多 2000 字），`view` 按 `large` 小组件的子集裁（Siri 的结果卡片）。没有这个扩展 / 快捷指令回 404，扩展出错回 502 `plugin_failed` |
+
+**App 侧**（#1862）：一个通用的 App Intent「运行扩展动作」，参数是「动作」（动态选项：`GET …/-/shortcuts` 列出的，按扩展分组）和按 `params` 生成的参数（文字形式），
+运行就是上面的 `POST`，`text` 作为 Intent 的结果对话，`view` 用 App 的小组件画法画成结果卡片（`ShowsSnippetView`，注意 `#if compiler(>=6.4)`），有 `ui` 时给一个打开 App 那一页的按钮。手表上同样能跑。
+
+### 通知按钮
+
+扩展发通知（hub 的 `POST /api/v1/notify`，范围 `notify`；接口本身在 #1576，合并后这里接上）时可以带：
+
+```json
+{"title": "Example 网关面板", "body": "今天的预算用了 90%", "level": "active",
+ "ui": "usage", "state": "range=1d",
+ "actions": [{"id": "raise", "title": "预算加 ¥10"},
+             {"id": "note", "title": "回复", "input": {"placeholder": "说点什么"}},
+             {"id": "stop", "title": "停用这个 Key", "role": "destructive", "foreground": true}]}
+```
+
+- `actions` 最多 3 个：`id`（1–128）、`title`（1–40 字，按钮文字不换行）、`role?`（`normal` / `destructive`）、`foreground?`（点了打开 App 再做；不写是在后台做）、`input?: {placeholder?}`（先让用户输入一行字）。
+  `ui` 是点通知本身打开的页（同一个扩展的 `ui` 贡献，带 `state`），也是按钮的动作送去的地方。
+- 推送里：`aps.category` 是 `ext.<扩展 id>.<按钮 id 的 hash>`（同一组按钮同一个 category），`extension_notification: {extension, ui?, state?, actions?}`（schema `ExtensionNotification`）。
+  App 第一次见到一个 category 时按 `actions` 注册（`UNNotificationCategory`；`input` 是 `UNTextInputNotificationAction`）。
+- **点了按钮**：App 调 `POST /api/v1/extensions/{id}/-/ui/{ui}` `{action: <按钮 id>, state, values: {"text": <输入的字>}}`，和页面里点按钮完全一样走 `ui.action`；
+  在后台做的，回答里的 `toast` 作为一条本地通知显示，`open_url` / `push` 忽略；`foreground` 的打开 App 到 `ui` 那一页再调，回答照页面的规矩处理。点通知本身打开 `ui` 那一页（带 `state`）。
+- 现在 #1576 还没合并：schema、App 的约定和样例（`scripts/mock/apns/extension-notification.apns`，`xcrun simctl push <udid> <bundle id> <文件>`）先有；hub 一侧在 #1576 合并后加，
+  到时 `features` 报 `extension_notify_actions`。
+
+### 假 hub
+
+`MOCK_PLUGINS=1` 的假 hub 里 `example-gateway` 有一个小组件 `today`（五种尺寸，打开 `usage`）、两个快捷指令（`usage_today` 回一句话加一张卡片，`set_budget` 要金额），
+`PUT /api/v1/devices/{id}/widgets` 记在内存里；带按钮的通知用上面的 `.apns` 样例。只在新路径 `/api/v1/extensions/…` 上。
+
 
 ## 个人 Agent 来源
 
@@ -1170,6 +1339,61 @@ func main() {
 		UI: map[string]ext.Page{"home": {Render: home, Action: act}}})
 }
 ```
+
+### TypeScript：`sdk/ts`
+
+`@persona/extension`（不发 npm，扩展仓库拷一份），给 Bun 用：`main({id, version, manifest, init, namespaces, ui, fetch})` 和 Go 的 `ext.Main` 一一对应
+（`connect(prog, write)` 是不带 stdin 的同一套，测试用）；`Hub` 的 `call` / `notify` / `badge` / `invalidate`，`env()`，`decodeState` / `encodeState`，`ExtError`；
+`wire.ts` 是生成的类型。紧跟在 `initialize` 后面、没等它回答就发来的调用会等它做完。
+
+**打包**：`bun build --compile --minify --target=bun-<linux|darwin>-<x64|arm64> src/main.ts --outfile bin/<id>-<平台>`，四个平台都能在一台 Linux 上交叉编译，
+一个文件 60–80 MB（带着 Bun 自己）。包里只有这个可执行文件，hub 和电脑上都不需要 node / bun。
+
+### 模板
+
+`sdk/templates/go`、`sdk/templates/ts`：一个能直接跑的扩展，主导航上一页（搜索框、带图标的列表、点一行 push 出详情（`markdown`）、没结果时 `empty`）、
+总览上一张卡片（`stat_grid`）、一个设置项（问候语）、一个密钥（API Key，只显示设没设）、测试（Go：`exttest` 一致性检查 + 搜索和打开；TS：经协议走一遍）。
+给 UI 版本 3 以前的 App 画的样子也在里面（搜索框换成输入框加按钮，详情页带「返回」），作为「画给老 App」的例子。
+
+**push / pop 和老 App**：两个 SDK 都替扩展兼容 UI 版本 3 以前的 App（它们不认识 `push` / `pop`，点了会拿动作的 `id` 调 `ui.action`）：
+View 发给老 App 时，带 `push` 的动作换成 SDK 自己的 id（`ext.push.<n>`，记在内存里最近 512 个），老 App 点了，SDK 直接画被 push 的那一页、替换当前页；
+`ui.action` 回 `push` 就画那一页，回 `pop` 就画这一页最初的样子（`state` 为空）。扩展只写一遍 `push` / `pop`（`ext.Open` / `open()`）。
+
+### 命令行
+
+| 命令 | 做什么 |
+| --- | --- |
+| `new <id> [--template go\|ts] [--name <名字>] [--dir <目录>]` | 从模板写一个扩展（模板和 SDK 编在 personad 里：`sdk/go` 的 `sdk.Go`、`sdk.Bundle`），SDK 拷一份到 `<目录>/sdk/go` 或 `sdk/ts`，Go 的 `go.mod` 用 `replace` 指向它；目录里已经有东西就不写。不需要 hub |
+| `test [<目录>]` | 给这台机器构建，按装的时候那样查清单和包（程序在不在、配置的 schema、收件箱的分拣规则），再起程序跑 hub 的一致性检查（`extension/conformance`，和 hub 收 View 时同一套）。不需要 hub |
+| `pack [<目录>] [--platforms …] [--out dist] [--split]` | 清单里每个平台都构建（Go：`CGO_ENABLED=0 go build -buildvcs=false -trimpath`；TS：`bun build --compile`），打一个 `<id>-<版本>.tar.gz`（`--split` 每个平台一个），里面只有清单、各平台的程序、`skills/`、`assistant/`、`assets/`、README、LICENSE，没有源码和 SDK；打印 sha256 和可以贴进市场索引的 `packages` |
+| `dev [<目录>]` | 构建后挂到这台机器的 hub 上（下面），每秒看一次文件，改了就重建、让 hub 重启它（清单变了就重新挂）；扩展的 stderr、hub 对它的每次调用（方法、耗时、错误）打到终端；Ctrl-C 拿掉 |
+
+**dev**：只在 hub 机器上、主 token 经回环（和安装一样）。hub 把它当来源 `dev` 的扩展：直接从那个目录跑（不拷贝、不进数据库，hub 重启就没了），开着，
+清单里声明的权限都给（主人自己机器上自己的代码），环境和安装的扩展一样干净，但不进沙箱（同官方市场的扩展，见「沙箱」）。设置和密钥从目录里的 `extension.dev.json`（`{"config": {…}, "secrets": {…}}`，别提交）来，
+只放在 hub 的内存里；App 里看得到它（来源 `dev`），但开关、配置、密钥、卸载要改这个文件再 `dev`。id 不能和别的来源的扩展重复。
+接口：`POST /api/v1/extensions/-/dev {dir（绝对路径）, config?, secrets?}` 挂上或换掉（回详情）、`POST /api/v1/extensions/{id}/-/dev/restart`、
+`DELETE /api/v1/extensions/{id}/-/dev`、`GET /api/v1/extensions/{id}/-/dev/logs`（一行一条的文字流：它的日志，`→ <方法> <耗时>[：错误]`）。
+
+### 给扩展仓库：`scripts/gen/sync-sdk.sh`
+
+`scripts/gen/sync-sdk.sh <扩展仓库> [go|ts|all]` 把这个仓库的 SDK 拷到 `<扩展仓库>/sdk/go`、`sdk/ts`，在 `sdk/VERSION` 记下来源的 commit。
+扩展仓库的 `go.mod`：`require github.com/nwverse/persona/sdk/go v0.0.0` + `replace github.com/nwverse/persona/sdk/go => ./sdk/go`。
+SDK 的 TS 部分和模板变了要跑 `python3 scripts/gen/sdk_bundle.py`（`scripts/gen/extension_schema.py` 顺手跑；`scripts/test/test_sdk_bundle.py` 查它是不是最新的）。
+
+### 语音扩展：从 `/usr/bin/node` 迁到打包
+
+hub.json 里写 `"command": "/usr/bin/node"`、`"args": ["…/main.mjs"]` 的外部语音扩展依赖机器上的 node。迁成正常的已安装扩展：
+
+1. `personad extension new voice-x --template ts`，把原来的 `main.mjs` 搬进 `src/`（Bun 能直接跑 Node 的 `http` / `ws` 写法；WebSocket 服务用 `Bun.serve` 的 `websocket` 更省事）。
+2. 清单：去掉模板的 `ui`，写 `"contributes": {"voice": [{"id": "voice-x", "name": "…"}]}`，`"runtime": {"command": {…四个平台…}, "rpc": "none", "http": true}`，
+   `"activation_events": ["on_startup"]`；要 hub 的 token 就加 `"permissions": {"hub_api": true}`（和 hub.json 里一样，安装时会列出来）。
+   程序的 HTTP 交给 `main({…, fetch})`（`rpc: none` 时 SDK 不等 stdin，一直服务到 hub 停它），socket 是 `env().socket`。
+3. 原来 hub.json `config` 里的东西：标量拆成清单 `configuration` 的字段，凭据放 `secrets`；超出表单子集的（上游的对象数组）放一个 `string` 字段写 JSON，程序自己解析。
+   程序读 `env().config` / `env().secrets`（`rpc: none` 时 hub 经环境变量给）。
+4. `personad extension pack` → `personad extension install file:dist/voice-x-<版本>.tar.gz`，在 App 里填设置和密钥，确认语音能用后删掉 hub.json 里那一项、重启 hub。
+   App 按扩展的 `kind`（第一个扩展点 `voice`）和 `running` 找语音，id 变了模型配置的用途 `plugin.<id>` 也跟着变，要重新选一次模型。
+
+内置的 `personad voice`（下面「内置语音扩展」）不受影响：它就是 personad 自己，不依赖 node。
 
 ## Telegram：从内置扩展到扩展（#1704）
 

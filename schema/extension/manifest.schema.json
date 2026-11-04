@@ -51,9 +51,19 @@
         "args": {"type": "array", "items": {"type": "string"}},
         "env": {"type": "object", "additionalProperties": {"type": "string"}},
         "rpc": {"type": "string", "enum": ["stdio", "none"]},
-        "http": {"type": "boolean"}
+        "http": {"type": "boolean"},
+        "resources": {"$ref": "#/$defs/Resources"}
       },
       "required": ["command"]
+    },
+    "Resources": {
+      "description": "The most a program may use when the hub runs it in a sandbox (docs/extensions.md「沙箱」): memory in MB, CPU in percent of one core. Unset: 1024 MB, 100%.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "memory_mb": {"type": "integer", "minimum": 64, "maximum": 8192},
+        "cpu_percent": {"type": "integer", "minimum": 10, "maximum": 800}
+      }
     },
     "Command": {
       "description": "A path in the package, or one per platform ({\"linux-amd64\": \"bin/x\"}).",
@@ -103,7 +113,8 @@
         "ui": {"type": "array", "items": {"$ref": "#/$defs/UIItem"}},
         "agent_sources": {"type": "array", "items": {"$ref": "#/$defs/AgentSourceItem"}},
         "channel": {"type": "array", "items": {"$ref": "#/$defs/ChannelItem"}},
-        "events": {"type": "array", "items": {"$ref": "#/$defs/EventsItem"}}
+        "events": {"type": "array", "items": {"$ref": "#/$defs/EventsItem"}},
+        "shortcuts": {"type": "array", "items": {"$ref": "#/$defs/ShortcutItem"}}
       }
     },
     "ConnectorItem": {
@@ -205,8 +216,10 @@
         "placement": {"$ref": "view.schema.json#/$defs/Placement"},
         "hosts": {"type": "array", "items": {"$ref": "#/$defs/Host"}, "description": "launcher_section only."},
         "icon": {"$ref": "view.schema.json#/$defs/NavIcon", "description": "nav_page only."},
-        "opens": {"type": "string", "description": "overview_card only: a nav_page or plugin_page of the same extension."},
-        "connector": {"type": "string", "description": "inbox_item only: one of the extension's own connectors."}
+        "opens": {"type": "string", "description": "overview_card and widget only: a nav_page or extension_page of the same extension."},
+        "connector": {"type": "string", "description": "inbox_item only: one of the extension's own connectors."},
+        "families": {"type": "array", "minItems": 1, "items": {"$ref": "view.schema.json#/$defs/WidgetFamily"}, "description": "widget only (and needed there): the sizes it can be drawn at."},
+        "refresh_minutes": {"type": "integer", "minimum": 15, "maximum": 1440, "description": "widget only: how often the widget is drawn again on its own (30 when not said)."}
       },
       "required": ["id", "title", "placement"]
     },
@@ -254,6 +267,31 @@
         "subscribe": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["inbox.changed", "agent.needs_you", "agent.finished"]}}
       },
       "required": ["id", "subscribe"]
-    }
+    },
+    "ShortcutItem": {
+      "description": "An action of the extension the system runs (docs「系统级位置」): Shortcuts and Siri on iPhone, Mac and Apple Watch. The hub asks the extension shortcut.run with the values.",
+      "type": "object",
+      "properties": {
+        "id": {"$ref": "#/$defs/ID"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 40},
+        "description": {"type": "string", "maxLength": 200},
+        "params": {"type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/ShortcutParam"}},
+        "ui": {"type": "string", "description": "A whole page of the same extension (nav_page or extension_page) the app opens to show more of the result."}
+      },
+      "required": ["id", "title"]
+    },
+    "ShortcutParam": {
+      "description": "A value the shortcut asks for; it reaches the extension as a string (a toggle's \"true\" / \"false\").",
+      "type": "object",
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 40},
+        "kind": {"$ref": "#/$defs/ShortcutParamKind"},
+        "choices": {"type": "array", "minItems": 1, "maxItems": 50, "items": {"$ref": "view.schema.json#/$defs/Choice"}, "description": "choice only."},
+        "required": {"type": "boolean"}
+      },
+      "required": ["name", "title", "kind"]
+    },
+    "ShortcutParamKind": {"type": "string", "enum": ["text", "number", "toggle", "choice"]}
   }
 }

@@ -5,7 +5,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { LOOP_TEXT, loopHint } from "../../lib/loop-command";
 import { ApiError, api, enc, errorText } from "../../lib/api";
 import { uuid } from "../../lib/format";
-import { enterSends, isCoarsePointer } from "../../lib/viewport";
+import { enterSends, hasFinePointer } from "../../lib/viewport";
+import { INPUT_MAX } from "./dock";
 import { imagePayload, MAX_IMAGE, quotePath } from "../../lib/attachments";
 import { activateComposer, addContext, getContexts, newContext, registerComposer, removeContext, useContexts, withContexts, type ComposerHandle } from "../../lib/links";
 import { applyDraft, onDraftEvent, replaceNeedsConfirm, withUnsent, type DraftImage } from "../../lib/drafts";
@@ -77,6 +78,7 @@ export function Composer({
   footer,
   suggestion,
   mention,
+  onFocusChange,
 }: {
   draftKey: string;
   placeholder: string;
@@ -91,6 +93,8 @@ export function Composer({
   suggestion?: string;
   /** Turns on the @ menu: the chat's files and folder, and other sessions. */
   mention?: MentionSource;
+  /** The text box gains / loses focus (on a phone: the keyboard comes up / goes down). */
+  onFocusChange?: (focused: boolean) => void;
 }) {
   const [draft, setDraft] = useState(() => localStorage.getItem(`draft:${draftKey}`) ?? "");
   const [atts, setAtts] = useState<Attachment[]>([]);
@@ -120,7 +124,8 @@ export function Composer({
   useEffect(() => {
     setDraft(localStorage.getItem(`draft:${draftKey}`) ?? "");
     setAtts([]);
-    if (autoFocus) setTimeout(() => input.current?.focus(), 0);
+    // not on a touch screen alone: there the focus brings the keyboard up over the conversation just opened
+    if (autoFocus && hasFinePointer()) setTimeout(() => input.current?.focus(), 0);
   }, [draftKey, autoFocus]);
 
   // 引用 / 编辑 / a queued message pulled back / an edited picture, from the chat (lib/drafts.ts)
@@ -163,8 +168,10 @@ export function Composer({
     if (!el) return;
     el.style.height = "0px";
     const h = el.scrollHeight;
-    el.style.height = `${Math.min(Math.max(h, 24), 240)}px`;
-    el.style.overflowY = h > 240 ? "auto" : "hidden";
+    // the CSS max-height (INPUT_MAX) caps it: 240px, less when the visible height is small (a keyboard, a phone on
+    // its side), so the send button stays on screen; past it the box scrolls (overflow-y-auto: when the keyboard
+    // lowers the cap, no new draft comes to say so)
+    el.style.height = `${Math.max(h, 24)}px`;
   }, [draft]);
 
   const query = dismissed ? null : parseSlash(draft);
@@ -362,6 +369,8 @@ export function Composer({
             }} />
           </div>
         )}
+        {/* a field that turns disabled loses focus with no blur event: the keyboard is down, say so */}
+        <DisabledBlur disabled={Boolean(disabled)} focused={focused} onBlur={() => { setFocused(false); onFocusChange?.(false); }} />
         <textarea
           ref={input}
           rows={1}
@@ -370,8 +379,12 @@ export function Composer({
           onFocus={() => {
             activateComposer(handle);
             setFocused(true);
+            onFocusChange?.(true);
           }}
-          onBlur={() => setFocused(false)}
+          onBlur={() => {
+            setFocused(false);
+            onFocusChange?.(false);
+          }}
           onChange={(e) => {
             setDraft(e.target.value);
             setDismissed(false);
@@ -427,15 +440,17 @@ export function Composer({
               setDraft(suggestion);
               return;
             }
-            // a touch keyboard's return is a new line there; the send button sends
-            if (enterSends(e, isCoarsePointer())) {
+            // a touch keyboard's return is a new line there; the send button sends (a hardware keyboard with a
+            // trackpad, an iPad's, sends on Enter)
+            if (enterSends(e, hasFinePointer())) {
               e.preventDefault();
               void submit();
             }
           }}
           placeholder={suggestion && !draft ? `${suggestion}（Tab 填入）` : placeholder}
           aria-label="消息"
-          className="min-h-6 w-full resize-none bg-transparent px-2 pt-1.5 text-[14px] leading-[21px] text-ink outline-none [@media(pointer:coarse)]:text-[16px] [@media(pointer:coarse)]:leading-[24px] [overflow-wrap:anywhere] placeholder:text-ink-3 disabled:opacity-50"
+          style={{ maxHeight: INPUT_MAX }}
+          className="min-h-6 w-full resize-none overflow-y-auto bg-transparent px-2 pt-1.5 text-[14px] leading-[21px] text-ink outline-none [@media(pointer:coarse)]:text-[16px] [@media(pointer:coarse)]:leading-[24px] [overflow-wrap:anywhere] placeholder:text-ink-3 disabled:opacity-50"
         />
         {loop && (
           <div role="status" className={cx("flex items-center gap-1.5 px-2 text-[11.5px]", loop.missing ? "text-ink-3" : "text-ink-2")}>
@@ -443,7 +458,7 @@ export function Composer({
             <span className="min-w-0 truncate">{loop.text}</span>
           </div>
         )}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 [@media(pointer:coarse)]:gap-2">
           <input ref={fileInput} type="file" multiple hidden onChange={(e) => e.target.files && void addFiles(e.target.files).finally(() => (e.target.value = ""))} />
           <button
             type="button"
@@ -451,7 +466,7 @@ export function Composer({
             title={machineId ? "图片作为附件；其他文件传到会话所在的电脑" : "添加图片"}
             onClick={() => fileInput.current?.click()}
             disabled={disabled}
-            className="flex size-7 items-center justify-center rounded-[8px] text-ink-3 transition-[background-color,color,transform] duration-150 hover:bg-hover hover:text-ink active:scale-[0.94]"
+            className="touch-hit flex size-7 items-center justify-center rounded-[8px] text-ink-3 transition-[background-color,color,transform] duration-150 hover:bg-hover hover:text-ink active:scale-[0.94]"
           >
             {uploading ? <Spinner /> : <Icon name="plus" size={16} stroke={2} />}
           </button>
@@ -462,7 +477,7 @@ export function Composer({
               title="引用文件或会话（@）"
               disabled={disabled}
               onClick={typeAt}
-              className="flex size-7 items-center justify-center rounded-[8px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
+              className="touch-hit flex size-7 items-center justify-center rounded-[8px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
             >
               <Icon name="at" size={15} />
             </button>
@@ -478,19 +493,20 @@ export function Composer({
               setDismissed(false);
               input.current?.focus();
             }}
-            className="flex h-7 items-center justify-center rounded-[8px] px-1.5 font-mono text-[13px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
+            className="touch-hit flex h-7 items-center justify-center rounded-[8px] px-1.5 font-mono text-[13px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
           >
             /
           </button>
           )}
-          <div className="min-w-0 flex-1 truncate px-1 text-[11.5px] text-ink-3">{footer}</div>
+          {/* not overflow-hidden: the chips' tap areas reach past this row (touch-hit); the footer truncates its own text */}
+          <div className="min-w-0 flex-1 px-1 text-[11.5px] whitespace-nowrap text-ink-3">{footer}</div>
           {showStop ? (
             <button
               type="button"
               aria-label="中断"
               title="中断（Esc）"
               onClick={onStop}
-              className="flex size-7 items-center justify-center rounded-[8px] bg-red text-white transition-transform duration-150 active:scale-[0.94]"
+              className="touch-hit flex size-7 shrink-0 items-center justify-center rounded-[8px] bg-red text-white transition-transform duration-150 active:scale-[0.94]"
               style={{ animation: `pop-in 200ms ${EASE} both` }}
             >
               <Icon name="stop" size={12} />
@@ -502,7 +518,7 @@ export function Composer({
               title="发送（Enter）· 换行（Shift+Enter）"
               disabled={!canSend}
               onClick={() => void submit()}
-              className="flex size-7 items-center justify-center rounded-[8px] transition-[background-color,color,transform] duration-200 enabled:active:scale-[0.94]"
+              className="touch-hit flex size-7 shrink-0 items-center justify-center rounded-[8px] transition-[background-color,color,transform] duration-200 enabled:active:scale-[0.94]"
               style={{ background: canSend ? "var(--ink)" : "var(--line-strong)", color: canSend ? "var(--surface)" : "var(--ink-2)" }}
             >
               {sending ? <Spinner /> : <Icon name="up" size={16} stroke={2.4} />}
@@ -524,4 +540,14 @@ export function Composer({
       )}
     </div>
   );
+}
+
+/** Reports the blur a focused field misses when it is disabled (browsers send none). */
+function DisabledBlur({ disabled, focused, onBlur }: { disabled: boolean; focused: boolean; onBlur: () => void }) {
+  const blur = useRef(onBlur);
+  blur.current = onBlur;
+  useEffect(() => {
+    if (disabled && focused) blur.current();
+  }, [disabled, focused]);
+  return null;
 }

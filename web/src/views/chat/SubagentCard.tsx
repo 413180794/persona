@@ -49,7 +49,7 @@ export const SubagentCard = memo(function SubagentCard({ step, status, mid, scop
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
           aria-label={open ? "收起子 Agent 详情" : "展开子 Agent 详情"}
-          className="flex w-full min-w-0 items-start gap-2 rounded-lg text-left"
+          className="flex w-full min-w-0 items-start gap-2 rounded-lg text-left [@media(pointer:coarse)]:min-h-10"
         >
           <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-field text-ink-2">
             <Icon name="agent" size={14} />
@@ -57,7 +57,7 @@ export const SubagentCard = memo(function SubagentCard({ step, status, mid, scop
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 items-center gap-2">
               <span className="shrink-0 text-[11px] whitespace-nowrap text-ink-2">子 Agent</span>
-              <span className="min-w-0 flex-1 truncate text-[14px] leading-[1.428571] font-medium text-ink">{title}</span>
+              <span className="min-w-0 flex-1 truncate text-[length:var(--chat-secondary)] leading-[1.428571] font-medium text-ink">{title}</span>
               <span className={cx("inline-flex shrink-0 items-center gap-1.5 text-[12px] leading-[1.333333] whitespace-nowrap", status === "failed" ? "text-red" : "text-ink-2")}>
                 {running ? <Spinner size={11} /> : <Icon name={status === "failed" ? "info" : status === "stopped" ? "stop" : "check"} size={12} />}
                 {STATUS[status]}

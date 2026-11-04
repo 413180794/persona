@@ -20,6 +20,7 @@ import (
 	"github.com/nwverse/persona/server/internal/osproc"
 
 	"github.com/nwverse/persona/server/internal/assistant"
+	"github.com/nwverse/persona/server/internal/extension/sandbox"
 	"github.com/nwverse/persona/server/internal/hub"
 	"github.com/nwverse/persona/server/internal/mcpserver"
 	"github.com/nwverse/persona/server/internal/node"
@@ -109,6 +110,10 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if os.Args[1] == sandbox.RunCommand { // an extension's sandbox (docs/extensions.md「沙箱」); it passes signals on itself
+		stop()
+		os.Exit(sandbox.Run(os.Args[2:], os.Stderr))
+	}
 	var err error
 	switch os.Args[1] {
 	case "version", "--version", "-v":

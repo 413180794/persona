@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/nwverse/persona/sdk/go/wire"
@@ -100,5 +101,53 @@ func TestServe(t *testing.T) {
 	}
 	if f := c.call("other.method", nil); f.Error == nil || f.Error.Code != wire.ErrorCodeUnknownMethod {
 		t.Fatalf("unknown method: %+v", f.Error)
+	}
+}
+
+// An app before UI version 3 does not know push and pop: it calls ui.action with the action's id, and gets the pushed
+// page in place of this one; a newer app gets the push as written.
+func TestPushForOlderApps(t *testing.T) {
+	list := func(ctx context.Context, r *UIRequest) (*wire.View, error) {
+		if r.State != "" {
+			return &wire.View{Title: "详情 " + r.State, Sections: []wire.Section{}}, nil
+		}
+		return &wire.View{Title: "列表", Sections: []wire.Section{{Items: []wire.Component{
+			{Type: wire.ComponentRow, Title: "第一条", Action: Open("open", "", "1", "第一条")},
+		}}}}, nil
+	}
+	c := start(t, Program{ID: "example", Version: "1.0.0", UI: map[string]Page{"home": {Render: list,
+		Action: func(ctx context.Context, r *UIRequest) (*wire.ActionResult, error) {
+			if r.Action == "save" {
+				return &wire.ActionResult{Pop: true, Toast: "存好了"}, nil
+			}
+			return nil, nil
+		}}}})
+	c.call("initialize", map[string]any{"protocol": 1, "hub": map[string]any{"build": 1}, "granted": map[string]any{}})
+	var v wire.View
+	f := c.call("ui.render", wire.UIParams{Contribution: "home", UIVersion: 3})
+	_ = json.Unmarshal(f.Result, &v)
+	if a := v.Sections[0].Items[0].Action; a.ID != "open" || a.Push == nil || a.Push.State != `"1"` {
+		t.Fatalf("a newer app gets the push as written: %+v", a)
+	}
+	f = c.call("ui.render", wire.UIParams{Contribution: "home", UIVersion: 2})
+	_ = json.Unmarshal(f.Result, &v)
+	id := v.Sections[0].Items[0].Action.ID
+	if !strings.HasPrefix(id, pushPrefix) {
+		t.Fatalf("an older app gets an id of the SDK's: %q", id)
+	}
+	var res wire.ActionResult
+	f = c.call("ui.action", wire.UIParams{Contribution: "home", UIVersion: 2, Action: id})
+	if json.Unmarshal(f.Result, &res); res.View == nil || res.View.Title != `详情 "1"` {
+		t.Fatalf("the pushed page in place: %s %+v", f.Result, f.Error)
+	}
+	res = wire.ActionResult{}
+	f = c.call("ui.action", wire.UIParams{Contribution: "home", UIVersion: 2, Action: "save", State: `"1"`})
+	if json.Unmarshal(f.Result, &res); res.View == nil || res.View.Title != "列表" || res.Toast != "存好了" || res.Pop {
+		t.Fatalf("a pop is the page as first drawn: %s", f.Result)
+	}
+	res = wire.ActionResult{}
+	f = c.call("ui.action", wire.UIParams{Contribution: "home", UIVersion: 3, Action: "save"})
+	if json.Unmarshal(f.Result, &res); !res.Pop || res.View != nil {
+		t.Fatalf("a newer app gets the pop: %s", f.Result)
 	}
 }

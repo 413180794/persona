@@ -2,7 +2,7 @@
 // does, the layout one stays), so the shell sizes itself to what is visible: the composer rides on the keyboard and
 // the chat above it is not hidden under it. Chrome on Android resizes the page itself (`interactive-widget` in
 // index.html), and 100dvh is enough there.
-import { useEffect, type RefObject } from "react";
+import { useCallback, useEffect, useSyncExternalStore, type RefObject } from "react";
 
 const KEYBOARD_MIN = 120;
 
@@ -20,16 +20,34 @@ export function keyboardFrame(innerHeight: number, vv: { height: number; offsetT
   return { top: Math.max(0, vv.offsetTop), height: Math.round(vv.height) };
 }
 
-/** Keeps `ref`'s element over the visible part while the keyboard is up. It sets the element's style itself: the
- *  keyboard sends a stream of frames as it slides, and a React state per frame would re-render the whole page. */
+const KB_VARS = ["--kb-top", "--kb-h"] as const;
+
+/** The visible viewport as the variables fixed overlays on a phone sit in (styles.css `--kb-top` / `--kb-h`); null when
+ *  nothing covers the page, and the stylesheet's defaults (0 and 100dvh) apply. */
+export function keyboardVars(f: ViewportFrame | undefined): Record<(typeof KB_VARS)[number], string> | null {
+  return f ? { "--kb-top": `${f.top}px`, "--kb-h": `${f.height}px` } : null;
+}
+
+/** Keeps `ref`'s element over the visible part while the keyboard is up, and `--kb-top` / `--kb-h` on the root element
+ *  for the other fixed things (the side panel, sheets). It sets the styles itself: the keyboard sends a stream of frames
+ *  as it slides, and a React state per frame would re-render the whole page. */
 export function useKeyboardFrame(ref: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const vv = typeof window === "undefined" ? undefined : window.visualViewport;
     if (!vv) return;
+    const root = document.documentElement.style;
+    let last = "";
     const update = () => {
+      const f = keyboardFrame(window.innerHeight, vv);
+      // the visual viewport scrolls while the keyboard stands still: a root variable restyles the whole page, so only
+      // a frame that moved is written
+      const key = f ? `${f.top}/${f.height}` : "";
+      if (key === last) return;
+      last = key;
+      const vars = keyboardVars(f);
+      KB_VARS.forEach((k) => (vars ? root.setProperty(k, vars[k]) : root.removeProperty(k)));
       const el = ref.current;
       if (!el) return;
-      const f = keyboardFrame(window.innerHeight, vv);
       el.style.position = f ? "fixed" : "";
       el.style.insetInline = f ? "0" : "";
       el.style.top = f ? `${f.top}px` : "";
@@ -41,16 +59,54 @@ export function useKeyboardFrame(ref: RefObject<HTMLElement | null>) {
     return () => {
       vv.removeEventListener("resize", update);
       vv.removeEventListener("scroll", update);
+      KB_VARS.forEach((k) => root.removeProperty(k));
     };
   }, [ref]);
 }
 
-/** A coarse pointer (a finger): the composer's Enter makes a new line there and only its button sends. */
-export function isCoarsePointer(): boolean {
-  return typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+// one list per query: the chat reads them on every render (a streaming reply re-renders it per delta)
+const lists = new Map<string, MediaQueryList>();
+function mediaList(q: string): MediaQueryList | undefined {
+  if (typeof matchMedia !== "function") return undefined;
+  let l = lists.get(q);
+  if (!l) lists.set(q, (l = matchMedia(q)));
+  return l;
+}
+const matches = (q: string) => Boolean(mediaList(q)?.matches);
+
+const FINE = "(any-pointer: fine)";
+
+/** Some pointer is precise (a mouse, a trackpad; an iPad with its keyboard and trackpad): Enter sends there. */
+export function hasFinePointer(): boolean {
+  return matches(FINE);
 }
 
-/** Whether Enter (without Shift) sends: on a keyboard with a pointer, yes; on a touch screen it is a new line. */
-export function enterSends(e: { key: string; shiftKey: boolean }, coarse: boolean): boolean {
-  return e.key === "Enter" && !e.shiftKey && !coarse;
+/** Whether Enter (without Shift) sends: with a precise pointer, yes; on a touch screen alone it is a new line there and
+ *  only the button sends. */
+export function enterSends(e: { key: string; shiftKey: boolean }, fine: boolean): boolean {
+  return e.key === "Enter" && !e.shiftKey && fine;
 }
+
+/** The narrow layout (below lg: the sidebar is a drawer, the side panel covers the page): Tailwind's `max-lg:`, kept in step. */
+export const NARROW = "(max-width: 1023px)";
+/** A phone on its side: little height for anything above the composer. */
+export const SHORT = "(max-height: 500px)";
+/** A phone-width screen (Tailwind's max-sm): Dialog is a bottom sheet, 设置 a list of categories. */
+export const PHONE = "(max-width: 639px)";
+/** No hover (a touch screen): what shows on hover elsewhere stays shown. */
+export const NO_HOVER = "(hover: none)";
+/** Whether a media query matches now (once, not following it). */
+export const mediaMatches = (q: string) => matches(q);
+
+/** Whether a media query matches, following it. */
+export function useMedia(query: string): boolean {
+  const subscribe = useCallback((l: () => void) => {
+    const q = mediaList(query);
+    q?.addEventListener("change", l);
+    return () => q?.removeEventListener("change", l);
+  }, [query]);
+  return useSyncExternalStore(subscribe, () => matches(query), () => false);
+}
+
+/** Whether a precise pointer is there, following it (a trackpad attached to an iPad). */
+export const useFinePointer = () => useMedia(FINE);

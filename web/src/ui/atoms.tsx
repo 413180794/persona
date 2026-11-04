@@ -1,9 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { stateColor, STATE_LABEL } from "../lib/format";
 import type { AgentState } from "../lib/types";
 import { Icon, type IconName } from "./icons";
 import { collapseMounted } from "../lib/disclosure";
+import { useCloseOnBack } from "../lib/back-close";
+import { keyboardFrame } from "../lib/viewport";
+import { focusables, NARROW_QUERY, placeMenu, SHEET_QUERY, trapTab, useMedia } from "./overlay";
 
 export const EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
 
@@ -125,7 +128,7 @@ export function IconButton({
       disabled={disabled}
       onClick={onClick}
       className={cx(
-        "flex shrink-0 items-center justify-center rounded-[8px] transition-[background-color,color,transform] duration-150 enabled:active:scale-[0.94] disabled:opacity-40",
+        "touch-hit flex shrink-0 items-center justify-center rounded-[8px] transition-[background-color,color,transform] duration-150 enabled:active:scale-[0.94] disabled:opacity-40",
         active ? "bg-hover text-ink" : "text-ink-3 enabled:hover:bg-hover enabled:hover:text-ink",
         className,
       )}
@@ -284,18 +287,15 @@ export function Menu({
   const [active, setActive] = useState(-1);
   const [box, setBox] = useState<{ top: number; height: number } | null>(null);
   const [pos, setPos] = useState<React.CSSProperties>({ visibility: "hidden" });
+  const narrow = useMedia(NARROW_QUERY);
 
   useLayoutEffect(() => {
     if (!anchor || !ref.current) return;
-    const r = anchor.getBoundingClientRect();
-    const h = ref.current.offsetHeight;
-    const menuWidth = Math.min(width, innerWidth - 16);
-    const left = align === "left" ? r.left : r.right - menuWidth;
-    let top = side === "bottom" ? r.bottom + 6 : r.top - h - 6;
-    if (side === "bottom" && top + h > innerHeight - 8) top = r.top - h - 6;
-    if (top < 8) top = 8;
-    setPos({ left: Math.max(8, Math.min(left, innerWidth - menuWidth - 8)), top, width: menuWidth });
-  }, [anchor, align, side, width, items.length]);
+    // On a phone it keeps to what the keyboard leaves visible (the frame --kb-top / --kb-h follow).
+    const view = narrow ? keyboardFrame(innerHeight, window.visualViewport) : undefined;
+    const { maxHeight, ...at } = placeMenu(anchor.getBoundingClientRect(), ref.current.offsetHeight, { width, align, side, screenW: innerWidth, screenH: innerHeight, view });
+    setPos(maxHeight === undefined ? at : { ...at, maxHeight: `min(70vh, 520px, ${maxHeight}px)` });
+  }, [anchor, align, side, width, items.length, narrow]);
 
   useLayoutEffect(() => {
     const el = rows.current[active];
@@ -303,7 +303,9 @@ export function Menu({
   }, [active]);
 
   useEffect(() => {
-    const down = (e: MouseEvent) => {
+    // pointerdown, not mousedown: lifting the finger after a long press that opened the menu sends a compatibility
+    // mousedown at the finger, outside the menu, which closed it at once. A tap outside still closes it.
+    const down = (e: PointerEvent) => {
       if (ref.current?.contains(e.target as Node) || anchor?.contains(e.target as Node)) return;
       onClose();
     };
@@ -326,10 +328,10 @@ export function Menu({
         if (!items[active].submenu && !items[active].keepOpen) onClose();
       }
     };
-    addEventListener("mousedown", down);
+    addEventListener("pointerdown", down);
     addEventListener("keydown", key);
     return () => {
-      removeEventListener("mousedown", down);
+      removeEventListener("pointerdown", down);
       removeEventListener("keydown", key);
     };
   }, [anchor, onClose, items, active]);
@@ -366,7 +368,7 @@ export function Menu({
               if (!it.submenu && !it.keepOpen) onClose();
             }}
             className={cx(
-              "relative z-10 flex h-8 w-full items-center gap-2 rounded-[6px] px-2 text-left text-[12.5px] disabled:opacity-40",
+              "relative z-10 flex h-8 w-full items-center gap-2 rounded-[6px] px-2 pointer-coarse:min-h-11 text-left text-[12.5px] disabled:opacity-40",
               it.danger ? "text-red" : "text-ink",
             )}
           >
@@ -399,6 +401,9 @@ export function useMenu() {
 
 // ── modal dialog ────────────────────────────────────────
 
+/** A modal. Wide: a card in the middle of the page. Phone width (max-sm): a sheet up from the bottom of what the
+ *  keyboard leaves visible (--kb-top / --kb-h), at most 90% of it, its body scrolling between the title and the footer,
+ *  and Back closes it. Either way the focus moves in, Tab stays in, and goes back where it was when it closes. */
 export function Dialog({
   open,
   onClose,
@@ -414,24 +419,60 @@ export function Dialog({
   width?: number;
   footer?: React.ReactNode;
 }) {
+  const panel = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const sheet = useMedia(SHEET_QUERY);
+  useCloseOnBack(open, onClose, sheet);
   useEffect(() => {
     if (!open) return;
     const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     addEventListener("keydown", key);
     return () => removeEventListener("keydown", key);
   }, [open, onClose]);
+  useEffect(() => {
+    const el = panel.current;
+    if (!open || !el) return;
+    const back = document.activeElement as HTMLElement | null;
+    // The dialog itself, so a phone's keyboard does not come up for its first field (one with autoFocus took it already).
+    if (!el.contains(document.activeElement)) el.focus({ preventScroll: true });
+    const tab = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const list = focusables(el);
+      const i = trapTab(list.length, list.indexOf(document.activeElement as HTMLElement), e.shiftKey);
+      if (i === null) return;
+      e.preventDefault();
+      (list[i] ?? el).focus();
+    };
+    el.addEventListener("keydown", tab);
+    return () => {
+      el.removeEventListener("keydown", tab);
+      if (back?.isConnected) back.focus({ preventScroll: true });
+    };
+  }, [open]);
   if (!open) return null;
   return createPortal(
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/25 px-4 pt-[12vh] pb-8 backdrop-blur-[2px] dark:bg-black/45" style={{ animation: "fade-in 140ms ease-out both" }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" className="w-full overflow-hidden rounded-[14px] bg-surface shadow-overlay" style={{ maxWidth: width, animation: `slide-up 220ms ${EASE} both` }}>
+    <div
+      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/25 px-4 pt-[12vh] pb-8 backdrop-blur-[2px] dark:bg-black/45 max-sm:top-(--kb-top) max-sm:bottom-auto max-sm:h-(--kb-h) max-sm:items-end max-sm:overflow-hidden max-sm:p-0"
+      style={{ animation: "fade-in 140ms ease-out both" }}
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        ref={panel}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        tabIndex={-1}
+        className="w-full max-w-(--dialog-w) animate-[slide-up_220ms_var(--ease-out-strong)_both] overflow-hidden rounded-[14px] bg-surface shadow-overlay outline-none max-sm:flex max-sm:max-h-[calc(var(--kb-h)*0.9)] max-sm:max-w-none max-sm:animate-none max-sm:flex-col max-sm:rounded-b-none max-sm:transition-transform max-sm:duration-300 max-sm:ease-(--ease-out-strong) max-sm:starting:translate-y-full"
+        style={{ "--dialog-w": `${width}px` } as React.CSSProperties}
+      >
         {title && (
-          <div className="flex items-center justify-between gap-3 px-4 pt-3.5 pb-1">
-            <h2 className="text-[14px] font-semibold text-ink">{title}</h2>
+          <div className="flex items-center justify-between gap-3 px-4 pt-3.5 pb-1 max-sm:shrink-0">
+            <h2 id={titleId} className="text-[14px] font-semibold text-ink">{title}</h2>
             <IconButton icon="x" label="关闭" onClick={onClose} size={26} iconSize={14} />
           </div>
         )}
-        <div className="px-4 pt-2 pb-4">{children}</div>
-        {footer && <div className="flex items-center justify-end gap-2 border-t border-line bg-inset px-4 py-2.5">{footer}</div>}
+        <div className={cx("px-4 pt-2 pb-4 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto max-sm:overscroll-contain", !footer && "max-sm:pb-[calc(16px+env(safe-area-inset-bottom))]")}>{children}</div>
+        {footer && <div className="flex items-center justify-end gap-2 border-t border-line bg-inset px-4 py-2.5 max-sm:shrink-0 max-sm:pb-[calc(10px+env(safe-area-inset-bottom))]">{footer}</div>}
       </div>
     </div>,
     document.body,

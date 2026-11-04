@@ -10,6 +10,7 @@
   "display": "standalone",
   "background_color": "#fafafb",
   "theme_color": "#fafafb",
+  "user_preferences": { "color_scheme": { "dark": { "background_color": "#17181a", "theme_color": "#17181a" } } },
   "icons": [
     { "src": "/app-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },

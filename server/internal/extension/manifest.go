@@ -94,6 +94,33 @@ type Runtime struct {
 	RPC string `json:"rpc,omitempty"`
 	// HTTP: the program serves HTTP on PERSONA_PLUGIN_SOCKET, and the hub relays /api/v1/plugins/<id>/… to it.
 	HTTP bool `json:"http,omitempty"`
+	// Resources are the most it may use when the hub runs it in a sandbox (docs/extensions.md「沙箱」); the defaults
+	// otherwise.
+	Resources *Resources `json:"resources,omitempty"`
+}
+
+// Resources cap a sandboxed program: memory in MB and CPU in percent of one core.
+type Resources struct {
+	MemoryMB   int `json:"memory_mb,omitempty"`
+	CPUPercent int `json:"cpu_percent,omitempty"`
+}
+
+// The bounds of Resources, and what a program that names none gets.
+const (
+	ResourcesMemoryMin, ResourcesMemoryMax, ResourcesMemoryDefault = 64, 8192, 1024
+	ResourcesCPUMin, ResourcesCPUMax, ResourcesCPUDefault          = 10, 800, 100
+)
+
+// Limits are r with the defaults filled in.
+func (r *Resources) Limits() Resources {
+	out := Resources{MemoryMB: ResourcesMemoryDefault, CPUPercent: ResourcesCPUDefault}
+	if r != nil && r.MemoryMB > 0 {
+		out.MemoryMB = r.MemoryMB
+	}
+	if r != nil && r.CPUPercent > 0 {
+		out.CPUPercent = r.CPUPercent
+	}
+	return out
 }
 
 // SpeaksRPC says whether the program speaks the plugin protocol.
@@ -181,6 +208,18 @@ func (c Command) For(platform string) (string, bool) {
 	}
 	p, ok := c.ByPlatform[platform]
 	return p, ok && p != ""
+}
+
+// Platforms are the platforms it has a program for, sorted (none for a single path).
+func (c Command) Platforms() []string {
+	out := make([]string, 0, len(c.ByPlatform))
+	for p, path := range c.ByPlatform {
+		if path != "" {
+			out = append(out, p)
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // SecretSpec is a secret the plugin needs.
@@ -369,6 +408,13 @@ func (m *Manifest) Validate() error {
 				}
 			}
 		}
+		if name == "shortcuts" {
+			for _, s := range m.Shortcuts() {
+				if s.UI != "" && !slices.ContainsFunc(m.UIs(), func(o UIItem) bool { return o.ID == s.UI && FullPage(o.Placement) }) {
+					bad("contributes.shortcuts: %s opens %q, which is not a nav_page or extension_page of this extension", s.ID, s.UI)
+				}
+			}
+		}
 		if name == "providers" {
 			for _, it := range m.Providers() {
 				if it.DynamicModels && !m.Runtime.SpeaksRPC() {
@@ -430,6 +476,14 @@ func (r *Runtime) validate() []error {
 	}
 	if !r.SpeaksRPC() && !r.HTTP {
 		bad("runtime: rpc none and no http: the hub could not talk to it")
+	}
+	if res := r.Resources; res != nil {
+		if res.MemoryMB != 0 && (res.MemoryMB < ResourcesMemoryMin || res.MemoryMB > ResourcesMemoryMax) {
+			bad("runtime.resources.memory_mb %d: %d–%d", res.MemoryMB, ResourcesMemoryMin, ResourcesMemoryMax)
+		}
+		if res.CPUPercent != 0 && (res.CPUPercent < ResourcesCPUMin || res.CPUPercent > ResourcesCPUMax) {
+			bad("runtime.resources.cpu_percent %d: %d–%d", res.CPUPercent, ResourcesCPUMin, ResourcesCPUMax)
+		}
 	}
 	return append(errs, checkEnv("runtime.env", r.Env)...)
 }
@@ -590,14 +644,27 @@ func (m *Manifest) UIs() []UIItem {
 	return out
 }
 
-// Surfaces are the slots outside its own settings the plugin draws in (UISlot.Shown), each once, in UISlots' order:
-// the user is shown them before installing and agrees again when an upgrade adds one.
+// Shortcuts are the manifest's contributions to shortcuts.
+func (m *Manifest) Shortcuts() []ShortcutItem {
+	var out []ShortcutItem
+	_ = json.Unmarshal(m.Contributes["shortcuts"], &out)
+	return out
+}
+
+// SurfaceShortcuts is the surface of an extension with shortcuts: its actions in Shortcuts and Siri.
+const SurfaceShortcuts = "shortcuts"
+
+// Surfaces are the slots outside its own settings the plugin draws in (UISlot.Shown), each once, in UISlots' order,
+// then shortcuts when it has some: the user is shown them before installing and agrees again when an upgrade adds one.
 func (m *Manifest) Surfaces() []string {
 	var out []string
 	for _, sl := range UISlots {
 		if sl.Shown != "" && slices.ContainsFunc(m.UIs(), func(u UIItem) bool { return u.Placement == sl.Name }) {
 			out = append(out, sl.Name)
 		}
+	}
+	if len(m.Shortcuts()) > 0 {
+		out = append(out, SurfaceShortcuts)
 	}
 	return out
 }

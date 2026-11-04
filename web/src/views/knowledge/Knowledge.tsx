@@ -50,7 +50,7 @@ export function Knowledge({ kind, id, onToggleSidebar }: { kind?: string; id?: s
         onToggleSidebar={onToggleSidebar}
         onOpen={open}
       />
-      <section className={cx("min-h-0 min-w-0 flex-1 flex-col", detailOpen ? "flex" : "hidden @4xl:flex")}>
+      <section className={cx("min-h-0 min-w-0 flex-1 flex-col", detailOpen ? "flex" : "hidden @3xl:flex")}>
         {detailOpen ? (
           <EntryDetail
             key={`${kind}/${id}`}

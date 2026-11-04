@@ -8,12 +8,13 @@ import { refreshAssistant, useStore } from "../lib/store";
 import { NEW_CONVERSATION, pickedLauncher, pickLauncher } from "../lib/assistant-chat";
 import { noteSent } from "../lib/outbox";
 import type { Session } from "../lib/types";
-import { EASE, IconButton, Loading, toast } from "../ui/atoms";
+import { cx, EASE, IconButton, Loading, toast } from "../ui/atoms";
 import { Icon } from "../ui/icons";
 import { ChatView } from "./chat/ChatView";
 import { Composer, type Outgoing } from "./chat/Composer";
 import { StarterLauncherChip } from "./assistant/AssistantChat";
 import { PersonaAvatar, usePersona } from "./assistant/Persona";
+import { ShellHeaderSlots, ShellSwitch } from "./ShellSwitch";
 
 const SUGGESTIONS = ["今天我有哪些会？帮我准备一下", "看看各台电脑上的 Agent 都在干什么", "总结一下飞书里需要我回复的消息", "我最近在做哪些项目？进展如何"];
 
@@ -26,7 +27,9 @@ export function PersonaAssistant({ sid, fresh, onToggleSidebar }: { sid?: string
   const id = sid ?? assistant?.main;
   if (id) {
     if (!assistant) return <Centered><Loading /></Centered>;
-    return <ChatView key={id} mid={assistant.machine_id} sid={id} assistant starting={starting.has(id)} onToggleSidebar={onToggleSidebar} />;
+    // the main conversation is the phone's 助手 page: 「助手 | Agents」 in its top bar (ChatView's `topCenter`, narrow only)
+    const topCenter = id === assistant.main ? <ShellSwitch page="assistant" /> : undefined;
+    return <ChatView key={id} mid={assistant.machine_id} sid={id} assistant starting={starting.has(id)} onToggleSidebar={onToggleSidebar} topCenter={topCenter} />;
   }
   if (!loaded) return <Centered><Loading /></Centered>;
   return <Starter main onToggleSidebar={onToggleSidebar} />;
@@ -68,9 +71,14 @@ function Starter({ main, onToggleSidebar }: { main?: boolean; onToggleSidebar: (
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-4">
-        <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
-        <span className="flex-1" />
-        <button type="button" onClick={() => navigate({ name: "profile" })} className="flex h-7 items-center gap-1.5 rounded-[8px] px-2 text-[12px] font-medium whitespace-nowrap text-ink-2 shadow-btn hover:bg-hover hover:text-ink">
+        {/* a phone's 助手 page: 「助手 | Agents」 between the same side slots as ChatView's and the Agents page's */}
+        {main ? (
+          <ShellHeaderSlots page="assistant" onToggleSidebar={onToggleSidebar} end={<IconButton icon="info" label="资料" onClick={() => navigate({ name: "profile" })} />} />
+        ) : (
+          <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
+        )}
+        <span className={cx("flex-1", main && "max-lg:hidden")} />
+        <button type="button" onClick={() => navigate({ name: "profile" })} className={cx("flex h-7 items-center gap-1.5 rounded-[8px] px-2 text-[12px] font-medium whitespace-nowrap text-ink-2 shadow-btn hover:bg-hover hover:text-ink", main && "max-lg:hidden")}>
           <PersonaAvatar size={16} fallback={<Icon name="info" size={13} />} /> 资料
         </button>
       </header>

@@ -12,7 +12,7 @@ import { machineWithHub } from "../../lib/mesh";
 import { href, onLinkClick } from "../../lib/router";
 import { useStore } from "../../lib/store";
 import type { Interaction } from "../../lib/types";
-import { Collapse, cx, IconButton, Loading } from "../../ui/atoms";
+import { Collapse, cx, IconButton, Loading, Menu, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { DraftDialog } from "./InboxDialogs";
 import { TriageBanner } from "./TriageBanner";
@@ -43,6 +43,7 @@ export function InboxList({ selected }: { selected?: string }) {
   const [open, setOpen] = useState<Set<string>>(() => new Set(["action", "fyi"]));
   const [editing, setEditing] = useState<InboxItem | null>(null);
   const accounts = useMailAccounts();
+  const more = useMenu();
 
   // The opened item stays in sight in the list (a link straight to it, a click in the detail).
   useEffect(() => {
@@ -86,7 +87,9 @@ export function InboxList({ selected }: { selected?: string }) {
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索标题、发件人、内容" aria-label="搜索收件箱" className="min-w-0 flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink-3" />
           {query && <IconButton icon="x" label="清除" size={20} iconSize={11} onClick={() => setQuery("")} />}
         </label>
-        <div className="mt-2.5 flex flex-wrap items-center gap-1.5" role="toolbar" aria-label="筛选">
+        {/* A phone: the chips in one row that scrolls sideways, 全部标为已处理 in the ⋯ menu at its end. */}
+        <div className="mt-2.5 flex items-center gap-1.5">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 max-sm:-my-1 max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:py-1 max-sm:scrollbar-none max-sm:[&>*]:shrink-0" role="toolbar" aria-label="筛选">
           <Chip on={!source && !kind} onClick={() => { setSource(""); setKind(""); }}>全部</Chip>
           <Chip on={source === "feishu"} onClick={() => pickSource("feishu")}>飞书</Chip>
           {chips.map((a) => (
@@ -104,13 +107,19 @@ export function InboxList({ selected }: { selected?: string }) {
             disabled={!openInView.length}
             title={`全部标为已处理：${scope}`}
             onClick={() => void setAllDone(openInView, true)}
-            className="ml-auto inline-flex h-7 items-center gap-1.5 rounded-control bg-surface px-2.5 text-[12px] whitespace-nowrap text-ink-2 shadow-btn transition-colors duration-150 hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-45"
+            className="ml-auto inline-flex h-7 items-center gap-1.5 rounded-control bg-surface px-2.5 text-[12px] whitespace-nowrap text-ink-2 shadow-btn transition-colors duration-150 hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-45 max-sm:hidden"
           >
             <Icon name="check" size={12} stroke={2.6} />
             全部标为已处理
             <span className="text-ink-3">{scope}</span>
           </button>
         </div>
+        <IconButton icon="more" label="更多操作" onClick={more.open} active={Boolean(more.anchor)} className="sm:hidden" />
+        </div>
+        {more.anchor && (
+          <Menu anchor={more.anchor} onClose={more.close} align="right" width={240}
+            items={[{ key: "all-done", label: "全部标为已处理", hint: scope, icon: "check", disabled: !openInView.length, onSelect: () => void setAllDone(openInView, true) }]} />
+        )}
 
         <TriageBanner triage={triage} />
         {error && !items.length && <p className="mt-4 text-[12.5px] text-red">{error}</p>}

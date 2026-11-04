@@ -241,6 +241,9 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, detailOut(r, ps.detail(r.Context(), ps.reg.Get(p.Record.ID))))
 	}))
+	mux.HandleFunc("PUT /api/v1/admin/extensions/{id}/sandbox", func(w http.ResponseWriter, r *http.Request) {
+		h.putSandbox(w, r, adminActor) // the admin session's checks are the mux's (extension_sandbox.go)
+	})
 	mux.HandleFunc("DELETE /api/v1/admin/extensions/{id}", one(func(w http.ResponseWriter, r *http.Request, ps *extensions, p *extension.Extension) {
 		var in struct {
 			KeepData bool `json:"keep_data"`

@@ -774,6 +774,9 @@ def main() -> int:
             if not path.exists() or path.read_text() != text:
                 path.write_text(text)
                 print(f"wrote {path.relative_to(ROOT)}")
+    if not args.check:
+        # sdk/ts/src/wire.ts is also in the bundle `personad extension new` writes extensions from.
+        subprocess.run([sys.executable, str(ROOT / "scripts" / "gen" / "sdk_bundle.py")], check=True)
     if stale:
         print("generated files differ from schema/extension (run python3 scripts/gen/extension_schema.py):",
               file=sys.stderr)

@@ -8,7 +8,7 @@ import type { BackgroundTask, LoopInfo, Session } from "../../lib/types";
 import { Button, copyText, cx, Dialog, useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 
-/** "⟳ 11:57" and "后台 2" in the chat's header; a click opens them. */
+/** "⟳ 11:57" and "后台 2" in the chat's header (on a phone one icon: ⟳, or ⚙ 2); a click opens them. */
 export function ActivityChips({ session, onStopLoop }: { session: Session; onStopLoop: () => void }) {
   const [open, setOpen] = useState(false);
   const loop = session.loop;
@@ -18,7 +18,7 @@ export function ActivityChips({ session, onStopLoop }: { session: Session; onSto
   const label = [loop ? `循环中，${loopLabel(loop, now)}` : "", bg.length ? `${bg.length} 个后台任务` : ""].filter(Boolean).join("，");
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} aria-label={`${label}，点按查看`} title={label} className="flex h-7 shrink-0 items-center gap-1 rounded-[8px] px-1 transition-colors hover:bg-hover">
+      <button type="button" onClick={() => setOpen(true)} aria-label={`${label}，点按查看`} title={label} className="touch-hit flex h-7 shrink-0 items-center gap-1 rounded-[8px] px-1 transition-colors hover:bg-hover">
         {loop && (
           <span className="flex h-5.5 items-center gap-1 rounded-full bg-accent-tint px-2 text-[11.5px] font-medium whitespace-nowrap text-accent-ink">
             <Icon name="loop" size={12} stroke={2.2} />
@@ -26,7 +26,7 @@ export function ActivityChips({ session, onStopLoop }: { session: Session; onSto
           </span>
         )}
         {bg.length > 0 && (
-          <span className="flex h-5.5 items-center gap-1 rounded-full bg-orange-tint px-2 text-[11.5px] font-medium whitespace-nowrap text-orange">
+          <span className={cx("flex h-5.5 items-center gap-1 rounded-full bg-orange-tint px-2 text-[11.5px] font-medium whitespace-nowrap text-orange", loop && "max-sm:hidden")}>
             <Icon name="gear" size={12} stroke={2.2} />
             <span className="hidden sm:inline">后台</span> {bg.length}
           </span>

@@ -1,16 +1,17 @@
 // Beautiful UI's Sidebar Nav: workspace row, quick search, sections, one gliding highlight. Persona's main conversation
 // is the first entry (the app opens on 助手); a new conversation and a new agent are the「+」of their sections (#1239).
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { NARROW, useMedia } from "../lib/viewport";
 import { AGENT_FILTERS, agentFilter, applyFilter, arrangeSpaces, filterCounts, isSpaceMuted, matchingKeys, shownFilters, unreadOf, type AgentFilter, type FilterCounts } from "../lib/agent-filter";
 import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, buildSpaces, isQuiet, splitAgentSessions, type AgentGroup, type AgentMutes, type Space } from "../lib/agent-groups";
 import { buildRepoTree, type RepoTree, type RepoWorktree } from "../lib/agent-repos";
 import { buildMachineTree, resolveTab, type HerdrMachine, type HerdrSpace, type HerdrTab } from "../lib/herdr-tree";
 import { addSection, arrangeSessions, assignSection, GROUP_LABEL, isDefaultView, providerLabel, removeSection, resetView, setView, SHOW_LABEL, SORT_LABEL, toggleProvider, togglePin, totalUnread, updateAgentPrefs, useAgentList, useAgentPrefs, viewOf, type AgentPrefs, type AgentSession, type GroupBy, type ShowMode, type SortBy } from "../lib/agents";
-import { api, errorText, setToken } from "../lib/api";
+import { api, setToken } from "../lib/api";
 import { useInboxBadge } from "../lib/inbox";
 import { useLarkHome } from "../lib/lark-chats";
 import { machineWithHub } from "../lib/mesh";
-import { ago, baseName, sessionDeletable, sessionPreview, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
+import { ago, baseName, sessionPreview, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
 import { agentKey, isSpacePinned, pinnedSessions } from "../lib/pins";
 import { NAV_PAGES, otherConversations, extensionNavKey, sidebarActiveKey } from "../lib/persona-nav";
 import { useExtensionSlot } from "../lib/extension-slots";
@@ -18,10 +19,10 @@ import { toneOf } from "../lib/extension-ui";
 import { BADGE_TONE, navIcon, pageRoute } from "./extensions/ExtensionSlots";
 import { href, navigate, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
-import { reset, refresh, refreshTodos, useLarkOn, useStore } from "../lib/store";
-import { buildTodoAgentGroups, findTodoForSpace, openTodoFromTag, TODO_STATUS_INFO, unlinkAgentFromTodo, type TodoStatus } from "../lib/todos";
+import { reset, useLarkOn, useStore } from "../lib/store";
+import { buildTodoAgentGroups, findTodoForSpace, openTodoFromTag, TODO_STATUS_INFO, type TodoStatus } from "../lib/todos";
 import type { AgentState, Machine, Session } from "../lib/types";
-import { Collapse, cx, EASE, Kbd, Menu, StatusDot, toast, useMenu, type MenuItem } from "../ui/atoms";
+import { Collapse, cx, EASE, Kbd, Menu, StatusDot, useMenu, type MenuItem } from "../ui/atoms";
 import { AppMark } from "../ui/AppMark";
 import { Icon, type IconName } from "../ui/icons";
 import { DeleteSessionDialog, RenameDialog, RenameSpaceDialog } from "./chat/SessionDialogs";
@@ -47,18 +48,203 @@ function useFolded(key: string, initial = false): [boolean, () => void] {
   ];
 }
 
+/** The gliding highlight under a list of rows (Beautiful UI's Sidebar Nav): rows register under their keys, and the
+ *  one under the pointer (else the active one) gets the box. The list is the box's scroll container (`nav`). */
+function useGlide(activeKey: string) {
+  const nav = useRef<HTMLDivElement>(null);
+  const rows = useRef(new Map<string, HTMLElement>());
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [box, setBox] = useState<{ top: number; height: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = rows.current.get(hovered ?? activeKey);
+    let next: { top: number; height: number } | null = null;
+    if (el && nav.current) {
+      const n = nav.current.getBoundingClientRect(),
+        r = el.getBoundingClientRect();
+      if (r.height) next = { top: r.top - n.top + nav.current.scrollTop, height: r.height };
+    }
+    // runs after every render (rows fold, lists change): only a real move updates
+    setBox((b) => (b?.top === next?.top && b?.height === next?.height ? b : next));
+  });
+  const reg: RegFn = (k) => (el) => {
+    if (el) rows.current.set(k, el);
+    else rows.current.delete(k);
+  };
+  const highlight = (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute inset-x-2.5 rounded-[7px] bg-hover"
+      style={{ top: box?.top ?? 0, height: box?.height ?? 0, opacity: box ? 1 : 0, transition: `top 220ms ${EASE}, height 220ms ${EASE}, opacity 150ms ease` }}
+    />
+  );
+  return { nav, reg, hover: setHovered, highlight };
+}
+
+/** The row a route lights up in the sidebar: a tab's page is the pane it shows (its row in the tree is the tab's). */
+function useActiveKey(route: Route): string {
+  const all = useAgentSessions();
+  const assistant = useStore((s) => s.assistant);
+  const tabPath = route.name === "tab" ? href(route) : "";
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `route` is parsed anew each render; its path says it all
+  const tabPane = useMemo(() => (route.name === "tab" ? resolveTab(all, route) : undefined), [all, tabPath]);
+  return route.name === "tab" ? (tabPane ? rowKey(tabPane) : "") : sidebarActiveKey(route, assistant?.main);
+}
+
+function useGo(onNavigate?: () => void): GoFn {
+  return (to: Route) => (e: React.MouseEvent) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    navigate(to);
+    onNavigate?.();
+  };
+}
+
+/** One entry of the pages under Persona (总览, 收件箱 … 设置, and the extensions' pages). */
+export type NavPage = { k: string; to: Route; icon: IconName; label: string; short?: string; badge?: number | string; badgeTone?: keyof typeof BADGE_CLASS; hint?: string; title?: string };
+
 export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Route; onSearch: () => void; onNewAgent: () => void; onNavigate?: () => void }) {
   const conn = useStore((s) => s.conn);
   const machines = useStore((s) => s.machines);
   const assistant = useStore((s) => s.assistant);
+  const todos = useStore((s) => s.todos);
+  const todosSupported = useStore((s) => s.todosSupported);
+  // Quiet tasks (#1731) are told about in the main conversation, not counted here.
+  const uncompletedTodosCount = useMemo(() => todos.filter((t) => !t.done_at && !t.quiet).length, [todos]);
+  const counts = useCounts();
+  const inbox = useInboxBadge();
+  const larkSwitch = useLarkHome();
+  const lark = useLarkOn();
+  // 消息 needs the hub to read Feishu (feature `lark`) as well as this browser's switch
+  const larkHome = larkSwitch && lark;
+  const extensionPages = useExtensionSlot("nav_page");
+  // a phone's drawer has the pages as two rows of icons, so its first screen reaches the Agents (#1996)
+  const narrow = useMedia(NARROW);
+  const [jarvisFolded, toggleJarvis] = useFolded("jarvis");
+  const activeKey = useActiveKey(route);
+  const { nav, reg, hover, highlight } = useGlide(activeKey);
+  const go = useGo(onNavigate);
+
+  const online = machines.filter((m) => m.online).length;
+  const convs = otherConversations(assistant?.conversations ?? [], assistant?.main);
+  const mainConversation = assistant?.main ? assistant.conversations.find((c) => c.session_id === assistant.main) : undefined;
+  const page: Record<(typeof NAV_PAGES)[number], NavPage | false> = {
+    home: { k: "home", to: { name: "home" }, icon: "home", label: "总览", badge: counts.badge || undefined, badgeTone: "red" },
+    inbox: { k: "inbox", to: { name: "inbox" }, icon: "inbox", label: "收件箱", badge: inbox || undefined, badgeTone: "red" },
+    messages: larkHome && { k: "messages", to: { name: "messages" }, icon: "chat", label: "消息" },
+    "workspace-board": { k: "workspace-board", to: { name: "workspace-board" }, icon: "layers", label: "工作流看板", short: "看板" },
+    todos: todosSupported !== false && { k: "todos", to: { name: "todos" }, icon: "todo", label: "待办", badge: uncompletedTodosCount || undefined },
+    routines: { k: "routines", to: { name: "routines" }, icon: "clock", label: "定时任务" },
+    kb: { k: "kb", to: { name: "kb" }, icon: "book", label: "知识库" },
+    machines: { k: "machines", to: { name: "machines" }, icon: "machine", label: "机器", hint: machines.length ? `${online}/${machines.length}` : undefined },
+    settings: { k: "settings", to: { name: "settings" }, icon: "gear", label: "设置" },
+  };
+  const pages = NAV_PAGES.flatMap((k): NavPage[] => [
+    // the extensions' pages (docs/extensions.md「UI 插槽」 nav_page): one entry each, right before 设置
+    ...(k === "settings"
+      ? extensionPages.map((u) => {
+          const key = extensionNavKey(u.extension, u.id);
+          return { k: key, to: pageRoute(u.extension, u.id), icon: navIcon(u.icon), label: u.title, badge: u.badge?.text || undefined, badgeTone: BADGE_TONE[toneOf(u.badge?.tone)], title: u.extension_name ? `${u.title} · ${u.extension_name}` : u.title };
+        })
+      : []),
+    ...(page[k] ? [page[k]] : []),
+  ]);
+
+  return (
+    <aside className="flex h-full w-full flex-col bg-canvas">
+      <div className="px-2.5 pt-2.5">
+        <AccountRow conn={conn} online={online} total={machines.length} />
+        <button type="button" onClick={onSearch} className="touch-hit mb-1 flex h-8 w-full items-center gap-2 rounded-control bg-inset px-2.5 text-left shadow-hairline transition-colors hover:bg-hover">
+          <Icon name="search" size={12} stroke={2} className="text-ink-3" />
+          <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-3">搜索会话</span>
+          <span className="hidden sm:inline-flex"><Kbd>⌘K</Kbd></span>
+        </button>
+      </div>
+
+      <div ref={nav} onMouseLeave={() => hover(null)} className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 pb-3">
+        {highlight}
+        <div className="flex flex-col gap-px pt-1">
+          <PersonaRow reg={reg} hover={hover} active={activeKey === "persona"} go={go} main={mainConversation} />
+          {narrow ? <NavGrid pages={pages} activeKey={activeKey} go={go} /> : pages.map((p) => <NavRow key={p.k} {...p} reg={reg} hover={hover} active={activeKey === p.k} go={go} />)}
+        </div>
+
+        {assistant && (
+          <Section title="Persona 对话" folded={jarvisFolded} onToggle={toggleJarvis} right={<SectionAdd label="新对话" to={{ name: "persona-new" }} go={go} />}>
+            {convs.map((c) => (
+              <SessionRow key={c.session_id} s={c} k={`j:${c.session_id}`} reg={reg} hover={hover} active={activeKey === `j:${c.session_id}`} to={{ name: "jarvis", sid: c.session_id }} go={go} showState={false} />
+            ))}
+            <NavRow k="history" reg={reg} hover={hover} active={activeKey === "history"} to={{ name: "history" }} go={go} icon="list" label="全部对话" hint={assistant.conversations.length > convs.length ? String(assistant.conversations.length) : undefined} />
+          </Section>
+        )}
+
+        <PersonalAgents reg={reg} hover={hover} activeKey={activeKey} go={go} />
+
+        {/* the phone's Agents page shows them already: the drawer over it doesn't build them twice */}
+        {!(narrow && route.name === "agent-list") && <AgentsBlock reg={reg} hover={hover} activeKey={activeKey} go={go} onNewAgent={onNewAgent} onNavigate={onNavigate} />}
+      </div>
+    </aside>
+  );
+}
+
+/** The phone's「Agents」page (#1996): the sidebar's Agents block, the same components, filling the page. */
+export function AgentsList({ route, onNewAgent }: { route: Route; onNewAgent: () => void }) {
+  const activeKey = useActiveKey(route);
+  const { nav, reg, hover, highlight } = useGlide(activeKey);
+  const go = useGo();
+  return (
+    <div className="h-full overflow-y-auto overscroll-contain">
+      <div ref={nav} onMouseLeave={() => hover(null)} className="relative mx-auto max-w-[640px] px-2.5 pb-6">
+        {highlight}
+        <AgentsBlock reg={reg} hover={hover} activeKey={activeKey} go={go} onNewAgent={onNewAgent} add={false} />
+      </div>
+    </div>
+  );
+}
+
+/** How many columns the phone's page grid has for `n` pages: two even rows (8 → 4 + 4), at most 5 to a row. */
+export function navGridColumns(n: number): number {
+  return Math.max(1, Math.min(5, Math.ceil(n / 2)));
+}
+
+/** The pages as two rows of icons in a phone's drawer: one tap away like the list, a third of its height. */
+export function NavGrid({ pages, activeKey, go }: { pages: NavPage[]; activeKey: string; go: GoFn }) {
+  return (
+    <nav aria-label="页面" className="mb-1 grid gap-0.5" style={{ gridTemplateColumns: `repeat(${navGridColumns(pages.length)}, minmax(0, 1fr))` }}>
+      {pages.map((p) => {
+        const active = activeKey === p.k;
+        return (
+          <a
+            key={p.k}
+            href={href(p.to)}
+            onClick={go(p.to)}
+            title={p.title ?? p.label}
+            aria-label={p.badge !== undefined ? `${p.label} ${p.badge}` : p.label}
+            aria-current={active ? "page" : undefined}
+            className={cx("relative z-10 flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-[9px] px-0.5 py-1.5 transition-[background-color,transform] duration-150 active:scale-[0.96]", active ? "bg-hover" : "hover:bg-hover")}
+          >
+            <span className={cx("relative", active ? "text-ink" : "text-ink-3")}>
+              <Icon name={p.icon} size={17} stroke={1.8} />
+              {p.badge !== undefined && (
+                <span className={cx("absolute -top-1.5 left-2.5 flex h-4 min-w-4 items-center justify-center whitespace-nowrap rounded-full px-1 text-[10px] font-semibold tabular-nums", BADGE_CLASS[p.badgeTone ?? "accent"])}>{p.badge}</span>
+              )}
+            </span>
+            <span className={cx("w-full truncate text-center text-[11px] leading-tight", active ? "font-medium text-ink" : "text-ink-2")}>{p.short ?? p.label}</span>
+          </a>
+        );
+      })}
+    </nav>
+  );
+}
+
+/** The sidebar's「Agents」: grouping, the quick filter, 置顶, 正在启动, the groups (spaces, machines, repositories,
+ *  states or todos) and 最近. The drawer and the phone's Agents page both show it. `add`: the title row's「+」. */
+function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = true }: { reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onNewAgent: () => void; onNavigate?: () => void; add?: boolean }) {
+  const machines = useStore((s) => s.machines);
   const all = useAgentSessions();
   const mutes = useStore((s) => s.mutes);
   const pins = useStore((s) => s.pins);
   const loaded = useStore((s) => s.loaded);
   const todos = useStore((s) => s.todos);
   const todosSupported = useStore((s) => s.todosSupported);
-  // Quiet tasks (#1731) are told about in the main conversation, not counted here.
-  const uncompletedTodosCount = useMemo(() => todos.filter((t) => !t.done_at && !t.quiet).length, [todos]);
   const launches = useStore((s) => Object.values(s.launches).filter((launch) => launch.phase !== "ready"));
   const [grouping, setGrouping] = useState(() => agentGrouping(localStorage.getItem("jarvis.agentGrouping")));
   const groupingMenu = useMenu();
@@ -101,7 +287,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
     localStorage.setItem("jarvis.agentFilter", f);
     setFilter(f);
     setKept(matchingKeys(live, f, mutes));
-    setHovered(null);
+    hover(null);
   };
   const [rowMenu, setRowMenu] = useState<{ s: Session; anchor: HTMLElement } | null>(null);
   const [spaceMenu, setSpaceMenu] = useState<{ sp: Space; anchor: HTMLElement } | null>(null);
@@ -111,204 +297,108 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const [confirmSeen, setConfirmSeen] = useState<Session[] | null>(null);
   const onRowMenu = (s: Session, anchor: HTMLElement) => setRowMenu((m) => (m?.anchor === anchor ? null : { s, anchor }));
   const onSpaceMenu = (sp: Space, anchor: HTMLElement) => setSpaceMenu((m) => (m?.anchor === anchor ? null : { sp, anchor }));
-  const counts = useCounts();
-  const inbox = useInboxBadge();
-  const larkSwitch = useLarkHome();
-  const lark = useLarkOn();
-  // 消息 needs the hub to read Feishu (feature `lark`) as well as this browser's switch
-  const larkHome = larkSwitch && lark;
-  const extensionPages = useExtensionSlot("nav_page");
-  const nav = useRef<HTMLDivElement>(null);
-  const rows = useRef(new Map<string, HTMLElement>());
-  const [hovered, setHovered] = useState<string | null>(null);
-  const [box, setBox] = useState<{ top: number; height: number } | null>(null);
-  const [showAllRecent, setShowAllRecent] = useState(false);
   const [recentFolded, toggleRecent] = useFolded("recent", true);
-  const [jarvisFolded, toggleJarvis] = useFolded("jarvis");
   const [idleFolded, toggleIdle] = useFolded("idle-spaces", true);
   const [pinnedFolded, togglePinned] = useFolded("agents-pinned");
   const [launchesFolded, toggleLaunches] = useFolded("agents-launching");
-  const [sessionContextMenu, setSessionContextMenu] = useState<{ s: Session; el: HTMLElement } | null>(null);
+  const [showAllRecent, setShowAllRecent] = useState(false);
   const [linkTargetSession, setLinkTargetSession] = useState<Session | undefined>();
   const [linkTargetSpace, setLinkTargetSpace] = useState<LinkTargetSpace | undefined>();
 
-  // a tab's page is the pane it shows (its row in the tree is the tab's, TabRow)
-  const tabPath = route.name === "tab" ? href(route) : "";
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- `route` is parsed anew each render; its path says it all
-  const tabPane = useMemo(() => (route.name === "tab" ? resolveTab(all, route) : undefined), [all, tabPath]);
-  const activeKey = route.name === "tab" ? (tabPane ? rowKey(tabPane) : "") : sidebarActiveKey(route, assistant?.main);
   // a space with nothing to look at (every agent seen and waiting) goes to「空闲的空间」, like the app; the open
   // conversation's space stays where it is so the row under the pointer doesn't move away
   const busy = (sp: Space) => sp.sessions.some((s) => !isQuiet(s) || activeKey === `s:${s.machine_id}/${s.session_id}`);
   // pinned spaces lead; under a quick filter nothing folds into 「空闲的空间」
   const { active, idle } = arrangeSpaces(spaces, { pins, mutes, filtered, busy });
-
-  useLayoutEffect(() => {
-    const el = rows.current.get(hovered ?? activeKey);
-    let next: { top: number; height: number } | null = null;
-    if (el && nav.current) {
-      const n = nav.current.getBoundingClientRect(),
-        r = el.getBoundingClientRect();
-      if (r.height) next = { top: r.top - n.top + nav.current.scrollTop, height: r.height };
-    }
-    // runs after every render (rows fold, lists change): only a real move updates
-    setBox((b) => (b?.top === next?.top && b?.height === next?.height ? b : next));
-  });
-
-  const reg = (k: string) => (el: HTMLElement | null) => {
-    if (el) rows.current.set(k, el);
-    else rows.current.delete(k);
-  };
-
-  const go = (to: Route) => (e: React.MouseEvent) => {
-    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-    e.preventDefault();
-    navigate(to);
-    onNavigate?.();
-  };
-
-  const online = machines.filter((m) => m.online).length;
-  const convs = otherConversations(assistant?.conversations ?? [], assistant?.main);
-  const mainConversation = assistant?.main ? assistant.conversations.find((c) => c.session_id === assistant.main) : undefined;
-  const pages: Record<(typeof NAV_PAGES)[number], React.ReactNode> = {
-    home: <NavRow k="home" reg={reg} hover={setHovered} active={activeKey === "home"} to={{ name: "home" }} go={go} icon="home" label="总览" badge={counts.badge || undefined} badgeTone="red" />,
-    inbox: <NavRow k="inbox" reg={reg} hover={setHovered} active={activeKey === "inbox"} to={{ name: "inbox" }} go={go} icon="inbox" label="收件箱" badge={inbox || undefined} badgeTone="red" />,
-    messages: larkHome && <NavRow k="messages" reg={reg} hover={setHovered} active={activeKey === "messages"} to={{ name: "messages" }} go={go} icon="chat" label="消息" />,
-    "workspace-board": <NavRow k="workspace-board" reg={reg} hover={setHovered} active={activeKey === "workspace-board"} to={{ name: "workspace-board" }} go={go} icon="layers" label="工作流看板" />,
-    todos: todosSupported !== false && <NavRow k="todos" reg={reg} hover={setHovered} active={activeKey === "todos"} to={{ name: "todos" }} go={go} icon="todo" label="待办" badge={uncompletedTodosCount || undefined} />,
-    routines: <NavRow k="routines" reg={reg} hover={setHovered} active={activeKey === "routines"} to={{ name: "routines" }} go={go} icon="clock" label="定时任务" />,
-    kb: <NavRow k="kb" reg={reg} hover={setHovered} active={activeKey === "kb"} to={{ name: "kb" }} go={go} icon="book" label="知识库" />,
-    machines: <NavRow k="machines" reg={reg} hover={setHovered} active={activeKey === "machines"} to={{ name: "machines" }} go={go} icon="machine" label="机器" hint={machines.length ? `${online}/${machines.length}` : undefined} />,
-    settings: <NavRow k="settings" reg={reg} hover={setHovered} active={activeKey === "settings"} to={{ name: "settings" }} go={go} icon="gear" label="设置" />,
-  };
+  const tree = { machines, reg, hover, activeKey, go, mutes, onSpaceMenu, onRowMenu, onNavigate };
 
   return (
-    <aside className="flex h-full w-full flex-col bg-canvas">
-      <div className="px-2.5 pt-2.5">
-        <AccountRow conn={conn} online={online} total={machines.length} />
-        <button type="button" onClick={onSearch} className="mb-1 flex h-8 w-full items-center gap-2 rounded-control bg-inset px-2.5 text-left shadow-hairline transition-colors hover:bg-hover">
-          <Icon name="search" size={12} stroke={2} className="text-ink-3" />
-          <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-3">搜索会话</span>
-          <span className="hidden sm:inline-flex"><Kbd>⌘K</Kbd></span>
+    <>
+      <div className="mt-3 flex items-center gap-1 px-2">
+        <span className="min-w-0 flex-1 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">Agents</span>
+        <button type="button" aria-label={`Agent 分组：${groupingLabel}`} aria-haspopup="menu" aria-expanded={Boolean(groupingMenu.anchor)} onClick={groupingMenu.open} className="touch-hit relative z-10 flex items-center gap-1 whitespace-nowrap rounded-control px-2 py-1 text-[11px] text-ink-3 hover:bg-hover hover:text-ink-2">
+          {groupingLabel}
+          <Icon name="chevron" size={10} stroke={2} />
         </button>
+        {add && <SectionAdd label="新建 Agent" onClick={onNewAgent} />}
       </div>
+      {groupingMenu.anchor && (
+        <Menu anchor={groupingMenu.anchor} onClose={groupingMenu.close} align="right" header="Agent 分组" items={availableGroupings.map((g) => ({
+          key: g.key, label: g.label, icon: g.key === "space" ? "folder" : g.key === "machine" ? "machine" : g.key === "todo" ? "todo" : "layers", checked: grouping === g.key,
+          onSelect: () => { localStorage.setItem("jarvis.agentGrouping", g.key); setGrouping(g.key); hover(null); },
+        }))} />
+      )}
+      <FilterBar selection={filter} counts={filterTotals} onChoose={choose} />
 
-      <div ref={nav} onMouseLeave={() => setHovered(null)} className="relative min-h-0 flex-1 overflow-y-auto px-2.5 pb-3">
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-2.5 rounded-[7px] bg-hover"
-          style={{ top: box?.top ?? 0, height: box?.height ?? 0, opacity: box ? 1 : 0, transition: `top 220ms ${EASE}, height 220ms ${EASE}, opacity 150ms ease` }}
-        />
-        <div className="flex flex-col gap-px pt-1">
-          <PersonaRow reg={reg} hover={setHovered} active={activeKey === "persona"} go={go} main={mainConversation} />
-          {NAV_PAGES.map((k) => (
-            <Fragment key={k}>
-              {/* the extensions' pages (docs/extensions.md「UI 插槽」 nav_page): one row each, right before 设置 */}
-              {k === "settings" &&
-                extensionPages.map((u) => {
-                  const key = extensionNavKey(u.extension, u.id);
-                  return <NavRow key={key} k={key} reg={reg} hover={setHovered} active={activeKey === key} to={pageRoute(u.extension, u.id)} go={go} icon={navIcon(u.icon)} label={u.title} badge={u.badge?.text || undefined} badgeTone={BADGE_TONE[toneOf(u.badge?.tone)]} title={u.extension_name ? `${u.title} · ${u.extension_name}` : u.title} />;
-                })}
-              {pages[k]}
-            </Fragment>
+      {unreadShown.length > 0 && (
+        <button type="button" onClick={() => setConfirmSeen(unreadShown)} className="relative z-10 mt-1 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 text-left transition-[background-color,transform] duration-100 hover:bg-hover active:scale-[0.98] [@media(pointer:coarse)]:min-h-11">
+          <span className="flex size-3.5 shrink-0 items-center justify-center text-green"><Icon name="check" size={13} stroke={2.4} /></span>
+          <span className="min-w-0 flex-1 truncate text-[13px] text-ink">全部标为已读</span>
+          <span className="shrink-0 text-[11px] whitespace-nowrap text-ink-3 tabular-nums">{unreadShown.length} 个完成未看</span>
+        </button>
+      )}
+
+      {filtered && shown.length === 0 && (
+        <div className="mt-2 flex items-center gap-2 px-2 py-1.5 text-[12px] text-ink-3">
+          <span className="min-w-0 flex-1 truncate">没有{AGENT_FILTERS.find((f) => f.key === filter)!.label}的 Agent</span>
+          <button type="button" onClick={() => choose("all")} className="touch-hit relative z-10 shrink-0 whitespace-nowrap rounded-control px-1.5 py-0.5 text-[12px] font-medium text-accent-ink hover:bg-hover">看全部</button>
+        </div>
+      )}
+
+      {pinnedAgents.length > 0 && (
+        <Section title={<span className="flex items-center gap-1"><Icon name="pin" size={10} stroke={2.2} />置顶</span>} folded={pinnedFolded} onToggle={togglePinned} right={<SessionTally sessions={pinnedAgents} folded={pinnedFolded} />}>
+          {pinnedAgents.map((s) => {
+            const key = `s:${s.machine_id}/${s.session_id}`;
+            const context = [s.space_name || baseName(s.cwd), machines.length > 1 ? machineWithHub(s.machine_id, machines) : ""].filter(Boolean).join(" · ");
+            return <SessionRow key={key} s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={context} onMenu={onRowMenu} />;
+          })}
+        </Section>
+      )}
+
+      {launches.length > 0 && <Section title="正在启动" folded={launchesFolded} onToggle={toggleLaunches} right={<span className="text-[10.5px] text-ink-3 tabular-nums">{launches.length}</span>}>
+        {launches.map((launch) => <NavRow key={launch.id} k={`s:${launch.machineId}/${launch.id}`} reg={reg} hover={hover} active={activeKey === `s:${launch.machineId}/${launch.id}`} to={{ name: "session", mid: launch.machineId, sid: launch.id }} go={go} icon={launch.phase === "failed" ? "retry" : "agent"} label={launch.text || baseName(launch.cwd) || "新 Agent"} hint={launch.phase === "failed" ? "启动失败" : "后台启动中"} />)}
+      </Section>}
+
+      {grouping === "space" ? <>
+      {active.map((sp) => (
+        <SpaceSection key={sp.key} sp={sp} machineName={machines.length > 1 ? machineWithHub(sp.machineId, machines) : undefined} reg={reg} hover={hover} activeKey={activeKey} go={go} pinned={isSpacePinned(sp.machineId, sp.name, pins)} muted={isSpaceMuted(sp, mutes)} onMenu={onSpaceMenu} onRowMenu={onRowMenu} onNavigate={onNavigate} />
+      ))}
+
+      {idle.length > 0 && (
+        <Section title={`空闲的空间 ${idle.length}`} folded={idleFolded} onToggle={toggleIdle}>
+          {idle.flatMap((sp) =>
+            sp.sessions.map((s) => (
+              <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={hover} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={sp.sessions.length > 1 ? `${sp.name} › ${tabLabel(s)}` : sp.name} onMenu={onRowMenu} />
+            )),
+          )}
+        </Section>
+      )}
+
+      {loose.length > 0 && <LooseSection sessions={loose} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} />}
+
+      </> : grouping === "machine" ? machineTree.map((m) => (
+        <MachineSection key={m.key} m={m} {...tree} />
+      )) : grouping === "repo" ? repoTree.map((t) => (
+        <RepoSection key={t.key} tree={t} machines={machines} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} />
+      )) : groups.map((group) => (
+        <AgentSection key={group.key} group={group} machines={machines} byTodo={grouping === "todo"} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onNavigate={onNavigate} />
+      ))}
+
+      {recent.length > 0 && (
+        <Section title="最近（未运行）" folded={recentFolded} onToggle={toggleRecent} right={<span className="text-[10.5px] text-ink-3 tabular-nums">{recent.length}</span>}>
+          {(showAllRecent ? recent : recent.slice(0, 8)).map((s) => (
+            <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={hover} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} onMenu={onRowMenu} />
           ))}
-        </div>
-
-        {assistant && (
-          <Section title="Persona 对话" folded={jarvisFolded} onToggle={toggleJarvis} right={<SectionAdd label="新对话" to={{ name: "persona-new" }} go={go} />}>
-            {convs.map((c) => (
-              <SessionRow key={c.session_id} s={c} k={`j:${c.session_id}`} reg={reg} hover={setHovered} active={activeKey === `j:${c.session_id}`} to={{ name: "jarvis", sid: c.session_id }} go={go} showState={false} />
-            ))}
-            <NavRow k="history" reg={reg} hover={setHovered} active={activeKey === "history"} to={{ name: "history" }} go={go} icon="list" label="全部对话" hint={assistant.conversations.length > convs.length ? String(assistant.conversations.length) : undefined} />
-          </Section>
-        )}
-
-        <PersonalAgents reg={reg} hover={setHovered} activeKey={activeKey} go={go} />
-
-        <div className="mt-3 flex items-center gap-1 px-2">
-          <span className="min-w-0 flex-1 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">Agents</span>
-          <button type="button" aria-label={`Agent 分组：${groupingLabel}`} aria-haspopup="menu" aria-expanded={Boolean(groupingMenu.anchor)} onClick={groupingMenu.open} className="relative z-10 flex items-center gap-1 whitespace-nowrap rounded-control px-2 py-1 text-[11px] text-ink-3 hover:bg-hover hover:text-ink-2">
-            {groupingLabel}
-            <Icon name="chevron" size={10} stroke={2} />
-          </button>
-          <SectionAdd label="新建 Agent" onClick={onNewAgent} />
-        </div>
-        {groupingMenu.anchor && (
-          <Menu anchor={groupingMenu.anchor} onClose={groupingMenu.close} align="right" header="Agent 分组" items={availableGroupings.map((g) => ({
-            key: g.key, label: g.label, icon: g.key === "space" ? "folder" : g.key === "machine" ? "machine" : g.key === "todo" ? "todo" : "layers", checked: grouping === g.key,
-            onSelect: () => { localStorage.setItem("jarvis.agentGrouping", g.key); setGrouping(g.key); setHovered(null); },
-          }))} />
-        )}
-        <FilterBar selection={filter} counts={filterTotals} onChoose={choose} />
-
-        {unreadShown.length > 0 && (
-          <button type="button" onClick={() => setConfirmSeen(unreadShown)} className="relative z-10 mt-1 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 text-left transition-[background-color,transform] duration-100 hover:bg-hover active:scale-[0.98]">
-            <span className="flex size-3.5 shrink-0 items-center justify-center text-green"><Icon name="check" size={13} stroke={2.4} /></span>
-            <span className="min-w-0 flex-1 truncate text-[13px] text-ink">全部标为已读</span>
-            <span className="shrink-0 text-[11px] whitespace-nowrap text-ink-3 tabular-nums">{unreadShown.length} 个完成未看</span>
-          </button>
-        )}
-
-        {filtered && shown.length === 0 && (
-          <div className="mt-2 flex items-center gap-2 px-2 py-1.5 text-[12px] text-ink-3">
-            <span className="min-w-0 flex-1 truncate">没有{AGENT_FILTERS.find((f) => f.key === filter)!.label}的 Agent</span>
-            <button type="button" onClick={() => choose("all")} className="relative z-10 shrink-0 whitespace-nowrap rounded-control px-1.5 py-0.5 text-[12px] font-medium text-accent-ink hover:bg-hover">看全部</button>
-          </div>
-        )}
-
-        {pinnedAgents.length > 0 && (
-          <Section title={<span className="flex items-center gap-1"><Icon name="pin" size={10} stroke={2.2} />置顶</span>} folded={pinnedFolded} onToggle={togglePinned} right={<SessionTally sessions={pinnedAgents} folded={pinnedFolded} />}>
-            {pinnedAgents.map((s) => {
-              const key = `s:${s.machine_id}/${s.session_id}`;
-              const context = [s.space_name || baseName(s.cwd), machines.length > 1 ? machineWithHub(s.machine_id, machines) : ""].filter(Boolean).join(" · ");
-              return <SessionRow key={key} s={s} k={key} reg={reg} hover={setHovered} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={context} onMenu={onRowMenu} />;
-            })}
-          </Section>
-        )}
-
-        {launches.length > 0 && <Section title="正在启动" folded={launchesFolded} onToggle={toggleLaunches} right={<span className="text-[10.5px] text-ink-3 tabular-nums">{launches.length}</span>}>
-          {launches.map((launch) => <NavRow key={launch.id} k={`s:${launch.machineId}/${launch.id}`} reg={reg} hover={setHovered} active={activeKey === `s:${launch.machineId}/${launch.id}`} to={{ name: "session", mid: launch.machineId, sid: launch.id }} go={go} icon={launch.phase === "failed" ? "retry" : "agent"} label={launch.text || baseName(launch.cwd) || "新 Agent"} hint={launch.phase === "failed" ? "启动失败" : "后台启动中"} />)}
-        </Section>}
-
-        {grouping === "space" ? <>
-        {active.map((sp) => (
-          <SpaceSection key={sp.key} sp={sp} machineName={machines.length > 1 ? machineWithHub(sp.machineId, machines) : undefined} reg={reg} hover={setHovered} activeKey={activeKey} go={go} pinned={isSpacePinned(sp.machineId, sp.name, pins)} muted={isSpaceMuted(sp, mutes)} onMenu={onSpaceMenu} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} onNavigate={onNavigate} />
-        ))}
-
-        {idle.length > 0 && (
-          <Section title={`空闲的空间 ${idle.length}`} folded={idleFolded} onToggle={toggleIdle}>
-            {idle.flatMap((sp) =>
-              sp.sessions.map((s) => (
-                <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={setHovered} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={sp.sessions.length > 1 ? `${sp.name} › ${tabLabel(s)}` : sp.name} onMenu={onRowMenu} onContextMenu={(el) => setSessionContextMenu({ s, el })} />
-              )),
-            )}
-          </Section>
-        )}
-
-        {loose.length > 0 && <LooseSection sessions={loose} reg={reg} hover={setHovered} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} />}
-
-        </> : grouping === "machine" ? machineTree.map((m) => (
-          <MachineSection key={m.key} m={m} machines={machines} reg={reg} hover={setHovered} activeKey={activeKey} go={go} mutes={mutes} onSpaceMenu={onSpaceMenu} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} onNavigate={onNavigate} />
-        )) : grouping === "repo" ? repoTree.map((tree) => (
-          <RepoSection key={tree.key} tree={tree} machines={machines} reg={reg} hover={setHovered} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} />
-        )) : groups.map((group) => (
-          <AgentSection key={group.key} group={group} machines={machines} byTodo={grouping === "todo"} reg={reg} hover={setHovered} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} onNavigate={onNavigate} />
-        ))}
-
-        {recent.length > 0 && (
-          <Section title="最近（未运行）" folded={recentFolded} onToggle={toggleRecent} right={<span className="text-[10.5px] text-ink-3 tabular-nums">{recent.length}</span>}>
-            {(showAllRecent ? recent : recent.slice(0, 8)).map((s) => (
-              <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={setHovered} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} onMenu={onRowMenu} onContextMenu={(el) => setSessionContextMenu({ s, el })} />
-            ))}
-            {recent.length > 8 && (
-              <button type="button" onClick={() => setShowAllRecent((x) => !x)} className="relative z-10 w-full rounded-[7px] px-2 py-1 text-left text-[12px] text-ink-3 hover:text-ink-2">
-                {showAllRecent ? "收起" : `再显示 ${recent.length - 8} 个`}
-              </button>
-            )}
-          </Section>
-        )}
-      </div>
-      {rowMenu && <AgentRowMenu s={rowMenu.s} anchor={rowMenu.anchor} onClose={() => setRowMenu(null)} onRename={setRenaming} onDelete={setDeleting} />}
+          {recent.length > 8 && (
+            <button type="button" onClick={() => setShowAllRecent((x) => !x)} className="relative z-10 w-full rounded-[7px] px-2 py-1 text-left text-[12px] text-ink-3 hover:text-ink-2 [@media(pointer:coarse)]:min-h-11">
+              {showAllRecent ? "收起" : `再显示 ${recent.length - 8} 个`}
+            </button>
+          )}
+        </Section>
+      )}
+      {/* the row's ⋯ (and its right click): pin, rename, mute, the todo it hangs on, delete — a long press on iOS
+          Safari sends no contextmenu, so nothing lives only there */}
+      {rowMenu && <AgentRowMenu s={rowMenu.s} anchor={rowMenu.anchor} onClose={() => setRowMenu(null)} onRename={setRenaming} onDelete={setDeleting} onLinkTodo={setLinkTargetSession} />}
       {spaceMenu && (
         <SpaceMenu
           sp={spaceMenu.sp}
@@ -323,62 +413,9 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
       {renamingSpace && <RenameSpaceDialog open session={renamingSpace} onClose={() => setRenamingSpace(null)} />}
       {deleting && <DeleteSessionDialog open session={deleting} machineName={machineWithHub(deleting.machine_id, machines)} onClose={() => setDeleting(null)} />}
       <MarkSeenDialog list={confirmSeen} onClose={() => setConfirmSeen(null)} onDone={() => setKept(new Set())} />
-
-      {sessionContextMenu && (
-        <Menu
-          anchor={sessionContextMenu.el}
-          onClose={() => setSessionContextMenu(null)}
-          align="left"
-          items={[
-            ...(sessionContextMenu.s.todo
-              ? [
-                  {
-                    key: "unlink-todo",
-                    label: "解除关联",
-                    icon: "x" as const,
-                    onSelect: async () => {
-                      try {
-                        await unlinkAgentFromTodo(sessionContextMenu.s.todo!.id, sessionContextMenu.s.machine_id, sessionContextMenu.s.session_id);
-                        await refreshTodos();
-                        await refresh();
-                        toast("已解除待办关联", "ok");
-                      } catch (e) {
-                        toast(`解除关联失败：${errorText(e)}`, "error");
-                      }
-                    },
-                  },
-                  {
-                    key: "relink-todo",
-                    label: "关联到待办…",
-                    icon: "todo" as const,
-                    onSelect: () => setLinkTargetSession(sessionContextMenu.s),
-                  },
-                ]
-              : [
-                  {
-                    key: "link-todo",
-                    label: "关联到待办…",
-                    icon: "todo" as const,
-                    onSelect: () => setLinkTargetSession(sessionContextMenu.s),
-                  },
-                ]),
-            ...(sessionDeletable(sessionContextMenu.s) ? [{ key: "delete", label: "删除对话…", icon: "trash" as const, danger: true, onSelect: () => setDeleting(sessionContextMenu.s) }] : []),
-          ]}
-        />
-      )}
-
-      <LinkTodoDialog
-        open={Boolean(linkTargetSession)}
-        session={linkTargetSession}
-        onClose={() => setLinkTargetSession(undefined)}
-      />
-
-      <LinkTodoDialog
-        open={Boolean(linkTargetSpace)}
-        space={linkTargetSpace}
-        onClose={() => setLinkTargetSpace(undefined)}
-      />
-    </aside>
+      <LinkTodoDialog open={Boolean(linkTargetSession)} session={linkTargetSession} onClose={() => setLinkTargetSession(undefined)} />
+      <LinkTodoDialog open={Boolean(linkTargetSpace)} space={linkTargetSpace} onClose={() => setLinkTargetSpace(undefined)} />
+    </>
   );
 }
 
@@ -402,7 +439,7 @@ function FilterBar({ selection, counts, onChoose }: { selection: AgentFilter; co
             aria-label={n === undefined ? f.label : `${f.label} ${n}`}
             onClick={() => onChoose(k)}
             className={cx(
-              "relative z-10 flex h-6 items-center gap-1 whitespace-nowrap rounded-full px-[7px] text-[11.5px] transition-[background-color,color,box-shadow] duration-150",
+              "touch-hit relative z-10 flex h-6 items-center gap-1 whitespace-nowrap rounded-full px-[7px] text-[11.5px] transition-[background-color,color,box-shadow] duration-150",
               on ? "bg-surface font-medium text-ink shadow-btn" : "text-ink-2 hover:bg-hover hover:text-ink",
             )}
           >
@@ -470,7 +507,7 @@ function Section({ title, children, folded, onToggle, right }: { title: React.Re
   return (
     <div className="mt-3">
       <div className="group/sec flex items-center gap-1 px-2 pb-1">
-        <button type="button" aria-expanded={!folded} onClick={onToggle} className="relative z-10 flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-left text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase hover:text-ink-2">
+        <button type="button" aria-expanded={!folded} onClick={onToggle} className="touch-hit relative z-10 flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-left text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase hover:text-ink-2">
           <span className="min-w-0 truncate">{title}</span>
           <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 opacity-0 transition-[opacity,transform] duration-200 group-hover/sec:opacity-100 [@media(hover:none)]:opacity-100" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
         </button>
@@ -483,12 +520,12 @@ function Section({ title, children, folded, onToggle, right }: { title: React.Re
   );
 }
 
-function AgentSection({ group, machines, byTodo, reg, hover, activeKey, go, onRowMenu, onSessionMenu, onNavigate }: { group: AgentGroup; machines: Machine[]; byTodo?: boolean; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn; onSessionMenu?: (s: Session, el: HTMLElement) => void; onNavigate?: () => void }) {
+function AgentSection({ group, machines, byTodo, reg, hover, activeKey, go, onRowMenu, onNavigate }: { group: AgentGroup; machines: Machine[]; byTodo?: boolean; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn; onNavigate?: () => void }) {
   const [folded, toggle] = useFolded(group.key, group.folded);
   const row = (s: Session) => {
     const key = `s:${s.machine_id}/${s.session_id}`;
     const context = [s.space_name || baseName(s.cwd), machines.length > 1 ? machineWithHub(s.machine_id, machines) : ""].filter(Boolean).join(" · ");
-    return <SessionRow key={key} s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={context} showTodoTag={!byTodo} onMenu={onRowMenu} onContextMenu={(el) => onSessionMenu?.(s, el)} />;
+    return <SessionRow key={key} s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={context} showTodoTag={!byTodo} onMenu={onRowMenu} />;
   };
 
   const statusInfo = group.todoStatus ? TODO_STATUS_INFO[group.todoStatus as TodoStatus] : undefined;
@@ -530,11 +567,11 @@ function AgentSection({ group, machines, byTodo, reg, hover, activeKey, go, onRo
 }
 
 /** One repository on one machine (按仓库): its working trees under it, the main checkout marked and first. */
-function RepoSection({ tree, machines, reg, hover, activeKey, go, onRowMenu, onSessionMenu }: { tree: RepoTree; machines: Machine[]; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn; onSessionMenu?: (s: Session, el: HTMLElement) => void }) {
+function RepoSection({ tree, machines, reg, hover, activeKey, go, onRowMenu }: { tree: RepoTree; machines: Machine[]; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn }) {
   const [folded, toggle] = useFolded(tree.key, false);
   const row = (s: Session, hint: string) => {
     const key = `s:${s.machine_id}/${s.session_id}`;
-    return <SessionRow key={key} s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={hint} onMenu={onRowMenu} onContextMenu={(el) => onSessionMenu?.(s, el)} />;
+    return <SessionRow key={key} s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={hint} onMenu={onRowMenu} />;
   };
   const machine = machines.length > 1 ? machineWithHub(tree.machineId, machines) : "";
   // A repository with only its main checkout needs no working-tree level: its agents sit right under the repository.
@@ -571,7 +608,7 @@ function RepoWorktreeRows({ w, repo, row }: { w: RepoWorktree; repo: string; row
   );
 }
 
-function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, muted, onMenu, onRowMenu, onSessionMenu, onNavigate }: { sp: Space; machineName?: string; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; pinned: boolean; muted: boolean; onMenu: (sp: Space, anchor: HTMLElement) => void; onRowMenu: RowMenuFn; onSessionMenu?: (s: Session, el: HTMLElement) => void; onNavigate?: () => void }) {
+function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, muted, onMenu, onRowMenu, onNavigate }: { sp: Space; machineName?: string; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; pinned: boolean; muted: boolean; onMenu: (sp: Space, anchor: HTMLElement) => void; onRowMenu: RowMenuFn; onNavigate?: () => void }) {
   const allIdle = sp.sessions.every(isQuiet);
   const [folded, toggle] = useFolded(`space:${sp.key}`, allIdle && sp.sessions.length > 3);
 
@@ -595,7 +632,7 @@ function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, mute
       }
     >
       {sp.sessions.map((s) => (
-        <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={hover} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} tab showTodoTag onMenu={onRowMenu} onContextMenu={(el) => onSessionMenu?.(s, el)} />
+        <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={hover} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} tab showTodoTag onMenu={onRowMenu} />
       ))}
     </Section>
   );
@@ -644,14 +681,14 @@ function SpaceMenuButton({ sp, onMenu }: { sp: Space; onMenu: (sp: Space, anchor
       aria-haspopup="menu"
       title="空间的操作"
       onClick={(e) => onMenu(sp, e.currentTarget)}
-      className="relative z-10 -my-1 flex size-5 items-center justify-center rounded-[5px] text-ink-3 opacity-0 transition-opacity duration-150 group-hover/sec:opacity-100 hover:bg-hover-2 hover:text-ink focus-visible:opacity-100 [@media(hover:none)]:size-8 [@media(hover:none)]:opacity-100"
+      className="touch-hit relative z-10 -my-1 flex size-5 items-center justify-center rounded-[5px] text-ink-3 opacity-0 transition-opacity duration-150 group-hover/sec:opacity-100 hover:bg-hover-2 hover:text-ink focus-visible:opacity-100 [@media(hover:none)]:size-8 [@media(hover:none)]:opacity-100"
     >
       <Icon name="more" size={12} />
     </button>
   );
 }
 
-type TreeProps = { machines: Machine[]; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; mutes: AgentMutes; onSpaceMenu: (sp: Space, anchor: HTMLElement) => void; onRowMenu: RowMenuFn; onSessionMenu: (s: Session, el: HTMLElement) => void; onNavigate?: () => void };
+type TreeProps = { machines: Machine[]; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; mutes: AgentMutes; onSpaceMenu: (sp: Space, anchor: HTMLElement) => void; onRowMenu: RowMenuFn; onNavigate?: () => void };
 
 // 按机器 (lib/herdr-tree.ts): one machine as herdr lays it out, its workspaces, their tabs, then「其他」. A machine that
 // is away starts folded; its agents are under「最近（未运行）」.
@@ -735,14 +772,14 @@ function WorkspaceBlock({ sp, ...p }: { sp: HerdrSpace } & TreeProps) {
   );
 }
 
-function TreeSessionRow({ s, reg, hover, activeKey, go, onRowMenu, onSessionMenu }: { s: Session } & TreeProps) {
+function TreeSessionRow({ s, reg, hover, activeKey, go, onRowMenu }: { s: Session } & TreeProps) {
   const key = rowKey(s);
-  return <SessionRow s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} showTodoTag onMenu={onRowMenu} onContextMenu={(el) => onSessionMenu(s, el)} />;
+  return <SessionRow s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} showTodoTag onMenu={onRowMenu} />;
 }
 
 // One herdr tab: `#N` (or its name) and what its most urgent pane is doing; it opens on that pane, the others are the
 // chat's pane tabs (PaneTabs). A tab with one pane has that agent's ⋯.
-function TabRow({ t, reg, hover, activeKey, go, onRowMenu, onSessionMenu }: { t: HerdrTab } & TreeProps) {
+function TabRow({ t, reg, hover, activeKey, go, onRowMenu }: { t: HerdrTab } & TreeProps) {
   const open = t.sessions.find((x) => rowKey(x) === activeKey);
   const k = open ? activeKey : `t:${t.key}`;
   const n = t.sessions.length;
@@ -761,19 +798,18 @@ function TabRow({ t, reg, hover, activeKey, go, onRowMenu, onSessionMenu }: { t:
       hint={single ? undefined : `${n} 个 Agent`}
       showTodoTag={single}
       onMenu={single ? onRowMenu : undefined}
-      onContextMenu={single ? (el) => onSessionMenu(t.lead, el) : undefined}
     />
   );
 }
 
 // Agents outside any space (Codex sessions and the like): folds like a space, folded at first when it is long and
 // nothing in it wants a look. The app lists them as a space of their machine.
-function LooseSection({ sessions, reg, hover, activeKey, go, onRowMenu, onSessionMenu }: { sessions: Session[]; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn; onSessionMenu: (s: Session, el: HTMLElement) => void }) {
+function LooseSection({ sessions, reg, hover, activeKey, go, onRowMenu }: { sessions: Session[]; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn }) {
   const [folded, toggle] = useFolded("loose", sessions.every(isQuiet) && sessions.length > 3);
   return (
     <Section title="其他 Agent" folded={folded} onToggle={toggle} right={<SessionTally sessions={sessions} folded={folded} />}>
       {sessions.map((s) => (
-        <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={hover} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} onMenu={onRowMenu} onContextMenu={(el) => onSessionMenu(s, el)} />
+        <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={hover} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} onMenu={onRowMenu} />
       ))}
     </Section>
   );
@@ -816,7 +852,7 @@ function PersonaRow({ reg, hover, active, go, main }: { reg: RegFn; hover: (k: s
       onBlur={() => hover(null)}
       aria-current={active ? "page" : undefined}
       title="Persona 的主对话"
-      className="relative z-10 mb-1 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 transition-transform duration-150 active:scale-[0.98]"
+      className="relative z-10 mb-1 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11"
     >
       <PersonaAvatar
         size={18}
@@ -838,7 +874,7 @@ function PersonaRow({ reg, hover, active, go, main }: { reg: RegFn; hover: (k: s
 
 // A section's「+」(a new conversation, a new agent): quiet, next to the section's title.
 function SectionAdd({ label, to, go, onClick }: { label: string; to?: Route; go?: GoFn; onClick?: () => void }) {
-  const cls = "relative z-10 flex size-5 shrink-0 items-center justify-center rounded-[5px] text-ink-3 hover:bg-hover hover:text-ink-2";
+  const cls = "touch-hit relative z-10 flex size-5 shrink-0 items-center justify-center rounded-[5px] text-ink-3 hover:bg-hover hover:text-ink-2";
   const icon = <Icon name="plus" size={12} stroke={2} />;
   if (to && go) return <a href={href(to)} onClick={go(to)} title={label} aria-label={label} className={cls}>{icon}</a>;
   return <button type="button" onClick={onClick} title={label} aria-label={label} className={cls}>{icon}</button>;
@@ -873,7 +909,7 @@ function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, 
   );
 }
 
-function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint, showState = true, showTodoTag, onMenu, onContextMenu }: { s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; prefix?: React.ReactNode; hint?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn; onContextMenu?: (el: HTMLElement) => void }) {
+function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint, showState = true, showTodoTag, onMenu }: { s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; prefix?: React.ReactNode; hint?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn }) {
   const st = stateOf(s);
   const t = [sourceSubtitle(s), hint ?? (tab ? tabLabel(s) : "")].filter(Boolean).join(" · ");
   const preview = sessionPreview(s);
@@ -887,14 +923,10 @@ function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint
       href={href(to)}
       onClick={go(to)}
       onContextMenu={(e) => {
-        // right click (or the menu key): the todo menu when the list gives one, else the row's menu
-        if (onContextMenu) {
-          e.preventDefault();
-          onContextMenu(e.currentTarget);
-        } else if (onMenu) {
-          e.preventDefault();
-          onMenu(s, e.currentTarget);
-        }
+        // right click (or the menu key): the row's menu, the same as its ⋯
+        if (!onMenu) return;
+        e.preventDefault();
+        onMenu(s, e.currentTarget);
       }}
       onMouseEnter={() => hover(k)}
       onFocus={() => hover(k)}
@@ -902,7 +934,7 @@ function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint
       aria-current={active ? "page" : undefined}
       title={`${sessionTitle(s)}${sourceSubtitle(s) ? `\n${sourceSubtitle(s)}` : ""}${hint ? `\n${hint}` : ""}${s.todo ? `\n待办：${s.todo.title}` : ""}${preview ? `\n${preview}` : ""}`}
       // a touch screen: rows a finger can hit (44), and room at the end for the ⋯ that is always there
-      className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", onMenu && "[@media(hover:none)]:pr-9")}
+      className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", onMenu && "[@media(hover:none)]:pr-11")}
     >
       <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusDot state={st} size={7} /> : <Icon name="chat" size={12} className="text-ink-3" />}</span>
       {prefix}
@@ -936,7 +968,7 @@ function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint
         title="更多"
         tabIndex={-1}
         onClick={() => row.current && onMenu(s, row.current)}
-        className="absolute top-1/2 right-1 z-20 hidden size-6 -translate-y-1/2 items-center justify-center rounded-[6px] bg-hover text-ink-3 hover:bg-hover-2 hover:text-ink group-hover/row:flex [@media(hover:none)]:flex [@media(hover:none)]:size-8 [@media(hover:none)]:bg-transparent"
+        className="absolute top-1/2 right-1 z-20 hidden size-6 -translate-y-1/2 items-center justify-center rounded-[6px] bg-hover text-ink-3 hover:bg-hover-2 hover:text-ink group-hover/row:flex [@media(hover:none)]:right-0 [@media(hover:none)]:flex [@media(hover:none)]:size-11 [@media(hover:none)]:bg-transparent"
       >
         <Icon name="more" size={14} />
       </button>
@@ -1015,7 +1047,7 @@ function PersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: 
       right={
         <>
           {unread ? <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-tint px-1 text-[10px] font-semibold text-accent-ink tabular-nums">{unread}</span> : <span className="text-[10.5px] text-ink-3 tabular-nums">{sessions.length || ""}</span>}
-          <button type="button" title="搜索个人 Agent" aria-label="搜索个人 Agent" onClick={() => setSearching((x) => !x || !!q)} className={cx("relative z-10 flex size-5 items-center justify-center rounded-[5px] text-ink-3 hover:bg-hover hover:text-ink-2", (searching || q) && "text-ink-2")}>
+          <button type="button" title="搜索个人 Agent" aria-label="搜索个人 Agent" onClick={() => setSearching((x) => !x || !!q)} className={cx("touch-hit relative z-10 flex size-5 items-center justify-center rounded-[5px] text-ink-3 hover:bg-hover hover:text-ink-2", (searching || q) && "text-ink-2")}>
             <Icon name="search" size={12} />
           </button>
           <button
@@ -1027,7 +1059,7 @@ function PersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: 
               setPage("root");
               menu.open(e);
             }}
-            className={cx("relative z-10 flex size-5 items-center justify-center rounded-[5px] hover:bg-hover hover:text-ink-2", filtered ? "text-accent" : "text-ink-3", menu.anchor && "bg-hover")}
+            className={cx("touch-hit relative z-10 flex size-5 items-center justify-center rounded-[5px] hover:bg-hover hover:text-ink-2", filtered ? "text-accent" : "text-ink-3", menu.anchor && "bg-hover")}
           >
             <Icon name="filter" size={12} />
           </button>
@@ -1104,7 +1136,7 @@ function AgentRow({ s, reg, hover, active, go, pinned, onMenu }: { s: AgentSessi
         onBlur={() => hover(null)}
         aria-current={active ? "page" : undefined}
         title={`${s.title || "未命名会话"} · ${providerLabel(s.provider)}`}
-        className="relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98]"
+        className="relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98] [@media(hover:none)]:pr-11 [@media(pointer:coarse)]:min-h-11"
       >
         <AgentAvatar s={s} size={16} />
         <span className={cx("min-w-0 flex-1 truncate text-[13px]", active || unread ? "font-medium text-ink" : "text-ink-2")}>{s.title || "未命名会话"}</span>
@@ -1121,9 +1153,20 @@ function AgentRow({ s, reg, hover, active, go, pinned, onMenu }: { s: AgentSessi
         title={pinned ? "取消置顶" : "置顶"}
         aria-label={pinned ? "取消置顶" : "置顶"}
         onClick={() => updateAgentPrefs((x) => togglePin(x, s.id))}
-        className={cx("absolute top-1/2 right-1 z-20 flex size-5 -translate-y-1/2 items-center justify-center rounded-[5px] opacity-0 hover:bg-hover group-hover/row:opacity-100 focus-visible:opacity-100", pinned ? "text-accent" : "text-ink-3")}
+        className={cx("absolute top-1/2 right-1 z-20 flex size-5 -translate-y-1/2 items-center justify-center rounded-[5px] opacity-0 hover:bg-hover group-hover/row:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:hidden", pinned ? "text-accent" : "text-ink-3")}
       >
         <Icon name="pin" size={11} />
+      </button>
+      {/* a touch screen has no hover pin and no right click: the row's menu (置顶 is in it) behind a ⋯ that stays */}
+      <button
+        type="button"
+        aria-label="个人 Agent 的操作"
+        aria-haspopup="menu"
+        title="更多"
+        onClick={(e) => onMenu(e.currentTarget.parentElement ?? e.currentTarget)}
+        className="absolute top-1/2 right-0 z-20 hidden size-11 -translate-y-1/2 items-center justify-center text-ink-3 [@media(hover:none)]:flex"
+      >
+        <Icon name="more" size={14} />
       </button>
     </div>
   );

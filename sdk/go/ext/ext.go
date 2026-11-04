@@ -1,7 +1,7 @@
 // Package ext is an extension program's side of the process protocol (docs/extensions.md「进程扩展协议」): it answers
 // initialize, ping and manifest, hands each namespaced call (connector.status, ui.render, …) to its handler, and
 // lets the program call the hub and send it events. It has no dependencies beyond the standard library and the
-// generated wire types, so an extension's repository can carry a copy (scripts/sync-sdk.sh).
+// generated wire types, so an extension's repository can carry a copy (scripts/gen/sync-sdk.sh).
 //
 // A program:
 //
@@ -134,21 +134,44 @@ func Main(prog Program) {
 		}
 		go func() { errs <- ServeHTTP(ctx, sock, prog.HTTP) }()
 	}
-	go func() { errs <- Serve(ctx, os.Stdin, os.Stdout, prog) }()
-	select {
-	case <-ctx.Done():
-	case err := <-errs:
-		if err != nil && err != io.EOF && ctx.Err() == nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+	in := &counting{r: os.Stdin}
+	go func() { errs <- Serve(ctx, in, os.Stdout, prog) }()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err := <-errs:
+			// rpc: none (only HTTP): the hub sends nothing on stdin; serve until it stops the program.
+			if err == io.EOF && prog.HTTP != nil && in.n == 0 {
+				continue
+			}
+			if err != nil && err != io.EOF && ctx.Err() == nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			return
 		}
 	}
+}
+
+// counting counts what was read, to tell a hub that speaks the protocol from one that sends nothing.
+type counting struct {
+	r io.Reader
+	n int64
+}
+
+func (c *counting) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	return n, err
 }
 
 type server struct {
 	prog Program
 	hub  *Hub
 	ctx  context.Context
+
+	pushes pushes
 
 	mu          sync.Mutex
 	initialized bool

@@ -12,6 +12,8 @@ import { LinkPanel } from "./link/LinkPanel";
 import { AgentPanel, TaskPanel } from "./assistant/TaskPanel";
 import { SubagentPanel } from "./chat/SubagentPanel";
 import { subagentParent } from "../lib/tasks";
+import { useCloseOnBack } from "../lib/back-close";
+import { NARROW, useMedia } from "../lib/viewport";
 
 const WIDTH_KEY = "jarvis.panelWidth";
 const MIN = 360;
@@ -22,6 +24,8 @@ function clampWidth(w: number) {
 
 export function SidePanel() {
   const panel = usePanel();
+  // narrow, it covers the page: Back closes it first (and stays on the conversation)
+  useCloseOnBack(Boolean(panel), closePanel, useMedia(NARROW));
   const [width, setWidth] = useState(() => clampWidth(Number(localStorage.getItem(WIDTH_KEY)) || 600));
   const drag = useRef<{ x: number; w: number } | null>(null);
 
@@ -49,7 +53,9 @@ export function SidePanel() {
   return (
     <aside
       aria-label={panelLabel(panel)}
-      className="fixed inset-0 z-30 flex flex-col bg-page shadow-overlay lg:relative lg:inset-auto lg:z-auto lg:w-(--panel-w) lg:shrink-0 lg:border-l lg:border-line lg:shadow-none"
+      // narrow: over the visible part of the page (--kb-top / --kb-h, lib/viewport.ts), so on iOS the terminal's key
+      // bar sits on the keyboard instead of under it
+      className="fixed inset-x-0 top-(--kb-top) z-30 flex h-(--kb-h) flex-col bg-page shadow-overlay lg:relative lg:inset-auto lg:top-auto lg:z-auto lg:h-auto lg:w-(--panel-w) lg:shrink-0 lg:border-l lg:border-line lg:shadow-none"
       style={{ "--panel-w": `${width}px`, animation: `slide-in-right 260ms ${EASE} both` } as React.CSSProperties}
     >
       <div

@@ -19,11 +19,19 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/db/dbtest"
+	"github.com/nwverse/persona/server/internal/extension/sandbox"
 )
 
 // TestMain doubles as a plugin: re-run with JARVIS_TEST_PLUGIN=1 the test binary serves on JARVIS_PLUGIN_SOCKET.
 // Otherwise the tests run on a database of their own (dbtest, #583).
 func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == sandbox.RunCommand { // a sandbox's first process (extension_sandbox_test.go)
+		os.Exit(sandbox.Run(os.Args[2:], os.Stderr))
+	}
+	if os.Getenv("JARVIS_TEST_PLUGIN") == "boxed" {
+		serveBoxedExtensionForTest()
+		return
+	}
 	if os.Getenv("JARVIS_TEST_PLUGIN") == "1" {
 		serveExtensionForTest()
 		return
@@ -34,6 +42,10 @@ func TestMain(m *testing.M) {
 	}
 	if os.Getenv("JARVIS_TEST_PLUGIN") == "ui" {
 		serveUIExtensionForTest()
+		return
+	}
+	if os.Getenv("JARVIS_TEST_PLUGIN") == "system" {
+		serveSystemExtensionForTest()
 		return
 	}
 	if os.Getenv("JARVIS_TEST_PLUGIN") == "inboxui" {

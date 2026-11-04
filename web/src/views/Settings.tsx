@@ -6,8 +6,6 @@ import { splitDevices } from "../lib/devices";
 import { ago } from "../lib/format";
 import { install, useInstall, type InstallState } from "../lib/pwa";
 import { reset, useStore } from "../lib/store";
-import { settingsTab } from "../lib/channels";
-import { hubHasExt } from "../lib/extension-api";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from "../ui/atoms";
 import { Icon, type IconName } from "../ui/icons";
 import { setTheme, useTheme, type Theme } from "./theme";
@@ -25,8 +23,11 @@ import { Extensions } from "./settings/Extensions";
 import { HubSettings } from "./settings/HubSettings";
 import { LauncherQuota } from "./settings/LauncherQuota";
 import { LauncherExtensionSections } from "./settings/ExtensionView";
+import { hubHasExt } from "../lib/extension-api";
 import { launcherNameProblem, loadPresets, presetBody, presetChoices, presetDefaultModel, presetModelLabel, presetSubtitle, type LauncherPreset } from "../lib/launcher-presets";
 import { Segmented } from "./assistant/parts";
+import { FROM_LIST, LIST_GROUPS, openedFromList, settingsAt, settingsHref, TAB_INFO, TABS, type Tab } from "./settings/nav";
+import { SHEET_QUERY, useMedia } from "../ui/overlay";
 
 // ── types (docs/launchers.md) ───────────────────────────
 
@@ -98,83 +99,113 @@ export function tokens(n: number): string {
 
 // ── page ────────────────────────────────────────────────
 
-type Tab = "general" | "assistant" | "models" | "model-config" | "claude" | "codex" | "connectors" | "extensions" | "translate" | "devices" | "hub";
-const TABS: Tab[] = ["general", "assistant", "models", "model-config", "claude", "codex", "connectors", "extensions", "translate", "devices", "hub"];
-// The tab whose page opens one of its items, and the query parameter that names it.
-const SUB: Partial<Record<Tab, string>> = { "model-config": "purpose", extensions: "extension", connectors: "connector" };
-
 export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
-  const [tab, setTab] = useState<Tab>(() => {
-    const t = settingsTab(new URLSearchParams(location.search).get("tab"));
-    return TABS.includes(t as Tab) ? (t as Tab) : "general";
-  });
-  // The purpose (模型配置) or extension (扩展) the tab has open.
-  const [sub, setSub] = useState<string | null>(() => {
-    const q = new URLSearchParams(location.search);
-    const t = settingsTab(q.get("tab")) as Tab;
-    const param = SUB[t];
-    // ?tab=plugins&plugin=<id>: a link from before #1845
-    return param ? (q.get(param) ?? (t === "extensions" ? q.get("plugin") : null)) : null;
-  });
+  const phone = useMedia(SHEET_QUERY);
+  // The category (null: none named, the phone's list) and the purpose (模型配置) or extension (扩展) it has open.
+  const [at, setAt] = useState(() => settingsAt(location.search));
+  // Back from a category opened from the list: the URL went back, the page follows it.
+  useEffect(() => {
+    const back = () => {
+      if (location.pathname !== "/settings") return;
+      const now = settingsAt(location.search);
+      setAt((was) => (was.tab === now.tab && was.sub === now.sub ? was : now));
+    };
+    addEventListener("popstate", back);
+    return () => removeEventListener("popstate", back);
+  }, []);
+  const listed = phone && !at.tab;
+  const tab: Tab = at.tab ?? "general";
+  const { sub } = at;
   // 扩展 only on a hub with the extension base (docs/extensions.md「hub 的接口」); a link to it still opens it.
   const hasExtensions = useStore((s) => hubHasExt(s.features, "manager"));
-  const tabs: { k: Tab; label: string; icon: IconName }[] = [
-    { k: "general", label: "通用", icon: "gear" },
-    { k: "assistant", label: "助手", icon: "spark" },
-    { k: "models", label: "模型供应商", icon: "layers" },
-    { k: "model-config", label: "模型配置", icon: "gear" },
-    { k: "claude", label: "Claude Code", icon: "terminal" },
-    { k: "codex", label: "Codex", icon: "terminal" },
-    { k: "connectors", label: "连接器", icon: "link" },
-    ...(hasExtensions || tab === "extensions" ? [{ k: "extensions" as Tab, label: "扩展", icon: "extension" as IconName }] : []),
-    { k: "translate", label: "翻译", icon: "translate" },
-    { k: "devices", label: "设备", icon: "key" },
-    { k: "hub", label: "hub", icon: "hub" },
-  ];
+  const shown = (k: Tab) => k !== "extensions" || hasExtensions || tab === "extensions";
+  const tabs = TABS.filter(shown).map((k) => ({ k, ...TAB_INFO[k] }));
   const pick = (k: Tab, id: string | null = null) => {
-    setTab(k);
-    setSub(id);
-    const param = SUB[k];
-    history.replaceState(null, "", k === "general" ? "/settings" : `/settings?tab=${k}${id && param ? `&${param}=${enc(id)}` : ""}`);
+    setAt({ tab: k, sub: id });
+    const to = settingsHref(k, id, phone);
+    // from the phone's list the category goes on top of it, so Back returns to the list
+    if (listed) history.pushState({ [FROM_LIST]: true }, "", to);
+    else history.replaceState(openedFromList(history.state) ? history.state : null, "", to);
+  };
+  const toList = () => {
+    if (openedFromList(history.state)) return history.back();
+    history.replaceState(null, "", "/settings");
+    setAt({ tab: null, sub: null });
   };
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
-        <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
-        <h1 className="shrink-0 whitespace-nowrap text-[14px] font-semibold text-ink">设置</h1>
-        <nav className="ml-1 flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-control bg-inset p-0.5 shadow-hairline sm:ml-3" aria-label="设置分类">
-          {tabs.map((t) => (
-            <button
-              key={t.k}
-              type="button"
-              onClick={() => pick(t.k)}
-              aria-current={tab === t.k ? "page" : undefined}
-              className={cx(
-                "flex h-7 items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2.5 text-[12.5px] transition-[background-color,color] duration-150",
-                tab === t.k ? "bg-surface font-medium text-ink shadow-btn" : "text-ink-3 hover:text-ink-2",
-              )}
-            >
-              <Icon name={t.icon} size={13} />
-              {t.label}
-            </button>
-          ))}
-        </nav>
+        {phone && at.tab ? (
+          <>
+            <IconButton icon="chevronLeft" label="返回设置" onClick={toList} />
+            <h1 className="min-w-0 truncate text-[14px] font-semibold text-ink">{TAB_INFO[tab].label}</h1>
+          </>
+        ) : (
+          <>
+            <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
+            <h1 className="shrink-0 whitespace-nowrap text-[14px] font-semibold text-ink">设置</h1>
+          </>
+        )}
+        {!phone && (
+          <nav className="ml-1 flex min-w-0 items-center gap-0.5 overflow-x-auto rounded-control bg-inset p-0.5 shadow-hairline sm:ml-3" aria-label="设置分类">
+            {tabs.map((t) => (
+              <button
+                key={t.k}
+                type="button"
+                onClick={() => pick(t.k)}
+                aria-current={tab === t.k ? "page" : undefined}
+                className={cx(
+                  "flex h-7 items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2.5 text-[12.5px] transition-[background-color,color] duration-150",
+                  tab === t.k ? "bg-surface font-medium text-ink shadow-btn" : "text-ink-3 hover:text-ink-2",
+                )}
+              >
+                <Icon name={t.icon} size={13} />
+                {t.label}
+              </button>
+            ))}
+          </nav>
+        )}
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div key={tab} className="mx-auto max-w-[760px] px-5 py-6 sm:px-8" style={{ animation: `fade-up 320ms ${EASE} both` }}>
-          {tab === "general" && <General onTriageModel={() => pick("model-config", "agent.triage")} />}
-          {tab === "models" && <Models />}
-          {tab === "model-config" && <ModelConfiguration open={sub} onOpen={(id) => pick("model-config", id)} onProviders={() => pick("models")} />}
-          {tab === "assistant" && <AssistantSettings />}
-          {(tab === "claude" || tab === "codex") && <AgentSettings key={tab} agent={tab} />}
-          {tab === "connectors" && <Connectors open={sub} onOpen={(id) => pick("connectors", id)} onChannel={(id) => pick("extensions", `-channels/${id}`)} />}
-          {tab === "extensions" && <Extensions open={sub} onOpen={(id) => pick("extensions", id)} onTab={(t, id) => TABS.includes(t as Tab) && pick(t as Tab, id)} />}
-          {tab === "translate" && <TranslationSettings onConfigure={() => pick("model-config", "translate")} />}
-          {tab === "devices" && <Devices />}
-          {tab === "hub" && <HubSettings />}
-        </div>
+        {listed ? (
+          <div className="px-4 py-5" style={{ animation: `fade-up 320ms ${EASE} both` }}>
+            <SettingsList shown={shown} onPick={pick} />
+          </div>
+        ) : (
+          <div key={tab} className="mx-auto max-w-[760px] px-5 py-6 sm:px-8" style={{ animation: `fade-up 320ms ${EASE} both` }}>
+            {tab === "general" && <General onTriageModel={() => pick("model-config", "agent.triage")} />}
+            {tab === "models" && <Models />}
+            {tab === "model-config" && <ModelConfiguration open={sub} onOpen={(id) => pick("model-config", id)} onProviders={() => pick("models")} />}
+            {tab === "assistant" && <AssistantSettings />}
+            {(tab === "claude" || tab === "codex") && <AgentSettings key={tab} agent={tab} />}
+            {tab === "connectors" && <Connectors open={sub} onOpen={(id) => pick("connectors", id)} onChannel={(id) => pick("extensions", `-channels/${id}`)} />}
+            {tab === "extensions" && <Extensions open={sub} onOpen={(id) => pick("extensions", id)} onTab={(t, id) => TABS.includes(t as Tab) && pick(t as Tab, id)} />}
+            {tab === "translate" && <TranslationSettings onConfigure={() => pick("model-config", "translate")} />}
+            {tab === "devices" && <Devices />}
+            {tab === "hub" && <HubSettings />}
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+/** The phone's first page of 设置: the categories in grouped cards, each opening its page (as on iOS). */
+function SettingsList({ shown, onPick }: { shown: (k: Tab) => boolean; onPick: (k: Tab) => void }) {
+  return (
+    <nav aria-label="设置分类">
+      {LIST_GROUPS.map((g) => {
+        const tabs = g.tabs.filter(shown);
+        if (!tabs.length) return null;
+        return (
+          <Group key={g.title} title={g.title}>
+            {tabs.map((k) => (
+              <Row key={k} icon={TAB_INFO[k].icon} label={TAB_INFO[k].label} onClick={() => onPick(k)} />
+            ))}
+          </Group>
+        );
+      })}
+    </nav>
   );
 }
 

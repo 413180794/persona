@@ -118,7 +118,7 @@ export function ListPane({
   const setTag = (t?: string) => setTags((x) => ({ ...x, [kind]: t }));
 
   return (
-    <section className={cx("min-h-0 min-w-0 flex-col @4xl:w-[400px] @4xl:shrink-0 @4xl:border-r @4xl:border-line", detailOpen ? "hidden @4xl:flex" : "flex w-full")}>
+    <section className={cx("min-h-0 min-w-0 flex-col @3xl:w-[400px] @3xl:shrink-0 @3xl:border-r @3xl:border-line", detailOpen ? "hidden @3xl:flex" : "flex w-full")}>
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
         <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
         <h1 className="flex-1 truncate text-[14px] font-semibold text-ink">知识库</h1>

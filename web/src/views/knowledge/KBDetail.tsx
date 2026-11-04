@@ -137,7 +137,7 @@ export function EntryDetail({
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-1.5 border-b border-line px-3 sm:px-4">
         <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
-        <IconButton icon="chevronLeft" label="返回列表" onClick={onBack} className="@4xl:hidden" />
+        <IconButton icon="chevronLeft" label="返回列表" onClick={onBack} className="@3xl:hidden" />
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink-2">{kindTitle(kind)}</span>
         <Button tone="secondary" onClick={() => setEditing(true)} disabled={!d}>
           <KBIcon name="tag" size={14} stroke={2.1} />

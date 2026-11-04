@@ -6,12 +6,14 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { imageURL } from "../../lib/api";
+import { useCloseOnBack } from "../../lib/back-close";
 import { sendDraft, type DraftImage } from "../../lib/drafts";
 import { fitRect } from "../../lib/image-edit";
 import { clampView, doubleTapView, fingers, IDENTITY, isZoomed, panView, wheelFactor, zoomAt, type Point, type Rect, type Size, type View } from "../../lib/image-zoom";
 import type { Item } from "../../lib/types";
 import { cx, EASE, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
+import { NARROW, useMedia } from "../../ui/media-query";
 import { useChatActions } from "./chat-actions";
 import { ImageEditor } from "./ImageEditor";
 
@@ -19,6 +21,18 @@ export interface ViewerImage {
   id: string;
   src: string;
   mime?: string;
+  /** What it is (a file's name, 截图 · MacBook): on top, beside n / m. */
+  label?: string;
+  /** The name 下载 saves it under. */
+  name?: string;
+}
+
+/** A button of the viewer's bottom bar for the picture shown (拷贝路径, 在文件页打开). */
+export interface ViewerAction {
+  key: string;
+  icon: IconName;
+  label: string;
+  run: () => void;
 }
 
 function viewerImage(item: Item, mid: string, sid: string): ViewerImage {
@@ -54,12 +68,15 @@ export function ImageViewer({
   start,
   onClose,
   attach,
+  actions,
 }: {
   images: ViewerImage[];
   start: number;
   onClose: () => void;
   /** Where an edited picture goes (the chat's composer); none hides 编辑. True when it was taken. */
   attach?: (img: DraftImage) => boolean;
+  /** More buttons for the picture at `index`, after 下载. */
+  actions?: (index: number) => ViewerAction[];
 }) {
   const [index, setIndex] = useState(() => Math.min(Math.max(start, 0), images.length - 1));
   const [view, setView] = useState<View>(IDENTITY);
@@ -69,6 +86,8 @@ export function ImageViewer({
   const swipe = useRef<{ x: number; y: number } | null>(null);
   const cur = images[index];
   const many = images.length > 1;
+  // Back (a phone's back gesture) closes the viewer, not the chat under it
+  useCloseOnBack(true, onClose, useMedia(NARROW));
   // fitted like the app's viewer (scaled to fit, small pictures too): the picture's own size and the room it has
   const area = useRef<HTMLDivElement>(null);
   const [natural, setNatural] = useState<{ width: number; height: number } | null>(null);
@@ -185,7 +204,7 @@ export function ImageViewer({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `image-${index + 1}.${(blob.type.split("/")[1] || "png").replace("jpeg", "jpg")}`;
+      a.download = cur.name || `image-${index + 1}.${(blob.type.split("/")[1] || "png").replace("jpeg", "jpg")}`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch {
@@ -204,12 +223,21 @@ export function ImageViewer({
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
 
+  // the bottom bar; more than three don't fit a phone with their words, so there they are icons
+  const off = failed[cur.id];
+  const bar: (ViewerAction & { disabled?: boolean })[] = [
+    ...(attach ? [{ key: "edit", icon: "pencil" as const, label: "编辑", run: () => setEditing(true), disabled: off }] : []),
+    ...(canCopyImage() ? [{ key: "copy", icon: "copy" as const, label: "拷贝", run: () => void copy(), disabled: off }] : []),
+    { key: "download", icon: "download", label: "下载", run: () => void download(), disabled: off },
+    ...(actions?.(index) ?? []),
+  ];
+
   return createPortal(
     <div
       ref={box}
       role="dialog"
       aria-modal="true"
-      aria-label={many ? `图片 ${index + 1} / ${images.length}` : "图片"}
+      aria-label={[cur.label || "图片", many ? `${index + 1} / ${images.length}` : ""].filter(Boolean).join(" ")}
       tabIndex={-1}
       className="fixed inset-0 z-50 flex flex-col bg-black/90 text-white outline-none backdrop-blur-sm"
       style={{ animation: "fade-in 150ms ease-out both" }}
@@ -217,8 +245,9 @@ export function ImageViewer({
       <div className="flex h-14 shrink-0 items-center gap-2 px-3">
         <RoundButton icon="x" label="关闭（Esc）" onClick={onClose} />
         <div className="flex-1" />
+        {cur.label && <span className="min-w-0 truncate text-[13px] font-medium">{cur.label}</span>}
         {many && (
-          <span className="rounded-full bg-white/15 px-3 py-1 text-[12.5px] font-medium tabular-nums whitespace-nowrap" aria-live="polite">
+          <span className="shrink-0 rounded-full bg-white/15 px-3 py-1 text-[12.5px] font-medium tabular-nums whitespace-nowrap" aria-live="polite">
             {index + 1} / {images.length}
           </span>
         )}
@@ -347,19 +376,9 @@ export function ImageViewer({
       </div>
 
       <div className="flex shrink-0 items-center justify-center gap-2 px-4 pt-2 pb-[max(12px,env(safe-area-inset-bottom))]">
-        {attach && (
-          <BarButton icon="pencil" onClick={() => setEditing(true)} disabled={failed[cur.id]}>
-            编辑
-          </BarButton>
-        )}
-        {canCopyImage() && (
-          <BarButton icon="copy" onClick={() => void copy()} disabled={failed[cur.id]}>
-            拷贝
-          </BarButton>
-        )}
-        <BarButton icon="download" onClick={() => void download()} disabled={failed[cur.id]}>
-          下载
-        </BarButton>
+        {bar.map((b) => (
+          <BarButton key={b.key} icon={b.icon} label={b.label} onClick={b.run} disabled={b.disabled} compact={bar.length > 3} />
+        ))}
       </div>
 
       {editing && attach && (
@@ -413,16 +432,21 @@ function SideButton({ side, disabled, onClick }: { side: "left" | "right"; disab
   );
 }
 
-function BarButton({ icon, onClick, disabled, children }: { icon: IconName; onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
+/** `compact`: just its icon on a phone (its words for screen readers and as its tooltip). */
+function BarButton({ icon, label, onClick, disabled, compact }: { icon: IconName; label: string; onClick: () => void; disabled?: boolean; compact?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex h-9 items-center gap-1.5 rounded-full bg-white/15 px-4 text-[13px] font-medium whitespace-nowrap transition-[background-color,transform] hover:bg-white/25 active:scale-[0.97] disabled:opacity-40"
+      title={compact ? label : undefined}
+      className={cx(
+        "flex h-9 items-center gap-1.5 rounded-full bg-white/15 px-4 text-[13px] font-medium whitespace-nowrap transition-[background-color,transform] hover:bg-white/25 active:scale-[0.97] disabled:opacity-40",
+        compact && "max-sm:size-11 max-sm:justify-center max-sm:px-0",
+      )}
     >
       <Icon name={icon} size={14} />
-      {children}
+      <span className={compact ? "max-sm:sr-only" : undefined}>{label}</span>
     </button>
   );
 }

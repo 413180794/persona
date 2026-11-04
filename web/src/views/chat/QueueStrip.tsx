@@ -7,12 +7,14 @@ import { sendDraft } from "../../lib/drafts";
 import { agentLabel } from "../../lib/mentions";
 import { keepAllBut } from "../../lib/queue";
 import type { Session } from "../../lib/types";
-import { copyText, Menu, Spinner, toast, useMenu, type MenuItem } from "../../ui/atoms";
+import { Collapse, copyText, cx, Menu, Spinner, toast, useMenu, type MenuItem } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 
-export function QueueStrip({ session, draftKey, canEdit }: { session: Session; draftKey: string; canEdit: boolean }) {
+/** `compact` (a phone on its side): one line, 排队中 N 条, that opens the messages. */
+export function QueueStrip({ session, draftKey, canEdit, compact }: { session: Session; draftKey: string; canEdit: boolean; compact?: boolean }) {
   const queued = session.queued ?? [];
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const act = async (index: number, del: boolean) => {
     if (busy) return;
@@ -33,18 +35,34 @@ export function QueueStrip({ session, draftKey, canEdit }: { session: Session; d
   };
 
   if (!queued.length) return null;
-  return (
-    <div className="flex flex-col gap-1.5 rounded-[12px] bg-surface p-2 shadow-card" style={{ animation: "fade-up 200ms ease-out both" }}>
-      <div className="flex h-5 items-center gap-1.5 px-1 text-[11.5px] font-medium text-ink-3">
-        <Icon name="inbox" size={13} />
-        <span className="min-w-0 flex-1 truncate">
-          排队中 {queued.length} 条 · {agentLabel(session)} 忙完会依次处理
-        </span>
-        {busy && <Spinner />}
+  const rows = queued.map((q, i) => (
+    <QueueRow key={`${i}:${q}`} n={i + 1} text={q} disabled={busy} canEdit={canEdit} onEdit={() => void act(i, false)} onDelete={() => void act(i, true)} />
+  ));
+  const head = (
+    <>
+      <Icon name="inbox" size={13} />
+      <span className="min-w-0 flex-1 truncate">
+        排队中 {queued.length} 条 · {agentLabel(session)} 忙完会依次处理
+      </span>
+      {busy && <Spinner />}
+    </>
+  );
+  if (compact)
+    return (
+      <div data-queue-strip className="flex flex-col rounded-[12px] bg-surface p-1 shadow-card" style={{ animation: "fade-up 200ms ease-out both" }}>
+        <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex h-7 items-center gap-1.5 rounded-[8px] px-1.5 text-left text-[11.5px] font-medium text-ink-3 transition-colors hover:bg-hover">
+          {head}
+          <Icon name="chevron" size={12} stroke={2.2} className={cx("shrink-0 transition-transform duration-200", open && "rotate-180")} />
+        </button>
+        <Collapse open={open}>
+          <div className="flex flex-col gap-1.5 px-1 pt-1 pb-0.5">{rows}</div>
+        </Collapse>
       </div>
-      {queued.map((q, i) => (
-        <QueueRow key={`${i}:${q}`} n={i + 1} text={q} disabled={busy} canEdit={canEdit} onEdit={() => void act(i, false)} onDelete={() => void act(i, true)} />
-      ))}
+    );
+  return (
+    <div data-queue-strip className="flex flex-col gap-1.5 rounded-[12px] bg-surface p-2 shadow-card" style={{ animation: "fade-up 200ms ease-out both" }}>
+      <div className="flex h-5 items-center gap-1.5 px-1 text-[11.5px] font-medium text-ink-3">{head}</div>
+      {rows}
     </div>
   );
 }

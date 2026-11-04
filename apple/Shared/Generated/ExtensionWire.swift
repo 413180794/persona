@@ -114,13 +114,15 @@ nonisolated struct ExtensionRuntime: Codable, Equatable, Sendable {
     var env: [String: String]?
     var rpc: String?
     var http: Bool?
+    var resources: ExtensionResources?
 
-    init(command: JSONValue = .null, args: [String]? = nil, env: [String: String]? = nil, rpc: String? = nil, http: Bool? = nil) {
+    init(command: JSONValue = .null, args: [String]? = nil, env: [String: String]? = nil, rpc: String? = nil, http: Bool? = nil, resources: ExtensionResources? = nil) {
         self.command = command
         self.args = args
         self.env = env
         self.rpc = rpc
         self.http = http
+        self.resources = resources
     }
 
     enum CodingKeys: String, CodingKey {
@@ -129,6 +131,7 @@ nonisolated struct ExtensionRuntime: Codable, Equatable, Sendable {
         case env
         case rpc
         case http
+        case resources
     }
 
     init(from decoder: Decoder) throws {
@@ -138,6 +141,30 @@ nonisolated struct ExtensionRuntime: Codable, Equatable, Sendable {
         self.env = try? c.decodeIfPresent([String: String].self, forKey: .env)
         self.rpc = try? c.decodeIfPresent(String.self, forKey: .rpc)
         self.http = try? c.decodeIfPresent(Bool.self, forKey: .http)
+        self.resources = try? c.decodeIfPresent(ExtensionResources.self, forKey: .resources)
+    }
+}
+
+/// The most a program may use when the hub runs it in a sandbox (docs/extensions.md「沙箱」): memory in MB, CPU in
+/// percent of one core. Unset: 1024 MB, 100%.
+nonisolated struct ExtensionResources: Codable, Equatable, Sendable {
+    var memoryMb: Int?
+    var cpuPercent: Int?
+
+    init(memoryMb: Int? = nil, cpuPercent: Int? = nil) {
+        self.memoryMb = memoryMb
+        self.cpuPercent = cpuPercent
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case memoryMb = "memory_mb"
+        case cpuPercent = "cpu_percent"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.memoryMb = try? c.decodeIfPresent(Int.self, forKey: .memoryMb)
+        self.cpuPercent = try? c.decodeIfPresent(Int.self, forKey: .cpuPercent)
     }
 }
 
@@ -219,8 +246,9 @@ nonisolated struct ExtensionContributes: Codable, Equatable, Sendable {
     var agentSources: [ExtensionAgentSourceItem]?
     var channel: [ExtensionChannelItem]?
     var events: [ExtensionEventsItem]?
+    var shortcuts: [ExtensionShortcutItem]?
 
-    init(connectors: [ExtensionConnectorItem]? = nil, voice: [ExtensionNamedItem]? = nil, computer: [ExtensionNamedItem]? = nil, browser: [ExtensionNamedItem]? = nil, quota: [ExtensionQuotaItem]? = nil, providers: [ExtensionProviderItem]? = nil, api: [ExtensionAPIItem]? = nil, assistant: [ExtensionAssistantItem]? = nil, ui: [ExtensionUIItem]? = nil, agentSources: [ExtensionAgentSourceItem]? = nil, channel: [ExtensionChannelItem]? = nil, events: [ExtensionEventsItem]? = nil) {
+    init(connectors: [ExtensionConnectorItem]? = nil, voice: [ExtensionNamedItem]? = nil, computer: [ExtensionNamedItem]? = nil, browser: [ExtensionNamedItem]? = nil, quota: [ExtensionQuotaItem]? = nil, providers: [ExtensionProviderItem]? = nil, api: [ExtensionAPIItem]? = nil, assistant: [ExtensionAssistantItem]? = nil, ui: [ExtensionUIItem]? = nil, agentSources: [ExtensionAgentSourceItem]? = nil, channel: [ExtensionChannelItem]? = nil, events: [ExtensionEventsItem]? = nil, shortcuts: [ExtensionShortcutItem]? = nil) {
         self.connectors = connectors
         self.voice = voice
         self.computer = computer
@@ -233,6 +261,7 @@ nonisolated struct ExtensionContributes: Codable, Equatable, Sendable {
         self.agentSources = agentSources
         self.channel = channel
         self.events = events
+        self.shortcuts = shortcuts
     }
 
     enum CodingKeys: String, CodingKey {
@@ -248,6 +277,7 @@ nonisolated struct ExtensionContributes: Codable, Equatable, Sendable {
         case agentSources = "agent_sources"
         case channel
         case events
+        case shortcuts
     }
 
     init(from decoder: Decoder) throws {
@@ -264,6 +294,7 @@ nonisolated struct ExtensionContributes: Codable, Equatable, Sendable {
         self.agentSources = try? c.decodeIfPresent([ExtensionAgentSourceItem].self, forKey: .agentSources)
         self.channel = try? c.decodeIfPresent([ExtensionChannelItem].self, forKey: .channel)
         self.events = try? c.decodeIfPresent([ExtensionEventsItem].self, forKey: .events)
+        self.shortcuts = try? c.decodeIfPresent([ExtensionShortcutItem].self, forKey: .shortcuts)
     }
 }
 
@@ -554,12 +585,16 @@ nonisolated struct ExtensionUIItem: Codable, Equatable, Sendable {
     var hosts: [String]?
     /// nav_page only.
     var icon: String?
-    /// overview_card only: a nav_page or plugin_page of the same extension.
+    /// overview_card and widget only: a nav_page or extension_page of the same extension.
     var opens: String?
     /// inbox_item only: one of the extension's own connectors.
     var connector: String?
+    /// widget only (and needed there): the sizes it can be drawn at.
+    var families: [String]?
+    /// widget only: how often the widget is drawn again on its own (30 when not said).
+    var refreshMinutes: Int?
 
-    init(id: String = "", title: String = "", placement: String = "", hosts: [String]? = nil, icon: String? = nil, opens: String? = nil, connector: String? = nil) {
+    init(id: String = "", title: String = "", placement: String = "", hosts: [String]? = nil, icon: String? = nil, opens: String? = nil, connector: String? = nil, families: [String]? = nil, refreshMinutes: Int? = nil) {
         self.id = id
         self.title = title
         self.placement = placement
@@ -567,6 +602,8 @@ nonisolated struct ExtensionUIItem: Codable, Equatable, Sendable {
         self.icon = icon
         self.opens = opens
         self.connector = connector
+        self.families = families
+        self.refreshMinutes = refreshMinutes
     }
 
     enum CodingKeys: String, CodingKey {
@@ -577,6 +614,8 @@ nonisolated struct ExtensionUIItem: Codable, Equatable, Sendable {
         case icon
         case opens
         case connector
+        case families
+        case refreshMinutes = "refresh_minutes"
     }
 
     init(from decoder: Decoder) throws {
@@ -588,6 +627,8 @@ nonisolated struct ExtensionUIItem: Codable, Equatable, Sendable {
         self.icon = try? c.decodeIfPresent(String.self, forKey: .icon)
         self.opens = try? c.decodeIfPresent(String.self, forKey: .opens)
         self.connector = try? c.decodeIfPresent(String.self, forKey: .connector)
+        self.families = try? c.decodeIfPresent([String].self, forKey: .families)
+        self.refreshMinutes = try? c.decodeIfPresent(Int.self, forKey: .refreshMinutes)
     }
 }
 
@@ -729,6 +770,86 @@ nonisolated struct ExtensionEventsItem: Codable, Equatable, Sendable {
         self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
         self.subscribe = (try? c.decodeIfPresent([String].self, forKey: .subscribe)) ?? []
     }
+}
+
+/// An action of the extension the system runs (docs「系统级位置」): Shortcuts and Siri on iPhone, Mac and Apple Watch. The
+/// hub asks the extension shortcut.run with the values.
+nonisolated struct ExtensionShortcutItem: Codable, Equatable, Sendable {
+    var id: String
+    var title: String
+    var description: String?
+    var params: [ExtensionShortcutParam]?
+    /// A whole page of the same extension (nav_page or extension_page) the app opens to show more of the result.
+    var ui: String?
+
+    init(id: String = "", title: String = "", description: String? = nil, params: [ExtensionShortcutParam]? = nil, ui: String? = nil) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.params = params
+        self.ui = ui
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case description
+        case params
+        case ui
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
+        self.description = try? c.decodeIfPresent(String.self, forKey: .description)
+        self.params = try? c.decodeIfPresent([ExtensionShortcutParam].self, forKey: .params)
+        self.ui = try? c.decodeIfPresent(String.self, forKey: .ui)
+    }
+}
+
+/// A value the shortcut asks for; it reaches the extension as a string (a toggle's "true" / "false").
+nonisolated struct ExtensionShortcutParam: Codable, Equatable, Sendable {
+    var name: String
+    var title: String
+    var kind: String
+    /// choice only.
+    var choices: [ExtensionChoice]?
+    var required: Bool?
+
+    init(name: String = "", title: String = "", kind: String = "", choices: [ExtensionChoice]? = nil, required: Bool? = nil) {
+        self.name = name
+        self.title = title
+        self.kind = kind
+        self.choices = choices
+        self.required = required
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case title
+        case kind
+        case choices
+        case required
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.name = (try? c.decodeIfPresent(String.self, forKey: .name)) ?? ""
+        self.title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
+        self.kind = (try? c.decodeIfPresent(String.self, forKey: .kind)) ?? ""
+        self.choices = try? c.decodeIfPresent([ExtensionChoice].self, forKey: .choices)
+        self.required = try? c.decodeIfPresent(Bool.self, forKey: .required)
+    }
+}
+
+/// Values of ShortcutParamKind.
+nonisolated enum ExtensionShortcutParamKind {
+    static let text = "text"
+    static let number = "number"
+    static let toggle = "toggle"
+    static let choice = "choice"
+    static let all = ["text", "number", "toggle", "choice"]
 }
 
 /// One line: a request {id, method, params}, an answer {id, result} or {id, error}, or an event {event, params}.
@@ -1360,6 +1481,398 @@ nonisolated struct ExtensionUIPlaces: Codable, Equatable, Sendable {
     }
 }
 
+/// A widget an extension draws outside the app (GET …/extensions/-/widgets; docs「系统级位置」).
+nonisolated struct ExtensionWidgetPlace: Codable, Equatable, Sendable {
+    var `extension`: String
+    var extensionName: String?
+    var id: String
+    var title: String
+    var families: [String]
+    var refreshMinutes: Int
+    var opens: String?
+
+    init(`extension`: String = "", extensionName: String? = nil, id: String = "", title: String = "", families: [String] = [], refreshMinutes: Int = 0, opens: String? = nil) {
+        self.extension = `extension`
+        self.extensionName = extensionName
+        self.id = id
+        self.title = title
+        self.families = families
+        self.refreshMinutes = refreshMinutes
+        self.opens = opens
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case `extension`
+        case extensionName = "extension_name"
+        case id
+        case title
+        case families
+        case refreshMinutes = "refresh_minutes"
+        case opens
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.extension = (try? c.decodeIfPresent(String.self, forKey: .`extension`)) ?? ""
+        self.extensionName = try? c.decodeIfPresent(String.self, forKey: .extensionName)
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
+        self.families = (try? c.decodeIfPresent([String].self, forKey: .families)) ?? []
+        self.refreshMinutes = (try? c.decodeIfPresent(Int.self, forKey: .refreshMinutes)) ?? 0
+        self.opens = try? c.decodeIfPresent(String.self, forKey: .opens)
+    }
+}
+
+nonisolated struct ExtensionWidgetPlaces: Codable, Equatable, Sendable {
+    var widgets: [ExtensionWidgetPlace]
+
+    init(widgets: [ExtensionWidgetPlace] = []) {
+        self.widgets = widgets
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case widgets
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.widgets = (try? c.decodeIfPresent([ExtensionWidgetPlace].self, forKey: .widgets)) ?? []
+    }
+}
+
+/// An app's POST …/extensions/{id}/-/widget/{ui}: context.size is the family it draws (WidgetFamily).
+nonisolated struct ExtensionWidgetRequest: Codable, Equatable, Sendable {
+    var context: ExtensionUIContext?
+
+    init(context: ExtensionUIContext? = nil) {
+        self.context = context
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case context
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.context = try? c.decodeIfPresent(ExtensionUIContext.self, forKey: .context)
+    }
+}
+
+/// A widget's view, held to what the family draws, and until when the hub keeps it (the app's timeline's next entry).
+nonisolated struct ExtensionWidgetAnswer: Codable, Equatable, Sendable {
+    var view: ExtensionView
+    var expiresAt: String
+
+    init(view: ExtensionView = ExtensionView(), expiresAt: String = "") {
+        self.view = view
+        self.expiresAt = expiresAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case view
+        case expiresAt = "expires_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.view = (try? c.decodeIfPresent(ExtensionView.self, forKey: .view)) ?? ExtensionView()
+        self.expiresAt = (try? c.decodeIfPresent(String.self, forKey: .expiresAt)) ?? ""
+    }
+}
+
+/// A widget a device has on a screen (PUT /api/v1/devices/{id}/widgets): the hub wakes that device when it changes.
+nonisolated struct ExtensionDeviceWidget: Codable, Equatable, Sendable {
+    var `extension`: String
+    var id: String
+    var family: String
+
+    init(`extension`: String = "", id: String = "", family: String = "") {
+        self.extension = `extension`
+        self.id = id
+        self.family = family
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case `extension`
+        case id
+        case family
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.extension = (try? c.decodeIfPresent(String.self, forKey: .`extension`)) ?? ""
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.family = (try? c.decodeIfPresent(String.self, forKey: .family)) ?? ""
+    }
+}
+
+nonisolated struct ExtensionDeviceWidgets: Codable, Equatable, Sendable {
+    var widgets: [ExtensionDeviceWidget]
+
+    init(widgets: [ExtensionDeviceWidget] = []) {
+        self.widgets = widgets
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case widgets
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.widgets = (try? c.decodeIfPresent([ExtensionDeviceWidget].self, forKey: .widgets)) ?? []
+    }
+}
+
+/// extension_widget in a background push (content-available): a widget the device has changed; the app reloads its
+/// timelines.
+nonisolated struct ExtensionWidgetPush: Codable, Equatable, Sendable {
+    var `extension`: String
+    var id: String
+
+    init(`extension`: String = "", id: String = "") {
+        self.extension = `extension`
+        self.id = id
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case `extension`
+        case id
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.extension = (try? c.decodeIfPresent(String.self, forKey: .`extension`)) ?? ""
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+    }
+}
+
+/// An extension's action the system runs (GET …/extensions/-/shortcuts).
+nonisolated struct ExtensionShortcutPlace: Codable, Equatable, Sendable {
+    var `extension`: String
+    var extensionName: String?
+    var id: String
+    var title: String
+    var description: String?
+    var params: [ExtensionShortcutParam]?
+    var ui: String?
+
+    init(`extension`: String = "", extensionName: String? = nil, id: String = "", title: String = "", description: String? = nil, params: [ExtensionShortcutParam]? = nil, ui: String? = nil) {
+        self.extension = `extension`
+        self.extensionName = extensionName
+        self.id = id
+        self.title = title
+        self.description = description
+        self.params = params
+        self.ui = ui
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case `extension`
+        case extensionName = "extension_name"
+        case id
+        case title
+        case description
+        case params
+        case ui
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.extension = (try? c.decodeIfPresent(String.self, forKey: .`extension`)) ?? ""
+        self.extensionName = try? c.decodeIfPresent(String.self, forKey: .extensionName)
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
+        self.description = try? c.decodeIfPresent(String.self, forKey: .description)
+        self.params = try? c.decodeIfPresent([ExtensionShortcutParam].self, forKey: .params)
+        self.ui = try? c.decodeIfPresent(String.self, forKey: .ui)
+    }
+}
+
+nonisolated struct ExtensionShortcutPlaces: Codable, Equatable, Sendable {
+    var shortcuts: [ExtensionShortcutPlace]
+
+    init(shortcuts: [ExtensionShortcutPlace] = []) {
+        self.shortcuts = shortcuts
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case shortcuts
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.shortcuts = (try? c.decodeIfPresent([ExtensionShortcutPlace].self, forKey: .shortcuts)) ?? []
+    }
+}
+
+/// An app's POST …/extensions/{id}/-/shortcut/{sid}: the params' values (strings) and the context (tz, locale,
+/// platform, ui_version).
+nonisolated struct ExtensionShortcutRequest: Codable, Equatable, Sendable {
+    var values: [String: String]?
+    var context: ExtensionUIContext?
+
+    init(values: [String: String]? = nil, context: ExtensionUIContext? = nil) {
+        self.values = values
+        self.context = context
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case values
+        case context
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.values = try? c.decodeIfPresent([String: String].self, forKey: .values)
+        self.context = try? c.decodeIfPresent(ExtensionUIContext.self, forKey: .context)
+    }
+}
+
+/// shortcut.run's parameters: which shortcut, its values, for whom.
+nonisolated struct ExtensionShortcutRunParams: Codable, Equatable, Sendable {
+    var contribution: String
+    var values: [String: String]
+    var uiVersion: Int
+    var tz: String?
+    var locale: String?
+    var platform: String?
+
+    init(contribution: String = "", values: [String: String] = [:], uiVersion: Int = 0, tz: String? = nil, locale: String? = nil, platform: String? = nil) {
+        self.contribution = contribution
+        self.values = values
+        self.uiVersion = uiVersion
+        self.tz = tz
+        self.locale = locale
+        self.platform = platform
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case contribution
+        case values
+        case uiVersion = "ui_version"
+        case tz
+        case locale
+        case platform
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.contribution = (try? c.decodeIfPresent(String.self, forKey: .contribution)) ?? ""
+        self.values = (try? c.decodeIfPresent([String: String].self, forKey: .values)) ?? [:]
+        self.uiVersion = (try? c.decodeIfPresent(Int.self, forKey: .uiVersion)) ?? 0
+        self.tz = try? c.decodeIfPresent(String.self, forKey: .tz)
+        self.locale = try? c.decodeIfPresent(String.self, forKey: .locale)
+        self.platform = try? c.decodeIfPresent(String.self, forKey: .platform)
+    }
+}
+
+/// What shortcut.run answers (and the app gets): a sentence Siri says or shows, and a view held to the large widget's
+/// subset (the result card).
+nonisolated struct ExtensionShortcutResult: Codable, Equatable, Sendable {
+    var text: String?
+    var view: ExtensionView?
+
+    init(text: String? = nil, view: ExtensionView? = nil) {
+        self.text = text
+        self.view = view
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case text
+        case view
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.text = try? c.decodeIfPresent(String.self, forKey: .text)
+        self.view = try? c.decodeIfPresent(ExtensionView.self, forKey: .view)
+    }
+}
+
+/// A button on an extension's notification (POST /api/v1/notify actions, at most 3). A tap runs ui.action on the
+/// notification's ui with this id; input asks for a line of text first (values.text).
+nonisolated struct ExtensionNotifyAction: Codable, Equatable, Sendable {
+    var id: String
+    var title: String
+    var role: String?
+    /// Open the app to run it; otherwise it runs in the background and its toast is shown as a notification.
+    var foreground: Bool?
+    var input: ExtensionNotifyActionInput?
+
+    init(id: String = "", title: String = "", role: String? = nil, foreground: Bool? = nil, input: ExtensionNotifyActionInput? = nil) {
+        self.id = id
+        self.title = title
+        self.role = role
+        self.foreground = foreground
+        self.input = input
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case role
+        case foreground
+        case input
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
+        self.role = try? c.decodeIfPresent(String.self, forKey: .role)
+        self.foreground = try? c.decodeIfPresent(Bool.self, forKey: .foreground)
+        self.input = try? c.decodeIfPresent(ExtensionNotifyActionInput.self, forKey: .input)
+    }
+}
+
+nonisolated struct ExtensionNotifyActionInput: Codable, Equatable, Sendable {
+    var placeholder: String?
+
+    init(placeholder: String? = nil) {
+        self.placeholder = placeholder
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case placeholder
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.placeholder = try? c.decodeIfPresent(String.self, forKey: .placeholder)
+    }
+}
+
+/// extension_notification in an extension's alert push: whose it is, the page a tap opens (ui with state) and its
+/// buttons (category ext.<extension>.<hash of the action ids>, registered by the app as it meets it).
+nonisolated struct ExtensionNotification: Codable, Equatable, Sendable {
+    var `extension`: String
+    var ui: String?
+    var state: String?
+    var actions: [ExtensionNotifyAction]?
+
+    init(`extension`: String = "", ui: String? = nil, state: String? = nil, actions: [ExtensionNotifyAction]? = nil) {
+        self.extension = `extension`
+        self.ui = ui
+        self.state = state
+        self.actions = actions
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case `extension`
+        case ui
+        case state
+        case actions
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.extension = (try? c.decodeIfPresent(String.self, forKey: .`extension`)) ?? ""
+        self.ui = try? c.decodeIfPresent(String.self, forKey: .ui)
+        self.state = try? c.decodeIfPresent(String.self, forKey: .state)
+        self.actions = try? c.decodeIfPresent([ExtensionNotifyAction].self, forKey: .actions)
+    }
+}
+
 /// A role color the app picks, never one of the extension's own. An unknown tone draws as neutral.
 nonisolated enum ExtensionTone {
     static let neutral = "neutral"
@@ -1412,14 +1925,34 @@ nonisolated enum ExtensionPlacement {
     static let machineSection = "machine_section"
     static let inboxItem = "inbox_item"
     static let extensionPage = "extension_page"
-    static let all = ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page"]
+    static let widget = "widget"
+    static let all = ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget"]
 }
 
-/// Values of Size.
+/// How much room a view has: compact (a card), full (a page, a section), or for a widget the family it is drawn for
+/// (WidgetFamily).
 nonisolated enum ExtensionSize {
     static let compact = "compact"
     static let full = "full"
-    static let all = ["compact", "full"]
+    static let small = "small"
+    static let medium = "medium"
+    static let large = "large"
+    static let accessoryCircular = "accessory_circular"
+    static let accessoryRectangular = "accessory_rectangular"
+    static let accessoryInline = "accessory_inline"
+    static let all = ["compact", "full", "small", "medium", "large", "accessory_circular", "accessory_rectangular", "accessory_inline"]
+}
+
+/// A widget's size outside the app (docs「系统级位置」): a home screen widget's small / medium / large, a Lock Screen or
+/// watch face complication's accessory_*.
+nonisolated enum ExtensionWidgetFamily {
+    static let small = "small"
+    static let medium = "medium"
+    static let large = "large"
+    static let accessoryCircular = "accessory_circular"
+    static let accessoryRectangular = "accessory_rectangular"
+    static let accessoryInline = "accessory_inline"
+    static let all = ["small", "medium", "large", "accessory_circular", "accessory_rectangular", "accessory_inline"]
 }
 
 /// Values of Platform.

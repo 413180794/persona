@@ -1,14 +1,15 @@
 // What the agent is waiting on (questions, plans, permissions, terminal dialogs), as Beautiful UI's Approval Card.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiError, enc, errorText } from "../../lib/api";
 import { apiOp } from "../../lib/ops";
 import type { Interaction } from "../../lib/types";
 import { answerLines, endedText, type Resolution, type ResolveResult } from "../../lib/answered";
 import { sessionCan } from "../../lib/format";
 import { dropAnswered, endInteraction, getSession, useStore, type AnsweredCard as Answered } from "../../lib/store";
-import { Button, cx, EASE, Menu, toast, useMenu } from "../../ui/atoms";
+import { Button, Collapse, cx, EASE, Menu, toast, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
+import { cardFold, cardLine, PLAN_MAX, showsAnswered } from "./dock";
 
 async function resolve(ix: Interaction, body: Record<string, unknown>) {
   if (!sessionCan(getSession(ix.machine_id, ix.session_id), "approve")) {
@@ -51,7 +52,7 @@ function Card({ title, kicker, onDismiss, children, footer }: { title: string; k
             aria-label="交回电脑处理"
             title="交回电脑处理"
             onClick={onDismiss}
-            className="flex size-6 shrink-0 items-center justify-center rounded-[6px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
+            className="touch-hit flex size-6 shrink-0 items-center justify-center rounded-[6px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
           >
             <Icon name="x" size={14} stroke={2.2} />
           </button>
@@ -65,7 +66,7 @@ function Card({ title, kicker, onDismiss, children, footer }: { title: string; k
 
 function Choice({ on, multi, label, desc, onClick }: { on: boolean; multi?: boolean; label: string; desc?: string; onClick: () => void }) {
   return (
-    <button type="button" aria-pressed={on} onClick={onClick} className="-mx-1.5 flex items-start gap-2 rounded-control px-1.5 py-1.5 text-left transition-colors duration-100 hover:bg-hover">
+    <button type="button" aria-pressed={on} onClick={onClick} className="touch-hit -mx-1.5 flex items-start gap-2 rounded-control px-1.5 py-1.5 text-left transition-colors duration-100 hover:bg-hover">
       <span
         className={cx(
           "mt-[2px] flex size-4 shrink-0 items-center justify-center transition-colors duration-200",
@@ -91,7 +92,7 @@ function SendArrow({ ready, onClick, label, busy }: { ready: boolean; onClick: (
       title={label}
       disabled={!ready || busy}
       onClick={onClick}
-      className="flex size-7 items-center justify-center rounded-[8px] transition-[background-color,color,transform] duration-200 enabled:active:scale-[0.96]"
+      className="touch-hit flex size-7 items-center justify-center rounded-[8px] transition-[background-color,color,transform] duration-200 enabled:active:scale-[0.96]"
       style={{ background: ready ? "var(--ink)" : "var(--field)", color: ready ? "var(--surface)" : "var(--ink-3)", boxShadow: ready ? "inset 0 1px 0 rgba(255,255,255,0.14)" : "var(--shadow-btn)" }}
     >
       <Icon name="up" size={14} stroke={2.5} />
@@ -141,7 +142,7 @@ function QuestionCard({ ix }: { ix: Interaction }) {
           <span className="flex items-center gap-2">
             {qs.length > 1 && (
               <>
-                <button type="button" aria-label="上一题" disabled={qi === 0} onClick={() => setQi(qi - 1)} className="flex size-6 items-center justify-center rounded-[5px] text-ink-3 enabled:hover:bg-hover disabled:opacity-35">
+                <button type="button" aria-label="上一题" disabled={qi === 0} onClick={() => setQi(qi - 1)} className="touch-hit flex size-6 items-center justify-center rounded-[5px] text-ink-3 enabled:hover:bg-hover disabled:opacity-35">
                   <Icon name="chevronLeft" size={14} stroke={2.2} />
                 </button>
                 <span className="flex items-center gap-1">
@@ -156,7 +157,7 @@ function QuestionCard({ ix }: { ix: Interaction }) {
                     />
                   ))}
                 </span>
-                <button type="button" aria-label="下一题" disabled={last} onClick={() => setQi(qi + 1)} className="flex size-6 items-center justify-center rounded-[5px] text-ink-3 enabled:hover:bg-hover disabled:opacity-35">
+                <button type="button" aria-label="下一题" disabled={last} onClick={() => setQi(qi + 1)} className="touch-hit flex size-6 items-center justify-center rounded-[5px] text-ink-3 enabled:hover:bg-hover disabled:opacity-35">
                   <Icon name="chevronRight" size={14} stroke={2.2} />
                 </button>
               </>
@@ -238,7 +239,7 @@ function PlanCard({ ix }: { ix: Interaction }) {
               <Button tone="primary" busy={busy} className="rounded-r-none" onClick={() => go({ approve: true, mode: "acceptEdits" })}>
                 批准
               </Button>
-              <button type="button" aria-label="批准方式" onClick={menu.open} className="flex h-8 w-7 items-center justify-center rounded-r-control border-l border-white/15 bg-ink text-surface hover:opacity-90">
+              <button type="button" aria-label="批准方式" onClick={menu.open} className="touch-hit flex h-8 w-7 items-center justify-center rounded-r-control border-l border-white/15 bg-ink text-surface hover:opacity-90">
                 <Icon name="chevron" size={12} stroke={2.4} />
               </button>
               {menu.anchor && <Menu anchor={menu.anchor} onClose={menu.close} align="right" side="top" width={196} items={MODES.map((m) => ({ key: m.key, label: m.label, onSelect: () => go({ approve: true, mode: m.key }) }))} />}
@@ -247,7 +248,7 @@ function PlanCard({ ix }: { ix: Interaction }) {
         )
       }
     >
-      <div className="max-h-[40vh] overflow-y-auto rounded-[8px] bg-inset px-3 py-2.5 shadow-hairline">
+      <div className="overflow-y-auto rounded-[8px] bg-inset px-3 py-2.5 shadow-hairline" style={{ maxHeight: PLAN_MAX }}>
         <Markdown text={ix.plan ?? ""} small />
       </div>
     </Card>
@@ -351,7 +352,7 @@ function ScreenCard({ ix }: { ix: Interaction }) {
                 type="button"
                 disabled={busy !== null}
                 onClick={() => (o.kind === "type_something" ? setTyping(o.key) : go({ option: o.key }, o.key))}
-                className="-mx-1.5 flex items-start gap-2 rounded-control px-1.5 py-1.5 text-left transition-colors hover:bg-hover disabled:opacity-60"
+                className="touch-hit -mx-1.5 flex items-start gap-2 rounded-control px-1.5 py-1.5 text-left transition-colors hover:bg-hover disabled:opacity-60"
               >
                 <span className="mt-[1px] flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-[5px] bg-field px-1 font-mono text-[10.5px] text-ink-2 shadow-hairline">{o.key}</span>
                 <span className="min-w-0">
@@ -425,7 +426,7 @@ function MultiScreenCard({ ix }: { ix: Interaction }) {
             aria-checked={picked.has(o.key)}
             disabled={busy !== null}
             onClick={() => toggle(o.key)}
-            className="-mx-1.5 flex items-start gap-2 rounded-control px-1.5 py-1.5 text-left transition-colors hover:bg-hover disabled:opacity-60"
+            className="touch-hit -mx-1.5 flex items-start gap-2 rounded-control px-1.5 py-1.5 text-left transition-colors hover:bg-hover disabled:opacity-60"
           >
             <span className={`mt-[1px] flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-[5px] px-1 font-mono text-[10.5px] shadow-hairline ${picked.has(o.key) ? "bg-accent text-white" : "bg-field text-ink-2"}`}>
               {picked.has(o.key) ? "✓" : o.key}
@@ -475,7 +476,7 @@ export function AnsweredCard({ card }: { card: Answered }) {
           aria-label="收起"
           title="收起"
           onClick={() => dropAnswered(card.ix.id)}
-          className="flex size-6 shrink-0 items-center justify-center rounded-[6px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
+          className="touch-hit flex size-6 shrink-0 items-center justify-center rounded-[6px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
         >
           <Icon name="x" size={14} stroke={2.2} />
         </button>
@@ -490,4 +491,82 @@ export function InteractionCard({ ix }: { ix: Interaction }) {
     : ix.kind === "plan" ? <PlanCard ix={ix} />
     : ix.kind === "permission" ? <PermissionCard ix={ix} /> : <ScreenCard ix={ix} />;
   return canApprove ? card : <fieldset disabled>{card}</fieldset>;
+}
+
+/**
+ * The cards waiting on you, and the ones just answered, above the composer. Wide screens show them all, as always.
+ * Narrow ones (#1996) keep them in a box that scrolls on its own: the first in full and 还有 N 件 for the others until
+ * that is tapped; while the keyboard is up, one line for all of them (tapping it puts the keyboard away).
+ */
+export function PendingCards({ interactions, answered, narrow, short = false, keyboard, onDismissKeyboard }: {
+  interactions: Interaction[];
+  answered: Answered[];
+  narrow: boolean;
+  /** A phone on its side: all of them in one line until tapped. */
+  short?: boolean;
+  keyboard: boolean;
+  onDismissKeyboard: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const count = interactions.length;
+  useEffect(() => {
+    if (!count) setOpen(false);
+  }, [count]);
+  const { full, summary } = cardFold(count, { narrow, keyboard, open, short });
+  if (!count && !answered.length) return null;
+  const done = showsAnswered({ narrow, keyboard, open, short }) ? answered.map((a) => <AnsweredCard key={a.ix.id} card={a} />) : [];
+  const cards = interactions.map((ix) => <InteractionCard key={ix.id} ix={ix} />);
+  if (!narrow) return <>{done}{cards}</>;
+  const more = summary?.kind === "more";
+  return (
+    <div className="flex min-h-0 shrink flex-col gap-2">
+      {/* the box clips what is in it: its children keep a little room for their shadows (p-1; -m-1 gives it back) */}
+      <div data-chat-cards className={cx("-m-1 flex min-h-0 shrink flex-col overflow-y-auto overscroll-contain p-1", !done.length && !full && "hidden")}>
+        {done.length > 0 && <div className="flex flex-col gap-2">{done}</div>}
+        {count > 0 && (
+          <Collapse open={full >= 1}>
+            <div className={cx(done.length > 0 && "pt-2")}>{cards[0]}</div>
+          </Collapse>
+        )}
+        {count > 1 && (
+          <Collapse open={full > 1}>
+            <div className="flex flex-col gap-2 pt-2">{cards.slice(1)}</div>
+          </Collapse>
+        )}
+      </div>
+      {/* the line for what is folded stays in view under the box (in it, a tall first card would scroll it away) */}
+      {summary && (
+        <FoldRow
+          label={more ? `还有 ${summary.count} 件` : `${summary.count} 件待处理`}
+          detail={(more ? interactions.slice(1) : interactions).map(cardLine).join(" · ")}
+          onClick={summary.kind === "typing" ? onDismissKeyboard : () => setOpen(true)}
+        />
+      )}
+      {open && (count > 1 || short) && !keyboard && (
+        <Button tone="quiet" onClick={() => setOpen(false)} className="touch-hit -mt-1 self-center">
+          {short ? "收起" : "只看第一件"}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/** One line in place of folded cards: how many, what they are, ›. */
+function FoldRow({ label, detail, onClick }: { label: string; detail: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      data-chat-cards-fold
+      // the composer keeps its focus until the click (Android): the row must not move out from under the finger first
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
+      className="flex h-11 shrink-0 items-center gap-2 rounded-card bg-surface px-3.5 text-left shadow-card transition-colors hover:bg-hover"
+      style={{ animation: `fade-up 250ms ${EASE} both` }}
+    >
+      <span className="size-1.5 shrink-0 rounded-full bg-red" />
+      <span className="shrink-0 text-[13px] font-medium whitespace-nowrap text-ink">{label}</span>
+      <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-3">{detail}</span>
+      <Icon name="chevronRight" size={14} stroke={2.2} className="shrink-0 text-ink-3" />
+    </button>
+  );
 }

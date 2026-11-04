@@ -49,5 +49,6 @@ export function usePanel(): Panel | null {
       return () => listeners.delete(l);
     },
     () => current,
+    () => current,
   );
 }

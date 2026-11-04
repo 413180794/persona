@@ -51,6 +51,13 @@ export function paneRoute(s: Session): Route {
     : { name: "session", mid: s.machine_id, sid: s.session_id };
 }
 
+/** The `/t/…` an old `/s/<mid>/<sid>` link stands for: its pane's tab, when the session is known and has one (#1996). */
+export function tabOfSessionLink(all: Session[], r: { mid: string; sid: string }): Route | undefined {
+  const s = all.find((x) => x.machine_id === r.mid && x.session_id === r.sid);
+  const to = s && paneRoute(s);
+  return to?.name === "tab" ? to : undefined;
+}
+
 /** What `/t/<mid>/<space>/<slot>[/<sid>]` opens: the asked-for pane when the tab has it, else the session `sid` (the
  *  tab's ids changed with a herdr restart), else the tab's most urgent pane; undefined when none of them is there. */
 export function resolveTab(all: Session[], r: { mid: string; space: string; slot: string; sid?: string }): Session | undefined {

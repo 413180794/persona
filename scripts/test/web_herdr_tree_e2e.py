@@ -138,11 +138,11 @@ def desktop(browser, base, token, shots):
     expect(tree_header(page, "NAS")).to_have_attribute("aria-expanded", "true")
     ok("workspace and machine folds stay after a reload")
 
-    # 6. The old session links still open, without a redirect.
+    # 6. The old session links still open; a pane in a tab moves to its tab's /t/ in place (#1996).
     page.goto(base + f"/s/server/{CLAUDE}")
     expect(page.locator("main").get_by_text("中间件写好了，在补刷新失败的测试。").first).to_be_visible()
-    assert path_of(page) == f"/s/server/{CLAUDE}", path_of(page)
-    ok("/s/<mid>/<sid> opens the session as before")
+    page.wait_for_function(f"location.pathname === {TAB1 + '/' + CLAUDE!r}")
+    ok("/s/<mid>/<sid> opens the session, its address replaced by the tab's /t/")
 
     # 7. A tab whose ids changed (herdr restarted) falls back to the pane; with no pane it says so.
     page.goto(base + f"/t/server/w9/{quote('w9:t1', safe='')}/{SINGLE}")

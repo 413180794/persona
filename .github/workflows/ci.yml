@@ -35,6 +35,8 @@ jobs:
           go-version-file: sdk/go/go.mod
       - name: Generated types and examples
         run: python3 scripts/test/test_extension_schema.py
+      - name: The SDK bundle personad writes new extensions from
+        run: python3 scripts/test/test_sdk_bundle.py
       - name: Go wire types round-trip the examples
         working-directory: sdk/go
         run: go test ./...

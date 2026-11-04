@@ -102,9 +102,9 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                   <Spark points={mm?.points ?? []} />
                 </div>
                 <div className="flex items-center justify-between border-t border-line px-4 py-2 text-[11.5px] text-ink-3">
-                  <span>{!m.online ? expectedDisconnect ? "等待 node 重新连接" : "连不上这台电脑" : agents.length ? `${agents.length} 个 Agent${working ? `，${working} 个在工作` : ""}` : "没有在跑的 Agent"}</span>
+                  <span className="whitespace-nowrap">{!m.online ? expectedDisconnect ? "等待 node 重新连接" : "连不上这台电脑" : agents.length ? `${agents.length} 个 Agent${working ? `，${working} 个在工作` : ""}` : "没有在跑的 Agent"}</span>
                   <span className="flex min-w-0 items-center gap-3">
-                    <span className="truncate font-mono">{[m.claude_version && `claude ${m.claude_version}`, m.herdr_version && `herdr ${m.herdr_version}`].filter(Boolean).join(" · ")}</span>
+                    <span className="truncate font-mono max-sm:hidden">{[m.claude_version && `claude ${m.claude_version}`, m.herdr_version && `herdr ${m.herdr_version}`].filter(Boolean).join(" · ")}</span>
                     <a href={href(detail)} onClick={(e) => onLinkClick(e, detail)} className="shrink-0 whitespace-nowrap text-ink-2 hover:text-ink">详情 ›</a>
                   </span>
                 </div>

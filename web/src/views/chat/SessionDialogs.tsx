@@ -292,7 +292,7 @@ export function Chip({ label, onClick, active, danger, title }: { label: string;
       aria-haspopup="menu"
       onClick={onClick}
       className={cx(
-        "flex h-5.5 items-center gap-0.5 whitespace-nowrap rounded-full px-2 text-[11px] font-medium transition-colors",
+        "touch-hit flex h-5.5 items-center gap-0.5 whitespace-nowrap rounded-full px-2 text-[11px] font-medium transition-colors",
         danger ? "bg-red-tint text-red" : active ? "bg-hover text-ink" : "bg-field text-ink-2 hover:bg-hover hover:text-ink",
       )}
     >

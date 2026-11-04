@@ -73,8 +73,8 @@ func (ps *extensions) uiPlaces(placement, base string) []UIPlace {
 			switch {
 			case !known:
 				continue
-			case placement == "" && u.Placement == "launcher_section":
-				continue
+			case placement == "" && (u.Placement == "launcher_section" || u.Placement == "widget"):
+				continue // a launcher's sections are asked for with the launcher; widgets are listed on their own
 			case placement != "" && u.Placement != placement && !(extension.PageSlot(placement) && extension.PageSlot(u.Placement)):
 				continue
 			case u.Placement == "launcher_section" && (host == "" || (len(u.Hosts) > 0 && !hostMatches(host, u.Hosts)) || !p.Record.Granted.LauncherKeys):
@@ -228,6 +228,9 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (extens
 	slot, known := extension.Slot(item.Placement)
 	if !known {
 		return res, fmt.Errorf("这个 hub 没有 %s 这个位置", item.Placement)
+	}
+	if item.Placement == "widget" {
+		return res, errUseWidget
 	}
 	params := h.uiParams(*item, slot, in)
 	switch item.Placement {
@@ -434,6 +437,8 @@ func (h *Hub) extensionUIRoutes(api *http.ServeMux) {
 			writeErrCode(w, http.StatusNotFound, "unsupported", err)
 		case errors.Is(err, errNotItsItem):
 			writeErrCode(w, http.StatusForbidden, "forbidden", err)
+		case errors.Is(err, errUseWidget):
+			writeErrCode(w, http.StatusBadRequest, "bad_request", err)
 		case errors.Is(err, errOffline):
 			writeErrCode(w, http.StatusServiceUnavailable, "offline", err)
 		case err != nil:
@@ -529,6 +534,7 @@ func (ps *extensions) tellInvalid(id string) {
 	if ps.h == nil || len(ids) == 0 {
 		return
 	}
+	ps.h.widgetsChanged(id, ids)
 	if ids[""] {
 		ps.h.broadcast(map[string]any{"type": "extension_ui", "extension": id, "invalidate": true})
 		return

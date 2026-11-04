@@ -1,7 +1,7 @@
 // An exchange's work as lib/work-groups.ts groups it (cindy's WorkGroupBlock): 「正在工作…」 with a clock and its
 // newest steps peeking out while it runs, 「已工作 Xs」 once done; open, every step on a 2 px rail. A finished
 // exchange's outer group is a timeline: the agent's words between inner groups that stay folded.
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import type { Item, SessionLive } from "../../lib/types";
 import { groupOpens, groupTitle, isAgentStep, isPlanStep, isRowStep, planTodos, previewSteps, workDuration, type AgentStatus, type ToolStep, type WorkGroupNode, type WorkNode } from "../../lib/work-groups";
 import type { Step } from "../../lib/turns";
@@ -44,20 +44,37 @@ export const WorkGroup = memo(function WorkGroup({ g, p }: { g: WorkGroupNode; p
   const open = remembered && opens;
   const preview = g.live && !open ? previewSteps(g) : [];
   const inside = useMemo(() => ({ ...p, onOpen: undefined, nested: true }), [p]);
-  const toggle = async () => {
+  const toggle = () => {
     if (p.onOpen) return p.onOpen();
     const next = !open;
     setOpen(next);
-    const folds = foldsOf(g);
-    if (!next || !folds.length) return;
-    for (const f of folds) if (f.fold) openFoldRange(p.scope, f.seq, f.fold.through_seq);
-    setLoading(true);
-    try {
-      for (const f of folds) await p.expandFold(f);
-    } finally {
-      setLoading(false);
-    }
+    if (next) for (const f of foldsOf(g)) if (f.fold) openFoldRange(p.scope, f.seq, f.fold.through_seq);
   };
+  // an open group's folded steps are fetched: opened just now, or remembered open when the chat comes back (#1996: it
+  // stayed at 正在取 N 条 then); once in, the folds are gone and this has nothing left to do. The outer group fetches
+  // its nested groups' folds too.
+  const folds = useMemo(() => (open && !p.nested ? foldsOf(g) : []), [open, p.nested, g]);
+  const foldKey = folds.map((f) => f.id).join(" ");
+  const expandFold = p.expandFold;
+  // a fetch that failed (the hub restarting, the network): the group says so, and 重试 runs it again
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (!foldKey) return;
+    let live = true;
+    setLoading(true);
+    setFailed(false);
+    folds
+      // each fold that comes in runs this again with the rest: this run stops there
+      .reduce((done, f) => done.then(() => (live ? expandFold(f) : undefined)), Promise.resolve())
+      .catch(() => live && setFailed(true))
+      .finally(() => live && setLoading(false));
+    return () => {
+      live = false;
+    };
+    // the folds by their ids: a new `g` with the same folds is not a new fetch
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [foldKey, expandFold, attempt]);
   const thinkingNow = g.live && p.status?.thinking ? <ThinkingCard live={p.status} /> : null;
   return (
     <div className="flex w-full min-w-0 flex-col" data-work-group={g.live ? "live" : "done"} data-group-id={g.id}>
@@ -66,15 +83,22 @@ export const WorkGroup = memo(function WorkGroup({ g, p }: { g: WorkGroupNode; p
         onClick={opens ? toggle : undefined}
         disabled={!opens}
         aria-expanded={opens ? open || preview.length > 0 : undefined}
-        className={cx("flex w-full min-w-0 items-center gap-1.5 py-[2px] text-left select-none", opens ? "cursor-pointer transition-opacity hover:opacity-80" : "cursor-default")}
+        // on a touch screen 40 tall, the margin taking back what it adds, so nothing around it moves
+        className={cx("flex w-full min-w-0 items-center gap-1.5 py-[2px] text-left select-none [@media(pointer:coarse)]:-my-[7.5px] [@media(pointer:coarse)]:min-h-10", opens ? "cursor-pointer transition-opacity hover:opacity-80" : "cursor-default")}
       >
         <span className="inline-flex h-[1lh] shrink-0 items-center text-tool-ink">{g.live ? <Spinner size={14} /> : <Icon name="layers" size={14} />}</span>
-        <span className="min-w-0 translate-y-[1px] truncate text-[14px] text-tool-ink">{groupTitle(g)}</span>
+        <span className="min-w-0 translate-y-[1px] truncate text-[length:var(--chat-secondary)] text-tool-ink">{groupTitle(g)}</span>
         <span className="flex-1" />
         {loading && <Spinner size={11} />}
         {g.live && g.startedAt !== undefined && <Elapsed since={g.startedAt} />}
         {opens && <Icon name="chevronRight" size={14} stroke={2.2} className="shrink-0 text-tool-ink transition-transform duration-150 motion-reduce:transition-none" style={{ transform: open ? "rotate(90deg)" : "none" }} />}
       </button>
+      {open && failed && !loading && (
+        <div className="mt-1 flex items-center gap-2 pl-[22px] text-[12px] text-ink-3" role="status">
+          没能取回这段过程
+          <button type="button" onClick={() => setAttempt((n) => n + 1)} className="touch-hit rounded-control px-1.5 py-0.5 font-medium whitespace-nowrap text-accent-ink hover:bg-hover">重试</button>
+        </div>
+      )}
       {(preview.length > 0 || (thinkingNow && !open)) && (
         <div className="mt-1 flex min-w-0 flex-col border-l-2 border-tool-rail py-[2px] pl-3" data-live-preview>
           {preview.map((s) => (s.kind === "tool" ? <ActionRow key={s.id} step={s} running={!s.result} mid={p.mid} sid={p.sid} /> : <ThinkingLine key={s.id} item={s.item} />))}

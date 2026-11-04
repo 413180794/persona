@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { imageURL } from "../../lib/api";
+import { useCloseOnBack } from "../../lib/back-close";
 import { compactionLabel } from "../../lib/compaction";
 import { clock } from "../../lib/format";
 import { openPanel } from "../../lib/panel";
@@ -11,6 +12,7 @@ import { taskLabel, taskPill, taskSubject, wakeSummary, type Tone } from "../../
 import type { Item } from "../../lib/types";
 import { Collapse, copyText, cx, EASE } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
+import { NARROW, useMedia } from "../../ui/media-query";
 import { useChatContext } from "./chat-context";
 import { ChatImageViewer } from "./ImageViewer";
 
@@ -119,7 +121,7 @@ function Mono({ text, tone }: { text: string; tone?: "out" | "error" }) {
         type="button"
         aria-label="拷贝"
         onClick={() => copyText(text)}
-        className="absolute top-1 right-1 flex size-6 items-center justify-center rounded-[6px] bg-surface text-ink-3 opacity-0 shadow-btn transition-opacity group-hover/mono:opacity-100 hover:text-ink focus-visible:opacity-100"
+        className="absolute top-1 right-1 flex size-6 touch-hit items-center justify-center rounded-[6px] bg-surface text-ink-3 opacity-0 shadow-btn transition-opacity group-hover/mono:opacity-100 hover:text-ink focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
       >
         <Icon name="copy" size={12} />
       </button>
@@ -239,6 +241,7 @@ export function Thumb({ item, mid, sid, size = 132 }: { item: Item; mid: string;
 }
 
 export function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  useCloseOnBack(true, onClose, useMedia(NARROW));
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6 backdrop-blur-sm"

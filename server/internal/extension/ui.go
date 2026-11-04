@@ -33,10 +33,20 @@ type UIItem struct {
 	Hosts     []string `json:"hosts,omitempty"`
 	// Icon is a nav_page's icon, from UIIcons (each app draws its own); the default when empty.
 	Icon string `json:"icon,omitempty"`
-	// Opens is the ui (a nav_page or extension_page of the same extension) an overview_card opens when tapped.
+	// Opens is the ui (a nav_page or extension_page of the same extension) an overview_card or a widget opens when
+	// tapped.
 	Opens string `json:"opens,omitempty"`
 	// Connector is the connector an inbox_item draws the items of: one of the plugin's own connectors.
 	Connector string `json:"connector,omitempty"`
+	// Families are the sizes a widget can be drawn at (WidgetFamilies); RefreshMinutes how often it is drawn again on
+	// its own (WidgetRefreshDefault when 0). A widget's only.
+	Families       []string `json:"families,omitempty"`
+	RefreshMinutes int      `json:"refresh_minutes,omitempty"`
+}
+
+// Refresh is how often widget u is drawn again on its own.
+func (u UIItem) Refresh() time.Duration {
+	return time.Duration(cmp.Or(u.RefreshMinutes, WidgetRefreshDefault)) * time.Minute
 }
 
 // UISlot is a place in the apps plugins may draw (docs/extensions.md「UI 插槽」).
@@ -67,7 +77,23 @@ var UISlots = []UISlot{
 	// inbox_item draws the body of an inbox item from the plugin's connector (its own header stays the app's): the
 	// same items a plugin's connector brought in, with the hub's triage on them. Drawn with UI version 2's items.
 	{Name: "inbox_item", Size: SizeFull, Context: "item", Shown: "收件箱里它的连接器的条目详情（会读到那一条的标题、总结和分级）", Since: 2},
+	// widget is drawn outside the app (docs/extensions.md「系统级位置」): a home screen widget, a Lock Screen or watch
+	// face complication. The size it is asked for is the family (FitWidget holds the view to it); the apps list
+	// widgets on their own (GET /api/v1/extensions/-/widgets), not with the slots drawn in the app.
+	{Name: "widget", Size: WidgetFamilySmall, Shown: "主屏幕小组件和表盘（在 App 外显示）", Since: 3},
 }
+
+// Widgets: the families a widget is drawn at and how often it is drawn again (docs/extensions.md「系统级位置」).
+const (
+	WidgetFamilySmall    = wire.WidgetFamilySmall
+	WidgetRefreshDefault = 30 // minutes
+	WidgetRefreshLeast   = 15
+	WidgetRefreshMost    = 24 * 60
+)
+
+// WidgetFamilies are the sizes a widget can be drawn at: small / medium / large on the home screen, accessory_* on the
+// Lock Screen and watch faces.
+var WidgetFamilies = wire.WidgetFamilies
 
 // Slot is the slot named name.
 func Slot(name string) (UISlot, bool) {
@@ -618,6 +644,119 @@ func downgrade(v *View, uiVersion int) {
 		}
 		s.More, s.Items = nil, items
 	}
+}
+
+// Limits of a widget (FitWidget): the items of each family, the stats of a stat_grid, the rows, the lines of a text.
+var widgetItems = map[string]int{"small": 4, "medium": 6, "large": 12}
+
+const (
+	widgetSections   = 2
+	widgetStats      = 4
+	widgetStatsSmall = 2
+	widgetRows       = 4
+	widgetLines      = 3
+	widgetText       = 200
+)
+
+// widgetKinds are the components a widget draws; the rest are left out, or drawn as text (markdown, empty, loading).
+var widgetKinds = []string{"metric", "stat_grid", "progress", "chart", "text", "row"}
+
+// FitWidget makes a View an extension drew for a widget into one the family draws (docs/extensions.md「系统级位置」):
+// first as any view (Fit), then held to a widget's subset — a metric, a stat_grid, a progress, a chart, a few lines of
+// text, a few rows, nothing to tap (a tap opens the widget's page), no search, filter or more — cutting what is too
+// long rather than refusing it. A complication (accessory_*) draws one metric, progress or line of text, the first.
+// It says what it left out.
+func FitWidget(v *View, family string, uiVersion int) (dropped []string, err error) {
+	if !slices.Contains(WidgetFamilies, family) {
+		return nil, fmt.Errorf("a widget is drawn at one of %s", strings.Join(WidgetFamilies, ", "))
+	}
+	slot, _ := Slot("widget")
+	if dropped, err = Fit(v, slot, uiVersion); err != nil {
+		return dropped, err
+	}
+	drop := func(what string) {
+		if !slices.Contains(dropped, what) {
+			dropped = append(dropped, what)
+		}
+	}
+	if v.Search != nil || v.Filter != nil {
+		drop("search")
+	}
+	v.Search, v.Filter, v.RefreshAfter = nil, nil, 0
+	complication := strings.HasPrefix(family, "accessory_")
+	stats := widgetStats
+	if family == "small" {
+		stats = widgetStatsSmall
+	}
+	sections := []Section{}
+	n, rows := 0, 0
+	for _, s := range v.Sections {
+		if s.More != nil {
+			drop("more")
+		}
+		var kept []UIElem
+		for _, e := range s.Items {
+			switch e.Type {
+			case "markdown":
+				e = UIElem{Type: "text", Text: e.Text}
+			case "empty":
+				e = UIElem{Type: "text", Text: strings.TrimSpace(e.Title + "\n" + e.Detail), Style: "secondary"}
+			case "loading":
+				e = UIElem{Type: "text", Text: cmp.Or(e.Title, "加载中…"), Style: "secondary"}
+			}
+			if !slices.Contains(widgetKinds, e.Type) {
+				drop(e.Type)
+				continue
+			}
+			e.Action, e.Avatar, e.Thumbnail = nil, nil, nil
+			if complication {
+				if e.Type == "metric" || e.Type == "text" || e.Type == "progress" && family != "accessory_inline" {
+					if e.Type == "text" {
+						e.Text = widgetLinesOf(e.Text, map[bool]int{true: widgetLines, false: 1}[family == "accessory_rectangular"])
+					}
+					v.Sections = []Section{{Items: []UIElem{e}}}
+					return dropped, nil
+				}
+				continue
+			}
+			switch e.Type {
+			case "text":
+				e.Text = widgetLinesOf(e.Text, widgetLines)
+			case "stat_grid":
+				if len(e.Stats) > stats {
+					e.Stats = e.Stats[:stats]
+				}
+			case "row":
+				if rows++; rows > widgetRows {
+					continue
+				}
+			}
+			if n < widgetItems[family] {
+				kept = append(kept, e)
+				n++
+			}
+		}
+		if len(kept) > 0 && len(sections) < widgetSections {
+			sections = append(sections, Section{Title: s.Title, Items: kept})
+		}
+	}
+	if complication {
+		return dropped, errors.New("a complication draws a metric, a progress or a line of text: the view has none")
+	}
+	if len(sections) == 0 {
+		return dropped, errors.New("a widget draws a metric, a stat_grid, a progress, a chart, text or rows: the view has none")
+	}
+	v.Sections = sections
+	return dropped, nil
+}
+
+// widgetLinesOf is text cut to at most lines lines and widgetText characters.
+func widgetLinesOf(text string, lines int) string {
+	parts := strings.Split(text, "\n")
+	if len(parts) > lines {
+		text = strings.Join(parts[:lines], "\n") + "…"
+	}
+	return clip(text, widgetText)
 }
 
 // clip is s cut to at most n characters, an ellipsis ending one that was longer.

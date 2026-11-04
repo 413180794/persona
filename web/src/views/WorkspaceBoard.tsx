@@ -88,7 +88,7 @@ export function WorkspaceBoard({ onToggleSidebar }: { onToggleSidebar?: () => vo
             {cards.map((c) => <div key={c.id} className={cx("rounded-card", drop === c.id && "ring-2 ring-accent")} onDragOver={(e) => { if (!disabled && dragging.current) { e.preventDefault(); e.stopPropagation(); setDrop(c.id); } }} onDrop={(e) => dropCard(e, column.id, c.id)}>
               <WorkspaceCard card={c} machine={machines.find((m) => m.id === c.machine_id)} workspace={state.discovery.workspaces.find((w) => w.id === c.workspace_id || w.machine_id === c.machine_id && sameDirectory(w.cwd, c.cwd))} sessions={cardSessions(c, sessions)} disabled={disabled} onOpen={() => setSelected(c.id)} onMenu={(anchor) => setMenu({ anchor, card: c })} onDragStart={(e) => { dragging.current = c.id; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("application/x-persona-workspace", c.id); }} onDragEnd={() => { dragging.current = null; setDrop(""); }} />
             </div>)}
-            <div className={cx("flex min-h-16 items-center justify-center rounded-control border border-dashed px-3 py-4 text-center text-xs text-ink-3", drop === column.id ? "border-accent bg-accent-tint" : "border-line-strong")} onDragOver={(e) => { if (!disabled && dragging.current) { e.preventDefault(); setDrop(column.id); } }} onDrop={(e) => dropCard(e, column.id)}>{cards.length ? "拖到这里放在列末" : search || machine ? "没有匹配的工作空间" : "还没有工作空间"}</div>
+            <div className={cx("flex min-h-16 items-center justify-center rounded-control border border-dashed px-3 py-4 text-center text-xs text-ink-3", drop === column.id ? "border-accent bg-accent-tint" : "border-line-strong")} onDragOver={(e) => { if (!disabled && dragging.current) { e.preventDefault(); setDrop(column.id); } }} onDrop={(e) => dropCard(e, column.id)}>{cards.length ? <TouchHint text="拖到这里放在列末" /> : search || machine ? "没有匹配的工作空间" : <TouchHint text="还没有工作空间" />}</div>
           </div>{!archived && <div className="border-t border-line px-3 py-2"><Button tone="quiet" icon="plus" className="w-full" disabled={disabled} onClick={() => setAdding(column.id)}>绑定工作空间</Button></div>}
         </section>;
       })}
@@ -151,4 +151,9 @@ function BindWorkspace({ column, board, workspaces, machines, busy, disabled, on
       <p className="text-xs text-ink-3">只绑定目录，不会启动 Agent。hub 会验证并规范化目录路径。</p><div className="flex justify-end"><Button type="submit" tone="primary" disabled={disabled || busy || !mid || !path.trim()} busy={busy}>绑定目录</Button></div>
     </form>}
   </Dialog>;
+}
+
+// A finger can't drag a card: on a touch screen the drop zone says how to move one here instead.
+function TouchHint({ text }: { text: string }) {
+  return <><span className="pointer-coarse:hidden">{text}</span><span className="hidden pointer-coarse:inline">用卡片菜单移到这列</span></>;
 }

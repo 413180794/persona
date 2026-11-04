@@ -11,6 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -70,6 +71,43 @@ type VoiceItem struct {
 type ComputerItem struct {
 	ID   string `json:"id"`
 	Name string `json:"name,omitempty"`
+}
+
+// ShortcutItem is a contribution to shortcuts: an action of the extension the system runs — Shortcuts and Siri on
+// iPhone, Mac and Apple Watch (docs/extensions.md「系统级位置」). The hub asks shortcut.run with its values.
+type (
+	ShortcutItem  = wire.ShortcutItem
+	ShortcutParam = wire.ShortcutParam
+)
+
+var shortcutParamName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
+
+// checkShortcut holds a shortcut to what the apps can ask for.
+func checkShortcut(s ShortcutItem) error {
+	if !idPattern.MatchString(s.ID) {
+		return fmt.Errorf("shortcuts id %q: a-z0-9_-", s.ID)
+	}
+	if s.Title == "" || utf8.RuneCountInString(s.Title) > 40 || utf8.RuneCountInString(s.Description) > 200 {
+		return fmt.Errorf("shortcut %s: a title of 1 to 40 characters, a description of at most 200", s.ID)
+	}
+	if len(s.Params) > 8 {
+		return fmt.Errorf("shortcut %s: at most 8 params", s.ID)
+	}
+	for i, p := range s.Params {
+		switch {
+		case !shortcutParamName.MatchString(p.Name) || slices.ContainsFunc(s.Params[:i], func(o ShortcutParam) bool { return o.Name == p.Name }):
+			return fmt.Errorf("shortcut %s: param %q: a name (a-z0-9_), once", s.ID, p.Name)
+		case p.Title == "" || utf8.RuneCountInString(p.Title) > 40:
+			return fmt.Errorf("shortcut %s: param %s: a title of 1 to 40 characters", s.ID, p.Name)
+		case !slices.Contains(wire.ShortcutParamKinds, p.Kind):
+			return fmt.Errorf("shortcut %s: param %s: kind is one of %s", s.ID, p.Name, strings.Join(wire.ShortcutParamKinds, ", "))
+		case p.Kind == "choice" && (len(p.Choices) == 0 || len(p.Choices) > 50):
+			return fmt.Errorf("shortcut %s: param %s: a choice has 1 to 50 choices", s.ID, p.Name)
+		case p.Kind != "choice" && len(p.Choices) > 0:
+			return fmt.Errorf("shortcut %s: param %s: only a choice has choices", s.ID, p.Name)
+		}
+	}
+	return nil
 }
 
 // QuotaItem is a contribution to quota: a gateway whose launchers' quota the plugin reads (docs/extensions.md「额度」).
@@ -444,8 +482,23 @@ var Points = map[string]Point{
 		if u.Icon != "" && (u.Placement != "nav_page" || !slices.Contains(UIIcons, u.Icon)) {
 			return u.ID, fmt.Errorf("ui %s: only a nav_page has an icon, one of %s", u.ID, strings.Join(UIIcons, ", "))
 		}
-		if u.Opens != "" && u.Placement != "overview_card" {
-			return u.ID, fmt.Errorf("ui %s: only an overview_card opens a page", u.ID)
+		if u.Opens != "" && u.Placement != "overview_card" && u.Placement != "widget" {
+			return u.ID, fmt.Errorf("ui %s: only an overview_card or a widget opens a page", u.ID)
+		}
+		if u.Placement == "widget" {
+			if len(u.Families) == 0 {
+				return u.ID, fmt.Errorf("ui %s: a widget says the sizes it is drawn at (families: %s)", u.ID, strings.Join(WidgetFamilies, ", "))
+			}
+			for i, f := range u.Families {
+				if !slices.Contains(WidgetFamilies, f) || slices.Contains(u.Families[:i], f) {
+					return u.ID, fmt.Errorf("ui %s: families are some of %s, once each", u.ID, strings.Join(WidgetFamilies, ", "))
+				}
+			}
+			if u.RefreshMinutes != 0 && (u.RefreshMinutes < WidgetRefreshLeast || u.RefreshMinutes > WidgetRefreshMost) {
+				return u.ID, fmt.Errorf("ui %s: refresh_minutes is %d to %d", u.ID, WidgetRefreshLeast, WidgetRefreshMost)
+			}
+		} else if len(u.Families) > 0 || u.RefreshMinutes != 0 {
+			return u.ID, fmt.Errorf("ui %s: only a widget has families and refresh_minutes", u.ID)
 		}
 		switch {
 		case u.Placement == "inbox_item" && !connectorID.MatchString(u.Connector):
@@ -506,6 +559,14 @@ var Points = map[string]Point{
 			return "", err
 		}
 		return c.ID, c.Validate()
+	}},
+	// shortcuts: actions the system runs (Shortcuts, Siri), each asked of the program as shortcut.run.
+	"shortcuts": {Name: "shortcuts", Namespace: "shortcut", Version: 1, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
+		var s ShortcutItem
+		if err := strict(raw, &s); err != nil {
+			return "", err
+		}
+		return s.ID, checkShortcut(s)
 	}},
 	"computer": {Name: "computer", Namespace: "computer", Version: 1, Item: func(raw json.RawMessage) (string, error) {
 		var c ComputerItem

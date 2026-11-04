@@ -22,11 +22,14 @@ import { LinkTodoDialog } from "../LinkTodoDialog";
 import { chatLines, freshWords, openRecap, parseUserText, segments, type UserMessage } from "../../lib/turns";
 import type { Item, Session } from "../../lib/types";
 import { anchoredScroll, followsAgain, isScrollbarPress, jumpLabel, leavesOnKey, leavesOnScrollbarDrag, leavesOnTouch, leavesOnWheel, followsAfterUnfold, UNFOLD_PAUSE, type ScrollAnchor } from "../../lib/disclosure";
-import { Button, copyText, Dialog, IconButton, Loading, Menu, StatePill, StatusDot, toast, useMenu, type MenuItem } from "../../ui/atoms";
+import { Button, copyText, cx, Dialog, IconButton, Loading, Menu, StatePill, StatusDot, toast, useMenu, type MenuItem } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { AGENT_COMMANDS, Composer, type Outgoing } from "./Composer";
 import { hasLoop, LOOP_TEXT } from "../../lib/loop-command";
-import { AnsweredCard, InteractionCard } from "./Interactions";
+import { PendingCards } from "./Interactions";
+import { DOCK_MAX, turnStart } from "./dock";
+import { HEADER_SLOT, HEADER_SLOT_END, HEADER_SLOT_START } from "./header";
+import { NARROW, SHORT, useFinePointer, useMedia } from "../../lib/viewport";
 import { UserBubble } from "./SegmentView";
 import { ActivityChips } from "./Activity";
 import { paneRoute, tabSessions } from "../../lib/herdr-tree";
@@ -60,7 +63,16 @@ interface Pending {
 
 /** `readOnly`: a subagent's conversation (`<parent>@<agent>`) in the side panel (SubagentPanel): the transcript only,
  *  no header, no composer. */
-export function ChatView({ mid, sid, assistant, starting: launching, onToggleSidebar, readOnly }: { mid: string; sid: string; assistant?: boolean; starting?: boolean; onToggleSidebar?: () => void; readOnly?: boolean }) {
+export function ChatView({ mid, sid, assistant, starting: launching, onToggleSidebar, readOnly, topCenter }: {
+  mid: string;
+  sid: string;
+  assistant?: boolean;
+  starting?: boolean;
+  onToggleSidebar?: () => void;
+  readOnly?: boolean;
+  /** On a narrow screen, in the header's middle in place of the title (the shell's 助手 | Agents switch). */
+  topCenter?: React.ReactNode;
+}) {
   const session = useStore((s) => (s.sessions[mid] ?? []).find((x) => x.session_id === sid) ?? s.assistant?.conversations.find((c) => c.session_id === sid));
   // a subagent's own launches are listed on the session that launched it
   const parentSid = subagentParent(sid);
@@ -445,6 +457,33 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     closeRecap(recapKey, pendingRecap.id);
     setRecapClosed(pendingRecap.id);
   };
+  // On a phone (#1996): what is under the chat stays within about half of the visible height (dock.ts); the keyboard is
+  // up while the composer has the focus on a touch screen alone
+  const narrow = useMedia(NARROW);
+  const short = useMedia(SHORT);
+  const [typing, setTyping] = useState(false);
+  const fine = useFinePointer();
+  const keyboard = typing && !fine;
+  const composerBox = useRef<HTMLDivElement>(null);
+  // the run's time counts from the turn's start, as its 正在工作… does (not from the session's last state change)
+  const stateSince = session?.state_since;
+  const runStart = useMemo(() => {
+    const live = lines.findLast((l) => l.kind === "segment" && l.live);
+    return (live?.kind === "segment" ? turnStart(live.seg) : undefined) ?? stateSince;
+  }, [lines, stateSince]);
+  const planPill = plan && planOut && (lastLive || !planProgress(plan.todos).allDone) ? (
+    <PlanPill todos={plan.todos} onClick={() => scroller.current?.querySelector(`[data-plan-id="${CSS.escape(plan.id)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" })} />
+  ) : null;
+  const running = session && !assistant ? <RunningStatusBar mid={mid} sid={sid} working={state === "working"} startedAt={runStart} /> : null;
+  const queue = session && queued.length > 0 ? <QueueStrip session={session} draftKey={draftKey} canEdit={canCompose && !assistant} compact={short} /> : null;
+  // with the plan's pill showing, 跳到底部 goes beside it (over the chat, they hid each other)
+  const jumpInDock = Boolean(planPill) && !readOnly;
+  const pills = jumpInDock && away ? (
+    <div className="flex shrink-0 items-center justify-center gap-2">
+      {planPill}
+      <JumpPill label={jumpLabel(newSince)} onClick={toEnd} inline />
+    </div>
+  ) : planPill;
 
   return (
     <div className="flex h-full min-w-0 flex-col">
@@ -460,9 +499,10 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           onInterrupt={interrupt}
           onStopLoop={() => void deliver({ text: STOP_LOOP_MESSAGE, images: [] }, uuid())}
           last={assistant ? tr.items[tr.items.length - 1] : undefined}
+          topCenter={topCenter}
         />
       )}
-      {session && panes.length > 1 && <PaneTabs sessions={panes} current={sid} onSelect={(s) => navigate(paneRoute(s))} />}
+      {session && panes.length > 1 && <PaneTabs sessions={panes} current={sid} onSelect={(s) => navigate(paneRoute(s), true)} />}
 
       <div className="relative min-h-0 flex-1">
         <div ref={scroller} onScroll={onScroll} data-chat-scroll className="h-full overflow-y-auto [overflow-anchor:none]">
@@ -544,15 +584,33 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           </div>
           </ChatActionsContext.Provider>
         </div>
-        {away && <JumpPill label={jumpLabel(newSince)} onClick={toEnd} />}
+        {away && !jumpInDock && <JumpPill label={jumpLabel(newSince)} onClick={toEnd} />}
       </div>
 
       {!readOnly && (
-      <div className="mx-auto flex w-full max-w-[880px] flex-col gap-2 px-4 pb-4 sm:px-7" onInput={pendingRecap ? dismissRecap : undefined}>
-        {plan && planOut && (lastLive || !planProgress(plan.todos).allDone) && (
-          <PlanPill todos={plan.todos} onClick={() => scroller.current?.querySelector(`[data-plan-id="${CSS.escape(plan.id)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" })} />
+      <div
+        data-chat-dock
+        // narrow: at most DOCK_MAX; the cards' box gives up its height first, and should the composer alone need more,
+        // it grows up over the chat (justify-end) instead of down off the screen
+        className="mx-auto flex w-full max-w-[880px] flex-col gap-2 px-4 pb-4 sm:px-7 max-lg:max-h-(--dock-max) max-lg:justify-end [@media(max-height:500px)]:pb-2"
+        style={{ "--dock-max": DOCK_MAX } as React.CSSProperties}
+        onInput={pendingRecap ? dismissRecap : undefined}
+      >
+        {short ? (
+          // a phone on its side: the plan's pill, the run's status and the queue share one line
+          (pills || running || queue) && (
+            <div className="flex shrink-0 items-center gap-2">
+              {pills && <div className="shrink-0">{pills}</div>}
+              {running && <div className="shrink-0">{running}</div>}
+              {queue && <div className="min-w-0 flex-1">{queue}</div>}
+            </div>
+          )
+        ) : (
+          <>
+            {pills}
+            {running}
+          </>
         )}
-        {session && !assistant && <RunningStatusBar mid={mid} sid={sid} working={state === "working"} startedAt={session.state_since} />}
         {assistant && (
           <>
             <TaskQuestions conversation={sid} />
@@ -560,15 +618,18 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
             <RouteChip conversation={sid} />
           </>
         )}
-        {answered.map((a) => (
-          <AnsweredCard key={a.ix.id} card={a} />
-        ))}
-        {interactions.map((ix) => (
-          <InteractionCard key={ix.id} ix={ix} />
-        ))}
+        <PendingCards
+          interactions={interactions}
+          answered={answered}
+          narrow={narrow}
+          short={short}
+          keyboard={keyboard}
+          onDismissKeyboard={() => composerBox.current?.querySelector("textarea")?.blur()}
+        />
         {assistant && session && <CompactionStrip session={session} />}
         {session && !assistant && <AttentionNote session={session} />}
-        {session && queued.length > 0 && <QueueStrip session={session} draftKey={draftKey} canEdit={canCompose && !assistant} />}
+        {!short && queue}
+        <div ref={composerBox} className="shrink-0">
         <Composer
           draftKey={draftKey}
           placeholder={!sessionCan(session, "send") && session?.source_kind ? "此会话仅可查看" : assistant ? `问 ${persona.name}…` : state === "offline" ? "发消息会在电脑上恢复这个会话…" : "给 Agent 发消息…"}
@@ -582,8 +643,10 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           suggestion={session?.suggestion}
           mention={mention}
           autoFocus
+          onFocusChange={setTyping}
           footer={session ? <ComposerFooter session={session} assistant={assistant} /> : null}
         />
+        </div>
       </div>
       )}
 
@@ -619,9 +682,9 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
 }
 
 /** Away from the end: 有新消息 / 跳到底部 over the chat's bottom edge (cindy's JumpToBottomChip). */
-function JumpPill({ label, onClick }: { label: string; onClick: () => void }) {
+function JumpPill({ label, onClick, inline }: { label: string; onClick: () => void; /** In a row (beside the plan's pill), not over the chat. */ inline?: boolean }) {
   return (
-    <div aria-live="polite" className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2" style={{ animation: "fade-up 150ms ease-out both" }}>
+    <div aria-live="polite" className={inline ? "shrink-0" : "absolute bottom-3 left-1/2 z-10 -translate-x-1/2"} style={{ animation: "fade-up 150ms ease-out both" }}>
       <button
         type="button"
         onClick={onClick}
@@ -669,7 +732,7 @@ function AttentionNote({ session }: { session: Session }) {
   );
 }
 
-function Header({
+export function Header({
   session,
   title,
   machineName,
@@ -680,6 +743,7 @@ function Header({
   onInterrupt,
   onStopLoop,
   last,
+  topCenter,
 }: {
   session?: Session;
   title: string;
@@ -692,6 +756,7 @@ function Header({
   onInterrupt: () => void;
   onStopLoop: () => void;
   last?: Item;
+  topCenter?: React.ReactNode;
 }) {
   const menu = useMenu();
   const tabs = useMenu();
@@ -806,21 +871,32 @@ function Header({
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-page/85 px-3 backdrop-blur-md sm:px-4">
-      {onToggleSidebar && <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />}
-      <div className="min-w-0 flex-1">
+      <div className={headerSlot(Boolean(topCenter), "start")}>
+        {onToggleSidebar && <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />}
+      </div>
+      <div className={cx("min-w-0 flex-1", Boolean(topCenter) && "max-lg:hidden")}>
         <div className="flex min-w-0 items-center gap-2">
           {session && !assistant && <StatusDot state={state} />}
           {assistant && <AssistantFace session={session} last={last} />}
+          {/* narrow: the dot before the title says the state; the pill would leave the title a word or two */}
           <h1 className="truncate text-[14px] font-semibold text-ink">{title}</h1>
-          {session && !assistant && state !== "idle" && <StatePill state={state} />}
+          {session && !assistant && state !== "idle" && <span className="hidden sm:contents"><StatePill state={state} /></span>}
         </div>
         {sub && <div title={sub} className="truncate text-[11.5px] text-ink-3">{sub}</div>}
       </div>
+      {topCenter && <div className="flex min-w-0 flex-1 justify-center lg:hidden">{topCenter}</div>}
+      <div className={headerSlot(Boolean(topCenter), "end")}>
       {session && !assistant && <ActivityChips session={session} onStopLoop={onStopLoop} />}
       {others.length > 0 && (
-        <button type="button" onClick={tabs.open} className="relative flex h-7 items-center gap-1.5 rounded-[8px] px-2 text-[12px] font-medium whitespace-nowrap text-ink-2 shadow-btn transition-colors hover:bg-hover hover:text-ink">
+        <button
+          type="button"
+          onClick={tabs.open}
+          aria-label={`同空间 ${others.length}`}
+          title={`同空间 ${others.length}`}
+          className="touch-hit flex h-7 shrink-0 items-center gap-1.5 rounded-[8px] px-2 text-[12px] font-medium whitespace-nowrap text-ink-2 shadow-btn transition-colors hover:bg-hover hover:text-ink max-sm:gap-1 max-sm:px-1.5"
+        >
           <Icon name="layers" size={13} />
-          同空间 {others.length}
+          <span className="max-sm:hidden">同空间</span> {others.length}
           {othersNeed && <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-red shadow-[0_0_0_2px_var(--page)]" />}
         </button>
       )}
@@ -846,6 +922,7 @@ function Header({
       {showFiles && <IconButton icon="folder" label="文件" onClick={openFiles} active={here(panel, "files") || here(panel, "git")} className="hidden sm:flex" />}
       {showTerminal && <IconButton icon="terminal" label="终端" onClick={openTerminal} active={here(panel, "terminal")} className="hidden sm:flex" />}
       {items.length > 0 && <IconButton icon="more" label="更多" onClick={menu.open} active={Boolean(menu.anchor)} />}
+      </div>
       {menu.anchor && <Menu anchor={menu.anchor} onClose={menu.close} align="right" items={items} />}
       {session && <CloseAgent open={closing} onClose={() => setClosing(false)} session={session} machineName={machineName} />}
       {session && <SessionInfoDialog open={dialog === "info"} onClose={() => setDialog(null)} session={session} machineName={machineName} />}
@@ -856,6 +933,13 @@ function Header({
       {assistantDialogs}
     </header>
   );
+}
+
+/** The header's side slots around a switch in its middle (narrow screens, header.ts); wide, or without one, no boxes
+ *  at all. */
+function headerSlot(centered: boolean, side: "start" | "end"): string {
+  if (!centered) return "contents";
+  return cx(HEADER_SLOT, side === "start" ? HEADER_SLOT_START : HEADER_SLOT_END, "lg:contents");
 }
 
 function CloseAgent({ open, onClose, session, machineName }: { open: boolean; onClose: () => void; session: Session; machineName: string }) {

@@ -7,9 +7,9 @@ import { clock } from "../../lib/format";
 import { sendDraft } from "../../lib/drafts";
 import { Button, copyText, cx, Dialog, Menu, type MenuItem } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
+import { isNoHover } from "../../ui/media-query";
 import { useChatActions } from "./chat-actions";
 
-const coarse = () => typeof matchMedia === "function" && matchMedia("(hover: none)").matches;
 
 function pointAnchor(x: number, y: number): HTMLElement {
   const el = document.createElement("span");
@@ -30,7 +30,7 @@ function useActions(text: string, isUser: boolean, select: () => void): Action[]
   const chat = useChatActions();
   if (!text.trim()) return [];
   const out: Action[] = [{ key: "copy", label: "复制", icon: "copy", onSelect: () => void copyText(text) }];
-  if (coarse()) out.push({ key: "select", label: "选择文本", icon: "read", onSelect: select });
+  if (isNoHover()) out.push({ key: "select", label: "选择文本", icon: "read", onSelect: select });
   if (chat?.canCompose) {
     out.push({ key: "quote", label: "引用", icon: "quote", onSelect: () => void sendDraft(chat.draftKey, { type: "quote", text }) });
     if (isUser) out.push({ key: "edit", label: "编辑", icon: "pencil", onSelect: () => void sendDraft(chat.draftKey, { type: "replace", text }) });
@@ -121,6 +121,11 @@ export function MessageActions({
         }}
         onPointerUp={cancelPress}
         onPointerCancel={cancelPress}
+        // the finger lifting after the press opened the menu: no mouse events after it, whose mousedown would land
+        // outside the menu and close it at once
+        onTouchEnd={(e) => {
+          if (Date.now() - opened.current < 1000) e.preventDefault();
+        }}
       >
         {children}
       </div>

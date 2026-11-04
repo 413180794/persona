@@ -52,7 +52,7 @@
 - `pop-in` 这类关键帧动画的是 `transform`，会盖掉行内的 `transform: translate(...)`：浮层定位用 CSS 的 `translate` 属性。
 - 只渲染看得见的行的列表，行数变少（JSON 从格式化切回原文）时窗口会落后一帧：先把窗口截到行数以内，否则越界。
 - 只在悬停时出现的行内按钮在触屏上要整个藏掉（`@media (hover:hover)`），否则是看不见、一碰就触发的区域。
-- 两栏的页（收件箱、知识库）按页面自己的宽度切单栏（Tailwind v4 的 `@container` / `@4xl:`），不按窗口：右侧面板一开，主区变窄，按窗口判断会挤坏。
+- 两栏的页（收件箱、知识库）按页面自己的宽度切单栏（Tailwind v4 的 `@container` / `@3xl:`，#1996 起；消息页仍是 `@4xl:`），不按窗口：右侧面板一开，主区变窄，按窗口判断会挤坏。
 - SVG 曲线按真实像素宽度画（ResizeObserver），不用 `preserveAspectRatio="none"`：坐标轴上的字会被拉伸。
 - 订阅模块级 store、第一次拉取要放 `useEffect`，不能在 render 里做：React 会报「渲染中更新别的组件」。
 - `JSON.parse` 会把像整数的键排到最前、让 64 位数字丢精度：只是给人看的格式化，就只重新缩进，不解析值。
@@ -234,3 +234,11 @@
 - **herdr 里的 Claude Code 没有 token 流**：transcript 只写完整的块，thinking 块大多是空的（实测 5 个会话、2066 块里 1698 块正文为空）；屏幕上的正文也是整段出现（每 0.4 s 读屏一次，连读 20 次核对过）。只有底部状态行每秒在变，所以实时信息走 node 读状态行的 `live` 推送，回复只能「整块到了再逐词淡入」。助手主对话才有真正的 delta。
 - **浮动滚动条按在视图里面**：macOS、iOS 的滚动条盖在内容上，按下时 `offsetX < clientWidth`。用「按下的是滚动视图本身、不是里面的内容」判断在拖滚动条，不要比较 `offsetX` 和 `clientWidth`，否则拖滚动条永远停不下跟随。
 - **e2e 别在带 token 的链接换完凭据之前离开**：`/overview?token=…` 打开后立刻 `goto` 别处，会落在登录页上，看起来像「列表一直不稳定」。先等侧栏（`aside`）出现再跳。
+
+## 手机版（2026-11-05，#1996）
+
+- **没分层的全局样式会盖过 utility**：`.prose-j { font-size:14px }` 写在 `@layer` 外面，所以回答外层的 `[&_.prose-j]:text-[15px]` 一直没生效。#1990 设定的 15 / 1.6 实际显示的是 14 / 1.7，桌面上也一样，要在构建后的 CSS 或 computed style 里核对才看得出来。现在暂时在 Answer 上加 `!`，以后应该把 `.prose-*` 放进 `@layer components`。
+- **StrictMode 让「打开时 pushState、关闭时 back()」的浮层一打开就关掉**：dev 环境下 effect 会跑两次，cleanup 里的 `history.back()` 是异步的，等它真正执行时，退掉的是新压进去的那条记录，结果触发 popstate，浮层被关上。`lib/back-close.ts` 的做法是关闭时推迟一个 tick 再退，紧接着又打开时复用同一条记录（replaceState）。生产构建不会这样，所以只拿生产构建测会漏掉。
+- **iOS 键盘弹起时 `vh` 不变，fixed 浮层还是按布局视口定位**：被键盘挡住的部分照样算在高度里。用 visualViewport 算出可见区域写成 CSS 变量（`--kb-top` / `--kb-h`），浮层按它定位；`max-h-[40vh]` 这类写法在手机上不可信。
+- **iOS Safari 长按不会触发 `contextmenu`，长按链接还会弹系统预览**：只挂在右键菜单上的操作，在手机上等于没有，要同时放进 ⋯ 菜单。菜单用 `mousedown` 判断点到外面的话，长按松手时合成的 mousedown 会把刚打开的菜单关掉，要改用 `pointerdown` 并跳过触摸。
+- **CDP 模拟触摸**：同一个手势的 `Input.dispatchTouchEvent`（start / move / end）要在同一个 CDP session 里发，否则页面收到的是几段互不相干的触摸。

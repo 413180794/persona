@@ -78,6 +78,8 @@ type ExtensionView struct {
 	UpgradeNote *ExtensionUpgradeNote `json:"upgrade_note,omitempty"`
 	// Nodes: its program on each computer it is switched on for (extension_nodes.go), for a plugin with one.
 	Nodes []ExtensionNodeView `json:"nodes,omitempty"`
+	// Sandbox: an installed extension's sandbox and its connections through the egress proxy (extension_sandbox.go).
+	Sandbox *SandboxView `json:"sandbox,omitempty"`
 }
 
 // Statuses besides the host's.
@@ -134,12 +136,18 @@ type extensions struct {
 	// markets are the plugin markets (plugin_market.go); upgrades their plugins' auto-upgrade (plugin_autoupgrade.go).
 	markets  markets
 	upgrades extensionUpgrades
+	// dev streams what the extensions being written log (extension_dev.go).
+	dev devTaps
 	// badges are the plugins' badges on their nav_pages' entries ("<plugin>/<ui>" → plugin.Badge; plugin_ui.go).
 	badges sync.Map
 	// invalid are the extensions' ui.invalidate waiting to be told to the apps (extension_ui.go), at most one a second.
 	invalid invalidations
+	// widgets are the views drawn for widgets and the widgets each device has (extension_system.go).
+	widgets widgets
 	// nodes are plugins' programs on computers (extension_nodes.go).
 	nodes extensionNodes
+	// sandboxes are the owner's sandbox choices and the egress proxy (extension_sandbox.go).
+	sandboxes extensionSandboxes
 }
 
 // newPlugins is the registry with hub.json's plugins: a bad entry is logged and skipped. Built-in and installed ones
@@ -246,6 +254,13 @@ func (ps *extensions) view(ctx context.Context, p *extension.Extension) Extensio
 	if m.Node != nil {
 		v.Nodes = ps.nodes.views(p.Record.ID)
 	}
+	if st := ps.sandboxOf(ctx, p); st.applies {
+		sv := st.SandboxView
+		v.Sandbox = &sv
+		if st.Why != "" {
+			v.Warnings = append(slices.Clone(v.Warnings), st.Why)
+		}
+	}
 	return v
 }
 
@@ -312,6 +327,7 @@ func (h *Hub) attachExtensions(ctx context.Context) {
 	ps.mu.Lock()
 	ps.reg = reg
 	ps.mu.Unlock()
+	ps.loadSandboxes(ctx)     // before any of them starts (extension_sandbox.go)
 	h.migrateWeChatState(ctx) // before its program starts (channels_migrate.go)
 	for _, p := range reg.List() {
 		if len(p.Manifest.Items("connectors")) > 0 {
@@ -427,6 +443,7 @@ func (ps *extensions) apply(ctx context.Context, id string) {
 		// one comes with its next start.
 		ps.h.extTokens.revoke(id)
 	}
+	ps.forgetEgress(id) // the same for its proxy credential (extension_sandbox.go)
 	if old != nil {
 		ps.removeAgentSources(old)
 		for _, c := range old.conns {
@@ -440,6 +457,7 @@ func (ps *extensions) apply(ctx context.Context, id string) {
 	}
 	p := ps.reg.Get(id)
 	if p == nil {
+		ps.forgetSandbox(ctx, id)
 		return
 	}
 	hp := &hubExtension{id: id, kind: p.Manifest.Kind(), stats: ps.stats.of(id)}
@@ -556,6 +574,9 @@ func selfExecutable() string {
 // spec is how the host runs p; it also makes p's connectors (hp.conns) and its HTTP socket (hp.socket).
 func (ps *extensions) spec(ctx context.Context, p *extension.Extension, hp *hubExtension) (host.Spec, error) {
 	s, err := ps.specOf(ctx, p, hp)
+	if err == nil {
+		err = ps.confine(ctx, p, hp, &s) // its sandbox and the egress proxy (extension_sandbox.go)
+	}
 	s.Env = withExtensionEnv(s.Env)
 	return s, err
 }
@@ -567,6 +588,9 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 	s := host.Spec{ID: id, Name: m.Name, Logf: ps.hostLogf()}
 	if st := ps.stats.of(id); st != nil {
 		s.Observe = st
+	}
+	if p.Record.Source == extension.SourceDev { // what it logs and the hub's calls to it go to `personad extension dev` too
+		s.Observe = &devObserver{next: s.Observe, taps: &ps.dev, id: id}
 	}
 	hubEnv := ps.hubEnv()
 	var hubToken startToken // its token of the hub's API this start (extension_scopes.go)
@@ -616,7 +640,7 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 			s.Command = filepath.Join(p.Dir, filepath.FromSlash(cmd))
 		}
 		s.Args, s.Dir = rt.Args, p.Dir
-		s.CleanEnv = p.Record.Source == extension.SourceInstalled // not the hub's own credentials
+		s.CleanEnv = p.Record.Source == extension.SourceInstalled || p.Record.Source == extension.SourceDev // not the hub's own credentials
 		dataDir := ps.reg.DataDir(id)
 		if err := os.MkdirAll(dataDir, 0o700); err != nil {
 			return s, err

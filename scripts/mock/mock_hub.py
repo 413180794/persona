@@ -4900,6 +4900,28 @@ if os.environ.get("MOCK_RICH") == "1":
 参考：https://en.wikipedia.org/wiki/Weather_(disambiguation)。"""
     ITEMS[RICH] = [it("user", "text", 5, text="还有哪些要我拍板？"), it("assistant", "text", 2, text=_rich)]
 
+# MOCK_CHAT_READ=1: a finished exchange for reading the chat on a phone (#1996, web_mobile_read_e2e.py): a long message
+# of yours, an edit of 60 lines (its diff folds on a phone), a command with output, and an answer with a code block and
+# formulas (KaTeX loads only for those).
+CHAT_READ = "a1f3c2d4-0000-4000-8000-0000000c1ead"
+
+
+def mock_chat_read():
+    _new = "\n".join("    let hour%02d = forecast.hours[%d] // 第 %d 小时的降雨概率，取整到百分之五，给小组件的中号尺寸用" % (i, i, i) for i in range(60))
+    SESSIONS.append(sess("macbook", CHAT_READ, "在手机上读对话", "/Users/me/code/weather", "done", "read", "weather", 1, "read", 8, 4, "改好了。"))
+    ITEMS[CHAT_READ] = [
+        it("user", "text", 6, text="把小组件的降雨概率改成逐小时的，顺便看一下中号尺寸在小屏幕上会不会被截断。"
+                                   "改完以后跑一遍测试，再告诉我面积公式和能量公式在文档里写对没有，别的不用动。"),
+        *tool("Edit", {"file_path": "/Users/me/code/weather/WeatherWidget/Provider.swift", "old_string": "    let hours = []", "new_string": _new}, "ok", 5),
+        *tool("Bash", {"command": "swift test", "description": "跑测试"}, "Test Suite 'All tests' passed\nExecuted 42 tests, with 0 failures", 4),
+        it("assistant", "text", 3, text="改好了，测试全过。新的写法：\n\n```swift\nlet hours = forecast.hours.prefix(6).map { Int(($0 * 20).rounded()) * 5 }\n```\n\n"
+                                        "文档里的公式都对：圆的面积 $S = \\pi r^2$，质能方程\n\n$$\nE = mc^2\n$$"),
+    ]
+
+
+if os.environ.get("MOCK_CHAT_READ") == "1":
+    mock_chat_read()
+
 # MOCK_PORTS=1: an agent running a dev server (docs/ports.md): its session lists the port, its reply links it (and a
 # server it has stopped), and …/ports/{port}/connect forwards a WebSocket's bytes to a real page served here on
 # another port (PortForwardTests). GET /mock/ports lists the connects.
@@ -7703,6 +7725,71 @@ def upgrades_route(handler, p, req):
     return False
 
 
+# ---------- MOCK_PLUGINS: places outside the app (docs/extensions.md「系统级位置」) ----------
+# example-gateway draws a widget "today" (small / medium / Lock Screen and watch face complications) that opens its
+# nav_page "usage", and has two shortcuts. The hub's new paths only (these came after the rename). A sample of an
+# extension's notification with buttons is scripts/mock/apns/extension-notification.apns:
+#   xcrun simctl push <udid> <bundle id> scripts/mock/apns/extension-notification.apns
+_WIDGETS = [{"extension": "example-gateway", "extension_name": "Example 网关面板", "id": "today", "title": "今天的用量",
+             "families": ["small", "medium", "accessory_circular", "accessory_rectangular", "accessory_inline"], "refresh_minutes": 30, "opens": "usage"}]
+_SHORTCUTS = [{"extension": "example-gateway", "extension_name": "Example 网关面板", "id": "usage_today", "title": "今天用了多少",
+               "description": "说出今天的用量", "ui": "usage"},
+              {"extension": "example-gateway", "extension_name": "Example 网关面板", "id": "set_budget", "title": "设预算", "params": [
+                  {"name": "amount", "title": "金额", "kind": "number", "required": True},
+                  {"name": "period", "title": "周期", "kind": "choice", "choices": [{"value": "day", "title": "每天"}, {"value": "month", "title": "每月"}]}]}]
+DEVICE_WIDGETS = {}
+
+
+def _widget_view(family):
+    """The widget "today" at a family, as the hub holds it to what the family draws."""
+    if family == "accessory_inline":
+        return {"sections": [{"items": [{"type": "text", "text": "今天 1.2M tokens"}]}]}
+    if family in ("accessory_circular", "accessory_rectangular"):
+        return {"sections": [{"items": [{"type": "progress", "label": "今天的预算", "ratio": 0.62, "detail": "¥3.10 / ¥5", "tone": "caution"}]}]}
+    stats = [{"label": "费用", "value": "¥3.10"}, {"label": "7 天", "value": "8.4M"}]
+    items = [{"type": "metric", "label": "今天", "value": "1.2M", "detail": "+12% 比昨天", "tone": "caution"},
+             {"type": "stat_grid", "stats": stats if family == "medium" else stats[:1]}]
+    if family == "medium":
+        items.append({"type": "chart", "kind": "bar", "unit": "tokens", "series": [{"points": [
+            {"label": d, "value": v} for d, v in [("11-01", 0.9e6), ("11-02", 1.4e6), ("11-03", 0.7e6), ("11-04", 1.1e6), ("11-05", 1.2e6)]]}]})
+    return {"sections": [{"items": items}]}
+
+
+def system_route(handler, p, req):
+    """MOCK_PLUGINS: widgets and shortcuts under /api/v1/extensions/…, and the widgets each device has. False otherwise."""
+    method = handler.command
+    on = "example-gateway" in PLUGINS and PLUGINS["example-gateway"]["enabled"]
+    parts = p.split("/")
+    if p == "/api/v1/extensions/-/widgets" and method == "GET":
+        handler.send_json({"widgets": _WIDGETS if on else []}); return True
+    if p == "/api/v1/extensions/-/shortcuts" and method == "GET":
+        handler.send_json({"shortcuts": _SHORTCUTS if on else []}); return True
+    if len(parts) == 8 and parts[3] == "extensions" and parts[5] == "-" and parts[6] == "widget" and method == "POST":
+        family = (req.get("context") or {}).get("size", "")
+        if not on or parts[4] != "example-gateway" or parts[7] != "today":
+            handler.send_json({"error": "no such extension", "code": "not_found"}, 404); return True
+        if family not in _WIDGETS[0]["families"]:
+            handler.send_json({"error": "这个小组件不画这个尺寸", "code": "bad_request"}, 400); return True
+        expires = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 30 * 60))
+        handler.send_json({"view": _widget_view(family), "expires_at": expires}); return True
+    if len(parts) == 8 and parts[3] == "extensions" and parts[5] == "-" and parts[6] == "shortcut" and method == "POST":
+        sc = next((s for s in _SHORTCUTS if s["id"] == parts[7]), None) if on and parts[4] == "example-gateway" else None
+        if not sc:
+            handler.send_json({"error": "这个扩展没有这个快捷指令", "code": "not_found"}, 404); return True
+        values = req.get("values") or {}
+        if sc["id"] == "set_budget":
+            if not values.get("amount"):
+                handler.send_json({"error": "快捷指令的参数不对：缺 金额", "code": "bad_request"}, 400); return True
+            period = {"day": "每天", "month": "每月"}.get(values.get("period", "day"), "每天")
+            handler.send_json({"text": "预算设好了：%s ¥%s。" % (period, values["amount"])}); return True
+        handler.send_json({"text": "今天用了 1.2M tokens，约 ¥3.10。",
+                           "view": {"sections": [{"items": [{"type": "metric", "label": "今天", "value": "1.2M", "detail": "约 ¥3.10"}]}]}}); return True
+    if len(parts) == 6 and parts[3] == "devices" and parts[5] == "widgets" and method == "PUT":
+        DEVICE_WIDGETS[parts[4]] = req.get("widgets") or []
+        handler.send_json({"widgets": DEVICE_WIDGETS[parts[4]]}); return True
+    return False
+
+
 def markets_route(handler, p, body):
     """MOCK_PLUGINS: the markets, the catalog, installing from it, and the plugins' declarative UI. False otherwise."""
     if not PLUGINS_MODE: return False
@@ -7822,7 +7909,8 @@ _features_without_plugins = features
 
 
 def features():
-    return _features_without_plugins() + (["plugins", "plugin_manager", "plugin_ui_slots", "plugin_auto_upgrade", "extension_ui_v3"] if PLUGINS_MODE else [])
+    return _features_without_plugins() + (["plugins", "plugin_manager", "plugin_ui_slots", "plugin_auto_upgrade", "extension_ui_v3",
+                                           "extension_widgets", "extension_shortcuts"] if PLUGINS_MODE else [])
 
 
 def _plugin_needs(pl):
@@ -7835,7 +7923,10 @@ def _plugin_needs(pl):
 
 def plugins_route(handler, p, body):
     """MOCK_PLUGINS: GET /api/v1/plugins, a plugin's page and its switch, settings and secrets. False otherwise."""
-    if not PLUGINS_MODE or not p.startswith("/api/v1/plugins"): return False
+    if not PLUGINS_MODE: return False
+    if (p.startswith("/api/v1/extensions/") or p.startswith("/api/v1/devices/") and p.endswith("/widgets")) and \
+            system_route(handler, p, json.loads(body or b"{}") if body else {}): return True
+    if not p.startswith("/api/v1/plugins"): return False
     if markets_route(handler, p, body): return True
     if p == "/api/v1/plugins":
         handler.send_json({"plugins": [{k: v for k, v in _plugin_needs(pl).items() if k in _PLUGIN_VIEW and v is not None}
@@ -10627,6 +10718,49 @@ def live_status_subscribe(send, mid, sid):
 
 
 MOCK_HELP.append("MOCK_LIVE_STATUS=1  Claude 会话的实时状态行（session_live，#1963）：声明了 session_live 的连接订阅后按 MOCK_LIVE_STATUS_TICK 秒（默认 1）一条推 live（思考中、thought for、token 增长、动词变化），最后推 null、会话变空闲；结束后再订阅会重来一轮")
+
+
+# ---------- MOCK_CHAT_CARDS: a crowded composer on a phone (#1996) ----------
+# MOCK_CHAT_CARDS=1 (with MOCK_SPLIT_TABS=1): the working claude of server's tab w1:t1 waits on three cards (a plan, a
+# question, a permission), has two messages queued, a /loop and a background task: everything that sits above the
+# composer or beside the title at once. Its tab's codex pane is the other pane to switch to.
+def chat_cards_mock():
+    s = next((x for x in SESSIONS if x["session_id"] == SPLIT_CLAUDE), None)
+    if not s:
+        return
+    s.update(queued=["顺便把刷新失败的日志也补上", "改完跑一遍集成测试"],
+             loop={"kind": "wakeup", "prompt": "/loop 每 30 分钟检查 CI，红了就修", "interval_seconds": 1800,
+                   "next_at": (datetime.now(timezone.utc) + timedelta(minutes=17)).isoformat().replace("+00:00", "Z"), "ticks": 2},
+             background=[{"id": "b1", "kind": "shell", "description": "跑中间件的单元测试", "command": "go test ./middleware/...",
+                          "started_at": ago(minutes=3)}],
+             pending_interactions=3)
+    # a plan under way and a long answer before it: scrolled up, the plan's Step N / M pill and 跳到底部 both show
+    todos = {"todos": [{"content": c, "status": st, "activeForm": c} for c, st in
+                       [("写刷新中间件", "completed"), ("删掉重复逻辑", "in_progress"), ("补测试", "pending")]]}
+    ITEMS[SPLIT_CLAUDE] = ([it("user", "text", 30, text="讲讲 token 刷新为什么要放到中间件里")]
+                           + [it("assistant", "text", 29, text="\n\n".join(["放在中间件里，每个接口就不用各自判断令牌过期、各自刷新、各自重试。"
+                                                                          "刷新失败时的处理也只有一处，登出的时机一致。"] * 8))]
+                           + [it("user", "text", 12, text="把 token 刷新挪到中间件里")]
+                           + tool("TodoWrite", todos, "ok", 11.9)
+                           + [it("assistant", "text", 11, text="中间件写好了，在补刷新失败的测试。")])
+    base = {"machine_id": "server", "session_id": SPLIT_CLAUDE, "session_title": s["title"], "cwd": s["cwd"],
+            "expires_at": later(minutes=30)}
+    INTERACTIONS.extend([
+        dict(base, id="ix_cards_plan", kind="plan", created_at=ago(minutes=3), tool_name="ExitPlanMode", tool_use_id="toolu_cp",
+             plan="## 刷新挪到中间件\n\n1. 新建 `RefreshMiddleware`，401 时先刷新再重放\n2. 刷新失败统一登出\n3. 删掉各接口里的重复逻辑\n"
+                  "4. 补测试：并发刷新、刷新失败、令牌过期前一刻\n5. 更新接口文档\n6. 跑一遍集成测试"),
+        dict(base, id="ix_cards_q", kind="question", created_at=ago(minutes=2), tool_name="AskUserQuestion", tool_use_id="toolu_cq",
+             questions=[{"question": "刷新失败以后怎么处理？", "header": "失败处理", "multi_select": False, "options": [
+                 {"label": "直接登出", "description": "最简单，用户重新登录"},
+                 {"label": "重试一次再登出", "description": "网络抖动时少打扰用户"}]}]),
+        dict(base, id="ix_cards_perm", kind="permission", created_at=ago(minutes=1), tool_name="Bash", tool_use_id="toolu_cb",
+             tool_input={"command": "go test ./middleware/...", "description": "跑中间件的单元测试"}),
+    ])
+
+
+if os.environ.get("MOCK_CHAT_CARDS") == "1":
+    chat_cards_mock()
+MOCK_HELP.append("MOCK_CHAT_CARDS=1  （配合 MOCK_SPLIT_TABS=1）server 上 w1:t1 那个工作中的 Claude 同时有计划、提问、授权三张卡，两条排队消息，/loop 和一个后台任务：手机上输入区最挤的样子（#1996）")
 
 # ---------- MOCK_PLUGINS: a hub from #1844 on (docs/extensions.md「命名和兼容」) ----------
 # It says `extensions` and the extension_* features beside the old ones and answers /api/v1/extensions/… with the new keys

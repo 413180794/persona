@@ -132,6 +132,8 @@ type Registry struct {
 	// yields: built-in plugins an installed one of the same id takes the place of (Yields); yielded: those put aside.
 	yields  map[string]bool
 	yielded map[string]*Extension
+	// devSecrets are the secrets of the extensions being written (SourceDev), in memory only.
+	devSecrets map[string]map[string]string
 }
 
 // NewRegistry is a registry for the hub of build, keeping packages under dir.
@@ -795,6 +797,9 @@ func (r *Registry) Uninstall(ctx context.Context, id string, keepData bool, acto
 	if old == nil {
 		return fmt.Errorf("没有扩展 %s", id)
 	}
+	if old.Record.Source == SourceDev {
+		return r.RemoveDev(id)
+	}
 	if old.Record.Source != SourceInstalled {
 		return fmt.Errorf("%s 是%s的扩展，只能停用", id, map[string]string{SourceBuiltin: "内置", SourceHubJSON: " hub.json 里"}[old.Record.Source])
 	}
@@ -826,6 +831,9 @@ func (r *Registry) editable(id string) (*Extension, error) {
 	}
 	if p.ReadOnly() {
 		return nil, fmt.Errorf("%s 写在 hub.json 里：去 hub.json 或管理界面改", id)
+	}
+	if p.Record.Source == SourceDev {
+		return nil, fmt.Errorf("%s 是开发中的扩展：改它目录里的 extension.dev.json，再跑一次 personad extension dev", id)
 	}
 	return p, nil
 }
@@ -983,6 +991,12 @@ func (r *Registry) ensureRow(ctx context.Context, p *Extension) error {
 
 // Secrets are a plugin's secrets in plain text, for handing to it only.
 func (r *Registry) Secrets(ctx context.Context, id string) (map[string]string, error) {
+	r.mu.Lock()
+	dev, isDev := r.devSecrets[id]
+	r.mu.Unlock()
+	if isDev {
+		return maps.Clone(dev), nil
+	}
 	if r.store == nil || r.seal == nil {
 		return nil, nil
 	}
@@ -1004,6 +1018,14 @@ func (r *Registry) Secrets(ctx context.Context, id string) (map[string]string, e
 // SecretsSet says which declared secrets have a value.
 func (r *Registry) SecretsSet(ctx context.Context, p *Extension) map[string]bool {
 	out := map[string]bool{}
+	if p.Record.Source == SourceDev {
+		r.mu.Lock()
+		for _, s := range p.Manifest.Secrets {
+			_, out[s.Name] = r.devSecrets[p.Record.ID][s.Name]
+		}
+		r.mu.Unlock()
+		return out
+	}
 	if r.store == nil || p.ReadOnly() {
 		return out
 	}
@@ -1037,6 +1059,11 @@ func (r *Registry) Missing(ctx context.Context, p *Extension) []string {
 		out = append(out, "配置（"+err.Error()+"）")
 	}
 	return out
+}
+
+// Audit records what the hub changed about extension id outside the registry (its sandbox).
+func (r *Registry) Audit(ctx context.Context, id, action, actor string, detail any) {
+	r.audit(ctx, id, action, actor, detail)
 }
 
 func (r *Registry) audit(ctx context.Context, id, action, actor string, detail any) {

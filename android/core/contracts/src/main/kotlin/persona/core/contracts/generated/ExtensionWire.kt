@@ -69,6 +69,17 @@ data class ExtensionRuntime(
     val env: Map<String, String>? = null,
     val rpc: String? = null,
     val http: Boolean? = null,
+    val resources: ExtensionResources? = null,
+)
+
+/**
+ * The most a program may use when the hub runs it in a sandbox (docs/extensions.md「沙箱」): memory in MB, CPU in percent
+ * of one core. Unset: 1024 MB, 100%.
+ */
+@Serializable
+data class ExtensionResources(
+    @SerialName("memory_mb") val memoryMb: Int? = null,
+    @SerialName("cpu_percent") val cpuPercent: Int? = null,
 )
 
 /**
@@ -118,6 +129,7 @@ data class ExtensionContributes(
     @SerialName("agent_sources") val agentSources: List<ExtensionAgentSourceItem>? = null,
     val channel: List<ExtensionChannelItem>? = null,
     val events: List<ExtensionEventsItem>? = null,
+    val shortcuts: List<ExtensionShortcutItem>? = null,
 )
 
 /**
@@ -218,13 +230,21 @@ data class ExtensionUIItem(
      */
     val icon: String? = null,
     /**
-     * overview_card only: a nav_page or plugin_page of the same extension.
+     * overview_card and widget only: a nav_page or extension_page of the same extension.
      */
     val opens: String? = null,
     /**
      * inbox_item only: one of the extension's own connectors.
      */
     val connector: String? = null,
+    /**
+     * widget only (and needed there): the sizes it can be drawn at.
+     */
+    val families: List<String>? = null,
+    /**
+     * widget only: how often the widget is drawn again on its own (30 when not said).
+     */
+    @SerialName("refresh_minutes") val refreshMinutes: Int? = null,
 )
 
 @Serializable
@@ -264,6 +284,48 @@ data class ExtensionEventsItem(
     val id: String = "",
     val subscribe: List<String> = emptyList(),
 )
+
+/**
+ * An action of the extension the system runs (docs「系统级位置」): Shortcuts and Siri on iPhone, Mac and Apple Watch. The
+ * hub asks the extension shortcut.run with the values.
+ */
+@Serializable
+data class ExtensionShortcutItem(
+    val id: String = "",
+    val title: String = "",
+    val description: String? = null,
+    val params: List<ExtensionShortcutParam>? = null,
+    /**
+     * A whole page of the same extension (nav_page or extension_page) the app opens to show more of the result.
+     */
+    val ui: String? = null,
+)
+
+/**
+ * A value the shortcut asks for; it reaches the extension as a string (a toggle's "true" / "false").
+ */
+@Serializable
+data class ExtensionShortcutParam(
+    val name: String = "",
+    val title: String = "",
+    val kind: String = "",
+    /**
+     * choice only.
+     */
+    val choices: List<ExtensionChoice>? = null,
+    val required: Boolean? = null,
+)
+
+/**
+ * Values of ShortcutParamKind.
+ */
+object ExtensionShortcutParamKind {
+    const val TEXT = "text"
+    const val NUMBER = "number"
+    const val TOGGLE = "toggle"
+    const val CHOICE = "choice"
+    val ALL = listOf("text", "number", "toggle", "choice")
+}
 
 /**
  * One line: a request {id, method, params}, an answer {id, result} or {id, error}, or an event {event, params}.
@@ -515,6 +577,152 @@ data class ExtensionUIPlaces(
 )
 
 /**
+ * A widget an extension draws outside the app (GET …/extensions/-/widgets; docs「系统级位置」).
+ */
+@Serializable
+data class ExtensionWidgetPlace(
+    val extension: String = "",
+    @SerialName("extension_name") val extensionName: String? = null,
+    val id: String = "",
+    val title: String = "",
+    val families: List<String> = emptyList(),
+    @SerialName("refresh_minutes") val refreshMinutes: Int = 0,
+    val opens: String? = null,
+)
+
+@Serializable
+data class ExtensionWidgetPlaces(
+    val widgets: List<ExtensionWidgetPlace> = emptyList(),
+)
+
+/**
+ * An app's POST …/extensions/{id}/-/widget/{ui}: context.size is the family it draws (WidgetFamily).
+ */
+@Serializable
+data class ExtensionWidgetRequest(
+    val context: ExtensionUIContext? = null,
+)
+
+/**
+ * A widget's view, held to what the family draws, and until when the hub keeps it (the app's timeline's next entry).
+ */
+@Serializable
+data class ExtensionWidgetAnswer(
+    val view: ExtensionView = ExtensionView(),
+    @SerialName("expires_at") val expiresAt: String = "",
+)
+
+/**
+ * A widget a device has on a screen (PUT /api/v1/devices/{id}/widgets): the hub wakes that device when it changes.
+ */
+@Serializable
+data class ExtensionDeviceWidget(
+    val extension: String = "",
+    val id: String = "",
+    val family: String = "",
+)
+
+@Serializable
+data class ExtensionDeviceWidgets(
+    val widgets: List<ExtensionDeviceWidget> = emptyList(),
+)
+
+/**
+ * extension_widget in a background push (content-available): a widget the device has changed; the app reloads its
+ * timelines.
+ */
+@Serializable
+data class ExtensionWidgetPush(
+    val extension: String = "",
+    val id: String = "",
+)
+
+/**
+ * An extension's action the system runs (GET …/extensions/-/shortcuts).
+ */
+@Serializable
+data class ExtensionShortcutPlace(
+    val extension: String = "",
+    @SerialName("extension_name") val extensionName: String? = null,
+    val id: String = "",
+    val title: String = "",
+    val description: String? = null,
+    val params: List<ExtensionShortcutParam>? = null,
+    val ui: String? = null,
+)
+
+@Serializable
+data class ExtensionShortcutPlaces(
+    val shortcuts: List<ExtensionShortcutPlace> = emptyList(),
+)
+
+/**
+ * An app's POST …/extensions/{id}/-/shortcut/{sid}: the params' values (strings) and the context (tz, locale,
+ * platform, ui_version).
+ */
+@Serializable
+data class ExtensionShortcutRequest(
+    val values: Map<String, String>? = null,
+    val context: ExtensionUIContext? = null,
+)
+
+/**
+ * shortcut.run's parameters: which shortcut, its values, for whom.
+ */
+@Serializable
+data class ExtensionShortcutRunParams(
+    val contribution: String = "",
+    val values: Map<String, String> = emptyMap(),
+    @SerialName("ui_version") val uiVersion: Int = 0,
+    val tz: String? = null,
+    val locale: String? = null,
+    val platform: String? = null,
+)
+
+/**
+ * What shortcut.run answers (and the app gets): a sentence Siri says or shows, and a view held to the large widget's
+ * subset (the result card).
+ */
+@Serializable
+data class ExtensionShortcutResult(
+    val text: String? = null,
+    val view: ExtensionView? = null,
+)
+
+/**
+ * A button on an extension's notification (POST /api/v1/notify actions, at most 3). A tap runs ui.action on the
+ * notification's ui with this id; input asks for a line of text first (values.text).
+ */
+@Serializable
+data class ExtensionNotifyAction(
+    val id: String = "",
+    val title: String = "",
+    val role: String? = null,
+    /**
+     * Open the app to run it; otherwise it runs in the background and its toast is shown as a notification.
+     */
+    val foreground: Boolean? = null,
+    val input: ExtensionNotifyActionInput? = null,
+)
+
+@Serializable
+data class ExtensionNotifyActionInput(
+    val placeholder: String? = null,
+)
+
+/**
+ * extension_notification in an extension's alert push: whose it is, the page a tap opens (ui with state) and its
+ * buttons (category ext.<extension>.<hash of the action ids>, registered by the app as it meets it).
+ */
+@Serializable
+data class ExtensionNotification(
+    val extension: String = "",
+    val ui: String? = null,
+    val state: String? = null,
+    val actions: List<ExtensionNotifyAction>? = null,
+)
+
+/**
  * A role color the app picks, never one of the extension's own. An unknown tone draws as neutral.
  */
 object ExtensionTone {
@@ -578,16 +786,38 @@ object ExtensionPlacement {
     const val MACHINE_SECTION = "machine_section"
     const val INBOX_ITEM = "inbox_item"
     const val EXTENSION_PAGE = "extension_page"
-    val ALL = listOf("plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page")
+    const val WIDGET = "widget"
+    val ALL = listOf("plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget")
 }
 
 /**
- * Values of Size.
+ * How much room a view has: compact (a card), full (a page, a section), or for a widget the family it is drawn for
+ * (WidgetFamily).
  */
 object ExtensionSize {
     const val COMPACT = "compact"
     const val FULL = "full"
-    val ALL = listOf("compact", "full")
+    const val SMALL = "small"
+    const val MEDIUM = "medium"
+    const val LARGE = "large"
+    const val ACCESSORY_CIRCULAR = "accessory_circular"
+    const val ACCESSORY_RECTANGULAR = "accessory_rectangular"
+    const val ACCESSORY_INLINE = "accessory_inline"
+    val ALL = listOf("compact", "full", "small", "medium", "large", "accessory_circular", "accessory_rectangular", "accessory_inline")
+}
+
+/**
+ * A widget's size outside the app (docs「系统级位置」): a home screen widget's small / medium / large, a Lock Screen or
+ * watch face complication's accessory_*.
+ */
+object ExtensionWidgetFamily {
+    const val SMALL = "small"
+    const val MEDIUM = "medium"
+    const val LARGE = "large"
+    const val ACCESSORY_CIRCULAR = "accessory_circular"
+    const val ACCESSORY_RECTANGULAR = "accessory_rectangular"
+    const val ACCESSORY_INLINE = "accessory_inline"
+    val ALL = listOf("small", "medium", "large", "accessory_circular", "accessory_rectangular", "accessory_inline")
 }
 
 /**

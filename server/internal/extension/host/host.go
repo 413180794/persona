@@ -68,6 +68,9 @@ type Spec struct {
 	// CleanEnv: the program gets only the basics of the hub's environment (PassEnv), not all of it: the hub's may
 	// hold its own credentials (a database URL). An installed plugin's is clean; the hub's own and hub.json's are not.
 	CleanEnv bool
+	// Wrap, when set, is the command line that really runs Command and Args (a sandbox around it), and more environment
+	// for that one start; asked at each start.
+	Wrap func(command string, args []string) (string, []string, []string, error)
 
 	// RPC: it speaks the plugin protocol, on stdin / stdout when the hub runs it, else on RPCSocket.
 	RPC       bool
@@ -729,7 +732,15 @@ func (p *Proc) spawn(ctx context.Context) (*child, io.Reader, error) {
 	if _, err := os.Stat(p.spec.Command); err != nil && filepath.IsAbs(p.spec.Command) {
 		return nil, nil, fmt.Errorf("没有找到 %s 的程序（%s）", p.spec.Name, p.spec.Command)
 	}
-	cmd := exec.Command(p.spec.Command, p.spec.Args...)
+	name, args := p.spec.Command, p.spec.Args
+	var wrapEnv []string
+	if p.spec.Wrap != nil {
+		var err error
+		if name, args, wrapEnv, err = p.spec.Wrap(name, args); err != nil {
+			return nil, nil, fmt.Errorf("%s 的沙箱起不来：%v", p.spec.Name, err)
+		}
+	}
+	cmd := exec.Command(name, args...)
 	cmd.Dir = p.spec.Dir
 	base := os.Environ()
 	if p.spec.CleanEnv {
@@ -739,6 +750,7 @@ func (p *Proc) spawn(ctx context.Context) (*child, io.Reader, error) {
 	if p.spec.StartEnv != nil {
 		env = append(slices.Clone(env), p.spec.StartEnv()...)
 	}
+	env = append(slices.Clone(env), wrapEnv...)
 	cmd.Env = identity.Environment(base, env...)
 	cmd.SysProcAttr = osproc.GroupAttr() // so stopping it takes its children too
 	ch := &child{cmd: cmd, exited: make(chan error, 1)}

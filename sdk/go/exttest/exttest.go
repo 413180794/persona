@@ -128,6 +128,14 @@ func Check(t testing.TB, manifest []byte, run Run, config ...json.RawMessage) wi
 	if err := h.call(ctx, "nonexistent.method", map[string]any{}, nil); code(err) != wire.ErrorCodeUnknownMethod {
 		t.Fatalf("an unknown method: want %s, got %v", wire.ErrorCodeUnknownMethod, err)
 	}
+	if len(m.Contributes.UI) > 0 {
+		if err := h.call(ctx, "ui.nonexistent_method", map[string]any{}, nil); code(err) != wire.ErrorCodeUnknownMethod {
+			t.Fatalf("an unknown method of ui: want %s, got %v", wire.ErrorCodeUnknownMethod, err)
+		}
+		if err := h.call(ctx, "ui.render", map[string]any{"contribution": "no-such-contribution"}, nil); code(err) != wire.ErrorCodeNoContribution {
+			t.Fatalf("ui.render of a contribution it does not have: want %s, got %v", wire.ErrorCodeNoContribution, err)
+		}
+	}
 
 	for _, u := range m.Contributes.UI {
 		size := wire.SizeFull

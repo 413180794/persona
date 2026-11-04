@@ -397,15 +397,21 @@ export function displayLines(lines: ChatLine[], feed: FeedItem[]): DisplayLine[]
   return withDays(out);
 }
 
-export function withDays(lines: DisplayLine[]): DisplayLine[] {
+/** A day line over the first line of each later day. The lines keep their order, which is not always the order of their
+ *  times (an exchange's feed items, a clock that was behind): a line from a day already passed gets no line of its own,
+ *  so the days only go forward and each day line (`day-<date>`) is there once. */
+export function withDays(lines: DisplayLine[], now = Date.now()): DisplayLine[] {
   const out: DisplayLine[] = [];
   let last = "";
   for (const l of lines) {
     const t = lineTime(l);
-    if (t !== undefined && !Number.isNaN(t)) {
+    // a day line only forward (a line from a clock that was behind is not a day back, nor the same day twice), and none
+    // from a line dated after now (a clock ahead would take every day after it with it)
+    if (t !== undefined && !Number.isNaN(t) && t <= now + 60_000) {
       const d = new Date(t);
+      // YYYY-MM-DD: compares as a string
       const day = d.toLocaleDateString("sv");
-      if (day !== last) {
+      if (day > last) {
         out.push({ kind: "day", id: "day-" + day, date: new Date(d.getFullYear(), d.getMonth(), d.getDate()) });
         last = day;
       }

@@ -2,13 +2,14 @@
 // card like a file card (its thumbnail, name, where it came from); several are a strip that scrolls sideways and fades
 // at its edge. A tap opens the gallery of the turn's pictures. Tiles keep their keys and the strip its height, so a
 // picture arriving while the agent works appends without moving anything above it.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useMemo, useRef, useState } from "react";
 import { fileDownloadURL, fileThumbURL } from "../../lib/api";
 import { openPanel } from "../../lib/panel";
 import type { TurnImage } from "../../lib/turn-images";
-import { copyText, cx, IconButton } from "../../ui/atoms";
+import { copyText } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { edgeMask, useEdgeFade } from "./edge-fade";
+import { ImageViewer, type ViewerAction, type ViewerImage } from "./ImageViewer";
 import { imageSrc } from "./Steps";
 
 const TILE_H = 60;
@@ -47,23 +48,8 @@ export function TurnImages({ images, mid, sid, cwd }: { images: TurnImage[]; mid
  * larger thumbnail. No words: names and sizes are on hover and in the gallery. */
 function Strip({ images, mid, sid, cwd, onOpen }: { images: TurnImage[]; mid: string; sid: string; cwd?: string; onOpen: (i: number) => void }) {
   const row = useRef<HTMLDivElement>(null);
-  const [edges, setEdges] = useState({ left: false, right: false });
-  const measure = useCallback(() => {
-    const el = row.current;
-    if (!el) return;
-    const left = el.scrollLeft > 2;
-    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
-    setEdges((e) => (e.left === left && e.right === right ? e : { left, right }));
-  }, []);
-  useLayoutEffect(measure, [images.length, measure]);
-  useEffect(() => {
-    const el = row.current;
-    if (!el) return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [measure]);
-  const mask = edges.left && edges.right ? "linear-gradient(90deg,transparent,#000 28px,#000 calc(100% - 44px),transparent)" : edges.right ? "linear-gradient(90deg,#000 calc(100% - 44px),transparent)" : edges.left ? "linear-gradient(90deg,transparent,#000 28px)" : undefined;
+  const { edges, measure } = useEdgeFade(row, [images.length]);
+  const mask = edgeMask(edges);
   return (
     <>
       <div
@@ -110,84 +96,28 @@ function Tile({ img, mid, sid, cwd, h, onOpen }: { img: TurnImage; mid: string; 
   );
 }
 
-/** The turn's pictures full size: ← / → or the thumbnails to move, Esc to close; download, copy the path, open the file. */
+/** The turn's pictures in the chat's image viewer (pinch, double tap, swipe; ← / →, Esc), with the file's own
+ *  buttons for a picture read from disk: copy its path, open it in the file panel. */
 function Gallery({ images, start, mid, sid, cwd, onClose }: { images: TurnImage[]; start: number; mid: string; sid: string; cwd?: string; onClose: () => void }) {
-  const [at, setAt] = useState(start);
-  const img = images[Math.min(at, images.length - 1)];
-  const { full } = sources(img, mid, sid, cwd);
-  const go = useCallback((d: number) => setAt((i) => (i + d + images.length) % images.length), [images.length]);
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-      else if (e.key === "ArrowLeft") go(-1);
-      else if (e.key === "ArrowRight") go(1);
-    };
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
-  }, [go, onClose]);
-  const download = () => {
-    const a = document.createElement("a");
-    a.href = img.path ? fileDownloadURL(mid, img.path, cwd) : full;
-    a.download = img.path?.split("/").pop() || `${img.label}.png`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  };
-  return createPortal(
-    <div role="dialog" aria-label="这一轮看过的图片" className="fixed inset-0 z-50 flex flex-col bg-black/85 text-white backdrop-blur-sm" style={{ animation: "fade-in 160ms ease-out both" }} onClick={onClose}>
-      <div className="flex h-12 shrink-0 items-center gap-3 px-4" onClick={(e) => e.stopPropagation()}>
-        <span className="min-w-0 flex-1 truncate text-[13px]">
-          <span className="font-medium">{img.label}</span>
-          <span className="ml-2 text-white/60">{meta(img)}</span>
-        </span>
-        <span className="shrink-0 text-[12px] text-white/60 tabular-nums">
-          {at + 1} / {images.length}
-        </span>
-        <div className="flex shrink-0 items-center gap-1 [&_button]:text-white/85 [&_button:hover]:bg-white/10">
-          <IconButton icon="arrowDown" label="下载" onClick={download} />
-          {img.path && <IconButton icon="copy" label="拷贝路径" onClick={() => copyText(img.path!)} />}
-          {img.path && (
-            <IconButton
-              icon="folder"
-              label="在文件页打开"
-              onClick={() => {
-                onClose();
-                openPanel({ kind: "file", mid, path: img.path!, cwd });
-              }}
-            />
-          )}
-          <IconButton icon="x" label="关闭" onClick={onClose} />
-        </div>
-      </div>
-      <div className="relative flex min-h-0 flex-1 items-center justify-center px-14">
-        <img key={img.key} src={full} alt={img.label} className="max-h-full max-w-full rounded-[6px] object-contain shadow-2xl" style={{ animation: "fade-in 160ms ease-out both" }} onClick={(e) => e.stopPropagation()} />
-        {images.length > 1 && (
-          <>
-            <button type="button" aria-label="上一张" onClick={(e) => (e.stopPropagation(), go(-1))} className="absolute left-3 flex size-10 items-center justify-center rounded-full bg-white/10 hover:bg-white/20">
-              <Icon name="chevronLeft" size={18} />
-            </button>
-            <button type="button" aria-label="下一张" onClick={(e) => (e.stopPropagation(), go(1))} className="absolute right-3 flex size-10 items-center justify-center rounded-full bg-white/10 hover:bg-white/20">
-              <Icon name="chevronRight" size={18} />
-            </button>
-          </>
-        )}
-      </div>
-      {images.length > 1 && (
-        <div className="flex shrink-0 justify-center gap-2 overflow-x-auto px-4 py-3" onClick={(e) => e.stopPropagation()}>
-          {images.map((m, i) => (
-            <button
-              key={m.key}
-              type="button"
-              aria-label={m.label}
-              onClick={() => setAt(i)}
-              className={cx("size-12 shrink-0 overflow-hidden rounded-[8px] transition-[opacity,box-shadow]", i === at ? "opacity-100 ring-2 ring-white" : "opacity-55 hover:opacity-90")}
-            >
-              <img src={sources(m, mid, sid, cwd).thumb} alt="" loading="lazy" className="size-full object-cover" />
-            </button>
-          ))}
-        </div>
-      )}
-    </div>,
-    document.body,
+  const shown = useMemo(
+    () => images.map<ViewerImage>((img) => ({ id: img.key, src: sources(img, mid, sid, cwd).full, label: [img.label, meta(img)].filter(Boolean).join(" · "), name: img.path?.split("/").pop() })),
+    [images, mid, sid, cwd],
   );
+  const actions = (i: number): ViewerAction[] => {
+    const path = images[i]?.path;
+    if (!path) return [];
+    return [
+      { key: "path", icon: "link", label: "拷贝路径", run: () => void copyText(path) },
+      {
+        key: "file",
+        icon: "folder",
+        label: "在文件页打开",
+        run: () => {
+          onClose();
+          openPanel({ kind: "file", mid, path, cwd });
+        },
+      },
+    ];
+  };
+  return <ImageViewer images={shown} start={start} onClose={onClose} actions={actions} />;
 }

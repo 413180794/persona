@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { enterSends, keyboardFrame } from "./viewport";
+import { enterSends, keyboardFrame, keyboardVars } from "./viewport";
 
 describe("keyboardFrame", () => {
   it("follows the visible part while the keyboard covers the bottom", () => {
@@ -14,14 +14,24 @@ describe("keyboardFrame", () => {
   });
 });
 
-describe("enterSends", () => {
-  it("sends on Enter with a pointer, never with Shift", () => {
-    expect(enterSends({ key: "Enter", shiftKey: false }, false)).toBe(true);
-    expect(enterSends({ key: "Enter", shiftKey: true }, false)).toBe(false);
-    expect(enterSends({ key: "a", shiftKey: false }, false)).toBe(false);
+describe("keyboardVars", () => {
+  it("puts the visible part in --kb-top / --kb-h while the keyboard is up", () => {
+    expect(keyboardVars({ top: 120, height: 508 })).toEqual({ "--kb-top": "120px", "--kb-h": "508px" });
   });
 
-  it("makes a new line on a touch screen", () => {
-    expect(enterSends({ key: "Enter", shiftKey: false }, true)).toBe(false);
+  it("leaves them to the stylesheet without a keyboard", () => {
+    expect(keyboardVars(undefined)).toBeNull();
+  });
+});
+
+describe("enterSends", () => {
+  it("sends on Enter with a precise pointer, never with Shift", () => {
+    expect(enterSends({ key: "Enter", shiftKey: false }, true)).toBe(true);
+    expect(enterSends({ key: "Enter", shiftKey: true }, true)).toBe(false);
+    expect(enterSends({ key: "a", shiftKey: false }, true)).toBe(false);
+  });
+
+  it("makes a new line on a touch screen alone", () => {
+    expect(enterSends({ key: "Enter", shiftKey: false }, false)).toBe(false);
   });
 });

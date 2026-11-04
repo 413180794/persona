@@ -1,7 +1,9 @@
 // One tool call in a work group (cindy's AgentActionRow): [status][verb][what it worked on][+N −N][›]. A command and
 // the like open in place (what went in, what came out, in full); an edit opens its diff over the page; a read opens
 // the file in the side panel.
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useCloseOnBack } from "../../lib/back-close";
 import { diffLines, type Op } from "../../lib/compare";
 import { fileName, toolFile } from "../../lib/files";
 import { openPanel } from "../../lib/panel";
@@ -10,13 +12,16 @@ import { taskBadge } from "../../lib/tasks";
 import { toolChip, toolLabel } from "../../lib/turns";
 import type { Item } from "../../lib/types";
 import type { ToolStep } from "../../lib/work-groups";
-import { cx, Dialog, Spinner } from "../../ui/atoms";
+import { cx, Dialog, EASE, IconButton, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { NARROW, useMedia } from "../../ui/media-query";
 import { useChatContext } from "./chat-context";
+import { edgeMask, useEdgeFade } from "./edge-fade";
 import { Thumb } from "./Steps";
 
 /** The row's chrome, shared with the thinking rows so a mixed list reads as one (cindy's activityRowChrome). */
-const ROW = "group flex w-full min-w-0 items-center gap-1.5 rounded-[8px] px-2 py-[3px] text-left select-none transition-colors duration-150 hover:bg-tool-hover motion-reduce:transition-none";
+/** On a touch screen a row is a finger tall (40). */
+const ROW = "group flex w-full min-w-0 items-center gap-1.5 rounded-[8px] px-2 py-[3px] [@media(pointer:coarse)]:min-h-10 text-left select-none transition-colors duration-150 hover:bg-tool-hover motion-reduce:transition-none";
 export const CHEVRON_SLOT = "ml-auto flex size-[18px] shrink-0 items-center justify-center rounded-[8px] text-tool-ink transition-colors duration-150 group-hover:bg-hover-2 motion-reduce:transition-none";
 export const STATUS_SLOT = "inline-flex h-[18px] w-4 shrink-0 items-center justify-center text-tool-ink";
 
@@ -161,7 +166,7 @@ export const ActionRow = memo(function ActionRow({ step, running, mid, sid }: { 
         <span role="img" aria-label={running ? "进行中" : error ? "出错" : "完成"} className={cx(STATUS_SLOT, error && "text-red")}>
           {running ? <Spinner size={12} /> : <Icon name={error ? "x" : "check"} size={13} />}
         </span>
-        {p.verb && <span className="shrink-0 text-[14px] whitespace-nowrap text-tool-ink">{p.verb}</span>}
+        {p.verb && <span className="shrink-0 text-[length:var(--chat-secondary)] whitespace-nowrap text-tool-ink">{p.verb}</span>}
         {p.param &&
           (p.file ? (
             <span className="inline-flex max-w-full min-w-0 items-center gap-[3px] rounded-[4px] border border-line bg-field px-[5px] py-[0.5px] font-mono text-[13px] leading-[1.385] whitespace-nowrap text-ink-2 transition-colors group-hover:bg-hover-2" data-file-chip>
@@ -169,7 +174,7 @@ export const ActionRow = memo(function ActionRow({ step, running, mid, sid }: { 
               <span className="truncate">{p.param.text}</span>
             </span>
           ) : (
-            <span className="min-w-0 truncate text-[14px] font-medium text-tool-ink">{p.param.text}</span>
+            <span className="min-w-0 truncate text-[length:var(--chat-secondary)] font-medium text-tool-ink">{p.param.text}</span>
           ))}
         <span className="flex-1" />
         {stats && (stats.add > 0 || stats.del > 0) && (
@@ -207,37 +212,73 @@ export const ActionRow = memo(function ActionRow({ step, running, mid, sid }: { 
           {!input && !result?.text && <span className="text-tool-ink">没有内容</span>}
         </div>
       )}
-      {diffs && <DiffDialog open={diffOpen} onClose={() => setDiffOpen(false)} path={p.file ?? ""} diffs={diffs} mid={mid} sid={sid} />}
+      {diffs && diffOpen && <DiffDialog onClose={() => setDiffOpen(false)} path={p.file ?? ""} diffs={diffs} mid={mid} sid={sid} />}
     </div>
   );
 });
 
-/** An edit's changes over the page: whole lines on red and green, the file one click away. */
-function DiffDialog({ open, onClose, path, diffs, mid, sid }: { open: boolean; onClose: () => void; path: string; diffs: Op[][]; mid: string; sid: string }) {
+/** How many lines of a diff the phone's full-screen view shows before 展开. */
+export const DIFF_FOLD_LINES = 40;
+
+/** The first `max` lines of an edit's changes (cut inside the change they end in), and how many lines that leaves out. */
+export function foldDiffs(diffs: Op[][], max = DIFF_FOLD_LINES): { shown: Op[][]; hidden: number } {
+  const total = diffs.reduce((n, d) => n + d.length, 0);
+  if (total <= max) return { shown: diffs, hidden: 0 };
+  const shown: Op[][] = [];
+  let left = max;
+  for (const d of diffs) {
+    if (left <= 0) break;
+    shown.push(d.slice(0, left));
+    left -= d.length;
+  }
+  return { shown, hidden: total - max };
+}
+
+function DiffStats({ diffs }: { diffs: Op[][] }) {
   const s = diffStats(diffs);
   return (
+    <span className="shrink-0 font-mono text-[12px] font-medium tabular-nums">
+      <span className="text-diff-add-fg">+{s.add}</span> <span className="text-diff-del-fg">−{s.del}</span>
+    </span>
+  );
+}
+
+function DiffBlocks({ diffs }: { diffs: Op[][] }) {
+  return diffs.map((d, n) => (
+    <div key={n} className="min-w-fit overflow-hidden rounded-[8px] py-1 font-mono text-[12px] leading-[1.6] shadow-hairline">
+      {d.map((l, i) => (
+        <div key={i} className={cx("flex min-w-fit pr-3", l.kind === "add" && "bg-diff-add-bg", l.kind === "del" && "bg-diff-del-bg")} data-diff-line={l.kind}>
+          <span className={cx("w-6 shrink-0 text-center select-none", l.kind === "add" ? "text-diff-add-fg" : l.kind === "del" ? "text-diff-del-fg" : "text-ink-3")}>{l.kind === "add" ? "+" : l.kind === "del" ? "−" : " "}</span>
+          <span className="whitespace-pre text-ink">{l.text || " "}</span>
+        </div>
+      ))}
+    </div>
+  ));
+}
+
+/** An edit's changes over the page: whole lines on red and green, the file one click away. On a narrow screen they
+ *  take the whole screen instead (DiffScreen). */
+function DiffDialog({ onClose, path, diffs, mid, sid }: { onClose: () => void; path: string; diffs: Op[][]; mid: string; sid: string }) {
+  const narrow = useMedia(NARROW);
+  const openFile = () => {
+    onClose();
+    openPanel({ kind: "file", mid, path, cwd: getSession(mid, sid)?.cwd });
+  };
+  if (narrow) return <DiffScreen onClose={onClose} path={path} diffs={diffs} onOpenFile={path ? openFile : undefined} />;
+  return (
     <Dialog
-      open={open}
+      open
       onClose={onClose}
       width={860}
       title={
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate">{path ? fileName(path) : "改动"}</span>
-          <span className="shrink-0 font-mono text-[12px] font-medium tabular-nums">
-            <span className="text-diff-add-fg">+{s.add}</span> <span className="text-diff-del-fg">−{s.del}</span>
-          </span>
+          <DiffStats diffs={diffs} />
         </span>
       }
       footer={
         path ? (
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              openPanel({ kind: "file", mid, path, cwd: getSession(mid, sid)?.cwd });
-            }}
-            className="flex h-8 items-center gap-1.5 rounded-control px-3 text-[12.5px] font-medium whitespace-nowrap text-ink-2 shadow-btn transition-colors hover:bg-hover"
-          >
+          <button type="button" onClick={openFile} className="flex h-8 items-center gap-1.5 rounded-control px-3 text-[12.5px] font-medium whitespace-nowrap text-ink-2 shadow-btn transition-colors hover:bg-hover">
             <Icon name="read" size={13} />
             打开文件
           </button>
@@ -246,17 +287,60 @@ function DiffDialog({ open, onClose, path, diffs, mid, sid }: { open: boolean; o
     >
       {path && <div className="mb-2 truncate font-mono text-[11.5px] text-ink-3" title={path}>{path}</div>}
       <div className="flex max-h-[60vh] flex-col gap-2 overflow-auto" data-diff>
-        {diffs.map((d, n) => (
-          <div key={n} className="min-w-fit overflow-hidden rounded-[8px] py-1 font-mono text-[12px] leading-[1.6] shadow-hairline">
-            {d.map((l, i) => (
-              <div key={i} className={cx("flex min-w-fit pr-3", l.kind === "add" && "bg-diff-add-bg", l.kind === "del" && "bg-diff-del-bg")} data-diff-line={l.kind}>
-                <span className={cx("w-6 shrink-0 text-center select-none", l.kind === "add" ? "text-diff-add-fg" : l.kind === "del" ? "text-diff-del-fg" : "text-ink-3")}>{l.kind === "add" ? "+" : l.kind === "del" ? "−" : " "}</span>
-                <span className="whitespace-pre text-ink">{l.text || " "}</span>
-              </div>
-            ))}
-          </div>
-        ))}
+        <DiffBlocks diffs={diffs} />
       </div>
     </Dialog>
+  );
+}
+
+/** The diff on a phone: the whole visible screen (above the keyboard), Back or ✕ to close; long lines scroll sideways
+ *  under a fade at the right edge while there is more, and a long diff shows its first 40 lines until 展开. */
+function DiffScreen({ onClose, path, diffs, onOpenFile }: { onClose: () => void; path: string; diffs: Op[][]; onOpenFile?: () => void }) {
+  useCloseOnBack(true, onClose);
+  const [all, setAll] = useState(false);
+  const { shown, hidden } = useMemo(() => (all ? { shown: diffs, hidden: 0 } : foldDiffs(diffs)), [all, diffs]);
+  const body = useRef<HTMLDivElement>(null);
+  const { edges, measure } = useEdgeFade(body, [shown]);
+  // the chat's own Esc (interrupt) leaves it alone while a dialog is open
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    addEventListener("keydown", key);
+    return () => removeEventListener("keydown", key);
+  }, [onClose]);
+  const mask = edgeMask(edges);
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={path ? `${fileName(path)} 的改动` : "改动"}
+      className="fixed inset-x-0 z-40 flex flex-col bg-surface pt-[env(safe-area-inset-top)]"
+      style={{ top: "var(--kb-top)", height: "var(--kb-h)", animation: `slide-up 220ms ${EASE} both` }}
+      data-diff-screen
+    >
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-line px-2">
+        <IconButton icon="x" label="关闭" onClick={onClose} size={36} className="touch-hit" />
+        <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink" title={path || undefined}>
+          {path ? fileName(path) : "改动"}
+        </span>
+        <DiffStats diffs={diffs} />
+        {onOpenFile && (
+          <button type="button" onClick={onOpenFile} className="flex h-9 shrink-0 items-center gap-1.5 rounded-control px-3 text-[13px] font-medium whitespace-nowrap text-ink-2 shadow-btn transition-colors hover:bg-hover">
+            <Icon name="read" size={13} />
+            打开文件
+          </button>
+        )}
+      </div>
+      {path && <div className="shrink-0 truncate px-4 pt-2 font-mono text-[11.5px] text-ink-3">{path}</div>}
+      <div ref={body} onScroll={measure} className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto overscroll-contain px-3 pt-2 pb-[max(12px,env(safe-area-inset-bottom))]" style={{ maskImage: mask, WebkitMaskImage: mask }} data-diff>
+        <DiffBlocks diffs={shown} />
+        {hidden > 0 && (
+          <button type="button" onClick={() => setAll(true)} className="sticky left-0 flex h-10 w-fit shrink-0 items-center gap-1.5 rounded-control px-3 text-[13px] font-medium whitespace-nowrap text-accent-ink" data-diff-more>
+            <Icon name="chevron" size={13} stroke={2.2} />
+            展开其余 {hidden} 行
+          </button>
+        )}
+      </div>
+    </div>,
+    document.body,
   );
 }

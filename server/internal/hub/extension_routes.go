@@ -105,8 +105,11 @@ func readExtensionJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 
 func (h *Hub) extensionRoutes(api *http.ServeMux) {
 	h.extensionUIRoutes(api)
+	h.extensionSystemRoutes(api)
 	h.marketRoutes(api)
 	h.upgradeRoutes(api)
+	h.extensionDevRoutes(api)
+	h.sandboxRoutes(api)
 	h.contributionRoutes(api)
 	ps := func() *extensions { return h.extensions }
 	h.legacyExtensionRoutes(api, "/api/v1/plugins", "/api/v1/extensions")

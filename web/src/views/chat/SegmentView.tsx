@@ -32,7 +32,7 @@ export function bubbleLines(text: string, perLine = CHARS_PER_LINE): number {
 
 export function UserBubble({ msg, mid, sid, pending }: { msg: UserMessage; mid: string; sid: string; pending?: boolean }) {
   return (
-    <div className="ml-auto flex max-w-[488px] min-w-0 flex-col items-end gap-1.5" style={pending ? { animation: `fade-up 300ms ${EASE} both` } : undefined} data-user-bubble>
+    <div className="ml-auto flex max-w-[488px] min-w-0 flex-col items-end gap-1.5 pl-[12%]" style={pending ? { animation: `fade-up 300ms ${EASE} both` } : undefined} data-user-bubble>
       {msg.images.length > 0 && (
         <div className="flex flex-wrap justify-end gap-1.5">
           {msg.images.map((im) => (
@@ -44,7 +44,7 @@ export function UserBubble({ msg, mid, sid, pending }: { msg: UserMessage; mid: 
       {msg.files && <FileCards files={msg.files} mid={mid} />}
       {msg.text &&
         (pending ? (
-          <div className="max-w-full rounded-[12px] bg-user-bubble px-4 py-2.5 text-[15px] leading-[1.6] whitespace-pre-wrap text-ink opacity-60 [overflow-wrap:anywhere]">{msg.text}</div>
+          <BubbleText text={msg.text} mid={mid} sid={sid} pending />
         ) : (
           <MessageActions text={msg.text} isUser ts={msg.ts} side className="max-w-full">
             <BubbleText text={msg.text} ts={msg.ts} mid={mid} sid={sid} />
@@ -56,8 +56,8 @@ export function UserBubble({ msg, mid, sid, pending }: { msg: UserMessage; mid: 
   );
 }
 
-/** The bubble's words, folded to ten lines past fourteen. */
-function BubbleText({ text, ts, mid, sid }: { text: string; ts?: string; mid: string; sid: string }) {
+/** The bubble's words, folded to ten lines past fourteen; `pending` (still being sent): dimmed, the same fold. */
+function BubbleText({ text, ts, mid, sid, pending }: { text: string; ts?: string; mid: string; sid: string; pending?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [long, setLong] = useState(() => bubbleLines(text) > BUBBLE_MAX_LINES);
   const [open, setOpen] = useState(false);
@@ -76,7 +76,7 @@ function BubbleText({ text, ts, mid, sid }: { text: string; ts?: string; mid: st
     <div className="flex max-w-full flex-col items-end gap-1">
       <div
         ref={ref}
-        className={`max-w-full rounded-[12px] bg-user-bubble px-4 py-2.5 text-[15px] leading-[1.6] whitespace-pre-wrap text-ink [overflow-wrap:anywhere] ${folded ? "line-clamp-10" : ""}`}
+        className={`max-w-full rounded-[12px] bg-user-bubble px-4 py-2.5 text-[length:var(--chat-body)] leading-[1.6] whitespace-pre-wrap text-ink [overflow-wrap:anywhere] ${folded ? "line-clamp-10" : ""} ${pending ? "opacity-60" : ""}`}
         title={clock(ts)}
         data-folded={folded || undefined}
       >
@@ -103,21 +103,28 @@ function ChannelSource({ clientMsgId }: { clientMsgId?: string }) {
   );
 }
 
-/** What the agent said, without a bubble, 15 / 1.6. `fade`: it just came in, its words fade in once. */
+/** An answer's prose at the chat's body size, 1.6 lines. Important: styles.css's `.prose-j` (14 / 1.7) is outside
+ *  Tailwind's layers, so it would win over a plain utility. */
+const ANSWER = "[&_.prose-j]:text-[length:var(--chat-body)]! [&_.prose-j]:leading-[1.6]!";
+
+/** What the agent said, without a bubble, the chat's body size (15, 16 on a phone) / 1.6. `fade`: it just came in, its
+ *  words fade in once. Still streaming, it has the same menu (copy what is there so far, quote it). */
 export function Answer({ item, streaming, mid, sid, fade }: { item?: Item; streaming?: string; mid?: string; sid?: string; fade?: boolean }) {
   const text = streaming ?? item?.text ?? "";
   if (!text) return null;
   const cwd = mid && sid ? getSession(mid, sid)?.cwd : undefined;
   if (streaming !== undefined) {
     return (
-      <div className="[&_.prose-j]:text-[15px] [&_.prose-j]:leading-[1.6]">
-        <Markdown text={text} mid={mid} cwd={cwd} streaming />
-      </div>
+      <MessageActions text={text}>
+        <div className={ANSWER} data-answer="streaming">
+          <Markdown text={text} mid={mid} cwd={cwd} streaming />
+        </div>
+      </MessageActions>
     );
   }
   return (
     <MessageActions text={text} ts={item?.ts}>
-      <div className="[&_.prose-j]:text-[15px] [&_.prose-j]:leading-[1.6]" data-answer>
+      <div className={ANSWER} data-answer>
         <Markdown text={text} mid={mid} cwd={cwd} fade={fade || undefined} />
       </div>
       {mid && sid && <ReplyFiles text={text} mid={mid} cwd={cwd} />}

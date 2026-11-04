@@ -155,6 +155,9 @@ type Config struct {
 	// (docs/extensions.md「hub.json 里的扩展」); LegacyExtensions are the same under the old key "plugins", still read.
 	Extensions       []ExtensionConfig `json:"extensions,omitempty"`
 	LegacyExtensions []ExtensionConfig `json:"plugins,omitempty"`
+	// TrustedExtensionMarkets are markets' signing keys (key ids, or ed25519:<key> from a market.pub) whose extensions
+	// run outside a sandbox unless the owner says otherwise, like the official ones (docs/extensions.md「沙箱」).
+	TrustedExtensionMarkets []string `json:"trusted_extension_markets,omitempty"`
 	// Tailcat tunes reaching machines over tailcat (tailcat.go).
 	Tailcat TailcatConfig `json:"tailcat,omitempty"`
 	// Bots: talking to Persona through a chat app's bot (bots.go, docs/bots.md); switched on in the app.

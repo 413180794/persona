@@ -33,10 +33,13 @@ describe("PaneTabs", () => {
     expect(html).toContain("DSH");
   });
 
-  it("is tall enough to hit, and taller on a touch screen", () => {
+  it("is tall enough to hit, and taller on a touch screen unless the screen is short (#1996)", () => {
     const html = renderToStaticMarkup(<PaneTabs sessions={[pane("a", "claude", "x"), pane("b", "codex", "y")]} current="a" onSelect={noop} />);
     expect(html).toContain("h-9");
-    expect(html).toContain("[@media(pointer:coarse)]:h-11");
+    expect(html).toContain("[@media(pointer:coarse)_and_(min-height:501px)]:h-11");
+    // a phone on its side keeps the 36px row, its taps 44 through touch-hit
+    expect(html).toContain("touch-hit");
+    expect(html).toContain("[@media(max-height:500px)]:py-0");
   });
 });
 

@@ -16,9 +16,18 @@
     "Placement": {
       "description": "A slot in the apps an extension draws at (docs「UI 插槽」). extension_page is plugin_page's new name (UI version 3): the hub takes both and answers the new API with extension_page, the old one with plugin_page.",
       "type": "string",
-      "enum": ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page"]
+      "enum": ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget"]
     },
-    "Size": {"type": "string", "enum": ["compact", "full"]},
+    "Size": {
+      "description": "How much room a view has: compact (a card), full (a page, a section), or for a widget the family it is drawn for (WidgetFamily).",
+      "type": "string",
+      "enum": ["compact", "full", "small", "medium", "large", "accessory_circular", "accessory_rectangular", "accessory_inline"]
+    },
+    "WidgetFamily": {
+      "description": "A widget's size outside the app (docs「系统级位置」): a home screen widget's small / medium / large, a Lock Screen or watch face complication's accessory_*.",
+      "type": "string",
+      "enum": ["small", "medium", "large", "accessory_circular", "accessory_rectangular", "accessory_inline"]
+    },
     "Platform": {"type": "string", "enum": ["ios", "mac", "android", "web"]},
     "NavIcon": {
       "description": "The fixed icon set: a nav_page's icon, a row's, an empty state's (UI version 3 for the last two and the icons after money). Each app draws its own icon for the meaning; an unknown one draws as the default (extension; plugin is its old name).",

@@ -44,6 +44,9 @@ func (s *server) ui(ctx context.Context, method string, raw json.RawMessage) (an
 	if err := json.Unmarshal(raw, &r.UIParams); err != nil {
 		return nil, &Error{Code: "invalid", Message: err.Error()}
 	}
+	if method != "render" && method != "action" {
+		return nil, UnknownMethod("ui." + method)
+	}
 	page, ok := s.prog.UI[r.Contribution]
 	if !ok {
 		return nil, NoContribution(r.Contribution)
@@ -53,12 +56,27 @@ func (s *server) ui(ctx context.Context, method string, raw json.RawMessage) (an
 		if page.Render == nil {
 			return nil, UnknownMethod("ui.render")
 		}
-		return page.Render(ctx, r)
+		v, err := page.Render(ctx, r)
+		if err == nil && older(r) {
+			s.forOlder(v, r.Contribution)
+		}
+		return v, err
 	case "action":
+		if older(r) {
+			if res, ok, err := s.olderAction(ctx, r); ok {
+				return res, err
+			}
+		}
 		if page.Action != nil {
 			res, err := page.Action(ctx, r)
-			if err != nil || res != nil && (res.View != nil || res.Toast != "" || res.OpenURL != "") {
-				return res, err
+			if err != nil {
+				return nil, err
+			}
+			if res != nil && (res.View != nil || res.Toast != "" || res.OpenURL != "" || res.Push != nil || res.Pop) {
+				if older(r) {
+					return s.olderResult(ctx, r, res)
+				}
+				return res, nil
 			}
 		}
 		if page.Render == nil {
@@ -67,6 +85,9 @@ func (s *server) ui(ctx context.Context, method string, raw json.RawMessage) (an
 		v, err := page.Render(ctx, r)
 		if err != nil {
 			return nil, err
+		}
+		if older(r) {
+			s.forOlder(v, r.Contribution)
 		}
 		return wire.ActionResult{View: v}, nil
 	}

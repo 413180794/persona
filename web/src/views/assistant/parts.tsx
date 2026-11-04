@@ -24,7 +24,7 @@ export function Switch({ checked, onChange, label, disabled }: { checked: boolea
       }}
       onKeyDown={(e) => e.stopPropagation()}
       className={cx(
-        "relative inline-flex h-5 w-[34px] shrink-0 items-center rounded-full transition-colors duration-200 disabled:opacity-45",
+        "touch-hit relative inline-flex h-5 w-[34px] shrink-0 items-center rounded-full transition-colors duration-200 disabled:opacity-45",
         checked ? "bg-green" : "bg-line-strong",
       )}
     >

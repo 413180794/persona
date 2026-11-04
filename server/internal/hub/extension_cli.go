@@ -35,6 +35,7 @@ const extensionUsage = `usage: personad extension <command> (also: personad ext,
   upgrade <id> <source> [--yes]     a newer version of an installed extension
   rollback <id>                     back to the version before the last upgrade
   enable <id> | disable <id>
+  sandbox <id> on|off|default       run it in a sandbox or not (default: on unless from a trusted market)
   config <id> key=value …           set settings (a value is JSON when it parses, text otherwise)
   secret <id> <name>                set a secret, read from stdin (never an argument)
   secret <id> <name> --delete
@@ -57,7 +58,14 @@ const extensionUsage = `usage: personad extension <command> (also: personad ext,
 // PluginCommand runs `personad extension <args>`.
 func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return errors.New(extensionUsage)
+		return errors.New(extensionUsage + extensionBuildUsage)
+	}
+	switch args[0] {
+	case "new", "test", "pack":
+		return extensionBuildCommand(ctx, args, stdout, stderr)
+	case "help", "-h", "--help":
+		fmt.Fprintln(stdout, extensionUsage+extensionBuildUsage)
+		return nil
 	}
 	cfg, err := localHubConfig()
 	if err != nil {
@@ -85,6 +93,8 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 		return nil
 	}
 	switch args[0] {
+	case "dev":
+		return c.dev(ctx, dirArg(positional), stdout, stderr)
 	case "list":
 		var out struct {
 			Extensions []ExtensionView `json:"extensions"`
@@ -325,6 +335,34 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 			return err
 		}
 		fmt.Fprintf(stdout, "%s：%s\n", d.ID, d.Status)
+		return nil
+	case "sandbox": // docs/extensions.md「沙箱」
+		if err := need(2); err != nil {
+			return err
+		}
+		var on *bool
+		switch positional[1] {
+		case "on", "off":
+			v := positional[1] == "on"
+			on = &v
+		case "default":
+		default:
+			return errors.New("personad extension sandbox <id> on|off|default")
+		}
+		var d ExtensionDetail
+		if err := c.do(ctx, "PUT", "/api/v1/extensions/"+url.PathEscape(positional[0])+"/-/sandbox", map[string]*bool{"enabled": on}, &d); err != nil {
+			return err
+		}
+		switch sb := d.Sandbox; {
+		case sb == nil:
+			fmt.Fprintf(stdout, "%s：没有沙箱\n", d.ID)
+		case sb.Enabled && sb.Active:
+			fmt.Fprintf(stdout, "%s：在沙箱里运行，只能经 hub 的代理连 permissions.network 里的主机\n", d.ID)
+		case sb.Enabled:
+			fmt.Fprintf(stdout, "%s：%s；只把它指向 hub 的代理\n", d.ID, sb.Why)
+		default:
+			fmt.Fprintf(stdout, "%s：不在沙箱里运行\n", d.ID)
+		}
 		return nil
 	case "config":
 		if err := need(2); err != nil {

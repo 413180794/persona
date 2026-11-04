@@ -1,5 +1,6 @@
 // A tiny history router: the hub serves index.html for every path that isn't a file.
 import { useSyncExternalStore } from "react";
+import { takeOverlayEntry } from "./back-close";
 
 // Persona's main conversation is the front door (like the app, which opens on 助手): `/` and `/j` open it, `/j/<id>` is
 // one conversation, `/j/new` starts a one-off one, and 总览 lives at `/overview`. `/extension/<id>/<ui>` is an extension's page
@@ -22,6 +23,8 @@ export type Route =
   | { name: "machine"; mid: string }
   | { name: "settings" }
   | { name: "agents"; id?: string }
+  // the phone's「Agents」page (#1996): the sidebar's Agents block on a page of its own, next to 助手
+  | { name: "agent-list" }
   | { name: "todos"; id?: string }
   | { name: "extension"; extension: string; ui: string };
 
@@ -41,6 +44,7 @@ export function parse(path: string): Route {
   if (p[0] === "kb") return { name: "kb", kind: p[1], id: p[2] };
   if (p[0] === "machines") return p[1] ? { name: "machine", mid: p[1] } : { name: "machines" };
   if (p[0] === "a") return { name: "agents", id: p[1] };
+  if (p[0] === "agents") return { name: "agent-list" };
   if (p[0] === "settings") return { name: "settings" };
   // /plugin/<id>/<ui>: the same page under its name before #1845 (bookmarks)
   if ((p[0] === "extension" || p[0] === "plugin") && p[1] && p[2]) return { name: "extension", extension: p[1], ui: p[2] };
@@ -83,6 +87,8 @@ export function href(r: Route): string {
       return "/settings";
     case "agents":
       return r.id ? `/a/${encodeURIComponent(r.id)}` : "/a";
+    case "agent-list":
+      return "/agents";
     case "todos":
       return r.id ? `/todos?id=${encodeURIComponent(r.id)}` : "/todos";
     case "extension":
@@ -100,7 +106,11 @@ if (typeof addEventListener !== "undefined") {
 export function navigate(r: Route | string, replace = false) {
   const to = typeof r === "string" ? r : href(r);
   if (to === location.pathname) return;
-  if (replace) history.replaceState(null, "", to);
+  // From inside an open overlay (a drawer's link, a sheet's action): the new page takes the overlay's entry, so Back
+  // from it goes to the page under the overlay, not to a dead copy of it (#1996). A replace keeps the entry's state:
+  // an overlay open over the page keeps its marker.
+  if (replace) history.replaceState(history.state, "", to);
+  else if (takeOverlayEntry()) history.replaceState(null, "", to);
   else history.pushState(null, "", to);
   listeners.forEach((l) => l());
 }

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { stateColor, STATE_LABEL } from "../lib/format";
 import type { AgentState } from "../lib/types";
-import { Menu, useMenu } from "./atoms";
+import { Dialog, IconButton, Menu, useMenu } from "./atoms";
 
 vi.mock("react", async (importOriginal) => ({
   ...await importOriginal<typeof import("react")>(),
@@ -60,5 +60,63 @@ describe("agent status in menus", () => {
     expect(html).not.toContain("已看");
     expect(html).not.toContain("title=");
     expect(html).toContain("#1 · 示例任务</span>");
+  });
+
+  it("gives a finger rows of at least 44pt", () => {
+    expect(renderMenu()).toContain("pointer-coarse:min-h-11");
+  });
+});
+
+describe("dialog", () => {
+  function renderDialog(footer?: React.ReactNode) {
+    vi.stubGlobal("document", { body: {} });
+    return renderToStaticMarkup(
+      <Dialog open onClose={() => {}} title="新建 Agent" width={520} footer={footer}>
+        <p>正文</p>
+      </Dialog>,
+    );
+  }
+
+  it("is labelled by its title", () => {
+    const html = renderDialog();
+    const id = /<h2 id="([^"]+)"/.exec(html)?.[1];
+    expect(id).toBeTruthy();
+    expect(html).toContain(`aria-labelledby="${id}"`);
+    expect(html).toContain('aria-modal="true"');
+  });
+
+  it("keeps the wide card's width, through a variable the phone's sheet can lift", () => {
+    const html = renderDialog();
+    expect(html).toContain("--dialog-w:520px");
+    expect(html).toContain("max-w-(--dialog-w)");
+    expect(html).toContain("max-sm:max-w-none");
+    expect(html).not.toContain("max-width:520px");
+  });
+
+  it("is a sheet on a phone: on the keyboard's frame, at most 90% of it, sliding up unless motion is reduced", () => {
+    const html = renderDialog();
+    expect(html).toContain("max-sm:top-(--kb-top)");
+    expect(html).toContain("max-sm:h-(--kb-h)");
+    expect(html).toContain("max-sm:items-end");
+    expect(html).toContain("max-sm:max-h-[calc(var(--kb-h)*0.9)]");
+    // a transition (cut to 1ms by the reduced-motion rule in styles.css), not the wide card's keyframes
+    expect(html).toContain("max-sm:starting:translate-y-full");
+    expect(html).toContain("max-sm:animate-none");
+  });
+
+  it("scrolls its body and pins the footer above the home indicator", () => {
+    const html = renderDialog(<button type="button">启动</button>);
+    expect(html).toContain("max-sm:overflow-y-auto");
+    expect(html).toMatch(/max-sm:shrink-0 max-sm:pb-\[calc\(10px\+env\(safe-area-inset-bottom\)\)\]">.*启动/);
+    // without a footer the body keeps the safe area
+    expect(renderDialog()).toContain("max-sm:pb-[calc(16px+env(safe-area-inset-bottom))]");
+  });
+});
+
+describe("icon button", () => {
+  it("has a 44pt hit area on touch screens (touch-hit), whatever its size", () => {
+    const html = renderToStaticMarkup(<IconButton icon="x" label="关闭" size={20} />);
+    expect(html).toContain("touch-hit");
+    expect(html).toContain("width:20px");
   });
 });

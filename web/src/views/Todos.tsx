@@ -339,13 +339,22 @@ function TodoListItem({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-current={selected || undefined}
       onClick={onSelect}
+      // Enter / Space on the row itself (not on its own buttons) opens it, as a click does
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+        e.preventDefault();
+        onSelect();
+      }}
       className={cx(
-        "group/item flex cursor-pointer gap-2.5 rounded-control p-2.5 transition-colors",
+        "group/item flex cursor-pointer gap-2.5 rounded-control p-2.5 transition-colors focus-visible:outline-2 focus-visible:outline-accent",
         selected ? "bg-accent-tint/70" : "hover:bg-hover",
       )}
     >
-      {/* Checkbox button */}
+      {/* Checkbox button: touch-hit makes the 16px circle a 44px target on touch, its own (no row underneath) */}
       <button
         type="button"
         aria-label={todo.done_at ? "重新打开待办" : "完成待办"}
@@ -354,7 +363,7 @@ function TodoListItem({
           onToggleDone();
         }}
         className={cx(
-          "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors",
+          "touch-hit mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors",
           todo.done_at
             ? "border-accent bg-accent text-white"
             : "border-line-strong hover:border-accent hover:text-accent text-transparent",

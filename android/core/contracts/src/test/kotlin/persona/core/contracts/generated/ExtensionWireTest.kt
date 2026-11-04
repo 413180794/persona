@@ -27,6 +27,12 @@ class ExtensionWireTest {
         "InitializeResult" to ExtensionInitializeResult.serializer(),
         "Manifest" to ExtensionManifest.serializer(),
         "PersonaCard" to ExtensionPersonaCard.serializer(),
+        "WidgetPlaces" to ExtensionWidgetPlaces.serializer(),
+        "WidgetAnswer" to ExtensionWidgetAnswer.serializer(),
+        "DeviceWidgets" to ExtensionDeviceWidgets.serializer(),
+        "ShortcutPlaces" to ExtensionShortcutPlaces.serializer(),
+        "ShortcutResult" to ExtensionShortcutResult.serializer(),
+        "ExtensionNotification" to ExtensionNotification.serializer(),
     )
 
     @Suppress("UNCHECKED_CAST")

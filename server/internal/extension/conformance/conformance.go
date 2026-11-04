@@ -70,9 +70,15 @@ func Serve(t testing.TB, prog serve.Program) Run {
 
 var snake = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
+// T is what Check reports to: a test's testing.TB, or `personad extension test`'s own (Fatalf ends the check).
+type T interface {
+	Helper()
+	Fatalf(format string, args ...any)
+}
+
 // Check holds the program to the protocol, m being its manifest; init is what to send with initialize (the plugin's
 // id and version are filled in from m). It returns what initialize answered.
-func Check(t testing.TB, m *extension.Manifest, run Run, init extension.InitializeParams) extension.InitializeResult {
+func Check(t T, m *extension.Manifest, run Run, init extension.InitializeParams) extension.InitializeResult {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -170,21 +176,53 @@ func Check(t testing.TB, m *extension.Manifest, run Run, init extension.Initiali
 			params.Item = &extension.UIInboxItem{ID: u.Connector + ":conformance", Title: "示例", Summary: "一件示例的事", Tier: "fyi",
 				Meta: json.RawMessage("null")}
 		}
-		var raw json.RawMessage
-		err := hub.Call(ctx, "ui.render", params, &raw)
+		// A widget draws at each of its families (what a widget does not draw may be left out: it is cut to fit).
+		sizes := []string{params.Size}
+		if u.Placement == "widget" {
+			sizes = u.Families
+		}
+		for _, size := range sizes {
+			params.Size = size
+			var raw json.RawMessage
+			err := hub.Call(ctx, "ui.render", params, &raw)
+			switch c := code(err); {
+			case c == extension.CodeUnknownMethod || c == extension.CodeNoContribution:
+				t.Fatalf("ui %s: ui.render answered %v", u.ID, err)
+			case err != nil:
+				continue
+			}
+			snakeKeys(t, "ui "+u.ID, raw, 0)
+			var v extension.View
+			if err := json.Unmarshal(raw, &v); err != nil {
+				t.Fatalf("ui %s: %v", u.ID, err)
+			}
+			if u.Placement == "widget" {
+				if _, err := extension.FitWidget(&v, size, extension.UIVersion); err != nil {
+					t.Fatalf("ui %s: a %s widget cannot draw it: %v", u.ID, size, err)
+				}
+				continue
+			}
+			if dropped, err := extension.Fit(&v, slot, extension.UIVersion); err != nil || len(dropped) > 0 {
+				t.Fatalf("ui %s: the apps cannot draw it at %s: %v (unknown items: %v)", u.ID, u.Placement, err, dropped)
+			}
+		}
+	}
+
+	// Each shortcut runs (shortcut.run): it may refuse the empty values in words, never not know the method.
+	for _, s := range m.Shortcuts() {
+		var res struct {
+			Text string          `json:"text"`
+			View *extension.View `json:"view"`
+		}
+		err := hub.Call(ctx, "shortcut.run", map[string]any{"contribution": s.ID, "values": map[string]string{},
+			"ui_version": extension.UIVersion, "tz": "Asia/Shanghai", "locale": "zh-Hans-CN", "platform": "ios"}, &res)
 		switch c := code(err); {
 		case c == extension.CodeUnknownMethod || c == extension.CodeNoContribution:
-			t.Fatalf("ui %s: ui.render answered %v", u.ID, err)
-		case err != nil:
-			continue
-		}
-		snakeKeys(t, "ui "+u.ID, raw, 0)
-		var v extension.View
-		if err := json.Unmarshal(raw, &v); err != nil {
-			t.Fatalf("ui %s: %v", u.ID, err)
-		}
-		if dropped, err := extension.Fit(&v, slot, extension.UIVersion); err != nil || len(dropped) > 0 {
-			t.Fatalf("ui %s: the apps cannot draw it at %s: %v (unknown items: %v)", u.ID, u.Placement, err, dropped)
+			t.Fatalf("shortcut %s: shortcut.run answered %v", s.ID, err)
+		case err == nil && res.View != nil:
+			if _, err := extension.FitWidget(res.View, "large", extension.UIVersion); err != nil {
+				t.Fatalf("shortcut %s: its view cannot be drawn: %v", s.ID, err)
+			}
 		}
 	}
 
@@ -193,14 +231,14 @@ func Check(t testing.TB, m *extension.Manifest, run Run, init extension.Initiali
 		select {
 		case <-run.Exited:
 		case <-time.After(5 * time.Second):
-			t.Fatal("still running 5 seconds after the hub closed its stdin")
+			t.Fatalf("still running 5 seconds after the hub closed its stdin")
 		}
 	}
 	return res
 }
 
 // snakeKeys checks every object key in raw is snake_case.
-func snakeKeys(t testing.TB, at string, raw json.RawMessage, depth int) {
+func snakeKeys(t T, at string, raw json.RawMessage, depth int) {
 	t.Helper()
 	if depth > 6 {
 		return

@@ -58,6 +58,25 @@ describe("the assistant's feed among the chat's lines (docs/unified-entry.md)", 
     expect(out.filter((i) => !i.startsWith("day-"))).toEqual(["s1", "quick-u1"]);
   });
 
+  it("never puts a day line back in time, nor the same one twice, when the lines are out of order (#1996)", () => {
+    // minutes ago of noon `n` days back (whatever the time now, never across midnight), `m` minutes later
+    const noon = (n: number, m = 0) => {
+      const d = new Date();
+      d.setDate(d.getDate() - n);
+      d.setHours(12, m, 0, 0);
+      return (Date.now() - d.getTime()) / 60_000;
+    };
+    // yesterday, then a line from two days ago (a clock that was behind), then yesterday again, then a day later
+    const lines = [seg("s1", noon(2)), seg("s2", noon(3)), seg("s3", noon(2, 10)), seg("s4", noon(1))];
+    const out = displayLines(lines, []);
+    const days = out.filter((l) => l.kind === "day");
+    expect(new Set(days.map((d) => d.id)).size).toBe(days.length);
+    const dates = days.map((d) => (d.kind === "day" ? d.date.getTime() : 0));
+    expect(dates).toEqual([...dates].sort((a, b) => a - b));
+    expect(days).toHaveLength(2);
+    expect(out.map((l) => l.id).filter((i) => !i.startsWith("day-"))).toEqual(["s1", "s2", "s3", "s4"]);
+  });
+
   it("names today and yesterday", () => {
     const now = new Date();
     expect(dayLabel(now, now)).toMatch(/^今天 · /);
@@ -236,5 +255,20 @@ describe("a receipt's outcome (#1516)", () => {
     expect(receiptState(receipt({ state: "done", summary: "修好了 API Error: Connection lost 时的崩溃" }))).toBe("done");
     expect(receiptState(receipt({ state: "failed", summary: "没开起来：x" }))).toBe("failed");
     expect(receiptState(receipt({}))).toBe("done");
+  });
+
+  it("a line from a clock ahead does not hide the day lines after it (#1996)", () => {
+    const noon = (n: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() - n);
+      d.setHours(12, 0, 0, 0);
+      return (Date.now() - d.getTime()) / 60_000;
+    };
+    // three days ago, then one from a clock years ahead, then two days ago, then yesterday
+    const out = displayLines([seg("s1", noon(3)), seg("s2", -5 * 365 * 24 * 60), seg("s3", noon(2)), seg("s4", noon(1))], []);
+    const days = out.filter((l) => l.kind === "day");
+    expect(days).toHaveLength(3);
+    const dates = days.map((d) => (d.kind === "day" ? d.date.getTime() : 0));
+    expect(dates).toEqual([...dates].sort((a, b) => a - b));
   });
 });

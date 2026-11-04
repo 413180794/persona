@@ -2,6 +2,8 @@
 // streaming the code changes: it is drawn once it has been still for a moment, keeping the last drawing until then.
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { cachedMermaid, mermaidProblem, renderMermaid } from "../lib/mermaid";
+import { useCloseOnBack } from "../lib/back-close";
+import { isNoHover, NARROW, useMedia } from "./media-query";
 import { copyText, cx } from "./atoms";
 import { Icon } from "./icons";
 
@@ -52,7 +54,7 @@ export function MermaidBlock({ code }: { code: string }) {
   }, [code, dark]);
 
   const showSource = source || (!svg && !!error);
-  const tool = "flex size-6 items-center justify-center rounded-[6px] bg-surface text-ink-3 shadow-btn hover:text-ink";
+  const tool = "flex size-6 touch-hit items-center justify-center rounded-[6px] bg-surface text-ink-3 shadow-btn hover:text-ink";
   return (
     <div className="group/code relative my-3" data-mermaid="">
       {showSource || !svg ? (
@@ -61,7 +63,10 @@ export function MermaidBlock({ code }: { code: string }) {
         </pre>
       ) : (
         <div
-          className="overflow-x-auto rounded-[10px] border border-line bg-surface p-3 [&_svg]:mx-auto [&_svg]:h-auto [&_svg]:max-h-[460px] [&_svg]:max-w-full"
+          // on a touch screen (no hover to find 放大 by) a tap on the diagram opens it big
+          onClick={() => isNoHover() && setBig(true)}
+          data-mermaid-diagram=""
+          className="overflow-x-auto rounded-[10px] border border-line bg-surface p-3 [@media(hover:none)]:cursor-zoom-in [&_svg]:mx-auto [&_svg]:h-auto [&_svg]:max-h-[460px] [&_svg]:max-w-full"
           // Mermaid's strict mode has already sanitized this markup (DOMPurify)
           dangerouslySetInnerHTML={{ __html: svg }}
         />
@@ -72,7 +77,7 @@ export function MermaidBlock({ code }: { code: string }) {
           <pre className="mt-1 overflow-x-auto rounded-[6px] bg-inset px-2 py-1.5 font-mono text-[11.5px] whitespace-pre text-ink-2">{error.detail}</pre>
         </details>
       )}
-      <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition-opacity duration-150 group-hover/code:opacity-100 focus-within:opacity-100">
+      <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition-opacity duration-150 group-hover/code:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
         {svg && (
           <button type="button" aria-label={showSource ? "看图" : "看源码"} title={showSource ? "看图" : "看源码"} onClick={() => setSource(!source)} className={tool}>
             <Icon name={showSource ? "image" : "terminal"} size={13} />
@@ -94,6 +99,7 @@ export function MermaidBlock({ code }: { code: string }) {
 
 /** The diagram over the whole page at its own size (scroll for a big one); click outside it or Esc closes. */
 function Zoomed({ svg, onClose }: { svg: string; onClose: () => void }) {
+  useCloseOnBack(true, onClose, useMedia(NARROW));
   useEffect(() => {
     const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", key);

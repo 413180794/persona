@@ -280,6 +280,8 @@ var Features = []string{
 	"extension_auto_upgrade", // /api/v1/extensions/-/upgrades, …/{id}/-/auto-upgrade, extension_upgrade events
 	"extension_market_spec",  // PUT /api/v1/extensions/-/markets/{id} {spec}: a market moves, keeping its id
 	"extension_ui_v3",        // UI version 3 (markdown, table, empty, loading, search, filter, more, push / pop) and extension_ui {invalidate} (docs/extensions.md「UI 版本 3」)
+	"extension_widgets",      // widgets outside the app: GET /api/v1/extensions/-/widgets, POST …/{id}/-/widget/{ui}, PUT /api/v1/devices/{id}/widgets, extension_widget pushes (docs/extensions.md「系统级位置」)
+	"extension_shortcuts",    // extensions' actions in Shortcuts and Siri: GET /api/v1/extensions/-/shortcuts, POST …/{id}/-/shortcut/{sid} (docs/extensions.md「系统级位置」)
 	"desktops",               // register_desktop, the desktops event, NotifyPrefs.mute_while_desktop (手机静音)
 	"sessions_delta",         // ?features=sessions_delta on the WebSocket: a snapshot, then sessions_delta (docs/protocol.md「会话增量」)
 	"connectors",             // GET /api/v1/connectors (docs/plan-connectors.md)

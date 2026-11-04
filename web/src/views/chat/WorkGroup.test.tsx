@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 import type { Item, Subagent } from "../../lib/types";
 import type { Step } from "../../lib/turns";
 import type { ToolStep, WorkGroupNode } from "../../lib/work-groups";
-import { ActionRow, diffStats, editDiffs, lineDiff, presentAction, truncateParam } from "./ActionRow";
+import { ActionRow, DIFF_FOLD_LINES, diffStats, editDiffs, foldDiffs, lineDiff, presentAction, truncateParam } from "./ActionRow";
 import { ChatContext } from "./chat-context";
 import { emptyTaskIndex } from "../../lib/tasks";
 import { PlanCard } from "./PlanCard";
-import { bubbleLines, SegmentView, UserBubble } from "./SegmentView";
+import { Answer, bubbleLines, SegmentView, UserBubble } from "./SegmentView";
 import { SubagentCard } from "./SubagentCard";
 import { ThinkingCard } from "./ThinkingCard";
 import { WorkGroup, type WorkProps } from "./WorkGroup";
@@ -21,6 +21,15 @@ const props: WorkProps = { mid: "m", sid: "s", scope: "t:", expandFold: async ()
 const group = (children: Step[], live: boolean, durationMs?: number): WorkGroupNode => ({ kind: "group", id: `work-${live}`, children: children.map((step) => ({ kind: "step", step })), live, durationMs, startedAt: T0 });
 
 describe("WorkGroup", () => {
+  it("its header, a subagent card's and a plan's are a finger tall on a touch screen (#1996)", () => {
+    const coarse = "[@media(pointer:coarse)]:min-h-10";
+    const head = renderToStaticMarkup(<WorkGroup g={group([tool("t1", "Grep", { pattern: "x" })], false, 3000)} p={props} />);
+    // the margin gives back what the height adds, so the group does not move
+    expect(head).toContain(`[@media(pointer:coarse)]:-my-[7.5px] ${coarse}`);
+    expect(renderToStaticMarkup(<SubagentCard step={tool("a1", "Task", { description: "查", prompt: "p" })} status="completed" mid="m" />)).toContain(coarse);
+    expect(renderToStaticMarkup(<PlanCard id="p" todos={[{ content: "读", status: "pending" }]} />)).toContain(coarse);
+  });
+
   it("while live: a spinner, 正在工作… and a clock, its newest steps on a rail", () => {
     const html = renderToStaticMarkup(<WorkGroup g={group([tool("t1", "Bash", { command: "ls", description: "看目录" }, false)], true)} p={props} />);
     expect(html).toContain('data-work-group="live"');
@@ -97,6 +106,22 @@ describe("ActionRow", () => {
     expect(lineDiff("a\nb\nc", "a\nx\nc").map(sign)).toEqual([" a", "-b", "+x", " c"]);
     expect(lineDiff("", "n1\nn2").map((l) => l.kind)).toEqual(["add", "add"]);
     expect(lineDiff("o", "").map((l) => l.kind)).toEqual(["del"]);
+  });
+
+  it("a long diff shows its first 40 lines on a phone, cut inside the change they end in (#1996)", () => {
+    const lines = (n: number) => lineDiff("", Array.from({ length: n }, (_, i) => `l${i}`).join("\n"));
+    const short = [lines(10), lines(30)];
+    expect(foldDiffs(short)).toEqual({ shown: short, hidden: 0 });
+    const { shown, hidden } = foldDiffs([lines(25), lines(25), lines(5)]);
+    expect(shown.map((d) => d.length)).toEqual([25, 15]);
+    expect(hidden).toBe(15);
+    expect(DIFF_FOLD_LINES).toBe(40);
+  });
+
+  it("is a finger tall on a touch screen, in the chat's secondary size (#1996)", () => {
+    const html = renderToStaticMarkup(<ActionRow step={tool("t1", "Grep", { pattern: "x" })} mid="m" sid="s" />);
+    expect(html).toContain("[@media(pointer:coarse)]:min-h-10");
+    expect(html).toContain("text-[length:var(--chat-secondary)]");
   });
 });
 
@@ -177,11 +202,31 @@ describe("the user's bubble and the answer", () => {
     expect(bubbleLines("x".repeat(31))).toBe(2);
   });
 
+  it("past 14 lines it folds while it is still being sent too, dimmed (#1996)", () => {
+    const long = Array.from({ length: 20 }, (_, i) => `第 ${i} 行`).join("\n");
+    const html = renderToStaticMarkup(<UserBubble msg={msg(long)} mid="m" sid="s" pending />);
+    expect(html).toContain("line-clamp-10");
+    expect(html).toContain(">展开<");
+    expect(html).toContain("opacity-60");
+    expect(html).toContain(">发送中…<");
+  });
+
+  it("leaves 12% on its left like a merged bubble, so it never runs the whole width (#1996)", () => {
+    expect(renderToStaticMarkup(<UserBubble msg={msg("你好")} mid="m" sid="s" />)).toContain("pl-[12%]");
+  });
+
+  it("a streaming answer has the message menu too, at the chat's body size (#1996)", () => {
+    const html = renderToStaticMarkup(<Answer streaming="写到一半" mid="m" sid="s" />);
+    expect(html).toContain("group/msg");
+    expect(html).toContain('data-answer="streaming"');
+    expect(html).toContain("[&amp;_.prose-j]:text-[length:var(--chat-body)]!");
+  });
+
   it("an exchange: the answer without a bubble at 15 / 1.6, the work before it folded", () => {
     const user: Item = { id: "u1#0", seq: 1, role: "user", kind: "text", text: "看一下", ts: at(0) };
     const seg = { id: "s", user: { id: "u1#0", text: "看一下", images: [], contexts: [], ts: at(0) }, steps: [tool("t2", "Read", { file_path: "/a.ts" })], answer: { id: "a3#0", seq: 3, role: "assistant", kind: "text", text: "看完了。", ts: at(9) } as Item, tools: 1, thoughts: 0, replies: 0, folds: [], start: user.ts };
     const html = renderToStaticMarkup(<SegmentView seg={seg} live={false} mid="m" sid="s" expandFold={async () => {}} />);
-    expect(html).toContain("[&amp;_.prose-j]:text-[15px]");
+    expect(html).toContain("[&amp;_.prose-j]:text-[length:var(--chat-body)]!");
     expect(html).toContain(">已工作 9s · 读取 1 个文件<");
     expect(html.indexOf("已工作")).toBeLessThan(html.indexOf("看完了。"));
   });

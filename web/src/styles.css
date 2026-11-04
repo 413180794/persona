@@ -13,7 +13,7 @@
   --hover-2: #e7e9eb;
   --ink: #1f2124;
   --ink-2: #62656b;
-  --ink-3: #9a9da3;
+  --ink-3: #6e7177;
   --line: #ecedef;
   --line-strong: #e0e2e5;
   --field: #f2f2f3;
@@ -169,7 +169,8 @@ body {
 html, body, #root { height: 100%; }
 /* Installed on a phone (PWA, docs/web.md「安装成 App」): the page runs under the home indicator and, in landscape, the
    notch (viewport-fit=cover); the status bar keeps its own strip (apple-mobile-web-app-status-bar-style: default). */
-@media (display-mode: standalone) { #root { padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); } }
+#root { padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left); }
+@media (display-mode: standalone) { #root { padding-bottom: env(safe-area-inset-bottom); } }
 body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
 ::selection { background: var(--accent-tint); }
 /* In the base layer: unlayered, it beat every utility, so `scrollbar-none` rows kept a thin, always-on bar (#1381). */
@@ -204,8 +205,8 @@ button:disabled { cursor: default; }
 .prose-j code { font-family: var(--font-mono); font-size: .86em; background: var(--field); border-radius: 5px; padding: .12em .36em; box-shadow: var(--shadow-hairline); }
 .prose-j pre { margin: .7em 0; background: var(--inset); border-radius: 10px; box-shadow: var(--shadow-hairline); padding: 10px 12px; overflow-x: auto; font-size: 12.5px; line-height: 1.6; }
 .prose-j pre code { background: none; box-shadow: none; padding: 0; font-size: inherit; }
-.prose-j table { display: block; max-width: 100%; overflow-x: auto; border-collapse: separate; border-spacing: 0; margin: .8em 0; font-size: 13px; border-radius: 10px; box-shadow: var(--shadow-hairline); }
-.prose-j th, .prose-j td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; min-width: 4em; }
+.prose-j table { display: block; width: max-content; max-width: 100%; overflow-x: auto; border-collapse: separate; border-spacing: 0; margin: .8em 0; font-size: 13px; border-radius: 10px; box-shadow: var(--shadow-hairline); }
+.prose-j th, .prose-j td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; min-width: 7em; max-width: 18em; overflow-wrap: normal; word-break: normal; }
 .prose-j th { font-weight: 600; color: var(--ink-2); background: var(--inset); white-space: nowrap; }
 .prose-j tr:last-child td { border-bottom: 0; }
 .prose-j input[type=checkbox] { margin-right: .4em; accent-color: var(--ink); }
@@ -243,3 +244,25 @@ button:disabled { cursor: default; }
  * Checked as a set (adjacent pairs, light and dark) with the dataviz palette validator. */
 :root { --series-1: #0285ff; --series-2: #1baf7a; --series-3: #6250d6; --series-4: #e87ba4; }
 .dark { --series-1: #3987e5; --series-2: #199e70; --series-3: #9085e9; --series-4: #d55181; }
+
+/* ── Phones (#1996) ─────────────────────────────────────── */
+/* The chat's reading sizes: 15 / 14 on wide screens, 16 / 15 on a phone (the user's call: iOS reads at 17, but tool rows
+   and tables would fit too few lines). Views read them as text-[length:var(--chat-body)]. */
+:root { --chat-body: 15px; --chat-secondary: 14px; }
+@media (max-width: 639px) { :root { --chat-body: 16px; --chat-secondary: 15px; } }
+/* The visible viewport (lib/viewport.ts keeps them; the soft keyboard shrinks it): fixed overlays on a phone sit in it,
+   not in the layout viewport the keyboard covers on iOS. */
+:root { --kb-top: 0px; --kb-h: 100dvh; }
+/* A tap target of at least 44 × 44 on touch screens without changing how big the control looks: an invisible square
+   centred on it (smaller only where the control is already bigger). */
+@utility touch-hit {
+  position: relative;
+  @media (pointer: coarse) {
+    &::before { content: ""; position: absolute; top: min(0px, calc(50% - 22px)); bottom: min(0px, calc(50% - 22px)); left: min(0px, calc(50% - 22px)); right: min(0px, calc(50% - 22px)); }
+  }
+}
+/* iOS zooms the page into any focused field under 16px: on touch screens none is. Unlayered on purpose, so it wins
+   over the text-[13px] utilities. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), textarea, select { font-size: max(16px, 1em); }
+}

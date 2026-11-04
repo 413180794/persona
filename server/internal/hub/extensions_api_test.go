@@ -157,6 +157,7 @@ func newExtensionStore() *extensionStore {
 func startTestExtensions(t *testing.T, h *Hub, cfgs ...ExtensionConfig) {
 	h.connectors = connector.NewRegistry(nil)
 	h.extensions = newExtensions(h.cfg.dir, cfgs, h.logf)
+	h.extensions.sandboxes.noDefault = true // test programs live outside their packages (extension_sandbox_test.go)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(func() {
 		cancel()

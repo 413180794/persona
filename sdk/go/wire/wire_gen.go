@@ -45,11 +45,19 @@ type Engines struct {
 }
 
 type Runtime struct {
-	Command json.RawMessage   `json:"command"`
-	Args    []string          `json:"args,omitempty"`
-	Env     map[string]string `json:"env,omitempty"`
-	RPC     string            `json:"rpc,omitempty"`
-	HTTP    bool              `json:"http,omitempty"`
+	Command   json.RawMessage   `json:"command"`
+	Args      []string          `json:"args,omitempty"`
+	Env       map[string]string `json:"env,omitempty"`
+	RPC       string            `json:"rpc,omitempty"`
+	HTTP      bool              `json:"http,omitempty"`
+	Resources *Resources        `json:"resources,omitempty"`
+}
+
+// Resources: the most a program may use when the hub runs it in a sandbox (docs/extensions.md「沙箱」): memory in MB, CPU
+// in percent of one core. Unset: 1024 MB, 100%.
+type Resources struct {
+	MemoryMb   int `json:"memory_mb,omitempty"`
+	CpuPercent int `json:"cpu_percent,omitempty"`
 }
 
 // A path in the package, or one per platform ({"linux-amd64": "bin/x"}).
@@ -87,6 +95,7 @@ type Contributes struct {
 	AgentSources []AgentSourceItem `json:"agent_sources,omitempty"`
 	Channel      []ChannelItem     `json:"channel,omitempty"`
 	Events       []EventsItem      `json:"events,omitempty"`
+	Shortcuts    []ShortcutItem    `json:"shortcuts,omitempty"`
 }
 
 // ConnectorItem: the connector protocol's manifest (docs/connector-protocol.md).
@@ -167,10 +176,14 @@ type UIItem struct {
 	Hosts []string `json:"hosts,omitempty"`
 	// nav_page only.
 	Icon string `json:"icon,omitempty"`
-	// overview_card only: a nav_page or plugin_page of the same extension.
+	// overview_card and widget only: a nav_page or extension_page of the same extension.
 	Opens string `json:"opens,omitempty"`
 	// inbox_item only: one of the extension's own connectors.
 	Connector string `json:"connector,omitempty"`
+	// widget only (and needed there): the sizes it can be drawn at.
+	Families []string `json:"families,omitempty"`
+	// widget only: how often the widget is drawn again on its own (30 when not said).
+	RefreshMinutes int `json:"refresh_minutes,omitempty"`
 }
 
 type AgentSourceItem struct {
@@ -206,6 +219,38 @@ type EventsItem struct {
 	ID        string   `json:"id"`
 	Subscribe []string `json:"subscribe"`
 }
+
+// ShortcutItem: an action of the extension the system runs (docs「系统级位置」): Shortcuts and Siri on iPhone, Mac and Apple
+// Watch. The hub asks the extension shortcut.run with the values.
+type ShortcutItem struct {
+	ID          string          `json:"id"`
+	Title       string          `json:"title"`
+	Description string          `json:"description,omitempty"`
+	Params      []ShortcutParam `json:"params,omitempty"`
+	// A whole page of the same extension (nav_page or extension_page) the app opens to show more of the result.
+	UI string `json:"ui,omitempty"`
+}
+
+// ShortcutParam: A value the shortcut asks for; it reaches the extension as a string (a toggle's "true" / "false").
+type ShortcutParam struct {
+	Name  string `json:"name"`
+	Title string `json:"title"`
+	Kind  string `json:"kind"`
+	// choice only.
+	Choices  []Choice `json:"choices,omitempty"`
+	Required bool     `json:"required,omitempty"`
+}
+
+// Values of ShortcutParamKind.
+const (
+	ShortcutParamKindText   = "text"
+	ShortcutParamKindNumber = "number"
+	ShortcutParamKindToggle = "toggle"
+	ShortcutParamKindChoice = "choice"
+)
+
+// ShortcutParamKinds are the values of ShortcutParamKind, in order.
+var ShortcutParamKinds = []string{"text", "number", "toggle", "choice"}
 
 // Frame: one line: a request {id, method, params}, an answer {id, result} or {id, error}, or an event {event,
 // params}.
@@ -410,6 +455,116 @@ type UIPlaces struct {
 	UI []UIPlace `json:"ui"`
 }
 
+// WidgetPlace: A widget an extension draws outside the app (GET …/extensions/-/widgets; docs「系统级位置」).
+type WidgetPlace struct {
+	Extension      string   `json:"extension"`
+	ExtensionName  string   `json:"extension_name,omitempty"`
+	ID             string   `json:"id"`
+	Title          string   `json:"title"`
+	Families       []string `json:"families"`
+	RefreshMinutes int      `json:"refresh_minutes"`
+	Opens          string   `json:"opens,omitempty"`
+}
+
+type WidgetPlaces struct {
+	Widgets []WidgetPlace `json:"widgets"`
+}
+
+// WidgetRequest: an app's POST …/extensions/{id}/-/widget/{ui}: context.size is the family it draws (WidgetFamily).
+type WidgetRequest struct {
+	Context *UIContext `json:"context,omitempty"`
+}
+
+// WidgetAnswer: A widget's view, held to what the family draws, and until when the hub keeps it (the app's timeline's
+// next entry).
+type WidgetAnswer struct {
+	View      View      `json:"view"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// DeviceWidget: A widget a device has on a screen (PUT /api/v1/devices/{id}/widgets): the hub wakes that device when
+// it changes.
+type DeviceWidget struct {
+	Extension string `json:"extension"`
+	ID        string `json:"id"`
+	Family    string `json:"family"`
+}
+
+type DeviceWidgets struct {
+	Widgets []DeviceWidget `json:"widgets"`
+}
+
+// WidgetPush: extension_widget in a background push (content-available): a widget the device has changed; the app
+// reloads its timelines.
+type WidgetPush struct {
+	Extension string `json:"extension"`
+	ID        string `json:"id"`
+}
+
+// ShortcutPlace: an extension's action the system runs (GET …/extensions/-/shortcuts).
+type ShortcutPlace struct {
+	Extension     string          `json:"extension"`
+	ExtensionName string          `json:"extension_name,omitempty"`
+	ID            string          `json:"id"`
+	Title         string          `json:"title"`
+	Description   string          `json:"description,omitempty"`
+	Params        []ShortcutParam `json:"params,omitempty"`
+	UI            string          `json:"ui,omitempty"`
+}
+
+type ShortcutPlaces struct {
+	Shortcuts []ShortcutPlace `json:"shortcuts"`
+}
+
+// ShortcutRequest: an app's POST …/extensions/{id}/-/shortcut/{sid}: the params' values (strings) and the context
+// (tz, locale, platform, ui_version).
+type ShortcutRequest struct {
+	Values  map[string]string `json:"values,omitempty"`
+	Context *UIContext        `json:"context,omitempty"`
+}
+
+// ShortcutRunParams: shortcut.run's parameters: which shortcut, its values, for whom.
+type ShortcutRunParams struct {
+	Contribution string            `json:"contribution"`
+	Values       map[string]string `json:"values"`
+	UIVersion    int               `json:"ui_version"`
+	TZ           string            `json:"tz,omitempty"`
+	Locale       string            `json:"locale,omitempty"`
+	Platform     string            `json:"platform,omitempty"`
+}
+
+// ShortcutResult: what shortcut.run answers (and the app gets): a sentence Siri says or shows, and a view held to the
+// large widget's subset (the result card).
+type ShortcutResult struct {
+	Text string `json:"text,omitempty"`
+	View *View  `json:"view,omitempty"`
+}
+
+// NotifyAction: A button on an extension's notification (POST /api/v1/notify actions, at most 3). A tap runs
+// ui.action on the notification's ui with this id; input asks for a line of text first (values.text).
+type NotifyAction struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Role  string `json:"role,omitempty"`
+	// Open the app to run it; otherwise it runs in the background and its toast is shown as a notification.
+	Foreground bool               `json:"foreground,omitempty"`
+	Input      *NotifyActionInput `json:"input,omitempty"`
+}
+
+type NotifyActionInput struct {
+	Placeholder string `json:"placeholder,omitempty"`
+}
+
+// ExtensionNotification: extension_notification in an extension's alert push: whose it is, the page a tap opens (ui
+// with state) and its buttons (category ext.<extension>.<hash of the action ids>, registered by the app as it meets
+// it).
+type ExtensionNotification struct {
+	Extension string         `json:"extension"`
+	UI        string         `json:"ui,omitempty"`
+	State     string         `json:"state,omitempty"`
+	Actions   []NotifyAction `json:"actions,omitempty"`
+}
+
 // Tone: A role color the app picks, never one of the extension's own. An unknown tone draws as neutral.
 const (
 	ToneNeutral  = "neutral"
@@ -472,19 +627,41 @@ const (
 	PlacementMachineSection  = "machine_section"
 	PlacementInboxItem       = "inbox_item"
 	PlacementExtensionPage   = "extension_page"
+	PlacementWidget          = "widget"
 )
 
 // Placements are the values of Placement, in order.
-var Placements = []string{"plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page"}
+var Placements = []string{"plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget"}
 
-// Values of Size.
+// Size: how much room a view has: compact (a card), full (a page, a section), or for a widget the family it is drawn
+// for (WidgetFamily).
 const (
-	SizeCompact = "compact"
-	SizeFull    = "full"
+	SizeCompact              = "compact"
+	SizeFull                 = "full"
+	SizeSmall                = "small"
+	SizeMedium               = "medium"
+	SizeLarge                = "large"
+	SizeAccessoryCircular    = "accessory_circular"
+	SizeAccessoryRectangular = "accessory_rectangular"
+	SizeAccessoryInline      = "accessory_inline"
 )
 
 // Sizes are the values of Size, in order.
-var Sizes = []string{"compact", "full"}
+var Sizes = []string{"compact", "full", "small", "medium", "large", "accessory_circular", "accessory_rectangular", "accessory_inline"}
+
+// WidgetFamily: A widget's size outside the app (docs「系统级位置」): a home screen widget's small / medium / large, a Lock
+// Screen or watch face complication's accessory_*.
+const (
+	WidgetFamilySmall                = "small"
+	WidgetFamilyMedium               = "medium"
+	WidgetFamilyLarge                = "large"
+	WidgetFamilyAccessoryCircular    = "accessory_circular"
+	WidgetFamilyAccessoryRectangular = "accessory_rectangular"
+	WidgetFamilyAccessoryInline      = "accessory_inline"
+)
+
+// WidgetFamilies are the values of WidgetFamily, in order.
+var WidgetFamilies = []string{"small", "medium", "large", "accessory_circular", "accessory_rectangular", "accessory_inline"}
 
 // Values of Platform.
 const (
@@ -777,60 +954,78 @@ type CardPart struct {
 
 // newDef makes a value of each definition, for tests that read examples by definition name.
 var newDef = map[string]func() any{
-	"Manifest":            func() any { return new(Manifest) },
-	"Engines":             func() any { return new(Engines) },
-	"Runtime":             func() any { return new(Runtime) },
-	"SecretSpec":          func() any { return new(SecretSpec) },
-	"Permissions":         func() any { return new(Permissions) },
-	"Contributes":         func() any { return new(Contributes) },
-	"ConnectorItem":       func() any { return new(ConnectorItem) },
-	"NamedItem":           func() any { return new(NamedItem) },
-	"QuotaItem":           func() any { return new(QuotaItem) },
-	"ProviderItem":        func() any { return new(ProviderItem) },
-	"ProviderModel":       func() any { return new(ProviderModel) },
-	"APIItem":             func() any { return new(APIItem) },
-	"APIReceipt":          func() any { return new(APIReceipt) },
-	"AssistantItem":       func() any { return new(AssistantItem) },
-	"UIItem":              func() any { return new(UIItem) },
-	"AgentSourceItem":     func() any { return new(AgentSourceItem) },
-	"ChannelItem":         func() any { return new(ChannelItem) },
-	"ChannelCapabilities": func() any { return new(ChannelCapabilities) },
-	"EventsItem":          func() any { return new(EventsItem) },
-	"Frame":               func() any { return new(Frame) },
-	"RPCError":            func() any { return new(RPCError) },
-	"InitializeParams":    func() any { return new(InitializeParams) },
-	"HubInfo":             func() any { return new(HubInfo) },
-	"ExtensionInfo":       func() any { return new(ExtensionInfo) },
-	"InitializeResult":    func() any { return new(InitializeResult) },
-	"UIParams":            func() any { return new(UIParams) },
-	"UIMachine":           func() any { return new(UIMachine) },
-	"UILauncher":          func() any { return new(UILauncher) },
-	"UIInboxItem":         func() any { return new(UIInboxItem) },
-	"BadgeEvent":          func() any { return new(BadgeEvent) },
-	"InvalidateEvent":     func() any { return new(InvalidateEvent) },
-	"UIContext":           func() any { return new(UIContext) },
-	"UIRequest":           func() any { return new(UIRequest) },
-	"UIPlace":             func() any { return new(UIPlace) },
-	"UIPlaces":            func() any { return new(UIPlaces) },
-	"View":                func() any { return new(View) },
-	"Section":             func() any { return new(Section) },
-	"Component":           func() any { return new(Component) },
-	"Action":              func() any { return new(Action) },
-	"Push":                func() any { return new(Push) },
-	"Search":              func() any { return new(Search) },
-	"Filter":              func() any { return new(Filter) },
-	"More":                func() any { return new(More) },
-	"Avatar":              func() any { return new(Avatar) },
-	"Thumbnail":           func() any { return new(Thumbnail) },
-	"TableColumn":         func() any { return new(TableColumn) },
-	"EmptyButton":         func() any { return new(EmptyButton) },
-	"Badge":               func() any { return new(Badge) },
-	"Choice":              func() any { return new(Choice) },
-	"ChartSeries":         func() any { return new(ChartSeries) },
-	"ChartPoint":          func() any { return new(ChartPoint) },
-	"Stat":                func() any { return new(Stat) },
-	"ActionResult":        func() any { return new(ActionResult) },
-	"PersonaCard":         func() any { return new(PersonaCard) },
-	"CardAmount":          func() any { return new(CardAmount) },
-	"CardPart":            func() any { return new(CardPart) },
+	"Manifest":              func() any { return new(Manifest) },
+	"Engines":               func() any { return new(Engines) },
+	"Runtime":               func() any { return new(Runtime) },
+	"Resources":             func() any { return new(Resources) },
+	"SecretSpec":            func() any { return new(SecretSpec) },
+	"Permissions":           func() any { return new(Permissions) },
+	"Contributes":           func() any { return new(Contributes) },
+	"ConnectorItem":         func() any { return new(ConnectorItem) },
+	"NamedItem":             func() any { return new(NamedItem) },
+	"QuotaItem":             func() any { return new(QuotaItem) },
+	"ProviderItem":          func() any { return new(ProviderItem) },
+	"ProviderModel":         func() any { return new(ProviderModel) },
+	"APIItem":               func() any { return new(APIItem) },
+	"APIReceipt":            func() any { return new(APIReceipt) },
+	"AssistantItem":         func() any { return new(AssistantItem) },
+	"UIItem":                func() any { return new(UIItem) },
+	"AgentSourceItem":       func() any { return new(AgentSourceItem) },
+	"ChannelItem":           func() any { return new(ChannelItem) },
+	"ChannelCapabilities":   func() any { return new(ChannelCapabilities) },
+	"EventsItem":            func() any { return new(EventsItem) },
+	"ShortcutItem":          func() any { return new(ShortcutItem) },
+	"ShortcutParam":         func() any { return new(ShortcutParam) },
+	"Frame":                 func() any { return new(Frame) },
+	"RPCError":              func() any { return new(RPCError) },
+	"InitializeParams":      func() any { return new(InitializeParams) },
+	"HubInfo":               func() any { return new(HubInfo) },
+	"ExtensionInfo":         func() any { return new(ExtensionInfo) },
+	"InitializeResult":      func() any { return new(InitializeResult) },
+	"UIParams":              func() any { return new(UIParams) },
+	"UIMachine":             func() any { return new(UIMachine) },
+	"UILauncher":            func() any { return new(UILauncher) },
+	"UIInboxItem":           func() any { return new(UIInboxItem) },
+	"BadgeEvent":            func() any { return new(BadgeEvent) },
+	"InvalidateEvent":       func() any { return new(InvalidateEvent) },
+	"UIContext":             func() any { return new(UIContext) },
+	"UIRequest":             func() any { return new(UIRequest) },
+	"UIPlace":               func() any { return new(UIPlace) },
+	"UIPlaces":              func() any { return new(UIPlaces) },
+	"WidgetPlace":           func() any { return new(WidgetPlace) },
+	"WidgetPlaces":          func() any { return new(WidgetPlaces) },
+	"WidgetRequest":         func() any { return new(WidgetRequest) },
+	"WidgetAnswer":          func() any { return new(WidgetAnswer) },
+	"DeviceWidget":          func() any { return new(DeviceWidget) },
+	"DeviceWidgets":         func() any { return new(DeviceWidgets) },
+	"WidgetPush":            func() any { return new(WidgetPush) },
+	"ShortcutPlace":         func() any { return new(ShortcutPlace) },
+	"ShortcutPlaces":        func() any { return new(ShortcutPlaces) },
+	"ShortcutRequest":       func() any { return new(ShortcutRequest) },
+	"ShortcutRunParams":     func() any { return new(ShortcutRunParams) },
+	"ShortcutResult":        func() any { return new(ShortcutResult) },
+	"NotifyAction":          func() any { return new(NotifyAction) },
+	"NotifyActionInput":     func() any { return new(NotifyActionInput) },
+	"ExtensionNotification": func() any { return new(ExtensionNotification) },
+	"View":                  func() any { return new(View) },
+	"Section":               func() any { return new(Section) },
+	"Component":             func() any { return new(Component) },
+	"Action":                func() any { return new(Action) },
+	"Push":                  func() any { return new(Push) },
+	"Search":                func() any { return new(Search) },
+	"Filter":                func() any { return new(Filter) },
+	"More":                  func() any { return new(More) },
+	"Avatar":                func() any { return new(Avatar) },
+	"Thumbnail":             func() any { return new(Thumbnail) },
+	"TableColumn":           func() any { return new(TableColumn) },
+	"EmptyButton":           func() any { return new(EmptyButton) },
+	"Badge":                 func() any { return new(Badge) },
+	"Choice":                func() any { return new(Choice) },
+	"ChartSeries":           func() any { return new(ChartSeries) },
+	"ChartPoint":            func() any { return new(ChartPoint) },
+	"Stat":                  func() any { return new(Stat) },
+	"ActionResult":          func() any { return new(ActionResult) },
+	"PersonaCard":           func() any { return new(PersonaCard) },
+	"CardAmount":            func() any { return new(CardAmount) },
+	"CardPart":              func() any { return new(CardPart) },
 }

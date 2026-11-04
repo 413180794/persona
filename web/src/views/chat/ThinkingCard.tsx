@@ -10,7 +10,7 @@ import { Icon } from "../../ui/icons";
 import { CHEVRON_SLOT, STATUS_SLOT } from "./ActionRow";
 import { useExpanded } from "./expanded";
 
-const HEAD = "flex w-full min-w-0 items-center gap-1.5 rounded-[8px] px-2 py-0.5 text-left select-none transition-colors duration-150 motion-reduce:transition-none";
+const HEAD = "flex w-full min-w-0 items-center gap-1.5 rounded-[8px] px-2 py-0.5 [@media(pointer:coarse)]:min-h-10 text-left select-none transition-colors duration-150 motion-reduce:transition-none";
 
 export function ThinkingCard({ item, durationMs, live, scope = "" }: { item?: Item; durationMs?: number; live?: SessionLive | null; scope?: string }) {
   const text = item?.text?.trim() ?? "";
@@ -23,7 +23,7 @@ export function ThinkingCard({ item, durationMs, live, scope = "" }: { item?: It
         <span className={STATUS_SLOT}>
           <Icon name="spark" size={14} />
         </span>
-        <span className="translate-y-[1px] text-[14px] whitespace-nowrap text-tool-ink">{label}</span>
+        <span className="translate-y-[1px] text-[length:var(--chat-secondary)] whitespace-nowrap text-tool-ink">{label}</span>
         <span className={CHEVRON_SLOT} aria-hidden>
           {text && <Icon name="chevronRight" size={13} stroke={2.2} className="transition-transform duration-150 motion-reduce:transition-none" style={{ transform: open ? "rotate(90deg)" : "none" }} />}
         </span>
@@ -31,7 +31,7 @@ export function ThinkingCard({ item, durationMs, live, scope = "" }: { item?: It
       {text && (
         <Collapse open={open} lazy>
           <div className="mt-1 border-l-2 border-tool-rail py-1.5 pl-3 select-text">
-            <p className="text-[14px] leading-[1.6] whitespace-pre-wrap text-thinking-ink italic">{text}</p>
+            <p className="text-[length:var(--chat-secondary)] leading-[1.6] whitespace-pre-wrap text-thinking-ink italic">{text}</p>
           </div>
         </Collapse>
       )}
@@ -47,7 +47,7 @@ export function ThinkingLine({ item }: { item: Item }) {
       <span className={STATUS_SLOT}>
         <Icon name="spark" size={13} />
       </span>
-      <span className="min-w-0 flex-1 truncate text-[14px] text-thinking-ink italic" title={text}>
+      <span className="min-w-0 flex-1 truncate text-[length:var(--chat-secondary)] text-thinking-ink italic" title={text}>
         {text}
       </span>
     </div>
@@ -63,7 +63,7 @@ function LiveThinking() {
       <span className={STATUS_SLOT}>
         <Icon name="spark" size={14} />
       </span>
-      <span className="translate-y-[1px] text-[14px] text-tool-ink">Thinking</span>
+      <span className="translate-y-[1px] text-[length:var(--chat-secondary)] text-tool-ink">Thinking</span>
       <span aria-hidden className="flex translate-y-[2px] items-center gap-[3px]">
         {[0, 200, 400].map((d) => (
           <span key={d} className="size-1 rounded-full bg-tool-ink motion-safe:animate-[breathe_1.2s_ease-in-out_infinite]" style={{ animationDelay: `${d}ms` }} />

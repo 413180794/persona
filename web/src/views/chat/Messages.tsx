@@ -23,7 +23,7 @@ export function MergedBubble({ msg, mid, sid }: { msg: UserMessage; mid: string;
       )}
       {msg.files && <FileCards files={msg.files} mid={mid} />}
       <MessageActions text={parts.join("\n\n")} isUser ts={msg.ts} side className="max-w-full">
-        <div className="flex max-w-full flex-col gap-2 rounded-[14px] bg-user-bubble px-3.5 py-2 text-[14px] leading-[1.55] text-ink" title={clock(msg.ts)} aria-label={`${parts.length} 条消息`}>
+        <div className="flex max-w-full flex-col gap-2 rounded-[14px] bg-user-bubble px-3.5 py-2 text-[length:var(--chat-secondary)] leading-[1.55] text-ink" title={clock(msg.ts)} aria-label={`${parts.length} 条消息`}>
           {parts.map((t, i) => (
             <div key={i} className="flex flex-col gap-2">
               {i > 0 && <span aria-hidden className="mx-auto h-[2px] w-6 rounded-full bg-ink/20" />}

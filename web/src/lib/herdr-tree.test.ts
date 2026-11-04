@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMachineTree, mostUrgent, paneRoute, resolveTab, summaryState, tabPagePane, tabSessions } from "./herdr-tree";
+import { buildMachineTree, mostUrgent, paneRoute, resolveTab, summaryState, tabOfSessionLink, tabPagePane, tabSessions } from "./herdr-tree";
 import type { AgentState, Machine, Session } from "./types";
 
 const mac: Machine = { id: "mac", name: "Mac", online: true };
@@ -143,6 +143,19 @@ describe("resolveTab and paneRoute", () => {
     expect(paneRoute(a)).toEqual({ name: "tab", mid: "mac", space: "w1", slot: "w1:t1", sid: a.session_id });
     const s = pane({});
     expect(paneRoute(s)).toEqual({ name: "session", mid: "mac", sid: s.session_id });
+  });
+});
+
+describe("tabOfSessionLink: an old /s/ link of a pane in a tab is that tab's /t/", () => {
+  const a = pane({ space: "w1", slot: 1, p: 1 });
+  const loose = pane({});
+  it("names the tab and the pane", () => {
+    expect(tabOfSessionLink([a, loose], { mid: "mac", sid: a.session_id })).toEqual({ name: "tab", mid: "mac", space: "w1", slot: "w1:t1", sid: a.session_id });
+  });
+  it("leaves a session without a tab, an unknown one and another machine's", () => {
+    expect(tabOfSessionLink([a, loose], { mid: "mac", sid: loose.session_id })).toBeUndefined();
+    expect(tabOfSessionLink([a], { mid: "mac", sid: "nope" })).toBeUndefined();
+    expect(tabOfSessionLink([a], { mid: "box", sid: a.session_id })).toBeUndefined();
   });
 });
 

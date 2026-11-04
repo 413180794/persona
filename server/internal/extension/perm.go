@@ -116,7 +116,7 @@ type PermissionLine struct {
 }
 
 var (
-	runsCode     = PermissionLine{Key: "runs_code", Title: "在 hub 机器上运行程序", Detail: "以 hub 的系统用户运行，能读写这个用户能读写的文件；不在沙箱里"}
+	runsCode     = PermissionLine{Key: "runs_code", Title: "在 hub 机器上运行程序", Detail: "以 hub 的系统用户运行；默认在沙箱里，只能读写自己的包和数据目录（受信任市场来的、主人关了沙箱的，能读写这个用户能读写的文件）"}
 	launcherKeys = PermissionLine{Key: "launcher_keys", Title: "用启动器的 Key 访问它的网关", Detail: "查额度、画启动器页上的面板；它看不到 Key：hub 或有这个启动器的电脑替它发请求，只发到启动器自己的网关"}
 	hubAPI       = PermissionLine{Key: "hub_api", Title: "完整权限（旧写法）", Detail: "拿到 hub 的完整 token，能做 hub 主人能做的一切：读知识库、驱动各台电脑上的 Agent……；新的扩展只要用得到的那几项（permissions.hub）"}
 	nodeFiles    = PermissionLine{Key: "node_files", Title: "读写这些电脑上的文件", Detail: "不只是它自己的数据目录"}
@@ -194,7 +194,7 @@ func Explain(m *Manifest) []PermissionLine {
 	}
 	if len(m.Permissions.Network) > 0 {
 		out = append(out, PermissionLine{Key: "network", Title: "访问网络",
-			Detail: strings.Join(m.Permissions.normalized().Network, "、") + "（hub 暂不拦截别的地址）"})
+			Detail: strings.Join(m.Permissions.normalized().Network, "、") + "（在沙箱里时只能连这些）"})
 	}
 	if m.Permissions.FullHub() {
 		out = append(out, hubAPI)
@@ -310,6 +310,14 @@ func Added(old, m *Manifest) []PermissionLine {
 func surfacesDetail(m *Manifest, surfaces []string) string {
 	var parts []string
 	for _, name := range surfaces {
+		if name == SurfaceShortcuts {
+			var titles []string
+			for _, s := range m.Shortcuts() {
+				titles = append(titles, s.Title)
+			}
+			parts = append(parts, "快捷指令和 Siri 里的动作："+strings.Join(titles, "、"))
+			continue
+		}
 		sl, _ := Slot(name)
 		var titles []string
 		for _, u := range m.UIs() {
