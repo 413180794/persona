@@ -20,6 +20,8 @@
   `python3 scripts/test/web_sidebar_e2e.py <网页地址> [--shots <目录>]`，用法见脚本开头，`--shots` 顺带拍浅色 / 深色 / 窄屏截图。
   任务「重试」的端到端检查（#1396：卡片、失败回执、计划卡红字、连点、再失败、离线；桌面 / 手机宽度 × 浅色 / 深色）：假 hub 带 `MOCK_TASKS=1` 起，
   跑 `python3 scripts/test/web_task_retry_e2e.py <网页地址> --hub <假 hub 地址> [--shots <目录>]`（假 hub 的 `GET /mock/retry?mode=|fail|offline` 复原失败的任务、选重试的结果）。
+  侧栏分组收起的端到端检查（「其他 Agent」收起 / 展开 / 刷新后保持，四种分组方式下每组都能收起，触屏常显箭头，#1417）：假 hub 带 `MOCK_SOURCES=1` 起，再跑
+  `python3 scripts/test/web_sidebar_fold_e2e.py <网页地址> [--shots <目录>]`。
   对话停在最新处的端到端检查（首次打开、刷新、侧栏切换、内容一块块进来、输入框变高、往上翻了不被拉回、慢网分页，主对话和 Agent 对话、宽屏和窄屏，#1340）：
   假 hub 带 `MOCK_TASKS=1 MOCK_LONG_ASSISTANT=1 MOCK_LONG_HISTORY=1` 起，再跑 `python3 scripts/test/web_chat_scroll_e2e.py <网页地址> [--hub <假 hub 地址>] [--shots <目录>]`。
   主对话任务坞的端到端检查（「全部 N」和胶囊同高、上下边对齐，胶囊行没有滚动条、仍能横滑；Chrome 开着常显的滚动条跑，WebKit 可选）：假 hub 带
@@ -48,6 +50,11 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   要处理的事在这里就能看到、能交代；总览更像 Agents 的仪表盘，挪到 `/overview`。主对话只有一个入口：`/`、旧的 `/j`、`/persona`、`/j/<主对话 id>` 都选中 Persona 这一行，
   「Persona 对话」列表和新对话页顶栏不再重复列「主对话」。主对话的顶栏标题固定是「Persona」（形象头像在左），没有副标题行（同 iOS 的 Persona 顶栏），菜单里没有「重命名…」（#1313）；
   旁支对话照旧是对话标题 +「启动器 · 多久以前」。还没有主对话时 `/` 是新对话页，第一条消息带 `main: true` 开出主对话。
+  **侧边栏的每个分组都能收起**（#1417）：Persona 对话、个人 Agent、置顶、正在启动、各种分组方式下的每一组、空闲的空间、其他 Agent、最近（未运行）都是同一个
+  `Section`（`folded` / `onToggle` 是必填的），点标题收起 / 展开，收起状态存在这个浏览器（`localStorage` 的 `fold:<键>`），刷新后保持；没有悬停的触屏上折叠箭头常显。
+  标题右边是件数，收起时换成里面「需要你 / 完成未看 / 工作中」的状态点，收起不会把要看的藏掉。
+  「其他 Agent」（不在任何空间里的 Agent，比如 Codex、DSH 的会话）按空间的规则决定默认：多于 3 个且都没什么要看的（已看、在等）时默认收起，否则展开。
+  不照「空闲的空间」一律收起，是因为没用 herdr 的人所有 Agent 都在这一组，一律收起等于把工作中的也藏了。iOS 没有这一组，空间外的 Agent 按电脑归成一个空间，同样能收起。
   Agents 标题右侧可切换「按项目 / 按状态 / 按机器 / 按待办」，默认按项目，选择和各组折叠状态保存在当前浏览器。
   - **按项目**保留原来的 herdr 顺序（机器 → workspace → tab），没有动静的空间收进「空闲的空间」；有 loop、后台工作、运行中子 Agent 的空间不会被收起。
   - **按状态**对齐 iOS `AgentListOrder`：需要你 → 完成未看 → 工作中 → 待唤醒 → 已屏蔽 → 已看，只显示非空组，已看默认折叠。

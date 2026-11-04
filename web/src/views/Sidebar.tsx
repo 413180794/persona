@@ -118,6 +118,8 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const [recentFolded, toggleRecent] = useFolded("recent", true);
   const [jarvisFolded, toggleJarvis] = useFolded("jarvis");
   const [idleFolded, toggleIdle] = useFolded("idle-spaces", true);
+  const [pinnedFolded, togglePinned] = useFolded("agents-pinned");
+  const [launchesFolded, toggleLaunches] = useFolded("agents-launching");
   const [sessionContextMenu, setSessionContextMenu] = useState<{ s: Session; el: HTMLElement } | null>(null);
   const [linkTargetSession, setLinkTargetSession] = useState<Session | undefined>();
   const [linkTargetSpace, setLinkTargetSpace] = useState<LinkTargetSpace | undefined>();
@@ -242,7 +244,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
         )}
 
         {pinnedAgents.length > 0 && (
-          <Section title={<span className="flex items-center gap-1"><Icon name="pin" size={10} stroke={2.2} />置顶</span>}>
+          <Section title={<span className="flex items-center gap-1"><Icon name="pin" size={10} stroke={2.2} />置顶</span>} folded={pinnedFolded} onToggle={togglePinned} right={<SessionTally sessions={pinnedAgents} folded={pinnedFolded} />}>
             {pinnedAgents.map((s) => {
               const key = `s:${s.machine_id}/${s.session_id}`;
               const context = [s.space_name || baseName(s.cwd), machines.length > 1 ? machineWithHub(s.machine_id, machines) : ""].filter(Boolean).join(" · ");
@@ -251,7 +253,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
           </Section>
         )}
 
-        {launches.length > 0 && <Section title="正在启动">
+        {launches.length > 0 && <Section title="正在启动" folded={launchesFolded} onToggle={toggleLaunches} right={<span className="text-[10.5px] text-ink-3 tabular-nums">{launches.length}</span>}>
           {launches.map((launch) => <NavRow key={launch.id} k={`s:${launch.machineId}/${launch.id}`} reg={reg} hover={setHovered} active={activeKey === `s:${launch.machineId}/${launch.id}`} to={{ name: "session", mid: launch.machineId, sid: launch.id }} go={go} icon={launch.phase === "failed" ? "retry" : "agent"} label={launch.text || baseName(launch.cwd) || "新 Agent"} hint={launch.phase === "failed" ? "启动失败" : "后台启动中"} />)}
         </Section>}
 
@@ -270,20 +272,14 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
           </Section>
         )}
 
-        {loose.length > 0 && (
-          <Section title="其他 Agent">
-            {loose.map((s) => (
-              <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={setHovered} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} onMenu={onRowMenu} onContextMenu={(el) => setSessionContextMenu({ s, el })} />
-            ))}
-          </Section>
-        )}
+        {loose.length > 0 && <LooseSection sessions={loose} reg={reg} hover={setHovered} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} />}
 
         </> : groups.map((group) => (
           <AgentSection key={group.key} group={group} machines={machines} byMachine={grouping === "machine"} byTodo={grouping === "todo"} reg={reg} hover={setHovered} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} onNavigate={onNavigate} />
         ))}
 
         {recent.length > 0 && (
-          <Section title="最近（未运行）" folded={recentFolded} onToggle={toggleRecent}>
+          <Section title="最近（未运行）" folded={recentFolded} onToggle={toggleRecent} right={<span className="text-[10.5px] text-ink-3 tabular-nums">{recent.length}</span>}>
             {(showAllRecent ? recent : recent.slice(0, 8)).map((s) => (
               <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={setHovered} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} onMenu={onRowMenu} onContextMenu={(el) => setSessionContextMenu({ s, el })} />
             ))}
@@ -452,13 +448,14 @@ function AccountRow({ conn, online, total }: { conn: string; online: number; tot
   );
 }
 
-function Section({ title, children, folded, onToggle, right }: { title: React.ReactNode; children: React.ReactNode; folded?: boolean; onToggle?: () => void; right?: React.ReactNode }) {
+// Every group in the sidebar is one of these: its title folds it, and the fold is kept in this browser (useFolded).
+function Section({ title, children, folded, onToggle, right }: { title: React.ReactNode; children: React.ReactNode; folded: boolean; onToggle: () => void; right?: React.ReactNode }) {
   return (
     <div className="mt-3">
       <div className="group/sec flex items-center gap-1 px-2 pb-1">
-        <button type="button" aria-expanded={onToggle ? !folded : undefined} disabled={!onToggle} onClick={onToggle} className="relative z-10 flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-left text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase enabled:hover:text-ink-2">
+        <button type="button" aria-expanded={!folded} onClick={onToggle} className="relative z-10 flex min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-left text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase hover:text-ink-2">
           <span className="min-w-0 truncate">{title}</span>
-          {onToggle && <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 opacity-0 transition-[opacity,transform] duration-200 group-hover/sec:opacity-100" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />}
+          <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 opacity-0 transition-[opacity,transform] duration-200 group-hover/sec:opacity-100 [@media(hover:none)]:opacity-100" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
         </button>
         {right}
       </div>
@@ -530,8 +527,6 @@ function AgentSection({ group, machines, byMachine, byTodo, reg, hover, activeKe
 function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, muted, onMenu, onRowMenu, onSessionMenu, onNavigate }: { sp: Space; machineName?: string; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; pinned: boolean; muted: boolean; onMenu: (sp: Space, anchor: HTMLElement) => void; onRowMenu: RowMenuFn; onSessionMenu?: (s: Session, el: HTMLElement) => void; onNavigate?: () => void }) {
   const allIdle = sp.sessions.every(isQuiet);
   const [folded, toggle] = useFolded(`space:${sp.key}`, allIdle && sp.sessions.length > 3);
-  const states = sp.sessions.map(stateOf);
-  const dots = (["needs_you", "unread", "working"] as const).filter((s) => states.includes(s));
 
   const todos = useStore((st) => st.todos);
   const todosSupported = useStore((st) => st.todosSupported);
@@ -568,15 +563,7 @@ function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, mute
               <Icon name="todo" size={10} stroke={2} />
             </button>
           )}
-          {folded && dots.length ? (
-            <span className="flex items-center gap-1">
-              {dots.map((d) => (
-                <StatusDot key={d} state={d} size={6} />
-              ))}
-            </span>
-          ) : (
-            <span className="text-[10.5px] text-ink-3 tabular-nums">{sp.sessions.length}</span>
-          )}
+          <SessionTally sessions={sp.sessions} folded={folded} />
           <button
             type="button"
             aria-label={`空间 ${sp.name} 的操作`}
@@ -595,6 +582,34 @@ function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, mute
       ))}
     </Section>
   );
+}
+
+// Agents outside any space (Codex sessions and the like): folds like a space, folded at first when it is long and
+// nothing in it wants a look. The app lists them as a space of their machine.
+function LooseSection({ sessions, reg, hover, activeKey, go, onRowMenu, onSessionMenu }: { sessions: Session[]; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn; onSessionMenu: (s: Session, el: HTMLElement) => void }) {
+  const [folded, toggle] = useFolded("loose", sessions.every(isQuiet) && sessions.length > 3);
+  return (
+    <Section title="其他 Agent" folded={folded} onToggle={toggle} right={<SessionTally sessions={sessions} folded={folded} />}>
+      {sessions.map((s) => (
+        <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={hover} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} onMenu={onRowMenu} onContextMenu={(el) => onSessionMenu(s, el)} />
+      ))}
+    </Section>
+  );
+}
+
+// A group's count; folded, the states that want a look instead, so a folded group doesn't hide them.
+function SessionTally({ sessions, folded }: { sessions: Session[]; folded: boolean }) {
+  const states = sessions.map(stateOf);
+  const dots = (["needs_you", "unread", "working"] as const).filter((s) => states.includes(s));
+  if (folded && dots.length)
+    return (
+      <span className="flex items-center gap-1">
+        {dots.map((d) => (
+          <StatusDot key={d} state={d} size={6} />
+        ))}
+      </span>
+    );
+  return <span className="text-[10.5px] text-ink-3 tabular-nums">{sessions.length}</span>;
 }
 
 type RegFn = (k: string) => (el: HTMLElement | null) => void;
