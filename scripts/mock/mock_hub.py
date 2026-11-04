@@ -2465,9 +2465,9 @@ def tg_media(ref):
     parts = ref.split(".")
     if parts[0] == "a" and len(parts) == 3 and parts[1] in TG_AVATAR_COLORS:
         return png(96, 96, TG_AVATAR_COLORS[parts[1]])
-    if ref == "m.u1.34.f":
+    if ref == "m.u1.333.f":
         return tg_photo(400, 300, (110, 170, 235), (210, 230, 250))
-    if ref == "m.u1.31.f":
+    if ref == "m.u1.335.f":
         return tg_sticker()
     if ref == "m.c2.9.t":
         return tg_photo(320, 180, (40, 50, 80), (120, 90, 140), sun=False)
@@ -2489,13 +2489,13 @@ def tg_thread_messages(thread):
         out += [
             {"id": "29", "at": at(0, 9, 12), "sender": you, "text": "周末的示例活动还去吗？"},
             {"id": "30", "at": at(0, 9, 13), "sender": me, "mine": True, "text": "去，九点在示例公园门口见"},
-            {"id": "31", "at": at(0, 9, 14), "sender": you, "media": [{"kind": "sticker", "ref": "m.u1.31.f", "emoji": "😄", "width": 512, "height": 512}]},
-            {"id": "32", "at": at(0, 9, 40), "sender": you, "media": [{"kind": "voice", "duration": 12, "mime": "audio/ogg"}]},
-            {"id": "33", "at": at(0, 9, 41), "sender": you, "text": "路线发你了", "media": [{"kind": "file", "name": "示例路线.pdf", "size": 284000,
+            {"id": "31", "at": at(0, 9, 40), "sender": you, "media": [{"kind": "voice", "duration": 12, "mime": "audio/ogg"}]},
+            {"id": "32", "at": at(0, 9, 41), "sender": you, "text": "路线发你了", "media": [{"kind": "file", "name": "示例路线.pdf", "size": 284000,
                                                                                          "mime": "application/pdf"}]},
-            {"id": "34", "at": at(0, 9, 41), "sender": you, "text": "上次拍的", "media": [{"kind": "image", "ref": "m.u1.34.f", "width": 1200, "height": 900}]},
-            {"id": "35", "at": at(0, 9, 42), "sender": me, "mine": True, "text": "天气真好，这次也带上相机",
-             "reply_to": {"id": "34", "from": "示例用户", "text": "上次拍的"}},
+            {"id": "33", "at": at(0, 9, 41), "sender": you, "text": "上次拍的", "media": [{"kind": "image", "ref": "m.u1.333.f", "width": 1200, "height": 900}]},
+            {"id": "34", "at": at(0, 9, 42), "sender": me, "mine": True, "text": "天气真好，这次也带上相机",
+             "reply_to": {"id": "33", "from": "示例用户", "text": "上次拍的"}},
+            {"id": "35", "at": at(0, 9, 42), "sender": you, "media": [{"kind": "sticker", "ref": "m.u1.335.f", "emoji": "😄", "width": 512, "height": 512}]},
             {"id": "36", "at": at(0, 9, 43), "sender": you, "text": "九点见，别迟到", "edited": True,
              "reply_to": {"id": "30", "from": "我", "text": "去，九点在示例公园门口见"}},
         ]
@@ -2511,7 +2511,8 @@ def tg_thread_messages(thread):
             {"id": "5", "at": at(0, 9, 3), "sender": you, "text": "我觉得第二版更清楚"},
             {"id": "6", "at": at(0, 9, 5), "sender": me, "mine": True, "text": "同意，第二版的结构更好", "reply_to": {"id": "4", "from": "另一个示例用户",
                                                                                                          "text": "@example 这个示例方案你怎么看？"}},
-            {"id": "7", "at": at(0, 9, 6), "sender": other, "text": "那就按第二版来"},
+            {"id": "7", "at": at(0, 9, 6), "sender": me, "mine": True, "text": "那就按第二版来，我今晚把第三节的示例补齐，明早发到群里给大家看"},
+            {"id": "71", "at": at(0, 9, 7), "sender": other, "text": "好"},
             {"id": "8", "at": at(0, 9, 30), "sender": third, "text": "演示的录屏放这里了"},
             {"id": "9", "at": at(0, 9, 30), "sender": third, "media": [{"kind": "video", "thumb": "m.c2.9.t", "duration": 65, "width": 1280, "height": 720}]},
         ]

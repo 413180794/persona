@@ -100,6 +100,17 @@ struct ConnectorThreadTests {
         #expect(!pr.isChat)
     }
 
+    /// The time in a bubble's corner: hours and minutes in the device's zone, 已编辑 before it for an edited message.
+    @Test func stamps() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = try #require(TimeZone(secondsFromGMT: 8 * 3600))
+        var m = try JSON.decoder.decode(ThreadMessage.self, from: Data(message(1, at: 5).utf8)) // 09:05 UTC
+        #expect(ThreadLayout.stamp(m, calendar: cal) == "17:05")
+        m.edited = true
+        #expect(ThreadLayout.stamp(m, calendar: cal) == "已编辑 17:05")
+        #expect(ThreadLayout.bubbleShare > 0.74 && ThreadLayout.bubbleShare < 0.81)
+    }
+
     /// Like the Feishu chat: a time above a new day or a pause; one avatar and name for a run from the same person,
     /// mine apart from theirs, an event apart from both.
     @Test func runsAndSeparators() throws {
@@ -113,5 +124,9 @@ struct ConnectorThreadTests {
         #expect(!ThreadLayout.continues(mine, after: c))
         #expect(ThreadLayout.separates(late, after: mine))
         #expect(!ThreadLayout.continues(late, after: mine))
+        // The avatar goes beside a run's last: a's run goes on to b, b's ends before another sender, the last ends.
+        #expect(!ThreadLayout.endsRun(a, before: b))
+        #expect(ThreadLayout.endsRun(b, before: c))
+        #expect(ThreadLayout.endsRun(late, before: nil))
     }
 }

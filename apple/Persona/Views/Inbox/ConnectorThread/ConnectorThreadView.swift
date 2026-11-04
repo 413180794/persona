@@ -1,10 +1,10 @@
 import SwiftUI
 
 // A chat app's conversation opened from the inbox (Telegram's), laid out like the Feishu chat page: others on the
-// left with their avatar and (in a group) name on the first of a run, mine on the right; a time between messages
-// after a pause or on a new day; pictures, stickers, video thumbnails, voice and files; a reply's quote leading back
-// to what it answers. Older pages load as the top comes into view. With a reply action, a box at the bottom: the hub
-// asks the user on the phone before anything is sent (connector_gate).
+// left, (in a group) the name over the first of a run and the avatar beside its last, mine on the right; a time
+// between messages after a pause or on a new day; pictures, stickers, video thumbnails, voice and files; a reply's
+// quote leading back to what it answers. Older pages load as the top comes into view. With a reply action, a box at
+// the bottom: the hub asks the user on the phone before anything is sent (connector_gate).
 
 struct ConnectorThreadView: View {
     var model: ConnectorThreadModel
@@ -16,6 +16,9 @@ struct ConnectorThreadView: View {
     @State private var olderFailed = false
     @State private var notice: String?
     @FocusState private var focused: Bool
+    /// The page's width (bubbles take ThreadLayout.bubbleShare of it) and how far down the summary bar reaches.
+    @State private var width: CGFloat = 390
+    @State private var topInset: CGFloat = 0
 
     private var isGroup: Bool { model.chat?.isGroup ?? false }
 
@@ -27,8 +30,11 @@ struct ConnectorThreadView: View {
                     let prev = i > 0 ? model.messages[i - 1] : nil
                     if ThreadLayout.separates(m, after: prev) { LarkTimeSeparator(date: m.at) }
                     let grouped = ThreadLayout.continues(m, after: prev)
-                    ConnectorThreadRow(connector: model.connector, message: m, grouped: grouped, isGroup: isGroup,
-                                       canReply: model.chat?.reply != nil, reply: { answer($0) }, jump: { await jump(to: $0) })
+                    let next = i + 1 < model.messages.count ? model.messages[i + 1] : nil
+                    ConnectorThreadRow(connector: model.connector, message: m, grouped: grouped,
+                                       endsRun: ThreadLayout.endsRun(m, before: next), isGroup: isGroup,
+                                       canReply: model.chat?.reply != nil, bubbleMax: width * ThreadLayout.bubbleShare,
+                                       reply: { answer($0) }, jump: { await jump(to: $0) })
                         .padding(.top, grouped ? LarkChatLayout.groupedGap : Theme.Space.s)
                         .overlay {
                             if flash?.line == m.id { QuoteFlash().id(flash?.id) }
@@ -42,6 +48,19 @@ struct ConnectorThreadView: View {
         }
         .scrollPosition($position)
         .defaultScrollAnchor(.bottom)
+        // What scrolls up under the summary bar fades out at its edge instead of being cut there.
+        .onGeometryChange(for: CGSize.self) { CGSize(width: $0.size.width, height: $0.safeAreaInsets.top) } action: {
+            width = $0.width
+            topInset = $0.height
+        }
+        .mask {
+            VStack(spacing: 0) {
+                Color.clear.frame(height: topInset)
+                LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: Theme.Space.xxl)
+                Color.black
+            }
+            .ignoresSafeArea()
+        }
         .scrollDismissesKeyboard(.interactively)
         .overlay {
             if !model.loaded {
@@ -185,14 +204,20 @@ struct ConnectorThreadView: View {
     }
 }
 
-/// One message: an event centred; others' with the avatar (first of a run) and, in a group, the name; mine on the
-/// right without either. A picture, sticker or video alone has no bubble.
+/// One message: an event centred; others' with, in a group, the name over the first of a run and the avatar beside
+/// its last (as Telegram); mine on the right without either. A bubble is as wide as what it holds, at most `bubbleMax`, its quote as wide as the rest; its
+/// time is in its bottom-right corner. A picture, sticker or video alone has no bubble, its time on a capsule.
 struct ConnectorThreadRow: View {
     var connector: String
     var message: ThreadMessage
+    /// It continues the run of the message before: no name over it.
     var grouped: Bool
+    /// The run's last: the avatar beside it.
+    var endsRun: Bool
     var isGroup: Bool
     var canReply: Bool
+    /// The widest a bubble gets (ThreadLayout.bubbleShare of the page), the same for mine and others'.
+    var bubbleMax: CGFloat
     var reply: (ThreadMessage) -> Void
     var jump: (String) async -> Bool
     @Environment(\.openURL) private var openURL
@@ -208,26 +233,23 @@ struct ConnectorThreadRow: View {
                 .padding(.vertical, Theme.Space.xs)
         } else {
             let mine = m.isMine
-            HStack(alignment: .top, spacing: Theme.Space.s) {
-                Group {
-                    if !mine && !grouped {
-                        ThreadAvatar(connector: connector, name: m.sender.name, ref: m.sender.avatar)
-                    } else {
-                        Color.clear
+            HStack(alignment: .bottom, spacing: Theme.Space.s) {
+                if mine {
+                    Spacer(minLength: 0)
+                } else {
+                    Group {
+                        if endsRun { ThreadAvatar(connector: connector, name: m.sender.name, ref: m.sender.avatar) } else { Color.clear }
                     }
+                    .scaledFrame(width: Theme.Size.wellM, height: endsRun ? Theme.Size.wellM : Theme.Size.line)
                 }
-                .scaledFrame(width: Theme.Size.wellM, height: !mine && !grouped ? Theme.Size.wellM : Theme.Size.line)
                 VStack(alignment: mine ? .trailing : .leading, spacing: Theme.Space.xs) {
                     if isGroup, !mine, !grouped {
                         Text(m.sender.name).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                     }
                     content.contextMenu { menu }
-                    if m.edited == true {
-                        Text("已编辑").font(Theme.Font.caption).foregroundStyle(.tertiary)
-                    }
                 }
-                .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
-                if !mine { Color.clear.scaledFrame(width: Theme.Size.wellM, height: Theme.Size.line) }
+                .frame(maxWidth: bubbleMax, alignment: mine ? .trailing : .leading)
+                if !mine { Spacer(minLength: 0) }
             }
             .accessibilityElement(children: .combine)
         }
@@ -235,12 +257,20 @@ struct ConnectorThreadRow: View {
 
     private var media: ThreadMedia? { m.media?.first }
     private var words: String { m.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
+    private var stamp: String { ThreadLayout.stamp(m) }
+
+    /// A picture, sticker or video that ends the message with no words after it: the time goes on it.
+    private var pictureLast: Bool {
+        guard let media, words.isEmpty else { return false }
+        return ["sticker", "image", "video"].contains(media.kind) && media.picture != nil
+    }
 
     @ViewBuilder private var content: some View {
-        if let media, ["sticker", "image", "video"].contains(media.kind), media.picture != nil, words.isEmpty, m.replyTo == nil {
+        if let media, pictureLast, m.replyTo == nil {
             ThreadMediaView(connector: connector, media: media) // a picture alone: no bubble around it
+                .overlay(alignment: .bottomTrailing) { StampCapsule(text: stamp) }
         } else {
-            VStack(alignment: .leading, spacing: Theme.Space.sm) {
+            WidestColumn(spacing: Theme.Space.sm) {
                 if let q = m.replyTo {
                     QuoteCard(heading: q.from ?? "消息", summary: q.text.flatMap { $0.isEmpty ? nil : $0 } ?? "（原消息）", tint: LarkColor.blue,
                               ink: .primary) {
@@ -249,9 +279,17 @@ struct ConnectorThreadRow: View {
                         }
                     }
                 }
-                if let media { ThreadMediaView(connector: connector, media: media) }
+                if let media {
+                    ThreadMediaView(connector: connector, media: media)
+                        .overlay(alignment: .bottomTrailing) {
+                            if pictureLast { StampCapsule(text: stamp) }
+                        }
+                }
                 if !words.isEmpty {
-                    Text(words).font(Theme.Font.body).lineHeight(.body).foregroundStyle(.primary).textSelection(.enabled)
+                    StampedText(text: words, stamp: stamp)
+                } else if !pictureLast {
+                    Text(stamp).font(Theme.Font.caption).monospacedDigit().foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
             .padding(Theme.Space.m)
@@ -360,5 +398,35 @@ struct ThreadMediaView: View {
         Label(label, systemImage: symbol).font(Theme.Font.secondary).foregroundStyle(.secondary)
             .padding(Theme.Space.m)
             .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+    }
+}
+
+/// A message's words with its time in the corner, as Telegram: after the last line when it fits there, else on a line
+/// of its own at the right. A clear copy of the time ends the words, so they leave it room; the shown one sits over it.
+struct StampedText: View {
+    var text: String
+    var stamp: String
+
+    var body: some View {
+        (Text(text).font(Theme.Font.body) + Text("\u{2003}" + stamp).font(Theme.Font.caption).monospacedDigit().foregroundStyle(.clear))
+            .lineHeight(.body)
+            .foregroundStyle(.primary)
+            .textSelection(.enabled)
+            .overlay(alignment: .bottomTrailing) {
+                Text(stamp).font(Theme.Font.caption).monospacedDigit().foregroundStyle(.secondary).accessibilityHidden(true)
+            }
+    }
+}
+
+/// The time over a picture's corner: on a dark, half-clear capsule, readable on any picture.
+struct StampCapsule: View {
+    var text: String
+
+    var body: some View {
+        Text(text).font(Theme.Font.caption).monospacedDigit().foregroundStyle(.white)
+            .padding(.horizontal, Theme.Space.sm)
+            .padding(.vertical, Theme.Space.xxs)
+            .background(.black.opacity(0.45), in: .capsule)
+            .padding(Theme.Space.s)
     }
 }

@@ -179,11 +179,28 @@ nonisolated enum ConnectorMedia {
 /// Where a conversation breaks up, as the Feishu chat does (LarkChatLayout): a time between messages after a pause or
 /// on a new day, and one avatar and name for a run of messages from the same person.
 nonisolated enum ThreadLayout {
+    /// The widest a bubble gets, as a share of the page's width: the same for mine and others'.
+    static let bubbleShare: CGFloat = 0.78
+
+    /// The time in a message's corner, in the device's zone like the separators: 09:42, or 已编辑 09:42.
+    static func stamp(_ m: ThreadMessage, calendar: Calendar = .current) -> String {
+        let c = calendar.dateComponents([.hour, .minute], from: m.at)
+        let time = String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
+        return m.edited == true ? "已编辑 " + time : time
+    }
+
     /// The run's first message shows its sender; a time separator goes above a new day or `LarkChatLayout.separatorGap`
     /// of quiet.
     static func separates(_ m: ThreadMessage, after prev: ThreadMessage?, calendar: Calendar = .current) -> Bool {
         guard let prev else { return true }
         return !calendar.isDate(m.at, inSameDayAs: prev.at) || m.at.timeIntervalSince(prev.at) >= LarkChatLayout.separatorGap
+    }
+
+    /// The last of its run (the message after it starts another, or there is none): the avatar goes beside it, at its
+    /// bottom, as in Telegram; the name stays over the first.
+    static func endsRun(_ m: ThreadMessage, before next: ThreadMessage?, calendar: Calendar = .current) -> Bool {
+        guard let next else { return true }
+        return !continues(next, after: m, calendar: calendar)
     }
 
     /// Same sender as the message before, with no separator between them: no second avatar or name.
