@@ -28,7 +28,7 @@ extension AppModel {
         guard let api = api(key.group) else { return .failed }
         do {
             try await api.send(key, text: msg.text, images: msg.images, launcher: assistantLaunchers[key],
-                               clientMsgID: msg.id.uuidString, clearDraft: clearDraft)
+                               model: assistantModels[key], clientMsgID: msg.id.uuidString, clearDraft: clearDraft)
             return .sent
         } catch let e as APIError where e.code == "input_draft" {
             Haptics.attention()

@@ -58,20 +58,32 @@ func TestMainConversationFollowsTheAssistantLauncher(t *testing.T) {
 	m.peer, m.online = hubPeer, true
 	m.mu.Unlock()
 
+	m.mu.Lock()
+	m.sessions = []proto.Session{{SessionID: "side-2", Launcher: "sss", Assistant: true, Cwd: "/home/u/.jarvis/assistant"}}
+	m.mu.Unlock()
+
 	mux := h.routes()
-	for _, c := range []struct{ sid, body, want string }{
-		{"main-1", `{"text":"hi"}`, "ccc"},
-		{"main-1", `{"text":"hi","launcher":"other"}`, "other"},
-		{"side-2", `{"text":"hi"}`, ""},
+	for _, c := range []struct{ sid, body, want, wantModel string }{
+		{"main-1", `{"text":"hi"}`, "ccc", ""},
+		{"main-1", `{"text":"hi","launcher":"other"}`, "other", ""},
+		{"side-2", `{"text":"hi"}`, "sss", ""},
+		// The chat's menu: the app sends both; a model alone keeps the conversation's launcher.
+		{"side-2", `{"text":"hi","launcher":"other","model":"m2"}`, "other", "m2"},
+		{"side-2", `{"text":"hi","model":"m9"}`, "sss", "m9"},
 	} {
 		if code, out := call(t, mux, "POST", "/api/v1/sessions/box/"+c.sid+"/messages", h.cfg.Token, c.body); code != 200 {
 			t.Fatalf("%s: %d %v", c.sid, code, out)
 		}
 		mu.Lock()
 		l, _ := got["launcher"].(string)
+		model, _ := got["model"].(string)
+		fp, _ := got["model_fingerprint"].(string)
 		mu.Unlock()
-		if l != c.want {
-			t.Errorf("%s %s: launcher %q, want %q", c.sid, c.body, l, c.want)
+		if l != c.want || model != c.wantModel {
+			t.Errorf("%s %s: launcher %q model %q, want %q %q", c.sid, c.body, l, model, c.want, c.wantModel)
+		}
+		if (l != "" || model != "") && fp == "" {
+			t.Errorf("%s %s: no model fingerprint", c.sid, c.body)
 		}
 	}
 }

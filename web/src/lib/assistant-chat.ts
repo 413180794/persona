@@ -49,6 +49,8 @@ export function assistantInfoText(o: { title?: string; isMain: boolean; sessionI
 }
 
 const picks = new Map<string, string>();
+/** The model picked for the next messages, with the launcher pick (`pickedModel`); absent: the launcher's default. */
+const models = new Map<string, string>();
 const listeners = new Set<() => void>();
 
 export function conversationKey(mid: string, sid: string) {
@@ -63,7 +65,24 @@ export function pickedLauncher(key: string): string | undefined {
 export function pickLauncher(key: string, name: string | undefined) {
   if (name) picks.set(key, name);
   else picks.delete(key);
+  models.delete(key); // another launcher: back to its default model
   listeners.forEach((l) => l());
+}
+
+/** The model picked for key, if any. */
+export function pickedModel(key: string): string | undefined {
+  return models.get(key);
+}
+
+/** Pick a model for key (undefined: the launcher's default); the launcher pick stays. */
+export function pickModel(key: string, model: string | undefined) {
+  if (model) models.set(key, model);
+  else models.delete(key);
+  listeners.forEach((l) => l());
+}
+
+export function usePickedModel(key: string): string | undefined {
+  return useSyncExternalStore(subscribe, () => models.get(key));
 }
 
 function subscribe(l: () => void) {

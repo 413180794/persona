@@ -20,6 +20,8 @@ struct AssistantTopBar: View {
     @State private var showInfo = false
     @State private var showLink = false
     @State private var launchers: [Launcher] = []
+    /// Each launcher's /model list, fetched when the bar appears (the menu's model submenus).
+    @State private var modelOptions: [String: [AgentModelOption]] = [:]
     /// A copy's confirmation, in the name pill for a moment (a toast would sit right on the face).
     @State private var hint: String?
     #if os(macOS)
@@ -63,7 +65,10 @@ struct AssistantTopBar: View {
                 if UserDefaults.standard.bool(forKey: "showInfo") { try? await Task.sleep(for: .seconds(2)); showInfo = true }
             }
             #endif
-        .task(id: model.hubRef(machineID)) { launchers = ((try? await model.launchers(model.hubRef(machineID))) ?? []).filter(\.runsAssistant) }
+        .task(id: model.hubRef(machineID)) {
+            launchers = ((try? await model.launchers(model.hubRef(machineID))) ?? []).filter(\.runsAssistant)
+            await loadModelOptions()
+        }
     }
 
     @ViewBuilder private var bar: some View {
@@ -215,6 +220,34 @@ struct AssistantTopBar: View {
     }
 
     /// The conversation's launcher (the next message uses it) or, on the new-conversation page, the default one.
+    /// The model picked for the next message here, nil: the launcher's default.
+    private var pickedModel: String? { key.flatMap { model.assistantModels[$0] } }
+
+    private func modelID(_ m: AgentModelOption) -> String? { m.isDefault == true ? nil : m.id }
+
+    private func pick(_ launcher: String, model picked: String?) {
+        guard let key else { return }
+        model.assistantLaunchers[key] = launcher
+        model.assistantModels[key] = picked
+        Haptics.tap()
+        let what = picked == nil ? launcher : "\(launcher) · \(picked ?? "")"
+        model.toast = Toast("下一条消息起使用 \(what)", style: .success)
+    }
+
+    /// Each launcher's /model list; a failure just leaves the submenu without entries.
+    private func loadModelOptions() async {
+        let machine = model.hubRef(machineID)
+        guard let api = model.api, !launchers.isEmpty else { return }
+        await withTaskGroup(of: (String, [AgentModelOption]).self) { group in
+            for l in launchers {
+                group.addTask { (l.name, (try? await api.launcherModels(machine: machine, launcher: l.name)) ?? []) }
+            }
+            for await (name, options) in group {
+                if !options.isEmpty { modelOptions[name] = options }
+            }
+        }
+    }
+
     private var launcher: String {
         // The main conversation follows 设置 › 助手 (the hub sends it there), side ones keep their own.
         if let key, key == model.assistantMain, let l = model.assistantLaunchers[key] ?? model.assistantConfig?.launcher { return l }
@@ -264,10 +297,16 @@ struct AssistantTopBar: View {
                 Menu {
                     Section("下一条消息起使用") {
                         ForEach(launchers) { l in
-                            Button {
-                                model.assistantLaunchers[key] = l.name
-                                Haptics.tap()
-                                model.toast = Toast("已切换到 \(l.name)，下一条消息生效", style: .success)
+                            Menu {
+                                Button { pick(l.name, model: nil) } label: {
+                                    if l.name == launcher, pickedModel == nil { Label("默认模型", systemImage: Theme.Icon.done) } else { Text("默认模型") }
+                                }
+                                ForEach(modelOptions[l.name] ?? []) { m in
+                                    let chosen = l.name == launcher && pickedModel == modelID(m)
+                                    Button { pick(l.name, model: m.isDefault == true ? nil : m.id) } label: {
+                                        if chosen { Label(m.title, systemImage: Theme.Icon.done) } else { Text(m.title) }
+                                    }
+                                }
                             } label: {
                                 let title = [l.name, Fmt.model(l.model)].compactMap { $0 }.joined(separator: " · ")
                                 if l.name == launcher { Label(title, systemImage: Theme.Icon.done) } else { Text(title) }
@@ -296,7 +335,7 @@ struct AssistantTopBar: View {
         guard let key else { return "新对话 · \(launcher)" }
 
         let title = name == model.persona.name && key == model.assistantMain ? "主对话" : name
-        return [title, launcher, Fmt.model(session?.model)].compactMap { $0 }.joined(separator: " · ")
+        return [title, launcher, Fmt.model(pickedModel ?? session?.model)].compactMap { $0 }.joined(separator: " · ")
     }
 
     private var infoText: String {

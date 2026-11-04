@@ -33,6 +33,16 @@ nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+/// One model a launcher offers in its /model menu (the chat's model picker, node/launcher_models.go).
+nonisolated struct AgentModelOption: Decodable, Identifiable, Hashable, Sendable {
+    var id: String
+    var name: String?
+    var resolved: String?
+    var isDefault: Bool?
+    enum CodingKeys: String, CodingKey { case id, name, resolved, isDefault = "default" }
+    var title: String { name ?? id }
+}
+
 nonisolated struct LauncherDetail: Codable, Hashable, Sendable {
     struct ModelTier: Codable, Hashable, Sendable { var role: String; var env: String; var model: String }
     struct EnvVar: Codable, Hashable, Sendable { var key: String; var value: String }
@@ -153,6 +163,12 @@ extension APIClient {
         struct R: Decodable { var launcher: LauncherView }
         let r: R = try await get("/api/v1/launchers/\(name)")
         return r.launcher
+    }
+    /// The models this launcher's agent offers in its /model menu on this machine (the chat's model picker).
+    func launcherModels(machine: String, launcher: String) async throws -> [AgentModelOption] {
+        struct R: Decodable { var models: [AgentModelOption]? }
+        let r: R = try await get("/api/v1/machines/\(machine)/launchers/\(launcher)/models")
+        return r.models ?? []
     }
     func saveLauncher(_ input: LauncherInput, isNew: Bool) async throws {
         _ = try await request(isNew ? "POST" : "PUT", isNew ? "/api/v1/launchers" : "/api/v1/launchers/\(input.name)", body: input)

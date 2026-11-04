@@ -13,7 +13,7 @@ import { getSession, getState, markSeenLocally, refresh, refreshTodos, setMutes,
 import { buildTaskIndex, STOP_LOOP_MESSAGE, visibleSubagents } from "../../lib/tasks";
 import { echoed, taggedSeen } from "../../lib/echo";
 import { outboxKey, settleOutbox } from "../../lib/outbox";
-import { conversationKey, pickedLauncher } from "../../lib/assistant-chat";
+import { conversationKey, pickedLauncher, pickedModel } from "../../lib/assistant-chat";
 import { unlinkAgentFromTodo } from "../../lib/todos";
 import { LinkTodoDialog } from "../LinkTodoDialog";
 import { chatLines, parseUserText, segments, withoutShownRecap, type UserMessage } from "../../lib/turns";
@@ -244,7 +244,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       try {
         await api(`${sessionPath(mid, sid)}/messages`, {
           method: "POST",
-          json: { text: out.text, images: out.images.length ? out.images : undefined, client_msg_id: id, clear_draft: clearDraft, launcher: assistant ? pickedLauncher(conversationKey(mid, sid)) : undefined },
+          json: { text: out.text, images: out.images.length ? out.images : undefined, client_msg_id: id, clear_draft: clearDraft, launcher: assistant ? pickedLauncher(conversationKey(mid, sid)) : undefined, model: assistant ? pickedModel(conversationKey(mid, sid)) : undefined },
         });
         return true;
       } catch (e) {

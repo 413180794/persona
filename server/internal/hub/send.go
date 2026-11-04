@@ -137,13 +137,31 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 		h.userSpoke(sid)                 // and it works for them, not for a chain of conversations
 	}
 	// Persona' main conversation follows 设置 › 助手's launcher (the next message resumes it on that one) unless the
-	// app picked one for this send; side conversations keep the launcher they started with.
-	if l, _ := p["launcher"].(string); l == "" {
-		if cfg := h.assistantConfig(r.Context()); cfg.Main != "" && cfg.Main == sid && cfg.MachineID == m.cfg.ID {
-			if err := h.applyModel(r.Context(), "assistant", p); err != nil {
-				writeErr(w, 400, err)
-				return
+	// app picked one for this send; side conversations keep the launcher they started with unless the app picked
+	// another. A picked launcher/model (the chat's menu) is checked and fingerprinted like a configured one.
+	s, known := m.session(sid)
+	cfg := h.assistantConfig(r.Context())
+	mine := cfg.Main != "" && cfg.Main == sid && cfg.MachineID == m.cfg.ID
+	if mine || (known && (s.Assistant || isAssistant(s, m.assistantCwd()))) {
+		l, _ := p["launcher"].(string)
+		if l == "" && known {
+			l = s.Launcher // no launcher picked: the one this conversation runs
+			if l != "" {
+				p["launcher"] = l
 			}
+			if _, picked := p["model"]; !picked && s.Model != "" {
+				p["model"] = s.Model // and the model it runs, so no pick keeps it
+			}
+		}
+		var err error
+		if l != "" {
+			err = h.applyPickedModel(r.Context(), p)
+		} else {
+			err = h.applyModel(r.Context(), "assistant", p)
+		}
+		if err != nil {
+			writeErr(w, 400, err)
+			return
 		}
 	}
 	// The send carries on when the phone stops waiting (backgrounded, network gone): it may be typing already, and

@@ -4,8 +4,10 @@
 import { useEffect, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
 import {
-  assistantInfoText, conversationKey, effectiveLauncher, NEW_CONVERSATION, pickLauncher, runsAssistant, shortModel, usePickedLauncher, type AssistantLauncher,
+  assistantInfoText, conversationKey, effectiveLauncher, NEW_CONVERSATION, pickLauncher, pickModel, runsAssistant, shortModel, usePickedLauncher,
+  usePickedModel, type AssistantLauncher,
 } from "../../lib/assistant-chat";
+import { launcherModels, type AgentModel } from "../../lib/launcher-models";
 import { personaState } from "../../lib/persona";
 import { navigate } from "../../lib/router";
 import { useStore } from "../../lib/store";
@@ -54,29 +56,62 @@ function launcherItems(list: AssistantLauncher[] | null, error: string, current:
   return list.map((l) => ({ key: l.name, label: l.name, hint: shortModel(l.model) || undefined, checked: l.name === current, onSelect: () => onPick(l.name) }));
 }
 
-/** The composer's 启动器 chip in a Persona conversation: the next message (and the ones after it) uses the pick. */
+/** The composer's 启动器 chip in a Persona conversation: the next message (and the ones after it) uses the pick.
+ *  Picking a launcher opens its model submenu in the same menu. */
 export function AssistantLauncherChip({ session }: { session: Session }) {
   const menu = useMenu();
   const assistant = useStore((s) => s.assistant);
   const key = conversationKey(session.machine_id, session.session_id);
   const picked = usePickedLauncher(key);
+  const pickedM = usePickedModel(key);
+  const [modelsFor, setModelsFor] = useState<{ name: string; options: AgentModel[]; loading: boolean } | null>(null);
   const current = effectiveLauncher({ isMain: assistant?.main === session.session_id, picked, session: session.launcher, config: assistant?.launcher });
   const { list, error } = useAssistantLaunchers(session.machine_id, Boolean(menu.anchor));
-  const model = shortModel(picked ? list?.find((l) => l.name === picked)?.model : session.model);
+  const model = shortModel(pickedM ?? (picked ? list?.find((l) => l.name === picked)?.model : session.model));
+
+  // Picking the launcher already applies; the submenu only offers that launcher's models.
+  const openModels = (name: string) => {
+    pickLauncher(key, name);
+    setModelsFor({ name, options: [], loading: true });
+    void launcherModels(session.machine_id, name)
+      .then((r) => setModelsFor((cur) => (cur?.name === name ? { name, options: r?.models ?? [], loading: false } : cur)))
+      .catch(() => setModelsFor((cur) => (cur?.name === name ? { name, options: [], loading: false } : cur)));
+  };
+  const pick = (name: string, id: string | undefined) => {
+    pickModel(key, id);
+    toast(id ? `下一条消息起使用 ${name} · ${id}` : `下一条消息起使用 ${name} 的默认模型`, "ok");
+  };
+
+  const items: MenuItem[] = modelsFor
+    ? [
+        { key: "back", label: "← 启动器", onSelect: () => setModelsFor(null), keepOpen: true },
+        { key: "default", label: "默认模型", checked: !pickedM, onSelect: () => pick(modelsFor.name, undefined) },
+        ...(modelsFor.loading
+          ? [{ key: "loading", label: "正在读取模型…", disabled: true, onSelect: () => {} }]
+          : modelsFor.options.map((m) => ({
+              key: m.id,
+              label: m.name || m.id,
+              hint: m.description,
+              checked: m.default ? !pickedM : pickedM === m.id,
+              onSelect: () => pick(modelsFor.name, m.default ? undefined : m.id),
+            }))),
+      ]
+    : launcherItems(list, error, current, openModels).map((it) => ({ ...it, submenu: true }));
+
   return (
     <>
       <Chip label={[current, model].filter(Boolean).join(" · ")} onClick={menu.open} active={Boolean(menu.anchor)} title="启动器：下一条消息起使用" />
       {menu.anchor && (
         <Menu
           anchor={menu.anchor}
-          onClose={menu.close}
+          onClose={() => {
+            menu.close();
+            setModelsFor(null);
+          }}
           side="top"
           width={280}
-          header="下一条消息起使用"
-          items={launcherItems(list, error, current, (name) => {
-            pickLauncher(key, name);
-            toast(`已切换到 ${name}，下一条消息生效`, "ok");
-          })}
+          header={modelsFor ? `模型：${modelsFor.name}` : "下一条消息起使用"}
+          items={items}
         />
       )}
     </>

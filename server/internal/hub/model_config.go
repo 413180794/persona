@@ -772,19 +772,42 @@ func (h *Hub) applyModel(ctx context.Context, id string, params map[string]any) 
 	if effort, _ := params["effort"].(string); effort != "" {
 		b.Effort = effort
 	}
-	if name, ok := strings.CutPrefix(b.Provider, "launcher."); ok {
-		for _, provider := range h.storedLaunchers(ctx) {
-			if provider.Name == name && provider.Kind == "api" {
-				return errors.New("这个用途引用了直接 API 接入，不能作为启动器运行")
-			}
-		}
-		params["launcher"] = name
-	} else if strings.HasPrefix(id, "plugin.") {
-		params["model"] = b.Model
+	return h.finishModel(ctx, id, params, b)
+}
+
+// applyPickedModel is applyModel for a launcher/model picked for one send (the chat's menu): with no model the
+// launcher's own default stays, instead of the purpose's configured one.
+func (h *Hub) applyPickedModel(ctx context.Context, params map[string]any) error {
+	name, _ := params["launcher"].(string)
+	if name == "" {
 		return nil
-	} else {
+	}
+	b := ModelBinding{Provider: launcherProvider(name)}
+	if m, _ := params["model"].(string); m != "" {
+		b.Model = m
+	}
+	if e, _ := params["effort"].(string); e != "" {
+		b.Effort = e
+	}
+	return h.finishModel(ctx, "assistant", params, b)
+}
+
+// finishModel puts a final binding into params: the launcher name, the model / effort set, the execution fingerprint.
+func (h *Hub) finishModel(ctx context.Context, id string, params map[string]any, b ModelBinding) error {
+	name, ok := strings.CutPrefix(b.Provider, "launcher.")
+	if !ok {
+		if strings.HasPrefix(id, "plugin.") {
+			params["model"] = b.Model
+			return nil
+		}
 		return errors.New("这个用途不是启动器")
 	}
+	for _, provider := range h.storedLaunchers(ctx) {
+		if provider.Name == name && provider.Kind == "api" {
+			return errors.New("这个用途引用了直接 API 接入，不能作为启动器运行")
+		}
+	}
+	params["launcher"] = name
 	if b.Model != "" {
 		params["model"] = b.Model
 	}

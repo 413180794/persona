@@ -453,19 +453,21 @@ nonisolated struct APIClient: Sendable {
         var text: String
         var images: [ImagePayload]?
         var launcher: String?
+        var model: String?
         var clientMsgID: String?
         var clearDraft: String?
         var todoID: String?
         enum CodingKeys: String, CodingKey {
-            case text, images, launcher, clientMsgID = "client_msg_id", clearDraft = "clear_draft", todoID = "todo_id"
+            case text, images, launcher, model, clientMsgID = "client_msg_id", clearDraft = "clear_draft", todoID = "todo_id"
         }
     }
-    /// launcher switches the model of a headless (assistant) conversation from this message on. clientMsgID stays the
-    /// same on a retry (the node types it once); clearDraft is the computer's draft the user agreed to clear first.
-    func send(_ k: SessionKey, text: String, images: [ImagePayload] = [], launcher: String? = nil,
+    /// launcher / model switch what a headless (assistant) conversation runs on from this message on. clientMsgID
+    /// stays the same on a retry (the node types it once); clearDraft is the computer's draft the user agreed to
+    /// clear first.
+    func send(_ k: SessionKey, text: String, images: [ImagePayload] = [], launcher: String? = nil, model: String? = nil,
               clientMsgID: String? = nil, clearDraft: String? = nil, todoID: String? = nil) async throws {
         try await post(sp(k) + "/messages", body: SendBody(text: text, images: images.isEmpty ? nil : images, launcher: launcher,
-                                                           clientMsgID: clientMsgID, clearDraft: clearDraft, todoID: todoID), timeout: 100)
+                                                           model: model, clientMsgID: clientMsgID, clearDraft: clearDraft, todoID: todoID), timeout: 100)
     }
     func interrupt(_ k: SessionKey) async throws { try await post(sp(k) + "/interrupt") }
     func attach(_ k: SessionKey) async throws { try await post(sp(k) + "/attach") }

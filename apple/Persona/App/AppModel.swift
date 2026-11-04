@@ -646,7 +646,10 @@ final class AppModel {
         do {
             assistantConfig = try await api.setAssistant(launcher: launcher)
             // The main conversation follows the setting (the hub resumes it on this launcher): drop a one-off pick.
-            if let main = assistantMain { assistantLaunchers[main] = nil }
+            if let main = assistantMain {
+                assistantLaunchers[main] = nil
+                assistantModels[main] = nil
+            }
             toast = Toast("Persona 下一条消息起使用 \(launcher)", style: .success)
         } catch { show(error) }
     }
@@ -1332,6 +1335,8 @@ final class AppModel {
 
     /// Launcher chosen in an assistant chat for its next messages (model switch).
     var assistantLaunchers: [SessionKey: String] = [:]
+    /// The model picked for the next message here, with assistantLaunchers (nil: the launcher's default).
+    var assistantModels: [SessionKey: String] = [:]
 
     /// Check at dispatch time too: capabilities can change while a menu or outbox bubble is on screen.
     func allowSend(_ key: SessionKey) -> Bool {
@@ -1397,7 +1402,7 @@ final class AppModel {
     func send(_ key: SessionKey, text: String, images: [ImagePayload] = [], haptic: Bool = true) async -> Bool {
         guard allowSend(key), let api = api(key.group) else { return false }
         do {
-            try await api.send(key, text: text, images: images, launcher: assistantLaunchers[key])
+            try await api.send(key, text: text, images: images, launcher: assistantLaunchers[key], model: assistantModels[key])
             if haptic { Haptics.tap() }
             return true
         } catch {

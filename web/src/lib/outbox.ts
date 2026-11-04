@@ -3,7 +3,7 @@
 // it, as the app's outbox does (AppModel.sendNow / askPersona). A failed one stays with the reason, 重试 and 删除.
 // The conversation's own composer keeps its local sending bubbles (ChatView); both look the same.
 import { api, ApiError, errorText, sessionPath } from "./api";
-import { pickedLauncher, conversationKey } from "./assistant-chat";
+import { pickedLauncher, pickedModel, conversationKey } from "./assistant-chat";
 import { uuid } from "./format";
 import { navigate } from "./router";
 import { getState, refreshAssistant, setOutbox } from "./store";
@@ -32,6 +32,7 @@ export interface OutboxEntry {
   /** The hub could not tell whether it went in: a retry is a new message. */
   newId?: boolean;
   launcher?: string;
+  model?: string;
 }
 
 /** How long a sent message waits for the transcript before its bubble goes (the transcript may word it differently). */
@@ -103,7 +104,7 @@ async function deliver(mid: string, sid: string, e: OutboxEntry, clearDraft?: st
   try {
     await api(`${sessionPath(mid, sid)}/messages`, {
       method: "POST",
-      json: { text: e.text, images: e.images.length ? e.images : undefined, client_msg_id: e.id, launcher: e.launcher || undefined, clear_draft: clearDraft },
+      json: { text: e.text, images: e.images.length ? e.images : undefined, client_msg_id: e.id, launcher: e.launcher || undefined, model: e.model || undefined, clear_draft: clearDraft },
     });
     update(key, e.id, { state: "sent", at: Date.now(), error: undefined, clearable: undefined });
     return true;
@@ -119,9 +120,9 @@ async function deliver(mid: string, sid: string, e: OutboxEntry, clearDraft?: st
 }
 
 /** Shows the message in that conversation and sends it; false when it didn't go (the bubble says why). */
-export function sendToSession(mid: string, sid: string, out: { text: string; images?: OutboxImage[] }, opts: { launcher?: string } = {}): Promise<boolean> {
+export function sendToSession(mid: string, sid: string, out: { text: string; images?: OutboxImage[] }, opts: { launcher?: string; model?: string } = {}): Promise<boolean> {
   const key = outboxKey(mid, sid);
-  const e: OutboxEntry = { id: uuid(), text: out.text, images: out.images ?? [], at: Date.now(), state: "sending", launcher: opts.launcher };
+  const e: OutboxEntry = { id: uuid(), text: out.text, images: out.images ?? [], at: Date.now(), state: "sending", launcher: opts.launcher, model: opts.model };
   setOutbox(key, [...list(key), e]);
   return deliver(mid, sid, e);
 }
@@ -159,7 +160,7 @@ export async function askPersona(text: string): Promise<void> {
   }
   if (a?.main) {
     navigate({ name: "jarvis", sid: a.main });
-    void sendToSession(a.machine_id, a.main, { text }, { launcher: pickedLauncher(outboxKey(a.machine_id, a.main)) });
+    void sendToSession(a.machine_id, a.main, { text }, { launcher: pickedLauncher(outboxKey(a.machine_id, a.main)), model: pickedModel(outboxKey(a.machine_id, a.main)) });
     return;
   }
   const r = await api<{ session: Session }>("/assistant/conversations", { method: "POST", json: { prompt: text, main: true } });
