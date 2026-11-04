@@ -9,6 +9,7 @@ import { AdminError, errorText, getPlugins, installPlugin, previewPlugin, rollba
 import { AdminIcon, type AdminIconName } from "../icons";
 import { canRollBack, canUpgrade, countdown, pluginSourceLabel, pluginStatus, pointLabel, sourceProblem, uploadProblem } from "../logic";
 import { devDialog } from "../router";
+import { PluginMarkets } from "./PluginMarket";
 import type { AdminPlugin, PermissionLine, PluginPreview } from "../types";
 import { Card, Dot, EmptyState, ErrorBox, Field, Loader, Notice, PageHeader, Segmented, Tag, useLoad } from "../parts";
 
@@ -85,6 +86,7 @@ export function Plugins() {
               ))
             )}
           </Card>
+          {data.can_install && <PluginMarkets onChanged={reload} />}
         </>
       )}
       <InstallDialog open={installing} uploadMost={data?.upload_most ?? 0} onClose={() => setInstalling(false)} onDone={reload} />
@@ -216,7 +218,7 @@ function Meta({ label, children, mono }: { label: string; children: React.ReactN
   );
 }
 
-function Permissions({ lines, title, tone }: { lines: PermissionLine[]; title: string; tone?: "orange" }) {
+export function Permissions({ lines, title, tone }: { lines: PermissionLine[]; title: string; tone?: "orange" }) {
   return (
     <div>
       <div className={cx("mb-1.5 text-[11.5px] font-medium", tone === "orange" ? "text-orange" : "text-ink-3")}>{title}</div>
@@ -385,7 +387,7 @@ function InstallDialog({ open, upgrade, uploadMost, onClose, onDone }: { open: b
   );
 }
 
-function PreviewBody({ pv }: { pv: PluginPreview }) {
+export function PreviewBody({ pv }: { pv: PluginPreview }) {
   const now = useNow(1000);
   const left = countdown(pv.expires_at, now);
   const m = pv.manifest;

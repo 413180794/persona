@@ -6118,8 +6118,8 @@ def markets_route(handler, p, body):
         handler.send_json({"markets": list(MARKETS.values())}); return True
     if p == "/api/v1/plugins/-/markets" and method == "POST":
         spec = (req.get("spec") or "").strip()
-        if not spec.startswith(("https://", "github:")):
-            handler.send_json({"error": "市场的地址是 https://… 或 github:owner/repo", "code": "market_failed"}, 400); return True
+        if not spec.startswith(("https://", "github:", "git:", "git@")):
+            handler.send_json({"error": "市场的地址是 https://…、github:owner/repo 或 git:<地址>", "code": "market_failed"}, 400); return True
         if "private" in spec and not req.get("token"):
             handler.send_json({"error": "读不到 %s：找不到（404）：地址不对，或者是私有的，要填 token" % spec, "code": "market_failed"}, 400); return True
         mid = "%010x" % (abs(hash(spec)) % (16 ** 10))
@@ -6147,7 +6147,7 @@ def markets_route(handler, p, body):
         pid = "pv%06d" % (len(_PREVIEWS) + 1)
         cur = PLUGINS.get(c["id"])
         pv = {"preview_id": pid, "manifest": {"id": c["id"], "name": c["name"], "version": c["version"], "description": c["description"]},
-              "permissions": c["permissions"], "permissions_digest": "d-" + c["id"], "expires_at": "2026-11-04T07:10:00Z", "market": c["market"]}
+              "permissions": c["permissions"], "permissions_digest": "d-" + c["id"], "expires_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 600)), "market": c["market"]}
         if cur and cur["source"] == "installed":
             pv.update({"upgrade": True, "from": cur.get("version"), "more_permissions": False})
         _PREVIEWS[pid] = c
@@ -6173,12 +6173,17 @@ def markets_route(handler, p, body):
             if placement == "plugin_page":
                 ui = PLUGINS["example-gateway"]["ui"]
             elif placement == "launcher_section" and q.get("launcher"):
-                ui = [{"plugin": "example-gateway", "id": "panel", "title": "Example 网关", "placement": "launcher_section"}]
+                # "elsewhere" has no hosts (listed on every launcher) and always says the launcher is not its gateway:
+                # clients hide it (docs/plugins.md「声明式 UI」, #1339)
+                ui = [{"plugin": "example-gateway", "id": "panel", "title": "Example 网关", "placement": "launcher_section"},
+                      {"plugin": "example-gateway", "id": "elsewhere", "title": "别家网关", "placement": "launcher_section"}]
         handler.send_json({"ui": ui}); return True
     if len(parts) == 8 and parts[3] == "plugins" and parts[5] == "-" and parts[6] == "ui" and method == "POST":
         if parts[4] != "example-gateway" or "example-gateway" not in PLUGINS:
             handler.send_json({"error": "no such plugin", "code": "not_found"}, 404); return True
         launcher = (req.get("context") or {}).get("launcher", "")
+        if parts[7] == "elsewhere":
+            handler.send_json({"error": "this launcher's gateway is not the plugin's", "code": "unsupported"}, 404); return True
         if req.get("action"):
             handler.send_json(_ui_action(parts[7], req["action"], req.get("values"))); return True
         handler.send_json({"view": _ui_view(parts[7], launcher)}); return True

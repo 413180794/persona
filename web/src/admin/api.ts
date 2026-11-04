@@ -1,5 +1,6 @@
 // The admin API client (docs/admin.md「接口」): a session cookie, not the web client's bearer token. Writes carry the
 // session's CSRF token, which lives in memory only (GET state hands it out again after a reload).
+import { catalogQuery, type Catalog, type Market } from "../lib/plugin-market";
 import type { AddedMachine, AdminPlugin, AdminPlugins, ConnectorRepair, LinkPair, MeshView, PluginPreview } from "./types";
 
 export class AdminError extends Error {
@@ -112,6 +113,7 @@ const MESSAGES: Record<string, string> = {
   busy: "正在预览另一个插件，等它结束再试",
   too_large: "包太大了",
   confirm_required: "先看过它能做什么，确认后再装",
+  no_markets: "这台 hub 读不了插件市场（没有数据库）",
 };
 
 // errorText is what a person reads for a failed call. Codes not listed here (pair_failed, member_hub,
@@ -168,3 +170,15 @@ export const rollbackPlugin = (id: string) => adminApi<AdminPlugin>(`/plugins/${
 export const setPluginEnabled = (id: string, enabled: boolean) => adminApi<AdminPlugin>(`/plugins/${enc(id)}/enabled`, "PUT", { enabled });
 
 export const uninstallPlugin = (id: string, keepData: boolean) => adminApi<{ ok: boolean }>(`/plugins/${enc(id)}`, "DELETE", { keep_data: keepData });
+
+// ── plugin markets (docs/plugins.md「插件市场」): the apps' routes under /plugins/-/, behind the admin session. Installing
+// and upgrading from a market's preview go through installPlugin / upgradePlugin above (the preview's id and digest).
+
+export const getMarkets = () => adminApi<{ markets?: Market[] }>("/plugins/-/markets").then((r) => r.markets ?? []);
+export const addMarket = (spec: string, token?: string) => adminApi<Market>("/plugins/-/markets", "POST", token ? { spec, token } : { spec });
+export const removeMarket = (id: string) => adminApi<{ ok: boolean }>(`/plugins/-/markets/${enc(id)}`, "DELETE");
+export const refreshMarket = (id: string) => adminApi<Market>(`/plugins/-/markets/${enc(id)}/refresh`, "POST");
+export const setMarketToken = (id: string, token: string) => adminApi<Market>(`/plugins/-/markets/${enc(id)}/token`, "PUT", { token });
+export const getCatalog = (q?: string, market?: string, refresh?: boolean) =>
+  adminApi<Catalog>(`/plugins/-/catalog${catalogQuery(q, market, refresh)}`).then((c) => ({ ...c, markets: c.markets ?? [], plugins: c.plugins ?? [] }));
+export const previewFromMarket = (market: string, plugin: string) => adminApi<PluginPreview>("/plugins/-/catalog/preview", "POST", { market, plugin });

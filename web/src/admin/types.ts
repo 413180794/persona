@@ -276,4 +276,6 @@ export interface PluginPreview {
   from?: string;
   more_permissions?: boolean;
   added_permissions?: PermissionLine[];
+  /** The market it comes from, when previewed from one (docs/plugins.md「插件市场」). */
+  market?: string;
 }

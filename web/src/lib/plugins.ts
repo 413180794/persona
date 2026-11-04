@@ -3,6 +3,7 @@
 // upgrading and removing happen on the hub's machine (`personad plugin`), never here.
 import { api, ApiError, enc } from "./api";
 import type { Machine } from "./types";
+import type { UIPlace } from "./plugin-ui";
 
 export type Json = string | number | boolean | null | Json[] | { [k: string]: Json };
 export type JsonObject = { [k: string]: Json };
@@ -85,6 +86,8 @@ export interface HubPluginDetail extends HubPlugin {
   config?: JsonObject;
   secrets?: PluginSecret[];
   permissions?: PluginPermission[];
+  /** The pages it draws in its settings (placement plugin_page, docs/plugins.md「声明式 UI」). */
+  ui?: UIPlace[];
 }
 
 // ── the hub ─────────────────────────────────────────────
@@ -92,6 +95,13 @@ export interface HubPluginDetail extends HubPlugin {
 const base = (id: string) => `/plugins/${enc(id)}/-`;
 
 export const listPlugins = () => api<{ plugins?: HubPlugin[]; can_install?: boolean }>("/plugins").then((r) => r.plugins ?? []);
+/** The list with what this hub allows: installing at all (a database), and markets (docs/plugins.md「插件市场」). */
+export const listPluginsInfo = () =>
+  api<{ plugins?: HubPlugin[]; can_install?: boolean; markets?: boolean }>("/plugins").then((r) => ({
+    plugins: r.plugins ?? [],
+    canInstall: !!r.can_install,
+    markets: !!r.markets,
+  }));
 export const pluginDetail = (id: string) => api<HubPluginDetail>(`${base(id)}/`);
 export const setPluginEnabled = (id: string, enabled: boolean) => api<HubPluginDetail>(`${base(id)}/enabled`, { method: "PUT", json: { enabled } });
 export const setPluginConfig = (id: string, config: JsonObject) => api<HubPluginDetail>(`${base(id)}/config`, { method: "PUT", json: { config } });

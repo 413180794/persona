@@ -188,7 +188,19 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   「启用」开关（立即 `PUT …/-/enabled`），按 `form.fields` 画的表单（文字、数字、开关、选择、文字列表 / 多选，对象单独一组），改了底部浮出「还原 / 保存」，整份 `PUT …/-/config`，
   hub 回 `invalid_config` 时把原因写在那一项下面、草稿留着，数字不是数时不能保存；有未保存的改动时点返回先问。密钥每项只显示已设置 / 未设置，点开在弹窗里输入（`type=password`，不回显），
   已设置的可以清除（再点一次确认）；「提供」「它可以」「关于」（版本、上一个版本、来源、安装自、发布者、https 的主页、警告）。hub.json 来的只读：没有开关、表单、密钥。
-  装、升级、卸载在 hub 的管理界面（`/admin`）或 hub 机器上（`personad plugin`）。截图用 `MOCK_PLUGINS=1` 的假 hub。
+  装、升级、卸载在 hub 的管理界面（`/admin`）或 hub 机器上（`personad plugin`）；hub 有插件市场（列表回 `markets: true`）时也能从市场装（下面）。截图用 `MOCK_PLUGINS=1` 的假 hub。
+  **声明式 UI**（#1330，`settings/PluginView.tsx`，逻辑 `lib/plugin-ui.ts`，`docs/plugins.md`「声明式 UI」）：插件详情多一组「页面」（它的 `ui`），点进去是 `&plugin=<id>/ui/<页面>`，
+  一个组件画全部八种条目：text（四种样式）、metric（连着的几个并排）、progress、row（徽标、可点）、button（连着的放一行，destructive 是红字，submit 是主按钮）、link（只认 https，`openLink` 打开）、field（文字、密钥不回显、数字、开关、选择）、divider；
+  tone 换成角色色（neutral → accent / 正文色，positive → green，caution → orange，danger → red）。按钮有 `confirm` 先弹确认框，`submit` 带上这一页全部 field 的值（开关是 `"true"` / `"false"`，数字不是数就不发），
+  回答里的新 view 换上、`toast` 弹出、`open_url` 用网页的链接打开方式，什么都没有就重画；画不出来是空状态加「重试」。
+  「模型供应商」的启动器详情里，hub 带 `plugin_manager` 时按 `GET /plugins/-/ui?placement=launcher_section&launcher=<名字>[&machine=<第一台在线的电脑>]` 每个插件加一节（标题是插件给的名字）；
+  画的时候插件回 404 `{"code": "unsupported"}`（不写 `hosts` 的一节会列在每个启动器上，插件说这不是它的网关，#1339）就把这一节整个藏掉，不算出错、不显示错误。
+  **插件市场**（`settings/PluginMarket.tsx`，逻辑 `lib/plugin-market.ts`，`docs/plugins.md`「插件市场」）：插件列表下面「插件市场」一组两行。
+  「浏览插件市场」（`&plugin=-market`）：搜索（停顿 250 ms 后查 hub）、按市场筛选的 chip、重新读取全部，读不到的市场在顶上写原因；每行名字、版本、说明、市场、标签和状态（未安装 / 可升级到 x / 已装 x / hub 自带 / 装不了和原因）。
+  点进是详情（`&plugin=-market/<市场>/<插件>`）：说明、标签、「它可以」、「提供」、「关于」；「安装」/「升级到 x」先 `POST …/catalog/preview`，弹出预览（权限、升级的 `旧 → 新`、权限变多时的红色提示和「新增」、剩几分钟，过期就不能点），
+  「同意并安装」/「升级」/「同意新权限并升级」带着预览的 id 和摘要调 `/plugins/-/install` / `/plugins/<id>/-/upgrade`，装好跳到这个插件的详情；从这个市场装的有「卸载」（可留数据），插件详情里也有（`origin` 是 `market:` 的）。
+  「管理市场」（`&plugin=-markets`）：每个市场的名字、token、地址、几个插件 · 多久前读过、说明、读不到的原因和警告；重新读取、填 / 换 / 去掉 token（只写；`git:` 的市场没有这个按钮）、删除（就地确认）；「添加市场」填地址和可选 token，占位文字和说明写三种写法（https、`github:owner/repo`、`git:…`，#1373），
+  页面不查地址的写法，原样交给 hub，hub 读不到时原因写在对话框里；`git:` 的市场用 hub 机器自己的 SSH 凭据，token 一栏不能填。逻辑和文字（`MARKET_SPEC_HINT`）网页和管理界面共用。
   「模型供应商」是全部接入（搜索；Persona 管理 / 来自 ~/.zshrc / 已隐藏），点开是弹窗：按电脑分组的真实参数（`docs/launchers.md`）、
   「额度 · <网关名>」（非直接 API 的，#1326，`settings/LauncherQuota.tsx`，逻辑 `lib/quota.ts`，照 iOS `LauncherQuotaSection`：预算、各账号 / 供应商的窗口和进度条（≥ 70% 橙、≥ 90% 或用完红）、按模型折叠、这个 Key 的用量，右上刷新带 `refresh=1`，`docs/launchers.md`「额度」）、
   测试可用性、函数原文（折叠）、编辑、删除 / 隐藏；新增支持启动器或直接 API（Messages / Responses），hub 的插件有供应商预设时多一个「从插件添加」（`docs/launchers.md`「从插件添加」）；

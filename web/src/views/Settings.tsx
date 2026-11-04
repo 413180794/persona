@@ -18,6 +18,7 @@ import { TranslationSettings } from "./settings/TranslationSettings";
 import { Plugins } from "./settings/Plugins";
 import { HubSettings } from "./settings/HubSettings";
 import { LauncherQuota } from "./settings/LauncherQuota";
+import { LauncherPluginSections } from "./settings/PluginView";
 import { launcherNameProblem, loadPresets, presetBody, presetChoices, presetDefaultModel, presetModelLabel, presetSubtitle, type LauncherPreset } from "../lib/launcher-presets";
 import { Segmented } from "./assistant/parts";
 
@@ -369,6 +370,8 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
   const [confirm, setConfirm] = useState(false);
   const [showDef, setShowDef] = useState(false);
   const mname = (id: string) => machines.find((m) => m.id === id)?.name ?? id;
+  // plugins draw a section here (docs/plugins.md「声明式 UI」 launcher_section)
+  const hasPlugins = useStore((s) => s.features.includes("plugin_manager"));
 
   useEffect(() => {
     setL(null);
@@ -527,6 +530,8 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
               {l.kind !== "api" && l.args?.length ? <KVRow k="额外参数" v={l.args.join(" ")} mono /> : null}
             </KV>
           )}
+
+          {hasPlugins && <LauncherPluginSections launcher={l.name} machine={l.source === "jarvis" ? undefined : testOn[0] || undefined} />}
 
           {groups.map((g) => (
             <DetailBlock key={g.ids.join()} d={g.d} place={groups.length > 1 ? g.ids.map(mname).join("、") : undefined} />

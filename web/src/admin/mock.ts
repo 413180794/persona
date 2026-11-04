@@ -11,6 +11,7 @@
 // upgraded, one waiting for its key), a broken hub.json one; a source containing "fail" does not preview, an upgrade
 // asks for one more host.
 import { setTransport } from "./api";
+import type { CatalogItem, Market } from "../lib/plugin-market";
 import type { AdminMachine, AdminPlugin, AdminState, Device, DiscoveredHub, MeshView, NetworkView, Overview, Peer, PermissionLine, PluginPreview } from "./types";
 
 const SELF = "0d9e8f7a-6b5c-4d3e-8f2a-1b0c9d8e7f6a";
@@ -203,6 +204,47 @@ export function installMock(scenario: string) {
   };
   let pending: PluginPreview | null = null;
 
+  // Markets (docs/plugins.md「插件市场」): a public site and a private GitHub repository (token set, one warning); the
+  // catalog has a plugin to install, two installed ones with an upgrade, a built-in one, and one this hub cannot install.
+  // A spec containing "fail" is not read; "private" without a token asks for one.
+  const MA = "3f2a9c1d0b";
+  const MB = "8e01b7c4a2";
+  let markets: Market[] =
+    scenario === "empty"
+      ? []
+      : [
+          { id: MA, spec: "https://plugins.example.com/persona/", name: "Example 插件", description: "Example 官方维护的插件", has_token: false, plugins: 4, warnings: [], fetched_at: iso(42), added_at: iso(60 * 72) },
+          { id: MB, spec: "github:example/team-plugins", name: "团队插件", has_token: true, plugins: 2, warnings: ["第 3 个插件：没有 manifest，跳过"], fetched_at: iso(95), added_at: iso(60 * 48) },
+        ];
+  const catalogItems = (): CatalogItem[] => {
+    const raw: CatalogItem[] = [
+      { market: MA, market_name: "", id: "example-notes", name: "Example Notes", version: "1.3.0", description: "把 Example Notes 的笔记同步进知识库，并给助手一个搜索工具", publisher: "example", tags: ["笔记", "连接器"],
+        contributes: { connectors: ["examplenotes"] }, permissions: [RUNS, net("files.example.com、notes.example.com"), keys("API Key")] },
+      { market: MA, market_name: "", id: "example-translate", name: "Example 翻译", version: "0.9.0", description: "给助手一个翻译工具，按术语表翻", publisher: "example", homepage: "https://plugins.example.com/translate", tags: ["翻译", "助手"],
+        contributes: { assistant: ["translate"] }, permissions: [RUNS, net("api.translate.example.com"), keys("API Key")] },
+      { market: MA, market_name: "", id: "example-calendar", name: "Example Calendar", version: "0.4.0", description: "把日程同步进知识库", publisher: "example", tags: ["日历"],
+        contributes: { connectors: ["examplecal"] }, permissions: [RUNS, net("calendar.example.com"), keys("API Key")] },
+      { market: MA, market_name: "", id: "telegram", name: "Telegram", version: "1.0.0", description: "用你自己的 Telegram 账号收消息（只读）", publisher: "example", tags: ["连接器"], contributes: { connectors: ["telegram"] }, permissions: [RUNS] },
+      { market: MB, market_name: "", id: "team-digest", name: "每日摘要", version: "2.3.0", description: "每天早上把收件箱和 Agent 的进展总结成一条消息", publisher: "team", tags: ["摘要", "事件"],
+        contributes: { events: ["digest"] }, permissions: [RUNS, { key: "events", title: "收到 hub 的事件", detail: "收件箱里有新的或更新了的条目；有 Agent 做完了" }] },
+      { market: MB, market_name: "", id: "team-windows", name: "Windows 工具", version: "0.2.0", description: "只有 Windows 版的包", publisher: "team", tags: [], contributes: { assistant: ["tools"] }, permissions: [RUNS],
+        problem: "没有这台 hub（linux-amd64）能用的包" },
+    ];
+    return raw
+      .filter((c) => markets.some((m) => m.id === c.market))
+      .map((c) => {
+        const pl = plugins.find((p) => p.id === c.id);
+        const it: CatalogItem = { ...c, market_name: markets.find((m) => m.id === c.market)?.name ?? "" };
+        if (pl) {
+          it.installed = pl.version;
+          it.installed_source = pl.source;
+          it.from_this_market = pl.origin === `market:${c.market}/${c.id}`;
+          it.upgradable = pl.source === "installed" && (pl.version ?? "") < c.version;
+        }
+        return it;
+      });
+  };
+
   const overview = (): Overview => ({
     hub: { hub_id: SELF, name: state.hub_name, name_set: true, default_name: "server", version: state.version, started_at: startedAt, os: "linux", arch: "amd64", container: false, can_restart: true },
     listen: network.listen,
@@ -317,10 +359,44 @@ export function installMock(scenario: string) {
         if (!pending || body.preview_id !== pending.preview_id) return fail(400, "install_failed", "预览过期了，重新预览一次");
         const m = pending.manifest;
         const p: AdminPlugin = { id: m.id, name: m.name, kind: "connectors", status: "needs_setup", version: m.version, source: "installed", enabled: true, description: m.description,
-          contributes: { connectors: ["exampleweather"] }, needs_setup: ["API Key"], origin: "dir:/opt/removed/example-weather", publisher: m.publisher, permissions: pending.permissions };
+          contributes: { connectors: ["exampleweather"] }, needs_setup: ["API Key"], origin: pending.market ? `market:${pending.market}/${m.id}` : "dir:/opt/removed/example-weather", publisher: m.publisher, permissions: pending.permissions };
         plugins = [...plugins, p].sort((a, b) => a.id.localeCompare(b.id));
         pending = null;
         return json(p);
+      }
+      case "GET /plugins/-/markets":
+        return json({ markets });
+      case "POST /plugins/-/markets": {
+        await wait(800);
+        const spec = String(body.spec ?? "").trim();
+        if (!/^(https:\/\/|github:|git:|git@)/.test(spec)) return fail(400, "market_failed", "市场的地址是 https://…、github:owner/repo 或 git:<地址>");
+        if (spec.includes("fail")) return fail(400, "market_failed", `读不到 ${spec}：找不到（404）：地址不对，或者是私有的，要填 token`);
+        if (spec.includes("private") && !body.token) return fail(400, "market_failed", `读不到 ${spec}：要 token（401）`);
+        const m: Market = { id: `m${Date.now().toString(16).slice(-8)}`, spec, name: spec.replace(/^(github|git):/, "").replace(/\.git(#.*)?$/, "").split(/[/:]/).filter(Boolean).pop() ?? spec, has_token: Boolean(body.token), plugins: 0, warnings: [], fetched_at: iso(0), added_at: iso(0) };
+        markets = [...markets, m];
+        return json(m);
+      }
+      case "GET /plugins/-/catalog": {
+        const q = new URLSearchParams(url.split("?")[1] ?? "");
+        if (q.get("refresh") === "1") await wait(700);
+        const words = (q.get("q") ?? "").toLowerCase();
+        const only = q.get("market") ?? "";
+        const items = catalogItems().filter(
+          (c) => (!only || c.market === only) && (!words || [c.id, c.name, c.description ?? "", c.publisher ?? "", ...(c.tags ?? [])].join("\n").toLowerCase().includes(words)),
+        );
+        return json({ markets, plugins: items, platform: "linux-amd64" });
+      }
+      case "POST /plugins/-/catalog/preview": {
+        await wait(700);
+        const c = catalogItems().find((x) => x.market === body.market && x.id === body.plugin);
+        if (!c || c.problem) return fail(400, "invalid_plugin", c?.problem ?? `这个市场里没有插件 ${body.plugin}`);
+        const cur = plugins.find((p) => p.id === c.id && p.source === "installed");
+        const base = { preview_id: `pv_${Date.now()}`, permissions_digest: "a7e2".repeat(16), expires_at: later(10), market: c.market, permissions: c.permissions ?? [] };
+        const manifest = { id: c.id, name: c.name, version: c.version, description: c.description, publisher: c.publisher, contributes: Object.fromEntries(Object.entries(c.contributes ?? {}).map(([k, v]) => [k, v.map(() => ({}))])) };
+        pending = cur
+          ? { ...base, manifest, upgrade: true, from: cur.version, more_permissions: c.id === "example-notes", added_permissions: c.id === "example-notes" ? [{ key: "network", title: "访问更多网络", detail: "files.example.com" }] : undefined }
+          : { ...base, manifest };
+        return json(pending);
       }
       case "GET /mesh":
         return scenario === "nopeers" ? fail(501, "not_implemented") : json(mesh);
@@ -385,6 +461,20 @@ export function installMock(scenario: string) {
       }
       if (m[2] === "/reconnect") return json({ ok: true });
       if (m[2] === "/link-pair") return json({ pair_url: `jarvis://link?url=https%3A%2F%2Fhub.example.com%3A18662&machine=${id}&token=jp_mock`, expires_at: later(10), command: `jarvis-link pair 'jarvis://link?…&machine=${id}'` });
+    }
+    const mk = /^\/plugins\/-\/markets\/([^/?]+)(\/[a-z]+)?$/.exec(path);
+    if (mk) {
+      const m = markets.find((x) => x.id === decodeURIComponent(mk[1]));
+      if (!m) return fail(404, "not_found", "没有这个市场");
+      if (method === "DELETE") {
+        markets = markets.filter((x) => x !== m);
+        return json({ ok: true });
+      }
+      await wait(600);
+      const read = { ...m, fetched_at: iso(0) };
+      if (mk[2] === "/token") read.has_token = Boolean(body.token);
+      markets = markets.map((x) => (x.id === m.id ? read : x));
+      return json(read);
     }
     const pl = /^\/plugins\/([^/?]+)(\/[a-z]+)?$/.exec(path);
     if (pl) {

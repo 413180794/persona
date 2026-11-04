@@ -20,7 +20,7 @@ const P = {
   upload: <g><path d="M12 15V3M7 8l5-5 5 5" /><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" /></g>,
 } satisfies Record<string, React.ReactNode>;
 
-const SHARED = ["machine", "copy", "plus", "x", "check", "retry", "key", "logout", "sun", "moon", "monitor", "menu", "web", "terminal", "chevronRight", "spark", "external", "info", "chevron", "undo", "up", "folder"] as const;
+const SHARED = ["machine", "copy", "plus", "x", "check", "retry", "key", "logout", "sun", "moon", "monitor", "menu", "web", "terminal", "chevronRight", "spark", "external", "info", "chevron", "undo", "up", "folder", "search", "git"] as const;
 
 export type AdminIconName = keyof typeof P | (typeof SHARED)[number];
 

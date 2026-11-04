@@ -409,6 +409,7 @@ iOS（Mac 共用同一套页面）在 hub 带 `plugin_manager` 时，设置首�
 - 截图：`MOCK_PLUGINS=1` 的假 hub 有五个状态各不相同的示例插件；`-tab settings -openPlugins YES`（`-openPlugin <id>` 直接进详情）。
   UI 测试 `PluginSettingsTests`（`TEST_RUNNER_JARVIS_PLUGINS_HUB`），单元测试 `PluginsModelTests`。
 - 网页（#1207）：设置 › 插件，同样的列表和详情（`web/src/views/settings/Plugins.tsx`、`web/src/lib/plugins.ts`，`/settings?tab=plugins&plugin=<id>`），见 `docs/web.md`「设置」。
+  #1330 加上声明式 UI（`settings/PluginView.tsx`、`lib/plugin-ui.ts`：插件详情的「页面」、启动器详情里的一节）和插件市场（`settings/PluginMarket.tsx`、`lib/plugin-market.ts`：目录、详情、管理市场）。
 - Android（#1206）同样的功能，入口在设置首页的「扩展」一节，代码和截图方法见 [android.md](android.md)「插件（设置 › 插件）」。
 
 ## 管理界面：插件
@@ -421,7 +422,8 @@ hub 管理界面（[admin.md](admin.md)）的「插件」页（`web/src/admin/pa
   拿到预览才显示名字、版本、发布者、描述、「它可以」逐项、提供什么、警告和预览剩几分钟，**点「同意并安装」才带着预览的 `permissions_digest` 安装**。
 - 升级：同样先预览（版本 `旧 → 新`）；权限变多时顶部红色提示「新版本要的权限变多了」，单列「新增」几项，按钮变成红色的「同意新权限并升级」，不同意就不升；没变多是普通的「升级」。
 - 回滚、卸载都要在对话框里确认；卸载可以勾「保留它的数据」（`~/.persona/plugins/data/<id>/`）。
-- 截图：`cd web && npx vite`，`/admin/plugins?mock=app&theme=dark`，`?dialog=install|upload|preview|upgrade|uninstall|details`（`web/src/admin/mock.ts`）。
+- 插件市场（#1330）：列表下面登记市场（添加、删除、重新读取、换 token）和市场的目录（搜索、按市场筛选），从目录安装 / 升级先预览、同意后走上面的安装 / 升级，见 [admin.md](admin.md)「插件」。
+- 截图：`cd web && npx vite`，`/admin/plugins?mock=app&theme=dark`，`?dialog=install|upload|preview|upgrade|uninstall|details|market|market-add`（`web/src/admin/mock.ts`）。
 
 ![管理界面的插件页（浅色）：列表、展开的「它可以」和关于](screenshots/admin-plugins-light.png)
 

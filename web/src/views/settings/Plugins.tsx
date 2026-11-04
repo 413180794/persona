@@ -6,18 +6,62 @@
 import { useEffect, useMemo, useState } from "react";
 import { errorText } from "../../lib/api";
 import { useStore } from "../../lib/store";
+import { marketOf, pluginsRoute, routeSub } from "../../lib/plugin-market";
 import {
-  choiceLabel, clearPluginSecret, compact, configError, fieldLabel, fieldTitle, isDirty, listItems, listPlugins, listSummary, numberProblems,
+  choiceLabel, clearPluginSecret, compact, configError, fieldLabel, fieldTitle, isDirty, listItems, listPluginsInfo, listSummary, numberProblems,
   placeholder, pluginDetail, pluginState, pluginTone, pointText, readNumber, same, secretState, setAt, setPluginConfig, setPluginEnabled,
   machineStatus, saveFooter, setPluginSecret, sourceText, stateLine, valueAt,
   type HubPlugin, type HubPluginDetail, type Json, type JsonObject, type PluginField, type PluginSecret,
 } from "../../lib/plugins";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { MarketCatalog, MarketItem, Markets, UninstallDialog } from "./PluginMarket";
+import { PluginUI } from "./PluginView";
 import { Group, Pill, Row, Switch } from "./SettingsParts";
 
+/**
+ * The tab's pages, by its `plugin` parameter (lib/plugin-market.ts pluginsRoute): the list, a plugin, a page a plugin
+ * draws, and the market (its catalog, one plugin of it, the markets).
+ */
 export function Plugins({ open, onOpen }: { open: string | null; onOpen: (id: string | null) => void }) {
-  return open ? <PluginDetail key={open} id={open} onBack={() => onOpen(null)} /> : <PluginList onOpen={onOpen} />;
+  const r = pluginsRoute(open);
+  const go = (to: Parameters<typeof routeSub>[0]) => onOpen(routeSub(to));
+  switch (r.kind) {
+    case "plugin":
+      return <PluginDetail key={r.id} id={r.id} onBack={() => onOpen(null)} onPage={(ui) => go({ kind: "page", id: r.id, ui })} />;
+    case "page":
+      return <PluginPage key={open} id={r.id} ui={r.ui} onBack={() => go({ kind: "plugin", id: r.id })} />;
+    case "catalog":
+      return <MarketCatalog onBack={() => onOpen(null)} onOpen={(it) => go({ kind: "item", market: it.market, id: it.id })} onMarkets={() => go({ kind: "markets" })} />;
+    case "item":
+      return <MarketItem key={open} market={r.market} id={r.id} onBack={() => go({ kind: "catalog" })} onInstalled={(id) => go({ kind: "plugin", id })} />;
+    case "markets":
+      return <Markets onBack={() => go({ kind: "catalog" })} />;
+    default:
+      return <PluginList onOpen={onOpen} onMarket={() => go({ kind: "catalog" })} onMarkets={() => go({ kind: "markets" })} />;
+  }
+}
+
+/** A page a plugin draws (placement plugin_page), under the plugin's name. */
+function PluginPage({ id, ui, onBack }: { id: string; ui: string; onBack: () => void }) {
+  const [d, setD] = useState<HubPluginDetail | null>(null);
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    pluginDetail(id).then(setD, () => {});
+  }, [id]);
+  const title = d?.ui?.find((u) => u.id === ui)?.title;
+  return (
+    <>
+      <div className="mb-3 flex items-center gap-2">
+        <Button tone="quiet" icon="chevronLeft" onClick={onBack} className="-ml-2">
+          <span className="max-w-[240px] truncate">{d?.name ?? id}</span>
+        </Button>
+        <span className="flex-1" />
+        <IconButton icon="retry" label="重新画" onClick={() => setN((x) => x + 1)} />
+      </div>
+      <PluginUI key={n} plugin={id} ui={ui} title={title} />
+    </>
+  );
 }
 
 const DOT: Record<ReturnType<typeof pluginTone>, string> = { red: "bg-red", orange: "bg-orange", green: "bg-green", idle: "bg-line-strong" };
@@ -34,14 +78,15 @@ function StateDot({ plugin }: { plugin?: HubPlugin | null }) {
 
 // ── the list ────────────────────────────────────────────
 
-function PluginList({ onOpen }: { onOpen: (id: string) => void }) {
+function PluginList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) => void; onMarket: () => void; onMarkets: () => void }) {
   const [plugins, setPlugins] = useState<HubPlugin[] | null>(null);
+  const [markets, setMarkets] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const load = () => {
     setLoading(true);
-    listPlugins()
-      .then((list) => (setPlugins(list), setError("")))
+    listPluginsInfo()
+      .then((r) => (setPlugins(r.plugins), setMarkets(r.markets), setError("")))
       .catch((e) => setError(errorText(e)))
       .finally(() => setLoading(false));
   };
@@ -114,6 +159,28 @@ function PluginList({ onOpen }: { onOpen: (id: string) => void }) {
           </button>
         ))}
       </Group>
+      {markets && (
+        <Group title="插件市场" footer="市场是网站或 GitHub 仓库发布的插件索引：在这里搜索、安装、升级，从市场装的也能在这里卸载。">
+          <Row
+            label={
+              <span className="flex items-center gap-2">
+                <Icon name="search" size={13} className="shrink-0 text-ink-3" />
+                浏览插件市场
+              </span>
+            }
+            onClick={onMarket}
+          />
+          <Row
+            label={
+              <span className="flex items-center gap-2">
+                <Icon name="gear" size={13} className="shrink-0 text-ink-3" />
+                管理市场
+              </span>
+            }
+            onClick={onMarkets}
+          />
+        </Group>
+      )}
     </>
   );
 }
@@ -123,7 +190,8 @@ function PluginList({ onOpen }: { onOpen: (id: string) => void }) {
 /** A number field as typed, by dotted path, until it reads as one. */
 type Typed = Record<string, { text: string; integer: boolean }>;
 
-function PluginDetail({ id, onBack }: { id: string; onBack: () => void }) {
+function PluginDetail({ id, onBack, onPage }: { id: string; onBack: () => void; onPage: (ui: string) => void }) {
+  const [removing, setRemoving] = useState(false);
   const [detail, setDetail] = useState<HubPluginDetail | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -292,6 +360,23 @@ function PluginDetail({ id, onBack }: { id: string; onBack: () => void }) {
             </Group>
           )}
 
+          {!!p.ui?.length && (
+            <Group title="页面" footer="这些页面由插件画，按钮的动作交给插件处理。">
+              {p.ui.map((u) => (
+                <Row
+                  key={u.id}
+                  label={
+                    <span className="flex items-center gap-2">
+                      <Icon name="layers" size={13} className="shrink-0 text-ink-3" />
+                      {u.title || u.id}
+                    </span>
+                  }
+                  onClick={() => onPage(u.id)}
+                />
+              ))}
+            </Group>
+          )}
+
           {editable && fields.length > 0 && (
             <>
               {fieldErrors[""] && <p role="alert" className="mb-3 rounded-[8px] bg-red-tint px-3 py-2 text-[12px] break-words text-red">没有保存：{fieldErrors[""]}</p>}
@@ -360,8 +445,18 @@ function PluginDetail({ id, onBack }: { id: string; onBack: () => void }) {
           )}
 
           <About d={p} />
+
+          {marketOf(p.origin) && (
+            <Group footer="这个插件是从插件市场装的：卸载后可以在市场里重新安装。">
+              <button type="button" onClick={() => setRemoving(true)} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[13px] whitespace-nowrap text-red transition-colors hover:bg-red-tint">
+                <Icon name="trash" size={13} className="shrink-0" />
+                卸载
+              </button>
+            </Group>
+          )}
         </>
       )}
+      {removing && p && <UninstallDialog id={p.id} name={p.name} onClose={() => setRemoving(false)} onDone={onBack} />}
 
       {dirty && (
         <div className="sticky bottom-3 z-10 mt-2 flex items-center gap-2 rounded-card bg-surface px-3 py-2 shadow-overlay" style={{ animation: `fade-up 220ms ${EASE} both` }}>
