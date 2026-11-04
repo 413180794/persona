@@ -146,7 +146,15 @@ private fun ChatPage(
     var interactionFeedback by remember { mutableStateOf<InteractionSubmission?>(null) }
     var uncertain by remember { mutableStateOf(emptySet<String>()) }
     var busyId by remember { mutableStateOf<String?>(null) }
-    val requests = allRequests.filter { it.sessionKey == key && it.id !in resolved }
+    // The assistant's tasks (docs/unified-entry.md): their agents' questions are answered here too, oldest first.
+    val tasks = chrome.tasks
+    val taskTodos by (tasks?.todos ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList<persona.core.contracts.Todo>()) })
+        .collectAsStateWithLifecycle()
+    val taskKeys = remember(taskTodos, key) {
+        taskTodos.filter { it.origin == key.sessionId && it.doneAt == null }
+            .flatMap { t -> t.activeAgents.map { SessionKey(it.machineId, it.sessionId) } }.toSet()
+    }
+    val requests = allRequests.filter { (it.sessionKey == key || it.sessionKey in taskKeys) && it.id !in resolved }
         .sortedBy { if (it.id == chrome.requestId) 0 else 1 }
     val messages = allMessages.filter {
         it.session == key && snapshot.items.none { item -> item.id == it.clientMessageId || MessageEcho.tag(item) == it.clientMessageId }
@@ -215,7 +223,14 @@ private fun ChatPage(
         value = withContext(Dispatchers.Default) { timeline.lines(items, liveId, openWork.toSet()) }
         projectedFrom = items
     }
-    val lines = remember(projection, search.selected) { searchVisibleLines(projection.lines, search.selected?.itemId).asReversed() }
+    val feeds by (tasks?.feeds ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyMap<String, List<persona.core.contracts.FeedItem>>()) })
+        .collectAsStateWithLifecycle()
+    val feed = feeds[key.sessionId].orEmpty()
+    LaunchedEffect(key, tasks) { tasks?.load(key.sessionId); tasks?.loadTodayIfMain(key.sessionId) }
+    val lines = remember(projection, search.selected, feed, tasks) {
+        searchVisibleLines(projection.lines, search.selected?.itemId)
+            .let { if (tasks != null) persona.core.domain.tasks.AssistantLines.lines(it, feed) else it }.asReversed()
+    }
     val searchableItems by produceState(emptyList<Item>(), snapshot.items, timelineVersion, search.visible) {
         if (search.visible) value = withContext(Dispatchers.Default) { timeline.searchItems(snapshot.items) }
     }
@@ -301,6 +316,12 @@ private fun ChatPage(
         if (readOnly || !canSend) return
         if (sending || submittedDraft != null) return
         if (command == null && ((!composer.hasContent && linkContexts.isEmpty()) || !composer.ready)) return
+        // Routed to a task (「对「xx」说」): straight to its agent, not to Persona (docs/unified-entry.md「指向谁」).
+        if (command == null && tasks != null && linkContexts.isEmpty() && composer.attachments.isEmpty() &&
+            tasks.sendRouted(key.sessionId, composer.value.text.trim()) { notice = operationFeedback(it).message }) {
+            composer.clearIfUnchanged(composer.draft)
+            return
+        }
         val draft = composer.draft
         val refs = if (command == null) linkContexts else emptyList()
         val wireText = command ?: linkMessage(composer.message(), refs)
@@ -335,6 +356,11 @@ private fun ChatPage(
             photos = photos, pictures = { chatViewerImages(key, currentItems, repository) },
             openImages = { images, index -> viewer = ViewerRequest(images, index) },
             menu = messageMenu, retryLineId = retryId, onRetry = { currentSend("继续") })
+    }
+    val taskHost = tasks?.let { store ->
+        AssistantTaskHost(store, key.sessionId, sessionList, { id -> machines.firstOrNull { it.id == id }?.name?.takeIf(String::isNotBlank) ?: id },
+            onOpen = { k -> chrome.onOpenSession?.invoke(k) }, onError = { notice = operationFeedback(it).message },
+            say = { text -> scope.launch { runCatching { sender.send(key, text, UUID.randomUUID().toString()) } } })
     }
     LaunchedEffect(allMessages, submittedDraft) {
         submittedDraft?.let { (id, draft) ->
@@ -475,6 +501,7 @@ private fun ChatPage(
                                     ChatQueueStrip(session, chrome.actions, composer, { notice = it }, sessions::refresh)
                                 // A source that only lets the phone read says so where the typing would be.
                                 if (!canSend && session != null && (requests.isEmpty() || requestCollapsed)) ChatSourceNote(session)
+                                taskHost?.let { AssistantTaskBar(it) }
                                 ChatComposer(key, composer, session?.status == "working", sending || submittedDraft != null,
                                     // /clear and /model type into Claude's pane: Claude in a terminal engine only (positive check).
                                     canClear = clearingPane == null && session?.canTypeClaudeCommands == true,
@@ -529,6 +556,7 @@ private fun ChatPage(
                                 }
                                 items(lines, key = { it.id }, contentType = { it.contentType() }) { line ->
                                     ChatSearchHighlight(search, line.id) {
+                                        androidx.compose.runtime.CompositionLocalProvider(LocalAssistantTaskHost provides taskHost) {
                                         ChatLineContent(line, key, loader,
                                         line.recordedDuration(snapshot.recordedTurnDurations),
                                         ::toggle, ::expand, folding, foldErrors,
@@ -546,6 +574,7 @@ private fun ChatPage(
                                         lastWorkStep = (line as? ChatLine.Step)?.let {
                                             contentWorkGroups[it.groupId]?.steps?.lastOrNull()?.id == it.step.id
                                         } == true)
+                                        }
                                     }
                                 }
                                 if (snapshot.loadingOlder) item(key = "loading-older", contentType = "loading") { JLoading() }

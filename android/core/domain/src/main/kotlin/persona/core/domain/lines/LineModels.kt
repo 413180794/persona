@@ -165,6 +165,9 @@ sealed interface ChatLine {
     data class Recaps(val items: List<LineItem>) : ChatLine {
         override val id get() = "rc-" + items.first().id
     }
+    /** What the assistant's conversation adds to the transcript (docs/unified-entry.md, `tasks.AssistantLines`): the
+     *  hub's feed items, quick results, day lines; [payload] is drawn by the chat's host. */
+    data class Extra(override val id: String, val payload: Any) : ChatLine
 }
 
 data class WorkSummary(val full: List<String>, val short: List<String>) {

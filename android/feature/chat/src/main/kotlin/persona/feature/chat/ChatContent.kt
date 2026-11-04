@@ -208,6 +208,7 @@ internal fun ChatLineContent(
             else -> ChatSystemLine(line.row.item?.text.orEmpty(), line.row.item?.task?.failed == true)
         }
         is ChatLine.Recaps -> RecapLine(line.items.map { it.item })
+        is ChatLine.Extra -> AssistantExtraLine(line.payload, LocalAssistantTaskHost.current)
         is ChatLine.ApiError -> ApiErrorLine(line)
         is ChatLine.UserImages -> if (!imagesInUserBubble) UserBubbleFrame {
             line.images.forEach { ChatPicture(session, it.item, loader, alignEnd = true) }

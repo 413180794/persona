@@ -633,6 +633,24 @@ adb -s emulator-5600 exec-out screencap -p > /tmp/jarvis-state-offline-dark.png
 
 Debug 包的设置页底部另有一行「组件目录（调试版）」，自动化启动（`debug.automation`）时隐藏。组件目录的路由和页面只在 `src/debug/` 编译，Release 包里没有。兼容 `--es openSession machine/session`。通知、公开深链和 debug 参数最终汇入同一个路由器；旧通知需要等待会话元数据加载后再分流。
 
+## 主对话统一入口（#930）
+
+和 iOS、网页同一套（[unified-entry.md](unified-entry.md)），代码尽量在新文件里，对话页只留几个挂接点：
+
+| 部分 | 在哪 |
+| --- | --- |
+| 线上类型：计划、对话动态、待办、`todos` / `assistant_feed` / `task_plan` 事件，提问的 `task_title` | `core/contracts` 的 `Tasks.kt`、`ServerEvent.kt`、`Models.kt` |
+| 接口 | `core/contracts/api/TasksApi.kt`、`core/hub/HttpTasksApi.kt` |
+| 状态（待办、计划、每段对话的动态、路由、发送）和纯计算（`AssistantLines`：动态放在它发生的那一轮末尾、工作行后面的秒办结果、每天一行日期；`TaskState`；`QuickResult`） | `core/domain/tasks/Tasks.kt`，单测 `AssistantLinesTest` |
+| 新的一种对话行 `ChatLine.Extra(id, payload)`，由对话页的宿主画 | `core/domain/lines/LineModels.kt` |
+| 卡片：计划卡、任务卡（不是今天的折成一行）、回执、答过的问题、路由气泡、「今天」、消息卡、秒办结果、日期；输入框上方的任务坞和路由标签 | `feature/chat/AssistantTasks.kt` |
+| 挂接点：`ChatChromeBindings.tasks`（`ChatDestination` 只给助手对话）、`ChatPage` 里行的合并、任务 Agent 的提问并进原来的提问面板（`requests`）、发送前看路由、底部栏的任务坞 | `feature/chat/ChatScreen.kt`、`ChatEntries.kt`、`app/di/ChatWiringModule.kt` |
+
+- 点任务卡、任务坞、回执的「看看」打开那个任务最要紧的 Agent 的对话（`ChatRoute`），不另做详情页。
+- 秒办结果在 Android 上没有撤销（提醒和日程在 iPhone 上），写「在 iPhone 上」。
+- 多 hub：只有当前组（不带组后缀的机器 id）的任务能对上会话，其他组的任务卡显示「正在开」，提问不并进来；要做时在 `GroupTranslation` 里给待办的机器 id 加组后缀。
+- 截图：`MOCK_TASKS=1`（可加 `MOCK_TASKS_AT`、`MOCK_TASKS_NO_ASKS`）导出后跑 `./scripts/app/android.sh shots`，助手对话那张就是主对话。
+
 ## 对话内容：照片、文件、长按菜单、工具详情、报错卡
 
 主线旧 App（d2d484ef、4588285d）对话部分的移植（2026-11-02），按新设计系统重画；行为和 iOS 对齐。看图和标注见上文「看图和标注」，文件页见下文「对话里的文件和 Git」。

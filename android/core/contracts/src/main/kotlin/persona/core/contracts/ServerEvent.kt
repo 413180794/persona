@@ -164,6 +164,9 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             "hook_event" -> input.json.decodeFromJsonElement<HookEvent>(obj)
             "lark" -> input.json.decodeFromJsonElement<LarkEvent>(obj)
             "inbox" -> input.json.decodeFromJsonElement<InboxEvent>(obj)
+            "todos" -> input.json.decodeFromJsonElement<TodosEvent>(obj)
+            "assistant_feed" -> input.json.decodeFromJsonElement<AssistantFeedEvent>(obj)
+            "task_plan" -> input.json.decodeFromJsonElement<TaskPlanEvent>(obj)
             "terminal" -> input.json.decodeFromJsonElement<TerminalEvent>(obj).also { event ->
                 if (!event.streamEnded && (event.epoch == null || event.seq == null || event.frameBytes == null)) {
                     throw SerializationException("Terminal frame requires epoch, seq and base64 data")
@@ -197,6 +200,9 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             is HookEvent -> "hook_event" to output.json.encodeToJsonElement(value)
             is LarkEvent -> "lark" to output.json.encodeToJsonElement(value)
             is InboxEvent -> "inbox" to output.json.encodeToJsonElement(value)
+            is TodosEvent -> "todos" to output.json.encodeToJsonElement(value)
+            is AssistantFeedEvent -> "assistant_feed" to output.json.encodeToJsonElement(value)
+            is TaskPlanEvent -> "task_plan" to output.json.encodeToJsonElement(value)
             is TerminalEvent -> "terminal" to output.json.encodeToJsonElement(value)
             is TerminalControlEvent -> "terminal_control" to output.json.encodeToJsonElement(value)
             is ErrorEvent -> "error" to output.json.encodeToJsonElement(value)

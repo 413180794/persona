@@ -299,6 +299,8 @@ data class Interaction(
     @SerialName("machine_id") val machineId: String = "",
     @SerialName("session_id") val sessionId: String = "",
     @SerialName("session_title") val sessionTitle: String? = null,
+    /** The task its agent works for (docs/unified-entry.md), named by the hub. */
+    @SerialName("task_title") val taskTitle: String? = null,
     @SerialName("cwd") val cwd: String? = null,
     @WireEnum("question", "plan", "permission", "screen", "elicitation", "unknown")
     @SerialName("kind") val kind: String = "unknown",
