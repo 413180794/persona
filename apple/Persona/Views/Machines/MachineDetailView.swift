@@ -49,6 +49,7 @@ struct MachineDetailView: View {
                         if !online { connection(machine) }
                     }
                     agentsSection(machine)
+                    if let computer = machine.computer { ComputerSection(ref: ref, computer: computer, online: online) }
                     VStack(alignment: .leading, spacing: Theme.Space.m) {
                         heading("监控")
                         if let s = data?.latest, online { NowGrid(sample: s, cores: system?.cores) }

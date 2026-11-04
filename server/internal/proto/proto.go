@@ -53,6 +53,8 @@ type Machine struct {
 	// found on the machine (empty while offline). docs/protocol.md「引擎」.
 	Engine  string   `json:"engine"`
 	Engines []Engine `json:"engines"`
+	// Computer: operating it through Cua Driver, while the plugin cua is on and it is a Mac (Computer).
+	Computer *Computer `json:"computer,omitempty"`
 	// Hub mesh (docs/mesh.md): the hub that connects to this machine (its owner), its name, the machine's own id
 	// (~/.jarvis/machine-uid, empty for an old node or one never reached) and how the hub the client talks to gets
 	// there. A hub without peers fills them in for its own machines too.
@@ -117,6 +119,35 @@ type Engine struct {
 	Available bool   `json:"available"`
 	Version   string `json:"version,omitempty"`
 	Note      string `json:"note,omitempty"`
+}
+
+// Computer is a Mac the assistant may operate through Cua Driver (the built-in plugin cua, docs/computer-use.md). In
+// proto.Machine only while the plugin is on, and only for a Mac. Enabled: the user turned it on for this machine; the
+// rest is what the node found when last asked (computer.status), and only for an enabled one.
+type Computer struct {
+	Enabled   bool   `json:"enabled"`
+	Installed bool   `json:"installed"`
+	Version   string `json:"version,omitempty"`
+	// Daemon: Cua Driver's daemon (CuaDriver.app) runs; nothing works without it.
+	Daemon bool `json:"daemon"`
+	// Accessibility, ScreenRecording: the daemon's macOS permissions, granted | missing | unknown.
+	Accessibility   string `json:"accessibility,omitempty"`
+	ScreenRecording string `json:"screen_recording,omitempty"`
+	// Desktop: active (this user's desktop is on screen) | locked (its screen is locked) | away (logged out, or another
+	// user is on the console). Cua Driver needs it active.
+	Desktop string `json:"desktop,omitempty"`
+	// Ready: all of the above in place. Note says what is missing and what to do, in Chinese for the app.
+	Ready   bool      `json:"ready"`
+	Note    string    `json:"note,omitempty"`
+	Checked time.Time `json:"checked,omitempty"`
+}
+
+// ComputerResult is what one Cua Driver tool answered (node computer.call): its JSON (Output), or Text when it was not
+// JSON, and the screenshot it took, if any.
+type ComputerResult struct {
+	Output json.RawMessage `json:"output,omitempty"`
+	Text   string          `json:"text,omitempty"`
+	Image  *Image          `json:"image,omitempty"`
 }
 
 // Protocol is the app <-> hub protocol's major version: it goes up only for a change an older app cannot live with

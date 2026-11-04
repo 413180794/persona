@@ -72,7 +72,7 @@ func TestPluginCommand(t *testing.T) {
 	run("", "disable", "example-notes")
 	run("", "enable", "example-notes")
 	run("", "uninstall", "example-notes")
-	if got := run("", "list"); !strings.Contains(got, "没有插件") {
-		t.Fatal(got)
+	if got := run("", "list"); strings.Contains(got, "example-notes") || !strings.Contains(got, cuaPluginID) {
+		t.Fatal("gone; the built-in ones stay:", got)
 	}
 }

@@ -9,7 +9,7 @@ Persona 的插件底座（#1101）：开源仓库只放通用能力和**扩展�
 
 | 来源 | 是什么 | 能做什么 |
 | --- | --- | --- |
-| `builtin` | personad 自带，清单编在二进制里（现在只有 Telegram 连接器） | 开关、配置、密钥；不能卸载 |
+| `builtin` | personad 自带，清单编在二进制里（Telegram 连接器，操控电脑 `cua`） | 开关、配置、密钥；不能卸载 |
 | `hub.json` | hub.json 的 `plugins[]`，主人手写（现在的语音插件），见下面「hub.json 里的插件」 | 只读：去 hub.json 或管理界面改 |
 | `installed` | 用 `personad plugin install` 装在 hub 机器上的包，或跑在别处、经 socket 接入的插件 | 全部：开关、配置、密钥、升级、回滚、卸载 |
 
@@ -24,6 +24,7 @@ Persona 的插件底座（#1101）：开源仓库只放通用能力和**扩展�
 | --- | --- | --- | --- | --- |
 | `connectors`（版本 2） | `connector.` | 连接器协议的清单字段：`id`（`^[a-z][a-z0-9]*$`）、`name`、`capabilities`、`hosts`、`agent_tools`、`unlisted`、`poll_seconds`、`kinds` | 进程说协议 | 连接器注册表（设置 › 连接器、收件箱、知识库、助手的工具），方法见 `docs/connector-protocol.md` |
 | `voice`（版本 1） | — | `id`、`name?` | `runtime.http` | App 的语音对话，契约见下面「语音」 |
+| `computer`（版本 1） | — | `id`、`name?` | — | 助手操控电脑的工具和机器页的开关（只有内置的 `cua`），见 [computer-use.md](computer-use.md) |
 
 hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的），这一项不生效，预览和列表里有一条警告。以后每一步加自己的扩展点（模型供应商、额度、知识库来源、
 助手能力、事件钩子、链接识别、声明式 UI），在这张表里加一行。
@@ -229,7 +230,7 @@ iOS（Mac 共用同一套页面）在 hub 带 `plugin_manager` 时，设置首�
 
 ```json
 {"protocol": 1,
- "hub": {"build": 202611050000, "extension_points": {"connectors": 2, "voice": 1}},
+ "hub": {"build": 202611050000, "extension_points": {"computer": 1, "connectors": 2, "voice": 1}},
  "plugin": {"id": "example-notes", "version": "1.2.0", "dir": "…", "data_dir": "…"},
  "config": {"base_url": "https://notes.example.com", "folders": ["work"], "include_shared": false},
  "secrets": {"api_key": "…"},
@@ -263,6 +264,11 @@ iOS（Mac 共用同一套页面）在 hub 带 `plugin_manager` 时，设置首�
 `jarvisd-telegram` 在 personad 旁边时注册成内置插件 `telegram`，贡献连接器 `telegram`（能力在 `connector/telegram/spec`，程序没跑过也报得出）。
 程序必须和 hub 是同一次构建（`version -v` 一样），否则状态写明「不是同一个版本」、不启动。连接器 id、`connector_secrets` 里的会话、连接器的开关和选项都没变，
 默认关着；用户平时只碰连接器的开关（插件默认启用，开着连接器才跑进程）。
+
+## 内置插件：操控电脑（`cua`）
+
+纯声明插件（不跑进程），贡献扩展点 `computer`（版本 1，`{id, name?}`）。**默认关**；配置是 `machines`（打开了的机器，机器页的开关写这里）和 `confirm`
+（操作前在手机上确认）。打开后助手才有 `computer_state` / `computer_run`，机器页才有「操控电脑」。见 [computer-use.md](computer-use.md)。
 
 ## hub.json 里的插件
 

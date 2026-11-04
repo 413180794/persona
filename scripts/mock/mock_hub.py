@@ -5393,6 +5393,30 @@ if os.environ.get("MOCK_CHURN") == "1":
         _x["seq"] = _w[0]["seq"] + _n
 
 
+# MOCK_COMPUTER=ready|permissions|locked: the hub's plugin cua is on (docs/computer-use.md) and macbook is turned on
+# in that state; Mac Studio is a Mac it is not on for yet. =off: on, but for no machine yet. Unset: the plugin is off.
+MOCK_COMPUTER = os.environ.get("MOCK_COMPUTER", "")
+COMPUTER_STATES = {
+    "ready": {"installed": True, "version": "0.38.0", "daemon": True, "accessibility": "granted",
+              "screen_recording": "granted", "desktop": "active", "ready": True},
+    "permissions": {"installed": True, "version": "0.38.0", "daemon": True, "accessibility": "granted",
+                    "screen_recording": "missing", "desktop": "active", "ready": False,
+                    "note": "Cua Driver 还没有屏幕录制权限：在这台 Mac 上运行 cua-driver permissions grant，在弹出的窗口里允许"},
+    "locked": {"installed": True, "version": "0.38.0", "daemon": True, "accessibility": "granted",
+               "screen_recording": "granted", "desktop": "locked", "ready": False, "note": "这台 Mac 锁屏了，解锁后才能操控"},
+}
+
+
+def computer_of(machine_id, enabled):
+    if not enabled: return {"enabled": False}
+    return {"enabled": True, **COMPUTER_STATES.get(MOCK_COMPUTER, COMPUTER_STATES["ready"])}
+
+
+if MOCK_COMPUTER:
+    for _m in MACHINES:
+        if _m.get("os") == "darwin":
+            _m["computer"] = computer_of(_m["id"], _m["id"] == "macbook" and MOCK_COMPUTER != "off")
+
 # Every fixture, including machines added by optional modes, follows the engine contract.
 for _m in MACHINES:
     _m["engine"] = "herdr"
@@ -5835,6 +5859,11 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/hub/update/history": return self.send_json({"history": hub_update_history()})
         if p == "/api/v1/skills": return self.send_json({"machine_id": "macbook", "machine": "MacBook", "skills": MOCK_SKILLS})
         if p == "/api/v1/machines": return self.send_json({"machines": out_machines()})
+        if p.startswith("/api/v1/machines/") and p.endswith("/computer"):  # the plugin cua (MOCK_COMPUTER)
+            machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
+            if machine is None or "computer" not in machine:
+                return self.send_json({"error": "操控电脑的插件没打开，或这台不是 Mac"}, 404)
+            return self.send_json(machine["computer"])
         if p == "/api/v1/metrics":
             return self.send_json({"machines": [machine_metrics(m["id"], 3600, 60) for m in MACHINES if kept(m["id"])], "step": 60})
         if p.startswith("/api/v1/machines/") and p.endswith("/metrics"):
@@ -6533,6 +6562,15 @@ class H(BaseHTTPRequestHandler):
         if self.command == "DELETE" and p == "/api/v1/imessage/data":  # what the hub kept, once 交给 Jarvis is off
             if IMESSAGE_STATUS.get("ai"): return self.send_json({"error": "先关掉「交给 Jarvis」再删除", "code": "ai_on"}, 409)
             return self.send_json({"chats": 6, "people": 9, "inbox": 1})
+        if self.command == "PUT" and p.startswith("/api/v1/machines/") and p.endswith("/computer"):  # the plugin cua
+            machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
+            if machine is None or "computer" not in machine:
+                return self.send_json({"error": "操控电脑的插件没打开，或这台不是 Mac"}, 404)
+            machine["computer"] = computer_of(machine["id"], bool(json.loads(self.last_body or b"{}").get("enabled")))
+            for send, _ in list(LIVE):
+                try: send({"type": "machines", "machines": out_machines()})
+                except Exception: pass
+            return self.send_json(machine["computer"])
         if self.command == "PUT" and p.startswith("/api/v1/machines/") and p.endswith("/engine"):
             mid = p.split("/")[4]
             machine = next((m for m in MACHINES if m["id"] == mid), None)

@@ -40,6 +40,13 @@ type VoiceItem struct {
 	Name string `json:"name,omitempty"`
 }
 
+// ComputerItem is a contribution to computer: operating the user's computers for the assistant (the built-in plugin
+// cua, docs/computer-use.md).
+type ComputerItem struct {
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+}
+
 // Points are the extension points this hub has, by name.
 var Points = map[string]Point{
 	"connectors": {Name: "connectors", Namespace: "connector", Version: 2, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
@@ -70,6 +77,16 @@ var Points = map[string]Point{
 			return v.ID, fmt.Errorf("voice id %q: a-z0-9_-", v.ID)
 		}
 		return v.ID, nil
+	}},
+	"computer": {Name: "computer", Namespace: "computer", Version: 1, Item: func(raw json.RawMessage) (string, error) {
+		var c ComputerItem
+		if err := strict(raw, &c); err != nil {
+			return "", err
+		}
+		if !idPattern.MatchString(c.ID) {
+			return c.ID, fmt.Errorf("computer id %q: a-z0-9_-", c.ID)
+		}
+		return c.ID, nil
 	}},
 }
 

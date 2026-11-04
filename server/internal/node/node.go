@@ -755,6 +755,10 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return n.portDial(ctx, params)
 	case "port.probe":
 		return n.portProbeRPC(ctx, params)
+	case "computer.status": // Cua Driver on this Mac, asked only while the user has it on (computer.go)
+		return computerStatus(ctx), nil
+	case "computer.call":
+		return computerCall(ctx, params)
 	case "fs.stat":
 		return map[string]any{"stats": n.statPaths(p.Paths, p.Cwd)}, nil
 	case "space.rename":

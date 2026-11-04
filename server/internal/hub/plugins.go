@@ -240,6 +240,9 @@ func (h *Hub) attachPlugins(ctx context.Context) {
 			h.logf("plugin telegram: %v", err)
 		}
 	}
+	if err := reg.AddBuiltin(cuaManifest(h), "", false); err != nil { // off until the user turns it on (computer.go)
+		h.logf("plugin cua: %v", err)
+	}
 	if err := reg.Load(ctx); err != nil {
 		h.logf("plugins: %v", err)
 	}
@@ -286,6 +289,9 @@ func (ps *plugins) changed(c plugin.Change) {
 		ctx = context.Background()
 	}
 	ps.apply(ctx, c.ID)
+	if c.ID == cuaPluginID && ps.h != nil {
+		ps.h.computerChanged(ctx)
+	}
 	if c.Kind == "removed" && c.Old != nil && ps.h != nil {
 		for _, id := range c.Old.Manifest.Items("connectors") {
 			ps.h.forgetConnector(ctx, id)

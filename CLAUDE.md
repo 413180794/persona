@@ -244,6 +244,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/bots.md` | 飞书机器人：私聊机器人就是和 Persona 主对话说话，回答发回飞书，提问 / 批准在飞书里点卡片，推送和主对话同步，在飞书里驱动各台电脑上的 Agent；开放平台长连接、配对、只认主人、卡片 JSON 2.0 的坑 |
 | `docs/lark-agent.md` | 飞书里自己发 `/agent …`：hub 收集所在会话 / 话题 / 引用 / 文档 / 知识库的上下文，起 Agent 处理，以我的身份回复 |
 | `docs/phone-tools.md` | 手机数据工具（phone_*）、权限、需要确认的写操作、iOS 限制 |
+| `docs/computer-use.md` | 操控电脑：内置插件 `cua`（默认关、按机器开），助手经 hub → node → Cua Driver 看窗口、点按、截图（`computer_state` / `computer_run`），能力发现、会话、截图、写操作的日志和确认；一键安装和实时画面（屏幕共享经 hub 隧道）的方案 |
 | `docs/recording.md` | 手机和 Apple Watch 录音作为 Persona 上下文：分段、本机转写、可靠回传、确认发送与验证边界 |
 
 ### 客户端

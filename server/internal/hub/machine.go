@@ -32,10 +32,12 @@ type Machine struct {
 	cfg MachineConfig
 	hub *Hub
 
-	mu       sync.Mutex
-	peer     *rpc.Peer
-	streams  *streams.Mux // the forwarded ports' connections on peer (ports.go)
-	info     proto.NodeInfo
+	mu      sync.Mutex
+	peer    *rpc.Peer
+	streams *streams.Mux // the forwarded ports' connections on peer (ports.go)
+	info    proto.NodeInfo
+	// computer: what the node last said of Cua Driver (computer.status), while the plugin cua is on for it (computer.go).
+	computer *proto.Computer
 	online   bool
 	err      string
 	lastSeen time.Time
@@ -101,6 +103,7 @@ func newMachine(h *Hub, cfg MachineConfig) *Machine {
 
 func (m *Machine) snapshot() proto.Machine {
 	engine := m.hub.engineOf(m.cfg.ID) // before m.mu: it may read settings
+	computer := m.hub.computerOf(m)    // before m.mu: it takes it
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	engines := []proto.Engine{} // what the node found: none while offline
@@ -121,7 +124,7 @@ func (m *Machine) snapshot() proto.Machine {
 		CanDeploy: &canDeploy, DeployReason: deployReason, DeployPhase: m.deployPhase,
 		System:    m.hub.metrics.system(m.cfg.ID),
 		Transport: m.via, TailcatPath: m.path, Tailcat: m.cfg.TailcatAddr != "",
-		Engine: engine, Engines: engines, Link: linkInfo(m.link),
+		Engine: engine, Engines: engines, Computer: computer, Link: linkInfo(m.link),
 	}
 }
 
@@ -579,6 +582,9 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		}
 		if m.hub.connectors.Offers(p.Name) && (p.Assistant || m.hub.connectors.ForAgents(p.Name)) {
 			return m.hub.callConnector(ctx, m.cfg.ID, p.Name, p.Args), nil
+		}
+		if p.Assistant && isComputerTool(p.Name) {
+			return m.hub.callComputerTool(ctx, p.SessionID, p.Name, p.Args), nil
 		}
 		if p.Assistant && isAssistantTool(p.Name) {
 			return m.hub.callAssistantTool(ctx, m, p.SessionID, p.Name, p.Args), nil

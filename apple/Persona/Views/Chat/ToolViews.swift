@@ -18,6 +18,7 @@ enum ToolPresentation {
         case "conversation_archive": return Theme.Icon.archive
         case "conversation_unarchive": return Theme.Icon.unarchive
         case "conversations_list", "conversation_read", "conversation_new", "conversation_send": return Theme.Icon.conversation
+        case "computer_state", "computer_run": return Theme.Icon.machine
         case "Bash", "BashOutput", "KillShell", "KillBash": return "terminal"
         case "Read": return "doc.text"
         case "Edit", "MultiEdit", "NotebookEdit": return "pencil.line"
@@ -50,6 +51,9 @@ enum ToolPresentation {
         case "conversation_unarchive": return "取消归档"
         case "conversation_new": return "新开对话"
         case "conversation_send": return "发到对话"
+        // Operating a Mac through Cua Driver (docs/computer-use.md).
+        case "computer_state": return "看电脑"
+        case "computer_run": return "操控电脑"
         case "Bash": return "运行"
         case "Read": return "读取"
         case "Edit", "MultiEdit": return "编辑"
@@ -90,6 +94,10 @@ enum ToolPresentation {
         case "conversation_new", "conversation_send": return firstLine(s("text") ?? "")
         case "conversation_read", "conversation_archive", "conversation_unarchive": return String((s("id") ?? "").prefix(8))
         case "ToolSearch": return s("query") ?? ""
+        case "computer_state": return [s("machine"), s("app") ?? "整个屏幕"].compactMap { $0 }.joined(separator: " · ")
+        case "computer_run":
+            let steps = i["steps"]?.array?.count
+            return [s("machine"), steps.map { "\($0) 步" } ?? s("script").map(firstLine)].compactMap { $0 }.joined(separator: " · ")
         // ask_user is the Jarvis assistant's own question tool (docs/assistant.md); it takes the same questions.
         case "AskUserQuestion", "ask_user": return i["questions"]?.array?.first?["question"]?.string ?? ""
         case "ExitPlanMode": return PlanText.title(s("plan") ?? "")

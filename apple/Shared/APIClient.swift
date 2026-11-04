@@ -288,6 +288,16 @@ nonisolated struct APIClient: Sendable {
         return m
     }
 
+    /// What the machine has of Cua Driver now (its node is asked); 404 while the hub's plugin cua is off.
+    func computer(machine: String) async throws -> MachineComputer {
+        try JSON.decoder.decode(MachineComputer.self, from: await request("GET", "/api/v1/machines/\(machine)/computer"))
+    }
+    /// The machine page's 操控电脑 switch.
+    func setComputer(machine: String, enabled: Bool) async throws -> MachineComputer {
+        struct Body: Encodable { var enabled: Bool }
+        return try JSON.decoder.decode(MachineComputer.self, from: await request("PUT", "/api/v1/machines/\(machine)/computer", body: Body(enabled: enabled)))
+    }
+
     /// The group on what the hub returned (docs/multi-hub.md).
     func stamp(_ list: [Machine]) -> [Machine] { group.isEmpty ? list : list.map { var m = $0; m.group = group; return m } }
     func stamp(_ list: [Session]) -> [Session] { group.isEmpty ? list : list.map { var s = $0; s.group = group; return s } }

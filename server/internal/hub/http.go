@@ -36,6 +36,8 @@ func (h *Hub) routes() http.Handler {
 		writeJSON(w, map[string]any{"ok": true})
 	}))
 	api.HandleFunc("PUT /api/v1/machines/{mid}/engine", h.withMachine(h.putEngine))
+	api.HandleFunc("GET /api/v1/machines/{mid}/computer", h.withMachine(h.getComputer))
+	api.HandleFunc("PUT /api/v1/machines/{mid}/computer", h.withMachine(h.putComputer))
 	api.HandleFunc("POST /api/v1/machines/{mid}/deploy", h.withMachine(func(w http.ResponseWriter, r *http.Request, m *Machine) {
 		if err := m.startDeploy(); err != nil {
 			writeErr(w, http.StatusConflict, err)

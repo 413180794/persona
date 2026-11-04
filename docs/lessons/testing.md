@@ -260,6 +260,8 @@
   新建 Persona 对话：mock 原来根本不写第一句、不推会话列表（App 显示「还没有消息」、新对话不选中）；DemoHub 立刻写好第一句（一切正常）；
   hub 是先推会话列表，node 对还没写 transcript 的会话回空的 items，等 claude 写下第一行（watch 每 0.5 秒看一次）才推。所以真 hub 上也会闪一下「还没有消息」，
   这才是 App 该修的（第一句按「已发送」留在屏幕上）。当初写「体验模式也复现」，其实是副本钥匙串里留着 mock 的配对、`-demo.on YES` 没生效（见上面「钥匙串里留着以前配对过的 hub」）。
+- cua 的 `element_token` 只在同一个会话里有效：`cua-driver call` 不带 `session` 时每次调用是一个新会话，上一次读到的 token 下一次就是 `stale_element_token`；
+  每次都带同一个 `session`（如 `"session": "qa"`）就能跨调用用，空闲 5 分钟过期（0.38.0 实测，2026-11-04，#1182）。只要一次调用里做完的，用 `run_steps` / `run_script`。
 - cua 的 `tree_format: "elements"` 不列只有值、没有标签的静态文字（新对话页的乐观气泡、「Persona 正在准备…」都在里面），拿它判断「没显示」会误判；
   判断某段文字在不在，用 `get_window_state` 带 `query`（树里有 `AXStaticText = "…"`）或截图。
 - cua 的 `type_text` 默认在后台用辅助功能插入文字（`AXSelectedText`）：主窗口工具栏的搜索框能筛选，sheet 里 `.searchable` 的框（新建对话 › 启动器）

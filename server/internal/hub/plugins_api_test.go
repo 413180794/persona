@@ -224,9 +224,14 @@ func TestInstalledConnectorPlugin(t *testing.T) {
 		t.Fatalf("%+v", res)
 	}
 	_, list := call(t, mux, "GET", "/api/v1/plugins", master, "")
-	plugins := list["plugins"].([]any)
-	if len(plugins) != 1 || plugins[0].(map[string]any)["status"] != "running" || plugins[0].(map[string]any)["kind"] != "connectors" {
-		t.Fatalf("%v", plugins)
+	var notes map[string]any
+	for _, p := range list["plugins"].([]any) {
+		if p.(map[string]any)["id"] == "example-notes" {
+			notes = p.(map[string]any)
+		}
+	}
+	if notes["status"] != "running" || notes["kind"] != "connectors" {
+		t.Fatalf("%v", list["plugins"])
 	}
 
 	if code, _ := call(t, mux, "GET", "/api/v1/plugins/example-notes/-/anything", master, ""); code != 404 {

@@ -29,6 +29,8 @@ nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
     var system: MachineSystem?
     var engine: MachineEngine = .herdr
     var engines: [DetectedEngine] = []
+    /// Operating it through Cua Driver; nil while the hub's plugin cua is off or it is not a Mac.
+    var computer: MachineComputer? = nil
     /// Hub mesh (docs/plan-hub-mesh.md 2.6): the hub that owns the computer in its group, its name, the computer's own
     /// id across hubs, and how the hub reaches it. nil from hubs before the mesh.
     var hubID: String? = nil
@@ -42,7 +44,7 @@ nonisolated struct Machine: Codable, Identifiable, Hashable, Sendable {
     var groupLabel: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case id, name, kind, icon, online, error, hostname, os, arch, home, system, engine, engines, route
+        case id, name, kind, icon, online, error, hostname, os, arch, home, system, engine, engines, computer, route
         case sshHost = "ssh_host", herdrVersion = "herdr_version", claudeVersion = "claude_version", lastSeen = "last_seen"
         case nodeMismatch = "node_mismatch", nodeVersion = "node_version", deploying, deployError = "deploy_error"
         case hubID = "hub_id", hubName = "hub_name", machineUID = "machine_uid", hubGroup = "app_hub_group",
@@ -83,6 +85,7 @@ extension Machine {
         system = try c.decodeIfPresent(MachineSystem.self, forKey: .system)
         engine = try c.decodeIfPresent(MachineEngine.self, forKey: .engine) ?? .herdr
         engines = try c.decodeIfPresent([DetectedEngine].self, forKey: .engines) ?? []
+        computer = try? c.decodeIfPresent(MachineComputer.self, forKey: .computer)
         hubID = try? c.decodeIfPresent(String.self, forKey: .hubID)
         hubName = try? c.decodeIfPresent(String.self, forKey: .hubName)
         machineUID = try? c.decodeIfPresent(String.self, forKey: .machineUID)
@@ -197,6 +200,54 @@ nonisolated struct DetectedEngine: Codable, Hashable, Identifiable, Sendable {
     var available: Bool
     var version: String?
     var note: String?
+}
+
+/// A Mac the assistant may operate through Cua Driver (the hub's plugin cua, docs/computer-use.md). `enabled`: the user
+/// turned it on for this machine; the rest is what its node found when last asked, and only for an enabled one.
+nonisolated struct MachineComputer: Codable, Hashable, Sendable {
+    var enabled = false
+    var installed = false
+    var version: String? = nil
+    var daemon = false
+    /// granted | missing | unknown
+    var accessibility: String? = nil
+    var screenRecording: String? = nil
+    /// active | locked | away
+    var desktop: String? = nil
+    var ready = false
+    /// What is missing and what to do, in Chinese.
+    var note: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case enabled, installed, version, daemon, accessibility, desktop, ready, note
+        case screenRecording = "screen_recording"
+    }
+
+    init(enabled: Bool = false, installed: Bool = false, version: String? = nil, daemon: Bool = false, accessibility: String? = nil,
+         screenRecording: String? = nil, desktop: String? = nil, ready: Bool = false, note: String? = nil) {
+        self.enabled = enabled
+        self.installed = installed
+        self.version = version
+        self.daemon = daemon
+        self.accessibility = accessibility
+        self.screenRecording = screenRecording
+        self.desktop = desktop
+        self.ready = ready
+        self.note = note
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        installed = try c.decodeIfPresent(Bool.self, forKey: .installed) ?? false
+        version = try c.decodeIfPresent(String.self, forKey: .version)
+        daemon = try c.decodeIfPresent(Bool.self, forKey: .daemon) ?? false
+        accessibility = try c.decodeIfPresent(String.self, forKey: .accessibility)
+        screenRecording = try c.decodeIfPresent(String.self, forKey: .screenRecording)
+        desktop = try c.decodeIfPresent(String.self, forKey: .desktop)
+        ready = try c.decodeIfPresent(Bool.self, forKey: .ready) ?? false
+        note = try c.decodeIfPresent(String.self, forKey: .note)
+    }
 }
 
 extension Machine {
