@@ -219,10 +219,12 @@ nonisolated struct MachineComputer: Codable, Hashable, Sendable {
     var note: String? = nil
     /// Installing Cua Driver or asking for its permissions (the page's buttons): the running one, or the last.
     var job: ComputerJob? = nil
+    /// macOS's Screen Sharing answers on the Mac: its live screen can be shown (看画面).
+    var screenSharing = false
 
     enum CodingKeys: String, CodingKey {
         case enabled, installed, version, daemon, accessibility, desktop, ready, note, job
-        case screenRecording = "screen_recording"
+        case screenRecording = "screen_recording", screenSharing = "screen_sharing"
     }
 
     init(enabled: Bool = false, installed: Bool = false, version: String? = nil, daemon: Bool = false, accessibility: String? = nil,
@@ -251,6 +253,7 @@ nonisolated struct MachineComputer: Codable, Hashable, Sendable {
         ready = try c.decodeIfPresent(Bool.self, forKey: .ready) ?? false
         note = try c.decodeIfPresent(String.self, forKey: .note)
         job = try? c.decodeIfPresent(ComputerJob.self, forKey: .job)
+        screenSharing = try c.decodeIfPresent(Bool.self, forKey: .screenSharing) ?? false
     }
 
     /// The macOS permissions it still lacks, by their names in System Settings.

@@ -7,7 +7,7 @@ Persona 助手经 [Cua Driver](https://github.com/trycua/cua)（`libs/cua-driver
 | --- | --- | --- |
 | 接入：能力发现、助手的 `computer_state` / `computer_run`、截图 | #1182 | 本文「接入」 |
 | 手机上一键安装、引导授权 | #1183 | 本文「一键安装」 |
-| 实时画面：Agent 操作电脑时在手机、网页上看，必要时接管 | #1184 | 计划，见「实时画面」 |
+| 实时画面：Agent 操作电脑时在手机、网页上看，必要时接管 | #1184 | 本文「实时画面」 |
 
 ## 开关
 
@@ -156,7 +156,7 @@ node 的探测：
 ### 授权（node 的 `computer.grant`）
 
 - node 执行 `cua-driver permissions grant`：它经 LaunchServices 打开 CuaDriver.app，弹出辅助功能、屏幕录制的系统窗口。
-- **这一步只能在那台 Mac 的屏幕上点「允许」**，App 替不了。实时画面（下一节）做好后，这里会多一个「看画面」，在手机上远程点。
+- **这一步只能在那台 Mac 的屏幕上点「允许」**，App 替不了点。屏幕共享开着时，机器页给「看画面」（下一节），在手机上的画面里远程点。
 - **做不到的**：那台 Mac 的屏幕共享也没开时，第一次授权必须本人在机器前操作。之后都能远程。
 - 卸载按钮没做，不是必须的。要卸载就运行 Cua 自己的 `https://cua.ai/driver/uninstall.sh`。
 
@@ -167,7 +167,7 @@ node 的探测：
 - 离线、已经有任务在跑、node 太旧：409 `{"error"}`。
 - 「取消」只停安装；授权等的是 Mac 上的系统窗口，那是用户的事。
 
-## 实时画面（#1184，计划）
+## 实时画面（#1184）
 
 用途：Agent 或助手操作电脑时，在手机、网页上看那台 Mac 的真实桌面。先只看，再支持接管点按。
 Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。它画的 agent cursor 是一个浮在最上层的窗口，屏幕上看得到。
@@ -191,28 +191,52 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 ### 连接
 
 只经 hub 的隧道，不对外开新端口：
-- 客户端 ⇄ hub：WebSocket `GET /api/v1/machines/{mid}/ports/5900/connect`，二进制帧，原样 TCP 字节（[ports.md](ports.md) 的端口转发，已有）；鉴权用 hub 的 token。
+- 客户端 ⇄ hub：WebSocket `GET /api/v1/machines/{mid}/ports/5900/connect?token=…`，二进制帧，原样 TCP 字节（[ports.md](ports.md) 的端口转发）。
+  - 插件对这台 Mac 打开时，hub 常设放行 5900（`portAllowed`），只放 5900，不用 Agent 在听、也不用手动 `open`。
+  - 接受 noVNC 可能带的 `binary` 子协议。
+  - 只读的设备（手表那种）照旧 403。
 - hub ⇄ node：`port.dial`，node 只连本机的 `127.0.0.1:5900`。
-
-**要改的**：
-- 端口转发现在只放行 Agent 在监听的端口，或 24 小时内手动 `open` 过的端口。要改成插件对这台打开了「实时画面」时，常设放行 5900。
-- 可能要放宽单个流的未确认字节上限（512 KB），帧大时会卡。
+- `computer.status` 多报一个 `screen_sharing`：node 连一下 `127.0.0.1:5900`，看对方是不是用 RFB 的版本号打招呼（macOS 是 `RFB 003.889`）。机器页据此决定给「看画面」，还是说明怎么打开屏幕共享。
+- 单个流的未确认上限仍是 512 KB：按 50 ms 往返算约 10 MB/s，看画面够用，没有改。
 
 **屏幕共享的局限**：
-- 它监听所有网卡，局域网里看得到 5900。这是系统的行为，Persona 不另开端口。
-- 它要 macOS 账号密码（Apple 的 ARD 认证）或单独设的 VNC 密码。第一版由客户端让用户输入，存在设备的钥匙串里，不进 hub、不进仓库。
-- 要只留回环，需要 sudo 加一条 pf 规则，文档里给出命令，由用户决定。
+- 它监听所有网卡，局域网里看得到 5900。这是系统的行为，Persona 不另开端口。要只留回环，需要 sudo 加一条 pf 规则，由用户自己决定。
+- 它要那台 Mac 的 macOS 账号和密码（Apple 的 ARD 认证），或单独设的 VNC 密码。
+  - 页面每次让用户输入，只发给那台 Mac，不进 hub、不进仓库，页面也不保存。
+  - 账号名按机器的家目录（`/Users/<名字>`）预填。
 
-### 客户端
+### 页面：`/screen/<机器 id>`（网页，`web/src/screen/`）
 
-| 端 | 做法 |
-| --- | --- |
-| 网页 | [noVNC](https://github.com/novnc/noVNC)（MPL-2.0）连上面的 WebSocket，在侧边面板里开（`{kind: "desktop", mid}`）。noVNC 1.4 起支持 Apple 的 ARD 认证，屏幕共享报的 `RFB 003.889` 它认，实现时实测 |
-| iOS / Mac | 第一版用 WKWebView 打开 hub 托管的同一个 noVNC 页面：一份实现，按「链接在 App 内打开」的卡片铺满。要更好的手势和性能再换原生库（RoyalVNCKit，MIT，Swift，支持 ARD 认证） |
+- **加载**：网页的入口在路径是 `/screen/…` 时不走登录和侧栏，只动态加载这一页。noVNC（[noVNC](https://github.com/novnc/noVNC) 1.7，MPL-2.0，`@novnc/novnc`）在单独的代码块里，不进主包。
+- **token**：
+  - App 打开时把自己的设备 token 放在 `#token=…&embed=1` 里：URL 的 fragment 不发给服务器；页面一加载就从地址栏去掉，只放在内存里。
+  - 不像网页的登录链接那样换一个新的浏览器 token（那样每打开一次就多一个设备 token）。
+  - 网页里已经登录的用户直接用自己的 token。
+- **先问 hub**：有没有这台、在不在线、插件开没开、屏幕共享开没开，各给一句中文说明。然后才连。
+- **登录**：屏幕共享要登录时，出一个表单「登录这台 Mac 的屏幕共享」（账号、密码、「连接」）。登录失败就说「账号或密码不对」，可以再试。
+- **连上以后**：
+  - 默认「只看」（`viewOnly`），顶栏的「只看 / 接管」切换后，键盘和鼠标（触屏）都交给那台 Mac。
+  - 画面按窗口缩放（`scaleViewport`），不改那台 Mac 的分辨率。
+  - 断了给「重新连接」。
+- **没有 `crypto.subtle` 时**：ARD 登录要用 AES 加密账号和密码，而 noVNC 的 AES 用的是浏览器的 `crypto.subtle`。HTTP 打开的页面（hub 的内网地址、App 的 WebView）不是安全上下文，没有 `crypto.subtle`。
+  - `aes.ts` 在缺它时补一个只会 AES-CBC 加密的替身。
+  - 测试：FIPS-197 的三组标准向量，以及和 WebCrypto 逐字节比对。
+  - HTTPS 或 localhost 打开时不补，用浏览器自己的。
+- **画面**：Cua Driver 在后台操作，不抢焦点，画面里是真实桌面。它画的 agent cursor 是最上层的一个窗口，看得到。
 
-**入口**：
-- 机器页「看画面」。
-- 对话页：Agent 或助手在用 `computer_*` 时，工具行旁边一个「看画面」。
+### App
+
+- **机器页「操控电脑」**：
+  - 就绪时给「看画面」。
+  - 授权中、或请求过还缺权限时，给突出的「看画面」，在手机上远程点「允许」。
+  - 屏幕共享没开时，说明在那台 Mac 的「系统设置 › 通用 › 共享」里打开。
+- **对话页**：工具详情下面也有「看画面」（`ScreenEntry`）。出现在两类工具下面，并且要那台 Mac 的插件开着、屏幕共享开着：
+  - 助手的 `computer_state` / `computer_run`：对应它点名的那台；
+  - 电脑上的 Agent 自己注册的 Cua Driver MCP 工具（`mcp__cua-driver__…`）：对应这个 Agent 所在的那台。
+- **`ScreenViewer`**：iOS 全屏，Mac 是大 sheet。里面一个 WKWebView 打开 hub 上的 `/screen/<机器>#token=…&embed=1`，走 App 连 hub 的同一条路（SSH 隧道时经隧道）。
+  - 网页数据用不落盘的存储（`nonPersistent`）。
+  - 页面的滚动关掉了，手势都交给远端画面。
+- **以后可以做的**：要更好的手势和性能，可以换原生 VNC 库（RoyalVNCKit，MIT，Swift，支持 ARD 认证），经 App 已有的端口转发（`PortForwarder`）连。
 
 ## 怎么验证
 
@@ -226,6 +250,10 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - 打开方式：`PERSONA_CUA_E2E=1`，可选 `PERSONA_CUA_SHOT=<图片路径>`；测试二进制用 `GOOS=darwin go test -c` 编好拷过来。
   - 内容：用 `run_steps` 在计算器里算 6×7，再读窗口，断言有 42，并写出截图。
   - 2026-11-04 实测：就绪、42、230×408 的 JPEG。会动这台 Mac 的计算器。
+- **网页**：`web/src/screen/aes.test.ts`（AES 替身对 FIPS-197 和 WebCrypto）、`screen.test.ts`（路径、fragment 里的 token、WebSocket 地址、预填的账号）。
+- **看画面端到端**：mock 带 `MOCK_WEB=web/dist`，托管构建好的页面，并把 5900 转到这台 Mac 自己的屏幕共享。
+  - `ComputerSectionTests.testTheLiveScreenAsksForTheMacsSignIn` 点「看画面」，App 的 WebView → 页面 → noVNC → mock 转发 → 本机屏幕共享，一直走到它要求登录（ARD）。
+  - 登录那一步要那台 Mac 的密码，测试不做。
 - **截图**：mock 的 `MOCK_COMPUTER=ready|permissions|locked|missing|off`（[testing.md](testing.md)），配合 `-tab settings -openMachines YES -openMachineDetail macbook`。
 - **部署后验收**：
   1. 在「设置 › 插件」打开「操控电脑（Cua）」。

@@ -5415,6 +5415,20 @@ def say(text, user=None, stream=False, steps=10, ms=300):
                 pass
 
 
+if os.environ.get("MOCK_COMPUTER", "") not in ("", "off"):
+    # The assistant operating MacBook (#1182, #1184), in a conversation of its own: its tools read 操控电脑 / 看电脑, the
+    # screenshot is a made-up placeholder, and under them 看画面 opens the live screen.
+    _steps = [{"click": {"app": "Calculator", "role": "button", "name": n}} for n in ("All Clear", "6", "Multiply", "7", "Equals")]
+    _run = tool("mcp__jarvis__computer_run", {"machine": "macbook", "steps": _steps}, '{"ok":true,"executed":5,"total":5}', 1)
+    _look = tool("mcp__jarvis__computer_state", {"machine": "macbook", "app": "Calculator"},
+                 '{"snapshot_id":"s1","tree_markdown":"- [0] AXWindow \\"Calculator\\"\\n  - AXStaticText = \\"42\\""}', 1)
+    _calc = it("user", "image", 1, tool_use_id=_look[0]["tool_use_id"],
+               image={"mime": "image/png", "data": base64.b64encode(png(230, 408, (44, 44, 48))).decode(), "width": 230, "height": 408})
+    ASK_CUA = "b2e4d6f8-0000-4000-8000-0000000000c1"  # a conversation of its own: -openAssistant server/<it>
+    ASSISTANT.append(assistant_sess(ASK_CUA, "用计算器算 6×7", 1, "算好了：6 × 7 = 42。"))
+    ITEMS[ASK_CUA] = [it("user", "text", 2, text="在 MacBook 上用计算器算一下 6×7，把截图发给我")] + _run + _look + [_calc] + \
+        [it("assistant", "text", 1, text="算好了：6 × 7 = 42。截图在上面。")]
+
 if os.environ.get("MOCK_CHURN") == "1":
     # Machines enough that the ⋯ menu scrolls, as it does with six on a phone.
     for _i, _n in enumerate(["构建机", "测试机", "Mac mini", "Mac mini 2", "训练机"]):
@@ -5432,11 +5446,12 @@ if os.environ.get("MOCK_CHURN") == "1":
 # MOCK_COMPUTER=ready|permissions|locked: the hub's plugin cua is on (docs/computer-use.md) and macbook is turned on
 # in that state; Mac Studio is a Mac it is not on for yet. =off: on, but for no machine yet. Unset: the plugin is off.
 MOCK_COMPUTER = os.environ.get("MOCK_COMPUTER", "")
+MOCK_WEB = os.environ.get("MOCK_WEB", "")  # web/dist: serve the built client's live screen page (#1184)
 COMPUTER_STATES = {
     "ready": {"installed": True, "version": "0.38.0", "daemon": True, "accessibility": "granted",
-              "screen_recording": "granted", "desktop": "active", "ready": True},
+              "screen_recording": "granted", "desktop": "active", "ready": True, "screen_sharing": True},
     "permissions": {"installed": True, "version": "0.38.0", "daemon": True, "accessibility": "granted",
-                    "screen_recording": "missing", "desktop": "active", "ready": False,
+                    "screen_recording": "missing", "desktop": "active", "ready": False, "screen_sharing": True,
                     "note": "Cua Driver 还没有屏幕录制权限：在这台 Mac 上运行 cua-driver permissions grant，在弹出的窗口里允许"},
     "locked": {"installed": True, "version": "0.38.0", "daemon": True, "accessibility": "granted",
                "screen_recording": "granted", "desktop": "locked", "ready": False, "note": "这台 Mac 锁屏了，解锁后才能操控"},
@@ -5457,7 +5472,7 @@ def computer_now(machine):
         return c
     t = (time.time() - job["at"]) / COMPUTER_STEP
     missing = {"installed": True, "version": "0.38.0", "daemon": True, "accessibility": "missing",
-               "screen_recording": "missing", "desktop": "active", "ready": False,
+               "screen_recording": "missing", "desktop": "active", "ready": False, "screen_sharing": True,
                "note": "Cua Driver 还没有辅助功能、屏幕录制权限：在这台 Mac 上运行 cua-driver permissions grant，在弹出的窗口里允许"}
     if job["kind"] == "install":
         if job.get("cancelled"):
@@ -5928,6 +5943,7 @@ class H(BaseHTTPRequestHandler):
         if pins_route(self, p): return
         if chat_pins_route(self, p, parse_qs(urlparse(self.path).query)): return
         if p == "/mock/ports": return self.send_json({"connects": PORT_LOG})
+        if MOCK_WEB and (p.startswith("/screen/") or p.startswith("/assets/")): return self.web_file(p)
         if p.startswith("/api/v1/machines/") and "/ports/" in p:
             parts = p.split("/")  # ['', 'api', 'v1', 'machines', mid, 'ports', port, ('connect')]
             port = int(parts[6]) if parts[6].isdigit() else 0
@@ -7304,11 +7320,25 @@ class H(BaseHTTPRequestHandler):
     do_DELETE = do_POST
     do_PATCH = do_POST
 
+    def web_file(self, p):
+        """MOCK_WEB=<web/dist>: the built web client's files, and its index.html for /screen/<machine> (#1184)."""
+        root = os.path.realpath(MOCK_WEB)
+        f = os.path.realpath(os.path.join(root, p.lstrip("/"))) if p.startswith("/assets/") else os.path.join(root, "index.html")
+        if not f.startswith(root + os.sep) or not os.path.isfile(f): return self.send_json({"error": "not found"}, 404)
+        body = open(f, "rb").read()
+        kind = {".js": "text/javascript", ".css": "text/css", ".html": "text/html; charset=utf-8", ".woff2": "font/woff2",
+                ".svg": "image/svg+xml"}.get(os.path.splitext(f)[1], "application/octet-stream")
+        self.send_response(200); self.send_header("Content-Type", kind); self.send_header("Content-Length", str(len(body)))
+        self.end_headers(); self.wfile.write(body)
+
     # ---------- minimal WebSocket ----------
     def port_connect(self, mid, port):
         """…/ports/{port}/connect: the WebSocket's binary messages are one TCP connection to the port (docs/ports.md)."""
         import socket
         listed = any(pp.get("port") == port for x in all_sessions() for pp in (x.get("ports") or []))
+        # The live screen (#1184): macOS's Screen Sharing on this Mac's own 5900, for a Mac the plugin cua is on for.
+        machine = next((m for m in MACHINES if m["id"] == mid), {})
+        listed = listed or (port == 5900 and machine.get("computer", {}).get("enabled"))
         if not listed: return self.send_json({"error": "port %d is not an agent's and was not opened" % port}, 403)
         try:
             tcp = socket.create_connection(("127.0.0.1", port), timeout=3)

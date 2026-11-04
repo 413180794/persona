@@ -136,6 +136,9 @@ type Computer struct {
 	// Desktop: active (this user's desktop is on screen) | locked (its screen is locked) | away (logged out, or another
 	// user is on the console). Cua Driver needs it active.
 	Desktop string `json:"desktop,omitempty"`
+	// ScreenSharing: macOS's Screen Sharing answers on 127.0.0.1:5900, so the app can show this Mac's live screen
+	// (docs/computer-use.md「实时画面」). Not needed to operate it.
+	ScreenSharing bool `json:"screen_sharing"`
 	// Ready: all of the above in place. Note says what is missing and what to do, in Chinese for the app.
 	Ready   bool      `json:"ready"`
 	Note    string    `json:"note,omitempty"`

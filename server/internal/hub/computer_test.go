@@ -139,6 +139,10 @@ func TestComputerPluginIsOffUntilTurnedOnForAMachine(t *testing.T) {
 		t.Fatalf("the machine list says it: %+v", c)
 	}
 
+	if !h.portAllowed(mac, screenPort) || h.portAllowed(box, screenPort) || h.portAllowed(mac, 5901) {
+		t.Fatal("the live screen's port is open for a Mac it is on for, and only that port")
+	}
+
 	code, out = call(t, mux, "PUT", "/api/v1/machines/mac/computer", h.cfg.Token, `{"enabled": false}`)
 	if code != 200 || out["enabled"] != false || h.computerTools() != nil {
 		t.Fatalf("off again: %d %v", code, out)
@@ -148,6 +152,9 @@ func TestComputerPluginIsOffUntilTurnedOnForAMachine(t *testing.T) {
 	}
 	if mac.snapshot().Computer != nil {
 		t.Fatal("the plugin off: nothing of it")
+	}
+	if h.portAllowed(mac, screenPort) {
+		t.Fatal("the plugin off: no live screen")
 	}
 }
 

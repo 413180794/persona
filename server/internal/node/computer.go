@@ -15,6 +15,8 @@ import (
 	"image/draw"
 	"image/jpeg"
 	_ "image/png" // cua-driver's screenshots
+	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -84,9 +86,34 @@ func computerStatus(ctx context.Context) proto.Computer {
 	if out, err := exec.CommandContext(ctx, "/usr/sbin/ioreg", "-n", "Root", "-d1").Output(); err == nil {
 		c.Desktop = parseConsole(string(out), os.Getuid())
 	}
+	c.ScreenSharing = screenSharing(ctx)
 	c.Ready, c.Note = computerReady(c)
 	c.Job = currentJob()
 	return c
+}
+
+// screenPort is where macOS's Screen Sharing (VNC) listens; the live screen reaches it through the hub's port relay.
+const screenPort = 5900
+
+// screenSharing: macOS's Screen Sharing answers on 127.0.0.1:5900.
+func screenSharing(ctx context.Context) bool {
+	return answersRFB(ctx, net.JoinHostPort("127.0.0.1", strconv.Itoa(screenPort)))
+}
+
+// answersRFB: what listens at addr greets with RFB's version ("RFB 003.889" from macOS).
+func answersRFB(ctx context.Context, addr string) bool {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	var d net.Dialer
+	c, err := d.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return false
+	}
+	defer c.Close()
+	_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
+	greeting := make([]byte, 4)
+	_, err = io.ReadFull(c, greeting)
+	return err == nil && string(greeting) == "RFB "
 }
 
 // parseCuaVersion: "cua-driver 0.38.0" → "0.38.0".

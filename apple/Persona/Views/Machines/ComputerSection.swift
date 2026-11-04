@@ -13,6 +13,7 @@ struct ComputerSection: View {
     @State private var fresh: MachineComputer?
     @State private var saving = false
     @State private var asking = false
+    @State private var screen: ScreenPage?
 
     private var shown: MachineComputer { fresh ?? computer }
 
@@ -45,6 +46,7 @@ struct ComputerSection: View {
         .task(id: online && shown.enabled) {
             if online && shown.enabled { await refresh() }
         }
+        .screenViewer($screen)
         .task(id: watching) {
             while watching, !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
@@ -69,6 +71,7 @@ struct ComputerSection: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("computer-status")
                 if job.kind == "install" { action("取消", "cancel", identifier: "computer-cancel") }
+                if job.kind == "grant", c.screenSharing { look(prominent: true) } // 允许 is clicked on the Mac's screen
             }
         } else if !c.installed {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -85,7 +88,11 @@ struct ComputerSection: View {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 if let job = c.job, job.kind == "grant", job.state == "done" {
                     line(Self.grantHint, ok: false)
-                    action("再请求一次", "grant", identifier: "computer-grant")
+                    HStack(spacing: Theme.Space.s) {
+                        if c.screenSharing { look(prominent: true) }
+                        action("再请求一次", "grant", identifier: "computer-grant")
+                    }
+                    if !c.screenSharing { Self.noScreenSharing }
                 } else {
                     let failed = c.job.flatMap { $0.kind == "grant" && $0.state == "failed" ? $0.error : nil }
                     line(failed ?? "Cua Driver 还没有\(c.missingPermissions.joined(separator: "、"))权限", ok: false)
@@ -93,7 +100,10 @@ struct ComputerSection: View {
                 }
             }
         } else if c.ready {
-            line("现在可以操控" + (c.version.map { " · Cua Driver \($0)" } ?? ""), ok: true)
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                line("现在可以操控" + (c.version.map { " · Cua Driver \($0)" } ?? ""), ok: true)
+                if c.screenSharing { look(prominent: false) } else { Self.noScreenSharing }
+            }
         } else {
             line(c.note ?? "还不知道能不能操控", ok: false)
         }
@@ -122,6 +132,20 @@ struct ComputerSection: View {
         .disabled(asking)
         .accessibilityIdentifier(identifier)
     }
+
+    /// 看画面: the Mac's live screen, where macOS's dialogs can be answered from the phone too.
+    private func look(prominent: Bool) -> some View {
+        Button {
+            if let url = ScreenViewer.url(model, ref) { screen = ScreenPage(url: url) }
+        } label: {
+            Label("看画面", systemImage: Theme.Icon.screen).font(Theme.Font.labelStrong).lineLimit(1)
+        }
+        .themedButton(prominent: prominent)
+        .accessibilityIdentifier("computer-screen")
+    }
+
+    static let noScreenSharing = Text("在那台 Mac 的「系统设置 › 通用 › 共享」里打开「屏幕共享」，这里就能看它的画面、远程点「允许」。")
+        .font(Theme.Font.label).foregroundStyle(.secondary)
 
     // MARK: Calls
 

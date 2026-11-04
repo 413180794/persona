@@ -504,6 +504,7 @@ struct ToolDetail: View {
                 }
             }
             ForEach(Array(call.images.enumerated()), id: \.offset) { i, img in Base64Image(payload: img, gallery: call.images, index: i) }
+            ScreenEntry(call: call) // a tool that operates a Mac: after what it saw, that Mac's live screen
         }
     }
 

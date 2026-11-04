@@ -345,6 +345,8 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。
 
 ### 机器和设置
 
+- **看画面**（`/screen/<机器 id>`，#1184，[computer-use.md](computer-use.md)「实时画面」）：单独的一页，不走登录和侧栏，noVNC 只在这一页按需加载；经 hub 的端口转发连那台 Mac 的屏幕共享（5900），默认只看，「接管」后键鼠交给它；App 在 WebView 里打开同一页，token 放在 fragment 里只留内存。
+
 | 手机端的功能 | 网页 | 轮次 | 说明 |
 | --- | --- | --- | --- |
 | 机器列表（卡片、曲线、重连、重新部署） | 有 | — | 卡片点进机器页 |

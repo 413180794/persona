@@ -27,6 +27,28 @@ struct ComputerTests {
         return ToolCall(use: use, result: nil)
     }
 
+    @Test func aToolThatOperatesAMacShowsItsScreen() throws {
+        let mac = try machine()
+        var work = try machine()
+        work.group = "work"
+        let machines = [mac, work]
+        let named: JSONValue = .object(["machine": .string("MacBook")])
+        #expect(ScreenEntry.machine("mcp__jarvis__computer_run", input: named, chat: MachineRef(id: "server"), machines: machines) == mac.ref,
+                "the assistant's: the Mac it names, by name too")
+        #expect(ScreenEntry.machine("mcp__jarvis__computer_state", input: .object(["machine": .string("macbook")]),
+                                    chat: MachineRef(group: "work", id: "server"), machines: machines) == MachineRef(group: "work", id: "macbook"),
+                "in the chat's group of hubs")
+        #expect(ScreenEntry.machine("mcp__cua-driver__click", input: .object([:]), chat: mac.ref, machines: machines) == mac.ref,
+                "an agent's own Cua Driver: its machine")
+        #expect(ScreenEntry.machine("Bash", input: named, chat: mac.ref, machines: machines) == nil)
+        #expect(ScreenEntry.machine("mcp__jarvis__computer_run", input: .object([:]), chat: mac.ref, machines: machines) == nil)
+    }
+
+    @Test func theMachineListSaysWhetherItsScreenCanBeShown() throws {
+        #expect(try machine(",\"computer\":{\"enabled\":true,\"screen_sharing\":true}").computer?.screenSharing == true)
+        #expect(try machine(",\"computer\":{\"enabled\":true}").computer?.screenSharing == false, "an older hub")
+    }
+
     @Test func theToolsReadInChinese() {
         let look = call("computer_state", ["machine": .string("macbook"), "app": .string("Calculator")])
         #expect(ToolPresentation.verb(look.name) == "看电脑")

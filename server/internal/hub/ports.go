@@ -125,8 +125,18 @@ func (h *Hub) openPort(w http.ResponseWriter, r *http.Request, m *Machine) {
 	writeJSON(w, res)
 }
 
-// portAllowed: an agent on the machine listens on port, or the user opened it.
+// screenPort is macOS's Screen Sharing (VNC): the live screen of a Mac the plugin cua is on for
+// (docs/computer-use.md「实时画面」).
+const screenPort = 5900
+
+// portAllowed: an agent on the machine listens on port, or the user opened it, or it is the screen of a Mac the
+// plugin cua is on for.
 func (h *Hub) portAllowed(m *Machine, port int) bool {
+	if port == screenPort {
+		if c := h.computerOf(m); c != nil && c.Enabled {
+			return true
+		}
+	}
 	m.mu.Lock()
 	for _, s := range m.sessions {
 		for _, p := range s.Ports {
@@ -183,7 +193,8 @@ func (h *Hub) connectPort(w http.ResponseWriter, r *http.Request, m *Machine) {
 		callErr(w, err)
 		return
 	}
-	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	// noVNC may ask for the "binary" subprotocol (its frames are binary either way).
+	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true, Subprotocols: []string{"binary"}})
 	if err != nil {
 		mux.Abort(id, err)
 		return

@@ -41,6 +41,46 @@ final class ComputerSectionTests: XCTestCase {
         shot(app, "computer-granted")
     }
 
+    /// 看画面 (#1184): the hub's live screen page in a web view, which reaches the Mac's Screen Sharing through the port
+    /// relay and asks for its sign-in. Needs the mock to serve the built page (MOCK_WEB=web/dist) and to relay to a real
+    /// Screen Sharing on this Mac's 5900 (TEST_RUNNER_JARVIS_COMPUTER_SCREEN=1).
+    @MainActor func testTheLiveScreenAsksForTheMacsSignIn() throws {
+        guard state == "ready", ProcessInfo.processInfo.environment["JARVIS_COMPUTER_SCREEN"] == "1" else {
+            throw XCTSkip("MOCK_COMPUTER=ready with MOCK_WEB and a Screen Sharing on 5900 (JARVIS_COMPUTER_SCREEN=1)")
+        }
+        let (app, _, _) = try open()
+        let look = app.buttons["computer-screen"].firstMatch
+        XCTAssertTrue(look.waitForExistence(timeout: 10), "no 看画面:\n\(app.debugDescription)")
+        look.tap()
+        let signIn = app.webViews.staticTexts["登录这台 Mac 的屏幕共享"].firstMatch
+        XCTAssertTrue(signIn.waitForExistence(timeout: 30), "the Mac's Screen Sharing did not ask to sign in:\n\(app.debugDescription)")
+        XCTAssertTrue(app.webViews.textFields["账号"].exists && app.webViews.secureTextFields["密码"].exists)
+        shot(app, "computer-screen-signin")
+        app.buttons["完成"].firstMatch.tap()
+        XCTAssertTrue(look.waitForExistence(timeout: 10), "back on the machine page")
+    }
+
+    /// In the chat, under the assistant's 看电脑 / 操控电脑: 看画面 for the Mac it operated (MOCK_COMPUTER=ready has a
+    /// conversation where it did 6 × 7 on MacBook).
+    @MainActor func testTheChatOffersTheLiveScreen() throws {
+        guard state == "ready", let hub = ProcessInfo.processInfo.environment["JARVIS_COMPUTER_HUB"] else {
+            throw XCTSkip("MOCK_COMPUTER=ready (JARVIS_COMPUTER_HUB)")
+        }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-app.tab", "assistant", "-tab", "assistant",
+                               "-openAssistant", "server/b2e4d6f8-0000-4000-8000-0000000000c1", "-openWork", "YES",
+                               "-showToolDetails", "YES", "-showRunsOpen", "YES"] // BeautifulUI folds the two into a run of chips
+        app.launchPinned()
+        let look = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "看电脑")).firstMatch
+        XCTAssertTrue(look.waitForExistence(timeout: 30), "no 看电脑 row:\n\(app.debugDescription)")
+        let screen = app.buttons["tool-screen"].firstMatch
+        XCTAssertTrue(screen.waitForExistence(timeout: 10), "no 看画面 under the tool:\n\(app.debugDescription)")
+        for _ in 0..<4 where !screen.isHittable { screen.frame.minY < app.frame.midY ? app.swipeDown() : app.swipeUp() }
+        shot(app, "computer-chat-tool")
+    }
+
     @MainActor func testAnInstallCanBeCancelled() throws {
         guard state == "missing" else { throw XCTSkip("MOCK_COMPUTER=missing") }
         let (app, _, status) = try open()

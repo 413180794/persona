@@ -9,6 +9,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,6 +56,41 @@ func TestParseConsole(t *testing.T) {
 		if got := parseConsole(c.out, 501); got != c.want {
 			t.Errorf("%s: %q, want %q", c.name, got, c.want)
 		}
+	}
+}
+
+// The live screen needs macOS's Screen Sharing: something on the port that greets like VNC.
+func TestAnswersRFB(t *testing.T) {
+	listen := func(greeting string) string {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = l.Close() })
+		go func() {
+			for {
+				c, err := l.Accept()
+				if err != nil {
+					return
+				}
+				_, _ = c.Write([]byte(greeting))
+				_ = c.Close()
+			}
+		}()
+		return l.Addr().String()
+	}
+	ctx := context.Background()
+	if !answersRFB(ctx, listen("RFB 003.889\n")) {
+		t.Fatal("Screen Sharing")
+	}
+	if answersRFB(ctx, listen("HTTP/1.1 400 Bad Request\r\n")) {
+		t.Fatal("not VNC")
+	}
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	addr := l.Addr().String()
+	_ = l.Close()
+	if answersRFB(ctx, addr) {
+		t.Fatal("nothing there")
 	}
 }
 

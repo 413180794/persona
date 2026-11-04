@@ -85,6 +85,7 @@ WKWebView ─ http://localhost:5173 ─▶ 本机 127.0.0.1:5173（App 监听）
 - 端口只能是 Agent 名下的（node 扫出来的）或用户在 App 里点开过的；随便猜一个端口号连会 403。点开过的记在 hub 内存里 24 小时，
   hub 重启后清空（再点一次就行）。
 - 探测（`GET …/ports/{port}`）只回「有没有在听、是不是 HTTP、标题」，不放行。
+- 例外：插件 `cua` 对一台 Mac 打开时，它的 5900（macOS 的屏幕共享）常设放行，给「看画面」用（[computer-use.md](computer-use.md)「实时画面」）；WebSocket 接受 `binary` 子协议（noVNC 可能带）。
 
 ## 还没做的
 

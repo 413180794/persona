@@ -397,7 +397,7 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | GET | `/api/v1/machines` | `{"machines":[Machine]}` |
 | POST | `/api/v1/machines/{mid}/reconnect` | 重连该机器的 node |
 | PUT | `/api/v1/machines/{mid}/engine` | `{"engine":"herdr"\|"herdr-core"\|"herdr-both"\|"orca"}` → 200 更新后的 Machine；不认识的引擎 400 `{"error"}`，没有这台机器 404。离线也能改（存下，连上时生效）；改完照常推 `machines`（下面「引擎」） |
-| GET | `/api/v1/machines/{mid}/computer` | 这台 Mac 现在有没有 Cua Driver、能不能被助手操控（hub 当场问 node 的 `computer.status`）→ 200 `Computer`（`{enabled, installed, version?, daemon, accessibility?, screen_recording?, desktop?, ready, note?}`，[computer-use.md](computer-use.md)）；插件 `cua` 没开、或不是 Mac → 404 |
+| GET | `/api/v1/machines/{mid}/computer` | 这台 Mac 现在有没有 Cua Driver、能不能被助手操控（hub 当场问 node 的 `computer.status`）→ 200 `Computer`（`{enabled, installed, version?, daemon, accessibility?, screen_recording?, desktop?, screen_sharing, ready, note?, job?}`，[computer-use.md](computer-use.md)）；插件 `cua` 没开、或不是 Mac → 404 |
 | PUT | `/api/v1/machines/{mid}/computer` | `{"enabled": bool}`：机器页「允许助手操控这台电脑」开关，写进插件 `cua` 配置里的 `machines` → 200 `Computer`；插件没开、不是 Mac → 404。改完照常推 `machines` |
 | POST | `/api/v1/machines/{mid}/computer/{install\|grant\|cancel}` | 机器页的「安装 Cua Driver」「去授权」「取消」：node 在后台跑（`computer.install` / `computer.grant` / `computer.cancel`），→ 200 `Computer`，进度在它的 `job`（`{kind, state: running\|done\|failed\|cancelled, step?, error?, started}`），页面接着 GET。插件没对这台打开 404；离线、已有任务、node 太旧 409 |
 | GET | `/api/v1/machines/{mid}/launchers` | `{"launchers":[Launcher]}` |

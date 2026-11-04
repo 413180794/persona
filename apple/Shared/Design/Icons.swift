@@ -198,6 +198,8 @@ extension Theme {
         /// A computer whose kind is not known.
         static let machine = "desktopcomputer"
         static let laptop = "laptopcomputer"
+        /// A Mac's live screen (看画面, docs/computer-use.md「实时画面」).
+        static let screen = "display"
         /// Signing in with a code entered on a web page instead of a computer's login (GitHub's device flow).
         static let deviceCode = "key"
         /// This Mac out of the hub's reach (the Persona page's device chip on the Mac).
