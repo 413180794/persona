@@ -139,6 +139,10 @@ func (h *Hub) routes() http.Handler {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
+		if principalOf(r.Context()).Role != roleFull && !answerMayResolve(res) {
+			writeErr(w, http.StatusForbidden, errors.New("this device can only answer with a card's own choices"))
+			return
+		}
 		if err := h.resolve(r.PathValue("id"), res); err != nil {
 			if errors.Is(err, errNotPending) {
 				writeErr(w, http.StatusGone, err)

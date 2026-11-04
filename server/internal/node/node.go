@@ -345,7 +345,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		PermissionMode   string          `json:"permission_mode"`
 		Effort           string          `json:"effort"`
 		ResumeOnly       bool            `json:"resume_only"`
-		Refresh          bool            `json:"refresh"` // launchers.models: ask again, not the kept list
+		Refresh          bool            `json:"refresh"`    // launchers.models: ask again, not the kept list
+		Configured       bool            `json:"configured"` // launchers.models: hub.json names this launcher
 		Raw              json.RawMessage `json:"-"`
 	}
 	if len(params) > 0 {
@@ -474,6 +475,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "launchers.probe":
 		return map[string]any{"detail": n.launcherProbeCached(ctx, p.Name)}, nil
 	case "launchers.models":
+		if !p.Configured && p.AgentType == "" && !n.knownLauncher(ctx, p.Name) { // either: the hub vouches, from hub.json
+			return nil, fmt.Errorf("unknown launcher %q", p.Name)
+		}
 		return n.launcherModels(ctx, p.Name, p.AgentType, p.Refresh)
 	case "launchers.quota":
 		r, err := n.launcherQuota(ctx, p.Name, p.TZ)

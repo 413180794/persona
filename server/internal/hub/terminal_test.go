@@ -311,26 +311,19 @@ func TestTerminalControlNewestDeviceDrives(t *testing.T) {
 	}
 }
 
-// An answer-only device may watch a terminal, not drive it: it never gets control, what it types never reaches the
-// computer, and asking for control does not take it from the device that has it.
+// The WebSocket is not an answer-only device's (allowed), and if it ever were, this one would still only watch a
+// terminal: it never gets control, what it types never reaches the computer, and asking for control does not take it
+// from the device that has it.
 func TestAnswerRoleCannotDriveTerminal(t *testing.T) {
 	box := newMeshNode("uid-box", "box", "s1")
 	box.resident = true
 	mh := startTestHub(t, hubB, "Office", []MachineConfig{{ID: "box", Name: "Box", Kind: "ssh"}}, []*meshNode{box})
 	fullTok, _ := mh.deviceToken(t, roleFull)
-	answerTok, _ := mh.deviceToken(t, roleAnswer)
 	eventually(t, 10*time.Second, "box online", func() bool { return mh.machines(t, fullTok)["box"].Online })
 	subscribe := map[string]any{"type": "terminal_subscribe", "machine_id": "box", "session_id": "s1",
 		"control": map[string]any{"cols": 80, "rows": 24}, "takeover": true}
 	input := func(text string) map[string]any {
 		return map[string]any{"type": "terminal_input", "machine_id": "box", "session_id": "s1", "text": text}
-	}
-	// What an app sends is handled in order: the pong means what came before it has been.
-	settled := func(a *app, id string) {
-		t.Helper()
-		from := a.count()
-		a.send(t, map[string]any{"type": "ping", "id": id})
-		a.wait(t, "pong "+id, from, func(m map[string]any) bool { return m["type"] == "pong" && m["id"] == id })
 	}
 	controller := func() *client {
 		mh.h.terms.mu.Lock()
@@ -340,13 +333,15 @@ func TestAnswerRoleCannotDriveTerminal(t *testing.T) {
 		}
 		return nil
 	}
+	answer := &client{hub: mh.h, out: make(chan []byte, 64), subs: map[[2]string]bool{}, role: roleAnswer}
+	t.Cleanup(func() { mh.h.terminalUnsubscribe(answer, "box", "s1") })
+	say := func(v map[string]any) {
+		b, _ := json.Marshal(v)
+		mh.h.onClientMessage(context.Background(), answer, b)
+	}
 
-	answer := dialApp(t, mh, answerTok)
-	answer.send(t, subscribe)
-	answer.wait(t, "being told it only watches", 0, func(m map[string]any) bool {
-		return m["type"] == "terminal_control" && m["state"] == "unsupported"
-	})
-	settled(answer, "1")
+	say(subscribe)
+	awaitStates(t, answer, "unsupported")
 	if controller() != nil {
 		t.Fatal("an answer-only device got control of the terminal")
 	}
@@ -355,8 +350,7 @@ func TestAnswerRoleCannotDriveTerminal(t *testing.T) {
 	full := dialApp(t, mh, fullTok)
 	full.send(t, subscribe)
 	full.wait(t, "control", 0, func(m map[string]any) bool { return m["type"] == "terminal_control" && m["state"] == "active" })
-	answer.send(t, input("typed-by-answer"))
-	settled(answer, "2")
+	say(input("typed-by-answer"))
 	full.send(t, input("typed-by-full"))
 	logged := func(text string) bool {
 		for _, e := range box.eventLog() {
@@ -373,8 +367,7 @@ func TestAnswerRoleCannotDriveTerminal(t *testing.T) {
 
 	// Asking again does not take it over.
 	driver := controller()
-	answer.send(t, subscribe)
-	settled(answer, "3")
+	say(subscribe)
 	if controller() != driver {
 		t.Fatal("an answer-only device took the terminal from the device driving it")
 	}

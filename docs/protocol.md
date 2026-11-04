@@ -8,7 +8,7 @@
 
 - 优先使用 `Authorization: Bearer <token>`。当前实现未收紧 URL token：没有 Authorization 值时，所有鉴权 API（含 WebSocket）仍可回退到 `?token=`，不只限回环或 WS。客户端应使用请求头，避免凭据进入 URL。
 - hub.json 的 `token` 是主 token，只接受回环 / 内网等受信任来源；公网即使用 TLS 也返回 `403 master_token_local_only`。公网应使用临时配对 token 或设备 token。默认拒绝公网明文 API，返回 `403 tls_required`，仅 `GET /api/v1/health` 例外。
-- 每台设备自己的凭据：`POST /api/v1/auth/tokens {"name":"<设备名称>","kind":"phone"}` → `{id,token,role,name}`。设备 token 以 `jd_` 开头，hub 只存哈希；`kind: watch` 得到 `answer`，其他 kind 得到 `full`。`full` 可以创建设备 token；`answer` 能读、回答交互、发消息、标已读 / 中断、处理收件箱和注册推送，不能改设置或注册手机工具，其余写操作一律 403，WebSocket 上也不能注册成手机执行 `phone_*` 工具，也不能接管终端（`terminal_subscribe` 的 `control`、`takeover` 被忽略，只能看）。新 App 配对后立刻换一个自己的 token，之后只用它；配对的手表再换一个 `kind: watch` 的，手表只拿到这个。
+- 每台设备自己的凭据：`POST /api/v1/auth/tokens {"name":"<设备名称>","kind":"phone"}` → `{id,token,role,name}`。设备 token 以 `jd_` 开头，hub 只存哈希；`kind: watch` 得到 `answer`，其他 kind 得到 `full`。`full` 可以创建设备 token。`answer` 只能做手表用到的事（允许列表，`devicetokens.go`），其余一律 403，GET 也一样：读机器、会话、对话内容、交互和收件箱列表，回答交互，发消息，标已读 / 中断，收件箱标记完成、草拟、回复。文件、启动器、设备注册和 WebSocket 都不行。回答屏幕卡片只能选选项或按 `1`–`9`、`esc`、`enter`，不能打字；发消息只能发给列表里的会话，只带文字（去掉控制字符），选不了启动器和模型，也不能带图；回复收件箱不能带文档状态变更，开了 `lark_agent` 时也不能发 `/agent`。发消息和批准计划是它本来的能力，所以手表丢了还是要撤销。新 App 配对后立刻换一个自己的 token，之后只用它；配对的手表再换一个 `kind: watch` 的，换到了手表就只拿这个；还没换到时（请求失败、旧 hub）手表暂用手机那份。
 - `GET /api/v1/auth/tokens` 返回 `{tokens,current}`，`DELETE /api/v1/auth/tokens/{id}` 撤销凭据、清缓存（认证结果缓存 30 秒，撤销时清掉）并断开该设备的 WebSocket；App 在「设置 › 设备」里管理。旧 hub 无此接口时，旧客户端仍按原配对流程使用凭据。
 - 电脑链路的凭据（[link.md](link.md)）：`POST /api/v1/auth/tokens {"kind":"link","machine":"<hub.json 里 kind 为 link 的机器>"}` → `role: link`，
   只能开 `/api/v1/link` 和 `/api/v1/link/stream`，其他接口 403；列表里带 `machine_id`。用给这台生成的配对码（下文 `{"machine"}`）兑换时，
@@ -518,7 +518,7 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | `items` | `machine_id`, `session_id`, `items`，以及这批在 transcript 里的位置（见下「items 的连续性」）：`history`, `to_seq`, `from_seq`（接续的批次才有）。只推给订阅了该会话的客户端；没有 item 的行（ai-title 之类）也会推一条空的 `items`，让 App 知道这几行已经看过 |
 | `delta` | `machine_id`, `session_id`, `text`（无头助手正在生成的整段文字；空串表示这轮结束）。约每 80 ms 一条；App 每个对话最多每秒画 5 次，停顿后的第一条立刻画、之后画最新的，空串立刻画，消息落进 transcript 或重连时丢掉还没画的（`DeltaPacer`） |
 | `screen` | `machine_id`, `session_id`, `text`, `status`, `ts`（node 已不再随订阅采样屏幕：终端页自己按需读 `/screen`，旧 App 收不到这条也不影响） |
-| `terminal_control` | `machine_id`, `session_id`, `state`：`active`（接管了，带 `cols`, `rows`）、`busy`（电脑上别的程序占着，问用户要不要 `takeover`；先镜像着）、`taken`（被别的设备或程序抢走）、`lost`（node 自己放手了）、`unsupported`（旧 node / herdr，或这台设备的凭据是 `answer`，只能镜像），`error` 是给人看的原因 |
+| `terminal_control` | `machine_id`, `session_id`, `state`：`active`（接管了，带 `cols`, `rows`）、`busy`（电脑上别的程序占着，问用户要不要 `takeover`；先镜像着）、`taken`（被别的设备或程序抢走）、`lost`（node 自己放手了）、`unsupported`（旧 node / herdr，只能镜像），`error` 是给人看的原因 |
 | `terminal` | `machine_id`, `session_id`，以及一帧 `epoch`, `seq`, `full`, `cols`, `rows`, `data`（base64 的 VT 字节），或者 `error`（流停了：电脑离线、会话不在跑……）+ `unsupported`（旧 node / herdr 不能推流，改用 `/screen` 轮询）。见下「终端流」 |
 | `interaction` | `interaction`（新的待处理，推给所有客户端） |
 | `interaction_resolved` | `id` |

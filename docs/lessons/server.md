@@ -256,3 +256,7 @@
 - 仅 DNS 的负载均衡记录让流量回到 Cloudflare 自己时，会 `error 1000`；要走 Cloudflare for SaaS，而域名本身在 Cloudflare 上时（O2O），自定义主机名只认指向 SaaS 区域的 CNAME，TXT 预验证不生效。
 - 阿里云函数计算的自定义域名必须 CNAME 到它，根域名绑不上（Cloudflare 把根域名 CNAME 展平成 A 记录）。
 - `wrangler deploy` 会让 Worker 的自定义域名和 `wrangler.jsonc` 的 `routes` 一致：用 API 额外挂的会被去掉，列着的会被重新占上。
+
+## 角色权限（2026-11-04，#1128）
+
+- **GET 不等于读**（#1128）：`answer` 角色从有它起就按「GET 算读」放行，结果一个 GET 能经启动器接口在电脑上执行命令，另一个能读 `hub.json` 拿到主 token。角色权限要写允许列表：列出这个角色的客户端真正调用的接口，默认拒绝。列的时候查客户端的历史版本（`git log -p`），不只看现在的代码；请求体也要看，同一个接口的参数可能也不该让它选（发消息的 `launcher`，回答卡片的 `text`）；接口的副作用也要看，发消息给一个不存在的会话 id 会在电脑上起一个新 Agent，`POST /sessions` 拒了也没用。

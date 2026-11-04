@@ -216,6 +216,72 @@ func TestLauncherModelsLockedByFixedModel(t *testing.T) {
 	}
 }
 
+// Asking a launcher for its models runs it, so a name this machine does not offer as a launcher is not run, unless the
+// hub says its hub.json names it.
+func TestLauncherModelsOnlyRunsKnownLaunchers(t *testing.T) {
+	home := fakeCLIHome(t)
+	n, _ := testNode(t)
+	n.home = home
+	marker := filepath.Join(home, "ran")
+	f, err := os.OpenFile(filepath.Join(home, ".zshrc"), os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("notalauncher() { echo ran >> " + marker + " }\n"); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+	ask := func(name string, configured bool) error {
+		params, _ := json.Marshal(map[string]any{"name": name, "refresh": true, "configured": configured})
+		_, err := n.handle(context.Background(), "launchers.models", params)
+		return err
+	}
+	for _, name := range []string{"notalauncher", "true"} {
+		if err := ask(name, false); err == nil {
+			t.Errorf("asked %s, not a launcher, for its models", name)
+		}
+	}
+	if b, err := os.ReadFile(marker); err == nil {
+		t.Fatalf("ran what is not a launcher: %s", b)
+	}
+	if err := ask("mine", false); err != nil {
+		t.Fatalf("a launcher of this machine: %v", err)
+	}
+	_ = ask("notalauncher", true) // the hub vouches for it: asked, whatever it answers
+	if _, err := os.ReadFile(marker); err != nil {
+		t.Fatalf("a launcher in hub.json was not asked: %v", err)
+	}
+	_ = os.Remove(marker)
+	params, _ := json.Marshal(map[string]any{"name": "notalauncher", "agent_type": "claude", "refresh": true}) // an old hub says it with this
+	_, _ = n.handle(context.Background(), "launchers.models", params)
+	if _, err := os.ReadFile(marker); err != nil {
+		t.Fatalf("a launcher with its type from hub.json was not asked: %v", err)
+	}
+	n.setManaged([]proto.ManagedLauncher{{Name: "managed"}})
+	for _, name := range []string{"claude", "traex", "managed"} {
+		if err := ask(name, false); err != nil && strings.Contains(err.Error(), "unknown launcher") {
+			t.Errorf("%s refused: %v", name, err)
+		}
+	}
+}
+
+// A runtime's launcher is a launcher too, though no shell lists it.
+func TestLauncherModelsKnowsRuntimeLaunchers(t *testing.T) {
+	n, _ := runtimeNode(t)
+	dialRuntime(t, n, dshHello())
+	var name string
+	for _, l := range n.runtimes.launchers() {
+		name = l.Name
+	}
+	if name == "" {
+		t.Fatal("no runtime launcher")
+	}
+	params, _ := json.Marshal(map[string]any{"name": name})
+	if _, err := n.handle(context.Background(), "launchers.models", params); err != nil && strings.Contains(err.Error(), "unknown launcher") {
+		t.Fatalf("%s refused: %v", name, err)
+	}
+}
+
 func TestLauncherModelsOtherAgents(t *testing.T) {
 	n, _ := testNode(t)
 	res, err := n.launcherModels(context.Background(), "traex", "", false)

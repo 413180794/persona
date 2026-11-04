@@ -587,7 +587,7 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
   - 截图：`-tab settings -openAppearance icon`；`AppIconTests`（UI 测试，体验模式）点「气场」、接受系统提示、回主屏截图，再换回默认。
 - 设置页顶部和欢迎页名字旁边的标志就是 App 图标本身（`AppGlyph` 显示默认图标的预览 `app-icon-default`，浅色 / 深色跟着屏幕），换图标它跟着变（#709；以前是代码画的夜色底珊瑚星）。
 - 品牌色：珊瑚色（`Theme.brand`）只给 Persona 自己的标志：对话首页的图标、实时活动锁屏的四角星。能点的东西一律用当前风格的主色 `Theme.accent`。
-  两份 AccentColor 资源（手表的标题和 tint、系统弹窗这类读资源的地方）是系统蓝；实时活动读不到风格，描边和按钮固定用系统蓝（按钮是压深的 `#0071E3`，白字 4.7:1）。
+  两份 AccentColor 资源（手表的标题和 tint、系统弹窗这类读资源的地方）是系统蓝；iPhone / iPad 窗口的 `tintColor` 跟着主题色（`WindowTint`：UIKit 画的 List 行图标取它，#1188）；实时活动读不到风格，描边和按钮固定用系统蓝（按钮是压深的 `#0071E3`，白字 4.7:1）。
 
 ## 数据流
 

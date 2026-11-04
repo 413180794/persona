@@ -640,8 +640,11 @@ func (h *Hub) launcherModels(w http.ResponseWriter, r *http.Request, m *Machine)
 func (h *Hub) askLauncherModels(ctx context.Context, m *Machine, name string, refresh bool) (proto.LauncherModels, error) {
 	params := map[string]any{"name": name, "refresh": refresh}
 	for _, l := range m.cfg.Launchers {
-		if l.Name == name && l.AgentType != "" {
-			params["agent_type"] = l.AgentType // what the user said it runs
+		if l.Name == name {
+			params["configured"] = true // the node may not list it (a wrapper)
+			if l.AgentType != "" {
+				params["agent_type"] = l.AgentType // what the user said it runs
+			}
 		}
 	}
 	var res proto.LauncherModels

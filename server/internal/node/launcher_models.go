@@ -99,6 +99,25 @@ func (n *Node) launcherModels(ctx context.Context, name, agentType string, refre
 	return v.(proto.LauncherModels), nil
 }
 
+// knownLauncher: asking a launcher for its models runs it under the login shell, so only what this machine offers as a
+// launcher is asked. One the hub's hub.json names (a wrapper the node may not list) is the hub's to vouch for.
+func (n *Node) knownLauncher(ctx context.Context, name string) bool {
+	if name == "claude" || name == traexAgent {
+		return true
+	}
+	if _, ok := n.managedLauncher(name); ok {
+		return true
+	}
+	if n.runtimes.launcherRuntime(name) != nil || shellLauncherNames()[name] {
+		return true // the shell's last list will do: no login shell to wait for when the models are kept anyway
+	}
+	list, err := n.launchers(ctx)
+	if err != nil {
+		return false
+	}
+	return slices.ContainsFunc(list, func(l proto.Launcher) bool { return l.Name == name })
+}
+
 // launcherModelsAgent is the agent the launcher runs: the user's word for it, else what the node knows of it.
 func (n *Node) launcherModelsAgent(ctx context.Context, name, agentType string) string {
 	switch {

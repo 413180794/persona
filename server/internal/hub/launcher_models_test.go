@@ -67,6 +67,9 @@ func TestLauncherModelsEndpoint(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("%d %s", w.Code, w.Body)
 	}
+	if got["configured"] != true {
+		t.Fatalf("a launcher in hub.json is not vouched for: %v", got)
+	}
 	if got["name"] != "work" || got["agent_type"] != "codex" || got["refresh"] != true {
 		t.Fatalf("node got %+v", got)
 	}

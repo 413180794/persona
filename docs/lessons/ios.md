@@ -647,3 +647,10 @@ Claude Code 压缩一次写三样：`system/compact_boundary`（`compactMetadata
 踩到的坑：一轮里除了回答，别的都进工作行，所以「回答之后才来的」提示会被收进折叠的工作行里，单元测试只造了没有工具的一轮就没发现，要连工具一起造。
 另一个坑：点开时 `ChatPin` 把标题按在原处，分隔线是对话最后一行时，卡片往下长就到了输入框后面（矮屏上露一半）。点开后再调 `ChatPin.show` 把卡片底边滚到列表底边以内，标题不出屏；行在最后、点开往下长的都该这样。
 
+## 换了主题色，设置的行图标还是系统蓝：List 行图标取窗口的 tintColor（2026-11-04，#1188）
+
+除 BeautifulUI 以外的风格，`SettingsRow` 是系统的 `Label`，不读传进来的颜色，图标跟着 tint 走。RootView 的 `.tint(Theme.accent)` 只写进 SwiftUI 的环境；
+`List` 行图标是经 UIKit 画的，有时取的是所在窗口的 UIKit `tintColor`，窗口没设过就是资源里的 AccentColor（系统蓝 `#007AFF`）。
+设置 sheet 开着时换主题色（整树按 `look` 重建，sheet 留着），或换完后进出二级页，行图标就成了系统蓝，同一页的文字按钮和 × 却是新颜色。
+现在 RootView 在 `look` 变化时也把各窗口的 `tintColor` 设成主题色（`WindowTint`）；默认的液态玻璃主色本来就是系统蓝，默认外观一像素不变。
+复现：设置首页在屏幕上时 `scripts/app/personactl.py set-style --color coral`，取行图标的像素看是不是 `#007AFF`。经界面进「主题色」页选色再返回这条路在模拟器上不一定复现。

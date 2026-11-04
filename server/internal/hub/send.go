@@ -6,9 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
 
+	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -67,6 +70,16 @@ func (l *sendLog) forget(id string, f *sendFlight) {
 	l.mu.Unlock()
 }
 
+// withoutControls drops what acts on a terminal rather than being read: line breaks and tabs stay.
+func withoutControls(s string) string {
+	return strings.Map(func(c rune) rune {
+		if unicode.IsControl(c) && c != '\n' && c != '\t' {
+			return -1
+		}
+		return c
+	}, s)
+}
+
 func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	p := map[string]any{}
 	if r.ContentLength != 0 {
@@ -97,6 +110,27 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 			writeErr(w, http.StatusConflict, errors.New("todo is already completed"))
 			return
 		}
+	}
+	if principalOf(r.Context()).Role != roleFull {
+		// An answer-only device says something to a conversation it can see, no more. A message to an id nobody has starts
+		// an agent on the computer; which program runs it, and whatever else a send can shape, are a full device's to pick;
+		// and it is text for the agent, not keys for the terminal.
+		s, ok := m.session(sid)
+		if !ok || len(h.shown(m.cfg.ID, []proto.Session{s})) == 0 {
+			writeErr(w, http.StatusNotFound, errors.New("no such session"))
+			return
+		}
+		text, _ := p["text"].(string)
+		text = withoutControls(text)
+		if strings.TrimSpace(text) == "" {
+			writeErr(w, http.StatusBadRequest, errors.New("text is required"))
+			return
+		}
+		said := map[string]any{"session_id": sid, "text": text}
+		if id, ok := p["client_msg_id"]; ok {
+			said["client_msg_id"] = id
+		}
+		p = said
 	}
 	if s, ok := m.session(sid); ok && isAssistant(s, m.assistantCwd()) {
 		h.unarchiveOnSend(m.cfg.ID, sid) // the user is talking in it again: back in the list

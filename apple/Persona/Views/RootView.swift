@@ -48,6 +48,8 @@ struct RootView: View {
         #if os(iOS)
         // 设置 › 外观 › 深浅色 on this scene's window (and any other open one) as it first shows.
         .onAppear { model.colorScheme.apply() }
+        // The 主题色 on the windows too, for what UIKit draws in the window's tint (设置's row icons, `WindowTint`).
+        .onChange(of: model.look, initial: true) { WindowTint.apply() }
         #endif
         #if DEBUG
         .overlay(alignment: .bottomTrailing) { PerfCountProbe() }

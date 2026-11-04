@@ -17,12 +17,13 @@ import (
 
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/link"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // One credential per device (docs/protocol.md「鉴权」). The pairing token in hub.json still opens everything (the CLI,
 // apps from before this); an app trades it for a token of its own right after pairing and stops keeping it, so a lost
-// phone is revoked alone instead of re-pairing every device. A watch gets an answer-only token: it can read, answer,
-// reply and mark done, not change settings, start or close agents, or run tools.
+// phone is revoked alone instead of re-pairing every device. A watch gets an answer-only token: it can do what the
+// watch app does (answerReads, answerWrites) and nothing else.
 
 const (
 	roleFull   = "full"
@@ -178,10 +179,16 @@ func (h *Hub) authenticate(ctx context.Context, tok string) (principal, bool) {
 	return *c.p, true
 }
 
-// answerWrites are what an answer-only device may change: answering, sending and replying, seen / done, its own
-// push registration. Everything else that is not a read is refused.
-var answerWrites = regexp.MustCompile(`^/api/v1/(interactions/[^/]+/resolve|sessions/[^/]+/[^/]+/(messages|seen|interrupt)|` +
-	`inbox/[^/]+/(done|reply|draft)|inbox/refresh|devices(/.*)?)$`)
+// answerReads and answerWrites are all an answer-only device may do: what the watch app does and has done, no more. A
+// GET is not harmless for being a GET (one reads any file of a computer, one runs a launcher), so none gets through for
+// its method. Something new the watch needs goes here.
+var (
+	answerReads  = regexp.MustCompile(`^/api/v1/(machines|sessions|interactions|inbox|sessions/[^/]+/[^/]+/items)$`)
+	answerWrites = regexp.MustCompile(`^/api/v1/(interactions/[^/]+/resolve|sessions/[^/]+/[^/]+/(messages|seen|interrupt)|` +
+		`inbox/[^/]+/(done|reply|draft))$`)
+	// answerKey is a key the watch can press on a screen card it could not read: a menu's number, Esc, Return.
+	answerKey = regexp.MustCompile(`^([1-9]|esc|enter)$`)
+)
 
 func allowed(p principal, method, path string) bool {
 	switch p.Role {
@@ -195,11 +202,23 @@ func allowed(p principal, method, path string) bool {
 		return method == http.MethodGet && path == peerPath
 	case rolePeerPair:
 		return method == http.MethodPost && path == peerPairPath
+	case roleAnswer:
+		if method == http.MethodGet || method == http.MethodHead {
+			return answerReads.MatchString(path)
+		}
+		return method == http.MethodPost && answerWrites.MatchString(path)
 	}
-	if method == http.MethodGet || method == http.MethodHead {
-		return true
+	return false
+}
+
+// answerMayResolve is what an answer-only device may say to a card: pick an answer, say yes or no and why. Typing into a
+// terminal, pressing more than a menu's key, filling in a card's fields and making a tool's approval stand (always) are
+// for a full device. A screen card's own "don't ask again" is one of its options, and the watch shows it.
+func answerMayResolve(r proto.Resolution) bool {
+	if r.Text != "" || len(r.PreKeys) > 0 || r.Always || r.Message != "" || len(r.Values) > 0 || r.Action != "" || len(r.Content) > 0 {
+		return false
 	}
-	return p.Role == roleAnswer && answerWrites.MatchString(path)
+	return len(r.Keys) == 0 || len(r.Keys) == 1 && answerKey.MatchString(r.Keys[0])
 }
 
 func (h *Hub) tokenRoutes(api *http.ServeMux) {

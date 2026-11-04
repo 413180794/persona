@@ -901,6 +901,15 @@ func (h *Hub) inboxRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, errors.New("text is required"))
 			return
 		}
+		if principalOf(r.Context()).Role != roleFull {
+			// Posted as the user, a "/agent …" comes back as their request and starts an agent (lark_agent.go).
+			cfg := h.larkAgentCfg()
+			_, asksAgent := larkAgentRequest(in.Text, cfg.prefix())
+			if len(in.Changes) > 0 || cfg.Enabled && asksAgent {
+				writeErr(w, http.StatusForbidden, errors.New("this device can only reply with text"))
+				return
+			}
+		}
 		it, err := h.replyInboxChecked(r.Context(), r.PathValue("id"), strings.TrimSpace(in.Text), in.ClientID, in.ExpectedUID, in.ExpectedVersion, in.Changes...)
 		switch {
 		case errors.Is(err, errMailReplyTargetChanged):
