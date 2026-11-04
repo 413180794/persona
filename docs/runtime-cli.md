@@ -230,6 +230,35 @@ scripts/app/personactl.py screenshot shot.jpg        # App 自己画的窗口（
   模拟器上也一样，不再要 `idb`。
 - `--hub` 仍是 `launch` 配对的 hub（模拟器脚本、mock）；经 hub 发命令是 `--via-hub`，两个不混用。
 
+## 用 CLI 写的 UI 用例
+
+`scripts/app/cli-tests/` 是用 Runtime CLI 写的 UI 用例（用户 2026-11-03 定的：比 XCUITest 快、断言等价的那些迁过来；XCUITest 原用例先留着对照）。
+`clitest.py` 是一个小框架：启动一次 App（和 XCUITest 的 `launchPinned()` 一样：旧布局、固定风格），每个用例前 mock reset、忘掉列表存下的样子、换新的界面树；
+App 自己记着标过已读的，计数对不上时就重启一次（和 XCUITest 每个用例都冷启动一样）。
+
+```sh
+python3 scripts/mock/mock_scenarios.py --port 18761 --scenario agents &        # live_update.py 用 --scenario churn
+JARVISCTL_UDID=<模拟器 udid> HUB=http://127.0.0.1:18761 scripts/app/cli-tests/agents_list.py 3           # 全部用例 3 轮
+JARVISCTL_UDID=<udid> HUB=… scripts/app/cli-tests/agents_list.py 1 quick_filters compact_rows             # 只跑这两个
+```
+
+每一轮每个用例一行 `PASS` / `FAIL`、耗时、失败原因，最后一行一个用例的汇总；有失败退出码不为 0。`CLITEST_LOG=<文件>` 再追加一份 tab 分隔的结果。
+要先装好 `idb`（菜单项、滑动、长按是真实触摸）。
+
+| CLI 用例 | 对应的 XCUITest |
+|---|---|
+| `agents_list.py`：`quick_filters`、`compact_rows`、`folding_spaces`、`mark_space_read`、`working_through_unread` | `AgentsListTests` 同名的 5 个 |
+| `live_update.py`：`open_work_stays_open`、`row_menu_holds_still`、`swiped_row_stays_open`、`search_keeps_typed`、`list_menu_holds_still` | `LiveUpdateTests` 对应的 5 个（mock 用 `churn` 场景；body 次数和主线程耗时从 `perf` 读，打印的 `PERF` 行和 XCUITest 的一样） |
+
+和 XCUITest 写法上的差别：
+- 行的文字是一整个按钮的 label（「完成未看、platform 任务 4、3 分钟前、…」），按 `、名字、` 包含去找。
+- XCUITest 点一个元素前会自己把它滚进屏幕，CLI 不会：屏幕下面的行先 `reach`（往上滑到看得见），点筛选前先回到顶部。
+- 菜单项不吃无障碍激活，`tap` 自动换成 `idb` 的真实触摸。
+
+不迁、永久留在 XCUITest 的：`testScrollingTheLongList`（`XCTOSSignpostMetric` 量滚动卡顿）、ChatFollowTests（真实惯性滚动）、
+`testImageViewerStaysOpenThroughUpdates`（图片查看器）。还没迁的：`testFilterBarHugsTheTop`（#740）、`testScrolledListHoldsStillThroughUpdates`（CLI 版偶发）、
+`testStateGroupingOpensSeenInOneTap`（能迁，但 CLI 更慢）。
+
 ## 协议和安全
 
 - 只在 DEBUG 构建里：`apple/Persona/Debug/` 下的文件整个包在 `#if DEBUG && os(iOS)` 里，入口是 `AppDelegate` 原有
