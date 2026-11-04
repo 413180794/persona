@@ -35,7 +35,7 @@ final class ComputerSectionTests: XCTestCase {
         XCTAssertTrue(waitFor(status, label: "下载"), "the node's steps: \(status.label)")
         XCTAssertTrue(app.buttons["computer-cancel"].exists, "an install can be stopped")
         shot(app, "computer-installing")
-        XCTAssertTrue(waitFor(status, label: "在它的屏幕上点「允许」", timeout: 30), "then the grant: \(status.label)")
+        XCTAssertTrue(waitFor(status, label: "弹出了授权窗口", timeout: 30), "then the grant: \(status.label)")
         shot(app, "computer-granting")
         XCTAssertTrue(waitFor(status, label: "现在可以操控", timeout: 30), "allowed on the Mac: \(status.label)")
         shot(app, "computer-granted")
@@ -103,9 +103,17 @@ final class ComputerSectionTests: XCTestCase {
             return
         }
         XCTAssertEqual(toggle.value as? String, "1")
-        let says = state == "ready" ? "现在可以操控 · Cua Driver 0.38.0" : state == "locked" ? "锁屏" : "屏幕录制权限"
+        let says = ["ready": "现在可以操控 · Cua Driver 0.38.0", "locked": "锁屏", "permissions": "还需要一项权限", "both": "还需要两项权限"][state] ?? ""
         XCTAssertTrue(status.waitForExistence(timeout: 10) && status.label.contains(says), "\(status.label)")
-        if state == "permissions" { XCTAssertTrue(app.buttons["computer-grant"].exists, "去授权 in place of a command to run") }
+        if state == "permissions" || state == "both" { // #1280: steps for what is missing, what is allowed checked
+            XCTAssertTrue(app.buttons["computer-grant"].exists && app.buttons["computer-recheck"].exists, "去授权 and 再检查一次")
+            let accessibility = app.descendants(matching: .any)["computer-step-accessibility"].firstMatch
+            let screen = app.descendants(matching: .any)["computer-step-screen"].firstMatch
+            XCTAssertEqual(accessibility.value as? String, state == "both" ? "待做" : "已完成")
+            XCTAssertEqual(screen.value as? String, "待做")
+            XCTAssertTrue(screen.label.contains("录屏与系统录音") && screen.label.contains("Cua Driver"), screen.label)
+            if state == "both" { XCTAssertTrue(accessibility.label.contains("系统设置 › 隐私与安全性 › 辅助功能"), accessibility.label) }
+        }
         shot(app, "computer-\(state)")
 
         toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()

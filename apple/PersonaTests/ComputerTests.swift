@@ -49,6 +49,26 @@ struct ComputerTests {
         #expect(try machine(",\"computer\":{\"enabled\":true}").computer?.screenSharing == false, "an older hub")
     }
 
+    /// #1280: one step per missing permission in System Settings' own words, the allowed ones checked first.
+    @Test func theGrantGuideSaysWhatIsLeft() {
+        let both = GrantGuide.steps(MachineComputer(enabled: true, installed: true, daemon: true, accessibility: "missing", screenRecording: "missing"))
+        #expect(both.map(\.id) == ["accessibility", "screen", "prompt", "recheck"])
+        #expect(both[0].text.contains("系统设置 › 隐私与安全性 › 辅助功能") && both[0].text.contains("「Cua Driver」"))
+        #expect(both[1].text.hasPrefix("同一处的「录屏与系统录音」"))
+        #expect(GrantGuide.number(of: both[3], in: both) == 4)
+        #expect(GrantGuide.header(MachineComputer(accessibility: "missing", screenRecording: "missing"), asking: false) == "Cua Driver 还需要两项权限")
+
+        let screen = GrantGuide.steps(MachineComputer(enabled: true, installed: true, daemon: true, accessibility: "granted", screenRecording: "missing"))
+        #expect(screen.map(\.id) == ["accessibility", "screen", "prompt", "recheck"] && screen[0].done && !screen[1].done)
+        #expect(screen[0].text == "辅助功能：已允许 Cua Driver")
+        #expect(screen[1].text.contains("系统设置 › 隐私与安全性 › 录屏与系统录音") && screen[1].text.contains("屏幕录制"))
+        #expect(GrantGuide.number(of: screen[1], in: screen) == 1, "the allowed one has no number")
+        #expect(GrantGuide.header(MachineComputer(accessibility: "granted", screenRecording: "missing"), asking: false) == "Cua Driver 还需要一项权限")
+
+        let accessibility = GrantGuide.steps(MachineComputer(accessibility: "missing", screenRecording: "granted"))
+        #expect(accessibility.map(\.id) == ["screen", "accessibility", "recheck"], "no prompt step without screen recording")
+    }
+
     @Test func theToolsReadInChinese() {
         let look = call("computer_state", ["machine": .string("macbook"), "app": .string("Calculator")])
         #expect(ToolPresentation.verb(look.name) == "看电脑")

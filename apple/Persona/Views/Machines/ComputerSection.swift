@@ -14,6 +14,7 @@ struct ComputerSection: View {
     @State private var saving = false
     @State private var asking = false
     @State private var screen: ScreenPage?
+    @State private var checking = false
 
     private var shown: MachineComputer { fresh ?? computer }
 
@@ -61,17 +62,18 @@ struct ComputerSection: View {
         let c = shown
         if !online {
             line("机器离线，连上后才能操控", ok: false)
+        } else if let job = c.job, job.running, job.kind == "grant" {
+            grantGuide(c, asking: true)
         } else if let job = c.job, job.running {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 HStack(spacing: Theme.Space.s) {
                     ProgressView().controlSize(.small)
-                    Text(job.kind == "grant" ? Self.grantHint : (job.step ?? "正在安装"))
+                    Text(job.step ?? "正在安装")
                         .font(Theme.Font.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("computer-status")
                 if job.kind == "install" { action("取消", "cancel", identifier: "computer-cancel") }
-                if job.kind == "grant", c.screenSharing { look(prominent: true) } // 允许 is clicked on the Mac's screen
             }
         } else if !c.installed {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -85,20 +87,7 @@ struct ComputerSection: View {
                 action(c.job?.state == "failed" ? "重新安装" : "安装 Cua Driver", "install", prominent: true, identifier: "computer-install")
             }
         } else if c.daemon, !c.missingPermissions.isEmpty {
-            VStack(alignment: .leading, spacing: Theme.Space.s) {
-                if let job = c.job, job.kind == "grant", job.state == "done" {
-                    line(Self.grantHint, ok: false)
-                    HStack(spacing: Theme.Space.s) {
-                        if c.screenSharing { look(prominent: true) }
-                        action("再请求一次", "grant", identifier: "computer-grant")
-                    }
-                    if !c.screenSharing { Self.noScreenSharing }
-                } else {
-                    let failed = c.job.flatMap { $0.kind == "grant" && $0.state == "failed" ? $0.error : nil }
-                    line(failed ?? "Cua Driver 还没有\(c.missingPermissions.joined(separator: "、"))权限", ok: false)
-                    action("去授权", "grant", prominent: true, identifier: "computer-grant")
-                }
-            }
+            grantGuide(c, asking: false)
         } else if c.ready {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 line("现在可以操控" + (c.version.map { " · Cua Driver \($0)" } ?? ""), ok: true)
@@ -109,9 +98,51 @@ struct ComputerSection: View {
         }
     }
 
-    /// macOS shows its permission dialogs on the Mac itself: nobody can answer them from the phone (#1184 adds its live
-    /// screen).
-    static let grantHint = "那台 Mac 上弹出了授权窗口：在它的屏幕上点「允许」"
+    /// The way to Cua Driver's two permissions (#1280): what is allowed already, checked; the rest as numbered steps in
+    /// System Settings' own words; 去授权 (macOS's dialogs), 再检查一次, and 看画面 to do it from the phone.
+    private func grantGuide(_ c: MachineComputer, asking: Bool) -> some View {
+        let steps = GrantGuide.steps(c)
+        let failed = c.job.flatMap { $0.kind == "grant" && $0.state == "failed" ? $0.error : nil }
+        return VStack(alignment: .leading, spacing: Theme.Space.s) {
+            HStack(spacing: Theme.Space.s) {
+                if asking {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: Theme.Icon.error).foregroundStyle(Theme.caution)
+                }
+                Text(failed.map { "没能请求授权：\($0)" } ?? GrantGuide.header(c, asking: asking))
+                    .font(Theme.Font.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("computer-status")
+            ForEach(Array(steps.enumerated()), id: \.element.id) { _, step in
+                Label {
+                    Text(step.text).font(Theme.Font.label).foregroundStyle(step.done ? Color.secondary : Color.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    if step.done {
+                        Image(systemName: Theme.Icon.success).foregroundStyle(Theme.positive)
+                    } else {
+                        Text("\(GrantGuide.number(of: step, in: steps))").font(Theme.Font.labelStrong.monospacedDigit()).foregroundStyle(Theme.accent)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("computer-step-\(step.id)")
+                .accessibilityValue(step.done ? "已完成" : "待做")
+            }
+            HStack(spacing: Theme.Space.s) {
+                if !asking { action("去授权", "grant", prominent: !c.screenSharing, identifier: "computer-grant") }
+                if c.screenSharing { look(prominent: true) }
+                Button { Task { await recheck() } } label: {
+                    if checking { ProgressView().controlSize(.small) } else { Text("再检查一次").font(Theme.Font.labelStrong).lineLimit(1) }
+                }
+                .themedButton()
+                .disabled(checking)
+                .accessibilityIdentifier("computer-recheck")
+            }
+            if !c.screenSharing { Self.noScreenSharing }
+        }
+    }
 
     private func line(_ text: String, ok: Bool) -> some View {
         Label {
@@ -149,6 +180,12 @@ struct ComputerSection: View {
 
     // MARK: Calls
 
+    private func recheck() async {
+        checking = true
+        defer { checking = false }
+        await refresh()
+    }
+
     private func refresh() async {
         guard let api = model.api(ref.group) else { return }
         if let c = try? await api.computer(machine: ref.id) { fresh = c }
@@ -175,5 +212,47 @@ struct ComputerSection: View {
         } catch {
             if let m = error.shown { model.toast = Toast(m, style: .error) }
         }
+    }
+}
+
+/// The steps to Cua Driver's permissions on that Mac (#1280), checked against macOS 26's System Settings: 隐私与安全性 ›
+/// 辅助功能 and › 录屏与系统录音 (屏幕录制 before), where the app is listed as Cua Driver (com.trycua.driver).
+nonisolated enum GrantGuide {
+    struct Step: Hashable, Identifiable {
+        var id: String
+        var done: Bool
+        var text: String
+    }
+
+    /// What is allowed already first, then what is left to do, then 再检查一次.
+    static func steps(_ c: MachineComputer) -> [Step] {
+        let accessibility = c.accessibility == "granted", screen = c.screenRecording == "granted"
+        var done: [Step] = [], todo: [Step] = []
+        if accessibility {
+            done.append(Step(id: "accessibility", done: true, text: "辅助功能：已允许 Cua Driver"))
+        } else {
+            todo.append(Step(id: "accessibility", done: false, text: "在那台 Mac 上打开「系统设置 › 隐私与安全性 › 辅助功能」，打开「Cua Driver」的开关"))
+        }
+        if screen {
+            done.append(Step(id: "screen", done: true, text: "录屏与系统录音：已允许 Cua Driver"))
+        } else {
+            todo.append(Step(id: "screen", done: false, text: accessibility
+                ? "在那台 Mac 上打开「系统设置 › 隐私与安全性 › 录屏与系统录音」（旧版 macOS 叫「屏幕录制」），打开「Cua Driver」的开关"
+                : "同一处的「录屏与系统录音」（旧版 macOS 叫「屏幕录制」）里，也打开「Cua Driver」的开关"))
+            todo.append(Step(id: "prompt", done: false, text: "系统要是提示退出并重新打开 Cua Driver，或问它能否直接访问屏幕，都选允许"))
+        }
+        todo.append(Step(id: "recheck", done: false, text: "回到这里点「再检查一次」"))
+        return done + todo
+    }
+
+    /// A step's number among the ones left to do.
+    static func number(of step: Step, in steps: [Step]) -> Int {
+        (steps.filter { !$0.done }.firstIndex(of: step) ?? 0) + 1
+    }
+
+    static func header(_ c: MachineComputer, asking: Bool) -> String {
+        if asking { return "那台 Mac 上弹出了授权窗口，按下面的步骤允许" }
+        let missing = [c.accessibility, c.screenRecording].filter { $0 != "granted" }.count
+        return missing == 2 ? "Cua Driver 还需要两项权限" : "Cua Driver 还需要一项权限"
     }
 }
