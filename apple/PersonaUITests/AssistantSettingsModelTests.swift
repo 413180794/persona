@@ -53,4 +53,37 @@ final class AssistantSettingsModelTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["对话模型"].exists, "no 对话模型 row on 设置 › 助手")
         shot(app, "assistant-page-settings")
     }
+
+    /// 设置 › 助手 › 任务通知 (#1731): the switch shows the hub's value and turning it off is sent to the hub.
+    @MainActor func testMainTasksQuietSwitch() throws {
+        try setQuiet(true)
+        let app = launch(["-openAssistantPage", "assistant"])
+        let toggle = app.switches["assistant-main-tasks-quiet"].firstMatch
+        XCTAssertTrue(app.staticTexts["定时任务"].firstMatch.waitForExistence(timeout: 10))
+        for _ in 0..<6 where !toggle.isHittable { app.swipeUp() }
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        XCTAssertEqual(toggle.value as? String, "1")
+        XCTAssertTrue(app.staticTexts["只在主对话里通知"].firstMatch.exists)
+        shot(app, "assistant-main-tasks-quiet-on")
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap() // the switch, not the label
+        let off = expectation(for: NSPredicate { _, _ in (try? self.hubQuiet()) == false }, evaluatedWith: nil)
+        wait(for: [off], timeout: 10)
+        XCTAssertEqual(toggle.value as? String, "0")
+        shot(app, "assistant-main-tasks-quiet-off")
+        try setQuiet(true)
+    }
+
+    private func hubQuiet() throws -> Bool? {
+        let data = try Data(contentsOf: URL(string: hub + "/api/v1/assistant")!)
+        return (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["main_tasks_quiet"] as? Bool
+    }
+
+    private func setQuiet(_ on: Bool) throws {
+        var req = URLRequest(url: URL(string: hub + "/api/v1/assistant")!)
+        req.httpMethod = "PUT"
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["main_tasks_quiet": on])
+        let done = expectation(description: "PUT")
+        URLSession.shared.dataTask(with: req) { _, _, _ in done.fulfill() }.resume()
+        wait(for: [done], timeout: 5)
+    }
 }

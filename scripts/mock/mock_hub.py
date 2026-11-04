@@ -777,7 +777,8 @@ SCHEDULE_RAN = []  # what 立即运行 started (UI tests read it back at /mock/s
 # ---------- where the assistant runs (设置 › 助手) ----------
 # What hub.json's assistant.notes says; the app's 关于我 replaces it once saved there (notes stops being None).
 ASSISTANT_HUB_NOTES = "代码都在 ~/code 下，平时用 MacBook 开发。\n周报每周五下班前先给我草稿，不要直接发。\n服务器上的 /srv 目录不要动。"
-ASSISTANT_CONFIG = {"machine_id": "server", "launcher": "claude", "timezone": "Asia/Shanghai", "notes": None, "main": ASK1}
+ASSISTANT_CONFIG = {"machine_id": "server", "launcher": "claude", "timezone": "Asia/Shanghai", "notes": None, "main": ASK1,
+                    "main_tasks_quiet": True}  # 主对话派的任务只在主对话里通知 (#1731), on by default
 
 
 def assistant_state():
@@ -786,7 +787,7 @@ def assistant_state():
     home = next((m.get("home") for m in MACHINES if m["id"] == cfg["machine_id"]), None)
     notes = cfg["notes"] if cfg["notes"] is not None else ASSISTANT_HUB_NOTES
     out = {"machine_id": cfg["machine_id"], "launcher": cfg["launcher"], "cwd": home + "/.jarvis/assistant" if home else "",
-           "timezone": cfg["timezone"], "notes_effective": notes.strip(),
+           "timezone": cfg["timezone"], "notes_effective": notes.strip(), "main_tasks_quiet": cfg["main_tasks_quiet"],
            "conversations": [s for s in ASSISTANT if s["machine_id"] == cfg["machine_id"]]}
     if cfg["notes"] is not None:
         out["notes"] = cfg["notes"]
@@ -8847,6 +8848,8 @@ class H(BaseHTTPRequestHandler):
                 ASSISTANT_CONFIG["notes"] = body["notes"]
             if body.get("main"):
                 ASSISTANT_CONFIG["main"] = "" if body["main"] == "-" else body["main"]
+            if isinstance(body.get("main_tasks_quiet"), bool):
+                ASSISTANT_CONFIG["main_tasks_quiet"] = body["main_tasks_quiet"]
             return self.send_json(assistant_state())
         if p.startswith("/api/v1/assistant/memory/") and self.command in ("PUT", "DELETE"):
             name = unquote(p.rsplit("/", 1)[1])

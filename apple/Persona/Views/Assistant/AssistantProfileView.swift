@@ -88,6 +88,18 @@ struct AssistantProfileView: View {
             } footer: {
                 Text("「关于我」是你告诉 Persona 的；「记忆」是它在对话里自己记下的，都可以改。")
             }
+            if let quiet = quietTasks {
+                Section {
+                    Toggle(isOn: quiet) {
+                        Label(Self.quietTitle, systemImage: Theme.Icon.notifications).lineLimit(1)
+                    }
+                    .accessibilityIdentifier("assistant-main-tasks-quiet")
+                } header: {
+                    Text("任务通知")
+                } footer: {
+                    Text(Self.quietFooter)
+                }
+            }
             Section {
                 NavigationLink { SkillsPage() } label: { row("Skills", Theme.Icon.skills, detail: nil) }
                 LabeledContent("运行在", value: machineName)
@@ -141,6 +153,14 @@ struct AssistantProfileView: View {
                     }
                     NavigationLink { AssistantMemoryView() } label: {
                         buiRow("记忆", "brain", detail: memoryCount.flatMap { $0 > 0 ? "\($0) 条" : nil })
+                    }
+                }
+                if let quiet = quietTasks {
+                    BUIListSection("任务通知", footer: Self.quietFooter) {
+                        BUIListRow(Self.quietTitle) { BUIIconTile(Theme.Icon.notifications, tint: Theme.accent) } trailing: {
+                            Toggle(Self.quietTitle, isOn: quiet).labelsHidden()
+                                .accessibilityIdentifier("assistant-main-tasks-quiet")
+                        }
                     }
                 }
                 BUIListSection("设置", footer: "每段对话在 \(machineName) 的这个目录里后台运行一个 Claude，不进 herdr。用哪个模型在「设置 › 模型配置 › 主对话」里选，单段对话在它自己的菜单里换。") {
@@ -202,6 +222,14 @@ struct AssistantProfileView: View {
         (model.sessionsByMachine[model.hubRef(machineID)] ?? []).contains { $0.assistant && $0.state == .working }
     }
 
+    /// 主对话派的任务只在主对话里通知 (#1731); nil (no switch) from a hub without the setting.
+    private var quietTasks: Binding<Bool>? {
+        guard let on = model.assistantConfig?.mainTasksQuiet else { return nil }
+        return Binding(get: { on }, set: { v in Task { await model.setMainTasksQuiet(v) } })
+    }
+    private static let quietTitle = "只在主对话里通知"
+    private static let quietFooter = "主对话派出去的任务不进灵动岛、推送和角标，做完、等你回答或出错时由 Persona 在主对话里告诉你。只影响之后派的任务。"
+
     private var upcoming: [AssistantUpcoming] {
         AssistantUpcoming.merge(tasks ?? []).prefix(3).map { $0 }
     }
@@ -230,6 +258,8 @@ struct AssistantProfileView: View {
         async let r = try? api.scheduledTasks()
         async let h = try? api.scheduleRuns()
         async let m = try? api.assistantMemory()
+        // The switch shows once the hub says it has the setting (#1731): a hub updated since the app read it, too.
+        if model.assistantConfig?.mainTasksQuiet == nil { await model.refreshAssistant() }
         tasks = await r
         runs = await h
         if let files = await m { memoryCount = files.filter { $0.name != AssistantMemoryEntry.index }.count }

@@ -687,8 +687,12 @@ nonisolated struct APIClient: Sendable {
         var timezone: String?
         /// The main conversation's session id (the Persona tab opens it); nil until there is one.
         var main: String?
+        /// 主对话派的任务只在主对话里通知 (#1731): tasks the main conversation starts are quiet (`TodoItem.quiet`). The
+        /// value in effect (on by default); nil from a hub without the setting, which hides the switch.
+        var mainTasksQuiet: Bool?
         enum CodingKeys: String, CodingKey {
-            case launcher, cwd, conversations, timezone, main; case machineID = "machine_id", notes = "notes_effective"
+            case launcher, cwd, conversations, timezone, main
+            case machineID = "machine_id", notes = "notes_effective", mainTasksQuiet = "main_tasks_quiet"
         }
     }
     func assistant() async throws -> AssistantState { try await get("/api/v1/assistant") }
@@ -697,11 +701,16 @@ nonisolated struct APIClient: Sendable {
         var launcher: String?
         var timezone: String?
         var notes: String?
-        enum CodingKeys: String, CodingKey { case launcher, timezone, notes; case machineID = "machine_id" }
+        var mainTasksQuiet: Bool?
+        enum CodingKeys: String, CodingKey {
+            case launcher, timezone, notes
+            case machineID = "machine_id", mainTasksQuiet = "main_tasks_quiet"
+        }
     }
-    func setAssistant(machine: String? = nil, launcher: String? = nil, timezone: String? = nil, notes: String? = nil) async throws -> AssistantState {
+    func setAssistant(machine: String? = nil, launcher: String? = nil, timezone: String? = nil, notes: String? = nil,
+                      mainTasksQuiet: Bool? = nil) async throws -> AssistantState {
         try JSON.decoder.decode(AssistantState.self, from: try await request("PUT", "/api/v1/assistant",
-            body: AssistantConfigBody(machineID: machine, launcher: launcher, timezone: timezone, notes: notes)))
+            body: AssistantConfigBody(machineID: machine, launcher: launcher, timezone: timezone, notes: notes, mainTasksQuiet: mainTasksQuiet)))
     }
     /// The 对话 tab is open: the hub gets a claude process ready so the first message starts at once.
     func warmAssistant(launcher: String?) async throws {

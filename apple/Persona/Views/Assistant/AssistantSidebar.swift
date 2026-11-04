@@ -855,7 +855,7 @@ struct AssistantSidebar: View {
                 .accessibilityIdentifier("sidebar-profile")
                 action("收件箱", Theme.Icon.inbox, id: "sidebar-inbox", count: InboxStore.shared.actionCount, run: openInbox)
                 if TodoStore.shared.isSupported {
-                    action("待办", Theme.Icon.todo, id: "sidebar-todos", count: TodoStore.shared.openCount, run: { (openTodos ?? openInbox)() })
+                    action("待办", Theme.Icon.todo, id: "sidebar-todos", count: TodoStore.shared.badgeCount, run: { (openTodos ?? openInbox)() })
                 }
                 action("定时任务", Theme.Icon.schedule, run: openRoutines)
                 action("知识库", Theme.Icon.knowledge, run: openKnowledge)

@@ -87,8 +87,8 @@ extension MacAttention {
             _ = model.pendingInteractions.count
             _ = model.config?.url
             _ = model.live.state
-            // Muting changes the badge too: read what isMuted reads.
-            _ = model.allSessions.map { model.isMuted($0) }
+            // Muting changes the badge too: read what isMuted reads, and what isQuiet does (a task found quiet, #1731).
+            _ = model.allSessions.map { model.isMuted($0) || model.isQuiet($0) }
             return model.allSessions
         } onChange: {
             // Called before the change lands; read the new values on the next turn of the main queue.
@@ -98,7 +98,8 @@ extension MacAttention {
     }
 
     private func update(_ model: AppModel, sessions: [Session]) {
-        let muted: (Session) -> Bool = { model.isMuted($0) }
+        // A quiet task's agent (#1731) is the main conversation's to tell: no banner, no count, like a muted one.
+        let muted: (Session) -> Bool = { model.isMuted($0) || model.isQuiet($0) }
         NSApp.dockTile.badgeLabel = model.isPaired ? MacAttention.badge(sessions, muted: muted) : nil
         defer { last = sessions }
         if connectedAt == nil, model.live.state == .connected {

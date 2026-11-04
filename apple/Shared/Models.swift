@@ -567,6 +567,10 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var startError: String? = nil
     /// The todo this session is linked to, filled by the hub (docs/protocol.md).
     var todo: SessionTodoRef? = nil
+    /// It works for a task the main conversation started while 设置 › 助手 › 主对话派的任务只在主对话里通知 was on (#1731):
+    /// the main conversation tells the user about it, so it stays off the island, notifications, badges and the watch.
+    /// The hub keeps it after the task is done; false from a hub without it.
+    var quiet: Bool = false
     /// Why it waits for the user, in its host's words (a botmux attention's reason); only while it needs you.
     var attentionReason: String? = nil
     /// Where it lives outside Persona (a botmux session's Feishu topic): 在飞书打开.
@@ -644,7 +648,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index",
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, subagents, ports,
              updatedAt = "updated_at", lastText = "last_text", activity, activityAt = "activity_at", pendingInteractions = "pending_interactions", rev, suggestion,
-             starting, startError = "start_error", todo, hubGroup = "app_hub_group",
+             starting, startError = "start_error", todo, quiet, hubGroup = "app_hub_group",
              attentionReason = "attention_reason", externalURL = "external_url", channels
     }
 
@@ -702,6 +706,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         starting = try c.decodeIfPresent(Bool.self, forKey: .starting)
         startError = try c.decodeIfPresent(String.self, forKey: .startError)
         todo = try c.decodeIfPresent(SessionTodoRef.self, forKey: .todo)
+        quiet = try c.decodeIfPresent(Bool.self, forKey: .quiet) ?? false
         attentionReason = try c.decodeIfPresent(String.self, forKey: .attentionReason)
         externalURL = try c.decodeIfPresent(String.self, forKey: .externalURL)
         channels = try c.decodeIfPresent([String].self, forKey: .channels)

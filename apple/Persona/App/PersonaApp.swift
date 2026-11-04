@@ -198,8 +198,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         let ref = Self.sessionRef(notification.request.content.userInfo)
         nonisolated(unsafe) let done = completionHandler
         DispatchQueue.main.async {
-            let (key, visible) = MainActor.assumeIsolated { (ref.flatMap(Self.sessionKey), AppModel.shared.visibleSession) }
-            done(key != nil && key == visible ? [] : [.banner, .sound, .list])
+            let (key, visible, quiet) = MainActor.assumeIsolated {
+                let key = ref.flatMap(Self.sessionKey)
+                // A quiet task's agent (#1731) is the main conversation's to tell; a hub that knows sends no push for it.
+                return (key, AppModel.shared.visibleSession, key.map(AppModel.shared.isQuiet) ?? false)
+            }
+            done(key != nil && (key == visible || quiet) ? [] : [.banner, .sound, .list])
         }
     }
 

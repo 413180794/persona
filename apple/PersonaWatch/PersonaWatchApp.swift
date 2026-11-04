@@ -75,6 +75,8 @@ final class WatchModel {
     }
 
     private func apply(sessions: [Session], interactions: [Interaction], machines: [Machine]) {
+        // Agents of quiet tasks and their questions are the main conversation's to tell (#1731), by the hub's word.
+        let (sessions, interactions) = QuietTasks.leavingOut(sessions: sessions, interactions: interactions, quiet: \.quiet)
         let hadNew = interactions.contains { ix in !self.interactions.contains { $0.uid == ix.uid } }
         func rank(_ s: Session) -> Int { s.state.priority }
         self.sessions = sessions.filter { $0.state.isLive && !$0.assistant || $0.state == .needsYou || $0.state == .working }

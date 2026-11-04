@@ -78,7 +78,8 @@ enum MacMenuBar {
 
     private func observe(_ model: AppModel) {
         let next = withObservationTracking {
-            MacMenuBar.shown(MacMenuBar.sections(model.allSessions, muted: { model.isMuted($0) }), paired: model.isPaired,
+            // Agents of quiet tasks (#1731) are the main conversation's to tell: not in the menu at all.
+            MacMenuBar.shown(MacMenuBar.sections(model.allSessions.filter { !model.isQuiet($0) }, muted: { model.isMuted($0) }), paired: model.isPaired,
                              interactions: model.pendingInteractions,
                              machineName: names(model.machines))
         } onChange: {

@@ -202,16 +202,20 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
     var doneReason: String?
     var agents: [Agent]
     var spaces: [Space]?
+    /// Started from the main conversation while 主对话派的任务只在主对话里通知 was on (#1731, fixed when the hub made it):
+    /// the main conversation tells the user about it, nothing else does (the island, notifications, badges, the watch).
+    /// Its card in the conversation shows as always. False from a hub without it.
+    var quiet: Bool
 
     enum CodingKeys: String, CodingKey {
-        case id, title, notes, origin, agents, spaces
+        case id, title, notes, origin, agents, spaces, quiet
         case doneAt = "done_at", createdAt = "created_at", updatedAt = "updated_at", planID = "plan_id", startError = "start_error",
              doneBy = "done_by", doneReason = "done_reason"
     }
 
     init(id: String, title: String, notes: String? = nil, doneAt: Date? = nil, createdAt: Date? = nil, updatedAt: Date? = nil,
          origin: String? = nil, planID: String? = nil, startError: String? = nil, doneBy: String? = nil, doneReason: String? = nil,
-         agents: [Agent] = [], spaces: [Space]? = nil) {
+         agents: [Agent] = [], spaces: [Space]? = nil, quiet: Bool = false) {
         self.id = id
         self.title = title
         self.notes = notes
@@ -225,6 +229,7 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
         self.doneReason = doneReason
         self.agents = agents
         self.spaces = spaces
+        self.quiet = quiet
     }
 
     init(from decoder: Decoder) throws {
@@ -242,6 +247,7 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
         doneReason = try c.decodeIfPresent(String.self, forKey: .doneReason)
         agents = try c.decodeIfPresent([Agent].self, forKey: .agents) ?? []
         spaces = try c.decodeIfPresent([Space].self, forKey: .spaces)
+        quiet = try c.decodeIfPresent(Bool.self, forKey: .quiet) ?? false
     }
 
     var activeAgents: [Agent] { agents.filter(\.isActive) }
@@ -249,6 +255,51 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
     var failedToStart: Bool { !(startError ?? "").isEmpty }
     /// The hub marked it done because its task's work was judged finished; reopening undoes it.
     var autoDone: Bool { doneAt != nil && doneBy == "auto" }
+}
+
+/// The agents of quiet tasks (#1731, `TodoItem.quiet`): the main conversation tells the user about them, so the island,
+/// notifications, badges, the watch and the Mac's menu bar leave them out. The hub marks such a session `quiet` itself;
+/// the todo list is the fallback for a session the hub has not sent again since (and for a cache from before).
+nonisolated struct QuietTasks: Equatable, Sendable {
+    /// The quiet todos' ids.
+    var todos: Set<String> = []
+    /// "machine/session" of every agent a quiet todo has had: a released one too, its finish stays the conversation's.
+    var agents: Set<String> = []
+
+    init(todos: Set<String> = [], agents: Set<String> = []) {
+        self.todos = todos
+        self.agents = agents
+    }
+
+    init(_ list: some Sequence<TodoItem>) {
+        for t in list where t.quiet {
+            todos.insert(t.id)
+            for a in t.agents { agents.insert(Self.key(machine: a.machineID, session: a.sessionID)) }
+        }
+    }
+
+    static func key(machine: String, session: String) -> String { machine + "/" + session }
+
+    /// A session of the todos' hub (the caller checks the group): quiet by the hub's word, its todo, or a quiet todo
+    /// that has it as an agent.
+    func covers(_ s: Session) -> Bool {
+        if s.quiet { return true }
+        if let id = s.todo?.id, todos.contains(id) { return true }
+        return agents.contains(Self.key(machine: s.machineID, session: s.sessionID))
+    }
+
+    /// A fleet item's id ("machine/session") or a session key of the todos' hub without a session at hand.
+    func covers(machine: String, session: String) -> Bool { agents.contains(Self.key(machine: machine, session: session)) }
+}
+
+extension QuietTasks {
+    /// The watch's lists (#1731): the sessions without the quiet ones, and the questions without theirs.
+    static func leavingOut(sessions: [Session], interactions: [Interaction], quiet: (Session) -> Bool)
+        -> (sessions: [Session], interactions: [Interaction]) {
+        let keys = Set(sessions.filter(quiet).map(\.key))
+        guard !keys.isEmpty else { return (sessions, interactions) }
+        return (sessions.filter { !keys.contains($0.key) }, interactions.filter { !keys.contains($0.sessionKey) })
+    }
 }
 
 /// An agent going on (等你 / 在做) as the main conversation's dock shows it after the tasks (#1113): the ones the user

@@ -658,6 +658,19 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 放在 Agents 列表顶上而不是顶栏：顶栏是两页共用的，常驻一条会盖住内容；列表顶上这一行跟着滚走，和微信一样。Mac 自己登记成桌面端，不当手机（`docs/mac.md`「Mac 是桌面端，不是手机」）。
 截图：`-showDesktopSample YES`（假装有一台 Mac、手机静音开着），`-openDesktopSheet YES` 打开卡片。
 
+## 主对话派的任务只在主对话里通知（#1731）
+
+设置 › 助手 › 任务通知的开关（hub 的 `main_tasks_quiet`，默认开，`GET / PUT /api/v1/assistant`；hub 没返回这个字段时不显示开关）。
+开着时从主对话派出去的任务是 quiet 的（待办的 `quiet`，挂在上面的会话也带 `quiet`），由 hub 往主对话投消息、助手来告诉你；推送和实时活动 hub 自己就不发。客户端这几处把它们去掉：
+
+- 实时活动：`AppModel.mergedFleet()` 合并前去掉 quiet 会话的条目、扣掉对应的数（`FleetState.leavingOut`），兜住标记之前的 fleet。
+- 前台通知：`willPresent` 遇到 quiet 会话不弹。
+- 角标：quiet 会话的提问不算在 Agents 上，算到助手上（在主对话里处理）；抽屉 / Mac 侧边栏的「待办」数不含 quiet 任务（`TodoStore.badgeCount`），待办列表本身照常有。
+- 手表：手机推过去的摘要和手表自己拉的列表都去掉 quiet 会话和它的提问（手表的凭据读不了待办，只认会话上的 `quiet`）。
+- Mac：通知、Dock 角标当作静音，菜单栏不列。
+
+判断在 `AppModel.isQuiet`：先看 hub 在会话上的 `quiet`，再看当前 hub 的待办（`QuietTasks`：quiet 待办和它的 Agent，放出去的也算）。主对话里的任务卡片、Agents 页的列表照常显示。
+
 ## 连接状态（弱网 / 断网）
 
 参考 Telegram：网络有问题时不弹横幅，**页面标题位直接换成「小转圈 + 状态」**，好了以后无声换回（2026-10-29 用户要求，原来列表顶上的

@@ -162,6 +162,26 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
         return s
     }
 
+    /// Without the items `quiet` names (agents of quiet tasks, #1731), their counts taken off with them and the phase
+    /// worked out again. A hub that knows quiet tasks leaves them out itself; this only catches what it still sent (a
+    /// fleet from before the task was marked). Counts of agents not among the items stay: they cannot be told apart.
+    func leavingOut(_ quiet: (Item) -> Bool) -> FleetState {
+        let gone = items.filter(quiet)
+        guard !gone.isEmpty else { return self }
+        var s = self
+        s.items.removeAll(where: quiet)
+        for item in gone {
+            switch item.kind {
+            case .working: s.working = max(0, s.working - 1)
+            case .unread: s.unread = max(0, s.unread - 1)
+            default: s.needsYou = max(0, s.needsYou - 1)
+            }
+        }
+        if s.working == 0 { s.workingSince = nil }
+        s.phase = s.needsYou > 0 ? .needsYou : s.working > 0 ? .working : s.unread > 0 ? .done : .none
+        return s
+    }
+
     var isEmpty: Bool { phase == .none }
     var workingSinceDate: Date? { workingSince.map { Date(timeIntervalSince1970: $0) } }
     /// Agents left out when only the first `showing` items are drawn ("+2 个").

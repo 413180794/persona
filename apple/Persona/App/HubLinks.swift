@@ -284,10 +284,19 @@ extension AppModel {
     /// Every group's Fleet state as one (docs/multi-hub.md「实时活动」): counts added up, the requests of every group
     /// first, then the working and finished agents; another group's rows carry it in their ids ("group|…"), so a tap
     /// or a button reaches the right hub. One group: its state as the hub sent it.
+    /// Agents of quiet tasks (#1731) are left out of each group's first: a hub that knows them never sends them, this
+    /// catches a fleet from before the task was marked.
     func mergedFleet() -> FleetState {
-        let states = links.compactMap { l in l.fleet.map { (group: l.group, state: $0) } }
+        let states = links.compactMap { l in l.fleet.map { (group: l.group, state: quietless($0, group: l.group)) } }
         guard states.count > 1 || states.first?.group.isEmpty == false else { return states.first?.state ?? FleetState() }
-        return FleetMerge.merge(states, base: hub?.fleet ?? states.first?.state)
+        return FleetMerge.merge(states, base: hub?.fleet.map { quietless($0, group: hub?.group ?? "") } ?? states.first?.state)
+    }
+
+    private func quietless(_ fleet: FleetState, group: String) -> FleetState {
+        fleet.leavingOut { item in
+            guard let k = item.key else { return false }
+            return isQuiet(SessionKey(group: group, machineID: k.machine, sessionID: k.session))
+        }
     }
 
     // MARK: Watch

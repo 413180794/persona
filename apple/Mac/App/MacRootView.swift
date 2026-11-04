@@ -293,7 +293,7 @@ private struct MacShell: View {
         let n: Int
         switch section {
         case .knowledge, .machines: return nil
-        case .todos: n = TodoStore.shared.openCount
+        case .todos: n = TodoStore.shared.badgeCount
         case .assistant: n = model.badges.assistant
         case .agents: n = model.badges.agents
         case .inbox: n = InboxStore.shared.actionCount

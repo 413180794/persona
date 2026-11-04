@@ -9,9 +9,15 @@ final class TodoStore {
     static let shared = TodoStore()
 
     private(set) var todos: [TodoItem] = [] {
-        didSet { byID = Self.index(todos) }
+        didSet {
+            byID = Self.index(todos)
+            let q = QuietTasks(todos)
+            if q != quiet { quiet = q } // read by the badges and the Mac's menu bar: told only when it changes
+        }
     }
     private(set) var byID: [String: TodoItem] = [:]
+    /// The quiet tasks and their agents (#1731), which stay off the island, notifications and badges.
+    private(set) var quiet = QuietTasks()
     private(set) var loading = false
     /// false when GET /api/v1/todos returned 404 (old hub without todos)
     private(set) var isSupported = true
@@ -38,6 +44,7 @@ final class TodoStore {
         let initialIndex = Self.index(initial)
         todos = initial
         byID = initialIndex
+        quiet = QuietTasks(initial)
         lastPushed = initialIndex
         self.cacheWriter = cacheWriter
         self.hubListChanged = hubListChanged
@@ -50,7 +57,9 @@ final class TodoStore {
     }
 
     var openTodos: [TodoItem] { todos.filter { !$0.isDone } }
-    var openCount: Int { openTodos.count }
+    /// The 待办 badge (the drawer, the Mac's sidebar): open todos, quiet tasks left out (#1731, the main conversation
+    /// tells about them). The list itself still has them.
+    var badgeCount: Int { todos.count(where: { !$0.isDone && !$0.quiet }) }
 
     func forget() {
         generation += 1

@@ -718,6 +718,23 @@ final class AppModel {
         } catch { show(error) }
     }
 
+    /// 设置 › 助手 › 主对话派的任务只在主对话里通知 (#1731). Shown at once, put back if the hub says no; tasks already
+    /// started keep how they were made.
+    func setMainTasksQuiet(_ on: Bool) async {
+        guard let api, var shown = assistantConfig else { return }
+        let was = shown.mainTasksQuiet
+        shown.mainTasksQuiet = on
+        assistantConfig = shown
+        do {
+            let st = try await api.setAssistant(mainTasksQuiet: on)
+            guard api.group == hub?.group else { return }
+            assistantConfig = st
+        } catch {
+            if api.group == hub?.group { assistantConfig?.mainTasksQuiet = was }
+            show(error)
+        }
+    }
+
     /// Routes a notification / deep link to the right tab; `latestAnswer` lands on the start of the agent's last answer.
     func open(_ key: SessionKey, latestAnswer: Bool = false) {
         if latestAnswer { latestAnswerFor = key }
@@ -1876,7 +1893,8 @@ final class AppModel {
         var b = TabBadges()
         for ix in interactions.values {
             let s = sessionIndex[ix.sessionKey]
-            if s?.assistant == true {
+            // A quiet task's agent asking is the main conversation's to tell (#1731): its count goes there, not on Agents.
+            if s?.assistant == true || isQuiet(ix.sessionKey) {
                 b.assistant += 1
             } else if pinsStore(ix.sessionKey.group)?.isMuted(session: Self.pinKey(session: ix.sessionKey),
                                                               space: s?.spaceName.map { "\(ix.sessionKey.machineID)/\($0)" }) != true {
@@ -1887,14 +1905,40 @@ final class AppModel {
         if !watchingMutes { watchingMutes = true; watchMutes() }
     }
 
-    /// Muting an agent or a space takes its questions off the Agents badge (each group's hub keeps its own mutes).
+    /// Muting an agent or a space takes its questions off the Agents badge (each group's hub keeps its own mutes); a task
+    /// found quiet once the todo list comes takes them off too, and its agents off the Live Activity (#1731).
     private func watchMutes() {
-        withObservationTracking { for l in links { _ = l.pins.mutes } } onChange: { [weak self] in
+        withObservationTracking {
+            for l in links { _ = l.pins.mutes }
+            _ = TodoStore.shared.quiet
+        } onChange: { [weak self] in
             Task { @MainActor in
-                self?.countBadges()
-                self?.watchMutes()
+                guard let self else { return }
+                let quiet = TodoStore.shared.quiet
+                self.countBadges()
+                if quiet != self.appliedQuiet, self.links.contains(where: { $0.fleet != nil }) {
+                    LiveActivityController.shared.apply(self.mergedFleet())
+                }
+                self.appliedQuiet = quiet
+                self.watchMutes()
             }
         }
+    }
+    @ObservationIgnored private var appliedQuiet = QuietTasks()
+
+    // MARK: Quiet tasks
+
+    /// An agent of a task the main conversation started with 主对话派的任务只在主对话里通知 on (#1731): the main
+    /// conversation tells the user about it, so the island, notifications, the Agents badge, the watch and the Mac's
+    /// Dock and menu bar leave it out. The hub's own word on the session first, then the current hub's todo list.
+    func isQuiet(_ s: Session) -> Bool {
+        if s.quiet { return true }
+        return s.group == (hub?.group ?? "") && TodoStore.shared.quiet.covers(s)
+    }
+
+    func isQuiet(_ k: SessionKey) -> Bool {
+        if let s = sessionIndex[k] { return isQuiet(s) }
+        return k.group == (hub?.group ?? "") && TodoStore.shared.quiet.covers(machine: k.machineID, session: k.sessionID)
     }
 
     // MARK: Pins and mutes
@@ -2074,13 +2118,15 @@ final class AppModel {
     }
 
     func watchSummary() -> WatchSummary {
-        let sessions = allSessions.filter { $0.status.isLive }
-            .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
+        // A quiet task's agent and its questions are the main conversation's (#1731).
+        let (live, asking) = QuietTasks.leavingOut(sessions: allSessions.filter { $0.status.isLive }, interactions: pendingInteractions,
+                                                   quiet: isQuiet)
+        let sessions = live.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
         // The watch does not draw connectors' items (GitHub…) yet.
         let inbox = InboxStore.shared.items.filter { !$0.isDone && $0.triage == .action && $0.connector == nil }
         // A task's agent asking: the watch names the task (docs/unified-entry.md「手表」).
         let tasks = TasksStore.shared
-        let interactions = pendingInteractions.map { ix in
+        let interactions = asking.filter { !isQuiet($0.sessionKey) }.map { ix in
             var ix = ix
             ix.taskTitle = tasks.task(of: ix.sessionKey)?.title
             return ix
