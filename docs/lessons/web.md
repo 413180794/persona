@@ -211,3 +211,9 @@
 
 - **旧版本不要经 JSON 传**：node 把 `git cat-file blob` 的内容写进缓存（按 blob id 命名，带原扩展名，内容不变名字就不变），回一个路径，客户端用已有的 `file/download` 按 Range 读，查看器、PDF、Office 渲染全都能直接复用。
 - **pdf.js 6 的接口变了**：`getDocument` 没有 `isEvalSupported` 了，释放用 loading task 的 `destroy()`（文档对象上没有）；worker 用 `pdfjs-dist/build/pdf.worker.min.mjs?url` 交给 Vite 出地址。
+
+
+## 会话里的文件链接（2026-11-04，#1555）
+
+- Markdown 的 `/workspace/report.md` 是 Agent 所在电脑的路径，不能让浏览器把它当成 hub 的站内网页：答案（含流式文字）和执行过程文字向 Markdown 传入机器与工作目录，普通点击复用文件侧栏；相对路径按会话目录解析。链接的真实 href 走机器的文件下载接口，修饰键 / 中键打开也不会落到站内 404。
+- `new URL()` 接受路径里不完整的 `%` 转义，后续 `decodeURIComponent()` 仍会抛 `URIError`。模型输出的 `persona://session/…` / `jarvis://session/…` 在渲染期经过链接分类，解码失败要当作无效链接，不能让整个对话白屏；回归用真实 Markdown 渲染覆盖这个边界。

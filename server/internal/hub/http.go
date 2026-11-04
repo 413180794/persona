@@ -641,7 +641,8 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(p.NameHint) != "" {
 		nameFrom = p.NameHint
 	}
-	async := p.Async && p.ResumeSessionID == ""
+	// Match the node: only Claude can acknowledge startup before the session is ready.
+	async := p.Async && p.ResumeSessionID == "" && (p.AgentType == "" || p.AgentType == "claude")
 	parent := r.Context()
 	if r.Header.Get("X-Jarvis-Op-Id") != "" {
 		// Finish an accepted start even if its HTTP response is lost; client_ops records the outcome.
@@ -678,11 +679,11 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		if title == "" {
 			title = cleanPromptTitle(nameFrom)
 		}
-		if err := h.linkTodoAgent(r.Context(), p.TodoID, m.cfg.ID, res.Session.SessionID, title, res.Session.Cwd, res.Session.Agent, ""); err != nil {
+		if err := h.linkTodoAgent(ctx, p.TodoID, m.cfg.ID, res.Session.SessionID, title, res.Session.Cwd, res.Session.Agent, ""); err != nil {
 			h.logf("startSession: link todo %s for %s/%s failed: %v", p.TodoID, m.cfg.ID, res.Session.SessionID, err)
 		} else {
 			res.Session.Todo = &proto.TodoRef{ID: p.TodoID, Title: title}
-			if t, err := h.getTodoForLink(r.Context(), p.TodoID); err == nil && t != nil {
+			if t, err := h.getTodoForLink(ctx, p.TodoID); err == nil && t != nil {
 				res.Session.Todo.Title = t.Title
 			}
 		}

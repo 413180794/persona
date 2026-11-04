@@ -1,7 +1,10 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { clickLink, linkHref, linkRoute, prefetchLink } from "../lib/links";
+import { fileDownloadURL } from "../lib/api";
+import { isMachineRef, resolveRef } from "../lib/files";
+import { openPanel } from "../lib/panel";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
@@ -316,14 +319,20 @@ export function markdownUrl(url: string): string {
 
 // A link opens where it belongs (lib/links.ts): Feishu documents in the side panel, conversations in place, pages in
 // a new tab. ⌘ / Ctrl / middle click is always the browser's new tab.
-function Link({ href, children }: { href?: string; children?: React.ReactNode }) {
+function Link({ href, children, mid, cwd }: { href?: string; children?: React.ReactNode; mid?: string; cwd?: string }) {
   const title = textOf(children).trim();
+  const path = mid && href && isMachineRef(href) ? resolveRef(cwd ?? "", href) : "";
   return (
     <a
-      href={href ? linkHref(href) : undefined}
+      href={path && mid ? fileDownloadURL(mid, path, cwd, { inline: true }) : href ? linkHref(href) : undefined}
       target="_blank"
       rel="noreferrer noopener"
-      onClick={(e) => clickLink(e, href, title && title !== href ? title : undefined)}
+      onClick={(e) => {
+        if (path && mid && !e.defaultPrevented && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+          e.preventDefault();
+          openPanel({ kind: "file", mid, path, cwd });
+        } else clickLink(e, href, title && title !== href ? title : undefined);
+      }}
       onPointerEnter={() => prefetchLink(href)}
     >
       {children}
@@ -369,10 +378,14 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
 
 // `compact`: a few lines inside a card (a task's receipt): body size in the card's color, headings as bold body text,
 // tight blocks, so a parent's line-clamp shows as much as it can.
-export const Markdown = memo(function Markdown({ text, small, compact }: { text: string; small?: boolean; compact?: boolean }) {
+export const Markdown = memo(function Markdown({ text, small, compact, mid, cwd }: { text: string; small?: boolean; compact?: boolean; mid?: string; cwd?: string }) {
+  const components = useMemo<Components>(() => mid ? {
+    ...markdownComponents,
+    a: ({ href, children }) => <Link href={href} mid={mid} cwd={cwd}>{children}</Link>,
+  } : markdownComponents, [mid, cwd]);
   return (
     <div className={`prose-j ${small ? "prose-sm" : ""} ${compact ? "prose-compact" : ""}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={markdownComponents} urlTransform={markdownUrl}>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={components} urlTransform={markdownUrl}>
         {linkify(normalizeMath(text), { math: true })}
       </ReactMarkdown>
     </div>

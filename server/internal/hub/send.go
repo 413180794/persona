@@ -230,7 +230,7 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 			if s, ok := m.session(sid); ok {
 				title, cwd, agent = s.Title, s.Cwd, s.Agent
 			}
-			if err := h.linkTodoAgent(r.Context(), todoID, m.cfg.ID, sid, title, cwd, agent, ""); err != nil {
+			if err := h.linkTodoAgent(ctx, todoID, m.cfg.ID, sid, title, cwd, agent, ""); err != nil {
 				h.logf("sendMessage: link todo %s for %s/%s failed: %v", todoID, m.cfg.ID, sid, err)
 			}
 		}
@@ -290,7 +290,7 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 		if s, ok := m.session(sid); ok {
 			title, cwd, agent = s.Title, s.Cwd, s.Agent
 		}
-		if err := h.linkTodoAgent(r.Context(), todoID, m.cfg.ID, sid, title, cwd, agent, ""); err != nil {
+		if err := h.linkTodoAgent(ctx, todoID, m.cfg.ID, sid, title, cwd, agent, ""); err != nil {
 			h.logf("sendMessage: link todo %s for %s/%s failed: %v", todoID, m.cfg.ID, sid, err)
 		}
 	}

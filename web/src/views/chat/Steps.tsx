@@ -150,7 +150,7 @@ const StepRow = memo(function StepRow({ step, live, mid, sid }: { step: Step; li
     case "text":
       return (
         <div className="py-1 pl-0.5 text-ink-2">
-          <Markdown text={step.item.text ?? ""} small />
+          <Markdown text={step.item.text ?? ""} small mid={mid} cwd={getSession(mid, sid)?.cwd} />
         </div>
       );
     case "notice":

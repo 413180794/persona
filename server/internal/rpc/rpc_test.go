@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -277,5 +278,86 @@ func TestCodedErrorReachesCaller(t *testing.T) {
 	var re *Error
 	if !errors.As(err, &re) || re.Code != "input_draft" || string(re.Data) != `{"draft":"hi"}` || re.Message != "draft there" {
 		t.Fatalf("got %#v", err)
+	}
+}
+
+// A caller that stopped waiting before dispatch must not start work on the remote machine.
+func TestCanceledCallDoesNotSend(t *testing.T) {
+	for _, expired := range []bool{false, true} {
+		t.Run(map[bool]string{false: "canceled", true: "deadline"}[expired], func(t *testing.T) {
+			var wire bytes.Buffer
+			p := New("h", &wire)
+			ctx, cancel := context.WithCancel(context.Background())
+			if expired {
+				cancel()
+				ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+			} else {
+				cancel()
+			}
+			defer cancel()
+			wantErr := ctx.Err()
+			if err := p.Call(ctx, "session.start", map[string]string{"prompt": "hello"}, nil); !errors.Is(err, wantErr) {
+				t.Fatalf("call = %v, want %v", err, wantErr)
+			}
+			if wire.Len() != 0 {
+				t.Fatalf("canceled request reached wire: %s", wire.String())
+			}
+		})
+	}
+}
+
+type callMarshalFunc func() ([]byte, error)
+
+func (f callMarshalFunc) MarshalJSON() ([]byte, error) { return f() }
+
+func TestCallCanceledDuringMarshalDoesNotSend(t *testing.T) {
+	var wire bytes.Buffer
+	p := New("h", &wire)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	params := callMarshalFunc(func() ([]byte, error) {
+		cancel()
+		return []byte(`{}`), nil
+	})
+	if err := p.Call(ctx, "session.start", params, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("call = %v, want canceled", err)
+	}
+	if wire.Len() != 0 {
+		t.Fatalf("canceled request reached wire: %s", wire.String())
+	}
+}
+
+func TestCallCanceledBeforeWriterAvailableDoesNotSend(t *testing.T) {
+	var wire bytes.Buffer
+	p := New("h", &wire)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	marshaled := make(chan struct{})
+	params := callMarshalFunc(func() ([]byte, error) {
+		close(marshaled)
+		return []byte(`{}`), nil
+	})
+	// Another outbound message owns the writer until after this call loses its caller.
+	p.wmu.Lock()
+	done := make(chan error, 1)
+	go func() { done <- p.Call(ctx, "session.start", params, nil) }()
+	select {
+	case <-marshaled:
+	case <-time.After(time.Second):
+		p.wmu.Unlock()
+		t.Fatal("request did not reach serialization")
+	}
+	cancel()
+	p.wmu.Unlock()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("call = %v, want canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("canceled call did not return after the writer became available")
+	}
+	if wire.Len() != 0 {
+		t.Fatalf("queued canceled request reached wire: %s", wire.String())
 	}
 }

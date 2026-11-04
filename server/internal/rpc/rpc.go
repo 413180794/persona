@@ -123,6 +123,10 @@ func (p *Peer) handle(ctx context.Context, m message) {
 }
 
 func (p *Peer) write(m message) error {
+	return p.writeContext(context.Background(), m)
+}
+
+func (p *Peer) writeContext(ctx context.Context, m message) error {
 	b, err := json.Marshal(m)
 	if err != nil {
 		return err
@@ -130,6 +134,10 @@ func (p *Peer) write(m message) error {
 	b = append(b, '\n')
 	p.wmu.Lock()
 	defer p.wmu.Unlock()
+	// Serialization or another write may have outlasted the caller. Check at dispatch.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	select {
 	case <-p.closed:
 		return ErrClosed
@@ -141,6 +149,9 @@ func (p *Peer) write(m message) error {
 
 // Call sends a request and decodes the result into out (if non-nil).
 func (p *Peer) Call(ctx context.Context, method string, params any, out any) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	id := fmt.Sprintf("%s%d", p.prefix, p.nextID.Add(1))
 	ch := make(chan message, 1)
 	p.mu.Lock()
@@ -155,7 +166,7 @@ func (p *Peer) Call(ctx context.Context, method string, params any, out any) err
 	if err != nil {
 		return err
 	}
-	if err := p.write(message{ID: id, Method: method, Params: raw}); err != nil {
+	if err := p.writeContext(ctx, message{ID: id, Method: method, Params: raw}); err != nil {
 		return err
 	}
 	select {

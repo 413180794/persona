@@ -60,14 +60,14 @@ export function Answer({ item, streaming, mid, sid }: { item?: Item; streaming?:
   if (streaming !== undefined) {
     return (
       <div>
-        <Markdown text={text} />
+        <Markdown text={text} mid={mid} cwd={mid && sid ? getSession(mid, sid)?.cwd : undefined} />
         <span className="stream-caret" aria-hidden />
       </div>
     );
   }
   return (
     <MessageActions text={text} ts={item?.ts}>
-      <Markdown text={text} />
+      <Markdown text={text} mid={mid} cwd={mid && sid ? getSession(mid, sid)?.cwd : undefined} />
       {mid && sid && <ReplyFiles text={text} mid={mid} cwd={getSession(mid, sid)?.cwd} />}
     </MessageActions>
   );

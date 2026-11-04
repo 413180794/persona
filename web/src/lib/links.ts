@@ -99,8 +99,13 @@ export function linkRoute(url: string, lark = larkOn()): LinkRoute {
   const scheme = u.protocol.toLowerCase();
   if (scheme === "jarvis:" || scheme === "persona:") {
     // jarvis://session/<mid>/<sid>: the host is "session"
-    const parts = `${u.host}${u.pathname}`.split("/").filter(Boolean).map(decodeURIComponent);
-    if (parts[0] === "session" && parts[1] && parts[2]) return { kind: "session", mid: parts[1], sid: parts[2] };
+    try {
+      const parts = `${u.host}${u.pathname}`.split("/").filter(Boolean).map(decodeURIComponent);
+      if (parts[0] === "session" && parts[1] && parts[2]) return { kind: "session", mid: parts[1], sid: parts[2] };
+    } catch {
+      // A malformed percent escape in model output must not crash the transcript render.
+      return { kind: "none" };
+    }
     return { kind: "none" };
   }
   if (scheme === "mailto:" || scheme === "tel:") return { kind: "system" };

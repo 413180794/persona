@@ -86,6 +86,15 @@ describe("where a link opens", () => {
     expect(linkRoute("jarvis://pair?token=x").kind).toBe("none");
   });
 
+  it("ignores malformed percent escapes in conversation links", () => {
+    for (const scheme of ["persona", "jarvis"]) {
+      for (const suffix of ["%", "%E0%A4%A", "%FF"]) {
+        expect(linkRoute(`${scheme}://session/desktop/${suffix}`)).toEqual({ kind: "none" });
+        expect(opensInApp(`${scheme}://session/desktop/${suffix}`)).toBe(false);
+      }
+    }
+  });
+
   it("leaves what is not http(s) alone", () => {
     expect(linkRoute("mailto:me@example.com").kind).toBe("system");
     expect(linkRoute("tel:10086").kind).toBe("system");

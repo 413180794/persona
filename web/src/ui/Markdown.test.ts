@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import katex from "katex";
 import { linkify, normalizeMath, splitCode } from "./Markdown";
 
@@ -161,5 +161,53 @@ describe("Mermaid blocks", () => {
     const raw = "Parse error on line 3:\nflowchart TD A -->\n--------------^\nExpecting 'NODE', got 'EOF'";
     expect(mermaidProblem(new Error(raw))).toEqual({ summary: "这张图有语法错误（第 3 行）", detail: raw });
     expect(mermaidProblem(new Error("No diagram type detected")).summary).toBe("这张图画不出来");
+  });
+});
+
+
+describe("conversation links", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("routes a machine file to its file endpoint instead of a site path", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+    const { Markdown } = await import("./Markdown");
+    vi.stubGlobal("localStorage", { getItem: () => "test-token" });
+    for (const text of ["[报告](/workspace/my%20report.md)", "[报告](./my%20report.md)"]) {
+      const html = renderToStaticMarkup(createElement(Markdown, { text, mid: "desktop", cwd: "/workspace" }));
+      expect(html).toContain("/api/v1/machines/desktop/file/download?path=%2Fworkspace%2Fmy%20report.md");
+      expect(html).not.toContain('href="/workspace/');
+    }
+  });
+
+  it("keeps web links and file-reader-relative links on their existing routes", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+    const { Markdown } = await import("./Markdown");
+    const html = renderToStaticMarkup(createElement(Markdown, { text: "[站点](https://example.com/report.md) [章节](#heading)", mid: "desktop" }));
+    expect(html).toContain('href="https://example.com/report.md"');
+    expect(html).toContain('href="#heading"');
+    expect(renderToStaticMarkup(createElement(Markdown, { text: "[另一个文件](./other.md)" }))).toContain('href="./other.md"');
+  });
+
+  it("passes machine context through both finished and streaming answers", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+    const { Answer } = await import("../views/chat/SegmentView");
+    vi.stubGlobal("localStorage", { getItem: () => "test-token" });
+    const text = "[报告](/workspace/report.md)";
+    for (const props of [{ streaming: text }, { item: { id: "answer", seq: 1, role: "assistant" as const, kind: "text" as const, text } }]) {
+      const html = renderToStaticMarkup(createElement(Answer, { ...props, mid: "desktop", sid: "session" }));
+      expect(html).toContain("/api/v1/machines/desktop/file/download?path=%2Fworkspace%2Freport.md");
+    }
+  });
+
+  it("renders malformed conversation URLs without crashing the transcript", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+    const { Markdown } = await import("./Markdown");
+    for (const scheme of ["persona", "jarvis"]) {
+      expect(() => renderToStaticMarkup(createElement(Markdown, { text: `[会话](${scheme}://session/desktop/%E0%A4%A)` }))).not.toThrow();
+    }
   });
 });

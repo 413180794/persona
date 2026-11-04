@@ -2,6 +2,10 @@
 
 踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
 
+- 新建会话的 HTTP 预算要跟 node 实际的启动路径一致（2026-11-04，#1551）：客户端可能统一发 `async: true`，但 node 只有 Claude 会立即回启动占位会话，显式或机器启动器配置标明的 Codex / TRAEX 仍同步等待真实会话。hub 若只看请求里的 async，就会在 15 秒报超时，而后台可能已经成功。两端使用相同的异步适用条件，同步路径保留 100 秒预算；回归走实际 HTTP handler、模型配置和假 RPC，观察操作 context 的截止时间，覆盖显式类型、配置推导类型及 Claude 对照组，无需真等到超时。
+
+- 已接受的操作断联后，待办关联也要沿用操作自己的有界 context（2026-11-04，#1551）：新建会话带操作回执、发送消息的两种路径都会继续执行，但若成功后的 `LinkTodoAgent` 仍用 HTTP 请求的 context，手机进后台或断网时会出现「操作成功、待办没有关联」，回执重放也不会补上。后处理使用同一个操作 context；回归让假 node 在回复成功前取消请求，并让持久化替身像 Postgres 一样拒绝已取消的写入，逐条验证新建、普通发送、去重发送。RPC 在调用前已取消或已过截止时间时直接返回，并在实际 writer 锁内、写入之前再次检查 context；仅在入口检查会漏掉 JSON 序列化期间、等待其他消息释放写锁期间的取消，仍把启动等副作用请求发出去。两条回归分别在参数序列化时取消、在 writer 不可用时取消，断言线上没有请求字节；这不改变已经发出的操作或远端运行的取消语义。
+
 - GitHub 的设备码登录不在 API 的域名上（2026-11-04，#1106）：取码和轮询是 `github.com/login/device/code`、`github.com/login/oauth/access_token`，
   API 是 `api.github.com`。有的网络里 hub 机器连 `api.github.com` 正常、连 `github.com` 超时，于是 GitHub 连接器（用电脑的 gh 登录时）一切正常，
   一换设备码登录就 502「dial tcp …:443: connection timed out」。验证设备码登录要经 personad 真的调一次 `POST /api/v1/connectors/github/login`，
