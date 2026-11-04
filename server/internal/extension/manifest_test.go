@@ -689,15 +689,17 @@ func TestParseRefusesNodeProgram(t *testing.T) {
 		"hub's env":                   func(n, _ map[string]any) { n["env"] = map[string]any{"PERSONA_HUB_TOKEN": "x"} },
 		"unknown secret":              func(n, _ map[string]any) { n["secrets"] = []any{"password"} },
 		"secret twice":                func(n, _ map[string]any) { n["secrets"] = []any{"api_key", "api_key"} },
-		"host":                        func(n, _ map[string]any) { n["permissions"] = map[string]any{"network": []any{"https://x.example.com"}} },
-		"unknown permission":          func(n, _ map[string]any) { n["permissions"] = map[string]any{"camera": true} },
-		"no machines field":           func(n, _ map[string]any) { delete(n, "machines") },
-		"missing machines field":      func(n, _ map[string]any) { n["machines"] = "computers" },
-		"machines not machines":       func(_, f map[string]any) { f["items"] = map[string]any{"type": "string"} },
-		"machines not a list":         func(_, f map[string]any) { delete(f, "items"); f["type"] = "string"; f["format"] = "machine" },
-		"x-os missing":                func(_, f map[string]any) { delete(f["items"].(map[string]any), "x-os") },
-		"x-os with no program":        func(_, f map[string]any) { f["items"].(map[string]any)["x-os"] = []any{"darwin", "linux"} },
-		"unknown field":               func(n, _ map[string]any) { n["max_machines"] = 1 },
+		"host": func(n, _ map[string]any) {
+			n["permissions"] = map[string]any{"network": []any{"https://x.example.com"}}
+		},
+		"unknown permission":     func(n, _ map[string]any) { n["permissions"] = map[string]any{"camera": true} },
+		"no machines field":      func(n, _ map[string]any) { delete(n, "machines") },
+		"missing machines field": func(n, _ map[string]any) { n["machines"] = "computers" },
+		"machines not machines":  func(_, f map[string]any) { f["items"] = map[string]any{"type": "string"} },
+		"machines not a list":    func(_, f map[string]any) { delete(f, "items"); f["type"] = "string"; f["format"] = "machine" },
+		"x-os missing":           func(_, f map[string]any) { delete(f["items"].(map[string]any), "x-os") },
+		"x-os with no program":   func(_, f map[string]any) { f["items"].(map[string]any)["x-os"] = []any{"darwin", "linux"} },
+		"unknown field":          func(n, _ map[string]any) { n["max_machines"] = 1 },
 	}
 	for name, change := range cases {
 		if _, err := Parse(withNode(t, change)); err == nil {

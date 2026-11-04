@@ -24,6 +24,9 @@ import (
 // runtime socket (orcarttest) and a fake process table. No test here talks to a real Orca.
 
 func TestMain(m *testing.M) {
+	if mode := os.Getenv("NODE_TEST_PLUGIN"); mode != "" { // the test binary as a plugin's program (plugins_test.go)
+		runTestPlugin(mode)
+	}
 	// No test may reach the user's running Orca: the default metadata path points nowhere.
 	os.Setenv("ORCA_USER_DATA_PATH", "/tmp/jarvis-test-no-orca")
 	// Nor the user's botmux: a node registers no botmux host unless a test gives it one.

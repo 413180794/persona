@@ -343,6 +343,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	if strings.HasPrefix(method, "node.update.") {
 		return n.handleUpdate(ctx, method, params)
 	}
+	if strings.HasPrefix(method, "plugin.node.") { // plugins' programs on this computer (plugins.go)
+		return n.handlePlugins(ctx, method, params)
+	}
 	var p struct {
 		Path             string        `json:"path"`
 		Paths            []string      `json:"paths"`

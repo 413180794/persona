@@ -354,3 +354,10 @@ PR 冒烟按路径触发、不含 `integrations/**`，所以合并前没跑。�
 - `plugin.Digest` 是用户同意过的那一份（存在 `plugins.granted`，安装 / 升级回传对比）。给清单加新东西（这次是 `node` 段）时，新字段放进摘要要用 `omitempty` 的指针：
   没有这个字段的插件算出来的摘要和以前一字不差，否则所有已装的插件一升级 hub 都会被当成「要了更多权限」。`TestDigestWithoutNodeIsAsBefore` 按旧的结构重算一遍对比。
 - 「要了更多」（`MorePermissions`）不能只看 `granted` 里的 `Permissions`：node 段的权限不在那张表里，按新旧清单比（`NodeAdds`）。
+
+## node 上要跨连接活着的东西不能挂在 `Node` 上（2026-11-05，#1830）
+
+- `node.Node` 是一条连接一个（hub 重连就新建一个），`nodeupdate.Manager` 才是进程级的。插件在电脑上的程序要在 hub 重连时接着跑（租约），
+  所以放在按 node 目录区分的进程级表里（`node/plugins.go` 的 `pluginHosts`），事件发给最近一条连接的 peer。
+- 只在这条连接真有 peer 时才换事件的去处：每个 `plugin.node.*` 请求都会取一次这张表，没有 peer 的调用（测试、本地命令）把去处换成空的，事件就丢了。
+

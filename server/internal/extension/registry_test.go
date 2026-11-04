@@ -641,7 +641,7 @@ func TestBuiltinYieldsToAnInstalledOne(t *testing.T) {
 	}
 }
 
-// A package with a program on computers: refused until this hub's nodes can run one (NodePrograms); then every
+// A package with a program on computers: refused where nodes cannot run one (NodePrograms off); else every
 // platform's program has to be in it, executable, whatever this hub's own platform is.
 func TestPackageWithNodePrograms(t *testing.T) {
 	ctx := context.Background()
@@ -652,11 +652,11 @@ func TestPackageWithNodePrograms(t *testing.T) {
 		m["configuration"].(map[string]any)["properties"].(map[string]any)["computers"] = map[string]any{"type": "array",
 			"items": map[string]any{"type": "string", "format": "machine", "x-os": []any{"darwin", "linux"}}}
 	})
+	NodePrograms = false
 	if _, err := r.Preview(ctx, "dir:"+pkg, ""); err == nil || !strings.Contains(err.Error(), "还不能在电脑上运行") {
-		t.Fatalf("installed before nodes can run it: %v", err)
+		t.Fatalf("installed where nodes cannot run it: %v", err)
 	}
 	NodePrograms = true
-	t.Cleanup(func() { NodePrograms = false })
 	if _, err := r.Preview(ctx, "dir:"+pkg, ""); err == nil || !strings.Contains(err.Error(), "node/helper") {
 		t.Fatalf("no program for the computers in the package: %v", err)
 	}

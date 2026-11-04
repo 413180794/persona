@@ -87,7 +87,7 @@ hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的�
 | `engines.persona` | 否 | hub 构建号的范围，只有 `>=N`、`<N` 及其组合；不满足装不上，已装的标成 `incompatible`。开发构建（构建号 0）不检查，给一条警告 |
 | `engines.plugin_protocol` | 有 `runtime` 或 `node` 时是 | `1` |
 | `runtime` | 否 | 没有就是纯声明插件。`command`：包里的相对路径，或 `{"<GOOS>-<GOARCH>": 路径}`，没有这台 hub 的平台就装不上；不能是绝对路径、不能跳出包（`..`、指向包外的链接都查），必须可执行；`personad` 只有内置插件能用。`args`；`env`（不能是 `PERSONA_` / `JARVIS_` 开头，密钥不放这里）；`rpc`：`stdio`（默认）/ `none`；`http`：在 `PERSONA_PLUGIN_SOCKET` 上起 HTTP。`rpc: none` 又没有 `http` 装不上 |
-| `node` | 否 | 在你选的电脑上运行的程序（#1830，`docs/plan-plugins.md`「七」）。`command`：只能按平台写 `{"darwin-<arch>" \| "linux-<arch>": 路径}`，路径规则同 `runtime`，不能是 `personad`；有哪些平台就是能在哪些电脑上跑，包里每个平台的程序都要在、要可执行（hub 不检查自己的平台）。`machines`：选电脑的配置字段名，这个字段必须是 `format: machine` 的数组，`items` 的 `x-os` 要写、且只能是 `command` 有程序的系统（要限定只能一台就写 `maxItems`）。`args`、`env`、`rpc`、`http` 同 `runtime`；`keep_running`：`lease`（默认，hub 半小时没续就停）/ `always`；`secrets`：发给电脑的密钥名（必须是 `secrets` 里的），其余只留在 hub；`permissions`：`network`（主机名）、`files`、`macos_privacy`，见「权限」。可以只有 `node` 没有 `runtime`（贡献的扩展点要不需要 hub 上的程序）。**还不能装**：node 还不会起这些程序（第 2 步），有 `node` 段的包现在会被拒绝 |
+| `node` | 否 | 在你选的电脑上运行的程序（#1830，`docs/plan-plugins.md`「七」）。`command`：只能按平台写 `{"darwin-<arch>" \| "linux-<arch>": 路径}`，路径规则同 `runtime`，不能是 `personad`；有哪些平台就是能在哪些电脑上跑，包里每个平台的程序都要在、要可执行（hub 不检查自己的平台）。`machines`：选电脑的配置字段名，这个字段必须是 `format: machine` 的数组，`items` 的 `x-os` 要写、且只能是 `command` 有程序的系统（要限定只能一台就写 `maxItems`）。`args`、`env`、`rpc`、`http` 同 `runtime`；`keep_running`：`lease`（默认，hub 半小时没续就停）/ `always`；`secrets`：发给电脑的密钥名（必须是 `secrets` 里的），其余只留在 hub；`permissions`：`network`（主机名）、`files`、`macos_privacy`，见「权限」。可以只有 `node` 没有 `runtime`（贡献的扩展点要不需要 hub 上的程序）。怎么跑见「在电脑上运行的程序」 |
 | `activation_events` | 否 | `on_startup` / `on_call` / `on_http`，见「什么时候跑」；有 `runtime` 时默认 `on_call`；`rpc: none` 的只能 `on_startup` |
 | `contributes` | 是 | 见「扩展点」，至少一项 |
 | `configuration` | 否 | 配置的 JSON Schema，只能用下面的子集 |
@@ -849,6 +849,26 @@ hub 管理界面（[admin.md](admin.md)）的「插件」页（`web/src/admin/pa
 其余错误只有 `message`，是给人看的一句话，不带密钥和正文。改了字段的意思或删了字段就加协议版本；只加可选字段不加。
 
 用 Go 写插件可以直接用 `extension/serve`（`serve.Serve(ctx, os.Stdin, os.Stdout, serve.Program{…})`）；连接器程序用 `connector/serve.MainWith`，它同时认两种开头。
+
+## 在电脑上运行的程序（`node` 段，#1830）
+
+hub 只存「应该是什么样」：插件开着、设置齐了、`node.machines` 字段里选了这台、这台的系统有程序，就该在它上面跑（`hub/extension_nodes.go`），
+node 照做（`node/plugins.go`）。什么时候对齐：这台电脑连上时、插件装 / 开关 / 改配置 / 升级 / 卸载时，都是整份对账，不排队；离线的连上再对。
+
+- **包**：hub 按这台电脑的平台做一份 tar.gz（`extension.NodePackage`：去掉别的平台的程序和 hub 上的程序，固定顺序、不带时间和属主，同一个包每次字节一样），
+  sha256 当摘要；电脑上没有这一份（`plugin.node.have`）才分块发过去（`plugin.node.put.begin/chunk/commit`，1 MB 一块，node 校验 sha256 后解包，检查同安装）。
+  放在那台电脑的 `~/.persona/plugins/<id>/<版本>/`，程序自己的数据在 `~/.persona/plugins/<id>/data/`，跨版本保留。
+- **起**：`plugin.node.start`，hub 带上配置和 `node.secrets` 里的密钥（只在 `initialize` 里，不落那台电脑的盘），**不带 hub 的 token**（电脑上的程序没有 `hub_api`）。
+  环境变量 `PERSONA_PLUGIN_ID`、`PERSONA_PLUGIN_DIR`、`PERSONA_PLUGIN_DATA`（有 `http` 时还有 `PERSONA_PLUGIN_SOCKET`），环境是干净的（同 hub 上装的插件）。
+  和正在跑的完全一样（版本、配置、密钥）就不动它；版本不同先停旧的；新版本 30 秒内没起来就停掉、把上一版再起起来，错误报给 hub。
+- **对账**：`plugin.node.sync` 带上应该跑的全部 `{id, 版本, 摘要}` 和 hub 上装着的插件 id：不该跑的停掉、删掉它的包；要跑的留当前版本和上一版（回退用）；
+  hub 上已经卸载的连数据一起删，只是在这台关掉的留数据。
+- **租约**：hub 每 10 分钟续一次（`plugin.node.renew`，30 分钟）；超过 30 分钟没续，node 停掉 `keep_running: "lease"` 的程序（状态 `lease_expired`），
+  hub 回来再起；`always` 的不停。node 进程退出时程序都跟着退（`always` 也是，重启后等 hub 连上再起：密钥在 hub）。
+- **调用和事件**：hub 上的程序调 `nodes.call {machine, method, params}`，转给那台电脑上程序的插件协议方法（只能调开着的机器上的）；
+  电脑上的程序发的事件，hub 以 `node.event {machine_id, event, params}` 转给 hub 上的程序。电脑上的程序调 hub 的方法一律 `unknown_method`。
+- **状态**：插件列表里每个有 `node` 段的插件带 `nodes: [{machine_id, version, state, error?}]`，`state` 是 `running` / `starting` / `error` /
+  `missing`（那台没有这个版本的包）/ `lease_expired` / `offline` / `outdated`（那台的 personad 太旧，不认 `plugin.node.*`）。
 
 ## 一致性测试
 

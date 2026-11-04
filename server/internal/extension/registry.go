@@ -528,9 +528,9 @@ func (r *Registry) checkPackage(m *Manifest, root string) error {
 	return checkProgram(root, "runtime.command", cmd)
 }
 
-// NodePrograms says whether this hub runs plugins' programs on computers (docs/plan-plugins.md「七」): until nodes
-// can start them (step 2), a package with a node program does not install, rather than install and never run there.
-var NodePrograms = false
+// NodePrograms says whether this hub runs plugins' programs on computers (docs/plan-plugins.md「七」): off, a package
+// with a node program does not install, rather than install and never run there (a test turns it off).
+var NodePrograms = true
 
 // checkProgram holds a program a manifest names (at: which field) to being an executable file inside the package.
 func checkProgram(root, at, cmd string) error {

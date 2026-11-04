@@ -76,6 +76,8 @@ type ExtensionView struct {
 	AutoUpgrade *bool                 `json:"auto_upgrade,omitempty"`
 	Upgrade     *ExtensionUpgrade     `json:"upgrade,omitempty"`
 	UpgradeNote *ExtensionUpgradeNote `json:"upgrade_note,omitempty"`
+	// Nodes: its program on each computer it is switched on for (extension_nodes.go), for a plugin with one.
+	Nodes []ExtensionNodeView `json:"nodes,omitempty"`
 }
 
 // Statuses besides the host's.
@@ -127,6 +129,8 @@ type extensions struct {
 	upgrades extensionUpgrades
 	// badges are the plugins' badges on their nav_pages' entries ("<plugin>/<ui>" → plugin.Badge; plugin_ui.go).
 	badges sync.Map
+	// nodes are plugins' programs on computers (extension_nodes.go).
+	nodes extensionNodes
 }
 
 // newPlugins is the registry with hub.json's plugins: a bad entry is logged and skipped. Built-in and installed ones
@@ -222,6 +226,9 @@ func (ps *extensions) view(ctx context.Context, p *extension.Extension) Extensio
 	}
 	if ps.h != nil {
 		ps.h.extensionUpgrades().decorate(ctx, &v, p)
+	}
+	if m.Node != nil {
+		v.Nodes = ps.nodes.views(p.Record.ID)
 	}
 	return v
 }
@@ -336,6 +343,9 @@ func (ps *extensions) changed(c extension.Change) {
 		ctx = context.Background()
 	}
 	ps.apply(ctx, c.ID)
+	if now := ps.reg.Get(c.ID); ps.h != nil && (now != nil && now.Manifest.Node != nil || c.Old != nil && c.Old.Manifest.Node != nil) {
+		ps.h.syncExtensionNodesEverywhere(ctx) // its program on computers starts, changes or stops there (extension_nodes.go)
+	}
 	if c.ID == cuaExtensionID && ps.h != nil {
 		ps.h.computerChanged(ctx)
 	}
@@ -669,6 +679,9 @@ func (ps *extensions) spec(ctx context.Context, p *extension.Extension, hp *hubE
 		}
 		if method == "quota.http" || method == "gateway.http" {
 			return ps.quotaHTTP(ctx, id, params)
+		}
+		if method == "nodes.call" && ps.h != nil { // its program on a computer (extension_nodes.go)
+			return ps.h.nodesCall(ctx, id, params)
 		}
 		return nil, &rpc.Error{Code: extension.CodeUnknownMethod, Message: "unknown method " + method}
 	}

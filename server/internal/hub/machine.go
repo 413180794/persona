@@ -416,6 +416,8 @@ func (m *Machine) removeWatcher(id string) {
 
 func (m *Machine) onEvent(event string, params json.RawMessage) {
 	switch event {
+	case "plugin.node.state", "plugin.node.event": // plugins' programs on this computer (extension_nodes.go)
+		m.hub.extensionNodeEvent(m, event, params)
 	case "sessions.changed":
 		var p struct {
 			Sessions []proto.Session `json:"sessions"`

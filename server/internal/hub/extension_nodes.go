@@ -1,0 +1,423 @@
+package hub
+
+// Plugins' programs on computers (docs/plan-plugins.md「七」, #1830): the hub keeps what should run where (the
+// plugin's switch, configuration and the machines picked in its node.machines field) and makes each machine so —
+// when it connects, when the plugin changes, and by renewing the leases every 10 minutes. Nothing is queued for a
+// machine that is away: it is brought in line when it is back. The node runs them (node/plugins.go).
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
+)
+
+const (
+	// extensionLease is how long a machine keeps a plugin's program running without hearing from the hub
+	// (plan「拍板结果」), renewed every extensionLeaseEvery.
+	extensionLease      = 30 * time.Minute
+	extensionLeaseEvery = 10 * time.Minute
+	// extensionNodeOutdated is a machine whose node cannot run plugins' programs (older than #1830).
+	extensionNodeOutdated = "outdated"
+	extensionNodeOffline  = "offline"
+)
+
+// extensionNodes is what the hub knows of plugins' programs on machines.
+type extensionNodes struct {
+	mu sync.Mutex
+	// states: plugin id → machine id → how it is there (what the apps show).
+	states map[string]map[string]proto.PluginNodeState
+	// packages: "<id>/<version>/<platform>" → the package file sent to machines of that platform.
+	packages map[string]nodePackage
+	// syncing: one sync at a time per machine.
+	syncing map[string]*sync.Mutex
+}
+
+type nodePackage struct {
+	file, digest string
+	size         int64
+}
+
+func (pn *extensionNodes) lock(machine string) *sync.Mutex {
+	pn.mu.Lock()
+	defer pn.mu.Unlock()
+	if pn.syncing == nil {
+		pn.syncing = map[string]*sync.Mutex{}
+	}
+	l := pn.syncing[machine]
+	if l == nil {
+		l = &sync.Mutex{}
+		pn.syncing[machine] = l
+	}
+	return l
+}
+
+func (pn *extensionNodes) set(pluginID, machine string, st proto.PluginNodeState) {
+	pn.mu.Lock()
+	defer pn.mu.Unlock()
+	if pn.states == nil {
+		pn.states = map[string]map[string]proto.PluginNodeState{}
+	}
+	if pn.states[pluginID] == nil {
+		pn.states[pluginID] = map[string]proto.PluginNodeState{}
+	}
+	pn.states[pluginID][machine] = st
+}
+
+func (pn *extensionNodes) forget(pluginID string, keep []string) {
+	pn.mu.Lock()
+	defer pn.mu.Unlock()
+	for m := range pn.states[pluginID] {
+		if !slices.Contains(keep, m) {
+			delete(pn.states[pluginID], m)
+		}
+	}
+}
+
+// ExtensionNodeView is a plugin's program on one machine, as the apps show it.
+type ExtensionNodeView struct {
+	MachineID string `json:"machine_id"`
+	Version   string `json:"version,omitempty"`
+	State     string `json:"state"` // running | starting | stopped | error | missing | lease_expired | offline | outdated
+	Error     string `json:"error,omitempty"`
+}
+
+// views are plugin id's programs on machines, by machine id.
+func (pn *extensionNodes) views(pluginID string) []ExtensionNodeView {
+	pn.mu.Lock()
+	defer pn.mu.Unlock()
+	var out []ExtensionNodeView
+	for m, st := range pn.states[pluginID] {
+		out = append(out, ExtensionNodeView{MachineID: m, Version: st.Version, State: st.State, Error: st.Error})
+	}
+	slices.SortFunc(out, func(a, b ExtensionNodeView) int { return strings.Compare(a.MachineID, b.MachineID) })
+	return out
+}
+
+// nodeMachines are the machines p's program on computers is switched on for (its node.machines field).
+func (ps *extensions) nodeMachines(p *extension.Extension) []string {
+	if p == nil || p.Manifest.Node == nil {
+		return nil
+	}
+	var cfg map[string]json.RawMessage
+	_ = json.Unmarshal(ps.reg.Config(p), &cfg)
+	var ids []string
+	_ = json.Unmarshal(cfg[p.Manifest.Node.Machines], &ids)
+	return ids
+}
+
+// nodeRunsOn says whether p's program should run on m now: the plugin is on and set up, m is picked, and the program
+// has a build for m's platform.
+func (ps *extensions) nodeRunsOn(ctx context.Context, p *extension.Extension, m *Machine) bool {
+	if p.Manifest.Node == nil || !p.Record.Enabled || p.Problem != "" || len(ps.reg.Missing(ctx, p)) > 0 {
+		return false
+	}
+	if !slices.Contains(ps.nodeMachines(p), m.cfg.ID) {
+		return false
+	}
+	m.mu.Lock()
+	goos, goarch := m.info.OS, m.info.Arch
+	m.mu.Unlock()
+	return p.Manifest.NodeRuns(goos, goarch)
+}
+
+// nodePackage is p's package for platform, made once per version (the same bytes each time: NodePackage).
+func (ps *extensions) nodePackage(p *extension.Extension, platform string) (nodePackage, error) {
+	key := p.Record.ID + "/" + p.Record.Version + "/" + platform
+	pn := &ps.nodes
+	pn.mu.Lock()
+	pkg, ok := pn.packages[key]
+	pn.mu.Unlock()
+	if ok {
+		if _, err := os.Stat(pkg.file); err == nil {
+			return pkg, nil
+		}
+	}
+	dir := filepath.Join(ps.dir, "plugins", "node-packages")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nodePackage{}, err
+	}
+	file := filepath.Join(dir, p.Record.ID+"-"+p.Record.Version+"-"+platform+".tgz")
+	digest, size, err := extension.NodePackageFile(p.Manifest, p.Dir, platform, file)
+	if err != nil {
+		return nodePackage{}, err
+	}
+	pkg = nodePackage{file: file, digest: digest, size: size}
+	pn.mu.Lock()
+	if pn.packages == nil {
+		pn.packages = map[string]nodePackage{}
+	}
+	pn.packages[key] = pkg
+	pn.mu.Unlock()
+	return pkg, nil
+}
+
+// putNodePackage sends pkg to m unless it has it.
+func putNodePackage(ctx context.Context, m *Machine, prog proto.PluginNodeProgram, pkg nodePackage) error {
+	var have proto.PluginNodeHave
+	if err := m.call(ctx, "plugin.node.have", prog, &have); err != nil {
+		return err
+	}
+	if have.Have {
+		return nil
+	}
+	f, err := os.Open(pkg.file)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	var begun struct {
+		UploadID string `json:"upload_id"`
+	}
+	if err := m.call(ctx, "plugin.node.put.begin", proto.PluginNodePutBegin{PluginNodeProgram: prog, Size: pkg.size}, &begun); err != nil {
+		return err
+	}
+	buf := make([]byte, proto.UploadChunkBytes)
+	var off int64
+	for {
+		n, rerr := f.Read(buf)
+		if n > 0 {
+			if err := m.call(ctx, "plugin.node.put.chunk", proto.PluginNodePutChunk{UploadID: begun.UploadID, Offset: off, Data: buf[:n]}, nil); err != nil {
+				return err
+			}
+			off += int64(n)
+		}
+		if rerr != nil {
+			break
+		}
+	}
+	return m.call(ctx, "plugin.node.put.commit", map[string]string{"upload_id": begun.UploadID}, nil)
+}
+
+// nodeInit is the initialize p's program on a computer gets: the configuration, and only the secrets its manifest
+// sends to computers (node.secrets); no hub token (no hub_api on computers, plan「拍板结果」).
+func (ps *extensions) nodeInit(ctx context.Context, p *extension.Extension) (json.RawMessage, error) {
+	all, err := ps.reg.Secrets(ctx, p.Record.ID)
+	if err != nil {
+		return nil, err
+	}
+	secrets := map[string]string{}
+	for _, name := range p.Manifest.Node.Secrets {
+		if v, ok := all[name]; ok {
+			secrets[name] = v
+		}
+	}
+	params := extension.InitializeParams{Hub: extension.HubInfo{ExtensionPoints: extension.PointVersions(), Capabilities: extension.HubCapabilities()},
+		Extension: extension.ExtensionInfo{ID: p.Record.ID, Version: p.Record.Version}, Config: ps.reg.Config(p), Secrets: secrets,
+		Active: map[string][]string{}}
+	if ps.h != nil {
+		params.Hub.Build = ps.h.build.Number
+		params.Hub.Timezone = ps.h.userTZName()
+	}
+	return json.Marshal(params)
+}
+
+// syncExtensionNodes makes m run what it should of plugins' programs, and nothing else.
+func (h *Hub) syncExtensionNodes(ctx context.Context, m *Machine) {
+	ps := h.extensions
+	if ps == nil || ps.reg == nil {
+		return
+	}
+	l := ps.nodes.lock(m.cfg.ID)
+	l.Lock()
+	defer l.Unlock()
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute) // a package of 200 MB over a slow link
+	defer cancel()
+	var programs []proto.PluginNodeProgram
+	var installed []string
+	all := ps.reg.List()
+	for _, p := range all {
+		installed = append(installed, p.Record.ID)
+	}
+	online := m.isOnline()
+	for _, p := range all {
+		id := p.Record.ID
+		if p.Manifest.Node == nil {
+			continue
+		}
+		if !ps.nodeRunsOn(ctx, p, m) {
+			ps.nodes.forget(id, slices.DeleteFunc(ps.nodeMachines(p), func(mid string) bool { return mid == m.cfg.ID }))
+			continue
+		}
+		if !online {
+			ps.nodes.set(id, m.cfg.ID, proto.PluginNodeState{ID: id, Version: p.Record.Version, State: extensionNodeOffline})
+			continue
+		}
+		st, prog := h.startExtensionNode(ctx, p, m)
+		ps.nodes.set(id, m.cfg.ID, st)
+		if prog != nil {
+			programs = append(programs, *prog)
+		}
+	}
+	if !online {
+		return
+	}
+	if programs == nil {
+		programs = []proto.PluginNodeProgram{}
+	}
+	var states proto.PluginNodeStates
+	if err := m.call(ctx, "plugin.node.sync", proto.PluginNodeSync{Programs: programs, Installed: installed}, &states); err != nil &&
+		!nodeOutdated(err) {
+		h.logf("[%s] plugins' programs: %v", m.cfg.ID, err)
+	}
+}
+
+// startExtensionNode sends m p's package (unless it has it) and starts it; the program to keep there, nil when the node
+// cannot run one.
+func (h *Hub) startExtensionNode(ctx context.Context, p *extension.Extension, m *Machine) (proto.PluginNodeState, *proto.PluginNodeProgram) {
+	ps := h.extensions
+	id := p.Record.ID
+	st := proto.PluginNodeState{ID: id, Version: p.Record.Version}
+	m.mu.Lock()
+	platform := strings.ToLower(m.info.OS + "-" + m.info.Arch)
+	m.mu.Unlock()
+	fail := func(err error) (proto.PluginNodeState, *proto.PluginNodeProgram) {
+		if nodeOutdated(err) {
+			st.State, st.Error = extensionNodeOutdated, "这台电脑上的 personad 太旧，不能运行插件的程序；更新它之后再试"
+			return st, nil
+		}
+		st.State, st.Error = "error", err.Error()
+		h.logf("[%s] plugin %s: %v", m.cfg.ID, id, err)
+		return st, nil
+	}
+	pkg, err := ps.nodePackage(p, platform)
+	if err != nil {
+		return fail(err)
+	}
+	prog := proto.PluginNodeProgram{ID: id, Version: p.Record.Version, Digest: pkg.digest}
+	if err := putNodePackage(ctx, m, prog, pkg); err != nil {
+		return fail(err)
+	}
+	init, err := ps.nodeInit(ctx, p)
+	if err != nil {
+		return fail(err)
+	}
+	n := p.Manifest.Node
+	cmd, _ := n.Command.For(platform)
+	keep := n.KeepRunning
+	if keep == "" {
+		keep = extension.KeepLease
+	}
+	start := proto.PluginNodeStart{ID: id, Name: p.Manifest.Name, Version: p.Record.Version, Command: cmd, Args: n.Args, Env: n.Env,
+		RPC: n.SpeaksRPC(), HTTP: n.HTTP, Keep: keep, LeaseSeconds: int(extensionLease / time.Second), Init: init}
+	if err := m.call(ctx, "plugin.node.start", start, &st); err != nil {
+		st.Version = p.Record.Version
+		if !nodeOutdated(err) {
+			st.State, st.Error = "error", err.Error()
+			return st, &prog // keep the package there: the version before it may be running (a rollback)
+		}
+		return fail(err)
+	}
+	return st, &prog
+}
+
+// nodeOutdated says whether err is a node that does not know plugins' programs (before #1830: its handle answers
+// "unknown method plugin.node.have").
+func nodeOutdated(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "unknown method plugin.node.")
+}
+
+// syncExtensionNodesEverywhere brings every machine in line (a plugin was installed, switched, configured, upgraded,
+// removed). Machines that are away are brought in line when they connect.
+func (h *Hub) syncExtensionNodesEverywhere(ctx context.Context) {
+	for _, m := range h.machinesNow() {
+		go h.syncExtensionNodes(ctx, m)
+	}
+}
+
+// extensionLeaseLoop renews the leases of plugins' programs on the machines that run them.
+func (h *Hub) extensionLeaseLoop(ctx context.Context) {
+	t := time.NewTicker(extensionLeaseEvery)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		if h.extensions == nil || h.extensions.reg == nil {
+			continue
+		}
+		for _, m := range h.machinesNow() {
+			if !m.isOnline() {
+				continue
+			}
+			var ids []string
+			for _, p := range h.extensions.reg.List() {
+				if h.extensions.nodeRunsOn(ctx, p, m) {
+					ids = append(ids, p.Record.ID)
+				}
+			}
+			if len(ids) == 0 {
+				continue
+			}
+			rctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			if err := m.call(rctx, "plugin.node.renew", proto.PluginNodeRenew{IDs: ids, LeaseSeconds: int(extensionLease / time.Second)}, nil); err != nil &&
+				!nodeOutdated(err) {
+				h.logf("[%s] plugins' leases: %v", m.cfg.ID, err)
+			}
+			cancel()
+		}
+	}
+}
+
+// extensionNodeEvent takes what a machine says of a plugin's program: its state, or an event for the plugin's program on
+// the hub (node.event: which machine, the event and its params).
+func (h *Hub) extensionNodeEvent(m *Machine, event string, params json.RawMessage) {
+	if h.extensions == nil {
+		return
+	}
+	switch event {
+	case "plugin.node.state":
+		var st proto.PluginNodeState
+		if json.Unmarshal(params, &st) == nil && st.ID != "" {
+			h.extensions.nodes.set(st.ID, m.cfg.ID, st)
+		}
+	case "plugin.node.event":
+		var e proto.PluginNodeEvent
+		if json.Unmarshal(params, &e) != nil || e.ID == "" {
+			return
+		}
+		if hp := h.extensions.get(e.ID); hp != nil && hp.proc != nil && hp.proc.Spec().RPC {
+			_ = hp.proc.Notify("node.event", map[string]any{"machine_id": m.cfg.ID, "event": e.Event, "params": e.Params})
+		}
+	}
+}
+
+// nodesCall is the plugin protocol's nodes.call from plugin id's program on the hub: a method of its program on one of
+// the machines it runs on.
+func (h *Hub) nodesCall(ctx context.Context, id string, params json.RawMessage) (any, error) {
+	var p struct {
+		Machine string          `json:"machine"`
+		Method  string          `json:"method"`
+		Params  json.RawMessage `json:"params"`
+	}
+	if err := json.Unmarshal(params, &p); err != nil || p.Machine == "" || p.Method == "" {
+		return nil, &rpc.Error{Code: extension.CodeUnsupported, Message: "nodes.call: machine and method"}
+	}
+	pl := h.extensions.reg.Get(id)
+	if pl == nil || pl.Manifest.Node == nil {
+		return nil, &rpc.Error{Code: extension.CodePermissionDenied, Message: "nodes.call: the plugin has no program on computers"}
+	}
+	m := h.machineByID(p.Machine)
+	if m == nil || !h.extensions.nodeRunsOn(ctx, pl, m) {
+		return nil, &rpc.Error{Code: extension.CodePermissionDenied, Message: fmt.Sprintf("nodes.call: not switched on for machine %s", p.Machine)}
+	}
+	if !m.isOnline() {
+		return nil, &rpc.Error{Code: extensionNodeOffline, Message: "machine " + p.Machine + " is offline"}
+	}
+	var out json.RawMessage
+	if err := m.call(ctx, "plugin.node.call", proto.PluginNodeCall{ID: id, Method: p.Method, Params: p.Params}, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}

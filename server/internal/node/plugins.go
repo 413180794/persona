@@ -1,0 +1,572 @@
+package node
+
+// Plugins' programs on this computer (docs/plan-plugins.md「七」, #1830). The hub sends a package
+// (plugin.node.put.*), says what should run (plugin.node.start, …sync), renews the lease (…renew), and relays calls
+// (…call); the programs' events go back as plugin.node.event. They belong to this process, not to one connection: a
+// hub that reconnects finds them running; one gone longer than their lease finds them stopped (keep "always": still
+// running). Secrets reach a program in initialize only and are never written here.
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"hash"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/extension/host"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
+)
+
+const (
+	pluginStateMissing = "missing"       // no package of that version here
+	pluginLeaseExpired = "lease_expired" // the hub did not renew it in time
+	// pluginLeaseDefault is a lease when the hub names none: what it renews every 10 minutes (plan「拍板结果」).
+	pluginLeaseDefault = 30 * time.Minute
+	pluginUploadTTL    = 10 * time.Minute
+	// pluginNotRunning is the code of a call to a program that is not running here.
+	pluginNotRunning = "not_running"
+)
+
+var digestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// pluginHosts are this process's plugin programs, one set per node directory (tests run several nodes).
+var pluginHosts = struct {
+	sync.Mutex
+	byDir map[string]*pluginHost
+}{byDir: map[string]*pluginHost{}}
+
+// plugins is this node's set of plugin programs; the connection n is is the one their events now go to.
+func (n *Node) plugins() *pluginHost {
+	pluginHosts.Lock()
+	defer pluginHosts.Unlock()
+	ph := pluginHosts.byDir[n.dir]
+	if ph == nil {
+		ph = &pluginHost{dir: filepath.Join(n.dir, "plugins"), running: map[string]*pluginRun{}, uploads: map[string]*pluginUpload{},
+			logf: n.logger.Printf, now: time.Now}
+		pluginHosts.byDir[n.dir] = ph
+		go ph.watchLeases()
+	}
+	if peer := n.peer; peer != nil { // the hub's latest connection is where the programs' events go
+		ph.mu.Lock()
+		ph.notify = func(event string, params any) { _ = peer.Notify(event, params) }
+		ph.mu.Unlock()
+	}
+	return ph
+}
+
+type pluginHost struct {
+	dir  string // <persona dir>/plugins: <id>/<version>/ the packages, <id>/data/ the programs' own
+	logf func(string, ...any)
+	now  func() time.Time
+
+	mu      sync.Mutex
+	running map[string]*pluginRun
+	uploads map[string]*pluginUpload
+	notify  func(event string, params any)
+}
+
+type pluginRun struct {
+	spec       proto.PluginNodeStart
+	sum        string // of spec, Init included: the same start again changes nothing
+	proc       *host.Proc
+	leaseUntil time.Time
+	expired    bool
+}
+
+type pluginUpload struct {
+	prog   proto.PluginNodeProgram
+	size   int64
+	file   *os.File
+	sum    hash.Hash
+	offset int64
+	at     time.Time
+}
+
+func (n *Node) handlePlugins(ctx context.Context, method string, params json.RawMessage) (any, error) {
+	ph := n.plugins()
+	switch method {
+	case "plugin.node.have":
+		var p proto.PluginNodeProgram
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		return proto.PluginNodeHave{Have: ph.has(p)}, nil
+	case "plugin.node.put.begin":
+		var p proto.PluginNodePutBegin
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		id, err := ph.begin(p)
+		return map[string]string{"upload_id": id}, err
+	case "plugin.node.put.chunk":
+		var p proto.PluginNodePutChunk
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"ok": true}, ph.chunk(p)
+	case "plugin.node.put.commit":
+		var p struct {
+			UploadID string `json:"upload_id"`
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"ok": true}, ph.commit(p.UploadID)
+	case "plugin.node.start":
+		var p proto.PluginNodeStart
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		return ph.start(ctx, p)
+	case "plugin.node.stop":
+		var p struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		ph.stop(p.ID)
+		return map[string]bool{"ok": true}, nil
+	case "plugin.node.sync":
+		var p proto.PluginNodeSync
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		return ph.sync(p), nil
+	case "plugin.node.renew":
+		var p proto.PluginNodeRenew
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		ph.renew(p)
+		return map[string]bool{"ok": true}, nil
+	case "plugin.node.status":
+		return ph.status(), nil
+	case "plugin.node.call":
+		var p proto.PluginNodeCall
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		return ph.call(ctx, p)
+	}
+	return nil, fmt.Errorf("unknown method %s", method)
+}
+
+func checkProgram(p proto.PluginNodeProgram) error {
+	if !extension.ValidID(p.ID) {
+		return fmt.Errorf("plugin id %q", p.ID)
+	}
+	if _, err := extension.ParseVersion(p.Version); err != nil {
+		return fmt.Errorf("plugin %s version %q", p.ID, p.Version)
+	}
+	if p.Digest != "" && !digestPattern.MatchString(p.Digest) {
+		return fmt.Errorf("plugin %s digest", p.ID)
+	}
+	return nil
+}
+
+func (ph *pluginHost) versionDir(id, version string) string {
+	return filepath.Join(ph.dir, id, version)
+}
+func (ph *pluginHost) dataDir(id string) string { return filepath.Join(ph.dir, id, "data") }
+
+// has: the package of that version is here, and is the one with that digest.
+func (ph *pluginHost) has(p proto.PluginNodeProgram) bool {
+	if checkProgram(p) != nil {
+		return false
+	}
+	b, err := os.ReadFile(filepath.Join(ph.versionDir(p.ID, p.Version), ".persona-digest"))
+	return err == nil && strings.TrimSpace(string(b)) == p.Digest
+}
+
+func (ph *pluginHost) begin(p proto.PluginNodePutBegin) (string, error) {
+	if err := checkProgram(p.PluginNodeProgram); err != nil {
+		return "", err
+	}
+	if p.Digest == "" || p.Size <= 0 || p.Size > extension.PackageMost {
+		return "", fmt.Errorf("plugin %s: a package of %d bytes with a digest", p.ID, p.Size)
+	}
+	if err := os.MkdirAll(filepath.Join(ph.dir, ".uploads"), 0o700); err != nil {
+		return "", err
+	}
+	f, err := os.CreateTemp(filepath.Join(ph.dir, ".uploads"), p.ID+"-*.tgz")
+	if err != nil {
+		return "", err
+	}
+	b := make([]byte, 12)
+	_, _ = rand.Read(b)
+	id := hex.EncodeToString(b)
+	ph.mu.Lock()
+	defer ph.mu.Unlock()
+	ph.dropStaleLocked()
+	ph.uploads[id] = &pluginUpload{prog: p.PluginNodeProgram, size: p.Size, file: f, sum: sha256.New(), at: ph.now()}
+	return id, nil
+}
+
+// dropStaleLocked forgets uploads nobody went on with (a hub that went away halfway).
+func (ph *pluginHost) dropStaleLocked() {
+	for id, u := range ph.uploads {
+		if ph.now().Sub(u.at) > pluginUploadTTL {
+			u.file.Close()
+			_ = os.Remove(u.file.Name())
+			delete(ph.uploads, id)
+		}
+	}
+}
+
+func (ph *pluginHost) chunk(p proto.PluginNodePutChunk) error {
+	ph.mu.Lock()
+	defer ph.mu.Unlock()
+	u := ph.uploads[p.UploadID]
+	switch {
+	case u == nil:
+		return errors.New("no such upload")
+	case p.Offset != u.offset:
+		return fmt.Errorf("chunk at %d, expected %d", p.Offset, u.offset)
+	case u.offset+int64(len(p.Data)) > u.size:
+		return errors.New("more than the package's size")
+	}
+	if _, err := u.file.Write(p.Data); err != nil {
+		return err
+	}
+	u.sum.Write(p.Data)
+	u.offset += int64(len(p.Data))
+	u.at = ph.now()
+	return nil
+}
+
+func (ph *pluginHost) commit(uploadID string) error {
+	ph.mu.Lock()
+	u := ph.uploads[uploadID]
+	delete(ph.uploads, uploadID)
+	ph.mu.Unlock()
+	if u == nil {
+		return errors.New("no such upload")
+	}
+	defer os.Remove(u.file.Name())
+	u.file.Close()
+	if u.offset != u.size {
+		return fmt.Errorf("plugin %s: %d of %d bytes", u.prog.ID, u.offset, u.size)
+	}
+	if got := hex.EncodeToString(u.sum.Sum(nil)); got != u.prog.Digest {
+		return fmt.Errorf("plugin %s: the package's sha256 is %s, not %s", u.prog.ID, got, u.prog.Digest)
+	}
+	dir := ph.versionDir(u.prog.ID, u.prog.Version)
+	tmp := dir + ".unpacking"
+	_ = os.RemoveAll(tmp)
+	if err := extension.UnpackNodePackage(u.file.Name(), tmp); err != nil {
+		_ = os.RemoveAll(tmp)
+		return fmt.Errorf("plugin %s: %w", u.prog.ID, err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, ".persona-digest"), []byte(u.prog.Digest+"\n"), 0o644); err != nil {
+		return err
+	}
+	ph.mu.Lock()
+	r := ph.running[u.prog.ID]
+	busy := r != nil && r.spec.Version == u.prog.Version
+	ph.mu.Unlock()
+	if busy { // the same version with other bytes (a package rebuilt): stop it before its files change under it
+		ph.stop(u.prog.ID)
+	}
+	_ = os.RemoveAll(dir)
+	return os.Rename(tmp, dir)
+}
+
+// specSum is what makes two starts the same: everything in it, Init (configuration, secrets) included.
+func specSum(s proto.PluginNodeStart) string {
+	s.LeaseSeconds = 0 // a renewal, not another start
+	b, _ := json.Marshal(s)
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
+func (ph *pluginHost) lease(s proto.PluginNodeStart) time.Time {
+	d := time.Duration(s.LeaseSeconds) * time.Second
+	if d <= 0 {
+		d = pluginLeaseDefault
+	}
+	return ph.now().Add(d)
+}
+
+// start runs s: nothing changes when it runs already as s says (the lease is renewed); another version or other
+// settings stop the one running first. A new version that does not come up within ReadyWithin is stopped, and the
+// version that ran before it is started again.
+func (ph *pluginHost) start(ctx context.Context, s proto.PluginNodeStart) (proto.PluginNodeState, error) {
+	state := proto.PluginNodeState{ID: s.ID, Version: s.Version}
+	if err := checkProgram(proto.PluginNodeProgram{ID: s.ID, Version: s.Version}); err != nil {
+		return state, err
+	}
+	if s.Keep != extension.KeepLease && s.Keep != extension.KeepAlways {
+		return state, fmt.Errorf("plugin %s: keep %q", s.ID, s.Keep)
+	}
+	dir := ph.versionDir(s.ID, s.Version)
+	if _, err := os.Stat(filepath.Join(dir, ".persona-digest")); err != nil {
+		state.State = pluginStateMissing
+		return state, nil
+	}
+	sum := specSum(s)
+	ph.mu.Lock()
+	cur := ph.running[s.ID]
+	if cur != nil && cur.sum == sum && !cur.expired {
+		cur.leaseUntil = ph.lease(s)
+		st, why := cur.proc.Status()
+		ph.mu.Unlock()
+		state.State, state.Error = st, why
+		return state, nil
+	}
+	ph.mu.Unlock()
+	var before *proto.PluginNodeStart
+	if cur != nil {
+		if cur.spec.Version != s.Version {
+			prev := cur.spec
+			before = &prev
+		}
+		ph.stop(s.ID)
+	}
+	run, err := ph.run(s, sum)
+	if err != nil {
+		state.State, state.Error = host.StateError, err.Error()
+		return state, nil
+	}
+	wctx, cancel := context.WithTimeout(ctx, host.ReadyWithin)
+	err = run.proc.Wait(wctx)
+	cancel()
+	st, why := run.proc.Status()
+	state.State, state.Error = st, why
+	if err != nil && before != nil {
+		// The new version did not come up: back to the one that ran (its package is still here).
+		ph.stop(s.ID)
+		if _, rerr := ph.run(*before, specSum(*before)); rerr == nil {
+			ph.logf("plugin %s: %s did not come up (%v); running %s again", s.ID, s.Version, err, before.Version)
+			return state, fmt.Errorf("%s 没有起来，退回了 %s：%v", s.Version, before.Version, err)
+		}
+	}
+	return state, nil
+}
+
+// run starts s's program (nothing of the id is running).
+func (ph *pluginHost) run(s proto.PluginNodeStart, sum string) (*pluginRun, error) {
+	dir := ph.versionDir(s.ID, s.Version)
+	rel := filepath.FromSlash(s.Command)
+	if s.Command == "" || filepath.IsAbs(rel) || strings.HasPrefix(filepath.Clean(rel), "..") {
+		return nil, fmt.Errorf("plugin %s: command %q", s.ID, s.Command)
+	}
+	data := ph.dataDir(s.ID)
+	if err := os.MkdirAll(data, 0o700); err != nil {
+		return nil, err
+	}
+	var params extension.InitializeParams
+	if len(s.Init) > 0 {
+		if err := json.Unmarshal(s.Init, &params); err != nil {
+			return nil, fmt.Errorf("plugin %s: initialize: %w", s.ID, err)
+		}
+	}
+	params.Extension.Dir, params.Extension.DataDir = dir, data
+	id := s.ID
+	spec := host.Spec{ID: id, Name: s.Name, Command: filepath.Join(dir, rel), Args: s.Args, Dir: dir, CleanEnv: true,
+		RPC: s.RPC, HTTP: s.HTTP, Startup: true, Logf: ph.logf,
+		Env: []string{"PERSONA_PLUGIN_ID=" + id, "PERSONA_PLUGIN_DIR=" + dir, "PERSONA_PLUGIN_DATA=" + data}}
+	if spec.Name == "" {
+		spec.Name = id
+	}
+	for k, v := range s.Env {
+		if strings.HasPrefix(k, "PERSONA_") || strings.HasPrefix(k, "JARVIS_") {
+			continue // the hub checked the manifest; this only keeps a node from being told otherwise
+		}
+		spec.Env = append(spec.Env, k+"="+v)
+	}
+	if s.HTTP {
+		spec.Socket = filepath.Join(ph.dir, id, "run.sock")
+		spec.Env = append(spec.Env, "PERSONA_PLUGIN_SOCKET="+spec.Socket)
+	}
+	spec.Init = func(context.Context) (extension.InitializeParams, error) { return params, nil }
+	// A program on a computer talks to its plugin's program on the hub, not to the hub itself (no hub_api).
+	spec.Handle = func(_ context.Context, method string, _ json.RawMessage) (any, error) {
+		return nil, &rpc.Error{Code: extension.CodeUnknownMethod, Message: "unknown method " + method + " (a program on a computer has no hub methods)"}
+	}
+	spec.OnEvent = func(event string, params json.RawMessage) {
+		ph.send("plugin.node.event", proto.PluginNodeEvent{ID: id, Event: event, Params: params})
+	}
+	spec.OnUp = func() {
+		ph.send("plugin.node.state", proto.PluginNodeState{ID: id, Version: s.Version, State: host.StateRunning})
+	}
+	r := &pluginRun{spec: s, sum: sum, leaseUntil: ph.lease(s)}
+	r.proc = host.Start(context.Background(), spec) // the process's, not this call's
+	ph.mu.Lock()
+	ph.running[id] = r
+	ph.mu.Unlock()
+	return r, nil
+}
+
+func (ph *pluginHost) send(event string, params any) {
+	ph.mu.Lock()
+	notify := ph.notify
+	ph.mu.Unlock()
+	if notify != nil {
+		notify(event, params)
+	}
+}
+
+func (ph *pluginHost) stop(id string) {
+	ph.mu.Lock()
+	r := ph.running[id]
+	delete(ph.running, id)
+	ph.mu.Unlock()
+	if r != nil {
+		r.proc.Stop()
+	}
+}
+
+// sync stops what should not run here and removes its packages: of a plugin still to run, the version to run and the
+// one before it (what an upgrade falls back to); of one not installed any more, its data too.
+func (ph *pluginHost) sync(p proto.PluginNodeSync) proto.PluginNodeStates {
+	want := map[string]string{}
+	for _, prog := range p.Programs {
+		if checkProgram(prog) == nil {
+			want[prog.ID] = prog.Version
+		}
+	}
+	ph.mu.Lock()
+	var stale []string
+	for id, r := range ph.running {
+		if want[id] != r.spec.Version {
+			stale = append(stale, id)
+		}
+	}
+	ph.mu.Unlock()
+	for _, id := range stale {
+		ph.stop(id)
+	}
+	entries, _ := os.ReadDir(ph.dir)
+	for _, e := range entries {
+		id := e.Name()
+		if !e.IsDir() || !extension.ValidID(id) {
+			continue
+		}
+		version, wanted := want[id]
+		if !wanted {
+			if slices.Contains(p.Installed, id) {
+				ph.prune(id, "") // switched off here: its data stays for when it is back
+			} else {
+				_ = os.RemoveAll(filepath.Join(ph.dir, id))
+			}
+			continue
+		}
+		ph.prune(id, version)
+	}
+	return ph.status()
+}
+
+// prune removes id's packages but version and the newest one before it (all of them when version is "").
+func (ph *pluginHost) prune(id, version string) {
+	type older struct {
+		v    extension.Version
+		name string
+	}
+	keep, _ := extension.ParseVersion(version)
+	var before []older
+	entries, _ := os.ReadDir(filepath.Join(ph.dir, id))
+	for _, e := range entries {
+		v, err := extension.ParseVersion(e.Name())
+		if !e.IsDir() || err != nil || e.Name() == version {
+			continue
+		}
+		if version != "" && v.Compare(keep) < 0 {
+			before = append(before, older{v, e.Name()})
+			continue
+		}
+		_ = os.RemoveAll(filepath.Join(ph.dir, id, e.Name()))
+	}
+	slices.SortFunc(before, func(a, b older) int { return a.v.Compare(b.v) })
+	for i, o := range before {
+		if i < len(before)-1 { // the newest of the older ones stays
+			_ = os.RemoveAll(filepath.Join(ph.dir, id, o.name))
+		}
+	}
+}
+
+func (ph *pluginHost) renew(p proto.PluginNodeRenew) {
+	ph.mu.Lock()
+	defer ph.mu.Unlock()
+	for _, id := range p.IDs {
+		if r := ph.running[id]; r != nil && !r.expired {
+			r.spec.LeaseSeconds = p.LeaseSeconds
+			r.leaseUntil = ph.lease(r.spec)
+		}
+	}
+}
+
+func (ph *pluginHost) status() proto.PluginNodeStates {
+	ph.mu.Lock()
+	defer ph.mu.Unlock()
+	out := proto.PluginNodeStates{Programs: []proto.PluginNodeState{}}
+	for id, r := range ph.running {
+		st := proto.PluginNodeState{ID: id, Version: r.spec.Version}
+		if r.expired {
+			st.State = pluginLeaseExpired
+		} else {
+			st.State, st.Error = r.proc.Status()
+		}
+		out.Programs = append(out.Programs, st)
+	}
+	slices.SortFunc(out.Programs, func(a, b proto.PluginNodeState) int { return strings.Compare(a.ID, b.ID) })
+	return out
+}
+
+func (ph *pluginHost) call(ctx context.Context, p proto.PluginNodeCall) (json.RawMessage, error) {
+	ph.mu.Lock()
+	r := ph.running[p.ID]
+	ph.mu.Unlock()
+	if r == nil || r.expired {
+		return nil, &rpc.Error{Code: pluginNotRunning, Message: "plugin " + p.ID + " is not running on this computer"}
+	}
+	var out json.RawMessage
+	var params any
+	if len(p.Params) > 0 {
+		params = p.Params
+	}
+	if err := r.proc.Call(ctx, p.Method, params, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// watchLeases stops the programs kept on a lease once it runs out (the hub has not been there for that long);
+// "always" ones go on. A hub that comes back starts them again (plugin.node.start).
+func (ph *pluginHost) watchLeases() {
+	t := time.NewTicker(30 * time.Second)
+	defer t.Stop()
+	for range t.C {
+		ph.expireLeases()
+	}
+}
+
+func (ph *pluginHost) expireLeases() {
+	now := ph.now()
+	ph.mu.Lock()
+	var due []*pluginRun
+	for _, r := range ph.running {
+		if r.spec.Keep != extension.KeepAlways && !r.expired && now.After(r.leaseUntil) {
+			r.expired = true
+			due = append(due, r)
+		}
+	}
+	ph.mu.Unlock()
+	for _, r := range due {
+		ph.logf("plugin %s: the hub did not renew its lease; stopped until it is back", r.spec.ID)
+		r.proc.Stop()
+		ph.send("plugin.node.state", proto.PluginNodeState{ID: r.spec.ID, Version: r.spec.Version, State: pluginLeaseExpired})
+	}
+}
