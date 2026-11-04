@@ -628,13 +628,15 @@ export function foldRecaps(lines: ChatLine[]): ChatLine[] {
   return out;
 }
 
-/** The chat with `shown` (the newest recap, open in full above the composer) taken out of the last line, so it is
- *  not on screen twice; the older recaps folded with it stay as the line. Closing the strip brings the line back. */
-export function withoutShownRecap(lines: ChatLine[], shown?: Item): ChatLine[] {
+/** The newest recap shown open, in full, as the chat's last line (#1360): in the flow with the agent's words, so it
+ *  scrolls with them and never covers them. Only while it is the last line and `pending` (not closed); the older
+ *  recaps folded into the same line stay a one-line chip above it. */
+export type OpenRecap = { line: string; earlier: Item[]; newest: Item };
+
+export function openRecap(lines: ChatLine[], pending?: Item): OpenRecap | undefined {
   const last = lines[lines.length - 1];
-  if (!shown || last?.kind !== "recaps" || last.items[last.items.length - 1]?.id !== shown.id) return lines;
-  const rest = last.items.slice(0, -1);
-  return rest.length ? [...lines.slice(0, -1), { ...last, items: rest }] : lines.slice(0, -1);
+  if (!pending || last?.kind !== "recaps" || last.items[last.items.length - 1]?.id !== pending.id) return undefined;
+  return { line: last.id, earlier: last.items.slice(0, -1), newest: pending };
 }
 
 /** The drawer behind a wakes line: each wake (its task reports, then what the agent answered to them), newest wake

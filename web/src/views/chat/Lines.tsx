@@ -5,7 +5,7 @@ import { memo, useState } from "react";
 import { ago, clock } from "../../lib/format";
 import { retryable, type APIErrorInfo } from "../../lib/api-errors";
 import { wakeSummary } from "../../lib/tasks";
-import { wakeDrawer, workSegment, type ChatLine, type Turn } from "../../lib/turns";
+import { wakeDrawer, workSegment, type ChatLine, type OpenRecap, type Turn } from "../../lib/turns";
 import type { Item } from "../../lib/types";
 import { Button, Collapse, copyText, cx, Dialog, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -189,9 +189,19 @@ function RecapDrawer({ items, open, onClose }: { items: Item[]; open: boolean; o
   );
 }
 
-/** The newest recap in full above the composer when you come back to a chat; a click (or typing) closes it. The line in
- *  the chat stays. */
-export function RecapStrip({ item, onClose }: { item: Item; onClose: () => void }) {
+/** The open recap's line, the chat's last (#1360): the older recaps folded with it as their chip, then the newest in
+ *  full. In the flow with the agent's words: it scrolls with them, and the chat's end includes it. */
+export function OpenRecapLine({ open, onClose }: { open: OpenRecap; onClose: () => void }) {
+  return (
+    <div className="flex flex-col gap-2" data-open-recap>
+      {open.earlier.length > 0 && <RecapChip items={open.earlier} />}
+      <RecapStrip item={open.newest} onClose={onClose} />
+    </div>
+  );
+}
+
+/** The newest recap in full when you come back to a chat; a click (or typing) closes it back to its chip. */
+function RecapStrip({ item, onClose }: { item: Item; onClose: () => void }) {
   return (
     <div className="group/recap relative flex gap-2.5 rounded-card bg-accent-tint px-3 py-2.5" style={{ animation: "fade-up 250ms ease-out both" }}>
       <span aria-hidden className="w-[3px] shrink-0 rounded-full bg-accent" />

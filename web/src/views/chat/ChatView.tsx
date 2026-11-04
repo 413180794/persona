@@ -16,7 +16,7 @@ import { outboxKey, settleOutbox } from "../../lib/outbox";
 import { conversationKey, pickedLauncher, pickedModel } from "../../lib/assistant-chat";
 import { unlinkAgentFromTodo } from "../../lib/todos";
 import { LinkTodoDialog } from "../LinkTodoDialog";
-import { chatLines, parseUserText, segments, withoutShownRecap, type UserMessage } from "../../lib/turns";
+import { chatLines, openRecap, parseUserText, segments, type UserMessage } from "../../lib/turns";
 import type { Item, Session, Subagent } from "../../lib/types";
 import { anchoredScroll, followsAfterScroll, READER_WINDOW, type ScrollAnchor } from "../../lib/disclosure";
 import { Button, copyText, cx, Dialog, IconButton, Loading, Menu, StatePill, StatusDot, toast, useMenu, useNow, type MenuItem } from "../../ui/atoms";
@@ -26,7 +26,7 @@ import { InteractionCard } from "./Interactions";
 import { UserBubble } from "./SegmentView";
 import { ActivityChips, AgentStrip, SubagentFooter } from "./Activity";
 import { ChatContext, type ChatContextValue } from "./chat-context";
-import { ChatLineView, closedRecap, closeRecap, RecapStrip } from "./Lines";
+import { ChatLineView, closedRecap, closeRecap, OpenRecapLine } from "./Lines";
 import { useTranscript } from "./useTranscript";
 import { DeleteSessionDialog, ModeChips, RenameDialog, RenameSpaceDialog, SessionInfoDialog } from "./SessionDialogs";
 import { ChatActionsContext, type ChatActions } from "./chat-actions";
@@ -376,14 +376,14 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   // 重试 on an API error card: only when it is the last thing, the agent is not working (someone may have retried already)
   const retry = useCallback(() => void deliver({ text: "继续", images: [] }, uuid()), [deliver]);
   const canRetry = !viewed && lastLine?.kind === "apiError" && state !== "working" && !outgoing && sessionCan(session, "send");
-  // Claude Code's "while you were away" recap, above the composer while it is the newest thing and not closed
+  // Claude Code's "while you were away" recap, open in full while it is the newest thing and not closed: the chat's last
+  // line, in the flow with the agent's words (#1360: above the composer it covered the end of the reply)
   const recapKey = `${mid}/${sid}`;
   const [recapClosed, setRecapClosed] = useState(() => closedRecap(recapKey));
   useEffect(() => setRecapClosed(closedRecap(recapKey)), [recapKey]);
   const newestRecap = !assistant && !viewed && lastLine?.kind === "recaps" ? lastLine.items[lastLine.items.length - 1] : undefined;
   const pendingRecap = newestRecap && recapClosed !== newestRecap.id ? newestRecap : undefined;
-  // the strip has the newest recap in full: the chat does not show it a second time until the strip is closed
-  const shownLines = useMemo(() => withoutShownRecap(lines, pendingRecap), [lines, pendingRecap]);
+  const open = useMemo(() => openRecap(lines, pendingRecap), [lines, pendingRecap]);
   const dismissRecap = () => {
     if (!pendingRecap) return;
     closeRecap(recapKey, pendingRecap.id);
@@ -433,7 +433,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
             )}
             <ChatContext.Provider value={ctx}>
               {assistant
-                ? displayLines(shownLines, feed).map((d) =>
+                ? displayLines(lines, feed).map((d) =>
                     d.kind === "feed" ? (
                       <FeedLineView key={d.id} item={d.item} />
                     ) : d.kind === "quick" ? (
@@ -451,11 +451,13 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
                         expandFold={tr.expandFold}
                         onSplit={onSplit}
                         onUnsplit={onUnsplit}
-                        onRetry={canRetry && d.line.id === shownLines.at(-1)?.id ? retry : undefined}
+                        onRetry={canRetry && d.line.id === lines.at(-1)?.id ? retry : undefined}
                       />
                     ),
                   )
-                : shownLines.map((line, i) => (
+                : lines.map((line, i) => open?.line === line.id ? (
+                <OpenRecapLine key={line.id} open={open} onClose={dismissRecap} />
+              ) : (
                 <ChatLineView
                   key={line.id}
                   line={line}
@@ -467,7 +469,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
                   expandFold={tr.expandFold}
                   onSplit={onSplit}
                   onUnsplit={onUnsplit}
-                  onRetry={canRetry && i === shownLines.length - 1 ? retry : undefined}
+                  onRetry={canRetry && i === lines.length - 1 ? retry : undefined}
                 />
               ))}
             </ChatContext.Provider>
@@ -504,7 +506,6 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         </div>
       )}
       <div className={cx("mx-auto flex w-full max-w-[760px] flex-col gap-2 px-4 pb-4 sm:px-7", viewed && "hidden")} onInput={pendingRecap ? dismissRecap : undefined}>
-        {pendingRecap && <RecapStrip item={pendingRecap} onClose={dismissRecap} />}
         {assistant && (
           <>
             <TaskQuestions conversation={sid} />
