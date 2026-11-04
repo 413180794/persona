@@ -77,6 +77,22 @@ import Testing
         #expect(c.matching("nothing").isEmpty)
     }
 
+    /// 模型配置 (#943): an id the list lacks can be used, the current unlisted one stays shown, and 默认 names what is
+    /// inherited.
+    @Test func modelConfigurationTakesIdsTheListLacks() throws {
+        var c = LauncherModelChoice(list: try claude, configured: "model-chat", configuredLabel: "继承")
+        #expect(c.defaultDetail == "继承：model-chat")
+        #expect(c.customModelID("  my-gateway/model-x ") == "my-gateway/model-x")
+        #expect(c.customModelID("opus") == nil) // listed: pick its row
+        #expect(c.customModelID("two words") == nil && c.customModelID("") == nil)
+        c.picked = "my-gateway/model-x"
+        #expect(c.unlisted == "my-gateway/model-x" && c.title == "默认")
+        c.picked = "opus"
+        #expect(c.unlisted == nil)
+        let decoded = try list(#"{"agent":"claude","machine":"desk","models":[]}"#)
+        #expect(decoded.machine == "desk")
+    }
+
     @Test func aStartCarriesThePick() throws {
         let req = APIClient.StartRequest(machineID: "box", cwd: "/code", launcher: "claude", model: "opus")
         let body = try JSONSerialization.jsonObject(with: JSONEncoder().encode(req)) as? [String: Any]

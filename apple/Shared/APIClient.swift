@@ -386,6 +386,20 @@ nonisolated struct APIClient: Sendable {
         let path = "/api/v1/machines/\(machine)/launchers/\(launcher.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? launcher)/models"
         return try JSON.decoder.decode(LauncherModels.self, from: await request("GET", path, query: refresh ? ["refresh": "1"] : [:], timeout: 75))
     }
+    /// 模型配置's list for a launcher provider (`launcher.<name>`, #943), asked on a machine that has the launcher (its
+    /// `machine`); nil: an older hub, or a provider without a list (a plugin brings its own, an API has none).
+    /// `machine`: the purpose's own (a task, 飞书 /agent run there), so the list is that machine's launcher.
+    func providerModels(_ provider: String, refresh: Bool = false, machine: String? = nil) async throws -> LauncherModels? {
+        let path = "/api/v1/model-config/providers/\(provider.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? provider)/models"
+        var query: [String: String] = [:]
+        if refresh { query["refresh"] = "1" }
+        if let machine, !machine.isEmpty { query["machine"] = machine }
+        do {
+            return try JSON.decoder.decode(LauncherModels.self, from: await request("GET", path, query: query, timeout: 75))
+        } catch let e as APIError where e.status == 404 {
+            return nil
+        }
+    }
     func dirs(machine: String, path: String) async throws -> DirList {
         try await get("/api/v1/machines/\(machine)/dirs", query: ["path": path])
     }

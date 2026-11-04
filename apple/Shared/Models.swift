@@ -384,6 +384,8 @@ nonisolated struct LauncherModels: Codable, Hashable, Sendable {
     var models: [AgentModel]
     /// Why a picked model would not reach the agent (the launcher passes its own --model); nil: it would.
     var locked: String?
+    /// 模型配置's list (#943): the machine whose CLI answered.
+    var machine: String? = nil
 }
 
 nonisolated struct AgentModel: Codable, Hashable, Sendable, Identifiable {

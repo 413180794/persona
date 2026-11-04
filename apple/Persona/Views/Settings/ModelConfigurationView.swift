@@ -129,6 +129,11 @@ struct ModelPurposeEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var page = ModelConfigurationModel()
     @State private var confirmReload = false
+    /// A launcher provider's /model list (#943) for `listFor`; nil: none to pick from (not loaded, older hub, none).
+    @State private var launcherList: LauncherModels?
+    @State private var listFor = ""
+    @State private var listLoading = false
+    @State private var listError: String?
 
     var body: some View {
         SettingsForm {
@@ -148,7 +153,16 @@ struct ModelPurposeEditorView: View {
                     if purpose.supports("provider") { providerPicker }
                     if purpose.supports("model") {
                         if purpose.kind == "plugin" { pluginModelPicker }
-                        else {
+                        else if let choice = launcherChoice {
+                            launcherModelRow(choice)
+                        } else if listLoading && listFor == listProvider {
+                            HStack {
+                                Text("具体模型")
+                                Spacer()
+                                Text("正在读取模型列表…").foregroundStyle(.secondary).lineLimit(1)
+                                ProgressView().controlSize(.small)
+                            }
+                        } else {
                             #if os(macOS)
                             // A Mac form: the field's name on the left, what to type in the box (#1221).
                             TextField("具体模型", text: optional(\.model), prompt: Text("留空跟随默认"))
@@ -160,6 +174,13 @@ struct ModelPurposeEditorView: View {
                                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                                 .accessibilityIdentifier("model-config-model")
                             #endif
+                            if let listError, listFor == listProvider {
+                                HStack {
+                                    Text("模型列表没读到：\(listError)").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
+                                    Spacer(minLength: Theme.Space.s)
+                                    Button("重试") { Task { await loadList(refresh: true) } }.buttonStyle(.borderless).lineLimit(1)
+                                }
+                            }
                         }
                     }
                     if purpose.supports("effort") && allowsEffort {
@@ -217,6 +238,7 @@ struct ModelPurposeEditorView: View {
         .sheetCancel(unsaved: page.dirty, when: inSheet) { dismiss() }
         #endif
         .task(id: purposeID) { await page.load(purposeID: purposeID) }
+        .task(id: listProvider) { await loadList() }
         .confirmationDialog("重新加载会丢弃未保存的编辑。", isPresented: $confirmReload, titleVisibility: .visible) {
             Button("重新加载", role: .destructive) { Task { await page.load(purposeID: purposeID) } }
         }
@@ -239,6 +261,74 @@ struct ModelPurposeEditorView: View {
         }
         .disabled(page.purpose == nil || !page.dirty || page.saving || page.loading || page.conflict)
         .accessibilityIdentifier("model-config-save")
+    }
+
+    /// The launcher provider whose /model list 具体模型 picks from; "": a plugin's, an API's, none.
+    private var listProvider: String {
+        guard let purpose = page.purpose, purpose.kind != "plugin", purpose.supports("model") else { return "" }
+        let id = page.draft.provider ?? purpose.effective.provider
+        return page.providers.first(where: { $0.id == id && $0.kind == "launcher" })?.id ?? ""
+    }
+
+    /// The list as a choice: 默认 is leaving it empty, which inherits while the provider does too.
+    private var launcherChoice: LauncherModelChoice? {
+        guard let list = launcherList, listFor == listProvider, !list.models.isEmpty, let purpose = page.purpose else { return nil }
+        let inherited = page.draft.provider == nil && (purpose.override.model ?? "").isEmpty ? purpose.effective.model ?? "" : ""
+        return LauncherModelChoice(list: list, picked: page.draft.model ?? "", configured: inherited, configuredLabel: "继承")
+    }
+
+    @ViewBuilder private func launcherModelRow(_ choice: LauncherModelChoice) -> some View {
+        if let locked = choice.list.locked {
+            // The launcher passes its own --model: a pick would not reach it (saving one fails the hub's check).
+            LabeledContent("具体模型") {
+                VStack(alignment: .trailing, spacing: Theme.Space.xxs) {
+                    HStack(spacing: Theme.Space.xs) {
+                        Text(choice.unlisted ?? "默认").lineLimit(1)
+                        Image(systemName: Theme.Icon.locked).foregroundStyle(.secondary)
+                    }
+                    Text(locked).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
+                }
+            }
+            .accessibilityIdentifier("model-config-model-locked")
+        } else {
+            unlockedModelRow(choice)
+        }
+    }
+
+    private func unlockedModelRow(_ choice: LauncherModelChoice) -> some View {
+        NavigationLink {
+            LauncherModelPicker(choice: choice, picked: optional(\.model), refresh: { await loadList(refresh: true) }, allowsCustom: true,
+                                defaultFooter: "留空：\(page.draft.provider == nil ? "继承上一级的设置" : "用这个供应商的默认模型")。列表和在终端里输入 /model 看到的一样\(launcherList?.machine.map { "（来自 \($0)）" } ?? "")。")
+        } label: {
+            LabeledContent("具体模型") {
+                VStack(alignment: .trailing, spacing: Theme.Space.xxs) {
+                    Text(choice.selected?.name ?? choice.unlisted ?? "默认").lineLimit(1)
+                    if let detail = choice.unlisted != nil ? "列表里没有" : choice.detail {
+                        Text(detail).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    }
+                }
+            }
+        }
+        .accessibilityIdentifier("model-config-model-list")
+    }
+
+    private func loadList(refresh: Bool = false) async {
+        let provider = listProvider
+        if !refresh, listFor == provider, launcherList != nil || listLoading { return }
+        if listFor != provider { launcherList = nil }
+        listFor = provider
+        listError = nil
+        guard !provider.isEmpty, let api = AppModel.shared.api else { return }
+        listLoading = true
+        defer { if listFor == provider { listLoading = false } }
+        do {
+            let list = try await api.providerModels(provider, refresh: refresh, machine: page.purpose?.machineID)
+            guard listFor == provider else { return }
+            launcherList = list
+        } catch {
+            guard listFor == provider, !Task.isCancelled else { return }
+            listError = error.shown
+        }
     }
 
     private var allowsEffort: Bool {

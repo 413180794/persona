@@ -78,21 +78,10 @@ func handle(ctx context.Context, version string, req request) (any, *rpcError) {
 	case "tools/list":
 		ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
-		line, err := node.DialSocket(ctx, map[string]any{"kind": "mcp.tools", "assistant": isAssistant(), "session_id": sessionID()})
-		tools := []map[string]any{}
-		if err == nil {
-			var res struct {
-				Tools []proto.Tool `json:"tools"`
-			}
-			if json.Unmarshal(line, &res) == nil {
-				for _, t := range res.Tools {
-					schema := t.InputSchema
-					if len(schema) == 0 {
-						schema = json.RawMessage(`{"type":"object","properties":{}}`)
-					}
-					tools = append(tools, map[string]any{"name": t.Name, "description": t.Description, "inputSchema": schema})
-				}
-			}
+		tools, err := listTools(ctx)
+		if err != nil {
+			// listChanged is false, so an empty list would stick for the whole conversation: fail with the reason instead.
+			return nil, &rpcError{Code: -32603, Message: "Persona tools are unavailable: " + err.Error()}
 		}
 		return map[string]any{"tools": tools}, nil
 	case "tools/call":
@@ -106,7 +95,7 @@ func handle(ctx context.Context, version string, req request) (any, *rpcError) {
 		// Phone round trips, approvals and ask_user can take a while (the user may need to unlock the phone).
 		ctx, cancel := context.WithTimeout(ctx, 40*time.Minute)
 		defer cancel()
-		line, err := node.DialSocket(ctx, map[string]any{"kind": "mcp.call", "name": p.Name, "args": p.Arguments,
+		line, err := dialNode(ctx, map[string]any{"kind": "mcp.call", "name": p.Name, "args": p.Arguments,
 			"session_id": sessionID(), "assistant": isAssistant()})
 		if err != nil {
 			return toolResult(proto.TextResult(fmt.Sprintf("Persona node is not reachable (%v). Is the hub connected to this machine?", err), true)), nil
@@ -118,6 +107,53 @@ func handle(ctx context.Context, version string, req request) (any, *rpcError) {
 		return toolResult(res), nil
 	}
 	return nil, &rpcError{Code: -32601, Message: "method not found: " + req.Method}
+}
+
+// dialNode and retryEvery are swapped out by tests.
+var (
+	dialNode   = node.DialSocket
+	retryEvery = 500 * time.Millisecond
+)
+
+// listTools asks the local node for the tools until ctx ends: the node may still be starting or reconnecting to the hub.
+func listTools(ctx context.Context) ([]map[string]any, error) {
+	for {
+		tools, err := listToolsOnce(ctx)
+		if err == nil {
+			return tools, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, err
+		case <-time.After(retryEvery):
+		}
+	}
+}
+
+func listToolsOnce(ctx context.Context) ([]map[string]any, error) {
+	line, err := dialNode(ctx, map[string]any{"kind": "mcp.tools", "assistant": isAssistant(), "session_id": sessionID()})
+	if err != nil {
+		return nil, fmt.Errorf("Persona node is not reachable: %w", err)
+	}
+	var res struct {
+		Tools []proto.Tool `json:"tools"`
+		Error string       `json:"error"`
+	}
+	if err := json.Unmarshal(line, &res); err != nil {
+		return nil, fmt.Errorf("bad response from Persona node: %w", err)
+	}
+	if res.Error != "" { // the node could not reach the hub (node/hooks.go)
+		return nil, fmt.Errorf("Persona node could not list tools: %s", res.Error)
+	}
+	tools := []map[string]any{}
+	for _, t := range res.Tools {
+		schema := t.InputSchema
+		if len(schema) == 0 {
+			schema = json.RawMessage(`{"type":"object","properties":{}}`)
+		}
+		tools = append(tools, map[string]any{"name": t.Name, "description": t.Description, "inputSchema": schema})
+	}
+	return tools, nil
 }
 
 // The assistant's processes start this server with JARVIS_ASSISTANT / JARVIS_SESSION_ID (node/assistant.go):

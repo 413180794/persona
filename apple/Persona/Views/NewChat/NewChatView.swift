@@ -374,7 +374,8 @@ struct NewChatView: View {
         } else if let c = modelChoice, !c.list.models.isEmpty {
             if c.canPick {
                 NavigationLink {
-                    LauncherModelPicker(choice: c, picked: $pickedModel) { await loadModels(refresh: true) }
+                    LauncherModelPicker(choice: c, picked: $pickedModel, refresh: { await loadModels(refresh: true) },
+                                        defaultFooter: "不指定模型：按启动器自己的设置\(c.configured.isEmpty ? "" : "和「模型配置」")运行。")
                 } label: {
                     modelLabel(title: c.selected?.name ?? "默认模型", detail: c.detail, trailing: nil)
                 }

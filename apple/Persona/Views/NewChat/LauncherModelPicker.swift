@@ -8,6 +8,8 @@ nonisolated struct LauncherModelChoice: Equatable {
     var picked = ""
     /// 模型配置 › 新建 Agent's model when it is what runs with no pick (the launcher is the one it names); "": none.
     var configured = ""
+    /// How 默认's line names [configured]: 模型配置 (新建 Agent), 继承 (模型配置 itself, where empty inherits).
+    var configuredLabel = "模型配置"
 
     /// A pick can reach the agent: there is a list and the launcher does not pass its own --model.
     var canPick: Bool { list.locked == nil && !list.models.isEmpty }
@@ -29,7 +31,7 @@ nonisolated struct LauncherModelChoice: Equatable {
     }
     /// What runs with no pick: 模型配置's model, or the one the agent defaults to.
     var defaultDetail: String? {
-        if !configured.isEmpty { return "模型配置：\(configured)" }
+        if !configured.isEmpty { return "\(configuredLabel)：\(configured)" }
         return defaultModel.map { $0.resolved ?? $0.name }
     }
 
@@ -39,6 +41,16 @@ nonisolated struct LauncherModelChoice: Equatable {
         guard let running else { return nil }
         return running.efforts ?? []
     }
+
+    /// What is typed, as an id to use when no model has exactly that id (模型配置 takes ids the list lacks); nil: none.
+    func customModelID(_ query: String) -> String? {
+        let id = query.trimmingCharacters(in: .whitespaces)
+        guard !id.isEmpty, !id.contains(where: \.isWhitespace), !list.models.contains(where: { $0.id == id }) else { return nil }
+        return id
+    }
+
+    /// The picked id when the list does not have it (模型配置's from before, or one typed in); nil: none.
+    var unlisted: String? { !picked.isEmpty && selected == nil ? picked : nil }
 
     /// Models whose name, id, resolved model or description has the query.
     func matching(_ query: String) -> [AgentModel] {
@@ -66,6 +78,10 @@ struct LauncherModelPicker: View {
     @Binding var picked: String
     /// Asks the CLI again (pull to refresh).
     var refresh: () async -> Void
+    /// 模型配置: an id the list does not have can be used (what is typed), and the current one stays shown.
+    var allowsCustom = false
+    /// Under 默认: what picking nothing means here.
+    var defaultFooter = "不指定模型：按启动器自己的设置运行。"
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
 
@@ -75,8 +91,11 @@ struct LauncherModelPicker: View {
             if query.isEmpty {
                 Section {
                     row(title: "默认", detail: choice.defaultDetail, description: nil, id: "")
+                    if allowsCustom, let id = choice.unlisted {
+                        row(title: id, detail: "当前配置，列表里没有", description: nil, id: id)
+                    }
                 } footer: {
-                    Text("不指定模型：按启动器自己的设置\(choice.configured.isEmpty ? "" : "和「模型配置」")运行。")
+                    Text(defaultFooter)
                 }
             }
             Section {
@@ -86,11 +105,15 @@ struct LauncherModelPicker: View {
             } header: {
                 if !shown.isEmpty { Text("\(shown.count) 个模型") }
             }
-            if shown.isEmpty && !query.isEmpty {
+            if allowsCustom, let id = choice.customModelID(query) {
+                Section {
+                    row(title: "使用「\(id)」", detail: nil, description: "列表里没有，按这个 ID 保存", id: id)
+                }
+            } else if shown.isEmpty && !query.isEmpty {
                 ContentUnavailableView.search(text: query)
             }
         }
-        .searchable(text: $query, prompt: "名称或 ID")
+        .searchable(text: $query, prompt: allowsCustom ? "搜索，或输入模型 ID" : "名称或 ID")
         .refreshable { await refresh() }
         .themedPage()
         .navigationTitle("模型")
