@@ -50,10 +50,66 @@ func (h *Hub) downloadFile(w http.ResponseWriter, r *http.Request, m *Machine) {
 		w.Header().Set("Content-Type", "application/octet-stream")
 	}
 	w.Header().Set("ETag", fmt.Sprintf("%q", info.Revision))
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": info.Name}))
+	disposition := "attachment"
+	if q.Get("inline") == "1" && inlineMime(info.Mime) {
+		disposition = "inline"
+	}
+	w.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": info.Name}))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// The hub serves the web app on this origin: a file opened by itself (an SVG, an HTML page saved as .png) must
+	// not run as the app. Chrome will not show a PDF in a sandbox, and a PDF runs no page script anyway.
+	if !strings.HasPrefix(info.Mime, "application/pdf") {
+		w.Header().Set("Content-Security-Policy", "sandbox")
+	}
 	reader := &remoteFileReader{get: get, request: p, size: info.Size}
 	http.ServeContent(w, r, info.Name, info.Modified, reader)
+}
+
+// inlineMime: what a browser may show in place (?inline=1: <img>, <video>, <audio>, a PDF in a frame); anything
+// else is always downloaded. HTML is previewed from file.read text in a sandboxed frame (docs/protocol.md「文件预览」).
+func inlineMime(m string) bool {
+	return strings.HasPrefix(m, "image/") || strings.HasPrefix(m, "video/") || strings.HasPrefix(m, "audio/") ||
+		strings.HasPrefix(m, "application/pdf")
+}
+
+// fileThumb is a file's thumbnail (node file.thumb): 304 for the ETag the client has, 404 no_thumbnail when the
+// machine cannot draw it.
+func (h *Hub) fileThumb(w http.ResponseWriter, r *http.Request, m *Machine) {
+	q := r.URL.Query()
+	p := proto.FileThumbRequest{Path: q.Get("path"), Cwd: q.Get("cwd"), Size: atoi(q.Get("size")),
+		ETag: strings.Trim(r.Header.Get("If-None-Match"), `"`)}
+	if strings.TrimSpace(p.Path) == "" {
+		writeErr(w, http.StatusBadRequest, errors.New("path is required"))
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	var out proto.FileThumb
+	if err := m.call(ctx, "file.thumb", p, &out); err != nil {
+		var re *rpc.Error
+		switch {
+		case errors.As(err, &re) && strings.HasPrefix(re.Message, "unknown method"):
+			writeCode(w, http.StatusConflict, proto.CodeNodeOutdated, "这台机器上的 jarvisd 太旧，没有缩略图，需要重新部署", nil)
+		case errors.As(err, &re) && re.Code == proto.CodeNoThumbnail:
+			writeCode(w, http.StatusNotFound, proto.CodeNoThumbnail, re.Message, nil)
+		default:
+			callErr(w, err)
+		}
+		return
+	}
+	w.Header().Set("ETag", fmt.Sprintf("%q", out.ETag))
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	if out.NotModified {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	if !strings.HasPrefix(out.Mime, "image/") {
+		writeErr(w, http.StatusBadGateway, errors.New("invalid thumbnail"))
+		return
+	}
+	w.Header().Set("Content-Type", out.Mime)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_, _ = w.Write(out.Data)
 }
 
 type remoteFileReader struct {

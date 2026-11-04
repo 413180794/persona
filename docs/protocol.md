@@ -445,8 +445,9 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | GET | `/api/v1/hub/update/history` | `{"history":[{from_version, to_version, to_build, started, ended, result: updated\|rolled_back\|failed\|held, reason?, auto}]}`，新的在前，留 50 条；`held`：更新的版本没有自动装（`reason` 写原因），每个版本记一次 |
 | GET | `/api/v1/skills` | 跑助手那台机器上的 skill（只读）：`{"machine_id","machine","skills":[{"name","description","source":"user\|builtin"}]}`；用户的在那台机器的 `~/.persona/skills/`（`docs/hub-update.md`）。node 太旧（没有 `skills.list`）或不在线时 502 |
 | GET / PUT | `/api/v1/pins` | 开发列表置顶：`{"spaces":["server/app"],"sessions":["server/<session id>"]}`，空间用「机器/空间名」（herdr 重启后 workspace id 会变），存 Postgres settings |
-| GET | `/api/v1/machines/{mid}/file?path=&cwd=&offset=` | 读一个文件（文件查看器，`docs/ios.md`「文件查看器」）：`{"path","name","size","mime","text"\|"data","truncated","offset","next","is_dir","entries"?}`。文本文件每次最多 2 MB，从 `offset` 读起，没读完时停在最后一个完整行的末尾，`next` 是下一页的起点（读完为 0）；二进制文件整个给（上限 2 MB），不能从中间读；目录给前 500 项。`~` 是 home，相对路径在 `cwd` 里；拒绝 iCloud |
-| GET | `/api/v1/machines/{mid}/file/download?path=&cwd=` | 完整文件的原始字节，使用同一 Bearer 鉴权，不把 token 放进 URL；hub 用 node 的 `file.chunk` 每次最多 1 MiB 读取，单次请求不把整个文件放进内存。支持 HTTP Range / Content-Range（包括文件末尾范围），附带 Content-Length、ETag 和附件文件名；空路径 400、旧 node 409 `node_outdated`，非普通文件、iCloud 和读取错误拒绝。后续块必须匹配首次读取的文件大小和版本，文件中途变更或请求取消就停止下载。旧 `/file` 的 2 MiB 二进制预览行为不变 |
+| GET | `/api/v1/machines/{mid}/file?path=&cwd=&offset=` | 读一个文件（文件查看器，`docs/ios.md`「文件查看器」）：`{"path","name","size","mime","text"\|"data","truncated","offset","next","is_dir","entries"?}`。文本文件每次最多 2 MB，从 `offset` 读起，没读完时停在最后一个完整行的末尾，`next` 是下一页的起点（读完为 0）；二进制文件整个给（上限 2 MB），不能从中间读；目录给前 500 项。`~` 是 home，相对路径在 `cwd` 里；拒绝 iCloud。带 `stream=1`（hub 特性 `file_stream`）时二进制文件只回描述 `{"stream":true,"revision",...}`、不带 `data`，内容走 `/file/download`；`mime` 按固定扩展名表、再按开头字节嗅探（见下面「文件预览」） |
+| GET | `/api/v1/machines/{mid}/file/download?path=&cwd=&inline=` | 完整文件的原始字节，App 用同一 Bearer 鉴权；网页的 `<video>` / `<audio>` / `<img>` 发不了头，用 `?token=`（hub 从不记录查询串）；hub 用 node 的 `file.chunk` 每次最多 1 MiB 读取，单次请求不把整个文件放进内存。支持 HTTP Range / Content-Range（包括文件末尾范围），附带 Content-Length、ETag 和附件文件名；空路径 400、旧 node 409 `node_outdated`，非普通文件、iCloud 和读取错误拒绝。后续块必须匹配首次读取的文件大小和版本，文件中途变更或请求取消就停止下载。旧 `/file` 的 2 MiB 二进制预览行为不变。`inline=1` 只对图片、音视频、PDF 生效（`Content-Disposition: inline`），其余照旧附件；除 PDF 外一律带 `Content-Security-Policy: sandbox` |
+| GET | `/api/v1/machines/{mid}/file/thumb?path=&cwd=&size=` | 文件的缩略图（hub 特性 `file_thumb`，node `file.thumb`）：长边最多 `size` 像素（默认 256，32–1024），不透明的给 JPEG、带透明的给 PNG；`ETag` 是「文件版本-尺寸」，带 `If-None-Match` 回 304，`Cache-Control: private, max-age=86400`。画不了回 404 `no_thumbnail`（客户端显示图标），旧 node 409 `node_outdated` |
 | GET | `/api/v1/machines/{mid}/stat?paths=&cwd=` | 会话里提到的路径在这台机器上在不在：`paths` 一行一个（也收 `path=a&path=b`），最多 200 个 → `{"stats":[{"path"(原样),"kind":"file"\|"dir"\|"denied"\|"missing","size"?}]}`。`denied` 是 macOS 不让 personad 读的文件夹（打开时会说怎么授权）；相对路径没有 `cwd`、iCloud 里的路径一律 `missing`。手机只给 file / dir / denied 的路径做可点的文件块 |
 | GET | `/api/v1/machines/{mid}/fs?path=&cwd=` | 文件树：`{"path","entries":[{"name","dir","symlink","size","mtime"}],"truncated"}`，目录在前，最多 2000 项；拒绝 iCloud |
 | GET | `/api/v1/machines/{mid}/git/status?cwd=` | `{"is_repo","root","branch","head","upstream","ahead","behind","files":[{"path","orig_path","index","worktree","added","deleted","binary"}],"stashes","commits":[最近 30 条]}`（只读，`GIT_OPTIONAL_LOCKS=0`） |
@@ -719,6 +720,15 @@ App 发出的消息在对话记录里出现之前显示一个待发气泡。Clau
   认过的行照样带字段，重启前还没认到的接着认。hub 没有数据库时只在 node 进程的内存里。
 - **App 怎么用**：带 `client_msg_id` 的 item 收起 id 相同的那条待发消息（不管 role、kind），也不会再按字去认另一条；
   不带的照旧按字认（旧 hub、node 没认出来的）。iOS `PendingMessage.tied`、Android `MessageEcho.tag`、网页 `lib/echo.ts`。
+
+### 文件预览
+
+文件页和各种预览（表格、Office、媒体、对比）共用的底座，三端一样（#1292）：
+
+- **类型**：node 按固定扩展名表定 `mime`（docx / xlsx / pptx / ipynb / heic / m4a 等，Go 自带的表随机器而变），表里没有再查系统表，再读开头 512 字节嗅探（HEIC、MP4 / MOV、PDF……）。`.key` 开头不是 zip 就当文本（PEM 密钥），是 zip 才是 Keynote。
+- **取内容**：先 `GET /file?stream=1`。文本照旧分页给 `text`；二进制只给 `size`、`mime`、`revision`，再按需从 `/file/download` 取：媒体直接把 URL 给 `<video>` / `<audio>`（Range 拖动），PDF / Office / 表格整份取回来交给渲染库，大文件不再整份 base64 进 JSON。`revision` 和下载的 ETag 是同一个值。
+- **内联和隔离**：hub 和网页同源，所以 `inline=1` 只放行图片、音视频、PDF；SVG 虽然内联，也带 `Content-Security-Policy: sandbox`，单独打开时脚本不能以网页的身份运行。HTML 不内联，预览时取文本放进沙盒 iframe（M5）。
+- **缩略图**：图片（PNG / JPEG / GIF / WebP / BMP / TIFF）由 node 自己解码缩放，SVG 用 oksvg 只画形状；其余交给系统：Mac 上 Quick Look（`qlmanage`，PDF、Office、iWork、HEIC、视频），别的系统装了 `pdftoppm` 给 PDF、装了 `ffmpeg` 给视频。系统工具一次只跑一个，单次 12 秒超时；超时一次（锁屏的 Mac 上 Quick Look 会卡住）之后 5 分钟内不再调用，直接回 `no_thumbnail`，免得一屏文件列表每个都等。node 内存里留最近 128 张。
 
 ### 发送文件
 

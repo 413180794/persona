@@ -24,6 +24,8 @@ type downloadNode struct {
 	requests []proto.FileChunkRequest
 	old      bool
 	bad      bool
+	mime     string
+	thumbs   []proto.FileThumbRequest
 }
 
 func (f *downloadNode) handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
@@ -31,6 +33,20 @@ func (f *downloadNode) handle(ctx context.Context, method string, params json.Ra
 	defer f.mu.Unlock()
 	if f.old {
 		return nil, errors.New("unknown method " + method)
+	}
+	if method == "file.thumb" {
+		var p proto.FileThumbRequest
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		f.thumbs = append(f.thumbs, p)
+		switch {
+		case strings.HasSuffix(p.Path, ".bin"):
+			return nil, &rpc.Error{Code: proto.CodeNoThumbnail, Message: "no thumbnail for x.bin"}
+		case p.ETag == "r1-256":
+			return proto.FileThumb{ETag: "r1-256", NotModified: true}, nil
+		}
+		return proto.FileThumb{Mime: "image/png", ETag: "r1-256", Data: []byte("png")}, nil
 	}
 	if method != "file.chunk" {
 		return nil, errors.New("unexpected method")
@@ -40,7 +56,11 @@ func (f *downloadNode) handle(ctx context.Context, method string, params json.Ra
 		return nil, err
 	}
 	f.requests = append(f.requests, p)
-	out := proto.FileChunk{Path: "/work/preview.mp4", Name: "preview.mp4", Size: int64(len(f.data)), Mime: "video/mp4", Revision: "r1", Modified: time.Unix(1700000000, 0), Offset: p.Offset}
+	mime := f.mime
+	if mime == "" {
+		mime = "video/mp4"
+	}
+	out := proto.FileChunk{Path: "/work/preview.mp4", Name: "preview.mp4", Size: int64(len(f.data)), Mime: mime, Revision: "r1", Modified: time.Unix(1700000000, 0), Offset: p.Offset}
 	if p.Length > 0 {
 		out.Data = f.data[p.Offset:min(int64(len(f.data)), p.Offset+int64(p.Length))]
 		if f.bad {
@@ -66,6 +86,7 @@ func downloadHub(t *testing.T, f *downloadNode) http.Handler {
 	h.byID["m1"] = m
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/machines/{mid}/file/download", h.withMachine(h.downloadFile))
+	mux.HandleFunc("GET /api/v1/machines/{mid}/file/thumb", h.withMachine(h.fileThumb))
 	return mux
 }
 
@@ -152,5 +173,67 @@ func TestDownloadReaderCancellationAndSeek(t *testing.T) {
 	}
 	if _, err := reader.Seek(0, 99); err == nil {
 		t.Fatal("invalid whence")
+	}
+}
+
+func TestDownloadInlineOnlyForWhatABrowserShows(t *testing.T) {
+	for _, test := range []struct {
+		mime, query, disposition string
+		sandbox                  bool
+	}{
+		{"video/mp4", "&inline=1", "inline;", true},
+		{"audio/mpeg", "&inline=1", "inline;", true},
+		{"application/pdf", "&inline=1", "inline;", false},
+		{"image/svg+xml", "&inline=1", "inline;", true}, // shown, but never as the app's origin
+		{"text/html", "&inline=1", "attachment;", true},
+		{"application/vnd.openxmlformats-officedocument.wordprocessingml.document", "&inline=1", "attachment;", true},
+		{"video/mp4", "", "attachment;", true},
+	} {
+		rec := httptest.NewRecorder()
+		downloadHub(t, &downloadNode{data: []byte{1, 2, 3}, mime: test.mime}).ServeHTTP(rec,
+			httptest.NewRequest("GET", "/api/v1/machines/m1/file/download?path=x"+test.query, nil))
+		h := rec.Header()
+		if rec.Code != 200 || !strings.HasPrefix(h.Get("Content-Disposition"), test.disposition) ||
+			(h.Get("Content-Security-Policy") == "sandbox") != test.sandbox || h.Get("Content-Type") != test.mime {
+			t.Fatalf("%s%s: %d %v", test.mime, test.query, rec.Code, h)
+		}
+	}
+}
+
+func TestThumbnailCachesAndExplainsWhatItCannotDraw(t *testing.T) {
+	f := &downloadNode{}
+	mux := downloadHub(t, f)
+	get := func(path, etag string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("GET", "/api/v1/machines/m1/file/thumb?path="+path+"&cwd=/work&size=256", nil)
+		if etag != "" {
+			req.Header.Set("If-None-Match", etag)
+		}
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		return rec
+	}
+	rec := get("a.png", "")
+	if rec.Code != 200 || rec.Body.String() != "png" || rec.Header().Get("Content-Type") != "image/png" ||
+		rec.Header().Get("ETag") != `"r1-256"` || !strings.Contains(rec.Header().Get("Cache-Control"), "private") {
+		t.Fatalf("%d %v %q", rec.Code, rec.Header(), rec.Body)
+	}
+	if rec := get("a.png", `"r1-256"`); rec.Code != 304 || rec.Body.Len() != 0 {
+		t.Fatalf("revalidated: %d", rec.Code)
+	}
+	if rec := get("x.bin", ""); rec.Code != 404 || !strings.Contains(rec.Body.String(), proto.CodeNoThumbnail) {
+		t.Fatalf("undrawable: %d %s", rec.Code, rec.Body)
+	}
+	if rec := get("", ""); rec.Code != 400 {
+		t.Fatalf("no path: %d", rec.Code)
+	}
+	f.mu.Lock()
+	if len(f.thumbs) != 3 || f.thumbs[0].Size != 256 || f.thumbs[0].Cwd != "/work" || f.thumbs[1].ETag != "r1-256" {
+		t.Fatalf("%+v", f.thumbs)
+	}
+	f.mu.Unlock()
+	rec = httptest.NewRecorder()
+	downloadHub(t, &downloadNode{old: true}).ServeHTTP(rec, httptest.NewRequest("GET", "/api/v1/machines/m1/file/thumb?path=a.png", nil))
+	if rec.Code != 409 || !strings.Contains(rec.Body.String(), proto.CodeNodeOutdated) {
+		t.Fatalf("old node: %d %s", rec.Code, rec.Body)
 	}
 }

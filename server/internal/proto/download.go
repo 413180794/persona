@@ -22,3 +22,28 @@ type FileChunk struct {
 	Offset   int64     `json:"offset"`
 	Data     []byte    `json:"data,omitempty"`
 }
+
+// Thumbnails (GET /api/v1/machines/{mid}/file/thumb → node file.thumb): an image of a file at most Size pixels on
+// its long side, for file lists and preview cards.
+const (
+	ThumbDefault = 256
+	ThumbMin     = 32
+	ThumbMax     = 1024
+	// CodeNoThumbnail: the machine cannot draw this file (no decoder, no system tool); the client shows an icon (404).
+	CodeNoThumbnail = "no_thumbnail"
+)
+
+type FileThumbRequest struct {
+	Path string `json:"path"`
+	Cwd  string `json:"cwd"`
+	Size int    `json:"size"`
+	// ETag the client already has (If-None-Match): the same version at the same size answers NotModified, no data.
+	ETag string `json:"etag,omitempty"`
+}
+
+type FileThumb struct {
+	Mime        string `json:"mime"`
+	ETag        string `json:"etag"`
+	NotModified bool   `json:"not_modified,omitempty"`
+	Data        []byte `json:"data,omitempty"`
+}

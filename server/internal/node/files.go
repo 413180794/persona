@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"mime"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -26,12 +24,15 @@ type FileContent struct {
 	Size      int64    `json:"size"`
 	Mime      string   `json:"mime"`
 	Text      string   `json:"text,omitempty"` // UTF-8 text files
-	Data      string   `json:"data,omitempty"` // base64 for binary files (images, PDFs)
+	Data      string   `json:"data,omitempty"` // base64 for binary files (images, PDFs), unless asked with stream
 	Truncated bool     `json:"truncated"`      // there is more after this page
 	Offset    int64    `json:"offset"`         // where this page starts (bytes)
 	Next      int64    `json:"next,omitempty"` // where the next page starts; 0 at the end
 	IsDir     bool     `json:"is_dir"`
 	Entries   []string `json:"entries,omitempty"` // directory listing (names, dirs end with /)
+	// Stream: a binary file asked for with stream; its bytes come from file/download (Range), Revision pins them.
+	Stream   bool   `json:"stream,omitempty"`
+	Revision string `json:"revision,omitempty"`
 }
 
 // resolvePath turns a path as the conversation wrote it into one on this machine: ~ is the home, a relative path is
@@ -57,8 +58,9 @@ func inICloud(path string) bool { return strings.Contains(path, "/Library/Mobile
 
 // readFile reads a file for the phone's viewer, a text file maxFileBytes at a time from offset (the page before's
 // `next`): a page that stops short of the end stops after a line's end. Directories are listed, binary files sent
-// whole up to the cap (they are not paged).
-func (n *Node) readFile(path, cwd string, offset int64) (*FileContent, error) {
+// whole up to the cap (they are not paged), or with stream only described: the client fetches them from
+// file/download by Range, however big.
+func (n *Node) readFile(path, cwd string, offset int64, stream bool) (*FileContent, error) {
 	asked := strings.TrimSpace(path)
 	if asked == "" {
 		return nil, fmt.Errorf("empty path")
@@ -102,15 +104,21 @@ func (n *Node) readFile(path, cwd string, offset int64) (*FileContent, error) {
 		return nil, explainDenied(path, n.home, err)
 	}
 	defer f.Close()
+	fc.Offset = offset
+	if stream {
+		fc.Revision = fileRevision(st)
+		if offset == 0 && st.Mode().IsRegular() {
+			if m := fileMime(path, readHead(f)); streamedMime(m) {
+				fc.Mime, fc.Stream = m, true
+				return fc, nil
+			}
+		}
+	}
 	buf := make([]byte, min(st.Size()-offset, maxFileBytes))
 	nr, _ := f.ReadAt(buf, offset)
 	buf = buf[:nr]
 	more := st.Size() > offset+int64(nr)
-	fc.Offset = offset
-	fc.Mime = mime.TypeByExtension(strings.ToLower(filepath.Ext(path)))
-	if fc.Mime == "" {
-		fc.Mime = http.DetectContentType(buf)
-	}
+	fc.Mime = fileMime(path, buf[:min(len(buf), sniffBytes)])
 	// Text is valid UTF-8 (a page may cut the last character) with no NUL bytes.
 	if bytes.IndexByte(buf, 0) < 0 && (utf8.Valid(buf) || (more && utf8.Valid(trimPartialRune(buf)))) {
 		text := trimPartialRune(buf)
@@ -130,6 +138,10 @@ func (n *Node) readFile(path, cwd string, offset int64) (*FileContent, error) {
 	}
 	if offset > 0 {
 		return nil, fmt.Errorf("binary files are read whole, not from an offset")
+	}
+	if stream {
+		fc.Stream = true
+		return fc, nil
 	}
 	fc.Truncated = more
 	fc.Data = base64.StdEncoding.EncodeToString(buf)

@@ -310,6 +310,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		Path             string        `json:"path"`
 		Paths            []string      `json:"paths"`
 		Offset           int64         `json:"offset"`
+		Stream           bool          `json:"stream"`
 		SessionID        string        `json:"session_id"`
 		Cwd              string        `json:"cwd"`
 		Launcher         string        `json:"launcher"`
@@ -758,8 +759,14 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return nil, err
 		}
 		return n.readFileChunk(chunk)
+	case "file.thumb":
+		var t proto.FileThumbRequest
+		if err := json.Unmarshal(params, &t); err != nil {
+			return nil, err
+		}
+		return n.fileThumb(ctx, t)
 	case "file.read":
-		return n.readFile(p.Path, p.Cwd, p.Offset)
+		return n.readFile(p.Path, p.Cwd, p.Offset, p.Stream)
 	case "port.dial":
 		return n.portDial(ctx, params)
 	case "port.probe":

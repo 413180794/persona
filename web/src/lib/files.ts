@@ -31,6 +31,9 @@ export interface FileContent {
   offset?: number;
   /** Where the next page starts; 0 / missing: the end. */
   next?: number;
+  /** Asked with stream=1 and binary: no `data`; the bytes come from fileDownloadURL (Range), `revision` pins them. */
+  stream?: boolean;
+  revision?: string;
 }
 
 export interface GitFile {

@@ -40,7 +40,7 @@ func TestDownloadFileChunks(t *testing.T) {
 	if !bytes.Equal(got, data) {
 		t.Fatalf("downloaded %d of %d bytes", len(got), len(data))
 	}
-	legacy, err := n.readFile(path, "", 0)
+	legacy, err := n.readFile(path, "", 0, false)
 	if err != nil || !legacy.Truncated {
 		t.Fatal("legacy binary preview should still be capped")
 	}

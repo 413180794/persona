@@ -54,9 +54,11 @@ func (h *Hub) routes() http.Handler {
 		return map[string]any{"path": r.URL.Query().Get("path")}
 	}))
 	api.HandleFunc("GET /api/v1/machines/{mid}/file/download", h.withMachine(h.downloadFile))
+	api.HandleFunc("GET /api/v1/machines/{mid}/file/thumb", h.withMachine(h.fileThumb))
+	// stream=1: a binary file comes back described (stream, revision), its bytes from file/download.
 	api.HandleFunc("GET /api/v1/machines/{mid}/file", h.proxy("file.read", func(r *http.Request) any {
 		q := r.URL.Query()
-		return map[string]any{"path": q.Get("path"), "cwd": q.Get("cwd"), "offset": atoi(q.Get("offset"))}
+		return map[string]any{"path": q.Get("path"), "cwd": q.Get("cwd"), "offset": atoi(q.Get("offset")), "stream": q.Get("stream") == "1"}
 	}))
 	// Which of the paths a conversation mentions are there on the machine (?paths=a%0Ab or ?path=a&path=b, and cwd):
 	// the phone links only those.

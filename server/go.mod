@@ -16,6 +16,7 @@ require (
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
 	github.com/tailscale/go-winio v0.0.0-20231025203758-c4f33415bf55
 	github.com/tailscale/tailcat v0.7.0
+	golang.org/x/image v0.41.0
 	golang.org/x/sys v0.48.0
 	tailscale.com v1.103.0-pre.0.20260916030321-a2263542f260
 )
@@ -85,7 +86,6 @@ require (
 	go4.org/netipx v0.0.0-20260823151212-3075585bcbeb // indirect
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
-	golang.org/x/image v0.41.0 // indirect
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
