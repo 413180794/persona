@@ -414,7 +414,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 2026-11-01 全部过了一遍：分 5 组并行，每组用离屏截图（体验模式和 `scripts/mock/mock_hub.py` 的假数据，深浅色）和单元测试（`JarvisMacTests`）逐条核对，顺手修了能修的；再由一个 reviewer 逐条试着推翻打的勾，推翻了的不勾，写清看到了什么、没看到什么。
 核对后 106 条 [x]、118 条 [ ]。没勾的每条下面都写了原因：「要到 Mac 前看」是要解锁后在 Mac 上点、按、看的，「没做」是还没做的，「Mac 上没有」是 Mac 上本来就不该有的。
-2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 141 条 [x]、81 条 [ ]。
+2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 146 条 [x]、76 条 [ ]。
 待你确认：`-showSampleScreen` 的示例「终端在问你」里原来有像内部工具 / 服务的名字，已在提交「chore: the sample terminal dialog uses made-up names only」里全换成编造的名字；以前拍的截图里可能还是旧文字。
 
 ### 真窗口验收怎么分工（2026-11-03 起）
@@ -969,21 +969,28 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 ## 26. Settings pages
 - [x] Root: header (demo note), 形象, 界面风格 + 字号, 助手, 模型, Claude Code 设置, 机器, 设备, 手机数据, 通知, 翻译, 存储空间, 服务器, 关于, 同步到 Apple Watch — Views/Settings/SettingsView.swift (SettingsDestinations, SettingsPage)
   - Mac（2026-11-01 核对）深浅色截图（假 hub）：hub 地址和已连接、形象、界面风格、模型、助手、Claude Code 设置、连接器、机器、设备、通知、翻译、存储空间、服务器、关于；手机数据按设计不在 Mac 上，「同步到 Apple Watch」原来还显示，现在只在 iOS 显示。
-- [ ] 助手 → profile page; 定时任务 (upcoming timeline, daily/interval/once rows, toggle, swipe delete, long-press run now, templates, editor with model/permission/effort, bypass confirm, continue conversation, history) — Views/Settings/AssistantProactiveViews.swift (AssistantRoutinesView, AssistantTaskRow, AssistantTaskEditor, AssistantWeekdayPicker), Views/Settings/AssistantRoutinesModel.swift
+- [x] 助手 → profile page; 定时任务 (upcoming timeline, daily/interval/once rows, toggle, swipe delete, long-press run now, templates, editor with model/permission/effort, bypass confirm, continue conversation, history) — Views/Settings/AssistantProactiveViews.swift (AssistantRoutinesView, AssistantTaskRow, AssistantTaskEditor, AssistantWeekdayPicker), Views/Settings/AssistantRoutinesModel.swift
   - 要到 Mac 前看：右键定时任务 › 立即运行 / 删除、勾选开关、保存一次编辑、选「绕过权限」看确认框、从运行记录继续对话、打开历史。主页、定时任务时间线、编辑页、新建 sheet 截图看过；一次性跟进的页脚在 Mac 上改成「右键可以立即运行或删除」。
-- [ ] 记忆 (frontmatter, type tags, markdown detail, edit, swipe delete, MEMORY.md read-only) — AssistantProactiveViews.swift (AssistantMemoryView, AssistantMemoryDetail, AssistantMemoryEditor)
+  - Mac 真窗口（2026-11-04，执行者跑）：右键「早报」出 立即运行 / 编辑 / 删除，「立即运行」跳到 Persona 页这次运行的对话；勾选开关能关能开，离开分区再回来保持；编辑页（标题、开关、什么时候、提示词、模型、权限模式、对话运行方式、立即运行 / 上次结果 / 历史 / 删除）改了就自动保存，列表马上显示新时间；
+    权限选「全部放行」弹确认「全部放行？…」，取消不变；历史记录列两次运行，点一次跳到它的对话、能接着说。
+    右键（iOS 是长按）和左滑的「删除」都是直接删、不确认，和 iOS 一样（共用代码）；只有编辑页底部的删除按钮先确认。记忆那边右键 / 左滑删除都先确认，两处不一致，要不要统一待定。
+- [x] 记忆 (frontmatter, type tags, markdown detail, edit, swipe delete, MEMORY.md read-only) — AssistantProactiveViews.swift (AssistantMemoryView, AssistantMemoryDetail, AssistantMemoryEditor)
   - Mac（2026-11-01 核对）：列表（类型标签、只读的「索引」行和 MEMORY.md 页脚）、详情、编辑 sheet 截图看过；左滑删除要触控板，Mac 上加了右键「删除」走同一个确认框，但右键菜单没截到。要到 Mac 前看：右键一条记忆 › 删除 › 确认，触控板左滑也还能用。
-- [ ] 关于我 notes — AssistantProactiveViews.swift (AssistantNotesView)
+  - Mac 真窗口（2026-11-04，执行者跑）：右键一条记忆出「删除」，确认框「删除这条记忆？Persona 以后不再记得「早报格式」。」，确认后从列表消失。触控板左滑没试（cua 做不了）。
+- [x] 关于我 notes — AssistantProactiveViews.swift (AssistantNotesView)
   - 要到 Mac 前看：改一段文字保存，重开看是否保留。页面（`-openAssistantPage about`）截图看过，保存要打字和点击。
-- [ ] Claude Code 设置 (settings.json whitelist keys, apply to all machines) — SettingsView.swift (ClaudeSettingsView)
+  - Mac 真窗口（2026-11-04，执行者跑）：末尾加几个字后右上角「保存」变可点，保存后变灰；返回再进来，加的字还在。
+- [x] Claude Code 设置 (settings.json whitelist keys, apply to all machines) — SettingsView.swift (ClaudeSettingsView)
   - 要到 Mac 前看：设置 › Claude Code 设置 改一个白名单里的键，应用到所有机器，看结果。设置根页面上有这一行，没有 DEBUG 开关能直接打开。
+  - Mac 真窗口（2026-11-04，执行者跑）：列出机器、同时改所有在线机器、离开回顾（recap）、总是深度思考、思考强度、回复语言、屏蔽的配置目录；开着「同时改所有在线机器」切换 recap，提示「已应用到 3 台机器」。
 - [x] 翻译 (auto translate, mail, chat picker) + Translator (NLLanguageRecognizer, batching) — Views/Settings/TranslationSettingsView.swift, App/Translator.swift
   - Mac（2026-11-01 核对）截图（`-translate.enabled YES -translate.mail YES`）：自动翻译开、目标语言、邮件勾上、飞书会话选择行；假 hub 收件箱里英文邮件显示成中文标题带翻译图标，Mac 上语言识别和翻译跑过。
-- [ ] 存储空间 (per category sizes, clear one / all, keep web logins) — Views/Settings/StorageView.swift
+- [x] 存储空间 (per category sizes, clear one / all, keep web logins) — Views/Settings/StorageView.swift
   - Mac（2026-11-01）：本机 ad-hoc 签名的调试版没有沙盒，`URL.cachesDirectory` 是所有 App 共用的 `~/Library/Caches`、`libraryDirectory` 是整个 `~/Library`：页面一直「计算中…」（在遍历整个 ~/Library），而「清除全部缓存」会把别的 App 的缓存当「其他缓存」删掉。改成没沙盒时只认 Persona 自己写的文件夹（`StorageUsage.owned`，有测试）、临时目录只认 `lark-`、不数 Library 和 Documents；有沙盒（iOS、签了名的 Mac 版）时和原来一样。修后截图算出 127 KB；清除没在 Mac 上点过。
     review（2026-11-01 07:20）后又改两处：缓存目录认 `chats` / `chats-v<数字>`（`ChatCache.isFolder`）（对话缓存现在是 `chats-v3`，原来的名单漏了它）；没沙盒时临时目录一个也不碰（`$TMPDIR` 是整个用户共用的，别的程序也可能写 `lark-` 开头的文件夹）。
     已改（2026-11-01，iOS 一起）：对话缓存的目录名只在 `ChatCache.folder` 一处定义，`StorageUsage` 判断归属和分类都用 `ChatCache.isFolder`，`chats-v3` 和以后的版本都算「Agent 对话」（以前落进「其他缓存」，iOS 也一样）；`chats-vx`、`chats-v3.bak` 这类不算。有 Mac 和 iOS 两边的测试。
   - 要到 Mac 前看：清除一类、再清除全部，看大小变小、网页登录还在（2026-11-01）。截图看到总量、比例条、各类大小和「清除全部缓存」。
+  - Mac 真窗口（2026-11-04，执行者跑，隔离副本的 `CFFIXED_USER_HOME`）：各类大小（Agent 对话 49 KB、列表和飞书会话 61 KB…，共 111 KB）；清除「Agent 对话」先确认「清除「Agent 对话」49 KB？」，清完 0 KB、总计 61 KB。
 - [x] 通知 / 灵动岛 — see §18, §19
   - Mac（2026-11-01 核对）：通知页截图看过（Mac 的说法「把鼠标移到通知上，点『选项』」）；灵动岛部分 Mac 上没有，见 §19。页面上出现两个一样的「系统通知设置」按钮，没查。
 
