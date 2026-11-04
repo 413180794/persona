@@ -7,7 +7,9 @@ paths of their own time and are not checked; neither are the rename docs, which 
 """
 from pathlib import Path
 import re
+import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -27,10 +29,22 @@ GENERATED = {
     "apple/Config.xcconfig",
     "apple/Persona.xcodeproj",
     "android/app/build/outputs/apk/debug/app-debug.apk",
-    "android/feature/settings/build/channel-shots",  # Robolectric screenshots (docs/android.md)
-    "android/feature/chat/build/channel-shots",
     "web/dist",
     "apple/Jarvis.xcodeproj",  # the kept compatibility symlink to the generated Persona.xcodeproj
+}
+
+# Only these exact screenshot outputs are generated, and their actual producers must declare the same default.
+GENERATED_SCREENSHOTS = {
+    "android/feature/settings/build/channel-shots":
+        "android/feature/settings/src/test/kotlin/persona/feature/settings/ChannelsShotsTest.kt",
+    "android/feature/chat/build/channel-shots":
+        "android/feature/chat/src/test/kotlin/persona/feature/chat/ChannelSourceShotsTest.kt",
+    "android/feature/settings/build/hub-update-shots":
+        "android/feature/settings/src/test/kotlin/persona/feature/settings/HubUpdateShotsTest.kt",
+    "android/feature/settings/build/translation-shots":
+        "android/feature/settings/src/test/kotlin/persona/feature/settings/TranslationSettingsShotsTest.kt",
+    "android/feature/inbox/build/translation-shots":
+        "android/feature/inbox/src/test/kotlin/persona/feature/inbox/InboxTranslationShotsTest.kt",
 }
 
 # Quoted on purpose though not at the repository root: paths in another project or in the mock hub's fake file tree.
@@ -60,11 +74,53 @@ def quoted_paths(line):
         yield path
 
 
+def generated_screenshot(path):
+    producer = GENERATED_SCREENSHOTS.get(path)
+    if producer is None:
+        return False
+    source = ROOT / producer
+    if not source.is_file():
+        return False
+    output = "build/" + path.split("/build/", 1)[1]
+    pattern = (r'(?m)^\s*private\s+fun\s+out\(\)(?:\s*:\s*File)?\s*=\s*'
+               r'File\(\s*System\.getProperty\("persona\.shots"\)\s*\?:\s*"'
+               + re.escape(output) + r'"\s*\)')
+    return re.search(pattern, source.read_text()) is not None
+
+
 def exists(path):
+    if path in GENERATED_SCREENSHOTS:
+        return generated_screenshot(path)
     return path in GENERATED or path in ELSEWHERE or (ROOT / path).exists() or (ROOT / "scripts" / path).exists()
 
 
 class DocPathTests(unittest.TestCase):
+    def test_generated_screenshots_have_matching_source_producers(self):
+        for path in GENERATED_SCREENSHOTS:
+            with self.subTest(path=path):
+                self.assertTrue(generated_screenshot(path))
+                self.assertTrue(exists(path))
+
+    def test_missing_or_changed_producers_and_unknown_outputs_are_rejected(self):
+        path, producer = next(iter(GENERATED_SCREENSHOTS.items()))
+        output = "build/" + path.split("/build/", 1)[1]
+        with tempfile.TemporaryDirectory(prefix="doc-shot-producer-") as directory:
+            root = Path(directory)
+            with patch(__name__ + ".ROOT", root):
+                (root / path).mkdir(parents=True)
+                self.assertFalse(exists(path))
+                source = root / producer
+                source.parent.mkdir(parents=True)
+                source.write_text(f'// private fun out() = File(System.getProperty("persona.shots") ?: "{output}")\n'
+                                  'private fun out() = File(System.getProperty("persona.shots") ?: "build/other-shots")\n')
+                self.assertFalse(exists(path))
+                source.write_text(f'private fun out() = File(System.getProperty("persona.shots") ?: "{output}")\n')
+                self.assertTrue(exists(path))
+                source.unlink()
+                self.assertFalse(exists(path))
+                self.assertFalse(exists(path + "-unknown"))
+                self.assertFalse(exists("android/feature/missing/src/Unknown.kt"))
+
     def test_quoted_repository_paths_exist(self):
         missing = []
         for doc in doc_files():
