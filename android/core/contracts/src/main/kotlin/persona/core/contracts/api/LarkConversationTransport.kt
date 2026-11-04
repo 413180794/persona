@@ -5,6 +5,11 @@ import kotlinx.serialization.json.*
 /** Adds visible-message receipts without changing legacy inbox transports. */
 interface LarkConversationTransport : InboxAssistantTransport {
     suspend fun markRead(feedId: String, position: Long, badgeCount: Long?, messageIds: List<String>)
+    suspend fun react(messageId: String, key: String, remove: Boolean): Unit = Unit
+    suspend fun cardAction(messageId: String, actionId: String): Unit = Unit
+    suspend fun userProfile(userId: String, feedId: String? = null): JsonObject = JsonObject(emptyMap())
+    suspend fun quickReactions(): List<String> = emptyList()
+    suspend fun emojis(): JsonObject = JsonObject(emptyMap())
 }
 
 /** Decode raw socket frames before the compatibility event decoder discards unknown events. */

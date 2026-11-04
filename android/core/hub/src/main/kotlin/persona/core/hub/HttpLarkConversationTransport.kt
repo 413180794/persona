@@ -43,4 +43,74 @@ class HttpLarkConversationTransport(
             if (!it.isSuccessful) throw HubFailure.from(it)
         }
     }
+
+    override suspend fun react(messageId: String, key: String, remove: Boolean) {
+        require(messageId.isNotBlank() && key.isNotBlank())
+        if (!isCurrent()) throw CancellationException("Pairing changed")
+        val url = base.newBuilder().addPathSegments("api/v1/lark/messages")
+            .addPathSegment(messageId).addPathSegment("reactions").build()
+        val body = buildJsonObject {
+            put("key", key)
+            put("remove", remove)
+        }
+        val request = Request.Builder().url(url).header("Authorization", "Bearer $token")
+            .post(body.toString().toRequestBody("application/json".toMediaType())).build()
+        http.newCall(request).awaitResponse().use {
+            if (!isCurrent()) throw CancellationException("Pairing changed")
+            if (!it.isSuccessful) throw HubFailure.from(it)
+        }
+    }
+
+    override suspend fun cardAction(messageId: String, actionId: String) {
+        require(messageId.isNotBlank() && actionId.isNotBlank())
+        if (!isCurrent()) throw CancellationException("Pairing changed")
+        val url = base.newBuilder().addPathSegments("api/v1/lark/messages")
+            .addPathSegment(messageId).addPathSegments("card-actions").addPathSegment(actionId).build()
+        val request = Request.Builder().url(url).header("Authorization", "Bearer $token")
+            .post("{}".toRequestBody("application/json".toMediaType())).build()
+        http.newCall(request).awaitResponse().use {
+            if (!isCurrent()) throw CancellationException("Pairing changed")
+            if (!it.isSuccessful) throw HubFailure.from(it)
+        }
+    }
+
+    override suspend fun userProfile(userId: String, feedId: String?): JsonObject {
+        require(userId.isNotBlank())
+        if (!isCurrent()) throw CancellationException("Pairing changed")
+        val urlBuilder = base.newBuilder().addPathSegments("api/v1/lark/users")
+            .addPathSegment(userId)
+        if (!feedId.isNullOrBlank()) urlBuilder.addQueryParameter("feed_id", feedId)
+        val request = Request.Builder().url(urlBuilder.build()).header("Authorization", "Bearer $token").get().build()
+        return http.newCall(request).awaitResponse().use {
+            if (!isCurrent()) throw CancellationException("Pairing changed")
+            if (!it.isSuccessful) throw HubFailure.from(it)
+            val raw = it.body?.string().orEmpty()
+            Json.parseToJsonElement(raw.ifBlank { "{}" }).jsonObject
+        }
+    }
+
+    override suspend fun quickReactions(): List<String> {
+        if (!isCurrent()) throw CancellationException("Pairing changed")
+        val url = base.newBuilder().addPathSegments("api/v1/lark/reactions/quick").build()
+        val request = Request.Builder().url(url).header("Authorization", "Bearer $token").get().build()
+        return http.newCall(request).awaitResponse().use {
+            if (!isCurrent()) throw CancellationException("Pairing changed")
+            if (!it.isSuccessful) return@use emptyList()
+            val raw = it.body?.string().orEmpty()
+            val obj = Json.parseToJsonElement(raw.ifBlank { "{}" }).jsonObject
+            (obj["keys"] as? JsonArray)?.mapNotNull { el -> (el as? JsonPrimitive)?.contentOrNull } ?: emptyList()
+        }
+    }
+
+    override suspend fun emojis(): JsonObject {
+        if (!isCurrent()) throw CancellationException("Pairing changed")
+        val url = base.newBuilder().addPathSegments("api/v1/lark/emojis").build()
+        val request = Request.Builder().url(url).header("Authorization", "Bearer $token").get().build()
+        return http.newCall(request).awaitResponse().use {
+            if (!isCurrent()) throw CancellationException("Pairing changed")
+            if (!it.isSuccessful) return@use JsonObject(emptyMap())
+            val raw = it.body?.string().orEmpty()
+            Json.parseToJsonElement(raw.ifBlank { "{}" }).jsonObject
+        }
+    }
 }

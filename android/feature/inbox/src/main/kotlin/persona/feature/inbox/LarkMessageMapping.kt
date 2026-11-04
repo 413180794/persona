@@ -25,15 +25,75 @@ internal fun larkMessage(data: JsonObject, transport: InboxAssistantTransport, f
             val meta = part["metadata"] as? JsonObject ?: JsonObject(emptyMap())
             val text = part.text("text").ifBlank { data.text("text") }
             when (part.text("kind")) {
-                "image", "emotion" -> image(part.text("url"), meta.number("width")?.toInt() ?: 1, meta.number("height")?.toInt() ?: 1)
+                "image" -> image(part.text("url"), meta.number("width")?.toInt() ?: 1, meta.number("height")?.toInt() ?: 1)
+                "emotion" -> {
+                    val url = part.text("url")
+                    if (url.isNotBlank()) {
+                        LarkPart.Sticker(image(url, meta.number("width")?.toInt() ?: 1, meta.number("height")?.toInt() ?: 1),
+                            text.ifBlank { "表情" }, meta.number("width")?.toInt() ?: 1, meta.number("height")?.toInt() ?: 1)
+                    } else {
+                        val key = part.text("refId").ifBlank { text }
+                        LarkPart.Text(LarkEmojiHelper.symbol(key), source)
+                    }
+                }
+                "code" -> LarkPart.Code(text, meta.text("languageName").ifBlank { meta.text("language") })
                 "file" -> LarkPart.File(part.text("url"), meta.text("name").ifBlank { text.ifBlank { "文件" } }, meta.text("mimeType").ifBlank { "application/octet-stream" })
-                "text", "at", "code" -> LarkPart.Text(text, source)
-                "card", "interactive" -> larkInteractivePart(meta, text, transport)
+                "text", "at" -> LarkPart.Text(text, source)
+                "card", "interactive" -> larkInteractivePart(meta, text, transport, id)
                 "link" -> LarkPart.Text(listOf(text, part.text("url")).filter { it.isNotBlank() }.distinct().joinToString("\n"), source)
-                else -> LarkPart.External(text, external, if (part.text("kind") == "media") "video" else "card", meta.text("duration"))
+                "merge_forward", "forward" -> {
+                    val forwardMessages = (meta["messages"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.map { fm ->
+                        LarkForwardedMessage(
+                            id = fm.text("id"),
+                            senderName = fm.text("senderName").ifBlank { fm.text("sender_name") },
+                            senderAvatar = larkAvatar(fm.cursor("senderAvatarUrl") ?: fm.cursor("sender_avatar"), transport.scope, transport::media),
+                            time = fm.text("createdAt").ifBlank { fm.text("created_at") },
+                            text = fm.text("textPreview").ifBlank { fm.text("text") },
+                            parts = (fm["parts"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.map { fp ->
+                                LarkPart.Text(fp.text("text"), source)
+                            }
+                        )
+                    }
+                    LarkPart.MergeForward(meta.text("title").ifBlank { text.ifBlank { "合并转发的聊天记录" } }, forwardMessages, source)
+                }
+                "media" -> {
+                    val mime = meta.text("mime")
+                    val duration = meta.number("duration") ?: 0L
+                    if (mime.startsWith("audio/") || (duration > 0 && !mime.startsWith("video/"))) {
+                        LarkPart.Audio(part.text("url"), duration, source)
+                    } else if (mime.startsWith("video/")) {
+                        LarkPart.Video(part.text("url"), duration, null, source)
+                    } else {
+                        LarkPart.External(text, external, "video", meta.text("duration"))
+                    }
+                }
+                else -> {
+                    if (meta["messages"] != null) {
+                        val forwardMessages = (meta["messages"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.map { fm ->
+                            LarkForwardedMessage(
+                                id = fm.text("id"),
+                                senderName = fm.text("senderName").ifBlank { fm.text("sender_name") },
+                                senderAvatar = larkAvatar(fm.cursor("senderAvatarUrl") ?: fm.cursor("sender_avatar"), transport.scope, transport::media),
+                                time = fm.text("createdAt").ifBlank { fm.text("created_at") },
+                                text = fm.text("textPreview").ifBlank { fm.text("text") }
+                            )
+                        }
+                        LarkPart.MergeForward(meta.text("title").ifBlank { text.ifBlank { "合并转发的聊天记录" } }, forwardMessages, source)
+                    } else {
+                        LarkPart.External(text, external, if (part.text("kind") == "media") "video" else "card", meta.text("duration"))
+                    }
+                }
             }
         }.ifEmpty { listOf(LarkPart.Text(data.text("text"), source)) }
     val quote = data["reply_to"] as? JsonObject
+    val reactions = (data["reactions"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.map { r ->
+        persona.core.contracts.LarkReaction(
+            key = r.text("key"),
+            count = r.number("count")?.toInt() ?: 0,
+            mine = r.flag("mine") || r.flag("isMine"),
+            users = (r["users"] as? JsonArray ?: r["userNames"] as? JsonArray)?.mapNotNull { u -> (u as? JsonPrimitive)?.contentOrNull }
+        )
+    }
     return LarkMessage(id, data.text("sender_id"), data.text("sender_name"), data.number("position"), data.text("created_at"),
         data.flag("is_mine"), parts, data.cursor("client_id") ?: data.cursor("clientId"),
         delivery = when (data.text("local_state")) {
@@ -46,7 +106,8 @@ internal fun larkMessage(data: JsonObject, transport: InboxAssistantTransport, f
         quote = quote?.let { LarkQuote(it.text("id"), it.text("sender_name"), if (it.flag("recalled")) "消息已撤回" else it.text("text")) },
         badgeCount = data.number("badge_count"), isRead = data.flag("is_read"),
         replyCount = maxOf(0L, data.number("reply_count") ?: 0L, data.number("thread_reply_count") ?: 0L),
-        thread = larkThreadSource(data, transport, feed))
+        thread = larkThreadSource(data, transport, feed),
+        reactions = reactions)
 }
 
 internal fun larkDate(time: String): LocalDate? = runCatching {

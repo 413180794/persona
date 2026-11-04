@@ -19,7 +19,12 @@ data class LarkCardContent(val title: String, val blocks: List<LarkCardBlock>, v
 
 sealed interface LarkCardBlock {
     data class Text(val text: String) : LarkCardBlock
-    data class Button(val label: String) : LarkCardBlock
+    data class Button(
+        val label: String,
+        val actionId: String? = null,
+        val actionMethod: Int = 1,
+        val url: String? = null,
+    ) : LarkCardBlock
     data class Image(val url: String, val alt: String, val width: Int = 1, val height: Int = 1) : LarkCardBlock
     data class Columns(val columns: List<List<LarkCardBlock>>, val weights: List<Float>) : LarkCardBlock
     data class Group(val children: List<LarkCardBlock>) : LarkCardBlock
@@ -49,7 +54,12 @@ fun parseLarkCard(meta: JsonObject, fallback: String): LarkCardContent {
         fun children() = kids.flatMap { node(it, depth + 1) }
         fun text() = readableLarkText(plain(n)).trim()
         return when (n.text("tag")) {
-            "button" -> listOf(LarkCardBlock.Button(text().ifBlank { "操作" }))
+            "button" -> {
+                val actionId = n.text("actionId").ifBlank { n.text("action_id") }.ifBlank { null }
+                val actionMethod = n.number("actionMethod")?.toInt() ?: n.number("action_method")?.toInt() ?: 1
+                val url = n.text("url").ifBlank { null }
+                listOf(LarkCardBlock.Button(text().ifBlank { "操作" }, actionId, actionMethod, url))
+            }
             "img", "image" -> {
                 val image = n["image"] as? JsonObject
                 val url = image?.text("url").orEmpty().ifBlank { n.text("url") }
@@ -100,5 +110,5 @@ fun parseLarkCard(meta: JsonObject, fallback: String): LarkCardContent {
 }
 
 /** Shared by the current data repository and the window-based inbox adapter. */
-fun larkInteractivePart(metadata: JsonObject, fallback: String, transport: InboxAssistantTransport): LarkPart.Card =
-    LarkPart.Card(parseLarkCard(metadata, fallback), LarkContentSource(transport))
+fun larkInteractivePart(metadata: JsonObject, fallback: String, transport: InboxAssistantTransport, messageId: String? = null): LarkPart.Card =
+    LarkPart.Card(parseLarkCard(metadata, fallback), LarkContentSource(transport), messageId)

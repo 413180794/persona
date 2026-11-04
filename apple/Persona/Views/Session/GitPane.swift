@@ -40,7 +40,7 @@ struct GitPane: View {
         .toolbar { MacRefreshItem(id: [machineID, cwd]) { await load() } } // no pull to refresh on the Mac
         #endif
         .task(id: cwd) { await load() }
-        .sheet(item: $diff) { t in GitDiffSheet(machineID: machineID, group: group, cwd: cwd, target: t) }
+        .sheet(item: $diff) { t in GitDiffSheet(machineID: machineID, group: group, cwd: cwd, root: status?.root, target: t) }
         .sheet(item: $commit) { c in GitCommitSheet(machineID: machineID, group: group, cwd: cwd, commit: c) }
         #if os(macOS) && DEBUG
         .onAppear {
@@ -305,9 +305,17 @@ struct GitDiffSheet: View {
     /// The group of hubs the machine is in (docs/multi-hub.md).
     var group: String = ""
     let cwd: String
+    /// The repository's root: the working tree's version of a file is read there (comparing, `CompareView`).
+    var root: String? = nil
     @State var target: GitDiffTarget
     @State private var diff: GitDiff?
     @State private var error: String?
+
+    /// A picture or a document the hub can give the versions of: compared instead of a text diff (docs/ios.md「对比」).
+    private var compares: DocumentText.Kind? {
+        guard model.features(group).contains("git_blob"), root != nil else { return nil }
+        return DocumentText.kind(target.file.name)
+    }
 
     var body: some View {
         NavigationStack {
@@ -317,7 +325,11 @@ struct GitDiffSheet: View {
                     .padding(.horizontal, Theme.Space.l)
                     .padding(.vertical, Theme.Space.s)
                 }
-                if let diff {
+                if let kind = compares, let root {
+                    CompareFileView(machine: MachineRef(group: group, id: machineID), cwd: cwd, root: root, file: target.file.path,
+                                    versions: .change(staged: target.staged), kind: kind)
+                        .id(target)
+                } else if let diff {
                     DiffText(diff: diff.diff, truncated: diff.truncated)
                 } else if let error {
                     ContentUnavailableView("读不到改动", systemImage: Theme.Icon.error, description: Text(error))
@@ -392,9 +404,16 @@ struct GitCommitSheet: View {
                     Section("\(show.files.count) 个文件") {
                         ForEach(show.files) { f in
                             NavigationLink {
-                                DiffText(diff: chunks[f.path] ?? "", truncated: show.truncated && chunks[f.path] == nil)
-                                    .navigationTitle(f.name)
-                                    .navigationBarTitleDisplayMode(.inline)
+                                Group {
+                                    if model.features(group).contains("git_blob"), let kind = DocumentText.kind(f.name) {
+                                        CompareFileView(machine: MachineRef(group: group, id: machineID), cwd: cwd, root: "", file: f.path,
+                                                        versions: .commit(commit.hash), kind: kind)
+                                    } else {
+                                        DiffText(diff: chunks[f.path] ?? "", truncated: show.truncated && chunks[f.path] == nil)
+                                    }
+                                }
+                                .navigationTitle(f.name)
+                                .navigationBarTitleDisplayMode(.inline)
                             } label: {
                                 GitFileRow(file: f, showsStage: false)
                             }

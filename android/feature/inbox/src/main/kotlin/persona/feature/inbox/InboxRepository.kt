@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.util.UUID
+import persona.core.contracts.LarkReaction
 import persona.core.contracts.api.ConnectionState
 import persona.core.contracts.api.MailTransport
 import persona.core.contracts.api.OutboxMessage
@@ -78,6 +79,11 @@ interface InboxRepository : persona.core.contracts.api.InboxRepository {
     suspend fun momentsPost(postId: String): persona.core.contracts.LarkMomentsPost = error("Moments post unavailable")
     suspend fun momentsComments(postId: String): List<persona.core.contracts.LarkMomentsComment> = emptyList()
     suspend fun urlPreview(messageId: String, url: String): persona.core.contracts.LarkUrlPreview? = null
+    suspend fun react(messageId: String, key: String, remove: Boolean) = Unit
+    suspend fun cardAction(messageId: String, actionId: String) = Unit
+    suspend fun userProfile(userId: String, feedId: String? = null): kotlinx.serialization.json.JsonObject? = null
+    suspend fun quickReactions(): List<String> = emptyList()
+    suspend fun emojis(): kotlinx.serialization.json.JsonObject? = null
 }
 
 data class InboxSnapshot(
@@ -193,17 +199,32 @@ data class LarkMessage(
     val isRead: Boolean = false,
     val replyCount: Long = 0,
     val thread: LarkThreadSource? = null,
+    val reactions: List<LarkReaction> = emptyList(),
 )
 
 data class LarkQuote(val id: String, val sender: String, val text: String)
 
+data class LarkForwardedMessage(
+    val id: String = "",
+    val senderName: String = "",
+    val senderAvatar: AuthenticatedLarkImage? = null,
+    val time: String = "",
+    val text: String = "",
+    val parts: List<LarkPart> = emptyList(),
+)
+
 sealed interface LarkPart {
     data class Text(val text: String, val source: LarkContentSource? = null) : LarkPart
-    data class Card(val content: LarkCardContent, val source: LarkContentSource) : LarkPart
+    data class Card(val content: LarkCardContent, val source: LarkContentSource, val messageId: String? = null) : LarkPart
     // Models may carry an authenticated Coil ImageRequest supplied by the data layer.
     data class Image(val model: Any, val description: String = "图片", val width: Int = 1, val height: Int = 1) : LarkPart
     data class File(val ref: String, val name: String, val mimeType: String = "application/octet-stream") : LarkPart
     data class External(val title: String, val larkUrl: String, val kind: String, val duration: String = "", val cover: Image? = null) : LarkPart
+    data class Code(val code: String, val language: String = "") : LarkPart
+    data class Audio(val ref: String, val durationMs: Long, val source: LarkContentSource? = null) : LarkPart
+    data class Video(val ref: String, val durationMs: Long, val cover: Image? = null, val source: LarkContentSource? = null) : LarkPart
+    data class Sticker(val model: Any, val description: String = "表情", val width: Int = 1, val height: Int = 1) : LarkPart
+    data class MergeForward(val title: String, val messages: List<LarkForwardedMessage>, val source: LarkContentSource? = null) : LarkPart
 }
 
 internal fun startsInboxItem(message: LarkMessage, previous: LarkMessage?, start: Long?): Boolean =

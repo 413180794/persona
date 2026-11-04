@@ -80,6 +80,21 @@ class LarkInboxRepository(
     override suspend fun refreshConversation(feedId: String) = safely(window(feedId)) { reconcile(window(feedId)) }
     override suspend fun loadOlder(feedId: String) = safely(window(feedId)) { page(window(feedId), older = true) }
     override suspend fun loadNewer(feedId: String) = safely(window(feedId)) { page(window(feedId), older = false) }
+    override suspend fun react(messageId: String, key: String, remove: Boolean) {
+        transports.value?.react(messageId, key, remove)
+    }
+    override suspend fun cardAction(messageId: String, actionId: String) {
+        transports.value?.cardAction(messageId, actionId)
+    }
+    override suspend fun userProfile(userId: String, feedId: String?): JsonObject? {
+        return transports.value?.userProfile(userId, feedId)
+    }
+    override suspend fun quickReactions(): List<String> {
+        return transports.value?.quickReactions() ?: emptyList()
+    }
+    override suspend fun emojis(): JsonObject? {
+        return transports.value?.emojis()
+    }
     override suspend fun latestConversation(feedId: String) {
         val w = window(feedId)
         w.lock.withLock {

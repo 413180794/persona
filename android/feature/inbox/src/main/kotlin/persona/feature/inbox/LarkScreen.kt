@@ -7,6 +7,8 @@ import persona.core.navigation.ConnectionSettingsRoute
 import androidx.compose.ui.platform.LocalDensity
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -14,11 +16,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.text.AnnotatedString
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
@@ -30,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import kotlinx.serialization.json.JsonObject
 import persona.core.chatlist.*
 import persona.core.navigation.Navigator
 import kotlinx.coroutines.CancellationException
@@ -94,6 +99,13 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
     SideEffect { store?.observe(displayed) }
     var thread by remember(route.feedId) { mutableStateOf<LarkMessage?>(null) }
     var more by remember { mutableStateOf(false) }
+    var profilePerson by remember { mutableStateOf<LarkPersonRef?>(null) }
+    var reactionPickerMessage by remember { mutableStateOf<LarkMessage?>(null) }
+    var forwardedDetail by remember { mutableStateOf<LarkPart.MergeForward?>(null) }
+    var videoPlayerUrl by remember { mutableStateOf<String?>(null) }
+    val customEmojis by produceState<JsonObject?>(null, repository) {
+        value = runCatching { repository.emojis() }.getOrNull()
+    }
     var editingDraft by remember { mutableStateOf(false) }
     var drafting by remember { mutableStateOf(false) }
     var handingOff by remember { mutableStateOf(false) }
@@ -108,6 +120,7 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
     val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     val focused = LocalWindowInfo.current.isWindowFocused
     val occluded = LocalLarkReadOccluded.current || thread != null || more || editingDraft || drafting || handingOff ||
+        profilePerson != null || reactionPickerMessage != null || forwardedDetail != null || videoPlayerUrl != null ||
         chatList.programmaticScroll
     val dragged by scroll.interactionSource.collectIsDraggedAsState()
     var interacted by remember(route) { mutableStateOf(false) }
@@ -189,6 +202,32 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
         }
     }
     thread?.let { root -> LarkThreadSheet(root, repository, onDismiss = { thread = null }) }
+    profilePerson?.let { person ->
+        LarkProfileSheet(person, repository, onDismiss = { profilePerson = null })
+    }
+    reactionPickerMessage?.let { msg ->
+        LarkReactionPicker(
+            message = msg,
+            onPick = { key ->
+                scope.launch {
+                    try {
+                        repository.react(msg.id, key, remove = false)
+                        repository.refreshConversation(route.feedId)
+                    } catch (e: Exception) {
+                        error = e.message ?: "回应失败"
+                    }
+                }
+            },
+            onDismiss = { reactionPickerMessage = null },
+            customEmojis = customEmojis
+        )
+    }
+    forwardedDetail?.let { fwd ->
+        LarkForwardedSheet(part = fwd, onDismiss = { forwardedDetail = null })
+    }
+    videoPlayerUrl?.let { url ->
+        LarkVideoPlayerDialog(url = url, onDismiss = { videoPlayerUrl = null })
+    }
     // AI 草拟 writes the reply to the item (sent with POST …/reply, confirmed first); the composer below stays the
     // user's own words for the chat, sent as typed.
     if (drafting && record != null) InboxDraftSheet(repository, record,
@@ -266,7 +305,22 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
                         LarkBubble(message, showsSender(message, previous, boundary || dateBoundary), repository,
                             modifier = Modifier.onGloballyPositioned { bounds[message.listKey()] = it.boundsInWindow() },
                             retrying = retrying[message.clientId] == true, onRetry = { retry(message) }, onError = { error = it },
-                            onThread = { thread = message })
+                            onThread = { thread = message },
+                            onProfile = { profilePerson = it },
+                            onReact = { msg, key, isMine ->
+                                scope.launch {
+                                    try {
+                                        repository.react(msg.id, key, remove = isMine)
+                                        repository.refreshConversation(route.feedId)
+                                    } catch (e: Exception) {
+                                        error = e.message ?: "回应失败"
+                                    }
+                                }
+                            },
+                            onOpenReactionPicker = { reactionPickerMessage = it },
+                            onOpenForward = { forwardedDetail = it },
+                            onPlayVideo = { videoPlayerUrl = it },
+                            feedId = route.feedId)
                     }
                 }
                 if (conversation.hasOlder) item("older") {
@@ -296,20 +350,80 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
 }
 
 @Composable
-internal fun LarkBubble(message: LarkMessage, showSender: Boolean, repository: InboxRepository, modifier: Modifier = Modifier, retrying: Boolean, onRetry: () -> Unit, onError: (String) -> Unit, onThread: (() -> Unit)? = null) {
+internal fun LarkBubble(
+    message: LarkMessage,
+    showSender: Boolean,
+    repository: InboxRepository,
+    modifier: Modifier = Modifier,
+    retrying: Boolean,
+    onRetry: () -> Unit,
+    onError: (String) -> Unit,
+    onThread: (() -> Unit)? = null,
+    onProfile: ((LarkPersonRef) -> Unit)? = null,
+    onReact: ((LarkMessage, String, Boolean) -> Unit)? = null,
+    onOpenReactionPicker: ((LarkMessage) -> Unit)? = null,
+    onOpenForward: ((LarkPart.MergeForward) -> Unit)? = null,
+    onPlayVideo: ((String) -> Unit)? = null,
+    feedId: String? = null,
+) {
     if (message.system) {
         TimelineMark(message.parts.filterIsInstance<LarkPart.Text>().joinToString("\n") { it.text }, modifier)
         return
     }
+    var menuExpanded by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
+
     val body: @Composable ColumnScope.() -> Unit = {
-        message.quote?.let { quote ->
-            JNotice(quote.text, title = quote.sender)
+        Box {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs),
+                modifier = Modifier.combinedClickable(
+                    onClick = {},
+                    onLongClick = { menuExpanded = true }
+                )
+            ) {
+                message.quote?.let { quote ->
+                    JNotice(quote.text, title = quote.sender)
+                }
+                message.parts.forEach { part ->
+                    LarkPartContent(
+                        part = part,
+                        repository = repository,
+                        onError = onError,
+                        onOpenForward = onOpenForward,
+                        onPlayVideo = onPlayVideo,
+                        onOpenProfile = { uid -> onProfile?.invoke(LarkPersonRef(uid, uid, null, feedId)) }
+                    )
+                }
+                if (message.edited) Text("已编辑", style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
+            }
+
+            LarkMessageActionMenu(
+                message = message,
+                expanded = menuExpanded,
+                onDismiss = { menuExpanded = false },
+                onReact = { key -> onReact?.invoke(message, key, false) },
+                onOpenPicker = { onOpenReactionPicker?.invoke(message) },
+                onOpenProfile = if (message.senderId.isNotBlank() && onProfile != null) ({
+                    onProfile(LarkPersonRef(message.senderId, message.senderName, message.avatar, feedId))
+                }) else null,
+                onCopy = {
+                    val textToCopy = message.parts.filterIsInstance<LarkPart.Text>().joinToString("\n") { it.text }
+                        .ifBlank { message.parts.filterIsInstance<LarkPart.Code>().joinToString("\n") { it.code } }
+                    clipboard.setText(AnnotatedString(textToCopy))
+                }
+            )
         }
-        message.parts.forEach { part -> LarkPartContent(part, repository, onError) }
-        if (message.edited) Text("已编辑", style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
     }
     val footer: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+            if (message.reactions.isNotEmpty() && onReact != null && onOpenReactionPicker != null) {
+                LarkReactionRow(
+                    reactions = message.reactions,
+                    onToggleReaction = { key, isMine -> onReact(message, key, isMine) },
+                    onOpenPicker = { onOpenReactionPicker(message) }
+                )
+            }
             if (message.mine) Text(larkTime(message.time), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
             if (message.bot) JTag("机器人")
             if (message.replyCount > 0 && onThread != null) {
@@ -336,12 +450,25 @@ internal fun LarkBubble(message: LarkMessage, showSender: Boolean, repository: I
     if (message.mine) UserBubbleFrame(modifier, footer = footer, content = body)
     else IncomingBubbleFrame(modifier, author = message.senderName.takeIf { showSender },
         time = larkTime(message.time).takeIf { showSender }, avatar = {
-            LarkAvatar(message.senderName.ifBlank { if (message.bot) "机器人" else "信" }, message.avatar)
+            Box(Modifier.clickable {
+                if (message.senderId.isNotBlank() && onProfile != null) {
+                    onProfile(LarkPersonRef(message.senderId, message.senderName, message.avatar, feedId))
+                }
+            }) {
+                LarkAvatar(message.senderName.ifBlank { if (message.bot) "机器人" else "信" }, message.avatar)
+            }
         }, footer = footer, content = body)
 }
 
 @Composable
-internal fun LarkPartContent(part: LarkPart, repository: InboxRepository, onError: (String) -> Unit) {
+internal fun LarkPartContent(
+    part: LarkPart,
+    repository: InboxRepository,
+    onError: (String) -> Unit = {},
+    onOpenForward: ((LarkPart.MergeForward) -> Unit)? = null,
+    onPlayVideo: ((String) -> Unit)? = null,
+    onOpenProfile: ((String) -> Unit)? = null,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var opening by remember { mutableStateOf(false) }
@@ -354,9 +481,14 @@ internal fun LarkPartContent(part: LarkPart, repository: InboxRepository, onErro
                     open?.invoke(part.text, part.source)
                 })
             } else {
-                LarkLinkedText(part.text, part.source)
+                LarkRichInlineText(part.text, source = part.source, onOpenProfile = onOpenProfile)
             }
         }
+        is LarkPart.Code -> LarkCodeBlock(part.code, part.language)
+        is LarkPart.Audio -> LarkVoiceView(part)
+        is LarkPart.Video -> LarkVideoView(part, onPlay = { onPlayVideo?.invoke(part.ref) })
+        is LarkPart.Sticker -> LarkStickerView(part)
+        is LarkPart.MergeForward -> LarkMergeForwardCard(part, onClick = { onOpenForward?.invoke(part) })
         is LarkPart.Card -> LarkInteractiveCard(part, repository, onError)
         is LarkPart.Image -> {
             var failed by remember(part.model) { mutableStateOf(false) }
@@ -389,7 +521,7 @@ internal fun LarkPartContent(part: LarkPart, repository: InboxRepository, onErro
             }
         })
         is LarkPart.External -> Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            part.cover?.let { LarkPartContent(it, repository, onError) }
+            part.cover?.let { LarkPartContent(it, repository, onError, onOpenForward, onPlayVideo, onOpenProfile) }
             Text(listOf(when (part.kind) { "video" -> "视频"; "audio" -> "语音"; else -> "卡片" }, part.title, part.duration).filter { it.isNotBlank() }.joinToString("，"), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
             JButton(text = "在飞书中打开", onClick = {
                 try {

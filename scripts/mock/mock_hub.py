@@ -29,7 +29,7 @@ def features():
     # Match proto.Features, retaining the existing terminal fixture switches.
     return ["error_codes", "client_hello", "heartbeat", "app_ping", "client_msg_id", "send_refusals",
             "screen_dialog", "resumable_interactions", "secret_prompts", "request_id", "file_upload",
-            "tls", "endpoints", "connectors", "lark_attachments", "file_stream", "file_thumb"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (
+            "tls", "endpoints", "connectors", "lark_attachments", "file_stream", "file_thumb", "git_blob"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (
                 ["terminal_control", "terminal_scroll", "terminal_click"] if TERMINAL_CONTROL else [])
 
 
@@ -7477,7 +7477,7 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"path": blob, "size": len(FILES[blob])} if blob and q.get("rev", [""])[0] in ("HEAD", "INDEX") else {"missing": True})
         if p.startswith("/api/v1/machines/") and p.endswith("/file/thumb"):  # node file.thumb: a drawn stand-in for a HEIC
             if not q.get("path", [""])[0].lower().endswith((".heic", ".heif")):
-                return self.send_json({"error": "no thumbnail", "code": "no_thumbnail"}, 404)
+                return self.file_thumb(p, q)  # the rest drawn by Quick Look, as a Mac node does (the Files tab's thumbnails)
             body = _page_png(768, 1024)
             self.send_response(200)
             self.send_header("Content-Type", "image/png")
