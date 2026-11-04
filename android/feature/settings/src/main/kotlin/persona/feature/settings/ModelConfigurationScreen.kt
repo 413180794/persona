@@ -8,6 +8,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import persona.core.contracts.api.ModelConfiguration
 import persona.core.contracts.api.ModelPurpose
+import persona.core.contracts.api.ProviderSetup
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.core.navigation.LocalDetailKey
@@ -19,7 +20,7 @@ import kotlinx.coroutines.launch
  * catalog; a row opens that use's page.
  */
 @Composable
-internal fun ModelConfigurationPage(models: ModelConfiguration?, onBack: () -> Unit, onPurpose: (String) -> Unit) {
+internal fun ModelConfigurationPage(models: ModelConfiguration?, onBack: () -> Unit, onPurpose: (String) -> Unit, providers: ProviderSetup? = null) {
     if (models == null) {
         JListPage(title = "模型配置", onBack = onBack) { item { JNotice("体验模式没有 hub 的模型配置。") } }
         return
@@ -28,12 +29,22 @@ internal fun ModelConfigurationPage(models: ModelConfiguration?, onBack: () -> U
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
+    // 新增模型供应商 opens over this page (`debug.newProvider` opens it for captures).
+    var adding by remember { mutableStateOf<String?>(if (providers != null) NewProviderPreview.take() else null) }
     LaunchedEffect(model) { model.load() }
+    if (adding != null && providers != null) {
+        NewProviderPage(providers, onBack = { adding = null }, onSaved = { adding = null; scope.launch { model.load() } },
+            preferPreset = adding == "preset")
+        return
+    }
     val catalog = state.catalog
     val groups = catalog?.let { modelPurposeGroups(it.purposes, it.providers, query) }.orEmpty()
     val detail = LocalDetailKey.current
     JListPage(title = "模型配置", onBack = onBack, refreshing = state.loading && catalog != null, onRefresh = { scope.launch { model.load() } },
-        actions = { JIconButton(PhIcons.ArrowClockwise, "刷新", { scope.launch { model.load() } }, enabled = !state.loading) }) {
+        actions = {
+            if (providers != null) JIconButton(PhIcons.Plus, "新增模型供应商", { adding = "manual" })
+            JIconButton(PhIcons.ArrowClockwise, "刷新", { scope.launch { model.load() } }, enabled = !state.loading)
+        }) {
         item("search") {
             Column(Modifier.padding(top = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                 JSearchField(query, { query = it }, "搜索用途或模型")
@@ -68,7 +79,7 @@ internal fun ModelConfigurationPage(models: ModelConfiguration?, onBack: () -> U
 
 /** One AI use: what is in effect, and its own provider, model and effort (blank: inherit). */
 @Composable
-fun ModelPurposePage(models: ModelConfiguration?, purposeId: String, onBack: () -> Unit) {
+fun ModelPurposePage(models: ModelConfiguration?, purposeId: String, onBack: () -> Unit, providers: ProviderSetup? = null) {
     if (models == null) {
         JListPage(title = "模型配置", onBack = onBack) { item { JNotice("体验模式没有 hub 的模型配置。") } }
         return
@@ -79,8 +90,14 @@ fun ModelPurposePage(models: ModelConfiguration?, purposeId: String, onBack: () 
     val feedback = LocalAppFeedback.current
     var choosingProvider by remember { mutableStateOf(false) }
     var pickingModel by remember { mutableStateOf(false) }
+    var adding by remember { mutableStateOf(false) }
     LaunchedEffect(model) { model.load() }
     LaunchedEffect(model, state.listProvider) { model.loadModels() }
+    if (adding && providers != null) {
+        // A provider added from here is picked for this use (the edit is kept; saving is still the user's).
+        NewProviderPage(providers, onBack = { adding = false }, onSaved = { id -> adding = false; scope.launch { model.providerAdded(id) } })
+        return
+    }
     fun save(restore: Boolean) {
         scope.launch { model.save(restore)?.let { notice -> feedback?.notice(notice); onBack() } }
     }
@@ -120,7 +137,9 @@ fun ModelPurposePage(models: ModelConfiguration?, purposeId: String, onBack: () 
     }
     if (choosingProvider && purpose != null) JActionSheet(providerOptions(purpose, state.detail?.providers.orEmpty(), state.draft.provider).map { option ->
         JAction(option.label, checked = option.id == state.draft.provider, onClick = { model.edit(state.draft.choosingProvider(option.id)) })
-    }, { choosingProvider = false }, title = "模型供应商")
+    } + listOfNotNull(providers?.let {
+        JAction("新增模型供应商…", icon = PhIcons.Plus, separatorBefore = true, onClick = { adding = true })
+    }), { choosingProvider = false }, title = "模型供应商")
 }
 
 private fun androidx.compose.foundation.lazy.LazyListScope.effective(purpose: ModelPurpose, state: ModelPurposeState) {

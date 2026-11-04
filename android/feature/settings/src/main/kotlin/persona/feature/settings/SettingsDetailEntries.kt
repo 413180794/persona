@@ -18,7 +18,8 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
             onDone = navigator::back, onBack = navigator::back)
     }
     entry<ModelPurposeRoute> { route ->
-        ModelPurposePage(services.models.takeUnless { demo }, route.purposeId, onBack = navigator::back)
+        ModelPurposePage(services.models.takeUnless { demo }, route.purposeId, onBack = navigator::back,
+            providers = services.providers.takeUnless { demo })
     }
     entry<PluginRoute> { route ->
         PluginPage(services.plugins.takeUnless { demo }, route.pluginId, onBack = navigator::back)

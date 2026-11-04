@@ -9,6 +9,7 @@ import persona.core.contracts.api.*
 import persona.core.hub.HttpMachineManagement
 import persona.core.hub.HttpModelConfiguration
 import persona.core.hub.HttpPluginManagement
+import persona.core.hub.HttpProviderSetup
 import persona.core.hub.HubError
 import persona.core.hub.HubFailure
 import persona.core.hub.OkHttpHubConnection
@@ -49,6 +50,13 @@ object MachineManagementModule {
         override suspend fun purpose(id: String) = api().purpose(id)
         override suspend fun save(purpose: ModelPurpose, draft: ModelConfigurationDraft) = api().save(purpose, draft)
         override suspend fun providerModels(provider: String, refresh: Boolean, machine: String?) = api().providerModels(provider, refresh, machine)
+    }
+
+    // 新增模型供应商 from 模型配置: the selected group's hub keeps the provider.
+    @Provides @Singleton fun providers(runtime: ConnectionRuntime): ProviderSetup = object : ProviderSetup {
+        private fun api() = HttpProviderSetup(runtime.connection())
+        override suspend fun presets() = api().presets()
+        override suspend fun add(provider: NewProvider) = api().add(provider)
     }
 
     // A hub-level page too: the selected group's plugins.

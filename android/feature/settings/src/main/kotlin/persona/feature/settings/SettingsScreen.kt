@@ -122,9 +122,11 @@ private fun SettingsContent(
             footer = { onDemo?.let { Action("没有 hub？先体验一下", onClick = it) }; deviceFeedback() },
             machines = services.machines.takeUnless { services.demo })
         "claude" -> ClaudeSettingsPage(services.sessions, services.machines.takeUnless { services.demo }, back)
-        "models" -> purpose?.let { id -> ModelPurposePage(services.models.takeUnless { services.demo }, id, onBack = { purpose = null }) }
+        "models" -> purpose?.let { id -> ModelPurposePage(services.models.takeUnless { services.demo }, id, onBack = { purpose = null },
+                providers = services.providers.takeUnless { services.demo }) }
             ?: ModelConfigurationPage(services.models.takeUnless { services.demo }, back,
-                onPurpose = { id -> onNavigate?.invoke(persona.core.navigation.ModelPurposeRoute(id)) ?: run { purpose = id } })
+                onPurpose = { id -> onNavigate?.invoke(persona.core.navigation.ModelPurposeRoute(id)) ?: run { purpose = id } },
+                providers = services.providers.takeUnless { services.demo })
         "plugins" -> plugin?.let { id -> PluginPage(services.plugins.takeUnless { services.demo }, id, onBack = { plugin = null }) }
             ?: PluginsPage(services.plugins.takeUnless { services.demo }, back,
                 onPlugin = { id -> onNavigate?.invoke(persona.core.navigation.PluginRoute(id)) ?: run { plugin = id } })

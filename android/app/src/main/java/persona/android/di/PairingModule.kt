@@ -33,11 +33,11 @@ object PairingModule {
     @Provides @Singleton fun settings(
         pairing: PairingService, connection: HubConnection, sessions: SessionsRepository,
         updates: AppUpdates, diagnostics: SettingsDiagnostics, devices: WiredDeviceSettings, runtime: ConnectionRuntime,
-        machines: MachineManagement, models: ModelConfiguration, plugins: PluginManagement,
+        machines: MachineManagement, models: ModelConfiguration, plugins: PluginManagement, providers: ProviderSetup,
         platform: persona.android.platform.PlatformPairing,
     ) = SettingsServices(pairing, connection, sessions, updates, diagnostics, binding = devices.binding,
         // Explicit: the runtime cannot be a ConnectionEndpoints itself (its HubConnection.state has another type).
-        disconnect = { pairing.unpair() }, endpoints = runtime.endpoints, machines = machines, models = models, plugins = plugins,
+        disconnect = { pairing.unpair() }, endpoints = runtime.endpoints, machines = machines, models = models, plugins = plugins, providers = providers,
         hubs = runtime.hubGroups, addHub = platform.adding)
 }
 

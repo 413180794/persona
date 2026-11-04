@@ -45,6 +45,8 @@ data class SettingsServices(
     val machines: MachineManagement? = null,
     /** 设置 › 模型配置 on the paired hub; null in 体验模式. */
     val models: ModelConfiguration? = null,
+    /** 新增模型供应商 (from 模型配置) on the paired hub; null in 体验模式. */
+    val providers: ProviderSetup? = null,
     /** 设置 › 插件 on the paired hub; null in 体验模式. */
     val plugins: PluginManagement? = null,
     /** The phone's hub groups (settings › hub); null where there is no real pairing (体验模式). */

@@ -119,6 +119,24 @@ internal class ModelPurposeModel(private val api: ModelConfiguration, private va
 
     fun edit(draft: ModelConfigurationDraft) = mutable.update { if (it.busy) it else it.copy(draft = draft) }
 
+    /**
+     * A provider was just added (新增模型供应商 from the provider sheet): the providers are read again, the edit kept, and
+     * the new one picked when this use can take it.
+     */
+    suspend fun providerAdded(providerId: String) {
+        if (state.value.busy) return
+        mutable.update { it.copy(busy = true, error = null) }
+        try {
+            val detail = api.purpose(id)
+            mutable.update { s ->
+                val usable = detail.purpose.providersFrom(detail.providers).any { it.id == providerId }
+                s.copy(detail = detail, draft = if (usable) s.draft.choosingProvider(providerId) else s.draft)
+            }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) { mutable.update { it.copy(error = "读取失败：${failureReason(error)}") } }
+        finally { mutable.update { it.copy(busy = false) } }
+    }
+
     /** The /model list of [ModelPurposeState.listProvider] (again with [refresh]); a provider without one clears it. */
     suspend fun loadModels(refresh: Boolean = false) {
         val provider = state.value.listProvider
