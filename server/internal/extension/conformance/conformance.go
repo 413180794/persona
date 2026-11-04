@@ -1,7 +1,8 @@
-// Package conformance holds a plugin program to the plugin protocol (docs/plugins.md「一致性测试」): the handshake,
+// Package conformance holds a plugin program to the plugin protocol (docs/extensions.md「一致性测试」): the handshake,
 // the error codes, the shape of what it answers, and that it exits when the hub goes away. A program written in any
 // language can be held to it with Program; one in Go with Serve. What each extension point's methods answer is
 // checked by that point's own tests (connector/conformance for connectors); a ui contribution's View is checked here.
+// What the handshake and a View hold is checked against schema/extension (wire.Validate), the apps' own truth.
 package conformance
 
 import (
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/extension/serve"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -102,6 +104,9 @@ func Check(t testing.TB, m *extension.Manifest, run Run, init extension.Initiali
 		t.Fatalf("initialize: %v", err)
 	}
 	snakeKeys(t, "initialize", raw, 0)
+	if err := wire.ValidateJSON("InitializeResult", raw); err != nil {
+		t.Fatalf("initialize: the answer does not hold to the schema: %v", err)
+	}
 	var res extension.InitializeResult
 	if err := json.Unmarshal(raw, &res); err != nil {
 		t.Fatalf("initialize: %v", err)

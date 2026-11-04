@@ -126,7 +126,7 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
 
 ## 飞书：lark-connector skill（2026-10-30）
 
-> **2026-11-04 起（#1468）**：闸门是通用的「命令闸门」：命令名、脚本、凭据、规则都由插件的 `assistant.gate` 给（`docs/plugins.md`「助手」），
+> **2026-11-04 起（#1468）**：闸门是通用的「命令闸门」：命令名、脚本、凭据、规则都由插件的 `assistant.gate` 给（`docs/extensions.md`「助手」），
 > node 里不再有 lark-connector 的默认规则；装了经 lark-connector 接飞书的插件时 `ol` 的闸门和凭据来自插件，没装时 hub 自己的 lark-connector 合成同样的闸门（3c 删掉）。
 > 下面说的行为（读放行、别人看得到的写在手机上确认、拒绝 token / 直接 curl）不变。3c（#1520）之后 hub 不再合成这个闸门，lark-connector 技能、
 > 闸门规则和凭据只来自插件；仓库里的 `skills/lark-connector` 副本和同步脚本已删。

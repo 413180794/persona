@@ -8,7 +8,7 @@ Persona 和它驱动的 Agent 要用户回答、批准的，以文字发到微�
 
 ## 为什么做成插件
 
-只对一个服务有意义的东西做成插件（`docs/plugins.md`），不往 hub 里加：它是 personad 旁边的单独程序 `jarvisd-wechat`，和 Telegram 的一样注册成**内置插件**
+只对一个服务有意义的东西做成插件（`docs/extensions.md`），不往 hub 里加：它是 personad 旁边的单独程序 `jarvisd-wechat`，和 Telegram 的一样注册成**内置插件**
 `wechat`（同一次构建发布、自动更新时一起换，`version -v` 和 hub 不一样就不启动）。它是一个**渠道**（`docs/channels.md`）：程序只管和微信说话，
 「消息进哪个对话、等这一轮答完、答案发回、Agent 的提问」都是 hub 的统一管线（和飞书机器人是同一份）。
 

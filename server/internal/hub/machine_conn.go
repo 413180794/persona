@@ -284,7 +284,7 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	m.hub.broadcastMachines()
 	m.hub.connectors.MachineOnline(m.cfg.ID)
 	go m.hub.refreshComputer(ctx, m)    // only when the plugin cua is on for it (computer.go)
-	go m.hub.tellNoLock(ctx, m)         // 「插件开着时不自动锁屏」 (computer_nolock.go)
+	go m.hub.tellNoLock(ctx, m)         // 「扩展开着时不自动锁屏」 (computer_nolock.go)
 	go m.hub.tellCursor(ctx, m)         // 「显示 Agent 的光标」 (computer_cursor.go)
 	go m.hub.refreshBrowser(ctx, m)     // and ego (browser.go)
 	go m.hub.syncExtensionNodes(ctx, m) // plugins' programs on this computer (extension_nodes.go)

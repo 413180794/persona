@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// The quota extension point (docs/plugins.md「额度」): a plugin contributing quota answers quota.query with a
+// The quota extension point (docs/extensions.md「额度」): a plugin contributing quota answers quota.query with a
 // quota.Report, sending what it needs to the launcher's gateway through quota.http. Those requests are only taken
 // while the query runs, from the plugin it was asked of, and go out through whoever holds the key (quotaSender).
 

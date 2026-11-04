@@ -13,10 +13,10 @@ import (
 
 // A source's own triage rules (#1644) for jarvis_settings: a plugin whose settings declare triage_rules (a string at the
 // top of its schema) sends them as its inbox things' rules, which replace inbox.rules for its items. The entry reads
-// and writes that setting the way 设置 › 插件 does (the registry's SetConfig: held to the schema, the plugin restarts).
+// and writes that setting the way 设置 › 扩展 does (the registry's SetConfig: held to the schema, the plugin restarts).
 // The hub's own connectors (GitHub, iMessage) carry no rules yet.
 
-// triageRulesField is the plugin setting that holds a source's triage rules (docs/plugins.md「约定的设置项」).
+// triageRulesField is the plugin setting that holds a source's triage rules (docs/extensions.md「约定的设置项」).
 const triageRulesField = "triage_rules"
 
 // sourceRulesSettings is one entry per plugin that declares triage_rules.

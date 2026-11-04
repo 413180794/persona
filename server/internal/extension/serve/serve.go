@@ -1,4 +1,4 @@
-// Package serve is a plugin program's side of the plugin protocol (docs/plugins.md「进程插件协议」): it answers
+// Package serve is a plugin program's side of the plugin protocol (docs/extensions.md「进程扩展协议」): it answers
 // initialize and ping and hands each namespaced call (connector.status, …) to the handler of its namespace. A
 // third party's program written in Go can use it as is; one in another language does the same on the wire and is
 // held to it by plugin/conformance.

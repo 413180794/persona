@@ -603,7 +603,7 @@ func TestBuiltinYieldsToAnInstalledOne(t *testing.T) {
 	}
 	pkg := t.TempDir()
 	writePackage(t, pkg, nil) // example-notes 1.2.0
-	if _, err := r.Preview(ctx, pkg, ""); err == nil || !strings.Contains(err.Error(), "已经有一个叫 example-notes 的插件") {
+	if _, err := r.Preview(ctx, pkg, ""); err == nil || !strings.Contains(err.Error(), "已经有一个叫 example-notes 的扩展") {
 		t.Fatal("a built-in that does not yield keeps its id:", err)
 	}
 	r.Yields("example-notes")

@@ -194,7 +194,8 @@ func adminPath(p string) bool {
 // one too), same-origin fetch metadata, an Origin of this host.
 func adminWriteCheck(r *http.Request) (string, error) {
 	ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
-	upload := r.Method == http.MethodPost && path.Clean(r.URL.Path) == adminUploadPath && strings.HasPrefix(ct, "application/octet-stream")
+	p := path.Clean(r.URL.Path)
+	upload := r.Method == http.MethodPost && (p == adminUploadPath || p == legacyAdminUploadPath) && strings.HasPrefix(ct, "application/octet-stream")
 	if !strings.HasPrefix(ct, "application/json") && !upload {
 		return "csrf", errors.New("writes must be application/json")
 	}

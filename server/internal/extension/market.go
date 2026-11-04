@@ -20,12 +20,16 @@ import (
 	"time"
 )
 
-// Plugin markets (docs/plugins.md「插件市场」): a repository or a website publishes an index of its plugins,
-// persona-plugins.json; a hub that registered the market lists them, and installs one by downloading its package and
+// Plugin markets (docs/extensions.md「扩展市场」): a repository or a website publishes an index of its plugins,
+// persona-extensions.json (formerly persona-plugins.json); a hub that registered the market lists them, and installs one by downloading its package and
 // checking it against the sha256 the index pins.
 
-// IndexFile is a market's index, at the root of a repository or of a website's path.
-const IndexFile = "persona-plugins.json"
+// IndexFile is a market's index, at the root of a repository or of a website's path; LegacyIndexFile is its name
+// before #1844, read when a market has no IndexFile (docs/extensions.md「命名和兼容」).
+const (
+	IndexFile       = "persona-extensions.json"
+	LegacyIndexFile = "persona-plugins.json"
+)
 
 // Limits of a market.
 const (
@@ -50,7 +54,7 @@ type MarketSpec struct {
 var githubName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$`)
 
 // ParseMarket reads github:owner/repo[@ref], or an https URL: of the index itself (ending in .json) or of the
-// directory it is in (persona-plugins.json is added).
+// directory it is in (persona-extensions.json is added).
 func ParseMarket(s string) (MarketSpec, error) {
 	s = strings.TrimSpace(s)
 	if spec, ok, err := parseGit(s); ok {
@@ -118,13 +122,31 @@ func MarketID(s MarketSpec) string {
 	return hex.EncodeToString(sum[:5])
 }
 
-// MarketIndex is persona-plugins.json.
+// MarketIndex is persona-extensions.json (or the older persona-plugins.json).
 type MarketIndex struct {
-	MarketVersion int           `json:"market_version"`
-	Name          string        `json:"name"`
-	Description   string        `json:"description,omitempty"`
-	Homepage      string        `json:"homepage,omitempty"`
-	Extensions    []MarketEntry `json:"plugins"`
+	MarketVersion int    `json:"market_version"`
+	Name          string `json:"name"`
+	Description   string `json:"description,omitempty"`
+	Homepage      string `json:"homepage,omitempty"`
+	// Extensions are "extensions" in an index; the old key "plugins" is read too, and still the one written out (the
+	// hub keeps the index it read, which a hub rolled back to a build before #1844 reads again).
+	Extensions []MarketEntry `json:"plugins"`
+}
+
+func (ix *MarketIndex) UnmarshalJSON(data []byte) error {
+	type plain MarketIndex
+	var v struct {
+		plain
+		Current []MarketEntry `json:"extensions"`
+	}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	*ix = MarketIndex(v.plain)
+	if v.Current != nil {
+		ix.Extensions = v.Current
+	}
+	return nil
 }
 
 // MarketEntry is one plugin of a market: its manifest (so the permissions are known before downloading) and its
@@ -155,7 +177,7 @@ func ParseIndex(data []byte) (*MarketIndex, []string, error) {
 	}
 	var ix MarketIndex
 	if err := json.Unmarshal(data, &ix); err != nil {
-		return nil, nil, fmt.Errorf("不是插件市场的索引：%v", err)
+		return nil, nil, fmt.Errorf("不是扩展市场的索引：%v", err)
 	}
 	if ix.MarketVersion != 1 {
 		return nil, nil, fmt.Errorf("索引的 market_version 是 %d，这个 hub 只认 1", ix.MarketVersion)
@@ -171,7 +193,7 @@ func ParseIndex(data []byte) (*MarketIndex, []string, error) {
 		ix.Homepage = ""
 	}
 	if len(ix.Extensions) > IndexExtensionsMost {
-		return nil, nil, fmt.Errorf("索引里多于 %d 个插件", IndexExtensionsMost)
+		return nil, nil, fmt.Errorf("索引里多于 %d 个扩展", IndexExtensionsMost)
 	}
 	var warnings []string
 	seen := map[string]bool{}
@@ -180,9 +202,9 @@ func ParseIndex(data []byte) (*MarketIndex, []string, error) {
 		m, err := e.check()
 		switch {
 		case err != nil:
-			warnings = append(warnings, fmt.Sprintf("第 %d 个插件：%v", i+1, err))
+			warnings = append(warnings, fmt.Sprintf("第 %d 个扩展：%v", i+1, err))
 		case seen[m.ID]:
-			warnings = append(warnings, fmt.Sprintf("插件 %s 出现了两次，只用第一个", m.ID))
+			warnings = append(warnings, fmt.Sprintf("扩展 %s 出现了两次，只用第一个", m.ID))
 		default:
 			seen[m.ID] = true
 			e.Parsed = m
@@ -291,8 +313,10 @@ func (m *Market) get(ctx context.Context, u, accept string, w io.Writer, limit i
 	defer res.Body.Close()
 	switch {
 	case res.StatusCode == http.StatusNotFound && m.Token == "":
-		return errors.New("找不到（404）：地址不对，或者是私有的，要填 token")
-	case res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden || res.StatusCode == http.StatusNotFound:
+		return notFound{errors.New("找不到（404）：地址不对，或者是私有的，要填 token")}
+	case res.StatusCode == http.StatusNotFound:
+		return notFound{errors.New("没有权限（HTTP 404）：token 不对或没有读这个仓库的权限")}
+	case res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden:
 		return fmt.Errorf("没有权限（HTTP %d）：token 不对或没有读这个仓库的权限", res.StatusCode)
 	case res.StatusCode != http.StatusOK:
 		return fmt.Errorf("HTTP %d", res.StatusCode)
@@ -311,6 +335,11 @@ func (m *Market) origin() string {
 	}
 	return m.Spec.URL
 }
+
+// notFound is a 404 from a market: for an index, the hub then tries its old name.
+type notFound struct{ error }
+
+func (e notFound) Unwrap() error { return e.error }
 
 func sameOrigin(a, b string) bool {
 	ua, err1 := url.Parse(a)
@@ -350,12 +379,22 @@ func (m *Market) Fetch(ctx context.Context) (*MarketIndex, []string, error) {
 			return nil, nil, errors.New("git 市场用 hub 机器自己的凭据（SSH key），不收 token")
 		}
 		if err = m.syncGit(ctx); err == nil {
-			err = m.gitFile(IndexFile, &b, IndexMost)
+			if err = m.gitFile(IndexFile, &b, IndexMost); errors.Is(err, os.ErrNotExist) {
+				b.Reset()
+				err = m.gitFile(LegacyIndexFile, &b, IndexMost)
+			}
 		}
 	} else if m.Spec.Kind == "github" {
-		err = m.get(ctx, m.contentsURL(IndexFile), "application/vnd.github.raw", &b, IndexMost)
+		if err = m.get(ctx, m.contentsURL(IndexFile), "application/vnd.github.raw", &b, IndexMost); errors.As(err, new(notFound)) {
+			b.Reset()
+			err = m.get(ctx, m.contentsURL(LegacyIndexFile), "application/vnd.github.raw", &b, IndexMost)
+		}
 	} else {
 		err = m.get(ctx, m.Spec.URL, "application/json", &b, IndexMost)
+		if legacy, ok := strings.CutSuffix(m.Spec.URL, "/"+IndexFile); ok && errors.As(err, new(notFound)) {
+			b.Reset()
+			err = m.get(ctx, legacy+"/"+LegacyIndexFile, "application/json", &b, IndexMost)
+		}
 	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("读不到 %s：%w", m.Spec, err)

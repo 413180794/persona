@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extension"
 )
 
-// Plugin markets (docs/plugins.md「插件市场」): the hub keeps the markets the user registered and their indexes, lists
+// Plugin markets (docs/extensions.md「扩展市场」): the hub keeps the markets the user registered and their indexes, lists
 // their plugins as one catalog, and installs one from a market. A device with full rights may do all of this; other
 // sources (a directory, a file, a URL, an upload) stay with the hub's machine and the admin UI.
 
@@ -44,7 +44,7 @@ type MarketView struct {
 	Description string     `json:"description,omitempty"`
 	Homepage    string     `json:"homepage,omitempty"`
 	HasToken    bool       `json:"has_token"`
-	Extensions  int        `json:"plugins"`
+	Extensions  int        `json:"extensions"`
 	Warnings    []string   `json:"warnings"`
 	Error       string     `json:"error,omitempty"`
 	FetchedAt   *time.Time `json:"fetched_at,omitempty"`
@@ -90,7 +90,7 @@ func (h *Hub) marketsState() *markets {
 func (h *Hub) marketsLoad(ctx context.Context) error {
 	ms, st := h.marketsState(), h.marketStore()
 	if ms == nil || st == nil {
-		return errors.New("这个 hub 没有数据库：用不了插件市场")
+		return errors.New("这个 hub 没有数据库：用不了扩展市场")
 	}
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
@@ -173,7 +173,7 @@ func mustJSON(v any) []byte {
 var errNoMarket = errors.New("没有这个市场")
 
 // marketsDir is where git markets' clones are kept.
-func (h *Hub) marketsDir() string { return filepath.Join(h.extensions.dir, "plugins", "markets") }
+func (h *Hub) marketsDir() string { return filepath.Join(h.extensions.root, "markets") }
 
 func marketView(s *marketState) MarketView {
 	v := MarketView{ID: s.rec.ID, Spec: s.rec.Spec, Name: s.rec.Name, HasToken: s.rec.TokenSealed != "", Warnings: s.rec.Warnings,
@@ -217,7 +217,7 @@ func (h *Hub) marketAdd(ctx context.Context, specText, token string) (MarketView
 	id := extension.MarketID(spec)
 	ms := h.marketsState()
 	ms.mu.Lock()
-	n, dup := len(ms.byID), ms.byID[id] != nil
+	n, dup := len(ms.byID), ms.byID[id] != nil || ms.withSpec(spec.String()) != nil
 	ms.mu.Unlock()
 	if dup {
 		return MarketView{}, errors.New("已经登记过这个市场")
@@ -245,6 +245,85 @@ func (h *Hub) marketAdd(ctx context.Context, specText, token string) (MarketView
 	ms.byID[id] = s
 	ms.mu.Unlock()
 	h.logf("plugin market %s added: %s (%d plugins)", id, rec.Spec, len(ix.Extensions))
+	return marketView(s), nil
+}
+
+// marketToken is the token market id was registered with (empty when it has none).
+func (h *Hub) marketToken(id string) (string, error) {
+	ms := h.marketsState()
+	ms.mu.Lock()
+	s := ms.byID[id]
+	ms.mu.Unlock()
+	if s == nil {
+		return "", errNoMarket
+	}
+	if s.rec.TokenSealed == "" {
+		return "", errors.New("那个市场没有 token")
+	}
+	mk, err := h.market(s.rec)
+	if err != nil {
+		return "", err
+	}
+	return mk.Token, nil
+}
+
+// withSpec is the market registered at spec (ms.mu held).
+func (ms *markets) withSpec(spec string) *marketState {
+	for _, s := range ms.byID {
+		if s.rec.Spec == spec {
+			return s
+		}
+	}
+	return nil
+}
+
+// marketSetSpec moves market id to another address, keeping its id: what was installed from it (source
+// market:<id>/<extension>) stays its own, upgrades and all. The new address is read once first, with the market's
+// token; one that cannot be read changes nothing.
+func (h *Hub) marketSetSpec(ctx context.Context, id, specText string) (MarketView, error) {
+	if err := h.marketsLoad(ctx); err != nil {
+		return MarketView{}, err
+	}
+	spec, err := extension.ParseMarket(specText)
+	if err != nil {
+		return MarketView{}, err
+	}
+	ms := h.marketsState()
+	ms.mu.Lock()
+	s := ms.byID[id]
+	other := ms.withSpec(spec.String())
+	ms.mu.Unlock()
+	if s == nil {
+		return MarketView{}, errNoMarket
+	}
+	if other != nil && other != s {
+		return MarketView{}, errors.New("另一个市场已经是这个地址")
+	}
+	old, err := h.market(s.rec)
+	if err != nil {
+		return MarketView{}, err
+	}
+	mk := &extension.Market{Spec: spec, Token: old.Token, Client: ms.client, GitHubAPI: ms.githubAPI, Dir: h.marketsDir()}
+	ix, warnings, err := mk.Fetch(ctx)
+	if err != nil {
+		return MarketView{}, err
+	}
+	now := time.Now()
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	if s = ms.byID[id]; s == nil {
+		return MarketView{}, errNoMarket
+	}
+	rec := s.rec
+	rec.Spec, rec.Name, rec.Index, rec.Warnings, rec.Error, rec.FetchedAt = spec.String(), ix.Name, mustJSON(ix), warnings, "", &now
+	if err := h.marketStore().PutExtensionMarket(ctx, rec); err != nil {
+		return MarketView{}, err
+	}
+	if old.Spec.String() != spec.String() {
+		old.RemoveCheckout()
+	}
+	s.rec, s.index = rec, ix
+	h.logf("extension market %s moved: %s", id, rec.Spec)
 	return marketView(s), nil
 }
 
@@ -332,12 +411,12 @@ func (h *Hub) marketEntry(market, id string) (extension.MarketRecord, *extension
 			}
 		}
 	}
-	return extension.MarketRecord{}, nil, errors.New("这个市场里没有插件 " + id)
+	return extension.MarketRecord{}, nil, errors.New("这个市场里没有扩展 " + id)
 }
 
 // marketRoutes are the markets' routes for the apps (a device with full rights).
 func (h *Hub) marketRoutes(api *http.ServeMux) {
-	h.marketRoutesAt(api, "/api/v1/plugins/-", func(w http.ResponseWriter, r *http.Request) bool {
+	h.marketRoutesAt(api, "/api/v1/extensions/-", func(w http.ResponseWriter, r *http.Request) bool {
 		if principalOf(r.Context()).Role != roleFull {
 			writeErr(w, http.StatusForbidden, errors.New("this device can only read and answer"))
 			return false
@@ -368,22 +447,37 @@ func (h *Hub) marketRoutesAt(api *http.ServeMux, base string, allow func(w http.
 		writeErrCode(w, http.StatusBadRequest, code, err)
 	}
 	api.HandleFunc("GET "+base+"/markets", gate(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"markets": h.marketViews()})
+		writeJSON(w, map[string]any{"markets": marketsOut(r, h.marketViews())})
 	}))
 	api.HandleFunc("POST "+base+"/markets", gate(func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Spec  string `json:"spec"`
 			Token string `json:"token,omitempty"`
+			// TokenFrom: use the token of this registered market (one account's token reading several private
+			// repositories), never seen by the caller.
+			TokenFrom string `json:"token_from,omitempty"`
 		}
 		if !readExtensionJSON(w, r, &in) {
 			return
+		}
+		if in.TokenFrom != "" {
+			if in.Token != "" {
+				fail(w, errors.New("token 和 token_from 只能给一个"), "market_failed")
+				return
+			}
+			tok, err := h.marketToken(in.TokenFrom)
+			if err != nil {
+				fail(w, err, "market_failed")
+				return
+			}
+			in.Token = tok
 		}
 		v, err := h.marketAdd(r.Context(), in.Spec, in.Token)
 		if err != nil {
 			fail(w, err, "market_failed")
 			return
 		}
-		writeJSON(w, v)
+		writeJSON(w, marketOut(r, v))
 	}))
 	api.HandleFunc("DELETE "+base+"/markets/{mid}", gate(func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("mid")
@@ -407,13 +501,27 @@ func (h *Hub) marketRoutesAt(api *http.ServeMux, base string, allow func(w http.
 		ms.mu.Unlock()
 		writeJSON(w, map[string]any{"ok": true})
 	}))
+	api.HandleFunc("PUT "+base+"/markets/{mid}", gate(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Spec string `json:"spec"`
+		}
+		if !readExtensionJSON(w, r, &in) {
+			return
+		}
+		v, err := h.marketSetSpec(r.Context(), r.PathValue("mid"), in.Spec)
+		if err != nil {
+			fail(w, err, "market_failed")
+			return
+		}
+		writeJSON(w, marketOut(r, v))
+	}))
 	api.HandleFunc("POST "+base+"/markets/{mid}/refresh", gate(func(w http.ResponseWriter, r *http.Request) {
 		v, err := h.marketRead(r.Context(), r.PathValue("mid"))
 		if err != nil {
 			fail(w, err, "market_unreachable")
 			return
 		}
-		writeJSON(w, v)
+		writeJSON(w, marketOut(r, v))
 	}))
 	api.HandleFunc("PUT "+base+"/markets/{mid}/token", gate(func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
@@ -451,7 +559,7 @@ func (h *Hub) marketRoutesAt(api *http.ServeMux, base string, allow func(w http.
 			fail(w, err, "market_unreachable")
 			return
 		}
-		writeJSON(w, v)
+		writeJSON(w, marketOut(r, v))
 	}))
 	api.HandleFunc("GET "+base+"/catalog", gate(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("refresh") == "1" {
@@ -464,16 +572,20 @@ func (h *Hub) marketRoutesAt(api *http.ServeMux, base string, allow func(w http.
 		} else {
 			h.refreshStale()
 		}
-		writeJSON(w, map[string]any{"markets": h.marketViews(), "plugins": h.catalog(r.URL.Query().Get("q"), r.URL.Query().Get("market")),
+		writeJSON(w, map[string]any{"markets": marketsOut(r, h.marketViews()), extKey(r, "extensions", "plugins"): h.catalog(r.URL.Query().Get("q"), r.URL.Query().Get("market")),
 			"platform": extension.Platform()})
 	}))
 	api.HandleFunc("POST "+base+"/catalog/preview", gate(func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Market    string `json:"market"`
-			Extension string `json:"plugin"`
+			Extension string `json:"extension"`
+			Legacy    string `json:"plugin"`
 		}
 		if !readExtensionJSON(w, r, &in) {
 			return
+		}
+		if in.Extension == "" {
+			in.Extension = in.Legacy
 		}
 		rec, e, err := h.marketEntry(in.Market, in.Extension)
 		if err != nil {

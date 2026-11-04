@@ -114,7 +114,7 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
 | 概览 | `/admin` | hub 名字（可改）、版本、运行时长、监听 / TLS / 指纹、候选地址、电脑和设备数、「运行检查」（`personad hub doctor` 的结果）；除了本机没有别的电脑时，顶部引导「添加电脑」 |
 | 电脑 | `/admin/machines` | 「添加电脑」放在最上面，两种：**电脑来连**（kind link：填 id / 名字，生成 jarvis-link 配对链接，给 Mac / Linux / Windows 的装法）和 **hub 来连**（kind service：粘贴那台 `jarvis-link pair --listen` 打印的链接，可改地址、填 socks5 代理）；不再添加 ssh 电脑。每台的状态（在线 / 离线 / 错误、连接方式、node 版本）和**每条路**（方式、经哪台 hub、能不能用、RTT、哪条在用，[mesh.md](mesh.md)「一台电脑多条路」）；service 电脑的连接器被配给别的 hub 时「重新配对」；重连、删除（只在成员上配的电脑不能在这里删） |
 | 设备 | `/admin/devices` | 设备凭据列表、撤销、生成手机配对二维码；成员 hub 上只提示去中心的管理界面 |
-| 插件 | `/admin/plugins` | 这台 hub 的插件：列表、开关、安装（hub 机器上的目录或包、带 sha256 的 https 链接、上传、remote socket；先预览它能做什么，同意才装）、升级（权限变多明确提示）、回滚、卸载（可留数据），以及插件市场（登记市场、浏览目录、从市场安装 / 升级），见下面「插件」和 [plugins.md](plugins.md)「管理界面：插件」 |
+| 插件 | `/admin/plugins` | 这台 hub 的插件：列表、开关、安装（hub 机器上的目录或包、带 sha256 的 https 链接、上传、remote socket；先预览它能做什么，同意才装）、升级（权限变多明确提示）、回滚、卸载（可留数据），以及插件市场（登记市场、浏览目录、从市场安装 / 升级），见下面「插件」和 [extensions.md](extensions.md)「管理界面：插件」 |
 | 网络与访问 | `/admin/network` | 公网地址 / TLS / 候选地址（可改，重启生效）、`security` 的设置（只读）、管理界面的访问范围（只能收窄）、改管理员密码 |
 | 高级 › 互联 | `/admin/peers` | 一般用不到（推荐只装一台 hub）：组里的 hub（中心 / 成员、在线、任期，「设为中心」，原中心连不上时先确认）、发现到的 hub、生成 / 输入互联码、链路状态和 RTT、断开（[mesh.md](mesh.md)） |
 
@@ -156,7 +156,7 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
 | `POST peers/{hub_id}/center` `{"confirm"}` | 设为中心（hub_id 可以是自己）；409 `confirm_required`（原中心连不上，要确认）/ `unreachable`，404 `not_in_group` |
 | `…/peers`、`…/routes` | 互联：配过对的 hub（每项 `role`）、发现的 hub、互联码、断开、路由（[mesh.md](mesh.md)「管理接口和命令行」） |
 | 成员上的 `devices*` | 409 `member_hub`：设备由中心管 |
-| `GET plugins` | `{"plugins": [ExtensionDetail], "can_install", "upload_most"}`：每项是 App 接口的详情（[plugins.md](plugins.md)「hub 的接口」），`upload_most` 是上传的上限（字节） |
+| `GET plugins` | `{"plugins": [ExtensionDetail], "can_install", "upload_most"}`：每项是 App 接口的详情（[extensions.md](extensions.md)「hub 的接口」），`upload_most` 是上传的上限（字节） |
 | `GET plugins/{id}` | 一个插件的详情；404 `not_found` |
 | `POST plugins/preview` `{"source", "upgrade"?}` | 预览（来源写法同 `personad plugin install`），回预览（含 `permissions_digest`、升级时的 `more_permissions` / `added_permissions`）；400 `invalid_plugin`（`error` 是给人看的原因）、409 `busy`、429 `rate_limited` |
 | `POST plugins/upload?name=<文件名>&upgrade=<id>` | 请求体是 `.tar.gz` / `.tgz` / `.zip` 本身（`Content-Type: application/octet-stream`，唯一不是 JSON 的写操作，照样要 CSRF 头），最大 200 MB，回预览；413 `too_large`，别的同上 |
@@ -165,13 +165,13 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
 | `POST plugins/{id}/rollback` | 回到上一个版本；400 `rollback_failed` |
 | `PUT plugins/{id}/enabled` `{"enabled"}` | 开关；hub.json 来的 409 `read_only` |
 | `DELETE plugins/{id}` `{"keep_data"}` | 卸载；内置的和 hub.json 来的 409 `uninstall_failed` |
-| `GET plugins/-/markets`、`POST plugins/-/markets` `{"spec", "token"?}`、`DELETE plugins/-/markets/{id}`、`POST plugins/-/markets/{id}/refresh`、`PUT plugins/-/markets/{id}/token` `{"token"}` | 插件市场，和 App 的 `/api/v1/plugins/-/markets…` 同一套（[plugins.md](plugins.md)「插件市场」）；登记前先读一次索引，读不到 400 `market_failed`（`error` 是给人看的原因），token 只写不回显 |
+| `GET plugins/-/markets`、`POST plugins/-/markets` `{"spec", "token"?}`、`DELETE plugins/-/markets/{id}`、`POST plugins/-/markets/{id}/refresh`、`PUT plugins/-/markets/{id}/token` `{"token"}` | 插件市场，和 App 的 `/api/v1/plugins/-/markets…` 同一套（[extensions.md](extensions.md)「插件市场」）；登记前先读一次索引，读不到 400 `market_failed`（`error` 是给人看的原因），token 只写不回显 |
 | `GET plugins/-/catalog?q=&market=&refresh=1`、`POST plugins/-/catalog/preview` `{"market", "plugin"}` | 市场的目录（`{markets, plugins, platform}`），和从市场预览（回同样的预览，多一个 `market`）；拿到预览后照常 `plugins/install` / `plugins/{id}/upgrade` |
 | 没有插件底座的 hub | `plugins*` 写操作 503 `no_plugins`；更老的 hub 没有这些路由（404），页面提示先升级 hub |
 
 ## 插件
 
-装插件就是在 hub 机器上运行新程序。管理界面能加电脑、签发设备凭据，本来就和 hub 主人一样大，所以登录的会话也能装（[plugins.md](plugins.md)「安装、升级、回滚、卸载」），
+装插件就是在 hub 机器上运行新程序。管理界面能加电脑、签发设备凭据，本来就和 hub 主人一样大，所以登录的会话也能装（[extensions.md](extensions.md)「安装、升级、回滚、卸载」），
 和 `personad plugin` 用同一个注册表、同样的检查，另外：
 
 - **先预览、再同意**：安装和权限变多的升级都要带预览给的 `permissions_digest`，装的就是页面上给人看过的那一份；页面只在拿到预览后才给「同意并安装」。

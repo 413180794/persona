@@ -25,7 +25,7 @@ wechat-connector 服务（外部，另行部署）
   不用 `wechat`：那是上面那个微信机器人。
 - 密钥在 REST 请求里只放 `Authorization` 头，在实时通道里只放连接后的认证消息，从不出现在 URL 里。
 - 插件只是这个 API 的客户端：不创建密钥、不申请 `send` 范围、不打开服务方的外发开关，也不持有微信登录态或管理员令牌。
-  协议细节见 [connector-protocol.md](connector-protocol.md)、[plugins.md](plugins.md)。
+  协议细节见 [connector-protocol.md](connector-protocol.md)、[extensions.md](extensions.md)。
 
 ## 前置条件
 
@@ -57,10 +57,10 @@ personad plugin install file:/path/to/wechat-connector-persona-<版本>.tar.gz
 也可以在管理界面（`/admin` 的「插件」页）选「上传文件」，传核对过摘要的包。运维者把包放在 https 地址上时，可以让 hub 下载并校验：
 `personad plugin install 'https://<发布地址>/wechat-connector-persona-<版本>.tar.gz#sha256=<64 位 hex>'`。
 
-- 安装前的预览会列出它要运行程序（以 hub 的系统用户运行，没有沙箱，[plugins.md](plugins.md)「权限」）。它只连你登录时填的服务地址；
+- 安装前的预览会列出它要运行程序（以 hub 的系统用户运行，没有沙箱，[extensions.md](extensions.md)「权限」）。它只连你登录时填的服务地址；
   清单的 `permissions.network` 只能写固定的主机名，所以那一栏是空的。
 - 升级：`personad plugin upgrade wechat-connector file:<新包>`，配置和密钥留着，新版本起不来时自动回滚。
-- 卸载会一并删掉 hub 上存的密钥和这个连接器的设置（[plugins.md](plugins.md)「安装、升级、回滚、卸载」）。
+- 卸载会一并删掉 hub 上存的密钥和这个连接器的设置（[extensions.md](extensions.md)「安装、升级、回滚、卸载」）。
 
 ## 登录
 
@@ -251,12 +251,12 @@ personad plugin config wechat-connector group_inbox=off 'exclude_chats=["wxid_ex
 ## 一致性测试
 
 插件对 hub 来说是一个外部程序。Persona 用 `CheckProgram` 对任意实现连接器协议的外部程序做一致性检查，线上夹具是合成数据，
-见 [connector-protocol.md](connector-protocol.md)「一致性测试」和 [plugins.md](plugins.md)「一致性测试」。
+见 [connector-protocol.md](connector-protocol.md)「一致性测试」和 [extensions.md](extensions.md)「一致性测试」。
 
 ## 相关
 
 - [connectors.md](connectors.md)：连接器的结构、能力、闸门
-- [plugins.md](plugins.md)：插件底座、清单字段、安装 / 升级 / 回滚 / 卸载
+- [extensions.md](extensions.md)：插件底座、清单字段、安装 / 升级 / 回滚 / 卸载
 - [connector-protocol.md](connector-protocol.md)：连接器协议 v2 的每条方法和字段
 - [inbox.md](inbox.md)：收件箱、AI 分拣、AI 分身
 - [config.md](config.md)：hub.json 的 `connector_gate`

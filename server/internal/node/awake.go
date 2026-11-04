@@ -164,7 +164,7 @@ func (c *watchedConn) Close() error {
 	return c.Conn.Close()
 }
 
-// noLockFor: how long 「插件开着时不自动锁屏」 holds without the hub saying so again (it does every few minutes,
+// noLockFor: how long 「扩展开着时不自动锁屏」 holds without the hub saying so again (it does every few minutes,
 // computer.nolock), so the Mac goes back to locking by itself that long after the hub is gone.
 var noLockFor = 30 * time.Minute
 

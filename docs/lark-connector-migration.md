@@ -1,7 +1,7 @@
 # 飞书能力整合（#392）
 
 > **2026-11-04 起（#1520，插件第 3 步 3c）**：经 lark-connector 接飞书的整条链路（App 的 `/api/v1/lark/…`、收件箱和知识库的飞书来源、公司圈、
-> 助手的 `ol` 闸门和凭据、/agent、个人 Agent）不在开源仓库里了，由接飞书的插件提供（`docs/plugins.md`，`docs/plan-plugins.md`「第 3 步」）。
+> 助手的 `ol` 闸门和凭据、/agent、个人 Agent）不在开源仓库里了，由接飞书的插件提供（`docs/extensions.md`，`docs/plan-extensions.md`「第 3 步」）。
 > 下文描述的行为由插件照原样提供；文中提到的 hub 源文件（`hub/lark*.go`、`internal/lark` 的客户端……）已删。开源版只留官方 lark-cli、飞书机器人、飞书邮箱。
 
 以 Persona 原生收件箱、Hub 认证、聊天页、发件箱和实时同步为基础，逐项迁入缺失能力；不并排维护两个完整客户端。
@@ -52,7 +52,7 @@ lark-connector 的 Pin 列表 GET **会标记 Pin 已读**。因此只在用户�
 
 历史请求带当前会话所属飞书账号 `account_id`（多账号时连同 `ol_account`），接飞书的插件读取前后核对该账号，响应带 `account_id` 且 `no-store`；回答的账号不对、旧版本不返回归属时都不合并，分别提示「飞书账号已切换，请重新打开会话」「更新 Hub 后可加载更早的消息」。旧版本只影响历史，最新消息的读取不变。离开会话、退到后台、切换账号或跳到 Pin 定位的窗口时取消请求，迟到的回答不写回。
 
-验证：`LarkHistoryPagingTests`（单元），`LarkHistoryFlowTests`（模拟器 + 隔离 mock `MOCK_LARK_HISTORY=1`，浅色 / 深色）：前插保持位置、失败重试、重复 / 空页 / 游标循环停下、短页自动补满后停下、离开和换号后迟到回答不落、私聊、快速滑到最早、阅读中新消息到达不动、大字号单行；账号核对和旧调用不变的测试在插件里（removed `lark-connector`）。
+验证：`LarkHistoryPagingTests`（单元），`LarkHistoryFlowTests`（模拟器 + 隔离 mock `MOCK_LARK_HISTORY=1`，浅色 / 深色）：前插保持位置、失败重试、重复 / 空页 / 游标循环停下、短页自动补满后停下、离开和换号后迟到回答不落、私聊、快速滑到最早、阅读中新消息到达不动、大字号单行；账号核对和旧调用不变的测试在扩展里（persona-removed `lark-connector`）。
 
 ### 回到最新（#1034）
 

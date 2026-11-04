@@ -154,7 +154,7 @@ func CheckEngines(m *Manifest, build int64) (warning string, err error) {
 		return "开发构建的 hub 不检查 engines.persona（" + m.Engines.Persona + "）", nil
 	}
 	if !r.Allows(build) {
-		return "", fmt.Errorf("这个插件要 hub 的构建号 %s，这台是 %d", m.Engines.Persona, build)
+		return "", fmt.Errorf("这个扩展要 hub 的构建号 %s，这台是 %d", m.Engines.Persona, build)
 	}
 	return "", nil
 }

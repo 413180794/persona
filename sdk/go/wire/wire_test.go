@@ -56,3 +56,37 @@ func TestComponentTypes(t *testing.T) {
 		t.Errorf("ComponentTypes = %v", ComponentTypes)
 	}
 }
+
+// Validate agrees with the schema's examples: each holds to its definition, each under invalid/ does not.
+func TestValidateExamples(t *testing.T) {
+	for _, dir := range []string{"", "invalid"} {
+		files, _ := filepath.Glob(filepath.Join("..", "..", "..", "schema", "extension", "examples", dir, "*.json"))
+		if len(files) == 0 {
+			t.Fatalf("no examples in %q", dir)
+		}
+		for _, f := range files {
+			raw, err := os.ReadFile(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = ValidateJSON(strings.SplitN(filepath.Base(f), ".", 2)[0], raw)
+			if dir == "" && err != nil {
+				t.Errorf("%s: %v", filepath.Base(f), err)
+			}
+			if dir == "invalid" && err == nil {
+				t.Errorf("%s: holds, but should not", filepath.Base(f))
+			}
+		}
+	}
+}
+
+func TestValidateSays(t *testing.T) {
+	err := ValidateJSON("View", []byte(`{"sections":[{"items":[{"type":"metric","label":"a"},{"type":"nope"}]}]}`))
+	ve, ok := err.(*ValidationError)
+	if !ok || len(ve.Errors) != 2 || ve.Errors[0] != "$.sections[0].items[0]: no value" || ve.Errors[1] != `$.sections[0].items[1]: no variant with type "nope"` {
+		t.Fatalf("got %#v", err)
+	}
+	if err := Validate("View", View{Sections: []Section{{Items: []Component{{Type: "text", Text: "hi"}}}}}); err != nil {
+		t.Fatal(err)
+	}
+}

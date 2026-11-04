@@ -96,7 +96,7 @@ func TestModelConfigurationExtensionFailureIsVisible(t *testing.T) {
 	if err := json.Unmarshal(r.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Purpose.Status != "读不到插件模型列表" {
+	if result.Purpose.Status != "读不到扩展模型列表" {
 		t.Fatalf("plugin failure was hidden: %+v", result.Purpose)
 	}
 }

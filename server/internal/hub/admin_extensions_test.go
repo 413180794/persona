@@ -213,7 +213,7 @@ func TestAdminExtensionsInstallUpgradeRollbackUninstall(t *testing.T) {
 
 	// 1.1.0 reaches one more host: the upgrade says what is new and needs the new digest.
 	pkg2 := notesPackage(t, "1.1.0")
-	mf := filepath.Join(pkg2, "persona-plugin.json")
+	mf := filepath.Join(pkg2, "persona-extension.json")
 	b, _ := os.ReadFile(mf)
 	_ = os.WriteFile(mf, []byte(strings.Replace(string(b), `"network": ["notes.example.com"]`, `"network": ["notes.example.com", "files.example.com"]`, 1)), 0o644)
 	code, up, _ := c.do("POST", "/api/v1/admin/plugins/preview", `{"source": "dir:`+pkg2+`", "upgrade": "example-notes"}`)

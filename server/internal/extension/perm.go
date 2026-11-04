@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// Permissions are what a plugin asks for (docs/plan-plugins.md「权限」). The vocabulary is closed: a manifest naming
+// Permissions are what a plugin asks for (docs/plan-extensions.md「权限」). The vocabulary is closed: a manifest naming
 // a permission this hub does not know does not install, so nobody is shown one the hub cannot explain.
 type Permissions struct {
 	// Network are the hosts it reaches ("api.example.com", "*.example.com"). Shown and recorded; the hub does not
@@ -20,7 +20,7 @@ type Permissions struct {
 	// HubAPI: it gets the hub's address and full token (PERSONA_HUB_URL, PERSONA_HUB_TOKEN).
 	HubAPI bool `json:"hub_api,omitempty"`
 	// LauncherKeys: it reads launchers' quota with their keys — never seeing them: the hub (or the machine with the
-	// launcher) sends its requests, to the launcher's own gateway only (docs/plugins.md「额度」).
+	// launcher) sends its requests, to the launcher's own gateway only (docs/extensions.md「额度」).
 	LauncherKeys bool `json:"launcher_keys,omitempty"`
 }
 

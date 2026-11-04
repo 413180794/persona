@@ -116,7 +116,7 @@ App 用这份列表画整节：飞书、邮箱画成原来的行（状态还读�
 
 > **微信（wechat-connector）是进程插件连接器的范例**，而且不写在 hub 里：连接器是外部 API 服务 wechat-connector 的客户端，以插件包（`.tar.gz` 加 sha256）交付，
 > 用插件协议 1 加连接器协议 v2 和 hub 说话，本仓库没有它的代码。接入手册见 [wechat-connector.md](wechat-connector.md)。
-> 怎么给这样的外部程序做一致性测试：插件一侧的起停和握手用 `conformance.Program`（[plugins.md](plugins.md)「一致性测试」），
+> 怎么给这样的外部程序做一致性测试：插件一侧的起停和握手用 `conformance.Program`（[extensions.md](extensions.md)「一致性测试」），
 > 连接器一侧逐个能力的检查用 `CheckProgram` 加合成的线上夹具（[connector-protocol.md](connector-protocol.md)「一致性测试」）。
 
 ## 二、v2 设计

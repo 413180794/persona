@@ -29,12 +29,12 @@ import (
 	wechat "github.com/nwverse/persona/server/internal/wechat/spec"
 )
 
-// Plugins (docs/plugins.md): one registry of every plugin — built into personad, written in hub.json, installed on
+// Plugins (docs/extensions.md): one registry of every plugin — built into personad, written in hub.json, installed on
 // this machine — and the plugin host running them. A plugin's contributions plug into the hub where they belong: a
 // connector into the connector registry, a voice plugin into the app's voice conversation (relayed under
 // /api/v1/plugins/<id>/…).
 
-// PluginConfig is hub.json's plugins[]: a process the hub runs next to itself (docs/plugins.md「hub.json 里的插件」).
+// PluginConfig is hub.json's plugins[]: a process the hub runs next to itself (docs/extensions.md「hub.json 里的扩展」).
 // The hub starts it, restarts it when it exits and relays /api/v1/plugins/{id}/… to the HTTP server it serves on the
 // unix socket in JARVIS_PLUGIN_SOCKET (WebSockets included). Without a command the plugin runs elsewhere and only its
 // socket is here (e.g. forwarded with ssh -R from a machine that reaches what the plugin needs). The registry gives it
@@ -50,7 +50,7 @@ type ExtensionConfig struct {
 	Dir      string            `json:"dir,omitempty"` // working directory; "~/" is the hub machine's home
 	Disabled bool              `json:"disabled,omitempty"`
 	// Config is the plugin's own settings, handed over as JSON in JARVIS_PLUGIN_CONFIG (the built-in voice plugin's
-	// providers, docs/plugins.md「内置语音插件」).
+	// providers, docs/extensions.md「内置语音扩展」).
 	Config json.RawMessage `json:"config,omitempty"`
 }
 
@@ -114,6 +114,7 @@ func (p *hubExtension) healthy(ctx context.Context) bool { return p.proc != nil 
 // plugins is the registry and what runs of it.
 type extensions struct {
 	dir  string // the hub's data directory
+	root string // where the extensions are kept: <dir>/extensions (extensionsRoot)
 	reg  *extension.Registry
 	logf func(string, ...any)
 
@@ -136,7 +137,8 @@ type extensions struct {
 // newPlugins is the registry with hub.json's plugins: a bad entry is logged and skipped. Built-in and installed ones
 // join when the hub attaches its database (attachPlugins).
 func newExtensions(dir string, cfgs []ExtensionConfig, logf func(string, ...any)) *extensions {
-	ps := &extensions{dir: dir, reg: extension.NewRegistry(filepath.Join(dir, "plugins"), nil, nil, 0), logf: logf, byID: map[string]*hubExtension{}}
+	root := extensionsRoot(dir, logf)
+	ps := &extensions{dir: dir, root: root, reg: extension.NewRegistry(root, nil, nil, 0), logf: logf, byID: map[string]*hubExtension{}}
 	for _, c := range cfgs {
 		if !extensionIDPattern.MatchString(c.ID) || (c.Command == "" && c.Socket == "") {
 			logf("plugin %q: skipped (needs an id of a-z0-9_- and a command or a socket)", c.ID)
@@ -165,7 +167,7 @@ func (ps *extensions) legacySocket(c ExtensionConfig) string {
 	if c.Socket != "" {
 		return expandHome(c.Socket)
 	}
-	return filepath.Join(ps.dir, "plugins", c.ID+".sock")
+	return filepath.Join(ps.root, c.ID+".sock")
 }
 
 // legacyManifest is a hub.json entry as a manifest: a program serving HTTP (no protocol) contributing its kind, run
@@ -258,7 +260,7 @@ func (h *Hub) attachExtensions(ctx context.Context) {
 	if s, ok := h.store.(extension.Store); ok {
 		store = s
 	}
-	reg := extension.NewRegistry(filepath.Join(ps.dir, "plugins"), store, hubSealer{h}, h.build.Number)
+	reg := extension.NewRegistry(ps.root, store, hubSealer{h}, h.build.Number)
 	for _, p := range ps.reg.List() { // hub.json's
 		_ = reg.AddHubJSON(p.Manifest, p.Legacy, p.Record.Enabled)
 	}
@@ -469,7 +471,7 @@ func (hp *hubExtension) setProxy(id string) {
 		return d.DialContext(ctx, "unix", socket)
 	}
 	hp.client = &http.Client{Transport: &http.Transport{DialContext: dial}, Timeout: 5 * time.Second}
-	prefix := "/api/v1/plugins/" + id
+	prefix := "/api/v1/extensions/" + id
 	hp.proxy = &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.Out.URL.Scheme, r.Out.URL.Host = "http", "plugin"
@@ -523,6 +525,13 @@ func selfExecutable() string {
 
 // spec is how the host runs p; it also makes p's connectors (hp.conns) and its HTTP socket (hp.socket).
 func (ps *extensions) spec(ctx context.Context, p *extension.Extension, hp *hubExtension) (host.Spec, error) {
+	s, err := ps.specOf(ctx, p, hp)
+	s.Env = withExtensionEnv(s.Env)
+	return s, err
+}
+
+// specOf is spec with only the old names of the extension's variables (PERSONA_PLUGIN_*).
+func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hubExtension) (host.Spec, error) {
 	m := p.Manifest
 	id := p.Record.ID
 	s := host.Spec{ID: id, Name: m.Name, Logf: ps.logf}
@@ -582,7 +591,7 @@ func (ps *extensions) spec(ctx context.Context, p *extension.Extension, hp *hubE
 			s.Env = append(s.Env, k+"="+v)
 		}
 		if rt.HTTP {
-			hp.socket = filepath.Join(ps.dir, "plugins", id+".sock")
+			hp.socket = filepath.Join(ps.root, id+".sock")
 			s.HTTP, s.Socket = true, hp.socket
 			s.Env = append(s.Env, "PERSONA_PLUGIN_SOCKET="+hp.socket)
 		}

@@ -225,7 +225,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   「更新 hub」，等空闲时列出在忙的 Agent 和「现在就更新…」（先确认），Docker 部署给要改的镜像和命令（可复制），自动更新开关、首次「已开启」提示、各台电脑上的 personad 版本、更新记录；
   跟着 `hub_update` 推送刷新，旧 hub（没有这个接口）只显示一句说明；
   「插件」（`settings/Plugins.tsx`，逻辑 `lib/plugins.ts`，`?tab=plugins`，`&plugin=<id>` 直接进详情；hub 的 features 有 `plugin_manager` 才出现，#1207）：
-  和 iOS 同一套（`docs/plugins.md`「App：设置 › 插件」）。列表是名字、状态圆点和文字、还缺什么 / 错误，标题旁写个数和几个要处理；详情是状态 · 版本 · 来源、描述、还缺、错误，
+  和 iOS 同一套（`docs/extensions.md`「App：设置 › 插件」）。列表是名字、状态圆点和文字、还缺什么 / 错误，标题旁写个数和几个要处理；详情是状态 · 版本 · 来源、描述、还缺、错误，
   「启用」开关（立即 `PUT …/-/enabled`），按 `form.fields` 画的表单（文字、数字、开关、选择、文字列表 / 多选，对象单独一组），改了底部浮出「还原 / 保存」，整份 `PUT …/-/config`，
   hub 回 `invalid_config` 时把原因写在那一项下面、草稿留着，数字不是数时不能保存；有未保存的改动时点返回先问。密钥每项只显示已设置 / 未设置，点开在弹窗里输入（`type=password`，不回显），
   已设置的可以清除（再点一次确认）；「提供」「它可以」「关于」（版本、上一个版本、来源、安装自、发布者、https 的主页、警告）。hub.json 来的只读：没有开关、表单、密钥。
@@ -244,13 +244,13 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   ![扫码绑定微信（浅色）](screenshots/web-channel-bind-qr-light.png)
 
   ![对话页里来自微信的消息（深色）](screenshots/web-channel-source-dark.png)
-  **声明式 UI**（#1330，`settings/PluginView.tsx`，逻辑 `lib/plugin-ui.ts`，`docs/plugins.md`「声明式 UI」）：插件详情多一组「页面」（它的 `ui`），点进去是 `&plugin=<id>/ui/<页面>`，
+  **声明式 UI**（#1330，`settings/PluginView.tsx`，逻辑 `lib/plugin-ui.ts`，`docs/extensions.md`「声明式 UI」）：插件详情多一组「页面」（它的 `ui`），点进去是 `&plugin=<id>/ui/<页面>`，
   一个组件画全部八种条目：text（四种样式）、metric（连着的几个并排）、progress、row（徽标、可点）、button（连着的放一行，destructive 是红字，submit 是主按钮）、link（只认 https，`openLink` 打开）、field（文字、密钥不回显、数字、开关、选择）、divider；
   tone 换成角色色（neutral → accent / 正文色，positive → green，caution → orange，danger → red）。按钮有 `confirm` 先弹确认框，`submit` 带上这一页全部 field 的值（开关是 `"true"` / `"false"`，数字不是数就不发），
   回答里的新 view 换上、`toast` 弹出、`open_url` 用网页的链接打开方式，什么都没有就重画；画不出来是空状态加「重试」。
   「模型供应商」的启动器详情里，hub 带 `plugin_manager` 时按 `GET /plugins/-/ui?placement=launcher_section&launcher=<名字>[&machine=<第一台在线的电脑>]` 每个插件加一节（标题是插件给的名字）；
   画的时候插件回 404 `{"code": "unsupported"}`（不写 `hosts` 的一节会列在每个启动器上，插件说这不是它的网关，#1339）就把这一节整个藏掉，不算出错、不显示错误。
-  **UI 插槽**（#1451，`docs/plugins.md`「UI 插槽」；列表和角标 `lib/plugin-slots.ts`，三处的画法 `views/plugins/PluginSlots.tsx`，图 `views/plugins/PluginChart.tsx`，逻辑 `lib/plugin-ui.ts`）：
+  **UI 插槽**（#1451，`docs/extensions.md`「UI 插槽」；列表和角标 `lib/plugin-slots.ts`，三处的画法 `views/plugins/PluginSlots.tsx`，图 `views/plugins/PluginChart.tsx`，逻辑 `lib/plugin-ui.ts`）：
   hub 的 features 有 `plugin_ui_slots` 才问。`GET /plugins/-/ui`（不带 placement）一次拿齐，重连（hello）、在这里启用 / 停用 / 改设置 / 装 / 升级 / 卸载插件后、标签页隔一分钟以上回到前台时再拿；
   `nav_page` 是侧边栏「机器」和「设置」之间一页一行（固定的八个图标换成网页的，不认识的画成插件图标；角标按 tone 上色，收到 `plugin_ui` 事件就地改，不重拉），点进 `/plugin/<插件>/<页面>`；
   `overview_card` 是总览问候语下面一排卡片（一张占满，多张两列），紧凑画法（`context.size: compact`），点卡片空白处或标题打开 `opens`，卡片里的按钮、行、图照常能点；
@@ -259,13 +259,13 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   悬停或方向键看这个标签下每个系列的值，横轴标签隔几个写一个、不重叠，紧凑时只画首尾标签；没 tone 的系列按 `--series-1…4`（第一个是主色，避开 green / orange / red 三个角色色，深浅色两套）取色。
   `stat_grid` 窄时一行 2 个、够宽 3 个、很宽一行放全；`segmented` 选了马上发 `ui.action`（`values: {name: 选的值}`）。`refresh_after` 只在页面可见、组件还在时按时重画，回到前台已经过点就马上画。
   截图用 `MOCK_PLUGINS=1` 的假 hub（`example-gateway` 的用量页、今天的用量卡片、机器页的「网关调用」）。
-  `inbox_item`（#1681，`docs/plugins.md`「收件箱条目」）：同一个缓存的列表里带 `connector` 的那几项，打开一件事时按条目的 `source` 找（`useInboxItemPlace`），不另外问 hub；
+  `inbox_item`（#1681，`docs/extensions.md`「收件箱条目」）：同一个缓存的列表里带 `connector` 的那几项，打开一件事时按条目的 `source` 找（`useInboxItemPlace`），不另外问 hub；
   找到了就由 `views/inbox/InboxPluginBody.tsx` 在详情的头部下面画插件的 View（`context.item` 是条目 id），条目的 `version` 变了（来了新消息）就重画、正在填的字段留着；
   hub 回 403 / 404（只读设备、条目没了、连接器不归它）直接画原来的正文，插件出错时也画原来的正文，上面一行「…的详情没画出来」和「重试」。
   插件画的时候头部不出 Pin（Pin 作用在原来的会话页上）。按钮回 `open_url: persona://inbox/<这一条>/source`（「在会话里看」）时，正文换成原来的会话页
   （飞书停在这件事的第一条），上面一行「回到<页面标题>」，插件的页藏起来不卸载、回去原样；别的条目的、别的 `persona:` 链接不打开（`lib/plugin-ui.ts` 的 `outcome` / `inboxSourceItem`）。
   截图用 `MOCK_PLUGINS=1 MOCK_INBOX_ITEM_UI=1`：飞书的条目由 `example-chat` 画（回复、在会话里看），群聊的条目插件出错（看回退）。
-  **插件市场**（`settings/PluginMarket.tsx`，逻辑 `lib/plugin-market.ts`，`docs/plugins.md`「插件市场」）：插件列表下面「插件市场」一组两行。
+  **插件市场**（`settings/PluginMarket.tsx`，逻辑 `lib/plugin-market.ts`，`docs/extensions.md`「插件市场」）：插件列表下面「插件市场」一组两行。
   「浏览插件市场」（`&plugin=-market`）：搜索（停顿 250 ms 后查 hub）、按市场筛选的 chip、重新读取全部，读不到的市场在顶上写原因；每行名字、版本、说明、市场、标签和状态（未安装 / 可升级到 x / 已装 x / hub 自带 / 装不了和原因）。
   点进是详情（`&plugin=-market/<市场>/<插件>`）：说明、标签、「它可以」、「提供」、「关于」；「安装」/「升级到 x」先 `POST …/catalog/preview`，弹出预览（权限、升级的 `旧 → 新`、权限变多时的红色提示和「新增」、剩几分钟，过期就不能点），
   「同意并安装」/「升级」/「同意新权限并升级」带着预览的 id 和摘要调 `/plugins/-/install` / `/plugins/<id>/-/upgrade`，装好跳到这个插件的详情；从这个市场装的有「卸载」（可留数据），插件详情里也有（`origin` 是 `market:` 的）。

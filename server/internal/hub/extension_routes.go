@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extension"
 )
 
-// The plugin API (docs/plugins.md「hub 的接口」). /api/v1/plugins/<id>/… is relayed to the plugin, so the hub's own
+// The plugin API (docs/extensions.md「hub 的接口」). /api/v1/plugins/<id>/… is relayed to the plugin, so the hub's own
 // routes live under the reserved "-" segment: /api/v1/plugins/-/… and /api/v1/plugins/<id>/-/….
 
 // PluginDetail is one plugin with its form, settings and permissions (GET /api/v1/plugins/{id}/-/).
@@ -85,7 +85,7 @@ func actor(r *http.Request) string {
 }
 
 // fromThisMachine says whether r carries the master token over loopback: installing runs code on this machine, so
-// only its owner there (`personad plugin`) may; a phone may not (docs/plugins.md「安装」).
+// only its owner there (`personad plugin`) may; a phone may not (docs/extensions.md「安装」).
 func (h *Hub) fromThisMachine(r *http.Request) bool {
 	tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	return remoteIP(r).IsLoopback() && tok != "" && h.cfg != nil && subtle.ConstantTimeCompare([]byte(tok), []byte(h.cfg.Token)) == 1
@@ -104,12 +104,14 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 	h.marketRoutes(api)
 	h.upgradeRoutes(api)
 	ps := func() *extensions { return h.extensions }
-	api.HandleFunc("GET /api/v1/plugins", func(w http.ResponseWriter, r *http.Request) {
+	h.legacyExtensionRoutes(api, "/api/v1/plugins", "/api/v1/extensions")
+	api.HandleFunc("GET /api/v1/extensions", func(w http.ResponseWriter, r *http.Request) {
+		key := extKey(r, "extensions", "plugins")
 		if ps() == nil {
-			writeJSON(w, map[string]any{"plugins": []ExtensionView{}})
+			writeJSON(w, map[string]any{key: []ExtensionView{}})
 			return
 		}
-		writeJSON(w, map[string]any{"plugins": ps().listCtx(r.Context()), "can_install": ps().reg.HasStore(), "markets": h.marketStore() != nil && ps().reg.HasStore()})
+		writeJSON(w, map[string]any{key: ps().listCtx(r.Context()), "can_install": ps().reg.HasStore(), "markets": h.marketStore() != nil && ps().reg.HasStore()})
 	})
 	// The hub's own routes under a plugin: what changes it is for a device with full rights.
 	full := func(f func(w http.ResponseWriter, r *http.Request, p *extension.Extension)) http.HandlerFunc {
@@ -133,7 +135,7 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 	owner := func(f http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			if !h.fromThisMachine(r) {
-				writeErrCode(w, http.StatusForbidden, "this_machine_only", errors.New("插件只能在 hub 机器上（personad plugin …）或 hub 的管理界面里装、升级和卸载"))
+				writeErrCode(w, http.StatusForbidden, "this_machine_only", errors.New("扩展只能在 hub 机器上（personad extension …）或 hub 的管理界面里装、升级和卸载"))
 				return
 			}
 			if ps() == nil {
@@ -144,7 +146,7 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 		}
 	}
 	// marketOr is owner for installing, upgrading, rolling back and removing, or a device with full rights when it is a
-	// plugin of a registered market (its package pinned by the market's index; docs/plugins.md「插件市场」).
+	// plugin of a registered market (its package pinned by the market's index; docs/extensions.md「扩展市场」).
 	marketOr := func(w http.ResponseWriter, r *http.Request, ofMarket func() bool) bool {
 		if ps() == nil {
 			writeErrCode(w, http.StatusServiceUnavailable, "no_plugins", errors.New("plugins are not set up"))
@@ -153,13 +155,13 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 		if h.fromThisMachine(r) || (principalOf(r.Context()).Role == roleFull && ofMarket()) {
 			return true
 		}
-		writeErrCode(w, http.StatusForbidden, "this_machine_only", errors.New("这个插件只能在 hub 机器上（personad plugin …）或 hub 的管理界面里装、升级和卸载；手机上只能装插件市场里的"))
+		writeErrCode(w, http.StatusForbidden, "this_machine_only", errors.New("这个扩展只能在 hub 机器上（personad extension …）或 hub 的管理界面里装、升级和卸载；手机上只能装扩展市场里的"))
 		return false
 	}
-	api.HandleFunc("GET /api/v1/plugins/{id}/-/{$}", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
-		writeJSON(w, ps().detail(r.Context(), p))
+	api.HandleFunc("GET /api/v1/extensions/{id}/-/{$}", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
+		writeJSON(w, detailOut(r, ps().detail(r.Context(), p)))
 	}))
-	api.HandleFunc("PUT /api/v1/plugins/{id}/-/enabled", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
+	api.HandleFunc("PUT /api/v1/extensions/{id}/-/enabled", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
 		var in struct {
 			Enabled bool `json:"enabled"`
 		}
@@ -170,9 +172,9 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 			writeExtensionErr(w, http.StatusConflict, "read_only", err)
 			return
 		}
-		writeJSON(w, ps().detail(r.Context(), ps().reg.Get(p.Record.ID)))
+		writeJSON(w, detailOut(r, ps().detail(r.Context(), ps().reg.Get(p.Record.ID))))
 	}))
-	api.HandleFunc("PUT /api/v1/plugins/{id}/-/config", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
+	api.HandleFunc("PUT /api/v1/extensions/{id}/-/config", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
 		var in struct {
 			Config json.RawMessage `json:"config"`
 		}
@@ -190,9 +192,9 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 			writeErrCode(w, http.StatusConflict, "read_only", err)
 			return
 		}
-		writeJSON(w, ps().detail(r.Context(), ps().reg.Get(p.Record.ID)))
+		writeJSON(w, detailOut(r, ps().detail(r.Context(), ps().reg.Get(p.Record.ID))))
 	}))
-	api.HandleFunc("PUT /api/v1/plugins/{id}/-/secrets/{name}", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
+	api.HandleFunc("PUT /api/v1/extensions/{id}/-/secrets/{name}", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
 		var in struct {
 			Value string `json:"value"`
 		}
@@ -203,17 +205,17 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 			writeErrCode(w, http.StatusBadRequest, "invalid_secret", err)
 			return
 		}
-		writeJSON(w, ps().detail(r.Context(), ps().reg.Get(p.Record.ID)))
+		writeJSON(w, detailOut(r, ps().detail(r.Context(), ps().reg.Get(p.Record.ID))))
 	}))
-	api.HandleFunc("DELETE /api/v1/plugins/{id}/-/secrets/{name}", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
+	api.HandleFunc("DELETE /api/v1/extensions/{id}/-/secrets/{name}", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
 		if err := ps().reg.DeleteSecret(r.Context(), p.Record.ID, r.PathValue("name"), actor(r)); err != nil {
 			writeErrCode(w, http.StatusBadRequest, "invalid_secret", err)
 			return
 		}
-		writeJSON(w, ps().detail(r.Context(), ps().reg.Get(p.Record.ID)))
+		writeJSON(w, detailOut(r, ps().detail(r.Context(), ps().reg.Get(p.Record.ID))))
 	}))
 
-	api.HandleFunc("POST /api/v1/plugins/-/preview", owner(func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("POST /api/v1/extensions/-/preview", owner(func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Source  string `json:"source"`
 			Upgrade string `json:"upgrade,omitempty"`
@@ -228,7 +230,7 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, pv)
 	}))
-	api.HandleFunc("POST /api/v1/plugins/-/install", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("POST /api/v1/extensions/-/install", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			PreviewID string `json:"preview_id"`
 			Digest    string `json:"permissions_digest"`
@@ -236,14 +238,14 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 		if !readExtensionJSON(w, r, &in) || !marketOr(w, r, func() bool { return ps().reg.PreviewMarketOf(in.PreviewID) != "" }) {
 			return
 		}
-		p, err := ps().reg.Install(r.Context(), in.PreviewID, in.Digest, actorOr(r, "personad plugin"))
+		p, err := ps().reg.Install(r.Context(), in.PreviewID, in.Digest, actorOr(r, "personad extension"))
 		if err != nil {
 			writeExtensionErr(w, http.StatusBadRequest, "install_failed", err)
 			return
 		}
-		writeJSON(w, ps().detail(r.Context(), p))
+		writeJSON(w, detailOut(r, ps().detail(r.Context(), p)))
 	})
-	api.HandleFunc("POST /api/v1/plugins/{id}/-/upgrade", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("POST /api/v1/extensions/{id}/-/upgrade", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			PreviewID string `json:"preview_id"`
 			Digest    string `json:"permissions_digest"`
@@ -251,12 +253,12 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 		if !readExtensionJSON(w, r, &in) || !marketOr(w, r, func() bool { return ps().reg.PreviewMarketOf(in.PreviewID) != "" }) {
 			return
 		}
-		p, err := ps().reg.Upgrade(r.Context(), r.PathValue("id"), in.PreviewID, in.Digest, actorOr(r, "personad plugin"))
+		p, err := ps().reg.Upgrade(r.Context(), r.PathValue("id"), in.PreviewID, in.Digest, actorOr(r, "personad extension"))
 		if err != nil {
 			writeExtensionErr(w, http.StatusBadRequest, "upgrade_failed", err)
 			return
 		}
-		writeJSON(w, ps().detail(r.Context(), p))
+		writeJSON(w, detailOut(r, ps().detail(r.Context(), p)))
 	})
 	fromMarket := func(r *http.Request) func() bool {
 		return func() bool {
@@ -264,22 +266,22 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 			return p != nil && extension.FromMarket(p.Record.Origin) != ""
 		}
 	}
-	api.HandleFunc("POST /api/v1/plugins/{id}/-/rollback", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("POST /api/v1/extensions/{id}/-/rollback", func(w http.ResponseWriter, r *http.Request) {
 		if !marketOr(w, r, fromMarket(r)) {
 			return
 		}
-		p, err := ps().reg.Rollback(r.Context(), r.PathValue("id"), actorOr(r, "personad plugin"))
+		p, err := ps().reg.Rollback(r.Context(), r.PathValue("id"), actorOr(r, "personad extension"))
 		if err != nil {
 			writeErrCode(w, http.StatusBadRequest, "rollback_failed", err)
 			return
 		}
-		writeJSON(w, ps().detail(r.Context(), p))
+		writeJSON(w, detailOut(r, ps().detail(r.Context(), p)))
 	})
-	api.HandleFunc("DELETE /api/v1/plugins/{id}/-/{$}", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("DELETE /api/v1/extensions/{id}/-/{$}", func(w http.ResponseWriter, r *http.Request) {
 		if !marketOr(w, r, fromMarket(r)) {
 			return
 		}
-		if err := ps().reg.Uninstall(r.Context(), r.PathValue("id"), r.URL.Query().Get("keep_data") == "1", actorOr(r, "personad plugin")); err != nil {
+		if err := ps().reg.Uninstall(r.Context(), r.PathValue("id"), r.URL.Query().Get("keep_data") == "1", actorOr(r, "personad extension")); err != nil {
 			writeErrCode(w, http.StatusBadRequest, "uninstall_failed", err)
 			return
 		}
@@ -287,8 +289,8 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 	})
 
 	// A plugin's program on a computer: the app's requests to it (extension_nodes.go).
-	api.HandleFunc("/api/v1/plugins/{id}/-/machines/{mid}/", h.serveNodeExtensionHTTP)
-	api.HandleFunc("/api/v1/plugins/{id}/", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("/api/v1/extensions/{id}/-/machines/{mid}/", h.serveNodeExtensionHTTP)
+	api.HandleFunc("/api/v1/extensions/{id}/", func(w http.ResponseWriter, r *http.Request) {
 		// A plugin can do anything the hub can (it may hold its token): not for an answer-only device.
 		if principalOf(r.Context()).Role != roleFull {
 			writeErr(w, http.StatusForbidden, errors.New("this device can only read and answer"))
@@ -299,7 +301,7 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 		if ps() != nil {
 			hp = ps().get(id)
 		}
-		rest := strings.TrimPrefix(r.URL.Path, "/api/v1/plugins/"+id)
+		rest := strings.TrimPrefix(r.URL.Path, "/api/v1/extensions/"+id)
 		if hp == nil || hp.proxy == nil || hp.proc == nil || strings.HasPrefix(rest, "/-/") {
 			writeErrCode(w, http.StatusNotFound, "not_found", errors.New("no such plugin"))
 			return

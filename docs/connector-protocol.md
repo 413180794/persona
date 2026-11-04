@@ -4,10 +4,10 @@
 为什么这样设计、和在 hub 里跑的连接器什么关系，见 `docs/connectors.md`「二 · 4」。代码：程序一侧 `server/internal/connector/serve`，
 hub 一侧 `server/internal/connector/proc`，一致性测试 `server/internal/connector/conformance`。
 
-**它现在是插件协议的 `connector` 命名空间**（#1101，`docs/plugins.md`「进程插件协议」）：连接器程序是一个贡献了 `connectors` 扩展点的插件，
+**它现在是插件协议的 `connector` 命名空间**（#1101，`docs/extensions.md`「进程插件协议」）：连接器程序是一个贡献了 `connectors` 扩展点的插件，
 hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `connector.`（`status` → `connector.status`），参数里多一个 `contribution`（连接器的 id），
 参数、结果、硬性规定一个都不变。程序调 hub 的 `secrets.*` 和事件 `changed` 也一样加前缀、带 `contribution`。进程什么时候起、怎么停、
-怎么重启、配置和用户填的密钥怎么给，都是插件底座的事（`docs/plugins.md`）。
+怎么重启、配置和用户填的密钥怎么给，都是插件底座的事（`docs/extensions.md`）。
 
 `connector/serve` 同时认两种开头：插件协议的 `initialize` + `connector.*`（hub 现在只用这种），和下面原来的 `init` + 不带前缀的方法名（单独的连接器协议，
 保留一个发布周期，下一次改协议时删）。Go 写的连接器程序用 `serve.MainWith`，它在插件开头里还能拿到用户填的密钥（`Init.Declared`）和数据目录。
@@ -40,7 +40,7 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 
 | 字段 | 意思 |
 | --- | --- |
-| `capabilities` | `status`、`tools`、`actions`（写操作，见下）、`events`、`inbox`、`archive`、`items`（知识库的条目：文档、会议、日程）、`login`、`options`、`threads`（收件箱的会话在 App 里打开成会话页）、`snapshot`（助手快照里的未读会话和今天的会）、`group`（收件箱的事件合成，要有 `inbox`，见下面「事件合成」）、`meta`（事件合成时自己记每件事的 meta：hub 合成一件事后调 `group.append`，要有 `group` 和 `meta_description`）、`fallback`（承诺每个收件箱条目都带兜底分级 `extra.rule_tier`，没有方法；要有 `inbox`，见 `docs/plugins.md`「收件箱的通用规则」）；hub 只调声明了的 |
+| `capabilities` | `status`、`tools`、`actions`（写操作，见下）、`events`、`inbox`、`archive`、`items`（知识库的条目：文档、会议、日程）、`login`、`options`、`threads`（收件箱的会话在 App 里打开成会话页）、`snapshot`（助手快照里的未读会话和今天的会）、`group`（收件箱的事件合成，要有 `inbox`，见下面「事件合成」）、`meta`（事件合成时自己记每件事的 meta：hub 合成一件事后调 `group.append`，要有 `group` 和 `meta_description`）、`fallback`（承诺每个收件箱条目都带兜底分级 `extra.rule_tier`，没有方法；要有 `inbox`，见 `docs/extensions.md`「收件箱的通用规则」）；hub 只调声明了的 |
 | `hosts` | 链接所在的主机名（App 认链接） |
 | `agent_tools` | 哪些工具也给编程 Agent，按名字的通配（不写就只给助手） |
 | `unlisted` | 哪些工具和写操作不进模型的工具列表，按名字的通配：连接器自己的前端按名字调（Telegram 的 `tg` 命令行）。不是权限：按名字调照常能调，写的照常过闸门，Agent 能不能调照旧看 `agent_tools` |
@@ -80,16 +80,16 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 `url`、`open_url`、`reply_to`、`can_reply`、`tier`（`action` / `fyi` / `noise`，空的交给模型）、`why`、`done`（`read` / `replied`：这件事结束了）、
 `read`、`tags: [{key, value, name}]`（`repo` / `chat` / `sender` 能被用户静音）、`rules`、`extra`（见下）、`group`、`id`、`meta`（见下面「事件合成」）。
 
-- `rules`：用户给这件事定的分拣规则，原话（这个来源、这个账号的，比如插件设置里的 `triage_rules`，`docs/plugins.md`「约定的设置项」）。
+- `rules`：用户给这件事定的分拣规则，原话（这个来源、这个账号的，比如插件设置里的 `triage_rules`，`docs/extensions.md`「约定的设置项」）。
   有就**只用它**，不用 hub 的全局 `inbox.rules`；空的用全局。hub 的默认判断标准照旧在下面，用户的规则优先。可以有换行；最多 4000 字，多了截掉。和别的字段一样在 thing 的第一层，迁出 hub 的连接器（带 `extra` 的）也是。
   旧 hub 不认这个字段，照旧用全局规则。
 - 声明了 `fallback` 的连接器每个条目都带 `extra.rule_tier`：这件事的兜底分级，模型照样先分，分不了时按它进收件箱（不带 `tier` 时也一样；
-  普通连接器的 `extra` hub 只读这一项）。没声明 `fallback` 的插件连接器要有能用的分拣模型才能启用（`docs/plugins.md`「收件箱的通用规则」）。
+  普通连接器的 `extra` hub 只读这一项）。没声明 `fallback` 的插件连接器要有能用的分拣模型才能启用（`docs/extensions.md`「收件箱的通用规则」）。
 - `tier` 是这件事的兜底：模型分不了（没配、没额度、出错、超时）时按它进收件箱。插件提供的连接器（不是 personad 自带的）`tier` 为空的没有兜底，
   它的新条目先分拣再进收件箱（`docs/inbox.md`「AI 分拣」），模型分不了时**这一轮不进收件箱**，
   hub 也不存；下一轮 `inbox.collect` 再交回来（本来就是从内存回答，不用为此做什么），模型好了就进来。hub 在 `GET /api/v1/inbox` 的 `triage` 里说有几件在等（`docs/inbox.md`「AI 分拣」）。
 
-**迁出 hub 的连接器**（`connector.MigratableConnectors`，现在是 `lark`，`docs/plugins.md`「App 接口」）：它的 thing 可以带 `extra`
+**迁出 hub 的连接器**（`connector.MigratableConnectors`，现在是 `lark`，`docs/extensions.md`「App 接口」）：它的 thing 可以带 `extra`
 （`source`、`account`、`account_name`、`legacy_id`、`avatar`、`count`、`started_at`、`rule_tier`，以及原来条目的块之一 `lark` / `doc` / `moment`）。
 hub 只对这些连接器读它：条目保持 hub 原来自己做的样子（那个块，没有通用的 `connector` 块），App 照旧打开飞书聊天、文档的行、帖子；thread 由块算出
 （`chat:<feed>`，非主账号 `chat:<账号>:<feed>`；`doc:<notice>`；`moment:<post>`），所以迁出之前 hub 自己做的条目接着用、不重复出一条；新条目的 id
@@ -107,7 +107,7 @@ hub 只对这些连接器读它：条目保持 hub 原来自己做的样子（�
 ### 事件合成（`group`，#1680）
 
 声明了 `group` 的连接器不再一个会话交一条，而是把一个会话的新消息交成**待关联的一批**，由 hub 的模型判断各归哪件事（`docs/inbox.md`「事件合成」）。
-只在 hub 的 `initialize` 报了 `inbox_group`（`hub.capabilities`，`docs/plugins.md`）时这么做；否则照旧一个会话交一条。
+只在 hub 的 `initialize` 报了 `inbox_group`（`hub.capabilities`，`docs/extensions.md`）时这么做；否则照旧一个会话交一条。
 
 - **一批**：`inbox.collect` 的 thing 带 `group: {batch, new}`。`batch` 是这一批的 id，同一批再交时不变；`new` 是要归类的新消息 id（对 hub 不透明）。
   同时带 `thread`（会话）、`context`（这些新消息的文字，给模型看，每条带上它的 id）、`rules`、`last`；不用带 `extra`。hub **不把它写进收件箱**。
@@ -144,7 +144,7 @@ hub 只对这些连接器读它：条目保持 hub 原来自己做的样子（�
 | `archive.chats` | `{source?}` → `{chats: [{id, name, cursor, last_at, messages}]}` | 知识库里这个连接器某个名字（空着是 id，或 `archive_sources` 之一）下的会话：来源那边的 id 和读到哪。接续用：连接器第一次归档时从这里接着，不重复、不漏 |
 | 事件 `changed` | `{scope}` | `chats`、`items`、`inbox`：有新东西，hub 尽快来取；不认识的 scope 被丢掉并记日志 |
 
-插件同时贡献了 `events`（`docs/plugins.md`「事件」）时，hub 发来的 `event.<名字>` 交给实现了 `serve.Listener` 的连接器（`Hear(ctx, 名字, 参数)`，
+插件同时贡献了 `events`（`docs/extensions.md`「事件」）时，hub 发来的 `event.<名字>` 交给实现了 `serve.Listener` 的连接器（`Hear(ctx, 名字, 参数)`，
 在自己的 goroutine 里，不回应）；没实现的照旧丢掉。微信机器人用它听 `agent.needs_you`（`docs/wechat.md`）。
 
 ### 知识库
@@ -197,7 +197,7 @@ hub 只对这些连接器读它：条目保持 hub 原来自己做的样子（�
 
 `conformance.Check(t, c)` 把一个 Go 连接器放在协议的程序一侧（`serve.Serve`，经一对管道），对清单声明的每个能力既直接调、也经协议调，
 两边的结果编成 JSON 必须一字不差：字段在线上丢了、类型变了都会挂。两种开头各跑一遍（`init` + 原方法名，`initialize` + `connector.*`）；
-插件开头那一遍还查 `initialize` 回的贡献和清单一致、不认识的连接器回 `no_contribution`。程序整体是否守插件协议，由 `extension/conformance` 查（`docs/plugins.md`「一致性测试」）。GitHub、信息、Telegram 的测试里都跑它；`TestWireTypesAreTagged` 检查
+插件开头那一遍还查 `initialize` 回的贡献和清单一致、不认识的连接器回 `no_contribution`。程序整体是否守插件协议，由 `extension/conformance` 查（`docs/extensions.md`「一致性测试」）。GitHub、信息、Telegram 的测试里都跑它；`TestWireTypesAreTagged` 检查
 线上的每个字段都有明确的 snake_case 名字。用 Go 写的第三方程序可以照着 `serve.Serve` 的接法，用同一份测试检查自己。
 
 ### 别的语言写的程序：`CheckProgram`

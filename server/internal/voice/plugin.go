@@ -33,7 +33,7 @@ func New(cfg Config, hubURL, hubToken string, logger *log.Logger) *Plugin {
 
 func (pl *Plugin) logf(format string, args ...any) { pl.logger.Printf(format, args...) }
 
-// Handler is the plugin's API (docs/plugins.md「语音」): /health, /models, /voices, /ws.
+// Handler is the plugin's API (docs/extensions.md「语音」): /health, /models, /voices, /ws.
 func (pl *Plugin) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +90,7 @@ func Run(ctx context.Context) error {
 	logger := log.New(os.Stderr, "", 0)
 	socket := identity.Getenv("JARVIS_PLUGIN_SOCKET")
 	if socket == "" {
-		return errors.New("JARVIS_PLUGIN_SOCKET is not set: this runs under the Persona hub (plugins in ~/.jarvis/hub.json, docs/plugins.md)")
+		return errors.New("JARVIS_PLUGIN_SOCKET is not set: this runs under the Persona hub (plugins in ~/.jarvis/hub.json, docs/extensions.md)")
 	}
 	cfg, err := LoadConfig()
 	if err != nil {

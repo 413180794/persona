@@ -1,7 +1,7 @@
 # 操控电脑（Cua Driver）
 
 Persona 助手经 [Cua Driver](https://github.com/trycua/cua)（`libs/cua-driver`，MIT，外部安装，不进仓库）操控用户的 Mac：
-看窗口和屏幕、点按、输入、截图。做成 hub 的**内置插件 `cua`**（[plugins.md](plugins.md)），**默认关**，打开后再**按机器**逐台打开。
+看窗口和屏幕、点按、输入、截图。做成 hub 的**内置插件 `cua`**（[extensions.md](extensions.md)），**默认关**，打开后再**按机器**逐台打开。
 
 | 块 | issue | 状态 |
 | --- | --- | --- |
@@ -15,7 +15,7 @@ Persona 助手经 [Cua Driver](https://github.com/trycua/cua)（`libs/cua-driver
 - **插件 `cua`**：personad 自带的纯声明插件（不跑进程），贡献扩展点 `computer`。在「设置 › 插件」里开关（#1191），
   或在 hub 机器上 `personad plugin enable cua`。默认关。
 - **按机器**：插件打开后，每台 Mac 的机器页多一节「操控电脑」，开关「允许助手操控这台电脑」
-  （`PUT /api/v1/machines/{mid}/computer`），存在插件配置的 `machines` 里。插件页的「能操控的电脑」是同一个值：只列 Mac，每台一个开关（名字、在线与否、Cua 的状态），即时生效（`format: machine`，[plugins.md](plugins.md)）。
+  （`PUT /api/v1/machines/{mid}/computer`），存在插件配置的 `machines` 里。插件页的「能操控的电脑」是同一个值：只列 Mac，每台一个开关（名字、在线与否、Cua 的状态），即时生效（`format: machine`，[extensions.md](extensions.md)）。
 - **操作前确认**：插件配置的 `confirm`（「操作前在手机上确认」），默认关，见「写操作」。
 
 **插件关着时**：
@@ -386,7 +386,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - 只在 Mac 上。实测（`TestAwakeOnThisMac`，`PERSONA_AWAKE_E2E=1`）：`pmset -g assertions` 里有这个 caffeinate 的 `PreventUserIdleDisplaySleep`，撤掉后就没了。
 - **锁着时的「解锁」入口**（已做）：机器页「操控电脑」在那台锁屏时写「这台 Mac 锁屏了，解锁后才能操控」。屏幕共享开着时，给「解锁」打开实时画面：切到「接管」，在锁屏上输登录密码。node 的说明也改成「屏幕共享开着时，可以在它的画面上输登录密码解锁」。
 - **「插件开着时不自动锁屏」**（已做，#1507 b2，插件 `cua` 的 `no_auto_lock`：按 Mac 的列表，默认空）：
-  - 打开时先确认：机器页「操控电脑」的开关弹确认框；插件页的按机器开关看 schema 的 `x-confirm`（插件表单的通用扩展，[plugins.md](plugins.md)），App 弹确认框、网页用 `window.confirm`。关掉不问。
+  - 打开时先确认：机器页「操控电脑」的开关弹确认框；插件页的按机器开关看 schema 的 `x-confirm`（插件表单的通用扩展，[extensions.md](extensions.md)），App 弹确认框、网页用 `window.confirm`。关掉不问。
   - 插件对这台开着、开关也开着时，node 持有 `caffeinate -dims -t 1800 -w <node 的 pid>`（`node/awake.go` 的 `computer.nolock`，和「保持唤醒」的那个分开）。
   - hub 在开关或插件变了、node 连上时说一次，之后每 10 分钟再说一次（`hub/computer_nolock.go`）。node 每次收到都换一个新的 30 分钟；hub 不再说（断开了），30 分钟后自己到期，就恢复按时锁屏。
   - 没有 `-u`，所以不会去点亮已经关了的显示器。

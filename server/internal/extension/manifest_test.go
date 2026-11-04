@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// exampleManifest is the plan's example (docs/plan-plugins.md「三」), a made-up notes service.
+// exampleManifest is the plan's example (docs/plan-extensions.md「三」), a made-up notes service.
 const exampleManifest = `{
   "manifest_version": 1,
   "id": "example-notes",

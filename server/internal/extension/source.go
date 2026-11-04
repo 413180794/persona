@@ -25,7 +25,7 @@ const (
 	PackageFiles = 20000
 )
 
-// Source is where a package comes from (docs/plan-plugins.md「来源」).
+// Source is where a package comes from (docs/plan-extensions.md「来源」).
 type Source struct {
 	Kind string // dir | file | https | remote | upload | market
 	Path string // dir, file: a path on the hub's machine; https: the URL without the fragment; upload: the file's name
@@ -230,7 +230,7 @@ func Stage(ctx context.Context, src Source, dir string) (string, error) {
 
 // packageRoot is dir, or its only top-level directory, whichever has the manifest.
 func packageRoot(dir string) (string, error) {
-	if _, err := os.Stat(filepath.Join(dir, ManifestFile)); err == nil {
+	if hasManifest(dir) {
 		return dir, nil
 	}
 	entries, err := os.ReadDir(dir)
@@ -239,11 +239,11 @@ func packageRoot(dir string) (string, error) {
 	}
 	if len(entries) == 1 && entries[0].IsDir() {
 		sub := filepath.Join(dir, entries[0].Name())
-		if _, err := os.Stat(filepath.Join(sub, ManifestFile)); err == nil {
+		if hasManifest(sub) {
 			return sub, nil
 		}
 	}
-	return "", fmt.Errorf("包里没有 %s（根目录或唯一的顶层目录里）", ManifestFile)
+	return "", fmt.Errorf("包里没有 %s（或老名字 %s；根目录或唯一的顶层目录里）", ManifestFile, LegacyManifestFile)
 }
 
 // macMetadata says whether rel is what macOS puts into a package made on a Mac (Finder's zip, tar without

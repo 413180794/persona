@@ -272,7 +272,7 @@ hub 合成条目（`server/internal/hub/inbox_connectors.go`），规则和飞�
   看过的飞书消息按可见即读上报飞书已读，从收件箱打开时的第一屏也算（2026-10-31 用户确认，门禁见 `docs/redesign/ux.md` 3.5 / 3.6）；「已处理」只记在 Persona，不回写飞书。
   导航栏下面是操作条（`InboxActionBar`）：✦ 摘要 +「AI 草拟回复」「交给 AI」。
 - DEBUG：`-tab mail`（打开收件箱）、`-openInboxFirst YES`（打开第一件未处理的）、`-showInboxAction draft|handoff`（再打开那个浮层）。
-- **插件画的详情**（#1681，`docs/plugins.md`「收件箱条目」）：插件的连接器收进来的事（`source` 是那个连接器），插件贡献了这个连接器的 `inbox_item` 时，
+- **插件画的详情**（#1681，`docs/extensions.md`「收件箱条目」）：插件的连接器收进来的事（`source` 是那个连接器），插件贡献了这个连接器的 `inbox_item` 时，
   详情的头部（标题、来源、已处理、✦ 摘要、AI 草拟回复 / 交给 AI）照旧，下面的正文换成插件按这一条画的 View（飞书插件按 meta 画一件事：涉及的人、时间跨度、接着哪件、消息链、回复、在会话里看）。
   「在会话里看」回 `persona://inbox/<条目 id>/source`，App 打开这件事原来的来源页（飞书会话停在这件事的第一条）。
   hub 把这一行的 `{id, title, summary, tier, reason, done, meta, extra}` 交给插件，`meta` 原样、不解析。没有这个插槽的来源、没有它的老 hub、只读设备、插件画不出来时，照旧画原来的正文。

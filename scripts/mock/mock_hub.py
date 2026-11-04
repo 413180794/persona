@@ -4195,7 +4195,7 @@ def _w(label, ratio=None, used=None, limit=None, unit="percent", resets=None, ex
     if resets: w["resets_at"] = resets
     if exhausted: w["exhausted"] = True
     return w
-LAUNCHER_QUOTAS = {  # as a quota plugin would answer (docs/plugins.md「额度」); gateway_name is what the app shows
+LAUNCHER_QUOTAS = {  # as a quota plugin would answer (docs/extensions.md「额度」); gateway_name is what the app shows
     "cc_main": {"gateway": "example-gateway", "gateway_name": "示例网关", "key_name": "cc_main",
         "budget": [_w("每周预算", 0.62, 496, 800, "usd", later(hours=60))],
         "pools": [
@@ -4212,7 +4212,7 @@ LAUNCHER_QUOTAS = {  # as a quota plugin would answer (docs/plugins.md「额度�
              "models": [{"model": "example-flash", "windows": [_w("TPM", 0.02, 8400, 500000, "tokens")]}]},
             {"name": "供应商 B", "state": "unsupported", "detail": "上游没有额度接口，只有网关统计"}]},
 }
-# 新增供应商 › 从插件添加 (docs/plugins.md「模型供应商」): the providers made-up plugins offer (GET /api/v1/launchers/presets).
+# 新增供应商 › 从插件添加 (docs/extensions.md「模型供应商」): the providers made-up plugins offer (GET /api/v1/launchers/presets).
 LAUNCHER_PRESETS = [
     {"id": "example-gateway/team", "plugin": "example-gateway", "name": "示例网关 · 团队", "description": "团队共用的 Claude Code 网关，按 Key 计费",
      "kind": "launcher", "base_url": "https://gateway.example.com", "model": "claude-opus-5-5", "small_model": "claude-haiku-5-5",
@@ -7295,7 +7295,7 @@ def pins_route(handler, p):
     return True
 
 
-# ---------- MOCK_PLUGINS: the plugin base (docs/plugins.md「hub 的接口」) ----------
+# ---------- MOCK_PLUGINS: the plugin base (docs/extensions.md「hub 的接口」) ----------
 # MOCK_PLUGINS=1 lists five made-up plugins, one of each state the app draws (needs setup, running, hub.json's,
 # switched off, incompatible), with feature plugin_manager; their pages, switches, settings and secrets work in memory.
 # The form of example-notes has every kind of field. A base_url that is not a URL is refused like the hub does.
@@ -7347,7 +7347,7 @@ PLUGINS["example-gateway"] = {
     "ui": [{"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "home", "title": "概况", "placement": "plugin_page", "size": "full"},
            {"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "usage", "title": "用量", "placement": "nav_page", "size": "full",
             "icon": "chart", "badge": {"text": "3", "tone": "danger"}}]}
-# The UI slots (docs/plugins.md「UI 插槽」): example-gateway's nav_page, overview_card and machine_section.
+# The UI slots (docs/extensions.md「UI 插槽」): example-gateway's nav_page, overview_card and machine_section.
 _SLOT_UI = [{"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "today", "title": "今天的用量", "placement": "overview_card",
              "size": "compact", "opens": "usage"},
             {"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "gpu", "title": "网关调用", "placement": "machine_section", "size": "full"}]
@@ -7402,7 +7402,7 @@ def cua_config(pl):
 _PLUGIN_VIEW = ["id", "name", "kind", "status", "error", "version", "source", "enabled", "description", "contributes", "needs_setup", "warnings",
                 "auto_upgrade", "upgrade", "upgrade_note"]
 
-# ---------- MOCK_PLUGINS: declarative UI (docs/plugins.md「声明式 UI」) ----------
+# ---------- MOCK_PLUGINS: declarative UI (docs/extensions.md「声明式 UI」) ----------
 # example-gateway draws a page (plugin_page "home") and a section on every launcher's page (launcher_section "panel"),
 # with every kind of item; its buttons answer (a toast, a new view, a link), the form's values come back.
 _UI_STATE = {"note": "", "auto": "true", "plan": "team", "refreshed": 0}
@@ -7508,13 +7508,13 @@ def _ui_action(ui, action, values):
     return {}
 
 
-# ---------- MOCK_PLUGINS: plugin markets (docs/plugins.md「插件市场」) ----------
+# ---------- MOCK_PLUGINS: plugin markets (docs/extensions.md「扩展市场」) ----------
 # Two made-up markets (a public site, a private GitHub repository with its token set); their catalog has a plugin to
 # install, one installed from the market with an upgrade, one installed elsewhere, and one this hub cannot install.
 # Previews, installs, upgrades and removals work in memory.
 _MARKET_A, _MARKET_B = "3f2a9c1d0b", "8e01b7c4a2"
 MARKETS = {
-    _MARKET_A: {"id": _MARKET_A, "spec": "https://plugins.example.com/persona/persona-plugins.json", "name": "Example 插件",
+    _MARKET_A: {"id": _MARKET_A, "spec": "https://plugins.example.com/persona/persona-extensions.json", "name": "Example 插件",
                 "description": "Example 官方维护的插件。", "homepage": "https://plugins.example.com/", "has_token": False, "plugins": 3,
                 "warnings": [], "fetched_at": "2026-11-04T06:00:00Z", "added_at": "2026-11-01T08:00:00Z"},
     _MARKET_B: {"id": _MARKET_B, "spec": "github:example/team-plugins", "name": "团队插件", "description": "团队内部用的插件（私有仓库）。",
@@ -7550,7 +7550,7 @@ def _catalog_item(c):
     return {k: v for k, v in it.items() if v not in (None, "", False)} | {"tags": c.get("tags", [])}
 
 
-# Auto-upgrade (docs/plugins.md「自动升级」): example-gateway, from a market at 1.0.0, has 1.1.0 there asking for one more
+# Auto-upgrade (docs/extensions.md「自动升级」): example-gateway, from a market at 1.0.0, has 1.1.0 there asking for one more
 # host. MOCK_PLUGIN_UPGRADE picks how it stands: needs_permission (default), waiting_idle, skipped, upgraded (the last
 # one went in by itself), none.
 AUTO_UPGRADE = {"auto": True}
@@ -7670,7 +7670,7 @@ def markets_route(handler, p, body):
                 ui = [u for u in PLUGINS["example-gateway"]["ui"] + _SLOT_UI if placement in ("", u["placement"])]
             elif q.get("launcher"):
                 # "elsewhere" has no hosts (listed on every launcher) and always says the launcher is not its gateway:
-                # clients hide it (docs/plugins.md「声明式 UI」, #1339)
+                # clients hide it (docs/extensions.md「声明式 UI」, #1339)
                 ui = [{"plugin": "example-gateway", "id": "panel", "title": "Example 网关", "placement": "launcher_section"},
                       {"plugin": "example-gateway", "id": "elsewhere", "title": "别家网关", "placement": "launcher_section"}]
         ui += [u for u in INBOX_ITEM_UI if placement in ("", u["placement"])]
@@ -7778,7 +7778,7 @@ def plugins_route(handler, p, body):
     return True
 
 
-# ---------- MOCK_VOICE: the hub's voice plugin (docs/plugins.md「语音」, docs/android.md「语音对话」) ----------
+# ---------- MOCK_VOICE: the hub's voice plugin (docs/extensions.md「语音」, docs/android.md「语音对话」) ----------
 # MOCK_VOICE=1 serves a running voice plugin: /api/v1/plugins, its voices and models, the model configuration of
 # plugin.voice, and a socket that answers start with ready, then talks by a script (captions, a tool, audio). Modes for
 # captures: drop (closes with 1001, a plugin restart, while Jarvis speaks), bad-model (the model configuration says the
@@ -10401,7 +10401,7 @@ MOCK_HELP.append("MOCK_RESTART=1  hub 无感重启（#1634）：hello 带 event_
 MOCK_HELP.append("MOCK_DOC_COMMENTS=1  飞书文档阅读页能写评论（#1290）：features 带 lark_doc_comments，每篇文档三条编造的评论，回复 / 新评论 / 解决 / 重新打开 / @人都改它们；GET /mock/doc-comments 看写了什么")
 
 
-# ---------- area: an inbox item's page drawn by a plugin (docs/plugins.md「收件箱条目」, #1681) ----------
+# ---------- area: an inbox item's page drawn by a plugin (docs/extensions.md「收件箱条目」, #1681) ----------
 # MOCK_INBOX_ITEM_UI=1 (with MOCK_PLUGINS=1): a plugin example-chat draws the page of Feishu's items (inbox_item for
 # connector lark), from the item it is told of (context.item): the people, the time it spans, the thing it continues
 # and its messages, a reply (files the item as replied) and 在会话里看 (persona://inbox/<item>/source: the apps open the

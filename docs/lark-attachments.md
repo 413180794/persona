@@ -1,7 +1,7 @@
 # 原生飞书图片与文件发送（#410）
 
 > **2026-11-04 起（#1520，插件第 3 步 3c）**：经 lark-connector 接飞书的整条链路（App 的 `/api/v1/lark/…`、收件箱和知识库的飞书来源、公司圈、
-> 助手的 `ol` 闸门和凭据、/agent、个人 Agent）不在开源仓库里了，由接飞书的插件提供（`docs/plugins.md`，`docs/plan-plugins.md`「第 3 步」）。
+> 助手的 `ol` 闸门和凭据、/agent、个人 Agent）不在开源仓库里了，由接飞书的插件提供（`docs/extensions.md`，`docs/plan-extensions.md`「第 3 步」）。
 > 下文描述的行为由插件照原样提供；文中提到的 hub 源文件（`hub/lark*.go`、`internal/lark` 的客户端……）已删。开源版只留官方 lark-cli、飞书机器人、飞书邮箱。
 
 现有 `LarkChatView` 输入框的「＋」选择照片或文件，先预览、移除，再发送。预览复用图片查看器（支持下拉关闭）与系统 Quick Look；消息继续使用原生飞书排版。

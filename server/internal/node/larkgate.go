@@ -17,7 +17,7 @@ import (
 )
 
 // The assistant's skills call HTTP APIs as the user through commands (`<command> METHOD PATH [BODY]`, the
-// command gates the hub hands over: plugins' assistant.gate, docs/plugins.md「助手」) and through lark-cli. Every Bash
+// command gates the hub hands over: plugins' assistant.gate, docs/extensions.md「助手」) and through lark-cli. Every Bash
 // call of the assistant passes a PreToolUse hook that reads the command (docs/assistant.md):
 //
 //   - only gated calls (and a few output filters): each call goes by its gate's rules (the first match: allow, confirm

@@ -149,7 +149,7 @@ func TestLockScreen(t *testing.T) {
 	}
 }
 
-// 「插件开着时不自动锁屏」: held for its window, renewed by each word from the hub, let go when off, by itself when the
+// 「扩展开着时不自动锁屏」: held for its window, renewed by each word from the hub, let go when off, by itself when the
 // hub says nothing more.
 func TestNoLockHoldsUntilLetGoOrRunOut(t *testing.T) {
 	log := fakeCaffeinate(t)

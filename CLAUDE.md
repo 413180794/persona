@@ -202,7 +202,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/hub-restart.md` | hub 重启对客户端无感：socket activation 零空窗、计划内停机、事件序号和续传（`event_seq`）、warm start、常驻 node 托管助手对话、客户端的静默重连和幂等重放、反复重启的验证脚本 |
 | `docs/hub-update.md` | hub 的版本、检测更新和自动更新（方案）：skill 从二进制拿出来、一种二进制、签名的版本清单、自动发布和灰度、下载 → 校验 → 等空闲 → 重启 → 回滚、App 里怎么显示 |
 | `docs/push-relay.md` | 推送中继（端到端加密）：没有 APNs key 的 hub 经发布方的 `personad relay` 推送，正文用手机公钥加密、通知服务扩展解密；谁知道什么、防滥用、接口、部署 |
-| `docs/plugins.md` | 插件底座：内置 / hub.json / 安装的三种来源、扩展点、清单 `persona-plugin.json`（字段、配置表单的 schema 子集、权限）、安装 / 升级 / 回滚 / 卸载和 `personad plugin`、市场插件的自动升级、按需激活和崩溃降级、配置和密钥怎么到插件、`/api/v1/plugins` 接口、进程插件协议和一致性测试；语音插件和 App 之间的契约；内置的 GPT-Live 语音插件 `personad voice` |
+| `docs/extensions.md` | 扩展（原「插件」，#1843）：术语（扩展 / 扩展点 / 贡献）、命名和兼容（老名字照旧能用、保留到何时）、内置 / hub.json / 安装的三种来源、扩展点、清单 `persona-extension.json`（字段、配置表单的 schema 子集、权限）、安装 / 升级 / 回滚 / 卸载和 `personad extension`、扩展市场和自动升级、按需激活和崩溃降级、配置和密钥怎么到扩展、`/api/v1/extensions` 接口、进程扩展协议和一致性测试；语音扩展和 App 之间的契约；内置的 GPT-Live 语音扩展 `personad voice` |
 | `docs/ports.md` | 端口转发：node 找出 Agent 在监听的端口、App 认出回答里的 localhost 链接，手机本地监听 + WebSocket 经 hub 转到那台机器，取舍和安全边界 |
 | `docs/prompts.md` | 提示词：`server/internal/prompts/` 的目录结构、每个提示词干什么用、模板规矩、怎么改 / 加、golden 测试怎么更新 |
 | `docs/machines.md` | 机器监控：OS 识别、CPU / 内存 / 网络 / 磁盘的采集口径（哪些网卡算）、开销实测、24 小时历史的存储 / 降采样 / 清理、App 的「机器」页（Agent 和监控合在一起）和机器详情 |
@@ -294,6 +294,6 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/redesign/` | 客户端重设计与 Android 首版的方案（2026-10-30 草案）：功能对齐矩阵、交互规格、流程图、hub 改动；外观部分已被 `docs/android-design.md` 取代，调研笔记在 `research/` |
 | `docs/plan-lark-cli.md` | 计划：没有 lark-connector 时用官方 lark-cli 接飞书：能力对照和降级、两种来源并存、做成连接器、闸门认 lark-cli、收件箱收什么、分步计划和已拍板项 |
 | `docs/plan-ego-browser.md` | 计划：ego lite 浏览器插件（#1304）：照 Cua 插件的模式接入（默认关、按 Mac 开、安装校验、首次设置引导），助手的 `browser_*` 工具和 Agent 用自带 skill 的分工，看浏览器（实时画面 / 定时截图 / CDP 投屏），导入 cookies 的来源、存储与安全、写入方式，要拍板的 |
-| `docs/plan-plugins.md` | 计划：插件系统（#1101）：关键取舍（只在 hub 机器上装、权限不是沙箱、表单子集）、实现和方案的出入、分步进度（1a 服务端底座已做，1b App 设置页、第 2–4 步待做）、语音和连接器 v2 怎么迁上来 |
+| `docs/plan-extensions.md` | 计划：扩展系统（#1101，#1843 改名）：关键取舍（只在 hub 机器上装、权限不是沙箱、表单子集）、实现和方案的出入、分步进度、语音和连接器 v2 怎么迁上来 |
 | `docs/lessons/` | 经验（踩坑）按主题分文件：协作、Agent、助手、服务端、transcript、飞书邮件、终端、iOS、Android、macOS、测试，索引 `docs/lessons/README.md` |
 | `docs/archive/` | 已结束的车道方案、真实数据验证、阶段状态表和验收记录（实时更新打断操作、消息链路、会话读取验证、Android P0），只作证据引用，不随代码更新；新的一次性记录做完放这里 |

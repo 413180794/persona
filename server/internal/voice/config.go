@@ -1,4 +1,4 @@
-// Package voice is the built-in voice plugin (`jarvisd voice`, docs/plugins.md「内置语音插件」): full-duplex voice
+// Package voice is the built-in voice plugin (`jarvisd voice`, docs/extensions.md「内置语音扩展」): full-duplex voice
 // conversations in the app over a realtime service that speaks the GPT-Live wire. The hub starts it like any plugin
 // and relays /api/v1/plugins/<id>/… to the HTTP server it serves on JARVIS_PLUGIN_SOCKET.
 //
@@ -75,7 +75,7 @@ var (
 func LoadConfig() (Config, error) {
 	raw := strings.TrimSpace(identity.Getenv("JARVIS_PLUGIN_CONFIG"))
 	if raw == "" {
-		return Config{}, errors.New("JARVIS_PLUGIN_CONFIG is empty: give the plugin entry in hub.json a config with providers (docs/plugins.md)")
+		return Config{}, errors.New("JARVIS_PLUGIN_CONFIG is empty: give the plugin entry in hub.json a config with providers (docs/extensions.md)")
 	}
 	var c Config
 	if err := json.Unmarshal([]byte(raw), &c); err != nil {

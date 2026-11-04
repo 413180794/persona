@@ -888,7 +888,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return macClipboard(ctx, params)
 	case "computer.cursor": // 「显示 Agent 的光标」: Cua Driver's daemon with or without its cursor overlay (cua_extras.go)
 		return setCursor(ctx, params)
-	case "computer.nolock": // 「插件开着时不自动锁屏」, said again by the hub every few minutes (awake.go)
+	case "computer.nolock": // 「扩展开着时不自动锁屏」, said again by the hub every few minutes (awake.go)
 		var p struct {
 			On bool `json:"on"`
 		}

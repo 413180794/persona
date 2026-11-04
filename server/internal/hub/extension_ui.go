@@ -21,7 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// Declarative UI and events (docs/plugins.md「声明式 UI」「事件」). The apps ask the hub what plugins draw where
+// Declarative UI and events (docs/extensions.md「声明式 UI」「事件」). The apps ask the hub what plugins draw where
 // (GET /api/v1/plugins/-/ui) and for one of them (POST /api/v1/plugins/{id}/-/ui/{ui}); the hub asks the plugin
 // (ui.render, ui.action), holds the View to what the apps draw (plugin.CheckView) and gives it to them. A launcher
 // section may reach the launcher's gateway with its key the way quota does (gateway.http), never seeing the key. An
@@ -31,8 +31,8 @@ const uiTimeout = 20 * time.Second
 
 // UIPlace is one thing a plugin draws, as the apps list it.
 type UIPlace struct {
-	Extension     string `json:"plugin"`
-	ExtensionName string `json:"plugin_name,omitempty"`
+	Extension     string `json:"extension"`
+	ExtensionName string `json:"extension_name,omitempty"`
 	ID            string `json:"id"`
 	Title         string `json:"title"`
 	Placement     string `json:"placement"`
@@ -231,7 +231,7 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (extens
 			return res, errors.New("这个界面属于一个启动器：缺 context.launcher")
 		}
 		if !p.Record.Granted.LauncherKeys {
-			return res, errors.New("这个插件没有被允许用启动器的 Key")
+			return res, errors.New("这个扩展没有被允许用启动器的 Key")
 		}
 		gw, err := h.launcherGateway(ctx, in.Context.Launcher, in.Context.Machine)
 		if err != nil {
@@ -239,7 +239,7 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (extens
 		}
 		root, err := quota.Root(gw.base)
 		if err != nil || (len(item.Hosts) > 0 && !hostMatches(root.Hostname(), item.Hosts)) {
-			return res, errors.New("这个启动器的网关不是这个插件的")
+			return res, errors.New("这个启动器的网关不是这个扩展的")
 		}
 		var b [12]byte
 		_, _ = rand.Read(b[:])
@@ -296,14 +296,14 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (extens
 			h.extensions.logf("plugin %s: ui %s drew items this hub does not know (%s): left out", id, uiID, strings.Join(dropped, ", "))
 		}
 		if err != nil {
-			return fmt.Errorf("插件画的界面这个 hub 画不了：%v", err)
+			return fmt.Errorf("扩展画的界面这个 hub 画不了：%v", err)
 		}
 		return nil
 	}
 	if method == "ui.render" {
 		var v extension.View
 		if err := json.Unmarshal(out, &v); err != nil {
-			return res, fmt.Errorf("插件画的界面这个 hub 画不了：%v", err)
+			return res, fmt.Errorf("扩展画的界面这个 hub 画不了：%v", err)
 		}
 		if err := fit(&v); err != nil {
 			return res, err
@@ -336,9 +336,9 @@ func checkOpenURL(ui extension.UIItem, itemID, raw string) error {
 	}
 	if u, err := url.Parse(raw); err != nil || u.Scheme != "https" || u.Host == "" {
 		if strings.HasPrefix(raw, "persona:") {
-			return errors.New("插件要打开的 persona: 链接不是这一条的来源（只有收件箱条目的界面能开 persona://inbox/<这一条>/source）")
+			return errors.New("扩展要打开的 persona: 链接不是这一条的来源（只有收件箱条目的界面能开 persona://inbox/<这一条>/source）")
 		}
-		return errors.New("插件要打开的不是 https 链接")
+		return errors.New("扩展要打开的不是 https 链接")
 	}
 	return nil
 }
@@ -353,14 +353,14 @@ var (
 	// errNoItem: an inbox item's page without the item, or for one the inbox does not have.
 	errNoItem = errors.New("收件箱里没有这一条")
 	// errNotItsItem: an inbox item's page for an item of another source than its connector.
-	errNotItsItem = errors.New("这一条不是这个插件的连接器收进来的")
+	errNotItsItem = errors.New("这一条不是这个扩展的连接器收进来的")
 	// errNotServed: an inbox item's page whose connector is not the plugin's now (not registered, or another's); the
 	// apps draw the item's own detail.
-	errNotServed = errors.New("这个插件现在不管这个连接器")
+	errNotServed = errors.New("这个扩展现在不管这个连接器")
 )
 
 func (h *Hub) extensionUIRoutes(api *http.ServeMux) {
-	api.HandleFunc("GET /api/v1/plugins/-/ui", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("GET /api/v1/extensions/-/ui", func(w http.ResponseWriter, r *http.Request) {
 		placement := r.URL.Query().Get("placement")
 		base := ""
 		if name := r.URL.Query().Get("launcher"); name != "" && placement == "launcher_section" {
@@ -371,9 +371,9 @@ func (h *Hub) extensionUIRoutes(api *http.ServeMux) {
 				base = gw.base
 			}
 		}
-		writeJSON(w, map[string]any{"ui": h.extensions.uiPlaces(placement, base)})
+		writeJSON(w, map[string]any{"ui": uiPlacesOut(r, h.extensions.uiPlaces(placement, base))})
 	})
-	api.HandleFunc("POST /api/v1/plugins/{id}/-/ui/{ui}", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("POST /api/v1/extensions/{id}/-/ui/{ui}", func(w http.ResponseWriter, r *http.Request) {
 		if principalOf(r.Context()).Role != roleFull {
 			writeErr(w, http.StatusForbidden, errors.New("this device can only read and answer"))
 			return
@@ -434,7 +434,7 @@ func (ps *extensions) setBadge(id string, params json.RawMessage) {
 		badge = &b
 	}
 	if ps.h != nil {
-		ps.h.broadcast(map[string]any{"type": "plugin_ui", "plugin": id, "id": ev.Contribution, "badge": badge})
+		ps.h.broadcastExtension("ui", id, map[string]any{"id": ev.Contribution, "badge": badge})
 	}
 }
 

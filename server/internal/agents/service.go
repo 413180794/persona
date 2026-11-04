@@ -72,7 +72,7 @@ func NewService(kv KV, onChange func(ids []string), logf func(string, ...any), s
 	return s
 }
 
-// Add registers a source while the hub runs (a plugin's, docs/plugins.md「个人 Agent 来源」); false when one by that
+// Add registers a source while the hub runs (a plugin's, docs/extensions.md「个人 Agent 来源」); false when one by that
 // name is there already.
 func (s *Service) Add(src Source) bool {
 	s.srcMu.Lock()

@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// A git repository as a market (docs/plugins.md「插件市场」): the hub keeps a shallow clone in its data directory and
+// A git repository as a market (docs/extensions.md「扩展市场」): the hub keeps a shallow clone in its data directory and
 // reads the index and the packages from it, with its machine's own credentials (its SSH key) — for private hosts
 // with no way to read one file with a token.
 
@@ -122,7 +122,7 @@ func (m *Market) gitFile(rel string, w io.Writer, limit int64) error {
 	}
 	p, err := filepath.EvalSymlinks(filepath.Join(root, filepath.FromSlash(clean)))
 	if err != nil {
-		return fmt.Errorf("仓库里没有 %s", clean)
+		return fmt.Errorf("仓库里没有 %s：%w", clean, os.ErrNotExist)
 	}
 	if r, err := filepath.Rel(root, p); err != nil || r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
 		return errors.New("包的相对路径不能跳出市场")

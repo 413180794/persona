@@ -148,8 +148,10 @@ type Config struct {
 	Security SecurityConfig `json:"security,omitempty"`
 	// Admin is who may open the admin UI (docs/admin.md).
 	Admin AdminConfig `json:"admin,omitempty"`
-	// Plugins are processes the hub runs to add things to the app, e.g. the voice conversation (docs/plugins.md).
-	Extensions []ExtensionConfig `json:"plugins,omitempty"`
+	// Extensions are processes the hub runs to add things to the app, e.g. the voice conversation
+	// (docs/extensions.md「hub.json 里的扩展」); LegacyExtensions are the same under the old key "plugins", still read.
+	Extensions       []ExtensionConfig `json:"extensions,omitempty"`
+	LegacyExtensions []ExtensionConfig `json:"plugins,omitempty"`
 	// Tailcat tunes reaching machines over tailcat (tailcat.go).
 	Tailcat TailcatConfig `json:"tailcat,omitempty"`
 	// Bots: talking to Persona through a chat app's bot (bots.go, docs/bots.md); switched on in the app.

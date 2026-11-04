@@ -33,7 +33,7 @@ var (
 // ValidID says whether id is a plugin id: a-z0-9_-, at most 32, not starting with - or _ (those are the hub's).
 func ValidID(id string) bool { return idPattern.MatchString(id) }
 
-// Manifest is persona-plugin.json (docs/plan-plugins.md「三」).
+// Manifest is persona-plugin.json (docs/plan-extensions.md「三」).
 type Manifest struct {
 	ManifestVersion  int                        `json:"manifest_version"`
 	ID               string                     `json:"id"`
@@ -52,11 +52,37 @@ type Manifest struct {
 	Permissions      Permissions                `json:"permissions,omitzero"`
 }
 
-// Engines are what the plugin runs on.
+// Engines are what the extension runs on.
 type Engines struct {
 	// Persona is a range of hub build numbers (">=202611050000 <202701010000").
-	Persona           string `json:"persona,omitempty"`
-	ExtensionProtocol int    `json:"plugin_protocol,omitempty"`
+	Persona string
+	// ExtensionProtocol is "extension_protocol"; its old name "plugin_protocol" is read too (docs/extensions.md
+	// 「命名和兼容」). It is still written out as "plugin_protocol", so the manifests the hub stores stay readable to a hub
+	// rolled back to a build before #1844.
+	ExtensionProtocol int
+}
+
+func (e Engines) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Persona  string `json:"persona,omitempty"`
+		Protocol int    `json:"plugin_protocol,omitempty"`
+	}{e.Persona, e.ExtensionProtocol})
+}
+
+func (e *Engines) UnmarshalJSON(data []byte) error {
+	var v struct {
+		Persona  string `json:"persona,omitempty"`
+		Protocol int    `json:"extension_protocol,omitempty"`
+		Legacy   int    `json:"plugin_protocol,omitempty"`
+	}
+	if err := strict(data, &v); err != nil {
+		return err
+	}
+	if v.Protocol != 0 && v.Legacy != 0 && v.Protocol != v.Legacy {
+		return fmt.Errorf("engines: extension_protocol %d and plugin_protocol %d differ", v.Protocol, v.Legacy)
+	}
+	e.Persona, e.ExtensionProtocol = v.Persona, max(v.Protocol, v.Legacy)
+	return nil
 }
 
 // Runtime is how the plugin's program runs; a plugin without one runs no code.
@@ -73,7 +99,7 @@ type Runtime struct {
 // SpeaksRPC says whether the program speaks the plugin protocol.
 func (r *Runtime) SpeaksRPC() bool { return r != nil && r.RPC != "none" }
 
-// NodeRuntime is the plugin's program that runs on computers, not on the hub (docs/plan-plugins.md「七」): on each
+// NodeRuntime is the plugin's program that runs on computers, not on the hub (docs/plan-extensions.md「七」): on each
 // machine the user switched on in the configuration field Machines, started and stopped by that machine's node.
 type NodeRuntime struct {
 	// Command is one per platform ("darwin-arm64": "node/bin/x"); its platforms are the computers it runs on.
@@ -206,7 +232,7 @@ func strict(data []byte, v any) error {
 	return nil
 }
 
-// Validate checks everything a manifest can be checked for on its own (docs/plan-plugins.md「字段」). What depends on
+// Validate checks everything a manifest can be checked for on its own (docs/plan-extensions.md「字段」). What depends on
 // the hub (the platform's command, engines, ids other plugins use) is the registry's.
 func (m *Manifest) Validate() error {
 	var errs []error
@@ -234,7 +260,7 @@ func (m *Manifest) Validate() error {
 		}
 	}
 	if (m.Runtime != nil || m.Node != nil) && m.Engines.ExtensionProtocol != Protocol {
-		bad("engines.plugin_protocol %d: this hub speaks %d", m.Engines.ExtensionProtocol, Protocol)
+		bad("engines.extension_protocol %d: this hub speaks %d", m.Engines.ExtensionProtocol, Protocol)
 	}
 	if m.Runtime != nil {
 		errs = append(errs, m.Runtime.validate()...)

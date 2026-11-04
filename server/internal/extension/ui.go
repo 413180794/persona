@@ -5,15 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"math"
 	"net/url"
 	"slices"
+	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/nwverse/persona/sdk/go/wire"
 )
 
-// Declarative UI (docs/plugins.md「声明式 UI」): a plugin never runs code in the apps. It answers ui.render with a View
+// Declarative UI (docs/extensions.md「声明式 UI」): a plugin never runs code in the apps. It answers ui.render with a View
 // — a few fixed kinds of items — and the apps draw it with their own components (each style's, in light and dark);
 // a button's action goes back to the plugin (ui.action). The same View is drawn by iOS, Android and the web.
 
@@ -35,7 +37,7 @@ type UIItem struct {
 	Connector string `json:"connector,omitempty"`
 }
 
-// UISlot is a place in the apps plugins may draw (docs/plugins.md「UI 插槽」).
+// UISlot is a place in the apps plugins may draw (docs/extensions.md「UI 插槽」).
 type UISlot struct {
 	Name string
 	// Size is what the plugin is asked to draw there: compact (a card) or full (a page, a section).
@@ -162,7 +164,7 @@ func CheckBadge(text, tone string) error {
 }
 
 // EventsItem is a contribution to events: the hub's events a plugin is told about. It is only told; it changes
-// nothing (docs/plugins.md「事件」).
+// nothing (docs/extensions.md「事件」).
 type EventsItem struct {
 	ID        string   `json:"id"`
 	Subscribe []string `json:"subscribe"`
@@ -177,117 +179,31 @@ var (
 	}
 )
 
-// View is what a plugin draws (ui.render, ui.action).
-type View struct {
-	Title    string    `json:"title,omitempty"`
-	Sections []Section `json:"sections"`
-	// State is the plugin's own, sent back with the next render or action (a page, a tab); at most StateMost bytes.
-	State string `json:"state,omitempty"`
-	// RefreshAfter: the apps draw it again after this many seconds while it is on screen (RefreshLeast at least, the
-	// hub raises a smaller one; 0 never).
-	RefreshAfter int `json:"refresh_after,omitempty"`
-}
-
-// Section is a group of items.
-type Section struct {
-	Title  string   `json:"title,omitempty"`
-	Footer string   `json:"footer,omitempty"`
-	Items  []UIElem `json:"items"`
-}
-
-// UIElem is one item. Type says which fields mean something:
-//
-//	text      Text, Style (body | secondary | caption | code)
-//	metric    Label, Value, Detail, Tone
-//	progress  Label, Ratio (0…1), Detail, Tone
-//	row       Title, Subtitle, Value, Badge, Action
-//	button    Title, Action, Role (normal | destructive)
-//	link      Title, URL (https; opened in the app)
-//	field     Name, Label, Kind (text | secret | number | toggle | choice), Value, Choices, Placeholder
-//	divider
-//	chart     Kind (bar | line), Series, Title, Unit, Stacked, Detail                     (UI version 2)
-//	stat_grid Stats                                                                     (UI version 2)
-//	segmented Name, Choices (2…5), Value, Action: one of a few, chosen at once          (UI version 2)
-type UIElem struct {
-	Type        string     `json:"type"`
-	Text        string     `json:"text,omitempty"`
-	Style       string     `json:"style,omitempty"`
-	Label       string     `json:"label,omitempty"`
-	Value       string     `json:"value,omitempty"`
-	Detail      string     `json:"detail,omitempty"`
-	Tone        string     `json:"tone,omitempty"` // neutral | positive | caution | danger
-	Ratio       *float64   `json:"ratio,omitempty"`
-	Title       string     `json:"title,omitempty"`
-	Subtitle    string     `json:"subtitle,omitempty"`
-	Badge       *Badge     `json:"badge,omitempty"`
-	Action      *UIAction  `json:"action,omitempty"`
-	Role        string     `json:"role,omitempty"`
-	URL         string     `json:"url,omitempty"`
-	Name        string     `json:"name,omitempty"`
-	Kind        string     `json:"kind,omitempty"`
-	Choices     []UIChoice `json:"choices,omitempty"`
-	Placeholder string     `json:"placeholder,omitempty"`
-	// A chart's: its series (all with the same labels, in the same order), the unit of their values, bars stacked.
-	Series  []ChartSeries `json:"series,omitempty"`
-	Unit    string        `json:"unit,omitempty"`
-	Stacked bool          `json:"stacked,omitempty"`
-	// A stat_grid's: a few metrics side by side.
-	Stats []Stat `json:"stats,omitempty"`
-}
-
-// ChartSeries is one line, or one color of bars. Tone empty: the app's own colors for series, in order.
-type ChartSeries struct {
-	Name   string       `json:"name,omitempty"`
-	Tone   string       `json:"tone,omitempty"`
-	Points []ChartPoint `json:"points"`
-}
-
-// ChartPoint is a value at a label (a day, a model). Display is how to write the value ("¥1.20", "3.4M"); the app
-// writes Value with the chart's Unit when it is empty.
-type ChartPoint struct {
-	Label   string  `json:"label"`
-	Value   float64 `json:"value"`
-	Display string  `json:"display,omitempty"`
-}
-
-// Stat is one metric of a stat_grid.
-type Stat struct {
-	Label  string `json:"label"`
-	Value  string `json:"value"`
-	Detail string `json:"detail,omitempty"`
-	Tone   string `json:"tone,omitempty"`
-}
-
-type Badge struct {
-	Text string `json:"text"`
-	Tone string `json:"tone,omitempty"`
-}
-
-// UIAction is what a row or a button does: ui.action with its ID (and the fields' values when Submit).
-type UIAction struct {
-	ID string `json:"id"`
-	// Confirm asks the user first, in these words.
-	Confirm string `json:"confirm,omitempty"`
-	Submit  bool   `json:"submit,omitempty"`
-}
-
-type UIChoice struct {
-	Value string `json:"value"`
-	Title string `json:"title,omitempty"`
-}
+// The View and its components are the wire types generated from schema/extension/view.schema.json (sdk/go/wire):
+// the schema is the one truth of what an extension may draw, and the same types are every app's.
+type (
+	// View is what an extension draws (ui.render, ui.action): sections of components, a state of its own the apps send
+	// back (at most StateMost bytes), refresh_after.
+	View    = wire.View
+	Section = wire.Section
+	// UIElem is one component; Type says which fields mean something (the schema's Component, one flat struct).
+	UIElem      = wire.Component
+	ChartSeries = wire.ChartSeries
+	ChartPoint  = wire.ChartPoint
+	Stat        = wire.Stat
+	Badge       = wire.Badge
+	// UIAction is what a row, a button or a segmented does: ui.action with its ID (and the fields' values when Submit).
+	UIAction = wire.Action
+	UIChoice = wire.Choice
+	// ActionResult is what ui.action answers: a new View, a short message, a link to open, or nothing (draw again).
+	ActionResult = wire.ActionResult
+)
 
 // InboxSourceURL is the one link besides https an action may open, and only on an inbox_item, for the item it is
 // drawn for: the apps open the item's own source page there (what opening the item showed before the slot: a Feishu
 // chat at the item's first message). The id is escaped as one path segment ("lark:F1:1051" stays as it is).
 func InboxSourceURL(itemID string) string {
 	return "persona://inbox/" + url.PathEscape(itemID) + "/source"
-}
-
-// ActionResult is what ui.action answers: a new View, a short message, a link to open, or nothing (draw again).
-type ActionResult struct {
-	View    *View  `json:"view,omitempty"`
-	Toast   string `json:"toast,omitempty"`
-	OpenURL string `json:"open_url,omitempty"`
 }
 
 // Limits of a View.
@@ -309,85 +225,44 @@ const (
 	RefreshMost  = 24 * 3600
 )
 
-var (
-	// elemSince is each item's type and the UI version that brought it.
-	elemSince = map[string]int{"text": 1, "metric": 1, "progress": 1, "row": 1, "button": 1, "link": 1, "field": 1, "divider": 1,
-		"chart": 2, "stat_grid": 2, "segmented": 2}
-	elemTypes  = slices.Sorted(maps.Keys(elemSince))
-	chartKinds = []string{"bar", "line"}
-	tones      = []string{"", "neutral", "positive", "caution", "danger"}
-	textStyles = []string{"", "body", "secondary", "caption", "code"}
-	fieldKinds = []string{"text", "secret", "number", "toggle", "choice"}
-)
+// elemSince is each component's type and the UI version that brought it (the schema's x-since).
+var elemSince = wire.ComponentSince
 
-// CheckView holds a View to what the apps draw: known item types with what they need, short strings, https links,
-// tones and styles from the fixed lists. A View that does not fit is refused, not half drawn.
+// tones are the tones a component may have; empty is the app's own.
+var tones = append([]string{""}, wire.Tones...)
+
+// CheckView holds a View to what the apps draw: first to the schema (known component types with what they need, short
+// strings, https links, tones and styles from the fixed lists), then to what the schema cannot say (a page's size, a
+// field's name once, a chart's series alike). A View that does not fit is refused, not half drawn.
 func CheckView(v *View) error {
 	if v == nil {
 		return errors.New("no view")
 	}
+	if err := wire.Validate("View", v); err != nil {
+		var ve *wire.ValidationError
+		if errors.As(err, &ve) {
+			return errors.New(where(v, ve.Errors[0]))
+		}
+		return err
+	}
 	if len(v.State) > StateMost {
 		return fmt.Errorf("state: more than %d bytes", StateMost)
-	}
-	long := func(s string) bool { return utf8.RuneCountInString(s) > StringMost }
-	if long(v.Title) {
-		return errors.New("title too long")
 	}
 	n := 0
 	names := map[string]bool{}
 	for i, s := range v.Sections {
-		if long(s.Title) || long(s.Footer) {
-			return fmt.Errorf("section %d: title or footer too long", i)
-		}
 		for j, e := range s.Items {
 			if n++; n > ItemsMost {
 				return fmt.Errorf("more than %d items", ItemsMost)
 			}
-			at := fmt.Sprintf("section %d item %d (%s)", i, j, e.Type)
-			for _, str := range []string{e.Text, e.Label, e.Value, e.Detail, e.Title, e.Subtitle, e.Placeholder, e.Unit} {
-				if long(str) {
-					return fmt.Errorf("%s: a string longer than %d", at, StringMost)
-				}
-			}
-			if !slices.Contains(elemTypes, e.Type) {
-				return fmt.Errorf("%s: unknown type", at)
-			}
-			if !slices.Contains(tones, e.Tone) || (e.Badge != nil && !slices.Contains(tones, e.Badge.Tone)) {
-				return fmt.Errorf("%s: tone is neutral, positive, caution or danger", at)
-			}
-			if e.Action != nil && (e.Action.ID == "" || len(e.Action.ID) > 128) {
-				return fmt.Errorf("%s: an action needs an id", at)
-			}
 			var err error
 			switch e.Type {
-			case "text":
-				if e.Text == "" || !slices.Contains(textStyles, e.Style) {
-					err = errors.New("text needs text; style is body, secondary, caption or code")
-				}
-			case "metric":
-				if e.Label == "" || e.Value == "" {
-					err = errors.New("metric needs label and value")
-				}
-			case "progress":
-				if e.Label == "" || e.Ratio == nil || *e.Ratio < 0 || *e.Ratio > 1 {
-					err = errors.New("progress needs label and a ratio 0…1")
-				}
-			case "row":
-				if e.Title == "" {
-					err = errors.New("row needs title")
-				}
-			case "button":
-				if e.Title == "" || e.Action == nil || (e.Role != "" && e.Role != "normal" && e.Role != "destructive") {
-					err = errors.New("button needs title and action; role is normal or destructive")
-				}
 			case "link":
-				if u, perr := url.Parse(e.URL); e.Title == "" || perr != nil || u.Scheme != "https" || u.Host == "" {
-					err = errors.New("link needs title and an https url")
+				if u, perr := url.Parse(e.URL); perr != nil || u.Scheme != "https" || u.Host == "" {
+					err = errors.New("link needs an https url")
 				}
 			case "field":
 				switch {
-				case e.Name == "" || e.Label == "" || !slices.Contains(fieldKinds, e.Kind):
-					err = errors.New("field needs name, label and kind text | secret | number | toggle | choice")
 				case names[e.Name]:
 					err = fmt.Errorf("field %q twice", e.Name)
 				case e.Kind == "choice" && len(e.Choices) == 0:
@@ -398,8 +273,6 @@ func CheckView(v *View) error {
 				names[e.Name] = true
 			case "segmented":
 				switch {
-				case e.Name == "" || e.Action == nil || len(e.Choices) < 2 || len(e.Choices) > SegmentsMost:
-					err = fmt.Errorf("segmented needs name, action and 2 to %d choices", SegmentsMost)
 				case names[e.Name]:
 					err = fmt.Errorf("field %q twice", e.Name)
 				case !slices.ContainsFunc(e.Choices, func(c UIChoice) bool { return c.Value == e.Value }):
@@ -414,15 +287,26 @@ func CheckView(v *View) error {
 				err = checkStats(e.Stats)
 			}
 			if err != nil {
-				return fmt.Errorf("%s: %v", at, err)
+				return fmt.Errorf("section %d item %d (%s): %v", i, j, e.Type, err)
 			}
 		}
 	}
 	return nil
 }
 
+// where turns the schema's "$.sections[1].items[2].tone: …" into "section 1 item 2 (metric): tone: …".
+func where(v *View, msg string) string {
+	var i, j int
+	if k, err := fmt.Sscanf(msg, "$.sections[%d].items[%d]", &i, &j); err == nil && k == 2 && i < len(v.Sections) && j < len(v.Sections[i].Items) {
+		rest := msg[len(fmt.Sprintf("$.sections[%d].items[%d]", i, j)):]
+		rest = strings.TrimPrefix(strings.TrimPrefix(rest, "."), ": ")
+		return fmt.Sprintf("section %d item %d (%s): %s", i, j, v.Sections[i].Items[j].Type, rest)
+	}
+	return strings.TrimPrefix(strings.TrimPrefix(msg, "$."), "$: ")
+}
+
 func checkChart(e UIElem) error {
-	if !slices.Contains(chartKinds, e.Kind) {
+	if !slices.Contains(wire.ChartKinds, e.Kind) {
 		return errors.New("chart kind is bar or line")
 	}
 	if len(e.Series) == 0 || len(e.Series) > SeriesMost {
@@ -483,6 +367,11 @@ func ParseView(raw json.RawMessage) (*View, error) {
 	}
 	if v.Sections == nil {
 		v.Sections = []Section{}
+	}
+	for i := range v.Sections {
+		if v.Sections[i].Items == nil {
+			v.Sections[i].Items = []UIElem{}
+		}
 	}
 	return &v, CheckView(&v)
 }

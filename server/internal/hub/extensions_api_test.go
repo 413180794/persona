@@ -311,7 +311,7 @@ func TestInstalledConnectorExtension(t *testing.T) {
 		t.Fatal("its connector's switch stays")
 	}
 	actions := strings.Join(store.audit, "\n")
-	for _, a := range []string{"install personad plugin", "config hub token", "secret_set hub token", "disabled hub token", "upgrade personad plugin", "uninstall personad plugin"} {
+	for _, a := range []string{"install personad extension", "config hub token", "secret_set hub token", "disabled hub token", "upgrade personad extension", "uninstall personad extension"} {
 		if !strings.Contains(actions, a) {
 			t.Errorf("audit has no %q:\n%s", a, actions)
 		}

@@ -115,7 +115,7 @@ func (h *Hub) browserChanged(ctx context.Context) {
 func (h *Hub) getBrowser(w http.ResponseWriter, r *http.Request, m *Machine) {
 	b := h.refreshBrowser(r.Context(), m)
 	if b == nil {
-		writeErr(w, http.StatusNotFound, errors.New("浏览器插件没打开，或这台不是 Mac"))
+		writeErr(w, http.StatusNotFound, errors.New("浏览器扩展没打开，或这台不是 Mac"))
 		return
 	}
 	writeJSON(w, b)
@@ -131,7 +131,7 @@ func (h *Hub) putBrowser(w http.ResponseWriter, r *http.Request, m *Machine) {
 		return
 	}
 	if h.browserOf(m) == nil {
-		writeErr(w, http.StatusNotFound, errors.New("浏览器插件没打开，或这台不是 Mac"))
+		writeErr(w, http.StatusNotFound, errors.New("浏览器扩展没打开，或这台不是 Mac"))
 		return
 	}
 	if err := h.setExtensionMachine(r.Context(), egoExtensionID, m.cfg.ID, in.Enabled); err != nil {
@@ -150,7 +150,7 @@ func (h *Hub) postBrowserJob(w http.ResponseWriter, r *http.Request, m *Machine)
 		return
 	}
 	if b := h.browserOf(m); b == nil || !b.Enabled {
-		writeErr(w, http.StatusNotFound, errors.New("浏览器插件没有对这台打开"))
+		writeErr(w, http.StatusNotFound, errors.New("浏览器扩展没有对这台打开"))
 		return
 	}
 	if !m.isOnline() {

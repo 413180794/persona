@@ -25,12 +25,12 @@
 | 微信机器人 | 内置插件 `wechat`（`server/internal/wechat`，`docs/wechat.md`，#1447） | 主对话，或 `/new` 开的对话 | 插件经 hub 的 API 每 2 秒看一次会话，取这一轮的答案，发文字 | 文字往返（回复序号、允许 / 拒绝） | 渠道 `wechat`（插件贡献） |
 | 飞书机器人 | hub 里（`hub/bots*.go`、`feishubot/`，`docs/bots.md`） | 主对话、`/new` 的对话、`/agents` 选的 Agent、回复绑定了目标的那条消息 | hub 内部 watch 会话，进度卡 + 答案卡 | 卡片按钮 | 渠道 `feishu`（内置） |
 | 飞书里的 `/agent` | `hub/lark_agent.go`、`lark_agent_docs.go`（`docs/lark-agent.md`） | 每个请求 / 话题一段新的无头对话 | Agent 调 `lark_agent_reply`，以**我的名义**回复那条消息 / 评论 | 没有 | 渠道 `lark_agent`（内置，只读设置） |
-| 语音 | hub.json 的插件 `voice`、内置语音插件（`server/internal/voice`，`docs/plugins.md`「语音」） | 语音模型自己说；要交给主对话的事经 hub 的 API 发进主对话 | 声音 | 没有 | 渠道 `voice`（插件贡献的 `voice` 扩展点，列出来但不走下面的管线） |
+| 语音 | hub.json 的插件 `voice`、内置语音插件（`server/internal/voice`，`docs/extensions.md`「语音」） | 语音模型自己说；要交给主对话的事经 hub 的 API 发进主对话 | 声音 | 没有 | 渠道 `voice`（插件贡献的 `voice` 扩展点，列出来但不走下面的管线） |
 | Telegram | 扩展 `telegram` 的**连接器**（私有扩展市场；用户自己的账号，MTProto，#1704） | —— | —— | —— | **不是渠道**：只是数据来源。现在没有 Telegram 的对话机器人；以后做就是一个插件渠道（Bot API），见「还没做」 |
 | 邮件 | 连接器 `mail` | 收件箱 | AI 分身起草、点一下发送 | —— | 不是渠道（数据来源） |
 | 收件箱的 AI 分身、定时任务、飞书机器人的 `pushes` / `sync` | hub | hub 自己发起的对话 | 推送、飞书 | —— | 不是入口：hub 发起的。它们**往外发**时用渠道的「推送」能力（见「推送和同步」） |
 | botmux | node 的宿主（`docs/engines.md`「botmux」） | 飞书话题 ↔ 某台电脑上的 Claude Code | botmux 自己 | botmux 自己 | 不是 Persona 的渠道：那是 Agent 自己的入口，Agents 页照常显示 |
-| 插件的 `assistant`、`api`、`events`、`hub_api` | `docs/plugins.md` | —— | —— | —— | 不是渠道，是拼出渠道的零件；微信第一版就是用 `connectors` + `hub_api` + `events` 拼的 |
+| 插件的 `assistant`、`api`、`events`、`hub_api` | `docs/extensions.md` | —— | —— | —— | 不是渠道，是拼出渠道的零件；微信第一版就是用 `connectors` + `hub_api` + `events` 拼的 |
 
 结论：**真正「外面的消息进对话、答案发回去」的有三份实现**——飞书机器人（hub 里，`bots_runs.go`）、微信机器人（插件里，`wechat/turns.go`，
 注释里写着规则照飞书机器人）、Siri（App 里）。`/agent` 和语音的形状不一样（一个以我的名义回复、每次新对话；一个自己就是模型），
@@ -218,7 +218,7 @@
 ### 写一个渠道插件
 
 Go 的用 `connector/serve.MainWith`，连接器实现 `channel.Transport`（`Send`、可选的 `Typing`、`Edit`），收到消息调 `serve` 给的 `channel.Hub.Receive`。
-别的语言照上面的协议，一行一条 JSON（`docs/plugins.md`「进程插件协议」）。
+别的语言照上面的协议，一行一条 JSON（`docs/extensions.md`「进程插件协议」）。
 
 ## 五、兼容和迁移
 

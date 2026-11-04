@@ -77,7 +77,7 @@ func (h *Hub) collectConnectors(ctx context.Context) []*InboxItem {
 }
 
 // thingRulesMost is the most of a thing's rules the model gets (runes; the rest is cut): what the convention's
-// triage_rules setting allows (docs/plugins.md「约定的设置项」).
+// triage_rules setting allows (docs/extensions.md「约定的设置项」).
 const thingRulesMost = 4000
 
 // vetThings holds a connector's things to its manifest: a tier the inbox does not know is dropped (the model

@@ -9,7 +9,7 @@ import (
 	"github.com/nwverse/persona/server/internal/quota"
 )
 
-// launcherHTTP is how a quota plugin on the hub reads a ~/.zshrc launcher's quota (docs/plugins.md「额度」): the probe
+// launcherHTTP is how a quota plugin on the hub reads a ~/.zshrc launcher's quota (docs/extensions.md「额度」): the probe
 // gives the gateway and the key the launcher sets; this machine sends the plugin's request to that gateway only (the
 // address is the one this machine reaches it by) with the key put in for ${launcher_key}, and answers with the key
 // taken out. The key never leaves the machine and the plugin never sees it. Without a request: the gateway's address,

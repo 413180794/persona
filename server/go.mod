@@ -49,6 +49,7 @@ require (
 	github.com/mdlayher/netlink v1.7.3-0.20250113171957-fbb4dce95f42 // indirect
 	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect
+	github.com/nwverse/persona/sdk/go v0.0.0
 	github.com/pires/go-proxyproto v0.8.1 // indirect
 	github.com/pkg/sftp v1.13.6 // indirect
 	github.com/rogpeppe/go-internal v1.15.0 // indirect
@@ -70,3 +71,5 @@ require (
 	golang.zx2c4.com/wireguard/windows v0.5.3 // indirect
 	gvisor.dev/gvisor v0.0.0-20260915211658-a6f909f08a72 // indirect
 )
+
+replace github.com/nwverse/persona/sdk/go => ../sdk/go

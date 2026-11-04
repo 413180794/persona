@@ -11,7 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The providers extension point (docs/plugins.md「模型供应商」): a plugin declares model providers — address, kind,
+// The providers extension point (docs/extensions.md「模型供应商」): a plugin declares model providers — address, kind,
 // models — and 设置 › 模型供应商 offers them when a launcher is added: the user picks one and fills in only the name and
 // the key (POST /api/v1/launchers with preset). A provider whose plugin lists its models itself (dynamic_models) is
 // asked provider.models.

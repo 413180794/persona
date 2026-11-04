@@ -399,7 +399,7 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 
 用户要求（2026-11-02）：「jarvis 的会话和记忆等等内容，是运行在哪个设备上的，现在也完全没有设置选项」。代码在 `feature/assistant/…/settings/`：页面 `AssistantSettingsScreen`，状态和请求 `AssistantSettingsState`，接口用 `AssistantManagement` 的 `config` / `updateConfig` / `launchers`（`GET` / `PUT /api/v1/assistant`、`GET /api/v1/machines/{id}/launchers`）和原有的记忆接口。
 
-- 入口：设置列表「助手 › Persona」（`SettingsPage.Assistant`，深链 `jarvis://open?target=settings&page=assistant`；宽窗口在设置列表右栏打开，页内的子页也在右栏）。Persona tab 标题菜单的「助手设置」、右上角的「助手资料」按钮、抽屉里的「资料页」「启动器」在 Persona tab 里原地打开同一页。体验模式没有这页，显示说明。
+- 入口：设置列表「助手 › Persona」（`SettingsPage.Assistant`，深链 `jarvis://open?target=settings&page=assistant`；宽窗口在设置列表右栏打开，页内的子页也在右栏）。Persona tab 标题菜单的「助手设置」、右上角的「助手资料」按钮、抽屉里的「启动器」在 Persona tab 里原地打开同一页（抽屉原来的「资料页」和 iOS 的「认识 Persona」一样挪进了设置，#2003）。体验模式没有这页，显示说明。
 - 在哪运行：机器（在线状态；`kind: local` 的写「hub 所在的机器」）、工作目录（按那台机器的 home 缩成 `~/.persona/assistant`）。启动器和模型不在这里：统一在「设置 › 模型配置 › 主对话」里选（#1291），那里也显示供应商离线、缺失等状态。
 - 换机器：先确认，确认框写明「记忆和会话记录在原来那台机器上，不会跟过去」，目标离线时另外写明；确认后 `PUT {"machine_id":…,"main":"-"}`。主对话是原来那台机器上的 transcript，换过去接不上，所以一起清掉，下一条消息在新机器上开新的主对话；原来的会话和记忆留在那台机器上，换回来还在（原来的主对话成了普通会话）。换完刷新 Persona 的会话列表，重新读启动器和记忆。
 - 数据存在哪里：会话记录和记忆在助手所在的机器；关于我、定时任务和设置在 hub；知识库在 hub 所在的机器（`~/.persona/data`）。
@@ -824,7 +824,7 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
 
 ## 插件（设置 › 插件，#1206）
 
-和 iOS 同一套规格（[plugins.md](plugins.md)「hub 的接口」「App：设置 › 插件」）。hub 的 hello 带 `plugin_manager` 时，设置首页多一节「扩展」，里面一行「插件」，右边写个数和几个要处理（`PluginText.listSummary`，回到设置首页、重连后重读）；体验模式没有。
+和 iOS 同一套规格（[extensions.md](extensions.md)「hub 的接口」「App：设置 › 插件」）。hub 的 hello 带 `plugin_manager` 时，设置首页多一节「扩展」，里面一行「插件」，右边写个数和几个要处理（`PluginText.listSummary`，回到设置首页、重连后重读）；体验模式没有。
 
 - 数据：`core:contracts` 的 `PluginManagement`（`available` 跟着所选 hub 的 features，列表、详情、开关、整份保存设置、设 / 清密钥）、`HubPlugin`（和语音页共用，多了版本、来源、启用、描述、提供、还缺、警告）、`PluginDetail`（列表那一项加上 `form`、`config`、`secrets`、`permissions`…，`PluginDetail.decode` 从同一个对象里读两遍）；`core:hub` 的 `HttpPluginManagement`（hub 自己的接口在保留的 `-` 段下；插件 id 和密钥名先校验，不让它们变成别的路径；400 `invalid_config` 变成 `PluginConfigRejected(field, message)`），在 `MachineManagementModule` 里按当前配对注入。
 - 页面：`feature:settings` 的 `PluginsScreen.kt`（列表 `PluginsPage`、一个插件 `PluginPage`，`PluginRoute(pluginId)` 是详情页，宽屏在右栏）和 `PluginsState.kt`（文案 `PluginText`、草稿 `PluginDraft`、两个页的模型）。
@@ -835,7 +835,7 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
 
 ### 插件画的界面和插件市场（#1329）
 
-规格见 [plugins.md](plugins.md)「声明式 UI」「插件市场」。数据：`PluginManagement` 同时是 `PluginUi`（`uiPlaces`、`renderUi`、`uiAction`）和 `PluginMarkets`（市场、目录、预览、安装 / 升级 / 卸载），`listing()` 带上列表的 `can_install`、`markets`；`PluginDetail.ui` 是插件自己的页面（只留 `plugin_page`）。`HttpPluginManagement` 把 404 `{code: "unsupported"}`（插件说这个启动器的网关不是它的，#1339）变成 `PluginUiUnsupported`。
+规格见 [extensions.md](extensions.md)「声明式 UI」「插件市场」。数据：`PluginManagement` 同时是 `PluginUi`（`uiPlaces`、`renderUi`、`uiAction`）和 `PluginMarkets`（市场、目录、预览、安装 / 升级 / 卸载），`listing()` 带上列表的 `can_install`、`markets`；`PluginDetail.ui` 是插件自己的页面（只留 `plugin_page`）。`HttpPluginManagement` 把 404 `{code: "unsupported"}`（插件说这个启动器的网关不是它的，#1339）变成 `PluginUiUnsupported`。
 
 - **渲染器**（`PluginViewContent.kt`，`LazyListScope.pluginViewItems` + `rememberPluginView`）：八种条目只用设计系统画。text 按 `style` 用正文 / 次要 / 说明 / `JCodeBlock`；metric 是一块（说明、`number` 字号的值、细节）；progress 是 `JLinearProgress(tone)` 加百分比和细节；row 是 `JRow`（徽标 `JTag(tone)`，有 action 才可点）；button 是整宽 `JButton`（submit 的是主按钮，`destructive` 是危险按钮，其余次要，文字单行）；link 是带外链图标的行（只画 https，在 App 内打开）；field 五种：文字、密钥（不回显、不预填）、数字（只收数字）、开关、选择（底部面板）；divider 是 `JDivider`。相邻的行、链接、开关、选择合成一组。`tone` 经设计系统新加的 `Tone` / `PersonaPalette.tone()` 换成角色色（positive 完成绿、caution 需要你琥珀、danger 红、neutral 灰）。不认识的条目跳过不画。按钮有 `confirm` 先弹 `JDialog`；`submit` 带上这一页所有 field 的当前值；结果里的 view 换掉整页，toast 走 App 的提示，`open_url` 只开 https，什么都没有就重画一次；画的时候带回插件的 `state`。逻辑在 `PluginUiState.kt`（`PluginViewModel`、`PluginPlacesModel`、`PluginViewText`）。
 - **插件页面**：插件详情多一节「页面」（插件有 `ui` 时），点进 `PluginUiRoute(pluginId, uiId, title)`，标题用 View 的 `title`；读不到是带「重试」的提示，空的是空状态，下拉刷新。
@@ -850,7 +850,7 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
 
 ### 插件的 UI 插槽（#1451）
 
-规格见 [plugins.md](plugins.md)「UI 插槽」。hub 的 features 有 `plugin_ui_slots` 时才问新插槽（`PluginManagement.slotsAvailable`），老 hub 上什么都不画。
+规格见 [extensions.md](extensions.md)「UI 插槽」。hub 的 features 有 `plugin_ui_slots` 时才问新插槽（`PluginManagement.slotsAvailable`），老 hub 上什么都不画。
 
 - **数据**：`PluginUiPlace` 加了 `plugin_name`、`size`、`icon`、`opens`、`badge`；`uiPlaces("")` 不带 `placement`，一次拿齐 `nav_page`、`overview_card`、`machine_section`。`PluginUiContext` 加了 `size`、`tz`、`locale`、`platform`、`ui_version`：`HttpPluginManagement` 每次画、按按钮都带上这台手机的时区、语言、`android` 和 UI 版本 2（`deviceContext()`），调用方只给启动器、机器和尺寸。`PluginView.refresh_after`；条目加了 `chart`（`series`、`unit`、`stacked`）、`stat_grid`（`stats`）、`segmented`。一节里读不出来的条目（更新的 hub 的、字段类型对不上的）单独丢掉，其余照画，不会白屏（`LenientItemsSerializer`）。404 `not_found`（hub 不认识这台机器，比如另一台 hub 的）是 `PluginUiNotFound`，那一节不画。WebSocket 事件 `plugin_ui {plugin, id, badge}` 解成 `PluginUiEvent`（`PluginManagement.uiEvents`）。插件详情的 `ui` 现在是 `plugin_page` 和 `nav_page`（都能从设置 › 插件 › 这个插件点进去）。
 - **整个外壳一份**：`PluginSlots`（`feature:settings` 的 `PluginSlots.kt`）在 `Root.kt` 的 `PersonaShell` 里建（`rememberPluginSlots`），放进 `SettingsServices.pluginSlots`：hub 在线时读一次列表，回到设置首页时再读，收到 `plugin_ui` 只改那一项的角标。不认识的 `placement` 忽略，不认识的 `icon` 画成拼图（`PluginSlotText.icon`，`money` 用新加的 `PhIcons.Coins`）。
@@ -921,7 +921,7 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
 
 ## 语音对话（hub 语音插件）
 
-和 hub 上的语音插件全双工对话（契约见 [plugins.md](plugins.md)「语音」）：页面开着就一直听，Persona 说话时直接开口就能打断。代码在 `feature/voice`，传输在 `core/hub` 的 `HttpVoicePlugins`，契约 `core/contracts` 的 `VoicePlugins`，路由 `VoiceRoute(pluginId, title)`。
+和 hub 上的语音插件全双工对话（契约见 [extensions.md](extensions.md)「语音」）：页面开着就一直听，Persona 说话时直接开口就能打断。代码在 `feature/voice`，传输在 `core/hub` 的 `HttpVoicePlugins`，契约 `core/contracts` 的 `VoicePlugins`，路由 `VoiceRoute(pluginId, title)`。
 
 - 入口：模块对外只有两样。`voiceEntries(navigator, plugins, identity, onModelConfiguration = null)`（回调参数是用途 id） 注册 `VoiceRoute`（`Root.kt` 里和机器监控同样写法，体验模式没有这份服务，打开是说明页）；`rememberVoicePlugin(plugins, active)` 在 `active` 为真时取一次 hub 上第一个 `kind == voice && status == running` 的插件（404、失败都当没有，配对换了重取），宿主据此决定出不出现「语音对话」入口（Persona 标题菜单，由宿主接）。服务是 `ShellSession.voice`，和 `metrics` 一样每次调用按当前选路、钉扎的客户端和 token 建 `HttpVoicePlugins`，配对换了就取消。
 - 权限：第一次进页面申请 `RECORD_AUDIO`（另声明 `MODIFY_AUDIO_SETTINGS`）。没给时是空状态「语音对话要用麦克风 / 只在这一页打开时听，离开就结束，不在后台录音。」，拒绝后「没有麦克风权限 / 语音对话用不了。可以在系统设置里给 Persona 打开麦克风。」，按钮「允许使用麦克风」：系统还会问就再申请一次，已经不再问（拒绝两次）就打开系统里这个 App 的设置页，回来时重新检查。
@@ -953,7 +953,7 @@ adb -s <模拟器> shell am start -n <包名>/persona.android.debug.DebugEntryAc
 2026-11-02 从主线旧 App（和 iOS 的 `ShellNeedsYou`）移植过来。代码在 `feature/assistant`：`NeedsYou.kt`、`AssistantData.kt`、`AssistantScreen.kt`；宿主的数据和跳转在 `app/…/ui/Root.kt`、`app/…/navigation/NeedsYouLinks.kt`。
 
 - 现在要你处理的事：Persona 首页（新对话页）的问候下面、建议卡上面（已拍板：和建议卡并存）。先列等你的 Agent（待处理的提问、计划、授权、终端对话框；不算 Persona 自己的对话，按 hub 的屏蔽规则去掉被屏蔽的会话和空间，空间里单独放行的照样算），按 hub 给的顺序；再列收件箱「需要你」里没处理的事，新的在前。最多 3 行，多出来的写成一行「还有 N 件在收件箱」（N 也算多出来的 Agent，和 iOS 一样），点了去收件箱；一件都没有就整节不出现。每行：左边一个标记（Agent 按请求的种类、用「需要你」的颜色；收件箱按飞书 / 邮件 / 文档、灰色），标题是会话名（没有就目录最后一段，再没有「Agent」）或消息标题，副标题是请求的一句话或消息的摘要（没有摘要用预览），都是单行。点 Agent 的一行打开它的对话（落在 Agents tab），点收件箱的一行打开收件箱列表会打开的那一页（飞书会话或邮件）。纯函数 `needsYou(...)`，单测 `NeedsYouTest`、`NeedsYouLinksTest`。
-- 对话历史（抽屉、宽屏的侧栏）：每一行的 ⋯ 和长按是同一个菜单：「置顶 / 取消置顶」（主对话没有）、「拷贝会话 ID」、在跑的对话还有「结束对话」。置顶存在 hub 的 pins（已拍板，和 Agents 共用一份，所以 iOS / 旧 App 存本机的做法没搬）；「置顶」组标题的 ⋯ 里有「全部取消置顶」，只取消 Persona 自己的对话，不动 Agents 的置顶。「最近」组先列 30 个，其余收成一行「查看全部 N 个」（N 是这一组的总数），点开后全部列出；搜索时列出全部结果。
+- 对话历史（抽屉、宽屏的侧栏）：搜索框下面第一行是主对话，和 iOS 侧边栏一样显示成形象名（默认「Persona」）、前面是 Persona 的脸，没有「主对话」分组标题和标签；还没有主对话时这一行写「开始主对话」，点了开始。只改显示，会话的标题和 id 不变（#2003）。iOS 侧边栏里 Persona 和「收件箱」之间的分隔线 Android 不做：收件箱是底部 tab，不在抽屉里。截图 `AssistantDrawerShotsTest`（Robolectric，三套风格 × 深浅色，输出 `feature/assistant/build/drawer-shots/`）。每一行的 ⋯ 和长按是同一个菜单：「置顶 / 取消置顶」（主对话没有）、「拷贝会话 ID」、在跑的对话还有「结束对话」。置顶存在 hub 的 pins（已拍板，和 Agents 共用一份，所以 iOS / 旧 App 存本机的做法没搬）；「置顶」组标题的 ⋯ 里有「全部取消置顶」，只取消 Persona 自己的对话，不动 Agents 的置顶。「最近」组先列 30 个，其余收成一行「查看全部 N 个」（N 是这一组的总数），点开后全部列出；搜索时列出全部结果。
 - 标题菜单（点标题「Persona」）：助手设置、知识库、语音对话（hub 有运行中的语音插件时，见上文「语音对话」；每次切到 Persona tab 且连着 hub 时问一次 `GET /api/v1/plugins`）、会话信息，打开着对话时再加一条「拷贝会话 ID」。拷贝后提示「已拷贝会话 ID」。
 - 交接对话的标题：从「交给 Persona」开出来的对话，第一句是 `<jarvis-context … title="X">` 标签，hub 按它起标题；历史里显示「交给 Persona：X」（解码 `&quot; &lt; &gt; &amp;`），标签没有 title 时显示「交给 Persona」。没有标题时取最后一句的第一行，先认标签再截到 30 个字（旧 App 先截断，长标题的标签就认不出来了）。单测在 `AssistantTest`。
 - 截图：假 hub 默认就有 5 个等你的请求和几件「需要你」的收件箱（三行 + 还有 N 件）；`MOCK_NEEDS=two` 两行、`MOCK_NEEDS=none` 整节不出现；`MOCK_HISTORY=1` 让历史很长（最近 30 个 + 查看全部）、多一段交接对话和一个置顶，并且保存 App 写的置顶。Persona tab 默认打开主对话，要看首页：点左上角「对话列表」→「返回首页」。

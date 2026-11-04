@@ -26,6 +26,9 @@ python3 scripts/test/test_extension_schema.py     # --check + 例子合不合 sc
 | Swift | `apple/Shared/Generated/ExtensionWire.swift` | 类型名加 `Extension` 前缀（`ExtensionView`），`nonisolated`、`Codable`、`Sendable`；缺字段、字段类型不对都不失败（取零值或 nil）；联合类型是 enum，不认识的或读不出来的组件是 `.unknown(type:)`；任意 JSON 用 `JSONValue` |
 | Kotlin | `android/core/contracts/src/main/kotlin/persona/core/contracts/generated/ExtensionWire.kt` | kotlinx.serialization 的 data class，同样加 `Extension` 前缀，字段都有默认值；联合类型是 sealed interface + 读 `type` 的 serializer，不认识或读不出来的是 `Unknown(type, raw)`，写回去时原样写。和 Swift 不同，组件以外的对象有字段类型不对时整个读不出来（hub 先按 schema 查过 View，App 拿到的都合规） |
 
+生成器还把三份 schema 原样拷到 `sdk/go/wire/schema/`（`go:embed` 读不到 module 外面的文件）：`wire.Validate(<定义名>, 值)` 按它们查，
+hub 查扩展画的 View（`extension.CheckView`）、一致性测试查 `initialize` 的回答都用它，和 `scripts/test/test_extension_schema.py` 的校验器认同一个子集。
+
 生成的文件头写着「do not edit」，别手改：改 schema，再生成。Go 的输出过一遍 `gofmt`（生成器要求 PATH 上有它）。
 
 ## 子集

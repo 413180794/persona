@@ -17,7 +17,7 @@ import (
 
 func (h *Hub) computerClipboard(w http.ResponseWriter, r *http.Request, m *Machine) {
 	if !h.portAllowed(m, screenPort) {
-		writeErr(w, http.StatusNotFound, errors.New("这台 Mac 没有打开操控电脑或浏览器插件"))
+		writeErr(w, http.StatusNotFound, errors.New("这台 Mac 没有打开操控电脑或浏览器扩展"))
 		return
 	}
 	if !m.isOnline() {

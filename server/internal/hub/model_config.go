@@ -142,7 +142,7 @@ func (h *Hub) modelPurposeDef(ctx context.Context, id string) (ModelPurpose, err
 	if strings.HasPrefix(id, "plugin.") && h.extensions != nil {
 		for _, p := range h.extensions.list() {
 			if id == "plugin."+p.ID && p.Kind == "voice" {
-				return ModelPurpose{ID: id, Name: p.Name, Group: "插件", Kind: "plugin"}, nil
+				return ModelPurpose{ID: id, Name: p.Name, Group: "扩展", Kind: "plugin"}, nil
 			}
 		}
 	}
@@ -252,7 +252,7 @@ func (h *Hub) modelBaseline(ctx context.Context, p ModelPurpose) (ModelBinding, 
 	if p.Kind == "launcher" {
 		return ModelBinding{Provider: "launcher.claude"}, "默认", nil
 	}
-	return ModelBinding{Provider: p.ID}, "插件默认", nil
+	return ModelBinding{Provider: p.ID}, "扩展默认", nil
 }
 
 // modelAutoSource is what 继承来源 says for an API use that runs on fallbackAPIProvider's pick.
@@ -590,7 +590,7 @@ func (h *Hub) validateModel(ctx context.Context, p ModelPurpose, b ModelBinding,
 	}
 	if p.Kind == "plugin" {
 		if b.Effort != "" {
-			return errors.New("插件不支持思考等级")
+			return errors.New("扩展不支持思考等级")
 		}
 		if b.Model != "" {
 			models, err := h.extensionModelChoices(ctx, p.ID)
@@ -598,7 +598,7 @@ func (h *Hub) validateModel(ctx context.Context, p ModelPurpose, b ModelBinding,
 				return err
 			}
 			if !slices.ContainsFunc(models.Models, func(m ModelChoice) bool { return m.ID == b.Model }) {
-				return errors.New("插件没有这个模型")
+				return errors.New("扩展没有这个模型")
 			}
 		}
 		return nil

@@ -74,7 +74,7 @@ func TestInboxExtensionNeedsTheTriageModel(t *testing.T) {
 
 	pv := previewDir(t, h, pkg)
 	code, out := install(t, h, pv)
-	if code != 409 || out["code"] != "needs_triage_model" || out["error"] != "先在 设置 › 模型 里配好『信息筛选』，再启用这个插件" ||
+	if code != 409 || out["code"] != "needs_triage_model" || out["error"] != "先在 设置 › 模型 里配好『信息筛选』，再启用这个扩展" ||
 		h.extensions.reg.Get("example-notes") != nil {
 		t.Fatalf("installed without the model: %d %v", code, out)
 	}
@@ -160,7 +160,7 @@ func (c *chatInbox) Collect(context.Context) ([]connector.InboxThing, error) {
 func (*chatInbox) Reply(context.Context, connector.InboxReply) error { return nil }
 
 // A hub.json plugin cannot be switched off: one whose inbox needs the triage model runs, but its inbox is not collected
-// and 设置 › 插件 says why, until the model can be called.
+// and 设置 › 扩展 says why, until the model can be called.
 func TestHubJSONInboxExtensionWaitsForTheModel(t *testing.T) {
 	h, _ := extensionTestHub(t)
 	items, _ := json.Marshal([]extension.ConnectorItem{{ID: "examplechat", Name: "Example Chat", Capabilities: []string{"inbox"}}})

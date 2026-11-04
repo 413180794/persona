@@ -12,7 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/quota"
 )
 
-// A launcher's quota at its gateway (docs/launchers.md「额度」), read by the quota plugins (docs/plugins.md「额度」). A
+// A launcher's quota at its gateway (docs/launchers.md「额度」), read by the quota plugins (docs/extensions.md「额度」). A
 // plugin never sees the key: it says what to send, and whoever holds the key sends it — the hub for a launcher added in
 // Persona (its sealed key), the machine for a ~/.zshrc one (node/launcherquota.go), so that key stays on that machine.
 // Answers are kept a minute: the page opens often, the gateways count every read.

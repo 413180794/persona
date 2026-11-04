@@ -12,10 +12,10 @@ func TestParseMarket(t *testing.T) {
 		"github:example/plugins@release":              "github:example/plugins@release",
 		"https://github.com/example/plugins":          "github:example/plugins",
 		"https://github.com/example/plugins/tree/dev": "github:example/plugins@dev",
-		"https://example.com/plugins":                 "https://example.com/plugins/persona-plugins.json",
-		"https://example.com/plugins/":                "https://example.com/plugins/persona-plugins.json",
+		"https://example.com/plugins":                 "https://example.com/plugins/persona-extensions.json",
+		"https://example.com/plugins/":                "https://example.com/plugins/persona-extensions.json",
 		"https://example.com/v100/market.json#x":      "https://example.com/v100/market.json",
-		" https://example.com ":                       "https://example.com/persona-plugins.json",
+		" https://example.com ":                       "https://example.com/persona-extensions.json",
 	} {
 		s, err := ParseMarket(in)
 		if err != nil || s.String() != want {

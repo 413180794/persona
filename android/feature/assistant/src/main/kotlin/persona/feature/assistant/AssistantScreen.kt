@@ -370,7 +370,7 @@ fun AssistantScreen(
             onOpen = { openConversation(it); scope.launch { drawerOpen = false } },
             onInfo = {
                 if (it == "知识库" && onKnowledge != null) onKnowledge()
-                else if (management != null && it in listOf("资料页", "启动器")) settingsOpen = true
+                else if (management != null && it == "启动器") settingsOpen = true
                 else if (management != null && it == "定时任务") proactiveOpen = true
                 else info = it
                 scope.launch { drawerOpen = false }
@@ -559,7 +559,6 @@ fun AssistantScreen(
             text = when (title) {
                 "定时任务" -> "体验模式里没有定时任务。连上自己的 hub 以后，可以在这里管理 Persona 的定时任务、跟进和运行记录。"
                 "知识库" -> "在这里查看人、群和项目的资料。知识库内容尚未接入。"
-                "资料页" -> "资料页连接尚未配置。接入后可管理定时任务、跟进、关于我和记忆。"
                 "助手设置" -> "体验模式里没有助手设置。连上自己的 hub 以后，可以选 Persona 在哪台机器上运行，改关于我和记忆。"
                 "会话信息" -> if (active == null) "当前还没有打开对话。" else "当前对话：${active.sessionId}"
                 else -> "启动器配置尚未接入。"
@@ -633,7 +632,7 @@ private fun AssistantHome(
 }
 
 @Composable
-private fun AssistantDrawer(
+internal fun AssistantDrawer(
     face: PersonaState,
     query: String, onQuery: (String) -> Unit, groups: ConversationGroups, active: SessionKey?, hasMain: Boolean,
     onEnd: ((Session) -> Unit)?,
@@ -653,15 +652,17 @@ private fun AssistantDrawer(
                 }
             }
             item { JSearchField(query, onQuery, "搜索对话") }
-            item { JSectionHeader("主对话") }
+            // The main conversation is always first, under Persona's own name and face (iOS's sidebar): it has no pin
+            // of its own. Its session keeps its id and title; only the row reads differently.
             if (groups.main != null) item {
-                // The main conversation is always first: it has no pin of its own.
                 ConversationRow(groups.main, main = true, selected = groups.main.key == active,
+                    modifier = Modifier.padding(top = Tokens.Space.m),
                     onOpen = { onOpen(groups.main.key) }, onEnd = onEnd?.let { action -> { action(groups.main) } },
                     onCopy = { onCopy(groups.main) })
             } else if (query.isBlank()) item {
-                JGroupItem(GroupPosition.Single) {
-                    DrawerItem(if (hasMain) "回主对话" else "开始主对话", PhIcons.ChatCircle, onMain)
+                JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
+                    JRow(LocalPersonaName.current, leading = { PersonaMark() }, onClick = onMain,
+                        subtitle = if (hasMain) null else "开始主对话")
                 }
             }
             if (groups.pinned.isNotEmpty()) item(key = "pinned-header") {
@@ -699,19 +700,21 @@ private fun AssistantDrawer(
                     if (query.isBlank()) "发一句话，开始和 Persona 聊聊。" else "换个关键词再试试。") }
             }
             item { JSectionHeader("更多") }
-            val totalMore = if (showTodos && onTodos != null) 7 else 6
+            // 资料页 is in 设置 › Persona now, like iOS's 认识 Persona.
+            val totalMore = if (showTodos && onTodos != null) 6 else 5
+            // Each row's place in the group is taken while the list is built: counted inside an item's own content, it
+            // was counted again whenever only some rows recomposed, and the group's corners landed on the wrong rows.
             var moreIndex = 0
-            item { JGroupItem(GroupPosition.of(moreIndex++, totalMore)) { DrawerItem("返回首页", PhIcons.House, onHome) } }
-            if (showTodos && onTodos != null) {
-                item { JGroupItem(GroupPosition.of(moreIndex++, totalMore)) {
-                    DrawerItem("待办", PhIcons.ListChecks, badge = todoCount, onClick = onTodos)
-                } }
+            fun more(content: @Composable () -> Unit) {
+                val position = GroupPosition.of(moreIndex++, totalMore)
+                item { JGroupItem(position) { content() } }
             }
-            item { JGroupItem(GroupPosition.of(moreIndex++, totalMore)) { DrawerItem("资料页", PhIcons.UserCircle) { onInfo("资料页") } } }
-            item { JGroupItem(GroupPosition.of(moreIndex++, totalMore)) { DrawerItem("定时任务", PhIcons.Clock) { onInfo("定时任务") } } }
-            item { JGroupItem(GroupPosition.of(moreIndex++, totalMore)) { DrawerItem("知识库", PhIcons.BookOpen) { onInfo("知识库") } } }
-            item { JGroupItem(GroupPosition.of(moreIndex++, totalMore)) { DrawerItem("会话信息", PhIcons.Info) { onInfo("会话信息") } } }
-            item { JGroupItem(GroupPosition.of(moreIndex++, totalMore)) { DrawerItem("启动器", PhIcons.RocketLaunch) { onInfo("启动器") } } }
+            more { DrawerItem("返回首页", PhIcons.House, onHome) }
+            if (showTodos && onTodos != null) more { DrawerItem("待办", PhIcons.ListChecks, badge = todoCount, onClick = onTodos) }
+            more { DrawerItem("定时任务", PhIcons.Clock) { onInfo("定时任务") } }
+            more { DrawerItem("知识库", PhIcons.BookOpen) { onInfo("知识库") } }
+            more { DrawerItem("会话信息", PhIcons.Info) { onInfo("会话信息") } }
+            more { DrawerItem("启动器", PhIcons.RocketLaunch) { onInfo("启动器") } }
         }
         Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             JButton("新对话", onNew, Modifier.weight(1f), icon = PhIcons.NotePencil)
@@ -727,25 +730,25 @@ private fun AssistantDrawer(
 @Composable
 private fun ConversationRow(
     session: Session, main: Boolean, selected: Boolean, onOpen: () -> Unit, onEnd: (() -> Unit)?,
-    position: GroupPosition = GroupPosition.Single,
+    modifier: Modifier = Modifier, position: GroupPosition = GroupPosition.Single,
     pinned: Boolean = false, onPin: (() -> Unit)? = null, onCopy: () -> Unit = {},
 ) {
     var menu by remember { mutableStateOf(false) }
     // The channel its latest message came in from (WeChat, the Feishu bot…), as a small mark after the title.
     val channels = LocalChannels.current
     val channel = remember(session.channels, channels) { ChannelSources.latest(session.channels, channels) }
-    JGroupItem(position) {
+    val title = if (main) LocalPersonaName.current else session.conversationTitle()
+    JGroupItem(position, modifier) {
         // The time goes on the line under the title, with the state: beside the title it left the title two or three
         // characters in the wide window's 300dp list (2026-11-02), and a narrow drawer cut it short too.
-        JRow(session.conversationTitle(), onClick = onOpen, onLongClick = { menu = true },
+        JRow(title, onClick = onOpen, onLongClick = { menu = true },
             titleAccessory = channel?.let { c -> { JChannelMark(c, size = MarkSize.Inline) } },
             subtitle = session.lastText?.takeIf { it.isNotBlank() },
-            leading = { JIcon(if (selected) PhIcons.CheckCircle else PhIcons.ChatCircle, null,
+            leading = { if (main) PersonaMark() else JIcon(if (selected) PhIcons.CheckCircle else PhIcons.ChatCircle, null,
                 selected = selected, tint = if (selected) PersonaTheme.palette.accent else PersonaTheme.palette.ink2) },
             trailing = { JIconButton(PhIcons.DotsThree, "对话操作", { menu = true }) }, chevron = false)
         Row(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (main) JTag("主对话")
             StatusLabel(session.conversationStatus())
             conversationTime(session.updated)?.let { time ->
                 Text(time, Modifier.weight(1f), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3,
@@ -754,7 +757,7 @@ private fun ConversationRow(
         }
     }
     if (menu) JActionSheet(
-        title = session.conversationTitle(), onDismiss = { menu = false },
+        title = title, onDismiss = { menu = false },
         actions = conversationActions(pinned, session.isLive, onPin, onCopy, onEnd),
     )
 }
@@ -766,6 +769,10 @@ internal fun conversationActions(pinned: Boolean, live: Boolean, onPin: (() -> U
         add(JAction("拷贝会话 ID", PhIcons.Copy, onClick = onCopy))
         if (onEnd != null && live) add(JAction("结束对话", PhIcons.Stop, destructive = true, separatorBefore = true, onClick = onEnd))
     }
+
+/** Persona's face, still, in a row's icon slot: the main conversation's mark. */
+@Composable
+private fun PersonaMark() = PersonaFace(PersonaState.Idle, size = Tokens.Space.xxl)
 
 @Composable
 private fun DrawerItem(title: String, icon: PhIcon, onClick: () -> Unit) {

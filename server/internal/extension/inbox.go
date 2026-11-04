@@ -5,7 +5,7 @@ import (
 	"slices"
 )
 
-// The inbox's common rules for a plugin (docs/plugins.md「收件箱的通用规则」): a connector with an inbox comes with the
+// The inbox's common rules for a plugin (docs/extensions.md「收件箱的通用规则」): a connector with an inbox comes with the
 // user's own triage rules (a top-level string setting triage_rules, sent as its things' rules), and either brings
 // its own fallback tier (capability fallback) or needs the hub's triage model.
 
@@ -41,6 +41,6 @@ func CheckTriageRules(m *Manifest) error {
 	if err == nil && s != nil && slices.ContainsFunc(s.Fields, func(f Field) bool { return f.Name == TriageRulesField && f.Type == "string" }) {
 		return nil
 	}
-	return fmt.Errorf("%s 的连接器 %s 用收件箱，设置里却没有 %s（分拣规则，字符串）：用收件箱的插件要带上用户自己的分拣规则，装不上",
+	return fmt.Errorf("%s 的连接器 %s 用收件箱，设置里却没有 %s（分拣规则，字符串）：用收件箱的扩展要带上用户自己的分拣规则，装不上",
 		m.ID, inbox[0], TriageRulesField)
 }

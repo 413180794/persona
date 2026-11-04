@@ -93,7 +93,7 @@ func TestQuotaThroughAnExtension(t *testing.T) {
 	}
 
 	_, out := call(t, mux, "GET", "/api/v1/launchers/gwlauncher/quota", master, "")
-	if out["unsupported"] != true || !strings.Contains(fmt.Sprint(out["error"]), "额度插件") {
+	if out["unsupported"] != true || !strings.Contains(fmt.Sprint(out["error"]), "额度扩展") {
 		t.Fatalf("no quota plugin yet: %v", out)
 	}
 

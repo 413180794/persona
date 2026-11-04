@@ -1,11 +1,14 @@
-// Package plugin is the plugin base (docs/plugins.md, docs/plan-plugins.md): the manifest (persona-plugin.json) and
-// its rules, the configuration form's JSON Schema subset, permissions, the registry of installed plugins, and the
-// wire types of the process plugin protocol. Running plugins is plugin/host's; a program's side is plugin/serve.
+// Package extension is the extension base (docs/extensions.md, docs/plan-extensions.md): the manifest
+// (persona-extension.json, formerly persona-plugin.json) and its rules, the configuration form's JSON Schema subset,
+// permissions, the registry of installed extensions, and the wire types of the process extension protocol. Running
+// extensions is extension/host's; a program's side is extension/serve.
 package extension
 
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 )
 
 // Protocol is the version of the process plugin protocol: the hub sends it with initialize, the program answers with
@@ -15,8 +18,28 @@ const Protocol = 1
 // ManifestVersion is the version of persona-plugin.json this hub reads.
 const ManifestVersion = 1
 
-// ManifestFile is the manifest's name at the root of a plugin package.
-const ManifestFile = "persona-plugin.json"
+// ManifestFile is the manifest's name at the root of an extension package; LegacyManifestFile is its name before
+// #1844, still read when a package has no ManifestFile (docs/extensions.md「命名和兼容」).
+const (
+	ManifestFile       = "persona-extension.json"
+	LegacyManifestFile = "persona-plugin.json"
+)
+
+// ManifestPath is the manifest in dir: ManifestFile, or LegacyManifestFile when only that one is there.
+func ManifestPath(dir string) string {
+	if _, err := os.Stat(filepath.Join(dir, ManifestFile)); err != nil {
+		if _, lerr := os.Stat(filepath.Join(dir, LegacyManifestFile)); lerr == nil {
+			return filepath.Join(dir, LegacyManifestFile)
+		}
+	}
+	return filepath.Join(dir, ManifestFile)
+}
+
+// hasManifest says whether dir has a manifest under either name.
+func hasManifest(dir string) bool {
+	_, err := os.Stat(ManifestPath(dir))
+	return err == nil
+}
 
 // Methods of the base (every other method is <namespace>.<method>, the namespace being an extension point's).
 const (
@@ -42,9 +65,10 @@ const (
 
 // InitializeParams is what the hub sends first.
 type InitializeParams struct {
-	Protocol  int           `json:"protocol"`
-	Hub       HubInfo       `json:"hub"`
-	Extension ExtensionInfo `json:"plugin"`
+	Protocol int     `json:"protocol"`
+	Hub      HubInfo `json:"hub"`
+	// Extension is "extension"; the hub sends it as "plugin" too, for the programs written before #1844, and reads either.
+	Extension ExtensionInfo `json:"extension"`
 	// Config is the plugin's configuration with the schema's defaults filled in.
 	Config json.RawMessage `json:"config,omitempty"`
 	// Secrets are the plugin's own (declared in its manifest, filled in by the user), by name.
@@ -53,6 +77,30 @@ type InitializeParams struct {
 	Granted Permissions `json:"granted"`
 	// Active are the contributions this run is for, by extension point (a switched-off connector is not in it).
 	Active map[string][]string `json:"active,omitempty"`
+}
+
+func (p InitializeParams) MarshalJSON() ([]byte, error) {
+	type plain InitializeParams
+	return json.Marshal(struct {
+		plain
+		Legacy ExtensionInfo `json:"plugin"`
+	}{plain(p), p.Extension})
+}
+
+func (p *InitializeParams) UnmarshalJSON(data []byte) error {
+	type plain InitializeParams
+	var v struct {
+		plain
+		Legacy *ExtensionInfo `json:"plugin"`
+	}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	*p = InitializeParams(v.plain)
+	if p.Extension == (ExtensionInfo{}) && v.Legacy != nil {
+		p.Extension = *v.Legacy
+	}
+	return nil
 }
 
 // HubInfo is the hub a plugin runs under.

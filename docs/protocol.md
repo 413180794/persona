@@ -40,7 +40,7 @@
 
 - P0 新增：`tls`、`endpoints`、`client_hello`、`heartbeat`、`app_ping`、`error_codes`、`client_ops`、`ws_notify`、`lock_test`、`android_update`。
 - 已有：`client_msg_id`、`send_refusals`、`screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`、`terminal_stream`、`terminal_control`、`terminal_scroll`、`terminal_click`、`file_upload`。
-- 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](plugins.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[plugins.md](plugins.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[plugins.md](plugins.md)「自动升级」）、`desktops`（桌面端登记，见下文 `register_desktop`）。
+- 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](extensions.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[extensions.md](extensions.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[extensions.md](extensions.md)「自动升级」）、`desktops`（桌面端登记，见下文 `register_desktop`）。
 
 能力位表示实现支持；`tls` 不代表已经开启监听，要同时看 `tls_port` / `fp`。新客户端遇到旧 hub 时按能力位退回旧行为。机器列表的 `node_version` / `node_mismatch` 用来提示 node 与 hub 的部署版本是否一致（那台电脑上的 personad 不是 hub 这次部署的，`deploy.sh` 只部署了一部分；hub 连上时也记一行日志）。新字段都是可选的，App 目前靠字段在不在判断；以后有「旧 hub 会误解」的新请求时先查这里。
 
@@ -235,7 +235,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 - `GET /api/v1/model-config` → `{purposes, providers}`。
 - `GET /api/v1/model-config/purposes/{id}` → `{purpose, providers}`。
 - `PATCH /api/v1/model-config/purposes/{id}` 接收 `{revision, provider?, model?, effort?}`；缺失不改，`null` 清除覆盖，revision 冲突返回 409。成功返回同单项 GET。
-  `inbox.triage` 改成调不了的、又有要它的插件开着时返回 422 `{code: "triage_model_in_use", plugins: [名字], error}`（`docs/plugins.md`「收件箱的通用规则」）。
+  `inbox.triage` 改成调不了的、又有要它的插件开着时返回 422 `{code: "triage_model_in_use", plugins: [名字], error}`（`docs/extensions.md`「收件箱的通用规则」）。
 - 用途的 `fields`、`provider_ids` 限定可编辑参数和兼容供应商；`override` 与 `effective` 分开，`inherited_from` 标记来源，`status` 为中文状态说明。真实任务/插件使用 `task.<id>` / `plugin.<id>`。
 
 供应商响应只带描述与 `has_key`，不返回秘密；具体默认、执行边界和兼容规则见 `docs/model-config.md`。
@@ -555,14 +555,14 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | GET / PUT | `/api/v1/devices/{id}/prefs` | 这台设备要哪些推送：`{"input":true,"done":"off|long|always"}`，另有 `translate`（设置 › 翻译：`{enabled,target,mail}`，hub 据此提前翻译新邮件）、`live_activity`（默认 true）、`lock_details`（锁屏显示详情，默认 false）、`island`（灵动岛两侧：`{"preset":"a|b|c|custom","left","right","machine"}`，默认 `a`）、`mute_while_desktop`（手机静音，默认 false：有桌面端连着时不给这台设备推「需要你处理」「Agent 做完」；助手按你的要求发的提醒照推）；`look`（这台手机的实时活动画哪个形象：`{"design","light","dark","package"?}`，App 换形象时单独 PUT，hub 原样放进这台设备推送的 content-state，见 `docs/live-activity.md`「形象」；design 超过 32 字节或 package 超过 160 字节的不存）；PUT 可以只带要改的字段；返回值另带 hub 的 `long_turn_seconds`、`done_delay_seconds`（只读）。设备还没注册推送时也能设 |
 | GET | `/api/v1/personas` | 形象（`docs/persona.md`）：`{"personas":[{"id","rev","bytes","manifest":{persona.json 原样}}]}`，hub 机器 `~/.persona/personas/` 下检查通过的包（文件齐全、id 和目录同名、不超大小）；`rev` 是整个包内容的哈希，任何一个字节变了它就变，手机按 rev 缓存。没有目录时是空列表 |
 | GET | `/api/v1/personas/{id}/{file…}` | 包里的一个文件（PNG / persona.json），只给包目录里的普通文件（不跟软链、不给点开头的） |
-| GET | `/api/v1/plugins` | hub 的插件：`{"plugins":[{"id","name","kind","status","error"?, "version", "source", "enabled", "contributes", "needs_setup"?, …}], "can_install"}`，`status` 是 `disabled / needs_setup / incompatible / stopped / starting / running / error`（`docs/plugins.md`「hub 的接口」）；`features` 带 `plugins` 时才有 |
-| GET / PUT / DELETE | `/api/v1/plugins/{id}/-/…`、`/api/v1/plugins/-/…` | 插件的详情、开关、配置、密钥（完整权限的设备），预览 / 安装 / 升级 / 回滚 / 卸载（只认主 token 经回环）；`features` 带 `plugin_manager` 时才有，见 `docs/plugins.md`「hub 的接口」 |
+| GET | `/api/v1/plugins` | hub 的插件：`{"plugins":[{"id","name","kind","status","error"?, "version", "source", "enabled", "contributes", "needs_setup"?, …}], "can_install"}`，`status` 是 `disabled / needs_setup / incompatible / stopped / starting / running / error`（`docs/extensions.md`「hub 的接口」）；`features` 带 `plugins` 时才有 |
+| GET / PUT / DELETE | `/api/v1/plugins/{id}/-/…`、`/api/v1/plugins/-/…` | 插件的详情、开关、配置、密钥（完整权限的设备），预览 / 安装 / 升级 / 回滚 / 卸载（只认主 token 经回环）；`features` 带 `plugin_manager` 时才有，见 `docs/extensions.md`「hub 的接口」 |
 | GET | `/api/v1/machines/{mid}/ports/{port}` | 端口探测（`docs/ports.md`）：`{"port","listening","http","title"?}`，只看不放行 |
 | POST | `/api/v1/machines/{mid}/ports/{port}/open` | 用户在 App 里点开一个不在任何 Agent 名下的端口：有东西在听就放行 24 小时、回同上；没有 404；只读设备 403 |
 | GET | `/api/v1/machines/{mid}/ports/{port}/connect` | 端口转发：升级成 WebSocket，二进制消息就是一条 TCP 连接的字节（手机本地监听，浏览器每开一条连接就连一次）。端口必须是这台机器某个会话 `ports` 里的或点开过的，否则 403；没在听 404；只读设备 403；机器离线 503；一台机器同时超过 64 条 429 |
 | POST | `/api/v1/phone/runtime-cli` | `{cmd, args, timeout}`：让手机上的 DEBUG 包执行一条 Runtime CLI 命令（`docs/runtime-cli.md`「经 hub 连真机」），回 App 的原样回答 `{"ok": …}`。只给 `full` 设备凭据（只读设备 403）；没有登记了 `phone_runtime_cli` 的 App 在线 503 `phone_offline`（不唤醒）；`timeout` 秒内（最多 120）没回答 504；App 说这次调用失败 502。每次调用 hub 记一行日志（命令、调用方设备 id、状态、耗时），不记参数和回答 |
-| 任意 | `/api/v1/plugins/{id}/-/machines/{mid}/{path…}` | 插件在电脑 `mid` 上的程序的 HTTP（`node.http`，`docs/plugins.md`「在电脑上运行的程序」），WebSocket 也是：hub 经 `plugin.node.dial` 开流转发，去掉 `Authorization` 和 `token`；只给完整权限的设备；插件没在这台开 404，机器离线 409，程序不应答 502 |
-| 任意 | `/api/v1/plugins/{id}/{path…}` | 原样转发给插件的 `/{path…}`（`/-/` 开头的不转发）（WebSocket 也是），去掉 `Authorization` 和 `token`；只读设备 403。语音插件的契约见 `docs/plugins.md`「语音」 |
+| 任意 | `/api/v1/plugins/{id}/-/machines/{mid}/{path…}` | 插件在电脑 `mid` 上的程序的 HTTP（`node.http`，`docs/extensions.md`「在电脑上运行的程序」），WebSocket 也是：hub 经 `plugin.node.dial` 开流转发，去掉 `Authorization` 和 `token`；只给完整权限的设备；插件没在这台开 404，机器离线 409，程序不应答 502 |
+| 任意 | `/api/v1/plugins/{id}/{path…}` | 原样转发给插件的 `/{path…}`（`/-/` 开头的不转发）（WebSocket 也是），去掉 `Authorization` 和 `token`；只读设备 403。语音插件的契约见 `docs/extensions.md`「语音」 |
 
 **按路径读文件的边界**（`file`、`file/download`、`file/thumb`、`file/convert`、`stat`、`fs`，node 的 `pathguard.go`）：只给已认证的客户端（设备 token）。路径逐段解析符号链接，**每一段在看之前**先检查，所以经链接指过去的也拦得住、且根本不碰目标：
 - **iCloud**（任何一段含 `Library/Mobile Documents`，不分大小写）：没解锁的 Mac 上一碰就卡住，`stat` 当不存在，读取拒绝。
@@ -588,7 +588,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | `machines` | `machines` |
 | `workspace_board` | `revision`：看板修改已保存，客户端重新读取完整状态；不代表 Agent 状态变化 |
 | `todos` | —：待办或关联变了就推，客户端收到后重拉 `GET /api/v1/todos` |
-| `plugin_ui` | `plugin`, `id`, `badge`（`{text, tone}`，`null` 是清掉）：插件改了它主导航入口（`nav_page`）的角标，[plugins.md](plugins.md)「UI 插槽」 |
+| `plugin_ui` | `plugin`, `id`, `badge`（`{text, tone}`，`null` 是清掉）：插件改了它主导航入口（`nav_page`）的角标，[extensions.md](extensions.md)「UI 插槽」 |
 | `assistant_feed` | `conversation`, `item`（`FeedItem`）：对话动态多了一条 |
 | `task_plan` | `plan`（`TaskPlan`）：计划交给用户、开始、不开了、某个任务没开起来（`tasks[i].error`） |
 | `sessions` | `machine_id`, `sessions`（该机器全量，变化时推，和上一条一模一样就不推；每个会话带 `rev` = transcript 字节数，变了就说明有新内容；可选 `suggestion`：Claude 一轮结束后在输入框里给的灰色「下一条」建议，见 `docs/claude-integration.md`；可选 `attention_reason`：会话在「需要你」时，宿主说的原因（botmux 的 attention reason）；可选 `external_url`：在 Persona 之外打开它的地方（botmux 会话的飞书话题），见 `docs/engines.md`「botmux」） |
@@ -1055,7 +1055,7 @@ hub → node 请求：
 | `computer.install` / `computer.grant` / `computer.cancel` | `{}` → `Computer`：一个后台任务（一次一个），状态随 `computer.status` 的 `job` 回来。install：三个安装脚本先下载到临时目录、检查后从磁盘跑 `install.sh --no-modify-path`（`CUA_DRIVER_RS_TELEMETRY_ENABLED=0`），装完 `telemetry disable`，接着自动 grant；grant：`cua-driver permissions grant`（Mac 上弹系统窗口）；cancel 只停安装（[computer-use.md](computer-use.md)「一键安装」） |
 | `browser.status` / `browser.install` / `browser.open` / `browser.cancel` | `{}` → `Browser`：ego lite 装没装、首次设置、统计、只读探测；安装是下载官方 DMG、校验签名（Team `JGQLC6YQYJ`）和公证后 ditto 进「应用程序」、保留 quarantine；打开是在那台 Mac 上 `open` 它 |
 | `browser.call` | `{session, script?, look?, full?, screenshot?, timeout_ms?}` → `{output, image?}`：`ego-browser nodejs`（脚本走 stdin）在名为 `session` 的任务空间里跑助手的脚本（`task`、`page` 现成），或 look 时拍快照；最后一行结果用 `@@persona-browser@@` 标出（不能用 NUL：ego 会丢掉整段输出），截图另放 `image` |
-| `plugin.node.have` / `plugin.node.put.begin` / `.chunk` / `.commit` | 插件在这台电脑上的包（`docs/plugins.md`「在电脑上运行的程序」）：`{id, version, digest}` → `{have}`；`begin {id, version, digest, size}` → `{upload_id}`，`chunk {upload_id, offset, data}`（按顺序，1 MB），`commit {upload_id}`：校验 sha256、解包到 `~/.persona/plugins/<id>/<version>/` |
+| `plugin.node.have` / `plugin.node.put.begin` / `.chunk` / `.commit` | 插件在这台电脑上的包（`docs/extensions.md`「在电脑上运行的程序」）：`{id, version, digest}` → `{have}`；`begin {id, version, digest, size}` → `{upload_id}`，`chunk {upload_id, offset, data}`（按顺序，1 MB），`commit {upload_id}`：校验 sha256、解包到 `~/.persona/plugins/<id>/<version>/` |
 | `plugin.node.start` / `plugin.node.stop` | `start {id, name, version, command, args?, env?, rpc, http?, keep, lease_seconds, init}` → `{id, version, state, error?}`：起它（和正在跑的完全一样就不动，只续租约；新版本 30 秒内没起来回退到上一版并报错）；`init` 是程序的 `initialize`（配置、发给电脑的密钥，不落盘）。`stop {id}` |
 | `plugin.node.sync` / `plugin.node.renew` / `plugin.node.status` | `sync {programs: [{id, version, digest}], installed: [id]}` → `{programs: [状态]}`：不在 `programs` 里的停掉、删包，不在 `installed` 里的连数据删；`renew {ids, lease_seconds}`；`status` → `{programs}` |
 | `plugin.node.dial` | `{id, plugin}` → `{}`：连上这个插件程序的 HTTP socket，开一条流 `id`（之后同 `port.dial` 用 `stream.*` 事件传字节）；程序没在跑或不开 HTTP 回 `code: not_running` |

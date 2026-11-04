@@ -135,7 +135,7 @@ func NewRegistry(dir string, store Store, seal Sealer, build int64) *Registry {
 }
 
 // Yields marks the built-in plugin id as one an installed plugin of the same id takes the place of, while it moves out
-// of personad into a package (Telegram, docs/plan-plugins.md): installing that plugin puts the built-in aside (the hub
+// of personad into a package (Telegram, docs/plan-extensions.md): installing that plugin puts the built-in aside (the hub
 // stops its program before the installed one starts), uninstalling it brings the built-in back.
 func (r *Registry) Yields(id string) {
 	r.mu.Lock()
@@ -245,8 +245,8 @@ func (r *Registry) fromRow(row Record) *Extension {
 	p.Schema, _ = ParseSchema(m.Configuration)
 	if row.Remote == nil {
 		p.Dir = r.installedDir(row.ID, row.Version)
-		if _, err := os.Stat(filepath.Join(p.Dir, ManifestFile)); err != nil {
-			p.Problem = "插件包不见了（" + p.Dir + "）"
+		if !hasManifest(p.Dir) {
+			p.Problem = "扩展包不见了（" + p.Dir + "）"
 		}
 	}
 	if w, err := CheckEngines(m, r.build); err != nil {
@@ -293,7 +293,7 @@ type Preview struct {
 	// AddedPermissions are the lines of what the new version may do that the installed one may not (only what is
 	// new: the added hosts, the added secrets), for the upgrade screen.
 	AddedPermissions []PermissionLine `json:"added_permissions,omitempty"`
-	// Market is the market it comes from (a full-rights device may install it, docs/plugins.md「插件市场」).
+	// Market is the market it comes from (a full-rights device may install it, docs/extensions.md「扩展市场」).
 	Market string `json:"market,omitempty"`
 
 	source  Source
@@ -311,7 +311,7 @@ func newID() string {
 // the installed plugin upgrade.
 func (r *Registry) Preview(ctx context.Context, source, upgrade string) (*Preview, error) {
 	if r.store == nil {
-		return nil, errors.New("没有数据库：装不了插件")
+		return nil, errors.New("没有数据库：装不了扩展")
 	}
 	src, err := ParseSource(source)
 	if err != nil {
@@ -324,7 +324,7 @@ func (r *Registry) Preview(ctx context.Context, source, upgrade string) (*Previe
 // against the index's sha256, must be the plugin the index says (id, version, permissions).
 func (r *Registry) PreviewMarket(ctx context.Context, mk *Market, marketID string, e *MarketEntry, upgrade string) (*Preview, error) {
 	if r.store == nil {
-		return nil, errors.New("没有数据库：装不了插件")
+		return nil, errors.New("没有数据库：装不了扩展")
 	}
 	pkg := e.PackageFor(Platform())
 	if pkg == nil {
@@ -385,7 +385,7 @@ func (r *Registry) PreviewMarketOf(previewID string) string {
 // name, written into the preview's staging directory (at most PackageMost bytes) and unpacked there.
 func (r *Registry) PreviewUpload(ctx context.Context, name string, body io.Reader, upgrade string) (*Preview, error) {
 	if r.store == nil {
-		return nil, errors.New("没有数据库：装不了插件")
+		return nil, errors.New("没有数据库：装不了扩展")
 	}
 	name, err := UploadName(name)
 	if err != nil {
@@ -405,7 +405,7 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 			return nil, errors.New("this hub cannot reach remote plugins")
 		}
 		if m, err = r.RemoteManifest(ctx, Remote{RPCSocket: src.RPCSocket, HTTPSocket: src.HTTPSocket}); err != nil {
-			return nil, fmt.Errorf("问不到远端插件的清单：%w", err)
+			return nil, fmt.Errorf("问不到远端扩展的清单：%w", err)
 		}
 		if err := m.Validate(); err != nil {
 			return nil, err
@@ -421,7 +421,7 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 			return nil, err
 		}
 		pv.root = root
-		data, err := os.ReadFile(filepath.Join(root, ManifestFile))
+		data, err := os.ReadFile(ManifestPath(root))
 		if err == nil {
 			m, err = Parse(data)
 		}
@@ -456,11 +456,11 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 	cur := r.extensions[m.ID]
 	switch {
 	case upgrade == "" && cur != nil && !r.yielding(cur):
-		return fail(fmt.Errorf("已经有一个叫 %s 的插件（%s）：要换新版本用升级", m.ID, cur.Record.Source))
+		return fail(fmt.Errorf("已经有一个叫 %s 的扩展（%s）：要换新版本用升级", m.ID, cur.Record.Source))
 	case upgrade != "" && upgrade != m.ID:
 		return fail(fmt.Errorf("这个包是 %s，不是 %s", m.ID, upgrade))
 	case upgrade != "" && (cur == nil || cur.Record.Source != SourceInstalled):
-		return fail(fmt.Errorf("没有装过插件 %s（内置的和 hub.json 里的不能升级）", upgrade))
+		return fail(fmt.Errorf("没有装过扩展 %s（内置的和 hub.json 里的不能升级）", upgrade))
 	case upgrade != "" && !NewerVersion(m.Version, cur.Record.Version):
 		return fail(fmt.Errorf("%s 不比已装的 %s 新", m.Version, cur.Record.Version))
 	}
@@ -506,7 +506,7 @@ func (r *Registry) checkPackage(m *Manifest, root string) error {
 	}
 	if m.Node != nil {
 		if !NodePrograms {
-			return errors.New("这个版本的 hub 还不能在电脑上运行插件的程序（node 段），先升级 hub")
+			return errors.New("这个版本的 hub 还不能在电脑上运行扩展的程序（node 段），先升级 hub")
 		}
 		// Every computer's program is in the package: the hub sends each machine the one for its platform.
 		for _, platform := range slices.Sorted(maps.Keys(m.Node.Command.ByPlatform)) {
@@ -520,7 +520,7 @@ func (r *Registry) checkPackage(m *Manifest, root string) error {
 	}
 	cmd, ok := m.Runtime.Command.For(r.platform)
 	if !ok {
-		return fmt.Errorf("这个插件没有 %s 的程序", r.platform)
+		return fmt.Errorf("这个扩展没有 %s 的程序", r.platform)
 	}
 	if IsBuiltinCommand(cmd) {
 		return errors.New("runtime.command: only a built-in plugin runs the hub's own binary")
@@ -528,7 +528,7 @@ func (r *Registry) checkPackage(m *Manifest, root string) error {
 	return checkProgram(root, "runtime.command", cmd)
 }
 
-// NodePrograms says whether this hub runs plugins' programs on computers (docs/plan-plugins.md「七」): off, a package
+// NodePrograms says whether this hub runs plugins' programs on computers (docs/plan-extensions.md「七」): off, a package
 // with a node program does not install, rather than install and never run there (a test turns it off).
 var NodePrograms = true
 
@@ -560,7 +560,7 @@ func (r *Registry) conflicts(m *Manifest) error {
 			}
 			for _, other := range r.extensions {
 				if other.Record.ID != m.ID && slices.Contains(other.Manifest.Items(point), id) {
-					errs = append(errs, fmt.Errorf("%s 里的 %q 已经是插件 %s 的", point, id, other.Record.ID))
+					errs = append(errs, fmt.Errorf("%s 里的 %q 已经是扩展 %s 的", point, id, other.Record.ID))
 				}
 			}
 		}
@@ -644,7 +644,7 @@ func (r *Registry) Install(ctx context.Context, previewID, digest, actor string)
 	builtin := r.extensions[m.ID]
 	if builtin != nil && !r.yielding(builtin) {
 		r.mu.Unlock()
-		return nil, fmt.Errorf("已经有一个叫 %s 的插件", m.ID)
+		return nil, fmt.Errorf("已经有一个叫 %s 的扩展", m.ID)
 	}
 	if err := r.conflicts(m); err != nil {
 		r.mu.Unlock()
@@ -706,7 +706,7 @@ func (r *Registry) Upgrade(ctx context.Context, id, previewID, digest, actor str
 	}
 	old := r.Get(id)
 	if old == nil || old.Record.Version != pv.From {
-		return nil, errors.New("插件在预览之后变了，重新预览一次")
+		return nil, errors.New("扩展在预览之后变了，重新预览一次")
 	}
 	row := old.Record
 	row.PreviousVersion, row.Version, row.UpdatedAt = row.Version, m.Version, r.now()
@@ -748,13 +748,13 @@ func (r *Registry) prune(id string, keep ...string) {
 func (r *Registry) Rollback(ctx context.Context, id, actor string) (*Extension, error) {
 	old := r.Get(id)
 	if old == nil || old.Record.Source != SourceInstalled {
-		return nil, fmt.Errorf("没有装过插件 %s", id)
+		return nil, fmt.Errorf("没有装过扩展 %s", id)
 	}
 	prev := old.Record.PreviousVersion
 	if prev == "" || old.Record.Remote != nil {
 		return nil, errors.New("没有可以回到的上一个版本")
 	}
-	data, err := os.ReadFile(filepath.Join(r.installedDir(id, prev), ManifestFile))
+	data, err := os.ReadFile(ManifestPath(r.installedDir(id, prev)))
 	if err != nil {
 		return nil, fmt.Errorf("上一个版本 %s 的包不在了", prev)
 	}
@@ -783,10 +783,10 @@ func (r *Registry) Rollback(ctx context.Context, id, actor string) (*Extension, 
 func (r *Registry) Uninstall(ctx context.Context, id string, keepData bool, actor string) error {
 	old := r.Get(id)
 	if old == nil {
-		return fmt.Errorf("没有插件 %s", id)
+		return fmt.Errorf("没有扩展 %s", id)
 	}
 	if old.Record.Source != SourceInstalled {
-		return fmt.Errorf("%s 是%s的插件，只能停用", id, map[string]string{SourceBuiltin: "内置", SourceHubJSON: " hub.json 里"}[old.Record.Source])
+		return fmt.Errorf("%s 是%s的扩展，只能停用", id, map[string]string{SourceBuiltin: "内置", SourceHubJSON: " hub.json 里"}[old.Record.Source])
 	}
 	if err := r.store.DeleteExtension(ctx, id); err != nil {
 		return err
@@ -812,7 +812,7 @@ func (r *Registry) Uninstall(ctx context.Context, id string, keepData bool, acto
 func (r *Registry) editable(id string) (*Extension, error) {
 	p := r.Get(id)
 	if p == nil {
-		return nil, fmt.Errorf("没有插件 %s", id)
+		return nil, fmt.Errorf("没有扩展 %s", id)
 	}
 	if p.ReadOnly() {
 		return nil, fmt.Errorf("%s 写在 hub.json 里：去 hub.json 或管理界面改", id)

@@ -183,7 +183,7 @@ func TestExtensionRelay(t *testing.T) {
 		}
 	}
 
-	if _, err := os.Stat(filepath.Join(dir, "plugins", "voice.sock")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "extensions", "voice.sock")); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -33,7 +33,7 @@ func (h *Hub) browserCookies(w http.ResponseWriter, r *http.Request, m *Machine)
 		return
 	}
 	if h.browserOf(m) == nil {
-		writeErr(w, http.StatusNotFound, errors.New("浏览器插件没打开，或这台不是 Mac"))
+		writeErr(w, http.StatusNotFound, errors.New("浏览器扩展没打开，或这台不是 Mac"))
 		return
 	}
 	if !m.isOnline() {

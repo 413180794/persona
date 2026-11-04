@@ -10,7 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extension"
 )
 
-// The plugins page (docs/admin.md「插件」, docs/plugins.md「管理界面」): what `personad plugin` does on the hub's
+// The plugins page (docs/admin.md「扩展」, docs/extensions.md「管理界面」): what `personad plugin` does on the hub's
 // machine, from a signed-in admin session (CSRF and the admin scope already checked by adminRoutes). Installing runs
 // code on this machine; the admin password guards everything else here that is as strong (adding computers, issuing
 // credentials), so the session may. Every change is audited as the admin UI.
@@ -19,7 +19,10 @@ import (
 const adminActor = "admin UI"
 
 // adminUploadPath is where the browser uploads a package: the one admin write whose body is not JSON.
-const adminUploadPath = "/api/v1/admin/plugins/upload"
+const adminUploadPath = "/api/v1/admin/extensions/upload"
+
+// legacyAdminUploadPath is adminUploadPath before #1844, where the admin UI out there still uploads.
+const legacyAdminUploadPath = "/api/v1/admin/plugins/upload"
 
 // Previews stage packages of up to plugin.PackageMost bytes on disk for 10 minutes: one at a time, and at most
 // pluginPreviewsPer in pluginPreviewWindow, so a stolen session cannot fill the disk.
@@ -63,8 +66,8 @@ func (g *extensionGate) begin(now time.Time) (end func(), retry time.Duration, b
 
 // AdminPlugins is GET /api/v1/admin/plugins.
 type AdminExtensions struct {
-	Extensions []ExtensionDetail `json:"plugins"`
-	CanInstall bool              `json:"can_install"`
+	Extensions []any `json:"extensions"`
+	CanInstall bool  `json:"can_install"`
 	// UploadMost is the largest package the browser may upload, in bytes.
 	UploadMost int64 `json:"upload_most"`
 }
@@ -72,7 +75,7 @@ type AdminExtensions struct {
 func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 	ps := func(w http.ResponseWriter) *extensions {
 		if h.extensions == nil {
-			writeErrCode(w, http.StatusServiceUnavailable, "no_plugins", errors.New("这台 hub 没有启用插件"))
+			writeErrCode(w, http.StatusServiceUnavailable, "no_plugins", errors.New("这台 hub 没有启用扩展"))
 		}
 		return h.extensions
 	}
@@ -85,7 +88,7 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 			}
 			p := s.reg.Get(r.PathValue("id"))
 			if p == nil {
-				writeErrCode(w, http.StatusNotFound, "not_found", errors.New("没有这个插件"))
+				writeErrCode(w, http.StatusNotFound, "not_found", errors.New("没有这个扩展"))
 				return
 			}
 			f(w, r, s, p)
@@ -96,7 +99,7 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 		end, retry, busy := h.admin.extensions.begin(h.adminNow())
 		switch {
 		case busy:
-			writeErrCode(w, http.StatusConflict, "busy", errors.New("正在预览另一个插件，等它结束再试"))
+			writeErrCode(w, http.StatusConflict, "busy", errors.New("正在预览另一个扩展，等它结束再试"))
 			return
 		case retry > 0:
 			retryAfter(w, retry)
@@ -116,27 +119,32 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 	}
 
 	// The markets, as the apps have them (the admin session is the gate).
-	h.marketRoutesAt(mux, "/api/v1/admin/plugins/-", func(w http.ResponseWriter, r *http.Request) bool {
+	h.marketRoutesAt(mux, "/api/v1/admin/extensions/-", func(w http.ResponseWriter, r *http.Request) bool {
 		if h.extensions == nil {
 			writeErrCode(w, http.StatusServiceUnavailable, "no_plugins", errors.New("plugins are not set up"))
 			return false
 		}
 		return true
 	})
-	mux.HandleFunc("GET /api/v1/admin/plugins", func(w http.ResponseWriter, r *http.Request) {
-		out := AdminExtensions{Extensions: []ExtensionDetail{}, UploadMost: extension.PackageMost}
+	h.legacyExtensionRoutes(mux, "/api/v1/admin/plugins", "/api/v1/admin/extensions")
+	mux.HandleFunc("GET /api/v1/admin/extensions", func(w http.ResponseWriter, r *http.Request) {
+		out := AdminExtensions{Extensions: []any{}, UploadMost: extension.PackageMost}
 		if h.extensions != nil {
 			for _, p := range h.extensions.reg.List() {
-				out.Extensions = append(out.Extensions, h.extensions.detail(r.Context(), p))
+				out.Extensions = append(out.Extensions, detailOut(r, h.extensions.detail(r.Context(), p)))
 			}
 			out.CanInstall = h.extensions.reg.HasStore()
 		}
+		if legacyExtensionRequest(r) {
+			writeJSON(w, legacyAdminExtensions(out))
+			return
+		}
 		writeJSON(w, out)
 	})
-	mux.HandleFunc("GET /api/v1/admin/plugins/{id}", one(func(w http.ResponseWriter, r *http.Request, ps *extensions, p *extension.Extension) {
-		writeJSON(w, ps.detail(r.Context(), p))
+	mux.HandleFunc("GET /api/v1/admin/extensions/{id}", one(func(w http.ResponseWriter, r *http.Request, ps *extensions, p *extension.Extension) {
+		writeJSON(w, detailOut(r, ps.detail(r.Context(), p)))
 	}))
-	mux.HandleFunc("POST /api/v1/admin/plugins/preview", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/v1/admin/extensions/preview", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Source  string `json:"source"`
 			Upgrade string `json:"upgrade,omitempty"`
@@ -170,7 +178,7 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 			return s.reg.PreviewUpload(r.Context(), q.Get("name"), body, q.Get("upgrade"))
 		})
 	})
-	mux.HandleFunc("POST /api/v1/admin/plugins/install", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/v1/admin/extensions/install", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			PreviewID string `json:"preview_id"`
 			Digest    string `json:"permissions_digest"`
@@ -192,9 +200,9 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 			return
 		}
 		h.logf("admin: installed plugin %s %s", p.Record.ID, p.Record.Version)
-		writeJSON(w, s.detail(r.Context(), p))
+		writeJSON(w, detailOut(r, s.detail(r.Context(), p)))
 	})
-	mux.HandleFunc("POST /api/v1/admin/plugins/{id}/upgrade", one(func(w http.ResponseWriter, r *http.Request, ps *extensions, p *extension.Extension) {
+	mux.HandleFunc("POST /api/v1/admin/extensions/{id}/upgrade", one(func(w http.ResponseWriter, r *http.Request, ps *extensions, p *extension.Extension) {
 		var in struct {
 			PreviewID string `json:"preview_id"`
 			Digest    string `json:"permissions_digest"`
@@ -208,18 +216,18 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 			return
 		}
 		h.logf("admin: upgraded plugin %s %s → %s", np.Record.ID, np.Record.PreviousVersion, np.Record.Version)
-		writeJSON(w, ps.detail(r.Context(), np))
+		writeJSON(w, detailOut(r, ps.detail(r.Context(), np)))
 	}))
-	mux.HandleFunc("POST /api/v1/admin/plugins/{id}/rollback", one(func(w http.ResponseWriter, r *http.Request, ps *extensions, p *extension.Extension) {
+	mux.HandleFunc("POST /api/v1/admin/extensions/{id}/rollback", one(func(w http.ResponseWriter, r *http.Request, ps *extensions, p *extension.Extension) {
 		np, err := ps.reg.Rollback(r.Context(), p.Record.ID, adminActor)
 		if err != nil {
 			writeErrCode(w, http.StatusBadRequest, "rollback_failed", err)
 			return
 		}
 		h.logf("admin: rolled plugin %s back to %s", np.Record.ID, np.Record.Version)
-		writeJSON(w, ps.detail(r.Context(), np))
+		writeJSON(w, detailOut(r, ps.detail(r.Context(), np)))
 	}))
-	mux.HandleFunc("PUT /api/v1/admin/plugins/{id}/enabled", one(func(w http.ResponseWriter, r *http.Request, ps *extensions, p *extension.Extension) {
+	mux.HandleFunc("PUT /api/v1/admin/extensions/{id}/enabled", one(func(w http.ResponseWriter, r *http.Request, ps *extensions, p *extension.Extension) {
 		var in struct {
 			Enabled bool `json:"enabled"`
 		}
@@ -230,9 +238,9 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 			writeExtensionErr(w, http.StatusConflict, "read_only", err)
 			return
 		}
-		writeJSON(w, ps.detail(r.Context(), ps.reg.Get(p.Record.ID)))
+		writeJSON(w, detailOut(r, ps.detail(r.Context(), ps.reg.Get(p.Record.ID))))
 	}))
-	mux.HandleFunc("DELETE /api/v1/admin/plugins/{id}", one(func(w http.ResponseWriter, r *http.Request, ps *extensions, p *extension.Extension) {
+	mux.HandleFunc("DELETE /api/v1/admin/extensions/{id}", one(func(w http.ResponseWriter, r *http.Request, ps *extensions, p *extension.Extension) {
 		var in struct {
 			KeepData bool `json:"keep_data"`
 		}

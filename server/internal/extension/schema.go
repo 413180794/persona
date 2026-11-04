@@ -18,7 +18,7 @@ import (
 const ConfigMost = 64 << 10
 
 // Schema is a plugin's configuration: the subset of JSON Schema every client can draw as a form
-// (docs/plan-plugins.md「configuration」), its properties in the order the manifest has them.
+// (docs/plan-extensions.md「configuration」), its properties in the order the manifest has them.
 type Schema struct {
 	Fields []Field `json:"fields"`
 }
@@ -36,7 +36,7 @@ type Field struct {
 	// OS, for format machine: only machines of these systems (x-os: darwin, linux, windows); none, any.
 	OS []string `json:"os,omitempty"`
 	// Confirm (x-confirm): what a form asks before a switch is turned on (a boolean, or a machine of a machine list),
-	// for settings with a cost the user should agree to (the plugin cua's 「插件开着时不自动锁屏」, #1507).
+	// for settings with a cost the user should agree to (the plugin cua's 「扩展开着时不自动锁屏」, #1507).
 	Confirm     string   `json:"confirm,omitempty"`
 	Pattern     string   `json:"pattern,omitempty"`
 	MinLength   *int     `json:"min_length,omitempty"`

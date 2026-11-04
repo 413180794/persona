@@ -11,16 +11,16 @@ import (
 	"github.com/nwverse/persona/server/internal/extension"
 )
 
-// The inbox's common rules for plugins (#1730, docs/plugins.md「收件箱的通用规则」). A plugin connector with an inbox and
+// The inbox's common rules for plugins (#1730, docs/extensions.md「收件箱的通用规则」). A plugin connector with an inbox and
 // no fallback of its own (capability fallback) leaves sorting to the hub's model (inbox.triage, 信息筛选): its new
 // items without a tier are not let in while the model cannot sort them (inbox_admit.go). So such a plugin is not
 // switched on while that model cannot be called, and the model is not cleared while one is on. A hub.json plugin
 // cannot be switched: it runs, but its inbox is not collected until the model is there.
 
 // errNeedsTriageModel refuses to switch on (or install, or upgrade while on) a plugin that needs the triage model.
-var errNeedsTriageModel = errors.New("先在 设置 › 模型 里配好『信息筛选』，再启用这个插件")
+var errNeedsTriageModel = errors.New("先在 设置 › 模型 里配好『信息筛选』，再启用这个扩展")
 
-// needsTriageModelSetup is what 设置 › 插件 says of a hub.json plugin waiting for the model (needs_setup).
+// needsTriageModelSetup is what 设置 › 扩展 says of a hub.json plugin waiting for the model (needs_setup).
 const needsTriageModelSetup = "需要先配分拣模型"
 
 // modelUsable says whether a binding of an API use can be called: it resolves to an address, a model and a key.
@@ -78,7 +78,7 @@ func (h *Hub) waitsForTriageModel(ctx context.Context, c connector.Connector) bo
 		!c.Manifest().Has(connector.CapFallback) && !h.triageUsable(ctx)
 }
 
-// hubJSONWaitsForTriageModel is waitsForTriageModel for a plugin (its status in 设置 › 插件).
+// hubJSONWaitsForTriageModel is waitsForTriageModel for a plugin (its status in 设置 › 扩展).
 func (h *Hub) hubJSONWaitsForTriageModel(ctx context.Context, p *extension.Extension) bool {
 	if p.Record.Source != extension.SourceHubJSON {
 		return false
@@ -109,5 +109,5 @@ func (h *Hub) triageInUse(ctx context.Context, id string, effective ModelBinding
 		return nil
 	}
 	return map[string]any{"code": "triage_model_in_use", "plugins": names,
-		"error": "这些插件靠『信息筛选』分拣收件箱：" + strings.Join(names, "、") + "。先在 设置 › 插件 里停用它们，再改掉这个模型"}
+		"error": "这些扩展靠『信息筛选』分拣收件箱：" + strings.Join(names, "、") + "。先在 设置 › 扩展 里停用它们，再改掉这个模型"}
 }

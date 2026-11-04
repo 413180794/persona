@@ -214,7 +214,7 @@ func TestProgram(t *testing.T) {
 }
 
 // linked is the program run as a plugin by the plugin host, the connector reaching it through its Link (the hub's
-// way, docs/plugins.md); the hub's part (passing the program's calls and events to the connector) is done here.
+// way, docs/extensions.md); the hub's part (passing the program's calls and events to the connector) is done here.
 func linked(t *testing.T, s connector.Secrets) *Conn {
 	t.Helper()
 	exe, err := os.Executable()

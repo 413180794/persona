@@ -275,7 +275,7 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
 - `connector_gate`（可选）：连接器写操作（`github_comment` 这类）的闸门规则，第一条匹配的说了算，没有匹配的就在手机上逐次确认：
   `[{"connector":"github","action":"github_comment","match":{"repo":"example-org/*"},"decision":"allow"}]`
   （`connector`、`action` 可用 `*` 通配；`match` 按工具参数的顶层字段匹配，字符串也可以通配；`decision` 是 `allow` / `confirm` / `deny`，
-  写错了 hub 不启动；`server/internal/connector/gate.go`，`docs/plan-connectors.md`）。插件清单里 `confirm_always` 命中的写操作，`allow` 规则也会被钳成 `confirm`（`docs/plugins.md`）。
+  写错了 hub 不启动；`server/internal/connector/gate.go`，`docs/plan-connectors.md`）。插件清单里 `confirm_always` 命中的写操作，`allow` 规则也会被钳成 `confirm`（`docs/extensions.md`）。
   助手写飞书的规则也写这里：`connector` 写 `lark`，`action` 写「方法 路径」，如 `{"connector":"lark","action":"POST /conversations/*/messages","decision":"allow"}`、
   lark-cli 的 `{"connector":"lark","action":"CLI /im/+messages-send","decision":"allow"}`（路径里 `*` 一段、`**` 剩下的全部，`"*"` 是任何调用；`match` 按 body 的顶层字段）。
   它们排在老的 `lark_gate` 前面，再往后是内置规则（`docs/assistant.md`「飞书：lark-connector skill」）。
@@ -334,8 +334,8 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   连接器的条目带了自己的规则（`rules`，如插件设置的 `triage_rules`）时用那一份，不用这里的。
 - `bots.feishu`（可选）：在飞书里和 Persona 对话的机器人的应用凭证 `app_id`、`app_secret`、`domain`（`feishu` / `lark` / 开放平台地址），
   给不想在 App 里填的人用；App 里（设置 › 连接器 › 飞书机器人）存过的优先，开关、配对、各项功能都在 App 里（`docs/bots.md`）。
-- `plugins`：手写在 hub.json 里、hub 跑起来、转发给 App 的插件（语音对话等），`id`、`kind`、`command` + `args`（或只给 `socket`：跑在别处的插件）、`config`（插件自己的设置），见 `docs/plugins.md`「hub.json 里的插件」；用 `personad plugin install` 装的插件不写这里，登记在数据库；
-  personad 自带的语音插件（GPT-Live）写 `"command": "jarvisd", "args": ["voice"]`，上游放 `config.providers`（`docs/plugins.md`「内置语音插件」）。
+- `plugins`：手写在 hub.json 里、hub 跑起来、转发给 App 的插件（语音对话等），`id`、`kind`、`command` + `args`（或只给 `socket`：跑在别处的插件）、`config`（插件自己的设置），见 `docs/extensions.md`「hub.json 里的插件」；用 `personad plugin install` 装的插件不写这里，登记在数据库；
+  personad 自带的语音插件（GPT-Live）写 `"command": "jarvisd", "args": ["voice"]`，上游放 `config.providers`（`docs/extensions.md`「内置语音插件」）。
 
 ## DDNS（public.ddns）
 

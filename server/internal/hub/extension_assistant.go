@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The assistant extension point (docs/plugins.md「助手」): a plugin's skills go to the machine that runs the assistant
+// The assistant extension point (docs/extensions.md「助手」): a plugin's skills go to the machine that runs the assistant
 // with assistant.prepare (the files only when that machine does not have them yet), and its instructions are added to
 // the assistant's CLAUDE.md; the assistant asks for both (app.call plugins.assistant, assistant_apps.go).
 

@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "protocol.schema.json",
+  "title": "Extension process protocol",
+  "description": "The process protocol (version 1) between the hub and an extension's program: one JSON object a line on stdin / stdout (or a unix socket), keys in snake_case. Also what the apps send the hub to draw a slot.",
+  "$defs": {
+    "Frame": {
+      "description": "One line: a request {id, method, params}, an answer {id, result} or {id, error}, or an event {event, params}.",
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "method": {"type": "string"},
+        "event": {"type": "string"},
+        "params": {},
+        "result": {},
+        "error": {"$ref": "#/$defs/RPCError"}
+      }
+    },
+    "RPCError": {
+      "type": "object",
+      "properties": {
+        "message": {"type": "string", "description": "For people; never a secret or a message's body."},
+        "code": {"type": "string", "description": "One of ErrorCode, or an extension point's own (not_found, invalid, conflict…)."},
+        "data": {}
+      },
+      "required": ["message"]
+    },
+    "ErrorCode": {
+      "type": "string",
+      "enum": ["not_initialized", "unknown_method", "wrong_protocol", "no_capability", "no_contribution", "permission_denied", "timeout", "unsupported"]
+    },
+    "Method": {
+      "description": "Methods of the base; every other method is <namespace>.<method>, the namespace an extension point's.",
+      "type": "string",
+      "enum": ["initialize", "ping", "manifest"]
+    },
+    "HubRole": {"type": "string", "enum": ["center", "member"]},
+    "HubCapability": {"type": "string", "enum": ["inbox_group"]},
+    "InitializeParams": {
+      "description": "What the hub sends first. The extension is under extension; hubs before the rename (#1844) send it as plugin, newer hubs send both.",
+      "type": "object",
+      "properties": {
+        "protocol": {"type": "integer", "const": 1},
+        "hub": {"$ref": "#/$defs/HubInfo"},
+        "extension": {"$ref": "#/$defs/ExtensionInfo"},
+        "plugin": {"$ref": "#/$defs/ExtensionInfo"},
+        "config": {"description": "The configuration with the schema's defaults filled in."},
+        "secrets": {"type": "object", "additionalProperties": {"type": "string"}},
+        "granted": {"$ref": "manifest.schema.json#/$defs/Permissions"},
+        "active": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}},
+          "description": "The contributions this run is for, by extension point."}
+      },
+      "required": ["protocol", "hub", "granted"]
+    },
+    "HubInfo": {
+      "type": "object",
+      "properties": {
+        "build": {"type": "integer", "x-go-type": "int64"},
+        "extension_points": {"type": "object", "additionalProperties": {"type": "integer"}},
+        "role": {"$ref": "#/$defs/HubRole"},
+        "timezone": {"type": "string"},
+        "capabilities": {"type": "array", "items": {"type": "string"}}
+      },
+      "required": ["build", "extension_points"]
+    },
+    "ExtensionInfo": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "version": {"type": "string"},
+        "dir": {"type": "string"},
+        "data_dir": {"type": "string"}
+      },
+      "required": ["id", "version"]
+    },
+    "InitializeResult": {
+      "type": "object",
+      "properties": {
+        "protocol": {"type": "integer", "const": 1},
+        "id": {"type": "string"},
+        "version": {"type": "string"},
+        "contributes": {"type": "object", "additionalProperties": {}, "description": "A subset of the manifest's."}
+      },
+      "required": ["protocol", "id", "version"]
+    },
+    "UIParams": {
+      "description": "ui.render's and ui.action's parameters: what to draw, where, for whom.",
+      "type": "object",
+      "properties": {
+        "contribution": {"type": "string"},
+        "state": {"type": "string"},
+        "action": {"type": "string"},
+        "values": {"type": "object", "additionalProperties": {"type": "string"}},
+        "placement": {"$ref": "view.schema.json#/$defs/Placement"},
+        "size": {"$ref": "view.schema.json#/$defs/Size"},
+        "ui_version": {"type": "integer"},
+        "tz": {"type": "string"},
+        "locale": {"type": "string"},
+        "platform": {"$ref": "view.schema.json#/$defs/Platform"},
+        "machine": {"$ref": "#/$defs/UIMachine"},
+        "launcher": {"$ref": "#/$defs/UILauncher"},
+        "item": {"$ref": "#/$defs/UIInboxItem"}
+      },
+      "required": ["contribution", "state", "placement", "size", "ui_version"]
+    },
+    "UIMachine": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "os": {"type": "string"},
+        "online": {"type": "boolean"}
+      },
+      "required": ["id", "name", "online"]
+    },
+    "UILauncher": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "base_url": {"type": "string"},
+        "query_id": {"type": "string"}
+      },
+      "required": ["name", "base_url", "query_id"]
+    },
+    "UIInboxItem": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "summary": {"type": "string"},
+        "tier": {"type": "string"},
+        "reason": {"type": "string"},
+        "done": {"type": "boolean"},
+        "meta": {"description": "The connector's own record of what the item gathers, as stored; null when it has none."},
+        "extra": {"type": "object", "additionalProperties": {}},
+        "count": {"type": "integer"},
+        "started_at": {"type": "string", "format": "date-time"}
+      },
+      "required": ["id", "title", "done", "meta"]
+    },
+    "BadgeEvent": {
+      "description": "ui.badge, sent by an extension: the badge on its nav_page's entry (no text clears it).",
+      "type": "object",
+      "properties": {
+        "contribution": {"type": "string"},
+        "text": {"type": "string", "maxLength": 8},
+        "tone": {"$ref": "view.schema.json#/$defs/Tone"}
+      },
+      "required": ["contribution"]
+    },
+    "UIContext": {
+      "description": "What an app says when it draws a slot: for whom and where (the hub checks it and hands the extension UIParams).",
+      "type": "object",
+      "properties": {
+        "launcher": {"type": "string"},
+        "machine": {"type": "string"},
+        "item": {"type": "string"},
+        "size": {"$ref": "view.schema.json#/$defs/Size"},
+        "tz": {"type": "string"},
+        "locale": {"type": "string"},
+        "platform": {"$ref": "view.schema.json#/$defs/Platform"},
+        "ui_version": {"type": "integer"}
+      }
+    },
+    "UIRequest": {
+      "description": "An app's POST …/-/ui/{ui}: without action it draws, with one a control was used.",
+      "type": "object",
+      "properties": {
+        "context": {"$ref": "#/$defs/UIContext"},
+        "state": {"type": "string"},
+        "action": {"type": "string"},
+        "values": {"type": "object", "additionalProperties": {"type": "string"}}
+      }
+    },
+    "UIPlace": {
+      "description": "Where an extension draws something, as the hub lists it (GET …/-/ui). The new API names the extension extension / extension_name; the old one plugin / plugin_name.",
+      "type": "object",
+      "properties": {
+        "extension": {"type": "string"},
+        "extension_name": {"type": "string"},
+        "plugin": {"type": "string"},
+        "plugin_name": {"type": "string"},
+        "id": {"type": "string"},
+        "title": {"type": "string"},
+        "placement": {"$ref": "view.schema.json#/$defs/Placement"},
+        "size": {"$ref": "view.schema.json#/$defs/Size"},
+        "icon": {"$ref": "view.schema.json#/$defs/NavIcon"},
+        "opens": {"type": "string"},
+        "badge": {"$ref": "view.schema.json#/$defs/Badge"},
+        "connector": {"type": "string"}
+      },
+      "required": ["id", "title", "placement"]
+    },
+    "UIPlaces": {
+      "type": "object",
+      "properties": {"ui": {"type": "array", "items": {"$ref": "#/$defs/UIPlace"}}},
+      "required": ["ui"]
+    }
+  }
+}

@@ -1,6 +1,6 @@
 package node
 
-// Plugins' programs on this computer (docs/plan-plugins.md「七」, #1830). The hub sends a package
+// Plugins' programs on this computer (docs/plan-extensions.md「七」, #1830). The hub sends a package
 // (plugin.node.put.*), says what should run (plugin.node.start, …sync), renews the lease (…renew), and relays calls
 // (…call); the programs' events go back as plugin.node.event. They belong to this process, not to one connection: a
 // hub that reconnects finds them running; one gone longer than their lease finds them stopped (keep "always": still
@@ -427,7 +427,8 @@ func (ph *pluginHost) run(s proto.PluginNodeStart, sum string) (*pluginRun, erro
 	id := s.ID
 	spec := host.Spec{ID: id, Name: s.Name, Command: filepath.Join(dir, rel), Args: s.Args, Dir: dir, CleanEnv: true,
 		RPC: s.RPC, HTTP: s.HTTP, Startup: true, Logf: ph.logf,
-		Env: []string{"PERSONA_PLUGIN_ID=" + id, "PERSONA_PLUGIN_DIR=" + dir, "PERSONA_PLUGIN_DATA=" + data}}
+		Env: []string{"PERSONA_PLUGIN_ID=" + id, "PERSONA_PLUGIN_DIR=" + dir, "PERSONA_PLUGIN_DATA=" + data,
+			"PERSONA_EXTENSION_ID=" + id, "PERSONA_EXTENSION_DIR=" + dir, "PERSONA_EXTENSION_DATA=" + data}}
 	if spec.Name == "" {
 		spec.Name = id
 	}
@@ -439,7 +440,7 @@ func (ph *pluginHost) run(s proto.PluginNodeStart, sum string) (*pluginRun, erro
 	}
 	if s.HTTP {
 		spec.Socket = filepath.Join(ph.dir, id, "run.sock")
-		spec.Env = append(spec.Env, "PERSONA_PLUGIN_SOCKET="+spec.Socket)
+		spec.Env = append(spec.Env, "PERSONA_PLUGIN_SOCKET="+spec.Socket, "PERSONA_EXTENSION_SOCKET="+spec.Socket)
 	}
 	spec.Init = func(context.Context) (extension.InitializeParams, error) { return params, nil }
 	// A program on a computer talks to its plugin's program on the hub, not to the hub itself (no hub_api).

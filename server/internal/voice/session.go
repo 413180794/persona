@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-// One voice conversation: the app's WebSocket on one side (docs/plugins.md「语音」), a GPT-Live session on the other.
+// One voice conversation: the app's WebSocket on one side (docs/extensions.md「语音」), a GPT-Live session on the other.
 // The upstream session can drop mid-conversation: the app's socket stays open, shows 「重新连接中」 and the
 // conversation goes on in a new session told what was said so far.
 

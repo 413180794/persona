@@ -215,7 +215,7 @@ Registry ──┬─ ChatSources / Streams / Backfiller / Attachments → kb.En
 
 ### 外部进程（沿用插件机制，代码在别的仓库）
 
-`docs/plugins.md` 的插件加一个 `kind: "connector"`：hub 照旧启动进程、给 `JARVIS_PLUGIN_SOCKET`、健康检查、退避重启；
+`docs/extensions.md` 的插件加一个 `kind: "connector"`：hub 照旧启动进程、给 `JARVIS_PLUGIN_SOCKET`、健康检查、退避重启；
 只连 socket 的远端插件（`ssh -R`）也照旧能用。插件在 socket 上提供：
 
 | 路径 | 用途 |

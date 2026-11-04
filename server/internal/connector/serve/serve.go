@@ -7,7 +7,7 @@
 // A write (actions.do) comes only once the hub's gate let it through; the program never starts one itself.
 //
 // A program answers two openings: init and the bare method names (connector protocol 2 on its own), and the plugin
-// protocol's initialize with the same methods in the connector namespace (connector.status, …; docs/plugins.md). The
+// protocol's initialize with the same methods in the connector namespace (connector.status, …; docs/extensions.md). The
 // hub starts its connector programs as plugins; the bare opening stays for one release.
 package serve
 
@@ -106,7 +106,7 @@ type (
 	}
 )
 
-// Namespace is the connector extension point's (docs/plugins.md): under the plugin protocol every method above is
+// Namespace is the connector extension point's (docs/extensions.md): under the plugin protocol every method above is
 // Namespace + "." + method, with the connector's id as the contribution.
 const Namespace = "connector"
 
@@ -236,7 +236,7 @@ type Init struct {
 }
 
 // Listener is a connector that also hears the hub's events: a plugin that contributes the events extension point
-// (docs/plugins.md「事件」) next to its connector. Hear gets the event's name without its namespace
+// (docs/extensions.md「事件」) next to its connector. Hear gets the event's name without its namespace
 // ("agent.needs_you") and its parameters, on a goroutine of its own; nothing is answered.
 type Listener interface {
 	Hear(ctx context.Context, event string, params json.RawMessage)

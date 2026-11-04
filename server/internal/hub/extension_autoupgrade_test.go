@@ -388,13 +388,13 @@ func (f writerFunc) Write(b []byte) (int, error) { return f(b) }
 func TestPrintUpgrades(t *testing.T) {
 	var b strings.Builder
 	printUpgrades(&b, upgradesView{Auto: true, Upgrades: []ExtensionUpgrade{
-		{ID: "example-a", From: "1.0.0", To: "1.1.0", State: upgradeWaitingIdle, Detail: "插件正在用"},
+		{ID: "example-a", From: "1.0.0", To: "1.1.0", State: upgradeWaitingIdle, Detail: "扩展正在用"},
 		{ID: "example-b", Market: "m1", From: "0.6.0", To: "0.7.0", State: upgradeNeedsConsent,
 			AddedPermissions: []extension.PermissionLine{{Title: "访问更多网络", Detail: "api.example.com"}}},
 		{ID: "example-c", From: "2.0.0", To: "2.1.0", State: upgradeSkipped},
 	}})
 	out := b.String()
-	for _, want := range []string{"插件自动升级：开", "可升级：", "example-a", "等空闲：插件正在用", "等你确认：",
+	for _, want := range []string{"扩展自动升级：开", "可升级：", "example-a", "等空闲：扩展正在用", "等你确认：",
 		"要多一项权限：访问更多网络（api.example.com）", "market:m1/example-b", "已跳过：", "回滚过"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("no %q in:\n%s", want, out)

@@ -373,7 +373,7 @@ func logRequests(h *Hub, next http.Handler) http.Handler {
 // slow requests however long they last.
 func longLived(path string) bool {
 	return path == "/api/v1/ws" || path == link.Path || path == link.StreamPath || path == bus.Path ||
-		strings.HasPrefix(path, "/api/v1/plugins/") || strings.HasSuffix(path, "/connect")
+		strings.HasPrefix(path, "/api/v1/plugins/") || strings.HasPrefix(path, "/api/v1/extensions/") || strings.HasSuffix(path, "/connect")
 }
 
 // requestID keeps a client's id if it is a short token (it lands in logs), else makes one.

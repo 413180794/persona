@@ -29,6 +29,8 @@ FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
 ARG VERSION=dev
 ARG IMAGE=
 WORKDIR /src/server
+# The extension SDK's wire types (sdk/go): server/go.mod replaces the module with ../sdk/go.
+COPY sdk/go/ /src/sdk/go/
 COPY server/go.mod server/go.sum ./
 RUN go mod download
 COPY server/ ./

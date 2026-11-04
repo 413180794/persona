@@ -1,9 +1,34 @@
 package extension
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 )
+
+// CheckView agrees with the schema's examples of views: each one holds, each one under invalid/ is refused.
+func TestCheckViewAgreesWithTheSchema(t *testing.T) {
+	for _, dir := range []string{"", "invalid"} {
+		files, _ := filepath.Glob(filepath.Join("..", "..", "..", "schema", "extension", "examples", dir, "View.*.json"))
+		if len(files) == 0 {
+			t.Fatalf("no examples in %q", dir)
+		}
+		for _, f := range files {
+			raw, err := os.ReadFile(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = ParseView(raw)
+			if dir == "" && err != nil {
+				t.Errorf("%s: %v", filepath.Base(f), err)
+			}
+			if dir == "invalid" && err == nil {
+				t.Errorf("%s: accepted", filepath.Base(f))
+			}
+		}
+	}
+}
 
 // Fit leaves out what the asking app cannot draw (and a section left with nothing), raises refresh_after to its least,
 // and holds a card to its size.

@@ -1,6 +1,6 @@
 // Package lark is hub.json's "lark": how the hub and the assistant run lark-cli, Feishu's official open-platform CLI
 // (docs/plan-lark-cli.md). Feishu through lark-connector (the user's own web client) is a plugin's now
-// (docs/plan-plugins.md「第 3 步」); its old fields are still read, only to say so.
+// (docs/plan-extensions.md「第 3 步」); its old fields are still read, only to say so.
 package lark
 
 import "errors"

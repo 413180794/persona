@@ -17,7 +17,7 @@ hub 有两种部署方式，功能一样，按 hub 所在的机器挑一种：
 - 第一次启动写的 `hub.json` 里 `"machines": []`（不是原生方式的「本机一台 `kind: local`」），每台电脑都要加进去。
 - 「Persona」助手跑在某台电脑上：`assistant.machine` 填它的 id（不填就用 `machines` 里的第一台）。
 - 飞书用 `lark.token`，不能用 `lark.container`（那要在 hub 里跑 `docker inspect`）。
-- 插件（`docs/plugins.md`）是 hub 机器上的外部程序，镜像里没有，暂不支持。
+- 插件（`docs/extensions.md`）是 hub 机器上的外部程序，镜像里没有，暂不支持。
 
 电脑怎么接进来：
 - **tailcat（推荐）**：NAS 不用 ssh 到任何电脑，电脑在哪个内网都行（`docs/server.md`「tailcat 打洞」）。

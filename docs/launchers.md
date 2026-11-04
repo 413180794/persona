@@ -120,7 +120,7 @@ Persona 管理的左滑是「删除」，连 hub 里存的 Key 一起删、不�
 | `GET /api/v1/launchers/{name}` | 一个；~/.zshrc 的带 `definitions`（每台电脑的函数，打码）和 `details`（跑一遍得到的参数） |
 | `POST /api/v1/launchers/{name}/check?machine=` | 测试可用性 |
 | `POST /api/v1/launchers` | 新增 `{name, base_url, model, small_model?, subagent_model?, custom_model?, custom_model_name?, custom_model_description?, args?, api_key, auth?, preset?}`；`auth` 是 `api_key`（默认）或 `bearer`；带 `preset` 时没填的从预设补上（见下面「从插件添加」） |
-| `GET /api/v1/launchers/presets` | 插件提供的供应商预设（`docs/plugins.md`「模型供应商」）；旧 hub 回 404，App 当成没有 |
+| `GET /api/v1/launchers/presets` | 插件提供的供应商预设（`docs/extensions.md`「模型供应商」）；旧 hub 回 404，App 当成没有 |
 | `PUT /api/v1/launchers/{name}` | 改（`api_key` 不填就不变）；只对 Persona 管理的 |
 | `DELETE /api/v1/launchers/{name}` | Persona 管理的删除；~/.zshrc 的隐藏 |
 | `POST /api/v1/launchers/{name}/restore` | 取消隐藏 |
@@ -137,7 +137,7 @@ Persona 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧�
 
 ## 从插件添加
 
-插件贡献的模型供应商（`docs/plugins.md`「模型供应商」）在「设置 › 模型供应商 › 新增」里多一个「从插件添加」：hub 的 `GET /api/v1/launchers/presets`
+插件贡献的模型供应商（`docs/extensions.md`「模型供应商」）在「设置 › 模型供应商 › 新增」里多一个「从插件添加」：hub 的 `GET /api/v1/launchers/presets`
 有预设时，新增页顶上是「自己填写 / 从插件添加」的切换（没有预设就和以前一样只有自己填写）。从插件添加：选一个预设（名字、描述、接入方式和地址），
 只填名字和 Key，默认模型从预设的 `models` 里选（不选就是预设的默认）；`POST /api/v1/launchers` 只带 `name`、`api_key`、`preset`，选了别的模型才带 `model`，
 地址、接入方式、API、小模型由 hub 从预设补上。预设的 `key_hint` 写在 Key 下面，`models_error` 写在模型下面。加好以后和自己填写的一样能编辑。
@@ -155,7 +155,7 @@ Persona 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧�
 
 ## 额度
 
-启动器页的「额度」读启动器的 Key 在网关那边还剩多少。**读哪些网关、怎么读是额度插件的事**（`docs/plugins.md`「额度」）：开源仓库里不带任何网关的读法，
+启动器页的「额度」读启动器的 Key 在网关那边还剩多少。**读哪些网关、怎么读是额度插件的事**（`docs/extensions.md`「额度」）：开源仓库里不带任何网关的读法，
 没装额度插件时这一节说明查不了，不报错。代码：通用部分 `server/internal/quota`（报告的形状、代发请求），hub 一侧 `hub/launcherquota.go`、`hub/extension_quota.go`，
 node 一侧 `node/launcherquota.go`。
 

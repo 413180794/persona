@@ -159,7 +159,7 @@ type GroupNew struct {
 }
 
 // MigratableConnectors are the hub's own connectors a plugin may take over while they move out of the hub (Feishu
-// through lark-connector, docs/plan-plugins.md「第 3 步」): a plugin's connector with the same id replaces the hub's while
+// through lark-connector, docs/plan-extensions.md「第 3 步」): a plugin's connector with the same id replaces the hub's while
 // the plugin is on, and its inbox things may carry the items' own blocks (ThingExtra).
 var MigratableConnectors = []string{"lark"}
 

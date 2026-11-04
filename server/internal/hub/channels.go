@@ -18,7 +18,7 @@ import (
 )
 
 // Channels (docs/channels.md): every way of talking to Persona in one list — the apps, the Feishu bot, /agent in
-// Feishu, voice, and the chat app bots plugins contribute (the channel extension point). 设置 › 插件 › 渠道 lists them,
+// Feishu, voice, and the chat app bots plugins contribute (the channel extension point). 设置 › 扩展 › 渠道 lists them,
 // says which are connected, and sets each up: on and off, binding, where its messages go, what it does.
 
 // channelsKey holds each channel's settings the hub keeps for it: {"wechat": {"target": …, "features": …}}. The

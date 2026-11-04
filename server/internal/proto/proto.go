@@ -145,7 +145,7 @@ type Computer struct {
 	// ScreenSharing: macOS's Screen Sharing answers on 127.0.0.1:5900, so the app can show this Mac's live screen
 	// (docs/computer-use.md「实时画面」). Not needed to operate it.
 	ScreenSharing bool `json:"screen_sharing"`
-	// NoAutoLock: 「插件开着时不自动锁屏」 is on for this Mac (the hub's, from the plugin's settings).
+	// NoAutoLock: 「扩展开着时不自动锁屏」 is on for this Mac (the hub's, from the plugin's settings).
 	NoAutoLock bool `json:"no_auto_lock,omitempty"`
 	// Ready: all of the above in place. Note says what is missing and what to do, in Chinese for the app.
 	Ready   bool      `json:"ready"`
@@ -267,10 +267,18 @@ var Features = []string{
 	"file_upload",            // POST /api/v1/machines/{mid}/files (docs/protocol.md「发送文件」)
 	"tls",                    // optional TLS listener and SPKI pin (hub-changes.md 1.1)
 	"endpoints",              // authenticated address discovery and capability-gated updates
-	"plugins",                // GET /api/v1/plugins and the relay under /api/v1/plugins/{id}/ (docs/plugins.md)
-	"plugin_manager",         // a plugin's detail, form, settings, secrets and switch under /api/v1/plugins/{id}/-/ (docs/plugins.md)
-	"plugin_ui_slots",        // plugins' UI slots (nav_page, overview_card, machine_section), UI version 2, plugin_ui events (docs/plugins.md「UI 插槽」)
-	"plugin_auto_upgrade",    // market plugins upgrade themselves: /api/v1/plugins/-/upgrades, …/{id}/-/auto-upgrade, plugin_upgrade events (docs/plugins.md「自动升级」)
+	"plugins",                // GET /api/v1/plugins and the relay under /api/v1/plugins/{id}/ (docs/extensions.md)
+	"plugin_manager",         // a plugin's detail, form, settings, secrets and switch under /api/v1/plugins/{id}/-/ (docs/extensions.md)
+	"plugin_ui_slots",        // plugins' UI slots (nav_page, overview_card, machine_section), UI version 2, plugin_ui events (docs/extensions.md「UI 插槽」)
+	"plugin_auto_upgrade",    // market plugins upgrade themselves: /api/v1/plugins/-/upgrades, …/{id}/-/auto-upgrade, plugin_upgrade events (docs/extensions.md「自动升级」)
+	// The same under the new names (docs/extensions.md「命名和兼容」, #1844): /api/v1/extensions/… answering with the
+	// keys extensions / extension / extension_name, extension_ui and extension_upgrade events. The plugin ones above
+	// stay for the apps out there (until at least 2027-05-05).
+	"extensions",             // GET /api/v1/extensions and the relay under /api/v1/extensions/{id}/
+	"extension_manager",      // an extension's detail, form, settings, secrets and switch under /api/v1/extensions/{id}/-/
+	"extension_ui_slots",     // UI slots under /api/v1/extensions/-/ui, extension_ui events
+	"extension_auto_upgrade", // /api/v1/extensions/-/upgrades, …/{id}/-/auto-upgrade, extension_upgrade events
+	"extension_market_spec",  // PUT /api/v1/extensions/-/markets/{id} {spec}: a market moves, keeping its id
 	"desktops",               // register_desktop, the desktops event, NotifyPrefs.mute_while_desktop (手机静音)
 	"sessions_delta",         // ?features=sessions_delta on the WebSocket: a snapshot, then sessions_delta (docs/protocol.md「会话增量」)
 	"connectors",             // GET /api/v1/connectors (docs/plan-connectors.md)
@@ -1141,7 +1149,7 @@ type AssistantLark struct {
 	Rules   []LarkRule `json:"rules,omitempty"`
 	CLI     *LarkCLI   `json:"cli,omitempty"`    // lark-cli is configured (hub.json lark.cli, docs/plan-lark-cli.md)
 	Prefer  string     `json:"prefer,omitempty"` // "lark-connector" | "cli": the primary source when both are there
-	// Gates are the command gates of the assistant's skills (plugins' assistant.gate, docs/plugins.md「助手」):
+	// Gates are the command gates of the assistant's skills (plugins' assistant.gate, docs/extensions.md「助手」):
 	// a command calling an HTTP API as the user, its credentials and the rules its calls go by.
 	Gates []CommandGate `json:"gates,omitempty"`
 }

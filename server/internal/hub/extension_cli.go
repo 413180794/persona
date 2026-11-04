@@ -22,32 +22,37 @@ import (
 	"github.com/nwverse/persona/server/internal/extension"
 )
 
-// `personad plugin …` on the hub's machine (docs/plugins.md「命令行」): what installs, upgrades and removes plugins.
-// It talks to the running hub over loopback with the master token in hub.json, like `hub admin`.
+// `personad extension …` on the hub's machine (docs/extensions.md「命令行」): what installs, upgrades and removes
+// extensions. It talks to the running hub over loopback with the master token in hub.json, like `hub admin`.
+// `personad ext …` is the same, and so is `personad plugin …` (its name before #1844).
 
-const extensionUsage = `usage:
-  personad plugin list                          the plugins and their state
-  personad plugin show <id>                     one plugin: permissions, settings, secrets set or not
-  personad plugin install <source> [--yes]      install (source: a directory, dir:/p, file:/p.tar.gz | .zip,
-                                                https://…/p.tar.gz#sha256=<hex>, remote:rpc=/p.sock,http=/q.sock);
-                                                shows what it may do and asks first unless --yes
-  personad plugin upgrade <id> <source> [--yes] a newer version of an installed plugin
-  personad plugin rollback <id>                 back to the version before the last upgrade
-  personad plugin enable <id> | disable <id>
-  personad plugin config <id> key=value …       set settings (a value is JSON when it parses, text otherwise)
-  personad plugin secret <id> <name>            set a secret, read from stdin (never an argument)
-  personad plugin secret <id> <name> --delete
-  personad plugin uninstall <id> [--keep-data]
-  personad plugin market list                   the plugin markets this hub reads
-  personad plugin market add <spec> [--token]   a market: https://example.com/plugins/ (its persona-plugins.json),
-                                                a .json URL, or github:owner/repo[@ref]; --token reads one from stdin
-  personad plugin market remove <id> | refresh <id>
-  personad plugin search [words]                the markets' plugins
-  personad plugin install market:<market>/<id>  install (or upgrade) one of a market's plugins
-  personad plugin auto-upgrade on|off [<id>]    market plugins upgrade themselves (all of them, or one)
-  personad plugin upgrades                      newer versions: going in, waiting for your confirmation, skipped`
+const extensionUsage = `usage: personad extension <command> (also: personad ext, personad plugin)
+  list                              the extensions and their state
+  show <id>                         one extension: permissions, settings, secrets set or not
+  install <source> [--yes]          install (source: a directory, dir:/p, file:/p.tar.gz | .zip,
+                                    https://…/p.tar.gz#sha256=<hex>, remote:rpc=/p.sock,http=/q.sock);
+                                    shows what it may do and asks first unless --yes
+  upgrade <id> <source> [--yes]     a newer version of an installed extension
+  rollback <id>                     back to the version before the last upgrade
+  enable <id> | disable <id>
+  config <id> key=value …           set settings (a value is JSON when it parses, text otherwise)
+  secret <id> <name>                set a secret, read from stdin (never an argument)
+  secret <id> <name> --delete
+  uninstall <id> [--keep-data]
+  market list                       the extension markets this hub reads
+  market add <spec> [--token]       a market: https://example.com/extensions/ (its persona-extensions.json, or the
+                                    older persona-plugins.json), a .json URL, github:owner/repo[@ref] or
+                                    git:<address>[#branch]; --token reads one from stdin, --token-from=<market id>
+                                    uses that registered market's token (never shown)
+  market set-spec <id> <spec>       the market moved (a renamed repository): same id, so what was installed from it
+                                    stays its own
+  market remove <id> | refresh <id>
+  search [words]                    the markets' extensions
+  install market:<market>/<id>      install (or upgrade) one of a market's extensions
+  auto-upgrade on|off [<id>]        market extensions upgrade themselves (all of them, or one)
+  upgrades                          newer versions: going in, waiting for your confirmation, skipped`
 
-// PluginCommand runs `personad plugin <args>`.
+// PluginCommand runs `personad extension <args>`.
 func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		return errors.New(extensionUsage)
@@ -80,13 +85,15 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 	switch args[0] {
 	case "list":
 		var out struct {
-			Extensions []ExtensionView `json:"plugins"`
+			Extensions []ExtensionView `json:"extensions"`
+			Legacy     []ExtensionView `json:"plugins"` // a hub before #1844
 		}
-		if err := c.do(ctx, "GET", "/api/v1/plugins", nil, &out); err != nil {
+		if err := c.do(ctx, "GET", "/api/v1/extensions", nil, &out); err != nil {
 			return err
 		}
+		out.Extensions = append(out.Extensions, out.Legacy...)
 		if len(out.Extensions) == 0 {
-			fmt.Fprintln(stdout, "没有插件")
+			fmt.Fprintln(stdout, "没有扩展")
 		}
 		for _, p := range out.Extensions {
 			line := fmt.Sprintf("%-20s %-10s %-9s %-12s %s", p.ID, p.Version, p.Source, p.Status, p.Name)
@@ -104,7 +111,7 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 			return err
 		}
 		var d ExtensionDetail
-		if err := c.do(ctx, "GET", "/api/v1/plugins/"+url.PathEscape(positional[0])+"/-/", nil, &d); err != nil {
+		if err := c.do(ctx, "GET", "/api/v1/extensions/"+url.PathEscape(positional[0])+"/-/", nil, &d); err != nil {
 			return err
 		}
 		b, _ := json.MarshalIndent(d, "", "  ")
@@ -127,15 +134,15 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 		if rest, ok := strings.CutPrefix(source, "market:"); ok {
 			market, id, ok := strings.Cut(rest, "/")
 			if !ok {
-				return errors.New("写成 market:<市场 id>/<插件 id>（市场 id 见 personad plugin market list）")
+				return errors.New("写成 market:<市场 id>/<扩展 id>（市场 id 见 personad extension market list）")
 			}
-			if err := c.do(ctx, "POST", "/api/v1/plugins/-/catalog/preview", map[string]string{"market": market, "plugin": id}, &pv); err != nil {
+			if err := c.do(ctx, "POST", "/api/v1/extensions/-/catalog/preview", map[string]string{"market": market, "extension": id, "plugin": id}, &pv); err != nil {
 				return err
 			}
 			if pv.Upgrade {
 				upgrade = id
 			}
-		} else if err := c.do(ctx, "POST", "/api/v1/plugins/-/preview", map[string]string{"source": source, "upgrade": upgrade}, &pv); err != nil {
+		} else if err := c.do(ctx, "POST", "/api/v1/extensions/-/preview", map[string]string{"source": source, "upgrade": upgrade}, &pv); err != nil {
 			return err
 		}
 		printPreview(stdout, &pv)
@@ -144,16 +151,16 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 		}
 		var d ExtensionDetail
 		body := map[string]string{"preview_id": pv.ID, "permissions_digest": pv.Digest}
-		path := "/api/v1/plugins/-/install"
+		path := "/api/v1/extensions/-/install"
 		if upgrade != "" {
-			path = "/api/v1/plugins/" + url.PathEscape(upgrade) + "/-/upgrade"
+			path = "/api/v1/extensions/" + url.PathEscape(upgrade) + "/-/upgrade"
 		}
 		if err := c.do(ctx, "POST", path, body, &d); err != nil {
 			return err
 		}
 		fmt.Fprintf(stdout, "%s %s：%s\n", d.ID, d.Version, d.Status)
 		if len(d.NeedsSetup) > 0 {
-			fmt.Fprintf(stdout, "还缺：%s（App 的 设置 › 插件，或 personad plugin config / secret）\n", strings.Join(d.NeedsSetup, "、"))
+			fmt.Fprintf(stdout, "还缺：%s（App 的 设置 › 扩展，或 personad extension config / secret）\n", strings.Join(d.NeedsSetup, "、"))
 		}
 		return nil
 	case "market":
@@ -165,14 +172,14 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 			var out struct {
 				Markets []MarketView `json:"markets"`
 			}
-			if err := c.do(ctx, "GET", "/api/v1/plugins/-/markets", nil, &out); err != nil {
+			if err := c.do(ctx, "GET", "/api/v1/extensions/-/markets", nil, &out); err != nil {
 				return err
 			}
 			if len(out.Markets) == 0 {
-				fmt.Fprintln(stdout, "没有登记插件市场")
+				fmt.Fprintln(stdout, "没有登记扩展市场")
 			}
 			for _, m := range out.Markets {
-				line := fmt.Sprintf("%-10s %-24s %3d 个插件  %s", m.ID, m.Name, m.Extensions, m.Spec)
+				line := fmt.Sprintf("%-10s %-24s %3d 个扩展  %s", m.ID, m.Name, m.Extensions, m.Spec)
 				if m.Error != "" {
 					line += "（" + m.Error + "）"
 				}
@@ -191,37 +198,54 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 				}
 				body["token"] = tok
 			}
+			for _, a := range args[1:] {
+				if from, ok := strings.CutPrefix(a, "--token-from="); ok {
+					body["token_from"] = from
+				}
+			}
 			var m MarketView
-			if err := c.do(ctx, "POST", "/api/v1/plugins/-/markets", body, &m); err != nil {
+			if err := c.do(ctx, "POST", "/api/v1/extensions/-/markets", body, &m); err != nil {
 				return err
 			}
-			fmt.Fprintf(stdout, "%s：%s，%d 个插件\n", m.ID, m.Name, m.Extensions)
+			fmt.Fprintf(stdout, "%s：%s，%d 个扩展\n", m.ID, m.Name, m.Extensions)
 			for _, w := range m.Warnings {
 				fmt.Fprintln(stdout, "  警告："+w)
 			}
+			return nil
+		case "set-spec":
+			if err := need(3); err != nil {
+				return err
+			}
+			var m MarketView
+			if err := c.do(ctx, "PUT", "/api/v1/extensions/-/markets/"+url.PathEscape(positional[1]), map[string]string{"spec": positional[2]}, &m); err != nil {
+				return err
+			}
+			fmt.Fprintf(stdout, "%s：%s，%d 个扩展（%s）\n", m.ID, m.Name, m.Extensions, m.Spec)
 			return nil
 		case "remove", "refresh":
 			if err := need(2); err != nil {
 				return err
 			}
 			if positional[0] == "remove" {
-				return c.do(ctx, "DELETE", "/api/v1/plugins/-/markets/"+url.PathEscape(positional[1]), nil, nil)
+				return c.do(ctx, "DELETE", "/api/v1/extensions/-/markets/"+url.PathEscape(positional[1]), nil, nil)
 			}
 			var m MarketView
-			if err := c.do(ctx, "POST", "/api/v1/plugins/-/markets/"+url.PathEscape(positional[1])+"/refresh", nil, &m); err != nil {
+			if err := c.do(ctx, "POST", "/api/v1/extensions/-/markets/"+url.PathEscape(positional[1])+"/refresh", nil, &m); err != nil {
 				return err
 			}
-			fmt.Fprintf(stdout, "%s：%s，%d 个插件\n", m.ID, m.Name, m.Extensions)
+			fmt.Fprintf(stdout, "%s：%s，%d 个扩展\n", m.ID, m.Name, m.Extensions)
 			return nil
 		}
 		return errors.New(extensionUsage)
 	case "search":
 		var out struct {
-			Extensions []CatalogItem `json:"plugins"`
+			Extensions []CatalogItem `json:"extensions"`
+			Legacy     []CatalogItem `json:"plugins"` // a hub before #1844
 		}
-		if err := c.do(ctx, "GET", "/api/v1/plugins/-/catalog?q="+url.QueryEscape(strings.Join(positional, " ")), nil, &out); err != nil {
+		if err := c.do(ctx, "GET", "/api/v1/extensions/-/catalog?q="+url.QueryEscape(strings.Join(positional, " ")), nil, &out); err != nil {
 			return err
 		}
+		out.Extensions = append(out.Extensions, out.Legacy...)
 		if len(out.Extensions) == 0 {
 			fmt.Fprintln(stdout, "没有找到")
 		}
@@ -248,24 +272,24 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 		on := positional[0] == "on"
 		if len(positional) > 1 {
 			var d ExtensionDetail
-			if err := c.do(ctx, "PUT", "/api/v1/plugins/"+url.PathEscape(positional[1])+"/-/auto-upgrade", map[string]bool{"auto": on}, &d); err != nil {
+			if err := c.do(ctx, "PUT", "/api/v1/extensions/"+url.PathEscape(positional[1])+"/-/auto-upgrade", map[string]bool{"auto": on}, &d); err != nil {
 				return err
 			}
 			fmt.Fprintf(stdout, "%s：自动升级%s\n", d.ID, map[bool]string{true: "开", false: "关"}[on])
 			return nil
 		}
 		var v upgradesView
-		if err := c.do(ctx, "PUT", "/api/v1/plugins/-/upgrades", map[string]bool{"auto": on}, &v); err != nil {
+		if err := c.do(ctx, "PUT", "/api/v1/extensions/-/upgrades", map[string]bool{"auto": on}, &v); err != nil {
 			return err
 		}
-		fmt.Fprintf(stdout, "插件自动升级：%s\n", map[bool]string{true: "开", false: "关"}[v.Auto])
+		fmt.Fprintf(stdout, "扩展自动升级：%s\n", map[bool]string{true: "开", false: "关"}[v.Auto])
 		if v.Auto && len(v.Off) > 0 {
 			fmt.Fprintf(stdout, "单独关掉的：%s\n", strings.Join(v.Off, "、"))
 		}
 		return nil
 	case "upgrades":
 		var v upgradesView
-		if err := c.do(ctx, "GET", "/api/v1/plugins/-/upgrades", nil, &v); err != nil {
+		if err := c.do(ctx, "GET", "/api/v1/extensions/-/upgrades", nil, &v); err != nil {
 			return err
 		}
 		printUpgrades(stdout, v)
@@ -275,7 +299,7 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 			return err
 		}
 		var d ExtensionDetail
-		if err := c.do(ctx, "POST", "/api/v1/plugins/"+url.PathEscape(positional[0])+"/-/rollback", map[string]string{}, &d); err != nil {
+		if err := c.do(ctx, "POST", "/api/v1/extensions/"+url.PathEscape(positional[0])+"/-/rollback", map[string]string{}, &d); err != nil {
 			return err
 		}
 		fmt.Fprintf(stdout, "%s 回到了 %s\n", d.ID, d.Version)
@@ -285,7 +309,7 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 			return err
 		}
 		var d ExtensionDetail
-		if err := c.do(ctx, "PUT", "/api/v1/plugins/"+url.PathEscape(positional[0])+"/-/enabled", map[string]bool{"enabled": args[0] == "enable"}, &d); err != nil {
+		if err := c.do(ctx, "PUT", "/api/v1/extensions/"+url.PathEscape(positional[0])+"/-/enabled", map[string]bool{"enabled": args[0] == "enable"}, &d); err != nil {
 			return err
 		}
 		fmt.Fprintf(stdout, "%s：%s\n", d.ID, d.Status)
@@ -296,7 +320,7 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 		}
 		id := positional[0]
 		var d ExtensionDetail
-		if err := c.do(ctx, "GET", "/api/v1/plugins/"+url.PathEscape(id)+"/-/", nil, &d); err != nil {
+		if err := c.do(ctx, "GET", "/api/v1/extensions/"+url.PathEscape(id)+"/-/", nil, &d); err != nil {
 			return err
 		}
 		cfg := map[string]json.RawMessage{}
@@ -316,7 +340,7 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 				cfg[k], _ = json.Marshal(v)
 			}
 		}
-		if err := c.do(ctx, "PUT", "/api/v1/plugins/"+url.PathEscape(id)+"/-/config", map[string]any{"config": cfg}, &d); err != nil {
+		if err := c.do(ctx, "PUT", "/api/v1/extensions/"+url.PathEscape(id)+"/-/config", map[string]any{"config": cfg}, &d); err != nil {
 			return err
 		}
 		fmt.Fprintf(stdout, "%s：%s\n", d.ID, d.Status)
@@ -325,7 +349,7 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 		if err := need(2); err != nil {
 			return err
 		}
-		path := "/api/v1/plugins/" + url.PathEscape(positional[0]) + "/-/secrets/" + url.PathEscape(positional[1])
+		path := "/api/v1/extensions/" + url.PathEscape(positional[0]) + "/-/secrets/" + url.PathEscape(positional[1])
 		var d ExtensionDetail
 		if flag("--delete") {
 			if err := c.do(ctx, "DELETE", path, nil, &d); err != nil {
@@ -347,7 +371,7 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 		if err := need(1); err != nil {
 			return err
 		}
-		path := "/api/v1/plugins/" + url.PathEscape(positional[0]) + "/-/"
+		path := "/api/v1/extensions/" + url.PathEscape(positional[0]) + "/-/"
 		if flag("--keep-data") {
 			path += "?keep_data=1"
 		}
@@ -357,7 +381,7 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 		fmt.Fprintf(stdout, "卸载了 %s\n", positional[0])
 		return nil
 	}
-	return fmt.Errorf("unknown plugin command %q\n%s", args[0], extensionUsage)
+	return fmt.Errorf("unknown extension command %q\n%s", args[0], extensionUsage)
 }
 
 func printPreview(w io.Writer, pv *extension.Preview) {
@@ -419,7 +443,7 @@ func localHubConfig() (*Config, error) {
 	cfg := &Config{Listen: ":18660", dir: dir}
 	b, err := os.ReadFile(dir + "/hub.json")
 	if err != nil {
-		return nil, fmt.Errorf("这台机器上没有 hub 的配置（%s/hub.json）：插件只能在 hub 机器上管理", dir)
+		return nil, fmt.Errorf("这台机器上没有 hub 的配置（%s/hub.json）：扩展只能在 hub 机器上管理", dir)
 	}
 	if err := json.Unmarshal(b, cfg); err != nil {
 		return nil, err
@@ -432,6 +456,21 @@ type extensionClient struct{ cfg *Config }
 
 // do calls the hub on this machine over loopback with the master token.
 func (c *extensionClient) do(ctx context.Context, method, path string, body, out any) error {
+	err := c.call(ctx, method, path, body, out)
+	if legacy, ok := strings.CutPrefix(path, "/api/v1/extensions"); ok && errors.Is(err, errNoRoute) {
+		// A hub before #1844 (not restarted since this binary came): the old paths.
+		err = c.call(ctx, method, "/api/v1/plugins"+legacy, body, out)
+	}
+	if errors.Is(err, errNoRoute) {
+		return errors.New("hub 没有这个接口：hub 比这个命令旧，先重启 hub")
+	}
+	return err
+}
+
+// errNoRoute is a 404 that is not the hub's JSON answer: the hub has no such route.
+var errNoRoute = errors.New("no such route")
+
+func (c *extensionClient) call(ctx context.Context, method, path string, body, out any) error {
 	_, port, err := net.SplitHostPort(c.cfg.Listen)
 	if n, perr := strconv.Atoi(port); err != nil || perr != nil || n <= 0 || n > 65535 {
 		return errors.New("hub.json listen has no valid port")
@@ -466,6 +505,9 @@ func (c *extensionClient) do(ctx context.Context, method, path string, body, out
 	if err != nil {
 		return err
 	}
+	if res.StatusCode == http.StatusNotFound && !json.Valid(data) {
+		return errNoRoute
+	}
 	if res.StatusCode != http.StatusOK {
 		var e struct {
 			Error string `json:"error"`
@@ -484,7 +526,7 @@ func (c *extensionClient) do(ctx context.Context, method, path string, body, out
 
 // printUpgrades lists the newer versions by what happens to them.
 func printUpgrades(w io.Writer, v upgradesView) {
-	fmt.Fprintf(w, "插件自动升级：%s\n", map[bool]string{true: "开", false: "关"}[v.Auto])
+	fmt.Fprintf(w, "扩展自动升级：%s\n", map[bool]string{true: "开", false: "关"}[v.Auto])
 	groups := []struct {
 		title  string
 		states []string
@@ -505,7 +547,7 @@ func printUpgrades(w io.Writer, v upgradesView) {
 			line := fmt.Sprintf("  %-20s %s → %s", up.ID, up.From, up.To)
 			switch {
 			case up.State == upgradeNeedsConsent:
-				line += "  " + morePermissionsText(up.AddedPermissions) + "（App 的 设置 › 插件，或 personad plugin install market:" + up.Market + "/" + up.ID + "）"
+				line += "  " + morePermissionsText(up.AddedPermissions) + "（App 的 设置 › 扩展，或 personad extension install market:" + up.Market + "/" + up.ID + "）"
 			case up.Detail != "":
 				line += "  " + what[up.State] + "：" + up.Detail
 			default:
@@ -522,6 +564,6 @@ func printUpgrades(w io.Writer, v upgradesView) {
 		}
 	}
 	if !any {
-		fmt.Fprintln(w, "从插件市场装的插件都是最新的")
+		fmt.Fprintln(w, "从扩展市场装的扩展都是最新的")
 	}
 }

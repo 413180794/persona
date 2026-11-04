@@ -1,6 +1,6 @@
 package hub
 
-// Plugin settings that name the hub's machines (schema format machine, docs/plugins.md): stored by machine id. Older
+// Plugin settings that name the hub's machines (schema format machine, docs/extensions.md): stored by machine id. Older
 // settings were typed in by hand, often as a machine's name ("macstudio" for Mac Studio), which nothing matched; when
 // the hub attaches its plugins those become the id of the one machine they name.
 

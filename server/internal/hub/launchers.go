@@ -336,7 +336,7 @@ type launcherInput struct {
 	Preset string `json:"preset,omitempty"`
 }
 
-var errNoPreset = errors.New("没有这个供应商预设（提供它的插件停用或卸载了？）")
+var errNoPreset = errors.New("没有这个供应商预设（提供它的扩展停用或卸载了？）")
 
 func (in launcherInput) check() error {
 	if in.Kind != "" && in.Kind != "api" && in.Kind != "launcher" {

@@ -14,7 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Plugins upgrade themselves from their markets (docs/plugins.md「自动升级」): the hub reads the registered markets
+// Plugins upgrade themselves from their markets (docs/extensions.md「自动升级」): the hub reads the registered markets
 // every few hours and installs a newer version of a plugin it installed from one, when the version asks for nothing
 // more than the user granted and nothing is using the plugin. One that asks for more waits for the user; one that
 // does not come up is rolled back (watchUpgrade) and not tried again. Built-in, hub.json's and plugins installed
@@ -110,7 +110,7 @@ func (h *Hub) extensionUpgrades() *extensionUpgrades {
 // plugin's tools next).
 func (h *Hub) extensionBusy(id string) string {
 	if hp := h.extensions.get(id); hp != nil && hp.proc != nil && !hp.proc.Idle() {
-		return "插件正在用"
+		return "扩展正在用"
 	}
 	for _, m := range h.machinesNow() {
 		for _, s := range h.decorated(m) {
@@ -320,7 +320,7 @@ func (u *extensionUpgrades) upgrade(ctx context.Context) {
 					s.Notified[id] = up.To
 					s.note(id, n)
 				})
-				u.tell(id, n, "插件有新版本", fmt.Sprintf("%s %s %s，去确认", up.Name, up.To, n.Detail))
+				u.tell(id, n, "扩展有新版本", fmt.Sprintf("%s %s %s，去确认", up.Name, up.To, n.Detail))
 			}
 		case upgradeAvailable, upgradeWaitingIdle:
 			why := u.busy(id)
@@ -401,7 +401,7 @@ func (u *extensionUpgrades) install(ctx context.Context, p *extension.Extension,
 	u.mu.Unlock()
 	n := ExtensionUpgradeNote{Kind: upgradeFailed, From: up.From, To: up.To, Detail: err.Error(), At: time.Now()}
 	_ = u.change(ctx, func(s *extensionUpgradeSettings) { s.note(id, n) })
-	h.broadcast(map[string]any{"type": "plugin_upgrade", "plugin": id, "note": n})
+	h.broadcastExtension("upgrade", id, map[string]any{"note": n})
 }
 
 // watched is how an upgrade of plugin id from one version to another ended: rolled back (that version is skipped from
@@ -427,7 +427,7 @@ func (u *extensionUpgrades) watched(ctx context.Context, id, from, to string, ro
 			s.Skipped[id] = to
 			s.note(id, n)
 		})
-		u.tell(id, n, "插件升级没成功", fmt.Sprintf("%s %s 起不来，已回到 %s，不再自动升级到这个版本", name, to, from))
+		u.tell(id, n, "扩展升级没成功", fmt.Sprintf("%s %s 起不来，已回到 %s，不再自动升级到这个版本", name, to, from))
 		return
 	}
 	if !auto {
@@ -436,16 +436,17 @@ func (u *extensionUpgrades) watched(ctx context.Context, id, from, to string, ro
 	}
 	n := ExtensionUpgradeNote{Kind: "upgraded", From: from, To: to, At: time.Now()}
 	_ = u.change(ctx, func(s *extensionUpgradeSettings) { s.note(id, n) })
-	u.tell(id, n, "插件已自动升级", fmt.Sprintf("%s 升级到了 %s", name, to))
+	u.tell(id, n, "扩展已自动升级", fmt.Sprintf("%s 升级到了 %s", name, to))
 }
 
 // tell tells the apps (the plugin's page) and sends a quiet push, like the hub's own update.
 func (u *extensionUpgrades) tell(id string, n ExtensionUpgradeNote, title, body string) {
-	u.h.broadcast(map[string]any{"type": "plugin_upgrade", "plugin": id, "note": n})
+	u.h.broadcastExtension("upgrade", id, map[string]any{"note": n})
 	u.h.push.send(map[string]any{
 		"aps": map[string]any{"alert": map[string]any{"title": title, "body": body}, "thread-id": "plugin_upgrade",
 			"interruption-level": "passive"},
-		"plugin_upgrade": map[string]any{"plugin": id, "kind": n.Kind, "version": n.To},
+		"plugin_upgrade":    map[string]any{"plugin": id, "kind": n.Kind, "version": n.To},
+		"extension_upgrade": map[string]any{"extension": id, "kind": n.Kind, "version": n.To},
 	}, "plugin_upgrade."+id, nil)
 }
 
@@ -516,10 +517,10 @@ func (h *Hub) upgradeRoutes(api *http.ServeMux) {
 			f(w, r)
 		}
 	}
-	api.HandleFunc("GET /api/v1/plugins/-/upgrades", gate(func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("GET /api/v1/extensions/-/upgrades", gate(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, h.extensionUpgrades().view(r.Context()))
 	}))
-	api.HandleFunc("PUT /api/v1/plugins/-/upgrades", gate(func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("PUT /api/v1/extensions/-/upgrades", gate(func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Auto *bool `json:"auto"`
 		}
@@ -537,7 +538,7 @@ func (h *Hub) upgradeRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, u.view(r.Context()))
 	}))
-	api.HandleFunc("PUT /api/v1/plugins/{id}/-/auto-upgrade", gate(func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("PUT /api/v1/extensions/{id}/-/auto-upgrade", gate(func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Auto *bool `json:"auto"`
 		}
@@ -555,7 +556,7 @@ func (h *Hub) upgradeRoutes(api *http.ServeMux) {
 			return
 		}
 		if p.Record.Source != extension.SourceInstalled || extension.FromMarket(p.Record.Origin) == "" {
-			writeErrCode(w, http.StatusBadRequest, "not_from_market", errors.New("只有从插件市场装的插件会自动升级"))
+			writeErrCode(w, http.StatusBadRequest, "not_from_market", errors.New("只有从扩展市场装的扩展会自动升级"))
 			return
 		}
 		u := h.extensionUpgrades()
@@ -568,6 +569,6 @@ func (h *Hub) upgradeRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
-		writeJSON(w, h.extensions.detail(r.Context(), h.extensions.reg.Get(id)))
+		writeJSON(w, detailOut(r, h.extensions.detail(r.Context(), h.extensions.reg.Get(id))))
 	}))
 }

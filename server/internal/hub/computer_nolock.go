@@ -1,6 +1,6 @@
 package hub
 
-// 「插件开着时不自动锁屏」 (docs/computer-use.md「锁屏、防睡眠、按 App 批准」b2, #1507): the plugin cua's no_auto_lock,
+// 「扩展开着时不自动锁屏」 (docs/computer-use.md「锁屏、防睡眠、按 App 批准」b2, #1507): the plugin cua's no_auto_lock,
 // per Mac and off by default, asked about before it is turned on (x-confirm). While it is on for a Mac (and the
 // plugin and that Mac are), its node holds caffeinate -dims; the hub says so again every noLockEvery, and the node's
 // hold runs out by itself 30 minutes after the last word, so a Mac the hub no longer reaches goes back to locking.

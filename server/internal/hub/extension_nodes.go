@@ -1,6 +1,6 @@
 package hub
 
-// Plugins' programs on computers (docs/plan-plugins.md「七」, #1830): the hub keeps what should run where (the
+// Plugins' programs on computers (docs/plan-extensions.md「七」, #1830): the hub keeps what should run where (the
 // plugin's switch, configuration and the machines picked in its node.machines field) and makes each machine so —
 // when it connects, when the plugin changes, and by renewing the leases every 10 minutes. Nothing is queued for a
 // machine that is away: it is brought in line when it is back. The node runs them (node/plugins.go).
@@ -147,7 +147,7 @@ func (ps *extensions) nodePackage(p *extension.Extension, platform string) (node
 			return pkg, nil
 		}
 	}
-	dir := filepath.Join(ps.dir, "plugins", "node-packages")
+	dir := filepath.Join(ps.root, "node-packages")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nodePackage{}, err
 	}
@@ -449,7 +449,7 @@ func (h *Hub) serveNodeExtensionHTTP(w http.ResponseWriter, r *http.Request) {
 		writeErrCode(w, http.StatusConflict, extensionNodeOffline, fmt.Errorf("%s 离线", m.cfg.Name))
 		return
 	}
-	prefix := "/api/v1/plugins/" + id + "/-/machines/" + mid
+	prefix := "/api/v1/extensions/" + id + "/-/machines/" + mid
 	dial := func(ctx context.Context, _, _ string) (net.Conn, error) { return dialNodeExtension(ctx, m, id) }
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {

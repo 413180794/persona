@@ -15,7 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Point is an extension point: a place in the hub a plugin contributes to (docs/plan-plugins.md「contributes」).
+// Point is an extension point: a place in the hub a plugin contributes to (docs/plan-extensions.md「contributes」).
 type Point struct {
 	Name string // the key under contributes ("connectors")
 	// Namespace is the prefix of its methods ("connector": connector.status).
@@ -59,7 +59,7 @@ type ConnectorItem struct {
 // metaDescriptionMost is the longest meta_description (runes): a paragraph the relating prompt carries every time.
 const metaDescriptionMost = 4000
 
-// VoiceItem is a contribution to voice: the voice conversation's contract (docs/plugins.md「语音」).
+// VoiceItem is a contribution to voice: the voice conversation's contract (docs/extensions.md「语音」).
 type VoiceItem struct {
 	ID   string `json:"id"`
 	Name string `json:"name,omitempty"`
@@ -72,7 +72,7 @@ type ComputerItem struct {
 	Name string `json:"name,omitempty"`
 }
 
-// QuotaItem is a contribution to quota: a gateway whose launchers' quota the plugin reads (docs/plugins.md「额度」).
+// QuotaItem is a contribution to quota: a gateway whose launchers' quota the plugin reads (docs/extensions.md「额度」).
 type QuotaItem struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -82,7 +82,7 @@ type QuotaItem struct {
 }
 
 // AgentSourceItem is a contribution to agent_sources: a source of personal agents' sessions in the Agents tab, next
-// to the hub's own (docs/plugins.md「个人 Agent 来源」). Its id is the source part of the sessions' ids
+// to the hub's own (docs/extensions.md「个人 Agent 来源」). Its id is the source part of the sessions' ids
 // (<id>:<sessionKey>).
 type AgentSourceItem struct {
 	ID   string `json:"id"`
@@ -94,7 +94,7 @@ type AgentSourceItem struct {
 var providerPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
 
 // ProviderItem is a contribution to providers: a model provider the user can add a launcher from (设置 › 模型供应商),
-// its address and models filled in (docs/plugins.md「模型供应商」).
+// its address and models filled in (docs/extensions.md「模型供应商」).
 type ProviderItem struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -120,7 +120,7 @@ type ProviderModel struct {
 }
 
 // APIItem is a contribution to api: a part of the app's API the plugin serves on its HTTP side, under /api/v1/<prefix>/
-// (docs/plugins.md「App 接口」).
+// (docs/extensions.md「App 接口」).
 type APIItem struct {
 	ID     string `json:"id"`
 	Prefix string `json:"prefix"`
@@ -159,7 +159,7 @@ func (r APIReceipt) Matches(method, path string) bool {
 }
 
 // AssistantItem is a contribution to assistant: skills and a part of the assistant's instructions, in the package
-// (docs/plugins.md「助手」).
+// (docs/extensions.md「助手」).
 type AssistantItem struct {
 	ID string `json:"id"`
 	// Skills are directories in the package, each a skill (SKILL.md first), put in with the assistant's.
@@ -498,7 +498,7 @@ var Points = map[string]Point{
 		}
 		return c.ID, nil
 	}},
-	// channel: a way to talk to Persona, a chat app's bot (docs/channels.md「插件怎么贡献渠道」). The hub follows the
+	// channel: a way to talk to Persona, a chat app's bot (docs/channels.md「扩展怎么贡献渠道」). The hub follows the
 	// turns; the program only talks to the chat app.
 	"channel": {Name: "channel", Namespace: "channel", Version: 1, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
 		var c channel.Item

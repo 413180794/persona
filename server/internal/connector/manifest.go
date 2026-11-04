@@ -17,7 +17,7 @@ type Capability string
 // Capabilities and the interface each stands for. The names are the ones GET /api/v1/connectors lists (except
 // CapSettle, CapGroup, CapMeta and CapFallback, which only the hub uses). CapFallback is a promise, not an interface:
 // every inbox thing carries a fallback tier (ThingExtra.RuleTier), so its items never need the model to come in
-// (docs/plugins.md).
+// (docs/extensions.md).
 const (
 	CapStatus   Capability = "status"   // Accounts
 	CapTools    Capability = "tools"    // ReadTools
