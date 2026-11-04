@@ -73,7 +73,7 @@ struct LarkComposer: View {
                 LarkMentionPicker(query: q, members: members, everyone: mentionFeed != nil) { m in
                     let picked = LarkMentions.insert(m, into: text, cursor: typing?.end)
                     text = picked.text
-                    selection = TextSelection(insertionPoint: text.index(text.startIndex, offsetBy: picked.cursor))
+                    selection = .cursor(utf16: text[..<text.index(text.startIndex, offsetBy: picked.cursor)].utf16.count)
                     mentions.wrappedValue.append(m)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))

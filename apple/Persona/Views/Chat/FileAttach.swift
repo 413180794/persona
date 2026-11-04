@@ -32,7 +32,7 @@ nonisolated enum PathInsert {
     @MainActor static func edit(_ path: String, text: String, selection: Binding<TextSelection?>,
                                 focused: FocusState<Bool>.Binding) -> String {
         let r = insert([path], into: text, at: focused.wrappedValue ? range(selection.wrappedValue, in: text) : nil)
-        selection.wrappedValue = TextSelection(insertionPoint: String.Index(utf16Offset: r.cursor, in: r.text))
+        selection.wrappedValue = .cursor(utf16: r.cursor)
         focused.wrappedValue = true
         return r.text
     }

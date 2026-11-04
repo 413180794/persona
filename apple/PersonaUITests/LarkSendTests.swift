@@ -323,21 +323,40 @@ final class LarkSendTests: XCTestCase {
         XCTAssertTrue(box.waitForExistence(timeout: 5))
         box.tap()
         box.typeText("一起去")
-        // The cursor to the start of the text, then @ there.
-        box.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.5)).tap()
-        box.typeText("@")
-        XCTAssertEqual(box.value as? String, "@一起去", "the @ went in at the cursor")
+        // The cursor into the text, then @ there. A long press puts the cursor where it is (a tap snaps to the word's
+        // end, and 「一起去」 is one word: the @ went in after it, #1627); where exactly is the text's layout, so the
+        // checks follow where the @ went in.
+        // Right after typing the field does not always take a press as moving the cursor (the app saw no new cursor
+        // at all, #1627): wait a moment, and press again when the @ still went in at the end.
+        var typed = ""
+        for attempt in 0..<3 {
+            sleep(2)
+            box.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.5)).press(forDuration: 0.8)
+            sleep(1) // the loupe goes away
+            box.typeText("@")
+            typed = box.value as? String ?? ""
+            if !typed.hasSuffix("@") || attempt == 2 { break }
+            box.typeText(XCUIKeyboardKey.delete.rawValue)
+        }
+        XCTAssertEqual(typed.count, 4)
+        XCTAssertFalse(typed.hasSuffix("@"), "the @ went in at the cursor, not at the end: \(typed)")
+        let at = typed.firstIndex(of: "@").map { typed.distance(from: typed.startIndex, to: $0) } ?? 0
+        func spliced(_ insert: String) -> String {
+            var t = typed
+            t.replaceSubrange(t.index(t.startIndex, offsetBy: at)...t.index(t.startIndex, offsetBy: at), with: insert)
+            return t
+        }
         let mia = app.buttons["@Mia"]
         XCTAssertTrue(mia.waitForExistence(timeout: 5), "@ before other words still lists the members")
         shot(app, "lark-mention-cursor-picker")
         mia.tap()
-        XCTAssertEqual(box.value as? String, "@Mia 一起去", "the name goes in at the cursor, not at the end")
+        XCTAssertEqual(box.value as? String, spliced("@Mia "), "the name goes in at the cursor, not at the end")
         box.typeText("周六")
-        XCTAssertEqual(box.value as? String, "@Mia 周六一起去", "and the cursor is right after it")
+        XCTAssertEqual(box.value as? String, spliced("@Mia 周六"), "and the cursor is right after it")
         shot(app, "lark-mention-cursor-picked")
         // Leave the box empty for the next run.
-        app.buttons["lark.send"].tap()
-        XCTAssertTrue(app.textFields.matching(NSPredicate(format: "value == %@", "@Mia 周六一起去")).firstMatch.waitForNonExistence(timeout: 3))
+        tapAfterTyping(app.buttons["lark.send"])
+        XCTAssertTrue(app.textFields.matching(NSPredicate(format: "value == %@", spliced("@Mia 周六"))).firstMatch.waitForNonExistence(timeout: 3))
         sleep(3)
     }
 
@@ -377,7 +396,7 @@ final class LarkSendTests: XCTestCase {
         let tag = String(UUID().uuidString.prefix(6))
         let failedBefore = failed(app)
         for i in 1...3 { send(app, "连发第 \(i) 条 " + tag) }
-        assertAllOut(app, within: 12, failedBefore: failedBefore, "in the chat")
+        assertAllOut(app, sent: (1...3).map { "连发第 \($0) 条 " + tag }, within: 12, failedBefore: failedBefore, "in the chat")
         let thread = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         thread.launchArguments = ["-pairURL", pair, "-tab", "mail", "-openInboxItem", "lark:f3:300"] + Self.fresh
@@ -389,12 +408,19 @@ final class LarkSendTests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 5), "the thread sheet has a box")
         XCTAssertTrue(thread.staticTexts["60 条回复"].waitForExistence(timeout: 10), "the thread's latest page did not load")
         let threadFailedBefore = failed(thread)
+        let box = thread.textFields["lark.thread.box"] // the placeholder goes once it holds text
         for i in 1...3 {
-            field.tap()
-            field.typeText("话题连发第 \(i) 条 " + tag)
-            thread.buttons["lark.thread.send"].tap()
+            box.tap()
+            box.typeText("话题连发第 \(i) 条 " + tag)
+            tapAfterTyping(thread.buttons["lark.thread.send"])
         }
-        assertAllOut(thread, within: 12, failedBefore: threadFailedBefore, "in the thread sheet")
+        assertAllOut(thread, sent: (1...3).map { "话题连发第 \($0) 条 " + tag }, within: 12, failedBefore: threadFailedBefore, "in the thread sheet")
+    }
+
+    /// A tap right after typeText is sometimes lost: the button never sees it (#1627). Give the field a moment.
+    @MainActor private func tapAfterTyping(_ button: XCUIElement) {
+        sleep(1)
+        button.tap()
     }
 
     /// Failed marks on screen (the outbox keeps failed messages of earlier runs).
@@ -403,10 +429,13 @@ final class LarkSendTests: XCTestCase {
     }
 
     /// No message is still going `within` seconds of the last send (three in a row at 2 s each: about 6), none failed.
-    @MainActor private func assertAllOut(_ app: XCUIApplication, within seconds: TimeInterval, failedBefore: Int, _ where_: String,
+    @MainActor private func assertAllOut(_ app: XCUIApplication, sent: [String], within seconds: TimeInterval, failedBefore: Int, _ where_: String,
                                          file: StaticString = #filePath, line: UInt = #line) {
         let sending = app.descendants(matching: .any).matching(identifier: "lark.outgoing.sending")
-        XCTAssertTrue(sending.firstMatch.waitForExistence(timeout: 2), "\(where_): nothing is going", file: file, line: line)
+        // That they went: their bubbles (a mini ProgressView is not always in XCUITest's tree, #1627).
+        for text in sent {
+            XCTAssertTrue(app.staticTexts[text].waitForExistence(timeout: 2), "\(where_): \(text) is not on screen", file: file, line: line)
+        }
         let start = Date()
         while sending.count > 0, Date().timeIntervalSince(start) < seconds { usleep(250_000) }
         XCTAssertEqual(sending.count, 0, "\(where_): still going \(Int(Date().timeIntervalSince(start))) s after the last send", file: file, line: line)
@@ -429,11 +458,13 @@ final class LarkSendTests: XCTestCase {
         let text = "我也报名坐地铁 " + UUID().uuidString.prefix(8) // no full-width comma: typing it dropped the characters before it
         field.tap()
         field.typeText(text)
+        let box = app.textFields["lark.thread.box"]
+        XCTAssertEqual(box.value as? String, text, "the box holds what was typed")
         shot(app, "lark-thread-box")
-        app.buttons["lark.thread.send"].tap()
-        let sending = app.descendants(matching: .any).matching(identifier: "lark.outgoing.sending").firstMatch
-        XCTAssertTrue(sending.waitForExistence(timeout: 1), "the reply is not on screen while it goes")
-        XCTAssertTrue(app.staticTexts[text].exists)
+        tapAfterTyping(app.buttons["lark.thread.send"])
+        // The reply itself, not its spinner: a mini ProgressView is not always in XCUITest's tree (#1627).
+        XCTAssertTrue(app.staticTexts[text].waitForExistence(timeout: 1), "the reply is not on screen while it goes")
+        XCTAssertTrue(["", "回复话题"].contains(box.value as? String ?? ""), "the box empties when the reply goes") // an empty field reports its placeholder, or not
         assertAtEnd(app, app.staticTexts[text], box: "lark.thread.box", "the sending reply shows right above the thread's box")
         shot(app, "lark-thread-sending")
         sleep(6) // sent, and the newest page brings its copy in its place
