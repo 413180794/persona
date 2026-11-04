@@ -10,12 +10,14 @@
 
 - **由 hub 自己托管**：hub 把 `<hub 数据目录>/web`（默认 `~/.persona/web`）当静态站，和 API 同一个端口（hub 的 `listen`，默认 `:18660`，即所有网卡）。
   同源，所以没有 CORS，WebSocket 和图片也用同一个 token。没有这个目录时非 `/api/` 路径照旧 404。
-  不是文件的路径都回 `index.html`（前端路由：`/`、`/s/<机器>/<会话>`、`/j`、`/j/<会话>`、`/history`、`/inbox`、`/inbox/<件>`、`/routines`、
+  不是文件的路径都回 `index.html`（前端路由：`/`（Persona 主对话）、`/overview`（总览）、`/s/<机器>/<会话>`、`/j`、`/j/<会话>`、`/j/new`、`/history`、`/inbox`、`/inbox/<件>`、`/routines`、
   `/kb`、`/kb/<类型>/<条目>`、`/machines`、`/machines/<机器>`、`/assistant`（助手资料页）、`/settings`）；
   `/assets/` 下是带内容哈希的文件，永久缓存，`index.html` 不缓存（`server/internal/hub/web.go`）。
 - 部署：`./scripts/deploy/deploy.sh web`（只构建、传网页，不重启 hub）；部署 hub 时也会顺带部署网页。
 - 本地开发：`cd web && npm ci && npm run dev`，Vite 把 `/api` 代理到 `JARVIS_HUB_URL`（`eval "$(python3 ../scripts/persona_config.py env)"`）。
   测试 `npm test`（vitest，`src/lib/*.test.ts`），类型检查 `npm run typecheck`。
+  侧边栏入口的端到端检查（Persona 进主对话、两个「+」、老链接、窄屏抽屉；Python Playwright 驱动本机 Chrome）：起假 hub 和 `npx vite` 后跑
+  `python3 scripts/test/web_sidebar_e2e.py <网页地址> [--shots <目录>]`，用法见脚本开头，`--shots` 顺带拍浅色 / 深色 / 窄屏截图。
 
 ## 登录
 
@@ -33,8 +35,12 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 
 ## 页面
 
-- **侧边栏**（宽屏常驻，窄屏是抽屉）：连接状态和在线电脑数、⌘K 搜索、新建 Agent、总览 / Persona / 收件箱（「需要你」的件数）/ 待办 / 定时任务 / 知识库 / 机器 / 设置、
-  Persona 的对话（主对话在最前，末尾「全部对话」）。
+- **侧边栏**（宽屏常驻，窄屏是抽屉，两者同一份）：连接状态和在线电脑数、⌘K 搜索；第一项是 **Persona**（形象头像、加粗，打开主对话，主对话在工作 / 需要你时带状态点或件数），
+  下面是总览 / 收件箱（「需要你」的件数）/ 待办 / 定时任务 / 知识库 / 机器 / 设置；再下面「Persona 对话」（除主对话外最近 5 段，末尾「全部对话」；
+  标题右边「+」开一次性的新对话 `/j/new`）、个人 Agent、Agents（标题右边「+」是新建 Agent，⌘K 面板里也有）。
+  **为什么默认落在 Persona**（#1239）：和 iOS 一致（App 打开是「助手」，Agents 是第二个 tab），主对话本身带任务坞和「需要你」（#930），
+  要处理的事在这里就能看到、能交代；总览更像 Agents 的仪表盘，挪到 `/overview`。主对话只有一个入口：`/`、旧的 `/j`、`/persona`、`/j/<主对话 id>` 都选中 Persona 这一行，
+  「Persona 对话」列表和新对话页顶栏不再重复列「主对话」。还没有主对话时 `/` 是新对话页，第一条消息带 `main: true` 开出主对话。
   Agents 标题右侧可切换「按项目 / 按状态 / 按机器 / 按待办」，默认按项目，选择和各组折叠状态保存在当前浏览器。
   - **按项目**保留原来的 herdr 顺序（机器 → workspace → tab），没有动静的空间收进「空闲的空间」；有 loop、后台工作、运行中子 Agent 的空间不会被收起。
   - **按状态**对齐 iOS `AgentListOrder`：需要你 → 完成未看 → 工作中 → 待唤醒 → 已屏蔽 → 已看，只显示非空组，已看默认折叠。
@@ -95,7 +101,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     Codex、TRAEX、runtime 的会话和助手没有。
   - 发送中的气泡把 `<jarvis-context>` 显示成引用卡片，和记录里的一样（以前会露出原始标签）。
   - 打开页面、页面回到前台时发 `seen`。
-- **Persona**：`/j` 是新对话（建议 + Prompt Bar，`POST /api/v1/assistant/conversations`），`/j/<id>` 是一段对话，无头助手的 `delta` 逐字流式显示。
+- **Persona**：`/`（和旧的 `/j`）是主对话，`/j/new` 是新对话（建议 + Prompt Bar，`POST /api/v1/assistant/conversations`），`/j/<id>` 是一段对话，无头助手的 `delta` 逐字流式显示。
   - **形象**（#433，`lib/persona.ts`、`views/assistant/Persona.tsx`，`docs/persona.md`）：hub 的 `/personas` 形象包，选哪个存在当前浏览器；用在新对话页的大图标、对话顶栏标题左边随状态变的圆点
     （状态同 iOS `personaState`，APNG 由浏览器自己播，减弱动态效果时用 canvas 画第一帧）、设置 › 助手的头部、「问 xxx…」占位符。选默认形象（或旧 hub、没有包）时每处都是原来的样子；
     形象的配色不改网页的 token。选择在设置 › 通用 › 形象和资料页。

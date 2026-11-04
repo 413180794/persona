@@ -76,7 +76,7 @@ export function History({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           {total > 0 && <span className="ml-2 text-[12px] font-normal text-ink-3 tabular-nums">{total}</span>}
         </h1>
         <IconButton icon="retry" label="刷新" onClick={() => void after()} />
-        <Button tone="primary" icon="plus" onClick={() => navigate({ name: "jarvis" })}>新对话</Button>
+        <Button tone="primary" icon="plus" onClick={() => navigate({ name: "persona-new" })}>新对话</Button>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">

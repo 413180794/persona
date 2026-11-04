@@ -127,7 +127,7 @@ function Shell() {
   }, [at]);
 
   const title =
-    route.name === "session" ? "Agent" : route.name === "jarvis" ? "Persona" : route.name === "history" ? "Persona 的对话" : route.name === "profile" ? "Persona 的资料" : route.name === "inbox" ? "收件箱"
+    route.name === "session" ? "Agent" : route.name === "jarvis" ? "Persona" : route.name === "persona-new" ? "新对话" : route.name === "history" ? "Persona 的对话" : route.name === "profile" ? "Persona 的资料" : route.name === "inbox" ? "收件箱"
       : route.name === "routines" ? "定时任务" : route.name === "kb" ? "知识库" : route.name === "todos" ? "待办" : route.name === "machines" || route.name === "machine" ? "机器" : route.name === "settings" ? "设置"
       : route.name === "agents" ? "个人 Agent" : "总览";
   useEffect(() => {
@@ -141,6 +141,9 @@ function Shell() {
       break;
     case "jarvis":
       main = <PersonaAssistant sid={route.sid} onToggleSidebar={toggle} />;
+      break;
+    case "persona-new":
+      main = <PersonaAssistant fresh onToggleSidebar={toggle} />;
       break;
     case "history":
       main = <History onToggleSidebar={toggle} />;

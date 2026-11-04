@@ -1,5 +1,6 @@
-// The Persona tab: the headless assistant on the hub's machine (docs/assistant.md). /j is a new conversation,
-// /j/<id> one of them.
+// The Persona tab: the headless assistant on the hub's machine (docs/assistant.md). `/` (and the old `/j`) is the main
+// conversation, `/j/<id>` one of them, `/j/new` a new one-off conversation. With no main conversation yet, the first
+// message on `/` starts it.
 import { useState } from "react";
 import { api, errorText } from "../lib/api";
 import { navigate } from "../lib/router";
@@ -18,20 +19,24 @@ const SUGGESTIONS = ["今天我有哪些会？帮我准备一下", "看看各台
 
 const starting = new Set<string>();
 
-export function PersonaAssistant({ sid, onToggleSidebar }: { sid?: string; onToggleSidebar: () => void }) {
+export function PersonaAssistant({ sid, fresh, onToggleSidebar }: { sid?: string; fresh?: boolean; onToggleSidebar: () => void }) {
   const assistant = useStore((s) => s.assistant);
-  if (sid) {
+  const loaded = useStore((s) => s.loaded);
+  if (fresh) return <Starter onToggleSidebar={onToggleSidebar} />;
+  const id = sid ?? assistant?.main;
+  if (id) {
     if (!assistant) return <Centered><Loading /></Centered>;
-    return <ChatView key={sid} mid={assistant.machine_id} sid={sid} assistant starting={starting.has(sid)} onToggleSidebar={onToggleSidebar} />;
+    return <ChatView key={id} mid={assistant.machine_id} sid={id} assistant starting={starting.has(id)} onToggleSidebar={onToggleSidebar} />;
   }
-  return <Starter onToggleSidebar={onToggleSidebar} />;
+  if (!loaded) return <Centered><Loading /></Centered>;
+  return <Starter main onToggleSidebar={onToggleSidebar} />;
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
   return <div className="flex h-full items-center justify-center">{children}</div>;
 }
 
-function Starter({ onToggleSidebar }: { onToggleSidebar: () => void }) {
+function Starter({ main, onToggleSidebar }: { main?: boolean; onToggleSidebar: () => void }) {
   const assistant = useStore((s) => s.assistant);
   const machines = useStore((s) => s.machines);
   const persona = usePersona();
@@ -40,7 +45,7 @@ function Starter({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const start = async (out: Outgoing): Promise<boolean> => {
     try {
       const launcher = pickedLauncher(NEW_CONVERSATION);
-      const r = await api<{ session: Session }>("/assistant/conversations", { method: "POST", json: { prompt: out.text, images: out.images.length ? out.images : undefined, launcher } });
+      const r = await api<{ session: Session }>("/assistant/conversations", { method: "POST", json: { prompt: out.text, images: out.images.length ? out.images : undefined, launcher, main: main || undefined } });
       starting.add(r.session.session_id);
       // the prompt shows in the conversation at once (it started with it), until its transcript has it
       noteSent(r.session.machine_id, r.session.session_id, out);
@@ -68,11 +73,6 @@ function Starter({ onToggleSidebar }: { onToggleSidebar: () => void }) {
         <button type="button" onClick={() => navigate({ name: "profile" })} className="flex h-7 items-center gap-1.5 rounded-[8px] px-2 text-[12px] font-medium whitespace-nowrap text-ink-2 shadow-btn hover:bg-hover hover:text-ink">
           <PersonaAvatar size={16} fallback={<Icon name="info" size={13} />} /> 资料
         </button>
-        {assistant?.main && (
-          <button type="button" onClick={() => navigate({ name: "jarvis", sid: assistant.main })} className="flex h-7 items-center gap-1.5 rounded-[8px] px-2 text-[12px] font-medium text-ink-2 shadow-btn hover:bg-hover hover:text-ink">
-            <Icon name="chat" size={13} /> 主对话
-          </button>
-        )}
       </header>
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-5 pb-[10vh]">
         <div className="w-full max-w-[640px]" style={{ animation: `fade-up 450ms ${EASE} both` }}>

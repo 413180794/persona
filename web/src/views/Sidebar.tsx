@@ -1,5 +1,6 @@
-// Beautiful UI's Sidebar Nav: workspace row, quick search, the accent action, sections, one gliding highlight.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+// Beautiful UI's Sidebar Nav: workspace row, quick search, sections, one gliding highlight. Persona's main conversation
+// is the first entry (the app opens on 助手); a new conversation and a new agent are the「+」of their sections (#1239).
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AGENT_FILTERS, agentFilter, applyFilter, arrangeSpaces, filterCounts, isSpaceMuted, matchingKeys, shownFilters, unreadOf, type AgentFilter, type FilterCounts } from "../lib/agent-filter";
 import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, buildSpaces, isQuiet, splitAgentSessions, type AgentGroup, type Space } from "../lib/agent-groups";
 import { addSection, arrangeSessions, assignSection, GROUP_LABEL, isDefaultView, providerLabel, removeSection, resetView, setView, SHOW_LABEL, SORT_LABEL, toggleProvider, togglePin, totalUnread, updateAgentPrefs, useAgentList, useAgentPrefs, viewOf, type AgentPrefs, type AgentSession, type GroupBy, type ShowMode, type SortBy } from "../lib/agents";
@@ -8,6 +9,7 @@ import { useInboxBadge } from "../lib/inbox";
 import { machineWithHub } from "../lib/mesh";
 import { ago, baseName, sessionDeletable, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
 import { agentKey, isSpacePinned, pinnedSessions } from "../lib/pins";
+import { NAV_PAGES, otherConversations, sidebarActiveKey } from "../lib/persona-nav";
 import { href, navigate, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { reset, refresh, refreshTodos, useStore } from "../lib/store";
@@ -22,6 +24,7 @@ import { setTheme, useTheme, type Theme } from "./theme";
 import { AgentAvatar } from "./agents/AgentAvatar";
 import { LinkTodoDialog, type LinkTargetSpace } from "./LinkTodoDialog";
 import { hubMenuItems, useHubs } from "./Hubs";
+import { PersonaAvatar } from "./assistant/Persona";
 
 function useFolded(key: string, initial = false): [boolean, () => void] {
   const [v, setV] = useState(() => {
@@ -113,10 +116,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const [linkTargetSession, setLinkTargetSession] = useState<Session | undefined>();
   const [linkTargetSpace, setLinkTargetSpace] = useState<LinkTargetSpace | undefined>();
 
-  const activeKey =
-    route.name === "session" ? `s:${route.mid}/${route.sid}` : route.name === "jarvis" ? (route.sid ? `j:${route.sid}` : "j:new")
-      : route.name === "todos" ? "todos" : route.name === "machines" || route.name === "machine" ? "machines" : route.name === "kb" ? "kb"
-      : route.name === "settings" ? "settings" : route.name === "agents" ? (route.id ? `a:${route.id}` : "agents") : route.name;
+  const activeKey = sidebarActiveKey(route, assistant?.main);
   // a space with nothing to look at (every agent seen and waiting) goes to「空闲的空间」, like the app; the open
   // conversation's space stays where it is so the row under the pointer doesn't move away
   const busy = (sp: Space) => sp.sessions.some((s) => !isQuiet(s) || activeKey === `s:${s.machine_id}/${s.session_id}`);
@@ -148,10 +148,17 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   };
 
   const online = machines.filter((m) => m.online).length;
-  const convs = (assistant?.conversations ?? [])
-    .slice()
-    .sort((a, b) => (a.session_id === assistant?.main ? -1 : b.session_id === assistant?.main ? 1 : (b.updated_at ?? "").localeCompare(a.updated_at ?? "")))
-    .slice(0, 6);
+  const convs = otherConversations(assistant?.conversations ?? [], assistant?.main);
+  const mainConversation = assistant?.main ? assistant.conversations.find((c) => c.session_id === assistant.main) : undefined;
+  const pages: Record<(typeof NAV_PAGES)[number], React.ReactNode> = {
+    home: <NavRow k="home" reg={reg} hover={setHovered} active={activeKey === "home"} to={{ name: "home" }} go={go} icon="home" label="总览" badge={counts.needs || undefined} badgeTone="red" />,
+    inbox: <NavRow k="inbox" reg={reg} hover={setHovered} active={activeKey === "inbox"} to={{ name: "inbox" }} go={go} icon="inbox" label="收件箱" badge={inbox || undefined} badgeTone="red" />,
+    todos: todosSupported !== false && <NavRow k="todos" reg={reg} hover={setHovered} active={activeKey === "todos"} to={{ name: "todos" }} go={go} icon="todo" label="待办" badge={uncompletedTodosCount || undefined} />,
+    routines: <NavRow k="routines" reg={reg} hover={setHovered} active={activeKey === "routines"} to={{ name: "routines" }} go={go} icon="clock" label="定时任务" />,
+    kb: <NavRow k="kb" reg={reg} hover={setHovered} active={activeKey === "kb"} to={{ name: "kb" }} go={go} icon="book" label="知识库" />,
+    machines: <NavRow k="machines" reg={reg} hover={setHovered} active={activeKey === "machines"} to={{ name: "machines" }} go={go} icon="machine" label="机器" hint={machines.length ? `${online}/${machines.length}` : undefined} />,
+    settings: <NavRow k="settings" reg={reg} hover={setHovered} active={activeKey === "settings"} to={{ name: "settings" }} go={go} icon="gear" label="设置" />,
+  };
 
   return (
     <aside className="flex h-full w-full flex-col bg-canvas">
@@ -162,16 +169,6 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
           <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-3">搜索会话</span>
           <span className="hidden sm:inline-flex"><Kbd>⌘K</Kbd></span>
         </button>
-        <button
-          type="button"
-          onClick={onNewAgent}
-          className="mb-1 flex w-full items-center gap-2 rounded-control px-2 py-1.5 text-[13px] font-medium text-accent transition-[background-color,transform] duration-100 hover:bg-accent-tint active:scale-[0.98]"
-        >
-          <span className="min-w-0 flex-1 truncate text-left">新建 Agent</span>
-          <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-accent text-white">
-            <Icon name="plus" size={9} stroke={3} />
-          </span>
-        </button>
       </div>
 
       <div ref={nav} onMouseLeave={() => setHovered(null)} className="relative min-h-0 flex-1 overflow-y-auto px-2.5 pb-3">
@@ -181,35 +178,28 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
           style={{ top: box?.top ?? 0, height: box?.height ?? 0, opacity: box ? 1 : 0, transition: `top 220ms ${EASE}, height 220ms ${EASE}, opacity 150ms ease` }}
         />
         <div className="flex flex-col gap-px pt-1">
-          <NavRow k="home" reg={reg} hover={setHovered} active={activeKey === "home"} to={{ name: "home" }} go={go} icon="home" label="总览" badge={counts.needs || undefined} badgeTone="red" />
-          <NavRow k="j:new" reg={reg} hover={setHovered} active={activeKey === "j:new"} to={{ name: "jarvis" }} go={go} icon="spark" label="Persona" />
-          <NavRow k="inbox" reg={reg} hover={setHovered} active={activeKey === "inbox"} to={{ name: "inbox" }} go={go} icon="inbox" label="收件箱" badge={inbox || undefined} badgeTone="red" />
-          <NavRow k="routines" reg={reg} hover={setHovered} active={activeKey === "routines"} to={{ name: "routines" }} go={go} icon="clock" label="定时任务" />
-          <NavRow k="kb" reg={reg} hover={setHovered} active={activeKey === "kb"} to={{ name: "kb" }} go={go} icon="book" label="知识库" />
-          {todosSupported !== false && (
-            <NavRow k="todos" reg={reg} hover={setHovered} active={activeKey === "todos"} to={{ name: "todos" }} go={go} icon="todo" label="待办" badge={uncompletedTodosCount || undefined} />
-          )}
-          <NavRow k="machines" reg={reg} hover={setHovered} active={activeKey === "machines"} to={{ name: "machines" }} go={go} icon="machine" label="机器" hint={machines.length ? `${online}/${machines.length}` : undefined} />
-          <NavRow k="settings" reg={reg} hover={setHovered} active={activeKey === "settings"} to={{ name: "settings" }} go={go} icon="gear" label="设置" />
+          <PersonaRow reg={reg} hover={setHovered} active={activeKey === "persona"} go={go} main={mainConversation} />
+          {NAV_PAGES.map((k) => <Fragment key={k}>{pages[k]}</Fragment>)}
         </div>
 
-        <PersonalAgents reg={reg} hover={setHovered} activeKey={activeKey} go={go} />
-
-        {convs.length > 0 && (
-          <Section title="Persona 对话" folded={jarvisFolded} onToggle={toggleJarvis}>
+        {assistant && (
+          <Section title="Persona 对话" folded={jarvisFolded} onToggle={toggleJarvis} right={<SectionAdd label="新对话" to={{ name: "persona-new" }} go={go} />}>
             {convs.map((c) => (
-              <SessionRow key={c.session_id} s={c} k={`j:${c.session_id}`} reg={reg} hover={setHovered} active={activeKey === `j:${c.session_id}`} to={{ name: "jarvis", sid: c.session_id }} go={go} label={c.session_id === assistant?.main ? "主对话" : undefined} showState={false} />
+              <SessionRow key={c.session_id} s={c} k={`j:${c.session_id}`} reg={reg} hover={setHovered} active={activeKey === `j:${c.session_id}`} to={{ name: "jarvis", sid: c.session_id }} go={go} showState={false} />
             ))}
-            <NavRow k="history" reg={reg} hover={setHovered} active={activeKey === "history"} to={{ name: "history" }} go={go} icon="list" label="全部对话" hint={(assistant?.conversations.length ?? 0) > convs.length ? String(assistant!.conversations.length) : undefined} />
+            <NavRow k="history" reg={reg} hover={setHovered} active={activeKey === "history"} to={{ name: "history" }} go={go} icon="list" label="全部对话" hint={assistant.conversations.length > convs.length ? String(assistant.conversations.length) : undefined} />
           </Section>
         )}
 
-        <div className="mt-3 flex items-center justify-between gap-2 px-2">
-          <span className="text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">Agents</span>
+        <PersonalAgents reg={reg} hover={setHovered} activeKey={activeKey} go={go} />
+
+        <div className="mt-3 flex items-center gap-1 px-2">
+          <span className="min-w-0 flex-1 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">Agents</span>
           <button type="button" aria-label={`Agent 分组：${groupingLabel}`} aria-haspopup="menu" aria-expanded={Boolean(groupingMenu.anchor)} onClick={groupingMenu.open} className="relative z-10 flex items-center gap-1 whitespace-nowrap rounded-control px-2 py-1 text-[11px] text-ink-3 hover:bg-hover hover:text-ink-2">
             {groupingLabel}
             <Icon name="chevron" size={10} stroke={2} />
           </button>
+          <SectionAdd label="新建 Agent" onClick={onNewAgent} />
         </div>
         {groupingMenu.anchor && (
           <Menu anchor={groupingMenu.anchor} onClose={groupingMenu.close} align="right" header="Agent 分组" items={availableGroupings.map((g) => ({
@@ -593,6 +583,50 @@ function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, mute
 type RegFn = (k: string) => (el: HTMLElement | null) => void;
 type GoFn = (to: Route) => (e: React.MouseEvent) => void;
 type RowMenuFn = (s: Session, anchor: HTMLElement) => void;
+
+// Persona's main conversation: the first and strongest entry (its face, always in ink), with the conversation's state
+// when it is working or wants you.
+function PersonaRow({ reg, hover, active, go, main }: { reg: RegFn; hover: (k: string | null) => void; active: boolean; go: GoFn; main?: Session }) {
+  const to: Route = { name: "jarvis" };
+  const st = main ? stateOf(main) : undefined;
+  const pending = main?.pending_interactions ?? 0;
+  return (
+    <a
+      ref={reg("persona")}
+      href={href(to)}
+      onClick={go(to)}
+      onMouseEnter={() => hover("persona")}
+      onFocus={() => hover("persona")}
+      onBlur={() => hover(null)}
+      aria-current={active ? "page" : undefined}
+      title="Persona 的主对话"
+      className="relative z-10 mb-1 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 transition-transform duration-150 active:scale-[0.98]"
+    >
+      <PersonaAvatar
+        size={18}
+        fallback={
+          <span className="flex size-[18px] shrink-0 items-center justify-center rounded-[5px] bg-ink text-surface">
+            <Icon name="spark" size={11} stroke={2} />
+          </span>
+        }
+      />
+      <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-ink">Persona</span>
+      {pending > 0 ? (
+        <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums">{pending}</span>
+      ) : st === "working" || st === "needs_you" || st === "unread" ? (
+        <StatusDot state={st} size={7} />
+      ) : null}
+    </a>
+  );
+}
+
+// A section's「+」(a new conversation, a new agent): quiet, next to the section's title.
+function SectionAdd({ label, to, go, onClick }: { label: string; to?: Route; go?: GoFn; onClick?: () => void }) {
+  const cls = "relative z-10 flex size-5 shrink-0 items-center justify-center rounded-[5px] text-ink-3 hover:bg-hover hover:text-ink-2";
+  const icon = <Icon name="plus" size={12} stroke={2} />;
+  if (to && go) return <a href={href(to)} onClick={go(to)} title={label} aria-label={label} className={cls}>{icon}</a>;
+  return <button type="button" onClick={onClick} title={label} aria-label={label} className={cls}>{icon}</button>;
+}
 
 function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, hint }: { k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; icon: IconName; label: string; badge?: number; badgeTone?: "red"; hint?: string }) {
   return (
