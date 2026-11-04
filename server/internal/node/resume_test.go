@@ -43,6 +43,7 @@ func fakeNodes(t *testing.T, replies ...map[string]any) chan sockRequest {
 	}
 	t.Cleanup(func() { os.RemoveAll(home) })
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	_ = os.MkdirAll(filepath.Join(home, ".jarvis"), 0o700)
 	ln, err := net.Listen("unix", SocketPath())
 	if err != nil {
@@ -93,7 +94,9 @@ func TestHookResumesOnNextNode(t *testing.T) {
 }
 
 func TestHookWithoutNodeLeavesItToTheTUI(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	start := time.Now()
 	if out := Hook(context.Background(), json.RawMessage(`{}`), ""); out != nil {
 		t.Fatalf("output %s", out)

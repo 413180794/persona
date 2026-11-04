@@ -46,6 +46,7 @@ func TestLiveCardLatency(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	n, err := node.New("live")
 	if err != nil {
 		t.Fatal(err)

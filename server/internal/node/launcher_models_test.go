@@ -150,6 +150,7 @@ fixed() { LAUNCHER_MODEL=fixed-model command claude --model fixed-model "$@" }
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	t.Setenv("ZDOTDIR", home)
 	t.Setenv("PATH", bin+":/usr/bin:/bin")
 	launcherCache.Lock()

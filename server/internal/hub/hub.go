@@ -555,6 +555,47 @@ func (h *Hub) createScreenInteraction(m *Machine, s proto.Session) {
 	h.mu.Unlock()
 	h.record(ix)
 	h.announce(ix)
+	if d == nil {
+		go h.upgradeScreenCard(m, s.SessionID, id)
+	}
+}
+
+// screenUpgrade: how often, and screenUpgradeFor how long, a screen card made without a dialog it could read looks
+// at the screen again (upgradeScreenCard).
+var screenUpgrade, screenUpgradeFor = 500 * time.Millisecond, 30 * time.Second
+
+// upgradeScreenCard: the agent may be called blocked before it draws its dialog (Orca does so from its PreToolUse
+// hook; on Windows the hooks take seconds before AskUserQuestion's dialog shows), so the card made then has no dialog
+// to answer. Look at the screen again; once a dialog shows, its card replaces this one. Stop when this card is
+// answered or gone, the agent no longer blocked, or the time up (a dialog the hub cannot read: the card stays).
+func (h *Hub) upgradeScreenCard(m *Machine, session, id string) {
+	for end := time.Now().Add(screenUpgradeFor); time.Now().Before(end); {
+		time.Sleep(screenUpgrade)
+		cur, ok := m.session(session)
+		if !ok || cur.Status != proto.StatusBlocked {
+			return
+		}
+		h.mu.Lock()
+		_, still := h.interactions[id]
+		h.mu.Unlock()
+		if !still {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		var scr struct {
+			Text string `json:"text"`
+		}
+		err := m.call(ctx, "session.screen", map[string]any{"session_id": session, "lines": 40}, &scr)
+		cancel()
+		if err != nil {
+			return
+		}
+		if screen.ParseDialog(scr.Text) != nil {
+			h.finishInteraction(id)
+			h.createScreenInteraction(m, cur)
+			return
+		}
+	}
 }
 
 // screenRecheck: how often, and screenRecheckFor how long, the screen is looked at again after a screen card's

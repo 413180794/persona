@@ -962,13 +962,10 @@ var terminalEscapes = regexp.MustCompile(`\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b\[
 
 var claudeVersionLine = regexp.MustCompile(`^\s*v?(\d+\.\d+\.\d+\S*)\s*(\(Claude Code\))?\s*$`)
 
-// loginShell runs a command in an interactive zsh so ~/.zshrc functions and PATH are available.
+// loginShell runs a command in an interactive zsh so ~/.zshrc functions and PATH are available (loginShellProgram:
+// bash without zsh, Git Bash on Windows).
 func loginShell(ctx context.Context, script string) *exec.Cmd {
-	shell := "zsh"
-	if _, err := exec.LookPath("zsh"); err != nil {
-		shell = "bash"
-	}
-	cmd := exec.CommandContext(ctx, shell, "-ic", script)
+	cmd := exec.CommandContext(ctx, loginShellProgram(), "-ic", script)
 	cmd.Stdin = nil
 	return cmd
 }

@@ -388,6 +388,7 @@ func TestRunningPaneWinsOverParkedBotmuxRow(t *testing.T) {
 func TestBotmuxFoundOutsidePATH(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	t.Setenv("PATH", t.TempDir())
 	if bin := findBotmux(); bin != "" {
 		t.Fatalf("found %q without botmux", bin)

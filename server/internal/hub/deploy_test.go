@@ -45,7 +45,9 @@ func TestDeployScriptInstallsTheBinary(t *testing.T) {
 
 // No binary for the machine's platform on the hub: say what to do, don't start.
 func TestNodeBinaryMissing(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	if _, err := nodeBinary("plan9", "mips"); err == nil || !strings.Contains(err.Error(), "deploy.sh") {
 		t.Fatalf("err = %v", err)
 	}

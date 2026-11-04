@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -359,13 +358,9 @@ func TestTabsInLayoutOrder(t *testing.T) {
 
 // A request Orca could not read is answered under the id "unknown": that is this request's refusal, not a hang.
 func TestUnknownIDRefusal(t *testing.T) {
-	dir, err := os.MkdirTemp("/tmp", "orcau")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
-	sock := filepath.Join(dir, "o.sock")
-	ln, err := net.Listen("unix", sock)
+	dir := orcarttest.TempDir(t)
+	kind, sock := orcarttest.Endpoint(dir)
+	ln, err := orcarttest.Listen(kind, sock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,7 +384,7 @@ func TestUnknownIDRefusal(t *testing.T) {
 	}()
 	meta := filepath.Join(dir, "orca-runtime.json")
 	b, _ := json.Marshal(map[string]any{"runtimeId": "rt", "authToken": "t",
-		"transports": []any{map[string]any{"kind": "unix", "endpoint": sock}}})
+		"transports": []any{map[string]any{"kind": kind, "endpoint": sock}}})
 	if err := os.WriteFile(meta, b, 0o600); err != nil {
 		t.Fatal(err)
 	}

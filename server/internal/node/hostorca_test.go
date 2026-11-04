@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -495,7 +496,7 @@ func TestOrcaEngineDetection(t *testing.T) {
 func TestOrcaEngineUse(t *testing.T) {
 	n, _, home := herdrNode(t)
 	o := orcarttest.New(t)
-	t.Setenv("ORCA_USER_DATA_PATH", strings.TrimSuffix(o.MetaPath, "/orca-runtime.json"))
+	t.Setenv("ORCA_USER_DATA_PATH", filepath.Dir(o.MetaPath))
 	writeClaudePID(t, home, 4242, sidB)
 	writeTranscript(t, home, orcaCwd, sidB, time.Now().Add(-time.Minute), `{"type":"custom-title","customTitle":"x"}`)
 	o.SetTerminals(orcaTerm("term_1", "tab1", "leaf1", "claude"))

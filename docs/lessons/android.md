@@ -111,6 +111,11 @@
 - ColorOS 上 `adb install` 要在手机上点确认「USB 安装」：手机熄屏或没人点时 adb 一直卡住，几分钟后报失败。装到用户手机上要先让用户在手机旁边。
 - `debug.mockAddress` 是静默配对（`platformPairing.pair`，不经过配对页），配对完成之后的步骤（选择引擎、准备清单）都看不到：要看这些就用 `jarvis://pair?url=…&token=mock` 链接打开配对页，再点「确认配对」。
 - 想让一次保存失败，别靠 `adb reverse --remove` 断掉假 hub：App 的 OkHttp 连接池里已经建好的长连接照样能用，请求还是成功了。用假 hub 的失败开关（`MOCK_ENGINE_ERROR`、`MOCK_MODEL_CONFLICT`、`MOCK_DEPLOY_ERROR`）。
+- **用户已经配对着自己的 hub 时，别给 App 发 `jarvis://pair` 深链**：深链进的是根配对页，确认后 `HubDataStore.pair` 会丢掉原来的配对再写新的。
+  加一台测试 hub 走 设置 › hub › 添加 hub（新的一组，原来的不动）。准备清单没走完时，深链和添加 hub 的配对页都会先停在准备清单上，链接被忽略。
+- **`adb shell input text` 遇上中文输入法会打乱**：微信输入法、拼音模式的 Gboard 会把字符重排、`?` 变成全角、吞掉 `=` 和 `_`、把字母转成汉字。
+  要往输入框里打链接这类 ASCII，临时 `ime set` 到一个不处理按键的输入法（如手机上启用了的 `com.google.android.gms/.autofill.service.AutofillInputMethodServiceProxy`），
+  打完马上 `ime set` 回 `settings get secure default_input_method` 记下的原值。配对页的地址框一出现 `jarvis://` 开头就立刻解析，长链接先打后半段、最后在行首补 `jarvis://`。
 
 
 ## 语音对话

@@ -58,6 +58,7 @@ func TestHubShutdownWithOnlineDevice(t *testing.T) {
 					t.Fatal(err)
 				}
 				t.Setenv("HOME", home)
+				t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 				loopback := netip.AddrFrom4([4]byte{127, 0, 0, 1}).String()
 				ln, err := net.Listen("tcp", net.JoinHostPort(loopback, "0"))
 				if err != nil {

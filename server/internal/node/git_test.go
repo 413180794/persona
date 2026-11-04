@@ -21,6 +21,7 @@ func newPullFixture(t *testing.T) pullFixture {
 	t.Helper()
 	base := t.TempDir()
 	t.Setenv("HOME", base)
+	t.Setenv("USERPROFILE", base) // os.UserHomeDir on Windows
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv("GIT_AUTHOR_NAME", "Sample Dev")

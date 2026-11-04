@@ -339,7 +339,7 @@ Linux 上见下面「Linux（headless）」：编出 `jarvis-link`，`jarvis-lin
 **构建**
 - 纯 Go、不要 cgo：`cd server && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o jarvis-link ./cmd/jarvis-link`。
   `amd64`、`arm64`、32 位树莓派（`GOARCH=arm GOARM=7`）都能编；Windows 也能编了（文件锁、信号按平台分文件），但还没有托盘程序（#299）。
-- `personad` 也能为 Windows 编译（`GOOS=windows go build ./...`；进程组、信号、文件锁、CPU 时间按平台分文件，在 `internal/osproc` 和各包的 `_windows.go` 里），但 Windows 上的 node 还不能用，见 #1090。
+- `personad` 也能为 Windows 编译（`GOOS=windows go build ./...`；进程组、信号、文件锁、CPU 时间按平台分文件，在 `internal/osproc` 和各包的 `_windows.go` 里），Windows 上的常驻 node 配 Orca 引擎能用了（手动在前台跑，安装和自启还没有），见 [windows.md](windows.md)。
 - 常驻 node 用同一个提交编的 `jarvisd`（`~/.persona/bin/personad`）；`scripts/deploy/node-launchd.sh install` 在 Linux 上把它装成 systemd 用户服务 `jarvisd-node`。
 
 **一条命令装好**

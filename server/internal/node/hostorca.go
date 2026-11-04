@@ -721,11 +721,11 @@ func agentOfCmd(argv []string) string {
 	if len(argv) == 0 {
 		return ""
 	}
-	switch filepath.Base(argv[0]) {
+	switch progName(argv[0]) {
 	case "codex":
 		return "codex"
 	case "node", "bun":
-		if len(argv) > 1 && (filepath.Base(argv[1]) == "codex" || strings.Contains(argv[1], "/codex/")) {
+		if len(argv) > 1 && (progName(argv[1]) == "codex" || strings.Contains(filepath.ToSlash(argv[1]), "/codex/")) {
 			return "codex"
 		}
 	}
@@ -735,10 +735,14 @@ func agentOfCmd(argv []string) string {
 // scanOrcaProcs lists this user's claude and codex processes in front in Orca's terminals, by pane key: not stopped,
 // in their terminal's foreground process group (a suspended or background agent is not what the terminal shows), not
 // inside a nested herdr / herdr-core. Claude first, lowest pid first within an agent (a wrapper before the program it
-// starts). Linux reads /proc; macOS asks ps twice: the command lines of all, then the environments of the agents only.
+// starts). Linux reads /proc; macOS asks ps twice: the command lines of all, then the environments of the agents only;
+// Windows reads the process table (scanOrcaProcsOS, which has its own idea of in front).
 func scanOrcaProcs() (map[string][]orcaProc, error) {
-	if runtime.GOOS == "linux" {
+	switch runtime.GOOS {
+	case "linux":
 		return scanOrcaProcsLinux()
+	case "windows":
+		return scanOrcaProcsOS()
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

@@ -1,4 +1,5 @@
-// Package orcarttest is a scriptable fake of Orca's runtime socket for tests: it writes its own orca-runtime.json,
+// Package orcarttest is a scriptable fake of Orca's runtime socket for tests (a unix socket, a named pipe on Windows,
+// as Orca itself serves there): it writes its own orca-runtime.json,
 // checks the auth token, answers status.get, terminal.list, worktree.ps and terminal.read from its state, records every
 // call in order, and lets a test replace any method's answer. Nothing here talks to a real Orca.
 package orcarttest
@@ -19,9 +20,10 @@ import (
 
 // Fake is one fake Orca runtime.
 type Fake struct {
-	// MetaPath is its orca-runtime.json, Socket its unix socket.
+	// MetaPath is its orca-runtime.json, Socket its socket (a named pipe on Windows) and Kind that transport's kind.
 	MetaPath string
 	Socket   string
+	Kind     string
 
 	mu          sync.Mutex
 	token       string
@@ -63,16 +65,13 @@ func (c Call) String() string {
 // Fail makes a handler answer with an error of that code.
 type Fail struct{ Code string }
 
-// New starts a fake runtime in a fresh directory under /tmp (unix socket paths are short).
+// New starts a fake runtime in a fresh directory (TempDir).
 func New(t testing.TB) *Fake {
 	t.Helper()
-	dir, err := os.MkdirTemp("/tmp", "orca")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
+	dir := TempDir(t)
+	kind, socket := Endpoint(dir)
 	f := &Fake{
-		MetaPath: filepath.Join(dir, "orca-runtime.json"), Socket: filepath.Join(dir, "o.sock"),
+		MetaPath: filepath.Join(dir, "orca-runtime.json"), Socket: socket, Kind: kind,
 		token: "test-token-1", runtimeID: "rt-1", screens: map[string]map[string]any{},
 		on: map[string]func(map[string]any) any{}, agentStatus: map[string]map[string]any{}, revisions: map[string]int{},
 		status: map[string]any{"appVersion": "1.4.245", "runtimeProtocolVersion": 3, "minCompatibleRuntimeClientVersion": 2,
@@ -87,8 +86,7 @@ func New(t testing.TB) *Fake {
 
 // Start listens (again, after Stop) and writes the metadata file.
 func (f *Fake) Start() error {
-	_ = os.Remove(f.Socket)
-	ln, err := net.Listen("unix", f.Socket)
+	ln, err := Listen(f.Kind, f.Socket)
 	if err != nil {
 		return err
 	}
@@ -133,7 +131,7 @@ func (f *Fake) Restart(token string) error {
 func (f *Fake) writeMeta() error {
 	f.mu.Lock()
 	meta := map[string]any{"runtimeId": f.runtimeID, "pid": os.Getpid(), "authToken": f.token, "startedAt": 1,
-		"transports": []any{map[string]any{"kind": "unix", "endpoint": f.Socket},
+		"transports": []any{map[string]any{"kind": f.Kind, "endpoint": f.Socket},
 			map[string]any{"kind": "websocket", "endpoint": "ws://127.0.0.1:1"}}}
 	f.mu.Unlock()
 	b, _ := json.Marshal(meta)

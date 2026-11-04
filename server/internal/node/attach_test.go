@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -164,14 +165,19 @@ func TestAttachServesExtraConnections(t *testing.T) {
 }
 
 // shortHome sets HOME to a short temp dir: a unix socket path is limited to 104 bytes on macOS, and t.TempDir() under
-// /var/folders makes ~/.jarvis/node-attach.sock longer than that.
+// /var/folders makes ~/.jarvis/node-attach.sock longer than that. Windows has no /tmp; its temp directory is short.
 func shortHome(t *testing.T) string {
 	t.Helper()
-	home, err := os.MkdirTemp("/tmp", "jn")
+	base := "/tmp"
+	if runtime.GOOS == "windows" {
+		base = ""
+	}
+	home, err := os.MkdirTemp(base, "jn")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(home) })
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	return home
 }

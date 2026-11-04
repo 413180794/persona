@@ -38,7 +38,8 @@ func TestTailcatEndToEnd(t *testing.T) {
 		return d
 	}
 	hubHome, nodeHome := short("jh"), short("jn")
-	t.Setenv("HOME", hubHome) // the hub's key file and node builds live under its home
+	t.Setenv("HOME", hubHome)        // the hub's key file and node builds live under its home
+	t.Setenv("USERPROFILE", hubHome) // os.UserHomeDir on Windows
 	hk, err := tunnel.LoadOrCreateHubKey(tunnel.HubKeyPath())
 	if err != nil {
 		t.Fatal(err)

@@ -128,3 +128,40 @@ func TestScreenCardAfterAnAnswerWhileStillBlocked(t *testing.T) {
 		t.Fatalf("after the second answer, with no status change: %v after %v", got, took)
 	}
 }
+
+// Blocked a moment before the dialog is drawn (Orca calls a claude blocked from its PreToolUse hook; on Windows the
+// hooks take seconds): the card made then has no dialog. Once the dialog shows, its card replaces that one; a card
+// answered or gone, or an agent no longer blocked, stops the looking.
+func TestScreenCardUpgradesWhenTheDialogShows(t *testing.T) {
+	old, oldFor := screenUpgrade, screenUpgradeFor
+	screenUpgrade, screenUpgradeFor = 50*time.Millisecond, time.Second
+	t.Cleanup(func() { screenUpgrade, screenUpgradeFor = old, oldFor })
+	h := newTestHub(t)
+	m, f := newCodexMachine(t, h)
+	f.screen = "  ✢ Percolating… (running PreToolUse hooks… 1/2 · 3s)\n"
+	blockSession(h, m, proto.Session{SessionID: "s1", Agent: "claude"})
+	got, _ := waitCards(h, 1, 2*time.Second)
+	if len(got) != 1 || got["scr_"+m.cfg.ID+"_s1"] == "" {
+		t.Fatalf("the card before the dialog: %v", got)
+	}
+	f.mu.Lock()
+	f.screen = pickModel
+	f.mu.Unlock()
+	start := time.Now()
+	for time.Since(start) < 2*time.Second {
+		if ids := pendingIDs(h); len(ids) == 1 && ids["scr_"+m.cfg.ID+"_s1"] == "" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	ids := pendingIDs(h)
+	h.mu.Lock()
+	var dialog bool
+	for _, p := range h.interactions {
+		dialog = p.ix.Dialog != nil && len(p.ix.Dialog.Options) == 2
+	}
+	h.mu.Unlock()
+	if len(ids) != 1 || ids["scr_"+m.cfg.ID+"_s1"] != "" || !dialog {
+		t.Fatalf("after the dialog showed: %v (dialog %v)", ids, dialog)
+	}
+}

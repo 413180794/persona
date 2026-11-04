@@ -58,6 +58,7 @@ func TestDefaultConfigWithoutLocalNode(t *testing.T) {
 	t.Setenv("JARVIS_LOCAL_NODE", "0")
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	if _, err := LoadConfig(); err != nil {
 		t.Fatal(err)
 	}
@@ -78,6 +79,7 @@ func TestDefaultConfigWithoutLocalNode(t *testing.T) {
 func TestEnvOverridesConfig(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	dir := filepath.Join(home, ".jarvis")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
@@ -115,6 +117,7 @@ func TestNodeBinaryDirFromEnv(t *testing.T) {
 func TestLoadConfigCreatesAndReloads(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatal(err)
@@ -141,6 +144,7 @@ func TestLoadConfigCreatesAndReloads(t *testing.T) {
 func TestLoadConfigPersistsTokenMissingFromFile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	dir := filepath.Join(home, ".jarvis")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
@@ -170,6 +174,7 @@ func TestLoadConfigPersistsTokenMissingFromFile(t *testing.T) {
 func TestLoadConfigFillsMissingTimeout(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	dir := filepath.Join(home, ".jarvis")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
@@ -193,6 +198,7 @@ func TestLoadConfigFillsMissingTimeout(t *testing.T) {
 func TestLoadConfigRejectsEmptyToken(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	dir := filepath.Join(home, ".jarvis")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
@@ -208,6 +214,7 @@ func TestLoadConfigRejectsEmptyToken(t *testing.T) {
 func TestLoadConfigRejectsBadJSON(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	dir := filepath.Join(home, ".jarvis")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)

@@ -1,8 +1,9 @@
 // Package orcart talks to the runtime of the Orca desktop app (a git-worktree and terminal manager for coding agents)
-// over its local unix socket: one JSON request per line {id, authToken, method, params}, answered by one JSON line
-// {id, ok, result | error{code, message}} (slow calls send {"_keepalive": true} lines first). The socket and its token
-// are in orca-runtime.json in Orca's data directory; the token changes every time Orca starts. Only unary methods
-// work on this socket (streaming ones need Orca's paired WebSocket). See docs/plan-orca-support.md「Orca 来源」.
+// over its local socket (a unix socket on macOS and Linux, a named pipe on Windows): one JSON request per line
+// {id, authToken, method, params}, answered by one JSON line {id, ok, result | error{code, message}} (slow calls send
+// {"_keepalive": true} lines first). The socket and its token are in orca-runtime.json in Orca's data directory; the
+// token changes every time Orca starts. Only unary methods work on this socket (streaming ones need Orca's paired
+// WebSocket). See docs/plan-orca-support.md「Orca 来源」.
 //
 // Orca being absent (not installed, not running) is normal: calls fail fast with ErrNotRunning and log nothing until
 // it was seen once.
@@ -90,6 +91,8 @@ func MetaPath() string {
 
 // runtimeMeta is what the client keeps of orca-runtime.json.
 type runtimeMeta struct {
+	// kind is the transport dialed (kindUnix or kindNamedPipe), socket its endpoint.
+	kind      string
 	socket    string
 	token     string
 	runtimeID string
@@ -98,7 +101,14 @@ type runtimeMeta struct {
 // String never shows the token.
 func (m *runtimeMeta) String() string { return "orca runtime at " + m.socket }
 
-// ErrNotRunning: Orca is not running (no metadata file, no unix transport in it, or its socket is gone / refuses).
+// The transport kinds Orca writes into orca-runtime.json that this client dials: a unix socket (macOS, Linux), a named
+// pipe (Windows, endpoint \\.\pipe\orca-…). Orca also lists a "websocket" one, which needs pairing and is not used.
+const (
+	kindUnix      = "unix"
+	kindNamedPipe = "named-pipe"
+)
+
+// ErrNotRunning: Orca is not running (no metadata file, no local transport in it, or its socket is gone / refuses).
 var ErrNotRunning = errors.New("orca is not running")
 
 // ErrIncompatible: the running Orca speaks a runtime protocol this client does not (status.get).
@@ -160,7 +170,7 @@ const (
 	compatRecheck = 5 * time.Minute
 )
 
-// readMeta reads orca-runtime.json: its unix transport and token.
+// readMeta reads orca-runtime.json: the first transport of localKinds it lists (in that order) and the token.
 func (c *Client) readMeta() (*runtimeMeta, error) {
 	if c.MetaPath == "" {
 		return nil, ErrNotRunning
@@ -181,14 +191,18 @@ func (c *Client) readMeta() (*runtimeMeta, error) {
 		return nil, fmt.Errorf("%w: %s is not valid JSON", ErrNotRunning, filepath.Base(c.MetaPath))
 	}
 	m := &runtimeMeta{token: f.AuthToken, runtimeID: f.RuntimeID}
-	for _, t := range f.Transports {
-		if t.Kind == "unix" && t.Endpoint != "" {
-			m.socket = t.Endpoint
-			break
+pick:
+	for _, kind := range localKinds {
+		for _, t := range f.Transports {
+			if t.Kind == kind && t.Endpoint != "" {
+				m.kind, m.socket = kind, t.Endpoint
+				break pick
+			}
 		}
 	}
 	if m.socket == "" || m.token == "" {
-		return nil, fmt.Errorf("%w: no unix transport in %s", ErrNotRunning, filepath.Base(c.MetaPath))
+		return nil, fmt.Errorf("%w: no %s transport in %s", ErrNotRunning, strings.Join(localKinds, " / "),
+			filepath.Base(c.MetaPath))
 	}
 	return m, nil
 }
@@ -334,13 +348,21 @@ func (s Status) compatible() error {
 
 // dial connects to the runtime's socket within dialTimeout (and ctx). A socket that is gone or refuses means Orca is
 // not running (it left its metadata file behind).
-func dial(ctx context.Context, socket string) (net.Conn, error) {
+func dial(ctx context.Context, m *runtimeMeta) (net.Conn, error) {
+	dctx, cancel := context.WithTimeout(ctx, dialTimeout)
+	defer cancel()
+	if m.kind == kindNamedPipe {
+		return dialPipe(dctx, m.socket)
+	}
+	return dialUnix(dctx, m.socket)
+}
+
+// dialUnix connects to a unix socket (AF_UNIX, which Windows has too).
+func dialUnix(ctx context.Context, socket string) (net.Conn, error) {
 	if _, err := os.Stat(socket); err != nil {
 		return nil, fmt.Errorf("%w: socket: %v", ErrNotRunning, errors.Unwrap(err))
 	}
-	dctx, cancel := context.WithTimeout(ctx, dialTimeout)
-	defer cancel()
-	conn, err := (&net.Dialer{}).DialContext(dctx, "unix", socket)
+	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", socket)
 	if err != nil {
 		if errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.ENOENT) {
 			return nil, fmt.Errorf("%w: %v", ErrNotRunning, syscall.ECONNREFUSED)
@@ -353,7 +375,7 @@ func dial(ctx context.Context, socket string) (net.Conn, error) {
 func (c *Client) callOnce(ctx context.Context, m *runtimeMeta, timeout time.Duration, method string, params, out any) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	conn, err := dial(ctx, m.socket)
+	conn, err := dial(ctx, m)
 	if err != nil {
 		return err
 	}
