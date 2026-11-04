@@ -5,12 +5,13 @@ import { useEffect, useRef, useState } from "react";
 import { bytes } from "../../lib/format";
 import { Button, Collapse, cx, Dialog, toast, useNow } from "../../ui/atoms";
 import { Switch } from "../../views/settings/SettingsParts";
-import { AdminError, errorText, getExtensions, installExtension, previewExtension, rollbackExtension, setExtensionEnabled, uninstallExtension, upgradeExtension, uploadExtension } from "../api";
+import { AdminError, errorText, getExtensions, getMetricsOverview, installExtension, previewExtension, rollbackExtension, setExtensionEnabled, uninstallExtension, upgradeExtension, uploadExtension } from "../api";
 import { AdminIcon, type AdminIconName } from "../icons";
 import { canRollBack, canUpgrade, countdown, extensionRunNote, extensionSourceLabel, extensionStatus, pointLabel, sourceProblem, uploadProblem } from "../logic";
 import { devDialog } from "../router";
 import { ExtensionMarkets } from "./ExtensionMarket";
-import type { AdminExtension, PermissionLine, ExtensionPreview } from "../types";
+import { ExtensionRunning, RunColumns } from "./ExtensionRunning";
+import type { AdminExtension, ExtensionOverview, PermissionLine, ExtensionPreview } from "../types";
 import { Card, Dot, EmptyState, ErrorBox, Field, Loader, Notice, PageHeader, Segmented, Tag, useLoad } from "../parts";
 
 const PERM_ICON: Record<string, AdminIconName> = { runs_code: "terminal", network: "web", hub_api: "key", launcher_keys: "gauge", secrets: "lock" };
@@ -39,6 +40,23 @@ export function Extensions() {
     const t = setInterval(reload, 15_000);
     return () => clearInterval(t);
   }, [data, reload]);
+
+  // How each runs, over the last day (docs/extensions.md「运行情况」); a hub from before #1857 has none (null).
+  const [running, setRunning] = useState<Record<string, ExtensionOverview> | null>(null);
+  useEffect(() => {
+    let live = true;
+    const load = () =>
+      getMetricsOverview("24h").then(
+        (o) => live && setRunning(Object.fromEntries(o.extensions.map((x) => [x.id, x]))),
+        () => live && setRunning(null),
+      );
+    void load();
+    const t = setInterval(load, 60_000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, []);
 
   const replace = (p: AdminExtension) => data && set({ ...data, extensions: data.extensions.map((x) => (x.id === p.id ? p : x)) });
   const missing = error instanceof AdminError && (error.status === 404 || error.code === "no_plugins");
@@ -82,7 +100,7 @@ export function Extensions() {
               </EmptyState>
             ) : (
               data.extensions.map((p) => (
-                <ExtensionRow key={p.id} p={p} onChanged={replace} onUpgrade={() => setUpgrading(p)} onRollBack={() => setRolling(p)} onRemove={() => setRemoving(p)} />
+                <ExtensionRow key={p.id} p={p} run={running?.[p.id]} running={running !== null} onChanged={replace} onUpgrade={() => setUpgrading(p)} onRollBack={() => setRolling(p)} onRemove={() => setRemoving(p)} />
               ))
             )}
           </Card>
@@ -97,7 +115,24 @@ export function Extensions() {
   );
 }
 
-function ExtensionRow({ p, onChanged, onUpgrade, onRollBack, onRemove }: { p: AdminExtension; onChanged: (p: AdminExtension) => void; onUpgrade: () => void; onRollBack: () => void; onRemove: () => void }) {
+function ExtensionRow({
+  p,
+  run,
+  running,
+  onChanged,
+  onUpgrade,
+  onRollBack,
+  onRemove,
+}: {
+  p: AdminExtension;
+  /** how it ran over the last day; running: the hub counts at all */
+  run?: ExtensionOverview;
+  running: boolean;
+  onChanged: (p: AdminExtension) => void;
+  onUpgrade: () => void;
+  onRollBack: () => void;
+  onRemove: () => void;
+}) {
   // Dev only (screenshots): ?dialog=details opens the rows that can roll back.
   const [open, setOpen] = useState(() => devDialog() === "details" && canRollBack(p));
   const [busy, setBusy] = useState(false);
@@ -139,7 +174,9 @@ function ExtensionRow({ p, onChanged, onUpgrade, onRollBack, onRemove }: { p: Ad
             </span>
           </span>
         </button>
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <RunColumns o={run} />
+        {/* as wide as the widest row's buttons, so the run columns line up */}
+        <div className={cx("ml-auto flex shrink-0 items-center justify-end gap-1.5", running && "sm:min-w-[248px]")}>
           {canUpgrade(p) && (
             <Button tone="quiet" className="h-7 px-2" onClick={onUpgrade}>
               <AdminIcon name="up" size={13} />
@@ -181,7 +218,7 @@ function ExtensionRow({ p, onChanged, onUpgrade, onRollBack, onRemove }: { p: Ad
         <p className="mt-2 ml-12 text-[12px] leading-relaxed text-orange">还缺：{p.needs_setup.join("、")}（在 App 的「设置 › 扩展」里填）</p>
       )}
       <Collapse open={open} lazy>
-        <div className="mt-3 ml-12 grid gap-3">
+        <div className="mt-3 ml-12 grid min-w-0 gap-3 pr-px pb-px">
           {p.permissions.length > 0 && <Permissions lines={p.permissions} title="它可以" />}
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[12px]">
             {extensionRunNote(p) && <Meta label="现在">{extensionRunNote(p)}</Meta>}
@@ -204,6 +241,7 @@ function ExtensionRow({ p, onChanged, onUpgrade, onRollBack, onRemove }: { p: Ad
               {w}
             </p>
           ))}
+          {running && <ExtensionRunning id={p.id} />}
         </div>
       </Collapse>
     </div>

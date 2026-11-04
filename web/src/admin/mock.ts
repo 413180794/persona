@@ -11,8 +11,9 @@
 // upgraded, one waiting for its key), a broken hub.json one; a source containing "fail" does not preview, an upgrade
 // asks for one more host.
 import { setTransport } from "./api";
+import { installMockFollower, mockLogs, mockMetrics, mockOverview } from "./mock-metrics";
 import type { CatalogItem, Market } from "../lib/extension-market";
-import type { AdminMachine, AdminExtension, AdminState, Device, DiscoveredHub, MeshView, NetworkView, Overview, Peer, PermissionLine, ExtensionPreview } from "./types";
+import type { AdminMachine, AdminExtension, AdminState, Device, DiscoveredHub, MeshView, MetricsWindow, NetworkView, Overview, Peer, PermissionLine, ExtensionPreview } from "./types";
 
 const SELF = "0d9e8f7a-6b5c-4d3e-8f2a-1b0c9d8e7f6a";
 const OFFICE = "6f1c2a9e-0b7d-4c55-9e3a-2b8f41d07c11";
@@ -476,6 +477,18 @@ export function installMock(scenario: string) {
       markets = markets.map((x) => (x.id === m.id ? read : x));
       return json(read);
     }
+    // How they run (docs/extensions.md「运行情况」).
+    const query = new URLSearchParams(path.split("?")[1] ?? "");
+    const win = (query.get("window") || "24h") as MetricsWindow;
+    if (key === "GET /extensions/-/metrics") return json(mockOverview(extensions.map((x) => x.id), win));
+    const run = /^\/extensions\/([^/?]+)\/(metrics|logs)$/.exec(path.split("?")[0]);
+    if (run && method === "GET") {
+      const id = decodeURIComponent(run[1]);
+      if (!extensions.some((x) => x.id === id)) return fail(404, "not_found", "没有这个扩展");
+      if (run[2] === "metrics") return json(mockMetrics(id, win));
+      const since = query.get("since");
+      return json(mockLogs(id, query.get("q") ?? "", since === null ? undefined : Number(since)));
+    }
     const pl = /^\/extensions\/([^/?]+)(\/[a-z]+)?$/.exec(path);
     if (pl) {
       const i = extensions.findIndex((x) => x.id === decodeURIComponent(pl[1]));
@@ -523,6 +536,7 @@ export function installMock(scenario: string) {
     return fail(404, "not_found", "404 page not found");
   };
 
+  installMockFollower();
   // A page from before #1845 asks /api/v1/admin/plugins…: the same answers under the keys it reads (docs/extensions.md
   // 「命名和兼容」).
   setTransport(async (url, init) => {

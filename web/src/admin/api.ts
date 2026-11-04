@@ -1,7 +1,7 @@
 // The admin API client (docs/admin.md「接口」): a session cookie, not the web client's bearer token. Writes carry the
 // session's CSRF token, which lives in memory only (GET state hands it out again after a reload).
 import { catalogOf, catalogQuery, marketView, type Catalog, type Market } from "../lib/extension-market";
-import type { AddedMachine, AdminExtension, AdminExtensions, ConnectorRepair, LinkPair, MeshView, ExtensionPreview } from "./types";
+import type { AddedMachine, AdminExtension, AdminExtensions, ConnectorRepair, ExtensionMetrics, ExtensionPreview, LinkPair, LogLine, LogsPage, MeshView, MetricsOverview, MetricsWindow } from "./types";
 
 export class AdminError extends Error {
   status: number;
@@ -225,3 +225,42 @@ export const getCatalog = async (q?: string, market?: string, refresh?: boolean)
 /** Both keys: a hub from before #1844 reads `plugin`, a newer one `extension` (or `plugin`). */
 export const previewFromMarket = async (market: string, extension: string) =>
   adminApi<ExtensionPreview>(`${await extRoot()}/-/catalog/preview`, "POST", { market, extension, plugin: extension });
+
+// ── how the extensions run (docs/extensions.md「运行情况」): counts and logs, on a hub from #1857 on (older ones 404) ──
+
+export const getMetricsOverview = (window: MetricsWindow = "24h") => adminApi<MetricsOverview>(`/extensions/-/metrics?window=${window}`);
+
+export const getExtensionMetrics = (id: string, window: MetricsWindow) => adminApi<ExtensionMetrics>(`/extensions/${enc(id)}/metrics?window=${window}`);
+
+export const getExtensionLogs = (id: string, q = "", since?: number) => {
+  const p = new URLSearchParams();
+  if (q) p.set("q", q);
+  if (since !== undefined) p.set("since", String(since));
+  const qs = p.toString();
+  return adminApi<LogsPage>(`/extensions/${enc(id)}/logs${qs ? `?${qs}` : ""}`);
+};
+
+/** Hands each new line of an extension's log (after since) to onLine until the returned stop; onError when it breaks. */
+export type LogFollower = (id: string, since: number, onLine: (l: LogLine) => void, onError: () => void) => () => void;
+
+// The real one is the server-sent events stream (the browser reconnects with Last-Event-ID); the mock hub sets its own.
+let follower: LogFollower = (id, since, onLine, onError) => {
+  const es = new EventSource(`/api/v1/admin/extensions/${enc(id)}/logs/stream?since=${since}`, { withCredentials: true });
+  es.onmessage = (ev) => {
+    try {
+      onLine(JSON.parse(ev.data) as LogLine);
+    } catch {
+      // a line that is not one: skipped
+    }
+  };
+  es.onerror = () => {
+    if (es.readyState === EventSource.CLOSED) onError();
+  };
+  return () => es.close();
+};
+
+export function setLogFollower(f: LogFollower) {
+  follower = f;
+}
+
+export const followExtensionLogs: LogFollower = (...args) => follower(...args);

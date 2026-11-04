@@ -1023,6 +1023,10 @@ hub 管理界面（[admin.md](admin.md)）的「扩展」页（`web/src/admin/pa
   拿到预览才显示名字、版本、发布者、描述、「它可以」逐项、提供什么、警告和预览剩几分钟，**点「同意并安装」才带着预览的 `permissions_digest` 安装**。
 - 升级：同样先预览（版本 `旧 → 新`）；权限变多时顶部红色提示「新版本要的权限变多了」，单列「新增」几项，按钮变成红色的「同意新权限并升级」，不同意就不升；没变多是普通的「升级」。
 - 回滚、卸载都要在对话框里确认；卸载可以勾「保留它的数据」（`~/.persona/extensions/data/<id>/`）。
+- 运行情况（#1857，`web/src/admin/pages/ExtensionRunning.tsx`，见上面「运行情况」）：每行在按钮前两列「错误率」「p95」（近 24 小时；错误率 1% 起橙色、10% 起红色，调用不到 5 次不上色），
+  展开后「运行情况」可选 1 小时 / 24 小时 / 7 天：调用、错误率、延迟 p95（附 p50 / p99）、启动 / 出错退出四个数，调用和出错（叠起来的柱子）、p95 延迟两张图，
+  按方法的表（调用、错误率、p95、出错的码），出错退出的原因；「日志」能搜索（停 0.3 秒后问 hub）、实时跟随（server-sent events，读者停在底部时跟着滚）、拷贝。
+  没有这些接口的老 hub（404）整块不显示。截图同上，`?dialog=details` 展开能回滚的那一行（mock 的数据在 `web/src/admin/mock-metrics.ts`）。
 - 扩展市场（#1330）：列表下面登记市场（添加、删除、重新读取、换 token）和市场的目录（搜索、按市场筛选），从目录安装 / 升级先预览、同意后走上面的安装 / 升级，见 [admin.md](admin.md)「扩展」。
 - 截图：`cd web && npx vite`，`/admin/extensions?mock=app&theme=dark`，`?dialog=install|upload|preview|upgrade|uninstall|details|market|market-add`（`web/src/admin/mock.ts`）。
 

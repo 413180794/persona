@@ -1,5 +1,6 @@
 // Pure helpers behind the admin pages, kept apart so they can be tested without a browser.
-import type { Access, AdminMachine, AdminExtension, Device, DoctorItem, MeshHub, MeshView, Peer, PeerProbe, Restart } from "./types";
+import type { UIItem } from "../lib/extension-ui";
+import type { Access, AdminMachine, AdminExtension, Device, DoctorItem, ExtensionMetrics, LogLine, MeshHub, MeshView, MetricsWindow, Peer, PeerProbe, Restart } from "./types";
 
 // ── access scope (docs/admin.md「访问范围」) ──────────────
 
@@ -391,4 +392,72 @@ export function uploadProblem(file: { name: string; size: number }, most: number
   if (!/\.(?:tar\.gz|tgz|zip)$/i.test(file.name)) return "只能上传 .tar.gz、.tgz 或 .zip";
   if (most > 0 && file.size > most) return `包超过 ${Math.floor(most / (1 << 20))} MB`;
   return "";
+}
+
+// ── how the extensions run (docs/extensions.md「运行情况」) ──
+
+/** An error rate as people read it: 0%, 0.4%, 12%; "—" without calls. */
+export function rateText(rate: number, calls: number): string {
+  if (!calls) return "—";
+  const pct = rate * 100;
+  if (pct === 0) return "0%";
+  if (pct < 0.1) return "<0.1%";
+  return `${pct < 10 ? Number(pct.toFixed(1)) : Math.round(pct)}%`;
+}
+
+/** A latency: 0.8 ms, 140 ms, 1.2 s; "—" without one. */
+export function msText(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined) return "—";
+  if (ms < 10) return `${Number(ms.toFixed(1))} ms`;
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  return `${Number((ms / 1000).toFixed(ms < 10_000 ? 1 : 0))} s`;
+}
+
+/** The rate is worth a color: orange from 1%, red from 10% (with enough calls to mean it). */
+export function rateTone(rate: number, calls: number): "red" | "orange" | "gray" {
+  if (calls < 5 || rate < 0.01) return "gray";
+  return rate >= 0.1 ? "red" : "orange";
+}
+
+/** A step's label on the charts: the hour and minute, with the day for the 7 days. */
+export function stepLabel(iso: string, window: MetricsWindow): string {
+  const d = new Date(iso);
+  const two = (n: number) => String(n).padStart(2, "0");
+  const hm = `${two(d.getHours())}:${two(d.getMinutes())}`;
+  return window === "7d" ? `${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}时` : hm;
+}
+
+/** The two charts of an extension's 运行情况: calls (answered and failed, stacked) and the p95 latency. */
+export function metricsCharts(m: Pick<ExtensionMetrics, "series" | "window">): { calls: UIItem; latency: UIItem | null } {
+  const label = (at: string) => stepLabel(at, m.window);
+  const calls: UIItem = {
+    type: "chart",
+    kind: "bar",
+    stacked: true,
+    unit: "次",
+    series: [
+      { name: "成功", points: m.series.map((p) => ({ label: label(p.at), value: p.calls - p.errors })) },
+      { name: "出错", tone: "danger", points: m.series.map((p) => ({ label: label(p.at), value: p.errors })) },
+    ],
+  };
+  if (!m.series.some((p) => p.p95_ms !== null)) return { calls, latency: null };
+  const latency: UIItem = {
+    type: "chart",
+    kind: "line",
+    unit: "ms",
+    series: [{ name: "p95", points: m.series.map((p) => ({ label: label(p.at), value: p.p95_ms ?? 0, display: msText(p.p95_ms) })) }],
+  };
+  return { calls, latency };
+}
+
+/** Log lines as text to copy: time, where from, the line. */
+export function logText(lines: LogLine[]): string {
+  return lines.map((l) => `${l.at} ${l.source === "hub" ? "[hub] " : ""}${l.text}`).join("\n");
+}
+
+/** Lines kept on the page: the latest most of them, without repeats (a stream that came back resends some). */
+export function mergeLines(have: LogLine[], more: LogLine[], most = 2000): LogLine[] {
+  const last = have.length ? have[have.length - 1].seq : -1;
+  const out = have.concat(more.filter((l) => l.seq > last));
+  return out.length > most ? out.slice(out.length - most) : out;
 }
