@@ -14,6 +14,11 @@ export type Panel =
   /** An agent the main conversation's dock shows that no task stands for (#1113): its chat. */
   | { kind: "agent"; mid: string; sid: string };
 
+/** Files and Git state belongs to a directory even when that workspace has no Agent/session ID. */
+export function directoryPanelKey(panel: { mid: string; sid: string; cwd: string }): string {
+  return JSON.stringify([panel.mid, panel.sid, panel.cwd]);
+}
+
 let current: Panel | null = null;
 const listeners = new Set<() => void>();
 

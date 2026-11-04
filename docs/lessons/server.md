@@ -315,3 +315,9 @@
   停机期间（`stopping`）不广播这些，新 hub 用交接来的机器快照（warm start）。
 - **socket activation 之后旧二进制起不来**：不认识 `LISTEN_FDS` 的 hub 自己 `net.Listen`，端口在 `jarvisd.socket` 手里，`address already in use` 反复重启。
   回滚二进制前先 `PERSONA_HUB_SOCKET=0 scripts/deploy/hub-systemd.sh`。`systemctl --user stop jarvisd` 之后来一个连接会把它重新拉起，要停连 socket 一起停。
+
+## 工作区目录与独立发现（2026-11-04，#1646）
+
+- **工作区不能只从 Agent 推导**：宿主空间里可以没有终端，Agent 退出也不意味着工作区被删除。分别枚举空间、补充会话目录和已绑定目录，保存合并后的 Postgres 快照；部分宿主失败要报告错误并保留该来源的旧记录，不能写成一次成功的空清单。
+- **目录身份由拥有文件系统的 node 验证**：hub 不用自己的 filepath 或文件系统解释远端路径。绑定时验证目录、解析符号链接，Session 用可选 `workspace_cwd` 提供同样的物理目录，保留原始 `cwd` 给运行时。只在前端清理斜线或 `..`，无法识别 symlink，也会漏掉同目录的 Agent。目录验证可缓存，但后续文件操作仍需自行检查。
+- **机器 alias 可以在绑定之后被吸收**：只在新增卡时规范机器 ID 不够。读取时将卡片和快照投影到当前路由身份，保留原始卡片 ID、列和顺序；修改和 CAS 仍对原始状态执行，避免两张原有 alias 卡被静默合并。新绑定按有效机器与规范目录判重（含归档），快照按有效机器选择最新完整版本，不把旧 alias 的已删除工作区重新合入。

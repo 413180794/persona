@@ -496,11 +496,14 @@ type Session struct {
 	Attached         bool                 `json:"attached,omitempty"`
 	Title            string               `json:"title"`
 	Cwd              string               `json:"cwd"`
-	Status           string               `json:"status"`
-	PaneID           string               `json:"pane_id,omitempty"`
-	TabID            string               `json:"tab_id,omitempty"`
-	WorkspaceID      string               `json:"workspace_id,omitempty"`
-	AgentName        string               `json:"agent_name,omitempty"`
+	// WorkspaceCwd is the node-verified physical directory for Cwd. Consumers
+	// matching workspace bindings prefer it and fall back to Cwd on older nodes.
+	WorkspaceCwd string `json:"workspace_cwd,omitempty"`
+	Status       string `json:"status"`
+	PaneID       string `json:"pane_id,omitempty"`
+	TabID        string `json:"tab_id,omitempty"`
+	WorkspaceID  string `json:"workspace_id,omitempty"`
+	AgentName    string `json:"agent_name,omitempty"`
 	// CodexRoute: how Persona reaches a Codex in a terminal (docs/codex.md「守护进程上的会话」) — "app_server" (joined on
 	// the shared app-server: questions, approvals and messages go through its protocol) or "terminal" (its rollout and
 	// screen, keys and typing); CodexRouteNote says why when it is the terminal.

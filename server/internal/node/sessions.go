@@ -627,6 +627,11 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 		n.decorate(&s)
 		out = append(out, s)
 	}
+	for i := range out {
+		// Keep cwd as the runtime reported it for existing clients and controls.
+		// Workspace bindings need the same physical path workspace.resolve returns.
+		out[i].WorkspaceCwd = n.sessionWorkspaceCwd(out[i].Cwd)
+	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
 	return out
 }

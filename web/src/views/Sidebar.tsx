@@ -167,6 +167,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
     home: <NavRow k="home" reg={reg} hover={setHovered} active={activeKey === "home"} to={{ name: "home" }} go={go} icon="home" label="总览" badge={counts.needs || undefined} badgeTone="red" />,
     inbox: <NavRow k="inbox" reg={reg} hover={setHovered} active={activeKey === "inbox"} to={{ name: "inbox" }} go={go} icon="inbox" label="收件箱" badge={inbox || undefined} badgeTone="red" />,
     messages: larkHome && <NavRow k="messages" reg={reg} hover={setHovered} active={activeKey === "messages"} to={{ name: "messages" }} go={go} icon="chat" label="消息" />,
+    "workspace-board": <NavRow k="workspace-board" reg={reg} hover={setHovered} active={activeKey === "workspace-board"} to={{ name: "workspace-board" }} go={go} icon="layers" label="工作流看板" />,
     todos: todosSupported !== false && <NavRow k="todos" reg={reg} hover={setHovered} active={activeKey === "todos"} to={{ name: "todos" }} go={go} icon="todo" label="待办" badge={uncompletedTodosCount || undefined} />,
     routines: <NavRow k="routines" reg={reg} hover={setHovered} active={activeKey === "routines"} to={{ name: "routines" }} go={go} icon="clock" label="定时任务" />,
     kb: <NavRow k="kb" reg={reg} hover={setHovered} active={activeKey === "kb"} to={{ name: "kb" }} go={go} icon="book" label="知识库" />,

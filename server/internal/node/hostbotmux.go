@@ -317,7 +317,7 @@ func (h *botmuxHost) Snapshot(ctx context.Context) (*host.Layout, error) {
 	for _, a := range agents {
 		if !seen[a.WorkspaceID] {
 			seen[a.WorkspaceID] = true
-			l.Spaces = append(l.Spaces, host.Space{ID: a.WorkspaceID, Label: filepath.Base(a.Cwd), Number: len(l.Spaces) + 1})
+			l.Spaces = append(l.Spaces, host.Space{ID: a.WorkspaceID, Label: filepath.Base(a.Cwd), Number: len(l.Spaces) + 1, Cwd: a.Cwd})
 		}
 	}
 	return l, nil

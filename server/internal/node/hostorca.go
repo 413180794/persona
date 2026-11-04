@@ -268,13 +268,12 @@ func (h *orcaHost) Snapshot(ctx context.Context) (*host.Layout, error) {
 			return
 		}
 		spaces[id] = true
-		l.Spaces = append(l.Spaces, host.Space{ID: id, Label: orcaSpaceLabel(branch, path), Number: len(l.Spaces) + 1})
+		l.Spaces = append(l.Spaces, host.Space{ID: id, Label: orcaSpaceLabel(branch, path), Number: len(l.Spaces) + 1,
+			Cwd: path, Branch: strings.TrimPrefix(branch, "refs/heads/")})
 	}
 	// Orca's sidebar order (worktree.ps), then any worktree only the terminals name.
 	for _, w := range v.trees {
-		if slices.ContainsFunc(v.terms, func(t orcart.Terminal) bool { return t.WorktreeID == w.WorktreeID }) {
-			addSpace(w.WorktreeID, w.Path, w.Branch)
-		}
+		addSpace(w.WorktreeID, w.Path, w.Branch)
 	}
 	for _, t := range v.terms {
 		addSpace(t.WorktreeID, t.WorktreePath, t.Branch)
@@ -301,6 +300,23 @@ func (h *orcaHost) Snapshot(ctx context.Context) (*host.Layout, error) {
 		}
 	}
 	return l, nil
+}
+
+// Spaces reads the complete worktree catalog, including worktrees with no terminal.
+// Unlike agent discovery's best-effort hook rows, catalog failures must reach the caller.
+func (h *orcaHost) Spaces(ctx context.Context) ([]host.Space, error) {
+	trees, _, _, err := h.c.Worktrees(ctx, "")
+	if err != nil {
+		return nil, orcaErr(err)
+	}
+	out := make([]host.Space, 0, len(trees))
+	for _, w := range trees {
+		if w.WorktreeID != "" {
+			out = append(out, host.Space{ID: w.WorktreeID, Label: orcaSpaceLabel(w.Branch, w.Path),
+				Number: len(out) + 1, Cwd: w.Path, Branch: strings.TrimPrefix(w.Branch, "refs/heads/")})
+		}
+	}
+	return out, nil
 }
 
 // orcaSpaceLabel names a worktree the way Orca's sidebar does: its branch, else its folder.

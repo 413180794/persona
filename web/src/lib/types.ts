@@ -72,6 +72,8 @@ export interface SessionCapabilities {
 }
 
 export interface Session {
+  /** Node-verified physical working directory; the original cwd stays available for existing session flows. */
+  workspace_cwd?: string;
   machine_id: string;
   session_id: string;
   title: string;

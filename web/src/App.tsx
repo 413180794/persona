@@ -8,6 +8,7 @@ import { connect, disconnect, reset, useStore } from "./lib/store";
 import { cx, EASE, Spinner, Toasts } from "./ui/atoms";
 import { AgentsView } from "./views/agents/AgentsView";
 import { ChatView } from "./views/chat/ChatView";
+import { WorkspaceBoard } from "./views/WorkspaceBoard";
 import { Home } from "./views/Home";
 import { PersonaAssistant } from "./views/PersonaAssistant";
 import { Login } from "./views/Login";
@@ -132,7 +133,7 @@ function Shell() {
   const pluginTitle = usePluginPlace(route.name === "plugin" ? route.plugin : "", route.name === "plugin" ? route.ui : "")?.title;
   const title =
     route.name === "session" ? "Agent" : route.name === "jarvis" ? "Persona" : route.name === "persona-new" ? "新对话" : route.name === "history" ? "Persona 的对话" : route.name === "profile" ? "Persona 的资料" : route.name === "inbox" ? "收件箱" : route.name === "messages" ? "消息"
-      : route.name === "routines" ? "定时任务" : route.name === "kb" ? "知识库" : route.name === "todos" ? "待办" : route.name === "machines" || route.name === "machine" ? "机器" : route.name === "settings" ? "设置"
+      : route.name === "routines" ? "定时任务" : route.name === "kb" ? "知识库" : route.name === "workspace-board" ? "工作流看板" : route.name === "todos" ? "待办" : route.name === "machines" || route.name === "machine" ? "机器" : route.name === "settings" ? "设置"
       : route.name === "agents" ? "个人 Agent" : route.name === "plugin" ? pluginTitle || "插件" : "总览";
   useEffect(() => {
     document.title = title === "Persona" ? title : `${title} · Persona`;
@@ -166,6 +167,9 @@ function Shell() {
       break;
     case "kb":
       main = <Knowledge kind={route.kind} id={route.id} onToggleSidebar={toggle} />;
+      break;
+    case "workspace-board":
+      main = <WorkspaceBoard onToggleSidebar={toggle} />;
       break;
     case "todos":
       main = <TodosView selectedId={route.id} onToggleSidebar={toggle} />;

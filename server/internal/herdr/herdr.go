@@ -332,6 +332,8 @@ type Workspace struct {
 	ID     string `json:"workspace_id"`
 	Label  string `json:"label"`
 	Number int    `json:"number"`
+	Cwd    string `json:"cwd,omitempty"`
+	Branch string `json:"branch,omitempty"`
 }
 
 type Tab struct {

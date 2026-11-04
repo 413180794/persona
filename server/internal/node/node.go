@@ -116,6 +116,8 @@ type Node struct {
 
 	// hostAgents: each host's agents in its last answer (refreshHosts), kept for a host that does not answer.
 	hostAgents map[string][]host.Agent
+	// workspaceDirs avoids resolving every listed session directory every second.
+	workspaceDirs workspaceDirectoryCache
 
 	// pushLocks: one per session, held from reading its new lines to pushing them (pushLock).
 	pushLocks map[string]*sync.Mutex
@@ -532,6 +534,12 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return n.launcherHTTP(ctx, p.Name, p.HTTP)
 	case "dirs.list":
 		return n.dirs(p.Path)
+	case "workspaces.list":
+		n.configured()
+		n.useBotmux(true, true)
+		return n.listWorkspaces(ctx)
+	case "workspace.resolve":
+		return n.resolveWorkspace(p.Path)
 	case "sessions.list":
 		n.configured()          // a hub that lists without engine.use keeps herdr (engine.go)
 		n.useBotmux(true, true) // and one that lists without saying botmux keeps it, as before (hostbotmux.go)

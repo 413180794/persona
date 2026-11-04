@@ -48,6 +48,10 @@ func (h *herdrHost) Snapshot(ctx context.Context) (*host.Layout, error) {
 	for _, t := range snap.Tabs {
 		l.Slots = append(l.Slots, host.Slot{ID: t.ID, SpaceID: t.WorkspaceID, Label: t.Label, Number: t.Number})
 	}
+	fillSpaceDirectories(l.Spaces, l.Panes)
+	if len(l.Panes) == 0 {
+		fillSpaceDirectories(l.Spaces, l.Agents)
+	}
 	return l, nil
 }
 
@@ -139,7 +143,7 @@ func subscriptions(panes []string) []herdr.Subscription {
 
 func (h *herdrHost) Spaces(ctx context.Context) ([]host.Space, error) {
 	wss, err := h.c.Workspaces(ctx)
-	var out []host.Space
+	out := make([]host.Space, 0, len(wss))
 	for _, w := range wss {
 		out = append(out, fromHerdrWorkspace(w))
 	}
@@ -233,7 +237,7 @@ func (c herdrControl) Err() error {
 }
 
 func fromHerdrWorkspace(w herdr.Workspace) host.Space {
-	return host.Space{ID: w.ID, Label: w.Label, Number: w.Number}
+	return host.Space{ID: w.ID, Label: w.Label, Number: w.Number, Cwd: w.Cwd, Branch: w.Branch}
 }
 
 func fromHerdrCreated(c *herdr.Created) *host.Created {

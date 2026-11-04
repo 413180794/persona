@@ -11,7 +11,7 @@
 - **由 hub 自己托管**：hub 把 `<hub 数据目录>/web`（默认 `~/.persona/web`）当静态站，和 API 同一个端口（hub 的 `listen`，默认 `:18660`，即所有网卡）。
   同源，所以没有 CORS，WebSocket 和图片也用同一个 token。没有这个目录时非 `/api/` 路径照旧 404。
   不是文件的路径都回 `index.html`（前端路由：`/`（Persona 主对话）、`/overview`（总览）、`/s/<机器>/<会话>`、`/j`、`/j/<会话>`、`/j/new`、`/history`、`/inbox`、`/inbox/<件>`、`/messages`、`/messages/<会话>`、`/routines`、
-  `/kb`、`/kb/<类型>/<条目>`、`/machines`、`/machines/<机器>`、`/assistant`（助手资料页）、`/settings`、`/plugin/<插件>/<页面>`（插件的整页））；
+  `/kb`、`/kb/<类型>/<条目>`、`/workspace-board`（工作流看板）、`/machines`、`/machines/<机器>`、`/assistant`（助手资料页）、`/settings`、`/plugin/<插件>/<页面>`（插件的整页））；
   `/assets/` 下是带内容哈希的文件，永久缓存，`index.html` 不缓存（`server/internal/hub/web.go`）。
 - 部署：`./scripts/deploy/deploy.sh web`（只构建、传网页，不重启 hub）；部署 hub 时也会顺带部署网页。
 - 本地开发：`cd web && npm ci && npm run dev`，Vite 把 `/api` 代理到 `JARVIS_HUB_URL`（`eval "$(python3 ../scripts/persona_config.py env)"`）。
@@ -42,6 +42,8 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 只在内网 / VPN 里用，要放到公网前面必须加 HTTPS 反向代理。
 
 ## 页面
+
+- **工作流看板**（`/workspace-board`，#1646）：从侧边栏进入，绑定已有工作区或在线机器的真实目录，手工管理列、卡片顺序、置顶和归档；详情关联同目录的 Agents，并打开文件、Git 或显式新建 Agent。卡片和列状态存 Postgres，Agent 状态不迁列，离线保留卡片。操作、权限、升级和来源见 [工作区看板](workspace-board.md)。
 
 - **侧边栏**（宽屏常驻，窄屏是抽屉，两者同一份）：连接状态和在线电脑数、⌘K 搜索；第一项是 **Persona**（形象头像、加粗，打开主对话，主对话在工作 / 需要你时带状态点或件数），
   下面是总览 / 收件箱（「需要你」的件数）/ 待办 / 定时任务 / 知识库 / 机器 /（插件的页面，见「设置」里的「UI 插槽」）/ 设置；再下面「Persona 对话」（除主对话外最近 5 段，末尾「全部对话」；

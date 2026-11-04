@@ -6,6 +6,7 @@ import { useSyncExternalStore } from "react";
 // (docs/plugins.md「UI 插槽」 nav_page).
 export type Route =
   | { name: "home" }
+  | { name: "workspace-board" }
   | { name: "persona-new" }
   | { name: "session"; mid: string; sid: string }
   | { name: "jarvis"; sid?: string }
@@ -27,6 +28,7 @@ export function parse(path: string): Route {
   if (p[0] === "s" && p[1] && p[2]) return { name: "session", mid: p[1], sid: p[2] };
   if (!p.length) return { name: "jarvis" };
   if (p[0] === "j" || p[0] === "persona") return p[1] === "new" && !p[2] ? { name: "persona-new" } : { name: "jarvis", sid: p[1] };
+  if (p[0] === "workspace-board") return { name: "workspace-board" };
   if (p[0] === "overview") return { name: "home" };
   if (p[0] === "history") return { name: "history" };
   if (p[0] === "assistant") return { name: "profile" };
@@ -69,6 +71,8 @@ export function href(r: Route): string {
       return "/machines";
     case "machine":
       return `/machines/${encodeURIComponent(r.mid)}`;
+    case "workspace-board":
+      return "/workspace-board";
     case "settings":
       return "/settings";
     case "agents":

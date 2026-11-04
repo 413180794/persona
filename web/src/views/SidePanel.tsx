@@ -1,7 +1,7 @@
 // The right-hand panel next to the page (docs/web.md「侧边面板」): one at a time, chosen in lib/panel.ts.
 // Wide screens (lg+) get a resizable column that pushes the page; narrower ones an overlay over the page.
 import { useEffect, useRef, useState } from "react";
-import { closePanel, usePanel, type Panel } from "../lib/panel";
+import { directoryPanelKey, closePanel, usePanel, type Panel } from "../lib/panel";
 import { EASE, IconButton } from "../ui/atoms";
 import { Icon, type IconName } from "../ui/icons";
 import { FilesPanel } from "./session/FilesPanel";
@@ -80,9 +80,9 @@ function body(p: Panel) {
     case "terminal":
       return <TerminalPanel key={`${p.mid}/${p.sid}`} mid={p.mid} sid={p.sid} onClose={closePanel} />;
     case "files":
-      return <FilesPanel key={`${p.mid}/${p.sid}`} mid={p.mid} sid={p.sid} cwd={p.cwd} path={p.path} onClose={closePanel} />;
+      return <FilesPanel key={directoryPanelKey(p)} mid={p.mid} sid={p.sid} cwd={p.cwd} path={p.path} onClose={closePanel} />;
     case "git":
-      return <GitPanel key={`${p.mid}/${p.sid}`} mid={p.mid} sid={p.sid} cwd={p.cwd} onClose={closePanel} />;
+      return <GitPanel key={directoryPanelKey(p)} mid={p.mid} sid={p.sid} cwd={p.cwd} onClose={closePanel} />;
     case "file":
       return <FileViewerPanel key={`${p.mid}:${p.path}`} mid={p.mid} path={p.path} cwd={p.cwd} line={p.line} onClose={closePanel} />;
     case "link":

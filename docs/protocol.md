@@ -7,6 +7,7 @@
 ## 鉴权
 
 - 优先使用 `Authorization: Bearer <token>`。当前实现未收紧 URL token：没有 Authorization 值时，所有鉴权 API（含 WebSocket）仍可回退到 `?token=`，不只限回环或 WS。客户端应使用请求头，避免凭据进入 URL。
+- 工作区看板（#1646）将 GET `/api/v1/workspace-board` 与 `/api/v1/workspaces` 加入 `answer` 读取允许列表；修改看板仍仅限 `full`，详见「工作区看板」。
 - hub.json 的 `token` 是主 token，只接受回环 / 内网等受信任来源；公网即使用 TLS 也返回 `403 master_token_local_only`。公网应使用临时配对 token 或设备 token。默认拒绝公网明文 API，返回 `403 tls_required`，仅 `GET /api/v1/health` 例外。
 - 每台设备自己的凭据：`POST /api/v1/auth/tokens {"name":"<设备名称>","kind":"phone"}` → `{id,token,role,name}`。设备 token 以 `jd_` 开头，hub 只存哈希；`kind: watch` 得到 `answer`，其他 kind 得到 `full`。`full` 可以创建设备 token。`answer` 只能做手表用到的事（允许列表，`devicetokens.go`），其余一律 403，GET 也一样：读机器、会话、对话内容、交互和收件箱列表，回答交互，发消息，标已读 / 中断，收件箱标记完成、草拟、回复。文件、启动器、设备注册和 WebSocket 都不行。回答屏幕卡片只能选选项或按 `1`–`9`、`esc`、`enter`，不能打字；发消息只能发给列表里的会话，只带文字（去掉控制字符），选不了启动器和模型，也不能带图；回复收件箱不能带文档状态变更，开了 `lark_agent` 时也不能发 `/agent`。发消息和批准计划是它本来的能力，所以手表丢了还是要撤销。新 App 配对后立刻换一个自己的 token，之后只用它；配对的手表再换一个 `kind: watch` 的，换到了手表就只拿这个；还没换到时（请求失败、旧 hub）手表暂用手机那份。
 - `GET /api/v1/auth/tokens` 返回 `{tokens,current}`，`DELETE /api/v1/auth/tokens/{id}` 撤销凭据、清缓存（认证结果缓存 30 秒，撤销时清掉）并断开该设备的 WebSocket；App 在「设置 › 设备」里管理。旧 hub 无此接口时，旧客户端仍按原配对流程使用凭据。
@@ -286,6 +287,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 
 // Session：(machine_id, session_id) 唯一。session_id 就是 Claude Code 的 session uuid。
 {"machine_id":"server","session_id":"uuid","title":"AI 生成的标题或目录名","cwd":"<项目目录>",
+ "workspace_cwd":"<node 验证的物理目录>",   // 可选；用于工作区关联，缺失时兼容回退 cwd，不替换原始 cwd
  "status":"idle|working|blocked|done|unknown|offline",   // offline = 不在 herdr 里运行，只有 transcript，可恢复
  "pane_id":"w1:p2","tab_id":"w1:t2","workspace_id":"w1","agent_name":"j-3f2a",
  "agent":"claude","agent_label":"",   // agent_label 只在 App 不认识的 Agent 上有：runtime 的叫法（「DSH」，见「Runtime ↔ node」）
@@ -394,11 +396,51 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 
 新字段随现有交互 JSON payload 存储，无需数据库迁移。包内协议核对和未验收项见 [Claude 集成文档](claude-integration.md#mcp-elicitation-hooks)。
 
+## 工作区看板
+
+工作流说明、升级和持久化见 [工作区看板](workspace-board.md)。下列接口以当前 hub 的 Postgres 为唯一持久状态，没有内存或 JSON 文件写入降级。`answer` 允许 GET 看板和清单，POST 要求 `full`；`can_write` 表示当前请求的角色能否编辑，不额外授予文件、Git 或 Agent 操作权限。
+
+```text
+BoardState { revision: int64, columns: Column[], cards: Card[], can_write: bool }
+Column { id, title }
+Card { id, machine_id, workspace_id, title, cwd, source, source_id?, branch?,
+       column_id, pinned: bool, archived: bool }
+Workspace { id, machine_id, source, source_id, title, cwd, branch?,
+            online: bool, available: bool, last_seen?: RFC3339 }
+```
+
+默认 revision 为 0，列 ID 为 `todo`、`doing`、`review`、`done`。数组顺序是人工顺序，客户端按列、归档状态和置顶分组后保持数组相对顺序。卡片自身 ID 稳定；工作区 ID 由 hub 按机器、来源和来源 ID 限定，不能拿宿主本地 ID 直接匹配另一台机器。
+
+POST 必须显式给出 `revision`，成功后数据库原子递增并返回完整状态。可用 action 与参数如下：
+
+| action | 参数 |
+| --- | --- |
+| `add_card` | `column_id,machine_id`，另提供 `workspace_id` 或 `cwd`，可选 `title,pinned,archived`；ID 由 hub 生成 |
+| `update_card` | `id`；仅更新给出的 `title,pinned,archived` |
+| `move_card` | `id,column_id,before_id?`；省略 before 放到目标列末尾 |
+| `add_column` | `title`；ID 由 hub 生成 |
+| `update_column` | `id,title` |
+| `move_column` | `id,before_id?`；省略 before 放到末尾 |
+| `delete_column` | `id,move_to?`；含卡片（含归档）时必须提供另一列，不能删除最后一列 |
+
+`add_card` 的工作区必须属于指定机器。hub 重新枚举或核对会话目录，再让 node 以 `workspace.resolve` 验证并解析物理目录；客户端不能写入 `source/source_id/branch`。同一有效机器、同一规范目录只允许一个新绑定，归档也参与判重。路径按远端语法处理（POSIX、Windows 盘符、UNC），不能使用 hub 自己的文件系统解析远端路径。机器 alias 后来被吸收时，仅在响应中投影到当前路由身份，不合并或改写原卡的列与顺序；原始状态继续参与修改和 CAS。
+
+错误：无效 action、路径、引用、重复绑定等返回 400；非 full 写入 403；revision 过期或提交时竞争返回 409 `conflict`；存储不可用返回 503（未实现存储能力时 code 为 `not_supported`）。客户端遇到 409 应先重读，不能自动覆盖最新状态；其他失败恢复上一次确认状态。旧 hub 可返回 404。
+
+GET 清单合并宿主空间、当前会话目录和已绑定目录。宿主未知目录可以为空，客户端不能据此绑定；机器离线或枚举失败时使用最后快照，并标记可用性，发现错误放入 `errors`。部分宿主失败不能清空其他宿主的结果。alias 快照按当前有效机器归组，以最新完整快照为准。卡片在工作区消失、机器离线及 hub 重启后保留。
+
+Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的物理目录，只用于工作区关联，原始 `cwd` 保持不变。不存在、不可解析或不允许读取的目录可以不返回该字段；旧客户端忽略它，新客户端优先使用它，缺失时回退 `cwd`。该值经过短期缓存，不构成后续文件操作的权限或存在性保证。
+
+移动、归档等看板修改不调用 Agent 或 Git 操作。成功后 WS 推送 `{"type":"workspace_board","revision":<新版本>}`，客户端据此重读。网页还在看板可见期间每 10 秒刷新发现，回到前台时立即刷新，以补足目录和连接状态变化。
+
 ## REST（App → hub）
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/v1/machines` | `{"machines":[Machine]}` |
+| GET | `/api/v1/workspace-board` | `{revision,columns,cards,can_write}`，完整工作流看板；`answer` 可读，见「工作区看板」 |
+| POST | `/api/v1/workspace-board` | `{revision,action,...}` → 更新后的完整看板；仅 `full`，过期版本 409 `conflict` |
+| GET | `/api/v1/workspaces` | `{workspaces:[Workspace],errors?:[{machine_id,error}]}`；独立于 Agent 的工作区发现，失败保留历史信息，`answer` 可读 |
 | POST | `/api/v1/machines/{mid}/reconnect` | 重连该机器的 node |
 | PUT | `/api/v1/machines/{mid}/engine` | `{"engine":"herdr"\|"herdr-core"\|"herdr-both"\|"orca"}` → 200 更新后的 Machine；不认识的引擎 400 `{"error"}`，没有这台机器 404。离线也能改（存下，连上时生效）；改完照常推 `machines`（下面「引擎」） |
 | GET | `/api/v1/machines/{mid}/computer` | 这台 Mac 现在有没有 Cua Driver、能不能被助手操控（hub 当场问 node 的 `computer.status`）→ 200 `Computer`（`{enabled, installed, version?, daemon, accessibility?, screen_recording?, desktop?, screen_sharing, ready, note?, job?}`，[computer-use.md](computer-use.md)）；插件 `cua` 没开、或不是 Mac → 404 |
@@ -523,6 +565,7 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | `endpoints` | `endpoints`（完整候选列表，仅发给声明同名能力的连接） |
 | `client_hello_ack` | `heartbeat: {interval, pong_timeout}`（本次协商后实际采用的秒数） |
 | `machines` | `machines` |
+| `workspace_board` | `revision`：看板修改已保存，客户端重新读取完整状态；不代表 Agent 状态变化 |
 | `todos` | —：待办或关联变了就推，客户端收到后重拉 `GET /api/v1/todos` |
 | `plugin_ui` | `plugin`, `id`, `badge`（`{text, tone}`，`null` 是清掉）：插件改了它主导航入口（`nav_page`）的角标，[plugins.md](plugins.md)「UI 插槽」 |
 | `assistant_feed` | `conversation`, `item`（`FeedItem`）：对话动态多了一条 |
@@ -930,6 +973,8 @@ hub → node 请求：
 | `launchers.models` | `{name, agent_type?, refresh?}` → `{agent, models, locked?}`：同 REST 的 `…/launchers/{name}/models`；`agent_type` 是 hub 配置里这个启动器的类型（不给就按 node 自己认出的） |
 | `skills.list` | → `{skills: [{name, description, source}]}`：这台机器上助手拿到的 skill（`~/.persona/skills/` 里用户的，加上内置的；`docs/hub-update.md`）。老 node 没有它时 hub 当作装了 lark-connector（老版本把它编在二进制里） |
 | `dirs.list` | `{path}` → 同 REST |
+| `workspaces.list` | `{}` → `{workspaces:[Workspace],errors?:[{source,error}]}`；Workspace 同「工作区看板」，node 省略 machine_id，id/source_id 为宿主本地 ID。包含没有运行 Agent 的空间；各来源分别报告错误，全部失败返回 RPC error，不能伪装成空成功 |
+| `workspace.resolve` | `{path}` → `Workspace`；校验真实目录、解析符号链接，成功 source 为 `directory`、id/source_id/cwd 为物理路径、available 为 true；支持本机绝对路径或 `~/`，拒绝不存在、非目录及受保护的 iCloud 路径，不执行宿主、Agent 或 Git 操作 |
 | `sessions.list` | → `{sessions}` |
 | `session.start` | `{cwd, launcher, agent_type?, prompt?, resume_session_id?, workspace_id?, permission_mode?, effort?, tab_name?, async?}` → `{session}`；`async` 立刻回、后台启动（`node/starting.go`）；Codex 启动器同步、必须带 `prompt`（`node/codex_start.go`） |
 | `session.send` | `{session_id, text, images?, client_msg_id?}`（`client_msg_id` 见「待发消息的对应」） |

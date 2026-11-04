@@ -12,7 +12,7 @@
 | `agents.md` | 改 node 里驱动 Claude Code / Codex / TRAEX 的部分：herdr 的行为、认窗格和会话、配置目录、发送、`/effort`、生图、启动超时 |
 | `dsh.md` | 改 DSH 插件（`integrations/dsh`）或 runtime 接入（`runtime.sock`、`integrations/runtime-sdk`）：DSH 的应答链、事件来源、seq、日志格式、端到端测试的坑 |
 | `assistant.md` | 改「Persona」tab 的无头助手：ask_user、权限、后台任务、定时任务、飞书写操作闸门 |
-| `server.md` | 改 hub / node 的进程、连接、推送、代理、端口转发、机器监控、远程部署、知识库的写入和保留期 |
+| `server.md` | 改 hub / node 的进程、连接、推送、代理、端口转发、机器监控、远程部署、知识库的写入和保留期；工作区独立发现、物理目录和动态机器 alias |
 | `transcript.md` | 改 transcript / rollout 解析、会话列表、分页、后台同步、折叠、App 的会话缓存 |
 | `lark-mail.md` | 改飞书（lark-connector）和邮件（IMAP / SMTP / Gmail）、云文档通知 |
 | `terminal.md` | 改终端 tab：herdr 读屏 / observe / 接管、滚动、键盘输入、宽字符 |
@@ -20,5 +20,5 @@
 | `android.md` | 改 Android App：Compose 与玻璃（Haze）、切页面闪烁、平板 / 折叠屏、深浅色、前台服务、模拟器和真机调试 |
 | `macos.md` | 改 Mac App：兼容层、分栏、截图、非活动窗口变灰、Form 里的危险按钮 |
 | `windows.md` | 改 Windows 上的 node、在 Windows 上开发：LF 检出、AF_UNIX 路径长度、`bash` 是 WSL、读别的进程的 PEB、Orca 的命名管道、计划任务（S4U 要管理员、失败后重启不管程序退出、控制台窗口、默认 72 小时）|
-| `web.md` | 改网页界面：React 事件、弹出菜单、窄屏布局、浏览器交互回归、xterm、加 npm 依赖、Playwright 验证、展开折叠的动画和滚动锚定、全局样式和 Tailwind 的 layer |
+| `web.md` | 改网页界面：React 事件、弹出菜单、窄屏布局、浏览器交互回归、xterm、加 npm 依赖、Playwright 验证、展开折叠的动画和滚动锚定、全局样式和 Tailwind 的 layer；无会话工作区的文件 / Git 面板 key |
 | `testing.md` | 跑 UI 测试、截图、量帧率 / 跳动；模拟器和 XCUITest 的怪行为；起 sshd 做测试 |

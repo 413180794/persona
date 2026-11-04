@@ -192,7 +192,7 @@ func (h *Hub) authenticate(ctx context.Context, tok string) (principal, bool) {
 // GET is not harmless for being a GET (one reads any file of a computer, one runs a launcher), so none gets through for
 // its method. Something new the watch needs goes here.
 var (
-	answerReads  = regexp.MustCompile(`^/api/v1/(machines|sessions|interactions|inbox|sessions/[^/]+/[^/]+/items)$`)
+	answerReads  = regexp.MustCompile(`^/api/v1/(machines|sessions|interactions|inbox|workspace-board|workspaces|sessions/[^/]+/[^/]+/items)$`)
 	answerWrites = regexp.MustCompile(`^/api/v1/(interactions/[^/]+/resolve|sessions/[^/]+/[^/]+/(messages|seen|interrupt)|` +
 		`inbox/[^/]+/(done|reply|draft))$`)
 	// answerKey is a key the watch can press on a screen card it could not read: a menu's number, Esc, Return.

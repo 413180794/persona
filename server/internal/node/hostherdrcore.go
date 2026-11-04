@@ -100,6 +100,18 @@ func (h *herdrCoreHost) terminals(ctx context.Context) ([]herdrcore.Terminal, er
 }
 
 func (h *herdrCoreHost) Snapshot(ctx context.Context) (*host.Layout, error) {
+	return h.snapshot(ctx, false)
+}
+
+func (h *herdrCoreHost) Spaces(ctx context.Context) ([]host.Space, error) {
+	l, err := h.snapshot(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	return l.Spaces, nil
+}
+
+func (h *herdrCoreHost) snapshot(ctx context.Context, requireDoc bool) (*host.Layout, error) {
 	terms, err := h.terminals(ctx)
 	if err != nil {
 		return nil, err
@@ -115,7 +127,10 @@ func (h *herdrCoreHost) Snapshot(ctx context.Context) (*host.Layout, error) {
 			} `json:"tabs"`
 		} `json:"spaces"`
 	}
-	_ = h.c.Doc(ctx, herdrAppDoc, &doc) // names and order only: without it the labels still place terminals
+	// Agent discovery can place terminals by labels when the app document is unavailable.
+	if err := h.c.Doc(ctx, herdrAppDoc, &doc); err != nil && requireDoc {
+		return nil, hcErr(err)
+	}
 	// What the app shows for a space / tab: its name, else the terminal's where label, else the folder / number.
 	whereSpace, whereTab := map[string]string{}, map[string]string{}
 	for _, t := range terms {
@@ -128,7 +143,7 @@ func (h *herdrCoreHost) Snapshot(ctx context.Context) (*host.Layout, error) {
 	known := map[string]bool{}
 	for i, s := range doc.Spaces {
 		label := firstOf(s.Name, whereSpace[s.ID], filepath.Base(s.Folder))
-		l.Spaces = append(l.Spaces, host.Space{ID: s.ID, Label: label, Number: i + 1})
+		l.Spaces = append(l.Spaces, host.Space{ID: s.ID, Label: label, Number: i + 1, Cwd: s.Folder})
 		known[s.ID] = true
 		for j, t := range s.Tabs {
 			l.Slots = append(l.Slots, host.Slot{ID: t.ID, SpaceID: s.ID, Label: firstOf(t.Name, whereTab[t.ID], strconv.Itoa(j+1)),
@@ -150,6 +165,7 @@ func (h *herdrCoreHost) Snapshot(ctx context.Context) (*host.Layout, error) {
 			l.Agents = append(l.Agents, a)
 		}
 	}
+	fillSpaceDirectories(l.Spaces, l.Panes)
 	return l, nil
 }
 

@@ -82,6 +82,11 @@ type TextTyper interface {
 	CanTypeText() bool
 }
 
+// SpaceLister lists spaces without requiring an agent or permission to launch one.
+type SpaceLister interface {
+	Spaces(ctx context.Context) ([]Space, error)
+}
+
 // Launcher opens new panes running a command.
 type Launcher interface {
 	// Spaces lists the spaces (herdr: workspaces) new panes can go into.
@@ -262,6 +267,9 @@ type Space struct {
 	ID     string
 	Label  string
 	Number int
+	// Cwd and Branch come from the host; empty means the host did not report them.
+	Cwd    string
+	Branch string
 }
 
 // Slot holds panes inside a space (herdr: a tab).

@@ -26,6 +26,7 @@ func (h *Hub) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/health", h.health)
 	api := http.NewServeMux()
+	h.workspaceBoardRoutes(api)
 	if h.upd != nil {
 		h.upd.routes(api)
 	}

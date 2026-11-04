@@ -53,7 +53,7 @@ describe("Persona is the front door (#1239)", () => {
   });
 
   it("orders the pages under Persona like the app", () => {
-    expect(NAV_PAGES).toEqual(["home", "inbox", "messages", "todos", "routines", "kb", "machines", "settings"]);
+    expect(NAV_PAGES).toEqual(["home", "inbox", "messages", "workspace-board", "todos", "routines", "kb", "machines", "settings"]);
   });
 });
 
