@@ -2816,6 +2816,27 @@ if os.environ.get("MOCK_LARK_OLK"):
         "olk": LARK_MESSAGES["f2"][3]["olk"],
     }
 
+LARK_ACCOUNT_ID = "123" if os.environ.get("MOCK_LARK_NATIVE_OLK") else "trainer-account" if os.environ.get("MOCK_LARK_TRAINER") else "mock-lark-account"
+LARK_DISPLAY = {"account_id": LARK_ACCOUNT_ID, "anti_recall": False, "show_edit_history": False}
+if os.environ.get("MOCK_LARK_TRAINER"):
+    retained = _lm("200", "李雷", "已留存的评审时间：周五下午", mins=55)
+    retained.update(recalled=True, retained=True, parts=[{"kind": "text", "text": retained["text"]}])
+    missing = _lm("201", "李雷", "不能展示的占位原文", mins=54)
+    missing.update(recalled=True, retained=False)
+    edited = _lm("202", "李雷", "评审地点改为线上", mins=53)
+    edited.update(edited=True, edit_history=[
+        {"edited_at": "2026-01-01T10:00:00.123Z", "text": "原定会议室 A", "parts": [{"kind": "text", "text": "原定会议室 A"}]},
+        {"edited_at": "2026-01-01T10:05:00Z", "text": "不得缓存的旧加密正文", "olk": {
+            "version": 1, "state": "locked", "publicParts": [{"kind": "text", "text": "稍后确认"}]}}
+    ])
+    quoted = _lm("203", "我", "收到，按新的安排。", mine=True, mins=52)
+    quoted["reply_to"] = {"id": retained["id"], "sender_name": "李雷", "text": retained["text"], "recalled": True, "retained": True}
+    recalled_system = _lm("204", "系统成员", "不得展示的系统撤回原文", mins=51)
+    recalled_system.update(type="SYSTEM", recalled=True, retained=True)
+    anonymous_system = _lm("205", "", "不得展示的匿名系统原文", mins=50)
+    anonymous_system.update(type="SYSTEM", recalled=True, retained=True)
+    LARK_MESSAGES["f2"] = [retained, missing, edited, quoted, recalled_system, anonymous_system]
+
 # The 周末徒步群 chat (inbox f3): what the chat page has to draw. Three days of history (day separators), more than
 # one page (40) before the first unread (paging back, has_older), an image, a quoted reply, reactions, a bot and a
 # thread with more replies than one thread page. Unread from 300 (12 messages), read up to 299.
@@ -5738,7 +5759,7 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({k: v for k, v in st.items() if v is not None})
         if p == "/api/v1/lark/raw/accounts":
             return self.send_json({"activeId": "1", "accounts": [{"id": "1", "active": True,
-                "signedIn": not bool(os.environ.get("MOCK_LARK_LOGGED_OUT")), "userId": "123" if os.environ.get("MOCK_LARK_NATIVE_OLK") else "mock-lark-account"}]})
+                "signedIn": not bool(os.environ.get("MOCK_LARK_LOGGED_OUT")), "userId": LARK_ACCOUNT_ID}]})
         if p.startswith("/api/v1/lark/raw/messages/"):
             mid = p.rsplit("/", 1)[-1]
             for feed, messages in LARK_MESSAGES.items():
@@ -5747,6 +5768,8 @@ class H(BaseHTTPRequestHandler):
                         return self.send_json({"item": {"id": mid, "feedId": feed,
                             "isMine": message.get("is_mine", False), "localState": message.get("local_state", "synced")}})
             return self.send_json({"error": "消息不存在"}, 404)
+        if p == "/api/v1/lark/message-display":
+            return self.send_json(LARK_DISPLAY)
         if p == "/api/v1/lark/encryption" and os.environ.get("MOCK_LARK_NATIVE_OLK"):
             return self.send_json({"accountId": "123", "configured": True, "locked": LARK_NATIVE_OLK["locked"], "unifiedPassword": False})
         if p == "/api/v1/lark/status":  # 设置 › 连接器 › 飞书
@@ -5949,6 +5972,31 @@ class H(BaseHTTPRequestHandler):
         self.last_body = self.body()
         p = urlparse(self.path).path
         if pins_route(self, p): return
+        if p == "/mock/trainer/recall" and os.environ.get("MOCK_LARK_TRAINER"):
+            req = json.loads(self.last_body or b"{}")
+            if type(req.get("recalled")) is not bool:
+                return self.send_json({"error": "invalid recall"}, 400)
+            LARK_MESSAGES["f2"][0]["recalled"] = req["recalled"]
+            for message in LARK_MESSAGES["f2"]:
+                if message.get("reply_to", {}).get("id") == LARK_MESSAGES["f2"][0]["id"]:
+                    message["reply_to"]["recalled"] = req["recalled"]
+            for send, _ in list(LIVE):
+                try: send({"type": "lark", "feed_ids": ["f2"]})
+                except Exception: pass
+            return self.send_json({"ok": True})
+        if p == "/api/v1/lark/message-display" and self.command == "POST":
+            req = json.loads(self.last_body or b"{}")
+            key = req.get("key")
+            if key not in ("anti_recall", "show_edit_history") or type(req.get("value")) is not bool or type(req.get("expected")) is not bool:
+                return self.send_json({"error": "invalid settings"}, 400)
+            if req.get("account_id") != LARK_DISPLAY["account_id"] or req["expected"] != LARK_DISPLAY[key]:
+                return self.send_json({"error": "设置已变化"}, 409)
+            LARK_DISPLAY[key] = req["value"]
+            for send, _ in list(LIVE):
+                # Exercise settings coalesced with a conversation change, not just an empty event.
+                try: send({"type": "lark", "feed_ids": ["f2"], "settings_changed": True})
+                except Exception: pass
+            return self.send_json(LARK_DISPLAY)
         if p == "/api/v1/auth/tokens" and self.command == "POST":  # pairing trades its token for a device token
             req = json.loads(self.last_body or b"{}")
             kind = req.get("kind") if req.get("kind") in ("phone", "watch") else "other"

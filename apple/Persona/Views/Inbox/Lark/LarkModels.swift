@@ -85,6 +85,8 @@ nonisolated struct LarkPart: Codable, Hashable, Sendable {
     var refId: String?
     var metadata: JSONValue?
 
+    enum CodingKeys: String, CodingKey { case kind, text, url, refId, metadata }
+
     func meta(_ key: String) -> JSONValue? { metadata?[key] }
     func metaString(_ key: String) -> String? { meta(key)?.string }
     func metaBool(_ key: String) -> Bool { meta(key)?.bool ?? false }
@@ -114,10 +116,11 @@ nonisolated struct LarkReplyTo: Codable, Hashable, Sendable {
     var senderName: String
     var text: String
     var recalled: Bool?
+    var retained: Bool? = nil
     var parts: [LarkPart]?
 
     enum CodingKeys: String, CodingKey {
-        case id, text, recalled, parts, olk
+        case id, text, recalled, retained, parts, olk
         case senderName = "sender_name"
     }
 }
@@ -143,6 +146,8 @@ nonisolated struct LarkMessage: Codable, Identifiable, Hashable, Sendable {
     var createdAt: Date?
     var recalled: Bool
     var edited: Bool?
+    var retained: Bool? = nil
+    var editHistory: [LarkEditVersion]? = nil
     var replyCount: Int
     var threadReplyCount: Int?
     var badgeCount: Int?
@@ -155,7 +160,8 @@ nonisolated struct LarkMessage: Codable, Identifiable, Hashable, Sendable {
     var localState: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, position, type, text, recalled, edited, parts, reactions, olk
+        case id, position, type, text, recalled, retained, edited, parts, reactions, olk
+        case editHistory = "edit_history"
         case senderID = "sender_id", senderName = "sender_name", senderAvatar = "sender_avatar", senderType = "sender_type"
         case isMine = "is_mine", createdAt = "created_at", replyCount = "reply_count"
         case threadReplyCount = "thread_reply_count", replyTo = "reply_to"
@@ -176,6 +182,8 @@ nonisolated struct LarkForwardedMessage: Decodable, Identifiable, Hashable, Send
     var parts: [LarkPart]?
     var textPreview: String?
     var isRecalled: Bool?
+    var hasRetainedRecallContent: Bool?
+    var olk: LarkEncryption?
 }
 
 extension APIClient {

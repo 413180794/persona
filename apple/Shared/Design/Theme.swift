@@ -400,6 +400,8 @@ nonisolated enum Theme {
         static func drawer(velocity: Double = 0) -> Animation {
             .interpolatingSpring(duration: 0.32, bounce: 0, initialVelocity: velocity)
         }
+        /// Something the finger dragged aside going back to its place (a message swiped to quote it): a little bounce.
+        static let springBack = Animation.spring(duration: 0.3, bounce: 0.25)
         /// The stationary sidebar rises only this far as the page slides off it; no horizontal parallax or zoom.
         static let drawerLift = Theme.Space.s
     }

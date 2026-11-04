@@ -10,26 +10,22 @@ import (
 	"github.com/nwverse/persona/server/internal/lark"
 )
 
-// larkEvents relays lark-connector's realtime events to the apps as {"type":"lark","feed_ids":[…]}: the push half of
+// larkEvents relays lark-connector's realtime events to the apps: the push half of
 // keeping Feishu fresh. The apps pull what changed (the conversation list, the latest page of each chat).
 // Bursts (a busy group, one message firing message + conversation events) go out once per larkCoalesce.
 func (h *Hub) larkEvents(ctx context.Context) {
 	const larkCoalesce = 400 * time.Millisecond
 	var (
 		mu      sync.Mutex
-		pending = map[string]bool{} // an event without conversations (settings) still sends an empty list
+		pending larkEventBatch
 		timer   *time.Timer
 	)
 	flush := func() {
 		mu.Lock()
-		ids := make([]string, 0, len(pending))
-		for id := range pending {
-			ids = append(ids, id)
-		}
-		sort.Strings(ids)
-		pending, timer = map[string]bool{}, nil
+		message := pending.drain()
+		timer = nil
 		mu.Unlock()
-		h.broadcast(map[string]any{"type": "lark", "feed_ids": ids})
+		h.broadcast(message)
 		h.kickLarkChats()
 		h.kbKick()
 	}
@@ -47,11 +43,37 @@ func (h *Hub) larkEvents(ctx context.Context) {
 		h.larkAgentEvent(ev) // a /agent request starts at once, not with the coalesced refresh
 		mu.Lock()
 		defer mu.Unlock()
-		for _, id := range ev.FeedIDs {
-			pending[id] = true
-		}
+		pending.add(ev)
 		if timer == nil { // a throttle, not a debounce: a group that never goes quiet still gets through
 			timer = time.AfterFunc(larkCoalesce, flush)
 		}
 	}, h.logf)
+}
+
+// Settings and messages can share one throttle window. Keep their invalidations independent.
+// The caller holds the batch lock while adding or draining.
+type larkEventBatch struct {
+	feeds           map[string]bool
+	settingsChanged bool
+}
+
+func (b *larkEventBatch) add(ev lark.Event) {
+	if b.feeds == nil {
+		b.feeds = make(map[string]bool)
+	}
+	for _, id := range ev.FeedIDs {
+		b.feeds[id] = true
+	}
+	b.settingsChanged = b.settingsChanged || ev.Type == "local.settings.updated"
+}
+
+func (b *larkEventBatch) drain() map[string]any {
+	ids := make([]string, 0, len(b.feeds))
+	for id := range b.feeds {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	out := map[string]any{"type": "lark", "feed_ids": ids, "settings_changed": b.settingsChanged}
+	*b = larkEventBatch{}
+	return out
 }

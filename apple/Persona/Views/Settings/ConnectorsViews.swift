@@ -370,6 +370,10 @@ struct FeishuConnectorView: View {
             }
             #endif
 
+            Section {
+                NavigationLink("风灵月影") { LarkMessageDisplaySettingsView() }
+            }
+
             Section("Persona 用飞书做什么") {
                 use(Theme.Icon.inbox, "收件箱", "私聊、@我、群消息和云文档里提到你的地方，AI 先分拣、起草回复")
                 use(Theme.Icon.knowledge, "知识库", "会话、人、群、项目归档下来，给助手和 AI 分身做上下文")

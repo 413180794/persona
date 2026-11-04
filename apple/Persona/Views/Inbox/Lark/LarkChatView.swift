@@ -127,13 +127,14 @@ struct LarkChatView: View {
         }
         .task {
             if chatLink == nil { chatLink = model.hub }
+            async let display: Void = refreshDisplay()
             async let restored: Void = restoreDraft()
             LarkMedia.shared.loadEmojiCatalog()
             // The last messages seen here paint at once (offline too); the network only brings them up to date.
             // Background sync (LarkSync) keeps this cache current, so it is usually already the latest. An unread chat
             // opens at its first unread message: the cache serves when it reaches back that far.
             if pager.messages.isEmpty, conversation.focus == nil,
-               let cached = StateCache.load("lark-chat-\(conversation.id)", as: [LarkMessage].self), !cached.isEmpty,
+               let cached = LarkMessage.loadCached("lark-chat-\(conversation.id)"), !cached.isEmpty,
                !opensAtMessage || cached.first.map({ !LarkPosition.less(LarkPosition.next(conversation.readPosition ?? "0"), $0.position) }) == true {
                 pager.messages = cached
                 pager.hasOlder = true
@@ -144,6 +145,7 @@ struct LarkChatView: View {
             }
             await load()
             await restored
+            await display
             #if DEBUG
             if attachments.isEmpty { attachments = await LarkAttachmentFixture.load(config: chatAPI?.config) }
             #endif
@@ -160,6 +162,7 @@ struct LarkChatView: View {
         .tabActiveTask {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))
+                await refreshDisplay()
                 await refreshLatest()
                 askReceiptsAgain()
             }
@@ -224,6 +227,7 @@ struct LarkChatView: View {
         .overlay { placeholder }
         .overlay(alignment: .bottomTrailing) { jumpToLatestButton }
         .overlay(alignment: .topTrailing) { mentionButton }
+        .environment(\.larkDisplay, chatLink?.larkDisplay.policy ?? .hidden)
         .environment(\.larkOpenFile, { url, name in fileRequest = (url, name) })
         .environment(\.larkRefresh, { Task { await refreshLatest() } })
         .environment(\.larkOpenProfile, { person = $0 })
@@ -303,7 +307,7 @@ struct LarkChatView: View {
         .onChange(of: scenePhase) { _, phase in
             guard tabActive else { return }
             if phase != .active { saveDraft(immediately: true) }
-            else { Task { await restoreDraft() } }
+            else { Task { await restoreDraft(); await refreshDisplay() } }
         }
         .onChange(of: outbox.storageProblem) { _, problem in
             if let problem { model.toast = Toast(problem, style: .error) }
@@ -530,6 +534,11 @@ struct LarkChatView: View {
         position.scrollTo(id: id, anchor: .top)
         try? await Task.sleep(for: .milliseconds(250))
         position.scrollTo(id: id, anchor: .top)
+    }
+
+    private func refreshDisplay() async {
+        guard let link = chatLink, let api = chatAPI else { return }
+        await link.larkDisplay.refresh(using: api)
     }
 
     /// Polls the tail while it is loaded: new messages append, cards that changed (alert status…) update in place.
@@ -1035,6 +1044,8 @@ struct LarkMessageRow: View {
     @Environment(\.larkOpenProfile) private var openProfile
     @Environment(\.larkReact) private var react
     @Environment(\.larkReply) private var reply
+    @Environment(\.larkDisplay) private var display
+    @State private var showHistory = false
     @State private var showThread = false
     /// The thread sheet opens with its box focused (回复 on a topic group's thread).
     @State private var threadFocus = false
@@ -1044,7 +1055,9 @@ struct LarkMessageRow: View {
         let m = message
         if m.isSystem {
             Group {
-                if let p = m.parts?.first, p.metaBool("system") { LarkSystemText(part: p) } else { Text(m.text).font(Theme.Font.label).foregroundStyle(.secondary) }
+                if m.recalled { Text(recallNotice).font(Theme.Font.label).foregroundStyle(.secondary) }
+                else if let p = m.parts?.first, p.metaBool("system") { LarkSystemText(part: p) }
+                else { Text(m.text).font(Theme.Font.label).foregroundStyle(.secondary) }
             }
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
@@ -1093,6 +1106,7 @@ struct LarkMessageRow: View {
                 }
                 .frame(maxWidth: .infinity, alignment: side.alignment)
             }
+            .sheet(isPresented: $showHistory) { LarkEditHistoryView(message: message) }
             .sheet(isPresented: $picking) {
                 LarkReactionPicker(message: m) { react?(m, $0) }
             }
@@ -1107,13 +1121,19 @@ struct LarkMessageRow: View {
         openProfile?(LarkPersonRef(id: id, name: message.senderName, avatar: message.senderAvatar, feedID: feedID))
     }
 
+    private var recallNotice: String {
+        if message.isMine { return "你撤回了一条消息" }
+        let name = message.senderName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "消息已撤回" : "\(name) 撤回了一条消息"
+    }
+
     @ViewBuilder private var content: some View {
         let m = message
         let parts = m.parts ?? []
         if let localAttachment {
             LarkAttachmentView(attachment: localAttachment)
-        } else if m.recalled {
-            Text(m.isMine ? "你撤回了一条消息" : "\(m.senderName) 撤回了一条消息").font(Theme.Font.caption).foregroundStyle(.tertiary).italic()
+        } else if !display.showsBody(of: m) {
+            Text(recallNotice).font(Theme.Font.caption).foregroundStyle(.tertiary).italic()
                 .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
                 .background(Color.primary.opacity(0.04), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
         } else if let encryption = m.olk {
@@ -1133,7 +1153,7 @@ struct LarkMessageRow: View {
         } else if LarkPartsView.isBare(parts) {
             if let reply = m.replyTo { LarkReplyQuote(reply: reply).padding(.horizontal, Theme.Space.xs) }
             LarkPartsView(parts: parts)
-                .environment(\.larkContext, LarkRenderContext(messageID: m.id, images: LarkPartsView.imageURLs(parts)))
+                .environment(\.larkContext, LarkRenderContext(messageID: m.recalled ? nil : m.id, images: LarkPartsView.imageURLs(parts)))
                 .frame(maxWidth: parts.contains { $0.kind == "card" || $0.kind == "link" } ? .infinity : nil, alignment: .leading)
                 .contextMenu { menu }
         } else {
@@ -1141,7 +1161,7 @@ struct LarkMessageRow: View {
                 VStack(alignment: .leading, spacing: Theme.Space.sm) {
                     if let reply = m.replyTo { LarkReplyQuote(reply: reply) }
                     LarkPartsView(parts: parts)
-                        .environment(\.larkContext, LarkRenderContext(messageID: m.id, images: LarkPartsView.imageURLs(parts)))
+                        .environment(\.larkContext, LarkRenderContext(messageID: m.recalled ? nil : m.id, images: LarkPartsView.imageURLs(parts)))
                 }
             }
         }
@@ -1202,7 +1222,7 @@ struct LarkMessageRow: View {
     @ViewBuilder private var footer: some View {
         let m = message
         let reactions = m.reactions ?? []
-        if !reactions.isEmpty {
+        if !reactions.isEmpty && !m.recalled {
             LarkFlowLayout(spacing: 6, lineSpacing: 6, trailing: LarkChatLayout.side(of: m) == .right) {
                 ForEach(reactions, id: \.key) { r in
                     Button { react?(m, r.key) } label: { LarkReactionChip(reaction: r) }
@@ -1222,15 +1242,23 @@ struct LarkMessageRow: View {
         }
         let replies = max(m.threadReplyCount ?? 0, m.replyCount)
         // No time here: it is in the separators above (LarkChatLayout).
-        if replies > 0 || m.edited == true {
+        if m.recalled && display.showsBody(of: m) {
+            Text("已撤回").font(Theme.Font.caption).foregroundStyle(.secondary)
+        }
+        if (!m.recalled && replies > 0) || (m.edited == true && display.showsBody(of: m)) {
             HStack(spacing: Theme.Space.s) {
-                if replies > 0 && !inThread {
+                if replies > 0 && !inThread && !m.recalled {
                     Button { showThread = true } label: {
                         Label("\(replies) 条回复", systemImage: Theme.Icon.reply).foregroundStyle(LarkColor.blue)
                     }
                     .buttonStyle(.plain)
                 }
-                if m.edited == true { Text("已编辑") }
+                if m.edited == true {
+                    if display.showsHistory(of: m) {
+                        Button("已编辑") { showHistory = true }.buttonStyle(.plain).lineLimit(1)
+                            .accessibilityLabel("查看编辑历史").accessibilityIdentifier("lark.editHistory.\(m.id)")
+                    } else { Text("已编辑") }
+                }
             }
             .font(Theme.Font.label)
             .foregroundStyle(.secondary)
@@ -1270,11 +1298,14 @@ extension LarkMessage {
 /// back to it in the chat, lit up for a moment, when it is loaded there.
 struct LarkReplyQuote: View {
     var reply: LarkReplyTo
+    @Environment(\.larkDisplay) private var display
     @Environment(\.larkJump) private var jump
 
     var body: some View {
-        QuoteCard(heading: reply.senderName, summary: reply.recalled == true ? "消息已撤回" : Fmt.plain(reply.displayText),
-                  tint: LarkColor.blue, ink: .primary) {
+        let summary = reply.recalled == true && !(display.antiRecall && reply.retained == true)
+            ? "消息已撤回"
+            : "\(Fmt.plain(reply.displayText))\(reply.recalled == true ? " · 已撤回" : "")"
+        QuoteCard(heading: reply.senderName, summary: summary, tint: LarkColor.blue, ink: .primary) {
             if jump?(reply.id) == true { Haptics.tap() } else { Haptics.attention() }
         }
     }

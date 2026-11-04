@@ -509,7 +509,7 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | `task_plan` | `plan`（`TaskPlan`）：计划交给用户、开始、不开了、某个任务没开起来（`tasks[i].error`） |
 | `sessions` | `machine_id`, `sessions`（该机器全量，变化时推，和上一条一模一样就不推；每个会话带 `rev` = transcript 字节数，变了就说明有新内容；可选 `suggestion`：Claude 一轮结束后在输入框里给的灰色「下一条」建议，见 `docs/claude-integration.md`） |
 | `revs` | `machine_id`, `revs`（`{session_id: rev}`，只含变了的；列表里看得见的字段没变、只是 transcript 长了时发，推给所有客户端，App 据此后台拉增量） |
-| `lark` | `feed_ids`（飞书有新消息 / 会话变化的会话；hub 跟随 lark-connector 的实时事件 `/agent/v1/events`，每 400ms 最多发一次，推给所有客户端） |
+| `lark` | `feed_ids`（飞书有新消息 / 会话变化的会话）；`settings_changed`（可选布尔值，默认 false，本批包含消息展示设置变化，与会话 ID 独立；客户端同时重读设置）。hub 跟随 lark-connector 的实时事件 `/agent/v1/events`，每 400ms 最多发一次，推给所有客户端。 |
 | `items` | `machine_id`, `session_id`, `items`，以及这批在 transcript 里的位置（见下「items 的连续性」）：`history`, `to_seq`, `from_seq`（接续的批次才有）。只推给订阅了该会话的客户端；没有 item 的行（ai-title 之类）也会推一条空的 `items`，让 App 知道这几行已经看过 |
 | `delta` | `machine_id`, `session_id`, `text`（无头助手正在生成的整段文字；空串表示这轮结束）。约每 80 ms 一条；App 每个对话最多每秒画 5 次，停顿后的第一条立刻画、之后画最新的，空串立刻画，消息落进 transcript 或重连时丢掉还没画的（`DeltaPacer`） |
 | `screen` | `machine_id`, `session_id`, `text`, `status`, `ts`（node 已不再随订阅采样屏幕：终端页自己按需读 `/screen`，旧 App 收不到这条也不影响） |
@@ -1189,6 +1189,8 @@ lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/v1/lark/status` | `{"configured","connected","name","error","last_event_at"}`：设置 › 连接器 › 飞书。configured = hub.json 有 lark；connected 每次现问 lark-connector 的 `/accounts`；last_event_at 最近一条实时事件（Unix 秒） |
+| GET | `/api/v1/lark/message-display` | `{"account_id","anti_recall","show_edit_history"}`：当前选中飞书账号的展示设置；只返回这两个开关和实际用户 ID，不返回脚本/自动发送配置 |
+| POST | `/api/v1/lark/message-display` | `{"account_id","key","value","expected"}`：key 为 `anti_recall` 或 `show_edit_history`，value/expected 为布尔值；完整设备权限，body ≤1 KiB，未知字段拒绝；通过 lark-connector 受限 PATCH 保留其他字段。账号/旧值冲突 409，未授权 403，旧服务无接口 404；登录失效 502 + `lark_not_logged_in`。成功返回与 GET 相同结构并推送带 `settings_changed=true` 的 `lark` 事件，不自动重试未知结果 |
 | GET | `/api/v1/lark/encryption` | 原生加密状态 `{accountId,configured,locked,unifiedPassword}`。须有独立 native OLK 授权；不返回密钥或凭据，`Cache-Control: no-store` |
 | POST | `/api/v1/lark/encryption/unlock` | `{account_id,password}` → 同上。只允许完整写权限；按实际飞书账号校验，共享网页的密码尝试限制；密码不存储 |
 | POST | `/api/v1/lark/conversations/{id}/encryption/covers` | `{account_id}` → `{lines:[string]}`；候选历史外显复用 lark-connector 网页规则 |
@@ -1238,9 +1240,11 @@ lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 
 // LarkMessage
 {"id","position","sender_id","sender_name","sender_avatar","sender_type":"user|bot","is_mine",
  "type":"TEXT|POST|IMAGE|CARD|SYSTEM|FILE|MEDIA|STICKER|MERGE_FORWARD…","text":"纯文本预览","created_at",
- "recalled","edited","reply_count","thread_reply_count","badge_count","at_me","is_read",
+ "recalled","retained"?,"edited","reply_count","thread_reply_count","badge_count","at_me","is_read",
  "parts":[MessagePart],                       // lark-connector 原样（见下），媒体 URL 已改写到 /api/v1/lark/
- "reply_to":{"id","sender_name","text","recalled","parts"},
+ "olk"?:{…},                                 // 加密投影：状态、公开外显、授权解密正文、密钥分发信息
+ "edit_history"?:[{"edited_at","text","parts"?,"olk"?}],
+ "reply_to":{"id","sender_name","text","recalled","retained"?,"parts","olk"?},
  "reactions":[{"key":"THUMBSUP","count":2,"mine":true,"users":["示例成员甲","示例成员乙"]}]}
 // MessagePart（lark-connector 的 MessagePart，不改字段名）
 {"kind":"text|at|link|image|file|code|emotion|media|card|docs|interactive|table",
@@ -1252,6 +1256,8 @@ lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 
 
 媒体改写规则：parts JSON 里所有 `"/api/media/` → `"/api/v1/lark/media/`，`"/api/messages/` → `"/api/v1/lark/messages/`
 （合并转发卡片里嵌套的消息也一并改写）。
+
+`retained=true` 表示 lark-connector 已留存撤回原内容，不是恢复权限；展示时仍保留 `recalled`，不能据此开放回复、表情或卡片写操作。两个展示开关不删除服务端留存，也不限制原有消息读取权限；客户端在设置关闭/未知时隐藏撤回原文和编辑历史入口。历史、引用、转发的 OLK 投影沿用当前授权，锁定时只显示公开内容，手机缓存清除解密正文。
 
 ## 个人 Agent 来源状态
 

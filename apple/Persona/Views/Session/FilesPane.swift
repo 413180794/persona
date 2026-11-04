@@ -20,7 +20,7 @@ struct FilesPane: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            breadcrumb
+            breadcrumb.accessibilityElement(children: .contain).accessibilityIdentifier("files.pane")
             List {
                 if let listing, listed == path {
                     let entries = listing.entries.filter { showHidden || !$0.name.hasPrefix(".") }

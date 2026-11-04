@@ -280,6 +280,9 @@
 
 - 新增 `proto.Features` 能力后，连接 hello / manifest 的共享 wire 样例也要更新（`go test ./internal/hub -run '^TestWireSamples$' -update`），检查差异只有预期能力标记；只跑能力自己的处理器测试会漏掉协议快照失败。
 
+- SwiftUI Form 的 Toggle 无障碍 frame 可能覆盖整行。整行的 0.88 或 0.95 比例点在不同机型上仍会点空（没有 POST）；应取 `toggle.switches.firstMatch` 内部控件，等 enabled 和 hittable 后点击其中心，再断言服务响应后的值。新增系统消息 fixture 后，不要用数组末项定位引用：按被引用消息 ID 查找，避免 mock 自身 500 被误认为实时同步故障。
+- Shell 状态行折叠后保留上一条 toast 用于过渡；XCUITest 的节点仍可能 `exists`，录屏却已经不可见。只为等待后续长按不受遮挡时，应断言提示不再 `hittable`，不要要求节点被销毁。
+
 ## 起 sshd 做测试（2026-11-03，#891）
 
 - macOS 自带的 `/usr/sbin/sshd` 可以不要 root 跑：`sshd -D -e -f <配置>`，配置里 `UsePAM no`、`StrictModes no`、自己的 `HostKey` / `PidFile` / `AuthorizedKeysFile`，只能登录当前用户。OpenSSH 10 要加 `PerSourcePenalties no`，否则同一来源连得多了会被罚等。

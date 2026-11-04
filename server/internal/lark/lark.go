@@ -268,7 +268,16 @@ func (p *OLKPresentation) normalize() *OLKPresentation {
 	return &out
 }
 
+type EditVersion struct {
+	EditedAt string           `json:"edited_at"`
+	Text     string           `json:"text"`
+	Parts    json.RawMessage  `json:"parts,omitempty"`
+	OLK      *OLKPresentation `json:"olk,omitempty"`
+}
+
 type Message struct {
+	Retained         bool             `json:"retained,omitempty"`
+	EditHistory      []EditVersion    `json:"edit_history,omitempty"`
 	OLK              *OLKPresentation `json:"olk,omitempty"`
 	ClientID         string           `json:"client_id,omitempty"`
 	LocalState       string           `json:"local_state,omitempty"`
@@ -299,6 +308,7 @@ type Message struct {
 
 // ReplyTo is the message a reply quotes.
 type ReplyTo struct {
+	Retained   bool             `json:"retained,omitempty"`
 	OLK        *OLKPresentation `json:"olk,omitempty"`
 	ID         string           `json:"id"`
 	SenderName string           `json:"sender_name"`
@@ -316,6 +326,14 @@ type Reaction struct {
 }
 
 type rawMessage struct {
+	HasRetainedRecallContent bool `json:"hasRetainedRecallContent"`
+	IsSystem                 bool `json:"isSystem"`
+	EditHistory              []struct {
+		EditedAt    string           `json:"editedAt"`
+		TextPreview string           `json:"textPreview"`
+		Parts       json.RawMessage  `json:"parts"`
+		OLK         *OLKPresentation `json:"olk"`
+	} `json:"editHistory"`
 	OLK               *OLKPresentation `json:"olk"`
 	ClientID          string           `json:"clientId"`
 	LocalState        string           `json:"localState"`
@@ -342,12 +360,13 @@ type rawMessage struct {
 	ThreadID          string           `json:"threadId"`
 	ThreadMessageType string           `json:"threadMessageType"`
 	ReplyTo           *struct {
-		OLK         *OLKPresentation `json:"olk"`
-		ID          string           `json:"id"`
-		SenderName  string           `json:"senderName"`
-		TextPreview string           `json:"textPreview"`
-		IsRecalled  bool             `json:"isRecalled"`
-		Parts       json.RawMessage  `json:"parts"`
+		HasRetainedRecallContent bool             `json:"hasRetainedRecallContent"`
+		OLK                      *OLKPresentation `json:"olk"`
+		ID                       string           `json:"id"`
+		SenderName               string           `json:"senderName"`
+		TextPreview              string           `json:"textPreview"`
+		IsRecalled               bool             `json:"isRecalled"`
+		Parts                    json.RawMessage  `json:"parts"`
 	} `json:"replyTo"`
 	Reactions []struct {
 		Key       string   `json:"key"`
@@ -358,7 +377,7 @@ type rawMessage struct {
 }
 
 func (m rawMessage) normalize() Message {
-	out := Message{OLK: m.OLK.normalize(), ID: m.ID, ClientID: m.ClientID, LocalState: m.LocalState, Position: m.Position, SenderID: m.SenderID, SenderName: m.SenderName,
+	out := Message{Retained: m.HasRetainedRecallContent && !m.IsSystem, OLK: m.OLK.normalize(), ID: m.ID, ClientID: m.ClientID, LocalState: m.LocalState, Position: m.Position, SenderID: m.SenderID, SenderName: m.SenderName,
 		SenderAvatar: MediaURL(m.SenderAvatarURL), SenderType: m.SenderType, IsMine: m.IsMine,
 		Type: m.MessageTypeName, Text: m.TextPreview, CreatedAt: m.CreatedAt, Recalled: m.IsRecalled, Edited: m.IsEdited,
 		ReplyCount: m.ReplyCount, ThreadReplyCount: m.ThreadReplyCount, BadgeCount: m.BadgeCount, AtMe: m.IsAtMe || m.IsAtAll,
@@ -367,7 +386,10 @@ func (m rawMessage) normalize() Message {
 		out.ThreadKind = m.ThreadMessageType
 	}
 	if r := m.ReplyTo; r != nil {
-		out.ReplyTo = &ReplyTo{OLK: r.OLK.normalize(), ID: r.ID, SenderName: r.SenderName, Text: r.TextPreview, Recalled: r.IsRecalled, Parts: rewriteMedia(r.Parts)}
+		out.ReplyTo = &ReplyTo{Retained: r.HasRetainedRecallContent, OLK: r.OLK.normalize(), ID: r.ID, SenderName: r.SenderName, Text: r.TextPreview, Recalled: r.IsRecalled, Parts: rewriteMedia(r.Parts)}
+	}
+	for _, v := range m.EditHistory {
+		out.EditHistory = append(out.EditHistory, EditVersion{EditedAt: v.EditedAt, Text: v.TextPreview, Parts: rewriteMedia(v.Parts), OLK: v.OLK.normalize()})
 	}
 	for _, r := range m.Reactions {
 		if r.Count > 0 {

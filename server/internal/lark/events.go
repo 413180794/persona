@@ -112,7 +112,7 @@ func parseEvent(data []byte) (Event, bool) {
 	}
 	switch raw.Type {
 	case "message.upserted", "message.deleted", "message.recalled", "conversation.upserted", "conversations.upserted",
-		"feed.settings.updated":
+		"feed.settings.updated", "local.settings.updated":
 	case "agent-bridge.updated":
 		return Event{Type: raw.Type, SessionKeys: raw.SessionKeys}, true
 	default:

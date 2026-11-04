@@ -26,18 +26,19 @@ struct LarkSummaryCardView: View {
 
 /// "聊天记录": a few previews; tap opens every forwarded message.
 struct LarkMergeForwardCard: View {
+    @Environment(\.larkDisplay) private var display
     var meta: JSONValue
     var title: String
     @State private var showing = false
 
     var body: some View {
-        let previews = meta["previews"]?.array ?? []
+        let previews = meta["messages"]?.array ?? meta["previews"]?.array ?? []
         let count = meta["messageCount"]?.int ?? previews.count
         Button { showing = true } label: {
             VStack(alignment: .leading, spacing: Theme.Space.sm) {
                 Text(title.isEmpty ? "聊天记录" : title).font(Theme.Font.secondaryStrong).lineLimit(2).multilineTextAlignment(.leading)
                 ForEach(Array(previews.prefix(4).enumerated()), id: \.offset) { _, p in
-                    Text("\(p["senderName"]?.string ?? "")：\(Fmt.plain(p["text"]?.string ?? ""))")
+                    Text("\(p["senderName"]?.string ?? "")：\(Fmt.plain(display.forwardedPreview(p)))")
                         .font(Theme.Font.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -61,6 +62,7 @@ struct LarkMergeForwardCard: View {
 
 /// Every message of a merge-forward, rendered like the chat.
 struct LarkForwardedView: View {
+    @Environment(\.larkDisplay) private var display
     var title: String
     var meta: JSONValue
     @Environment(\.dismiss) private var dismiss
@@ -82,11 +84,18 @@ struct LarkForwardedView: View {
                                     Text(m.senderName ?? "").font(Theme.Font.labelStrong).foregroundStyle(.secondary)
                                     if let d = m.createdAt { Text(d.formatted(date: .abbreviated, time: .shortened)).font(Theme.Font.label).foregroundStyle(.tertiary) }
                                 }
-                                if let parts = m.parts, !parts.isEmpty {
+                                if m.isRecalled == true && !(display.antiRecall && m.hasRetainedRecallContent == true) {
+                                    Text("消息已撤回").font(Theme.Font.caption).foregroundStyle(.secondary)
+                                } else if let encryption = m.olk {
+                                    LarkEncryptedContent(encryption: encryption)
+                                } else if let parts = m.parts, !parts.isEmpty {
                                     LarkPartsView(parts: parts)
-                                        .environment(\.larkContext, LarkRenderContext(messageID: m.id, images: LarkPartsView.imageURLs(parts)))
+                                        .environment(\.larkContext, LarkRenderContext(messageID: m.isRecalled == true ? nil : m.id, images: LarkPartsView.imageURLs(parts)))
                                 } else {
                                     Text(m.textPreview ?? "").font(Theme.Font.body)
+                                }
+                                if m.isRecalled == true && display.antiRecall && m.hasRetainedRecallContent == true {
+                                    Text("已撤回").font(Theme.Font.caption).foregroundStyle(.secondary)
                                 }
                             }
                         }

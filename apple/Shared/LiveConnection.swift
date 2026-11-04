@@ -35,7 +35,7 @@ nonisolated enum ServerEvent: Sendable {
     /// Transcripts that grew on a machine (session id → rev): pull them before they are opened.
     case revs(machineID: String, [String: Int64])
     /// Feishu conversations with new or changed messages (lark-connector's realtime events, relayed by the hub).
-    case lark(feedIDs: [String])
+    case lark(feedIDs: [String], settingsChanged: Bool)
     /// Personal agent sessions (lark-connector agent-bridge, hub/agents.go) that changed: `<source>:<sessionKey>` ids, empty
     /// for "something changed, re-pull the list".
     case agents(sessionIDs: [String])
@@ -83,6 +83,7 @@ nonisolated enum ServerEvent: Sendable {
         var error: String?
         var revs: [String: Int64]?
         var feedIDs: [String]?
+        var settingsChanged: Bool?
         var sessionIDs: [String]?
         var fleet: FleetState?
         var desktops: [DesktopDevice]?
@@ -110,6 +111,7 @@ nonisolated enum ServerEvent: Sendable {
             case type, machines, sessions, upsert, remove, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
             case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, mesh, channel, build, update, item, plan
             case hubID = "hub_id", hubName = "hub_name", protocolVersion = "protocol", minAppBuild = "min_app_build"
+            case settingsChanged = "settings_changed"
             case machineID = "machine_id", sessionID = "session_id", hasMore = "has_more", callID = "call_id",
                  moreAfter = "more_after", fromSeq = "from_seq", toSeq = "to_seq",
                  lastAssistantMessage = "last_assistant_message", feedIDs = "feed_ids", sessionIDs = "session_ids"
@@ -162,7 +164,7 @@ nonisolated enum ServerEvent: Sendable {
         case "revs":
             guard let m = e.machineID, let revs = e.revs else { return nil }
             return .revs(machineID: m, revs)
-        case "lark": return .lark(feedIDs: e.feedIDs ?? [])
+        case "lark": return .lark(feedIDs: e.feedIDs ?? [], settingsChanged: e.settingsChanged ?? false)
         case "agents": return .agents(sessionIDs: e.sessionIDs ?? [])
         // the list prefs changed on another device: a non-session id wakes only the lists, which re-pull the prefs
         case "agents.prefs": return .agents(sessionIDs: ["agents.prefs"])

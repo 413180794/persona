@@ -1,6 +1,7 @@
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
+import UIKit.UIGestureRecognizerSubclass
 #endif
 
 /// WeChat-style message actions: long-press a message and a dark bar with 复制 / 选择 / 引用 / 分享 (and 编辑 for your
@@ -21,6 +22,10 @@ final class MessageMenu {
     @ObservationIgnored var agent: () -> String = { "Claude" }
     /// 引用: the message's text, its id, and whether it is the user's own.
     @ObservationIgnored var quote: ((String, String, Bool) -> Void)?
+    /// A message dragged to the left is quoted (Telegram's reply, #1058): Agents chats. The assistant's pages sit in
+    /// the shell's pager, whose own sideways swipe this would take. Observed: the chat turns it on as it appears, after
+    /// its first rows may have been drawn without it (they never got the drag, now and then).
+    var swipeQuotes = false
     @ObservationIgnored var edit: ((String) -> Void)?
     /// The press that opened the bar. Its own lift must not close it: the list's simultaneous tap-to-close gesture
     /// recognizes that lift as a tap (only presses longer than ~2 s fail it), and a held finger's small drift shows
@@ -72,6 +77,79 @@ struct SelectableText: Identifiable {
 }
 
 #if os(iOS)
+/// A drag to the left on a message, Telegram's reply (#1058). It fails as soon as the finger goes another way, and
+/// the scroll views around it (the chat list, a pager) wait for that: scrolling starts as it always did, while a drag
+/// that does go left moves the message and not the list. The left edge's swipe back goes right, so never starts it.
+final class LeftDragRecognizer: UIPanGestureRecognizer {
+    private var start: CGPoint?
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        start = touches.first?.location(in: view)
+        super.touchesBegan(touches, with: event)
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        if state == .possible, let start, let p = touches.first?.location(in: view) {
+            let dx = p.x - start.x, dy = p.y - start.y
+            if hypot(dx, dy) > MessageSwipe.decide {
+                guard dx < 0, abs(dx) > abs(dy) * MessageSwipe.slope else {
+                    state = .failed
+                    return
+                }
+            }
+        }
+        super.touchesMoved(touches, with: event)
+    }
+
+    override func reset() {
+        super.reset()
+        start = nil
+    }
+
+    override func shouldBeRequiredToFail(by other: UIGestureRecognizer) -> Bool {
+        other.view is UIScrollView && other is UIPanGestureRecognizer
+    }
+
+    // It waits for no one but the scroll views. The message's long press (the action bar) is a child's gesture, which
+    // SwiftUI makes this one wait for, and the navigation stack's back pans (the edge, and on iOS 26 anywhere in the
+    // content) are around it in the old layout: now and then the drag lost those races and never started. A drag
+    // that goes left has moved past the press's allowance and is not a way back, so they never both happen.
+    private static func standsAside(_ other: UIGestureRecognizer) -> Bool {
+        other is UILongPressGestureRecognizer || (other is UIPanGestureRecognizer && !(other.view is UIScrollView))
+    }
+
+    override func require(toFail other: UIGestureRecognizer) {
+        if Self.standsAside(other) { return }
+        super.require(toFail: other)
+    }
+
+    override func shouldRequireFailure(of other: UIGestureRecognizer) -> Bool {
+        Self.standsAside(other) ? false : super.shouldRequireFailure(of: other)
+    }
+
+    override func canBePrevented(by preventing: UIGestureRecognizer) -> Bool {
+        Self.standsAside(preventing) ? false : super.canBePrevented(by: preventing)
+    }
+}
+
+/// The drag as SwiftUI sees it: how far left (≤ 0) while it moves, and where it ended.
+struct LeftDrag: UIGestureRecognizerRepresentable {
+    var moved: (CGFloat) -> Void
+    var ended: (CGFloat) -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> LeftDragRecognizer { LeftDragRecognizer() }
+
+    func handleUIGestureRecognizerAction(_ recognizer: LeftDragRecognizer, context: Context) {
+        let x = min(0, recognizer.translation(in: recognizer.view).x)
+        switch recognizer.state {
+        case .began, .changed: moved(x)
+        case .ended: ended(x)
+        case .cancelled, .failed: ended(0)
+        default: break
+        }
+    }
+}
+
 /// UIKit swipe: it waits for a clear sideways flick and lets scroll views have everything else (a SwiftUI drag on the
 /// chat list would take its scrolling).
 struct SwipeTo: UIGestureRecognizerRepresentable {
@@ -136,16 +214,35 @@ private struct MessageLongPress: ViewModifier {
     }
 }
 
+/// How a drag on a message quotes it (#1058).
+enum MessageSwipe {
+    /// How far the finger travels before the drag is told to be sideways or not.
+    static let decide: CGFloat = 10
+    /// Sideways is this much more across than down.
+    static let slope: CGFloat = 1.3
+    /// How far left a message goes before letting go quotes it: past this, a tap of the haptics and the icon fills.
+    static var threshold: CGFloat { Theme.Size.tapTarget * 1.5 }
+    /// Past the threshold the message follows the finger at this rate (a rubber band).
+    static let stretch: CGFloat = 0.25
+
+    /// Where the message sits for a drag of `x` (≤ 0).
+    static func offset(_ x: CGFloat) -> CGFloat {
+        x >= -threshold ? x : -threshold + (x + threshold) * stretch
+    }
+}
+
 private struct MessageActionBarHost: ViewModifier {
     @Environment(MessageMenu.self) private var menu: MessageMenu?
     let id: String
     let text: String
     let isUser: Bool
     let date: Date?
+    @State private var drag: CGFloat = 0
+    @State private var armed = false
 
     func body(content: Content) -> some View {
         if let menu {
-            content
+            swipeable(content, menu)
                 .coordinateSpace(.named(MessageMenu.row))
                 .overlay(alignment: .topLeading) {
                     if menu.selected == id {
@@ -169,6 +266,52 @@ private struct MessageActionBarHost: ViewModifier {
         } else {
             content.contextMenu { CopyButton(text: text) }
         }
+    }
+
+    /// The row as a drag to the left moves it, with the reply icon coming in at the right (#1058).
+    @ViewBuilder private func swipeable(_ content: Content, _ menu: MessageMenu) -> some View {
+        #if os(iOS)
+        if menu.swipeQuotes {
+            content
+                .offset(x: MessageSwipe.offset(drag))
+                .overlay(alignment: .trailing) {
+                    if drag < 0 {
+                        let progress = min(1, -drag / MessageSwipe.threshold)
+                        Image(systemName: Theme.Icon.reply)
+                            .font(Theme.Font.labelStrong)
+                            .foregroundStyle(armed ? Color.white : Color.secondary)
+                            .scaledFrame(width: Theme.Size.wellM, height: Theme.Size.wellM)
+                            .background(armed ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Theme.Fill.chip), in: .circle)
+                            .scaleEffect(0.6 + 0.4 * progress)
+                            .opacity(progress)
+                            .padding(.trailing, Theme.Space.s)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .gesture(LeftDrag(moved: moved, ended: ended))
+                .accessibilityAction(named: "引用") { menu.quote?(text, id, isUser) }
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
+    }
+
+    private func moved(_ x: CGFloat) {
+        menu?.close()
+        drag = x
+        let past = -x >= MessageSwipe.threshold
+        if past != armed {
+            armed = past
+            if past { Haptics.tap() }
+        }
+    }
+
+    private func ended(_ x: CGFloat) {
+        if armed { menu?.quote?(text, id, isUser) }
+        armed = false
+        withAnimation(Theme.Motion.springBack) { drag = 0 }
     }
 }
 

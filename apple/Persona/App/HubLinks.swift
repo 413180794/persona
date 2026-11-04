@@ -8,6 +8,7 @@ final class HubLink: Identifiable {
     let group: String
     var id: String { group }
     let live = LiveConnection()
+    let larkDisplay = LarkMessageDisplayModel()
     /// Who answered on the socket: the hub's id, name, features and group (its hello).
     private(set) var hello = HubHello()
     /// What the hub listed in its hello beyond the first protocol (`terminal_stream`, `file_upload`…).

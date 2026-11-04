@@ -1132,8 +1132,11 @@ final class AppModel {
             scheduleSessionsFlush()
         case .revs(let machineID, let revs):
             AgentSync.shared.revs(machine: MachineRef(group: group, id: machineID), revs)
-        case .lark(let feedIDs):
+        case .lark(let feedIDs, let settingsChanged):
             if isHub { LarkSync.shared.received(feedIDs) }
+            if settingsChanged || feedIDs.isEmpty, let source = link(group) {
+                Task { await source.larkDisplay.refresh(using: source.api) }
+            }
         case .agents(let ids):
             if isHub { PersonalAgentSync.shared.received(ids) }
         case .inbox:
@@ -1761,6 +1764,8 @@ final class AppModel {
     var composerInbox: [SessionKey: [UIImage]] = [:]
     /// Page excerpts picked as context for a chat's next message (`<jarvis-context>`).
     var composerContexts: [SessionKey: [ContextRef]] = [:]
+    /// A chat asked for its composer's keyboard (a message just quoted, #1058); the composer takes it and clears it.
+    var composerFocus: SessionKey?
 
     // MARK: Renames
 

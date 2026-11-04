@@ -610,3 +610,23 @@ Task 里只遍历这个序列，就能编过。选择器用 `preferredItemEncodi
 
 电脑断连时 hub 不把它的会话标成 offline，而是 unknown，`AgentState.isLive` 仍为真；待办详情的「当前没有 Agent」只看状态，电脑断了还以为有人在做，网页却会显示（它还要求电脑在线）。
 另外 `model.allSessions` 是所有 hub 组的会话，只比电脑 id 和项目名会把别的组里同 id、同名项目的会话算进来。凡是「这台电脑 / 这个项目现在有没有 Agent」的判断：先 `isOnTodosHub`（或对应的组判断）筛组，再看 `model.machine(...)?.online`，最后才看会话状态。
+
+## 消息左滑引用：横向手势和列表滚动、返回手势怎么共存（2026-11-04，#1058）
+
+- **SwiftUI 的 `DragGesture` 放在列表的行上会抢列表的滚动**，加 `simultaneousGesture` 又会两边一起动。
+  - 做法：UIKit 的 `UIPanGestureRecognizer` 子类（`LeftDragRecognizer`），经 `UIGestureRecognizerRepresentable` 挂上。
+  - 在 `touchesMoved` 里，走过 10 pt 还不是往左的横向拖动，就把 `state` 设成 `.failed`。
+  - 覆盖 `shouldBeRequiredToFail(by:)`：对 `UIScrollView` 的 pan 返回 true，让滚动等它失败了再开始。
+  - 竖着滑时，它在 10 pt 内就失败了，滚动只晚开始这一点。这只碰 recognizer 子类自己的方法，不用设 `delegate`（SwiftUI 管着它）。
+- **从左边缘往右滑返回**是往右的手势，在第一次判断时就让它失败，所以不受影响。
+- **UI 测试里的边缘返回**：要从 x = 0 起、用 `.fast`。master 上从 1 % 处慢慢拖，系统也不认。
+  - 回到列表后，搜索框是收起的（#1052），不能用 `searchFields` 判断回到了列表，看 `agents.filter.` 的 chip。
+- **在列表还在滚（刚打开对话时跟到最新）时拖一条消息**：第一下触摸只会让列表停下，这是 iOS 的正常行为。测试里先等列表停稳再拖。
+- **顶栏闲着几秒就收成细条**（`chromeIdleSeconds`）：顶栏里加了按钮，细条里也要有，不然 UI 测试和用户在细条状态下都找不到。
+- **行上的手势要等子视图的手势失败**：`UIGestureRecognizerRepresentable` 只能用 `.gesture` 挂（`.simultaneousGesture` 要的是 SwiftUI 的 `Gesture`，编不过）。
+  - SwiftUI 让它等子视图上的 `.gesture`（消息的长按 `LongPressAt`）先失败。拖动偶尔输掉这场竞争，压根不开始（旧布局 + BeautifulUI 4 次里挂 2 次）。
+  - 做法：在 recognizer 子类里，对 `UILongPressGestureRecognizer` 不 `require(toFail:)`，`shouldRequireFailure(of:)` 和 `canBePrevented(by:)` 都返回 false。往左一拖就超出了长按允许的移动，两者不会同时成立。改完 4 次全过。
+  - UI 测试别用 `.slow` 拖：慢到 0.35 s 内没走出 10 pt，长按就先成立了（真人拖得快）。
+- **视图读的开关别标 `@ObservationIgnored`**：`MessageMenu.swipeQuotes` 在对话页的 `onAppear`（`bindMenu`）里才打开。
+  - 一开始标了 `@ObservationIgnored`，`onAppear` 之前画好的行不会重画，于是没有挂上手势，十次里挂两三次。
+  - 手势的日志显示失败那次的 recognizer 一个触摸都没收到，这才看出来。改成被观察以后十次全过。

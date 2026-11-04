@@ -96,6 +96,22 @@ Agent 返回的普通文字不能用于猜测是否加密。新增的 `olk` 投�
 - Application Support 的选取临时副本不会被系统自动清理；进程重启后先清理旧 UUID 目录，再开始新的选取。清理只运行一次，与选取共用锁，不能删除当前进程新建的副本或独立的持久化媒体目录。
 - 流式上传的超时包含手机上传时间，应按文件大小给手机和 Hub 相同预算；lark-connector 的 pending / failed 本地消息即使已从本机发件箱删除，也不能变成普通已发送气泡。
 
+## 风灵月影与账号设置
+
+整份 local settings PUT 会覆盖网页或另一客户端刚改的字段。手机只通过受限 PATCH 修改两个展示开关，并携带旧值；未知结果先重读，不能自动重试。Hub 返回实际选中账号的用户 ID，不能用账号列表里另一个 primary 用户代替。前后身份校验可以拒绝换号响应，但不是跨登录操作的数据库事务。
+
+防撤回的原内容就在 lark-connector 的 parts 中，必须另看 hasRetainedRecallContent，不能把系统撤回提示误当原文。展示与权限分离：保留 recalled 标记；未开启时正文、引用和转发都走撤回提示。编辑版本有自己的 OLK 投影，不能只清主消息和引用的磁盘明文而漏掉 editHistory。
+
+合并转发卡片的 metadata 同时包含 messages 和复制出来的 previews；不能只处理展开后的正文。预览按原记录的撤回状态/OLK 投影生成；落盘递归去除记录及历史的解密正文，再重建预览，避免无 OLK 标记的复制文本漏进缓存。编辑时间可能包含毫秒，沿用 JSON.parseDate，不能仅用默认 ISO8601DateFormatter。
+
+设置变更推送可能早于保存请求的 HTTP 回执，也可能在旧账号的读取尚未结束时到达。不能因为 `loading` / `saving` 就丢掉刷新：合并期间的通知，在当前请求结束后用最近一次客户端补读，不发布已被通知取代的旧响应。补读由设置模型持有，离开先前页面或取消该页面的等待不能同时取消新的实时变更；写操作仍只提交一次。
+
+Hub 在 400ms 内合并事件时，设置变化必须独立累积为 `settings_changed`，不能依赖空 `feed_ids` 表示；同一批有新消息时仍须重读设置。未登录错误沿用 `lark_not_logged_in`，指向 Hub 所在机器的 lark-connector 登录入口，不能建议无效的反复重读。
+
+这两个开关控制展示，沿用 lark-connector 的语义，不是留存或访问授权：关闭后并不删除服务端留存，Hub 仍向已有消息读取权限的客户端返回原内容与版本，普通未加密内容仍可能进入本地缓存。OLK 解密正文与此独立，持久化必须清理。现有收件箱分拣及助手引用仍可能使用已撤回的 `Text`；其 AI 上下文策略在 #882 后续单独统一，本阶段不宣称已改变。
+
 ## 消息列表行间距
 
 SwiftUI List 默认行 inset 会叠加内容自己的 padding。#957 在 iOS 27 实测：46 pt 头像 + 上下各 8 pt 内容留白，最终行高却是 92 pt；显式把行上下 inset 设为 0 并用现有 48 pt 头像 token 后，普通行是 64 pt。不要用固定高度掩盖重复留白，动态字体应允许增高。仅在消息列表的 NavigationLink 上设定，避免改变共用收件箱。
+
+- When merging message-display controls with interactive quotes, keep the shared `QuoteCard` and `larkJump` action. Apply recall visibility to the card summary before rendering; UI tests should query the quote button, not the former static text.

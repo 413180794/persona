@@ -927,10 +927,10 @@ struct ChatView: View {
 
     private var lastPromptID: String? { store.items.last { $0.role == "user" && $0.kind == .text }?.id }
 
-    /// A swipe to the left: from the chat to its files (and Git); to the right: back.
+    /// A swipe to the right goes from files or Git back to the chat. To the left there is none: on the chat a drag to
+    /// the left quotes a message (#1058); files are behind the header's folder button.
     private var swipeablePanes: some View {
         paneContent
-            .gesture(SwipeTo(direction: .left) { swipePane(forward: true) })
             .gesture(SwipeTo(direction: .right) { swipePane(forward: false) })
     }
 
@@ -1590,14 +1590,24 @@ struct ChatView: View {
             .accessibilityLabel(model.connection.shown != .online ? "\(model.connection.shown.title)，显示标题和标签"
                                 : "\(compactPlace)，显示标题和标签")
             Spacer(minLength: 0)
-            // A loop or background work: a small mark. As wide as back either way, so the place stays centered.
-            // The terminal is in the ··· menu (no button of its own in the header).
+            // A loop or background work: a small mark; then the files (#1058). The terminal is in the ··· menu.
             HStack(spacing: 0) {
                 if session?.loop != nil || !(session?.background ?? []).isEmpty {
                     Button { Haptics.tap(); showActivity = true } label: { activityMark }
                         .buttonStyle(.plain)
                         .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.wellM)
                         .accessibilityLabel("循环与后台任务，点按查看")
+                }
+                if panes.contains(.files) {
+                    Button { toggleFiles() } label: {
+                        Image(systemName: pane == .files ? Theme.Icon.folderFilled : Theme.Icon.folder)
+                            .font(Theme.Font.secondaryStrong).dynamicTypeSize(...DynamicTypeSize.xxLarge)
+                            .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.wellM)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(pane == .files ? "回到对话" : "文件")
+                    .accessibilityIdentifier("chat.files")
                 }
             }
             .scaledFrame(minWidth: Theme.Size.tapTarget)
@@ -1776,8 +1786,20 @@ struct ChatView: View {
                         Spacer(minLength: 0)
                         titleButton
                         Spacer(minLength: 0)
-                        // The terminal (it comes up from the bottom over the page, TerminalCover), files and Git are in
-                        // the ··· menu; files and Git also a swipe to the left away — no tab row (docs/ios.md).
+                        // Files have a button of their own (they were a swipe to the left away, which now quotes a
+                        // message, #1058); the terminal (it comes up from the bottom, TerminalCover) and Git are in ···.
+                        if panes.contains(.files) {
+                            Button { toggleFiles() } label: {
+                                Image(systemName: pane == .files ? Theme.Icon.folderFilled : Theme.Icon.folder)
+                                    .font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge)
+                                    .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
+                                    .contentShape(.circle)
+                            }
+                            .buttonStyle(.plain)
+                            .surface(interactive: true, in: .circle)
+                            .accessibilityLabel(pane == .files ? "回到对话" : "文件")
+                            .accessibilityIdentifier("chat.files")
+                        }
                         Menu { moreMenuItems } label: {
                             Image(systemName: Theme.Icon.more).font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge).scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                                 .contentShape(.circle)
@@ -1791,7 +1813,7 @@ struct ChatView: View {
                 .padding(.top, Theme.Space.xxs)
                 .padding(.bottom, Theme.Space.sm)
                 // Row two, only when there is something for it: the space's other agents and a /loop or background
-                // work (small chips; a tap opens them). Files and Git are a swipe or the ··· menu away.
+                // work (small chips; a tap opens them). Files are the folder button, Git the ··· menu.
                 let hasActivity = session?.loop != nil || !(session?.background ?? []).isEmpty
                 if session?.spaceKey != nil || hasActivity {
                     HStack(spacing: Theme.Space.s) {
@@ -1911,7 +1933,13 @@ struct ChatView: View {
         if pane != .chat { withAnimation(Theme.Motion.standard) { pane = .chat } } else { dismissChat() }
     }
 
-    /// A swipe to the left goes from the chat to its files (then Git); to the right, back toward the chat.
+    /// The header's folder button: the files, or from them back to the chat (#1058).
+    private func toggleFiles() {
+        Haptics.tap()
+        withAnimation(Theme.Motion.standard) { pane = pane == .files ? .chat : .files }
+    }
+
+    /// A swipe to the right goes back toward the chat (from Git to files, from files to the chat).
     private func swipePane(forward: Bool) {
         guard style == .dev else { return }
         let order = panes.filter { $0 != .terminal }
@@ -2211,8 +2239,9 @@ struct ChatView: View {
             guard !quotes.contains(where: { $0.kind == "quote" && $0.msg == id && !id.isEmpty }) else { return }
             quotes.append(.quote(text, from: from, msg: id))
             withAnimation(Theme.Motion.state) { model.composerContexts[key] = quotes }
-            Haptics.tap()
+            model.composerFocus = key // ready to type the reply, as in Telegram
         }
+        if menu.swipeQuotes != (style == .dev) { menu.swipeQuotes = style == .dev }
         menu.edit = { [model, key] text in model.drafts[key] = text }
         menu.agent = { [model, key] in model.session(key)?.agentLabel ?? "Claude" }
         menu.source = { [model, key] in
@@ -2594,6 +2623,11 @@ struct Composer: View, Equatable {
         }
         #endif
         .animation(Theme.Motion.standard, value: suggestion)
+        .onChange(of: model.composerFocus) { _, k in
+            guard k == key else { return }
+            model.composerFocus = nil
+            focused = true
+        }
         #if DEBUG
         .task { // `-showClearConfirm YES`: the /clear confirmation, for screenshots
             guard UserDefaults.standard.bool(forKey: "showClearConfirm") else { return }
