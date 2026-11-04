@@ -25,9 +25,6 @@ extension Theme.Size {
     static let macSidebarMin: CGFloat = 180
     static let macSidebarIdeal: CGFloat = 210
     static let macSidebarMax: CGFloat = 280
-    /// The 设置 window.
-    static let macSettingsWidth: CGFloat = 620
-    static let macSettingsHeight: CGFloat = 640
     /// The link panel at the detail column's trailing edge: its first width, its narrowest, and the least it leaves the page.
     static let macLinkPanelIdeal: CGFloat = 520
     static let macLinkPanelMin: CGFloat = 360

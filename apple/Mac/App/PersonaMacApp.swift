@@ -57,11 +57,6 @@ struct PersonaMacApp: App {
         }
         .defaultSize(width: Theme.Size.macWindowHeight, height: Theme.Size.macWindowHeight)
 
-        Settings {
-            MacSettingsWindow()
-                .environment(model)
-        }
-
         MenuBarExtra {
             MacMenuBarMenu().environment(model)
         } label: {
@@ -135,6 +130,16 @@ struct MacCommands: Commands {
                 .keyboardShortcut("k", modifiers: .command)
                 .disabled(!model.isPaired)
         }
+        // Persona › 设置… ⌘,: the 设置 section of the main window (#1222). A Settings window of its own held the same
+        // pages as the section: two ways to the same place, and one of them a window on its own.
+        CommandGroup(replacing: .appSettings) {
+            Button("设置…") {
+                MacShellState.shared.go(.settings, model)
+                MacShellState.shared.showMain()
+            }
+            .keyboardShortcut(",", modifiers: .command)
+            .disabled(!model.isPaired)
+        }
         CommandGroup(after: .sidebar) {
             ForEach(Array(MacSection.shortcutOrder.enumerated()), id: \.element) { i, section in
                 if MacSection.visible(supportsTodos: TodoStore.shared.isSupported).contains(section) {
@@ -144,19 +149,6 @@ struct MacCommands: Commands {
             }
             Divider()
         }
-    }
-}
-
-/// 设置 in the Settings window (⌘,): the same page as the sidebar's 设置.
-struct MacSettingsWindow: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        NavigationStack {
-            SettingsView()
-        }
-        .macLook(model)
-        .frame(minWidth: Theme.Size.macSettingsWidth, minHeight: Theme.Size.macSettingsHeight)
     }
 }
 

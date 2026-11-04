@@ -1,7 +1,7 @@
 # macOS App
 
 原生 macOS 版 Persona（`apple/` 里的 `PersonaMac` target，旧 `JarvisMac` scheme 指向它）：和 iOS App 同一套逻辑层（`Shared/`、`Persona/App`）和内容视图，
-外面是 Mac 自己的壳（`apple/Mac/`）：窗口、侧边栏、工具栏、菜单、快捷键、设置窗口、菜单栏。目标是 iOS App 的全部功能一个不少，
+外面是 Mac 自己的壳（`apple/Mac/`）：窗口、侧边栏、工具栏、菜单、快捷键、菜单栏。目标是 iOS App 的全部功能一个不少，
 交互按 macOS 原生的方式做，滚动和动画 60 fps 起（ProMotion 屏 120 fps）。
 
 ## 做法
@@ -184,7 +184,7 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   三栏分栏收不起内容栏，设成 `.detailOnly` 会被系统马上改回 `.all`，空的侧栏那一栏冒出来、列表还在（#856）。
   窗口最小 920×560（#1200）：分区列 210 + 列表最窄 340 + 旁边的页面最窄 360（`macDetailMin`）。窗口变窄时列表先让：Persona 的 `MacListBeside`、收件箱的列表收到各自的最小宽度，
   分栏的详情栏有最小宽度。原来最小是 820，旁边的页面只剩约 200，对话、收件箱详情被窗口右边裁掉。收件箱多一列筛选，最窄时详情只有约 220，排得开但挤（要更宽得把筛选列收起，见 #1169 的清单）。
-  ⌘1…⌘7 切换；`Settings` 场景（⌘,）放设置；`onOpenURL` 处理 `jarvis://pair`；App 变成活跃时 `ensureConnected` + `refresh`。
+  ⌘1…⌘7 切换；Persona › 设置… ⌘, 把主窗口带到前面、选中侧栏的「设置」（#1222，2026-11-04 用户定：原来是一个单独的设置窗口，内容和侧栏的「设置」完全一样，两个入口；没配对时不可用）；`onOpenURL` 处理 `jarvis://pair`；App 变成活跃时 `ensureConnected` + `refresh`。
   App 在后台不断开 WebSocket（Mac 应用常驻，hub 靠这条连接找到它）。
 - 兼容层（`Mac/Compat/`）：`UIKitTypes.swift`（UIColor / UIImage / UIFont / UIEdgeInsets 的别名，UIPasteboard、UIApplication.open、UIDevice（含电池）、
   UIGraphicsImageRenderer、haptics 空操作、UIKit 语义色）、`SwiftUICompat.swift`（iOS 专用修饰符的同名 Mac 版本：`navigationBarTitleDisplayMode` 什么都不做、
@@ -747,12 +747,16 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Kind pills (项目/会话/人/文档/会议/日程 with counts), tag filter, project sections (重点/其他进行中/已完成/不是项目) — Views/Knowledge/KnowledgeView.swift (KnowledgeView, KBKindBar, KBRow, KBAvatar, ImportanceBadge, KBPill)
 - [x] Full-text search, merged per entry, highlighted hits — KnowledgeView.swift (KBHitRow)
   - Mac（2026-11-01 核对）截图（`-showKnowledgeSearch 小组件`）：按 项目 1 / 会话 1 / 人 1 分组，一条一行带命中数（4 处、6 处），每行命中里「小组件」都加粗。
-- [ ] Detail: header, 问 Persona / 开 Agent, agents, timeline, profile, relations, code dirs, last 7 days messages, path; search matches — KnowledgeView.swift (KnowledgeDetailView, KBMatchRow, KBTimelineRow, KBLinkRow, KBMessageText)
+- [x] Detail: header, 问 Persona / 开 Agent, agents, timeline, profile, relations, code dirs, last 7 days messages, path; search matches — KnowledgeView.swift (KnowledgeDetailView, KBMatchRow, KBTimelineRow, KBLinkRow, KBMessageText)
   - Mac（2026-11-01 核对）：截图里 P0 / 短期项目 / 相关 92、标签、开 Agent、在做的 Agent、时间线、档案、相关removed、搜索匹配行、目录路径都对；「问 Persona」按钮的位置是空白（白字加醒目玻璃底，离屏画不出），没看到，要到 Mac 前看一眼。
-- [ ] Day view of chat messages with prev/next — KnowledgeView.swift (KBDayView)
+  - Mac 真窗口（2026-11-04，执行者跑）：天气 App 的详情顶部「问 Persona」（主题色底白字）和「开 Agent」（浅主题色底、主题色字）两个按钮都画出来了、看得清；头部 P0 / 短期项目 / 相关 92。
+- [x] Day view of chat messages with prev/next — KnowledgeView.swift (KBDayView)
   - 要到 Mac 前看：点底部「‹ 前一天」，前一天加载出来、再能翻回来。`-showKnowledgeDay YES` 截图里当天 8 条消息、命中的那条高亮、前一天链接都对。
-- [ ] 打标 editor (importance, relevance, tags, project type/status) — KnowledgeView.swift (KBTagEditor)
+  - Mac 真窗口（2026-11-04，执行者跑）：搜「灰度」→ 会话「天气 App 项目群」→ 搜索匹配的第一行，进到 10 月 30 日（3 条，命中的那条高亮）；底部「‹ 10月29日 周四」翻到前一天（3 条），再点「10月30日 周五 ›」回来。
+    假 hub 归档的聊天只有 `oc_team` 两天，搜的词要在里面（「灰度」「降雨条」「设计稿」）：搜「小组件」「发布」不出会话。
+- [x] 打标 editor (importance, relevance, tags, project type/status) — KnowledgeView.swift (KBTagEditor)
   - 要到 Mac 前看：打开一个项目等详情加载完，点工具栏的打标按钮，看重要级 / 相关度 / 标签 / 类型状态的预填对不对，改一项保存后头部更新。`-showKBEditor` 在详情加载前就弹 sheet，预填的是占位条目（P2 / 0），只是 DEBUG 的先后问题。
+  - Mac 真窗口（2026-11-04，执行者跑）：天气 App 详情加载完点工具栏「打标」，预填 重要级 P0、相关度「与我相关 92」、标签「iOS 小组件」、类型「短期（需求）」、状态「进行中」，和头部一致；改成 P1 保存，2 秒内头部变成 P1。
 - [x] Models — Shared/Knowledge.swift
   - Mac（2026-11-01 核对）：`KnowledgeTests` 编进 JarvisMacTests 通过；列表、详情、搜索的响应在 Mac 上解出来并画出来了（截图）。
   Mac（2026-11-01 截图）：侧栏「知识库」整页，类型胶囊、项目分组、人列表、条目详情（问 Persona / 开 Agent、档案、目录）都对；体验模式的搜索固定回空（DemoHub），搜索命中、日视图还没在 Mac 上看过；打标 sheet 截图看过（见上面「表单」那段的 `-showKBEditor`）。
@@ -921,8 +925,9 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Assistant sidebar search — AssistantSidebar.swift
   - Mac（2026-11-03 Mac mini 真窗口，执行者跑）：点放大镜出「搜索对话」框和「取消」；输「第 3 周」只剩一条、没有分节，输「火星」显示「没有找到「火星」」；取消后回到完整列表。
 - [x] Inbox search — InboxView.swift
-- [ ] Knowledge search — KnowledgeView.swift
+- [x] Knowledge search — KnowledgeView.swift
   - Mac（2026-11-01 核对）截图（`-showKnowledgeSearch 发布`）按 项目 / 会话 / 人 分组对；高亮只在「人」那条里看到加粗，项目和会话露出的片段里没有这个词（§12 用「小组件」搜时每条都加粗了）。
+  - Mac 真窗口（2026-11-04，执行者跑）：在搜索框里打「灰度」，出「会话」一组（天气 App 项目群），露出的两段聊天里「灰度」都加粗。
 - [x] Launcher search, directory search, translation chat picker search — ModelLaunchersView.swift, NewChatView.swift, TranslationSettingsView.swift
   - Mac（2026-11-03 Mac mini 真窗口：执行者跑，开发会话复核了两项「不通过」）：⌘N › 启动器（本次覆盖）› 「函数名或模型」输「s」，codex 被筛掉；设置 › 翻译 › 飞书会话（「要翻译的会话」sheet）输「徒步」只剩「周末徒步群」。执行者用后台的辅助功能插入打字，字显示在框里但不触发搜索，报了不通过；改用前台真按键就筛了（`docs/lessons/testing.md`）。翻译那一项原来是 mock 的飞书会话缺 `is_mine` 等字段，App 解不开（「未能读取数据，因为数据丢失。」），mock 已补上（`scripts/mock/test_lark_mock.py`）。设置 › 模型供应商的启动器搜索（`ModelLaunchersView`）：`-showModelSearch <词>` 预填后截图看到列表筛选（2026-11-01）。清单里的「directory search」是旧描述：目录选择（`DirectoryBrowser`）没有搜索框，iOS 也一样，是逐级点进去。
 
