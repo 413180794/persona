@@ -152,6 +152,21 @@ export interface TaskNote {
   detail?: string;
 }
 
+/** A picture folded into a run of work (proto.Fold.images): the turn-image strip shows it without opening the fold. */
+export interface FoldImage {
+  /** The image item: its bytes from /sessions/{mid}/{sid}/items/{item_id}/image. Missing: only a path (file/thumb). */
+  item_id?: string;
+  tool_use_id: string;
+  tool: string;
+  source: "read" | "screenshot" | "browser" | "mcp" | "tool";
+  path?: string;
+  machine?: string;
+  mime?: string;
+  size?: number;
+  width?: number;
+  height?: number;
+}
+
 export interface Item {
   id: string;
   seq: number;
@@ -167,8 +182,8 @@ export interface Item {
   queued?: boolean;
   wake?: boolean;
   task?: TaskNote;
-  fold?: { items: number; tools: number; thoughts: number; until?: string; through_seq: number; through_id?: string };
-  image?: { mime: string; data?: string; lazy?: boolean; width?: number; height?: number };
+  fold?: { items: number; tools: number; thoughts: number; until?: string; through_seq: number; through_id?: string; images?: FoldImage[] };
+  image?: { mime: string; data?: string; lazy?: boolean; size?: number; width?: number; height?: number };
   /** Sent by another Claude session (cross-session messaging), not typed by you: its name. */
   from?: string;
   /** The client_msg_id of the message this came from, as the hub tied it (every item of it: the text, its images, a

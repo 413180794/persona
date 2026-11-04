@@ -1,6 +1,8 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { clock } from "../../lib/format";
-import { getSession } from "../../lib/store";
+import { getSession, getState } from "../../lib/store";
+import { turnImages } from "../../lib/turn-images";
+import { TurnImages } from "./TurnImages";
 import { isLoopTick, type Segment, type UserMessage } from "../../lib/turns";
 import type { Item } from "../../lib/types";
 import { channelOf, useChannels } from "../../lib/channels";
@@ -93,10 +95,13 @@ export const SegmentView = memo(function SegmentView({
 }) {
   // while the agent works, its latest words are still part of the work, unless the headless assistant streams
   const showAnswer = !live || streaming !== undefined || Boolean(seg.answer && !seg.steps.length);
+  // the pictures the agent looked at this turn, between its work and its answer (they appear and grow while it works)
+  const images = useMemo(() => turnImages(seg, getState().machines.find((m) => m.id === mid)?.name), [seg, mid]);
   return (
     <section className="flex flex-col gap-3">
       {seg.user && (seg.user.parts ? <MergedBubble msg={seg.user} mid={mid} sid={sid} /> : seg.user.from ? <PeerMessage msg={seg.user} /> : isLoopTick(seg.user) ? <LoopTick msg={seg.user} /> : <UserBubble msg={seg.user} mid={mid} sid={sid} />)}
       <WorkRow seg={live && seg.answer && !showAnswer ? { ...seg, steps: [...seg.steps, { kind: "text", id: seg.answer.id, item: seg.answer }] } : seg} live={live} now={now} mid={mid} sid={sid} expandFold={expandFold} onOpen={onOpen} />
+      {images.length > 0 && <TurnImages images={images} mid={mid} sid={sid} cwd={getSession(mid, sid)?.cwd} />}
       {showAnswer && <Answer item={seg.answer} streaming={streaming} mid={mid} sid={sid} />}
     </section>
   );

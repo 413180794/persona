@@ -5764,6 +5764,36 @@ if os.environ.get("MOCK_COMPARE"):
         FILES[_blob] = _old
         COMPARE_BLOBS[_rel] = _blob
         MOCK_TREE.setdefault(MOCK_REPO + "/" + _rel.rsplit("/", 1)[0] + "/", None)
+# MOCK_TURN_IMAGES_WEB=1: turns whose tools brought pictures back, for the web's strip (#1540): nine in a
+# finished review, one in the release notes, and two so far in the widget turn that is still working.
+if os.environ.get("MOCK_TURN_IMAGES_WEB"):
+    def _shot(name, png, tool, tid, ts, inp=None):
+        return [it("assistant", "tool_use", ts, tool_use_id=tid, tool_name=tool, tool_input=inp or {}),
+                it("user", "image", ts, tool_use_id=tid, image={"mime": "image/png", "data": base64.b64encode(png).decode(), "width": _png_size(png)[0], "height": _png_size(png)[1]}),
+                it("user", "tool_result", ts, tool_use_id=tid, text=name)]
+
+    def _png_size(png):
+        return struct.unpack(">II", png[16:24])
+
+    # built in conversation order: an item's seq is when it was made
+    _ask = it("user", "text", 10, text="对一下设计稿：图标、小组件截图和网页预览，哪里不一致？")
+    _review_shots = (_shot("icon", _bar_png(256, 256, (0.35, 0.6, 0.8, 0.95)), "Read", "ti-a", 9, {"file_path": "/Users/me/code/weather/docs/icon.png"})
+                     + _shot("screen", _page_png(720, 450), "mcp__cua__screenshot", "ti-b", 8)
+                     + _shot("page", _page_png(640, 400), "mcp__playwright__browser_take_screenshot", "ti-c", 7)
+                     + _shot("figma", _bar_png(400, 300, (0.2, 0.8, 0.5, 0.9)), "mcp__figma__get_image", "ti-d", 6)
+                     + _shot("codex", _bar_png(300, 300, (0.9, 0.6, 0.4, 0.2)), "view_image", "ti-e", 5, {"path": "/Users/me/code/weather/docs/widget-small.png"})
+                     + _shot("medium", _bar_png(640, 300, (0.3, 0.45, 0.7, 0.85)), "Read", "ti-i", 5, {"file_path": "/Users/me/code/weather/docs/widget-medium.png"})
+                     + _shot("lock", _page_png(300, 640), "Read", "ti-j", 5, {"file_path": "/Users/me/code/weather/docs/lock-screen.png"})
+                     + _shot("dark", _bar_png(400, 400, (0.6, 0.4, 0.8, 0.5)), "mcp__cua__screenshot", "ti-k", 5)
+                     + _shot("spec", _page_png(800, 500), "mcp__playwright__browser_take_screenshot", "ti-l", 5))
+    ITEMS[REVIEW] = ITEMS[REVIEW] + [_ask] + _review_shots + [
+        it("assistant", "text", 4, text="对过了：图标的圆角比设计稿小 2pt，小组件截图里降雨概率的字号偏大，网页预览和 Figma 一致。我把差异列在 `docs/design-diff.md` 里了。")]
+    _ask = it("user", "text", 3, text="看下这张发布海报能不能用")
+    ITEMS[RELEASE] = ITEMS.get(RELEASE, []) + [_ask] + _shot("poster", _page_png(420, 560), "Read", "ti-f", 2, {"file_path": "/Users/me/code/weather/release/poster.png"}) + [
+        it("assistant", "text", 1, text="海报可以用，版本号和日期都对；右下角的二维码离边缘太近，建议往里挪 16px。")]
+    _ask = it("user", "text", 1, text="截两张小组件的图对比一下深浅色")
+    ITEMS[WIDGET] = ITEMS[WIDGET] + [_ask] + _shot("light", _page_png(360, 360), "mcp__cua__screenshot", "ti-g", 1) + _shot("dark", _bar_png(360, 360, (0.5, 0.7, 0.3, 0.6)), "mcp__cua__screenshot", "ti-h", 0)
+
 if os.environ.get("MOCK_OFFICE"):  # the Office viewer's files (#1345): rendered in the browser, or converted by "LibreOffice"
     MOCK_TREE.setdefault(MOCK_REPO + "/reports/", None)
     MOCK_TREE[MOCK_REPO + "/reports/季度报告.docx"] = (MOCK_MIMES[".docx"], base64.b64encode(office_docx()).decode())
