@@ -109,6 +109,6 @@ nonisolated enum AskPersonaText {
     /// What Siri reads: a long answer is clipped (the snippet shows the whole thing).
     static func spoken(_ answer: String?) -> String {
         guard let answer else { return pending }
-        return IntentText.excerpt(answer, limit: 300)
+        return IntentText.excerpt(AssistantCardText.replacingCards(answer), limit: 300)
     }
 }

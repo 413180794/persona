@@ -30,7 +30,9 @@ nonisolated enum WatchText {
         (#"\n{3,}"#, "\n\n"),
     ]
 
-    static func shown(_ text: String) -> String {
+    static func shown(_ raw: String) -> String {
+        // The assistant's cards first: their words, not their JSON (the fence rule below would leave the JSON).
+        let text = AssistantCardText.replacingCards(raw)
         let ns = text as NSString
         let blocks = context.matches(in: text, range: NSRange(location: 0, length: ns.length))
         var t = context.stringByReplacingMatches(in: text, range: NSRange(location: 0, length: ns.length), withTemplate: "")
