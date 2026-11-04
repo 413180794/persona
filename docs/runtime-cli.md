@@ -86,7 +86,8 @@ scripts/app/personactl.py idle && scripts/app/personactl.py screenshot out.png
 - `freeze` 打开模拟器的“减弱动态效果”（私有的 `_AXSSetReduceMotionEnabled`，和打开无障碍树的开关在同一个库里），尊重它的视图
   画成静止的样子；`layers` 管减弱动态效果管不到的 Core Animation 动画：`strip`（默认）把正在跑的动画一次拿掉，图层直接到终点，
   几遍之间像素一样；`pause` 停住窗口的动画时钟，停在哪一相不一定，而且之后开始的转场不会结束，**导航前先 `freeze --off`**。
-  `freeze --off` 把减弱动态效果改回原样。
+  `freeze --off` 把减弱动态效果改回原样。这个开关是整个模拟器的，App 退出后还开着：开之前的值存在 App 的 UserDefaults 里
+  （`runtimeCLIReduceMotionBefore`），App 被杀或脚本中途出错、没走到 `--off` 时，下一次启动（DEBUG）会改回去。
 - 打开减弱动态效果后“需要你”的圆点画法不同（没有外圈），所以 freeze 拍的图只和同样 freeze 拍的比，不和 `id-old.sh` 比。
 - 实测（每种 3 遍，两两比，任一通道差超过 2 算不同）：液态玻璃的对话不 freeze 时 4 s 内停不下、freeze 后 3/3 停下且 0 差；
   BeautifulUI 的对话不 freeze 3 遍都停不下（几遍之间差 2026–8578 px），freeze 后 3/3 停下、只差顶栏的时间（748–1292 px）；

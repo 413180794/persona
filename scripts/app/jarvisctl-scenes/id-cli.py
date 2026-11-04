@@ -13,7 +13,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from jarvisctl import Ctl  # noqa: E402
+from jarvisctl import Ctl, CtlError  # noqa: E402
 
 ERR = "server/b2e4d6f8-0000-4000-8000-000000000001"
 CHAT = "macbook/a1f3c2d4-0000-4000-8000-000000000001"
@@ -46,32 +46,37 @@ def main():
     freeze = os.environ.get("FREEZE") == "1"
     times = []
     ap = None
-    for combo in combos:
-        style, appear = combo.split(":")
-        if appear != ap:
-            c.appearance(appear)
-            ap = appear
-        c.call("set-style", style=style)
-        for name, nav in SCENES:
-            s = time.time()
-            restarts = c.online(15).get("mockRestarts", [])
-            flags = {"openWork": False}
-            flags.update(nav.get("defaults", {}))
-            if freeze:
-                c.call("freeze", on=False)  # a transition must end: navigate first, freeze before the shot
-            c.navigate(**dict(nav, defaults=flags, coldChats=os.environ.get("COLD", "1") == "1"))
-            c.idle()  # the page's data in (machines' metrics come after the page)
-            if "session" in nav:
-                c.call("wait-loaded", timeout=15)  # the chat's history from the hub, not only the disk cache's
-            time.sleep(max(0.0, AT_LEAST.get(name, 0) - (time.time() - s)))
-            if freeze:
-                c.call("freeze")
-            r = c.call("settle", timeout=10, stable=int(os.environ.get("STABLE", "4")), every=150, pixels=int(os.environ.get("PIXELS", "600")))
-            f = f"{style}-{appear}-{name}.png"
-            c.screenshot(os.path.join(out, f), settle=False)
-            times.append((f, time.time() - s, r.get("settled"), r.get("frames")))
-    if freeze:
-        c.call("freeze", on=False)  # the simulator's Reduce Motion back as it was
+    try:
+        for combo in combos:
+            style, appear = combo.split(":")
+            if appear != ap:
+                c.appearance(appear)
+                ap = appear
+            c.call("set-style", style=style)
+            for name, nav in SCENES:
+                s = time.time()
+                restarts = c.online(15).get("mockRestarts", [])
+                flags = {"openWork": False}
+                flags.update(nav.get("defaults", {}))
+                if freeze:
+                    c.call("freeze", on=False)  # a transition must end: navigate first, freeze before the shot
+                c.navigate(**dict(nav, defaults=flags, coldChats=os.environ.get("COLD", "1") == "1"))
+                c.idle()  # the page's data in (machines' metrics come after the page)
+                if "session" in nav:
+                    c.call("wait-loaded", timeout=15)  # the chat's history from the hub, not only the disk cache's
+                time.sleep(max(0.0, AT_LEAST.get(name, 0) - (time.time() - s)))
+                if freeze:
+                    c.call("freeze")
+                r = c.call("settle", timeout=10, stable=int(os.environ.get("STABLE", "4")), every=150, pixels=int(os.environ.get("PIXELS", "600")))
+                f = f"{style}-{appear}-{name}.png"
+                c.screenshot(os.path.join(out, f), settle=False)
+                times.append((f, time.time() - s, r.get("settled"), r.get("frames")))
+    finally:
+        if freeze:  # the simulator's Reduce Motion back as it was, also when a shot failed
+            try:
+                c.call("freeze", on=False)
+            except (OSError, CtlError, ValueError) as e:  # ValueError: a dying app's half answer
+                print(f"WARNING freeze not turned off ({e}): the app's next launch puts Reduce Motion back")
     with open(os.path.join(out, "times.tsv"), "w") as fh:
         for f, t, ok, n in times:
             fh.write(f"{f}\t{t:.2f}\t{ok}\t{n}\n")

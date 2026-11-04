@@ -8,10 +8,24 @@ extension RuntimeCLI {
         "freeze": { a in freeze(a) },
     ]
 
-    nonisolated(unsafe) private static var reduceMotionBefore: Bool?
+    /// Reduce Motion as it was before `freeze`, saved: the setting is the simulator's, so it outlives the app. A launch
+    /// that finds it (the app killed or a script stopped while frozen) puts it back (`restoreReduceMotion`).
+    private static let reduceMotionBeforeKey = "runtimeCLIReduceMotionBefore"
+    private static var reduceMotionBefore: Bool? {
+        get { UserDefaults.standard.object(forKey: reduceMotionBeforeKey) as? Bool }
+        set { UserDefaults.standard.set(newValue, forKey: reduceMotionBeforeKey) }
+    }
+
+    /// At launch (`startIfAsked`, every DEBUG launch): Reduce Motion back as it was before a `freeze` never turned off.
+    static func restoreReduceMotion() {
+        guard let before = reduceMotionBefore else { return }
+        setReduceMotion(before)
+        reduceMotionBefore = nil
+    }
 
     /// `on` (default true) / false. `reduceMotion` (default true): the simulator's Reduce Motion, which the views that
-    /// read it draw still (a needs-you dot stops breathing, BeautifulUI's chat stops); put back as it was by `on: false`.
+    /// read it draw still (a needs-you dot stops breathing, BeautifulUI's chat stops); put back as it was by `on: false`
+    /// or, when that never came, by the next launch.
     /// `layers`: what Reduce Motion does not reach (a UIKit spinner in a working agent's steps, seen through the glass
     /// bar too): "strip" (default: every running Core Animation animation removed once, layers jump to where they were
     /// going; the same pixels run after run), "pause" (Core Animation's clock stopped in the app's windows: what runs now

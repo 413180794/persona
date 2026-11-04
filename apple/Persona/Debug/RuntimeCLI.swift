@@ -33,6 +33,7 @@ enum RuntimeCLI {
 
     static func startIfAsked() {
         let d = UserDefaults.standard
+        restoreReduceMotion()
         if overHub { enableAccessibilityTree() } // the hub's calls read the tree too (RuntimeCLI+Hub.swift)
         let port = d.integer(forKey: "runtimeCLI")
         guard port > 0, port < 65536, listener == nil, let nwPort = NWEndpoint.Port(rawValue: UInt16(port)) else { return }
