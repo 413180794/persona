@@ -307,3 +307,34 @@ func TestDoneSignals(t *testing.T) {
 		t.Fatalf("clipMiddle = %q", s)
 	}
 }
+
+// The judge reads the agent's whole latest turn: a follow-up the user sent it is part of the work; the turn that
+// answers the task's own prompt does not repeat it.
+func TestTaskDoneReadsTheLatestTurn(t *testing.T) {
+	h, tn := newTaskHub(t)
+	js := stubJudge(t, h, http.StatusOK, `{"verdict":"done","reason":"已合并并发了 TestFlight"}`)
+	todo := startedTask(t, h)
+	tn.mu.Lock()
+	tn.items = []proto.Item{
+		{Kind: proto.KindText, Role: "user", Text: "再把「全部 N」挪到最左边"},
+		{Kind: proto.KindText, Role: "assistant", Text: "我先看看"},
+		{Kind: proto.KindText, Role: "assistant", Text: "挪好了，PR 已合并，TestFlight 构建号 202611040923。没截图的：Mac。"},
+	}
+	tn.mu.Unlock()
+	runTurn(h, "挪好了")
+	waitFor(t, "auto done", func() bool { return todoNow(h, todo.ID).DoneAt != nil })
+	in, _ := js.input.Load().(string)
+	for _, want := range []string{"用户后来给它的要求", "全部 N", "构建号 202611040923", "没截图的：Mac"} {
+		if !strings.Contains(in, want) {
+			t.Errorf("judge input lacks %q: %s", want, in)
+		}
+	}
+	if strings.Contains(in, "我先看看") {
+		t.Errorf("judge input has an earlier reply of the turn: %s", in)
+	}
+
+	if !sameRequest("<jarvis-context kind=\"context\">x</jarvis-context>\niPad 横屏时登录页崩溃，修好并补测试", "iPad 横屏时登录页崩溃，修好并补测试") ||
+		sameRequest("再把「全部 N」挪到最左边", "iPad 横屏时登录页崩溃，修好并补测试") {
+		t.Fatal("sameRequest")
+	}
+}

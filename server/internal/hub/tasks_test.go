@@ -26,6 +26,8 @@ type taskNode struct {
 	n      int
 	// failStart: session.start answers this error instead of a session.
 	failStart error
+	// items: what session.items answers (the agent's latest turn).
+	items []proto.Item
 }
 
 func (tn *taskNode) calls() (starts, sends []map[string]any) {
@@ -59,6 +61,8 @@ func connectTaskNode(t *testing.T, h *Hub, id string) *taskNode {
 			return map[string]any{"session": proto.Session{SessionID: sid, Cwd: p["cwd"].(string), Agent: "claude"}}, nil
 		case "session.send":
 			tn.sends = append(tn.sends, p)
+		case "session.items":
+			return map[string]any{"items": tn.items}, nil
 		}
 		return map[string]any{}, nil
 	}

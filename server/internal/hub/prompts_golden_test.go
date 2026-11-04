@@ -580,4 +580,8 @@ func TestGoldenTaskDone(t *testing.T) {
 	golden(t, "task_done_input.two_agents", prompts.RenderTaskDoneInput(prompts.TaskDoneInput{Title: "用新 logo 设计默认形象",
 		Prompt: "按新 logo 重画默认形象的全部表情",
 		Replies: []prompts.TaskDoneReply{{Machine: "box", Text: "没有全改完，还差三个表情"}, {Machine: "mac", Text: "预览图放在 /tmp/preview.png"}}}))
+	golden(t, "task_done_input.follow_up", prompts.RenderTaskDoneInput(prompts.TaskDoneInput{Title: "修任务启动失败",
+		Prompt: "任务启动失败时一直显示正在开，修好",
+		Replies: []prompts.TaskDoneReply{{Machine: "box", Ask: "再把「全部 N」挪到这一行最左边",
+			Text: "挪好了，PR 已合并，TestFlight 构建号 202611040923。没截图的：Mac。"}}, Build: true}))
 }

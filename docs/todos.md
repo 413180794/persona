@@ -167,7 +167,7 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 
 **什么时候判断**：任务的 Agent 全部停下（没有在工作、没有等用户回答、没有待处理的卡片）、hub 往对话里发 done 回执的同一处（`tasks.go` 的 `taskTurnEnded`，一段工作只发一次回执，也只判断一次）。
 
-**怎么判断**：Agent 停下不等于做完了：停在「没有全改完……」「等待审核」的都不该关。hub 用判断模型（模型配置里的「AI 分身判断器」`inbox.judge`，即 hub.json 的 `inbox.judge_ai`，没配时继承 `ai`）看三样东西：任务标题、派活时的要求（待办的 `notes`）、每个活跃 Agent 最后一条完整回复（经 `session.items` 读，读不到时用会话列表里截短的 `last_text`）。模型答五选一：
+**怎么判断**：Agent 停下不等于做完了：停在「没有全改完……」「等待审核」的都不该关。hub 用判断模型（模型配置里的「AI 分身判断器」`inbox.judge`，即 hub.json 的 `inbox.judge_ai`，没配时继承 `ai`）看三样东西：任务标题、派活时的要求（待办的 `notes`）、每个活跃 Agent 最近一轮的内容（经 `session.items` 读：这一轮里用户给它的话和它最后一条完整回复；读不到时用会话列表里截短的 `last_text`）。用户后来又给 Agent 发了新的要求时，要求以后来的为准（原来的已在之前几轮处理过）；后来的话只是确认、回答它的问题（「好」「👌」「按 A」）时仍以派活时的要求为准（#1116）。模型答五选一：
 
 | 结论 | 含义 | 自动完成 |
 | --- | --- | --- |
@@ -177,6 +177,7 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 | `needs_user` | 要用户拍板、提供信息、批准、手动操作或验收 | 否 |
 | `unsure` | 看不出来 | 否 |
 
+- 附带说明不影响完成：没截图的平台、没实测的环境、提醒用户的事都不算没做完；交付以后例行的等待（TestFlight 外部组的 Beta 审核、CI 重跑）也不算在等；处理 App Store / Mac App Store 审核意见、提交后在等审核结论的算 `waiting`。
 - 宁可不关：模型不可用、超时、回复不是合法 JSON、结论不是 `done`，都不动待办，只记日志；回执照发。
 - 便宜的线索：最后的回复里有 GitHub PR 链接且提到合并（merged / 已合并 / 合入），或提到 TestFlight 加构建号，hub 把这两个线索写进输入，只作提示，不能单凭它判完成。
 - 提示词在 `server/internal/prompts/assistant/task_done.md`、`task_done_input.md`（`docs/prompts.md`）。

@@ -223,9 +223,10 @@ type TaskDoneInput struct {
 	MergedPR, Build bool
 }
 
-// TaskDoneReply is one agent's last reply.
+// TaskDoneReply is one agent's last reply, and what the user last asked it in that turn when it was not the task's
+// own prompt (a follow-up the user sent the agent later).
 type TaskDoneReply struct {
-	Machine, Text string
+	Machine, Ask, Text string
 }
 
 func RenderTaskDoneInput(in TaskDoneInput) string { return render("assistant/task_done_input", in) }

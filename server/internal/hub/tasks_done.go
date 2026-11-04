@@ -92,7 +92,7 @@ func (h *Hub) taskReplies(ctx context.Context, t Todo) []prompts.TaskDoneReply {
 		if m == nil {
 			continue
 		}
-		text := lastAnswer(ctx, m, a.SessionID)
+		ask, text := lastTurn(ctx, m, a.SessionID)
 		if text == "" {
 			if s, ok := m.session(a.SessionID); ok {
 				text = strings.TrimSpace(s.LastText)
@@ -101,27 +101,50 @@ func (h *Hub) taskReplies(ctx context.Context, t Todo) []prompts.TaskDoneReply {
 		if text == "" {
 			continue
 		}
-		out = append(out, prompts.TaskDoneReply{Machine: m.cfg.Name, Text: clipMiddle(text, 1500)})
+		if sameRequest(ask, t.Notes) {
+			ask = "" // the turn that answers the task's own prompt: the prompt is already in the input
+		}
+		out = append(out, prompts.TaskDoneReply{Machine: m.cfg.Name, Ask: clipMiddle(ask, 500), Text: clipMiddle(text, 1500)})
 	}
 	return out
 }
 
-// lastAnswer is the agent's last reply in its latest turn; "" when it cannot be read.
-func lastAnswer(ctx context.Context, m *Machine, sid string) string {
+// lastTurn is the agent's latest turn: what the user asked in it (its first user message; "" when none) and its last
+// reply ("" when the turn cannot be read). The user may have sent the agent a follow-up since the task's prompt: the
+// work to judge is then that.
+func lastTurn(ctx context.Context, m *Machine, sid string) (ask, answer string) {
 	var res struct {
 		Items []proto.Item `json:"items"`
 	}
 	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	if err := m.call(cctx, "session.items", map[string]any{"session_id": sid, "turns": 1}, &res); err != nil {
-		return ""
+		return "", ""
+	}
+	for _, it := range res.Items {
+		if it.Kind == proto.KindText && it.Role == "user" && strings.TrimSpace(it.Text) != "" {
+			ask = strings.TrimSpace(it.Text)
+			break
+		}
 	}
 	for i := len(res.Items) - 1; i >= 0; i-- {
 		if it := res.Items[i]; it.Kind == proto.KindText && it.Role == "assistant" && strings.TrimSpace(it.Text) != "" {
-			return strings.TrimSpace(it.Text)
+			return ask, strings.TrimSpace(it.Text)
 		}
 	}
-	return ""
+	return ask, ""
+}
+
+// sameRequest: ask is the task's own prompt (as sent, maybe with context around it).
+func sameRequest(ask, prompt string) bool {
+	ask, prompt = oneLine(ask), oneLine(prompt)
+	if ask == "" || prompt == "" {
+		return ask == prompt
+	}
+	if r := []rune(prompt); len(r) > 80 {
+		prompt = string(r[:80])
+	}
+	return strings.Contains(ask, prompt)
 }
 
 // clipMiddle keeps a long text's first and last n runes: a final answer says what was done first and what is left last.
