@@ -162,6 +162,10 @@ struct ChatView: View {
         let _ = PerfTrace.body("ChatView")
         #endif
         let _ = actions.set(handlers)
+        chatLifecycle
+    }
+
+    private var chatSurface: some View {
         swipeablePanes
         // A readable measure on a wide page (iPhone Duo open, nothing beside the chat); a no-op on other iPhones.
         .frame(maxWidth: Self.readableWidth)
@@ -182,6 +186,10 @@ struct ChatView: View {
         .overlay(alignment: .top) {
             if style == .dev { if sideBars { sideHeader } else { devChrome } }
         }
+    }
+
+    private var chatPresentation: some View {
+        chatSurface
         // The session's details come up from the bottom (2026-10-31: the card that dropped from the title covered the
         // chat and needed a second tap on the title; a sheet closes with a swipe or a tap above it).
         #if os(iOS)
@@ -222,6 +230,10 @@ struct ChatView: View {
             }
         }
         #endif
+    }
+
+    private var chatActivity: some View {
+        chatPresentation
         .task(id: "\(key.machineID)/\(key.sessionID)|\(session?.cwd ?? "")") { await loadGit() }
         .task(id: key) {
             guard style == .assistant else { return }
@@ -293,6 +305,10 @@ struct ChatView: View {
                 }
             }
         }
+    }
+
+    private var chatLifecycle: some View {
+        chatActivity
         .environment(\.openFile, actions.openFile)
         .environment(\.fileScope, FileScope(machine: key.machineRef, cwd: session?.cwd ?? ""))
         .environment(\.chatImages, store.images)
