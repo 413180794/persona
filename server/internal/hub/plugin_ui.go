@@ -9,6 +9,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/plugin"
@@ -25,13 +28,20 @@ const uiTimeout = 20 * time.Second
 
 // UIPlace is one thing a plugin draws, as the apps list it.
 type UIPlace struct {
-	Plugin    string `json:"plugin"`
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	Placement string `json:"placement"`
+	Plugin     string `json:"plugin"`
+	PluginName string `json:"plugin_name,omitempty"`
+	ID         string `json:"id"`
+	Title      string `json:"title"`
+	Placement  string `json:"placement"`
+	Size       string `json:"size,omitempty"`
+	// Icon: a nav_page's (plugin.UIIcons); Opens: the page an overview_card opens; Badge: on a nav_page's entry.
+	Icon  string        `json:"icon,omitempty"`
+	Opens string        `json:"opens,omitempty"`
+	Badge *plugin.Badge `json:"badge,omitempty"`
 }
 
-// uiPlaces are the plugins' UI of placement; for launcher sections, those whose hosts have the gateway at base.
+// uiPlaces are the plugins' UI of placement (every slot's but launcher sections' when it is empty); for launcher
+// sections, those whose hosts have the gateway at base.
 func (ps *plugins) uiPlaces(placement, base string) []UIPlace {
 	out := []UIPlace{}
 	if ps == nil {
@@ -52,24 +62,75 @@ func (ps *plugins) uiPlaces(placement, base string) []UIPlace {
 			continue
 		}
 		for _, u := range p.Manifest.UIs() {
-			if u.Placement != placement || (placement == "launcher_section" && (host == "" || (len(u.Hosts) > 0 && !hostMatches(host, u.Hosts)) || !p.Record.Granted.LauncherKeys)) {
+			slot, known := plugin.Slot(u.Placement)
+			switch {
+			case !known:
+				continue
+			case placement == "" && u.Placement == "launcher_section":
+				continue
+			case placement != "" && u.Placement != placement:
+				continue
+			case u.Placement == "launcher_section" && (host == "" || (len(u.Hosts) > 0 && !hostMatches(host, u.Hosts)) || !p.Record.Granted.LauncherKeys):
 				continue
 			}
-			out = append(out, UIPlace{Plugin: p.Record.ID, ID: u.ID, Title: u.Title, Placement: u.Placement})
+			place := UIPlace{Plugin: p.Record.ID, PluginName: p.Manifest.Name, ID: u.ID, Title: u.Title, Placement: u.Placement,
+				Size: slot.Size, Icon: u.Icon, Opens: u.Opens}
+			if slot.Badge {
+				if b, ok := ps.badges.Load(p.Record.ID + "/" + u.ID); ok {
+					badge := b.(plugin.Badge)
+					place.Badge = &badge
+				}
+			}
+			out = append(out, place)
 		}
 	}
 	return out
 }
 
-// uiRequest is what the apps send: render (no action) or an action, with where it is drawn and the plugin's state.
+// uiRequest is what the apps send: render (no action) or an action, with where it is drawn, for whom, and the
+// plugin's state.
 type uiRequest struct {
 	Context struct {
 		Launcher string `json:"launcher,omitempty"`
 		Machine  string `json:"machine,omitempty"`
+		TZ       string `json:"tz,omitempty"`
+		Locale   string `json:"locale,omitempty"`
+		Platform string `json:"platform,omitempty"`
+		Size     string `json:"size,omitempty"`
+		// UIVersion is the UI version the app draws: 1 (the first eight items) when it says nothing.
+		UIVersion int `json:"ui_version,omitempty"`
 	} `json:"context"`
 	State  string            `json:"state,omitempty"`
 	Action string            `json:"action,omitempty"`
 	Values map[string]string `json:"values,omitempty"`
+}
+
+var localePattern = regexp.MustCompile(`^[A-Za-z]{2,3}([-_][A-Za-z0-9]{1,8}){0,4}$`)
+
+// uiParams are what the plugin is told of a request to draw item: the app's context held to what is known (a time
+// zone that loads, the user's when the app says none; a locale that looks like one; a known platform and size).
+func (h *Hub) uiParams(item plugin.UIItem, slot plugin.UISlot, in uiRequest) plugin.UIParams {
+	c := in.Context
+	out := plugin.UIParams{Contribution: item.ID, State: in.State, Placement: item.Placement, Size: slot.Size,
+		UIVersion: min(max(c.UIVersion, 1), plugin.UIVersion)}
+	if c.Size == plugin.SizeCompact || c.Size == plugin.SizeFull {
+		out.Size = c.Size
+	}
+	if _, err := time.LoadLocation(c.TZ); c.TZ != "" && len(c.TZ) <= 64 && err == nil {
+		out.TZ = c.TZ
+	} else {
+		out.TZ = h.userTZName()
+	}
+	if len(c.Locale) <= 35 && localePattern.MatchString(c.Locale) {
+		out.Locale = c.Locale
+	}
+	if slices.Contains(plugin.UIPlatforms, c.Platform) {
+		out.Platform = c.Platform
+	}
+	if in.Action != "" {
+		out.Action, out.Values = in.Action, in.Values
+	}
+	return out
 }
 
 // uiCall asks plugin id's ui contribution to render or act.
@@ -90,8 +151,13 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (plugin
 	if item == nil {
 		return res, fmt.Errorf("%s 没有叫 %s 的界面", id, uiID)
 	}
-	params := map[string]any{"state": in.State}
-	if item.Placement == "launcher_section" {
+	slot, known := plugin.Slot(item.Placement)
+	if !known {
+		return res, fmt.Errorf("这个 hub 没有 %s 这个位置", item.Placement)
+	}
+	params := h.uiParams(*item, slot, in)
+	switch item.Placement {
+	case "launcher_section":
 		if in.Context.Launcher == "" {
 			return res, errors.New("这个界面属于一个启动器：缺 context.launcher")
 		}
@@ -111,18 +177,26 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (plugin
 		qid := hex.EncodeToString(b[:])
 		quotaQueries.Store(qid, &quotaQuery{plugin: id, send: gw.send})
 		defer quotaQueries.Delete(qid)
-		params["launcher"] = map[string]string{"name": in.Context.Launcher, "base_url": root.String(), "query_id": qid}
+		params.Launcher = &plugin.UILauncher{Name: in.Context.Launcher, BaseURL: root.String(), QueryID: qid}
+	case "machine_section":
+		m := h.machineByID(in.Context.Machine)
+		if m == nil && in.Context.Machine != "" {
+			m = h.machineByName(in.Context.Machine)
+		}
+		if m == nil {
+			return res, errNoMachine
+		}
+		s := m.snapshot()
+		params.Machine = &plugin.UIMachine{ID: s.ID, Name: s.Name, OS: s.OS, Online: s.Online}
 	}
 	method := "ui.render"
 	if in.Action != "" {
 		method = "ui.action"
-		params["action"], params["values"] = in.Action, in.Values
 	}
-	raw, _ := plugin.Targeted(params, uiID)
 	cctx, cancel := context.WithTimeout(ctx, uiTimeout)
 	defer cancel()
 	var out json.RawMessage
-	if err := hp.proc.Call(cctx, method, raw, &out); err != nil {
+	if err := hp.proc.Call(cctx, method, params, &out); err != nil {
 		var re *rpc.Error
 		if errors.As(err, &re) {
 			if re.Code == plugin.CodeUnsupported {
@@ -132,20 +206,33 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (plugin
 		}
 		return res, err
 	}
-	if method == "ui.render" {
-		v, err := plugin.ParseView(out)
+	fit := func(v *plugin.View) error {
+		dropped, err := plugin.Fit(v, slot, params.UIVersion)
+		if len(dropped) > 0 && params.UIVersion == plugin.UIVersion {
+			h.plugins.logf("plugin %s: ui %s drew items this hub does not know (%s): left out", id, uiID, strings.Join(dropped, ", "))
+		}
 		if err != nil {
+			return fmt.Errorf("插件画的界面这个 hub 画不了：%v", err)
+		}
+		return nil
+	}
+	if method == "ui.render" {
+		var v plugin.View
+		if err := json.Unmarshal(out, &v); err != nil {
 			return res, fmt.Errorf("插件画的界面这个 hub 画不了：%v", err)
 		}
-		res.View = v
+		if err := fit(&v); err != nil {
+			return res, err
+		}
+		res.View = &v
 		return res, nil
 	}
 	if err := json.Unmarshal(out, &res); err != nil {
 		return res, err
 	}
 	if res.View != nil {
-		if err := plugin.CheckView(res.View); err != nil {
-			return plugin.ActionResult{}, fmt.Errorf("插件画的界面这个 hub 画不了：%v", err)
+		if err := fit(res.View); err != nil {
+			return plugin.ActionResult{}, err
 		}
 	}
 	if res.OpenURL != "" {
@@ -161,6 +248,8 @@ var (
 	// errUnsupportedGateway: a launcher section without hosts whose plugin says the launcher's gateway is not its own;
 	// the apps leave the section out.
 	errUnsupportedGateway = errors.New("not this plugin's gateway")
+	// errNoMachine: a machine section for a machine the hub does not have.
+	errNoMachine = errors.New("没有这台机器")
 )
 
 func (h *Hub) pluginUIRoutes(api *http.ServeMux) {
@@ -188,7 +277,7 @@ func (h *Hub) pluginUIRoutes(api *http.ServeMux) {
 		}
 		res, err := h.uiCall(r.Context(), r.PathValue("id"), r.PathValue("ui"), in)
 		switch {
-		case errors.Is(err, errNoPlugin):
+		case errors.Is(err, errNoPlugin), errors.Is(err, errNoMachine):
 			writeErrCode(w, http.StatusNotFound, "not_found", err)
 		case errors.Is(err, errUnsupportedGateway):
 			writeErrCode(w, http.StatusNotFound, "unsupported", err)
@@ -199,6 +288,54 @@ func (h *Hub) pluginUIRoutes(api *http.ServeMux) {
 		default:
 			writeJSON(w, res)
 		}
+	})
+}
+
+// setBadge takes a plugin's ui.badge: the badge on one of its nav_pages' entries, told to the apps (plugin_ui).
+func (ps *plugins) setBadge(id string, params json.RawMessage) {
+	p := ps.reg.Get(id)
+	var ev plugin.BadgeEvent
+	if p == nil || json.Unmarshal(params, &ev) != nil {
+		return
+	}
+	i := slices.IndexFunc(p.Manifest.UIs(), func(u plugin.UIItem) bool { return u.ID == ev.Contribution })
+	if i < 0 {
+		ps.logf("plugin %s: ui.badge for %q, which it does not have: dropped", id, ev.Contribution)
+		return
+	}
+	if slot, _ := plugin.Slot(p.Manifest.UIs()[i].Placement); !slot.Badge {
+		ps.logf("plugin %s: ui.badge for %s, which has no entry to badge: dropped", id, ev.Contribution)
+		return
+	}
+	if err := plugin.CheckBadge(ev.Text, ev.Tone); err != nil {
+		ps.logf("plugin %s: ui.badge for %s: %v: dropped", id, ev.Contribution, err)
+		return
+	}
+	key := id + "/" + ev.Contribution
+	var badge *plugin.Badge
+	if ev.Text == "" {
+		if _, had := ps.badges.LoadAndDelete(key); !had {
+			return
+		}
+	} else {
+		b := plugin.Badge{Text: ev.Text, Tone: ev.Tone}
+		if old, had := ps.badges.Swap(key, b); had && old.(plugin.Badge) == b {
+			return
+		}
+		badge = &b
+	}
+	if ps.h != nil {
+		ps.h.broadcast(map[string]any{"type": "plugin_ui", "plugin": id, "id": ev.Contribution, "badge": badge})
+	}
+}
+
+// clearBadges forgets a plugin's badges: it (re)starts, and says them again.
+func (ps *plugins) clearBadges(id string) {
+	ps.badges.Range(func(k, _ any) bool {
+		if strings.HasPrefix(k.(string), id+"/") {
+			ps.badges.Delete(k)
+		}
+		return true
 	})
 }
 

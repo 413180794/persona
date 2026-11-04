@@ -29,14 +29,16 @@ struct BrowserTests {
         #expect(off.allSatisfy { $0.done })
     }
 
-    @Test func toolsReadInChinese() {
+    @Test func toolsReadInChinese() throws {
         let use = Item(id: "1#0", seq: 1, ts: Date(timeIntervalSince1970: 1), role: "assistant", kind: .toolUse, text: nil, toolUseID: "t1",
                        toolName: "mcp__jarvis__browser_run",
                        toolInput: .object(["machine": .string("macbook"), "script": .string("\nawait page.goto(\"https://example.com\");\nreturn 1")]),
                        isError: nil, image: nil)
         let run = ToolCall(use: use, result: nil)
         #expect(ToolPresentation.verb(run.name) == "用浏览器")
-        #expect(ToolPresentation.subject(run) == "macbook · await page.goto(\"https://example.com\");")
+        #expect(ToolPresentation.subject(run, machines: [try machine("")]) == "MacBook · await page.goto(\"https://example.com\");",
+                "the Mac's name, not its id")
+        #expect(ToolPresentation.truncation(run.name) == .tail)
         #expect(ToolPresentation.verb("mcp__jarvis__browser_look") == "看浏览器")
     }
 }

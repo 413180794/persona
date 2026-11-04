@@ -355,7 +355,7 @@ var Points = map[string]Point{
 		}
 		return a.ID, nil
 	}},
-	"ui": {Name: "ui", Namespace: "ui", Version: 1, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
+	"ui": {Name: "ui", Namespace: "ui", Version: UIVersion, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
 		var u UIItem
 		if err := strict(raw, &u); err != nil {
 			return "", err
@@ -366,11 +366,21 @@ var Points = map[string]Point{
 		if u.Title == "" || utf8.RuneCountInString(u.Title) > 40 {
 			return u.ID, fmt.Errorf("ui %s: title, 1 to 40 characters", u.ID)
 		}
-		if !slices.Contains(UIPlacements, u.Placement) {
-			return u.ID, fmt.Errorf("ui %s: placement is %s", u.ID, strings.Join(UIPlacements, " or "))
+		if _, ok := Slot(u.Placement); !ok {
+			var names []string
+			for _, sl := range UISlots {
+				names = append(names, sl.Name)
+			}
+			return u.ID, fmt.Errorf("ui %s: placement is one of %s", u.ID, strings.Join(names, ", "))
 		}
 		if u.Placement != "launcher_section" && len(u.Hosts) > 0 {
 			return u.ID, fmt.Errorf("ui %s: only a launcher_section has hosts", u.ID)
+		}
+		if u.Icon != "" && (u.Placement != "nav_page" || !slices.Contains(UIIcons, u.Icon)) {
+			return u.ID, fmt.Errorf("ui %s: only a nav_page has an icon, one of %s", u.ID, strings.Join(UIIcons, ", "))
+		}
+		if u.Opens != "" && u.Placement != "overview_card" {
+			return u.ID, fmt.Errorf("ui %s: only an overview_card opens a page", u.ID)
 		}
 		for _, h := range u.Hosts {
 			if !hostPattern.MatchString(h) {

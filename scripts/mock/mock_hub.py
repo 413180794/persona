@@ -5923,6 +5923,48 @@ def png(w, h, rgb):
             + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
 
 
+def calculator_png(w=230, h=408):
+    """A made-up Calculator window showing 42, drawn here (stdlib only): the screenshot computer_state brings back."""
+    import zlib
+    px = bytearray(bytes((28, 28, 30)) * w * h)
+
+    def fill(x0, y0, x1, y1, c):
+        x0, x1 = max(0, int(x0)), min(w, int(x1))
+        for y in range(max(0, int(y0)), min(h, int(y1))):
+            if x1 > x0: px[(y * w + x0) * 3:(y * w + x1) * 3] = bytes(c) * (x1 - x0)
+
+    def disc(cx, cy, r, c):
+        for y in range(cy - r, cy + r + 1):
+            dx = int((r * r - (y - cy) ** 2) ** 0.5)
+            fill(cx - dx, y, cx + dx + 1, y + 1, c)
+
+    def digit(x, y, segs, dw=34, dh=56, t=7):  # seven segments: a top, b c right, d bottom, e f left, g middle
+        white = (255, 255, 255)
+        parts = {"a": (x + t, y, x + dw - t, y + t), "b": (x + dw - t, y + t, x + dw, y + dh // 2),
+                 "c": (x + dw - t, y + dh // 2, x + dw, y + dh - t), "d": (x + t, y + dh - t, x + dw - t, y + dh),
+                 "e": (x, y + dh // 2, x + t, y + dh - t), "f": (x, y + t, x + t, y + dh // 2),
+                 "g": (x + t, y + dh // 2 - t // 2, x + dw - t, y + dh // 2 + t // 2 + 1)}
+        for k in segs: fill(*parts[k], white)
+
+    for i, c in enumerate([(255, 95, 87), (254, 188, 46), (40, 200, 64)]):  # the window's three buttons
+        disc(18 + i * 20, 16, 6, c)
+    digit(134, 78, "fgbc")   # 4
+    digit(178, 78, "abged")  # 2
+    d, gap, top = 44, 8, 150
+    for row in range(5):
+        for col in range(4):
+            c = (255, 159, 10) if col == 3 else (165, 165, 165) if row == 0 else (51, 51, 51)
+            cx, cy = 12 + col * (d + gap) + d // 2, top + row * (d + gap) + d // 2
+            if row == 4 and col == 0:  # 0 is twice as wide
+                disc(cx, cy, d // 2, c); disc(cx + d + gap, cy, d // 2, c); fill(cx, cy - d // 2, cx + d + gap, cy + d // 2 + 1, c)
+            elif not (row == 4 and col == 1):
+                disc(cx, cy, d // 2, c)
+    raw = b"".join(b"\0" + bytes(px[y * w * 3:(y + 1) * w * 3]) for y in range(h))
+    def chunk(t, d): return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
 def churn(rounds, ms, steps=1, final=False, inbox=False, waiting=False, real=False):
     import time
     flips = [s for s in SESSIONS if s["state"] == "working"][-1:] if real else []
@@ -6120,17 +6162,27 @@ def say(text, user=None, stream=False, steps=10, ms=300):
 
 if os.environ.get("MOCK_COMPUTER", "") not in ("", "off"):
     # The assistant operating MacBook (#1182, #1184), in a conversation of its own: its tools read 操控电脑 / 看电脑, the
-    # screenshot is a made-up placeholder, and under them 看画面 opens the live screen.
+    # screenshot is a made-up Calculator (calculator_png), and under them 看画面 opens the live screen.
     _steps = [{"click": {"app": "Calculator", "role": "button", "name": n}} for n in ("All Clear", "6", "Multiply", "7", "Equals")]
     _run = tool("mcp__jarvis__computer_run", {"machine": "macbook", "steps": _steps}, '{"ok":true,"executed":5,"total":5}', 1)
     _look = tool("mcp__jarvis__computer_state", {"machine": "macbook", "app": "Calculator"},
                  '{"snapshot_id":"s1","tree_markdown":"- [0] AXWindow \\"Calculator\\"\\n  - AXStaticText = \\"42\\""}', 1)
     _calc = it("user", "image", 1, tool_use_id=_look[0]["tool_use_id"],
-               image={"mime": "image/png", "data": base64.b64encode(png(230, 408, (44, 44, 48))).decode(), "width": 230, "height": 408})
+               image={"mime": "image/png", "data": base64.b64encode(calculator_png()).decode(), "width": 230, "height": 408})
     ASK_CUA = "b2e4d6f8-0000-4000-8000-0000000000c1"  # a conversation of its own: -openAssistant server/<it>
     ASSISTANT.append(assistant_sess(ASK_CUA, "用计算器算 6×7", 1, "算好了：6 × 7 = 42。"))
     ITEMS[ASK_CUA] = [it("user", "text", 2, text="在 MacBook 上用计算器算一下 6×7，把截图发给我")] + _run + _look + [_calc] + \
         [it("assistant", "text", 1, text="算好了：6 × 7 = 42。截图在上面。")]
+    if os.environ.get("MOCK_COMPUTER_OPERATING") == "1":
+        # It is operating MacBook right now (#1343): the last call has no result yet, in the assistant's conversation and
+        # in an agent's (its own Cua Driver MCP), so the running work shows 「正在操作 MacBook · …」.
+        _again = [{"click": {"app": "Calculator", "role": "button", "name": n}} for n in ("All Clear", "9", "Multiply", "8")]
+        ITEMS[ASK_CUA] += [it("user", "text", 0, text="再算一下 9×8"),
+                           it("assistant", "tool_use", 0, tool_use_id="toolu_mock_operating", tool_name="mcp__jarvis__computer_run",
+                              tool_input={"machine": "macbook", "steps": _again})]
+        ITEMS[WIDGET] = ITEMS[WIDGET] + [it("assistant", "tool_use", 0, tool_use_id="toolu_mock_cua_click",
+                                            tool_name="mcp__cua-driver__click",
+                                            tool_input={"app": "Simulator", "role": "button", "name": "小组件"})]
 
 if os.environ.get("MOCK_CHURN") == "1":
     # Machines enough that the ⋯ menu scrolls, as it does with six on a phone.
@@ -6368,10 +6420,18 @@ PLUGINS = {
 }
 PLUGINS["example-gateway"] = {
     "id": "example-gateway", "name": "Example 网关面板", "kind": "ui", "status": "running", "version": "1.0.0", "source": "installed",
-    "enabled": True, "description": "在启动器页上显示 Example 网关的余额、Key 和用量。", "contributes": {"ui": ["home", "panel"]},
+    "enabled": True, "description": "在启动器页上显示 Example 网关的余额、Key 和用量。", "contributes": {"ui": ["home", "panel", "usage", "today", "gpu"]},
     "publisher": "example", "origin": "market:3f2a9c1d0b/example-gateway", "form": {"fields": []}, "config": {}, "secrets": [],
-    "permissions": [_RUNS, {"key": "launcher_keys", "title": "用启动器的 Key 访问它的网关", "detail": "查额度、画启动器页上的面板；它看不到 Key：hub 或有这个启动器的电脑替它发请求，只发到启动器自己的网关"}],
-    "ui": [{"plugin": "example-gateway", "id": "home", "title": "概况", "placement": "plugin_page"}]}
+    "permissions": [_RUNS, {"key": "launcher_keys", "title": "用启动器的 Key 访问它的网关", "detail": "查额度、画启动器页上的面板；它看不到 Key：hub 或有这个启动器的电脑替它发请求，只发到启动器自己的网关"},
+                    {"key": "ui_surfaces", "title": "在 App 里显示自己的界面",
+                     "detail": "主导航上的入口：用量；总览上的卡片：今天的用量；机器详情页里的一节（会知道是哪台机器）：网关调用"}],
+    "ui": [{"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "home", "title": "概况", "placement": "plugin_page", "size": "full"},
+           {"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "usage", "title": "用量", "placement": "nav_page", "size": "full",
+            "icon": "chart", "badge": {"text": "3", "tone": "danger"}}]}
+# The UI slots (docs/plugins.md「UI 插槽」): example-gateway's nav_page, overview_card and machine_section.
+_SLOT_UI = [{"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "today", "title": "今天的用量", "placement": "overview_card",
+             "size": "compact", "opens": "usage"},
+            {"plugin": "example-gateway", "plugin_name": "Example 网关面板", "id": "gpu", "title": "网关调用", "placement": "machine_section", "size": "full"}]
 
 if MOCK_COMPUTER:
     # The built-in plugin cua, on (MOCK_COMPUTER, docs/computer-use.md): its list of Macs is each Mac's computer.enabled,
@@ -6413,6 +6473,58 @@ _PLUGIN_VIEW = ["id", "name", "kind", "status", "error", "version", "source", "e
 # example-gateway draws a page (plugin_page "home") and a section on every launcher's page (launcher_section "panel"),
 # with every kind of item; its buttons answer (a toast, a new view, a link), the form's values come back.
 _UI_STATE = {"note": "", "auto": "true", "plan": "team", "refreshed": 0}
+
+
+_DAYS = ["10-29", "10-30", "10-31", "11-01", "11-02", "11-03", "11-04"]
+_IN = [1.8, 2.4, 0.9, 0.6, 3.1, 2.7, 1.2]
+_OUT = [0.4, 0.7, 0.2, 0.1, 0.9, 0.8, 0.3]
+
+
+def _chart(kind, series, title=None, stacked=False, unit="M tokens"):
+    item = {"type": "chart", "kind": kind, "unit": unit, "series": [
+        {"name": name, **({"tone": tone} if tone else {}), "points": [{"label": d, "value": v, "display": "%.1fM" % v} for d, v in zip(_DAYS, vals)]}
+        for name, tone, vals in series]}
+    if title: item["title"] = title
+    if stacked: item["stacked"] = True
+    return item
+
+
+def _slot_view(ui, range_="7d", machine=None):
+    """The views of the UI slots: a card (stat_grid and a small bar chart), a full page with tabs and charts, a machine's section."""
+    if ui == "today":
+        return {"refresh_after": 300, "sections": [{"items": [
+            {"type": "stat_grid", "stats": [{"label": "今天", "value": "1.5M", "detail": "-56% 比昨天", "tone": "positive"},
+                                            {"label": "近 7 天", "value": "17.0M", "detail": "+12% 比上周", "tone": "caution"},
+                                            {"label": "费用", "value": "¥36.20"}]},
+            _chart("bar", [("tokens", None, [a + b for a, b in zip(_IN, _OUT)])])]}]}
+    if ui == "gpu":
+        name = (machine or {}).get("name") or "这台电脑"
+        return {"sections": [{"footer": "只算从 %s 发出的请求。" % name, "items": [
+            {"type": "stat_grid", "stats": [{"label": "今天的请求", "value": "214"}, {"label": "失败", "value": "3", "tone": "danger"}]},
+            _chart("line", [("请求", None, [120, 180, 90, 40, 260, 230, 214])], title="近 7 天的请求", unit="次")]}]}
+    tabs = [("1d", "今天"), ("7d", "7 天"), ("30d", "30 天"), ("90d", "90 天")]
+    return {"title": "用量", "state": "range=" + range_, "refresh_after": 600, "sections": [
+        {"items": [{"type": "button", "title": ("● " if r == range_ else "") + t, "action": {"id": "range:" + r}} for r, t in tabs]},
+        {"title": "概况", "items": [
+            {"type": "stat_grid", "stats": [{"label": "tokens", "value": "17.0M", "detail": "+12% 比上周", "tone": "caution"},
+                                            {"label": "费用", "value": "¥36.20", "detail": "+8% 比上周", "tone": "caution"},
+                                            {"label": "请求", "value": "1,204"}, {"label": "缓存命中", "value": "62%", "tone": "positive"}]}]},
+        {"title": "按天", "footer": "按你的时区分天。", "items": [
+            _chart("bar", [("输入", None, _IN), ("输出", None, _OUT)], stacked=True),
+            _chart("line", [("费用", "caution", [3.1, 5.2, 2.0, 1.1, 8.3, 7.6, 3.5])], title="费用", unit="元")]},
+        {"title": "按模型", "items": [
+            {"type": "row", "title": "model-large", "subtitle": "1,021 次", "value": "12.4M"},
+            {"type": "row", "title": "model-small", "subtitle": "183 次", "value": "4.6M"}]}]}
+
+
+def _fit_v1(view):
+    """What the hub does for an app that does not say ui_version (1): no chart or stat_grid, a section they emptied gone."""
+    out = dict(view, sections=[])
+    for sec in view["sections"]:
+        items = [it for it in sec["items"] if it["type"] not in ("chart", "stat_grid")]
+        if items or not sec["items"] or sec.get("footer"):
+            out["sections"].append(dict(sec, items=items))
+    return out
 
 
 def _ui_view(ui, launcher=""):
@@ -6567,9 +6679,9 @@ def markets_route(handler, p, body):
         placement = q.get("placement", "")
         ui = []
         if "example-gateway" in PLUGINS and PLUGINS["example-gateway"]["enabled"]:
-            if placement == "plugin_page":
-                ui = PLUGINS["example-gateway"]["ui"]
-            elif placement == "launcher_section" and q.get("launcher"):
+            if placement != "launcher_section":
+                ui = [u for u in PLUGINS["example-gateway"]["ui"] + _SLOT_UI if placement in ("", u["placement"])]
+            elif q.get("launcher"):
                 # "elsewhere" has no hosts (listed on every launcher) and always says the launcher is not its gateway:
                 # clients hide it (docs/plugins.md「声明式 UI」, #1339)
                 ui = [{"plugin": "example-gateway", "id": "panel", "title": "Example 网关", "placement": "launcher_section"},
@@ -6581,6 +6693,18 @@ def markets_route(handler, p, body):
         launcher = (req.get("context") or {}).get("launcher", "")
         if parts[7] == "elsewhere":
             handler.send_json({"error": "this launcher's gateway is not the plugin's", "code": "unsupported"}, 404); return True
+        ctx = req.get("context") or {}
+        if parts[7] in ("usage", "today", "gpu"):
+            if parts[7] == "gpu" and not ctx.get("machine"):
+                handler.send_json({"error": "没有这台机器", "code": "not_found"}, 404); return True
+            machine = next((m for m in MACHINES if ctx.get("machine") in (m["id"], m.get("name"))), {"name": ctx.get("machine")})
+            state = req.get("state") or "range=7d"
+            if (req.get("action") or "").startswith("range:"):
+                state = "range=" + req["action"].split(":", 1)[1]
+            view = _slot_view(parts[7], state.split("=", 1)[1], machine)
+            if (ctx.get("ui_version") or 1) < 2:
+                view = _fit_v1(view)
+            handler.send_json({"view": view}); return True
         if req.get("action"):
             handler.send_json(_ui_action(parts[7], req["action"], req.get("values"))); return True
         handler.send_json({"view": _ui_view(parts[7], launcher)}); return True
@@ -6590,7 +6714,7 @@ _features_without_plugins = features
 
 
 def features():
-    return _features_without_plugins() + (["plugins", "plugin_manager"] if PLUGINS_MODE else [])
+    return _features_without_plugins() + (["plugins", "plugin_manager", "plugin_ui_slots"] if PLUGINS_MODE else [])
 
 
 def _plugin_needs(pl):

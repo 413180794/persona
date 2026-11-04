@@ -69,6 +69,9 @@
   启动器页的一节经 `gateway.http` 用 Key 访问网关，插件看不到 Key）和 `events`（`inbox.changed`、`agent.needs_you`、`agent.finished`，只通知，订阅随权限一起同意）。
   规格在 `docs/plugins.md`「声明式 UI」「事件」。
 - [ ] 第 4 步（客户端）：iOS / Mac、Android、网页画 View（插件详情里的页面、启动器页上的一节）。
+- [x] **UI 插槽（服务端，#1451）**：插槽表（`nav_page` 主导航入口、`overview_card` 总览卡片、`machine_section` 机器详情的一节），渲染上下文（时区、语言、平台、尺寸、UI 版本），
+  `chart` / `stat_grid` / `segmented`、`refresh_after`、`ui.badge` 角标，主导航 / 总览 / 机器详情按贡献算进「它可以」和权限摘要，老 App 由 hub 按 UI 版本拿掉新条目。规格在 `docs/plugins.md`「UI 插槽」。
+- [ ] UI 插槽（客户端）：网页、Android、iOS / Mac 画新插槽和新条目。
 - [x] **插件市场（服务端，#1303）**：仓库 / 网站发布 `persona-plugins.json`，hub 登记市场（GitHub 私有仓库带只读 token），目录、搜索，完整权限的设备从市场装、升级、卸载；
   命令行 `personad plugin market … / search / install market:…`。规格在 `docs/plugins.md`「插件市场」。
 - [x] git 仓库作为市场（#1373）：`git:<地址>`，hub 浅克隆、用 hub 机器的 SSH 凭据，给没有 token 读文件接口的私有 git 托管用。

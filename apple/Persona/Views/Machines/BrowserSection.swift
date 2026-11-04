@@ -14,7 +14,6 @@ struct BrowserSection: View {
     @State private var saving = false
     @State private var asking = false
     @State private var checking = false
-    @State private var screen: ScreenPage?
 
     private var shown: MachineBrowser { fresh ?? browser }
 
@@ -45,7 +44,6 @@ struct BrowserSection: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .card()
         }
-        .screenViewer($screen)
         .task(id: online && shown.enabled) {
             if online && shown.enabled { await refresh() }
         }
@@ -177,7 +175,7 @@ struct BrowserSection: View {
     /// 看画面: the Mac's live screen, where ego's setup is done from the phone.
     private func look(prominent: Bool) -> some View {
         Button {
-            if let url = ScreenViewer.url(model, ref) { screen = ScreenPage(url: url) }
+            model.openScreen(ref)
         } label: {
             Label("看画面", systemImage: Theme.Icon.screen).font(Theme.Font.labelStrong).lineLimit(1)
         }

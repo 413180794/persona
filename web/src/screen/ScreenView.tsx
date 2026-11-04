@@ -93,6 +93,18 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
     if (rfb.current) rfb.current.viewOnly = !control;
   }, [control, phase.kind]);
 
+  // In the app (#1343) the app draws the name, the state and 只看 / 接管 around the page: it hears the phase, and
+  // says 接管 through window.personaScreen.
+  useEffect(() => {
+    if (!target.embedded) return;
+    const w = window as unknown as { webkit?: { messageHandlers?: { screen?: { postMessage(m: unknown): void } } } };
+    w.webkit?.messageHandlers?.screen?.postMessage({ phase: phase.kind });
+  }, [target.embedded, phase.kind]);
+  useEffect(() => {
+    if (!target.embedded) return;
+    (window as unknown as { personaScreen?: unknown }).personaScreen = { setControl: (on: boolean) => setControl(on) };
+  }, [target.embedded]);
+
   const signIn = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
@@ -115,7 +127,8 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
 
   const live = phase.kind === "live";
   return (
-    <div className="flex h-dvh flex-col bg-canvas text-ink">
+    <div className={cx("flex h-dvh flex-col text-ink", target.embedded ? "bg-transparent" : "bg-canvas")}>
+      {!target.embedded && (
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-3">
         {!target.embedded && (
           <a href={`/machines/${encodeURIComponent(target.mid)}`} className="whitespace-nowrap rounded-control px-2 py-1 text-[12.5px] text-ink-2 hover:bg-hover hover:text-ink">
@@ -145,6 +158,7 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
           </div>
         )}
       </header>
+      )}
       <main className="relative min-h-0 flex-1">
         <div ref={screen} className={cx("absolute inset-0", !live && "invisible")} data-testid="screen" />
         {!live && (

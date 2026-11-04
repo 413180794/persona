@@ -30,7 +30,7 @@ Persona 的插件底座（#1101）：开源仓库只放通用能力和**扩展�
 | `providers`（版本 1） | `provider.` | `id`、`name`、`description?`、`kind?`（`launcher` / `api`）、`api?`（`messages` / `responses`）、`base_url`、`model?`、`small_model?`、`models?: [{id, name?}]`、`dynamic_models?`、`key_hint?` | 纯声明即可；`dynamic_models` 要进程说协议 | 设置 › 模型供应商的「从插件添加」，见下面「模型供应商」 |
 | `api`（版本 1） | `api.` | `id`、`prefix`（一段路径）、`features?`、`events?` | `runtime.http`，`on_startup`；有 `events` 要进程说协议 | App 用的一段接口 `/api/v1/<prefix>/…`，见下面「App 接口」 |
 | `assistant`（版本 1） | `assistant.` | `id`、`skills?`（包里的目录，各有 `SKILL.md`）、`instructions?`（包里的 `.md`）、`gate?`（包里的 `.json`：技能里一个命令的闸门） | 包里有这些文件；`gate` 要有 `skills`，要凭据时进程说协议 | 助手的技能、说明和命令闸门，见下面「助手」 |
-| `ui`（版本 1） | `ui.` | `id`、`title`、`placement`（`plugin_page` / `launcher_section`）、`hosts?`（只有 `launcher_section` 能写：网关主机名，可 `*.` 开头；不写就是任何启动器，插件自己判断） | 进程说协议；`launcher_section` 要权限 `launcher_keys` | 插件详情里的页面、启动器页上的一节，见下面「声明式 UI」 |
+| `ui`（版本 2） | `ui.` | `id`、`title`、`placement`（插槽，见「UI 插槽」：`plugin_page` / `launcher_section` / `nav_page` / `overview_card` / `machine_section`）、`hosts?`（只有 `launcher_section` 能写：网关主机名，可 `*.` 开头；不写就是任何启动器，插件自己判断）、`icon?`（只有 `nav_page`）、`opens?`（只有 `overview_card`） | 进程说协议；`launcher_section` 要权限 `launcher_keys` | 插件详情里的页面、启动器页上的一节、主导航、总览、机器详情，见下面「声明式 UI」「UI 插槽」 |
 | `agent_sources`（版本 1） | `agentsrc.` | `id`（`a-z0-9_-`，也是会话 id 的来源段 `<id>:<sessionKey>`）、`name`、`providers?`（`a-z0-9_`，如 `grok_bot`） | 进程说协议，`on_startup` | Agents 页的个人 Agent，和 hub 自己的 lark-connector 来源并列，见下面「个人 Agent 来源」 |
 | `events`（版本 1） | `event.` | `id`、`subscribe`（事件名的列表，见「事件」） | 进程说协议，`on_startup` | 只是告诉插件 hub 上发生了什么，见下面「事件」 |
 
@@ -125,6 +125,7 @@ hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的�
 | `network` | 主机名列表，可以 `*.` 开头，小写，不带协议、端口、路径 | 会访问哪些地方 | 只展示和记录；hub 暂不拦截别的地址 |
 | `hub_api` | `true` | 拿到 hub 的地址和完整 token（`PERSONA_HUB_URL`、`PERSONA_HUB_TOKEN`），能做 hub 主人能做的一切 | 没接受就不给这两个变量 |
 | `launcher_keys` | `true` | 用启动器的 Key 访问它的网关（贡献 `quota`、`launcher_section` 的 `ui` 必须有） | 插件看不到 Key：hub 或那台电脑替它发请求，只发到启动器自己的网关；没接受就不问它 |
+| 显示在 App 里（有 `nav_page` / `overview_card` / `machine_section` 的 `ui` 就有） | — | 在主导航、总览、机器详情页里显示自己的界面（列出每处的标题） | 和事件一样不用写在 `permissions` 里，按贡献算进安装前给人看的「它可以」和权限摘要；升级时多了一处要重新同意，见「UI 插槽」「权限」 |
 | 密钥（有 `secrets` 就有） | — | 用你填的密钥 | 每个插件只拿到自己的 |
 
 后面的扩展点会加细的权限（`kb.read`、`inbox.read`、`agents.control`……），按接受的权限放行 hub 提供给插件的方法，没接受回 `permission_denied`。
@@ -360,7 +361,7 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 插件**不在 App 里跑代码**：它回一份 View（几种固定的条目），iOS、Mac、Android、网页用各自的设计系统画出来（每种界面风格、深浅色都对），
 按钮的动作回到插件。View 的定义和检查在 `server/internal/plugin/ui.go`。
 
-**放在哪**（贡献 `ui` 的 `placement`）：
+**放在哪**（贡献 `ui` 的 `placement`）：见下一节「UI 插槽」的插槽表。最早的两个：
 
 | placement | 出现在 | 额外 |
 | --- | --- | --- |
@@ -369,17 +370,20 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 
 **hub 的接口**（完整权限的设备）：
 
-- `GET /api/v1/plugins/-/ui?placement=<p>[&launcher=<名字>&machine=<机器>]` → `{ui: [{plugin, id, title, placement}]}`：启用、在跑的插件在这里画什么；
-  `launcher_section` 要带 `launcher`，只列网关对得上的。插件详情里也有 `ui`（它的 `plugin_page`）。
-- `POST /api/v1/plugins/{id}/-/ui/{ui}` `{context?: {launcher, machine}, state?, action?, values?}`：不带 `action` 是画（回 `{view}`），
+- `GET /api/v1/plugins/-/ui?placement=<p>[&launcher=<名字>&machine=<机器>]` → `{ui: [{plugin, plugin_name, id, title, placement, size, icon?, opens?, badge?}]}`：启用、在跑的插件在这里画什么；
+  `launcher_section` 要带 `launcher`，只列网关对得上的；不带 `placement` 是除了 `launcher_section` 以外的全部插槽（一次拿齐主导航、总览、机器详情）。
+  插件详情里也有 `ui`（它的 `plugin_page` 和 `nav_page`，都是能从设置里点进去的整页）。
+- `POST /api/v1/plugins/{id}/-/ui/{ui}` `{context?: {launcher, machine, tz, locale, platform, size, ui_version}, state?, action?, values?}`（`context` 的各项见「UI 插槽」「上下文」）：不带 `action` 是画（回 `{view}`），
   带 `action` 是点了按钮（回 `{view?, toast?, open_url?}`；什么都没有就重新画一次）。插件不在、没启用回 404；不写 `hosts` 的一节插件说不是它的网关回 404 `unsupported`；
-  插件出错、View 画不了回 502 `plugin_failed`。
+  `machine_section` 没带 `machine` 或没有这台机器回 404 `not_found`；插件出错、View 画不了回 502 `plugin_failed`。
 
-**hub 调插件**：`ui.render {contribution, state, launcher?}` → View；`ui.action {contribution, state, action, values, launcher?}` → `{view?, toast?, open_url?}`。
+**hub 调插件**：`ui.render {contribution, state, placement, size, ui_version, tz?, locale?, platform?, machine?, launcher?}` → View；
+`ui.action {…同上, action, values}` → `{view?, toast?, open_url?}`（参数是 `plugin.UIParams`，各项见「UI 插槽」「上下文」）。
 `launcher` 是 `{name, base_url, query_id}`：`launcher_section` 才有，插件拿 `query_id` 调 hub 的 `gateway.http`（和「额度」的 `quota.http` 一样：
 `${launcher_key}` 由手里有 Key 的一方换上，只发到这个网关，一次最多 16 个请求），画完就失效。
 
-**View**：`{title?, sections: [{title?, footer?, items: [条目]}], state?}`。`state` 是插件自己的（第几页、哪个标签），App 下次画、点按钮时原样带回，最多 16 KB。
+**View**：`{title?, sections: [{title?, footer?, items: [条目]}], state?, refresh_after?}`。`state` 是插件自己的（第几页、哪个标签），App 下次画、点按钮时原样带回，最多 16 KB。
+`refresh_after` 见「UI 插槽」「刷新」。
 
 | 条目 `type` | 字段 | 画成 |
 | --- | --- | --- |
@@ -391,11 +395,163 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 | `link` | `title`、`url`（只能 https） | 在 App 里打开的链接 |
 | `field` | `name`、`label`、`kind`（`text` / `secret` / `number` / `toggle` / `choice`）、`value?`、`choices?: [{value, title?}]`、`placeholder?` | 输入；`secret` 不回显、插件也不能预填 |
 | `divider` | — | 分隔线 |
+| `chart`（UI 版本 2） | `kind`（`bar` / `line`）、`series`、`title?`、`unit?`、`stacked?`、`detail?` | 柱状图 / 折线图，见「UI 插槽」「新条目」 |
+| `stat_grid`（UI 版本 2） | `stats: [{label, value, detail?, tone?}]`（1–6 个） | 并排的几个数，见「UI 插槽」「新条目」 |
+| `segmented`（UI 版本 2） | `name`、`choices: [{value, title?}]`（2–5 个）、`value`、`action` | 分段选择（时间范围这类），选了马上走 `action`，见「UI 插槽」「新条目」 |
 
 `tone` 只有 `neutral` / `positive` / `caution` / `danger`，App 换成自己的角色色；插件不能给颜色、字号、图标。`action` 是 `{id, confirm?, submit?}`：
 `confirm` 有字就先让用户确认，`submit` 时把这一页所有 `field` 的值作为 `values`（名字 → 字符串，开关是 `"true"` / `"false"`）带上。
-限制：一页最多 300 个条目，每个字符串最多 2000 个字符；不认识的 `type`、`tone`、不是 https 的链接，整页拒绝（不画一半）。
+限制：一页最多 300 个条目，每个字符串最多 2000 个字符；`tone` 不在上面四个里、不是 https 的链接、认识的条目缺字段，整页拒绝（不画一半）。
+hub 不认识的 `type`（给更新的 hub 写的插件）和 App 画不了的（老 App）从 View 里拿掉、照常画其余的，见「UI 插槽」「兼容」。
 `open_url` 也只能是 https。
+
+## UI 插槽
+
+插件能画东西的地方叫**插槽**：hub 有一张允许的插槽表（`plugin.UISlots`，`server/internal/plugin/ui.go`），插件在清单 `contributes.ui[].placement` 里说插在哪；
+表里没有的位置装不上。插件仍然不在 App 里跑代码：每个插槽画的都是上面的声明式 View，各端用自己的设计系统画；插件改变的只是这些位置的
+**入口**（导航上多一项）、**角标**、**卡片**和按钮的**动作**，不能改 App 自己的页面和行为。（#1451）
+
+### 插槽表
+
+| placement | 出现在 | 尺寸 | 上下文 | 角标 | 安装时展示 | UI 版本 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `plugin_page` | 设置 › 插件 › 这个插件，一行进入一页 | full | — | — | — | 1 |
+| `launcher_section` | 启动器详情页的一节（见上面「声明式 UI」） | full | `launcher` | — | 已由 `launcher_keys` 展示 | 1 |
+| `nav_page` | **主导航上的一个入口**，点进去是一整页 | full | — | 有 | 主导航上的入口 | 2 |
+| `overview_card` | **「总览」上的一张卡片**，点卡片打开 `opens` 指的页 | compact | — | — | 总览上的卡片 | 2 |
+| `machine_section` | **机器详情页里的一节**，在机器自己的各节后面 | full | `machine` | — | 机器详情页里的一节（会知道是哪台机器） | 2 |
+
+各端放在哪：
+
+| placement | 网页 | Mac | iOS | Android |
+| --- | --- | --- | --- | --- |
+| `nav_page` | 侧栏「总览 / 机器 / 设置」那一组里，设置前面，一页一行（图标、标题、角标） | 左边的分区列，和网页同一组、同样的位置 | 设置首页最上面的「插件」一节，一页一行（图标、标题、角标）；设置 tab 的角标加上这些角标（数字相加，只有文字角标时是一个点） | 同 iOS：设置首页最上面的「插件」一节 |
+| `overview_card` | 总览页（`/overview`）上，Agent 概况下面一排卡片 | 没有总览页：放在设置 › 插件的列表上面 | 没有总览页：放在设置首页「插件」一节的入口上面 | 同 iOS |
+| `machine_section` | 机器详情页 | 机器详情页 | 机器详情页 | 机器详情页 |
+
+清单里的写法：
+
+```json
+"contributes": {"ui": [
+  {"id": "usage", "title": "用量", "placement": "nav_page", "icon": "chart"},
+  {"id": "today", "title": "今天的用量", "placement": "overview_card", "opens": "usage"},
+  {"id": "gpu", "title": "显卡", "placement": "machine_section"}
+]}
+```
+
+- `icon` 只有 `nav_page` 能写，从固定的几个里挑：`plugin`（默认）、`chart`、`gauge`、`list`、`bell`、`doc`、`calendar`、`money`；各端换成自己设计系统里同一个意思的图标，
+  不认识的画成 `plugin`。插件不能给图片、SF Symbol 名字或颜色。
+- `opens` 只有 `overview_card` 能写：同一个插件的一个 `nav_page` 或 `plugin_page` 的 id，不写就是卡片不能点（卡片里的按钮、行照样能点）。
+- 标题 1–40 个字；导航里放不下时各端截断（单行），不换行。
+
+**没做的位置**（评估过，先不开；名字留着）：
+
+- 对话页工具栏的动作（`session_action`）：对话页是最常用、最在乎打开速度的页，每打开一个对话都要列一遍插件的动作；手机上的工具栏已经放满，按钮又不能换行，
+  只能收进菜单，价值不大；动作作用在某个 Agent 的会话上，插件要读会话、驱动 Agent 才有用，而这类权限（读会话、`agents.control`）还没有。
+  要对 Agent 的事做反应，先用「事件」（`agent.finished`、`agent.needs_you`）加自己的 `nav_page`。
+- Agent 详情的一节（`agent_section`）：各端没有统一的「Agent 详情」（iOS 是对话页的信息面板，网页是右侧面板），而且同样要把会话交给插件，等有了读会话的权限再开。
+
+### 上下文
+
+App 画一个插槽时在 `context` 里说清楚是给谁画、画在哪，hub 核对后交给插件（`ui.render` / `ui.action` 的参数 `plugin.UIParams`）：
+
+| 字段 | App 发 | 插件收到 |
+| --- | --- | --- |
+| `placement` | — | 这个贡献的插槽 |
+| `size` | 可选：`compact` / `full` | 不发就是插槽表里的尺寸；`compact` 是卡片，要紧凑（见「新条目」下面的限制） |
+| `ui_version` | App 画得了的 UI 版本：现在是 `2`；**老 App 不发，算 1** | `min(App 的, hub 的)`；插件可以给老 App 画一个它画得了的版本（比如用 `progress` 代替 `chart`） |
+| `tz` | 用户的时区（IANA 名字，`Asia/Shanghai`） | 能加载的才转；没发或不对时是 hub 知道的用户时区（App 上报的、助手设置里的），都没有就空。「今天」按它算 |
+| `locale` | App 的语言（`zh-Hans-CN`） | 像个语言标签的才转，不然空 |
+| `platform` | `ios` / `mac` / `android` / `web` | 别的值丢掉 |
+| `machine` | `machine_section`：机器 id（机器名也认） | `{id, name, os, online}`；`machine_section` 没有它回 404 |
+| `launcher` | `launcher_section`：启动器名（`machine` 是它所在的电脑） | `{name, base_url, query_id}`，见上面「声明式 UI」 |
+
+### 新条目（UI 版本 2）
+
+**`chart`**：真正的图，不再用一排进度条凑。
+
+```json
+{"type": "chart", "kind": "bar", "title": "近 7 天", "unit": "tokens", "stacked": true,
+ "series": [
+   {"name": "输入", "points": [{"label": "11-01", "value": 1200000, "display": "1.2M"}, {"label": "11-02", "value": 800000}]},
+   {"name": "输出", "tone": "positive", "points": [{"label": "11-01", "value": 300000}, {"label": "11-02", "value": 250000}]}
+ ],
+ "detail": "按北京时间分天"}
+```
+
+- `kind`：`bar`（柱状）/ `line`（折线）。`series` 1–4 个，每个 1–120 个点；**每个系列的 `label` 一样、顺序一样**（横轴就是第一个系列的标签）；多于一个系列时每个都要有 `name`（各端画图例）。
+- `value` 是数（可以是负数、小数）；`display` 是这个值怎么写（「¥1.20」「1.2M」），不给时 App 按 `unit` 写成紧凑的数（`1.2M tokens`）。纵轴刻度 App 自己算、自己写成紧凑的数。
+- `tone`：不写是 App 自己的数据色（按系列顺序取，第一个是主色）；写了用角色色（`positive` / `caution` / `danger` / `neutral`）。插件不能给颜色。
+- `stacked`：多个系列的柱子叠起来（默认并排）；折线图忽略。
+- 各端：点或悬停一个点显示 `label`、各系列的 `display`（或数）；compact 里不画坐标轴文字、只留柱子 / 线和首尾标签。标签多时 App 隔几个写一个，不能挤成重叠。
+
+**`stat_grid`**：并排的几个数，卡片里放得下今天 / 7 天 / 费用这类摘要。
+
+```json
+{"type": "stat_grid", "stats": [
+  {"label": "今天", "value": "1.2M", "detail": "+12% 比昨天", "tone": "caution"},
+  {"label": "近 7 天", "value": "8.4M"},
+  {"label": "费用", "value": "¥36.20"}
+]}
+```
+
+1–6 个；各端按宽度一行放 2–3 个（网页、Mac 宽时一行放全），`tone` 给 `detail` 上色（和 `metric` 一样）。
+
+**`segmented`**：几个里选一个、选了马上生效（时间范围、视角），代替一排按钮。
+
+```json
+{"type": "segmented", "name": "range", "value": "7d", "action": {"id": "range"},
+ "choices": [{"value": "1d", "title": "今天"}, {"value": "7d", "title": "7 天"}, {"value": "30d", "title": "30 天"}]}
+```
+
+2–5 个选项，每个最多 12 个字，`value` 是其中一个；`name` 和 `field` 的名字不能重复。用户选了别的，App 马上调 `ui.action`，`action` 是它的 `id`，
+`values` 里 `{name: 选的值}`（有 `submit` 时连同这一页的 `field` 一起）；插件回新的 View（一般把选中的值放进 `state`）。
+
+**卡片（`size: compact`，`overview_card`）的限制**：最多 2 节、12 个条目，不能有 `field`（要填东西就 `opens` 到一整页）。超出 hub 回 502 `plugin_failed`。
+建议一张卡片是一个 `stat_grid` 加一个小 `chart`。
+
+### 刷新
+
+View 带 `refresh_after`（秒）：这个 View 在屏幕上时，App 过这么久重新画一次（`ui.render`，带上 `state`）。最少 30 秒（更小的 hub 改成 30），最多一天，不写或 0 不自动刷新。
+不在屏幕上（切到别的页、App 在后台）不刷新，回到前台、重新出现时如果已经过了就马上画一次。手动下拉刷新照旧。
+
+### 角标
+
+`nav_page` 的入口可以带角标（数字或短字，最多 8 个字，`tone` 同上）。插件给 hub 发事件：
+
+```json
+{"event": "ui.badge", "params": {"contribution": "usage", "text": "3", "tone": "danger"}}
+```
+
+`text` 为空是清掉。hub 记在内存里，`GET /api/v1/plugins/-/ui` 的那一项带上 `badge`，并推 WebSocket 事件 `plugin_ui {plugin, id, badge}` 给在线的 App（App 收到改角标，不用重拉列表）。
+插件重启后 hub 清掉它的角标：插件在 `initialize` 之后自己再发一次（要角标及时的插件用 `on_startup`）。不是 `nav_page` 的、太长的、`tone` 不对的角标丢掉并记日志。
+
+### 权限
+
+往主导航、总览、机器详情页放东西不单列一个 `permissions` 里的权限（它们不多拿任何数据），但**要让人知道**：和「事件」一样按贡献自动算——
+
+- 安装前的「它可以」里多一行「在 App 里显示自己的界面」，列出每处和标题（「主导航上的入口：用量；总览上的卡片：今天的用量」）；
+- 这几个插槽算进权限摘要：升级时多了一处（比如新加一个 `nav_page`）要重新同意（预览的 `more_permissions`，`added_permissions` 里是「在 App 的更多位置显示自己的界面」），同一处多一页不用；
+- `machine_section` 会让插件知道是哪台机器（id、名字、系统、在不在线），所以这一行写明了；`launcher_section` 已经要 `launcher_keys`；`plugin_page` 只在插件自己的设置里，不展示。
+
+不想看到某个插件的入口和卡片：停用这个插件。
+
+### 兼容
+
+**UI 版本**：1 是最早的八种条目、两个插槽；2 加了三个插槽、`chart` / `stat_grid` / `segmented`、`refresh_after`、上下文。扩展点 `ui` 的版本跟着变成 2（`initialize` 的 `hub.extension_points.ui`）。
+
+- **老 App 遇到新插槽**：它只按 `placement` 问自己认识的插槽，看不到新插槽，不出错。`nav_page` 同时出现在插件详情的 `ui` 里，老 App（网页）在设置 › 插件 › 这个插件 里照样能点进去；
+  所以重要的内容放 `nav_page` 就行，`plugin_page` 可以不要。
+- **老 App 遇到新条目**：老 App 不发 `ui_version`，hub 当它是 1，从 View 里拿掉 `chart`、`stat_grid`、`segmented`（一节只剩它们时整节拿掉，有 `footer` 的留着），老 App 不会白屏；
+  插件也看得到 `ui_version: 1`，可以给它画一个替代（`progress`、`metric`、一排 `row` 代替 `segmented`）。`refresh_after` 是多出来的字段，老 App 忽略。
+- **新 App 的规矩**（以后再加条目、插槽都靠这条，不用再改 hub）：不认识的条目 `type` 跳过、照常画其余的；不认识的 `tone` 当 `neutral`；不认识的 `icon` 画成 `plugin`；
+  列表里不认识的 `placement` 忽略；角标、`refresh_after` 不认识就不管。只有整个 View 读不出来时才显示出错。
+- **插件比 hub 新**：hub 不认识的条目 `type` 不再整页拒绝，拿掉并在 hub 日志里记一行，其余照常画。清单是严格读的：老 hub 不认识的 `placement`、`icon`、`opens` 让插件装不上，
+  用新插槽的插件在 `engines.persona` 里写上带 UI 插槽的 hub 构建号，或在 `initialize` 里看 `hub.extension_points.ui >= 2`。
+- **新 App 连老 hub**：hello / `/health` 的 `features` 没有 `plugin_ui_slots` 时不问新插槽、不画导航入口和卡片（老 hub 对不认识的 `placement` 只会回空列表，也不出错）。
+
+**一致性测试**：`conformance.Check` 对清单里的每个 `ui` 贡献按它的插槽调一次 `ui.render`（带上一份示例上下文）：回了 View 就必须是 App 在那个插槽画得了的
+（`plugin.Fit` 通过、没有不认识的条目、键是 snake_case）；回错误也行（测试里连不上插件自己的服务），但不能是 `unknown_method` / `no_contribution`。
 
 ## 个人 Agent 来源
 
@@ -531,7 +687,7 @@ hub 管理界面（[admin.md](admin.md)）的「插件」页（`web/src/admin/pa
 
 `plugin/conformance.Check(t, manifest, run, init)` 把一个插件程序放在协议的另一头检查：`initialize` 前 `ping` 回 `not_initialized`、别的协议版本回
 `wrong_protocol`、`initialize` 回的 id / 版本和清单一致、`contributes` 是清单的子集、回应的键都是 snake_case、不认识的方法回 `unknown_method`、
-不认识的贡献回 `no_contribution`、关掉 stdin 后 5 秒内退出。任何语言写的程序用 `conformance.Program(t, path, args…)` 跑，Go 的用 `conformance.Serve`。
+不认识的贡献回 `no_contribution`、每个 `ui` 贡献画出来的 View 在它的插槽画得了（见「UI 插槽」「兼容」）、关掉 stdin 后 5 秒内退出。任何语言写的程序用 `conformance.Program(t, path, args…)` 跑，Go 的用 `conformance.Serve`。
 连接器的 `connector/conformance.Check` 对每个连接器两种开头各跑一遍（直接调 / 经协议，结果一字不差）。
 
 ## 内置插件：Telegram

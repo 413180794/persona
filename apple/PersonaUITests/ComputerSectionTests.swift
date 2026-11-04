@@ -56,7 +56,7 @@ final class ComputerSectionTests: XCTestCase {
         XCTAssertTrue(signIn.waitForExistence(timeout: 30), "the Mac's Screen Sharing did not ask to sign in:\n\(app.debugDescription)")
         XCTAssertTrue(app.webViews.textFields["账号"].exists && app.webViews.secureTextFields["密码"].exists)
         shot(app, "computer-screen-signin")
-        app.buttons["完成"].firstMatch.tap()
+        app.descendants(matching: .any)["screen-close"].firstMatch.tap() // the drawer's handle (#1343)
         XCTAssertTrue(look.waitForExistence(timeout: 10), "back on the machine page")
     }
 
@@ -75,6 +75,10 @@ final class ComputerSectionTests: XCTestCase {
         app.launchPinned()
         let look = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "看电脑")).firstMatch
         XCTAssertTrue(look.waitForExistence(timeout: 30), "no 看电脑 row:\n\(app.debugDescription)")
+        XCTAssertTrue(look.label.contains("MacBook · Calculator"), "the Mac's name, not its id: \(look.label)")
+        // The screenshot under it decoded (a placeholder has no such label).
+        let picture = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "图片，点按查看大图")).firstMatch
+        XCTAssertTrue(picture.waitForExistence(timeout: 10), "no screenshot under 看电脑:\n\(app.debugDescription)")
         let screen = app.buttons["tool-screen"].firstMatch
         XCTAssertTrue(screen.waitForExistence(timeout: 10), "no 看画面 under the tool:\n\(app.debugDescription)")
         for _ in 0..<4 where !screen.isHittable { screen.frame.minY < app.frame.midY ? app.swipeDown() : app.swipeUp() }

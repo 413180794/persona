@@ -278,6 +278,7 @@ struct AssistantTopBar: View {
             }
             Button(action: openKnowledge) { Label("知识库", systemImage: Theme.Icon.knowledge) }
             Button(action: openProfile) { Label("详细信息", systemImage: Theme.Icon.person) }
+            ScreenMenu() // a Mac's live screen, whether or not the model is operating it (#1343)
             if let main = model.assistantMain, key != main {
                 Button {
                     withAnimation(Theme.Motion.standard) { model.assistantCurrent = main }

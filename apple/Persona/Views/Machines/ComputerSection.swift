@@ -13,7 +13,6 @@ struct ComputerSection: View {
     @State private var fresh: MachineComputer?
     @State private var saving = false
     @State private var asking = false
-    @State private var screen: ScreenPage?
     @State private var checking = false
 
     private var shown: MachineComputer { fresh ?? computer }
@@ -47,7 +46,6 @@ struct ComputerSection: View {
         .task(id: online && shown.enabled) {
             if online && shown.enabled { await refresh() }
         }
-        .screenViewer($screen)
         .task(id: watching) {
             while watching, !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
@@ -167,7 +165,7 @@ struct ComputerSection: View {
     /// 看画面: the Mac's live screen, where macOS's dialogs can be answered from the phone too.
     private func look(prominent: Bool) -> some View {
         Button {
-            if let url = ScreenViewer.url(model, ref) { screen = ScreenPage(url: url) }
+            model.openScreen(ref)
         } label: {
             Label("看画面", systemImage: Theme.Icon.screen).font(Theme.Font.labelStrong).lineLimit(1)
         }

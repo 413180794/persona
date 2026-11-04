@@ -117,6 +117,8 @@ type plugins struct {
 	skillsSent sync.Map
 	// markets are the plugin markets (plugin_market.go).
 	markets markets
+	// badges are the plugins' badges on their nav_pages' entries ("<plugin>/<ui>" → plugin.Badge; plugin_ui.go).
+	badges sync.Map
 }
 
 // newPlugins is the registry with hub.json's plugins: a bad entry is logged and skipped. Built-in and installed ones
@@ -589,6 +591,7 @@ func (ps *plugins) spec(ctx context.Context, p *plugin.Plugin, hp *hubPlugin) (h
 		s.Check = sameBuild(ps.h, p.Manifest.Name, s.Command) // the program must be the hub's build
 	}
 	s.Accept = func(res plugin.InitializeResult) error {
+		ps.clearBadges(id)
 		var said []plugin.ConnectorItem
 		_ = json.Unmarshal(res.Contributes["connectors"], &said)
 		for _, c := range conns {
@@ -628,6 +631,10 @@ func (ps *plugins) spec(ctx context.Context, p *plugin.Plugin, hp *hubPlugin) (h
 		}
 		if event == "agentsrc.updated" {
 			ps.agentSourceUpdated(id, hp, params)
+			return
+		}
+		if event == "ui.badge" {
+			ps.setBadge(id, params)
 			return
 		}
 		if rest, ok := strings.CutPrefix(event, serve.Namespace+"."); ok {

@@ -1,7 +1,7 @@
 // Package conformance holds a plugin program to the plugin protocol (docs/plugins.md「一致性测试」): the handshake,
 // the error codes, the shape of what it answers, and that it exits when the hub goes away. A program written in any
 // language can be held to it with Program; one in Go with Serve. What each extension point's methods answer is
-// checked by that point's own tests (connector/conformance for connectors).
+// checked by that point's own tests (connector/conformance for connectors); a ui contribution's View is checked here.
 package conformance
 
 import (
@@ -144,6 +144,39 @@ func Check(t testing.TB, m *plugin.Manifest, run Run, init plugin.InitializePara
 		if err := hub.Call(ctx, ns+".status", map[string]any{"contribution": "no-such-contribution"}, nil); code(err) != plugin.CodeNoContribution &&
 			code(err) != plugin.CodeUnknownMethod {
 			t.Fatalf("a contribution it does not have: want %s, got %v", plugin.CodeNoContribution, err)
+		}
+	}
+
+	// Each ui contribution draws, for an app of this hub's UI version, a View the apps can draw where it goes; or
+	// says in words why it cannot now (its service is not reachable from the test): never that it has no ui.render.
+	for _, u := range m.UIs() {
+		slot, ok := plugin.Slot(u.Placement)
+		if !ok {
+			continue
+		}
+		params := plugin.UIParams{Contribution: u.ID, Placement: u.Placement, Size: slot.Size, UIVersion: plugin.UIVersion,
+			TZ: "Asia/Shanghai", Locale: "zh-Hans-CN", Platform: "web"}
+		switch slot.Context {
+		case "machine":
+			params.Machine = &plugin.UIMachine{ID: "example-machine", Name: "Example", OS: "darwin", Online: true}
+		case "launcher":
+			params.Launcher = &plugin.UILauncher{Name: "example", BaseURL: "https://gateway.example.com", QueryID: "conformance"}
+		}
+		var raw json.RawMessage
+		err := hub.Call(ctx, "ui.render", params, &raw)
+		switch c := code(err); {
+		case c == plugin.CodeUnknownMethod || c == plugin.CodeNoContribution:
+			t.Fatalf("ui %s: ui.render answered %v", u.ID, err)
+		case err != nil:
+			continue
+		}
+		snakeKeys(t, "ui "+u.ID, raw, 0)
+		var v plugin.View
+		if err := json.Unmarshal(raw, &v); err != nil {
+			t.Fatalf("ui %s: %v", u.ID, err)
+		}
+		if dropped, err := plugin.Fit(&v, slot, plugin.UIVersion); err != nil || len(dropped) > 0 {
+			t.Fatalf("ui %s: the apps cannot draw it at %s: %v (unknown items: %v)", u.ID, u.Placement, err, dropped)
 		}
 	}
 

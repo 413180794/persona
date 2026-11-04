@@ -441,10 +441,62 @@ func TestUIAndEventsPoints(t *testing.T) {
 			m["activation_events"] = []any{"on_call"}
 			m["contributes"] = map[string]any{"events": []any{map[string]any{"id": "e", "subscribe": []any{"agent.finished"}}}}
 		},
+		"icon off the navigation": func(m map[string]any) {
+			m["contributes"] = map[string]any{"ui": []any{map[string]any{"id": "x", "title": "x", "placement": "plugin_page", "icon": "chart"}}}
+		},
+		"unknown icon": func(m map[string]any) {
+			m["contributes"] = map[string]any{"ui": []any{map[string]any{"id": "x", "title": "x", "placement": "nav_page", "icon": "rocket"}}}
+		},
+		"a page opens nothing": func(m map[string]any) {
+			m["contributes"] = map[string]any{"ui": []any{map[string]any{"id": "x", "title": "x", "placement": "nav_page"},
+				map[string]any{"id": "y", "title": "y", "placement": "plugin_page", "opens": "x"}}}
+		},
+		"a card opens what is not there": func(m map[string]any) {
+			m["contributes"] = map[string]any{"ui": []any{map[string]any{"id": "x", "title": "x", "placement": "overview_card", "opens": "nav"}}}
+		},
+		"a card opens a card": func(m map[string]any) {
+			m["contributes"] = map[string]any{"ui": []any{map[string]any{"id": "x", "title": "x", "placement": "overview_card", "opens": "y"},
+				map[string]any{"id": "y", "title": "y", "placement": "overview_card"}}}
+		},
 	} {
 		if _, err := Parse(with(t, change)); err == nil {
 			t.Errorf("%s: parsed", name)
 		}
+	}
+}
+
+// The slots outside a plugin's settings are shown before installing, in the digest, and agreed to again when an
+// upgrade adds one.
+func TestUISurfaces(t *testing.T) {
+	page := mustParse(t)(with(t, func(m map[string]any) {
+		m["contributes"] = map[string]any{"ui": []any{map[string]any{"id": "home", "title": "概况", "placement": "plugin_page"}}}
+	}))
+	slots := mustParse(t)(with(t, func(m map[string]any) {
+		m["contributes"] = map[string]any{"ui": []any{map[string]any{"id": "home", "title": "概况", "placement": "plugin_page"},
+			map[string]any{"id": "usage", "title": "用量", "placement": "nav_page", "icon": "chart"},
+			map[string]any{"id": "card", "title": "今天", "placement": "overview_card", "opens": "usage"},
+			map[string]any{"id": "gpu", "title": "显卡", "placement": "machine_section"}}}
+	}))
+	if len(page.Surfaces()) != 0 || strings.Join(slots.Surfaces(), ",") != "nav_page,overview_card,machine_section" {
+		t.Fatalf("%v %v", page.Surfaces(), slots.Surfaces())
+	}
+	if Digest(page) == Digest(slots) {
+		t.Fatal("the surfaces are in the digest")
+	}
+	if Digest(page) != Digest(mustParse(t)(with(t, func(m map[string]any) {
+		m["contributes"] = map[string]any{"ui": []any{map[string]any{"id": "other", "title": "别的", "placement": "plugin_page"}}}
+	}))) {
+		t.Fatal("its own pages are not")
+	}
+	explained := fmt.Sprint(Explain(slots))
+	if !strings.Contains(explained, "主导航上的入口：用量；总览上的卡片：今天；机器详情页里的一节（会知道是哪台机器）：显卡") {
+		t.Fatal(explained)
+	}
+	if added := fmt.Sprint(Added(page, slots)); !strings.Contains(added, "在 App 的更多位置显示自己的界面") {
+		t.Fatal(added)
+	}
+	if added := Added(slots, slots); added != nil {
+		t.Fatal(added)
 	}
 }
 

@@ -85,6 +85,12 @@ final class AppModel {
     /// A short message: the result of something just done, floating over the page for a moment (`ToastOverlay`; in the
     /// iPhone's shell in a window of its own, `ToastWindow`, docs/shell.md「状态行」).
     var toast: Toast?
+    /// A Mac whose live screen is up (`ScreenDrawer`, RootView presents it; #1343): opened from the chat's running
+    /// work, its ··· menu, the machine page or a tool's details.
+    var screenOpen: ScreenOpen?
+    /// What a chat's model last did on each Mac (`ComputerActivity`), kept by the open chat: the live screen shows it
+    /// over the picture.
+    var computerActivities: [MachineRef: ComputerActivity] = [:]
     var openChat: SessionKey?
     /// A chat to open at its latest answer, like a finished one from the list (ChatView takes it): a tap on a
     /// "完成" notification. From the background the session list is stale (the agent still reads as working until the
@@ -547,6 +553,14 @@ final class AppModel {
     }
 
     func machine(_ ref: MachineRef) -> Machine? { machines.first { $0.id == ref.id && $0.group == ref.group } }
+    /// Macs whose live screen can be shown: the plugin cua is on for them and Screen Sharing answers (docs/computer-use.md).
+    var screenMachines: [Machine] { machines.filter { $0.computer?.enabled == true && $0.computer?.screenSharing == true } }
+    func canShowScreen(_ ref: MachineRef) -> Bool { machine(ref)?.computer.map { $0.enabled && $0.screenSharing } ?? false }
+    /// Brings up ref's live screen.
+    func openScreen(_ ref: MachineRef) {
+        guard api(ref.group) != nil else { toast = Toast("尚未连接 hub", style: .error); return }
+        screenOpen = ScreenOpen(machine: ref)
+    }
     /// A machine of the hub-level group (the assistant's, a hub setting's).
     func hubRef(_ id: String) -> MachineRef { MachineRef(group: hub?.group ?? "", id: id) }
     /// The hub-level group's machines (pages about the hub: Persona, its settings).

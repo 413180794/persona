@@ -65,7 +65,8 @@ func Digest(m *Manifest) string {
 		RunsCode    bool        `json:"runs_code"`
 		Permissions Permissions `json:"permissions"`
 		Events      []string    `json:"events,omitempty"`
-	}{m.Runtime != nil, m.Permissions.normalized(), m.Topics()})
+		Surfaces    []string    `json:"surfaces,omitempty"`
+	}{m.Runtime != nil, m.Permissions.normalized(), m.Topics(), m.Surfaces()})
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
 }
@@ -105,6 +106,9 @@ func Explain(m *Manifest) []PermissionLine {
 			what = append(what, EventTopics[t])
 		}
 		out = append(out, PermissionLine{Key: "events", Title: "收到 hub 的事件", Detail: strings.Join(what, "；")})
+	}
+	if surfaces := m.Surfaces(); len(surfaces) > 0 {
+		out = append(out, PermissionLine{Key: "ui_surfaces", Title: "在 App 里显示自己的界面", Detail: surfacesDetail(m, surfaces)})
 	}
 	if len(m.Secrets) > 0 {
 		names := make([]string, 0, len(m.Secrets))
@@ -147,6 +151,15 @@ func Added(old, m *Manifest) []PermissionLine {
 	if len(topics) > 0 {
 		out = append(out, PermissionLine{Key: "events", Title: "收到更多 hub 的事件", Detail: strings.Join(topics, "；")})
 	}
+	var surfaces []string
+	for _, sl := range m.Surfaces() {
+		if !slices.Contains(old.Surfaces(), sl) {
+			surfaces = append(surfaces, sl)
+		}
+	}
+	if len(surfaces) > 0 {
+		out = append(out, PermissionLine{Key: "ui_surfaces", Title: "在 App 的更多位置显示自己的界面", Detail: surfacesDetail(m, surfaces)})
+	}
 	var names []string
 	for _, s := range m.Secrets {
 		if !slices.ContainsFunc(old.Secrets, func(o SecretSpec) bool { return o.Name == s.Name }) {
@@ -157,4 +170,20 @@ func Added(old, m *Manifest) []PermissionLine {
 		out = append(out, PermissionLine{Key: "secrets", Title: "使用更多密钥", Detail: strings.Join(names, "、")})
 	}
 	return out
+}
+
+// surfacesDetail says where in the apps m draws, of surfaces: 主导航上的入口：Token 用量；总览上的卡片：…
+func surfacesDetail(m *Manifest, surfaces []string) string {
+	var parts []string
+	for _, name := range surfaces {
+		sl, _ := Slot(name)
+		var titles []string
+		for _, u := range m.UIs() {
+			if u.Placement == name {
+				titles = append(titles, u.Title)
+			}
+		}
+		parts = append(parts, sl.Shown+"："+strings.Join(titles, "、"))
+	}
+	return strings.Join(parts, "；")
 }

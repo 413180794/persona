@@ -143,6 +143,10 @@ struct ChatView: View {
         viewing.map { SessionKey(group: key.group, machineID: key.machineID, sessionID: $0.sessionID) } ?? key
     }
     private var store: ChatStore { model.chat(shownKey) }
+    /// The latest time this chat's model operated a Mac (#1343): shown with its running work, kept for the live screen.
+    private var computerActivity: ComputerActivity? {
+        ComputerActivity.latest(in: store.items, chat: shownKey.machineRef, machines: model.machines)
+    }
     private var session: Session? { model.session(key) }
     /// The latest state of the subagent being viewed (the list refreshes with the session).
     private var viewedAgent: Subagent? { viewing.flatMap { v in session?.subagents?.first { $0.id == v.id } ?? v } }
@@ -257,6 +261,7 @@ struct ChatView: View {
                 }
             }
         }
+        .onChange(of: computerActivity, initial: true) { _, a in if let a { model.computerActivities[a.machine] = a } }
         .onChange(of: pane) { _, p in
             showChrome()
             // The chat's scroll view is rebuilt when you come back to it: start at the latest message.
@@ -1241,7 +1246,7 @@ struct ChatView: View {
                 }
             }
         }
-        TaskDock(conversation: conversation)
+        TaskDock(conversation: conversation, computer: computerActivity)
         RouteChip(conversation: conversation)
     }
 
@@ -1264,6 +1269,10 @@ struct ChatView: View {
     private var mainFooter: some View {
             VStack(spacing: Theme.Space.m) {
                 if style == .assistant, viewing == nil { taskFooter }
+                // An agent operating a Mac (its own Cua Driver): with its running work, over the box (#1343).
+                if style == .dev, viewing == nil, ComputerActivityPill.shows(computerActivity) {
+                    ComputerActivityPill(activity: computerActivity).frame(maxWidth: .infinity, alignment: .leading)
+                }
                 if !pendingCards.isEmpty {
                     PendingCards(cards: pendingCards, room: footerRoom)
                 }
@@ -1704,6 +1713,7 @@ struct ChatView: View {
                     Label(model.isMuted(key) ? "开启通知" : "屏蔽通知", systemImage: model.isMuted(key) ? Theme.Icon.unmute : Theme.Icon.mute)
                 }
             }
+            ScreenMenu(recent: computerActivity?.machine)
             Divider()
             if let s = session {
                 if s.canTerminal {

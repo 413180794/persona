@@ -28,7 +28,8 @@ type PluginDetail struct {
 	Config          json.RawMessage         `json:"config,omitempty"`
 	Secrets         []PluginSecretView      `json:"secrets,omitempty"`
 	Permissions     []plugin.PermissionLine `json:"permissions"`
-	// UI are the pages it draws in its settings (plugin_page; POST /api/v1/plugins/{id}/-/ui/{ui}).
+	// UI are the pages it draws, opened from its settings (plugin_page, and nav_page also on the main navigation;
+	// POST /api/v1/plugins/{id}/-/ui/{ui}).
 	UI []UIPlace `json:"ui,omitempty"`
 }
 
@@ -48,8 +49,8 @@ func (ps *plugins) detail(ctx context.Context, p *plugin.Plugin) PluginDetail {
 	if d.Permissions == nil {
 		d.Permissions = []plugin.PermissionLine{}
 	}
-	for _, u := range ps.uiPlaces("plugin_page", "") {
-		if u.Plugin == p.Record.ID {
+	for _, u := range ps.uiPlaces("", "") {
+		if u.Plugin == p.Record.ID && (u.Placement == "plugin_page" || u.Placement == "nav_page") {
 			d.UI = append(d.UI, u)
 		}
 	}
@@ -257,7 +258,10 @@ func (h *Hub) pluginRoutes(api *http.ServeMux) {
 		writeJSON(w, ps().detail(r.Context(), p))
 	})
 	fromMarket := func(r *http.Request) func() bool {
-		return func() bool { p := ps().reg.Get(r.PathValue("id")); return p != nil && plugin.FromMarket(p.Record.Origin) != "" }
+		return func() bool {
+			p := ps().reg.Get(r.PathValue("id"))
+			return p != nil && plugin.FromMarket(p.Record.Origin) != ""
+		}
 	}
 	api.HandleFunc("POST /api/v1/plugins/{id}/-/rollback", func(w http.ResponseWriter, r *http.Request) {
 		if !marketOr(w, r, fromMarket(r)) {

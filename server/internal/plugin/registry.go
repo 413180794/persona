@@ -423,7 +423,8 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 	if upgrade != "" {
 		pv.Upgrade, pv.From = true, cur.Record.Version
 		pv.MorePermissions = !cur.Record.Granted.Covers(m.Permissions) || (m.Runtime != nil && cur.Manifest.Runtime == nil) ||
-			slices.ContainsFunc(m.Topics(), func(t string) bool { return !slices.Contains(cur.Manifest.Topics(), t) })
+			slices.ContainsFunc(m.Topics(), func(t string) bool { return !slices.Contains(cur.Manifest.Topics(), t) }) ||
+			slices.ContainsFunc(m.Surfaces(), func(t string) bool { return !slices.Contains(cur.Manifest.Surfaces(), t) })
 		pv.AddedPermissions = Added(cur.Manifest, m)
 	}
 	r.previews[pv.ID] = pv

@@ -77,10 +77,18 @@ enum ToolPresentation {
         }
     }
 
-    static func subject(_ call: ToolCall) -> String {
+    /// Where a tool's subject gives way when it does not fit: a path keeps its file name (the middle goes), a Mac's
+    /// steps or a browser script read from their start (the end goes).
+    static func truncation(_ name: String) -> Text.TruncationMode {
+        ComputerSteps.isComputerTool(name) || ["browser_run", "browser_look"].contains(baseName(name)) ? .tail : .middle
+    }
+
+    /// `machines`: who the computer tools' `machine` is (AppModel's when nil).
+    static func subject(_ call: ToolCall, machines: [Machine]? = nil) -> String {
         let i = call.input
         let n = baseName(call.name)
         func s(_ k: String) -> String? { i[k]?.string.flatMap { $0.isEmpty ? nil : $0 } }
+        func mac() -> String? { s("machine").map { ComputerSteps.machineName($0, in: machines ?? AppModel.shared.machines) } }
         switch n {
         case "Bash": return s("description") ?? firstLine(s("command") ?? "")
         case "Read", "Edit", "MultiEdit", "Write", "NotebookEdit":
@@ -97,12 +105,10 @@ enum ToolPresentation {
         case "conversation_new", "conversation_send": return firstLine(s("text") ?? "")
         case "conversation_read", "conversation_archive", "conversation_unarchive": return String((s("id") ?? "").prefix(8))
         case "ToolSearch": return s("query") ?? ""
-        case "computer_state": return [s("machine"), s("app") ?? "整个屏幕"].compactMap { $0 }.joined(separator: " · ")
-        case "browser_look": return s("machine") ?? ""
-        case "browser_run": return [s("machine"), s("script").map { firstLine($0.trimmingCharacters(in: .whitespacesAndNewlines)) }].compactMap { $0 }.joined(separator: " · ")
-        case "computer_run":
-            let steps = i["steps"]?.array?.count
-            return [s("machine"), steps.map { "\($0) 步" } ?? s("script").map(firstLine)].compactMap { $0 }.joined(separator: " · ")
+        case "computer_state": return [mac(), s("app") ?? "整个屏幕"].compactMap { $0 }.joined(separator: " · ")
+        case "browser_look": return mac() ?? ""
+        case "browser_run": return [mac(), s("script").map { firstLine($0.trimmingCharacters(in: .whitespacesAndNewlines)) }].compactMap { $0 }.joined(separator: " · ")
+        case "computer_run": return [mac(), ComputerSteps.describe(call.name, input: i)].compactMap { $0 }.joined(separator: " · ")
         // ask_user is the Jarvis assistant's own question tool (docs/assistant.md); it takes the same questions.
         case "AskUserQuestion", "ask_user": return i["questions"]?.array?.first?["question"]?.string ?? ""
         case "ExitPlanMode": return PlanText.title(s("plan") ?? "")
@@ -401,7 +407,7 @@ struct ToolCallRow: View {
                     .font(Theme.Font.secondary)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .truncationMode(.middle)
+                    .truncationMode(ToolPresentation.truncation(call.name))
                 Spacer(minLength: 4)
                 taskBadge
                 if call.isError { Image(systemName: Theme.Icon.errorFilled).foregroundStyle(Theme.danger).font(Theme.Font.label) }
@@ -463,6 +469,14 @@ struct ToolDetail: View {
     @Environment(\.openFile) private var openFile
 
     var body: some View {
+        if ComputerSteps.isComputerTool(call.name) {
+            ComputerToolDetail(call: call, input: ToolTextMemo.input(call.use, scope: memoScope)) // in words (#1323)
+        } else {
+            detail
+        }
+    }
+
+    @ViewBuilder private var detail: some View {
         let base = ToolPresentation.baseName(call.name)
         let i = call.input
         VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -509,7 +523,6 @@ struct ToolDetail: View {
                 }
             }
             ForEach(Array(call.images.enumerated()), id: \.offset) { i, img in Base64Image(payload: img, gallery: call.images, index: i) }
-            ScreenEntry(call: call) // a tool that operates a Mac: after what it saw, that Mac's live screen
         }
     }
 
@@ -1087,6 +1100,50 @@ struct FoldedWorkRow: View {
                 try await openFold(fold)
             } catch {
                 failed = error.shown
+            }
+        }
+    }
+}
+
+/// A tool that operates a Mac, in words (#1323): what it did as a line of steps (「点 AC → 6 → × → 7 → =」), the
+/// screenshot it brought back, 看画面; its JSON and what the driver answered folded under 原始参数.
+struct ComputerToolDetail: View {
+    var call: ToolCall
+    var input: String
+    @State private var raw = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            Label {
+                Text(ComputerSteps.describe(call.name, input: call.input)).font(Theme.Font.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                if call.isRunning { ProgressView().controlSize(.mini) } else {
+                    Image(systemName: call.isError ? Theme.Icon.error : Theme.Icon.success)
+                        .foregroundStyle(call.isError ? Theme.danger : Theme.positive)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("computer-steps")
+            if let result = call.result, result.isError == true {
+                Text(ToolPresentation.firstLine(result.cutText)).font(Theme.Font.label).foregroundStyle(Theme.danger).lineLimit(3)
+            }
+            ForEach(Array(call.images.enumerated()), id: \.offset) { i, img in Base64Image(payload: img, gallery: call.images, index: i) }
+            ScreenEntry(call: call)
+            Button {
+                withAnimation(Theme.Motion.state) { raw.toggle() }
+            } label: {
+                Label(raw ? "收起原始参数" : "原始参数", systemImage: raw ? Theme.Icon.collapse : Theme.Icon.expand)
+                    .font(Theme.Font.label).lineLimit(1)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .accessibilityIdentifier("computer-raw")
+            if raw {
+                CodeBlock(text: input, maxLines: 14)
+                if let result = call.result {
+                    ResultBlock(text: result.cutText, isError: result.isError ?? false, cut: result.fullSize.map { (result.id, $0) })
+                }
             }
         }
     }

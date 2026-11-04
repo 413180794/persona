@@ -233,6 +233,7 @@ var Features = []string{
 	"endpoints",              // authenticated address discovery and capability-gated updates
 	"plugins",                // GET /api/v1/plugins and the relay under /api/v1/plugins/{id}/ (docs/plugins.md)
 	"plugin_manager",         // a plugin's detail, form, settings, secrets and switch under /api/v1/plugins/{id}/-/ (docs/plugins.md)
+	"plugin_ui_slots",        // plugins' UI slots (nav_page, overview_card, machine_section), UI version 2, plugin_ui events (docs/plugins.md「UI 插槽」)
 	"desktops",               // register_desktop, the desktops event, NotifyPrefs.mute_while_desktop (手机静音)
 	"sessions_delta",         // ?features=sessions_delta on the WebSocket: a snapshot, then sessions_delta (docs/protocol.md「会话增量」)
 	"connectors",             // GET /api/v1/connectors (docs/plan-connectors.md)

@@ -752,6 +752,8 @@ struct TaskQuestions: View {
 /// that no task stands for (opened on the Agents page, #1113) follow the tasks, marked as agents.
 struct TaskDock: View {
     var conversation: String
+    /// The conversation's model operating a Mac (#1343): a pill of its own, first.
+    var computer: ComputerActivity? = nil
     @State private var removing: TodoItem?
     private var store: TasksStore { .shared }
 
@@ -759,12 +761,14 @@ struct TaskDock: View {
         let dock = store.dock(conversation)
         let all = store.tasks(of: conversation)
         let agents = store.agents(of: conversation)
-        if !all.isEmpty || !agents.isEmpty {
+        let operating = ComputerActivityPill.shows(computer)
+        if !all.isEmpty || !agents.isEmpty || operating {
             HStack(spacing: Theme.Space.s) {
-                board(all.count + agents.count)
-                if !dock.isEmpty || !agents.isEmpty {
+                if !all.isEmpty || !agents.isEmpty { board(all.count + agents.count) }
+                if !dock.isEmpty || !agents.isEmpty || operating {
                     ScrollView(.horizontal) {
                         HStack(spacing: Theme.Space.s) {
+                            if operating { ComputerActivityPill(activity: computer) }
                             ForEach(dock) { todo in pill(todo) }
                             ForEach(agents) { agent in pill(agent) }
                         }
@@ -849,6 +853,7 @@ struct DockPillLabel<Marks: View>: View {
     var title: String
     var state: AgentState
     var waiting: Bool
+    var maxWidth: CGFloat = Theme.Size.box200
     @ViewBuilder var marks: Marks
 
     var body: some View {
@@ -862,7 +867,7 @@ struct DockPillLabel<Marks: View>: View {
         .padding(.horizontal, Theme.Space.m)
         .padding(.vertical, Theme.Space.sm)
         .background(waiting ? state.tone.tint : Theme.Fill.chip, in: .capsule)
-        .scaledFrame(maxWidth: Theme.Size.box200)
+        .scaledFrame(maxWidth: maxWidth)
     }
 }
 

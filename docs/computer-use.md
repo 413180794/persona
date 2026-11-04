@@ -232,9 +232,16 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 - **对话页**：工具详情下面也有「看画面」（`ScreenEntry`）。出现在两类工具下面，并且要那台 Mac 的插件开着、屏幕共享开着：
   - 助手的 `computer_state` / `computer_run`：对应它点名的那台；
   - 电脑上的 Agent 自己注册的 Cua Driver MCP 工具（`mcp__cua-driver__…`）：对应这个 Agent 所在的那台。
-- **`ScreenViewer`**：iOS 全屏，Mac 是大 sheet。里面一个 WKWebView 打开 hub 上的 `/screen/<机器>#token=…&embed=1`，走 App 连 hub 的同一条路（SSH 隧道时经隧道）。
-  - 网页数据用不落盘的存储（`nonPersistent`）。
-  - 页面的滚动关掉了，手势都交给远端画面。
+- **画面在抽屉里**（#1343，和终端的抽屉一样）：iOS 从底下铺满，拖顶上的把手往下或点把手关掉，没拖够弹回去；Mac 是大 sheet。
+  - 顶上：机器名、连接的阶段（检查 / 连接 / 要登录 / 已连上 / 已断开），助手或 Agent 正在操作这台时多一行「正在：点 AC → 6 → × → 7 → =」。
+  - 底下：「只看 / 接管」，经 WebView 的桥（`personaScreen.setControl`）切网页的 `viewOnly`；网页在 `embed=1` 时不画自己的顶栏，阶段经 `webkit.messageHandlers.screen` 报给 App。
+  - 里面一个 WKWebView 打开 hub 上的 `/screen/<机器>#token=…&embed=1`，走 App 连 hub 的同一条路（SSH 隧道时经隧道）。网页数据用不落盘的存储（`nonPersistent`），页面的滚动关掉了，手势都交给远端画面。
+  - 只有一个抽屉，挂在 `RootView`（`AppModel.screenOpen`）：从哪里打开都是同一个。
+- **从哪里打开**：
+  - **正在操作的条**：对话里最近一次操作电脑的工具（助手的 `computer_*`，Agent 的 `mcp__cua-driver__*`）还在跑、或刚结束 6 秒内，输入框上面的任务条最前面多一个「正在操作 MacBook · 点 …」（`ComputerActivityPill`），点它打开那台的画面。
+  - **··· 菜单**：助手顶栏和 Agent 对话页的 ··· 里有「看画面 · <机器>」（`ScreenMenu`），列出插件开着、屏幕共享开着的 Mac，这个对话最近操作的那台排第一。
+  - 机器页「操控电脑」和工具详情里的「看画面」（`ScreenEntry`）也打开这个抽屉。
+- **工具写成人话**（#1323，`ComputerSteps`）：工具详情先是一行步骤（连续的点按合成「点 AC → 6 → × → 7 → =」，计算器的按键名换成符号），再是截图和「看画面」；原来的 JSON 收在「原始参数」里，点开才看。标题里的机器用它的名字（MacBook），按 id 或名字认（和 hub 一样），认不出才照工具里写的；放不下时截掉尾部（文件路径照旧截中间）。
 - **以后可以做的**：要更好的手势和性能，可以换原生 VNC 库（RoyalVNCKit，MIT，Swift，支持 ARD 认证），经 App 已有的端口转发（`PortForwarder`）连。
 
 ## 怎么验证
@@ -244,7 +251,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - `server/internal/node/computer_install_test.go`：假的下载源和安装器，验证三个脚本从磁盘运行、参数和环境变量、关统计、接着授权、不像安装器的不运行、取消。
     `PERSONA_CUA_INSTALLER_CHECK=1` 时对真的 cua.ai 只下载、只检查（2026-11-04 通过）。
   - `server/internal/hub/computer_test.go`：插件默认关、按机器开、工具出现和消失、经假 node 调用、确认被拒。
-  - `apple/PersonaTests/ComputerTests.swift`：机器的 `computer` 字段、工具的中文名。
+  - `apple/PersonaTests/ComputerTests.swift`：机器的 `computer` 字段、工具的中文名、步骤写成人话、最近一次操作在结果回来前算在跑。
 - **真机（node 一侧）**：在装好 Cua Driver 的 Mac 上跑 node 包的 `TestCuaEndToEnd`。
   - 打开方式：`PERSONA_CUA_E2E=1`，可选 `PERSONA_CUA_SHOT=<图片路径>`；测试二进制用 `GOOS=darwin go test -c` 编好拷过来。
   - 内容：用 `run_steps` 在计算器里算 6×7，再读窗口，断言有 42，并写出截图。
@@ -253,6 +260,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 - **看画面端到端**：mock 带 `MOCK_WEB=web/dist`，托管构建好的页面，并把 5900 转到这台 Mac 自己的屏幕共享。
   - `ComputerSectionTests.testTheLiveScreenAsksForTheMacsSignIn` 点「看画面」，App 的 WebView → 页面 → noVNC → mock 转发 → 本机屏幕共享，一直走到它要求登录（ARD）。
   - 登录那一步要那台 Mac 的密码，测试不做。
+  - `ScreenDrawerTests`（mock 加 `MOCK_COMPUTER_OPERATING=1`，助手和 Agent 的对话里各有一个在跑的操作）：点助手、Agent 的「正在操作」条和 ··· 菜单打开抽屉，往下拖关掉。
 - **截图**：mock 的 `MOCK_COMPUTER=ready|permissions|locked|missing|off`（[testing.md](testing.md)），配合 `-tab settings -openMachines YES -openMachineDetail macbook`。
 - **部署后验收**：
   1. 在「设置 › 插件」打开「操控电脑（Cua）」。
