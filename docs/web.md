@@ -203,6 +203,20 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   hub 回 `invalid_config` 时把原因写在那一项下面、草稿留着，数字不是数时不能保存；有未保存的改动时点返回先问。密钥每项只显示已设置 / 未设置，点开在弹窗里输入（`type=password`，不回显），
   已设置的可以清除（再点一次确认）；「提供」「它可以」「关于」（版本、上一个版本、来源、安装自、发布者、https 的主页、警告）。hub.json 来的只读：没有开关、表单、密钥。
   装、升级、卸载在 hub 的管理界面（`/admin`）或 hub 机器上（`personad plugin`）；hub 有插件市场（列表回 `markets: true`）时也能从市场装（下面）。截图用 `MOCK_PLUGINS=1` 的假 hub。
+  **渠道**（#1466，`settings/Channels.tsx`，逻辑 `lib/channels.ts`，[channels.md](channels.md)；hub 的 features 有 `channels` 才出现）：插件列表顶上一行「渠道」（几个已连接、几个出错），
+  点进 `&plugin=-channels`：分「Persona」（各端）、「已接入」、「可以安装」（市场里的，点了进市场的详情）三组，每行是渠道的标志（飞书用自己的，其余按种类的图标）、名字、账号或说明、状态圆点和文字。
+  单个渠道 `&plugin=-channels/<id>`：状态、账号、最近一条；「启用」；没绑时「绑定」按 `bind` 分步走（填字段、扫码时画 hub 给的二维码并能「保存二维码」、配对码时大字显示并轮询），绑了是账号和「解除绑定」（先确认）；
+  「消息发到」（主对话 / 新对话 / 选一段助手的对话）；按 `features` 画的开关；在等几个回答和提问、最近进过的对话；它能做什么；「发一条测试消息」（只发给自己）；有 `settings_url` 的多一行「更多设置」（飞书机器人进原来的弹窗）。
+  只读的（Persona、飞书 /agent、语音）只显示信息。连接器页的微信、飞书机器人顶上有一行链到这里。对话页里从渠道来的消息（`client_msg_id` 是 `<渠道>-…`）气泡下面一行「来自 微信」，
+  对话列表在标题旁画最近那个渠道（会话的 `channels`）的小标志。截图用 `MOCK_CHANNELS=1` 的假 hub。
+
+  ![设置 › 插件 › 渠道（浅色）](screenshots/web-channels-light.png)
+
+  ![微信渠道的设置（深色）](screenshots/web-channel-wechat-dark.png)
+
+  ![扫码绑定微信（浅色）](screenshots/web-channel-bind-qr-light.png)
+
+  ![对话页里来自微信的消息（深色）](screenshots/web-channel-source-dark.png)
   **声明式 UI**（#1330，`settings/PluginView.tsx`，逻辑 `lib/plugin-ui.ts`，`docs/plugins.md`「声明式 UI」）：插件详情多一组「页面」（它的 `ui`），点进去是 `&plugin=<id>/ui/<页面>`，
   一个组件画全部八种条目：text（四种样式）、metric（连着的几个并排）、progress、row（徽标、可点）、button（连着的放一行，destructive 是红字，submit 是主按钮）、link（只认 https，`openLink` 打开）、field（文字、密钥不回显、数字、开关、选择）、divider；
   tone 换成角色色（neutral → accent / 正文色，positive → green，caution → orange，danger → red）。按钮有 `confirm` 先弹确认框，`submit` 带上这一页全部 field 的值（开关是 `"true"` / `"false"`，数字不是数就不发），

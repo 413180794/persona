@@ -3,7 +3,9 @@ import { clock } from "../../lib/format";
 import { getSession } from "../../lib/store";
 import { isLoopTick, type Segment, type UserMessage } from "../../lib/turns";
 import type { Item } from "../../lib/types";
+import { channelOf, useChannels } from "../../lib/channels";
 import { EASE } from "../../ui/atoms";
+import { ChannelMark } from "../../ui/ChannelMark";
 import { Markdown } from "../../ui/Markdown";
 import { LoopTick, MergedBubble, PeerMessage } from "./Messages";
 import { ContextGroup } from "./ContextGroup";
@@ -33,7 +35,20 @@ export function UserBubble({ msg, mid, sid, pending }: { msg: UserMessage; mid: 
         </MessageActions>
       ))}
       {(pending || msg.queued) && <span className="text-[11px] text-ink-3">{pending ? "发送中…" : "工作中插入的消息"}</span>}
+      {!pending && <ChannelSource clientMsgId={msg.client_msg_id} />}
     </div>
+  );
+}
+
+/** 「来自 微信」 under a message that came from a channel (its client_msg_id is `<channel>-…`, docs/channels.md). */
+function ChannelSource({ clientMsgId }: { clientMsgId?: string }) {
+  const via = channelOf(clientMsgId, useChannels());
+  if (!via) return null;
+  return (
+    <span className="flex items-center gap-1.5 whitespace-nowrap text-[11px] text-ink-3">
+      <ChannelMark c={via} size={14} />
+      来自 {via.name}
+    </span>
   );
 }
 

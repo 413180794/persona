@@ -155,8 +155,8 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           {tab === "model-config" && <ModelConfiguration open={sub} onOpen={(id) => pick("model-config", id)} onProviders={() => pick("models")} />}
           {tab === "assistant" && <AssistantSettings />}
           {(tab === "claude" || tab === "codex") && <AgentSettings key={tab} agent={tab} />}
-          {tab === "connectors" && <Connectors open={sub} onOpen={(id) => pick("connectors", id)} />}
-          {tab === "plugins" && <Plugins open={sub} onOpen={(id) => pick("plugins", id)} />}
+          {tab === "connectors" && <Connectors open={sub} onOpen={(id) => pick("connectors", id)} onChannel={(id) => pick("plugins", `-channels/${id}`)} />}
+          {tab === "plugins" && <Plugins open={sub} onOpen={(id) => pick("plugins", id)} onTab={(t, id) => TABS.includes(t as Tab) && pick(t as Tab, id)} />}
           {tab === "translate" && <TranslationSettings onConfigure={() => pick("model-config", "translate")} />}
           {tab === "devices" && <Devices />}
           {tab === "hub" && <HubSettings />}

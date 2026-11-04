@@ -112,6 +112,8 @@ export interface Session {
   suggestion?: string;
   /** An assistant conversation moved out of the list (docs/assistant.md「管理自己的对话」). */
   archived?: boolean;
+  /** The channels messages came into it from, newest first (docs/channels.md「来源标记」). */
+  channels?: string[];
   todo?: { id: string; title: string };
 }
 

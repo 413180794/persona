@@ -25,11 +25,11 @@ interface LarkStatus {
   last_event_at?: number;
 }
 
-export function Connectors({ open, onOpen }: { open: string | null; onOpen: (id: string | null) => void }) {
+export function Connectors({ open, onOpen, onChannel }: { open: string | null; onOpen: (id: string | null) => void; onChannel?: (id: string) => void }) {
   // An older hub has no connectors API (feature "connectors"): only mail and Feishu, as before.
   const hasConnectors = useStore((s) => s.features.includes("connectors"));
   // "feishu-bot" is not a hub connector: FeishuBot reads it and opens its own dialog.
-  if (open && open !== "feishu-bot") return <ConnectorDetail key={open} id={open} onBack={() => onOpen(null)} />;
+  if (open && open !== "feishu-bot") return <ConnectorDetail key={open} id={open} onBack={() => onOpen(null)} onChannel={onChannel} />;
   return (
     <>
       <p className="mb-5 px-1 text-[12.5px] leading-relaxed text-ink-3">
@@ -38,7 +38,7 @@ export function Connectors({ open, onOpen }: { open: string | null; onOpen: (id:
       </p>
       <Mail />
       <Feishu />
-      <FeishuBot />
+      <FeishuBot onChannel={onChannel} />
       {hasConnectors && <ConnectorList onOpen={onOpen} />}
     </>
   );

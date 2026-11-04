@@ -2,6 +2,7 @@
 // connectors page with the bot's state; its page (a dialog) has the status and the on / off switch, the app's
 // credentials, pairing with a code sent to the bot, what the bot may do, the agents driven there, and how to make one.
 // Each change goes to the hub at once and the page shows what the hub answered; a failed one leaves it as it was.
+import { ChannelLink } from "./Channels";
 import { useCallback, useEffect, useState } from "react";
 import { errorText } from "../../lib/api";
 import { ago } from "../../lib/format";
@@ -48,7 +49,7 @@ function useBot() {
   return { status, setStatus, loading, error, setError, load };
 }
 
-export function FeishuBot() {
+export function FeishuBot({ onChannel }: { onChannel?: (id: string) => void } = {}) {
   const bot = useBot();
   const [open, setOpen] = useState(() => new URLSearchParams(location.search).get("connector") === "feishu-bot");
   const tone = botTone(bot.status);
@@ -70,6 +71,7 @@ export function FeishuBot() {
           <Icon name="chevronRight" size={12} stroke={2} className="shrink-0 text-ink-3" />
         </button>
       </Group>
+      {onChannel && <ChannelLink id="feishu" onOpen={onChannel} />}
       {open && <FeishuBotDialog bot={bot} onClose={() => setOpen(false)} />}
     </>
   );

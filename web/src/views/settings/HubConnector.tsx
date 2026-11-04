@@ -17,6 +17,7 @@ import { ago } from "../../lib/format";
 import { Button, cx, Dialog, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
 import { BrandMark } from "../../ui/BrandMark";
 import { Icon } from "../../ui/icons";
+import { ChannelLink } from "./Channels";
 import { Group, Row, Switch } from "./SettingsParts";
 
 const DOT: Record<ConnectorTone, string> = { green: "bg-green", orange: "bg-orange", red: "bg-red", idle: "bg-line-strong" };
@@ -70,7 +71,7 @@ export function ConnectorList({ onOpen }: { onOpen: (id: string) => void }) {
 
 // ── one connector's page ─────────────────────────────────
 
-export function ConnectorDetail({ id, onBack }: { id: string; onBack: () => void }) {
+export function ConnectorDetail({ id, onBack, onChannel }: { id: string; onBack: () => void; onChannel?: (id: string) => void }) {
   const [c, setC] = useState<HubConnector | null>(null);
   const [failure, setFailure] = useState("");
   const [loading, setLoading] = useState(true);
@@ -130,6 +131,7 @@ export function ConnectorDetail({ id, onBack }: { id: string; onBack: () => void
         {c?.last_sync && <InfoRow k="最近一次同步" v={ago(c.last_sync)} />}
         {err && <p className={cx("border-t border-line px-4 py-2.5 text-[12px] break-words select-text", rateLimited ? "text-ink-2" : "text-red")}>{err}</p>}
       </section>
+      {onChannel && <ChannelLink id={id} onOpen={onChannel} />}
       {c && !signsInHere(c) && !undescribed(c) && (
         <p className="-mt-4 mb-6 px-1 text-[11.5px] leading-relaxed text-ink-3">
           {id === "imessage" ? "「交给 Persona」和删除已存的数据在手机 App 的 设置 › 连接器 › 信息 里。" : "登录在 hub 一侧设置（hub.json，见 docs/config.md），这里只看状态。"}

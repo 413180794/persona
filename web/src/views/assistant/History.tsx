@@ -1,6 +1,8 @@
 // 全部对话 (docs/assistant.md「管理自己的对话」, the iOS app's sidebar + ArchivedConversationsView): every conversation
 // Persona has, the main one first, the rest newest first by day; search on the title and the last message; a row's menu
 // renames it, copies its id, archives it (the main one can't be). The archived ones are folded at the end.
+import { conversationChannel, useChannels } from "../../lib/channels";
+import { ChannelMark } from "../../ui/ChannelMark";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
 import { ago, stateOf } from "../../lib/format";
@@ -182,6 +184,19 @@ function markTone(id: string): string {
   return MARK_TONES[h % MARK_TONES.length];
 }
 
+/** The latest channel a conversation's messages came from, as a small mark beside its title. */
+function ConvChannel({ ids }: { ids?: string[] }) {
+  const list = useChannels();
+  const via = conversationChannel(ids, list);
+  if (!via) return null;
+  const kind = list.find((c) => c.id === via.id)?.kind ?? "im";
+  return (
+    <span title={`来自${via.name}`} className="flex shrink-0">
+      <ChannelMark c={{ id: via.id, kind }} size={16} />
+    </span>
+  );
+}
+
 function ConvRow({ s, main, now, onRename, onArchive }: { s: Conversation; main?: boolean; now: number; onRename: (s: Conversation) => void; onArchive: (s: Conversation, on: boolean) => void }) {
   const menu = useMenu();
   const route: Route = { name: "jarvis", sid: s.session_id };
@@ -223,6 +238,7 @@ function ConvRow({ s, main, now, onRename, onArchive }: { s: Conversation; main?
               )}
             </span>
             {main && <span className="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full bg-accent-tint px-2 text-[11px] font-medium text-accent-ink">主对话</span>}
+            <ConvChannel ids={s.channels} />
           </span>
           {last && <span className="mt-0.5 block truncate text-[12px] text-ink-3">{last}</span>}
         </span>
