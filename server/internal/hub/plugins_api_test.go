@@ -60,6 +60,7 @@ type pluginStore struct {
 	rows    map[string]plugin.Record
 	secrets map[string]map[string]string
 	audit   []string
+	markets map[string]plugin.MarketRecord
 }
 
 func (s *pluginStore) Plugins(context.Context) ([]plugin.Record, error) {
@@ -332,4 +333,29 @@ func callFrom(t *testing.T, h http.Handler, method, path, token, body, from stri
 	out := map[string]any{}
 	_ = json.Unmarshal(w.Body.Bytes(), &out)
 	return w.Code, out
+}
+
+func (s *pluginStore) PluginMarkets(context.Context) ([]plugin.MarketRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []plugin.MarketRecord
+	for _, r := range s.markets {
+		out = append(out, r)
+	}
+	return out, nil
+}
+func (s *pluginStore) PutPluginMarket(_ context.Context, r plugin.MarketRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.markets == nil {
+		s.markets = map[string]plugin.MarketRecord{}
+	}
+	s.markets[r.ID] = r
+	return nil
+}
+func (s *pluginStore) DeletePluginMarket(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.markets, id)
+	return nil
 }

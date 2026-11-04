@@ -115,6 +115,14 @@ func (h *Hub) adminPluginRoutes(mux *http.ServeMux) {
 		writeJSON(w, pv)
 	}
 
+	// The markets, as the apps have them (the admin session is the gate).
+	h.marketRoutesAt(mux, "/api/v1/admin/plugins/-", func(w http.ResponseWriter, r *http.Request) bool {
+		if h.plugins == nil {
+			writeErrCode(w, http.StatusServiceUnavailable, "no_plugins", errors.New("plugins are not set up"))
+			return false
+		}
+		return true
+	})
 	mux.HandleFunc("GET /api/v1/admin/plugins", func(w http.ResponseWriter, r *http.Request) {
 		out := AdminPlugins{Plugins: []PluginDetail{}, UploadMost: plugin.PackageMost}
 		if h.plugins != nil {

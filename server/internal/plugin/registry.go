@@ -265,6 +265,8 @@ type Preview struct {
 	// AddedPermissions are the lines of what the new version may do that the installed one may not (only what is
 	// new: the added hosts, the added secrets), for the upgrade screen.
 	AddedPermissions []PermissionLine `json:"added_permissions,omitempty"`
+	// Market is the market it comes from (a full-rights device may install it, docs/plugins.md「插件市场」).
+	Market string `json:"market,omitempty"`
 
 	source  Source
 	root    string // the staged package
@@ -288,6 +290,52 @@ func (r *Registry) Preview(ctx context.Context, source, upgrade string) (*Previe
 		return nil, err
 	}
 	return r.preview(ctx, src, upgrade, func(dir string) (string, error) { return Stage(ctx, src, dir) })
+}
+
+// PreviewMarket is Preview for a plugin of a market: its package for this hub's platform, downloaded and checked
+// against the index's sha256, must be the plugin the index says (id, version, permissions).
+func (r *Registry) PreviewMarket(ctx context.Context, mk *Market, marketID string, e *MarketEntry, upgrade string) (*Preview, error) {
+	if r.store == nil {
+		return nil, errors.New("没有数据库：装不了插件")
+	}
+	pkg := e.PackageFor(Platform())
+	if pkg == nil {
+		return nil, fmt.Errorf("%s 没有这台 hub（%s）能用的包", e.Parsed.ID, Platform())
+	}
+	src := Source{Kind: "market", Path: marketID + "/" + e.Parsed.ID}
+	pv, err := r.preview(ctx, src, upgrade, func(dir string) (string, error) {
+		file, name, err := mk.Download(ctx, pkg, dir)
+		if err != nil {
+			return "", err
+		}
+		out := filepath.Join(dir, "pkg")
+		if err := unpackAs(file, name, out); err != nil {
+			return "", err
+		}
+		_ = os.Remove(file)
+		return packageRoot(out)
+	})
+	if err != nil {
+		return nil, err
+	}
+	if m := pv.Manifest; m.ID != e.Parsed.ID || m.Version != e.Parsed.Version || Digest(m) != Digest(e.Parsed) {
+		if pv, _ := r.take(pv.ID); pv != nil {
+			r.dropStaging(pv)
+		}
+		return nil, fmt.Errorf("下载的包（%s %s）和市场索引里写的（%s %s）不一致", m.ID, m.Version, e.Parsed.ID, e.Parsed.Version)
+	}
+	pv.Market = marketID
+	return pv, nil
+}
+
+// PreviewMarketOf is the market a preview's package comes from ("" when it does not, or the preview is gone).
+func (r *Registry) PreviewMarketOf(previewID string) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if pv := r.previews[previewID]; pv != nil {
+		return pv.Market
+	}
+	return ""
 }
 
 // PreviewUpload is Preview for a package uploaded in the browser (the admin UI): body is the .tar.gz / .zip named

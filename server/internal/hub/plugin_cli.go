@@ -36,7 +36,13 @@ const pluginUsage = `usage:
   personad plugin config <id> key=value …       set settings (a value is JSON when it parses, text otherwise)
   personad plugin secret <id> <name>            set a secret, read from stdin (never an argument)
   personad plugin secret <id> <name> --delete
-  personad plugin uninstall <id> [--keep-data]`
+  personad plugin uninstall <id> [--keep-data]
+  personad plugin market list                   the plugin markets this hub reads
+  personad plugin market add <spec> [--token]   a market: https://example.com/plugins/ (its persona-plugins.json),
+                                                a .json URL, or github:owner/repo[@ref]; --token reads one from stdin
+  personad plugin market remove <id> | refresh <id>
+  personad plugin search [words]                the markets' plugins
+  personad plugin install market:<market>/<id>  install (or upgrade) one of a market's plugins`
 
 // PluginCommand runs `personad plugin <args>`.
 func PluginCommand(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
@@ -115,7 +121,18 @@ func PluginCommand(ctx context.Context, args []string, stdin io.Reader, stdout, 
 			source = positional[0]
 		}
 		var pv plugin.Preview
-		if err := c.do(ctx, "POST", "/api/v1/plugins/-/preview", map[string]string{"source": source, "upgrade": upgrade}, &pv); err != nil {
+		if rest, ok := strings.CutPrefix(source, "market:"); ok {
+			market, id, ok := strings.Cut(rest, "/")
+			if !ok {
+				return errors.New("写成 market:<市场 id>/<插件 id>（市场 id 见 personad plugin market list）")
+			}
+			if err := c.do(ctx, "POST", "/api/v1/plugins/-/catalog/preview", map[string]string{"market": market, "plugin": id}, &pv); err != nil {
+				return err
+			}
+			if pv.Upgrade {
+				upgrade = id
+			}
+		} else if err := c.do(ctx, "POST", "/api/v1/plugins/-/preview", map[string]string{"source": source, "upgrade": upgrade}, &pv); err != nil {
 			return err
 		}
 		printPreview(stdout, &pv)
@@ -134,6 +151,88 @@ func PluginCommand(ctx context.Context, args []string, stdin io.Reader, stdout, 
 		fmt.Fprintf(stdout, "%s %s：%s\n", d.ID, d.Version, d.Status)
 		if len(d.NeedsSetup) > 0 {
 			fmt.Fprintf(stdout, "还缺：%s（App 的 设置 › 插件，或 personad plugin config / secret）\n", strings.Join(d.NeedsSetup, "、"))
+		}
+		return nil
+	case "market":
+		if err := need(1); err != nil {
+			return err
+		}
+		switch positional[0] {
+		case "list":
+			var out struct {
+				Markets []MarketView `json:"markets"`
+			}
+			if err := c.do(ctx, "GET", "/api/v1/plugins/-/markets", nil, &out); err != nil {
+				return err
+			}
+			if len(out.Markets) == 0 {
+				fmt.Fprintln(stdout, "没有登记插件市场")
+			}
+			for _, m := range out.Markets {
+				line := fmt.Sprintf("%-10s %-24s %3d 个插件  %s", m.ID, m.Name, m.Plugins, m.Spec)
+				if m.Error != "" {
+					line += "（" + m.Error + "）"
+				}
+				fmt.Fprintln(stdout, line)
+			}
+			return nil
+		case "add":
+			if err := need(2); err != nil {
+				return err
+			}
+			body := map[string]string{"spec": positional[1]}
+			if flag("--token") {
+				tok, err := readSecret(stdin, stdout)
+				if err != nil {
+					return err
+				}
+				body["token"] = tok
+			}
+			var m MarketView
+			if err := c.do(ctx, "POST", "/api/v1/plugins/-/markets", body, &m); err != nil {
+				return err
+			}
+			fmt.Fprintf(stdout, "%s：%s，%d 个插件\n", m.ID, m.Name, m.Plugins)
+			for _, w := range m.Warnings {
+				fmt.Fprintln(stdout, "  警告："+w)
+			}
+			return nil
+		case "remove", "refresh":
+			if err := need(2); err != nil {
+				return err
+			}
+			if positional[0] == "remove" {
+				return c.do(ctx, "DELETE", "/api/v1/plugins/-/markets/"+url.PathEscape(positional[1]), nil, nil)
+			}
+			var m MarketView
+			if err := c.do(ctx, "POST", "/api/v1/plugins/-/markets/"+url.PathEscape(positional[1])+"/refresh", nil, &m); err != nil {
+				return err
+			}
+			fmt.Fprintf(stdout, "%s：%s，%d 个插件\n", m.ID, m.Name, m.Plugins)
+			return nil
+		}
+		return errors.New(pluginUsage)
+	case "search":
+		var out struct {
+			Plugins []CatalogItem `json:"plugins"`
+		}
+		if err := c.do(ctx, "GET", "/api/v1/plugins/-/catalog?q="+url.QueryEscape(strings.Join(positional, " ")), nil, &out); err != nil {
+			return err
+		}
+		if len(out.Plugins) == 0 {
+			fmt.Fprintln(stdout, "没有找到")
+		}
+		for _, p := range out.Plugins {
+			state := ""
+			switch {
+			case p.Upgradable:
+				state = "（已装 " + p.Installed + "，可升级）"
+			case p.Installed != "":
+				state = "（已装 " + p.Installed + "）"
+			case p.Problem != "":
+				state = "（" + p.Problem + "）"
+			}
+			fmt.Fprintf(stdout, "market:%s/%s  %s %s%s\n    %s\n", p.Market, p.ID, p.Name, p.Version, state, p.Description)
 		}
 		return nil
 	case "rollback":

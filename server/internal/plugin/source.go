@@ -27,7 +27,7 @@ const (
 
 // Source is where a package comes from (docs/plan-plugins.md「来源」).
 type Source struct {
-	Kind string // dir | file | https | remote | upload
+	Kind string // dir | file | https | remote | upload | market
 	Path string // dir, file: a path on the hub's machine; https: the URL without the fragment; upload: the file's name
 	// SHA256 is what an https download must hash to.
 	SHA256 string
@@ -51,6 +51,8 @@ func (s Source) String() string {
 		return "remote:" + strings.Join(parts, ",")
 	case "upload":
 		return "upload:" + s.Path
+	case "market":
+		return "market:" + s.Path
 	}
 	return s.Kind + ":" + s.Path
 }

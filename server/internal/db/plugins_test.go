@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,6 +60,36 @@ func TestPluginRows(t *testing.T) {
 		t.Fatal("its secrets went with it")
 	}
 	if rows, _ := d.Plugins(ctx); len(rows) != 0 {
+		t.Fatal(rows)
+	}
+}
+
+// A market's row round-trips, its index and token with it.
+func TestPluginMarketRows(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	at := time.Date(2026, 11, 4, 1, 2, 3, 0, time.UTC)
+	r := plugin.MarketRecord{ID: "m1", Spec: "github:example/plugins", Name: "Example", TokenSealed: "sealed", AddedAt: at}
+	if err := d.PutPluginMarket(ctx, r); err != nil {
+		t.Fatal(err)
+	}
+	r.Index, r.Warnings, r.Error, r.FetchedAt = json.RawMessage(`{"market_version": 1}`), []string{"w"}, "", &at
+	if err := d.PutPluginMarket(ctx, r); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.PutPluginMarket(ctx, plugin.MarketRecord{ID: "m2", Spec: "github:example/plugins", AddedAt: at}); err == nil {
+		t.Fatal("the same market twice")
+	}
+	rows, err := d.PluginMarkets(ctx)
+	if err != nil || len(rows) != 1 {
+		t.Fatal(rows, err)
+	}
+	if g := rows[0]; g.TokenSealed != "sealed" || !strings.Contains(string(g.Index), "market_version") || g.Warnings[0] != "w" || g.FetchedAt == nil || !g.AddedAt.Equal(at) {
+		t.Fatalf("%+v", g)
+	}
+	if err := d.DeletePluginMarket(ctx, "m1"); err != nil {
+		t.Fatal(err)
+	}
+	if rows, _ := d.PluginMarkets(ctx); len(rows) != 0 {
 		t.Fatal(rows)
 	}
 }

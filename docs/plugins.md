@@ -126,13 +126,14 @@ hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的�
 
 ## 安装、升级、回滚、卸载
 
-装插件就是在 hub 机器上跑一个新程序，所以只有 hub 的主人能装，两条路：
+装插件就是在 hub 机器上跑一个新程序，所以任意来源的包只有 hub 的主人能装，两条路：
 
 - **hub 机器上的命令行**：`personad plugin …` 读 hub.json 里的主 token，经回环调下面的接口。
 - **管理界面**（`/admin` 的「插件」页，[admin.md](admin.md)「插件」）：管理员密码登录的会话，过访问范围、CSRF 和预览限流，接口在 `/api/v1/admin/plugins…`。
   管理界面本来就能加电脑、发凭据，和装插件一样要紧，所以同一把密码；审计里记成 `admin UI`。
 
-手机（设备凭据）能看列表、开关、改配置、填密钥，不能装、升级、回滚、卸载。
+手机（设备凭据）能看列表、开关、改配置、填密钥；装、升级、回滚、卸载只能针对**已登记的插件市场里的插件**（见「插件市场」），
+任意来源（目录、文件、网址、上传、跑在别处）仍只走上面两条路。
 
 插件包：一个目录，或一个 `.tar.gz` / `.tgz` / `.zip`（根目录或唯一的顶层目录里有清单）。最大 200 MB、2 万个文件；解包时拒绝绝对路径、`..`、指向包外的链接、
 设备文件，zip 里不能有链接；文件权限只留「可执行或不可执行」。
@@ -172,7 +173,69 @@ personad plugin enable <id> | disable <id>
 personad plugin config <id> key=value …           值能解析成 JSON 就按 JSON，否则当文字；key= 删掉这一项
 personad plugin secret <id> <name> [--delete]     值从标准输入读（终端里不回显），不进命令行参数
 personad plugin uninstall <id> [--keep-data]
+personad plugin market list | add <spec> [--token] | remove <id> | refresh <id>
+personad plugin search [关键词]
+personad plugin install market:<市场 id>/<插件 id>  从市场装；已装的就是升级
 ```
+
+## 插件市场
+
+一个仓库或网站发布一份**索引** `persona-plugins.json`，声明它提供的所有插件；hub 登记这个市场以后，App、网页、管理界面和命令行都能浏览、搜索、
+安装、升级、卸载里面的插件。开源仓库不带任何市场，也不预置。代码在 `server/internal/plugin/market.go`（索引、下载、校验）和 `server/internal/hub/plugin_market.go`（登记、目录、接口）。
+
+**市场的地址**：
+
+| 写法 | 读哪里 |
+| --- | --- |
+| `https://example.com/plugins/`（不以 `.json` 结尾） | `https://example.com/plugins/persona-plugins.json` |
+| `https://example.com/v100/market.json` | 就是这个文件 |
+| `github:owner/repo`、`github:owner/repo@分支`（也认 `https://github.com/owner/repo`、`…/tree/<分支>`） | 仓库根目录的 `persona-plugins.json`，经 GitHub API 读，私有仓库也行 |
+
+只收 https。私有的市场填一个 **token**（GitHub 用只读的 fine-grained token：这个仓库的 Contents 读权限）：用 hub 的 `secret.key` 加密存，
+只以 `Authorization: Bearer` 发给市场自己的源（GitHub 市场是 API 的源），重定向到别的主机（Release 附件跳到的存储）不带；不回显。
+
+**索引**：
+
+```json
+{"market_version": 1,
+ "name": "Example plugins",
+ "description": "示例市场",
+ "homepage": "https://example.com/",
+ "plugins": [
+   {"manifest": {"manifest_version": 1, "id": "example-notes", "name": "Example Notes", "version": "1.2.0", "…": "…"},
+    "tags": ["笔记"],
+    "packages": [
+      {"platforms": ["linux-amd64", "linux-arm64"], "url": "dist/example-notes-1.2.0-linux.tar.gz", "sha256": "<64 位 hex>", "size": 123456},
+      {"url": "release:v1.2.0/example-notes-1.2.0.tar.gz", "sha256": "<64 位 hex>"}]}]}
+```
+
+- `manifest` 是插件的整份 `persona-plugin.json`：没下载就能看它的权限、贡献。下载的包里的清单必须和它一致（id、版本、权限摘要），否则不装。
+- `packages` 按顺序找第一个 `platforms` 含这台 hub（`GOOS-GOARCH`）的，没写 `platforms` 的算哪都能用。`url` 是相对索引的路径（GitHub 市场是仓库里的路径）、
+  https 地址，或 GitHub 市场的 `release:<tag>/<附件名>`（经 API 下载 Release 附件，私有仓库也行）。`sha256` 必填，下载后校验，不对就不装。
+- 坏掉的条目（清单不合法、没有包、地址不是 https、同一个 id 两次）丢掉并给一条警告，其余照常；`market_version` 不是 1、没有 `name` 的整份不认。
+  上限：索引 4 MB、500 个插件、一台 hub 32 个市场。
+
+**接口**（完整权限的设备；管理界面在 `/api/v1/admin/plugins/-/…` 有同样的一套，过它的会话）：
+
+| 接口 | 做什么 |
+| --- | --- |
+| `GET /api/v1/plugins/-/markets` | `{markets: [{id, spec, name, description, homepage, has_token, plugins（个数）, warnings, error, fetched_at, added_at}]}` |
+| `POST /api/v1/plugins/-/markets` `{spec, token?}` | 先读一次索引，读不到不登记（400，`error` 说原因：地址不对、私有要 token、token 不对）；回市场 |
+| `DELETE /api/v1/plugins/-/markets/{id}` | 不再读这个市场；从它装的插件留着 |
+| `POST /api/v1/plugins/-/markets/{id}/refresh` | 现在重读索引 |
+| `PUT /api/v1/plugins/-/markets/{id}/token` `{token}` | 换 token（空串去掉）并重读 |
+| `GET /api/v1/plugins/-/catalog?q=&market=&refresh=1` | `{markets, plugins: [CatalogItem], platform}`。`q` 在 id、名字、说明、发布者、标签里找（不分大小写）；索引超过 6 小时的在后台重读，`refresh=1` 等全部重读完 |
+| `POST /api/v1/plugins/-/catalog/preview` `{market, plugin}` | 下载、校验，回预览（同「安装」的预览，多一个 `market`）；已装的就是升级的预览 |
+
+`CatalogItem`：`market`、`market_name`、`id`、`name`、`version`、`description`、`publisher`、`homepage`、`tags`、`contributes`（扩展点 → id）、
+`permissions`（给人看的几行，和安装前一样）、`problem`（装不了的原因：没有这台 hub 平台的包、要更新的 hub）、`installed`（已装的版本）、
+`installed_source`、`from_this_market`、`upgradable`。
+
+**谁能做**：完整权限的设备能登记 / 删除市场；预览来自市场时能拿它安装、升级（`POST /api/v1/plugins/-/install`、`…/{id}/-/upgrade`，同样带权限摘要），
+来源记成 `market:<市场 id>/<插件 id>` 的插件能回滚、卸载。理由：完整权限的设备本来就能经 Agent 在各台电脑上跑任意命令，开放市场不扩大信任边界；
+包由市场索引的 sha256 钉死，装之前同样列出权限。只能读和回答的设备都不行。
+
+**发布一个市场**：仓库根目录放 `persona-plugins.json`，包放进 Release 附件（或仓库里、网站上），`sha256sum` 写进索引。插件仓库的打包脚本顺手生成索引。
 
 ## 什么时候跑；崩溃和超时
 

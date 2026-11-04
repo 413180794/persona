@@ -66,6 +66,14 @@ func (ps *plugins) detail(ctx context.Context, p *plugin.Plugin) PluginDetail {
 	return d
 }
 
+// actorOr is actor, or def for the master token over loopback.
+func actorOr(r *http.Request, def string) string {
+	if principalOf(r.Context()).ID == "" {
+		return def
+	}
+	return actor(r)
+}
+
 // actor is who changes a plugin, for its audit.
 func actor(r *http.Request) string {
 	p := principalOf(r.Context())
@@ -92,13 +100,14 @@ func readPluginJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 
 func (h *Hub) pluginRoutes(api *http.ServeMux) {
 	h.pluginUIRoutes(api)
+	h.marketRoutes(api)
 	ps := func() *plugins { return h.plugins }
 	api.HandleFunc("GET /api/v1/plugins", func(w http.ResponseWriter, r *http.Request) {
 		if ps() == nil {
 			writeJSON(w, map[string]any{"plugins": []PluginView{}})
 			return
 		}
-		writeJSON(w, map[string]any{"plugins": ps().listCtx(r.Context()), "can_install": ps().reg.HasStore()})
+		writeJSON(w, map[string]any{"plugins": ps().listCtx(r.Context()), "can_install": ps().reg.HasStore(), "markets": h.marketStore() != nil && ps().reg.HasStore()})
 	})
 	// The hub's own routes under a plugin: what changes it is for a device with full rights.
 	full := func(f func(w http.ResponseWriter, r *http.Request, p *plugin.Plugin)) http.HandlerFunc {
@@ -131,6 +140,19 @@ func (h *Hub) pluginRoutes(api *http.ServeMux) {
 			}
 			f(w, r)
 		}
+	}
+	// marketOr is owner for installing, upgrading, rolling back and removing, or a device with full rights when it is a
+	// plugin of a registered market (its package pinned by the market's index; docs/plugins.md「插件市场」).
+	marketOr := func(w http.ResponseWriter, r *http.Request, ofMarket func() bool) bool {
+		if ps() == nil {
+			writeErrCode(w, http.StatusServiceUnavailable, "no_plugins", errors.New("plugins are not set up"))
+			return false
+		}
+		if h.fromThisMachine(r) || (principalOf(r.Context()).Role == roleFull && ofMarket()) {
+			return true
+		}
+		writeErrCode(w, http.StatusForbidden, "this_machine_only", errors.New("这个插件只能在 hub 机器上（personad plugin …）或 hub 的管理界面里装、升级和卸载；手机上只能装插件市场里的"))
+		return false
 	}
 	api.HandleFunc("GET /api/v1/plugins/{id}/-/{$}", full(func(w http.ResponseWriter, r *http.Request, p *plugin.Plugin) {
 		writeJSON(w, ps().detail(r.Context(), p))
@@ -204,51 +226,60 @@ func (h *Hub) pluginRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, pv)
 	}))
-	api.HandleFunc("POST /api/v1/plugins/-/install", owner(func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("POST /api/v1/plugins/-/install", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			PreviewID string `json:"preview_id"`
 			Digest    string `json:"permissions_digest"`
 		}
-		if !readPluginJSON(w, r, &in) {
+		if !readPluginJSON(w, r, &in) || !marketOr(w, r, func() bool { return ps().reg.PreviewMarketOf(in.PreviewID) != "" }) {
 			return
 		}
-		p, err := ps().reg.Install(r.Context(), in.PreviewID, in.Digest, "personad plugin")
+		p, err := ps().reg.Install(r.Context(), in.PreviewID, in.Digest, actorOr(r, "personad plugin"))
 		if err != nil {
 			writeErrCode(w, http.StatusBadRequest, "install_failed", err)
 			return
 		}
 		writeJSON(w, ps().detail(r.Context(), p))
-	}))
-	api.HandleFunc("POST /api/v1/plugins/{id}/-/upgrade", owner(func(w http.ResponseWriter, r *http.Request) {
+	})
+	api.HandleFunc("POST /api/v1/plugins/{id}/-/upgrade", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			PreviewID string `json:"preview_id"`
 			Digest    string `json:"permissions_digest"`
 		}
-		if !readPluginJSON(w, r, &in) {
+		if !readPluginJSON(w, r, &in) || !marketOr(w, r, func() bool { return ps().reg.PreviewMarketOf(in.PreviewID) != "" }) {
 			return
 		}
-		p, err := ps().reg.Upgrade(r.Context(), r.PathValue("id"), in.PreviewID, in.Digest, "personad plugin")
+		p, err := ps().reg.Upgrade(r.Context(), r.PathValue("id"), in.PreviewID, in.Digest, actorOr(r, "personad plugin"))
 		if err != nil {
 			writeErrCode(w, http.StatusBadRequest, "upgrade_failed", err)
 			return
 		}
 		writeJSON(w, ps().detail(r.Context(), p))
-	}))
-	api.HandleFunc("POST /api/v1/plugins/{id}/-/rollback", owner(func(w http.ResponseWriter, r *http.Request) {
-		p, err := ps().reg.Rollback(r.Context(), r.PathValue("id"), "personad plugin")
+	})
+	fromMarket := func(r *http.Request) func() bool {
+		return func() bool { p := ps().reg.Get(r.PathValue("id")); return p != nil && plugin.FromMarket(p.Record.Origin) != "" }
+	}
+	api.HandleFunc("POST /api/v1/plugins/{id}/-/rollback", func(w http.ResponseWriter, r *http.Request) {
+		if !marketOr(w, r, fromMarket(r)) {
+			return
+		}
+		p, err := ps().reg.Rollback(r.Context(), r.PathValue("id"), actorOr(r, "personad plugin"))
 		if err != nil {
 			writeErrCode(w, http.StatusBadRequest, "rollback_failed", err)
 			return
 		}
 		writeJSON(w, ps().detail(r.Context(), p))
-	}))
-	api.HandleFunc("DELETE /api/v1/plugins/{id}/-/{$}", owner(func(w http.ResponseWriter, r *http.Request) {
-		if err := ps().reg.Uninstall(r.Context(), r.PathValue("id"), r.URL.Query().Get("keep_data") == "1", "personad plugin"); err != nil {
+	})
+	api.HandleFunc("DELETE /api/v1/plugins/{id}/-/{$}", func(w http.ResponseWriter, r *http.Request) {
+		if !marketOr(w, r, fromMarket(r)) {
+			return
+		}
+		if err := ps().reg.Uninstall(r.Context(), r.PathValue("id"), r.URL.Query().Get("keep_data") == "1", actorOr(r, "personad plugin")); err != nil {
 			writeErrCode(w, http.StatusBadRequest, "uninstall_failed", err)
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true})
-	}))
+	})
 
 	api.HandleFunc("/api/v1/plugins/{id}/", func(w http.ResponseWriter, r *http.Request) {
 		// A plugin can do anything the hub can (it may hold its token): not for an answer-only device.

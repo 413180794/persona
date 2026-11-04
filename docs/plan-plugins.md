@@ -69,6 +69,9 @@
   启动器页的一节经 `gateway.http` 用 Key 访问网关，插件看不到 Key）和 `events`（`inbox.changed`、`agent.needs_you`、`agent.finished`，只通知，订阅随权限一起同意）。
   规格在 `docs/plugins.md`「声明式 UI」「事件」。
 - [ ] 第 4 步（客户端）：iOS / Mac、Android、网页画 View（插件详情里的页面、启动器页上的一节）。
+- [x] **插件市场（服务端，#1303）**：仓库 / 网站发布 `persona-plugins.json`，hub 登记市场（GitHub 私有仓库带只读 token），目录、搜索，完整权限的设备从市场装、升级、卸载；
+  命令行 `personad plugin market … / search / install market:…`。规格在 `docs/plugins.md`「插件市场」。
+- [ ] 插件市场（客户端）：iOS / Mac、Android、网页、管理界面的「插件市场」页。
 
 ## 第 3 步的方案：lark-connector 迁成插件
 

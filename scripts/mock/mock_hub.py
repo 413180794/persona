@@ -5611,7 +5611,182 @@ PLUGINS = {
                         "source": "installed", "enabled": True, "error": "这个插件要 hub 的构建号 >=202612010000，这台是 202611041200",
                         "contributes": {"connectors": ["exampleweather"]}, "form": {"fields": []}, "config": {}, "secrets": [], "permissions": [_RUNS]},
 }
+PLUGINS["example-gateway"] = {
+    "id": "example-gateway", "name": "Example 网关面板", "kind": "ui", "status": "running", "version": "1.0.0", "source": "installed",
+    "enabled": True, "description": "在启动器页上显示 Example 网关的余额、Key 和用量。", "contributes": {"ui": ["home", "panel"]},
+    "publisher": "example", "origin": "market:3f2a9c1d0b/example-gateway", "form": {"fields": []}, "config": {}, "secrets": [],
+    "permissions": [_RUNS, {"key": "launcher_keys", "title": "用启动器的 Key 访问它的网关", "detail": "查额度、画启动器页上的面板；它看不到 Key：hub 或有这个启动器的电脑替它发请求，只发到启动器自己的网关"}],
+    "ui": [{"plugin": "example-gateway", "id": "home", "title": "概况", "placement": "plugin_page"}]}
 _PLUGIN_VIEW = ["id", "name", "kind", "status", "error", "version", "source", "enabled", "description", "contributes", "needs_setup", "warnings"]
+
+# ---------- MOCK_PLUGINS: declarative UI (docs/plugins.md「声明式 UI」) ----------
+# example-gateway draws a page (plugin_page "home") and a section on every launcher's page (launcher_section "panel"),
+# with every kind of item; its buttons answer (a toast, a new view, a link), the form's values come back.
+_UI_STATE = {"note": "", "auto": "true", "plan": "team", "refreshed": 0}
+
+
+def _ui_view(ui, launcher=""):
+    if ui == "panel":
+        return {"sections": [{"items": [
+            {"type": "metric", "label": "余额", "value": "¥ 182.40", "detail": "本月已用 ¥ 57.60", "tone": "positive"},
+            {"type": "progress", "label": "今日额度", "ratio": 0.72, "detail": "72% · 还剩 2.8 万 token", "tone": "caution"},
+            {"type": "row", "title": "Key：" + (launcher or "default"), "subtitle": "最近使用 3 分钟前", "badge": {"text": "有效", "tone": "positive"}},
+            {"type": "button", "title": "刷新", "action": {"id": "refresh"}}]}]}
+    return {"title": "Example 网关", "state": "tab=overview", "sections": [
+        {"title": "概况", "items": [
+            {"type": "metric", "label": "余额", "value": "¥ 182.40", "detail": "刷新过 %d 次" % _UI_STATE["refreshed"], "tone": "positive"},
+            {"type": "progress", "label": "本月预算", "ratio": 0.38, "detail": "¥ 57.60 / ¥ 150", "tone": "neutral"},
+            {"type": "progress", "label": "今日额度", "ratio": 0.93, "detail": "快用完了", "tone": "danger"},
+            {"type": "text", "text": "数字每 5 分钟更新一次。", "style": "secondary"}]},
+        {"title": "Key", "footer": "停用后，用这个 Key 的启动器会立刻失败。", "items": [
+            {"type": "row", "title": "工作", "subtitle": "sk-…3fa9 · 今天 1.2 万 token", "value": "¥ 12.30", "badge": {"text": "有效", "tone": "positive"},
+             "action": {"id": "key:work"}},
+            {"type": "row", "title": "测试", "subtitle": "sk-…77c0 · 7 天没用", "badge": {"text": "快过期", "tone": "caution"}},
+            {"type": "divider"},
+            {"type": "button", "title": "停用测试 Key", "role": "destructive", "action": {"id": "disable:test", "confirm": "停用后不能恢复，确定停用？"}}]},
+        {"title": "设置", "items": [
+            {"type": "field", "name": "note", "label": "备注", "kind": "text", "value": _UI_STATE["note"], "placeholder": "写点什么"},
+            {"type": "field", "name": "token", "label": "管理 Token", "kind": "secret", "placeholder": "不回显"},
+            {"type": "field", "name": "limit", "label": "每日上限（元）", "kind": "number", "value": "20"},
+            {"type": "field", "name": "auto", "label": "额度不足时提醒", "kind": "toggle", "value": _UI_STATE["auto"]},
+            {"type": "field", "name": "plan", "label": "套餐", "kind": "choice", "value": _UI_STATE["plan"],
+             "choices": [{"value": "solo", "title": "个人"}, {"value": "team", "title": "团队"}]},
+            {"type": "button", "title": "保存", "action": {"id": "save", "submit": True}}]},
+        {"items": [
+            {"type": "link", "title": "打开网关后台", "url": "https://example.com/console"},
+            {"type": "text", "text": "GET /v1/usage → 200", "style": "code"}]}]}
+
+
+def _ui_action(ui, action, values):
+    if action == "save":
+        _UI_STATE.update({k: v for k, v in (values or {}).items() if k in ("note", "auto", "plan")})
+        return {"toast": "已保存", "view": _ui_view(ui)}
+    if action == "refresh":
+        _UI_STATE["refreshed"] += 1
+        return {"toast": "已刷新"}
+    if action.startswith("key:"):
+        return {"open_url": "https://example.com/console/keys"}
+    if action.startswith("disable:"):
+        return {"toast": "已停用"}
+    return {}
+
+
+# ---------- MOCK_PLUGINS: plugin markets (docs/plugins.md「插件市场」) ----------
+# Two made-up markets (a public site, a private GitHub repository with its token set); their catalog has a plugin to
+# install, one installed from the market with an upgrade, one installed elsewhere, and one this hub cannot install.
+# Previews, installs, upgrades and removals work in memory.
+_MARKET_A, _MARKET_B = "3f2a9c1d0b", "8e01b7c4a2"
+MARKETS = {
+    _MARKET_A: {"id": _MARKET_A, "spec": "https://plugins.example.com/persona/persona-plugins.json", "name": "Example 插件",
+                "description": "Example 官方维护的插件。", "homepage": "https://plugins.example.com/", "has_token": False, "plugins": 3,
+                "warnings": [], "fetched_at": "2026-11-04T06:00:00Z", "added_at": "2026-11-01T08:00:00Z"},
+    _MARKET_B: {"id": _MARKET_B, "spec": "github:example/team-plugins", "name": "团队插件", "description": "团队内部用的插件（私有仓库）。",
+                "has_token": True, "plugins": 2, "warnings": ["第 3 个插件：没有 manifest"], "fetched_at": "2026-11-04T05:30:00Z",
+                "added_at": "2026-11-02T08:00:00Z"},
+}
+_NET = lambda hosts: {"key": "network", "title": "访问网络", "detail": hosts + "（hub 暂不拦截别的地址）"}
+CATALOG = [
+    {"market": _MARKET_A, "id": "example-gateway", "name": "Example 网关面板", "version": "1.1.0", "description": "在启动器页上显示 Example 网关的余额、Key 和用量。",
+     "publisher": "example", "tags": ["额度", "面板"], "contributes": {"ui": ["home", "panel"]}, "permissions": PLUGINS["example-gateway"]["permissions"]},
+    {"market": _MARKET_A, "id": "example-calendar", "name": "Example 日历", "version": "0.9.0", "description": "把 Example 日历的日程收进收件箱，助手能查空闲时间。",
+     "publisher": "example", "homepage": "https://plugins.example.com/calendar", "tags": ["日历", "连接器"], "contributes": {"connectors": ["examplecal"]},
+     "permissions": [_RUNS, _NET("calendar.example.com"), {"key": "secrets", "title": "使用你填的密钥", "detail": "API Key"}]},
+    {"market": _MARKET_A, "id": "example-notes", "name": "Example Notes", "version": "1.2.0", "description": "把 Example Notes 的笔记同步进知识库。",
+     "publisher": "example", "tags": ["笔记"], "contributes": {"connectors": ["examplenotes"]}, "permissions": PLUGINS["example-notes"]["permissions"]},
+    {"market": _MARKET_B, "id": "team-digest", "name": "每日摘要", "version": "2.3.0", "description": "每天早上把收件箱和 Agent 的进展总结成一条消息。",
+     "publisher": "team", "tags": ["摘要", "事件"], "contributes": {"events": ["digest"]},
+     "permissions": [_RUNS, {"key": "events", "title": "收到 hub 的事件", "detail": "收件箱里有新的或更新了的条目（来源、种类、标题）；有 Agent 做完了（哪台电脑、哪个会话、标题）"}]},
+    {"market": _MARKET_B, "id": "team-windows", "name": "Windows 工具", "version": "0.2.0", "description": "只有 Windows 版的包。",
+     "publisher": "team", "tags": [], "contributes": {"assistant": ["tools"]}, "permissions": [_RUNS], "problem": "没有这台 hub（linux-amd64）能用的包"},
+]
+_PREVIEWS = {}
+
+
+def _catalog_item(c):
+    it = dict(c, market_name=MARKETS.get(c["market"], {}).get("name", ""))
+    pl = PLUGINS.get(c["id"])
+    if pl:
+        it["installed"], it["installed_source"] = pl.get("version", ""), pl["source"]
+        it["from_this_market"] = pl.get("origin", "") == "market:%s/%s" % (c["market"], c["id"])
+        it["upgradable"] = pl["source"] == "installed" and pl.get("version", "") < c["version"]
+    return {k: v for k, v in it.items() if v not in (None, "", False)} | {"tags": c.get("tags", [])}
+
+
+def markets_route(handler, p, body):
+    """MOCK_PLUGINS: the markets, the catalog, installing from it, and the plugins' declarative UI. False otherwise."""
+    if not PLUGINS_MODE: return False
+    method = handler.command
+    q = {k: v[0] for k, v in parse_qs(urlparse(handler.path).query).items()}
+    req = json.loads(body or b"{}") if body else {}
+    if p == "/api/v1/plugins/-/markets" and method == "GET":
+        handler.send_json({"markets": list(MARKETS.values())}); return True
+    if p == "/api/v1/plugins/-/markets" and method == "POST":
+        spec = (req.get("spec") or "").strip()
+        if not spec.startswith(("https://", "github:")):
+            handler.send_json({"error": "市场的地址是 https://… 或 github:owner/repo", "code": "market_failed"}, 400); return True
+        if "private" in spec and not req.get("token"):
+            handler.send_json({"error": "读不到 %s：找不到（404）：地址不对，或者是私有的，要填 token" % spec, "code": "market_failed"}, 400); return True
+        mid = "%010x" % (abs(hash(spec)) % (16 ** 10))
+        MARKETS[mid] = {"id": mid, "spec": spec, "name": spec.split("/")[-1] or spec, "has_token": bool(req.get("token")), "plugins": 0,
+                        "warnings": [], "fetched_at": "2026-11-04T07:00:00Z", "added_at": "2026-11-04T07:00:00Z"}
+        handler.send_json(MARKETS[mid]); return True
+    parts = p.split("/")
+    if p.startswith("/api/v1/plugins/-/markets/") and len(parts) >= 7 and parts[6] in MARKETS:
+        mid = parts[6]
+        if method == "DELETE" and len(parts) == 7:
+            MARKETS.pop(mid); handler.send_json({"ok": True}); return True
+        if method == "POST" and parts[7:] == ["refresh"]:
+            MARKETS[mid]["fetched_at"] = "2026-11-04T07:05:00Z"; handler.send_json(MARKETS[mid]); return True
+        if method == "PUT" and parts[7:] == ["token"]:
+            MARKETS[mid]["has_token"] = bool(req.get("token")); handler.send_json(MARKETS[mid]); return True
+    if p == "/api/v1/plugins/-/catalog" and method == "GET":
+        words, market = q.get("q", "").lower(), q.get("market", "")
+        items = [_catalog_item(c) for c in CATALOG if c["market"] in MARKETS and (not market or c["market"] == market)
+                 and (not words or words in "\n".join([c["id"], c["name"], c["description"], c.get("publisher", "")] + c.get("tags", [])).lower())]
+        handler.send_json({"markets": list(MARKETS.values()), "plugins": items, "platform": "linux-amd64"}); return True
+    if p == "/api/v1/plugins/-/catalog/preview" and method == "POST":
+        c = next((c for c in CATALOG if c["market"] == req.get("market") and c["id"] == req.get("plugin")), None)
+        if not c or c.get("problem"):
+            handler.send_json({"error": (c or {}).get("problem") or "这个市场里没有插件 %s" % req.get("plugin"), "code": "invalid_plugin"}, 400); return True
+        pid = "pv%06d" % (len(_PREVIEWS) + 1)
+        cur = PLUGINS.get(c["id"])
+        pv = {"preview_id": pid, "manifest": {"id": c["id"], "name": c["name"], "version": c["version"], "description": c["description"]},
+              "permissions": c["permissions"], "permissions_digest": "d-" + c["id"], "expires_at": "2026-11-04T07:10:00Z", "market": c["market"]}
+        if cur and cur["source"] == "installed":
+            pv.update({"upgrade": True, "from": cur.get("version"), "more_permissions": False})
+        _PREVIEWS[pid] = c
+        handler.send_json(pv); return True
+    if p in ("/api/v1/plugins/-/install",) or (p.startswith("/api/v1/plugins/") and p.endswith("/-/upgrade")):
+        c = _PREVIEWS.pop(req.get("preview_id", ""), None)
+        if not c:
+            handler.send_json({"error": "预览过期了，重新预览一次", "code": "install_failed"}, 400); return True
+        pl = PLUGINS.get(c["id"]) or {"id": c["id"], "source": "installed", "enabled": True, "form": {"fields": []}, "config": {}, "secrets": []}
+        pl.update({"name": c["name"], "version": c["version"], "description": c["description"], "status": "running", "kind": next(iter(c["contributes"]), ""),
+                   "contributes": c["contributes"], "permissions": c["permissions"], "origin": "market:%s/%s" % (c["market"], c["id"]), "publisher": c.get("publisher")})
+        PLUGINS[c["id"]] = pl
+        handler.send_json({k: v for k, v in _plugin_needs(pl).items() if v is not None}); return True
+    if method == "DELETE" and len(parts) >= 6 and parts[3] == "plugins" and parts[5] == "-" and parts[6:] in ([], [""]) and parts[4] in PLUGINS:
+        if not PLUGINS[parts[4]].get("origin", "").startswith("market:"):
+            handler.send_json({"error": "这个插件只能在 hub 机器上（personad plugin …）或 hub 的管理界面里装、升级和卸载；手机上只能装插件市场里的",
+                               "code": "this_machine_only"}, 403); return True
+        PLUGINS.pop(parts[4]); handler.send_json({"ok": True}); return True
+    if p == "/api/v1/plugins/-/ui" and method == "GET":
+        placement = q.get("placement", "")
+        ui = []
+        if "example-gateway" in PLUGINS and PLUGINS["example-gateway"]["enabled"]:
+            if placement == "plugin_page":
+                ui = PLUGINS["example-gateway"]["ui"]
+            elif placement == "launcher_section" and q.get("launcher"):
+                ui = [{"plugin": "example-gateway", "id": "panel", "title": "Example 网关", "placement": "launcher_section"}]
+        handler.send_json({"ui": ui}); return True
+    if len(parts) == 8 and parts[3] == "plugins" and parts[5] == "-" and parts[6] == "ui" and method == "POST":
+        if parts[4] != "example-gateway" or "example-gateway" not in PLUGINS:
+            handler.send_json({"error": "no such plugin", "code": "not_found"}, 404); return True
+        launcher = (req.get("context") or {}).get("launcher", "")
+        if req.get("action"):
+            handler.send_json(_ui_action(parts[7], req["action"], req.get("values"))); return True
+        handler.send_json({"view": _ui_view(parts[7], launcher)}); return True
+    return False
 
 _features_without_plugins = features
 
@@ -5631,9 +5806,10 @@ def _plugin_needs(pl):
 def plugins_route(handler, p, body):
     """MOCK_PLUGINS: GET /api/v1/plugins, a plugin's page and its switch, settings and secrets. False otherwise."""
     if not PLUGINS_MODE or not p.startswith("/api/v1/plugins"): return False
+    if markets_route(handler, p, body): return True
     if p == "/api/v1/plugins":
         handler.send_json({"plugins": [{k: v for k, v in _plugin_needs(pl).items() if k in _PLUGIN_VIEW and v is not None}
-                                       for pl in sorted(PLUGINS.values(), key=lambda x: x["id"])], "can_install": True})
+                                       for pl in sorted(PLUGINS.values(), key=lambda x: x["id"])], "can_install": True, "markets": True})
         return True
     parts = p.split("/")  # ['', 'api', 'v1', 'plugins', id, '-', ...]
     if len(parts) < 6 or parts[5] != "-" or parts[4] not in PLUGINS:

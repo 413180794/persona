@@ -109,3 +109,54 @@ func (d *DB) AddPluginAudit(ctx context.Context, id, action, actor string, detai
 }
 
 var _ plugin.Store = (*DB)(nil)
+
+// ---- plugin markets (docs/plugins.md「插件市场」) ----
+
+// PluginMarkets are the registered markets, oldest first.
+func (d *DB) PluginMarkets(ctx context.Context) ([]plugin.MarketRecord, error) {
+	rows, err := d.pool.Query(ctx, `SELECT id, spec, name, token_sealed, index_json, warnings, error, fetched_at, added_at
+		FROM plugin_markets ORDER BY added_at, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []plugin.MarketRecord
+	for rows.Next() {
+		var r plugin.MarketRecord
+		var index, warnings []byte
+		if err := rows.Scan(&r.ID, &r.Spec, &r.Name, &r.TokenSealed, &index, &warnings, &r.Error, &r.FetchedAt, &r.AddedAt); err != nil {
+			return nil, err
+		}
+		if len(index) > 0 && string(index) != "null" {
+			r.Index = index
+		}
+		if err := json.Unmarshal(warnings, &r.Warnings); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// PutPluginMarket writes a market's row.
+func (d *DB) PutPluginMarket(ctx context.Context, r plugin.MarketRecord) error {
+	warnings, err := json.Marshal(append([]string{}, r.Warnings...))
+	if err != nil {
+		return err
+	}
+	var index []byte
+	if len(r.Index) > 0 {
+		index = r.Index
+	}
+	_, err = d.pool.Exec(ctx, `INSERT INTO plugin_markets (id, spec, name, token_sealed, index_json, warnings, error, fetched_at, added_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (id) DO UPDATE SET spec = $2, name = $3, token_sealed = $4, index_json = $5, warnings = $6, error = $7, fetched_at = $8`,
+		r.ID, r.Spec, r.Name, r.TokenSealed, index, warnings, r.Error, r.FetchedAt, r.AddedAt)
+	return err
+}
+
+// DeletePluginMarket forgets a market (the plugins installed from it stay).
+func (d *DB) DeletePluginMarket(ctx context.Context, id string) error {
+	_, err := d.pool.Exec(ctx, `DELETE FROM plugin_markets WHERE id = $1`, id)
+	return err
+}
