@@ -32,8 +32,6 @@ extension Theme {
         static let backgroundTask = "gearshape.2"
         static let backgroundTaskFilled = "gearshape.2.fill"
         static let pinned = "pin.fill"
-        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
-        static let locked = "lock"
         static let unchecked = "circle"
         static let uncheckedBox = "square"
         static let todo = "checklist"
@@ -322,6 +320,7 @@ extension Theme {
         /// Send someone a message.
         static let message = "bubble.left.fill"
         static let credentials = "key"
+        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
         static let locked = "lock"
         static let memory = "brain"
         /// Search (a list's, the sidebar's).
