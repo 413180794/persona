@@ -235,6 +235,7 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
         navigator, onDismiss = { drafting = false })
     if (handingOff && record != null) InboxHandOffSheet(repository, record, navigator, onDismiss = { handingOff = false })
     val connection by repository.connectionState.collectAsStateWithLifecycle(ConnectionState.Connecting)
+    val onlineSince = rememberOnlineSince(connection)
     fun refreshConversation() {
         if (refreshing) return
         refreshing = true
@@ -302,7 +303,7 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
                     Column {
                         if (dateBoundary) TimelineMark(date.toString())
                         if (boundary) TimelineMark("这件事从这里开始", emphasized = true)
-                        LarkBubble(message, showsSender(message, previous, boundary || dateBoundary), repository,
+                        LarkBubble(message, showsSender(message, previous, boundary || dateBoundary), repository, onlineSince,
                             modifier = Modifier.onGloballyPositioned { bounds[message.listKey()] = it.boundsInWindow() },
                             retrying = retrying[message.clientId] == true, onRetry = { retry(message) }, onError = { error = it },
                             onThread = { thread = message },
@@ -354,6 +355,7 @@ internal fun LarkBubble(
     message: LarkMessage,
     showSender: Boolean,
     repository: InboxRepository,
+    onlineSince: Long?,
     modifier: Modifier = Modifier,
     retrying: Boolean,
     onRetry: () -> Unit,
@@ -455,7 +457,7 @@ internal fun LarkBubble(
                     onProfile(LarkPersonRef(message.senderId, message.senderName, message.avatar, feedId))
                 }
             }) {
-                LarkAvatar(message.senderName.ifBlank { if (message.bot) "机器人" else "信" }, message.avatar)
+                LarkAvatar(message.senderName.ifBlank { if (message.bot) "机器人" else "信" }, message.avatar, onlineSince)
             }
         }, footer = footer, content = body)
 }

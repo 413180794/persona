@@ -20,6 +20,8 @@ internal fun LarkThreadSheet(root: LarkMessage, repository: InboxRepository, onD
         root.thread?.takeIf { it.canReply }?.let { LarkThreadReplyRepository(repository, root.id, it) }
     }
     val composers = rememberReplyComposers(repository)
+    val connection by repository.connectionState.collectAsStateWithLifecycle(persona.core.contracts.api.ConnectionState.Connecting)
+    val onlineSince = rememberOnlineSince(connection)
     val composer = replies?.let { composers.get(it.target, replyRepository = it) }
     val scroll = rememberLazyListState()
     var mediaError by remember(root.id) { mutableStateOf<String?>(null) }
@@ -48,7 +50,7 @@ internal fun LarkThreadSheet(root: LarkMessage, repository: InboxRepository, onD
                         JEmptyState("暂无回复", "这条消息还没有话题回复。")
                     }
                     items(state.messages.asReversed(), key = { "reply:${it.id}" }) { message ->
-                        LarkBubble(message, true, repository, retrying = false, onRetry = {}, onError = { mediaError = it })
+                        LarkBubble(message, true, repository, onlineSince, retrying = false, onRetry = {}, onError = { mediaError = it })
                     }
                     if (state.hasOlder) item("older") {
                         JButton(if (state.loading) "正在加载…" else "查看更早的回复",
@@ -57,7 +59,7 @@ internal fun LarkThreadSheet(root: LarkMessage, repository: InboxRepository, onD
                     }
                     item("root") {
                         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
-                            LarkBubble(root, true, repository, retrying = false, onRetry = {}, onError = { mediaError = it })
+                            LarkBubble(root, true, repository, onlineSince, retrying = false, onRetry = {}, onError = { mediaError = it })
                             JDivider()
                             Text("${root.replyCount} 条回复", style = PersonaTheme.type.callout,
                                 color = PersonaTheme.palette.ink3)

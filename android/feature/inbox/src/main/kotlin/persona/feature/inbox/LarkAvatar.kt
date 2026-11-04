@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.ensureActive
+import persona.core.contracts.api.ConnectionState
 import persona.core.designsystem.JAvatar
 
 /** The edge asked of the hub for a person's or chat's picture: avatars are drawn at most 48 dp, here at 3×. */
@@ -41,7 +42,8 @@ fun larkAvatar(ref: String?, scope: String, read: suspend (String) -> ByteArray)
 /**
  * One read per picture however many rows show it at once, finishing in [scope] even when the row that asked has
  * scrolled away (it is in the memory cache when the row comes back). A picture that failed is not asked for again for
- * [retryAfterMillis], so scrolling past it does not ask the hub each time.
+ * [retryAfterMillis], so scrolling past it does not ask the hub each time; a failure from before the connection last
+ * came up does not count (the read gave up waiting for a route), so reconnecting asks again at once.
  */
 internal class LarkAvatarLoads<T : Any>(
     private val scope: CoroutineScope,
@@ -51,11 +53,11 @@ internal class LarkAvatarLoads<T : Any>(
     private val running = HashMap<String, Deferred<T?>>()
     private val failed = HashMap<String, Long>()
 
-    /** The decoded picture, or null when there is none to have now. */
-    suspend fun get(image: AuthenticatedLarkImage, decode: suspend (ByteArray) -> T?): T? {
+    /** The decoded picture, or null when there is none to have now; [onlineSince] is when the connection came up. */
+    suspend fun get(image: AuthenticatedLarkImage, onlineSince: Long, decode: suspend (ByteArray) -> T?): T? {
         val key = image.cacheKey
         val load = synchronized(this) {
-            failed[key]?.let { at -> if (now() - at < retryAfterMillis) return null else failed.remove(key) }
+            failed[key]?.let { at -> if (at >= onlineSince && now() - at < retryAfterMillis) return null else failed.remove(key) }
             running[key] ?: scope.async(start = CoroutineStart.LAZY) {
                 var result: T? = null
                 try {
@@ -79,21 +81,28 @@ internal class LarkAvatarLoads<T : Any>(
 
 private val avatarLoads = LarkAvatarLoads<Image>(CoroutineScope(SupervisorJob() + Dispatchers.IO))
 
+/** When the hub connection last came up (the same clock as [LarkAvatarLoads]), or null while it is not up. */
+@Composable
+internal fun rememberOnlineSince(connection: ConnectionState): Long? = remember(connection == ConnectionState.Online) {
+    if (connection == ConnectionState.Online) System.currentTimeMillis() else null
+}
+
 /**
  * [image] for [JAvatar]'s picture: null while it loads, when it fails and without one, so the initial stands in. A
  * picture Coil still holds shows on the first frame when its row comes back on screen, without asking again. Coil gets
- * the bytes, never the pairing's credentials.
+ * the bytes, never the pairing's credentials. Nothing is asked while the hub is not connected ([onlineSince] null);
+ * once it is, the rows on screen ask again.
  */
 @Composable
-internal fun rememberLarkAvatar(image: AuthenticatedLarkImage?): Painter? {
+internal fun rememberLarkAvatar(image: AuthenticatedLarkImage?, onlineSince: Long? = null): Painter? {
     val context = LocalContext.current.applicationContext
     val key = image?.cacheKey
     val picture = remember(key) {
         mutableStateOf(key?.let { SingletonImageLoader.get(context).memoryCache?.get(MemoryCache.Key(it))?.image?.asPainter(context) })
     }
-    LaunchedEffect(key) {
-        if (image == null || picture.value != null) return@LaunchedEffect
-        picture.value = avatarLoads.get(image) { bytes ->
+    LaunchedEffect(key, onlineSince) {
+        if (image == null || onlineSince == null || picture.value != null) return@LaunchedEffect
+        picture.value = avatarLoads.get(image, onlineSince) { bytes ->
             val request = ImageRequest.Builder(context).data(bytes).memoryCacheKey(image.cacheKey).size(LarkAvatarPixels).build()
             (SingletonImageLoader.get(context).execute(request) as? SuccessResult)?.image
         }?.asPainter(context)
@@ -103,6 +112,6 @@ internal fun rememberLarkAvatar(image: AuthenticatedLarkImage?): Painter? {
 
 /** A Feishu person or chat: their picture once it has loaded, the initial of [name] until then and without one. */
 @Composable
-internal fun LarkAvatar(name: String, image: AuthenticatedLarkImage?, modifier: Modifier = Modifier) {
-    JAvatar(name, modifier, image = rememberLarkAvatar(image))
+internal fun LarkAvatar(name: String, image: AuthenticatedLarkImage?, onlineSince: Long? = null, modifier: Modifier = Modifier) {
+    JAvatar(name, modifier, image = rememberLarkAvatar(image, onlineSince))
 }

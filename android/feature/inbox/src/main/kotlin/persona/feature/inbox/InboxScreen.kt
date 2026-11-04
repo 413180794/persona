@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     val snapshot by repository.snapshot.collectAsStateWithLifecycle()
     val connection by repository.connectionState.collectAsStateWithLifecycle(ConnectionState.Connecting)
+    val onlineSince = rememberOnlineSince(connection)
     val savedPreferences by repository.preferences.collectAsStateWithLifecycle(InboxPreferences())
     val feedback = persona.core.designsystem.LocalAppFeedback.current
     val scope = rememberCoroutineScope()
@@ -242,7 +243,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
                         }
                     } else records[row.id]?.let { record ->
                         val done = pending[record.item.id] ?: record.item.isDone
-                        InboxItemRow(record, repository, navigator, composers, position, done, record.item.id in pending,
+                        InboxItemRow(record, repository, navigator, composers, position, done, record.item.id in pending, onlineSince,
                             onDone = { markDone(record.item.id, !done) }, onHandOff = { handingOff = record.item.id })
                     }
                 }
@@ -265,7 +266,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
 
 @Composable
 private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navigator: Navigator,
-    composers: ReplyComposers, position: GroupPosition, done: Boolean, busy: Boolean, onDone: () -> Unit,
+    composers: ReplyComposers, position: GroupPosition, done: Boolean, busy: Boolean, onlineSince: Long?, onDone: () -> Unit,
     onHandOff: () -> Unit,
 ) {
     val item = record.item
@@ -280,7 +281,7 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
     ) {
         MessageItem(sender = item.sender.orEmpty().ifBlank { item.title }, title = item.title,
             selected = isInboxItemSelected(LocalDetailKey.current, item.id, record.feedId),
-            position = position, avatar = rememberLarkAvatar(record.avatar),
+            position = position, avatar = rememberLarkAvatar(record.avatar, onlineSince),
             source = if (record.feedId != null || record.source == "lark") MessageSource.Lark else MessageSource.Mail,
             sourceLabel = if (record.feedId != null || record.source == "lark") "飞书" else "邮件",
             group = item.title.takeIf { record.feedId != null && item.kind in setOf("group", "mention", "bot") },

@@ -38,8 +38,8 @@ class LarkAvatarTest {
         val gate = CompletableDeferred<ByteArray>()
         var reads = 0
         val image = AuthenticatedLarkImage("hub/a:/p") { reads++; gate.await() }
-        val first = async { loads.get(image) { "decoded" } }
-        val second = async { loads.get(image) { "decoded" } }
+        val first = async { loads.get(image, 0) { "decoded" } }
+        val second = async { loads.get(image, 0) { "decoded" } }
         runCurrent()
         gate.complete(byteArrayOf(1))
         assertEquals("decoded", first.await())
@@ -51,8 +51,8 @@ class LarkAvatarTest {
         val loads = LarkAvatarLoads<String>(backgroundScope)
         val gate = CompletableDeferred<ByteArray>()
         val image = AuthenticatedLarkImage("hub/a:/p") { gate.await() }
-        val gone = async { loads.get(image) { "decoded" } }
-        val staying = async { loads.get(image) { "decoded" } }
+        val gone = async { loads.get(image, 0) { "decoded" } }
+        val staying = async { loads.get(image, 0) { "decoded" } }
         runCurrent()
         gone.cancelAndJoin()
         gate.complete(byteArrayOf(1))
@@ -64,21 +64,46 @@ class LarkAvatarTest {
         val loads = LarkAvatarLoads<String>(backgroundScope, retryAfterMillis = 60_000, now = { clock })
         var reads = 0
         val image = AuthenticatedLarkImage("hub/a:/p") { reads++; throw IOException("offline") }
-        assertNull(loads.get(image) { "decoded" })
+        assertNull(loads.get(image, 0) { "decoded" })
         clock = 59_999
-        assertNull(loads.get(image) { "decoded" })
+        assertNull(loads.get(image, 0) { "decoded" })
         assertEquals(1, reads)
         clock = 60_000
-        assertNull(loads.get(image) { "decoded" })
+        assertNull(loads.get(image, 0) { "decoded" })
         assertEquals(2, reads)
+    }
+
+    @Test fun aFailureFromBeforeTheConnectionCameUpDoesNotHoldBackTheRetry() = runTest {
+        var clock = 1_000L
+        val loads = LarkAvatarLoads<String>(backgroundScope, retryAfterMillis = 60_000, now = { clock })
+        var online = false
+        var reads = 0
+        val image = AuthenticatedLarkImage("hub/a:/p") { reads++; if (online) byteArrayOf(1) else throw IOException("no route") }
+        // Read while the connection was still coming up: it gave up waiting for a route.
+        assertNull(loads.get(image, 0) { "decoded" })
+        clock = 5_000
+        online = true
+        assertEquals("decoded", loads.get(image, onlineSince = 5_000) { "decoded" })
+        assertEquals(2, reads)
+    }
+
+    @Test fun aFailureAfterTheConnectionCameUpStillWaits() = runTest {
+        var clock = 5_000L
+        val loads = LarkAvatarLoads<String>(backgroundScope, retryAfterMillis = 60_000, now = { clock })
+        var reads = 0
+        val image = AuthenticatedLarkImage("hub/a:/p") { reads++; throw IOException("not found") }
+        assertNull(loads.get(image, onlineSince = 5_000) { "decoded" })
+        clock = 6_000
+        assertNull(loads.get(image, onlineSince = 5_000) { "decoded" })
+        assertEquals(1, reads)
     }
 
     @Test fun aPictureThatDoesNotDecodeCountsAsFailed() = runTest {
         val loads = LarkAvatarLoads<String>(backgroundScope, now = { 0 })
         var reads = 0
         val image = AuthenticatedLarkImage("hub/a:/p") { reads++; byteArrayOf(1) }
-        assertNull(loads.get(image) { null })
-        assertNull(loads.get(image) { "decoded" })
+        assertNull(loads.get(image, 0) { null })
+        assertNull(loads.get(image, 0) { "decoded" })
         assertEquals(1, reads)
     }
 
@@ -87,8 +112,8 @@ class LarkAvatarTest {
         val loads = LarkAvatarLoads<String>(backgroundScope)
         var reads = 0
         val image = AuthenticatedLarkImage("hub/a:/p") { reads++; byteArrayOf(1) }
-        assertEquals("decoded", loads.get(image) { "decoded" })
-        assertEquals("decoded", loads.get(image) { "decoded" })
+        assertEquals("decoded", loads.get(image, 0) { "decoded" })
+        assertEquals("decoded", loads.get(image, 0) { "decoded" })
         assertEquals(2, reads)
     }
 }
