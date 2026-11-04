@@ -393,10 +393,8 @@ func (h *Hub) channelForward(ctx context.Context, id string, m channel.Message) 
 			p["images"] = images
 		}
 		h.asst().UserSpoke(ctx, assistantwire.SessionRef{MachineID: rt.m.cfg.ID, SessionID: sid}) // unarchived, and its title the user's to keep
-		if rt.main {
-			if err := h.assistantSend(ctx, rt.m, sid, p); err != nil {
-				return err
-			}
+		if err := h.assistantSend(ctx, rt.m, sid, p); err != nil {
+			return err
 		}
 		if err := h.botDeliver(ctx, rt.m, p); err != nil {
 			return err

@@ -440,10 +440,8 @@ func (h *Hub) botSend(ctx context.Context, api *feishubot.Client, set FeishuBotS
 		}
 		if !t.agent() {
 			h.asst().UserSpoke(ctx, assistantwire.SessionRef{MachineID: rt.m.cfg.ID, SessionID: sid})
-			if rt.main {
-				if err := h.assistantSend(ctx, rt.m, sid, p); err != nil {
-					return err
-				}
+			if err := h.assistantSend(ctx, rt.m, sid, p); err != nil {
+				return err
 			}
 		}
 		if err := h.botDeliver(ctx, rt.m, p); err != nil {

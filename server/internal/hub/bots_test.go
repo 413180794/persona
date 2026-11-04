@@ -592,3 +592,41 @@ func TestBotAnswerIsPostedOnceWhenChecksRace(t *testing.T) {
 		t.Fatalf("the answer was posted %d times", n)
 	}
 }
+
+// When the bot sends to a side conversation whose launcher is deleted, it falls back to the assistant's launcher (#2007).
+func TestBotSideConversationLauncherFallback(t *testing.T) {
+	w := newBotWorld(t)
+	ctx := context.Background()
+	if err := w.h.saveModelRecord(ctx, "assistant", 0, ModelBinding{Provider: "launcher.asst-launcher"}); err != nil {
+		t.Fatal(err)
+	}
+	w.m.mu.Lock()
+	w.m.sessions = append(w.m.sessions, proto.Session{
+		SessionID: "side-1",
+		MachineID: "box",
+		Cwd:       "/home/u/.jarvis/assistant",
+		Launcher:  "deleted-launcher",
+		Model:     "deleted-model",
+		Assistant: true,
+		Status:    proto.StatusIdle,
+	})
+	w.m.mu.Unlock()
+	w.pair(t)
+
+	w.h.bots.mu.Lock()
+	w.h.bots.st.Current = botTarget{Kind: targetJarvis, MachineID: "box", SessionID: "side-1"}
+	w.h.bots.mu.Unlock()
+
+	_, _ = w.h.botEvent(w.ctx, botMessageEvent("om_side", "ou_me", "text", textContent("发给旁支"), nil))
+	sent := w.node.sent(t, 0)
+	if sent["session_id"] != "side-1" {
+		t.Fatalf("session_id %v, want side-1", sent["session_id"])
+	}
+	if sent["launcher"] != "asst-launcher" {
+		t.Fatalf("launcher %v, want asst-launcher", sent["launcher"])
+	}
+	if sent["model"] != nil && sent["model"] != "" {
+		t.Fatalf("model %v, want empty/dropped", sent["model"])
+	}
+}
+
