@@ -183,3 +183,52 @@ func TestPrepareFollowsTheConnectors(t *testing.T) {
 		t.Fatalf("signed out, tg stayed: %v", err)
 	}
 }
+
+// A connector with a command line of its own (connector.Manifest.CLI, #1704): the hub says it with the connectors, the
+// node puts it on the assistant's PATH as personad tool --cli <id> (the built-in Telegram's tg until then), lets the
+// command lines call that connector's tools, and takes away only the command lines it wrote once the connector is
+// signed out (a plugin's gate commands live there too).
+func TestConnectorCommandLines(t *testing.T) {
+	t.Setenv("JARVIS_SKILLS_DIR", t.TempDir())
+	n, _ := testNode(t)
+	n.dir, n.bin, n.logger = t.TempDir(), "/opt/example/personad", log.New(io.Discard, "", 0)
+	prepare := func(conns []string, clis map[string]string) {
+		t.Helper()
+		params, _ := json.Marshal(map[string]any{"dir": ".jarvis/assistant", "claude_md": "# 示例", "connectors": conns, "clis": clis})
+		if _, err := n.handle(context.Background(), "assistant.prepare", params); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bin := filepath.Join(n.dir, "assistant-bin")
+	_ = os.MkdirAll(bin, 0o755)
+	gate := filepath.Join(bin, "ol") // a plugin's gate command: not the node's to take away
+	_ = os.WriteFile(gate, []byte("#!/bin/sh\nexec sh /x/ol.sh \"$@\"\n"), 0o755)
+
+	prepare([]string{"telegram", "example"}, map[string]string{"tg": "telegram", "ex": "example"})
+	for name, id := range map[string]string{"tg": "telegram", "ex": "example"} {
+		if b, err := os.ReadFile(filepath.Join(bin, name)); err != nil || !strings.Contains(string(b), "exec /opt/example/personad tool --cli "+id+" \"$@\"") {
+			t.Fatalf("%s: %q %v", name, b, err)
+		}
+	}
+	if !n.mayCall("example_list") || !n.mayCall("telegram_cli") || n.mayCall("phone_contacts") || n.mayCall("examplex_list") {
+		t.Fatal("the command lines call the signed-in connectors' tools, and only those")
+	}
+
+	prepare([]string{"telegram"}, nil) // the built-in Telegram: no command line of its own
+	if b, err := os.ReadFile(filepath.Join(bin, "tg")); err != nil || !strings.Contains(string(b), "exec /opt/example/personad tg \"$@\"") {
+		t.Fatalf("the built-in's tg: %q %v", b, err)
+	}
+	if _, err := os.Stat(filepath.Join(bin, "ex")); !os.IsNotExist(err) {
+		t.Fatalf("example signed out, ex stayed: %v", err)
+	}
+	if n.mayCall("example_list") {
+		t.Fatal("example signed out, its tools are still called")
+	}
+	prepare(nil, nil)
+	if _, err := os.Stat(filepath.Join(bin, "tg")); !os.IsNotExist(err) {
+		t.Fatalf("signed out, tg stayed: %v", err)
+	}
+	if _, err := os.Stat(gate); err != nil {
+		t.Fatal("a command the node did not write was taken away")
+	}
+}

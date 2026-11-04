@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"maps"
 	"net"
 	"os"
 	"path/filepath"
@@ -17,7 +18,8 @@ import (
 // or one of its descendants (its Bash tool), gets the assistant's tools. Any other caller (an agent, a program run by
 // hand) is refused; so is a system where the other end of a socket cannot be known.
 
-// cliPrefix is what the CLI may call: Telegram's tools and actions (the hub's gate still decides each write).
+// cliPrefix is what the built-in tg (personad tg) may call: Telegram's tools and actions (the hub's gate still decides
+// each write). personad tool may call the tools of the connectors signed in (mayCall).
 const cliPrefix = "telegram_"
 
 // ancestorsMost bounds the walk up the process tree.
@@ -55,14 +57,24 @@ func (n *Node) assistantOf(pid int, parent func(int) (int, error)) (string, bool
 	return "", false
 }
 
-// cliCall runs one of the tg CLI's calls on the hub as the assistant's, or refuses it.
+// mayCall says whether the command lines may call tool: one of a connector signed in as of the last
+// assistant.prepare ("<id>_…", the connector's own tools and its <id>_cli), or Telegram's (the built-in tg).
+func (n *Node) mayCall(tool string) bool {
+	if strings.HasPrefix(tool, cliPrefix) {
+		return true
+	}
+	return slices.ContainsFunc(n.signedInConnectors(), func(id string) bool { return strings.HasPrefix(tool, id+"_") })
+}
+
+// cliCall runs one of the command lines' calls (personad tg, personad tool) on the hub as the assistant's, or refuses
+// it.
 func (n *Node) cliCall(ctx context.Context, c net.Conn, req sockRequest) proto.ToolResult {
-	if !strings.HasPrefix(req.Name, cliPrefix) {
-		return proto.TextResult("tg only calls Telegram's tools", true)
+	if !n.mayCall(req.Name) {
+		return proto.TextResult(req.Name+" is not available: the command line calls only the tools of the hub's connectors that are signed in", true)
 	}
 	session, ok := n.assistantCaller(c)
 	if !ok {
-		return proto.TextResult("tg 只能在助手的对话里用：这个进程不是 Persona 为助手起的", true)
+		return proto.TextResult("这个命令只能在助手的对话里用：这个进程不是 Persona 为助手起的", true)
 	}
 	if n.peer == nil {
 		return proto.TextResult("Persona hub error: not connected", true)
@@ -96,22 +108,51 @@ func (n *Node) syncAssistantSkills(cwd string) {
 			n.logger.Printf("assistant: skills: %v", err)
 		}
 	}
-	n.writeTG(slices.Contains(conns, "telegram"))
+	n.writeCLIs(n.connectorCLIs(), slices.Contains(conns, "telegram"))
 }
 
-// writeTG puts tg (personad tg) on the assistant's PATH, or takes it away.
-func (n *Node) writeTG(on bool) {
+// connectorCLIs are the signed-in connectors' command lines as of the last assistant.prepare (name → connector).
+func (n *Node) connectorCLIs() map[string]string {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return maps.Clone(n.clis)
+}
+
+// cliMark is in every command line the node writes on the assistant's PATH: one it wrote and no longer has a
+// connector for goes, other files there (a plugin's gate commands) stay.
+const cliMark = "# a connector's command line, on the assistant's PATH while it is signed in (node/clicall.go)"
+
+// writeCLIs puts the signed-in connectors' command lines on the assistant's PATH (personad tool --cli <id>) and takes
+// away those whose connector is not. The built-in Telegram has none of its own: while it is signed in without one,
+// tg is personad tg, as before the connector moved into a plugin (#1704).
+func (n *Node) writeCLIs(clis map[string]string, telegram bool) {
 	bin := filepath.Join(n.dir, "assistant-bin")
-	tg := filepath.Join(bin, "tg")
-	if !on {
-		_ = os.Remove(tg)
+	want := map[string]string{}
+	for name, id := range clis {
+		want[name] = "#!/bin/sh\n" + cliMark + "\nexec " + shellQuote(n.bin) + " tool --cli " + shellQuote(id) + " \"$@\"\n"
+	}
+	if _, ok := want["tg"]; !ok && telegram {
+		want["tg"] = "#!/bin/sh\n" + cliMark + "\n# Telegram through the hub (the telegram skill).\nexec " + shellQuote(n.bin) + " tg \"$@\"\n"
+	}
+	entries, _ := os.ReadDir(bin)
+	for _, e := range entries {
+		if _, keep := want[e.Name()]; keep {
+			continue
+		}
+		p := filepath.Join(bin, e.Name())
+		if b, err := os.ReadFile(p); err == nil && (strings.Contains(string(b), cliMark) || strings.Contains(string(b), "Telegram through the hub")) {
+			_ = os.Remove(p)
+		}
+	}
+	if len(want) == 0 {
 		return
 	}
 	_ = os.MkdirAll(bin, 0o755)
-	wrapper := "#!/bin/sh\n# Telegram through the hub (the telegram skill), on the assistant's PATH while it is signed in (node/clicall.go).\nexec " +
-		shellQuote(n.bin) + " tg \"$@\"\n"
-	if cur, err := os.ReadFile(tg); err == nil && string(cur) == wrapper {
-		return
+	for name, wrapper := range want {
+		p := filepath.Join(bin, name)
+		if cur, err := os.ReadFile(p); err == nil && string(cur) == wrapper {
+			continue
+		}
+		_ = os.WriteFile(p, []byte(wrapper), 0o755)
 	}
-	_ = os.WriteFile(tg, []byte(wrapper), 0o755)
 }

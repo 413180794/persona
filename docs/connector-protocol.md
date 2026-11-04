@@ -48,6 +48,7 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 | `poll_seconds` | 多久问一次 `archive.changes`，0 用 hub 的默认 |
 | `kinds` | 收件箱条目的种类；hub 收到没声明的记一行日志 |
 | `archive_sources` | 除了自己的 id，归档还能放在哪些名字下（最多 4 个，格式同 id，不能是别的连接器的 id）：一类会话和其余的分开存（一个动态 feed 里和用户有关的帖子），或连接器迁出 hub 之前知识库里已有的会话 id（见下面「知识库」） |
+| `cli` | 连接器自己的命令行在助手 PATH 上的名字（小写字母、数字、`-`，如 Telegram 的 `tg`），见下面「命令行」；没有就不写 |
 
 ## hub 调程序
 
@@ -126,6 +127,22 @@ hub 只对这些连接器读它：条目保持 hub 原来自己做的样子（�
 - 帖子和用户有没有关系（`concerns`）由 hub 判断：连接器在自己的某个名字下有这个帖子 id 的会话就算（用户发的、有人回复或 @ 了用户的帖子，连接器照常当会话归档）。
 - 索引、按文字保留期清理、把帖子挂到项目上（`kb.LinkMoments`）都是 hub 的事，谁写的帖子都一样。爬多少、多久爬一次、怎么翻页是连接器自己的事，
   它自己的状态（翻到哪）放在自己那里。
+
+## 命令行
+
+连接器可以给助手一个命令行（#1704，原来 Telegram 的 `tg` 是 personad 自带的）：清单写 `cli`，再提供一个工具 `<id>_cli`（放进 `unlisted`，模型的工具列表里不出现）。
+
+- 连接器登录着时，hub 在每次给助手发消息前（`assistant.prepare` 的 `clis`）告诉跑助手的 node，node 在助手的 PATH 上写一个包装 `~/.persona/assistant-bin/<cli>`：
+  `exec personad tool --cli <id> "$@"`。登出后包装拿掉。命令行只能调**登录着的连接器的工具**（`<id>_` 开头），只能由 Persona 为助手起的进程调。
+- `personad tool --cli <id> [--format json|text] <词…>` 每次：
+  1. 调 `<id>_cli {argv, stdin?}`（命令行里有单独的 `-` 时，读 stdin 作为 `stdin`）：只解析，不碰外部服务。回一行 JSON：
+     - `{name, call: {tool, args}, render?}`：要调的工具和参数；`render` 是 `--format text` 时怎么显示结果；
+     - `{name, exit, stdout?, stderr?}`：直接回的（帮助、用法、词写错了），`exit` 是退出码。
+  2. 调 `call.tool`（和助手按名字调一样，写操作照旧过 hub 的闸门 `connector_gate`）。
+  3. `--format text` 且有 `render` 时，再调 `<id>_cli {render, result}`（`result` 是上一步工具回的文字）→ `{stdout}`，打印出来。
+- 输出：默认一行 JSON（工具回的原文）；失败时 stderr 一行 `{error, kind, retry_after?}`（`--format text` 时是 `<name>: …`），退出码：
+  0 成功、1 失败、2 用法、3 不可用（node / hub 连不上，连接器没登录）、4 限流（工具的错误里写「限流中，N 秒」或「还要 N 秒」，`retry_after` 是 N）、5 用户或 `connector_gate` 没同意。
+- `personad tool <工具> [<JSON 参数> | -]`：直接调一个工具，同样的限制和输出。
 
 ## 错误
 

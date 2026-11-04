@@ -126,6 +126,8 @@ type Manifest struct {
 	Kinds         []string `json:"kinds,omitempty"`
 	// ArchiveSources: connector.Manifest.ArchiveSources.
 	ArchiveSources []string `json:"archive_sources,omitempty"`
+	// CLI: connector.Manifest.CLI.
+	CLI string `json:"cli,omitempty"`
 }
 
 type (
@@ -777,7 +779,7 @@ func (w *writes) do(id string, run func() (CallResult, error)) (CallResult, erro
 func ManifestOf(c connector.Connector) Manifest {
 	cm := c.Manifest()
 	m := Manifest{Protocol: Protocol, ID: c.ID(), Name: c.Name(), Capabilities: []string{}, Hosts: cm.Hosts, AgentTools: cm.AgentTools,
-		Unlisted: cm.Unlisted, ConfirmAlways: cm.ConfirmAlways, PollSeconds: int(cm.Poll / time.Second), Kinds: cm.Kinds}
+		Unlisted: cm.Unlisted, ConfirmAlways: cm.ConfirmAlways, PollSeconds: int(cm.Poll / time.Second), Kinds: cm.Kinds, CLI: cm.CLI}
 	for _, cp := range cm.Capabilities {
 		m.Capabilities = append(m.Capabilities, string(cp))
 	}
@@ -787,7 +789,7 @@ func ManifestOf(c connector.Connector) Manifest {
 // Of is the connector.Manifest a program sent (a proxy's: it answers for the program).
 func (m Manifest) Of() connector.Manifest {
 	out := connector.Manifest{Hosts: m.Hosts, AgentTools: m.AgentTools, Unlisted: m.Unlisted, ConfirmAlways: m.ConfirmAlways,
-		Poll: time.Duration(m.PollSeconds) * time.Second, Kinds: m.Kinds, ArchiveSources: m.ArchiveSources, Proxy: true}
+		Poll: time.Duration(m.PollSeconds) * time.Second, Kinds: m.Kinds, ArchiveSources: m.ArchiveSources, CLI: m.CLI, Proxy: true}
 	for _, cp := range m.Capabilities {
 		out.Capabilities = append(out.Capabilities, connector.Capability(cp))
 	}

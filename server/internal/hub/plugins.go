@@ -754,7 +754,8 @@ func pluginSource(connectorID string) string {
 // connectorManifest is a contribution to connectors as the connector registry declares it.
 func connectorManifest(c plugin.ConnectorItem) connector.Manifest {
 	m := serve.Manifest{ID: c.ID, Name: c.Name, Capabilities: slices.Clone(c.Capabilities), Hosts: c.Hosts, AgentTools: c.AgentTools,
-		Unlisted: c.Unlisted, ConfirmAlways: c.ConfirmAlways, PollSeconds: c.PollSeconds, Kinds: c.Kinds, ArchiveSources: c.ArchiveSources}.Of()
+		Unlisted: c.Unlisted, ConfirmAlways: c.ConfirmAlways, PollSeconds: c.PollSeconds, Kinds: c.Kinds, ArchiveSources: c.ArchiveSources,
+		CLI: c.CLI}.Of()
 	slices.Sort(m.Capabilities)
 	return m
 }

@@ -122,9 +122,19 @@ func isAssistant(s proto.Session, dir string) bool {
 // assistantPrepare is what the node is told before a message to the assistant: its directory, its CLAUDE.md, and the
 // connectors signed in (rate limited counts: still signed in), whose built-in skills it puts in the directory (the
 // telegram skill and tg, node/clicall.go) or takes out.
+//
+// clis are the command lines of those connectors (connector.Manifest.CLI → its id): the node puts them on the
+// assistant's PATH (personad tool --cli <id>).
 func (h *Hub) assistantPrepare(ctx context.Context, m *Machine) map[string]any {
+	signedIn := h.signedInConnectors(ctx)
+	clis := map[string]string{}
+	for _, id := range signedIn {
+		if c := h.connectors.Get(id); c != nil && c.Manifest().CLI != "" {
+			clis[c.Manifest().CLI] = id
+		}
+	}
 	return map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx) + h.plugins.pluginInstructions(),
-		"connectors": h.signedInConnectors(ctx), "plugin_skills": h.plugins.pluginSkillsFor(m.cfg.ID)}
+		"connectors": signedIn, "clis": clis, "plugin_skills": h.plugins.pluginSkillsFor(m.cfg.ID)}
 }
 
 // signedInConnectors are the connectors that are ok or rate limited (switched on and signed in).

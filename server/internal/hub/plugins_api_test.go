@@ -468,3 +468,32 @@ func TestPluginsGetTheUserTimezone(t *testing.T) {
 		}
 	}
 }
+
+// A connector's command line (connector.Manifest.CLI, #1704) reaches the assistant's machine with the connectors
+// signed in, as its name and the connector it runs (assistant.prepare's clis): only while the connector is signed in.
+func TestAssistantGetsTheConnectorsCommandLines(t *testing.T) {
+	h, _ := pluginTestHub(t)
+	mux := h.routes()
+	master := h.cfg.Token
+	pkg := notesPackage(t, "1.0.0")
+	p := filepath.Join(pkg, plugin.ManifestFile)
+	raw, _ := os.ReadFile(p)
+	_ = os.WriteFile(p, []byte(strings.Replace(string(raw), `"hosts": ["notes.example.com"]}`, `"hosts": ["notes.example.com"], "cli": "notes"}`, 1)), 0o644)
+	_, pv := call(t, mux, "POST", "/api/v1/plugins/-/preview", master, `{"source": "dir:`+pkg+`"}`)
+	if code, out := call(t, mux, "POST", "/api/v1/plugins/-/install", master, fmt.Sprintf(`{"preview_id": %q, "permissions_digest": %q}`, pv["preview_id"], pv["permissions_digest"])); code != 200 {
+		t.Fatalf("%d %v", code, out)
+	}
+	m := &Machine{cfg: MachineConfig{ID: "server"}}
+	clis := func() map[string]string { return h.assistantPrepare(context.Background(), m)["clis"].(map[string]string) }
+	if len(clis()) != 0 {
+		t.Fatal("not signed in yet, a command line:", clis())
+	}
+	call(t, mux, "PUT", "/api/v1/plugins/example-notes/-/secrets/api_key", master, `{"value": "k3y"}`)
+	waitLong(t, "the connector signed in", func() bool {
+		c := h.connectors.Get("examplenotes")
+		return c != nil && connector.StatusOf(context.Background(), c).State == connector.StateOK
+	})
+	if got := clis(); len(got) != 1 || got["notes"] != "examplenotes" {
+		t.Fatal(got)
+	}
+}

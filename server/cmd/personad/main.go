@@ -28,6 +28,7 @@ import (
 	"github.com/nwverse/persona/server/internal/relay"
 	"github.com/nwverse/persona/server/internal/sysmon"
 	"github.com/nwverse/persona/server/internal/tgcli"
+	"github.com/nwverse/persona/server/internal/toolcli"
 	"github.com/nwverse/persona/server/internal/tunnel"
 	"github.com/nwverse/persona/server/internal/update"
 	"github.com/nwverse/persona/server/internal/voice"
@@ -230,6 +231,8 @@ func main() {
 		err = mcpserver.Serve(ctx, version, os.Stdin, os.Stdout)
 	case "tg":
 		os.Exit(tgcli.Main(ctx, os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+	case "tool": // a connector's tools and command line from the assistant's shell (internal/toolcli)
+		os.Exit(toolcli.Main(ctx, os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
 	case "office":
 		os.Exit(office.Main(os.Args[2:], os.Stdout, os.Stderr))
 	case "voice":

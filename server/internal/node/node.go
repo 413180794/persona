@@ -135,6 +135,7 @@ type Node struct {
 
 	// connectors are the hub's signed in, as the last assistant.prepare said (clicall.go).
 	connectors []string
+	clis       map[string]string // the connectors' command lines (assistant.prepare): name → connector id
 
 	// claudeV is claude's version as last asked (agentplugin.go).
 	claudeV claudeVersionCache
@@ -926,6 +927,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			ClaudeMD string `json:"claude_md"`
 			// Connectors are the hub's signed in: their built-in skills go in the directory (Telegram's tg).
 			Connectors []string `json:"connectors"`
+			// CLIs are their command lines (name → connector id), on the assistant's PATH (node/clicall.go).
+			CLIs map[string]string `json:"clis"`
 			// PluginSkills are the hub's plugins' skills (nil from a hub without plugins: those kept stay).
 			PluginSkills []assistantskills.PluginSkill `json:"plugin_skills"`
 		}
@@ -945,6 +948,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		// Before every message: a connector signed out since the last one takes its skill (and tg) away.
 		n.mu.Lock()
 		n.connectors = a.Connectors
+		n.clis = a.CLIs
 		n.mu.Unlock()
 		var need []string
 		if a.PluginSkills != nil {

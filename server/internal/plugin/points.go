@@ -49,6 +49,8 @@ type ConnectorItem struct {
 	KindDescriptions map[string]string `json:"kind_descriptions,omitempty"`
 	// ArchiveSources are other names its archive files conversations under (connector.Manifest.ArchiveSources).
 	ArchiveSources []string `json:"archive_sources,omitempty"`
+	// CLI is the connector's command line on the assistant's PATH (connector.Manifest.CLI): a lowercase name.
+	CLI string `json:"cli,omitempty"`
 }
 
 // VoiceItem is a contribution to voice: the voice conversation's contract (docs/plugins.md「语音」).
@@ -236,6 +238,13 @@ func checkPackagePath(p string) error {
 	return nil
 }
 
+// cliName is a connector's command line on the assistant's PATH (ConnectorItem.CLI); reservedCommands are the ones the
+// assistant has already, which no connector's may hide.
+var (
+	cliName          = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
+	reservedCommands = []string{"personad", "jarvisd", "lark-cli", "sh", "bash", "git", "gh", "curl", "python3", "node", "claude", "codex"}
+)
+
 // Points are the extension points this hub has, by name.
 var Points = map[string]Point{
 	"connectors": {Name: "connectors", Namespace: "connector", Version: 2, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
@@ -267,6 +276,9 @@ var Points = map[string]Point{
 			if !connectorID.MatchString(s) || s == c.ID {
 				return c.ID, fmt.Errorf("connector %s: archive source %q: lowercase letters and digits, a letter first, not its own id", c.ID, s)
 			}
+		}
+		if c.CLI != "" && (!cliName.MatchString(c.CLI) || slices.Contains(reservedCommands, c.CLI)) {
+			return c.ID, fmt.Errorf("connector %s: cli %q: a lowercase command name (letters, digits, -), not one the assistant has already", c.ID, c.CLI)
 		}
 		return c.ID, nil
 	}},

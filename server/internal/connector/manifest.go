@@ -84,6 +84,10 @@ type Manifest struct {
 	// one kind of conversation kept apart from the rest (a feed's posts the user is in, besides the chats), or ids
 	// the knowledge base had before a connector moved (docs/connector-protocol.md「知识库」). Same pattern as an id.
 	ArchiveSources []string
+	// CLI is the command on the assistant's PATH that is this connector's command line (Telegram's tg): the node
+	// writes it to run `personad tool --cli <id>`, which has the connector's <id>_cli tool read each command line and
+	// calls the tool it names, through the gate (docs/connector-protocol.md「命令行」). Empty: none.
+	CLI string
 	// Proxy: it answers for a program or a machine (connector/proc), so it implements every interface and has only
 	// what it declares. Check holds the others to "declared exactly what it implements".
 	Proxy bool
