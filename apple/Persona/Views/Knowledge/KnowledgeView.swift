@@ -54,6 +54,9 @@ struct KnowledgeView: View {
             }
         }
         .listStyle(.insetGrouped)
+        #if os(macOS)
+        .modifier(MacBelowTitleRowIfAsked()) // under 知识库's title in the window: the list starts below it (#1243)
+        #endif
         .themedPage()
         .navigationTitle("知识库")
         .navigationBarTitleDisplayMode(.inline)

@@ -152,3 +152,24 @@
   另外：macOS 26 上 `.toolbar { }` 的内容在某个平台分支里为空会编不过（`EmptyView` 当 `ToolbarContent` 要 macOS 27），整个 `.toolbar` 用 `#if` 包起来。
 - `NSColor.withAlphaComponent(_:)` 是把透明度换成给的值，不是乘上去（2026-11-04，#1224）：兼容层里 `tertiaryLabelColor.withAlphaComponent(0.18)` 得到的是 18% 的黑 / 白，
   不是 tertiaryLabel 本来的 26% 再乘 0.18，所以 Mac 的 `Theme.Fill.well` / `chip` 比 iPhone 深好几倍（真窗口取像素：卡片 248，选项区 212；深色 54 对 98）。量颜色用真窗口截图取像素，别凭感觉。
+- 列表往上滚时，行从标题栏那一行透出来，和壳画在那里的分区标题（`MacPageTitle`）叠在一起（2026-11-04，#1243，真窗口实测）：列表的滚动视图自己伸到窗口工具栏下面、内容往下让出工具栏的高度，
+  本来有系统的滚动边缘效果（AppKit 的 `NSScrollPocket`）在那一行挡住滚上去的行；壳为了让分区列伸到红绿灯后面隐藏了工具栏的底色
+  （`.toolbarBackgroundVisibility(.hidden, for: .windowToolbar)`），这块挡板也跟着没了。设置、收件箱、机器（窄窗口）都能滚出来，
+  分区列收起时设置的列表还会盖到红绿灯；Agents 的列表滚到快速筛选那一排底下就被挡住，待办的列表上面是搜索框，这两个碰不到这一行。
+  把工具栏底色打开不行：每个滚动视图顶上出现一块不透明的挡板和一条分隔线，静止时也在；Persona 页自己画在那一行的头被盖成模糊的，Agents 滚动后连分区列顶上也变白。
+  `scrollEdgeEffectStyle(.soft / .hard)` 改得动挡板的样式值，样子却没区别；窗口和分栏项的 `titlebarSeparatorStyle = .none` 都去不掉那条线（它只受挡板私有的 `allowsSeparator` 管）。
+  做法：`MacBelowTitleRow` 让列表从这一行下面开始排，并裁在自己的 frame 上，滚上去的行在这一行的下沿消失；只加 `padding` + `ignoresSafeArea` 不够，
+  分栏内容栏里 `List` 的滚动视图照样伸到工具栏下面（收件箱那种 `HStack` 里的列表倒是被裁了），要再 `.clipped()`。
+  裁剪要加在页面底色的里面：加在外面连底色一起裁掉，黏土这类带底色的风格里标题那一行成了白的。所以加在设置的列表上（`.themedPage()` 之前）、
+  收件箱的筛选栏上（底色在外层的 `HStack`），知识库和机器的首页由壳经 environment `macBelowTitleRow` 请页面自己加（这两页在 Persona 页、设置的详情栏里也会打开，那里不加）。
+  收件箱中间的列表不加：标题不在它上面，而它钉住的分组头（「需要你」）靠的就是系统那块挡板，挪到这一行下面后挡板没了，分组头直接压在滚上去的行上。
+  Agents 不加：列表栏的标题行里有它自己的按钮（`MacTitleRowButton`，画在列表那一层的 overlay 里），整栏裁掉按钮也没了；它的列表本来也碰不到这一行。
+  静止时真窗口截图和改之前逐像素对比，标题栏那一行没有差别，别处只有时间、动画这些本来就会变的地方（各分区，液态玻璃深浅色、黏土、飞书，分区列收起）。
+  推进去自己画标题的页（`pageTitle`）这次没加：滚动后只有钉在顶上的分组头的模糊探进这一行几个点，没有行压着标题。
+- 截图前后对比之前，先用同一个构建连拍几次，看哪些地方本来就不稳定：Persona 页推进去的档案页（`-tab assistant -openAssistantPage profile`），
+  标题下面有时空着一条带分隔线的带、有时内容直接贴着标题行，同一构建连拍三次两次有（2026-11-04，#1243 时看到，和那次改动无关，没追）。
+  只拍一次就当成改动的后果，差点得出错误的结论。
+- 离屏截图看不出上面这个问题修没修好：列表的行是截图时单独再画、贴回原处的，原来只按所在滚动视图的可见区域裁，`.clipped()` 挡掉的行照样画在标题栏那一行。
+  现在按行上面所有裁剪的视图（`clipsToBounds` / `masksToBounds`）裁。要看滚动以后的样子用 `-macSnapshotScroll <点数>`（`mac_shot.sh` 后面加上）。
+  没锁屏、终端有屏幕录制权限时，`screencapture -x -o -l <窗口号>` 能直接截体验实例的窗口（窗口号按 pid 从 `CGWindowListCopyWindowInfo` 找，宽高过滤掉菜单栏那个窗口），
+  不用 computer-use 工具；实例偶尔会被激活抢一下焦点。

@@ -152,7 +152,11 @@ struct MacInboxPage: View {
     var body: some View {
         HStack(spacing: 0) {
             // On the window's white, as the lists beside the sections are on the other pages.
+            // Below the title bar's row: the page's title is drawn there over the filters (#1243). Not the list beside
+            // them: the title is not over it, and there the system's scroll edge effect keeps its pinned group header
+            // legible (kept below the row, the header sat on the rows scrolled under it).
             MacInboxFilters()
+                .modifier(MacBelowTitleRow())
                 .frame(width: Theme.Size.macInboxFiltersWidth)
                 .frame(maxHeight: .infinity)
             Divider()

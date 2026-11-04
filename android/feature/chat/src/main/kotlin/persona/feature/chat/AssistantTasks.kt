@@ -140,7 +140,7 @@ private fun FeedLine(item: FeedItem, host: AssistantTaskHost) {
     val later by host.tasks.later.collectAsStateWithLifecycle()
     val title = todos.firstOrNull { it.id == item.ref }?.title ?: "任务"
     when (item.kind) {
-        "plan" -> plans[item.ref]?.let { PlanCard(it, host) }
+        "plan" -> (item.ref?.let { plans[it] } ?: item.plan)?.let { PlanCard(it, host) }
         "task" -> todos.firstOrNull { it.id == item.ref }?.let { todo ->
             val today = AssistantLines.time(item.at)?.atZone(ZoneId.systemDefault())?.toLocalDate() == LocalDate.now()
             if (today) TaskCard(todo, host) else TaskLine(todo, host)

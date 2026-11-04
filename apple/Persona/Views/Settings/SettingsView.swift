@@ -181,6 +181,11 @@ struct SettingsView: View {
                     SettingsHeading("关于")
                 }
             }
+            #if os(macOS)
+            // Below the section's title in the title bar's row, not scrolling through it (#1243); inside the page's
+            // background, which still reaches up behind the title.
+            .modifier(MacBelowTitleRow())
+            #endif
             .themedPage()
             .toolbar {
                     // As a sheet over the shell (docs/ios.md「新外壳」): ChatGPT's × to close it.

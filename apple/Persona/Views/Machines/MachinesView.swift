@@ -98,6 +98,9 @@ struct MachinesView: View {
             }
             .padding(Theme.Space.l)
         }
+        #if os(macOS)
+        .modifier(MacBelowTitleRowIfAsked()) // under 机器's title in the window: the cards start below it (#1243)
+        #endif
         .themedGroupedPage()
         .navigationTitle("机器")
         // Large wherever it is pushed (the Agents list's stack would make it inline, and the principal item below would

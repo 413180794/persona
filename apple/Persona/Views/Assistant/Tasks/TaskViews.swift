@@ -460,7 +460,7 @@ struct FeedLine: View {
     var body: some View {
         switch item.kind {
         case .plan:
-            if let id = item.ref, let plan = store.plans[id] { PlanCard(plan: plan) }
+            if let id = item.ref, let plan = store.plans[id] ?? item.plan { PlanCard(plan: plan) }
         case .task:
             if let id = item.ref {
                 // A task card of another day folds into a line: its mark, title and where it got to.

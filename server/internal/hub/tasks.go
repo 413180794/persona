@@ -255,13 +255,29 @@ func (h *Hub) toolTaskPlan(ctx context.Context, sessionID string, args json.RawM
 	if err := h.savePlan(ctx, p); err != nil {
 		return "", err
 	}
-	if _, err := h.appendFeed(ctx, sessionID, feedPlan, p.ID, nil); err != nil {
+	// The plan goes in the item's body too: a client that missed the task_plan event (or raced it) still draws the
+	// card from the conversation itself.
+	if _, err := h.appendFeed(ctx, sessionID, feedPlan, p.ID, map[string]any{"plan": p}); err != nil {
 		h.logf("task plan %s: feed: %v", p.ID, err)
 	}
 	if !h.planStartsAtOnce(ctx, p.Tasks) {
 		h.broadcast(map[string]any{"type": "task_plan", "plan": p})
-		return fmt.Sprintf("Plan %s is on the user's screen as a card; nothing has started. Don't wait for it: carry on. "+
-			"When they start it, the tasks show up in the context snapshot.", p.ID), nil
+		// A card below the answer is easy to miss: push it as well.
+		titles := make([]string, 0, len(p.Tasks))
+		for _, t := range p.Tasks {
+			titles = append(titles, t.Title)
+		}
+		title := fmt.Sprintf("有 %d 件事等你开始", len(p.Tasks))
+		if len(titles) == 1 {
+			title = "有一件事等你开始"
+		}
+		machineName := "Persona"
+		if m := h.localMachine(h.assistantConfig(ctx).MachineID); m != nil {
+			machineName = m.cfg.Name
+		}
+		h.notifyDone("assistant", h.assistantConfig(ctx).MachineID, machineName, sessionID, title, strings.Join(titles, "、"), pushWants{})
+		return fmt.Sprintf("Plan %s is on the user's screen as a card and pushed to their phone; nothing has started. "+
+			"Don't wait for it: carry on. When they start it, the tasks show up in the context snapshot.", p.ID), nil
 	}
 	started, err := h.startPlan(ctx, p.ID, nil, false)
 	if err != nil {

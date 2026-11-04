@@ -3,6 +3,7 @@ package persona.core.contracts
 import kotlinx.serialization.KeepGeneratedSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -55,6 +56,9 @@ data class FeedItem(
     val ref: String? = null,
     val body: JsonElement? = null,
 ) {
+    /** A plan card carries the plan in its body: drawn even when the `task_plan` event for it was missed or raced. */
+    val plan: TaskPlan? get() = ((body as? JsonObject)?.get("plan"))?.let { runCatching { Json.decodeFromJsonElement<TaskPlan>(it) }.getOrNull() }
+
     /** A string field of the body (receipt's title / summary / pr, routed's text, message's chat / draft…). */
     fun field(name: String): String? = ((body as? JsonObject)?.get(name) as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
     fun number(name: String): Int? = ((body as? JsonObject)?.get(name) as? JsonPrimitive)?.intOrNull

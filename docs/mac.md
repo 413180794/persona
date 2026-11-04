@@ -136,11 +136,11 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   默认体验模式；`BUILD=1` 先编译，`APP=` 指定 .app，`SIZE=1280x820`，`DELAY=4`，`APPEARANCES="light dark"`。
   例：`scripts/app/mac_shot.sh agents -tab dev -dev.openChat ""`、`scripts/app/mac_shot.sh chat -openSession macbook/a1f3c2d4-0000-4000-8000-000000000001`、
   `scripts/app/mac_shot.sh jarvis -tab assistant`、`scripts/app/mac_shot.sh inbox -tab mail`、`scripts/app/mac_shot.sh settings -tab settings`。
-  背后是 DEBUG 开关 `-macSnapshot <png> [-macSnapshotDelay 秒] [-macSnapshotQuit YES] [-macWindowSize WxH] [-macAppearance dark|light]`（`Mac/App/MacSnapshot.swift`）：
-  App 自己用 `cacheDisplay` 把窗口画进 PNG，不经过屏幕。
+  背后是 DEBUG 开关 `-macSnapshot <png> [-macSnapshotDelay 秒] [-macSnapshotQuit YES] [-macWindowSize WxH] [-macAppearance dark|light] [-macSnapshotScroll 点数]`（`Mac/App/MacSnapshot.swift`）：
+  App 自己用 `cacheDisplay` 把窗口画进 PNG，不经过屏幕。`-macSnapshotScroll` 截图前把窗口里能竖着滚的列表都往下滚这么多点（看滚上去的内容和标题栏那一行，#1243）。
 - 截图和屏幕上的差别（2026-10-31 试出来的）：
   - Liquid Glass / 毛玻璃画不出模糊，露出的是窗口底色；玻璃按钮只剩边框。看布局和文字够用，看材质要真机。
-  - SwiftUI `List`（NSTableView）的行作为窗口的一部分画时是空的：截图时每一行单独再画一次、贴回原处；选中行的材质离屏画成黑块，改成画非激活窗口的选中色。
+  - SwiftUI `List`（NSTableView）的行作为窗口的一部分画时是空的：截图时每一行单独再画一次、贴回原处（按行上面所有裁剪的视图裁，`.clipped()` 挡掉的不画）；选中行的材质离屏画成黑块，改成画非激活窗口的选中色。
   - 深色下 List 行里的文字仍是浅色方案的颜色（深灰），`NSApp.appearance`、`preferredColorScheme`、截图时套 appearance、去掉图层滤镜都没用；行的 effectiveAppearance 是 DarkAqua。
     还没确认是截图的问题还是真的这样，要在解锁的 Mac 上看一眼（待办）。
   - `layer.render(in:)` 上下颠倒、`dataWithPDF` 大部分文字丢失，都不如 `cacheDisplay`。
@@ -162,6 +162,9 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   不然页面的按钮全挤到左边。红绿灯旁边一个按钮收起 / 显示这一列（和「显示 › 隐藏侧边栏」⌃⌘S 是同一个动作）。
   标题和操作放一行（#830，2026-11-03 用户：去掉标题后顶上空一条、左边一块白色凸起，选了「标题和操作放一行」）：壳在红绿灯那一行、页面这一栏的左边画分区的标题
   （`MacPageTitle`，只是一个标签，那一行照样能拖动窗口；这一列收起时排在红绿灯和按钮后面），页面的按钮和搜索在右边，内容紧接着往下排。
+  这一行不画底色，标题下面的列表从这一行下面开始排、裁在这一行的下沿（`MacBelowTitleRow`，#1243）：往上滚的行不再从标题后面透出来
+  （工具栏底色隐藏后，系统挡住滚上去内容的那块也没了，见 `docs/lessons/macos.md`）。设置的列表、收件箱的筛选栏、知识库和机器的首页都这样（收件箱中间的列表不在标题下面，留着系统的挡板给它钉住的分组头）；
+  Agents 的列表滚到快速筛选那一排底下就被挡住，标题行里还有它自己的按钮，不加。
   Persona 页的两栏自己的头（列表的形象名和搜索、对话的顶栏）上移进这一行，不另画标题；这一列收起时从红绿灯后面开始（壳经 environment `macTitleRowLeading` 告诉页面从哪开始）。
   收件箱、知识库的工具栏加一个空的 `.principal` 占住中间（`MacToolbarMiddle`，同 Agents 的 `ConnectionTitle`），按钮靠到搜索框旁边，最窄的窗口里不盖住标题；
   机器的 `ConnectionTitle` 不画玻璃（连着时它是空的，玻璃在这一行中间画出一条细线）。

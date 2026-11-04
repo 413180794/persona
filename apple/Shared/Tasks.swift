@@ -69,6 +69,12 @@ nonisolated struct FeedItem: Codable, Hashable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey { case id, conversation, at, kind, ref, body }
 
+    /// A plan card carries the plan in its body: drawn even when the `task_plan` event for it was missed or raced.
+    var plan: TaskPlan? {
+        guard case .object(let o)? = body, let p = o["plan"] else { return nil }
+        return try? JSON.decoder.decode(TaskPlan.self, from: JSONEncoder().encode(p))
+    }
+
     private func string(_ key: String) -> String? {
         guard case .object(let o)? = body, case .string(let s)? = o[key] else { return nil }
         return s

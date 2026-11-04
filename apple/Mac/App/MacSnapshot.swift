@@ -5,8 +5,9 @@ import SwiftUI
 /// Screenshots without the screen (docs/mac.md「截图」): this Mac is often locked, and `screencapture` then only gets
 /// the lock screen. `-macSnapshot <png>` renders the main window's own views into a PNG after a while
 /// (`-macSnapshotDelay <s>`, default 4), then quits with `-macSnapshotQuit YES`. `-macWindowSize 1280x820` sizes the
-/// window first; `-macAppearance dark|light` picks the appearance (`-AppleInterfaceStyle Dark` also works).
-/// `scripts/app/mac_shot.sh` drives it.
+/// window first; `-macAppearance dark|light` picks the appearance (`-AppleInterfaceStyle Dark` also works);
+/// `-macSnapshotScroll <points>` scrolls the window's lists down that far before the shot (what moves under the title
+/// bar's row, #1243). `scripts/app/mac_shot.sh` drives it.
 @MainActor enum MacSnapshot {
     /// Before any window exists.
     static func applyAppearanceIfAsked() { applyAppearance(UserDefaults.standard.string(forKey: "macAppearance")) }
@@ -31,7 +32,8 @@ import SwiftUI
         let delay = d.object(forKey: "macSnapshotDelay") != nil ? d.double(forKey: "macSnapshotDelay") : 4
         DispatchQueue.main.asyncAfter(deadline: .now() + max(delay, 0.5)) {
             if let size { resize(to: size) }
-            // One more turn so a resize has laid out and drawn.
+            scroll(by: d.double(forKey: "macSnapshotScroll"))
+            // One more turn so a resize or a scroll has laid out and drawn.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 let ok = capture(to: URL(fileURLWithPath: path))
                 FileHandle.standardError.write(Data("macSnapshot \(ok ? "wrote" : "FAILED") \(path)\n".utf8))
@@ -86,6 +88,20 @@ import SwiftUI
         guard let w = mainWindow else { return }
         let frame = w.frameRect(forContentRect: NSRect(origin: .zero, size: size))
         w.setFrame(NSRect(origin: w.frame.origin, size: frame.size), display: true)
+    }
+
+    /// Every scroll view in the window that scrolls vertically (SwiftUI's `List`, `Form` and `ScrollView` are
+    /// NSScrollViews with flipped document views) moved `points` further down its content, as far as it goes.
+    private static func scroll(by points: Double) {
+        guard points > 0, let frameView = mainWindow?.contentView?.superview else { return }
+        for view in descendants(of: frameView) {
+            guard let scroll = view as? NSScrollView, isShown(scroll), let doc = scroll.documentView, doc.isFlipped else { continue }
+            let clip = scroll.contentView
+            let bottom = doc.frame.height - clip.bounds.height + scroll.contentInsets.bottom
+            guard bottom > clip.bounds.origin.y + 1 else { continue }
+            clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: min(clip.bounds.origin.y + points, bottom)))
+            scroll.reflectScrolledClipView(clip)
+        }
     }
 
     /// The window's frame view (title bar and toolbar included) drawn into a bitmap at the screen's scale. Views
@@ -184,9 +200,14 @@ import SwiftUI
             row.effectiveAppearance.performAsCurrentDrawingAppearance { row.cacheDisplay(in: row.bounds, to: sub) }
             materials.forEach { $0.isHidden = false }
             // The window bitmap's context is in the frame view's points, origin at the bottom left, as `convert` gives;
-            // clipped to what its scroll view shows.
+            // clipped to what every clipping view above it shows: its scroll view's, and SwiftUI's `.clipped()` (a
+            // list kept below the title bar's row stops there, `MacBelowTitleRow`, #1243).
             var r = row.convert(row.bounds, to: frameView)
-            if let clip = row.enclosingScrollView?.contentView { r = r.intersection(clip.convert(clip.bounds, to: frameView)) }
+            var above = row.superview
+            while let v = above, v !== frameView {
+                if v.clipsToBounds || v.layer?.masksToBounds == true { r = r.intersection(v.convert(v.bounds, to: frameView)) }
+                above = v.superview
+            }
             guard !r.isEmpty, let cg = sub.cgImage else { continue }
             let full = row.convert(row.bounds, to: frameView)
             if let ctx = NSGraphicsContext(bitmapImageRep: rep) {
