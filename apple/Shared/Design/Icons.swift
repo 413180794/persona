@@ -90,6 +90,8 @@ extension Theme {
         static let submit = "arrow.up.circle.fill"
         static let sendMail = "paperplane.fill"
         static let reply = "arrowshape.turn.up.left"
+        /// 表情回复: pick an emoji to react with (飞书).
+        static let react = "face.smiling"
         /// Leave the app for another one (飞书).
         static let openExternal = "arrow.up.forward.app"
         /// Translate, and what was translated.

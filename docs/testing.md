@@ -153,6 +153,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   已读回执（`POST …/read-states`）：f3 里我的消息 282 全部已读、296 部分已读、306 都未读；私聊 f1「韩梅梅」（`-openInboxItem lark:f1:100`）里我的消息有已读、未读（103）和没有回执（104）三种，mock 运行中新发的消息算都未读。
   头像：f3 里 Tom 的头像能加载，天气助手的头像地址 404（看加载失败退回首字），其他人没有头像。
   @人：f2、f3 有成员（`GET …/members`，Tom 和 Mia 有头像，阿杰的群昵称是「杰哥」）；带 `mentions` 发送或回复时，mock 把文字里的 `@name` 存成 `at` 片段。
+  话题群（#1087）：`MOCK_LARK_TOPIC=1` 启动 mock，`-tab mail -openInboxItem lark:f4:405` 打开「版本发布」话题群（消息页里也有）：发布机器人隔两分钟连发三个话题（各自一张卡片）、一个高过 320 pt 要收起的长卡片、我发的话题、带链接的话题，0 / 1 / 2 / 6 条回复的话题，还有撤回的话题（lark-connector 留存了和没留存的各一个）和编辑过的话题（最新一条回复是撤回的），给「风灵月影」用；话题的回复和 lark-connector 一样先回话题本身、再回最新的 `limit` 条。不要和 `MOCK_LARK=1` 同开：那时飞书的读取先由它接管，「版本发布」不出现。
 
 ## UI 测试（`scripts/app/ui-test.sh`）
 

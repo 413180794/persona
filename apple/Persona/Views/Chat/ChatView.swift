@@ -2255,6 +2255,7 @@ struct ChatView: View {
                 Task { try? await Task.sleep(for: .seconds(3)); closing = session }
             }
             if UserDefaults.standard.bool(forKey: "showDeleteSession") { // 删除对话's confirmation, for screenshots and UI tests
+                UserDefaults.standard.set(false, forKey: "showDeleteSession") // once: the page appears again after 取消
                 Task { // once the session list is in (the chat can open before it)
                     for _ in 0..<30 {
                         try? await Task.sleep(for: .seconds(1))

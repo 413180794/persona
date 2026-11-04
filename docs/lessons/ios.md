@@ -36,6 +36,12 @@
 - 用 `scrollTo(id)` 跳到离最新很远的地方后，底部哨兵的 `onScrollVisibilityChange` 不一定报「不可见」（懒加载把它整个移走了），`atBottom` 停在 true：
   落地完以为在最底部、重新跟随，下一条回复把人拽回最新（#597）。落地结束时离最新端超过一屏就把 `atBottom` 置 false（一屏以内哨兵还活着，回调可信）。
 - 长列表里不要把一组可能很多的行包成一个子视图（LazyVStack 里的一个 VStack）：几百行一次布局会卡死主线程、页面空白，要拆成独立的懒加载行。
+- 行能自己展开收起的列表（话题卡片的「展开」）别放进 `LazyVStack` + `scrollPosition`（2026-11-04，#1087）：点「展开」后 App 再也不空闲
+  （iPhone 模拟器上 60 秒查不到界面；iPad、矮一点的卡片碰巧能停），只在聊天先打开过一次（有缓存、一开就是全部话题）时出现。
+  逐项去掉排查：动画、底部锚定、跟随到底、`.alignment` 锚点、写回位置都不是，去掉 `scrollPosition` 绑定或换成 `VStack` 才好；
+  推测是懒加载按估算高度摆屏幕外的行、量出真实高度再摆，停不下来（没看到 SwiftUI 内部）。话题群改用 `VStack`（`LarkChatStack`），
+  要「上屏才做」的事改用 `onScrollVisibilityChange`。上游后来让列表按屏幕上的行保位置（`scrollTargetLayout`、`LarkHistoryHold`）之后，单跑这条测试不卡了，
+  全套里接在别的测试后面照样卡（11/04 晚），所以不能靠它。和上一条不冲突：话题群一页 40 个，加载更早每次再加 40，到几百个才会撞上它。
 - SwiftUI 的 `onScrollPhaseChange` 在内容流入、偏移被程序调整时也会进 `.animating`：只想响应用户滚动就判断 `.tracking` / `.interacting`。
 - 跟手的收起 / 展开（Safari 式工具栏）不要做成「切换状态 + 动画」：把进度（0…1）放在单独的 `@Observable` 里、只给那一小块视图读，
   滚动回调每帧写它；动起来的那块浮在内容上（overlay），别让内容的 frame 跟着变，否则每帧重排整页、消息跟着跳。松手再吸附。

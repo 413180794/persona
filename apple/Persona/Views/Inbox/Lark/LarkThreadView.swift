@@ -16,6 +16,8 @@ struct LarkThreadView: View {
     var pinTarget: LarkChatPinTarget? = nil
     var pinAPI: APIClient? = nil
     private var api: APIClient? { pinAPI ?? model.api?.lark(account) }
+    /// Opened from a topic group's card: 话题详情, 来自 <the group> (lark-connector's topic page).
+    var chatName: String? = nil
     @State private var person: LarkPersonRef?
     /// The replies loaded so far (never the root) and where paging stands (LarkPager).
     @State private var pager = LarkPager()
@@ -106,7 +108,7 @@ struct LarkThreadView: View {
             })
             .modifier(LarkFileOpener(request: $fileRequest))
             .sheet(item: $person) { LarkProfileView(person: $0) }
-            .navigationTitle("话题")
+            .modifier(LarkThreadTitle(chatName: chatName))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } } }
             .task {
@@ -273,6 +275,19 @@ struct LarkThreadView: View {
         let fresh = pager.refresh(with: r.replies(of: root.id))
         guard !fresh.isEmpty else { return }
         withAnimation(Theme.Motion.standard) { pager.add(fresh) }
+    }
+}
+
+/// 话题 for a thread in a chat; a topic group's topic is 话题详情 with the group it is from under it.
+private struct LarkThreadTitle: ViewModifier {
+    var chatName: String?
+
+    func body(content: Content) -> some View {
+        if let chatName {
+            content.navigationTitle("话题详情").navigationSubtitle("来自 \(chatName)")
+        } else {
+            content.navigationTitle("话题")
+        }
     }
 }
 

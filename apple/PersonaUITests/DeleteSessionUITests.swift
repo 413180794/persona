@@ -7,6 +7,7 @@ import XCTest
 final class DeleteSessionUITests: XCTestCase {
     private var app: XCUIApplication!
     private let recipe = "a1f3c2d4-0000-4000-8000-000000000007"
+    private var pair = ""
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -17,7 +18,7 @@ final class DeleteSessionUITests: XCTestCase {
         URLSession.shared.dataTask(with: URL(string: hub + "/mock/reset")!) { _, _, _ in reset.fulfill() }.resume()
         wait(for: [reset], timeout: 5)
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-openSession", "macbook/" + recipe, "-showDeleteSession", "YES",
                                "-holdChromeOpen", "YES"]
         app.launchPinned()
@@ -76,9 +77,10 @@ final class DeleteSessionUITests: XCTestCase {
     /// The Agents list offers it on a row's long press too, for one that is not running only: the list shows running
     /// and finished ones (整理发布说明 is done), not offline ones.
     @MainActor func testTheRowMenuOffersItOnlyWhenNotRunning() throws {
-        _ = confirmation().buttons["取消"].tap()
-        let back = app.buttons["返回"].firstMatch
-        if back.waitForExistence(timeout: 5) { back.tap() }
+        // Straight to the list: no chat (an empty remembered chat), no confirmation. Not 返回 from the chat: #1868.
+        app.terminate()
+        app.launchArguments = ["-pairURL", pair, "-tab", "dev", "-dev.openChat", "", "-holdChromeOpen", "YES"]
+        app.launchPinned()
         let search = app.searchFields.firstMatch
         if !search.waitForExistence(timeout: 5) { app.swipeDown() }
         XCTAssertTrue(search.waitForExistence(timeout: 5), "no search:\n\(app.debugDescription)")

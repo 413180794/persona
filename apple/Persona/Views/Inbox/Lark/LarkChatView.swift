@@ -127,6 +127,11 @@ struct LarkChatView: View {
     }
 
     private var isTopic: Bool { conversation.isTopic == true || foundTopic }
+    /// Under the bars above the box: the page's own background (a topic group's is the grouped one).
+    private var barBackground: Color { isTopic ? Theme.groupedPage : Theme.pageBackground }
+    /// Under the list: a topic group's cards stand on the grouped page, as Feishu's do. A property, not a ternary in
+    /// `body`'s long modifier chain (Xcode 26.0 type-checks such a chain as one expression, docs/lessons/ios.md).
+    private var pageBackground: Color { isTopic ? Theme.groupedPage : .clear }
     /// Opens at a message (first unread / a flagged message) rather than at the bottom.
     private var opensAtMessage: Bool { Self.opensAtMessage(conversation) }
     private var visibleMessages: [LarkMessage] { pager.messages.filter { !outbox.hidesEcho($0) } }
@@ -135,6 +140,7 @@ struct LarkChatView: View {
 
     var body: some View {
         chatContent
+        .background(pageBackground)
         .themedPage()
         .navigationTitle(conversation.name)
         .navigationSubtitle([isTopic ? "飞书话题群" : "飞书", conversation.accountName].compactMap { $0 }.joined(separator: " · "))
@@ -224,7 +230,7 @@ struct LarkChatView: View {
     @ViewBuilder private var chatContent: some View {
         let messages = visibleMessages
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
+            LarkChatStack(lazy: !isTopic) {
                 if pager.hasOlder {
                     historyHeader
                 }
@@ -232,30 +238,44 @@ struct LarkChatView: View {
                 ForEach(Array(messages.enumerated()), id: \.element.id) { i, m in
                     let prev = i > 0 ? messages[i - 1] : nil
                     VStack(alignment: .leading, spacing: 0) {
-                        if isFirstUnread(m, after: prev) { LarkNewMessagesDivider() }
-                        if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
-                        let grouped = LarkChatLayout.continues(m, after: prev)
-                        LarkMessageRow(message: m, grouped: grouped, isGroup: conversation.isGroup, feedID: conversation.id,
-                                       readState: receiptStates[m.id])
-                            .background { if historyAnchor == m.id { historyAnchorReport(m.id) } }
-                            .padding(.top, LarkChatLayout.gap(grouped: grouped))
+                        if isTopic {
+                            // A topic group lists topics: each its own card with its time, never run together like a
+                            // chat's messages (lark-connector's topic list); a system line stays a line.
+                            Group {
+                                if m.isSystem {
+                                    LarkMessageRow(message: m, grouped: false, isGroup: true, feedID: conversation.id)
+                                } else {
+                                    LarkTopicCard(topic: m, chatName: conversation.name, feedID: conversation.id)
+                                }
+                            }
+                            .padding(.top, Theme.Space.m)
+                        } else {
+                            if isFirstUnread(m, after: prev) { LarkNewMessagesDivider() }
+                            if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
+                            let grouped = LarkChatLayout.continues(m, after: prev)
+                            LarkMessageRow(message: m, grouped: grouped, isGroup: conversation.isGroup, feedID: conversation.id,
+                                           readState: receiptStates[m.id])
+                                .background { if historyAnchor == m.id { historyAnchorReport(m.id) } }
+                                .padding(.top, LarkChatLayout.gap(grouped: grouped))
+                        }
                     }
                     .background { if flash?.line == m.id { QuoteFlash().id(flash?.id).padding(.horizontal, -Theme.Space.m) } }
                     .onAppear {
                         markSeen(m)
-                        receiptAppeared(m)
+                        if !isTopic { receiptAppeared(m) } // a topic's card shows no read receipt
                     }
                     .onDisappear { book.receipts.disappeared(m.id) }
                     .id(m.id)
                 }
                 if pager.hasNewer {
                     ProgressView().controlSize(.small).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.tapTarget)
-                        .onAppear { Task { await loadNewer() } }
+                        .onAppear { if !isTopic { Task { await loadNewer() } } }
+                        // A topic group's stack lays out every row at once: newer topics only once this is on screen
+                        .onScrollVisibilityChange(threshold: 0.01) { if isTopic && $0 { Task { await loadNewer() } } }
                 } else {
                     outgoingRows
                 }
             }
-            .scrollTargetLayout()
             .coordinateSpace(.named(LarkHistoryHold.space))
             .background(LarkHistoryHold.Finder(hold: historyHold))
             .onAppear { historyHold.letGo = { [position = $position] in position.wrappedValue = ScrollPosition(idType: String.self) } }
@@ -329,7 +349,7 @@ struct LarkChatView: View {
                         Button("恢复") { confirmLegacyDraft = true }.lineLimit(1)
                     }
                     .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
-                    .frame(maxWidth: .infinity).background(Theme.pageBackground)
+                    .frame(maxWidth: .infinity).background(barBackground)
                 }
                 if let problem = accountProblem ?? outbox.preparationProblem {
                     HStack(spacing: Theme.Space.s) {
@@ -343,7 +363,7 @@ struct LarkChatView: View {
                     .padding(.horizontal, Theme.Space.m)
                     .padding(.vertical, Theme.Space.s)
                     .frame(maxWidth: .infinity)
-                    .background(Theme.pageBackground)
+                    .background(barBackground)
                 }
                 composer
             }
@@ -433,7 +453,8 @@ struct LarkChatView: View {
                     Text("正在准备附件…").font(Theme.Font.label).foregroundStyle(.secondary)
                 }
             }
-            LarkComposer(placeholder: "回复 \(conversation.name)", text: $text, focused: $composerFocused,
+            // What is sent to a topic group is a new topic (a reply goes into its thread from the topic's card).
+            LarkComposer(placeholder: isTopic ? "发布话题" : "回复 \(conversation.name)", text: $text, focused: $composerFocused,
                          replyTo: replyTo, cancelReply: { replyTo = nil },
                          attachmentPicker: { pickAttachment(photo: $0) },
                          canAddAttachments: encryptionDraft == nil && attachments.count < LarkAttachment.selectionLimit,
@@ -446,7 +467,7 @@ struct LarkChatView: View {
         .padding(.top, !attachments.isEmpty || preparingAttachment ? Theme.Space.s : 0)
         .background {
             if messageComposer || encryptionDraft != nil || !attachments.isEmpty || preparingAttachment {
-                Theme.pageBackground.ignoresSafeArea(edges: .bottom)
+                barBackground.ignoresSafeArea(edges: .bottom)
             }
         }
     }
@@ -530,7 +551,11 @@ struct LarkChatView: View {
         case .loading:
             LoadableContent(state: Loadable<Void>.loading, retry: nil) { _ in EmptyView() }
         case .empty:
-            EmptyStateView(symbol: Theme.Icon.feishuChats, title: "还没有消息", message: "发出的第一条消息会出现在这里。")
+            if isTopic {
+                EmptyStateView(symbol: Theme.Icon.feishuChats, title: "暂时没有话题", message: "在下面发布第一个话题。")
+            } else {
+                EmptyStateView(symbol: Theme.Icon.feishuChats, title: "还没有消息", message: "发出的第一条消息会出现在这里。")
+            }
         case .failed(let p):
             EmptyStateView(symbol: p.symbol, title: p.title, message: p.message, action: (title: "重试", run: retry))
         case nil:
@@ -662,7 +687,7 @@ struct LarkChatView: View {
             .accessibilityLabel(problem.text)
             .accessibilityIdentifier("lark.history.retry")
         } else if isTopic {
-            LarkLoadOlderButton(title: "加载更早的消息", loading: history.pending != nil) { requestHistory(retry: true) }
+            LarkLoadOlderButton(title: "加载更早的话题", loading: history.pending != nil) { requestHistory(retry: true) }
         } else {
             Group {
                 if history.pending != nil { ProgressView().controlSize(.small).accessibilityLabel("正在加载更早的消息") }
@@ -1177,6 +1202,24 @@ struct LarkChatView: View {
     }
 }
 
+/// A chat's rows, laid out as they come on screen; a topic group's cards all at once. In a lazy stack with a scroll
+/// position, a topic card opened under 展开 left the app never idle again on the iPhone (#1087; likely the off-screen
+/// rows placed by estimated heights and measured again without end, docs/lessons/ios.md). A page of a topic group is
+/// 40 topics; each 加载更早的话题 adds 40 more, all laid out: accepted, a group is rarely read that far back.
+private struct LarkChatStack<Content: View>: View {
+    var lazy: Bool
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        // The scroll target layout on the stack itself: on this view it would not reach the rows.
+        if lazy {
+            LazyVStack(alignment: .leading, spacing: 0) { content }.scrollTargetLayout()
+        } else {
+            VStack(alignment: .leading, spacing: 0) { content }.scrollTargetLayout()
+        }
+    }
+}
+
 /// 加载更早的…: the older page of a chat or thread, a spinner while it comes.
 struct LarkLoadOlderButton: View {
     var title: String
@@ -1350,11 +1393,7 @@ struct LarkMessageRow: View {
         openProfile?(LarkPersonRef(id: id, name: message.senderName, avatar: message.senderAvatar, feedID: feedID))
     }
 
-    private var recallNotice: String {
-        if message.isMine { return "你撤回了一条消息" }
-        let name = message.senderName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? "消息已撤回" : "\(name) 撤回了一条消息"
-    }
+    private var recallNotice: String { message.recallNotice }
 
     @ViewBuilder private var content: some View {
         let m = message
@@ -1404,54 +1443,22 @@ struct LarkMessageRow: View {
             .contextMenu { menu }
     }
 
-    /// Long press: a bar of quick reactions on top (one tap reacts), then reply, more emoji, copy.
-    /// A context menu cannot put a tappable view above itself (its preview takes no taps), so the bar is the menu's
-    /// first row, as a palette: six emoji across (all the palette shows without scrolling) instead of the four a compact
-    /// group fits.
-    @ViewBuilder private var menu: some View {
-        if react != nil && !message.recalled {
-            ControlGroup {
-                ForEach(LarkQuickReactions.bar(LarkMedia.shared.quickReactions), id: \.self) { key in
-                    // A title with the picture: the menu takes its items' names from their text (an image alone left
-                    // the item nameless, and VoiceOver and the tests found no 「爱心」).
-                    let name = LarkMedia.shared.emoji(key)?.label ?? LarkMedia.labelFallback(key, text: nil)
-                    Button { react?(message, key) } label: {
-                        if let img = LarkMedia.shared.emojiImage(key, points: LarkMedia.barPoints) {
-                            Label { Text(name) } icon: { Image(uiImage: img).renderingMode(.original) }
-                        } else {
-                            Text(name)
-                        }
-                    }
-                    .accessibilityLabel(name)
-                    .accessibilityIdentifier("lark.quickReaction")
-                }
+    private var menu: some View {
+        LarkMessageMenu(message: message, react: react, reply: replyAction, pickReaction: { picking = true }, addPin: addPin,
+                        showProfile: openProfile == nil ? nil : { showProfile() })
+    }
+
+    /// 回复 in the menu: the quote bar over the chat's box, the thread's box, or (a topic group's topic) its thread
+    /// with the box focused. Nil when there is nothing to answer.
+    private var replyAction: (() -> Void)? {
+        guard let reply, let route = LarkReply.route(for: message, inTopicGroup: reply.inTopicGroup, inThread: inThread) else { return nil }
+        return {
+            if route == .openThread {
+                threadFocus = true
+                showThread = true
+            } else {
+                reply.answer(message)
             }
-            .controlGroupStyle(.palette)
-            .menuActionDismissBehavior(.enabled) // a palette keeps the menu up after a tap; Feishu closes it
-        }
-        if let reply, let route = LarkReply.route(for: message, inTopicGroup: reply.inTopicGroup, inThread: inThread) {
-            Button {
-                if route == .openThread {
-                    threadFocus = true
-                    showThread = true
-                } else {
-                    reply.answer(message)
-                }
-            } label: { Label("回复", systemImage: Theme.Icon.reply) }
-        }
-        if react != nil && !message.recalled {
-            Button { picking = true } label: { Label("表情回复", systemImage: "face.smiling") }
-        }
-        Button {
-            UIPasteboard.general.string = message.displayText
-            Haptics.success()
-        } label: { Label("拷贝", systemImage: Theme.Icon.copy) }
-        if let addPin, message.canPin == true && !message.recalled && message.deleted != true && message.localState != "pending" && message.localState != "failed" {
-            Button { addPin(message) } label: { Label("添加 Pin", systemImage: Theme.Icon.pin) }
-                .accessibilityIdentifier("lark.pin.add")
-        }
-        if let id = message.senderID, !id.isEmpty, openProfile != nil {
-            Button { showProfile() } label: { Label("查看 \(message.senderName) 的资料", systemImage: Theme.Icon.person) }
         }
     }
 
@@ -1467,7 +1474,7 @@ struct LarkMessageRow: View {
                 }
                 if react != nil {
                     Button { picking = true } label: {
-                        Image(systemName: "face.smiling").font(.system(size: 14)).foregroundStyle(.secondary)
+                        Image(systemName: Theme.Icon.react).font(.system(size: 14)).foregroundStyle(.secondary)
                             .scaledFrame(width: Theme.Size.well, height: Theme.Size.iconL).background(Color.primary.opacity(0.05), in: .capsule)
                     }
                     .buttonStyle(.plain)
@@ -1527,6 +1534,72 @@ extension LarkMessage {
         }
         m.reactions = list
         return (m, false)
+    }
+}
+
+extension LarkMessage {
+    /// What a recalled message says where its body is not shown (`LarkMessageDisplay.showsBody`): a chat's row, a topic
+    /// group's card.
+    var recallNotice: String {
+        if isMine { return "你撤回了一条消息" }
+        let name = senderName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "消息已撤回" : "\(name) 撤回了一条消息"
+    }
+}
+
+/// Long press on a Feishu message (a chat's row, a topic group's card): a bar of quick reactions on top (one tap reacts),
+/// then reply, more emoji, copy, the sender's card. A context menu cannot put a tappable view above itself (its preview
+/// takes no taps), so the bar is the menu's first row, as a palette: six emoji across (all the palette shows without
+/// scrolling) instead of the four a compact group fits.
+struct LarkMessageMenu: View {
+    var message: LarkMessage
+    var react: ((LarkMessage, String) -> Void)?
+    /// 回复, when there is somewhere to answer.
+    var reply: (() -> Void)?
+    /// 表情回复: the whole picker.
+    var pickReaction: () -> Void
+    /// 添加 Pin, where the chat can pin (`larkAddPin`).
+    var addPin: ((LarkMessage) -> Void)?
+    var showProfile: (() -> Void)?
+
+    var body: some View {
+        if let react, !message.recalled {
+            ControlGroup {
+                ForEach(LarkQuickReactions.bar(LarkMedia.shared.quickReactions), id: \.self) { key in
+                    // A title with the picture: the menu takes its items' names from their text (an image alone left
+                    // the item nameless, and VoiceOver and the tests found no 「爱心」).
+                    let name = LarkMedia.shared.emoji(key)?.label ?? LarkMedia.labelFallback(key, text: nil)
+                    Button { react(message, key) } label: {
+                        if let img = LarkMedia.shared.emojiImage(key, points: LarkMedia.barPoints) {
+                            Label { Text(name) } icon: { Image(uiImage: img).renderingMode(.original) }
+                        } else {
+                            Text(name)
+                        }
+                    }
+                    .accessibilityLabel(name)
+                    .accessibilityIdentifier("lark.quickReaction")
+                }
+            }
+            .controlGroupStyle(.palette)
+            .menuActionDismissBehavior(.enabled) // a palette keeps the menu up after a tap; Feishu closes it
+        }
+        if let reply {
+            Button(action: reply) { Label("回复", systemImage: Theme.Icon.reply) }
+        }
+        if react != nil && !message.recalled {
+            Button(action: pickReaction) { Label("表情回复", systemImage: Theme.Icon.react) }
+        }
+        Button {
+            UIPasteboard.general.string = message.displayText
+            Haptics.success()
+        } label: { Label("拷贝", systemImage: Theme.Icon.copy) }
+        if let addPin, message.canPin == true && !message.recalled && message.deleted != true && message.localState != "pending" && message.localState != "failed" {
+            Button { addPin(message) } label: { Label("添加 Pin", systemImage: Theme.Icon.pin) }
+                .accessibilityIdentifier("lark.pin.add")
+        }
+        if let showProfile, let id = message.senderID, !id.isEmpty {
+            Button(action: showProfile) { Label("查看 \(message.senderName) 的资料", systemImage: Theme.Icon.person) }
+        }
     }
 }
 

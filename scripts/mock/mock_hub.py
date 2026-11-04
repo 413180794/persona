@@ -3708,6 +3708,82 @@ for _c in LARK_CHATS + FS_CONVS:
     for _k in ("at_me", "muted", "is_mine"):
         _c.setdefault(_k, False)
 
+# MOCK_LARK_TOPIC=1 (#1087): a topic group, 版本发布 (inbox f4, and on the 消息 page). Each message is a topic, its replies
+# are in its thread, which lark-connector answers with the topic first and then the newest replies (`limit` of them). What the
+# topic cards have to draw: three topics in a row from the release bot (each its own card, not run together like chat
+# messages), a card taller than the fold (展开 / 收起), one of mine, a link, and topics with 0, 1, 2 and 6 replies.
+LARK_TOPIC_FEEDS = set()
+if os.environ.get("MOCK_LARK_TOPIC"):
+    def _topic(pos, who, text, mins, replies=(), **kw):
+        m = _lm(str(pos), who, text, mine=who == "我", mins=mins)
+        m.update(thread_id="omt-%d" % pos, reply_count=len(replies), thread_reply_count=len(replies), **kw)
+        if who == "发布机器人": m.update(sender_id="bot-release", sender_type="bot")
+        thread = [copy.deepcopy(m)]
+        for i, (by, said) in enumerate(replies, 1):
+            r = _lm("%d%02d" % (pos, i), by, said, mine=by == "我", mins=mins - 4 * i)
+            r["id"] = "m%d-r%d" % (pos, i)
+            thread.append(r)
+        LARK_THREADS[m["id"]] = thread
+        return m
+
+    def _topic_card(title, theme, children, tag=None):
+        head = [{"tag": "plain_text", "text": title}] + ([{"tag": "text_tag", "text": tag, "style": {"color": theme}}] if tag else [])
+        return [{"kind": "card", "text": title, "metadata": {"theme": theme, "header": {"tag": "card_header", "children": head},
+                                                             "body": {"tag": "body", "children": children}}}]
+
+    _notes = ["深色模式下的图表配色重新调过", "相册选图支持一次选 20 张", "搜索结果按最近使用排序", "设置页加了清理缓存",
+              "通知可以按会话静音", "离线时草稿不再丢失", "首页加载快了约 30%", "修复横屏时键盘挡住输入框", "修复偶发的登录过期提示",
+              "修复部分机型上视频没有声音", "修复日历同步重复的问题", "小组件支持锁屏", "长按消息可以引用回复",
+              "表格支持左右滑动", "文件预览支持搜索", "更新了隐私说明", "图片查看支持双指缩放", "聊天记录可以按日期跳转",
+              "消息支持定时发送", "群公告支持富文本", "修复弱网下图片重复上传", "修复切换账号后角标不清零",
+              "修复深色模式下二维码看不清", "安装包小了 8 MB"]  # long enough that what the fold hides reaches past the card's foot
+    LARK_MESSAGES["f4"] = [
+        # 风灵月影 (LarkMessageDisplayTests' f2, as topics): an edited topic with an old version kept, whose newest reply
+        # was recalled with its text kept; a recalled topic lark-connector kept (with reactions and a reply, which a recalled
+        # topic does not show), and one it did not (the text must never show).
+        _topic(397, "Tom", "周四上架，商店审核预计一天", mins=29 * 60, edited=True, edit_history=[
+            {"edited_at": "2026-01-01T10:00:00Z", "text": "周三上架", "parts": [{"kind": "text", "text": "周三上架"}]}],
+               replies=[("Mia", "收到"), ("小周", "已留存的回复原文：我周三请假")]),
+        _topic(398, "阿杰", "已留存的话题原文：周会改到周五下午", mins=28 * 60, recalled=True, retained=True,
+               parts=[{"kind": "text", "text": "已留存的话题原文：周会改到周五下午"}],
+               reactions=[{"key": "THUMBSUP", "count": 2, "users": ["Tom", "Mia"]}], replies=[("Tom", "周五下午可以")]),
+        _topic(399, "小周", "不能展示的话题原文", mins=27 * 60, recalled=True, retained=False),
+        _topic(400, "老王", "下周三的版本冻结时间定了吗？我这边还有两个需求在提测", mins=26 * 60,
+               replies=[("Tom", "周二晚上 8 点冻结，之后只收修复"), ("老王", "好，我让他们周二中午前提完")]),
+        _topic(401, "发布机器人", "v2.4 构建通过", mins=180, type="CARD", parts=_topic_card("v2.4 构建通过", "green", [
+            _fsmd("所有检查都过了，可以开始灰度。"), {"tag": "note", "children": [{"tag": "plain_text", "text": "由发布机器人发送"}]}],
+            tag="已通过")),
+        _topic(402, "发布机器人", "v2.4 发版说明", mins=178, type="CARD", parts=_topic_card("v2.4 发版说明", "blue", [
+            _fsmd("本次更新 %d 项，预计周四上架。" % len(_notes)),
+            {"tag": "list", "items": [{"type": "ul", "level": 0, "children": [{"tag": "plain_text", "text": n}]} for n in _notes]},
+            {"tag": "hr"},
+            {"tag": "column_set", "style": {"flexMode": "none", "horizontalSpacingValue": 8}, "children": [
+                _fscol("新功能", "15"), _fscol("修复", "7", "green"), _fscol("其他", "2")]},
+            {"tag": "note", "children": [{"tag": "plain_text", "text": "由发布机器人发送"}]}]),
+               replies=[("Mia", "第 3 条的截图能补一下吗"), ("阿杰", "补了，在说明文档第二页"), ("小周", "安卓那边同步发吗"),
+                        ("Tom", "安卓晚一天，等商店审核"), ("Mia", "收到"), ("老王", "灰度名单我今晚发出来")]),
+        _topic(403, "发布机器人", "灰度 10% 已开始", mins=176, type="CARD", parts=_topic_card("灰度 10% 已开始", "orange", [
+            {"tag": "column_set", "style": {"flexMode": "none", "horizontalSpacingValue": 8}, "children": [
+                _fscol("崩溃率", "0.02%", "green"), _fscol("活跃", "1.2 万"), _fscol("反馈", "3", "orange")]}]),
+               replies=[("Tom", "我盯着崩溃率，有异常在这里说")]),
+        _topic(404, "我", "今晚 10 点开到 50%，大家留意一下反馈", mins=60),
+        _topic(405, "Mia", "回归用例表在这里，有补充直接改：回归用例表", mins=30, type="POST", parts=[
+            _fst("回归用例表在这里，有补充直接改："), {"kind": "link", "text": "回归用例表", "url": "https://example.com/sheets/regression"}]),
+    ]
+    _gone = LARK_THREADS["m397"][2]
+    _gone.update(recalled=True, retained=True, parts=[{"kind": "text", "text": _gone["text"]}])
+    for _m in LARK_MESSAGES["f4"] + [r for t in LARK_THREADS.values() for r in t if r["id"].startswith(("m39", "m40"))]:
+        if _m["sender_name"] == "Tom": _m["sender_avatar"] = "/api/v1/lark/media/avatar-tom"
+    LARK_TOPIC_FEEDS.add("f4")
+    LARK_MEMBER_COUNT["f4"] = 7
+    LARK_CHATS.append({"id": "f4", "is_mine": False, "name": "版本发布", "is_group": True, "is_topic": True, "unread": 1,
+                       "at_me": False, "muted": False, "preview": "回归用例表在这里，有补充直接改", "preview_sender": "Mia",
+                       "read_position": "404", "updated_at": ago(minutes=30)})
+    INBOX.append({"id": "lark:f4:405", "source": "lark", "kind": "group", "account": "lark", "account_name": "飞书", "title": "版本发布",
+                  "sender": "Mia", "preview": "回归用例表在这里，有补充直接改", "count": 1, "started_at": ago(hours=3),
+                  "updated_at": ago(minutes=30), "tier": "fyi", "summary": "Mia 发了回归用例表", "read": False,
+                  "lark": {"feed_id": "f4", "is_group": True, "is_topic": True, "start_position": "405", "read_position": "404"}})
+
 
 # MOCK_LARK_RICH=1 (docs/testing.md「卡顿测量」): f3's history is heavier, like a busy work group's: every third message
 # before the unread ones is a card, a picture or a rich post instead of a line of chatter.
@@ -7997,9 +8073,16 @@ class H(BaseHTTPRequestHandler):
                                        "next_cursor": str(cursor+limit) if cursor+limit < len(rows) else ""})
             return self.send_json({"conversations": LARK_CHATS if p.endswith("conversations") else [], "next_cursor": "", "account_id": LARK_ACCOUNT_ID})
         if p.startswith("/api/v1/lark/conversations/") and p.endswith("/messages"):
-            return self.send_json(lark_window(LARK_MESSAGES.get(p.split("/")[5], []), q))
+            feed = p.split("/")[5]
+            page = lark_window(LARK_MESSAGES.get(feed, []), q)
+            if feed in LARK_TOPIC_FEEDS: page["topic"] = True  # its topics, as the hub says
+            return self.send_json(page)
         if p.startswith("/api/v1/lark/messages/") and p.endswith("/thread"):
-            return self.send_json(lark_window(LARK_THREADS.get(p.split("/")[5], []), q))
+            thread = LARK_THREADS.get(p.split("/")[5], [])
+            if thread and thread[0].get("thread_id"):  # a topic: lark-connector puts it first, then the newest `limit` replies
+                page = lark_window(thread[1:], q)
+                return self.send_json(dict(page, messages=thread[:1] + page["messages"]))
+            return self.send_json(lark_window(thread, q))
         if p.startswith("/api/v1/lark/media/") and p.rsplit("/", 1)[-1] in LARK_UPLOAD_BYTES:
             body, mime = LARK_UPLOAD_BYTES[p.rsplit("/", 1)[-1]]
             self.send_response(200); self.send_header("Content-Type", mime)
