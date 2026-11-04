@@ -5,6 +5,7 @@
 !web/
 !deploy/docker/
 !integrations/dsh/
+!integrations/paseo/
 !integrations/pi/
 !integrations/runtime-sdk/
 integrations/**/node_modules/

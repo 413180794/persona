@@ -336,3 +336,9 @@
 - **`task.cdp` 只放 Target / Browser**：cookie 要走页面的 `page.cdp("Network.setCookies" / "getAllCookies" / "deleteCookies")`，`Storage.getCookies` 会报「task.cdp only supports Target. and Browser. commands」。
 - **ego-browser 出错时的输出可能回显脚本**：cookie 值在脚本里，所以出错只报退出码，不把 stdout / stderr 带回 hub。
 - **「是不是用户本人」用 `byOwnDevice`**：hub.json 的配对 token 也是 full 角色，但它在 CLI 和助手的进程手里；凭据类的操作只认带设备 id 的 token。
+
+## 新的 runtime 包要进 hub 镜像（2026-11-04，#1777）
+
+`server/internal/runtimepkg` 的 `go generate` 读 `integrations/<名字>/`，而镜像的构建上下文只有 `.dockerignore` 放行的目录、
+构建阶段只有 `Dockerfile` COPY 进去的目录。#1668 加了 `jarvis-paseo-runtime`，两处都没加，`v0.1.4` 的镜像构建在 `go generate` 失败；
+PR 冒烟按路径触发、不含 `integrations/**`，所以合并前没跑。加 runtime 包时 `.dockerignore`、`Dockerfile` 一起改，镜像 workflow 的 PR 路径现在包含 `integrations/**`。

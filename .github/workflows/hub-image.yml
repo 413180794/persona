@@ -16,6 +16,7 @@ on:
       - deploy/docker/**
       - server/**
       - web/**
+      - integrations/**
       - .github/workflows/hub-image.yml
 
 permissions:
