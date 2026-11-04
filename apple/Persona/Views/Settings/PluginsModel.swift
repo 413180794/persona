@@ -69,6 +69,10 @@ nonisolated struct PluginField: Codable, Hashable, Sendable, Identifiable {
 nonisolated struct PluginItems: Codable, Hashable, Sendable {
     var type: String
     var `enum`: [PluginChoice]?
+    /// machine: the hub's machines by id, drawn as a switch each (`PluginMachineSwitches`).
+    var format: String?
+    /// For machine: only machines of these systems (darwin, linux, windows); nil, any.
+    var os: [String]?
 }
 
 /// One value of a field's choices, with its label.
@@ -197,6 +201,16 @@ enum PluginText {
     /// The row's value: its state (the version is on its page).
     static func summary(_ p: HubPlugin) -> String { state(p) }
 
+    /// Under the form: which switches take effect at once (lists of machines, `PluginModel.saveNow`) and that the rest
+    /// waits for 保存.
+    static func saveFooter(_ fields: [PluginField]) -> String {
+        let all = fields.flatMap { $0.type == "object" ? ($0.fields ?? []) : [$0] }
+        let now = all.filter { $0.items?.format == "machine" }.map { "「\($0.label)」" }
+        if now.isEmpty { return "改完点右上角「保存」；保存后插件会重新启动。留空的项用插件的默认值。" }
+        if now.count == all.count { return now.joined(separator: "、") + "的开关即时生效，不用保存。" }
+        return now.joined(separator: "、") + "的开关即时生效；其他项改完点右上角「保存」，保存后插件会重新启动。留空的项用插件的默认值。"
+    }
+
     /// 设置's row: how many, and how many need the user.
     static func listSummary(_ list: [HubPlugin]?) -> String {
         guard let list else { return "" }
@@ -291,6 +305,19 @@ enum PluginText {
         return ok
     }
 
+    /// Saves one field at once (a machine's switch) on top of what the hub has, keeping the rest of what is being
+    /// edited for 保存.
+    func saveNow(_ value: JSONValue?, at path: [String]) async {
+        guard let saved = detail?.config else { return }
+        let editing = draft
+        set(value, at: path) // shows at once
+        saving = true
+        defer { saving = false }
+        let ok = await run { api in try await api.setPlugin(self.id, config: Self.compact(Self.setting(saved, path[...], value))) }
+        // run took the hub's answer as the draft: the other edits go back on top of it.
+        draft = Self.setting(editing, path[...], ok ? self.value(path) : Self.value(in: saved, path))
+    }
+
     func setSecret(_ name: String, value: String) async -> Bool {
         let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return false }
@@ -322,8 +349,10 @@ enum PluginText {
 
     // MARK: the draft by path
 
-    func value(_ path: [String]) -> JSONValue? {
-        var cur: JSONValue = .object(draft)
+    func value(_ path: [String]) -> JSONValue? { Self.value(in: draft, path) }
+
+    static func value(in obj: [String: JSONValue], _ path: [String]) -> JSONValue? {
+        var cur: JSONValue = .object(obj)
         for key in path {
             guard let next = cur[key] else { return nil }
             cur = next

@@ -5,10 +5,11 @@
 // upgrading and removing are done on the hub's side (`personad plugin` on its machine, or its admin UI at /admin).
 import { useEffect, useMemo, useState } from "react";
 import { errorText } from "../../lib/api";
+import { useStore } from "../../lib/store";
 import {
   choiceLabel, clearPluginSecret, compact, configError, fieldLabel, fieldTitle, isDirty, listItems, listPlugins, listSummary, numberProblems,
   placeholder, pluginDetail, pluginState, pluginTone, pointText, readNumber, same, secretState, setAt, setPluginConfig, setPluginEnabled,
-  setPluginSecret, sourceText, stateLine, valueAt,
+  machineStatus, saveFooter, setPluginSecret, sourceText, stateLine, valueAt,
   type HubPlugin, type HubPluginDetail, type Json, type JsonObject, type PluginField, type PluginSecret,
 } from "../../lib/plugins";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
@@ -204,6 +205,22 @@ function PluginDetail({ id, onBack }: { id: string; onBack: () => void }) {
     }
   };
 
+  // A machine's switch (format machine) is saved at once, on top of what the hub has; the rest of the draft stays.
+  const saveNow = async (path: string[], value: Json | undefined) => {
+    if (!detail) return;
+    const saved = detail.config ?? {};
+    setDraft((d) => setAt(d, path, value));
+    try {
+      const d = await setPluginConfig(id, compact(setAt(saved, path, value)));
+      setDetail(d);
+      setDraft((cur) => setAt(cur, path, valueAt(d.config ?? {}, path)));
+    } catch (e) {
+      setDraft((cur) => setAt(cur, path, valueAt(saved, path)));
+      toast(`没有保存：${errorText(e)}`, "error");
+    }
+  };
+  const computers = !!detail?.contributes?.computer;
+
   // A secret's answer is a whole detail too; keep the form's draft as it is.
   const secretDone = (d: HubPluginDetail) => setDetail(d);
 
@@ -279,11 +296,11 @@ function PluginDetail({ id, onBack }: { id: string; onBack: () => void }) {
             <>
               {fieldErrors[""] && <p role="alert" className="mb-3 rounded-[8px] bg-red-tint px-3 py-2 text-[12px] break-words text-red">没有保存：{fieldErrors[""]}</p>}
               {fields.some((f) => f.type !== "object") && (
-                <Group title="设置" footer="改完点「保存」；保存后插件会重新启动。留空的项用插件的默认值。">
+                <Group title="设置" footer={saveFooter(fields)}>
                   {fields
                     .filter((f) => f.type !== "object")
                     .map((f) => (
-                      <FieldRow key={f.name} field={f} path={[f.name]} draft={draft} typed={typed} errors={fieldErrors} problems={problems} onEdit={edit} onType={type} />
+                      <FieldRow key={f.name} field={f} path={[f.name]} draft={draft} typed={typed} errors={fieldErrors} problems={problems} onEdit={edit} onType={type} onSaveNow={saveNow} computers={computers} />
                     ))}
                 </Group>
               )}
@@ -292,7 +309,7 @@ function PluginDetail({ id, onBack }: { id: string; onBack: () => void }) {
                 .map((g) => (
                   <Group key={g.name} title={fieldLabel(g)} footer={g.description}>
                     {(g.fields ?? []).map((f) => (
-                      <FieldRow key={f.name} field={f} path={[g.name, f.name]} draft={draft} typed={typed} errors={fieldErrors} problems={problems} onEdit={edit} onType={type} />
+                      <FieldRow key={f.name} field={f} path={[g.name, f.name]} draft={draft} typed={typed} errors={fieldErrors} problems={problems} onEdit={edit} onType={type} onSaveNow={saveNow} computers={computers} />
                     ))}
                   </Group>
                 ))}
@@ -416,6 +433,10 @@ interface FieldProps {
   problems: Record<string, string>;
   onEdit: (path: string[], value: Json | undefined) => void;
   onType: (path: string[], text: string, integer: boolean) => void;
+  /** Saves one field at once (a machine's switch). */
+  onSaveNow: (path: string[], value: Json | undefined) => void;
+  /** The plugin operates computers: machine rows say how Cua Driver is there. */
+  computers: boolean;
 }
 
 /** One field of the form, by its type; its title above (or beside a switch), its description and error below. */
@@ -461,10 +482,13 @@ function FieldRow(props: FieldProps) {
   );
 }
 
-function Control({ field: f, path, draft, typed, onEdit, onType, id, invalid }: FieldProps & { id: string; invalid: boolean }) {
+function Control({ field: f, path, draft, typed, onEdit, onType, onSaveNow, computers, id, invalid }: FieldProps & { id: string; invalid: boolean }) {
   const ring = invalid ? "shadow-[inset_0_0_0_1px_var(--red)]" : "shadow-inset-field";
   const v = valueAt(draft, path);
 
+  if (f.type === "array" && f.items?.format === "machine") {
+    return <MachineSwitches field={f} path={path} draft={draft} onSaveNow={onSaveNow} computers={computers} id={id} />;
+  }
   if (f.type === "array") return <ListControl field={f} path={path} draft={draft} onEdit={onEdit} id={id} ring={ring} />;
 
   if (f.enum?.length) {
@@ -519,6 +543,36 @@ function Control({ field: f, path, draft, typed, onEdit, onType, id, invalid }: 
 }
 
 /** A list of texts (each removable, more added), or of choices (each one pressed in or out). */
+/** A list of the hub's machines (format machine): a switch per machine of the systems the field names, by name and how
+ *  it is, in effect at once; a value naming no machine still shows, to be turned off. */
+function MachineSwitches({ field: f, path, draft, onSaveNow, computers, id }: Pick<FieldProps, "field" | "path" | "draft" | "onSaveNow" | "computers"> & { id: string }) {
+  const all = useStore((s) => s.machines);
+  const items = listItems(draft, path, f);
+  const os = f.items?.os ?? [];
+  const machines = all.filter((m) => !os.length || os.includes(m.os ?? ""));
+  const unknown = items.filter((x) => !all.some((m) => m.id === x));
+  const flip = (mid: string, on: boolean) => {
+    const next = items.filter((x) => x !== mid);
+    if (on) next.push(mid);
+    onSaveNow(path, next.length ? next : undefined);
+  };
+  const rows = [...machines.map((m) => ({ id: m.id, name: m.name, status: machineStatus(m, computers) })), ...unknown.map((x) => ({ id: x, name: x, status: "找不到这台机器" }))];
+  if (!rows.length) return <p className="text-[12.5px] text-ink-3">{os.join() === "darwin" ? "这个 hub 上还没有 Mac。" : "这个 hub 上还没有机器。"}</p>;
+  return (
+    <div id={id} role="group" className="flex flex-col divide-y divide-line rounded-control shadow-hairline">
+      {rows.map((r) => (
+        <div key={r.id} className="flex items-center gap-3 px-3 py-2">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[13px] text-ink">{r.name}</p>
+            <p className="truncate text-[11.5px] text-ink-3">{r.status}</p>
+          </div>
+          <Switch on={items.includes(r.id)} onChange={(on) => flip(r.id, on)} label={r.name} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ListControl({ field: f, path, draft, onEdit, id, ring }: Pick<FieldProps, "field" | "path" | "draft" | "onEdit"> & { id: string; ring: string }) {
   const [adding, setAdding] = useState("");
   const items = listItems(draft, path, f);

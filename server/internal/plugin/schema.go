@@ -32,7 +32,9 @@ type Field struct {
 	Default     json.RawMessage `json:"default,omitempty"`
 	Required    bool            `json:"required,omitempty"`
 	Enum        []Choice        `json:"enum,omitempty"`
-	Format      string          `json:"format,omitempty"` // uri | email | hostname
+	Format      string          `json:"format,omitempty"` // uri | email | hostname | machine
+	// OS, for format machine: only machines of these systems (x-os: darwin, linux, windows); none, any.
+	OS []string `json:"os,omitempty"`
 	Pattern     string          `json:"pattern,omitempty"`
 	MinLength   *int            `json:"min_length,omitempty"`
 	MaxLength   *int            `json:"max_length,omitempty"`
@@ -56,14 +58,16 @@ type Choice struct {
 var (
 	describing = []string{"title", "description", "default"}
 	keysFor    = map[string][]string{
-		"string":  {"enum", "oneOf", "format", "pattern", "minLength", "maxLength"},
+		"string":  {"enum", "oneOf", "format", "x-os", "pattern", "minLength", "maxLength"},
 		"integer": {"enum", "oneOf", "minimum", "maximum"},
 		"number":  {"enum", "oneOf", "minimum", "maximum"},
 		"boolean": {},
 		"array":   {"items", "minItems", "maxItems", "uniqueItems"},
 		"object":  {"properties", "required"},
 	}
-	formats      = []string{"uri", "email", "hostname"}
+	// machine: one of the hub's machines, by id: a form draws a list of them as a switch each (x-os narrows it).
+	formats      = []string{"uri", "email", "hostname", "machine"}
+	systems      = []string{"darwin", "linux", "windows"}
 	hostnameLike = regexp.MustCompile(`^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$`)
 )
 
@@ -237,7 +241,15 @@ func parseField(name string, raw json.RawMessage, at string, depth int) (Field, 
 		return fail("%v", err)
 	}
 	if f.Format != "" && !slices.Contains(formats, f.Format) {
-		return fail("format %q: uri, email or hostname", f.Format)
+		return fail("format %q: uri, email, hostname or machine", f.Format)
+	}
+	if raw, ok := m["x-os"]; ok {
+		if f.Format != "machine" {
+			return fail("x-os: only with format machine")
+		}
+		if json.Unmarshal(raw, &f.OS) != nil || len(f.OS) == 0 || slices.ContainsFunc(f.OS, func(os string) bool { return !slices.Contains(systems, os) }) {
+			return fail("x-os: a list of darwin, linux, windows")
+		}
 	}
 	if f.Pattern != "" {
 		re, err := regexp.Compile(f.Pattern)
@@ -441,6 +453,10 @@ func (f *Field) check(raw json.RawMessage, at string) error {
 		case "hostname":
 			if !hostnameLike.MatchString(s) {
 				return errors.New("要是一个主机名")
+			}
+		case "machine":
+			if strings.TrimSpace(s) != s || s == "" {
+				return errors.New("要是一台机器的 id")
 			}
 		}
 	}

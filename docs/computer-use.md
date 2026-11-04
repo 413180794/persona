@@ -14,7 +14,7 @@ Persona 助手经 [Cua Driver](https://github.com/trycua/cua)（`libs/cua-driver
 - **插件 `cua`**：personad 自带的纯声明插件（不跑进程），贡献扩展点 `computer`。在「设置 › 插件」里开关（#1191），
   或在 hub 机器上 `personad plugin enable cua`。默认关。
 - **按机器**：插件打开后，每台 Mac 的机器页多一节「操控电脑」，开关「允许助手操控这台电脑」
-  （`PUT /api/v1/machines/{mid}/computer`），存在插件配置的 `machines` 里（插件页的表单里也能改）。
+  （`PUT /api/v1/machines/{mid}/computer`），存在插件配置的 `machines` 里。插件页的「能操控的电脑」是同一个值：只列 Mac，每台一个开关（名字、在线与否、Cua 的状态），即时生效（`format: machine`，[plugins.md](plugins.md)）。
 - **操作前确认**：插件配置的 `confirm`（「操作前在手机上确认」），默认关，见「写操作」。
 
 **插件关着时**：
@@ -22,7 +22,7 @@ Persona 助手经 [Cua Driver](https://github.com/trycua/cua)（`libs/cua-driver
 - 机器没有 `computer` 字段，机器页什么都不显示。
 - 助手没有 `computer_*` 工具。
 
-**插件开着、某台没打开时**：这台 Mac 的 `computer` 是 `{"enabled": false}`，机器页只有开关。助手的工具只在至少一台打开后才出现，而且只能操作打开了的机器。
+**插件开着、某台没打开时**：hub 照样问它的 node（连上时、插件改了时），这台 Mac 的 `computer` 带着状态，只是 `enabled` 为 false：机器页只有开关，插件页的那一行写出 Cua 的状态（「在线 · Cua 没装」）。助手的工具只在至少一台打开后才出现，而且只能操作打开了的机器。
 
 关掉插件或某台的开关时，撤掉的是工具和入口；那台 Mac 上装好的 Cua Driver 不动。
 

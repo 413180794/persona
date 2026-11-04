@@ -251,6 +251,7 @@ func (h *Hub) attachPlugins(ctx context.Context) {
 	if err := reg.Load(ctx); err != nil {
 		h.logf("plugins: %v", err)
 	}
+	h.fixMachineSettings(ctx, reg) // machine names typed into settings become ids (plugin_machines.go)
 	reg.OnChange = ps.changed
 	ps.mu.Lock()
 	ps.reg = reg

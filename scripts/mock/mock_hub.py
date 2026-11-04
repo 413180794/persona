@@ -5606,8 +5606,10 @@ def computer_now(machine):
 
 
 def computer_of(machine_id, enabled):
-    if not enabled: return {"enabled": False}
-    return {"enabled": True, **COMPUTER_STATES.get(MOCK_COMPUTER, COMPUTER_STATES["ready"])}
+    """How Cua Driver is on that Mac, said for every Mac while the plugin is on (MacBook: MOCK_COMPUTER's state; Mac
+    Studio: not installed), with whether it is turned on for it."""
+    state = MOCK_COMPUTER if machine_id == "macbook" else "missing"
+    return {"enabled": enabled, **COMPUTER_STATES.get(state, COMPUTER_STATES["ready"])}
 
 
 if MOCK_COMPUTER:
@@ -5734,6 +5736,28 @@ PLUGINS["example-gateway"] = {
     "publisher": "example", "origin": "market:3f2a9c1d0b/example-gateway", "form": {"fields": []}, "config": {}, "secrets": [],
     "permissions": [_RUNS, {"key": "launcher_keys", "title": "用启动器的 Key 访问它的网关", "detail": "查额度、画启动器页上的面板；它看不到 Key：hub 或有这个启动器的电脑替它发请求，只发到启动器自己的网关"}],
     "ui": [{"plugin": "example-gateway", "id": "home", "title": "概况", "placement": "plugin_page"}]}
+
+if MOCK_COMPUTER:
+    # The built-in plugin cua, on (MOCK_COMPUTER, docs/computer-use.md): its list of Macs is each Mac's computer.enabled,
+    # both ways, like the hub's (a switch here is the machine page's 允许助手操控这台电脑).
+    PLUGINS["cua"] = {"id": "cua", "name": "操控电脑（Cua）", "kind": "computer", "status": "running", "version": "202611041200",
+                      "source": "builtin", "enabled": True, "contributes": {"computer": ["cua"]},
+                      "description": "让助手经 Cua Driver 操控你的 Mac：看窗口和屏幕、点按、输入、截图。要在那台 Mac 上装好 Cua Driver 并给它辅助功能和屏幕录制权限。",
+                      "form": {"fields": [
+                          {"name": "machines", "type": "array", "title": "能操控的电脑", "unique_items": True,
+                           "description": "打开的 Mac，助手才能操控。开关即时生效，和它机器页上的「允许助手操控这台电脑」是同一个",
+                           "items": {"name": "items", "type": "string", "format": "machine", "os": ["darwin"]}},
+                          {"name": "confirm", "type": "boolean", "title": "操作前在手机上确认", "default": False,
+                           "description": "打开后，助手每次点击、输入、按键、打开或关闭 App 之前先在手机上问你；关着时直接做，记进 hub 的日志"}]},
+                      "config": {}, "secrets": [], "permissions": []}
+
+
+def cua_config(pl):
+    """The plugin cua's settings as the hub would answer: its machines are the Macs it is on for."""
+    machines = [m["id"] for m in MACHINES if m.get("computer", {}).get("enabled")]
+    pl["config"] = {**{k: v for k, v in pl["config"].items() if k != "machines"}, **({"machines": machines} if machines else {})}
+
+
 _PLUGIN_VIEW = ["id", "name", "kind", "status", "error", "version", "source", "enabled", "description", "contributes", "needs_setup", "warnings"]
 
 # ---------- MOCK_PLUGINS: declarative UI (docs/plugins.md「声明式 UI」) ----------
@@ -5946,12 +5970,20 @@ def plugins_route(handler, p, body):
             handler.send_json({"error": "base_url: 要是一个网址", "code": "invalid_config", "field": "base_url", "message": "要是一个网址"}, 400)
             return True
         pl["config"] = cfg
+        if pl["id"] == "cua":  # the Macs it is on for follow, and the machine list goes out again
+            for m in MACHINES:
+                if "computer" in m:
+                    m["computer"] = computer_of(m["id"], m["id"] in (cfg.get("machines") or []))
+            for send, _ in list(LIVE):
+                try: send({"type": "machines", "machines": out_machines()})
+                except Exception: pass
     elif len(rest) == 2 and rest[0] == "secrets" and method in ("PUT", "DELETE"):
         for s in pl.get("secrets", []):
             if s["name"] == rest[1]: s["set"] = method == "PUT"
     else:
         handler.send_json({"error": "not found"}, 404)
         return True
+    if pl["id"] == "cua": cua_config(pl)
     handler.send_json({k: v for k, v in _plugin_needs(pl).items() if v is not None})
     return True
 

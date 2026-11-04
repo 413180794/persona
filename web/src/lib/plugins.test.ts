@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "./api";
 import {
   clearPluginSecret, compact, configError, fieldTitle, isDirty, listItems, listPlugins, listSummary, numberProblems, placeholder, pluginDetail,
-  pluginState, pluginTone, readNumber, same, secretState, setAt, setPluginConfig, setPluginEnabled, setPluginSecret, sourceText, stateLine, valueAt,
+  machineStatus, pluginState, pluginTone, readNumber, same, secretState, setAt, setPluginConfig, setPluginEnabled, setPluginSecret, sourceText,
+  stateLine, valueAt,
   type HubPlugin, type PluginField,
 } from "./plugins";
 
@@ -105,5 +106,19 @@ describe("插件的接口", () => {
     expect(configError(new ApiError(400, "bad", { code: "invalid_config" }))).toEqual({ field: "", message: "bad" });
     expect(configError(new ApiError(500, "x", {}))).toBeNull();
     expect(configError(new Error("x"))).toBeNull();
+  });
+});
+
+describe("a plugin's machine switches", () => {
+  const mac = { id: "macbook", name: "MacBook", online: true, os: "darwin" };
+  it("say online or not, and for a computer plugin how Cua Driver is", () => {
+    const note = "…";
+    expect(machineStatus({ ...mac, online: false, computer: { enabled: true, installed: false, note } }, true)).toBe("离线");
+    expect(machineStatus({ ...mac, computer: { enabled: false, installed: false, note } }, true)).toBe("在线 · Cua 没装");
+    expect(machineStatus({ ...mac, computer: { enabled: true, installed: true, daemon: false, note } }, true)).toBe("在线 · Cua 没在运行");
+    expect(machineStatus({ ...mac, computer: { enabled: true, installed: true, daemon: true, screen_recording: "missing", note } }, true)).toBe("在线 · Cua 缺权限");
+    expect(machineStatus({ ...mac, computer: { enabled: true, installed: true, daemon: true, ready: true } }, true)).toBe("在线 · Cua 可以用");
+    expect(machineStatus({ ...mac, computer: { enabled: false } }, true)).toBe("在线");
+    expect(machineStatus({ ...mac, computer: { enabled: true, ready: true } }, false)).toBe("在线");
   });
 });

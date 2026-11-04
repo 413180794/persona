@@ -26,7 +26,7 @@ const cuaPluginID = "cua"
 const cuaConfig = `{
   "type": "object",
   "properties": {
-    "machines": {"type": "array", "title": "能操控的电脑", "description": "机器 id；在「机器」页逐台打开或关掉", "items": {"type": "string"}, "uniqueItems": true},
+    "machines": {"type": "array", "title": "能操控的电脑", "description": "打开的 Mac，助手才能操控。开关即时生效，和它机器页上的「允许助手操控这台电脑」是同一个", "items": {"type": "string", "format": "machine", "x-os": ["darwin"]}, "uniqueItems": true},
     "confirm": {"type": "boolean", "title": "操作前在手机上确认", "description": "打开后，助手每次点击、输入、按键、打开或关闭 App 之前先在手机上问你；关着时直接做，记进 hub 的日志", "default": false}
   }
 }`
@@ -67,8 +67,9 @@ func (h *Hub) operable(m *Machine) bool {
 	return h.cua().On && goos == "darwin"
 }
 
-// computerOf is m's proto.Machine.Computer: nil unless the plugin is on and m is a Mac; the last status the node gave
-// when it is on for m.
+// computerOf is m's proto.Machine.Computer: nil unless the plugin is on and m is a Mac; else the last status the node
+// gave (for every Mac while the plugin is on, so a list of switches can say how Cua Driver is on each before it is
+// turned on), with Enabled when the plugin is on for m.
 func (h *Hub) computerOf(m *Machine) *proto.Computer {
 	s := h.cua()
 	m.mu.Lock()
@@ -77,21 +78,18 @@ func (h *Hub) computerOf(m *Machine) *proto.Computer {
 	if !s.On || !darwin {
 		return nil
 	}
-	if !slices.Contains(s.Machines, m.cfg.ID) {
-		return &proto.Computer{}
-	}
 	c := proto.Computer{}
 	if last != nil {
 		c = *last
 	}
-	c.Enabled = true
+	c.Enabled = slices.Contains(s.Machines, m.cfg.ID)
 	return &c
 }
 
 // refreshComputer asks m's node what it has of Cua Driver now, when the plugin is on for m; the machine list goes out
 // again when that changed.
 func (h *Hub) refreshComputer(ctx context.Context, m *Machine) *proto.Computer {
-	if c := h.computerOf(m); c == nil || !c.Enabled {
+	if c := h.computerOf(m); c == nil || !m.isOnline() {
 		return c
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -129,10 +127,11 @@ func sameComputer(a, b proto.Computer) bool {
 	return a == b && (aj == nil) == (bj == nil) && (aj == nil || *aj == *bj)
 }
 
-// computerChanged: the plugin was turned on or off, or its machines changed: ask the machines it is on for now.
+// computerChanged: the plugin was turned on or off, or its machines changed: ask the Macs again (every one while it is
+// on: the settings' list says how Cua Driver is on each).
 func (h *Hub) computerChanged(ctx context.Context) {
 	for _, m := range h.machinesNow() {
-		if c := h.computerOf(m); c != nil && c.Enabled && m.isOnline() {
+		if c := h.computerOf(m); c != nil && m.isOnline() {
 			go h.refreshComputer(ctx, m)
 		}
 	}
@@ -177,11 +176,6 @@ func (h *Hub) putComputer(w http.ResponseWriter, r *http.Request, m *Machine) {
 	if err := h.plugins.reg.SetConfig(r.Context(), cuaPluginID, raw, "app"); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
-	}
-	if !in.Enabled {
-		m.mu.Lock()
-		m.computer = nil
-		m.mu.Unlock()
 	}
 	writeJSON(w, h.refreshComputer(r.Context(), m))
 }

@@ -28,6 +28,11 @@ export interface Machine {
   hub_name?: string;
   machine_uid?: string;
   route?: { via: string; hops: number; rtt_ms?: number };
+  /** Operating it through Cua Driver (the hub's plugin cua, docs/computer-use.md): only while the plugin is on and it is a Mac. */
+  computer?: {
+    enabled: boolean; installed?: boolean; daemon?: boolean; ready?: boolean; accessibility?: string; screen_recording?: string;
+    desktop?: string; screen_sharing?: boolean; note?: string;
+  };
 }
 
 /** The hubs of this hub's interconnected group, from the signed-in hello (docs/plan-hub-mesh.md 2.6). */

@@ -132,3 +132,35 @@ func TestSchemaRefusesOutsideTheSubset(t *testing.T) {
 		}
 	}
 }
+
+// A list of the hub's machines (format machine): the form draws a switch per machine, of the systems x-os names.
+func TestSchemaMachines(t *testing.T) {
+	s, err := ParseSchema(json.RawMessage(`{"type": "object", "properties": {
+	  "macs": {"type": "array", "title": "能操控的电脑", "items": {"type": "string", "format": "machine", "x-os": ["darwin"]}, "uniqueItems": true}
+	}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(s.Fields[0])
+	if !strings.Contains(string(b), `"items":{"name":"items","type":"string","format":"machine","os":["darwin"]}`) {
+		t.Fatal("the form says it:", string(b))
+	}
+	if err := s.Check(json.RawMessage(`{"macs": ["studio", "macbook"]}`)); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{`{"macs": [""]}`, `{"macs": [" studio"]}`, `{"macs": ["studio", "studio"]}`} {
+		if s.Check(json.RawMessage(bad)) == nil {
+			t.Errorf("%s passed", bad)
+		}
+	}
+	for _, bad := range []string{
+		`{"type": "object", "properties": {"m": {"type": "string", "x-os": ["darwin"]}}}`,
+		`{"type": "object", "properties": {"m": {"type": "string", "format": "machine", "x-os": ["beos"]}}}`,
+		`{"type": "object", "properties": {"m": {"type": "string", "format": "machine", "x-os": []}}}`,
+		`{"type": "object", "properties": {"m": {"type": "array", "x-os": ["darwin"], "items": {"type": "string"}}}}`,
+	} {
+		if _, err := ParseSchema(json.RawMessage(bad)); err == nil {
+			t.Errorf("%s parsed", bad)
+		}
+	}
+}

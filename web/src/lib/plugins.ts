@@ -2,6 +2,7 @@
 // switch, its configuration as a form drawn from its schema (`form.fields`), and its secrets, write-only. Installing,
 // upgrading and removing happen on the hub's machine (`personad plugin`), never here.
 import { api, ApiError, enc } from "./api";
+import type { Machine } from "./types";
 
 export type Json = string | number | boolean | null | Json[] | { [k: string]: Json };
 export type JsonObject = { [k: string]: Json };
@@ -47,7 +48,8 @@ export interface PluginField {
   max_length?: number;
   minimum?: number;
   maximum?: number;
-  items?: { type: string; enum?: PluginChoice[] };
+  /** A list's items; format machine: the hub's machines by id (of the systems in os), drawn as a switch each. */
+  items?: { type: string; enum?: PluginChoice[]; format?: string; os?: string[] };
   min_items?: number;
   max_items?: number;
   unique_items?: boolean;
@@ -248,4 +250,26 @@ export const isDirty = (draft: JsonObject, config: JsonObject | undefined) => !s
 export function listItems(draft: JsonObject, path: string[], f: PluginField): string[] {
   const v = valueAt(draft, path) ?? f.default;
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+}
+
+/** A machine on a plugin's machine list (format machine): online or not, and for a plugin that operates computers how
+ *  Cua Driver is there (known once it is turned on). */
+export function machineStatus(m: Machine, computers: boolean): string {
+  const parts = [m.online ? "在线" : "离线"];
+  const c = m.computer;
+  // Every Mac's while the plugin is on, once its node has said (a never-asked one has neither a verdict nor a note).
+  if (computers && m.online && c && (c.ready || c.note)) {
+    const missing = c.accessibility === "missing" || c.screen_recording === "missing";
+    parts.push(!c.installed ? "Cua 没装" : !c.daemon ? "Cua 没在运行" : missing ? "Cua 缺权限" : c.desktop === "locked" ? "锁屏了" : c.ready ? "Cua 可以用" : "Cua 已装");
+  }
+  return parts.join(" · ");
+}
+
+/** Under the form: which switches take effect at once (lists of machines) and that the rest waits for 保存. */
+export function saveFooter(fields: PluginField[]): string {
+  const all = fields.flatMap((f) => (f.type === "object" ? (f.fields ?? []) : [f]));
+  const now = all.filter((f) => f.items?.format === "machine").map((f) => `「${f.title || f.name}」`);
+  if (!now.length) return "改完点「保存」；保存后插件会重新启动。留空的项用插件的默认值。";
+  if (now.length === all.length) return `${now.join("、")}的开关即时生效，不用保存。`;
+  return `${now.join("、")}的开关即时生效；其他项改完点「保存」，保存后插件会重新启动。留空的项用插件的默认值。`;
 }

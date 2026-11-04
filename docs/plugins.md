@@ -99,11 +99,16 @@ hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的�
 
 | 类型 | 能用的关键字 | 表单 |
 | --- | --- | --- |
-| `string` | `title`、`description`、`default`、`enum`（带标签用 `oneOf: [{"const", "title"}]`）、`format`（`uri` / `email` / `hostname`）、`pattern`、`minLength`、`maxLength` | 输入框；有 `enum` 是选择器 |
+| `string` | `title`、`description`、`default`、`enum`（带标签用 `oneOf: [{"const", "title"}]`）、`format`（`uri` / `email` / `hostname` / `machine`）、`x-os`（只配 `machine`：`darwin` / `linux` / `windows` 的列表）、`pattern`、`minLength`、`maxLength` | 输入框；有 `enum` 是选择器 |
 | `integer`、`number` | 说明类、`enum`、`minimum`、`maximum` | 数字输入 |
 | `boolean` | 说明类 | 开关 |
-| `array` | `items` 只能是 `string`（可带 `enum`），`minItems`、`maxItems`、`uniqueItems` | 可增删的列表；`items` 有 `enum` 是多选 |
+| `array` | `items` 只能是 `string`（可带 `enum`），`minItems`、`maxItems`、`uniqueItems` | 可增删的列表；`items` 有 `enum` 是多选；`items` 是 `format: machine` 时每台机器一个开关（下面） |
 | `object` | 只在第一层，里面只能是上面的标量和数组；可以有自己的 `required` | 一个分组 |
+
+**机器（`format: machine`）**：值是这台 hub 上某台机器的 id。
+- 一列这种值（`{"type": "array", "items": {"type": "string", "format": "machine", "x-os": ["darwin"]}}`）在 App 和网页的设置页画成**每台机器一个开关**：机器名、在线与否，操控电脑一类的插件（贡献 `computer`）再加 Cua 的状态。`x-os` 只列这些系统的机器。
+- 开关**即时生效**，只改这一项，不等「保存」，表单里别的草稿留着。对不上任何机器的值照样列出来，可以关掉。
+- hub 加载插件时，把这类值里写成机器名、主机名的（大小写、空格、`-`、`_` 不计，只对上一台时）换成那台的 id，存回去（`plugin_machines.go`）。
 
 不支持 `$ref`、`allOf` / `anyOf`、`if` / `then`、对象数组、更深的嵌套、`additionalProperties`（额外的键一律不收）。值最大 64 KB。
 `default`、`enum` 的值也按类型查。属性名像 `password` / `token` / `secret` / `api_key` 的给一条警告：配置明文存、明文显示，该放 `secrets`。

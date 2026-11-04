@@ -74,6 +74,43 @@ struct PluginsModelTests {
         #expect(page.draft["proxy"] == nil)
     }
 
+    /// A machine's switch (format machine) is saved at once on top of what the hub has: other edits stay in the draft,
+    /// unsaved, and the switch's field is not left to 保存.
+    @Test func aMachineSwitchIsSavedAtOnceAlone() async throws {
+        let hub = FakeHub()
+        let cua = #"{"id":"cua","name":"操控电脑（Cua）","kind":"computer","status":"running","enabled":true,"contributes":{"computer":["cua"]},"# +
+            #""form":{"fields":[{"name":"machines","type":"array","items":{"name":"items","type":"string","format":"machine","os":["darwin"]}},"# +
+            #"{"name":"confirm","type":"boolean"}]},"config":{"machines":["macbook"]},"secrets":[],"permissions":[]}"#
+        hub.on("GET", "/api/v1/plugins/cua/-/", json: cua)
+        var sent: JSONValue?
+        hub.on("PUT", "/api/v1/plugins/cua/-/config") { req in
+            sent = try JSON.decoder.decode(JSONValue.self, from: req.body ?? Data())
+            return Data(cua.replacingOccurrences(of: #""machines":["macbook"]"#, with: #""machines":["macbook","studio"]"#).utf8)
+        }
+        let page = PluginModel(id: "cua", deps: .init(api: { hub.client }))
+        await page.load()
+        let field = try #require(page.detail?.form.first)
+        #expect(field.items?.format == "machine" && field.items?.os == ["darwin"])
+        page.set(.bool(true), at: ["confirm"]) // being edited, not saved
+        await page.saveNow(.array([.string("macbook"), .string("studio")]), at: ["machines"])
+        #expect(sent == .object(["config": .object(["machines": .array([.string("macbook"), .string("studio")])])]),
+                "only the switch's field, on top of what the hub had")
+        #expect(page.value(["machines"]) == .array([.string("macbook"), .string("studio")]))
+        #expect(page.value(["confirm"]) == .bool(true) && page.dirty, "the other edit is still there to 保存")
+    }
+
+    /// The footer says which switches take effect at once and that the rest waits for 保存.
+    @Test func theFooterSaysWhatIsSavedAtOnce() {
+        func field(_ name: String, _ type: String, machines: Bool = false) -> PluginField {
+            PluginField(name: name, type: type, title: name == "machines" ? "能操控的电脑" : nil,
+                        items: machines ? PluginItems(type: "string", format: "machine") : nil)
+        }
+        #expect(PluginText.saveFooter([field("url", "string")]).hasPrefix("改完点右上角「保存」"))
+        #expect(PluginText.saveFooter([field("machines", "array", machines: true)]) == "「能操控的电脑」的开关即时生效，不用保存。")
+        #expect(PluginText.saveFooter([field("machines", "array", machines: true), field("confirm", "boolean")])
+            .hasPrefix("「能操控的电脑」的开关即时生效；其他项改完点右上角「保存」"))
+    }
+
     @Test func aRefusedFieldComesBackBesideIt() async {
         let hub = FakeHub()
         hub.on("GET", "/api/v1/plugins/example-notes/-/", json: Self.detail)

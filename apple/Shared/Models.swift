@@ -256,6 +256,9 @@ nonisolated struct MachineComputer: Codable, Hashable, Sendable {
         screenSharing = try c.decodeIfPresent(Bool.self, forKey: .screenSharing) ?? false
     }
 
+    /// The node has said how it is (a never-asked one has neither a verdict nor a note).
+    var checked: Bool { ready || !(note ?? "").isEmpty }
+
     /// The macOS permissions it still lacks, by their names in System Settings.
     var missingPermissions: [String] {
         [(accessibility, "辅助功能"), (screenRecording, "屏幕录制")].compactMap { $0.0 == "missing" ? $0.1 : nil }

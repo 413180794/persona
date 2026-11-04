@@ -183,7 +183,7 @@ struct PluginDetailView: View {
             } header: {
                 SettingsHeading("设置")
             } footer: {
-                Text("改完点右上角「保存」；保存后插件会重新启动。留空的项用插件的默认值。")
+                Text(PluginText.saveFooter(d.form))
             }
             ForEach(d.form.filter { $0.type == "object" }) { group in
                 Section {
@@ -305,7 +305,11 @@ private struct PluginFieldRow: View {
                 Text(title).lineLimit(2)
             }
         case "array":
-            PluginListField(field: field, title: title, path: path, page: page)
+            if field.items?.format == "machine" {
+                PluginMachineSwitches(field: field, title: title, path: path, page: page)
+            } else {
+                PluginListField(field: field, title: title, path: path, page: page)
+            }
         default:
             if let choices = field.enum {
                 Picker(selection: Binding(get: { page.value(path) ?? .null }, set: { page.set($0 == .null ? nil : $0, at: path) })) {
@@ -360,6 +364,79 @@ private struct PluginFieldRow: View {
             let t = text.trimmingCharacters(in: .whitespaces)
             if t.isEmpty { page.set(nil, at: path) } else if let n = Double(t) { page.set(.number(n), at: path) }
         })
+    }
+}
+
+/// A list of the hub's machines (schema format machine, docs/plugins.md): a switch per machine of the systems the field
+/// names, by its name and how it is, in effect at once (`PluginModel.saveNow`), the same setting as where else it
+/// shows (the 操控电脑 switch on a Mac's page). A value that names no machine still shows, to be turned off.
+private struct PluginMachineSwitches: View {
+    @Environment(AppModel.self) private var model
+    var field: PluginField
+    var title: String
+    var path: [String]
+    @Bindable var page: PluginModel
+
+    private var items: [String] { page.value(path)?.array?.compactMap(\.string) ?? [] }
+    /// The page's hub's machines (the app's first group), of the systems asked for.
+    private var machines: [Machine] {
+        let os = field.items?.os ?? []
+        return model.machines.filter { $0.group.isEmpty && (os.isEmpty || os.contains($0.os ?? "")) }
+    }
+    private var unknown: [String] { items.filter { id in !model.machines.contains { $0.group.isEmpty && $0.id == id } } }
+    /// A plugin for operating computers (extension point computer): the rows say how Cua Driver is there too.
+    private var computers: Bool { page.detail?.plugin.contributes?["computer"] != nil }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            Text(title).font(Theme.Font.labelStrong).foregroundStyle(.secondary).lineLimit(2)
+            if machines.isEmpty && unknown.isEmpty {
+                Text(field.items?.os == ["darwin"] ? "这个 hub 上还没有 Mac。" : "这个 hub 上还没有机器。")
+                    .font(Theme.Font.secondary).foregroundStyle(.secondary)
+            }
+            ForEach(machines) { m in
+                row(m.id, name: m.name, status: Self.status(m, computers: computers))
+            }
+            ForEach(unknown, id: \.self) { id in
+                row(id, name: id, status: "找不到这台机器")
+            }
+        }
+    }
+
+    private func row(_ id: String, name: String, status: String) -> some View {
+        Toggle(isOn: Binding(get: { items.contains(id) }, set: { on in
+            var next = items.filter { $0 != id }
+            if on { next.append(id) }
+            Task { await page.saveNow(next.isEmpty ? nil : .array(next.map(JSONValue.string)), at: path) }
+        })) {
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                Text(name).lineLimit(1)
+                Text(status).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+            }
+        }
+        .disabled(page.saving)
+    }
+
+    /// 在线 / 离线, then for a computer plugin how Cua Driver is on it, once its node has said (every Mac's while the
+    /// plugin is on, whether or not it is turned on for it).
+    static func status(_ m: Machine, computers: Bool) -> String {
+        var parts = [m.online ? "在线" : "离线"]
+        if computers, m.online, let c = m.computer, c.checked {
+            if !c.installed {
+                parts.append("Cua 没装")
+            } else if !c.daemon {
+                parts.append("Cua 没在运行")
+            } else if !c.missingPermissions.isEmpty {
+                parts.append("Cua 缺权限")
+            } else if c.desktop == "locked" {
+                parts.append("锁屏了")
+            } else if c.ready {
+                parts.append("Cua 可以用")
+            } else {
+                parts.append("Cua 已装")
+            }
+        }
+        return parts.joined(separator: " · ")
     }
 }
 
