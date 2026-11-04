@@ -182,6 +182,14 @@ class InboxDataOwner @Inject constructor(
         override suspend fun personaContext(itemId: String) = use { it.inbox.personaContext(itemId) }
         override suspend fun draftReply(itemId: String, instruction: String) = use { it.inbox.draftReply(itemId, instruction) }
         override suspend fun handOff(request: InboxHandOffRequest) = use { it.inbox.handOff(request) }
+        override suspend fun momentsPost(postId: String) = use { it.inbox.momentsPost(postId) }
+        override suspend fun momentsComments(postId: String) = use { it.inbox.momentsComments(postId) }
+        override suspend fun urlPreview(messageId: String, url: String) = use { it.inbox.urlPreview(messageId, url) }
+        override suspend fun react(messageId: String, key: String, remove: Boolean) = use { it.inbox.react(messageId, key, remove) }
+        override suspend fun cardAction(messageId: String, actionId: String) = use { it.inbox.cardAction(messageId, actionId) }
+        override suspend fun userProfile(userId: String, feedId: String?) = use { it.inbox.userProfile(userId, feedId) }
+        override suspend fun quickReactions() = use { it.inbox.quickReactions() }
+        override suspend fun emojis() = use { it.inbox.emojis() }
     }
     val assistant = object : AssistantConversations {
         override val assistant = observe(AssistantSnapshot()) { it.assistant.assistant }

@@ -161,3 +161,10 @@
 - 握手失败不等于证书变了（#1250）：hub 重启那几秒，Docker Desktop 的端口代理和 `adb reverse` 会先接下 TCP 连接、再因为后端不在而断开，握手中途断开也抛 `SSLHandshakeException`。原来凡是它都归成「hub 的证书变了」且永不重试，App 要杀进程才连得上。
   只有拿到了证书、校验没过才算证书不符：`SpkiTrustManager` 拒了（异常链里有 `CertificateException`），或 hostname verifier 拒了（组里别的 hub 的 pin，`SSLPeerUnverifiedException`）。其余握手失败按普通网络错误退避重试（`HubFailure.from`）。
 - `OkHttpHubConnection.request` 遇到非 2xx 自己就抛 `HubFailure`，不会把响应交回调用方：在调用方里 `if (!response.isSuccessful)` 再读错误正文，用真实连接时永远走不到（MockWebServer 的单测直接返回响应，测不出来）。hub 错误正文里要用的字段（如插件设置被拒的 `field`、`message`）得进 `ErrorBody` / `HubFailure`（2026-11-04，#1206：被拒的字段在模拟器上显示成了页顶错误）；单测里用一个和连接一样先抛的 request 再测一遍（`HttpPluginManagementTest`）。
+
+## 模块门面别漏掉接口的默认方法（2026-11-04，#1619）
+
+- `InboxModule` 的 `InboxRepository` 门面（`object : InboxRepository`）把调用转发给当前激活组的 `it.inbox`。
+- 如果接口声明了带默认实现的方法（例如 `momentsPost` 默认 `error(...)`、`emojis` 默认 `null`），Kotlin 编译器不会报错要求实现，直接落到默认值；页面调用时就表现为功能不可用（如公司圈帖子打不开）。
+- 做法：门面实现时完整实现接口的所有方法，并加契约单测检查。
+
