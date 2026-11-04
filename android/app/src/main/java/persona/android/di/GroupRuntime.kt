@@ -79,11 +79,14 @@ class GroupRuntime internal constructor(
     /** Called by HubDataStore.openGroup (its transport factory): builds the group's one connection. */
     fun createTransport(storage: HubScope, credentials: HubCredentials, members: List<HubMember>): MessageTransport {
         lateinit var transport: HttpMessageTransport
+        val isCenter = credentials.hubId.takeUnless { it.startsWith("legacy-") }?.let { id ->
+            id == group.centerHubId
+        } ?: false
         val connection = OkHttpHubConnection(
             HubConnectionConfig(credentials.hubId.takeUnless { it.startsWith("legacy-") }, credentials.fp,
                 credentials.deviceToken, pairingEndpoints(credentials), settings.version, deviceId = credentials.deviceId,
                 clientFeatures = setOf("lock_test"), build = settings.build, os = settings.os,
-                heartbeatPolicy = settings.heartbeatPolicy, members = members),
+                heartbeatPolicy = settings.heartbeatPolicy, members = members, center = isCenter, centerHubId = group.centerHubId),
             HubNetwork("initial", available = false),
             onReady = { readyConnection ->
                 reconciliationJob?.cancelAndJoin()
@@ -166,7 +169,7 @@ class GroupRuntime internal constructor(
     fun update(group: StoredGroup, namespace: String?, members: List<HubMember>) {
         this.group = group
         this.namespace = namespace
-        live?.updateMembers(members)
+        live?.updateMembers(members, group.centerHubId)
     }
 
     fun setForeground(value: Boolean) {
@@ -206,9 +209,9 @@ internal fun pairingEndpoints(credentials: HubCredentials) =
     }
 
 /** A paired hub of the group other than the connection's own, with its own credential and route choices. */
-internal fun pairedMember(credentials: HubCredentials, overrides: EndpointOverrides) =
-    HubMember(credentials.hubId, credentials.fp, credentials.deviceToken, pairingEndpoints(credentials), overrides)
+internal fun pairedMember(credentials: HubCredentials, overrides: EndpointOverrides, center: Boolean = false) =
+    HubMember(credentials.hubId, credentials.fp, credentials.deviceToken, pairingEndpoints(credentials), overrides, center)
 
 /** A hub learned from the mesh: reached with the group credential, pinned by the fingerprint the hello gave. */
-internal fun meshMember(hub: persona.core.data.StoredMeshHub) =
-    HubMember(hub.hubId, hub.fp, null, hub.endpoints.distinctBy(::endpointKey).map { Endpoint(it, endpointKind(it)) })
+internal fun meshMember(hub: persona.core.data.StoredMeshHub, center: Boolean = false) =
+    HubMember(hub.hubId, hub.fp, null, hub.endpoints.distinctBy(::endpointKey).map { Endpoint(it, endpointKind(it)) }, center = center || hub.center == true)

@@ -26,7 +26,7 @@ data class HubNetwork(
     val transport: HubNetworkTransport = HubNetworkTransport.Other,
 )
 
-class HubConnectionConfig(
+data class HubConnectionConfig(
     val hubId: String?,
     val fingerprint: String?,
     val token: String,
@@ -43,6 +43,10 @@ class HubConnectionConfig(
      * Empty for a hub without a group: everything then behaves exactly as for a single paired hub.
      */
     val members: List<HubMember> = emptyList(),
+    /** Whether this connection's own hub is the group's center. */
+    val center: Boolean = false,
+    /** The hub id of the group's center, if known. */
+    val centerHubId: String? = null,
 )
 
 /** Call onReady to restore subscriptions and reconcile pending interactions after hello. */
@@ -68,6 +72,9 @@ class OkHttpHubConnection(
     private val lock = Any()
     private val selector = HubRouteSelector(clockMillis) { endpoint -> probe(endpoint) }
     @Volatile private var members: List<HubMember> = config.members
+    @Volatile private var centerHubId: String? = config.centerHubId
+        ?: if (config.center) config.hubId else config.members.firstOrNull { it.center }?.hubId
+    val centerId: String? get() = centerHubId ?: if (config.center) config.hubId else members.firstOrNull { it.center }?.hubId
     /** Hubs that refused their credential, with the member as it was then; a changed member is tried again. */
     private val excluded = HashMap<String, HubMember>()
     @Volatile private var homeExcluded = false
@@ -171,12 +178,17 @@ class OkHttpHubConnection(
         updateDiagnostics { it.copy(candidates = candidates.map { endpoint ->
             ConnectionCandidate(endpoint.url, endpoint.kind, "未实测")
         }) }
-        return probeRoutes(candidates)
+        val centerEndpoints = routes().filter { it.second.center }.map { endpointKey(it.first.url) }.toSet()
+        return probeRoutes(candidates, centerEndpoints = centerEndpoints)
     }
 
     /** Probes [candidates] in order ([HubRouteSelector]), recording each measured probe in the diagnostics. */
-    private suspend fun probeRoutes(candidates: List<Endpoint>, probeTimeoutMillis: Long? = null): HubRoute =
-        selector.select(candidates, probeTimeoutMillis, onProbeMeasured = { endpoint, elapsed, result ->
+    private suspend fun probeRoutes(
+        candidates: List<Endpoint>,
+        probeTimeoutMillis: Long? = null,
+        centerEndpoints: Set<String> = emptySet(),
+    ): HubRoute =
+        selector.select(candidates, probeTimeoutMillis, centerEndpoints = centerEndpoints, onProbeMeasured = { endpoint, elapsed, result ->
             updateDiagnostics { snapshot -> snapshot.copy(candidates = snapshot.candidates.map { candidate ->
                 if (candidate.url != endpoint.url) candidate else candidate.copy(
                     result = endpointResultLabel(result.exceptionOrNull()?.let { HubFailure.from(it).kind }),
@@ -212,16 +224,44 @@ class OkHttpHubConnection(
     fun candidates(overrides: EndpointOverrides = _overrides.value): List<Endpoint> =
         mergeEndpoints(overrides.manual, _endpoints.value, http.localAddressPolicy)
 
-    /** This hub's candidates, then each other hub's of the group (disabled ones included), deduplicated by key. */
-    fun allCandidates(): List<Endpoint> =
-        (candidates() + members.flatMap { memberCandidates(it) }).distinctBy { endpointKey(it.url) }
+    /** This hub's candidates, then each other hub's of the group (disabled ones included), deduplicated by key. Center first. */
+    fun allCandidates(): List<Endpoint> {
+        val center = centerId
+        val homeIsCenter = (center != null && config.hubId != null && config.hubId == center) || (center == null && config.center)
+        val own = candidates().map { it to homeIsCenter }
+        val group = members.flatMap { member ->
+            val memberIsCenter = (center != null && member.hubId == center) || (center == null && member.center)
+            memberCandidates(member).map { it to memberIsCenter }
+        }
+        val all = (own + group).distinctBy { endpointKey(it.first.url) }
+        return (all.filter { it.second } + all.filter { !it.second }).map { it.first }
+    }
+
+    /** Candidates with their hub and center markings (docs/multi-hub.md「选路」), center first. */
+    fun routeCandidates(overrides: EndpointOverrides = _overrides.value): List<HubRoute.Candidate> =
+        routes(overrides).map { (endpoint, owner) ->
+            HubRoute.Candidate(endpoint, hub = owner.hubId, center = owner.center)
+        }
+
+    /** Whether the current route is on a hub other than the group's center. */
+    fun onMember(): Boolean {
+        val current = _route.value ?: return false
+        val centerEndpoints = routes().filter { it.second.center }.map { endpointKey(it.first.url) }.toSet()
+        if (centerEndpoints.isEmpty()) return false
+        return endpointKey(current.endpoint.url) !in centerEndpoints
+    }
 
     /**
      * Replaces the other hubs of the group. A hub that refused its credential stays out unless it comes back changed.
      * Starts over only when the route in use belongs to a hub no longer listed, or there is no route.
      */
-    fun updateMembers(value: List<HubMember>) {
+    fun updateMembers(value: List<HubMember>, centerHubId: String? = null) {
         val reconnect = synchronized(lock) {
+            if (centerHubId != null) this.centerHubId = centerHubId
+            else {
+                val newCenter = value.firstOrNull { it.center }?.hubId
+                if (newCenter != null && this.centerHubId == null) this.centerHubId = newCenter
+            }
             if (value == members) return
             members = value.toList()
             excluded.entries.removeAll { (hubId, member) -> value.none { it.hubId == hubId } || value.first { it.hubId == hubId } != member }
@@ -447,6 +487,7 @@ class OkHttpHubConnection(
         val recheck = launch {
             while (isActive) {
                 delay(recheckMillis)
+                if (!foreground) continue
                 // Only a candidate listed above the one in use can take over; the list's order is the order tried. Each
                 // gets the step it has alone in the race: one that answers later would lose the race to the one in use
                 // again, and the connection would start over at every recheck for nothing.
@@ -514,6 +555,9 @@ class OkHttpHubConnection(
                         is Hello -> {
                             if (owner.hubId != null && event.hubId != owner.hubId) {
                                 throw HubFailure(HubError.HubMismatch, retryable = false)
+                            }
+                            event.mesh?.hubs?.firstOrNull { it.center == true }?.hubId?.let { learnedCenter ->
+                                centerHubId = learnedCenter
                             }
                             features = event.features.toSet()
                             _serverFeatures.value = features
@@ -620,13 +664,16 @@ class OkHttpHubConnection(
     private fun usableEndpoints(overrides: EndpointOverrides = _overrides.value) = routes(overrides).map { it.first }
 
     private fun routes(overrides: EndpointOverrides = _overrides.value): List<Pair<Endpoint, Owner>> {
+        val center = centerId
         val home = homeOwner()
         val own = if (homeExcluded) emptyList() else usable(candidates(overrides), overrides).map { it to home }
         val group = members.filter { synchronized(lock) { it.hubId !in excluded } }.flatMap { member ->
-            val owner = Owner(member.hubId, member.fingerprint, member.token ?: config.token, member.token != null, home = false)
+            val memberIsCenter = (center != null && member.hubId == center) || (center == null && member.center)
+            val owner = Owner(member.hubId, member.fingerprint, member.token ?: config.token, member.token != null, home = false, center = memberIsCenter)
             usable(memberCandidates(member), member.overrides).map { it to owner }
         }
-        return (own + group).distinctBy { endpointKey(it.first.url) }
+        val all = (own + group).distinctBy { endpointKey(it.first.url) }
+        return all.filter { it.second.center } + all.filter { !it.second.center }
     }
 
     private fun usable(candidates: List<Endpoint>, overrides: EndpointOverrides) =
@@ -666,7 +713,11 @@ class OkHttpHubConnection(
 
     private fun ownerOf(route: HubRoute?): Owner = routeOwner?.takeIf { route != null && it.first === route }?.second ?: homeOwner()
 
-    private fun homeOwner() = Owner(config.hubId, config.fingerprint, config.token, ownToken = true, home = true)
+    private fun homeOwner(): Owner {
+        val center = centerId
+        val homeIsCenter = (center != null && config.hubId != null && config.hubId == center) || (center == null && config.center)
+        return Owner(config.hubId, config.fingerprint, config.token, ownToken = true, home = true, center = homeIsCenter)
+    }
 
     /** Pinned health probes; without other hubs exactly the single-hub probe. */
     private suspend fun probe(endpoint: Endpoint): Health {
@@ -677,7 +728,7 @@ class OkHttpHubConnection(
     }
 
     /** The hub behind a route: id, pin, the credential to send and whether it is that hub's own. */
-    private class Owner(val hubId: String?, val fingerprint: String?, val token: String, val ownToken: Boolean, val home: Boolean)
+    private class Owner(val hubId: String?, val fingerprint: String?, val token: String, val ownToken: Boolean, val home: Boolean, val center: Boolean = false)
 
     /** Route legacy HTTP authentication failures through the same terminal state as live requests. */
     fun revoke() {

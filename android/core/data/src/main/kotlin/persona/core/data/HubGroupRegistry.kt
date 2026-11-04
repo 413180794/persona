@@ -52,6 +52,7 @@ data class StoredMeshHub(
     val fp: String? = null,
     val tlsPort: Int? = null,
     val online: Boolean? = null,
+    val center: Boolean? = null,
 )
 
 @Serializable
@@ -65,8 +66,10 @@ data class StoredGroup(
     val hubs: List<StoredHub>,
     val mesh: List<StoredMeshHub> = emptyList(),
     val createdAt: Long = 0,
+    val center: String? = null,
 ) {
     val home: StoredHub get() = hubs.first()
+    val centerHubId: String? get() = center ?: mesh.firstOrNull { it.center == true }?.hubId
 }
 
 /**
@@ -230,6 +233,7 @@ fun GroupsDocument.learn(
     newStorage: (String) -> StoredScope = ::freshStorage,
 ): RegistryChange {
     val entries = mesh.orEmpty().filter { it.hubId.isNotBlank() }.associateBy { it.hubId }
+    val centerId = mesh?.firstOrNull { it.center == true }?.hubId
     fun nameOf(id: String) = (if (id == from) hubName?.takeIf(String::isNotBlank) else null)
         ?: entries[id]?.name?.takeIf(String::isNotBlank)
     val order = mesh?.let { list -> (list.map { it.hubId }.filter(String::isNotBlank) + from).distinct() }
@@ -254,10 +258,13 @@ fun GroupsDocument.learn(
     val home = regrouped.groupOfHub(from)
         ?: regrouped.groups.firstOrNull { group -> group.hubs.any { it.hubId in members } }
     val document = regrouped.copy(groups = regrouped.groups.map { group ->
-        if (group.id == home?.id) group.copy(mesh = order.filter { it !in paired }.map { id ->
-            entries[id]?.let { StoredMeshHub(id, it.name.takeIf(String::isNotBlank) ?: nameOf(id), it.endpoints, it.fp, it.tlsPort, it.online) }
-                ?: StoredMeshHub(id, nameOf(id))
-        })
+        if (group.id == home?.id) group.copy(
+            center = centerId ?: group.center,
+            mesh = order.filter { it !in paired }.map { id ->
+                entries[id]?.let { StoredMeshHub(id, it.name.takeIf(String::isNotBlank) ?: nameOf(id), it.endpoints, it.fp, it.tlsPort, it.online, it.center) }
+                    ?: StoredMeshHub(id, nameOf(id))
+            }
+        )
         else group.copy(mesh = group.mesh.filterNot { it.hubId in members })
     })
     return RegistryChange(document, erasures(this, document), home?.id)
@@ -313,7 +320,7 @@ fun GroupsDocument.regroup(
         val hubs = component.sortedWith(compareBy<Member>({ if (it.group.id == id) 0 else 1 }).then(memberOrder)).map { it.hub }
         val mesh = groups.filter { landing[it.id] == index }.flatMap { it.mesh }
             .distinctBy { it.hubId }.filterNot { it.hubId in pairedIds }
-        StoredGroup(id, kept?.name, kept?.storage ?: newStorage(hubs.first().hubId), hubs, mesh, kept?.createdAt ?: now)
+        StoredGroup(id, kept?.name, kept?.storage ?: newStorage(hubs.first().hubId), hubs, mesh, kept?.createdAt ?: now, kept?.center)
     }
     val ordered = built.filter { group -> groups.any { it.id == group.id } }.sortedBy { group -> groups.indexOfFirst { it.id == group.id } } +
         built.filter { group -> groups.none { it.id == group.id } }

@@ -40,7 +40,8 @@ class HubGroupConnectionTest {
         onMemberRevoked = { hubId, own -> revoked += hubId to own },
     )
 
-    private fun member(hub: LoopbackHub, token: String?) = HubMember(hub.hubId, null, token, listOf(hub.endpoint("lan")))
+    private fun member(hub: LoopbackHub, token: String?, center: Boolean = false) =
+        HubMember(hub.hubId, null, token, listOf(hub.endpoint("lan")), center = center)
 
     private suspend fun OkHttpHubConnection.awaitRoute(url: String, millis: Long = 8000) =
         withTimeout(millis) { route.first { it != null && endpointKey(it.endpoint.url) == endpointKey(url) } }!!
@@ -95,6 +96,56 @@ class HubGroupConnectionTest {
                     connection.awaitOnline()
                     assertEquals(homeToken, connection.token)
                     assertEquals(listOf("Bearer $homeToken"), home.socketAuthorizations())
+                }
+            }
+        }
+    }
+
+    @Test fun whenBothCenterAndMemberAreAvailableConnectionPrefersCenter() = runBlocking<Unit> {
+        LoopbackHub(hubId = "hub-a").use { home ->
+            LoopbackHub(hubId = "hub-b").use { centerHub ->
+                group(home.endpoint("lan"), home.hubId, member(centerHub, "b-token", center = true)).use { connection ->
+                    connection.updateNetwork(HubNetwork("network"))
+                    connection.awaitRoute(centerHub.url)
+                    connection.awaitOnline()
+                    assertEquals("b-token", connection.token)
+                    assertFalse(connection.onMember())
+                }
+            }
+        }
+    }
+
+    @Test fun whenConnectedToAMemberTheRecheckMovesBackToCenterOnceItAnswers() = runBlocking<Unit> {
+        LoopbackHub(hubId = "hub-a").use { home ->
+            LoopbackHub(healthy = false, hubId = "hub-b").use { centerHub ->
+                group(home.endpoint("lan"), home.hubId, member(centerHub, "b-token", center = true), recheckMillis = 300).use { connection ->
+                    connection.updateNetwork(HubNetwork("network"))
+                    connection.awaitRoute(home.url)
+                    connection.awaitOnline()
+                    assertEquals(homeToken, connection.token)
+                    assertTrue(connection.onMember())
+
+                    centerHub.healthy = true
+                    connection.awaitRoute(centerHub.url)
+                    eventually { centerHub.opened.get() > 0 }
+                    connection.awaitOnline()
+                    assertEquals("b-token", connection.token)
+                    assertFalse(connection.onMember())
+                }
+            }
+        }
+    }
+
+    @Test fun whenCenterAnswersSlightlyLaterWithinGraceItIsPickedOverFastMember() = runBlocking<Unit> {
+        LoopbackHub(hubId = "hub-a").use { home ->
+            LoopbackHub(hubId = "hub-b").use { centerHub ->
+                centerHub.answerMillis = 100
+                group(home.endpoint("lan"), home.hubId, member(centerHub, "b-token", center = true)).use { connection ->
+                    connection.updateNetwork(HubNetwork("network"))
+                    connection.awaitRoute(centerHub.url)
+                    connection.awaitOnline()
+                    assertEquals("b-token", connection.token)
+                    assertFalse(connection.onMember())
                 }
             }
         }

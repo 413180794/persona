@@ -53,6 +53,7 @@ data class MeshHub(
     val endpoints: List<String> = emptyList(),
     @SerialName("tls_port") val tlsPort: Int? = null,
     val fp: String? = null,
+    val center: Boolean? = null,
 )
 
 @KeepGeneratedSerializer

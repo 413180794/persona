@@ -393,13 +393,14 @@ class ConnectionRuntime @Inject constructor(application: Application) : HubConne
 
     /** The group's hubs other than its own: the other paired ones with their credentials, then the mesh's. */
     private suspend fun members(entry: StoredGroup): List<HubMember> {
+        val center = entry.centerHubId
         val paired = entry.hubs.drop(1).mapNotNull { hub ->
             try {
-                dataStore.credentials(hub.pairing.scope)?.let { pairedMember(it, dataStore.endpoints(hub.pairing.scope)) }
+                dataStore.credentials(hub.pairing.scope)?.let { pairedMember(it, dataStore.endpoints(hub.pairing.scope), hub.hubId == center) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { null }
         }
-        return paired + entry.mesh.filter { it.endpoints.isNotEmpty() }.map(::meshMember)
+        return paired + entry.mesh.filter { it.endpoints.isNotEmpty() }.map { meshMember(it, it.hubId == center || it.center == true) }
     }
 
     private suspend fun publishSelectionLocked() {

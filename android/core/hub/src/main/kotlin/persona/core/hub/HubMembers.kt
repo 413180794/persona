@@ -15,6 +15,7 @@ data class HubMember(
     val token: String?,
     val endpoints: List<Endpoint>,
     val overrides: EndpointOverrides = EndpointOverrides(),
+    val center: Boolean = false,
 ) {
-    override fun toString(): String = "HubMember($hubId, ${endpoints.size} endpoints, token=${if (token == null) "group" else "own"})"
+    override fun toString(): String = "HubMember($hubId, ${endpoints.size} endpoints, token=${if (token == null) "group" else "own"}${if (center) ", center" else ""})"
 }
