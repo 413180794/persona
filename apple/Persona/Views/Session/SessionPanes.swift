@@ -1136,11 +1136,14 @@ extension EnvironmentValues {
 }
 
 /// The agents in this conversation, under the tabs: 主 Agent and each subagent it launched (spinning while it
-/// runs, a check when done). Tap one to read its conversation in the same chat UI.
+/// runs, a check when done). Tap one to read its conversation in the same chat UI. When some of `all` are not chips
+/// (finished, nested), 「全部子 Agent N」 at the end opens every one by who launched whom.
 struct AgentStrip: View {
     var agents: [Subagent]
+    var all: [Subagent]
     var viewing: String?
     var select: (Subagent?) -> Void
+    @State private var showAll = false
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -1152,6 +1155,7 @@ struct AgentStrip: View {
                         chip(title: a.title, symbol: nil, running: a.running, done: !a.running, on: viewing == a.id) { select(a) }
                             .id(a.id)
                     }
+                    if all.count > agents.count { allButton }
                 }
                 .padding(.horizontal, Theme.Space.l)
                 .padding(.bottom, Theme.Space.sm)
@@ -1163,6 +1167,37 @@ struct AgentStrip: View {
                 withAnimation(Theme.Motion.standard) { proxy.scrollTo(id, anchor: .trailing) }
             }
         }
+        .sheet(isPresented: $showAll) {
+            SubagentTreeSheet(rows: Subagent.tree(all), viewing: viewing) { a in
+                showAll = false
+                select(a)
+            }
+        }
+    }
+
+    @ViewBuilder private var allButton: some View {
+        let open = { Haptics.tap(); showAll = true }
+        Group {
+            if AppStyle.current.usesBeautifulUI {
+                BUIFilterChip("全部子 Agent", count: all.count, isActive: false, action: open)
+            } else {
+                Button(action: open) {
+                    HStack(spacing: Theme.Space.sm) {
+                        Image(systemName: Theme.Icon.list).font(Theme.Font.labelStrong)
+                        Text("全部子 Agent").lineLimit(1)
+                        Text("\(all.count)").monospacedDigit().foregroundStyle(.secondary)
+                    }
+                    .font(Theme.Font.labelMedium)
+                    .padding(.horizontal, Theme.Space.m)
+                    .padding(.vertical, Theme.Space.sm)
+                    .background(Theme.Fill.well, in: .capsule)
+                    .foregroundStyle(Color.primary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .accessibilityLabel("全部子 Agent，\(all.count) 个")
+        .accessibilityHint("按谁起的谁列出全部子 Agent")
     }
 
     @ViewBuilder private func chip(title: String, symbol: String?, running: Bool, done: Bool, on: Bool, action: @escaping () -> Void) -> some View {
@@ -1196,6 +1231,81 @@ struct AgentStrip: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title + (running ? "，运行中" : done ? "，已完成" : ""))
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+/// 「全部子 Agent」: every subagent under the one that launched it (`Subagent.tree`), with how it is going, what it is
+/// and when it started; a tap reads it, like its chip.
+struct SubagentTreeSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var rows: [Subagent.TreeRow]
+    var viewing: String?
+    var select: (Subagent) -> Void
+
+    /// Past this many levels deeper ones line up with the last.
+    private static let maxIndent = 4
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: Theme.Space.sm) {
+                    ForEach(rows, id: \.agent.id) { row($0) }
+                }
+                .padding(Theme.Space.l)
+            }
+            .background(Theme.pageBackground)
+            .navigationTitle("全部子 Agent")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func row(_ r: Subagent.TreeRow) -> some View {
+        let a = r.agent, on = viewing == a.id
+        return Button { select(a) } label: {
+            HStack(alignment: .top, spacing: Theme.Space.s) {
+                if r.depth > 0 {
+                    Image(systemName: Theme.Icon.followOn)
+                        .font(Theme.Font.label)
+                        .foregroundStyle(.tertiary)
+                }
+                StatusDot(state: a.running ? .working : .unread, size: Theme.Size.dotXS)
+                    .scaledFrame(width: Theme.Size.dot, height: Theme.Size.badge)
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                    Text(a.title).font(Theme.Font.secondaryMedium).foregroundStyle(Color.primary).lineLimit(1)
+                    HStack(spacing: Theme.Space.sm) {
+                        Text(a.running ? "运行中" : "已结束").foregroundStyle(a.running ? Theme.busy : .secondary)
+                        if a.fork == true {
+                            Chip(text: "分叉", symbol: Theme.Icon.gitBranch)
+                        } else if let t = a.type {
+                            Text("· " + t).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
+                    .font(Theme.Font.label)
+                    .lineLimit(1)
+                }
+                Spacer(minLength: Theme.Space.xs)
+                if let start = a.startedAt ?? a.updatedAt {
+                    TimelineView(.periodic(from: .now, by: 30)) { ctx in
+                        Text(Fmt.relative(start, now: ctx.date))
+                            .font(Theme.Font.label.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            .padding(Theme.Space.m)
+            .background(on ? Theme.accent.opacity(0.12) : Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .padding(.leading, CGFloat(min(r.depth, Self.maxIndent)) * Theme.Space.l)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(a.title + "，" + (a.running ? "运行中" : "已结束") + (a.fork == true ? "，分叉" : a.type.map { "，" + $0 } ?? "")
+                            + (r.depth > 0 ? "，第 \(r.depth + 1) 层" : ""))
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 }

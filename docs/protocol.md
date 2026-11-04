@@ -218,7 +218,7 @@ hub 重启保留未来预约；发送记录与 WS 写入无法原子完成，所
 
 外部 Codex 会话继续使用 `(machine_id, session_id)`。固定 legacy home 保持既有 raw thread ID，其他 canonical home 的 thread 使用 `c0de-` 加确定性摘要的 opaque ID；PID、endpoint 或连接代际变化不换会话 ID。`source_thread_id` 是原 thread ID，不可将 opaque ID 放进 `claude --resume`。
 
-Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server` / `identity_conflict`；Agent 运行时的会话是 `runtime`，见「Runtime ↔ node」）、`source_thread_id`、`source_instance_id`、`parent_thread_id`、`read_only_reason`、`attached`、`capabilities`（read/send/interrupt/approve/terminal/attach 六个布尔值）。旧来源缺这些字段维持兼容，新来源缺能力默认拒写。没有终端能力就不显示终端/按键/关闭窗格。
+Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server` / `identity_conflict`；Agent 运行时的会话是 `runtime`，见「Runtime ↔ node」；Claude Code 的后台会话是 `claude_bg`，只读，见 `docs/claude-integration.md`「后台会话」）、`source_thread_id`、`source_instance_id`、`parent_thread_id`、`read_only_reason`、`attached`、`capabilities`（read/send/interrupt/approve/terminal/attach 六个布尔值）。旧来源缺这些字段维持兼容，新来源缺能力默认拒写。没有终端能力就不显示终端/按键/关闭窗格。
 
 `POST /api/v1/sessions/{mid}/{sid}/attach`：用户要求实时接入，node 只对原实例仍 loaded、owner 唯一的 thread 请求 resume，且不带运行配置覆盖。发现/普通读历史不调用 resume。加入许可按 thread/稳定实例记在 settings；断线重验 owner，不自动冷恢复或换实例。loaded/list 与 resume 不原子，不能承诺中间没有 unload 竞态。
 
@@ -294,6 +294,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
  "activity":"在跑测试","activity_at":"...",   // 最近一步是工具调用、之后还没有新文字时才有：这一步在做什么（node 从 transcript 概括，40 字以内）和开始的时间；写出新文字或开始新一轮就没了
  "queued":["工作中输入、还没被取走的消息"],
  "subagents":[{"id":"a849e1f0…","session_id":"<id>@a849e1f0…","type":"Explore","description":"…","tool_use_id":"toolu_…",
+                "parent_id":"c27d03b1…","fork":true,   // 谁起的它：起它的子 Agent 的 id（主会话起的没有）；fork = 分叉出来的。父的不在列表里时当顶层
                 "running":true,"background":true,"started_at":"...","updated_at":"...","last_text":"…"}],   // 子 Agent 当会话读
  "loop":{"kind":"wakeup|cron","prompt":"/loop …","reason":"…","interval_seconds":1800,"next_at":"...","cron":"*/5 * * * *","ticks":12},
  // Agent 的进程在监听、回 HTTP 的 TCP 端口（docs/ports.md）：一个端口一条；title 是它首页的 <title>（没有就缺省）。旧 node 没有这个字段

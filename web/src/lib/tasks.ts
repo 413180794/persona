@@ -221,3 +221,36 @@ export function subagentTitle(a: Subagent): string {
 export function visibleSubagents(all: Subagent[] | undefined, viewing?: string): Subagent[] {
   return (all ?? []).filter((a) => a.running || a.id === viewing);
 }
+
+export interface SubagentRow {
+  agent: Subagent;
+  /** 0: the session launched it (or its launcher is not listed); 1: a subagent did; … */
+  depth: number;
+}
+
+/** Every subagent by who launched whom (`parent_id`), flattened for a list: each right under its launcher, one level
+ *  deeper; one whose launcher is not listed (it ended before the node's one-day cutoff) at the top level. Within a
+ *  level running ones first, then the newest first (as the node lists them). */
+export function subagentTree(all: Subagent[] | undefined): SubagentRow[] {
+  const list = all ?? [];
+  const listed = new Set(list.map((a) => a.id));
+  const newest = (a: Subagent) => Date.parse(a.started_at ?? "") || 0;
+  const order = (a: Subagent, b: Subagent) => Number(Boolean(b.running)) - Number(Boolean(a.running)) || newest(b) - newest(a);
+  const kids = new Map<string, Subagent[]>();
+  for (const a of [...list].sort(order)) {
+    const p = a.parent_id && a.parent_id !== a.id && listed.has(a.parent_id) ? a.parent_id : "";
+    kids.set(p, [...(kids.get(p) ?? []), a]);
+  }
+  const out: SubagentRow[] = [];
+  const placed = new Set<string>();
+  const place = (a: Subagent, depth: number) => {
+    if (placed.has(a.id)) return;
+    placed.add(a.id);
+    out.push({ agent: a, depth });
+    for (const k of kids.get(a.id) ?? []) place(k, depth + 1);
+  };
+  for (const a of kids.get("") ?? []) place(a, 0);
+  // launchers naming each other (only a runtime could write that) are reached from nowhere: list them at the top
+  for (const a of [...list].sort(order)) place(a, 0);
+  return out;
+}

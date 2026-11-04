@@ -17,7 +17,8 @@ import (
 
 // Subagents: Claude Code keeps each agent a session launches in <transcript dir>/<session>/subagents/
 // agent-<id>.jsonl (all lines isSidechain) with agent-<id>.meta.json beside it ({agentType, description, toolUseId,
-// requestShape, finished}). The phone reads one like a session whose id is "<session>@<agent id>".
+// requestShape, finished, parentAgentId, isFork}). The phone reads one like a session whose id is "<session>@<agent id>".
+// A subagent's own subagents are in the same directory, naming their launcher in parentAgentId (absent: the session).
 
 const subagentSep = "@"
 
@@ -57,9 +58,12 @@ type subagentMeta struct {
 	ToolUseID    string `json:"toolUseId"`
 	RequestShape string `json:"requestShape"`
 	Finished     bool   `json:"finished"`
+	ParentID     string `json:"parentAgentId"`
+	Fork         bool   `json:"isFork"`
 }
 
-// subagents lists a session's subagents, newest first; finished ones older than a day are left out.
+// subagents lists a session's subagents, newest first; finished ones older than a day are left out (each on its own:
+// a nested one stays listed when its parent is left out).
 func (n *Node) subagents(parent string) []proto.Subagent {
 	dir := n.subagentDir(parent)
 	if dir == "" {
@@ -90,7 +94,7 @@ func (n *Node) subagents(parent string) []proto.Subagent {
 		started, last := subagentEdgesCached(jp, st)
 		out = append(out, proto.Subagent{
 			ID: id, SessionID: parent + subagentSep + id, Type: m.AgentType, Description: m.Description,
-			ToolUseID: m.ToolUseID, Running: running, Background: m.RequestShape == "background",
+			ToolUseID: m.ToolUseID, ParentID: m.ParentID, Fork: m.Fork, Running: running, Background: m.RequestShape == "background",
 			StartedAt: started, UpdatedAt: st.ModTime(), LastText: snippet(last),
 		})
 	}

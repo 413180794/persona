@@ -41,6 +41,22 @@ base URL 和模型都相同的启动器只有一个就是它；否则如果这�
   只显示第一次和放弃时那次；`error` 在别的行里可能是字符串，解析时按原始 JSON 取。同一条 `<task-notification>` 常同时写成 user 行和
   queued_command，内容完全相同的只显示一次（同一任务内容不同的多次通知都是真事件）。
 
+## 后台会话（/fork、转到后台）
+
+2026-11-04 在 Claude Code 2.1.303 上实测（代码 `server/internal/node/claudebg.go`）：
+
+- `/fork <话>` 起的会话、转到后台的会话不在终端里跑：`claude daemon` 起一个 claude 进程跑它，它的 `sessions/<pid>.json` 是
+  `kind: "bg"`，`status` 是 `busy` / `idle` / `waiting`（等提问或对话框）。没有窗格，herdr 也收不到它的 SessionStart hook。
+  transcript 照常在 `projects/<cwd>/<会话 id>.jsonl`（fork 把历史抄过来换成新 id，每行带 `sessionKind: "bg"`），子 Agent 在它旁边。以前它一直列成离线。
+- node 把活着的后台会话（pid 还在、不是没认领的预热进程 `spare`、已经有 transcript）列成运行中：busy → working、idle → idle、
+  waiting → blocked，其余 unknown。来源 `source_kind: "claude_bg"`，`capabilities` 只有 `read`，带 `read_only_reason`：App 能看（对话流式更新、
+  子 Agent、后台任务照常），不能发消息、答卡片、看终端，hub 也不给它建屏幕卡片。万一发了，node 照样拒绝（跑它的 claude 开着这个会话，
+  `open_elsewhere`），什么都不输入。Claude 自己的 peer socket 协议没有接。
+- 把自己的会话转到后台的交互式 claude：`sessions/<pid>.json` 的 `sessionId` 不变、多一个 `parkedJobId`（原 transcript 末尾写
+  `continued-in`），窗格里换成 Claude 的 agents 视图，回到会话时 `parkedJobId` 去掉。herdr 仍按 SessionStart 记下的 id 认这个窗格、
+  按终端标题（agents 视图里打开的后台会话的）报状态，于是原会话显示「工作中」，手机发给它的消息会打进 agents 视图。node 和 Claude Code
+  一样认为 parked 的进程不算开着这个会话：只有 parked 的进程开着的会话不占这个窗格，列成离线，claude 回到它后恢复。
+
 ## 屏蔽配置目录（#676）
 
 有的机器上跑着自动化脚本，用单独的 `CLAUDE_CONFIG_DIR` 起 claude，每隔几分钟一条新会话。node 每 30 秒扫描运行中 claude 的环境变量，
@@ -249,8 +265,11 @@ hooks 和上面一样是插件，比 agent 的多一个 Bash 上的飞书闸门�
 
 - 文件：`~/.claude/projects/<cwd>/<session>/subagents/agent-<id>.jsonl`（每行 `isSidechain:true`、带 `agentId`，格式同主 transcript）
   + `agent-<id>.meta.json`：`{agentType, description, toolUseId, requestShape:"background"|…, finished}`。
+- 嵌套（2026-11-04 看 2.1 写的 meta）：子 Agent 再起的子 Agent 也在同一个 `subagents/` 目录，meta 多了 `parentAgentId`（起它的子 Agent 的 id，主会话起的没有这个字段）、
+  `spawnDepth`（1 = 主会话起的）、`isFork`（`agentType: "fork"` 的为 true），还有 `launchedWithDefaults`、`requestNonInteractive`、`model`。
 - node：会话 id `<session>@<agent id>` 打开子 Agent 的文件（`transcript.NewSubagentFile`，保留 sidechain 行），所以 items / watch / 分页全复用；
-  `Session.subagents` 列出子 Agent（未 finished 且 20 分钟内有写入算运行中；完成超过一天的不列）。后台任务列表里不再放 agent，只剩 shell。
+  `Session.subagents` 列出子 Agent（未 finished 且 20 分钟内有写入算运行中；完成超过一天的不列，每个单独判断：父的没列、子的照列）。后台任务列表里不再放 agent，只剩 shell。
+  meta 只用 `agentType`、`description`、`toolUseId`、`requestShape`、`finished`、`parentAgentId`（→ `parent_id`）、`isFork`（→ `fork`）；层级由客户端按 `parent_id` 搭，不用 `spawnDepth`。
 
 ## 跨会话消息（2026-10-25 实测）
 

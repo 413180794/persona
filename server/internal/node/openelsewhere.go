@@ -26,11 +26,39 @@ func (n *Node) claudeOpenElsewhere(id string) (pid int, where string, ok bool) {
 	if id == "" {
 		return 0, "", false
 	}
+	for _, c := range n.liveClaudes() {
+		if c.SessionID == id {
+			return c.pid, whereOpen(c.Entrypoint), true
+		}
+	}
+	return 0, "", false
+}
+
+// claudeProc is a running claude's sessions/<pid>.json: the session it has open and how it runs it.
+type claudeProc struct {
+	pid        int
+	SessionID  string `json:"sessionId"`
+	Entrypoint string `json:"entrypoint"`
+	Cwd        string `json:"cwd"`
+	Name       string `json:"name"`
+	// Kind is "interactive" for a claude in a terminal, "bg" for a background session Claude's daemon runs; Status is
+	// busy, idle or waiting (claudebg.go).
+	Kind   string `json:"kind"`
+	Status string `json:"status"`
+	// ParkedJobID is set while an interactive claude has sent its own session to the background (claudebg.go).
+	ParkedJobID string `json:"parkedJobId"`
+	Spare       bool   `json:"spare"` // a warm background process no session has claimed yet
+}
+
+// liveClaudes reads the sessions/<pid>.json of every claude still running, in every config directory, once per pid.
+func (n *Node) liveClaudes() []claudeProc {
+	var out []claudeProc
+	seen := map[int]bool{}
 	for _, dir := range n.claudeConfigDirs() {
 		files, _ := filepath.Glob(filepath.Join(dir, "sessions", "*.json"))
 		for _, f := range files {
 			p, err := strconv.Atoi(strings.TrimSuffix(filepath.Base(f), ".json"))
-			if err != nil || p <= 0 {
+			if err != nil || p <= 0 || seen[p] {
 				continue
 			}
 			st, err := os.Stat(f)
@@ -41,17 +69,15 @@ func (n *Node) claudeOpenElsewhere(id string) (pid int, where string, ok bool) {
 			if err != nil {
 				continue
 			}
-			var s struct {
-				SessionID  string `json:"sessionId"`
-				Entrypoint string `json:"entrypoint"`
+			c := claudeProc{pid: p}
+			if json.Unmarshal(b, &c) != nil || !alive(p) {
+				continue // a file left by a claude that exited
 			}
-			if json.Unmarshal(b, &s) != nil || s.SessionID != id || !alive(p) {
-				continue // another session, or a file left by a claude that exited
-			}
-			return p, whereOpen(s.Entrypoint), true
+			seen[p] = true
+			out = append(out, c)
 		}
 	}
-	return 0, "", false
+	return out
 }
 
 // whereOpen names the client a claude runs in, from its entrypoint.

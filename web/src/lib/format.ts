@@ -10,6 +10,7 @@ export function sessionCan(s: Session | undefined, operation: keyof SessionCapab
 export function sourceSubtitle(s?: Session): string {
   if (!s?.source_kind) return "";
   const label = s.source_kind === "codex_app_server" ? "Codex 实时" : s.source_kind === "codex_history" ? "Codex 历史" : s.source_kind === "identity_conflict" ? "身份冲突"
+    : s.source_kind === "claude_bg" ? "Claude 后台"
     : s.source_kind === "runtime" ? s.agent_label || s.agent || "runtime" // an agent runtime's session (docs/runtimes.md): its own name
     : s.source_kind;
   const detail = s.source_kind !== "identity_conflict" && s.agent_name ? ` · ${s.agent_name}` : "";

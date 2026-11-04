@@ -53,6 +53,7 @@ class SessionSourceTest {
         assertFalse(live.copy(attached = true).canAttach)
         assertTrue(live.copy(capabilities = live.capabilities!!.copy(interrupt = true)).canInterrupt)
         assertEquals("Codex 实时 · j-3f2a", live.sourceSubtitle)
+        assertEquals("Claude 后台 · 仅查看：此来源尚未允许发送", live.copy(sourceKind = "claude_bg", agentName = null, capabilities = SessionCapabilities(read = true)).sourceSubtitle)
         // Codex is not Claude: no modes, no /model or /clear even when it can send.
         assertFalse(live.canChangeModes || live.canTypeClaudeCommands)
     }

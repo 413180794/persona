@@ -40,6 +40,7 @@ val Session.source: SessionSourceInfo?
             "codex_app_server" -> "Codex 实时"
             "codex_history" -> "Codex 历史"
             "identity_conflict" -> "身份冲突"
+            "claude_bg" -> "Claude 后台"
             // An agent runtime's session (docs/runtimes.md): its own name, "DSH".
             "runtime" -> agentLabel
             else -> sourceKind?.takeIf(String::isNotEmpty)

@@ -4258,6 +4258,13 @@ if os.environ.get("MOCK_CHAT_LINES") == "1":
         + tool("Bash", {"command": "npm run test:e2e -- search", "description": "跑搜索的用例"}, "31 passed, 2 failed", 30)
         + [it("assistant", "thinking", 29, text="两个失败都在价格筛选，看一下是不是数据的问题。")]
         + tool("Read", {"file_path": "/Users/me/code/shop-web/e2e/search.spec.ts"}, "test('price filter', …)", 28))
+    # the search one launched one of its own, which forked itself once (they show nested in 全部子 Agent, web and iOS)
+    ITEMS[LINES + "@sa3price"] = (
+        [it("user", "text", 27, text="查价格筛选的测试数据")]
+        + [it("assistant", "text", 26, text="测试数据里有两件商品没有价格，筛选把它们排除了。")])
+    ITEMS[LINES + "@sa4fork"] = (
+        [it("user", "text", 26, text="核对没有价格的商品")]
+        + [it("assistant", "text", 25, text="两件商品是下架的旧数据。")])
     SESSIONS.append(sess("macbook", LINES, "首页性能和回归", "/Users/me/code/shop-web", "done", "unread", "shop-web", 15, "perf", 1, 5,
                          "首页的懒加载和骨架屏做完了。",
                          loop={"kind": "wakeup", "prompt": "/loop 每 30 分钟检查 CI，红了就修", "interval_seconds": 1800,
@@ -4269,7 +4276,11 @@ if os.environ.get("MOCK_CHAT_LINES") == "1":
                                      "last_text": "结算流程 42 个用例全部通过。"},
                                     {"id": "sa2search", "session_id": LINES + "@sa2search", "type": "general-purpose",
                                      "description": "回归：搜索和筛选", "tool_use_id": _sa2, "running": True, "background": True,
-                                     "started_at": ago(minutes=37)}]))
+                                     "started_at": ago(minutes=37)},
+                                    {"id": "sa3price", "session_id": LINES + "@sa3price", "type": "Explore", "parent_id": "sa2search",
+                                     "description": "查价格筛选的测试数据", "running": False, "started_at": ago(minutes=27)},
+                                    {"id": "sa4fork", "session_id": LINES + "@sa4fork", "type": "fork", "fork": True, "parent_id": "sa3price",
+                                     "description": "核对没有价格的商品", "running": False, "started_at": ago(minutes=26)}]))
 
 
 # MOCK_API_ERRORS=1: model API errors as Claude Code writes them when it gives up. The home conversation ends with the

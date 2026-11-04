@@ -26,6 +26,7 @@ describe("session capability contract", () => {
     expect(sessionCan(history, "read")).toBe(true);
     for (const op of operations.filter((op) => op !== "read")) expect(sessionCan(history, op)).toBe(false);
     expect(sourceSubtitle(history)).toContain("仅查看：外部进程正在使用此会话");
+    expect(sourceSubtitle({ ...history, source_kind: "claude_bg", read_only_reason: "回复请在电脑上打开" })).toBe("Claude 后台 · 仅查看：回复请在电脑上打开");
   });
 
   it("offers attach but not terminal, close or interrupt until explicitly granted", () => {

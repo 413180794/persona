@@ -52,6 +52,10 @@ export interface Subagent {
   description?: string;
   running?: boolean;
   tool_use_id?: string;
+  /** The subagent that launched it; absent when the session did. One not in the list: shown at the top level. */
+  parent_id?: string;
+  /** A fork of its launcher's conversation. */
+  fork?: boolean;
   background?: boolean;
   started_at?: string;
   updated_at?: string;

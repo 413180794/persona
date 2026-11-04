@@ -379,6 +379,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     [tr.items, session?.subagents, assistant],
   );
   const agents = assistant ? [] : visibleSubagents(session?.subagents, viewed?.id);
+  const allAgents = assistant ? [] : (session?.subagents ?? []);
   const onSplit = useCallback((g: string) => setSplit((x) => new Set([...x, g])), []);
   const onUnsplit = useCallback((g: string) => setSplit((x) => new Set([...x].filter((y) => y !== g))), []);
   const lastLine = lines[lines.length - 1];
@@ -413,7 +414,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         onStopLoop={() => void deliver({ text: STOP_LOOP_MESSAGE, images: [] }, uuid())}
         last={assistant ? tr.items[tr.items.length - 1] : undefined}
       />
-      {agents.length > 0 && <AgentStrip agents={agents} viewing={viewed?.id} onSelect={setViewing} />}
+      {allAgents.length > 0 && <AgentStrip agents={agents} all={allAgents} viewing={viewed?.id} onSelect={setViewing} />}
 
       <div className="relative min-h-0 flex-1">
         <div ref={scroller} onScroll={onScroll} data-chat-scroll className="h-full overflow-y-auto [overflow-anchor:none]">

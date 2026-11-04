@@ -599,6 +599,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         case "codex_app_server": "Codex 实时"
         case "identity_conflict": "身份冲突"
         case "codex_history": "Codex 历史"
+        case "claude_bg": "Claude 后台"
         case "runtime": agentLabel // an agent runtime's session (docs/runtimes.md): its own name, "DSH"
         case .some(let kind) where !kind.isEmpty: kind
         default: nil
@@ -724,6 +725,10 @@ nonisolated struct Subagent: Codable, Identifiable, Hashable, Sendable {
     var description: String?
     var toolUseID: String?
     var running: Bool
+    /// The subagent that launched it; nil when the session did. One not in the list: shown at the top level.
+    var parentID: String?
+    /// A fork of its launcher's conversation.
+    var fork: Bool?
     var background: Bool?
     var startedAt: Date?
     var updatedAt: Date?
@@ -732,9 +737,46 @@ nonisolated struct Subagent: Codable, Identifiable, Hashable, Sendable {
     var title: String { (description?.isEmpty == false ? description : nil) ?? type ?? "子 Agent" }
 
     enum CodingKeys: String, CodingKey {
-        case id, type, description, running, background
-        case sessionID = "session_id", toolUseID = "tool_use_id", startedAt = "started_at", updatedAt = "updated_at",
-             lastText = "last_text"
+        case id, type, description, running, fork, background
+        case sessionID = "session_id", toolUseID = "tool_use_id", parentID = "parent_id", startedAt = "started_at",
+             updatedAt = "updated_at", lastText = "last_text"
+    }
+}
+
+nonisolated extension Subagent {
+    /// A line of `tree(_:)`: the subagent and how deep it sits (0: the session launched it, or its launcher is not
+    /// listed; 1: a subagent did; …).
+    struct TreeRow: Hashable, Sendable {
+        var agent: Subagent
+        var depth: Int
+    }
+
+    /// Every subagent by who launched whom (`parentID`), flattened for a list: each right under its launcher, one level
+    /// deeper; one whose launcher is not listed (it ended before the node's one-day cutoff) at the top level. Within a
+    /// level running ones first, then the newest first (as the node lists them; web `subagentTree`).
+    static func tree(_ all: [Subagent]) -> [TreeRow] {
+        let listed = Set(all.map(\.id))
+        let ordered = all.enumerated().sorted { a, b in
+            if a.element.running != b.element.running { return a.element.running }
+            let x = a.element.startedAt ?? .distantPast, y = b.element.startedAt ?? .distantPast
+            return x != y ? x > y : a.offset < b.offset
+        }.map(\.element)
+        var kids: [String: [Subagent]] = [:]
+        for a in ordered {
+            let p = a.parentID.flatMap { $0 != a.id && listed.contains($0) ? $0 : nil } ?? ""
+            kids[p, default: []].append(a)
+        }
+        var out: [TreeRow] = []
+        var placed: Set<String> = []
+        func place(_ a: Subagent, depth: Int) {
+            guard placed.insert(a.id).inserted else { return }
+            out.append(TreeRow(agent: a, depth: depth))
+            for k in kids[a.id] ?? [] { place(k, depth: depth + 1) }
+        }
+        for a in kids[""] ?? [] { place(a, depth: 0) }
+        // Launchers naming each other (only a runtime could write that) are reached from nowhere: list them at the top.
+        for a in ordered { place(a, depth: 0) }
+        return out
     }
 }
 

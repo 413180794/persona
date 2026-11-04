@@ -1877,11 +1877,12 @@ struct ChatView: View {
                         .padding(.horizontal, Theme.Space.l)
                         .padding(.bottom, Theme.Space.s)
                 }
-                // Only while subagents run (plus the one being read): finished ones stay reachable from their
-                // Agent call ("查看子 Agent") without taking a row here.
-                let agents = (session?.subagents ?? []).filter { $0.running || $0.id == viewing?.id }
-                if pane == .chat, !agents.isEmpty {
-                    AgentStrip(agents: agents, viewing: viewing?.id) { a in view(a) }
+                // Chips only while subagents run (plus the one being read); finished and nested ones are in its
+                // 「全部子 Agent」 and stay reachable from their Agent call ("查看子 Agent").
+                let all = session?.subagents ?? []
+                let agents = all.filter { $0.running || $0.id == viewing?.id }
+                if pane == .chat, !all.isEmpty {
+                    AgentStrip(agents: agents, all: all, viewing: viewing?.id) { a in view(a) }
                 }
             }
         } compact: {
@@ -1928,7 +1929,7 @@ struct ChatView: View {
     }
 
     /// The header's other half while its buttons are in the side column: the title (a tap shows the session's info),
-    /// and when there are any the space's other agents, a /loop or background work and running subagents. It stays put.
+    /// and when there are any the space's other agents, a /loop or background work and subagents. It stays put.
     private var sideHeader: some View {
         VStack(spacing: Theme.Space.sm) {
             titleButton
@@ -1943,9 +1944,10 @@ struct ChatView: View {
                 }
             }
             if let ports = session?.ports, !ports.isEmpty { SessionPortChips(machine: key.machineRef, ports: ports) }
-            let agents = (session?.subagents ?? []).filter { $0.running || $0.id == viewing?.id }
-            if pane == .chat, !agents.isEmpty {
-                AgentStrip(agents: agents, viewing: viewing?.id) { a in view(a) }
+            let all = session?.subagents ?? []
+            let agents = all.filter { $0.running || $0.id == viewing?.id }
+            if pane == .chat, !all.isEmpty {
+                AgentStrip(agents: agents, all: all, viewing: viewing?.id) { a in view(a) }
             }
         }
         .padding(.horizontal, Theme.Space.l)

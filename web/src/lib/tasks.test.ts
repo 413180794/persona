@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseAPIError } from "./api-errors";
-import { buildTaskIndex, loopCadence, loopLabel, loopNext, loopShortLabel, loopTask, taskBadge, taskPill, wakeSummary } from "./tasks";
-import type { Item } from "./types";
+import { buildTaskIndex, loopCadence, loopLabel, loopNext, loopShortLabel, loopTask, subagentTree, taskBadge, taskPill, wakeSummary } from "./tasks";
+import type { Item, Subagent } from "./types";
 
 describe("buildTaskIndex", () => {
   it("finds the call a notice came from by its task id", () => {
@@ -46,6 +46,42 @@ describe("loops", () => {
     expect(loopNext(loop, now)).toContain("还有 4 分钟");
     expect(loopLabel({ ...loop, next_at: "2026-11-02T09:00:00Z" }, now)).toBe("循环执行中");
     expect(loopCadence({ kind: "cron", cron: "33 17 * * *" })).toBe("按计划 33 17 * * *");
+  });
+});
+
+describe("subagentTree", () => {
+  const sub = (id: string, minutesAgo: number, more: Partial<Subagent> = {}): Subagent => ({
+    id, session_id: `s1@${id}`, started_at: new Date(Date.parse("2026-11-02T10:00:00Z") - minutesAgo * 60_000).toISOString(), ...more,
+  });
+  const shape = (rows: ReturnType<typeof subagentTree>) => rows.map((r) => `${"  ".repeat(r.depth)}${r.agent.id}`);
+
+  it("nests each under its launcher, several levels deep", () => {
+    const rows = subagentTree([
+      sub("e5", 1, { parent_id: "c3", fork: true }),
+      sub("b2", 9),
+      sub("c3", 6, { parent_id: "a1" }),
+      sub("a1", 10, { running: true }),
+      sub("f6", 2, { parent_id: "c3", fork: true }),
+      sub("d4", 5, { parent_id: "a1" }),
+    ]);
+    expect(shape(rows)).toEqual(["a1", "  d4", "  c3", "    e5", "    f6", "b2"]);
+  });
+
+  it("puts one whose launcher is not listed at the top level", () => {
+    expect(shape(subagentTree([sub("a1", 10), sub("k9", 3, { parent_id: "gone" }), sub("c3", 6, { parent_id: "a1" })]))).toEqual(["k9", "a1", "  c3"]);
+  });
+
+  it("orders each level running first, then newest first", () => {
+    const rows = subagentTree([
+      sub("old", 30), sub("new", 1), sub("live", 50, { running: true }),
+      sub("kid-old", 20, { parent_id: "old" }), sub("kid-live", 25, { parent_id: "old", running: true }), sub("kid-new", 2, { parent_id: "old" }),
+    ]);
+    expect(shape(rows)).toEqual(["live", "new", "old", "  kid-live", "  kid-new", "  kid-old"]);
+  });
+
+  it("lists launchers naming each other once, from the top", () => {
+    expect(shape(subagentTree([sub("x", 2, { parent_id: "y" }), sub("y", 1, { parent_id: "x" }), sub("z", 3, { parent_id: "z" })]))).toEqual(["z", "y", "  x"]);
+    expect(subagentTree(undefined)).toEqual([]);
   });
 });
 

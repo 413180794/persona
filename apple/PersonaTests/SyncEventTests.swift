@@ -67,6 +67,8 @@ struct SyncEventTests {
         let history = try decode(#"{"session_id":"opaque","source_kind":"codex_history","source_thread_id":"thread","source_instance_id":"instance","parent_thread_id":"parent","capabilities":{"read":true},"read_only_reason":"外部进程正在使用此会话"}"#)
         #expect(history.canRead && !history.canSend && !history.canInterrupt && !history.canApprove && !history.canTerminal && !history.canAttach)
         #expect(history.sourceSubtitle == "Codex 历史 · 仅查看：外部进程正在使用此会话")
+        let bg = try decode(#"{"session_id":"s","source_kind":"claude_bg","capabilities":{"read":true},"read_only_reason":"回复请在电脑上打开"}"#)
+        #expect(bg.sourceSubtitle == "Claude 后台 · 仅查看：回复请在电脑上打开")
         #expect(history.resumeCommand == "codex resume")
         #expect(history.sourceThreadID == "thread" && history.sourceInstanceID == "instance" && history.parentThreadID == "parent")
         let roundTrip = try JSON.decoder.decode(Session.self, from: JSON.encoder.encode(history))

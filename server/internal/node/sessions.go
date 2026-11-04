@@ -612,6 +612,10 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 			seen[s.SessionID] = true
 		}
 	}
+	for _, s := range n.claudeBgSessions(n.liveClaudes(), seen) { // Claude's background sessions (claudebg.go)
+		out = append(out, s)
+		seen[s.SessionID] = true
+	}
 	for _, s := range n.codexSessions(seen) {
 		out = append(out, s)
 	}
@@ -938,6 +942,7 @@ func (n *Node) setAgents(agents []host.Agent) {
 func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 	m := map[string]host.Agent{}
 	var unknown, codex, pi []host.Agent
+	parked := parkedClaudeSessions(n.liveClaudes()) // claudebg.go
 	n.mu.Lock()
 	for _, a := range agents {
 		if a.Agent == "codex" {
@@ -958,6 +963,9 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 			continue
 		}
 		if id := a.SessionID(); id != "" {
+			if parked[id] {
+				continue // its claude sent the session to the background: the pane shows Claude's agents view
+			}
 			if liveTaken(m, id) && a.AgentStatus == proto.StatusOffline {
 				continue // the same session runs in another host's pane (botmux's parked row, herdr's resume)
 			}
@@ -981,6 +989,9 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 		// redeploy two panes showed sessions they had run days earlier). A guess (title, then newest transcript in
 		// the directory) is the last resort — six agents in one repo got each other's tab names that way.
 		id := n.sessionFromProcess(a.PaneID)
+		if parked[id] {
+			continue // the same, as the pane's own claude tells it
+		}
 		if id == "" {
 			n.mu.Lock()
 			id = n.panes[a.PaneID]

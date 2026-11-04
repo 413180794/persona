@@ -32,6 +32,9 @@
 - 没装 herdr claude integration 的机器，`agent list` 不带 session id（见 `docs/claude-integration.md` 的兜底）。
 - 没装 herdr claude 集成的机器认窗格对应哪个会话，用 `herdr pane process-info` 拿 claude 的 pid，再读
   `~/.claude/sessions/<pid>.json` 的 sessionId；别靠「同目录最新的 transcript」猜（同一个仓库里开六个 Agent，tab 名全串了）。
+- Claude Code 2.1.30x 的 `/fork`、转到后台的会话跑在 Claude 的 daemon 里（`sessions/<pid>.json` 的 `kind: "bg"`），没有窗格、herdr 没有 hook，
+  一直列成离线；原窗格的 claude 带着 `parkedJobId` 显示 agents 视图，herdr 却仍按原会话 id 和后台会话的终端标题报「工作中」（2026-11-04）。
+  认窗格之前看 `sessions/<pid>.json`：parked 的进程不算开着它的会话（`docs/claude-integration.md`「后台会话」）。
 - herdr 不认识的 Agent（TRAEX）：herdr 只报它内置识别的 Agent，`agent prompt` 对其他窗格报 not found。node 用 owner 文件（pid → 会话）
   加 pid 环境变量里的 `HERDR_PANE_ID`（pid → 窗格）自己认，状态看标题转圈字符和屏幕（`docs/codex.md` TRAEX 一节）。
 - Claude Code 的配置目录不一定是 `~/.claude`：启动器设了 `CLAUDE_CONFIG_DIR`（多套 profile）时 transcript、`sessions/<pid>.json`、`settings.json`

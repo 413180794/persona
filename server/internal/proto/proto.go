@@ -948,6 +948,8 @@ type Subagent struct {
 	Type        string    `json:"type,omitempty"`
 	Description string    `json:"description,omitempty"`
 	ToolUseID   string    `json:"tool_use_id,omitempty"`
+	ParentID    string    `json:"parent_id,omitempty"` // the launching subagent's id; empty: the session (an unlisted one: show at the top)
+	Fork        bool      `json:"fork,omitempty"`      // a fork of its launcher's conversation (agentType "fork")
 	Running     bool      `json:"running"`
 	Background  bool      `json:"background,omitempty"`
 	StartedAt   time.Time `json:"started_at,omitempty"`
