@@ -89,6 +89,38 @@ struct TasksTests {
         #expect(TaskNow(lead: nil, working: true) == nil)
     }
 
+    /// Running subagents of a lead session are summarized below its own step, while TaskNow stays untouched.
+    @Test func runningSubagentsSummarizeUnderTaskProgress() throws {
+        var lead = try lead(state: "working", lastText: "排查中", activity: "在跑测试", at: "2026-11-04T01:20:13Z")
+        #expect(runningSubagents(lead).isEmpty)
+        #expect(subagentsSummaryLine(runningSubagents(lead)) == nil)
+        #expect(TaskNow(lead: lead, working: true) == .step("在跑测试", since: lead.activityAt))
+
+        lead.subagents = [
+            Subagent(id: "s1", sessionID: "s1", type: "Explore", description: "扫目录", running: true),
+            Subagent(id: "s2", sessionID: "s2", type: "Review", description: nil, running: true),
+            Subagent(id: "s3", sessionID: "s3", type: nil, description: nil, running: true),
+            Subagent(id: "s4", sessionID: "s4", type: "Test", description: "已结束", running: false)
+        ]
+
+        let active = runningSubagents(lead)
+        #expect(active == ["扫目录", "Review", "子任务"])
+        #expect(subagentsSummaryLine(active) == "子 Agent 在跑：扫目录、Review、子任务")
+        // TaskNow still follows the lead agent itself
+        #expect(TaskNow(lead: lead, working: true) == .step("在跑测试", since: lead.activityAt))
+
+        // More than 3 running subagents append count
+        lead.subagents?.append(Subagent(id: "s5", sessionID: "s5", type: "Verify", description: "验证修复", running: true))
+        let more = runningSubagents(lead)
+        #expect(more.count == 4)
+        #expect(subagentsSummaryLine(more) == "子 Agent 在跑：扫目录、Review、子任务 等 4 个")
+
+        // Subagent changes cause Session.sameApartFromTicks to detect difference and trigger redrawing
+        var leadChanged = lead
+        leadChanged.subagents?[0].running = false
+        #expect(!Session.sameApartFromTicks(lead, leadChanged))
+    }
+
     /// A step's time reads in minutes and is drawn again often enough for them.
     @Test func aStepSaysHowLongItHasGoneOn() {
         let start = Date(timeIntervalSince1970: 1_793_755_213)

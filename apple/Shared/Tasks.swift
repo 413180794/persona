@@ -374,6 +374,28 @@ nonisolated enum TaskNow: Equatable, Sendable {
     }
 }
 
+/// What each of an agent's running subagents is for (docs/unified-entry.md): shown under its own progress,
+/// never instead of it.
+nonisolated func runningSubagents(_ lead: Session?) -> [String] {
+    (lead?.subagents ?? [])
+        .filter(\.running)
+        .map {
+            let desc = $0.description?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !desc.isEmpty { return desc }
+            let typ = $0.type?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !typ.isEmpty { return typ }
+            return "子任务"
+        }
+}
+
+/// A single summary line of running subagents for task cards: "子 Agent 在跑：A、B" (at most 3; "等 N 个" if more).
+nonisolated func subagentsSummaryLine(_ subagents: [String]) -> String? {
+    guard !subagents.isEmpty else { return nil }
+    let head = subagents.prefix(3).joined(separator: "、")
+    let tail = subagents.count > 3 ? " 等 \(subagents.count) 个" : ""
+    return "子 Agent 在跑：\(head)\(tail)"
+}
+
 // MARK: - Endpoints
 
 nonisolated extension APIClient {

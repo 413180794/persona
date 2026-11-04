@@ -392,25 +392,35 @@ struct TaskNowLine: View {
         let tint: Color? = state == .needsYou ? state.agentState.tone.text : state == .failed ? Theme.danger : nil
         let since: Date? = if state != .needsYou, state != .failed, case .step(_, let at)? = now { at } else { nil }
         let isStep: Bool = if state != .needsYou, state != .failed, case .step? = now { true } else { false }
+        let subagents = (state == .working || state == .needsYou) ? runningSubagents(lead) : []
+        let subagentsLine = subagentsSummaryLine(subagents)
         // What the agent says starts at the well's edge; only a question for the user keeps its mark.
-        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
-            if state == .needsYou {
-                Image(systemName: Theme.Icon.askFirst)
-                    .font(Theme.Font.label)
-                    .foregroundStyle(state.agentState.tone.text)
-            }
-            Text(text)
-                .font(Theme.Font.secondary)
-                .foregroundStyle(tint ?? (isStep ? .secondary : .primary))
-                .lineLimit(isStep ? 1 : 2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if let since {
-                // How long the step has gone on: a long test run or CI wait reads as one, not as a stuck card.
-                TimelineView(.periodic(from: .now, by: TaskClock.tick)) { context in
-                    if let t = TaskClock.since(since, now: context.date) {
-                        Text(t).font(Theme.Font.caption).foregroundStyle(.tertiary).lineLimit(1).fixedSize()
+        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+                if state == .needsYou {
+                    Image(systemName: Theme.Icon.askFirst)
+                        .font(Theme.Font.label)
+                        .foregroundStyle(state.agentState.tone.text)
+                }
+                Text(text)
+                    .font(Theme.Font.secondary)
+                    .foregroundStyle(tint ?? (isStep ? .secondary : .primary))
+                    .lineLimit(isStep ? 1 : 2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let since {
+                    // How long the step has gone on: a long test run or CI wait reads as one, not as a stuck card.
+                    TimelineView(.periodic(from: .now, by: TaskClock.tick)) { context in
+                        if let t = TaskClock.since(since, now: context.date) {
+                            Text(t).font(Theme.Font.caption).foregroundStyle(.tertiary).lineLimit(1).fixedSize()
+                        }
                     }
                 }
+            }
+            if let subagentsLine {
+                Text(subagentsLine)
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
         }
         .padding(.horizontal, Theme.Space.m)
