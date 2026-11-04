@@ -201,6 +201,8 @@ func TestSendDropsAModelTheLauncherNoLongerOffers(t *testing.T) {
 				switch method {
 				case "launchers.models":
 					return map[string]any{"agent": "claude", "models": []any{map[string]any{"id": "claude-opus-5-5"}}}, nil
+				case "launchers.list": // the launcher is still there; only the model is gone
+					return map[string]any{"launchers": []any{map[string]any{"name": "l"}}}, nil
 				case "session.send":
 					mu.Lock()
 					got = map[string]any{}
