@@ -8921,7 +8921,15 @@ class H(BaseHTTPRequestHandler):
             quoted = next((x for x in msgs if x["id"] == reply), None) if reply and not thread else None
             if quoted:
                 m["reply_to"] = {"id": quoted["id"], "sender_name": quoted.get("sender_name", ""), "text": quoted.get("text", "")}
-            msgs.append(m)
+            # Into a thread: it lands in the thread (its page brings the copy), not under the chat.
+            root_id = body.get("thread_root") or (reply if thread else None)
+            if thread and root_id in LARK_THREADS:
+                replies = LARK_THREADS[root_id]
+                m["position"] = str(max([int(x["position"]) for x in replies] or [0]) + 1)
+                m["thread_id"] = root_id
+                replies.append(m)
+            else:
+                msgs.append(m)
             LARK_UPLOADS[key] = m["id"]
             if body.get("name") == "lost-receipt.txt":
                 return self.send_json([])  # Accepted, but the client cannot decode the response as a receipt.

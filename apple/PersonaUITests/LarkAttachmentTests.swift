@@ -276,4 +276,81 @@ final class LarkAttachmentFlowTests: XCTestCase {
         }
         app.terminate()
     }
+
+    // MARK: Pictures and files in a thread (#1035)
+
+    private func hubCarriesAttachmentReplies() async throws -> Bool {
+        let hub = try XCTUnwrap(ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"])
+        var health = URLRequest(url: try XCTUnwrap(URL(string: hub + "/api/v1/health")))
+        health.setValue("Bearer mock", forHTTPHeaderField: "Authorization")
+        let (data, _) = try await URLSession.shared.data(for: health)
+        return ((try JSONSerialization.jsonObject(with: data) as? [String: Any])?["features"] as? [String] ?? []).contains("lark_attachment_reply")
+    }
+
+    private func uploads() async throws -> [String: [String: Any]] {
+        let hub = try XCTUnwrap(ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"])
+        let (data, _) = try await URLSession.shared.data(from: try XCTUnwrap(URL(string: hub + "/mock/lark/uploads")))
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: [String: Any]])
+    }
+
+    /// 周末徒步群 at its thread (60 replies), the thread's box with `draft` picked.
+    @MainActor private func openThread(_ draft: String) throws -> XCUIApplication {
+        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs mock Hub") }
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-demo.on", "NO", "-ui.oldLayout", "NO",
+                               "-openInboxItem", "lark:f3:300", "-showLarkThreadAttachmentDraft", draft]
+        app.launchPinned()
+        let thread = app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "条回复")).firstMatch
+        XCTAssertTrue(thread.waitForExistence(timeout: 20), "the chat did not open at its thread")
+        thread.tapCenter()
+        XCTAssertTrue(app.textFields["lark.thread.box"].waitForExistence(timeout: 10), "the thread sheet has a box")
+        return app
+    }
+
+    @MainActor func testThreadPhotoGoesIntoTheThreadWhenTheHubCanCarryIt() async throws {
+        let carries = try await hubCarriesAttachmentReplies()
+        let app = try openThread("photo")
+        let picked = app.buttons["移除 照片.jpg"]
+        guard carries else {
+            // An older extension would send it to the chat on its own: the thread offers no attachments.
+            XCTAssertFalse(picked.waitForExistence(timeout: 5), "no attachment in a thread without the hub's support")
+            shot(app, "lark-thread-photo-old-plugin")
+            app.terminate(); return
+        }
+        XCTAssertTrue(picked.waitForExistence(timeout: 10))
+        shot(app, "lark-thread-photo-draft")
+        let before = try await uploads().count
+        app.buttons["lark.thread.send"].tapCenter()
+        XCTAssertTrue(picked.waitForNonExistence(timeout: 5))
+        var sent: [String: Any]?
+        for _ in 0..<60 where sent == nil {
+            let now = try await uploads()
+            if now.count > before { sent = now.values.first { $0["thread"] as? Bool == true && ($0["thread_root"] as? String)?.isEmpty == false } }
+            if sent == nil { try await Task.sleep(for: .milliseconds(250)) }
+        }
+        XCTAssertNotNil(sent, "the photo went into the thread, with its root")
+        try await Task.sleep(for: .seconds(3))
+        shot(app, "lark-thread-photo-sent")
+        app.terminate()
+    }
+
+    @MainActor func testFailedThreadFileRetriesOnceIntoTheThread() async throws {
+        guard try await hubCarriesAttachmentReplies() else { throw XCTSkip("needs the hub's support") }
+        let app = try openThread("fail")
+        XCTAssertTrue(app.buttons["移除 retry-once.txt"].waitForExistence(timeout: 10))
+        app.buttons["lark.thread.send"].tapCenter()
+        let failed = app.buttons["lark.outgoing.failed"]
+        XCTAssertTrue(failed.waitForExistence(timeout: 15), "the first try fails and says so in the thread")
+        shot(app, "lark-thread-file-failed")
+        failed.tapCenter()
+        XCTAssertTrue(app.buttons["重发"].waitForExistence(timeout: 5))
+        app.buttons["重发"].tapCenter()
+        XCTAssertTrue(failed.waitForNonExistence(timeout: 15), "the retry goes out")
+        let sent = try await uploads().values.filter { $0["thread"] as? Bool == true }
+        XCTAssertFalse(sent.isEmpty)
+        shot(app, "lark-thread-file-retried")
+        app.terminate()
+    }
 }

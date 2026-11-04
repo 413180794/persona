@@ -62,6 +62,30 @@ struct LarkAttachmentView: View {
     }
 }
 
+/// The attachments picked for the box, each with its remove button (the chat's and a thread's box).
+struct LarkDraftAttachments: View {
+    @Binding var attachments: [LarkAttachment]
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: Theme.Space.s) {
+                ForEach(attachments) { attachment in
+                    HStack(spacing: Theme.Space.xs) {
+                        LarkAttachmentView(attachment: attachment, compact: true)
+                        Button { attachments.removeAll { $0.id == attachment.id } } label: {
+                            Image(systemName: Theme.Icon.close).font(Theme.Font.secondary)
+                                .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
+                        }
+                        .buttonStyle(.plain).accessibilityLabel("移除 \(attachment.name)")
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, Theme.Space.m)
+        .accessibilityIdentifier("lark.draft.attachments")
+    }
+}
+
 struct LarkAttachmentPicker: ViewModifier {
     @Binding var attachments: [LarkAttachment]
     @Binding var photos: Bool

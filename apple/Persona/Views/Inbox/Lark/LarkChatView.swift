@@ -241,6 +241,7 @@ struct LarkChatView: View {
         .onChange(of: mention) { pager.seen.formUnion(book.seen) }
         // Outermost, so the sheets above (a thread, a profile, a reaction picker) are about the same account.
         .environment(\.larkAccount, conversation.account)
+        .environment(\.larkChatOutbox, outbox)
     }
 
     @ViewBuilder private var chatContent: some View {
@@ -451,22 +452,7 @@ struct LarkChatView: View {
                 #endif
             }
             if !attachments.isEmpty {
-                ScrollView(.horizontal) {
-                    HStack(spacing: Theme.Space.s) {
-                        ForEach(attachments) { attachment in
-                            HStack(spacing: Theme.Space.xs) {
-                                LarkAttachmentView(attachment: attachment, compact: true)
-                                Button { attachments.removeAll { $0.id == attachment.id } } label: {
-                                    Image(systemName: Theme.Icon.close).font(Theme.Font.secondary)
-                                        .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
-                                }
-                                .buttonStyle(.plain).accessibilityLabel("移除 \(attachment.name)")
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, Theme.Space.m)
-                .accessibilityIdentifier("lark.draft.attachments")
+                LarkDraftAttachments(attachments: $attachments)
                 if replyTo != nil || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text(replyTo == nil ? "文字和附件将分别发送"
                          : model.larkFeatures.attachmentReplies ? "文字和附件将分别引用发送" : "更新 Hub 上的飞书扩展后才能引用发送附件")
@@ -971,9 +957,11 @@ struct LarkChatView: View {
 
     @ViewBuilder private var outgoingRows: some View {
         let mine = pager.messages.last(where: \.isMine)
-        ForEach(Array(outbox.items.enumerated()), id: \.element.id) { i, o in
+        // Replies queued from a thread show in their thread (LarkThreadView), not under the chat.
+        let rows = outbox.items.filter { !$0.thread }
+        ForEach(Array(rows.enumerated()), id: \.element.id) { i, o in
             let m = o.message(like: mine)
-            let prev = i > 0 ? outbox.items[i - 1].message(like: mine) : pager.messages.last
+            let prev = i > 0 ? rows[i - 1].message(like: mine) : pager.messages.last
             let grouped = LarkChatLayout.continues(m, after: prev)
             if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
             LarkOutgoingRow(outgoing: o, message: m, grouped: grouped, isGroup: conversation.isGroup,

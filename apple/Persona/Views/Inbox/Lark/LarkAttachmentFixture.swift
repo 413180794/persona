@@ -43,6 +43,19 @@ enum LarkAttachmentFixture {
               let kind = UserDefaults.standard.string(forKey: "showLarkAttachmentDraft") else { return [] }
         used = true
         guard !["corrupt", "legacy"].contains(kind) else { return [] }
+        return await stage(kind)
+    }
+
+    /// `-showLarkThreadAttachmentDraft <kind>`: the same pictures and files, picked in a thread's box (#1035).
+    static func loadForThread(config: ServerConfig?) async -> [LarkAttachment] {
+        guard !usedInThread, let config, ["127.0.0.1", "localhost"].contains(config.url.host ?? ""), config.token == "mock",
+              let kind = UserDefaults.standard.string(forKey: "showLarkThreadAttachmentDraft") else { return [] }
+        usedInThread = true
+        return await stage(kind)
+    }
+    private static var usedInThread = false
+
+    private static func stage(_ kind: String) async -> [LarkAttachment] {
         do {
             if kind == "photo", let image = UIImage(named: "app-icon-default"), let data = image.pngData() {
                 return [try await .stagePhoto(data)]

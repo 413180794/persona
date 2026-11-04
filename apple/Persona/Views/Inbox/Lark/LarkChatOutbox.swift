@@ -329,3 +329,9 @@ final class LarkChatOutbox {
         try await next.value
     }
 }
+
+extension EnvironmentValues {
+    /// The open chat's durable queue: a thread opened from the chat queues its pictures and files there, as replies in
+    /// that thread (#1035), so they survive a restart and settle with the chat's own checks. Nil outside a chat.
+    @Entry var larkChatOutbox: LarkChatOutbox? = nil
+}

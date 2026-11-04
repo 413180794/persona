@@ -35,6 +35,13 @@ struct LarkThreadView: View {
     /// Replies on their way (LarkOutgoing, `thread` true), under the loaded ones until their copies arrive.
     @State private var outgoing: [LarkOutgoing] = []
     @State private var sendChain: Task<Void, Never>?
+    /// Pictures and files picked for the box: sent as replies in this thread through the chat's durable queue (#1035).
+    @State private var attachments: [LarkAttachment] = []
+    @State private var showPhotos = false
+    @State private var showFiles = false
+    @State private var preparingAttachment = false
+    @State private var checkingQueued: Set<UUID> = []
+    @Environment(\.larkChatOutbox) private var chatOutbox
     @State private var position = ScrollPosition()
     /// The list stays at its newest reply as it changes (larkFollowsEnd): after sending, or once scrolled to the end.
     @State private var following = false
@@ -82,11 +89,33 @@ struct LarkThreadView: View {
             .scrollPosition($position)
             .larkFollowsEnd($position, following: $following, active: !loading)
             .safeAreaInset(edge: .bottom) {
-                LarkComposer(placeholder: "回复话题", text: $text, focused: $boxFocused, boxID: "lark.thread.box", sendID: "lark.thread.send",
-                             mentionFeed: isGroup ? feedID : nil, me: (replies + [root]).last(where: \.isMine)?.senderID,
-                             mentions: $mentions, send: send)
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    if !attachments.isEmpty { LarkDraftAttachments(attachments: $attachments) }
+                    if preparingAttachment {
+                        HStack(spacing: Theme.Space.s) {
+                            ProgressView().controlSize(.small)
+                            Text("正在准备附件…").font(Theme.Font.label).foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, Theme.Space.m)
+                    }
+                    LarkComposer(placeholder: "回复话题", text: $text, focused: $boxFocused, boxID: "lark.thread.box", sendID: "lark.thread.send",
+                                 attachmentPicker: canAttach ? { photo in if photo { showPhotos = true } else { showFiles = true } } : nil,
+                                 canAddAttachments: attachments.count < LarkAttachment.selectionLimit,
+                                 hasAttachments: !attachments.isEmpty, preparingAttachment: preparingAttachment,
+                                 mentionFeed: isGroup ? feedID : nil, me: (replies + [root]).last(where: \.isMine)?.senderID,
+                                 mentions: $mentions, send: send)
+                }
+                // Picked attachments stand on the page, not over the replies (as in the chat's box).
+                .background {
+                    if !attachments.isEmpty || preparingAttachment { Theme.pageBackground.ignoresSafeArea(edges: .bottom) }
+                }
             }
-            .onChange(of: pager.messages) { _, now in settleOutgoing(now) }
+            .modifier(LarkAttachmentPicker(attachments: $attachments, photos: $showPhotos, files: $showFiles, preparing: $preparingAttachment))
+            .onChange(of: pager.messages) { _, now in
+                settleOutgoing(now)
+                // The chat's own checks do not see thread replies: settle this thread's queued ones here.
+                if let chatOutbox, !queued.isEmpty { Task { try? await chatOutbox.settle(now) } }
+            }
             .onAppear {
                 guard text.isEmpty else { return }
                 let draft = LarkDrafts.shared[.thread(root.id)]
@@ -120,6 +149,9 @@ struct LarkThreadView: View {
                     }
                 }
                 await load()
+                #if DEBUG
+                if canAttach, attachments.isEmpty { attachments = await LarkAttachmentFixture.loadForThread(config: api?.config) }
+                #endif
             }
             // A reply in the thread is a change in its chat: bring the newest replies in while the sheet is open.
             .task(id: feedID) {
@@ -130,7 +162,16 @@ struct LarkThreadView: View {
     }
 
     /// Replies, or mine on their way: a problem is then one line over them rather than the placeholder.
-    private var hasReplies: Bool { !replies.isEmpty || !outgoing.isEmpty }
+    private var hasReplies: Bool { !replies.isEmpty || !outgoing.isEmpty || !queued.isEmpty }
+
+    /// Pictures and files can go into a thread when the hub carries a thread placement for them and the chat's queue,
+    /// bound to its Feishu account, is there to keep them (a thread opened outside a chat has none).
+    private var canAttach: Bool {
+        model.larkFeatures.attachmentReplies && feedID != nil && chatOutbox?.ready == true && chatOutbox?.identity != nil
+    }
+
+    /// This thread's pictures and files on their way (in the chat's queue).
+    private var queued: [LarkOutgoing] { chatOutbox?.items.filter { $0.thread && $0.threadRoot == root.id } ?? [] }
 
     /// Under the 条回复 line while there are no replies to show: loading, none yet, or what went wrong with 重试
     /// (the chat page's states; BeautifulUI draws its own).
@@ -201,10 +242,23 @@ struct LarkThreadView: View {
                 .padding(.top, LarkChatLayout.gap(grouped: grouped))
                 .id(o.id)
         }
+        ForEach(Array(queued.enumerated()), id: \.element.id) { i, o in
+            let m = o.message(like: mine)
+            let prev = i > 0 ? queued[i - 1].message(like: mine) : (outgoing.last?.message(like: mine) ?? replies.last ?? root)
+            let grouped = LarkChatLayout.continues(m, after: prev)
+            LarkOutgoingRow(outgoing: o, message: m, grouped: grouped, isGroup: isGroup,
+                            retry: { resendQueued(o.id) },
+                            edit: { putBack(o) },
+                            discard: { discardQueued(o.id) })
+                .padding(.top, LarkChatLayout.gap(grouped: grouped))
+                .id(o.id)
+        }
     }
 
     private func send() {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty || !attachments.isEmpty else { return }
+        if !attachments.isEmpty { sendAttachments() }
         guard !t.isEmpty else { return }
         let o = LarkOutgoing(text: t, replyTo: LarkReply.quote(root), thread: true, mentions: LarkMentions.mentions(in: t, picked: mentions))
         // One animation for the box shrinking back to a line and the row coming in: the list's bottom inset moves with
@@ -217,6 +271,63 @@ struct LarkThreadView: View {
         Haptics.tap()
         deliver(o.id)
         following = true // the reply shows right above the box (larkFollowsEnd)
+    }
+
+    /// The picked pictures and files go into the chat's durable queue as replies in this thread (#1035): they survive a
+    /// restart, keep their place and account, and are checked before any retry.
+    private func sendAttachments() {
+        guard canAttach, let queue = chatOutbox, let api, let feed = feedID else {
+            model.toast = Toast("需要更新 Hub 上的飞书扩展，才能在话题里发送图片和文件", style: .error); return
+        }
+        let picked = attachments
+        let batch = picked.map { LarkOutgoing(text: "", replyTo: LarkReply.quote(root), thread: true, threadRoot: root.id, attachment: $0) }
+        withAnimation(Theme.Motion.standard) { attachments = [] }
+        Task {
+            do { try await queue.enqueue(batch) } catch {
+                attachments = picked + attachments
+                model.toast = Toast("附件未发送，无法保存到本机，请检查存储空间", style: .error); return
+            }
+            Haptics.tap()
+            for item in batch { queue.deliver(item.id, using: api, feed: feed) { await refreshLatest() } }
+            following = true
+        }
+    }
+
+    /// 重发 a queued picture or file: the thread's newest replies first, so one that went out is not sent twice.
+    private func resendQueued(_ id: UUID) {
+        guard !checkingQueued.contains(id), let queue = chatOutbox, let api, let feed = feedID else { return }
+        checkingQueued.insert(id)
+        Task {
+            defer { checkingQueued.remove(id) }
+            do {
+                try await queue.checkAccount(using: api)
+                try await queue.settle(try await api.larkThread(root.id).messages)
+                guard let item = queue.items.first(where: { $0.id == id }) else { return }
+                guard item.canRetry else {
+                    model.toast = Toast("尚未确认文件是否发出，请稍后再检查", style: .error); return
+                }
+                try await queue.retry(id)
+                queue.deliver(id, using: api, feed: feed) { await refreshLatest() }
+            } catch { model.toast = Toast("暂时无法重试，请检查连接和本机存储空间", style: .error) }
+        }
+    }
+
+    private func discardQueued(_ id: UUID) {
+        Task {
+            do { try await chatOutbox?.discard(id) }
+            catch { model.toast = Toast("未能删除，请检查本机存储空间", style: .error) }
+        }
+    }
+
+    /// 放回输入框: the picture or file back among the picked ones, out of the queue.
+    private func putBack(_ o: LarkOutgoing) {
+        guard let attachment = o.attachment, attachments.count < LarkAttachment.selectionLimit else { return }
+        Task {
+            do {
+                try await chatOutbox?.discard(o.id)
+                attachments.append(attachment)
+            } catch { model.toast = Toast("未能放回，请检查本机存储空间", style: .error) }
+        }
     }
 
     private func resend(_ id: UUID) {
