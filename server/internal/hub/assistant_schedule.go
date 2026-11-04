@@ -1121,8 +1121,10 @@ func (h *Hub) watchScheduledRun(run ScheduleRun, t Task, m *Machine) {
 	}
 }
 
-// waitTurnEnd waits until the session ran a turn and is idle again; false when it never started or ctx ended.
+// waitTurnEnd waits until the sent turn is over; false when ctx ended. An immediate failure (a bad model) is idle
+// before the first poll sees it working, so a changed last item also means it ended.
 func (h *Hub) waitTurnEnd(ctx context.Context, m *Machine, sid string) bool {
+	before := h.lastItemID(ctx, m, sid)
 	ran := false
 	idle := 0
 	for {
@@ -1132,18 +1134,15 @@ func (h *Hub) waitTurnEnd(ctx context.Context, m *Machine, sid string) bool {
 		case <-time.After(2 * time.Second):
 		}
 		s, ok := m.session(sid)
-		if !ok {
-			if ran {
-				return true
-			}
-			continue
-		}
-		if s.Status == proto.StatusWorking || s.State == proto.StateWorking || s.State == proto.StateNeedsYou {
+		if ok && (s.Status == proto.StatusWorking || s.State == proto.StateWorking || s.State == proto.StateNeedsYou) {
 			ran, idle = true, 0
 			if s.State == proto.StateNeedsYou {
 				return true // waiting on the user counts as ended
 			}
 			continue
+		}
+		if h.lastItemID(ctx, m, sid) != before {
+			return true
 		}
 		if ran {
 			if idle++; idle >= 2 {
@@ -1151,6 +1150,19 @@ func (h *Hub) waitTurnEnd(ctx context.Context, m *Machine, sid string) bool {
 			}
 		}
 	}
+}
+
+// lastItemID is the newest item's id, "" when there is none.
+func (h *Hub) lastItemID(ctx context.Context, m *Machine, sid string) string {
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	var res struct {
+		Items []proto.Item `json:"items"`
+	}
+	if err := m.call(cctx, "session.items", map[string]any{"session_id": sid, "limit": 1, "lazy_images": true}, &res); err != nil || len(res.Items) == 0 {
+		return ""
+	}
+	return res.Items[len(res.Items)-1].ID
 }
 
 // lastTurnAPIError is the text of the turn's last answer when it is a model API error; "" otherwise.

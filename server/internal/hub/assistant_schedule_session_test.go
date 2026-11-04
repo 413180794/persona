@@ -352,3 +352,40 @@ func TestTaskTurnEndingInAPIErrorFailsAndRetriesOnce(t *testing.T) {
 	}
 	t.Fatal("the failed run was not recorded")
 }
+
+// A model error can end the turn before the first poll sees it working (a vanished model fails immediately): the
+// changed last item alone must still end the watch, or the run stays "ok" for the whole timeout.
+func TestTaskFailingBeforeTheWatcherSeesItWorking(t *testing.T) {
+	h := newTestHub(t)
+	n := newAssistantNode(t, h)
+	old := runRetryDelay
+	runRetryDelay = 50 * time.Millisecond
+	t.Cleanup(func() { runRetryDelay = old })
+	setTasks(h, Task{ID: "p", Title: "值守", Prompt: "go", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(-time.Minute), Enabled: true, MachineID: "server", CreatedBy: "assistant"})
+	n.items = []proto.Item{{ID: "before", Role: "assistant", Kind: "text", Text: "old"}}
+	n.m.mu.Lock()
+	n.m.sessions = []proto.Session{{SessionID: "s1", Status: proto.StatusOffline, State: proto.StateIdle, Assistant: true,
+		Cwd: "/home/me/.jarvis/assistant"}}
+	n.m.mu.Unlock()
+	go func() {
+		time.Sleep(1500 * time.Millisecond)
+		n.mu.Lock()
+		n.items = append(n.items, proto.Item{ID: "err", Role: "assistant", Kind: "text", Text: "There's an issue with the selected model (gone)."})
+		n.mu.Unlock()
+	}()
+	if _, err := runNow(t, h, "p"); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		s := h.loadSchedule(context.Background())
+		s.mu.Lock()
+		failed := slices.ContainsFunc(s.runs, func(r ScheduleRun) bool { return r.RefID == "p" && r.Status == runFailed })
+		s.mu.Unlock()
+		if failed {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatal("the failure before the first working poll was not recorded")
+}
