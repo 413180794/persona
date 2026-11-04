@@ -99,6 +99,10 @@ struct ChatView: View {
     @Environment(\.splitDetail) private var split
     /// The Persona conversation in the shell (docs/ios.md「新外壳」).
     @Environment(\.shellChat) private var shellChat
+    @Environment(\.shell) private var shell
+    /// The shell's composer (`ShellComposerBar`): the assistant's conversation and, in the shell, an agent's too, in every
+    /// style (#1091); the old layout keeps `ComposerRow` / `PromptComposer` and the mode chips above them.
+    private var usesShellComposer: Bool { shellChat || shell != nil }
     /// The system presents bars down the side of the screen (iPhone Duo closed, or open in landscape).
     @State private var barsVertical = false
     /// The slim header's height while the actions are in the side column (`sideHeader`).
@@ -1231,8 +1235,8 @@ struct ChatView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
                 // The assistant takes modes on Codex too (the node maps them to Codex's sandbox / approvals).
-                // In the shell the modes are in the composer's gauge menu (ShellComposerBar).
-                if viewing == nil, !shellChat, session?.canSend == true, session.map({ $0.assistant || $0.isClaude }) ?? true {
+                // In the shell the modes are in the composer's model menu (ShellComposerBar, #1091).
+                if viewing == nil, !usesShellComposer, session?.canSend == true, session.map({ $0.assistant || $0.isClaude }) ?? true {
                     SessionModeBar(key: key, session: session).padding(.leading, Theme.Space.xs)
                 }
                 if let s = session, !s.canSend, let reason = s.sourceSubtitle {
@@ -1242,7 +1246,7 @@ struct ChatView: View {
                          onCleared: { switchTo($0) })
                     // The shell's expanding field stays in the page's layout graph; so does BeautifulUI's prompt bar,
                     // whose menus hang above it: an island's hosting view takes no touches outside its bounds.
-                    .layoutIsland(enabled: !shellChat && !AppStyle.current.usesBeautifulUI)
+                    .layoutIsland(enabled: !usesShellComposer && !AppStyle.current.usesBeautifulUI)
             }
             .padding(.horizontal, Theme.Space.m)
             .padding(.bottom, Theme.Space.s)
@@ -2381,6 +2385,10 @@ struct Composer: View, Equatable {
 
     @Environment(AppModel.self) private var model
     @Environment(\.shellChat) private var shellChat
+    @Environment(\.shell) private var shell
+    /// The shell's composer (`ShellComposerBar`): the assistant's conversation and, in the shell, an agent's too, in every
+    /// style (#1091); the old layout keeps `ComposerRow` / `PromptComposer` and the mode chips above them.
+    private var usesShellComposer: Bool { shellChat || shell != nil }
     let key: SessionKey
     var status: SessionStatus
     var placeholder: String?
@@ -2430,6 +2438,32 @@ struct Composer: View, Equatable {
         return s.canSend && s.canTerminal && s.paneID != nil && !s.isCodex && !s.isTraex && !s.assistant
     }
 
+    /// Quick messages and /clear in the + menu (`ComposerRow`, and an agent's in the shell).
+    @ViewBuilder private var quickCommands: some View {
+        Section("快捷指令") {
+            ForEach(SlashCommand.all) { cmd in
+                Button { Task { await sendText(cmd.text) } } label: { Label(cmd.title, systemImage: cmd.symbol) }
+            }
+            if canClear {
+                Button(role: .destructive) { confirmClear = true } label: {
+                    Label("清空上下文 /clear", systemImage: "eraser")
+                }
+                .disabled(status.isActive || clearing)
+            }
+        }
+    }
+
+    /// Effort and permission mode can change: Claude Code and the assistant (`SessionModeBar` shows them for the same).
+    private var setsModes: Bool {
+        guard let s = model.session(key) else { return false }
+        return s.canSend && (s.assistant || s.isClaude)
+    }
+
+    /// The model button's title; with nothing to show or pick, no button.
+    private var modesTitle: String? {
+        SessionModesMenu.title(model.session(key), setsModes: setsModes) ?? (setsModes || canPickModel ? "模型" : nil)
+    }
+
     /// The @ menu: files this chat's tools touched, then other agents' sessions.
     private func mentions() -> [PromptSource] {
         PromptItems.files(model.chat(key).items, cwd: model.session(key)?.cwd ?? "")
@@ -2470,12 +2504,14 @@ struct Composer: View, Equatable {
             if !images.isEmpty {
                 ComposerImages(images: $images) { editingIndex = $0 } // a tap marks it up before sending
             }
-            if shellChat {
-                // The shell's composer (docs/ios.md「新外壳」), whatever the style.
-                ShellComposerBar(placeholder: status.isActive ? "补充说明（会排队发送）" : (suggestion ?? "问 \(model.persona.name)"),
+            if usesShellComposer {
+                // The shell's composer (docs/ios.md「新外壳」), whatever the style: the assistant's and an agent's (#1091).
+                ShellComposerBar(placeholder: status.isActive ? "补充说明（会排队发送）"
+                                     : (suggestion ?? (shellChat ? "问 \(model.persona.name)" : placeholder ?? "给 Claude 发消息")),
                                  text: textBinding, selection: $selection, focused: $focused, canSend: canSend,
                                  hasAttachments: hasAttachments,
                                  stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
+                                 modesTitle: modesTitle,
                                  modesWarn: model.session(key)?.permissionMode == "bypassPermissions",
                                  quotes: contexts,
                                  send: { Task { await sendText(text) } }) {
@@ -2485,8 +2521,9 @@ struct Composer: View, Equatable {
                     }
                     Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
                     Button { showRecording = true } label: { Label("录音上下文", systemImage: Theme.Icon.recording).lineLimit(1) }
+                    if !shellChat { quickCommands } // an agent's, as its composer offered them before the shell's
                 } modes: {
-                    SessionModesMenu(key: key, session: model.session(key))
+                    SessionModesMenu(key: key, session: model.session(key), picksModel: canPickModel, setsModes: setsModes)
                 }
             } else if AppStyle.current.usesBeautifulUI {
                 // The BeautifulUI style's prompt bar; every other style keeps the original input line.
@@ -2537,17 +2574,7 @@ struct Composer: View, Equatable {
                     }
                     Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
                     Button { showRecording = true } label: { Label("录音上下文", systemImage: Theme.Icon.recording).lineLimit(1) }
-                    Section("快捷指令") {
-                        ForEach(SlashCommand.all) { cmd in
-                            Button { Task { await sendText(cmd.text) } } label: { Label(cmd.title, systemImage: cmd.symbol) }
-                        }
-                        if canClear {
-                            Button(role: .destructive) { confirmClear = true } label: {
-                                Label("清空上下文 /clear", systemImage: "eraser")
-                            }
-                            .disabled(status.isActive || clearing)
-                        }
-                    }
+                    quickCommands
                 }
             }
         }

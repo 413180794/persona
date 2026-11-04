@@ -570,6 +570,7 @@ struct StarterComposer: View {
             if let shell {
                 ShellComposerBar(placeholder: "问 \(model.persona.name)", text: $text, selection: $selection, focused: $focused,
                                  canSend: canSend, hasAttachments: !images.isEmpty || !videos.items.isEmpty || !recordingContexts.isEmpty,
+                                 modesTitle: StarterModesMenu.title(modes: shell, launchers: launchers, model: model),
                                  modesWarn: shell.mode == "bypassPermissions",
                                  quotes: $recordingContexts, send: submit) {
                     attachments
@@ -843,36 +844,44 @@ struct StarterModelChip: View {
     }
 }
 
-/// The shell composer's gauge menu for a conversation not started yet: the launcher (model), the permission mode and
-/// the effort it starts with ("" keeps the launcher's own).
+/// The shell composer's model menu for a conversation not started yet (#1091): the launcher it starts with (that is the
+/// model), the effort and, a level down, the permission mode ("" keeps the launcher's own).
 struct StarterModesMenu: View {
     @Environment(AppModel.self) private var model
     var modes: StarterComposer.ShellModes
     var launchers: [Launcher]
 
+    /// The button's title: the launcher's model (its name when it names none) and the effort picked.
+    @MainActor static func title(modes: StarterComposer.ShellModes, launchers: [Launcher], model: AppModel) -> String? {
+        let name = modes.launcher ?? model.assistantConfig?.launcher
+        let launcher = launchers.first { $0.name == name }
+        return SessionModes.composerTitle(model: SessionModes.modelName(launcher?.model) ?? launcher?.name ?? name,
+                                          effort: SessionModes.effort(modes.effort)?.title)
+    }
+
     var body: some View {
         if !launchers.isEmpty {
-            Picker(selection: Binding(get: { modes.launcher ?? model.assistantConfig?.launcher ?? "" }, set: { modes.launcher = $0 })) {
-                ForEach(launchers) { l in
-                    Text(l.name).tag(l.name)
+            Section("模型") {
+                Picker("启动器", selection: Binding(get: { modes.launcher ?? model.assistantConfig?.launcher ?? "" }, set: { modes.launcher = $0 })) {
+                    ForEach(launchers) { l in
+                        Text(SessionModes.modelName(l.model).map { "\(l.name) · \($0)" } ?? l.name).tag(l.name)
+                    }
                 }
-            } label: {
-                Label("启动器", systemImage: Theme.Icon.model)
+                .pickerStyle(.inline)
             }
-            .pickerStyle(.menu)
+        }
+        Section("思考强度") {
+            Picker("思考强度", selection: modes.$effort) {
+                Text("跟随启动器").tag("")
+                ForEach(SessionModes.effortLevels) { o in Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id) }
+            }
+            .pickerStyle(.inline)
         }
         Picker(selection: modes.$mode) {
             Text("跟随启动器").tag("")
             ForEach(SessionModes.switchableModes) { o in Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id) }
         } label: {
-            Label("权限模式", systemImage: SessionModes.mode(modes.mode)?.symbol ?? Theme.Icon.askFirst)
-        }
-        .pickerStyle(.menu)
-        Picker(selection: modes.$effort) {
-            Text("跟随启动器").tag("")
-            ForEach(SessionModes.effortLevels) { o in Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id) }
-        } label: {
-            Label("思考强度", systemImage: SessionModes.effort(modes.effort)?.symbol ?? Theme.Icon.effort)
+            Label("权限模式：\(SessionModes.mode(modes.mode)?.title ?? "跟随启动器")", systemImage: SessionModes.mode(modes.mode)?.symbol ?? Theme.Icon.askFirst)
         }
         .pickerStyle(.menu)
     }

@@ -30,7 +30,8 @@ final class ComposerAccessibilityTests: XCTestCase {
     /// The composer's controls are in the tree and the field takes typing: + (its menu offers 照片), the field, and
     /// send (中断 in its place while the agent works and nothing is typed, 发送 once something is).
     @MainActor private func expectComposer(_ what: String) {
-        let plus = app.buttons["添加"].firstMatch
+        // ComposerRow's + reads 添加 (its symbol's own label); the shell's composer, an agent's too since #1091, says what it adds.
+        let plus = app.buttons.matching(NSPredicate(format: "label == '添加' OR label == '添加照片或文件'")).firstMatch
         let send = app.buttons["发送"].firstMatch, stop = app.buttons["中断"].firstMatch
         let field = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
         guard plus.waitForExistence(timeout: 15) else {

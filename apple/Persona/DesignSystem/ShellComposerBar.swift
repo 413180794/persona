@@ -2,7 +2,8 @@ import BeautifulUI
 import SwiftUI
 
 /// The shell's composer (docs/ios.md「新外壳」), ChatGPT's: one line — [+] 问 Persona… [mic] — that grows into a card
-/// while typing, the field on top and a row under it: [+] … [mode & effort] [mic] [send]. The field is one view in both
+/// while typing, the field on top and a row under it: [+] … [model · effort] [mic] [send]. The assistant's
+/// conversation and an agent's (in the shell) both type here (#1091). The field is one view in both
 /// shapes (only the buttons around it come and go), so focus and the IME's marked text survive the change.
 /// The callers keep their own state (drafts, uploads, SendSafety in `Composer`; the starter's text in StarterComposer).
 struct ShellComposerBar<Attach: View, Modes: View>: View {
@@ -15,7 +16,9 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     var hasAttachments = false
     /// Set while the agent works: a stop button takes send's place while nothing is typed.
     var stop: (() -> Void)?
-    /// Mode / effort warns (全部放行): the gauge is red.
+    /// What the model button says, ChatGPT's compact "Opus 5.5 · 高" (`SessionModes.composerTitle`); nil: no button.
+    var modesTitle: String?
+    /// The permission mode warns (全部放行): the button is red, with the shield.
     var modesWarn = false
     /// What goes with the message, quoted at the top of the card (#986); quotes keep it open (`hasAttachments`).
     var quotes: Binding<[ContextRef]>? = nil
@@ -72,18 +75,14 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                 HStack(spacing: Theme.Space.xs) {
                     plus
                     Spacer(minLength: Theme.Space.s)
-                    Menu { modes() } label: {
-                        Image(systemName: Theme.Icon.effort)
-                            .font(Theme.Font.heading)
-                            .fontWeight(.medium)
-                            .foregroundStyle(modesWarn ? Theme.danger : ink)
-                            .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
-                            .contentShape(.circle)
+                    if let modesTitle {
+                        Menu { modes() } label: { modesLabel(modesTitle) }
+                            .menuStyle(.button)
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("模型和思考强度")
+                            .accessibilityValue(modesWarn ? "\(modesTitle)，全部放行" : modesTitle)
+                            .accessibilityIdentifier("shell-composer-modes")
                     }
-                    .menuStyle(.button)
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("权限和思考强度")
-                    .accessibilityIdentifier("shell-composer-modes")
                     mic
                     if canSend {
                         round(Theme.Icon.send, label: "发送", id: "shell-composer-send", action: send)
@@ -122,6 +121,23 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
         .buttonStyle(.plain)
         .accessibilityLabel("添加照片或文件")
         .accessibilityIdentifier("shell-composer-add")
+    }
+
+    /// The model button's face: the gauge (the shield while everything is allowed), then the model and the effort, one
+    /// line, cut at the end when the row is short.
+    private func modesLabel(_ title: String) -> some View {
+        HStack(spacing: Theme.Space.xs) {
+            Image(systemName: modesWarn ? Theme.Icon.allowEverything : Theme.Icon.effort)
+                .font(Theme.Font.labelStrong)
+            Text(title)
+                .font(Theme.Font.secondaryMedium)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .foregroundStyle(modesWarn ? Theme.danger : ink)
+        .padding(.horizontal, Theme.Space.s)
+        .scaledFrame(minHeight: Theme.Size.tapTarget)
+        .contentShape(.capsule)
     }
 
     /// Speech to text into the field (`ComposerMicButton`, shared with an agent's composer).

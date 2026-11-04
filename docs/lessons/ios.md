@@ -598,3 +598,10 @@ Task 里只遍历这个序列，就能编过。选择器用 `preferredItemEncodi
 于是成了「ask_user + 一个空灰框」；卡片答完一收，对话里再也看不到问了什么、选了什么，看着像「没显示问题」。
 当时线上 hub 的交互记录里问题建了、推了、21 秒后答了，问题出在 App 怎么画。给助手加只给它用的工具（`hub/assistant_tools.go`）时，
 顺手在 `ToolPresentation` 里给它起中文名、挑参数；它的结果是给模型看的英文时，展开后换成用户看得懂的（`AskUserDetail` 从结果里读回选了哪项）。
+
+## 「两页共用一个组件」要从调用处查到底（2026-11-04，#1079 → #1091）
+
+#1079 要 Agent 对话页的听写、停止按钮和助手页一样，只把两个按钮抽成了共用组件，以为两页的输入框本来就是同一个 `ShellComposerBar`。
+其实 `ChatView` 的 `Composer` 只在环境值 `shellChat` 为真时才用它，而这个值只有 `AssistantView` 给自己的 `ChatView` 设；Agents 页推进来的是同一个
+`ChatView`、默认值 false，走的是 `ComposerRow` / `PromptComposer`。结果按钮一样了，位置不一样（麦克风在胶囊外面），TestFlight 上一眼就看出来。
+说两处「共用」之前，从两个页面各自的调用处往下看一遍走的是哪个分支（环境值、风格、旧布局开关都可能分叉），截图也要两页并排拍同一个状态。

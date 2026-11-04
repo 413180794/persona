@@ -133,12 +133,14 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
 - 渲染：每条消息、计时行、叙述、工具计数、答复都是 LazyVStack 里的独立行（`ChatLine`）。进行中的一轮可能有几百步，
   做成一个整块 VStack 时整页卡住、空白好几秒。
 - 取消不是错误：离开页面 / 新请求替换旧请求造成的取消（iOS 文案「已取消」）一律不提示（`Error.shown` / `isCancellation`）。
-- 输入框：Agent 对话（`Composer`）和助手的新对话（`StarterComposer`）共用 `ComposerRow`：+（照片 / 拍照 / 文件 / 快捷指令）、玻璃胶囊输入框、
-  听写、发送（没东西可发时淡掉），Agent 工作中且没打字时是中断。
-- **听写和中断按钮全 App 只有一份**（#1079）：`DesignSystem/ComposerButtons.swift` 的 `ComposerMicButton`（线条麦克风，听写中变实心、红色、脉动）和
-  `ComposerRoundButton.stop`（墨色实心圆里的停止），44pt 点按区域，随外壳放大一档（`shellScaled`）。新外壳的 `ShellComposerBar`、`ComposerRow`、
-  `PromptComposer` 在 iOS 上都用它们，Agent 对话页和助手对话页的这两个按钮因此一模一样；改样子只改这一个文件。Mac 没有新外壳，
-  仍是原来的（`ComposerRow` 红色中断、没有听写；`PromptComposer` 用库自己的）。
+- 输入框：**新外壳里助手对话页和 Agent 对话页是同一个 `ShellComposerBar`**（#1091，任何界面风格）。`ChatView` 的 `Composer` 以前只看
+  `shellChat`（只有 `AssistantView` 设），Agents 页推进来的对话走的是另一套（`ComposerRow` / `PromptComposer`），所以两页长得不一样；
+  现在条件是 `shellChat || shell != nil`（`usesShellComposer`）。Agent 页的 + 菜单比助手多一组「快捷指令」（含 /clear）；
+  BeautifulUI 风格下 Agent 页因此没有了 Prompt Bar 的 @ 和 / 菜单（快捷指令在 + 里）。
+- 旧布局（`-ui.oldLayout YES`）和 Mac 不变：Agent 对话和助手新对话共用 `ComposerRow`（+、玻璃胶囊输入框、发送，Agent 工作中且没打字时是红色的中断，
+  没有听写），输入框上方是权限 / 思考强度两个胶囊（`SessionModeBar`）。
+- **听写和中断按钮只有一份**（#1079）：`DesignSystem/ComposerButtons.swift` 的 `ComposerMicButton`（线条麦克风，听写中变实心、红色、脉动）和
+  `ComposerRoundButton.stop`（墨色实心圆里的停止），44pt 点按区域，随外壳放大一档（`shellScaled`）。`ShellComposerBar` 和 iOS 上的 `PromptComposer` 用它们。
 - 「BeautifulUI」风格（设置 › 外观 › 界面风格，`AppStyle.beautiful`，2026-10-30）下，输入框换成 `PromptComposer`（助手新对话是 `BeautifulStarterComposer`），
   是 BeautifulUI 的 Prompt Bar（`layout: .stacked`）。其他风格完全是上面的样子（CLAUDE.md：新样子做成新主题）：
   上面一个圆角框里是多行输入，下面一行工具栏：+（照片 / 拍照 / 文件）、@、/、模型、听写，右边发送；Agent 工作中且没打字时发送换成中断。
@@ -274,7 +276,7 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
 | 侧边栏的页面 | 都推到助手页的栈上（`ShellState.show` → `AssistantView.show`）。收件箱、机器按值推（`ShellRoute`，`ShellDestinations` 登记它们和它们再推的 InboxItem / 飞书页 / 机器详情 / 会话）：视图式推出的页面上再按值推，新页面会插到下面（docs/lessons/ios.md） |
 | 设置 | 全屏浮层（`model.shellSettings`，放在 model 里：换风格会重建整棵树，浮层要回到原来那一页），右上角 × |
 | 空对话 | 和旧布局同一个欢迎页（`AssistantWelcome`：问候、开一段新对话 / 主对话的说明、在线的机器和 iPhone、六个可以问的事；液态玻璃是两列卡片，BeautifulUI 是「可以问我」列表卡片）。2026-11-01 第一版只放输入框，没有待办时整页空白，用户 2026-11-02 要回原来的设计。输入框上面是需要你的事：等你的 Agent，然后收件箱的「需要你」，最多 3 行 +「还有 N 件在收件箱」（`ShellNeedsYou`），没有就不显示；这一块和输入框垫着页面底色，欢迎页滚到它们下面，在上沿渐隐（不硬切）。行数按空间定（2026-11-02，#283，iPhone Duo 外屏上 3 行 + 输入框占了半屏、把建议卡片拦腰截断）：这一块不盖住欢迎页第一行可以问的事（`NeedsRoom`：量第一行的下沿、页面高度（键盘不算）、输入框静止时的高度），放不下就少几行，至少 1 行；普通 iPhone 的液态玻璃仍是 3 行，17e 的 BeautifulUI 是 2 行，Duo 外屏和 SE 是 1 行。收起的里面有 Agent 时那一行写「还有 N 件需要你」，只剩 Agent 时点了去 Agents 页（收件箱里没有它们）。`AssistantWelcomeTests` 守着：两种布局、从侧边栏点新对话，问候、说明、第一个建议都在屏幕上、在输入框上面；「需要你」不盖住第一个建议、聚焦输入框后行数不变（在 Duo 外屏上也跑） |
-| 输入框 | 一行：[+] 问 Persona [麦克风]；聚焦或有字时长成卡片，字在上，下面一排 [+] … [权限和思考强度] [麦克风] [发送]（`ShellComposerBar`）。输入框始终是同一个视图，变形不丢焦点和拼音的 marked text。权限 / 思考强度从输入框上面那排挪进了量表菜单（`SessionModesMenu`、新对话的 `StarterModesMenu`，后者还能选启动器） |
+| 输入框 | 一行：[+] 问 Persona [麦克风]；聚焦或有字时长成卡片，字在上，下面一排 [+] … [模型 · 思考强度] [麦克风] [发送]（`ShellComposerBar`，助手和 Agent 对话页同一个，#1091）。输入框始终是同一个视图，变形不丢焦点和拼音的 marked text。「模型 · 思考强度」是 ChatGPT 那样的紧凑文字按钮（「Opus 5.5 · 高」，`SessionModes.composerTitle` / `modelName`），菜单里依次是模型、思考强度、再下一层的权限模式（`SessionModesMenu`；新对话 `StarterModesMenu`，模型就是启动器）；「全部放行」时按钮变红并换成盾牌图标。模型能选的只有 herdr 窗格里的 Claude Code（发 `/model`）和助手新对话（选启动器）；已开的助手对话、Codex 只显示正在用的模型；Codex / TRAEX 没有思考强度和权限模式 |
 | 对话 | 用户气泡换成中性灰（`Theme.Shell.userBubble`），只在壳里的 Persona 对话（`\.shellChat`），Agents 的对话不变 |
 | 弱网 | 顶栏下面一个小药丸（等待网络 / 连接中…），两页共用；原来的标题位被切换按钮占了 |
 
@@ -386,7 +388,8 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
 ## 思考强度和权限模式
 
 对话页输入框上方两个小标签：权限模式（手动确认 / 自动改文件 / 只做计划 / 自动 / 全部放行）和思考强度（低 … 最高），
-相当于 Claude Code 终端底栏，点开就能改（`SessionModeBar`，文案和图标在 `SessionModes`）。新开 Agent 的表单、助手首页的输入框上方
+相当于 Claude Code 终端底栏，点开就能改（`SessionModeBar`，文案和图标在 `SessionModes`）。新外壳里没有这两个标签，收进了输入框右下角的
+「模型 · 思考强度」按钮（#1091，见上面「新外壳」的输入框）。新开 Agent 的表单、助手首页的输入框上方
 也能选（不选就是「跟随启动器」）。Codex / TRAEX 的会话不显示。
 
 - 显示：transcript 每条 user 行带 `permissionMode`、每条回复带 `effort`；在 App 里改过的值在 transcript 写下更新的值之前优先

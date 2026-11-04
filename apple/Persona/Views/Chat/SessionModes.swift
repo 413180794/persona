@@ -42,6 +42,32 @@ nonisolated enum SessionModes {
     /// "手动确认" for known modes, the raw value otherwise (Codex approval policies, newer Claude Code modes).
     static func modeLabel(_ id: String?) -> String? { id.map { mode($0)?.title ?? $0 } }
     static func effortLabel(_ id: String?) -> String? { id.map { effort($0)?.title ?? $0 } }
+
+    /// The shell composer's model button (#1091), ChatGPT's "6.1 Sol 中": "Opus 5.5 · 高"; the model alone, or
+    /// "思考高" with no model known; nil with neither.
+    static func composerTitle(model: String?, effort: String?) -> String? {
+        switch (model, effort) {
+        case let (m?, e?): "\(m) · \(e)"
+        case let (m?, nil): m
+        case let (nil, e?): "思考\(e)"
+        case (nil, nil): nil
+        }
+    }
+
+    /// A model's short name for that button: "claude-opus-5-5-20260101" → "Opus 5.5", "opus" / "opus[1m]" → "Opus",
+    /// "claude-3-5-sonnet-20241022" → "Sonnet"; anything else as `Fmt.model` gives it ("gpt-5.5").
+    static func modelName(_ model: String?) -> String? {
+        guard let raw = Fmt.model(model) else { return nil }
+        let lower = raw.lowercased()
+        for family in ["fable", "opus", "sonnet", "haiku"] {
+            guard let r = lower.range(of: family) else { continue }
+            // The version follows the family in today's ids; a date (8 digits) and older ids' leading version do not.
+            let after = lower[r.upperBound...].split { $0 == "-" || $0 == "." || $0 == "_" }
+            let version = after.prefix { $0.allSatisfy(\.isNumber) && $0.count <= 2 }.prefix(2).joined(separator: ".")
+            return family.capitalized + (version.isEmpty ? "" : " " + version)
+        }
+        return raw
+    }
 }
 
 /// The two chips above the composer — permission mode and effort level, like the footer of Claude Code's TUI.
@@ -108,32 +134,60 @@ struct SessionModeBar: View {
     }
 }
 
-/// The shell composer's gauge menu for a running conversation (docs/ios.md「新外壳」): the same two choices as
-/// `SessionModeBar`, as pickers in one menu.
+/// The shell composer's model menu for a running conversation (#1091): the model (a choice where Claude Code takes
+/// `/model`, otherwise the one it runs), the effort, and the permission mode a level down. Effort and mode are the same
+/// choices as `SessionModeBar`, which the old layout keeps above its composer.
 struct SessionModesMenu: View {
     @Environment(AppModel.self) private var model
     let key: SessionKey
     var session: Session?
+    /// Claude Code in a herdr pane: picking a model sends `/model <alias>`.
+    var picksModel = false
+    /// Effort and permission mode can change (Claude Code, the assistant; not Codex or TRAEX).
+    var setsModes = true
+
+    /// The button's title for this conversation.
+    static func title(_ session: Session?, setsModes: Bool) -> String? {
+        SessionModes.composerTitle(model: SessionModes.modelName(session?.model),
+                                   effort: setsModes ? SessionModes.effortLabel(session?.effort) : nil)
+    }
 
     var body: some View {
         let mode = session?.permissionMode
         let effort = session?.effort
-        Picker(selection: Binding(get: { mode ?? "" }, set: { new in change(mode: new) })) {
-            ForEach(SessionModes.switchableModes + (mode.flatMap { m in SessionModes.switchableModes.contains { $0.id == m } ? nil : SessionModes.mode(m) }.map { [$0] } ?? [])) { o in
-                Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id)
+        Section("模型") {
+            if picksModel {
+                Picker("模型", selection: Binding(get: { PromptItems.claudeModelID(session?.model) }, set: { id in
+                    guard id != PromptItems.claudeModelID(session?.model) else { return }
+                    model.sendNow(key, text: "/model \(id)", images: []) // photos and quotes stay for the message
+                })) {
+                    ForEach(PromptItems.claudeModels, id: \.id) { m in
+                        Text(m.name).tag(m.id)
+                    }
+                }
+                .pickerStyle(.inline)
+            } else {
+                Text(SessionModes.modelName(session?.model) ?? "模型未知") // what it runs; changed where it was started
             }
-        } label: {
-            Label("权限模式：\(SessionModes.modeLabel(mode) ?? "未知")", systemImage: SessionModes.mode(mode)?.symbol ?? Theme.Icon.askFirst)
         }
-        .pickerStyle(.menu)
-        Picker(selection: Binding(get: { effort ?? "" }, set: { new in change(effort: new) })) {
-            ForEach(SessionModes.effortLevels) { o in
-                Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id)
+        if setsModes {
+            Section("思考强度") {
+                Picker("思考强度", selection: Binding(get: { effort ?? "" }, set: { new in change(effort: new) })) {
+                    ForEach(SessionModes.effortLevels) { o in
+                        Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id)
+                    }
+                }
+                .pickerStyle(.inline)
             }
-        } label: {
-            Label("思考强度：\(SessionModes.effortLabel(effort) ?? "未知")", systemImage: SessionModes.effort(effort)?.symbol ?? Theme.Icon.effort)
+            Picker(selection: Binding(get: { mode ?? "" }, set: { new in change(mode: new) })) {
+                ForEach(SessionModes.switchableModes + (mode.flatMap { m in SessionModes.switchableModes.contains { $0.id == m } ? nil : SessionModes.mode(m) }.map { [$0] } ?? [])) { o in
+                    Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id)
+                }
+            } label: {
+                Label("权限模式：\(SessionModes.modeLabel(mode) ?? "未知")", systemImage: SessionModes.mode(mode)?.symbol ?? Theme.Icon.askFirst)
+            }
+            .pickerStyle(.menu)
         }
-        .pickerStyle(.menu)
     }
 
     private func change(mode: String? = nil, effort: String? = nil) {

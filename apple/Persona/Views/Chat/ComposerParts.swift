@@ -2,9 +2,7 @@ import SwiftUI
 
 /// The composer's input line, shared by an agent's chat (`Composer`) and a new assistant conversation
 /// (`StarterComposer`) so the two look alike: [+] with the caller's menu, the field (a glass capsule, at least 44 pt),
-/// then send (faded while there is nothing to send) or, while the agent works and nothing is typed, stop.
-/// On iOS the mic before send and the stop are the shell composer's (`ComposerMicButton`, `ComposerRoundButton`, #1079);
-/// the Mac keeps its red stop and no mic.
+/// then send (faded while there is nothing to send) or, while the agent works and nothing is typed, a red stop.
 /// The callers keep their own state: the chat's drafts, SendSafety and uploads stay in `Composer`.
 struct ComposerRow<MenuItems: View>: View {
     var placeholder: String
@@ -18,9 +16,6 @@ struct ComposerRow<MenuItems: View>: View {
     /// What goes with the message, quoted over the field inside its box (#986).
     var quotes: Binding<[ContextRef]>? = nil
     @ViewBuilder var menu: () -> MenuItems
-    #if os(iOS)
-    @State private var dictation = Dictation()
-    #endif
 
     /// The symbols' frame: the button styles pad it to about 44 pt, the field's height.
     private static var glyph: CGFloat { 31 }
@@ -61,60 +56,34 @@ struct ComposerRow<MenuItems: View>: View {
             }
             .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.panel, style: .continuous))
 
-            #if os(iOS)
-            HStack(alignment: .bottom, spacing: Theme.Space.xs) { // as in the shell's composer
-                ComposerMicButton(dictation: dictation, text: $text)
-                if let stop, !canSend {
-                    ComposerRoundButton.stop {
-                        endDictation()
-                        stop()
-                    }
-                } else {
-                    sendButton
-                }
-            }
-            .animation(Theme.Motion.state, value: canSend)
-            #else
             if let stop, !canSend {
                 Button(action: stop) {
                     Image(systemName: Theme.Icon.interrupt).font(Theme.Font.heading).frame(width: Self.glyph, height: Self.glyph)
                 }
+                #if os(macOS)
                 .macRoundButton(prominent: true)
+                #else
+                .themedButton(prominent: true)
+                .clipShape(.circle)
+                #endif
                 .tint(Theme.danger)
                 .accessibilityLabel("中断")
             } else {
-                sendButton
+                Button(action: send) {
+                    Image(systemName: Theme.Icon.send).font(Theme.Font.heading).frame(width: Self.glyph, height: Self.glyph)
+                }
+                #if os(macOS)
+                .macRoundButton(prominent: true)
+                #else
+                .themedButton(prominent: true)
+                .clipShape(.circle)
+                #endif
+                .disabled(!canSend)
+                .keyboardShortcut(.return, modifiers: .command)
+                .accessibilityLabel("发送")
             }
-            #endif
         }
-        #if os(iOS)
-        .onDisappear { endDictation() }
-        #endif
     }
-
-    private var sendButton: some View {
-        Button {
-            #if os(iOS)
-            endDictation()
-            #endif
-            send()
-        } label: {
-            Image(systemName: Theme.Icon.send).font(Theme.Font.heading).frame(width: Self.glyph, height: Self.glyph)
-        }
-        #if os(macOS)
-        .macRoundButton(prominent: true)
-        #else
-        .themedButton(prominent: true)
-        .clipShape(.circle)
-        #endif
-        .disabled(!canSend)
-        .keyboardShortcut(.return, modifiers: .command)
-        .accessibilityLabel("发送")
-    }
-
-    #if os(iOS)
-    private func endDictation() { if dictation.isListening { dictation.stop() } }
-    #endif
 }
 
 /// Photos picked for the next message, above the composer: × takes one out; with `edit`, a tap marks it up first.
