@@ -234,6 +234,8 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   比如 `["~/.config/claude-code/profiles/work"]`，`~/` 是那台机器的 home）。正在跑的 claude 用的目录 node 自己会找到并记进数据库，
   这里只需要写「平时不开、但想在列表里看到它的历史会话」的目录。反过来，不想看到的目录（自动化脚本自己的 `CLAUDE_CONFIG_DIR`）
   在 App 的设置 › Claude Code ›「屏蔽的配置目录」里屏蔽，存在数据库，不写 hub.json（`docs/claude-integration.md`「屏蔽配置目录」）。
+- `machines[].botmux`（可选）：写 `false` 时那台电脑的 node 不列 botmux 的会话，也不跑 botmux（不跑 `botmux observe`、`botmux dashboard current`）；
+  不写就和以前一样，装了 botmux 就列（`docs/engines.md`「botmux」）。node 也要是这一版；手改 hub.json 要重启 hub，重连时生效。
 - `microsoft`（可选）：Outlook 的「使用 Microsoft 账号登录」（`docs/mail.md`「Outlook 接入方式」）。`client_id` 是默认的 client ID
   （一般不用写：用户在 App 里填自己在 Microsoft Entra 注册的那个，加密存 hub，优先于这里）；`redirect_uri` 默认
   `jarvis-mail-oauth://outlook`，改了要和 Entra 里登记的一致。

@@ -173,7 +173,7 @@ func New(version string) (*Node, error) {
 		n.logger.Printf("machine uid: %v", err) // the hubs then treat this computer as theirs alone
 	}
 	n.configureCodex(proto.CodexConfig{})
-	n.hosts = host.NewRegistry(nodeHosts(proto.EngineHerdr, n.logger.Printf)...) // herdr until engine.use
+	n.hosts = host.NewRegistry(nodeHosts(proto.EngineHerdr, false, n.logger.Printf)...) // herdr until engine.use, botmux until the hub says
 	n.resetSignals()
 	n.state = newState()
 	n.ports.kick = make(chan struct{}, 1)
@@ -424,6 +424,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			MachineID         string             `json:"machine_id"`
 			// Keep: sessions always listed, however old or crowded out (the assistant's main conversation).
 			Keep *[]string `json:"keep_sessions"`
+			// Botmux: list botmux's sessions (hub.json machines[].botmux); nil (a call that says nothing of it, an
+			// older hub) leaves it as it is (useBotmux).
+			Botmux *bool `json:"botmux"`
 		}
 		if err := json.Unmarshal(params, &c); err != nil {
 			return nil, err
@@ -445,6 +448,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		if c.Keep != nil {
 			n.setKept(*c.Keep)
+		}
+		if c.Botmux != nil {
+			n.useBotmux(*c.Botmux, false)
 		}
 		return map[string]any{"claude_dirs": n.claudeConfigDirs()}, nil
 	case "launchers.list":
@@ -485,7 +491,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "dirs.list":
 		return n.dirs(p.Path)
 	case "sessions.list":
-		n.configured() // a hub that lists without engine.use keeps herdr (engine.go)
+		n.configured()          // a hub that lists without engine.use keeps herdr (engine.go)
+		n.useBotmux(true, true) // and one that lists without saying botmux keeps it, as before (hostbotmux.go)
 		return map[string]any{"sessions": n.sessionList(ctx, true)}, nil
 	case "session.start":
 		tab := ""

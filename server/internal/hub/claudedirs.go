@@ -55,12 +55,15 @@ func (m *Machine) claudeDirs(ctx context.Context) []string {
 	return slices.DeleteFunc(dirs, func(d string) bool { return proto.ClaudeDirBlocked(d, home, blocked) })
 }
 
-// configureNode hands the node its config directories, before the first session list. Older nodes do not know
-// node.configure; they keep looking in ~/.claude only.
+// botmux is hub.json's machines[].botmux: the machine's node lists botmux's sessions unless it says false.
+func (m *Machine) botmux() bool { return m.cfg.Botmux == nil || *m.cfg.Botmux }
+
+// configureNode hands the node its config directories and whether it lists botmux's sessions, before the first
+// session list. Older nodes do not know node.configure; they keep looking in ~/.claude only.
 func (m *Machine) configureNode(ctx context.Context, peer *rpc.Peer) {
 	_ = peer.Call(ctx, "node.configure", map[string]any{"machine_id": m.cfg.ID, "codex": m.codexConfig(ctx),
 		"claude_dirs": m.claudeDirs(ctx), "claude_dirs_blocked": m.blockedClaudeDirs(ctx),
-		"keep_sessions": m.hub.keptSessions(ctx, m.cfg.ID)}, nil)
+		"keep_sessions": m.hub.keptSessions(ctx, m.cfg.ID), "botmux": m.botmux()}, nil)
 	m.sendManaged(ctx, func(ctx context.Context, method string, params, out any) error {
 		return peer.Call(ctx, method, params, out)
 	})
@@ -137,8 +140,10 @@ func (m *Machine) reconfigureClaudeDirs(ctx context.Context) {
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancel()
+	// botmux too: this can come between the connection and its own node.configure, and the session list that follows
+	// must not be the node's first word on it (an older hub's, node/hostbotmux.go useBotmux).
 	if err := m.call(ctx, "node.configure", map[string]any{"claude_dirs": m.claudeDirs(ctx),
-		"claude_dirs_blocked": m.blockedClaudeDirs(ctx)}, nil); err != nil {
+		"claude_dirs_blocked": m.blockedClaudeDirs(ctx), "botmux": m.botmux()}, nil); err != nil {
 		m.hub.logf("[%s] configure claude dirs: %v", m.cfg.ID, err)
 		return
 	}

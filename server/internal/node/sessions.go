@@ -1151,8 +1151,12 @@ func (n *Node) pollAgents(ctx context.Context) {
 
 // publish pushes a rebuilt list to the hub: the whole list when anything it shows changed, else only the revs that
 // moved (a transcript grew: a few bytes instead of the list, so the app can pull those sessions). It returns the
-// revs that moved. Runtimes (runtimes.go) publish through it too when their list changes.
+// revs that moved. Runtimes (runtimes.go) publish through it too when their list changes. Nothing goes while the hub
+// has yet to say whether botmux's sessions are listed (botmuxPending).
 func (n *Node) publish(list []proto.Session) map[string]int64 {
+	if n.botmuxPending() {
+		return nil
+	}
 	key := listKey(list)
 	n.mu.Lock()
 	changed := key != n.lastList

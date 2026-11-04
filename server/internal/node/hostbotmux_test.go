@@ -10,11 +10,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/herdr"
 	"github.com/nwverse/persona/server/internal/host"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -34,11 +36,15 @@ type fakeBotmux struct {
 	offline  bool  // no daemon answers
 	fail     error // observe fails
 	observes int
-	token    string // the dashboard's current token
-	told     string // the token `dashboard current` prints
-	status   int    // the trigger's reply status (0: 200)
+	block    chan struct{} // observe waits on it (nil: answers at once)
+	token    string        // the dashboard's current token
+	told     string        // the token `dashboard current` prints
+	status   int           // the trigger's reply status (0: 200)
 	triggers []map[string]any
 	srv      *httptest.Server
+
+	herdr *fakeHerdr // botmuxNode's engine, and its home
+	home  string
 }
 
 func newFakeBotmux(t *testing.T) *fakeBotmux {
@@ -76,6 +82,11 @@ func (f *fakeBotmux) run(_ context.Context, args ...string) ([]byte, error) {
 	switch strings.Join(args, " ") {
 	case "observe --include-raw":
 		f.observes++
+		if b := f.block; b != nil { // an observe in flight until the test lets it answer
+			f.mu.Unlock()
+			<-b
+			f.mu.Lock()
+		}
 		if f.fail != nil {
 			return nil, f.fail
 		}
@@ -265,18 +276,21 @@ func TestBotmuxRefusalsAndUnsupported(t *testing.T) {
 	}
 }
 
-// botmux is registered next to the engine's hosts only when it is installed.
+// botmux is registered next to the engine's hosts only when it is installed and wanted.
 func TestNodeHostsAddBotmuxWhenInstalled(t *testing.T) {
 	old := botmuxBin
 	t.Cleanup(func() { botmuxBin = old })
 	botmuxBin = func() string { return "" }
-	if hs := nodeHosts(proto.EngineHerdr, nil); len(hs) != 1 {
+	if hs := nodeHosts(proto.EngineHerdr, true, nil); len(hs) != 1 {
 		t.Fatalf("without botmux: %d hosts", len(hs))
 	}
 	botmuxBin = func() string { return "/opt/botmux/bin/botmux" }
-	hs := nodeHosts(proto.EngineHerdrBoth, nil)
+	hs := nodeHosts(proto.EngineHerdrBoth, true, nil)
 	if len(hs) != 3 || hs[0].Kind() != host.Herdr || hs[2].Kind() != host.Botmux {
 		t.Fatalf("with botmux: %v", hs)
+	}
+	if hs := nodeHosts(proto.EngineHerdrBoth, false, nil); len(hs) != 2 {
+		t.Fatalf("botmux not wanted: %v", hs)
 	}
 	if defaultHostKind(proto.EngineHerdrBoth) != host.Herdr {
 		t.Fatal("new sessions must not go to botmux")
@@ -388,5 +402,233 @@ func TestBotmuxFoundOutsidePATH(t *testing.T) {
 	}
 	if bin := findBotmux(); bin != launcher {
 		t.Fatalf("findBotmux = %q, want %q", bin, launcher)
+	}
+}
+
+// botmuxNode is a Node before the hub's word on botmux, as New makes it (no botmux host), with botmux installed: a
+// fake CLI that counts its observes and has one running session.
+func botmuxNode(t *testing.T) (*Node, *fakeBotmux) {
+	t.Helper()
+	n, hf, home := herdrNode(t)
+	// An engine switch makes its hosts from the environment: the fake herdr, and no herdr-core, not this computer's.
+	t.Setenv("HERDR_SOCKET_PATH", hf.sock)
+	t.Setenv("HC_SOCKET", filepath.Join(t.TempDir(), "hc.sock"))
+	f := newFakeBotmux(t)
+	f.herdr, f.home = hf, home
+	stubBotmux(t, f)
+	f.rows = []map[string]any{bmxRow(sidA, "claude-code", "alive", "working", false, "a")}
+	writeTranscript(t, home, bmxCwd, sidA, time.Now().Add(-time.Minute), `{"type":"user","message":{"role":"user","content":"hi"}}`)
+	return n, f
+}
+
+// stubBotmux: botmux is installed, and the botmux host the node makes runs the fake CLI.
+func stubBotmux(t *testing.T, f *fakeBotmux) {
+	t.Helper()
+	oldBin, oldNew := botmuxBin, newBotmux
+	t.Cleanup(func() { botmuxBin, newBotmux = oldBin, oldNew })
+	botmuxBin = func() string { return "/opt/botmux/bin/botmux" }
+	newBotmux = func(string, func(string, ...any)) host.Host { return &botmuxHost{run: f.run, client: f.srv.Client()} }
+}
+
+func configureNode(t *testing.T, n *Node, params map[string]any) {
+	t.Helper()
+	if _, err := request(t, n, "node.configure", params); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// botmuxListed: the session is listed on its botmux pane (its transcript alone lists it offline, without a pane).
+func botmuxListed(t *testing.T, n *Node, id string) bool {
+	t.Helper()
+	s, ok := byID(listSessions(t, n))[id]
+	return ok && s.PaneID == "botmux:"+id
+}
+
+// A new node does not register botmux, installed or not: it waits for the hub's word (useBotmux).
+func TestNewNodeWaitsForTheHubOnBotmux(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PATH", os.Getenv("PATH")) // New puts ~/.local/bin and the like in front
+	stubBotmux(t, newFakeBotmux(t))
+	n, err := New("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kinds := hostKinds(n); slices.Contains(kinds, host.Botmux) {
+		t.Fatalf("botmux registered before the hub said: %v", kinds)
+	}
+}
+
+// Turned off for the machine (hub.json machines[].botmux false), botmux is no host: no observe and no sessions, and a
+// node.configure that says nothing of botmux (only keep_sessions, only claude_dirs) leaves it off; so does an engine
+// switch, before and after the hub's word.
+func TestBotmuxOffRunsNoBotmux(t *testing.T) {
+	n, f := botmuxNode(t)
+	if err := n.useEngine(context.Background(), proto.EngineHerdrBoth); err != nil {
+		t.Fatal(err)
+	}
+	if kinds := hostKinds(n); slices.Contains(kinds, host.Botmux) {
+		t.Fatalf("engine.use before the hub's word registered botmux: %v", kinds)
+	}
+	configureNode(t, n, map[string]any{"botmux": false})
+	configureNode(t, n, map[string]any{"keep_sessions": []string{}})
+	configureNode(t, n, map[string]any{"claude_dirs": []string{}})
+	if err := n.useEngine(context.Background(), proto.EngineHerdr); err != nil {
+		t.Fatal(err)
+	}
+	if kinds := hostKinds(n); slices.Contains(kinds, host.Botmux) {
+		t.Fatalf("botmux registered while off: %v", kinds)
+	}
+	if botmuxListed(t, n, sidA) || f.observes != 0 {
+		t.Fatalf("off: observed %d times", f.observes)
+	}
+}
+
+// Turned on, botmux's sessions are listed (an engine switch keeps them); turned off again they leave the list and
+// botmux is not asked any more; on again, they come back.
+func TestBotmuxComesAndGoesWithTheHubsWord(t *testing.T) {
+	n, f := botmuxNode(t)
+	configureNode(t, n, map[string]any{"botmux": true})
+	if err := n.useEngine(context.Background(), proto.EngineHerdrBoth); err != nil {
+		t.Fatal(err)
+	}
+	if !botmuxListed(t, n, sidA) {
+		t.Fatalf("on: %v", ids(listSessions(t, n)))
+	}
+	configureNode(t, n, map[string]any{"botmux": false})
+	seen := f.observes
+	if kinds := hostKinds(n); slices.Contains(kinds, host.Botmux) || botmuxListed(t, n, sidA) || f.observes != seen {
+		t.Fatalf("off again: hosts %v, observed %d → %d", kinds, seen, f.observes)
+	}
+	configureNode(t, n, map[string]any{"botmux": true})
+	if !botmuxListed(t, n, sidA) {
+		t.Fatalf("on again: %v", ids(listSessions(t, n)))
+	}
+}
+
+// A hub that lists sessions without having said (older than the setting) gets botmux's sessions as before; one that
+// said off first keeps it off.
+func TestBotmuxListedWhenTheHubListsWithoutSaying(t *testing.T) {
+	n, _ := botmuxNode(t)
+	configureNode(t, n, map[string]any{"keep_sessions": []string{}})
+	if !botmuxListed(t, n, sidA) {
+		t.Fatalf("an older hub: %v", ids(listSessions(t, n)))
+	}
+	off, f := botmuxNode(t)
+	configureNode(t, off, map[string]any{"botmux": false})
+	if botmuxListed(t, off, sidA) || f.observes != 0 {
+		t.Fatalf("listed after the hub said off: observed %d times", f.observes)
+	}
+}
+
+// Turned off while a refresh is still asking botmux, the refresh's answer is dropped: the sessions do not come back.
+func TestBotmuxOffDuringARefresh(t *testing.T) {
+	n, f := botmuxNode(t)
+	configureNode(t, n, map[string]any{"botmux": true})
+	block := make(chan struct{})
+	f.mu.Lock()
+	f.block = block
+	f.mu.Unlock()
+	done := make(chan struct{})
+	go func() { _ = n.refreshHosts(context.Background()); close(done) }()
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(time.Millisecond) {
+		f.mu.Lock()
+		asked := f.observes
+		f.mu.Unlock()
+		if asked > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the refresh never asked botmux")
+		}
+	}
+	configureNode(t, n, map[string]any{"botmux": false})
+	close(block)
+	<-done
+	if botmuxListed(t, n, sidA) {
+		t.Fatal("a refresh from before off brought botmux's session back")
+	}
+}
+
+// Turned off, the next list the node pushes (its poll, every second) is without botmux's sessions.
+func TestBotmuxOffTellsTheHub(t *testing.T) {
+	n, _ := botmuxNode(t)
+	configureNode(t, n, map[string]any{"botmux": true})
+	pushes, _ := pollNode(t, n)
+	awaitPush(t, pushes, listsBotmux(true), "the hub was not told the session while on")
+	configureNode(t, n, map[string]any{"botmux": false})
+	awaitPush(t, pushes, listsBotmux(false), "no session list without botmux's session went to the hub")
+}
+
+// Where the engine does not answer (herdr not running), turning botmux off still takes its sessions off the list: a
+// refresh nobody answers keeps the agents as they were.
+func TestBotmuxOffWithTheEngineDown(t *testing.T) {
+	n, _ := botmuxNode(t)
+	n.hosts = herdrHosts(&herdr.Client{Socket: filepath.Join(t.TempDir(), "gone.sock")})
+	configureNode(t, n, map[string]any{"botmux": true})
+	pushes, _ := pollNode(t, n)
+	awaitPush(t, pushes, listsBotmux(true), "the hub was not told the session while on")
+	configureNode(t, n, map[string]any{"botmux": false})
+	awaitPush(t, pushes, listsBotmux(false), "with herdr down, botmux's session stayed on the hub's list")
+}
+
+// Where botmux is installed, no list goes to the hub before its word on botmux: one without botmux's sessions would
+// take them off the hub's list for those seconds, and their coming back would read as new turns.
+func TestNoListGoesBeforeTheHubsWordOnBotmux(t *testing.T) {
+	n, f := botmuxNode(t)
+	// herdr runs an agent of its own: a list with it would go at the first tick, were lists not held.
+	cwd := "/tmp/poll"
+	writeTranscript(t, f.home, cwd, sidB, time.Now(),
+		`{"type":"user","timestamp":"2026-01-01T00:00:00Z","cwd":"/tmp/poll","message":{"role":"user","content":"hello"}}`)
+	f.herdr.reply("session.snapshot", snapshot(nil, nil,
+		[]any{claudeAgent(sidB, proto.StatusIdle, "w5:p1", "w5:t1", "w5", cwd, "poll")}, nil))
+	pushes, _ := pollNode(t, n)
+	for quiet := time.After(2500 * time.Millisecond); ; {
+		select {
+		case p := <-pushes:
+			if p.Event == "sessions.changed" || p.Event == "sessions.revs" {
+				t.Fatalf("%s went to the hub before its word: %s", p.Event, p.Params)
+			}
+			continue
+		case <-quiet:
+		}
+		break
+	}
+	configureNode(t, n, map[string]any{"botmux": true})
+	awaitPush(t, pushes, listsBotmux(true), "no list went to the hub after its word")
+}
+
+// Where botmux is not installed, lists go to the hub from the start, as before.
+func TestListsGoAtOnceWithoutBotmux(t *testing.T) {
+	n, f, home := herdrNode(t)
+	cwd := "/tmp/poll"
+	writeTranscript(t, home, cwd, sidA, time.Now(),
+		`{"type":"user","timestamp":"2026-01-01T00:00:00Z","cwd":"/tmp/poll","message":{"role":"user","content":"hello"}}`)
+	f.reply("session.snapshot", snapshot(nil, nil,
+		[]any{claudeAgent(sidA, proto.StatusIdle, "w5:p1", "w5:t1", "w5", cwd, "poll")}, nil))
+	pushes, _ := pollNode(t, n)
+	awaitPush(t, pushes, func(p hubPush) bool {
+		return p.Event == "sessions.changed" && strings.Contains(string(p.Params), sidA)
+	}, "no list went to the hub")
+}
+
+// listsBotmux: a session list that has (or has not) the session on its botmux pane.
+func listsBotmux(on bool) func(hubPush) bool {
+	return func(p hubPush) bool {
+		return p.Event == "sessions.changed" && strings.Contains(string(p.Params), `"botmux:`+sidA+`"`) == on
+	}
+}
+
+// awaitPush waits up to five seconds for a push that want takes.
+func awaitPush(t *testing.T, pushes <-chan hubPush, want func(hubPush) bool, what string) {
+	t.Helper()
+	for timeout := time.After(5 * time.Second); ; {
+		select {
+		case p := <-pushes:
+			if want(p) {
+				return
+			}
+		case <-timeout:
+			t.Fatal(what)
+		}
 	}
 }

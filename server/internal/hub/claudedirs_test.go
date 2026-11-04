@@ -256,3 +256,23 @@ func TestSelfSettingsBlocksClaudeDirs(t *testing.T) {
 		t.Fatal("not unblocked")
 	}
 }
+
+// Connecting tells the node whether to list botmux's sessions: as before unless hub.json turns them off for the
+// machine (machines[].botmux false). So does handing it new config directories, which asks for the session list
+// next: the node must not take that list for an older hub's.
+func TestConfigureNodeSaysBotmux(t *testing.T) {
+	_, _, m, _ := dirsHub(t)
+	f := connectDirsNode(t, m)
+	ctx := context.Background()
+	m.configureNode(ctx, m.peer)
+	off := false
+	m.cfg.Botmux = &off
+	m.configureNode(ctx, m.peer)
+	m.reconfigureClaudeDirs(ctx)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.configure) != 3 || string(f.configure[0]["botmux"]) != "true" || string(f.configure[1]["botmux"]) != "false" ||
+		string(f.configure[2]["botmux"]) != "false" {
+		t.Fatalf("botmux in node.configure: %v", f.configure)
+	}
+}

@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -77,13 +78,70 @@ func findBotmux() string {
 	return ""
 }
 
-// nodeHosts are the hosts a node drives: its engine's, and botmux's when botmux is installed.
-func nodeHosts(engine string, logf func(format string, args ...any)) []host.Host {
+// nodeHosts are the hosts a node drives: its engine's, and botmux's when botmux is installed and wanted (useBotmux).
+func nodeHosts(engine string, botmux bool, logf func(format string, args ...any)) []host.Host {
 	hs := engineHosts(engine, logf)
+	if !botmux {
+		return hs
+	}
 	if bin := botmuxBin(); bin != "" {
-		hs = append(hs, newBotmuxHost(bin, logf))
+		hs = append(hs, newBotmux(bin, logf))
 	}
 	return hs
+}
+
+// newBotmux makes the botmux host (tests: one on a fake CLI).
+var newBotmux = func(bin string, logf func(format string, args ...any)) host.Host { return newBotmuxHost(bin, logf) }
+
+// useBotmux lists this machine's botmux sessions, or stops (hub.json machines[].botmux): the hub's word in
+// node.configure, or on as before when the hub lists sessions without having said (fallback: a hub older than the
+// setting). Until one of them, botmux is not a host, so a machine turned off never runs botmux at all, not even while
+// the node starts (and no list goes to the hub meanwhile: botmuxPending). Off, botmux is no host: no new `botmux
+// observe`, no `botmux dashboard current` (one observe under way finishes, its answer dropped), and its sessions are
+// out of the next list pushed, within a second; on, they come with the next refresh. A fallback never overrides the
+// hub's word.
+func (n *Node) useBotmux(on, fallback bool) {
+	n.eng.mu.Lock()
+	if n.eng.botmux != nil && (fallback || *n.eng.botmux == on) {
+		n.eng.mu.Unlock()
+		return
+	}
+	n.eng.botmux = &on
+	n.eng.botmuxSaid.Store(true)
+	// The engine's hosts stay as they are (their watchers hold them); only botmux comes or goes.
+	all := n.hosts.All()
+	hs := slices.DeleteFunc(slices.Clone(all), func(h host.Host) bool { return h.Kind() == host.Botmux })
+	removed := !on && len(hs) < len(all)
+	switch bin := botmuxBin(); {
+	case on && len(hs) < len(all): // registered already
+	case on && bin != "":
+		n.hosts.Set(append(hs, newBotmux(bin, n.logf))...)
+	case removed:
+		n.hosts.Set(hs...)
+	}
+	n.eng.mu.Unlock()
+	if !removed {
+		return
+	}
+	// Its sessions go now, not when the hosts next answer: a refresh nobody answers (herdr not running) keeps the
+	// agents as they were. A refresh still asking botmux drops its answer (refreshHosts), so they do not come back.
+	n.mu.Lock()
+	n.engEpoch++
+	delete(n.hostAgents, host.Botmux)
+	for id, a := range n.agents {
+		if host.ParsePane(a.PaneID).Kind == host.Botmux {
+			delete(n.agents, id)
+		}
+	}
+	n.mu.Unlock()
+}
+
+// botmuxPending: botmux is installed and the hub has not said yet whether its sessions are listed. No list goes to
+// the hub until it has (publish): one without botmux's sessions would take them off the hub's list for the seconds
+// before the word (node.info comes first), and their coming back would read as new turns. The hub lists the sessions
+// right after its word.
+func (n *Node) botmuxPending() bool {
+	return !n.eng.botmuxSaid.Load() && botmuxBin() != ""
 }
 
 func newBotmuxHost(bin string, logf func(format string, args ...any)) *botmuxHost {

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/herdr"
@@ -32,6 +33,11 @@ type engineState struct {
 	use   sync.Mutex    // one engine.use at a time, applied whole (the last one to arrive wins)
 	ready chan struct{} // closed once the hub said which engine (configured)
 	once  sync.Once
+
+	// botmux: whether botmux's sessions are listed next to the engine's (useBotmux); nil until the hub said, or
+	// listed sessions without saying. botmuxSaid is the same "not nil", read without the lock (botmuxPending).
+	botmux     *bool
+	botmuxSaid atomic.Bool
 }
 
 // configWait is how long a new connection waits for the hub to say which engine before it starts on herdr: a hub
@@ -163,7 +169,7 @@ func (n *Node) useEngine(ctx context.Context, engine string) error {
 		return nil
 	}
 	n.eng.mu.Lock()
-	n.hosts.Set(nodeHosts(engine, n.logf)...)
+	n.hosts.Set(nodeHosts(engine, n.eng.botmux != nil && *n.eng.botmux, n.logf)...)
 	n.resetSignals()
 	n.eng.name = engine
 	n.mu.Lock()
