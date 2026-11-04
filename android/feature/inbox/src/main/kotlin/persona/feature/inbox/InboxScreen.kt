@@ -198,6 +198,8 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
                 Spacer(Modifier.height(Tokens.Space.s))
                 JSearchField(query, { filter(currentFilters.copy(query = it)) }, "搜索标题、发件人和内容")
             }
+            // New items waiting outside the list for triage (#1773): one line over the first item until triage is ok.
+            InboxTriageText.banner(snapshot.triage)?.let { banner -> item("triage") { InboxTriageNotice(banner) } }
             if (snapshot.loading) item("loading") { JLoading(text = "正在读取收件箱") }
             if (!failedEmpty) (error ?: snapshot.error?.takeIf { feedback == null || connection == ConnectionState.Online })?.let { message ->
                 item("error") { StatusText(message, isError = true) }

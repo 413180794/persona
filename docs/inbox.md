@@ -83,7 +83,18 @@
   或没轮到而没进来的新条目数（hub 自己的来源从不扣下，不在里面）；`state` 是其中最要紧的原因：`unconfigured`（没有配置分拣模型）> `paused`（模型没有额度 / 并发已满）> `error`（模型出错）>
   `timeout`（模型太慢）> `behind`（这一轮没分完）；`reason` 是给人看的原因；`sources: [{source, name, state, reason, waiting}]` 按来源分开。
   只在内存里，每轮重新算（这一轮读过的来源重算，没读的保留到它不在了为止）；没有等着的是 `{"state": "ok", "waiting": 0}`。
-  App 可以据此显示一行「分拣暂时不可用（模型没有额度）：2 件还在等」（客户端的提示是后续的事）。
+  App 据此在收件箱顶上显示「等分拣的横幅」（下一条）。
+- **等分拣的横幅**（#1773，网页、iOS / Mac、安卓一致）：`triage.state` 不是 `ok` 且 `waiting > 0` 时，收件箱列表顶上、搜索和筛选下面、第一段上面一条警示色（橙）的横幅，不能关掉；
+  跟着列表刷新（`inbox` 推送、重连、下拉刷新），恢复 `ok` 后消失。老 hub 没有 `triage`：不显示。
+  - 文案：只有一个来源在等（`sources` 里 `waiting > 0` 的恰好一个，而且有 `name`）时「有 {waiting} 条{name}消息在等分拣：{reason}」，否则「有 {waiting} 条消息在等分拣：{reason}」。
+    `reason` 用 hub 给的（去掉首尾空白）；空的按状态：`unconfigured` 还没配分拣模型 · `paused` 分拣模型暂停了 · `error` 分拣模型出错了 · `timeout` 分拣模型太慢了 · `behind` 新消息太多，正在排队；
+    不认识的状态又没有原因时只写「有 {waiting} 条消息在等分拣」。名字前后不加空格（「有 2 条GitHub消息在等分拣」）。
+  - 按钮：只有 `unconfigured` 有「去配置」，打开 设置 › 模型配置 › 信息筛选（`inbox.triage`）；只在这台设备能改设置时显示，否则只有文字。其他状态只说原因。
+  - 各端都用时钟图标。网页 `TriageBanner`（`docs/web.md`「收件箱」），「去配置」在文字右边；iOS / Mac `InboxStore.triage`，设计系统的 `NoticeBanner`（`apple/Persona/DesignSystem/Notice.swift`，图标 `Theme.Icon.time`）
+    做成列表的第一行（iPhone 在筛选下面，「去配置」在文字下面；Mac 在列表栏的第一行，「去配置」在右边），「去配置」以浮层打开信息筛选的模型编辑，体验模式里不显示；
+    安卓读得到 `GET /api/v1/model-config/purposes/inbox.triage` 才显示「去配置」（只能回答的设备、没有这个用途的 hub 只显示文字；体验模式没有），细节见 `docs/android.md`。
+    正常配对的设备三端结果一样：能保存这个设置的设备有按钮。
+  - 截图和联调用假 hub 的 `MOCK_INBOX_TRIAGE=<状态>[:<条数>[:<来源名，逗号隔开>[:<原因>]]]`（`unconfigured`、`behind:8:飞书`、`error:7:飞书,邮件,GitHub`、`error:2:GitHub:模型没有额度`）。
 - 2026-10-27 第一次跑：51 件里 3 件需要你、29 件噪音（全是营销邮件），摘要像「Sample Contact问 codex 代码是否已合入 1013，等你确认答复」。
 
 ## 事件合成（2026-11-04，#1680）

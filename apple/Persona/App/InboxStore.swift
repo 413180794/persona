@@ -9,6 +9,9 @@ final class InboxStore {
     static let shared = InboxStore()
 
     private(set) var items: [InboxItem]
+    /// How triage stands on the hub (new items held back until the model sorts them), with every list; nil from an
+    /// older hub, and until the first list of this run (it is not kept on disk: an old count must not show offline).
+    private(set) var triage: InboxTriageStatus?
     private(set) var loading = false
     var error: String?
     @ObservationIgnored private var reloading: Task<Void, Never>?
@@ -25,6 +28,7 @@ final class InboxStore {
     /// Entering or leaving 体验模式: the other side's items must not show for a moment.
     func forget() {
         items = []
+        triage = nil
         error = nil
         saver.run { StateCache.save(Self.stateName, [InboxItem]()) }
     }
@@ -37,7 +41,7 @@ final class InboxStore {
         guard reloading == nil else { return }
         reloading = Task {
             defer { reloading = nil }
-            await fetch { try await $0.inbox(connectors: Self.drawsConnectors) }
+            await fetch { try await $0.inboxListing(connectors: Self.drawsConnectors) }
         }
     }
 
@@ -53,12 +57,14 @@ final class InboxStore {
     private static let drawsConnectors = false
     #endif
 
-    private func fetch(_ load: (APIClient) async throws -> [InboxItem]) async {
+    private func fetch(_ load: (APIClient) async throws -> InboxListing) async {
         guard let api = AppModel.shared.api else { return }
         loading = true
         defer { loading = false }
         do {
-            apply(try await load(api))
+            let listing = try await load(api)
+            apply(listing.items)
+            if listing.triage != triage { triage = listing.triage }
             error = nil
         } catch {
             if let shown = error.shown { self.error = shown }

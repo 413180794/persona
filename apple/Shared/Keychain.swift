@@ -10,6 +10,11 @@ nonisolated enum Keychain {
     /// tunnel's private key (docs/network.md「经 SSH 隧道连 hub」).
     @discardableResult
     static func save(_ data: Data, account: String, thisDeviceOnly: Bool = false) -> Bool {
+        #if os(macOS) && DEBUG
+        // Screenshots (`-macSnapshot`) never touch the keychain, writes included: one paired with a mock hub
+        // (`-pairURL`) keeps the pairing in memory instead of leaving an item in this Mac's login keychain.
+        if UserDefaults.standard.string(forKey: "macSnapshot") != nil { return false }
+        #endif
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
                                     kSecAttrAccount as String: account]
         SecItemDelete(query as CFDictionary)
@@ -63,6 +68,9 @@ nonisolated enum Keychain {
     }
 
     static func delete(account: String) {
+        #if os(macOS) && DEBUG
+        if UserDefaults.standard.string(forKey: "macSnapshot") != nil { return } // as in `save`
+        #endif
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
                                     kSecAttrAccount as String: account]
         SecItemDelete(query as CFDictionary)

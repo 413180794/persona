@@ -47,6 +47,12 @@ struct MacInboxList: View {
         #endif
         let sections = state.sections(model)
         List(selection: $state.selection) {
+            // New items the hub holds back until the model sorts them (#1773): the column's first row, not selectable.
+            if let line = InboxTriageText.line(store.triage) {
+                InboxTriageBanner(line: line, configurable: InboxTriageText.configurable(store.triage, mayChangeSettings: !model.isDemo))
+                    .listRowSeparator(.hidden)
+                    .padding(.bottom, Theme.Space.xs)
+            }
             if let error = store.error, store.items.isEmpty {
                 Label(error, systemImage: Theme.Icon.error).font(Theme.Font.caption).foregroundStyle(Theme.danger)
             }

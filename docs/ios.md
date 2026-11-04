@@ -452,7 +452,10 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
   - `Shared/Design/`：token，手表也编译。`Theme`（字体级别和强调、间距、圆角、行高、动画、颜色角色）、`Icons`（`Theme.Icon` 和 `Theme.Brand`）、
     `Palette`（基础色，小组件 / 实时活动也编译它）、`StyleSpec`（组合后的一个值）、`ColorSpec`（主题色、迁移）和 `Styles/` 下每种风格一个文件。
   - `Persona/DesignSystem/`：只有 iOS 的配方和组件：`Styling`（表面、按钮、页面底色按 `spec.surface` / `spec.buttons` 画）、`Components`
-    （Chip、CountBadge、EmptyStateView、Monogram、`Loadable` / `LoadableContent`……）、`TextSize`。
+    （Chip、CountBadge、EmptyStateView、Monogram、`Loadable` / `LoadableContent`……）、`Notice`（`NoticeBanner`：页面内容顶上一句提示，
+    语气色（caution / danger）的图标（默认是语气自己的，也可以给一个说明是什么事的，比如等着的钟）+ 次要灰字 + 可选一个按钮
+    （手机上在字下面，Mac 在右边），底是语气色的浅底表面，和对话里的 `AttentionNote` 一个样子；不能关掉，说的事不成立了就消失，
+    收件箱的「等分拣」横幅用它，#1773）、`TextSize`。
   - **加一种风格**：在 `Shared/Design/Styles/` 写一个 `ComponentSpec`（表面画法、按钮、字体设计、组件套件、底色怎么来、描边、飞书卡片、
     它自己的颜色），`AppStyle` 加一个 case，`component` 里对上。**加一种主题色**：写一个 `ColorSpec`（主色、气泡和字、要不要压暗、
     淡色调可以手调或按主色算），`ThemeColor` 加一个 case。别的代码只读 `StyleSpec.current`，不要 `switch AppStyle` / `ThemeColor`。

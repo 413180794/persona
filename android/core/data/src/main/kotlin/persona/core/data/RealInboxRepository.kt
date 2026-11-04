@@ -185,7 +185,10 @@ class RealInboxRepository(
         restore(transport)
         current.update { it.copy(loading = true, error = null) }
         try {
-            val data = transport.inbox().array("items").map { it.jsonObject }
+            val body = transport.inbox()
+            val data = body.array("items").map { it.jsonObject }
+            // New items waiting for triage (#1773); an older hub sends no `triage`.
+            val triage = InboxTriage.decode(body["triage"])
             val mute = if (hubPreferences == null) transport.mutes() else null
             if (!owns(transport)) return@withLock
             val records = data.map { record(it, transport) }
@@ -200,7 +203,7 @@ class RealInboxRepository(
             outbox.value = saved.outbox
             current.update { it.copy(records = records.map { item -> withLocalStatus(item, saved) },
                 mutes = mute?.let { m -> AgentPreferences(m.strings("spaces"), m.strings("sessions"), m.strings("allowed").toSet()) } ?: it.mutes,
-                loading = false, error = null) }
+                loading = false, error = null, triage = triage) }
             snapshots.save("${transport.scope}:inbox", buildJsonObject { put("items", JsonArray(data)) })
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) {

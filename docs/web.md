@@ -154,6 +154,9 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   启动器、思考强度只在这次改过才发（统一模型配置那边存的值不被盖回去，`docs/model-config.md`），hub 有统一模型配置时给一个跳过去的链接。
 - **收件箱**（`/inbox`、`/inbox/<件>`，`src/views/inbox/`，`src/lib/inbox.ts`，`docs/inbox.md`）：飞书、邮件、云文档、公司圈和连接器（GitHub、Telegram、信息、插件的）一个列表，
   需要你 / 知悉即可（全部看过）/ 已折叠（全部清除）/ 已处理（收起，可移回）四段；筛选全部 / 飞书 / 每个邮箱 / 每个有条目的连接器 | @我 / 私聊 / 群聊 / 邮件 / Agent，搜标题、发件人、内容、摘要。
+  - **等分拣的横幅**（#1773，`views/inbox/TriageBanner.tsx`，文案 `lib/inbox.ts` 的 `triageBanner`，规则见 `docs/inbox.md`「等分拣的横幅」）：列表回包的 `triage` 存在收件箱的 store 里，
+    筛选下面、第一段上面一条 `bg-orange-tint` 的横幅（`role="status"`，时钟图标）；「去配置」打开 `/settings?tab=model-config&purpose=inbox.triage`（网页总是完整权限的设备，按钮总在）。
+    截图用 `MOCK_INBOX_TRIAGE=unconfigured`、`behind:8:飞书`、`error:7:飞书,邮件,GitHub` 的假 hub。
   - **连接器的条目**（#1324，`?sources=all` 拉列表，按条目的 `connector` 块画，不认具体来源）：标签是 `connector.label`，第二行「example-org/example-repo#12 · 谁：内容」，头像角上是连接器自己的标志（GitHub、Telegram）或灰色的通用标。
     详情（`ConnectorThread.tsx`）先读 `/connectors/<id>/thread`：GitHub 的 PR / issue 画成 GitHub 的时间线（状态、分支、标签、描述、评论、review、代码行评论带 diff、CI 结果和失败日志），
     聊天类（Telegram）画成气泡（图片、贴纸、视频封面经 `/connectors/<id>/media`，语音和文件只描述），可加载更早；会话页带回复动作（`chat.reply`）时底部有输入框，走 `thread/reply`（聊天可引用某条）。

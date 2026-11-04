@@ -373,31 +373,20 @@ struct ModelPurposeEditorView: View {
     }
 }
 
-/// A sheet avoids mixing value and view navigation in the existing assistant/task detail stacks.
-struct ModelConfigurationLink: View {
-    var title = "模型配置"
-    var purposeID: String?
-    var summary: String?
-    @State private var showing = false
+extension View {
+    /// 模型配置 over this page as a sheet: one purpose's editor (`purposeID`), or the categories (nil). A sheet avoids
+    /// mixing value and view navigation in the stack below (the assistant's and tasks' details, the inbox).
+    func modelConfigurationSheet(isPresented: Binding<Bool>, purposeID: String?) -> some View {
+        modifier(ModelConfigurationSheet(showing: isPresented, purposeID: purposeID))
+    }
+}
 
-    var body: some View {
-        Button { showing = true } label: {
-            if AppStyle.current.usesBeautifulUI {
-                BUIListRow(title) { BUIIconTile(Theme.Icon.model, tint: Theme.accent) } trailing: {
-                    Text(summary ?? "统一管理").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
-                }
-            } else {
-                LabeledContent {
-                    Text(summary ?? "统一管理").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
-                } label: {
-                    Label(title, systemImage: Theme.Icon.model).lineLimit(1)
-                }
-                .lineLimit(1)
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("model-config-link")
-        .sheet(isPresented: $showing) {
+private struct ModelConfigurationSheet: ViewModifier {
+    @Binding var showing: Bool
+    var purposeID: String?
+
+    func body(content: Content) -> some View {
+        content.sheet(isPresented: $showing) {
             #if os(macOS)
             // No leading 关闭 and no pushing in a Mac sheet (#1248): the editor brings its own 取消 and 保存 for the
             // sheet's bottom row, and the categories open each one over this sheet.
@@ -423,6 +412,34 @@ struct ModelConfigurationLink: View {
             }
             #endif
         }
+    }
+}
+
+/// A row that opens 模型配置 (or one purpose's editor) as a sheet (`modelConfigurationSheet`).
+struct ModelConfigurationLink: View {
+    var title = "模型配置"
+    var purposeID: String?
+    var summary: String?
+    @State private var showing = false
+
+    var body: some View {
+        Button { showing = true } label: {
+            if AppStyle.current.usesBeautifulUI {
+                BUIListRow(title) { BUIIconTile(Theme.Icon.model, tint: Theme.accent) } trailing: {
+                    Text(summary ?? "统一管理").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                }
+            } else {
+                LabeledContent {
+                    Text(summary ?? "统一管理").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                } label: {
+                    Label(title, systemImage: Theme.Icon.model).lineLimit(1)
+                }
+                .lineLimit(1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("model-config-link")
+        .modelConfigurationSheet(isPresented: $showing, purposeID: purposeID)
         #if DEBUG
         // `-showModelConfigSheet <purpose id>|all`: this sheet open, for screenshots.
         .task {

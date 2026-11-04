@@ -63,6 +63,35 @@ class InboxHandOffRepositoryTest {
         }
     }
 
+    // #1773: the list carries how triage stands, refreshed with it; an older hub says nothing, and the banner stays away.
+    @Test fun refreshCarriesTheHubsTriage() = runTest {
+        val directory = Files.createTempDirectory("inbox-triage-test").toFile()
+        try {
+            val transport = ItemsTransport(buildJsonArray {})
+            val repository = repository(transport, directory, backgroundScope)
+            repository.snapshot.first { it.contentSource != null }
+            repository.refresh()
+            assertNull(repository.snapshot.value.triage)
+
+            transport.triage = buildJsonObject {
+                put("state", "unconfigured"); put("waiting", 3)
+                put("sources", buildJsonArray { add(buildJsonObject {
+                    put("source", "lark"); put("name", "飞书"); put("state", "unconfigured"); put("waiting", 3)
+                }) })
+            }
+            repository.refresh()
+            assertEquals(InboxTriage("unconfigured", null, 3, listOf(InboxTriageSource("lark", "飞书", "unconfigured", waiting = 3))),
+                repository.snapshot.value.triage)
+
+            // Sorted again: back to ok, and the banner goes.
+            transport.triage = buildJsonObject { put("state", "ok"); put("waiting", 0) }
+            repository.refresh()
+            assertEquals("ok", repository.snapshot.value.triage?.state)
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
     @Test fun recordsCarryReadStateWithoutChangingMentionOrTier() = runTest {
         val directory = Files.createTempDirectory("inbox-read-test").toFile()
         try {
@@ -158,7 +187,9 @@ class InboxHandOffRepositoryTest {
     }
 
     private class ItemsTransport(private val items: JsonArray, override val scope: String = "hub/generation") : InboxAssistantTransport {
-        override suspend fun inbox() = buildJsonObject { put("items", items) }
+        /** What the hub says of triage with the list (#1773); none: an older hub. */
+        var triage: JsonObject? = null
+        override suspend fun inbox() = buildJsonObject { put("items", items); triage?.let { put("triage", it) } }
         override suspend fun setDone(itemId: String, done: Boolean) = JsonObject(emptyMap())
         override suspend fun reply(itemId: String?, feedId: String?, text: String, clientId: String) = JsonObject(emptyMap())
         override suspend fun messages(feedId: String, around: Long?, before: String?, after: String?) = buildJsonObject {

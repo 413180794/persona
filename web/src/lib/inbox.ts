@@ -609,10 +609,62 @@ export function momentText(c?: MomentContent): string {
   return c.segments.map((s) => (s.kind === "emoji" ? emojiLabel(s.key ?? s.emojiKey ?? "", s.text) : s.text ?? "")).join("");
 }
 
+// ── triage: the new items held back from the list (#1773) ───
+
+/**
+ * How triage stands (GET /api/v1/inbox `triage`, server/internal/hub/inbox_admit.go): new items the model could not
+ * sort wait outside the list. An older hub sends nothing.
+ */
+export interface InboxTriage {
+  /** ok | unconfigured | paused | error | timeout | behind */
+  state: string;
+  /** The state for people, the hub's own words; may be empty. */
+  reason?: string;
+  waiting: number;
+  sources?: InboxTriageSource[];
+}
+
+export interface InboxTriageSource {
+  source: string;
+  name?: string;
+  state: string;
+  reason?: string;
+  waiting: number;
+}
+
+/** What a state says when the hub gives no reason (the same words on iOS and Android). */
+export const TRIAGE_REASONS: Record<string, string> = {
+  unconfigured: "还没配分拣模型",
+  paused: "分拣模型暂停了",
+  error: "分拣模型出错了",
+  timeout: "分拣模型太慢了",
+  behind: "新消息太多，正在排队",
+};
+
+/** The model settings 去配置 opens: 信息筛选, the purpose that sorts the inbox. */
+export const TRIAGE_SETTINGS = "/settings?tab=model-config&purpose=inbox.triage";
+
+/**
+ * The banner over the list while new items wait for triage; null when none wait, triage is ok, or the hub is older.
+ * One source waiting names it (「有 3 条飞书消息在等分拣：…」), several do not; the reason is the hub's, else the
+ * state's words (an unknown state without a reason says only how many wait). `configure`: 去配置, only for a model
+ * not set up.
+ */
+export function triageBanner(t: InboxTriage | null | undefined): { text: string; configure: boolean } | null {
+  if (!t || typeof t !== "object" || !t.state || t.state === "ok" || !(Number(t.waiting) > 0)) return null;
+  const sources = (Array.isArray(t.sources) ? t.sources : []).filter((x) => x && Number(x.waiting) > 0);
+  const name = sources.length === 1 ? (sources[0].name ?? "").trim() : "";
+  const reason = (t.reason ?? "").trim() || TRIAGE_REASONS[t.state] || "";
+  const text = `有 ${t.waiting} 条${name}消息在等分拣${reason ? `：${reason}` : ""}`;
+  return { text, configure: t.state === "unconfigured" };
+}
+
 // ── the list, shared by the page and the sidebar badge ───
 
 interface InboxState {
   items: InboxItem[];
+  /** The hub's triage state from the last list; null from an older hub. */
+  triage: InboxTriage | null;
   loaded: boolean;
   loading: boolean;
   error: string;
@@ -622,7 +674,7 @@ interface InboxState {
   moving: string[];
 }
 
-let state: InboxState = { items: [], loaded: false, loading: false, error: "", sending: [], moving: [] };
+let state: InboxState = { items: [], triage: null, loaded: false, loading: false, error: "", sending: [], moving: [] };
 const listeners = new Set<() => void>();
 /** Replies that did not go out, by item: the draft dialog opens with that text again. */
 export const unsentReplies = new Map<string, string>();
@@ -668,8 +720,8 @@ export function reloadInbox(): Promise<void> {
     try {
       do {
         again = false;
-        const r = await api<{ items?: InboxItem[] }>("/inbox?sources=all");
-        set({ items: r.items ?? [], loaded: true, error: "" });
+        const r = await api<{ items?: InboxItem[]; triage?: InboxTriage }>("/inbox?sources=all");
+        set({ items: r.items ?? [], triage: r.triage ?? null, loaded: true, error: "" });
       } while (again);
     } catch (e) {
       set({ error: errorText(e), loaded: true });
@@ -685,8 +737,8 @@ export function reloadInbox(): Promise<void> {
 export async function refreshInbox(): Promise<void> {
   set({ loading: true });
   try {
-    const r = await api<{ items?: InboxItem[] }>("/inbox/refresh?sources=all", { method: "POST" });
-    set({ items: r.items ?? [], loaded: true, error: "" });
+    const r = await api<{ items?: InboxItem[]; triage?: InboxTriage }>("/inbox/refresh?sources=all", { method: "POST" });
+    set({ items: r.items ?? [], triage: r.triage ?? null, loaded: true, error: "" });
   } catch (e) {
     toast(`没刷新成功：${errorText(e)}`, "error");
   } finally {
@@ -840,7 +892,7 @@ export function useInboxBadge(): number {
 
 /** Tests only: back to an empty, unstarted list. */
 export function resetInboxForTests() {
-  state = { items: [], loaded: false, loading: false, error: "", sending: [], moving: [] };
+  state = { items: [], triage: null, loaded: false, loading: false, error: "", sending: [], moving: [] };
   started = false;
   inFlight = null;
   again = false;

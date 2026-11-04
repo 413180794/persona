@@ -187,6 +187,13 @@ struct InboxPage: View {
                 .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
                 .listRowSeparator(.hidden)
                 .themedRow()
+            // New items the hub holds back until the model sorts them (#1773): above the first item.
+            if let line = InboxTriageText.line(store.triage) {
+                InboxTriageBanner(line: line, configurable: InboxTriageText.configurable(store.triage, mayChangeSettings: !model.isDemo))
+                    .listRowInsets(EdgeInsets(top: 0, leading: Theme.Space.page, bottom: Theme.Space.s, trailing: Theme.Space.page))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+            }
             if let error = store.error, store.items.isEmpty {
                 Label(error, systemImage: Theme.Icon.error).font(Theme.Font.caption).foregroundStyle(Theme.danger)
                     .themedRow()

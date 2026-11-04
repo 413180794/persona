@@ -435,6 +435,16 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 
 单测：`feature/inbox` 的 `InboxHandOffTest`（和 iOS 一样的交接消息、最近在线 Agent、操作 ID、行标签）、`InboxDraftTest`（instruction 拼法、AI 标记的来去、发送中不换草稿、AI 分身草稿只填没动过的回复、确认文案）；`core/data` 的 `InboxHandOffRepositoryTest`（`at_all` / `mail` / `direct` 的解析、AI 草稿和手打草稿的行状态、交给 Persona 和交给 Agent 走哪个 outbox、草拟走 actions）；`core/hub` 的 `InboxActionsTransportTest`（draft 的路径、请求体、空草稿和失败）、`KnowledgeRepositoryTest`（agents 只留在线非助手、PUT 只发设置了的字段）；`feature/knowledge` 的 `KnowledgePresentationTest`（项目分段、六类、命中的条目 / 来源 / 文本、按条目合并、逐词加粗、时间线、档案去重、代码目录、开 Agent 的预填、打标表单和请求体）、`KnowledgeTaggingFlowTest`（保存失败留在浮层、保存后条目和列表都重读、Agent 只留在线非助手）；`core:designsystem` 的 `SliderTest`。
 
+## 收件箱：等分拣的新条目（#1773）
+
+三端共同的规格（位置、文案、兜底的话、来源名的规则、去配置、假 hub 的 `MOCK_INBOX_TRIAGE`）见 [inbox.md](inbox.md)「分拣状态」的「等分拣的横幅」，这里只写 Android 的做法：
+
+- **数据**：`RealInboxRepository` 每次刷新收件箱时读 `triage`，放进 `InboxSnapshot.triage`（`feature/inbox` 的 `InboxTriage.kt`）；老 hub 没有这个字段，是 null，不显示。
+- **横幅**：列表里筛选和搜索框那一项后面单独一项（`InboxScreen` 的 `item("triage")`），设计系统的 `JNotice`，「需要你」的状态色（玻璃是琥珀描边，看板是琥珀色条，晨报按它自己的提示样式），图标 `Clock`（在等，和网页一样）；文案在 `InboxTriageText.banner`，和网页的 `triageBanner` 一条一条对齐。
+- **去配置**：打开 `ModelPurposeRoute("inbox.triage")`。能不能改设置由外壳（`Root.kt` 的 `InboxTriageSetup`）判断：横幅要按钮时读一次这个用途（`GET /api/v1/model-config/purposes/inbox.triage`），读得到才给，读到一次就记住；只能回答的设备（403）、没有这个用途的 hub 只显示文字。体验模式没有。
+- **截图（不用模拟器）**：`./gradlew :feature:inbox:testDebugUnitTest --tests '*InboxTriageShotsTest*'`，Robolectric 原生绘制整个收件箱页，三种风格 × 深浅色 × 三种情况（没配模型带「去配置」、积压、几个来源带 hub 的原因），PNG 在 `build/inbox-triage-shots/`。
+- **单测**：`InboxTriageTest`（解析、老 hub、一个 / 几个来源、hub 的原因和兜底的话、不认识的状态、只有没配模型才有去配置）、`InboxTriageShotsTest`（文案在、去配置只在没配模型时出现且点了打开设置、不能改设置的设备只有文字、回到 ok 和老 hub 不显示）、`core/data` 的 `InboxHandOffRepositoryTest.refreshCarriesTheHubsTriage`。
+
 ## 飞书经插件：按 hub 的 features 显示（#1530）
 
 经 lark-connector 接飞书由私有插件提供，hub 只在装了插件时有 `/api/v1/lark/…`，插件往 hello 的 features 里加 `lark`、`lark_moments`（还有 `lark_attachments`、`lark_native_encryption`）。

@@ -7,7 +7,8 @@ plugins {
 
 android {
     namespace = "persona.feature.inbox"
-    // The translation views are rendered on the JVM (Robolectric's native graphics) for their screenshots.
+    // The translation views and the triage banner are rendered on the JVM (Robolectric's native graphics) for their
+    // screenshots.
     testOptions { unitTests { isIncludeAndroidResources = true } }
 }
 

@@ -63,6 +63,9 @@ import persona.feature.inbox.InboxItemPages
 import persona.feature.inbox.InboxItemPluginScreen
 import persona.feature.inbox.InboxRepository
 import persona.feature.inbox.LocalInboxItemPages
+import persona.feature.inbox.InboxTriage
+import persona.feature.inbox.InboxTriageSetup
+import persona.feature.inbox.LocalInboxTriageSetup
 import persona.feature.inbox.inboxEntries
 import persona.feature.inbox.inboxItemPage
 import persona.feature.inbox.inboxSourcePage
@@ -331,6 +334,21 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
     }
     // A plugin enabled since the hub was last read draws its items as soon as the inbox shows.
     LaunchedEffect(selected, pluginSlots) { if (selected == AppTab.Inbox) pluginSlots?.loadInboxItems() }
+    // The inbox's triage banner (#1773): 去配置 opens 设置 › 模型 › 信息筛选, offered only when this device can read that
+    // model use (a device that may only read and answer cannot, nor a hub without it). Asked once per hub when the
+    // banner wants it; a yes is kept.
+    val triageSetup = remember(services.models, services.demo, session.identity) {
+        val models = services.models.takeUnless { services.demo }
+        var allowed = false
+        InboxTriageSetup(
+            mayConfigure = {
+                allowed || (models != null && try { models.purpose(InboxTriage.Purpose); true }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { false }).also { allowed = it }
+            },
+            configure = { navigator.navigate(ModelPurposeRoute(InboxTriage.Purpose)) },
+        )
+    }
     val tools = LocalDeveloperTools.current
     val decorators = AppTab.entries.associateWith { tab -> key(tab) {
         listOf(rememberSaveableStateHolderNavEntryDecorator<NavKey>(), rememberViewModelStoreNavEntryDecorator<NavKey>())
@@ -517,7 +535,8 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
         val sides = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
         val sideRoom = sides.getLeft(LocalDensity.current, LocalLayoutDirection.current) > 0 ||
             sides.getRight(LocalDensity.current, LocalLayoutDirection.current) > 0
-        CompositionLocalProvider(LocalAmbience provides ambience, LocalWindowLayout provides windowLayout, LocalInboxItemPages provides inboxItemPages) {
+        CompositionLocalProvider(LocalAmbience provides ambience, LocalWindowLayout provides windowLayout, LocalInboxItemPages provides inboxItemPages,
+            LocalInboxTriageSetup provides triageSetup) {
           Box(Modifier.fillMaxSize().background(PersonaTheme.palette.background)) {
             // One background for the window. Pages paint the same light at the same place (PageBackdrop), so in wide
             // windows the rail, the panes and the room between them read as one surface; cards are what separate them.

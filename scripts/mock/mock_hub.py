@@ -2422,6 +2422,49 @@ def inbox_for(query):
     return [dict({k: v for k, v in x.items() if k != "context"}, version=inbox_version(x)) for x in INBOX if all_sources or "connector" not in x]
 
 
+# New items waiting for triage (GET /api/v1/inbox `triage`, #1773; the hub's inbox_admit.go). Unset: no `triage` at all,
+# as from a hub older than #1644. MOCK_INBOX_TRIAGE=<state>[:<waiting>[:<source name>[:<reason>]]]:
+#   unconfigured                  3 Feishu items wait, no model set up (the apps offer 去配置)
+#   behind:12:飞书,邮件            12 wait from two sources (6 each): the banner names none
+#   error:2:GitHub:模型没有额度     the hub's own reason instead of the state's words
+#   ok                            triage is fine: {"state": "ok", "waiting": 0}
+# States: ok | unconfigured | paused | error | timeout | behind. Several names, comma-separated, share the waiting.
+def inbox_triage_from(spec):
+    """The triage block MOCK_INBOX_TRIAGE asks for; None when it is not set."""
+    if not spec:
+        return None
+    parts = spec.split(":", 3)
+    state = parts[0].strip() or "ok"
+    if state == "ok":
+        return {"state": "ok", "waiting": 0}
+    waiting = int(parts[1]) if len(parts) > 1 and parts[1].strip() else 3
+    names = [n.strip() for n in (parts[2] if len(parts) > 2 else "飞书").split(",") if n.strip()] or ["飞书"]
+    reason = parts[3].strip() if len(parts) > 3 else ""
+    ids = {"飞书": "lark", "邮件": "mail", "GitHub": "github", "Telegram": "telegram"}
+    sources = []
+    for i, name in enumerate(names):
+        share = waiting // len(names) + (1 if i < waiting % len(names) else 0)
+        src = {"source": ids.get(name, "source%d" % (i + 1)), "name": name, "state": state, "waiting": share}
+        if reason:
+            src["reason"] = reason
+        sources.append(src)
+    out = {"state": state, "waiting": waiting, "sources": sorted(sources, key=lambda x: x["source"])}
+    if reason:
+        out["reason"] = reason
+    return out
+
+
+INBOX_TRIAGE = inbox_triage_from(os.environ.get("MOCK_INBOX_TRIAGE", ""))
+
+
+def inbox_list(query):
+    """GET /api/v1/inbox (and POST …/refresh): the items, with `triage` when MOCK_INBOX_TRIAGE is set."""
+    body = {"items": inbox_for(query)}
+    if INBOX_TRIAGE is not None:
+        body["triage"] = INBOX_TRIAGE
+    return body
+
+
 # What each bulk 已处理 / 撤销 asked for (POST /api/v1/inbox/done), kept at /mock/inbox_bulk.
 INBOX_BULK = []
 
@@ -7853,7 +7896,7 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"ok": True})
         if p == "/mock/renamed": return self.send_json({"renamed": RENAMED})
         if p == "/mock/served": return self.send_json({"served": SERVED})
-        if p == "/api/v1/inbox": return self.send_json({"items": inbox_for(q)})
+        if p == "/api/v1/inbox": return self.send_json(inbox_list(q))
         if p == "/api/v1/inbox/mutes": return self.send_json({"mutes": MUTES})
         if p == "/api/v1/lark/moments/posts/mp1": return self.send_json(MOMENT_POST)
         if p == "/api/v1/lark/moments/posts/mp1/comments": return self.send_json({"comments": MOMENT_COMMENTS})
@@ -8775,7 +8818,7 @@ class H(BaseHTTPRequestHandler):
             if not any(m.get("client_msg_id") and m.get("client_msg_id") == body.get("client_msg_id") for m in SENT):
                 SENT.append(body)
             return self.send_json({"ok": True})
-        if p == "/api/v1/inbox/refresh": return self.send_json({"items": inbox_for(parse_qs(urlparse(self.path).query))})
+        if p == "/api/v1/inbox/refresh": return self.send_json(inbox_list(parse_qs(urlparse(self.path).query)))
         if p == "/api/v1/inbox/done" and self.command == "POST":  # 全部标为已处理 / 撤销
             body = json.loads(self.last_body or b"{}")
             if body.get("done") is None: return self.send_json({"error": "done and items are required"}, 400)
@@ -9721,6 +9764,7 @@ if os.environ.get("MOCK_MOMENTS_FEED"):  # the project's posts say which feed th
             _m["feed"] = os.environ["MOCK_MOMENTS_FEED"]
 MOCK_HELP.append("MOCK_MOMENTS_FEED=<名字>  知识库的公司圈帖子带 feed（项目的「相关<名字>」和存档帖子页的标题用它；不设时叫「公司圈」）")
 MOCK_HELP.append("MOCK_NO_LARK=1  没装 lark-connector 插件的 hub：features 里没有 lark / lark_moments / lark_attachments，/api/v1/lark/… 404，连接器里没有飞书")
+MOCK_HELP.append("MOCK_INBOX_TRIAGE=<状态>[:<条数>[:<来源名，逗号隔开>[:<原因>]]]  收件箱列表带 triage（新条目在等分拣，#1773）：unconfigured / paused / error / timeout / behind / ok；不设时没有 triage（老 hub）")
 
 # ---------- area: commenting in the Feishu document reader (#1290) ----------
 # MOCK_DOC_COMMENTS=1: the plugin says `lark_doc_comments`; GET /api/v1/lark/raw/documents/comments has three made-up

@@ -272,23 +272,51 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-extension APIClient {
-    private nonisolated struct InboxList: Decodable, Sendable { var items: [InboxItem] }
+/// How triage stands (GET /api/v1/inbox `triage`, #1644): new items the hub holds back because the model could not
+/// sort them yet, and why. `ok` when none wait; older hubs leave it out. Mirrors hub/inbox_admit.go `InboxTriage`.
+nonisolated struct InboxTriageStatus: Codable, Hashable, Sendable {
+    /// ok | unconfigured | paused | error | timeout | behind (the most telling of the sources').
+    var state: String
+    /// The state for people, the hub's words (模型没有额度); may be empty.
+    var reason: String?
+    var waiting: Int
+    var sources: [Source]?
 
-    private static func decodeInbox(_ data: Data) async throws -> [InboxItem] {
+    nonisolated struct Source: Codable, Hashable, Sendable {
+        var source: String
+        var name: String?
+        var state: String
+        var reason: String?
+        var waiting: Int
+    }
+}
+
+/// One answer of GET /api/v1/inbox (and of a refresh): the items, and how triage stands (nil from an older hub).
+nonisolated struct InboxListing: Decodable, Sendable {
+    var items: [InboxItem]
+    var triage: InboxTriageStatus?
+}
+
+extension APIClient {
+    private static func decodeInbox(_ data: Data) async throws -> InboxListing {
         try await Task.detached(priority: .userInitiated) {
-            try JSON.decoder.decode(InboxList.self, from: data).items
+            try JSON.decoder.decode(InboxListing.self, from: data)
         }.value
     }
 
     /// Open items and the ones done in the last few days, newest first. `connectors`: the connectors' items too
     /// (GitHub…), for a client that draws their `connector` block; without it the hub lists Feishu and mail only.
     func inbox(connectors: Bool = false) async throws -> [InboxItem] {
+        try await inboxListing(connectors: connectors).items
+    }
+
+    /// The same with how triage stands.
+    func inboxListing(connectors: Bool = false) async throws -> InboxListing {
         try await Self.decodeInbox(request("GET", "/api/v1/inbox", query: connectors ? ["sources": "all"] : [:]))
     }
 
     /// Collects Feishu and mail now, then lists.
-    func refreshInbox(connectors: Bool = false) async throws -> [InboxItem] {
+    func refreshInbox(connectors: Bool = false) async throws -> InboxListing {
         try await Self.decodeInbox(request("POST", "/api/v1/inbox/refresh", query: connectors ? ["sources": "all"] : [:],
                                            body: [String: String](), timeout: 60))
     }

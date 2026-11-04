@@ -15,6 +15,7 @@ import type { Interaction } from "../../lib/types";
 import { Collapse, cx, IconButton, Loading } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { DraftDialog } from "./InboxDialogs";
+import { TriageBanner } from "./TriageBanner";
 import { AgentWorking, Chip, Count, DraftCard, Glyph, ItemAvatar, Spark, StatusMenu, Tag, type GlyphName } from "./InboxParts";
 
 function useStored(key: string): [string, (v: string) => void] {
@@ -31,6 +32,7 @@ export function InboxList({ selected }: { selected?: string }) {
   const loaded = useInbox((s) => s.loaded);
   const loading = useInbox((s) => s.loading);
   const error = useInbox((s) => s.error);
+  const triage = useInbox((s) => s.triage);
   const interactions = useStore((s) => s.interactions);
   const sessions = useStore((s) => s.sessions);
   const mutes = useStore((s) => s.mutes);
@@ -110,6 +112,7 @@ export function InboxList({ selected }: { selected?: string }) {
           </button>
         </div>
 
+        <TriageBanner triage={triage} />
         {error && !items.length && <p className="mt-4 text-[12.5px] text-red">{error}</p>}
         {!loaded && <div className="mt-6 px-1"><Loading /></div>}
         {loaded && empty && (

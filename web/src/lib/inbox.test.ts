@@ -12,8 +12,8 @@ vi.mock("../ui/atoms", () => ({ toast: vi.fn() }));
 import {
   badgeCount, bulkMessage, bulkScope, canDraft, cardText, connectorReference, connectorSources, contextXML, openTitle, openURL, sourceLine, conversationRoute, docChangeLine, emojiLabel, fromLine, getInbox, handOffMessage, interactionAsk,
   interactionMuted, interactionTitle, itemPath, kindLabel, labelIsUrgent, mailAccounts, mergeMessages, momentText, nextLarkPosition, partRuns, reloadInbox,
-  replyLarkMessage, resetInboxForTests, sections, sendLarkMessage, sendReply, setAllDone, setDocStatus, setDone, shortTime, triage, unsentReplies, waitingAgents, withToken,
-  type InboxFilter, type InboxItem, type LarkMessage,
+  replyLarkMessage, resetInboxForTests, sections, sendLarkMessage, sendReply, setAllDone, setDocStatus, setDone, shortTime, triage, triageBanner, TRIAGE_REASONS, TRIAGE_SETTINGS,
+  unsentReplies, waitingAgents, withToken, type InboxFilter, type InboxItem, type InboxTriage, type LarkMessage,
 } from "./inbox";
 import { toast } from "../ui/atoms";
 import type { AgentMutes } from "./agent-groups";
@@ -320,6 +320,21 @@ describe("列表状态", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
+  it("记下分拣的状态；老 hub 没有就是 null，恢复 ok 后横幅消失", async () => {
+    expect(getInbox().triage).toBeNull();
+    const waiting: InboxTriage = { state: "unconfigured", waiting: 3, sources: [{ source: "lark", name: "飞书", state: "unconfigured", waiting: 3 }] };
+    fetcher.mockResolvedValueOnce(ok({ items: [dm], triage: waiting }));
+    await reloadInbox();
+    expect(getInbox().triage).toEqual(waiting);
+    expect(triageBanner(getInbox().triage)?.text).toBe("有 3 条飞书消息在等分拣：还没配分拣模型");
+    fetcher.mockResolvedValueOnce(ok({ items: [dm], triage: { state: "ok", waiting: 0 } }));
+    await reloadInbox();
+    expect(triageBanner(getInbox().triage)).toBeNull();
+    fetcher.mockResolvedValueOnce(ok({ items: [dm] }));
+    await reloadInbox();
+    expect(getInbox().triage).toBeNull();
+  });
+
   it("拉列表；请求进行中再要一次会在之后补一次", async () => {
     expect(getInbox().items.map((x) => x.id)).toEqual([dm.id, doc.id, mail.id]);
     fetcher.mockResolvedValueOnce(ok({ items: [dm] })).mockResolvedValueOnce(ok({ items: [mail] }));
@@ -440,5 +455,37 @@ describe("列表状态", () => {
     expect(nextLarkPosition([])).toBeTruthy();
     expect(nextLarkPosition([{ id: "1", position: "10" }])).toBe("11");
     expect(nextLarkPosition([{ id: "1", position: "10" }, { id: "2", position: "25" }])).toBe("26");
+  });
+});
+
+describe("等分拣的横幅（#1773）", () => {
+  const src = (source: string, name: string, waiting: number, state = "behind") => ({ source, name, state, waiting });
+  it("一个来源写出它的名字，几个来源不写；原因是 hub 的", () => {
+    expect(triageBanner({ state: "unconfigured", waiting: 3, sources: [src("lark", "飞书", 3, "unconfigured")] })).toEqual({ text: "有 3 条飞书消息在等分拣：还没配分拣模型", configure: true });
+    expect(triageBanner({ state: "behind", waiting: 12, sources: [src("lark", "飞书", 7), src("mail", "邮件", 5)] })).toEqual({ text: "有 12 条消息在等分拣：新消息太多，正在排队", configure: false });
+    expect(triageBanner({ state: "error", reason: "模型没有额度", waiting: 2, sources: [src("github", "GitHub", 2, "error")] })?.text).toBe("有 2 条GitHub消息在等分拣：模型没有额度");
+    // a source without a name, or one that waits for nothing, is not named
+    expect(triageBanner({ state: "timeout", waiting: 4, sources: [src("x", "", 4, "timeout")] })?.text).toBe("有 4 条消息在等分拣：分拣模型太慢了");
+    expect(triageBanner({ state: "paused", waiting: 4, sources: [src("lark", "飞书", 4, "paused"), src("mail", "邮件", 0, "ok")] })?.text).toBe("有 4 条飞书消息在等分拣：分拣模型暂停了");
+    expect(triageBanner({ state: "paused", waiting: 1 })?.text).toBe("有 1 条消息在等分拣：分拣模型暂停了");
+  });
+  it("每个状态有自己的话；不认识的状态又没有原因只说条数", () => {
+    for (const [state, words] of Object.entries(TRIAGE_REASONS)) {
+      expect(triageBanner({ state, waiting: 1 })).toEqual({ text: `有 1 条消息在等分拣：${words}`, configure: state === "unconfigured" });
+    }
+    expect(Object.keys(TRIAGE_REASONS)).toEqual(["unconfigured", "paused", "error", "timeout", "behind"]);
+    expect(triageBanner({ state: "later", waiting: 2 })).toEqual({ text: "有 2 条消息在等分拣", configure: false });
+    expect(triageBanner({ state: "error", reason: "  ", waiting: 2 })?.text).toBe("有 2 条消息在等分拣：分拣模型出错了");
+  });
+  it("ok、没有等的、老 hub 都不显示", () => {
+    expect(triageBanner(null)).toBeNull();
+    expect(triageBanner(undefined)).toBeNull();
+    expect(triageBanner({ state: "ok", waiting: 0 })).toBeNull();
+    expect(triageBanner({ state: "ok", waiting: 3 })).toBeNull();
+    expect(triageBanner({ state: "unconfigured", waiting: 0 })).toBeNull();
+    expect(triageBanner({} as InboxTriage)).toBeNull();
+  });
+  it("去配置打开信息筛选的模型配置", () => {
+    expect(TRIAGE_SETTINGS).toBe("/settings?tab=model-config&purpose=inbox.triage");
   });
 });

@@ -96,6 +96,8 @@ data class InboxSnapshot(
     val contentSource: LarkContentSource? = null,
     /** Machine names by id, for saying where an Agent runs. */
     val machines: Map<String, String> = emptyMap(),
+    /** How triage stands: new items waiting outside the list (#1773); null from an older hub. */
+    val triage: InboxTriage? = null,
 )
 
 data class InboxRecord(
