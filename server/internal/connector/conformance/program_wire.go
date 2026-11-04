@@ -197,8 +197,10 @@ func checkDescribe(name string, raw json.RawMessage) error {
 	return is.err()
 }
 
-// checkCollect is the answer to inbox.collect: what the hub needs of a thing to make an item and keep it.
-func checkCollect(kinds []string, raw json.RawMessage) ([]connector.InboxThing, error) {
+// checkCollect is the answer to inbox.collect: what the hub needs of a thing to make an item and keep it. With a
+// fallback (the capability), every thing but a batch to relate (group) has a tier the hub knows without the model:
+// extra.rule_tier, or a tier its rules decided for sure.
+func checkCollect(kinds []string, fallback bool, raw json.RawMessage) ([]connector.InboxThing, error) {
 	var res serve.CollectResult
 	if err := decodeWire(raw, &res); err != nil {
 		return nil, err
@@ -218,6 +220,9 @@ func checkCollect(kinds []string, raw json.RawMessage) ([]connector.InboxThing, 
 		}
 		if th.Tier != "" && !th.Tier.Known() {
 			is.add("things[%d]: tier %q is not action, fyi or noise", i, th.Tier)
+		}
+		if fallback && th.Group == nil && !th.Tier.Known() && (th.Extra == nil || !connector.Tier(th.Extra.RuleTier).Known()) {
+			is.add("things[%d]: the connector declares fallback, and the thing has no extra.rule_tier (action, fyi or noise)", i)
 		}
 		if !slices.Contains([]string{"", connector.DoneRead, connector.DoneReplied}, th.Done) {
 			is.add("things[%d]: done %q is not read or replied", i, th.Done)

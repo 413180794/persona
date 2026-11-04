@@ -224,7 +224,7 @@ hub 只对这些连接器读它：条目保持 hub 原来自己做的样子（�
 | 事件 `connector.changed` | `serve.ChangedEvent` | `contribution` 是自己的连接器，且声明了 `events`；`scope` 是 hub 认得的 |
 | 程序调 `secrets.*` | `{contribution, data?}` | 带 `contribution`，是自己的连接器 |
 
-清单也要过：能力都是 hub 能在程序里用到的（`connector/proc.Conn` 实现的那些）、不重复，只有收件箱才有 `kinds`，`kind_descriptions` 的键都是声明过的 `kinds`。**从不调**的：`actions.do`（写只在 hub 的闸门之后）、`inbox.reply`
+清单也要过：能力都是 hub 能在程序里用到的（`connector/proc.Conn` 实现的那些，加上只是一个承诺的 `fallback`：声明了它，`inbox.collect` 的每个条目（`group` 批次除外）都要带 hub 认识的 `extra.rule_tier` 或 `tier`，#1899）、不重复，只有收件箱才有 `kinds`，`kind_descriptions` 的键都是声明过的 `kinds`。**从不调**的：`actions.do`（写只在 hub 的闸门之后）、`inbox.reply`
 （那是用户按的发送）。选项：`WithLogin(values)` 按字段名填登录的每一步，之后程序必须是 `ok`（只给装在夹具上的后端用，别给真账号的密钥），回应里出现了给它的密钥就挂；
 `RequireData()` 让 `inbox.collect`、`thread.page`、`archive.changes` 回空也算挂，免得什么都不回的程序也过。
 

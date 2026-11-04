@@ -78,7 +78,9 @@ func Testwechat-connectorWireFixtures(t *testing.T) {
 		"actions.list.json":     ignore(func(raw json.RawMessage) ([]proto.Tool, error) { return checkToolList("wechat-connector", "actions", raw) }),
 		"actions.describe.json": func(raw json.RawMessage) error { return checkDescribe("wechat-connector_send", raw) },
 		"actions.do.json":       func(raw json.RawMessage) error { return decodeWire(raw, &serve.CallResult{}) },
-		"inbox.collect.json":    ignore(func(raw json.RawMessage) ([]connector.InboxThing, error) { return checkCollect(items[0].Kinds, raw) }),
+		"inbox.collect.json": ignore(func(raw json.RawMessage) ([]connector.InboxThing, error) {
+			return checkCollect(items[0].Kinds, slices.Contains(items[0].Capabilities, string(connector.CapFallback)), raw)
+		}),
 		"thread.page.json": ignore(func(raw json.RawMessage) (connector.ThreadPage, error) {
 			return checkThreadPage(programThreadLimit, actions, raw)
 		}),
@@ -247,6 +249,34 @@ func (f *fixtureProgram) check(t *testing.T, opts ...ProgramOption) string {
 		t.Fatal("CheckProgram did not end")
 	}
 	return strings.Join(rec.msgs, "\n")
+}
+
+// A connector that declares fallback (#1807) passes the manifest check, and each of its inbox things needs a tier the
+// hub knows without the model: extra.rule_tier, or a tier for sure; a batch to relate needs none (#1899).
+func TestCollectHoldsAFallback(t *testing.T) {
+	if !slices.Contains(programCaps, connector.CapFallback) {
+		t.Fatal("a program cannot declare fallback")
+	}
+	thing := `{"thread":"t%d","kind":"dm","at":"2026-11-04T09:00:00Z","last":"1"%s}`
+	for _, c := range []struct {
+		extra string
+		ok    bool
+	}{
+		{`,"extra":{"rule_tier":"action"}`, true},
+		{`,"tier":"fyi"`, true},
+		{`,"group":{"batch":"b1","new":["m1"]}`, true},
+		{``, false},
+		{`,"extra":{"rule_tier":"later"}`, false},
+	} {
+		raw := json.RawMessage(fmt.Sprintf(`{"things":[`+thing+`]}`, 1, c.extra))
+		_, err := checkCollect([]string{"dm"}, true, raw)
+		if (err == nil) != c.ok {
+			t.Errorf("%s: %v", c.extra, err)
+		}
+		if _, err := checkCollect([]string{"dm"}, false, raw); err != nil {
+			t.Errorf("without a fallback %s: %v", c.extra, err)
+		}
+	}
 }
 
 func TestCheckProgramPassesWhatTheFixturesSay(t *testing.T) {

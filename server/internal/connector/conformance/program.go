@@ -29,9 +29,10 @@ const (
 )
 
 // programCaps are the capabilities the hub can reach in a program: connector/proc.Conn implements their interfaces, and a
-// manifest declaring another one does not pass connector.Check there.
+// manifest declaring another one does not pass connector.Check there. CapFallback has none: it is a promise about the
+// inbox things (checkCollect holds them to it).
 var programCaps = []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapActions, connector.CapEvents,
-	connector.CapInbox, connector.CapArchive, connector.CapItems, connector.CapLogin, connector.CapThreads}
+	connector.CapInbox, connector.CapArchive, connector.CapItems, connector.CapLogin, connector.CapThreads, connector.CapFallback}
 
 // ProgramOption tunes CheckProgram.
 type ProgramOption func(*programOptions)
@@ -495,7 +496,8 @@ func (p *probe) logout() {
 // collect asks for the inbox twice: the thread of a thing is its key, and must stay the same.
 func (p *probe) collect(kinds []string) []connector.InboxThing {
 	p.t.Helper()
-	check := func(raw json.RawMessage) ([]connector.InboxThing, error) { return checkCollect(kinds, raw) }
+	fallback := p.has(connector.CapFallback)
+	check := func(raw json.RawMessage) ([]connector.InboxThing, error) { return checkCollect(kinds, fallback, raw) }
 	things, ok := ask(p, serve.MCollect, struct{}{}, check)
 	if !ok {
 		return nil
