@@ -4546,6 +4546,46 @@ if os.environ.get("MOCK_LINK_SCHEMES") == "1":
         "设计稿在 https://example.com/widget 。有问题发邮件到 [me@example.com](mailto:me@example.com)，急事打 [10086](tel:10086)。"
         "收件箱里的那封看 [这里](jarvis://tab/inbox)；[重新配对](jarvis://pair?url=http://example.com&token=x) 和 [脚本](javascript:alert(1)) 都不会打开。"))]
 
+PICTURE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".heif", ".bmp", ".tif", ".tiff"}
+
+
+def viewed_images(run, page):
+    """transcript.ViewedImages: the pictures a run's calls looked at, in order and each once (Fold.images)."""
+    uses = {x.get("tool_use_id"): x for x in page if x["kind"] == "tool_use"}
+    carried = {x.get("tool_use_id") for x in run if x["kind"] == "image" and x.get("tool_use_id") and x.get("image")}
+    done = {x.get("tool_use_id") for x in run if x["kind"] == "tool_result" and not x.get("is_error")}
+
+    def said(use):
+        name, inp = use.get("tool_name") or "", use.get("tool_input") if isinstance(use.get("tool_input"), dict) else {}
+        base, mcp = (name.rsplit("__", 1)[-1], True) if name.startswith("mcp__") and name.count("__") >= 2 else (name, False)
+        im = {"tool_use_id": use.get("tool_use_id"), "tool": name, "source": "tool"}
+        if base == "Read" and not mcp: im.update(source="read", path=inp.get("file_path") or "")
+        elif mcp and base.startswith("computer_"): im.update(source="screenshot", machine=inp.get("machine") or "")
+        elif mcp and base.startswith("browser_"): im.update(source="browser", machine=inp.get("machine") or "")
+        elif mcp: im["source"] = "mcp"
+        return {k: v for k, v in im.items() if v != ""}
+
+    def key(im):
+        if im.get("path"): return "p:" + im["path"]
+        if im.get("size") and im.get("width") and im.get("height"): return "s:%s:%d:%dx%d" % (im.get("mime"), im["size"], im["width"], im["height"])
+        return "i:" + im.get("item_id", "")
+    out, seen = [], set()
+    for x in run:
+        im = None
+        if x["kind"] == "image" and x.get("tool_use_id") and x.get("image"):
+            im = said(uses.get(x["tool_use_id"]) or {"tool_use_id": x["tool_use_id"]})
+            img = x["image"]
+            im.update(item_id=x["id"], tool_use_id=x["tool_use_id"], mime=img.get("mime"), size=img.get("size") or len(img.get("data") or "") * 3 // 4,
+                      width=img.get("width") or 0, height=img.get("height") or 0)
+        elif x["kind"] == "tool_use" and x.get("tool_use_id") not in carried and x.get("tool_use_id") in done:
+            im = said(x)
+            if os.path.splitext(im.get("path") or "")[1].lower() not in PICTURE_EXTS: im = None
+        if im and key(im) not in seen:
+            seen.add(key(im))
+            out.append(im)
+    return out
+
+
 def fold_task_snapshots(items):
     """Capture successful TodoWrite snapshots used by the conversation fixtures."""
     uses = {x.get("tool_use_id"): x for x in items if x["kind"] == "tool_use"}
@@ -4600,12 +4640,12 @@ def fold_work(items):
         if len(run) < 3 and sum(len(x.get("text") or "") + len(json.dumps(x.get("tool_input") or "")) for x in run) < 4096:
             out += run
         else:
-            tasks = fold_task_snapshots(run)
+            tasks, images = fold_task_snapshots(run), viewed_images(run, items)
             out.append({"id": "fold:" + run[0]["id"], "seq": run[0]["seq"], "ts": run[0]["ts"], "role": "assistant", "kind": "fold",
                         "fold": {"items": len(run), "tools": sum(x["kind"] == "tool_use" for x in run),
                                  "thoughts": sum(x["kind"] == "thinking" and bool((x.get("text") or "").strip()) for x in run),
                                  "until": run[-1]["ts"], "through_seq": run[-1]["seq"], "through_id": run[-1]["id"],
-                                 **({"tasks": tasks} if tasks else {})}})
+                                 **({"tasks": tasks} if tasks else {}), **({"images": images} if images else {})}})
         i = j
     return out
 
@@ -5742,6 +5782,103 @@ if os.environ.get("MOCK_OFFICE"):
         _ext = os.path.splitext(_name)[1]
         MOCK_TREE[MOCK_REPO + "/docs/" + _name] = _body if isinstance(_body, str) else _body.decode() if _ext == ".rtf" else (
             MOCK_MIMES.get(_ext, "audio/wav" if _ext == ".wav" else "application/octet-stream"), base64.b64encode(_body).decode())
+# MOCK_TURN_IMAGES=one|many: the pictures the agent looked at in a turn, under its answer (docs/protocol.md「这一轮看过的图片」),
+# with the Office files it made as cards. `many`: the blog conversation's last turn reads design pictures, a phone
+# screenshot and a picture too big to keep (only its path), looks at the browser and the screen; the weather one is
+# still at it (two so far); the assistant looked at a Mac's screen. `one`: the blog turn looked at one page. All
+# pictures are drawn here (made-up pages, no binary in the repo).
+def mock_shot(w, h, bg, bar, blocks, bar_h=0.12):
+    """A made-up screenshot: a background, a top bar, and blocks given as (x0, y0, x1, y1, rgb) fractions of the page."""
+    import zlib
+    rows = [bytearray(bytes(bg) * w) for _ in range(h)]
+
+    def rect(x0, y0, x1, y1, c):
+        a, b = int(x0 * w), max(int(x0 * w) + 1, int(x1 * w))
+        for y in range(int(y0 * h), min(h, max(int(y0 * h) + 1, int(y1 * h)))):
+            rows[y][a * 3:b * 3] = bytes(c) * (b - a)
+    rect(0, 0, 1, bar_h, bar)
+    for blk in blocks: rect(*blk)
+    raw = b"".join(b"\x00" + bytes(r) for r in rows)
+    chunk = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+    return base64.b64encode(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) +
+                            chunk(b"IDAT", zlib.compress(raw, 6)) + chunk(b"IEND", b"")).decode()
+
+
+def _cards(y0, y1, cols, c, gap=0.03, x0=0.06, x1=0.94):
+    width = (x1 - x0 - gap * (cols - 1)) / cols
+    return [(x0 + i * (width + gap), y0, x0 + i * (width + gap) + width, y1, c) for i in range(cols)]
+
+
+SHOT_DESIGN = mock_shot(480, 300, (246, 247, 250), (30, 41, 59),
+                        [(0.06, 0.2, 0.62, 0.27, (30, 41, 59)), (0.06, 0.31, 0.45, 0.35, (148, 163, 184)),
+                         (0.06, 0.4, 0.94, 0.62, (99, 102, 241))] + _cards(0.68, 0.94, 3, (255, 255, 255)))
+SHOT_DESKTOP = mock_shot(512, 320, (255, 255, 255), (226, 229, 234),
+                         [(0.02, 0.03, 0.2, 0.09, (255, 255, 255)), (0.0, 0.12, 1, 0.2, (24, 24, 27)),
+                          (0.08, 0.27, 0.6, 0.36, (24, 24, 27)), (0.08, 0.4, 0.42, 0.44, (113, 113, 122)),
+                          (0.08, 0.5, 0.92, 0.72, (249, 115, 22))] + _cards(0.77, 0.96, 4, (244, 244, 245), x0=0.08, x1=0.92), bar_h=0.12)
+SHOT_PHONE = mock_shot(195, 422, (250, 250, 250), (24, 24, 27),
+                       [(0.08, 0.13, 0.7, 0.17, (24, 24, 27)), (0.08, 0.2, 0.92, 0.42, (20, 184, 166))] +
+                       [(0.08, 0.46 + i * 0.1, 0.92, 0.53 + i * 0.1, (228, 228, 231)) for i in range(5)], bar_h=0.06)
+SHOT_SCREEN = mock_shot(504, 328, (51, 65, 85), (30, 41, 59),
+                        [(0.08, 0.14, 0.62, 0.8, (248, 250, 252)), (0.08, 0.14, 0.62, 0.2, (226, 232, 240)),
+                         (0.11, 0.26, 0.5, 0.3, (100, 116, 139)), (0.11, 0.34, 0.58, 0.37, (203, 213, 225)),
+                         (0.11, 0.4, 0.55, 0.43, (203, 213, 225)), (0.66, 0.3, 0.94, 0.72, (254, 243, 199)),
+                         (0.3, 0.88, 0.7, 0.97, (71, 85, 105))], bar_h=0.04)
+SHOT_PAGE = mock_shot(480, 300, (255, 251, 235), (120, 53, 15),
+                      [(0.08, 0.2, 0.55, 0.28, (120, 53, 15)), (0.08, 0.34, 0.92, 0.38, (214, 211, 209)),
+                       (0.08, 0.42, 0.85, 0.46, (214, 211, 209)), (0.08, 0.52, 0.48, 0.9, (251, 191, 36)),
+                       (0.52, 0.52, 0.92, 0.9, (253, 230, 138))])
+
+
+def shot(item_min, tid, data, w, h):
+    return it("user", "image", item_min, tool_use_id=tid, image={"mime": "image/png", "data": data, "width": w, "height": h})
+
+
+def looked(name, inp, result, ts_min, *pictures):
+    """A call whose result carried pictures ((data, w, h) each), as the transcript splits them into image items."""
+    items = tool(name, inp, result, ts_min)
+    return items + [shot(ts_min, items[0]["tool_use_id"], *p) for p in pictures]
+
+
+if os.environ.get("MOCK_TURN_IMAGES"):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import mock_office
+    _blog = "/Users/me/code/blog"
+    for _rel, _data in (("design/首页.png", SHOT_DESIGN), ("screenshots/手机首页.png", SHOT_PHONE), ("design/横幅大图.jpg", SHOT_PAGE)):
+        MOCK_TREE["code/blog/" + _rel] = ("image/png", _data)
+    MOCK_TREE["code/blog/docs/"] = None
+    for _name in ("季度报告.docx", "逐小时预报.xlsx", "路线图.pptx"):
+        MOCK_TREE["code/blog/docs/" + _name] = (MOCK_MIMES[os.path.splitext(_name)[1]], base64.b64encode(mock_office.SAMPLES[_name]()).decode())
+    MOCK_TREE["code/blog/docs/首页对比.md"] = "# 首页对比\n\n编造的笔记。\n"
+    _ask = [it("user", "text", 9, text="首页按设计稿对一下，手机和桌面都看看，差别整理成文档和表格")]
+    if os.environ["MOCK_TURN_IMAGES"] == "one":
+        _ask += looked("mcp__jarvis__browser_look", {"machine": "studio"}, "已读取页面：首页", 8, (SHOT_DESKTOP, 512, 320))
+        _ask += [it("assistant", "text", 6, text="桌面版首页和设计稿基本一致，只有横幅的圆角大了 4pt，已经改好。\n\n"
+                                                    "对比记录在 `" + _blog + "/docs/季度报告.docx`。")]
+    else:
+        _ask += looked("Read", {"file_path": _blog + "/design/首页.png"}, "", 9, (SHOT_DESIGN, 480, 300))
+        _ask += looked("mcp__jarvis__browser_look", {"machine": "studio"}, "已读取页面：首页", 8, (SHOT_DESKTOP, 512, 320))
+        _ask += looked("Read", {"file_path": _blog + "/screenshots/手机首页.png"}, "", 8, (SHOT_PHONE, 195, 422))
+        _ask += tool("Read", {"file_path": _blog + "/design/横幅大图.jpg"}, "", 8)  # too big to keep: only its path
+        _ask += looked("mcp__jarvis__computer_state", {"machine": "studio", "app": "Safari"}, "Safari — 首页", 7, (SHOT_SCREEN, 504, 328))
+        _ask += looked("Read", {"file_path": _blog + "/design/首页.png"}, "", 7, (SHOT_DESIGN, 480, 300))  # the same file again
+        _ask += tool("Bash", {"command": "python3 scripts/compare.py", "description": "生成对比表"}, "wrote docs/逐小时预报.xlsx", 6)
+        _ask += [it("assistant", "text", 5, text="对完了，桌面版和设计稿一致，手机上有两处差别：\n\n"
+                                                    "1. 标题在 390pt 宽时换成了两行，设计稿是一行\n2. 卡片之间的间距少了 4pt\n\n"
+                                                    "整理好了：\n\n- 对比文档 `" + _blog + "/docs/季度报告.docx`\n"
+                                                    "- 差异表 `" + _blog + "/docs/逐小时预报.xlsx`\n- 讲解用的幻灯片 `" + _blog + "/docs/路线图.pptx`\n\n"
+                                                    "笔记在 `" + _blog + "/docs/首页对比.md`。")]
+        # Still at it: two pictures so far, the third call running.
+        ITEMS[WIDGET] = ITEMS[WIDGET][:-1] + looked("mcp__jarvis__computer_state", {"machine": "macbook", "app": "Simulator"},
+                                                     "Simulator — 小组件", 2, (SHOT_PHONE, 195, 422)) + [
+            it("assistant", "text", 1, text="小号布局截好了，降雨条比设计稿高了一点，我再看一下中号的。")] + looked(
+            "Read", {"file_path": "/Users/me/code/weather/docs/icon.png"}, "", 1, (SHOT_DESIGN, 480, 300)) + [
+            it("assistant", "tool_use", 0, tool_use_id="toolu_mock_running_shot", tool_name="mcp__jarvis__computer_state",
+               tool_input={"machine": "macbook", "app": "Simulator"})]
+        ITEMS[ASK1] = ITEMS[ASK1] + [it("user", "text", 3, text="看看 Studio 上现在开着什么")] + looked(
+            "mcp__jarvis__computer_state", {"machine": "studio"}, "屏幕上：Safari（首页）、备忘录", 2, (SHOT_SCREEN, 504, 328)) + [
+            it("assistant", "text", 1, text="Studio 上开着 Safari（博客首页）和备忘录，备忘录里是一张发布前的检查清单。")]
+    ITEMS[BLOG] = ITEMS[BLOG] + _ask  # it() numbers lines in order: appended ones come after
 # MOCK_RENDER=1: formulas and a diagram (docs/ios.md「公式和图」): the last turn of the release-notes conversation, and docs/算法.md.
 RENDER_MD = ("降雨概率按逻辑回归估：$p = \\sigma(w^\\top x + b)$，其中 \\(\\sigma(z) = 1/(1+e^{-z})\\)。损失是交叉熵：\n\n"
              "$$\nL = -\\frac{1}{n}\\sum_{i=1}^{n} \\big[y_i \\log p_i + (1-y_i)\\log(1-p_i)\\big]\n$$\n\n"
@@ -7562,6 +7699,16 @@ class H(BaseHTTPRequestHandler):
                    **span(items, None, int(b) - 1 if b else last)}
             served(sid, "page", out)
             return self.send_json(out)
+        if p.startswith("/api/v1/sessions/") and "/items/" in p and p.endswith("/image"):  # a lazy image, a fold's
+            sid, iid = unquote(p.split("/")[5]), unquote(p.split("/")[7])
+            img = next((x.get("image") for x in find_items(sid) if x["id"] == iid and x.get("image")), None)
+            if not img: return self.send_json({"error": "not found"}, 404)
+            body = base64.b64decode(img.get("data") or "")
+            self.send_response(200)
+            self.send_header("Content-Type", img.get("mime") or "image/png")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            return self.wfile.write(body)
         if p.startswith("/api/v1/sessions/") and "/items/" in p and p.endswith("/full"):
             item = FULL.get(unquote(p.split("/")[7]))
             return self.send_json(item) if item else self.send_json({"error": "not found"}, 404)

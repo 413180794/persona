@@ -637,6 +637,25 @@ type Fold struct {
 	ThroughSeq int                `json:"through_seq"`
 	ThroughID  string             `json:"through_id"`
 	Tasks      []FoldTaskSnapshot `json:"tasks,omitempty"`
+	// Images: the images the run's calls looked at, in order (FoldImage): a chat shows its turn's under the answer
+	// without opening the run.
+	Images []FoldImage `json:"images,omitempty"`
+}
+
+// FoldImage is an image a tool call of a folded run looked at (docs/protocol.md「这一轮看过的图片」): one its result
+// carried (ItemID, fetched from GET …/items/{item id}/image), or a picture file Read opened whose result carried none
+// (only Path; the file's thumbnail is GET /machines/{mid}/file/thumb).
+type FoldImage struct {
+	ItemID    string `json:"item_id,omitempty"`
+	ToolUseID string `json:"tool_use_id"`
+	Tool      string `json:"tool"`              // the call's tool as written (Read, mcp__jarvis__computer_state)
+	Source    string `json:"source"`            // read, screenshot (computer_*), browser (browser_*), mcp (another MCP tool), tool
+	Path      string `json:"path,omitempty"`    // the picture file Read opened (a Codex view_image too)
+	Machine   string `json:"machine,omitempty"` // screenshot / browser: the machine the call named (an id or a name)
+	Mime      string `json:"mime,omitempty"`
+	Size      int    `json:"size,omitempty"` // bytes, about (the base64's length × 3 / 4, like Image.Placeholder)
+	Width     int    `json:"width,omitempty"`
+	Height    int    `json:"height,omitempty"`
 }
 
 // FoldTaskSnapshot preserves a successful task result without its raw tool payload.

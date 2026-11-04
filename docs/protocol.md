@@ -332,7 +332,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
          "status":"completed|failed|killed|stopped|event|ended|waiting","title":"description 或命令第一行",
          "task_id":"…","tool_use_id":"toolu_…","exit_code":0,"output_file":"…",
          "detail":"Monitor 的事件 / 子 Agent 的结果 / 整条命令（已解码实体）"},
- "fold":{"items":1294,"tools":647,"thoughts":110,     // 仅 kind=fold（请求带 fold_work 才有）：一段被折叠的工作，见「折叠的工作」
+ "fold":{"items":1294,"tools":647,"thoughts":110,     // 仅 kind=fold（请求带 fold_work 才有）：一段被折叠的工作，见「折叠的工作」；可带 tasks、images
          "until":"...","through_seq":6890,"through_id":"…#0"},
  "image":{"mime":"image/png","data":"base64"}}        // 仅 image（tool_result 里的图片也拆成 image item，带 tool_use_id）
 
@@ -825,12 +825,38 @@ Android 按关联消息定位已加载历史中的用户轮次或后台唤醒段
     Android 不展开即可重建进度；查看记录时先展开所属工作行，再按范围取回原记录并定位，后续真实结果按原规则继续更新。
 
   例如：`"tasks":[{"replace":"todo","entries":[{"id":"todo:0","subject":"检查表单","status":"in_progress"}],"source_item_id":"entry_tool#0","source_tool_use_id":"call_example","source_seq":3}]`。
+- `fold.images` 是可选的数组：这段工作看过的图片（`transcript.ViewedImages`），规则见下面「这一轮看过的图片」；没有图片时省略。
+  旧客户端忽略这个字段。
 - 不折叠：用户消息、回复（text）、通知、recap；结果不在这一页的 tool_use（还在跑）和 tool_use 不在这一页的 tool_result
   （App 要把它们和后来 / 之前的另一半配对）；不到 3 条且不到 4 KB 的短段（展开还要一次往返，不值）。
 - App 展开工作行时用 `from_seq=<fold.seq>&through_seq=<fold.through_seq>` 取回这一段（一页约 1000 条，`more` 时从最后一条的 seq + 1 接着取），
   合并进来并去掉 fold。合并一条 fold 时，本地在它范围内（按 seq + 块序号）的工具 / 思考 item 被它替换。
 - `after_seq` 的补发和实时推送从不折叠：它们接着 App 已有的内容，里面可能有 App 正等着结果的工具调用。
 - 1412 条 / 1.08 MB 的那种页，折叠后是十几条、几 KB（`TestFoldedFirstPageOfALongSession`：1417 条 880 KB → 13 条 1.9 KB）。
+
+### 这一轮看过的图片
+
+App 和网页在一轮的回复下面放一条「这一轮看过的图片」（#1543、#1540）。图片来自这一轮工作里的工具调用，两种来源按同一套规则汇总：
+没折叠的工作看 items 本身，折叠的看 `fold.images`（工作行展开后 fold 被真实 items 替换，汇总结果不变）。
+
+- 算哪些：结果里带的图（`kind: image` 且有 `tool_use_id` 的 item：Read 读的图片、computer_state 的截图、browser_look 的截图、
+  其他 MCP 工具返回的图片）；Read 读了图片文件（png / jpg / jpeg / gif / webp / heic / heif / bmp / tif / tiff）但结果里没带图的
+  （图太大没留下，或 Codex 的 view_image，transcript 里映射成 Read）也算一条，只有路径。用户这一轮发的图不算（在用户气泡里），
+  失败的 Read、不是图片的文件、还没有结果的调用不算。
+- 顺序和去重：按第一次出现的顺序；同一路径只出一次，没有路径的按 mime + 大小 + 宽高认（同一个屏幕没变又看一次只算一张），
+  都没有时按 image item。
+- `fold.images` 每项：
+
+  | 字段 | 说明 |
+  | --- | --- |
+  | `item_id` | image item 的 id，图片用 `GET /api/v1/sessions/{mid}/{sid}/items/{item_id}/image` 取；只有路径的没有这一项 |
+  | `tool_use_id`、`tool` | 看图的那次调用和它的工具名（原样，如 `Read`、`mcp__jarvis__computer_state`） |
+  | `source` | `read`（Read）、`screenshot`（MCP 的 `computer_*`）、`browser`（MCP 的 `browser_*`）、`mcp`（其他 MCP 工具）、`tool`（其他） |
+  | `path` | Read 读的文件（`file_path`）；缩略图用 `GET /api/v1/machines/{mid}/file/thumb`，大图用 `file/download` |
+  | `machine` | `screenshot` / `browser`：调用里写的机器（id 或名字），显示成「截图 · <机器名>」 |
+  | `mime`、`size`、`width`、`height` | 图片的类型、字节数（约数：base64 长度 × 3 / 4）、像素宽高，和懒加载的 `image` 一样，用来在图到之前占好位置 |
+
+  例如：`"images":[{"item_id":"entry_tool#1","tool_use_id":"call_a","tool":"Read","source":"read","path":"/work/design.png","mime":"image/png","size":48213,"width":1280,"height":800},{"tool_use_id":"call_b","tool":"Read","source":"read","path":"/work/banner.jpg"}]`。
 
 ### 终端流
 
