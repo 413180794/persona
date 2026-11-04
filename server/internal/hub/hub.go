@@ -51,6 +51,7 @@ type Hub struct {
 	store       Store      // nil in unit tests: nothing is persisted
 	workspaceMu sync.Mutex // serializes read-only workspace discovery and snapshot commits
 	modelMu     sync.Mutex // serializes legacy writes and test stores without a database CAS
+	mainMu      sync.Mutex // one change of the main conversation at a time (assistant_main.go)
 	ai          *ai.Client
 	// The inbox's own models (inbox_agent.go): 1 triages, 2 decides what the agent (3) should take on.
 	triageAI, judgeAI *ai.Client

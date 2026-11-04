@@ -1,0 +1,85 @@
+package persona.feature.assistant
+
+import persona.core.contracts.SessionCompaction
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+import java.time.LocalDate
+
+class MainConversationActionsTest {
+    private val first = "2026-11-04T00:30:00Z"
+    private val second = "2026-11-04T01:00:00Z"
+    private fun running(at: String = first) = SessionCompaction("running", startedAt = at)
+    private fun done(at: String = first) = SessionCompaction("done", startedAt = at, finishedAt = at)
+    private fun failed(at: String = first, error: String = "Not enough messages to compact") =
+        SessionCompaction("failed", error, startedAt = at, finishedAt = at)
+
+    @Test fun theActionsFollowTheHubsFeatures() {
+        assertEquals(MainActions(compact = true, newMain = true), MainActions.of(setOf("client_ops", CompactFeature, NewMainFeature)))
+        assertEquals(MainActions(compact = true, newMain = false), MainActions.of(setOf(CompactFeature)))
+        assertEquals(MainActions(compact = false, newMain = false), MainActions.of(emptySet()))
+    }
+
+    /** Seen running here: 正在压缩, then 已压缩 once, not again on the next update. */
+    @Test fun aCompactionSeenRunningAnnouncesItsEndOnce() {
+        var status = CompactionStatus().observe(running())
+        assertEquals(CompactionLine.Running, status.line)
+        status = status.observe(done())
+        assertEquals(CompactionLine.Done, status.line)
+        status = status.dismissed().observe(done())
+        assertNull(status.line)
+    }
+
+    /** An end from before the screen opened is old news, whether it went well or not. */
+    @Test fun anOldEndIsNotAnnounced() {
+        assertNull(CompactionStatus().observe(done()).line)
+        assertNull(CompactionStatus().observe(failed()).line)
+        assertNull(CompactionStatus().observe(null).line)
+    }
+
+    @Test fun aFailureSaysWhyAndStaysUntilClosed() {
+        var status = CompactionStatus().observe(running()).observe(failed())
+        assertEquals(CompactionLine.Failed("Not enough messages to compact"), status.line)
+        assertEquals("压缩失败：Not enough messages to compact", status.line?.text)
+        status = status.observe(failed())
+        assertEquals("压缩失败：Not enough messages to compact", status.line?.text)
+        assertNull(status.dismissed().line)
+        assertEquals("压缩失败", CompactionLine.Failed("").text)
+    }
+
+    /** Asked for here: 正在压缩 at once; the old compaction still on the session is not this one's end. */
+    @Test fun askingShowsRunningAndWaitsForItsOwnCompaction() {
+        var status = CompactionStatus().observe(done()).asked(done())
+        assertEquals(CompactionLine.Running, status.line)
+        status = status.observe(done()) // an update before the hub took it in
+        assertEquals(CompactionLine.Running, status.line)
+        status = status.observe(running(second)).observe(done(second))
+        assertEquals(CompactionLine.Done, status.line)
+    }
+
+    /** One so quick that the screen never saw it running is still announced when it was asked for here. */
+    @Test fun aQuickCompactionAskedForHereIsAnnounced() {
+        val status = CompactionStatus().asked(null).observe(failed(second, "对话太短"))
+        assertEquals(CompactionLine.Failed("对话太短"), status.line)
+    }
+
+    /** A refused request (409 busy) puts the line back to what the session says. */
+    @Test fun aRefusalClearsTheLine() {
+        assertNull(CompactionStatus().asked(done()).refused(done()).line)
+        assertEquals(CompactionLine.Running, CompactionStatus().asked(null).refused(running(second)).line)
+    }
+
+    /** 正在压缩 does not close by hand, and goes when the session no longer says it runs. */
+    @Test fun runningStaysUntilTheSessionSaysOtherwise() {
+        val status = CompactionStatus().observe(running())
+        assertEquals(CompactionLine.Running, status.dismissed().line)
+        assertNull(status.observe(null).line)
+    }
+
+    @Test fun theDialogNamesTheDayAndTheNoticeWhatCarriedOver() {
+        assertEquals(true, newMainText(LocalDate.of(2026, 11, 4)).contains("「旧主对话 · 至 11月4日」"))
+        assertEquals("已新建主对话，会带上旧对话的摘要", newMainNotice(carried = true, asked = true))
+        assertEquals("已新建主对话，旧对话没有能带过来的内容", newMainNotice(carried = false, asked = true))
+        assertEquals("已新建主对话", newMainNotice(carried = false, asked = false))
+    }
+}

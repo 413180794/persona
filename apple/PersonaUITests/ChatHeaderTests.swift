@@ -13,10 +13,13 @@ final class ChatHeaderTests: XCTestCase {
     }
 
     /// Opens the first agent from the list; `folded`: the header folds itself after its idle seconds, else it is held open.
-    @MainActor private func openChat(oldLayout: Bool, folded: Bool) {
+    /// `sideBars`: laid out as under iPhone Duo's side bars (`-sideBars YES`): the system's bar takes the actions, 返回
+    /// first, and the page draws no back of its own (2026-11-04: two backs, the system's and ours, one over the other).
+    @MainActor private func openChat(oldLayout: Bool, folded: Bool, sideBars: Bool = false) {
         app = XCUIApplication()
         app.launchArguments = ["-demo.on", "YES", "-ui.oldLayout", oldLayout ? "YES" : "NO", "-app.tab", "chats", "-tab", "dev",
-                               "-dev.openChat", "", "-openAgentsFresh", "YES", "-holdChromeOpen", folded ? "NO" : "YES"]
+                               "-dev.openChat", "", "-openAgentsFresh", "YES", "-holdChromeOpen", folded ? "NO" : "YES",
+                               "-sideBars", sideBars ? "YES" : "NO"]
         app.launchPinned()
         let row = app.buttons.matching(identifier: "agents.row").firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 15), "no agent in the list")
@@ -42,8 +45,12 @@ final class ChatHeaderTests: XCTestCase {
         return bar.exists && bar.frame.height > 0 ? bar.frame.maxY : 44
     }
 
-    @MainActor private func check(_ what: String, folded: Bool) {
+    @MainActor private func check(_ what: String, folded: Bool, sideBars: Bool = false) {
         shot(what)
+        if sideBars { // the system's own back (UIKit's "BackButton", labelled with the page before) besides ours
+            let system = app.navigationBars.buttons.matching(identifier: "BackButton").allElementsBoundByIndex.filter(\.isHittable)
+            XCTAssertTrue(system.isEmpty, "\(what): the system's back as well as 返回: \(system.map(\.label))")
+        }
         let backs = app.buttons.matching(NSPredicate(format: "label == %@", "返回")).allElementsBoundByIndex
         if backs.count != 1 {
             let t = XCTAttachment(string: app.debugDescription)
@@ -84,6 +91,25 @@ final class ChatHeaderTests: XCTestCase {
     @MainActor func testFoldedHeaderInTheOldLayout() {
         openChat(oldLayout: true, folded: true)
         check("old folded", folded: true)
+    }
+
+    @MainActor func testSideBarsInTheShell() {
+        openChat(oldLayout: false, folded: false, sideBars: true)
+        checkSideBars("shell side bars")
+    }
+
+    @MainActor func testSideBarsInTheOldLayout() {
+        openChat(oldLayout: true, folded: false, sideBars: true)
+        checkSideBars("old side bars")
+    }
+
+    /// One back, the chat's own: as `check` on an iPhone width; the split's first page (iPad, iPhone Duo open) has none.
+    @MainActor private func checkSideBars(_ what: String) {
+        guard app.windows.firstMatch.frame.width > 600 else { return check(what, folded: false, sideBars: true) }
+        shot(what)
+        let backs = app.buttons.matching(NSPredicate(format: "label == %@", "返回")).allElementsBoundByIndex.filter(\.isHittable)
+        let system = app.navigationBars.buttons.matching(identifier: "BackButton").allElementsBoundByIndex.filter(\.isHittable)
+        XCTAssertTrue(backs.isEmpty && system.isEmpty, "\(what): a back on the split's first page: \(backs.map(\.frame)) \(system.map(\.label))")
     }
 }
 

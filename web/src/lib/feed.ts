@@ -347,7 +347,7 @@ function lineTime(l: DisplayLine): number | undefined {
     case "chat": {
       const c = l.line;
       if (c.kind === "segment") return Date.parse(c.seg.user?.ts ?? c.seg.start ?? "") || undefined;
-      if (c.kind === "notice" || c.kind === "apiError") return Date.parse(c.item.ts ?? "") || undefined;
+      if (c.kind === "notice" || c.kind === "apiError" || c.kind === "compact") return Date.parse(c.item.ts ?? "") || undefined;
       return undefined;
     }
     default:

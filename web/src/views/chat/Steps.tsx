@@ -4,7 +4,8 @@ import { memo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { imageURL } from "../../lib/api";
 import { toolFile } from "../../lib/files";
-import { duration } from "../../lib/format";
+import { compactionLabel } from "../../lib/compaction";
+import { clock, duration } from "../../lib/format";
 import { openPanel } from "../../lib/panel";
 import { getSession } from "../../lib/store";
 import { taskBadge, taskLabel, taskPill, taskSubject, wakeSummary, type Tone } from "../../lib/tasks";
@@ -455,8 +456,23 @@ const TONE: Record<Tone, string> = {
 const TASK_ICON: Record<string, IconName> = { shell: "run", monitor: "monitor", agent: "agent" };
 
 /** A notice in a trace: a background task reporting back (iOS TaskNoteRow), a wake, or a plain line. */
+/** Where the context was compacted (lib/compaction.ts): a hairline across the chat, what is known about it in the middle;
+ *  the notices folded into it show on hover. */
+export function CompactDivider({ item }: { item: Item }) {
+  const label = compactionLabel(item.compact);
+  const notes = [...(item.compact?.notes ?? []), item.ts ? clock(item.ts) : ""].filter(Boolean).join("\n");
+  return (
+    <div role="separator" aria-label={label} title={notes || undefined} className="flex min-w-0 items-center gap-3 py-1 text-[11.5px] text-ink-3" data-compact-divider>
+      <span aria-hidden className="h-px min-w-4 flex-1 bg-line-strong" />
+      <span className="min-w-0 truncate whitespace-nowrap">{label}</span>
+      <span aria-hidden className="h-px min-w-4 flex-1 bg-line-strong" />
+    </div>
+  );
+}
+
 export function NoticeRow({ item, mid, sid }: { item: Item; mid: string; sid: string }) {
   const { tasks } = useChatContext();
+  if (item.compact) return <CompactDivider item={item} />;
   const t = item.task;
   if (t) {
     const call = tasks.calls.get(item.id);

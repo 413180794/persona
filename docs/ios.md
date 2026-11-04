@@ -381,6 +381,9 @@ iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度）
 - **侧边竖排栏**：系统把栏竖着放到侧边时（外屏，内屏横放；`toolbarVerticalEdge` 不为 nil，iOS 27.1 起），Agents 对话页不再画自己的页头按钮，
   把返回、终端、Git、文件、⋯ 交给系统工具栏，它们排进状态栏下面那一列（`ChatView.sideBarItems`，每个都有标题和图标）；页面顶部只留一条不折叠的标题
   （点开会话信息）和同空间的 Agent、循环 / 后台任务、子 Agent（`sideHeader`）。水平栏时（普通 iPhone、内屏竖放）照旧是自绘的可折叠页头。
+  系统自己的返回键由对话页藏起（`navigationBarBackButtonHidden(sideBars)`），侧边那一列只有对话页给的「返回」。对话页的目标页要用
+  `.splitDetailPage(ownsBack: true)`：外层写的 `navigationBarBackButtonHidden(false)` 会盖过页面自己的 `true`，系统的返回又冒出来，
+  两个返回键上下排着（2026-11-04，TestFlight）。
   输入框弹出键盘时这一条只剩雾（标题、同空间的 Agent、子 Agent 都收起，键盘收下去再出来）：内屏横放时键盘上面只有约 390pt，
   页头、模式按钮和输入框占满了，一行消息都看不到（2026-11-04）。侧边那一列的系统标题仍然写着是哪个会话。
   Persona 的顶栏仍是自绘的、在内容顶部，它下面的雾横向铺到侧边状态栏下面（`BarFog`，只铺到内容宽度时深色下有一条竖边）。

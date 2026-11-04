@@ -1,23 +1,47 @@
 {
   "batches": [
     {
-      "chat": {"id": "primary.wxid_example_a", "name": "示例联系人", "kind": "dm", "updated_at": "2026-11-04T08:01:00Z"},
+      "chat": {
+        "id": "primary.wxid_example_a",
+        "name": "Example A",
+        "kind": "dm",
+        "updated_at": "2026-11-04T08:23:00.000Z"
+      },
       "messages": [
-        {"id": "g1-l101", "position": "41", "sender_id": "wxid_example_a", "sender_name": "示例联系人", "type": "TEXT", "text": "早", "at": "2026-11-04T07:58:00Z",
-         "sender_handles": [{"kind": "wechat", "value": "wxid_example_a"}]},
-        {"id": "g1-l102", "position": "42", "sender_id": "primary", "sender_name": "我", "mine": true, "type": "TEXT", "text": "早上好", "at": "2026-11-04T07:59:00Z"},
-        {"id": "g1-l103", "position": "43", "sender_id": "wxid_example_a", "sender_name": "示例联系人", "type": "IMAGE", "text": "[图片]", "at": "2026-11-04T08:00:00Z",
-         "sender_handles": [{"kind": "wechat", "value": "wxid_example_a"}]}
-      ]
-    },
-    {
-      "chat": {"id": "primary.example_room_a@chatroom", "name": "示例群", "kind": "group", "updated_at": "2026-11-04T07:30:00Z"},
-      "messages": [
-        {"id": "g1-l90", "position": "40", "sender_id": "wxid_example_c", "sender_name": "示例群成员", "type": "TEXT", "text": "@所有人 周五聚餐", "at": "2026-11-04T07:30:00Z",
-         "sender_handles": [{"kind": "wechat", "value": "wxid_example_c"}]}
+        {
+          "id": "880000000002",
+          "position": "2",
+          "mine": false,
+          "type": "TEXT",
+          "text": "Synthetic question: are you free today?",
+          "at": "2026-11-04T08:22:00.000Z",
+          "sender_id": "wxid_example_a",
+          "sender_handles": [
+            {
+              "kind": "wechat",
+              "value": "wxid_example_a"
+            }
+          ],
+          "sender_name": "Example A"
+        },
+        {
+          "id": "880000000003",
+          "position": "3",
+          "mine": false,
+          "type": "IMAGE",
+          "text": "[图片]",
+          "at": "2026-11-04T08:23:00.000Z",
+          "sender_id": "wxid_example_a",
+          "sender_handles": [
+            {
+              "kind": "wechat",
+              "value": "wxid_example_a"
+            }
+          ],
+          "sender_name": "Example A"
+        }
       ]
     }
   ],
-  "next": "{\"v\":1,\"a\":{\"primary\":{\"g\":1,\"s\":43}}}",
-  "more": false
+  "next": "{\"v\":1,\"a\":{\"primary\":{\"g\":1,\"s\":8}}}"
 }

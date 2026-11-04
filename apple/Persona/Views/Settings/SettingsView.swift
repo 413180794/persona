@@ -395,7 +395,7 @@ private struct SettingsDestinations: ViewModifier {
             .navigationDestination(for: MachineDetailRoute.self) { r in MachineDetailView(ref: r.ref).splitDetailPage() }
             .navigationDestination(for: MessagesChatsRoute.self) { _ in MessagesChatListView().splitDetailPage() }
             .navigationDestination(for: MessagesThreadRoute.self) { r in MessagesThreadView(id: r.id, name: r.name).splitDetailPage() }
-            .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key).splitDetailPage() }
+            .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key).splitDetailPage(ownsBack: true) }
     }
 
     @ViewBuilder private func page(for page: SettingsPage) -> some View {

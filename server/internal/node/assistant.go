@@ -81,6 +81,7 @@ type assistantProc struct {
 	context     int      // tokens in the conversation's context at its last request (claude), or after a compaction
 	compacting  bool     // an idle compaction is running (compactIdle)
 	compacted   bool     // compactIdle ran in this process: it is let go when idle again
+	manual      bool     // the compaction running is the user's (assistant_compact.go): its end is reported
 	requested   bool     // its first request was logged
 
 	// owner: the Node that took it over from an earlier connection of a resident node (assistant_keep.go); nil: the
@@ -544,6 +545,8 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 				Post int `json:"post_tokens"`
 			} `json:"compact_metadata"`
 			ParentToolUseID *string `json:"parent_tool_use_id"`
+			IsError         bool    `json:"is_error"`
+			Result          string  `json:"result"`
 		}
 		if json.Unmarshal(line, &ev) != nil {
 			continue
@@ -557,8 +560,13 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 			if ev.Subtype == "compact_boundary" {
 				p.mu.Lock()
 				p.context = ev.Compact.Post
+				manual := p.manual
+				p.manual = false
 				p.mu.Unlock()
 				n.contextCompacted(p.id)
+				if manual {
+					n.compactionEnded(p.id, "")
+				}
 				continue
 			}
 			if ev.Subtype != "background_tasks_changed" {
@@ -632,11 +640,16 @@ func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
 			}
 		case "result":
 			p.mu.Lock()
+			manual := p.manual
+			p.manual = false
 			p.compacting = false
 			p.busy = false
 			p.lastActive = time.Now()
 			p.partial.Reset()
 			p.mu.Unlock()
+			if manual { // the user's /compact ended without a boundary: it did not compact
+				n.compactionEnded(p.id, compactFailure(ev.IsError, ev.Result))
+			}
 			if f, err := n.file(p.id); err == nil {
 				n.refresh(p.id, f)
 			}
@@ -810,8 +823,13 @@ func (n *Node) reapAssistants(ctx context.Context) {
 		}
 		var idle []string
 		var compact []*assistantProc
+		var timedOut []string
 		for id, p := range n.procs {
 			p.mu.Lock()
+			if p.manual && time.Since(p.lastActive) > assistantCompactTimeout {
+				p.manual, p.compacting = false, false
+				timedOut = append(timedOut, id)
+			}
 			if p.reapable(time.Now()) {
 				if p.idleCompactable() {
 					compact = append(compact, p)
@@ -822,6 +840,10 @@ func (n *Node) reapAssistants(ctx context.Context) {
 			p.mu.Unlock()
 		}
 		n.mu.Unlock()
+		for _, id := range timedOut {
+			n.compactionEnded(id, "压缩超过 10 分钟没有结果")
+		}
+		n.sweepCompactions()
 		for _, p := range compact {
 			n.compactIdle(p)
 		}

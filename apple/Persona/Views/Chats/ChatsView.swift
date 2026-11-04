@@ -2139,7 +2139,7 @@ struct MachineSectionHeader: View {
 private struct AgentsDestinations: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key).splitDetailPage() }
+            .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key).splitDetailPage(ownsBack: true) }
             .navigationDestination(for: SpaceRoute.self) { r in SpaceView(spaceKey: r.id).splitDetailPage() }
             .navigationDestination(for: MachineRoute.self) { r in MachineSpacesView(ref: r.ref).splitDetailPage() }
             .navigationDestination(for: MachineListRoute.self) { _ in MachinesView().splitDetailPage() }

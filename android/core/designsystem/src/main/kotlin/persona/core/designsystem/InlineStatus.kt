@@ -12,8 +12,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import persona.core.designsystem.icons.PhIcons
 
-/** What an [JInlineStatus] says: something under way, something to look at, or something that went wrong. */
-enum class InlineTone { Busy, Caution, Failed }
+/** What an [JInlineStatus] says: something under way, something to look at, something that went wrong, or that it is done. */
+enum class InlineTone { Busy, Caution, Failed, Done }
 
 /**
  * A short status set inside a card or above the composer, up to three lines: a spinner while [tone] is busy, a mark
@@ -32,6 +32,7 @@ fun JInlineStatus(
         InlineTone.Busy -> palette.surfaceStrong to palette.ink2
         InlineTone.Caution -> palette.needsYou.tint to palette.cautionText
         InlineTone.Failed -> palette.danger.tint to palette.danger.text
+        InlineTone.Done -> palette.done.tint to palette.done.text
     }
     Row(
         modifier.fillMaxWidth().semantics(mergeDescendants = true) {}.clip(PersonaTheme.shapes.controlShape).background(fill)
@@ -42,6 +43,7 @@ fun JInlineStatus(
             InlineTone.Busy -> JSpinner(Modifier.size(14.dp), color = ink, stroke = 1.8.dp)
             InlineTone.Caution -> JIcon(PhIcons.Warning, null, size = 16.dp, tint = palette.caution)
             InlineTone.Failed -> JIcon(PhIcons.WarningCircle, null, size = 16.dp, tint = palette.danger.dot)
+            InlineTone.Done -> JIcon(PhIcons.CheckCircle, null, size = 16.dp, tint = palette.positive)
         }
         Text(text, Modifier.weight(1f), style = PersonaTheme.type.caption, color = ink, maxLines = 3, overflow = TextOverflow.Ellipsis)
         action?.invoke()

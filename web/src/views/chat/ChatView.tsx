@@ -37,7 +37,7 @@ import { QueueStrip } from "./QueueStrip";
 import { chatFiles } from "../../lib/mentions";
 import { sameMessage } from "../../lib/queue";
 import { OutboxBubbles } from "./OutboxBubbles";
-import { AssistantFace, AssistantLauncherChip, useAssistantMenu } from "../assistant/AssistantChat";
+import { AssistantFace, AssistantLauncherChip, CompactionStrip, useAssistantMenu } from "../assistant/AssistantChat";
 import { MAIN_TITLE } from "../assistant/conversations";
 import { usePersona } from "../assistant/Persona";
 import { displayLines, loadFeed, loadToday, sendRouted, useFeed, type FeedItem } from "../../lib/feed";
@@ -531,6 +531,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         {interactions.map((ix) => (
           <InteractionCard key={ix.id} ix={ix} />
         ))}
+        {assistant && session && !viewed && <CompactionStrip session={session} />}
         {session && !assistant && <AttentionNote session={session} />}
         {session && queued.length > 0 && <QueueStrip session={session} draftKey={draftKey} canEdit={canCompose && !assistant} />}
         <Composer
@@ -685,7 +686,7 @@ function Header({
   const openFiles = () => session && togglePanel({ kind: "files", mid: session.machine_id, sid: session.session_id, cwd: session.cwd });
   const openGit = () => session && togglePanel({ kind: "git", mid: session.machine_id, sid: session.session_id, cwd: session.cwd });
   const othersNeed = others.some((s) => stateOf(s) === "needs_you");
-  const assistantItems = useAssistantMenu(assistant ? session : undefined);
+  const { items: assistantItems, dialogs: assistantDialogs } = useAssistantMenu(assistant ? session : undefined);
   const feishu = externalLink(session);
 
   const items: MenuItem[] = session
@@ -798,6 +799,7 @@ function Header({
       {session && <RenameSpaceDialog open={dialog === "space"} onClose={() => setDialog(null)} session={session} />}
       {session && <DeleteSessionDialog open={dialog === "delete"} onClose={() => setDialog(null)} session={session} machineName={machineName} />}
       <LinkTodoDialog open={linkTodoOpen} session={session} onClose={() => setLinkTodoOpen(false)} />
+      {assistantDialogs}
     </header>
   );
 }

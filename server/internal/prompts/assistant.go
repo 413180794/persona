@@ -252,3 +252,22 @@ type TaskDoneReply struct {
 }
 
 func RenderTaskDoneInput(in TaskDoneInput) string { return render("assistant/task_done_input", in) }
+
+// MainHandoff is the first message of a new main conversation: what the old one left (its last compaction summary,
+// the messages after it), behind a note, then what the user wrote (docs/assistant.md「新建主对话」).
+type MainHandoff struct {
+	FromID  string
+	Until   string // when the old one was archived, in the user's words
+	Summary string
+	Recent  []HandoffTurn
+	Text    string
+}
+
+// HandoffTurn is one message of the old conversation: Role user or assistant.
+type HandoffTurn struct {
+	Role string
+	Text string
+}
+
+// RenderMainHandoff is assistant/main_handoff.
+func RenderMainHandoff(h MainHandoff) string { return render("assistant/main_handoff", h) }

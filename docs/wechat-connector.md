@@ -75,13 +75,13 @@ personad plugin install file:/path/to/wechat-connector-persona-<版本>.tar.gz
 
 1. 地址和密钥的格式，不对就不发任何请求；
 2. `GET /api/session`：密钥有效，范围含 `read` 和 `events`；
-3. 一次实时通道握手（`/ws`，用以后同样的 `Origin` 和认证），5 秒内要收到 `welcome`；
+3. 一次实时通道握手（`/ws`，用以后同样的 `Origin` 和认证），5 秒内要收到 `welcome`；握手不通不拦登录，事件改为每 5 秒轮询一次，提示里写明要加进允许来源的 origin，之后插件定时重试实时通道，通了就切回去；
 4. 账号诊断，只用来提示微信未登录。
 
 | 提示 | API 的结果 | 怎么办 |
 | --- | --- | --- |
 | 地址要用 https:// | — | 改成 `https://`；明文只在本机回环可用 |
-| 连不上 wechat-connector（提示里给出要加的 origin） | 连不上、HTTP 421、握手被拒或超时 | 请服务方把这个 origin 加进允许来源；检查网络和前置代理（要转发 WebSocket 升级） |
+| 连不上 wechat-connector（提示里给出要加的 origin） | 连不上、HTTP 421 | 请服务方把这个 origin 加进允许来源；检查网络和前置代理（要转发 WebSocket 升级） |
 | 应用密钥无效或已被撤销 | 401 | 重新签发 |
 | 微信登录身份变了，或这把密钥不能用 | 403 | 重新签发 |
 | 请求太频繁 | 429 | 稍后再试 |
@@ -118,7 +118,7 @@ personad plugin config wechat-connector group_inbox=off 'exclude_chats=["wxid_ex
 - 登录成功就开始：私聊进知识库和收件箱（两个通用开关默认开）。内容会进分拣、起草和助手的提示词，也就是**会发给你配置的模型供应商**。
 - 群聊默认不进知识库（`archive_groups=false`），公众号和服务号默认不进（`archive_official=false`）；群消息只有 @ 你或 @所有人 的才进收件箱（`group_inbox=mentions`）。
 - `exclude_chats` 里的会话永不进收件箱和知识库。
-- 只有 wechat-connector 已经收到、仍在服务方保留期内的消息（保留多久由服务方定，默认最近 7 天），不是微信的完整历史；接入之前的消息读不到。收件箱只看最近 `inbox_lookback_hours`。
+- 只有 wechat-connector 已经收到、仍在服务方保留期内的消息（保留多久以服务方的设置为准，`wechat-connector_status` 的 `retention_days` 会写出来，0 表示不按时间清理），不是微信的完整历史；接入之前的消息读不到。收件箱只看最近 `inbox_lookback_hours`。
 - 图片、语音、视频、表情、文件、链接只显示占位（如 `[图片]`），插件不取媒体和头像。
 - 知识库会存对方的昵称和会话标识（`<账号>.<username>`，含微信号）；跨来源的身份线索只存哈希。不要把它当成「不留痕」。
 - 插件的日志只写计数、状态码、错误码和账号标签，不写正文、昵称、微信号、地址和密钥；发送记录只存哈希、状态和时间。
@@ -140,7 +140,7 @@ personad plugin config wechat-connector group_inbox=off 'exclude_chats=["wxid_ex
 **预览之前就拒绝的**：空内容或超过 4000 个字符；带 `reply_to`（不支持引用回复，会明说）；收件人不是个人联系人（群聊、公众号、服务号只读）或不在联系人里；
 账号未登录或密钥已失效。每次只发一条纯文本，没有图片、文件、@、红包和转账。
 
-**批准之后**插件才向服务方要预览，核对回显的收件人和正文与请求一致，再用一次性的确认单确认（只发一次，从不重试），然后最多等约 20 秒的任务回执。回给用户的话：
+**批准之后**插件才调用服务方的发送接口。服务方提供 `agent/send` 时用它（服务方自己做预览和确认），每次尝试带一个随机的 `Idempotency-Key`，发出前先记进发送记录；超时、5xx 或 409 时用同一个键再问（最多 3 次），服务方对同一个键只建一个任务，不会发出第二条。服务方没有这个接口时，插件向它要预览，核对回显的收件人和正文与请求一致，再用一次性的确认单确认（只发一次，从不重试）。两种方式都由服务方的外发开关把关，插件不会绕过它，之后等一段时间的任务回执。回给用户的话：
 
 | 回复 | 含义 |
 | --- | --- |
@@ -148,7 +148,7 @@ personad plugin config wechat-connector group_inbox=off 'exclude_chats=["wxid_ex
 | 已提交给 wechat-connector（任务 …），尚未收到微信回执 | 还没到终态（`queued`、`dispatching`、`awaiting_receipt`）。可能已发出，不要重发，稍后用 `wechat-connector_job` 查 |
 | 没有发送：… | 预览之前被拒，或任务 `held`（外发开关关着）、`superseded`（授权或账号身份在发送前变了） |
 | 发送失败：… | 任务 `failed`，微信没有发出 |
-| 结果未知（`SEND_STATE_UNKNOWN`） | 任务 `unknown`，或确认超时、5xx：可能发出也可能没有。不重发，去微信里确认 |
+| 结果未知（`SEND_STATE_UNKNOWN`） | 任务 `unknown`，或同一个键问了几次都没有答复、先超时后被拒：可能发出也可能没有。不重发，去微信里确认 |
 
 同样的内容 5 分钟内不再发给同一个人（上一次可能已经发出时），确定没发出的不受这个限制。
 
@@ -189,17 +189,18 @@ personad plugin config wechat-connector group_inbox=off 'exclude_chats=["wxid_ex
 | `not_configured` | 还没登录 | 在 设置 › 连接器 › 微信（wechat-connector）登录 |
 | `not_signed_in` | 应用密钥无效或已被撤销；或微信账号在 wechat-connector 上未登录 | 重新签发密钥后重新登录；或请服务方在 wechat-connector 侧登录这个微信账号 |
 | `no_permission` | 微信登录身份变了，或这把密钥缺少「读取」「事件」权限 | 重新签发含 `read`、`events` 的密钥 |
-| `rate_limited` | wechat-connector 暂时拒绝了请求（请求太频繁），稍后会自动重试 | 等它自己恢复 |
+| `rate_limited` | wechat-connector 暂时拒绝了请求（请求太频繁），提示里写约几点恢复；插件按服务方的 `Retry-After` 等待，期间不再发请求 | 等它自己恢复 |
 | `error` | 连不上 wechat-connector；wechat-connector 服务未就绪（括号里是服务给的状态码）；wechat-connector 侧未开启这个账号的事件推送；同一把应用密钥已有别的连接；正在连接或同步 | 按提示处理。事件推送没开是设计，不是故障，请服务方开启 |
-| `ok` | 状态页「登录」一行写 `wechat-connector · <服务状态>`，另有最近一次同步的时间 | 中间有缺口时，状态的 `guide` 带一句「中间有一段时间的消息 wechat-connector 未能提供，这段不会补上」；App 只在状态不是 `ok` 时显示 `guide`，所以缺口要问 `wechat-connector_status` |
+| `ok` | 状态页「登录」一行写 `wechat-connector · <服务状态>`（实时通道不通、在轮询时后面多一个「· 轮询」，`guide` 写明要加的允许来源），另有最近一次同步的时间 | 中间有缺口时，状态的 `guide` 带一句「中间有一段时间的消息 wechat-connector 未能提供，这段不会补上」；App 只在状态不是 `ok` 时显示 `guide`，所以缺口要问 `wechat-connector_status` |
 
 ## 助手的工具
 
 | 工具 | 读 / 写 | 做什么 |
 | --- | --- | --- |
-| `wechat-connector_status` | 读 | 每个账号的连接状态、事件推送、缺口、密钥范围和服务方外发开关（`outbound_sends_enabled` 只说明服务方的开关，不代表现在就能发） |
+| `wechat-connector_status` | 读 | 每个账号的连接状态、实时通道还是轮询、事件推送、缺口、密钥范围与绑定身份、保留天数、请求配额和服务方外发开关（`outbound_sends_enabled` 只说明服务方的开关，不代表现在就能发） |
 | `wechat-connector_chats` | 读 | 最近的会话；`query` 是子串匹配，不是全文搜索 |
 | `wechat-connector_messages` | 读 | 一个会话的消息，旧的在前，用 `before` 往前翻 |
+| `wechat-connector_search` | 读 | 在服务方保存的消息里按原文找字：区分大小写的字面子串，只查纯文本，每次只看最近一段，用返回的 `cursor` 继续往前找；按意思找用 `kb_search` |
 | `wechat-connector_contacts` | 读 | 联系人的昵称和 username，找收件人用 |
 | `wechat-connector_job` | 读 | 发送任务的状态，回答「刚才那条发出去了吗」 |
 | `wechat-connector_send` | 写，过闸门 | 给个人联系人发一条纯文本，见「发送的三道锁」 |
@@ -224,7 +225,8 @@ personad plugin config wechat-connector group_inbox=off 'exclude_chats=["wxid_ex
 
 | 现象 | 线索 | 处理 |
 | --- | --- | --- |
-| 登录停在「连不上 wechat-connector」 | 日志 `sign in refused reason=handshake`（REST 通、实时通道不通），或 `reason=unreachable` / `timeout` | `handshake`：请服务方把提示里的 origin 加进允许来源，前置代理要转发 WebSocket 升级；`unreachable`：hub 机器能不能访问这个地址、TLS 证书对不对 |
+| 登录停在「连不上 wechat-connector」 | 日志 `reason=unreachable` / `timeout` | hub 机器能不能访问这个地址、TLS 证书对不对 |
+| 状态写「· 轮询」 | 实时通道握手不通（REST 通） | 请服务方把提示里的 origin 加进允许来源，前置代理要转发 WebSocket 升级；轮询期间消息最多晚约 5 秒 |
 | 登录说密钥无效，或状态 `not_signed_in` | 401，日志 `reason=unauthorized` | 重新签发后重新登录 |
 | 状态 `no_permission` | 403，或密钥范围缺项 | 重新签发含 `read`、`events` 的密钥；换过微信号的话也要重签 |
 | 状态 `error`：wechat-connector 侧未开启这个账号的事件推送 | 状态字段 | 请服务方开启；这期间不会收到新消息 |

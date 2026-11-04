@@ -24,6 +24,8 @@ class HttpAssistantManagement(
         .retryOnConnectionFailure(false).build()
     /** 立即运行 answers once the hub has started the conversation (it allows itself two minutes), like starting an agent. */
     private val runHttp = http.newBuilder().readTimeout(130, TimeUnit.SECONDS).build()
+    /** Compacting may start the conversation's process first, and 新建主对话 reads what the old one left: the hub allows a minute. */
+    private val compactHttp = http.newBuilder().readTimeout(70, TimeUnit.SECONDS).build()
 
     private fun checkScope() { if (!isCurrent()) throw CancellationException("Pairing changed") }
 
@@ -57,6 +59,29 @@ class HttpAssistantManagement(
     }
     override suspend fun endConversation(session: SessionKey) {
         request("POST", listOf("api", "v1", "sessions", session.machineId, session.sessionId, "close"), buildJsonObject { })
+    }
+    override suspend fun compactConversation(session: SessionKey) {
+        require(session.sessionId.isNotBlank())
+        refusals {
+            request("POST", listOf("api", "v1", "assistant", "conversations", session.sessionId, "compact"), buildJsonObject {
+                if (session.machineId.isNotBlank()) put("machine_id", session.machineId)
+            }, compactHttp)
+        }
+    }
+    override suspend fun newMainConversation(carrySummary: Boolean, expect: String?): NewMainResult {
+        val body = buildJsonObject {
+            put("carry", if (carrySummary) "summary" else "none")
+            expect?.takeIf(String::isNotBlank)?.let { put("expect", it) }
+        }
+        val out = refusals { request("POST", listOf("api", "v1", "assistant", "main", "new"), body, compactHttp) }
+        return NewMainResult((out["archived"] as? JsonPrimitive)?.contentOrNull.orEmpty(),
+            (out["carried"] as? JsonPrimitive)?.booleanOrNull == true)
+    }
+    /** A 409 with a code is the hub refusing the action for a reason it words itself (正在回答, 主对话已经换过了…). */
+    private inline fun <T> refusals(block: () -> T): T = try { block() } catch (failure: HubFailure) {
+        val code = failure.code
+        if (failure.status == 409 && !code.isNullOrBlank()) throw AssistantRefused(code, failure.message)
+        throw failure
     }
     override suspend fun routines(): List<Routine> = assistant("GET", "routines").list("routines")
     override suspend fun setRoutines(list: List<Routine>): List<Routine> {

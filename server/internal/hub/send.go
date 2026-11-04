@@ -203,6 +203,9 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 			writeErr(w, 400, err)
 			return
 		}
+		if text, ok := p["text"].(string); ok && h.isMainConversation(r.Context(), m, sid) {
+			p["text"] = h.handoffFor(r.Context(), sid, text) // a new main conversation started empty (assistant_main.go)
+		}
 	}
 	// The send carries on when the phone stops waiting (backgrounded, network gone): it may be typing already, and
 	// its outcome is what the retry gets. Resuming an offline session can take a while (shell + claude startup).

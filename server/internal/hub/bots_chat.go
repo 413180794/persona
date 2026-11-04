@@ -414,19 +414,15 @@ func (h *Hub) botSend(ctx context.Context, api *feishubot.Client, set FeishuBotS
 		run.Ext["reaction"] = reaction
 	}
 	if rt.isNew {
-		s, err := h.startAssistant(ctx, text, images, "", "", "")
+		start := h.startAssistant
+		if rt.main {
+			start = h.startMainWith
+		}
+		s, err := start(ctx, text, images, "", "", "")
 		if err != nil {
 			return err
 		}
 		h.asst().ConversationStarted(ctx, assistantwire.ConversationStarted{MachineID: s.MachineID, SessionID: s.SessionID, Started: time.Now()})
-		if rt.main && h.store != nil {
-			cfg := h.assistantConfig(ctx)
-			cfg.Main = s.SessionID
-			if err := h.store.PutSetting(ctx, "assistant", cfg); err != nil {
-				h.logf("bots: save main: %v", err)
-			}
-			h.keepMain(ctx)
-		}
 		run.MachineID, run.SessionID, run.TargetKind, run.Probe = s.MachineID, s.SessionID, targetJarvis, ""
 		if t.Kind == targetJarvis { // /new: the chat goes on in it
 			h.bots.mu.Lock()

@@ -15,6 +15,20 @@ interface AssistantManagement {
     /** The launchers a machine offers (GET /api/v1/machines/{id}/launchers). */
     suspend fun launchers(machineId: String): List<AgentLauncher> = throw UnsupportedOperationException("助手设置尚未接入")
     suspend fun endConversation(session: SessionKey)
+    /**
+     * Compacts an assistant conversation's context now (POST /api/v1/assistant/conversations/{id}/compact, hub feature
+     * `assistant_compact`); its progress comes back on the session's `compaction`. A hub that refuses (409: `busy`,
+     * `compacting`, `gone`, `unsupported`) throws [AssistantRefused] with its own words.
+     */
+    suspend fun compactConversation(session: SessionKey): Unit = throw UnsupportedOperationException("压缩上下文尚未接入")
+    /**
+     * Puts the main conversation away for a new one (POST /api/v1/assistant/main/new, hub feature `assistant_main_new`):
+     * it is renamed and archived, and the next message to the main conversation starts a new one. [carrySummary] brings
+     * what the old one left; [expect] is the main conversation on screen (a hub where another device replaced it since
+     * refuses with `main_changed`, as [AssistantRefused]; `busy` while it answers or compacts).
+     */
+    suspend fun newMainConversation(carrySummary: Boolean, expect: String?): NewMainResult =
+        throw UnsupportedOperationException("新建主对话尚未接入")
     suspend fun routines(): List<Routine>
     suspend fun setRoutines(list: List<Routine>): List<Routine>
     suspend fun runRoutine(id: String): SessionKey
@@ -86,3 +100,9 @@ data class AssistantNotes(
 
 @Serializable
 data class MemoryFile(val name: String = "", val content: String = "", @SerialName("updated_at") val updatedAt: String? = null)
+
+/** What 新建主对话 did: the conversation put away ([archived], empty when there was none) and whether any of it carries over. */
+data class NewMainResult(val archived: String = "", val carried: Boolean = false)
+
+/** The hub refused an assistant action (409 with a `code`); [message] is the hub's own words, fit to show as they are. */
+class AssistantRefused(val code: String, message: String) : Exception(message)

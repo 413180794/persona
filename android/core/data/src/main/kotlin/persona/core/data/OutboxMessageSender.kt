@@ -211,6 +211,14 @@ class OutboxMessageSender(
         Unit
     }
 
+    // Under the processing lock: a drain that already read the old binding finishes before it goes.
+    override suspend fun mainReplaced(previous: SessionKey) = processing.withLock {
+        check(job.isActive) { "Pairing scope is closed" }
+        store.forgetMainConversation(previous)
+        wake.trySend(Unit)
+        Unit
+    }
+
     /**
      * The session's transcript holds [items]: authoritative (from the hub), never an optimistic local echo. A message
      * sent from here that is among them is shown, and its bubble goes. An item the hub tagged with a client message id

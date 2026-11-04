@@ -101,5 +101,9 @@ object AssistantSendingModule {
                 val pairing = checkNotNull(data.restore()) { "请先配对 hub" }
                 pairing.messages.sendToMain(text, clientMessageId, draft)
             }
+
+            override suspend fun mainReplaced(previous: SessionKey) {
+                data.restore()?.messages?.mainReplaced(previous)
+            }
         }
 }

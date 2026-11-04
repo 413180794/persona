@@ -1,8 +1,7 @@
 {
   "state": "ok",
-  "account": "primary",
-  "via": "wechat-connector · https://wechat-connector.example.com",
-  "guide": ["中间有一段时间的消息 wechat-connector 未能提供。"],
-  "last_sync": "2026-11-04T08:01:00Z",
-  "last_event": "2026-11-04T08:00:30Z"
+  "via": "wechat-connector · ready",
+  "last_sync": "2026-11-04T09:59:30.000Z",
+  "last_event": "2026-11-04T09:59:00.000Z",
+  "account": "Example account"
 }

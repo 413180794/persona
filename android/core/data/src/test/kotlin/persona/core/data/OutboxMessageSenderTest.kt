@@ -142,6 +142,38 @@ class OutboxMessageSenderTest {
         restarted.close()
     }
 
+    /** 新建主对话: once the old main conversation is put away, the next message starts a new one, not the archived one. */
+    @Test fun aReplacedMainConversationIsForgottenAndTheNextMessageStartsANewOne() = runTest {
+        val store = FakeStore()
+        val transport = FakeTransport(online = true)
+        val replacement = SessionKey("machine", "next-main")
+        var remoteMain: SessionKey? = session
+        var creates = 0
+        val resolver = object : MainConversationResolver {
+            override suspend fun findMainConversation(): SessionKey? = remoteMain
+            override suspend fun createMainConversation(): SessionKey { creates++; return replacement.also { remoteMain = it } }
+        }
+        val sender = OutboxMessageSender(scope, store, transport, backgroundScope)
+        sender.connectMainConversation(resolver)
+        transport.answers += MessageTransportResult.Accepted
+        sender.sendToMain("to the old one", "old")
+        runCurrent()
+        assertEquals(session, transport.requests.single().session)
+
+        remoteMain = null // the hub put it away
+        sender.mainReplaced(SessionKey("machine", "someone-else")) // not the bound one: nothing changes
+        assertEquals(session, store.mainConversation())
+        sender.mainReplaced(session)
+        assertEquals(null, store.mainConversation())
+        transport.answers += MessageTransportResult.Accepted
+        sender.sendToMain("to the new one", "new")
+        runCurrent()
+        assertEquals(1, creates)
+        assertEquals(replacement, transport.requests.last().session)
+        assertEquals(OutboxState.Sent, store.state("new"))
+        sender.close()
+    }
+
     @Test fun durableQueueWaitsForNetworkAndDistinguishesRefusalFromUncertainDelivery() = runTest {
         val store = FakeStore()
         val transport = FakeTransport(online = false)
@@ -432,7 +464,14 @@ class OutboxMessageSenderTest {
         }
         override suspend fun bindMainConversation(session: SessionKey) {
             main = session
-            entries.value = entries.value.map { if (it.mainTarget) it.copy(session = session) else it }
+            entries.value = entries.value.map {
+                if (it.mainTarget && it.session == PendingMainConversation) it.copy(session = session) else it
+            }
+        }
+        override suspend fun forgetMainConversation(session: SessionKey) {
+            if (main != session) return
+            main = null
+            creationClaimed = false
         }
         val transitions = mutableListOf<Pair<OutboxState, OutboxState>>()
         fun state(id: String) = entries.value.single { it.clientMessageId == id }.state

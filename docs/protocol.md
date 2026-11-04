@@ -40,7 +40,7 @@
 
 - P0 新增：`tls`、`endpoints`、`client_hello`、`heartbeat`、`app_ping`、`error_codes`、`client_ops`、`ws_notify`、`lock_test`、`android_update`。
 - 已有：`client_msg_id`、`send_refusals`、`screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`、`terminal_stream`、`terminal_control`、`terminal_scroll`、`terminal_click`、`file_upload`。
-- 另有：`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](plugins.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[plugins.md](plugins.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[plugins.md](plugins.md)「自动升级」）、`desktops`（桌面端登记，见下文 `register_desktop`）。
+- 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](plugins.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[plugins.md](plugins.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[plugins.md](plugins.md)「自动升级」）、`desktops`（桌面端登记，见下文 `register_desktop`）。
 
 能力位表示实现支持；`tls` 不代表已经开启监听，要同时看 `tls_port` / `fp`。新客户端遇到旧 hub 时按能力位退回旧行为。机器列表的 `node_version` / `node_mismatch` 用来提示 node 与 hub 的部署版本是否一致（那台电脑上的 personad 不是 hub 这次部署的，`deploy.sh` 只部署了一部分；hub 连上时也记一行日志）。新字段都是可选的，App 目前靠字段在不在判断；以后有「旧 hub 会误解」的新请求时先查这里。
 
@@ -313,7 +313,9 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
  "todo":{"id":"todo_…","title":"天气 App 发 1.3 版"},
  "quiet":true,   // 给安静的任务干活（干过）的 Agent（#1731，docs/unified-entry.md「安静的任务」）：不进任务通知和全局角标，任务做完后也一直带着
  "background":[{"id":"b85polnoj","kind":"shell|agent","description":"…","command":"…",   // 还没回报的后台命令 / 子代理
-                "output_file":"/private/tmp/…/b85polnoj.output","started_at":"..."}]}
+                "output_file":"/private/tmp/…/b85polnoj.output","started_at":"..."}],
+ // 用户最近一次手动压缩（只有助手对话，POST …/compact 之后才有）：running → done | failed（error 是给人看的原因）；node 记着，直到下一次
+ "compaction":{"state":"running|done|failed","error":"…","started_at":"...","finished_at":"..."}}
 
 // Todo：待办事项（docs/todos.md）
 {"id":"todo_…","title":"天气 App 发 1.3 版","notes":"说明","done_at":null,
@@ -520,9 +522,11 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | DELETE | `/api/v1/sessions/{mid}/{sid}` | 删除对话：只是从各端的会话列表里移除（hub 在 settings `sessions.deleted` 记下时间，`sessions` 推送和 `GET /api/v1/sessions` 都不再带它），电脑上的 transcript 不动；之后这个会话再被用到（`updated_at` 晚于删除时间，或又运行起来）会重新出现。启动失败的（`start_error`）也能删，立即消失。→ `{"ok":true}`；正在运行或还在启动 409，助手的对话 400（用归档），没有这个会话 404，只读设备 403 |
 | GET | `/api/v1/assistant` | `{"machine_id","launcher","cwd","timezone","notes"?,"notes_effective","main"?,"main_tasks_quiet","conversations":[Session]}`：`notes` 只在 App 里保存过时有，`main_tasks_quiet` 是「主对话派的任务只在主对话里通知」的生效值（没改过时是 `true`，#1731），`main` 是主对话的会话 id（在 `machine_id` 那台机器上）；已归档的对话默认不列，`?archived=1` 一起列（`archived: true`） |
 | PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?,"timezone"?,"notes"?,"main"?,"main_tasks_quiet"?}`，存 Postgres settings（`docs/assistant.md`）；只改带了的字段，`notes` 为空串也算改；`main` 为 `"-"` 时清掉主对话（换机器时 App 一起发） |
-| POST | `/api/v1/assistant/conversations` | `{"prompt","images"?,"purpose"?,"machine_id"?}` → `{"session"}`：写好 CLAUDE.md 后在助手目录新开会话。`purpose`：用哪个模型用途（hub 认识的，如 `lark.agent`，不认识回 400；空着是 `assistant`）；`machine_id`：在 hub 的哪台机器上跑（空着是助手那台；没有这台回 400）。插件的 /agent 用这两个（#1484） |
+| POST | `/api/v1/assistant/conversations` | `{"prompt","images"?,"purpose"?,"machine_id"?,"main"?}` → `{"session"}`：写好 CLAUDE.md 后在助手目录新开会话。`purpose`：用哪个模型用途（hub 认识的，如 `lark.agent`，不认识回 400；空着是 `assistant`）；`machine_id`：在 hub 的哪台机器上跑（空着是助手那台；没有这台回 400）。插件的 /agent 用这两个（#1484） |
 | POST | `/api/v1/assistant/conversations/{id}/archive` | 归档助手的一段对话（只是不在列表里，数据保留）→ `{"ok","archived":true}`；主对话 400。会话列表（`sessions` 推送）里它带 `archived: true`，App 收在「已归档」；用户再给它发消息（`POST …/messages`）自动取消归档（`docs/assistant.md`「管理自己的对话」） |
 | POST | `/api/v1/assistant/conversations/{id}/unarchive` | 取消归档 → `{"ok","archived":false}` |
+| POST | `/api/v1/assistant/conversations/{id}/compact` | `{"machine_id"?}`（空着是助手那台）：手动压缩这段对话（Claude 发 `/compact`，进程不在就先 `--resume`；Codex `thread/compact/start`）→ 开始了就回 `{"ok":true}`，进度看会话的 `compaction`。409 + `code`：`busy`（正在回答）、`compacting`（已经在压）、`gone`（记录不在了）、`unsupported`（runtime 跑的对话）；`error` 是给人看的中文 |
+| POST | `/api/v1/assistant/main/new` | `{"carry":"summary"\|"none","expect"?}`：新建主对话。`carry`（默认 `summary`）带上旧主对话最近一次压缩的摘要和之后的几条消息；`expect` 是 App 看到的主对话 id，对不上回 409 `main_changed`；旧主对话正在回答 / 压缩时 409 `busy`。成功后主对话清空（`GET /api/v1/assistant` 的 `main` 没了），旧的改名「旧主对话 · 至 M月D日」并归档 → `{"ok","archived":"<旧 id，没有主对话时为空>","carried":bool}`。之后第一条带 `main:true` 的 `POST /api/v1/assistant/conversations`（以及飞书机器人、渠道发给主对话的消息）开新的主对话，带过去的背景作为 `<jarvis-context kind="context" title="接上旧主对话">` 放在第一条消息前，只用一次（`docs/assistant.md`「新建主对话」） |
 | POST | `/api/v1/assistant/warm` | `{"launcher"?}`：先起一个备用 claude 进程，新对话直接用 |
 | GET | `/api/v1/assistant/tasks` | 定时任务（一张表，`docs/assistant.md`「定时任务」）：`{"tasks":[Task]}`，已经跑过的一次性跟进不列。`Task` = `{id,title,prompt,repeat:"once"\|"daily"\|"interval",at,time:"HH:MM",weekdays:[1..7],every_minutes,enabled,machine_id,session_id,launcher,permission_mode,effort,created_by,created_at,last_run,last_session_id,last_status,last_error,next_run,run_machine_id,run_session_id,run_launcher}`：`once` 用 `at`，`daily` 用 `time` + `weekdays`（空 = 每天），`interval` 每 `every_minutes`（5 分钟到 7 天）跑一次、`at` 是下一次；`session_id` 有值时发进那段对话，空 = 任务自己的对话（`run_session_id`，hub 记的：第一次运行开，之后接着用；空 = 下一次开）；`launcher` / `permission_mode`（`default` / `acceptEdits` / `plan` / `auto` / `bypassPermissions`）/ `effort`（`low`…`max`）空 = 助手的默认，只能在 App 里改；`created_by: "assistant"` 是助手在对话里建的 |
 | POST | `/api/v1/assistant/tasks` | 新建 `Task`（`session_id` 忽略，用任务自己的对话）→ `{"task"}`；不合法 400，消息是给用户看的中文 |

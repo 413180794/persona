@@ -134,6 +134,24 @@ export interface Session {
   attention_reason?: string;
   /** Where it lives outside Persona (a botmux session's Feishu topic): 在飞书打开. */
   external_url?: string;
+  /** The last compaction the user asked for in an assistant conversation (POST …/compact, #1727). */
+  compaction?: Compaction;
+}
+
+/** A compaction the user asked for (proto.Compaction): running, done or failed (`error` says why). */
+export interface Compaction {
+  state: "running" | "done" | "failed";
+  error?: string;
+  started_at: string;
+  finished_at?: string;
+}
+
+/** Where the context was compacted (proto.Compact): "manual" (/compact) or "auto", the size before it. `notes`: the
+ *  notices of the compaction folded into it here (lib/compaction.ts), never from the hub. */
+export interface CompactInfo {
+  trigger?: string;
+  pre_tokens?: number;
+  notes?: string[];
 }
 
 /** A /loop: Claude re-runs a prompt on its own, scheduling each wakeup ("wakeup") or by cron ("cron"). */
@@ -206,6 +224,8 @@ export interface Item {
   /** The client_msg_id of the message this came from, as the hub tied it (every item of it: the text, its images, a
    *  queued copy, or the notice it became); older hubs never send it (lib/echo.ts). */
   client_msg_id?: string;
+  /** This notice is where the context was compacted (Claude Code's compact_boundary). */
+  compact?: CompactInfo;
 }
 
 export interface ItemsPage {

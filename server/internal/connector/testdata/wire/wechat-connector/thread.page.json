@@ -1,11 +1,44 @@
 {
-  "chat": {"id": "primary.wxid_example_a", "name": "示例联系人", "kind": "dm", "reply": "wechat-connector_send"},
+  "chat": {
+    "id": "primary.example_room_a@chatroom",
+    "name": "微信群（…om_a）",
+    "kind": "group"
+  },
   "messages": [
-    {"id": "g1-l101", "at": "2026-11-04T07:58:00Z", "sender": {"id": "wxid_example_a", "name": "示例联系人"}, "text": "早"},
-    {"id": "g1-l102", "at": "2026-11-04T07:59:00Z", "sender": {"id": "primary", "name": "我"}, "mine": true, "text": "早上好"},
-    {"id": "g1-l103", "at": "2026-11-04T08:00:00Z", "sender": {"id": "wxid_example_a", "name": "示例联系人"}, "media": [{"kind": "image"}]},
-    {"id": "g1-l104", "at": "2026-11-04T08:00:30Z", "sender": {"name": ""}, "event": true, "text": "系统消息"},
-    {"id": "g1-l105", "at": "2026-11-04T08:01:00Z", "sender": {"id": "wxid_example_a", "name": "示例联系人"}, "text": "在吗"}
-  ],
-  "before": "eyJjIjoib3BhcXVlLWN1cnNvciIsInMiOjEwMX0"
+    {
+      "id": "880000000001",
+      "at": "2026-11-04T08:21:00.000Z",
+      "sender": {
+        "id": "wxid_example_a",
+        "name": "Example A"
+      },
+      "text": "大家好，今天的合成会议改到下午。"
+    },
+    {
+      "id": "880000000006",
+      "at": "2026-11-04T08:26:00.000Z",
+      "sender": {
+        "id": "wxid_example_a",
+        "name": "Example A"
+      },
+      "text": "@示例用户 请看一下这个合成文档"
+    },
+    {
+      "id": "s10",
+      "at": "2026-11-04T08:30:00.000Z",
+      "sender": {
+        "name": "群成员"
+      },
+      "event": true,
+      "text": "系统消息"
+    },
+    {
+      "id": "880000000099",
+      "at": "2026-11-04T08:31:00.000Z",
+      "sender": {
+        "name": "群成员"
+      },
+      "text": "A member the index has not seen"
+    }
+  ]
 }

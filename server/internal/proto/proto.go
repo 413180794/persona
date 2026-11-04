@@ -237,6 +237,8 @@ const (
 // Features are what this hub supports beyond the first protocol, listed in the WebSocket hello and /health for
 // clients that need to know before they try (docs/protocol.md).
 var Features = []string{
+	"assistant_compact",      // POST /api/v1/assistant/conversations/{id}/compact, session.compaction
+	"assistant_main_new",     // POST /api/v1/assistant/main/new: archive the main conversation, the next message starts one
 	"android_update",         // authenticated Android release metadata and APK downloads
 	"error_codes",            // stable HTTP error codes and optional delivery information
 	"client_hello",           // client platform, version and capabilities
@@ -563,6 +565,9 @@ type Session struct {
 	// Archived: an assistant conversation moved out of the sidebar's list (kept, listed under 已归档; hub
 	// assistant_conversations.go).
 	Archived bool `json:"archived,omitempty"`
+	// Compaction is the last compaction the user asked for in an assistant conversation (POST …/compact), kept by the
+	// node until the next one: running, then done or failed (docs/assistant.md「手动压缩」).
+	Compaction *Compaction `json:"compaction,omitempty"`
 	// Channels are the channels messages came into this conversation from, newest first ("wechat", "feishu"):
 	// the conversation list draws the latest's icon (docs/channels.md「来源标记」). Set by the hub.
 	Channels []string `json:"channels,omitempty"`
@@ -866,6 +871,21 @@ type Item struct {
 type Compact struct {
 	Trigger   string `json:"trigger,omitempty"`
 	PreTokens int    `json:"pre_tokens,omitempty"`
+}
+
+// Compaction states.
+const (
+	CompactionRunning = "running"
+	CompactionDone    = "done"
+	CompactionFailed  = "failed"
+)
+
+// Compaction is a compaction the user asked for: State running, done or failed (Error says why).
+type Compaction struct {
+	State      string     `json:"state"`
+	Error      string     `json:"error,omitempty"`
+	StartedAt  time.Time  `json:"started_at"`
+	FinishedAt *time.Time `json:"finished_at,omitempty"`
 }
 
 // TurnDuration preserves a recorded whole-turn duration and its native association.

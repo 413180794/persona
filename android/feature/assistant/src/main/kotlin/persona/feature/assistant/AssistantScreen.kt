@@ -24,6 +24,7 @@ import persona.core.contracts.Session
 import persona.core.contracts.Machine
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.AssistantManagement
+import persona.core.contracts.api.AssistantRefused
 import persona.core.contracts.api.AssistantRepository
 import persona.core.contracts.api.ChannelSources
 import persona.core.designsystem.*
@@ -155,6 +156,22 @@ fun AssistantScreen(
         }
     }
     val active = activeSession?.let { SessionKey(activeMachine.orEmpty(), it) }
+    // 压缩上下文 and 新建主对话 (#1727): the main conversation's menu, on hubs that offer them.
+    val mainActions = if (management != null && !demo) MainActions.of(LocalHubFeatures.current) else MainActions(false, false)
+    val onMain = active != null && active == snapshot.mainSession
+    val shownCompaction = if (onMain) snapshot.conversations.firstOrNull { it.key == active }?.compaction else null
+    var compaction by remember(active) { mutableStateOf(CompactionStatus()) }
+    var compacting by remember { mutableStateOf(false) }
+    var newMainOpen by remember { mutableStateOf(false) }
+    var newMainBusy by remember { mutableStateOf(false) }
+    var carrySummary by rememberSaveable { mutableStateOf(true) }
+    LaunchedEffect(active, shownCompaction) { compaction = compaction.observe(shownCompaction) }
+    LaunchedEffect(compaction.line) {
+        if (compaction.line == CompactionLine.Done) {
+            kotlinx.coroutines.delay(CompactionDoneMillis)
+            compaction = compaction.dismissed()
+        }
+    }
     val groups = remember(snapshot, query, pinnedConversations, ended) {
         conversationGroups(snapshot.copy(conversations = snapshot.conversations.map {
             if (it.key in ended) it.copy(status = "offline", state = "offline") else it
@@ -188,6 +205,54 @@ fun AssistantScreen(
         pendingClientId = null
         pendingText = null
         scope.launch { drawerOpen = false }
+    }
+    fun refusal(error: Exception): String =
+        if (error is AssistantRefused) error.message.orEmpty() else persona.core.designsystem.operationFeedback(error).message
+    fun compactMain() {
+        val key = active ?: return
+        val api = management ?: return
+        if (compacting) return
+        compacting = true
+        compaction = compaction.asked(shownCompaction)
+        scope.launch {
+            try { api.compactConversation(key) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                compaction = compaction.refused(snapshot.conversations.firstOrNull { it.key == key }?.compaction)
+                say(refusal(error))
+            }
+            finally { compacting = false }
+        }
+    }
+    fun newMain() {
+        val api = management ?: return
+        val previous = snapshot.mainSession ?: return
+        if (newMainBusy) return
+        newMainBusy = true
+        val carry = carrySummary
+        scope.launch {
+            try {
+                val result = api.newMainConversation(carry, previous.sessionId)
+                newMainOpen = false
+                // The next message to the main conversation starts the new one, here and from every other entry.
+                assistantAttempt { mainConversationSender?.mainReplaced(previous) }
+                assistantAttempt { repository.refresh() }
+                newConversation()
+                say(newMainNotice(result.carried, carry))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                newMainOpen = false
+                if ((error as? AssistantRefused)?.code == "main_changed") {
+                    // Another device put it away first: show the main conversation the hub has now.
+                    assistantAttempt { mainConversationSender?.mainReplaced(previous) }
+                    assistantAttempt { repository.refresh() }
+                }
+                say(refusal(error))
+            } finally {
+                newMainBusy = false
+            }
+        }
     }
     fun startNewConversation() {
         if (sending) return
@@ -383,6 +448,12 @@ fun AssistantScreen(
                             if (assistantChatContent != null) assistantChatContent(active, AssistantChatOptions())
                             else chatContent?.invoke(active)
                         }
+                        // A compaction of the main conversation: under the bar, over the conversation.
+                        if (onMain) compaction.line?.let { line ->
+                            CompactionStatusLine(line, onDismiss = { compaction = compaction.dismissed() },
+                                modifier = Modifier.align(Alignment.TopCenter)
+                                    .then(if (demo) Modifier else Modifier.padding(top = padding.calculateTopPadding())))
+                        }
                     }
                 }
             } else if (viewingMainQueue || (active != null && !hasChat)) {
@@ -449,9 +520,21 @@ fun AssistantScreen(
             }
             onVoice?.let { open -> add(JAction("语音对话", onClick = open)) }
             add(JAction("会话信息", onClick = { info = "会话信息" }))
+            if (onMain && mainActions.compact) add(JAction("压缩上下文", separatorBefore = true,
+                enabled = !compacting && compaction.line != CompactionLine.Running, onClick = ::compactMain))
+            if (onMain && mainActions.newMain) add(JAction("新建主对话", separatorBefore = !mainActions.compact,
+                enabled = !newMainBusy, onClick = { newMainOpen = true }))
             active?.let { key -> add(JAction("拷贝会话 ID", separatorBefore = true, onClick = { copyId(key) })) }
         },
     )
+    if (newMainOpen) {
+        JDialog(onDismiss = { if (!newMainBusy) newMainOpen = false }, title = NewMainTitle,
+            text = newMainText(java.time.LocalDate.now()), confirmEnabled = !newMainBusy,
+            confirm = "新建" to ::newMain, dismiss = "取消" to { if (!newMainBusy) newMainOpen = false }) {
+            JSwitchRow(CarrySummaryTitle, carrySummary, { carrySummary = it }, subtitle = CarrySummaryHint,
+                enabled = !newMainBusy)
+        }
+    }
     ending?.let { session ->
         JDialog(onDismiss = { if (!endingBusy) ending = null }, title = "结束这个对话？",
             text = "「${session.conversationTitle()}」会停止运行。历史记录仍会保留。",

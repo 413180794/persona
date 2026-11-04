@@ -209,6 +209,11 @@ data class Session(
     @SerialName("channels") val channels: List<String> = emptyList(),
     val todo: SessionTodo? = null,
     /**
+     * The last compaction the user asked for in an assistant conversation (POST …/compact, docs/assistant.md「手动压缩」):
+     * running, then done or failed. Kept until the next one; older hubs never send it.
+     */
+    val compaction: SessionCompaction? = null,
+    /**
      * Works (or worked) for a quiet task (#1731): the main conversation opened it while 主对话派的任务只在主对话里通知
      * was on. No alerts or global badges for it; the main conversation tells the user. Older hubs never send it.
      */
@@ -234,6 +239,21 @@ data class Session(
     val isLive: Boolean get() = status != "offline"
     val updated: Instant? get() = parseTime(updatedAt)
 }
+
+@KeepGeneratedSerializer
+@Serializable(with = SessionCompactionSerializer::class)
+data class SessionCompaction(
+    @WireEnum("running", "done", "failed", "unknown") val state: String = "unknown",
+    val error: String? = null,
+    @WireTime @SerialName("started_at") val startedAt: String? = null,
+    @WireTime @SerialName("finished_at") val finishedAt: String? = null,
+) {
+    val running: Boolean get() = state == "running"
+    val done: Boolean get() = state == "done"
+    val failed: Boolean get() = state == "failed"
+}
+
+object SessionCompactionSerializer : WireSerializer<SessionCompaction>(SessionCompaction.generatedSerializer())
 
 data class SessionKey(val machineId: String, val sessionId: String) {
     val path: String get() = "$machineId/$sessionId"
@@ -275,7 +295,19 @@ data class Item(
     /** The client message id of the message sent from a phone that this item came from (#968): its text, images,
      *  queued copy, or the notice it became. Older hubs never send it. */
     @SerialName("client_msg_id") val clientMsgId: String? = null,
+    /** On a notice: the context was compacted here (Claude Code's compact_boundary); the chat draws it as a divider. */
+    val compact: CompactBoundary? = null,
 )
+
+/** How a compaction came about: [trigger] `manual` (/compact) or `auto`, and the context's size before it. */
+@KeepGeneratedSerializer
+@Serializable(with = CompactBoundarySerializer::class)
+data class CompactBoundary(
+    val trigger: String? = null,
+    @SerialName("pre_tokens") val preTokens: Long? = null,
+)
+
+object CompactBoundarySerializer : WireSerializer<CompactBoundary>(CompactBoundary.generatedSerializer())
 
 @KeepGeneratedSerializer
 @Serializable(with = TurnDurationSerializer::class)

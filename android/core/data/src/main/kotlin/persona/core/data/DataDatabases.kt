@@ -84,6 +84,9 @@ interface PersistentDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun putMainConversation(row: MainConversationRow)
 
+    @Query("DELETE FROM main_conversation WHERE scope = :scope AND machine = :machine AND session = :session")
+    suspend fun forgetMainConversation(scope: String, machine: String, session: String)
+
     @Query("UPDATE outbox SET machine = :machine, session = :session WHERE scope = :scope AND main_target = 1 AND machine = ''")
     suspend fun bindMainMessages(scope: String, machine: String, session: String)
 
@@ -149,6 +152,9 @@ class RoomOutboxStore(private val database: PersistentDatabase, private val scop
         dao.putMainConversation(MainConversationRow(scope.path, session.machineId, session.sessionId))
         dao.bindMainMessages(scope.path, session.machineId, session.sessionId)
     }
+
+    override suspend fun forgetMainConversation(session: SessionKey) =
+        dao.forgetMainConversation(scope.path, session.machineId, session.sessionId)
 
     override suspend fun transition(id: String, from: Set<OutboxState>, to: OutboxState, error: String?): Boolean =
         dao.transition(scope.path, id, from.map { it.wire }, to.wire, error) != 0

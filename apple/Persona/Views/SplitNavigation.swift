@@ -154,18 +154,23 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// A page the list opens: in the split's detail column its first page has no back button.
-    func splitDetailPage() -> some View { modifier(SplitDetailPage()) }
+    /// A page the list opens: in the split's detail column its first page has no back button. `ownsBack`: the page
+    /// shows or hides the system's back itself (an Agents chat); on iOS this leaves it alone, as an outer
+    /// `navigationBarBackButtonHidden(false)` wins over the page's own `true` (iPhone Duo's side bars, 2026-11-04: the
+    /// system's back beside the chat's own, two backs).
+    func splitDetailPage(ownsBack: Bool = false) -> some View { modifier(SplitDetailPage(ownsBack: ownsBack)) }
 }
 
 private struct SplitDetailPage: ViewModifier {
     @Environment(\.splitDetail) private var split
+    var ownsBack = false
 
     func body(content: Content) -> some View {
         #if os(macOS)
         content.modifier(MacDetailBack(shown: split?.isFirstPage == false))
         #else
-        content.navigationBarBackButtonHidden(split?.isFirstPage == true)
+        // `ownsBack` is fixed for a page (no identity change as the path grows).
+        if ownsBack { content } else { content.navigationBarBackButtonHidden(split?.isFirstPage == true) }
         #endif
     }
 }

@@ -11,7 +11,7 @@ import { Button, Collapse, copyText, cx, Dialog, Spinner } from "../../ui/atoms"
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
 import { Answer, SegmentView } from "./SegmentView";
-import { NoticeRow, WorkRow } from "./Steps";
+import { CompactDivider, NoticeRow, WorkRow } from "./Steps";
 
 export interface LineProps {
   line: ChatLine;
@@ -57,6 +57,8 @@ export const ChatLineView = memo(function ChatLineView({ line, now, mid, sid, st
       return <LineNotice item={line.item} />;
     case "wakes":
       return <WakeChip turn={line.turn} live={line.live} now={now} mid={mid} sid={sid} expandFold={expandFold} />;
+    case "compact":
+      return <CompactDivider item={line.item} />;
     case "recaps":
       return <RecapChip items={line.items} />;
     case "apiError":

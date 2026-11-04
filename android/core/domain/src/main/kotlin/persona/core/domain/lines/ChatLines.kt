@@ -11,7 +11,7 @@ fun chatLines(items: List<LineItem>, options: LineOptions = LineOptions()): Chat
             positionCompare(it.seq, it.part, frozen.seq, frozen.part) <= 0
         }
     }
-    val blocks = buildBlocks(buildLineRows(source))
+    val blocks = buildBlocks(buildLineRows(foldCompactions(source)))
     val live = if (frozen != null) frozen.liveTurnId else options.liveTurnId
     val builder = LineBuilder(live, options.openWork)
     val lines = blocks.flatMap {
@@ -208,6 +208,8 @@ private fun segments(ordered: List<ChatRow>): List<Segment> {
     return out
 }
 
+private val ChatRow.isCompaction get() = type == "notice" && item?.compaction != null
+
 private fun photos(rows: List<ChatRow>): List<LineItem> = rows.filter {
     it.type == "image" && it.isUserInput && it.item?.item?.image != null
 }.map { it.item!! }
@@ -284,13 +286,22 @@ private class LineBuilder(val liveId: String?, val open: Set<String>) {
             if (photos.isNotEmpty()) add(ChatLine.UserImages(photos))
             seg.user?.let { add(ChatLine.Row(it)) }
             val last = seg.rows.indexOfLast { it.type == "reply" }
-            val steps = workItems(seg.rows.filterIndexed { i, _ -> i != last })
-            if (steps.isNotEmpty() || live) {
+            // A compaction after the answer (idle, a /compact of its own) is a divider after it, not a step hidden in
+            // the turn's work line.
+            val after = if (last < 0) emptySet() else
+                seg.rows.indices.filter { it > last && seg.rows[it].isCompaction }.toSet()
+            val rows = seg.rows.filterIndexed { i, _ -> i != last && i !in after }
+            val steps = workItems(rows)
+            if (!live && steps.isNotEmpty() && steps.all { it is WorkItem.Thought && it.item.compaction != null }) {
+                // Only compactions: dividers across the chat, no work line to open.
+                addAll(rows.filter { it.isCompaction }.map { ChatLine.Row(it) })
+            } else if (steps.isNotEmpty() || live) {
                 val id = "w-" + (seg.user?.id ?: seg.rows.firstOrNull()?.id ?: turn.id)
                 add(work(id, steps, live, seg.user?.start ?: (if (k == 0) wokeAt else null) ?:
                     seg.rows.firstOrNull()?.start ?: turn.start, seg.rows.lastOrNull()?.end))
             }
             seg.rows.getOrNull(last)?.let { add(ChatLine.Row(it)) }
+            addAll(after.sorted().map { ChatLine.Row(seg.rows[it]) })
         }
         if (turn.wakes.isNotEmpty()) add(wakes(turn, turn.id == liveId && turn.tail.isNotEmpty()))
         addAll(turn.trailing.map { ChatLine.Row(it) })

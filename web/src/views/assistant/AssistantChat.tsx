@@ -1,19 +1,25 @@
 // What a Persona conversation adds to the chat page (the app's AssistantTopBar): the persona's dot in the header,
 // moving with the conversation's state; the header menu's 详细信息 / 知识库 / 回到主对话 / 拷贝信息; and the
-// launcher chip under the composer that switches the model for the next messages (AssistantTopBar's 启动器 menu).
-import { useEffect, useState } from "react";
-import { api, enc, errorText } from "../../lib/api";
+// launcher chip under the composer that switches the model for the next messages (AssistantTopBar's 启动器 menu); the
+// main conversation's 压缩上下文 / 新建主对话 and the strip above the composer while it compacts (#1727).
+import { useEffect, useRef, useState } from "react";
+import { api, ApiError, enc, errorText } from "../../lib/api";
 import {
   assistantInfoText, conversationKey, effectiveLauncher, NEW_CONVERSATION, pickLauncher, pickModel, runsAssistant, shortModel, usePickedLauncher,
   usePickedModel, type AssistantLauncher,
 } from "../../lib/assistant-chat";
+import {
+  archivedMainTitle, COMPACT_FEATURE, compactBody, compactionView, compactPath, NEW_MAIN_FEATURE, NEW_MAIN_PATH, newMainBody, type CompactionView,
+} from "../../lib/compaction";
 import { launcherModels, type AgentModel } from "../../lib/launcher-models";
 import { personaState } from "../../lib/persona";
 import { navigate } from "../../lib/router";
-import { useStore } from "../../lib/store";
+import { hubHas, refreshAssistant, useStore } from "../../lib/store";
 import type { Item, Session } from "../../lib/types";
-import { copyText, Menu, toast, useMenu, type MenuItem } from "../../ui/atoms";
+import { Button, copyText, Dialog, IconButton, Menu, Spinner, toast, useMenu, type MenuItem } from "../../ui/atoms";
+import { Icon } from "../../ui/icons";
 import { Chip } from "../chat/SessionDialogs";
+import { Switch } from "./parts";
 import { PersonaDot, usePersona } from "./Persona";
 
 // ── launchers ───────────────────────────────────────────
@@ -159,20 +165,29 @@ export function AssistantFace({ session, last }: { session?: Session; last?: Ite
   return <PersonaDot size={30} state={state} fallback={null} className="-my-1" />;
 }
 
-/** The header menu's Persona part: 详细信息 (the profile), 知识库, 回到主对话, 拷贝信息. Empty for an agent. */
-export function useAssistantMenu(session: Session | undefined): MenuItem[] {
+/** The header menu's Persona part: 详细信息 (the profile), 知识库, 回到主对话, the main conversation's 压缩上下文 and
+ *  新建主对话 (when the hub can), 拷贝信息; `dialogs` goes with them. Empty for an agent. */
+export function useAssistantMenu(session: Session | undefined): { items: MenuItem[]; dialogs: React.ReactNode } {
   const assistant = useStore((s) => s.assistant);
   const machine = useStore((s) => (session ? s.machines.find((m) => m.id === session.machine_id)?.name ?? "" : ""));
+  const canCompact = useStore((s) => hubHas(s.features, COMPACT_FEATURE));
+  const canNewMain = useStore((s) => hubHas(s.features, NEW_MAIN_FEATURE));
   const picked = usePickedLauncher(session ? conversationKey(session.machine_id, session.session_id) : "");
-  if (!session) return [];
+  const [newMain, setNewMain] = useState(false);
+  if (!session) return { items: [], dialogs: null };
   const isMain = assistant?.main === session.session_id;
   const launcher = effectiveLauncher({ isMain, picked, session: session.launcher, config: assistant?.launcher });
   const cwd = session.cwd || assistant?.cwd || "~/.jarvis/assistant";
   const title = !isMain && session.title && session.title !== "Claude Code" ? session.title : undefined;
-  return [
+  const compacting = session.compaction?.state === "running";
+  const items: MenuItem[] = [
     { key: "profile", label: "详细信息", icon: "info", onSelect: () => navigate({ name: "profile" }) },
     { key: "kb", label: "知识库", icon: "book", onSelect: () => navigate({ name: "kb" }) },
     ...(assistant?.main && !isMain ? [{ key: "main", label: "回到主对话", icon: "home" as const, onSelect: () => navigate({ name: "jarvis", sid: assistant.main }) }] : []),
+    ...(isMain && canCompact
+      ? [{ key: "compact", label: compacting ? "正在压缩上下文…" : "压缩上下文", icon: "layers" as const, disabled: compacting, onSelect: () => void startCompaction(session) }]
+      : []),
+    ...(isMain && canNewMain ? [{ key: "newmain", label: "新建主对话…", icon: "compose" as const, onSelect: () => setNewMain(true) }] : []),
     {
       key: "copyinfo",
       label: "拷贝信息",
@@ -180,4 +195,157 @@ export function useAssistantMenu(session: Session | undefined): MenuItem[] {
       onSelect: () => void copyText(assistantInfoText({ title, isMain, sessionId: session.session_id, machine, machineId: session.machine_id, cwd, launcher, model: shortModel(session.model) || undefined })),
     },
   ];
+  const dialogs = isMain && canNewMain ? <NewMainDialog open={newMain} onClose={() => setNewMain(false)} session={session} /> : null;
+  return { items, dialogs };
+}
+
+// ── 压缩上下文 ──────────────────────────────────────────
+
+const COMPACT_REQUESTED = "persona:compact-requested";
+
+/** Asks the hub to compact the conversation; its progress comes on the session (`compaction`). */
+async function startCompaction(session: Session) {
+  try {
+    await api(compactPath(session.session_id), { method: "POST", json: compactBody(session.machine_id) });
+    window.dispatchEvent(new CustomEvent(COMPACT_REQUESTED, { detail: { mid: session.machine_id, sid: session.session_id } }));
+  } catch (e) {
+    // 409: busy (正在回答), compacting, gone, unsupported — the hub's words say which
+    toast(`没开始压缩：${errorText(e)}`, "error");
+  }
+}
+
+const dismissedKey = (mid: string, sid: string) => `compact-dismissed:${mid}/${sid}`;
+/** How long a done compaction's notice stays. */
+const DONE_SHOWN_MS = 4000;
+/** How long the strip says 正在压缩 after asking, before the hub's word on it arrives. */
+const REQUEST_GRACE_MS = 15_000;
+
+/** Above the composer while the conversation compacts (正在压缩上下文…), briefly once it is done (已压缩上下文), and a
+ *  failure until it is closed (lib/compaction.ts compactionView: only what this page saw change, or just now). */
+export function CompactionStrip({ session }: { session: Session }) {
+  const mid = session.machine_id;
+  const sid = session.session_id;
+  const c = session.compaction;
+  const sig = c ? `${c.started_at}|${c.state}|${c.finished_at ?? ""}|${c.error ?? ""}` : "";
+  const prev = useRef<NonNullable<typeof c>["state"] | undefined>(undefined);
+  const [view, setView] = useState<CompactionView>(null);
+  // asked here and the hub has not said anything new yet: already compacting
+  const [requested, setRequested] = useState<{ sig: string; at: number } | null>(null);
+
+  useEffect(() => {
+    const v = compactionView(c, prev.current, Date.now(), localStorage.getItem(dismissedKey(mid, sid)) ?? undefined);
+    prev.current = c?.state;
+    setView(v);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mid, sid, sig]);
+
+  useEffect(() => {
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ mid: string; sid: string }>).detail;
+      if (d.mid === mid && d.sid === sid) setRequested({ sig, at: Date.now() });
+    };
+    window.addEventListener(COMPACT_REQUESTED, on);
+    return () => window.removeEventListener(COMPACT_REQUESTED, on);
+  }, [mid, sid, sig]);
+  useEffect(() => {
+    if (!requested) return;
+    if (requested.sig !== sig) {
+      setRequested(null);
+      return;
+    }
+    const t = setTimeout(() => setRequested(null), REQUEST_GRACE_MS);
+    return () => clearTimeout(t);
+  }, [requested, sig]);
+  useEffect(() => {
+    if (view?.kind !== "done") return;
+    const t = setTimeout(() => setView(null), DONE_SHOWN_MS);
+    return () => clearTimeout(t);
+  }, [view]);
+
+  const shown: CompactionView = requested ? { kind: "running" } : view;
+  if (!shown) return null;
+  const dismiss = () => {
+    if (shown.kind === "failed") localStorage.setItem(dismissedKey(mid, sid), shown.key);
+    setView(null);
+  };
+  return (
+    <div role="status" className="flex min-h-9 items-center gap-2 rounded-[12px] bg-surface px-3 py-1.5 text-[12.5px] text-ink-2 shadow-card" style={{ animation: "fade-up 200ms ease-out both" }}>
+      {shown.kind === "running" ? (
+        <>
+          <Spinner size={12} />
+          <span className="min-w-0 flex-1 truncate">正在压缩上下文…</span>
+        </>
+      ) : shown.kind === "done" ? (
+        <>
+          <Icon name="check" size={13} stroke={2.2} className="shrink-0 text-green" />
+          <span className="min-w-0 flex-1 truncate">已压缩上下文</span>
+        </>
+      ) : (
+        <>
+          <Icon name="info" size={13} className="shrink-0 text-red" />
+          <span className="min-w-0 flex-1 break-words">压缩失败：{shown.error}</span>
+          <IconButton icon="x" label="关闭" onClick={dismiss} size={24} iconSize={13} />
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── 新建主对话 ──────────────────────────────────────────
+
+/** Archives the main conversation (renamed 旧主对话 · 至 M月D日) and leaves none: the next message starts the new one. */
+function NewMainDialog({ open, onClose, session }: { open: boolean; onClose: () => void; session: Session }) {
+  const [carry, setCarry] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const toEmptyMain = async () => {
+    await refreshAssistant().catch(() => {});
+    onClose();
+    navigate({ name: "jarvis" });
+  };
+  const go = async () => {
+    setBusy(true);
+    try {
+      const r = await api<{ ok: boolean; archived?: string; carried?: boolean }>(NEW_MAIN_PATH, { method: "POST", json: newMainBody(carry, session.session_id) });
+      await toEmptyMain();
+      toast(r.carried ? "已新建主对话，会带上旧对话的摘要" : "已新建主对话", "ok");
+    } catch (e) {
+      if (e instanceof ApiError && e.code === "main_changed") {
+        // another device replaced it: show what the hub has now
+        await toEmptyMain();
+        toast("主对话已在别的设备上换过了，已刷新", "info");
+      } else {
+        toast(`没新建：${errorText(e)}`, "error");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="新建主对话？"
+      footer={
+        <>
+          <Button tone="quiet" onClick={onClose}>
+            取消
+          </Button>
+          <Button tone="primary" busy={busy} onClick={() => void go()}>
+            新建主对话
+          </Button>
+        </>
+      }
+    >
+      <p className="text-[13px] leading-relaxed text-ink-2">
+        现在的主对话会归档，改名为「{archivedMainTitle()}」，之后在「已归档」里能找到。新的主对话从你发的下一条消息开始。
+      </p>
+      <div className="mt-3 flex items-start gap-3 rounded-control bg-inset px-3 py-2.5 shadow-hairline">
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-medium text-ink">带上旧对话的摘要</div>
+          <div className="mt-0.5 text-[12px] leading-relaxed text-ink-3">没压缩过的只带最近几条；想带完整摘要，可以先压缩上下文。</div>
+        </div>
+        <Switch checked={carry} onChange={setCarry} label="带上旧对话的摘要" disabled={busy} />
+      </div>
+    </Dialog>
+  );
 }

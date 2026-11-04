@@ -451,6 +451,27 @@ func (c *codexConn) interrupt(ctx context.Context) error {
 	return nil
 }
 
+// compact asks Codex to compact the thread (the user's compaction, assistant_compact.go); it reports the end with
+// thread/compacted or a contextCompaction item, or a turn that ends without one.
+func (c *codexConn) compact(ctx context.Context) error {
+	c.mu.Lock()
+	thread := c.threadID
+	c.mu.Unlock()
+	return c.call(ctx, "thread/compact/start", map[string]any{"threadId": thread}, nil)
+}
+
+// compacted: Codex compacted the thread; the user's compaction, if one was running, is done.
+func (c *codexConn) compacted() {
+	c.n.contextCompacted(c.p.id) // the snapshots it had seen were summarized away (assistant_context.go)
+	c.p.mu.Lock()
+	manual := c.p.manual
+	c.p.manual, c.p.compacting = false, false
+	c.p.mu.Unlock()
+	if manual {
+		c.n.compactionEnded(c.p.id, "")
+	}
+}
+
 // syncTasks reads the thread's background terminals (commands the model left running, Codex's background tasks) into
 // the process's task list: while there are some the process is not reaped, and a restart tells the conversation what
 // it lost (recoverAssistantTasks). Unlike Claude's, a finishing one does not start a turn by itself.
@@ -620,13 +641,13 @@ func (c *codexConn) notification(method string, params json.RawMessage) {
 			n.emitDelta(p.id, text)
 		}
 	case "thread/compacted":
-		n.contextCompacted(p.id) // the snapshots it had seen were summarized away (assistant_context.go)
+		c.compacted()
 	case "item/completed":
 		c.mu.Lock()
 		delete(c.files, ev.Item.ID)
 		c.mu.Unlock()
 		if ev.Item.Type == "contextCompaction" {
-			n.contextCompacted(p.id)
+			c.compacted()
 		}
 		if ev.Item.Type == "agentMessage" {
 			n.emitDelta(p.id, ev.Item.Text) // until the item arrives from the rollout
@@ -647,7 +668,16 @@ func (c *codexConn) notification(method string, params json.RawMessage) {
 		p.busy = false
 		p.lastActive = time.Now()
 		p.partial.Reset()
+		manual := p.manual
+		p.manual, p.compacting = false, false
 		p.mu.Unlock()
+		if manual { // the turn the compaction ran in ended before its item came: done, unless it failed
+			failure := ""
+			if ev.Turn.Error != nil && ev.Turn.Error.Message != "" {
+				failure = snippet(ev.Turn.Error.Message)
+			}
+			n.compactionEnded(p.id, failure)
+		}
 		if f, err := n.file(p.id); err == nil {
 			n.refresh(p.id, f)
 		}

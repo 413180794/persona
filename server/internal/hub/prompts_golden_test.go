@@ -506,3 +506,14 @@ func TestTodoDecisionsGolden(t *testing.T) {
 		{N: 2, Question: "用哪个迁移号？", Choice: "0311", When: "11-04 11:30", From: "在「发版 Agent」的提问里答的"},
 	}}))
 }
+
+func TestGoldenMainHandoff(t *testing.T) {
+	golden(t, "main_handoff", prompts.RenderMainHandoff(prompts.MainHandoff{FromID: "a1b2c3d4-0000-4000-8000-000000000001",
+		Until: "11月4日 21:30", Summary: "示例摘要：用户在整理周末出游计划，酒店已订好，还差火车票。",
+		Recent: []prompts.HandoffTurn{{Role: "user", Text: "示例问题：火车票买了吗"}, {Role: "assistant", Text: "示例回答：还没有，等你确认时间"}},
+		Text:   "今天有什么安排"}))
+	golden(t, "main_handoff.recent_only", prompts.RenderMainHandoff(prompts.MainHandoff{FromID: "a1b2c3d4-0000-4000-8000-000000000001",
+		Until: "11月4日 21:30", Recent: []prompts.HandoffTurn{{Role: "user", Text: "示例问题"}}, Text: "接着说"}))
+	golden(t, "main_handoff.empty", prompts.RenderMainHandoff(prompts.MainHandoff{FromID: "a1b2c3d4-0000-4000-8000-000000000001",
+		Until: "11月4日 21:30", Text: "你好"}))
+}

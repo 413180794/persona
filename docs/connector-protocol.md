@@ -209,7 +209,7 @@ conformance.CheckProgram(t, m, progconf.Program(t, "bin/my-connector"), plugin.I
 **线上夹具**：`server/internal/connector/testdata/wire/<程序>/*.json` 是程序对每个方法回的 JSON，**合成数据**（没有真账号、名字、群名、地址，示例只用
 `https://wechat-connector.example.com`、`wxid_example_a`、`127.0.0.1`），连同一份 `persona-plugin.json`。`Testwechat-connectorWireFixtures` 把每个夹具按上表严格解码、过不变量，
 一份没在表里的夹具也会挂；`TestCheckProgramCatchesDrift` 拿夹具喂一个纯 Go 的假程序，看改了字段名、顺序、游标时 `CheckProgram` 会不会红。所以即使 CI 里没有 Node，
-Persona 一改 Go 类型（改名、删字段）这些测试就红，提醒程序一侧同步夹具；程序一侧的仓库应保留同一批文件的副本，用同样的数据检查自己的输出，新增或改夹具时两边一起改。
+Persona 一改 Go 类型（改名、删字段）这些测试就红，提醒程序一侧跟上。`wechat-connector` 这一组按当前插件包的真实输出整理（标识换成上面的示例值），插件的输出变了要在这里同步；它不会自动跟着插件更新。
 
 **跨仓库活测试**：`Testwechat-connectorProgramLive` 跑任意一个实现了连接器协议的外部程序，对着任意一个兼容 wechat-connector 开发者 API 的夹具服务。
 路径由两个环境变量给出：`PERSONA_TEST_wechat-connector_PROGRAM` 指向连接器程序的启动脚本（插件包 `bin/` 下的程序）；`wechat-connector_FIXTURE_SERVER` 指向夹具服务的脚本，

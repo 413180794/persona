@@ -369,19 +369,15 @@ func (h *Hub) channelForward(ctx context.Context, id string, m channel.Message) 
 	run := &channel.Run{ID: id + "_" + m.ID, Channel: id, ReplyTo: m.ID, TargetKind: channel.TargetConversation, Label: rt.label,
 		Started: time.Now().UTC(), Probe: channel.Probe(in.Text, append(slices.Clone(in.Files), in.Forward, in.Quote)...)}
 	if rt.isNew {
-		s, err := h.startAssistant(ctx, text, images, "", "", "")
+		start := h.startAssistant
+		if rt.main {
+			start = h.startMainWith
+		}
+		s, err := start(ctx, text, images, "", "", "")
 		if err != nil {
 			return fmt.Errorf("没开成新对话：%w", err)
 		}
 		h.asst().ConversationStarted(ctx, assistantwire.ConversationStarted{MachineID: s.MachineID, SessionID: s.SessionID, Started: time.Now()})
-		if rt.main && h.store != nil {
-			cfg := h.assistantConfig(ctx)
-			cfg.Main = s.SessionID
-			if err := h.store.PutSetting(ctx, "assistant", cfg); err != nil {
-				h.logf("channels: save main: %v", err)
-			}
-			h.keepMain(ctx)
-		}
 		if !rt.main { // /new: the chat goes on in it
 			c := &h.channels
 			c.mu.Lock()

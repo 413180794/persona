@@ -583,6 +583,10 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return map[string]any{"session_id": id}, err
 	case "session.modes":
 		return ok(n.setModes(ctx, p.SessionID, p.PermissionMode, p.Effort))
+	case "assistant.compact": // the user compacting an assistant conversation (assistant_compact.go)
+		return ok(n.assistantCompact(ctx, p.SessionID))
+	case "assistant.handoff": // what a new main conversation is told about the old one
+		return n.assistantHandoff(p.SessionID)
 	case "assistant.warm":
 		return ok(n.assistantWarm(p.Cwd, p.Launcher, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint}))
 	case "assistant.memory":

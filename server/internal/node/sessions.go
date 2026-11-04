@@ -40,6 +40,8 @@ type sessionState struct {
 	StartedAt        time.Time `json:"started_at"`
 	// Tasks: the assistant conversation's background tasks and monitors running right now (node/assistant.go).
 	Tasks []string `json:"tasks,omitempty"`
+	// Compaction: the last compaction the user asked for (assistant_compact.go).
+	Compaction *proto.Compaction `json:"compaction,omitempty"`
 }
 
 func newState() *stateFile { return &stateFile{Sessions: map[string]sessionState{}} }
@@ -795,6 +797,7 @@ func (n *Node) decorate(s *proto.Session) {
 	if st, ok := n.state.get(s.SessionID); ok {
 		s.StartedByJarvis = true
 		s.Launcher = st.Launcher
+		s.Compaction = st.Compaction
 		if s.Cwd == "" {
 			s.Cwd = st.Cwd
 		}
@@ -1415,6 +1418,9 @@ func listKey(list []proto.Session) string {
 			fmt.Fprintf(&b, "activity:%s/%d\n", s.Activity, unixOf(s.ActivityAt))
 		}
 		fmt.Fprintf(&b, "attention:%q/%s\n", s.AttentionReason, s.ExternalURL) // a new reason or link alone is a change
+		if c := s.Compaction; c != nil {
+			fmt.Fprintf(&b, "compaction:%s/%d\n", c.State, c.StartedAt.Unix())
+		}
 		fmt.Fprintf(&b, "source:%s/%s/%s/%s/%v/%v/%s/%s\n", s.SourceKind, s.SourceThreadID, s.SourceInstanceID, s.ReadOnlyReason, s.Capabilities, s.Attached, s.CodexRoute, s.CodexRouteNote)
 		for _, t := range s.Background {
 			b.WriteString(t.ID + ",")

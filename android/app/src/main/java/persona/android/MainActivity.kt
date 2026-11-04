@@ -49,7 +49,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -104,15 +103,17 @@ class MainActivity : ComponentActivity() {
             // Levels are ordered best first, so the lower of the two choices is the later one.
             val glassLevel = maxOf(app.appearance.deviceLevel(glassPreference), GlassThrottle.ceiling.value)
             val channels by channelDirectory.channels.collectAsStateWithLifecycle()
-            // What the selected hub offers of Feishu through the lark-connector plugin, from its hello (#1530).
-            val lark by remember(app) {
-                app.hub.flatMapLatest { it?.connection?.serverFeatures ?: flowOf(emptySet()) }
-                    .map(LarkFeatures::of).distinctUntilChanged()
-            }.collectAsStateWithLifecycle(LarkFeatures.All)
+            // What the selected hub offers, from its hello: Feishu through the lark-connector plugin (#1530), the main
+            // conversation's actions (#1727).
+            val features by remember(app) {
+                app.hub.flatMapLatest { it?.connection?.serverFeatures ?: flowOf(emptySet()) }.distinctUntilChanged()
+            }.collectAsStateWithLifecycle(emptySet())
+            val lark = remember(features) { LarkFeatures.of(features) }
             AppearanceOverride(forced) { CompositionLocalProvider(
                 LocalDeveloperTools provides launchAdapter?.tools,
                 persona.core.designsystem.LocalChannels provides channels,
                 persona.core.designsystem.LocalLarkFeatures provides lark,
+                persona.core.designsystem.LocalHubFeatures provides features,
                 persona.feature.inbox.LocalTranslator provides translator,
                 LocalAppStyleStore provides app.appearance,
                 LocalGlassLevel provides glassLevel,

@@ -2,24 +2,112 @@
   "tools": [
     {
       "name": "wechat-connector_status",
-      "description": "Say how wechat-connector is doing for each account: whether the WeChat account is signed in and wechat-connector pushes its events.",
-      "input_schema": {"type": "object", "properties": {}}
+      "description": "查看每个微信账号的连接状态：是否登录、事件推送是否开启、有没有缺口、密钥权限与绑定身份是否有效、消息保留天数、请求配额、外发开关（只是 wechat-connector 的开关，能不能发还要看密钥权限和手机上的批准）。",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
     },
     {
       "name": "wechat-connector_chats",
-      "description": "List the latest chats wechat-connector has messages for (only what it received, not WeChat's full history).",
+      "description": "列出最近的微信会话（最新在前）：会话、名字、私聊或群聊、最后一条的时间和预览。结果只含 wechat-connector 能提供的消息（事件推送开启期间、保留期之内），不是微信的完整历史；空结果不代表没有消息。图片、语音、视频只显示占位。全文检索请用 kb_search。",
       "input_schema": {
         "type": "object",
-        "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 50}, "query": {"type": "string"}}
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "只看名字、微信号或预览里含这段文字的会话（子串匹配，不是全文搜索）。"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "最多返回几条，1 到 50，默认 20。"
+          }
+        }
       }
     },
     {
       "name": "wechat-connector_messages",
-      "description": "Read the latest messages of one chat, oldest first. For a full-text search use kb_search.",
+      "description": "读一个会话的消息，旧的在前，每行「时间 名字：内容」。翻更早的消息用上一次返回的 before。结果只含 wechat-connector 能提供的消息（事件推送开启期间、保留期之内），不是微信的完整历史；空结果不代表没有消息。图片、语音、视频只显示占位。全文检索请用 kb_search。",
       "input_schema": {
         "type": "object",
-        "properties": {"chat": {"type": "string"}, "limit": {"type": "integer", "minimum": 1, "maximum": 50}, "before": {"type": "string"}},
-        "required": ["chat"]
+        "properties": {
+          "chat": {
+            "type": "string",
+            "description": "会话，格式 <账号>.<username>，从 wechat-connector_chats 或 wechat-connector_contacts 里取。"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "最多返回几条，1 到 50，默认 20。"
+          },
+          "before": {
+            "type": "string",
+            "description": "上一次返回的 before。"
+          }
+        },
+        "required": [
+          "chat"
+        ]
+      }
+    },
+    {
+      "name": "wechat-connector_search",
+      "description": "在 wechat-connector 保存的微信消息里按原文找字：区分大小写的字面子串，只查纯文本消息，不分词、不支持通配。每次只查看最近一段（最多 5000 条记录），返回 cursor 时可用它继续往更早找；没找到不代表没有。跨会话按意思找以前的消息请先用 kb_search。结果只含 wechat-connector 能提供的消息（事件推送开启期间、保留期之内），不是微信的完整历史；空结果不代表没有消息。图片、语音、视频只显示占位。全文检索请用 kb_search。",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "要找的原文，1 到 100 个字符。"
+          },
+          "chat": {
+            "type": "string",
+            "description": "只在这个会话里找（可选），格式 <账号>.<username>。"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "最多返回几条，1 到 50，默认 20。"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "上一次返回的 cursor，用来继续往更早找。"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "wechat-connector_contacts",
+      "description": "查微信联系人（昵称和 username），用来找收件人。来自 wechat-connector 联系人接口的缓存，刚启动时可能还是空的。",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "昵称或 username 里含这段文字。"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "最多返回几条，1 到 50，默认 20。"
+          }
+        }
+      }
+    },
+    {
+      "name": "wechat-connector_job",
+      "description": "查一个发送任务的状态，回答「刚才那条发出去了吗」。只有状态是 sent 才表示微信回执确认已发出。",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "任务 id。"
+          }
+        },
+        "required": [
+          "id"
+        ]
       }
     }
   ]

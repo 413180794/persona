@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Segment, Step } from "../../lib/turns";
 import type { Item } from "../../lib/types";
-import { WorkRow, WorkTrace } from "./Steps";
+import { CompactDivider, WorkRow, WorkTrace } from "./Steps";
 
 const use = (n: number): Item => ({ id: `u${n}`, seq: n, role: "assistant", kind: "tool_use", tool_name: "Bash", tool_use_id: `c${n}`, tool_input: { command: `echo ${n}` } });
 const seg = (tools: number): Segment => {
@@ -37,5 +37,15 @@ describe("WorkRow", () => {
     const html = renderToStaticMarkup(<WorkRow seg={seg(4)} live={false} now={0} mid="m" sid="s" expandFold={async () => {}} />);
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain("收起执行过程");
+  });
+});
+
+describe("CompactDivider", () => {
+  it("is one separator with what is known, the folded notices on hover", () => {
+    const item: Item = { id: "n1", seq: 1, role: "system", kind: "notice", text: "上下文已压缩", compact: { trigger: "manual", pre_tokens: 181_000, notes: ["压缩上下文", "上下文已压缩"] } };
+    const html = renderToStaticMarkup(<CompactDivider item={item} />);
+    expect(html).toContain('role="separator"');
+    expect(html).toContain(">以上内容已压缩 · 手动 · 压缩前 18.1 万 token<");
+    expect(html).toContain('title="压缩上下文\n上下文已压缩"');
   });
 });

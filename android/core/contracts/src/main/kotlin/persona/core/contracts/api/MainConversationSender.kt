@@ -11,6 +11,11 @@ interface MainConversationSender {
     val outbox: StateFlow<List<OutboxMessage>>
     /** Commits locally before returning; a failed call must leave the editor intact. */
     suspend fun sendToMain(text: String, clientMessageId: String, draft: DraftSnapshot? = null)
+    /**
+     * The hub put the main conversation [previous] away (新建主对话): forget it as the main conversation, so the next
+     * message to the main conversation starts a new one instead of going to the archived one.
+     */
+    suspend fun mainReplaced(previous: SessionKey) = Unit
 }
 
 /** Bind to one immutable pairing, like MessageTransport. */

@@ -3,6 +3,7 @@
 // words before the next message as the answer.
 
 import { errorSignature, isRetryText, parseAPIError, type APIErrorInfo } from "./api-errors";
+import { foldCompactions, isCompaction } from "./compaction";
 import type { Item } from "./types";
 
 export type Step =
@@ -464,7 +465,7 @@ export function buildBlocks(items: Item[]): Block[] {
     t.ordered.push(it);
   };
 
-  for (const it of items) {
+  for (const [i, it] of items.entries()) {
     if (isUserInput(it)) {
       const entry = it.id.split("#")[0];
       const prev: Item | undefined = cur ? cur.ordered[cur.ordered.length - 1] : undefined;
@@ -479,6 +480,18 @@ export function buildBlocks(items: Item[]): Block[] {
         add(cur, it, false);
       }
       lastUserEntry = entry;
+      continue;
+    }
+    // a compaction is a divider of its own after the exchange; in the middle of work (more of it follows) it stays a
+    // step of that work, so an auto-compaction does not split the exchange
+    if (isCompaction(it)) {
+      const next = items[i + 1];
+      if (cur && next && !isUserInput(next)) {
+        add(cur, it);
+        continue;
+      }
+      close();
+      blocks.push({ kind: "row", item: it });
       continue;
     }
     if (it.kind === "recap") {
@@ -526,6 +539,8 @@ export type ChatLine =
   | { kind: "notice"; id: string; item: Item }
   /** Under an answer: background tasks reported back; what the agent did next opens in a drawer. */
   | { kind: "wakes"; id: string; turn: Turn; live: boolean }
+  /** Where the context was compacted: a divider across the chat (lib/compaction.ts). */
+  | { kind: "compact"; id: string; item: Item }
   /** One or more "while you were away" recaps in a row. */
   | { kind: "recaps"; id: string; items: Item[] }
   /** A model API error, `count` times in a row (retries between folded in). */
@@ -616,13 +631,13 @@ function turnLines(t: Turn, live: boolean, split: ReadonlySet<string>): ChatLine
 
 /** The chat as lines (iOS ChatLines.lines): exchanges, their wakes and notices, recaps, API errors as cards. */
 export function chatLines(items: Item[], opts: ChatLinesOptions = {}): ChatLine[] {
-  const blocks = buildBlocks(items);
+  const blocks = buildBlocks(foldCompactions(items));
   const split = opts.split ?? new Set<string>();
   const last = blocks[blocks.length - 1];
   const liveId = opts.live && last?.kind === "turn" ? last.turn.id : undefined;
   const out: ChatLine[] = [];
   for (const b of blocks) {
-    if (b.kind === "row") out.push({ kind: "recaps", id: b.item.id, items: [b.item] });
+    if (b.kind === "row") out.push(isCompaction(b.item) ? { kind: "compact", id: b.item.id, item: b.item } : { kind: "recaps", id: b.item.id, items: [b.item] });
     else out.push(...turnLines(b.turn, b.turn.id === liveId, split));
   }
   // working with nothing of this turn yet (the last thing is a recap): the work row still shows

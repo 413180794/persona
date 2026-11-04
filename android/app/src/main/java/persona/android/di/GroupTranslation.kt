@@ -190,6 +190,9 @@ internal fun AssistantManagement.inGroup(names: GroupNames): AssistantManagement
                 .let { it.copy(machineId = names.machineId(it.machineId)) }
         override suspend fun launchers(machineId: String) = source.launchers(names.rawMachine(machineId))
         override suspend fun endConversation(session: SessionKey) = source.endConversation(names.raw(session))
+        override suspend fun compactConversation(session: SessionKey) = source.compactConversation(names.raw(session))
+        override suspend fun newMainConversation(carrySummary: Boolean, expect: String?) =
+            source.newMainConversation(carrySummary, expect)
         override suspend fun routines() = source.routines()
         override suspend fun setRoutines(list: List<Routine>) = source.setRoutines(list)
         override suspend fun runRoutine(id: String) = names.key(source.runRoutine(id))
@@ -212,6 +215,7 @@ internal fun MainConversationSender.inGroup(names: GroupNames, scope: CoroutineS
         override val outbox = source.outbox.mapIn(scope) { list -> list.map(names::outbox) }
         override suspend fun sendToMain(text: String, clientMessageId: String, draft: DraftSnapshot?) =
             source.sendToMain(text, clientMessageId, draft?.let(names::rawDraft))
+        override suspend fun mainReplaced(previous: SessionKey) = source.mainReplaced(names.raw(previous))
     }
 }
 

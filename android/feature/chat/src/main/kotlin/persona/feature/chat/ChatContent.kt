@@ -216,7 +216,8 @@ internal fun ChatLineContent(
             "thinking" -> if (!style.hideThoughts) ThoughtContent(line.row.item?.text.orEmpty(), line.id, style.collapseThoughts)
             "image" -> line.row.item?.item?.let { ChatPicture(session, it, loader) }
             "recap" -> line.row.item?.item?.let { RecapLine(listOf(it)) }
-            else -> ChatSystemLine(line.row.item?.text.orEmpty(), line.row.item?.task?.failed == true)
+            else -> line.row.item?.compaction?.let { TimelineMark(it.label) }
+                ?: ChatSystemLine(line.row.item?.text.orEmpty(), line.row.item?.task?.failed == true)
         }
         is ChatLine.Recaps -> RecapLine(line.items.map { it.item })
         is ChatLine.Extra -> AssistantExtraLine(line.payload, LocalAssistantTaskHost.current)
@@ -303,7 +304,8 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
         is WorkItem.Thought -> if (step.item.kind == "thinking") {
             if (!style.hideThoughts) ThoughtContent(textUpdates[step.item.id]?.text ?: step.item.text.orEmpty(), step.item.id, style.collapseThoughts, last)
         }
-        else ChatSystemLine(step.item.task?.detail ?: step.item.text.orEmpty(), step.item.task?.failed == true)
+        else step.item.compaction?.let { TimelineMark(it.label) }
+            ?: ChatSystemLine(step.item.task?.detail ?: step.item.text.orEmpty(), step.item.task?.failed == true)
     }
 }
 

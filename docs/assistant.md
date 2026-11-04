@@ -260,6 +260,40 @@ hub 看到的事（`conversation.started`、`conversation.renamed`、`session.us
   「压缩上下文」提示（以前显示成用户发的消息，还会让对话变成未看）。
 - **Codex**：`-c model_auto_compact_token_limit=200000`（Codex 配置文档的顶层键）。Codex 有 `thread/compact/start`，空闲压缩暂时没接。
 
+### 手动压缩（2026-11-04，#1727）
+
+用户在主对话的菜单里点「压缩上下文」：`POST /api/v1/assistant/conversations/{id}/compact` → node 的 `assistant.compact`（`node/assistant_compact.go`）。
+
+- 和空闲压缩同一条路：进程在就直接写一条 `/compact`，不在就先 `--resume` 起一个（启动器、模型按这段对话上次的）；Codex 是 `thread/compact/start`；runtime 跑的对话不支持。
+  正在回答、已经在压的回 409，不排队：排在一轮后面的 `/compact` 用户看不到什么时候开始。
+- 进度记在 node 的会话状态里（落 hub 的 Postgres），随会话列表下发 `compaction`：`running` → 看到 `compact_boundary`（Codex 的 `thread/compacted` / `contextCompaction`）是 `done`；
+  这一轮的 `result` 先到、没有边界是 `failed`，错误是 Claude Code 的原话（对话太短时是「Not enough messages to compact」之类）；
+  10 分钟没结果、进程退出、node 重启都算 `failed`（`reapAssistants` 每分钟查一次）。这一轮里自己触发的自动压缩不改它。
+- 它不是一轮对话：会话状态不变成「工作中」、不推送、不取消归档；transcript 里 `/compact` 和边界照旧是「压缩上下文」「上下文已压缩」两条提示，
+  各端把一次压缩画成一条分隔线「以上内容已压缩 · 手动 · 压缩前 N 万 token」。
+
+### 新建主对话（2026-11-04，#1727）
+
+主对话用久了上下文很大，用户可以换一段新的：`POST /api/v1/assistant/main/new`（`hub/assistant_main.go`）。
+
+1. 旧主对话正在回答或压缩时拒绝（409 `busy`）；App 带上它看到的主对话 id（`expect`），别的设备已经换过时拒绝（409 `main_changed`），不会把新的又换掉。
+2. 带背景（`carry: summary`，默认）：node 的 `assistant.handoff` 从旧对话的 transcript 里取最近一次压缩的摘要（Claude 的 `isCompactSummary` 行、Codex 的 `compacted` 行，最多 1.2 万字）
+   和之后的几条文字消息（最多 12 条、6000 字，去掉 `<jarvis-context>`），存进 settings `assistant.main_handoff`。
+3. 清掉 `assistant.main`，旧 id 记进 `assistant.former_main`（最多 10 个，`keptSessions` 让 node 一直列出它们，安静多久都找得到），
+   改名「旧主对话 · 至 M月D日」（算用户起的，自动命名不覆盖），归档。助手要过一会儿才知道主对话换了（`assistantUpdated` 有 200 ms 合并），
+   这期间它拒绝归档「主对话」，hub 隔 200 ms 再试，最多 3 秒。
+4. 下一条发给主对话的消息开新的会话（App 的 `POST /api/v1/assistant/conversations` 带 `main:true`、飞书机器人和渠道插件发给主对话的，都走 `startMain`），
+   `assistant/main_handoff.md` 把带过去的背景写成 `<jarvis-context kind="context" title="接上旧主对话">` 放在第一条消息前（App 里是一个上下文标签），用完就清掉；
+   没带背景（`carry: none`）也写一句旧主对话的 id，助手要翻可以用 `conversation_read`。
+   安卓开新主对话是先用空的 `prompt` 建、再单独发消息：这时背景记上新会话的 id（`for`），等发给它的第一条消息（`POST …/messages`）再带上，不单独成一轮。
+
+为什么这样定：
+
+- **不当场开新会话**：没有用户的第一句话就得替用户编一句，新主对话第一条就成了机器写的。延到第一条消息，和「还没有主对话」的流程一样，各端本来就支持。
+- **带压缩摘要，不带知识库**：人、群、项目、记忆、实时快照每个助手对话本来就有（CLAUDE.md、工具、每条消息的快照），再带一遍是重复；
+  换对话会丢的是这段对话里的结论和还在进行的事，正是压缩摘要。没压缩过的只带最近几条，确认框里提示可以先压缩再新建。
+- **旧的不删**：归档只是不在列表里，用户再给它发消息就自动回到列表（`unarchiveOnSend`）。
+
 ## 定时任务（2026-10-31 合成一张表）
 
 以前是两套：定时任务（routines，每天几点）和跟进（follow-ups，助手用 `schedule_followup` 安排的一次性唤醒），分存在两个 settings 里，
@@ -340,7 +374,7 @@ App 的「定时任务」页只列前者的开关。用户让助手「每 30 分
 | `conversation_send` | 给另一段对话发消息；不能发给自己 |
 
 - **归档只是不显示**：hub 的 settings `assistant.archived`（会话 id → 机器、时间、谁归档的），会话列表里带 `archived: true`；
-  `GET /api/v1/assistant` 默认不列，`?archived=1` 才列。不删 transcript，不做硬删除。主对话不能归档（接口 400，工具报错）。
+  `GET /api/v1/assistant` 默认不列，`?archived=1` 才列。不删 transcript，不做硬删除。主对话不能归档（接口 400，工具报错）；要换掉它用「新建主对话」（上面「压缩」一节）。
   - **归档自己**：允许（用户在一段支线对话里说「聊完了，归档吧」是最自然的用法）。这一轮照常跑完，App 里开着的对话不会被关掉，只是不在列表里了；
     用户再在里面发消息就自动回到列表（`sendMessage` 里 `unarchiveOnSend`），别的对话 `conversation_send` 给它也一样。
   - node 只列最近的会话：很久以前归档的对话会从「已归档」里消失（和不归档时从列表里消失一样），归档记录还在，`conversation_unarchive` 给 id 就能取回。

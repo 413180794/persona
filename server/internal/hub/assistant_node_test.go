@@ -22,6 +22,11 @@ type assistantNode struct {
 	sends []map[string]any
 	kept  []string     // the last node.configure keep_sessions
 	items []proto.Item // session.items answers this (assistant_titles_test.go)
+	// assistant.handoff answers handoff; assistant.compact notes the session and answers compactErr
+	// (assistant_main_test.go).
+	handoff    map[string]any
+	compacts   []string
+	compactErr error
 }
 
 func newAssistantNode(t *testing.T, h *Hub) *assistantNode {
@@ -51,6 +56,20 @@ func newAssistantNode(t *testing.T, h *Hub) *assistantNode {
 		case "session.rename":
 			n.sends = append(n.sends, map[string]any{"rename": p})
 			return map[string]any{"ok": true}, nil
+		case "assistant.handoff":
+			if n.handoff == nil {
+				return nil, fmt.Errorf("conversation %v is gone", p["session_id"])
+			}
+			return n.handoff, nil
+		case "assistant.compact":
+			n.compacts = append(n.compacts, fmt.Sprint(p["session_id"]))
+			if n.compactErr != nil {
+				return nil, n.compactErr
+			}
+			return map[string]any{"ok": true}, nil
+		case "session.send":
+			n.sends = append(n.sends, p)
+			return map[string]any{}, nil
 		case "assistant.send":
 			n.sends = append(n.sends, p)
 			id, _ := p["session_id"].(string)

@@ -5,7 +5,11 @@ import java.time.Duration
 import java.time.Instant
 
 /** Domain-only additions keep the existing wire Item compatible with its current callers. */
-data class LineItem(val item: Item, val fold: Fold? = null, val task: TaskNote? = null) {
+data class LineItem(
+    val item: Item, val fold: Fold? = null, val task: TaskNote? = null,
+    /** Set by [foldCompactions] on the notice that stands for a compaction; the chat draws it as one divider. */
+    val compaction: Compaction? = null,
+) {
     val id get() = item.id
     val seq get() = item.seq
     val part get() = blockPart(id)

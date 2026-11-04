@@ -32,6 +32,9 @@ type AssistantConfig struct {
 	Notes *string `json:"notes,omitempty"`
 	// Main is the main conversation (the Persona tab opens it): one long-running conversation, the others are side ones.
 	Main string `json:"main,omitempty"`
+	// Former are the main conversations replaced since (newest first, POST /api/v1/assistant/main/new): their machine
+	// keeps listing them, archived, however long they are quiet.
+	Former []FormerMain `json:"former_main,omitempty"`
 	// MainTasksQuiet: tasks the main conversation opens are told only there, not pushed, on the Live Activity or in
 	// task badges (#1731). nil is on (the default); the view always says what is in effect.
 	MainTasksQuiet *bool `json:"main_tasks_quiet,omitempty"`
@@ -71,7 +74,7 @@ func (h *Hub) assistantConfigLegacy(ctx context.Context) AssistantConfig {
 			if saved.Launcher != "" {
 				cfg.Launcher = saved.Launcher
 			}
-			cfg.Timezone, cfg.Notes, cfg.Main, cfg.MainTasksQuiet = saved.Timezone, saved.Notes, saved.Main, saved.MainTasksQuiet
+			cfg.Timezone, cfg.Notes, cfg.Main, cfg.Former, cfg.MainTasksQuiet = saved.Timezone, saved.Notes, saved.Main, saved.Former, saved.MainTasksQuiet
 		}
 	}
 	return cfg
@@ -321,6 +324,7 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 		writeJSON(w, map[string]any{"ok": true})
 	})
 	h.assistantRoutesRelayed(api)
+	h.assistantMainRoutes(api)
 	api.HandleFunc("POST /api/v1/assistant/conversations", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Prompt         string        `json:"prompt"`
@@ -350,20 +354,20 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, fmt.Errorf("no machine %q", in.MachineID))
 			return
 		}
-		s, err := h.startAssistantAt(ctx, in.MachineID, in.Prompt, in.Images, in.Launcher, in.PermissionMode, in.Effort, in.Purpose)
+		start := func() (*proto.Session, error) {
+			return h.startAssistantAt(ctx, in.MachineID, in.Prompt, in.Images, in.Launcher, in.PermissionMode, in.Effort, in.Purpose)
+		}
+		if in.Main { // the main conversation is the assistant's, on its machine
+			start = func() (*proto.Session, error) {
+				return h.startMain(ctx, in.Prompt, in.Images, in.Launcher, in.PermissionMode, in.Effort)
+			}
+		}
+		s, err := start()
 		if err != nil {
 			callErr(w, err)
 			return
 		}
 		h.asst().ConversationStarted(ctx, assistantwire.ConversationStarted{MachineID: s.MachineID, SessionID: s.SessionID, Started: time.Now()})
-		if in.Main && h.store != nil {
-			cfg := h.assistantConfig(ctx)
-			cfg.Main = s.SessionID
-			if err := h.store.PutSetting(ctx, "assistant", cfg); err != nil {
-				h.logf("assistant: save main: %v", err)
-			}
-			h.keepMain(ctx)
-		}
 		writeJSON(w, map[string]any{"session": s})
 	})
 }
@@ -471,6 +475,11 @@ func (h *Hub) keptSessions(ctx context.Context, machine string) []string {
 	out := []string{}
 	if cfg.Main != "" && cfg.MachineID == machine {
 		out = append(out, cfg.Main)
+	}
+	for _, f := range cfg.Former { // archived, still to be found
+		if f.MachineID == machine && !slices.Contains(out, f.SessionID) {
+			out = append(out, f.SessionID)
+		}
 	}
 	// Scheduled tasks' own conversations too (the assistant reports them): a weekly one would drop out of the list in
 	// between, and with it the app's link to it and the check that its last run is still going.
