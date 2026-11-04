@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "description": "Synthetic manifest for the wire fixtures: personal WeChat through wechat-connector, as a connector plugin.",
   "engines": {"plugin_protocol": 1},
-  "runtime": {"command": "bin/wechat-connector-persona"},
+  "runtime": {"command": "bin/connector"},
   "contributes": {
     "connectors": [
       {

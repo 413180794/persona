@@ -307,19 +307,21 @@ func TestCheckProgramReportsARefusedSignIn(t *testing.T) {
 	}
 }
 
-// The program of wechat-connector itself (its repository's integrations/persona), against its fixture server: the real thing
-// on the other side of the wire. Needs Node and both paths, so it runs where someone sets them up and skips elsewhere:
+// Any program that speaks the connector protocol for wechat-connector, against any fixture server compatible with the
+// wechat-connector developer API: the real thing on the other side of the wire. PERSONA_TEST_wechat-connector_PROGRAM is the
+// program's launcher (in bin/ of its plugin package), wechat-connector_FIXTURE_SERVER the fixture server's script, run with
+// Node. Needs Node and both paths, so it runs where someone sets them up and skips elsewhere:
 //
-//	PERSONA_TEST_wechat-connector_PROGRAM=<wechat-connector>/integrations/persona/bin/wechat-connector-persona \
-//	wechat-connector_FIXTURE_SERVER=<wechat-connector>/test/fixtures/persona-server.mjs \
+//	PERSONA_TEST_wechat-connector_PROGRAM=<plugin package>/bin/<program> \
+//	wechat-connector_FIXTURE_SERVER=<fixture server script> \
 //	go test ./internal/connector/conformance -run wechat-connector -v
 //
-// The fixture server starts a platform with a fake gateway on a loopback port (PORT=0) and prints one JSON line on its
-// stdout once it is ready (see signInValues). Sending stays off on it, as it is on every platform in development.
+// The fixture server listens on a loopback port (PORT=0) and prints one JSON line on its stdout once it is ready: its
+// base_url and test keys (see signInValues). Sending stays off on it.
 func Testwechat-connectorProgramLive(t *testing.T) {
 	program, server := os.Getenv("PERSONA_TEST_wechat-connector_PROGRAM"), os.Getenv("wechat-connector_FIXTURE_SERVER")
 	if program == "" || server == "" {
-		t.Skip("set PERSONA_TEST_wechat-connector_PROGRAM and wechat-connector_FIXTURE_SERVER to run wechat-connector's program (docs/connector-protocol.md「一致性测试」)")
+		t.Skip("set PERSONA_TEST_wechat-connector_PROGRAM (a connector program's launcher) and wechat-connector_FIXTURE_SERVER (a compatible fixture server's script) to run it (docs/connector-protocol.md「一致性测试」)")
 	}
 	login := startFixtureServer(t, server)
 	// The package is what the program sits in: persona-plugin.json next to bin/.
@@ -387,7 +389,7 @@ func isLoopbackHost(host string) bool {
 // is signed in to, and with the read key.
 func TestSignInValuesOnlyForALoopbackServerWithSendingOff(t *testing.T) {
 	const loopback = `{"base_url":"http://127.0.0.1:41000","outbound_sends_enabled":false,"port":41000,
-		"accounts":[{"account":"primary","key":"wcpat_example_read","send_key":"wcpat_example_send"},{"account":"vm-02","key":"wcpat_example_other"}]}`
+		"accounts":[{"account":"primary","key":"wcpat_example_read","send_key":"wcpat_example_send"},{"account":"secondary","key":"wcpat_example_other"}]}`
 	got, err := signInValues(loopback)
 	if err != nil || got["base_url"] != "http://127.0.0.1:41000" || got["app_key"] != "wcpat_example_read" || len(got) != 2 {
 		t.Fatalf("the loopback fixture server: %v, %v", got, err)

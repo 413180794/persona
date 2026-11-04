@@ -184,16 +184,17 @@ conformance.CheckProgram(t, m, progconf.Program(t, "bin/my-connector"), plugin.I
 一份没在表里的夹具也会挂；`TestCheckProgramCatchesDrift` 拿夹具喂一个纯 Go 的假程序，看改了字段名、顺序、游标时 `CheckProgram` 会不会红。所以即使 CI 里没有 Node，
 Persona 一改 Go 类型（改名、删字段）这些测试就红，提醒程序一侧同步夹具；程序一侧的仓库应保留同一批文件的副本，用同样的数据检查自己的输出，新增或改夹具时两边一起改。
 
-**跨仓库活测试**：`Testwechat-connectorProgramLive` 跑 wechat-connector 仓库里的真程序，对着它的夹具服务（一个假网关的平台，`PORT=0` 起在回环地址上）。需要 Node 和两个环境变量，
-有一个没设就 `t.Skip`，所以现有的测试和 CI 不受影响：
+**跨仓库活测试**：`Testwechat-connectorProgramLive` 跑任意一个实现了连接器协议的外部程序，对着任意一个兼容 wechat-connector 开发者 API 的夹具服务。
+路径由两个环境变量给出：`PERSONA_TEST_wechat-connector_PROGRAM` 指向连接器程序的启动脚本（插件包 `bin/` 下的程序）；`wechat-connector_FIXTURE_SERVER` 指向夹具服务的脚本，
+测试用 Node 运行它（`PORT=0`，起在回环地址上）。需要 Node，两个环境变量有一个没设就 `t.Skip`，所以现有的测试和 CI 不受影响：
 
 ```sh
 cd server
-PERSONA_TEST_wechat-connector_PROGRAM=<wechat-connector>/integrations/persona/bin/wechat-connector-persona \
-wechat-connector_FIXTURE_SERVER=<wechat-connector>/test/fixtures/persona-server.mjs \
+PERSONA_TEST_wechat-connector_PROGRAM=<插件包>/bin/<程序> \
+wechat-connector_FIXTURE_SERVER=<夹具服务脚本> \
 go test ./internal/connector/conformance -run wechat-connector -v
 ```
 
 程序所在的包里 `persona-plugin.json` 在 `bin/` 的上一级。夹具服务起来后在 stdout 打印**一行** JSON：`base_url`、`outbound_sends_enabled`，和 `accounts`（每个账号的 `key` 是读取 + 事件的应用密钥，另有带发送范围的 `send_key`）。
 测试用 `base_url` 和第一个账号的 `key`，按字段名 `base_url`、`app_key` 填程序的登录那一步；`send_key` 从不用。`base_url` 不在回环地址上，或这一行没说外发是关的（`outbound_sends_enabled` 不是 `false`），测试就拒绝登录。
-夹具服务上外发保持关闭（和开发中的所有平台一样），测试不碰真账号、运行时目录和消息库。先对程序跑 `plugin/conformance.Check`（起停、握手、错误码），再用一份新起的程序跑 `CheckProgram`。
+夹具服务上外发保持关闭，测试只用它给的合成账号和测试密钥，不碰真账号。先对程序跑 `plugin/conformance.Check`（起停、握手、错误码），再用一份新起的程序跑 `CheckProgram`。

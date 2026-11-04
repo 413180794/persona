@@ -32,6 +32,9 @@ struct AssistantTopBar: View {
     static let height: CGFloat = 70
     /// How far below the bar the fog fades out.
     static let fade: CGFloat = 30
+    /// How far below the status bar the round buttons start. The sidebar's header beside the bar in the split starts
+    /// there too, with the same `circle` (AssistantSidebar `besideBar`), so the two rows line up.
+    static let topInset = Theme.Space.xxs
 
     private var session: Session? { key.flatMap { model.session($0) } }
     private var machineID: String { model.assistantMachineID(key) }
@@ -101,7 +104,7 @@ struct AssistantTopBar: View {
     private var classicBar: some View {
         HStack(alignment: .top) {
             GlassEffectContainer {
-                circle(sidebarIsColumn ? "sidebar.left" : "line.3.horizontal", label: "历史对话", id: "assistant-sidebar-button") {
+                Self.circle(sidebarIsColumn ? "sidebar.left" : "line.3.horizontal", label: "历史对话", id: "assistant-sidebar-button") {
                     Haptics.tap()
                     openSidebar()
                 }
@@ -110,7 +113,7 @@ struct AssistantTopBar: View {
             face
             Spacer(minLength: 8)
             GlassEffectContainer {
-                circle("square.and.pencil", label: "新对话", id: "assistant-new") {
+                Self.circle("square.and.pencil", label: "新对话", id: "assistant-new") {
                     Haptics.tap()
                     newConversation()
                 }
@@ -123,7 +126,7 @@ struct AssistantTopBar: View {
         // it stays the whole width.
         .padding(.leading, max(0, titleRowLeading - Theme.Space.l))
         #endif
-        .padding(.top, Theme.Space.xxs)
+        .padding(.top, Self.topInset)
         .frame(height: Self.height, alignment: .top)
         .background(alignment: .top) {
             // Solid down to the bar's bottom edge, fading out below it (fading under the pill let the messages show
@@ -132,7 +135,8 @@ struct AssistantTopBar: View {
         }
     }
 
-    private func circle(_ symbol: String, label: String, id: String, action: @escaping () -> Void) -> some View {
+    /// The bar's round icon button; also the sidebar header's search button when the sidebar is the split's column.
+    static func circle(_ symbol: String, label: String, id: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(Theme.Font.heading)

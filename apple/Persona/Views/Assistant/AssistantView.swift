@@ -277,6 +277,9 @@ struct AssistantHome: View {
     @Binding var effort: String
     var send: (String, [ImagePayload]) -> Void
 
+    /// How far the page fades out above the chips and the field.
+    private static let fade = Theme.Space.xl
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xl) {
@@ -313,9 +316,13 @@ struct AssistantHome: View {
         // the composer is added: margins reach every scroll view below them, and the chips' row above the field stood
         // the top bar's height tall, over the suggestion cards.
         .contentMargins(.top, AssistantTopBar.height, for: .scrollContent)
+        // Room to scroll the last suggestions clear of the fade over the chips (as ShellHome).
+        .contentMargins(.bottom, Self.fade, for: .scrollContent)
         .themedGroupedPage()
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(alignment: .leading, spacing: Theme.Space.s) {
+            // The chips' row a step off the field (2026-11-04: with Theme.Space.s it sat right on it, and the
+            // suggestion cards were cut off hard just above it).
+            VStack(alignment: .leading, spacing: Theme.Space.m) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Theme.Space.s) {
                         // The BeautifulUI style picks the launcher in the prompt bar's model menu.
@@ -334,6 +341,14 @@ struct AssistantHome: View {
             .padding(.bottom, Theme.Space.s)
             .frame(maxWidth: ChatView.readableWidth)
             .frame(maxWidth: .infinity)
+            // Above the chips the page fades out instead of ending in a hard edge across the cards.
+            .background(alignment: .top) {
+                LinearGradient(colors: [Theme.groupedPage.opacity(0), Theme.groupedPage], startPoint: .top, endPoint: .bottom)
+                    .frame(height: Self.fade)
+                    .offset(y: -Self.fade)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
             // At large text sizes the page reaches down here: back the chips and the field with the page, or the
             // machine chips scrolled under them read through.
             .background(Theme.groupedPage.ignoresSafeArea(edges: .bottom))

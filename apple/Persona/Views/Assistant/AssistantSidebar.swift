@@ -704,7 +704,7 @@ struct AssistantSidebar: View {
                 // The title bar's row: centred on it as the other sections' titles are, so it does not jump (#830).
                 .frame(height: Theme.Size.macToolbarHeight)
                 #else
-                .padding(.top, Theme.Space.s)
+                .padding(.top, besideBar ? AssistantTopBar.topInset : Theme.Space.s)
                 .padding(.bottom, Theme.Space.s)
                 #endif
             // A list (not a stack in a scroll view) for its rows' own swipe: a conversation swipes left to 归档.
@@ -768,20 +768,38 @@ struct AssistantSidebar: View {
             HStack {
                 Text(model.persona.name).font(isShell ? Theme.Font.display : Theme.Font.title).foregroundStyle(Color.primary).lineLimit(1)
                 Spacer(minLength: Theme.Space.s)
-                Button {
-                    withAnimation(Theme.Motion.state) { searchOpen = true }
-                    searching = true
-                } label: {
-                    Image(systemName: Theme.Icon.search)
-                        .font(Theme.Font.heading)
-                        .foregroundStyle(Color.primary)
-                        .scaledFrame(width: Theme.Size.avatarL, height: Theme.Size.avatarL)
-                        .surface(interactive: true, in: .circle)
+                if besideBar {
+                    // The same button as the top bar's beside it (2026-11-04: on iPhone Duo open, this one stood lower
+                    // and larger than 历史对话 / 新对话 in the next column).
+                    AssistantTopBar.circle(Theme.Icon.search, label: "搜索对话", id: "assistant-sidebar-search", action: openSearch)
+                } else {
+                    Button(action: openSearch) {
+                        Image(systemName: Theme.Icon.search)
+                            .font(Theme.Font.heading)
+                            .foregroundStyle(Color.primary)
+                            .scaledFrame(width: Theme.Size.avatarL, height: Theme.Size.avatarL)
+                            .surface(interactive: true, in: .circle)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("搜索对话")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("搜索对话")
             }
         }
+    }
+
+    private func openSearch() {
+        withAnimation(Theme.Motion.state) { searchOpen = true }
+        searching = true
+    }
+
+    /// The split's list column (a wide display), beside the conversation's top bar: the header is that bar's row.
+    /// The drawer and the shell keep their own; on the Mac both sit in the title bar's row already (#830).
+    private var besideBar: Bool {
+        #if os(macOS)
+        false
+        #else
+        drawer == nil && !isShell
+        #endif
     }
 
     /// The open search field; in the BeautifulUI style SidebarNav's.
