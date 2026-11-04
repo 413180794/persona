@@ -324,8 +324,14 @@ struct ChatView: View {
         .environment(\.imageZoom, imageZoom)
         .environment(\.openTools, openTools)
         .fullScreenCover(item: $viewingImages) { v in
-            ImageViewer(images: v.images, index: v.index, conversation: v.conversation) { [model, key] img in
-                model.composerInbox[key, default: []].append(img)
+            Group {
+                if let viewed = v.viewed {
+                    ImageViewer(items: viewed, index: v.index) { [model, key] img in model.composerInbox[key, default: []].append(img) }
+                } else {
+                    ImageViewer(images: v.images, index: v.index, conversation: v.conversation) { [model, key] img in
+                        model.composerInbox[key, default: []].append(img)
+                    }
+                }
             }
             .navigationTransition(.zoom(sourceID: v.source, in: imageZoom))
         }
@@ -752,6 +758,8 @@ struct ChatView: View {
             }
         case .recaps(_, let items):
             RecapCard(items: items)
+        case .viewed(_, let images):
+            ViewedImagesRow(images: images).equatable()
         }
     }
 
@@ -3200,6 +3208,8 @@ struct ChatLine: Identifiable {
         case quick(QuickResult)
         /// The date over the first line of a day (the assistant's conversation).
         case day(Date)
+        /// The images an exchange's work looked at, between it and the answer (`ViewedImages`, docs/protocol.md「这一轮看过的图片」).
+        case viewed(id: String, images: [ViewedImage])
 
         var id: String {
             switch self {
@@ -3217,6 +3227,7 @@ struct ChatLine: Identifiable {
             case .feed(let f): "feed-" + f.id
             case .quick(let q): "quick-" + q.callID
             case .day(let d): "day-\(Int(d.timeIntervalSince1970))"
+            case .viewed(let id, _): id
             }
         }
     }
@@ -3245,6 +3256,7 @@ struct ChatLine: Identifiable {
     static func feed(_ item: FeedItem) -> Self { Self(.feed(item)) }
     static func quick(_ result: QuickResult) -> Self { Self(.quick(result)) }
     static func day(_ date: Date) -> Self { Self(.day(date)) }
+    static func viewed(id: String, images: [ViewedImage]) -> Self { Self(.viewed(id: id, images: images)) }
     static func toolRun(id: String, calls: [ToolCall], open: Bool, first: Bool) -> Self {
         Self(.toolRun(id: id, calls: calls, open: open, first: first))
     }

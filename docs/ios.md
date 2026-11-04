@@ -722,6 +722,16 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 - **怎么画**：一个藏起来的 WKWebView 加载打包的 `render.html`（内容安全策略只放行包里的脚本、样式、字体，另有一张规则表挡掉所有网络请求），一次画一个，截成图；要画的东西作为参数交给 `renderMath` / `renderMermaid`，不拼进页面。图按（种类, 源码, 深浅色, 字号）存在内存和缓存目录。公式画成黑色、当模板图用，跟着文字颜色走，深浅色共用一张；图按深浅色各画一张（Mermaid 自己的 default / dark 主题）。行内公式经 MarkdownUI 的行内图片（`![…](persona-math:…)`，`MathInlineImages` 挂在根视图上），独立公式和图替换代码块。
 - **画不出来时**：独立公式和图退回代码块，下面写 KaTeX / Mermaid 的原话；行内公式显示成等宽的原文。图点开全屏看（`ImageViewer`）。
 
+**这一轮看过的图片和文档卡片**（#1543，`Views/Chat/TurnAttachments.swift`、`ViewedImages.swift`）：
+- **看过的图片**：一轮里 Agent 看过的图片（规则见 `docs/protocol.md`「这一轮看过的图片」，`ViewedImages` 和 hub 的 `transcript.ViewedImages` 同一套）放在工作行和回复正文之间，是自己的一行（`ChatLine.viewed`）。流式中新图进来只是这一行横着变长，回复的字不重排、跟随不断。
+  - 不写任何说明文字，只有缩略图：多张是一条 64pt 高、可以横滑的条，伸到屏幕边，有更多时那一侧渐隐；一张时是一张 80pt 高的缩略图。截图和网页截图左下角有个小标记。
+  - 宽度按图的比例（¾ 到 1.6 倍高）：手机截图窄，屏幕截图宽，图到之前用懒加载图片带的宽高占好位置。
+  - 名字和来源（「屏幕截图 · Studio」「首页.png · 480×300」）只在长按的预览、Mac 的悬停和画廊里出现。
+  - 缩略图来源：带图的走 `ChatImageLoader`（懒加载、按尺寸降采样、内存 + 磁盘缓存）；只有路径的走 M0 的 `file/thumb`（`FileThumbnails`）。
+  - 点开是这一轮的画廊（`ImageViewer(items:)`）：左右滑、保存、分享、拷贝图片，有路径的另有拷贝路径和「在文件页打开」。
+  - 工作折叠时用 `fold.images`，展开后用真实的工具调用，两种结果一样。
+- **文档卡片**：回复里提到的 Word / Excel / PowerPoint / iWork / PDF（`FileThumbnails.isDocument`）不再是胶囊，而是回复文字下面的卡片：第一页的缩略图（M1 的 `FileThumbnailIcon`），加上文件名和类型（「Word 文档」）。点开是文件预览，长按拷贝路径。别的文件照旧是胶囊。
+
 **预览内的链接**
 
 文件查看器在自己的展示层里打开 http(s) 链接：iPhone 的链接卡片叠在文件预览上方，Mac 的链接面板位于文件预览窗口内部。关闭链接返回原文件、保留阅读位置，不能让会话底层的链接抽屉等文件关闭后再出现。会话文件块和「文件」页均把原 `SessionKey` 交给预览，链接内的 AI 修改 / 作为上下文仍归原会话；没有会话的独立预览也能浏览网页。localhost / 机器地址的开发服务按文件所在机器经 hub 转发，其他 URL scheme 保留平台已有策略。

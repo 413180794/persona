@@ -1,0 +1,309 @@
+import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
+
+// What a turn made and looked at (#1543): the documents its answer names, as cards under the answer's words
+// (`DocumentCards`, part of `AssistantText`), and the images its work looked at, a strip of bare thumbnails between the
+// work line and the answer (`ViewedImagesRow`, a line of its own, so pictures coming in while the turn runs leave the
+// answer alone). Names and sizes show on a long press, on hover on the Mac, and in the viewer, never under a thumbnail.
+
+/// The height of a card and of the strip's thumbnails.
+private let tileHeight = Theme.Size.box64
+
+/// A thumbnail is as wide as its picture (between ¾ and 1.6 of its height): a phone screenshot narrow, a screen wide.
+private func tileWidth(_ aspect: CGFloat?, height: CGFloat) -> CGFloat {
+    height * min(max(aspect ?? 1, 0.75), 1.6)
+}
+
+/// A document as a card: `thumb` on the left (its first page), its name, and what it is.
+struct AttachmentCard<Thumb: View>: View {
+    var title: String
+    var subtitle: String
+    @ViewBuilder var thumb: Thumb
+
+    var body: some View {
+        HStack(spacing: Theme.Space.m) {
+            thumb
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                Text(title).font(Theme.Font.secondaryStrong).foregroundStyle(.primary).lineLimit(1).truncationMode(.middle)
+                Text(subtitle).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Theme.Space.s)
+        .scaledFrame(width: Theme.Size.box240, height: tileHeight, alignment: .leading)
+        .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+        .contentShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous))
+    }
+}
+
+/// A row that scrolls sideways from the page's edge to the screen's, fading where there is more: what the strip
+/// and the cards scroll in.
+private struct AttachmentScroller<Content: View>: View {
+    @ViewBuilder var content: Content
+    @State private var more = Edges()
+
+    private struct Edges: Equatable {
+        var leading = false
+        var trailing = false
+        var width: CGFloat = 0
+    }
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: Theme.Space.s) { content }
+        }
+        .scrollIndicators(.hidden)
+        // Out to the list's margins, so the row scrolls to the screen's edge and starts where the text does.
+        .padding(.horizontal, -Theme.Space.page)
+        .contentMargins(.horizontal, Theme.Space.page, for: .scrollContent)
+        .onScrollGeometryChange(for: Edges.self) { g in
+            // At rest the offset is minus the leading margin; at the end the trailing margin shows past the content.
+            Edges(leading: g.contentOffset.x > 1 - g.contentInsets.leading,
+                  trailing: g.contentOffset.x + g.containerSize.width < g.contentSize.width + g.contentInsets.trailing - 1,
+                  width: g.containerSize.width)
+        } action: { _, edges in
+            more = edges
+        }
+        .mask { LinearGradient(stops: fade, startPoint: .leading, endPoint: .trailing) }
+    }
+
+    /// Opaque, fading out over the last `Theme.Space.xl` on a side where there is more to scroll to.
+    private var fade: [Gradient.Stop] {
+        let f = more.width > 0 ? min(Theme.Space.xl / more.width, 0.25) : 0
+        return [.init(color: .black.opacity(more.leading ? 0 : 1), location: 0), .init(color: .black, location: f),
+                .init(color: .black, location: 1 - f), .init(color: .black.opacity(more.trailing ? 0 : 1), location: 1)]
+    }
+}
+
+// MARK: Documents
+
+/// The documents an answer names (Word, Excel, PowerPoint, iWork, PDF: what has a first page to show), as cards with
+/// that page (`FileThumbnailIcon`, M1); a tap opens the file as its chip did. Other files stay chips (`FileChips`).
+struct DocumentCards: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.fileScope) private var scope
+    var paths: [String]
+    var open: (String) -> Void
+
+    private var shown: [String] {
+        guard let scope else { return [] }
+        return Array(paths.filter { model.filePresence.linkable($0, in: scope) }.prefix(6))
+    }
+
+    var body: some View {
+        let shown = shown
+        if let scope, !shown.isEmpty {
+            AttachmentScroller {
+                ForEach(shown, id: \.self) { p in
+                    Button { open(p) } label: {
+                        AttachmentCard(title: Self.name(p), subtitle: Self.kind(p)) {
+                            FileThumbnailIcon(ref: FileRef(group: scope.machine.group, machineID: scope.machine.id, path: p, cwd: scope.cwd),
+                                              size: 0, modified: nil, symbol: FileViewer.symbol(for: p),
+                                              width: Theme.Size.wellL, height: Theme.Size.avatarXL)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("file-card-" + p)
+                    .contextMenu { Button { UIPasteboard.general.string = p } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) } }
+                }
+            }
+        }
+    }
+
+    static func isDocument(_ path: String) -> Bool { FileThumbnails.isDocument(path) }
+
+    static func name(_ path: String) -> String {
+        let name = (path as NSString).lastPathComponent
+        return name.isEmpty ? path : name
+    }
+
+    /// What a document is, as the Files app says it.
+    static func kind(_ path: String) -> String {
+        switch (path as NSString).pathExtension.lowercased() {
+        case "docx", "doc": "Word 文档"
+        case "xlsx", "xls": "Excel 表格"
+        case "pptx", "ppt": "PowerPoint 演示文稿"
+        case "pages": "Pages 文稿"
+        case "numbers": "Numbers 表格"
+        case "key": "Keynote 演示文稿"
+        case "rtf": "RTF 文档"
+        case "pdf": "PDF 文档"
+        default: "文档"
+        }
+    }
+}
+
+// MARK: Images the turn looked at
+
+/// The images a turn's work looked at, between the work line and the answer (`ViewedImages`): thumbnails as tall as a
+/// card in a strip that scrolls sideways, one alone a little bigger. Nothing written around them: a tap opens the viewer
+/// on this turn's images, a long press (hover on the Mac) shows the picture with its name and where it came from.
+struct ViewedImagesRow: View, Equatable {
+    var images: [ViewedImage]
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.images == b.images }
+    @Environment(AppModel.self) private var model
+    @Environment(\.viewImages) private var viewImages
+    @Environment(\.fileScope) private var scope
+    @Environment(\.imageZoom) private var pageZoom
+
+    var body: some View {
+        #if DEBUG || PERF_SIGNPOST
+        let _ = PerfTrace.body("ViewedImagesRow")
+        #endif
+        Group {
+            if images.count == 1, let im = images.first {
+                tapped(im, index: 0) { ViewedImageThumb(image: im, height: Theme.Size.box80, badge: true) }
+            } else {
+                AttachmentScroller {
+                    ForEach(Array(images.enumerated()), id: \.element.id) { n, im in
+                        tapped(im, index: n) { ViewedImageThumb(image: im, height: tileHeight, badge: true) }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        #if DEBUG
+        // Screenshots: `-openViewedImage N` opens the viewer on the strip's Nth image (1 is the first) once it shows.
+        .task {
+            let n = UserDefaults.standard.integer(forKey: "openViewedImage")
+            if n > 0, images.indices.contains(n - 1) {
+                try? await Task.sleep(for: .seconds(1))
+                open(n - 1)
+            }
+        }
+        #endif
+    }
+
+    private func tapped<Content: View>(_ im: ViewedImage, index: Int, @ViewBuilder label: () -> Content) -> some View {
+        let caption = caption(im)
+        return Button { open(index) } label: { label() }
+            .buttonStyle(.plain)
+            .matchedTransitionSource(id: "viewed-" + im.id, in: pageZoom ?? fallbackZoom)
+            .accessibilityLabel(caption)
+            .accessibilityHint("查看大图")
+            .accessibilityIdentifier("viewed-image-\(index)")
+            #if os(macOS)
+            .help(caption)
+            #endif
+            .contextMenu {
+                if let path = im.path {
+                    Button { UIPasteboard.general.string = path } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) }
+                }
+            } preview: {
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    ViewedImageThumb(image: im, height: Theme.Size.box240)
+                    Text(caption).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+                .padding(Theme.Space.m)
+            }
+    }
+    @Namespace private var fallbackZoom
+
+    private func open(_ index: Int) {
+        Haptics.tap()
+        let items = images.map { im in
+            ViewerImage(payload: im.payload, file: file(im), caption: caption(im)) as ViewerImage
+        }
+        viewImages?(ImageViewing(images: [], index: index, conversation: [], source: "viewed-" + images[index].id, viewed: items))
+    }
+
+    private func file(_ im: ViewedImage) -> FileRef? {
+        guard let path = im.path, let scope else { return nil }
+        return FileRef(group: scope.machine.group, machineID: scope.machine.id, path: path, cwd: scope.cwd)
+    }
+
+    /// The name of the file, or what took the picture.
+    func title(_ im: ViewedImage) -> String {
+        switch im.source {
+        case .screenshot: "屏幕截图"
+        case .browser: "网页截图"
+        case .read, .mcp, .tool: im.name ?? (im.source == .mcp ? Self.toolName(im.tool) : "图片")
+        }
+    }
+
+    /// What a long press, a hover and the viewer say: its name, and the machine of a screenshot or a picture's size
+    /// (「屏幕截图 · Studio」「首页.png · 480×300」).
+    func caption(_ im: ViewedImage) -> String {
+        var parts = [title(im)]
+        if let m = im.machine {
+            parts.append(model.machines.first { $0.id == m && $0.group == (scope?.machine.group ?? $0.group) }?.name
+                         ?? model.machines.first { $0.name == m }?.name ?? m)
+        } else if let w = im.payload?.width, let h = im.payload?.height {
+            parts.append("\(w)×\(h)")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    /// An MCP tool's own name ("mcp__server__snap" → "snap").
+    static func toolName(_ tool: String) -> String {
+        guard tool.hasPrefix("mcp__"), let r = tool.range(of: "__", options: .backwards) else { return tool }
+        return String(tool[r.upperBound...])
+    }
+}
+
+/// One image the turn looked at, filling a rounded tile `height` tall (as wide as its shape allows): its bytes from the
+/// hub (scaled down, cached by `ChatImageLoader`), or the file's thumbnail (`FileThumbnails`) when only its path is
+/// known. `badge`: a small mark for a screenshot or a web page.
+struct ViewedImageThumb: View {
+    var image: ViewedImage
+    var height: CGFloat
+    var badge = false
+    @Environment(AppModel.self) private var model
+    @Environment(\.fileScope) private var scope
+    @Environment(\.displayScale) private var displayScale
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var picture: UIImage?
+
+    /// The long edge to decode to, in points: the picture fitted in it still fills the widest or the narrowest tile.
+    private var side: CGFloat { height * Theme.sizeScale(typeSize) * 1.6 }
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
+        let aspect = picture.map { $0.size.width / max($0.size.height, 1) } ?? image.aspect
+        ZStack(alignment: .bottomLeading) {
+            Theme.Fill.well
+            if let picture = picture ?? cached {
+                Image(uiImage: picture).resizable().scaledToFill()
+            } else {
+                Image(systemName: symbol).font(Theme.Font.secondary).foregroundStyle(.tertiary)
+            }
+        }
+        .scaledFrame(width: tileWidth(aspect, height: height), height: height)
+        .clipShape(shape)
+        .overlay(shape.stroke(Theme.cardStroke, lineWidth: Theme.Size.hairline))
+        .overlay(alignment: .bottomLeading) {
+            if badge, image.source == .screenshot || image.source == .browser {
+                Image(systemName: symbol)
+                    .font(Theme.Font.labelStrong)
+                    .foregroundStyle(.white)
+                    .scaledFrame(width: Theme.Size.iconXS, height: Theme.Size.iconXS)
+                    .background(.black.opacity(0.45), in: .circle)
+                    .padding(Theme.Space.xs)
+                    .accessibilityHidden(true)
+            }
+        }
+        .animation(Theme.Motion.state, value: picture != nil)
+        .task(id: image.id) { picture = await load() }
+    }
+
+    private var symbol: String {
+        switch image.source {
+        case .screenshot: Theme.Icon.screen
+        case .browser: Theme.Icon.safari
+        case .read, .mcp, .tool: Theme.Icon.photo
+        }
+    }
+
+    /// Back on screen: no placeholder flash.
+    private var cached: UIImage? { image.payload.flatMap { ChatImageLoader.cached($0, side: side * displayScale) } }
+
+    private func load() async -> UIImage? {
+        if let p = image.payload { return await ChatImageLoader.image(p, side: side * displayScale) } // pixels: decoded at scale 1
+        guard let path = image.path, let scope, model.features(scope.machine.group).contains("file_thumb"),
+              let api = model.api(scope.machine.group) else { return nil }
+        let ref = FileRef(group: scope.machine.group, machineID: scope.machine.id, path: path, cwd: scope.cwd)
+        return await FileThumbnails.shared.thumbnail(ref, size: 0, modified: nil, side: side, scale: displayScale, api: api)
+    }
+}

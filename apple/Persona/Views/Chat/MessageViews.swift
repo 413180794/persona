@@ -132,6 +132,8 @@ struct ImageViewing: Identifiable {
     /// The conversation's images (the viewer's 「对话里的图片」), as they were when it opened.
     var conversation: [ImagePayload]
     var source: String
+    /// A turn's images it looked at (`ViewedImagesRow`), with their names and files: shown instead of `images`.
+    var viewed: [ViewerImage]? = nil
 }
 
 /// Tool calls opened or closed by the user, by call id; the rest follow their own default.
@@ -486,7 +488,11 @@ struct AssistantText: View, Equatable {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(.rect)
                 .messageLongPress(id: item.id)
-            if let openFile { FileChips(paths: d.files, open: openFile) }
+            if let openFile {
+                // Documents as cards with their first page (#1543), the rest as chips.
+                FileChips(paths: d.files.filter { !DocumentCards.isDocument($0) }, open: openFile)
+                DocumentCards(paths: d.files.filter(DocumentCards.isDocument), open: openFile)
+            }
             PortChips(text: item.text ?? "")
         }
         .lookUpFiles(d.files)

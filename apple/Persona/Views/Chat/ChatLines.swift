@@ -49,7 +49,9 @@ struct ChatLines {
                             if case .user = r { return false }
                             return n != answer
                         }.map(\.element)
-                        out.append(.work(id: groupID, items: Self.workItems(rest), live: false, start: t.startedAt, end: t.endedAt))
+                        let work = Self.workItems(rest)
+                        out.append(.work(id: groupID, items: work, live: false, start: t.startedAt, end: t.endedAt))
+                        out += Self.viewed("vi-" + groupID, work)
                         if let answer { out.append(.row(t.ordered[answer])) }
                         if !t.wakes.isEmpty { out.append(.wakes(t, live: false)) }
                         out += t.trailing.map { .row($0) }
@@ -83,6 +85,9 @@ struct ChatLines {
                                          start: seg.user?.firstTS ?? (k == 0 ? wokeAt : nil) ?? seg.rows.first?.firstTS ?? t.startedAt,
                                          end: work.last?.lastTS ?? seg.rows.last?.lastTS))
                     }
+                    // Between the work and the answer: what the work looked at. Its id stays as pictures come in and
+                    // the answer changes, so the strip grows sideways in place.
+                    out += Self.viewed("vi-" + (seg.user?.id ?? seg.rows.first?.id ?? t.id), items)
                     if let last { out.append(.row(seg.rows[last])) }
                     out += after.sorted().map { .row(seg.rows[$0]) }
                 }
@@ -248,6 +253,12 @@ struct ChatLines {
             run = []
         }
         return found()
+    }
+
+    /// The strip of what a work line's calls looked at, when they looked at any.
+    static func viewed(_ id: String, _ work: [WorkItem]) -> [ChatLine] {
+        let images = ViewedImages.of(work)
+        return images.isEmpty ? [] : [.viewed(id: id, images: images)]
     }
 
     static func photos(_ rows: [ChatRow]) -> [Item] {

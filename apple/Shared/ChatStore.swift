@@ -635,12 +635,19 @@ final class ChatStore {
         }
     }
 
-    /// Lazy images learn where to fetch their bytes from.
+    /// Lazy images learn where to fetch their bytes from, and so do those a fold says its work looked at.
     nonisolated static func withImageRefs(_ items: [Item], _ key: SessionKey) -> [Item] {
-        guard items.contains(where: { $0.image?.lazy == true }) else { return items }
+        guard items.contains(where: { $0.image?.lazy == true || $0.fold?.images?.isEmpty == false }) else { return items }
         return items.map { it in
             var it = it
             if it.image?.lazy == true { it.image?.ref = "\(key.machineID)/\(key.sessionID)/\(it.id)" }
+            if let images = it.fold?.images {
+                it.fold?.images = images.map { im in
+                    var im = im
+                    if let id = im.itemID { im.ref = "\(key.machineID)/\(key.sessionID)/\(id)" }
+                    return im
+                }
+            }
             return it
         }
     }
@@ -1060,10 +1067,11 @@ nonisolated enum ChatCache {
     /// `group-<id>/`. v6: a Feishu /agent request's first message is rewritten by the hub (its instructions in a
     /// <jarvis-context> block, #876), so v5's copies would keep showing the old text: they are dropped, not moved
     /// (`dropOlder`). v7: items carry `client_msg_id`, the message sent from the phone they came from (#968).
+    /// v8: folds carry the images their work looked at (`Fold.images`); v7's folds had none, and their turns no strip.
     /// Bump it whenever the item structure or the text the hub gives an item changes.
-    static let folder = "chats-v7"
+    static let folder = "chats-v8"
     /// The folder before, removed on the first launch with this one.
-    private static let previous = "chats-v6"
+    private static let previous = "chats-v7"
 
     /// Once per launch, before the first copy is read or written (a static let runs once, on whichever thread asks first).
     private static let dropOlder: Void = {

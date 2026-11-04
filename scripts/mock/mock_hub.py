@@ -5890,12 +5890,12 @@ if os.environ.get("MOCK_TURN_IMAGES"):
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import mock_office
     _blog = "/Users/me/code/blog"
-    for _rel, _data in (("design/首页.png", SHOT_DESIGN), ("screenshots/手机首页.png", SHOT_PHONE), ("design/横幅大图.jpg", SHOT_PAGE)):
-        MOCK_TREE["code/blog/" + _rel] = ("image/png", _data)
-    MOCK_TREE["code/blog/docs/"] = None
+    # In FILES (what …/stat, …/file and the thumbnails read), so the answer's paths are files and the pictures draw.
+    for _rel, _data in (("design/首页.png", SHOT_DESIGN), ("screenshots/手机首页.png", SHOT_PHONE), ("design/横幅大图.png", SHOT_PAGE)):
+        FILES[_blog + "/" + _rel] = base64.b64decode(_data)
     for _name in ("季度报告.docx", "逐小时预报.xlsx", "路线图.pptx"):
-        MOCK_TREE["code/blog/docs/" + _name] = (MOCK_MIMES[os.path.splitext(_name)[1]], base64.b64encode(mock_office.SAMPLES[_name]()).decode())
-    MOCK_TREE["code/blog/docs/首页对比.md"] = "# 首页对比\n\n编造的笔记。\n"
+        FILES[_blog + "/docs/" + _name] = mock_office.SAMPLES[_name]()
+    FILES[_blog + "/docs/首页对比.md"] = "# 首页对比\n\n编造的笔记。\n".encode()
     _ask = [it("user", "text", 9, text="首页按设计稿对一下，手机和桌面都看看，差别整理成文档和表格")]
     if os.environ["MOCK_TURN_IMAGES"] == "one":
         _ask += looked("mcp__jarvis__browser_look", {"machine": "studio"}, "已读取页面：首页", 8, (SHOT_DESKTOP, 512, 320))
@@ -5905,7 +5905,7 @@ if os.environ.get("MOCK_TURN_IMAGES"):
         _ask += looked("Read", {"file_path": _blog + "/design/首页.png"}, "", 9, (SHOT_DESIGN, 480, 300))
         _ask += looked("mcp__jarvis__browser_look", {"machine": "studio"}, "已读取页面：首页", 8, (SHOT_DESKTOP, 512, 320))
         _ask += looked("Read", {"file_path": _blog + "/screenshots/手机首页.png"}, "", 8, (SHOT_PHONE, 195, 422))
-        _ask += tool("Read", {"file_path": _blog + "/design/横幅大图.jpg"}, "", 8)  # too big to keep: only its path
+        _ask += tool("Read", {"file_path": _blog + "/design/横幅大图.png"}, "", 8)  # too big to keep: only its path
         _ask += looked("mcp__jarvis__computer_state", {"machine": "studio", "app": "Safari"}, "Safari — 首页", 7, (SHOT_SCREEN, 504, 328))
         _ask += looked("Read", {"file_path": _blog + "/design/首页.png"}, "", 7, (SHOT_DESIGN, 480, 300))  # the same file again
         _ask += tool("Bash", {"command": "python3 scripts/compare.py", "description": "生成对比表"}, "wrote docs/逐小时预报.xlsx", 6)

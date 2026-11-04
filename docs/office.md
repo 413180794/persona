@@ -1,6 +1,7 @@
 # 生成 Office 文件（`personad office`，#1300）
 
-助手和 Agent 生成 Word、PowerPoint、Excel 文件用的命令，是 #1289 的 M9。文件生成在那台机器上；回复里写出它的绝对路径，App 就把它显示成文件，点开是 M1–M3 的预览。
+助手和 Agent 生成 Word、PowerPoint、Excel 文件用的命令，是 #1289 的 M9。文件生成在那台机器上；回复里写出它的绝对路径，App 就在回复下面把它显示成一张卡片
+（第一页的缩略图、文件名、「Word 文档」这样的类型，#1543，见 `docs/ios.md`「这一轮看过的图片和文档卡片」），点开是 M1–M3 的预览。
 助手和 Persona 启动的 Agent 经 skill `persona-office` 用它（见下面「skill」）。
 
 ## 为什么做进 personad

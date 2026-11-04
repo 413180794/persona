@@ -966,10 +966,37 @@ nonisolated struct Fold: Codable, Hashable, Sendable {
     var until: Date?
     var throughSeq: Int
     var throughID: String
+    /// The images the run's calls looked at (docs/protocol.md「这一轮看过的图片」): its turn shows them before the answer
+    /// while the run stays folded.
+    var images: [FoldImage]? = nil
 
     enum CodingKeys: String, CodingKey {
-        case items, tools, thoughts, until
+        case items, tools, thoughts, until, images
         case throughSeq = "through_seq", throughID = "through_id"
+    }
+}
+
+/// An image a folded run's call looked at (`Fold.images`): one its result carried (`itemID`), or a picture file Read
+/// opened whose result carried none (only `path`).
+nonisolated struct FoldImage: Codable, Hashable, Sendable {
+    var itemID: String?
+    var toolUseID: String
+    var tool: String
+    /// read, screenshot, browser, mcp or tool.
+    var source: String
+    var path: String?
+    /// The machine a screenshot's or a browser's call named (an id or a name).
+    var machine: String?
+    var mime: String?
+    var size: Int?
+    var width: Int?
+    var height: Int?
+    /// Where its bytes are, like `ImagePayload.ref`: "<machine>/<session>/<item id>" (filled in by ChatStore).
+    var ref: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case tool, source, path, machine, mime, size, width, height, ref
+        case itemID = "item_id", toolUseID = "tool_use_id"
     }
 }
 

@@ -55,4 +55,14 @@ struct LinkTests {
         #expect(FilePaths.find(in: "日志在 /var/log/app.log，看一下") == ["/var/log/app.log"])
         #expect(FilePaths.find(in: "（~/.config/app/x.json）") == ["~/.config/app/x.json"])
     }
+
+    /// In backticks a path is whole, Chinese names and spaces too (the files an agent made, #1543): not cut at the
+    /// first non-ASCII character into its folder. Outside them paths end as before; order is the text's.
+    @Test func aPathInBackticksIsWhole() {
+        #expect(FilePaths.find(in: "对比文档 `/Users/me/code/blog/docs/季度报告.docx`，表格 `~/out/Q4 差异.xlsx`")
+                == ["/Users/me/code/blog/docs/季度报告.docx", "~/out/Q4 差异.xlsx"])
+        #expect(FilePaths.find(in: "先看 /var/log/app.log，再看 `/srv/报告/汇总.pptx`") == ["/var/log/app.log", "/srv/报告/汇总.pptx"])
+        #expect(FilePaths.find(in: "`/a` 和 `https://example.com/x` 和 `npm run build`").isEmpty)
+        #expect(FilePaths.find(in: "改了 `ios/Persona/Foo.swift` 里的") == ["ios/Persona/Foo.swift"])
+    }
 }

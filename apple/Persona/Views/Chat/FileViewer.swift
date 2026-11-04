@@ -58,6 +58,10 @@ nonisolated enum FilePaths {
     private static let pattern = try! NSRegularExpression(
         pattern: #"(?<![A-Za-z0-9_/:.\-~])(~(?:/[A-Za-z0-9_.@+\-]+)+/?|/[A-Za-z0-9_.@+\-]+(?:/[A-Za-z0-9_.@+\-]+)+/?|[A-Za-z0-9_.@\-]+(?:/[A-Za-z0-9_.@+\-]+)+\.[A-Za-z][A-Za-z0-9]{0,7})(?![A-Za-z0-9_/\-])"#)
 
+    /// A path in backticks is whole, whatever it is written in: `~/报告/第四季度.docx` (an agent names the files it made
+    /// that way; outside them a path ends at the first character that is not ASCII, and a Chinese file name was lost).
+    private static let codeSpan = try! NSRegularExpression(pattern: #"`(~?/[^`\n]+)`"#)
+
     private static let memo = TextMemo<[String]>()
 
     /// File-looking paths in text, in order, without duplicates or URL fragments (memoized: rows ask on every redraw).
@@ -68,14 +72,26 @@ nonisolated enum FilePaths {
 
     private static func scan(_ text: String, limit: Int) -> [String] {
         let ns = text as NSString
-        var out: [String] = []
-        for m in pattern.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+        let all = NSRange(location: 0, length: ns.length)
+        var found: [(at: Int, path: String)] = []
+        var spans: [NSRange] = [] // backticks holding a path: the ASCII pattern takes nothing in them
+        for m in codeSpan.matches(in: text, range: all) {
+            let p = ns.substring(with: m.range(at: 1)).trimmingCharacters(in: .whitespaces)
+            guard !p.hasPrefix("//"), !p.contains("://"), p.split(separator: "/").count >= 2 else { continue }
+            spans.append(m.range)
+            found.append((m.range.location, p))
+        }
+        for m in pattern.matches(in: text, range: all) where !spans.contains(where: { NSIntersectionRange($0, m.range).length > 0 }) {
             var p = ns.substring(with: m.range(at: 1))
             while let last = p.last, ".,;:)".contains(last) { p.removeLast() }
             let before = m.range.location >= 3 ? ns.substring(with: NSRange(location: m.range.location - 3, length: 3)) : ""
-            if before.hasSuffix("://") || p.hasPrefix("//") || p.count < 4 || out.contains(p) { continue }
+            if before.hasSuffix("://") || p.hasPrefix("//") || p.count < 4 { continue }
             if p.hasPrefix("/") && p.split(separator: "/").count < 2 { continue }
-            out.append(p)
+            found.append((m.range.location, p))
+        }
+        var out: [String] = []
+        for f in found.sorted(by: { $0.at < $1.at }) where !out.contains(f.path) {
+            out.append(f.path)
             if out.count >= limit { break }
         }
         return out
