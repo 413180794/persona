@@ -167,6 +167,10 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 			writeErr(w, http.StatusConflict, errors.New("todo is already completed"))
 			return
 		}
+		// Handed to the agent for the todo: the calls already made on it go first (#1618).
+		if text, ok := p["text"].(string); ok {
+			p["text"] = h.withTodoDecisions(r.Context(), todoID, text)
+		}
 	}
 	if principalOf(r.Context()).Role != roleFull {
 		// An answer-only device says something to a conversation it can see, no more. A message to an id nobody has starts

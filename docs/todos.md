@@ -56,6 +56,17 @@
   - 主键：`(todo_id, machine_id, session_id)`。
   - 部分唯一索引：`UNIQUE (machine_id, session_id) WHERE released_at IS NULL`，保证一个 Agent 同一时间只能为一个待办活跃工作。
 
+### 4. todo_decisions 表
+这件事上用户拍过的板（见「决策记录」）：
+- `id` (text, PK)：`dec_` 开头的不透明标识。
+- `todo_id` (text, NOT NULL, FK → `todos(id)` ON DELETE CASCADE)。
+- `question` / `choice` / `reason` (text)：问题、选了什么、原因（原因可空）。
+- `source` (text, NOT NULL, DEFAULT 'manual')：`manual` 在待办里手动记的；`card` 用户答 Agent 的提问卡片时自动记的。
+- `source_machine` / `source_session` / `source_message` (text)：出处，`card` 时是提问的 Agent 和那张卡片（interaction id），手动记的为空。
+- `supersedes_id` (text, FK → `todo_decisions(id)` ON DELETE SET NULL)：这条改判了哪一条更早的决策。
+- `created_at` (timestamptz, NOT NULL)。
+- 约束：部分唯一索引 `(todo_id, source_message, question) WHERE source_message <> ''`，同一张卡片的同一个问题只记一次。
+
 关联与释放语义：
 - 当一个 Agent 被关联到新待办时，如果它当前在其它待办上处于活跃状态，在同一个事务中将原关联记录标为 `released`（记录 `released_at` 时间），旧待办中将其展示为「参与过」。
 - 若之前参与过该待办的 Agent 再次手动挂回该待办，清除 `released_at` 和 `dismissed_at`，并刷新 `linked_at` 与快照信息。
@@ -74,6 +85,9 @@
 | DELETE | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | 解除整组挂（物理删除待办下该项目的 space 关联 Agents） → `{"ok": true}`；不存在 404；只读角色 403 |
 | PUT | `/api/v1/todos/{id}/agents/{mid}/{sid}` | 将已有 Agent 挂到待办上（不发消息） → `{"ok": true}`；清空 `dismissed_at`；已完成待办不可挂（409）；不存在 404；只读角色 403 |
 | DELETE | `/api/v1/todos/{id}/agents/{mid}/{sid}` | 移出 Agent（软移出：置 `released_at` 和 `dismissed_at`，接口不返回且不再自动挂回） → `{"ok": true}`；不存在 404；只读角色 403 |
+| GET | `/api/v1/todos/{id}/decisions` | 决策列表 → `{"decisions": [...]}`，按时间先后；默认只给生效的，`?all=1` 连被改判的一起给（被改判的带 `superseded_by`）；没有时是 `[]`；不存在 404 |
+| POST | `/api/v1/todos/{id}/decisions` | 手动记一条 `{"question", "choice", "reason"?, "supersedes_id"?}` → `{"decision": Decision}`；问题或选择为空 400，`supersedes_id` 不是这个待办里更早的一条 400；只读角色 403 |
+| PATCH | `/api/v1/todos/{id}/decisions/{did}` | 补标改判 `{"supersedes_id"}`（空字符串撤销） → `{"decision": Decision}`；规则同上；不存在 404；只读角色 403 |
 | POST | `/api/v1/sessions` | 新建会话，支持可选 `todo_id` 参数：创建成功后在同一请求内自动挂上待办；待办不存在 404，已完成 409，只读角色 403 |
 | POST | `/api/v1/sessions/{mid}/{sid}/messages` | 发送消息，支持可选 `todo_id` 参数：发送成功后自动挂上待办；待办不存在 404，已完成 409，只读角色 403 |
 
@@ -198,6 +212,19 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 
 `skip` 不为空时表示这次自动流程不会判断它（`not_a_task` 手建的待办、`done` 已经完成、`reopened` 重新打开后还没有新一轮工作），但接口照样给出模型的结论，方便看。
 
+## 决策记录
+
+长程任务里最贵的错误是 Agent 忘了用户已经拍过的板：重复问同一件事，或悄悄推翻之前的决定（#1618）。决策散在各个 Agent 的对话里，换一个 Agent 或压缩一次就丢了，所以按待办收在一处：
+
+- **一条决策** = 问题 + 选了什么 + 原因 + 时间 + 出处（哪个 Agent 问的、哪张卡片里答的）。
+- **自动记**：用户在 App 里答了 Claude Code 的选项提问（`question` 卡片，即 `AskUserQuestion`），而提问的 Agent 正挂在一个未完成的待办上时，每个答了的问题记一条（`source = "card"`）。授权、计划审批、终端对话框、忽略掉的卡片不记；同一张卡片重复上报只记一次。
+- **手动记**：待办详情页「决策」里「记一条」。
+- **改判**：新决策可以标「取代」一条更早的（`supersedes_id`），旧的保留、划掉；只有没被任何一条取代的才算生效。写错了能用 PATCH 补标或撤销。只能取代同一个待办里更早的，所以不会绕成圈。
+- **交给 Agent**：`POST /api/v1/sessions` 的 `prompt`、`POST …/messages` 的 `text` 带 `todo_id` 时（各端「交给 Agent」都这么发），hub 把生效的决策拼成一段 `<jarvis-context kind="context" title="待办 · <标题> · 已定的决策">` 放在最前面（提示词 `server/internal/prompts/todo/decisions.md`），各端不用改；没有决策时原样发。读不出来（数据库出错）时照常发，只记日志。
+- 记一条、改判都会更新待办的 `updated_at` 并广播 `{"type":"todos"}`，客户端据此重新拉决策。
+
+还没做：Agent 侧按待办随时取决策的 MCP 工具（压缩后重拿）、安卓 / iOS 的决策列表。
+
 ## 各端交互设计
 
 ### 1. 侧边栏与主导航
@@ -206,6 +233,7 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 ### 2. 待办列表与详情
 - 列表页：搜索栏、未完成列表、底部收起的已完成分组。每行展示待办标题、状态点、挂着几个 Agent 以及当前最要紧的 Agent 的最新一句话。点击圆圈或向左滑动可标记完成。
 - 详情页：直接编辑标题与说明；展示当前状态；展示当前关联的项目列表（整组挂）与活跃的 Agents 列表（状态点、标题、机器与工作区标签、最新消息摘要、更新时间，点击进入会话；超出会话时间窗的借助快照展示并标注「已结束」；启动失败展示原因并允许移除）；收起的「参与过」列表；底部常驻「交给 Agent」和「完成 / 重新打开」按钮；右上角更多菜单支持删除。
+- 「决策」小节位于说明下方（网页）：生效的决策按时间先后列出（问题、选了、原因、时间、出处），每条可「改判」（写一条新的取代它）或在 ⋯ 里补标「改判了哪一条」/「撤销改判」；有被改判的时可「看全历史」，被改判的划掉。hub 不支持（路由 404）时整节不显示。
 - 「项目」小节位于 Agents 上方，每行显示「项目名 · 机器名」，支持「移出」；没有在线 Agent 的项目标「当前没有 Agent」：只算当前 hub 组里、所在电脑连着的、状态不是 offline 的会话（别的组里 id 相同的电脑不算；电脑断连时 hub 把它的会话标成 unknown 而不是 offline，也不算，和网页一致）。Agent 的来源显示「随项目 <项目名>」或「由 <父 Agent 标题> 派出」；缺少项目来源时只写「随项目」，找不到父 Agent 时只写「派生」，手动挂的不标注。
 
 ### 3. 交给 Agent

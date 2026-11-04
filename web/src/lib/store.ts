@@ -8,6 +8,7 @@ import type { AgentMutes } from "./agent-groups";
 import { stateOf } from "./format";
 import { NO_PINS, pinsOf, type AgentPins } from "./pins";
 import type { AssistantInfo, Interaction, Item, Machine, MeshHub, Session } from "./types";
+import type { Resolution } from "./answered";
 import type { AgentLaunch } from "./new-agent";
 import { isSpacesSupported, type Todo } from "./todos";
 import { releaseAttachments } from "./attachments";
@@ -15,6 +16,13 @@ import type { OutboxEntry } from "./outbox";
 import { afterEvent, afterHello, graceUntil, isResumed, NO_CURSOR, RESTART_FAST_MS, retryDelay, shownConn, wsQuery, type Drop, type EventCursor } from "./reconnect";
 
 export type Conn = "connecting" | "online" | "offline";
+
+export interface AnsweredCard {
+  ix: Interaction;
+  resolution: Resolution;
+  /** The hub said it was answered already: the resolution is the answer that took effect, not what was just sent. */
+  already?: boolean;
+}
 
 export interface State {
   conn: Conn;
@@ -27,6 +35,8 @@ export interface State {
   machines: Machine[];
   sessions: Record<string, Session[]>;
   interactions: Interaction[];
+  /** Cards this page just answered, by interaction id: shown answered (with the picks) for a moment, not clickable. */
+  answered: Record<string, AnsweredCard>;
   assistant: AssistantInfo | null;
   mutes: AgentMutes;
   /** Pinned spaces / agents (GET /pins): the top of the Agents list. */
@@ -50,6 +60,7 @@ let state: State = {
   machines: [],
   sessions: {},
   interactions: [],
+  answered: {},
   assistant: null,
   mutes: { spaces: [], sessions: [], allowed: [] },
   pins: NO_PINS,
@@ -324,13 +335,11 @@ function onMessage(msg: Record<string, unknown>) {
       upsertSession(s);
       break;
     }
-    case "interaction": {
-      const ix = msg.interaction as Interaction;
-      set({ interactions: [...state.interactions.filter((i) => i.id !== ix.id), ix] });
+    case "interaction":
+      changeInteraction((msg.interaction as Interaction).id, msg.interaction as Interaction);
       break;
-    }
     case "interaction_resolved":
-      set({ interactions: state.interactions.filter((i) => i.id !== msg.id) });
+      changeInteraction(msg.id as string, null);
       break;
     case "items": {
       const e = msg as unknown as ItemsEvent;
@@ -422,7 +431,60 @@ function syncAssistant(mid: string, list: Session[]) {
   if (changed) set({ assistant: { ...a, conversations: convs } });
 }
 
+// ── pending interactions ───────────────
+
+// Every change to the pending interactions (an event, an answer from this page), numbered: a /interactions snapshot
+// asked for before a change must not undo it when it lands. refresh() waits for /sessions too (seconds on a busy hub),
+// so without this a card answered meanwhile came back, clickable, and answering it again said "no longer pending".
+let ixRev = 0;
+const ixChanges = new Map<string, { rev: number; ix: Interaction | null }>();
+const IX_CHANGES_KEPT = 500;
+
+function changeInteraction(id: string, ix: Interaction | null) {
+  ixChanges.delete(id); // re-inserted: the oldest are dropped first
+  ixChanges.set(id, { rev: ++ixRev, ix });
+  if (ixChanges.size > IX_CHANGES_KEPT) ixChanges.delete(ixChanges.keys().next().value!);
+  const interactions = state.interactions.filter((i) => i.id !== id);
+  if (ix) interactions.push(ix);
+  else if (interactions.length === state.interactions.length) return;
+  set({ interactions });
+}
+
+/** The pending interactions from a snapshot asked for at revision `before`, with what changed since. */
+export function mergeInteractions(snapshot: Interaction[], before: number): Interaction[] {
+  const out = new Map(snapshot.map((i) => [i.id, i]));
+  for (const [id, c] of ixChanges) {
+    if (c.rev <= before) continue;
+    out.delete(id);
+    if (c.ix) out.set(id, c.ix);
+  }
+  return [...out.values()];
+}
+
+const ANSWERED_MS = 20_000;
+
+/**
+ * An interaction this page answered (or found over when it tried): its card goes at once, without waiting for the
+ * hub's interaction_resolved, which may be late or lost with a socket. With `answer` it shows answered for a while.
+ */
+export function endInteraction(id: string, answer?: AnsweredCard) {
+  changeInteraction(id, null);
+  if (!answer) return;
+  set({ answered: { ...state.answered, [id]: answer } });
+  setTimeout(() => dropAnswered(id, answer), ANSWERED_MS);
+}
+
+/** Takes an answered card away (its time is up, or closed); `only` keeps a newer one for the same id. */
+export function dropAnswered(id: string, only?: AnsweredCard) {
+  const cur = state.answered[id];
+  if (!cur || (only && cur !== only)) return;
+  const answered = { ...state.answered };
+  delete answered[id];
+  set({ answered });
+}
+
 export async function refresh() {
+  const before = ixRev;
   const [sessions, interactions, assistant, machines, mutes, pins, todos] = await Promise.allSettled([
     api<{ sessions: Session[] }>("/sessions"),
     api<{ interactions: Interaction[] }>("/interactions"),
@@ -438,7 +500,7 @@ export async function refresh() {
     for (const s of sessions.value.sessions ?? []) (by[s.machine_id] ??= []).push(s);
     patch.sessions = by;
   }
-  if (interactions.status === "fulfilled") patch.interactions = interactions.value.interactions ?? [];
+  if (interactions.status === "fulfilled") patch.interactions = mergeInteractions(interactions.value.interactions ?? [], before);
   if (assistant.status === "fulfilled") patch.assistant = { ...assistant.value, conversations: assistant.value.conversations ?? [] };
   if (machines.status === "fulfilled") patch.machines = machines.value.machines ?? [];
   if (mutes.status === "fulfilled") patch.mutes = { spaces: mutes.value.spaces ?? [], sessions: mutes.value.sessions ?? [], allowed: mutes.value.allowed ?? [] };
@@ -497,12 +559,14 @@ export function markSeenLocally(mid: string, sid: string) {
 export function reset() {
   disconnect();
   cursor = NO_CURSOR; // another login: another stream
+  ixChanges.clear();
   resetAgents();
   Object.values(state.launches).forEach((launch) => releaseAttachments(launch.attachments));
   set({
     machines: [],
     sessions: {},
     interactions: [],
+    answered: {},
     assistant: null,
     launches: {},
     outbox: {},

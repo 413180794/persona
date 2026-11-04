@@ -101,26 +101,11 @@ func resolutionAnswer(ix proto.Interaction, r proto.Resolution) string {
 	return "回答了"
 }
 
-// questionAnswers pairs a question card's questions with the answers, in the card's order; answers keyed by a
-// question the card does not have (an older app's) follow, sorted.
+// questionAnswers pairs a question card's questions with the answers, in the card's order (proto.QuestionAnswers).
 func questionAnswers(ix proto.Interaction, r proto.Resolution) []answeredItem {
 	var out []answeredItem
-	seen := map[string]bool{}
-	for _, q := range ix.Questions {
-		if a, ok := r.Answers[q.Question]; ok {
-			out = append(out, answeredItem{Question: q.Question, Answer: a})
-			seen[q.Question] = true
-		}
-	}
-	var rest []string
-	for q := range r.Answers {
-		if !seen[q] {
-			rest = append(rest, q)
-		}
-	}
-	sort.Strings(rest)
-	for _, q := range rest {
-		out = append(out, answeredItem{Question: q, Answer: r.Answers[q]})
+	for _, qa := range proto.QuestionAnswers(ix, r) {
+		out = append(out, answeredItem{Question: qa.Question, Answer: qa.Answer})
 	}
 	return out
 }

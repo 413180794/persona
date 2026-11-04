@@ -38,7 +38,7 @@ import { getState, useStore } from "../../lib/store";
 import type { AgentState, Interaction, Session } from "../../lib/types";
 import { Button, Collapse, cx, Menu, StatusDot, toast, useNow } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
-import { InteractionCard } from "../chat/Interactions";
+import { AnsweredCard, InteractionCard } from "../chat/Interactions";
 import { clock, sessionTitle, stateOf } from "../../lib/format";
 
 // ── what a task is now ──
@@ -710,26 +710,38 @@ function MessageCard({ item }: { item: FeedItem }) {
 export function TaskQuestions({ conversation }: { conversation: string }) {
   const todos = useStore((s) => s.todos);
   const interactions = useStore((s) => s.interactions);
-  const asks = useMemo(() => {
+  const answeredAll = useStore((s) => s.answered);
+  const { asks, answered } = useMemo(() => {
     const out: { todo: Todo; ix: Interaction }[] = [];
+    const keys = new Set<string>();
     for (const t of todos) {
       if (t.origin !== conversation || t.done_at) continue;
-      const keys = new Set((t.agents ?? []).filter((a) => !a.released_at).map((a) => `${a.machine_id}/${a.session_id}`));
-      for (const ix of interactions) if (keys.has(`${ix.machine_id}/${ix.session_id}`)) out.push({ todo: t, ix });
+      const mine = (t.agents ?? []).filter((a) => !a.released_at).map((a) => `${a.machine_id}/${a.session_id}`);
+      mine.forEach((k) => keys.add(k));
+      for (const ix of interactions) if (mine.includes(`${ix.machine_id}/${ix.session_id}`)) out.push({ todo: t, ix });
     }
-    return out.sort((a, b) => (a.ix.created_at ?? "").localeCompare(b.ix.created_at ?? ""));
-  }, [todos, interactions, conversation]);
+    // just answered here: shown answered for a moment above the next one
+    const done = Object.values(answeredAll).filter((a) => keys.has(`${a.ix.machine_id}/${a.ix.session_id}`));
+    return { asks: out.sort((a, b) => (a.ix.created_at ?? "").localeCompare(b.ix.created_at ?? "")), answered: done };
+  }, [todos, interactions, answeredAll, conversation]);
   const first = asks[0];
-  if (!first) return null;
+  if (!first && !answered.length) return null;
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-1.5 px-1 text-[12px] font-semibold text-red">
-        <Icon name="hand" size={13} />
-        <span className="truncate">{first.todo.title}</span>
-        <span className="flex-1" />
-        {asks.length > 1 && <span className="shrink-0">还有 {asks.length - 1} 件</span>}
-      </div>
-      <InteractionCard ix={first.ix} />
+      {answered.map((a) => (
+        <AnsweredCard key={a.ix.id} card={a} />
+      ))}
+      {first && (
+        <>
+          <div className="flex items-center gap-1.5 px-1 text-[12px] font-semibold text-red">
+            <Icon name="hand" size={13} />
+            <span className="truncate">{first.todo.title}</span>
+            <span className="flex-1" />
+            {asks.length > 1 && <span className="shrink-0">还有 {asks.length - 1} 件</span>}
+          </div>
+          <InteractionCard ix={first.ix} />
+        </>
+      )}
     </div>
   );
 }

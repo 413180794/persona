@@ -314,6 +314,7 @@ func cleanPromptTitle(prompt string) string {
 }
 
 func (h *Hub) todoRoutes(api *http.ServeMux) {
+	h.todoDecisionRoutes(api)
 	// GET /api/v1/todos: list all todos (newest created_at first), agents sorted (active first, then released)
 	api.HandleFunc("GET /api/v1/todos", func(w http.ResponseWriter, r *http.Request) {
 		if err := h.ensureTodosLoaded(r.Context()); err != nil {

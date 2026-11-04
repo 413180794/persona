@@ -219,6 +219,9 @@ type Store interface {
 	AutoLinkTodoAgent(ctx context.Context, todoID, machineID, sessionID, title, cwd, agent, startError, source, via string, linkedAt time.Time) (bool, []string, error)
 	UnlinkTodoAgent(ctx context.Context, todoID, machineID, sessionID string) error
 	UpdateTodoAgentSnapshot(ctx context.Context, machineID, sessionID, title, startError string) error
+	ListTodoDecisions(ctx context.Context, todoID string, all bool) ([]db.TodoDecisionRow, error)
+	InsertTodoDecision(ctx context.Context, r db.TodoDecisionRow) (bool, error)
+	SetTodoDecisionSupersedes(ctx context.Context, todoID, id, supersedesID string, at time.Time) (*db.TodoDecisionRow, error)
 	CreateTaskPlan(ctx context.Context, p db.TaskPlanRow) error
 	TaskPlan(ctx context.Context, id string) (*db.TaskPlanRow, error)
 	TaskPlans(ctx context.Context, conversation string) ([]db.TaskPlanRow, error)
@@ -889,6 +892,31 @@ func (h *Hub) recordEnd(id, status string, r *proto.Resolution) {
 
 // errNotPending: the interaction was answered, withdrawn or expired already.
 var errNotPending = errors.New("no longer pending")
+
+// writeEnded answers a resolve of an interaction that is over already. Answered (or handed back, and handed back
+// again) it is the same outcome as the first time: 200 with already and the answer as the history keeps it, so the
+// app shows the card as answered rather than an error — the first answer's event may not have reached it. Otherwise
+// (expired, withdrawn, handed back, or unknown) 410, with how it ended when the history knows.
+func (h *Hub) writeEnded(w http.ResponseWriter, id string, r proto.Resolution, err error) {
+	var status string
+	var kept *proto.Resolution
+	if h.store != nil {
+		status, kept, _ = h.store.InteractionOutcome(context.Background(), id)
+	}
+	if status == "resolved" || (status == "dismissed" && r.Dismiss) {
+		out := map[string]any{"ok": true, "already": true, "status": status}
+		if kept != nil {
+			out["resolution"] = kept
+		}
+		writeJSON(w, out)
+		return
+	}
+	body := errorBody(http.StatusGone, "", err)
+	if status != "" && status != "pending" {
+		body["status"] = status
+	}
+	writeErrorBody(w, http.StatusGone, body)
+}
 var errInvalidElicitation = errors.New("elicitation requires action accept, decline or cancel")
 
 // resolve answers an interaction from the app. A screen card acts right away and its error comes back (the
@@ -938,12 +966,14 @@ func (h *Hub) resolve(id string, r proto.Resolution) error {
 		h.recordEnd(id, status, &kept)
 		h.finished(p)
 		go h.taskAnswered(p.ix, r, status)
+		go h.cardDecisions(p.ix, r, status)
 		return err
 	}
 	kept := redacted(p.ix, r)
 	h.recordEnd(id, status, &kept)
 	h.botResolution(p.ix, r)
 	go h.taskAnswered(p.ix, r, status)
+	go h.cardDecisions(p.ix, r, status)
 	select {
 	case p.done <- r:
 	default:

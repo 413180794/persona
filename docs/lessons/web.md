@@ -223,3 +223,8 @@
 
 - Markdown 的 `/workspace/report.md` 是 Agent 所在电脑的路径，不能让浏览器把它当成 hub 的站内网页：答案（含流式文字）和执行过程文字向 Markdown 传入机器与工作目录，普通点击复用文件侧栏；相对路径按会话目录解析。链接的真实 href 走机器的文件下载接口，修饰键 / 中键打开也不会落到站内 404。
 - `new URL()` 接受路径里不完整的 `%` 转义，后续 `decodeURIComponent()` 仍会抛 `URIError`。模型输出的 `persona://session/…` / `jarvis://session/…` 在渲染期经过链接分类，解码失败要当作无效链接，不能让整个对话白屏；回归用真实 Markdown 渲染覆盖这个边界。
+
+## 提问卡片回答后不消失（2026-11-04，#1673）
+
+- **`refresh()` 的快照会把刚结束的卡片盖回来**：它并发拉 `/sessions`（忙的 hub 上要几秒）和 `/interactions`，全部回来后整体写回。中间到的 `interaction_resolved` 先删了卡片，旧快照随后又把它放回来，卡片还能点，再点就是 410「no longer pending」。待处理卡片的每次变化都编号（`store.ts` 的 `changeInteraction`），快照只补发请求之前的状态；安卓的 `HubInteractionCenter` 用的是同一个办法。
+- **提交成功就在本地收起卡片**，不要只等 WebSocket 的事件（可能晚到，也可能随断掉的连接丢了）；iOS、安卓本来就这样。hub 对已经回答过的卡片幂等回 200 和当时的答案（`already`），只有过期、撤回、交回电脑才回 410，见 `docs/protocol.md`。

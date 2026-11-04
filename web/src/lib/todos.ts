@@ -345,6 +345,70 @@ export function formatTodoContext(title: string, notes?: string): string {
   return `<jarvis-context kind="context" title="待办 · ${t}" url="">${body}</jarvis-context>`;
 }
 
+// ── 决策记录（#1618, docs/todos.md「决策记录」） ───────────────
+
+/** One call the user made on a todo: written by hand, or their answer to a question card of an agent on it. */
+export interface TodoDecision {
+  id: string;
+  todo_id: string;
+  question: string;
+  choice: string;
+  reason: string;
+  source: "manual" | "card" | string;
+  source_machine: string;
+  source_session: string;
+  /** The question card (interaction id) it was answered in; empty for one written by hand. */
+  source_message: string;
+  /** The earlier decision this one replaces. */
+  supersedes_id: string;
+  /** The newest decision that replaces this one; empty while it is in effect. */
+  superseded_by: string;
+  created_at: string;
+}
+
+/** Where a decision came from, as the detail page says it: the agent that asked, by its title when known. */
+export function decisionSourceLabel(d: TodoDecision, todo: Todo, lookup: ReturnType<typeof makeSessionLookup>): string {
+  if (d.source !== "card") return "手动记的";
+  const title = lookup(d.source_machine, d.source_session)?.title
+    || todo.agents?.find((a) => a.machine_id === d.source_machine && a.session_id === d.source_session)?.title;
+  if (!title) return "在 Agent 的提问里答的";
+  // A session's title is often its first message: keep the label to a glance.
+  const short = [...title.trim()].length > 24 ? `${[...title.trim()].slice(0, 24).join("")}…` : title.trim();
+  return `在「${short}」的提问里答的`;
+}
+
+/** The decisions d may be marked as replacing: earlier ones (list order) that are in effect, not d itself. */
+export function supersedeCandidates(d: TodoDecision, all: TodoDecision[]): TodoDecision[] {
+  const at = all.findIndex((x) => x.id === d.id);
+  return all.slice(0, Math.max(at, 0)).filter((x) => !x.superseded_by && x.id !== d.supersedes_id);
+}
+
+/** Every decision of a todo, oldest first, superseded ones included (`superseded_by` set). */
+export async function fetchTodoDecisions(todoId: string): Promise<TodoDecision[]> {
+  const r = await api<{ decisions: TodoDecision[] }>(`/todos/${enc(todoId)}/decisions?all=1`);
+  return r.decisions ?? [];
+}
+
+export async function addTodoDecision(
+  todoId: string,
+  d: { question: string; choice: string; reason?: string; supersedes_id?: string },
+): Promise<TodoDecision> {
+  const r = await api<{ decision: TodoDecision }>(`/todos/${enc(todoId)}/decisions`, {
+    method: "POST",
+    json: { question: d.question.trim(), choice: d.choice.trim(), reason: d.reason?.trim() || undefined, supersedes_id: d.supersedes_id || undefined },
+  });
+  return r.decision;
+}
+
+/** Marks decision `id` as replacing the earlier `supersedesId` ("" undoes it). */
+export async function setDecisionSupersedes(todoId: string, id: string, supersedesId: string): Promise<TodoDecision> {
+  const r = await api<{ decision: TodoDecision }>(`/todos/${enc(todoId)}/decisions/${enc(id)}`, {
+    method: "PATCH",
+    json: { supersedes_id: supersedesId },
+  });
+  return r.decision;
+}
+
 // ── API helpers ──────────────────────────────────────────────
 
 export async function fetchTodos(): Promise<Todo[]> {
@@ -422,7 +486,7 @@ export function openTodoFromTag(
 }
 
 /**
- * Check if an error from the spaces endpoints is a legacy hub 404 (route does not exist).
+ * Check if an error from the spaces (or decisions, #1618) endpoints is a legacy hub 404 (route does not exist).
  * In Persona hub, jsonRouteErrors produces code === "not_found" and error === "Not Found"
  * for unregistered routes. Handlers themselves return specific messages like "todo not found"
  * or "待办不存在". Only a route-level 404 (code === "not_found" and error === "Not Found", or non-JSON 404)

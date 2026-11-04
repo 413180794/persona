@@ -163,7 +163,7 @@ func (h *Hub) routes() http.Handler {
 		}
 		if err := h.resolve(r.PathValue("id"), res); err != nil {
 			if errors.Is(err, errNotPending) {
-				writeErr(w, http.StatusGone, err)
+				h.writeEnded(w, r.PathValue("id"), res, err)
 			} else if errors.Is(err, errInvalidElicitation) {
 				writeErr(w, http.StatusBadRequest, err)
 			} else {
@@ -597,6 +597,10 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 	nameFrom := p.Prompt
 	if strings.TrimSpace(p.NameHint) != "" {
 		nameFrom = p.NameHint
+	}
+	if p.TodoID != "" {
+		// The decisions go to the agent, not into its tab's name (nameFrom is taken before).
+		p.Prompt = h.withTodoDecisions(r.Context(), p.TodoID, p.Prompt)
 	}
 	// Match the node: only Claude can acknowledge startup before the session is ready.
 	async := p.Async && p.ResumeSessionID == "" && (p.AgentType == "" || p.AgentType == "claude")

@@ -529,3 +529,13 @@ func (s *meshStore) UnlinkTodoAgent(context.Context, string, string, string) err
 func (s *meshStore) UpdateTodoAgentSnapshot(context.Context, string, string, string, string) error {
 	return nil
 }
+
+func (s *meshStore) ListTodoDecisions(context.Context, string, bool) ([]db.TodoDecisionRow, error) {
+	return nil, nil
+}
+func (s *meshStore) InsertTodoDecision(context.Context, db.TodoDecisionRow) (bool, error) {
+	return false, db.ErrTodoNotFound
+}
+func (s *meshStore) SetTodoDecisionSupersedes(context.Context, string, string, string, time.Time) (*db.TodoDecisionRow, error) {
+	return nil, db.ErrDecisionNotFound
+}

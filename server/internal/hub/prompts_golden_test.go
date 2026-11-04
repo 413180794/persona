@@ -495,3 +495,14 @@ func TestGoldenTaskDone(t *testing.T) {
 		Replies: []prompts.TaskDoneReply{{Machine: "box", Ask: "再把「全部 N」挪到这一行最左边",
 			Text: "挪好了，PR 已合并，TestFlight 构建号 202611040923。没截图的：Mac。"}}, Build: true}))
 }
+
+// The decisions a handoff carries for a todo (todo/decisions, #1618): one by hand with a reason, one from a card.
+func TestTodoDecisionsGolden(t *testing.T) {
+	if got := prompts.RenderTodoDecisions(prompts.TodoDecisions{Title: "x"}); got != "" {
+		t.Fatalf("no decisions = %q, want nothing", got)
+	}
+	golden(t, "todo_decisions.two", prompts.RenderTodoDecisions(prompts.TodoDecisions{Title: `天气 App "1.3"`, Decisions: []prompts.TodoDecision{
+		{N: 1, Question: "先发哪个平台？", Choice: "安卓", Reason: "iOS 审核卡住了", When: "11-04 10:02"},
+		{N: 2, Question: "用哪个迁移号？", Choice: "0311", When: "11-04 11:30", From: "在「发版 Agent」的提问里答的"},
+	}}))
+}

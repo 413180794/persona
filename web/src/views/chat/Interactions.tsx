@@ -3,8 +3,9 @@ import { useState } from "react";
 import { ApiError, enc, errorText } from "../../lib/api";
 import { apiOp } from "../../lib/ops";
 import type { Interaction } from "../../lib/types";
+import { answerLines, endedText, type Resolution, type ResolveResult } from "../../lib/answered";
 import { sessionCan } from "../../lib/format";
-import { getSession, useStore } from "../../lib/store";
+import { dropAnswered, endInteraction, getSession, useStore, type AnsweredCard as Answered } from "../../lib/store";
 import { Button, cx, EASE, Menu, toast, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
@@ -16,10 +17,18 @@ async function resolve(ix: Interaction, body: Record<string, unknown>) {
   }
   try {
     // one op id for this answer: sent again through a gap (a hub restart), it is taken once
-    await apiOp(`/interactions/${enc(ix.id)}/resolve`, { method: "POST", json: body });
+    const res = await apiOp<ResolveResult>(`/interactions/${enc(ix.id)}/resolve`, { method: "POST", json: body });
+    // Answered already (here, its event missed; or elsewhere): the hub says with what, and the card shows that.
+    const already = res?.already === true;
+    const r: Resolution = already ? (res.resolution ?? {}) : body;
+    endInteraction(ix.id, r.dismiss === true && !already ? undefined : { ix, resolution: r, already });
+    if (already) toast("这张卡片已经回答过了", "info");
     return true;
   } catch (e) {
-    if (e instanceof ApiError && e.code === "prompt_changed") toast("电脑上的对话框变了，已按新的屏幕重新生成", "error");
+    if (e instanceof ApiError && e.status === 410) {
+      endInteraction(ix.id); // over (expired, withdrawn, handed back): nothing left to answer
+      toast(endedText(e.body.status), "error");
+    } else if (e instanceof ApiError && e.code === "prompt_changed") toast("电脑上的对话框变了，已按新的屏幕重新生成", "error");
     else toast(`没送到：${errorText(e)}`, "error");
     return false;
   }
@@ -438,6 +447,40 @@ function MultiScreenCard({ ix }: { ix: Interaction }) {
         )}
       </div>
     </Card>
+  );
+}
+
+/** A card this page answered: what was asked and the picks, read-only, for a moment (lib/store.ts endInteraction). */
+export function AnsweredCard({ card }: { card: Answered }) {
+  const lines = answerLines(card.ix, card.resolution);
+  return (
+    <div role="status" className="overflow-hidden rounded-card bg-surface px-3.5 py-2.5 shadow-card" style={{ animation: `fade-up 300ms ${EASE} both` }}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-green">
+            <Icon name="check" size={11} stroke={3} />
+            {card.resolution.dismiss === true ? "已交回电脑" : "已回答"}
+          </div>
+          <div className="flex flex-col gap-1">
+            {lines.map((l, i) => (
+              <div key={i} className="min-w-0 text-[13px] leading-snug">
+                {l.label && <span className="block truncate text-[12px] text-ink-3">{l.label}</span>}
+                <span className="block whitespace-pre-wrap text-ink">{l.answer}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <button
+          type="button"
+          aria-label="收起"
+          title="收起"
+          onClick={() => dropAnswered(card.ix.id)}
+          className="flex size-6 shrink-0 items-center justify-center rounded-[6px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
+        >
+          <Icon name="x" size={14} stroke={2.2} />
+        </button>
+      </div>
+    </div>
   );
 }
 

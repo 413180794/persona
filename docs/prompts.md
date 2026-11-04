@@ -42,6 +42,7 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `tools/tab_name.md` | 给新 Agent 的 herdr 标签页起名 | `hub/tabname.go` |
 | `tools/translate*.md` | 翻译短文本 / 一封邮件 | `hub/translate.go` |
 | `tools/json_only.md` | 所有要 JSON 的请求在 system 末尾加的那句 | `ai/ai.go` `JSONMax` |
+| `todo/decisions.md` | 交给 Agent 时消息前面的 `<jarvis-context>`：这个待办上现在生效的决策（`docs/todos.md`「决策记录」） | `hub/todo_decisions.go` |
 | `tools/launcher_check.md` | 设置 › 模型「测试可用性」发的那一句 | `node/launchercheck.go` |
 | `voice/instructions.md` | 内置语音插件的实时模型的 instructions（称呼、说话方式、有没有函数工具、重连时断之前说过的话） | `voice/session.go` |
 | `voice/delegated.md`、`report.md`、`handoff.md` | 语音里交给主对话的消息、做完后告诉语音模型的话、交出去时先回的那句 | `voice/session.go`、`delegate.go` |

@@ -24,7 +24,7 @@ import { Button, copyText, cx, Dialog, IconButton, Loading, Menu, StatePill, Sta
 import { Icon } from "../../ui/icons";
 import { AGENT_COMMANDS, Composer, type Outgoing } from "./Composer";
 import { hasLoop, LOOP_TEXT } from "../../lib/loop-command";
-import { InteractionCard } from "./Interactions";
+import { AnsweredCard, InteractionCard } from "./Interactions";
 import { UserBubble } from "./SegmentView";
 import { ActivityChips, AgentStrip, SubagentFooter } from "./Activity";
 import { ChatContext, type ChatContextValue } from "./chat-context";
@@ -56,6 +56,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const machineName = useStore((s) => machineWithHub(mid, s.machines));
   const siblings = useStore((s) => (session?.space_id ? (s.sessions[mid] ?? []).filter((x) => x.space_id === session.space_id && stateOf(x) !== "offline") : []));
   const interactions = useStore((s) => s.interactions.filter((i) => i.machine_id === mid && i.session_id === sid));
+  const answered = useStore((s) => Object.values(s.answered).filter((a) => a.ix.machine_id === mid && a.ix.session_id === sid));
   // a subagent's conversation is read in the same chat, read-only (its session id is "<parent>@<agent>")
   const [viewing, setViewing] = useState<Subagent | null>(null);
   useEffect(() => setViewing(null), [mid, sid]);
@@ -523,6 +524,9 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
             <RouteChip conversation={sid} />
           </>
         )}
+        {answered.map((a) => (
+          <AnsweredCard key={a.ix.id} card={a} />
+        ))}
         {interactions.map((ix) => (
           <InteractionCard key={ix.id} ix={ix} />
         ))}

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getState, hubHas, larkOn, refresh, refreshTodos, reset, setSpacesSupported } from "./store";
+import { dropAnswered, endInteraction, getState, hubHas, larkOn, refresh, refreshTodos, reset, setSpacesSupported } from "./store";
 
 describe("待办 store 与 404 兼容 (C2)", () => {
   beforeEach(() => {
@@ -148,5 +148,76 @@ describe("hub features", () => {
     expect(larkOn({ features: [] })).toBe(true);
     expect(larkOn({ features: ["plugins", "lark_attachments", "lark_native_encryption"] })).toBe(false);
     expect(larkOn({ features: ["plugins", "lark", "lark_moments"] })).toBe(true);
+  });
+});
+
+describe("待回答的卡片：刷新不复活已结束的卡片 (#1673)", () => {
+  const ix = { id: "ix_q", machine_id: "m", session_id: "s", kind: "question" as const, questions: [{ question: "发吗？", options: [{ label: "发" }] }] };
+
+  beforeEach(() => {
+    reset();
+    vi.stubGlobal("localStorage", { getItem: () => "mock-token", setItem: () => {}, removeItem: () => {} });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    reset();
+  });
+
+  /** /interactions answers at once with `pending`; /sessions waits for release() (a busy hub takes seconds). */
+  function slowSessions(pending: unknown[]) {
+    let release = () => {};
+    const held = new Promise<void>((r) => (release = r));
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async (url: string) => {
+      if (url.includes("/interactions")) return new Response(JSON.stringify({ interactions: pending }), { status: 200 });
+      if (url.includes("/sessions")) await held;
+      return new Response(JSON.stringify({}), { status: 200 });
+    }));
+    return () => release();
+  }
+
+  it("刷新途中回答的卡片，刷新回来后不再出现", async () => {
+    let release = slowSessions([ix]);
+    await (async () => {
+      const p = refresh();
+      release();
+      await p;
+    })();
+    expect(getState().interactions.map((i) => i.id)).toEqual(["ix_q"]);
+
+    release = slowSessions([ix]); // the snapshot still has it: asked for before the answer
+    const p = refresh();
+    await new Promise((r) => setTimeout(r, 0));
+    endInteraction("ix_q", { ix, resolution: { answers: { "发吗？": "发" } } });
+    expect(getState().interactions).toEqual([]);
+    release();
+    await p;
+    expect(getState().interactions).toEqual([]);
+    expect(getState().answered.ix_q?.resolution).toEqual({ answers: { "发吗？": "发" } });
+
+    // a snapshot asked for after the answer is taken as it is
+    release = slowSessions([]);
+    const q = refresh();
+    release();
+    await q;
+    expect(getState().interactions).toEqual([]);
+  });
+
+  it("已回答的卡片过一会儿收起，也可以手动收起", () => {
+    vi.useFakeTimers();
+    endInteraction("ix_q", { ix, resolution: { answers: { "发吗？": "发" } } });
+    expect(Object.keys(getState().answered)).toEqual(["ix_q"]);
+    vi.advanceTimersByTime(25_000);
+    expect(getState().answered).toEqual({});
+
+    endInteraction("ix_q", { ix, resolution: {} });
+    dropAnswered("ix_q");
+    expect(getState().answered).toEqual({});
+  });
+
+  it("没有答案（交回电脑、已过期）只收起卡片", () => {
+    endInteraction("ix_q");
+    expect(getState().answered).toEqual({});
   });
 });

@@ -1,5 +1,5 @@
 // Beautiful UI Todos View: left list (sorted by status & created_at), right detail, handover dialog.
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, enc, errorText } from "../lib/api";
 import { ago, clock, shortPath, stateOf, tabLabel, uuid } from "../lib/format";
 import { launchAgent } from "../lib/new-agent";
@@ -8,10 +8,16 @@ import { plainMarkdown } from "../lib/plain-markdown";
 import { useAgentSessions } from "../lib/sessions";
 import { refresh, refreshTodos, useStore } from "../lib/store";
 import {
+  addTodoDecision,
   createTodo,
+  decisionSourceLabel,
   deleteTodo,
+  fetchTodoDecisions,
+  setDecisionSupersedes,
+  supersedeCandidates,
   formatAgentSource,
   formatTodoContext,
+  isLegacySpacesRouteError,
   makeSessionLookup,
   mostUrgentAgent,
   sortTodos,
@@ -24,6 +30,7 @@ import {
   updateTodo,
   type Todo,
   type TodoAgent,
+  type TodoDecision,
   taskNow,
 } from "../lib/todos";
 import type { Interaction, Launcher, Machine } from "../lib/types";
@@ -592,6 +599,8 @@ function TodoDetail({
         </div>
       </div>
 
+      <DecisionsSection todo={todo} lookup={lookup} />
+
       {/* Spaces Section */}
       {spacesSupported !== false && todo.spaces && todo.spaces.length > 0 && (
         <div className="mt-6">
@@ -773,6 +782,270 @@ function TodoDetail({
         </Button>
       </div>
     </div>
+  );
+}
+
+// ── Decisions (#1618) ────────────────────────────────────────
+
+/**
+ * 决策：the calls made on this todo, in effect first-to-last; 改判 writes a new one that replaces it, 看全历史 shows
+ * the replaced ones struck through. Refetched whenever the todo changes (the hub bumps it when a decision is written,
+ * also from an answered card). Hidden on a hub without decisions (404 on the route).
+ */
+function DecisionsSection({ todo, lookup }: { todo: Todo; lookup: ReturnType<typeof makeSessionLookup> }) {
+  const [all, setAll] = useState<TodoDecision[] | null>(null);
+  const [failed, setFailed] = useState("");
+  const [unsupported, setUnsupported] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const [form, setForm] = useState<{ supersedes?: TodoDecision } | null>(null);
+  const [linking, setLinking] = useState<TodoDecision | null>(null);
+  const menu = useMenu();
+  // Only the newest load lands: a slow earlier one must not put back an older list.
+  const loads = useRef(0);
+
+  const load = useCallback(async () => {
+    const n = ++loads.current;
+    try {
+      const list = await fetchTodoDecisions(todo.id);
+      if (n !== loads.current) return;
+      setAll(list);
+      setFailed("");
+      setUnsupported(false);
+    } catch (e) {
+      if (n !== loads.current) return;
+      if (isLegacySpacesRouteError(e)) setUnsupported(true); // a hub from before decisions: no route
+      else setFailed(errorText(e));
+    }
+  }, [todo.id]);
+
+  useEffect(() => {
+    void load();
+  }, [load, todo.updated_at]);
+
+  useEffect(() => {
+    setAll(null);
+    setFailed("");
+    setShowAll(false);
+    setForm(null);
+  }, [todo.id]);
+
+  if (unsupported) return null;
+  const effective = (all ?? []).filter((d) => !d.superseded_by);
+  const replaced = (all ?? []).length - effective.length;
+  const shown = showAll ? (all ?? []) : effective;
+  const byId = new Map((all ?? []).map((d) => [d.id, d]));
+
+  const markSupersedes = async (d: TodoDecision, old: string) => {
+    try {
+      await setDecisionSupersedes(todo.id, d.id, old);
+      await load();
+      toast(old ? "已标为改判" : "已撤销改判", "ok");
+    } catch (e) {
+      toast(`操作失败：${errorText(e)}`, "error");
+    }
+  };
+
+  return (
+    <div className="mt-6">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <span className="text-[11.5px] font-medium tracking-[0.04em] text-ink-3 uppercase">决策 · {effective.length}</span>
+        <div className="flex shrink-0 items-center gap-1">
+          {replaced > 0 && (
+            <Button tone="quiet" className="whitespace-nowrap px-2 py-1 text-[12px]" onClick={() => setShowAll((v) => !v)}>
+              {showAll ? "只看生效的" : `看全历史（${replaced} 条已改判）`}
+            </Button>
+          )}
+          <Button tone="quiet" icon="plus" className="whitespace-nowrap px-2 py-1 text-[12px]" onClick={() => setForm({})}>
+            记一条
+          </Button>
+        </div>
+      </div>
+
+      {failed && all === null ? (
+        <div className="flex items-center justify-between gap-3 rounded-control border border-dashed border-line p-4 text-[12.5px] text-ink-3">
+          <span className="min-w-0 truncate">决策没加载出来：{failed}</span>
+          <Button tone="quiet" className="shrink-0 whitespace-nowrap px-2 py-1 text-[12px]" onClick={() => void load()}>
+            重试
+          </Button>
+        </div>
+      ) : all === null ? null : shown.length === 0 ? (
+        <div className="rounded-control border border-dashed border-line p-4 text-[12.5px] leading-[1.6] text-ink-3">
+          这件事上拍过的板记在这里：Agent 提问时你的回答会自动记一条，也可以手动记。交给 Agent 时会带上生效的这些。
+        </div>
+      ) : (
+        <ol className="flex flex-col gap-2">
+          {shown.map((d) => {
+            const off = Boolean(d.superseded_by);
+            const replaces = d.supersedes_id ? byId.get(d.supersedes_id) : undefined;
+            const candidates = supersedeCandidates(d, all ?? []);
+            return (
+              <li
+                key={d.id}
+                className={cx("rounded-control border border-line p-3", off ? "bg-hover/40" : "bg-canvas")}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className={cx("text-[13.5px] font-semibold", off ? "text-ink-3 line-through" : "text-ink")}>{d.question}</div>
+                    <div className={cx("mt-1 text-[13px] whitespace-pre-wrap", off ? "text-ink-3 line-through" : "text-ink")}>
+                      <span className="text-ink-3">选了：</span>
+                      {d.choice}
+                    </div>
+                    {d.reason && (
+                      <div className={cx("mt-0.5 text-[12.5px] whitespace-pre-wrap text-ink-2", off && "line-through")}>
+                        <span className="text-ink-3">原因：</span>
+                        {d.reason}
+                      </div>
+                    )}
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 text-[11.5px] text-ink-3">
+                      <span>{clock(d.created_at)}</span>
+                      <span>·</span>
+                      <span>{decisionSourceLabel(d, todo, lookup)}</span>
+                      {off && (
+                        <>
+                          <span>·</span>
+                          <span>已被改判</span>
+                        </>
+                      )}
+                      {!off && replaces && (
+                        <>
+                          <span>·</span>
+                          <span className="truncate">改判了「{replaces.choice}」</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {!off && (
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <Button tone="quiet" className="whitespace-nowrap px-2 py-1 text-[12px]" onClick={() => setForm({ supersedes: d })}>
+                        改判
+                      </Button>
+                      {(candidates.length > 0 || d.supersedes_id) && (
+                        <IconButton
+                          icon="more"
+                          label="更多"
+                          size={26}
+                          active={linking?.id === d.id && Boolean(menu.anchor)}
+                          onClick={(e) => {
+                            setLinking(d);
+                            menu.open(e);
+                          }}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+
+      {menu.anchor && linking && (
+        <Menu
+          anchor={menu.anchor}
+          onClose={menu.close}
+          align="right"
+          width={260}
+          items={[
+            ...supersedeCandidates(linking, all ?? []).map((c) => ({
+              key: c.id,
+              label: `改判了「${c.question} → ${c.choice}」`,
+              onSelect: () => void markSupersedes(linking, c.id),
+            })),
+            ...(linking.supersedes_id
+              ? [{ key: "undo", label: "撤销改判", divider: true, onSelect: () => void markSupersedes(linking, "") }]
+              : []),
+          ]}
+        />
+      )}
+
+      <DecisionDialog
+        open={form !== null}
+        todoId={todo.id}
+        supersedes={form?.supersedes}
+        onClose={() => setForm(null)}
+        onSaved={load}
+      />
+    </div>
+  );
+}
+
+function DecisionDialog({
+  open,
+  todoId,
+  supersedes,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  todoId: string;
+  supersedes?: TodoDecision;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [question, setQuestion] = useState("");
+  const [choice, setChoice] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setQuestion(supersedes?.question ?? "");
+      setChoice("");
+      setReason("");
+    }
+  }, [open, supersedes]);
+
+  const submit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!question.trim() || !choice.trim()) return;
+    setBusy(true);
+    try {
+      await addTodoDecision(todoId, { question, choice, reason, supersedes_id: supersedes?.id });
+      await onSaved();
+      toast(supersedes ? "已改判" : "已记下", "ok");
+      onClose();
+    } catch (err) {
+      toast(`保存失败：${errorText(err)}`, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const field = "w-full rounded-control border border-line bg-canvas px-3 py-1.5 text-[13.5px] text-ink outline-none focus:border-accent";
+  return (
+    <Dialog open={open} onClose={onClose} title={supersedes ? "改判" : "记一条决策"}>
+      <form onSubmit={submit} className="flex flex-col gap-3.5">
+        {supersedes && (
+          <p className="text-[12.5px] leading-[1.6] text-ink-3">
+            原来选的「{supersedes.choice}」会保留、划掉，交给 Agent 时只带新的这条。
+          </p>
+        )}
+        <div>
+          <label htmlFor="decision-question" className="mb-1 block text-[12px] font-medium text-ink-2">问题</label>
+          <input id="decision-question" type="text" required autoFocus={!supersedes} value={question}
+            onChange={(e) => setQuestion(e.target.value)} placeholder="要定的是什么…" className={field} />
+        </div>
+        <div>
+          <label htmlFor="decision-choice" className="mb-1 block text-[12px] font-medium text-ink-2">选了什么</label>
+          <input id="decision-choice" type="text" required autoFocus={Boolean(supersedes)} value={choice}
+            onChange={(e) => setChoice(e.target.value)} placeholder="定下来的方案…" className={field} />
+        </div>
+        <div>
+          <label htmlFor="decision-reason" className="mb-1 block text-[12px] font-medium text-ink-2">原因（选填）</label>
+          <textarea id="decision-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)}
+            placeholder="为什么这么定、否了什么…" className={cx(field, "resize-y text-[13px]")} />
+        </div>
+        <div className="mt-2 flex justify-end gap-2">
+          <Button tone="secondary" onClick={onClose}>
+            取消
+          </Button>
+          <Button tone="accent" type="submit" disabled={!question.trim() || !choice.trim() || busy} busy={busy}>
+            {supersedes ? "改判" : "记下"}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
   );
 }
 

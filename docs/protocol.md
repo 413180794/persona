@@ -531,7 +531,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | PUT | `/api/v1/machines/{mid}/claude-dirs/blocked` | 整份替换屏蔽规则 `{"blocked":["~/.automation/*", …]}`（路径或通配，以 `/` 或 `~/` 开头，否则 400）；回同 GET 的状态 |
 | GET | `/api/v1/interactions/history?machine_id=&session_id=&limit=` | `{"interactions":[{"interaction","status","resolution","resolved_at"}]}` |
 | GET | `/api/v1/interactions` | `{"interactions":[Interaction]}`（待处理） |
-| POST | `/api/v1/interactions/{id}/resolve` | body 为 Resolution |
+| POST | `/api/v1/interactions/{id}/resolve` | body 为 Resolution；回 `{"ok":true}`。已经结束的（#1673）：已回答的（或交回电脑后再交回）幂等回 200 `{"ok":true,"already":true,"status","resolution"}`，`resolution` 是当时生效的答案（按历史记录脱敏），可能和这次发的不同，App 据此把卡片显示成已回答；过期、撤回、交回电脑的回 410 `{"error","code":"gone","status"}`，查不到结局的 410 不带 `status` |
 | POST | `/api/v1/devices` | `{"device_id","name","kind":"iphone|mac|watch","apns_token"?,"apns_env"?,"topic"?,"push_key"?,"relay_url"?,"relay_grant"?}`；后三个是推送中继（手机公钥、中继地址、中继给的凭据，`docs/push-relay.md`），hub 没有 APNs key 时据此推送。互联组里只有中心推送：连成员时这条也被转给中心；推送的 payload（直推的和经中继密封的）顶层带 `hub_id`：中心的（[mesh.md](mesh.md)「凭据和推送」）。`mac` 是 Mac App（同一个 bundle id，同一个 topic）：不收静默唤醒，它连着 hub 时不收「需要你处理」「Agent 做完」（App 自己发本地通知）。hub 记下是哪个设备凭据登记的，吊销那个凭据时连这台设备一起删掉，不再推送 |
 | POST | `/api/v1/devices/{id}/live-activity` | 实时活动的 token：`{"push_to_start_token"}`、`{"activity_id","push_token"}`（会轮换，重复发）、`{"activity_id","ended":true}`（`docs/live-activity.md`） |
 | GET | `/api/v1/fleet` | `{"fleet": FleetState}`：当前的实时活动内容（App 回到前台时拉），`stats` 带全部数字和每台机器的负载 |
