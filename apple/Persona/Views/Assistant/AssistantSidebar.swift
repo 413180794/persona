@@ -611,7 +611,7 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
 struct DrawerPan {
     /// Marks nothing: there is no drawer drag to keep off a row.
     struct NoRowSwipe: View {
-        var body: some View { Color.clear.frame(width: 0, height: 0) }
+        var body: some View { EmptyView() }
     }
 }
 #endif

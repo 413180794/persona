@@ -5,6 +5,10 @@
 - 共享视图引用的辅助扩展也必须编进每个目标：watchOS 10 兼容把 `Color.mix` 换成 `blended` 后，扩展若仍留在 `Theme.swift`，
   只编入 `PersonaFace` 的灵动岛小组件会在 Release 归档失败。辅助扩展随 `PersonaFace.swift` 编入每个目标；不要把整套 App 主题拖进扩展，也不要在两个文件里重复声明。
 
+## 无内容的平台替身用 EmptyView（#2001）
+
+visionOS 没有 iOS 的抽屉手势，`DrawerPan.NoRowSwipe` 只需作为无内容背景。用 `Color.clear.frame(width: 0, height: 0)` 会引入不必要的固定尺寸；iOS 的 token 检查扫描共享源码，不会因为它位于 visionOS 分支就忽略。直接返回 `EmptyView()`，既不绘制内容，也不占布局空间；不为这个空替身新增零尺寸 token，不提高基线或添加豁免。
+
 ## 视频导出
 
 - 2026-11-04，#1045：生成的灰色视频在真实压缩测试中触发 `EXC_BREAKPOINT / SIGTRAP`，调用栈位于 Swift AVFoundation 的 `AVAssetExportSession.ProgressStates.Iterator.StateInternal.init`。
