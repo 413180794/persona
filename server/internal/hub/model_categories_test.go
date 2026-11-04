@@ -79,14 +79,17 @@ func TestModelUsesAreReadOnlyAndIgnoreDeprecatedOverrides(t *testing.T) {
 	}
 }
 
-// A task's own conversation (started, then continued) runs on the Agents category, never on the task's old fields;
-// delivery into the conversation it came from is a turn of that conversation (#1518): its launcher, still none of the
-// task's old fields, the task's permission mode.
-func TestScheduledExecutionUsesAgentsCategoryAndNoOldOverrides(t *testing.T) {
+// A task's own conversation (started, then continued) runs on the 主对话 category (#1544: not Agents, whatever that
+// is set to), never on the task's old fields; delivery into the conversation it came from is a turn of that
+// conversation (#1518): its launcher, still none of the task's old fields, the task's permission mode.
+func TestScheduledExecutionUsesMainConversationCategoryAndNoOldOverrides(t *testing.T) {
 	h, _ := modelTestHub(t)
 	n := newAssistantNode(t, h)
 	ctx := context.Background()
-	if err := h.saveModelRecord(ctx, "agent.new", 0, ModelBinding{Provider: "launcher.claude", Model: "category-model", Effort: "high"}); err != nil {
+	if err := h.saveModelRecord(ctx, "assistant", 0, ModelBinding{Provider: "launcher.claude", Model: "category-model", Effort: "high"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.saveModelRecord(ctx, "agent.new", 0, ModelBinding{Provider: "launcher.agents", Model: "agents-model"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := h.saveModelRecord(ctx, "schedule", 0, ModelBinding{Provider: "launcher.old-schedule"}); err != nil {

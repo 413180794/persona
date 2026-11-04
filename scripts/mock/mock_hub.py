@@ -3819,15 +3819,15 @@ MODEL_DEFINITIONS = [
     ("kb.moments", "removed关联", "信息处理", "api"),
     ("assistant.title", "对话标题", "信息处理", "api"),
     ("agent.title", "Agent 标签名", "信息处理", "api"),
-    ("schedule", "自动任务", "Agents", "launcher"),
+    ("schedule", "定时任务", "主对话", "launcher"),
 ]
 MODEL_SCOPES = {
-    "assistant": ["与当前 persona 的直接对话"],
-    "agent.new": ["新建 Agent", "AI 分身执行", "飞书 /agent", "自动任务"],
+    "assistant": ["与当前 persona 的直接对话", "定时任务"],
+    "agent.new": ["新建 Agent", "AI 分身执行", "飞书 /agent"],
     "kb": ["文本与邮件翻译", "草拟回复", "知识整理与会话压缩", "项目整理与事项提取", "对话标题与 Agent 标签名"],
     "inbox.triage": ["收件箱分拣与摘要", "重要性判断", "判断是否需要回复或交给 Agent"],
 }
-MODEL_CATEGORY_FOR = {pid: {"Agents": "agent.new", "信息处理": "kb", "信息筛选": "inbox.triage"}.get(group, pid)
+MODEL_CATEGORY_FOR = {pid: {"主对话": "assistant", "Agents": "agent.new", "信息处理": "kb", "信息筛选": "inbox.triage"}.get(group, pid)
                       for pid, _, group, _ in MODEL_DEFINITIONS}
 
 
@@ -3838,11 +3838,11 @@ def model_configuration(include_uses=False):
                   {"id": "legacy.ai", "name": "轻量 API", "kind": "api", "api": "messages", "model": "model-fast"}]
     definitions = list(MODEL_DEFINITIONS if include_uses else MODEL_DEFINITIONS[:4])
     if include_uses:
-        definitions += [("task." + t["id"], t.get("title") or "跟进任务", "Agents", "launcher") for t in SCHEDULE]
+        definitions += [("task." + t["id"], t.get("title") or "跟进任务", "主对话", "launcher") for t in SCHEDULE]
     purposes = []
     with MODEL_CONFIG_LOCK:
         for pid, name, group, kind in definitions:
-            category = "agent.new" if pid.startswith("task.") else MODEL_CATEGORY_FOR[pid]
+            category = "assistant" if pid.startswith("task.") else MODEL_CATEGORY_FOR[pid]
             stored = MODEL_BINDINGS.get(category, {"revision": 0, "override": {}})
             binding = dict(stored["override"])
             effective = {"provider": "legacy.ai" if kind == "api" else "launcher.claude", "model": "model-fast" if kind == "api" else "model-chat"}

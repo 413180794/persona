@@ -65,8 +65,8 @@ type ModelPurpose struct {
 var modelCategoryIDs = []string{"assistant", "agent.new", "kb", "inbox.triage"}
 
 var modelPurposes = []ModelPurpose{
-	{ID: "assistant", Name: "主对话", Group: "默认模型", Kind: "launcher", Uses: []ModelUse{{Name: "与当前 persona 的直接对话"}}},
-	{ID: "agent.new", Name: "Agents", Group: "默认模型", Kind: "launcher", Uses: []ModelUse{{Name: "新建 Agent"}, {Name: "AI 分身执行"}, {Name: "飞书 /agent"}, {Name: "自动任务"}}},
+	{ID: "assistant", Name: "主对话", Group: "默认模型", Kind: "launcher", Uses: []ModelUse{{Name: "与当前 persona 的直接对话"}, {Name: "定时任务"}}},
+	{ID: "agent.new", Name: "Agents", Group: "默认模型", Kind: "launcher", Uses: []ModelUse{{Name: "新建 Agent"}, {Name: "AI 分身执行"}, {Name: "飞书 /agent"}}},
 	{ID: "kb", Name: "信息处理", Group: "默认模型", Kind: "api", Uses: []ModelUse{{Name: "文本与邮件翻译"}, {Name: "草拟回复"}, {Name: "知识整理与会话压缩"}, {Name: "项目整理与事项提取"}, {Name: "对话标题与 Agent 标签名"}}},
 	{ID: "inbox.triage", Name: "信息筛选", Group: "默认模型", Kind: "api", Uses: []ModelUse{{Name: "收件箱分拣与摘要"}, {Name: "重要性判断"}, {Name: "判断是否需要回复或交给 Agent"}}},
 	{ID: "inbox.agent", Name: "AI 分身执行", Group: "Agents", Kind: "launcher", Parent: "agent.new"},
@@ -81,12 +81,15 @@ var modelPurposes = []ModelPurpose{
 	{ID: "kb.moments", Name: "removed关联", Group: "信息处理", Kind: "api", Parent: "kb"},
 	{ID: "assistant.title", Name: "对话标题", Group: "信息处理", Kind: "api", Parent: "kb"},
 	{ID: "agent.title", Name: "Agent 标签名", Group: "信息处理", Kind: "api", Parent: "kb"},
-	{ID: "schedule", Name: "自动任务", Group: "Agents", Kind: "launcher", Parent: "agent.new"},
+	// Scheduled tasks (早报…) run in the assistant's directory with its instructions, memory and tools: they are the
+	// assistant's conversations, on 主对话's model, not new Agents (#1544; #697 had them under Agents, plain Claude Code
+	// by default, which is not logged in on every hub machine).
+	{ID: "schedule", Name: "定时任务", Group: "主对话", Kind: "launcher", Parent: "assistant"},
 }
 
 func modelCategoryID(id string) string {
 	if strings.HasPrefix(id, "task.") {
-		return "agent.new"
+		return "assistant"
 	}
 	for _, p := range modelPurposes {
 		if p.ID == id && p.Parent != "" {
@@ -136,7 +139,7 @@ func (h *Hub) modelPurposeDef(ctx context.Context, id string) (ModelPurpose, err
 		}
 		for _, t := range s.tasks {
 			if id == "task."+t.ID {
-				return ModelPurpose{ID: id, CategoryID: "agent.new", Name: t.label(), Group: "Agents", Kind: "launcher", Parent: "agent.new", MachineID: t.MachineID}, nil
+				return ModelPurpose{ID: id, CategoryID: "assistant", Name: t.label(), Group: "主对话", Kind: "launcher", Parent: "assistant", MachineID: t.MachineID}, nil
 			}
 		}
 	}

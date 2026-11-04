@@ -66,8 +66,10 @@ func TestMainConversationFollowsTheAssistantLauncher(t *testing.T) {
 	m.mu.Lock()
 	m.sessions = []proto.Session{{SessionID: "main-1", Launcher: "claude", Model: "stale", Assistant: true, Cwd: "/home/u/.jarvis/assistant"},
 		{SessionID: "side-2", Launcher: "sss", Assistant: true, Cwd: "/home/u/.jarvis/assistant"},
-		{SessionID: "side-3", Launcher: "gone", Assistant: true, Cwd: "/home/u/.jarvis/assistant"}}
+		{SessionID: "side-3", Launcher: "gone", Assistant: true, Cwd: "/home/u/.jarvis/assistant"},
+		{SessionID: "daily-4", Launcher: "sss", Assistant: true, Cwd: "/home/u/.jarvis/assistant"}}
 	m.mu.Unlock()
+	setTasks(h, Task{ID: "r", Title: "早报", Repeat: repeatDaily, Time: "09:00", Enabled: true, RunMachineID: "box", RunSessionID: "daily-4"})
 
 	mux := h.routes()
 	for _, c := range []struct{ sid, body, want, wantModel string }{
@@ -80,6 +82,9 @@ func TestMainConversationFollowsTheAssistantLauncher(t *testing.T) {
 		{"side-2", `{"text":"hi","model":"m9"}`, "sss", "m9"},
 		// a launcher deleted since (claude-mac → claude-example-cli): back to the configured one
 		{"side-3", `{"text":"hi"}`, "ccc", ""},
+		// a scheduled task's own conversation follows the setting like the main one (#1544); a pick still wins
+		{"daily-4", `{"text":"hi"}`, "ccc", ""},
+		{"daily-4", `{"text":"hi","launcher":"other"}`, "other", ""},
 	} {
 		if code, out := call(t, mux, "POST", "/api/v1/sessions/box/"+c.sid+"/messages", h.cfg.Token, c.body); code != 200 {
 			t.Fatalf("%s: %d %v", c.sid, code, out)

@@ -984,7 +984,7 @@ var errTaskBusy = errors.New("上一轮还在运行，这次跳过")
 
 // runTask sends the task's message into the conversation it came from (on that conversation's launcher, as the phone's
 // messages are), else into its own conversation, else (none yet, or that one is gone, busy elsewhere, or on another
-// launcher / machine) a new one that becomes its own; those two on the Agents launcher (模型配置), with the task's
+// launcher / machine) a new one that becomes its own; those two on 模型配置 › 主对话 (#1544), with the task's
 // permission mode. due: when it was meant to run; now: when the scheduler noticed (a run that
 // waited for the hub to come back is told how late it is); manual is 立即运行 in the app.
 //
@@ -1003,9 +1003,9 @@ func (h *Hub) runTask(t Task, due, now time.Time, manual, retried bool) (proto.S
 	defer h.sched.end(t.ID)
 	if t.SessionID != "" {
 		if m := h.localMachine(t.MachineID); m != nil {
-			// A follow-up the assistant scheduled for itself is a turn of that conversation, not an Agents task: it
-			// keeps the conversation's launcher like a message from the phone does. On the Agents launcher it moved
-			// the main conversation onto another one (plain claude, not logged in there) for good (#1518).
+			// A follow-up the assistant scheduled for itself is a turn of that conversation: it keeps the
+			// conversation's launcher like a message from the phone does. On the task's category launcher (Agents
+			// then) it moved the main conversation onto another one (plain claude, not logged in there) for good (#1518).
 			params := map[string]any{"session_id": t.SessionID, "text": taskPrompt(t, due, now, loc, manual, kb, false), "permission_mode": t.PermissionMode}
 			err := h.assistantSendModel(ctx, m, t.SessionID, params)
 			if err == nil {

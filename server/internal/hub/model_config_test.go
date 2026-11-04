@@ -275,7 +275,7 @@ func TestTaskModelConfigurationSurvivesOrdinaryTaskSave(t *testing.T) {
 	s.mu.Lock()
 	s.tasks = []Task{{ID: "one", Title: "任务", Prompt: "x", Repeat: repeatInterval, EveryMinutes: 30, Enabled: true}}
 	s.mu.Unlock()
-	r := modelRequest(mux, "PATCH", "agent.new", `{"revision":0,"provider":"launcher.claude","model":"exact","effort":"high"}`)
+	r := modelRequest(mux, "PATCH", "assistant", `{"revision":0,"provider":"launcher.claude","model":"exact","effort":"high"}`)
 	if r.Code != 200 {
 		t.Fatal(r.Body.String())
 	}

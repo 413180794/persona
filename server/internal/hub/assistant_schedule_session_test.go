@@ -176,7 +176,7 @@ func TestATaskStartsANewConversationWhenItsOwnCannotGoOn(t *testing.T) {
 		t.Fatalf("a new conversation gets the whole message again: %q", text)
 	}
 
-	if err := h.saveModelRecord(context.Background(), "agent.new", 0, ModelBinding{Provider: "launcher.codex"}); err != nil {
+	if err := h.saveModelRecord(context.Background(), "assistant", 0, ModelBinding{Provider: "launcher.codex"}); err != nil {
 		t.Fatal(err)
 	}
 	switched, _ := runNow(t, h, "p")
@@ -390,8 +390,7 @@ func TestTaskFailingBeforeTheWatcherSeesItWorking(t *testing.T) {
 	t.Fatal("the failure before the first working poll was not recorded")
 }
 
-// A follow-up the assistant scheduled for itself goes into its conversation on that conversation's launcher, not the
-// Agents one (#1518): the main conversation on 模型配置 › 主对话 (even when it last ran on another launcher), another
+// A follow-up the assistant scheduled for itself goes into its conversation on that conversation's launcher (#1518): the main conversation on 模型配置 › 主对话 (even when it last ran on another launcher), another
 // of its conversations on what it runs. On the Agents launcher (plain claude by default) a follow-up moved the main
 // conversation off its launcher, and every message after stayed there.
 func TestAFollowUpKeepsItsConversationsLauncher(t *testing.T) {
@@ -411,15 +410,21 @@ func TestAFollowUpKeepsItsConversationsLauncher(t *testing.T) {
 	n.m.sessions = []proto.Session{
 		{SessionID: "main", Launcher: "claude", Model: "stale", Assistant: true, Status: proto.StatusOffline},
 		{SessionID: "side", Launcher: "side-l", Model: "side-m", Assistant: true, Status: proto.StatusOffline},
+		// 早报's own conversation, moved onto plain claude by a follow-up before #1518 (#1544)
+		{SessionID: "daily", Launcher: "claude", Assistant: true, Status: proto.StatusOffline},
 	}
 	n.m.mu.Unlock()
 	setTasks(h,
 		Task{ID: "fu_main", Prompt: "会前准备", Repeat: repeatOnce, Enabled: true, MachineID: "server", SessionID: "main", CreatedBy: "assistant"},
 		Task{ID: "fu_side", Prompt: "再看一眼", Repeat: repeatOnce, Enabled: true, MachineID: "server", SessionID: "side", CreatedBy: "assistant"},
-		Task{ID: "own", Prompt: "早报", Repeat: repeatDaily, Time: "09:00", Enabled: true})
+		Task{ID: "own", Prompt: "早报", Repeat: repeatDaily, Time: "09:00", Enabled: true},
+		Task{ID: "r", Prompt: "早报", Repeat: repeatDaily, Time: "09:00", Enabled: true, RunMachineID: "server", RunSessionID: "daily", RunLauncher: "conv"},
+		Task{ID: "fu_daily", Prompt: "会前准备", Repeat: repeatOnce, Enabled: true, MachineID: "server", SessionID: "daily", CreatedBy: "assistant"})
 	for _, c := range []struct{ task, session, launcher, model, effort string }{
 		{"fu_main", "main", "conv", "", "high"},
 		{"fu_side", "side", "side-l", "side-m", ""},
+		// a scheduled task's own conversation follows 主对话 like the main one, whatever it ran last (#1544)
+		{"fu_daily", "daily", "conv", "", "high"},
 	} {
 		got, err := runNow(t, h, c.task)
 		if err != nil {
@@ -435,12 +440,12 @@ func TestAFollowUpKeepsItsConversationsLauncher(t *testing.T) {
 			t.Errorf("%s: no model fingerprint: %v", c.task, p)
 		}
 	}
-	// A task with no conversation of its own to go back to is an Agents task (#697): its own conversation, on that launcher.
+	// A task with no conversation to go back to runs in its own, on 主对话's launcher (#1544), not the Agents one.
 	if _, err := runNow(t, h, "own"); err != nil {
 		t.Fatal(err)
 	}
-	if p := n.lastSend(t); p["launcher"] != "agents" {
-		t.Fatalf("a task's own conversation runs on the Agents launcher: %v", p)
+	if p := n.lastSend(t); p["launcher"] != "conv" || p["effort"] != "high" {
+		t.Fatalf("a task's own conversation runs on 主对话's launcher: %v", p)
 	}
 }
 

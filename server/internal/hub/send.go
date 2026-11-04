@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -89,16 +90,17 @@ func (h *Hub) isMainConversation(ctx context.Context, m *Machine, sid string) bo
 }
 
 // assistantSendModel puts into p (a message for one of the assistant's conversations, sid on m) which launcher and
-// model run it: one picked in the chat's menu (sent with the message) wins; else the main conversation follows
-// 模型配置 › 主对话 and the others keep what they run. The main conversation follows the setting on every message, not
-// what it ran last: once a run had moved it to another launcher, every later message stayed there (#1518). A launcher
-// or model that is gone falls back to the assistant's. A picked one is checked and fingerprinted like a configured one.
-// The phone's messages (sendMessage) and the follow-ups the assistant schedules for itself (runTask) both go through here.
+// model run it: one picked in the chat's menu (sent with the message) wins; else the main conversation and a scheduled
+// task's own conversation (早报's, #1544) follow 模型配置 › 主对话, and the others keep what they run. Those two follow
+// the setting on every message, not what they ran last: once a run had moved one to another launcher, every later
+// message stayed there (#1518). A launcher or model that is gone falls back to the assistant's. A picked one is checked
+// and fingerprinted like a configured one. The phone's messages (sendMessage) and the follow-ups the assistant
+// schedules for itself (runTask) both go through here.
 func (h *Hub) assistantSendModel(ctx context.Context, m *Machine, sid string, p map[string]any) error {
 	cfg := h.assistantConfig(ctx)
-	isMain := cfg.Main != "" && cfg.Main == sid && cfg.MachineID == m.cfg.ID
+	followsSetting := cfg.Main != "" && cfg.Main == sid && cfg.MachineID == m.cfg.ID || h.isTaskConversation(ctx, m.cfg.ID, sid)
 	l, _ := p["launcher"].(string)
-	if s, known := m.session(sid); l == "" && known && !isMain {
+	if s, known := m.session(sid); l == "" && known && !followsSetting {
 		l = s.Launcher // no launcher picked: the one this conversation runs
 		if l != "" {
 			p["launcher"] = l
@@ -126,6 +128,14 @@ func (h *Hub) assistantSendModel(ctx context.Context, m *Machine, sid string, p 
 		return h.applyPickedModel(ctx, p)
 	}
 	return h.applyModel(ctx, "assistant", p)
+}
+
+// isTaskConversation: sid on machine is a scheduled task's own conversation (Task.RunSessionID).
+func (h *Hub) isTaskConversation(ctx context.Context, machine, sid string) bool {
+	s := h.loadSchedule(ctx)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.ContainsFunc(s.tasks, func(t Task) bool { return t.RunSessionID == sid && t.RunMachineID == machine })
 }
 
 func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
