@@ -15,18 +15,27 @@ nonisolated struct FileContent: Decodable, Sendable {
     /// Where this page starts, and where the next one does (0 / nil: the end). Older nodes send neither.
     var offset: Int64?
     var next: Int64?
+    /// Asked with `stream=1` (hub feature `file_stream`): a binary file comes described, its bytes from `/file/download`.
+    var stream: Bool?
+    var revision: String?
 
     enum CodingKeys: String, CodingKey {
-        case path, name, size, mime, text, data, truncated, entries, offset, next
+        case path, name, size, mime, text, data, truncated, entries, offset, next, stream, revision
         case isDir = "is_dir"
     }
 }
 
 extension APIClient {
     /// A file or a directory on a machine; a text file bigger than a page from `offset` (the page before's `next`).
-    func file(machine: String, path: String, cwd: String?, offset: Int64 = 0) async throws -> FileContent {
+    /// `stream`: a binary file without its bytes (hub feature `file_stream`, docs/protocol.md「文件预览」).
+    func file(machine: String, path: String, cwd: String?, offset: Int64 = 0, stream: Bool = false) async throws -> FileContent {
         try await get("/api/v1/machines/\(machine)/file",
-                      query: ["path": path, "cwd": cwd ?? "", "offset": offset > 0 ? String(offset) : ""])
+                      query: ["path": path, "cwd": cwd ?? "", "offset": offset > 0 ? String(offset) : "", "stream": stream ? "1" : ""])
+    }
+
+    /// A whole file's bytes (`/file/download`), for what is drawn from memory (images, PDFs).
+    func fileBytes(machine: String, path: String, cwd: String?) async throws -> Data {
+        try await request("GET", "/api/v1/machines/\(machine)/file/download", query: ["path": path, "cwd": cwd ?? ""], timeout: 120)
     }
 }
 
@@ -127,7 +136,8 @@ extension View {
 }
 
 /// Reads a file (or lists a directory) on a machine (docs/ios.md「文件查看器」): code colored by its language with
-/// line numbers, JSON as a foldable outline, Markdown rendered (or its source), images and PDFs inline. Text shows
+/// line numbers, JSON as a foldable outline, Markdown rendered (or its source), images and PDFs inline, Office and
+/// iWork documents in QuickLook (`QuickLookFileView`). Text shows
 /// at once and is colored in the background; a file bigger than a page loads the next one as the end comes near.
 struct FileViewer: View {
     @Environment(AppModel.self) private var model
@@ -201,7 +211,8 @@ struct FileViewer: View {
 
     private func open() async {
         page?.video?.stop()
-        let p = FileViewerModel(ref: ref, api: model.api(ref.group))
+        page?.preview?.stop()
+        let p = FileViewerModel(ref: ref, api: model.api(ref.group), stream: model.features(ref.group).contains("file_stream"))
         page = p
         await p.load()
     }
@@ -247,6 +258,8 @@ struct FileViewer: View {
                 }
             case .video:
                 if let video = page.video { VideoFileView(model: video) }
+            case .quickLook:
+                if let preview = page.preview { QuickLookFileView(model: preview) }
             case .binary:
                 EmptyStateView(symbol: Theme.Icon.missingFile, title: "无法预览",
                                message: "\(file.mime ?? "二进制文件") · \(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))")
@@ -284,9 +297,12 @@ struct FileViewer: View {
             if let text = page?.text {
                 Button { UIPasteboard.general.string = text } label: { Label("拷贝内容", systemImage: Theme.Icon.copy) }
                 ShareLink(item: text, subject: Text(page?.file?.name ?? "")) { Label("分享", systemImage: Theme.Icon.share) }
+            } else if let local = page?.localFile {
+                ShareLink(item: local) { Label("分享", systemImage: Theme.Icon.share) }
             }
         } label: { Image(systemName: Theme.Icon.moreMenu) }
         .arrowlessMenu()
+        .accessibilityLabel("更多")
     }
 
     /// The path, the size, and what is not shown yet: pages still on the machine, lines past the coloring caps, why
@@ -316,6 +332,9 @@ struct FileViewer: View {
         case "png", "jpg", "jpeg", "gif", "webp", "heic": "photo"
         case "mp4", "mov", "m4v", "mpeg", "mpg", "webm", "mkv", "avi": Theme.Icon.video
         case "pdf": "doc.richtext"
+        case "doc", "docx", "pages", "rtf": Theme.Icon.document
+        case "xls", "xlsx", "numbers", "csv", "tsv": Theme.Icon.sheet
+        case "ppt", "pptx": Theme.Icon.slides
         case "json", "yml", "yaml", "toml", "plist": "curlybraces"
         case "": path.hasSuffix("/") ? Theme.Icon.folder : Theme.Icon.file
         default: Theme.Icon.code
@@ -389,14 +408,17 @@ private struct MarkdownFile: View {
 /// the code document, the JSON outline or the Markdown pieces off the main thread, and fetches further pages.
 @MainActor @Observable
 final class FileViewerModel {
-    enum Kind { case directory, markdown, json, code, image, pdf, video, binary }
+    enum Kind { case directory, markdown, json, code, image, pdf, video, quickLook, binary }
 
     let ref: FileRef
     @ObservationIgnored private let api: APIClient?
+    /// Ask for binary files without their bytes and download them (the hub has `file_stream`).
+    @ObservationIgnored private let stream: Bool
     private(set) var file: FileContent?
     private(set) var error: String?
     private(set) var kind: Kind = .code
     private(set) var video: VideoFileModel?
+    private(set) var preview: QuickLookFileModel?
     /// The source as text (code, Markdown's source, JSON before its outline or when it is not JSON).
     private(set) var code: CodeFileSource?
     private(set) var outline: JSONOutlineSource?
@@ -423,13 +445,16 @@ final class FileViewerModel {
     /// JSON is read whole (up to this) before it is parsed into an outline.
     static let maxJSONBytes: Int64 = 24 << 20
 
-    init(ref: FileRef, api: APIClient?) {
+    init(ref: FileRef, api: APIClient?, stream: Bool = false) {
         self.ref = ref
         self.api = api
+        self.stream = stream
         perf = FilePerf(ref.path)
     }
 
     var text: String? { text_.isEmpty ? nil : text_.joined() }
+    /// The file as downloaded for its player or QuickLook, to share.
+    var localFile: URL? { preview?.localURL ?? video?.localURL }
 
     var shownSource: CodeLineSource? {
         if kind == .json, !showSource, let outline { return outline }
@@ -442,7 +467,7 @@ final class FileViewerModel {
         guard let api else { return }
         let f: FileContent
         do {
-            f = try await api.file(machine: ref.machineID, path: ref.path, cwd: ref.cwd)
+            f = try await api.file(machine: ref.machineID, path: ref.path, cwd: ref.cwd, stream: stream)
         } catch {
             self.error = error.shown
             return
@@ -454,6 +479,11 @@ final class FileViewerModel {
             kind = .directory
             return
         }
+        if QuickLookFileType.matches(name: f.name, text: f.text) {
+            kind = .quickLook
+            preview = QuickLookFileModel(ref: ref, file: f, api: api)
+            return
+        }
         if f.text == nil, VideoFileType.matches(name: f.name, mime: f.mime) {
             kind = .video
             video = VideoFileModel(ref: ref, file: f, api: api)
@@ -462,6 +492,10 @@ final class FileViewerModel {
         guard let text = f.text else {
             let mime = f.mime ?? ""
             kind = mime.hasPrefix("image/") ? .image : mime == "application/pdf" ? .pdf : .binary
+            if kind != .binary, f.stream == true {
+                file = nil // the spinner until the bytes are here
+                await fetchBytes(f)
+            }
             return
         }
         text_ = [text]
@@ -479,6 +513,20 @@ final class FileViewerModel {
         default: break
         }
         if f.truncated, f.next == nil { note = "文件太大，只显示了前 \(ByteCountFormatter.string(fromByteCount: Int64(text.utf8.count), countStyle: .file))" }
+    }
+
+    /// A streamed image or PDF: its bytes from `/file/download`, whole (the old answer stopped at 2 MB).
+    private func fetchBytes(_ f: FileContent) async {
+        guard let api else { return }
+        do {
+            let bytes = try await api.fileBytes(machine: ref.machineID, path: f.path, cwd: ref.cwd)
+            var whole = f
+            whole.data = await Task.detached(priority: .userInitiated) { bytes.base64EncodedString() }.value
+            whole.truncated = false
+            file = whole
+        } catch {
+            self.error = error.shown
+        }
     }
 
     private func setCode(_ source: CodeFileSource) {

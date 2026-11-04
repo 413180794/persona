@@ -38,23 +38,18 @@ final class VideoFileModel {
             return
         }
         let mine = generation
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("jarvis-video-" + UUID().uuidString, isDirectory: true)
-        let url = directory.appendingPathComponent((file.name as NSString).lastPathComponent)
+        var url: URL?
         var kept = false
-        defer { if !kept { try? FileManager.default.removeItem(at: directory) } }
+        defer { if !kept { MachineFileDownload.remove(url) } }
         do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try await api.download("/api/v1/machines/\(ref.machineID)/file/download",
-                                   query: ["path": file.path, "cwd": ref.cwd ?? ""], to: url) { [weak self] received, total in
-                Task { @MainActor in
-                    guard let self, self.generation == mine else { return }
-                    self.received = received
-                    if total > 0 { self.total = total }
-                }
+            let fetched = try await MachineFileDownload.fetch(ref, file: file, api: api, prefix: "jarvis-video-") { [weak self] received, total in
+                guard let self, self.generation == mine else { return }
+                self.received = received
+                if total > 0 { self.total = total }
             }
-            try Task.checkCancellation()
+            url = fetched
             guard generation == mine else { return }
-            let asset = AVURLAsset(url: url)
+            let asset = AVURLAsset(url: fetched)
             guard try await asset.load(.isPlayable) else {
                 throw APIError(status: 0, message: "这个视频的格式或编码无法在当前设备播放，请导出为 H.264 或 HEVC 的 MP4 视频")
             }
@@ -70,7 +65,7 @@ final class VideoFileModel {
                     self.player?.pause()
                 }
             }
-            localURL = url
+            localURL = fetched
             kept = true
             player = AVPlayer(playerItem: item)
             player?.play()
@@ -87,7 +82,7 @@ final class VideoFileModel {
         player?.pause()
         player?.replaceCurrentItem(with: nil)
         player = nil
-        if let localURL { try? FileManager.default.removeItem(at: localURL.deletingLastPathComponent()) }
+        MachineFileDownload.remove(localURL)
         localURL = nil
     }
 }

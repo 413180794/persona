@@ -175,6 +175,26 @@ nonisolated struct APIClient: Sendable {
         return data
     }
 
+    /// A GET that may answer 304 Not Modified: `data` is nil when the copy tagged `etag` is still current
+    /// (`If-None-Match`), else the new bytes and their tag. The fake transport has no headers: the tag rides in the query
+    /// as `If-None-Match` and a 304 is an APIError with that status.
+    func conditionalGet(_ path: String, query: [String: String], etag: String?) async throws -> (data: Data?, etag: String?) {
+        if transport != nil || config.isDemo {
+            var q = query
+            if let etag { q["If-None-Match"] = etag }
+            do { return (try await request("GET", path, query: q), nil) } catch let e as APIError where e.status == 304 { return (nil, etag) }
+        }
+        var req = URLRequest(url: url(path, query: query), timeoutInterval: 30)
+        req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        let requestID = String(UUID().uuidString.prefix(8)).lowercased()
+        req.setValue(requestID, forHTTPHeaderField: "X-Client-Request-Id")
+        if let etag { req.setValue(etag, forHTTPHeaderField: "If-None-Match") }
+        let (data, resp) = try await Self.uncachedSession.data(for: req) // our own cache: URLSession's would hide the 304
+        let http = resp as? HTTPURLResponse
+        if http?.statusCode == 304 { return (nil, etag) }
+        return (try checked(data, resp, requestID: requestID), http?.value(forHTTPHeaderField: "ETag"))
+    }
+
     /// A bounded, staged attachment sent from disk. The fake transport reads it only in tests.
     func uploadBytes(file: URL, path: String, query: [String: String], timeout: TimeInterval = 180) async throws -> Data {
         let query = larkScoped(path, query)

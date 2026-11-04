@@ -181,6 +181,8 @@ extension Theme {
         static let document = "doc.text"
         /// A spreadsheet (Feishu 表格).
         static let sheet = "tablecells"
+        /// A slide deck (PowerPoint, Keynote).
+        static let slides = "rectangle.on.rectangle.angled"
         /// A database table (Feishu 多维表格).
         static let base = "square.grid.3x2"
         /// A removed (Feishu Moments) post in the inbox: the company's public feed.

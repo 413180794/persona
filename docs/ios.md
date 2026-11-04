@@ -729,6 +729,11 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 | Markdown | 默认渲染，用的是对话里的那套（`.jarvis` 主题、`FittedTable`、`Links`），代码块按语言上色。菜单里能「查看源文件」 |
 | 图片、PDF、目录 | 和以前一样 |
 | 视频 | `video/*` 或常见视频扩展名进入原生播放器；完整下载到本次预览的临时文件后播放，可以暂停和拖动进度。下载中显示进度，失败或编码不受系统支持时说明原因；关闭预览暂停播放器并清理临时文件 |
+| Office、iWork、RTF | docx、doc、xlsx、xls、pptx、ppt、pages、numbers、key、rtf 交给系统的 QuickLook（#1293）：和视频一样经 `…/file/download` 下载到本次预览的临时文件，再嵌在页面里显示（iOS `QLPreviewController`，Mac `QLPreviewView`），不另弹一层；菜单里能「分享」这个文件（用别的 App 打开、存到文件）。关闭预览清理临时文件。以文本发来的 `.key`（PEM 私钥）照旧按代码显示；iWork 存成文件夹（包）的文档仍按目录列出 |
+
+**「文件」页的缩略图**（#1293）：图片、PDF、视频和上面这些文档，行出现时向文件所在的机器要缩略图（`GET …/file/thumb`，hub 特性 `file_thumb`，`docs/protocol.md`「文件预览」），尺寸按行里的格子乘屏幕倍数，同时最多三个（`FileThumbnails`）。结果按（hub 组, 机器, 路径, 大小, 修改时间）存在内存和缓存目录：文件变了键就变、重新要，没变就不再问。机器画不了（`no_thumbnail`：Linux 上的 Office、没装工具的）、旧 hub 没这个特性的，照旧显示图标，这次启动内不再问。代码、文本不要缩略图。文档的缩略图是一页深色的就不用，显示图标（Mac 深色模式下 Quick Look 给 RTF、文本画的是深底，列表里是个黑方块）。只知道路径的（对话里的文件卡片，`FileThumbnailIcon` 传大小 0、不传时间）按路径存，旁边记着 node 回的 ETag，每次启动后第一次出现时带 `If-None-Match` 问一次：304 用旧图，同一路径重新生成的文件拿到新图。卡片的格子用 `width` / `height` 调大，图按比例放进去。
+
+**二进制文件只取描述**：hub 有 `file_stream` 时，文件页用 `stream=1` 读，二进制文件只回大小、类型和 revision；图片、PDF 再从 `…/file/download` 整份取回（不再停在 2 MB），QuickLook 和视频照旧下载到临时文件。旧 hub 照旧整份 base64。
 
 视频不使用旧接口返回的前 2 MiB 二进制片段。`VideoFileModel` 通过 `GET …/file/download` 下载到磁盘，鉴权放在请求头；不把完整视频塞进 JSON 或 App 的内存，也不把 hub 凭据交给播放 URL。客户端关闭页面时取消下载，完成后仍检查任务和预览代次，避免迟到的结果重新挂上播放器。支持的实际编码由系统决定，推荐 H.264 / HEVC 的 MP4；不会自动改写或转码电脑上的源文件。hub 和视频所在机器的 node 都需支持 `file_download`。
 

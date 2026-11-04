@@ -97,6 +97,8 @@ nonisolated enum Theme {
     /// Corner radii: five, plus capsules and circles. Static: the styles differ in color and surface, not in corners
     /// (`AppStyle.corner` only draws the style previews in 设置).
     enum Radius {
+        /// A file's thumbnail in a list row, about an icon's size (the Files tab): a page's corner, not a tile's.
+        static let thumbnail: CGFloat = 3
         /// Badges, inline code, small marks.
         static let badge: CGFloat = 6
         /// Code blocks, thumbnails, segmented controls, small tiles.

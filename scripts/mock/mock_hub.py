@@ -29,7 +29,7 @@ def features():
     # Match proto.Features, retaining the existing terminal fixture switches.
     return ["error_codes", "client_hello", "heartbeat", "app_ping", "client_msg_id", "send_refusals",
             "screen_dialog", "resumable_interactions", "secret_prompts", "request_id", "file_upload",
-            "tls", "endpoints", "connectors", "lark_attachments"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (
+            "tls", "endpoints", "connectors", "lark_attachments", "file_stream", "file_thumb"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (
                 ["terminal_control", "terminal_scroll", "terminal_click"] if TERMINAL_CONTROL else [])
 
 
@@ -5559,6 +5559,14 @@ if os.environ.get("MOCK_OFFICE"):  # the Office viewer's files (#1345): rendered
     MOCK_TREE[MOCK_REPO + "/reports/路线图.pages"] = ("application/vnd.apple.pages", base64.b64encode(_zip({"Index/Document.iwa": b"\x00" * 2048, "QuickLook/Thumbnail.png": _page_png()})).decode())
     MOCK_TREE[MOCK_REPO + "/reports/发布会.key"] = ("application/vnd.apple.keynote", base64.b64encode(_zip({"Index/Document.iwa": b"\x00" * 2048})).decode())
     FILES["/Users/me/Library/Caches/persona/convert/mock.pdf"] = base64.b64decode(mock_pdf())
+# MOCK_OFFICE=1: made-up Word, Excel, PowerPoint and RTF files in docs/ for the QuickLook preview and its thumbnails.
+if os.environ.get("MOCK_OFFICE"):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import mock_office
+    for _name, _make in mock_office.SAMPLES.items():
+        _body = _make()
+        _ext = os.path.splitext(_name)[1]
+        MOCK_TREE[MOCK_REPO + "/docs/" + _name] = _body.decode() if _ext == ".rtf" else (MOCK_MIMES[_ext], base64.b64encode(_body).decode())
 MOCK_TREE["Desktop/"] = None  # listed, but macOS keeps it from jarvisd (mock_denied)
 MOCK_COMMITS[2]["refs"] = "tag: v0.1.0"
 TIME_OFFSET = os.environ.get("MOCK_TIME_OFFSET", "")
@@ -5618,6 +5626,27 @@ if FILES:
         if found or offset: return found
         answer = mock_files("/api/v1/machines/macbook/file", {"path": [path], "cwd": [cwd]})
         return answer[0] if answer and answer[1] == 200 else None
+
+
+def mock_file_bytes(mid, q, text=False):
+    """(bytes, mime) of a file for …/file/download and …/file/thumb: the big-file set's videos, then the browser's tree
+    (images, the PDF, the Office samples; text files only when `text`). (None, "") when there is none."""
+    path, cwd = q.get("path", [""])[0], q.get("cwd", [""])[0]
+    value = FILES.get(file_path(path, cwd))
+    if isinstance(value, bytes): return value, mock_mime(file_path(path, cwd))
+    home, full = mock_abs(mid, path, cwd)
+    v = MOCK_TREE.get(mock_rel(home, full) or "")
+    if isinstance(v, tuple): return base64.b64decode(v[1]), v[0]
+    if isinstance(v, str) and (text or full.endswith(".rtf")): return v.encode(), "text/plain"
+    return None, ""
+
+
+def file_streamed(f, q):
+    """GET …/file?stream=1 (hub feature file_stream): a binary file described, its bytes left to …/file/download."""
+    if (q.get("stream") or [""])[0] != "1" or "data" not in f: return f
+    f = {k: v for k, v in f.items() if k != "data"}
+    f.update({"stream": True, "truncated": False, "revision": "mock-%d" % f.get("size", 0)})
+    return f
 
 
 def net_control(path, q):
@@ -6882,10 +6911,10 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json({"error": "LibreOffice is not installed on this machine", "code": "no_converter"}, 404)
             return self.send_json({"path": "/Users/me/Library/Caches/persona/convert/mock.pdf", "size": len(FILES.get("/Users/me/Library/Caches/persona/convert/mock.pdf", b"")), "mime": "application/pdf"})
         if p.startswith("/api/v1/machines/") and p.endswith("/file/download"):
-            value = FILES.get(file_path(q.get("path", [""])[0], q.get("cwd", [""])[0]))
-            if not isinstance(value, bytes): return self.send_json({"error": "no such video"}, 404)
+            value, mime = mock_file_bytes(p.split("/")[4], q, text=True)
+            if value is None: return self.send_json({"error": "no such file"}, 404)
             self.send_response(200)
-            self.send_header("Content-Type", mock_mime(file_path(q.get("path", [""])[0], q.get("cwd", [""])[0])))
+            self.send_header("Content-Type", mime)
             self.send_header("Content-Length", str(len(value)))
             self.end_headers()
             self.wfile.write(value)
@@ -6893,7 +6922,7 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/machines/") and p.endswith("/file") and FILES:
             f = file_read(q.get("path", [""])[0], q.get("cwd", [""])[0], int(q.get("offset", ["0"])[0] or 0), q.get("stream", [""])[0] == "1")
             if not f: return self.send_json({"error": "stat %s: no such file or directory" % q.get("path", [""])[0]}, 404)
-            return self.send_json(f)
+            return self.send_json(file_streamed(f, q))
         # lark-connector's personal agents (hub agents.go): none here, as on a hub without lark-connector; the web's sidebar hid
         # the section only after these answered, and showed 「个人 Agent 加载失败」 on the 404 instead.
         if p == "/api/v1/agents": return self.send_json({"sources": []})
@@ -7175,10 +7204,42 @@ class H(BaseHTTPRequestHandler):
             hits = [{"path": "%s/%s/summary.md" % (k, e["id"]), "line": "- " + e["name"] + "：" + (e.get("one_line") or "")}
                     for k, l in KB.items() for e in l if word and (word in e["name"].lower() or word in (e.get("one_line") or "").lower())]
             return self.send_json({"hits": hits})
+        if p.startswith("/api/v1/machines/") and p.endswith("/file/thumb"): return self.file_thumb(p, q)
         files = mock_files(p, q)
-        if files: return self.send_json(*files)
+        if files: return self.send_json(file_streamed(files[0], q) if p.endswith("/file") else files[0], files[1])
         LOG.write("  MISSING GET %s\n" % p); LOG.flush()
         self.send_json({"error": "not found"}, 404)
+
+    def file_thumb(self, p, q):
+        """GET …/file/thumb (hub feature file_thumb): drawn by Quick Look (qlmanage) like a Mac node, PNG; 404
+        no_thumbnail for text, folders, and where there is no qlmanage."""
+        body, _ = mock_file_bytes(p.split("/")[4], q)
+        name = os.path.basename(q.get("path", [""])[0]) or "file"
+        size = max(32, min(1024, int((q.get("size") or ["256"])[0] or 256)))
+        if body is None or not shutil.which("qlmanage"):
+            return self.send_json({"error": "no thumbnail", "code": "no_thumbnail"}, 404)
+        with tempfile.TemporaryDirectory(prefix="mock-thumb-") as tmp:
+            src = os.path.join(tmp, name)
+            with open(src, "wb") as f: f.write(body)
+            try:
+                subprocess.run(["qlmanage", "-t", "-s", str(size), "-o", tmp, src], capture_output=True, timeout=12)
+            except subprocess.TimeoutExpired:
+                pass
+            out = src + ".png"
+            if not os.path.exists(out): return self.send_json({"error": "no thumbnail", "code": "no_thumbnail"}, 404)
+            png = open(out, "rb").read()
+        tag = '"mock-%d-%d"' % (len(body), size)  # the node's is revision-size
+        if self.headers.get("If-None-Match") == tag:
+            self.send_response(304)
+            self.send_header("ETag", tag)
+            self.end_headers()
+            return
+        self.send_response(200)
+        self.send_header("ETag", tag)
+        self.send_header("Content-Type", "image/png")
+        self.send_header("Content-Length", str(len(png)))
+        self.end_headers()
+        self.wfile.write(png)
 
     def upload(self):
         """POST /api/v1/machines/{mid}/files?name=…: the body read slowly enough to watch the progress bar

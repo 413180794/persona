@@ -124,10 +124,15 @@ struct FilesPane: View {
             }
         } label: {
             HStack(spacing: Theme.Space.m) {
-                Image(systemName: e.dir ? Theme.Icon.folderFilled : FileViewer.symbol(for: e.name))
-                    .font(Theme.Font.body)
-                    .foregroundStyle(e.dir ? Theme.accent : Color.secondary)
-                    .scaledFrame(width: Theme.Size.icon)
+                if e.dir {
+                    Image(systemName: Theme.Icon.folderFilled)
+                        .font(Theme.Font.body)
+                        .foregroundStyle(Theme.accent)
+                        .scaledFrame(width: Theme.Size.icon)
+                } else {
+                    FileThumbnailIcon(ref: FileRef(group: group, machineID: machineID, path: full, cwd: cwd), size: e.size, modified: e.mtime,
+                                      symbol: FileViewer.symbol(for: e.name))
+                }
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     HStack(spacing: Theme.Space.xs) {
                         Text(e.name).font(Theme.Font.secondary).foregroundStyle(e.name.hasPrefix(".") ? Color.secondary : Color.primary).lineLimit(1)
