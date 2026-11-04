@@ -4956,6 +4956,9 @@ if os.environ.get("MOCK_FILES"):
     FILES[ROOT + "/server/handlers.go"] = long_go()
     FILES[ROOT + "/README.md"] = long_markdown()
     FILES[ROOT + "/logs/api.log"] = log()
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import mock_office
+    FILES[ROOT + "/data/observations.csv"] = mock_office.csv_text(100_000)  # 5 MB: the table viewer's paging
     ITEMS[WIDGET] = ITEMS[WIDGET] + [it("assistant", "text", 0, text=(
         "hub 上的 `~/.jarvis/personas/doudou` 不在这台电脑上，`/Users/me/code/weather/old/Removed.swift` 也已经删掉了。"
         "其余的都在：`Sources/App.swift`、`server/handlers.go`、`data/forecast.json`、`/Users/me/code/weather/README.md`、"
@@ -5566,7 +5569,8 @@ if os.environ.get("MOCK_OFFICE"):
     for _name, _make in mock_office.SAMPLES.items():
         _body = _make()
         _ext = os.path.splitext(_name)[1]
-        MOCK_TREE[MOCK_REPO + "/docs/" + _name] = _body.decode() if _ext == ".rtf" else (MOCK_MIMES[_ext], base64.b64encode(_body).decode())
+        MOCK_TREE[MOCK_REPO + "/docs/" + _name] = _body if isinstance(_body, str) else _body.decode() if _ext == ".rtf" else (
+            MOCK_MIMES[_ext], base64.b64encode(_body).decode())
 MOCK_TREE["Desktop/"] = None  # listed, but macOS keeps it from jarvisd (mock_denied)
 MOCK_COMMITS[2]["refs"] = "tag: v0.1.0"
 TIME_OFFSET = os.environ.get("MOCK_TIME_OFFSET", "")

@@ -1,5 +1,6 @@
 """Made-up Office documents for the mock hub's file viewer (docs/ios.md「文件查看器」): the smallest valid docx, xlsx,
 pptx and rtf that QuickLook and the table viewer open, built with the standard library only. All text is invented."""
+import datetime
 import io
 import zipfile
 from xml.sax.saxutils import escape
@@ -62,12 +63,16 @@ def _col(i):
 
 
 def xlsx(sheets):
-    """A workbook: [(sheet name, rows)], each row a list of str / int / float; the first row is the header."""
+    """A workbook: [(sheet name, rows)], each row a list of str / int / float / bool / date; the first row is the header."""
     strings, index = [], {}
 
     def cell(r, c, v):
         ref = "%s%d" % (_col(c), r + 1)
-        if isinstance(v, (int, float)) and not isinstance(v, bool):
+        if isinstance(v, bool):
+            return '<c r="%s" t="b"><v>%d</v></c>' % (ref, v)
+        if isinstance(v, datetime.date):
+            return '<c r="%s" s="2"><v>%d</v></c>' % (ref, (v - datetime.date(1899, 12, 30)).days)
+        if isinstance(v, (int, float)):
             return '<c r="%s"><v>%s</v></c>' % (ref, v)
         v = str(v)
         if v not in index:
@@ -89,7 +94,7 @@ def xlsx(sheets):
     styles = ('<styleSheet xmlns="%s"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>'
               '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill>'
               '<fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders>'
-              '<cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="2"><xf/><xf fontId="1" applyFont="1"/></cellXfs></styleSheet>' % S)
+              '<cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="3"><xf/><xf fontId="1" applyFont="1"/><xf numFmtId="14" applyNumberFormat="1"/></cellXfs></styleSheet>' % S)
     return _zip([
         ("[Content_Types].xml", _types(BASE, [("/xl/workbook.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"),
                                              ("/xl/sharedStrings.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"),
@@ -176,6 +181,18 @@ def rtf(title, paragraphs):
     return ("{\\rtf1\\ansi\\ansicpg1252\\deff0{\\fonttbl{\\f0 Helvetica;}}\n" + body + "}\n").encode()
 
 
+def csv_text(rows=240):
+    """A made-up observations table, wide enough to scroll sideways, with a quoted field and a comma in one."""
+    cities = ["上海", "Tokyo", "Lisbon", "Reykjavík", "São Paulo", "Nairobi"]
+    out = ["时间,城市,温度 °C,体感 °C,湿度 %,降雨 mm,风速 km/h,风向,气压 hPa,能见度 km,紫外线,备注"]
+    for i in range(rows):
+        note = '"阵雨, 傍晚转晴"' if i % 17 == 0 else ('"有""雷暴""预警"' if i % 29 == 0 else "")
+        out.append("2026-11-%02d %02d:00,%s,%.1f,%.1f,%d,%.1f,%d,%s,%d,%d,%d,%s" % (
+            1 + i // 24 % 28, i % 24, cities[i % len(cities)], 8 + i * 7 % 23 * 0.9, 6 + i * 5 % 25 * 0.9, 40 + i * 13 % 55,
+            i * 3 % 11 * 0.4, 3 + i * 11 % 30, "NESW"[i % 4], 1003 + i % 19, 5 + i % 20, i % 9, note))
+    return "\n".join(out) + "\n"
+
+
 # The weather app's sample documents (docs/ is where the tree keeps them).
 SAMPLES = {
     "季度报告.docx": lambda: docx("天气 App 第四季度报告", [
@@ -185,13 +202,15 @@ SAMPLES = {
     "逐小时预报.xlsx": lambda: xlsx([
         ("逐小时预报", [["时间", "城市", "温度 °C", "降雨概率 %", "风速 km/h"]] +
          [["%02d:00" % h, ["上海", "Tokyo", "Lisbon"][h % 3], round(12 + (h * 7 % 13) * 0.8, 1), h * 9 % 100, 5 + h * 3 % 22] for h in range(24)]),
-        ("城市", [["城市", "时区", "纬度", "经度"], ["上海", "UTC+8", 31.2, 121.5], ["Tokyo", "UTC+9", 35.7, 139.7], ["Lisbon", "UTC+0", 38.7, -9.1]]),
+        ("城市", [["城市", "时区", "纬度", "经度", "更新日期", "有雷达"], ["上海", "UTC+8", 31.2, 121.5, datetime.date(2026, 10, 31), True],
+                ["Tokyo", "UTC+9", 35.7, 139.7, datetime.date(2026, 11, 1), True], ["Lisbon", "UTC+0", 38.7, -9.1, datetime.date(2026, 11, 2), False]]),
     ]),
     "路线图.pptx": lambda: pptx([
         ("天气 App 路线图", ["2026 年第四季度 · 示例数据", "小组件 · 推送 · 锁屏"]),
         ("这一季做完的", ["主屏幕小组件（小号、中号）", "6 小时降雨条", "后台刷新省电三成"]),
         ("下一季", ["锁屏小组件", "雷阵雨提醒", "Apple Watch 表盘"]),
     ]),
+    "城市观测.csv": lambda: csv_text(),
     "发布说明.rtf": lambda: rtf("天气 App 4.2 发布说明", [
         "新增：主屏幕小组件，显示当前温度和接下来 6 小时的降雨。", "改进：后台刷新更省电。", "修复：深色模式下标题的对比度。"]),
 }

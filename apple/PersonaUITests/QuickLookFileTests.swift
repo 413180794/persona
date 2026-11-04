@@ -46,7 +46,7 @@ final class QuickLookFileTests: XCTestCase {
         XCTAssertTrue(row("季度报告.docx").waitForExistence(timeout: 10), "no documents in docs/")
         sleep(4) // the thumbnails: fetched, then drawn by QuickLook
         shot("list")
-        for (name, tag) in [("季度报告.docx", "docx"), ("逐小时预报.xlsx", "xlsx"), ("路线图.pptx", "pptx"), ("发布说明.rtf", "rtf")] {
+        for (name, tag) in [("季度报告.docx", "docx"), ("路线图.pptx", "pptx"), ("发布说明.rtf", "rtf")] {
             row(name).tap()
             let preview = app.descendants(matching: .any)["file-quicklook"]
             XCTAssertTrue(preview.waitForExistence(timeout: 20), "\(name) did not open in QuickLook")

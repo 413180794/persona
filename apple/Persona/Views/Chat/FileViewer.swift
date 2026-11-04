@@ -231,9 +231,13 @@ struct FileViewer: View {
                     }
                 }
                 .themedPage()
+            case .table where !page.showSource:
+                if let table = page.table { TableFileView(model: table) }
+            case .table where page.preview != nil:
+                if let preview = page.preview { QuickLookFileView(model: preview) }
             case .markdown where !page.showSource:
                 MarkdownFile(page: page, home: model.machine(ref.machineRef)?.home, loadImage: loadImageFile)
-            case .markdown, .json, .code:
+            case .markdown, .json, .code, .table:
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
                     meta(page).padding(.horizontal, Theme.Space.l)
                     if let source = page.shownSource {
@@ -278,6 +282,11 @@ struct FileViewer: View {
                 case .markdown:
                     Button { page.showSource.toggle() } label: {
                         Label(page.showSource ? "渲染 Markdown" : "查看源文件", systemImage: page.showSource ? "doc.richtext" : Theme.Icon.code)
+                    }
+                case .table:
+                    Button { page.showSource.toggle() } label: {
+                        Label(page.showSource ? "按表格查看" : page.preview != nil ? "用快速查看打开" : "查看源文件",
+                              systemImage: page.showSource ? Theme.Icon.sheet : page.preview != nil ? Theme.Icon.document : Theme.Icon.code)
                     }
                 case .json where page.outline != nil:
                     Button { page.showSource.toggle() } label: {
@@ -408,7 +417,7 @@ private struct MarkdownFile: View {
 /// the code document, the JSON outline or the Markdown pieces off the main thread, and fetches further pages.
 @MainActor @Observable
 final class FileViewerModel {
-    enum Kind { case directory, markdown, json, code, image, pdf, video, quickLook, binary }
+    enum Kind { case directory, markdown, json, code, image, pdf, video, quickLook, table, binary }
 
     let ref: FileRef
     @ObservationIgnored private let api: APIClient?
@@ -419,6 +428,8 @@ final class FileViewerModel {
     private(set) var kind: Kind = .code
     private(set) var video: VideoFileModel?
     private(set) var preview: QuickLookFileModel?
+    /// CSV / TSV / xlsx as a table (`TableFileView`); an xlsx also has `preview`, the menu's QuickLook.
+    private(set) var table: TableFileModel?
     /// The source as text (code, Markdown's source, JSON before its outline or when it is not JSON).
     private(set) var code: CodeFileSource?
     private(set) var outline: JSONOutlineSource?
@@ -479,6 +490,12 @@ final class FileViewerModel {
             kind = .directory
             return
         }
+        if f.text == nil, TableFileType.isWorkbook(f.name) {
+            kind = .table
+            table = TableFileModel(ref: ref, file: f, api: api)
+            preview = QuickLookFileModel(ref: ref, file: f, api: api)
+            return
+        }
         if QuickLookFileType.matches(name: f.name, text: f.text) {
             kind = .quickLook
             preview = QuickLookFileModel(ref: ref, file: f, api: api)
@@ -505,6 +522,10 @@ final class FileViewerModel {
             ?? ((f.mime ?? "").contains("json") ? .json : nil)
         language = lang?.id
         kind = lang?.id == "markdown" && ext != "" ? .markdown : lang?.id == "json" && !["jsonl", "ndjson"].contains(ext) ? .json : .code
+        if TableFileType.isDelimited(f.name) {
+            kind = .table
+            table = TableFileModel(ref: ref, file: f, api: api)
+        }
         let doc = await Task.detached(priority: .userInitiated) { CodeDocument(text: text, language: lang) }.value
         setCode(CodeFileSource(doc))
         switch kind {
