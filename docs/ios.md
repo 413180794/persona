@@ -893,7 +893,7 @@ Markdown 的情况再说两点：
 | `LarkMessageContent.swift` | `index.tsx` `renderPart` / `rich-blocks.ts` | 富文本块树（段落、有序 / 无序列表、引用、标题）、图片、贴纸、文件卡、视频、语音、代码块（轻量高亮）、系统消息 |
 | `LarkCard.swift` | `card-renderer.tsx` | 卡片元素：header 主题色、markdown、column_set（权重 / 固定 / auto 列宽 + bisect / trisect / stretch 窄屏重排）、table、list、collapsible_panel、note、text_tag、icon、按钮（链接 / 回调）、select / input / picker（只读）、overflow、img、chart（Swift Charts）…… |
 | `LarkSummaryCards.swift` | `SummaryCardView` | 合并转发（点开看全部消息）、群 / 个人名片、视频会议、日程、投票等摘要卡 |
-| `LarkChatView.swift` | messenger 气泡 | 头像、发送者 + 机器人标、同一发送者（按 id）连发合并、时间只在居中的分隔里（换天或隔 5 分钟以上，`LarkChatLayout`）、回复引用、表情回应、已编辑；卡片 / 图片 / 文件无气泡；话题群（`is_topic`）照 lark-connector 网页一个话题一张卡片（`LarkTopicCard.swift`：头像、名字和时间各自带着，不按聊天合并；内容高过 320 pt 收起成「展开」；点正文或「N 条回复」打开「话题详情」；撤回和编辑过的话题和聊天里的消息一样按「风灵月影」的防撤回、编辑历史显示，#1087） |
+| `LarkChatView.swift` | messenger 气泡 | 头像、发送者 + 机器人标、同一发送者（按 id）连发合并、时间只在居中的分隔里（换天或隔 5 分钟以上，`LarkChatLayout`）、回复引用、表情回应、已编辑；卡片 / 图片 / 文件无气泡；话题群（`is_topic`）照 lark-connector 网页一个话题一张卡片（`LarkTopicCard.swift`：头像、名字和时间各自带着，不按聊天合并；内容高过 320 pt 收起成「展开」；下面露出最新两条回复和「查看更早 N 条回复」，卡片上了屏才读、同时最多读 3 个、回复数没变不再读（`LarkTopicReplies`）；底部「表情回复」「回复」；点正文或回复打开「话题详情」；撤回和编辑过的话题、撤回的回复和聊天里的消息一样按「风灵月影」的防撤回、编辑历史显示，#1087） |
 
 要点：
 - 行内内容拼成一个 `Text`（`Text("\(a)\(b)")` 插值拼接），表情图用 `Text(Image(uiImage:))` 嵌进行内，未加载时先显示 `[标签]`，

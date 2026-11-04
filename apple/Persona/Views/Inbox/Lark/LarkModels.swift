@@ -327,8 +327,10 @@ extension APIClient {
                                     query: ["before": before ?? "", "after": after ?? "", "around": around ?? "", "limit": "40", "topic": topic ? "1" : ""])
     }
     /// Replies in one message's thread (decoded off the main thread, like `larkMessages`).
-    func larkThread(_ messageID: String, before: String? = nil) async throws -> LarkMessages {
-        try await getDecodedOffMain("/api/v1/lark/messages/\(messageID)/thread", query: ["before": before ?? "", "limit": "60"])
+    /// A page of a thread, oldest first: the newest `limit` replies, or those before `before`. lark-connector puts the thread's
+    /// first message (a topic) in front of every page (`replies(of:)` drops it).
+    func larkThread(_ messageID: String, before: String? = nil, limit: Int = 60) async throws -> LarkMessages {
+        try await getDecodedOffMain("/api/v1/lark/messages/\(messageID)/thread", query: ["before": before ?? "", "limit": String(limit)])
     }
     struct LarkText: Encodable {
         var text: String

@@ -1,16 +1,19 @@
 import SwiftUI
 
 /// One topic of a Feishu topic group, drawn the way lark-connector draws a topic group (#1087): a card per topic with the
-/// poster's avatar, name and time on top and the topic under them, folded behind 展开 past `Theme.Size.box320`.
-/// A tap on the topic (not on its links or a card's buttons) opens its thread; a long press has the chat's menu.
-/// Topics are never run together like a chat's messages (`LarkChatLayout.continues`): where a bot posts a topic a
-/// minute, each one still has its own card, name and time. A recalled or edited topic follows 风灵月影 (防撤回, 编辑历史)
-/// as a chat's row does (`LarkMessageDisplay`).
+/// poster's avatar, name and time on top and the topic under them, folded behind 展开 past `Theme.Size.box320`, then
+/// its newest replies (`LarkTopicReplies`), its reactions and 表情回复 / 回复.
+/// A tap on the topic (not on its links or a card's buttons) or on its replies opens its thread; a long press has the
+/// chat's menu. Topics are never run together like a chat's messages (`LarkChatLayout.continues`): where a bot posts a
+/// topic a minute, each one still has its own card, name and time. A recalled or edited topic, and a recalled reply,
+/// follow 风灵月影 (防撤回, 编辑历史) as a chat's row does (`LarkMessageDisplay`).
 struct LarkTopicCard: View {
     var topic: LarkMessage
     /// The topic group, named under the thread's title.
     var chatName: String
     var feedID: String?
+    /// The topic group's newest replies, read as cards come on screen.
+    var replies: LarkTopicReplies?
     @Environment(\.larkOpenProfile) private var openProfile
     @Environment(\.larkReact) private var react
     @Environment(\.larkAddPin) private var addPin
@@ -19,6 +22,8 @@ struct LarkTopicCard: View {
     @State private var threadOpen: LarkTopicThreadOpening?
     @State private var picking = false
     @State private var showHistory = false
+    /// On screen: a topic group lays out all its cards at once (`LarkChatStack`), so appearing is not coming on screen.
+    @State private var onScreen = false
 
     var body: some View {
         let m = topic
@@ -29,17 +34,35 @@ struct LarkTopicCard: View {
             // no longer shows.
             if display.showsBody(of: m) { fold.contextMenu { menu } } else { fold }
             if m.olk == nil { LarkTranslationLine(message: m, feedID: feedID) }
-            footer
+            if !m.recalled && LarkTopicReplies.count(of: m) > 0 {
+                LarkTopicReplyPreview(topic: m, replies: replies, open: canOpen ? { openThread() } : nil)
+            }
+            reactionChips
+            if !m.recalled || display.showsBody(of: m) { actions }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .card(padding: Theme.Space.m)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("lark.topic")
+        .onScrollVisibilityChange(threshold: 0.01) { onScreen = $0 }
+        .task(id: readKey) { await readReplies() }
         .sheet(isPresented: $picking) { LarkReactionPicker(message: m) { react?(m, $0) } }
         .sheet(isPresented: $showHistory) { LarkEditHistoryView(message: m) }
         .sheet(item: $threadOpen) { t in
             LarkThreadView(root: m, isGroup: true, feedID: feedID, focusBox: t.focus, chatName: chatName)
         }
+    }
+
+    /// Reads the topic's newest replies once its card has been on screen a moment (not one flung past), and again when
+    /// its reply count changes; off screen before its turn, it is not read. Nor is a topic whose thread cannot be opened
+    /// (recalled): its replies would lead nowhere. The key and the read are a property and a method, not in `body`'s
+    /// chain (a closure there is type-checked with the whole chain, docs/lessons/ios.md).
+    private var readKey: String { "\(topic.id)#\(LarkTopicReplies.count(of: topic))#\(onScreen)" }
+
+    private func readReplies() async {
+        guard onScreen else { replies?.drop(topic.id); return }
+        try? await Task.sleep(for: .milliseconds(200))
+        if !Task.isCancelled && canOpen { replies?.want(topic) }
     }
 
     private var menu: some View {
@@ -66,9 +89,8 @@ struct LarkTopicCard: View {
         }
     }
 
-    /// Reactions, then how many replies (opens the thread) and 已编辑; none of them on a recalled topic, which says
-    /// 已撤回 when its body shows (as a chat's row).
-    @ViewBuilder private var footer: some View {
+    /// None on a recalled topic, as a chat's row.
+    @ViewBuilder private var reactionChips: some View {
         let m = topic
         let reactions = m.reactions ?? []
         if !reactions.isEmpty && !m.recalled {
@@ -78,46 +100,49 @@ struct LarkTopicCard: View {
                         .buttonStyle(.plain)
                         .disabled(react == nil)
                 }
-                if react != nil {
-                    Button { picking = true } label: {
-                        Image(systemName: Theme.Icon.react).font(Theme.Font.secondary).foregroundStyle(.secondary)
-                            .scaledFrame(width: Theme.Size.well, height: Theme.Size.iconL)
-                            .background(Color.primary.opacity(0.05), in: .capsule)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("表情回复")
-                }
             }
         }
-        let replies = m.recalled ? 0 : max(m.threadReplyCount ?? 0, m.replyCount)
-        let edited = m.edited == true && display.showsBody(of: m)
-        if m.recalled && display.showsBody(of: m) {
-            Text("已撤回").font(Theme.Font.caption).foregroundStyle(.secondary)
-        }
-        if replies > 0 || edited {
-            HStack(spacing: Theme.Space.s) {
-                if replies > 0 {
-                    Button { openThread() } label: {
-                        Label("\(replies) 条回复", systemImage: Theme.Icon.reply).foregroundStyle(LarkColor.blue)
-                    }
-                    .buttonStyle(.plain)
-                }
-                if edited { editedMark }
+    }
+
+    /// 表情回复 and 回复 under the topic (lark-connector's card footer), 已撤回 and 已编辑 at the other end. A recalled topic
+    /// has neither button; it says 已撤回 when its body shows.
+    private var actions: some View {
+        HStack(spacing: Theme.Space.s) {
+            if react != nil && !topic.recalled {
+                action(Theme.Icon.react, "表情回复", id: "lark.topic.react") { picking = true }
             }
-            .font(Theme.Font.label)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
+            if canOpen {
+                action(Theme.Icon.reply, "回复", id: "lark.topic.reply") { openThread(focus: true) }
+            }
+            Spacer(minLength: 0)
+            Group {
+                if topic.recalled { Text("已撤回") }
+                if topic.edited == true { editedMark }
+            }
+            .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
         }
+        .padding(.leading, -Theme.Space.s) // the icons, not their tap areas, line up with the text above
     }
 
     /// 已编辑: with 编辑历史 on and old versions kept, a button to them (`LarkEditHistoryView`).
     @ViewBuilder private var editedMark: some View {
         if display.showsHistory(of: topic) {
-            Button("已编辑") { showHistory = true }.buttonStyle(.plain).lineLimit(1)
+            Button("已编辑") { showHistory = true }.buttonStyle(.plain)
                 .accessibilityLabel("查看编辑历史").accessibilityIdentifier("lark.editHistory.\(topic.id)")
         } else {
             Text("已编辑")
         }
+    }
+
+    private func action(_ icon: String, _ label: String, id: String, run: @escaping () -> Void) -> some View {
+        Button(action: run) {
+            Image(systemName: icon).font(Theme.Font.body).foregroundStyle(.secondary)
+                .scaledFrame(width: Theme.Size.well, height: Theme.Size.tapTarget)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier(id)
     }
 
     /// Nothing to open for a recalled topic or one not in Feishu yet (`LarkReply.route`).
@@ -139,6 +164,67 @@ struct LarkTopicCard: View {
 private struct LarkTopicThreadOpening: Identifiable {
     let id = UUID()
     var focus: Bool
+}
+
+/// A topic's newest two replies, a line each, under 查看更早 N 条回复 when there are more (lark-connector's topic card).
+/// Until they are read, the lines they will take are there already, as placeholders: a card does not grow when its
+/// replies come in (in a list anchored at its newest end, cards growing as they come on screen moved the cards around
+/// them on and off screen, again and again). A tap opens the thread. A view of its own: a read coming in redraws these
+/// lines, not every card on screen.
+private struct LarkTopicReplyPreview: View {
+    var topic: LarkMessage
+    var replies: LarkTopicReplies?
+    /// Opens the thread; nil when there is none to open.
+    var open: (() -> Void)?
+    @Environment(\.larkDisplay) private var display
+
+    var body: some View {
+        let count = LarkTopicReplies.count(of: topic)
+        let preview = replies?.previews[topic.id]
+        let shown = preview?.replies ?? []
+        // Not read yet (or the read failed): the lines the replies will take.
+        let pending = shown.isEmpty ? min(count, LarkTopicReplies.shown) : 0
+        let earlier = max(0, count - max(shown.count, pending))
+        Button { open?() } label: {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                if earlier > 0 {
+                    Text("查看更早 \(earlier) 条回复").font(Theme.Font.label).foregroundStyle(LarkColor.blue).lineLimit(1)
+                }
+                ForEach(shown) { r in
+                    Text("\(Text(r.senderName).font(Theme.Font.secondaryMedium))：\(said(r))")
+                        .font(Theme.Font.secondary).lineLimit(1)
+                }
+                ForEach(0..<pending, id: \.self) { _ in
+                    Text("\(Text("某某").font(Theme.Font.secondaryMedium))：回复内容回复内容")
+                        .font(Theme.Font.secondary).lineLimit(1).redacted(reason: .placeholder)
+                }
+            }
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.vertical, Theme.Space.s)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.primary.opacity(0.04), in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(open == nil)
+        .accessibilityLabel(spoken(count: count, earlier: earlier, shown: shown))
+        .accessibilityIdentifier("lark.topic.replies")
+        if preview?.failed == true, shown.isEmpty, let replies {
+            HStack(spacing: Theme.Space.s) {
+                Text("回复没读到").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                Button("重试") { replies.retry(topic) }.font(Theme.Font.labelMedium).lineLimit(1)
+            }
+        }
+    }
+
+    /// VoiceOver reads the preview as one line: what it shows, in order.
+    private func spoken(count: Int, earlier: Int, shown: [LarkMessage]) -> String {
+        guard !shown.isEmpty else { return "\(count) 条回复，正在读取" }
+        let lines = shown.map { "\($0.senderName)：\(said($0))" }
+        return ((earlier > 0 ? ["查看更早 \(earlier) 条回复"] : []) + lines).joined(separator: "，")
+    }
+
+    private func said(_ r: LarkMessage) -> String { LarkTopicReplies.line(of: r, display: display) }
 }
 
 /// A topic's own content on its card: what a chat bubble holds, without the bubble (the card is its frame). A recalled

@@ -197,7 +197,7 @@
 | 10.8 | 表情回应 | 回应条（表情图 + 谁 / 几个），点一下切换自己的回应；「☺︎」或长按「表情回复」打开常用 + 全部表情目录（分组） | `Lark/LarkReactionsMoments.swift`（LarkReactionPicker、LarkEmojiImage）、`LarkChatView.swift`（LarkReactionChip） | — | ModalBottomSheet + LazyVerticalGrid | M | P2 |
 | 10.9 | 长按菜单 | 常用表情一排、回复、表情回复、拷贝、查看 <某人> 的资料；消息和话题卡片同一个菜单 | `LarkChatView.swift`（LarkMessageMenu） | `contextMenu` | 长按 DropdownMenu | S | P1 |
 | 10.10 | 资料卡 | 点头像或名字：封面、头像、名字、状态、签名、「发消息」（打开 / 建私聊）、信息行（前 5 行 +「查看更多信息」，可拷贝），上级行打开上级的资料卡 | `Lark/LarkPeople.swift`（LarkProfileView） | sheet | ModalBottomSheet | M | P2 |
-| 10.11 | 话题群 | `is_topic` 的群一个话题一张卡片（头像、名字、时间各自带着，高过 320 pt 收起成「展开」，#1087），点正文或「N 条回复」打开「话题详情 · 来自 群名」看全部回复；底部输入框发的是新话题（占位「发布话题」） | `LarkChatView.swift`、`LarkTopicCard.swift`（LarkThreadView） | — | 同 | M | P2 |
+| 10.11 | 话题群 | `is_topic` 的群一个话题一张卡片（头像、名字、时间各自带着，高过 320 pt 收起成「展开」，露出最新两条回复和「查看更早 N 条回复」，底部「表情回复」「回复」，#1087），点正文或回复打开「话题详情 · 来自 群名」看全部回复；底部输入框发的是新话题（占位「发布话题」） | `LarkChatView.swift`、`LarkTopicCard.swift`（LarkThreadView） | — | 同 | M | P2 |
 | 10.12 | 公司圈分享 | 消息里的公司圈分享链接渲染成预览卡（标题、作者、摘要、计数），点开看帖子全文、图片、回应和评论（没有 feed） | `Lark/LarkReactionsMoments.swift`（LarkMomentsCard、LarkMomentsPostView）、`docs/feishu.md` | — | 同 | M | P2 |
 | 10.13 | 飞书路由 | 链接分流：文档 → 原生阅读器，公司圈帖子 → 帖子页，其余 → 网页；`FeishuRoute` 只有 chat / doc / profile / momentsPost 四种落点（不做第二个飞书） | `Jarvis/Views/Feishu/Foundation/FeishuFoundation.swift`、`docs/feishu.md` | — | 同 | S | P1 |
 

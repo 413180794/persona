@@ -3,7 +3,8 @@ import XCTest
 /// A Feishu topic group lists its topics as cards, as lark-connector does (#1087): three topics in a row from one bot each
 /// keep their own card with the name and time (a chat runs them together under one name), a long topic folds behind
 /// 展开 (what it hides takes no taps), a tap on a topic opens its thread as 话题详情 from the group, and a tap on a link
-/// in a topic opens the link only. A recalled or edited topic follows 风灵月影 (防撤回, 编辑历史) as a chat's row does.
+/// in a topic opens the link only. Under a topic are its newest two replies (查看更早 N 条回复 above them), then 表情回复
+/// and 回复. A recalled or edited topic, and a recalled reply, follow 风灵月影 (防撤回, 编辑历史) as a chat's row does.
 /// Against scripts/mock/mock_hub.py with MOCK_LARK_TOPIC=1 (JARVIS_MOCK_HUB); TEST_RUNNER_JARVIS_SHOTS=<dir> keeps a
 /// screenshot of each step, light and dark.
 final class LarkTopicGroupTests: XCTestCase {
@@ -50,6 +51,11 @@ final class LarkTopicGroupTests: XCTestCase {
         let edited = topic("周四上架")
         XCTAssertTrue(edited.staticTexts["已编辑"].exists, "no 已编辑 on the edited topic:\n\(edited.debugDescription)")
         XCTAssertFalse(edited.buttons["查看编辑历史"].exists, "编辑历史 is off, yet 已编辑 opens it")
+        // Its newest reply was recalled: the preview says so, and keeps what it said to itself.
+        let preview = edited.buttons["lark.topic.replies"]
+        let hidden = NSPredicate { _, _ in preview.label.contains("小周：消息已撤回") }
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation(for: hidden, evaluatedWith: nil)], timeout: 10), .completed, preview.label)
+        XCTAssertFalse(preview.label.contains("已留存的回复原文"), "防撤回 is off, yet the recalled reply shows: \(preview.label)")
         shot("topics-recalled-off")
 
         try await display("anti_recall", true)
@@ -62,6 +68,9 @@ final class LarkTopicGroupTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["不能展示的话题原文"].exists, "a recalled topic lark-connector did not keep shows its text")
         let history = topic("周四上架").buttons["查看编辑历史"]
         XCTAssertTrue(history.waitForExistence(timeout: 10), "编辑历史 is on, yet 已编辑 is not a button")
+        let keptReply = NSPredicate { _, _ in preview.label.contains("小周：已留存的回复原文：我周三请假 · 已撤回") }
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation(for: keptReply, evaluatedWith: nil)], timeout: 10), .completed,
+                       "防撤回 is on, yet the kept reply does not show: \(preview.label)")
         shot("topics-recalled-on")
         history.tap()
         XCTAssertTrue(app.staticTexts["周三上架"].waitForExistence(timeout: 5), "the old version is not in 编辑历史:\n\(app.debugDescription)")
@@ -79,11 +88,10 @@ final class LarkTopicGroupTests: XCTestCase {
         XCTAssertEqual(fold.label, "展开")
         let folded = card.frame.height
         shot("topic-folded")
-        // What the fold hides takes no taps: in the card's foot, clear of the fold's edge and of the card's own buttons
-        // (a tap a little off one still counts for it), a tap opens nothing.
+        // What the fold hides takes no taps: in the middle of the card's 表情回复 / 回复 row, clear of the fold's edge and
+        // of the card's own buttons (a tap a little off one still counts for it), a tap opens nothing.
         center(fold)
-        let replies = card.buttons.matching(NSPredicate(format: "label CONTAINS %@", "条回复")).firstMatch
-        point(x: card.frame.midX, y: (replies.frame.maxY + card.frame.maxY) / 2).tap()
+        point(x: card.frame.midX, y: card.buttons["lark.topic.reply"].frame.midY).tap()
         sleep(1)
         XCTAssertFalse(app.navigationBars["话题详情"].exists, "a tap under the fold opened the topic: what the fold hides took it")
         // 展开 takes a whole tap target, not just its pill: a tap near its top edge opens the fold, not the topic.
@@ -136,6 +144,70 @@ final class LarkTopicGroupTests: XCTestCase {
         XCTAssertTrue(app.navigationBars["话题详情"].waitForNonExistence(timeout: 5))
     }
 
+    @MainActor func testATopicShowsItsNewestReplies() {
+        open(scheme: "light")
+        // Six replies: the newest two, and the four before them counted.
+        let six = topic("v2.4 发版说明").buttons["lark.topic.replies"]
+        XCTAssertTrue(six.waitForExistence(timeout: 5), "no replies on the topic:\n\(app.debugDescription)")
+        let read = NSPredicate { _, _ in six.label.contains("老王：灰度名单我今晚发出来") }
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation(for: read, evaluatedWith: nil)], timeout: 10), .completed,
+                       "the newest replies were not read: \(six.label)")
+        XCTAssertTrue(six.label.contains("查看更早 4 条回复"), six.label)
+        XCTAssertTrue(six.label.contains("Mia：收到"), six.label)
+        XCTAssertFalse(six.label.contains("小周"), "more than the newest two: \(six.label)")
+        shot("topic-replies")
+        // One reply: no 查看更早; none: no replies at all.
+        let one = topic("灰度 10% 已开始").buttons["lark.topic.replies"]
+        let oneRead = NSPredicate { _, _ in one.label.contains("Tom：我盯着崩溃率") }
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation(for: oneRead, evaluatedWith: nil)], timeout: 10), .completed, one.label)
+        XCTAssertFalse(one.label.contains("查看更早"), one.label)
+        XCTAssertFalse(topic("v2.4 构建通过").buttons["lark.topic.replies"].exists)
+        // A tap on them opens the thread.
+        one.tap()
+        XCTAssertTrue(app.navigationBars["话题详情"].waitForExistence(timeout: 5), "the replies did not open the thread")
+    }
+
+    /// A topic group lays out all its cards at once (`LarkChatStack`): a card's replies are still read only once it
+    /// comes on screen, not when the group opens. Opened before, so its topics are all there from the first frame.
+    @MainActor func testRepliesAreReadOnlyOnceTheirCardIsOnScreen() async throws {
+        open(scheme: "light")
+        sleep(4) // the topics cached
+        app.terminate()
+        let before = try await threadReads()
+        open(scheme: "light")
+        let oldestCard = topics.containing(NSPredicate(format: "label BEGINSWITH %@", "周四上架")).firstMatch
+        if oldestCard.isHittable { throw XCTSkip("the whole group fits on this screen") }
+        var opened = try await threadReads()
+        for _ in 0..<20 where opened["m403", default: 0] <= before["m403", default: 0] {
+            try await Task.sleep(for: .milliseconds(500))
+            opened = try await threadReads()
+        }
+        XCTAssertGreaterThan(opened["m403", default: 0], before["m403", default: 0], "the card on screen was not read")
+        try await Task.sleep(for: .seconds(2))
+        opened = try await threadReads()
+        XCTAssertEqual(opened["m397", default: 0], before["m397", default: 0], "the oldest topic, off screen, was read at once")
+        let oldest = topic("周四上架").buttons["lark.topic.replies"]
+        let read = NSPredicate { _, _ in oldest.label.contains("Mia：收到") }
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation(for: read, evaluatedWith: nil)], timeout: 10), .completed,
+                       "on screen, the oldest topic's replies were not read: \(oldest.label)")
+    }
+
+    @MainActor func testTheCardsActionsReactAndReply() {
+        open(scheme: "light")
+        let card = topic("今晚 10 点开到 50%")
+        card.buttons["lark.topic.reply"].tap()
+        XCTAssertTrue(app.navigationBars["话题详情"].waitForExistence(timeout: 5), "回复 did not open the thread")
+        // The cursor, not the keyboard: after a typeText the simulator types on a hardware keyboard (docs/lessons/testing.md).
+        let box = app.textFields["lark.thread.box"]
+        let focused = NSPredicate { _, _ in box.value(forKey: "hasKeyboardFocus") as? Bool == true }
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation(for: focused, evaluatedWith: nil)], timeout: 5), .completed,
+                       "回复 did not focus the thread's box:\n\(app.debugDescription)")
+        app.buttons["完成"].tap()
+        XCTAssertTrue(app.navigationBars["话题详情"].waitForNonExistence(timeout: 5))
+        card.buttons["lark.topic.react"].tap()
+        XCTAssertTrue(app.navigationBars["表情回复"].waitForExistence(timeout: 5), "表情回复 did not open the picker")
+    }
+
     @MainActor func testALinkInATopicOpensOnlyTheLink() {
         open(scheme: "light")
         let link = topic("回归用例表在这里").links.firstMatch
@@ -155,6 +227,9 @@ final class LarkTopicGroupTests: XCTestCase {
     @MainActor private func noReactionsOrReplies(_ card: XCUIElement) {
         XCTAssertFalse(card.staticTexts["Tom、Mia"].exists, "a recalled topic shows its reactions:\n\(card.debugDescription)")
         XCTAssertFalse(card.buttons["1 条回复"].exists, "a recalled topic shows its replies:\n\(card.debugDescription)")
+        for id in ["lark.topic.replies", "lark.topic.react", "lark.topic.reply"] {
+            XCTAssertFalse(card.buttons[id].exists, "a recalled topic has \(id):\n\(card.debugDescription)")
+        }
     }
 
     /// Sets one of 风灵月影 on the mock hub, as the settings page does; the hub tells the app, which reads them again.
@@ -169,6 +244,18 @@ final class LarkTopicGroupTests: XCTestCase {
         req.httpBody = try JSONSerialization.data(withJSONObject: ["account_id": now["account_id"] ?? "", "key": key, "value": on, "expected": !on])
         let (_, response) = try await URLSession.shared.data(for: req)
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200, "the mock hub did not take \(key) = \(on)")
+    }
+
+    /// How many times the mock hub was asked for each topic's thread, by topic id.
+    private func threadReads() async throws -> [String: Int] {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: hub + "/mock/hits")!)
+        let hits = (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["hits"] as? [String: Int] ?? [:]
+        var reads: [String: Int] = [:]
+        let prefix = "GET /api/v1/lark/messages/"
+        for (path, n) in hits where path.hasPrefix(prefix) && path.hasSuffix("/thread") {
+            reads[String(path.dropFirst(prefix.count).dropLast("/thread".count)), default: 0] += n
+        }
+        return reads
     }
 
     @MainActor private func open(scheme: String) {

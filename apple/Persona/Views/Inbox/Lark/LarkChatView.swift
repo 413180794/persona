@@ -110,6 +110,8 @@ struct LarkChatView: View {
     @State private var receiptStates: [String: LarkReadState] = [:]
     /// What rows coming on and off screen keep track of (LarkChatBook).
     @State private var book = LarkChatBook()
+    /// A topic group's newest replies, for its cards.
+    @State private var topicReplies = LarkTopicReplies()
 
     init(conversation: LarkConversation, messageComposer: Bool = false) {
         self.conversation = conversation
@@ -127,6 +129,16 @@ struct LarkChatView: View {
     }
 
     private var isTopic: Bool { conversation.isTopic == true || foundTopic }
+    /// How the topic cards read a topic's newest replies (`LarkTopicReplies`), on the chat's account. `chatAPI` spelled
+    /// out: through it the closure would hold this page, whose state holds the closure. A function of its own, not in
+    /// `.task`: a closure in `body`'s modifier chain is type-checked with the whole chain (Xcode 26.0, docs/lessons/ios.md).
+    private func bindTopicReplies() {
+        let link = chatLink ?? model.hub, app = model, account = conversation.account
+        topicReplies.fetch = { id, limit in
+            guard let link, app.link(link.group) === link, let api = app.api(link.group)?.lark(account) else { throw CancellationError() }
+            return try await api.larkThread(id, limit: limit).messages
+        }
+    }
     /// Under the bars above the box: the page's own background (a topic group's is the grouped one).
     private var barBackground: Color { isTopic ? Theme.groupedPage : Theme.pageBackground }
     /// Under the list: a topic group's cards stand on the grouped page, as Feishu's do. A property, not a ternary in
@@ -160,6 +172,7 @@ struct LarkChatView: View {
         }
         .task {
             if chatLink == nil { chatLink = model.hub }
+            bindTopicReplies()
             async let display: Void = refreshDisplay()
             async let restored: Void = restoreDraft()
             LarkMedia.shared.loadEmojiCatalog()
@@ -245,7 +258,7 @@ struct LarkChatView: View {
                                 if m.isSystem {
                                     LarkMessageRow(message: m, grouped: false, isGroup: true, feedID: conversation.id)
                                 } else {
-                                    LarkTopicCard(topic: m, chatName: conversation.name, feedID: conversation.id)
+                                    LarkTopicCard(topic: m, chatName: conversation.name, feedID: conversation.id, replies: topicReplies)
                                 }
                             }
                             .padding(.top, Theme.Space.m)
