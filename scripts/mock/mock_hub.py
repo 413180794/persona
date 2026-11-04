@@ -6483,6 +6483,10 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"session": session})
         if p.endswith("/messages") and not os.environ.get("MOCK_SEND_REFUSE"):  # sent messages, once per client_msg_id
             body = json.loads(self.last_body or b"{}")
+            # MOCK_SEND_DELAY_MS: the hub takes this long to hand a message to the agent (one starting up takes seconds).
+            if os.environ.get("MOCK_SEND_DELAY_MS"): time.sleep(int(os.environ["MOCK_SEND_DELAY_MS"]) / 1000)
+            # MOCK_SEND_FAIL=1: it does not get there (502).
+            if os.environ.get("MOCK_SEND_FAIL"): return self.send_json({"error": "node unreachable"}, 502)
             if os.environ.get("MOCK_ECHO_SENT") and not body.get("todo_id"):
                 echo_sent(p.split("/"), body)
             todo_id = body.get("todo_id")

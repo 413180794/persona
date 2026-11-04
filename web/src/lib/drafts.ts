@@ -25,6 +25,13 @@ export function withAppended(draft: string, text: string): string {
   return draft ? `${draft}\n${text}` : text;
 }
 
+/** The draft after a send failed: the composer emptied itself when the message went out, so the text comes back;
+ * what was typed while it was on its way stays, under it on its own line. */
+export function withUnsent(draft: string, unsent: string): string {
+  if (!unsent) return draft;
+  return draft ? `${unsent}\n${draft}` : unsent;
+}
+
 /** The draft after a text event (an image changes the attachments, not the text). */
 export function applyDraft(draft: string, e: DraftEvent): string {
   switch (e.type) {

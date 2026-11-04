@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { applyDraft, onDraftEvent, replaceNeedsConfirm, sendDraft, withAppended, withQuote } from "./drafts";
+import { applyDraft, onDraftEvent, replaceNeedsConfirm, sendDraft, withAppended, withQuote, withUnsent } from "./drafts";
 import { browseTarget, byPrefix, chatFiles, displayTitle, mentionAt, nameMatches, otherSessions, relPath, replaceToken, sessionQuote } from "./mentions";
 import { keepAllBut, sameMessage } from "./queue";
 import { boxRect, burnWidth, fitRect, keepMark, toImage, toScreen } from "./image-edit";
@@ -154,5 +154,13 @@ describe("image markup geometry", () => {
     expect(keepMark({ tool: "pen", color: "red", points: [{ x: 1, y: 1 }, { x: 1, y: 2 }] })).toBe(true);
     expect(burnWidth({ width: 2200, height: 1000 })).toBe(10);
     expect(burnWidth({ width: 48, height: 32 })).toBe(2);
+  });
+});
+
+describe("发送失败放回输入框", () => {
+  it("空着就原样放回；期间又打了字，接在放回的那段下面", () => {
+    expect(withUnsent("", "删除所有测试设备")).toBe("删除所有测试设备");
+    expect(withUnsent("还有一件事", "删除所有测试设备")).toBe("删除所有测试设备\n还有一件事");
+    expect(withUnsent("还有一件事", "")).toBe("还有一件事");
   });
 });

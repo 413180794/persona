@@ -6,7 +6,7 @@ import { ApiError, api, enc, errorText } from "../../lib/api";
 import { uuid } from "../../lib/format";
 import { imagePayload, MAX_IMAGE, quotePath } from "../../lib/attachments";
 import { activateComposer, addContext, getContexts, newContext, registerComposer, removeContext, useContexts, withContexts, type ComposerHandle } from "../../lib/links";
-import { applyDraft, onDraftEvent, replaceNeedsConfirm, type DraftImage } from "../../lib/drafts";
+import { applyDraft, onDraftEvent, replaceNeedsConfirm, withUnsent, type DraftImage } from "../../lib/drafts";
 import { browseTarget, mentionAt, replaceToken, sessionQuote } from "../../lib/mentions";
 import { AttachmentTray } from "../../ui/AttachmentTray";
 import { cx, EASE, Spinner, toast } from "../../ui/atoms";
@@ -259,21 +259,29 @@ export function Composer({
   };
 
   const canSend = (draft.trim().length > 0 || atts.length > 0 || contexts.length > 0) && !sending && !disabled;
-  const showStop = working && !draft.trim() && !atts.length && !contexts.length && onStop;
+  const showStop = working && !sending && !draft.trim() && !atts.length && !contexts.length && onStop;
 
   const submit = async (text = draft) => {
     const refs = getContexts(draftKey);
     if (sending || disabled || (!text.trim() && !atts.length && !refs.length)) return;
     setSending(true);
+    // The message shows in the chat at once (a sending bubble), so the box empties at once too: waiting for the hub to
+    // hand it to the agent (seconds when it starts up) left the same words in both places. A failure puts them back.
+    const sent = atts;
+    setDraft("");
+    draftNow.current = "";
+    localStorage.removeItem(`draft:${draftKey}`);
+    setAtts([]);
+    refs.forEach((r) => removeContext(draftKey, r.id));
     // picked contexts ride in front as <jarvis-context> tags (docs/protocol.md「消息里的标签」)
-    const ok = await onSend({ text: withContexts(refs, text, atts.length > 0), images: atts.map((a) => ({ mime: a.mime, data: a.data })) });
+    const ok = await onSend({ text: withContexts(refs, text, sent.length > 0), images: sent.map((a) => ({ mime: a.mime, data: a.data })) });
     setSending(false);
     if (ok) {
-      setDraft("");
-      atts.forEach((a) => URL.revokeObjectURL(a.url));
-      setAtts([]);
-      localStorage.removeItem(`draft:${draftKey}`);
-      refs.forEach((r) => removeContext(draftKey, r.id));
+      sent.forEach((a) => URL.revokeObjectURL(a.url));
+    } else {
+      setDraft((cur) => withUnsent(cur, text));
+      setAtts((cur) => [...sent, ...cur]);
+      refs.forEach((r) => addContext(draftKey, r));
     }
     input.current?.focus();
   };
