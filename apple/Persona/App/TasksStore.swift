@@ -17,9 +17,12 @@ final class TasksStore {
     var routes: [String: String] = [:]
     /// The task whose detail sheet is open, and whether the board is.
     var detailTask: String?
+    /// The agent (not a task's, #1113) whose page the detail sheet shows instead.
+    var detailAgent: SessionKey?
     var showBoard = false
-    /// A task picked on the board, opened when the board has gone down.
+    /// A task or an agent picked on the board, opened when the board has gone down.
     var openAfterBoard: String?
+    var openAgentAfterBoard: SessionKey?
     /// Message cards (inbox item ids) put off with 稍后, and the ones sent from their card.
     private(set) var laterMessages: Set<String> = []
     private(set) var sentMessages: Set<String> = []
@@ -43,6 +46,7 @@ final class TasksStore {
         feeds = [:]
         routes = [:]
         detailTask = nil
+        detailAgent = nil
         showBoard = false
         busyPlans = []
     }
@@ -114,6 +118,21 @@ final class TasksStore {
     func tasks(of conversation: String) -> [TodoItem] {
         todos.values.filter { $0.origin == conversation }
             .sorted { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) }
+    }
+
+    /// The agents going on that the conversation's dock and board show after its tasks (#1113): in the main
+    /// conversation the ones no task stands for (opened by hand on the Agents page); in the others none.
+    func agents(of conversation: String) -> [DockAgent] {
+        let model = AppModel.shared
+        guard let main = model.assistantMain?.sessionID, conversation == main else { return [] }
+        let group = model.hub?.group ?? ""
+        let tasks = todos.values.filter { !($0.origin ?? "").isEmpty && $0.doneAt == nil }
+        let keys = Set(tasks.flatMap { t in
+            t.activeAgents.map { SessionKey(group: group, machineID: $0.machineID, sessionID: $0.sessionID) }
+        })
+        let manual = todos.values.filter { ($0.origin ?? "").isEmpty }.map(\.id)
+        return DockAgent.shown(model.goingAgents, conversation: conversation, main: main, group: group,
+                               taskAgents: keys, manualTodos: Set(manual))
     }
 
     /// The task (a todo from an assistant conversation, not done) an agent works for.

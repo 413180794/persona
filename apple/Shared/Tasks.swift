@@ -224,6 +224,57 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
     var autoDone: Bool { doneAt != nil && doneBy == "auto" }
 }
 
+/// An agent going on (等你 / 在做) as the main conversation's dock shows it after the tasks (#1113): the ones the user
+/// opened on the Agents page, which no conversation's task stands for. Made from the Agents page's session list, so
+/// it follows the agents without a poll of its own.
+nonisolated struct DockAgent: Hashable, Identifiable, Sendable {
+    var key: SessionKey
+    var title: String
+    var state: AgentState
+    /// When it entered its state (the hub's `state_since`): the newest first among the same state.
+    var since: Date?
+    /// The todo it works for, as the hub tags the session (a task's, or one made by hand).
+    var todoID: String?
+
+    var id: SessionKey { key }
+    var isWaiting: Bool { state == .needsYou }
+
+    init(key: SessionKey, title: String, state: AgentState, since: Date? = nil, todoID: String? = nil) {
+        self.key = key
+        self.title = title
+        self.state = state
+        self.since = since
+        self.todoID = todoID
+    }
+
+    /// The agents going on in a session list (Persona's own conversations are not agents): waiting for the user
+    /// first, then the newest. Only what a pill shows goes in, so it changes when a pill would.
+    @MainActor static func going(_ sessions: [Session]) -> [DockAgent] {
+        sessions.filter { !$0.assistant && ($0.state == .needsYou || $0.state == .working) }
+            .map { DockAgent(key: $0.key, title: $0.displayTitle, state: $0.state, since: $0.stateSince, todoID: $0.todo?.id) }
+            .sorted { a, b in
+                if a.state.priority != b.state.priority { return a.state.priority < b.state.priority }
+                if a.since != b.since { return (a.since ?? .distantPast) > (b.since ?? .distantPast) }
+                return a.key.path < b.key.path
+            }
+    }
+
+    /// What a conversation's dock shows after its tasks: in the main conversation, every agent going on that no task
+    /// stands for (a task's agents are its pill already, whichever conversation opened it); elsewhere nothing.
+    /// `taskAgents` are the agents of the tasks not done. An agent the hub tags with a todo shows only when that todo
+    /// is one of `manualTodos` (made by hand): a task the todo list has not caught up with yet stays out too. Those
+    /// are the todos of `group`'s hub; another group's agent tagged with a todo of its own hub stays out.
+    static func shown(_ going: [DockAgent], conversation: String, main: String?, group: String,
+                      taskAgents: Set<SessionKey>, manualTodos: Set<String>) -> [DockAgent] {
+        guard let main, !main.isEmpty, conversation == main else { return [] }
+        return going.filter { a in
+            guard !taskAgents.contains(a.key) else { return false }
+            guard let todo = a.todoID else { return true }
+            return a.key.group == group && manualTodos.contains(todo)
+        }
+    }
+}
+
 /// Where a task is, from its todo and its agents' states (docs/todos.md「状态计算规则」, the hub's taskState).
 nonisolated enum TaskState: String, Sendable, CaseIterable {
     case needsYou, working, unread, followup, notStarted, done, failed

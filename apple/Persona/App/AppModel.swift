@@ -47,6 +47,8 @@ final class AppModel {
         didSet {
             allSessions = sessionsByMachine.values.flatMap { $0 }
             sessionsNow = allSessions
+            let going = DockAgent.going(allSessions)
+            if going != goingAgents { goingAgents = going }
             var index: [SessionKey: Session] = [:]
             for (machine, sessions) in sessionsByMachine {
                 for session in sessions {
@@ -62,6 +64,9 @@ final class AppModel {
         }
     }
     private(set) var allSessions: [Session] = []
+    /// The agents waiting for the user or working, as the main conversation's dock shows them (#1113): set only when
+    /// what a pill shows changes, so the dock is not drawn again by every push.
+    private(set) var goingAgents: [DockAgent] = []
     /// `allSessions` without watching it: for an action when it is tapped (the @ menu, the next agent), not for a view.
     /// A view reading `allSessions` is drawn again by every push about any agent; only the lists of agents may
     /// (`AllSessionsReadersTests`).

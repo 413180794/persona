@@ -1299,10 +1299,17 @@ if MOCK_TASKS:
              done_at=ago(minutes=7.9), start_error="rpc: connection closed", agents=[]),
     ]
     # MOCK_TASKS_DOCK=2: only the two tasks going on (the widget fix and the unit tests), for the dock with few pills;
+    # =pair: one task (the widget fix) and one agent opened by hand that waits for the user (the photo sync; the
+    # /orders agent and the unit tests' go idle), the main conversation's dock with a task pill and an agent pill (#1113);
     # =many: four more tasks going on (working, needing you, two still opening), for a dock wider than the screen.
+    # Without it the dock has the four tasks not done and, after them, the two agents opened by hand (photo sync, /orders).
     _dock = os.environ.get("MOCK_TASKS_DOCK", "")
     if _dock == "2":
         TODOS_INIT[:] = [t for t in TODOS_INIT if t.get("origin") != ASK1 or t["id"] in ("todo_task_widget", "todo_task_tests")]
+    elif _dock == "pair":
+        TODOS_INIT[:] = [t for t in TODOS_INIT if t.get("origin") != ASK1 or t["id"] == "todo_task_widget"]
+        for _s in SESSIONS:
+            if _s["session_id"] in (ORDERS, TESTS): _s.update(state="idle", status="idle", pending_interactions=0)
     elif _dock == "many":
         TODOS_INIT += [
             _task_todo("todo_task_orders", "排查 /orders 接口变慢", "", "server", ORDERS, "/home/me/code/shop-api", 20, "plan_mock_2"),

@@ -191,15 +191,17 @@ struct ChatView: View {
                 .presentationDragIndicator(.visible)
         }
         // The assistant's tasks (docs/unified-entry.md): a task's detail rises like a link; 全部 is the board.
-        .sheet(isPresented: Binding(get: { style == .assistant && TasksStore.shared.detailTask != nil },
-                                    set: { if !$0 { TasksStore.shared.detailTask = nil } })) {
+        .sheet(isPresented: Binding(get: { style == .assistant && (TasksStore.shared.detailTask != nil || TasksStore.shared.detailAgent != nil) },
+                                    set: { if !$0 { TasksStore.shared.detailTask = nil; TasksStore.shared.detailAgent = nil } })) {
             if let id = TasksStore.shared.detailTask { TaskDetailSheet(todoID: id) }
+            else if let key = TasksStore.shared.detailAgent { TaskDetailSheet(agent: key) }
         }
         .sheet(isPresented: Binding(get: { style == .assistant && TasksStore.shared.showBoard },
                                     set: { TasksStore.shared.showBoard = $0 }),
                onDismiss: {
                    let tasks = TasksStore.shared
                    if let id = tasks.openAfterBoard { tasks.openAfterBoard = nil; tasks.detailTask = id }
+                   if let key = tasks.openAgentAfterBoard { tasks.openAgentAfterBoard = nil; tasks.detailAgent = key }
                }) {
             TaskBoardSheet(conversation: key.sessionID)
         }

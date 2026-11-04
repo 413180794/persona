@@ -663,7 +663,8 @@ struct TaskQuestions: View {
 }
 
 /// The dock: 全部 for the board, held at the leading edge so it never scrolls out of reach, then a pill for each task
-/// going on (waiting for the user first), scrolling sideways beside it.
+/// going on (waiting for the user first), scrolling sideways beside it. In the main conversation the agents going on
+/// that no task stands for (opened on the Agents page, #1113) follow the tasks, marked as agents.
 struct TaskDock: View {
     var conversation: String
     @State private var removing: TodoItem?
@@ -672,17 +673,19 @@ struct TaskDock: View {
     var body: some View {
         let dock = store.dock(conversation)
         let all = store.tasks(of: conversation)
-        if !all.isEmpty {
+        let agents = store.agents(of: conversation)
+        if !all.isEmpty || !agents.isEmpty {
             HStack(spacing: Theme.Space.s) {
-                board(all.count)
-                if !dock.isEmpty {
+                board(all.count + agents.count)
+                if !dock.isEmpty || !agents.isEmpty {
                     ScrollView(.horizontal) {
                         HStack(spacing: Theme.Space.s) {
                             ForEach(dock) { todo in pill(todo) }
+                            ForEach(agents) { agent in pill(agent) }
                         }
                     }
                     .scrollIndicators(.hidden)
-                    .animation(Theme.Motion.layout, value: dock.map(\.id))
+                    .animation(Theme.Motion.layout, value: dock.map(\.id) + agents.map(\.key.path))
                 }
             }
             .padding(.horizontal, Theme.Space.xs)
@@ -695,7 +698,7 @@ struct TaskDock: View {
         Button {
             store.showBoard = true
         } label: {
-            Label("全部 \(count)", systemImage: Theme.Icon.taskBoard)
+            Text("全部 \(count)")
                 .font(Theme.Font.captionMedium)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -710,27 +713,59 @@ struct TaskDock: View {
 
     private func pill(_ todo: TodoItem) -> some View {
         let state = store.state(todo)
-        let waiting = state == .needsYou
         return Button {
             store.detailTask = todo.id
         } label: {
-            HStack(spacing: Theme.Space.sm) {
+            DockPillLabel(title: todo.title, state: state.agentState, waiting: state == .needsYou) {
                 TaskMark(state: state, size: Theme.Size.dot)
-                Text(todo.title).lineLimit(1)
-                if waiting { Text("等你").lineLimit(1).fixedSize() } // the title gives way, the ask does not
             }
-            .font(Theme.Font.captionStrong)
-            .foregroundStyle(waiting ? state.agentState.tone.text : .primary)
-            .padding(.horizontal, Theme.Space.m)
-            .padding(.vertical, Theme.Space.sm)
-            .background(waiting ? state.agentState.tone.tint : Theme.Fill.chip, in: .capsule)
-            .scaledFrame(maxWidth: Theme.Size.box200)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("task-dock.pill")
         .menuPreviewShape(.capsule)
         .contextMenu { TaskRemoveMenuItem(todo: todo, state: state, pending: $removing) }
         .transition(.scale.combined(with: .opacity))
+    }
+
+    /// An agent no task stands for: its state's dot and the Agents mark, opening its page in the task's sheet.
+    private func pill(_ agent: DockAgent) -> some View {
+        Button {
+            store.detailAgent = agent.key
+        } label: {
+            DockPillLabel(title: agent.title, state: agent.state, waiting: agent.isWaiting) {
+                StatusDot(state: agent.state, size: Theme.Size.dot)
+                Image(systemName: Theme.Icon.agents).font(Theme.Font.label)
+                    .foregroundStyle(agent.isWaiting ? AnyShapeStyle(agent.state.tone.text) : AnyShapeStyle(.secondary))
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Agent \(agent.title)，\(agent.isWaiting ? "等你" : "在做")")
+        .accessibilityIdentifier("task-dock.agent")
+        .transition(.scale.combined(with: .opacity))
+    }
+}
+
+/// A dock pill's face, the same for a task and an agent: its marks, the title (which gives way), and 等你 tinted with
+/// the state's tone while it waits for the user.
+struct DockPillLabel<Marks: View>: View {
+    var title: String
+    var state: AgentState
+    var waiting: Bool
+    @ViewBuilder var marks: Marks
+
+    var body: some View {
+        HStack(spacing: Theme.Space.sm) {
+            marks
+            Text(title).lineLimit(1)
+            if waiting { Text("等你").lineLimit(1).fixedSize() } // the title gives way, the ask does not
+        }
+        .font(Theme.Font.captionStrong)
+        .foregroundStyle(waiting ? state.tone.text : .primary)
+        .padding(.horizontal, Theme.Space.m)
+        .padding(.vertical, Theme.Space.sm)
+        .background(waiting ? state.tone.tint : Theme.Fill.chip, in: .capsule)
+        .scaledFrame(maxWidth: Theme.Size.box200)
     }
 }
 

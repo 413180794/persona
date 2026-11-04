@@ -263,8 +263,6 @@ extension Theme {
         static let addedReminder = "checklist.checked"
         /// Kinds of tasks that start without asking first (这类以后直接开).
         static let taskTrust = "bolt.shield"
-        /// Tasks from the assistant's conversation (docs/unified-entry.md): the board of all of them (任务板).
-        static let taskBoard = "rectangle.grid.2x2"
         /// A plan the assistant handed the user (计划卡).
         static let taskPlan = "list.clipboard"
         /// Saying something straight to a task (说一句, 「对「xx」说」).
