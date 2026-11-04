@@ -300,3 +300,16 @@
 - 在 Mac 上 `tar -czf` 不设 `COPYFILE_DISABLE=1`，每个文件旁边都多一个 `._<名字>` 的 AppleDouble 文件，连顶层目录也有（`._<插件 id>`）；
   hub 认「根目录或唯一的顶层目录」里的清单，顶层成了两项就报「包里没有 persona-plugin.json」。Linux 上 `tar tzf` 能看见这些 `._*` 和 `LIBARCHIVE.xattr` 的提示。
 - 现在 hub 解包时跳过 `._*`、`__MACOSX/`、`.DS_Store`；打包脚本仍应 `export COPYFILE_DISABLE=1`，旧 hub 照样装不上带这些文件的包。
+
+## hub 重启无感的几个坑（2026-11-04，#1574）
+
+- **常驻 node 的 systemd 单元要带 hub 一样的 PATH**：以前本机 node 是 hub 的子进程，继承 hub 单元里的 `PATH=%h/.local/bin:…`；
+  单独起成 `jarvisd-node` 后用的是 systemd 的默认 PATH，找不到 `~/.local/bin` 里的 herdr、claude。`node-launchd.sh` 现在写同样的 PATH。
+- **给常驻 node 发信号只发给主进程**：`systemctl --user kill -s HUP jarvisd-node` 默认发给整个 cgroup，助手的 claude 和它的后台命令也会收到 SIGHUP 退出。
+  要 `--kill-whom=main`（`node-launchd.sh restart-idle`）。
+- **常驻 node `exec` 的那一下，`node --stdio` 会自己接下连接**：socket 文件还在（`SetUnlinkOnClose(false)`）但拒绝连接，旧的 `Relay` 当成没有常驻 node，
+  自己服务这条连接，助手的对话就又落回 hub 的 cgroup，下次 hub 重启照样被杀。现在拒绝连接时等最多 8 s（`dialResident`）。
+- **停机时的「离线」广播是假的**：以前 hub 收到 SIGTERM 先取消 ctx，各台机器的连接一断就广播 `machines`（离线）、结束问题，客户端在被断开之前先看到一串离线。
+  停机期间（`stopping`）不广播这些，新 hub 用交接来的机器快照（warm start）。
+- **socket activation 之后旧二进制起不来**：不认识 `LISTEN_FDS` 的 hub 自己 `net.Listen`，端口在 `jarvisd.socket` 手里，`address already in use` 反复重启。
+  回滚二进制前先 `PERSONA_HUB_SOCKET=0 scripts/deploy/hub-systemd.sh`。`systemctl --user stop jarvisd` 之后来一个连接会把它重新拉起，要停连 socket 一起停。

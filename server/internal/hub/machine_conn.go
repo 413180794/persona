@@ -423,6 +423,22 @@ func (m *Machine) detach(err error, planned bool) {
 	m.todoTokensMu.Lock()
 	m.lastTodoTokens = nil
 	m.todoTokensMu.Unlock()
+	if !planned && m.online && reconnectGrace > 0 && m.cfg.Kind != kindLink {
+		// A node the hub reaches itself that comes straight back (a resident node exec'ing a new binary, a relay
+		// replaced) is not news: the machine shows as it was for reconnectGrace, then offline as below if it is still
+		// gone (warm.go). A link going away is the computer leaving: offline at once (TestLinkMachineComesOnline…).
+		m.online = false
+		if err != nil {
+			m.err = err.Error()
+		}
+		ch := make(chan struct{})
+		m.warmUntil, m.warmed = time.Now().Add(reconnectGrace), ch
+		m.mu.Unlock()
+		m.hub.logf("[%s] disconnected: %v (shown as online for %s while it reconnects)", m.cfg.ID, err, reconnectGrace)
+		time.AfterFunc(reconnectGrace, func() { m.warmExpired(ch) })
+		m.hub.cancelMachineInteractions(m.cfg.ID)
+		return
+	}
 	if !planned {
 		m.online = false
 		m.via, m.path = "", ""

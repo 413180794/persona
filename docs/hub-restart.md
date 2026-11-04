@@ -159,6 +159,10 @@ hub 记住每个会话最后一条 `session.delta`（空串清掉，机器真正
 ### node 和插件
 
 - node：本机的常驻 node 和 hub 之间只是转发，hub 重启后 0.2 s 内重新连上并接管对话；ssh 的电脑照旧 2–8 s 重连，靠 warm start 让客户端看不出来。
+- node 自己断开又马上回来（常驻 node 空闲时 `exec` 新二进制约 2 s、转发进程被换掉）：运行中的 hub 先把这台照原样显示 **5 s**
+  （`reconnectGrace`，`machine_conn.go` 的 `detach`），回来了就什么都不广播，过了 5 s 还没回来才照旧显示离线。jarvis-link 的电脑除外：链路断了就是电脑走了，立刻离线。
+- 常驻 node 正在 `exec` 时它的 socket 文件还在、但没人听：`node --stdio` 的 `Relay` 遇到「拒绝连接」会等它最多 8 s（`dialResident`），
+  而不是自己接下这条连接——那样助手的对话又会落到 hub 的 cgroup 里。没有 socket 文件（没装常驻 node）时立刻自己处理，和以前一样。
   node 侧状态（会话状态、后台任务）在 Postgres，连上后 `state.load`；hub 重新 `session.watch` 订阅中的会话（`since_seq`）。
 - 交互（提问、审批）：可续的照旧等 hook 重连认领（`resumeGrace` 3 分钟）；停机时不再先结束、广播再恢复。
 - 插件、连接器程序：仍是 hub 的子进程，随 hub 重启（登录态在插件自己的目录里，新 hub 一起来就拉起）。插件起来之前对它的请求会失败，和以前一样；
@@ -199,6 +203,19 @@ hub 记住每个会话最后一条 `session.delta`（空串清掉，机器真正
     后台命令的结果回来了、对话没收到「刚重启过」。
   - 最后一行 `PASS` / `FAIL` / `TIMEOUT` 和数字。
 
+## 实测结果（2026-11-04，这台开发机的 hub，#1617 部署后）
+
+部署：hub 切到 `jarvisd.socket`、装常驻 node（`jarvisd-node`），切换那一次停了约 1 s。之后：
+
+| 场景 | 结果 |
+| --- | --- |
+| `hub_restart_seamless.py --restarts 3`（只挂客户端） | PASS：健康探针 247 次 0 失败（最慢 0.95 s，在 backlog 里等）；4 次连接里 3 次重连全部 `resumed`，同一条流，54 条事件不丢不重；客户端看到的断开 0.73–1.01 s（网页 / 安卓的宽限 8 s、重启时 30 s，界面不变）；每次重启连命令 1.3–1.6 s |
+| `--restarts 3 --converse --count 300`（同时一个流式输出的副对话 + `sleep 75` 的后台命令） | PASS：健康探针 827 次 0 失败；3 次重连全部续传，121 条事件不丢不重，断开最长 0.81 s；回答 300 行一行不少，后台命令跑完回报了，对话没收到「刚重启过」；node 日志三次「took over 1 running conversations」（同一个 claude 进程） |
+| hub 日志 | 每次重启：`event log: continuing stream … at N`、`warm start: 3 machines shown as before`、本机 node 0.2–1 s、两台 ssh 的 Mac 1–3 s 连回 |
+| 常驻 node 空闲重启（`node-launchd.sh restart-idle`） | PID 不变（`exec`），hub 那边本机 node 断开约 2 s——当时会广播一次离线；之后加了上面的 5 s 宽限和 `dialResident`（#1574 的后续 PR） |
+
+改动前的对照（同一台机器 2026-11-04 19:30 那次部署的 journal）：端口关约 1.3 s，期间连接被拒绝；本机 node 和它的助手进程被杀；两台 Mac 2.4 s、8 s 后才连回，期间显示离线。
+
 ## iOS / Mac
 
-LiveConnection 的改动单独派：issue #TBD（续传序号、静默重连阈值、写操作排队和幂等重放，以及 hub 已经提供的协议）。
+LiveConnection 的改动单独派：#1634（续传序号、静默重连阈值、写操作排队和幂等重放，以及 hub 已经提供的协议）。

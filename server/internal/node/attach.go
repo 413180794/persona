@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -30,7 +31,7 @@ func AttachSocketPath() string {
 // Relay pipes r / w to a resident node if one is listening. ok is false when there is none (the caller serves the
 // connection itself); otherwise it returns when either side closes.
 func Relay(ctx context.Context, r io.Reader, w io.Writer) (ok bool, err error) {
-	c, err := net.DialTimeout("unix", AttachSocketPath(), 2*time.Second)
+	c, err := dialResident(ctx, AttachSocketPath(), residentRestartWait)
 	if err != nil {
 		return false, nil
 	}
@@ -45,6 +46,28 @@ func Relay(ctx context.Context, r io.Reader, w io.Writer) (ok bool, err error) {
 		return true, ctx.Err()
 	case err := <-back:
 		return true, err
+	}
+}
+
+// residentRestartWait: how long a relay waits for a resident node that is restarting (its socket is there, nobody
+// answers: it is exec'ing a new binary, cmd/personad runResident) before serving the connection itself. Serving it
+// here would put the assistant's conversations under this process, which ends with the hub's connection.
+var residentRestartWait = 8 * time.Second
+
+// dialResident dials the resident node's socket, again while it refuses (restarting) for up to wait; no socket at all
+// (no resident node) returns at once.
+func dialResident(ctx context.Context, path string, wait time.Duration) (net.Conn, error) {
+	deadline := time.Now().Add(wait)
+	for {
+		c, err := net.DialTimeout("unix", path, 2*time.Second)
+		if err == nil || !errors.Is(err, syscall.ECONNREFUSED) || time.Now().After(deadline) {
+			return c, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, err
+		case <-time.After(200 * time.Millisecond):
+		}
 	}
 }
 

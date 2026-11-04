@@ -1,7 +1,11 @@
 package node
 
 import (
+	"context"
+	"net"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -87,5 +91,43 @@ func TestResidentNodeKeepsConversations(t *testing.T) {
 	}
 	if AssistantsBusy() {
 		t.Fatal("an exited conversation is still counted")
+	}
+}
+
+// A relay finds a resident node that is restarting (its socket refuses) once it is back, instead of serving the
+// connection itself; with no resident node at all it does not wait.
+func TestRelayWaitsForARestartingResidentNode(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "attach") // unix socket paths are short
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "node-attach.sock")
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln.(*net.UnixListener).SetUnlinkOnClose(false)
+	ln.Close() // exec'ing: the socket stays, nobody answers
+	go func() {
+		time.Sleep(600 * time.Millisecond)
+		_ = os.Remove(path)
+		ln, err := net.Listen("unix", path)
+		if err != nil {
+			return
+		}
+		defer ln.Close()
+		if c, err := ln.Accept(); err == nil {
+			c.Close()
+		}
+	}()
+	c, err := dialResident(context.Background(), path, 5*time.Second)
+	if err != nil {
+		t.Fatalf("did not wait for the restarting node: %v", err)
+	}
+	c.Close()
+	start := time.Now()
+	if _, err := dialResident(context.Background(), filepath.Join(dir, "none.sock"), 5*time.Second); err == nil || time.Since(start) > time.Second {
+		t.Fatalf("no resident node: %v after %s", err, time.Since(start))
 	}
 }

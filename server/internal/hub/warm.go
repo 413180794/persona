@@ -13,6 +13,10 @@ import (
 // a second, an ssh one in a few seconds): the apps that reconnect meanwhile see nothing go offline and come back, and
 // a request for it waits for the node instead of failing.
 
+// reconnectGrace: a running hub shows a machine whose node just disconnected as it was this long, while it reconnects
+// (a resident node restarting on a new binary takes about 2 s); a variable for tests.
+var reconnectGrace = 5 * time.Second
+
 const (
 	warmKey   = "hub.warm_machines"
 	warmGrace = 30 * time.Second // shown as before at most this long without its node
@@ -69,12 +73,15 @@ func (h *Hub) loadWarm(ctx context.Context) {
 			continue
 		}
 		m.mu.Lock()
-		if !m.online {
-			m.info, m.sessions, m.warmUntil, m.warmed = w.Info, w.Sessions, until, make(chan struct{})
-			n++
+		if m.online {
+			m.mu.Unlock()
+			continue
 		}
+		ch := make(chan struct{})
+		m.info, m.sessions, m.warmUntil, m.warmed = w.Info, w.Sessions, until, ch
+		n++
 		m.mu.Unlock()
-		time.AfterFunc(warmGrace, m.warmExpired)
+		time.AfterFunc(warmGrace, func() { m.warmExpired(ch) })
 	}
 	if n > 0 {
 		h.logf("warm start: %d machines shown as before while their nodes reconnect", n)
@@ -93,21 +100,27 @@ func (m *Machine) endWarmLocked() {
 	}
 }
 
-// warmExpired: the node did not come back in time; the machine shows offline as it would have from the start.
-func (m *Machine) warmExpired() {
+// warmExpired: the node did not come back in time (ch: the wait that ended); the machine shows offline as it would
+// have from the start.
+func (m *Machine) warmExpired(ch chan struct{}) {
 	m.mu.Lock()
-	if m.warmed == nil || m.online {
+	if m.warmed != ch || m.online {
 		m.mu.Unlock()
 		return
 	}
 	m.endWarmLocked()
+	m.via, m.path = "", ""
 	for i := range m.sessions {
 		if m.sessions[i].Status != proto.StatusOffline {
 			m.sessions[i].Status = proto.StatusUnknown
 		}
 	}
+	why := m.err
 	m.mu.Unlock()
-	m.hub.logf("[%s] warm start: the node did not reconnect within %s", m.cfg.ID, warmGrace)
+	m.hub.logf("[%s] offline: its node did not come back in time", m.cfg.ID)
+	if why != "" {
+		m.tellLinks(false, why)
+	}
 	m.hub.broadcastMachines()
 	m.hub.sessionsChanged(m)
 }
