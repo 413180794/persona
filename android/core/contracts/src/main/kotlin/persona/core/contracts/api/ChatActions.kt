@@ -11,6 +11,8 @@ sealed interface ChatAction {
     data object Close : ChatAction
     /** Join a Codex app-server thread live (POST …/attach); only for a session whose capabilities offer it. */
     data object Attach : ChatAction
+    /** 删除对话 (DELETE /sessions/{mid}/{sid}): out of every app's list, the transcript stays; only for `Session.canDelete`. */
+    data object Delete : ChatAction
 }
 
 sealed interface ChatActionResult {

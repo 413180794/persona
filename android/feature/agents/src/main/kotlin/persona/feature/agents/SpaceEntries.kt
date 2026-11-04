@@ -129,7 +129,8 @@ private fun SpacePage(route: SpaceRoute, model: AgentsViewModel, navigator: Navi
                     navigator.navigate(ChatRoute(it.machineId, it.sessionId, kind = ConversationKind.Assistant))
                 })
             },
-            onClose = { operationDialog = AgentOperationDialog.Close(row.session) })
+            onClose = { operationDialog = AgentOperationDialog.Close(row.session) },
+            onDelete = { operationDialog = AgentOperationDialog.Delete(row.session) })
     }
     SpaceScreen(space, page.machines, pending, page.preferences, operations.busy,
         canStart = workspace != null && page.machines.any { it.id == space?.machineId && it.online }, snackbar = snackbar, now = now,

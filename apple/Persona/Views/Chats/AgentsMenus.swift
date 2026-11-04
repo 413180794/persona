@@ -150,27 +150,34 @@ struct AgentRowMenu: View, Equatable {
     nonisolated let live: Bool
     nonisolated var terminal = true
     nonisolated var attachable = false
+    /// 删除对话 is offered (`Session.canDelete`).
+    nonisolated var deletable = false
     nonisolated let actions: Actions
 
     @MainActor final class Actions {
         private var renameHandler: (Session) -> Void = { _ in }
         private var closeHandler: (Session) -> Void = { _ in }
         private var linkTodoHandler: (Session) -> Void = { _ in }
+        private var deleteHandler: (Session) -> Void = { _ in }
 
-        func update(rename: @escaping (Session) -> Void, close: @escaping (Session) -> Void, linkTodo: @escaping (Session) -> Void = { _ in }) {
+        func update(rename: @escaping (Session) -> Void, close: @escaping (Session) -> Void, linkTodo: @escaping (Session) -> Void = { _ in },
+                    delete: @escaping (Session) -> Void = { _ in }) {
             renameHandler = rename
             closeHandler = close
             linkTodoHandler = linkTodo
+            deleteHandler = delete
         }
 
         func rename(_ s: Session) { renameHandler(s) }
         func close(_ s: Session) { closeHandler(s) }
         func linkTodo(_ s: Session) { linkTodoHandler(s) }
+        func delete(_ s: Session) { deleteHandler(s) }
     }
 
     nonisolated static func == (a: Self, b: Self) -> Bool {
         a.key == b.key && a.pinned == b.pinned && a.muted == b.muted && a.looping == b.looping && a.live == b.live
-            && a.terminal == b.terminal && a.attachable == b.attachable && a.actions === b.actions
+            && a.terminal == b.terminal && a.attachable == b.attachable && a.deletable == b.deletable
+            && a.actions === b.actions
     }
 
     var body: some View {
@@ -237,6 +244,11 @@ struct AgentRowMenu: View, Equatable {
         }
         if live && terminal {
             Button(role: .destructive) { if let s = now() { actions.close(s) } } label: { Label("关闭 Agent…", systemImage: Theme.Icon.end) }
+        }
+        if deletable {
+            Button(role: .destructive) {
+                if let s = now(), s.canDelete { actions.delete(s) }
+            } label: { Label("删除对话…", systemImage: Theme.Icon.delete).lineLimit(1) }
         }
     }
 }

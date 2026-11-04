@@ -106,7 +106,9 @@ internal fun AgentsScreen(
     val spaces = remember(page.sessions, page.preferences) { agentSpaces(page.sessions.map { it.listSession(page.preferences) }) }
     // The list rows and the space page share one session menu and one space menu.
     val rowMenu: @Composable (AgentSession) -> List<JAction> = { row ->
-        if (!row.session.isLive) listOf(JAction("只读打开", onClick = { openRow(row) }))
+        if (!row.session.isLive) listOfNotNull(JAction("只读打开", onClick = { openRow(row) }),
+            JAction("删除对话", destructive = true, enabled = !operations.busy) { operationDialog = AgentOperationDialog.Delete(row.session) }
+                .takeIf { row.session.canDelete })
         else AgentSessionMenuItems(row, row.id in page.preferences.pins.sessions, page.preferences.mutes.mutes(row), operations.busy,
             onOpen = { openRow(row) }, onPin = { model.pin(row) }, onMute = { model.mute(row) },
             onRead = { model.markRead(listOf(row)) }, onRename = { operationDialog = AgentOperationDialog.Rename(row.session) },
@@ -119,7 +121,8 @@ internal fun AgentsScreen(
             // A Codex app-server thread the phone may join live (iOS 实时接入).
             onAttach = if (row.session.canAttach) ({ model.attach(row.session) }) else null,
             onLinkTodo = { pickingTodoForSession = row.session },
-            onUnlinkTodo = row.session.todo?.let { todo -> { model.unlinkTodo(todo.id, row.session) } })
+            onUnlinkTodo = row.session.todo?.let { todo -> { model.unlinkTodo(todo.id, row.session) } },
+            onDelete = { operationDialog = AgentOperationDialog.Delete(row.session) })
     }
     // In the list the space menu also opens the space page; the space page itself puts it in its bar.
     val spaceMenu: @Composable (AgentSpace, Boolean) -> Unit = { space, inList ->
@@ -422,6 +425,7 @@ internal fun AgentSessionMenuItems(
     onAttach: (() -> Unit)? = null,
     onLinkTodo: (() -> Unit)? = null,
     onUnlinkTodo: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
 ): List<JAction> {
     val clipboard = LocalClipboardManager.current
     val session = row.session
@@ -444,6 +448,7 @@ internal fun AgentSessionMenuItems(
         add(JAction("拷贝目录", enabled = session.cwd.isNotBlank(), onClick = { clipboard.setText(AnnotatedString(session.cwd)) }))
         add(JAction("打开会话", onClick = onOpen))
         if (session.isLive && session.canTerminal) add(JAction("关闭 Agent", destructive = true, enabled = !busy, onClick = onClose))
+        if (session.canDelete && onDelete != null) add(JAction("删除对话", destructive = true, enabled = !busy, onClick = onDelete))
     }
 }
 

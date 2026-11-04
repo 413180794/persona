@@ -340,6 +340,7 @@ private struct AgentsList: View {
     @State private var renamingSpace: SpaceGroup?
     @State private var renamingSession: Session?
     @State private var closingSession: Session?
+    @State private var deletingSession: Session?
     @State private var linkingSession: Session?
     @State private var linkingSpace: SpaceGroup?
     /// The long-press menu's actions on a row (not observed: see `AgentRowMenu`).
@@ -465,7 +466,8 @@ private struct AgentsList: View {
                                    foldAll: { setFolded(folding($0, true, in: folded)); expandedQuiet = [] },
                                    unfoldAll: { setFolded(Set(Self.foldedByDefault.map { "!" + $0 })) },
                                    onMachines: { openFromList(MachineListRoute()) })
-        let _ = rowActions.update(rename: { renamingSession = $0 }, close: { closingSession = $0 }, linkTodo: { linkingSession = $0 })
+        let _ = rowActions.update(rename: { renamingSession = $0 }, close: { closingSession = $0 }, linkTodo: { linkingSession = $0 },
+                                  delete: { deletingSession = $0 })
 
         let list = List {
             // On a phone the filter bar is the list's first row: it scrolls with the list, so the search field can
@@ -663,6 +665,7 @@ private struct AgentsList: View {
         .renameSpaceAlert($renamingSpace)
         .renameSessionAlert($renamingSession)
         .confirmClose($closingSession)
+        .confirmDeleteSession($deletingSession)
         .sheet(item: $linkingSession) { s in
             TodoLinkAgentSheet(session: s)
         }
@@ -1127,7 +1130,8 @@ private struct AgentsList: View {
             }
             .contextMenu {
                 AgentRowMenu(key: s.key, pinned: model.isPinned(s.key), muted: model.isMuted(s), looping: s.loop != nil,
-                             live: s.state.isLive, terminal: s.canTerminal, attachable: s.canAttach, actions: rowActions)
+                             live: s.state.isLive, terminal: s.canTerminal, attachable: s.canAttach, deletable: s.canDelete,
+                             actions: rowActions)
                     .equatable()
             }
     }

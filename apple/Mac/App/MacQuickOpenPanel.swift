@@ -34,7 +34,7 @@ import SwiftUI
     @ObservationIgnored private var keyObservers: [Any] = []
 
     struct ChatRequest: Equatable {
-        enum Kind { case inspector, rename, clear, close }
+        enum Kind { case inspector, rename, clear, close, delete }
         let key: SessionKey
         let kind: Kind
         /// The window it is for: only the chat in that window answers (the same chat can be open in two).

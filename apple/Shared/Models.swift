@@ -605,6 +605,9 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var canApprove: Bool { !hasSource || capabilities?.approve == true }
     var canTerminal: Bool { !hasSource || capabilities?.terminal == true }
     var canAttach: Bool { hasSource && capabilities?.attach == true && attached != true }
+    /// 删除对话 (docs/protocol.md `DELETE /sessions`) only for one that is not running: offline, finished or unknown,
+    /// not still starting, and not the assistant's (those archive). What the hub hides once deleted (`stillDeleted`).
+    var canDelete: Bool { !assistant && starting != true && (status == .offline || status == .done || status == .unknown) }
     var sourceLabel: String? {
         switch sourceKind {
         case "codex_app_server": "Codex 实时"
@@ -1575,4 +1578,14 @@ nonisolated struct ConversationTitle: Equatable, Sendable {
 
 nonisolated private extension Character {
     var isASCIIDigit: Bool { isASCII && isNumber }
+}
+
+/// The words of 删除对话's confirmation (the web's `DeleteSessionDialog`).
+nonisolated enum DeleteSessionText {
+    /// `machine`: where its record stays (nil: unknown); `resume`: the command that continues it there (nil: none).
+    static func message(title: String, machine: String?, resume: String?) -> String {
+        let place = machine.map { "\($0) 上的" } ?? "电脑上的"
+        let back = resume.map { "之后在电脑上用 \($0) 继续，它会重新出现。" } ?? "之后再用到它，它会重新出现。"
+        return "「\(title)」会从各端的列表里移除。\(place)对话记录不会删除，" + back
+    }
 }

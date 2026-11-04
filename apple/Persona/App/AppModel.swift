@@ -1696,6 +1696,35 @@ final class AppModel {
         }
     }
 
+    /// 删除对话 (issue #1749): the hub takes it out of every app's list (the transcript stays on its computer, and it
+    /// is listed again once used). It leaves this app's list right away; the hub's next sessions push agrees.
+    /// The conversation last deleted from this app: every chat showing it closes (the split's detail, a Mac window),
+    /// wherever the delete was asked from.
+    private(set) var deletedSession: SessionKey?
+
+    @discardableResult
+    func deleteSession(_ key: SessionKey) async -> Bool {
+        guard let api = api(key.group) else {
+            toast = Toast("未连接到这个对话的 hub，没有删除", style: .error)
+            return false
+        }
+        do {
+            try await api.deleteSession(key)
+            if let list = sessionsByMachine[key.machineRef] { sessionsByMachine[key.machineRef] = list.filter { $0.key != key } }
+            if let list = pendingSessions[key.machineRef] { pendingSessions[key.machineRef] = list.filter { $0.key != key } }
+            deletedSession = key
+            toast = Toast("已删除对话", style: .success)
+            Haptics.success()
+            return true
+        } catch {
+            if error.isOffline { show(error) } else {
+                toast = Toast("删除失败：" + error.localizedDescription, style: .error)
+                Haptics.error()
+            }
+            return false
+        }
+    }
+
     /// Moves on every change to the launchers (hide, restore, delete, save): 设置 › 模型供应商's list reloads on it, as
     /// the page a change is made on is not the list (#1433).
     private(set) var launchersRevision = 0

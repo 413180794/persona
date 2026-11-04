@@ -56,4 +56,18 @@ class HttpAgentOperationsTest {
             catch (e: AgentOperationFailure) { assertFalse(e.uncertain) }
         }
     }
+
+    @Test fun deleteSendsTheSessionsDeleteAndRefusalsAreNotUncertain() = runBlocking {
+        MockWebServer().use { server ->
+            val api = HttpAgentOperations("scope", server.url("/").toString(), "test-token", OkHttpClient())
+            server.enqueue(MockResponse().setBody("""{"ok":true}"""))
+            api.deleteSession(SessionKey("server", "s1"))
+            val delete = server.takeRequest()
+            assertEquals("DELETE", delete.method)
+            assertEquals("/api/v1/sessions/server/s1", delete.path)
+            server.enqueue(MockResponse().setResponseCode(409).setBody("""{"error":"这个 Agent 还在运行，先关闭再删除"}"""))
+            try { api.deleteSession(SessionKey("server", "s1")); fail("Delete must fail") }
+            catch (e: AgentOperationFailure) { assertFalse(e.uncertain) }
+        }
+    }
 }

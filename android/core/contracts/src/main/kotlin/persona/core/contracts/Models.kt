@@ -237,6 +237,11 @@ data class Session(
         else -> agentLabelHint?.takeIf(String::isNotBlank) ?: agent.orEmpty()
     }
     val isLive: Boolean get() = status != "offline"
+    /**
+     * 删除对话 is offered: not running (offline, finished or unknown), not still starting, not the assistant's (those
+     * archive). The hub accepts and then hides exactly these (server/internal/hub/deleted_sessions.go `stillDeleted`).
+     */
+    val canDelete: Boolean get() = !assistant && !starting && status in setOf("offline", "done", "unknown")
     val updated: Instant? get() = parseTime(updatedAt)
 }
 

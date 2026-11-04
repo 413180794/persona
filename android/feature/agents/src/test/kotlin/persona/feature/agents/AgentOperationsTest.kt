@@ -77,6 +77,25 @@ class AgentOperationsTest {
         assertEquals("codex resume 'a'\"'\"'b'", session.copy(agent = "codex", sessionId = "a'b", cwd = "").resumeCommand())
     }
 
+    @Test fun deleteHidesTheConversationUntilTheHubDropsItAndRestoresOnFailure() = runTest {
+        val api = FakeOperations()
+        val operations = AgentOperationsState(api)
+        val session = Session(machineId = "machine", sessionId = "old", title = "旧对话", status = "offline")
+        val other = Session(machineId = "machine", sessionId = "other", status = "working")
+        api.fail = true
+        try { operations.session(session, AgentSessionEdit(deleted = true)); fail("Delete must fail") } catch (_: AgentOperationFailure) { }
+        assertEquals(listOf(session, other), operations.state.value.project(listOf(session, other)))
+        api.fail = false
+        operations.session(session, AgentSessionEdit(deleted = true))
+        assertEquals(listOf(session.key), api.deleted)
+        // Gone from the list right away, while the hub still lists it.
+        assertEquals(listOf(other), operations.state.value.project(listOf(session, other)))
+        assertTrue(operations.reconcile(listOf(session, other)).isEmpty())
+        // Once the hub's list has dropped it, the edit is done (the view model already told an open chat to go).
+        operations.reconcile(listOf(other))
+        assertTrue(operations.state.value.sessions.isEmpty())
+    }
+
     private class FakeOperations : AgentOperations {
         override val scope = "scope"
         var pins = AgentOperationPreferences()
@@ -93,5 +112,7 @@ class AgentOperationsTest {
         override suspend fun renameSession(key: SessionKey, title: String?, tabName: String?) { checkFailure() }
         override suspend fun renameSpace(machineId: String, workspaceId: String, name: String) { checkFailure(); renamedWorkspace = workspaceId; onSpaceRename() }
         override suspend fun closeSession(key: SessionKey) { checkFailure() }
+        val deleted = mutableListOf<SessionKey>()
+        override suspend fun deleteSession(key: SessionKey) { checkFailure(); deleted += key }
     }
 }

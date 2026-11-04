@@ -31,7 +31,8 @@ internal fun ShellChat(route: ChatRoute, session: ShellSession, navigator: Navig
     val actions = remember(sourceActions) { sourceActions?.let { delegate ->
         object : ChatActions by delegate {
             private fun confirmed(session: persona.core.contracts.Session, action: ChatAction, result: ChatActionResult): ChatActionResult {
-                if (action == ChatAction.Close && result == ChatActionResult.Done) {
+                // Closed or deleted: the chat and its routes go (AppNavigator.sessionClosed).
+                if ((action == ChatAction.Close || action == ChatAction.Delete) && result == ChatActionResult.Done) {
                     closed = true
                     onClosed(session.key)
                 }

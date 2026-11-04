@@ -98,6 +98,7 @@ struct ChatView: View {
     private var readKey: String { "chat.read.\(shownKey.machineID)/\(shownKey.sessionID)" }
     @State private var renaming: Session?
     @State private var closing: Session?
+    @State private var deleting: Session?
     /// The turn whose "后台任务完成" drawer is open.
     @State private var wakeDrawer: String?
     @Environment(\.dismiss) private var dismissChat
@@ -256,6 +257,7 @@ struct ChatView: View {
             case .inspector: showInfo.toggle()
             case .rename: if session?.canTerminal == true { renaming = session }
             case .close: if session?.status.isLive == true && session?.canTerminal == true { closing = session }
+            case .delete: if session?.canDelete == true { deleting = session }
             case .clear: break // the composer's
             }
         }
@@ -306,6 +308,9 @@ struct ChatView: View {
         }
         .renameSessionAlert($renaming)
         .confirmClose($closing) { closedAgent($0, order: []) }
+        .confirmDeleteSession($deleting)
+        // Deleted here or from the list beside it: the chat goes (AppModel.deletedSession).
+        .onChange(of: model.deletedSession) { _, gone in if let gone { closedAgent(gone, order: []) } }
         .sheet(item: $file) { ref in FileViewer(ref: ref, key: key) }
         #if DEBUG
         // Simulator automation: `-showComposerPhoto YES` puts a made-up picture in the composer, as if picked from
@@ -1837,6 +1842,11 @@ struct ChatView: View {
                         Label("停止并关闭 Agent…", systemImage: Theme.Icon.end).lineLimit(1)
                     }
                 }
+                if s.canDelete {
+                    Button(role: .destructive) { deleting = s } label: {
+                        Label("删除对话…", systemImage: Theme.Icon.delete).lineLimit(1)
+                    }
+                }
             }
     }
 
@@ -2243,6 +2253,14 @@ struct ChatView: View {
             }
             if UserDefaults.standard.bool(forKey: "showCloseAgent") { // the close confirmation, for screenshots
                 Task { try? await Task.sleep(for: .seconds(3)); closing = session }
+            }
+            if UserDefaults.standard.bool(forKey: "showDeleteSession") { // 删除对话's confirmation, for screenshots and UI tests
+                Task { // once the session list is in (the chat can open before it)
+                    for _ in 0..<30 {
+                        try? await Task.sleep(for: .seconds(1))
+                        if let s = session, s.canDelete { deleting = s; break }
+                    }
+                }
             }
             if let u = UserDefaults.standard.string(forKey: "openLinkURL").flatMap(URL.init(string:)) { // `-openLinkURL <url>`
                 Task { try? await Task.sleep(for: .seconds(3)); actions.openLink(u) } // as a tap would: localhost is the machine's

@@ -629,6 +629,8 @@ nonisolated struct APIClient: Sendable {
         return try await get(sp(k) + "/screen", query: q)
     }
     func close(_ k: SessionKey) async throws { try await post(sp(k) + "/close") }
+    /// 删除对话: the hub takes it out of every app's list; the transcript stays on its computer.
+    func deleteSession(_ k: SessionKey) async throws { try await delete(sp(k)) }
 
     struct ScreenBefore: Decodable { var text: String; var hasMore: Bool; var atLimit: Bool
         enum CodingKeys: String, CodingKey { case text; case hasMore = "has_more", atLimit = "at_limit" } }

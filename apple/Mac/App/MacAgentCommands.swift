@@ -128,6 +128,8 @@ struct MacAgentMenu: Commands {
                 Button("关闭 Agent…") { ask(.close) }
                     .disabled(agent?.status.isLive != true || agent?.canTerminal != true)
             }
+            Button("删除对话…") { ask(.delete) }
+                .disabled(agent?.canDelete != true)
             Divider()
             Button("标为已读") { if let key { model.markSeen(key) } }
                 .disabled(key == nil || model.session(key!)?.state != .unread)

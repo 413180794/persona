@@ -515,7 +515,32 @@ struct CloseAgentSheet: View {
     }
 }
 
+/// Asks before 删除对话: says that it only leaves the lists (every app's), and that the record on the computer stays and
+/// brings it back once used again. 删除 runs it; a failure shows as the toast and the conversation stays.
+struct DeleteSessionConfirmation: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Binding var session: Session?
+    var onDeleted: (SessionKey) -> Void = { _ in }
+
+    func body(content: Content) -> some View {
+        content.alert("删除这个对话？", isPresented: Binding(get: { session != nil }, set: { if !$0 { session = nil } }),
+                      presenting: session) { s in
+            Button("删除", role: .destructive) {
+                Task { if await model.deleteSession(s.key) { onDeleted(s.key) } }
+            }
+            Button("取消", role: .cancel) {}
+        } message: { s in
+            Text(DeleteSessionText.message(title: s.displayTitle, machine: model.machine(s.machineRef)?.title,
+                                           resume: s.canTerminal ? s.resumeCommand : nil))
+        }
+    }
+}
+
 extension View {
+    func confirmDeleteSession(_ session: Binding<Session?>, onDeleted: @escaping (SessionKey) -> Void = { _ in }) -> some View {
+        modifier(DeleteSessionConfirmation(session: session, onDeleted: onDeleted))
+    }
+
     func confirmClose(_ session: Binding<Session?>, onClosed: @escaping (SessionKey) -> Void = { _ in }) -> some View {
         modifier(CloseAgentConfirmation(session: session, onClosed: onClosed))
     }

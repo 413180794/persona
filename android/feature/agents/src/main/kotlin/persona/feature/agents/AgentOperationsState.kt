@@ -13,9 +13,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-internal data class AgentSessionEdit(val title: String? = null, val tab: String? = null, val closed: Boolean = false) {
-    fun matches(session: Session?) = if (closed) session == null || !session.isLive else
-        session != null && (title == null || session.title == title) && (tab == null || session.slotName == tab)
+internal data class AgentSessionEdit(
+    val title: String? = null, val tab: String? = null, val closed: Boolean = false,
+    /** 删除对话: hidden until the hub's list no longer has it. */
+    val deleted: Boolean = false,
+) {
+    fun matches(session: Session?) = when {
+        deleted -> session == null
+        closed -> session == null || !session.isLive
+        else -> session != null && (title == null || session.title == title) && (tab == null || session.slotName == tab)
+    }
+    /** Leaves the list (closed or deleted) once it succeeds: the chat open on it goes too. */
+    val removes: Boolean get() = closed || deleted
 }
 internal data class AgentSpaceEdit(val machine: String, val workspace: String, val oldName: String, val name: String)
 internal data class AgentOperationsSnapshot(
@@ -28,7 +37,7 @@ internal data class AgentOperationsSnapshot(
 ) {
     fun project(source: List<Session>): List<Session> = source.mapNotNull { session ->
         val edit = sessions[session.key]
-        if (edit?.closed == true) null else {
+        if (edit?.removes == true) null else {
             val space = spaces.values.firstOrNull { it.machine == session.machineId && it.workspace == session.operationWorkspaceId }
             session.copy(title = edit?.title ?: session.title, slotName = edit?.tab ?: session.slotName,
                 spaceName = space?.name ?: session.spaceName)
@@ -83,17 +92,21 @@ internal class AgentOperationsState(private val api: AgentOperations, private va
 
     suspend fun session(session: Session, requested: AgentSessionEdit) = mutex.withLock {
         val rename = SessionRename.changes(session, requested.title, requested.tab)
-        if (!requested.closed && !rename.changed) return@withLock
-        val edit = if (requested.closed) requested else AgentSessionEdit(rename.title, rename.tabName)
+        if (!requested.removes && !rename.changed) return@withLock
+        val edit = if (requested.removes) requested else AgentSessionEdit(rename.title, rename.tabName)
         val key = session.key
-        val operation = "${if (edit.closed) "close" else "rename"}:${key.path}"
+        val operation = "${if (edit.deleted) "delete" else if (edit.closed) "close" else "rename"}:${key.path}"
         check(operation !in mutable.value.uncertain) { "Verify the previous operation first" }
         val before = mutable.value
         val previous = before.sessions[key]
-        val projected = if (edit.closed) edit else edit.copy(title = edit.title ?: previous?.title, tab = edit.tab ?: previous?.tab)
+        val projected = if (edit.removes) edit else edit.copy(title = edit.title ?: previous?.title, tab = edit.tab ?: previous?.tab)
         mutable.value = before.copy(sessions = before.sessions + (key to projected), busy = true)
         try {
-            if (edit.closed) api.closeSession(key) else api.renameSession(key, edit.title, edit.tab)
+            when {
+                edit.deleted -> api.deleteSession(key)
+                edit.closed -> api.closeSession(key)
+                else -> api.renameSession(key, edit.title, edit.tab)
+            }
         } catch (e: Exception) {
             val uncertain = e is CancellationException || (e as? AgentOperationFailure)?.uncertain == true
             mutable.value = before.copy(uncertain = if (uncertain) before.uncertain + operation else before.uncertain)
@@ -149,7 +162,7 @@ internal class AgentOperationsState(private val api: AgentOperations, private va
             } },
             uncertain = mutable.value.uncertain - resolvedKeys,
         )
-        resolved.values.filter { it.second.closed }.map { it.first }
+        resolved.values.filter { it.second.removes }.map { it.first }
     }
 }
 

@@ -10,12 +10,14 @@ import androidx.compose.ui.unit.dp
 import persona.core.contracts.Session
 import persona.core.domain.sort.SessionRename
 import persona.core.domain.sort.closeConfirmation
+import persona.core.domain.sort.deleteConfirmation
 
 internal sealed interface AgentOperationDialog {
     val session: Session
     data class Rename(override val session: Session) : AgentOperationDialog
     data class RenameSpace(override val session: Session) : AgentOperationDialog
     data class Close(override val session: Session) : AgentOperationDialog
+    data class Delete(override val session: Session) : AgentOperationDialog
 }
 
 @Composable
@@ -30,6 +32,18 @@ internal fun AgentOperationDialog(dialog: AgentOperationDialog, model: AgentsVie
                 confirm = "关闭 Agent" to {
                     // It may have been closed elsewhere since the dialog opened: then there is nothing left to do.
                     if (model.closable(session)) model.close(session)
+                    dismiss()
+                },
+            )
+        }
+        // The same words as the chat's menu (core:domain deleteConfirmation).
+        is AgentOperationDialog.Delete -> {
+            val confirmation = session.deleteConfirmation(machineName)
+            JDialog(
+                onDismiss = dismiss, title = confirmation.title, destructive = true, text = confirmation.message,
+                confirm = "删除" to {
+                    // It may have started again since the dialog opened: then the hub would refuse it.
+                    if (model.deletable(session)) model.delete(session)
                     dismiss()
                 },
             )

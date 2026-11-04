@@ -539,6 +539,8 @@ if os.environ.get("MOCK_SOURCES"):
 ORIG_STATE = {s["session_id"]: (s["state"], s["status"]) for s in SESSIONS}
 SEEN = []  # session ids marked seen (GET /mock/seen)
 SESSION_CLOSE = {"fail": False, "attempts": [], "closed": [], "interactions": []}
+# 删除对话 (DELETE /api/v1/sessions/{mid}/{sid}): what was taken out, so /mock/reset puts it back.
+SESSION_DELETED = []
 PINS = {"spaces": ["macbook/weather"], "sessions": []}  # GET / PUT /api/v1/pins: what the Agents list keeps on top
 
 
@@ -7709,6 +7711,7 @@ class H(BaseHTTPRequestHandler):
             del RECONNECTS[:], STARTED[:], SEEN[:]
             INTERACTIONS.extend(SESSION_CLOSE["interactions"])
             SESSION_CLOSE.update(fail=False, attempts=[], closed=[], interactions=[])
+            SESSIONS.extend(SESSION_DELETED); del SESSION_DELETED[:]
             PINS.update(spaces=["macbook/weather"], sessions=[])
             for sid, items in CHURN_ITEMS.items(): ITEMS[sid] = list(items)  # LiveUpdateTests, ChatFollowTests: what churn / say added goes
             if CHURN_INBOX: INBOX[:] = copy.deepcopy(CHURN_INBOX)
@@ -8869,6 +8872,19 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True})
             SCHEDULE[i] = save_task(SCHEDULE[i], json.loads(self.last_body or b"{}"))
             return self.send_json({"task": SCHEDULE[i]})
+        if p.startswith("/api/v1/sessions/") and self.command == "DELETE" and len(p.split("/")) == 6:
+            # 删除对话 (docs/protocol.md): out of the lists; refused while it runs, as the hub's deleted_sessions.go.
+            if is_read_only(self): return self.send_json({"error": "read-only role cannot delete conversations"}, 403)
+            mid, sid = p.split("/")[4:6]
+            s = next((s for s in SESSIONS if s["machine_id"] == mid and s["session_id"] == sid), None)
+            if s is None: return self.send_json({"error": "没有这个会话"}, 404)
+            if s.get("assistant"): return self.send_json({"error": "助手的对话用归档"}, 400)
+            if s.get("starting") or s.get("status") in ("working", "blocked"):
+                return self.send_json({"error": "这个 Agent 还在运行，先关闭再删除"}, 409)
+            SESSIONS.remove(s)
+            SESSION_DELETED.append(s)
+            push_machine(mid)
+            return self.send_json({"ok": True})
         if p.startswith("/api/v1/sessions/") and p.endswith("/close") and self.command == "POST":
             if is_read_only(self): return self.send_json({"error": "只读角色不能关闭 Agent"}, 403)
             mid, sid = p.split("/")[4:6]

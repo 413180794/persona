@@ -260,6 +260,14 @@ internal class AgentsViewModel(
         it.session(session, AgentSessionEdit(closed = true))
         bindings?.onSessionClosed?.invoke(session.key)
     }
+    /** 删除对话: out of every app's list (the transcript stays); a chat open on it goes. */
+    fun delete(session: Session) = change("已删除对话") {
+        it.session(session, AgentSessionEdit(deleted = true))
+        bindings?.onSessionClosed?.invoke(session.key)
+    }
+    /** Still not running (not started again elsewhere since the confirmation opened). */
+    fun deletable(session: Session): Boolean = page.value.sessions.firstOrNull { it.key == session.key }?.canDelete
+        ?: page.value.sessions.isEmpty()
     /** Still running in a terminal pane (not closed elsewhere since a confirmation opened). */
     fun closable(session: Session): Boolean = page.value.sessions.firstOrNull { it.key == session.key }
         ?.let { it.isLive && it.canTerminal } ?: page.value.sessions.isEmpty()

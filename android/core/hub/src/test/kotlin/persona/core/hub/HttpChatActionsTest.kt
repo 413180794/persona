@@ -61,6 +61,31 @@ class HttpChatActionsTest {
         }
     }
 
+    @Test fun deleteSendsTheSessionsDeleteAndVerifiesItLeftTheList() = runBlocking {
+        MockWebServer().use { server ->
+            val actions = actions(server)
+            val session = Session(machineId = "m", sessionId = "s/1", status = "offline")
+            server.enqueue(MockResponse().setBody("""{"ok":true}"""))
+            assertEquals(ChatActionResult.Done, actions.execute(session, ChatAction.Delete))
+            val request = server.takeRequest()
+            assertEquals("DELETE", request.method)
+            assertEquals("/api/v1/sessions/m/s%2F1", request.path)
+            assertEquals(0L, request.bodySize)
+            // The hub refuses one that runs again: reported, not retried or left uncertain.
+            server.enqueue(MockResponse().setResponseCode(409).setBody("""{"error":"这个 Agent 还在运行，先关闭再删除"}"""))
+            assertTrue(actions.execute(session, ChatAction.Delete) is ChatActionResult.Failed)
+            server.takeRequest()
+            // A lost answer is verified against the session list: gone from it is done.
+            server.enqueue(MockResponse().setResponseCode(502).setBody("""{"delivered":"unknown"}"""))
+            assertEquals(ChatActionResult.Unknown, actions.execute(session, ChatAction.Delete))
+            server.takeRequest()
+            server.enqueue(MockResponse().setBody("""{"sessions":[]}"""))
+            assertEquals(ChatActionResult.Done, actions.verify(session, ChatAction.Delete))
+            assertEquals("GET", server.takeRequest().method)
+            assertEquals(4, server.requestCount)
+        }
+    }
+
     @Test fun attachPostsToTheSessionAndVerifiesTheAttachedFlag() = runBlocking {
         MockWebServer().use { server ->
             val actions = actions(server)

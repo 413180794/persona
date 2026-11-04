@@ -85,6 +85,7 @@ private fun groupAgentsState(stack: GroupStack, assistant: AssistantConversation
         }
         override suspend fun closeSession(key: SessionKey) = api().closeSession(key)
         override suspend fun attachSession(key: SessionKey) = api().attachSession(key)
+        override suspend fun deleteSession(key: SessionKey) = api().deleteSession(key)
     }
     // Notifications are posted with merged ids; the plain key a closed session reports is put back into them.
     val bindings = AgentsOperationsBindings(PersistentAgentOperations(operations, data.operations, HubChatTransport(connection)), assistant) { key ->

@@ -48,11 +48,15 @@ class HttpChatActions internal constructor(
                 }
                 else -> buildJsonObject { }
             }
-            val path = if (action is ChatAction.Mute) api("mutes")
-                else api("sessions", session.machineId, session.sessionId, kind(action))
+            val path = when (action) {
+                is ChatAction.Mute -> api("mutes")
+                ChatAction.Delete -> api("sessions", session.machineId, session.sessionId)
+                else -> api("sessions", session.machineId, session.sessionId, kind(action))
+            }
+            val method = when (action) { is ChatAction.Mute -> "PUT"; ChatAction.Delete -> "DELETE"; else -> "POST" }
             sent = true
-            request(path, if (action is ChatAction.Mute) "PUT" else "POST",
-                payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())).use {
+            request(path, method,
+                if (action == ChatAction.Delete) null else payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())).use {
                 if (!it.isSuccessful) throw HubFailure.from(it)
             }
             ChatActionResult.Done
@@ -106,6 +110,7 @@ class HttpChatActions internal constructor(
                     ChatAction.Close -> current == null || !current.isLive
                     ChatAction.Interrupt -> current != null && current.status in listOf("idle", "done", "offline")
                     ChatAction.Attach -> current?.attached == true
+                    ChatAction.Delete -> current == null
                     else -> false
                 }
             }
@@ -131,6 +136,7 @@ class HttpChatActions internal constructor(
         is ChatAction.Modes -> "modes"
         ChatAction.Close -> "close"
         ChatAction.Attach -> "attach"
+        ChatAction.Delete -> "delete"
     }
     private fun api(vararg segments: String) = HttpUrl.Builder().scheme("https").host("example.com")
         .addPathSegment("api").addPathSegment("v1").apply { segments.forEach(::addPathSegment) }.build().encodedPath

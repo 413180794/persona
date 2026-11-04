@@ -18,6 +18,7 @@ import persona.core.domain.sort.canAttach
 import persona.core.domain.sort.canInterrupt
 import persona.core.domain.sort.canTerminal
 import persona.core.domain.sort.closeConfirmation
+import persona.core.domain.sort.deleteConfirmation
 import persona.core.domain.sort.resumeCommand
 import persona.core.domain.sort.source
 
@@ -109,6 +110,8 @@ internal fun ChatHeader(
         // Persona's conversations are not agents in a pane, and a session without a terminal has no pane to close.
         if (session?.assistant != true && session?.canTerminal != false)
             add(JAction("关闭 Agent", destructive = true, enabled = canAct && session?.isLive == true) { dialog = "close" })
+        // Only one that is not running (core:contracts Session.canDelete); the same words as the Agents list's.
+        if (session?.canDelete == true) add(JAction("删除对话", destructive = true, enabled = canAct) { dialog = "delete" })
     })
     val feedback = LocalAppFeedback.current
     LaunchedEffect(state.notice) {
@@ -137,6 +140,11 @@ internal fun ChatHeader(
             val confirmation = target.closeConfirmation(machine?.displayName)
             JDialog(onDismiss = { dialog = null }, title = confirmation.title, text = confirmation.message,
                 confirm = "关闭 Agent" to { dialog = null; state.run(target, ChatAction.Close) }, destructive = true, confirmEnabled = canAct)
+        }
+        "delete" -> session?.let { target ->
+            val confirmation = target.deleteConfirmation(machine?.displayName)
+            JDialog(onDismiss = { dialog = null }, title = confirmation.title, text = confirmation.message,
+                confirm = "删除" to { dialog = null; state.run(target, ChatAction.Delete) }, destructive = true, confirmEnabled = canAct)
         }
         "info" -> session?.let { target -> ChatSessionInfoSheet(target, machine, state, onOpenTodo = onOpenTodo, onDismiss = { dialog = null }) }
         "peers" -> JSheet(onDismiss = { dialog = null }, title = "同空间的 Agent") {

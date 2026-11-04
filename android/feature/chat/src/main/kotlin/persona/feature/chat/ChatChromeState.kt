@@ -83,9 +83,10 @@ internal class ChatChromeState(
                             is ChatAction.Modes -> "已更新设置"
                             ChatAction.Close -> "已关闭 Agent"
                             ChatAction.Attach -> "已实时接入"
+                            ChatAction.Delete -> "已删除对话"
                         }
                         if (action is ChatAction.Mute) muted = action.muted
-                        if (action == ChatAction.Close) onClosed()
+                        if (action == ChatAction.Close || action == ChatAction.Delete) onClosed()
                         else try { refresh() } catch (error: CancellationException) { throw error }
                         catch (_: Exception) { notice = "操作已完成，会话信息稍后更新" }
                     }
