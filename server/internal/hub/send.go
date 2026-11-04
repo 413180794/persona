@@ -153,6 +153,12 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 				p["model"] = s.Model // and the model it runs, so no pick keeps it
 			}
 		}
+		// A model the launcher no longer offers (the gateway dropped it) would fail every turn with
+		// 「There's an issue with the selected model」: fall back to the launcher's default.
+		if model, _ := p["model"].(string); model != "" && l != "" && !h.launcherHasModel(r.Context(), m, l, model) {
+			h.logf("[%s] %s: model %s is not in %s's list any more, using its default", m.cfg.ID, short(sid), model, l)
+			delete(p, "model")
+		}
 		var err error
 		if l != "" {
 			err = h.applyPickedModel(r.Context(), p)

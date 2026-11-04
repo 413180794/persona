@@ -175,3 +175,50 @@ func TestAnswerRoleSendsOnlyText(t *testing.T) {
 		t.Fatalf("a full device's send: %q", sent)
 	}
 }
+
+// A conversation whose model the gateway dropped (claude-opus-5) falls back to the launcher's default instead of
+// failing every turn with "There's an issue with the selected model".
+func TestSendDropsAModelTheLauncherNoLongerOffers(t *testing.T) {
+	for _, c := range []struct{ model, want string }{{"claude-opus-5", ""}, {"claude-opus-5-5", "claude-opus-5-5"}} {
+		t.Run(c.model, func(t *testing.T) {
+			h := newTestHub(t)
+			m := newMachine(h, MachineConfig{ID: "box-" + c.model, Name: "box"})
+			h.byID[m.cfg.ID] = m
+			h.machines = append(h.machines, m)
+			hubIn, nodeOut := io.Pipe()
+			nodeIn, hubOut := io.Pipe()
+			hubPeer, nodePeer := rpc.New("h", hubOut), rpc.New("n", nodeOut)
+			var mu sync.Mutex
+			var got map[string]any
+			nodePeer.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
+				switch method {
+				case "launchers.models":
+					return map[string]any{"agent": "claude", "models": []any{map[string]any{"id": "claude-opus-5-5"}}}, nil
+				case "session.send":
+					mu.Lock()
+					got = map[string]any{}
+					_ = json.Unmarshal(params, &got)
+					mu.Unlock()
+				}
+				return map[string]any{"ok": true}, nil
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+			go func() { _ = hubPeer.Serve(ctx, hubIn) }()
+			go func() { _ = nodePeer.Serve(ctx, nodeIn) }()
+			m.mu.Lock()
+			m.peer, m.online = hubPeer, true
+			m.sessions = []proto.Session{{SessionID: "side", Launcher: "l", Model: c.model, Assistant: true, Cwd: "/home/u/.jarvis/assistant"}}
+			m.mu.Unlock()
+			if code, out := call(t, h.routes(), "POST", "/api/v1/sessions/"+m.cfg.ID+"/side/messages", h.cfg.Token, `{"text":"hi"}`); code != 200 {
+				t.Fatalf("%d %v", code, out)
+			}
+			mu.Lock()
+			model, _ := got["model"].(string)
+			mu.Unlock()
+			if model != c.want {
+				t.Errorf("model %q, want %q", model, c.want)
+			}
+		})
+	}
+}

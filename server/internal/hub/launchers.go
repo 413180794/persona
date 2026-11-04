@@ -690,6 +690,51 @@ func (h *Hub) askLauncherModels(ctx context.Context, m *Machine, name string, re
 	return res, nil
 }
 
+// launcherModelCache remembers which models a launcher offered, by machine and launcher, for a few minutes: a send
+// checks its conversation's model against it (a model the gateway dropped fails every turn otherwise).
+var launcherModelCache struct {
+	mu   sync.Mutex
+	at   map[string]time.Time
+	have map[string]map[string]bool
+}
+
+// launcherHasModel: whether the launcher offers model (its id or what an alias resolves to). Unknown (an agent with
+// no list, a failed call) counts as yes.
+func (h *Hub) launcherHasModel(ctx context.Context, m *Machine, launcher, model string) bool {
+	key := m.cfg.ID + "\x00" + launcher
+	c := &launcherModelCache
+	c.mu.Lock()
+	if c.at != nil && time.Since(c.at[key]) < 5*time.Minute {
+		set := c.have[key]
+		c.mu.Unlock()
+		return set == nil || set[model]
+	}
+	c.mu.Unlock()
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	res, err := h.askLauncherModels(cctx, m, launcher, false)
+	if err != nil {
+		return true
+	}
+	set := map[string]bool{}
+	for _, x := range res.Models {
+		set[x.ID] = true
+		if x.Resolved != "" {
+			set[x.Resolved] = true
+		}
+	}
+	if len(set) == 0 {
+		return true
+	}
+	c.mu.Lock()
+	if c.at == nil {
+		c.at, c.have = map[string]time.Time{}, map[string]map[string]bool{}
+	}
+	c.at[key], c.have[key] = time.Now(), set
+	c.mu.Unlock()
+	return set[model]
+}
+
 func writeLauncherModelsErr(w http.ResponseWriter, err error) {
 	var re *rpc.Error
 	if errors.As(err, &re) && strings.HasPrefix(re.Message, "unknown method") {
