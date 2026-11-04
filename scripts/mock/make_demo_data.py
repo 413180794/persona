@@ -199,7 +199,7 @@ data = {
     "prefs": m.PREFS,
     "pins": {"spaces": ["macbook/weather"], "sessions": []},
     "launchers": [{"name": "claude", "model": "opus"}, {"name": "codex", "model": "gpt-5.5"}],
-    "dirs": m.mock_dirs("macbook", ""),
+    "dirs": m.mock_dirs("macbook", "")[0],
 }
 
 with open(OUT, "w") as f:

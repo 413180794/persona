@@ -549,14 +549,24 @@ STARTED = []  # bodies of POST /api/v1/sessions (GET /mock/started)
 START_IDS = [int(time.time()) % 10**8 * 1000]  # new sessions' ids: never reused, across runs too (the app caches chats by id)
 
 
+# A machine's directories for the new chat's browser, and the hub's error when it can't list one. code/eval (not in
+# code's list; type ~/code/eval) is like an eval harness's work tree (d-wx------): the hub can't list it (502, Go's
+# os error), but its runs open by their full path, ~/code/eval/run1 (#1402). A directory named nope is gone.
 def mock_dirs(mid, path):
     home = next((m.get("home") for m in MACHINES if m["id"] == mid), None) or "/home/me"
+    if path == "~" or path.startswith("~/"):
+        path = home + path[1:]
     path = path or home + "/code"
-    names = {"code": ["weather", "blog", "photo-sync", "shop-api", "recipes"]}.get(path.rstrip("/").rsplit("/", 1)[-1], ["src", "docs"])
+    if path.rstrip("/") == home + "/code/eval":
+        return None, "open " + path + ": permission denied"
+    if path.rstrip("/").rsplit("/", 1)[-1] == "nope":
+        return None, "open " + path + ": no such file or directory"
+    names = {"code": ["weather", "blog", "photo-sync", "shop-api", "recipes"],
+             "eval": ["run1"], "run1": ["work"]}.get(path.rstrip("/").rsplit("/", 1)[-1], ["src", "docs"])
     return {"path": path, "parent": path.rsplit("/", 1)[0] or "/",
             "entries": [{"name": n, "path": path.rstrip("/") + "/" + n, "is_git": path.endswith("/code")} for n in names],
             "recent": [{"path": home + "/code/weather", "name": "weather", "last_used": ago(minutes=30)},
-                       {"path": home + "/code/blog", "name": "blog", "last_used": ago(days=2)}]}
+                       {"path": home + "/code/blog", "name": "blog", "last_used": ago(days=2)}]}, None
 
 
 def machine_online(mid):
@@ -7683,7 +7693,10 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/machines/") and not machine_online(p.split("/")[4]) and p.split("/")[5] in ("launchers", "dirs"):
             return self.send_json({"error": "%s: machine is offline" % p.split("/")[4]}, 503)
         if p.startswith("/api/v1/machines/") and p.endswith("/dirs"):
-            return self.send_json(mock_dirs(p.split("/")[4], (q.get("path") or [""])[0]))
+            listing, problem = mock_dirs(p.split("/")[4], (q.get("path") or [""])[0])
+            if problem:
+                return self.send_json({"code": "internal", "error": problem}, 502)
+            return self.send_json(listing)
         if p == "/api/v1/launchers": return self.send_json({"launchers": [dict(l) for l in LAUNCHERS]})
         if p == "/api/v1/launchers/presets": return self.send_json({"presets": LAUNCHER_PRESETS})
         if p.startswith("/api/v1/launchers/") and p.endswith("/quota"):

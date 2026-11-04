@@ -427,20 +427,50 @@ struct DirectoryBrowser: View {
     var onPick: (String) -> Void
     @State private var list: DirList?
     @State private var path = ""
+    @State private var draft = ""
     @State private var error: String?
+    @State private var loading = false
+    @State private var attempt = 0
+    @FocusState private var editing: Bool
 
     var body: some View {
         List {
             if let list {
                 Section {
+                    HStack(spacing: Theme.Space.s) {
+                        TextField("输入路径", text: $draft)
+                            .font(Theme.Font.code)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.asciiCapable)
+                            .submitLabel(.go)
+                            .focused($editing)
+                            .onSubmit { go() }
+                            .accessibilityIdentifier("dirBrowser.path")
+                        if loading {
+                            ProgressView()
+                        } else if editing, DirectoryPath.resolve(draft, from: list.path) != list.path {
+                            Button { go() } label: { Image(systemName: Theme.Icon.enter) }
+                                .accessibilityLabel("前往")
+                        }
+                    }
                     Button {
                         onPick(list.path)
                         dismiss()
                     } label: {
                         Label("使用「\((list.path as NSString).lastPathComponent)」", systemImage: Theme.Icon.successFilled)
                             .font(Theme.Font.heading)
+                            .lineLimit(1)
                     }
-                } footer: { Text(list.path).font(Theme.Font.code) }
+                } footer: { Text("可以直接改上面的路径，回车前往；~ 是主目录") }
+
+                if let error {
+                    Section {
+                        Label(error, systemImage: Theme.Icon.error)
+                            .foregroundStyle(Theme.danger)
+                            .accessibilityIdentifier("dirBrowser.error")
+                    }
+                }
 
                 Section {
                     if let parent = list.parent, !parent.isEmpty {
@@ -469,16 +499,65 @@ struct DirectoryBrowser: View {
         .task { await load(start) }
     }
 
+    private func go() {
+        guard let target = DirectoryPath.resolve(draft, from: list?.path ?? "") else { return }
+        editing = false
+        Task { await load(target) }
+    }
+
+    /// The last tap wins; a directory the hub can't list keeps the current one on screen and says why. A start that
+    /// can't be listed (a saved directory gone or unreadable) falls back to the home directory, the reason above it.
     private func load(_ p: String) async {
         guard let api = model.api(ref.group) else { return }
+        attempt += 1
+        let mine = attempt
+        loading = true
+        defer { if mine == attempt { loading = false } }
         do {
             let l = try await api.dirs(machine: ref.id, path: p)
+            guard mine == attempt else { return }
             withAnimation(Theme.Motion.standard) {
                 list = l
                 path = l.path
+                draft = l.path
+                error = nil
             }
         } catch {
-            self.error = error.shown
+            guard mine == attempt else { return }
+            let reason = DirectoryPath.problem((error as? APIError)?.message ?? error.shown ?? "", path: p)
+            if list == nil, !p.isEmpty {
+                await load("")
+                self.error = reason
+                return
+            }
+            withAnimation(Theme.Motion.standard) {
+                self.error = reason
+                if let list { draft = list.path }
+            }
         }
+    }
+}
+
+/// The directory browser's typed paths and failures, apart from the view (DirectoryPathTests).
+nonisolated enum DirectoryPath {
+    /// What to ask the hub for: `~`, `~/…` and absolute paths as typed (the node expands `~`); anything else is
+    /// under `current` (under the home directory when there is none yet). nil for nothing typed.
+    static func resolve(_ typed: String, from current: String) -> String? {
+        let t = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return nil }
+        if t.hasPrefix("/") || t == "~" || t.hasPrefix("~/") { return t }
+        guard !current.isEmpty else { return "~/" + t }
+        return (current as NSString).appendingPathComponent(t)
+    }
+
+    /// Why the hub couldn't list `path`, in words: its errors are Go's os errors ("open /x: permission denied").
+    static func problem(_ message: String, path: String) -> String {
+        let m = message.lowercased()
+        let name = (path as NSString).lastPathComponent
+        let shown = name.isEmpty ? path : name
+        if m.contains("permission denied") { return "没有权限列出「\(shown)」里的目录。知道下一级的名字，可以在上面直接输入完整路径" }
+        if m.contains("no such file") { return "「\(path)」不存在" }
+        if m.contains("not a directory") { return "「\(path)」不是目录" }
+        return message.isEmpty ? "打不开「\(path)」" : message
     }
 }
