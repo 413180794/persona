@@ -82,6 +82,10 @@ type assistantProc struct {
 	compacting  bool     // an idle compaction is running (compactIdle)
 	compacted   bool     // compactIdle ran in this process: it is let go when idle again
 	requested   bool     // its first request was logged
+
+	// owner: the Node that took it over from an earlier connection of a resident node (assistant_keep.go); nil: the
+	// one that started it.
+	owner atomic.Pointer[Node]
 }
 
 func (p *assistantProc) write(line []byte) error {
@@ -471,10 +475,16 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 			}
 		}
 	}()
+	liveAssistants.Store(p, struct{}{})
 	go n.readAssistant(p, stdout)
 	go func() {
 		_ = cmd.Wait()
+		liveAssistants.Delete(p)
 		close(p.exited)
+		if n.keeper != nil {
+			n.keeper.forget(p) // exited between two connections
+		}
+		n := p.ownerOr(n)
 		n.mu.Lock()
 		wasSpare := n.spare == p
 		if wasSpare {
@@ -496,9 +506,11 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 // readAssistant turns the stream-json output into live deltas and turn-finished signals.
 // The structured messages themselves come from the transcript, like every other session.
 func (n *Node) readAssistant(p *assistantProc, r io.Reader) {
+	started := n
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
 	for sc.Scan() {
+		n := p.ownerOr(started) // a resident node's next connection may have taken it over (assistant_keep.go)
 		line := sc.Bytes()
 		if len(line) == 0 || line[0] != '{' { // interactive zsh may print banners
 			continue
@@ -780,6 +792,10 @@ func (n *Node) reapAssistants(ctx context.Context) {
 			n.mu.Unlock()
 			if spare != nil {
 				spare.stop()
+			}
+			if n.keeper != nil { // a resident node: the next connection takes them over (assistant_keep.go)
+				n.handOverAssistants()
+				ids = nil
 			}
 			for _, id := range ids {
 				n.stopAssistant(id)

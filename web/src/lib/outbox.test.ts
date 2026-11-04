@@ -101,7 +101,7 @@ describe("sending from another page", () => {
     expect(outbox()["m/s"]).toBeUndefined();
   });
 
-  it("keeps a failure with why, retries with the same id, and can drop it", async () => {
+  it("keeps a failure with why, retries as another operation (the hub keeps its answer for the id), and can drop it", async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(response({ code: "input_draft", error: "draft", clearable: "old" }, 409))
       .mockResolvedValueOnce(response({ ok: true }));
@@ -111,9 +111,10 @@ describe("sending from another page", () => {
     expect(failed).toMatchObject({ state: "failed", error: "电脑上的输入框里有没发出去的字", clearable: "old" });
     expect(await retryOutbox("m", "s", failed.id, failed.clearable)).toBe(true);
     const again = JSON.parse(fetcher.mock.calls[1][1].body);
-    expect(again.client_msg_id).toBe(failed.id);
+    expect(again.client_msg_id).not.toBe(failed.id);
+    expect(fetcher.mock.calls[1][1].headers.get("X-Jarvis-Op-Id")).toBe(again.client_msg_id);
     expect(again.clear_draft).toBe("old");
-    discardOutbox("m", "s", failed.id);
+    discardOutbox("m", "s", again.client_msg_id);
     expect(outbox()["m/s"]).toBeUndefined();
   });
 

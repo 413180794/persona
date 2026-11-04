@@ -329,6 +329,15 @@ ssh 电脑照常能用，但不再推荐、管理界面不再添加，迁移见 
 （`personad hub peer list` 看谁是中心，`personad hub peer center` 换中心）。同一台电脑只出现一次，用最好的那条路。互联只走 TLS 端口。
 设计、协议和怎么验证见 [mesh.md](mesh.md)。
 
+## 重启不打断客户端（[hub-restart.md](hub-restart.md)）
+
+- hub 的监听 socket 归 `jarvisd.socket`（socket activation，`hub-systemd.sh` 写），`systemctl --user restart jarvisd` 时端口一直开着，连接排队等新进程；
+  没有 `LISTEN_FDS`（Docker、launchd、手动运行）时 hub 自己监听。回滚：`PERSONA_HUB_SOCKET=0 scripts/deploy/hub-systemd.sh`（换回不认识
+  `LISTEN_FDS` 的旧二进制之前必须先做，否则它抢不到端口）。完全停掉 hub 要连 socket 一起：`systemctl --user stop jarvisd.socket jarvisd`。
+- SIGTERM 是计划内停机：先给客户端发 `hub_restarting`、把机器和会话交给下一个 hub（settings `hub.warm_machines`），停机造成的离线不广播，
+  最后把事件日志交出去（settings `hub.event_log`，下一个 hub 取走接着编号）。
+- hub 所在的机器装常驻 node（下一节），助手的对话进程就不在 hub 的 cgroup 里，hub 重启时接着跑；部署用 `node-launchd.sh restart-idle`，node 空闲时才换二进制。
+
 ## 常驻 node（Mac，`scripts/deploy/node-launchd.sh`）
 
 hub 通过 ssh 起 node（`personad node --stdio`），node 再起助手的 claude。ssh 会话读不了 macOS 的**登录钥匙串**，所以 API key 存在钥匙串里的

@@ -13,6 +13,7 @@ import { getSession, getState, markSeenLocally, refresh, refreshTodos, setMutes,
 import { buildTaskIndex, STOP_LOOP_MESSAGE, visibleSubagents } from "../../lib/tasks";
 import { echoed, taggedSeen } from "../../lib/echo";
 import { outboxKey, settleOutbox } from "../../lib/outbox";
+import { apiOp } from "../../lib/ops";
 import { conversationKey, pickedLauncher, pickedModel } from "../../lib/assistant-chat";
 import { unlinkAgentFromTodo } from "../../lib/todos";
 import { LinkTodoDialog } from "../LinkTodoDialog";
@@ -291,8 +292,10 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       setPending((ps) => [...ps.filter((x) => x.id !== id), p]);
       atEnd.current = true;
       try {
-        await api(`${sessionPath(mid, sid)}/messages`, {
+        // the bubble stays as sending while a gap (a hub restart) is waited out; the id is the op id too
+        await apiOp(`${sessionPath(mid, sid)}/messages`, {
           method: "POST",
+          opId: id,
           json: { text: out.text, images: out.images.length ? out.images : undefined, client_msg_id: id, clear_draft: clearDraft, launcher: assistant ? pickedLauncher(conversationKey(mid, sid)) : undefined, model: assistant ? pickedModel(conversationKey(mid, sid)) : undefined },
         });
         return true;
@@ -555,7 +558,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
                 onClick={() => {
                   const r = draftRefusal!;
                   setDraftRefusal(null);
-                  void deliver(r.out, r.id, r.clearable);
+                  void deliver(r.out, uuid(), r.clearable); // another operation: the refused one keeps its answer
                 }}
               >
                 清空并发送

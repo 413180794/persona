@@ -3,6 +3,11 @@ package persona.core.hub
 import persona.core.contracts.*
 import persona.core.contracts.api.*
 import kotlinx.serialization.encodeToString
+import java.util.UUID
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -11,19 +16,31 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 
 /** Shares the selected connection's authenticated HTTP client and route. */
-class HubChatTransport private constructor(
-    private val request: suspend (String, String, RequestBody?) -> Response,
+class HubChatTransport internal constructor(
+    private val send: suspend (path: String, method: String, body: RequestBody?, headers: Map<String, String>) -> Response,
+    /** Waits until the connection is Online, at most the given millis; false when it was not. */
+    private val awaitOnline: suspend (Long) -> Boolean = { true },
+    private val clockMillis: () -> Long = { System.nanoTime() / 1_000_000 },
+    private val newOpId: () -> String = { UUID.randomUUID().toString() },
+    /** How long an answer cut off by the connection keeps being retried with the same op id. */
+    private val resolveRetryMillis: Long = RESOLVE_RETRY_MILLIS,
 ) : ChatTransport {
-    constructor(connection: OkHttpHubConnection) : this({ path, method, body -> connection.request(path, method, body) })
+    constructor(connection: OkHttpHubConnection) : this(
+        { path, method, body, headers -> connection.request(path, method, body, headers) },
+        { timeout -> withTimeoutOrNull(timeout) { connection.state.first { it == ConnectionState.Online } } != null },
+    )
 
     /** Fixed origins are only available to tests in this module. */
-    internal constructor(http: HubHttpClient, endpoint: Endpoint, token: String) : this({ path, method, body ->
+    internal constructor(http: HubHttpClient, endpoint: Endpoint, token: String) : this({ path, method, body, headers ->
         val url = endpoint.baseUrl().resolve(path) ?: throw HubFailure(HubError.Protocol, retryable = false)
-        http.client.newCall(Request.Builder().url(url).header("Authorization", "Bearer $token")
+        http.client.newCall(Request.Builder().url(url).apply { headers.forEach { (name, value) -> header(name, value) } }
+            .header("Authorization", "Bearer $token")
             .method(method, body).build()).awaitResponse().also { response ->
             if (!response.isSuccessful) throw response.use { HubFailure.from(it) }
         }
     })
+
+    private suspend fun request(path: String, method: String, body: RequestBody?) = send(path, method, body, emptyMap())
 
     override suspend fun machines() = get<MachinesResponse>(api("machines")).machines
     override suspend fun sessions() = get<SessionsResponse>(api("sessions")).sessions
@@ -48,14 +65,31 @@ class HubChatTransport private constructor(
         return get(url.encodedPath + "?" + url.encodedQuery)
     }
 
+    /**
+     * Sends one answer under one op id (#1574): when the connection cuts it off (a hub restarting, a network change),
+     * the same answer goes again with the same id once the connection is back, for up to [resolveRetryMillis]; the
+     * hub runs it at most once and answers a repeat with the stored outcome.
+     */
     override suspend fun resolve(id: String, resolution: Resolution) {
-        try {
-            request(api("interactions", id, "resolve"), "POST",
-                JsonCodec.encodeToString(resolution).toRequestBody("application/json; charset=utf-8".toMediaType())).close()
-        } catch (error: HubFailure) {
-            if (error.status == 410) throw InteractionGoneException()
-            if (error.code == "prompt_changed") throw InteractionPromptChangedException()
-            throw error
+        val path = api("interactions", id, "resolve")
+        val body = JsonCodec.encodeToString(resolution)
+        val headers = mapOf(OP_ID_HEADER to newOpId())
+        val deadline = clockMillis() + resolveRetryMillis
+        while (true) {
+            try {
+                send(path, "POST", body.toRequestBody("application/json; charset=utf-8".toMediaType()), headers).close()
+                return
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                val failure = HubFailure.from(error)
+                if (failure.status == 410) throw InteractionGoneException()
+                if (failure.code == "prompt_changed") throw InteractionPromptChangedException()
+                val remaining = deadline - clockMillis()
+                if (!cutOff(failure) || remaining <= 0) throw error
+                delay(RESOLVE_RETRY_PAUSE_MILLIS.coerceAtMost(remaining))
+                if (!awaitOnline((deadline - clockMillis()).coerceAtLeast(0))) throw error
+            }
         }
     }
 
@@ -65,6 +99,21 @@ class HubChatTransport private constructor(
 
     override suspend fun fullItem(session: SessionKey, itemId: String): Item =
         get(api("sessions", session.machineId, session.sessionId, "items", itemId, "full"))
+
+    companion object {
+        const val OP_ID_HEADER = "X-Jarvis-Op-Id"
+        const val RESOLVE_RETRY_MILLIS = 60_000L
+        /** Between tries: a hub that answers 503 while it stops would otherwise be asked again at once. */
+        const val RESOLVE_RETRY_PAUSE_MILLIS = 500L
+
+        /** The connection lost the request (refused, reset, timed out, or a proxy said the hub is not there). */
+        internal fun cutOff(failure: HubFailure) = when (failure.status) {
+            null -> failure.kind in setOf(HubError.ConnectionRefused, HubError.Unreachable, HubError.Timeout,
+                HubError.Transport, HubError.NoNetwork, HubError.AddressNotFound)
+            502, 503, 504 -> true
+            else -> false
+        }
+    }
 
     private suspend inline fun <reified T> get(path: String): T = request(path, "GET", null).use {
         try { JsonCodec.decodeFromString<T>(it.body!!.string()) }

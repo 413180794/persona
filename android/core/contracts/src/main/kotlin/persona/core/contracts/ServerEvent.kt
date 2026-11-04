@@ -36,6 +36,12 @@ data class Hello(
     @SerialName("hub_name") val hubName: String? = null,
     /** Every hub of this hub's mesh, itself included; only in the authenticated hello. */
     val mesh: HubMesh? = null,
+    /** The hub's broadcast stream (#1574): its broadcasts carry `event_seq`, numbered within it. Absent on older hubs. */
+    @SerialName("event_stream") val eventStream: String? = null,
+    /** The stream's last broadcast number when this socket connected. */
+    @SerialName("event_seq") val eventSeq: Long? = null,
+    /** The hub replays every broadcast this client missed right after the hello: no refetch is needed. */
+    val resumed: Boolean? = null,
 ) : ServerEvent
 
 @KeepGeneratedSerializer

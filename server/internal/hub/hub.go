@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/agents"
@@ -68,8 +69,15 @@ type Hub struct {
 	sessionsMu   sync.Mutex
 	sessionsSent map[string][]byte
 
-	mu            sync.Mutex
-	clients       map[*client]struct{}
+	mu      sync.Mutex
+	clients map[*client]struct{}
+	events  *eventLog // what was broadcast lately, numbered (eventlog.go); guarded by mu
+	// stopping: a planned stop has begun (beginStop, docs/hub-restart.md): what the stop itself causes (machines going
+	// offline, their questions ending) is not news for the apps, which reconnect to the next hub in a moment.
+	stopping atomic.Bool
+	// deltas: the live text of each session's message being generated, as last relayed (machine, session -> text): a
+	// client subscribing in the middle of it gets it after the backlog instead of waiting for the next token.
+	deltas        map[[2]string]string
 	interactions  map[string]*pending
 	phoneTools    map[string]db.PhoneToolRegistration
 	calls         map[string]chan proto.ToolResult
@@ -185,6 +193,7 @@ type Store interface {
 	SeenTimes(ctx context.Context) (map[[2]string]time.Time, error)
 	Setting(ctx context.Context, key string, out any) (bool, error)
 	PutSetting(ctx context.Context, key string, v any) error
+	TakeSetting(ctx context.Context, key string, out any) (bool, error)
 	ConnectorSecret(ctx context.Context, connector string) (string, bool, error)
 	PutConnectorSecret(ctx context.Context, connector, sealed string) error
 	DeleteConnectorSecret(ctx context.Context, connector string) error
@@ -267,7 +276,9 @@ func runConfigured(ctx context.Context, b update.Build, cfg *Config, updating bo
 }
 
 func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBudget, updating bool) error {
-	ctx, cancel := context.WithCancel(ctx)
+	// The stop asked for (stop) begins with beginStop, before anything sees its context end (restart.go).
+	stop := ctx
+	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancel()
 
 	h := &Hub{
@@ -291,15 +302,27 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 			h.nodeWorkers.Wait()
 			return nil
 		})
+		if h.stopping.Load() {
+			budget.step(h, "hand over the event log", func(ctx context.Context) error { h.saveEventLog(ctx); return nil })
+		}
 		budget.step(h, "close database", database.CloseContext)
 	}()
 	h.store = database
+	go func() {
+		select {
+		case <-stop.Done():
+			h.beginStop()
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
 	if err := h.startClientOps(ctx); err != nil {
 		return err
 	}
 	if err := h.initHubID(ctx); err != nil {
 		return err
 	}
+	h.loadEventLog(ctx)
 	if resumable, err := database.ExpireStaleInteractions(ctx); err != nil {
 		h.logf("expire stale interactions: %v", err)
 	} else {
@@ -342,6 +365,7 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 		h.machines = append(h.machines, m)
 		h.byID[mc.ID] = m
 	}
+	h.loadWarm(ctx) // before the machines connect: shown as they were before a restart meanwhile (warm.go)
 	h.initMesh(ctx) // before the machines connect: a member leaves its computers to the center (mesh_group.go)
 	h.fleetRegroup()
 	for _, m := range h.machines {

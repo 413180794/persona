@@ -84,6 +84,7 @@ class GroupStacks @Inject constructor(application: Application, private val runt
         val names = GroupNames(group.namespace)
         val view = object : HubConnection {
             override val state = group.state
+            override val resumed get() = connection.resumed
             override val events = connection.events
             override fun reconnect() = group.reconnect()
             override fun send(message: JsonObject) = connection.send(message)

@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/nwverse/persona/server/internal/identity"
 	"io"
@@ -95,7 +96,7 @@ func handle(ctx context.Context, version string, req request) (any, *rpcError) {
 		// Phone round trips, approvals and ask_user can take a while (the user may need to unlock the phone).
 		ctx, cancel := context.WithTimeout(ctx, 40*time.Minute)
 		defer cancel()
-		line, err := dialNode(ctx, map[string]any{"kind": "mcp.call", "name": p.Name, "args": p.Arguments,
+		line, err := callNode(ctx, map[string]any{"kind": "mcp.call", "name": p.Name, "args": p.Arguments,
 			"session_id": sessionID(), "assistant": isAssistant()})
 		if err != nil {
 			return toolResult(proto.TextResult(fmt.Sprintf("Persona node is not reachable (%v). Is the hub connected to this machine?", err), true)), nil
@@ -114,6 +115,27 @@ var (
 	dialNode   = node.DialSocket
 	retryEvery = 500 * time.Millisecond
 )
+
+// callNode is dialNode for a tool call, tried again only while no node listens (nothing was sent): a resident node's
+// socket belongs to the Node serving the hub's connection, so it is gone for a moment while a hub restart replaces
+// that connection (docs/hub-restart.md「对话不中断」). A call that reached the node is never sent twice.
+func callNode(ctx context.Context, req any) ([]byte, error) {
+	deadline := time.Now().Add(callRedialFor)
+	for {
+		line, err := dialNode(ctx, req)
+		if err == nil || !errors.Is(err, node.ErrNoNode) || time.Now().After(deadline) {
+			return line, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, err
+		case <-time.After(retryEvery):
+		}
+	}
+}
+
+// callRedialFor: how long callNode waits for the node's socket to come back.
+var callRedialFor = 15 * time.Second
 
 // listTools asks the local node for the tools until ctx ends: the node may still be starting or reconnecting to the hub.
 func listTools(ctx context.Context) ([]map[string]any, error) {

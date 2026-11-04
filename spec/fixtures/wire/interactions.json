@@ -204,6 +204,7 @@
     "derived": true,
     "decoder": "event",
     "input": {
+      "event_seq": 1,
       "interaction": {
         "id": "ix_elicitation_form",
         "machine_id": "m1",
@@ -258,6 +259,7 @@
     "derived": true,
     "decoder": "event",
     "input": {
+      "event_seq": 1,
       "interaction": {
         "id": "ix_elicitation_url",
         "machine_id": "m1",

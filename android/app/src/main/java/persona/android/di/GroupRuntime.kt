@@ -95,9 +95,10 @@ class GroupRuntime internal constructor(
                 reconciliationJob = scope.launch {
                     try {
                         val data = checkNotNull(data)
-                        data.openWindowReconciliation.reconcile(settings.reconciliationTimeoutMillis, listOf(
-                            { HubChatTransport(readyConnection).interactions(); Unit },
-                            { data.messages.onReady() },
+                        // A resumed socket had the pending interactions with the hub's snapshot and replay (#1574).
+                        data.openWindowReconciliation.reconcile(settings.reconciliationTimeoutMillis, listOfNotNull(
+                            if (readyConnection.resumed) null else suspend { HubChatTransport(readyConnection).interactions(); Unit },
+                            suspend { data.messages.onReady() },
                         ))
                     } catch (cancelled: CancellationException) { throw cancelled }
                     catch (_: Exception) { /* Individual repositories retain unverified state. */ }
@@ -146,7 +147,8 @@ class GroupRuntime internal constructor(
         }
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             combine(connection.state, reconciling) { state, syncing ->
-                if (state == ConnectionState.Online && syncing) ConnectionState.Updating else state
+                // A resumed socket only resubscribes the open chats: nothing to show (#1574).
+                if (state == ConnectionState.Online && syncing && !connection.resumed) ConnectionState.Updating else state
             }.collect { state ->
                 if (live !== connection) return@collect
                 if (state !in setOf(ConnectionState.Online, ConnectionState.Updating, ConnectionState.Connecting)) {

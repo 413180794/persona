@@ -514,8 +514,9 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 
 | type | 字段 |
 | --- | --- |
+| `hub_restarting` | `back_in_ms`：hub 要重启了（部署、`systemctl restart`、更新），接着就是 1001「hub restarting」。客户端立刻重连、界面保持原样（[hub-restart.md](hub-restart.md)）。不带 `event_seq`，不补发 |
 | `hub_update` | `update`（同 `GET /api/v1/hub/update`）：检查、下载、等空闲、重启、确认、回滚，状态一变就推；`restarting` 之后连接会断一会儿，是预期的 |
-| `hello` | `server_version`, `client_id`, `features`, `hub_id`, `hub_name`, `endpoints`, `tls_port`, `fp`, `mesh`, `channel`, `build`, `protocol`, `min_app_build`（后四个同 `/api/v1/health`）；每条 WS 首条消息，尚不含协商后的心跳。`mesh`：`{"hubs":[{hub_id,name,online,self,center,endpoints,tls_port,fp}]}`，互联组里所有 hub（含自己，`self: true`；配过对但现在到不了的 `online: false`；`center: true` 是组里的中心，客户端在同组的几台里优先连它），没有互联时只有自己。连成员时 hello 来自中心（`hub_id` 是中心的）（[mesh.md](mesh.md)） |
+| `hello` | `server_version`, `client_id`, `features`, `hub_id`, `hub_name`, `endpoints`, `tls_port`, `fp`, `mesh`, `channel`, `build`, `protocol`, `min_app_build`（后四个同 `/api/v1/health`），`event_stream`, `event_seq`, `resumed`（见下「事件续传」）；每条 WS 首条消息，尚不含协商后的心跳。`mesh`：`{"hubs":[{hub_id,name,online,self,center,endpoints,tls_port,fp}]}`，互联组里所有 hub（含自己，`self: true`；配过对但现在到不了的 `online: false`；`center: true` 是组里的中心，客户端在同组的几台里优先连它），没有互联时只有自己。连成员时 hello 来自中心（`hub_id` 是中心的）（[mesh.md](mesh.md)） |
 | `endpoints` | `endpoints`（完整候选列表，仅发给声明同名能力的连接） |
 | `client_hello_ack` | `heartbeat: {interval, pong_timeout}`（本次协商后实际采用的秒数） |
 | `machines` | `machines` |
@@ -558,6 +559,18 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | `tool_result` | `call_id`, `content`（`[{"type":"text","text"}|{"type":"image","data","mime_type"}]`）, `is_error` |
 | `client_hello` | `device_id`, `platform`, `version`, `build`, `os: {name, version, sdk}`, `features`, `heartbeat: {interval?, pong_timeout?}`，均可省略，见下文 |
 | `ping` | 必须带字符串 `id`，允许空字符串；缺失、null 或非字符串时不回复 |
+
+### 事件续传（`event_seq`，2026-11-04）
+
+hub 发给所有客户端的广播（这张表里除 `hello`、连接快照、`sessions_delta`、`items`、`delta`、`terminal*`、`tool_call`、`notify`、`lock_test`、`pong`、`error`、
+`client_hello_ack`、`hub_restarting` 以外的）带 `event_seq`：同一条流（`hello.event_stream`）里每条加一，hub 重启后接着编号。
+
+- 客户端记住 `event_stream` 和收到的最大 `event_seq`，重连时带上：`/api/v1/ws?event_stream=<流>&event_seq=<n>`（两个都带才算）。
+- `hello.resumed: true`：紧跟 hello 补发 `event_seq > n` 的广播（按顺序、不重复），之后是实时的；客户端不用全量重拉。连接快照照常发（完整状态，静默应用）。
+- `resumed: false`（流变了：hub 崩溃过；漏掉的已经不在 hub 留的最近 2000 条 / 15 分钟里；超过 400 条）或旧 hub 没有这些字段：照以前全量刷新。
+  `hello.event_seq` 是此刻的最后一条，全量刷新后从它接着记。
+- 需要填写的授权卡片（elicitation 的 `interaction`）不补发，靠连接后的待处理交互快照。
+- 订阅（`subscribe`）的补发之后，正在生成的无头助手会话紧跟一条当前的 `delta`。
 
 ### 常驻连接通知（ws_notify）
 

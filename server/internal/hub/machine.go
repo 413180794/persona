@@ -44,6 +44,10 @@ type Machine struct {
 	browser   *proto.Browser
 	browserAt time.Time
 	online    bool
+	// warmUntil, warmed: shown as before a hub restart until then, while its node reconnects (warm.go); warmed is
+	// closed when that ends.
+	warmUntil time.Time
+	warmed    chan struct{}
 	err       string
 	lastSeen  time.Time
 	sessions  []proto.Session
@@ -113,7 +117,8 @@ func (m *Machine) snapshot() proto.Machine {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	engines := []proto.Engine{} // what the node found: none while offline
-	if m.online {
+	warm := m.warmLocked(time.Now())
+	if m.online || warm {
 		engines = append(engines, m.info.Engines...)
 	}
 	icon := m.cfg.Icon
@@ -122,7 +127,7 @@ func (m *Machine) snapshot() proto.Machine {
 	}
 	canDeploy, deployReason := m.canDeployLocked()
 	return proto.Machine{
-		ID: m.cfg.ID, Name: m.cfg.Name, Kind: m.cfg.Kind, Icon: icon, SSHHost: m.cfg.SSHHost, Online: m.online, Error: m.err,
+		ID: m.cfg.ID, Name: m.cfg.Name, Kind: m.cfg.Kind, Icon: icon, SSHHost: m.cfg.SSHHost, Online: m.online || warm, Error: m.err,
 		Hostname: m.info.Hostname, OS: m.info.OS, Arch: m.info.Arch, Home: m.info.Home,
 		HerdrVersion: m.info.HerdrVersion, ClaudeVersion: m.info.ClaudeVersion, LastSeen: m.lastSeen,
 		NodeVersion: m.info.Version, NodeMismatch: m.online && nodeMismatch(m.hub.version, m.info.Version),
@@ -283,6 +288,11 @@ func (m *Machine) call(ctx context.Context, method string, params any, out any) 
 		if fields.Model != "" || fields.Fingerprint != "" {
 			return &rpc.Error{Code: proto.CodeNodeOutdated, Message: "这台电脑的 node 还不支持统一模型配置，请更新 node"}
 		}
+	}
+	if p == nil && m.waitWarm(ctx) { // the hub just restarted: its node is on its way back (warm.go)
+		m.mu.Lock()
+		p = m.peer
+		m.mu.Unlock()
 	}
 	if p == nil {
 		return fmt.Errorf("%s: %w", m.cfg.Name, errOffline)
@@ -484,6 +494,7 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 			Text      string `json:"text"`
 		}
 		if json.Unmarshal(params, &p) == nil {
+			m.hub.rememberLiveText(m.cfg.ID, p.SessionID, p.Text)
 			m.hub.toSubscribers(m.cfg.ID, p.SessionID, map[string]any{"type": "delta", "machine_id": m.cfg.ID, "session_id": p.SessionID, "text": p.Text})
 			m.hub.channelDelta(m.cfg.ID, p.SessionID, p.Text)
 		}

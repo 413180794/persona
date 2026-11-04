@@ -602,6 +602,20 @@ func (d *DB) PutSetting(ctx context.Context, key string, v any) error {
 	return err
 }
 
+// TakeSetting is Setting that also removes the key, in one statement: a value meant to be read once (the event log a
+// stopping hub hands to the next one, docs/hub-restart.md) is never read twice.
+func (d *DB) TakeSetting(ctx context.Context, key string, out any) (bool, error) {
+	var raw []byte
+	err := d.pool.QueryRow(ctx, `DELETE FROM settings WHERE key = $1 RETURNING value`, key).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, json.Unmarshal(raw, out)
+}
+
 // CompareSetting atomically replaces a versioned setting without losing another writer's update.
 // A cleared binding keeps its revision, so restoring defaults does not reset concurrency history.
 func (d *DB) CompareSetting(ctx context.Context, key string, revision int64, value any) (bool, error) {

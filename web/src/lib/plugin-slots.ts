@@ -5,6 +5,7 @@
 // plugin_ui_slots: an older one is never asked (it would answer an empty list anyway).
 import { useMemo, useSyncExternalStore } from "react";
 import { applyBadge, placesOf, uiPlaces, type BadgeEvent, type SlotName, type UIPlace } from "./plugin-ui";
+import { isResumed } from "./reconnect";
 import { getState, onHubEvent, useStore } from "./store";
 
 export const SLOTS_FEATURE = "plugin_ui_slots";
@@ -13,6 +14,7 @@ let places: UIPlace[] = [];
 let asked = 0; // when the list was last asked for
 let generation = 0;
 let started = false;
+let helloVersion = ""; // the hub version the last hello named
 const listeners = new Set<() => void>();
 
 function set(next: UIPlace[]) {
@@ -38,11 +40,18 @@ export function refreshPluginPlaces() {
 function start() {
   if (started || typeof window === "undefined") return;
   started = true;
-  onHubEvent("hello", refreshPluginPlaces);
+  onHubEvent("hello", (msg) => {
+    // resumed: missed plugin_ui pushes are replayed; but a hub that came back as another version may run other plugins
+    const version = String(msg.server_version ?? "");
+    const same = version === helloVersion;
+    helloVersion = version;
+    if (!isResumed(msg) || !same) refreshPluginPlaces();
+  });
   onHubEvent("plugin_ui", (msg) => set(applyBadge(places, msg as unknown as BadgeEvent)));
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && Date.now() - asked > 60_000) refreshPluginPlaces();
   });
+  helloVersion = getState().version;
   if (getState().conn === "online") refreshPluginPlaces();
 }
 

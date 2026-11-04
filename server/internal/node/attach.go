@@ -99,8 +99,11 @@ func Attach(ctx context.Context, newNode func() (*Node, error), extra <-chan net
 		}
 	}()
 
+	keeper := newAssistantKeeper()
+	var served chan struct{} // closed when the connection being served has ended
 	var current context.CancelFunc
 	var wg sync.WaitGroup
+	defer keeper.stopAll() // after the last connection handed them over: this resident node is ending
 	defer wg.Wait()
 	for {
 		var c net.Conn
@@ -124,10 +127,19 @@ func Attach(ctx context.Context, newNode func() (*Node, error), extra <-chan net
 		cctx, cancel := context.WithCancel(ctx)
 		current = cancel
 		wg.Add(1)
+		prev, done := served, make(chan struct{})
+		served = done
 		go func() {
 			defer wg.Done()
+			defer close(done)
 			defer c.Close()
 			defer cancel()
+			if prev != nil { // the last connection's Node hands its conversations over as it ends (assistant_keep.go)
+				select {
+				case <-prev:
+				case <-time.After(10 * time.Second):
+				}
+			}
 			n, err := newNode()
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "node: %v\n", err)
@@ -136,6 +148,7 @@ func Attach(ctx context.Context, newNode func() (*Node, error), extra <-chan net
 			if runtimes != nil {
 				n.runtimeHost = runtimes // Serve attaches it for this connection
 			}
+			n.keeper = keeper                        // conversations go on from one connection to the next (assistant_keep.go)
 			go func() { <-cctx.Done(); c.Close() }() // a replaced connection stops reading at once
 			if err := n.Serve(cctx, c, c); err != nil && !errors.Is(err, io.EOF) && cctx.Err() == nil {
 				n.logger.Printf("connection ended: %v", err)

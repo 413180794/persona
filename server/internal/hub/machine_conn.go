@@ -249,6 +249,7 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 	m.hub.pathConnected(p)
 	m.mu.Lock()
 	m.peer, m.info, m.online, m.err, m.lastSeen = c.peer, c.info, true, "", time.Now().UTC()
+	m.endWarmLocked()
 	m.streams = c.mux
 	m.via, m.path = c.via, ""
 	m.active, m.transport, m.uid = p, c.via, c.info.MachineUID
@@ -406,6 +407,15 @@ func (m *Machine) takeNext() *nodeConn {
 // ones come back through the next connection). Unless another connection takes over at once (planned), the machine is
 // offline.
 func (m *Machine) detach(err error, planned bool) {
+	if m.hub.stopping.Load() {
+		// The hub is stopping for a restart: the next one shows the machine as it was while its node reconnects
+		// (warm.go). Telling the apps it went offline, or ending its questions, would only be noise.
+		m.mu.Lock()
+		m.peer, m.streams, m.active, m.transport = nil, nil, nil, ""
+		m.mu.Unlock()
+		return
+	}
+	m.hub.forgetLiveText(m.cfg.ID) // the node that was generating it is gone: the transcript has what was finished
 	m.hub.terminalsOffline(m.cfg.ID)
 	m.mu.Lock()
 	m.peer, m.streams = nil, nil
@@ -440,6 +450,9 @@ func (m *Machine) detach(err error, planned bool) {
 
 // markOffline: a connection could not be made; the machine shows why.
 func (m *Machine) markOffline(err error) {
+	if m.hub.stopping.Load() {
+		return // a connection that failed because the hub is stopping (detach)
+	}
 	m.mu.Lock()
 	was := m.online
 	m.online = false

@@ -81,7 +81,11 @@ class HubSessionsRepository(
         }
         scope.launch {
             connection.state.collectLatest {
-                if (it == ConnectionState.Online) quietly { refresh() }
+                // A resumed socket already had the hub's machines and sessions snapshots and every broadcast missed
+                // (#1574): what is held now is the hub's, no refetch needed.
+                if (it == ConnectionState.Online) {
+                    if (connection.resumed) lock.withLock { verifyHeld() } else quietly { refresh() }
+                }
                 else lock.withLock { verifiedLists.value = VerifiedSessionLists() }
             }
         }
@@ -100,13 +104,18 @@ class HubSessionsRepository(
             val changed = sessionChanges.filterValues { it > before }.keys
             mutableSessions.value = sessions.filterNot { it.machineId in changed } +
                 mutableSessions.value.filter { it.machineId in changed }
-            if (connection.state.value == ConnectionState.Online) verifiedLists.value = VerifiedSessionLists(
-                mutableMachines.value,
-                (mutableMachines.value.map { it.id } + mutableSessions.value.map { it.machineId })
-                    .distinct().associateWith { machine -> mutableSessions.value.filter { it.machineId == machine } },
-            )
+            verifyHeld()
             persist()
         }
+    }
+
+    /** Marks the lists held now as the hub's; called under [lock]. */
+    private fun verifyHeld() {
+        if (connection.state.value == ConnectionState.Online) verifiedLists.value = VerifiedSessionLists(
+            mutableMachines.value,
+            (mutableMachines.value.map { it.id } + mutableSessions.value.map { it.machineId })
+                .distinct().associateWith { machine -> mutableSessions.value.filter { it.machineId == machine } },
+        )
     }
 
     override suspend fun adopt(session: Session) {

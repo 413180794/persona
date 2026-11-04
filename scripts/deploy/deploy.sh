@@ -134,7 +134,7 @@ $command")
       ssh -o ConnectTimeout=10 "$vh" "ssh -o BatchMode=yes -o ConnectTimeout=15 $host $quoted" < "$bin"
     else
       remote_state "$host" "$command" "$role" < "$bin" || return 1
-      python3 ../scripts/persona_identity.py --service node --prefix ../scripts/deploy/node-launchd.sh | ssh "$host" 'bash -s restart' 2>/dev/null || true
+      python3 ../scripts/persona_identity.py --service node --prefix ../scripts/deploy/node-launchd.sh | ssh "$host" 'bash -s restart-idle' 2>/dev/null || true
     fi
   fi
 }
@@ -174,8 +174,9 @@ ensure_herdr() { # machine-id
   fi 2>&1 | sed "s/^/$id: /" || true
 }
 
-# A resident node (scripts/deploy/node-launchd.sh, Mac or Linux) keeps the old binary until it restarts.
-restart_resident() { ../scripts/deploy/node-launchd.sh restart || true; }
+# A resident node (scripts/deploy/node-launchd.sh, Mac or Linux) keeps the old binary until it restarts: it does so
+# once none of the assistant's conversations is busy, which go on across hub restarts (docs/hub-restart.md).
+restart_resident() { ../scripts/deploy/node-launchd.sh restart-idle || true; }
 
 # The admin UI's scope on the hub (its new binary is in place, the hub restarts right after): what was given, else a
 # question when it was never chosen and there is a terminal, else the default and one line about it.

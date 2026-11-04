@@ -35,7 +35,8 @@ class HubInteractionCenter(
             } }
         }
         scope.launch {
-            connection.state.collect { if (it == ConnectionState.Online) quietly { refresh() } }
+            // A resumed socket already had the pending snapshot and every answer missed (#1574).
+            connection.state.collect { if (it == ConnectionState.Online && !connection.resumed) quietly { refresh() } }
         }
     }
 

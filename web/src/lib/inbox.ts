@@ -13,6 +13,7 @@ import { connectorOpenTitle } from "./connectors";
 import { larkPath } from "./lark-accounts";
 import { baseName } from "./format";
 import type { Route } from "./router";
+import { isResumed } from "./reconnect";
 import { onHubEvent } from "./store";
 import type { AssistantInfo, Interaction, Session } from "./types";
 import { toast } from "../ui/atoms";
@@ -652,7 +653,7 @@ function start() {
   if (started) return;
   started = true;
   onHubEvent("inbox", () => void reloadInbox());
-  onHubEvent("hello", () => void reloadInbox());
+  onHubEvent("hello", (msg) => !isResumed(msg) && void reloadInbox()); // resumed: the missed inbox pushes are replayed
   void reloadInbox();
 }
 

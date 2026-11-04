@@ -38,6 +38,8 @@ data class HubConnectionConfig(
     val requiredFeatures: Set<String> = emptySet(),
     val clientFeatures: Set<String> = emptySet(),
     val heartbeatPolicy: HeartbeatPolicy = HeartbeatPolicy(),
+    /** How long a drop keeps showing Online and how fast a restarting hub is retried (#1574). */
+    val reconnectPolicy: ReconnectPolicy = ReconnectPolicy(),
     /**
      * The other hubs of this hub's group, tried after this hub's own candidates in list order (docs/android.md「多 hub」).
      * Empty for a hub without a group: everything then behaves exactly as for a single paired hub.
@@ -123,7 +125,25 @@ class OkHttpHubConnection(
     private var runner: Job? = null
     private var pendingState: Job? = null
     private var stateTarget: ConnectionState? = null
+    private var stateDeadline = 0L
+    /** When the published Online started being held back from a change (clock millis); null while nothing is held. */
+    private var heldSince: Long? = null
     private val pingIds = AtomicLong()
+    private val policy = config.reconnectPolicy
+    @Volatile override var resumed = false
+        private set
+    /**
+     * The hub's broadcast stream this client can resume (#1574) and the last broadcast of it seen; kept across
+     * sockets. The stream is only resumable once a socket that started over reached its first sync.
+     */
+    @Volatile private var eventStream: String? = null
+    private val lastEventSeq = AtomicLong(0)
+    /** When the hub last said it is restarting (clock millis): quick retries and the longer grace until the window ends. */
+    @Volatile private var restartSince: Long? = null
+    @Volatile private var restartAttempts = 0
+
+    /** Where the next socket resumes from: the stream and its last broadcast seen. */
+    internal val resumePoint: Pair<String, Long>? get() = eventStream?.let { it to lastEventSeq.get() }
 
     init { updateDiagnostics { it }; reconnect() }
 
@@ -371,6 +391,11 @@ class OkHttpHubConnection(
                 // A hub of the group refusing its credential is dropped; the next round tries the others at once.
                 if (recordFailure(failure)) { backoff = 1L; continue }
                 if (!failure.retryable || revoked) return
+                // A restarting hub is back within seconds: retry soon and steadily, and do not count it toward the backoff.
+                if (policy.restarting(restartSince, clockMillis())) {
+                    delay(policy.restartDelay(restartAttempts++))
+                    continue
+                }
                 val retryMillis = failure.retryAfterSeconds?.let { it.coerceAtMost(86400) * 1000 }
                     ?: (backoff * 1000 * Random.nextDouble(0.8, 1.0)).toLong()
                 delay(retryMillis)
@@ -390,8 +415,10 @@ class OkHttpHubConnection(
         }
         _heartbeat.value = Heartbeat(20, 15)
         val owner = ownerOf(selected)
+        resumed = false
+        val resumeFrom = resumePoint
         val ws = webSocketFactory.newWebSocket(
-            authorized(selected.endpoint.baseUrl().newBuilder().encodedPath("/api/v1/ws").build(), owner).build(),
+            authorized(socketUrl(selected.endpoint.baseUrl(), resumeFrom), owner).build(),
             object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     received()
@@ -409,6 +436,8 @@ class OkHttpHubConnection(
                 }
                 override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) { received() }
                 override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                    // 1001 "going away": the hub is stopping (a deploy) and the next one takes over within seconds.
+                    if (code == 1001) markRestart()
                     webSocket.close(code, null)
                     messages.trySend(Signal.Failed(HubFailure(HubError.Transport, "WebSocket closed ($code): $reason")))
                 }
@@ -427,6 +456,8 @@ class OkHttpHubConnection(
         var pingJob: Job? = null
         val pendingPing = AtomicReference<Pair<String, CompletableDeferred<Unit>>?>(null)
         var syncing: Job? = null
+        /** A stream this socket started over in: resumable once the data is in sync. */
+        var freshStream: String? = null
 
         fun probe(reconnectOnTimeout: Boolean = false, immediate: Boolean = true) {
             if (pingJob?.isActive == true || "app_ping" !in features) return
@@ -531,6 +562,8 @@ class OkHttpHubConnection(
                 Signal.Synced -> {
                     synchronizedData = true
                     ready()
+                    restartSince = null
+                    freshStream?.let { eventStream = it; freshStream = null }
                     if (!_weakNetwork.value) {
                         _failure.value = null
                         publishState(ConnectionState.Online)
@@ -543,12 +576,22 @@ class OkHttpHubConnection(
                         publishState(ConnectionState.Online)
                     } else if (!signal.timely) {
                         _failure.value = HubFailure(HubError.Timeout)
-                        publishState(ConnectionState.Connecting)
+                        // A slow answer on a live socket, not a drop: shown as soon as it always was.
+                        publishState(ConnectionState.Connecting, policy.otherStateDelayMillis)
                     }
                 }
                 is Signal.Failed -> throw signal.error
                 is Signal.Text -> {
                     val raw = runCatching { JsonCodec.parseToJsonElement(signal.value) as? JsonObject }.getOrNull()
+                    val type = (raw?.get("type") as? JsonPrimitive)?.contentOrNull
+                    // Every broadcast carries its number (the hello's is where the stream stood, handled with it).
+                    if (type != "hello") (raw?.get("event_seq") as? JsonPrimitive)?.longOrNull?.let { seq ->
+                        lastEventSeq.accumulateAndGet(seq, ::maxOf)
+                    }
+                    if (type == "hub_restarting") {
+                        markRestart()
+                        continue
+                    }
                     if (raw != null && phoneMessageHandler?.invoke(raw) == true) continue
                     val event = ServerEvent.decode(signal.value) ?: continue
                     when (event) {
@@ -566,6 +609,17 @@ class OkHttpHubConnection(
                             }
                             receivedHello = true
                             helloDeadline.cancel()
+                            resumed = event.resumed == true && resumeFrom != null && event.eventStream == resumeFrom.first
+                            if (!resumed) {
+                                // Starting over: what the gap missed is refetched, so the stream counts from here. It is
+                                // not resumable until that is done; a drop before then starts over again.
+                                eventStream = null
+                                lastEventSeq.set(event.eventSeq ?: 0)
+                                freshStream = event.eventStream
+                                surfaceHeldDrop()
+                            }
+                            // Resumed: the missed broadcasts follow and raise lastEventSeq themselves; jumping to
+                            // hello.event_seq now would skip them if this socket dropped during the replay.
                             if (event.endpoints.isNotEmpty()) {
                                 if (owner.home) {
                                     _endpoints.value = event.endpoints
@@ -650,6 +704,24 @@ class OkHttpHubConnection(
                 put("interval", config.heartbeatPolicy.interval(foreground, network.transport))
                 put("pong_timeout", config.heartbeatPolicy.pongTimeoutSeconds)
             }
+        }
+    }
+
+    /** The socket's URL; with the stream and last broadcast seen, so the hub replays what was missed (#1574). */
+    internal fun socketUrl(base: HttpUrl, resumeFrom: Pair<String, Long>?): HttpUrl =
+        base.newBuilder().encodedPath("/api/v1/ws").apply {
+            resumeFrom?.let { (stream, seq) ->
+                addQueryParameter("event_stream", stream)
+                addQueryParameter("event_seq", seq.toString())
+            }
+        }.build()
+
+    /** The hub is restarting: retry quickly and keep showing Online for the restart's grace window. */
+    private fun markRestart() = synchronized(lock) {
+        val now = clockMillis()
+        if (!policy.restarting(restartSince, now)) {
+            restartSince = now
+            restartAttempts = 0
         }
     }
 
@@ -773,12 +845,8 @@ class OkHttpHubConnection(
         if (revoked) return@synchronized
         _failure.value = error
         updateDiagnostics { it.copy(lastDisconnectReason = error.message) }
-        if (error.kind == HubError.Timeout) synchronized(lock) {
-            pendingState?.cancel()
-            pendingState = null
-            stateTarget = null
-            _state.value = ConnectionState.Connecting
-        }
+        // A socket that went silent was already gone for a long while: say so at once, unless the hub is restarting.
+        if (error.kind == HubError.Timeout && !policy.restarting(restartSince, clockMillis())) setState(ConnectionState.Connecting)
         when (error.kind) {
             HubError.PairingExpired -> {
                 revoked = true
@@ -794,22 +862,52 @@ class OkHttpHubConnection(
         }
     }
 
-    private fun publishState(value: ConnectionState) = synchronized(lock) {
+    /**
+     * Publishes [value]. A change away from Online is held back (#1574) — Connecting / Updating for the drop's grace
+     * (longer while the hub restarts), anything else for [ReconnectPolicy.otherStateDelayMillis] — counted from when
+     * Online was first held, so a reconnect that keeps changing between Connecting and Updating does not extend it.
+     * [graceMillis] overrides the hold. Online and Revoked are published at once.
+     */
+    private fun publishState(value: ConnectionState, graceMillis: Long? = null) = synchronized(lock) {
         if (revoked && value != ConnectionState.Revoked) return@synchronized
         if (value == ConnectionState.Revoked || value == ConnectionState.Online ||
             _state.value != ConnectionState.Online && pendingState == null) {
-            pendingState?.cancel()
-            pendingState = null
-            stateTarget = null
-            _state.value = value
-        } else if (stateTarget != value) {
-            pendingState?.cancel()
-            stateTarget = value
-            pendingState = scope.launch {
-                delay(1500)
-                synchronized(lock) { _state.value = value; pendingState = null; stateTarget = null }
-            }
+            setState(value)
+            return@synchronized
         }
+        val now = clockMillis()
+        val since = heldSince ?: now.also { heldSince = it }
+        val connecting = value == ConnectionState.Connecting || value == ConnectionState.Updating
+        val deadline = since + (graceMillis ?: policy.graceMillis(connecting, policy.restarting(restartSince, now)))
+        if (pendingState != null && stateTarget == value && stateDeadline == deadline) return@synchronized
+        pendingState?.cancel()
+        stateTarget = value
+        stateDeadline = deadline
+        lateinit var job: Job
+        job = scope.launch(start = CoroutineStart.LAZY) {
+            delay((deadline - clockMillis()).coerceAtLeast(0))
+            synchronized(lock) { if (pendingState === job) setState(value) }
+        }
+        pendingState = job
+        job.start()
+    }
+
+    /** Publishes [value] now, dropping any held change. Callers hold [lock]. */
+    private fun setState(value: ConnectionState) {
+        pendingState?.cancel()
+        pendingState = null
+        stateTarget = null
+        heldSince = null
+        _state.value = value
+    }
+
+    /**
+     * A socket that did not resume the event stream after a drop the user would have seen before the grace window
+     * existed: show Updating now, so what reacts to coming back Online refetches what the gap missed, as it always did.
+     */
+    private fun surfaceHeldDrop() = synchronized(lock) {
+        val since = heldSince ?: return@synchronized
+        if (pendingState != null && !revoked && policy.surfaceFreshStart(clockMillis() - since)) setState(ConnectionState.Updating)
     }
 
     override fun close() {

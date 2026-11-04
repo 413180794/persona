@@ -1,6 +1,7 @@
 // What the agent is waiting on (questions, plans, permissions, terminal dialogs), as Beautiful UI's Approval Card.
 import { useState } from "react";
-import { api, ApiError, enc, errorText } from "../../lib/api";
+import { ApiError, enc, errorText } from "../../lib/api";
+import { apiOp } from "../../lib/ops";
 import type { Interaction } from "../../lib/types";
 import { sessionCan } from "../../lib/format";
 import { getSession, useStore } from "../../lib/store";
@@ -14,7 +15,8 @@ async function resolve(ix: Interaction, body: Record<string, unknown>) {
     return false;
   }
   try {
-    await api(`/interactions/${enc(ix.id)}/resolve`, { method: "POST", json: body });
+    // one op id for this answer: sent again through a gap (a hub restart), it is taken once
+    await apiOp(`/interactions/${enc(ix.id)}/resolve`, { method: "POST", json: body });
     return true;
   } catch (e) {
     if (e instanceof ApiError && e.code === "prompt_changed") toast("电脑上的对话框变了，已按新的屏幕重新生成", "error");

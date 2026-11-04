@@ -119,6 +119,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 - 截图验证用 DEBUG 启动参数 + `simctl io screenshot`，不用 computer-use；界面改动必须真的看到截图（看不到是网关丢图，见 `testing.md`）。
 - 共用页面里一直在动的 `TimelineView(.animation)` 在 Mac 上可能每帧整窗重新布局（实测：「需要你」圆点的呼吸圈让 Agents 页空闲占一个核的 14%）：Mac 上常驻动画交给 Core Animation（`MacBreathingRing`）。（`lessons/macos.md`）
 - hub 的内存状态随时会被别人重新部署清掉：跨请求的流程要自包含或落库。（`server.md`）
+- hub 的端口归 systemd 的 `jarvisd.socket`（socket activation）：换回不认识 `LISTEN_FDS` 的旧二进制前先 `PERSONA_HUB_SOCKET=0 scripts/deploy/hub-systemd.sh`，否则抢不到端口反复重启；`stop jarvisd` 后来一个连接又会被拉起，要停连 `jarvisd.socket` 一起停。（`hub-restart.md`）
 - 按来源地址判断信任时：容器里经端口映射进来的连接常常都显示成网桥网关（私网地址，公网来的也是），同机反向代理让公网请求像回环；网关用 `containerGateway` 排除，转发头只用来收紧。（`server.md`「管理界面」）
 - Claude Code 的配置目录不一定是 `~/.claude`（`CLAUDE_CONFIG_DIR`），同一会话 id 可能在两个目录各有一份，按 id 找一律取最近修改的。（`agents.md`）
 - 改 transcript 解析或同步协议用真实语料验证；改了 item 结构把 App 的 `ChatCache` 目录版本号加一。（`transcript.md`）
@@ -198,6 +199,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/server.md` | personad 各模式、配置、部署、运维 |
 | `docs/site.md` | 官网：Worker 托管、国内经阿里云香港入口（nginx 转发到 Worker 的回源域名）、入口密钥和客户端地址、证书、为什么不用 CDN / 函数计算 / 负载均衡、以后转出注册商后改分线路 |
 | `docs/docker.md` | hub 的两种部署方式（原生二进制 / Docker）、用 Docker 跑 hub（NAS）：compose、镜像标签、PUID / PGID、环境变量、迁移 |
+| `docs/hub-restart.md` | hub 重启对客户端无感：socket activation 零空窗、计划内停机、事件序号和续传（`event_seq`）、warm start、常驻 node 托管助手对话、客户端的静默重连和幂等重放、反复重启的验证脚本 |
 | `docs/hub-update.md` | hub 的版本、检测更新和自动更新（方案）：skill 从二进制拿出来、一种二进制、签名的版本清单、自动发布和灰度、下载 → 校验 → 等空闲 → 重启 → 回滚、App 里怎么显示 |
 | `docs/push-relay.md` | 推送中继（端到端加密）：没有 APNs key 的 hub 经发布方的 `personad relay` 推送，正文用手机公钥加密、通知服务扩展解密；谁知道什么、防滥用、接口、部署 |
 | `docs/plugins.md` | 插件底座：内置 / hub.json / 安装的三种来源、扩展点、清单 `persona-plugin.json`（字段、配置表单的 schema 子集、权限）、安装 / 升级 / 回滚 / 卸载和 `personad plugin`、按需激活和崩溃降级、配置和密钥怎么到插件、`/api/v1/plugins` 接口、进程插件协议和一致性测试；语音插件和 App 之间的契约；内置的 GPT-Live 语音插件 `personad voice` |

@@ -68,9 +68,12 @@ func (h *Hub) startPublic(ctx context.Context) error {
 		if err := h.refreshTLS(time.Now()); err != nil {
 			return err
 		}
-		ln, err := net.Listen("tcp", h.cfg.Public.TLSListen)
+		ln, activated, err := listenTCP(h.cfg.Public.TLSListen)
 		if err != nil {
 			return fmt.Errorf("listen TLS: %w", err)
+		}
+		if activated {
+			h.logf("hub TLS: listening on the socket systemd passed (%s)", ln.Addr())
 		}
 		h.public.listener = ln
 		h.public.server = newHubHTTPServer(h.cfg.Public.TLSListen, nil)
@@ -231,9 +234,12 @@ func (h *Hub) serveHTTP(ctx context.Context) error {
 		servers = append(servers, srv)
 		go func() { errs <- srv.ServeTLS(h.public.listener, "", "") }()
 	}
-	ln, err := net.Listen("tcp", plain.Addr)
+	ln, activated, err := listenTCP(plain.Addr)
 	if err != nil {
 		return err
+	}
+	if activated {
+		h.logf("hub: listening on the socket systemd passed (%s): restarts refuse no connection", ln.Addr())
 	}
 	servers = append(servers, plain)
 	listeners = append(listeners, ln)

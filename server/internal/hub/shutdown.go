@@ -95,6 +95,10 @@ func (h *Hub) stopWebSockets(ctx context.Context) error {
 		clients = append(clients, c)
 	}
 	h.mu.Unlock()
+	closeReason := "hub stopping"
+	if h.stopping.Load() {
+		closeReason = "hub restarting" // after hub_restarting (restart.go)
+	}
 	links := h.stopLinks() // their streams end now; jarvis-link comes back to the next hub on the 1001
 	h.stopPeerLinks()      // the other hubs of the mesh group hear a 1001 too (peer_link.go)
 
@@ -104,7 +108,7 @@ func (h *Hub) stopWebSockets(ctx context.Context) error {
 		go func() {
 			defer closes.Done()
 			defer c.cancel()
-			_ = c.conn.Close(websocket.StatusGoingAway, "hub stopping")
+			_ = c.conn.Close(websocket.StatusGoingAway, closeReason)
 		}()
 	}
 	for _, l := range links {

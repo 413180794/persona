@@ -262,6 +262,29 @@ func runResident(ctx context.Context) error {
 	if err != nil {
 		logger.Printf("tailcat: %v (serving relays over ssh only)", err) // a broken key file must not stop the node
 	}
+	// SIGHUP (a deploy: scripts/deploy/node-launchd.sh restart-idle) restarts on the binary now installed, once no
+	// conversation is answering or running background tasks: they go on across hub restarts, not across this one.
+	restartIdle := make(chan struct{})
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+	defer signal.Stop(hup)
+	go func() {
+		select {
+		case <-hup:
+		case <-ctx.Done():
+			return
+		}
+		logger.Printf("restart asked for: restarting once no conversation is busy")
+		for node.AssistantsBusy() {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(5 * time.Second):
+			}
+		}
+		close(restartIdle)
+		cancel()
+	}()
 	// The runtime socket is the resident node's, not one connection's: runtimes (DSH…) stay connected while the hub
 	// reconnects, and connect before it does (node/runtimehost.go).
 	err = node.Attach(ctx, func() (*node.Node, error) {
@@ -275,6 +298,9 @@ func runResident(ctx context.Context) error {
 	<-stopped
 	select {
 	case <-restart:
+		return syscall.Exec(updater.Executable(), os.Args, os.Environ())
+	case <-restartIdle:
+		logger.Printf("restarting on %s", updater.Executable())
 		return syscall.Exec(updater.Executable(), os.Args, os.Environ())
 	default:
 		return err

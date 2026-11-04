@@ -95,6 +95,8 @@ type Node struct {
 	// runtimeHost: the runtime socket this Node lists runtimes from — the resident node's, shared by its Nodes
 	// (attach.go), or its own for the one connection it serves (runtimehost.go).
 	runtimeHost *RuntimeHost
+	// keeper: a resident node's conversations between hub connections (assistant_keep.go); nil without one.
+	keeper *assistantKeeper
 
 	// codexStarting: panes a Codex start is opening (codex_start.go): no thread is guessed for them meanwhile.
 	codexStarting map[string]bool
@@ -199,6 +201,9 @@ func (n *Node) ServeStdio(ctx context.Context) error {
 func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	if n.keeper != nil {
+		defer n.handOverAssistants() // last, once nothing of this connection runs (assistant_keep.go)
+	}
 	if err := n.writeClaudeConfig(); err != nil {
 		n.logger.Printf("write claude config: %v", err)
 	}
@@ -217,7 +222,14 @@ func (n *Node) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	n.cdirs.report = func(dirs []string) { _ = n.peer.Notify("claude.dirs", map[string]any{"dirs": dirs}) }
 	n.codices.report = func(cfg proto.CodexConfig) { _ = n.peer.Notify("codex.inventory", cfg) }
 	go n.runCodex(ctx)
-	go n.loadState(ctx)
+	var adopted []*assistantProc
+	if n.keeper != nil { // before the state loads: a conversation taken over has lost no background task
+		adopted = n.keeper.adopt(n)
+	}
+	go func() {
+		n.loadState(ctx)
+		n.resumeAssistants(adopted)
+	}()
 	ln, err := n.listenHookSocket(ctx)
 	if err != nil {
 		n.logger.Printf("hook socket: %v", err)

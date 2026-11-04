@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/node"
 )
 
 func listRequest() request {
@@ -80,5 +83,29 @@ func TestToolsListEmptyFromAHealthyNodeIsNotAnError(t *testing.T) {
 	}
 	if tools := res.(map[string]any)["tools"].([]map[string]any); len(tools) != 0 || *n != 1 {
 		t.Fatalf("tools = %+v after %d dials", tools, *n)
+	}
+}
+
+func callRequest() request {
+	return request{JSONRPC: "2.0", ID: json.RawMessage(`3`), Method: "tools/call", Params: json.RawMessage(`{"name":"notify_user","arguments":{}}`)}
+}
+
+// A tool call made while the resident node's socket is gone for a hub restart waits for it; one the node received
+// and dropped is not sent again.
+func TestToolsCallWaitsForTheNodeSocket(t *testing.T) {
+	n := fakeNode(t, func(n int) ([]byte, error) {
+		if n < 3 {
+			return nil, fmt.Errorf("%w: dial unix node.sock: no such file or directory", node.ErrNoNode)
+		}
+		return []byte(`{"content":[{"type":"text","text":"sent"}]}`), nil
+	})
+	res, rerr := handle(context.Background(), "test", callRequest())
+	if rerr != nil || *n != 3 || !strings.Contains(fmt.Sprint(res), "sent") {
+		t.Fatalf("call across the gap: %+v %+v after %d dials", res, rerr, *n)
+	}
+	n = fakeNode(t, func(int) ([]byte, error) { return nil, errors.New("node closed connection: EOF") })
+	res, _ = handle(context.Background(), "test", callRequest())
+	if *n != 1 || !strings.Contains(fmt.Sprint(res), "not reachable") {
+		t.Fatalf("a call the node may have run was sent %d times: %+v", *n, res)
 	}
 }

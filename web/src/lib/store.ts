@@ -12,6 +12,7 @@ import type { AgentLaunch } from "./new-agent";
 import { isSpacesSupported, type Todo } from "./todos";
 import { releaseAttachments } from "./attachments";
 import type { OutboxEntry } from "./outbox";
+import { afterEvent, afterHello, graceUntil, isResumed, NO_CURSOR, RESTART_FAST_MS, retryDelay, shownConn, wsQuery, type Drop, type EventCursor } from "./reconnect";
 
 export type Conn = "connecting" | "online" | "offline";
 
@@ -187,6 +188,14 @@ let retry = 0;
 let retryTimer: number | undefined;
 let lastMessage = 0;
 let stopped = true;
+// A reconnect after a drop is invisible for a while (lib/reconnect.ts): the drop that began while online, the
+// attempts since, the ones in the quick phase after a restart, and the timer that shows the drop once the grace ends.
+let drop: Drop | null = null;
+let fastTries = 0;
+let graceTimer: number | undefined;
+// The hub said hub_restarting on this socket: its close is a restart whatever the close code.
+let restartNotice = false;
+let cursor: EventCursor = NO_CURSOR;
 
 export function send(msg: Record<string, unknown>) {
   if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
@@ -197,11 +206,13 @@ export function connect() {
   clearTimeout(retryTimer);
   ws?.close();
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  const sock = new WebSocket(`${proto}//${location.host}/api/v1/ws?token=${encodeURIComponent(getToken())}`);
+  const sock = new WebSocket(`${proto}//${location.host}/api/v1/ws?${wsQuery(getToken(), cursor)}`);
   ws = sock;
+  restartNotice = false;
   if (state.conn !== "online") set({ conn: "connecting" });
   sock.onopen = () => {
     retry = 0;
+    fastTries = 0;
     lastMessage = Date.now();
   };
   sock.onmessage = (ev) => {
@@ -214,19 +225,45 @@ export function connect() {
     }
     onMessage(msg);
   };
-  sock.onclose = () => {
+  sock.onclose = (ev) => {
     if (ws !== sock) return;
     ws = null;
     if (stopped) return;
-    set({ conn: retry > 1 ? "offline" : "connecting" });
-    const wait = Math.min(15000, 600 * 2 ** retry) * (0.8 + Math.random() * 0.4);
+    const now = Date.now();
+    const restart = restartNotice || ev.code === 1001;
+    // the drop starts while online; a restart announced on a later attempt stretches its grace
+    const next = !drop && state.conn === "online" ? { at: now, restart } : drop && restart && !drop.restart ? { ...drop, restart } : null;
+    if (next) {
+      drop = next;
+      clearTimeout(graceTimer);
+      graceTimer = window.setTimeout(showDrop, Math.max(0, graceUntil(next) - now));
+    }
+    const since = drop ? now - drop.at : Infinity;
+    const fast = Boolean(drop?.restart) && since < RESTART_FAST_MS;
+    // the ordinary backoff counts its own attempts: after a restart's quick phase it starts again from the fast one
+    const wait = retryDelay(fast ? fastTries : retry - fastTries, Boolean(drop?.restart), since, Math.random());
+    if (fast) fastTries++;
     retry++;
+    const conn = shownConn(drop, retry - 1, now);
+    if (conn !== state.conn) set({ conn }); // inside the grace: nothing changes
     retryTimer = window.setTimeout(connect, wait);
   };
 }
 
+// The grace is over and the socket is still not back: show it as before.
+function showDrop() {
+  if (!drop || stopped || state.conn !== "online") return;
+  set({ conn: shownConn(drop, Math.max(0, retry - 1), Date.now()) });
+}
+
+function back() {
+  drop = null;
+  clearTimeout(graceTimer);
+}
+
 export function disconnect() {
   stopped = true;
+  back();
   ws?.close();
   ws = null;
 }
@@ -245,6 +282,7 @@ if (typeof window !== "undefined") {
 }
 
 function onMessage(msg: Record<string, unknown>) {
+  cursor = msg.type === "hello" ? afterHello(cursor, msg) : afterEvent(cursor, msg);
   switch (msg.type) {
     case "hello": {
       const mesh = (msg.mesh as { hubs?: MeshHub[] } | undefined)?.hubs;
@@ -255,12 +293,20 @@ function onMessage(msg: Record<string, unknown>) {
         hubName: typeof msg.hub_name === "string" ? msg.hub_name : "",
         mesh: Array.isArray(mesh) ? mesh : [],
       });
+      back();
+      // subscriptions are per connection: chats resubscribe from what they have either way
       sessionListeners.forEach((ls) => ls.forEach((l) => l.reconnected?.()));
-      void refresh();
-      void refreshAgentSessions();
-      void refreshAgentPrefs();
+      // resumed: the hub replays every broadcast missed since the cursor, nothing needs refetching
+      if (!isResumed(msg)) {
+        void refresh();
+        void refreshAgentSessions();
+        void refreshAgentPrefs();
+      }
       break;
     }
+    case "hub_restarting":
+      restartNotice = true; // the close that follows is a restart: retry at once, stay quiet longer
+      break;
     case "ping":
       send({ type: "pong" });
       break;
@@ -450,6 +496,7 @@ export function markSeenLocally(mid: string, sid: string) {
 
 export function reset() {
   disconnect();
+  cursor = NO_CURSOR; // another login: another stream
   resetAgents();
   Object.values(state.launches).forEach((launch) => releaseAttachments(launch.attachments));
   set({

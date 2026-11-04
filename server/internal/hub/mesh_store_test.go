@@ -203,6 +203,17 @@ func (s *meshStore) Setting(_ context.Context, key string, out any) (bool, error
 	return true, json.Unmarshal(b, out)
 }
 
+func (s *meshStore) TakeSetting(_ context.Context, key string, out any) (bool, error) {
+	s.mu.Lock()
+	b, ok := s.settings[key]
+	delete(s.settings, key)
+	s.mu.Unlock()
+	if !ok {
+		return false, nil
+	}
+	return true, json.Unmarshal(b, out)
+}
+
 func (s *meshStore) PutSetting(_ context.Context, key string, v any) error {
 	b, err := json.Marshal(v)
 	if err != nil {

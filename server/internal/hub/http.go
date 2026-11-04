@@ -784,6 +784,10 @@ func (h *Hub) broadcastTo(typ string, b []byte, elicitation bool) {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.events == nil {
+		h.events = newEventLog()
+	}
+	b = h.events.add(b, elicitation, time.Now())
 	for c := range h.clients {
 		if elicitation && !c.has("elicitation") {
 			continue
@@ -931,12 +935,17 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 		session.ctx = r.Context()
 		c.deviceSessionID = session.id
 	}
+	// The hello goes first, then (resuming) what the client missed, before any live event: under h.mu, which
+	// broadcastTo holds while it numbers and sends (eventlog.go).
+	hello := h.hello()
+	stream, after, resuming := resumeOf(r)
 	h.mu.Lock()
 	if h.wsStopping {
 		h.mu.Unlock()
 		return
 	}
 	h.clients[c] = struct{}{}
+	h.helloLocked(c, hello, stream, after, resuming)
 	h.mu.Unlock()
 
 	writerDone = make(chan struct{})
@@ -951,7 +960,6 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 		}))
 	}()
 
-	c.sendJSON(h.hello())
 	c.sendJSON(map[string]any{"type": "machines", "machines": h.machineList()})
 	for _, m := range h.machinesNow() {
 		if c.delta {
@@ -1151,6 +1159,7 @@ func (h *Hub) sendBacklog(ctx context.Context, c *client, m *Machine, sid string
 		}
 		c.sendJSON(out)
 		if !more {
+			h.sendLiveText(c, m.cfg.ID, sid)
 			return
 		}
 		after = res.Items[len(res.Items)-1].Seq

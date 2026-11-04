@@ -7,6 +7,7 @@ import { pickedLauncher, pickedModel, conversationKey } from "./assistant-chat";
 import { uuid } from "./format";
 import { navigate } from "./router";
 import { getState, refreshAssistant, setOutbox } from "./store";
+import { apiOp, isTransient } from "./ops";
 import { echoed, isEcho, type Seen, type Sent } from "./echo";
 import { parseUserText, type UserMessage } from "./turns";
 import type { Item, Session } from "./types";
@@ -102,8 +103,10 @@ export function settleOutbox(mid: string, sid: string, users: Seen[]) {
 async function deliver(mid: string, sid: string, e: OutboxEntry, clearDraft?: string): Promise<boolean> {
   const key = outboxKey(mid, sid);
   try {
-    await api(`${sessionPath(mid, sid)}/messages`, {
+    // stays sending through a gap (a hub restart); the client_msg_id is the op id
+    await apiOp(`${sessionPath(mid, sid)}/messages`, {
       method: "POST",
+      opId: e.id,
       json: { text: e.text, images: e.images.length ? e.images : undefined, client_msg_id: e.id, launcher: e.launcher || undefined, model: e.model || undefined, clear_draft: clearDraft },
     });
     update(key, e.id, { state: "sent", at: Date.now(), error: undefined, clearable: undefined });
@@ -113,7 +116,9 @@ async function deliver(mid: string, sid: string, e: OutboxEntry, clearDraft?: st
       state: "failed",
       error: failureText(err),
       clearable: err instanceof ApiError && err.code === "input_draft" && typeof err.body.clearable === "string" ? err.body.clearable : undefined,
-      newId: err instanceof ApiError && err.body.delivered === "unknown",
+      // the hub answered: it keeps that answer for this id, so a retry is another operation; a gap it never
+      // answered is retried with the same id (the hub does it at most once)
+      newId: !isTransient(err),
     });
     return false;
   }

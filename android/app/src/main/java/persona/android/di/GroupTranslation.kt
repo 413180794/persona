@@ -116,6 +116,7 @@ internal fun HubConnection.inGroup(names: GroupNames, scope: CoroutineScope): Hu
     val source = this
     return object : HubConnection {
         override val state = source.state
+        override val resumed get() = source.resumed
         override val events: SharedFlow<ServerEvent> = source.events.map(names::event)
             .shareIn(scope, SharingStarted.WhileSubscribed())
         override fun reconnect() = source.reconnect()
