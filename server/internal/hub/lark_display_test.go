@@ -41,10 +41,10 @@ func TestLarkDisplayScopedPatchAndConflicts(t *testing.T) {
 			defer up.Close()
 			h := &Hub{lark: lark.New(lark.Config{BaseURL: up.URL, Token: "test-token", Account: 7})}
 			mux := http.NewServeMux()
-			h.larkDisplayRoutes(mux)
+			h.larkDisplayRoutes(larkMux{mux, h})
 			request := func(account string) *httptest.ResponseRecorder {
 				w := httptest.NewRecorder()
-				mux.ServeHTTP(w, httptest.NewRequest("POST", "/api/v1/lark/message-display?ol_account=1", strings.NewReader(`{"account_id":"`+account+`","key":"anti_recall","value":true,"expected":false}`)))
+				mux.ServeHTTP(w, httptest.NewRequest("POST", "/api/v1/lark/message-display?ol_account=7", strings.NewReader(`{"account_id":"`+account+`","key":"anti_recall","value":true,"expected":false}`)))
 				return w
 			}
 			w := request("selected")
@@ -70,7 +70,7 @@ func TestLarkDisplayScopedPatchAndConflicts(t *testing.T) {
 func TestLarkDisplayRejectsInvalidAndReadOnly(t *testing.T) {
 	h := &Hub{}
 	mux := http.NewServeMux()
-	h.larkDisplayRoutes(mux)
+	h.larkDisplayRoutes(larkMux{mux, h})
 	for _, body := range []string{`{}`, `{"account_id":"a","key":"standIn","value":true,"expected":false}`, `{"account_id":"a","key":"anti_recall","value":true}`, `{"account_id":"a","key":"anti_recall","value":true,"expected":false,"script":"x"}`, `{"account_id":"a","key":"anti_recall","value":true,"expected":false} {}`} {
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, httptest.NewRequest("POST", "/api/v1/lark/message-display", strings.NewReader(body)))
@@ -93,7 +93,7 @@ func TestLarkDisplayPreservesSignedOutCode(t *testing.T) {
 	defer up.Close()
 	h := &Hub{lark: lark.New(lark.Config{BaseURL: up.URL, Token: "test-token", Account: 7})}
 	mux := http.NewServeMux()
-	h.larkDisplayRoutes(mux)
+	h.larkDisplayRoutes(larkMux{mux, h})
 	for _, method := range []string{"GET", "POST"} {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(method, "/api/v1/lark/message-display", strings.NewReader(`{"account_id":"selected","key":"anti_recall","value":true,"expected":false}`))

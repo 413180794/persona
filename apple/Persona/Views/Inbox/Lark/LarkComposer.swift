@@ -20,6 +20,7 @@ struct LarkReplyHandler {
 /// the field takes the whole row. In a group, typing @ lists the members to mention (LarkMentionPicker).
 struct LarkComposer: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.larkAccount) private var larkAccount
     var placeholder: String
     @Binding var text: String
     var focused: FocusState<Bool>.Binding
@@ -130,7 +131,7 @@ struct LarkComposer: View {
             return
         }
         try? await Task.sleep(for: .milliseconds(200))
-        guard !Task.isCancelled, let api = model.api else { return }
+        guard !Task.isCancelled, let api = model.api?.lark(larkAccount) else { return }
         do {
             let found = try await api.larkMembers(feed, query: query).members
             members = found.filter { $0.userID != me }

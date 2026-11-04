@@ -50,7 +50,7 @@ func (cfg Config) Validate() error {
 	if cfg.NativeOLKToken != "" && (!nativeOLKToken.MatchString(cfg.NativeOLKToken) || cfg.NativeOLKToken == cfg.Token || !cfg.lark-connectorConfigured()) {
 		return errors.New("lark.native_olk_token requires a separate native grant and configured lark-connector")
 	}
-	if cfg.Account < 0 || cfg.Account > 999999999 {
+	if cfg.Account < 0 || cfg.Account > MaxAccount {
 		return errors.New("lark.account must be an integer between 1 and 999999999 (or 0 for the primary account)")
 	}
 	switch cfg.Prefer {
@@ -73,6 +73,9 @@ type Client struct {
 	emojiGroups []EmojiGroup
 	emojisAt    time.Time
 	topics      map[string]bool // feed id → topic group or not, from the feed's chatMode or GET /conversations/FEED_ID
+
+	root     *Client         // the client ForAccount derived this one from; nil for the configured account
+	accounts map[int]*Client // on the root: the other accounts' clients (ForAccount), under mu
 }
 
 func New(cfg Config) *Client {

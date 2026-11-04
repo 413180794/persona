@@ -12,14 +12,14 @@ struct SyncEventTests {
 
     @Test func decodesLark() throws {
         let data = Data(#"{"type":"lark","feed_ids":["a","b"]}"#.utf8)
-        guard case .lark(let ids, let settingsChanged) = try #require(ServerEvent.decode(data)) else { Issue.record("not lark"); return }
+        guard case .lark(let ids, let settingsChanged, _) = try #require(ServerEvent.decode(data)) else { Issue.record("not lark"); return }
         #expect(ids == ["a", "b"])
         #expect(!settingsChanged)
     }
 
     @Test func decodesSettingsBatchedWithMessages() throws {
         let data = Data(#"{"type":"lark","feed_ids":["a"],"settings_changed":true}"#.utf8)
-        guard case .lark(let ids, let settingsChanged) = try #require(ServerEvent.decode(data)) else { Issue.record("not lark"); return }
+        guard case .lark(let ids, let settingsChanged, _) = try #require(ServerEvent.decode(data)) else { Issue.record("not lark"); return }
         #expect(ids == ["a"] && settingsChanged)
     }
 

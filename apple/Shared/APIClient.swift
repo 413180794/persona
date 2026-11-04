@@ -92,6 +92,9 @@ nonisolated struct APIClient: Sendable {
     /// The group of paired hubs this client talks to (docs/multi-hub.md): put on the sessions, machines,
     /// interactions and keys it returns. "" = the default group.
     var group: String = ""
+    /// The Feishu account (lark-connector account number) the `/api/v1/lark` requests are about, sent as `ol_account`
+    /// (docs/feishu.md「多账号」). nil: the hub's own (lark.account).
+    var larkAccount: Int?
     /// Answers the demo config's requests (DemoHub registers it at launch); every endpoint goes through `request`.
     nonisolated(unsafe) static var local: (@Sendable (LocalRequest) async throws -> Data)?
 
@@ -125,8 +128,25 @@ nonisolated struct APIClient: Sendable {
         return p.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? p
     }
 
+    /// This client for one Feishu account's chats; nil: the hub's own.
+    func lark(_ account: Int?) -> APIClient {
+        var c = self
+        c.larkAccount = account
+        return c
+    }
+
+    /// `query` with the Feishu account a `/api/v1/lark` request is about, unless it names one already (a media URL
+    /// the hub handed out for that account).
+    func larkScoped(_ path: String, _ query: [String: String]) -> [String: String] {
+        guard let larkAccount, path.hasPrefix("/api/v1/lark/"), query["ol_account"] == nil else { return query }
+        var q = query
+        q["ol_account"] = String(larkAccount)
+        return q
+    }
+
     func request(_ method: String, _ path: String, query: [String: String] = [:], body: (any Encodable)? = nil,
                  timeout: TimeInterval = 30) async throws -> Data {
+        let query = larkScoped(path, query)
         if let answer = transport ?? (config.isDemo ? Self.local : nil) {
             return try await answer(LocalRequest(method: method, path: path, query: query.filter { !$0.value.isEmpty },
                                                  body: try body.map { try JSON.encoder.encode(AnyEncodable($0)) }))
@@ -157,6 +177,7 @@ nonisolated struct APIClient: Sendable {
 
     /// A bounded, staged attachment sent from disk. The fake transport reads it only in tests.
     func uploadBytes(file: URL, path: String, query: [String: String], timeout: TimeInterval = 180) async throws -> Data {
+        let query = larkScoped(path, query)
         if config.isDemo { throw APIError(status: 403, message: DemoText.notSent) }
         if let transport {
             return try await transport(LocalRequest(method: "POST", path: path, query: query, body: Data(contentsOf: file)))
@@ -194,6 +215,7 @@ nonisolated struct APIClient: Sendable {
 
     func download(_ path: String, query: [String: String], to destination: URL,
                   progress: @escaping @Sendable (Int64, Int64) -> Void) async throws {
+        let query = larkScoped(path, query)
         if transport != nil || config.isDemo {
             let data = try await request("GET", path, query: query)
             try Task.checkCancellation()

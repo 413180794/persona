@@ -95,3 +95,71 @@ func TestAccountConfigValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestForAccount(t *testing.T) {
+	c := New(Config{BaseURL: "http://lark-connector.invalid/agent/v1", Token: "test-token", Account: 2})
+	if c.ForAccount(0) != c || c.ForAccount(2) != c {
+		t.Fatal("the configured account is the client itself")
+	}
+	one := c.ForAccount(1)
+	if one.Account() != 1 || c.ForAccount(1) != one || one.ForAccount(2) != c || one.ForAccount(3) != c.ForAccount(3) {
+		t.Fatal("derived clients are kept per account and lead back to the root")
+	}
+	if one.ForAccount(0) != c {
+		t.Fatal("zero is lark.account from any derived client")
+	}
+}
+
+func TestParseAccount(t *testing.T) {
+	for s, want := range map[string]int{"1": 1, "2": 2, "999999999": 999999999} {
+		if got, ok := ParseAccount(s); !ok || got != want {
+			t.Errorf("%q = %d %v", s, got, ok)
+		}
+	}
+	for _, s := range []string{"", "0", "-1", "01", "+1", "1.0", "x", "1000000000"} {
+		if _, ok := ParseAccount(s); ok {
+			t.Errorf("%q accepted", s)
+		}
+	}
+}
+
+func TestAccountsAndMe(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		account := r.Header.Get("x-lark-connector-account")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"activeId":"` + account + `","accounts":[
+			{"id":"1","name":"一号","userId":"u1","signedIn":true,"primary":true,"unreadCount":2},
+			{"id":"2","name":"二号","userId":"u2","signedIn":true,"primary":false,"unreadCount":0,"avatarUrl":"/agent/v1/media/x?ol_account=2"},
+			{"id":"3","signedIn":true,"quarantined":true,"primary":false,"unreadCount":0},
+			{"id":"bad","signedIn":true,"primary":false,"unreadCount":0}]}`))
+	}))
+	defer srv.Close()
+	c := New(Config{BaseURL: srv.URL, Token: "test-token"})
+	list, err := c.Accounts(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 3 || list[0].ID != 1 || !list[0].Primary || list[0].Unread != 2 || list[1].Avatar != "/api/v1/lark/media/x?ol_account=2" ||
+		list[2].SignedIn || !list[2].Quarantined {
+		t.Fatalf("accounts = %+v", list)
+	}
+	// The primary account comes first in the list whichever account is asked about: Me is the one asked about.
+	for _, id := range []int{1, 2} {
+		me, err := c.ForAccount(id).Me(context.Background())
+		if err != nil || me.UserID != "u"+strconv.Itoa(id) {
+			t.Fatalf("account %d: me = %+v, %v", id, me, err)
+		}
+	}
+}
+
+func TestAccountsBeforeMultiAccount(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error":{"code":"NOT_FOUND","message":"no route"}}`))
+	}))
+	defer srv.Close()
+	list, err := New(Config{BaseURL: srv.URL, Token: "test-token"}).Accounts(context.Background())
+	if err != nil || len(list) != 1 || list[0].ID != 1 || !list[0].SignedIn {
+		t.Fatalf("accounts = %+v, %v", list, err)
+	}
+}

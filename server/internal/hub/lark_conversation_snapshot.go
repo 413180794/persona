@@ -11,7 +11,7 @@ import (
 // Check again after upstream I/O; never publish a page from a changed login.
 func (h *Hub) larkConversationSnapshot(w http.ResponseWriter, r *http.Request, pinned bool) {
 	w.Header().Set("Cache-Control", "no-store")
-	account, err := h.lark.SelectedUserID(r.Context())
+	account, err := h.larkOf(r).SelectedUserID(r.Context())
 	if err != nil {
 		writeLarkErr(w, err)
 		return
@@ -29,15 +29,15 @@ func (h *Hub) larkConversationSnapshot(w http.ResponseWriter, r *http.Request, p
 	var rows []lark.Conversation
 	var next string
 	if pinned {
-		rows, err = h.lark.Pinned(r.Context())
+		rows, err = h.larkOf(r).Pinned(r.Context())
 	} else {
-		rows, next, err = h.lark.Conversations(r.Context(), q.Get("scope"), q.Get("cursor"), atoi(q.Get("limit")))
+		rows, next, err = h.larkOf(r).Conversations(r.Context(), q.Get("scope"), q.Get("cursor"), atoi(q.Get("limit")))
 	}
 	if err != nil {
 		writeLarkErr(w, err)
 		return
 	}
-	after, err := h.lark.SelectedUserID(r.Context())
+	after, err := h.larkOf(r).SelectedUserID(r.Context())
 	if err != nil {
 		writeLarkErr(w, err)
 		return

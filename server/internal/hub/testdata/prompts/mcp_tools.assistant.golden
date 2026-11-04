@@ -964,6 +964,10 @@
         },
         "before": {
           "type": "string"
+        },
+        "account": {
+          "type": "integer",
+          "description": "the Feishu account (lark-connector account number) the chat is in, when an inbox item names one; omit for the default account"
         }
       }
     }

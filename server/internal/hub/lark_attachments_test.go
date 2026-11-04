@@ -50,10 +50,10 @@ func TestLarkAttachmentsBoundAccountAndRetry(t *testing.T) {
 			defer up.Close()
 			h := &Hub{lark: lark.New(lark.Config{BaseURL: up.URL + "/agent/v1", Token: "upstream-secret", Account: 7})}
 			mux := http.NewServeMux()
-			h.larkAttachmentRoutes(mux)
+			h.larkAttachmentRoutes(larkMux{mux, h})
 			for range 2 {
 				var body []byte
-				query := url.Values{"ol_account": {"42"}}
+				query := url.Values{"ol_account": {"7"}} // names lark.account: the same client, and only the header goes upstream
 				if kind == "images" {
 					body, _ = json.Marshal(map[string]any{"client_id": attachmentClientID, "name": "图.gif", "mime": "image/gif", "data": image})
 				} else {
@@ -80,7 +80,7 @@ func TestLarkAttachmentsBoundAccountAndRetry(t *testing.T) {
 func TestLarkAttachmentValidationBeforeUpstream(t *testing.T) {
 	h := &Hub{} // Invalid requests must not touch the client.
 	mux := http.NewServeMux()
-	h.larkAttachmentRoutes(mux)
+	h.larkAttachmentRoutes(larkMux{mux, h})
 	path := "/api/v1/lark/conversations/123/files?client_id=" + attachmentClientID + "&name=file.txt&mime=text/plain"
 	for _, tc := range []struct {
 		path   string
@@ -130,7 +130,7 @@ func TestLarkImageLimitAllowsEscapedBase64(t *testing.T) {
 		}))
 		h := &Hub{lark: lark.New(lark.Config{BaseURL: up.URL, Token: "test"})}
 		mux := http.NewServeMux()
-		h.larkAttachmentRoutes(mux)
+		h.larkAttachmentRoutes(larkMux{mux, h})
 		body, _ := json.Marshal(map[string]any{"client_id": attachmentClientID, "name": "x.gif", "mime": "image/gif", "data": data})
 		body = bytes.ReplaceAll(body, []byte("/"), []byte(`\/`))
 		w := httptest.NewRecorder()

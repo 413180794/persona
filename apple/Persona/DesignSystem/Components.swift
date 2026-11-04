@@ -213,6 +213,42 @@ struct LinkBadge: View {
 
 /// A count on a row or a section header: bold digits on a capsule, "99+" past 99. `.solid` is white on a color —
 /// `Theme.countBadge` gray, the accent when it is about you (@我); `.tone` is a state's words on its tint.
+/// A chip that turns a filter or a choice on and off (the inbox's sources, the Feishu accounts): in the BeautifulUI
+/// style its filter chip; otherwise a capsule filled with the accent while on. `count` follows the title.
+struct FilterChip: View {
+    var title: String
+    var symbol: String?
+    var count: Int?
+    var on: Bool
+    var action: () -> Void
+
+    var body: some View {
+        if AppStyle.current.usesBeautifulUI {
+            BUIFilterChip(title, count: count, isActive: on) { tapped() }
+        } else {
+            Button(action: tapped) {
+                HStack(spacing: Theme.Space.xs) {
+                    if let symbol { Image(systemName: symbol).font(Theme.Font.label) }
+                    Text(title)
+                    if let count { Text(count > 99 ? "99+" : "\(count)").monospacedDigit().opacity(0.7) }
+                }
+                .font(on ? Theme.Font.secondaryStrong : Theme.Font.secondary)
+                .lineLimit(1)
+                .padding(.horizontal, Theme.Space.m)
+                .padding(.vertical, Theme.Space.sm)
+                .foregroundStyle(on ? Color.white : Color.primary)
+                .background(on ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.secondary.opacity(0.12)), in: .capsule)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func tapped() {
+        withAnimation(Theme.Motion.standard) { action() }
+        Haptics.tap()
+    }
+}
+
 struct CountBadge: View {
     enum Look {
         case solid(Color)

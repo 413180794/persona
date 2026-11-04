@@ -9,9 +9,9 @@ import (
 	"github.com/nwverse/persona/server/internal/lark"
 )
 
-func (h *Hub) larkDisplayRoutes(api *http.ServeMux) {
+func (h *Hub) larkDisplayRoutes(api larkMux) {
 	api.HandleFunc("GET /api/v1/lark/message-display", func(w http.ResponseWriter, r *http.Request) {
-		settings, err := h.lark.MessageDisplay(r.Context(), nil)
+		settings, err := h.larkOf(r).MessageDisplay(r.Context(), nil)
 		if err != nil {
 			writeLarkDisplayErr(w, err)
 			return
@@ -35,7 +35,7 @@ func (h *Hub) larkDisplayRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, errors.New("invalid request body"))
 			return
 		}
-		settings, err := h.lark.MessageDisplay(r.Context(), &lark.MessageDisplayChange{AccountID: in.AccountID, Key: in.Key, Value: *in.Value, Expected: *in.Expected})
+		settings, err := h.larkOf(r).MessageDisplay(r.Context(), &lark.MessageDisplayChange{AccountID: in.AccountID, Key: in.Key, Value: *in.Value, Expected: *in.Expected})
 		if err != nil {
 			writeLarkDisplayErr(w, err)
 			return

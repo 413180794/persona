@@ -277,16 +277,17 @@ func (h *Hub) replyInboxAs(ctx context.Context, id, text, clientID string, chang
 // a group where it is not clear which message the reply answers; an item collected before reply_to existed).
 func (h *Hub) sendLarkReply(ctx context.Context, it InboxItem, text, clientID string) error {
 	l := it.Lark
+	c := h.lark.ForAccount(larkItemAccount(&it)) // as the account the messages came to
 	var err error
 	switch {
 	case !l.IsGroup || l.ReplyTo == "":
-		_, err = h.lark.Send(ctx, l.FeedID, text, clientID)
+		_, err = c.Send(ctx, l.FeedID, text, clientID)
 	case l.ThreadKind != "":
-		_, err = h.lark.Reply(ctx, l.ReplyTo, text, true, false, clientID)
+		_, err = c.Reply(ctx, l.ReplyTo, text, true, false, clientID)
 	case it.Kind == KindMention:
-		_, err = h.lark.Reply(ctx, l.ReplyTo, text, false, false, clientID)
+		_, err = c.Reply(ctx, l.ReplyTo, text, false, false, clientID)
 	default:
-		_, err = h.lark.Send(ctx, l.FeedID, text, clientID)
+		_, err = c.Send(ctx, l.FeedID, text, clientID)
 	}
 	return err
 }

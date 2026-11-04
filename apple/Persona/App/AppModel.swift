@@ -1153,9 +1153,10 @@ final class AppModel {
             scheduleSessionsFlush()
         case .revs(let machineID, let revs):
             AgentSync.shared.revs(machine: MachineRef(group: group, id: machineID), revs)
-        case .lark(let feedIDs, let settingsChanged):
-            if isHub { LarkSync.shared.received(feedIDs) }
-            if settingsChanged || feedIDs.isEmpty, let source = link(group) {
+        case .lark(let feedIDs, let settingsChanged, let account):
+            if isHub { LarkSync.shared.received(feedIDs, account: account) }
+            // Message display settings are the hub's own account's (LarkMessageDisplay).
+            if account == nil, settingsChanged || feedIDs.isEmpty, let source = link(group) {
                 Task { await source.larkDisplay.refresh(using: source.api) }
             }
         case .agents(let ids):

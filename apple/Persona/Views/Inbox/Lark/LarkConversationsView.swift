@@ -7,8 +7,22 @@ struct LarkConversationsView: View {
 
     var body: some View {
         if let config = model.config {
-            LarkConversationsPage(config: config).id(config)
+            LarkAccountsPage(config: config).id(config)
         }
+    }
+}
+
+/// The Feishu accounts on the hub's lark-connector (docs/feishu.md「多账号」): with more than one signed in, chips over the
+/// list pick whose chats it shows; each account keeps its own list and cache.
+private struct LarkAccountsPage: View {
+    @State private var choice: LarkAccountChoice
+
+    init(config: ServerConfig) {
+        _choice = State(initialValue: LarkAccountChoice(deps: .live(config)))
+    }
+
+    var body: some View {
+        LarkConversationsPage(config: choice.config, choice: choice).id(choice.requestAccount)
     }
 }
 
@@ -22,9 +36,12 @@ private struct LarkConversationsPage: View {
     @State private var pins = LarkPinnedInteraction()
     @State private var canExpandPins = false
     @State private var scroll = LarkConversationScroll()
+    var choice: LarkAccountChoice
 
-    init(config: ServerConfig) {
-        _store = State(initialValue: LarkConversationsModel(deps: .live(config)))
+    init(config: ServerConfig, choice: LarkAccountChoice) {
+        self.choice = choice
+        _store = State(initialValue: LarkConversationsModel(deps: .live(config, account: choice.requestAccount,
+                                                                          accountName: choice.selectedName)))
     }
 
     private var filtered: [LarkConversation] {
@@ -35,6 +52,12 @@ private struct LarkConversationsPage: View {
         NavigationStack(path: $path) {
             ScrollViewReader { proxy in
             List {
+                if query.isEmpty, choice.accounts.count > 1 {
+                    accountChips
+                        .listRowInsets(EdgeInsets(top: Theme.Space.s, leading: 0, bottom: Theme.Space.s, trailing: 0))
+                        .listRowSeparator(.hidden)
+                        .themedRow()
+                }
                 if query.isEmpty, !store.pinned.isEmpty {
                     LarkPinnedShelf(conversations: store.pinned, interaction: $pins, expandable: $canExpandPins) { path.append($0) }
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { scroll.shelfChanged($0) }
@@ -122,13 +145,32 @@ private struct LarkConversationsPage: View {
         .onChange(of: path.isEmpty, initial: true) { _, root in shell?.feishuAtRoot = root }
         .tabActiveTask(id: model.connection.shown == .online) {
             let changes = LarkSync.shared.changes()
+            async let accounts: Void = choice.load()
             await store.refresh()
+            await accounts
             for await _ in changes {
                 guard !Task.isCancelled else { return }
+                async let accounts: Void = choice.load()
                 await store.refresh()
+                await accounts
             }
         }
 
+    }
+
+    /// One chip per signed-in account, its unread count beside the name; the chosen one is filled.
+    private var accountChips: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: Theme.Space.s) {
+                ForEach(choice.accounts) { account in
+                    FilterChip(title: account.title, count: account.unread > 0 ? account.unread : nil,
+                               on: account.id == choice.selectedID) { choice.select(account.id) }
+                        .accessibilityIdentifier("feishu-account-\(account.id)")
+                }
+            }
+            .padding(.horizontal, Theme.Space.page)
+        }
+        .accessibilityLabel("飞书账号")
     }
 
     private func shelfPassed(_ offset: Double) -> Bool {

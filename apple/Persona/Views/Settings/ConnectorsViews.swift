@@ -326,6 +326,7 @@ struct FeishuConnectorView: View {
     @Bindable private var larkHome = LarkHomePreference.shared
     #endif
     @State private var status: LarkStatus?
+    @State private var accounts: APIClient.LarkAccounts?
     @State private var loading = true
     @State private var failure: String?
 
@@ -359,6 +360,18 @@ struct FeishuConnectorView: View {
                 Text(status?.configured == false
                      ? "hub 还没接飞书：在 hub 所在的机器上运行 lark-connector，并在 hub.json 的 lark 里填上它（docs/feishu.md）。"
                      : "飞书账号在 hub 所在机器的 lark-connector 里登录，会话与收件箱共用这个账号，无需再次登录。")
+            }
+
+            if let accounts, accounts.accounts.count > 1 {
+                Section {
+                    ForEach(accounts.accounts) { account in
+                        accountRow(account, isDefault: account.id == accounts.default)
+                    }
+                } header: {
+                    Text("账号")
+                } footer: {
+                    Text("已登录的账号都会收进收件箱，「消息」页可以切换账号。/agent、助手和知识库使用默认账号；在 lark-connector 里添加或退出账号。")
+                }
             }
 
             #if os(iOS)
@@ -400,6 +413,29 @@ struct FeishuConnectorView: View {
         return st.connected ? "已连接" : "连不上 lark-connector"
     }
 
+    private func accountRow(_ account: LarkAccount, isDefault: Bool) -> some View {
+        HStack(spacing: Theme.Space.m) {
+            LarkAvatarImage(name: account.title, url: account.avatar, size: Theme.Size.wellM)
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                Text(account.title).font(Theme.Font.body).lineLimit(1)
+                Text(accountDetail(account)).font(Theme.Font.label).lineLimit(1)
+                    .foregroundStyle(account.signedIn ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.danger))
+            }
+            Spacer(minLength: Theme.Space.s)
+            if isDefault { Chip(text: "默认") }
+            if account.signedIn, account.unread > 0 { CountBadge(count: account.unread) }
+        }
+        .padding(.vertical, Theme.Space.xxs)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("feishu-account-row-\(account.id)")
+    }
+
+    private func accountDetail(_ account: LarkAccount) -> String {
+        if account.quarantined == true { return "无法打开，请在 lark-connector 里重试或移除" }
+        if !account.signedIn { return "未登录" }
+        return account.tenant?.isEmpty == false ? account.tenant! : "已登录"
+    }
+
     private func use(_ symbol: String, _ title: String, _ detail: String) -> some View {
         Label {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
@@ -415,12 +451,14 @@ struct FeishuConnectorView: View {
     private func load() async {
         loading = true
         defer { loading = false }
+        async let list = try? await model.api?.larkAccounts() // a hub from before several accounts: none
         do {
             status = try await model.api?.larkStatus()
             failure = nil
         } catch {
             failure = error.shown.map { "读不到飞书的状态：\($0)" }
         }
+        accounts = await list
     }
 }
 

@@ -78,7 +78,11 @@ type InboxAgent struct {
 	KB        *KBContext // what the knowledge base knows about the item's chat
 }
 
-type InboxAgentLark struct{ FeedID string }
+// InboxAgentLark is the item's Feishu chat; Account is the lark-connector account it is in when that is not lark.account.
+type InboxAgentLark struct {
+	FeedID  string
+	Account int
+}
 
 // InboxAgentConnector is the thread of a connector's item: Source is the connector's id.
 type InboxAgentConnector struct {

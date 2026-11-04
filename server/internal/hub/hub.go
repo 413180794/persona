@@ -57,7 +57,8 @@ type Hub struct {
 	quotas            quotaCache     // launcherquota.go
 	lark              *lark.Client
 	agents            *agents.Service
-	larkLastEvent     atomic.Int64 // Unix seconds of the last realtime event from lark-connector (设置 › 连接器 › 飞书)
+	larkAccounts      larkAccountList // the lark-connector's accounts, as last read (lark_accounts.go)
+	larkLastEvent     atomic.Int64    // Unix seconds of the last realtime event from lark-connector (设置 › 连接器 › 飞书)
 
 	terms terminals // the terminal tab's live streams (terminal.go)
 

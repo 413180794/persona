@@ -107,6 +107,7 @@ nonisolated enum LarkMoments {
 struct LarkMomentsCard: View {
     var part: LarkPart
     @Environment(\.larkContext) private var context
+    @Environment(\.larkAccount) private var larkAccount
     @State private var preview: LarkURLPreview?
     @State private var reading = false
 
@@ -142,7 +143,7 @@ struct LarkMomentsCard: View {
         }
         .buttonStyle(.plain)
         .task(id: part.url) {
-            guard let mid = context.messageID, let url = part.url, let api = AppModel.shared.api else { return }
+            guard let mid = context.messageID, let url = part.url, let api = AppModel.shared.api?.lark(larkAccount) else { return }
             preview = try? await api.larkURLPreview(message: mid, url: url)
         }
         .sheet(isPresented: $reading) { if let id = LarkMoments.postID(part.url) { LarkMomentsPostView(postID: id, link: part.url) } }
@@ -154,6 +155,7 @@ struct LarkMomentsPostView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @Environment(\.larkAccount) private var larkAccount
     var postID: String
     var link: String?
     /// Pushed as a page (the inbox's removed item) instead of presented as a sheet: no stack of its own, no 完成.
@@ -220,7 +222,7 @@ struct LarkMomentsPostView: View {
                 }
             }
             .task {
-                guard let api = model.api else { return }
+                guard let api = model.api?.lark(larkAccount) else { return }
                 LarkMedia.shared.loadEmojiCatalog()
                 async let c = api.larkMomentsComments(postID)
                 do { post = try await api.larkMomentsPost(postID) } catch { self.error = error.localizedDescription }

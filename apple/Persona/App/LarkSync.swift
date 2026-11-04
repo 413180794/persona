@@ -4,6 +4,8 @@ import Foundation
 /// `lark` (which conversations changed); the inbox and an open chat refresh on them instead of waiting for a poll.
 /// Pull: the latest page of each changed conversation goes into the cache its chat paints from, so opening it shows
 /// the new messages at once; on (re)connect the first page of the inbox is checked the same way.
+/// Conversations go by `LarkConversation.key`: a chat of another Feishu account than the hub's own is apart from the
+/// same feed in the hub's own account.
 @MainActor
 final class LarkSync {
     static let shared = LarkSync()
@@ -18,7 +20,7 @@ final class LarkSync {
     /// and decode its latest page, and a busy group changes more often than that (#674).
     static let chatGap: Duration = .seconds(1)
 
-    private var listeners: [UUID: (feed: String?, cont: AsyncStream<Void>.Continuation)] = [:]
+    private var listeners: [UUID: (key: String?, cont: AsyncStream<Void>.Continuation)] = [:]
     private var gates: [UUID: LarkChangeGate] = [:]
     /// Conversations from the inbox list: a topic group needs its own kind of page, and only listed ones are fetched.
     private var known: [String: LarkConversation] = [:]
@@ -35,12 +37,12 @@ final class LarkSync {
         fetched = StateCache.load(Self.stateName, as: [String: Date].self) ?? [:]
     }
 
-    /// Fires on every relayed change (`feed` nil), or on those touching one conversation (at most once per `chatGap`).
-    /// Bursts collapse into one.
-    func changes(of feed: String? = nil) -> AsyncStream<Void> {
+    /// Fires on every relayed change (`key` nil), or on those touching one conversation (its `LarkConversation.key`,
+    /// at most once per `chatGap`). Bursts collapse into one.
+    func changes(of key: String? = nil) -> AsyncStream<Void> {
         AsyncStream(bufferingPolicy: .bufferingNewest(1)) { cont in
             let id = UUID()
-            listeners[id] = (feed, cont)
+            listeners[id] = (key, cont)
             cont.onTermination = { _ in Task { @MainActor in
                 LarkSync.shared.listeners[id] = nil
                 LarkSync.shared.gates[id] = nil
@@ -56,16 +58,17 @@ final class LarkSync {
 
     /// The inbox learned its conversations.
     func know(_ convs: [LarkConversation]) {
-        for c in convs { known[c.id] = c }
+        for c in convs { known[c.key] = c }
     }
 
-    /// The hub's `lark` event.
-    func received(_ feedIDs: [String]) {
+    /// The hub's `lark` event: feeds of `account` (nil: the hub's own).
+    func received(_ feedIDs: [String], account: Int? = nil) {
+        let keys = feedIDs.map { LarkConversation.key($0, account: account) }
         for (id, l) in listeners {
-            guard let feed = l.feed else { l.cont.yield(); continue }
-            if feedIDs.contains(feed) { tell(id) }
+            guard let key = l.key else { l.cont.yield(); continue }
+            if keys.contains(key) { tell(id) }
         }
-        enqueue(feedIDs.filter { known[$0] != nil })
+        enqueue(keys.filter { known[$0] != nil })
     }
 
     /// One conversation's listener: told now, or once `chatGap` since it was last told is up.
@@ -91,15 +94,15 @@ final class LarkSync {
 
     /// The socket came (back) up: whatever happened while away is pulled now.
     func reconnected() {
-        for l in listeners.values where l.feed == nil { l.cont.yield() }
+        for l in listeners.values where l.key == nil { l.cont.yield() }
         Task {
             guard let api = AppModel.shared.api, let r = try? await api.larkConversations() else { return }
             know(r.conversations)
             let stale = r.conversations.prefix(Self.reconnectCount).filter { c in
                 guard let at = c.updatedAt else { return false }
-                return fetched[c.id].map { $0 < at } ?? true
+                return fetched[c.key].map { $0 < at } ?? true
             }
-            enqueue(stale.map(\.id))
+            enqueue(stale.map(\.key))
         }
     }
 
@@ -111,16 +114,16 @@ final class LarkSync {
     }
 
     /// An open chat keeps itself current (and caches what it shows).
-    private func isOpen(_ id: String) -> Bool { listeners.values.contains { $0.feed == id } }
+    private func isOpen(_ key: String) -> Bool { listeners.values.contains { $0.key == key } }
 
     private func pump() {
         while running.count < Self.concurrency, !queue.isEmpty {
             let id = queue.removeFirst()
-            guard let conv = known[id], AppModel.shared.live.state == .connected, let api = AppModel.shared.api else { continue }
+            guard let conv = known[id], AppModel.shared.live.state == .connected, let api = AppModel.shared.api?.lark(conv.account) else { continue }
             running.insert(id)
             Task {
-                if let r = try? await api.larkMessages(id, topic: conv.isTopic ?? false), r.hasNewer != true {
-                    StateCache.save("lark-chat-\(id)", Array(r.messages.suffix(80)))
+                if let r = try? await api.larkMessages(conv.id, topic: conv.isTopic ?? false), r.hasNewer != true {
+                    StateCache.save(LarkMessage.cacheName(conv), Array(r.messages.suffix(80)))
                     fetched[id] = .now
                     let snapshot = fetched
                     saver.run { StateCache.save(Self.stateName, snapshot) }

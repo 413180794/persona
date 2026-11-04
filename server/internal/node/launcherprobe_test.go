@@ -189,3 +189,68 @@ func TestClaudeResultOfACheck(t *testing.T) {
 		t.Fatal("not a result")
 	}
 }
+
+// A launcher whose gateway and key are in the env of its --settings file (Claude Code reads it after it starts):
+// the probe must see them, or quota and the launcher's page find no gateway (#1378).
+func TestProbeReadsTheSettingsEnv(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(home+"/.claude", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	settings := `{"env": {"ANTHROPIC_BASE_URL": "https://gw.example.com/v1", "ANTHROPIC_AUTH_TOKEN": "sk-test",
+		"ANTHROPIC_MODEL": "from-settings", "CLAUDE_CODE_MAX_CONTEXT_TOKENS": 200000}}`
+	if err := os.WriteFile(home+"/.claude/settings.work.json", []byte(settings), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	claude := func(args ...string) Probe {
+		return Probe{Agent: "claude", Args: args, Env: map[string]string{"ANTHROPIC_MODEL": "from-shell", "CLAUDE_CODE_EFFORT_LEVEL": "high"}}
+	}
+
+	for _, args := range [][]string{
+		{"--settings", "~/.claude/settings.work.json", "--dangerously-skip-permissions"},
+		{"--settings=" + home + "/.claude/settings.work.json"},
+		{"--settings", "$HOME/.claude/settings.work.json"},
+		{"--settings", ".claude/settings.work.json"},                                 // relative: from home
+		{"--settings", "missing.json", "--settings", "~/.claude/settings.work.json"}, // the last one counts
+	} {
+		p := withSettingsEnv(claude(args...), home)
+		if p.Env["ANTHROPIC_BASE_URL"] != "https://gw.example.com/v1" || p.Env["ANTHROPIC_AUTH_TOKEN"] != "sk-test" {
+			t.Errorf("%v: gateway and key not read: %v", args, p.Env)
+		}
+		if p.Env["ANTHROPIC_MODEL"] != "from-settings" {
+			t.Errorf("%v: settings env must win over the shell's: %q", args, p.Env["ANTHROPIC_MODEL"])
+		}
+		if p.Env["CLAUDE_CODE_EFFORT_LEVEL"] != "high" || p.Env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] != "200000" {
+			t.Errorf("%v: env %v", args, p.Env)
+		}
+		if d := LauncherDetail(p); d.BaseURL != "https://gw.example.com/v1" || d.Auth != "ANTHROPIC_AUTH_TOKEN" || d.ContextWindow != 200000 {
+			t.Errorf("%v: detail %+v", args, d)
+		}
+	}
+
+	inline := withSettingsEnv(claude("--settings", `{"env": {"ANTHROPIC_BASE_URL": "https://inline.example.com"}}`), home)
+	if inline.Env["ANTHROPIC_BASE_URL"] != "https://inline.example.com" {
+		t.Errorf("inline settings: %v", inline.Env)
+	}
+
+	// Left as they were: no --settings, a file that cannot be read or is not JSON, settings without env, not claude.
+	if err := os.WriteFile(home+"/bad.json", []byte("not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(home+"/noenv.json", []byte(`{"model": "x"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []Probe{
+		claude("--dangerously-skip-permissions"),
+		claude("--settings", "~/nope.json"),
+		claude("--settings", "~/bad.json"),
+		claude("--settings", "~/noenv.json"),
+		claude("--settings"),
+		{Agent: "codex", Args: []string{"--settings", "~/.claude/settings.work.json"}, Env: map[string]string{"ANTHROPIC_MODEL": "from-shell"}},
+	} {
+		got := withSettingsEnv(p, home)
+		if _, ok := got.Env["ANTHROPIC_BASE_URL"]; ok || got.Env["ANTHROPIC_MODEL"] != "from-shell" {
+			t.Errorf("%s %v: changed: %v", p.Agent, p.Args, got.Env)
+		}
+	}
+}

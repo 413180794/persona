@@ -7,6 +7,7 @@ import SwiftUI
 struct LarkThreadView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.larkAccount) private var account
     var root: LarkMessage
     var isGroup = true
     var feedID: String? = nil
@@ -14,7 +15,7 @@ struct LarkThreadView: View {
     var focusBox = false
     var pinTarget: LarkChatPinTarget? = nil
     var pinAPI: APIClient? = nil
-    private var api: APIClient? { pinAPI ?? model.api }
+    private var api: APIClient? { pinAPI ?? model.api?.lark(account) }
     @State private var person: LarkPersonRef?
     /// The replies loaded so far (never the root) and where paging stands (LarkPager).
     @State private var pager = LarkPager()
@@ -121,7 +122,7 @@ struct LarkThreadView: View {
             // A reply in the thread is a change in its chat: bring the newest replies in while the sheet is open.
             .task(id: feedID) {
                 guard let feedID else { return }
-                for await _ in LarkSync.shared.changes(of: feedID) { await refreshLatest() }
+                for await _ in LarkSync.shared.changes(of: LarkConversation.key(feedID, account: account)) { await refreshLatest() }
             }
         }
     }

@@ -59,7 +59,10 @@ node 在登录 shell（`zsh -ic`，先加载 `~/.zshrc`）里一次取两样，�
 
 只读 ~/.zshrc 里函数的原文看不出 `_claude_proxy URL TOKEN MODEL WINDOW` 这类 helper、局部变量最后设了什么，所以 node 把启动器在
 子 shell 里真跑一遍：`claude` / `codex` / `traex` / `dsh` / `command` / `env` 都换成桩，只打印 Agent 会拿到的环境变量和参数，再和 shell 自己的
-环境比，只算启动器改了的（跑 `dsh` 的启动器认成 DSH，不会真把 DSH 跑起来，也不再当成 Claude 去起）。页面上按电脑显示（各台一样就合成一组）：
+环境比，只算启动器改了的（跑 `dsh` 的启动器认成 DSH，不会真把 DSH 跑起来，也不再当成 Claude 去起）。
+Claude 的参数里有 `--settings`（`alias work="claude --settings ~/.claude/settings.work.json"`，最后一个为准，文件或内联 JSON）时，
+那份 settings 的 `env` 盖在探测到的环境上（和 Claude Code 一样 settings 优先）：网关和 Key 常写在那里，不读的话页面看不到网关、「额度」以为没有网关（#1378）。
+读不了就照旧。页面上按电脑显示（各台一样就合成一组）：
 
 - 运行：Agent（Claude Code / Codex / TRAEX）、网关、Key 放在哪个变量（值不显示）
 - 模型：主模型、Fable / Opus / Sonnet / Haiku、小模型、子 Agent，各自的变量名；Codex 看 `-m`
@@ -69,7 +72,7 @@ node 在登录 shell（`zsh -ic`，先加载 `~/.zshrc`）里一次取两样，�
 
 跑一遍会执行启动器在 claude 之前做的事（比如取 token 的脚本），所以每个启动器 10 分钟最多跑一次、15 秒超时（连子进程一起杀），
 stdin 是 /dev/null。单测：`launcherprobe_test.go` 用 `testdata/launchers.zsh` 覆盖 helper、带小模型和窗口、helper 前加变量、
-子 shell 里 export、Codex 几种写法。
+子 shell 里 export、Codex 几种写法，`--settings` 的 env（`withSettingsEnv`）。
 
 ## 测试可用性（`node/launchercheck.go`）
 

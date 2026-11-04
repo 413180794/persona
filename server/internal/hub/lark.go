@@ -16,7 +16,9 @@ import (
 )
 
 // larkRoutes exposes Feishu chats from the user's lark-connector instance to the app's 信息 tab.
-func (h *Hub) larkRoutes(api *http.ServeMux) {
+func (h *Hub) larkRoutes(mux *http.ServeMux) {
+	api := larkMux{mux, h}
+	h.larkAccountRoutes(api)
 	h.larkAttachmentRoutes(api)
 	h.larkDisplayRoutes(api)
 	h.larkEncryptionRoutes(api)
@@ -30,7 +32,7 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 			h.larkConversationSnapshot(w, r, false)
 			return
 		}
-		convs, next, err := h.lark.Conversations(r.Context(), q.Get("scope"), q.Get("cursor"), atoi(q.Get("limit")))
+		convs, next, err := h.larkOf(r).Conversations(r.Context(), q.Get("scope"), q.Get("cursor"), atoi(q.Get("limit")))
 		if err != nil {
 			writeLarkErr(w, err)
 			return
@@ -42,7 +44,7 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 			h.larkConversationSnapshot(w, r, true)
 			return
 		}
-		convs, err := h.lark.Pinned(r.Context())
+		convs, err := h.larkOf(r).Pinned(r.Context())
 		if err != nil {
 			writeLarkErr(w, err)
 			return
@@ -50,7 +52,7 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		writeJSON(w, map[string]any{"conversations": convs})
 	})
 	api.HandleFunc("GET /api/v1/lark/labels", func(w http.ResponseWriter, r *http.Request) {
-		labels, err := h.lark.Labels(r.Context())
+		labels, err := h.larkOf(r).Labels(r.Context())
 		if err != nil {
 			writeLarkErr(w, err)
 			return
@@ -58,7 +60,7 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		writeJSON(w, map[string]any{"labels": labels})
 	})
 	api.HandleFunc("GET /api/v1/lark/unread-count", func(w http.ResponseWriter, r *http.Request) {
-		n, err := h.lark.UnreadTotal(r.Context())
+		n, err := h.larkOf(r).UnreadTotal(r.Context())
 		if err != nil {
 			writeLarkErr(w, err)
 			return
@@ -66,7 +68,7 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		writeJSON(w, map[string]any{"count": n})
 	})
 	api.HandleFunc("GET /api/v1/lark/flags", func(w http.ResponseWriter, r *http.Request) {
-		convs, msgs, err := h.lark.Flags(r.Context())
+		convs, msgs, err := h.larkOf(r).Flags(r.Context())
 		if err != nil {
 			writeLarkErr(w, err)
 			return
@@ -74,7 +76,7 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		writeJSON(w, map[string]any{"conversations": convs, "messages": msgs})
 	})
 	api.HandleFunc("GET /api/v1/lark/conversations/{id}/labels", func(w http.ResponseWriter, r *http.Request) {
-		ids, opts, err := h.lark.ChatLabels(r.Context(), r.PathValue("id"))
+		ids, opts, err := h.larkOf(r).ChatLabels(r.Context(), r.PathValue("id"))
 		if err != nil {
 			writeLarkErr(w, err)
 			return
@@ -90,7 +92,7 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
-		if err := h.lark.UpdateSettings(r.Context(), r.PathValue("id"), in); err != nil {
+		if err := h.larkOf(r).UpdateSettings(r.Context(), r.PathValue("id"), in); err != nil {
 			writeLarkErr(w, err)
 			return
 		}
@@ -104,7 +106,7 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
-		if err := h.lark.SetUnread(r.Context(), r.PathValue("id"), in.Unread); err != nil {
+		if err := h.larkOf(r).SetUnread(r.Context(), r.PathValue("id"), in.Unread); err != nil {
 			writeLarkErr(w, err)
 			return
 		}
@@ -114,7 +116,7 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		q := r.URL.Query()
 		// The client may not know the chat is a topic group (opened from a profile, an old inbox item): ChatPage checks,
 		// and a page of threads says topic so the client shows them as topics.
-		page, err := h.lark.ChatPage(r.Context(), r.PathValue("id"), lark.Window{Before: q.Get("before"), After: q.Get("after"), Around: q.Get("around")},
+		page, err := h.larkOf(r).ChatPage(r.Context(), r.PathValue("id"), lark.Window{Before: q.Get("before"), After: q.Get("after"), Around: q.Get("around")},
 			atoi(q.Get("limit")), q.Get("topic") == "1")
 		if err != nil {
 			writeLarkErr(w, err)
@@ -123,7 +125,7 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		writeJSON(w, page)
 	})
 	api.HandleFunc("GET /api/v1/lark/messages/{id}/thread", func(w http.ResponseWriter, r *http.Request) {
-		page, err := h.lark.Thread(r.Context(), r.PathValue("id"), r.URL.Query().Get("before"), atoi(r.URL.Query().Get("limit")))
+		page, err := h.larkOf(r).Thread(r.Context(), r.PathValue("id"), r.URL.Query().Get("before"), atoi(r.URL.Query().Get("limit")))
 		if err != nil {
 			writeLarkErr(w, err)
 			return
@@ -148,7 +150,7 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		if !lark.ValidClientID(in.ClientID) {
 			in.ClientID = ""
 		}
-		id, err := h.lark.Send(r.Context(), r.PathValue("id"), in.Text, in.ClientID, in.Mentions...)
+		id, err := h.larkOf(r).Send(r.Context(), r.PathValue("id"), in.Text, in.ClientID, in.Mentions...)
 		if err != nil {
 			writeLarkErr(w, err)
 			return
@@ -179,7 +181,7 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		if !lark.ValidClientID(in.ClientID) {
 			in.ClientID = ""
 		}
-		id, err := h.lark.Reply(r.Context(), r.PathValue("id"), in.Text, in.Thread, false, in.ClientID, in.Mentions...)
+		id, err := h.larkOf(r).Reply(r.Context(), r.PathValue("id"), in.Text, in.Thread, false, in.ClientID, in.Mentions...)
 		if err != nil {
 			writeLarkErr(w, err)
 			return
@@ -193,7 +195,7 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 	// The chat's members for the @ picker: all of them (up to limit), or with q the ones matching it.
 	api.HandleFunc("GET /api/v1/lark/conversations/{id}/members", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		members, err := h.lark.Members(r.Context(), r.PathValue("id"), q.Get("q"), atoi(q.Get("limit")))
+		members, err := h.larkOf(r).Members(r.Context(), r.PathValue("id"), q.Get("q"), atoi(q.Get("limit")))
 		if err != nil {
 			writeLarkErr(w, err)
 			return
@@ -206,7 +208,7 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, errors.New("position is required"))
 			return
 		}
-		if err := h.lark.MarkRead(r.Context(), r.PathValue("id"), in); err != nil {
+		if err := h.larkOf(r).MarkRead(r.Context(), r.PathValue("id"), in); err != nil {
 			writeLarkErr(w, err)
 			return
 		}
@@ -225,7 +227,7 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, fmt.Errorf("at most %d message_ids", lark.MaxReadStates))
 			return
 		}
-		states, err := h.lark.ReadStates(r.Context(), r.PathValue("id"), in.MessageIDs)
+		states, err := h.larkOf(r).ReadStates(r.Context(), r.PathValue("id"), in.MessageIDs)
 		if err != nil {
 			writeLarkErr(w, err)
 			return
@@ -242,17 +244,17 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 	// Read-only window onto the rest of lark-connector's agent API (search, docs, calendar, minutes, tasks, contacts…):
 	// /api/v1/lark/raw/<path> = /agent/v1/<path>.
 	api.HandleFunc("GET /api/v1/lark/raw/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		if err := h.lark.Raw(r.Context(), w, "GET", rawPath(r), r.URL.Query(), nil, r.Header); err != nil {
+		if err := h.larkOf(r).Raw(r.Context(), w, "GET", rawPath(r), r.URL.Query(), nil, r.Header); err != nil {
 			writeLarkErr(w, err)
 		}
 	})
 	api.HandleFunc("POST /api/v1/lark/raw/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		if err := h.lark.Raw(r.Context(), w, "POST", rawPath(r), r.URL.Query(), io.LimitReader(r.Body, 1<<20), r.Header); err != nil {
+		if err := h.larkOf(r).Raw(r.Context(), w, "POST", rawPath(r), r.URL.Query(), io.LimitReader(r.Body, 1<<20), r.Header); err != nil {
 			writeLarkErr(w, err)
 		}
 	})
 	api.HandleFunc("GET /api/v1/lark/emojis", func(w http.ResponseWriter, r *http.Request) {
-		emojis, groups, err := h.lark.Emojis(r.Context())
+		emojis, groups, err := h.larkOf(r).Emojis(r.Context())
 		if err != nil {
 			writeLarkErr(w, err)
 			return
@@ -261,7 +263,7 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		writeJSON(w, map[string]any{"emojis": emojis, "groups": groups})
 	})
 	api.HandleFunc("GET /api/v1/lark/reactions/quick", func(w http.ResponseWriter, r *http.Request) {
-		keys, err := h.lark.QuickReactions(r.Context())
+		keys, err := h.larkOf(r).QuickReactions(r.Context())
 		if err != nil {
 			writeLarkErr(w, err)
 			return
@@ -277,17 +279,17 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, errors.New("key is required"))
 			return
 		}
-		if err := h.lark.React(r.Context(), r.PathValue("id"), in.Key, in.Remove); err != nil {
+		if err := h.larkOf(r).React(r.Context(), r.PathValue("id"), in.Key, in.Remove); err != nil {
 			writeLarkErr(w, err)
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true})
 	})
 	api.HandleFunc("GET /api/v1/lark/users/{id}", func(w http.ResponseWriter, r *http.Request) {
-		h.larkRaw(w)(h.lark.Profile(r.Context(), r.PathValue("id"), r.URL.Query().Get("feed_id")))
+		h.larkRaw(w)(h.larkOf(r).Profile(r.Context(), r.PathValue("id"), r.URL.Query().Get("feed_id")))
 	})
 	api.HandleFunc("POST /api/v1/lark/users/{id}/chat", func(w http.ResponseWriter, r *http.Request) {
-		feed, err := h.lark.DirectChat(r.Context(), r.PathValue("id"))
+		feed, err := h.larkOf(r).DirectChat(r.Context(), r.PathValue("id"))
 		if err != nil {
 			writeLarkErr(w, err)
 			return
@@ -295,17 +297,17 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		writeJSON(w, map[string]any{"feed_id": feed})
 	})
 	api.HandleFunc("GET /api/v1/lark/messages/{id}/url-preview", func(w http.ResponseWriter, r *http.Request) {
-		h.larkRaw(w)(h.lark.URLPreview(r.Context(), r.PathValue("id"), r.URL.Query().Get("url")))
+		h.larkRaw(w)(h.larkOf(r).URLPreview(r.Context(), r.PathValue("id"), r.URL.Query().Get("url")))
 	})
 	api.HandleFunc("GET /api/v1/lark/moments/posts/{id}", func(w http.ResponseWriter, r *http.Request) {
-		h.larkRaw(w)(h.lark.MomentsPost(r.Context(), r.PathValue("id")))
+		h.larkRaw(w)(h.larkOf(r).MomentsPost(r.Context(), r.PathValue("id")))
 	})
 	api.HandleFunc("GET /api/v1/lark/moments/posts/{id}/comments", func(w http.ResponseWriter, r *http.Request) {
-		h.larkRaw(w)(h.lark.MomentsComments(r.Context(), r.PathValue("id")))
+		h.larkRaw(w)(h.larkOf(r).MomentsComments(r.Context(), r.PathValue("id")))
 	})
 	api.HandleFunc("POST /api/v1/lark/messages/{id}/card-actions/{action}", func(w http.ResponseWriter, r *http.Request) {
 		params, _ := io.ReadAll(io.LimitReader(r.Body, 64<<10))
-		if err := h.lark.CardAction(r.Context(), r.PathValue("id"), r.PathValue("action"), params); err != nil {
+		if err := h.larkOf(r).CardAction(r.Context(), r.PathValue("id"), r.PathValue("action"), params); err != nil {
 			writeLarkErr(w, err)
 			return
 		}
@@ -373,7 +375,7 @@ func (h *Hub) larkMedia(w http.ResponseWriter, r *http.Request, path string) {
 	if size := r.URL.Query().Get("size"); size != "" {
 		q.Set("size", size)
 	}
-	if err := h.lark.Media(r.Context(), w, path, q, r.Header); err != nil {
+	if err := h.larkOf(r).Media(r.Context(), w, path, q, r.Header); err != nil {
 		writeLarkErr(w, err)
 	}
 }

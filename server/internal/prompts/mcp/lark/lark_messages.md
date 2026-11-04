@@ -18,6 +18,10 @@ Read a Feishu chat (id from lark_chats or lark_search): the latest messages as t
     },
     "before": {
       "type": "string"
+    },
+    "account": {
+      "type": "integer",
+      "description": "the Feishu account (lark-connector account number) the chat is in, when an inbox item names one; omit for the default account"
     }
   }
 }

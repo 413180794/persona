@@ -56,14 +56,28 @@ token 是好的；以前 hub 把所有 401 都当 token 错，丢掉配置里的
 一直失败到 personad 重启。现在 `AUTH_*` 报「lark-connector 未登录飞书」（`lark.ErrNotLoggedIn`，日志、收件箱和 App 的报错里都能看到），
 配置的 token 永远不丢，实时事件按退避（最长 1 分钟）重连、同一个错误只记一次日志，用户重新登录后自己恢复。
 
-`hub.json` 的 `lark.account` 可选择默认账号（整数 `1` 为主账号，`2` 为第二账号，省略或 `0` 默认主账号），
-重启 hub 后，收件箱采集、专用会话接口、媒体和常驻事件连接统一使用该账号；无需修改 iOS。
-助手的新进程会通过 `lark-connector_ACCOUNT` 继承配置，已有进程需要重新启动。账号编号是 `/accounts` 的 `id`，不是飞书用户 ID。
-服务端收件箱持久记录带账号编号，不同账号不会混入同一列表；旧记录视为主账号，切回后仍可加载。
-不修改飞书已读状态，也不同时聚合多个账号。
+## 多账号
 
-raw 代理不透传客户端的 `x-lark-connector-account` 请求头，默认使用配置账号；显式 `ol_account` 查询参数仍可覆盖默认账号，
-用于单次只读查询。专用会话接口不接受这个覆盖参数。不要把查询串塞进 `base_url`，客户端会在其后拼接接口路径。
+lark-connector 一个实例里可以登录多个飞书账号（它的 x-multi-account：`GET /agent/v1/accounts` 列出，请求用 `x-lark-connector-account`
+头或 `ol_account` 参数选账号，账号编号是 `/accounts` 的 `id`，不是飞书用户 ID；添加账号的账号的资源 URL 自带 `ol_account`）。
+Persona 都读（#1321，之前只读 `lark.account` 一个）：
+
+- **默认账号** = `hub.json` 的 `lark.account`（省略是主账号 1）。不带 `ol_account` 的 `/api/v1/lark/*` 请求是它的，旧客户端（Android、网页）
+  照旧只看到它。助手（`lark_*` 工具、`ol`）、知识库、`/agent`、风灵月影设置、文档阅读也只用它；助手的 `lark_messages` 可传 `account`
+  读别的账号的会话，`ol` 前加 `lark-connector_ACCOUNT=<编号>`。
+- **按请求选账号**：`/api/v1/lark/*` 全部认 `ol_account=<编号>`（`hub/lark_accounts.go` 的 `larkMux`，每个账号一个 `lark.Client`，
+  `Client.ForAccount`）；编号不合法回 400，不存在由 lark-connector 拒绝，不会落回默认账号。媒体 URL 里带的 `ol_account` 原样带回来就对了。
+  raw 代理把查询原样转给 lark-connector，客户端的 `x-lark-connector-account` 头不透传。不要把查询串塞进 `base_url`。
+- **账号列表** `GET /api/v1/lark/accounts`：每分钟最多读一次 lark-connector，用来决定收件箱和实时事件读哪些账号（已登录、没被隔离的）。
+  没有 `/accounts` 的旧 lark-connector 当作只有默认账号。
+- **实时事件**：默认账号一条连接，其他已登录账号每两分钟按账号列表开 / 关各自的连接。推给 App 的 `lark` 事件带 `account`，
+  非默认账号的再带 `ol_account`（App 据此定位会话缓存）。`/agent`、个人 Agent、知识库只跟默认账号的事件。
+- **收件箱**：每轮依次读每个已登录账号的未读和 @我；默认账号出错是这一轮的错，其他账号出错只记日志。条目带 `lark.account_id`
+  （旧记录为 0 = 账号 1）、`lark.ol_account`（不是默认账号时，App 打开会话、回复要带的那个），同一个群在两个账号里是两件；
+  多于一个账号时来源写「飞书 · <名字>」。回复以条目所属的账号发出。不修改飞书已读状态。
+- **App（iOS）**：`APIClient.lark(_:)` 给 `/api/v1/lark/` 请求加 `ol_account`；`LarkConversation.account` 跟着会话走（聊天、话题、资料卡、
+  卡片按钮、@成员、链接预览都按它），缓存和监听按 `LarkConversation.key`（`a<编号>-<feed>`）分开。「消息」页多于一个账号时
+  列表上方一排账号胶囊（带未读数），各账号的列表和置顶分开缓存；聊天页副标题写「飞书 · <名字>」。设置 › 连接器 › 飞书列出所有账号。
 
 ## 接口速查（hub 机器上实测过；助手现在用 lark-connector skill，lark-connector 的 references 为准）
 

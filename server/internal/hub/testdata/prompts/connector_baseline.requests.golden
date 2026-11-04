@@ -1,4 +1,4 @@
-GET /accounts  ×2
+GET /accounts  ×3
 GET /calendar/week?end=<base+8d14h@Z>&start=<base-10h@Z>
 GET /conversations/f_bot/messages?limit=1&tail=1
 GET /conversations/f_bot/messages?limit=100&tail=1

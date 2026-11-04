@@ -344,7 +344,10 @@ struct InboxHandOffSheet: View {
     static func message(_ it: InboxItem, ask: String) -> String {
         let title = (it.connector != nil ? it.accountName + " · " : it.isLark ? "飞书 · " : "邮件 · ") + it.title
         var text = it.context?.isEmpty == false ? it.context! : [it.sender ?? "", it.preview].filter { !$0.isEmpty }.joined(separator: "：")
-        if let l = it.lark { text += "\n\n（飞书会话 feedId \(l.feedID)，可用飞书工具读更多上下文或回复）" }
+        if let l = it.lark {
+            let account = l.olAccount.map { "，在飞书账号 \($0)（lark_messages 传 account=\($0)，ol 命令前加 lark-connector_ACCOUNT=\($0)）" } ?? ""
+            text += "\n\n（飞书会话 feedId \(l.feedID)\(account)，可用飞书工具读更多上下文或回复）"
+        }
         if let c = it.connector, let url = c.url { text += "\n\n（\(it.accountName)：\(url)）" }
         if let m = it.mail, let uid = m.uids.last {
             text += "\n\n（邮件 account_id \(m.accountID)，mailbox \(m.mailbox)，uid \(uid)，可用 mail_read 读全文、mail_send 回复）"

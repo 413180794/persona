@@ -22,6 +22,11 @@ nonisolated enum LarkPosition {
     }
 }
 
+extension EnvironmentValues {
+    /// The Feishu account of the chat a view is in (`LarkConversation.account`): the requests it makes name it.
+    @Entry var larkAccount: Int? = nil
+}
+
 /// One Feishu chat, opened like Feishu: at the oldest unread message under a 以下为新消息 line (or at the latest
 /// when all is read), newer pages as you scroll down, read state reported only for what was on screen,
 /// 回到最新 / 有人@你 jumps.
@@ -110,7 +115,7 @@ struct LarkChatView: View {
 
     private var chatAPI: APIClient? {
         guard let chatLink, model.link(chatLink.group) === chatLink else { return nil }
-        return model.api(chatLink.group)
+        return model.api(chatLink.group)?.lark(conversation.account)
     }
 
     private var isTopic: Bool { conversation.isTopic == true || foundTopic }
@@ -124,7 +129,7 @@ struct LarkChatView: View {
         chatContent
         .themedPage()
         .navigationTitle(conversation.name)
-        .navigationSubtitle(isTopic ? "飞书话题群" : "飞书")
+        .navigationSubtitle([isTopic ? "飞书话题群" : "飞书", conversation.accountName].compactMap { $0 }.joined(separator: " · "))
         .navigationBarTitleDisplayMode(.inline)
         // Keep the bar's material during push/pop instead of resolving its scroll-edge state after arrival.
         .toolbarBackground(.bar, for: .navigationBar)
@@ -148,7 +153,7 @@ struct LarkChatView: View {
             // Background sync (LarkSync) keeps this cache current, so it is usually already the latest. An unread chat
             // opens at its first unread message: the cache serves when it reaches back that far.
             if pager.messages.isEmpty, conversation.focus == nil,
-               let cached = LarkMessage.loadCached("lark-chat-\(conversation.id)"), !cached.isEmpty,
+               let cached = LarkMessage.loadCached(LarkMessage.cacheName(conversation)), !cached.isEmpty,
                !opensAtMessage || cached.first.map({ !LarkPosition.less(LarkPosition.next(conversation.readPosition ?? "0"), $0.position) }) == true {
                 pager.messages = cached
                 pager.hasOlder = true
@@ -182,7 +187,7 @@ struct LarkChatView: View {
             }
         }
         .task {
-            for await _ in LarkSync.shared.changes(of: conversation.id) {
+            for await _ in LarkSync.shared.changes(of: conversation.key) {
                 await refreshLatest()
                 askReceiptsAgain()
             }
@@ -191,6 +196,8 @@ struct LarkChatView: View {
         .onTabVisibility(appear: reportSoon, disappear: flushRead)
         .onChange(of: anchor) { pager.seen.formUnion(book.seen) }
         .onChange(of: mention) { pager.seen.formUnion(book.seen) }
+        // Outermost, so the sheets above (a thread, a profile, a reaction picker) are about the same account.
+        .environment(\.larkAccount, conversation.account)
     }
 
     @ViewBuilder private var chatContent: some View {
@@ -472,7 +479,7 @@ struct LarkChatView: View {
     private func apply(_ r: APIClient.LarkMessages) {
         if r.topic == true { foundTopic = true }
         pager.replace(with: r)
-        if !r.hasNewer.map({ $0 }).isTrue { StateCache.save("lark-chat-\(conversation.id)", Array(r.messages.suffix(80))) }
+        if !r.hasNewer.map({ $0 }).isTrue { StateCache.save(LarkMessage.cacheName(conversation), Array(r.messages.suffix(80))) }
     }
 
     /// Messages, or mine on their way: a problem is then one line on top rather than the page's placeholder.
@@ -1000,7 +1007,7 @@ struct LarkChatView: View {
         let link = chatLink
         queue.deliver(id, client: {
             guard let link, model.link(link.group) === link else { return nil }
-            return model.api(link.group)
+            return model.api(link.group)?.lark(conversation.account)
         }, feed: conversation.id) {
             guard let link, model.link(link.group) === link, outbox === queue else { return }
             await refreshLatest()

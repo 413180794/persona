@@ -243,10 +243,11 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   （lark-connector 所在的 docker 容器名，从它的环境变量 `lark-connector_AGENT_TOKEN` 读），两个都不写就不接飞书，没有默认容器名。
   配置的 token 整个进程期间都保留：lark-connector 未登录飞书时回 401 + `AUTH_*`（如 `AUTH_SESSION_EXPIRED`），这不是 token 错，
   hub 照样用这个 token 重试，用户在 lark-connector 里重新登录后收件箱和实时事件自己恢复，不用重启。
-- `lark.account`（可选整数）：lark-connector 账号编号，`1` 为主账号，`2` 为第二账号；省略或 `0` 使用主账号。
+- `lark.account`（可选整数）：默认账号的 lark-connector 账号编号，`1` 为主账号，`2` 为第二账号；省略或 `0` 使用主账号。
   例如 `"lark": {"base_url": "http://127.0.0.1:<隧道端口>/agent/v1", "token": "<Agent Token>", "account": 2}`。
   账号编号来自 lark-connector `/accounts` 的 `id`，不是飞书用户 ID。允许范围为 1–999999999，账号不存在时上游报错，不会回退到主账号。
-  修改后重启 hub（`systemctl --user restart jarvisd`），收件箱、默认飞书请求、媒体和实时事件统一切换，不需要更新 iOS。
+  lark-connector 上登录的其他账号不用配置，hub 都会读（收件箱、实时事件、App 的「消息」页切换，见 `docs/feishu.md`「多账号」）；
+  默认账号是不带 `ol_account` 的请求用的那个，也是助手、知识库、`/agent` 用的那个。修改后重启 hub（`systemctl --user restart jarvisd`）。
   助手的 `ol` 在新进程启动时继承所选账号；已有助手进程保留启动时的环境，需要重新启动才切换。
   不同账号的服务端收件箱记录隔离并保留，切回后可继续查看；不会同时聚合多个账号。
 - `lark.native_olk_token`（可选）：手机解锁与加密发送的独立授权，默认关闭，不从普通 Agent token 自动派生或读取。

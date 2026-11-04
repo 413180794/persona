@@ -555,10 +555,11 @@ func (h *Hub) runLarkTool(ctx context.Context, name string, args json.RawMessage
 		return b.String(), nil
 	case "lark_messages":
 		var a struct {
-			ChatID string `json:"chat_id"`
-			Thread string `json:"thread"`
-			Limit  int    `json:"limit"`
-			Before string `json:"before"`
+			ChatID  string `json:"chat_id"`
+			Thread  string `json:"thread"`
+			Limit   int    `json:"limit"`
+			Before  string `json:"before"`
+			Account int    `json:"account"`
 		}
 		_ = json.Unmarshal(args, &a)
 		if a.ChatID == "" && a.Thread == "" {
@@ -569,11 +570,12 @@ func (h *Hub) runLarkTool(ctx context.Context, name string, args json.RawMessage
 		}
 		var page lark.Page
 		var err error
+		c := h.lark.ForAccount(a.Account)
 		if a.Thread != "" {
-			page, err = h.lark.Thread(ctx, a.Thread, a.Before, a.Limit)
+			page, err = c.Thread(ctx, a.Thread, a.Before, a.Limit)
 		} else {
 			// A topic group's messages are only the 创建了话题群 notice; what was said is in its topics.
-			page, err = h.lark.ChatPage(ctx, a.ChatID, lark.Window{Before: a.Before}, a.Limit, false)
+			page, err = c.ChatPage(ctx, a.ChatID, lark.Window{Before: a.Before}, a.Limit, false)
 		}
 		if err != nil {
 			return "", err

@@ -25,9 +25,15 @@ nonisolated struct LarkConversation: Codable, Identifiable, Hashable, Sendable {
     var mentionPosition: String?
     /// Client only: open the chat at this message (a flagged message) instead of the first unread.
     var focus: String?
+    /// Client only: the Feishu account the chat is in, sent as `ol_account` (docs/feishu.md「多账号」); nil: the hub's
+    /// own. Kept in the caches.
+    var account: Int?
+    /// Client only: whose account it is, shown beside 飞书 while more than one is signed in.
+    var accountName: String?
 
     enum CodingKeys: String, CodingKey {
         case id, name, avatar, unread, muted, pinned, flagged, done, tags, preview
+        case account = "ol_account", accountName = "account_name"
         case isGroup = "is_group", isTopic = "is_topic", markedUnread = "marked_unread", atMe = "at_me", atAll = "at_all"
         case previewSender = "preview_sender", isMine = "is_mine", updatedAt = "updated_at"
         case readPosition = "read_position", mentionPosition = "mention_position"
@@ -48,11 +54,39 @@ nonisolated struct LarkConversation: Codable, Identifiable, Hashable, Sendable {
         self.focus = focus
     }
 
+    /// What the chat's caches and listeners go by: its feed, apart per account (one group can be in two of them).
+    var key: String { Self.key(id, account: account) }
+    static func key(_ feed: String, account: Int?) -> String { account.map { "a\($0)-\(feed)" } ?? feed }
+
     /// The number on the avatar: unread messages, or 1 for a chat marked unread.
     var badge: Int { unread > 0 ? unread : (markedUnread == true ? 1 : 0) }
     var isPinned: Bool { pinned == true }
     var isFlagged: Bool { flagged == true }
     var isDone: Bool { done == true }
+}
+
+extension LarkMessage {
+    /// The StateCache name of a chat's latest page (the chat paints from it before the network answers).
+    nonisolated static func cacheName(_ c: LarkConversation) -> String { "lark-chat-" + c.key }
+}
+
+/// One Feishu account signed in on the hub's lark-connector (`GET /api/v1/lark/accounts`).
+nonisolated struct LarkAccount: Codable, Identifiable, Hashable, Sendable {
+    var id: Int
+    var name: String?
+    var avatar: String?
+    var tenant: String?
+    var signedIn: Bool
+    var primary: Bool?
+    var unread: Int
+    var quarantined: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, avatar, tenant, primary, unread, quarantined
+        case signedIn = "signed_in"
+    }
+
+    var title: String { name?.isEmpty == false ? name! : "账号 \(id)" }
 }
 
 /// A flagged message in 标记, with the chat it belongs to.
@@ -242,6 +276,14 @@ extension APIClient {
         var messageIDs: [String]?
         enum CodingKeys: String, CodingKey { case position; case badgeCount = "badge_count", messageIDs = "message_ids" }
     }
+
+    struct LarkAccounts: Codable, Sendable {
+        var accounts: [LarkAccount]
+        /// lark.account: the one requests without `ol_account` are about.
+        var `default`: Int
+    }
+    /// The accounts on the hub's lark-connector; a hub from before there were several answers 404.
+    func larkAccounts() async throws -> LarkAccounts { try await get("/api/v1/lark/accounts") }
 
     /// One page of a feed scope: `chats` (消息), `unread`, `done` (已完成), `label:<id>`.
     func larkConversations(scope: String = "chats", cursor: String? = nil) async throws -> LarkConversations {

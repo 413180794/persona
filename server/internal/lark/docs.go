@@ -20,18 +20,27 @@ type Me struct {
 
 func (c *Client) Me(ctx context.Context) (Me, error) {
 	var out struct {
+		ActiveID string `json:"activeId"`
 		Accounts []struct {
 			Me
-			Primary bool `json:"primary"`
-			Active  bool `json:"active"`
+			ID      string `json:"id"`
+			Primary bool   `json:"primary"`
+			Active  bool   `json:"active"`
 		} `json:"accounts"`
 	}
 	if err := c.do(ctx, "GET", "/accounts", nil, nil, &out); err != nil {
 		return Me{}, err
 	}
-	for _, a := range out.Accounts {
-		if a.Active || a.Primary {
-			return a.Me, nil
+	// The account this client names; the primary one is first in the list whichever is asked about.
+	for _, pick := range []func(int) bool{
+		func(i int) bool { return out.ActiveID != "" && out.Accounts[i].ID == out.ActiveID },
+		func(i int) bool { return out.ActiveID == "" && out.Accounts[i].Active },
+		func(i int) bool { return out.ActiveID == "" && out.Accounts[i].Primary },
+	} {
+		for i := range out.Accounts {
+			if pick(i) {
+				return out.Accounts[i].Me, nil
+			}
 		}
 	}
 	if len(out.Accounts) > 0 {

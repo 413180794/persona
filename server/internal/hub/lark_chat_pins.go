@@ -21,7 +21,7 @@ func writeChatPinErr(w http.ResponseWriter, err error) {
 }
 
 func (h *Hub) chatPinAccount(w http.ResponseWriter, r *http.Request, expected string) (string, bool) {
-	account, err := h.lark.SelectedUserID(r.Context())
+	account, err := h.larkOf(r).SelectedUserID(r.Context())
 	if err != nil {
 		writeLarkErr(w, err)
 		return "", false
@@ -33,14 +33,14 @@ func (h *Hub) chatPinAccount(w http.ResponseWriter, r *http.Request, expected st
 	return account, true
 }
 
-func (h *Hub) larkChatPinRoutes(api *http.ServeMux) {
+func (h *Hub) larkChatPinRoutes(api larkMux) {
 	api.HandleFunc("GET /api/v1/lark/conversations/{id}/pins", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		account, ok := h.chatPinAccount(w, r, r.URL.Query().Get("account_id"))
 		if !ok {
 			return
 		}
-		out, err := h.lark.ChatPins(r.Context(), r.PathValue("id"), r.URL.Query().Get("cursor"), atoi(r.URL.Query().Get("limit")))
+		out, err := h.larkOf(r).ChatPins(r.Context(), r.PathValue("id"), r.URL.Query().Get("cursor"), atoi(r.URL.Query().Get("limit")))
 		if err != nil {
 			writeChatPinErr(w, err)
 			return
@@ -56,7 +56,7 @@ func (h *Hub) larkChatPinRoutes(api *http.ServeMux) {
 		if !ok {
 			return
 		}
-		target, err := h.lark.ResolveChatPin(r.Context(), r.PathValue("id"), r.PathValue("message"), r.URL.Query().Get("topic") == "1")
+		target, err := h.larkOf(r).ResolveChatPin(r.Context(), r.PathValue("id"), r.PathValue("message"), r.URL.Query().Get("topic") == "1")
 		if err != nil {
 			writeChatPinErr(w, err)
 			return
@@ -84,7 +84,7 @@ func (h *Hub) larkChatPinRoutes(api *http.ServeMux) {
 		if !ok {
 			return
 		}
-		if err := h.lark.ChangeChatPin(r.Context(), account, r.PathValue("id"), in.Message, in.Pin, in.Remove); err != nil {
+		if err := h.larkOf(r).ChangeChatPin(r.Context(), account, r.PathValue("id"), in.Message, in.Pin, in.Remove); err != nil {
 			writeChatPinErr(w, err)
 			return
 		}

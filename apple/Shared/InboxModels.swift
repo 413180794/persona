@@ -135,10 +135,13 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
         var readPosition: String?
         var mentionPosition: String?
         var atAll: Bool?
+        /// The Feishu account the chat is in, to pass as `ol_account`; nil: the hub's own (older hubs: always).
+        var olAccount: Int?
 
         enum CodingKeys: String, CodingKey {
             case feedID = "feed_id", isGroup = "is_group", isTopic = "is_topic", startPosition = "start_position"
             case readPosition = "read_position", mentionPosition = "mention_position", atAll = "at_all"
+            case olAccount = "ol_account"
         }
     }
 

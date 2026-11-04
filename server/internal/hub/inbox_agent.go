@@ -194,7 +194,7 @@ func (h *Hub) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 	now := time.Now().UTC()
 	for _, it := range queued {
 		it.Agent.State, it.Agent.StartedAt = AgentRunning, &now
-		jobs = append(jobs, job{it, inboxAgentPromptFor(it, h.ownerName(), h.kbContextFor(it), linked[it.Agent.TodoID])})
+		jobs = append(jobs, job{it, inboxAgentPromptFor(it, h.ownerName(), h.kbContextFor(it), linked[it.Agent.TodoID], max(h.inbox.larkAccount, 1))})
 	}
 	h.inbox.mu.Unlock()
 	for _, j := range jobs {
@@ -286,15 +286,19 @@ func (h *Hub) sweepInboxAgents(ctx context.Context, cfg InboxAgentConfig, now ti
 
 // inboxAgentPrompt is the AI 分身's first message for an item (prompts/inbox/agent.md).
 func inboxAgentPrompt(it *InboxItem, owner string, kbc *prompts.KBContext) string {
-	return inboxAgentPromptFor(it, owner, kbc, nil)
+	return inboxAgentPromptFor(it, owner, kbc, nil, 1)
 }
 
 // inboxAgentPromptFor is inboxAgentPrompt for an item about one of the user's tasks (linked: its progress).
-func inboxAgentPromptFor(it *InboxItem, owner string, kbc *prompts.KBContext, linked *prompts.InboxTask) string {
+// larkDefault is lark.account: the Feishu account lark_messages reads unless the prompt names another.
+func inboxAgentPromptFor(it *InboxItem, owner string, kbc *prompts.KBContext, linked *prompts.InboxTask, larkDefault int) string {
 	a := prompts.InboxAgent{Owner: owner, Title: it.Title, Item: promptItem(it), Task: it.Agent.Task, KB: kbc, Linked: linked}
 	switch {
 	case it.Lark != nil:
 		a.Lark = &prompts.InboxAgentLark{FeedID: it.Lark.FeedID}
+		if account := larkItemAccount(it); account != larkDefault {
+			a.Lark.Account = account
+		}
 	case it.Doc != nil:
 		a.Doc = &prompts.InboxAgentDoc{URL: it.Doc.URL, Rows: len(it.Doc.Rows) > 0}
 	case it.Moment != nil:

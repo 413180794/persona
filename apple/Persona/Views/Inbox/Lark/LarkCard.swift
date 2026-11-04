@@ -716,6 +716,7 @@ struct LarkCardButton: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.larkContext) private var context
     @Environment(\.larkRefresh) private var refresh
+    @Environment(\.larkAccount) private var larkAccount
     @State private var pending = false
 
     var body: some View {
@@ -733,7 +734,7 @@ struct LarkCardButton: View {
             Task {
                 defer { pending = false }
                 do {
-                    try await AppModel.shared.api?.larkCardAction(message: mid, action: aid)
+                    try await AppModel.shared.api?.lark(larkAccount).larkCardAction(message: mid, action: aid)
                     Haptics.success()
                     AppModel.shared.toast = Toast("已提交「\(label)」", style: .success)
                     try? await Task.sleep(for: .seconds(1.2))
@@ -937,6 +938,7 @@ struct LarkCardOverflow: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.larkContext) private var context
     @Environment(\.larkRefresh) private var refresh
+    @Environment(\.larkAccount) private var larkAccount
 
     var body: some View {
         let options = (node.raw["options"]?.array ?? []).filter { $0["disabled"]?.bool != true }
@@ -949,7 +951,7 @@ struct LarkCardOverflow: View {
                     Button {
                         Task {
                             do {
-                                try await AppModel.shared.api?.larkCardAction(message: mid, action: aid)
+                                try await AppModel.shared.api?.lark(larkAccount).larkCardAction(message: mid, action: aid)
                                 Haptics.success()
                                 AppModel.shared.toast = Toast("已提交「\(text)」", style: .success)
                                 try? await Task.sleep(for: .seconds(1.2))

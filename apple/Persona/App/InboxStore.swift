@@ -253,6 +253,9 @@ extension InboxItem {
                                  unread: isDone ? 0 : count, atMe: kind == "mention")
         c.updatedAt = updatedAt
         c.readPosition = l.readPosition
+        c.account = l.olAccount
+        // "飞书 · <name>" while the hub reads more than one account.
+        if let name = accountName.split(separator: " · ", maxSplits: 1).dropFirst().first { c.accountName = String(name) }
         if !isDone, let p = l.startPosition { c.focus = p }
         return c
     }

@@ -20,11 +20,20 @@ final class LarkConversationsModel {
         var cached: () -> Snapshot?
         var save: (Snapshot?) -> Void
 
-        static func live(_ config: ServerConfig) -> Self {
-            let api = APIClient(config: config)
-            let cache = LarkConversationCache(name: cacheName(config))
-            return Self(page: { try await api.larkConversationPage(cursor: $0, accountID: $1) },
-                        pinned: { try await api.larkPinnedSnapshot() },
+        /// account: the Feishu account to list (`ol_account`); nil: the hub's own. Its rows carry it (`LarkConversation.account`).
+        static func live(_ config: ServerConfig, account: Int? = nil, accountName: String? = nil) -> Self {
+            let api = APIClient(config: config).lark(account)
+            let cache = LarkConversationCache(name: cacheName(config, account: account))
+            let stamp = { (page: APIClient.LarkConversations) -> APIClient.LarkConversations in
+                var page = page
+                for i in page.conversations.indices {
+                    page.conversations[i].account = account
+                    page.conversations[i].accountName = accountName
+                }
+                return page
+            }
+            return Self(page: { stamp(try await api.larkConversationPage(cursor: $0, accountID: $1)) },
+                        pinned: { stamp(try await api.larkPinnedSnapshot()) },
                         status: { try await api.larkStatus() }, cached: { cache.load() }, save: { cache.save($0) })
         }
     }
@@ -70,10 +79,10 @@ final class LarkConversationsModel {
         }
     }
 
-    static func cacheName(_ config: ServerConfig) -> String {
+    static func cacheName(_ config: ServerConfig, account: Int? = nil) -> String {
         let digest = SHA256.hash(data: Data((config.url.absoluteString + "\n" + config.token).utf8))
         // Old snapshots have no owner. Do not import them into an account-bound shelf.
-        return "lark-conversations-v2-" + digest.map { String(format: "%02x", $0) }.joined()
+        return "lark-conversations-v2-" + digest.map { String(format: "%02x", $0) }.joined() + (account.map { "-a\($0)" } ?? "")
     }
 
     /// Fetch the complete shelf and every loaded page before replacing the snapshot.

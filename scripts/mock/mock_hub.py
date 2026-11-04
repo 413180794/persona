@@ -2976,6 +2976,17 @@ LARK_CHATS = [{"id": "f2", "is_mine": False, "name": "设计评审", "is_group":
                "preview_sender": "Tom", "read_position": "299", "updated_at": ago(minutes=30)},
               {"id": "f1", "is_mine": False, "name": "韩梅梅", "is_group": False, "unread": 2, "at_me": False, "muted": False, "preview": "新包发你了",
                "read_position": "99", "updated_at": ago(minutes=2)}]
+# MOCK_LARK_ACCOUNTS=1: a second Feishu account signed in on the lark-connector (docs/feishu.md「多账号」): GET
+# /api/v1/lark/accounts lists both, ol_account=2 reads its own chats, and the inbox has an item from it.
+LARK_ACCOUNTS = [{"id": 1, "name": "我", "tenant": "示例公司", "signed_in": True, "primary": True, "unread": 17},
+                 {"id": 2, "name": "工作号", "tenant": "示例集团", "signed_in": True, "unread": 4},
+                 {"id": 3, "name": "旧账号", "signed_in": False, "unread": 0}]
+LARK_CHATS_2 = [{"id": "w1", "is_mine": False, "name": "季度规划", "is_group": True, "unread": 3, "at_me": True, "muted": False,
+                 "preview": "@你 下周一前把排期填一下", "preview_sender": "王芳", "updated_at": ago(minutes=8)},
+                {"id": "w2", "is_mine": False, "name": "王芳", "is_group": False, "unread": 1, "at_me": False, "muted": False,
+                 "preview": "会议纪要发你了", "updated_at": ago(minutes=40)},
+                {"id": "w3", "is_mine": True, "name": "运维值班", "is_group": True, "unread": 0, "at_me": False, "muted": True,
+                 "preview": "收到", "updated_at": ago(hours=3)}]
 def _lm(pos, who, text, mine=False, mins=60):
     return {"id": "m" + pos, "position": pos, "sender_id": "u-" + who, "sender_name": who, "is_mine": mine, "type": "TEXT", "text": text,
             "created_at": ago(minutes=mins), "recalled": False, "reply_count": 0}
@@ -3115,6 +3126,16 @@ def _lark_f3():
 
 
 LARK_MESSAGES["f3"], LARK_THREADS = _lark_f3()
+LARK_MESSAGES["w1"] = [_lm("10", "王芳", "@你 下周一前把排期填一下，表格在群公告里", mins=8)]
+if os.environ.get("MOCK_LARK_ACCOUNTS"):
+    for it in INBOX:
+        if it.get("lark") and it["account_name"] == "飞书":
+            it["account_name"] = "飞书 · 我"
+    INBOX.insert(0, {"id": "lark:account:2:w1:10", "source": "lark", "kind": "mention", "account": "feishu", "account_name": "飞书 · 工作号",
+                     "title": "季度规划", "sender": "王芳", "preview": "@你 下周一前把排期填一下，表格在群公告里", "count": 1,
+                     "started_at": ago(minutes=8), "updated_at": ago(minutes=8), "tier": "action", "summary": "王芳请你下周一前填排期",
+                     "reason": "@了你，有截止时间", "read": False,
+                     "lark": {"account_id": 2, "ol_account": 2, "feed_id": "w1", "is_group": True, "start_position": "10"}})
 
 # The direct chat with 韩梅梅 (inbox f1): unread from 100, then my answers with each kind of read receipt.
 LARK_MESSAGES["f1"] = [_lm(str(pos), who, text, mine=who == "我", mins=mins) for pos, who, text, mins in (
@@ -6789,6 +6810,11 @@ class H(BaseHTTPRequestHandler):
             p.startswith(("/api/v1/lark/conversations/", "/api/v1/lark/messages/")) and p.endswith(("/messages", "/thread")))
         if lark_read and os.environ.get("MOCK_LARK_LOGGED_OUT"):
             return self.send_json({"error": LARK_LOGGED_OUT, "code": "lark_not_logged_in"}, 502)
+        if p == "/api/v1/lark/accounts" and os.environ.get("MOCK_LARK_ACCOUNTS"):
+            return self.send_json({"accounts": LARK_ACCOUNTS, "default": 1})
+        if p in ("/api/v1/lark/conversations", "/api/v1/lark/pinned") and q.get("ol_account", [""])[0] == "2" and os.environ.get("MOCK_LARK_ACCOUNTS"):
+            return self.send_json({"conversations": LARK_CHATS_2 if p.endswith("conversations") else LARK_CHATS_2[:1],
+                                   "next_cursor": "", "account_id": "mock-lark-account-2"})
         if p in ("/api/v1/lark/conversations", "/api/v1/lark/pinned"):
             if os.environ.get("MOCK_LARK_PINS"):
                 LARK_PIN_FIXTURE["requests"] += 1

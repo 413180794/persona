@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"maps"
 	"os/exec"
 	"regexp"
 	"sort"
@@ -149,7 +150,57 @@ func (n *Node) launcherProbe(ctx context.Context, name string, args ...string) (
 	if !ok {
 		return Probe{}, fmt.Errorf("%s did not start an agent when tried", name)
 	}
-	return p, nil
+	return withSettingsEnv(p, n.home), nil
+}
+
+// withSettingsEnv puts the env of the --settings a claude launcher passes on top of what the probe saw. Claude Code
+// reads that file itself once it runs, so a gateway and key set there (`alias work="claude --settings
+// ~/.claude/settings.work.json"`) are not in the environment the stub printed, and the launcher looked like one with
+// no gateway: no quota, no gateway on its page. Settings env wins over the process env, as in Claude Code. A file
+// that cannot be read leaves the probe as it was. home: where ~ and a relative path are from.
+func withSettingsEnv(p Probe, home string) Probe {
+	if p.Agent != "claude" {
+		return p
+	}
+	arg := settingsArg(p.Args)
+	if arg == "" {
+		return p
+	}
+	s, err := readLauncherSettings(arg, home, home)
+	if err != nil {
+		return p
+	}
+	env, _ := s["env"].(map[string]any)
+	if len(env) == 0 {
+		return p
+	}
+	merged := make(map[string]string, len(p.Env)+len(env))
+	maps.Copy(merged, p.Env)
+	for k, v := range env {
+		switch v := v.(type) {
+		case string:
+			merged[k] = v
+		case float64:
+			merged[k] = strconv.FormatFloat(v, 'f', -1, 64)
+		case bool:
+			merged[k] = strconv.FormatBool(v)
+		}
+	}
+	p.Env = merged
+	return p
+}
+
+// settingsArg is the last --settings in args, "" for none: Claude Code keeps only the last one.
+func settingsArg(args []string) string {
+	s := ""
+	for i, a := range args {
+		if a == "--settings" && i+1 < len(args) {
+			s = args[i+1]
+		} else if v, ok := strings.CutPrefix(a, "--settings="); ok {
+			s = v
+		}
+	}
+	return s
 }
 
 // --- what the probe means ---

@@ -52,7 +52,7 @@ func TestLarkNativeEncryptedReceiptSurvivesRestart(t *testing.T) {
 		h.store = store
 		h.lark = lark.New(lark.Config{BaseURL: up.URL, Token: "ordinary", NativeOLKToken: strings.Repeat("n", 43)})
 		mux := http.NewServeMux()
-		h.larkEncryptionRoutes(mux)
+		h.larkEncryptionRoutes(larkMux{mux, h})
 		body, _ := json.Marshal(map[string]string{"account_id": account, "ciphertext": ciphertext.String(), "client_id": clientID, "reply_id": "555"})
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, httptest.NewRequest("POST", "/api/v1/lark/conversations/789/encrypted-messages", strings.NewReader(string(body))))
@@ -98,7 +98,7 @@ func TestLarkNativeEncryptionRoutes(t *testing.T) {
 	defer up.Close()
 	h := &Hub{lark: lark.New(lark.Config{BaseURL: up.URL + "/agent/v1", Token: "regular", NativeOLKToken: strings.Repeat("n", 43), Account: 7})}
 	mux := http.NewServeMux()
-	h.larkEncryptionRoutes(mux)
+	h.larkEncryptionRoutes(larkMux{mux, h})
 	for _, tc := range []struct {
 		method, path, body string
 		status             int
@@ -109,7 +109,7 @@ func TestLarkNativeEncryptionRoutes(t *testing.T) {
 		{"POST", "/api/v1/lark/conversations/789/encryption/prepare", `{"account_id":"123","text":"secret","cover":"下周再聊"}`, 409},
 	} {
 		w := httptest.NewRecorder()
-		mux.ServeHTTP(w, httptest.NewRequest(tc.method, tc.path+"?ol_account=99", strings.NewReader(tc.body)))
+		mux.ServeHTTP(w, httptest.NewRequest(tc.method, tc.path+"?ol_account=7", strings.NewReader(tc.body)))
 		if w.Code != tc.status || w.Header().Get("Cache-Control") != "no-store" || strings.Contains(w.Body.String(), "private upstream") {
 			t.Fatalf("%s: %d %s", tc.path, w.Code, w.Body)
 		}
@@ -118,7 +118,7 @@ func TestLarkNativeEncryptionRoutes(t *testing.T) {
 func TestLarkNativeValidationAndRole(t *testing.T) {
 	h := &Hub{}
 	mux := http.NewServeMux()
-	h.larkEncryptionRoutes(mux)
+	h.larkEncryptionRoutes(larkMux{mux, h})
 	for _, tc := range []struct{ path, body string }{
 		{"/api/v1/lark/encryption/unlock", `{"account_id":"123","password":"x","unknown":true}`},
 		{"/api/v1/lark/encryption/unlock", `{"account_id":"123","password":"` + strings.Repeat("x", 5000) + `"}`},

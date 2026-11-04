@@ -35,10 +35,10 @@ func writeLarkEncryptionErr(w http.ResponseWriter, err error) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]string{"code": code, "error": message})
 }
-func (h *Hub) larkEncryptionRoutes(api *http.ServeMux) {
+func (h *Hub) larkEncryptionRoutes(api larkMux) {
 	api.HandleFunc("GET /api/v1/lark/encryption", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
-		out, err := h.lark.NativeOLKStatus(r.Context())
+		out, err := h.larkOf(r).NativeOLKStatus(r.Context())
 		if err != nil {
 			writeLarkEncryptionErr(w, err)
 			return
@@ -57,7 +57,7 @@ func (h *Hub) larkEncryptionRoutes(api *http.ServeMux) {
 			writeErr(w, 400, errors.New("解锁信息无效"))
 			return
 		}
-		out, err := h.lark.NativeOLKUnlock(r.Context(), in.Account, in.Password)
+		out, err := h.larkOf(r).NativeOLKUnlock(r.Context(), in.Account, in.Password)
 		if err != nil {
 			writeLarkEncryptionErr(w, err)
 			return
@@ -75,7 +75,7 @@ func (h *Hub) larkEncryptionRoutes(api *http.ServeMux) {
 			writeErr(w, 400, errors.New("会话信息无效"))
 			return
 		}
-		lines, err := h.lark.NativeOLKCovers(r.Context(), in.Account, r.PathValue("id"))
+		lines, err := h.larkOf(r).NativeOLKCovers(r.Context(), in.Account, r.PathValue("id"))
 		if err != nil {
 			writeLarkEncryptionErr(w, err)
 			return
@@ -95,7 +95,7 @@ func (h *Hub) larkEncryptionRoutes(api *http.ServeMux) {
 			writeErr(w, 400, errors.New("加密文字或对外展示内容无效"))
 			return
 		}
-		out, err := h.lark.NativeOLKEncrypt(r.Context(), in.Account, r.PathValue("id"), in.Text, in.Cover)
+		out, err := h.larkOf(r).NativeOLKEncrypt(r.Context(), in.Account, r.PathValue("id"), in.Text, in.Cover)
 		if err != nil {
 			writeLarkEncryptionErr(w, err)
 			return
@@ -116,7 +116,7 @@ func (h *Hub) larkEncryptionRoutes(api *http.ServeMux) {
 			writeErr(w, 400, errors.New("加密消息无效，未发送"))
 			return
 		}
-		id, err := h.lark.SendOLKCiphertext(r.Context(), in.Account, r.PathValue("id"), in.Text, in.ClientID, in.Reply)
+		id, err := h.larkOf(r).SendOLKCiphertext(r.Context(), in.Account, r.PathValue("id"), in.Text, in.ClientID, in.Reply)
 		if err != nil {
 			writeLarkEncryptionErr(w, err)
 			return

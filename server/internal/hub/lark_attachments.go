@@ -26,7 +26,7 @@ func validAttachmentMIME(s string) bool {
 	return err == nil && strings.Contains(t, "/") && len(params) == 0 && len(s) <= 200
 }
 
-func (h *Hub) larkAttachmentRoutes(api *http.ServeMux) {
+func (h *Hub) larkAttachmentRoutes(api larkMux) {
 	api.HandleFunc("POST /api/v1/lark/conversations/{id}/images", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			ClientID string `json:"client_id"`
@@ -59,7 +59,7 @@ func (h *Hub) larkAttachmentRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, errors.New("图片格式不匹配"))
 			return
 		}
-		out, err := h.lark.SendImage(r.Context(), r.PathValue("id"), in.ClientID, in.Name, in.MIME, in.Data)
+		out, err := h.larkOf(r).SendImage(r.Context(), r.PathValue("id"), in.ClientID, in.Name, in.MIME, in.Data)
 		if err != nil {
 			writeLarkErr(w, err)
 			return
@@ -85,7 +85,7 @@ func (h *Hub) larkAttachmentRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusRequestEntityTooLarge, errors.New("文件不能超过 100 MiB"))
 			return
 		}
-		out, err := h.lark.SendFile(r.Context(), r.PathValue("id"), q.Get("client_id"), q.Get("name"), q.Get("mime"),
+		out, err := h.larkOf(r).SendFile(r.Context(), r.PathValue("id"), q.Get("client_id"), q.Get("name"), q.Get("mime"),
 			http.MaxBytesReader(w, r.Body, r.ContentLength), r.ContentLength)
 		if err != nil {
 			writeLarkErr(w, err)

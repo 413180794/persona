@@ -20,6 +20,7 @@ struct LarkProfileView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.feishuOpen) private var feishuOpen
+    @Environment(\.larkAccount) private var account
     var person: LarkPersonRef
     /// Pushed inside an existing navigation stack (a route) rather than presented as its own sheet.
     var embedded = false
@@ -65,7 +66,7 @@ struct LarkProfileView: View {
         }
         .ignoresSafeArea(edges: .top)
         .task {
-            guard let api = model.api else { return }
+            guard let api = model.api?.lark(account) else { return }
             do { profile = try await api.larkProfile(person.id, feedID: person.feedID) } catch { self.error = error.localizedDescription }
         }
     }
@@ -121,12 +122,14 @@ struct LarkProfileView: View {
     private var messageButton: some View {
         Button {
             Task {
-                guard let api = model.api else { return }
+                guard let api = model.api?.lark(account) else { return }
                 opening = true
                 defer { opening = false }
                 do {
                     let feed = try await api.larkDirectChat(person.id)
-                    push(.chat(LarkConversation(id: feed, name: displayName, avatar: profile?.avatarUrl ?? person.avatar, isGroup: false)))
+                    var chat = LarkConversation(id: feed, name: displayName, avatar: profile?.avatarUrl ?? person.avatar, isGroup: false)
+                    chat.account = account
+                    push(.chat(chat))
                 } catch {
                     model.show(error)
                 }

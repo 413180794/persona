@@ -486,6 +486,10 @@ func TestGoldenInboxAgentPrompt(t *testing.T) {
 	h.kb.eng = goldenKB(t)
 	it := *items["mention"]
 	golden(t, "inbox_agent.mention_kb", inboxAgentPrompt(&it, h.ownerName(), h.kbContextFor(&it)))
+	// A chat in another Feishu account than lark.account: the prompt names it for lark_messages.
+	it = *items["dm"]
+	it.Lark = &InboxLark{AccountID: 2, FeedID: "f2"}
+	golden(t, "inbox_agent.dm_second_account", inboxAgentPromptFor(&it, "示例用户", nil, nil, 1))
 	it = *items["mail_direct"]
 	it.Mail = &InboxMail{AccountID: "acc1", Mailbox: "INBOX", UIDs: []uint32{3}, From: mail.Address{Email: "Sender@Example.com"}}
 	golden(t, "inbox_agent.mail_kb", inboxAgentPrompt(&it, "", h.kbContextFor(&it)))
@@ -567,7 +571,7 @@ func TestGoldenInboxTask(t *testing.T) {
 	task := prompts.InboxTask{ID: "todo_1", Title: "修登录崩溃", State: "在做", Last: "测试通过 42/42"}
 	golden(t, "inbox_judge_input.with_task", prompts.RenderInboxJudgeInput(prompts.InboxJudgeInput{Summary: "张三问修复进度",
 		Item: promptItem(items["dm"]), Tasks: []prompts.InboxTask{task}}))
-	golden(t, "inbox_agent.with_task", inboxAgentPromptFor(items["dm"], "示例用户", nil, &task))
+	golden(t, "inbox_agent.with_task", inboxAgentPromptFor(items["dm"], "示例用户", nil, &task, 1))
 }
 
 // Closing a finished task (docs/todos.md「自动完成」): the judge's system prompt and its input, with and without hints.

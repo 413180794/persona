@@ -141,3 +141,12 @@ SwiftUI List 默认行 inset 会叠加内容自己的 padding。#957 在 iOS 27 
 - `pins.updated` 表示列表变化，`pins.read-state.updated` 是已读状态变化。订阅后者再刷新 Pin 列表会形成自触发循环。
 - `capabilities` 是部分覆盖：对象存在但没有某个键时沿用 lark-connector 的默认值；整个对象缺失表示旧响应、不能推定写权限。正常消息 `localState` 是 `synced`，不能以非空为由禁用；撤回/删除禁止添加，但移除旧 Pin 仍按 `unpin` 权限。
 - Pin 写请求没有客户端幂等键，不能照搬文字发送的自动重试。网络失败、服务端 5xx、成功但回执缺字段都按未知处理，重新读列表后再由用户决定。定位也先获取完整目标窗口，失败不清空聊天。
+
+## lark-connector 多账号（#1321）
+
+- `GET /agent/v1/accounts` 不管问的是哪个账号，列表都按 lark-connector 的顺序，主账号 1 在最前；哪个是这次请求的账号看 `activeId`（旧版看 `active`）。
+  以前 `lark.Client.Me` 取「第一个 `active || primary`」，带 `x-lark-connector-account: 2` 问到的也是账号 1 的身份；现在先按 `activeId` 找。
+- 同一个群可以同时在两个账号里，feed id 一样：收件箱条目、App 的聊天缓存（`lark-chat-<key>`）和实时监听都要按「账号 + feed」区分，
+  不能只按 feed。因此 hub 也不按 feed 猜账号（旧客户端打开别的账号的会话时就用默认账号，宁可读不到也不能以错的身份发出去）。
+- 添加的账号的资源 URL（头像、图片、文件）lark-connector 自带 `ol_account`，hub 改写成 `/api/v1/lark/media/…?ol_account=N` 后原样带回来就对，
+  App 给这类 URL 加账号时不能覆盖它已有的 `ol_account`。
