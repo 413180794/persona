@@ -128,9 +128,13 @@ final class WatchModel {
         // To the hub of the interaction's own group.
         guard sessions.first(where: { $0.key == ix.sessionKey })?.canApprove == true, let api = api(ix.group) else { return }
         do {
-            try await api.resolve(ix.id, r)
+            _ = try await api.resolve(ix.id, r)
             interactions.removeAll { $0.uid == ix.uid }
             WKInterfaceDevice.current().play(.success)
+        } catch let e as APIError where e.status == 410 {
+            // Already ended on server: remove interaction cleanly without error
+            interactions.removeAll { $0.uid == ix.uid }
+            WKInterfaceDevice.current().play(.directionDown)
         } catch {
             self.error = error.watchShown
             WKInterfaceDevice.current().play(.failure)

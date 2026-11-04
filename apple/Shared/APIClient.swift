@@ -917,7 +917,10 @@ nonisolated struct APIClient: Sendable {
     func interactions() async throws -> [Interaction] {
         stamp(try await get("/api/v1/interactions", as: InteractionsResponse.self).interactions)
     }
-    func resolve(_ id: String, _ r: Resolution) async throws { try await post("/api/v1/interactions/\(id)/resolve", body: r) }
+    @discardableResult
+    func resolve(_ id: String, _ r: Resolution) async throws -> ResolveResult {
+        try await post("/api/v1/interactions/\(id)/resolve", body: r, as: ResolveResult.self)
+    }
 
     struct DeviceBody: Encodable {
         var deviceID: String

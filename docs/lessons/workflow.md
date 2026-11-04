@@ -50,6 +50,15 @@
 - 网页静态说明、表单 placeholder、mock、测试里的示例机器 ID 也要避免个人配置值（2026-11-03，#627）：即使是常见的机器类型词，与本机配置重合也会让全仓隐私扫描拦住发布。ID 用明确的示例标识，域名用 example.com，说明文字描述机器类型，不修改敏感词或给页面加豁免。
 - `gh pr checks` 的旧版本不支持 `--fail-fast`（2026-11-02，#341）：先看 `--help`，用支持的 `--watch` / `--interval`；参数错误的退出码 1 不等于 CI 失败，要看具体 check 的结论。
 
+## PR 里贴截图和录屏
+
+- 不用第三方图床、不进仓库：`gh` 2.99 起 `gh pr create`、`gh pr comment`、`gh issue comment` 等有 `--attach`（可重复，一次最多 50 个），
+  图片和视频传到 GitHub 的 user-attachments。正文写 `--body-file x.md`，里面用 `![说明](./a.png)` 引用，路径相对 body 文件所在目录。
+- 只有 Markdown 的 `![…](./a.png)` 会被换成上传后的地址；HTML 的 `<img src="./a.png" width=…>` 原样留着（2026-11-04，#1691）：
+  表格里全是坏图，附件被追加到评论末尾。要控制大小就先发 Markdown，再用 `gh api -X PATCH repos/<仓库>/issues/comments/<id> -F body=@…` 把地址填进 `<img>`。
+- 仓库是私有的，附件也只有成员能看：不登录 `curl` 是 404，带 `gh auth token` 是 200，不是传坏了。
+- 截图只用 mock hub / 体验模式的编造数据，`scripts/privacy_check.py` 查不到图片里的字，发之前自己看一遍。
+
 ## 临时的测试 hub
 
 - 产品改名不等于运行时契约改名（2026-11-03，#277）：文档的产品名写 Persona，但历史路径、签名 profile、数据库 / 数据卷、协议字段、包 ID、缓存键和源码证据不能盲替换。文档展示 `personad` / `~/.persona` 时明确旧 `jarvisd` / `~/.jarvis` 兼容，环境变量只为已经实现的新入口写优先级；独立文案 PR 不作为运行时迁移已经完成的证明。

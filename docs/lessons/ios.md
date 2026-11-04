@@ -752,6 +752,13 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
 - 子 Agent 的标题优先取 `description`，没有取 `type`，兜底取「子任务」；补充行只列 `running == true` 的项，最多 3 个顿号连接，超出部分显示「等 N 个」。
 - 主行 `TaskNow` 的计算规则完全独立，子 Agent 仅作为补充展示，绝不覆盖主 Agent 本身的话语或执行步骤；`Session.sameApartFromTicks` 包含 `subagents` 比较，保证状态实时刷新。
 
+## 提问卡片回答结局与状态：200 already 与 410 status 友好映射（2026-11-04，#1688）
+
+- hub 的 `POST /api/v1/interactions/{id}/resolve` 针对已结束的提问，若已回答则幂等返回 200 `already: true` 并带上当时的 `resolution`；若过期、撤回或交回电脑则返回 410 `code: gone` 并带上 `status`。
+- 客户端解析 200 的 `already` 回应，展示当时的答案，切勿误判为未完成；410 按 `status`（`expired`、`cancelled`、`dismissed`）展示中文说明，不弹原始英文错误。
+- 本地记录已结束的 interaction ID，`replaceInteractions` 合并快照时不放回已结束项，杜绝快照竞态复活。
+
+
 
 ## 隔离预览 HTML：规则表和 loadHTMLString 的地址（2026-11-04，#1297）
 

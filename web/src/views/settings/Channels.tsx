@@ -15,6 +15,7 @@ import { useStore } from "../../lib/store";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
 import { ChannelMark } from "../../ui/ChannelMark";
 import { Icon } from "../../ui/icons";
+import { QRStep, useStepPolling } from "./LoginSteps";
 import { Group, Pill, Row, Switch } from "./SettingsParts";
 
 const DOT: Record<ChannelTone, string> = { green: "bg-green", red: "bg-red", idle: "bg-line-strong" };
@@ -391,40 +392,6 @@ function TargetPicker({ open, current, onClose, onPick }: { open: boolean; curre
 
 // ── binding, a step at a time ────────────────────────────
 
-/** A QR code from the hub's modules (rows of "0" / "1"), in the page's own colors, with its quiet zone. */
-function QRCode({ rows, size = 184 }: { rows: string[]; size?: number }) {
-  const n = rows.length;
-  const quiet = 2;
-  const cells: string[] = [];
-  rows.forEach((row, y) => {
-    for (let x = 0; x < row.length; x++) if (row[x] === "1") cells.push(`M${x + quiet} ${y + quiet}h1v1h-1z`);
-  });
-  return (
-    <svg role="img" aria-label="绑定用的二维码" width={size} height={size} viewBox={`0 0 ${n + quiet * 2} ${n + quiet * 2}`} shapeRendering="crispEdges" className="rounded-[10px] bg-white">
-      <path d={cells.join("")} fill="#000" />
-    </svg>
-  );
-}
-
-function saveQR(rows: string[], name: string) {
-  const n = rows.length + 4;
-  const scale = 12;
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = n * scale;
-  const g = canvas.getContext("2d");
-  if (!g) return;
-  g.fillStyle = "#fff";
-  g.fillRect(0, 0, canvas.width, canvas.height);
-  g.fillStyle = "#000";
-  rows.forEach((row, y) => {
-    for (let x = 0; x < row.length; x++) if (row[x] === "1") g.fillRect((x + 2) * scale, (y + 2) * scale, scale, scale);
-  });
-  const a = document.createElement("a");
-  a.href = canvas.toDataURL("image/png");
-  a.download = `${name}-二维码.png`;
-  a.click();
-}
-
 function BindSteps({ c, onDone }: { c: Channel; onDone: () => Promise<void> }) {
   const [prompt, setPrompt] = useState<ChannelPrompt | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -462,23 +429,7 @@ function BindSteps({ c, onDone }: { c: Channel; onDone: () => Promise<void> }) {
   }, [c.id, c.name, onDone]);
 
   // A QR code or a code on screen: ask again every interval until it is scanned / sent.
-  const polled = isPolled(prompt) ? prompt : null;
-  useEffect(() => {
-    if (!polled) return;
-    let stop = false;
-    let t: ReturnType<typeof setTimeout>;
-    const tick = () => {
-      t = setTimeout(async () => {
-        if (stop) return;
-        if (!(await send(polled.step ?? "", {}, true)) && !stop) tick();
-      }, Math.max(polled.interval ?? 3, 1) * 1000);
-    };
-    tick();
-    return () => {
-      stop = true;
-      clearTimeout(t);
-    };
-  }, [polled?.step, polled?.user_code, polled?.url]); // eslint-disable-line react-hooks/exhaustive-deps
+  useStepPolling(isPolled(prompt) ? prompt : null, (step) => send(step, {}, true), 3);
 
   const footer = c.bind === "qr" ? "用手机上的" + c.name + "扫码，确认后这里自动继续。" : undefined;
   if (!prompt) {
@@ -502,14 +453,7 @@ function BindSteps({ c, onDone }: { c: Channel; onDone: () => Promise<void> }) {
         </div>
       )}
       {prompt.kind === "qr" && prompt.qr ? (
-        <div className="flex flex-col items-center gap-3 px-4 py-4">
-          <QRCode rows={prompt.qr.rows} />
-          <p className="flex items-center gap-2 text-[12.5px] text-ink-3"><Spinner size={11} />等你在{c.name}里扫码确认…</p>
-          <div className="flex items-center gap-2">
-            <Button tone="secondary" icon="download" onClick={() => saveQR(prompt.qr!.rows, c.name)}>保存二维码</Button>
-            <Button tone="quiet" onClick={() => setPrompt(null)}>取消</Button>
-          </div>
-        </div>
+        <QRStep rows={prompt.qr.rows} app={c.name} label="绑定用的二维码" onCancel={() => setPrompt(null)} />
       ) : prompt.kind === "pair_code" || prompt.kind === "device_code" ? (
         <div className="flex flex-col gap-3 px-4 py-3">
           <div className="flex items-center gap-3">

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   canSendStep, connectorBrand, connectorOpenTitle, connectorState, connectorSummary, connectorTone, deletedLine, feedsFooter, fieldInput, githubInboxFooter, githubMachineLine,
-  githubOptions, githubScopeAdvice, isDeviceCode, isStarting, labelColor, listConnectors, logoutMessage, mediaLine, mergeNewest, mergeOlder, mutableRepo,
-  otherConnectors, setGitHubAuth, signInFooter, signsInHere, startsGroup, switchFooter, undescribed,
+  githubOptions, githubScopeAdvice, isDeviceCode, isPolledStep, isStarting, labelColor, listConnectors, logoutMessage, mediaLine, mergeNewest, mergeOlder, mutableRepo,
+  otherConnectors, setGitHubAuth, signInFooter, signsInHere, startsGroup, stepView, switchFooter, undescribed,
   type HubConnector, type ThreadMessage, type ThreadPage,
 } from "./connectors";
 
@@ -96,6 +96,30 @@ describe("分步登录", () => {
     expect(canSendStep(p, { api_id: "1", api_hash: "  " })).toBe(false);
     expect(canSendStep(p, { api_id: "1", api_hash: "x" })).toBe(true);
     expect(canSendStep(null, {})).toBe(false);
+  });
+
+  it("draws only the steps it knows; the rest say they can't be drawn (#1693)", () => {
+    const rows = ["101", "010", "101"];
+    expect(stepView({ step: "credentials", fields: [{ name: "phone", label: "手机号" }] })).toBe("fields");
+    expect(stepView({ kind: "device_code", user_code: "ABCD-1234" })).toBe("device_code");
+    expect(stepView({ kind: "qr", url: "https://example.com/q", qr: { size: 3, rows } })).toBe("qr");
+    expect(stepView({ kind: "qr", url: "https://example.com/q" })).toBe("qr_link");
+    expect(stepView({ kind: "qr", qr: { size: 0, rows: [] } })).toBe("unsupported");
+    expect(stepView({ kind: "qr", url: "weixin-only-content" })).toBe("unsupported");
+    expect(stepView({ kind: "open_url", url: "https://example.com/auth" })).toBe("unsupported");
+    expect(stepView({ kind: "device_code" })).toBe("unsupported");
+    expect(stepView({ step: "wait", hint: "等一下" })).toBe("unsupported"); // no fields: 下一步 could never light up
+  });
+
+  it("asks a code or a QR code again by itself, not a form or a step it can't draw", () => {
+    expect(isPolledStep({ kind: "qr", step: "qr", qr: { size: 1, rows: ["1"] } })).toBe(true);
+    expect(isPolledStep({ kind: "qr", step: "qr", url: "https://example.com/q" })).toBe(true);
+    expect(isPolledStep({ kind: "device_code", user_code: "ABCD-1234" })).toBe(true);
+    expect(isPolledStep({ kind: "qr", step: "qr" })).toBe(false);
+    expect(isPolledStep({ kind: "mystery" })).toBe(false);
+    expect(isPolledStep({ step: "credentials", fields: [{ name: "phone", label: "手机号" }] })).toBe(false);
+    expect(isPolledStep({ kind: "qr", done: true, qr: { size: 1, rows: ["1"] } })).toBe(false);
+    expect(isPolledStep(null)).toBe(false);
   });
 
   it("knows a device code and each field's input", () => {

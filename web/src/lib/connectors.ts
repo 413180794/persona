@@ -40,12 +40,20 @@ export interface PromptField {
   placeholder?: string;
 }
 
-/** Where a sign-in stands (connector.Prompt): the step to fill in next, a device code, or done. */
+/** A QR code's modules as the hub draws them (connector.PromptQR): one string of "0" / "1" per row, no quiet zone. */
+export interface PromptQR {
+  size: number;
+  rows: string[];
+}
+
+/** Where a sign-in stands (connector.Prompt): the step to fill in next, a device code, a QR code, or done. */
 export interface ConnectorPrompt {
   step?: string;
   fields?: PromptField[];
-  kind?: string; // "" | device_code
+  kind?: string; // "" | device_code | qr
   url?: string;
+  /** url's QR code for a qr step, filled in by the hub on its way to the page. */
+  qr?: PromptQR;
   user_code?: string;
   interval?: number;
   hint?: string;
@@ -256,6 +264,32 @@ export function canSendStep(p: ConnectorPrompt | null, values: Record<string, st
 /** A code to enter on a web page (GitHub's device flow), asked again until the user has. */
 export function isDeviceCode(p?: ConnectorPrompt | null): boolean {
   return p?.kind === "device_code" && !!p.user_code;
+}
+
+/** How the page draws a sign-in step: fields to fill in, a device code, a QR code (or, without its modules, the
+ * link it encodes), or a step this page cannot draw (a kind it does not know, a QR code with nothing to show, a form
+ * with no fields) — said so, with what to do instead, rather than an empty form whose 下一步 never lights up. */
+export type StepView = "fields" | "device_code" | "qr" | "qr_link" | "unsupported";
+
+export function stepView(p: ConnectorPrompt): StepView {
+  switch (p.kind ?? "") {
+    case "":
+      return p.fields?.length ? "fields" : "unsupported";
+    case "device_code":
+      return p.user_code ? "device_code" : "unsupported";
+    case "qr":
+      if (p.qr?.rows?.length) return "qr";
+      return /^https?:\/\//i.test(p.url ?? "") ? "qr_link" : "unsupported";
+    default:
+      return "unsupported";
+  }
+}
+
+/** A step the page asks again by itself until it is done (a code to enter, a QR code to scan). */
+export function isPolledStep(p?: ConnectorPrompt | null): boolean {
+  if (!p || p.done) return false;
+  const v = stepView(p);
+  return v === "device_code" || v === "qr" || v === "qr_link";
 }
 
 /** What a field's input should be: digits for codes, a phone keypad, a password. */

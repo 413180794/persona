@@ -72,10 +72,8 @@ export interface ChannelDetail extends Channel {
   settings_url?: string;
 }
 
-/** A bind step (connector.Prompt) with the two kinds a channel adds: a QR code to scan, a code to send to the bot. */
-export interface ChannelPrompt extends ConnectorPrompt {
-  qr?: { size: number; rows: string[] };
-}
+/** A bind step (connector.Prompt); a channel adds pair_code, a code to send to the bot, to the kinds a connector has. */
+export type ChannelPrompt = ConnectorPrompt;
 
 // ── the hub's interface ──────────────────────────────────
 

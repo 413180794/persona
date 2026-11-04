@@ -2,23 +2,25 @@
 // GitHubConnectorSections, GitHubInboxSettings; docs/connectors.md): GitHub, Telegram and any plugin's connector, as
 // GET /api/v1/connectors lists them. A page shows how one is doing, as whom, where its sign-in comes from and what is
 // wrong (with the steps to fix it); one the user signs in to here (`login`) also gets its switch, the sign-in a step
-// at a time (fields the hub asks for, or GitHub's device code), 进知识库 / 进收件箱, sign-out and delete. GitHub adds
+// at a time (fields the hub asks for, GitHub's device code, or a QR code to scan), 进知识库 / 进收件箱, sign-out and delete. GitHub adds
 // where its token comes from (a computer's gh, or the device flow), the scopes it lacks, and its inbox options.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorText } from "../../lib/api";
 import {
   canSendStep, CI_MODES, connectorBrand, connectorLogin, connectorLogout, connectorState, connectorSummary, connectorTone, deleteConnectorArchive,
   deleteConnectorData, deletedLine, feedsFooter, fieldInput, githubAuth, githubInboxFooter, githubMachineLine, githubMachineWarns, githubOptions,
-  githubScopeAdvice, isDeviceCode, isEnabled, isSignedIn, isStarting, listConnectors, logoutMessage, mutableRepo, otherConnectors, setConnector, setGitHubAuth,
-  signInFooter, signsInHere, switchFooter, undescribed,
+  githubScopeAdvice, isEnabled, isPolledStep, isSignedIn, isStarting, listConnectors, logoutMessage, mutableRepo, otherConnectors, setConnector, setGitHubAuth,
+  signInFooter, signsInHere, stepView, switchFooter, undescribed,
   type ConnectorPrompt, type ConnectorTone, type GitHubAuth, type GitHubInboxOptions, type HubConnector,
 } from "../../lib/connectors";
+import { useChannels } from "../../lib/channels";
 import { ago } from "../../lib/format";
 import { useLarkOn } from "../../lib/store";
 import { Button, cx, Dialog, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
 import { BrandMark } from "../../ui/BrandMark";
 import { Icon } from "../../ui/icons";
 import { ChannelLink } from "./Channels";
+import { QRLinkStep, QRStep, UnsupportedStep, useStepPolling } from "./LoginSteps";
 import { Group, Row, Switch } from "./SettingsParts";
 
 const DOT: Record<ConnectorTone, string> = { green: "bg-green", orange: "bg-orange", red: "bg-red", idle: "bg-line-strong" };
@@ -329,6 +331,8 @@ function SignInSteps({ c, reload, footer }: { c: HubConnector; reload: () => Pro
     live.current = true; // again after StrictMode's extra unmount in development
     return () => void (live.current = false);
   }, []);
+  // Also a channel (WeChat): a step this page cannot draw can be done in 设置 › 插件 › 渠道 instead.
+  const isChannel = useChannels().some((x) => x.id === c.id);
 
   /** True when signing in is done. */
   const send = useCallback(async (step: string, vals: Record<string, string>, quiet = false): Promise<boolean> => {
@@ -356,24 +360,9 @@ function SignInSteps({ c, reload, footer }: { c: HubConnector; reload: () => Pro
     return false;
   }, [c.id, c.name, reload]);
 
-  // A code on screen (GitHub's device flow): ask again every interval the hub gave until the user has entered it.
-  const code = isDeviceCode(prompt) ? prompt : null;
-  useEffect(() => {
-    if (!code) return;
-    let stop = false;
-    let t: ReturnType<typeof setTimeout>;
-    const tick = () => {
-      t = setTimeout(async () => {
-        if (stop) return;
-        if (!(await send(code.step ?? "", {}, true)) && !stop) tick();
-      }, Math.max(code.interval ?? 5, 1) * 1000);
-    };
-    tick();
-    return () => {
-      stop = true;
-      clearTimeout(t);
-    };
-  }, [code?.step, code?.user_code]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A code on screen (GitHub's device flow) or a QR code to scan (WeChat): ask again every interval the hub gave
+  // until the user has entered / scanned it.
+  useStepPolling(isPolledStep(prompt) ? prompt : null, (step) => send(step, {}, true), prompt?.kind === "qr" ? 3 : 5);
 
   if (!prompt) {
     return (
@@ -384,38 +373,75 @@ function SignInSteps({ c, reload, footer }: { c: HubConnector; reload: () => Pro
       </Group>
     );
   }
-  const canSend = canSendStep(prompt, values) && !busy;
+  const cancel = () => (setPrompt(null), setValues({}));
   return (
     <Group title="登录" footer={footer}>
+      <SignInStep
+        name={c.name}
+        prompt={prompt}
+        values={values}
+        busy={busy}
+        isChannel={isChannel}
+        onChange={(name, v) => setValues((cur) => ({ ...cur, [name]: v }))}
+        onSubmit={() => void send(prompt.step ?? "", values)}
+        onRestart={() => (cancel(), void send("", {}))}
+        onCancel={cancel}
+      />
+    </Group>
+  );
+}
+
+/** One sign-in step as the hub sent it: its hint and error, then fields, a device code, a QR code, or why it can't be drawn. */
+export function SignInStep({ name, prompt, values, busy, isChannel, onChange, onSubmit, onRestart, onCancel }: {
+  name: string;
+  prompt: ConnectorPrompt;
+  values: Record<string, string>;
+  busy: boolean;
+  isChannel?: boolean;
+  onChange: (field: string, value: string) => void;
+  onSubmit: () => void;
+  onRestart: () => void;
+  onCancel: () => void;
+}) {
+  const view = stepView(prompt);
+  const canSend = canSendStep(prompt, values) && !busy;
+  return (
+    <>
       {(prompt.hint || prompt.error) && (
         <div className="flex flex-col gap-1 px-4 py-2.5">
           {prompt.hint && <p className="text-[12.5px] leading-relaxed text-ink-2">{prompt.hint}</p>}
           {prompt.error && <p role="alert" className="text-[12px] text-red">{prompt.error}</p>}
         </div>
       )}
-      {code ? (
+      {view === "device_code" ? (
         <div className="flex flex-col gap-3 px-4 py-3">
           <div className="flex items-center gap-3">
-            <span className="min-w-0 flex-1 truncate font-mono text-[26px] font-semibold tracking-[0.12em] text-ink select-all">{code.user_code}</span>
+            <span className="min-w-0 flex-1 truncate font-mono text-[26px] font-semibold tracking-[0.12em] text-ink select-all">{prompt.user_code}</span>
             <IconButton
               icon="copy"
               label="复制验证码"
-              onClick={() => void navigator.clipboard?.writeText(code.user_code ?? "").then(() => toast("已复制验证码", "ok"), () => toast("没复制上", "error"))}
+              onClick={() => void navigator.clipboard?.writeText(prompt.user_code ?? "").then(() => toast("已复制验证码", "ok"), () => toast("没复制上", "error"))}
             />
           </div>
-          <p className="flex items-center gap-2 text-[12.5px] text-ink-3"><Spinner size={11} />等你在 {c.name} 上授权…</p>
-          {code.url && (
+          <p className="flex items-center gap-2 text-[12.5px] text-ink-3"><Spinner size={11} />等你在 {name} 上授权…</p>
+          {prompt.url && (
             <div>
-              <Button tone="accent" icon="external" onClick={() => window.open(code.url, "_blank", "noopener,noreferrer")}>打开 {c.name} 输入验证码</Button>
+              <Button tone="accent" icon="external" onClick={() => window.open(prompt.url, "_blank", "noopener,noreferrer")}>打开 {name} 输入验证码</Button>
             </div>
           )}
         </div>
+      ) : view === "qr" ? (
+        <QRStep rows={prompt.qr!.rows} app={name} label="登录用的二维码" onCancel={onCancel} />
+      ) : view === "qr_link" ? (
+        <QRLinkStep url={prompt.url!} app={name} onCancel={onCancel} />
+      ) : view === "unsupported" ? (
+        <UnsupportedStep elsewhere={isChannel ? `也可以到 设置 › 插件 › 渠道 › ${name} 里绑定。` : undefined} onRestart={onRestart} onCancel={onCancel} />
       ) : (
         <form
           className="flex flex-col"
           onSubmit={(e) => {
             e.preventDefault();
-            if (canSend) void send(prompt.step ?? "", values);
+            if (canSend) onSubmit();
           }}
         >
           {(prompt.fields ?? []).map((f) => {
@@ -425,7 +451,7 @@ function SignInSteps({ c, reload, footer }: { c: HubConnector; reload: () => Pro
                 <span className="w-[96px] shrink-0 truncate text-[13px] text-ink">{f.label}</span>
                 <input
                   value={values[f.name] ?? ""}
-                  onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))}
+                  onChange={(e) => onChange(f.name, e.target.value)}
                   type={input.type}
                   inputMode={input.inputMode}
                   autoComplete={input.autoComplete}
@@ -440,11 +466,11 @@ function SignInSteps({ c, reload, footer }: { c: HubConnector; reload: () => Pro
           })}
           <div className="flex items-center gap-2 px-4 py-2.5">
             <Button type="submit" tone="accent" disabled={!canSend} busy={busy}>{busy ? "正在验证…" : "下一步"}</Button>
-            <Button tone="quiet" onClick={() => (setPrompt(null), setValues({}))} disabled={busy}>取消</Button>
+            <Button tone="quiet" onClick={onCancel} disabled={busy}>取消</Button>
           </div>
         </form>
       )}
-    </Group>
+    </>
   );
 }
 

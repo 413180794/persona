@@ -80,6 +80,8 @@ final class AppModel {
     @ObservationIgnored private var sessionLineCells: [SessionKey: SessionCell] = [:]
     /// Pending interactions by `uid` (the hub's id, with the group for another group).
     private(set) var interactions: [String: Interaction] = [:] { didSet { saveSnapshot(); countBadges() } }
+    /// Interactions ended locally (answered, cancelled or gone): snapshots will not restore them (#1688).
+    @ObservationIgnored var endedInteractionIDs: Set<String> = []
     /// The machine whose engine the pairing asks for (a newly paired group's hub machine).
     var pairingEngineMachine: MachineRef?
     /// A short message: the result of something just done, floating over the page for a moment (`ToastOverlay`; in the
@@ -1004,7 +1006,9 @@ final class AppModel {
     /// One group's pending interactions (the other groups' stay).
     func replaceInteractions(_ group: String, _ list: [Interaction]) {
         var all = interactions.filter { $0.value.group != group }
-        for ix in list where all[ix.uid] == nil { all[ix.uid] = ix }
+        for ix in list where all[ix.uid] == nil && !endedInteractionIDs.contains(ix.id) {
+            all[ix.uid] = ix
+        }
         if all != interactions { interactions = all }
     }
 
@@ -1234,6 +1238,7 @@ final class AppModel {
             if isNew { Haptics.attention() }
             WatchSync.shared.push(summary: watchSummary())
         case .interactionResolved(let id):
+            endedInteractionIDs.insert(id)
             interactions[group.isEmpty ? id : group + "|" + id] = nil
             WatchSync.shared.push(summary: watchSummary())
         case .toolCall(let callID, let name, let args):
@@ -1326,15 +1331,28 @@ final class AppModel {
         // No network: the card stays as it is (taking it away and bringing it back a moment later read as "done").
         guard connection.networkUp else { notDone(); return }
         interactions[ix.uid] = nil
+        endedInteractionIDs.insert(ix.id)
         do {
-            try await api.resolve(ix.id, r)
+            let res = try await api.resolve(ix.id, r)
+            if res.already == true, let existing = res.resolution {
+                // Resolved already on server, show what was effective
+                let lines = Answered.answerLines(ix, existing)
+                let text = (lines.first?.answer.isEmpty == false) ? "已回答：\(lines.first!.answer)" : "已回答"
+                toast = Toast(text, style: .success)
+            }
             Haptics.success()
         } catch let e as APIError where e.code == "prompt_changed" {
             // Nothing pressed: the terminal's dialog changed. The hub sends the card for what is there now.
+            endedInteractionIDs.remove(ix.id)
+            interactions[ix.uid] = ix
             Haptics.attention()
             toast = Toast("终端上的对话框已经变了，这次没有按任何键：看看新的再答", style: .error)
+        } catch let e as APIError where e.status == 410 {
+            let reason = Answered.endedText(e.fields["status"])
+            toast = Toast(reason, style: .error)
         } catch {
-            if (error as? APIError)?.status != 410 { interactions[ix.uid] = ix }
+            endedInteractionIDs.remove(ix.id)
+            interactions[ix.uid] = ix
             show(error)
         }
     }

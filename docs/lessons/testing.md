@@ -19,6 +19,8 @@
   （Operation not permitted）；UI 测试启动后在 springboard 上点「允许」（`ShellAvatarTests.launch`），手动截图前先跑一次这样的测试。
 - 模拟器里上一次启动遗留的系统授权弹窗，卸载重装 App 也不消失，要 `simctl shutdown` 重启模拟器（手动 `simctl launch` 不带 `-pairURL` 就会弹通知授权）。
 - `xcrun simctl launch` 对已经在运行的 App 只是拉到前台、新启动参数不生效：截图前用 `--terminate-running-process`。
+- `MOCK_PLUGINS=1` 的 mock 把插件的设置、密钥和开关留在进程内存里（2026-11-04，#1711）：浅色跑完 `PluginSettingsTests` 后「Example Notes」已经设置好，
+  紧接着跑深色，`testSetUpAPlugin` 一开始就找不到「需要设置」而失败，看着像代码坏了。换深浅色、重跑前先按端口重启 mock（和 `MOCK_WECHAT` 一样）。
 - UI 测试一律 `app.launchPinned()` 启动（`UITestStyle`）：App 记着上一个测试留下的风格，BeautifulUI 风格的界面又不一样，不说风格的测试会碰上别人留下的样子
   （LongSessionTests 在 BeautifulStyleTests 之后跑就挂过）。默认液态玻璃，`TEST_RUNNER_JARVIS_UI_STYLE=beautiful` 整套换成 BeautifulUI 风格跑；
   只测某一种风格的测试自己传 `-ui.style`。它经 `launchJarvis()` 启动，没选布局的测试照旧跑在四个 tab 的旧布局上。`UITestStyleTests` 查源码（`launch()`、`launchJarvis()` 都算漏）。

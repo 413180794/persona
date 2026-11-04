@@ -199,7 +199,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   配对码和倒计时（等配对时每 3 秒刷新）、测试消息、解除配对先确认、「能做什么」六个开关、飞书里聊过的 Agent、怎么建机器人；同 iOS `FeishuBotView`）；
   hub 带 `connectors` 时下面是「更多连接器」（`settings/HubConnector.tsx`，逻辑 `lib/connectors.ts`，`&connector=<id>` 直接进详情，#1324）：
   GitHub、Telegram、信息和插件提供的连接器，一行一个（标志、名字、状态圆点和账号）。详情照 iOS `HubConnectorView`：状态、登录来源、最近一次同步、错误（限流时灰字）和「怎么修好」的步骤；
-  能在这里登录的（`login`）有「同步 X」开关、分步登录（按 hub 给的字段填，`secret` 的是密码框；GitHub 的设备码大字显示、可复制、按 `interval` 自动再问）、进知识库 / 进收件箱、
+  能在这里登录的（`login`）有「同步 X」开关、分步登录（按 hub 给的字段填，`secret` 的是密码框；GitHub 的设备码大字显示、可复制、按 `interval` 自动再问；微信这类 `kind: qr` 画 hub 给的二维码、能「保存二维码」、按 `interval` 自动再问，二维码和渠道页共用 `settings/LoginSteps.tsx`；只缺点阵时给可复制的链接；画不了的步骤（不认识的 `kind`、没点阵也没链接、没有字段）说明画不了和下一步、给「重新开始」，不留灰掉的「下一步」，#1693）、进知识库 / 进收件箱、
   删除已存的知识库内容、退出登录、删除已存的数据（都先确认）；刚打开、进程还没报能力的每秒再问一次（最多 15 秒）。GitHub 另有「从哪里登录」（各台电脑上的 gh 或设备码，`/connectors/github/auth`）、
   权限不够时缺哪些 scope 和影响什么、收件箱选项（CI 失败档位、静音仓库，`PUT …/github/settings {options}`）。信息（iMessage）只看状态，「交给 Persona」和删除在手机上；「这台 iPhone」只在手机上有；
   「hub」（`settings/HubSettings.tsx`，逻辑 `lib/hub-update.ts`，`docs/hub-update.md`「App 里」）：版本、渠道、上次检查、检查更新，新版本和说明、回滚过 / 自动更新不装的提示、

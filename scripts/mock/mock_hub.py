@@ -2717,6 +2717,11 @@ def wechat_area(h, method, p, raw):
         return False
     qr = {"step": "qr", "kind": "qr", "url": WECHAT_QR_URL, "interval": 1, "qr": {"size": len(WECHAT_QR_ROWS), "rows": WECHAT_QR_ROWS},
           "hint": "用微信扫一扫这个二维码，在手机上确认后这里会自动继续。在同一部手机上：先保存二维码，再在微信里扫一扫、从相册选它。"}
+    # MOCK_WECHAT_QR=link drops the modules (only the link left), none drops both: a step the page can't draw (#1693).
+    if os.environ.get("MOCK_WECHAT_QR") in ("link", "none"):
+        qr.pop("qr")
+        if os.environ.get("MOCK_WECHAT_QR") == "none":
+            qr.pop("url")
     if (body.get("step") or "") == "qr":
         w["polls"] += 1
         if w["polls"] < 6 or os.environ.get("MOCK_WECHAT_WAIT"):
