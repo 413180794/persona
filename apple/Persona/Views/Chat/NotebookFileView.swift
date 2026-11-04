@@ -64,10 +64,7 @@ private struct NotebookOutputView: View {
         case .text(let text):
             OutputText(text: text, tint: nil)
         case .html(let html, let plain):
-            VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                OutputText(text: plain ?? Self.strip(html), tint: nil)
-                Text("HTML 输出，这里显示的是它的文本").font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
-            }
+            NotebookHTMLOutput(html: html, text: plain ?? Self.strip(html))
         case .image(let mime, let base64):
             Base64Image(payload: ImagePayload(mime: mime, data: base64))
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -104,7 +101,8 @@ private struct OutputText: View {
         let folded = !all && lines.count > NotebookOutputView.foldedLines
         let shown = folded ? lines.prefix(NotebookOutputView.foldedLines).joined(separator: "\n") : text
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            ScrollView(.horizontal, showsIndicators: false) {
+            // Long lines (a traceback's rule and file paths) scroll sideways; the fade says there is more.
+            SidewaysScroll {
                 Text(shown.hasSuffix("\n") ? String(shown.dropLast()) : shown)
                     .font(Theme.Font.code)
                     .foregroundStyle(tint ?? Color.primary)
@@ -112,6 +110,8 @@ private struct OutputText: View {
                     .fixedSize(horizontal: true, vertical: false)
                     .padding(Theme.Space.s)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("notebook-output")
             .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
             if folded {
                 Button("显示全部 \(lines.count) 行") { all = true }
@@ -120,6 +120,29 @@ private struct OutputText: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(Theme.accent)
             }
+        }
+    }
+}
+
+/// An HTML result (a pandas table): rendered in isolation (`HTMLSnippetView`, scripts and the network off), with its
+/// text version a tap away, and in its place when the HTML does not load.
+private struct NotebookHTMLOutput: View {
+    let html: String
+    let text: String
+    @State private var asText = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            if asText {
+                OutputText(text: text, tint: nil)
+            } else {
+                HTMLSnippetView(html: html, failed: { asText = true })
+            }
+            Button(asText ? "显示网页版" : "显示文本版") { asText.toggle() }
+                .font(Theme.Font.label)
+                .lineLimit(1)
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.accent)
         }
     }
 }

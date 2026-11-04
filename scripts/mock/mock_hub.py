@@ -5741,7 +5741,7 @@ if os.environ.get("MOCK_OFFICE"):
         _body = _make()
         _ext = os.path.splitext(_name)[1]
         MOCK_TREE[MOCK_REPO + "/docs/" + _name] = _body if isinstance(_body, str) else _body.decode() if _ext == ".rtf" else (
-            MOCK_MIMES[_ext], base64.b64encode(_body).decode())
+            MOCK_MIMES.get(_ext, "application/octet-stream"), base64.b64encode(_body).decode())
 # MOCK_RENDER=1: formulas and a diagram (docs/ios.md「公式和图」): the last turn of the release-notes conversation, and docs/算法.md.
 RENDER_MD = ("降雨概率按逻辑回归估：$p = \\sigma(w^\\top x + b)$，其中 \\(\\sigma(z) = 1/(1+e^{-z})\\)。损失是交叉熵：\n\n"
              "$$\nL = -\\frac{1}{n}\\sum_{i=1}^{n} \\big[y_i \\log p_i + (1-y_i)\\log(1-p_i)\\big]\n$$\n\n"

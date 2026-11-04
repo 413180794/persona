@@ -32,6 +32,7 @@ final class NotebookFileTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["In [1]"].waitForExistence(timeout: 5), "no run number on the first code cell")
         sleep(2)
         shot("top")
+        XCTAssertTrue(app.descendants(matching: .any)["notebook-html"].waitForExistence(timeout: 10), "the HTML result is not rendered")
         app.descendants(matching: .any)["file-notebook"].swipeUp()
         XCTAssertTrue(app.staticTexts["KeyError: '风速'"].waitForExistence(timeout: 5), "the error output is missing")
         sleep(1)

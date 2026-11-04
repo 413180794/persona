@@ -734,7 +734,8 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 | Markdown | 默认渲染，用的是对话里的那套（`.jarvis` 主题、`FittedTable`、`Links`），代码块按语言上色。菜单里能「查看源文件」 |
 | 图片、PDF、目录 | 和以前一样 |
 | 视频 | `video/*` 或常见视频扩展名进入原生播放器；完整下载到本次预览的临时文件后播放，可以暂停和拖动进度。下载中显示进度，失败或编码不受系统支持时说明原因；关闭预览暂停播放器并清理临时文件 |
-| Jupyter 笔记本 | .ipynb（nbformat 4，#1296）读完整个文件后按单元显示（`NotebookFileView`）：Markdown 单元用对话的 Markdown 样式，代码单元按笔记本的语言显示并标「In [n]」，下面是输出：stdout / stderr（stderr 橙色）、结果文本、图片、错误（名字、信息和去掉颜色码的回溯）；HTML 结果先显示它的文本版（隔离渲染见 M5）。超过 60 行的输出先折叠。菜单里能「查看源文件」；读不了的（nbformat 3、坏 JSON）按文本显示并说明 |
+| HTML | .html / .htm 默认隔离预览（`HTMLFileView`，#1297）：单独的 WKWebView，不留网站数据，**脚本关、网络关**（规则表挡掉除页面本身和 data: 以外的所有加载），页面不能自己跳转，点链接走 App 的链接卡片；顶上一行写着现在开了什么。菜单里能「允许运行脚本」「允许联网」（只对这次预览，改了重新加载）和「查看源文件」。页面引用的同目录文件（图片、样式表和其中的 url() / @import、字体、脚本）先经 hub 从那台电脑读来，换成 data: 放进页面（`HTMLResources`，最多 64 个、单个 8 MB、合计 24 MB），网络照旧关着；顶上那行写着读到几个。本机 dev server 的站点预览走端口转发，不在这里 |
+| Jupyter 笔记本 | .ipynb（nbformat 4，#1296）读完整个文件后按单元显示（`NotebookFileView`）：Markdown 单元用对话的 Markdown 样式，代码单元按笔记本的语言显示并标「In [n]」，下面是输出：stdout / stderr（stderr 橙色）、结果文本、图片、错误（名字、信息和去掉颜色码的回溯）；HTML 结果（pandas 表格）放进和 HTML 预览同样的隔离 WKWebView 渲染（禁脚本和网络，按内容定高，`HTMLSnippetView`），下面能切「显示文本版」，加载失败时自动用文本版。超过 60 行的输出先折叠。菜单里能「查看源文件」；读不了的（nbformat 3、坏 JSON）按文本显示并说明 |
 | 表格 | CSV、TSV、xlsx 用原生表格（`TableFileView`，#1294），见下面「表格」；菜单里 CSV 能「查看源文件」，xlsx 能「用快速查看打开」 |
 | Office、iWork、RTF | docx、doc、xlsx、xls、pptx、ppt、pages、numbers、key、rtf 交给系统的 QuickLook（#1293）：和视频一样经 `…/file/download` 下载到本次预览的临时文件，再嵌在页面里显示（iOS `QLPreviewController`，Mac `QLPreviewView`），不另弹一层；菜单里能「分享」这个文件（用别的 App 打开、存到文件）。关闭预览清理临时文件。以文本发来的 `.key`（PEM 私钥）照旧按代码显示；iWork 存成文件夹（包）的文档仍按目录列出 |
 

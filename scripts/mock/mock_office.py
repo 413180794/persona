@@ -255,6 +255,22 @@ SAMPLES = {
     ]),
     "城市观测.csv": lambda: csv_text(),
     "分析.ipynb": lambda: notebook(),
+    # The page's files beside it, read in through the hub by the preview (#1297).
+    "报告.css": lambda: "h1 { color: #0a84ff; border-bottom: 2px solid #0a84ff; padding-bottom: 4px; }\n",
+    "雨.png": lambda: _png(160, 72, (48, 176, 199)),
+    # A page with a script and a remote image: neither may run or load until the preview allows them.
+    "报告.html": lambda: ('<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>本周降雨</title>'
+                         '<meta name="viewport" content="width=device-width, initial-scale=1">'
+                         '<style>body{font:16px -apple-system,sans-serif;margin:20px;color:#1c1c1e}h1{font-size:22px}'
+                         'table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:6px 10px}th{background:#eef2f7}'
+                         '@media (prefers-color-scheme: dark){body{color:#eee;background:#111}th{background:#223}}</style></head>'
+                         '<body><h1>本周降雨</h1><p id="state">脚本没有运行</p>'
+                         '<table><tr><th>城市</th><th>降雨 mm</th></tr><tr><td>上海</td><td>12.4</td></tr><tr><td>Tokyo</td><td>3.1</td></tr></table>'
+                         '<link rel="stylesheet" href="报告.css">'
+                         '<p><img src="雨.png" alt="同目录的图片" width="160" height="72"></p>'
+                         '<p><img src="https://example.com/chart.png" alt="远程图片（不会加载）" width="160" height="80"></p>'
+                         '<p><a href="https://example.com/rain">详细数据</a></p>'
+                         '<script>document.getElementById("state").textContent = "脚本运行了";</script></body></html>'),
     "发布说明.rtf": lambda: rtf("天气 App 4.2 发布说明", [
         "新增：主屏幕小组件，显示当前温度和接下来 6 小时的降雨。", "改进：后台刷新更省电。", "修复：深色模式下标题的对比度。"]),
 }

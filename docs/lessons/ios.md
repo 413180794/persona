@@ -735,4 +735,7 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
 - 在 `@Observable` 类的 `init` 里，如果一个存储属性的计算读取了另一个刚刚赋值的存储属性（或调用了读取它们的方法），Swift 编译器可能会报错或在运行时触发未初始化的可观察状态访问。
 - 做法：在 `init` 里先用局部变量算好各个值，再分别赋给各个存储属性；所有存储属性初始化完成之前，不要读取自身的可观察属性或调用依赖它们的方法。
 
+## 隔离预览 HTML：规则表和 loadHTMLString 的地址（2026-11-04，#1297）
 
+- **内容规则的 `url-filter` 不认 `|`**：写成 `^(about|data):` 整张表编译失败，没有报错（`try?`），预览按设计退回「无法隔离网络」页。一个协议写一条 `ignore-previous-rules`。
+- **`loadHTMLString(_, baseURL: nil)` 的页面地址是 `applewebdata://…`，不是 about:**：只放行 about: 的规则和导航判断把页面自己挡了。`baseURL` 给 `about:blank`，两个协议都放行。

@@ -231,6 +231,9 @@ struct FileViewer: View {
                     }
                 }
                 .themedPage()
+            case .html where !page.showSource:
+                HTMLFileView(html: page.text ?? "", dir: (file.path as NSString).deletingLastPathComponent, fetch: page.fetch,
+                             scripts: page.htmlScripts, network: page.htmlNetwork, onLink: openLink)
             case .notebook where !page.showSource && page.notebook != nil:
                 if let notebook = page.notebook { NotebookFileView(notebook: notebook) }
             case .table where !page.showSource:
@@ -239,7 +242,7 @@ struct FileViewer: View {
                 if let preview = page.preview { QuickLookFileView(model: preview) }
             case .markdown where !page.showSource:
                 MarkdownFile(page: page, home: model.machine(ref.machineRef)?.home, loadImage: loadImageFile)
-            case .markdown, .json, .code, .table, .notebook:
+            case .markdown, .json, .code, .table, .notebook, .html:
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
                     meta(page).padding(.horizontal, Theme.Space.l)
                     if let source = page.shownSource {
@@ -284,6 +287,18 @@ struct FileViewer: View {
                 case .markdown:
                     Button { page.showSource.toggle() } label: {
                         Label(page.showSource ? "渲染 Markdown" : "查看源文件", systemImage: page.showSource ? "doc.richtext" : Theme.Icon.code)
+                    }
+                case .html:
+                    Button { page.showSource.toggle() } label: {
+                        Label(page.showSource ? "按网页预览" : "查看源文件", systemImage: page.showSource ? Theme.Icon.document : Theme.Icon.code)
+                    }
+                    if !page.showSource {
+                        Toggle(isOn: Binding(get: { page.htmlScripts }, set: { page.htmlScripts = $0 })) {
+                            Label("允许运行脚本", systemImage: Theme.Icon.code)
+                        }
+                        Toggle(isOn: Binding(get: { page.htmlNetwork }, set: { page.htmlNetwork = $0 })) {
+                            Label("允许联网", systemImage: Theme.Icon.openExternal)
+                        }
                     }
                 case .notebook where page.notebook != nil:
                     Button { page.showSource.toggle() } label: {
@@ -423,7 +438,7 @@ private struct MarkdownFile: View {
 /// the code document, the JSON outline or the Markdown pieces off the main thread, and fetches further pages.
 @MainActor @Observable
 final class FileViewerModel {
-    enum Kind { case directory, markdown, json, code, image, pdf, video, quickLook, table, notebook, binary }
+    enum Kind { case directory, markdown, json, code, image, pdf, video, quickLook, table, notebook, html, binary }
 
     let ref: FileRef
     @ObservationIgnored private let api: APIClient?
@@ -438,6 +453,9 @@ final class FileViewerModel {
     private(set) var table: TableFileModel?
     /// An .ipynb read and parsed (`NotebookFileView`); nil while it loads or when it cannot be read (then the text).
     private(set) var notebook: Notebook?
+    /// An .html preview's switches (the ⋯ menu): both off by default.
+    var htmlScripts = false
+    var htmlNetwork = false
     /// The source as text (code, Markdown's source, JSON before its outline or when it is not JSON).
     private(set) var code: CodeFileSource?
     private(set) var outline: JSONOutlineSource?
@@ -472,6 +490,12 @@ final class FileViewerModel {
     }
 
     var text: String? { text_.isEmpty ? nil : text_.joined() }
+    /// A file on the same machine by its absolute path (an HTML page's pictures and style sheets, `HTMLResources`).
+    var fetch: HTMLResources.Fetch {
+        let api = api, machine = ref.machineID, cwd = ref.cwd
+        return { path in try? await api?.fileBytes(machine: machine, path: path, cwd: cwd) }
+    }
+
     /// The file as downloaded for its player or QuickLook, to share.
     var localFile: URL? { preview?.localURL ?? video?.localURL }
 
@@ -535,6 +559,7 @@ final class FileViewerModel {
             table = TableFileModel(ref: ref, file: f, api: api)
         }
         if ext == "ipynb" { kind = .notebook }
+        if ext == "html" || ext == "htm" { kind = .html }
         let doc = await Task.detached(priority: .userInitiated) { CodeDocument(text: text, language: lang) }.value
         setCode(CodeFileSource(doc))
         switch kind {

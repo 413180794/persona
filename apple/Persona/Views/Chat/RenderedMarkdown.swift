@@ -381,7 +381,6 @@ struct RenderedBlock<Fallback: View>: View {
 private struct FittedDiagram: View {
     let image: UIImage
     @State private var width: CGFloat = 0
-    @State private var atEnd = false
 
     /// Diagrams are drawn at the caption's size; at 0.7 of it they are still readable.
     static let minScale: CGFloat = 0.7
@@ -398,15 +397,7 @@ private struct FittedDiagram: View {
             .frame(height: shown.height)
             .overlay(alignment: .leading) {
                 if width > 0, shown.width > width + 1 {
-                    ScrollView(.horizontal, showsIndicators: false) { picture }
-                        .onScrollGeometryChange(for: Bool.self) { g in
-                            g.contentOffset.x + g.containerSize.width >= g.contentSize.width - 1
-                        } action: { _, end in atEnd = end }
-                        .mask {
-                            LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: atEnd ? 1 : 0.85),
-                                                   .init(color: atEnd ? .black : .clear, location: 1)],
-                                           startPoint: .leading, endPoint: .trailing)
-                        }
+                    SidewaysScroll { picture }
                 } else {
                     picture
                 }
