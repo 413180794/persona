@@ -155,3 +155,23 @@ func TestManagedSettingsCarryTheLaunchersEnv(t *testing.T) {
 		t.Errorf("Persona's hooks are missing: %v", s)
 	}
 }
+
+// Persona's own settings not written yet (a test's node; a write that failed): the managed launcher's gateway still
+// goes in, alone, and nothing is logged (#1364: a node without a logger crashed here).
+func TestManagedSettingsWithoutPersonasFile(t *testing.T) {
+	home := t.TempDir()
+	n := &Node{home: home, dir: filepath.Join(home, ".jarvis")}
+	ours := filepath.Join(n.dir, "claude-settings.json")
+	n.setManaged([]proto.ManagedLauncher{{Name: "m", BaseURL: "https://gw.example.com", Model: "m1", APIKey: "k"}})
+	got := n.claudeSettings(context.Background(), "m", ours, home)
+	if got == ours {
+		t.Fatal("the bare settings, which are not there")
+	}
+	if env, _ := readSettings(t, got)["env"].(map[string]any); env["ANTHROPIC_BASE_URL"] != "https://gw.example.com" {
+		t.Errorf("the launcher's gateway is missing: %v", env)
+	}
+	writeFile(t, ours, `null`)
+	if env, _ := readSettings(t, n.claudeSettings(context.Background(), "m", ours, home))["env"].(map[string]any); env["ANTHROPIC_API_KEY"] != "k" {
+		t.Errorf("settings that say null: %v", env)
+	}
+}

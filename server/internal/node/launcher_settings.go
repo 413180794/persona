@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -89,13 +90,21 @@ func (n *Node) mergeLauncherSettings(launcher, own, ours, cwd string) (string, e
 
 // mergeManagedSettings writes ours with the managed launcher's env on top and says where (see writeSettings).
 func (n *Node) mergeManagedSettings(launcher string, l proto.ManagedLauncher, ours string) (string, error) {
+	mine := map[string]any{}
 	b, err := os.ReadFile(ours)
-	if err != nil {
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		// Not written yet (the node writes it as it starts serving; a test's node never does): the launcher's env
+		// alone, rather than no settings with the gateway at all (#1364).
+	case err != nil:
 		return "", err
-	}
-	var mine map[string]any
-	if err := json.Unmarshal(b, &mine); err != nil {
-		return "", err
+	default:
+		if err := json.Unmarshal(b, &mine); err != nil {
+			return "", err
+		}
+		if mine == nil { // the file says null
+			mine = map[string]any{}
+		}
 	}
 	env := map[string]any{}
 	if cur, ok := mine["env"].(map[string]any); ok {

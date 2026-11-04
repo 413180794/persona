@@ -199,8 +199,11 @@ func TestHerdrStartIntoAGivenWorkspaceReturnsOnABlockedClaude(t *testing.T) {
 	assertTrace(t, f.trace(), []string{
 		call("session.snapshot", nil),
 		call("tab.create", map[string]any{"workspace_id": "w2", "cwd": home, "label": "a very long tab name that goes p", "focus": false}),
+		// A managed launcher's start gets Persona's settings with its gateway merged in (#1336).
 		call("pane.send_input", map[string]any{"pane_id": "w2:p5", "keys": []string{"Enter"},
-			"text": startCmd("/tmp/jarvis-test/jarvisd launch work_gw", "--session-id "+startID, jarvisDir(home))}),
+			"text": "/tmp/jarvis-test/jarvisd launch work_gw --session-id " + startID + " --settings " +
+				shellQuote(filepath.Join(jarvisDir(home), "launcher-settings", "work_gw-claude-settings.json")) +
+				" --mcp-config " + shellQuote(filepath.Join(jarvisDir(home), "mcp.json"))}),
 		readVisible("w2:p5"), agentGet("w2:p5"),
 		call("agent.rename", map[string]any{"target": "w2:p5", "name": "j-0e0000"}),
 		call("agent.prompt", map[string]any{"target": "w2:p5", "text": "hello"}),
