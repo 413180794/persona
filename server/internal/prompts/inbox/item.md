@@ -1,4 +1,5 @@
-{{if eq .Source "github"}}{{template "inbox/kinds/github" .}}
+{{if .Described}}类型：{{.Described}}
+{{else if eq .Source "github"}}{{template "inbox/kinds/github" .}}
 {{else if eq .Source "imessage"}}{{template "inbox/kinds/imessage" .}}
 {{else if eq .Source "telegram"}}{{template "inbox/kinds/telegram" .}}
 {{else if eq .Kind "dm"}}类型：飞书私聊

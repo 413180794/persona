@@ -34,6 +34,13 @@ struct LarkChatView: View {
     var messageComposer = false
     @State private var encryptionDraft: LarkEncryptedDraft?
     @State private var encryptionStatus: LarkNativeEncryptionStatus?
+    @State private var pinsModel: LarkChatPinsModel?
+    @State private var showPins = false
+    @State private var pinTarget: LarkChatPinTarget?
+    @State private var pinThread: LarkChatPinTarget?
+    @State private var addingPin: LarkMessage?
+    @State private var changingPin = false
+    @State private var pinNeedsRecheck = false
     @State private var showEncryptionCovers = false
     @State private var showEncryptionUnlock = false
     @State private var checkingEncryption = false
@@ -124,6 +131,10 @@ struct LarkChatView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .hidesTabBarWhenShown()
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(action: openPins) { Label("Pin 消息", systemImage: Theme.Icon.pin) }
+                    .accessibilityIdentifier("lark.pins.open")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button { Task { await askJarvis() } } label: { Label("让 Persona 总结", systemImage: Theme.Icon.ai) }
             }
@@ -240,6 +251,10 @@ struct LarkChatView: View {
             replyTo = LarkReply.quote(m)
             composerFocused = true
         })
+        .environment(\.larkAddPin, outbox.identity != nil && !changingPin && !pinNeedsRecheck ? { addingPin = $0 } : nil)
+        .modifier(LarkPinPresentation(pins: pinsModel, show: $showPins, target: $pinTarget, thread: $pinThread,
+            adding: $addingPin, conversation: conversation, display: chatLink?.larkDisplay.policy ?? .hidden, api: chatAPI,
+            finish: finishPinNavigation, add: addPin))
         .modifier(LarkFileOpener(request: $fileRequest))
         .sheet(item: $person) { LarkProfileView(person: $0) }
         .sheet(isPresented: $showEncryptionCovers) {
@@ -598,6 +613,39 @@ struct LarkChatView: View {
         guard let api = chatAPI, let r = try? await api.larkMessages(conversation.id, around: target) else { return }
         apply(r)
         if let m = pager.messages.first(where: { $0.position == target }) { await scroll(to: m.id) }
+    }
+
+    private func openPins() {
+        guard let api = chatAPI else { return }
+        pinsModel = LarkChatPinsModel(account: outbox.identity?.account,
+            deps: .live(api: api, feed: conversation.id, topic: isTopic))
+        showPins = true
+    }
+
+    private func finishPinNavigation() {
+        if pinsModel?.loaded == true && pinsModel?.problem == nil { pinNeedsRecheck = false }
+        guard let target = pinTarget else { return }
+        pinTarget = nil
+        if target.root != nil { pinThread = target; return }
+        following = false
+        pager.replace(with: target.page)
+        Task { await scroll(to: target.message.id); flash = QuoteFlashMark(line: target.message.id) }
+    }
+
+    private func addPin(_ message: LarkMessage) {
+        guard let api = chatAPI, let account = outbox.identity?.account, !changingPin, !pinNeedsRecheck else { return }
+        changingPin = true
+        Task {
+            defer { changingPin = false }
+            do {
+                try await api.larkChangePin(conversation.id, message: message.id, pin: nil, account: account)
+                model.toast = Toast("已添加 Pin", style: .success)
+            } catch {
+                pinNeedsRecheck = (error as? APIError)?.code == "lark_pin_result_unknown" || error.isTimeout || error.isOffline
+                model.toast = Toast(LarkChatPinsModel.problemText(error), style: .error)
+                if pinNeedsRecheck { openPins() }
+            }
+        }
     }
 
     // MARK: Reactions
@@ -1079,6 +1127,7 @@ struct LarkMessageRow: View {
     /// The read receipt of a message of mine (LarkReadReceipts), shown beside it once there is one.
     var readState: LarkReadState? = nil
     @Environment(\.larkOpenProfile) private var openProfile
+    @Environment(\.larkAddPin) private var addPin
     @Environment(\.larkReact) private var react
     @Environment(\.larkReply) private var reply
     @Environment(\.larkDisplay) private var display
@@ -1251,6 +1300,10 @@ struct LarkMessageRow: View {
             UIPasteboard.general.string = message.displayText
             Haptics.success()
         } label: { Label("拷贝", systemImage: Theme.Icon.copy) }
+        if let addPin, message.canPin == true && !message.recalled && message.deleted != true && message.localState != "pending" && message.localState != "failed" {
+            Button { addPin(message) } label: { Label("添加 Pin", systemImage: Theme.Icon.pin) }
+                .accessibilityIdentifier("lark.pin.add")
+        }
         if let id = message.senderID, !id.isEmpty, openProfile != nil {
             Button { showProfile() } label: { Label("查看 \(message.senderName) 的资料", systemImage: Theme.Icon.person) }
         }

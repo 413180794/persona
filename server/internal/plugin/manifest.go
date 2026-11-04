@@ -232,6 +232,16 @@ func (m *Manifest) Validate() error {
 		if name == "quota" && !m.Permissions.LauncherKeys {
 			bad("contributes.quota needs permissions.launcher_keys (the user agrees that it reads quota with launchers' keys)")
 		}
+		if name == "api" && !slices.Contains(m.Activation(), OnStartup) {
+			bad("contributes.api: the app's API is there all the time: activation_events on_startup")
+		}
+		if name == "api" {
+			for _, it := range m.APIs() {
+				if len(it.Events) > 0 && !m.Runtime.SpeaksRPC() {
+					bad("contributes.api: %s pushes events (api.broadcast) but the plugin does not speak the protocol", it.ID)
+				}
+			}
+		}
 		if name == "providers" {
 			for _, it := range m.Providers() {
 				if it.DynamicModels && !m.Runtime.SpeaksRPC() {
@@ -354,6 +364,20 @@ func (m *Manifest) Connectors() []ConnectorItem {
 	return out
 }
 
+// APIs are the manifest's contributions to api.
+func (m *Manifest) APIs() []APIItem {
+	var out []APIItem
+	_ = json.Unmarshal(m.Contributes["api"], &out)
+	return out
+}
+
+// Assistants are the manifest's contributions to assistant.
+func (m *Manifest) Assistants() []AssistantItem {
+	var out []AssistantItem
+	_ = json.Unmarshal(m.Contributes["assistant"], &out)
+	return out
+}
+
 // Quotas are the manifest's contributions to quota.
 func (m *Manifest) Quotas() []QuotaItem {
 	var out []QuotaItem
@@ -382,7 +406,7 @@ func (m *Manifest) Contributions() map[string][]string {
 // Kind is the first extension point the plugin contributes to, by a fixed order: what GET /api/v1/plugins has always
 // said as "kind" (voice for a voice plugin).
 func (m *Manifest) Kind() string {
-	for _, name := range []string{"voice", "connectors", "quota", "providers"} {
+	for _, name := range []string{"voice", "connectors", "api", "quota", "providers", "assistant"} {
 		if len(m.Items(name)) > 0 {
 			return name
 		}

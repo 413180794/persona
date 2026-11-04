@@ -85,7 +85,7 @@
 
 ### 分阶段
 
-1. **3a 扩展点**（开源仓库）：`api`、`assistant`、连接器的种类说明；hub 里飞书相关的入口改成走注册表（没有提供 `lark` 的插件时，飞书相关的接口、工具、收件箱来源都不出现，App 按 `features` 不显示）。
+1. **3a 扩展点**（开源仓库，#1262 已做）：`api`、`assistant`、连接器的种类说明；hub 里飞书相关的入口改成走注册表（没有提供 `lark` 的插件时，飞书相关的接口、工具、收件箱来源都不出现，App 按 `features` 不显示）。
 2. **3b 插件**（私有插件仓库 `lark-connector/`）：把 `internal/lark` 和 hub 里 lark-connector 的逻辑搬过去，做成进程插件：`api`（现有 `/api/v1/lark/…` 接口原样，数据形状不变，App 不用改）、`connectors`（工具、收件箱、知识库归档和条目、实时事件）、`assistant`（lark-connector 技能和说明、写闸门规则）、`/agent`（经 `hub_api`）。对着用户 hub 上的真实 lark-connector 验证。
 3. **3c 清理**（开源仓库）：删掉 `internal/lark` 里 lark-connector 的部分、hub 的 `lark*.go` / 公司圈、提示词和 golden、`skills/lark-connector`、node 的写闸门、同步脚本、文档和测试数据里的相关内容；`lark-cli`、飞书机器人、飞书邮箱留着。部署，在用户的 hub 上装插件，确认飞书收件箱、聊天、知识库、助手都和以前一样。
 4. **3d 客户端**：飞书聊天页按 `features` 显示（插件提供时）；公司圈的界面改成通用的「飞书公司圈（Moments）」，名字和分组来自插件，不写死任何租户的名称。

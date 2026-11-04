@@ -5514,6 +5514,22 @@ if HISTORY_MODE:
     HUB_PINS["sessions"] = ["server/" + ASK3]
 
 
+# Separate from conversation pinning: opening this list marks message Pins read.
+CHAT_PINS_FIXTURE = None
+if os.environ.get("MOCK_LARK_CHAT_PINS"):
+    from lark_chat_pins import ChatPinsFixture
+    CHAT_PINS_FIXTURE = ChatPinsFixture(LARK_MESSAGES, LARK_THREADS, lark_window, LARK_ACCOUNT_ID)
+
+
+def chat_pins_route(handler, path, query=None):
+    if not CHAT_PINS_FIXTURE: return False
+    def broadcast():
+        for send, _ in list(LIVE):
+            try: send({"type": "lark", "feed_ids": ["f2"]})
+            except Exception: pass
+    return CHAT_PINS_FIXTURE.route(handler, path, query, broadcast)
+
+
 def pins_route(handler, p):
     """MOCK_HISTORY: GET and PUT /api/v1/pins keep the hub's pins (the history's 置顶). False otherwise."""
     if not HISTORY_MODE or p != "/api/v1/pins":
@@ -5900,6 +5916,7 @@ class H(BaseHTTPRequestHandler):
         if plugins_route(self, p, None): return
         if voice_route(self, p, q): return
         if pins_route(self, p): return
+        if chat_pins_route(self, p, parse_qs(urlparse(self.path).query)): return
         if p == "/mock/ports": return self.send_json({"connects": PORT_LOG})
         if p.startswith("/api/v1/machines/") and "/ports/" in p:
             parts = p.split("/")  # ['', 'api', 'v1', 'machines', mid, 'ports', port, ('connect')]
@@ -6340,6 +6357,7 @@ class H(BaseHTTPRequestHandler):
         self.last_body = self.body()
         p = urlparse(self.path).path
         if pins_route(self, p): return
+        if chat_pins_route(self, p, parse_qs(urlparse(self.path).query)): return
         if plugins_route(self, p, self.last_body): return
         if p == "/test/lark-pins/state" and os.environ.get("MOCK_LARK_PINS"):
             req = json.loads(self.last_body or b"{}")

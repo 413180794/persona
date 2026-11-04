@@ -815,6 +815,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			ClaudeMD string `json:"claude_md"`
 			// Connectors are the hub's signed in: their built-in skills go in the directory (Telegram's tg).
 			Connectors []string `json:"connectors"`
+			// PluginSkills are the hub's plugins' skills (nil from a hub without plugins: those kept stay).
+			PluginSkills []assistantskills.PluginSkill `json:"plugin_skills"`
 		}
 		if err := json.Unmarshal(params, &a); err != nil || a.Dir == "" || strings.Contains(a.Dir, "..") {
 			return nil, fmt.Errorf("bad assistant dir")
@@ -833,8 +835,15 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		n.mu.Lock()
 		n.connectors = a.Connectors
 		n.mu.Unlock()
+		var need []string
+		if a.PluginSkills != nil {
+			var err error
+			if need, err = assistantskills.ApplyPlugins(assistantskills.PluginDir(), a.PluginSkills); err != nil {
+				n.logger.Printf("assistant: plugin skills: %v", err)
+			}
+		}
 		n.syncAssistantSkills(dir)
-		return map[string]any{"cwd": dir}, nil
+		return map[string]any{"cwd": dir, "plugin_skills_need": need}, nil
 	case "session.info":
 		f, err := n.file(p.SessionID)
 		if err != nil {

@@ -35,6 +35,10 @@ func TestMain(m *testing.M) {
 		serveQuotaPluginForTest()
 		return
 	}
+	if os.Getenv("JARVIS_TEST_PLUGIN") == "api" {
+		serveAPIPluginForTest()
+		return
+	}
 	os.Exit(dbtest.Main(m))
 }
 

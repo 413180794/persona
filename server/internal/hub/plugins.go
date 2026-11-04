@@ -107,6 +107,9 @@ type plugins struct {
 	ctx  context.Context
 	mu   sync.Mutex
 	byID map[string]*hubPlugin
+	// skillsSent remembers which skill digests each machine was sent (machine id → *sync.Map of name → digest), so
+	// the files go once (again after the hub restarts).
+	skillsSent sync.Map
 }
 
 // newPlugins is the registry with hub.json's plugins: a bad entry is logged and skipped. Built-in and installed ones
@@ -570,6 +573,10 @@ func (ps *plugins) spec(ctx context.Context, p *plugin.Plugin, hp *hubPlugin) (h
 		return nil, &rpc.Error{Code: plugin.CodeUnknownMethod, Message: "unknown method " + method}
 	}
 	s.OnEvent = func(event string, params json.RawMessage) {
+		if event == "api.broadcast" {
+			ps.apiBroadcast(id, params)
+			return
+		}
 		if rest, ok := strings.CutPrefix(event, serve.Namespace+"."); ok {
 			if c := byID[contributionOf(params)]; c != nil {
 				c.Event(rest, params)
@@ -587,6 +594,9 @@ func (ps *plugins) spec(ctx context.Context, p *plugin.Plugin, hp *hubPlugin) (h
 		var secrets connector.Secrets
 		if ps.h != nil {
 			secrets = ps.h.secretsFor(c.ID)
+		}
+		for kind, d := range c.KindDescriptions {
+			pluginKinds.Store(c.ID+"/"+kind, d)
 		}
 		conn := proc.New(proc.Config{ID: c.ID, Name: c.Name, Manifest: connectorManifest(c), Secrets: secrets, Logf: ps.logf, Link: link})
 		byID[c.ID] = conn
@@ -606,6 +616,9 @@ func sameItem(a, b plugin.ConnectorItem) bool {
 	jb, _ := json.Marshal(connectorManifest(b))
 	return string(ja) == string(jb)
 }
+
+// pluginKinds are the plugin connectors' kinds of inbox things as they describe them: "<connector>/<kind>" → words.
+var pluginKinds sync.Map
 
 // connectorManifest is a contribution to connectors as the connector registry declares it.
 func connectorManifest(c plugin.ConnectorItem) connector.Manifest {

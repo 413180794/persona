@@ -232,7 +232,7 @@ func (h *Hub) startInboxAgent(ctx context.Context, cfg InboxAgentConfig, prompt 
 	var prep struct {
 		Cwd string `json:"cwd"`
 	}
-	if err := m.call(ctx, "assistant.prepare", h.assistantPrepare(ctx, m), &prep); err != nil {
+	if err := h.prepareAssistant(ctx, m, &prep.Cwd); err != nil {
 		return "", "", err
 	}
 	var res struct {

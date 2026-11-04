@@ -5,8 +5,10 @@ type InboxItem struct {
 	Kind       string // dm | mention | group | bot | doc | moment | mail; a connector's own (inbox/kinds/<source>)
 	MailDirect bool   // mail: sent to me, not cc / a list
 	// Source is a connector's id ("github") for its items, "" for Feishu's and mail's.
-	Source  string
-	Context string
+	Source string
+	// Described is what the item's kind is, as a plugin's connector says (its kind_descriptions); "" otherwise.
+	Described string
+	Context   string
 }
 
 func RenderInboxItem(it InboxItem) string { return render("inbox/item", it) }

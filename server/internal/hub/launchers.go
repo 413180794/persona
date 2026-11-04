@@ -49,17 +49,21 @@ type storedLauncher struct {
 
 // LauncherView is one launcher for the app: where it comes from, which machines have it; never the key.
 type LauncherView struct {
-	Kind       string   `json:"kind,omitempty"`
-	API        string   `json:"api,omitempty"`
-	Name       string   `json:"name"`
-	Source     string   `json:"source"` // zshrc | jarvis
-	BaseURL    string   `json:"base_url,omitempty"`
-	Model      string   `json:"model,omitempty"`
-	SmallModel string   `json:"small_model,omitempty"`
-	Args       []string `json:"args,omitempty"`
-	HasKey     bool     `json:"has_key,omitempty"`
-	Machines   []string `json:"machines,omitempty"` // zshrc: the machines whose ~/.zshrc defines it
-	Hidden     bool     `json:"hidden,omitempty"`
+	Kind                   string   `json:"kind,omitempty"`
+	API                    string   `json:"api,omitempty"`
+	Name                   string   `json:"name"`
+	Source                 string   `json:"source"` // zshrc | jarvis
+	BaseURL                string   `json:"base_url,omitempty"`
+	Model                  string   `json:"model,omitempty"`
+	SmallModel             string   `json:"small_model,omitempty"`
+	SubagentModel          string   `json:"subagent_model,omitempty"`
+	CustomModel            string   `json:"custom_model,omitempty"`
+	CustomModelName        string   `json:"custom_model_name,omitempty"`
+	CustomModelDescription string   `json:"custom_model_description,omitempty"`
+	Args                   []string `json:"args,omitempty"`
+	HasKey                 bool     `json:"has_key,omitempty"`
+	Machines               []string `json:"machines,omitempty"` // zshrc: the machines whose ~/.zshrc defines it
+	Hidden                 bool     `json:"hidden,omitempty"`
 	// Definition per machine (zshrc launchers, detail only): the function body, secrets masked.
 	Definitions map[string]string `json:"definitions,omitempty"`
 	// Details per machine (zshrc launchers, detail only): what the launcher really sets when run (node/launcherprobe.go).
@@ -233,7 +237,8 @@ func (h *Hub) launcherViews(ctx context.Context) []LauncherView {
 	for _, s := range h.storedLaunchers(ctx) {
 		managed[s.Name] = true
 		out = append(out, LauncherView{Kind: s.Kind, API: s.API, Name: s.Name, Source: "jarvis", BaseURL: s.BaseURL, Model: s.Model, SmallModel: s.SmallModel,
-			Args: s.Args, HasKey: s.KeySealed != ""})
+			SubagentModel: s.SubagentModel, CustomModel: s.CustomModel, CustomModelName: s.CustomModelName,
+			CustomModelDescription: s.CustomModelDescription, Args: s.Args, HasKey: s.KeySealed != ""})
 	}
 	hidden := h.hiddenLaunchers(ctx)
 	byName := map[string]*LauncherView{}
@@ -313,14 +318,18 @@ func (h *Hub) machineLaunchers(ctx context.Context, m *Machine) ([]proto.Launche
 // --- app API ---
 
 type launcherInput struct {
-	Kind       string   `json:"kind"`
-	API        string   `json:"api"`
-	Name       string   `json:"name"`
-	BaseURL    string   `json:"base_url"`
-	Model      string   `json:"model"`
-	SmallModel string   `json:"small_model"`
-	Args       []string `json:"args"`
-	APIKey     *string  `json:"api_key"` // nil or "" on an update keeps the key
+	Kind                   string   `json:"kind"`
+	API                    string   `json:"api"`
+	Name                   string   `json:"name"`
+	BaseURL                string   `json:"base_url"`
+	Model                  string   `json:"model"`
+	SmallModel             string   `json:"small_model"`
+	SubagentModel          string   `json:"subagent_model"`
+	CustomModel            string   `json:"custom_model"`
+	CustomModelName        string   `json:"custom_model_name"`
+	CustomModelDescription string   `json:"custom_model_description"`
+	Args                   []string `json:"args"`
+	APIKey                 *string  `json:"api_key"` // nil or "" on an update keeps the key
 	// Preset is a plugin's provider it is added from (GET /api/v1/launchers/presets): what is left empty is filled in.
 	Preset string `json:"preset,omitempty"`
 }
@@ -337,8 +346,16 @@ func (in launcherInput) check() error {
 	if in.Kind != "api" && in.API == "responses" {
 		return errors.New("Claude 启动器只支持 Messages 接入")
 	}
-	if in.Kind == "api" && (len(in.Args) != 0 || in.SmallModel != "") {
-		return errors.New("直接 API 接入不能设置启动参数或小模型")
+	if in.Kind == "api" && (len(in.Args) != 0 || in.SmallModel != "" || in.SubagentModel != "" || in.CustomModel != "") {
+		return errors.New("直接 API 接入不能设置启动参数、小模型或子 Agent 模型")
+	}
+	for _, v := range []struct{ name, value string }{{"子 Agent 模型", in.SubagentModel}, {"自定义模型", in.CustomModel}} {
+		if len(strings.TrimSpace(v.value)) > 200 {
+			return fmt.Errorf("%s太长", v.name)
+		}
+	}
+	if in.CustomModelName == "" && in.CustomModelDescription != "" {
+		return errors.New("自定义模型的说明要配一个名字")
 	}
 	if !managedLauncherName.MatchString(in.Name) || in.Name == "claude" || in.Name == "presets" {
 		return errors.New("名字只能用字母、数字、_ 和 -，以字母或 _ 开头（不能叫 claude）")
@@ -552,6 +569,8 @@ func (h *Hub) saveLauncher(w http.ResponseWriter, r *http.Request, in launcherIn
 	}
 	s.Name, s.BaseURL, s.Model, s.SmallModel = in.Name, strings.TrimRight(strings.TrimSpace(in.BaseURL), "/"),
 		strings.TrimSpace(in.Model), strings.TrimSpace(in.SmallModel)
+	s.SubagentModel, s.CustomModel = strings.TrimSpace(in.SubagentModel), strings.TrimSpace(in.CustomModel)
+	s.CustomModelName, s.CustomModelDescription = strings.TrimSpace(in.CustomModelName), strings.TrimSpace(in.CustomModelDescription)
 	s.Kind, s.API = in.Kind, in.API
 	s.Args = in.Args
 	if in.Preset != "" {
@@ -577,7 +596,8 @@ func (h *Hub) saveLauncher(w http.ResponseWriter, r *http.Request, in launcherIn
 	}
 	h.pushManaged(ctx)
 	writeJSON(w, map[string]any{"launcher": LauncherView{Kind: s.Kind, API: s.API, Name: s.Name, Source: "jarvis", BaseURL: s.BaseURL, Model: s.Model,
-		SmallModel: s.SmallModel, Args: s.Args, HasKey: s.KeySealed != ""}})
+		SmallModel: s.SmallModel, SubagentModel: s.SubagentModel, CustomModel: s.CustomModel, CustomModelName: s.CustomModelName,
+		CustomModelDescription: s.CustomModelDescription, Args: s.Args, HasKey: s.KeySealed != ""}})
 }
 
 // --- the new-agent picker's launchers, with the agent each starts ---

@@ -61,7 +61,7 @@ func UserDir() string {
 type Skill struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
-	Source      string `json:"source"` // user | builtin
+	Source      string `json:"source"` // user | builtin | plugin
 }
 
 // builtinNames lists the built-in skills.
@@ -102,6 +102,9 @@ func Sync(dir, user string, connectors []string, logf func(string, ...any)) erro
 	migrate(dir, user, logf)
 	mine := userNames(user)
 	if err := installBuiltins(dir, mine, connectors); err != nil {
+		return err
+	}
+	if err := installPlugins(dir, PluginDir(), mine); err != nil {
 		return err
 	}
 	for _, name := range mine {
@@ -250,6 +253,12 @@ func List(user string, connectors []string) []Skill {
 		if !slices.Contains(mine, n) && wanted(n, connectors) {
 			b, _ := fs.ReadFile(builtin, n+"/SKILL.md")
 			out = append(out, Skill{Name: n, Description: description(string(b)), Source: "builtin"})
+		}
+	}
+	for _, n := range pluginNames(PluginDir()) {
+		if !slices.Contains(mine, n) && !slices.Contains(builtinNames(), n) {
+			b, _ := os.ReadFile(filepath.Join(PluginDir(), n, "SKILL.md"))
+			out = append(out, Skill{Name: n, Description: description(string(b)), Source: "plugin"})
 		}
 	}
 	return out

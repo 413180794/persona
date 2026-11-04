@@ -69,6 +69,9 @@ func TestLauncherInputCheck(t *testing.T) {
 		{Name: "x", BaseURL: "gw.example.com", Model: "m"},
 		{Name: "x", BaseURL: "https://gw.example.com"},
 		{Name: "x", BaseURL: "https://gw.example.com", Model: "m", Args: []string{"; rm -rf ~"}},
+		{Name: "x", BaseURL: "https://gw.example.com", Model: "m", Kind: "api", SubagentModel: "s"},
+		{Name: "x", BaseURL: "https://gw.example.com", Model: "m", Kind: "api", CustomModel: "c"},
+		{Name: "x", BaseURL: "https://gw.example.com", Model: "m", CustomModelDescription: "no name"},
 	} {
 		if bad.check() == nil {
 			t.Errorf("accepted %+v", bad)

@@ -29,6 +29,23 @@ func TestManagedLauncherRunsThroughJarvisd(t *testing.T) {
 	}
 }
 
+// Subagents follow the model unless a subagent model is set; a custom model entry is passed with its labels.
+func TestManagedEnvSubagentAndCustomModel(t *testing.T) {
+	base := proto.ManagedLauncher{Name: "l", BaseURL: "http://gw", Model: "m1"}
+	if env := managedEnv(base); !slices.Contains(env, "CLAUDE_CODE_SUBAGENT_MODEL=m1") {
+		t.Fatalf("subagents do not follow the model: %v", env)
+	}
+	base.SubagentModel, base.CustomModel = "m2", "m3"
+	base.CustomModelName, base.CustomModelDescription = "Third", "a model"
+	env := managedEnv(base)
+	for _, want := range []string{"CLAUDE_CODE_SUBAGENT_MODEL=m2", "ANTHROPIC_CUSTOM_MODEL_OPTION=m3",
+		"ANTHROPIC_CUSTOM_MODEL_OPTION_NAME=Third", "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION=a model"} {
+		if !slices.Contains(env, want) {
+			t.Errorf("env lacks %s: %v", want, env)
+		}
+	}
+}
+
 func TestRedactSecrets(t *testing.T) {
 	def := strings.Join([]string{
 		`export ANTHROPIC_API_KEY="sk-live-123"`,

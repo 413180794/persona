@@ -12,6 +12,9 @@ struct LarkThreadView: View {
     var feedID: String? = nil
     /// Opened by 回复 on a topic group's thread: the box is focused.
     var focusBox = false
+    var pinTarget: LarkChatPinTarget? = nil
+    var pinAPI: APIClient? = nil
+    private var api: APIClient? { pinAPI ?? model.api }
     @State private var person: LarkPersonRef?
     /// The replies loaded so far (never the root) and where paging stands (LarkPager).
     @State private var pager = LarkPager()
@@ -32,6 +35,8 @@ struct LarkThreadView: View {
     @State private var position = ScrollPosition()
     /// The list stays at its newest reply as it changes (larkFollowsEnd): after sending, or once scrolled to the end.
     @State private var following = false
+    @State private var usedPinTarget = false
+    @State private var flash: QuoteFlashMark?
 
     private var replies: [LarkMessage] { pager.messages }
 
@@ -41,6 +46,8 @@ struct LarkThreadView: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     LarkTimeSeparator(date: root.createdAt)
                     LarkMessageRow(message: root, grouped: false, isGroup: isGroup, feedID: feedID, inThread: true)
+                        .overlay { if flash?.line == root.id { QuoteFlash().id(flash?.id) } }
+                        .id(root.id)
                     HStack {
                         Text(loading ? "加载回复…" : hasReplies || problem == nil ? "\(replies.count) 条回复" : "回复")
                             .font(Theme.Font.labelMedium).foregroundStyle(.secondary)
@@ -62,6 +69,8 @@ struct LarkThreadView: View {
                         if LarkChatLayout.showsTimeSeparator(m, after: prev) { LarkTimeSeparator(date: m.createdAt) }
                         LarkMessageRow(message: m, grouped: grouped, isGroup: isGroup, feedID: feedID, inThread: true)
                             .padding(.top, LarkChatLayout.gap(grouped: grouped))
+                            .overlay { if flash?.line == m.id { QuoteFlash().id(flash?.id) } }
+                            .id(m.id)
                     }
                     outgoingRows
                 }
@@ -92,7 +101,7 @@ struct LarkThreadView: View {
                 guard let i = pager.messages.firstIndex(where: { $0.id == m.id }) else { return }
                 let (next, remove) = m.togglingReaction(key, me: "我")
                 pager.messages[i] = next
-                Task { do { try await model.api?.larkReact(m.id, key: key, remove: remove) } catch { model.show(error) } }
+                Task { do { try await api?.larkReact(m.id, key: key, remove: remove) } catch { model.show(error) } }
             })
             .modifier(LarkFileOpener(request: $fileRequest))
             .sheet(item: $person) { LarkProfileView(person: $0) }
@@ -136,7 +145,17 @@ struct LarkThreadView: View {
 
     private func load() async {
         defer { loading = false }
-        guard let api = model.api else { return }
+        if let target = pinTarget, !usedPinTarget {
+            usedPinTarget = true
+            pager.replace(with: target.page.replies(of: root.id))
+            loading = false
+            try? await Task.sleep(for: .milliseconds(80))
+            guard !Task.isCancelled else { return }
+            position.scrollTo(id: target.id, anchor: .center)
+            flash = QuoteFlashMark(line: target.id)
+            return
+        }
+        guard let api = api else { return }
         do {
             pager.replace(with: try await api.larkThread(root.id).replies(of: root.id))
             problem = nil
@@ -152,7 +171,7 @@ struct LarkThreadView: View {
     }
 
     private func loadOlder() async {
-        guard let api = model.api, let cursor = pager.olderRequest, pager.hasOlder, !loadingOlder else { return }
+        guard let api = api, let cursor = pager.olderRequest, pager.hasOlder, !loadingOlder else { return }
         loadingOlder = true
         defer { loadingOlder = false }
         guard let r = try? await api.larkThread(root.id, before: cursor) else { return }
@@ -207,7 +226,7 @@ struct LarkThreadView: View {
         let before = sendChain
         sendChain = Task {
             await before?.value // in the order written
-            guard let api = model.api, let o = outgoing.first(where: { $0.id == id }), o.state == .sending else { return }
+            guard let api = api, let o = outgoing.first(where: { $0.id == id }), o.state == .sending else { return }
             do {
                 try await LarkOutbox.deliver(o, feed: feedID ?? "", api: api)
                 setState(id, .sent)
@@ -236,7 +255,7 @@ struct LarkThreadView: View {
     }
 
     private func refreshLatest() async {
-        guard !loading, let api = model.api, let r = try? await api.larkThread(root.id) else { return }
+        guard !loading, let api = api, let r = try? await api.larkThread(root.id) else { return }
         problem = nil // it answers again (lark-connector signed in again, the network is back)
         let fresh = pager.refresh(with: r.replies(of: root.id))
         guard !fresh.isEmpty else { return }

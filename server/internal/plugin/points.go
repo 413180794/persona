@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path"
 	"regexp"
+	"slices"
+	"strings"
 )
 
 // Point is an extension point: a place in the hub a plugin contributes to (docs/plan-plugins.md「contributes」).
@@ -33,6 +36,9 @@ type ConnectorItem struct {
 	Unlisted     []string `json:"unlisted,omitempty"`
 	PollSeconds  int      `json:"poll_seconds,omitempty"`
 	Kinds        []string `json:"kinds,omitempty"`
+	// KindDescriptions tell the models what each kind of its inbox things is ("类型：…" in the inbox's prompts), by
+	// kind: a plugin's connector says it itself (a built-in one has prompts/inbox/kinds/<id>.md).
+	KindDescriptions map[string]string `json:"kind_descriptions,omitempty"`
 }
 
 // VoiceItem is a contribution to voice: the voice conversation's contract (docs/plugins.md「语音」).
@@ -81,6 +87,37 @@ type ProviderItem struct {
 type ProviderModel struct {
 	ID   string `json:"id"`
 	Name string `json:"name,omitempty"`
+}
+
+// APIItem is a contribution to api: a part of the app's API the plugin serves on its HTTP side, under /api/v1/<prefix>/
+// (docs/plugins.md「App 接口」).
+type APIItem struct {
+	ID     string `json:"id"`
+	Prefix string `json:"prefix"`
+	// Features are added to the hub's (hello, /health): the apps show what needs them.
+	Features []string `json:"features,omitempty"`
+	// Events are the types of the events it pushes to the apps (api.broadcast).
+	Events []string `json:"events,omitempty"`
+}
+
+// AssistantItem is a contribution to assistant: skills and a part of the assistant's instructions, in the package
+// (docs/plugins.md「助手」).
+type AssistantItem struct {
+	ID string `json:"id"`
+	// Skills are directories in the package, each a skill (SKILL.md first), put in with the assistant's.
+	Skills []string `json:"skills,omitempty"`
+	// Instructions is a markdown file in the package, added to the assistant's CLAUDE.md.
+	Instructions string `json:"instructions,omitempty"`
+}
+
+var namePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,47}$`)
+
+// checkPackagePath is a path inside a package: relative, clean, not out of it.
+func checkPackagePath(p string) error {
+	if p == "" || strings.HasPrefix(p, "/") || strings.Contains(p, `\`) || path.Clean(p) != p || p == "." || p == ".." || strings.HasPrefix(p, "../") {
+		return fmt.Errorf("%q is not a path inside the package", p)
+	}
+	return nil
 }
 
 // Points are the extension points this hub has, by name.
@@ -150,6 +187,47 @@ var Points = map[string]Point{
 			seen[m.ID] = true
 		}
 		return p.ID, nil
+	}},
+	"api": {Name: "api", Namespace: "api", Version: 1, NeedsHTTP: true, Item: func(raw json.RawMessage) (string, error) {
+		var a APIItem
+		if err := strict(raw, &a); err != nil {
+			return "", err
+		}
+		if !idPattern.MatchString(a.ID) {
+			return a.ID, fmt.Errorf("api id %q: a-z0-9_-", a.ID)
+		}
+		if !idPattern.MatchString(a.Prefix) {
+			return a.ID, fmt.Errorf("api %s: prefix %q: a-z0-9_-, one path segment", a.ID, a.Prefix)
+		}
+		for _, f := range append(slices.Clone(a.Features), a.Events...) {
+			if !namePattern.MatchString(f) {
+				return a.ID, fmt.Errorf("api %s: %q is not a feature or event name (a-z0-9_)", a.ID, f)
+			}
+		}
+		return a.ID, nil
+	}},
+	"assistant": {Name: "assistant", Namespace: "assistant", Version: 1, Item: func(raw json.RawMessage) (string, error) {
+		var a AssistantItem
+		if err := strict(raw, &a); err != nil {
+			return "", err
+		}
+		if !idPattern.MatchString(a.ID) {
+			return a.ID, fmt.Errorf("assistant id %q: a-z0-9_-", a.ID)
+		}
+		if len(a.Skills) == 0 && a.Instructions == "" {
+			return a.ID, fmt.Errorf("assistant %s: no skills and no instructions", a.ID)
+		}
+		for _, sk := range a.Skills {
+			if err := checkPackagePath(sk); err != nil {
+				return a.ID, fmt.Errorf("assistant %s: skills: %v", a.ID, err)
+			}
+		}
+		if a.Instructions != "" {
+			if err := checkPackagePath(a.Instructions); err != nil || !strings.HasSuffix(a.Instructions, ".md") {
+				return a.ID, fmt.Errorf("assistant %s: instructions is a .md file inside the package", a.ID)
+			}
+		}
+		return a.ID, nil
 	}},
 	"voice": {Name: "voice", Namespace: "voice", Version: 1, NeedsHTTP: true, Item: func(raw json.RawMessage) (string, error) {
 		var v VoiceItem

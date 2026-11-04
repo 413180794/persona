@@ -133,6 +133,11 @@ nonisolated struct LarkReaction: Codable, Hashable, Sendable {
 }
 
 nonisolated struct LarkMessage: Codable, Identifiable, Hashable, Sendable {
+    var canPin: Bool? = nil
+    var canUnpin: Bool? = nil
+    var deleted: Bool? = nil
+    var threadID: String? = nil
+    var threadKind: String? = nil
     var olk: LarkEncryption? = nil
     var id: String
     var position: String
@@ -160,7 +165,8 @@ nonisolated struct LarkMessage: Codable, Identifiable, Hashable, Sendable {
     var localState: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, position, type, text, recalled, retained, edited, parts, reactions, olk
+        case id, position, type, text, recalled, retained, edited, parts, reactions, olk, deleted
+        case canPin = "can_pin", canUnpin = "can_unpin", threadID = "thread_id", threadKind = "thread_kind"
         case editHistory = "edit_history"
         case senderID = "sender_id", senderName = "sender_name", senderAvatar = "sender_avatar", senderType = "sender_type"
         case isMine = "is_mine", createdAt = "created_at", replyCount = "reply_count"

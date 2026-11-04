@@ -160,6 +160,9 @@ func promptItem(it *InboxItem) prompts.InboxItem {
 	p := prompts.InboxItem{Kind: it.Kind, MailDirect: it.Mail != nil && it.Mail.Direct, Context: it.Context}
 	if it.Connector != nil {
 		p.Source = it.Source
+		if d, ok := pluginKinds.Load(it.Source + "/" + it.Kind); ok {
+			p.Described = d.(string)
+		}
 	}
 	return p
 }

@@ -22,11 +22,13 @@ Persona 的插件底座（#1101）：开源仓库只放通用能力和**扩展�
 
 | 扩展点 | 命名空间（方法前缀） | 每项的字段 | 要求 | 接到哪 |
 | --- | --- | --- | --- | --- |
-| `connectors`（版本 2） | `connector.` | 连接器协议的清单字段：`id`（`^[a-z][a-z0-9]*$`）、`name`、`capabilities`、`hosts`、`agent_tools`、`unlisted`、`poll_seconds`、`kinds` | 进程说协议 | 连接器注册表（设置 › 连接器、收件箱、知识库、助手的工具），方法见 `docs/connector-protocol.md` |
+| `connectors`（版本 2） | `connector.` | 连接器协议的清单字段：`id`（`^[a-z][a-z0-9]*$`）、`name`、`capabilities`、`hosts`、`agent_tools`、`unlisted`、`poll_seconds`、`kinds`，以及 `kind_descriptions?`（种类 → 给模型看的一句「类型：…」，收件箱分拣、起草、AI 分身都用它） | 进程说协议 | 连接器注册表（设置 › 连接器、收件箱、知识库、助手的工具），方法见 `docs/connector-protocol.md` |
 | `voice`（版本 1） | — | `id`、`name?` | `runtime.http` | App 的语音对话，契约见下面「语音」 |
 | `computer`（版本 1） | — | `id`、`name?` | — | 助手操控电脑的工具和机器页的开关（只有内置的 `cua`），见 [computer-use.md](computer-use.md) |
 | `quota`（版本 1） | `quota.` | `id`、`name`、`hosts?`（网关主机名，可 `*.` 开头） | 进程说协议，权限 `launcher_keys` | 启动器页的「额度」，见下面「额度」 |
 | `providers`（版本 1） | `provider.` | `id`、`name`、`description?`、`kind?`（`launcher` / `api`）、`api?`（`messages` / `responses`）、`base_url`、`model?`、`small_model?`、`models?: [{id, name?}]`、`dynamic_models?`、`key_hint?` | 纯声明即可；`dynamic_models` 要进程说协议 | 设置 › 模型供应商的「从插件添加」，见下面「模型供应商」 |
+| `api`（版本 1） | `api.` | `id`、`prefix`（一段路径）、`features?`、`events?` | `runtime.http`，`on_startup`；有 `events` 要进程说协议 | App 用的一段接口 `/api/v1/<prefix>/…`，见下面「App 接口」 |
+| `assistant`（版本 1） | — | `id`、`skills?`（包里的目录，各有 `SKILL.md`）、`instructions?`（包里的 `.md`） | 包里有这些文件 | 助手的技能和说明，见下面「助手」 |
 
 hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的），这一项不生效，预览和列表里有一条警告。以后每一步加自己的扩展点（模型供应商、额度、知识库来源、
 助手能力、事件钩子、链接识别、声明式 UI），在这张表里加一行。
@@ -220,6 +222,27 @@ personad plugin uninstall <id> [--keep-data]
 | `DELETE /api/v1/plugins/{id}/-/` `?keep_data=1` | 同上 | |
 | `/api/v1/admin/plugins…` | 管理界面的会话 | 同样的预览 / 安装 / 升级 / 回滚 / 卸载 / 开关，外加浏览器上传；见 [admin.md](admin.md)「接口」 |
 | 任意 `/api/v1/plugins/{id}/{path…}` | 完整权限的设备 | 转发给插件的 HTTP（WebSocket 也是），去掉 App 的 `Authorization` 和 `token`；按需起的插件先起好 |
+
+## App 接口
+
+插件贡献 `api`，在自己的 HTTP 一侧（`PERSONA_PLUGIN_SOCKET`）提供 App 用的一段接口 `/api/v1/<prefix>/…`：
+
+- hub 先鉴权（和别的接口一样，只读设备照旧受限），再原样转给插件：路径不变，去掉 `Authorization` 和 `token`，带上 `X-Persona-Device`（设备 id，主 token 为空）和
+  `X-Persona-Role`；调用方自己带的 `X-Persona-*` 头一律丢掉。
+- hub 自己有的前缀（任何路由在 `/api/v1/<prefix>` 下）**整段都不给插件**，只有正在迁出 hub 的前缀例外（`migratablePrefixes`，现在是 `lark`）：插件提供的优先，
+  迁完后 hub 的那份删掉。
+- `features` 加进 hello 和 `/health` 的 `features`：客户端照旧按 features 决定显示什么，插件停用后就没有了。
+- 插件发事件 `api.broadcast {type, …}`：hub 原样推给在线的客户端（去掉 `contribution`），`type` 必须在 `events` 里，不然丢掉并记日志。
+- 要实时推送的插件要常驻：`api` 要求 `on_startup`。
+
+## 助手
+
+插件贡献 `assistant`：
+
+- `skills`：包里的技能目录（各有 `SKILL.md`）。hub 在 `assistant.prepare` 里带给跑助手的那台电脑（同一个技能每台电脑只带一次文件，之后只带摘要；
+  node 报「没有」的下次再带），node 放在 `~/.persona/plugin-skills/<名字>`，和内置技能一样拷进助手目录；用户自己的同名技能优先；插件停用或卸载后从助手目录拿掉。
+  技能列表里来源是 `plugin`。一个插件的技能合计最多 8 MB。
+- `instructions`：包里的一个 markdown 文件，接在助手的 CLAUDE.md 后面（`<!-- plugin <id> -->` 开头）。
 
 ## 额度
 

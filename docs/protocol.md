@@ -1218,6 +1218,9 @@ lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 
 | GET | `/api/v1/lark/conversations?scope=&cursor=&limit=` | `{"conversations":[LarkConversation],"next_cursor"}`；scope：`chats`（默认，飞书「消息」：不含已完成 / 折叠，按标签显示规则过滤）、`unread`、`done`（已完成）、`label:<id>`、`inbox`、`mentions`、`muted`、`p2p`、`group`、`thread`、`later` |
 | GET | `/api/v1/lark/pinned` | 全部置顶会话（持续读取 inbox + done 的置顶头部，合并去重后按置顶时间排序）；分页异常返回错误，不把截断集合当作成功结果 |
 | GET | 上述 `/conversations`、`/pinned` 加 `account_bound=1` | 额外返回实际选中账号 `account_id`，集合为空时为 `[]`，禁止中间缓存。可带预期 `account_id`；请求前后身份变化或预期不匹配返回 409 `lark_account_changed`，不带会话数据。未登录沿用 `lark_not_logged_in`；旧调用不加参数，保持原契约 |
+| GET | `/api/v1/lark/conversations/{id}/pins?account_id=&cursor=&limit=` | 聊天内 Pin 列表：`{account_id,items:[{id,message_id,message?:LarkMessage,operator_name?,created_at}],next_cursor,total}`。limit 默认 50、最大 100。完整保留上游分页，重复/缺失游标返回错误；此读取会清除 lark-connector 的 Pin 未读标记，禁止首页预取 |
+| GET | `/api/v1/lark/conversations/{id}/pin-messages/{message}?account_id=&topic=` | 定位 Pin：`{account_id,target:{message,root?,page}}`，page 与聊天/话题分页同结构。普通消息返回 around 窗口；回复返回话题根和包含目标的回复窗口（最多 20×100 条）；没有找到目标返回 409 `lark_pin_no_position`，客户端保留当前窗口 |
+| POST | `/api/v1/lark/conversations/{id}/pins` | `{account_id,message_id,pin_id?,remove}` → `{account_id,pinned}`。remove=true 时必须有对应 pin_id；写前核实消息 feed、capabilities、Pin 归属和实际账号。未知结果返回 `lark_pin_result_unknown`，必须重新读取确认，不自动重试。三条 Pin API 均 `no-store`，换号 409 `lark_account_changed` 不带数据；旧 lark-connector 路由 426 `lark_lark-connector_upgrade_required`，不存在的原消息为 `lark_pin_not_found` |
 | GET | `/api/v1/lark/labels` | `{"labels":[{"id","name","count"}]}` |
 | GET | `/api/v1/lark/unread-count` | `{"count"}`：「未读 N」（不含免打扰） |
 | GET | `/api/v1/lark/flags` | 标记：`{"conversations":[LarkConversation],"messages":[{"feed_id","chat_name","chat_avatar","flagged_at","message":LarkMessage}]}` |

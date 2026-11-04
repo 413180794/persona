@@ -1,6 +1,7 @@
 package node
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -54,7 +55,8 @@ func (n *Node) launcherCommand(name string) string {
 	return name
 }
 
-// managedEnv is the environment a managed launcher sets: the gateway, its key, the model for every tier.
+// managedEnv is the environment a managed launcher sets: the gateway, its key, the model for every tier, and the
+// subagent / custom model entries when it has them.
 func managedEnv(l proto.ManagedLauncher) []string {
 	small := l.SmallModel
 	if small == "" {
@@ -66,8 +68,21 @@ func managedEnv(l proto.ManagedLauncher) []string {
 	}
 	if l.Model != "" {
 		for _, k := range []string{"ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL",
-			"ANTHROPIC_DEFAULT_SONNET_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL"} {
+			"ANTHROPIC_DEFAULT_SONNET_MODEL"} {
 			env = append(env, k+"="+l.Model)
+		}
+	}
+	// Subagents follow the model unless the launcher says otherwise (workflows, multi-agent runs).
+	if subagent := cmp.Or(l.SubagentModel, l.Model); subagent != "" {
+		env = append(env, "CLAUDE_CODE_SUBAGENT_MODEL="+subagent)
+	}
+	if l.CustomModel != "" {
+		env = append(env, "ANTHROPIC_CUSTOM_MODEL_OPTION="+l.CustomModel)
+		if l.CustomModelName != "" {
+			env = append(env, "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME="+l.CustomModelName)
+		}
+		if l.CustomModelDescription != "" {
+			env = append(env, "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION="+l.CustomModelDescription)
 		}
 	}
 	if small != "" {

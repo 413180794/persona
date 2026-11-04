@@ -8,7 +8,7 @@ node 把名字敲进 herdr 窗格的交互式 shell 里跑，函数和 alias 都
 
 | 来源 | 在哪定义 | 能做什么 |
 | --- | --- | --- |
-| **Persona 管理** | App 里新增：名字、Base URL、API Key、模型、小模型、额外参数 | 改、删 |
+| **Persona 管理** | App 里新增：名字、Base URL、API Key、模型、小模型、子 Agent 模型、自定义模型项、额外参数 | 改、删 |
 | **~/.zshrc** | 各台电脑 `~/.zshrc` 里的函数，打开这页时同步（node 缓存 1 分钟） | 看每台电脑上的函数定义（Key / Token 打码）、在 Persona 里隐藏 / 恢复 |
 
 - 范围是**全局一份**：Persona 管理的每台电脑都能用；~/.zshrc 的标出来自哪几台（同名的合成一行）。离线电脑的列表用上次同步的（settings `launchers.zshrc`）。
@@ -43,7 +43,8 @@ node 在登录 shell（`zsh -ic`，先加载 `~/.zshrc`）里一次取两样，�
 - hub 在 node 连上时、每次改动后把完整设置（含 Key）推给所有 node（`launchers.managed`），node 只放内存。
 - 启动时 node 敲进 herdr 窗格（或无头助手执行）的是 `jarvisd launch <名字> …`：这个子命令经本机 node.sock 取设置
   （`launcher.env`），去掉 shell 里已有的 `ANTHROPIC_*` 等变量，设上 `ANTHROPIC_BASE_URL`、`ANTHROPIC_API_KEY`、各档模型
-  （`ANTHROPIC_MODEL`、`ANTHROPIC_DEFAULT_*_MODEL`、`CLAUDE_CODE_SUBAGENT_MODEL`，小模型给 haiku / small fast），再 exec claude。
+  （`ANTHROPIC_MODEL`、`ANTHROPIC_DEFAULT_*_MODEL`；小模型给 haiku / small fast；子 Agent 模型给 `CLAUDE_CODE_SUBAGENT_MODEL`，留空时跟主模型；
+  自定义模型项给 `ANTHROPIC_CUSTOM_MODEL_OPTION` 和它的名字 / 说明），再 exec claude。
   Key 不进文件、不进终端、不在命令行上。终端里也能直接敲 `jarvisd launch <名字>`。
 - 交互模式的 Claude Code 第一次见到 `ANTHROPIC_API_KEY` 里的 Key 会问「Do you want to use this API key?」，默认选中「No (recommended)」，
   回车（或手机上的对话框卡片点了默认项）就把这个 Key 记成拒绝，之后这个启动器起的会话都没有凭据。Key 是用户在 设置 › 模型 里自己填的，
@@ -90,7 +91,7 @@ Persona 管理的左滑是「删除」，连 hub 里存的 Key 一起删、不�
 | `GET /api/v1/launchers` | 全部（先同步各台电脑的 ~/.zshrc） |
 | `GET /api/v1/launchers/{name}` | 一个；~/.zshrc 的带 `definitions`（每台电脑的函数，打码）和 `details`（跑一遍得到的参数） |
 | `POST /api/v1/launchers/{name}/check?machine=` | 测试可用性 |
-| `POST /api/v1/launchers` | 新增 `{name, base_url, model, small_model?, args?, api_key}` |
+| `POST /api/v1/launchers` | 新增 `{name, base_url, model, small_model?, subagent_model?, custom_model?, custom_model_name?, custom_model_description?, args?, api_key}` |
 | `PUT /api/v1/launchers/{name}` | 改（`api_key` 不填就不变）；只对 Persona 管理的 |
 | `DELETE /api/v1/launchers/{name}` | Persona 管理的删除；~/.zshrc 的隐藏 |
 | `POST /api/v1/launchers/{name}/restore` | 取消隐藏 |
@@ -102,7 +103,7 @@ Persona 管理的左滑是「删除」，连 hub 里存的 Key 一起删、不�
 ## 直接 API 供应商
 
 Persona 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧的启动器行为）和 `api`（`messages` / `responses`）字段。
-`kind: api` 由 hub 直接发请求，不下发给 node，也不会出现在新建 Agent 的启动器列表中；小模型和 CLI 额外参数不用于这类接入。
+`kind: api` 由 hub 直接发请求，不下发给 node，也不会出现在新建 Agent 的启动器列表中；小模型、子 Agent 模型、自定义模型项和 CLI 额外参数不用于这类接入。
 认证仍使用原有的加密 Key 存储，不需要把 API Key 放进用途配置。原有 `/launchers` 接口与供应商名称保持兼容。
 
 ## 额度

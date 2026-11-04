@@ -251,6 +251,12 @@ struct ModelLauncherDetailView: View {
                         if let m = l.model, !m.isEmpty { mono("模型", m) }
                     }
                     if let s = l.smallModel, !s.isEmpty { mono("小模型", s) }
+                    if let s = l.subagentModel, !s.isEmpty { mono("子 Agent 模型", s) }
+                    if let c = l.customModel, !c.isEmpty {
+                        mono("自定义模型", c)
+                        if let n = l.customModelName, !n.isEmpty { LabeledContent("自定义模型名", value: n) }
+                        if let d = l.customModelDescription, !d.isEmpty { LabeledContent("自定义模型说明", value: d) }
+                    }
                     if l.managed { LabeledContent("API Key", value: l.hasKey == true ? "已设置（不显示）" : "未设置") }
                     if let a = l.args, !a.isEmpty { mono("额外参数", a.joined(separator: " ")) }
                     if let ids = l.machines, !ids.isEmpty {
@@ -422,6 +428,10 @@ struct LauncherEditor: View {
     @State private var apiKey = ""
     @State private var modelName = ""
     @State private var smallModel = ""
+    @State private var subagentModel = ""
+    @State private var customModel = ""
+    @State private var customModelName = ""
+    @State private var customModelDescription = ""
     @State private var args = ""
     @State private var kind = "launcher"
     @State private var protocolName = "messages"
@@ -465,8 +475,18 @@ struct LauncherEditor: View {
                     TextField("默认模型", text: $modelName).textInputAutocapitalization(.never).autocorrectionDisabled()
                     if kind == "launcher" {
                         TextField("小模型（可选，默认同上）", text: $smallModel).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        TextField("子 Agent 模型（可选，默认同上）", text: $subagentModel)
+                            .textInputAutocapitalization(.never).autocorrectionDisabled()
                     }
-                } header: { Text("默认模型") } footer: { Text("各用途的具体选择在「模型配置」里统一管理；未单独指定时使用这里的默认。") }
+                } header: { Text("默认模型") } footer: { Text("各用途的具体选择在「模型配置」里统一管理；未单独指定时使用这里的默认。子 Agent 模型用于 workflow 等多 Agent 运行。") }
+                if kind == "launcher" {
+                    Section {
+                        TextField("自定义模型（可选）", text: $customModel)
+                            .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        TextField("显示名（可选）", text: $customModelName)
+                        TextField("说明（可选）", text: $customModelDescription)
+                    } header: { Text("自定义模型项（可选）") } footer: { Text("在 /model 里多一个可选项，模型 ID 以网关为准。") }
+                }
                 if kind == "launcher" {
                     Section {
                         TextField("比如 --dangerously-skip-permissions", text: $args)
@@ -493,6 +513,10 @@ struct LauncherEditor: View {
                 baseURL = e.baseURL ?? ""
                 modelName = e.model ?? ""
                 smallModel = e.smallModel ?? ""
+                subagentModel = e.subagentModel ?? ""
+                customModel = e.customModel ?? ""
+                customModelName = e.customModelName ?? ""
+                customModelDescription = e.customModelDescription ?? ""
                 args = (e.args ?? []).joined(separator: " ")
                 kind = e.kind ?? "launcher"
                 protocolName = e.api ?? "messages"
@@ -510,6 +534,10 @@ struct LauncherEditor: View {
         let input = LauncherInput(name: name.trimmingCharacters(in: .whitespaces), baseURL: baseURL.trimmingCharacters(in: .whitespaces),
                                   model: modelName.trimmingCharacters(in: .whitespaces),
                                   smallModel: kind == "api" ? "" : smallModel.trimmingCharacters(in: .whitespaces),
+                                  subagentModel: kind == "api" ? "" : subagentModel.trimmingCharacters(in: .whitespaces),
+                                  customModel: kind == "api" ? "" : customModel.trimmingCharacters(in: .whitespaces),
+                                  customModelName: kind == "api" ? "" : customModelName.trimmingCharacters(in: .whitespaces),
+                                  customModelDescription: kind == "api" ? "" : customModelDescription.trimmingCharacters(in: .whitespaces),
                                   args: kind == "api" ? [] : args.split(whereSeparator: \.isWhitespace).map(String.init),
                                   apiKey: apiKey.isEmpty ? nil : apiKey, kind: kind,
                                   api: kind == "api" ? protocolName : "messages")

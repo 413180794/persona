@@ -381,6 +381,18 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 
 // checkPackage holds a staged package to what a manifest says of it: its program is in it for this platform.
 func (r *Registry) checkPackage(m *Manifest, root string) error {
+	for _, a := range m.Assistants() {
+		for _, sk := range a.Skills {
+			if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(sk), "SKILL.md")); err != nil {
+				return fmt.Errorf("assistant %s: %s/SKILL.md 不在包里", a.ID, sk)
+			}
+		}
+		if a.Instructions != "" {
+			if fi, err := os.Stat(filepath.Join(root, filepath.FromSlash(a.Instructions))); err != nil || !fi.Mode().IsRegular() {
+				return fmt.Errorf("assistant %s: %s 不在包里", a.ID, a.Instructions)
+			}
+		}
+	}
 	if m.Runtime == nil {
 		return nil
 	}

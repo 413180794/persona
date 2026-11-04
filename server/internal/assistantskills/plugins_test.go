@@ -1,0 +1,65 @@
+package assistantskills
+
+import (
+	"os"
+	"path/filepath"
+	"slices"
+	"testing"
+)
+
+// The plugins' skills: kept as the hub sends them, copied into the assistant's directory, the user's own of a name
+// winning, gone when the plugin is; one the hub thinks this machine has but it does not is asked for again.
+func TestPluginSkills(t *testing.T) {
+	plugins, user, dir := t.TempDir(), t.TempDir(), t.TempDir()
+	t.Setenv("JARVIS_PLUGIN_SKILLS_DIR", plugins)
+	t.Setenv("PERSONA_PLUGIN_SKILLS_DIR", plugins)
+	feed := PluginSkill{Name: "example-feed", Plugin: "example", Digest: "d1", Files: map[string][]byte{
+		"SKILL.md": []byte("---\nname: example-feed\ndescription: Read the feed.\n---\n"), "scripts/run.sh": []byte("#!/bin/sh\n")}}
+	notes := PluginSkill{Name: "example-notes", Plugin: "example", Digest: "d2", Files: map[string][]byte{"SKILL.md": []byte("notes\n")}}
+	if need, err := ApplyPlugins(plugins, []PluginSkill{feed, notes}); err != nil || len(need) != 0 {
+		t.Fatal(need, err)
+	}
+	if fi, err := os.Stat(filepath.Join(plugins, "example-feed", "scripts", "run.sh")); err != nil || fi.Mode()&0o111 == 0 {
+		t.Fatal("scripts are executable", err)
+	}
+	// The user's own example-notes wins.
+	_ = os.MkdirAll(filepath.Join(user, "example-notes"), 0o755)
+	_ = os.WriteFile(filepath.Join(user, "example-notes", "SKILL.md"), []byte("mine\n"), 0o644)
+	if err := Sync(dir, user, nil, t.Logf); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "example-feed", "SKILL.md")); len(b) == 0 {
+		t.Fatal("the plugin's skill is copied in")
+	}
+	if target, _ := os.Readlink(filepath.Join(dir, "example-notes")); target != filepath.Join(user, "example-notes") {
+		t.Fatal("the user's own wins:", target)
+	}
+	var sources []string
+	for _, s := range List(user, nil) {
+		sources = append(sources, s.Name+"/"+s.Source)
+	}
+	if !slices.Contains(sources, "example-feed/plugin") || !slices.Contains(sources, "example-notes/user") || slices.Contains(sources, "example-notes/plugin") {
+		t.Fatal(sources)
+	}
+
+	// Without files: kept when the digest is the one here, asked for again when not.
+	if need, _ := ApplyPlugins(plugins, []PluginSkill{{Name: "example-feed", Plugin: "example", Digest: "d1"}, {Name: "example-notes", Plugin: "example", Digest: "d9"}}); !slices.Equal(need, []string{"example-notes"}) {
+		t.Fatal(need)
+	}
+	// The plugin removed: its skills go, here and in the assistant's directory.
+	if _, err := ApplyPlugins(plugins, []PluginSkill{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Sync(dir, user, nil, t.Logf); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "example-feed")); err == nil {
+		t.Fatal("still in the assistant's directory")
+	}
+	if _, err := ApplyPlugins(plugins, []PluginSkill{{Name: "../x", Plugin: "p", Digest: "d", Files: map[string][]byte{"a": nil}}}); err == nil {
+		t.Fatal("a name that leaves the directory")
+	}
+	if _, err := ApplyPlugins(plugins, []PluginSkill{{Name: "x", Plugin: "p", Digest: "d", Files: map[string][]byte{"../../a": nil}}}); err == nil {
+		t.Fatal("a file that leaves the skill")
+	}
+}

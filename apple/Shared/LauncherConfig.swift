@@ -7,6 +7,12 @@ nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
     var baseURL: String?
     var model: String?
     var smallModel: String?
+    /// Subagents (workflows, multi-agent runs): "" follows the model.
+    var subagentModel: String?
+    /// An extra /model entry at the gateway.
+    var customModel: String?
+    var customModelName: String?
+    var customModelDescription: String?
     var args: [String]?
     var hasKey: Bool?
     var kind: String?
@@ -22,6 +28,8 @@ nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
     enum CodingKeys: String, CodingKey {
         case name, source, model, args, machines, hidden, definitions, details, kind, api
         case baseURL = "base_url", smallModel = "small_model", hasKey = "has_key"
+        case subagentModel = "subagent_model", customModel = "custom_model"
+        case customModelName = "custom_model_name", customModelDescription = "custom_model_description"
     }
 }
 
@@ -76,6 +84,10 @@ nonisolated struct LauncherInput: Encodable, Sendable {
     var baseURL: String
     var model: String
     var smallModel: String
+    var subagentModel: String
+    var customModel: String
+    var customModelName: String
+    var customModelDescription: String
     var args: [String]
     var apiKey: String?
     var kind: String? = nil
@@ -83,6 +95,8 @@ nonisolated struct LauncherInput: Encodable, Sendable {
     enum CodingKeys: String, CodingKey {
         case name, model, args, kind, api
         case baseURL = "base_url", smallModel = "small_model", apiKey = "api_key"
+        case subagentModel = "subagent_model", customModel = "custom_model"
+        case customModelName = "custom_model_name", customModelDescription = "custom_model_description"
     }
 }
 

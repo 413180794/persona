@@ -276,6 +276,9 @@ type EditVersion struct {
 }
 
 type Message struct {
+	CanPin           *bool            `json:"can_pin,omitempty"`
+	CanUnpin         *bool            `json:"can_unpin,omitempty"`
+	Deleted          bool             `json:"deleted,omitempty"`
 	Retained         bool             `json:"retained,omitempty"`
 	EditHistory      []EditVersion    `json:"edit_history,omitempty"`
 	OLK              *OLKPresentation `json:"olk,omitempty"`
@@ -326,8 +329,10 @@ type Reaction struct {
 }
 
 type rawMessage struct {
-	HasRetainedRecallContent bool `json:"hasRetainedRecallContent"`
-	IsSystem                 bool `json:"isSystem"`
+	FeedID                   string          `json:"feedId"`
+	Capabilities             map[string]bool `json:"capabilities"`
+	HasRetainedRecallContent bool            `json:"hasRetainedRecallContent"`
+	IsSystem                 bool            `json:"isSystem"`
 	EditHistory              []struct {
 		EditedAt    string           `json:"editedAt"`
 		TextPreview string           `json:"textPreview"`
@@ -377,7 +382,7 @@ type rawMessage struct {
 }
 
 func (m rawMessage) normalize() Message {
-	out := Message{Retained: m.HasRetainedRecallContent && !m.IsSystem, OLK: m.OLK.normalize(), ID: m.ID, ClientID: m.ClientID, LocalState: m.LocalState, Position: m.Position, SenderID: m.SenderID, SenderName: m.SenderName,
+	out := Message{CanPin: m.pinCapability("pin"), CanUnpin: m.pinCapability("unpin"), Deleted: m.IsDeleted, Retained: m.HasRetainedRecallContent && !m.IsSystem, OLK: m.OLK.normalize(), ID: m.ID, ClientID: m.ClientID, LocalState: m.LocalState, Position: m.Position, SenderID: m.SenderID, SenderName: m.SenderName,
 		SenderAvatar: MediaURL(m.SenderAvatarURL), SenderType: m.SenderType, IsMine: m.IsMine,
 		Type: m.MessageTypeName, Text: m.TextPreview, CreatedAt: m.CreatedAt, Recalled: m.IsRecalled, Edited: m.IsEdited,
 		ReplyCount: m.ReplyCount, ThreadReplyCount: m.ThreadReplyCount, BadgeCount: m.BadgeCount, AtMe: m.IsAtMe || m.IsAtAll,

@@ -42,6 +42,12 @@ interface LauncherView {
   base_url?: string;
   model?: string;
   small_model?: string;
+  /** Subagents (workflows, multi-agent runs): "" follows the model. */
+  subagent_model?: string;
+  /** An extra /model entry at the gateway. */
+  custom_model?: string;
+  custom_model_name?: string;
+  custom_model_description?: string;
   args?: string[];
   has_key?: boolean;
   machines?: string[];
@@ -511,6 +517,9 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
               <KVRow k="Base URL" v={l.base_url} mono />
               <KVRow k="模型" v={l.model} mono />
               {l.kind !== "api" && l.small_model && <KVRow k="小模型" v={l.small_model} mono />}
+              {l.kind !== "api" && l.subagent_model && <KVRow k="子 Agent 模型" v={l.subagent_model} mono />}
+              {l.kind !== "api" && l.custom_model && <KVRow k="自定义模型" v={l.custom_model} mono />}
+              {l.kind !== "api" && l.custom_model_name && <KVRow k="自定义模型名" v={l.custom_model_name} />}
               <KVRow k="API Key" v={l.has_key ? "已设置（不显示）" : "未设置"} />
               {l.kind !== "api" && l.args?.length ? <KVRow k="额外参数" v={l.args.join(" ")} mono /> : null}
             </KV>
@@ -608,13 +617,13 @@ function DetailBlock({ d, place }: { d: LauncherDetail; place?: string }) {
 function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView | "new" | null; onClose: () => void; onSaved: () => void }) {
   const isNew = existing === "new";
   const old = existing && existing !== "new" ? existing : null;
-  const [f, setF] = useState({ name: "", base_url: "", api_key: "", model: "", small_model: "", args: "", kind: "launcher", api: "messages" });
+  const [f, setF] = useState({ name: "", base_url: "", api_key: "", model: "", small_model: "", subagent_model: "", custom_model: "", custom_model_name: "", custom_model_description: "", args: "", kind: "launcher", api: "messages" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     setError("");
-    setF(old ? { name: old.name, base_url: old.base_url ?? "", api_key: "", model: old.model ?? "", small_model: old.small_model ?? "", args: (old.args ?? []).join(" "), kind: old.kind ?? "launcher", api: old.api ?? "messages" } : { name: "", base_url: "", api_key: "", model: "", small_model: "", args: "", kind: "launcher", api: "messages" });
+    setF(old ? { name: old.name, base_url: old.base_url ?? "", api_key: "", model: old.model ?? "", small_model: old.small_model ?? "", subagent_model: old.subagent_model ?? "", custom_model: old.custom_model ?? "", custom_model_name: old.custom_model_name ?? "", custom_model_description: old.custom_model_description ?? "", args: (old.args ?? []).join(" "), kind: old.kind ?? "launcher", api: old.api ?? "messages" } : { name: "", base_url: "", api_key: "", model: "", small_model: "", subagent_model: "", custom_model: "", custom_model_name: "", custom_model_description: "", args: "", kind: "launcher", api: "messages" });
   }, [existing]);
 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
@@ -624,7 +633,7 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
     setBusy(true);
     setError("");
     try {
-      const body = { name: f.name.trim(), kind: f.kind, api: f.kind === "api" ? f.api : "messages", base_url: f.base_url.trim(), model: f.model.trim(), small_model: f.kind === "api" ? "" : f.small_model.trim(), args: f.kind === "api" ? [] : f.args.split(/\s+/).filter(Boolean), api_key: f.api_key || undefined };
+      const body = { name: f.name.trim(), kind: f.kind, api: f.kind === "api" ? f.api : "messages", base_url: f.base_url.trim(), model: f.model.trim(), small_model: f.kind === "api" ? "" : f.small_model.trim(), subagent_model: f.kind === "api" ? "" : f.subagent_model.trim(), custom_model: f.kind === "api" ? "" : f.custom_model.trim(), custom_model_name: f.kind === "api" ? "" : f.custom_model_name.trim(), custom_model_description: f.kind === "api" ? "" : f.custom_model_description.trim(), args: f.kind === "api" ? [] : f.args.split(/\s+/).filter(Boolean), api_key: f.api_key || undefined };
       await api(isNew ? "/launchers" : enLauncher(body.name), { method: isNew ? "POST" : "PUT", json: body });
       toast(isNew ? `已新增 ${body.name}` : `已保存 ${body.name}`, "ok");
       onSaved();
@@ -699,7 +708,15 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
         <div className={f.kind === "api" ? "" : "grid grid-cols-2 gap-3"}>
           {field("model", "默认模型", { placeholder: "主模型", mono: true })}
           {f.kind !== "api" && field("small_model", "小模型（可选）", { placeholder: "默认同模型", mono: true })}
+          {f.kind !== "api" && field("subagent_model", "子 Agent 模型（可选）", { placeholder: "默认同模型", mono: true, hint: "workflow 等多 Agent 运行用。" })}
         </div>
+        {f.kind !== "api" && (
+          <div className="grid grid-cols-2 gap-3">
+            {field("custom_model", "自定义模型（可选）", { placeholder: "网关里的模型 ID", mono: true })}
+            {field("custom_model_name", "显示名（可选）", {})}
+          </div>
+        )}
+        {f.kind !== "api" && field("custom_model_description", "自定义模型说明（可选）", { hint: "在 /model 里多一个可选项；说明要配一个名字。" })}
         {f.kind !== "api" && field("args", "额外参数（可选）", { placeholder: "--dangerously-skip-permissions", hint: "加在 claude 后面，空格分隔，每个都以 - 开头。", mono: true })}
         {error && <p className="text-[12px] text-red">{error}</p>}
         <button type="submit" hidden />

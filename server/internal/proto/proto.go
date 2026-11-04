@@ -403,6 +403,12 @@ type ManagedLauncher struct {
 	BaseURL    string `json:"base_url"`
 	Model      string `json:"model"`
 	SmallModel string `json:"small_model,omitempty"`
+	// SubagentModel is CLAUDE_CODE_SUBAGENT_MODEL; "" keeps the model (the old behaviour).
+	SubagentModel string `json:"subagent_model,omitempty"`
+	// CustomModel is the gateway's /model extra entry (ANTHROPIC_CUSTOM_MODEL_OPTION) and how it reads.
+	CustomModel            string `json:"custom_model,omitempty"`
+	CustomModelName        string `json:"custom_model_name,omitempty"`
+	CustomModelDescription string `json:"custom_model_description,omitempty"`
 	// Args go before the caller's (e.g. --dangerously-skip-permissions).
 	Args   []string `json:"args,omitempty"`
 	APIKey string   `json:"api_key,omitempty"`

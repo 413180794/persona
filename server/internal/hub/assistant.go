@@ -112,8 +112,8 @@ func isAssistant(s proto.Session, dir string) bool {
 // connectors signed in (rate limited counts: still signed in), whose built-in skills it puts in the directory (the
 // telegram skill and tg, node/clicall.go) or takes out.
 func (h *Hub) assistantPrepare(ctx context.Context, m *Machine) map[string]any {
-	return map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx, h.hasSkill(ctx, m, "lark-connector")),
-		"connectors": h.signedInConnectors(ctx)}
+	return map[string]any{"dir": assistantDir, "claude_md": h.assistantClaudeMD(ctx, h.hasSkill(ctx, m, "lark-connector")) + h.plugins.pluginInstructions(),
+		"connectors": h.signedInConnectors(ctx), "plugin_skills": h.plugins.pluginSkillsFor(m.cfg.ID)}
 }
 
 // signedInConnectors are the connectors that are ok or rate limited (switched on and signed in).
@@ -346,7 +346,7 @@ func (h *Hub) startAssistant(ctx context.Context, prompt string, images []proto.
 	var prep struct {
 		Cwd string `json:"cwd"`
 	}
-	if err := m.call(ctx, "assistant.prepare", h.assistantPrepare(ctx, m), &prep); err != nil {
+	if err := h.prepareAssistant(ctx, m, &prep.Cwd); err != nil {
 		return nil, err
 	}
 	// Headless claude (node/assistant.go): no herdr tab, streamed tokens, any launcher per message.
@@ -387,7 +387,7 @@ func (h *Hub) warmAssistant(launcher string) {
 	var prep struct {
 		Cwd string `json:"cwd"`
 	}
-	if err := m.call(ctx, "assistant.prepare", h.assistantPrepare(ctx, m), &prep); err != nil {
+	if err := h.prepareAssistant(ctx, m, &prep.Cwd); err != nil {
 		return
 	}
 	params := map[string]any{"cwd": prep.Cwd, "launcher": launcher}

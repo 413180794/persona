@@ -320,3 +320,49 @@ func TestQuotaAndProviders(t *testing.T) {
 		t.Fatal("dynamic models with a program:", err)
 	}
 }
+
+func TestAPIAndAssistantPoints(t *testing.T) {
+	m, err := Parse(with(t, func(m map[string]any) {
+		m["runtime"].(map[string]any)["http"] = true
+		m["contributes"] = map[string]any{
+			"api":       []any{map[string]any{"id": "feed", "prefix": "examplefeed", "features": []any{"example_feed"}, "events": []any{"examplefeed"}}},
+			"assistant": []any{map[string]any{"id": "feed", "skills": []any{"skills/feed"}, "instructions": "assistant.md"}}}
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a := m.APIs(); len(a) != 1 || a[0].Prefix != "examplefeed" || len(m.Assistants()) != 1 {
+		t.Fatalf("%+v", a)
+	}
+	for name, change := range map[string]func(m map[string]any){
+		"api without http": func(m map[string]any) {
+			m["contributes"] = map[string]any{"api": []any{map[string]any{"id": "x", "prefix": "x"}}}
+		},
+		"api not on startup": func(m map[string]any) {
+			m["runtime"].(map[string]any)["http"] = true
+			m["activation_events"] = []any{"on_call"}
+			m["contributes"] = map[string]any{"api": []any{map[string]any{"id": "x", "prefix": "x"}}}
+		},
+		"prefix with a slash": func(m map[string]any) {
+			m["runtime"].(map[string]any)["http"] = true
+			m["contributes"] = map[string]any{"api": []any{map[string]any{"id": "x", "prefix": "a/b"}}}
+		},
+		"feature name": func(m map[string]any) {
+			m["runtime"].(map[string]any)["http"] = true
+			m["contributes"] = map[string]any{"api": []any{map[string]any{"id": "x", "prefix": "x", "features": []any{"Bad-Name"}}}}
+		},
+		"skill outside": func(m map[string]any) {
+			m["contributes"] = map[string]any{"assistant": []any{map[string]any{"id": "x", "skills": []any{"../skills"}}}}
+		},
+		"instructions not md": func(m map[string]any) {
+			m["contributes"] = map[string]any{"assistant": []any{map[string]any{"id": "x", "instructions": "a.txt"}}}
+		},
+		"assistant empty": func(m map[string]any) {
+			m["contributes"] = map[string]any{"assistant": []any{map[string]any{"id": "x"}}}
+		},
+	} {
+		if _, err := Parse(with(t, change)); err == nil {
+			t.Errorf("%s: parsed", name)
+		}
+	}
+}
