@@ -51,3 +51,21 @@ export function anchoredScroll(a: ScrollAnchor, m: ScrollMetrics): { scrollTop: 
 export function collapseMounted(lazy: boolean, open: boolean, closing: boolean): boolean {
   return !lazy || open || closing;
 }
+
+/** How close to the end still counts as at the end. */
+export const END_SLACK = 40;
+
+/** Whether the chat still follows the end after a scroll event (#1340). Only the reader leaves the end: a scroll event
+ *  that moves the offset up while the reader is scrolling (wheel, touch, keys, the scroll bar). The chat's own
+ *  events do not: its pin to the end whose event arrives after more content landed (images, cards, a page coming in
+ *  a burst) sees the end far away, and the browser pulling the offset up when the view grows for a moment (the
+ *  composer re-measuring its height) moves it up. Back near the end always follows again. */
+export function followsAfterScroll(following: boolean, m: { scrollTop: number; lastTop: number; gap: number; reader: boolean }): boolean {
+  if (m.gap < END_SLACK) return true;
+  if (m.reader && m.scrollTop < m.lastTop - 1) return false;
+  return following;
+}
+
+/** How long after the reader's last wheel, touch or key a scroll still counts as theirs (smooth scrolling and momentum
+ *  run on after the input). */
+export const READER_WINDOW = 700;

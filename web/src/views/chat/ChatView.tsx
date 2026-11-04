@@ -18,7 +18,7 @@ import { unlinkAgentFromTodo } from "../../lib/todos";
 import { LinkTodoDialog } from "../LinkTodoDialog";
 import { chatLines, parseUserText, segments, withoutShownRecap, type UserMessage } from "../../lib/turns";
 import type { Item, Session, Subagent } from "../../lib/types";
-import { anchoredScroll, type ScrollAnchor } from "../../lib/disclosure";
+import { anchoredScroll, followsAfterScroll, READER_WINDOW, type ScrollAnchor } from "../../lib/disclosure";
 import { Button, copyText, cx, Dialog, IconButton, Loading, Menu, StatePill, StatusDot, toast, useMenu, useNow, type MenuItem } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Composer, type Outgoing } from "./Composer";
@@ -122,6 +122,10 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   // ── scrolling: stick to the end while at the end; keep the view still when older pages load ──
   const scroller = useRef<HTMLDivElement>(null);
   const atEnd = useRef(true);
+  // the offset at the last scroll event, and when the reader last scrolled (followsAfterScroll: only the reader leaves the end)
+  const lastTop = useRef(0);
+  const readerAt = useRef(-Infinity);
+  const dragging = useRef(false);
   const [showDown, setShowDown] = useState(false);
   const before = useRef<{ h: number; top: number } | null>(null);
   const first = useRef(true);
@@ -129,6 +133,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   useEffect(() => {
     first.current = true;
     atEnd.current = true;
+    lastTop.current = 0;
   }, [mid, shownSid]);
 
   useLayoutEffect(() => {
@@ -176,9 +181,12 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
 
   // content that grows by itself (images loading, a row expanding at the end) keeps the end in view; a held row stays
   // put. A ResizeObserver runs after layout and before paint, so the offset moves in the same frame as the height.
+  // The view itself is watched too: what sits under it (the composer growing, the task dock, a question card) makes it
+  // shorter without the content changing, and at the end the newest line stays in view.
   useEffect(() => {
-    const el = scroller.current?.firstElementChild;
-    if (!el) return;
+    const view = scroller.current;
+    const el = view?.firstElementChild;
+    if (!view || !el) return;
     const ro = new ResizeObserver(() => {
       const sc = scroller.current;
       if (!sc) return;
@@ -204,16 +212,51 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       if (atEnd.current) sc.scrollTop = sc.scrollHeight;
     });
     ro.observe(el);
+    ro.observe(view);
     return () => ro.disconnect();
+  }, []);
+
+  // what the reader does to scroll: the wheel or a trackpad going up, a finger, the keys that scroll, the scroll bar
+  useEffect(() => {
+    const sc = scroller.current;
+    if (!sc) return;
+    const mark = () => (readerAt.current = performance.now());
+    const wheel = (e: WheelEvent) => e.deltaY < 0 && mark();
+    const key = (e: KeyboardEvent) => {
+      const t = e.target instanceof Element ? e.target : null;
+      if (t?.closest("input, textarea, [contenteditable=true]")) return;
+      if (["ArrowUp", "PageUp", "Home", " "].includes(e.key)) mark();
+    };
+    // a press on the view itself (not on what is in it) is on its scroll bar
+    const down = (e: PointerEvent) => {
+      if (e.target !== sc) return;
+      dragging.current = true;
+      mark();
+    };
+    const up = () => (dragging.current = false);
+    sc.addEventListener("wheel", wheel, { passive: true });
+    sc.addEventListener("touchmove", mark, { passive: true });
+    sc.addEventListener("pointerdown", down);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("keydown", key);
+    return () => {
+      sc.removeEventListener("wheel", wheel);
+      sc.removeEventListener("touchmove", mark);
+      sc.removeEventListener("pointerdown", down);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("keydown", key);
+    };
   }, []);
 
   const onScroll = () => {
     const el = scroller.current;
     if (!el) return;
     const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
-    // a held row decides; following picks up again once the reader is back at the end
-    if (!anchor.current || anchor.current.follow) atEnd.current = gap < 40;
-    setShowDown(gap > 400);
+    // a held row decides; otherwise only the reader scrolling up leaves the end, and following picks up again once the
+    // reader is back at the end (#1340: the pin's own scroll event, late behind more content, does not count)
+    if (!anchor.current || anchor.current.follow) atEnd.current = followsAfterScroll(atEnd.current, { scrollTop: el.scrollTop, lastTop: lastTop.current, gap, reader: dragging.current || performance.now() - readerAt.current < READER_WINDOW });
+    lastTop.current = el.scrollTop;
+    setShowDown(!atEnd.current && gap > 400);
     if (el.scrollTop < 300 && tr.hasMore && !tr.loadingEarlier && !first.current) {
       before.current = { h: el.scrollHeight, top: el.scrollTop };
       void tr.loadEarlier().finally(() => {
@@ -364,7 +407,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       {agents.length > 0 && <AgentStrip agents={agents} viewing={viewed?.id} onSelect={setViewing} />}
 
       <div className="relative min-h-0 flex-1">
-        <div ref={scroller} onScroll={onScroll} className="h-full overflow-y-auto [overflow-anchor:none]">
+        <div ref={scroller} onScroll={onScroll} data-chat-scroll className="h-full overflow-y-auto [overflow-anchor:none]">
           <ChatActionsContext.Provider value={actions}>
           <div className="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-5 pt-6 pb-10 sm:px-8">
             {session?.start_error && <div role="alert" className="rounded-control bg-inset px-3 py-2 text-[13px] text-red">启动失败：{session.start_error}</div>}

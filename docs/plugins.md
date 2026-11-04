@@ -298,9 +298,15 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 插件贡献 `api`，在自己的 HTTP 一侧（`PERSONA_PLUGIN_SOCKET`）提供 App 用的一段接口 `/api/v1/<prefix>/…`：
 
 - hub 先鉴权（和别的接口一样，只读设备照旧受限），再原样转给插件：路径不变，去掉 `Authorization` 和 `token`，带上 `X-Persona-Device`（设备 id，主 token 为空）和
-  `X-Persona-Role`；调用方自己带的 `X-Persona-*` 头一律丢掉。
+  `X-Persona-Role`；调用方自己带的 `X-Persona-*` 头一律丢掉。路径里调用方转义了的部分（`%2F`）原样到插件，插件读 `EscapedPath()`。
+- 缓存头以插件的为准：hub 给自己的接口设的 `Cache-Control: no-store` 转发前去掉，插件的回答没写 `Cache-Control` 时才补 `no-store`
+  （`ReverseProxy` 是追加响应头的，不去掉就成了 `no-store, private, max-age=3600`，App 什么都缓存不住；#1320）。
 - hub 自己有的前缀（任何路由在 `/api/v1/<prefix>` 下）**整段都不给插件**，只有正在迁出 hub 的前缀例外（`migratablePrefixes`，现在是 `lark`）：插件提供的优先，
   迁完后 hub 的那份删掉。
+- 连接器同理：正在迁出 hub 的连接器（`connector.MigratableConnectors`，现在是 `lark`）不预留，插件贡献同一个 id 时，插件启用期间 hub 自己的那个让出注册表、
+  插件停用或卸载后放回（`hub/connectors_migrate.go`）。id 不变，知识库的会话（`lark-<feed>`）、收件箱的来源和静音、连接器设置都接得上；
+  hub 自己那份的实时推送和收件箱 / 知识库刷新同时停下（插件做），`/agent`、个人 Agent、removed全量爬取照旧在 hub。它的收件箱条目怎么保持原样见
+  `docs/connector-protocol.md`「迁出 hub 的连接器」。
 - `features` 加进 hello 和 `/health` 的 `features`：客户端照旧按 features 决定显示什么，插件停用后就没有了。
 - 插件发事件 `api.broadcast {type, …}`：hub 原样推给在线的客户端（去掉 `contribution`），`type` 必须在 `events` 里，不然丢掉并记日志。
 - 要实时推送的插件要常驻：`api` 要求 `on_startup`。

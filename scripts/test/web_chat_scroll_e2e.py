@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+"""End-to-end check that a web chat opens at its newest message and stays there (#1340): first open, reload, switching
+from the sidebar, content that keeps landing after the first paint (images, cards), and the composer growing under the
+list. A reader who scrolled up is not pulled back.
+
+The race behind #1340: the chat pins itself to the end, and when more content lands before that scroll's event fires,
+the event sees the end far away and used to take it as the reader leaving. The check makes content land in a burst
+(one piece per task, faster than a frame), like images decoding one after another.
+
+Needs a running web page against the fake hub with the long conversations, and Playwright for Python (it drives the
+installed Chrome):
+
+    MOCK_TASKS=1 MOCK_LONG_ASSISTANT=1 MOCK_LONG_HISTORY=1 PORT=18792 python3 scripts/mock/mock_hub.py &
+    (cd web && PERSONA_HUB_URL=http://127.0.0.1:18792 npx vite --port 5292 --strictPort &)
+    python3 scripts/test/web_chat_scroll_e2e.py http://127.0.0.1:5292 [--hub http://127.0.0.1:18792] [--shots <dir>]
+
+Prints one line per check and a verdict; exits 1 on the first failure. --shots saves light / dark / narrow screenshots.
+--hub turns on the fake hub's paging and a slow network for one more reload (then resets it).
+"""
+import argparse
+import json
+import os
+import sys
+import urllib.request
+
+from playwright.sync_api import sync_playwright
+
+SCROLL = "[data-chat-scroll]"
+# The agent chat with fifteen earlier exchanges (MOCK_LONG_HISTORY).
+AGENT = ("macbook", "a1f3c2d4-0000-4000-8000-000000000001")
+
+METRICS = """() => {
+  const s = document.querySelector('[data-chat-scroll]');
+  if (!s || !s.firstElementChild || s.firstElementChild.childElementCount < 2) return null;
+  return { gap: s.scrollHeight - s.scrollTop - s.clientHeight, top: s.scrollTop, height: s.scrollHeight, view: s.clientHeight };
+}"""
+
+# Content lands in a burst below the newest message: one piece per task, each before the next frame.
+BURST = """async (n) => {
+  const s = document.querySelector('[data-chat-scroll]');
+  for (let i = 0; i < n; i++) {
+    await new Promise((r) => setTimeout(r, 7));
+    const d = document.createElement('div');
+    d.style.height = '120px';
+    d.setAttribute('data-e2e-burst', '');
+    s.firstElementChild.appendChild(d);
+  }
+  await new Promise((r) => setTimeout(r, 600));
+}"""
+
+# The composer's text box: the textarea outside the list (cards in the list have their own).
+COMPOSER = """() => [...document.querySelectorAll('main textarea')].filter((t) => !t.closest('[data-chat-scroll]')).pop()"""
+
+
+def ok(msg):
+    print("ok  " + msg, flush=True)
+
+
+def fail(msg):
+    print("FAIL " + msg, flush=True)
+    sys.exit(1)
+
+
+def settled(page, what, timeout=8000):
+    """Waits until the list has content and its size holds still for half a second; returns its metrics."""
+    last, still, waited = None, 0, 0
+    while waited < timeout:
+        m = page.evaluate(METRICS)
+        if m and last and abs(m["height"] - last["height"]) < 1 and abs(m["top"] - last["top"]) < 1:
+            still += 100
+            if still >= 500:
+                return m
+        else:
+            still = 0
+        last = m
+        page.wait_for_timeout(100)
+        waited += 100
+    fail(f"{what}: the list did not settle ({last})")
+
+
+def at_end(page, what, short_ok=False):
+    m = settled(page, what)
+    if m["height"] <= m["view"] + 40 and not short_ok:
+        fail(f"{what}: the conversation is too short to tell ({m})")
+    if m["gap"] > 2:
+        fail(f"{what}: {round(m['gap'])} px above the newest message ({m})")
+    ok(f"{what}: at the newest message")
+    return m
+
+
+def burst_stays(page, what):
+    for _ in range(3):
+        page.evaluate(BURST, 6)
+    at_end(page, what + ", content landing in bursts")
+
+
+def composer_grows(page, what):
+    box = page.evaluate_handle(COMPOSER).as_element()
+    if not box:
+        fail(f"{what}: no composer")
+    box.fill("一\n二\n三\n四\n五\n六")
+    at_end(page, what + ", composer grown to six lines")
+    box.fill("")
+    page.wait_for_timeout(300)
+
+
+def scrolled_up_stays(page, what):
+    sc = page.locator(SCROLL)
+    sc.hover()
+    page.mouse.wheel(0, -900)
+    m = settled(page, what + " scrolled up")
+    if m["gap"] < 400:
+        fail(f"{what}: the wheel did not move the list up ({m})")
+    page.evaluate(BURST, 6)
+    after = settled(page, what + " scrolled up, then content")
+    if abs(after["top"] - m["top"]) > 2:
+        fail(f"{what}: a reader who scrolled up was moved from {m['top']} to {after['top']}")
+    ok(f"{what}: scrolled up, content landing does not pull the reader back")
+    down = page.get_by_role("button", name="回到最新")
+    down.wait_for(state="visible")
+    down.click()
+    at_end(page, what + ", 回到最新")
+
+
+def shot(page, shots, name):
+    if shots:
+        page.wait_for_timeout(300)
+        page.screenshot(path=os.path.join(shots, name))
+
+
+def set_theme(page, theme):
+    page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
+
+
+def hub_get(hub, path):
+    return urllib.request.urlopen(urllib.request.Request(hub + path, headers={"Authorization": "Bearer mock"}), timeout=10).read()
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("base")
+    ap.add_argument("--hub")
+    ap.add_argument("--shots")
+    ap.add_argument("--token", default="mock")
+    a = ap.parse_args()
+    base = a.base.rstrip("/")
+    req = urllib.request.Request(base + "/api/v1/assistant", headers={"Authorization": "Bearer " + a.token})
+    assistant = json.load(urllib.request.urlopen(req, timeout=10))
+    main_id = assistant["main"]
+    other = next(c for c in assistant["conversations"] if c["session_id"] != main_id)
+    if a.shots:
+        os.makedirs(a.shots, exist_ok=True)
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(channel="chrome")
+        try:
+            wide(browser, base, a, other)
+            narrow(browser, base, a)
+        finally:
+            browser.close()
+            if a.hub:
+                hub_get(a.hub, "/mock/reset")
+    print("PASS web chat scroll e2e")
+
+
+def wide(browser, base, a, other):
+    ctx = browser.new_context(viewport={"width": 1280, "height": 820}, device_scale_factor=2)
+    page = ctx.new_page()
+    page.set_default_timeout(10000)
+    page.goto(base + "/?token=" + a.token)
+    set_theme(page, "light")
+
+    # The main conversation: long, with a task dock and a question card under it.
+    at_end(page, "wide / first open")
+    page.reload()
+    at_end(page, "wide / reload")
+    burst_stays(page, "wide /")
+    composer_grows(page, "wide /")
+    scrolled_up_stays(page, "wide /")
+    shot(page, a.shots, "wide-main-light.png")
+    set_theme(page, "dark")
+    page.reload()
+    at_end(page, "wide / reload, dark")
+    shot(page, a.shots, "wide-main-dark.png")
+    set_theme(page, "light")
+
+    # From the sidebar: another Persona conversation, then back to the main one.
+    page.locator(f'aside a[href="/j/{other["session_id"]}"]').click()
+    page.wait_for_function(f"location.pathname === '/j/{other['session_id']}'")
+    settled(page, "wide another Persona conversation")
+    ok("wide: another Persona conversation opens")
+    page.locator('aside a[title="Persona 的主对话"]').click()
+    page.wait_for_function("location.pathname === '/'")
+    at_end(page, "wide sidebar → Persona")
+
+    # An agent's chat.
+    path = f"/s/{AGENT[0]}/{AGENT[1]}"
+    link = page.locator(f'aside a[href="{path}"]')
+    if link.count():
+        link.first.click()
+        page.wait_for_function(f"location.pathname === '{path}'")
+    else:
+        page.goto(base + path)
+    at_end(page, "wide agent chat, from the sidebar")
+    page.reload()
+    at_end(page, "wide agent chat, reload")
+    burst_stays(page, "wide agent chat")
+    composer_grows(page, "wide agent chat")
+    scrolled_up_stays(page, "wide agent chat")
+    if a.shots:
+        # without the empty blocks the bursts added
+        page.reload()
+        at_end(page, "wide agent chat, reload before the screenshot")
+    shot(page, a.shots, "wide-agent-light.png")
+
+    # The newest page first, more over a slow network.
+    if a.hub:
+        hub_get(a.hub, "/mock/paging?on=1")
+        hub_get(a.hub, "/mock/delay?s=0.4")
+        page.goto(base + "/")
+        at_end(page, "wide / over a slow network, paged")
+        page.goto(base + path)
+        # its newest page (two exchanges) may fit in the view
+        at_end(page, "wide agent chat over a slow network, paged", short_ok=True)
+        hub_get(a.hub, "/mock/reset")
+    ctx.close()
+
+
+def narrow(browser, base, a):
+    for theme in ("light", "dark"):
+        ctx = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, has_touch=True)
+        page = ctx.new_page()
+        page.set_default_timeout(10000)
+        page.goto(base + "/overview?token=" + a.token)
+        set_theme(page, theme)
+        page.goto(base + "/")
+        at_end(page, f"narrow / first open, {theme}")
+        if theme == "light":
+            page.reload()
+            at_end(page, "narrow / reload")
+            burst_stays(page, "narrow /")
+            page.goto(base + f"/s/{AGENT[0]}/{AGENT[1]}")
+            at_end(page, "narrow agent chat")
+            burst_stays(page, "narrow agent chat")
+            page.goto(base + "/")
+            at_end(page, "narrow / again")
+        shot(page, a.shots, f"narrow-main-{theme}.png")
+        ctx.close()
+
+
+if __name__ == "__main__":
+    main()

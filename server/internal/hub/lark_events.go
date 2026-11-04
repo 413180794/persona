@@ -41,6 +41,9 @@ func (h *Hub) larkEvents(ctx context.Context) {
 			return
 		}
 		h.larkAgentEvent(ev) // a /agent request starts at once, not with the coalesced refresh
+		if h.larkByPlugin() {
+			return // the plugin pushes these to the apps and tells its connector's inbox and archive (connectors_migrate.go)
+		}
 		mu.Lock()
 		defer mu.Unlock()
 		pending.add(ev)

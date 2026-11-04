@@ -123,7 +123,9 @@ type Hub struct {
 	tasks tasksState // tasks opened from assistant conversations (tasks.go)
 
 	connectors *connector.Registry // sources of the user's information (connectors.go)
-	media      mediaCache          // connectors' media as the app's thread pages show them (connector_threads.go)
+	// migrated are the hub's own connectors a plugin took over (connectors_migrate.go): id → the hub's, for when the plugin goes.
+	migrated sync.Map
+	media    mediaCache // connectors' media as the app's thread pages show them (connector_threads.go)
 	// connectorsOff start switched off until the user turns them on (addConnectorOff).
 	connectorsOff map[string]bool
 }

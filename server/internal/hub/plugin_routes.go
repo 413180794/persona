@@ -303,7 +303,7 @@ func (h *Hub) pluginRoutes(api *http.ServeMux) {
 			return
 		}
 		defer end()
-		hp.proxy.ServeHTTP(w, r)
+		hp.servePluginHTTP(w, r)
 	})
 }
 

@@ -44,8 +44,21 @@ func (h *Hub) collectConnectors(ctx context.Context) []*InboxItem {
 			continue
 		}
 		h.vetThings(c, things)
+		var own []connector.InboxThing // a migrated connector's things that keep the hub's own item shape
+		if isMigrated(c.ID()) {
+			generic := things[:0:0]
+			for _, t := range things {
+				if t.Extra != nil {
+					own = append(own, t)
+				} else {
+					generic = append(generic, t)
+				}
+			}
+			things = generic
+		}
 		h.inbox.mu.Lock()
 		changed = append(changed, h.inbox.applyConnector(c.ID(), c.Name(), things, time.Now())...)
+		changed = append(changed, h.inbox.applyMigrated(c.ID(), own, time.Now())...)
 		h.inbox.mu.Unlock()
 		if s, ok := connector.As[connector.InboxSettler](c); ok {
 			changed = append(changed, h.settleConnector(ctx, c.ID(), s)...)

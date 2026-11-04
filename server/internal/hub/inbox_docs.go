@@ -767,6 +767,12 @@ func (h *Hub) setDocStatus(ctx context.Context, id string, ch DocChange) (InboxI
 	if !ok || d.NoticeID == "" {
 		return InboxItem{}, errNoInboxItem
 	}
+	if in := h.migratedConnector(it); in != nil { // a plugin took Feishu over (inbox_migrate.go)
+		if !docOffers(d, ch) {
+			return InboxItem{}, errNoDocRow
+		}
+		return h.migratedDocStatus(ctx, in, it, ch)
+	}
 	if err := h.writeDocStatus(ctx, d, ch); err != nil {
 		return InboxItem{}, err
 	}

@@ -60,14 +60,21 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 | `actions.describe` | `{name, args}` → `{action: {name, visible}, summary}` | 手机卡片上的话：做什么、全文；`visible` 是谁会看到。不联网。出错就是参数不对：hub 把错误回给调用方，不弹卡片 |
 | `actions.do` | `{name, args, request_id}` → `{text}` | **只在 hub 的闸门放行之后调**，`args` 就是卡片用的那一份。`request_id` 是 hub 为这一次生成的：同一个 id 程序只做一次（再来就回第一次的结果）；hub 超时后也不重发 |
 | `inbox.collect` | `{}` → `{things: [InboxThing]}` | 从内存回答 |
-| `inbox.reply` | `{thread, item_id?, last?, text}` → `{}` | 用户在手机上按了发送（发送本身就是确认） |
+| `inbox.reply` | `{thread, item_id?, last?, text, client_id?, changes?}` → `{}` | 用户在手机上按了发送（发送本身就是确认）。`client_id`：App 这次发送的 id，重试只发一次（没有时连接器自己派生）；`changes: [{ref, field, value}]`：先改文档某一行的状态列（文档条目的「改状态」、AI 分身的提议），这时 `text` 可以为空 |
 | `archive.changes` | `{cursor, limit}` → `{batches: [{chat, messages}], next, more}` | 游标是程序自己的，hub 原样存、原样还；第一次是 `""` |
 | `login.step` | `{step, values}` → `Prompt` | 分步登录；`step` 为 `""` 从头开始 |
 | `logout` | `{}` → `{}` | |
 
 `InboxThing`：`thread`（必填，这件事的稳定键）、`kind`、`label`、`title`、`sender`、`preview`、`context`、`at`、`last`（最新一步的标记，变了就算新动静）、
 `url`、`open_url`、`reply_to`、`can_reply`、`tier`（`action` / `fyi` / `noise`，空的交给模型）、`why`、`done`（`read` / `replied`：这件事结束了）、
-`read`、`tags: [{key, value, name}]`（`repo` / `chat` / `sender` 能被用户静音）。
+`read`、`tags: [{key, value, name}]`（`repo` / `chat` / `sender` 能被用户静音）、`extra`（见下）。
+
+**迁出 hub 的连接器**（`connector.MigratableConnectors`，现在是 `lark`，`docs/plugins.md`「App 接口」）：它的 thing 可以带 `extra`
+（`source`、`account`、`account_name`、`legacy_id`、`avatar`、`count`、`started_at`、`rule_tier`，以及原来条目的块之一 `lark` / `doc` / `moment`）。
+hub 只对这些连接器读它：条目保持 hub 原来自己做的样子（那个块，没有通用的 `connector` 块），App 照旧打开飞书聊天、文档的行、帖子；thread 由块算出
+（`chat:<feed>`，非主账号 `chat:<账号>:<feed>`；`doc:<notice>`；`moment:<post>`），所以迁出之前 hub 自己做的条目接着用、不重复出一条；新条目的 id
+用 `legacy_id`。同一步（`last` 没变）块变了（读到的位置、文档重读后的行）也更新条目。这些条目的回复和改状态经 `inbox.reply` 交给连接器，
+`client_id` 和 hub 原来自己发时用的一样（`hub/inbox_migrate.go`）。
 
 `messages` 里每条：`id`、`position`、`sender_id`、`sender_name`、`mine`、`type`、`text`、`at`、`media`、
 `sender_handles: [{kind, value}]`（身份线索，原值；hub 只存它的 HMAC，`docs/knowledge.md`「身份线索」）。

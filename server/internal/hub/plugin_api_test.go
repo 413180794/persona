@@ -27,7 +27,10 @@ func serveAPIPluginForTest() {
 		os.Exit(1)
 	}
 	go http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]string{"path": r.URL.Path, "device": r.Header.Get("X-Persona-Device"),
+		if strings.HasSuffix(r.URL.Path, "/cached") {
+			w.Header().Set("Cache-Control", "private, max-age=3600")
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"path": r.URL.Path, "raw": r.URL.EscapedPath(), "device": r.Header.Get("X-Persona-Device"),
 			"auth": r.Header.Get("Authorization"), "forged": r.Header.Get("X-Persona-Forged")})
 	}))
 	_ = pserve.Serve(context.Background(), os.Stdin, os.Stdout, pserve.Program{ID: "example-feed", Version: "1.0.0",
@@ -94,6 +97,21 @@ func TestPluginAPI(t *testing.T) {
 	}
 	if _, out := call(t, mux, "GET", "/api/v1/lark/chats", master, ""); out["path"] != "/api/v1/lark/chats" {
 		t.Fatalf("a prefix being moved out of the hub is the plugin's: %v", out)
+	}
+	if _, out := call(t, mux, "GET", "/api/v1/lark/raw/mail/threads/a%2Fb", master, ""); out["raw"] != "/api/v1/lark/raw/mail/threads/a%2Fb" {
+		t.Fatalf("an escaped / reaches the plugin escaped: %v", out)
+	}
+	// The plugin's own Cache-Control reaches the app alone; without one the answer is no-store, as the hub's own are.
+	for path, want := range map[string]string{"/api/v1/lark/emojis/cached": "private, max-age=3600", "/api/v1/lark/chats": "no-store",
+		"/api/v1/plugins/example-feed/cached": "private, max-age=3600"} {
+		req, _ := http.NewRequest("GET", path, nil)
+		req.RemoteAddr = "127.0.0.1:12345"
+		req.Header.Set("Authorization", "Bearer "+master)
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+		if got := w.Header().Values("Cache-Control"); w.Code != 200 || len(got) != 1 || got[0] != want {
+			t.Fatalf("%s: %d Cache-Control %q, want %q", path, w.Code, got, want)
+		}
 	}
 	if _, out := call(t, mux, "GET", "/api/v1/machines", master, ""); out["path"] != nil || out["machines"] == nil {
 		t.Fatalf("the hub's own API is not a plugin's: %v", out)

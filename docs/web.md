@@ -18,6 +18,8 @@
   测试 `npm test`（vitest，`src/lib/*.test.ts`），类型检查 `npm run typecheck`。
   侧边栏入口的端到端检查（Persona 进主对话、两个「+」、老链接、窄屏抽屉；Python Playwright 驱动本机 Chrome）：起假 hub 和 `npx vite` 后跑
   `python3 scripts/test/web_sidebar_e2e.py <网页地址> [--shots <目录>]`，用法见脚本开头，`--shots` 顺带拍浅色 / 深色 / 窄屏截图。
+  对话停在最新处的端到端检查（首次打开、刷新、侧栏切换、内容一块块进来、输入框变高、往上翻了不被拉回、慢网分页，主对话和 Agent 对话、宽屏和窄屏，#1340）：
+  假 hub 带 `MOCK_TASKS=1 MOCK_LONG_ASSISTANT=1 MOCK_LONG_HISTORY=1` 起，再跑 `python3 scripts/test/web_chat_scroll_e2e.py <网页地址> [--hub <假 hub 地址>] [--shots <目录>]`。
 
 ## 登录
 
@@ -70,6 +72,8 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   折成一行工作行，点开是带左侧细线的轨迹（每个工具一行，点开看命令、diff、输出、图片），最后一段话是回复。
   进行中的那段是像素格 loader + 闪光文字 + 计时，最新一步露在下面。请求带 `fold_work`，展开工作行时按 `from_seq` / `through_seq` 取回折叠的部分。
   滚到顶自动加载更早的两轮，位置不跳；在底部时跟着新内容走，往上翻了就不动，出现「回到最新」。
+  打开、刷新、从侧栏切过来都停在最新消息；后到的内容（图片、任务卡、今天卡）和列表下面变高的东西（输入框、任务坞、提问卡）都不会把最新消息挤出视口。
+  只有用户自己往上滚（滚轮、手指、滚动键、拖滚动条）才停止跟随，页面自己滚动产生的事件不算（#1340，`lib/disclosure.ts` 的 `followsAfterScroll`）。
   - **按行画**（#433，`chatLines()` / `buildBlocks()` 照 iOS `ChatLines`、`ChatBlock.build`，`views/chat/Lines.tsx`）：工作中插入的消息并进当前这一轮；做完的、有几条消息的一轮合成一个气泡（中间短横线），
     点工作行按消息拆开、上面「已按 N 条消息拆开 · 收起」；「已中断」单独一行居中；别的会话发来的消息是「来自 X」卡片，`/loop` 的唤醒是一条小条。
   - **后台任务唤醒**：被唤醒的工作留在原来那一轮，取最长的那段话当回答，下面「N 个后台任务完成 ›」小条，点开弹窗：每次唤醒一组（通知 + 回答），最新在上，中间的步骤折在最后。

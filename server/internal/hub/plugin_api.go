@@ -69,7 +69,7 @@ func (h *Hub) pluginAPIs(next http.Handler, mux *http.ServeMux) http.Handler {
 		p := principalOf(r.Context())
 		r.Header.Set("X-Persona-Device", p.ID)
 		r.Header.Set("X-Persona-Role", p.Role)
-		hp.proxy.ServeHTTP(w, r)
+		hp.servePluginHTTP(w, r)
 	})
 }
 

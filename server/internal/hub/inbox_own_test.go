@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
@@ -75,7 +76,7 @@ func TestInboxRepliesGoToTheirConnector(t *testing.T) {
 		t.Fatalf("orphan: %v", err)
 	}
 	if _, err := h.replyInbox(ctx, "example:1", "看过了"); err != nil || len(rc.got) != 1 ||
-		rc.got[0] != (connector.InboxReply{Thread: "example-org/example-repo#12", ItemID: "example:1", Last: "m2", Text: "看过了"}) {
+		!reflect.DeepEqual(rc.got[0], connector.InboxReply{Thread: "example-org/example-repo#12", ItemID: "example:1", Last: "m2", Text: "看过了"}) {
 		t.Fatalf("ReplyItem: %v %+v", err, rc.got)
 	}
 }

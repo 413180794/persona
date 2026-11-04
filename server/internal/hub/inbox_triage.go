@@ -244,6 +244,8 @@ func (h *Hub) replyInboxAs(ctx context.Context, id, text, clientID string, chang
 	var already bool
 	var err error
 	switch own := h.ownInboxFor(c); {
+	case h.migratedConnector(&c) != nil: // a plugin took Feishu over (inbox_migrate.go)
+		already, err = h.replyMigrated(ctx, h.migratedConnector(&c), req)
 	case len(changes) > 0 && (c.Connector != nil || own == nil):
 		return InboxItem{}, errors.New("only document items have a status to change")
 	case c.Connector != nil:

@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 )
 
@@ -60,6 +61,31 @@ type InboxThing struct {
 	// Tags are what the thing is about, for muting and rules: its repository, chat, sender (TagRepo, TagChat,
 	// TagSender: the row's menu offers to mute those), a CI failure's branch. The hub mutes by them for every source.
 	Tags []Tag `json:"tags,omitempty"`
+	// Extra is what an item the hub used to make itself had besides the generic fields (ThingExtra): only a connector
+	// taking over one of the hub's own (MigratableConnectors) sends it, and only for it does the hub read it.
+	Extra *ThingExtra `json:"extra,omitempty"`
+}
+
+// MigratableConnectors are the hub's own connectors a plugin may take over while they move out of the hub (Feishu
+// through lark-connector, docs/plan-plugins.md「第 3 步」): a plugin's connector with the same id replaces the hub's while
+// the plugin is on, and its inbox things may carry the items' own blocks (ThingExtra).
+var MigratableConnectors = []string{"lark"}
+
+// ThingExtra is an inbox item's own fields that the generic thing has no place for: the item keeps the shape the
+// apps know (the Feishu item's lark / doc / moment block, its avatar and count) instead of the generic connector block.
+type ThingExtra struct {
+	Source      string    `json:"source,omitempty"`
+	Account     string    `json:"account,omitempty"`
+	AccountName string    `json:"account_name,omitempty"`
+	LegacyID    string    `json:"legacy_id,omitempty"` // the id the hub would have given the item itself
+	Avatar      string    `json:"avatar,omitempty"`
+	Count       int       `json:"count,omitempty"`
+	StartedAt   time.Time `json:"started_at,omitempty"`
+	RuleTier    string    `json:"rule_tier,omitempty"`
+	// The item's block, as the hub's own item had it (one of them).
+	Lark   json.RawMessage `json:"lark,omitempty"`
+	Doc    json.RawMessage `json:"doc,omitempty"`
+	Moment json.RawMessage `json:"moment,omitempty"`
 }
 
 // Tag is one thing an inbox thing is about: Key (TagRepo…), the Value it matches by (an id), the Name people read.
@@ -91,6 +117,17 @@ type InboxReply struct {
 	ItemID string `json:"item_id,omitempty"` // the hub's inbox item
 	Last   string `json:"last,omitempty"`    // the newest move the item holds (InboxThing.Last): what the reply answers
 	Text   string `json:"text,omitempty"`
+	// ClientID is the app's id for the send: a retry with the same one goes out once (empty: the connector derives one).
+	ClientID string `json:"client_id,omitempty"`
+	// Changes move a document row's status first (a document item's 改状态, the AI 分身's proposal); Text may then be empty.
+	Changes []StatusChange `json:"changes,omitempty"`
+}
+
+// StatusChange moves one row's status column to a value it offers (the hub's DocChange).
+type StatusChange struct {
+	Ref   string `json:"ref"`
+	Field string `json:"field"`
+	Value string `json:"value"`
 }
 
 // InboxSettler is an inbox whose rules can close items the hub still has open (made under older rules, or of a

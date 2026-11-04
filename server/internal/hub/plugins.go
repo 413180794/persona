@@ -237,7 +237,9 @@ func (h *Hub) attachPlugins(ctx context.Context) {
 	reg.RemoteManifest = ps.remoteManifest
 	var own []string
 	for _, c := range h.connectors.All() {
-		own = append(own, c.ID())
+		if !slices.Contains(connector.MigratableConnectors, c.ID()) { // a plugin may take these over (connectors_migrate.go)
+			own = append(own, c.ID())
+		}
 	}
 	reg.Reserve("connectors", own...)
 	if path := telegramProgram(); path != "" {
@@ -346,7 +348,7 @@ func (ps *plugins) apply(ctx context.Context, id string) {
 	if old != nil {
 		for _, c := range old.conns {
 			if ps.h != nil && ps.h.connectors != nil {
-				ps.h.connectors.Remove(c.ID())
+				ps.h.removePluginConnector(c.ID())
 			}
 		}
 		if old.proc != nil {
@@ -412,7 +414,11 @@ func (hp *hubPlugin) setProxy(id string) {
 			if r.Out.URL.Path == "" {
 				r.Out.URL.Path = "/"
 			}
+			// Keep what the caller escaped (an id with "/" in it, as %2F): the plugin reads EscapedPath.
 			r.Out.URL.RawPath = ""
+			if raw := strings.TrimPrefix(r.In.URL.EscapedPath(), prefix); raw != "" && raw != r.Out.URL.Path {
+				r.Out.URL.RawPath = raw
+			}
 			// The hub has already checked the caller: the plugin never sees the app's credential.
 			q := r.Out.URL.Query()
 			q.Del("token")
@@ -422,10 +428,26 @@ func (hp *hubPlugin) setProxy(id string) {
 		},
 		Transport:     &http.Transport{DialContext: dial},
 		FlushInterval: -1, // stream (audio, server-sent events) as it comes
+		// The plugin says how its answers may be cached (images, emojis); the hub's no-store only when it says nothing.
+		// The caller drops the hub's own Cache-Control first (servePluginHTTP): the proxy adds headers, it does not
+		// replace them, and "no-store, private, max-age=3600" kept the apps from caching anything.
+		ModifyResponse: func(res *http.Response) error {
+			if res.Header.Get("Cache-Control") == "" {
+				res.Header.Set("Cache-Control", "no-store")
+			}
+			return nil
+		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			w.Header().Set("Cache-Control", "no-store")
 			writeErr(w, http.StatusBadGateway, fmt.Errorf("plugin %s is not answering: %w", id, err))
 		},
 	}
+}
+
+// servePluginHTTP hands one request to the plugin's HTTP side.
+func (hp *hubPlugin) servePluginHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Del("Cache-Control") // set by the hub's auth for its own answers: the plugin's own goes instead
+	hp.proxy.ServeHTTP(w, r)
 }
 
 // selfExecutable is this very binary (a built-in plugin's "personad").
@@ -698,7 +720,9 @@ func (h *Hub) addPluginConnector(ctx context.Context, c *proc.Conn, off bool) er
 	if !h.connectorOn(cs, c.ID()) {
 		h.connectors.StartOff(c.ID()) // added after Start, it must not run first
 	}
+	h.yieldOwnConnector(c.ID())
 	if err := h.addConnector(c); err != nil {
+		h.restoreOwnConnector(c.ID())
 		return err
 	}
 	h.restoreSwitchesOf(c, cs)

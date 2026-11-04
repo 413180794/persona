@@ -142,6 +142,16 @@
 - 验证：Playwright（`playwright-core` + 缓存的 Chrome for Testing）+ CDP 的 `Emulation.setCPUThrottlingRate`、`long-animation-frame`、`Page.startScreencast` 录帧；Playwright 自带的 ffmpeg 只解 MJPEG，录帧用 jpeg，没有管道就先拼成一个文件再读。
   `recordVideo` 在这台机器上不出文件（ffmpeg 版本号对不上时报错，链过去之后静默）。量开发版（`vite`）没意义：React 开发模式一次展开 700ms，生产构建才是用户看到的。
 
+## 打开、刷新对话停在最新处（2026-11-04，#1340）
+
+- 「是不是还跟着最新处」不能只看滚动事件那一刻离底多远：自己 `scrollTop = scrollHeight` 产生的滚动事件要到下一帧才派发，
+  中间又进来内容（图片一张张解码、任务卡、今天卡、一页历史）时，这个事件读到离底几百像素，以前就当成「用户往上翻了」停止跟随，
+  刷新后长对话（主对话最明显）就停在最新消息上面。假 hub 的数据同步就排好版，自然刷新复现不了，要让内容一块块进来（每块一个任务、比一帧快）才稳定复现。
+- 「滚动位置往上走了」也不等于是用户：输入框重新量高度时先塌一下，视口变高，浏览器把 `scrollTop` 往上夹几像素，事件同样晚一帧到。
+  所以只有用户在滚（滚轮向上、手指、滚动键、拖滚动条，之后 700ms 内）且位置往上走，才停止跟随（`followsAfterScroll`）。
+- 列表下面的东西（输入框、任务坞、提问卡）变高时内容没变、只是视口变矮，ResizeObserver 要连视口一起观察，否则最新一行被盖住。
+- 回归检查：`scripts/test/web_chat_scroll_e2e.py`（说明见 `docs/web.md`「怎么跑」）。
+
 ## 表格查看器（2026-11-04，#1310）
 
 - **npm 上的 `xlsx` 是停更的旧版**：SheetJS 2023 年起只从自己的 CDN 发新版，npm 的 0.18.5 有公开漏洞（读不可信文件时的原型污染、ReDoS）。仓库的隐私扫描和 Dockerfile 都只认 registry.npmjs.org，直接 `npm i https://cdn.sheetjs.com/…` 会被 `prebuild` 拦下（`unapproved npm source`）。做法是把 tarball 放进 `web/vendor/`，用 `file:` 相对路径装，Dockerfile 的检查放行 `file:vendor/`。

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { anchoredScroll, collapseMounted, FOLLOW_MARGIN, FOLLOW_STEP } from "./disclosure";
+import { anchoredScroll, collapseMounted, followsAfterScroll, FOLLOW_MARGIN, FOLLOW_STEP } from "./disclosure";
 
 // A 1000 px tall list in an 800 px view at the top of the window.
 const view = { clientHeight: 800, viewTop: 0 };
@@ -53,5 +53,35 @@ describe("collapseMounted", () => {
     expect(collapseMounted(true, true, false)).toBe(true);
     expect(collapseMounted(true, false, true)).toBe(true);
     expect(collapseMounted(false, false, false)).toBe(true);
+  });
+});
+
+describe("followsAfterScroll (#1340)", () => {
+  const reader = true;
+  it("keeps following when the chat's own pin lands after more content did", () => {
+    // pinned at 3000; before its scroll event fired, 480 px of images came in below: the end is far, the offset did not go up
+    expect(followsAfterScroll(true, { scrollTop: 3000, lastTop: 2600, gap: 480, reader: false })).toBe(true);
+    expect(followsAfterScroll(true, { scrollTop: 3000, lastTop: 3000, gap: 480, reader: false })).toBe(true);
+  });
+
+  it("keeps following when the browser pulls the offset up without the reader", () => {
+    // the composer re-measured: the view grew for a moment, the offset was clamped 3 px up, then the view shrank again
+    expect(followsAfterScroll(true, { scrollTop: 1914, lastTop: 1917, gap: 108, reader: false })).toBe(true);
+  });
+
+  it("stops following once the reader scrolls up", () => {
+    expect(followsAfterScroll(true, { scrollTop: 2400, lastTop: 3000, gap: 600, reader })).toBe(false);
+    // even while content keeps landing below
+    expect(followsAfterScroll(true, { scrollTop: 2990, lastTop: 3000, gap: 500, reader })).toBe(false);
+  });
+
+  it("does not start following on the way down until the end", () => {
+    expect(followsAfterScroll(false, { scrollTop: 2800, lastTop: 2400, gap: 300, reader })).toBe(false);
+    expect(followsAfterScroll(false, { scrollTop: 3170, lastTop: 2800, gap: 30, reader })).toBe(true);
+  });
+
+  it("near the end always follows", () => {
+    expect(followsAfterScroll(false, { scrollTop: 2000, lastTop: 2600, gap: 0, reader })).toBe(true);
+    expect(followsAfterScroll(true, { scrollTop: 2000, lastTop: 2600, gap: 0, reader: false })).toBe(true);
   });
 });
