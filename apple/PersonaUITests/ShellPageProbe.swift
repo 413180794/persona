@@ -6,7 +6,7 @@ struct ShellShown: Decodable {
     var position: Double
     var moving, lingering, drawerOpen, chatRoot, workRoot: Bool
     var status: String
-    var opened, folded, room: Int
+    var opened, folded: Int
     var trace: [String]
 }
 
@@ -31,16 +31,13 @@ extension XCUIApplication {
         guard let s = shellShown else { return "none" }
         return "\(s.strip) selected=\(s.selected) tab=\(s.tab) position=\(String(format: "%.2f", s.position))"
             + " drawer=\(s.drawerOpen ? 1 : 0) chatRoot=\(s.chatRoot ? 1 : 0) workRoot=\(s.workRoot ? 1 : 0)"
-            + " status=\(s.status) opened=\(s.opened) folded=\(s.folded) room=\(s.room) lingering=\(s.lingering ? 1 : 0)"
+            + " status=\(s.status) opened=\(s.opened) folded=\(s.folded) lingering=\(s.lingering ? 1 : 0)"
     }
 
-    /// One `key=value` of `shellPage` (`room`, `status`, `opened`…).
+    /// One `key=value` of `shellPage` (`status`, `opened`…).
     func shellValue(_ key: String) -> String? {
         shellPage.split(separator: " ").first { $0.hasPrefix(key + "=") }.map { String($0.dropFirst(key.count + 1)) }
     }
-
-    /// The room the status row takes at the top (points): the bars and pages are that much lower.
-    var shellRoom: CGFloat { CGFloat(shellShown?.room ?? 0) }
 
     /// The shell's latest events (switch taps, routes, slides, settles), for a failure's message.
     var shellTrace: String {
@@ -75,22 +72,19 @@ extension XCUIApplication {
     private let assistant: CGPoint
     private let agents: CGPoint
 
-    /// The points as they are with the status row folded (`shellRoom` moves the bar down while it is open).
+    /// The switch's points: they never move (the hub's link floats, #413).
     init(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
         self.app = app
         let a = app.buttons["shell-assistant"].firstMatch, g = app.buttons["shell-agents"].firstMatch
         XCTAssertTrue(a.waitForExistence(timeout: 15) && g.exists, "no 助手 | Agents switch", file: file, line: line)
-        let room = app.shellRoom
-        assistant = CGPoint(x: a.frame.midX, y: a.frame.midY - room)
-        agents = CGPoint(x: g.frame.midX, y: g.frame.midY - room)
+        assistant = CGPoint(x: a.frame.midX, y: a.frame.midY)
+        agents = CGPoint(x: g.frame.midX, y: g.frame.midY)
     }
 
-    /// Taps the segment, no waiting (quick taps, taps while the strip slides): where it is now, below the status row
-    /// if that is open.
-    func tap(agents toAgents: Bool, room: CGFloat? = nil) {
+    /// Taps the segment, no waiting (quick taps, taps while the strip slides).
+    func tap(agents toAgents: Bool) {
         let p = toAgents ? agents : assistant
-        let dy = room ?? app.shellRoom
-        app.windows.firstMatch.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: p.x, dy: p.y + dy)).tap()
+        app.windows.firstMatch.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: p.x, dy: p.y)).tap()
     }
 
     /// Taps the segment, then within `limit` seconds the strip must rest on that page with the switch and the app's

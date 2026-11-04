@@ -1,6 +1,6 @@
 import XCTest
 
-/// The app's toasts in the shell (docs/shell.md「状态行」, #1053): the result of something just done (已归档, 已复制…)
+/// The app's toasts in the shell (docs/shell.md「连接状态和 toast」, #1053): the result of something just done (已归档, 已复制…)
 /// floats over everything in a window of its own and moves nothing: the Agents list's first row, the drawer's rows and
 /// the status row stay where they are while it shows, what is under it takes the taps, and it is not under the
 /// keyboard. It used to open the status row, which pushed the pages and the drawer down and back.
@@ -44,10 +44,9 @@ final class ShellToastTests: XCTestCase {
         return ok
     }
 
-    /// The status row did not open for it: nothing was pushed down.
+    /// The toast brought no link state with it.
     @MainActor private func rowStayedFolded(_ what: String) {
-        XCTAssertEqual(app.shellValue("opened"), "0", "the status row opened for a toast (\(what)) \(app.shellTrace)")
-        XCTAssertEqual(app.shellValue("room"), "0", "the status row took room for a toast (\(what)) \(app.shellTrace)")
+        XCTAssertEqual(app.shellValue("opened"), "0", "the link's state showed for a toast (\(what)) \(app.shellTrace)")
     }
 
     /// Agents: the list's first row (`probe.agents-scroll`) and the bar's buttons stay put while toasts show, and the

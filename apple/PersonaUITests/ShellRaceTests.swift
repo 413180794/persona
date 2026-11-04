@@ -99,18 +99,16 @@ final class ShellRaceTests: XCTestCase {
     /// Taps faster than the strip slides: none is lost, it ends on the one tapped last.
     @MainActor func testQuickTapsEndOnTheLast() {
         launch()
-        // The status row stays folded here (体验模式 is online): read its room once, not between quick taps.
-        let room = app.shellRoom
         for gap in [0.05, 0.15, 0.3] {
             let g = useconds_t(gap * 1_000_000)
-            finger.tap(agents: true, room: room); usleep(g); finger.tap(agents: false, room: room); usleep(g); finger.tap(agents: true, room: room)
+            finger.tap(agents: true); usleep(g); finger.tap(agents: false); usleep(g); finger.tap(agents: true)
             app.expectShell(agents: true, "Agents, 助手, Agents \(gap)s apart")
-            finger.tap(agents: false, room: room); usleep(g); finger.tap(agents: true, room: room); usleep(g); finger.tap(agents: false, room: room)
+            finger.tap(agents: false); usleep(g); finger.tap(agents: true); usleep(g); finger.tap(agents: false)
             app.expectShell(agents: false, "助手, Agents, 助手 \(gap)s apart")
         }
         // Two taps: the second while the first still slides.
         for gap in [0.1, 0.2] {
-            finger.tap(agents: true, room: room); usleep(useconds_t(gap * 1_000_000)); finger.tap(agents: false, room: room)
+            finger.tap(agents: true); usleep(useconds_t(gap * 1_000_000)); finger.tap(agents: false)
             app.expectShell(agents: false, "Agents then 助手 \(gap)s later")
         }
     }
@@ -119,7 +117,7 @@ final class ShellRaceTests: XCTestCase {
     /// switch and the tab say so.
     @MainActor func testSwitchThenDragEndsWhereTheDragSettles() {
         launch()
-        finger.tap(agents: true, room: app.shellRoom)
+        finger.tap(agents: true)
         usleep(150_000)
         // A drag to the right from Agents' left edge (on a row elsewhere it is the row's swipe) while it still slides
         // in: back to 助手.

@@ -30,7 +30,7 @@ final class ConnectionStatus {
     private(set) var shown: Phase = .online {
         didSet { if shown != oldValue { onShown?(shown) } }
     }
-    /// Told of each new `shown` as it is set (the iPhone shell's status row: docs/shell.md「状态行」).
+    /// Told of each new `shown` as it is set (the iPhone shell's floating link pill: docs/shell.md「连接状态和 toast」).
     @ObservationIgnored var onShown: ((Phase) -> Void)?
     private(set) var networkUp = true
     private(set) var catchingUp = false

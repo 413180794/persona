@@ -85,7 +85,7 @@ final class AppModel {
     /// The machine whose engine the pairing asks for (a newly paired group's hub machine).
     var pairingEngineMachine: MachineRef?
     /// A short message: the result of something just done, floating over the page for a moment (`ToastOverlay`; in the
-    /// iPhone's shell in a window of its own, `ToastWindow`, docs/shell.md「状态行」).
+    /// iPhone's shell in a window of its own, `ToastWindow`, docs/shell.md「连接状态和 toast」).
     var toast: Toast?
     /// A Mac whose live screen is up (`ScreenDrawer`, RootView presents it; #1343): opened from the chat's running
     /// work, its ··· menu, the machine page or a tool's details.

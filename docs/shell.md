@@ -15,7 +15,7 @@
 
 `ShellRaceTests` 用坐标点击模拟手指（`ShellFinger`，不点无障碍元素）：Agents → 打开一个 Agent 的对话 → 返回（返回按钮 / 右滑，
 返回动画没结束就点、0.15 s、0.4 s、1 s 后点；对话正在流式输出时退出）→ 点助手 → 点 Agents。每一步读 DEBUG 探针
-（`probe.shell`：横条停在哪页、选中的段、App 的 tab、抽屉、两页是否在根部、状态行）和 `ShellTrace`（最近的点击、路由、滑动事件）。
+（`probe.shell`：横条停在哪页、选中的段、App 的 tab、抽屉、两页是否在根部、连接状态）和 `ShellTrace`（最近的点击、路由、滑动事件）。
 
 - 12 轮里 4 轮复现：探针是「横条停在助手，tab=agents」，Agents 段加粗，横条不动。
 - 追踪是这样的：`switch chats` → `tab assistant->chats`，之后再没有外壳的 body，也没有 `route`。也就是说，点击到了切换段，
@@ -113,49 +113,32 @@ TabView 只在显示时建 tab，没有这个问题。
 （`ShellState(page:)`，不等 `onAppear` 里的第一次路由）。`ShellLaunchTests` 按上面几种启动方式断言：启动后只有在前那页的对话出现、
 只出现一次，后面那页没有对话。
 
-## 状态行（连接提示）和 toast
+## 连接状态和 toast
 
 原来弱网的「连接中…」药丸浮在顶栏下面，正好压在 Agents 的筛选条和拉出来的搜索框上；全局 toast 浮在窗口顶部，新外壳里盖住头像、切换和新建按钮，
-点到它就把它关掉，点切换的那一下被吞了（2026-11-02）。当时两样都进了状态栏下面的同一行（`ShellStatus.swift`）。
-后来用户反馈（2026-11-04，#1053）：在侧栏归档一个对话，「已归档」进了这一行，把侧栏和页面往下推一下再推回来，「需要用覆盖在上层的 toast 实现」。现在按这条分：
+点到它就把它关掉，点切换的那一下被吞了（2026-11-02）。当时两样都进了状态栏下面的一行，靠改窗口的 safe area 让出位置。
+后来 toast 先改回浮层（2026-11-04，#1053：「已归档」把侧栏和页面往下推一下再推回来）；连接状态也改成浮层（2026-11-04，#413，用户在三种做法的录屏里选的）：
+这一行收起时 SwiftUI 重排 Agents 的导航栈，列表有几帧读到 inset 为 0、一帧跳约 210pt，导航栏偶尔（6 次里 2 次）把这当成一次滚动，把拉出来的搜索框收了又放出来。
+只要还靠窗口的 safe area 让位就修不干净（试过的做法和逐帧数据在 #413），所以不再让位。
 
-- **持续的状态进状态行**：hub 的连接（等待网络 / 连接中… / 更新中…）。它会持续一阵、反映的是现在的情况，让位置、不压控件是对的。
-- **一次性的结果是 toast**：刚做完一件事的结果（已归档、已删除、已置顶、已复制、已提交、发送失败、部署失败……，也就是所有 `AppModel.toast`）。
-  它短（info / success 2.5 s，error 4 s），自己消失，**不占位、不推动任何布局**，浮在最上层：外壳把它画在自己的一个窗口里（`ToastWindow`，
-  在外壳窗口上面一层），所以抽屉、两页、推出的页面、外壳上弹出的 sheet 都在它下面；状态行开着时它在状态行下面，不叠在连接提示上。
-  键盘在底部，toast 在顶部，不会被挡。
-- **toast 不吞点击**：那个窗口不接任何触摸（`hitTest` 返回 nil），toast 下面的切换、按钮照常能点；所以它也不能点掉，到时间自己走。
+- **都浮着，什么都不动**：连接状态（等待网络 / 连接中… / 更新中…）和 toast 画在外壳的一个窗口里（`ToastWindow`，在外壳窗口上面一层），
+  就在顶栏下面，连接状态在上、toast 在它下面；抽屉、两页、推出的页面、外壳上弹出的 sheet 都在它下面。出现、消失都不改任何页面的布局、safe area 或列表的位置。
+- **不吞点击**：那个窗口除了 toast 的按钮（撤销）不接任何触摸，药丸和 toast 下面的筛选条、搜索框、切换照常能点；所以它们也不能点掉，连接状态随连接走，toast 到时间自己走。
   因为 VoiceOver 不会移到一个不接触摸的窗口上，toast 出现时直接朗读出来（`AccessibilityNotification.Announcement`）。
-  同一时间只有一条，新的换掉旧的（和旧布局一样）。样子是设计系统的 `ToastCapsule`：液态玻璃的胶囊，BeautifulUI 风格下是它凸起的胶囊。
-
-状态行本身：
-
-- **占位置，不浮**：这一行出现时，外壳把窗口根控制器的 `additionalSafeAreaInsets.top` 加上这一行的高度（`ShellWindowHooks`），所有页面、顶栏、
-  系统导航栏、列表、推出的页面、打开的抽屉一起往下让；行画在让出来的空当里。只用 SwiftUI 的 `safeAreaInset` 不行：外壳自己画的顶栏让了，
-  底下 UIKit 的导航栏和列表没让，顶栏反而压到了筛选条上。
-- **手指在动时不展开、不收起**：窗口上一个只看不抢的手势识别器（不开始、不延迟、不取消任何触摸）记着有没有手指按着，松手后等到所有
-  滚动视图停下来。这期间展开和收起推迟（内容会在手指下平移），最多等 3 s；等待网络不等。
-- 旧布局、iPad、Mac：toast 是 `ToastOverlay`（同一个 `ToastCapsule`，点它关掉），连接状态在标题里。外壳在的时候 `ConnectionStatus.shown`
-  一设就转给这一行（`onShown`），和 tab 一样当场做，不靠视图重画。行的高度也是当场推给窗口（`onRoom`），不经过外壳的 body：经过 body 时
-  慢了一秒多，药丸先压在了切换上。
-- 让位置时，停在顶端的列表保持在顶端（跟着整页一起移）：offset 按变化之前的值加减这一行的高度来定。
-- **还没解决（#413）**：这一行收起时，导航栈里的列表有几帧读到 inset 为 0（导航栈重新排版，四种做法都有：SwiftUI 动画、
-  不加动画、`UIView.animate`、不在动画里排版），行跳约 210pt，导航栏偶尔（实测 6 次里 2 次）把这当成一次滚动，把 Agents 上拉出来的搜索框收了。
-  现在 0.6 s 后把列表放回原来停的位置，搜索框跟着出来，但看得到收起又出来的那一下。
-  - 逐帧量：`probe.agents-scroll` 的 `room`；`ShellRoomScrollTests` 断言开合中搜索框高度不变、行一帧不跳超过 12pt、收起后回到原处。修好之前它会挂，
-    只在 `TEST_RUNNER_JARVIS_KNOWN_ISSUES=1` 时跑，不进验收。
-  - 试过、不行的做法（数据在 #413）：从 UIKit 改 SwiftUI 的导航控制器（safe area、transform）、开合期间自己管列表 inset、关 `hidesSearchBarWhenScrolling`，
-    都会被 SwiftUI 改回去或带出别的跳动；Agents 根页的导航栏也没法为它变高（紧凑导航栏只有 54 / 88 两档，88 已经给顶栏的 clearance 用了）。
-- 这一行出现、消失只改透明度，不插入、不移除视图：用 `.transition` 插入时，第二次起停在透明（看不见，VoiceOver 也读不到）。
+- **当场出现**：不移动东西，也就不用等手指松开；`ConnectionStatus.shown` 一设就转给 `ShellNotices`（`onShown`），不靠视图重画。
+- **一次性的结果是 toast**：刚做完一件事的结果（已归档、已删除、已置顶、已复制、已提交、发送失败、部署失败……，也就是所有 `AppModel.toast`），
+  短（info / success 2.5 s，error 4 s），同一时间只有一条，新的换掉旧的。样子是设计系统的 `ToastCapsule`；连接状态是 `ShellLinkPill`（同一种胶囊：
+  液态玻璃，BeautifulUI 风格下是它凸起的胶囊）。键盘在底部，它们在顶部，不会被挡。
+- 旧布局、iPad、Mac：toast 是 `ToastOverlay`（同一个 `ToastCapsule`，点它关掉），连接状态在标题里。
 
 DEBUG：`-showConnectionCycle connecting:7:4`（第 7 秒起显示连接中… 4 秒，然后恢复；`waiting` / `connecting` / `updating`）、
 `-showToasts "5:info:文字;5.4:error:文字"`（这些时刻弹 toast）。
 
 | 项 | 定义 | 测试 |
 | --- | --- | --- |
-| 不压控件 | 连接提示和头像、切换、新建、筛选条、搜索框、输入框都不相交；三种连接状态都测 | `testTheLinkTakesItsRoomInEveryState`、`ShellSearchTests` |
-| 不跳 | 展开时顶上的控件和屏幕上的行都往下移同一个距离（这一行的高度），行的顺序不变；收起后回到原处 | `testTheLinkTakesItsRoomInEveryState` |
-| toast 不推布局 | toast 出现、消失时 Agents 列表第一行（`probe.agents-scroll`）、新建按钮、抽屉里的行都不动，状态行不展开 | `ShellToastTests` |
+| 连接状态不动布局 | 三种连接状态、两页：出现时和消失后，头像、切换、新建、筛选条、搜索框、输入框和屏幕上的行都不动，药丸在顶栏按钮下面 | `ShellStatusRowTests.testTheLinkFloatsAndMovesNothingInEveryState` |
+| 搜索框不闪 | 连接状态来去 12 次，拉出 / 收起的搜索框都不变，行不动，导航容器的 safe area 不变 | `ShellRoomScrollTests` |
+| toast 不推布局 | toast 出现、消失时 Agents 列表第一行（`probe.agents-scroll`）、新建按钮、抽屉里的行都不动，不带出连接状态 | `ShellToastTests` |
 | toast 不吞点击 | toast 显示时点它下面的切换、抽屉里的行照常生效 | `ShellToastTests` |
 | toast 不被键盘挡 | 键盘弹着时 toast 整个在屏幕里、和键盘不相交 | `ShellToastTests.testAToastWithTheKeyboardUpIsAboveIt` |
 | 手指优先 | 手指按着时连接中…不展开，松手后才展开；等待网络立刻展开 | `testTheRowWaitsForTheFingerUnlessUrgent` |

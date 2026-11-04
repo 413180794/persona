@@ -107,8 +107,7 @@ struct ShellStateTests {
         #expect(n.opened == 1 && n.folded == 1, "opened \(n.opened), folded \(n.folded): the row folded in between")
     }
 
-    /// A toast is the result of something just done: it floats (`ToastWindow`), and the row, which moves the pages,
-    /// stays as it was (#1053: 已归档 opened it and pushed the drawer down).
+    /// A toast is the result of something just done: it floats (`ToastWindow`) and brings no link state (#1053).
     @Test func aToastLeavesTheRowAlone() {
         let model = AppModel()
         let shell = ShellState()
@@ -117,24 +116,20 @@ struct ShellStateTests {
         let toast = Toast("已归档", style: .success)
         model.toast = toast
         #expect(model.toast == toast, "the toast is the model's to show, not taken into the row")
-        #expect(shell.notices.shown == nil && shell.notices.opened == 0 && shell.notices.room == 0)
+        #expect(shell.notices.shown == nil && shell.notices.opened == 0)
     }
 
-    @Test func theRowWaitsForTheFingerUnlessUrgent() {
+    /// The link's state floats and moves nothing (#413), so it shows and goes at once, a finger down or not.
+    @Test func theLinkShowsAndGoesAtOnce() {
         let n = ShellNotices()
-        n.fingers(busy: true)
         n.linkChanged(.connecting)
-        #expect(n.shown == nil, "opened under the finger")
-        n.fingers(busy: false)
-        #expect(n.shown == .link(.connecting))
-        n.fingers(busy: true)
-        n.linkChanged(.online)
-        #expect(n.shown == .link(.connecting), "folded under the finger")
-        n.fingers(busy: false)
-        #expect(n.shown == nil)
-        n.fingers(busy: true)
+        #expect(n.shown == .link(.connecting) && n.opened == 1)
         n.linkChanged(.waitingForNetwork)
-        #expect(n.shown == .link(.waitingForNetwork), "no network waited for the finger")
+        #expect(n.shown == .link(.waitingForNetwork) && n.opened == 1, "one state to another is not a new opening")
+        n.linkChanged(.online)
+        #expect(n.shown == nil && n.folded == 1)
+        n.linkChanged(.online)
+        #expect(n.folded == 1)
     }
 }
 #endif

@@ -53,9 +53,8 @@ struct ShellView: View {
                 #endif
             }
             .onDisappear { shell.detach(from: model) }
-            // 等待网络 / 连接中… / 更新中… and the toasts: one row under the status bar that takes its room, the pages and
-            // their bars making way (docs/shell.md「状态行」); it opens and folds once no finger moves the screen.
-            .overlay { ShellStatusRow(notices: shell.notices) }
+            // 等待网络 / 连接中… / 更新中… and the toasts float in a window of their own above the shell's, moving nothing
+            // (docs/shell.md「连接状态和 toast」).
             .background { ShellWindowHooks(notices: shell.notices, pager: shell.pager) }
     }
 
@@ -137,9 +136,9 @@ nonisolated struct ShellShown: Encodable, Equatable {
     var strip = "", selected = "", tab = ""
     var position = 0.0
     var moving = false, lingering = false, drawerOpen = false, chatRoot = true, workRoot = true
-    /// The status row: `none` or `link` (toasts float, `ToastWindow`), how many times it opened and folded, and its room (points).
+    /// The hub's link: `none` or `link` (it floats with the toasts, `ToastWindow`), how many times it came and went.
     var status = "none"
-    var opened = 0, folded = 0, room = 0
+    var opened = 0, folded = 0
     var trace: [String] = []
 
     init() {}
@@ -158,7 +157,6 @@ nonisolated struct ShellShown: Encodable, Equatable {
         status = n.shown == nil ? "none" : "link"
         opened = n.opened
         folded = n.folded
-        room = Int(n.room.rounded())
         trace = ShellTrace.shared.events
     }
 

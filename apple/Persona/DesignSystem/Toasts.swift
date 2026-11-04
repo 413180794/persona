@@ -3,7 +3,7 @@ import SwiftUI
 
 /// One toast (`AppModel.toast`): the style's icon and the words on a floating capsule; in the BeautifulUI style its
 /// raised capsule. A toast tells the result of something just done (已复制, 已归档, 发送失败…) and goes by itself after
-/// a moment; what lasts (the hub's link: 等待网络, 连接中…) is the shell's status row's (docs/shell.md「状态行」).
+/// a moment; what lasts (the hub's link: 等待网络, 连接中…) floats in the shell's toast window too (docs/shell.md「连接状态和 toast」).
 struct ToastCapsule: View {
     let toast: Toast
     /// Closes the toast after its button (撤销) ran.

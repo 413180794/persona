@@ -803,3 +803,9 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
   - 从任何地方都要能弹出的全屏层（画面这种），放进一个自己的窗口（iOS 的 `UIWindow`，level 在 shell 之上、toast 之下；Mac 的独立窗口），由模型的一个值驱动显示，不挂在某个视图的 present 链上。
   - 测试要从 sheet 或新外壳的页面里点一次。
 
+
+## 改窗口的 safe area 让位，SwiftUI 的导航栈会跟着重排（2026-11-04，#413）
+
+- 外壳靠 `rootViewController.additionalSafeAreaInsets.top` 给状态行让位，收起时 Agents 的导航栈重新排版，列表有 100–200 ms 读到 inset 和 offset 都是 0，一帧跳约 210pt，
+  导航栏偶尔把这当成一次滚动，把拉出来的搜索框收了。从 UIKit 改 SwiftUI 托管的导航控制器、负的 safeAreaPadding、开合时关 `hidesSearchBarWhenScrolling`，都会被 SwiftUI 改回去或带出别的跳动。
+- 结论：常驻、会来去的提示别让位，浮在一个不接触摸的窗口里（`ToastWindow`）；要让位的只能是不会频繁变的东西。判断用录屏逐帧看加探针逐帧记，不要只看最后停在哪。
