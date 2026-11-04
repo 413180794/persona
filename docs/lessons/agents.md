@@ -56,6 +56,7 @@
   （`stop_reason: max_tokens`），给 200 才有名字；小任务里给模型的 token 上限别卡太紧。
 - herdr 会把早就结束的 Codex 会话报成 working（2026-10-30：两天前结束的一轮显示「正在工作 45 小时」八分钟，rollout 没动过；App 的计时从那一轮的用户消息算起）。
   node 以 rollout 为准：结尾是 task_complete / turn_aborted、30 秒没写过，就当 done（`codexTurnOver`）。
+- 反过来，接不进去的 Codex 也别把状态留成 unknown：App 把 unknown 当空闲（2026-11-02：Codex 桌面 App 里正在跑的任务在手机上进了「空闲的空间」，它的 app-server 是 stdio，node 只知道它开着哪些 rollout，一律报 unknown）。按 rollout 判断（`codexSessions`）；尾部只读 384 KB，而一轮常写几 MB，只认 task_started 的话长任务过一会儿又变回 unknown：尾部里没有轮次事件、又没读到文件开头，就是还在一轮之中（`quickMeta.turnOpen`）。
 - 同一个 Claude 会话 id 可能在两个配置目录里各有一个文件（在另一个 profile 下 resume 过：旧的停住，新的接着写）。按目录顺序取第一个会读到旧的：
   在跑的会话在手机上停在两天前、子 Agent 报 not found、列表里同一个会话出现两次（2026-10-31，一台机器 45 个）。按 id 找文件一律取最近修改的那份（`newestFirst`）。
 - Codex 窗格认会话别靠「同目录最新的 rollout」（和 Claude 那条一样的坑）：终端标题是「线程名 | 目录」，按 `session_index.jsonl` 的线程名认；

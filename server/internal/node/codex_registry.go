@@ -365,9 +365,10 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 		}
 		s := proto.Session{SessionID: id, Agent: "codex", SourceKind: "codex_history", SourceThreadID: src.thread, Status: proto.StatusOffline,
 			Capabilities: &proto.SessionCapabilities{Read: true}, ReadOnlyReason: "仅查看：未发现可共享的 app-server 入口，请在电脑上打开会话"}
+		var m quickMeta
 		if src.path != "" {
 			if st, err := os.Stat(src.path); err == nil {
-				m := n.meta(src.path, st)
+				m = n.meta(src.path, st)
 				if identity.IsAssistantDir(m.cwd) {
 					continue
 				}
@@ -378,7 +379,14 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 		}
 		s.AgentName = filepath.Base(src.home)
 		if liveRollouts[id] {
+			// A stdio app-server (the Codex desktop App's own) has no way in, but the rollout it holds open says
+			// whether a turn runs; unknown put a desktop task at work under the app's quiet spaces.
 			s.Status = proto.StatusUnknown
+			if m.turnOpen {
+				s.Status = proto.StatusWorking
+			} else if m.turnClosed {
+				s.Status = proto.StatusDone // as a loaded idle thread on an app-server (codex_remote.go)
+			}
 			s.ReadOnlyReason = "app-server 正在运行，但未提供共享入口；只能同步本地历史"
 		}
 		if c, t, err := n.codexOwner(id); err == nil {

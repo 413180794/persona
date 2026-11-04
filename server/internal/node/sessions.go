@@ -134,6 +134,9 @@ type quickMeta struct {
 	sandbox  string // Codex: the turn's sandbox, which with mode (its approval policy) gives the app's mode back
 	// turnClosed: a Codex rollout whose tail ends with its turn finished (transcript.Meta.TurnClosed)
 	turnClosed bool
+	// turnOpen: a Codex rollout whose tail is inside a turn: the last turn it starts has not finished, or one turn
+	// fills the whole tail (a finished turn's task_complete is within a few KB of the end; real turns write MBs)
+	turnOpen bool
 }
 
 const offlineWindow = 7 * 24 * time.Hour
@@ -244,6 +247,7 @@ func readQuickMetaSince(path string, st os.FileInfo, prev quickMeta) quickMeta {
 	if t := tm.LastTool; t != nil {
 		m.doing, m.doingAt = transcript.Activity(t.Name, t.Input), t.At
 	}
+	m.turnOpen = tm.Codex && (tm.TurnOpen || off > 0 && !tm.TurnClosed)
 	m.mode, m.modeAt, m.effort, m.effortAt, m.sandbox = tm.PermissionMode, tm.ModeAt, tm.Effort, tm.EffortAt, tm.CodexSandbox
 	return m
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -82,4 +83,58 @@ func TestCodexStdioOpenRolloutIsVisibleButNeverWritable(t *testing.T) {
 		}
 	}
 	t.Fatal("open stdio rollout omitted")
+}
+
+// 2026-11-02: a task at work in the Codex desktop App showed on the phone under 空闲的空间. The App's own app-server
+// talks stdio, so node only sees which rollouts it holds open and called each unknown; the rollout says whether a
+// turn runs, even when one turn has written more than the tail node reads.
+func TestCodexStdioOpenRolloutStatusFollowsItsTurn(t *testing.T) {
+	output := `{"timestamp":"2026-01-01T00:00:02Z","type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"` + strings.Repeat("x", 64<<10) + `"}}`
+	long := []string{event("task_started")}
+	for range 8 { // 512 KB, more than readQuickMeta's 384 KB tail: the tail holds no task_started
+		long = append(long, output)
+	}
+	cases := []struct {
+		name   string
+		events []string
+		want   string
+	}{
+		{"in a turn", []string{event("task_started"), event("task_complete"), event("task_started"), output}, proto.StatusWorking},
+		{"in a turn longer than the tail", long, proto.StatusWorking},
+		{"after a turn longer than the tail", append(long[:len(long):len(long)], event("task_complete")), proto.StatusDone},
+		{"after an interrupted turn", []string{event("task_started"), event("turn_aborted")}, proto.StatusDone},
+		{"before the first turn", nil, proto.StatusUnknown},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			n := remoteTestNode(t)
+			home := t.TempDir()
+			dir := filepath.Join(home, "sessions", "2026", "11", "02")
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			lines := append([]string{`{"timestamp":"2026-01-01T00:00:00Z","type":"session_meta","payload":{"id":"` + remoteRaw + `","cwd":"/work"}}`}, c.events...)
+			path := filepath.Join(dir, "rollout-synthetic-"+remoteRaw+".jsonl")
+			if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			f, err := os.Open(path) // held open like the App's app-server holds it
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer f.Close()
+			n.codices.scan = func() []codexProcess { return []codexProcess{{pid: os.Getpid(), home: home, endpoint: "stdio://"}} }
+			n.discoverCodex()
+			id := n.registerCodex(home, remoteRaw, path)
+			for _, s := range n.codexSessions(map[string]bool{}) {
+				if s.SessionID == id {
+					if s.Status != c.want || s.Capabilities.Send || s.ReadOnlyReason == "" {
+						t.Fatalf("status %q, want %q (still read-only): %+v", s.Status, c.want, s)
+					}
+					return
+				}
+			}
+			t.Fatal("open stdio rollout omitted")
+		})
+	}
 }
