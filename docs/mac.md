@@ -416,6 +416,11 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - 要看右键菜单的，写明先把副本切到前台（`bring_to_front`）再用前台投递右键：前台投递做完会切回原来的 App，菜单跟着关掉，
   执行者就报「右键没有菜单」（2026-11-03 终端的右键菜单就这样误报过一次）。
 - 不起眼的控件写清长什么样、在哪：终端的「关闭终端」是 sheet 顶部正中那根手柄，没写，执行者点了左上角的「窗口尺寸」，报「点了不关」。
+- sheet 里的东西不要按 sheet 截图的像素点（2026-11-04）：macOS 26 的 SwiftUI sheet（`SheetPresentationWindow`）报的位置大小和 cua 截到的画面对不上
+  （画面里是主窗口那一块缩放进来的），按截图像素换出的屏幕坐标是偏的，点了没反应，像按钮坏了（#1132 就这样误报过）。
+  写明用主窗口无障碍树里 `AXSheet` 下那个元素：能按就按（AXPress），要真鼠标就取它的 frame，用屏幕坐标（`scope:"desktop"`）点中心。
+- 测终端翻历史，用不接管的终端（mock 只加 `MOCK_TERMINAL_STREAM=1`）：接管时滚轮按设计发给终端里的程序（`terminal_input.scroll`），
+  假 hub 只记下、不翻，执行者就报「翻不上去」（2026-11-03 s5c）。
 
 **切换前的对照**（2026-11-03）：拿 3 项已有结论的让执行者跑：建议胶囊（通过）、消息右键操作条（不通过，#501）、头像菜单（通过）。
 - 第一遍：1 项一致，2 项报「存疑」，证据都对。
@@ -651,13 +656,18 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [ ] Selection (long-press word, drag, 拷贝 / 全选), OSC 8 / URL tap → in-app link — TerminalView.swift (SelectionHandle)
   - Mac 真窗口（2026-11-03）：拖选第一行 ⌘C 拷出「Welcome to Claude Code」，双击选中一个词，⌘A ⌘C 拷出整屏；右键弹出 拷贝（没选中时灰）/ 粘贴 / 全选，系统还会自动加一项「自动填充」。还剩点带下划线的 OSC 8 链接在 App 里打开没试。
 - [ ] Scrollback loading 200 lines at a time (screen/before), 回到最新, ~1000-line limit notice — SessionPanes.swift
-  - 要到 Mac 前看：滚轮 / 触控板往上滚，触发每次 200 行的加载、回到最新、约 1000 行的提示。
+  - Mac 真窗口（2026-11-04，mock `MOCK_TERMINAL_STREAM=1`，不接管）：滚轮往上翻，接上了更早的输出（Step15 → Step3 → 翻到最前面的 Step1，假 hub 的约 430 行分两页加载），
+    底部出现「回到最新」，用鼠标点（按无障碍树的位置点）和 AXPress 都回到最新一屏。还差：翻到头没有「约 1000 行」/「已到最前面」的提示（浮层的细顶栏没带这行字，iOS 同样，#1133）。
+  - 接管时（`MOCK_TERMINAL_CONTROL=1`）滚轮按设计发给程序，不翻 App 自己的历史（2026-11-03 执行者因此报过不通过）。
 - [ ] Link status bar (last update, retry backoff, 重试) — SessionPanes.swift (TerminalLinkStatus)
   - 要到 Mac 前看：mock hub 加 `MOCK_SCREEN_FAIL_AFTER=3:14`，状态条出现（最后更新、退避、重试）后再恢复。体验模式和正常的 mock 都不出这条。
 - [ ] Key bar: sticky/locked/held ctrl/alt/shift, esc, tab, ⌃C, D-pad, paste, shortcuts — Views/Chat/TerminalKeys.swift (TerminalKeyBar, KeyCap, DirectionPad)
   - 要到 Mac 前看：修饰键的一次 / 锁定 / 按住、方向键盘、粘贴，以及深色下文字键近乎黑底黑字是不是真的。键栏截图里画出来了。
+  - Mac 真窗口（2026-11-03，接管的终端）：点一下 Ctrl 变成高亮（无障碍值「已按下」），再点一下取消；esc、tab、展开方向键后的上、左都发出去了（终端里显示 `[A[D`）；
+    「粘贴」弹出确认「粘贴 21 行到终端？多行文字在 shell 里可能被逐行执行。」带取消 / 粘贴。还剩：锁定和按住两种状态、深色下键的对比。
 - [ ] Input: field mode + direct typing mode (UIKeyInput / UITextInput, hardware arrow keys) — Terminal/TerminalInput.swift
   - 要到 Mac 前看：真键盘打字、拼音组字、方向键、⌃ 组合。Mac 走自己的 keyDown（映射有 `MacTerminalKeysTests`）。
+  - Mac 真窗口（2026-11-03，接管的终端）：点终端底部的输入行后打 hello jarvis，2 秒内出现在「>」后面，回车发出。还剩拼音组字、方向键、⌃ 组合。
 - [ ] Gestures: 2-finger swipe sibling agent / adjacent space, double-tap paste (multi-line confirm), scroll in-terminal — TerminalView.swift
   - 要到 Mac 前看：触控板三指轻扫到同空间的 Agent、⌘V 粘贴（多行有确认）、终端里滚动。Mac 上的说法在 `TerminalHelpText`（有测试）。
 - [ ] Shortcuts panel (single tap fill, double tap send), terminal settings (keys shown, auto-hide bar, theme, font, wrap), tips, completions from pane contents — Terminal/TerminalExtras.swift (ShortcutsPanel, TerminalSettingsView, TerminalPreview, ThemeRow, SuggestionStrip), SessionPanes.swift (TerminalTips)
