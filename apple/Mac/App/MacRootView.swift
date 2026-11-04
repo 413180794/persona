@@ -106,6 +106,7 @@ struct MacRootView: View {
         }
         .frame(minWidth: Theme.Size.macWindowMinWidth, minHeight: Theme.Size.macWindowMinHeight)
         .macLook(model)
+        .loadsChannels() // the names under a message that came in from a channel (「来自 微信」)
         .overlay(alignment: .top) { ToastOverlay() }
         .alert("Claude 想在这台 Mac 上执行", isPresented: Binding(
             get: { model.pendingConfirmation != nil },

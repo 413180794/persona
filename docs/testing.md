@@ -196,6 +196,11 @@ Telegram 会话页的回复框（`ConnectorThreadReplyTests`，#1190）：发出
 mock 第六次问时确认，页面自己变成已连接。mock 的登录状态留在进程里，再跑一次（比如换深色）先重启 mock；`MOCK_WECHAT_WAIT=1` 让它一直停在二维码，方便截图。
 用户自己的回复不弹卡片是 hub 定的（mock 不分设备），hub 一侧见 `TestConnectorThreadReplyFromTheUsersDevice`。
 
+渠道（`ChannelSettingsTests`，#1529，`docs/channels.md`「界面」）：`MOCK_CHANNELS=1 PORT=<独立端口> python3 scripts/mock/mock_hub.py &`，
+`TEST_RUNNER_JARVIS_CHANNELS_HUB=http://127.0.0.1:<端口> xcodebuild test … -only-testing:PersonaUITests/ChannelSettingsTests`：设置 › 插件 的「渠道」行和摘要、
+三节列表（Persona / 已接入 / 可以安装）、微信的页面（账号、消息发到、功能）、用令牌绑定（错的令牌原地报错）、飞书机器人解绑后用 6 位配对码重新配对、
+主对话第一条下面的「来自 微信」。mock 的绑定状态留在进程里，换深色再跑先重启 mock；`-openChannels YES` / `-openChannel <id>` 直接打开列表 / 某个渠道。
+
 已知会挂、修好之前不进验收的 UI 测试先跳过，`TEST_RUNNER_JARVIS_KNOWN_ISSUES=1` 才跑，跳过的说明里写 issue 号：
 现在只有 `ShellRoomScrollTests`（外壳状态行收起时 Agents 搜索框闪一下，#413，`docs/shell.md`「状态行」）。
 

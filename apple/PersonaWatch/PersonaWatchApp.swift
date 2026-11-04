@@ -493,6 +493,8 @@ struct WatchSessionView: View {
     var session: Session
     @State private var reply = ""
     @State private var items: [Item] = []
+    /// The hub's channels, to say which a message came in from (asked once; nothing from a hub without them).
+    @State private var channels: [HubChannel]?
 
     /// The session as the latest refresh has it (the one this page was opened with goes stale): its state follows, and
     /// a new rev (the transcript grew) reloads the messages.
@@ -515,6 +517,11 @@ struct WatchSessionView: View {
                         .background(it.role == "user" ? Theme.accent.opacity(0.25) : Color.white.opacity(0.08), in: .rect(cornerRadius: Theme.Radius.control))
                         .padding(it.role == "user" ? .leading : .trailing, 14)
                         .frame(maxWidth: .infinity, alignment: it.role == "user" ? .trailing : .leading)
+                    // Came in from a channel (WeChat, the Feishu bot…), as under the phone's bubble.
+                    if it.role == "user", let c = ChannelSource.of(it.clientMsgID, in: channels ?? []) {
+                        Text("来自 \(c.name)").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
                 }
                 if let source = session.sourceSubtitle {
                     Text(source).font(Theme.Font.caption).foregroundStyle(.secondary)
@@ -549,6 +556,9 @@ struct WatchSessionView: View {
     private func load() async {
         guard let api = model.api(session.group), let res = try? await api.items(session.key, beforeSeq: nil, turns: 2) else { return }
         items = res.items.filter { $0.kind == .text && !WatchText.shown($0.text ?? "").isEmpty }
+        if channels == nil, items.contains(where: { $0.role == "user" && ChannelSource.possible($0.clientMsgID) }) {
+            channels = (try? await api.channels()) ?? []
+        }
     }
 }
 

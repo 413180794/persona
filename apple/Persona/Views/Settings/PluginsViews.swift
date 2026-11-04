@@ -9,6 +9,8 @@ struct PluginsView: View {
 
     var body: some View {
         SettingsForm {
+            // 渠道 (docs/channels.md「界面」): only with a hub that has channels.
+            ChannelsEntryRow()
             #if os(macOS)
             // The plugins' overview cards (docs/plugins.md「UI 插槽」): the Mac has no 总览, they lead this list (their
             // pages are in the sidebar). The iPhone has them on 设置 itself.

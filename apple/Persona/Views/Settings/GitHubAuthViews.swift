@@ -64,7 +64,7 @@ struct GitHubConnectorSections: View {
         ConnectorSwitchSection(connector: connector, model: model, reload: reload)
         sourceSection
         if auth?.source == "device", connector.isEnabled, !connector.isSignedIn {
-            ConnectorSignInSteps(connector: connector, model: model, reload: { await reload(); await load() },
+            ConnectorSignInSteps(name: connector.name, model: model, reload: { await reload(); await load() },
                                  footer: "设备码登录的授权加密存在 hub 上；改用电脑上的 gh 登录时会忘掉。")
         }
         if let auth, let missing = auth.missing, !missing.isEmpty, connector.isSignedIn {

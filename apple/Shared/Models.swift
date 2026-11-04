@@ -513,6 +513,9 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var attentionReason: String? = nil
     /// Where it lives outside Persona (a botmux session's Feishu topic): 在飞书打开.
     var externalURL: String? = nil
+    /// The channels messages came into it from, newest first ("wechat", "feishu"; docs/channels.md「来源标记」): the
+    /// sidebar draws the latest one's mark. Nil from hubs without channels.
+    var channels: [String]? = nil
     /// The group of paired hubs it came from (docs/multi-hub.md); nil for the default group. The app's own.
     var hubGroup: String? = nil
 
@@ -583,7 +586,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
              slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, subagents, ports,
              updatedAt = "updated_at", lastText = "last_text", activity, activityAt = "activity_at", pendingInteractions = "pending_interactions", rev, suggestion,
              starting, startError = "start_error", todo, hubGroup = "app_hub_group",
-             attentionReason = "attention_reason", externalURL = "external_url"
+             attentionReason = "attention_reason", externalURL = "external_url", channels
     }
 
     init(from decoder: Decoder) throws {
@@ -642,6 +645,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         todo = try c.decodeIfPresent(SessionTodoRef.self, forKey: .todo)
         attentionReason = try c.decodeIfPresent(String.self, forKey: .attentionReason)
         externalURL = try c.decodeIfPresent(String.self, forKey: .externalURL)
+        channels = try c.decodeIfPresent([String].self, forKey: .channels)
         hubGroup = try c.decodeIfPresent(String.self, forKey: .hubGroup)
     }
 }

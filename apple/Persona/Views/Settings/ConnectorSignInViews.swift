@@ -4,6 +4,10 @@ import SwiftUI
 struct ConnectorDeps {
     var api: () -> APIClient?
     var report: (Error) -> Void
+    /// One step of the sign-in: a connector's login (the default), or a channel's binding (`ChannelBinding`).
+    var login: (APIClient, _ id: String, _ step: String, _ values: [String: String]) async throws -> ConnectorPrompt = { api, id, step, values in
+        try await api.connectorLogin(id, step: step, values: values)
+    }
 
     static var live: ConnectorDeps {
         let model = AppModel.shared
@@ -72,7 +76,7 @@ struct ConnectorDeps {
         busy = true
         defer { busy = false }
         do {
-            let p = try await api.connectorLogin(id, step: step, values: values)
+            let p = try await deps.login(api, id, step, values)
             if p.done == true {
                 cancel()
                 return true
@@ -163,7 +167,7 @@ struct ConnectorSignInSections: View {
         ConnectorSwitchSection(connector: connector, model: model, reload: reload)
         if connector.isEnabled && !connector.isSignedIn {
             if connector.signsInHere {
-                ConnectorSignInSteps(connector: connector, model: model, reload: reload,
+                ConnectorSignInSteps(name: connector.name, model: model, reload: reload,
                                      footer: connector.id == "telegram" ? "API 凭据和登录状态加密存在 hub 上，只显示 api_id；退出登录时一起删掉。"
                                          : "登录状态加密存在 hub 上，退出登录时删掉。")
             } else {
@@ -341,10 +345,14 @@ struct ConnectorDataSection: View {
 /// Signing in a step at a time (the hub says what each step asks for): the step's card, then its button on its own
 /// under the card (下一步, or the page to enter a code on), so the card keeps its rounded corners.
 struct ConnectorSignInSteps: View {
-    var connector: HubConnector
+    /// The connector's (or channel's) name, in the buttons and waiting lines.
+    var name: String
     var model: ConnectorSignInModel
     var reload: () async -> Void
     var footer: String
+    /// The section's heading and the first button: 登录 for a connector, 绑定 / 扫码绑定 for a channel.
+    var heading = "登录"
+    var start: String?
 
     var body: some View {
         if let p = model.prompt {
@@ -357,7 +365,7 @@ struct ConnectorSignInSteps: View {
                     Text(e).font(Theme.Font.label).foregroundStyle(Theme.danger)
                         .accessibilityIdentifier("connector.signInError")
                 }
-                if p.isDeviceCode {
+                if p.isDeviceCode || p.isPairCode {
                     deviceCode(p)
                 } else if p.isQRCode {
                     qrCode(p)
@@ -367,7 +375,7 @@ struct ConnectorSignInSteps: View {
                     }
                 }
             } header: {
-                SettingsHeading("登录")
+                SettingsHeading(heading)
             }
             .task(id: p.pollKey) {
                 if await model.waitForAuthorization() { await reload() }
@@ -380,7 +388,7 @@ struct ConnectorSignInSteps: View {
                         HStack {
                             Spacer(minLength: 0)
                             Link(destination: url) {
-                                Label("打开 \(connector.name) 输入验证码", systemImage: Theme.Icon.openExternal).lineLimit(1)
+                                Label("打开 \(name) 输入验证码", systemImage: Theme.Icon.openExternal).lineLimit(1)
                             }
                             .formButton(prominent: true)
                             .accessibilityIdentifier("connector.openVerification")
@@ -388,13 +396,15 @@ struct ConnectorSignInSteps: View {
                         .listRowBackground(Color.clear)
                         #else
                         Link(destination: url) {
-                            Label("打开 \(connector.name) 输入验证码", systemImage: Theme.Icon.openExternal).lineLimit(1).frame(maxWidth: .infinity)
+                            Label("打开 \(name) 输入验证码", systemImage: Theme.Icon.openExternal).lineLimit(1).frame(maxWidth: .infinity)
                         }
                         .themedButton(prominent: true)
                         .listRowBackground(Color.clear)
                         .accessibilityIdentifier("connector.openVerification")
                         #endif
                     }
+                } else if p.isPairCode {
+                    EmptyView() // nothing to press: the code goes to the bot from the chat app
                 } else if p.isQRCode {
                     if let image = model.qrImage {
                         FormAction {
@@ -429,14 +439,14 @@ struct ConnectorSignInSteps: View {
                     Button {
                         Task { await model.start() }
                     } label: {
-                        Text("登录 \(connector.name)").lineLimit(1).formActionWidth()
+                        Text(start ?? "登录 \(name)").lineLimit(1).formActionWidth()
                     }
                     .formButton(prominent: true)
                     .disabled(model.busy)
                     .accessibilityIdentifier("connector.signIn")
                 }
             } header: {
-                SettingsHeading("登录")
+                SettingsHeading(heading)
             } footer: {
                 Text(footer)
             }
@@ -449,7 +459,7 @@ struct ConnectorSignInSteps: View {
         HStack {
             Text(p.userCode ?? "").font(Theme.Font.display).monospaced().textSelection(.enabled).lineLimit(1)
                 .minimumScaleFactor(0.6)
-                .accessibilityIdentifier("connector.userCode")
+                .accessibilityIdentifier(p.isPairCode ? "connector.pairCode" : "connector.userCode")
             Spacer(minLength: Theme.Space.s)
             Button {
                 UIPasteboard.general.string = p.userCode
@@ -458,11 +468,11 @@ struct ConnectorSignInSteps: View {
                 Label("复制", systemImage: Theme.Icon.copy).labelStyle(.iconOnly)
             }
             .buttonStyle(.borderless)
-            .accessibilityLabel("复制验证码")
+            .accessibilityLabel(p.isPairCode ? "复制配对码" : "复制验证码")
         }
         HStack(spacing: Theme.Space.s) {
             ProgressView()
-            Text("等你在 \(connector.name) 上授权…").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
+            Text(p.isPairCode ? "等你把它发给机器人…" : "等你在 \(name) 上授权…").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
         }
     }
 
@@ -480,22 +490,43 @@ struct ConnectorSignInSteps: View {
     }
 
     @ViewBuilder private func field(_ f: ConnectorPrompt.Field) -> some View {
+        #if os(iOS)
+        if Self.stacked(f) {
+            // A label and a placeholder too long for one line: the title above, the field the row's width below. Left to
+            // LabeledContent, the row wrapped on its own and the field in it never took the focus (a long token hint).
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                Text(f.label).lineLimit(1)
+                input(f).multilineTextAlignment(.leading)
+            }
+        } else {
+            LabeledContent(f.label) { input(f).multilineTextAlignment(.trailing) }
+        }
+        #else
+        LabeledContent(f.label) { input(f).multilineTextAlignment(.trailing) }
+        #endif
+    }
+
+    @ViewBuilder private func input(_ f: ConnectorPrompt.Field) -> some View {
         let text = Binding(get: { model.values[f.name] ?? "" }, set: { model.values[f.name] = $0 })
         let prompt = Text(f.placeholder ?? f.label)
-        LabeledContent(f.label) {
-            Group {
-                if f.secret == true {
-                    SecureField(f.label, text: text, prompt: prompt)
-                } else {
-                    TextField(f.label, text: text, prompt: prompt)
-                        .keyboardType(Self.keyboard(f.name))
-                }
+        Group {
+            if f.secret == true {
+                SecureField(f.label, text: text, prompt: prompt)
+            } else {
+                TextField(f.label, text: text, prompt: prompt)
+                    .keyboardType(Self.keyboard(f.name))
             }
-            .multilineTextAlignment(.trailing)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .accessibilityIdentifier("connector.field." + f.name)
         }
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
+        .accessibilityIdentifier("connector.field." + f.name)
+    }
+
+    /// Whether a field's label and placeholder together are wider than a phone's row holds on one line, in widths of a
+    /// CJK character (a Latin one about half).
+    static func stacked(_ f: ConnectorPrompt.Field) -> Bool {
+        let width = (f.label + (f.placeholder ?? f.label)).reduce(0.0) { $0 + ($1.isASCII ? 0.55 : 1) }
+        return width > 16
     }
 
     private static func keyboard(_ name: String) -> UIKeyboardType {

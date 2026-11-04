@@ -8,6 +8,7 @@ struct FeishuBotView: View {
 
     var body: some View {
         SettingsForm {
+            ChannelLinkSection(channelID: "feishu")
             statusSection
             credentialsSection
             if model.status?.hasSecret == true {

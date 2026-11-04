@@ -269,7 +269,7 @@ Go 的用 `connector/serve.MainWith`，连接器实现 `channel.Transport`（`Se
 | 1 | 这份文档；`channel` 包（类型、`Check` / `Decide`、`Split`、`AskText` / `ReadAnswer`、来源）；hub 的渠道注册表和接口；扩展点 `channel`；统一管线：飞书机器人的 runs 迁过去，微信改成 `channel` 扩展点（插件只剩 iLink 收发、扫码），状态迁移；会话的 `channels`；一致性测试 |
 | 2 | 网页：设置 › 插件 › 渠道，对话页的来源 |
 | 3 | Android：同上 |
-| —— | iOS / Mac：另一个 Agent 照这份文档做（issue 见 #1466 的评论） |
+| —— | iOS / Mac / 手表（#1529）：设置 › 插件 › 渠道（`apple/Persona/Views/Settings/ChannelsViews.swift`，绑定复用连接器的分步登录组件，多了 `pair_code`），对话页和手表上的「来自 …」，侧栏的渠道小图标，连接器页（微信、飞书机器人）链到渠道 |
 
 ## 九、还没做
 

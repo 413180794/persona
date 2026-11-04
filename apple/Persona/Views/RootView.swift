@@ -70,6 +70,7 @@ struct RootView: View {
         }
         .sendRefusalAlert(model)
         .screenDrawer(model) // a Mac's live screen, from wherever it was asked for (#1343)
+        .loadsChannels() // the names under a message that came in from a channel (「来自 微信」)
         #if os(iOS)
         .onChange(of: LarkHomePreference.shared.shows) { _, enabled in
             if !enabled, model.selectedTab == .feishu { model.selectedTab = .assistant }

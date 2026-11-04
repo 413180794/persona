@@ -267,6 +267,10 @@ extension Theme {
         static let mailAccounts = "envelope.badge"
         /// A chat app's bot the user talks to Persona through (设置 › 连接器 › 飞书机器人).
         static let chatBot = "message.badge.waveform"
+        /// 设置 › 插件 › 渠道: the ways of talking to Persona (docs/channels.md).
+        static let channels = "ellipsis.bubble"
+        /// A voice channel (talking to Persona out loud).
+        static let voiceChannel = "waveform.and.mic"
         /// Pairing a device or a bot with a one-time code.
         static let pairing = "link.badge.plus"
         /// 设置 › 连接器: the data sources Persona reads and acts in (this device, mail, 飞书).

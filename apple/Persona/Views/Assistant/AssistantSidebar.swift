@@ -1047,6 +1047,7 @@ struct AssistantSidebar: View {
                     ConversationMark(id: s.sessionID)
                 }
                 titleText(title, named: !isMain)
+                ConversationChannelMark(ids: s.channels) // the channel its latest message came in from
                 Spacer(minLength: Theme.Space.xs)
                 mark(s)
             }

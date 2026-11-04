@@ -220,7 +220,8 @@ struct SettingsView: View {
             // With `-tab settings`: `-openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|
             // memoryEdit|about`, `-openStorage YES` (存储空间), `-openNotificationSettings YES` (通知), `-openMachines YES` (机器;
             // with `-openMachineDetail <id>` that machine's page), `-openDevices YES` (设备), `-openHubUpdate YES` (hub),
-            // `-openSkills YES` (Skills), `-openPlugins YES` (插件; `-openPlugin <id>` one of them).
+            // `-openSkills YES` (Skills), `-openPlugins YES` (插件; `-openPlugin <id>` one of them), `-openChannels YES`
+            // (插件 › 渠道; `-openChannel <id>` one of them).
             .onAppear(perform: openDebugPage)
             #endif
             .confirmationDialog("断开后需要重新扫码配对。", isPresented: $confirmUnpair, titleVisibility: .visible) {
@@ -281,6 +282,11 @@ struct SettingsView: View {
                 p.append(SettingsPage.plugin(id))
                 if let ui = d.string(forKey: "openPluginPage") { p.append(SettingsPage.pluginPage(plugin: id, ui: ui, title: "")) }
             }
+        }
+        else if d.bool(forKey: "openChannels") || d.string(forKey: "openChannel") != nil { // 设置 › 插件 › 渠道 (› one)
+            p.append(SettingsPage.plugins)
+            p.append(SettingsPage.channels)
+            if let id = d.string(forKey: "openChannel") { p.append(SettingsPage.channel(id)) }
         }
         else if d.bool(forKey: "openPluginMarket") || d.bool(forKey: "openPluginMarkets") || d.string(forKey: "openMarketPlugin") != nil {
             // 设置 › 插件 › 插件市场 (› 市场, or › <market>/<plugin>)
@@ -368,6 +374,9 @@ enum SettingsPage: Hashable {
     case pluginMarket
     case marketPlugin(market: String, id: String)
     case pluginMarkets
+    /// 设置 › 插件 › 渠道, and one channel by its id (docs/channels.md).
+    case channels
+    case channel(String)
     /// 设置 › hub › SSH 隧道 of one paired hub (its id; docs/network.md「经 SSH 隧道连 hub」).
     case sshTunnel(String)
 
@@ -429,6 +438,8 @@ private struct SettingsDestinations: ViewModifier {
         case .pluginMarket: PluginMarketView()
         case .marketPlugin(let market, let id): MarketPluginDetailView(market: market, id: id)
         case .pluginMarkets: PluginMarketsView()
+        case .channels: ChannelsView()
+        case .channel(let id): ChannelDetailView(id: id)
         }
     }
 
@@ -1068,7 +1079,7 @@ struct SettingsRow: View {
 }
 
 /// A brand's mark as a row's leading view: the size of `BUIIconTile`, so the names line up with the other rows'.
-private struct SettingsBrandMark: View {
+struct SettingsBrandMark: View {
     var asset: String
     @Environment(\.buiTheme) private var theme
 

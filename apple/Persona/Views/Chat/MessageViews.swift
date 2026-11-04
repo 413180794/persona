@@ -175,6 +175,8 @@ struct UserBubble: View, Equatable {
                 }
             }
             if let openFile { FileChips(paths: d.files, open: openFile) }
+            // Came in from a channel (WeChat, the Feishu bot…): 「来自 微信」 under it.
+            if ChannelSource.possible(item.clientMsgID) { ChannelSourceLine(clientMsgID: item.clientMsgID) }
         }
         .lookUpFiles(d.files)
         .frame(maxWidth: .infinity, alignment: .trailing)

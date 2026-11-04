@@ -154,8 +154,9 @@ nonisolated struct ConnectorPrompt: Codable, Equatable, Sendable {
     var error: String?
     var done: Bool?
     var account: String?
-    /// "device_code": show `userCode` to enter at `url`; "qr": show `qr`, the code of `url`, to scan with another app.
-    /// For both the same step is sent again every `interval` seconds.
+    /// "device_code": show `userCode` to enter at `url`; "qr": show `qr`, the code of `url`, to scan with another app;
+    /// "pair_code": show `userCode` to send to a bot from its chat app (a channel's binding, docs/channels.md). For all
+    /// three the same step is sent again every `interval` seconds.
     var kind: String?
     var url: String?
     var userCode: String?
@@ -177,10 +178,12 @@ nonisolated struct ConnectorPrompt: Codable, Equatable, Sendable {
     var isDeviceCode: Bool { kind == "device_code" && userCode != nil }
     /// A QR code to scan with another app (WeChat), asked again until it is scanned and confirmed there.
     var isQRCode: Bool { kind == "qr" && !(qr?.rows.isEmpty ?? true) }
+    /// A code to send to a bot from its chat app (the Feishu bot's pairing), asked again until the bot has it.
+    var isPairCode: Bool { kind == "pair_code" && userCode != nil }
     /// The step is asked again on its own until the user has acted somewhere else.
-    var polls: Bool { isDeviceCode || isQRCode }
+    var polls: Bool { isDeviceCode || isQRCode || isPairCode }
     /// What the polling follows: a new code starts it over.
-    var pollKey: String? { isDeviceCode ? userCode : isQRCode ? qr?.rows.joined() : nil }
+    var pollKey: String? { isDeviceCode || isPairCode ? userCode : isQRCode ? qr?.rows.joined() : nil }
 }
 
 /// Where a hub connector's things go besides the assistant's tools, each switched on its page.
@@ -501,6 +504,10 @@ struct HubConnectorView: View {
 
     var body: some View {
         SettingsForm {
+            // A connector that is only a channel's binding (WeChat's): the channel is where it is set up.
+            if ChannelDirectory.shared.list.contains(where: { $0.id == id && $0.source == "plugin" }) {
+                ChannelLinkSection(channelID: id)
+            }
             Section {
                 HStack(spacing: Theme.Space.m) {
                     mark
