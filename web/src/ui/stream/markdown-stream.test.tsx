@@ -1,0 +1,82 @@
+// Markdown's streaming path (#1963): the word fade while streaming or for a block that arrived whole, plain Markdown
+// otherwise, the repair of what the growing end leaves open, highlighting and CJK emphasis.
+import { describe, expect, it, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import { Markdown } from "../Markdown";
+import { loadHighlight } from "./highlight";
+
+const motion = vi.hoisted(() => ({ on: true }));
+vi.mock("./motion", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./motion")>()),
+  useReplyMotion: () => motion.on,
+}));
+
+const render = (props: Parameters<typeof Markdown>[0]) => renderToStaticMarkup(<Markdown {...props} />);
+
+describe("Markdown while streaming", () => {
+  it("fades the words in while streaming, and is plain Markdown once it ends", () => {
+    const streaming = render({ text: "Hello there world", streaming: true });
+    expect(streaming).toContain('class="stream-word"');
+    expect(streaming.match(/data-wf-key/g)).toHaveLength(3);
+    const done = render({ text: "Hello there world" });
+    expect(done).not.toContain("stream-word");
+    expect(done).not.toContain("data-wf-key");
+    expect(done).toBe('<div class="prose-j  "><p>Hello there world</p></div>');
+  });
+
+  it("fades a block that arrived whole (fade without streaming)", () => {
+    expect(render({ text: "整块到达的回答", fade: true })).toContain("stream-word");
+  });
+
+  it("fades nothing with 回复动效 off or reduced motion", () => {
+    motion.on = false;
+    try {
+      expect(render({ text: "Hello there", streaming: true })).not.toContain("stream-word");
+      expect(render({ text: "Hello there", fade: true })).not.toContain("stream-word");
+      expect(render({ text: "这是 **重要", streaming: true })).toContain("<strong>"); // the repair is not the fade's
+
+    } finally {
+      motion.on = true;
+    }
+  });
+
+  it("fades list dots with their first word", () => {
+    expect(render({ text: "- one\n- two", streaming: true })).toContain("data-stream-marker");
+  });
+
+  it("closes what the growing end leaves open, only while streaming", () => {
+    expect(render({ text: "这是 **重要", streaming: true })).toContain("<strong>");
+    expect(render({ text: "这是 **重要" })).not.toContain("<strong>");
+    expect(render({ text: "```ts\nconst a", streaming: true })).toContain("<pre>");
+  });
+
+  it("renders every chunk of a streaming text", () => {
+    const html = render({ text: "first para\n\nsecond para\n\n- item", streaming: true });
+    expect(html.match(/<p>/g)).toHaveLength(2);
+    expect(html).toContain("<li");
+  });
+
+  it("has no caret", () => {
+    expect(render({ text: "Hello", streaming: true })).not.toContain("stream-caret");
+  });
+});
+
+describe("Markdown's code", () => {
+  it("highlights a block naming its language once the highlighter is loaded, keeping copy and mermaid", async () => {
+    const text = "```ts\nconst a = 1\n```";
+    expect(render({ text })).not.toContain("hljs-keyword"); // not loaded yet: plain
+    await loadHighlight();
+    const html = render({ text });
+    expect(html).toContain('<span class="hljs-keyword">const</span>');
+    expect(html).toContain('aria-label="拷贝代码"');
+    expect(render({ text: "```mermaid\ngraph TD; A-->B\n```" })).not.toContain("hljs");
+    // not inside the fade's spans while streaming either
+    expect(render({ text, streaming: true })).toContain('<span class="hljs-keyword">const</span>');
+  });
+});
+
+describe("CJK emphasis", () => {
+  it("closes ** after full-width punctuation followed by CJK text", () => {
+    expect(render({ text: "这是**「重要」**的事" })).toContain("<strong>「重要」</strong>");
+  });
+});

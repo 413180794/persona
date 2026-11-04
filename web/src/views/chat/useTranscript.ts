@@ -4,6 +4,7 @@ import { api, errorText, sessionPath } from "../../lib/api";
 import { listenSession, send, type ItemsEvent } from "../../lib/store";
 import { mergeItems } from "../../lib/turns";
 import type { Item, ItemsPage } from "../../lib/types";
+import { createTextThrottle, type TextThrottle } from "../../ui/stream/throttle";
 
 const PAGE = "turns=2&fold_work=1&lazy_images=1";
 
@@ -19,6 +20,12 @@ export interface Transcript {
   reload: () => void;
 }
 
+/** One delta: the reply so far is throttled; "" (the turn's end) goes out at once and drops what was pending. */
+export function applyDelta(t: TextThrottle, text: string): void {
+  if (text) t.push(text);
+  else t.flush("");
+}
+
 export function useTranscript(mid: string, sid: string, opts: { starting?: boolean } = {}): Transcript {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,11 +39,15 @@ export function useTranscript(mid: string, sid: string, opts: { starting?: boole
   const itemsRef = useRef<Item[]>([]);
   itemsRef.current = items;
   const gapTimer = useRef<number | undefined>(undefined);
+  // The assistant's delta (the whole reply so far, about every 80 ms; "" when it ends) re-renders the chat at most once
+  // per throttle interval (ui/stream/throttle.ts), the last one never dropped; the end and the reply's item at once.
+  const deltas = useRef<TextThrottle>(null!);
+  deltas.current ??= createTextThrottle(setStreaming);
 
   const apply = useCallback((batch: Item[]) => {
     if (!batch.length) return;
     setItems((have) => mergeItems(have, batch));
-    if (batch.some((i) => i.role === "assistant" && i.kind === "text")) setStreaming("");
+    if (batch.some((i) => i.role === "assistant" && i.kind === "text")) deltas.current.flush("");
   }, []);
 
   useEffect(() => {
@@ -46,7 +57,7 @@ export function useTranscript(mid: string, sid: string, opts: { starting?: boole
     setLoading(true);
     setError("");
     setHasMore(false);
-    setStreaming("");
+    deltas.current.flush("");
     covered.current = 0;
     history.current = "";
 
@@ -81,7 +92,7 @@ export function useTranscript(mid: string, sid: string, opts: { starting?: boole
 
     const off = listenSession(mid, sid, {
       items: onItems,
-      delta: (text) => setStreaming(text),
+      delta: (text) => applyDelta(deltas.current, text),
       reconnected: subscribe,
     });
 
@@ -107,6 +118,7 @@ export function useTranscript(mid: string, sid: string, opts: { starting?: boole
       dead = true;
       ctl.abort();
       off();
+      deltas.current.cancel();
       clearTimeout(gapTimer.current);
       send({ type: "unsubscribe", machine_id: mid, session_id: sid });
     };

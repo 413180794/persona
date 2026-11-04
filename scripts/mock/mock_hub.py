@@ -561,6 +561,45 @@ if os.environ.get("MOCK_SOURCES"):
              **dict(NO_SPACE, space_kind="dsh")),
     ]
 
+# MOCK_SPLIT_TABS=1: herdr's layout for the sidebar's 按机器 tree and the chat's pane tabs (#1963): two machines (the
+# NAS offline, its agent only under 最近), workspaces whose tabs hold one pane or two (claude and codex in one slot),
+# and a botmux space without tabs.
+SPLIT_CLAUDE = "5b1170b5-0000-4000-8000-000000000001"
+SPLIT_CODEX = "5b1170b5-0000-4000-8000-000000000002"
+SPLIT_SINGLE = "5b1170b5-0000-4000-8000-000000000003"
+SPLIT_DOCS = "5b1170b5-0000-4000-8000-000000000004"
+SPLIT_BOT = "5b1170b5-0000-4000-8000-000000000005"
+SPLIT_NAS = "5b1170b5-0000-4000-8000-000000000006"
+
+
+def split_tabs_sessions():
+    bot = dict(space_kind="botmux", space_id="dir:/home/me/code/report", space_name="report", space_index=9, slot_id=None,
+               slot_name=None, slot_index=None, tab_id=None, workspace_id="dir:/home/me/code/report", pane_id="botmux:" + SPLIT_BOT)
+    return [
+        sess("server", SPLIT_CLAUDE, "重构登录流程，把 token 刷新挪到中间件里", "/home/me/code/app", "working", "working", "app", 1, "1", 1, 0,
+             "中间件写好了，在补刷新失败的测试。", pane_id="w1:p1"),
+        sess("server", SPLIT_CODEX, "审一下登录重构的改动", "/home/me/code/app", "blocked", "needs_you", "app", 1, "1", 1, 1,
+             "有两处会吞掉错误，要我直接改吗？", agent="codex", pending=1, pane_id="w1:p2"),
+        sess("server", SPLIT_SINGLE, "升级依赖", "/home/me/code/app", "done", "unread", "app", 1, "deps", 2, 6,
+             "依赖都升好了，测试全过。", pane_id="w1:p3"),
+        sess("server", SPLIT_DOCS, "整理接口文档", "/home/me/code/docs", "idle", "idle", "docs", 2, "1", 1, 30,
+             "文档目录理好了。", seen_at=ago(minutes=20), pane_id="w2:p1"),
+        sess("server", SPLIT_BOT, "1104 | 功能 | 看板筛选", "/home/me/code/report", "working", "working", "", 0, "", 0, 2,
+             "筛选条件加好了，在补测试。", **bot),
+        sess("nas", SPLIT_NAS, "备份脚本", "/home/me/code/backup", "idle", "idle", "backup", 1, "1", 1, 200,
+             "备份改成增量了。", seen_at=ago(minutes=190)),
+    ]
+
+
+def split_tabs_items():
+    return {SPLIT_CLAUDE: [it("user", "text", 8, text="把 token 刷新挪到中间件里"), it("assistant", "text", 1, text="中间件写好了，在补刷新失败的测试。")],
+            SPLIT_CODEX: [it("user", "text", 4, text="审一下登录重构的改动"), it("assistant", "text", 1, text="有两处会吞掉错误，要我直接改吗？")],
+            SPLIT_SINGLE: [it("user", "text", 20, text="把依赖升到最新"), it("assistant", "text", 6, text="依赖都升好了，测试全过。")]}
+
+
+if os.environ.get("MOCK_SPLIT_TABS"):
+    MACHINES[:] = [m for m in MACHINES if m["id"] in ("server", "nas")]
+    SESSIONS[:] = split_tabs_sessions()
 ORIG_STATE = {s["session_id"]: (s["state"], s["status"]) for s in SESSIONS}
 SEEN = []  # session ids marked seen (GET /mock/seen)
 SESSION_CLOSE = {"fail": False, "attempts": [], "closed": [], "interactions": []}
@@ -4521,6 +4560,131 @@ if os.environ.get("MOCK_CHAT_LINES") == "1":
                                      "description": "核对没有价格的商品", "running": False, "started_at": ago(minutes=26)}]))
 
 
+# MOCK_SUBAGENT_CARDS=1: subagent cards in the chat (#1963, web): a finished exchange whose subagents completed, failed
+# and nested (one launched another, which launched a third) fold into its 已工作; then the live exchange, with one
+# still running in the background (its card stays in the open) and a command running after it. Every subagent has a
+# transcript ("<session>@<agent>") for the card's latest steps and the side panel's 查看完整过程.
+SUBCARDS = "a1f3c2d4-0000-4000-8000-0000000c1e02"
+
+
+def mock_subagent_cards():
+    _s = [it("user", "text", 30, text="把结算、搜索、价格三块的回归拆给子 Agent 跑")]
+    _s += tool("Agent", {"description": "回归：结算流程", "subagent_type": "general-purpose", "prompt": "跑结算流程的回归用例，失败的列出来"},
+               "结算流程 42 个用例全部通过。\nagentId: scdone (use SendMessage with to: 'scdone' to continue this agent)", 29.5)
+    _done = _s[-2]["tool_use_id"]
+    _s[-1]["ts"] = ago(minutes=27)
+    _s += tool("Agent", {"description": "回归：支付回调", "subagent_type": "general-purpose", "prompt": "跑支付回调的回归用例"},
+               "支付回调的用例跑不起来：沙箱的回调地址 502。", 27, err=True)
+    _fail = _s[-2]["tool_use_id"]
+    _s += tool("Agent", {"description": "回归：价格筛选", "subagent_type": "Explore", "prompt": "查价格筛选的回归，必要时再拆给子 Agent"},
+               "价格筛选的两个失败是测试数据的问题：两件下架商品没有价格。\nagentId: scnest (use SendMessage with to: 'scnest' to continue this agent)", 26)
+    _nest = _s[-2]["tool_use_id"]
+    _s[-1]["ts"] = ago(minutes=22)
+    _s.append(it("assistant", "text", 21.5, text="结算全过；支付回调卡在沙箱 502；价格筛选的失败是测试数据的问题。"))
+    _s.append(it("user", "text", 10, text="搜索那块在后台再跑一遍全量，顺便把首页打个包"))
+    _s += tool("Agent", {"description": "回归：搜索全量", "subagent_type": "general-purpose", "prompt": "跑搜索和筛选的全量回归用例", "run_in_background": True},
+               "Async agent launched successfully.\nagentId: scrun (This is an internal ID for your use)", 9.8)
+    _run = _s[-2]["tool_use_id"]
+    _s.append(it("assistant", "tool_use", 1, tool_use_id="toolu_scbuild", tool_name="Bash",
+                 tool_input={"command": "npm run build -- --filter home", "description": "打包首页"}))
+    ITEMS[SUBCARDS] = _s
+    ITEMS[SUBCARDS + "@scdone"] = ([it("user", "text", 29.5, text="跑结算流程的回归用例，失败的列出来")]
+        + tool("Bash", {"command": "npm run test:e2e -- checkout", "description": "跑结算流程的用例"}, "42 passed (1.8m)", 28)
+        + tool("Read", {"file_path": "/Users/me/code/shop-web/e2e/checkout.spec.ts"}, "test('checkout', …)", 27.5)
+        + [it("assistant", "text", 27, text="结算流程 42 个用例全部通过。")])
+    ITEMS[SUBCARDS + "@scfail"] = ([it("user", "text", 27, text="跑支付回调的回归用例")]
+        + tool("Bash", {"command": "npm run test:e2e -- payment"}, "Error: callback 502", 26.5, err=True))
+    _launch = tool("Agent", {"description": "查价格的测试数据", "prompt": "查测试数据里商品的价格"}, "两件商品没有价格。", 25)
+    _data = _launch[0]["tool_use_id"]
+    ITEMS[SUBCARDS + "@scnest"] = ([it("user", "text", 26, text="查价格筛选的回归，必要时再拆给子 Agent")]
+        + tool("Grep", {"pattern": "price", "path": "e2e"}, "e2e/search.spec.ts:40", 25.5)
+        + _launch + [it("assistant", "text", 22, text="价格筛选的两个失败是测试数据的问题。")])
+    ITEMS[SUBCARDS + "@scdata"] = ([it("user", "text", 25, text="查测试数据里商品的价格")]
+        + tool("Read", {"file_path": "/Users/me/code/shop-web/e2e/fixtures/products.json"}, "[…]", 24.5)
+        + [it("assistant", "text", 24, text="两件商品没有价格，是下架的旧数据。")])
+    ITEMS[SUBCARDS + "@scold"] = [it("user", "text", 24.5, text="核对下架商品"), it("assistant", "text", 24, text="确认是下架的旧数据。")]
+    ITEMS[SUBCARDS + "@scrun"] = ([it("user", "text", 9.8, text="跑搜索和筛选的全量回归用例")]
+        + tool("Bash", {"command": "npm run test:e2e -- search --all", "description": "跑搜索全量用例"}, "120 passed", 8)
+        + tool("Read", {"file_path": "/Users/me/code/shop-web/e2e/filters.spec.ts"}, "test('filters', …)", 6)
+        + [it("assistant", "tool_use", 2, tool_use_id="toolu_scrunb", tool_name="Bash", tool_input={"command": "npm run test:e2e -- filters", "description": "跑筛选用例"})])
+    sub = lambda i, desc, use, **kw: {"id": i, "session_id": SUBCARDS + "@" + i, "type": kw.pop("type", "general-purpose"), "description": desc,
+                                      "tool_use_id": use, "running": False, "started_at": ago(minutes=kw.pop("at", 20)), **kw}
+    SESSIONS.append(sess("macbook", SUBCARDS, "回归拆给子 Agent", "/Users/me/code/shop-web", "working", "working", "shop-web", 15, "agents", 2, 0,
+                         "搜索全量在后台跑，首页在打包。", subagents=[
+                             sub("scrun", "回归：搜索全量", _run, at=9.8, running=True, background=True, last_text="筛选的用例在跑。"),
+                             sub("scdone", "回归：结算流程", _done, at=29.5, last_text="结算流程 42 个用例全部通过。"),
+                             sub("scfail", "回归：支付回调", _fail, at=27),
+                             sub("scnest", "回归：价格筛选", _nest, at=26, type="Explore"),
+                             sub("scdata", "查价格的测试数据", _data, at=25, parent_id="scnest"),
+                             sub("scold", "核对下架商品", None, at=24.5, parent_id="scdata", type="fork", fork=True)]))
+
+
+if os.environ.get("MOCK_SUBAGENT_CARDS") == "1":
+    mock_subagent_cards()
+
+
+# MOCK_WORK_GROUPS=1: one finished conversation with every way a work group reads (#1963, web): a short run (five steps
+# or fewer, an empty thought and one with words, a command with and without a description), a long run with an edit
+# and its diff, one that only read and searched, a delivered report between two steps (it stays out of the fold), and
+# a plan (TodoWrite) updated as it went; then a long answer, so the chat is taller than a screen.
+WORKG = "a1f3c2d4-0000-4000-8000-0000000c1e03"
+
+
+def mock_work_groups():
+    _w = [it("user", "text", 60, text="看一下小组件的刷新间隔是在哪里设的")]
+    _w.append(it("assistant", "thinking", 59.9, text=""))
+    _w += tool("Bash", {"command": "rg -n 'refresh' Widget/", "description": "找刷新相关的代码"}, "Widget/Provider.swift:12: policy: .after(next)", 59.8)
+    _w.append(it("assistant", "thinking", 59.7, text="刷新策略在 Provider 里，用的是 .after(next)。看一下 next 怎么算的。"))
+    _w += tool("Read", {"file_path": "/Users/me/code/weather/Widget/Provider.swift"}, "let next = Calendar.current.date(byAdding: .minute, value: 30, to: now)!", 59.6)
+    _w.append(it("assistant", "text", 59.5, text="刷新间隔在 `Widget/Provider.swift` 第 12 行：每 30 分钟刷新一次。"))
+    _w.append(it("user", "text", 50, text="改成 15 分钟，顺便把超时也调一下，跑一下测试"))
+    _w += tool("Bash", {"command": "git status --short"}, " M Widget/Provider.swift", 49.9)
+    _w += tool("Grep", {"pattern": "timeout", "path": "Widget"}, "Widget/Fetcher.swift:8: let timeout = 10", 49.8)
+    _w += tool("Read", {"file_path": "/Users/me/code/weather/Widget/Fetcher.swift"}, "struct Fetcher { let timeout = 10 }", 49.7)
+    _w += tool("Edit", {"file_path": "/Users/me/code/weather/Widget/Provider.swift", "old_string": "        let next = Calendar.current.date(byAdding: .minute, value: 30, to: now)!\n        return Timeline(entries: entries, policy: .after(next))",
+                        "new_string": "        // every quarter of an hour: rain moves fast\n        let next = Calendar.current.date(byAdding: .minute, value: 15, to: now)!\n        return Timeline(entries: entries, policy: .after(next))"}, "ok", 49.6)
+    _w += tool("Edit", {"file_path": "/Users/me/code/weather/Widget/Fetcher.swift", "old_string": "let timeout = 10", "new_string": "let timeout = 20"}, "ok", 49.5)
+    _w.append(it("assistant", "thinking", 49.4, text=""))
+    _w += tool("Bash", {"command": "xcodebuild test -scheme WeatherWidget -destination 'platform=iOS Simulator,name=iPhone 17' 2>&1 | tail -3"},
+               "Test Suite 'All tests' passed.\n     Executed 48 tests, with 0 failures (0 unexpected) in 12.4 seconds", 48)
+    _w += tool("Bash", {"command": "git diff --stat", "description": "看改动"}, " Widget/Fetcher.swift  | 2 +-\n Widget/Provider.swift | 3 ++-", 47.9)
+    _w.append(it("assistant", "text", 47.8, text="改好了：刷新间隔 15 分钟，拉数据的超时 20 秒，48 个测试都过了。"))
+    _w.append(it("user", "text", 40, text="小组件相关的代码都有哪些文件"))
+    for n, f in enumerate(["Provider.swift", "Entry.swift", "Views/SmallView.swift"]):
+        _w += tool("Read", {"file_path": "/Users/me/code/weather/Widget/" + f}, "…", 39.9 - n * 0.1)
+    _w += tool("Grep", {"pattern": "WidgetKit", "path": "."}, "Widget/Provider.swift\nWidget/Entry.swift", 39.5)
+    _w += tool("Glob", {"pattern": "Widget/**/*.swift"}, "Widget/Provider.swift\nWidget/Entry.swift\nWidget/Views/SmallView.swift", 39.4)
+    _w.append(it("assistant", "text", 39, text="小组件一共三个文件：`Provider.swift`、`Entry.swift` 和 `Views/SmallView.swift`。"))
+    _w.append(it("user", "text", 30, text="出一份小组件改动的简报，发到群里"))
+    _w += tool("Bash", {"command": "git log --oneline -5", "description": "看最近的提交"}, "1a2b3c widget: refresh every 15 min", 29.9)
+    _w.append(it("assistant", "text", 29.5, text="## 小组件改动简报\n\n这一轮改了两处：\n\n- 刷新间隔从 30 分钟改成 15 分钟\n- 拉数据的超时从 10 秒改成 20 秒\n- 48 个测试全部通过\n\n| 文件 | 改动 |\n| --- | --- |\n| Provider.swift | 刷新间隔 |\n| Fetcher.swift | 超时 |"))
+    _w += tool("mcp__lark__send_message", {"chat": "天气 App", "text": "小组件改动简报"}, "{\"ok\":true}", 29.4)
+    _w.append(it("assistant", "text", 29.3, text="简报发到「天气 App」群里了。"))
+    _w.append(it("user", "text", 20, text="按计划把中号小组件也做了"))
+    _todos = lambda st: {"todos": [{"content": "读现有的小号视图", "status": st[0], "activeForm": "读现有的小号视图"},
+                                   {"content": "写中号视图", "status": st[1], "activeForm": "写中号视图"},
+                                   {"content": "注册到 WidgetBundle", "status": st[2], "activeForm": "注册到 WidgetBundle"}]}
+    _w += tool("TodoWrite", _todos(["in_progress", "pending", "pending"]), "ok", 19.9)
+    _w += tool("Read", {"file_path": "/Users/me/code/weather/Widget/Views/SmallView.swift"}, "struct SmallView: View { … }", 19.8)
+    _w += tool("Write", {"file_path": "/Users/me/code/weather/Widget/Views/MediumView.swift", "content": "import SwiftUI\n\nstruct MediumView: View {\n    let entry: WeatherEntry\n    var body: some View {\n        HStack { SmallView(entry: entry); RainBars(hours: entry.rain) }\n    }\n}"}, "ok", 19.5)
+    _w += tool("TodoWrite", _todos(["completed", "completed", "in_progress"]), "ok", 19.4)
+    _w.append(it("assistant", "text", 19, text="中号视图写好了，还差注册到 WidgetBundle。"))
+    _w.append(it("user", "text", 10, text="讲讲为什么降雨概率要按小时取最大值"))
+    _w.append(it("assistant", "thinking", 9.9, text=""))
+    _w.append(it("assistant", "text", 9, text="\n\n".join([
+        "降雨概率按小时取最大值，是因为小组件一格代表一个小时，而数据源给的是每 15 分钟一个点。",
+        "如果取平均，一小时里只有一刻钟会下雨的情况就会被摊薄成 25%，看起来像不会下雨；取最大值，这一格就会显示这一小时里最可能下雨的那一刻，更接近人看天气时关心的问题：这一小时出门要不要带伞。",
+        "代价是会显得偏悲观：一小时里只要有一刻钟概率高，这一格就高。对一个只给你扫一眼的小组件来说，这比漏报更好。",
+        "如果以后要做详细页，可以把 15 分钟的点都画出来，那时就不用再取最大值了。"] * 2)))
+    ITEMS[WORKG] = _w
+    SESSIONS.append(sess("macbook", WORKG, "小组件的刷新和简报", "/Users/me/code/weather", "done", "read", "weather", 1, "groups", 7, 8,
+                         "降雨概率按小时取最大值。"))
+
+
+if os.environ.get("MOCK_WORK_GROUPS") == "1":
+    mock_work_groups()
+
+
 # MOCK_API_ERRORS=1: model API errors as Claude Code writes them when it gives up. The home conversation ends with the
 # same 502 three times (the user said 继续 twice in between); an idle Agent's last answer is a login error. The texts
 # follow real ones with every id, host and region replaced.
@@ -4545,6 +4709,8 @@ if os.environ.get("MOCK_CARDS") == "1":
             _card({"type": "pie", "segments": [{"label": "a", "value": 1}]}),
         ])),
     ]
+if os.environ.get("MOCK_SPLIT_TABS"):
+    ITEMS.update(split_tabs_items())
 if os.environ.get("MOCK_BOTMUX"):
     ITEMS[BOTMUX_BLOCKED] = [it("user", "text", 5, text="把周报导出改成按部门分 sheet")] + [
         it("assistant", "text", 3, text="导出脚本改好了，正在跑全量。")]
@@ -9744,6 +9910,8 @@ class H(BaseHTTPRequestHandler):
                 if msg.get("type") == "subscribe":
                     sid, mid = msg.get("session_id"), msg.get("machine_id")
                     subscribed.add(sid)
+                    if LIVE_STATUS and "session_live" in asked:
+                        live_status_subscribe(send, mid, sid)
                     items = find_items(sid)
                     since = msg.get("since_seq") or 0
                     if GAP and sid == SESSIONS[0]["session_id"] and not GAP_STATE["started"]:
@@ -10294,6 +10462,61 @@ def features():
 
 
 MOCK_HELP.append("MOCK_INBOX_ITEM_UI=1  （和 MOCK_PLUGINS=1 一起）收件箱里飞书的条目由插件 example-chat 画详情正文（inbox_item）：涉及的人、时间、接着哪件、消息链、回复、在会话里看（persona://inbox/<条目>/source）；群聊的条目插件出错")
+
+
+# ---------- MOCK_LIVE_STATUS: a working Claude's status line (session.live, #1963) ----------
+# MOCK_LIVE_STATUS=1: a connection that declared session_live (?features=) and subscribes to a Claude session gets a
+# run of `live` pushes for it, one per MOCK_LIVE_STATUS_TICK seconds (default 1): thinking, "thought for 3s", tokens
+# growing, the verb changing, the count holding still for a tick; then `live: null` and the session goes idle (the
+# turn is over). Subscribing again once it is over starts another run (the session working again).
+LIVE_STATUS = os.environ.get("MOCK_LIVE_STATUS") == "1"
+LIVE_STATUS_STATE = {"running": set(), "senders": set()}
+LIVE_STATUS_STEPS = [
+    {"verb": "Frosting", "elapsed_s": 1, "thinking": True},
+    {"verb": "Frosting", "elapsed_s": 2, "tokens_down": 400, "thinking": True},
+    {"verb": "Frosting", "elapsed_s": 3, "tokens_down": 900, "thinking": True},
+    {"verb": "Frosting", "elapsed_s": 4, "tokens_down": 1200, "thought_s": 3},
+    {"verb": "Frosting", "elapsed_s": 5, "tokens_down": 2300},
+    {"verb": "Moonwalking", "elapsed_s": 6, "tokens_down": 3400},
+    {"verb": "Moonwalking", "elapsed_s": 7, "tokens_down": 4800},
+    {"verb": "Moonwalking", "elapsed_s": 8, "tokens_down": 4800},
+    {"verb": "Moonwalking", "elapsed_s": 9, "tokens_down": 22800},
+]
+
+
+def live_status_subscribe(send, mid, sid):
+    s = next((x for x in SESSIONS if x["session_id"] == sid and x.get("agent") == "claude" and not x.get("assistant")), None)
+    if s is None:
+        return
+    LIVE_STATUS_STATE["senders"].add(send)
+    if sid in LIVE_STATUS_STATE["running"]:
+        return
+    LIVE_STATUS_STATE["running"].add(sid)
+
+    def push(live):
+        LIVE_STATUS_STATE["senders"] &= {out for out, _ in LIVE}  # closed connections leave LIVE
+        for out, subs in list(LIVE):
+            if out in LIVE_STATUS_STATE["senders"] and sid in subs:
+                try: out({"type": "live", "machine_id": mid, "session_id": sid, "live": live})
+                except Exception: pass
+
+    def run():
+        import time
+        tick = float(os.environ.get("MOCK_LIVE_STATUS_TICK", "1"))
+        s.update(status="working", state="working", state_since=utc_now(), updated_at=utc_now())
+        push_machine(mid)
+        for step in LIVE_STATUS_STEPS:
+            time.sleep(tick)
+            push({**step, "at": utc_now()})
+        time.sleep(tick)
+        push(None)
+        s.update(status="idle", state="idle", state_since=utc_now(), updated_at=utc_now())
+        push_machine(mid)
+        LIVE_STATUS_STATE["running"].discard(sid)
+    threading.Thread(target=run, daemon=True).start()
+
+
+MOCK_HELP.append("MOCK_LIVE_STATUS=1  Claude 会话的实时状态行（session_live，#1963）：声明了 session_live 的连接订阅后按 MOCK_LIVE_STATUS_TICK 秒（默认 1）一条推 live（思考中、thought for、token 增长、动词变化），最后推 null、会话变空闲；结束后再订阅会重来一轮")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="用于客户端测试的 mock hub")

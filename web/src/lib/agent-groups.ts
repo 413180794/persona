@@ -1,19 +1,20 @@
 import { byAttention, stateOf } from "./format";
 import { hubWaits } from "./work";
-import { hubLabel } from "./mesh";
 import type { AgentState, Machine, Session } from "./types";
 
 export type AgentGrouping = "repo" | "space" | "state" | "machine" | "todo";
+// 按机器 is herdr's own layout (machine → workspace → tab, lib/herdr-tree.ts) and the default for a browser that never
+// picked one; a grouping picked before stays.
 export const AGENT_GROUPINGS: { key: AgentGrouping; label: string }[] = [
+  { key: "machine", label: "按机器" },
   { key: "repo", label: "按仓库" },
   { key: "space", label: "按项目" },
   { key: "state", label: "按状态" },
-  { key: "machine", label: "按机器" },
   { key: "todo", label: "按待办" },
 ];
 
 export function agentGrouping(value: string | null): AgentGrouping {
-  return AGENT_GROUPINGS.find((g) => g.key === value)?.key ?? "repo";
+  return AGENT_GROUPINGS.find((g) => g.key === value)?.key ?? "machine";
 }
 
 export interface AgentMutes {
@@ -28,8 +29,6 @@ export interface AgentGroup {
   sessions: Session[];
   state?: AgentState;
   folded?: boolean;
-  /** The machine's hub, only when the list spans more than one (docs/plan-hub-mesh.md 2.6). */
-  hub?: string;
   todoId?: string;
   todoStatus?: string;
 }
@@ -93,14 +92,10 @@ function byDate(a: Session, b: Session): number {
   return date(b).localeCompare(date(a)) || a.session_id.localeCompare(b.session_id) || a.machine_id.localeCompare(b.machine_id);
 }
 
-// iOS AgentListOrder: needs you always wins, even when a session or its project is muted.
-export function buildAgentGroups(all: Session[], machines: Machine[], grouping: "state" | "machine", mutes: AgentMutes = { spaces: [], sessions: [] }): AgentGroup[] {
+// iOS AgentListOrder: needs you always wins, even when a session or its project is muted. 按状态 is the only grouping
+// built here (按机器 is lib/herdr-tree.ts); the argument stays for the callers that name it.
+export function buildAgentGroups(all: Session[], machines: Machine[], _grouping: "state", mutes: AgentMutes = { spaces: [], sessions: [] }): AgentGroup[] {
   const { live } = splitAgentSessions(all, machines);
-  if (grouping === "machine") {
-    return machines
-      .map((m) => ({ key: `machine:${m.id}`, name: m.name, hub: hubLabel(m, machines) || undefined, sessions: live.filter((s) => s.machine_id === m.id).sort(byAttention) }))
-      .filter((g) => g.sessions.length);
-  }
   const groups: AgentGroup[] = [
     { key: "state:needs", name: "需要你", state: "needs_you", sessions: [] },
     { key: "state:unread", name: "完成未看", state: "unread", sessions: [] },

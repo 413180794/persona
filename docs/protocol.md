@@ -596,6 +596,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | `lark` | `feed_ids`（飞书有新消息 / 会话变化的会话）；`settings_changed`（可选布尔值，默认 false，本批包含消息展示设置变化，与会话 ID 独立；客户端同时重读设置）；`account`（这些会话所在的 lark-connector 账号编号）；`ol_account`（只在不是默认账号时有，等于 `account`：读这些会话要带的参数，`docs/feishu.md`「多账号」）。hub 跟随 lark-connector 每个已登录账号的实时事件 `/agent/v1/events`，每个账号每 400ms 最多发一次，推给所有客户端。 |
 | `items` | `machine_id`, `session_id`, `items`，以及这批在 transcript 里的位置（见下「items 的连续性」）：`history`, `to_seq`, `from_seq`（接续的批次才有）。只推给订阅了该会话的客户端；没有 item 的行（ai-title 之类）也会推一条空的 `items`，让 App 知道这几行已经看过 |
 | `delta` | `machine_id`, `session_id`, `text`（无头助手正在生成的整段文字；空串表示这轮结束）。约每 80 ms 一条；App 每个对话最多每秒画 5 次，停顿后的第一条立刻画、之后画最新的，空串立刻画，消息落进 transcript 或重连时丢掉还没画的（`DeltaPacer`） |
+| `live` | `machine_id`, `session_id`, `live`（`SessionLive` 或 `null`）：工作中的 Claude 的状态行，只发给订阅了该会话并声明 `session_live` 的连接，见下「实时状态」 |
 | `screen` | `machine_id`, `session_id`, `text`, `status`, `ts`（node 已不再随订阅采样屏幕：终端页自己按需读 `/screen`，旧 App 收不到这条也不影响） |
 | `terminal_control` | `machine_id`, `session_id`, `state`：`active`（接管了，带 `cols`, `rows`）、`busy`（电脑上别的程序占着，问用户要不要 `takeover`；先镜像着）、`taken`（被别的设备或程序抢走）、`lost`（node 自己放手了）、`unsupported`（旧 node / herdr，只能镜像），`error` 是给人看的原因 |
 | `terminal` | `machine_id`, `session_id`，以及一帧 `epoch`, `seq`, `full`, `cols`, `rows`, `data`（base64 的 VT 字节），或者 `error`（流停了：电脑离线、会话不在跑……）+ `unsupported`（旧 node / herdr 不能推流，改用 `/screen` 轮询）。见下「终端流」 |
@@ -740,6 +741,24 @@ Agent blocked 而没有 hook 交互时，hub 读一次屏幕（`session.screen`�
   mock（`scripts/mock/mock_hub.py`）同样支持，`MOCK_WHOLE_LISTS=1` 当老 hub。
 - 回放（真实 hub 录的 19 分钟）：会话推送每分钟 2605 KB → 79 KB，连上时的快照 602 KB → 227 KB（`docs/testing.md`「推送回放」）。
 - 网页同样用它（`web/src/lib/sessions-delta.ts`，与 `SessionPatch` 同一套规则）：`wsQuery` 每次连接都带 `features=sessions_delta`，`store.ts` 按 `upsert` / `remove` 合并，`refresh()` 在连着增量 hub 时只从 `GET /api/v1/sessions` 取 Codex 历史。此前网页不带 `features`，实测每个连接每秒收约 3 MB 整表、把后面的小事件拖慢（#1707）。
+
+### 实时状态（`session_live`，2026-11-05）
+
+Claude Code 工作时屏幕底部的状态行（`✻ Frosting… (16m 15s · ↓ 22.8k tokens · thinking with xhigh effort)`）有动词、这一轮的用时、输出 token、是否在思考，transcript 里没有。
+订阅了会话的网页要显示它，node 从屏幕上读出来推过去。
+
+- 类型 `proto.SessionLive`（`server/internal/proto/live.go`）：`verb`（不带省略号）、`elapsed_s`、`tokens_down`（`↓` 的输出 token；`↑` 是输入，不算）、`thinking`（`thinking…` 段）、
+  `thought_s`（`thought for 3s`）、`at`（node 读到的时间，RFC 3339）；没有的字段省略。
+- node → hub 事件 `session.live {session_id, live}`，`live` 是 `SessionLive` 或 `null`。
+  - 只在这个会话被 watch（有客户端订阅）、是 herdr 里的 Claude（`agent == "claude"`，宿主 herdr；Codex、herdr-core、Orca、runtime、无头助手一律不读）、宿主报 `working` 时读：
+    约每秒一次 `pane.read --source visible --lines 60`，单次超时 3 秒，在 watch 自己的 goroutine 里，不拖慢 250 ms 一轮的 transcript 推送（`node/claudestatus.go`）。
+  - 解析：从输入框的上边线（屏幕上倒数第二条横线）往上找，跳过空行和缩进的行（提示、待办、右对齐的 `/goal`），第一行顶格的行是状态行或者就没有状态行；
+    所以正文、工具输出、用户消息里引用的状态行不会被当成现在的。spinner 字符不限（`· ✢ ✳ ✶ ✻ ✽`…），时长 `2s` / `1m 5s` / `1h 2m 3s`，token 单位 k / M / 无，括号里的段可缺、顺序可变，
+    `esc to interrupt` 之类的提示忽略。
+  - 和上一条不同才发（不比较 `at`）。停止工作、状态行没了、watch 结束（`session.unwatch`）时补一条 `live: null`，之前发过非空的才补。读屏失败时不发也不记日志，保留上一条。
+- hub → 客户端 `{"type":"live","machine_id","session_id","live"}`：只发给订阅了这个会话、并且声明了 `session_live` 的连接——WebSocket URL 的 `?features=`（网页的 `wsQuery`）
+  或 `client_hello.features` 都算。hub 不缓存、不补发：新订阅的客户端等下一次变化（工作中约一秒内就有）。旧 App 不声明，收不到，其余事件不变。
+- `hello.features` 目前不列 `session_live`：客户端照样声明就行，老 hub 不认识这个事件也就不发。
 
 ### 新建会话
 
@@ -1058,7 +1077,7 @@ hub → node 事件（按发出顺序处理）：`terminal.input {session_id, te
 node 拆成 `lines` 个一行的事件，落在 `column` / `row` 那一格，没给就落在屏幕正中间，`docs/terminal.md` 第十六节）、`terminal.click {session_id, column, row}`（左键按下 + 松开）、`terminal.keepalive {session_ids}`（每 20 s，接管中的终端；node 75 s 没听到就放手）。
 
 node → hub 事件：`terminal.frame {session_id, epoch, seq, full, cols, rows, data}`（相隔不到 30 ms 的帧由 node 合成一帧：diff 的字节接起来，整帧丢掉它前面的 diff）、`terminal.end {session_id, error, control?, taken?}`（流停了且起不来：会话不在跑、herdr 一直拒绝；`control` 时是接管结束了：`taken` 被别人抢走，否则租约到期）、
-`session.items {session_id, items, history, from_seq, to_seq}`、`session.echo {session_id, client_msg_id, text, images, sent_at, after_seq, line?}`（node 记下一次发送、认到它的那一行时各推一次，hub 存进 `sent_messages.echo`；已认到的不会被晚到的「还在等」盖掉）、`sessions.changed {sessions}`、
+`session.items {session_id, items, history, from_seq, to_seq}`、`session.live {session_id, live}`（watch 中、工作中的 herdr Claude 的状态行，变了才发，结束补 `null`，见「实时状态」）、`session.echo {session_id, client_msg_id, text, images, sent_at, after_seq, line?}`（node 记下一次发送、认到它的那一行时各推一次，hub 存进 `sent_messages.echo`；已认到的不会被晚到的「还在等」盖掉）、`sessions.changed {sessions}`、
 `sessions.revs {revs}`（每秒检查一次，只发变了的 rev；列表本身变了时 rev 跟着 `sessions.changed` 走）、
 `usage {buckets:[{minute, model, in, cache_write, cache_read, out, req}], full, load, cpus}`（每 10 秒，只发变了的分钟、每分钟的全量值，
 连上后第一次 `full: true` 带最近 26 小时全部；`docs/live-activity.md`「用量」）、

@@ -143,16 +143,19 @@ body {
 @keyframes fade-in{0%{opacity:0}to{opacity:1}}
 @keyframes eq-bounce{0%,to{transform:scaleY(.35)}50%{transform:scaleY(1)}}
 @keyframes stream-in{0%{opacity:0;filter:blur(4px)}to{opacity:1;filter:blur()}}
-@keyframes caret-blink{0%,to{opacity:1}50%{opacity:0}}
 @keyframes pop-in{0%{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
 @keyframes spin{to{transform:rotate(1turn)}}
 @keyframes pixel-on{0%,to{opacity:.15}18%,42%{opacity:1}62%{opacity:.15}}
 
-.stream-caret{background:var(--ink);vertical-align:text-bottom;border-radius:1px;width:2px;height:1.05em;margin-left:1.5px;animation:caret-blink 1s step-end infinite;display:inline-block;translate:0 -.5px}
 
 /* ── Persona additions ──────────────────────────────────── */
 :root { --status-needs: var(--red); --status-working: var(--orange); --status-unread: var(--green); --status-idle: var(--ink-3); --user-bubble: #f0f1f3; --term-magenta: #a347ba; --term-cyan: #0f8a9c; }
 .dark { --user-bubble: #2c2d31; --term-magenta: #c678dd; --term-cyan: #4fb6c4; }
+/* The chat's trace (aligned with cindy's defaults, #1963): tool rows and their chevrons, the work group's rail, thought
+   text, diff counts and the running status bar's accent. */
+:root { --tool-ink: #525252; --tool-rail: #ddd6cb; --thinking-ink: #a3a3a3; --diff-add-fg: #22863a; --diff-del-fg: #b31d28; --diff-add-bg: #e6ffec; --diff-del-bg: #ffebe9; --status-accent: #ea6b17; --tool-hover: #ececec; }
+.dark { --tool-ink: #a3a3a3; --tool-rail: #404040; --thinking-ink: #737373; --diff-add-fg: #7ee787; --diff-del-fg: #ff7b72; --diff-add-bg: #2ea04326; --diff-del-bg: #f8514926; --status-accent: #ea6b17; --tool-hover: #333436; }
+@theme inline { --color-tool-ink: var(--tool-ink); --color-tool-rail: var(--tool-rail); --color-thinking-ink: var(--thinking-ink); --color-diff-add-fg: var(--diff-add-fg); --color-diff-del-fg: var(--diff-del-fg); --color-diff-add-bg: var(--diff-add-bg); --color-diff-del-bg: var(--diff-del-bg); --color-status-accent: var(--status-accent); --color-tool-hover: var(--tool-hover); }
 /* The machine page's load chart (iOS MetricColor.load): its own hue, apart from CPU / memory / network. */
 :root { --chart-load: #e87ba4; }
 .dark { --chart-load: #d55181; }

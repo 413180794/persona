@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, errorText, getToken, handleUnauthorized, setToken } from "./lib/api";
 import { pair, takeToken } from "./lib/auth";
 import { acceptHubs, rememberHub, takeHubs } from "./lib/hubs";
 import { closePanel, getPanel } from "./lib/panel";
-import { useRoute } from "./lib/router";
+import { resolveTab, tabPagePane } from "./lib/herdr-tree";
+import { href, navigate, useRoute } from "./lib/router";
+import { useKeyboardFrame } from "./lib/viewport";
 import { connect, disconnect, reset, useStore } from "./lib/store";
-import { cx, EASE, Spinner, Toasts } from "./ui/atoms";
+import { cx, EASE, Loading, Spinner, Toasts } from "./ui/atoms";
 import { AgentsView } from "./views/agents/AgentsView";
 import { ChatView } from "./views/chat/ChatView";
 import { WorkspaceBoard } from "./views/WorkspaceBoard";
@@ -97,8 +99,25 @@ function Shell() {
   // this hub goes on the list of hubs to switch between, under the name it gives itself
   const hubName = useStore((s) => s.hubName);
   useEffect(() => void rememberHub(location.origin, hubName), [hubName]);
-  const launch = useStore((s) => route.name === "session" ? s.launches[route.sid] : undefined);
-  const starting = useStore((s) => route.name === "session" ? (s.sessions[route.mid] ?? []).find((session) => session.session_id === route.sid)?.starting : undefined);
+  // the conversation on the page: a session's (`/s/…`), or the pane a tab (`/t/…`) opens on
+  const tabSessions = useStore((s) => (route.name === "tab" ? s.sessions[route.mid] : undefined));
+  const loaded = useStore((s) => s.loaded);
+  const tabPath = route.name === "tab" ? href(route) : "";
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `route` is parsed anew each render; its path says it all
+  const tabPane = useMemo(() => (route.name === "tab" ? resolveTab(tabSessions ?? [], route) : undefined), [tabSessions, tabPath]);
+  const pane = route.name === "session" ? { mid: route.mid, sid: route.sid }
+    : route.name === "tab" ? tabPagePane(tabPane, route, loaded)
+    : undefined;
+  const launch = useStore((s) => (pane ? s.launches[pane.sid] : undefined));
+  const starting = useStore((s) => (pane ? (s.sessions[pane.mid] ?? []).find((session) => session.session_id === pane.sid)?.starting : undefined));
+  const shell = useRef<HTMLDivElement>(null);
+  useKeyboardFrame(shell);
+  // a tab opened without a pane settles on the one it picked: another pane needing you later does not swap the page
+  const picked = route.name === "tab" && !route.sid ? pane?.sid : undefined;
+  useEffect(() => {
+    if (picked && route.name === "tab") navigate({ ...route, sid: picked }, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picked]);
   const [palette, setPalette] = useState(false);
   const [newAgent, setNewAgent] = useState(false);
   const [preset, setPreset] = useState<NewAgentPreset | null>(null);
@@ -120,19 +139,19 @@ function Shell() {
     return () => removeEventListener("keydown", key);
   }, []);
 
-  useEffect(() => setDrawer(false), [route.name, route.name === "session" ? route.sid : route.name === "jarvis" ? route.sid : route.name === "agents" ? route.id : ""]);
+  useEffect(() => setDrawer(false), [route.name, pane ? pane.sid : route.name === "jarvis" ? route.sid : route.name === "agents" ? route.id : ""]);
   // a session's terminal / files / Git belong to that conversation: moving to another page closes them (a link and a
   // task stay)
-  const at = route.name === "session" ? `${route.mid}/${route.sid}` : route.name;
+  const at = pane ? `${pane.mid}/${pane.sid}` : route.name;
   useEffect(() => {
     const p = getPanel();
-    if (p && p.kind !== "link" && p.kind !== "task" && p.kind !== "agent" && !(p.kind !== "file" && route.name === "session" && p.mid === route.mid && p.sid === route.sid)) closePanel();
+    if (p && p.kind !== "link" && p.kind !== "task" && p.kind !== "agent" && !(p.kind !== "file" && pane && p.mid === pane.mid && p.sid === pane.sid)) closePanel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [at]);
 
   const pluginTitle = usePluginPlace(route.name === "plugin" ? route.plugin : "", route.name === "plugin" ? route.ui : "")?.title;
   const title =
-    route.name === "session" ? "Agent" : route.name === "jarvis" ? "Persona" : route.name === "persona-new" ? "新对话" : route.name === "history" ? "Persona 的对话" : route.name === "profile" ? "Persona 的资料" : route.name === "inbox" ? "收件箱" : route.name === "messages" ? "消息"
+    pane ? "Agent" : route.name === "jarvis" ? "Persona" : route.name === "persona-new" ? "新对话" : route.name === "history" ? "Persona 的对话" : route.name === "profile" ? "Persona 的资料" : route.name === "inbox" ? "收件箱" : route.name === "messages" ? "消息"
       : route.name === "routines" ? "定时任务" : route.name === "kb" ? "知识库" : route.name === "workspace-board" ? "工作流看板" : route.name === "todos" ? "待办" : route.name === "machines" || route.name === "machine" ? "机器" : route.name === "settings" ? "设置"
       : route.name === "agents" ? "个人 Agent" : route.name === "plugin" ? pluginTitle || "插件" : "总览";
   useEffect(() => {
@@ -142,7 +161,10 @@ function Shell() {
   let main: React.ReactNode;
   switch (route.name) {
     case "session":
-      main = launch ? <StartingAgent launch={launch} onToggleSidebar={toggle} /> : <ChatView key={`${route.mid}/${route.sid}`} mid={route.mid} sid={route.sid} starting={starting} onToggleSidebar={toggle} />;
+    case "tab":
+      main = !pane ? (loaded ? <TabGone onToggleSidebar={toggle} /> : <Loading />)
+        : launch ? <StartingAgent launch={launch} onToggleSidebar={toggle} />
+        : <ChatView key={`${pane.mid}/${pane.sid}`} mid={pane.mid} sid={pane.sid} starting={starting} onToggleSidebar={toggle} />;
       break;
     case "jarvis":
       main = <PersonaAssistant sid={route.sid} onToggleSidebar={toggle} />;
@@ -194,7 +216,8 @@ function Shell() {
   }
 
   return (
-    <div className="flex h-full overflow-hidden bg-page">
+    // #root is 100dvh (index.html); with a soft keyboard up (iOS) the shell is only the part above it (lib/viewport.ts)
+    <div ref={shell} className="flex h-full overflow-hidden bg-page">
       {/* wide: a fixed column; narrow: a drawer over the page */}
       <div
         className={cx(
@@ -223,6 +246,16 @@ function Shell() {
         setNewAgent(false);
         setPreset(null);
       }} />
+    </div>
+  );
+}
+
+// A tab link whose tab is gone (closed, or herdr restarted with new ids) and no pane to fall back to.
+function TabGone({ onToggleSidebar }: { onToggleSidebar: () => void }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+      <p className="text-[13px] text-ink-2">这个标签页已经不在了</p>
+      <button type="button" onClick={onToggleSidebar} className="whitespace-nowrap rounded-control px-2.5 py-1.5 text-[12.5px] font-medium text-accent-ink hover:bg-hover lg:hidden">打开侧边栏</button>
     </div>
   );
 }

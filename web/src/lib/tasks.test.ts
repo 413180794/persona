@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseAPIError } from "./api-errors";
-import { buildTaskIndex, loopCadence, loopLabel, loopNext, loopShortLabel, loopTask, subagentTree, taskBadge, taskPill, wakeSummary } from "./tasks";
+import { agentStatus, agentSummary, buildTaskIndex, loopCadence, loopLabel, loopNext, loopShortLabel, loopTask, nestedSubagents, subagentTree, taskBadge, taskPill, wakeSummary } from "./tasks";
 import type { Item, Subagent } from "./types";
 
 describe("buildTaskIndex", () => {
@@ -92,5 +92,39 @@ describe("parseAPIError", () => {
     const gpu = parseAPIError("API Error: 502 upstream error: Req 202610302115A1B2C3D4 Session 1ebd0000:7e470000 no available GPU pod");
     expect(gpu).toMatchObject({ status: 502, transient: true, requestId: "202610302115A1B2C3D4", session: "1ebd0000:7e470000" });
     expect(parseAPIError("all good")).toBeNull();
+  });
+});
+
+describe("a subagent call's card", () => {
+  const res = (text: string, is_error = false): Item => ({ id: "r#0", seq: 2, role: "user", kind: "tool_result", tool_use_id: "c", text, is_error });
+  const meta = (running: boolean): Subagent => ({ id: "a", session_id: "s@a", running, last_text: "最近说的话" });
+
+  it("goes by the session's list, then by the result", () => {
+    expect(agentStatus(undefined, meta(true), false)).toBe("running");
+    expect(agentStatus(res("done"), meta(false), true)).toBe("completed");
+    expect(agentStatus(res("boom", true), meta(true), true)).toBe("failed");
+    expect(agentStatus(undefined, undefined, true)).toBe("running");
+    expect(agentStatus(undefined, undefined, false)).toBe("stopped");
+    expect(agentStatus(res("Async agent launched successfully.\nagentId: x (This is an internal ID for your use)"), undefined, true)).toBe("running");
+    expect(agentStatus(res("Async agent launched successfully."), undefined, false)).toBe("completed");
+    expect(agentStatus(res("42 passed"), undefined, true)).toBe("completed");
+  });
+
+  it("summarizes the report without its agentId line; a launch receipt by the latest words", () => {
+    expect(agentSummary(res("结算流程 42 个用例全部通过。\nagentId: sa1 (use SendMessage with to: 'sa1' to continue this agent)"), undefined)).toBe("结算流程 42 个用例全部通过。");
+    expect(agentSummary(res("Async agent launched successfully.\nagentId: sa2 (This is an internal ID for your use)"), meta(true))).toBe("最近说的话");
+    expect(agentSummary(undefined, undefined)).toBe("");
+  });
+
+  it("lists the ones it launched, level by level", () => {
+    const all: Subagent[] = [
+      { id: "a", session_id: "s@a" },
+      { id: "b", session_id: "s@b", parent_id: "a" },
+      { id: "c", session_id: "s@c", parent_id: "b" },
+      { id: "d", session_id: "s@d" },
+    ];
+    expect(nestedSubagents(all, "a").map((r) => `${r.depth}:${r.agent.id}`)).toEqual(["0:b", "1:c"]);
+    expect(nestedSubagents(all, "d")).toEqual([]);
+    expect(nestedSubagents(all, "zz")).toEqual([]);
   });
 });

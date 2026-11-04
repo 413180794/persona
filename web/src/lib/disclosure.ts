@@ -51,34 +51,72 @@ export function anchoredScroll(a: ScrollAnchor, m: ScrollMetrics): { scrollTop: 
   return { scrollTop: Math.min(max, Math.max(0, m.scrollTop + move)), follow: false };
 }
 
-/** How far down a work row's header may come when it folds from inside (its 收起 at the end, the hairline on its
- *  left), #1486. A header on screen stays where it is; one above the view comes down to where the reader clicked,
- *  kept inside the view. */
-export function foldTopLimit(m: { rowTop: number; click: number; viewTop: number; viewBottom: number; header: number }): number {
-  if (m.rowTop >= m.viewTop) return m.rowTop;
-  return Math.max(m.viewTop + FOLLOW_MARGIN, Math.min(m.click, m.viewBottom - m.header - FOLLOW_MARGIN));
-}
-
 /** What a collapse renders: lazy ones mount their children when they open and keep them while the height runs back to
  *  zero (the content goes down with the height instead of vanishing), then drop them. */
 export function collapseMounted(lazy: boolean, open: boolean, closing: boolean): boolean {
   return !lazy || open || closing;
 }
 
-/** How close to the end still counts as at the end. */
-export const END_SLACK = 40;
+// ── following the end (cindy's autoFollowIntent) ──
+//
+// Only the reader leaves the end, and only by saying so: the wheel or a trackpad going up, a finger pulling the list
+// down, PageUp / ↑ / Home, dragging the scroll bar up. A scroll event alone never does (#1340: the chat's own pin whose
+// event lands after more content did sees the end far away). Back near the end, following picks up again.
 
-/** Whether the chat still follows the end after a scroll event (#1340). Only the reader leaves the end: a scroll event
- *  that moves the offset up while the reader is scrolling (wheel, touch, keys, the scroll bar). The chat's own
- *  events do not: its pin to the end whose event arrives after more content landed (images, cards, a page coming in
- *  a burst) sees the end far away, and the browser pulling the offset up when the view grows for a moment (the
- *  composer re-measuring its height) moves it up. Back near the end always follows again. */
-export function followsAfterScroll(following: boolean, m: { scrollTop: number; lastTop: number; gap: number; reader: boolean }): boolean {
-  if (m.gap < END_SLACK) return true;
-  if (m.reader && m.scrollTop < m.lastTop - 1) return false;
-  return following;
+/** At most this far from the end is at the end: following again whichever way the reader scrolled. */
+export const REPIN_AT_BOTTOM = 8;
+/** Scrolling down within this far of the end follows again. */
+export const REPIN_NEAR = 100;
+/** A finger has to move this far before it counts as pulling the list. */
+export const TOUCH_INTENT = 8;
+/** A scroll bar drag moving the offset up by more than this leaves the end. */
+export const SCROLLBAR_DEAD_ZONE = 2;
+/** Unfolding a card holds off following this long, the clicked row held where it was. */
+export const UNFOLD_PAUSE = 300;
+
+const UP_KEYS = new Set(["PageUp", "ArrowUp", "Home"]);
+
+/** Whether there is anything to scroll (a list that fits cannot leave its end). */
+const scrollable = (m: { scrollHeight: number; clientHeight: number }) => m.scrollHeight - m.clientHeight > 1;
+
+export function leavesOnWheel(m: { deltaX: number; deltaY: number; scrollHeight: number; clientHeight: number }): boolean {
+  return m.deltaY < 0 && Math.abs(m.deltaY) >= Math.abs(m.deltaX) && scrollable(m);
 }
 
-/** How long after the reader's last wheel, touch or key a scroll still counts as theirs (smooth scrolling and momentum
- *  run on after the input). */
-export const READER_WINDOW = 700;
+/** A finger moving down (the list's older part coming into view) by more than TOUCH_INTENT. */
+export function leavesOnTouch(m: { startY: number; y: number; scrollHeight: number; clientHeight: number }): boolean {
+  return m.y - m.startY > TOUCH_INTENT && scrollable(m);
+}
+
+export function leavesOnKey(m: { key: string; scrollHeight: number; clientHeight: number }): boolean {
+  return UP_KEYS.has(m.key) && scrollable(m);
+}
+
+/** A press on the view's own scroll bar: the target is the view itself and the point is past its content width. */
+export function isScrollbarPress(m: { targetIsView: boolean }): boolean {
+  // a press on the view itself, not on what is in it: overlay scroll bars (macOS, iOS) sit inside clientWidth, so
+  // where the press landed horizontally says nothing
+  return m.targetIsView;
+}
+
+export function leavesOnScrollbarDrag(m: { dragging: boolean; delta: number }): boolean {
+  return m.dragging && m.delta < -SCROLLBAR_DEAD_ZONE;
+}
+
+/** Whether a scroll event while not following brings following back: at the end, or scrolling down near it. (While
+ *  following, a scroll event changes nothing: only the intents above leave.) */
+export function followsAgain(m: { gap: number; delta: number }): boolean {
+  if (m.gap <= REPIN_AT_BOTTOM) return true;
+  return m.gap < REPIN_NEAR && m.delta > 0;
+}
+
+/** The pill while away from the end: 有新消息 when something came in since leaving it, else 跳到底部. */
+export function jumpLabel(newSince: boolean): string {
+  return newSince ? "有新消息" : "跳到底部";
+}
+
+/** After the pause an unfolded card holds following for: pick it up again only when the view was following, the
+ *  reader did not move in the meantime, and the end is still near. */
+export function followsAfterUnfold(m: { wasAtEnd: boolean; readerMoved: boolean; gap: number }): boolean {
+  return m.wasAtEnd && !m.readerMoved && m.gap <= REPIN_NEAR;
+}

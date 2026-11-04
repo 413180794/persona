@@ -200,3 +200,7 @@ claude 刚出来 7 秒就判了超时；标签页留在那里，里面的 claude
   - herdr 把 argv 敲进窗格的 shell：只给需要的元素加引号（第一个元素是 alias 也能展开），元素里不能有单引号。
   - 官方 integration 之后再报同一个 / 另一个 session id，herdr 都留着原来的 `resume_argv`：会话换了 id 必须自己重报，否则恢复到旧会话。
 
+
+## Claude 的状态行（2026-11-05，#1963）
+
+- 工作中的 Claude 在输入框上方画 `✻ Frosting… (16m 15s · ↓ 22.8k tokens · thinking with xhigh effort)`：spinner 字符每帧都在变，括号里的段会缺、顺序会变（`thought for 1s`、`esc to interrupt`），↑ 是输入 token。正文里引用的同样一行不能当成状态行，取输入框上方最后一行（`screen.AboveInputBox`，`node/claudestatus.go`）。pane 往上翻了的时候，读到的可见内容里没有状态行。

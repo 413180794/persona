@@ -228,3 +228,9 @@
 
 - **`refresh()` 的快照会把刚结束的卡片盖回来**：它并发拉 `/sessions`（忙的 hub 上要几秒）和 `/interactions`，全部回来后整体写回。中间到的 `interaction_resolved` 先删了卡片，旧快照随后又把它放回来，卡片还能点，再点就是 410「no longer pending」。待处理卡片的每次变化都编号（`store.ts` 的 `changeInteraction`），快照只补发请求之前的状态；安卓的 `HubInteractionCenter` 用的是同一个办法。
 - **提交成功就在本地收起卡片**，不要只等 WebSocket 的事件（可能晚到，也可能随断掉的连接丢了）；iOS、安卓本来就这样。hub 对已经回答过的卡片幂等回 200 和当时的答案（`already`），只有过期、撤回、交回电脑才回 410，见 `docs/protocol.md`。
+
+## 对话渲染对齐 cindy（2026-11-05，#1963）
+
+- **herdr 里的 Claude Code 没有 token 流**：transcript 只写完整的块，thinking 块大多是空的（实测 5 个会话、2066 块里 1698 块正文为空）；屏幕上的正文也是整段出现（每 0.4 s 读屏一次，连读 20 次核对过）。只有底部状态行每秒在变，所以实时信息走 node 读状态行的 `live` 推送，回复只能「整块到了再逐词淡入」。助手主对话才有真正的 delta。
+- **浮动滚动条按在视图里面**：macOS、iOS 的滚动条盖在内容上，按下时 `offsetX < clientWidth`。用「按下的是滚动视图本身、不是里面的内容」判断在拖滚动条，不要比较 `offsetX` 和 `clientWidth`，否则拖滚动条永远停不下跟随。
+- **e2e 别在带 token 的链接换完凭据之前离开**：`/overview?token=…` 打开后立刻 `goto` 别处，会落在登录页上，看起来像「列表一直不稳定」。先等侧栏（`aside`）出现再跳。

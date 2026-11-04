@@ -9,7 +9,8 @@ import { reset, useStore } from "../lib/store";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from "../ui/atoms";
 import { Icon, type IconName } from "../ui/icons";
 import { setTheme, useTheme, type Theme } from "./theme";
-import { Group, Row, Pill, RowConfirm } from "./settings/SettingsParts";
+import { Group, Row, Pill, RowConfirm, Switch } from "./settings/SettingsParts";
+import { setReplyMotionEnabled, useReplyMotionSetting } from "../ui/stream/motion";
 import { HubList } from "./Hubs";
 import { ModelConfiguration } from "./settings/ModelConfiguration";
 import { AgentSettings } from "./settings/AgentSettings";
@@ -191,6 +192,7 @@ interface AssistantState {
 
 function General({ onTriageModel }: { onTriageModel: () => void }) {
   const theme = useTheme();
+  const replyMotion = useReplyMotionSetting();
   const machines = useStore((s) => s.machines);
   const [assistant, setAssistant] = useState<AssistantState | null>(null);
 
@@ -225,6 +227,9 @@ function General({ onTriageModel }: { onTriageModel: () => void }) {
             </button>
           ))}
         </div>
+        <Row label="回复动效" hint="新到的回复逐词淡入；系统开了「减弱动态效果」时不播。">
+          <Switch on={replyMotion} onChange={setReplyMotionEnabled} label="回复动效" />
+        </Row>
       </Group>
 
       <Group title="形象" footer="Persona 的名字、头像和对话里会动的状态，只在这个浏览器里生效；网页的颜色不变。形象包放在 hub 机器上。">

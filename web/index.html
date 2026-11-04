@@ -2,7 +2,8 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- interactive-widget: Chrome on Android shrinks the page for the soft keyboard, so 100dvh is what is above it -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="color-scheme" content="light dark" />
     <meta name="robots" content="noindex" />
     <link rel="icon" href="/app-icon-64.png" type="image/png" media="(prefers-color-scheme: light)" />
@@ -33,7 +34,8 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- 100dvh: the visible height with the browser's bars, not the tallest one (100vh hides the bottom on phones) -->
+    <div id="root" style="height: 100dvh"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

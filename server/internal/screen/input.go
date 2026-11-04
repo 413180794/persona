@@ -63,6 +63,20 @@ func inputBox(screen string) *box {
 	return &box{plain: plain[start+1 : end], raw: raw[start+1 : end]}
 }
 
+// AboveInputBox is the screen's rows above Claude Code's input box, as plain text (every row when no box is on
+// screen): where its status line is (node/claudestatus.go).
+func AboveInputBox(screen string) []string {
+	lines := strings.Split(Plain(screen), "\n")
+	for i, rules := len(lines)-1, 0; i >= 0; i-- {
+		if isRule(lines[i]) {
+			if rules++; rules == 2 {
+				return lines[:i]
+			}
+		}
+	}
+	return lines
+}
+
 // run is a stretch of characters drawn with the same dim / inverse state.
 type run struct {
 	text         string

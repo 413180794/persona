@@ -151,6 +151,9 @@ def run(browser, base, token, shots):
     ctx.new_cdp_session(page).send("Emulation.setEmulatedMedia", {"features": [{"name": "hover", "value": "none"}]})
     page.goto(base + "/overview?token=" + token)
     expect(page.locator("main").get_by_role("button", name="侧边栏").first).to_be_visible()
+    # 「其他 Agent」 is 按项目's (a new browser groups 按机器, where the machines' titles fold the same way)
+    page.evaluate("localStorage.setItem('jarvis.agentGrouping', 'space')")
+    page.reload()
     page.locator("main").get_by_role("button", name="侧边栏").first.click()
     arrow = header(page, LOOSE).locator("svg").last
     expect(arrow).to_be_visible()

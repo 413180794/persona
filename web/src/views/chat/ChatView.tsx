@@ -10,24 +10,30 @@ import { hasModes, isMuted, toggleMute } from "../../lib/session-actions";
 import { flipPin } from "../../lib/agent-actions";
 import { isPinned } from "../../lib/pins";
 import { acknowledgeLaunch, launchMessageId } from "../../lib/new-agent";
-import { getSession, getState, markSeenLocally, refresh, refreshTodos, setMutes, useStore } from "../../lib/store";
-import { buildTaskIndex, STOP_LOOP_MESSAGE, visibleSubagents } from "../../lib/tasks";
+import { getSession, getState, listenSession, markSeenLocally, refresh, refreshTodos, setMutes, useStore } from "../../lib/store";
+import { buildTaskIndex, STOP_LOOP_MESSAGE, subagentParent } from "../../lib/tasks";
+import { planProgress } from "../../lib/work-groups";
 import { echoed, taggedSeen } from "../../lib/echo";
 import { outboxKey, settleOutbox } from "../../lib/outbox";
 import { apiOp } from "../../lib/ops";
 import { conversationKey, pickedLauncher, pickedModel } from "../../lib/assistant-chat";
 import { unlinkAgentFromTodo } from "../../lib/todos";
 import { LinkTodoDialog } from "../LinkTodoDialog";
-import { chatLines, openRecap, parseUserText, segments, type UserMessage } from "../../lib/turns";
-import type { Item, Session, Subagent } from "../../lib/types";
-import { anchoredScroll, foldTopLimit, followsAfterScroll, READER_WINDOW, type ScrollAnchor } from "../../lib/disclosure";
-import { Button, copyText, cx, Dialog, IconButton, Loading, Menu, StatePill, StatusDot, toast, useMenu, useNow, type MenuItem } from "../../ui/atoms";
+import { chatLines, freshWords, openRecap, parseUserText, segments, type UserMessage } from "../../lib/turns";
+import type { Item, Session } from "../../lib/types";
+import { anchoredScroll, followsAgain, isScrollbarPress, jumpLabel, leavesOnKey, leavesOnScrollbarDrag, leavesOnTouch, leavesOnWheel, followsAfterUnfold, UNFOLD_PAUSE, type ScrollAnchor } from "../../lib/disclosure";
+import { Button, copyText, Dialog, IconButton, Loading, Menu, StatePill, StatusDot, toast, useMenu, type MenuItem } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { AGENT_COMMANDS, Composer, type Outgoing } from "./Composer";
 import { hasLoop, LOOP_TEXT } from "../../lib/loop-command";
 import { AnsweredCard, InteractionCard } from "./Interactions";
 import { UserBubble } from "./SegmentView";
-import { ActivityChips, AgentStrip, SubagentFooter } from "./Activity";
+import { ActivityChips } from "./Activity";
+import { paneRoute, tabSessions } from "../../lib/herdr-tree";
+import { useSessionLive } from "../../lib/live";
+import { PaneTabs } from "./PaneTabs";
+import { RunningStatusBar } from "./RunningStatusBar";
+import { latestPlan, PlanPill, usePlanOutOfView } from "./PlanCard";
 import { ChatContext, type ChatContextValue } from "./chat-context";
 import { ChatLineView, closedRecap, closeRecap, OpenRecapLine } from "./Lines";
 import { useTranscript } from "./useTranscript";
@@ -52,18 +58,22 @@ interface Pending {
   at: number;
 }
 
-export function ChatView({ mid, sid, assistant, starting: launching, onToggleSidebar }: { mid: string; sid: string; assistant?: boolean; starting?: boolean; onToggleSidebar?: () => void }) {
+/** `readOnly`: a subagent's conversation (`<parent>@<agent>`) in the side panel (SubagentPanel): the transcript only,
+ *  no header, no composer. */
+export function ChatView({ mid, sid, assistant, starting: launching, onToggleSidebar, readOnly }: { mid: string; sid: string; assistant?: boolean; starting?: boolean; onToggleSidebar?: () => void; readOnly?: boolean }) {
   const session = useStore((s) => (s.sessions[mid] ?? []).find((x) => x.session_id === sid) ?? s.assistant?.conversations.find((c) => c.session_id === sid));
+  // a subagent's own launches are listed on the session that launched it
+  const parentSid = subagentParent(sid);
+  const subagents = useStore((s) => (s.sessions[mid] ?? []).find((x) => x.session_id === parentSid)?.subagents);
   const machineName = useStore((s) => machineWithHub(mid, s.machines));
+  const allSessions = useStore((s) => s.sessions[mid]);
+  const panes = useMemo(() => (session && !assistant && !readOnly ? tabSessions(allSessions ?? [], session) : []), [allSessions, session, assistant, readOnly]);
   const siblings = useStore((s) => (session?.space_id ? (s.sessions[mid] ?? []).filter((x) => x.space_id === session.space_id && stateOf(x) !== "offline") : []));
   const interactions = useStore((s) => s.interactions.filter((i) => i.machine_id === mid && i.session_id === sid));
   const answered = useStore((s) => Object.values(s.answered).filter((a) => a.ix.machine_id === mid && a.ix.session_id === sid));
-  // a subagent's conversation is read in the same chat, read-only (its session id is "<parent>@<agent>")
-  const [viewing, setViewing] = useState<Subagent | null>(null);
-  useEffect(() => setViewing(null), [mid, sid]);
-  const viewed = viewing ? (session?.subagents?.find((a) => a.id === viewing.id) ?? viewing) : null;
-  const shownSid = viewed?.session_id ?? sid;
-  const tr = useTranscript(mid, shownSid, { starting: Boolean(launching) && !viewed });
+  const viewed = readOnly ? (subagents?.find((a) => a.session_id === sid) ?? null) : null;
+  const tr = useTranscript(mid, sid, { starting: Boolean(launching) && !readOnly });
+  const status = useSessionLive(mid, sid);
   const [pending, setPending] = useState<Pending[]>(() => {
     const launch = Object.values(getState().launches).find((l) => l.phase === "ready" && l.machineId === mid && l.session?.session_id === sid);
     const out = launch?.outgoing;
@@ -83,12 +93,11 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const working = state === "working" || Boolean(tr.streaming) || outgoing > 0;
   // still starting only until the conversation has anything in it: the flag the caller passes may outlive the start
   const starting = Boolean(launching) && !tr.items.length && !tr.streaming && state !== "working";
-  const now = useNow(1000, working);
 
   const segs = useMemo(() => segments(tr.items), [tr.items]);
   // finished exchanges of several messages the user split open (iOS openWork on a merged exchange)
   const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set());
-  useEffect(() => setSplit((x) => (x.size ? new Set() : x)), [mid, shownSid]);
+  useEffect(() => setSplit((x) => (x.size ? new Set() : x)), [mid, sid]);
 
   // what the messages' menus, the image viewer and the @ menu read from this chat (chat-actions.ts)
   const items = useRef(tr.items);
@@ -123,22 +132,46 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     return () => document.removeEventListener("visibilitychange", v);
   }, [mid, sid]);
 
-  // ── scrolling: stick to the end while at the end; keep the view still when older pages load ──
+  // what came in over the WebSocket after the chat subscribed: the agent's words among it fade in (contract §3); the
+  // first page, older pages and unfolded ranges come over HTTP and do not
+  const [fresh, setFresh] = useState<ReadonlySet<string>>(() => new Set());
+  useEffect(() => {
+    setFresh(new Set());
+    return listenSession(mid, sid, {
+      items: (e) => {
+        const add = freshWords(items.current, e.items ?? []);
+        if (add.length) setFresh((f) => new Set([...f, ...add]));
+      },
+    });
+  }, [mid, sid]);
+
+  // ── scrolling (lib/disclosure.ts「following the end」): the end stays in view until the reader scrolls away from it;
+  // older pages landing above keep the view still ──
   const scroller = useRef<HTMLDivElement>(null);
   const atEnd = useRef(true);
-  // the offset at the last scroll event, and when the reader last scrolled (followsAfterScroll: only the reader leaves the end)
+  const [away, setAway] = useState(false);
+  // something came in since the reader left the end: the pill says 有新消息
+  const [newSince, setNewSince] = useState(false);
+  const follow = useCallback((on: boolean) => {
+    atEnd.current = on;
+    setAway(!on);
+    if (on) setNewSince(false);
+  }, []);
   const lastTop = useRef(0);
-  const readerAt = useRef(-Infinity);
   const dragging = useRef(false);
-  const [showDown, setShowDown] = useState(false);
   const before = useRef<{ h: number; top: number } | null>(null);
   const first = useRef(true);
 
   useEffect(() => {
     first.current = true;
-    atEnd.current = true;
+    follow(true);
     lastTop.current = 0;
-  }, [mid, shownSid]);
+  }, [mid, sid, follow]);
+
+  const lastId = tr.items[tr.items.length - 1]?.id;
+  useEffect(() => {
+    if (lastId && !atEnd.current) setNewSince(true);
+  }, [lastId]);
 
   useLayoutEffect(() => {
     const el = scroller.current;
@@ -154,44 +187,55 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     }
   }, [tr.items, pending, outbox, tr.streaming, interactions.length]);
 
-  // A row that unfolds or folds stays where it was on screen while its height runs (#1124, lib/disclosure.ts): the
-  // clicked header's top, or a work row's end when it folds from inside (its 收起 button, its hairline), the header
-  // coming down into view. At the end it keeps following. Held until the sizes stop changing for a moment, or the
-  // reader scrolls.
+  // A card that unfolds (#1124): following holds off for UNFOLD_PAUSE while the clicked row stays where it was on
+  // screen (anchoredScroll), then picks up again if the end is still near; a long card opened at the end stays put to
+  // be read, and the pill brings the end back. Held until the sizes stop changing for a moment, or the reader scrolls.
   const anchor = useRef<(ScrollAnchor & { el: Element; quiet: number }) | null>(null);
   useEffect(() => {
     const sc = scroller.current;
     if (!sc) return;
+    let resume = 0;
+    // the reader scrolled (wheel, finger, keys) while an unfold held following off: the pause does not pull them back
+    let moved = false;
     const drop = () => {
       if (anchor.current) clearTimeout(anchor.current.quiet);
       anchor.current = null;
     };
+    const readerMoves = () => {
+      moved = true;
+      drop();
+    };
     const onClick = (e: MouseEvent) => {
-      const t = e.target instanceof Element ? e.target : null;
-      const fromEnd = t?.closest("[data-fold-from-end]")?.closest("[data-work-row]");
-      const el = fromEnd ?? t?.closest("button[aria-expanded]");
+      const el = e.target instanceof Element ? e.target.closest("button[aria-expanded]") : null;
       if (!el || !sc.contains(el)) return;
       drop();
-      const r = el.getBoundingClientRect();
-      // a header above the view comes down to where the reader clicked (#1486); a key press has no point, the button's
-      const v = sc.getBoundingClientRect();
-      const click = e.detail > 0 ? e.clientY : (t?.closest("button")?.getBoundingClientRect().top ?? r.bottom);
-      const topLimit = fromEnd ? foldTopLimit({ rowTop: r.top, click, viewTop: v.top, viewBottom: v.bottom, header: el.firstElementChild?.getBoundingClientRect().height ?? 0 }) : undefined;
-      anchor.current = { el, edge: fromEnd ? "bottom" : "top", at: fromEnd ? r.bottom : r.top, follow: atEnd.current, topLimit, quiet: window.setTimeout(drop, 1000) };
+      clearTimeout(resume);
+      const was = atEnd.current;
+      atEnd.current = false;
+      moved = false;
+      anchor.current = { el, edge: "top", at: el.getBoundingClientRect().top, follow: false, quiet: window.setTimeout(drop, 1000) };
+      resume = window.setTimeout(() => {
+        if (!was) return;
+        if (!followsAfterUnfold({ wasAtEnd: was, readerMoved: moved, gap: sc.scrollHeight - sc.scrollTop - sc.clientHeight })) return follow(false);
+        drop();
+        follow(true);
+        sc.scrollTop = sc.scrollHeight;
+      }, UNFOLD_PAUSE);
     };
     sc.addEventListener("click", onClick, true);
-    for (const ev of ["wheel", "touchstart", "keydown"]) sc.addEventListener(ev, drop, { passive: true });
+    for (const ev of ["wheel", "touchstart", "keydown", "pointerdown"]) sc.addEventListener(ev, readerMoves, { passive: true });
     return () => {
       drop();
+      clearTimeout(resume);
       sc.removeEventListener("click", onClick, true);
-      for (const ev of ["wheel", "touchstart", "keydown"]) sc.removeEventListener(ev, drop);
+      for (const ev of ["wheel", "touchstart", "keydown", "pointerdown"]) sc.removeEventListener(ev, readerMoves);
     };
-  }, []);
+  }, [follow]);
 
-  // content that grows by itself (images loading, a row expanding at the end) keeps the end in view; a held row stays
-  // put. A ResizeObserver runs after layout and before paint, so the offset moves in the same frame as the height.
-  // The view itself is watched too: what sits under it (the composer growing, the task dock, a question card) makes it
-  // shorter without the content changing, and at the end the newest line stays in view.
+  // content that grows by itself (images loading, a live group's steps) keeps the end in view; a held row stays put.
+  // A ResizeObserver runs after layout and before paint, so the offset moves in the same frame as the height. The view
+  // itself is watched too: what sits under it (the composer growing, the task dock, a question card) makes it shorter
+  // without the content changing, and at the end the newest line stays in view.
   useEffect(() => {
     const view = scroller.current;
     const el = view?.firstElementChild;
@@ -204,16 +248,9 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         const r = a.el.getBoundingClientRect();
         const next = anchoredScroll(a, {
           scrollTop: sc.scrollTop, scrollHeight: sc.scrollHeight, clientHeight: sc.clientHeight,
-          viewTop: sc.getBoundingClientRect().top, edgeAt: a.edge === "top" ? r.top : r.bottom, elTop: r.top,
+          viewTop: sc.getBoundingClientRect().top, edgeAt: r.top, elTop: r.top,
         });
         if (Math.abs(next.scrollTop - sc.scrollTop) >= 0.5) sc.scrollTop = next.scrollTop;
-        if (a.follow && !next.follow) {
-          // following would push the row off the top: hold it from here
-          a.follow = false;
-          a.edge = "top";
-          a.at = a.el.getBoundingClientRect().top;
-          atEnd.current = false;
-        }
         clearTimeout(a.quiet);
         a.quiet = window.setTimeout(() => (anchor.current = null), 600);
         return;
@@ -225,47 +262,53 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     return () => ro.disconnect();
   }, []);
 
-  // what the reader does to scroll: the wheel or a trackpad going up, a finger, the keys that scroll, the scroll bar
+  // the reader leaving the end: the wheel or a trackpad going up, a finger pulling the list down, PageUp / ↑ / Home,
+  // the scroll bar dragged up (onScroll)
   useEffect(() => {
     const sc = scroller.current;
     if (!sc) return;
-    const mark = () => (readerAt.current = performance.now());
-    const wheel = (e: WheelEvent) => e.deltaY < 0 && mark();
+    const size = () => ({ scrollHeight: sc.scrollHeight, clientHeight: sc.clientHeight });
+    const leave = () => follow(false);
+    // (checked before sizes are read: no layout read per wheel or touch event while away from the end)
+    const wheel = (e: WheelEvent) => atEnd.current && leavesOnWheel({ deltaX: e.deltaX, deltaY: e.deltaY, ...size() }) && leave();
+    let startY: number | null = null;
+    const touchStart = (e: TouchEvent) => (startY = e.touches[0]?.clientY ?? null);
+    const touchMove = (e: TouchEvent) => {
+      const y = e.touches[0]?.clientY;
+      if (atEnd.current && startY !== null && y !== undefined && leavesOnTouch({ startY, y, ...size() })) leave();
+    };
     const key = (e: KeyboardEvent) => {
       const t = e.target instanceof Element ? e.target : null;
       if (t?.closest("input, textarea, [contenteditable=true]")) return;
-      if (["ArrowUp", "PageUp", "Home", " "].includes(e.key)) mark();
+      if (atEnd.current && leavesOnKey({ key: e.key, ...size() })) leave();
     };
-    // a press on the view itself (not on what is in it) is on its scroll bar
-    const down = (e: PointerEvent) => {
-      if (e.target !== sc) return;
-      dragging.current = true;
-      mark();
-    };
+    const down = (e: PointerEvent) => (dragging.current = isScrollbarPress({ targetIsView: e.target === sc }));
     const up = () => (dragging.current = false);
     sc.addEventListener("wheel", wheel, { passive: true });
-    sc.addEventListener("touchmove", mark, { passive: true });
+    sc.addEventListener("touchstart", touchStart, { passive: true });
+    sc.addEventListener("touchmove", touchMove, { passive: true });
     sc.addEventListener("pointerdown", down);
     window.addEventListener("pointerup", up);
     window.addEventListener("keydown", key);
     return () => {
       sc.removeEventListener("wheel", wheel);
-      sc.removeEventListener("touchmove", mark);
+      sc.removeEventListener("touchstart", touchStart);
+      sc.removeEventListener("touchmove", touchMove);
       sc.removeEventListener("pointerdown", down);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("keydown", key);
     };
-  }, []);
+  }, [follow]);
 
   const onScroll = () => {
     const el = scroller.current;
     if (!el) return;
     const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
-    // a held row decides; otherwise only the reader scrolling up leaves the end, and following picks up again once the
-    // reader is back at the end (#1340: the pin's own scroll event, late behind more content, does not count)
-    if (!anchor.current || anchor.current.follow) atEnd.current = followsAfterScroll(atEnd.current, { scrollTop: el.scrollTop, lastTop: lastTop.current, gap, reader: dragging.current || performance.now() - readerAt.current < READER_WINDOW });
+    const delta = el.scrollTop - lastTop.current;
     lastTop.current = el.scrollTop;
-    setShowDown(!atEnd.current && gap > 400);
+    if (atEnd.current) {
+      if (leavesOnScrollbarDrag({ dragging: dragging.current, delta })) follow(false);
+    } else if (!anchor.current && followsAgain({ gap, delta })) follow(true);
     if (el.scrollTop < 300 && tr.hasMore && !tr.loadingEarlier && !first.current) {
       before.current = { h: el.scrollHeight, top: el.scrollTop };
       void tr.loadEarlier().finally(() => {
@@ -278,8 +321,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const toEnd = () => {
     const el = scroller.current;
     if (!el) return;
-    atEnd.current = true;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    follow(true);
+    el.scrollTo({ top: el.scrollHeight, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   };
 
   // ── sending ──
@@ -292,7 +335,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       // a sending bubble shows picked contexts as quote cards, like the transcript will (not the raw tags)
       const p: Pending = { id, at: Date.now(), msg: { id: `pending:${id}`, ...parseUserText(out.text), images: out.images.map((image, i) => ({ id: `pending:${id}#${i}`, seq: 0, role: "user", kind: "image", image })) } };
       setPending((ps) => [...ps.filter((x) => x.id !== id), p]);
-      atEnd.current = true;
+      follow(true); // your own message: to the end, whatever you were reading
       try {
         // the bubble stays as sending while a gap (a hub restart) is waited out; the id is the op id too
         await apiOp(`${sessionPath(mid, sid)}/messages`, {
@@ -315,7 +358,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         return false;
       }
     },
-    [mid, sid, session, assistant],
+    [mid, sid, session, assistant, follow],
   );
 
   const onSend = async (out: Outgoing): Promise<boolean> => {
@@ -371,29 +414,30 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, session]);
 
-  const lastLive = viewed ? Boolean(viewed.running) && !tr.loading : working && !tr.loading;
+  const lastLive = (readOnly ? Boolean(viewed?.running) : working) && !tr.loading;
   // The main conversation is always Persona (#1313): not its first message, the node's title for it.
   const isMain = Boolean(assistant && sid === mainConversation);
   const title = isMain ? MAIN_TITLE : session ? sessionTitle(session) : assistant ? "新对话" : "会话";
-  const lines = useMemo(() => chatLines(tr.items, { live: lastLive && (viewed ? true : !outgoing), split }), [tr.items, lastLive, viewed, outgoing, split]);
+  const lines = useMemo(() => chatLines(tr.items, { live: lastLive && (readOnly || !outgoing), split }), [tr.items, lastLive, readOnly, outgoing, split]);
   const ctx = useMemo<ChatContextValue>(
-    () => ({ tasks: buildTaskIndex(tr.items), subagents: session?.subagents ?? [], openSubagent: assistant ? undefined : (a) => setViewing(a) }),
-    [tr.items, session?.subagents, assistant],
+    () => ({ tasks: buildTaskIndex(tr.items), subagents: assistant ? [] : (subagents ?? []), fresh, scope: `${mid}/${sid}:` }),
+    [tr.items, subagents, assistant, fresh, mid, sid],
   );
-  const agents = assistant ? [] : visibleSubagents(session?.subagents, viewed?.id);
-  const allAgents = assistant ? [] : (session?.subagents ?? []);
+  // the newest plan of the chat (lib/work-groups.ts planSteps): while its card is out of view, a pill above the composer
+  const plan = useMemo(() => latestPlan(segs), [segs]);
+  const planOut = usePlanOutOfView(scroller, plan?.id);
   const onSplit = useCallback((g: string) => setSplit((x) => new Set([...x, g])), []);
   const onUnsplit = useCallback((g: string) => setSplit((x) => new Set([...x].filter((y) => y !== g))), []);
   const lastLine = lines[lines.length - 1];
   // 重试 on an API error card: only when it is the last thing, the agent is not working (someone may have retried already)
   const retry = useCallback(() => void deliver({ text: "继续", images: [] }, uuid()), [deliver]);
-  const canRetry = !viewed && lastLine?.kind === "apiError" && state !== "working" && !outgoing && sessionCan(session, "send");
+  const canRetry = !readOnly && lastLine?.kind === "apiError" && state !== "working" && !outgoing && sessionCan(session, "send");
   // Claude Code's "while you were away" recap, open in full while it is the newest thing and not closed: the chat's last
   // line, in the flow with the agent's words (#1360: above the composer it covered the end of the reply)
   const recapKey = `${mid}/${sid}`;
   const [recapClosed, setRecapClosed] = useState(() => closedRecap(recapKey));
   useEffect(() => setRecapClosed(closedRecap(recapKey)), [recapKey]);
-  const newestRecap = !assistant && !viewed && lastLine?.kind === "recaps" ? lastLine.items[lastLine.items.length - 1] : undefined;
+  const newestRecap = !assistant && !readOnly && lastLine?.kind === "recaps" ? lastLine.items[lastLine.items.length - 1] : undefined;
   const pendingRecap = newestRecap && recapClosed !== newestRecap.id ? newestRecap : undefined;
   const open = useMemo(() => openRecap(lines, pendingRecap), [lines, pendingRecap]);
   const dismissRecap = () => {
@@ -404,24 +448,26 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <Header
-        session={session}
-        title={title}
-        machineName={machineName}
-        assistant={assistant}
-        main={isMain}
-        siblings={siblings}
-        onToggleSidebar={onToggleSidebar}
-        onInterrupt={interrupt}
-        onStopLoop={() => void deliver({ text: STOP_LOOP_MESSAGE, images: [] }, uuid())}
-        last={assistant ? tr.items[tr.items.length - 1] : undefined}
-      />
-      {allAgents.length > 0 && <AgentStrip agents={agents} all={allAgents} viewing={viewed?.id} onSelect={setViewing} />}
+      {!readOnly && (
+        <Header
+          session={session}
+          title={title}
+          machineName={machineName}
+          assistant={assistant}
+          main={isMain}
+          siblings={siblings}
+          onToggleSidebar={onToggleSidebar}
+          onInterrupt={interrupt}
+          onStopLoop={() => void deliver({ text: STOP_LOOP_MESSAGE, images: [] }, uuid())}
+          last={assistant ? tr.items[tr.items.length - 1] : undefined}
+        />
+      )}
+      {session && panes.length > 1 && <PaneTabs sessions={panes} current={sid} onSelect={(s) => navigate(paneRoute(s))} />}
 
       <div className="relative min-h-0 flex-1">
         <div ref={scroller} onScroll={onScroll} data-chat-scroll className="h-full overflow-y-auto [overflow-anchor:none]">
           <ChatActionsContext.Provider value={actions}>
-          <div className="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-5 pt-6 pb-10 sm:px-8">
+          <div className="mx-auto flex w-full max-w-[880px] flex-col gap-7 px-5 pt-6 pb-10 sm:px-8">
             {session?.start_error && <div role="alert" className="rounded-control bg-inset px-3 py-2 text-[13px] text-red">启动失败：{session.start_error}</div>}
             {starting && !tr.loading && !outgoing && <Loading label="正在启动 Agent" />}
             {tr.loadingEarlier && (
@@ -456,9 +502,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
                       <ChatLineView
                         key={d.id}
                         line={d.line}
-                        now={(d.line.kind === "segment" || d.line.kind === "wakes") && d.line.live ? now : 0}
                         mid={mid}
-                        sid={shownSid}
+                        sid={sid}
                         streaming={d.line.kind === "segment" && d.line.live ? tr.streaming || undefined : undefined}
                         expandFold={tr.expandFold}
                         onSplit={onSplit}
@@ -473,10 +518,10 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
                 <ChatLineView
                   key={line.id}
                   line={line}
-                  // only a live line ticks or streams: the others keep their memo
-                  now={(line.kind === "segment" || line.kind === "wakes") && line.live ? now : 0}
+                  // only a live line streams and shows the status line: the others keep their memo
+                  status={line.kind === "segment" && line.live ? status : undefined}
                   mid={mid}
-                  sid={shownSid}
+                  sid={sid}
                   streaming={line.kind === "segment" && line.live ? tr.streaming || undefined : undefined}
                   expandFold={tr.expandFold}
                   onSplit={onSplit}
@@ -485,13 +530,13 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
                 />
               ))}
             </ChatContext.Provider>
-            {!viewed && shownPending.map((p) => (
+            {!readOnly && shownPending.map((p) => (
               <div key={p.id} className="flex flex-col gap-3">
                 <UserBubble msg={p.msg} mid={mid} sid={sid} pending />
               </div>
             ))}
-            {!viewed && <OutboxBubbles mid={mid} sid={sid} entries={outbox} />}
-            {!viewed && (shownPending.length > 0 || outbox.some((e) => e.state === "sending") || (starting && outgoing > 0)) && (
+            {!readOnly && <OutboxBubbles mid={mid} sid={sid} entries={outbox} />}
+            {!readOnly && (shownPending.length > 0 || outbox.some((e) => e.state === "sending") || (starting && outgoing > 0)) && (
               <div className="flex items-center gap-2.5">
                 <Loading label={starting ? "正在准备" : "正在送达"} />
               </div>
@@ -499,25 +544,15 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           </div>
           </ChatActionsContext.Provider>
         </div>
-        {showDown && (
-          <button
-            type="button"
-            aria-label="回到最新"
-            onClick={toEnd}
-            className="absolute bottom-3 left-1/2 flex size-8 -translate-x-1/2 items-center justify-center rounded-full bg-surface text-ink-2 shadow-raised transition-transform hover:text-ink active:scale-95"
-            style={{ animation: "pop-in 200ms ease-out both" }}
-          >
-            <Icon name="arrowDown" size={15} stroke={2.2} />
-          </button>
-        )}
+        {away && <JumpPill label={jumpLabel(newSince)} onClick={toEnd} />}
       </div>
 
-      {viewed && (
-        <div className="mx-auto flex w-full max-w-[760px] flex-col gap-2 px-4 pb-4 sm:px-7">
-          <SubagentFooter agent={viewed} onBack={() => setViewing(null)} />
-        </div>
-      )}
-      <div className={cx("mx-auto flex w-full max-w-[760px] flex-col gap-2 px-4 pb-4 sm:px-7", viewed && "hidden")} onInput={pendingRecap ? dismissRecap : undefined}>
+      {!readOnly && (
+      <div className="mx-auto flex w-full max-w-[880px] flex-col gap-2 px-4 pb-4 sm:px-7" onInput={pendingRecap ? dismissRecap : undefined}>
+        {plan && planOut && (lastLive || !planProgress(plan.todos).allDone) && (
+          <PlanPill todos={plan.todos} onClick={() => scroller.current?.querySelector(`[data-plan-id="${CSS.escape(plan.id)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" })} />
+        )}
+        {session && !assistant && <RunningStatusBar mid={mid} sid={sid} working={state === "working"} startedAt={session.state_since} />}
         {assistant && (
           <>
             <TaskQuestions conversation={sid} />
@@ -531,7 +566,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         {interactions.map((ix) => (
           <InteractionCard key={ix.id} ix={ix} />
         ))}
-        {assistant && session && !viewed && <CompactionStrip session={session} />}
+        {assistant && session && <CompactionStrip session={session} />}
         {session && !assistant && <AttentionNote session={session} />}
         {session && queued.length > 0 && <QueueStrip session={session} draftKey={draftKey} canEdit={canCompose && !assistant} />}
         <Composer
@@ -550,6 +585,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           footer={session ? <ComposerFooter session={session} assistant={assistant} /> : null}
         />
       </div>
+      )}
 
       <Dialog
         open={Boolean(draftRefusal)}
@@ -578,6 +614,24 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         <p className="text-[13px] leading-relaxed text-ink-2">为了不把你的消息和它拼在一起，什么都没打。{draftRefusal?.clearable === undefined && "这段字有好几行，要在电脑上处理。"}</p>
         {draftRefusal?.draft && <pre className="mt-2.5 max-h-40 overflow-auto rounded-[8px] bg-inset px-2.5 py-2 font-mono text-[12px] whitespace-pre-wrap text-ink shadow-hairline">{draftRefusal.draft}</pre>}
       </Dialog>
+    </div>
+  );
+}
+
+/** Away from the end: 有新消息 / 跳到底部 over the chat's bottom edge (cindy's JumpToBottomChip). */
+function JumpPill({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <div aria-live="polite" className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2" style={{ animation: "fade-up 150ms ease-out both" }}>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={label}
+        data-jump-pill
+        className="flex h-8 items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-[12px] leading-none font-medium whitespace-nowrap text-ink-2 shadow-raised transition-colors duration-150 hover:bg-hover active:scale-[0.98]"
+      >
+        <Icon name="arrowDown" size={14} className="shrink-0" />
+        <span className="translate-y-[0.5px]">{label}</span>
+      </button>
     </div>
   );
 }

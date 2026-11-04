@@ -1,0 +1,39 @@
+/* Replies as they arrive (#1963, aligned with cindy's globals.css): each word fades in on its own delay (wordFade.ts),
+   opacity only; list dots fade in with their first word. `both` keeps a negative delay (a remount) resuming. */
+.stream-word { animation: stream-word-in 150ms var(--ease-out-strong) var(--wf-delay, 0ms) both; }
+[data-stream-marker]::marker { animation: stream-marker-in 150ms var(--ease-out-strong) var(--wf-delay, 0ms) both; }
+@keyframes stream-word-in { from { opacity: 0; } to { opacity: 1; } }
+/* ::marker animates color only; the end is the marker's own color. */
+@keyframes stream-marker-in { from { color: transparent; } }
+/* The running status bar breathes once per change in its token count (views/chat/RunningStatusBar.tsx). */
+.status-breath { animation: status-breath 1.5s steps(18, end) 1; }
+@keyframes status-breath { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .stream-word, [data-stream-marker]::marker, .status-breath { animation: none; } }
+
+/* Markdown in the chat (cindy's markdown rules): headings 20 / 18 / 16 at 500, inline code with a 6px corner, code
+   blocks with a 12px corner that wrap instead of scrolling. `.prose-j.prose-j` outranks styles.css whatever the order
+   the two load in; compact cards keep their own. */
+.prose-j.prose-j:not(.prose-compact) :is(h1, h2, h3) { font-weight: 500; }
+.prose-j.prose-j:not(.prose-compact) h1 { font-size: 20px; }
+.prose-j.prose-j:not(.prose-compact) h2 { font-size: 18px; }
+.prose-j.prose-j:not(.prose-compact) h3 { font-size: 16px; }
+.prose-j.prose-j code { border-radius: 6px; padding: .12em .4em; }
+.prose-j.prose-j pre { border-radius: 12px; padding: 16px; overflow-x: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+.prose-j.prose-j pre code { padding: 0; border-radius: 0; white-space: inherit; }
+.prose-j.prose-compact pre { padding: 6px 10px; }
+
+/* highlight.js classes (rehype-highlight). Colors are the page's tokens, so light and dark each have their own set;
+   --hl-* lets a theme override one. */
+.prose-j .hljs { color: var(--hl-text, var(--ink)); }
+.prose-j :is(.hljs-comment, .hljs-quote) { color: var(--hl-comment, var(--ink-3)); font-style: italic; }
+.prose-j :is(.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-doctag, .hljs-meta .hljs-keyword) { color: var(--hl-keyword, var(--term-magenta)); }
+.prose-j :is(.hljs-string, .hljs-regexp, .hljs-selector-attr, .hljs-template-variable, .hljs-meta .hljs-string) { color: var(--hl-string, var(--green)); }
+.prose-j :is(.hljs-number, .hljs-symbol, .hljs-bullet, .hljs-variable.constant_) { color: var(--hl-number, var(--orange)); }
+.prose-j :is(.hljs-title, .hljs-title.function_, .hljs-section) { color: var(--hl-title, var(--accent-ink)); }
+.prose-j :is(.hljs-type, .hljs-built_in, .hljs-title.class_, .hljs-selector-class, .hljs-selector-id) { color: var(--hl-type, var(--term-cyan)); }
+.prose-j :is(.hljs-attr, .hljs-attribute, .hljs-property, .hljs-params, .hljs-name, .hljs-tag) { color: var(--hl-attr, var(--ink-2)); }
+.prose-j :is(.hljs-meta, .hljs-link) { color: var(--hl-meta, var(--ink-3)); }
+.prose-j .hljs-addition { color: var(--diff-add-fg); background: var(--diff-add-bg); }
+.prose-j .hljs-deletion { color: var(--diff-del-fg); background: var(--diff-del-bg); }
+.prose-j .hljs-emphasis { font-style: italic; }
+.prose-j .hljs-strong { font-weight: 600; }

@@ -6,16 +6,17 @@ import { ago, clock } from "../../lib/format";
 import { retryable, type APIErrorInfo } from "../../lib/api-errors";
 import { wakeSummary } from "../../lib/tasks";
 import { wakeDrawer, workSegment, type ChatLine, type OpenRecap, type Turn } from "../../lib/turns";
-import type { Item } from "../../lib/types";
+import type { Item, SessionLive } from "../../lib/types";
 import { Button, Collapse, copyText, cx, Dialog, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
 import { Answer, SegmentView } from "./SegmentView";
-import { CompactDivider, NoticeRow, WorkRow } from "./Steps";
+import { CompactDivider, NoticeRow } from "./Steps";
 
 export interface LineProps {
   line: ChatLine;
-  now: number;
+  /** The screen's status line (contract §3), handed to the live line only. */
+  status?: SessionLive | null;
   mid: string;
   sid: string;
   streaming?: string;
@@ -27,14 +28,14 @@ export interface LineProps {
   onRetry?: () => void;
 }
 
-export const ChatLineView = memo(function ChatLineView({ line, now, mid, sid, streaming, expandFold, onSplit, onUnsplit, onRetry }: LineProps) {
+export const ChatLineView = memo(function ChatLineView({ line, status, mid, sid, streaming, expandFold, onSplit, onUnsplit, onRetry }: LineProps) {
   switch (line.kind) {
     case "segment":
       return (
         <SegmentView
           seg={line.seg}
           live={line.live}
-          now={now}
+          status={status}
           mid={mid}
           sid={sid}
           streaming={line.live ? streaming : undefined}
@@ -56,7 +57,7 @@ export const ChatLineView = memo(function ChatLineView({ line, now, mid, sid, st
     case "notice":
       return <LineNotice item={line.item} />;
     case "wakes":
-      return <WakeChip turn={line.turn} live={line.live} now={now} mid={mid} sid={sid} expandFold={expandFold} />;
+      return <WakeChip turn={line.turn} live={line.live} mid={mid} sid={sid} expandFold={expandFold} />;
     case "compact":
       return <CompactDivider item={line.item} />;
     case "recaps":
@@ -100,7 +101,7 @@ function LineNotice({ item }: { item: Item }) {
 
 // ── background tasks that reported back after the answer ──
 
-function WakeChip({ turn, live, now, mid, sid, expandFold }: { turn: Turn; live: boolean; now: number; mid: string; sid: string; expandFold: (f: Item) => Promise<void> }) {
+function WakeChip({ turn, live, mid, sid, expandFold }: { turn: Turn; live: boolean; mid: string; sid: string; expandFold: (f: Item) => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const notices = turn.wakes;
   const failed = notices.some((n) => wakeSummary(n).failed);
@@ -118,7 +119,7 @@ function WakeChip({ turn, live, now, mid, sid, expandFold }: { turn: Turn; live:
         <Icon name="chevronRight" size={12} stroke={2.2} className="shrink-0 text-ink-3" />
       </button>
       <Dialog open={open} onClose={() => setOpen(false)} title={notices.length > 1 ? `${notices.length} 个后台任务完成` : "后台任务完成"} width={640}>
-        {open && <WakeDrawerBody turn={turn} live={live} now={now} mid={mid} sid={sid} expandFold={expandFold} />}
+        {open && <WakeDrawerBody turn={turn} live={live} mid={mid} sid={sid} expandFold={expandFold} />}
       </Dialog>
     </>
   );
@@ -126,7 +127,7 @@ function WakeChip({ turn, live, now, mid, sid, expandFold }: { turn: Turn; live:
 
 /** Each wake (its reports, then what the agent answered to them), newest first; the steps in between fold into one
  *  work row at the end. */
-function WakeDrawerBody({ turn, live, now, mid, sid, expandFold }: { turn: Turn; live: boolean; now: number; mid: string; sid: string; expandFold: (f: Item) => Promise<void> }) {
+function WakeDrawerBody({ turn, live, mid, sid, expandFold }: { turn: Turn; live: boolean; mid: string; sid: string; expandFold: (f: Item) => Promise<void> }) {
   const d = wakeDrawer(turn);
   const work = workSegment(`dw-${turn.id}`, d.process);
   return (
@@ -141,7 +142,7 @@ function WakeDrawerBody({ turn, live, now, mid, sid, expandFold }: { turn: Turn;
           {g.answer && <Answer item={g.answer} mid={mid} sid={sid} />}
         </section>
       ))}
-      {(work.steps.length > 0 || live) && <WorkRow seg={work} live={live} now={now} mid={mid} sid={sid} expandFold={expandFold} />}
+      {(work.steps.length > 0 || live) && <SegmentView seg={work} live={live} mid={mid} sid={sid} expandFold={expandFold} />}
     </div>
   );
 }

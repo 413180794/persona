@@ -704,6 +704,8 @@ type client struct {
 	// JSON as sent), under the hub's sessionsMu.
 	delta bool
 	have  map[string]map[string][]byte
+	// urlFeatures: what the app listed in the WebSocket URL's ?features= (wants).
+	urlFeatures map[string]bool
 	// clean: the app closed the connection itself (gone to the background), rather than the network dropping it.
 	clean           bool
 	lazy            bool // asked for items without image data (subscribe with lazy_images)
@@ -768,6 +770,12 @@ func (h *Hub) broadcastTo(typ string, b []byte, elicitation bool) {
 }
 
 func (h *Hub) toSubscribers(machineID, sessionID string, v any) {
+	h.toSubscribersWith(machineID, sessionID, "", v)
+}
+
+// toSubscribersWith is toSubscribers for the subscribers that asked for feature ("": all of them), on the WebSocket
+// URL's ?features= or in client_hello.
+func (h *Hub) toSubscribersWith(machineID, sessionID, feature string, v any) {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return
@@ -779,7 +787,7 @@ func (h *Hub) toSubscribers(machineID, sessionID string, v any) {
 		c.mu.Lock()
 		sub := c.subs[key]
 		c.mu.Unlock()
-		if sub {
+		if sub && (feature == "" || c.wants(feature)) {
 			select {
 			case c.out <- b:
 			default:
@@ -864,7 +872,7 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 	who := principalOf(r.Context())
 	c := &client{cancel: cancel, hub: h, conn: conn, out: make(chan []byte, 512), subs: map[[2]string]bool{}, since: time.Now(),
 		device: who.ID, role: who.Role, delta: wantsFeature(r, featureSessionsDelta), have: map[string]map[string][]byte{},
-		meta: clientMeta{updates: make(chan heartbeatConfig, 512), done: ctx.Done()}}
+		urlFeatures: urlFeatures(r), meta: clientMeta{updates: make(chan heartbeatConfig, 512), done: ctx.Done()}}
 	h.mu.Lock()
 	if h.wsStopping {
 		h.mu.Unlock()

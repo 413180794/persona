@@ -144,6 +144,9 @@ function deltaOn(): boolean {
  */
 export const LARK_FEATURE = "lark";
 
+/** The web reads working Claudes' status lines (`live` pushes, lib/live.ts; docs/protocol.md「实时状态」). */
+export const SESSION_LIVE_FEATURE = "session_live";
+
 export function larkOn(s: Pick<State, "features"> = state): boolean {
   return hubHas(s.features, LARK_FEATURE, true);
 }
@@ -226,7 +229,7 @@ export function connect() {
   clearTimeout(retryTimer);
   ws?.close();
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  const sock = new WebSocket(`${proto}//${location.host}/api/v1/ws?${wsQuery(getToken(), cursor, [SESSIONS_DELTA_FEATURE])}`);
+  const sock = new WebSocket(`${proto}//${location.host}/api/v1/ws?${wsQuery(getToken(), cursor, [SESSIONS_DELTA_FEATURE, SESSION_LIVE_FEATURE])}`);
   ws = sock;
   restartNotice = false;
   if (state.conn !== "online") set({ conn: "connecting" });

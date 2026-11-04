@@ -10,6 +10,8 @@ import { GitPanel } from "./session/GitPanel";
 import { TerminalPanel } from "./session/TerminalPanel";
 import { LinkPanel } from "./link/LinkPanel";
 import { AgentPanel, TaskPanel } from "./assistant/TaskPanel";
+import { SubagentPanel } from "./chat/SubagentPanel";
+import { subagentParent } from "../lib/tasks";
 
 const WIDTH_KEY = "jarvis.panelWidth";
 const MIN = 360;
@@ -90,6 +92,8 @@ function body(p: Panel) {
     case "task":
       return <TaskPanel key={p.todo} todoId={p.todo} onClose={closePanel} />;
     case "agent":
+      // a subagent's conversation ("<parent>@<agent>", its card's 查看完整过程), read-only
+      if (subagentParent(p.sid) !== p.sid) return <SubagentPanel key={`${p.mid}/${p.sid}`} mid={p.mid} sid={p.sid} onClose={closePanel} />;
       return <AgentPanel key={`${p.mid}/${p.sid}`} mid={p.mid} sid={p.sid} onClose={closePanel} />;
   }
 }

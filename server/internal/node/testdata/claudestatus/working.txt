@@ -1,0 +1,22 @@
+
+⏺ <reply text>
+
+  Ran 32 shell commands
+
+⏺ Background command "<description>" completed (exit code 0)
+
+⏺ <tool title> · 34s
+  ⎿  $ cd <path> && git push -q 2>&1|tail -1
+     rsync -az … (34s)
+     (ctrl+b to run in background)
+
+✢ Frosting… (27m 16s · ↓ 41.5k tokens)
+  ⎿  Tip: Use /btw to ask a quick side question without interrupting Claude's current work
+                                                                                                    ◎ /goal active (1h)
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   󱙺 Opus 5.5 (xhigh)        󰝰 <project>  󰊢 main ?1
+   󰍛 ████▊      48% 484k/1M   $1.00
+    loading...               loading...        󰥔 00:00:00
+  ⏵⏵ bypass permissions on (shift+tab to cycle)

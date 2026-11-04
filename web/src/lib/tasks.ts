@@ -2,6 +2,7 @@
 // a background task, what its notices say in words, and how a /loop and the session's background tasks read.
 
 import type { BackgroundTask, Item, LoopInfo, Subagent, TaskNote } from "./types";
+import type { AgentStatus } from "./work-groups";
 
 /** Background tasks and the calls that started them. A notice names its call by tool_use_id, or only by the task id
  *  the call's result announced ("running in background with ID: …", "Monitor started (task …"). */
@@ -217,9 +218,52 @@ export function subagentTitle(a: Subagent): string {
   return a.description || a.type || "子 Agent";
 }
 
-/** The subagents worth a chip: running ones, plus the one being read. */
-export function visibleSubagents(all: Subagent[] | undefined, viewing?: string): Subagent[] {
-  return (all ?? []).filter((a) => a.running || a.id === viewing);
+// ── a subagent call in the chat (its card, cindy's AgentTaskCard) ──
+
+/** What an Agent / Task call returned when it only started the subagent in the background. */
+const LAUNCH_RECEIPT = /Async agent launched|This is an internal ID for your use/;
+/** The "agentId: …" line Claude Code appends to a subagent's report. */
+const AGENT_ID_LINE = /^\s*agentId:.*$/gm;
+
+/** The subagent an Agent / Task call launched, by the call's tool_use_id. */
+export function subagentFor(all: Subagent[], use: Item): Subagent | undefined {
+  return use.tool_use_id ? all.find((a) => a.tool_use_id === use.tool_use_id) : undefined;
+}
+
+/** The session a subagent's conversation belongs to: its id is "<parent>@<agent>" (the parent's own id otherwise). */
+export function subagentParent(sid: string): string {
+  return sid.split("@")[0];
+}
+
+export function isLaunchReceipt(result?: Item): boolean {
+  return LAUNCH_RECEIPT.test(result?.text ?? "");
+}
+
+/** How a subagent call is going. The session's list knows best (`running`); without it, the call's result: none yet
+ *  while the agent works is running, none after it stopped is stopped; a launch receipt runs until the agent stops. */
+export function agentStatus(result: Item | undefined, meta: Subagent | undefined, live: boolean): AgentStatus {
+  if (result?.is_error) return "failed";
+  if (meta) return meta.running ? "running" : "completed";
+  if (!result) return live ? "running" : "stopped";
+  if (isLaunchReceipt(result)) return live ? "running" : "completed";
+  return "completed";
+}
+
+/** What the subagent reported, without its agentId line; a launch receipt says nothing yet (its latest words do). */
+export function agentSummary(result: Item | undefined, meta: Subagent | undefined): string {
+  const text = isLaunchReceipt(result) ? "" : (result?.text ?? "").replace(AGENT_ID_LINE, "").trim();
+  return text || meta?.last_text?.trim() || "";
+}
+
+/** The subagents a subagent launched, and theirs, one level deeper each (`depth` 0: launched by `id`). */
+export function nestedSubagents(all: Subagent[] | undefined, id: string): SubagentRow[] {
+  const rows = subagentTree(all);
+  const at = rows.findIndex((r) => r.agent.id === id);
+  if (at < 0) return [];
+  const base = rows[at].depth;
+  const out: SubagentRow[] = [];
+  for (let i = at + 1; i < rows.length && rows[i].depth > base; i++) out.push({ agent: rows[i].agent, depth: rows[i].depth - base - 1 });
+  return out;
 }
 
 export interface SubagentRow {

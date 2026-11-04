@@ -9,6 +9,8 @@ export type Route =
   | { name: "workspace-board" }
   | { name: "persona-new" }
   | { name: "session"; mid: string; sid: string }
+  // one herdr tab (a slot) of a workspace; `sid` picks its pane (lib/herdr-tree.ts resolveTab)
+  | { name: "tab"; mid: string; space: string; slot: string; sid?: string }
   | { name: "jarvis"; sid?: string }
   | { name: "history" }
   | { name: "profile" }
@@ -26,6 +28,7 @@ export type Route =
 export function parse(path: string): Route {
   const p = path.split("/").filter(Boolean).map(decodeURIComponent);
   if (p[0] === "s" && p[1] && p[2]) return { name: "session", mid: p[1], sid: p[2] };
+  if (p[0] === "t" && p[1] && p[2] && p[3]) return { name: "tab", mid: p[1], space: p[2], slot: p[3], sid: p[4] || undefined };
   if (!p.length) return { name: "jarvis" };
   if (p[0] === "j" || p[0] === "persona") return p[1] === "new" && !p[2] ? { name: "persona-new" } : { name: "jarvis", sid: p[1] };
   if (p[0] === "workspace-board") return { name: "workspace-board" };
@@ -51,6 +54,8 @@ export function href(r: Route): string {
   switch (r.name) {
     case "session":
       return `/s/${encodeURIComponent(r.mid)}/${encodeURIComponent(r.sid)}`;
+    case "tab":
+      return ["/t", r.mid, r.space, r.slot, ...(r.sid ? [r.sid] : [])].map((x, i) => (i ? encodeURIComponent(x) : x)).join("/");
     case "jarvis":
       return r.sid ? `/j/${encodeURIComponent(r.sid)}` : "/";
     case "persona-new":

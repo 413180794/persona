@@ -766,6 +766,7 @@ func (n *Node) watch(id string, since int) error {
 	}
 	mu.Unlock()
 	go n.watchLoop(ctx, id, f)
+	go n.watchLive(ctx, id) // claudestatus.go
 	return nil
 }
 

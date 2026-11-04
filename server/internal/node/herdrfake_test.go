@@ -408,19 +408,8 @@ type hubPush struct {
 // returns what it pushes; stop ends the loop and waits until it has returned.
 func pollNode(t *testing.T, n *Node) (pushes <-chan hubPush, stop func()) {
 	t.Helper()
-	pr, pw := io.Pipe()
-	n.peer, n.events = rpc.New("n", pw), newHerdrEvents()
-	out := make(chan hubPush, 64)
-	go func() {
-		sc := bufio.NewScanner(pr)
-		sc.Buffer(make([]byte, 1<<20), 1<<24)
-		for sc.Scan() {
-			var m hubPush
-			if json.Unmarshal(sc.Bytes(), &m) == nil {
-				out <- m
-			}
-		}
-	}()
+	out, pw := hubPushes(n)
+	n.events = newHerdrEvents()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { n.pollAgents(ctx); close(done) }()
@@ -434,6 +423,24 @@ func pollNode(t *testing.T, n *Node) (pushes <-chan hubPush, stop func()) {
 	}
 	t.Cleanup(stop)
 	return out, stop
+}
+
+// hubPushes gives the node a hub connection and returns what it pushes there; closing pw ends it.
+func hubPushes(n *Node) (<-chan hubPush, *io.PipeWriter) {
+	pr, pw := io.Pipe()
+	n.peer = rpc.New("n", pw)
+	out := make(chan hubPush, 64)
+	go func() {
+		sc := bufio.NewScanner(pr)
+		sc.Buffer(make([]byte, 1<<20), 1<<24)
+		for sc.Scan() {
+			var m hubPush
+			if json.Unmarshal(sc.Bytes(), &m) == nil {
+				out <- m
+			}
+		}
+	}()
+	return out, pw
 }
 
 // rememberStarted is what the hub's state store says after a node restart: Persona started this session.

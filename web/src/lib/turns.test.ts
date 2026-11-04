@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chatLines, isLoopTick, mergeItems, parseUserText, segments, openRecap, toolChip, toolLabel, wakeDrawer, workSegment, workSummary, formatDuration } from "./turns";
+import { chatLines, freshWords, isLoopTick, mergeItems, parseUserText, segments, openRecap, toolChip, toolLabel, wakeDrawer, workSegment, formatDuration } from "./turns";
 import type { Item } from "./types";
 
 const u = (seq: number, text: string, extra: Partial<Item> = {}): Item => ({ id: `u${seq}#0`, seq, role: "user", kind: "text", text, ...extra });
@@ -16,7 +16,7 @@ describe("segments", () => {
     expect(s[0].steps.map((x) => x.kind)).toEqual(["text", "tool"]);
     expect(s[0].tools).toBe(1);
     expect(s[0].replies).toBe(1);
-    expect(workSummary(s[0])).toBe("工具 1 · 回复 1");
+    expect([s[0].tools, s[0].thoughts, s[0].replies]).toEqual([1, 0, 1]); // the counts the old work row read (workSummary is gone with it)
     const st = s[0].steps[1];
     expect(st.kind === "tool" && st.result?.text).toBe("ok");
     expect(s[1].answer?.text).toBe("sure");
@@ -42,6 +42,15 @@ describe("segments", () => {
     expect(s[0].tools).toBe(5);
     expect(s[0].thoughts).toBe(2);
     expect(s[0].folds).toHaveLength(1);
+  });
+});
+
+describe("freshWords", () => {
+  it("is the agent's words in a push the chat did not have yet", () => {
+    const have = [u(1, "hi"), a(2, "earlier")];
+    const pushed = [a(2, "earlier"), tool(3, "x"), a(4, "new words"), u(5, "next")];
+    expect(freshWords(have, pushed)).toEqual([pushed[2].id]);
+    expect(freshWords(have, [])).toEqual([]);
   });
 });
 

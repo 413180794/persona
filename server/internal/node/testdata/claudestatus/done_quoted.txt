@@ -1,0 +1,18 @@
+
+⏺ <reply text> the line looks like this:
+
+  ✻ Frosting… (16m 15s · ↓ 22.8k tokens · thinking with xhigh effort)
+
+❯ ✽ Frosting… (2m 1s · ↓ 1.2k tokens)
+
+⏺ <reply text>
+
+✻ Worked for 27m 30s
+                                                                                                                        
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   󱙺 Opus 5.5 (xhigh)        󰝰 <project>  󰊢 main ?1
+   󰍛 ████▊      48% 484k/1M   $1.00
+    loading...               loading...        󰥔 00:00:00
+  ⏵⏵ bypass permissions on (shift+tab to cycle)

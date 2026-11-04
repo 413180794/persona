@@ -1,12 +1,11 @@
-// What keeps an agent going, beside the chat's title (iOS ActivityChips / ActivitySheet / AgentStrip / SubagentFooter):
-// a /loop (its next wakeup, a way to stop it) and the background tasks (their output), and the subagents it launched
-// (read one's conversation in the same chat, read-only; all of them, finished and nested, by who launched whom).
+// What keeps an agent going, beside the chat's title (iOS ActivityChips / ActivitySheet): a /loop (its next wakeup, a
+// way to stop it) and the background tasks (their output). Subagents are cards in the chat where they were launched
+// (SubagentCard.tsx).
 import { useState } from "react";
-import { ago } from "../../lib/format";
 import { openPanel } from "../../lib/panel";
-import { backgroundTitle, elapsed, loopCadence, loopLabel, loopNext, loopShortLabel, loopTask, subagentTitle, subagentTree, type SubagentRow } from "../../lib/tasks";
-import type { BackgroundTask, LoopInfo, Session, Subagent } from "../../lib/types";
-import { Button, copyText, cx, Dialog, StatusDot, useNow } from "../../ui/atoms";
+import { backgroundTitle, elapsed, loopCadence, loopLabel, loopNext, loopShortLabel, loopTask } from "../../lib/tasks";
+import type { BackgroundTask, LoopInfo, Session } from "../../lib/types";
+import { Button, copyText, cx, Dialog, useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 
 /** "⟳ 11:57" and "后台 2" in the chat's header; a click opens them. */
@@ -141,127 +140,6 @@ function BackgroundList({ tasks, onOutput }: { tasks: BackgroundTask[]; onOutput
           </div>
         );
       })}
-    </div>
-  );
-}
-
-/** Under the header, while the session has subagents: 主 Agent and the running ones (plus the one being read) as chips,
- *  and at the end, when some are not chips, 「全部子 Agent N」: every subagent by who launched whom. */
-export function AgentStrip({ agents, all, viewing, onSelect }: { agents: Subagent[]; all: Subagent[]; viewing?: string; onSelect: (a: Subagent | null) => void }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="flex shrink-0 gap-1.5 overflow-x-auto border-b border-line bg-page/85 px-3 py-2 scrollbar-none sm:px-4">
-      <div className="flex shrink-0 gap-1.5" role="tablist" aria-label="子 Agent">
-        <Chip on={!viewing} title="主 Agent" onClick={() => onSelect(null)} />
-        {agents.map((a) => (
-          <Chip key={a.id} on={viewing === a.id} title={subagentTitle(a)} running={a.running} done={!a.running} onClick={() => onSelect(a)} />
-        ))}
-      </div>
-      {all.length > agents.length && (
-        <button
-          type="button"
-          aria-haspopup="dialog"
-          onClick={() => setOpen(true)}
-          className="ml-auto flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium whitespace-nowrap text-ink-2 transition-colors hover:bg-hover-2"
-        >
-          <Icon name="list" size={12} />
-          全部子 Agent
-          <span className="text-ink-3 tabular-nums">{all.length}</span>
-        </button>
-      )}
-      <Dialog open={open} onClose={() => setOpen(false)} title="全部子 Agent" width={520}>
-        <SubagentTree
-          rows={subagentTree(all)}
-          viewing={viewing}
-          onSelect={(a) => {
-            setOpen(false);
-            onSelect(a);
-          }}
-        />
-      </Dialog>
-    </div>
-  );
-}
-
-// One step deeper per level; past the last, deeper ones line up with it.
-const INDENT = ["pl-3.5", "pl-8.5", "pl-13.5", "pl-18.5", "pl-23.5"];
-
-/** Every subagent under the one that launched it: how it is going, what it is, when it started; a click reads it. */
-function SubagentTree({ rows, viewing, onSelect }: { rows: SubagentRow[]; viewing?: string; onSelect: (a: Subagent) => void }) {
-  const now = useNow(30_000);
-  return (
-    <div className="flex flex-col overflow-hidden rounded-card bg-surface shadow-hairline">
-      {rows.map(({ agent: a, depth }, i) => (
-        <button
-          key={a.id}
-          type="button"
-          onClick={() => onSelect(a)}
-          aria-current={viewing === a.id || undefined}
-          title={a.description || undefined}
-          className={cx(
-            "flex w-full items-start gap-2 py-2.5 pr-3.5 text-left transition-colors hover:bg-hover",
-            INDENT[Math.min(depth, INDENT.length - 1)],
-            i > 0 && "border-t border-line",
-            viewing === a.id && "bg-accent-tint/50",
-          )}
-        >
-          {depth > 0 && <span aria-hidden className="mt-[3px] h-2 w-2.5 shrink-0 rounded-bl-[4px] border-b border-l border-line-strong" />}
-          <span className="mt-[5px] flex size-2 shrink-0 items-center justify-center">
-            <StatusDot state={a.running ? "working" : "unread"} size={6} />
-          </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="truncate text-[13px] font-medium text-ink">{subagentTitle(a)}</span>
-            <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-ink-3">
-              <span className={cx("shrink-0", a.running && "text-orange")}>{a.running ? "运行中" : "已结束"}</span>
-              {a.fork ? (
-                <span className="flex shrink-0 items-center gap-0.5 rounded-[4px] bg-field px-1 text-[10.5px] font-medium text-ink-2">
-                  <Icon name="git" size={10} />
-                  分叉
-                </span>
-              ) : (
-                a.type && <span className="truncate">· {a.type}</span>
-              )}
-            </span>
-          </div>
-          <span className="shrink-0 text-[12px] whitespace-nowrap text-ink-3 tabular-nums">{ago(a.started_at || a.updated_at, now)}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function Chip({ on, title, running, done, onClick }: { on: boolean; title: string; running?: boolean; done?: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={on}
-      onClick={onClick}
-      title={title}
-      aria-label={title + (running ? "，运行中" : done ? "，已完成" : "")}
-      className={cx(
-        "flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[12px] whitespace-nowrap transition-colors",
-        on ? "bg-accent-tint font-semibold text-accent-ink shadow-[inset_0_0_0_1px_var(--accent)]" : "bg-inset font-medium text-ink-2 shadow-hairline hover:bg-hover-2",
-      )}
-    >
-      {running ? <StatusDot state="working" size={6} /> : done ? <StatusDot state="unread" size={6} /> : <Icon name="agent" size={12} />}
-      <span className="max-w-40 truncate">{title}</span>
-    </button>
-  );
-}
-
-/** In place of the composer while a subagent is shown: what it is and the way back. */
-export function SubagentFooter({ agent, onBack }: { agent: Subagent; onBack: () => void }) {
-  return (
-    <div className="flex items-center gap-3 rounded-[14px] bg-surface px-3.5 py-2.5 shadow-card">
-      <Icon name="agent" size={16} className="shrink-0 text-accent" />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-[12.5px] font-semibold text-ink">子 Agent · {agent.type || "Agent"}</span>
-        <span className="truncate text-[11.5px] text-ink-3">{agent.running ? "运行中，只读" : "已完成，只读"}</span>
-      </div>
-      <Button icon="chevronLeft" onClick={onBack}>
-        回到主 Agent
-      </Button>
     </div>
   );
 }

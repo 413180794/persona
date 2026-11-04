@@ -2,6 +2,7 @@
 // refetches nothing while an ordinary one refreshes everything as before.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { connect, getState, onHubEvent, reset } from "./store";
+import { liveEntry, resetLive } from "./live";
 
 class FakeSocket {
   static OPEN = 1;
@@ -70,12 +71,12 @@ function online() {
 describe("reconnecting", () => {
   it("first connect sends no resume point; reconnects resume from the last broadcast seen", () => {
     const s = online();
-    expect(s.url).toBe("ws://hub/api/v1/ws?token=tok&features=sessions_delta"); // the session list comes as deltas
+    expect(s.url).toBe("ws://hub/api/v1/ws?token=tok&features=sessions_delta,session_live"); // the session list comes as deltas; status lines are pushed
     s.push({ type: "todos", event_seq: 6 });
     s.push({ type: "items", machine_id: "m", session_id: "x", items: [] });
     s.drop();
     vi.advanceTimersByTime(600);
-    expect(last().url).toBe("ws://hub/api/v1/ws?token=tok&event_stream=s1&event_seq=6&features=sessions_delta");
+    expect(last().url).toBe("ws://hub/api/v1/ws?token=tok&event_stream=s1&event_seq=6&features=sessions_delta,session_live");
   });
 
   it("an ordinary drop stays invisible for 8 s, then shows as before", () => {
@@ -148,5 +149,17 @@ describe("reconnecting", () => {
     s.drop(1001);
     vi.advanceTimersByTime(20_000);
     expect(getState().conn).toBe("online");
+  });
+});
+
+describe("live pushes (#1963)", () => {
+  it("asks for session_live and hands each live message to lib/live", () => {
+    const s = online();
+    expect(s.url).toContain("session_live");
+    s.push({ type: "live", machine_id: "m", session_id: "x", live: { verb: "Frosting", tokens_down: 1200 } });
+    expect(liveEntry("m", "x")?.live).toEqual({ verb: "Frosting", tokens_down: 1200 });
+    s.push({ type: "live", machine_id: "m", session_id: "x", live: null });
+    expect(liveEntry("m", "x")).toBeUndefined();
+    resetLive();
   });
 });

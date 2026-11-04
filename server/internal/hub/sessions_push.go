@@ -21,7 +21,18 @@ const featureSessionsDelta = "sessions_delta"
 
 // wantsFeature: the app listed feature in the WebSocket URL's ?features= (comma-separated).
 func wantsFeature(r *http.Request, feature string) bool {
-	return slices.Contains(strings.Split(r.URL.Query().Get("features"), ","), feature)
+	return urlFeatures(r)[feature]
+}
+
+// urlFeatures is everything the app listed in the WebSocket URL's ?features=.
+func urlFeatures(r *http.Request) map[string]bool {
+	set := map[string]bool{}
+	for _, f := range strings.Split(r.URL.Query().Get("features"), ",") {
+		if f != "" {
+			set[f] = true
+		}
+	}
+	return set
 }
 
 // sentSession is one session of a list, as sent.

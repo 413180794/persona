@@ -1,6 +1,8 @@
-import { memo, useMemo } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkCjkFriendly from "remark-cjk-friendly";
+import type { PluggableList } from "unified";
 import { clickLink, linkHref, linkRoute, prefetchLink } from "../lib/links";
 import { fileDownloadURL } from "../lib/api";
 import { isMachineRef, resolveRef } from "../lib/files";
@@ -15,6 +17,14 @@ import { Icon } from "./icons";
 import { MermaidBlock } from "./Mermaid";
 import { rehypePathLinks, textPaths, writtenText } from "./PathLinks";
 import { usePathLinks } from "../lib/path-presence";
+import { StreamChunk } from "./stream/Chunk";
+import { splitChunks } from "./stream/chunks";
+import { hasLanguageFence, useHighlight } from "./stream/highlight";
+import { useReplyMotion } from "./stream/motion";
+import { repairStreamingMarkdown } from "./stream/repair";
+import { useThrottledText } from "./stream/throttle";
+import { createWordFadeState, remainingMs, type WordFadeState } from "./stream/wordFade";
+import "./stream/stream.css";
 
 // A link ends at whitespace or any non-ASCII character (Chinese text, full-width punctuation), without trailing
 // .,;:!? or an unbalanced ) ] (docs/lessons/ios.md: where a link ends). GFM's autolinks only end at whitespace, so
@@ -384,7 +394,11 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
 // tight blocks, so a parent's line-clamp shows as much as it can.
 // With `mid` (a conversation's machine) the paths the text names that are there link to the file panel; while
 // `streaming`, not the last word (a path still being written would be asked about at every step of it).
-export const Markdown = memo(function Markdown({ text, small, compact, mid, cwd, streaming }: { text: string; small?: boolean; compact?: boolean; mid?: string; cwd?: string; streaming?: boolean }) {
+// `streaming`: the text is still being written (the assistant's delta): rendered at most every 100 ms or so, in chunks
+// (only the last is parsed again), what the growing end leaves open closed for the moment, its words fading in.
+// `fade`: a block that just arrived whole: its words fade in once, then it is rendered plain. Neither fades with
+// 「回复动效」 off or reduced motion; once streaming ends it is plain Markdown again, without the fade's spans.
+export const Markdown = memo(function Markdown({ text: raw, small, compact, mid, cwd, streaming, fade }: { text: string; small?: boolean; compact?: boolean; mid?: string; cwd?: string; streaming?: boolean; fade?: boolean }) {
   const components = useMemo<Components>(() => mid ? {
     ...markdownComponents,
     a: ({ href, children, node }) => {
@@ -393,16 +407,52 @@ export const Markdown = memo(function Markdown({ text, small, compact, mid, cwd,
       return <Link href={href} mid={mid} cwd={cwd} line={line} title={title}>{children}</Link>;
     },
   } : markdownComponents, [mid, cwd]);
+  const text = useThrottledText(raw, Boolean(streaming));
+  const motion = useReplyMotion();
+  const wordFade = useWordFade(Boolean(streaming) && motion, Boolean(fade && !streaming) && motion, text);
   const settled = streaming ? writtenText(text) : text;
   const paths = useMemo(() => (mid ? textPaths(settled) : []), [settled, mid]);
   const { linkable, key } = usePathLinks(mid, cwd, paths);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const rehypePlugins = useMemo(() => (key ? [rehypeKatex, rehypePathLinks(linkable)] : [rehypeKatex]), [key]);
+  const highlight = useHighlight(useMemo(() => hasLanguageFence(text), [text]));
+  const rehypePlugins = useMemo<PluggableList>(
+    () => [rehypeKatex, ...(highlight ? [highlight] : []), ...(key ? [rehypePathLinks(linkable)] : [])],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [key, highlight],
+  );
+  const md = useMemo(() => linkify(normalizeMath(streaming ? repairStreamingMarkdown(text) : text), { math: true }), [text, streaming]);
+  const chunks = useMemo(() => (streaming ? splitChunks(md) : wordFade ? [{ start: 0, content: md }] : null), [md, streaming, wordFade]);
   return (
     <div className={`prose-j ${small ? "prose-sm" : ""} ${compact ? "prose-compact" : ""}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={rehypePlugins} components={components} urlTransform={markdownUrl}>
-        {linkify(normalizeMath(text), { math: true })}
-      </ReactMarkdown>
+      {chunks ? (
+        chunks.map((c) => (
+          <StreamChunk key={c.start} start={c.start} content={c.content} remarkPlugins={REMARK} rehypePlugins={rehypePlugins} components={components} urlTransform={markdownUrl} fade={wordFade} wholeDocument={chunks.length === 1} />
+        ))
+      ) : (
+        <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={rehypePlugins} components={components} urlTransform={markdownUrl}>
+          {md}
+        </ReactMarkdown>
+      )}
     </div>
   );
 });
+
+// remark-cjk-friendly: **强调**「这样」 next to CJK punctuation is still emphasis (CommonMark's flanking rules miss it).
+const REMARK: PluggableList = [remarkGfm, remarkMath, remarkCjkFriendly];
+
+/**
+ * The message's fade timeline: while it streams (a fresh one per stream), or for a block that arrived whole until its
+ * last word has faded in (`once`, at mount only), after which it renders plain. Null: no fade.
+ */
+function useWordFade(streaming: boolean, once: boolean, text: string): WordFadeState | null {
+  const [fadingOnce, setFadingOnce] = useState(once);
+  const ref = useRef<WordFadeState | null>(null);
+  if (!streaming && !(once && fadingOnce)) ref.current = null;
+  else ref.current ??= createWordFadeState();
+  useEffect(() => {
+    if (streaming || !once || !fadingOnce || !ref.current) return;
+    // after the commit: every word is on the timeline by now
+    const t = window.setTimeout(() => setFadingOnce(false), remainingMs(ref.current) + 32);
+    return () => clearTimeout(t);
+  }, [streaming, once, fadingOnce, text]);
+  return ref.current;
+}

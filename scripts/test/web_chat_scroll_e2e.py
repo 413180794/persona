@@ -23,7 +23,7 @@ import os
 import sys
 import urllib.request
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
 SCROLL = "[data-chat-scroll]"
 # The agent chat with fifteen earlier exchanges (MOCK_LONG_HISTORY).
@@ -116,10 +116,10 @@ def scrolled_up_stays(page, what):
     if abs(after["top"] - m["top"]) > 2:
         fail(f"{what}: a reader who scrolled up was moved from {m['top']} to {after['top']}")
     ok(f"{what}: scrolled up, content landing does not pull the reader back")
-    down = page.get_by_role("button", name="回到最新")
+    down = page.locator("[data-jump-pill]")  # 跳到底部 (有新消息 once something came in)
     down.wait_for(state="visible")
     down.click()
-    at_end(page, what + ", 回到最新")
+    at_end(page, what + ", 跳到底部")
 
 
 def shot(page, shots, name):
@@ -232,6 +232,8 @@ def narrow(browser, base, a):
         page = ctx.new_page()
         page.set_default_timeout(10000)
         page.goto(base + "/overview?token=" + a.token)
+        # signed in (the link's token traded for this browser's) before leaving, or the next page is the login form
+        expect(page.locator("aside")).to_be_attached()
         set_theme(page, theme)
         page.goto(base + "/")
         at_end(page, f"narrow / first open, {theme}")

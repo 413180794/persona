@@ -135,6 +135,13 @@ export interface Session {
   slot_id?: string;
   slot_name?: string;
   slot_index?: number;
+  /** The host's pane, tab and workspace ids (herdr: bare "w9:p1"; other hosts "<kind>:<id>"). Workspace ids change
+   *  across a herdr restart: never key anything stored by them (pins and folds go by 机器/空间名). */
+  pane_id?: string;
+  tab_id?: string;
+  workspace_id?: string;
+  /** Which host the space belongs to ("herdr", "orca", a runtime id…): space ids are unique only within one. */
+  space_kind?: string;
   updated_at?: string;
   seen_at?: string;
   last_text?: string;
@@ -355,4 +362,29 @@ export interface MachineMetrics {
   system?: Machine["system"];
   latest?: { t: number; cpu?: number; load?: number; mem_used?: number; mem_total?: number; net_rx?: number; net_tx?: number; disk_used?: number; disk_total?: number };
   points: MetricPoint[];
+}
+
+/** What a working Claude's status line says right now (hub `live` push, feature `session_live`; docs/protocol.md
+ *  「实时状态」): read off its pane about once a second while someone watches. Absent fields: the line did not say. */
+export interface SessionLive {
+  /** The spinner's verb without the ellipsis ("Frosting"). */
+  verb?: string;
+  /** Seconds this turn has run, as the line counts them. */
+  elapsed_s?: number;
+  /** Output tokens so far this turn (the line's "↓ 22.8k tokens"). */
+  tokens_down?: number;
+  /** It is thinking now ("thinking with … effort"). */
+  thinking?: boolean;
+  /** It just thought for this many seconds ("thought for 3s"). */
+  thought_s?: number;
+  /** When the node read it (RFC 3339). */
+  at?: string;
+}
+
+/** The hub's `live` push: `live` null or absent means the turn is over (or it is no longer read). */
+export interface LiveEvent {
+  type: "live";
+  machine_id: string;
+  session_id: string;
+  live?: SessionLive | null;
 }

@@ -40,6 +40,14 @@ func (c *client) has(feature string) bool {
 	return c.meta.features[feature]
 }
 
+// wants reports whether the client asked for feature on the WebSocket URL (?features=) or in client_hello: the
+// check for opt-in events (toSubscribersWith). The older capabilities keep their own (has, client.delta).
+func (c *client) wants(feature string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.urlFeatures[feature] || c.meta.features[feature]
+}
+
 func (h *Hub) onClientHello(c *client, data []byte) {
 	var msg struct {
 		clientMeta

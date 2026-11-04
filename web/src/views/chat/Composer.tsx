@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { LOOP_TEXT, loopHint } from "../../lib/loop-command";
 import { ApiError, api, enc, errorText } from "../../lib/api";
 import { uuid } from "../../lib/format";
+import { enterSends, isCoarsePointer } from "../../lib/viewport";
 import { imagePayload, MAX_IMAGE, quotePath } from "../../lib/attachments";
 import { activateComposer, addContext, getContexts, newContext, registerComposer, removeContext, useContexts, withContexts, type ComposerHandle } from "../../lib/links";
 import { applyDraft, onDraftEvent, replaceNeedsConfirm, withUnsent, type DraftImage } from "../../lib/drafts";
@@ -426,14 +427,15 @@ export function Composer({
               setDraft(suggestion);
               return;
             }
-            if (e.key === "Enter" && !e.shiftKey) {
+            // a touch keyboard's return is a new line there; the send button sends
+            if (enterSends(e, isCoarsePointer())) {
               e.preventDefault();
               void submit();
             }
           }}
           placeholder={suggestion && !draft ? `${suggestion}（Tab 填入）` : placeholder}
           aria-label="消息"
-          className="min-h-6 w-full resize-none bg-transparent px-2 pt-1.5 text-[14px] leading-[21px] text-ink outline-none [overflow-wrap:anywhere] placeholder:text-ink-3 disabled:opacity-50"
+          className="min-h-6 w-full resize-none bg-transparent px-2 pt-1.5 text-[14px] leading-[21px] text-ink outline-none [@media(pointer:coarse)]:text-[16px] [@media(pointer:coarse)]:leading-[24px] [overflow-wrap:anywhere] placeholder:text-ink-3 disabled:opacity-50"
         />
         {loop && (
           <div role="status" className={cx("flex items-center gap-1.5 px-2 text-[11.5px]", loop.missing ? "text-ink-3" : "text-ink-2")}>

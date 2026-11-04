@@ -2,8 +2,9 @@
 // is the first entry (the app opens on 助手); a new conversation and a new agent are the「+」of their sections (#1239).
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AGENT_FILTERS, agentFilter, applyFilter, arrangeSpaces, filterCounts, isSpaceMuted, matchingKeys, shownFilters, unreadOf, type AgentFilter, type FilterCounts } from "../lib/agent-filter";
-import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, buildSpaces, isQuiet, splitAgentSessions, type AgentGroup, type Space } from "../lib/agent-groups";
+import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, buildSpaces, isQuiet, splitAgentSessions, type AgentGroup, type AgentMutes, type Space } from "../lib/agent-groups";
 import { buildRepoTree, type RepoTree, type RepoWorktree } from "../lib/agent-repos";
+import { buildMachineTree, resolveTab, type HerdrMachine, type HerdrSpace, type HerdrTab } from "../lib/herdr-tree";
 import { addSection, arrangeSessions, assignSection, GROUP_LABEL, isDefaultView, providerLabel, removeSection, resetView, setView, SHOW_LABEL, SORT_LABEL, toggleProvider, togglePin, totalUnread, updateAgentPrefs, useAgentList, useAgentPrefs, viewOf, type AgentPrefs, type AgentSession, type GroupBy, type ShowMode, type SortBy } from "../lib/agents";
 import { api, errorText, setToken } from "../lib/api";
 import { useInboxBadge } from "../lib/inbox";
@@ -19,7 +20,7 @@ import { href, navigate, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { reset, refresh, refreshTodos, useLarkOn, useStore } from "../lib/store";
 import { buildTodoAgentGroups, findTodoForSpace, openTodoFromTag, TODO_STATUS_INFO, unlinkAgentFromTodo, type TodoStatus } from "../lib/todos";
-import type { Machine, Session } from "../lib/types";
+import type { AgentState, Machine, Session } from "../lib/types";
 import { Collapse, cx, EASE, Kbd, Menu, StatusDot, toast, useMenu, type MenuItem } from "../ui/atoms";
 import { AppMark } from "../ui/AppMark";
 import { Icon, type IconName } from "../ui/icons";
@@ -89,11 +90,12 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const recent = useMemo(() => (filtered ? [] : offline.filter((s) => !pinnedAgents.some((p) => agentKey(p) === agentKey(s)))), [filtered, offline, pinnedAgents]);
   const { spaces, loose } = useMemo(() => buildSpaces(unpinned, machines), [unpinned, machines]);
   const groups = useMemo(() => {
-    if (grouping === "space" || grouping === "repo") return [];
+    if (grouping === "space" || grouping === "repo" || grouping === "machine") return [];
     if (grouping === "todo") return buildTodoAgentGroups(unpinned, machines, todos, mutes);
-    return buildAgentGroups(unpinned, machines, grouping, mutes);
+    return buildAgentGroups(unpinned, machines, "state", mutes);
   }, [unpinned, machines, grouping, mutes, todos]);
   const repoTree = useMemo(() => (grouping === "repo" ? buildRepoTree(unpinned, machines) : []), [unpinned, machines, grouping]);
+  const machineTree = useMemo(() => (grouping === "machine" ? buildMachineTree(machines, unpinned, { pins, hideEmpty: filtered }) : []), [grouping, machines, unpinned, pins, filtered]);
   const unreadShown = filter === "unread" ? unreadOf(shown) : [];
   const choose = (f: AgentFilter) => {
     localStorage.setItem("jarvis.agentFilter", f);
@@ -130,7 +132,11 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const [linkTargetSession, setLinkTargetSession] = useState<Session | undefined>();
   const [linkTargetSpace, setLinkTargetSpace] = useState<LinkTargetSpace | undefined>();
 
-  const activeKey = sidebarActiveKey(route, assistant?.main);
+  // a tab's page is the pane it shows (its row in the tree is the tab's, TabRow)
+  const tabPath = route.name === "tab" ? href(route) : "";
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `route` is parsed anew each render; its path says it all
+  const tabPane = useMemo(() => (route.name === "tab" ? resolveTab(all, route) : undefined), [all, tabPath]);
+  const activeKey = route.name === "tab" ? (tabPane ? rowKey(tabPane) : "") : sidebarActiveKey(route, assistant?.main);
   // a space with nothing to look at (every agent seen and waiting) goes to「空闲的空间」, like the app; the open
   // conversation's space stays where it is so the row under the pointer doesn't move away
   const busy = (sp: Space) => sp.sessions.some((s) => !isQuiet(s) || activeKey === `s:${s.machine_id}/${s.session_id}`);
@@ -281,10 +287,12 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
 
         {loose.length > 0 && <LooseSection sessions={loose} reg={reg} hover={setHovered} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} />}
 
-        </> : grouping === "repo" ? repoTree.map((tree) => (
+        </> : grouping === "machine" ? machineTree.map((m) => (
+          <MachineSection key={m.key} m={m} machines={machines} reg={reg} hover={setHovered} activeKey={activeKey} go={go} mutes={mutes} onSpaceMenu={onSpaceMenu} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} onNavigate={onNavigate} />
+        )) : grouping === "repo" ? repoTree.map((tree) => (
           <RepoSection key={tree.key} tree={tree} machines={machines} reg={reg} hover={setHovered} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} />
         )) : groups.map((group) => (
-          <AgentSection key={group.key} group={group} machines={machines} byMachine={grouping === "machine"} byTodo={grouping === "todo"} reg={reg} hover={setHovered} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} onNavigate={onNavigate} />
+          <AgentSection key={group.key} group={group} machines={machines} byTodo={grouping === "todo"} reg={reg} hover={setHovered} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onSessionMenu={(s, el) => setSessionContextMenu({ s, el })} onNavigate={onNavigate} />
         ))}
 
         {recent.length > 0 && (
@@ -475,15 +483,11 @@ function Section({ title, children, folded, onToggle, right }: { title: React.Re
   );
 }
 
-function AgentSection({ group, machines, byMachine, byTodo, reg, hover, activeKey, go, onRowMenu, onSessionMenu, onNavigate }: { group: AgentGroup; machines: Machine[]; byMachine: boolean; byTodo?: boolean; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn; onSessionMenu?: (s: Session, el: HTMLElement) => void; onNavigate?: () => void }) {
+function AgentSection({ group, machines, byTodo, reg, hover, activeKey, go, onRowMenu, onSessionMenu, onNavigate }: { group: AgentGroup; machines: Machine[]; byTodo?: boolean; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn; onSessionMenu?: (s: Session, el: HTMLElement) => void; onNavigate?: () => void }) {
   const [folded, toggle] = useFolded(group.key, group.folded);
-  const [showIdle, setShowIdle] = useState(false);
-  const idle = byMachine ? group.sessions.filter((s) => isQuiet(s) && activeKey !== `s:${s.machine_id}/${s.session_id}`) : [];
-  const idleKeys = new Set(idle.map((s) => `${s.machine_id}/${s.session_id}`));
-  const visible = group.sessions.filter((s) => !idleKeys.has(`${s.machine_id}/${s.session_id}`));
   const row = (s: Session) => {
     const key = `s:${s.machine_id}/${s.session_id}`;
-    const context = [s.space_name || baseName(s.cwd), !byMachine && machines.length > 1 ? machineWithHub(s.machine_id, machines) : ""].filter(Boolean).join(" · ");
+    const context = [s.space_name || baseName(s.cwd), machines.length > 1 ? machineWithHub(s.machine_id, machines) : ""].filter(Boolean).join(" · ");
     return <SessionRow key={key} s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={context} showTodoTag={!byTodo} onMenu={onRowMenu} onContextMenu={(el) => onSessionMenu?.(s, el)} />;
   };
 
@@ -507,7 +511,6 @@ function AgentSection({ group, machines, byMachine, byTodo, reg, hover, activeKe
     <span className="flex min-w-0 items-center gap-1.5">
       {group.state && <span aria-hidden><StatusDot state={group.state} size={6} /></span>}
       <span className="truncate">{group.name}</span>
-      {group.hub && <span className="shrink-0 truncate normal-case tracking-normal font-normal">{group.hub}</span>}
     </span>
   );
 
@@ -521,14 +524,7 @@ function AgentSection({ group, machines, byMachine, byTodo, reg, hover, activeKe
 
   return (
     <Section title={titleNode} folded={folded} onToggle={toggle} right={rightNode}>
-      {visible.map(row)}
-      {idle.length > 0 && <>
-        <button type="button" aria-expanded={showIdle} onClick={() => setShowIdle((v) => !v)} className="relative z-10 flex w-full items-center gap-1.5 whitespace-nowrap rounded-control px-2 py-1.5 text-left text-[11px] text-ink-3 hover:bg-hover hover:text-ink-2">
-          <Icon name="chevron" size={10} style={{ transform: showIdle ? "none" : "rotate(-90deg)" }} />
-          <span>空闲 {idle.length}</span>
-        </button>
-        <Collapse open={showIdle}><div inert={!showIdle || undefined}>{idle.map(row)}</div></Collapse>
-      </>}
+      {group.sessions.map(row)}
     </Section>
   );
 }
@@ -579,13 +575,6 @@ function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, mute
   const allIdle = sp.sessions.every(isQuiet);
   const [folded, toggle] = useFolded(`space:${sp.key}`, allIdle && sp.sessions.length > 3);
 
-  const todos = useStore((st) => st.todos);
-  const todosSupported = useStore((st) => st.todosSupported);
-  const todosLoaded = useStore((st) => st.todosLoaded);
-  const spacesSupported = useStore((st) => st.spacesSupported);
-  const supportSpaces = todosLoaded && todosSupported !== false && spacesSupported !== false;
-  const linkedTodo = supportSpaces ? findTodoForSpace(todos, sp.machineId, sp.name) : undefined;
-
   return (
     <Section
       folded={folded}
@@ -593,38 +582,15 @@ function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, mute
       title={
         <span className="flex items-center gap-1.5">
           <span className="truncate normal-case tracking-normal text-[11.5px] text-ink-2">{sp.name}</span>
-          {pinned && <span title="已置顶" className="shrink-0 text-accent"><Icon name="pin" size={10} stroke={2.2} /><span className="sr-only">已置顶</span></span>}
-          {muted && <span title="已屏蔽通知" className="shrink-0"><Icon name="bellOff" size={10} stroke={2.2} /><span className="sr-only">已屏蔽通知</span></span>}
+          <SpaceMarks pinned={pinned} muted={muted} />
           {machineName && <span className="truncate normal-case tracking-normal text-[11px] font-normal text-ink-3">{machineName}</span>}
         </span>
       }
       right={
         <span className="flex items-center gap-1">
-          {linkedTodo && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                openTodoFromTag(linkedTodo.id, navigate, onNavigate);
-              }}
-              className="relative z-10 flex shrink-0 items-center justify-center rounded bg-hover px-1 py-0.5 text-ink-3 hover:bg-hover-2 hover:text-ink transition-colors cursor-pointer"
-              title={`待办：${linkedTodo.title}`}
-              aria-label={`待办：${linkedTodo.title}`}
-            >
-              <Icon name="todo" size={10} stroke={2} />
-            </button>
-          )}
+          <SpaceTodoTag sp={sp} onNavigate={onNavigate} />
           <SessionTally sessions={sp.sessions} folded={folded} />
-          <button
-            type="button"
-            aria-label={`空间 ${sp.name} 的操作`}
-            aria-haspopup="menu"
-            title="空间的操作"
-            onClick={(e) => onMenu(sp, e.currentTarget)}
-            className="relative z-10 -my-1 flex size-5 items-center justify-center rounded-[5px] text-ink-3 opacity-0 transition-opacity duration-150 group-hover/sec:opacity-100 hover:bg-hover-2 hover:text-ink focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
-          >
-            <Icon name="more" size={12} />
-          </button>
+          <SpaceMenuButton sp={sp} onMenu={onMenu} />
         </span>
       }
     >
@@ -632,6 +598,171 @@ function SpaceSection({ sp, machineName, reg, hover, activeKey, go, pinned, mute
         <SessionRow key={s.session_id} s={s} k={`s:${s.machine_id}/${s.session_id}`} reg={reg} hover={hover} active={activeKey === `s:${s.machine_id}/${s.session_id}`} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} tab showTodoTag onMenu={onRowMenu} onContextMenu={(el) => onSessionMenu?.(s, el)} />
       ))}
     </Section>
+  );
+}
+
+function SpaceMarks({ pinned, muted }: { pinned: boolean; muted: boolean }) {
+  return (
+    <>
+      {pinned && <span title="已置顶" className="shrink-0 text-accent"><Icon name="pin" size={10} stroke={2.2} /><span className="sr-only">已置顶</span></span>}
+      {muted && <span title="已屏蔽通知" className="shrink-0 text-ink-3"><Icon name="bellOff" size={10} stroke={2.2} /><span className="sr-only">已屏蔽通知</span></span>}
+    </>
+  );
+}
+
+// The todo a space hangs on (docs/todos.md), when the hub supports both: a tag that opens it.
+function SpaceTodoTag({ sp, onNavigate }: { sp: Space; onNavigate?: () => void }) {
+  const todos = useStore((st) => st.todos);
+  const todosSupported = useStore((st) => st.todosSupported);
+  const todosLoaded = useStore((st) => st.todosLoaded);
+  const spacesSupported = useStore((st) => st.spacesSupported);
+  const supportSpaces = todosLoaded && todosSupported !== false && spacesSupported !== false;
+  const linkedTodo = supportSpaces ? findTodoForSpace(todos, sp.machineId, sp.name) : undefined;
+  if (!linkedTodo) return null;
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        openTodoFromTag(linkedTodo.id, navigate, onNavigate);
+      }}
+      className="relative z-10 flex shrink-0 items-center justify-center rounded bg-hover px-1 py-0.5 text-ink-3 hover:bg-hover-2 hover:text-ink transition-colors cursor-pointer"
+      title={`待办：${linkedTodo.title}`}
+      aria-label={`待办：${linkedTodo.title}`}
+    >
+      <Icon name="todo" size={10} stroke={2} />
+    </button>
+  );
+}
+
+// A space's ⋯ (rename, pin, mute, mark seen, link a todo): on hover with a pointer, always on a touch screen.
+function SpaceMenuButton({ sp, onMenu }: { sp: Space; onMenu: (sp: Space, anchor: HTMLElement) => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={`空间 ${sp.name} 的操作`}
+      aria-haspopup="menu"
+      title="空间的操作"
+      onClick={(e) => onMenu(sp, e.currentTarget)}
+      className="relative z-10 -my-1 flex size-5 items-center justify-center rounded-[5px] text-ink-3 opacity-0 transition-opacity duration-150 group-hover/sec:opacity-100 hover:bg-hover-2 hover:text-ink focus-visible:opacity-100 [@media(hover:none)]:size-8 [@media(hover:none)]:opacity-100"
+    >
+      <Icon name="more" size={12} />
+    </button>
+  );
+}
+
+type TreeProps = { machines: Machine[]; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; mutes: AgentMutes; onSpaceMenu: (sp: Space, anchor: HTMLElement) => void; onRowMenu: RowMenuFn; onSessionMenu: (s: Session, el: HTMLElement) => void; onNavigate?: () => void };
+
+// 按机器 (lib/herdr-tree.ts): one machine as herdr lays it out, its workspaces, their tabs, then「其他」. A machine that
+// is away starts folded; its agents are under「最近（未运行）」.
+function MachineSection({ m, ...p }: { m: HerdrMachine } & TreeProps) {
+  const online = m.machine.online;
+  const [folded, toggle] = useFolded(m.foldKey, !online);
+  return (
+    <div className="mt-3">
+      <div className="group/sec flex items-center gap-1 px-2 pb-0.5">
+        <button type="button" aria-expanded={!folded} onClick={toggle} className="relative z-10 flex min-h-7 min-w-0 flex-1 items-center gap-1.5 whitespace-nowrap text-left [@media(pointer:coarse)]:min-h-11">
+          <span aria-hidden className={cx("size-1.5 shrink-0 rounded-full", online ? "bg-green" : "bg-line-strong")} />
+          <span className={cx("min-w-0 truncate text-[12.5px] font-semibold", online ? "text-ink" : "text-ink-3")}>{machineWithHub(m.machine.id, p.machines)}</span>
+          <span className="sr-only">{online ? "在线" : "离线"}</span>
+          <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 text-ink-3 opacity-0 transition-[opacity,transform] duration-200 group-hover/sec:opacity-100 [@media(hover:none)]:opacity-100" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
+        </button>
+        {m.needs > 0 ? (
+          <span title={`${m.needs} 个需要你`} className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums">
+            {m.needs}<span className="sr-only"> 个需要你</span>
+          </span>
+        ) : !online ? (
+          <span className="shrink-0 text-[10.5px] whitespace-nowrap text-ink-3">离线</span>
+        ) : (
+          <SessionTally sessions={m.sessions} folded={folded} />
+        )}
+      </div>
+      <Collapse open={!folded}>
+        <div className="flex flex-col gap-px" inert={folded || undefined}>
+          {m.spaces.map((sp) => <WorkspaceBlock key={sp.key} sp={sp} {...p} />)}
+          {m.other.length > 0 && (
+            // 「其他」: the machine's agents outside any workspace (Codex threads, runtimes without spaces)
+            <TreeBlock foldKey={m.otherFoldKey} sessions={m.other} title={<span className="min-w-0 truncate font-medium">其他</span>} right={(folded) => <SessionTally sessions={m.other} folded={folded} />}>
+              {m.other.map((s) => <TreeSessionRow key={s.session_id} s={s} {...p} />)}
+            </TreeBlock>
+          )}
+          {!m.sessions.length && <p className="truncate px-3 py-1 text-[12px] text-ink-3">{online ? "没有在跑的 Agent" : "它的 Agent 在「最近」里"}</p>}
+        </div>
+      </Collapse>
+    </div>
+  );
+}
+
+// A workspace or「其他」in the tree: its title row folds what is under it, the fold kept by 机器/空间名.
+function TreeBlock({ foldKey, sessions, state, title, right, children }: { foldKey: string; sessions: Session[]; state?: AgentState; title: React.ReactNode; right: (folded: boolean) => React.ReactNode; children: React.ReactNode }) {
+  const [folded, toggle] = useFolded(foldKey, sessions.every(isQuiet) && sessions.length > 3);
+  return (
+    <div>
+      <div className="group/sec flex items-center gap-1 pr-2 pl-2">
+        <button type="button" aria-expanded={!folded} onClick={toggle} className="relative z-10 flex min-h-7 min-w-0 flex-1 items-center gap-1.5 whitespace-nowrap text-left text-[12px] text-ink-2 hover:text-ink [@media(pointer:coarse)]:min-h-11">
+          <Icon name="chevron" size={9} stroke={2.4} className="shrink-0 text-ink-3 transition-transform duration-200" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
+          {state ? <StatusDot state={state} size={6} /> : <span className="size-1.5 shrink-0" />}
+          {title}
+        </button>
+        {right(folded)}
+      </div>
+      <Collapse open={!folded}>
+        <div className="flex flex-col gap-px pl-3" inert={folded || undefined}>{children}</div>
+      </Collapse>
+    </div>
+  );
+}
+
+function WorkspaceBlock({ sp, ...p }: { sp: HerdrSpace } & TreeProps) {
+  const tabs = sp.tabs.length;
+  return (
+    <TreeBlock
+      foldKey={sp.foldKey}
+      sessions={sp.sessions}
+      state={sp.state}
+      title={<><span className="min-w-0 truncate font-medium">{sp.name}</span><SpaceMarks pinned={sp.pinned} muted={isSpaceMuted(sp, p.mutes)} /></>}
+      right={(folded) => (
+        <span className="flex shrink-0 items-center gap-1">
+          <SpaceTodoTag sp={sp} onNavigate={p.onNavigate} />
+          {folded ? <SessionTally sessions={sp.sessions} folded /> : tabs > 0 && <span title={`${tabs} 个标签页`} className="text-[10.5px] text-ink-3 tabular-nums">{tabs}<span className="sr-only"> 个标签页</span></span>}
+          <SpaceMenuButton sp={sp} onMenu={p.onSpaceMenu} />
+        </span>
+      )}
+    >
+      {sp.tabs.map((t) => <TabRow key={t.key} t={t} {...p} />)}
+      {sp.loose.map((s) => <TreeSessionRow key={s.session_id} s={s} {...p} />)}
+    </TreeBlock>
+  );
+}
+
+function TreeSessionRow({ s, reg, hover, activeKey, go, onRowMenu, onSessionMenu }: { s: Session } & TreeProps) {
+  const key = rowKey(s);
+  return <SessionRow s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} showTodoTag onMenu={onRowMenu} onContextMenu={(el) => onSessionMenu(s, el)} />;
+}
+
+// One herdr tab: `#N` (or its name) and what its most urgent pane is doing; it opens on that pane, the others are the
+// chat's pane tabs (PaneTabs). A tab with one pane has that agent's ⋯.
+function TabRow({ t, reg, hover, activeKey, go, onRowMenu, onSessionMenu }: { t: HerdrTab } & TreeProps) {
+  const open = t.sessions.find((x) => rowKey(x) === activeKey);
+  const k = open ? activeKey : `t:${t.key}`;
+  const n = t.sessions.length;
+  const single = n === 1;
+  const to: Route = { name: "tab", mid: t.lead.machine_id, space: t.spaceId, slot: t.slotId };
+  return (
+    <SessionRow
+      s={t.lead}
+      k={k}
+      reg={reg}
+      hover={hover}
+      active={Boolean(open)}
+      to={to}
+      go={go}
+      prefix={t.label && <span className="shrink-0 text-[11.5px] text-ink-3 tabular-nums">{t.label}</span>}
+      hint={single ? undefined : `${n} 个 Agent`}
+      showTodoTag={single}
+      onMenu={single ? onRowMenu : undefined}
+      onContextMenu={single ? (el) => onSessionMenu(t.lead, el) : undefined}
+    />
   );
 }
 
@@ -664,6 +795,8 @@ function SessionTally({ sessions, folded }: { sessions: Session[]; folded: boole
 }
 
 type RegFn = (k: string) => (el: HTMLElement | null) => void;
+/** An agent row's key in the sidebar (highlight, active): sidebarActiveKey's for a session. */
+const rowKey = (s: Pick<Session, "machine_id" | "session_id">) => `s:${agentKey(s)}`;
 type GoFn = (to: Route) => (e: React.MouseEvent) => void;
 type RowMenuFn = (s: Session, anchor: HTMLElement) => void;
 
@@ -724,7 +857,7 @@ function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, 
       onFocus={() => hover(k)}
       onBlur={() => hover(null)}
       aria-current={active ? "page" : undefined}
-      className="relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 transition-transform duration-150 active:scale-[0.98]"
+      className="relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11"
     >
       <span className={active ? "text-ink" : "text-ink-3"}>
         <Icon name={icon} size={14} stroke={1.8} />
@@ -740,7 +873,7 @@ function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, 
   );
 }
 
-function SessionRow({ s, k, reg, hover, active, to, go, tab, label, hint, showState = true, showTodoTag, onMenu, onContextMenu }: { s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; hint?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn; onContextMenu?: (el: HTMLElement) => void }) {
+function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, hint, showState = true, showTodoTag, onMenu, onContextMenu }: { s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; prefix?: React.ReactNode; hint?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn; onContextMenu?: (el: HTMLElement) => void }) {
   const st = stateOf(s);
   const t = [sourceSubtitle(s), hint ?? (tab ? tabLabel(s) : "")].filter(Boolean).join(" · ");
   const preview = sessionPreview(s);
@@ -768,9 +901,11 @@ function SessionRow({ s, k, reg, hover, active, to, go, tab, label, hint, showSt
       onBlur={() => hover(null)}
       aria-current={active ? "page" : undefined}
       title={`${sessionTitle(s)}${sourceSubtitle(s) ? `\n${sourceSubtitle(s)}` : ""}${hint ? `\n${hint}` : ""}${s.todo ? `\n待办：${s.todo.title}` : ""}${preview ? `\n${preview}` : ""}`}
-      className="relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98]"
+      // a touch screen: rows a finger can hit (44), and room at the end for the ⋯ that is always there
+      className={cx("relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98] [@media(pointer:coarse)]:min-h-11", onMenu && "[@media(hover:none)]:pr-9")}
     >
       <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusDot state={st} size={7} /> : <Icon name="chat" size={12} className="text-ink-3" />}</span>
+      {prefix}
       <span className={cx("min-w-0 flex-1 truncate text-[13px]", active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
         {label ?? sessionTitle(s)}
       </span>
@@ -790,7 +925,7 @@ function SessionRow({ s, k, reg, hover, active, to, go, tab, label, hint, showSt
     </a>
   );
   if (!onMenu) return link;
-  // the ⋯ shows over the row's end on hover (a pointer); touch has the chat's ⋯ menu and the long press
+  // the ⋯ shows over the row's end on hover (a pointer); on a touch screen it stays, in the room the row leaves for it
   return (
     <div className="group/row relative">
       {link}
@@ -801,7 +936,7 @@ function SessionRow({ s, k, reg, hover, active, to, go, tab, label, hint, showSt
         title="更多"
         tabIndex={-1}
         onClick={() => row.current && onMenu(s, row.current)}
-        className="absolute top-1/2 right-1 z-20 hidden size-6 -translate-y-1/2 items-center justify-center rounded-[6px] bg-hover text-ink-3 hover:bg-hover-2 hover:text-ink group-hover/row:flex"
+        className="absolute top-1/2 right-1 z-20 hidden size-6 -translate-y-1/2 items-center justify-center rounded-[6px] bg-hover text-ink-3 hover:bg-hover-2 hover:text-ink group-hover/row:flex [@media(hover:none)]:flex [@media(hover:none)]:size-8 [@media(hover:none)]:bg-transparent"
       >
         <Icon name="more" size={14} />
       </button>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { anchoredScroll, collapseMounted, foldTopLimit, followsAfterScroll, FOLLOW_MARGIN, FOLLOW_STEP } from "./disclosure";
+import { anchoredScroll, collapseMounted, followsAfterUnfold, followsAgain, FOLLOW_MARGIN, FOLLOW_STEP, isScrollbarPress, jumpLabel, leavesOnKey, leavesOnScrollbarDrag, leavesOnTouch, leavesOnWheel } from "./disclosure";
 
 // A 1000 px tall list in an 800 px view at the top of the window.
 const view = { clientHeight: 800, viewTop: 0 };
@@ -58,21 +58,6 @@ describe("anchoredScroll", () => {
   });
 });
 
-describe("foldTopLimit (#1486)", () => {
-  const v = { viewTop: 0, viewBottom: 800, header: 28 };
-  it("keeps a header that is on screen where it is", () => {
-    expect(foldTopLimit({ ...v, rowTop: 120, click: 600 })).toBe(120);
-    expect(foldTopLimit({ ...v, rowTop: 0, click: 600 })).toBe(0);
-  });
-  it("brings a header above the view down to where the reader clicked, inside the view", () => {
-    expect(foldTopLimit({ ...v, rowTop: -2000, click: 500 })).toBe(500);
-    // clicked at the very bottom: the header still fits above the view's bottom
-    expect(foldTopLimit({ ...v, rowTop: -2000, click: 795 })).toBe(800 - 28 - FOLLOW_MARGIN);
-    // at the very top: not under the view's edge
-    expect(foldTopLimit({ ...v, rowTop: -2000, click: 2 })).toBe(FOLLOW_MARGIN);
-  });
-});
-
 describe("collapseMounted", () => {
   it("keeps a lazy collapse's content while it closes, drops it once closed", () => {
     expect(collapseMounted(true, false, false)).toBe(false);
@@ -82,32 +67,58 @@ describe("collapseMounted", () => {
   });
 });
 
-describe("followsAfterScroll (#1340)", () => {
-  const reader = true;
-  it("keeps following when the chat's own pin lands after more content did", () => {
-    // pinned at 3000; before its scroll event fired, 480 px of images came in below: the end is far, the offset did not go up
-    expect(followsAfterScroll(true, { scrollTop: 3000, lastTop: 2600, gap: 480, reader: false })).toBe(true);
-    expect(followsAfterScroll(true, { scrollTop: 3000, lastTop: 3000, gap: 480, reader: false })).toBe(true);
+// cindy's autoFollowIntent.test.ts, the cases that apply to a scroll view of our own
+describe("following the end", () => {
+  const view = { scrollHeight: 3000, clientHeight: 800 };
+  const fits = { scrollHeight: 800, clientHeight: 800 };
+
+  it("picks up again at the end, or scrolling down within 100 px of it", () => {
+    expect(followsAgain({ gap: 8, delta: -20 })).toBe(true);
+    expect(followsAgain({ gap: 9, delta: -20 })).toBe(false);
+    expect(followsAgain({ gap: 99, delta: 5 })).toBe(true);
+    expect(followsAgain({ gap: 99, delta: 0 })).toBe(false);
+    expect(followsAgain({ gap: 100, delta: 50 })).toBe(false);
   });
 
-  it("keeps following when the browser pulls the offset up without the reader", () => {
-    // the composer re-measured: the view grew for a moment, the offset was clamped 3 px up, then the view shrank again
-    expect(followsAfterScroll(true, { scrollTop: 1914, lastTop: 1917, gap: 108, reader: false })).toBe(true);
+  it("the wheel going up leaves it; going down or sideways does not", () => {
+    expect(leavesOnWheel({ deltaX: 0, deltaY: -1, ...view })).toBe(true);
+    expect(leavesOnWheel({ deltaX: 0, deltaY: 40, ...view })).toBe(false);
+    expect(leavesOnWheel({ deltaX: -30, deltaY: -10, ...view })).toBe(false);
+    expect(leavesOnWheel({ deltaX: 0, deltaY: -40, ...fits })).toBe(false);
   });
 
-  it("stops following once the reader scrolls up", () => {
-    expect(followsAfterScroll(true, { scrollTop: 2400, lastTop: 3000, gap: 600, reader })).toBe(false);
-    // even while content keeps landing below
-    expect(followsAfterScroll(true, { scrollTop: 2990, lastTop: 3000, gap: 500, reader })).toBe(false);
+  it("a finger pulling down more than 8 px leaves it", () => {
+    expect(leavesOnTouch({ startY: 100, y: 108, ...view })).toBe(false);
+    expect(leavesOnTouch({ startY: 100, y: 109, ...view })).toBe(true);
+    expect(leavesOnTouch({ startY: 100, y: 60, ...view })).toBe(false);
   });
 
-  it("does not start following on the way down until the end", () => {
-    expect(followsAfterScroll(false, { scrollTop: 2800, lastTop: 2400, gap: 300, reader })).toBe(false);
-    expect(followsAfterScroll(false, { scrollTop: 3170, lastTop: 2800, gap: 30, reader })).toBe(true);
+  it("PageUp, ↑ and Home leave it; other keys do not", () => {
+    for (const key of ["PageUp", "ArrowUp", "Home"]) expect(leavesOnKey({ key, ...view })).toBe(true);
+    for (const key of ["PageDown", "ArrowDown", "End", " ", "a"]) expect(leavesOnKey({ key, ...view })).toBe(false);
+    expect(leavesOnKey({ key: "PageUp", ...fits })).toBe(false);
   });
 
-  it("near the end always follows", () => {
-    expect(followsAfterScroll(false, { scrollTop: 2000, lastTop: 2600, gap: 0, reader })).toBe(true);
-    expect(followsAfterScroll(true, { scrollTop: 2000, lastTop: 2600, gap: 0, reader: false })).toBe(true);
+  it("dragging the scroll bar up leaves it", () => {
+    expect(isScrollbarPress({ targetIsView: true })).toBe(true);
+    expect(isScrollbarPress({ targetIsView: false })).toBe(false);
+    expect(leavesOnScrollbarDrag({ dragging: true, delta: -3 })).toBe(true);
+    expect(leavesOnScrollbarDrag({ dragging: true, delta: -2 })).toBe(false);
+    expect(leavesOnScrollbarDrag({ dragging: false, delta: -300 })).toBe(false);
+  });
+
+  it("the pill says 有新消息 when something came in, else 跳到底部", () => {
+    expect(jumpLabel(true)).toBe("有新消息");
+    expect(jumpLabel(false)).toBe("跳到底部");
+  });
+});
+
+describe("followsAfterUnfold", () => {
+  it("picks following up only when the view followed, the reader stayed put and the end is near", () => {
+    expect(followsAfterUnfold({ wasAtEnd: true, readerMoved: false, gap: 40 })).toBe(true);
+    // the reader wheeled up during the pause: it stays where they put it
+    expect(followsAfterUnfold({ wasAtEnd: true, readerMoved: true, gap: 40 })).toBe(false);
+    expect(followsAfterUnfold({ wasAtEnd: false, readerMoved: false, gap: 0 })).toBe(false);
+    expect(followsAfterUnfold({ wasAtEnd: true, readerMoved: false, gap: 400 })).toBe(false);
   });
 });

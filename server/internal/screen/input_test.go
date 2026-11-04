@@ -38,6 +38,24 @@ func TestCheckClaudeFixtures(t *testing.T) {
 
 // Without colors any text is a draft (a grey suggestion and typed words read the same), but for the exact
 // new-session tip row, which is how Claude draws it under NO_COLOR.
+func TestAboveInputBox(t *testing.T) {
+	rule, named := "────────────────", "──── my-session ─"
+	for _, c := range []struct {
+		screen string
+		want   int // rows above the box
+	}{
+		{"a\nb\n" + rule + "\n❯ x\n" + rule + "\nfooter", 2},
+		{"a\n" + named + "\n❯ x\n" + rule + "\nfooter", 1},
+		{"a\x1b[2mb\x1b[0m\n" + rule + "\n❯\n" + rule, 1},
+		{"a\nb\nc", 3}, // no box: every row
+	} {
+		got := AboveInputBox(c.screen)
+		if len(got) != c.want || got[0] != "a" && got[0] != "ab" {
+			t.Errorf("%q: %q", c.screen, got)
+		}
+	}
+}
+
 func TestPlainTextCannotTellSuggestion(t *testing.T) {
 	if code, _ := CheckClaude(fixture(t, "claude-2.1.312-empty-162.txt")); code != "" {
 		t.Fatalf("plain tip: %q", code)

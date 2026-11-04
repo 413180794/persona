@@ -1,0 +1,15 @@
+
+⏺ <reply text>
+
+✶ Frosting… (1h 2m 3s · ↑ 1.2M tokens · thought for 3s · esc to interrupt)
+  ⎿  ☒ <done task>
+     ☐ <next task>
+     ☐ <another task>
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ <draft>
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   󱙺 Opus 5.5 (xhigh)        󰝰 <project>  󰊢 main ?1
+   󰍛 ████▊      48% 484k/1M   $1.00
+    loading...               loading...        󰥔 00:00:00
+  ⏵⏵ bypass permissions on (shift+tab to cycle)

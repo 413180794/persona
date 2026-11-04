@@ -16,9 +16,9 @@ const ids = (sessions: Session[]) => sessions.map((s) => s.session_id);
 const mutes: AgentMutes = { spaces: ["machine-a/项目"], sessions: ["machine-a/muted-working", "machine-a/muted-needs", "machine-a/muted-idle", "machine-a/muted-waiting"], allowed: ["machine-a/allowed"] };
 
 describe("Agent 分组偏好", () => {
-  it("默认按仓库，并兼容丢失或未知的偏好", () => {
-    expect(agentGrouping(null)).toBe("repo");
-    expect(agentGrouping("invalid")).toBe("repo");
+  it("没选过的默认按机器，选过的保持原样，并兼容未知的偏好", () => {
+    expect(agentGrouping(null)).toBe("machine");
+    expect(agentGrouping("invalid")).toBe("machine");
     for (const value of ["repo", "space", "state", "machine", "todo"]) expect(agentGrouping(value)).toBe(value);
   });
 });
@@ -75,23 +75,6 @@ describe("iOS 标准的状态分组", () => {
   });
 });
 
-describe("iOS 标准的机器分组", () => {
-  it("沿用机器数组顺序，组内按状态、时间、ID 排序", () => {
-    const all = [session("idle", "idle"), session("working", "working", { state_since: date(8) }), session("unread", "unread"), session("needs", "needs_you"),
-      session("b", "unread", { machine_id: "machine-b", updated_at: date(3) }), session("a", "unread", { machine_id: "machine-b", updated_at: date(3) })];
-    const groups = buildAgentGroups(all, machines, "machine");
-    expect(groups.map((g) => g.name)).toEqual(["电脑 B", "电脑 A"]);
-    expect(ids(groups[0].sessions)).toEqual(["a", "b"]);
-    expect(ids(groups[1].sessions)).toEqual(["needs", "unread", "working", "idle"]);
-  });
-
-  it("不同机器上的相同 session ID 不丢失，也不要求项目元数据", () => {
-    const groups = buildAgentGroups([session("same", "working"), session("same", "working", { machine_id: "machine-b" })], machines, "machine");
-    expect(groups).toHaveLength(2);
-    expect(groups.every((g) => g.sessions.length === 1)).toBe(true);
-  });
-});
-
 describe("所有分组共用 live 与最近的边界", () => {
   it("助手不混入 Agents，离线或未知机器的会话只进入最近", () => {
     const all = [session("live", "unknown"), session("assistant", "working", { assistant: true }), session("offline", "offline"),
@@ -99,7 +82,7 @@ describe("所有分组共用 live 与最近的边界", () => {
     const lists = splitAgentSessions(all, machines);
     expect(ids(lists.live)).toEqual(["live"]);
     expect(ids(lists.recent)).toEqual(["offline", "machine-offline", "unknown-machine"]);
-    for (const grouping of ["state", "machine"] as const) expect(ids(buildAgentGroups(all, machines, grouping).flatMap((g) => g.sessions))).toEqual(["live"]);
+    expect(ids(buildAgentGroups(all, machines, "state").flatMap((g) => g.sessions))).toEqual(["live"]);
   });
 
   it("最近按更新时间倒序并限制 40 条，不修改输入数据", () => {

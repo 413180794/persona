@@ -476,6 +476,15 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		}
 		m.hub.toSubscribers(m.cfg.ID, p.SessionID, map[string]any{"type": "screen", "machine_id": m.cfg.ID, "session_id": p.SessionID,
 			"text": p.Text, "status": p.Status, "ts": time.Now().UTC()})
+	case "session.live": // a working Claude's status line as it is now: not kept, not replayed (docs/protocol.md「实时状态」)
+		var p struct {
+			SessionID string             `json:"session_id"`
+			Live      *proto.SessionLive `json:"live"`
+		}
+		if json.Unmarshal(params, &p) == nil && p.SessionID != "" {
+			m.hub.toSubscribersWith(m.cfg.ID, p.SessionID, proto.FeatureSessionLive,
+				map[string]any{"type": "live", "machine_id": m.cfg.ID, "session_id": p.SessionID, "live": p.Live})
+		}
 	case "terminal.frame":
 		m.hub.onTerminalFrame(m.cfg.ID, params)
 	case "terminal.end":

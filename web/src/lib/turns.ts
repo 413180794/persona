@@ -210,10 +210,9 @@ export function segments(items: Item[]): Segment[] {
         break;
       }
       case "thinking":
-        if (it.text?.trim()) {
-          cur.steps.push({ kind: "thinking", id: it.id, item: it });
-          cur.thoughts++;
-        }
+        // an empty thought (Claude Code mostly writes them without words) still shows as 「思考 Ns」
+        cur.steps.push({ kind: "thinking", id: it.id, item: it });
+        if (it.text?.trim()) cur.thoughts++;
         break;
       case "text":
         if (it.text?.trim()) cur.steps.push({ kind: "text", id: it.id, item: it });
@@ -248,14 +247,19 @@ export function segments(items: Item[]): Segment[] {
   return out;
 }
 
-export function workSummary(s: Segment): string {
-  const parts: string[] = [];
-  if (s.tools) parts.push(`工具 ${s.tools}`);
-  if (s.thoughts) parts.push(`思考 ${s.thoughts}`);
-  if (s.replies) parts.push(`回复 ${s.replies}`);
-  const notices = s.steps.filter((x) => x.kind === "notice").length;
-  if (notices) parts.push(`通知 ${notices}`);
-  return parts.join(" · ");
+/** The agent's words in a pushed batch that the chat did not have yet: they just came in (their words fade in once). */
+export function freshWords(have: Item[], pushed: Item[]): string[] {
+  const known = new Set(have.map((i) => i.id));
+  return pushed.filter((i) => i.role === "assistant" && i.kind === "text" && !known.has(i.id)).map((i) => i.id);
+}
+
+/** A segment's steps with its answer back in its place: what lib/work-groups.ts groups. */
+export function exchangeSteps(s: Segment): Step[] {
+  if (!s.answer) return s.steps;
+  const a = s.answer;
+  const at = s.steps.findIndex((st) => blockOrder(st.kind === "tool" ? st.use : st.item, a) > 0);
+  const step: Step = { kind: "text", id: a.id, item: a };
+  return at < 0 ? [...s.steps, step] : [...s.steps.slice(0, at), step, ...s.steps.slice(at)];
 }
 
 // The first line worth showing for a tool call: the command, the file, the pattern…
@@ -315,54 +319,6 @@ export function toolLabel(name?: string): string {
   // mcp__<server>__<tool>, and the server may have underscores itself (mcp__plugin_x_y__tool), like the apps
   if (name.startsWith("mcp__")) return name.slice(name.lastIndexOf("__") + 2).replace(/_/g, " ");
   return name;
-}
-
-export function toolIcon(name?: string): "run" | "read" | "write" | "search" | "web" | "agent" | "todo" | "tool" {
-  switch (name) {
-    case "Bash":
-    case "exec_command":
-    case "shell":
-      return "run";
-    case "Read":
-      return "read";
-    case "Edit":
-    case "MultiEdit":
-    case "Write":
-    case "NotebookEdit":
-    case "apply_patch":
-      return "write";
-    case "Grep":
-    case "Glob":
-    case "ToolSearch":
-      return "search";
-    case "WebFetch":
-    case "WebSearch":
-      return "web";
-    case "Task":
-    case "Agent":
-      return "agent";
-    case "TodoWrite":
-      return "todo";
-  }
-  return "tool";
-}
-
-// +N −M of an edit, from the old / new strings Claude gives.
-export function editStats(use: Item): { add: number; del: number } | null {
-  const inp = (use.tool_input ?? {}) as Record<string, unknown>;
-  const lines = (s: unknown) => (typeof s === "string" && s ? s.split("\n").length : 0);
-  if (use.tool_name === "Edit") return { add: lines(inp.new_string), del: lines(inp.old_string) };
-  if (use.tool_name === "Write") return { add: lines(inp.content), del: 0 };
-  if (use.tool_name === "MultiEdit" && Array.isArray(inp.edits)) {
-    let add = 0,
-      del = 0;
-    for (const e of inp.edits as Record<string, unknown>[]) {
-      add += lines(e.new_string);
-      del += lines(e.old_string);
-    }
-    return { add, del };
-  }
-  return null;
 }
 
 // ── exchanges and lines (iOS ChatBlock.build + ChatLines) ──────────────────────────

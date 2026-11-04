@@ -135,6 +135,8 @@ def run(browser, base, token, main_id, other, shots):
         page = ctx.new_page()
         page.set_default_timeout(10000)
         page.goto(base + "/overview?token=" + token)
+        # signed in (the link's token traded for this browser's) before the reload, or the reload lands on the login form
+        expect(page.locator("aside")).to_be_attached()
         page.evaluate(f"localStorage.setItem('jarvis.theme', '{theme}')")
         page.reload()
         page.locator("main").get_by_role("button", name="侧边栏").first.click()
