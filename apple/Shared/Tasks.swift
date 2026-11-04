@@ -74,9 +74,24 @@ nonisolated struct FeedItem: Codable, Hashable, Identifiable, Sendable {
         return s
     }
 
-    /// `answered`: what the card asked and the user's answer.
+    /// `answered`: what the card asked and the user's answer, a line each (the collapsed row).
     var question: String? { string("question") }
     var answer: String? { string("answer") }
+
+    /// `answered`: every question of the card with the user's answer in full, newlines kept (#1231). A record from
+    /// before it has only the line, which stands in; empty when there is nothing to show.
+    var answeredItems: [AnsweredItem] {
+        if case .object(let o)? = body, case .array(let list)? = o["items"] {
+            let items = list.compactMap { v -> AnsweredItem? in
+                guard case .object(let it) = v else { return nil }
+                let item = AnsweredItem(question: it["question"]?.string ?? "", answer: it["answer"]?.string ?? "")
+                return item.question.isEmpty && item.answer.isEmpty ? nil : item
+            }
+            if !items.isEmpty { return items }
+        }
+        let line = AnsweredItem(question: question ?? "", answer: answer ?? "")
+        return line.question.isEmpty && line.answer.isEmpty ? [] : [line]
+    }
     /// `receipt`: the task's title, done / failed, the agent's last words, its PR and machine.
     var title: String? { string("title") }
     var failed: Bool { string("state") == "failed" }
@@ -103,6 +118,12 @@ nonisolated struct FeedItem: Codable, Hashable, Identifiable, Sendable {
         guard let pr, let n = pr.split(separator: "/").last, Int(n) != nil else { return nil }
         return "PR #\(n)"
     }
+}
+
+/// One question of an answered card and what the user answered (`FeedItem.answeredItems`).
+nonisolated struct AnsweredItem: Hashable, Sendable {
+    var question: String
+    var answer: String
 }
 
 /// The 今天 card's content (docs/protocol.md「任务和对话动态」, kind `today`), built by the hub.

@@ -1369,7 +1369,17 @@ if MOCK_TASKS:
         _feed("feed_m3", 43.3, "task", "todo_task_tests"),
         _feed("feed_m4", 29.5, "plan", "plan_mock_2"),
         _feed("feed_m5", 29.4, "task", "todo_task_release"),
+        # An answered card from before #1231 (only the line), and one with every question and answer in full.
         _feed("feed_m6", 25, "answered", "todo_task_widget", {"question": "使用 Bash", "answer": "批准了 · 以后同类不再问"}),
+        _feed("feed_m6b", 24, "answered", "todo_task_tests", {
+            "question": "网络层的测试先补哪一块？",
+            "answer": "先补请求重试和超时（推荐）；用本地假服务器，不连真实接口；覆盖率目标 80%，生成的代码不算",
+            "items": [
+                {"question": "网络层的测试先补哪一块？", "answer": "先补请求重试和超时（推荐）"},
+                {"question": "测试里的网络请求怎么处理？\n真实接口有限流，跑一次全量会被封一小时。",
+                 "answer": "用本地假服务器，不连真实接口"},
+                {"question": "覆盖率按什么算？", "answer": "覆盖率目标 80%，生成的代码不算\n缓存层先不管，下周再补"},
+            ]}),
         _feed("feed_m7", 20, "receipt", "todo_task_release",
               {"title": "整理发布说明", "state": "done", "machine": "MacBook",
                "summary": "整理好了：这周合并了 7 个 PR，分成新功能、修复和其他三组，写在 docs/release-notes.md 里，等你过目。",

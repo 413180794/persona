@@ -379,6 +379,7 @@ func wireSamples(t *testing.T) map[string][]wireSample {
 	inboxLark := InboxItem{ID: "lark:feed_example:10", Source: "lark", Kind: KindMention, Account: "feishu", AccountName: "飞书", Title: "示例讨论", Sender: "小王", Preview: "请确认示例。", Count: 1, StartedAt: now, UpdatedAt: now, Tier: TierAction, Lark: &InboxLark{FeedID: "feed_example", IsGroup: true, StartPosition: "10", MentionPosition: "10"}, Context: "仅详情展示的示例内容", Last: "10", TriagedAt: "10", Agent: &InboxAgent{State: "drafted", MachineID: "m1", SessionID: "s1", Draft: "已收到示例。"}}
 	inboxMail := InboxItem{ID: "mail:account_example:thread_example:11", Source: "mail", Kind: KindMail, Account: "account_example", AccountName: "user@example.com", Title: "示例邮件", Preview: "示例已确认。", Count: 1, StartedAt: now, UpdatedAt: now, DoneAt: &now, DoneBy: "user", Read: true, Mail: &InboxMail{AccountID: "account_example", Mailbox: "INBOX", UIDs: []uint32{11}, MessageID: "message_example", From: mail.Address{Name: "小王", Email: "sender@example.com"}, Thread: "thread_example", Direct: true}}
 	add("inbox", "inbox_list", "收件箱列表包含飞书和邮件条目，并移除内部上下文。", "inbox", httpJSON(map[string]any{"items": []InboxItem{inboxLark.listed(), inboxMail.listed()}}), map[string]any{"/items/0/source": "lark", "/items/0/context": nil, "/items/0/agent/draft": "已收到示例。", "/items/1/source": "mail", "/items/1/mail/uids/0": 11, "/items/1/done_by": "user"}, "server/internal/hub/inbox.go: InboxItem.listed, Hub.inboxRoutes", "apple/Shared/InboxModels.swift: InboxItem")
+	wireFeed(add, httpJSON, now)
 	wireLark(t, add)
 	wireErrors(t, add)
 	wireCompatibility(t, files, add, ws, httpJSON, now)
@@ -597,4 +598,24 @@ func wireCompatibility(t *testing.T, files map[string][]wireSample, add wireAdde
 			files["errors"][i].HTTPStatus = 409
 		}
 	}
+}
+
+// wireFeed: an assistant conversation's feed with an answered record in full (#1231) and one from before it.
+func wireFeed(add func(file, name, description, decoder string, input json.RawMessage, fields map[string]any, sources ...string),
+	httpJSON func(any) json.RawMessage, now time.Time) {
+	ix := proto.Interaction{Kind: proto.IxQuestion, Questions: []proto.Question{{Question: "第一步放在哪里？"}, {Question: "示例插件叫什么？"}}}
+	r := proto.Resolution{Answers: map[string]string{"第一步放在哪里？": "放到独立仓库（推荐）\n先只迁一个", "示例插件叫什么？": "example-plugin"}}
+	full, _ := json.Marshal(answeredBody{Question: interactionQuestion(ix), Answer: resolutionAnswer(ix, r), Items: answeredItems(ix, r)})
+	legacy, _ := json.Marshal(map[string]string{"question": "使用 Bash", "answer": "批准了"})
+	items := []FeedItem{
+		{ID: "feed_1", Conversation: "conv_example", At: now, Kind: feedAnswered, Ref: "todo_example", Body: full},
+		{ID: "feed_2", Conversation: "conv_example", At: now, Kind: feedAnswered, Ref: "todo_example", Body: legacy},
+	}
+	add("feed", "feed_answered_items", "回答记录带一行摘要，并按问题成对保存完整的问题和回答（保留换行）；旧记录只有摘要。", "feed",
+		httpJSON(map[string]any{"items": items, "plans": map[string]*TaskPlan{}}),
+		map[string]any{"/items/0/kind": "answered", "/items/0/body/answer": "放到独立仓库（推荐） 先只迁一个；example-plugin",
+			"/items/0/body/items/0/answer": "放到独立仓库（推荐）\n先只迁一个", "/items/0/body/items/1/question": "示例插件叫什么？",
+			"/items/1/body/answer": "批准了", "/items/1/body/items": nil},
+		"server/internal/hub/tasks_answered.go: answeredBody, answeredItems", "apple/Shared/Tasks.swift: FeedItem.answeredItems",
+		"docs/protocol.md: 任务和对话动态")
 }

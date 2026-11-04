@@ -429,7 +429,7 @@ struct MailAccountsView: View {
     }
 
     private var page: some View {
-            List {
+            SettingsForm {
                 Section {
                     ForEach(accounts) { a in
                         HStack {
@@ -440,6 +440,14 @@ struct MailAccountsView: View {
                                     .font(Theme.Font.label).foregroundStyle(a.status == "error" ? Theme.danger : .secondary)
                             }
                         }
+                        #if os(macOS)
+                        // A Mac form has no swipe to delete: the row's menu removes the account (#1221).
+                        .contextMenu {
+                            Button("删除账户", role: .destructive) {
+                                Task { try? await model.api?.deleteMailAccount(a.id); await load() }
+                            }
+                        }
+                        #endif
                     }
                     .onDelete { idx in
                         let ids = idx.map { accounts[$0].id }

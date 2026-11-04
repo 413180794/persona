@@ -28,4 +28,18 @@ class TasksContractTest {
         val ix = JsonCodec.decodeFromString<Interaction>("""{"id":"ix","machine_id":"box","session_id":"s1","kind":"permission","task_title":"修登录崩溃"}""")
         assertEquals("修登录崩溃", ix.taskTitle)
     }
+
+    /** An answered record has every question with its answer in full (#1231); one from before it shows its line. */
+    @Test fun answeredItemsInFullOrTheLine() {
+        val res = JsonCodec.decodeFromString<FeedResponse>("""{"items":[
+            {"id":"f1","conversation":"c","at":"2026-11-03T10:00:00Z","kind":"answered","ref":"t",
+             "body":{"question":"先补哪一块？","answer":"重试；假服务器","items":[{"question":"先补哪一块？","answer":"重试\n和超时"},
+               {"question":"请求怎么处理？","answer":"假服务器"},{"question":"","answer":""},"x"]}},
+            {"id":"f2","conversation":"c","at":"2026-11-03T10:00:00Z","kind":"answered","body":{"question":"使用 Bash","answer":"批准了"}},
+            {"id":"f3","conversation":"c","at":"2026-11-03T10:00:00Z","kind":"answered","body":{"items":[]}}]}""")
+        assertEquals(listOf(AnsweredItem("先补哪一块？", "重试\n和超时"), AnsweredItem("请求怎么处理？", "假服务器")), res.items[0].answeredItems())
+        assertEquals("重试；假服务器", res.items[0].field("answer"))
+        assertEquals(listOf(AnsweredItem("使用 Bash", "批准了")), res.items[1].answeredItems())
+        assertTrue(res.items[2].answeredItems().isEmpty())
+    }
 }

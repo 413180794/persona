@@ -1,5 +1,12 @@
 package persona.feature.chat
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.background
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.clickable
@@ -138,13 +145,7 @@ private fun FeedLine(item: FeedItem, host: AssistantTaskHost) {
             val today = AssistantLines.time(item.at)?.atZone(ZoneId.systemDefault())?.toLocalDate() == LocalDate.now()
             if (today) TaskCard(todo, host) else TaskLine(todo, host)
         }
-        "answered" -> Row(Modifier.clip(CircleShape).background(PersonaTheme.palette.surfaceStrong)
-            .padding(horizontal = Tokens.Space.m, vertical = Tokens.Space.xs), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
-            JIcon(PhIcons.Check, decorative = true, size = Tokens.Space.m, tint = PersonaTheme.palette.ink2)
-            Text("$title · ${item.field("answer") ?: "回答了"}", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
+        "answered" -> AnsweredLine(item, title, todos.firstOrNull { it.id == item.ref }?.let { todo -> { openTask(host, todo) } })
         "receipt" -> ReceiptCard(item, host, todos)
         "routed" -> Column(Modifier.fillMaxWidth().padding(start = Tokens.Space.xxxl), horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
@@ -154,6 +155,45 @@ private fun FeedLine(item: FeedItem, host: AssistantTaskHost) {
         }
         "today" -> TodayCard(item, host, todos)
         "message" -> if (item.ref != null && item.ref !in later) MessageCard(item, host, todos)
+    }
+}
+
+/**
+ * A card of a task's agent the user dealt with, kept as a line「✓ 任务 · 回答」. Tap it for every question with its
+ * answer in full (#1231), selectable, and again to fold it; the task's name opens the task.
+ */
+@Composable
+internal fun AnsweredLine(item: FeedItem, title: String, onOpenTask: (() -> Unit)?) {
+    var open by rememberSaveable(item.id) { mutableStateOf(false) }
+    val items = remember(item) { item.answeredItems() }
+    val expandable = items.isNotEmpty()
+    val shape = if (open) PersonaTheme.shapes.cardShape else CircleShape
+    Column(Modifier.then(if (open) Modifier.fillMaxWidth() else Modifier).clip(shape).background(PersonaTheme.palette.surfaceStrong)
+        .animateContentSize()) {
+        Row(Modifier.then(if (expandable) Modifier.clickable(onClickLabel = if (open) "收起" else "展开") { open = !open } else Modifier)
+            .semantics { if (expandable) stateDescription = if (open) "已展开" else "已收起" }
+            .padding(horizontal = Tokens.Space.m, vertical = Tokens.Space.xs),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+            JIcon(PhIcons.Check, decorative = true, size = Tokens.Space.m, tint = PersonaTheme.palette.ink2)
+            Text(title, (if (onOpenTask != null) Modifier.clickable(onClickLabel = "打开任务", onClick = onOpenTask) else Modifier)
+                .weight(1f, fill = false), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("· ${item.field("answer") ?: "回答了"}", Modifier.weight(1f, fill = false), style = PersonaTheme.type.caption,
+                color = PersonaTheme.palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (expandable) JIcon(PhIcons.CaretRight, decorative = true, size = Tokens.Space.m, tint = PersonaTheme.palette.ink3,
+                modifier = Modifier.rotate(if (open) 90f else 0f))
+        }
+        if (open) SelectionContainer {
+            Column(Modifier.fillMaxWidth().padding(start = Tokens.Space.m, end = Tokens.Space.m, bottom = Tokens.Space.m)
+                .testTag("answered-detail"), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
+                items.forEach { qa ->
+                    Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xxs)) {
+                        if (qa.question.isNotEmpty()) Text(qa.question, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
+                        if (qa.answer.isNotEmpty()) Text(qa.answer, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink)
+                    }
+                }
+            }
+        }
     }
 }
 

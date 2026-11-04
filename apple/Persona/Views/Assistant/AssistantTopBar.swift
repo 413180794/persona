@@ -47,9 +47,7 @@ struct AssistantTopBar: View {
                     NavigationStack {
                         SessionInfoSheet(key: key, session: session)
                             .navigationTitle("会话信息")
-                            .toolbar {
-                                ToolbarItem(placement: .confirmationAction) { Button("完成") { showInfo = false }.lineLimit(1) }
-                            }
+                            .macSheetDone { showInfo = false }
                     }
                     .macSheet()
                     #else

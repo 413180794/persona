@@ -66,6 +66,9 @@ struct SSHTunnelForm<Status: View>: View {
     @State private var removing = false
     @State private var key: SSHIdentity?
     @State private var keyProblem: String?
+    /// The fields as the form opened: in its Mac sheet 取消 asks first once they differ.
+    @State private var opened: [String]?
+    private var fields: [String] { [host, port, user, targetHost, targetPort, always ? "1" : "0"] }
 
     private enum Confirm: Identifiable {
         case unknown(fingerprint: String, algorithm: String)
@@ -165,7 +168,8 @@ struct SSHTunnelForm<Status: View>: View {
         }
         .themedPage()
         #if os(macOS)
-        .modifier(MacFormChrome(inSheet: dismissOnSave, cancel: { dismiss() }, save: saveButton))
+        .modifier(MacFormChrome(inSheet: dismissOnSave, unsaved: opened.map { $0 != fields } ?? false,
+                                cancel: { dismiss() }, save: saveButton))
         #endif
         .onAppear(perform: load)
         .onChange(of: host) { _, _ in serverChanged() }
@@ -281,7 +285,6 @@ struct SSHTunnelForm<Status: View>: View {
                 Spacer(minLength: 0)
                 if !dismissOnSave { saveButton.buttonStyle(.borderedProminent) }
             }
-            .listRowBackground(Color.clear)
         } footer: {
             Text("会用上面的设置登录 SSH 服务器，并打开一次到隧道目标的转发。")
         }
@@ -345,6 +348,7 @@ struct SSHTunnelForm<Status: View>: View {
         }
         guard !loaded else { return }
         loaded = true
+        defer { opened = fields }
         guard let saved else { return }
         host = saved.host
         port = saved.port == 22 ? "" : String(saved.port)
@@ -432,6 +436,7 @@ extension SSHTunnelForm where Status == EmptyView {
 /// grouped form in the detail column.
 private struct MacFormChrome<Save: View>: ViewModifier {
     var inSheet: Bool
+    var unsaved: Bool
     var cancel: () -> Void
     var save: Save
 
@@ -439,8 +444,8 @@ private struct MacFormChrome<Save: View>: ViewModifier {
         if inSheet {
             content
                 .macSheet()
+                .sheetCancel(unsaved: unsaved, cancel: cancel)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("取消", action: cancel) }
                     ToolbarItem(placement: .confirmationAction) { save }
                 }
         } else {

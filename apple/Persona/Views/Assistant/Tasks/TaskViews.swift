@@ -286,11 +286,14 @@ struct PlanEditSheet: View {
             }
             .navigationTitle("改一下")
             .navigationBarTitleDisplayMode(.inline)
+            .sheetCancel(unsaved: !tasks.isEmpty && tasks != plan.tasks) { dismiss() }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("开始") { start(tasks) }.bold() }
             }
         }
+        #if os(macOS)
+        .macSheet()
+        #endif
         .onAppear { if tasks.isEmpty { tasks = plan.tasks } }
     }
 }
@@ -467,7 +470,7 @@ struct FeedLine: View {
             if let body = item.today { TodayCard(item: item, body: body) }
         case .message:
             if let id = item.ref, !store.laterMessages.contains(id) { MessageCard(item: item, itemID: id) }
-        case .answered: answered
+        case .answered: AnsweredLine(item: item, taskTitle: taskTitle)
         case .receipt: ReceiptCard(item: item)
         case .routed: routed
         case .unknown: EmptyView()
@@ -475,20 +478,6 @@ struct FeedLine: View {
     }
 
     private var taskTitle: String { item.ref.flatMap { store.todos[$0]?.title } ?? "任务" }
-
-    private var answered: some View {
-        HStack(spacing: Theme.Space.s) {
-            Image(systemName: Theme.Icon.done).font(Theme.Font.labelStrong)
-            Text("\(taskTitle) · \(item.answer ?? "回答了")").lineLimit(1)
-        }
-        .font(Theme.Font.caption)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, Theme.Space.m)
-        .padding(.vertical, Theme.Space.sm)
-        .background(Theme.Fill.chip, in: .capsule)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
-    }
 
     private var routed: some View {
         VStack(alignment: .trailing, spacing: Theme.Space.xs) {
@@ -505,6 +494,102 @@ struct FeedLine: View {
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.leading, Theme.Space.xxl)
+    }
+}
+
+/// A card of a task's agent the user dealt with, kept as a line「✓ 任务 · 回答」. Tap it for every question with its
+/// answer in full (#1231), selectable, and again to fold it; the task's name opens the task.
+struct AnsweredLine: View {
+    var item: FeedItem
+    var taskTitle: String
+    @State private var open = false
+    @State private var unfold = Unfolding()
+    /// Where the answers end on screen, to bring them into view once open (`ChatPin.show`).
+    @State private var bottom: CGFloat = 0
+    @Environment(\.chatPin) private var pin
+    private var store: TasksStore { .shared }
+    private var pinKey: String { "answered-" + item.id }
+
+    var body: some View {
+        let items = item.answeredItems
+        VStack(alignment: .leading, spacing: 0) {
+            header(expandable: !items.isEmpty)
+            if open {
+                VStack(alignment: .leading, spacing: Theme.Space.m) {
+                    ForEach(Array(items.enumerated()), id: \.offset) { _, it in
+                        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                            if !it.question.isEmpty {
+                                Text(it.question).font(Theme.Font.captionStrong).foregroundStyle(.secondary)
+                            }
+                            if !it.answer.isEmpty {
+                                Text(it.answer).font(Theme.Font.secondary).foregroundStyle(.primary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+                .padding(.horizontal, Theme.Space.m)
+                .padding(.bottom, Theme.Space.m)
+                .accessibilityIdentifier("answered-detail")
+                .unfolding(unfold)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .frame(maxWidth: open ? .infinity : nil, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).maxY }) { bottom = $0 }
+        .background(Theme.Fill.chip, in: open ? AnyShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous)) : AnyShape(.capsule))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .chatPinned(pinKey)
+    }
+
+    private func header(expandable: Bool) -> some View {
+        HStack(spacing: Theme.Space.s) {
+            Image(systemName: Theme.Icon.done).font(Theme.Font.labelStrong)
+            HStack(spacing: Theme.Space.xs) {
+                if let id = item.ref, store.todos[id] != nil {
+                    Button { store.detailTask = id } label: { Text(taskTitle).lineLimit(1) }
+                        .buttonStyle(.plain)
+                } else {
+                    Text(taskTitle).lineLimit(1)
+                }
+                Text("· \(item.answer ?? "回答了")").lineLimit(1)
+            }
+            if expandable {
+                Image(systemName: Theme.Icon.disclosure)
+                    .font(Theme.Font.labelStrong)
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(open ? 90 : 0))
+                    .accessibilityHidden(true)
+            }
+        }
+        .font(Theme.Font.caption)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, Theme.Space.m)
+        .padding(.vertical, Theme.Space.sm)
+        .contentShape(.rect)
+        .onTapGesture { if expandable { toggle() } }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("answered-line")
+        .accessibilityValue(expandable ? (open ? "已展开" : "已收起") : "")
+        .accessibilityAction(named: open ? "收起" : "展开") { if expandable { toggle() } }
+        .accessibilityAction(named: "打开任务") { if let id = item.ref, store.todos[id] != nil { store.detailTask = id } }
+    }
+
+    private func toggle() {
+        Haptics.tap()
+        let opening = !open
+        toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: open) { open.toggle() }
+        #if os(iOS)
+        // The line as the chat's last row: the answers open under it, past the composer.
+        guard opening, let pin else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(Theme.Motion.revealTime))
+            if open { pin.show(pinKey, bottom: bottom) }
+        }
+        #endif
     }
 }
 

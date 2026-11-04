@@ -330,7 +330,7 @@ struct FeishuConnectorView: View {
     @State private var failure: String?
 
     var body: some View {
-        List {
+        SettingsForm {
             Section {
                 HStack(spacing: Theme.Space.m) {
                     BrandMark(Theme.Brand.lark, side: Theme.Size.wellM)
@@ -436,7 +436,7 @@ struct HubConnectorView: View {
     @State private var failure: String?
 
     var body: some View {
-        List {
+        SettingsForm {
             Section {
                 HStack(spacing: Theme.Space.m) {
                     mark

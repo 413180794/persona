@@ -301,8 +301,11 @@ struct ChatView: View {
             if let s = session, let todoID = s.todo?.id,
                 TodosLogic.isOnTodosHub(sessionGroup: s.key.group, hubGroup: model.hub?.group) {
                 NavigationStack {
-                    TodoDetailView(todoID: todoID)
+                    TodoDetailView(todoID: todoID).macSheetDone { showTodoDetail = false }
                 }
+                #if os(macOS)
+                .macSheet()
+                #endif
             }
         }
     }
@@ -2983,7 +2986,10 @@ struct SessionInfoSheet: View {
                                 row(Theme.Icon.todo, "待办", todo.title)
                             }
                             .sheet(isPresented: $showTodo) {
-                                NavigationStack { TodoDetailView(todoID: todo.id) }
+                                NavigationStack { TodoDetailView(todoID: todo.id).macSheetDone { showTodo = false } }
+                                    #if os(macOS)
+                                    .macSheet()
+                                    #endif
                             }
                         }
                         row(Theme.Icon.folder, "目录", Fmt.path(info.cwd ?? session?.cwd ?? "", home: model.machine(key.machineRef)?.home), mono: true)

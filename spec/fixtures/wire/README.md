@@ -17,6 +17,7 @@
 | [fleet.json](fleet.json) | GET `/api/v1/fleet`；WS `fleet` | 调用 `buildFleet`，再使用实际快照或信封结构 |
 | [inbox.json](inbox.json) | GET `/api/v1/inbox` | `InboxItem.listed` 清理列表中的内部字段，再经 `writeJSON` |
 | [lark.json](lark.json) | GET `/api/v1/lark/conversations/{id}/messages` | 本地假上游 → `Client.Messages` → normalize / rewriteMedia → hub 路由 |
+| [feed.json](feed.json) | GET `/api/v1/assistant/conversations/{id}/feed` | `answeredBody` 由 `answeredItems` 等生成，再经 `writeJSON` |
 | [errors.json](errors.json) | 未鉴权请求的 401；发送及屏幕操作拒绝的 409 | 调用 `Hub.auth`、`callErr`，同时断言 HTTP 状态 |
 | [compatibility.json](compatibility.json) | 上述类型的旧格式、未知字段及异常类型 | 用 Go 编码器构造兼容性输入，交当前 iOS 解码；异常输入不代表 hub 正常输出 |
 
@@ -48,6 +49,7 @@
 | Fleet 保留驼峰键名，时间使用 Unix 秒数字。 | `server/internal/hub/liveactivity.go`：`FleetState`、`buildFleet`；`apple/Shared/FleetState.swift` | `fleet_snapshot`、`fleet_event` |
 | 收件箱列表统一承载飞书和邮件，移除 context 等内部字段并保留草拟回复。 | `server/internal/hub/inbox.go`：`InboxItem.listed`；`apple/Shared/InboxModels.swift`：`InboxItem` | `inbox_list` |
 | 飞书 parts 保留 refId 和任意 metadata 键名，媒体 URL 改写到 hub。 | `server/internal/lark/lark.go`：`normalize`、`rewriteMedia`；`apple/Persona/Views/Inbox/Lark/LarkModels.swift`：`LarkPart` | `lark_message_parts` |
+| 回答记录保留一行摘要，`items` 成对保存完整问答并保留换行；旧记录没有 `items`。 | `server/internal/hub/tasks_answered.go`：`answeredBody`、`answeredItems`；`apple/Shared/Tasks.swift`：`FeedItem` | `feed_answered_items` |
 | 401 保留字符串 error，409 的 code、delivered、draft、clearable 与 error 平铺。 | `Hub.auth`、`callErr`；`apple/Shared/APIClient.swift`：`APIError.fields(in:)`；`docs/protocol.md`「发消息」 | `unauthorized`、`conflict_input_draft`、`conflict_dialog_open`、`conflict_prompt_changed` |
 | 未知事件忽略，未知键忽略，旧 hello 缺 features 时返回空数组。 | `apple/Shared/LiveConnection.swift`：`ServerEvent.decode`、`Envelope` | `unknown_event_ignored`、`hello_unknown_field`、`hello_missing_features` |
 | 旧 items 事件中的 null 转为空数组，缺失的连续性字段保留为空。 | `ServerEvent.decode` | `items_legacy_null` |
@@ -78,6 +80,7 @@
 | `compat_session` | `JSON.decoder.decode(Session.self, ...)`，另检查日期有效性 |
 | `sessions`、`machines`、`interactions`、`inbox` | 解码对应数组中的真实 `Session`、`Machine`、`Interaction`、`InboxItem` |
 | `items` | `APIClient.ItemsResponse` |
+| `feed` | `APIClient.FeedResponse`（`FeedItem` 数组和计划） |
 | `items_after` | `APIClient.NewerResponse` |
 | `items_range` | `APIClient.foldedWork` 中的 `Range` |
 | `fleet` | 用默认 `JSONDecoder` 解码 `FleetState`，与 ActivityKit 一致 |

@@ -6,7 +6,7 @@ struct PluginsView: View {
     @State private var page = PluginsModel()
 
     var body: some View {
-        List {
+        SettingsForm {
             if let plugins = page.plugins, plugins.isEmpty {
                 Section {
                     EmptyStateView(symbol: Theme.Icon.plugins, title: "没有插件",
@@ -92,7 +92,7 @@ struct PluginDetailView: View {
     init(id: String) { _page = State(initialValue: PluginModel(id: id)) }
 
     var body: some View {
-        List {
+        SettingsForm {
             header
             if let d = page.detail {
                 if d.readOnly {
@@ -334,7 +334,12 @@ private struct PluginFieldRow: View {
     private func labeled(@ViewBuilder _ content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             Text(title).font(Theme.Font.labelStrong).foregroundStyle(.secondary).lineLimit(2)
+            #if os(macOS)
+            // A Mac form draws a field's title as its label beside an empty box: the title is the prompt here (#1221).
+            content().labelsHidden()
+            #else
             content()
+            #endif
         }
     }
 
@@ -396,6 +401,9 @@ private struct PluginListField: View {
                 }
                 HStack(spacing: Theme.Space.s) {
                     TextField("添加一项", text: $adding)
+                        #if os(macOS)
+                        .labelsHidden() // the title is the prompt (#1221)
+                        #endif
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .onSubmit(add)
@@ -455,8 +463,8 @@ private struct PluginSecretSheet: View {
             .themedPage()
             .navigationTitle(secret.title)
             .navigationBarTitleDisplayMode(.inline)
+            .sheetCancel(unsaved: !value.isEmpty) { dismiss() }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button { dismiss() } label: { Text("取消").lineLimit(1) } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         Task {
@@ -473,5 +481,8 @@ private struct PluginSecretSheet: View {
             }
         }
         .presentationDetents([.medium])
+        #if os(macOS)
+        .macSheet()
+        #endif
     }
 }

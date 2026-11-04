@@ -427,8 +427,11 @@ struct LauncherEditor: View {
     @State private var protocolName = "messages"
     @State private var saving = false
     @State private var error: String?
+    /// The fields as the sheet opened: 取消 asks first once they differ (Mac).
+    @State private var opened: [String]?
 
     private var isNew: Bool { existing == nil }
+    private var fields: [String] { [name, baseURL, apiKey, modelName, smallModel, args, kind, protocolName] }
 
     var body: some View {
         NavigationStack {
@@ -476,14 +479,15 @@ struct LauncherEditor: View {
             }
             .navigationTitle(isNew ? "新增供应商" : "编辑 \(existing?.name ?? "")")
             .navigationBarTitleDisplayMode(.inline)
+            .sheetCancel(unsaved: opened.map { $0 != fields } ?? false) { dismiss() }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.lineLimit(1) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") { Task { await save() } }.lineLimit(1)
                         .disabled(saving || name.isEmpty || baseURL.isEmpty || modelName.isEmpty || (isNew && apiKey.isEmpty))
                 }
             }
             .onAppear {
+                defer { if opened == nil { opened = fields } }
                 guard let e = existing else { return }
                 name = e.name
                 baseURL = e.baseURL ?? ""

@@ -38,6 +38,7 @@ class WireFixturesTest(private val name: String, private val fixture: JsonObject
             "items", "items_after", "items_range" -> model<ItemsResponse>(input)
             "fleet" -> model<FleetResponse>(input)
             "inbox" -> model<InboxResponse>(input)
+            "feed" -> model<FeedResponse>(input)
             "lark" -> model<LarkMessages>(input)
             "health" -> model<Health>(input)
             "error" -> model<ErrorBody>(input)

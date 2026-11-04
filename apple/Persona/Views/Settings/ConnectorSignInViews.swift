@@ -346,41 +346,56 @@ struct ConnectorSignInSteps: View {
             Section {
                 if p.isDeviceCode {
                     if let s = p.url, let url = URL(string: s) {
+                        #if os(macOS)
+                        // Standard buttons at the trailing end on the Mac, not bars the width of the form (#1221).
+                        HStack {
+                            Spacer(minLength: 0)
+                            Link(destination: url) {
+                                Label("打开 \(connector.name) 输入验证码", systemImage: Theme.Icon.openExternal).lineLimit(1)
+                            }
+                            .formButton(prominent: true)
+                            .accessibilityIdentifier("connector.openVerification")
+                        }
+                        .listRowBackground(Color.clear)
+                        #else
                         Link(destination: url) {
                             Label("打开 \(connector.name) 输入验证码", systemImage: Theme.Icon.openExternal).lineLimit(1).frame(maxWidth: .infinity)
                         }
                         .themedButton(prominent: true)
                         .listRowBackground(Color.clear)
                         .accessibilityIdentifier("connector.openVerification")
+                        #endif
                     }
                 } else {
-                    Button {
-                        Task {
-                            await model.next()
-                            await reload() // the status above follows (credentials saved: api_id shown; signed in)
+                    FormAction {
+                        Button {
+                            Task {
+                                await model.next()
+                                await reload() // the status above follows (credentials saved: api_id shown; signed in)
+                            }
+                        } label: {
+                            Text(model.busy ? "正在验证…" : "下一步").lineLimit(1).formActionWidth()
                         }
-                    } label: {
-                        Text(model.busy ? "正在验证…" : "下一步").lineLimit(1).frame(maxWidth: .infinity)
+                        .formButton(prominent: true)
+                        .disabled(!model.canSend)
+                        .accessibilityIdentifier("connector.next")
                     }
-                    .themedButton(prominent: true)
-                    .disabled(!model.canSend)
-                    .listRowBackground(Color.clear)
-                    .accessibilityIdentifier("connector.next")
                 }
             } footer: {
                 Text(footer)
             }
         } else {
             Section {
-                Button {
-                    Task { await model.start() }
-                } label: {
-                    Text("登录 \(connector.name)").lineLimit(1).frame(maxWidth: .infinity)
+                FormAction {
+                    Button {
+                        Task { await model.start() }
+                    } label: {
+                        Text("登录 \(connector.name)").lineLimit(1).formActionWidth()
+                    }
+                    .formButton(prominent: true)
+                    .disabled(model.busy)
+                    .accessibilityIdentifier("connector.signIn")
                 }
-                .themedButton(prominent: true)
-                .disabled(model.busy)
-                .listRowBackground(Color.clear)
-                .accessibilityIdentifier("connector.signIn")
             } header: {
                 SettingsHeading("登录")
             } footer: {

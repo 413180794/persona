@@ -28,6 +28,24 @@ struct TasksTests {
         #expect(plan.state == .open && plan.tasks.first?.project == "app" && plan.tasks.first?.isReadOnly == false)
     }
 
+    /// An answered record has every question with its answer in full (#1231); one from before it shows its line.
+    @Test func answeredItemsInFullOrTheLine() throws {
+        let res = try decode(#"""
+        {"items":[
+          {"id":"feed_1","conversation":"c1","at":"2026-11-03T10:06:00Z","kind":"answered","ref":"todo_1",
+           "body":{"question":"先补哪一块？","answer":"重试；假服务器","items":[
+             {"question":"先补哪一块？","answer":"重试\n和超时"},{"question":"请求怎么处理？","answer":"假服务器"},{"question":"","answer":""}]}},
+          {"id":"feed_2","conversation":"c1","at":"2026-11-03T10:07:00Z","kind":"answered","ref":"todo_1",
+           "body":{"question":"使用 Bash","answer":"批准了"}},
+          {"id":"feed_3","conversation":"c1","at":"2026-11-03T10:08:00Z","kind":"answered","ref":"todo_1","body":{"items":[]}}]}
+        """#, as: APIClient.FeedResponse.self)
+        #expect(res.items[0].answer == "重试；假服务器")
+        #expect(res.items[0].answeredItems == [AnsweredItem(question: "先补哪一块？", answer: "重试\n和超时"),
+                                               AnsweredItem(question: "请求怎么处理？", answer: "假服务器")])
+        #expect(res.items[1].answeredItems == [AnsweredItem(question: "使用 Bash", answer: "批准了")])
+        #expect(res.items[2].answeredItems.isEmpty)
+    }
+
     @Test func todoDecodesWithAndWithoutOrigin() throws {
         let t = try decode(#"""
         {"id":"todo_1","title":"修登录崩溃","notes":"","done_at":null,"created_at":"2026-11-03T10:00:00Z","origin":"c1","plan_id":"plan_1",

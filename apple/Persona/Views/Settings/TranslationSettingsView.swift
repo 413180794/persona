@@ -86,6 +86,8 @@ struct TranslationChatPicker: View {
     @State private var query = ""
     @State private var loading = true
     @State private var error: String?
+    /// The chats picked as the sheet opened: 取消 asks first once they differ (Mac).
+    @State private var opened: Set<String>?
 
     /// The picked ones first (so a chat no longer in the recent list can still be unpicked), then the recent ones.
     private var rows: [TranslationPrefs.Chat] {
@@ -124,8 +126,9 @@ struct TranslationChatPicker: View {
             .searchable(text: $query, prompt: "搜索会话")
             .navigationTitle("要翻译的会话")
             .navigationBarTitleDisplayMode(.inline)
+            .sheetCancel(unsaved: opened.map { $0 != Set(selected.map(\.id)) } ?? false) { dismiss() }
+            .onAppear { if opened == nil { opened = Set(selected.map(\.id)) } }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") {
                         save(selected)
@@ -135,6 +138,9 @@ struct TranslationChatPicker: View {
             }
             .task { await load() }
         }
+        #if os(macOS)
+        .macSheet()
+        #endif
     }
 
     private func load() async {

@@ -29,7 +29,6 @@ struct HubsView: View {
                     Spacer(minLength: 0)
                     Button("添加 hub…") { showPair = true }.lineLimit(1).formButton().accessibilityIdentifier("hubs.add")
                 }
-                .listRowBackground(Color.clear) // a button under the groups, not a group of its own
                 #else
                 Button { showPair = true } label: {
                     SettingsRow(title: "添加 hub", symbol: Theme.Icon.add, tint: Theme.accent)

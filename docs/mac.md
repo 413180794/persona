@@ -219,8 +219,8 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
 - 表单里的按钮用 `formButton(prominent:)`：iPhone 上是 `themedButton`，Mac 上是系统的标准按钮（`.bordered` / `.borderedProminent`），不画有色胶囊；整行宽的按钮在 Mac 上改成靠右的标准按钮。
 - Mac 的表单把输入框的标题画在左边、框在右边：标题写字段名，要填什么写进 `prompt`；标题本身就是提示的（屏蔽目录、Claude 设置的文本项）在 Mac 上 `.labelsHidden()`。
 - 单选在 Mac 上用 `.radioGroup`；空的分组在 Mac 上不画（表单里会留一块空白）。
-- 页尾单独一个按钮（添加 hub、清除全部缓存）在 Mac 上去掉那一行的底色，像按钮放在分组下面，不单独成一个空卡片。
-- 已经换的页：通知、Claude Code 设置、Codex 设置、飞书机器人（第一批）；设备、翻译、存储空间、hub、hub 列表、Skills（第二批）；其余逐页换，见 #1221。
+- 页尾单独一个按钮（添加 hub、清除全部缓存、登录某个连接器）在 Mac 上是一张卡片里靠右的标准按钮（同系统设置）；`.listRowBackground(Color.clear)` 在 Mac 的分组表单里不起作用，卡片去不掉（`FormAction`）。
+- 已经换的页：通知、Claude Code 设置、Codex 设置、飞书机器人（第一批）；设备、翻译、存储空间、hub、hub 列表、Skills（第二批）；邮箱、飞书、GitHub / Telegram、信息、插件和插件详情（第三批）；其余逐页换，见 #1221。
 
 ## SSH 隧道（Mac）
 
@@ -390,6 +390,9 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - 单独的窗口：`WindowGroup(id: "link", for: URL.self)`（`MacLinkWindow`）、`WindowGroup(id: "inbox-item", for: String.self)`（`MacInboxItemWindow`）。
 - DEBUG：`-openInboxFirst YES`、`-openInboxMatch <标题里的字>` 选中一件，`-showInboxAction draft|handoff` 打开弹层，`-openInboxLink <url>` 打开链接面板，`-addMail YES` 管理邮箱。
   例：`scripts/app/mac_shot.sh inbox-link -tab mail -openInboxMatch 下周的分享 -openInboxLink https://example.com/`。
+- sheet 的关闭和保存（#1248）：Mac 的 sheet 只能靠底栏的取消 / 完成（Esc）关，编辑类 sheet 用 `sheetCancel(unsaved:)`（有未保存的修改先确认），只看的用 `macSheetDone`，
+  见 `docs/lessons/macos.md`。截图：`-showModelConfigSheet <分类 id>|all` 打开「模型配置」sheet（`all` 那一行在「设置 › 助手」列表靠下，窗口要够高它才渲染、才会弹：`SIZE=1280x1500`），
+  `-showDiscardConfirm YES` 让编辑类 sheet 一打开就弹出「放弃未保存的修改？」（存成 `<名字>.sheet2.png`）。
 - 截图补充（2026-11-01）：窗口上的 sheet 是另一个窗口，`-macSnapshot` 现在把它另存成 `<名字>.sheet.png`；sheet 里有文本编辑器时 `terminate` 会被挡住，截完 1 秒后直接退出。
   锁屏时未签名的新构建读另一个构建写的钥匙串条目会一直卡在 securityd（跳过授权界面也一样），截图模式（`-macSnapshot`）下 Mac 的 DEBUG 构建不读钥匙串。
   没锁屏时同样的读会弹「想要使用你储存在钥匙串的 <bundle id> 中的机密信息」、要输登录密码的框，App 卡在启动、一直没有窗口（2026-11-03）：

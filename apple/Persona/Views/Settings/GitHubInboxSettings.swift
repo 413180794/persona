@@ -55,6 +55,9 @@ struct GitHubInboxSettings: View {
             }
             HStack {
                 TextField("静音仓库：owner/name", text: $newRepo)
+                    #if os(macOS)
+                    .labelsHidden() // the title is the prompt (#1221)
+                    #endif
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .onSubmit(add)

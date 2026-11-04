@@ -185,10 +185,16 @@ struct FeishuDocReader: View {
                 jump = rowID(for: item)
             }
             .presentationDetents([.medium, .large])
+            #if os(macOS)
+            .macSheet()
+            #endif
         }
         .sheet(isPresented: $showComments) {
             NavigationStack { FeishuDocsCommentsView(url: url, title: docTitle) }
                 .presentationDetents([.large])
+                #if os(macOS)
+                .macSheet()
+                #endif
         }
         .fullScreenCover(item: $gallery) { g in LarkImageGallery(urls: g.urls, index: g.index) }
     }
@@ -550,6 +556,7 @@ struct FeishuDocsUnsupportedView: View {
 struct FeishuDocsOutlineSheet: View {
     var items: [FeishuDocsOutlineItem]
     var pick: (FeishuDocsOutlineItem) -> Void
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         let top = items.map(\.level).min() ?? 1
@@ -569,6 +576,7 @@ struct FeishuDocsOutlineSheet: View {
             .listStyle(.plain)
             .navigationTitle("目录")
             .navigationBarTitleDisplayMode(.inline)
+            .macSheetDone { dismiss() }
         }
     }
 }
@@ -610,11 +618,15 @@ struct FeishuDocsCommentsView: View {
         .themedPage()
         .navigationTitle("评论")
         .navigationBarTitleDisplayMode(.inline)
+        #if os(macOS)
+        .macSheetDone { dismiss() }
+        #else
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button { dismiss() } label: { Label("关闭", systemImage: Theme.Icon.close) }
             }
         }
+        #endif
         .refreshable { await load() }
         .task {
             LarkMedia.shared.loadEmojiCatalog()

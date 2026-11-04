@@ -3,6 +3,7 @@ package persona.core.contracts
 import kotlinx.serialization.KeepGeneratedSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -57,7 +58,25 @@ data class FeedItem(
     /** A string field of the body (receipt's title / summary / pr, routed's text, message's chat / draft…). */
     fun field(name: String): String? = ((body as? JsonObject)?.get(name) as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
     fun number(name: String): Int? = ((body as? JsonObject)?.get(name) as? JsonPrimitive)?.intOrNull
+
+    /**
+     * `answered`: every question of the card with the user's answer in full, newlines kept (#1231). A record from
+     * before it has only its line (question, answer), which stands in; empty when there is nothing to show.
+     */
+    fun answeredItems(): List<AnsweredItem> {
+        fun JsonElement?.text() = (this as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull.orEmpty()
+        val listed = ((body as? JsonObject)?.get("items") as? JsonArray).orEmpty().mapNotNull { e ->
+            val o = e as? JsonObject ?: return@mapNotNull null
+            AnsweredItem(o["question"].text(), o["answer"].text()).takeIf { it.question.isNotEmpty() || it.answer.isNotEmpty() }
+        }
+        if (listed.isNotEmpty()) return listed
+        val line = AnsweredItem(field("question").orEmpty(), field("answer").orEmpty())
+        return if (line.question.isEmpty() && line.answer.isEmpty()) emptyList() else listOf(line)
+    }
 }
+
+/** One question of an answered card and what the user answered ([FeedItem.answeredItems]). */
+data class AnsweredItem(val question: String, val answer: String)
 
 @KeepGeneratedSerializer
 @Serializable(with = TodoAgentSerializer::class)

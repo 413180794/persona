@@ -4,6 +4,7 @@
 // side panel.
 import { useMemo, useState } from "react";
 import {
+  answeredItems,
   dayLabel,
   dismissPlan,
   field,
@@ -27,7 +28,7 @@ import { navigate } from "../../lib/router";
 import { openPanel } from "../../lib/panel";
 import { getState, useStore } from "../../lib/store";
 import type { AgentState, Interaction, Session } from "../../lib/types";
-import { Button, cx, Menu, StatusDot, toast } from "../../ui/atoms";
+import { Button, Collapse, cx, Menu, StatusDot, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { InteractionCard } from "../chat/Interactions";
 
@@ -316,20 +317,14 @@ export function FeedLineView({ item }: { item: FeedItem }) {
   const plan = useFeed((s) => (item.kind === "plan" && item.ref ? s.plans[item.ref] : undefined));
   const isLater = useFeed((s) => (item.ref ? s.later[item.ref] : false));
   const title = useStore((s) => s.todos.find((t) => t.id === item.ref)?.title) ?? "任务";
+  const known = useStore((s) => s.todos.some((t) => t.id === item.ref));
   switch (item.kind) {
     case "plan":
       return plan ? <PlanCard plan={plan} /> : null;
     case "task":
       return item.ref ? isToday(item.at) ? <TaskCard todoId={item.ref} conversation={item.conversation} /> : <TaskLine todoId={item.ref} /> : null;
     case "answered":
-      return (
-        <div className="inline-flex max-w-full items-center gap-1.5 self-start rounded-full bg-field px-3 py-1.5 text-[12px] text-ink-2">
-          <Icon name="check" size={12} />
-          <span className="truncate">
-            {title} · {field(item, "answer") ?? "回答了"}
-          </span>
-        </div>
-      );
+      return <AnsweredLine item={item} title={title} onOpenTask={known && item.ref ? () => openTask(item.ref!) : undefined} />;
     case "receipt":
       return <ReceiptCard item={item} />;
     case "routed":
@@ -349,6 +344,50 @@ export function FeedLineView({ item }: { item: FeedItem }) {
     default:
       return null;
   }
+}
+
+/** A card of a task's agent the user dealt with, kept as a line「✓ 任务 · 回答」. Click it for every question with its
+ *  answer in full (#1231), selectable, and again to fold it; the task's name opens the task. */
+export function AnsweredLine({ item, title, onOpenTask }: { item: FeedItem; title: string; onOpenTask?: () => void }) {
+  const [open, setOpen] = useState(false);
+  const items = answeredItems(item);
+  const expandable = items.length > 0;
+  return (
+    <div className={cx("flex max-w-full flex-col self-start bg-field text-[12px] text-ink-2", open ? "w-full rounded-card" : "rounded-full")}>
+      <div className="flex min-w-0 items-center gap-1.5 px-3 py-1.5">
+        <Icon name="check" size={12} className="shrink-0" />
+        {onOpenTask ? (
+          <button type="button" onClick={onOpenTask} className="max-w-[45%] shrink-0 truncate text-left hover:text-ink hover:underline">
+            {title}
+          </button>
+        ) : (
+          <span className="max-w-[45%] shrink-0 truncate">{title}</span>
+        )}
+        <button
+          type="button"
+          aria-expanded={expandable ? open : undefined}
+          disabled={!expandable}
+          onClick={() => setOpen(!open)}
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left enabled:cursor-pointer"
+        >
+          <span className="min-w-0 flex-1 truncate">· {field(item, "answer") ?? "回答了"}</span>
+          {expandable && (
+            <Icon name="chevronRight" size={12} stroke={2.2} className="shrink-0 text-ink-3 transition-transform duration-200" style={{ transform: open ? "rotate(90deg)" : "none" }} />
+          )}
+        </button>
+      </div>
+      <Collapse open={open} lazy>
+        <div className="flex flex-col gap-2.5 px-3 pt-0.5 pb-2.5 select-text" data-testid="answered-detail">
+          {items.map((x, i) => (
+            <div key={i} className="flex flex-col gap-0.5 whitespace-pre-wrap [overflow-wrap:anywhere]">
+              {x.question && <div className="font-medium text-ink-3">{x.question}</div>}
+              {x.answer && <div className="text-[13px] leading-[1.55] text-ink">{x.answer}</div>}
+            </div>
+          ))}
+        </div>
+      </Collapse>
+    </div>
+  );
 }
 
 function ReceiptCard({ item }: { item: FeedItem }) {

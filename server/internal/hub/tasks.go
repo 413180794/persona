@@ -70,7 +70,7 @@ type FeedItem struct {
 const (
 	feedPlan     = "plan"     // ref: the plan id
 	feedTask     = "task"     // ref: the todo id
-	feedAnswered = "answered" // ref: the todo id; body: question, answer
+	feedAnswered = "answered" // ref: the todo id; body: answeredBody (tasks_answered.go)
 	feedReceipt  = "receipt"  // ref: the todo id; body: title, state, summary, pr, machine
 	feedRouted   = "routed"   // ref: the todo id; body: text
 	feedMessage  = "message"  // ref: the inbox item id; body: messageBody (a message about a task, with its draft reply)
@@ -680,75 +680,6 @@ func (m *Machine) taskTurnEnded(sid string) {
 		h.logf("task %s: receipt: %v", t.ID, err)
 	}
 	h.autoFinishTask(t, since, worked) // the work may be finished: then the todo is done (tasks_done.go)
-}
-
-type answeredBody struct {
-	Question string `json:"question"`
-	Answer   string `json:"answer"`
-}
-
-// taskAnswered: the user dealt with a card of one of the task's agents; the conversation keeps a line of it.
-func (h *Hub) taskAnswered(ix proto.Interaction, r proto.Resolution, status string) {
-	t, ok := h.taskOf(ix.MachineID, ix.SessionID)
-	if !ok || status == "failed" {
-		return
-	}
-	body := answeredBody{Question: interactionQuestion(ix), Answer: resolutionAnswer(ix, r)}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if _, err := h.appendFeed(ctx, t.Origin, feedAnswered, t.ID, body); err != nil {
-		h.logf("task %s: answered: %v", t.ID, err)
-	}
-}
-
-// interactionQuestion is what a card asked, in a line.
-func interactionQuestion(ix proto.Interaction) string {
-	switch {
-	case len(ix.Questions) > 0:
-		return clip(oneLine(ix.Questions[0].Question), 120)
-	case ix.Kind == proto.IxPlan:
-		return "批准计划"
-	case ix.Summary != "":
-		return clip(oneLine(ix.Summary), 120)
-	case ix.ToolName != "":
-		return "使用 " + ix.ToolName
-	}
-	return "需要你处理"
-}
-
-// resolutionAnswer is the user's answer, in a line (never a typed secret: the hub keeps those nowhere).
-func resolutionAnswer(ix proto.Interaction, r proto.Resolution) string {
-	switch {
-	case r.Dismiss:
-		return "忽略了"
-	case len(r.Answers) > 0:
-		var parts []string
-		for _, q := range ix.Questions {
-			if a, ok := r.Answers[q.Question]; ok {
-				parts = append(parts, a)
-			}
-		}
-		if len(parts) == 0 {
-			for _, a := range r.Answers {
-				parts = append(parts, a)
-			}
-			sort.Strings(parts)
-		}
-		return clip(oneLine(strings.Join(parts, "；")), 120)
-	case r.Approve != nil && *r.Approve, r.Allow != nil && *r.Allow:
-		if r.Always {
-			return "批准了 · 以后同类不再问"
-		}
-		return "批准了"
-	case r.Approve != nil, r.Allow != nil:
-		if r.Feedback != "" || r.Message != "" {
-			return clip(oneLine("拒绝了："+r.Feedback+r.Message), 120)
-		}
-		return "拒绝了"
-	case r.Option != "" || len(r.Options) > 0:
-		return "选了"
-	}
-	return "回答了"
 }
 
 // routeToTask sends text straight to the agent of task todoID that most needs it, and keeps it in the conversation.

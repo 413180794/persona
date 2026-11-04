@@ -58,6 +58,30 @@ export function field(it: FeedItem, key: string): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
 
+/** One question of an answered card and what the user answered. */
+export interface AnsweredItem {
+  question: string;
+  answer: string;
+}
+
+/** `answered`: every question of the card with the user's answer in full, newlines kept (#1231). A record from before
+ *  it has only its line (question, answer), which stands in; empty when there is nothing to show. */
+export function answeredItems(it: FeedItem): AnsweredItem[] {
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+  const raw = it.body?.items;
+  if (Array.isArray(raw)) {
+    const out = raw.flatMap((x): AnsweredItem[] => {
+      if (!x || typeof x !== "object") return [];
+      const o = x as Record<string, unknown>;
+      const one = { question: str(o.question), answer: str(o.answer) };
+      return one.question || one.answer ? [one] : [];
+    });
+    if (out.length) return out;
+  }
+  const line = { question: field(it, "question") ?? "", answer: field(it, "answer") ?? "" };
+  return line.question || line.answer ? [line] : [];
+}
+
 // ── state ──
 
 interface FeedState {

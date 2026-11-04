@@ -1,0 +1,61 @@
+[
+  {
+    "name": "feed_answered_items",
+    "description": "回答记录带一行摘要，并按问题成对保存完整的问题和回答（保留换行）；旧记录只有摘要。",
+    "source": [
+      "server/internal/hub/tasks_answered.go: answeredBody, answeredItems",
+      "apple/Shared/Tasks.swift: FeedItem.answeredItems",
+      "docs/protocol.md: 任务和对话动态"
+    ],
+    "derived": true,
+    "decoder": "feed",
+    "input": {
+      "items": [
+        {
+          "id": "feed_1",
+          "conversation": "conv_example",
+          "at": "2026-01-02T03:04:05Z",
+          "kind": "answered",
+          "ref": "todo_example",
+          "body": {
+            "question": "第一步放在哪里？",
+            "answer": "放到独立仓库（推荐） 先只迁一个；example-plugin",
+            "items": [
+              {
+                "question": "第一步放在哪里？",
+                "answer": "放到独立仓库（推荐）\n先只迁一个"
+              },
+              {
+                "question": "示例插件叫什么？",
+                "answer": "example-plugin"
+              }
+            ]
+          }
+        },
+        {
+          "id": "feed_2",
+          "conversation": "conv_example",
+          "at": "2026-01-02T03:04:05Z",
+          "kind": "answered",
+          "ref": "todo_example",
+          "body": {
+            "answer": "批准了",
+            "question": "使用 Bash"
+          }
+        }
+      ],
+      "plans": {}
+    },
+    "expected": {
+      "accepted": true,
+      "fields": {
+        "/items/0/body/answer": "放到独立仓库（推荐） 先只迁一个；example-plugin",
+        "/items/0/body/items/0/answer": "放到独立仓库（推荐）\n先只迁一个",
+        "/items/0/body/items/1/question": "示例插件叫什么？",
+        "/items/0/kind": "answered",
+        "/items/1/body/answer": "批准了",
+        "/items/1/body/items": null
+      }
+    }
+  }
+]

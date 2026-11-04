@@ -231,7 +231,6 @@ struct StorageView: View {
                         .formButton()
                         .disabled(usage == nil || clearing != nil || clearableTotal == 0)
                 }
-                .listRowBackground(Color.clear) // a button under the groups, not a group of its own
                 #else
                 Button(role: .destructive) { confirmAll = true } label: {
                     HStack {

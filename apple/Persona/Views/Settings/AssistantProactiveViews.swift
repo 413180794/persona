@@ -425,6 +425,8 @@ struct AssistantTaskEditor: View {
     @State private var runs: [APIClient.ScheduleRun] = []
     /// Presented as the "new task" sheet: nothing is saved unless 添加 (or 立即运行) is tapped.
     private let creating: Bool
+    /// The task as the sheet opened: 取消 asks first once it differs (Mac).
+    private let opened: APIClient.ScheduledTask
     /// The conversation it came from, to switch back to after turning 接着原来的对话 off.
     private let conversation: String?
     var save: (APIClient.ScheduledTask) async -> APIClient.ScheduledTask?
@@ -435,6 +437,7 @@ struct AssistantTaskEditor: View {
         _draft = State(initialValue: task)
         _saved = State(initialValue: task.id.isEmpty ? nil : task)
         creating = task.id.isEmpty
+        opened = task
         conversation = task.sessionID
         self.save = save
         self.delete = delete
@@ -520,9 +523,9 @@ struct AssistantTaskEditor: View {
         .themedPage()
         .navigationTitle(creating ? "新建定时任务" : (draft.title.isEmpty ? "定时任务" : draft.title))
         .navigationBarTitleDisplayMode(.inline)
+        .sheetCancel(unsaved: !Self.same(opened, draft), when: creating) { dismiss() }
         .toolbar {
             if creating {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("添加") {
                         Task { if await persist(leaving: false) != nil { dismiss() } }
@@ -1129,6 +1132,8 @@ struct AssistantMemoryEditor: View {
     @State var text: String
     var saved: (String) async -> Void
     @State private var saving = false
+    /// The text as the sheet opened: 取消 asks first once it differs (Mac).
+    @State private var opened: String?
 
     var body: some View {
         NavigationStack {
@@ -1141,13 +1146,14 @@ struct AssistantMemoryEditor: View {
                 .background(Theme.pageBackground)
                 .navigationTitle(name)
                 .navigationBarTitleDisplayMode(.inline)
+                .sheetCancel(unsaved: opened.map { $0 != text } ?? false) { dismiss() }
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) {
                         Button { Task { await save() } } label: { if saving { ProgressView() } else { Text("保存") } }
                             .disabled(saving)
                     }
                 }
+                .onAppear { if opened == nil { opened = text } }
         }
         .interactiveDismissDisabled(saving)
         #if os(macOS)

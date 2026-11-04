@@ -259,11 +259,10 @@ struct MacTodosPage: View {
                 }
             }
             .navigationTitle("新建待办")
+            .sheetCancel(unsaved: !(creatingTitle + creatingNotes).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+                showCreate = false
+            }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { showCreate = false }
-                        .lineLimit(1)
-                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("添加") {
                         let t = creatingTitle.trimmingCharacters(in: .whitespacesAndNewlines)

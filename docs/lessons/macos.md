@@ -126,8 +126,14 @@
 - 设置列表在 Mac 上一半的行是灰的，像禁用了（2026-11-04，#1170）：列表在分栏的内容栏里用 `.listStyle(.sidebar)`（`SplitNavigation`），
   侧栏样式把一行里只有一个 `Label` 的行当源列表的行来画，文字是「活力」色，要靠背后的侧栏材质才显白；内容栏没有那层材质，就成了灰的。
   行其实能点。带值的行是 `LabeledContent`，不受影响，所以只有「模型供应商」「设备」这些没有值的行灰。Mac 上没有值的行也包一层 `LabeledContent`（`SettingsRow`）。
+- Mac 的 sheet 只能靠底栏那一排的取消 / 完成（Esc）关：不能下滑，点 sheet 外面只响一声（2026-11-04，#1248）。所以一个 sheet 的关闭键放错位置（`.topBarLeading`），
+  它就关不掉了：「模型配置」的「关闭」在 `.topBarLeading`、「保存」在 `.topBarTrailing`，Mac 上两个都看不到，改了存不了也关不掉。做法（`DesignSystem/SheetActions.swift`）：
+  编辑类 sheet 用 `sheetCancel(unsaved:)`（`.cancellationAction`；Mac 上有未保存的修改先问「放弃未保存的修改？」，iOS 照旧直接关），
+  只看的 sheet 用 `macSheetDone`（Mac 上底栏一个「完成」，iOS 什么都不加）。确认框挂在页面上、不挂在底栏的按钮上：底栏和页面不在一棵视图里。
+  从待办详情弹出的「交给 Agent」没套 `macSheet()`，表单退回两栏，标签被 sheet 左边裁掉、说明文字超出右边（同上）。
 - sheet 里的 `NavigationStack` 推进一页时，sheet 会缩到新页面的最小宽度，表单却按原来的宽度排，右边被裁掉，返回键还是 iPhone 那种圆形玻璃键（同上）。
-  Mac 的 sheet 里别推页面：要再填一组东西就在上面再开一个 sheet，自己的「取消」放 `.cancellationAction`，「保存」放 `.confirmationAction`（配对页的「经 SSH 隧道连接…」）。
+  Mac 的 sheet 里别推页面：要再填一组东西就在上面再开一个 sheet，自己的「取消」放 `.cancellationAction`，「保存」放 `.confirmationAction`（配对页的「经 SSH 隧道连接…」；
+  「模型配置」的分类列表点一类，在上面叠开这一类的编辑 sheet，#1248）。
 - 分栏详情栏里推进第二层的页面（设置 › hub › SSH 隧道），系统的返回键不在这一栏，而是在窗口工具栏的最左边、红绿灯旁边，压在分区列上，画成圆形玻璃键（同上）。
   `splitDetailPage()` 在 Mac 上隐藏系统的返回键，在这一栏标题栏那一行的左边画一个 ‹（`MacDetailBack`）。这一行能点：内容延伸到标题栏下面，按钮照常收到点击（真窗口里实测过）。
 - 窗口拉到最小时页面被窗口右边裁掉，不是压窄（2026-11-04，#1200）：`HStack` 里定宽的列表（`MacListBeside`、收件箱）不会因为窗口变窄而让位，
@@ -138,3 +144,5 @@
 - Mac 上 SwiftUI `List` 的分组页脚只排一行，后面是省略号；`.listStyle(.sidebar)` 干脆不显示页脚（2026-11-04，#1212，单独写了个最小程序在真窗口里试过）。
   `fixedSize(horizontal: false, vertical: true)`、`lineLimit(nil)`、`lineLimit(5)`、套一层 `VStack`、`.plain` / `.bordered` / `.inset` 样式都一样。
   只有 `Form` + `.formStyle(.grouped)` 的页脚会换行（或者把说明当成一行内容放进分组里）。设置的子页因此在 Mac 上用 `SettingsForm`（分组表单）。
+- Mac 分组表单（`Form` + `.grouped`）里 `.listRowBackground(Color.clear)` 不起作用，那一行的圆角卡片还在（2026-11-04，#1221，真窗口看过；我在第二批里写了「去掉底色」，是错的，第三批改正）。
+  单独一个按钮的行在 Mac 上就是卡片里靠右的标准按钮。Mac 表单里输入框的标题画在左边当标签：标题本身就是提示的（「添加一项」「默认：…」「静音仓库：owner/name」）要 `.labelsHidden()`，否则左边一串提示、右边一个空框。

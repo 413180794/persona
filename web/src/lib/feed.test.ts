@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { dayLabel, displayLines, getFeedState, mergeInto, quickResult, removeTask, setRoute, startFailure, type FeedItem, type TaskPlan } from "./feed";
+import { answeredItems, dayLabel, displayLines, getFeedState, mergeInto, quickResult, removeTask, setRoute, startFailure, type FeedItem, type TaskPlan } from "./feed";
 import { getPanel, openPanel } from "./panel";
 import type { Todo } from "./todos";
 import type { ChatLine, Segment } from "./turns";
@@ -96,5 +96,26 @@ describe("a task whose agent did not start (#1077, #1142)", () => {
       expect(ask.mock.calls[0][0]).toContain("Agents 页");
       expect(fetcher.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(true);
     });
+  });
+});
+
+describe("an answered record (#1231)", () => {
+  const answered = (body: Record<string, unknown>): FeedItem => ({ id: "a", conversation: "c1", at: ago(1), kind: "answered", ref: "t", body });
+
+  it("has every question with its answer in full, newlines kept", () => {
+    const it = answered({
+      question: "先补哪一块？",
+      answer: "重试；假服务器",
+      items: [{ question: "先补哪一块？", answer: "重试\n和超时" }, { question: "请求怎么处理？", answer: "假服务器" }, { question: "", answer: "" }, "x"],
+    });
+    expect(answeredItems(it)).toEqual([
+      { question: "先补哪一块？", answer: "重试\n和超时" },
+      { question: "请求怎么处理？", answer: "假服务器" },
+    ]);
+  });
+
+  it("shows a record from before it by its line, and nothing for an empty one", () => {
+    expect(answeredItems(answered({ question: "使用 Bash", answer: "批准了" }))).toEqual([{ question: "使用 Bash", answer: "批准了" }]);
+    expect(answeredItems(answered({ items: [] }))).toEqual([]);
   });
 });

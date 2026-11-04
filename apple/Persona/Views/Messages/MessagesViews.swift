@@ -18,7 +18,7 @@ struct MessagesConnectorView: View {
     @State private var deleted: String?
 
     var body: some View {
-        List {
+        SettingsForm {
             Section {
                 HStack(spacing: Theme.Space.m) {
                     Image(systemName: Theme.Icon.messagesApp).resizable().scaledToFit().foregroundStyle(Theme.positive)
