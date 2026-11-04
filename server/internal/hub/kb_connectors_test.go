@@ -127,3 +127,54 @@ func TestMailCursorGoesOnFromTheOldFile(t *testing.T) {
 		t.Fatalf("example started from %q, %v", g.cursors[0], err)
 	}
 }
+
+// mediaArchive hands out one message with two attachments, one of which it can fetch (connector.ArchiveMedia).
+type mediaArchive struct{ asked []string }
+
+func (*mediaArchive) Changes(_ context.Context, cursor string, _ int) ([]connector.ChatBatch, string, bool, error) {
+	if cursor != "" {
+		return nil, cursor, false, nil
+	}
+	return []connector.ChatBatch{{Chat: kb.SourceChat{ID: "g1", Name: "示例群", Kind: "group"},
+		Messages: []kb.SourceMessage{{ID: "m1", SenderName: "示例用户", Type: "FILE", Text: "周报", At: time.Now().Add(-time.Hour),
+			Media: []string{"file:ok", "file:gone"}}}}}, "1", false, nil
+}
+
+func (a *mediaArchive) ArchiveMedia(_ context.Context, ref string) (connector.Media, error) {
+	a.asked = append(a.asked, ref)
+	if ref != "file:ok" {
+		return connector.Media{}, os.ErrNotExist
+	}
+	return connector.Media{Mime: "application/pdf", Data: []byte("%PDF-1.7")}, nil
+}
+
+// An archived message's attachments come from the connector (archive.media): kept next to the chat and linked from
+// the line; one it cannot hand over stays [附件].
+func TestArchiveConnectorKeepsAttachments(t *testing.T) {
+	st, err := kb.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &mediaArchive{}
+	if _, err := archiveConnector(context.Background(), &kb.Engine{Store: st}, "example", a); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := st.Chat(kb.ChatID("example", "g1"))
+	text := st.Since(c.ID, time.Time{}, 10000)
+	if len(a.asked) != 2 || !strings.Contains(text, "[附件](attachments/") || strings.Count(text, "[附件]") != 2 {
+		t.Fatalf("asked %v, archived:\n%s", a.asked, text)
+	}
+	var kept []string
+	_ = filepath.Walk(filepath.Join(st.Dir), func(p string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() && strings.Contains(p, "attachments") {
+			kept = append(kept, p)
+		}
+		return nil
+	})
+	if len(kept) != 1 {
+		t.Fatalf("attachments kept: %v", kept)
+	}
+	if b, _ := os.ReadFile(kept[0]); string(b) != "%PDF-1.7" {
+		t.Fatalf("attachment holds %q", b)
+	}
+}

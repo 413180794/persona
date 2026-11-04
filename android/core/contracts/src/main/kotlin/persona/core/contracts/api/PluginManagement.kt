@@ -12,15 +12,19 @@ import kotlinx.serialization.json.contentOrNull
 
 /**
  * 设置 › 插件 (docs/plugins.md「hub 的接口」「App：设置 › 插件」): the hub's plugins, each one's switch, its
- * configuration (a form drawn from its schema) and its secrets, write-only. Installing, upgrading and removing happen
- * on the hub's machine (`personad plugin`), never here. Bound to the active pairing.
+ * configuration (a form drawn from its schema) and its secrets, write-only; the pages plugins draw ([PluginUi]); and
+ * the plugin markets ([PluginMarkets]), the only way a phone installs, upgrades or removes a plugin (anything else
+ * happens on the hub's machine, `personad plugin`). Bound to the active pairing.
  */
-interface PluginManagement {
+interface PluginManagement : PluginUi, PluginMarkets {
     /** Whether the paired hub manages plugins (`plugin_manager` in its features); the settings row shows only then. */
     val available: Flow<Boolean>
 
     /** `GET /api/v1/plugins`. */
     suspend fun plugins(): List<HubPlugin>
+
+    /** `GET /api/v1/plugins` with what the device may do (`can_install`, `markets`). */
+    suspend fun listing(): PluginListing = PluginListing(plugins())
 
     /** `GET /api/v1/plugins/{id}/-/`. */
     suspend fun plugin(id: String): PluginDetail
@@ -110,7 +114,12 @@ data class PluginDetail(
     val config: JsonObject = JsonObject(emptyMap()),
     val secrets: List<PluginSecret> = emptyList(),
     val permissions: List<PluginPermission> = emptyList(),
+    /** The pages it draws (its `plugin_page` UI). */
+    val ui: List<PluginUiPlace> = emptyList(),
 ) {
+    /** Installed from a plugin market (`market:<market>/<plugin>`): a phone may upgrade and remove it. */
+    val fromMarket: Boolean get() = origin?.startsWith("market:") == true
+
     @Serializable
     private data class Extra(
         val publisher: String? = null,
@@ -122,6 +131,7 @@ data class PluginDetail(
         val config: JsonObject? = null,
         val secrets: List<PluginSecret> = emptyList(),
         val permissions: List<PluginPermission> = emptyList(),
+        val ui: List<PluginUiPlace> = emptyList(),
     )
 
     @Serializable
@@ -135,6 +145,7 @@ data class PluginDetail(
             return PluginDetail(
                 plugin, extra.publisher, extra.homepage, extra.origin, extra.previousVersion, extra.readOnly,
                 extra.form?.fields.orEmpty(), extra.config ?: JsonObject(emptyMap()), extra.secrets, extra.permissions,
+                extra.ui.filter { it.placement.isEmpty() || it.placement == "plugin_page" },
             )
         }
     }

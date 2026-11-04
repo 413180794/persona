@@ -32,7 +32,7 @@ final class AskUserRowTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         // Every work line and tool row open: rows in the upside-down chat list do not take XCUITest's taps reliably.
         app.launchArguments = ["-pairURL", pair, "-app.tab", "assistant", "-tab", "assistant", "-openAssistant", main,
-                               "-openWork", "YES", "-showToolDetails", "YES"]
+                               "-openAllWork", "YES", "-showToolDetails", "YES"]
         app.launchPinned()
 
         let any = app.descendants(matching: .any)

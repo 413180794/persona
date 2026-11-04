@@ -661,7 +661,7 @@ struct AssistantSidebar: View {
     /// The shell's drawer (docs/ios.md「新外壳」) also lists 收件箱 and 机器, and ends in 新对话 + 设置 like ChatGPT's.
     var openInbox: (() -> Void)? = nil
     var openTodos: (() -> Void)? = nil
-    var openMachines: (() -> Void)? = nil
+    var onMachines: (() -> Void)? = nil
     private var isShell: Bool { openInbox != nil }
     @State private var query = ""
     @State private var searchOpen = false
@@ -811,7 +811,7 @@ struct AssistantSidebar: View {
     // MARK: What to start
 
     @ViewBuilder private var actions: some View {
-        if let openInbox, let openMachines {
+        if let openInbox, let onMachines {
             // The shell's: Persona's own page first (认识 Persona, like ChatGPT's 认识 Dot), then the places to go.
             VStack(alignment: .leading, spacing: 0) {
                 Button(action: openProfile) {
@@ -833,7 +833,7 @@ struct AssistantSidebar: View {
                 }
                 action("定时任务", Theme.Icon.schedule, run: openRoutines)
                 action("知识库", Theme.Icon.knowledge, run: openKnowledge)
-                action("机器", Theme.Icon.machines, id: "sidebar-machines", run: openMachines)
+                action("机器", Theme.Icon.machines, id: "sidebar-machines", run: onMachines)
             }
         } else {
             VStack(alignment: .leading, spacing: 0) {

@@ -19,3 +19,13 @@ type ChatBatch struct {
 type Archive interface {
 	Changes(ctx context.Context, cursor string, limit int) (batches []ChatBatch, next string, more bool, err error)
 }
+
+// ArchiveMedia is an Archive whose messages' Media (refs the connector made) can be fetched, so the knowledge base
+// keeps a conversation's pictures and files with it as it does for the hub's own sources. Optional: without it the
+// lines say [附件] and nothing is kept. At most ArchiveMediaMost bytes.
+type ArchiveMedia interface {
+	ArchiveMedia(ctx context.Context, ref string) (Media, error)
+}
+
+// ArchiveMediaMost is the largest attachment archive.media hands over.
+const ArchiveMediaMost = 20 << 20

@@ -17,7 +17,9 @@ import persona.core.designsystem.icons.PhIcons
 import persona.core.navigation.*
 
 @Composable
-internal fun MachinesScreen(machineId: String?, model: MachinesViewModel, navigator: Navigator, actions: MachineActionsViewModel? = null) {
+internal fun MachinesScreen(
+    machineId: String?, model: MachinesViewModel, navigator: Navigator, actions: MachineActionsViewModel? = null, launcherPages: Boolean = false,
+) {
     val state by model.state.collectAsStateWithLifecycle()
     val machines by model.sessions.machines.collectAsStateWithLifecycle()
     val sessions by model.sessions.sessions.collectAsStateWithLifecycle()
@@ -117,7 +119,8 @@ internal fun MachinesScreen(machineId: String?, model: MachinesViewModel, naviga
                     Text(session.cwd, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
-            if (machine != null && actions != null) machineLaunchers(machine.online, acting)
+            if (machine != null && actions != null) machineLaunchers(machine.online, acting,
+                onLauncher = if (launcherPages) ({ name -> navigator.navigate(LauncherRoute(machine.id, name)) }) else null)
             item("system") { JSectionHeader("系统信息") }
             val systemValues = listOf(
                 "系统" to system?.name, "版本" to system?.version, "内核" to system?.kernel, "架构" to system?.arch,

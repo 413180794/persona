@@ -105,7 +105,7 @@ struct ShellView: View {
                          drawer: shell.drawer,
                          openInbox: { go(.inbox) },
                          openTodos: { go(.todos) },
-                         openMachines: { go(.machines) })
+                         onMachines: { go(.machines) })
     }
 
     private func go(_ page: ShellPage) {

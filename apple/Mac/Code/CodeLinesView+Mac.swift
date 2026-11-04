@@ -337,7 +337,7 @@ struct CodeLines: View {
         .frame(idealWidth: Theme.Size.macSheetMinWidth, idealHeight: Theme.Size.macSheetMinHeight)
         #if DEBUG
         .onAppear {
-            // `-macFileFind <query>` (with `-openFile`): the bar open with that typed in, for offscreen screenshots.
+            // `-macFileFind <query>` (with `-openFilePath`): the bar open with that typed in, for offscreen screenshots.
             if let q = UserDefaults.standard.string(forKey: "macFileFind") {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                     find.show()

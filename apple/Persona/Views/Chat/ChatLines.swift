@@ -5,7 +5,7 @@ import Foundation
 /// their steps as lines. A plain function of the blocks and what is open, so `ChatView` memoizes it by
 /// `ChatStore.version` (`ChatScratch.LinesKey`) and `ChatLinesTests` checks it without a view.
 struct ChatLines {
-    /// Work lines the user opened; `openAll` flips them all (DEBUG `-openWork`).
+    /// Work lines the user opened; `openAll` flips them all (DEBUG `-openAllWork`).
     var openWork: Set<String>
     var openAll = false
     /// Runs of tool calls the user opened; `openAllRuns` flips them all (DEBUG `-showRunsOpen`).

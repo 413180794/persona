@@ -64,8 +64,11 @@ internal fun LazyListScope.machineControls(
     }
 }
 
-/** 启动器 N: each launcher's name and the model it runs (the last part of a provider path). */
-internal fun LazyListScope.machineLaunchers(online: Boolean, state: MachineActionsState) {
+/**
+ * 启动器 N: each launcher's name and the model it runs (the last part of a provider path). With [onLauncher] (the hub
+ * manages plugins) a row opens the launcher's page, where plugins may draw a section for its gateway.
+ */
+internal fun LazyListScope.machineLaunchers(online: Boolean, state: MachineActionsState, onLauncher: ((String) -> Unit)? = null) {
     val launchers = state.launchers.orEmpty()
     item("launchers-title") { JSectionHeader("启动器", count = launchers.size.takeIf { online && state.launchers != null }) }
     when {
@@ -81,7 +84,7 @@ internal fun LazyListScope.machineLaunchers(online: Boolean, state: MachineActio
     itemsIndexed(launchers, key = { _, it -> "launcher-${it.name}" }, contentType = { _, _ -> "launcher" }) { index, launcher ->
         val model = launcherModel(launcher)
         JGroupItem(GroupPosition.of(index, launchers.size)) {
-            JRow(chevron = false, trailing = if (model == null) null else ({
+            JRow(chevron = onLauncher != null, onClick = onLauncher?.let { open -> { open(launcher.name) } }, trailing = if (model == null) null else ({
                 Text(model, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
             })) {
                 Text(launcher.name, style = PersonaTheme.type.code, color = PersonaTheme.palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)

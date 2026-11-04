@@ -450,9 +450,17 @@ fun JBadge(count: Int, modifier: Modifier = Modifier, text: String? = null) {
 
 /** A small static label such as 草稿, 体验, 只读. */
 @Composable
-fun JTag(text: String, modifier: Modifier = Modifier, status: Status? = null) {
+fun JTag(text: String, modifier: Modifier = Modifier, status: Status? = null) =
+    JTagColored(text, modifier, status?.let { PersonaTheme.palette.status(it) })
+
+/** A small static label in a role colour ([Tone]): a plugin's badge (有效, 快过期). */
+@Composable
+fun JTag(text: String, tone: Tone, modifier: Modifier = Modifier) =
+    JTagColored(text, modifier, PersonaTheme.palette.tone(tone).takeIf { tone != Tone.Neutral })
+
+@Composable
+private fun JTagColored(text: String, modifier: Modifier, tone: StatusColors?) {
     val palette = PersonaTheme.palette
-    val tone = status?.let { palette.status(it) }
     val shape = RoundedCornerShape(if (PersonaTheme.style == AppStyle.Board) 4.dp else 6.dp)
     Text(
         text, style = PersonaTheme.type.micro.copy(fontWeight = FontWeight.SemiBold), color = tone?.text ?: palette.ink2, maxLines = 1,
@@ -477,9 +485,11 @@ fun JSpinner(modifier: Modifier = Modifier, color: Color = if (PersonaTheme.styl
 }
 
 @Composable
-fun JLinearProgress(progress: Float?, modifier: Modifier = Modifier) {
+fun JLinearProgress(progress: Float?, modifier: Modifier = Modifier, tone: Tone? = null) {
     val palette = PersonaTheme.palette
-    val color = if (PersonaTheme.style == AppStyle.Brief) palette.ink else palette.accent
+    // A toned bar (a plugin's progress) takes the role colour; otherwise the style's ink or accent.
+    val color = tone?.takeIf { it != Tone.Neutral }?.let { palette.tone(it).dot }
+        ?: if (PersonaTheme.style == AppStyle.Brief) palette.ink else palette.accent
     Box(modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(palette.surfaceStrong)) {
         if (progress != null) Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).fillMaxHeight().clip(CircleShape).background(color))
         else {

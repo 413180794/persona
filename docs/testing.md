@@ -59,7 +59,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 
 - **新建一台模拟器**，别用连过真实 hub 的：App 的磁盘缓存（对话、收件箱）会把真实数据带进截图。
 - mock 的条目 id 是固定的；改了 mock 数据（或 id）后要卸载重装 App，否则旧缓存和新数据合在一起，每一步出现两次。
-- Agent 对话页默认把工作过程折成一行，`-openWork YES` 展开。`-tab` 没有对话 tab，App 会停在上次的 tab：
+- Agent 对话页默认把工作过程折成一行，`-openAllWork YES` 展开。`-tab` 没有对话 tab，App 会停在上次的 tab：
   要拍对话 tab 就先卸载重装（新装默认在对话 tab）。
 - 首页问候按模拟器的真实时间（「晚上好」），状态栏时间也用当前时间，别固定成 9:41。
 - 深色：`xcrun simctl ui $SIM appearance dark`。
@@ -69,10 +69,10 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   不用滑动就能在屏幕底部看到更早的部分。`MOCK_TASKS_NO_ASKS=1` 让任务的 Agent 不提问，输入框上方不再被问题卡占住。`MOCK_TASKS_DOCK=2` 只留两个在做的任务（任务坞两个任务胶囊，后面还有两个手动开的 Agent），`=pair` 只留一个任务和一个等你的手动 Agent（两个胶囊），`=many` 再加四个任务（任务坞比屏幕宽，看「全部」固定在最左边）；不设时是四个没做完的任务加两个手动开的 Agent（#1113）。`-showTaskDetail <待办 id>`（如 `todo_task_widget`）打开任务详情，`-showTaskBoard YES` 打开任务板。
   任务提问的回答记录（#1231）：mock 里「补齐网络层的单元测试」那行有三个问题的完整问答，「修小组件横屏崩溃」那行是只有摘要的老记录；`MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_AT=23` 让它们停在底部，`AnsweredLineTests`（`JARVIS_SHOTS` 写折叠 / 展开两张图）点开再收起。
 - 离开期间回顾在消息流里（#1360）：`MOCK_RECAP_LONG=1` 启动 mock，「检查 PR #42 的改动」前面多出八轮对话、比一屏高，结尾是一条回顾；`TEST_RUNNER_JARVIS_MOCK_HUB=<地址> xcodebuild test … -only-testing:PersonaUITests/RecapInFlowTests` 查展开的回顾在回复和输入框之间、往上翻跟着滚走、点了收成小条、重开还是关着（`-openRecapsFresh YES` 忘掉关过的回顾）；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 和 `TEST_RUNNER_JARVIS_SHOTS_APPEARANCE=light|dark` 写展开 / 收起 × 贴底 / 往上翻四张图。`MOCK_RECAPS=1` 看三条折成一行时更早的两条留成小条。
-- 截断的长输出：`-openSession macbook/a1f3c2d4-0000-4000-8000-000000000002 -openWork YES -showFullOutput card`（展开「运行」卡片，
+- 截断的长输出：`-openSession macbook/a1f3c2d4-0000-4000-8000-000000000002 -openAllWork YES -showFullOutput card`（展开「运行」卡片，
   看「已截断，看全文」）或 `sheet`（再打开全文浮层，mock 的 `/items/{id}/full` 回全文）。
 - 往上翻时内容不动（`ChatView` 的冻结）：`MOCK_STREAM=1` 启动 mock（第一个会话打开后每 2 秒来一条新步骤 / 回复，共 12 次），
-  `-openSession macbook/a1f3c2d4-0000-4000-8000-000000000001 -openWork YES -showFreezeProbe YES`：App 自己往上翻，每 2 秒记一次屏幕中间那行的位置，
+  `-openSession macbook/a1f3c2d4-0000-4000-8000-000000000001 -openAllWork YES -showFreezeProbe YES`：App 自己往上翻，每 2 秒记一次屏幕中间那行的位置，
   结果写在 App 容器的 `Documents/freeze.txt`（`xcrun simctl get_app_container $SIM <bundle id> data`），最后一行 `RESULT:`，应为移动 0pt。
 - 新建 Persona 对话（#511）：mock 照 hub 的样子做，会话列表立刻推，transcript 先是空的，`MOCK_ASSISTANT_TRANSCRIPT_SECONDS`（默认 1）秒后才有第一句并推给打开的对话。
   App 里发出后对话页一直是这句（不出「还没有消息」）、侧栏的新对话选中、带工作中转圈。`MOCK_ASSISTANT_START_SECONDS=<秒>` 让这个 POST 晚回，
@@ -107,7 +107,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 - Office 预览（网页 #1345）：mock 再加 `MOCK_OFFICE=1`，`reports/` 下多出手写的 `季度报告.docx`（标题、表格、图片、页脚）、`季度回顾.pptx`（主题、母版、版式占位符、项目符号、图片、形状、表格、图表、备注）、`旧版说明.doc`（mock 的 `file/convert` 回一份 PDF）和 `路线图.pages`（回 `no_converter`）。
 - 文件预览里的链接（`FilePreviewLinkTests`）：`MOCK_FILES=1 MOCK_FILE_LINKS=1 MOCK_PORTS=1 PORT=<独立端口> python3 scripts/mock/mock_hub.py`，`TEST_RUNNER_JARVIS_FILE_LINK_HUB=http://127.0.0.1:<端口>`。从旧布局的会话文件块（固定 `-ui.oldLayout YES -tab dev`，避免隐藏助手响应全局 DEBUG 参数）与默认新外壳的「文件」页打开 README，链接必须在关闭文件前立即可点；关闭后返回原文件位置，重复打开同一链接正常，关闭文件后不补弹旧链接。开发预览还要实际读到经 hub 转发的网页文字。
   两种风格分别切实际 light / dark 外观运行；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 保存截图，`TEST_RUNNER_JARVIS_FILE_LINK_APPEARANCE` 仅负责文件命名。
-- 视频预览：合成一个大于 2 MiB 的 H.264/AAC MP4（例如 `ffmpeg -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=44100 -t 12 -c:v libx264 -b:v 3M -pix_fmt yuv420p -c:a aac -movflags +faststart /tmp/preview.mp4`）。mock 加 `MOCK_FILES=1 MOCK_VIDEO_FILE=/tmp/preview.mp4`，`VideoFileUITests` 检查原生播放器打开和重开（`TEST_RUNNER_JARVIS_VIDEO_HUB` 可单独指定视频 mock，避免新增视频回复改变原文件回归的可见区域）；用 `-openFile /Users/me/code/weather/media/preview.mp4` 单独检查两种风格的深浅色截图。用 `xcrun simctl ui <udid> appearance light|dark` 真正切换模拟器外观，再分别跑视频 UI 测试；`TEST_RUNNER_JARVIS_VIDEO_APPEARANCE` 只给截图命名，不改变外观，不能用 iOS 不生效的 `AppleInterfaceStyle` 启动默认值冒充切换。单测环境加 `TEST_RUNNER_JARVIS_VIDEO_FIXTURE=/tmp/preview.mp4`，`VideoFileTests/nativeVideoPlaysSeeksAndCleansUp` 验证完整字节、播放时钟推进、跳到 8 秒和临时文件清理；不传文件时该集成用例跳过，其他类型、下载及失败测试照常跑。node/hub 的 `TestDownload*` 验证大文件有界读取、Range、旧 node、无效范围、文件变化和取消。
+- 视频预览：合成一个大于 2 MiB 的 H.264/AAC MP4（例如 `ffmpeg -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=44100 -t 12 -c:v libx264 -b:v 3M -pix_fmt yuv420p -c:a aac -movflags +faststart /tmp/preview.mp4`）。mock 加 `MOCK_FILES=1 MOCK_VIDEO_FILE=/tmp/preview.mp4`，`VideoFileUITests` 检查原生播放器打开和重开（`TEST_RUNNER_JARVIS_VIDEO_HUB` 可单独指定视频 mock，避免新增视频回复改变原文件回归的可见区域）；用 `-openFilePath /Users/me/code/weather/media/preview.mp4` 单独检查两种风格的深浅色截图。用 `xcrun simctl ui <udid> appearance light|dark` 真正切换模拟器外观，再分别跑视频 UI 测试；`TEST_RUNNER_JARVIS_VIDEO_APPEARANCE` 只给截图命名，不改变外观，不能用 iOS 不生效的 `AppleInterfaceStyle` 启动默认值冒充切换。单测环境加 `TEST_RUNNER_JARVIS_VIDEO_FIXTURE=/tmp/preview.mp4`，`VideoFileTests/nativeVideoPlaysSeeksAndCleansUp` 验证完整字节、播放时钟推进、跳到 8 秒和临时文件清理；不传文件时该集成用例跳过，其他类型、下载及失败测试照常跑。node/hub 的 `TestDownload*` 验证大文件有界读取、Range、旧 node、无效范围、文件变化和取消。
 - 发送视频（#981，docs/protocol.md「发送视频」）：用 AVAssetWriter 合成一段 6 秒的 H.264 MOV（没有 ffmpeg 时也行，画面是渐变加一道扫过的竖条，不用真实视频），`xcrun simctl addmedia <udid> <文件>` 放进模拟器图库，
   另一段给 mock 的 `MOCK_SENT_VIDEO=<文件>`（对话里多一条「别的设备发的」视频卡片，文件只在电脑上）；mock 收到的视频上传会留在它的文件里，可以再下载。
   `VideoSendTests` 走真实的 PHPicker：Agents 对话和助手新对话各选一次视频、看上传进度和传完的卡片、发送后查 `/mock/sent` 里的 `<jarvis-file>` 标签、点消息里的卡片打开系统播放器；
@@ -167,7 +167,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 `PORT=18793 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18793 xcodebuild test … -only-testing:PersonaUITests/SearchOpenTests`。
 
 助手的 `ask_user` 在对话里画成「提问」（`AskUserRowTests`，#677）：工具行是「提问 + 第一个问题」不是原名，展开后列出问题和选项、勾上用户选的（含多选），
-用户没回答的写「没有回答」；测试带 `-openWork YES -showToolDetails YES` 把工作行和工具行都展开（倒着的对话列表里的行点不准）：
+用户没回答的写「没有回答」；测试带 `-openAllWork YES -showToolDetails YES` 把工作行和工具行都展开（倒着的对话列表里的行点不准）：
 `MOCK_ASK_USER=1 PORT=18797 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/AskUserRowTests`，
 截图在 `/tmp/persona-ask-user-*`（`TEST_RUNNER_SHOT_SUFFIX` 区分深浅色和风格）。
 

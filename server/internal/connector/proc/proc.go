@@ -24,6 +24,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
+	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/plugin"
 	"github.com/nwverse/persona/server/internal/plugin/host"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -594,6 +595,35 @@ func (c *Conn) Media(ctx context.Context, ref string) (connector.Media, error) {
 	return out, err
 }
 
+// ItemSource is the program's knowledge-base items (items.list, items.doc_title); the hub asks only when it declared
+// items.
+func (c *Conn) ItemSource() kb.ItemSource { return connItems{c} }
+
+type connItems struct{ c *Conn }
+
+func (s connItems) Items(ctx context.Context) ([]kb.Item, error) {
+	var out serve.ItemsResult
+	err := s.c.call(ctx, serve.MItems, struct{}{}, &out)
+	return out.Items, err
+}
+
+// DocTitle is "" when the program cannot tell (or fails): a title is a nicety.
+func (s connItems) DocTitle(ctx context.Context, url string) string {
+	var out serve.DocTitleResult
+	if s.c.call(ctx, serve.MDocTitle, serve.DocTitleParams{URL: url}, &out) != nil {
+		return ""
+	}
+	return out.Title
+}
+
+// ArchiveMedia is an archived message's attachment (archive.media); a program without it answers unknown_method and
+// the line keeps [附件].
+func (c *Conn) ArchiveMedia(ctx context.Context, ref string) (connector.Media, error) {
+	var out connector.Media
+	err := c.call(ctx, serve.MArchiveMedia, serve.MediaParams{Ref: ref}, &out)
+	return out, err
+}
+
 func firstLine(s string) string {
 	line, _, _ := bytes.Cut([]byte(s), []byte("\n"))
 	return string(line)
@@ -601,13 +631,15 @@ func firstLine(s string) string {
 
 // The capabilities Conn answers for: what the hub's pipes look for.
 var (
-	_ connector.Accounts  = (*Conn)(nil)
-	_ connector.Login     = (*Conn)(nil)
-	_ connector.Archive   = (*Conn)(nil)
-	_ connector.Inbox     = (*Conn)(nil)
-	_ connector.ReadTools = (*Conn)(nil)
-	_ connector.Actions   = (*Conn)(nil)
-	_ connector.Threads   = (*Conn)(nil)
-	_ connector.Events    = (*Conn)(nil)
-	_ connector.Runner    = (*Conn)(nil)
+	_ connector.Accounts     = (*Conn)(nil)
+	_ connector.Login        = (*Conn)(nil)
+	_ connector.Archive      = (*Conn)(nil)
+	_ connector.Inbox        = (*Conn)(nil)
+	_ connector.ReadTools    = (*Conn)(nil)
+	_ connector.Actions      = (*Conn)(nil)
+	_ connector.Threads      = (*Conn)(nil)
+	_ connector.Events       = (*Conn)(nil)
+	_ connector.Runner       = (*Conn)(nil)
+	_ connector.Items        = (*Conn)(nil)
+	_ connector.ArchiveMedia = (*Conn)(nil)
 )

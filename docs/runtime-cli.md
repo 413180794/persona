@@ -47,7 +47,7 @@ scripts/app/personactl.py call <命令> k=v …           # 任何 App 认识的
 | `type` | `text`，可带元素过滤（先激活它拿焦点，取法同 `activate`） | 往有焦点的输入框里打字 |
 | `dismiss-keyboard` | | 收起键盘 |
 | `snapshot` | `path` 或不带（回 base64），`scale` | App 窗口的 PNG（不含状态栏；要和老截图逐像素比用 `jarvisctl.py screenshot`） |
-| `navigate` | `scene`（home / assistant / agents / chat / inbox / settings / machines），`session`（`<机器>/<会话>`，chat 和 assistant 要），`machine`（machines 下打开某台），`defaults`（只在建页面时读的开关，如 `{"openWork": true}`），`keep`（不换新的界面树），`coldChats`、`dropChatCache`（同 `reset`） | 落到和对应启动开关一样的页面（`-newAssistant`、`-openAssistant`、`-tab dev`、`-openSession`、`-tab mail`、`-tab settings`、`-openMachines`），默认在一棵新的界面树上（窗口的根换成新的 `RootView`，Agents 页推进去的对话、抽屉、滚动位置都从头来）。回答同 `state` |
+| `navigate` | `scene`（home / assistant / agents / chat / inbox / settings / machines），`session`（`<机器>/<会话>`，chat 和 assistant 要），`machine`（machines 下打开某台），`defaults`（只在建页面时读的开关，如 `{"openAllWork": true}`），`keep`（不换新的界面树），`coldChats`、`dropChatCache`（同 `reset`） | 落到和对应启动开关一样的页面（`-newAssistant`、`-openAssistant`、`-tab dev`、`-openSession`、`-tab mail`、`-tab settings`、`-openMachines`），默认在一棵新的界面树上（窗口的根换成新的 `RootView`，Agents 页推进去的对话、抽屉、滚动位置都从头来）。回答同 `state` |
 | `set-style` | `style`（glass / clay / island / lark / beautiful）、`color`（主题色） | 同 `state`；整棵树按新风格重建 |
 | `set-appearance` | `value`（light / dark / system） | 只改 App：走 设置 › 外观 › 深浅色（`AppModel.colorScheme`，会存下来，用完 `system` 还原）；`jarvisctl.py appearance` 默认改整个模拟器（`simctl ui appearance`，状态栏一起变，截图脚本用这个） |
 | `defaults` | `set`（只在这次运行有效，写进注册域，不落盘）、`remove`（删掉存下的键，`-openAgentsFresh` 做的事）、`get` | `values` |
@@ -60,7 +60,7 @@ scripts/app/personactl.py call <命令> k=v …           # 任何 App 认识的
 scripts/app/personactl.py set-style beautiful            # 整棵树按新风格重建
 scripts/app/personactl.py appearance dark                # 整个模拟器（状态栏一起），--in-app 只改 App
 scripts/app/personactl.py navigate machines              # = -tab settings -openMachines YES，不用重启
-scripts/app/personactl.py navigate chat --session <机器>/<会话> --flag openWork=YES
+scripts/app/personactl.py navigate chat --session <机器>/<会话> --flag openAllWork=YES
 scripts/app/personactl.py idle && scripts/app/personactl.py screenshot out.png
 ```
 

@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/plugin"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -46,6 +47,10 @@ const (
 	MDo        = "actions.do" // only once the hub's gate let it through
 	MThread    = "thread.page"
 	MMedia     = "thread.media"
+	// The knowledge base's items (connector.Items) and an archived message's attachment (connector.ArchiveMedia).
+	MItems        = "items.list"
+	MDocTitle     = "items.doc_title"
+	MArchiveMedia = "archive.media"
 )
 
 // Methods the program calls on the hub, and its event.
@@ -125,6 +130,16 @@ type (
 	}
 	MediaParams struct {
 		Ref string `json:"ref"`
+	}
+	// ItemsResult is the knowledge base's items (connector.Items: documents, meetings, events).
+	ItemsResult struct {
+		Items []kb.Item `json:"items"`
+	}
+	DocTitleParams struct {
+		URL string `json:"url"`
+	}
+	DocTitleResult struct {
+		Title string `json:"title"`
 	}
 	// DoParams is a write the gate let through: the very args the card was made from, and the hub's id for this one
 	// run, the same if the hub ever sends it again (the program runs it at most once).
@@ -354,6 +369,40 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 			return nil, err
 		}
 		return th.Thread(ctx, p.Thread, p.Before, min(max(p.Limit, 1), connector.ThreadMost))
+	case MItems:
+		is, ok := connector.As[connector.Items](c)
+		if !ok {
+			return nil, noCapability(c, "items")
+		}
+		items, err := is.ItemSource().Items(ctx)
+		if items == nil {
+			items = []kb.Item{}
+		}
+		return ItemsResult{Items: items}, err
+	case MDocTitle:
+		is, ok := connector.As[connector.Items](c)
+		if !ok {
+			return nil, noCapability(c, "items")
+		}
+		var p DocTitleParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		return DocTitleResult{Title: is.ItemSource().DocTitle(ctx, p.URL)}, nil
+	case MArchiveMedia:
+		am, ok := c.(connector.ArchiveMedia)
+		if _, archive := connector.As[connector.Archive](c); !ok || !archive {
+			return nil, noCapability(c, "archive")
+		}
+		var p MediaParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		m, err := am.ArchiveMedia(ctx, p.Ref)
+		if err == nil && len(m.Data) > connector.ArchiveMediaMost {
+			return nil, fmt.Errorf("attachment %d bytes, more than %d", len(m.Data), connector.ArchiveMediaMost)
+		}
+		return m, err
 	case MMedia:
 		th, ok := connector.As[connector.Threads](c)
 		if !ok {

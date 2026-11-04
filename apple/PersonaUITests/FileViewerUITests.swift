@@ -47,7 +47,7 @@ final class FileViewerUITests: XCTestCase {
     }
 
     @MainActor func testJSONOpensAsAnOutline() throws {
-        let app = launch(["-openFile", "data/forecast.json"])
+        let app = launch(["-openFilePath", "data/forecast.json"])
         // The outline (after the whole file is read and parsed): the top level open, the forecasts folded.
         let forecasts = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", #""forecasts": [ … ]"#)).firstMatch
         XCTAssertTrue(forecasts.waitForExistence(timeout: 30), "no outline:\n\(app.debugDescription)")
@@ -60,7 +60,7 @@ final class FileViewerUITests: XCTestCase {
     }
 
     @MainActor func testMarkdownIsRendered() throws {
-        let app = launch(["-openFile", "README.md"])
+        let app = launch(["-openFilePath", "README.md"])
         XCTAssertTrue(app.descendants(matching: .any)["file-markdown"].waitForExistence(timeout: 20), "no rendered markdown")
         XCTAssertTrue(app.staticTexts["天气 App 开发手册"].waitForExistence(timeout: 10))
         shot(app, "markdown")
@@ -83,7 +83,7 @@ final class FileViewerPerfTests: XCTestCase {
         for file in ["server/handlers.go", "data/forecast.json", "README.md", "logs/api.log"] where only == nil || file.contains(only!) {
             let app = XCUIApplication()
             app.launchArguments = ["-pairURL", pair, "-openSession", "macbook/a1f3c2d4-0000-4000-8000-000000000006",
-                                   "-openFile", "/Users/me/code/weather/" + file, "-showFilePerf", "YES", "-showFileAutoScroll", "YES"] + extra
+                                   "-openFilePath", "/Users/me/code/weather/" + file, "-showFilePerf", "YES", "-showFileAutoScroll", "YES"] + extra
             app.launchPinned()
             let view = app.descendants(matching: .any).matching(NSPredicate(format: "identifier IN %@", ["file-code", "file-markdown"])).firstMatch
             XCTAssertTrue(view.waitForExistence(timeout: 30), "\(file) did not open")

@@ -33,12 +33,14 @@ settings:
       # The release machine's Swift gives up on expressions that dev machines still type-check (docs/lessons/ios.md); warn early.
       OTHER_SWIFT_FLAGS: "$(inherited) -Xfrontend -warn-long-expression-type-checking=150"
     Release:
-      # Anti-tampering basics: no symbols or reflection names in the shipped binary.
+      # Anti-tampering basics: no symbols in the shipped binary.
       STRIP_INSTALLED_PRODUCT: YES
       STRIP_STYLE: all
       DEPLOYMENT_POSTPROCESSING: YES
       DEAD_CODE_STRIPPING: YES
-      SWIFT_REFLECTION_METADATA_LEVEL: without-names
+      # Field names stay: App Intents finds each @Parameter by its name through reflection. Without them a shortcut's
+      # values never reach the intent, and reading a non-optional parameter traps, so the app quits (#990).
+      SWIFT_REFLECTION_METADATA_LEVEL: all
       DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
       SWIFT_COMPILATION_MODE: wholemodule
       SWIFT_OPTIMIZATION_LEVEL: -O

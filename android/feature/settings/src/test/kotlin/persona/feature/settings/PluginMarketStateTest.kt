@@ -1,0 +1,254 @@
+package persona.feature.settings
+
+import persona.core.contracts.api.*
+import persona.core.hub.HubError
+import persona.core.hub.HubFailure
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
+import org.junit.Assert.*
+import org.junit.Test
+
+private val marketA = PluginMarket("3f2a9c1d0b", "https://plugins.example.com/persona/", "Example 插件", plugins = 3,
+    fetchedAt = "2026-11-04T06:00:00Z")
+private val marketB = PluginMarket("8e01b7c4a2", "github:example/team-plugins", "团队插件", hasToken = true, plugins = 2,
+    warnings = listOf("第 3 个插件：没有 manifest"))
+private val runs = PluginPermission("runs_code", "在 hub 机器上运行程序")
+private val fresh = CatalogPlugin(marketA.id, "Example 插件", "example-calendar", "Example 日历", "0.9.0", permissions = listOf(runs))
+private val upgradable = CatalogPlugin(marketA.id, id = "example-gateway", name = "Example 网关面板", version = "1.1.0", installed = "1.0.0",
+    installedSource = "installed", fromThisMarket = true, upgradable = true)
+private val elsewhere = CatalogPlugin(marketA.id, id = "example-notes", name = "Example Notes", version = "1.2.0", installed = "1.2.0",
+    installedSource = "installed")
+private val builtin = CatalogPlugin(marketA.id, id = "telegram", name = "Telegram", version = "2.0.0", installed = "202611041200",
+    installedSource = "builtin")
+private val broken = CatalogPlugin(marketB.id, id = "team-windows", name = "Windows 工具", version = "0.2.0",
+    problem = "没有这台 hub（linux-amd64）能用的包")
+private val sameMarket = CatalogPlugin(marketB.id, id = "team-digest", name = "每日摘要", version = "2.3.0", installed = "2.3.0",
+    installedSource = "installed", fromThisMarket = true)
+
+private class FakeMarket : PluginApiStub() {
+    var markets = mutableListOf(marketA, marketB)
+    var catalog = listOf(fresh, upgradable, elsewhere, broken)
+    var fail: Exception? = null
+    val calls = mutableListOf<String>()
+    var gate: CompletableDeferred<Unit>? = null
+    var preview = PluginPreview("pv1", PreviewManifest("example-calendar", "Example 日历", "0.9.0"), listOf(runs), "d-1")
+    var installed = PluginDetail(HubPlugin("example-calendar", "Example 日历", "connectors", "needs_setup", version = "0.9.0",
+        needsSetup = listOf("密钥「API Key」")))
+
+    private fun check() { fail?.let { throw it } }
+    override suspend fun catalog(query: String, market: String?, refresh: Boolean): PluginCatalog {
+        calls += "catalog q=$query market=$market refresh=$refresh"
+        gate?.let { g -> if (query == "slow") g.await() }
+        check()
+        return PluginCatalog(markets, catalog.filter { (market == null || it.market == market) && (query.isEmpty() || query in it.name) }, "linux-amd64")
+    }
+    override suspend fun previewFromMarket(market: String, plugin: String): PluginPreview { calls += "preview $market/$plugin"; check(); return preview }
+    override suspend fun install(preview: PluginPreview): PluginDetail { calls += "install ${preview.previewId} ${preview.permissionsDigest}"; check(); return installed }
+    override suspend fun upgrade(id: String, preview: PluginPreview): PluginDetail { calls += "upgrade $id ${preview.previewId}"; check(); return installed }
+    override suspend fun uninstall(id: String, keepData: Boolean) { calls += "uninstall $id keep=$keepData"; check() }
+    override suspend fun markets(): List<PluginMarket> { check(); return markets }
+    override suspend fun addMarket(spec: String, token: String?): PluginMarket {
+        calls += "add $spec token=${token != null}"; check()
+        return PluginMarket("new${markets.size}", spec, "新市场", hasToken = token != null).also { markets += it }
+    }
+    override suspend fun removeMarket(id: String) { calls += "remove $id"; check(); markets.removeAll { it.id == id } }
+    override suspend fun refreshMarket(id: String): PluginMarket { calls += "refresh $id"; check(); return markets.first { it.id == id }.copy(fetchedAt = "2026-11-04T07:05:00Z") }
+    override suspend fun setMarketToken(id: String, token: String): PluginMarket { calls += "token $id ${token.isEmpty()}"; check(); return markets.first { it.id == id }.copy(hasToken = token.isNotEmpty()) }
+}
+
+class PluginMarketStateTest {
+    @Test fun whereEachPluginStandsAndWhatThePageOffers() {
+        assertEquals(CatalogStanding.Available, CatalogText.standing(fresh))
+        assertEquals(listOf(CatalogAction.Install), CatalogText.actions(fresh))
+        assertNull(CatalogText.badge(fresh))
+        assertEquals("0.9.0", CatalogText.line(fresh))
+
+        assertEquals(CatalogStanding.Upgradable, CatalogText.standing(upgradable))
+        assertEquals(listOf(CatalogAction.Upgrade, CatalogAction.Uninstall), CatalogText.actions(upgradable))
+        assertEquals("可升级", CatalogText.badge(upgradable))
+        assertEquals("1.0.0 → 1.1.0", CatalogText.line(upgradable))
+
+        // Installed from a folder on the hub's machine: the phone neither upgrades (not newer) nor removes it.
+        assertEquals(CatalogStanding.Installed, CatalogText.standing(elsewhere))
+        assertTrue(CatalogText.actions(elsewhere).isEmpty())
+        assertTrue(CatalogText.noActionReason(elsewhere)!!.contains("personad plugin"))
+
+        assertEquals(CatalogStanding.InstalledElsewhere, CatalogText.standing(builtin))
+        assertEquals("2.0.0 · 已装 202611041200（内置）", CatalogText.line(builtin))
+        assertTrue(CatalogText.actions(builtin).isEmpty())
+
+        assertEquals(CatalogStanding.Unavailable, CatalogText.standing(broken))
+        assertEquals("装不了", CatalogText.badge(broken))
+        assertEquals(broken.problem, CatalogText.line(broken))
+        assertEquals(broken.problem, CatalogText.noActionReason(broken))
+        assertTrue(CatalogText.actions(broken).isEmpty())
+        // An upgradable one this hub cannot take is not offered.
+        assertTrue(CatalogText.actions(upgradable.copy(problem = "要更新的 hub")).let { CatalogAction.Upgrade !in it })
+
+        assertEquals(listOf(CatalogAction.Uninstall), CatalogText.actions(sameMarket))
+        assertEquals("2.3.0 · 已安装", CatalogText.line(sameMarket))
+    }
+
+    @Test fun previewsSayWhatTheConfirmDoes() {
+        val install = PluginPreview("p", permissionsDigest = "d")
+        assertEquals("同意并安装", CatalogText.confirmLabel(install))
+        assertFalse(CatalogText.asksForMore(install))
+        val upgrade = install.copy(upgrade = true, from = "1.0.0")
+        assertEquals("升级", CatalogText.confirmLabel(upgrade))
+        val more = upgrade.copy(morePermissions = true, addedPermissions = listOf(PluginPermission("hub_api", "完整使用 hub")))
+        assertEquals("同意新权限并升级", CatalogText.confirmLabel(more))
+        assertTrue(CatalogText.asksForMore(more))
+    }
+
+    @Test fun marketWords() {
+        assertEquals("3 个插件 · 读取于 2026-11-04 06:00", CatalogText.marketLine(marketA))
+        assertEquals("2 个插件 · 有 token", CatalogText.marketLine(marketB))
+        val done = PluginDetail(HubPlugin("x", "X", version = "1.1.0"))
+        assertEquals("已安装", CatalogText.installed(done, upgrade = false))
+        assertEquals("已升级到 1.1.0", CatalogText.installed(done, upgrade = true))
+        assertEquals("已安装，还缺：密钥「API Key」", CatalogText.installed(FakeMarket().installed, upgrade = false))
+    }
+
+    @Test fun theCatalogSearchesAndNarrowsToAMarket() = runBlocking {
+        val api = FakeMarket()
+        val model = CatalogModel(api)
+        model.load()
+        assertEquals(4, model.state.value.plugins.size)
+        model.setQuery("日历")
+        model.load()
+        assertEquals(listOf("example-calendar"), model.state.value.plugins.map { it.id })
+        model.setQuery("")
+        model.setMarket(marketB.id)
+        model.load()
+        assertEquals(listOf("team-windows"), model.state.value.plugins.map { it.id })
+        assertEquals("catalog q= market=${marketB.id} refresh=false", api.calls.last())
+        model.load(refresh = true)
+        assertTrue(api.calls.last().endsWith("refresh=true"))
+        // A market that is gone is not a filter any more.
+        api.markets.removeAll { it.id == marketB.id }
+        model.load()
+        assertNull(model.state.value.market)
+    }
+
+    @Test fun aLateAnswerForAnOlderQueryIsDropped() = runBlocking {
+        val api = FakeMarket()
+        api.gate = CompletableDeferred()
+        val model = CatalogModel(api)
+        model.setQuery("slow")
+        val slow = async { model.load() }
+        yield()
+        model.setQuery("日历")
+        model.load()
+        api.gate!!.complete(Unit)
+        slow.await()
+        assertEquals(listOf("example-calendar"), model.state.value.plugins.map { it.id })
+        assertFalse(model.state.value.loading)
+    }
+
+    @Test fun catalogFailuresSayWhy() = runBlocking {
+        val api = FakeMarket()
+        api.fail = HubFailure(HubError.Server, "坏了", status = 500)
+        val model = CatalogModel(api)
+        model.load()
+        assertEquals("读取失败：坏了", model.state.value.error)
+        assertNull(model.state.value.catalog)
+    }
+
+    @Test fun installsOnlyAfterThePreviewIsAgreedTo() = runBlocking {
+        val api = FakeMarket()
+        val model = CatalogPluginModel(api, marketA.id, "example-calendar")
+        model.load()
+        assertEquals("Example 日历", model.state.value.plugin?.name)
+        assertEquals("Example 插件", model.state.value.marketName)
+        assertTrue(model.preview())
+        assertEquals("pv1", model.state.value.preview?.previewId)
+        assertFalse(api.calls.any { it.startsWith("install") })
+        api.catalog = api.catalog.map { if (it.id == "example-calendar") it.copy(installed = "0.9.0", installedSource = "installed", fromThisMarket = true) else it }
+        assertEquals("已安装，还缺：密钥「API Key」", model.confirm())
+        assertTrue("install pv1 d-1" in api.calls)
+        assertNull(model.state.value.preview)
+        assertEquals("0.9.0", model.state.value.plugin?.installed)
+        // Turning a preview down installs nothing.
+        model.preview()
+        model.dismissPreview()
+        assertNull(model.confirm())
+        assertEquals(1, api.calls.count { it.startsWith("install") })
+    }
+
+    @Test fun anUpgradePreviewUpgrades() = runBlocking {
+        val api = FakeMarket()
+        api.preview = api.preview.copy(upgrade = true, from = "1.0.0")
+        val model = CatalogPluginModel(api, marketA.id, "example-gateway")
+        model.load()
+        model.preview()
+        model.confirm()
+        assertTrue("upgrade example-gateway pv1" in api.calls)
+    }
+
+    @Test fun failuresKeepThePageAndSayWhy() = runBlocking {
+        val api = FakeMarket()
+        val model = CatalogPluginModel(api, marketA.id, "example-calendar")
+        model.load()
+        api.fail = HubFailure(HubError.Server, "sha256 不对", status = 400)
+        assertFalse(model.preview())
+        assertEquals("没有拿到安装包：sha256 不对", model.state.value.actionError)
+        api.fail = null
+        model.preview()
+        api.fail = HubFailure(HubError.Server, "预览过期了，重新预览一次", status = 400)
+        assertNull(model.confirm())
+        assertEquals("没有安装：预览过期了，重新预览一次", model.state.value.actionError)
+        assertNull(model.state.value.preview)
+        assertNotNull(model.state.value.plugin)
+    }
+
+    @Test fun removesAndSeesAPluginGone() = runBlocking {
+        val api = FakeMarket()
+        val model = CatalogPluginModel(api, marketA.id, "example-gateway")
+        model.load()
+        api.catalog = api.catalog.map { if (it.id == "example-gateway") it.copy(installed = null, fromThisMarket = false, upgradable = false) else it }
+        assertTrue(model.uninstall(keepData = true))
+        assertTrue("uninstall example-gateway keep=true" in api.calls)
+        assertNull(model.state.value.plugin?.installed)
+        api.catalog = emptyList()
+        model.load()
+        assertTrue(model.state.value.missing)
+    }
+
+    @Test fun managesTheMarkets() = runBlocking {
+        val api = FakeMarket()
+        val model = MarketsModel(api)
+        model.load()
+        assertEquals(2, model.state.value.markets?.size)
+        // #1373: the address goes to the hub as typed (git:, git@host:path.git, ssh://… and whatever it adds later).
+        assertFalse(model.add("   ", ""))
+        assertTrue(model.add("git@git.example.com:team/plugins.git", ""))
+        assertEquals("add git@git.example.com:team/plugins.git token=false", api.calls.last())
+        assertTrue(model.add(" github:example/more ", "  "))
+        assertEquals("add github:example/more token=false", api.calls.last())
+        assertTrue(model.add("github:example/private", "tok"))
+        assertEquals("add github:example/private token=true", api.calls.last())
+        assertEquals(5, model.state.value.markets?.size)
+        assertTrue(model.refresh(marketA.id))
+        assertEquals("2026-11-04T07:05:00Z", model.state.value.markets?.first { it.id == marketA.id }?.fetchedAt)
+        assertTrue(model.setToken(marketB.id, ""))
+        assertFalse(model.state.value.markets!!.first { it.id == marketB.id }.hasToken)
+        assertTrue(model.remove(marketA.id))
+        assertNull(model.state.value.markets?.firstOrNull { it.id == marketA.id })
+    }
+
+    @Test fun marketFailuresSayWhy() = runBlocking {
+        val api = FakeMarket()
+        val model = MarketsModel(api)
+        model.load()
+        api.fail = HubFailure(HubError.Server, "读不到 github:example/private：找不到（404）：地址不对，或者是私有的，要填 token", status = 400)
+        assertFalse(model.add("github:example/private", ""))
+        assertTrue(model.state.value.addError!!.contains("要填 token"))
+        api.fail = HubFailure(HubError.Server, "token 不对", status = 400)
+        assertFalse(model.setToken(marketB.id, "bad"))
+        assertEquals("没有换成：token 不对", model.state.value.actionError)
+        assertNull(model.state.value.working)
+        assertEquals(2, model.state.value.markets?.size)
+    }
+}

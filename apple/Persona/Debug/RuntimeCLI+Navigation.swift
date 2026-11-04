@@ -60,7 +60,7 @@ extension RuntimeCLI {
     }
 
     /// The page a launch switch opens (JarvisApp, SettingsView.openDebugPage), on a new view tree (`rebuild`), or in
-    /// place with `keep`. `defaults`: launch-only switches the pages read when they are built (`openWork`…),
+    /// place with `keep`. `defaults`: launch-only switches the pages read when they are built (`openAllWork`…),
     /// registered for this run, never saved. `coldChats`, `dropChatCache`: as `reset`.
     private static func navigate(_ a: Args) async -> Reply {
         let m = AppModel.shared

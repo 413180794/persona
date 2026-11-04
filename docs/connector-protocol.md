@@ -40,7 +40,7 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 
 | 字段 | 意思 |
 | --- | --- |
-| `capabilities` | `status`、`tools`、`actions`（写操作，见下）、`events`、`inbox`、`archive`、`login`、`options`、`threads`（收件箱的会话在 App 里打开成会话页）；hub 只调声明了的 |
+| `capabilities` | `status`、`tools`、`actions`（写操作，见下）、`events`、`inbox`、`archive`、`items`（知识库的条目：文档、会议、日程）、`login`、`options`、`threads`（收件箱的会话在 App 里打开成会话页）；hub 只调声明了的 |
 | `hosts` | 链接所在的主机名（App 认链接） |
 | `agent_tools` | 哪些工具也给编程 Agent，按名字的通配（不写就只给助手） |
 | `unlisted` | 哪些工具和写操作不进模型的工具列表，按名字的通配：连接器自己的前端按名字调（Telegram 的 `tg` 命令行）。不是权限：按名字调照常能调，写的照常过闸门，Agent 能不能调照旧看 `agent_tools` |
@@ -62,6 +62,9 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 | `inbox.collect` | `{}` → `{things: [InboxThing]}` | 从内存回答 |
 | `inbox.reply` | `{thread, item_id?, last?, text, client_id?, changes?}` → `{}` | 用户在手机上按了发送（发送本身就是确认）。`client_id`：App 这次发送的 id，重试只发一次（没有时连接器自己派生）；`changes: [{ref, field, value}]`：先改文档某一行的状态列（文档条目的「改状态」、AI 分身的提议），这时 `text` 可以为空 |
 | `archive.changes` | `{cursor, limit}` → `{batches: [{chat, messages}], next, more}` | 游标是程序自己的，hub 原样存、原样还；第一次是 `""` |
+| `archive.media` | `{ref}` → `{mime, data}` | 归档消息 `media` 里的一个 ref 对应的字节（base64），最多 20 MB；知识库把它存在会话的附件里。可选：没有时那一行只写 `[附件]` |
+| `items.list` | `{}` → `{items: [{kind, id, title, url?, at?, where?}]}` | 知识库的条目（`kind`：`docs` / `meetings` / `events`）；声明了 `items` 才调 |
+| `items.doc_title` | `{url}` → `{title}` | 会话里出现的文档链接的标题，读不到回 `""` |
 | `login.step` | `{step, values}` → `Prompt` | 分步登录；`step` 为 `""` 从头开始 |
 | `logout` | `{}` → `{}` | |
 

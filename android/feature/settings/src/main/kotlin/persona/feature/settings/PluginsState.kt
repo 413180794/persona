@@ -54,6 +54,12 @@ internal object PluginText {
     fun point(name: String): String = when (name) {
         "connectors" -> "连接器"
         "voice" -> "语音对话"
+        "ui" -> "界面"
+        "quota" -> "额度"
+        "providers" -> "模型供应商"
+        "events" -> "事件"
+        "assistant" -> "助手"
+        "api" -> "App 接口"
         else -> name
     }
 
@@ -132,6 +138,8 @@ internal object PluginDraft {
 
 internal data class PluginListState(
     val plugins: List<HubPlugin>? = null,
+    /** The hub has plugin markets (`markets: true`): the list opens 插件市场. */
+    val markets: Boolean = false,
     val loading: Boolean = false,
     val error: String? = null,
 )
@@ -145,8 +153,8 @@ internal class PluginListModel(private val api: PluginManagement) {
         if (state.value.loading) return
         mutable.update { it.copy(loading = true) }
         try {
-            val plugins = api.plugins()
-            mutable.update { it.copy(plugins = plugins, error = null) }
+            val listing = api.listing()
+            mutable.update { it.copy(plugins = listing.plugins, markets = listing.markets, error = null) }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { mutable.update { it.copy(error = "读取失败：${failureReason(error)}") } }
         finally { mutable.update { it.copy(loading = false) } }

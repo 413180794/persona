@@ -56,7 +56,7 @@ func (*exampleProgram) Name() string { return "Example" }
 
 func (*exampleProgram) Manifest() connector.Manifest {
 	return connector.Manifest{Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapActions,
-		connector.CapEvents, connector.CapArchive, connector.CapLogin, connector.CapThreads}, AgentTools: []string{"example_chats"},
+		connector.CapEvents, connector.CapArchive, connector.CapItems, connector.CapLogin, connector.CapThreads}, AgentTools: []string{"example_chats"},
 		Unlisted: []string{"example_send"}, Poll: 3 * time.Minute}
 }
 
@@ -124,6 +124,29 @@ func (*exampleProgram) Thread(_ context.Context, thread, before string, limit in
 
 func (*exampleProgram) Media(_ context.Context, ref string) (connector.Media, error) {
 	return connector.Media{Mime: "image/webp", Data: []byte{0, 1, 2, 255}}, nil
+}
+
+// ArchiveMedia hands an archived message's attachment over; ItemSource has one meeting and knows one title.
+func (*exampleProgram) ArchiveMedia(_ context.Context, ref string) (connector.Media, error) {
+	if ref != "file:1" {
+		return connector.Media{}, errors.New("no such attachment")
+	}
+	return connector.Media{Mime: "application/pdf", Data: []byte("%PDF-1.7")}, nil
+}
+
+func (*exampleProgram) ItemSource() kb.ItemSource { return exampleItems{} }
+
+type exampleItems struct{}
+
+func (exampleItems) Items(context.Context) ([]kb.Item, error) {
+	return []kb.Item{{Kind: kb.KindMeeting, ID: "m1", Title: "示例周会", At: time.Date(2026, 1, 2, 3, 0, 0, 0, time.UTC), Where: "meetings"}}, nil
+}
+
+func (exampleItems) DocTitle(_ context.Context, u string) string {
+	if u == "https://example.com/docx/1" {
+		return "示例文档"
+	}
+	return ""
 }
 
 func (*exampleProgram) Watch(ctx context.Context, changed func(connector.Scope)) error {
@@ -233,7 +256,7 @@ func exercise(t *testing.T, c *Conn, sec *memSecrets) {
 	}
 	go c.Run(ctx)
 	waitUntil(t, "the program's status", func() bool { return c.Status(ctx).State == connector.StateNotSignedIn })
-	if got := connector.Capabilities(c); !slices.Equal(got, []string{"status", "tools", "actions", "events", "archive", "login", "threads"}) {
+	if got := connector.Capabilities(c); !slices.Equal(got, []string{"status", "tools", "actions", "events", "archive", "items", "login", "threads"}) {
 		t.Fatalf("the registry lists %v", got)
 	}
 	if m := c.Manifest(); !m.Proxy || !m.ForAgents("example_chats") || m.Poll != 3*time.Minute || m.Listed("example_send") {
@@ -300,6 +323,22 @@ func exercise(t *testing.T, c *Conn, sec *memSecrets) {
 	}
 	if m, err := c.Media(ctx, "sticker:7"); err != nil || m.Mime != "image/webp" || !bytes.Equal(m.Data, []byte{0, 1, 2, 255}) {
 		t.Fatalf("media %+v %v", m, err)
+	}
+	if m, err := c.ArchiveMedia(ctx, "file:1"); err != nil || m.Mime != "application/pdf" || string(m.Data) != "%PDF-1.7" {
+		t.Fatalf("archive media %+v %v", m, err)
+	}
+	if _, err := c.ArchiveMedia(ctx, "file:2"); err == nil {
+		t.Fatal("an attachment it does not have")
+	}
+	is, ok := connector.As[connector.Items](c)
+	if !ok {
+		t.Fatal("declared items, yet no item source")
+	}
+	if items, err := is.ItemSource().Items(ctx); err != nil || len(items) != 1 || items[0].Title != "示例周会" || items[0].Kind != kb.KindMeeting || !items[0].At.Equal(time.Date(2026, 1, 2, 3, 0, 0, 0, time.UTC)) {
+		t.Fatalf("items %+v %v", items, err)
+	}
+	if title := is.ItemSource().DocTitle(ctx, "https://example.com/docx/1"); title != "示例文档" {
+		t.Fatalf("doc title %q", title)
 	}
 	got := make(chan connector.Scope, 4)
 	wctx, wcancel := context.WithCancel(ctx)
@@ -392,7 +431,7 @@ func TestNeverStartedDeclaresItsManifest(t *testing.T) {
 	cfg := program(t, sec)
 	cfg.Manifest = (&exampleProgram{}).Manifest()
 	c := New(cfg)
-	if got := connector.Capabilities(c); !slices.Equal(got, []string{"status", "tools", "actions", "events", "archive", "login", "threads"}) {
+	if got := connector.Capabilities(c); !slices.Equal(got, []string{"status", "tools", "actions", "events", "archive", "items", "login", "threads"}) {
 		t.Fatalf("before it ever ran: %v", got)
 	}
 	l, ok := connector.As[connector.Login](c)

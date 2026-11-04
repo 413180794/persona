@@ -24,7 +24,7 @@ AT_LEAST = {"chat": 3.6}
 SCENES = [
     ("home", dict(scene="home")),
     ("agents", dict(scene="agents")),
-    ("chat", dict(scene="chat", session=CHAT, defaults={"openWork": True})),
+    ("chat", dict(scene="chat", session=CHAT, defaults={"openAllWork": True})),
     ("inbox", dict(scene="inbox")),
     ("settings", dict(scene="settings")),
     ("machines", dict(scene="machines")),
@@ -56,7 +56,7 @@ def main():
             for name, nav in SCENES:
                 s = time.time()
                 restarts = c.online(15).get("mockRestarts", [])
-                flags = {"openWork": False}
+                flags = {"openAllWork": False}
                 flags.update(nav.get("defaults", {}))
                 if freeze:
                     c.call("freeze", on=False)  # a transition must end: navigate first, freeze before the shot

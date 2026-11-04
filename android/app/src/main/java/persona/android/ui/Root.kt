@@ -431,7 +431,8 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
                 ?: UnavailablePage("当前模式没有可用的手机工具", navigator) }
             session.terminal?.let { terminalEntries(navigator, it) { key -> sessions.firstOrNull { s -> s.key == key }?.displayTitle } }
                 ?: run { entry<TerminalRoute> { UnavailablePage("体验模式没有终端数据", navigator) } }
-            session.metrics?.let { machinesEntries(navigator, it, session.sessions, session.machines) } ?: run {
+            session.metrics?.let { machinesEntries(navigator, it, session.sessions, session.machines,
+                launcherPages = services.plugins?.takeUnless { services.demo }?.available ?: kotlinx.coroutines.flow.flowOf(false)) } ?: run {
                 entry<MachinesRoute> { UnavailablePage("体验模式没有机器监控数据", navigator) }
                 entry<MachineDetailRoute> { UnavailablePage("体验模式没有机器监控数据", navigator) }
             }

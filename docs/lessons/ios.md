@@ -542,7 +542,7 @@ mock 和真 hub 上试了很多种都不出，最后是拿那一轮的真实条�
   点开又算用户接过列表（不再跟随、冻结），这期间到的内容都扣着，再点一下收起、回到最新处时一起进来，整页往上一窜。
   修法：最新处展开时 `ChatPin.hold(rise:)` 允许标题先往上走到顶栏下面，步骤露出来，超出的部分才由列表滚动吸收；中间、上方展开照旧原地不动。
   XCUITest 认为输入框后面的步骤也 `isHittable`，量「标题往上走了多少」才分得出来（`RunningChatTests.testOpeningAtTheNewestShowsTheSteps`，修前 0 pt、修后 436 pt）。
-- 查法：XCUITest 给倒着的列表里的行报的位置是错的，点行会点到别处（打开了侧栏），只点标题这类在顶上的、或者用启动参数（`-showFullOutput card`、`-openWork YES`）；
+- 查法：XCUITest 给倒着的列表里的行报的位置是错的，点行会点到别处（打开了侧栏），只点标题这类在顶上的、或者用启动参数（`-showFullOutput card`、`-openAllWork YES`）；
   第二个模拟器之间来回测时，关着的模拟器上 `simctl uninstall` 会静默失败，先 `boot`。
 
 ## SSH 隧道（2026-11-03，#891，docs/network.md「经 SSH 隧道连 hub」）
@@ -689,3 +689,17 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
 
 - **xlsx 只显示文件里存的公式值**，不会自己算：没存值的公式格子是空的（合计行一片空白）。生成工作簿时要把值一起写进去（`personad office` 写的时候就算好，`docs/office.md`「公式的值」）。
 - docx 里只写在表格样式里的边框、`startOverride` 起始编号、分页符（显示成方块），QuickLook 都不认；做法见 `docs/office.md`「怎么验证的」。
+
+## 快捷指令运行「问 Persona」，App 意外退出：Release 去掉了反射名字（2026-11-04，#990）
+
+- 现象：TestFlight 包里，快捷指令跑「问 Persona」（问题已经写死）就「“Persona” App 意外退出」；Debug 包、模拟器上一直好的。
+  崩溃栈：AppIntents → `AskJarvisIntent.perform()` → `ask()` → `question.getter` → AppIntents 的 `_assertionFailure`。
+- 原因：Release 配置为了防篡改设了 `SWIFT_REFLECTION_METADATA_LEVEL: without-names`。App Intents 靠反射里的属性名（`_question`）
+  把快捷指令 / Siri 给的值放进 `@Parameter`；名字没了，值进不来，读非可选的参数就断言失败。所有带参数的 intent 都受影响
+  （问 Claude、让 Agent 去做、灵动岛的允许 / 拒绝 / 批准）。在 intent 里打印 `Mirror(reflecting: self).children` 能看到 label 是 nil。
+- 怎么复现：模拟器上要用 **Release** 配置编（Debug 永远有名字），装上后用 `xcrun simctl openurl … "shortcuts://run-shortcut?name=…"` 跑一个写死参数的快捷指令；
+  崩溃记录在 `~/Library/Logs/DiagnosticReports/Persona-*.ips`，dSYM 在 Release 产物旁边，`atos -i` 能解到行。
+- 做法：Release 保留反射名字（`all`）。代价是存储属性名进了二进制，和 DEBUG 启动参数同名就会被 release.sh 拦下：
+  这次改了 `-fromSeq` → `-showFromSeq`、`-openFile` → `-openFilePath`、`-openTerminal` → `-openTerminalPane`、`-openWork` → `-openAllWork`，侧边栏的 `openMachines` → `onMachines`。
+- 走过的弯路：先以为是参数没给值（改成可选 + `needsValueError`，结果在快捷指令里变成「内部错误」），又以为是 iOS 27 的结果卡片
+  （`ShowsSnippetView`）；这两条在 Release 下都复现过、都不是原因，已撤回。崩溃查不清时先在模拟器上用 Release 配置复现，再用 dSYM 解栈。

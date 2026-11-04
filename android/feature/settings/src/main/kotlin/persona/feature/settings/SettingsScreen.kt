@@ -129,7 +129,8 @@ private fun SettingsContent(
                 providers = services.providers.takeUnless { services.demo })
         "plugins" -> plugin?.let { id -> PluginPage(services.plugins.takeUnless { services.demo }, id, onBack = { plugin = null }) }
             ?: PluginsPage(services.plugins.takeUnless { services.demo }, back,
-                onPlugin = { id -> onNavigate?.invoke(persona.core.navigation.PluginRoute(id)) ?: run { plugin = id } })
+                onPlugin = { id -> onNavigate?.invoke(persona.core.navigation.PluginRoute(id)) ?: run { plugin = id } },
+                onMarket = onNavigate?.let { navigate -> { navigate(persona.core.navigation.PluginMarketRoute) } })
         "ready", "notify" -> {
             val preferences: LazyListScope.() -> Unit =
                 if (page == "notify") NotificationPreferences(deviceController, paired && services.deviceSettings != null) else ({})

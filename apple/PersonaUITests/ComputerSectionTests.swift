@@ -70,7 +70,7 @@ final class ComputerSectionTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-app.tab", "assistant", "-tab", "assistant",
-                               "-openAssistant", "server/b2e4d6f8-0000-4000-8000-0000000000c1", "-openWork", "YES",
+                               "-openAssistant", "server/b2e4d6f8-0000-4000-8000-0000000000c1", "-openAllWork", "YES",
                                "-showToolDetails", "YES", "-showRunsOpen", "YES"] // BeautifulUI folds the two into a run of chips
         app.launchPinned()
         let look = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "看电脑")).firstMatch

@@ -153,8 +153,17 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 				p["model"] = s.Model // and the model it runs, so no pick keeps it
 			}
 		}
-		// A model the launcher no longer offers (the gateway dropped it) would fail every turn with
-		// 「There's an issue with the selected model」: fall back to the launcher's default.
+		// A launcher or model that is gone (a renamed managed launcher, a model the gateway dropped) fails every turn:
+		// fall back to the assistant's launcher and its default.
+		if l != "" && !h.launcherAvailable(r.Context(), m, l) {
+			l = cfg.Launcher
+			if l == "" {
+				l = "claude"
+			}
+			h.logf("[%s] %s: its launcher is gone, using %s", m.cfg.ID, short(sid), l)
+			p["launcher"] = l
+			delete(p, "model")
+		}
 		if model, _ := p["model"].(string); model != "" && l != "" && !h.launcherHasModel(r.Context(), m, l, model) {
 			h.logf("[%s] %s: model %s is not in %s's list any more, using its default", m.cfg.ID, short(sid), model, l)
 			delete(p, "model")

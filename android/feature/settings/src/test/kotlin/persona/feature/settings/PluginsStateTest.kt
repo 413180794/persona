@@ -10,8 +10,7 @@ import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
 
-private class FakePlugins(var detail: PluginDetail) : PluginManagement {
-    override val available = flowOf(true)
+private class FakePlugins(var detail: PluginDetail) : PluginApiStub() {
     val configs = mutableListOf<JsonObject>()
     val secrets = mutableListOf<Pair<String, String?>>()
     var list: List<HubPlugin> = listOf(detail.plugin)
@@ -69,6 +68,8 @@ class PluginsStateTest {
         assertEquals("内置", PluginText.source("builtin"))
         assertNull(PluginText.source(null))
         assertEquals("连接器", PluginText.point("connectors"))
+        assertEquals("界面", PluginText.point("ui"))
+        assertEquals("future_point", PluginText.point("future_point"))
         assertEquals("需要设置 · 1.2.0 · 已安装", PluginText.stateLine(notes.plugin))
         assertNull(PluginText.listSummary(null))
         assertEquals("没有", PluginText.listSummary(emptyList()))
@@ -206,5 +207,19 @@ class PluginsStateTest {
         list.load()
         assertEquals("读取失败：坏了", list.state.value.error)
         assertEquals(1, list.state.value.plugins?.size)
+    }
+
+    @Test fun theListKnowsWhetherTheHubHasMarkets() = runBlocking {
+        val api = object : PluginApiStub() {
+            override suspend fun plugins() = listOf(notes.plugin)
+            override suspend fun listing() = PluginListing(plugins(), canInstall = true, markets = true)
+        }
+        val list = PluginListModel(api)
+        list.load()
+        assertTrue(list.state.value.markets)
+        // An older contract (no listing of its own) reads as no markets.
+        val old = PluginListModel(object : PluginApiStub() { override suspend fun plugins() = listOf(notes.plugin) })
+        old.load()
+        assertFalse(old.state.value.markets)
     }
 }

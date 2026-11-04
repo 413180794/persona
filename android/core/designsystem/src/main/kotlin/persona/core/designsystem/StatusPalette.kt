@@ -197,6 +197,20 @@ internal fun PersonaPalette.legacy() = PersonaColors(
     codeBackground = sunken, terminalBackground = terminalBackground, terminalText = terminalText,
 )
 
+/**
+ * A role colour for something that is not an agent's state: good, needs a look, broken, or plain. Plugins' views
+ * (docs/plugins.md「声明式 UI」) name these four and never a colour.
+ */
+enum class Tone { Neutral, Positive, Caution, Danger }
+
+/** [tone]'s colours: positive is the done green, caution the needs-you amber, danger red, neutral the idle grey. */
+fun PersonaPalette.tone(tone: Tone): StatusColors = when (tone) {
+    Tone.Positive -> done
+    Tone.Caution -> needsYou
+    Tone.Danger -> danger
+    Tone.Neutral -> idle
+}
+
 enum class Status(val label: String) {
     NeedsYou("需要你"), Working("工作中"), Unread("完成未看"), Idle("已看"),
     Offline("未运行"), Unknown("未知"), Waiting("待唤醒"), Muted("已屏蔽"),

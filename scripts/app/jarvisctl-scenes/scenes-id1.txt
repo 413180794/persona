@@ -1,6 +1,6 @@
 home 7 -newAssistant YES
 agents 7 -tab dev -dev.openChat ""
-chat 7 -openSession macbook/a1f3c2d4-0000-4000-8000-000000000001 -openWork YES
+chat 7 -openSession macbook/a1f3c2d4-0000-4000-8000-000000000001 -openAllWork YES
 inbox 7 -tab mail
 settings 7 -tab settings
 machines 7 -tab settings -openMachines YES

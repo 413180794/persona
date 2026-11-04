@@ -42,11 +42,15 @@ func TestMainConversationFollowsTheAssistantLauncher(t *testing.T) {
 	var mu sync.Mutex
 	var got map[string]any
 	nodePeer.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
-		if method == "session.send" {
+		switch method {
+		case "session.send":
 			mu.Lock()
 			got = map[string]any{}
 			_ = json.Unmarshal(params, &got)
 			mu.Unlock()
+		case "launchers.list":
+			return map[string]any{"launchers": []any{map[string]any{"name": "sss"}, map[string]any{"name": "other"},
+				map[string]any{"name": "ccc"}}}, nil
 		}
 		return map[string]any{"ok": true}, nil
 	}
@@ -59,7 +63,8 @@ func TestMainConversationFollowsTheAssistantLauncher(t *testing.T) {
 	m.mu.Unlock()
 
 	m.mu.Lock()
-	m.sessions = []proto.Session{{SessionID: "side-2", Launcher: "sss", Assistant: true, Cwd: "/home/u/.jarvis/assistant"}}
+	m.sessions = []proto.Session{{SessionID: "side-2", Launcher: "sss", Assistant: true, Cwd: "/home/u/.jarvis/assistant"},
+		{SessionID: "side-3", Launcher: "gone", Assistant: true, Cwd: "/home/u/.jarvis/assistant"}}
 	m.mu.Unlock()
 
 	mux := h.routes()
@@ -70,6 +75,8 @@ func TestMainConversationFollowsTheAssistantLauncher(t *testing.T) {
 		// The chat's menu: the app sends both; a model alone keeps the conversation's launcher.
 		{"side-2", `{"text":"hi","launcher":"other","model":"m2"}`, "other", "m2"},
 		{"side-2", `{"text":"hi","model":"m9"}`, "sss", "m9"},
+		// a launcher deleted since (claude-mac → claude-example-cli): back to the configured one
+		{"side-3", `{"text":"hi"}`, "ccc", ""},
 	} {
 		if code, out := call(t, mux, "POST", "/api/v1/sessions/box/"+c.sid+"/messages", h.cfg.Token, c.body); code != 200 {
 			t.Fatalf("%s: %d %v", c.sid, code, out)

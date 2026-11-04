@@ -12,6 +12,8 @@ import persona.core.contracts.api.MachineMetricsApi
 import persona.core.contracts.api.SessionsRepository
 import persona.core.designsystem.LocalAppFeedback
 import persona.core.navigation.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 /**
  * Supply the same hub-scoped repositories used by Agents; replacing a pairing replaces this identity. Without
@@ -22,13 +24,19 @@ fun EntryProviderScope<NavKey>.machinesEntries(
     metrics: MachineMetricsApi,
     sessions: SessionsRepository,
     management: MachineManagement? = null,
+    /** Whether a launcher's row opens its page (the hub manages plugins, which may draw a section there). */
+    launcherPages: Flow<Boolean> = flowOf(false),
 ) {
-    entry<MachinesRoute> { MachinesRouteContent(null, navigator, metrics, sessions, management) }
-    entry<MachineDetailRoute> { MachinesRouteContent(it.machineId, navigator, metrics, sessions, management) }
+    entry<MachinesRoute> { MachinesRouteContent(null, navigator, metrics, sessions, management, launcherPages) }
+    entry<MachineDetailRoute> { MachinesRouteContent(it.machineId, navigator, metrics, sessions, management, launcherPages) }
 }
 
 @Composable
-private fun MachinesRouteContent(id: String?, navigator: Navigator, api: MachineMetricsApi, sessions: SessionsRepository, management: MachineManagement?) {
+private fun MachinesRouteContent(
+    id: String?, navigator: Navigator, api: MachineMetricsApi, sessions: SessionsRepository, management: MachineManagement?,
+    launcherPages: Flow<Boolean>,
+) {
+    val launchers by launcherPages.collectAsState(false)
     key(api, sessions, management) {
         val model = viewModel(key = "machines:${System.identityHashCode(api)}:${id.orEmpty()}") {
             MachinesViewModel(api, sessions, id)
@@ -40,6 +48,6 @@ private fun MachinesRouteContent(id: String?, navigator: Navigator, api: Machine
         LaunchedEffect(model, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { model.poll() } }
         val feedback = LocalAppFeedback.current
         LaunchedEffect(actions, feedback) { actions?.notices?.collect { feedback?.notice(it) } }
-        MachinesScreen(id, model, navigator, actions)
+        MachinesScreen(id, model, navigator, actions, launcherPages = launchers)
     }
 }

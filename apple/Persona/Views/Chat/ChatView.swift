@@ -2003,7 +2003,7 @@ struct ChatView: View {
             model.markSeen(key)
             if style == .dev { AppModel.rememberChat(key) }
             #if DEBUG
-            if UserDefaults.standard.bool(forKey: "openTerminal") { showTerminal = true }
+            if UserDefaults.standard.bool(forKey: "openTerminalPane") { showTerminal = true }
             if UserDefaults.standard.bool(forKey: "openSpaceFromChat") { // chat → its space page
                 UserDefaults.standard.set(false, forKey: "openSpaceFromChat")
                 Task {
@@ -2145,7 +2145,7 @@ struct ChatView: View {
             if let p = UserDefaults.standard.string(forKey: "openPane").flatMap(SessionPane.init(rawValue:)) {
                 if p == .terminal { showTerminal = true } else { pane = p } // the terminal comes up over the page
             }
-            if let f = UserDefaults.standard.string(forKey: "openFile") {
+            if let f = UserDefaults.standard.string(forKey: "openFilePath") {
                 // Once the session is known (its cwd resolves a relative path) and the push is over: a sheet asked for
                 // during the push is dropped (a fresh install, FileViewerUITests).
                 Task {
@@ -2160,7 +2160,7 @@ struct ChatView: View {
                     if let a = session?.subagents?.first(where: { $0.id == id }) { view(a) }
                 }
             }
-            if UserDefaults.standard.bool(forKey: "showOldest") { // the start of what is loaded (with -fromSeq: that turn's top)
+            if UserDefaults.standard.bool(forKey: "showOldest") { // the start of what is loaded (with -showFromSeq: that turn's top)
                 Task {
                     try? await Task.sleep(for: .seconds(5))
                     userScrolled = true
@@ -2180,7 +2180,7 @@ struct ChatView: View {
             if UserDefaults.standard.bool(forKey: "showMenu") { // the long-press bar on the last answer, for screenshots
                 Task {
                     try? await Task.sleep(for: .seconds(UserDefaults.standard.bool(forKey: "loadAll") ? 40 : 6))
-                    let from = UserDefaults.standard.integer(forKey: "fromSeq")
+                    let from = UserDefaults.standard.integer(forKey: "showFromSeq")
                     let answers = model.chat(key).blocks.compactMap { b -> ChatRow? in if case .turn(let t) = b { t.answer } else { nil } }
                     let last = from > 0
                         ? answers.first { if case .assistant(let i) = $0 { i.seq > from } else { false } }
@@ -2194,13 +2194,13 @@ struct ChatView: View {
                     try? await Task.sleep(for: .seconds(3))
                     while model.chat(key).hasMore { await model.loadOlder(key) }
                     try? await Task.sleep(for: .seconds(1))
-                    if UserDefaults.standard.integer(forKey: "fromSeq") == 0 { position.scrollTo(edge: .bottom) } // oldest end
+                    if UserDefaults.standard.integer(forKey: "showFromSeq") == 0 { position.scrollTo(edge: .bottom) } // oldest end
                 }
             }
             #endif
     }
 
-    /// Simulator automation: `-openWork YES` shows every work line unfolded (screenshots of the expanded state).
+    /// Simulator automation: `-openAllWork YES` shows every work line unfolded (screenshots of the expanded state).
     #if DEBUG
     static let foldProbe = UserDefaults.standard.bool(forKey: "showFoldProbe") || UserDefaults.standard.bool(forKey: "showFreezeProbe")
     /// `-showAsUnread YES`: open the chat as if its answer had not been seen (where it lands).
@@ -2211,7 +2211,7 @@ struct ChatView: View {
 
     private static var debugOpenAll: Bool {
         #if DEBUG
-        UserDefaults.standard.bool(forKey: "openWork")
+        UserDefaults.standard.bool(forKey: "openAllWork")
         #else
         false
         #endif
@@ -2226,11 +2226,11 @@ struct ChatView: View {
         #endif
     }
 
-    /// Simulator automation: `-fromSeq N` renders from the turn holding the user message with that seq
+    /// Simulator automation: `-showFromSeq N` renders from the turn holding the user message with that seq
     /// (scrolling a long lazy history to a turn drifts while rows above size themselves).
     private static func debugTrim(_ blocks: [ChatBlock]) -> [ChatBlock] {
         #if DEBUG
-        let seq = UserDefaults.standard.integer(forKey: "fromSeq")
+        let seq = UserDefaults.standard.integer(forKey: "showFromSeq")
         if seq > 0, let i = blocks.firstIndex(where: { b in
             if case .turn(let t) = b { return t.users.contains { if case .user(let u) = $0 { u.seq == seq } else { false } } }
             return false

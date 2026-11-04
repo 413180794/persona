@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -22,13 +23,32 @@ const (
 	kbConnectorLimit = 20               // conversations per call
 )
 
-// kbConnectorSource names a connector's chats for Ingest; it has nothing to download.
-type kbConnectorSource struct{ id string }
+// kbConnectorSource names a connector's chats for Ingest; their attachments come from the connector when it can hand
+// them over (connector.ArchiveMedia), else the line keeps [附件].
+type kbConnectorSource struct {
+	id    string
+	media connector.ArchiveMedia // nil: no attachments
+}
 
 func (s kbConnectorSource) Name() string                                      { return s.id }
 func (kbConnectorSource) Chats(context.Context, int) ([]kb.SourceChat, error) { return nil, nil }
-func (kbConnectorSource) Download(context.Context, string, string) error {
-	return errors.New("no attachments")
+func (s kbConnectorSource) Download(ctx context.Context, ref, dst string) error {
+	if s.media == nil {
+		return errors.New("no attachments")
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	m, err := s.media.ArchiveMedia(ctx, ref)
+	if err != nil {
+		return err
+	}
+	if len(m.Data) == 0 || len(m.Data) > connector.ArchiveMediaMost {
+		return fmt.Errorf("attachment of %d bytes", len(m.Data))
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(dst, m.Data, 0o600)
 }
 func (kbConnectorSource) Messages(context.Context, kb.SourceChat, string, int) ([]kb.SourceMessage, string, bool, error) {
 	return nil, "", false, nil
@@ -76,6 +96,8 @@ type connectorCursor struct {
 // archiveConnector reads a connector's changes from its cursor, ingests them and moves the cursor on (only past
 // what was ingested: a failure reads the same again next time).
 func archiveConnector(ctx context.Context, e *kb.Engine, id string, a connector.Archive) (int, error) {
+	media, _ := a.(connector.ArchiveMedia)
+	src := kbConnectorSource{id: id, media: media}
 	file := filepath.Join(e.Store.Dir, "cursors", id+".json")
 	var cur connectorCursor
 	if raw, err := os.ReadFile(file); err == nil {
@@ -92,7 +114,7 @@ func archiveConnector(ctx context.Context, e *kb.Engine, id string, a connector.
 			return total, err
 		}
 		for _, b := range batches {
-			n, err := e.Ingest(ctx, kbConnectorSource{id}, b.Chat, b.Messages)
+			n, err := e.Ingest(ctx, src, b.Chat, b.Messages)
 			if err != nil {
 				return total, err
 			}

@@ -7,7 +7,8 @@
 #   ./scripts/app/android.sh apk        # debug APK only (android/app/build/outputs/apk/debug/app-debug.apk)
 # shots takes optional environment variables for repeatable, pixel-comparable captures (docs/android.md):
 #   SHOTS_STYLE=glass|brief|board  pass debug.style on every launch
-#   SHOTS_PLUGINS=1                the mock hub serves MOCK_PLUGINS (设置 › 插件) and the plugin pages are captured too;
+#   SHOTS_PLUGINS=1                the mock hub serves MOCK_PLUGINS (设置 › 插件) and the plugin pages are captured too
+#                                  (a plugin's own page, 插件市场 and a launcher's page with a plugin's section);
 #                                  off by default because its running voice plugin adds the voice button to Persona
 #   SHOTS_MOCK_PORT=<port>         run the mock hub on this port instead of a random one
 #   SHOTS_FROZEN=<ISO time>        e.g. 2026-11-02T04:00:00+00:00: freeze the mock hub's and the emulator's clock,
@@ -324,7 +325,15 @@ SHOTS_PY
       if [ -n "$PLUGINS_MODE" ]; then
         # 设置 › 插件 and three of the mock's plugins: one to set up (every kind of field), hub.json's, a broken one.
         capture "$theme" settings-plugins --es debug.openLink "'jarvis://open?target=settings&page=plugins'"
-        for id in example-notes voice example-weather; do capture "$theme" "plugin-$id" --es debug.openPage "plugin:$id"; done
+        for id in example-notes voice example-weather example-gateway; do capture "$theme" "plugin-$id" --es debug.openPage "plugin:$id"; done
+        # A page a plugin draws (every kind of item), 插件市场 (the catalog, an upgradable plugin, one this hub cannot
+        # install, the markets) and a launcher's page with a plugin's section (#1329).
+        capture "$theme" plugin-ui --es debug.openPage "plugin-ui:example-gateway:home"
+        capture "$theme" plugin-market --es debug.openPage market
+        capture "$theme" plugin-market-upgrade --es debug.openPage "market-plugin:3f2a9c1d0b:example-gateway"
+        capture "$theme" plugin-market-unavailable --es debug.openPage "market-plugin:8e01b7c4a2:team-windows"
+        capture "$theme" plugin-markets --es debug.openPage markets
+        capture "$theme" launcher --es debug.openPage "launcher:macbook:claude"
       fi
     done
     echo "截图已输出到：$OUTPUT"

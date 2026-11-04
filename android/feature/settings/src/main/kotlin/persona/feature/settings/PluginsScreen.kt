@@ -22,9 +22,11 @@ import persona.core.contracts.api.PluginDetail
 import persona.core.contracts.api.PluginField
 import persona.core.contracts.api.PluginManagement
 import persona.core.contracts.api.PluginSecret
+import persona.core.contracts.api.PluginUiPlace
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.core.navigation.LocalDetailKey
+import persona.core.navigation.PluginMarketRoute
 import persona.core.navigation.PluginRoute
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
@@ -37,7 +39,7 @@ import kotlinx.serialization.json.contentOrNull
  * the hub's machine), its state, and the way to its page. Plugins are installed on the hub's machine only.
  */
 @Composable
-internal fun PluginsPage(plugins: PluginManagement?, onBack: () -> Unit, onPlugin: (String) -> Unit) {
+internal fun PluginsPage(plugins: PluginManagement?, onBack: () -> Unit, onPlugin: (String) -> Unit, onMarket: (() -> Unit)? = null) {
     if (plugins == null) {
         JListPage(title = "插件", onBack = onBack) { item { JNotice("体验模式没有 hub 的插件。") } }
         return
@@ -55,6 +57,13 @@ internal fun PluginsPage(plugins: PluginManagement?, onBack: () -> Unit, onPlugi
                     actionLabel = "重试", onAction = { scope.launch { model.load() } })
             }
         }
+        // 插件市场 only when the hub has markets (docs/plugins.md「插件市场」): the one way a phone installs a plugin.
+        if (state.markets && onMarket != null) item("market") {
+            JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
+                JRow("插件市场", subtitle = "浏览、安装和升级市场里的插件", leadingIcon = PhIcons.Cube,
+                    selected = detail == PluginMarketRoute, onClick = onMarket)
+            }
+        }
         if (list == null && state.loading) item("loading") { JLoading() }
         if (list != null && list.isEmpty()) item("empty") {
             JEmptyState("没有插件", "插件在 hub 所在的机器上用 personad plugin install 安装，装好后在这里开关和设置。", icon = PhIcons.PuzzlePiece)
@@ -69,7 +78,8 @@ internal fun PluginsPage(plugins: PluginManagement?, onBack: () -> Unit, onPlugi
                 }
             }
             item("footer") {
-                SettingsCaption("插件只能在 hub 所在的机器上安装、升级和卸载（personad plugin），这里可以开关、改设置、填密钥。",
+                SettingsCaption(if (state.markets && onMarket != null) "插件市场里的插件可以在这里安装、升级和卸载；别的插件在 hub 所在的机器上（personad plugin）装。这里可以开关、改设置、填密钥。"
+                    else "插件只能在 hub 所在的机器上安装、升级和卸载（personad plugin），这里可以开关、改设置、填密钥。",
                     Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m))
             }
         }
@@ -92,7 +102,7 @@ private fun PluginStateMark(plugin: HubPlugin?) {
  * looked at here.
  */
 @Composable
-fun PluginPage(plugins: PluginManagement?, pluginId: String, onBack: () -> Unit) {
+fun PluginPage(plugins: PluginManagement?, pluginId: String, onBack: () -> Unit, onPage: ((PluginUiPlace) -> Unit)? = null) {
     if (plugins == null) {
         JListPage(title = "插件", onBack = onBack) { item { JNotice("体验模式没有 hub 的插件。") } }
         return
@@ -126,6 +136,7 @@ fun PluginPage(plugins: PluginManagement?, pluginId: String, onBack: () -> Unit)
                 }
                 item("enabled-note") { Note("停用后它不再运行，提供的连接器等也一起关掉；设置和密钥留着。") }
             }
+            if (onPage != null) pluginPages(detail.ui, onPage)
             if (hasForm) form(detail, state, model, onChoose = { field, path -> choosing = field to path })
             if (!detail.readOnly && detail.secrets.isNotEmpty()) secrets(detail, state, onEdit = { editingSecret = it })
             contributions(detail)

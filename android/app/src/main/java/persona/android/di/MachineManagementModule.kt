@@ -73,5 +73,22 @@ object MachineManagementModule {
         override suspend fun setConfig(id: String, config: JsonObject) = api().setConfig(id, config)
         override suspend fun setSecret(id: String, name: String, value: String) = api().setSecret(id, name, value)
         override suspend fun clearSecret(id: String, name: String) = api().clearSecret(id, name)
+        override suspend fun listing() = api().listing()
+        override suspend fun uiPlaces(placement: String, launcher: String?, machine: String?) = api().uiPlaces(placement, launcher, machine)
+        override suspend fun renderUi(plugin: String, ui: String, context: PluginUiContext?, state: String?) =
+            api().renderUi(plugin, ui, context, state)
+        override suspend fun uiAction(
+            plugin: String, ui: String, action: String, context: PluginUiContext?, state: String?, values: Map<String, String>?,
+        ) = api().uiAction(plugin, ui, action, context, state, values)
+        override suspend fun markets() = api().markets()
+        override suspend fun addMarket(spec: String, token: String?) = api().addMarket(spec, token)
+        override suspend fun removeMarket(id: String) = api().removeMarket(id)
+        override suspend fun refreshMarket(id: String) = api().refreshMarket(id)
+        override suspend fun setMarketToken(id: String, token: String) = api().setMarketToken(id, token)
+        override suspend fun catalog(query: String, market: String?, refresh: Boolean) = api().catalog(query, market, refresh)
+        override suspend fun previewFromMarket(market: String, plugin: String) = api().previewFromMarket(market, plugin)
+        override suspend fun install(preview: PluginPreview) = api().install(preview)
+        override suspend fun upgrade(id: String, preview: PluginPreview) = api().upgrade(id, preview)
+        override suspend fun uninstall(id: String, keepData: Boolean) = api().uninstall(id, keepData)
     }
 }

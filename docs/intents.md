@@ -70,6 +70,8 @@ hub 是公司内网的明文 HTTP：intent 用 `.background` 模式，不会因�
   `Invalid parameter type. AppEntity and AppEnum are the only allowed types for text`。所以「问 Claude」的短语不带内容，
   说完之后 Siri 再问一句「要跟 Claude 说什么？」（`@Parameter(requestValueDialog:)`）。
 - `shortTitle` / `systemImageName` 必须给，短标题是 Siri 结果卡片和快捷指令 App 里显示的名字。
+- Release 必须保留反射名字（`project.yml` 的 `SWIFT_REFLECTION_METADATA_LEVEL: all`）：App Intents 按属性名把值放进 `@Parameter`，
+  去掉名字后参数全是空的，读非可选参数时 App 崩溃（#990，`docs/lessons/ios.md`）。只在 Release 出现，验证要用 Release 配置。
 
 ## 并发
 

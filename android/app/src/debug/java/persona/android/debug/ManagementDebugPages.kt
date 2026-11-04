@@ -3,7 +3,8 @@ package persona.android.debug
 import persona.core.navigation.*
 
 /**
- * Captures of pages that take an id (debug builds only): `machine:<id>`, `engine:<id>`, `purpose:<id>`, `plugin:<id>`, and
+ * Captures of pages that take an id (debug builds only): `machine:<id>`, `engine:<id>`, `purpose:<id>`, `plugin:<id>`,
+ * `plugin-ui:<plugin>:<ui>`, `market`, `markets`, `market-plugin:<market>:<plugin>`, `launcher:<machine>:<name>`, and
  * `new-agent` or `new-agent:<machine>:<folder>` (a prefilled form, as the knowledge base opens it).
  */
 internal fun managementPage(name: String): ResolvedRoute? {
@@ -14,6 +15,11 @@ internal fun managementPage(name: String): ResolvedRoute? {
         "engine" -> argument?.let { ResolvedRoute(AppTab.Agents, EngineRoute(it)) }
         "purpose" -> argument?.let { ResolvedRoute(AppTab.Settings, ModelPurposeRoute(it)) }
         "plugin" -> argument?.let { ResolvedRoute(AppTab.Settings, PluginRoute(it)) }
+        "plugin-ui" -> argument?.let { plugin -> parts.getOrNull(2)?.takeIf { it.isNotBlank() }?.let { ResolvedRoute(AppTab.Settings, PluginUiRoute(plugin, it, it)) } }
+        "market" -> ResolvedRoute(AppTab.Settings, PluginMarketRoute)
+        "markets" -> ResolvedRoute(AppTab.Settings, PluginMarketsRoute)
+        "market-plugin" -> argument?.let { market -> parts.getOrNull(2)?.takeIf { it.isNotBlank() }?.let { ResolvedRoute(AppTab.Settings, PluginCatalogRoute(market, it)) } }
+        "launcher" -> argument?.let { machine -> parts.getOrNull(2)?.takeIf { it.isNotBlank() }?.let { ResolvedRoute(AppTab.Agents, LauncherRoute(machine, it)) } }
         "new-agent" -> ResolvedRoute(AppTab.Jarvis, NewAgentRoute(argument, parts.getOrNull(2)?.takeIf { it.isNotBlank() },
             prompt = if (argument == null) null else "这是知识库里这个项目的档案（示例）。\n\n"))
         else -> null

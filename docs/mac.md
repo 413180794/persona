@@ -340,7 +340,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 文件查看器里的代码也走这个 ⌘F（2026-11-01，`Mac/Code/CodeFindBar.swift`，匹配逻辑 `CodeFind.swift`，有测试）：顺序是 自带查找栏的文本视图 → 响应链上的
 `MacFindable`（代码视图）→ 窗口里的搜索框 → 窗口里看得见的 `MacFindable`（文件刚打开、还没点过代码）。代码上方出查找栏：不区分大小写，所有匹配浅黄、
 当前的系统查找黄并滚到看得见，「3 / 14」或红色「没有找到」；⏎ 下一个、⇧⏎ 上一个（两头循环），Esc / ✕ 关闭、焦点回到代码。这三个键用本地按键监听在窗口之前接住
-（文件查看器的「完成」占着 Esc，不先接就会关掉整个 sheet），拼音组字时让给输入法。截图：`-openFile <路径> -macFileFind <查询>`（体验模式的 hub 在 Mac 上给一个编造的 Swift 文件）。
+（文件查看器的「完成」占着 Esc，不先接就会关掉整个 sheet），拼音组字时让给输入法。截图：`-openFilePath <路径> -macFileFind <查询>`（体验模式的 hub 在 Mac 上给一个编造的 Swift 文件）。
 查找下一个 ⌘G / 查找上一个 ⇧⌘G（2026-11-01，`MacFind.findNext`，`CodeFindNextTests`、`MacFindTests`、`MacMenuShortcutTests`）跟着 ⌘F 走：带查找栏的文本视图（diff、输出）跳它的匹配，
 代码查看器跳自己的查找栏，查找栏关着时用上次的词重新打开。没做：区分大小写 / 整词 / 正则、行内部分选择；每次输入在主线程上重搜整个文件，10 万行的文件没量过。真按键没试过（锁屏）。
 显示 › 紧凑列表、分组方式（按项目 / 状态 / 机器 / 按待办）、全部折叠 / 全部展开：和 Agents 列表左上 ⋯ 菜单是同一组设置（`dev.compact`、`dev.grouping`、折叠由列表登记的 `AgentsListMenu.Actions` 做）。
@@ -490,8 +490,8 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Remember last tab / last open chat / reading position across cold start (`chat.read.<session>`) — App/AppModel.swift, Views/Chat/ChatView.swift
   - 要到 Mac 前看：在对话里往上翻，⌘Q 后重开，看是不是回到同一行（⌘Q 不一定触发 onDisappear）。只带 `-app.tab chats -dev.openChat …` 启动时回到了 Agents 和那个对话，tab 和对话的恢复看过。
   - Mac（2026-11-03 Mac mini 真窗口）：⌘Q 后不带参数重开，回到 Agents 和上次打开的对话；同一次运行里切到别的对话再切回来，回到原来看的那一行。冷启动后的阅读位置原来停在最底部（#597：冷启动只有最近两轮，找不到那一行就放弃），修好后（2026-11-03）离屏截图复验：假 hub 像真 hub 一样分页（`/mock/paging?on=1`），先打开一次写下缓存，再带 `-chat.read.<会话> <「第 5 个问题」的行 id>` 冷启动，落在第 4–9 轮（修之前是第 15 轮和最底部）；iOS 上 `ChatFollowTests` 的冷启动用例管着。
-- [x] DEBUG launch args (-tab, -openSession, -openPane, -openTerminal, -lark-connector, etc. list in docs/ios.md) — App/PersonaApp.swift + views
-  - Mac 上截图一直靠它们：`-tab`、`-openSession`、`-openTerminal`、`-openTerminalSettings`、`-openAssistantPage`、`-showInboxAction`、`-showNewChat`、`-addMail`、`-openWelcome`、`-showKnowledgeEntry` 都试过；Mac 自己的另见各节（`-macSection`、`-macAgentAsk`、`-openChatWindow`、`-macWindowLog`…）。
+- [x] DEBUG launch args (-tab, -openSession, -openPane, -openTerminalPane, -lark-connector, etc. list in docs/ios.md) — App/PersonaApp.swift + views
+  - Mac 上截图一直靠它们：`-tab`、`-openSession`、`-openTerminalPane`、`-openTerminalSettings`、`-openAssistantPage`、`-showInboxAction`、`-showNewChat`、`-addMail`、`-openWelcome`、`-showKnowledgeEntry` 都试过；Mac 自己的另见各节（`-macSection`、`-macAgentAsk`、`-openChatWindow`、`-macWindowLog`…）。
 
 ## 1. Persona tab (assistant)
 - [x] Headless Claude assistant conversations (main conversation `assistant.main` + side branches); first launch opens main — Views/Assistant/AssistantView.swift, App/AppModel.swift (assistantMain, refreshAssistant)
@@ -710,7 +710,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac 真窗口（2026-11-04，mock `MOCK_TERMINAL_STREAM=1`，不接管）：滚轮往上翻，接上了更早的输出（Step15 → Step3 → 翻到最前面的 Step1，假 hub 的约 430 行分两页加载），
     底部出现「回到最新」，用鼠标点（按无障碍树的位置点）和 AXPress 都回到最新一屏。还差：翻到头没有「约 1000 行」/「已到最前面」的提示（浮层的细顶栏没带这行字，iOS 同样，#1133）。
   - 接管时（`MOCK_TERMINAL_CONTROL=1`）滚轮按设计发给程序，不翻 App 自己的历史（2026-11-03 执行者因此报过不通过）。
-  - #1133 之后（2026-11-04）：翻到头在「回到最新」上面出现「— herdr 只保留最近约 1000 行，更早的过程在「对话」里 —」：真窗口（`-openTerminal YES -terminalPages 3`，流式 mock，浅色的 Persona 终端配色，提示条白底）、离屏截图的深色终端和单独的终端窗口（`-openTerminalWindow`）、iPhone 模拟器都看过。接管时不显示。
+  - #1133 之后（2026-11-04）：翻到头在「回到最新」上面出现「— herdr 只保留最近约 1000 行，更早的过程在「对话」里 —」：真窗口（`-openTerminalPane YES -terminalPages 3`，流式 mock，浅色的 Persona 终端配色，提示条白底）、离屏截图的深色终端和单独的终端窗口（`-openTerminalWindow`）、iPhone 模拟器都看过。接管时不显示。
 - [x] Link status bar (last update, retry backoff, 重试) — SessionPanes.swift (TerminalLinkStatus)
   - 要到 Mac 前看：mock hub 加 `MOCK_SCREEN_FAIL_AFTER=3:14`，状态条出现（最后更新、退避、重试）后再恢复。体验模式和正常的 mock 都不出这条。
   - Mac 真窗口（2026-11-04，执行者跑，`MOCK_SCREEN_FAIL_AFTER=100:150`）：读屏失败后终端上方出红色状态条「上次更新 50 秒前」「11 秒后重试 · node macbook: not connected（请求 …）」带「重试」；倒计时在走，点「重试」马上重发；恢复后状态条消失、终端接着刷新。
@@ -725,7 +725,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [ ] Gestures: 2-finger swipe sibling agent / adjacent space, double-tap paste (multi-line confirm), scroll in-terminal — TerminalView.swift
   - 要到 Mac 前看：触控板三指轻扫到同空间的 Agent、⌘V 粘贴（多行有确认）、终端里滚动。Mac 上的说法在 `TerminalHelpText`（有测试）。
 - [ ] Shortcuts panel (single tap fill, double tap send), terminal settings (keys shown, auto-hide bar, theme, font, wrap), tips, completions from pane contents — Terminal/TerminalExtras.swift (ShortcutsPanel, TerminalSettingsView, TerminalPreview, ThemeRow, SuggestionStrip), SessionPanes.swift (TerminalTips)
-  - 终端设置在 Mac 上是 grouped 表单（`macSheet`），「手机尺寸」相关的说法换成窗口（`TerminalSizeText`），截图看过（`-openTerminal YES -openTerminalSettings YES`，内层浮层存成 `<名字>.sheet2.png`）；快捷命令面板、补全没在 Mac 上试。
+  - 终端设置在 Mac 上是 grouped 表单（`macSheet`），「手机尺寸」相关的说法换成窗口（`TerminalSizeText`），截图看过（`-openTerminalPane YES -openTerminalSettings YES`，内层浮层存成 `<名字>.sheet2.png`）；快捷命令面板、补全没在 Mac 上试。
   - 终端设置 › 键盘 › 「将 Option 键用作 Meta 键」（2026-11-01，`TerminalPrefs.optionAsMeta`，只在 Mac 上有）：默认关，和「终端」App 一样，关着时 Option 照常打出 ™、é、德语布局的 @ [ ] 和走输入法。打开后 Option+可打印 ASCII 发 herdr 的 `alt+<键>`（herdr 编码成 ESC+键），Option+Shift+字母发 `alt+shift+<字母>`，符号的 Shift 已在字符里（`alt+>`）；组字时不管。映射是纯函数 `MacTerminalKeys.name`（有测试）。没拿真 herdr 试过 `alt+shift+a`（herdr 对带 shift 的组合可能编码成 CSI u，而「终端」App 发 ESC A）和 `alt++` 这类符号键名；真按键也没试（锁屏）。
   - 大 sheet（2026-11-01，`Mac/Design/MacLargeSheet.swift`）：终端、图片查看 / 编辑（Compat 的 fullScreenCover）、文件查看器、Git 的改动 / 提交在 Mac 上按主窗口内容区减两边 xxl 打开，最小 640×520；原来终端 640×520、文件查看器 470×280。坑：sheet 只认最小尺寸不认 ideal；固定 frame 设在 NavigationStack 上栈会变矮，要设在栈的内容上。fullScreenCover 统一按有标题栏和工具栏算（`macSheetBars` 116pt），终端也被多减了这一截（够大，没分开处理）。
   - 终端在 Mac 上的说法（`TerminalHelpText`，有测试）：上滑 → 往上滚动、左右滑 → 左右滚动；终端设置的「手势」在 Mac 上叫「操作」（点击、滚轮 / 触控板、拖选、⌘C / ⌘V、右键、⌘± / 捏合、三指轻扫），没有听写、长按、弹出键盘；「只看 · 接管」的图标是窗口。快捷命令在 Mac 上没有编辑模式，每条右键菜单里上移 / 下移 / 删除（`MacShortcutOrder`）。没修：深色截图里键栏的文字键几乎黑底黑字（⚡、粘贴是白的），分不清是不是截图的问题，要解锁看真窗口；链接状态条体验模式里不出现，没看。

@@ -50,7 +50,7 @@ struct ChatLinesTests {
         let closed = ChatLines(openWork: []).build(blocks(oneTurn.map { $0(self) }), live: nil)
         let open = ChatLines(openWork: [closed[1].id]).build(blocks(oneTurn.map { $0(self) }), live: nil)
         #expect(kinds(open) == ["user", "work", "step", "step", "end", "answer"])
-        // DEBUG -openWork flips every line: the opened one closes.
+        // DEBUG -openAllWork flips every line: the opened one closes.
         #expect(kinds(ChatLines(openWork: [closed[1].id], openAll: true).build(blocks(oneTurn.map { $0(self) }), live: nil))
                 == ["user", "work", "answer"])
     }

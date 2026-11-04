@@ -690,6 +690,26 @@ func (h *Hub) askLauncherModels(ctx context.Context, m *Machine, name string, re
 	return res, nil
 }
 
+// launcherAvailable: whether the machine can still run this launcher name (plain claude always; a deleted managed
+// launcher or a renamed ~/.zshrc one does not). A failed list counts as available.
+func (h *Hub) launcherAvailable(ctx context.Context, m *Machine, name string) bool {
+	if name == "" || name == "claude" {
+		return true
+	}
+	for _, s := range h.storedLaunchers(ctx) {
+		if s.Name == name {
+			return true
+		}
+	}
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	list, err := h.machineLaunchers(cctx, m)
+	if err != nil {
+		return true
+	}
+	return slices.ContainsFunc(list, func(l proto.Launcher) bool { return l.Name == name })
+}
+
 // launcherModelCache remembers which models a launcher offered, by machine and launcher, for a few minutes: a send
 // checks its conversation's model against it (a model the gateway dropped fails every turn otherwise).
 var launcherModelCache struct {
