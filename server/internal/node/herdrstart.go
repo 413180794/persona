@@ -88,6 +88,27 @@ func (n *Node) ensureHerdr(ctx context.Context, why string) error {
 	if !ok || h.c == nil || n.hstart.off.Load() {
 		return nil
 	}
+	return n.startHerdr(ctx, h, why)
+}
+
+// startHerdrServer is herdr.server.start: the user pressed 启动 in the Agents list (herdr_autostart off does not stop
+// that — the switch only says whether the node may do it on its own). It reports why when it could not.
+func (n *Node) startHerdrServer(ctx context.Context) (map[string]any, error) {
+	if e := n.engine(); e != proto.EngineHerdr && e != proto.EngineHerdrBoth {
+		return nil, fmt.Errorf("这台电脑的引擎不是 herdr")
+	}
+	h, ok := n.hosts.Get(host.Herdr).(*herdrHost)
+	if !ok || h.c == nil {
+		return nil, fmt.Errorf("这台电脑没有 herdr")
+	}
+	if err := n.startHerdr(ctx, h, "the user asked for it"); err != nil {
+		return nil, err
+	}
+	return map[string]any{"running": herdrAlive(ctx, h.c.Socket)}, nil
+}
+
+// startHerdr starts herdr's server unless it already answers, whatever asked for it.
+func (n *Node) startHerdr(ctx context.Context, h *herdrHost, why string) error {
 	sock := h.c.Socket
 	if herdrAlive(ctx, sock) {
 		return nil

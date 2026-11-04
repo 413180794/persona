@@ -443,6 +443,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return map[string]any{}, nil
 	case "node.info":
 		return n.info(ctx), nil
+	case "herdr.server.start": // the 启动 button beside 「herdr 没在运行」 (herdrstart.go)
+		return n.startHerdrServer(ctx)
 	case "connector.list", "connector.chats", "connector.older", "connector.changes", "connector.search": // this Mac's own data (connectors.go)
 		return localConnector(ctx, method, params)
 	case "credential.gh_token": // the GitHub connector's token from this machine's gh login (credential.go)
@@ -1062,6 +1064,7 @@ func (n *Node) info(ctx context.Context) proto.NodeInfo {
 	host, _ := os.Hostname()
 	hv := n.herdrVersion(ctx)
 	canUpdate, updateReason := n.updater.Capability()
+	running, runningKnown := n.herdrRunning(ctx)
 	return proto.NodeInfo{
 		NodeUpdate:         canUpdate,
 		NodeUpdateReason:   updateReason,
@@ -1072,6 +1075,8 @@ func (n *Node) info(ctx context.Context) proto.NodeInfo {
 		Home:               n.home,
 		DataDir:            n.dir,
 		HerdrVersion:       hv,
+		HerdrRunning:       running,
+		HerdrRunningKnown:  runningKnown,
 		ClaudeVersion:      n.claudeV.set(claudeVersionOf(ctx)),
 		Version:            n.Version,
 		System:             n.system(ctx),
@@ -1079,6 +1084,16 @@ func (n *Node) info(ctx context.Context) proto.NodeInfo {
 		Engines:            n.engines(ctx, hv),
 		MachineUID:         n.uid,
 	}
+}
+
+// herdrRunning says whether classic herdr's server answers on this machine, and whether the node can tell at all: a
+// machine driving Herdr App's herdr-core has no classic socket, so nothing is claimed about it (herdrstart.go).
+func (n *Node) herdrRunning(ctx context.Context) (running, known bool) {
+	h, ok := n.hosts.Get(host.Herdr).(*herdrHost)
+	if !ok || h.c == nil {
+		return false, false
+	}
+	return herdrAlive(ctx, h.c.Socket), true
 }
 
 func claudeVersion(ctx context.Context) string {

@@ -975,6 +975,10 @@ App 和网页在一轮的回复下面放一条「这一轮看过的图片」（#
   Orca 能用 = `orca-runtime.json` 在、它的 socket 答 `status.get`
   且协议版本兼容（不兼容时 `available` 为 false，`note` 是给用户看的一句中文原因，`version` 照样带；同样只在 `node.info` 时问一次）。
   `version` 是各自报的版本，没有就不带。旧 node 只报前两个。
+- `node.info` 的 `herdr_running` / `herdr_running_known`：经典 herdr 的 server 现在答不答话，以及 node 能不能判断（用 herdr-core
+  的机器没有那个 socket，两个都不带）。老 node 两个都不带，hub 据此区分「没在跑」和「不清楚」（`docs/engines.md`）。
+- `herdr.server.start`（hub → node，无参数，回 `{running}`）：用户点了 Agents 列表的「启动」。不受 `herdr_autostart` 约束，
+  起不来时按 `engine_missing` 那一套回原因。老 node 没有这个方法，hub 回 502 而不是说 herdr 起不来。
 - 并列时没有窗格的操作（新建、继续会话、改名）固定走经典 herdr（node 的 `defaultHost` / `defaultHostKind`）；
   每个窗格的操作（读屏、发送、按键、关闭）按窗格 id 的 host kind 路由，herdr-core 的窗格只受 herdr-core 能力限制。
 - **`paseo`（显示名「Paseo」，`docs/paseo.md`）不是终端宿主**：node 不注册宿主，自己运行 Paseo 的桥（`node/paseobridge.go`）。

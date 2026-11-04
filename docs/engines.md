@@ -111,8 +111,15 @@ node 所在的电脑 PATH 上有 `botmux` 时，node 在所选引擎的宿主之
   `XDG_*`、`HERDR_SOCKET_PATH`，再用用户的登录 shell（`$SHELL -l -c 'exec herdr server'`，launchd 下没有 `SHELL` 时读账户的登录 shell）起：
   PATH 是登录 shell 的，node 和启动器的 `ANTHROPIC_*`、代理变量一个都不带。herdr 命令先在 node 的 PATH 里找，找不到再问登录 shell。
 - **只起一个**：node 内一把锁，外加对 herdr 配置目录的 `flock`（同一账户上另一个 node），拿到锁后再确认一次 socket。
-- **开关**：hub.json 的 `machines[].herdr_autostart` 写 `false` 时，node 完全不拉（手动 `herdr server stop` 后就一直停着），不写是开。
-  App 里「设置 › 机器 › 引擎」下的「需要时自动启动 herdr」开关是后续（#1879 里拆出去的那一项），现在只能改 hub.json。
+- **开关**：按机器存，「设置 › 机器 › 引擎」下的「需要时自动启动 herdr」改的就是它。hub.json 的
+  `machines[].herdr_autostart` 只是这台机器还没选过时的默认值（不写是开）：用户选了之后存在 hub 的 settings
+  （`herdr_autostart/<机器 id>`），连上、改了都会经 `node.configure` 下发。关掉后手动 `herdr server stop` 就一直停着，
+  node 不再自己拉起。接口 `GET /api/v1/machines/{mid}/herdr`（`{autostart, running, known}`）和
+  `PUT`（`{"autostart": bool}`），只对引擎是 herdr / herdr-both 的机器有这一行。客户端界面待接（#1915）。
+- **手动启动**：`node.info` 带上 `herdr_running` / `herdr_running_known`（老 node 两个都不带，hub 据此区分「没在跑」和
+  「不清楚」）。`POST /api/v1/machines/{mid}/herdr/start` 转成 node 的 `herdr.server.start`，**不受自动启动开关约束**——
+  开关说的是 node 能不能自己拉，用户点「启动」是他自己要求的。起不来时原因同下（`engine_missing` 那一套）。
+  Agents 列表顶上的提示行和「启动」按钮待接（#1916）。
 - **起不来**：仍然是 `engine_missing`。没装 herdr 时文案和以前一样；装了但起不来时说「自动启动也没成功」，原因（herdr 的退出码和输出的最后几行，
   输出在 `$TMPDIR/persona-herdr-server.log`）放在详情里，也写进 node 的日志。Windows 上不拉，行为和以前一样。
 

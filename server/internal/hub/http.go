@@ -47,6 +47,10 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("DELETE /api/v1/machines/{mid}/computer/apps/{bundle}", h.withMachine(h.deleteComputerApp))
 	api.HandleFunc("GET /api/v1/machines/{mid}/browser", h.withMachine(h.getBrowser))
 	api.HandleFunc("PUT /api/v1/machines/{mid}/browser", h.withMachine(h.putBrowser))
+	// the engine row's herdr switch and the 启动 button (herdr.go)
+	api.HandleFunc("GET /api/v1/machines/{mid}/herdr", h.withMachine(h.getHerdr))
+	api.HandleFunc("PUT /api/v1/machines/{mid}/herdr", h.withMachine(h.putHerdr))
+	api.HandleFunc("POST /api/v1/machines/{mid}/herdr/start", h.withMachine(h.postHerdrStart))
 	api.HandleFunc("POST /api/v1/machines/{mid}/browser/{action}", h.withMachine(h.postBrowserJob))
 	// sign-ins in ego lite (browser_cookies.go): only the user's own apps, the hub keeps nothing
 	api.HandleFunc("GET /api/v1/machines/{mid}/browser/cookies", h.withMachine(h.browserCookies))

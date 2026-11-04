@@ -68,7 +68,7 @@ func (m *Machine) configureNode(ctx context.Context, peer *rpc.Peer) {
 	_ = peer.Call(ctx, "node.configure", map[string]any{"machine_id": m.cfg.ID, "codex": m.codexConfig(ctx),
 		"claude_dirs": m.claudeDirs(ctx), "claude_dirs_blocked": m.blockedClaudeDirs(ctx),
 		"keep_sessions": m.hub.keptSessions(ctx, m.cfg.ID), "botmux": m.botmux(), "claude_start_dir": m.cfg.ClaudeStartDir,
-		"herdr_autostart": m.cfg.HerdrAutostart == nil || *m.cfg.HerdrAutostart}, nil)
+		"herdr_autostart": m.herdrAutostart(ctx)}, nil)
 	m.sendManaged(ctx, func(ctx context.Context, method string, params, out any) error {
 		return peer.Call(ctx, method, params, out)
 	})

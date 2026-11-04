@@ -327,6 +327,11 @@ type NodeInfo struct {
 	// MachineUID is the computer's own id (~/.jarvis/machine-uid, a UUIDv4 made on the node's first run): hubs that
 	// both reach it tell it is the same computer (docs/mesh.md). Older nodes leave it out.
 	MachineUID string `json:"machine_uid,omitempty"`
+	// HerdrRunning and HerdrRunningKnown: whether classic herdr's server answers on this machine now, so the Agents
+	// list can offer 启动 instead of waiting for a start to fail (docs/engines.md). An older node sets neither, and
+	// the hub then tells "it does not run" apart from "nobody said".
+	HerdrRunning      bool `json:"herdr_running,omitempty"`
+	HerdrRunningKnown bool `json:"herdr_running_known,omitempty"`
 }
 
 // System is what a machine is: OS, hardware, since when it runs (sysmon; docs/machines.md). Read once when the node
