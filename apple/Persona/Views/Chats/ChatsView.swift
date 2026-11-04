@@ -234,7 +234,7 @@ struct ChatsView: View {
                 .onChange(of: path.isEmpty && !searching, initial: true) { _, root in shell?.workAtRoot = root }
                 .onChange(of: path) { _, p in
                     spaceAt = spaceAt.filter { $0.key < p.count }
-                    if p.isEmpty { AppModel.rememberChat(nil) } // back at the list: next launch starts here
+                    if p.isEmpty { AppModel.rememberChat(nil); model.chatSwitched = [:] } // back at the list: next launch starts here
                 }
                 .onChange(of: model.openChat, initial: true) { _, key in
                     guard let key else { return }
@@ -242,6 +242,15 @@ struct ChatsView: View {
                     model.openChat = nil
                 }
                 .onAppear {
+                    // A new tree (RootView swaps the shell and the tabs when the width class changes, which iOS does
+                    // for its snapshots when the app goes to the background: iPhone Duo open, 2026-11-04) starts at the
+                    // list: open the chat that was open, as a launch does (AppModel.init). Back at the list it is
+                    // forgotten (rememberChat(nil) above). A turn later: the split of the tree going away empties
+                    // the paths as it goes, and a push made in the same update did not show.
+                    if path.isEmpty, model.openChat == nil, model.selectedTab == .chats,
+                       let v = UserDefaults.standard.string(forKey: "dev.openChat") {
+                        DispatchQueue.main.async { if path.isEmpty, model.openChat == nil { model.openChat = SessionKey(path: v) } }
+                    }
                     if model.debugShowNewChat { model.debugShowNewChat = false; showNew = true }
                     #if DEBUG
                     // `-openMachinePage <machine id>` (with `-tab dev`): that machine's projects.

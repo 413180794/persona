@@ -133,9 +133,18 @@ struct ChatView: View {
     @State private var quoteFlash: QuoteFlashMark?
 
     init(key: SessionKey, style: ChatStyle = .dev) {
+        // Built again for the same path (a tree swap): the agent its header switched to, not the one it opened with.
+        #if os(iOS)
+        _key = State(initialValue: style == .dev ? AppModel.shared.chatSwitched[key] ?? key : key)
+        #else
         _key = State(initialValue: key)
+        #endif
+        opened = key
         self.style = style
     }
+
+    /// The session this page was opened with (the path's), which `switchTo` records its switches under.
+    private let opened: SessionKey
 
     /// A subagent of this session being looked at instead of the main agent (read-only, same message UI).
     @State private var viewing: Subagent?
@@ -2418,7 +2427,12 @@ struct ChatView: View {
         model.subscribe(next, by: owner)
         model.show(next, by: owner)
         model.markSeen(next)
-        if style == .dev { AppModel.rememberChat(next) }
+        if style == .dev {
+            AppModel.rememberChat(next)
+            #if os(iOS)
+            model.chatSwitched[opened] = next == opened ? nil : next
+            #endif
+        }
     }
 
     private var title: String {

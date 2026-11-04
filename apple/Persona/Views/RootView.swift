@@ -7,11 +7,18 @@ struct RootView: View {
     /// The system's text size, before 小 / 标准 / 大 moves it.
     @Environment(\.dynamicTypeSize) private var systemTypeSize
     @Environment(\.horizontalSizeClass) private var widthClass
+    #if DEBUG
+    /// `-swapTreeAt <seconds>`: the width class goes compact for a moment that long after launch, as iOS may set it for
+    /// its snapshots when the app goes to the background (iPhone Duo open): the tree swap that follows, on any simulator.
+    @State private var flipped = false
+    #else
+    private let flipped = false
+    #endif
 
     /// The ChatGPT-style shell (docs/ios.md「新外壳」): an iPhone-width screen, unless 设置 › 外观 › 旧布局 is on.
     private var usesShell: Bool {
         #if os(iOS)
-        return !model.oldLayout && widthClass == .compact
+        return !model.oldLayout && (widthClass == .compact || flipped)
         #else
         return false
         #endif
@@ -38,6 +45,16 @@ struct RootView: View {
         .task(id: PluginSlots.source(model)) { await PluginSlots.shared.reload(for: PluginSlots.source(model).hub) }
         // A new style, 主题色 or persona rebuilds the whole tree (tokens are static); the open tab and chat are remembered.
         .id(model.look)
+        #if DEBUG
+        .task {
+            let at = UserDefaults.standard.double(forKey: "swapTreeAt")
+            guard at > 0 else { return }
+            try? await Task.sleep(for: .seconds(at))
+            flipped = true
+            try? await Task.sleep(for: .seconds(1))
+            flipped = false
+        }
+        #endif
         .tint(Theme.accent)
         .fontDesign(model.style.fontDesign)
         .dynamicTypeSize(model.textSize.applied(to: systemTypeSize))

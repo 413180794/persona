@@ -841,3 +841,9 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
   两个分支里那一行的 id 都是 `live`，`LazyVStack` 留着原来的 `ChatLiveText`、它照样跟着 store 长，扣住的文本根本没画出来（`ScrollTrace` 里扣住的文本一直 309 字、
   内容高却一直涨，加 `NSLog` 看 body 才确认）。同一行要换内容，就让同一个视图拿不同的值（`ChatLiveText(held:)`），别用两个分支各画一个。
 - **Mac 的滚动阶段只管手指**：两指离开触控板 SwiftUI 就报 idle，惯性还在走；要按滚动事件的 phase / momentumPhase 自己判断（`MacWheelWatch`）。
+
+## 分栏的路径，换树时带不回页面（2026-11-04）
+
+- **分栏左栏的 `NavigationLink(value:)` 不写进绑定的 `path`**（iOS 26，2026-11-04）：`NavigationSplitView` 把值推进右栏时，绑定的 `path`
+  先被清空（`NavigationColumnState.ejectAll`），打开的页面不在 `path` 里。整棵树被换掉时（`RootView` 按宽度换新外壳和 tab），
+  别指望 `path` 能把页面带回来，要按另外记下的（`dev.openChat`）重开；要走的那棵树的分栏也会清空它的 `path`，所以把 `path` 放进 model 共享也没用。

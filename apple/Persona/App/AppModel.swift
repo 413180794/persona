@@ -1736,6 +1736,9 @@ final class AppModel {
     /// Where 设置 is (its pages), here and not in SettingsView's state: picking a style or a persona in 设置 › 外观
     /// rebuilds the whole tree (`look`), and the rebuilt settings stay on that page.
     var settingsPath = NavigationPath()
+    /// The space's other agent a chat page switched to in its header (`ChatView.switchTo`), by the session it opened
+    /// with: the page built again for that path goes to it. Cleared back at the list.
+    var chatSwitched: [SessionKey: SessionKey] = [:]
 
     /// The persona on screen: the chosen one, the built-in in 体验模式 (its packages are the user's hub's).
     var persona: Persona { isDemo ? .builtin : personas.current }

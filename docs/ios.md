@@ -362,6 +362,10 @@ iPhone Duo 是折叠屏：合上用外屏（约 466×678 点，compact 宽度）
 - **按宽度分两种布局，不看机型**（`Persona/Views/SplitNavigation.swift`）。compact（所有普通 iPhone、Duo 合上）还是原来的单个
   NavigationStack，行为一点不变；regular（Duo 打开）用 `NavigationSplitView`：左栏是列表，右栏是它打开的页面，像 Mail。
   两种布局共用同一个 `path`，开合时正在看的页面不丢；半折时系统自动让两栏避开折痕。Agents、收件箱、设置都用它。
+  - 但 `RootView` 按宽度在新外壳和 tab 之间换整棵树（`usesShell`），换树时 Agents 页的 `path`（视图状态）丢了；iOS 切后台拍快照时会临时改宽度，
+    Duo 打开时切个 App 回来右栏就成了「选一个 Agent」（2026-11-04）。而且分栏里左栏的链接打开的对话不写进 `path`。所以新的 Agents 页出现时
+    按 `dev.openChat`（打开对话时记下、回到列表时清掉）再打开一次，晚一拍（要走的那棵树的分栏走的时候会清空路径）；
+    页头切到的同空间 Agent 记在 `AppModel.chatSwitched`，同一个路径重建的对话页直接打开它。`ReturnToChatTests` 用 `-swapTreeAt` 在 iPad 上模拟换树。
   - 左栏的 `NavigationLink(value:)` 替换右栏（左栏自己有一个永远不推的栈，把要推的值转给右栏）；列表里用代码打开的页面也要替换：
     `path = NavigationPath([值])`（单栏时列表在栈底，和 append 一样；Agents 的 `openFromList`）。详情页里再打开的页面照常 append。
   - 右栏第一页没有返回按钮（旁边就是列表）：目标页加 `.splitDetailPage()`；Agents 对话页自绘的返回键看 `\.splitDetail` 隐藏（保留占位，标题居中）。
