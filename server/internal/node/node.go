@@ -4,6 +4,7 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/nwverse/persona/server/internal/identity"
 	"io"
@@ -1129,6 +1130,16 @@ func parseClaudeVersion(out string) string {
 var terminalEscapes = regexp.MustCompile(`\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b\[[0-9;?]*[A-Za-z]`)
 
 var claudeVersionLine = regexp.MustCompile(`^\s*v?(\d+\.\d+\.\d+\S*)\s*(\(Claude Code\))?\s*$`)
+
+// interactiveShell is the shell a launcher runs in interactively, so its rc file defines the launcher function:
+// loginShellProgram. On Windows that is Git Bash, never a bare bash, which is WSL there (a claude handed to WSL found
+// no Claude Code and exited, and the assistant stayed silent, #1994); without Git Bash it says so.
+func interactiveShell() (string, error) {
+	if sh := loginShellProgram(); sh != "" {
+		return sh, nil
+	}
+	return "", errors.New("这台电脑上没有 Git Bash（Git for Windows）：Claude Code 在 Windows 上也要它，装上后再试")
+}
 
 // loginShell runs a command in an interactive zsh so ~/.zshrc functions and PATH are available (loginShellProgram:
 // bash without zsh, Git Bash on Windows).

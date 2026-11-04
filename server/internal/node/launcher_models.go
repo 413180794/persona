@@ -160,9 +160,9 @@ func (n *Node) listAgentModels(ctx context.Context, name, agent string) ([]proto
 		return nil, err
 	}
 	defer os.RemoveAll(dir)
-	shell := "zsh"
-	if _, err := exec.LookPath("zsh"); err != nil {
-		shell = "bash"
+	shell, err := interactiveShell()
+	if err != nil {
+		return nil, err
 	}
 	var cmd *exec.Cmd
 	if agent == "codex" {

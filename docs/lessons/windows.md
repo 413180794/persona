@@ -14,6 +14,8 @@
 
 - **`bash` 可能是 WSL**：服务拿到的系统 PATH 里 `C:\Windows\System32\bash.exe` 排在 Git 前面，它会进 WSL 里执行（另一台「Linux」，看到的是那边的 claude 和 `~/.zshrc`）。
   node 在 Windows 上跑 shell 脚本一律用 Git for Windows 的 bash（`loginShellProgram`，和 Claude Code 自己一样，认 `CLAUDE_CODE_GIT_BASH_PATH`），找不到就让命令起不来，不要退回裸的 `bash`。
+  起启动器的地方用 `interactiveShell()`：助手、Codex 助手和列启动器模型曾各自写死「没有 zsh 就 bash」，Windows 上助手的 claude 进了 WSL、
+  以「open terminal failed: not a terminal」马上退出，主对话没有任何回应、日志里也没有（#1994）。新加起 shell 的地方别再自己挑。
 - **读别的进程的环境变量要读 PEB**：没有 `/proc`、没有 `ps -E`。`procs_windows.go` 用 Toolhelp32 列进程，再对候选进程 `NtQueryInformationProcess` + `ReadProcessMemory`
   读 `RTL_USER_PROCESS_PARAMETERS`（命令行、当前目录、环境块）。PEB 里的指针是对方进程的地址：按字节读出来、按 x/sys 的偏移取字段，
   不要直接读进 `windows.PEB` 这种带 Go 指针字段的结构体（GC 会把对方的地址当成自己的指针）。

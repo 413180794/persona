@@ -193,9 +193,9 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 		return nil, err
 	}
 	key := "proc-" + randHex(8)
-	shell := "zsh"
-	if _, err := exec.LookPath("zsh"); err != nil {
-		shell = "bash"
+	shell, err := interactiveShell()
+	if err != nil {
+		return nil, err
 	}
 	cmd := exec.Command(shell, append([]string{"-ic", codexShell(n.launcherCommand(launcher)), "jarvis"}, codexArgs(n.bin, key)...)...)
 	cmd.Dir = cwd

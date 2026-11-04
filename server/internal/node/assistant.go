@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -53,6 +54,13 @@ const assistantAllowedTools = "mcp__jarvis"
 // A spare process started when the app opens the 对话 tab, so the first message skips claude's startup.
 // It is only adopted while fresh (what it loaded at start — CLAUDE.md, memory, tools — may have changed since).
 const assistantSpareMaxAge = 10 * time.Minute
+
+// An assistant process that exits within assistantEarlyExit of starting failed to start: its last assistantStderrTail
+// stderr lines go to the log.
+const (
+	assistantEarlyExit  = 30 * time.Second
+	assistantStderrTail = 5
+)
 
 type assistantProc struct {
 	id       string
@@ -435,9 +443,9 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	} else {
 		args = append(args, "--session-id", id)
 	}
-	shell := "zsh"
-	if _, err := exec.LookPath("zsh"); err != nil {
-		shell = "bash"
+	shell, err := interactiveShell()
+	if err != nil {
+		return nil, err
 	}
 	// An interactive shell so ~/.zshrc defines the launcher function; "$@" passes our flags through.
 	cmd := exec.Command(shell, append([]string{"-ic", n.launcherCommand(launcher) + ` "$@"`, "jarvis"}, args...)...)
@@ -468,14 +476,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 		n.procs[id] = p
 		n.mu.Unlock()
 	}
-	go func() {
-		sc := bufio.NewScanner(stderr)
-		for sc.Scan() {
-			if l := sc.Text(); strings.Contains(l, "rror") {
-				n.logger.Printf("assistant %s: %s", id[:8], l)
-			}
-		}
-	}()
+	go watchAssistantStderr(n.logger, id, launcher, p.born, stderr)
 	liveAssistants.Store(p, struct{}{})
 	go n.readAssistant(p, stdout)
 	go func() {
@@ -502,6 +503,27 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 		n.notifySessions()
 	}()
 	return p, nil
+}
+
+// watchAssistantStderr logs an assistant process's error lines, and, when its stderr ends (it exited) within
+// assistantEarlyExit of born, its last lines whatever they say: it did not start. WSL's "open terminal failed: not a
+// terminal" has no "error" in it, and the assistant stayed silent with nothing in any log (#1994).
+func watchAssistantStderr(logger *log.Logger, id, launcher string, born time.Time, stderr io.Reader) {
+	var tail []string
+	sc := bufio.NewScanner(stderr)
+	for sc.Scan() {
+		l := sc.Text()
+		if strings.Contains(l, "rror") {
+			logger.Printf("assistant %s: %s", id[:8], l)
+		}
+		if tail = append(tail, l); len(tail) > assistantStderrTail {
+			tail = tail[1:]
+		}
+	}
+	if lived := time.Since(born); lived < assistantEarlyExit && len(tail) > 0 {
+		logger.Printf("assistant %s: %s exited %s after it started: %s", id[:8], launcher, lived.Round(time.Millisecond),
+			strings.Join(tail, " | "))
+	}
 }
 
 // readAssistant turns the stream-json output into live deltas and turn-finished signals.
