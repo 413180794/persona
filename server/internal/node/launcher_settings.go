@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // A launcher alias can bring its own settings (`alias work="claude --settings ~/.claude/settings.work.json …"`, with
@@ -20,6 +22,16 @@ import (
 // is an alias with its own --settings, the two merged into launcher-settings/<launcher>-<ours>. cwd is where claude
 // runs (a relative path in the alias is from there). Anything wrong with the launcher's file: ours, as before.
 func (n *Node) claudeSettings(ctx context.Context, launcher, ours, cwd string) string {
+	if m, ok := n.managedLauncher(launcher); ok {
+		// A managed launcher has no settings file of its own, but its gateway and key must beat the user's global
+		// settings env (another gateway): put them in ours.
+		if path, err := n.mergeManagedSettings(launcher, m, ours); err != nil {
+			n.logger.Printf("launcher %s: its gateway not merged with Persona's settings: %v", launcher, err)
+			return ours
+		} else {
+			return path
+		}
+	}
 	own := n.launcherOwnSettings(ctx, launcher)
 	if own == "" {
 		return ours
@@ -72,13 +84,45 @@ func (n *Node) mergeLauncherSettings(launcher, own, ours, cwd string) (string, e
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(n.dir, "launcher-settings")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	return writeSettings(n.dir, launcher, ours, out)
+}
+
+// mergeManagedSettings writes ours with the managed launcher's env on top and says where (see writeSettings).
+func (n *Node) mergeManagedSettings(launcher string, l proto.ManagedLauncher, ours string) (string, error) {
+	b, err := os.ReadFile(ours)
+	if err != nil {
 		return "", err
 	}
-	path := filepath.Join(dir, launcher+"-"+filepath.Base(ours))
-	// A temporary file of its own: two starts of the same launcher at once must not rename each other's away.
-	tmp, err := os.CreateTemp(dir, "."+launcher+"-*")
+	var mine map[string]any
+	if err := json.Unmarshal(b, &mine); err != nil {
+		return "", err
+	}
+	env := map[string]any{}
+	if cur, ok := mine["env"].(map[string]any); ok {
+		for k, v := range cur {
+			env[k] = v
+		}
+	}
+	for k, v := range managedSettingsEnv(l) {
+		env[k] = v
+	}
+	mine["env"] = env
+	out, err := json.MarshalIndent(mine, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return writeSettings(n.dir, launcher, ours, out)
+}
+
+// writeSettings stores merged settings for launcher under n.dir and returns the path. A temporary file of its own:
+// two starts of the same launcher at once must not rename each other's away.
+func writeSettings(dir, launcher, ours string, out []byte) (string, error) {
+	d := filepath.Join(dir, "launcher-settings")
+	if err := os.MkdirAll(d, 0o700); err != nil {
+		return "", err
+	}
+	path := filepath.Join(d, launcher+"-"+filepath.Base(ours))
+	tmp, err := os.CreateTemp(d, "."+launcher+"-*")
 	if err != nil {
 		return "", err
 	}

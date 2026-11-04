@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -34,6 +35,14 @@ func (n *Node) launcherCheck(ctx context.Context, name string) proto.LauncherChe
 	args := ` -p ` + shellQuote(prompt) + ` --output-format json --max-turns 1`
 	if agent != "claude" { // Codex / TRAEX: one non-interactive turn
 		args = ` exec --skip-git-repo-check ` + shellQuote(prompt)
+	}
+	if m, managed := n.managedLauncher(name); managed {
+		// Without --settings the check reads the user's global settings, whose env (another gateway) would win over
+		// the launcher's. Real starts always pass a settings file; this one carries the launcher's env too.
+		_ = m
+		if settings := n.claudeSettings(ctx, name, filepath.Join(n.dir, "claude-settings.json"), dir); settings != "" {
+			args += ` --settings ` + shellQuote(settings)
+		}
 	}
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()

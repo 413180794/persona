@@ -92,6 +92,18 @@ func managedEnv(l proto.ManagedLauncher) []string {
 	return env
 }
 
+// managedSettingsEnv is managedEnv as a settings "env" map. Settings env wins over the process env, so the user's
+// ~/.claude/settings.json (another gateway, another token) would otherwise replace a managed launcher's.
+func managedSettingsEnv(l proto.ManagedLauncher) map[string]string {
+	out := map[string]string{}
+	for _, kv := range managedEnv(l) {
+		if k, v, ok := strings.Cut(kv, "="); ok {
+			out[k] = v
+		}
+	}
+	return out
+}
+
 // launchEnvRemoved: what the shell may carry from another launcher or account, dropped before a managed one runs.
 var launchEnvRemoved = []string{"ANTHROPIC_", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY",
 	"CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_SUBAGENT_MODEL"}

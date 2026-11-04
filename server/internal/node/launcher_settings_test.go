@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/nwverse/persona/server/internal/proto"
 	"time"
 )
 
@@ -129,5 +131,27 @@ func TestClaudeSettingsMergesTheLaunchers(t *testing.T) {
 		if got := n.claudeSettings(ctx, launcher, ours, cwd); got != ours {
 			t.Errorf("%s: %s, want %s", launcher, got, ours)
 		}
+	}
+}
+
+// A managed launcher's gateway must be in the settings file: settings env wins over the process env, so the user's
+// global settings (another gateway) would otherwise replace it.
+func TestManagedSettingsCarryTheLaunchersEnv(t *testing.T) {
+	home := t.TempDir()
+	n := &Node{home: home, dir: filepath.Join(home, ".jarvis"), logger: log.New(io.Discard, "", 0)}
+	ours := filepath.Join(n.dir, "claude-settings.json")
+	writeFile(t, ours, `{"env":{"ANTHROPIC_AUTH_TOKEN":"global"},"hooks":{"Stop":[{"hooks":[{"type":"command","command":"jarvisd hook"}]}]}}`)
+	n.setManaged([]proto.ManagedLauncher{{Name: "m", BaseURL: "https://gw.example.com", Model: "m1", APIKey: "k"}})
+	got := n.claudeSettings(context.Background(), "m", ours, home)
+	if got == ours {
+		t.Fatal("a managed launcher used Persona's bare settings")
+	}
+	s := readSettings(t, got)
+	env, _ := s["env"].(map[string]any)
+	if env["ANTHROPIC_BASE_URL"] != "https://gw.example.com" || env["ANTHROPIC_API_KEY"] != "k" {
+		t.Errorf("the launcher's gateway is missing: %v", env)
+	}
+	if len(hookCommands(t, s, "Stop")) != 1 {
+		t.Errorf("Persona's hooks are missing: %v", s)
 	}
 }
