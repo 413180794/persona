@@ -132,9 +132,14 @@ final class AppModel {
 
     /// The dev chat that was open; saved when a chat opens, cleared when going back to the list.
     static func rememberChat(_ key: SessionKey?) {
+        rememberedChat = key?.path
         if let key { UserDefaults.standard.set(key.path, forKey: "dev.openChat") }
         else { UserDefaults.standard.removeObject(forKey: "dev.openChat") }
     }
+    /// The chat a rebuilt list opens again (ChatsView): what the launch had (`dev.openChat`), then what rememberChat
+    /// says. Kept here, not read back from UserDefaults: a launch argument of that name cannot be removed, and the
+    /// list came back to a chat just closed (#1868).
+    static var rememberedChat: String? = UserDefaults.standard.string(forKey: "dev.openChat").flatMap { $0.isEmpty ? nil : $0 }
     /// Session whose chat is on screen; its completion pings are suppressed.
     var visibleSession: SessionKey?
     private(set) var assistantConfig: APIClient.AssistantState? {

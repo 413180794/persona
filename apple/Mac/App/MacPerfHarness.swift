@@ -7,9 +7,9 @@ import QuartzCore
 /// The Mac this was written on has no Instruments display tracing (Developer Mode off) and posted wheel events from a
 /// shell tool are filtered out (no Accessibility grant), so the scroll is driven here and frames are timed here: a
 /// display link on the main run loop records when each frame could start. When the main thread is busy past a frame,
-/// the next tick comes late; that lateness is the hitch the user feels. It does not see the render server's own
-/// hitches; WindowServer's CPU time over the run (`windowServerCPUMsPerS`, every app's drawing, so only a comparison
-/// between runs on a quiet Mac says something) stands in for them.
+/// the next tick comes late; that lateness is the hitch the user feels. Waiting on the render server delays it too: a
+/// header rebuilt at every fold left the main thread's CPU time about the same and the frames late (#1337). Frames
+/// the render server drops on its own are not seen.
 ///
 /// `-showPerfRun scroll|sections|chats|resize|launch|pushes`, `-showPerfDelay <s>` (default 6), `-showPerfOut <json>`,
 /// `-showPerfQuit YES`; scroll: `-showPerfPoint x,y` (window points from the top left, inside the scroll view to
@@ -89,22 +89,6 @@ nonisolated func macPerfMainThreadCPU() -> Double {
     guard kr == KERN_SUCCESS else { return 0 }
     return Double(info.user_time.seconds + info.system_time.seconds) * 1000
         + Double(info.user_time.microseconds + info.system_time.microseconds) / 1000
-}
-
-/// WindowServer's CPU time, in milliseconds (0 when it cannot be read): it composites every window, our frames too.
-nonisolated func macPerfWindowServerCPU() -> Double {
-    var pids = [pid_t](repeating: 0, count: 4096)
-    let n = Int(proc_listallpids(&pids, Int32(pids.count * MemoryLayout<pid_t>.size)))
-    var name = [CChar](repeating: 0, count: 64)
-    for pid in pids.prefix(max(n, 0)) where pid > 0 {
-        guard proc_name(pid, &name, UInt32(name.count)) > 0, String(cString: name) == "WindowServer" else { continue }
-        var info = proc_taskinfo()
-        guard proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &info, Int32(MemoryLayout<proc_taskinfo>.size)) > 0 else { return 0 }
-        var base = mach_timebase_info()
-        mach_timebase_info(&base)
-        return Double(info.pti_total_user + info.pti_total_system) * Double(base.numer) / Double(base.denom) / 1e6
-    }
-    return 0
 }
 
 /// The whole process's CPU time (every thread), in milliseconds.
@@ -193,7 +177,7 @@ func round1(_ v: Double) -> Double { (v * 10).rounded() / 10 }
         let live = glideArg == "live"
         if glideArg == "up" { direction = -1 }
         var sweeps = 0
-        let cpu0 = macPerfMainThreadCPU(), all0 = macPerfProcessCPU(), ws0 = macPerfWindowServerCPU()
+        let cpu0 = macPerfMainThreadCPU(), all0 = macPerfProcessCPU()
         defaults.start()
         let t0 = CACurrentMediaTime()
         var moved: CGFloat = 0
@@ -207,7 +191,6 @@ func round1(_ v: Double) -> Double { (v * 10).rounded() / 10 }
                 r["run"] = "scroll"
                 r["pattern"] = live ? "live" : glide ? "glide" : "ping-pong"
                 if live { r["sweeps"] = sweeps }
-                r["windowServerCPUMsPerS"] = round1((macPerfWindowServerCPU() - ws0) / (t1 - t0))
                 r["point"] = "\(Int(point.x)),\(Int(point.y))"
                 r["speedPtPerFrame"] = Double(speed)
                 r["scrolledPt"] = Double(moved)

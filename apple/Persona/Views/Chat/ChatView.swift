@@ -3998,11 +3998,18 @@ private struct ChromeHeader<Full: View, Compact: View>: View {
 /// The open header once it has faded out: still laid out (its height is what folding measures) but hidden, so its
 /// buttons leave VoiceOver and XCUITest. `accessibilityHidden` alone was not enough (its back and ⋯ are glass, UIKit):
 /// slid up under the clip, its 返回 sat in the status bar's band, invisible, "hittable", and a tap there went nowhere.
+/// On the Mac it only leaves VoiceOver: it is already clear and takes no clicks there (`allowsHitTesting`), and
+/// swapping it for a hidden copy built the whole header again, its glass and the agents' tabs, at every fold and
+/// unfold: 71–82 ms of hitches a second scrolling a chat up and down, 9–29 without (#1337).
 private struct GoneWhen: ViewModifier {
     var gone: Bool
 
     func body(content: Content) -> some View {
+        #if os(macOS)
+        content.accessibilityHidden(gone)
+        #else
         if gone { content.hidden() } else { content }
+        #endif
     }
 }
 

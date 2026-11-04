@@ -280,7 +280,8 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
     只挪 clip view，SwiftUI 不当成用户在滚：对话一直「跟着最新」、落到上次读到的地方，和推着它的这边拉扯，每帧跳回去（2026-11-04 的 342–356 ms/s 主要是这个）；
     短对话一个方向 0.5 秒就到头，剩下的时间量的是不动的列表（看结果里的 `scrolledPt`：等于两倍滚动范围就是到头停了）。
   - 用合成的滚轮事件直接交给滚动视图（`scrollWheel(with:)` 或窗口的 `sendEvent`）不行：带阶段的手势 AppKit 另有跟踪，6 秒只滚了 380 pt。
-  - 结果里还有 WindowServer 的 CPU（`windowServerCPUMsPerS`，所有 App 的合成都在里面，只能在安静的机器上前后对比）：卡顿可能在合成，不在我们的主线程。
+  - 卡顿可能不在主线程的 CPU 上（等渲染服务也会让下一帧晚到）：主线程 CPU 两边差不多、帧数差很多时，看是不是在反复创建 / 拆掉视图（玻璃、材质）。
+    WindowServer 的 CPU 从 App 里读不到（没有权限），别指望它。
 - `-showPerfRun pushes -perfCounts YES -showPerfChurn 'http://127.0.0.1:<端口>/mock/churn?n=20&ms=300&steps=0'`：页面静止，让 mock 推 20 轮
   （每台机器的会话、机器列表的心跳；`steps=0` 时只有每 4 轮对话里多一句话），报这几秒里每个视图的 body 算了几次（`PerfCount`）、每次推送主线程忙多久。
   对话页为什么重算：加 `-showPerfChanges YES`，日志里有 `ChatView` 每次的 `_printChanges()`（哪个 `@State`、哪个被观察的属性变了）。
@@ -310,9 +311,12 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   外壳和 Agents 列表跟着重算，137 行的 SwiftUI List 每次整表重新比对（`OutlineListCoordinator.diffRows`）：拖窗口时约占主线程的一半，打开对话时约 28%。
   热的视图改用 `@StoredValue`（`Persona/App/StoredValue.swift`，用法同 `@AppStorage`，只有自己那个键的值变了才重算）。改后：拖窗口 P95 264–365 → 33–103 ms，
   打开对话中位 293–356 → 196–224 ms。
-- 对话页滚动：上面那一轮的数字不算数（见 `-showPerfGlide live`）。按用户滚动的方式量（`live`，2000 pt/s，负载 100 以上）：长 Agent 对话 65–86 ms/s，
-  关掉滚动几何 / 阶段的回调（等于顶栏不跟着手指折叠）是 10–14 ms/s，和 iPhone 一档；主线程 CPU 两边差不多（约 220 ms/s），差在顶栏每帧变高度、
-  它的材质背景每帧重新合成。要等机器安静了再确认，改顶栏的折叠方式先给用户看。
+- 对话页滚动：上面那一轮的数字不算数（见 `-showPerfGlide live`）。按用户滚动的方式量（`live`，2000 pt/s 来回，负载 15–19，交替各 3 次）：
+  长 Agent 对话 71–82 ms/s、P95 31–33 ms。顶栏一直开着或一直折着都只有 6–11 ms/s，卡在开 ↔ 折切换的那一下：折起时整个顶栏换成一份 `.hidden()` 的
+  （`GoneWhen` 里的 `if`），玻璃按钮、标签条每折一次、开一次就拆了重建（主线程 CPU 两边差不多，帧晚到）。Mac 上改成只对 VoiceOver 隐藏
+  （它这时已经透明、也不接点击）。iPhone 不变（UIKit 的玻璃按钮透明了也点得到，要真藏起来）。改后（交替各 6 次，负载 21–30，中位数）：
+  78.3 → 33.7 ms/s，P95 31.7 → 24.2 ms；折起时 VoiceOver 照样读不到它的按钮（cua 查无障碍树：开着有「更多」，折起前后都没有）。
+  剩下的 30 ms/s 左右还是开 ↔ 折那几帧（高度、透明度、简版条插进来）；一直开着或一直折着是 6–11 ms/s。
 - 推送让对话页整页重算（2026-11-04，#1337）：对话页的副标题、「正在操作」读了 `model.machines`，每台机器每次心跳整页带所有行重算；
   标签条读 `siblings(of:)`，它在里面读 `allSessions`。改成 `namedMachine(_:)`、每个空间一个格子之后，mock 推 20 轮心跳（`steps=0`）：
   `ChatView` 30 → 10 次（剩下的是那 5 句新话），气泡和正文 365 → 125 个，每次推送主线程 4.2 → 1.2 ms；带新步骤的推送 7.9 → 3.9 ms。

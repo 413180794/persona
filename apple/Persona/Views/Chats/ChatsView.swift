@@ -247,9 +247,11 @@ struct ChatsView: View {
                     // list: open the chat that was open, as a launch does (AppModel.init). Back at the list it is
                     // forgotten (rememberChat(nil) above). A turn later: the split of the tree going away empties
                     // the paths as it goes, and a push made in the same update did not show.
-                    if path.isEmpty, model.openChat == nil, model.selectedTab == .chats,
-                       let v = UserDefaults.standard.string(forKey: "dev.openChat") {
-                        DispatchQueue.main.async { if path.isEmpty, model.openChat == nil { model.openChat = SessionKey(path: v) } }
+                    // Still the same chat a turn later: going back runs onAppear before onChange(path) forgets it (#1868).
+                    if path.isEmpty, model.openChat == nil, model.selectedTab == .chats, let v = AppModel.rememberedChat {
+                        DispatchQueue.main.async {
+                            if path.isEmpty, model.openChat == nil, AppModel.rememberedChat == v { model.openChat = SessionKey(path: v) }
+                        }
                     }
                     if model.debugShowNewChat { model.debugShowNewChat = false; showNew = true }
                     #if DEBUG
