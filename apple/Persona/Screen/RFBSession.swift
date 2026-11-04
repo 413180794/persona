@@ -348,8 +348,8 @@ nonisolated final class RFBFrameSink: @unchecked Sendable {
         }
         let latency = stamp.map { Date().timeIntervalSince1970 * 1000 - $0 }
         report?(fps, latency.flatMap { $0 >= 0 && $0 < 60_000 ? $0 : nil })
-        let box = SampleBox(sample: sample), shown = LayersBox(layers: targets)
-        Task { @MainActor in for l in shown.layers { Self.enqueue(box.sample, in: l) } }
+        let box = SampleBox(sample: sample), onScreen = LayersBox(layers: targets)
+        Task { @MainActor in for l in onScreen.layers { Self.enqueue(box.sample, in: l) } }
         if lock.withLock({ dirty && !scheduled }) { changed() }
     }
 
