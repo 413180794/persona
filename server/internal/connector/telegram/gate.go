@@ -75,6 +75,7 @@ func seconds(d time.Duration) int { return int((d + time.Second - 1) / time.Seco
 
 // do sends one request (call) when the gate lets it: after the one in flight, the gap, and any flood wait.
 func (g *gate) do(ctx context.Context, call func(context.Context) error) error {
+	entered := g.now()
 	select {
 	case g.slot <- struct{}{}:
 	case <-ctx.Done():
@@ -90,6 +91,7 @@ func (g *gate) do(ctx context.Context, call func(context.Context) error) error {
 	if err := g.sleep(ctx, wait); err != nil {
 		return err
 	}
+	started := g.now()
 	err := call(context.WithValue(ctx, inGateKey{}, true))
 	g.mu.Lock()
 	now := g.now()
@@ -99,6 +101,11 @@ func (g *gate) do(ctx context.Context, call func(context.Context) error) error {
 		g.floodAt, g.floodWait, g.until = now, d, now.Add(d+g.pace())
 	}
 	g.mu.Unlock()
+	traceOf(ctx).update(func(t *fetchTrace) {
+		t.requests++
+		t.queued += started.Sub(entered)
+		t.call += now.Sub(started)
+	})
 	if flood {
 		g.flooded(d)
 	}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/gotd/td/bin"
 	"github.com/gotd/td/session"
@@ -14,12 +15,14 @@ import (
 )
 
 // dialGotd connects a gotd client with c and keeps it running until ctx ends (it does not tell whether Telegram knows c:
-// Check does). It logs nothing: no logger is given. Every request goes through g, gotd's own too (its config, the
-// sign-in's).
+// Check does). gotd logs nothing: its logger only feeds a picture's trace (trace.go). Every request goes through g,
+// gotd's own too (its config, the sign-in's).
 func dialGotd(ctx context.Context, c creds, store sessionStore, g *gate, updated func()) (client, error) {
 	cl := telegram.NewClient(c.id, c.hash, telegram.Options{
 		SessionStorage: gotdSession{store},
 		Middlewares:    []telegram.Middleware{gated(g)},
+		Logger:         traceLog{},
+		OnTransfer:     timedTransfer,
 		// How the session shows in the user's Telegram devices.
 		Device: telegram.DeviceConfig{DeviceModel: "Persona", SystemVersion: runtime.GOOS, AppVersion: "Persona"},
 		// What Telegram pushes only kicks the archive and the inbox: they read what is new themselves, by message id,
@@ -55,11 +58,16 @@ func dialGotd(ctx context.Context, c creds, store sessionStore, g *gate, updated
 }
 
 // gated sends every request of the client through g. One gotd makes while another is in the gate (a data center's
-// authorization transfer) is part of that one: it goes straight on, or it would wait for itself.
+// authorization transfer) is part of that one: it goes straight on, or it would wait for itself; its export is timed
+// for the trace.
 func gated(g *gate) telegram.Middleware {
 	return telegram.MiddlewareFunc(func(next tg.Invoker) telegram.InvokeFunc {
 		return func(ctx context.Context, input bin.Encoder, output bin.Decoder) error {
 			if inGate(ctx) {
+				if _, export := input.(*tg.AuthExportAuthorizationRequest); export && traceOf(ctx) != nil {
+					start := time.Now()
+					defer func() { traceOf(ctx).update(func(t *fetchTrace) { t.export += time.Since(start) }) }()
+				}
 				return next.Invoke(ctx, input, output)
 			}
 			return g.do(ctx, func(ctx context.Context) error { return next.Invoke(ctx, input, output) })

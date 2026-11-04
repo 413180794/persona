@@ -239,6 +239,20 @@ func (c *Conn) Media(ctx context.Context, ref string) (connector.Media, error) {
 	if left := c.gate.left(); left > 0 {
 		return connector.Media{}, heldError{left}
 	}
+	ctx, trace := withTrace(ctx)
+	start := time.Now()
+	m, err := c.media(ctx, cl, ref)
+	kind := "message picture"
+	if strings.HasPrefix(ref, "a.") {
+		kind = "avatar"
+	}
+	if line := trace.line(kind, time.Since(start), err); line != "" {
+		traceLogf("%s", line)
+	}
+	return m, err
+}
+
+func (c *Conn) media(ctx context.Context, cl client, ref string) (connector.Media, error) {
 	f, err := c.locate(ctx, cl, ref)
 	if err != nil {
 		return connector.Media{}, err

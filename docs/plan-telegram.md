@@ -107,6 +107,10 @@ gotd 让二进制大 35 MB，所以 Telegram 不编进 personad，单独一个�
   - 头像：`a.<会话>.<照片 id>`，不需要 file reference。
   - 消息里的：`m.<会话>.<消息 id>.f|t`，位置记在内存里；程序重启后再读一次那条消息，拿新的 file reference。
   - 照片取长边不超过 1280 的那一档。静态贴纸取本身（WebP）；动的贴纸、视频取缩略图。语音只显示时长，文件只显示名字和大小。
+  - 计时（#1255）：每取一张，jarvisd-telegram 的日志写一行，只有时间和数据中心编号，不写 ref、id、名字、内容。例：
+    `Telegram avatar: 4.78 s; 1 request(s), queued 0.62 s, in Telegram 4.10 s; account on DC 5; sent on to DC 4; new connection to DC 4, authorization transfer 1.90 s (export 0.41 s)`。
+    `sent on` 是 Telegram 回了 FILE_MIGRATE（图在别的数据中心）；`new connection` 是这个进程第一次去那个数据中心，要转授权（导出 + 导入）。
+    数据来源：闸门（`gate.do`）记排队和调用，gotd 的 `OnTransfer` 记授权转移，闸门中间件里嵌套的导出请求记导出；gotd 的 Logger（`traceLog`）只对带计时的请求打开，从 gotd 自己的两条记录里取编号，本身什么都不打印。
 - **限流**：页面和媒体都走 #965 的闸门；限流中直接回「Telegram 限流中，N 秒后再试」，App 在页面上方提示，或者退回 hub 收集的文本。
 - **人数**（#1228）：标题下面和飞书会话页一样写来源，群和频道再加人数：「Telegram 群聊 · 128 位成员」「Telegram 频道 · 1,234 位订阅者」，私聊只写「Telegram」。
   人数先从 Telegram 已经给的对象里拿，不多发请求：列会话（`getDialogs`）时普通群的 `Chat.participants_count` 一定有，超级群和频道的有时有。

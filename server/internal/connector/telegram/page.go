@@ -278,6 +278,7 @@ func (c *capped) Write(p []byte) (int, error) {
 }
 
 func (g *gotdClient) Fetch(ctx context.Context, f *fileLoc, most int) ([]byte, error) {
+	traceOf(ctx).update(func(t *fetchTrace) { t.home = g.c.Config().ThisDC })
 	w := &capped{n: most}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
