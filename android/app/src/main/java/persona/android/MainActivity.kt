@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -19,9 +18,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -36,6 +33,7 @@ import persona.android.platform.LockScreenTests
 import persona.android.platform.PlatformPairing
 import persona.android.platform.PlatformRoot
 import persona.android.ui.AppServices
+import persona.android.ui.AppearanceOverride
 import persona.core.contracts.api.HubConnection
 import persona.core.designsystem.GlassThrottle
 import persona.core.designsystem.PersonaTheme
@@ -199,18 +197,4 @@ class MainActivity : ComponentActivity() {
         /** A pairing link the activity was opened with, for the pairing screen to confirm. */
         val pendingPairLink = mutableStateOf<String?>(null)
     }
-}
-
-/** Debug captures pin light or dark; nested PersonaTheme calls read the same configuration. */
-@Composable
-private fun AppearanceOverride(dark: Boolean?, content: @Composable () -> Unit) {
-    if (dark == null) return content()
-    val base = LocalConfiguration.current
-    val configuration = remember(base, dark) {
-        Configuration(base).apply {
-            uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
-                if (dark) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO
-        }
-    }
-    CompositionLocalProvider(LocalConfiguration provides configuration, content = content)
 }

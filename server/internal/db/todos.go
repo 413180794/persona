@@ -62,7 +62,7 @@ const todoColumns = `id, title, notes, done_at, created_at, updated_at, origin, 
 
 // ListTodos returns all todos ordered by created_at DESC.
 func (d *DB) ListTodos(ctx context.Context) ([]TodoRow, error) {
-	rows, err := d.pool.Query(ctx, `SELECT id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error, done_by, done_reason, reopened_at FROM todos ORDER BY created_at DESC`)
+	rows, err := d.pool.Query(ctx, `SELECT `+todoColumns+` FROM todos ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +117,7 @@ func (d *DB) ListAllTodoAgents(ctx context.Context) ([]TodoAgentRow, error) {
 // GetTodo returns one todo by id, or ErrTodoNotFound.
 func (d *DB) GetTodo(ctx context.Context, id string) (*TodoRow, error) {
 	var r TodoRow
-	err := d.pool.QueryRow(ctx, `SELECT id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error, done_by, done_reason, reopened_at FROM todos WHERE id = $1`, id).
+	err := d.pool.QueryRow(ctx, `SELECT `+todoColumns+` FROM todos WHERE id = $1`, id).
 		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError, &r.DoneBy, &r.DoneReason, &r.ReopenedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTodoNotFound
@@ -146,7 +146,7 @@ func (d *DB) UpdateTodo(ctx context.Context, id string, title *string, notes *st
 	var updated TodoRow
 	err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
 		var cur TodoRow
-		err := tx.QueryRow(ctx, `SELECT id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error, done_by, done_reason, reopened_at FROM todos WHERE id = $1 FOR UPDATE`, id).
+		err := tx.QueryRow(ctx, `SELECT `+todoColumns+` FROM todos WHERE id = $1 FOR UPDATE`, id).
 			Scan(&cur.ID, &cur.Title, &cur.Notes, &cur.DoneAt, &cur.CreatedAt, &cur.UpdatedAt, &cur.Origin, &cur.PlanID, &cur.StartError, &cur.DoneBy, &cur.DoneReason, &cur.ReopenedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrTodoNotFound
@@ -197,7 +197,7 @@ func (d *DB) UpdateTodo(ctx context.Context, id string, title *string, notes *st
 func (d *DB) FailTodo(ctx context.Context, id, startError string, at time.Time) (*TodoRow, error) {
 	var r TodoRow
 	err := d.pool.QueryRow(ctx, `UPDATE todos SET done_at = COALESCE(done_at, $2), start_error = $3, updated_at = $2 WHERE id = $1
-		RETURNING id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error, done_by, done_reason, reopened_at`, id, at, startError).
+		RETURNING `+todoColumns, id, at, startError).
 		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError, &r.DoneBy, &r.DoneReason, &r.ReopenedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTodoNotFound

@@ -1,6 +1,5 @@
 package persona.android.debug
 
-import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -11,10 +10,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import persona.android.PersonaApp
+import persona.android.ui.AppearanceOverride
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.Machine
 import persona.core.contracts.SessionKey
@@ -56,7 +55,7 @@ class ProactiveDebugActivity : ComponentActivity() {
         setContent {
             val style by app.appearance.style.collectAsStateWithLifecycle()
             val glass by app.appearance.glass.collectAsStateWithLifecycle()
-            ForcedNight(forced) {
+            AppearanceOverride(forced) {
                 val dark = isSystemInDarkTheme()
                 SideEffect {
                     WindowCompat.getInsetsController(window, window.decorView).apply {
@@ -101,18 +100,4 @@ class ProactiveDebugActivity : ComponentActivity() {
             uri.query == null && uri.fragment == null && uri.port in 1..65535) { "debug.mockAddress 只能是本机回环地址上的假 hub" }
         return value
     }
-}
-
-/** Pages that read the system night mode (a nested PersonaTheme) follow the forced theme too. */
-@Composable
-private fun ForcedNight(dark: Boolean?, content: @Composable () -> Unit) {
-    if (dark == null) return content()
-    val base = LocalConfiguration.current
-    val configuration = remember(base, dark) {
-        Configuration(base).apply {
-            uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
-                if (dark) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO
-        }
-    }
-    CompositionLocalProvider(LocalConfiguration provides configuration, content = content)
 }

@@ -607,6 +607,7 @@ View 带 `refresh_after`（秒）：这个 View 在屏幕上时，App 过这么�
 `dynamic_models` 的由 hub 调插件的 `provider.models {contribution}` → `{models: [{id, name?}]}`，和声明的合在一起（读不到时声明的照旧，`models_error` 说原因）。
 新增启动器 `POST /api/v1/launchers` 带 `preset` 时，没填的 Base URL、接入类型、API、模型、小模型从预设补上，用户只填名字和 Key；启动器记着它来自哪个预设。
 App 里是「设置 › 模型供应商 › 新增」的「从插件添加」（iOS 和网页；有预设时才出现），见 `docs/launchers.md`「从插件添加」。
+新建 Agent 的模型选择器也列预设的模型：从这个预设加的启动器、网关地址和预设一样的启动器（手动加的、~/.zshrc 的），在 `/model` 的几项后面补上预设的全部模型。
 
 ## App：设置 › 插件
 

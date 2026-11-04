@@ -687,7 +687,7 @@ func (h *Hub) askLauncherModels(ctx context.Context, m *Machine, name string, re
 	if res.Models == nil {
 		res.Models = []proto.AgentModel{}
 	}
-	return res, nil
+	return h.presetModels(ctx, m, name, res), nil
 }
 
 // launcherAvailable: whether the machine can still run this launcher name (plain claude always; a deleted managed

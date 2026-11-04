@@ -130,6 +130,11 @@ Persona 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧�
 只填名字和 Key，默认模型从预设的 `models` 里选（不选就是预设的默认）；`POST /api/v1/launchers` 只带 `name`、`api_key`、`preset`，选了别的模型才带 `model`，
 地址、接入方式、API、小模型由 hub 从预设补上。预设的 `key_hint` 写在 Key 下面，`models_error` 写在模型下面。加好以后和自己填写的一样能编辑。
 
+新建 Agent 选模型时（`GET /api/v1/machines/{mid}/launchers/{name}/models`），走插件网关的启动器除了 Claude Code `/model` 自己列的几项，
+还列出预设的全部模型（`hub/plugin_providers.go` 的 `presetModels`）：Persona 管理的按它记着的预设，没记的（插件之前自己填写的）和 ~/.zshrc 的
+按网关地址对上预设（大小写、末尾的 `/` 不算）。只认 `kind: launcher` 的预设、只给 Claude Code 的启动器；`/model` 已有的同名项不重复，
+补上的项 `description` 是预设的名字。这样一个网关一个启动器就能选到它的所有模型，不用一个模型建一个；插件的 `dynamic_models` 更新了，选择器跟着变。
+
 - iOS：`LauncherPresetModel`（`apple/Persona/Views/Settings/LauncherPresetModel.swift`，单元测试 `LauncherPresetModelTests`）、`LauncherPresetViews.swift`；
   DEBUG `-tab settings -openModelLaunchers YES -openLauncherEditor preset` 直接打开从插件添加（`-openLauncherEditor YES` 打开新增页）。
 - 网页：`web/src/lib/launcher-presets.ts`（测试同名 `.test.ts`），新增弹窗里同样的切换。
