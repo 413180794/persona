@@ -40,6 +40,7 @@
   只检查 HTTP 200 不够：未改写的图片路径会落入 hub 网页并返回 HTML，手机还会在解码前把它缓存。验证消息返回的新 URL、图片 MIME 和实际字节；改写为正确代理地址也会改变手机缓存键。
 - lark-connector 会话列表的坑（`docs/protocol.md` 飞书 API）：`isDone` 字段不可靠（done scope 里全是 false），已完成以 scope 为准；
   置顶看 `onTopRankAt`（`settings.isShortcut` 也不准），且置顶会话分散在 inbox 和 done 两个 scope；未知 scope 会被静默当成 inbox。
+- 置顶集合不能固定读三页就宣告完整。读到第一个非置顶项或没有下一页才结束；隐藏项可能让整页过滤为空，仍应跟随游标。重复／缺失游标和安全上限都返回错误，不能让客户端用残缺数据覆盖缓存。置顶时间要解析后比较：带毫秒的 ISO 时间与整秒字符串直接排序会颠倒顺序。
 - 打开飞书会话不能用 `tail=1`（那是「回到最新」）：有未读时要 `aroundPosition=readPosition+1`，已读只上报真正上屏的消息。
 - 话题群（`chatMode: "topic"`）的 `GET /conversations/F/messages` 多半只有 position 0 的「创建了话题群」系统消息、`hasOlder=false`（实测 5 个话题群里 4 个如此，tail、around、before 都一样），内容在 `…/threads`（话题根消息，`nextOlderCursor` 往前翻），回复在 `GET /messages/ROOT/thread`。不能指望调用方带对 `topic`（人的名片进来、旧的收件箱条目、网页都没带）：hub 用 `lark.ChatPage` 自己按 chatMode 判断（会话列表里记下，没见过的查一次 `GET /conversations/F`），返回带 `topic: true`。
 - 有的网络（作者的 hub 机器）连不上 Google 的多数 IPv4 地址（`imap.gmail.com` / `smtp.gmail.com` 常解析到 173.194.x.x，所有端口超时），HTTPS 能通只是走了 IPv6。
@@ -115,6 +116,8 @@ Hub 在 400ms 内合并事件时，设置变化必须独立累积为 `settings_c
 SwiftUI List 默认行 inset 会叠加内容自己的 padding。#957 在 iOS 27 实测：46 pt 头像 + 上下各 8 pt 内容留白，最终行高却是 92 pt；显式把行上下 inset 设为 0 并用现有 48 pt 头像 token 后，普通行是 64 pt。不要用固定高度掩盖重复留白，动态字体应允许增高。仅在消息列表的 NavigationLink 上设定，避免改变共用收件箱。
 
 - When merging message-display controls with interactive quotes, keep the shared `QuoteCard` and `larkJump` action. Apply recall visibility to the card summary before rendering; UI tests should query the quote button, not the former static text.
+
+- 原生消息新能力必须在入口核验当前会话所用 Hub 的接口，并给出明确的升级对象。客户端更新早于 Hub 时，普通 404 不能直接展示成 not found；上游接口缺失须由 Hub 区分为 lark-connector 需要升级，未授权不能误报旧版本。保留加密草稿和重新检查入口，避免失败后隐式改成普通发送。
 
 ## 采集读消息时条目被标处理（#1105）
 

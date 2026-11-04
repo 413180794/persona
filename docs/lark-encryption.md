@@ -27,7 +27,7 @@ lark-connector 的 Agent 接口保留旧 `parts` / `textPreview`，新增版本�
 
 ### 部署与授权
 
-需要同时升级支持原生加密接口的 lark-connector（nwverse/lark-connector#997）及 Persona Hub；仅安装新 App 不会启用此能力。此阶段未改动既有部署。
+需要同时升级支持原生加密接口的 lark-connector（nwverse/lark-connector#997）及 Persona Hub；仅安装新 App 不会启用此能力。部署状态需单独核验，不能用 App 已安装或 PR 已合入代替。
 
 1. 在 lark-connector 网页创建密钥库；读取解密正文的 Agent 授权仍沿用网页现有设置，原生发送授权不会开启它。
 2. 在 lark-connector 部署环境设置独立的 `lark-connector_NATIVE_OLK_TOKEN` 和 `lark-connector_NATIVE_OLK_ACCOUNT_ID`。凭据使用新生成的 43–128 位 base64url 字符，不能复用普通 Agent token；账号是实际飞书用户 ID，不是 lark-connector 的账号槽位编号。
@@ -35,6 +35,12 @@ lark-connector 的 Agent 接口保留旧 `parts` / `textPreview`，新增版本�
 4. 撤销时移除或轮换 lark-connector 的原生凭据并重启；旧 Hub 无法继续原生解锁、准备密文或提交新的加密发送。已经被上游接受的消息不受撤销影响。普通 Agent 访问及读取解密授权互相独立。
 
 没有独立授权、账号已变化、旧版本没有接口、密码错误或加密失败，都明确失败并保留输入，不回退明文。首次创建、密码重置后恢复以及授权配置仍在网页/部署端完成；手机负责解锁和发送，不导出私钥。公网沿用 Hub TLS 要求。
+
+### 版本不支持时
+
+选择加密或打开历史外显前先读取原生加密状态，使用当前会话的 Hub 与账号，不比较版本字符串。Hub 在握手中声明 `lark_native_encryption`，客户端仍实际请求状态，以兼容已支持接口但尚未声明能力的版本。Hub 缺少接口时提示升级 Hub；Hub 已支持但 lark-connector 缺少接口时返回 `lark_lark-connector_upgrade_required`（426），提示升级 lark-connector；独立授权缺失仍是 `OLK_VAULT_NATIVE_NOT_AUTHORIZED`（403），不是版本错误。网络、登录和会话错误不冒充需要升级。
+
+提示提供「重新检查」。选择加密的意图与原有输入继续保存，失败不清空草稿，也不会偷偷切回普通发送。正常发送依然重新检查账号与授权。历史候选、解锁、准备密文、提交密文的旧接口错误也统一转换为可读提示，避免恢复旧草稿或部署切换时再次出现 `not found`。
 
 ### 重试与本机存储
 
@@ -50,3 +56,5 @@ lark-connector 的 Agent 接口保留旧 `parts` / `textPreview`，新增版本�
 - Xcode 26.0 iOS（含 Watch / 扩展）和 Mac 构建通过；Mac 关闭签名。所有发送、解锁和密码均来自隔离 mock，不向真实会话发消息；部署和真实端到端加密发送尚未验证。
 
 - iPhone 18 Pro 浅、深色各 3 个 UI 流程通过；[16 张最终截图](screenshots/lark-native-encryption/README.md) 已逐张检查。覆盖解锁失败再成功、失败重试、跨入口与强退恢复，以及普通收件箱保持原输入区。
+
+版本兼容回归（#1131）：7 项 Swift 测试（旧路由覆盖 404 / 405 与 4 种错误码表示）通过；4 个 UI 流程在浅、深色通过，新入口的 [8 张截图](screenshots/lark-encryption-compatibility/README.md) 已逐张检查。Go 的 lark / proto 测试、隔离 Postgres 下原生加密与握手测试及对应 `go vet` 通过。首次 UI 回归发现 mock 的通用 `not_found` 错误码未被转换，已补充产品处理和参数化用例；再次运行通过。

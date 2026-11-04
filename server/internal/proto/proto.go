@@ -149,6 +149,7 @@ var Features = []string{
 	"file_download",          // GET /api/v1/machines/{mid}/file/download
 	"file_upload",            // POST /api/v1/machines/{mid}/files (docs/protocol.md「发送文件」)
 	"lark_attachments",       // Feishu image/file sends with stable client IDs and receipts
+	"lark_native_encryption", // native vault status, unlock, replay covers and encrypted sends
 	"tls",                    // optional TLS listener and SPKI pin (hub-changes.md 1.1)
 	"endpoints",              // authenticated address discovery and capability-gated updates
 	"plugins",                // GET /api/v1/plugins and the relay under /api/v1/plugins/{id}/ (docs/plugins.md)

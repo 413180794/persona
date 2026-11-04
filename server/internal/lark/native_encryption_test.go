@@ -3,6 +3,7 @@ package lark
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -92,6 +93,24 @@ func TestNativeOLKGrantAndWire(t *testing.T) {
 		t.Fatal("unexpected write")
 	}
 }
+func TestNativeOLKMissingRoutesRequirelark-connectorUpgrade(t *testing.T) {
+	for _, status := range []int{404, 405} {
+		for _, body := range []string{"not found", `{"error":{"code":"NOT_FOUND","message":"private internal detail"}}`, `{"code":"not_found","error":"not found"}`} {
+			up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(status)
+				io.WriteString(w, body)
+			}))
+			c := New(Config{BaseURL: up.URL, Token: "ordinary", NativeOLKToken: strings.Repeat("n", 43)})
+			_, err := c.NativeOLKStatus(context.Background())
+			up.Close()
+			var native *NativeOLKError
+			if !errors.As(err, &native) || native.Code != "lark_lark-connector_upgrade_required" || native.Status != 426 || !strings.Contains(native.Message, "升级 lark-connector") {
+				t.Fatalf("missing route did not identify the outdated server: %v", err)
+			}
+		}
+	}
+}
+
 func TestNativeOLKNeverFallsBackOrReflectsSecrets(t *testing.T) {
 	for _, body := range []string{
 		`{"accountId":"123","feedId":"789","messages":[{"text":"private plaintext"}]}`,

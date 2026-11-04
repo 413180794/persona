@@ -31,19 +31,30 @@ nonisolated struct LarkEncryptedPayload: Codable, Equatable, Sendable {
 }
 
 extension APIClient {
+    private func larkEncryptionRequest<T: Decodable>(_ method: String, _ path: String,
+        body: (any Encodable)? = nil, timeout: TimeInterval = 30) async throws -> T {
+        do {
+            return try JSON.decoder.decode(T.self, from: await request(method, path, body: body, timeout: timeout))
+        } catch let error as APIError where [404, 405].contains(error.status)
+            && ["", "not_found", "method_not_allowed"].contains(error.code?.lowercased() ?? "") {
+            throw APIError(status: 426, message: "升级 Hub 后可使用加密消息。请在设置中打开 Hub，检查更新；升级后重新检查即可继续。",
+                           fields: ["code": "lark_hub_upgrade_required"])
+        }
+    }
+
     func larkEncryptionStatus() async throws -> LarkNativeEncryptionStatus {
-        try await get("/api/v1/lark/encryption")
+        try await larkEncryptionRequest("GET", "/api/v1/lark/encryption")
     }
     func larkUnlock(account: String, password: String) async throws -> LarkNativeEncryptionStatus {
-        try await post("/api/v1/lark/encryption/unlock", body: ["account_id": account, "password": password])
+        try await larkEncryptionRequest("POST", "/api/v1/lark/encryption/unlock", body: ["account_id": account, "password": password])
     }
     func larkEncryptionCovers(account: String, feed: String) async throws -> [String] {
         struct Covers: Decodable { var lines: [String] }
-        let result: Covers = try await post("/api/v1/lark/conversations/\(feed)/encryption/covers", body: ["account_id": account])
+        let result: Covers = try await larkEncryptionRequest("POST", "/api/v1/lark/conversations/\(feed)/encryption/covers", body: ["account_id": account])
         return result.lines
     }
     func larkPrepareEncryption(account: String, feed: String, text: String, cover: String) async throws -> LarkEncryptedPayload {
-        var result: LarkEncryptedPayload = try await post("/api/v1/lark/conversations/\(feed)/encryption/prepare",
+        var result: LarkEncryptedPayload = try await larkEncryptionRequest("POST", "/api/v1/lark/conversations/\(feed)/encryption/prepare",
             body: ["account_id": account, "text": text, "cover": cover])
         guard result.accountId == account, result.feedId == feed, !result.messages.isEmpty else { throw LarkOutboxIdentity.Failure.changed }
         result.cover = cover
@@ -55,7 +66,7 @@ extension APIClient {
         for (index, message) in payload.messages.enumerated() {
             var body = ["account_id": payload.accountId, "ciphertext": message.text, "client_id": payload.clientID(base: clientID, index: index)]
             if index == payload.messages.count - 1 { body["reply_id"] = replyID }
-            receipt = try await post("/api/v1/lark/conversations/\(payload.feedId)/encrypted-messages", body: body, timeout: Self.larkSendTimeout)
+            receipt = try await larkEncryptionRequest("POST", "/api/v1/lark/conversations/\(payload.feedId)/encrypted-messages", body: body, timeout: Self.larkSendTimeout)
         }
         return receipt
     }

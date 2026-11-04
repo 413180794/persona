@@ -173,6 +173,9 @@ func (c *Client) Conversations(ctx context.Context, scope, cursor string, limit 
 	}
 	next := ""
 	if res.HasMore {
+		if res.NextCursor == "" {
+			return nil, "", errors.New("lark: conversation page is missing its continuation cursor")
+		}
 		next = res.NextCursor
 	}
 	return out, next, nil
@@ -181,11 +184,15 @@ func (c *Client) Conversations(ctx context.Context, scope, cursor string, limit 
 // Pinned returns every pinned chat (置顶), highest rank first. lark-connector has no pinned list: pinned chats sort
 // first in each scope, and they live in both the inbox and done, so it reads the head of both.
 func (c *Client) Pinned(ctx context.Context) ([]Conversation, error) {
-	var out []Conversation
+	out := make([]Conversation, 0)
 	seen := map[string]bool{}
 	for _, scope := range []string{"inbox", "done"} {
 		cursor := ""
-		for page := 0; page < 3; page++ {
+		cursors := map[string]bool{"": true}
+		for {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			items, next, err := c.Conversations(ctx, scope, cursor, 100)
 			if err != nil {
 				return nil, err
@@ -204,10 +211,27 @@ func (c *Client) Pinned(ctx context.Context) ([]Conversation, error) {
 			if !more {
 				break
 			}
+			// A partial shelf must not replace the client's last complete snapshot. Bound a
+			// broken upstream as well as a cycling cursor, but never report truncation as success.
+			if cursors[next] || len(cursors) >= 1000 {
+				return nil, errors.New("lark: pinned conversation pagination did not complete")
+			}
+			cursors[next] = true
 			cursor = next
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].pinRank > out[j].pinRank })
+	sort.SliceStable(out, func(i, j int) bool {
+		// ISO strings with and without fractional seconds do not compare chronologically.
+		a, ae := time.Parse(time.RFC3339Nano, out[i].pinRank)
+		b, be := time.Parse(time.RFC3339Nano, out[j].pinRank)
+		if ae == nil && be == nil {
+			return a.After(b)
+		}
+		if (ae == nil) != (be == nil) {
+			return ae == nil
+		}
+		return out[i].pinRank > out[j].pinRank
+	})
 	return out, nil
 }
 

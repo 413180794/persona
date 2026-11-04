@@ -1195,13 +1195,13 @@ lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 
 | GET | `/api/v1/lark/status` | `{"configured","connected","name","error","last_event_at"}`：设置 › 连接器 › 飞书。configured = hub.json 有 lark；connected 每次现问 lark-connector 的 `/accounts`；last_event_at 最近一条实时事件（Unix 秒） |
 | GET | `/api/v1/lark/message-display` | `{"account_id","anti_recall","show_edit_history"}`：当前选中飞书账号的展示设置；只返回这两个开关和实际用户 ID，不返回脚本/自动发送配置 |
 | POST | `/api/v1/lark/message-display` | `{"account_id","key","value","expected"}`：key 为 `anti_recall` 或 `show_edit_history`，value/expected 为布尔值；完整设备权限，body ≤1 KiB，未知字段拒绝；通过 lark-connector 受限 PATCH 保留其他字段。账号/旧值冲突 409，未授权 403，旧服务无接口 404；登录失效 502 + `lark_not_logged_in`。成功返回与 GET 相同结构并推送带 `settings_changed=true` 的 `lark` 事件，不自动重试未知结果 |
-| GET | `/api/v1/lark/encryption` | 原生加密状态 `{accountId,configured,locked,unifiedPassword}`。须有独立 native OLK 授权；不返回密钥或凭据，`Cache-Control: no-store` |
+| GET | `/api/v1/lark/encryption` | 原生加密状态 `{accountId,configured,locked,unifiedPassword}`。须有独立 native OLK 授权；不返回密钥或凭据，`Cache-Control: no-store`。Hub 声明 `lark_native_encryption`；上游缺少原生接口返回 426 + `lark_lark-connector_upgrade_required`，独立授权缺失返回 403 + `OLK_VAULT_NATIVE_NOT_AUTHORIZED` |
 | POST | `/api/v1/lark/encryption/unlock` | `{account_id,password}` → 同上。只允许完整写权限；按实际飞书账号校验，共享网页的密码尝试限制；密码不存储 |
 | POST | `/api/v1/lark/conversations/{id}/encryption/covers` | `{account_id}` → `{lines:[string]}`；候选历史外显复用 lark-connector 网页规则 |
 | POST | `/api/v1/lark/conversations/{id}/encryption/prepare` | `{account_id,text,cover}` → `{accountId,feedId,messages:[{text}]}`。只生成带外显的密文，不发送；身份不一致、未授权、未解锁或无收件公钥时拒绝 |
 | POST | `/api/v1/lark/conversations/{id}/encrypted-messages` | `{account_id,ciphertext,client_id,reply_id?}` → `{ok,message_id?}`。必需稳定 UUID，仅接受 OLK2/OLK3 wire shape，重新校验原生授权与实际账号；上游写入携带 `expectedSenderId`。多段按顺序发送，仅最后一段可引用；每段单独保存去重回执。所有原生加密响应 `no-store`，失败不会改走普通文字接口；协议与限制见 [加密消息](lark-encryption.md) |
 | GET | `/api/v1/lark/conversations?scope=&cursor=&limit=` | `{"conversations":[LarkConversation],"next_cursor"}`；scope：`chats`（默认，飞书「消息」：不含已完成 / 折叠，按标签显示规则过滤）、`unread`、`done`（已完成）、`label:<id>`、`inbox`、`mentions`、`muted`、`p2p`、`group`、`thread`、`later` |
-| GET | `/api/v1/lark/pinned` | 全部置顶会话（读 inbox + done 两个 scope 的头部合并，按置顶顺序） |
+| GET | `/api/v1/lark/pinned` | 全部置顶会话（持续读取 inbox + done 的置顶头部，合并去重后按置顶时间排序）；分页异常返回错误，不把截断集合当作成功结果 |
 | GET | `/api/v1/lark/labels` | `{"labels":[{"id","name","count"}]}` |
 | GET | `/api/v1/lark/unread-count` | `{"count"}`：「未读 N」（不含免打扰） |
 | GET | `/api/v1/lark/flags` | 标记：`{"conversations":[LarkConversation],"messages":[{"feed_id","chat_name","chat_avatar","flagged_at","message":LarkMessage}]}` |

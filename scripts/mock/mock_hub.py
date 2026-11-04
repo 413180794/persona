@@ -5815,6 +5815,13 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/lark/message-display":
             return self.send_json(LARK_DISPLAY)
         if p == "/api/v1/lark/encryption" and os.environ.get("MOCK_LARK_NATIVE_OLK"):
+            unavailable = LARK_NATIVE_OLK.get("unavailable", "")
+            if unavailable == "hub":
+                return self.send_json({"error": "not found"}, 404)
+            if unavailable == "lark-connector":
+                return self.send_json({"code": "lark_lark-connector_upgrade_required", "error": "升级 lark-connector 后可使用加密消息。请在 Hub 连接的 lark-connector 中检查更新，升级后重新检查即可继续。"}, 426)
+            if unavailable == "authorization":
+                return self.send_json({"code": "OLK_VAULT_NATIVE_NOT_AUTHORIZED", "error": "尚未开启手机加密。请在 Hub 和 lark-connector 的部署配置中开启原生加密授权，再重新检查。"}, 403)
             return self.send_json({"accountId": "123", "configured": True, "locked": LARK_NATIVE_OLK["locked"], "unifiedPassword": False})
         if p == "/api/v1/lark/status":  # 设置 › 连接器 › 飞书
             return self.send_json({"configured": True, "connected": True, "name": "我", "last_event_at": int(time.time()) - 95})
@@ -6345,7 +6352,7 @@ class H(BaseHTTPRequestHandler):
         if os.environ.get("MOCK_LARK_NATIVE_OLK") and (p == "/test/lark-encryption/reset" or p == "/api/v1/lark/encryption/unlock" or p.endswith(("/encryption/covers", "/encryption/prepare", "/encrypted-messages"))):
             body = json.loads(self.last_body or b"{}")
             if p == "/test/lark-encryption/reset":
-                LARK_NATIVE_OLK.update(locked=body.get("locked", True), fail_once=body.get("fail_once", False), prepared={}, sent={})
+                LARK_NATIVE_OLK.update(locked=body.get("locked", True), fail_once=body.get("fail_once", False), unavailable=body.get("unavailable", ""), prepared={}, sent={})
                 LARK_MESSAGES["f2"] = [m for m in LARK_MESSAGES["f2"] if not m.get("client_id")]
                 return self.send_json({"ok": True})
             if p == "/api/v1/lark/encryption/unlock":

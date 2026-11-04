@@ -27,8 +27,10 @@ func (e *NativeOLKError) Error() string { return e.Message }
 func nativeOLKFailure(code string) *NativeOLKError {
 	status, message := http.StatusBadGateway, "加密服务暂时不可用，请稍后重试"
 	switch code {
+	case "lark_lark-connector_upgrade_required":
+		status, message = 426, "升级 lark-connector 后可使用加密消息。请在 Hub 连接的 lark-connector 中检查更新，升级后重新检查即可继续。"
 	case "OLK_VAULT_NATIVE_NOT_AUTHORIZED":
-		status, message = 403, "Hub 尚未获得手机加密授权，请在 Hub 上配置"
+		status, message = 403, "尚未开启手机加密。请在 Hub 和 lark-connector 的部署配置中开启原生加密授权，再重新检查。"
 	case "OLK_VAULT_ACCOUNT_CHANGED":
 		status, message = 409, "飞书账号已变化，请重新打开会话"
 	case "OLK_VAULT_LOCKED":
@@ -104,6 +106,11 @@ func (c *Client) nativeOLK(ctx context.Context, method, path string, body, out a
 	}
 	if res.StatusCode/100 != 2 {
 		code, _ := upstreamError(raw)
+		routeCode := strings.ToUpper(code)
+		missingRoute := routeCode == "" || routeCode == "NOT_FOUND" || routeCode == "METHOD_NOT_ALLOWED"
+		if missingRoute && (res.StatusCode == http.StatusNotFound || res.StatusCode == http.StatusMethodNotAllowed) {
+			return nativeOLKFailure("lark_lark-connector_upgrade_required")
+		}
 		return nativeOLKFailure(code)
 	}
 	if err = json.Unmarshal(raw, out); err != nil {

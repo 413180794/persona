@@ -36,6 +36,9 @@ struct LarkChatView: View {
     @State private var encryptionStatus: LarkNativeEncryptionStatus?
     @State private var showEncryptionCovers = false
     @State private var showEncryptionUnlock = false
+    @State private var checkingEncryption = false
+    @State private var encryptionProblem: String?
+    @State private var encryptionRetryOpensCovers = false
     @State private var pager = LarkPager()
     /// The hub answered with a topic group's topics for a chat opened without `isTopic` (from a profile, an old inbox item).
     @State private var foundTopic = false
@@ -252,6 +255,10 @@ struct LarkChatView: View {
                 LarkEncryptionUnlockSheet(api: api, account: account, unified: encryptionStatus?.unifiedPassword == true) { send() }
             }
         }
+        .alert("暂时无法使用加密消息", isPresented: Binding(get: { encryptionProblem != nil }, set: { if !$0 { encryptionProblem = nil } })) {
+            Button("重新检查") { checkEncryption(openCovers: encryptionRetryOpensCovers) }
+            Button("稍后", role: .cancel) { }
+        } message: { Text(encryptionProblem ?? "") }
         .sheet(item: $debugPick) { m in LarkReactionPicker(message: m) { react(m, $0) } }
         .sheet(isPresented: Binding(get: { debugPost != nil }, set: { if !$0 { debugPost = nil } })) {
             if let id = debugPost { LarkMomentsPostView(postID: id) }
@@ -324,7 +331,11 @@ struct LarkChatView: View {
     private var composer: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             if messageComposer {
-                LarkEncryptionModeBar(draft: $encryptionDraft, canEncrypt: attachments.isEmpty && !isTopic) { showEncryptionCovers = true }
+                LarkEncryptionModeBar(draft: $encryptionDraft, canEncrypt: attachments.isEmpty && !isTopic && !checkingEncryption,
+                    checking: checkingEncryption, selectEncrypted: {
+                        if encryptionDraft == nil { encryptionDraft = LarkEncryptedDraft() }
+                        checkEncryption(openCovers: false)
+                    }, pickCover: { checkEncryption(openCovers: true) })
             }
             if !messageComposer, encryptionDraft != nil {
                 #if os(iOS)
@@ -794,6 +805,32 @@ struct LarkChatView: View {
         outbox.scheduleDraft(draft, attachments: attachments, immediately: immediately)
     }
 
+    private func checkEncryption(openCovers: Bool) {
+        guard !checkingEncryption, let api = chatAPI, let identity = outbox.identity else { return }
+        let queue = outbox
+        checkingEncryption = true
+        encryptionProblem = nil
+        encryptionRetryOpensCovers = openCovers
+        Task {
+            defer { checkingEncryption = false }
+            do {
+                let status = try await api.larkEncryptionStatus()
+                guard outbox === queue, !queue.invalidated, status.accountId == identity.account else { throw LarkOutboxIdentity.Failure.changed }
+                guard encryptionDraft != nil else { return }
+                encryptionStatus = status
+                guard status.configured else {
+                    encryptionProblem = "请先在 lark-connector 网页创建密钥库，再回来重新检查。已输入的内容会保留。"
+                    return
+                }
+                if openCovers { showEncryptionCovers = true }
+            } catch {
+                if !error.isCancellation, outbox === queue, encryptionDraft != nil {
+                    encryptionProblem = error.shown ?? "暂时无法连接加密服务，请稍后重新检查。已输入的内容会保留。"
+                }
+            }
+        }
+    }
+
     /// The durable composer-to-outbox transaction finishes before the input clears and sending starts.
     private func send() {
         guard let api = chatAPI, let identity = outbox.identity else {
@@ -808,7 +845,7 @@ struct LarkChatView: View {
             guard messageComposer, attachments.isEmpty, !isTopic else {
                 model.toast = Toast("请从消息页发送加密文字", style: .error); return
             }
-            guard !encrypted.cover.isEmpty else { showEncryptionCovers = true; return }
+            guard !encrypted.cover.isEmpty else { checkEncryption(openCovers: true); return }
         }
         var batch: [LarkOutgoing] = []
         if !t.isEmpty { batch.append(LarkOutgoing(text: t, replyTo: replyTo, mentions: LarkMentions.mentions(in: t, picked: mentions))) }

@@ -3,6 +3,8 @@ import SwiftUI
 struct LarkEncryptionModeBar: View {
     @Binding var draft: LarkEncryptedDraft?
     var canEncrypt: Bool
+    var checking = false
+    var selectEncrypted: () -> Void
     var pickCover: () -> Void
 
     var body: some View {
@@ -10,7 +12,7 @@ struct LarkEncryptionModeBar: View {
             Menu {
                 Button { draft = nil } label: { Text("普通消息").lineLimit(1) }
                     .accessibilityIdentifier("lark.encryption.plain")
-                Button { if draft == nil { draft = LarkEncryptedDraft() } } label: { Text("加密消息").lineLimit(1) }
+                Button(action: selectEncrypted) { Text("加密消息").lineLimit(1) }
                     .disabled(!canEncrypt)
                     .accessibilityIdentifier("lark.encryption.encrypted")
             } label: {
@@ -27,7 +29,9 @@ struct LarkEncryptionModeBar: View {
                         .font(Theme.Font.label).lineLimit(1).truncationMode(.tail)
                 }
                 .accessibilityIdentifier("lark.encryption.cover")
+                .disabled(checking)
             }
+            if checking { ProgressView().controlSize(.small).accessibilityLabel("正在检查加密服务") }
             Spacer(minLength: 0)
         }
         .foregroundStyle(.secondary)

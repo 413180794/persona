@@ -4,6 +4,39 @@ import Testing
 @testable import Jarvis
 
 @MainActor struct LarkNativeEncryptionTests {
+    @Test(arguments: [404, 405], ["", "not_found", "NOT_FOUND", "method_not_allowed"]) func missingNativeRoutesExplainWhichServerNeedsUpdating(_ status: Int, _ code: String) async throws {
+        let hub = FakeHub()
+        let path = "/api/v1/lark/encryption"
+        hub.on("GET", path) { _ in throw APIError(status: status, message: "not found", fields: code.isEmpty ? [:] : ["code": code]) }
+        do {
+            _ = try await hub.client.larkEncryptionStatus()
+            Issue.record("old Hub was accepted")
+        } catch let error as APIError {
+            #expect(error.code == "lark_hub_upgrade_required")
+            #expect(error.message.contains("升级 Hub"))
+            #expect(!error.message.contains("not found"))
+        }
+        hub.on("GET", path, json: #"{"accountId":"123","configured":true,"locked":true,"unifiedPassword":false}"#)
+        #expect(try await hub.client.larkEncryptionStatus().accountId == "123")
+    }
+
+    @Test func nativeFailuresPreserveAuthorizationAndAccountErrors() async throws {
+        let hub = FakeHub()
+        for (status, code) in [(403, "OLK_VAULT_NATIVE_NOT_AUTHORIZED"), (401, "lark_not_logged_in"), (404, "conversation_not_found"), (426, "lark_lark-connector_upgrade_required")] {
+            hub.on("GET", "/api/v1/lark/encryption") { _ in throw APIError(status: status, message: "fixture", fields: ["code": code]) }
+            do {
+                _ = try await hub.client.larkEncryptionStatus()
+                Issue.record("failure was accepted")
+            } catch let error as APIError { #expect(error.code == code && error.status == status) }
+        }
+        hub.on("POST", "/api/v1/lark/conversations/789/encryption/covers") { _ in throw APIError(status: 404, message: "not found") }
+        do {
+            _ = try await hub.client.larkEncryptionCovers(account: "123", feed: "789")
+            Issue.record("missing cover route was accepted")
+        } catch let error as APIError { #expect(error.code == "lark_hub_upgrade_required") }
+        #expect(hub.sent("POST", "/api/v1/lark/conversations/789/messages").isEmpty)
+    }
+
     private func payload() -> LarkEncryptedPayload {
         LarkEncryptedPayload(accountId: "123", feedId: "789", messages: [.init(text: "ciphertext-one"), .init(text: "ciphertext-two")], cover: "下周再聊")
     }

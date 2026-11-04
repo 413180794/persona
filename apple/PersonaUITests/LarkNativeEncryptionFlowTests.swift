@@ -30,12 +30,46 @@ final class LarkNativeEncryptionFlowTests: XCTestCase {
         }
     }
 
-    private func resetMock(locked: Bool = true, failOnce: Bool = false) async throws {
+    private func resetMock(locked: Bool = true, failOnce: Bool = false, unavailable: String = "") async throws {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"], let url = URL(string: hub + "/test/lark-encryption/reset") else { throw XCTSkip("needs native encryption mock") }
         var request = URLRequest(url: url)
-        request.httpMethod = "POST"; request.httpBody = try JSONSerialization.data(withJSONObject: ["locked": locked, "fail_once": failOnce])
+        request.httpMethod = "POST"; request.httpBody = try JSONSerialization.data(withJSONObject: ["locked": locked, "fail_once": failOnce, "unavailable": unavailable])
         let (_, response) = try await URLSession.shared.data(for: request)
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+    }
+
+    @MainActor func testUpgradeAndAuthorizationChecksKeepDraftAndRecover() async throws {
+        try await resetMock(unavailable: "hub")
+        let app = try open()
+        let field = app.textFields["lark.box"]
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.8)).tap()
+        if let value = field.value as? String, !value.hasPrefix("回复 ") { field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: value.count)) }
+        XCTAssertTrue((field.value as? String ?? "").isEmpty || field.value as? String == field.placeholderValue)
+        field.typeText("Keep this private draft")
+        for (kind, text) in [("hub", "升级 Hub 后"), ("lark-connector", "升级 lark-connector 后"), ("authorization", "尚未开启手机加密")] {
+            try await resetMock(unavailable: kind)
+            app.buttons["lark.encryption.mode"].tapCenter()
+            app.buttons["lark.encryption.encrypted"].tapCenter()
+            let notice = app.alerts["暂时无法使用加密消息"]
+            XCTAssertTrue(notice.waitForExistence(timeout: 10))
+            XCTAssertTrue(notice.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", text)).firstMatch.exists)
+            XCTAssertFalse(app.staticTexts["not found"].exists)
+            shot(app, "native-removedunavailable-" + kind)
+            try await resetMock()
+            notice.buttons["重新检查"].tapCenter()
+            XCTAssertTrue(notice.waitForNonExistence(timeout: 10))
+            XCTAssertEqual(field.value as? String, "Keep this private draft")
+            XCTAssertTrue(app.buttons["lark.encryption.cover"].isEnabled)
+        }
+        app.buttons["lark.encryption.cover"].tapCenter()
+        XCTAssertTrue(app.buttons["下周再聊"].waitForExistence(timeout: 10))
+        shot(app, "native-removedupgrade-recovered")
+        app.buttons["取消"].tapCenter()
+        XCTAssertEqual(field.value as? String, "Keep this private draft")
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.8)).tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "Keep this private draft".count))
+        app.buttons["lark.encryption.mode"].tapCenter(); app.buttons["lark.encryption.plain"].tapCenter()
+        app.terminate()
     }
 
     @MainActor func testMessageEncryptionUnlockCoverAndSend() async throws {
