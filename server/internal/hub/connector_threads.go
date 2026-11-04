@@ -133,8 +133,9 @@ func (h *Hub) connectorThreadRoutes(api *http.ServeMux) {
 		}
 		writeMedia(w, m)
 	})
-	// A reply in the thread through the action its page named (ThreadChat.Reply), behind the gate: by default the user
-	// allows it on the phone, with the card's words (to whom, the whole text).
+	// A reply in the thread through the action its page named (ThreadChat.Reply). Sent from the user's own app it runs
+	// as they sent it; anything else (the pairing token: a script, maybe the AI's) goes through the gate like the
+	// assistant's writes, by default allowed on the phone with the card's words (to whom, the whole text).
 	api.HandleFunc("POST /api/v1/connectors/{id}/thread/reply", func(w http.ResponseWriter, r *http.Request) {
 		c, _, ok := h.threadConnector(w, r)
 		if !ok {
@@ -164,7 +165,12 @@ func (h *Hub) connectorThreadRoutes(api *http.ServeMux) {
 			}
 		}
 		raw, _ := json.Marshal(args)
-		res := h.callConnector(r.Context(), "", in.Action, raw)
+		var res proto.ToolResult
+		if byOwnDevice(r.Context()) {
+			res = h.connectors.Run(r.Context(), in.Action, raw)
+		} else {
+			res = h.callConnector(r.Context(), "", in.Action, raw)
+		}
 		text := ""
 		if len(res.Content) > 0 {
 			text = res.Content[0].Text

@@ -54,6 +54,15 @@ func principalOf(ctx context.Context) principal {
 	return principal{Role: roleFull} // handlers called directly (tests)
 }
 
+// byOwnDevice says whether the request came from one of the user's own signed-in apps (phone, Mac, web): a full device
+// token, as the hub's auth found it, never a field the client set. What such a request writes the user sent by hand,
+// so it is not put to the write gate, which is for the AI's (connector.Registry.Run). The pairing token in hub.json,
+// a pairing code and machine or mesh credentials are not a device: they stay behind the gate.
+func byOwnDevice(ctx context.Context) bool {
+	p, ok := ctx.Value(principalKey{}).(principal)
+	return ok && p.Role == roleFull && p.ID != "" && p.PairHash == ""
+}
+
 // devTokens caches token lookups so an app's burst of requests is one query.
 type devTokens struct {
 	mu       sync.Mutex

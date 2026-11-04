@@ -289,9 +289,19 @@ func has(tools []proto.Tool, name string) bool {
 	return slices.ContainsFunc(tools, func(t proto.Tool) bool { return t.Name == name })
 }
 
-// Call runs the tool name: a read tool right away, an action only when the gate lets it through — Allow runs it,
-// Deny refuses, Confirm runs it once ask says the user allowed it on the phone.
+// Call runs the tool name for the AI: a read tool right away, an action only when the gate lets it through — Allow
+// runs it, Deny refuses, Confirm runs it once ask says the user allowed it on the phone.
 func (r *Registry) Call(ctx context.Context, name string, args json.RawMessage, ask Ask) proto.ToolResult {
+	return r.call(ctx, name, args, ask, true)
+}
+
+// Run runs the tool name the user themselves asked for (the app's reply box, sent by their own hand): no gate. The
+// gate is there for what the AI writes; asking the user to allow what they just sent would be asking them twice.
+func (r *Registry) Run(ctx context.Context, name string, args json.RawMessage) proto.ToolResult {
+	return r.call(ctx, name, args, nil, false)
+}
+
+func (r *Registry) call(ctx context.Context, name string, args json.RawMessage, ask Ask, gated bool) proto.ToolResult {
 	c := r.Owner(name)
 	if c == nil {
 		return proto.TextResult("unknown tool "+name, true)
@@ -313,11 +323,13 @@ func (r *Registry) Call(ctx context.Context, name string, args json.RawMessage, 
 	if !ok || !has(a.Actions(), name) {
 		return proto.TextResult("unknown tool "+name, true)
 	}
-	r.mu.RLock()
-	rules := r.rules
-	r.mu.RUnlock()
-	if res := gate(ctx, rules, c, a, name, args, ask); res != nil {
-		return *res
+	if gated {
+		r.mu.RLock()
+		rules := r.rules
+		r.mu.RUnlock()
+		if res := gate(ctx, rules, c, a, name, args, ask); res != nil {
+			return *res
+		}
 	}
 	return result(a.Do(ctx, name, args))
 }

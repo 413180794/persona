@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -94,8 +95,17 @@ func (c *threadsConnector) Do(_ context.Context, _ string, args json.RawMessage)
 
 func threadsHub(t *testing.T) (*Hub, *threadsConnector, http.Handler) {
 	t.Helper()
+	return threadsHubWith(t, nil)
+}
+
+// threadsHubWith is threadsHub with hub.json's connector_gate rules.
+func threadsHubWith(t *testing.T, rules []connector.Rule) (*Hub, *threadsConnector, http.Handler) {
+	t.Helper()
 	h := newTestHub(t)
-	h.connectors = connector.NewRegistry(nil)
+	store := newPairStore()
+	store.memStore = *newMemStore()
+	h.store = store
+	h.connectors = connector.NewRegistry(rules)
 	c := newThreadsConnector()
 	if err := h.addConnector(c); err != nil {
 		t.Fatal(err)
@@ -207,8 +217,9 @@ func TestPruneMedia(t *testing.T) {
 	}
 }
 
-// A reply goes through the action the page named and the gate: declined, nothing is sent; allowed, the action gets
-// {chat, text, reply_to}. Another connector's action, or none, is refused.
+// A reply that does not come from one of the user's devices (here the pairing token) goes through the action the page
+// named and the gate: declined, nothing is sent; allowed, the action gets {chat, text, reply_to}. Another connector's
+// action, or none, is refused.
 func TestConnectorThreadReply(t *testing.T) {
 	h, c, mux := threadsHub(t)
 	answer := func(allow bool) {
@@ -244,5 +255,66 @@ func TestConnectorThreadReply(t *testing.T) {
 		if code, _ := call(t, mux, "POST", "/api/v1/connectors/example/thread/reply", h.cfg.Token, body); code != 400 {
 			t.Errorf("%s: %d", body, code)
 		}
+	}
+}
+
+// A reply the user sends from their own app (a phone's or the web's device token) runs as they sent it: no card, and
+// not even a deny rule in connector_gate stops it, the gate being for the AI's writes. With the same rule the pairing
+// token, a pairing code and the assistant's mcp.call are refused; with none they would be asked about.
+func TestConnectorThreadReplyFromTheUsersDevice(t *testing.T) {
+	device := func(h *Hub, id, kind, role string) string {
+		tok := "jd_" + randomHex(24)
+		_ = h.store.CreateDeviceToken(context.Background(), db.DeviceToken{ID: id, Name: kind, Kind: kind, Role: role}, hashToken(tok))
+		return tok
+	}
+	const body = `{"thread":"u1","action":"example_send","text":"示例回复"}`
+
+	h, c, mux := threadsHub(t)
+	// A card that shows up anyway is declined at once, so the reply fails here instead of waiting for it.
+	carded := make(chan string, 4)
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		no := false
+		for {
+			select {
+			case <-stop:
+				return
+			case <-time.After(5 * time.Millisecond):
+			}
+			for _, ix := range h.pendingInteractions() {
+				carded <- ix.ToolName
+				_ = h.resolve(ix.ID, proto.Resolution{Allow: &no})
+			}
+		}
+	}()
+	for _, tok := range []string{device(h, "dev_phone", "phone", roleFull), device(h, "dev_web", "other", roleFull)} {
+		if code, out := call(t, mux, "POST", "/api/v1/connectors/example/thread/reply", tok, body); code != 200 || out["ok"] != true {
+			t.Fatalf("from the device: %d %v", code, out)
+		}
+	}
+	if len(carded) != 0 {
+		t.Fatalf("a card for the user's own reply: %s", <-carded)
+	}
+	if len(c.sent) != 2 || c.sent[0] != `{"chat":"u1","text":"示例回复"}` {
+		t.Fatalf("sent %v", c.sent)
+	}
+
+	h, c, mux = threadsHubWith(t, []connector.Rule{{Connector: "example", Action: "example_send", Decision: connector.Deny}})
+	if code, out := call(t, mux, "POST", "/api/v1/connectors/example/thread/reply", device(h, "dev_phone", "phone", roleFull), body); code != 200 || out["ok"] != true || len(c.sent) != 1 {
+		t.Fatalf("a deny rule stopped the user's own reply: %d %v, sent %v", code, out, c.sent)
+	}
+	for name, tok := range map[string]string{"the pairing token": h.cfg.Token, "a pairing code": newPairCode(t, h).Token} {
+		if status, out := call(t, mux, "POST", "/api/v1/connectors/example/thread/reply", tok, body); status != 403 || out["code"] != "declined" {
+			t.Errorf("%s: %d %v", name, status, out)
+		}
+	}
+	m := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "local"})
+	params, _ := json.Marshal(map[string]any{"name": "example_send", "args": map[string]any{"chat": "u1", "text": "示例回复"}, "assistant": true})
+	if out, err := m.onRequest(context.Background(), "mcp.call", params); err != nil || !out.(proto.ToolResult).IsError {
+		t.Fatalf("the assistant got past the gate: %v %+v", err, out)
+	}
+	if len(c.sent) != 1 {
+		t.Fatalf("sent %v", c.sent)
 	}
 }

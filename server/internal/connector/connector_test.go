@@ -295,3 +295,25 @@ func TestWatchRestartsAfterAFailure(t *testing.T) {
 func contains(r proto.ToolResult, s string) bool {
 	return len(r.Content) == 1 && strings.Contains(r.Content[0].Text, s)
 }
+
+// Run is the user's own write (the app's reply box): it runs without asking, whatever the rules say, but not on a
+// connector that is not available or for a tool the connector does not have.
+func TestRunSkipsTheGate(t *testing.T) {
+	ctx := context.Background()
+	c := &fake{id: "example", status: Status{State: StateOK}}
+	r := NewRegistry([]Rule{{Connector: "*", Action: "*", Decision: Deny}})
+	_ = r.Add(c)
+	if res := r.Run(ctx, "example_comment", nil); res.IsError || len(c.did) != 1 {
+		t.Fatalf("the user's own write did not run: %+v %v", res, c.did)
+	}
+	if res := r.Call(ctx, "example_comment", nil, nil); !res.IsError || len(c.did) != 1 {
+		t.Fatalf("the AI's got past a deny rule: %+v %v", res, c.did)
+	}
+	if res := r.Run(ctx, "example_nope", nil); !res.IsError || !contains(res, "unknown tool") {
+		t.Fatalf("unknown tool: %+v", res)
+	}
+	c.status = Status{State: StateNotSignedIn}
+	if res := r.Run(ctx, "example_comment", nil); !res.IsError || len(c.did) != 1 {
+		t.Fatalf("ran while signed out: %+v %v", res, c.did)
+	}
+}

@@ -173,6 +173,11 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 `MOCK_PORTS=1 PORT=18791 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:PersonaUITests/PortForwardTests`；
 深浅色 × 新外壳 / 旧布局用 `TEST_RUNNER_JARVIS_LAYOUT`、`TEST_RUNNER_SHOT_SUFFIX` 各跑一遍，截图在 `/tmp/jarvis-ports-*`。
 
+Telegram 会话页的回复框（`ConnectorThreadReplyTests`，#1190）：发出去马上出现在页面里，页面上没有「确认卡片」的提示、也没有「允许」：
+`MOCK_TELEGRAM=signed_in MOCK_TELEGRAM_INBOX=1 PORT=18857 python3 scripts/mock/mock_hub.py &`，
+`TEST_RUNNER_JARVIS_MOCK_HUB_TELEGRAM_THREAD=http://127.0.0.1:18857 xcodebuild test … -only-testing:PersonaUITests/ConnectorThreadReplyTests`。
+用户自己的回复不弹卡片是 hub 定的（mock 不分设备），hub 一侧见 `TestConnectorThreadReplyFromTheUsersDevice`。
+
 已知会挂、修好之前不进验收的 UI 测试先跳过，`TEST_RUNNER_JARVIS_KNOWN_ISSUES=1` 才跑，跳过的说明里写 issue 号：
 现在只有 `ShellRoomScrollTests`（外壳状态行收起时 Agents 搜索框闪一下，#413，`docs/shell.md`「状态行」）。
 

@@ -2456,7 +2456,7 @@ def github_thread_area(h, method, p, raw):
         h.send_header("Cache-Control", "private, max-age=31536000, immutable")
         h.end_headers(); h.wfile.write(data)
         return True
-    if p.endswith("/thread/reply") and method == "POST":  # the real hub asks on the phone first (connector_gate)
+    if p.endswith("/thread/reply") and method == "POST":  # from the user's device the real hub posts it at once (#1190)
         body = json.loads(raw or b"{}")
         GH_SENT.append({"id": "c%d" % (100 + len(GH_SENT)), "at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
                         "sender": {"id": "sam", "name": "sam", "avatar": "avatar:sam:4"}, "mine": True, "format": "markdown",
@@ -2700,7 +2700,7 @@ def telegram_area(h, method, p, raw):
         h.send_header("Cache-Control", "private, max-age=31536000, immutable")
         h.end_headers(); h.wfile.write(data)
         return True
-    if p.endswith("/thread/reply") and method == "POST":  # the real hub asks on the phone first (connector_gate)
+    if p.endswith("/thread/reply") and method == "POST":  # from the user's device the real hub sends it at once too (#1190)
         thread = body.get("thread", "")
         sent = TG_SENT.setdefault(thread, [])
         m = {"id": str(100 + len(sent)), "at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"), "sender": {"name": "我"},

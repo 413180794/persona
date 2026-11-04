@@ -4,7 +4,7 @@ import SwiftUI
 // left, (in a group) the name over the first of a run and the avatar beside its last, mine on the right; a time
 // between messages after a pause or on a new day; pictures, stickers, video thumbnails, voice and files; a reply's
 // quote leading back to what it answers. Older pages load as the top comes into view. With a reply action, a box at
-// the bottom: the hub asks the user on the phone before anything is sent (connector_gate).
+// the bottom: what the user sends there goes out as they sent it (the hub's gate is for the AI's writes, #1190).
 
 struct ConnectorThreadView: View {
     var model: ConnectorThreadModel

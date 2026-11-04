@@ -358,7 +358,7 @@ hub 没有公网入口，webhook 收不到。`GET /notifications` 带上次的 `
     - 灰色的事件行：加标签、请人 review、改标题、合并、关闭、强制推送……
   - 更早的动态：在描述和时间线之间的「显示更早的动态」，同 GitHub 的 Load more。
   - 回复：底部回复框，长按评论「引用回复」把原文变成 Markdown 引用（不带 @，免得通知人家）。
-    发送走 `github_comment`（`{chat, text}` 和助手用的 `{repo, number, body}` 都认），过闸门，默认在手机上确认。
+    发送走 `github_comment`（`{chat, text}` 和助手用的 `{repo, number, body}` 都认）。用户自己点的发送直接评论，不过闸门、不弹卡片（#1190）；助手调的照旧过闸门。
   - 「AI 草拟回复」「交给 AI」照旧在收件箱的顶栏。CI 失败的通知不是 PR / issue，照旧显示 hub 收集的文本。
 - **数据**（`server/internal/connector/github/thread.go`）：
   - 每次读：issue、评论、事件；PR 再读 PR、reviews、行内评论，打开的 PR 再读 head 提交的 check runs。每个列表最多 5 页 × 100 条。

@@ -5,8 +5,8 @@ import SwiftUI
 // title, state, who opened it, branches, labels, 在 GitHub 打开), the description in Markdown, then the timeline —
 // comments, reviews in their state's color, comments on a line with the diff above them, CI checks (a failure with
 // the end of its log) and the gray lines of what happened. Older entries load between the description and the
-// timeline, as GitHub's 「Load more」. With a reply action, a box at the bottom: the comment goes through the hub's
-// gate (github_comment), the user allows it on the phone. AI 草拟回复 / 交给 AI stay in the inbox's bar above.
+// timeline, as GitHub's 「Load more」. With a reply action, a box at the bottom: the comment goes out as github_comment
+// as the user wrote it, without a card (#1190). AI 草拟回复 / 交给 AI stay in the inbox's bar above.
 
 struct GitHubThreadView: View {
     var model: ConnectorThreadModel

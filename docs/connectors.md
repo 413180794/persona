@@ -70,11 +70,16 @@ hub 收到不认识的档就丢掉、交给模型分拣。
 
 ### 闸门
 
-- 连接器的写操作只有 `Actions` 一条路：`Registry.Call` → `connector/gate.go` 的规则（hub.json `connector_gate`，第一条匹配的说了算）→
+- 闸门只管 **AI 发起的**写操作（助手的工具、`tg` 命令行 / skill、Agent，都经 node 的 `mcp.call`）：`Registry.Call` →
+  `connector/gate.go` 的规则（hub.json `connector_gate`，第一条匹配的说了算）→
   `allow` 直接做、`deny` 拒绝、`confirm`（默认）在手机上弹卡片（`hub.approve`，15 分钟过期）。卡片写明做什么、全文、谁会看到。
+- **用户本人手动发起的不过闸门**（#1190，用户：「我自己发送消息还需要我自己审批？这个完全不对吧」）：会话页回复框
+  （`POST …/thread/reply`）从用户自己登录的设备（手机、Mac、网页的 full 设备 token）发来，就走 `Registry.Run` 直接做，不弹卡片，
+  `deny` 规则也不拦。按 hub 鉴权得到的身份判断（`hub.byOwnDevice`），不看客户端自报的字段；hub.json 的配对 token、配对码、
+  机器 / 互联凭据不算设备，照旧过闸门。飞书的发消息、收件箱的「发送」本来就不过闸门。
 - 飞书的写操作不是工具：助手用 lark-connector skill 的 `ol` / lark-cli，node 的 Bash 钩子（`node/larkgate.go`）读命令判断读写，规则是
   `connector_gate` 里 `connector:"lark"` 的（`action` 写「方法 路径」）加上老的 `lark_gate`，再加内置规则（M5）。
-- 收件箱里点「发送」本身就是确认，`Reply` 不再弹卡片。
+- 收件箱里点「发送」本身就是确认，`Reply` 不再弹卡片；会话页回复框同理（见上）。
 
 ### 进收件箱
 
@@ -320,7 +325,7 @@ GitHub 读某台电脑上 `gh` 的登录。App 里还没有通用的连接器登
 
 现状（不变）：
 
-- 连接器的写操作都是 `Actions`，都过闸门（`github_comment`、`github_review`、`mail_send`）。
+- 连接器的写操作都是 `Actions`，AI 调的都过闸门（`github_comment`、`github_review`、`mail_send`）；用户在 App 里自己点发送的不过（#1190，见「闸门」）。
 - 飞书的写操作是例外：lark-connector skill 的 `ol` 和 lark-cli，node 的 Bash 钩子按命令判断读写（M5 后规则也写在 `connector_gate`），不管权限模式都要确认。
 - 用户自己放进 `~/.persona/skills` 的 skill 都会链接进助手的目录；助手调这些 skill 的脚本走 Claude Code 自己的权限流程。
 

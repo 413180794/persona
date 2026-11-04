@@ -2,7 +2,7 @@ import Foundation
 
 // A connector's inbox thread as a conversation (GET /api/v1/connectors/{id}/thread, docs/protocol.md「连接器 API」):
 // a page of messages at a time, newest page first, their pictures through the hub, a reply through the connector's
-// action behind the gate. Telegram's chats draw as bubbles (ConnectorThreadView); GitHub's pull requests and issues
+// action (the user's own: not put to the gate). Telegram's chats draw as bubbles (ConnectorThreadView); GitHub's pull requests and issues
 // as GitHub's thread (its own page), by `ThreadChat.kind`.
 
 nonisolated struct ThreadPage: Codable, Sendable {
@@ -152,8 +152,8 @@ extension APIClient {
         return try await getDecodedOffMain("/api/v1/connectors/\(connector)/thread", query: q)
     }
 
-    /// A reply through the thread's action: the hub asks the user on the phone first (connector_gate), so it can take
-    /// as long as the card lasts.
+    /// A reply through the thread's action. Sent from this device it runs at once: the hub puts only the AI's writes to
+    /// connector_gate, not what the user sends by hand.
     func connectorThreadReply(_ connector: String, thread: String, action: String, text: String, replyTo: String?) async throws {
         struct Body: Encodable {
             var thread, action, text: String
@@ -163,8 +163,7 @@ extension APIClient {
                 case replyTo = "reply_to"
             }
         }
-        _ = try await post("/api/v1/connectors/\(connector)/thread/reply", body: Body(thread: thread, action: action, text: text, replyTo: replyTo),
-                           timeout: 16 * 60)
+        _ = try await post("/api/v1/connectors/\(connector)/thread/reply", body: Body(thread: thread, action: action, text: text, replyTo: replyTo))
     }
 }
 
@@ -282,7 +281,7 @@ nonisolated enum ThreadLayout {
         return messages.contains { $0.id == id }
     }
 
-    /// Sends a reply (the user allows it on the phone first), then reads the newest page again; whether it was sent.
+    /// Sends a reply, then reads the newest page again; whether it was sent.
     func reply(_ text: String, to quote: ThreadMessage?) async -> Bool {
         guard let action = chat?.reply, let api = api(), !sending else { return false }
         sending = true
@@ -305,7 +304,7 @@ nonisolated enum ThreadLayout {
     /// A failure in words: a rate limit's says how long to wait (the hub's), a declined reply says so.
     private static func said(_ error: Error) -> String {
         if let e = error as? APIError {
-            return e.status == 403 ? "没有发送：在手机上取消了，或者 hub 的规则不允许" : e.message
+            return e.status == 403 ? "没有发送：hub 不允许" : e.message
         }
         return error.shown ?? "读不到"
     }
