@@ -212,6 +212,7 @@ struct FileViewer: View {
     private func open() async {
         page?.video?.stop()
         page?.preview?.stop()
+        page?.audio?.stop()
         let p = FileViewerModel(ref: ref, api: model.api(ref.group), stream: model.features(ref.group).contains("file_stream"))
         page = p
         await p.load()
@@ -269,6 +270,8 @@ struct FileViewer: View {
                 if let video = page.video { VideoFileView(model: video) }
             case .quickLook:
                 if let preview = page.preview { QuickLookFileView(model: preview) }
+            case .audio:
+                if let audio = page.audio { AudioFileView(model: audio) }
             case .binary:
                 EmptyStateView(symbol: Theme.Icon.missingFile, title: "无法预览",
                                message: "\(file.mime ?? "二进制文件") · \(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))")
@@ -361,6 +364,7 @@ struct FileViewer: View {
         case "md", "markdown", "txt": "doc.text"
         case "png", "jpg", "jpeg", "gif", "webp", "heic": "photo"
         case "mp4", "mov", "m4v", "mpeg", "mpg", "webm", "mkv", "avi": Theme.Icon.video
+        case "mp3", "m4a", "aac", "wav", "flac", "aif", "aiff", "caf", "m4b", "ogg", "opus": Theme.Icon.voiceMessage
         case "pdf": "doc.richtext"
         case "doc", "docx", "pages", "rtf": Theme.Icon.document
         case "xls", "xlsx", "numbers", "csv", "tsv": Theme.Icon.sheet
@@ -438,7 +442,7 @@ private struct MarkdownFile: View {
 /// the code document, the JSON outline or the Markdown pieces off the main thread, and fetches further pages.
 @MainActor @Observable
 final class FileViewerModel {
-    enum Kind { case directory, markdown, json, code, image, pdf, video, quickLook, table, notebook, html, binary }
+    enum Kind { case directory, markdown, json, code, image, pdf, video, audio, quickLook, table, notebook, html, binary }
 
     let ref: FileRef
     @ObservationIgnored private let api: APIClient?
@@ -449,6 +453,7 @@ final class FileViewerModel {
     private(set) var kind: Kind = .code
     private(set) var video: VideoFileModel?
     private(set) var preview: QuickLookFileModel?
+    private(set) var audio: AudioFileModel?
     /// CSV / TSV / xlsx as a table (`TableFileView`); an xlsx also has `preview`, the menu's QuickLook.
     private(set) var table: TableFileModel?
     /// An .ipynb read and parsed (`NotebookFileView`); nil while it loads or when it cannot be read (then the text).
@@ -497,7 +502,7 @@ final class FileViewerModel {
     }
 
     /// The file as downloaded for its player or QuickLook, to share.
-    var localFile: URL? { preview?.localURL ?? video?.localURL }
+    var localFile: URL? { preview?.localURL ?? video?.localURL ?? audio?.localURL }
 
     var shownSource: CodeLineSource? {
         if kind == .json, !showSource, let outline { return outline }
@@ -531,6 +536,11 @@ final class FileViewerModel {
         if QuickLookFileType.matches(name: f.name, text: f.text) {
             kind = .quickLook
             preview = QuickLookFileModel(ref: ref, file: f, api: api)
+            return
+        }
+        if f.text == nil, AudioFileType.matches(name: f.name, mime: f.mime) {
+            kind = .audio
+            audio = AudioFileModel(ref: ref, file: f, api: api)
             return
         }
         if f.text == nil, VideoFileType.matches(name: f.name, mime: f.mime) {

@@ -236,6 +236,25 @@ def notebook():
                       ensure_ascii=False, indent=1)
 
 
+def tone_wav(seconds=6, rate=22050):
+    """A made-up voice memo: six seconds of a soft little melody, 16-bit mono WAV."""
+    import math, struct, wave
+    notes = [523.25, 659.25, 783.99, 659.25, 587.33, 698.46, 880.0, 523.25]
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        frames = bytearray()
+        for i in range(seconds * rate):
+            t = i / rate
+            f = notes[int(t / (seconds / len(notes))) % len(notes)]
+            env = min(1.0, (t % (seconds / len(notes))) * 20) * 0.25
+            frames += struct.pack("<h", int(32767 * env * math.sin(2 * math.pi * f * t)))
+        w.writeframes(bytes(frames))
+    return buf.getvalue()
+
+
 # The weather app's sample documents (docs/ is where the tree keeps them).
 SAMPLES = {
     "季度报告.docx": lambda: docx("天气 App 第四季度报告", [
@@ -258,6 +277,7 @@ SAMPLES = {
     # The page's files beside it, read in through the hub by the preview (#1297).
     "报告.css": lambda: "h1 { color: #0a84ff; border-bottom: 2px solid #0a84ff; padding-bottom: 4px; }\n",
     "雨.png": lambda: _png(160, 72, (48, 176, 199)),
+    "站会录音.wav": lambda: tone_wav(),
     # A page with a script and a remote image: neither may run or load until the preview allows them.
     "报告.html": lambda: ('<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>本周降雨</title>'
                          '<meta name="viewport" content="width=device-width, initial-scale=1">'

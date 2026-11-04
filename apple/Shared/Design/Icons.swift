@@ -70,6 +70,9 @@ extension Theme {
         /// 长录音作为上下文，与输入框听写区分。
         static let recording = "waveform.circle"
         static let pause = "pause.fill"
+        /// Back and ahead 15 seconds in something that plays (an audio file).
+        static let skipBack = "gobackward.15"
+        static let skipForward = "goforward.15"
         static let share = "square.and.arrow.up"
         static let save = "square.and.arrow.down"
         static let down = "arrow.down"
