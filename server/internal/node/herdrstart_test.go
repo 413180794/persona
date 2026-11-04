@@ -429,3 +429,33 @@ func TestRunningPersonaClaudeGetsItsResumeCommand(t *testing.T) {
 		t.Fatalf("reported again: %v", got)
 	}
 }
+
+// Persona's Codex and other agents (TRAEX, pi) also get resume commands through their launcher,
+// instead of herdr falling back to bare builtin resume.
+func TestPersonaOtherAgentsResumeWithLauncher(t *testing.T) {
+	n, f, home := herdrNode(t)
+	launch := n.hosts.Get(host.Herdr).(*herdrHost)
+
+	// 1. Direct holdResume on codex
+	spec := agentLaunch{Agent: "codex", Launcher: "work_codex", ID: startID}
+	n.holdResume(context.Background(), launch, "w1:p4", startID, spec)
+	held := resumeHeldAgent("codex", "w1:p4", startID, "work_codex resume "+startID)
+	assertTrace(t, f.trace(), held[:])
+
+	// 2. Backfill for running Codex agent
+	f.reset()
+	n.state.put(sidB, sessionState{Pane: "w1:p5", Launcher: "custom_traex", Cwd: home, StartedAt: time.Now()})
+	f.reply("session.snapshot", snapshot(nil, nil, []any{
+		agentOf("traex", sidB, proto.StatusIdle, "w1:p5", "w1:t5", "w1", home, ""),
+		agentOf("codex", "00000000-0000-4000-8000-000000000099", proto.StatusIdle, "w1:p6", "w1:t6", "w1", home, ""), // user's own
+	}, nil))
+	listSessions(t, n)
+	waitCalls(t, f, "pane.report_agent_session", 1)
+	time.Sleep(100 * time.Millisecond)
+	reports := f.trace("pane.report_agent_session")
+	if len(reports) != 1 || !strings.Contains(reports[0], `"pane_id":"w1:p5"`) ||
+		!strings.Contains(reports[0], `"agent":"traex"`) ||
+		!strings.Contains(reports[0], `"eval","custom_traex resume `+sidB) {
+		t.Fatalf("reports %v", reports)
+	}
+}

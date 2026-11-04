@@ -26,12 +26,15 @@ import (
 // resumeSource is the reporter Persona holds its panes as (a custom source: herdr's own integration keeps its own).
 const resumeSource = "custom:persona"
 
-// claudeLaunch is what a Claude in a pane was started with, to start it again the same way.
-type claudeLaunch struct {
+// agentLaunch is what an agent in a pane was started with, to start it again the same way.
+type agentLaunch struct {
+	Agent                            string // "claude" (empty means claude), "codex", "traex", "pi"
 	Launcher, Settings, Hooks, Model string
 	Plugins                          bool // claude loads plugins: Persona's plugin directory and office rule
 	ID                               string
 }
+
+type claudeLaunch = agentLaunch
 
 // claudeCommandLine is the command that starts Claude for spec with args (--session-id / --resume …, mode flags),
 // quoting with q.
@@ -76,6 +79,19 @@ func (n *Node) claudeResumeArgv(spec claudeLaunch, id string) (argv []string, ok
 	return []string{"eval", cmd}, true
 }
 
+// agentResumeArgv is the resume_argv for an agent Persona started (Claude, Codex, TRAEX, pi).
+func (n *Node) agentResumeArgv(spec agentLaunch, id string) (argv []string, ok bool) {
+	kind := spec.Agent
+	if kind == "" || kind == "claude" {
+		return n.claudeResumeArgv(spec, id)
+	}
+	cmd := n.launcherCommandQ(spec.Launcher, dquote) + " resume " + id
+	if strings.Contains(cmd, "'") || !validID(id) {
+		return nil, false
+	}
+	return []string{"eval", cmd}, true
+}
+
 // holdResume gives herdr the pane's resume command and remembers how the pane's Claude was started, for a later
 // SessionStart with another session id. Hosts other than herdr: nothing to do. Failures are logged: the start
 // itself went through.
@@ -95,14 +111,18 @@ func (n *Node) holdResume(ctx context.Context, launch host.Launcher, pane, id st
 }
 
 func (n *Node) reportResume(ctx context.Context, h *herdrHost, pane string, spec claudeLaunch) {
-	argv, ok := n.claudeResumeArgv(spec, spec.ID)
+	argv, ok := n.agentResumeArgv(spec, spec.ID)
 	if !ok {
 		n.logf("herdr resume: %s (%s) not given a resume command (it cannot be said without an apostrophe)", pane, spec.ID)
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
-	if err := h.c.PaneReportResume(ctx, host.ParsePane(pane).ID, resumeSource, "claude", spec.ID, argv); err != nil {
+	agentName := spec.Agent
+	if agentName == "" {
+		agentName = "claude"
+	}
+	if err := h.c.PaneReportResume(ctx, host.ParsePane(pane).ID, resumeSource, agentName, spec.ID, argv); err != nil {
 		n.logf("herdr resume: %s (%s): %v", pane, spec.ID, err)
 	}
 }
@@ -131,7 +151,7 @@ func (n *Node) resumeOnSessionStart(pane, id string) {
 	go n.reportResume(context.Background(), h, pane, spec)
 }
 
-// backfillResume gives herdr the resume command of Persona-started Claudes found running in herdr that have none from
+// backfillResume gives herdr the resume command of Persona-started agents found running in herdr that have none from
 // this node yet: ones started by an older node, or before this node restarted (n.launches is memory only). Once
 // per pane and session; the work (settings paths, the reports) runs in the background, off the refresh.
 func (n *Node) backfillResume(agents []host.Agent) {
@@ -143,11 +163,12 @@ func (n *Node) backfillResume(agents []host.Agent) {
 		pane string
 		id   string
 		st   sessionState
+		kind string
 	}
 	var work []todo
 	n.mu.Lock()
 	for _, a := range agents {
-		if a.Agent != "claude" || a.PaneID == "" || host.ParsePane(a.PaneID).Kind != host.Herdr {
+		if a.PaneID == "" || host.ParsePane(a.PaneID).Kind != host.Herdr {
 			continue
 		}
 		id := n.panes[a.PaneID]
@@ -161,14 +182,21 @@ func (n *Node) backfillResume(agents []host.Agent) {
 			continue
 		}
 		st, ok := n.state.get(id)
-		if !ok || st.Launcher == "" || launcherAgentType(st.Launcher) != "claude" {
-			continue // not started by Persona (the user's own claude: herdr resumes it as before), or not a Claude launcher
+		if !ok || st.Launcher == "" {
+			continue // not started by Persona (the user's own agent: herdr resumes it as before)
+		}
+		kind := a.Agent
+		if kind == "" {
+			kind = launcherAgentType(st.Launcher)
+		}
+		if kind == "" {
+			kind = "claude"
 		}
 		if n.launches == nil {
-			n.launches = map[string]claudeLaunch{}
+			n.launches = map[string]agentLaunch{}
 		}
-		n.launches[a.PaneID] = claudeLaunch{Launcher: st.Launcher, Model: st.Model, ID: id} // claimed: once
-		work = append(work, todo{a.PaneID, id, st})
+		n.launches[a.PaneID] = agentLaunch{Agent: kind, Launcher: st.Launcher, Model: st.Model, ID: id} // claimed: once
+		work = append(work, todo{a.PaneID, id, st, kind})
 	}
 	n.mu.Unlock()
 	if len(work) == 0 {
@@ -178,9 +206,14 @@ func (n *Node) backfillResume(agents []host.Agent) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		for _, w := range work {
-			settings, hooks := n.claudeStartSettings(ctx, w.st.Launcher, "claude", w.st.Cwd)
-			spec := claudeLaunch{Launcher: w.st.Launcher, Settings: settings, Hooks: hooks, Model: w.st.Model,
-				Plugins: n.claudeLoadsPlugins(ctx), ID: w.id}
+			var spec agentLaunch
+			if w.kind == "claude" || w.kind == "" {
+				settings, hooks := n.claudeStartSettings(ctx, w.st.Launcher, "claude", w.st.Cwd)
+				spec = agentLaunch{Agent: w.kind, Launcher: w.st.Launcher, Settings: settings, Hooks: hooks, Model: w.st.Model,
+					Plugins: n.claudeLoadsPlugins(ctx), ID: w.id}
+			} else {
+				spec = agentLaunch{Agent: w.kind, Launcher: w.st.Launcher, Model: w.st.Model, ID: w.id}
+			}
 			n.mu.Lock()
 			if cur, ok := n.launches[w.pane]; !ok || cur.ID != w.id {
 				n.mu.Unlock()
