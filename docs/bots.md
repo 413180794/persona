@@ -4,7 +4,10 @@
 某台电脑上的 Claude Code / Codex），这一轮的回答以机器人的身份发回飞书；Persona 和 Agent 要用户回答、批准的，在飞书里发卡片，
 点一下就答了；推送和主对话在别处的回答也可以发一份到飞书。每一项单独开关，默认全关（2026-11-02 用户要求：「P1/2/3 都做吧，可选开启」，issue #322）。
 
-代码：`server/internal/feishubot`（长连接、REST、事件和消息内容、卡片）、`server/internal/hub/bots*.go`（配对、路由、跟踪回答、卡片、推送）；
+它是渠道 `feishu`（`docs/channels.md`）：跟踪这一轮走 hub 的统一管线（`hub/channels_runs.go`，规则在 `server/internal/channel`，和微信同一份），
+这里的代码只管飞书那一头（进度卡、答案卡、表情、提问卡片、命令）。
+
+代码：`server/internal/feishubot`（长连接、REST、事件和消息内容、卡片）、`server/internal/hub/bots*.go`（配对、路由、卡片、推送；`bots_runs.go` 是统一管线里飞书的那一头）；
 提示词 `server/internal/prompts/bot/message.md`；App 的页面 `apple/Persona/Views/Settings/FeishuBotView.swift`（设置 › 连接器 › 飞书机器人）。
 
 ## 和飞书 `/agent` 的区别
@@ -62,10 +65,10 @@
    发给 Persona 的再加一段说明「回答会发回飞书，结论先行、不用 notify_user」（提示词 `bot/message.md`）。
 4. 发送：Persona 的对话走 `session.send`（主对话照 App 一样跟着设置 › 助手的启动器），`client_msg_id` 是 `feishu-<message_id>`，
    和 App 共用 `sent_messages` 的去重：重发的事件不会打两遍。还没有主对话时新开一段并设为主对话。消息上点「OnIt」表情。
-5. 跟踪回答（`botRun`，存在 `bots.feishu.state`，hub 重启后接着等）：hub 像 App 打开对话那样 watch 这段对话；5 秒后还没答完就回一张进度卡
+5. 跟踪回答（统一管线的 run，存在 `channels.state`，hub 重启后接着等；老版本存在 `bots.feishu.state` 里的启动时搬过去）：hub 像 App 打开对话那样 watch 这段对话；5 秒后还没答完就回一张进度卡
    （在做什么：运行 / 读 / 改 / 搜……最近 4 步，正在写的字，用时），3 秒最多改一次。这一轮结束（不在工作、没有在等你的卡片）时取**这条消息之后**
    的最后一段回答（最后一次工具调用之后的文字），写进进度卡（没有就回复一张新卡片），表情换成「DONE」。
-   - 消息发出时对话正在忙：它排在当前这一轮后面。那一轮结束时 transcript 里还没有这条消息，不能把那一轮的结尾当成回答，所以按消息开头的一段字（`probe`）
+   - 消息发出时对话正在忙：它排在当前这一轮后面。那一轮结束时 transcript 里还没有这条消息，不能把那一轮的结尾当成回答，所以按这条消息的 `client_msg_id`（`feishu-<message_id>`，老 node 没有时按消息开头的一段字 `probe`）
      找到它在 transcript 里的位置，只取它后面的回答；10 分钟还找不到才退回取最后的话。
    - 同一段对话还没答完又发了一条：两条合成一个回答（两条消息都换「DONE」）。
    - 还有后台任务（`run_in_background`、Monitor、子 Agent）：先答一次并说明「后台还有 N 个任务」，等它们回报的那一轮结束再答一次（最多再等 2 小时）。

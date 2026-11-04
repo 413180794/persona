@@ -11,6 +11,8 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/nwverse/persona/server/internal/channel"
+
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -190,6 +192,9 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), wait)
 	defer cancel()
 	id, _ := p["client_msg_id"].(string)
+	if ch := channel.FromClientMsgID(id, []string{"voice"}); ch != "" {
+		h.noteChannelConversation(ch, m.cfg.ID, sid) // a voice conversation's errand (docs/channels.md「来源标记」)
+	}
 	external := false
 	if s, ok := m.session(sid); ok {
 		external = s.SourceKind != ""

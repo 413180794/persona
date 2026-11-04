@@ -1,10 +1,11 @@
 // Package wechat is the WeChat plugin's program (jarvisd-wechat, docs/wechat.md): a bot in the user's personal WeChat
-// through iLink (wechat/ilink). The user binds it by scanning a QR code (the connector's sign-in); their messages to
-// the bot go to the Persona tab's main conversation over the hub's API, and the turn's answer comes back as text.
-// What an agent it drives asks (a question, a permission, a plan) is sent as text too and answered by a reply.
+// through iLink (wechat/ilink), contributed as a channel (docs/channels.md). The user binds it by scanning a QR code
+// (the connector's sign-in); the owner's messages to the bot go to the hub (channel.receive), which sends them into a
+// conversation, follows the turn and asks what agents ask — all of that is the hub's. This program only talks to
+// WeChat: it receives, sends what the hub gives it (channel.send) and shows 「正在输入」.
 //
-// It keeps everything in one sealed blob in the hub (the connector's secrets): the bot token, the polling cursor, who
-// it talks to and the turns it waits on, so a restart picks up where it was.
+// It keeps its own in one sealed blob in the hub (the connector's secrets): the bot token, the polling cursor and the
+// owner's latest context token, so a restart picks up where it was.
 package wechat
 
 import (
@@ -16,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/wechat/ilink"
 	"github.com/nwverse/persona/server/internal/wechat/spec"
@@ -23,13 +25,12 @@ import (
 
 // Clock and iLink are what tests replace.
 type Options struct {
-	Hub   *Hub
+	// Hub takes the owner's messages (the plugin protocol's channel namespace).
+	Hub   channel.Hub
 	Agent string // the product token iLink sees ("Persona/<version>")
 	// NewClient makes the iLink client for a base URL and token (ilink.New when nil).
 	NewClient func(base, token string) (*ilink.Client, error)
 	Now       func() time.Time
-	// Tick is how often the turns are looked at (2 s when 0).
-	Tick time.Duration
 }
 
 // Bot is the connector and the bot behind it.
@@ -44,8 +45,7 @@ type Bot struct {
 	client  *ilink.Client // for the bound token; nil while not bound
 	qr      *pendingQR
 	wake    chan struct{}
-	nudge   chan struct{}
-	typing  map[string]*typing // by session: the peer's typing status while a turn runs
+	typing  *typing // the owner's chat shows the bot writing (the hub says while a turn goes on)
 	replied map[string]time.Time
 }
 
@@ -57,22 +57,9 @@ type state struct {
 	Cursor string   `json:"cursor,omitempty"`
 	// Context is the owner's latest message's context token: iLink needs one to send anything.
 	Context string `json:"context,omitempty"`
-	Target  target `json:"target"`
-	Runs    []*run `json:"runs,omitempty"`
-	Asks    []*ask `json:"asks,omitempty"`
 	// Seen are the ids of the latest messages handled (iLink may deliver one again).
 	Seen []string `json:"seen,omitempty"`
 }
-
-// target is where the owner's messages go: the main conversation, a conversation /new started, or (Fresh) the
-// conversation the next message starts.
-type target struct {
-	Machine string `json:"machine,omitempty"`
-	Session string `json:"session,omitempty"`
-	Fresh   bool   `json:"fresh,omitempty"`
-}
-
-func (t target) main() bool { return t.Session == "" && !t.Fresh }
 
 func New(opt Options, secrets connector.Secrets) *Bot {
 	if opt.NewClient == nil {
@@ -83,11 +70,7 @@ func New(opt Options, secrets connector.Secrets) *Bot {
 	if opt.Now == nil {
 		opt.Now = time.Now
 	}
-	if opt.Tick == 0 {
-		opt.Tick = 2 * time.Second
-	}
-	return &Bot{opt: opt, secrets: secrets, wake: make(chan struct{}, 1), nudge: make(chan struct{}, 1),
-		typing: map[string]*typing{}, replied: map[string]time.Time{},
+	return &Bot{opt: opt, secrets: secrets, wake: make(chan struct{}, 1), replied: map[string]time.Time{},
 		status: connector.Status{State: connector.StateNotSignedIn, Error: "还没绑定微信"}}
 }
 
@@ -168,7 +151,7 @@ func (b *Bot) kick() {
 	}
 }
 
-// Run polls iLink for the owner's messages while bound, and looks after the turns it waits on.
+// Run polls iLink for the owner's messages while bound.
 func (b *Bot) Run(ctx context.Context) {
 	for ctx.Err() == nil {
 		if err := b.load(ctx); err == nil {
@@ -180,7 +163,6 @@ func (b *Bot) Run(ctx context.Context) {
 			return
 		}
 	}
-	go b.watchTurns(ctx)
 	for ctx.Err() == nil {
 		b.mu.Lock()
 		creds := b.st.Creds
@@ -282,7 +264,7 @@ func (b *Bot) unbind(ctx context.Context, token string) {
 	}
 	b.st.Old = rememberToken(b.st.Old, b.st.Creds.Token)
 	b.st.Creds, b.st.Cursor, b.st.Context = nil, "", ""
-	b.st.Runs, b.st.Asks = nil, nil
+	b.typing = nil
 	b.saveLocked(ctx)
 }
 

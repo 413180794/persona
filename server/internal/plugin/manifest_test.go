@@ -500,6 +500,58 @@ func TestUISurfaces(t *testing.T) {
 	}
 }
 
+// The channel point (docs/channels.md「清单」): a chat app's bot bound through the plugin's own connector, or running
+// from the start without one.
+func TestChannelPoint(t *testing.T) {
+	ch := func(extra map[string]any) map[string]any {
+		c := map[string]any{"id": "examplechat", "name": "Example Chat", "kind": "im", "connector": "examplenotes", "bind": "qr",
+			"capabilities": map[string]any{"images_in": true, "format": "plain", "max_text": 4000, "asks": "text", "push": true, "typing": true}}
+		for k, v := range extra {
+			c[k] = v
+		}
+		return c
+	}
+	conn := []any{map[string]any{"id": "examplenotes", "name": "Example Notes", "capabilities": []any{"status", "login"}}}
+	m, err := Parse(with(t, func(m map[string]any) {
+		m["contributes"] = map[string]any{"connectors": conn, "channel": []any{ch(nil)}}
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := m.Channels(); len(c) != 1 || c[0].Capabilities.MaxText != 4000 || c[0].Bind != "qr" || m.Kind() != "connectors" {
+		t.Fatalf("%+v %s", c, m.Kind())
+	}
+	if !strings.Contains(fmt.Sprint(Explain(m)), "作为和 Persona 对话的渠道") {
+		t.Fatal("the channel is explained")
+	}
+	for name, change := range map[string]func(m map[string]any){
+		"a connector it does not have": func(m map[string]any) {
+			m["contributes"] = map[string]any{"channel": []any{ch(nil)}}
+		},
+		"no connector, not on startup": func(m map[string]any) {
+			m["activation_events"] = []any{"on_call"}
+			m["contributes"] = map[string]any{"channel": []any{ch(map[string]any{"connector": "", "bind": ""})}}
+		},
+		"the hub's id": func(m map[string]any) {
+			m["contributes"] = map[string]any{"connectors": conn, "channel": []any{ch(map[string]any{"id": "feishu"})}}
+		},
+		"a field it does not know": func(m map[string]any) {
+			m["contributes"] = map[string]any{"connectors": conn, "channel": []any{ch(map[string]any{"cards": true})}}
+		},
+		"asks it does not know": func(m map[string]any) {
+			m["contributes"] = map[string]any{"connectors": conn, "channel": []any{ch(map[string]any{"capabilities": map[string]any{"asks": "cards"}})}}
+		},
+		"without rpc": func(m map[string]any) {
+			m["runtime"].(map[string]any)["rpc"] = "none"
+			m["contributes"] = map[string]any{"channel": []any{ch(map[string]any{"connector": "", "bind": ""})}}
+		},
+	} {
+		if _, err := Parse(with(t, change)); err == nil {
+			t.Errorf("%s: parsed", name)
+		}
+	}
+}
+
 func mustParse(t *testing.T) func(b []byte) *Manifest {
 	return func(b []byte) *Manifest {
 		m, err := Parse(b)

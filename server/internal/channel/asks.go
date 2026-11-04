@@ -1,9 +1,7 @@
-package wechat
+package channel
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -12,18 +10,19 @@ import (
 	"unicode"
 
 	"github.com/nwverse/persona/server/internal/proto"
-	"github.com/nwverse/persona/server/internal/wechat/ilink"
 )
 
-// WeChat has no cards: what an agent the owner drives from WeChat asks (a question, a permission, a plan, a terminal
-// dialog) is sent as text, and the owner's next message answers it — a number, 允许 / 拒绝, 批准, or words. The
-// latest one asked is the one a reply answers. One answered somewhere else (the app) is let go: the reply is then an
-// ordinary message.
+// A channel without buttons (asks: text) gets what an agent asks — a question, a permission, a plan, a terminal
+// dialog — as text, and the owner's next message answers it: a number, 允许 / 拒绝, 批准, or words. The latest one
+// asked is the one a reply answers; one answered somewhere else (the app) is let go, and the reply is then an
+// ordinary message (docs/channels.md「提问和批准」).
 
-type ask struct {
+// Ask is something asked in a channel as text, waiting for the owner's reply.
+type Ask struct {
 	ID        string           `json:"id"`
-	Machine   string           `json:"machine"`
-	Session   string           `json:"session"`
+	Channel   string           `json:"channel"`
+	MachineID string           `json:"machine_id"`
+	SessionID string           `json:"session_id"`
 	Kind      string           `json:"kind"`
 	Title     string           `json:"title,omitempty"`
 	Questions []proto.Question `json:"questions,omitempty"`
@@ -35,87 +34,22 @@ type ask struct {
 	At      time.Time `json:"at"`
 }
 
-type needsYou struct {
-	MachineID     string `json:"machine_id"`
-	SessionID     string `json:"session_id"`
-	InteractionID string `json:"interaction_id"`
+// NewAsk is ix as something to ask in channel.
+func NewAsk(channel string, ix proto.Interaction, now time.Time) *Ask {
+	return &Ask{ID: ix.ID, Channel: channel, MachineID: ix.MachineID, SessionID: ix.SessionID, Kind: ix.Kind, Title: ix.SessionTitle,
+		Questions: ix.Questions, At: now}
 }
 
-// Hear takes the hub's events: an agent asks something, or a turn ended.
-func (b *Bot) Hear(ctx context.Context, event string, params json.RawMessage) {
-	switch event {
-	case "agent.finished":
-		b.poke()
-	case "agent.needs_you":
-		var n needsYou
-		if json.Unmarshal(params, &n) == nil && n.InteractionID != "" {
-			b.asked(ctx, n)
-		}
-	}
-}
-
-// drives says whether WeChat drives the session: a turn waits on it, or it is where the owner's messages go.
-func (b *Bot) drives(ctx context.Context, machine, session string) bool {
-	b.mu.Lock()
-	bound := b.st.Creds != nil
-	t := b.st.Target
-	waits := slices.ContainsFunc(b.st.Runs, func(r *run) bool { return r.Machine == machine && r.Session == session })
-	b.mu.Unlock()
-	switch {
-	case !bound:
-		return false
-	case waits || t.Machine == machine && t.Session == session:
-		return true
-	case t.main():
-		m, main, err := b.opt.Hub.Assistant(ctx)
-		return err == nil && m == machine && main == session
-	}
-	return false
-}
-
-func (b *Bot) asked(ctx context.Context, n needsYou) {
-	if err := b.load(ctx); err != nil || !b.drives(ctx, n.MachineID, n.SessionID) {
-		return
-	}
-	pending, err := b.opt.Hub.Interactions(ctx)
-	if err != nil {
-		return
-	}
-	i := slices.IndexFunc(pending, func(ix proto.Interaction) bool { return ix.ID == n.InteractionID })
-	if i < 0 {
-		return
-	}
-	ix := pending[i]
-	a := &ask{ID: ix.ID, Machine: ix.MachineID, Session: ix.SessionID, Kind: ix.Kind, Title: ix.SessionTitle, Questions: ix.Questions,
-		At: b.opt.Now()}
-	text, ok := promptFor(&ix, a)
-	if !ok {
-		b.tell(ctx, text)
-		return
-	}
-	b.mu.Lock()
-	known := slices.ContainsFunc(b.st.Asks, func(x *ask) bool { return x.ID == a.ID })
-	b.mu.Unlock()
-	if known || !b.tell(ctx, text) {
-		return // not asked in WeChat (no chat to send it to yet): the app has it
-	}
-	b.mu.Lock()
-	if !slices.ContainsFunc(b.st.Asks, func(x *ask) bool { return x.ID == a.ID }) {
-		b.st.Asks = append(b.st.Asks, a)
-		b.saveLocked(ctx)
-	}
-	b.mu.Unlock()
-}
-
-// promptFor is the text asking ix in WeChat; false when it cannot be answered here (the text then says where).
-func promptFor(ix *proto.Interaction, a *ask) (string, bool) {
+// AskText is the text asking ix (it fills in a's options); false when it cannot be answered in a channel (the text
+// then says where).
+func AskText(ix proto.Interaction, a *Ask) (string, bool) {
 	head := ""
 	if a.Title != "" {
 		head = "【" + a.Title + "】"
 	}
 	switch {
 	case len(ix.Fields) > 0:
-		return head + "有一步要在 App 里填写后才能批准：" + firstLine(ix.Summary), false
+		return head + "有一步要在 App 里填写后才能批准：" + FirstLine(ix.Summary), false
 	case ix.Kind == proto.IxPermission:
 		what := strings.TrimSpace(ix.Summary)
 		if what == "" {
@@ -124,13 +58,14 @@ func promptFor(ix *proto.Interaction, a *ask) (string, bool) {
 		if ix.Reason != "" {
 			what += "\n原因：" + ix.Reason
 		}
-		return head + "要你批准「" + toolName(ix) + "」：\n" + clip(what, 1500) + "\n\n回复「允许」让它做这一次，「拒绝」不让它做。", true
+		return head + "要你批准「" + toolName(ix) + "」：\n" + Clip(what, 1500) + "\n\n回复「允许」让它做这一次，「拒绝」不让它做。", true
 	case ix.Kind == proto.IxPlan:
-		return head + "Agent 写好了计划：\n\n" + clip(ix.Plan, 3000) +
+		return head + "Agent 写好了计划：\n\n" + Clip(ix.Plan, 3000) +
 			"\n\n回复 1 批准并自动执行，2 批准、改文件时自动同意，「拒绝」打回；也可以直接写要改什么，会打回并带上你的话。", true
 	case ix.Kind == proto.IxQuestion && len(ix.Questions) > 0:
-		return head + questionText(a, 0), true
+		return head + QuestionText(a, 0), true
 	case ix.Kind == proto.IxScreen && ix.Dialog != nil && len(ix.Dialog.Options) > 0 && !ix.Dialog.Multi:
+		a.Options = nil
 		var lines []string
 		for i, o := range ix.Dialog.Options {
 			a.Options = append(a.Options, o.Key)
@@ -140,12 +75,13 @@ func promptFor(ix *proto.Interaction, a *ask) (string, bool) {
 		if ix.Dialog.Detail != "" {
 			q = strings.TrimSpace(ix.Dialog.Detail) + "\n" + q
 		}
-		return head + "终端里在问：\n" + clip(q, 1500) + "\n" + strings.Join(lines, "\n") + "\n\n回复序号。", true
+		return head + "终端里在问：\n" + Clip(q, 1500) + "\n" + strings.Join(lines, "\n") + "\n\n回复序号。", true
 	}
-	return head + "有 Agent 在等你处理：" + firstLine(ix.Summary) + "\n这种要在 App 里处理。", false
+	return head + "有 Agent 在等你处理：" + FirstLine(ix.Summary) + "\n这种要在 App 里处理。", false
 }
 
-func questionText(a *ask, i int) string {
+// QuestionText asks a's question i.
+func QuestionText(a *Ask, i int) string {
 	q := a.Questions[i]
 	var b strings.Builder
 	if len(a.Questions) > 1 {
@@ -173,67 +109,6 @@ func questionText(a *ask, i int) string {
 	return b.String()
 }
 
-// answerAsk takes the owner's message as the answer to the latest thing asked; false when nothing waits (or what
-// waited was answered elsewhere): the message is then an ordinary one.
-func (b *Bot) answerAsk(ctx context.Context, c *ilink.Client, creds ilink.Credentials, m ilink.Message, text string) bool {
-	if text == "" {
-		return false
-	}
-	b.mu.Lock()
-	waiting := len(b.st.Asks) > 0
-	b.mu.Unlock()
-	if !waiting {
-		return false
-	}
-	pending, err := b.opt.Hub.Interactions(ctx)
-	if err != nil {
-		return false
-	}
-	b.mu.Lock()
-	b.st.Asks = slices.DeleteFunc(b.st.Asks, func(a *ask) bool {
-		return !slices.ContainsFunc(pending, func(ix proto.Interaction) bool { return ix.ID == a.ID })
-	})
-	if len(b.st.Asks) == 0 {
-		b.saveLocked(ctx)
-		b.mu.Unlock()
-		return false
-	}
-	a := b.st.Asks[len(b.st.Asks)-1]
-	b.mu.Unlock()
-	reply := func(s string) { b.send(ctx, c, m.From, m.ContextToken, s) }
-
-	r, done, again := resolution(a, text)
-	if again != "" {
-		reply(again)
-		b.save(ctx)
-		return true
-	}
-	if !done {
-		b.save(ctx) // a question answered, the next one asked
-		reply(questionText(a, a.Step))
-		return true
-	}
-	err = b.opt.Hub.Resolve(ctx, a.ID, r)
-	b.mu.Lock()
-	b.st.Asks = slices.DeleteFunc(b.st.Asks, func(x *ask) bool { return x.ID == a.ID })
-	left := len(b.st.Asks)
-	b.saveLocked(ctx)
-	b.mu.Unlock()
-	switch {
-	case errors.Is(err, errGone):
-		reply("这个已经在别处处理过了。")
-	case err != nil:
-		reply("没答上：" + err.Error())
-	default:
-		reply(answered(a, r))
-	}
-	if left > 0 {
-		reply(fmt.Sprintf("还有 %d 个在等你回复，最近的那个是上面倒数第二条。", left))
-	}
-	b.poke()
-	return true
-}
-
 var (
 	yes   = []string{"允许", "同意", "确认", "可以", "好", "好的", "行", "y", "yes", "ok", "allow"}
 	no    = []string{"拒绝", "不允许", "不同意", "不行", "不要", "取消", "n", "no", "deny"}
@@ -245,9 +120,10 @@ func is(text string, words []string) bool {
 	return slices.Contains(words, t)
 }
 
-// resolution reads text as the answer to a: the resolution once complete (done), or what to say when text does not
-// answer it (again). A question of several takes one answer per message: a.Step moves on.
-func resolution(a *ask, text string) (r proto.Resolution, done bool, again string) {
+// ReadAnswer reads text as the answer to a: the resolution once complete (done), or what to say when text does not
+// answer it (again). A question of several takes one answer per message: a.Step moves on, and the caller asks
+// QuestionText(a, a.Step) next.
+func ReadAnswer(a *Ask, text string) (r proto.Resolution, done bool, again string) {
 	t, f := true, false
 	switch a.Kind {
 	case proto.IxPermission:
@@ -316,7 +192,8 @@ func optionAnswer(q proto.Question, text string) string {
 	return strings.Join(labels, ", ")
 }
 
-func answered(a *ask, r proto.Resolution) string {
+// Answered is the line saying what a reply did.
+func Answered(r proto.Resolution) string {
 	switch {
 	case r.Allow != nil && *r.Allow:
 		return "已允许。"
@@ -332,7 +209,7 @@ func answered(a *ask, r proto.Resolution) string {
 	return "已回答。"
 }
 
-func toolName(ix *proto.Interaction) string {
+func toolName(ix proto.Interaction) string {
 	if ix.ToolName != "" {
 		return ix.ToolName
 	}
@@ -350,15 +227,17 @@ func toolBrief(input json.RawMessage) string {
 			return s
 		}
 	}
-	return clip(string(input), 300)
+	return Clip(string(input), 300)
 }
 
-func firstLine(s string) string {
+// FirstLine is s's first line, clipped.
+func FirstLine(s string) string {
 	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
-	return clip(line, 200)
+	return Clip(line, 200)
 }
 
-func clip(s string, n int) string {
+// Clip is s cut to n runes, with an ellipsis when cut.
+func Clip(s string, n int) string {
 	r := []rune(strings.TrimSpace(s))
 	if len(r) <= n {
 		return string(r)

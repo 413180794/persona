@@ -159,14 +159,14 @@ func (b *Bot) forgetQR(p *pendingQR) {
 	b.mu.Unlock()
 }
 
-// bound keeps the new credentials and starts serving them. The same bot (bound again) keeps its cursor and turns;
-// another starts fresh.
+// bound keeps the new credentials and starts serving them. The same bot (bound again) keeps its cursor; another
+// starts fresh.
 func (b *Bot) bound(ctx context.Context, creds ilink.Credentials) connector.Prompt {
 	b.mu.Lock()
 	if old := b.st.Creds; old != nil {
 		b.st.Old = rememberToken(b.st.Old, old.Token)
 		if old.BotID != creds.BotID || old.UserID != creds.UserID {
-			b.st.Cursor, b.st.Context, b.st.Runs, b.st.Asks, b.st.Target = "", "", nil, nil, target{}
+			b.st.Cursor, b.st.Context = "", ""
 		}
 	}
 	b.st.Creds = &creds

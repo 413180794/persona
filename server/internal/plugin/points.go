@@ -11,6 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -460,6 +461,15 @@ var Points = map[string]Point{
 			return c.ID, fmt.Errorf("browser id %q: a-z0-9_-", c.ID)
 		}
 		return c.ID, nil
+	}},
+	// channel: a way to talk to Persona, a chat app's bot (docs/channels.md「插件怎么贡献渠道」). The hub follows the
+	// turns; the program only talks to the chat app.
+	"channel": {Name: "channel", Namespace: "channel", Version: 1, NeedsRPC: true, Item: func(raw json.RawMessage) (string, error) {
+		var c channel.Item
+		if err := strict(raw, &c); err != nil {
+			return "", err
+		}
+		return c.ID, c.Validate()
 	}},
 	"computer": {Name: "computer", Namespace: "computer", Version: 1, Item: func(raw json.RawMessage) (string, error) {
 		var c ComputerItem

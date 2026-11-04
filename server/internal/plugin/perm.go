@@ -100,6 +100,14 @@ func Explain(m *Manifest) []PermissionLine {
 	if m.Permissions.LauncherKeys {
 		out = append(out, launcherKeys)
 	}
+	if chans := m.Channels(); len(chans) > 0 {
+		var names []string
+		for _, c := range chans {
+			names = append(names, c.Name)
+		}
+		out = append(out, PermissionLine{Key: "channel", Title: "作为和 Persona 对话的渠道",
+			Detail: "把你在" + strings.Join(names, "、") + "里发给它的消息交给 Persona，再把回答和 Agent 的提问发回给你"})
+	}
 	if topics := m.Topics(); len(topics) > 0 {
 		var what []string
 		for _, t := range topics {

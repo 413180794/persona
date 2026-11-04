@@ -107,8 +107,9 @@ type botThread struct {
 type botState struct {
 	Current botTarget             `json:"current"`
 	Threads map[string]*botThread `json:"threads,omitempty"`
-	Runs    []*botRun             `json:"runs,omitempty"`
-	Seen    []string              `json:"seen,omitempty"`
+	// Runs are an older hub's turns being answered: moved to the channels' state at start (migrateBotRuns).
+	Runs []*botRun `json:"runs,omitempty"`
+	Seen []string  `json:"seen,omitempty"`
 }
 
 const (
@@ -126,12 +127,9 @@ type botHub struct {
 	stop   context.CancelFunc
 	info   feishubot.BotInfo
 	base   context.Context
-	cards  map[string]botCard      // interaction id -> the card asking it
-	told   map[string]time.Time    // sender -> when the bot last told them it is not theirs / not paired
-	names  map[string]string       // open id -> name
-	live   map[string]*botProgress // run id -> its live progress (not persisted)
-	// answered: conversation -> when its last run was answered (no "finished" push, no mirror for it)
-	answered map[string]time.Time
+	cards  map[string]botCard   // interaction id -> the card asking it
+	told   map[string]time.Time // sender -> when the bot last told them it is not theirs / not paired
+	names  map[string]string    // open id -> name
 	// now and post are replaced in tests.
 	now func() time.Time
 }
@@ -230,6 +228,10 @@ func (h *Hub) startBots(ctx context.Context) {
 	h.bots.base = ctx
 	h.loadBotsLocked(ctx)
 	h.bots.mu.Unlock()
+	h.migrateBotRuns(ctx)
+	h.channels.mu.Lock()
+	h.loadChannelsLocked(ctx) // the conversations' channels (decorated)
+	h.channels.mu.Unlock()
 	h.restartBot()
 	go h.botLoop(ctx)
 }
@@ -279,9 +281,7 @@ func (h *Hub) restartBot() {
 		b.mu.Unlock()
 	}()
 	// Turns that were being answered when the hub stopped: watch them again.
-	for _, r := range b.st.Runs {
-		go h.watchRun(r)
-	}
+	go h.sweepChannelRuns()
 }
 
 // botAPI is the client while the bot is on and paired (nil otherwise), with the settings it runs under (a copy).
@@ -408,39 +408,61 @@ func (h *Hub) botRoutes(api *http.ServeMux) {
 		b := &h.bots
 		b.mu.Lock()
 		h.loadBotsLocked(r.Context())
-		n, _ := rand.Int(rand.Reader, big.NewInt(900000))
-		b.set.Pairing = &botPairing{Code: fmt.Sprintf("%06d", 100000+n.Int64()), Expires: b.clock().Add(botPairFor)}
+		b.set.Pairing = &botPairing{Code: botPairCode(), Expires: b.clock().Add(botPairFor)}
 		h.saveBotSettingsLocked()
 		b.mu.Unlock()
 		writeJSON(w, h.botView(r.Context()))
 	})
 	api.HandleFunc("DELETE /api/v1/bots/feishu/owner", func(w http.ResponseWriter, r *http.Request) {
-		b := &h.bots
-		b.mu.Lock()
-		h.loadBotsLocked(r.Context())
-		b.set.Owner, b.set.Pairing = nil, nil
-		b.st = botState{Current: botTarget{Kind: targetMain}, Threads: map[string]*botThread{}, Seen: b.st.Seen}
-		h.saveBotSettingsLocked()
-		h.saveBotStateLocked()
-		b.mu.Unlock()
+		h.unpairBot(r.Context())
 		writeJSON(w, h.botView(r.Context()))
 	})
 	// test: a message to the owner, to see that the bot reaches them.
 	api.HandleFunc("POST /api/v1/bots/feishu/test", func(w http.ResponseWriter, r *http.Request) {
-		api, set := h.botAPI()
-		if api == nil {
-			writeErr(w, http.StatusConflict, errors.New("机器人没打开或还没配对"))
-			return
-		}
-		card := feishubot.NewCard("", "", "测试消息").Markdown("这是来自 Persona 的测试消息：机器人能联系到你。")
 		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 		defer cancel()
-		if _, err := h.botPost(ctx, api, set.Owner.ChatID, "", card, ""); err != nil {
-			writeErr(w, http.StatusBadGateway, err)
+		if err := h.testFeishuBot(ctx); err != nil {
+			code := http.StatusBadGateway
+			if errors.Is(err, errBotOff) {
+				code = http.StatusConflict
+			}
+			writeErr(w, code, err)
 			return
 		}
 		writeJSON(w, map[string]any{"ok": true})
 	})
+}
+
+// botPairCode is a new six-digit pairing code.
+func botPairCode() string {
+	n, _ := rand.Int(rand.Reader, big.NewInt(900000))
+	return fmt.Sprintf("%06d", 100000+n.Int64())
+}
+
+// unpairBot forgets the owner (and the chat's state).
+func (h *Hub) unpairBot(ctx context.Context) {
+	b := &h.bots
+	b.mu.Lock()
+	h.loadBotsLocked(ctx)
+	b.set.Owner, b.set.Pairing = nil, nil
+	b.st = botState{Current: botTarget{Kind: targetMain}, Threads: map[string]*botThread{}, Seen: b.st.Seen}
+	h.saveBotSettingsLocked()
+	h.saveBotStateLocked()
+	b.mu.Unlock()
+	h.forgetChannelTurns(feishuChannelID)
+}
+
+var errBotOff = errors.New("机器人没打开或还没配对")
+
+// testFeishuBot sends the owner a card.
+func (h *Hub) testFeishuBot(ctx context.Context) error {
+	api, set := h.botAPI()
+	if api == nil {
+		return errBotOff
+	}
+	card := feishubot.NewCard("", "", "测试消息").Markdown("这是来自 Persona 的测试消息：机器人能联系到你。")
+	_, err := h.botPost(ctx, api, set.Owner.ChatID, "", card, "")
+	return err
 }
 
 // updateBot applies the app's changes; new credentials are tried (the bot's info) before they are saved.
@@ -516,7 +538,7 @@ func (h *Hub) updateBot(ctx context.Context, enabled *bool, appID, secret, domai
 	return nil
 }
 
-// botLoop sweeps: turns whose end was missed, pairings that expired.
+// botLoop sweeps: turns whose end was missed (every channel's, channels_runs.go).
 func (h *Hub) botLoop(ctx context.Context) {
 	t := time.NewTicker(5 * time.Second)
 	defer t.Stop()
@@ -526,6 +548,6 @@ func (h *Hub) botLoop(ctx context.Context) {
 			return
 		case <-t.C:
 		}
-		h.sweepBotRuns(ctx)
+		h.sweepChannelRuns()
 	}
 }

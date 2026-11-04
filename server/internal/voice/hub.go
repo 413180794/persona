@@ -3,6 +3,8 @@ package voice
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -111,7 +113,8 @@ func (h *hubClient) session(ctx context.Context, machine, id string) (*proto.Ses
 
 func (h *hubClient) send(ctx context.Context, machine, session, text string) error {
 	path := "/api/v1/sessions/" + url.PathEscape(machine) + "/" + url.PathEscape(session) + "/messages"
-	return h.call(ctx, "POST", path, map[string]string{"text": text}, nil)
+	// voice-…: the conversation shows it came by voice (docs/channels.md「来源标记」); a send only once.
+	return h.call(ctx, "POST", path, map[string]string{"text": text, "client_msg_id": "voice-" + randomID()}, nil)
 }
 
 // assistant: where the Persona tab's assistant runs and its main conversation (empty until there is one).
@@ -139,4 +142,10 @@ func (h *hubClient) startMain(ctx context.Context, prompt string) (string, error
 		return "", err
 	}
 	return out.Session.SessionID, nil
+}
+
+func randomID() string {
+	var b [8]byte
+	_, _ = rand.Read(b[:])
+	return hex.EncodeToString(b[:])
 }

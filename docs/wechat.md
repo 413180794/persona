@@ -9,22 +9,25 @@ Persona 和它驱动的 Agent 要用户回答、批准的，以文字发到微�
 ## 为什么做成插件
 
 只对一个服务有意义的东西做成插件（`docs/plugins.md`），不往 hub 里加：它是 personad 旁边的单独程序 `jarvisd-wechat`，和 Telegram 的一样注册成**内置插件**
-`wechat`（同一次构建发布、自动更新时一起换，`version -v` 和 hub 不一样就不启动），用插件底座现有的扩展点拼起来，hub 里没有任何微信的逻辑：
+`wechat`（同一次构建发布、自动更新时一起换，`version -v` 和 hub 不一样就不启动）。它是一个**渠道**（`docs/channels.md`）：程序只管和微信说话，
+「消息进哪个对话、等这一轮答完、答案发回、Agent 的提问」都是 hub 的统一管线（和飞书机器人是同一份）。
 
 | 要做的事 | 用什么 |
 | --- | --- |
-| 扫码绑定、设置里的状态和开关 | 扩展点 `connectors`，连接器 `wechat` 只有 `status` + `login` 两个能力；登录是二维码步骤（`kind: qr`，#1351） |
-| 存 token、游标、在等的回答 | `connector.secrets`（hub 用 `secret.key` 加密存数据库），整份一个 JSON |
-| 把微信消息发给主对话、拿回答、回答提问 | 权限 `hub_api`：程序拿到 hub 的地址和 token，走 hub 的 HTTP API（和语音插件一样） |
-| 知道 Agent 在问什么、哪一轮做完了 | 扩展点 `events`：`agent.needs_you`、`agent.finished` |
+| 扫码绑定、设置里的状态和开关 | 扩展点 `connectors`，连接器 `wechat` 只有 `status` + `login` 两个能力；登录是二维码步骤（`kind: qr`，#1351）。设置 › 插件 › 渠道 › 微信 里的「绑定」走的是同一个登录 |
+| 存 token、游标、主人最新的 `context_token` | `connector.secrets`（hub 用 `secret.key` 加密存数据库），整份一个 JSON |
+| 把主人的消息交给 hub、把 hub 给的话发回微信、「正在输入」 | 扩展点 `channel`（#1466）：程序调 hub 的 `channel.receive`，hub 调程序的 `channel.send`、`channel.typing` |
 | 访问微信 | 权限 `network: *.weixin.qq.com`（展示用，hub 暂不拦截） |
 
-进程跟着连接器的开关跑（和 Telegram 一样）：开着才收微信消息，也才收到事件。所以清单里虽然订了事件，却不写 `on_startup`——内置插件不过安装时的
-校验，这是有意的：关掉开关就该完全停下。
+第一版（#1447）用 `hub_api` + `events` 拼：插件拿着 hub 的 token 每 2 秒轮询会话、自己跟踪这一轮、自己把提问写成文字。#1466 把这些搬进 hub 的渠道管线，
+插件不再拿 hub 的 token、不订事件；原来存在插件状态里的「发到哪段对话」、在等的回答和提问，hub 第一次启动新版本时搬过去（`hub/channels_migrate.go`），已经绑定的不用重新扫码。
+
+进程跟着连接器的开关跑：开着才收微信消息。
 
 代码：程序入口 `server/cmd/personad-wechat`（旧名 `jarvisd-wechat` 是别名）；iLink 协议 `server/internal/wechat/ilink`（不存状态、不打日志，只认腾讯的
-HTTPS 源）；机器人 `server/internal/wechat`（`wechat.go` 主循环和存储、`login.go` 扫码、`chat.go` 消息和命令、`turns.go` 跟踪回答、`asks.go` 提问和批准、
-`hub.go` 调 hub）；hub 的注册 `server/internal/hub/wechat.go`；声明 `server/internal/wechat/spec`；发给主对话时加的说明 `server/internal/prompts/wechat/message.md`。
+HTTPS 源）；机器人 `server/internal/wechat`（`wechat.go` 主循环和存储、`login.go` 扫码、`chat.go` 收消息、发消息、「正在输入」）；声明 `server/internal/wechat/spec`
+（连接器和渠道）；hub 的注册 `server/internal/hub/wechat.go`。管线在 `server/internal/hub/channels*.go`，规则在 `server/internal/channel`，
+发给对话时加的说明 `server/internal/prompts/channel/message.md`。
 
 ## 绑定
 
@@ -38,24 +41,19 @@ HTTPS 源）；机器人 `server/internal/wechat`（`wechat.go` 主循环和存�
 
 ## 一条消息怎么走
 
-1. 长轮询 `getupdates`（游标存在 secrets 里，重启接着收），按消息 id 去重（留最近 200 个）。记下主人最新一条消息的 `context_token`：iLink 发任何消息都要它。
-2. `/` 开头的先当命令（下面），不认识的原样发过去（可能是对话自己的，比如 `/compact`）。
-3. 有提问在等回答，而且它还在 hub 的待处理列表里：这条消息是回答（见「提问和批准」）。在 App 里答过了的就放掉，这条当普通消息。
-4. 发给当前目标：主对话（没有就新开一个设为主对话），或 `/new` 开的对话。文字前面加一段 `<jarvis-context>` 说明「回答会发回微信，纯文字、结论先行」
-   （提示词 `wechat/message.md`）；引用的消息放进另一段 `<jarvis-context>`；图片（最多 4 张）解密后作为图片附件；语音用微信自己的转写；
-   文件、视频还转不了，在消息里写明「发来了文件「…」，机器人还不能转交」。`client_msg_id` 是 `wechat-<消息 id>`：重投的消息不会发两遍。
-5. 跟踪回答：每 2 秒看一次会话，规则照飞书机器人（`hub/bots_runs.go`）：
-   - 先按 `client_msg_id`（老 node 没有时按消息开头的一段字）在 transcript 里找到这条消息，取它后面最后一次工具调用之后的回答；
-   - 会话在工作（或在等你回答）就等；20 秒都没看到它工作才开始找回答；10 分钟还找不到这条消息才退回取最后的话；
-   - 同一段对话还没答完又发了一条：两条合成一个回答；
-   - 后台还有任务：先答一次并说「后台还有 N 个任务在跑，做完再告诉你」，等后台回报的那一轮结束再答一次（最多再等 2 小时）；
-   - 4 小时还没完就不等了，说一声到 App 里看。
-   - 处理期间微信里显示「对方正在输入」（每 5 秒续一次）。
-6. 回答发回微信：去掉微信显示不好的 Markdown（图片、删除线、五六级标题，中文上的斜体；粗体和代码保留），按 3500 字拆成几条，不在代码块中间断开。
+1. 程序长轮询 `getupdates`（游标存在 secrets 里，重启接着收），按消息 id 去重（留最近 200 个）。记下主人最新一条消息的 `context_token`：iLink 发任何消息都要它。
+   别人发来的只回一句「这个机器人只为绑定它的人服务。」，不交给 hub。
+2. 主人的消息整理成 `channel.Message` 交给 hub（`channel.receive`）：文字（语音用微信自己的转写）、引用、图片（最多 4 张，解密后）；
+   文件、视频还转不了，写进 `unsupported`（「文件「…」」）。
+3. 之后都是 hub 的（`docs/channels.md`「一条消息怎么走」）：去重、命令、回答在等的提问、发进主对话或 `/new` 开的对话（`client_msg_id` 是 `wechat-<消息 id>`）、
+   跟踪这一轮（找到这条消息、等它答完、后台任务答两次、合并、超时）、处理期间每 5 秒叫程序「正在输入」。
+4. 答案发回：hub 按 3500 字拆好发给程序（`channel.send`），程序去掉微信显示不好的 Markdown（图片、删除线、五六级标题，中文上的斜体；粗体和代码保留）再发。
+   主人还没发过消息（没有 `context_token`）时程序回 `cannot_send`。
 
 ## 提问和批准
 
-微信没有卡片。Agent（主对话，或微信正在驱动的对话）要你回答、批准时（事件 `agent.needs_you`），把卡片写成文字发到微信，你的下一条消息就是回答：
+微信没有卡片（渠道的能力 `asks: text`）。Agent（主对话，或微信正在驱动的对话）要你回答、批准时，hub 把卡片写成文字发到微信，你的下一条消息就是回答
+（`channel.AskText` / `channel.ReadAnswer`）：
 
 | 卡片 | 微信里怎么答 |
 | --- | --- |
@@ -71,28 +69,31 @@ HTTPS 源）；机器人 `server/internal/wechat`（`wechat.go` 主循环和存�
 
 ## 命令
 
-`/help`、`/new [第一句话]`（之后的消息发给新开的对话）、`/main`（回到主对话）、`/stop`（停下当前目标这一轮，不再等它的回答）、`/status`（发给谁、在等几个回答、几个问题）。
+hub 的渠道管线统一实现：`/help`、`/new [第一句话]`（之后的消息发给新开的对话）、`/main`（回到主对话）、`/stop`（停下当前目标这一轮，不再等它的回答）、
+`/status`（发给谁、在等几个回答、几个问题）。「消息发到」也能在 设置 › 插件 › 渠道 › 微信 里选。
 
 ## 和飞书机器人比
 
 | | 飞书机器人（`docs/bots.md`） | 微信机器人（这里） |
 | --- | --- | --- |
-| 在哪 | hub 里（`hub/bots*.go`） | 内置插件，单独的程序，经 hub 的 API |
+| 在哪 | hub 里（`hub/bots*.go`） | 内置插件，单独的程序，只管和微信说话（`channel` 扩展点） |
+| 跟踪这一轮 | hub 的渠道管线（同一份，`hub/channels_runs.go`） | 同左 |
 | 绑定 | 填自建应用的 App ID / Secret，再发配对码 | 扫码 |
 | 提问和批准 | 卡片按钮 | 文字往返 |
 | 进度 | 进度卡片 | 「对方正在输入」 |
 | 驱动各台电脑上的 Agent（`/agents`） | 有 | 没有（第一版） |
-| 从微信发起的一轮还推手机通知 | 不推 | 照推（插件改不了 hub 的推送） |
+| 从这里发起的一轮还推手机通知 | 不推 | 不推（#1466 起和飞书机器人一样） |
+| 推送 / 同步主对话 | `pushes` / `sync` | 同样的两个开关（渠道设置里，默认关） |
 
 ## 不做（第一版）
 
-群聊（iLink 只有和机器人的私聊）、发语音和文件、微信消息进收件箱 / 知识库、`notify_user` 主动推到微信、`/agents`。
+群聊（iLink 只有和机器人的私聊）、发语音和文件、微信消息进收件箱 / 知识库、`/agents`。
 
 ## 验证
 
 - `go test ./internal/wechat/...`：iLink 协议对着假的 iLink 服务器（扫码各状态、跳转只认腾讯的源、长轮询超时、被顶号、加解密、Markdown 过滤和拆分）；
-  机器人对着假的 iLink 和假的 hub 跑完整链路（绑定、消息进主对话和回答发回、陌生人、`/new` `/stop` `/main`、没有主对话时新开、批准、几个问题一个个答、
-  在 App 里答过、别的 Agent 不打扰、后台任务答两次、被顶号解绑、图片和文件、重投去重）；连接器一致性测试。
-- `go test ./internal/hub -run WeChat`：hub 注册的清单（连接器、事件、权限）和程序对着插件协议的一致性测试。
+  程序对着假的 iLink 和假的 hub（绑定、主人的消息交给 hub、陌生人、被顶号解绑、图片和文件、重投去重、没有 `context_token` 时 `cannot_send`、「正在输入」）；连接器一致性测试。
+- `go test ./internal/hub -run 'WeChat|Channel'`：hub 注册的清单（连接器、渠道、权限）、程序对着插件协议和渠道协议的一致性测试（`channel/conformance`）、
+  统一管线对着假的渠道程序和假的 node（消息进主对话和回答发回、拆分、去重、文字审批、在 App 里答过、发不出去、命令、目标）、旧状态的迁移。
 - App：`MOCK_WECHAT=signed_out` 的假 hub 跑 `QRSignInTests`（`docs/testing.md`）。
 - 真实的微信：要用户自己的微信扫码，CI 和单元测试都覆盖不到，部署后在用户的 hub 上实测。

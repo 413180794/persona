@@ -94,6 +94,7 @@ func (h *Hub) runAssistantTool(ctx context.Context, m *Machine, sessionID, name 
 		}
 		h.notifyDone("assistant", m.cfg.ID, "Persona", sessionID, a.Title, a.Body, pushWants{}) // asked for explicitly: every device
 		h.botPush(m.cfg.ID, sessionID, a.Title, a.Body)
+		h.channelPush(a.Title, a.Body)
 		h.mu.Lock()
 		h.notified[sessionID] = time.Now()
 		h.mu.Unlock()

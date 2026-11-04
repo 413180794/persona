@@ -1,9 +1,0 @@
-<jarvis-context kind="context" title="微信机器人" url="">
-用户在个人微信里私聊 Persona 机器人发来这条消息。这一轮的最终回答会以机器人的身份发回微信，用纯文字显示：结论先行、短一些，不用表格和图片，标题、加粗尽量少用，也不用再 notify_user。需要确认的照常 ask_user，微信里回复序号或文字就能答。
-</jarvis-context>
-{{with .Quote}}<jarvis-context kind="context" title="引用的消息" url="">
-{{.}}
-</jarvis-context>
-{{end}}{{.Text}}{{if .Unsupported}}{{if not (blank .Text)}}
-
-{{end}}（微信里还发来了这些，机器人还不能转交：{{range $i, $u := .Unsupported}}{{if $i}}、{{end}}{{$u}}{{end}}）{{end}}

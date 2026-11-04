@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/agents"
+	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/proc"
 	"github.com/nwverse/persona/server/internal/connector/serve"
@@ -279,6 +280,7 @@ func (h *Hub) attachPlugins(ctx context.Context) {
 	ps.mu.Lock()
 	ps.reg = reg
 	ps.mu.Unlock()
+	h.migrateWeChatState(ctx) // before its program starts (channels_migrate.go)
 	for _, p := range reg.List() {
 		if len(p.Manifest.Items("connectors")) > 0 {
 			ps.apply(ctx, p.Record.ID)
@@ -589,6 +591,9 @@ func (ps *plugins) spec(ctx context.Context, p *plugin.Plugin, hp *hubPlugin) (h
 				params.Active["connectors"] = append(params.Active["connectors"], c.ID)
 			}
 		}
+		for _, c := range m.Channels() {
+			params.Active["channel"] = append(params.Active["channel"], c.ID)
+		}
 		return params, nil
 	}
 	if builtin && (id == telegramPluginID || id == wechat.ID) && ps.h != nil {
@@ -622,6 +627,9 @@ func (ps *plugins) spec(ctx context.Context, p *plugin.Plugin, hp *hubPlugin) (h
 				return nil, &rpc.Error{Code: plugin.CodeNoContribution, Message: "no connector " + contributionOf(params)}
 			}
 			return c.Handle(ctx, rest, params)
+		}
+		if rest, ok := strings.CutPrefix(method, channel.Namespace+"."); ok && ps.h != nil {
+			return ps.h.pluginChannelCall(id, rest, params)
 		}
 		if method == "quota.http" || method == "gateway.http" {
 			return ps.quotaHTTP(ctx, id, params)

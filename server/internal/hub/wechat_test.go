@@ -8,6 +8,9 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/nwverse/persona/server/internal/channel"
+	chconf "github.com/nwverse/persona/server/internal/channel/conformance"
+
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
 	"github.com/nwverse/persona/server/internal/plugin"
@@ -16,8 +19,8 @@ import (
 	wechatspec "github.com/nwverse/persona/server/internal/wechat/spec"
 )
 
-// The WeChat plugin as the hub registers it: its connector (a status and a QR sign-in) known before the program runs,
-// the agents' events it hears, and the hub's API it may use.
+// The WeChat plugin as the hub registers it: its connector (a status and a QR sign-in) known before the program runs
+// and its channel; no hub token and no events any more (the hub's pipeline does that part).
 func TestWeChatBuiltin(t *testing.T) {
 	h := newTestHub(t)
 	reg := plugin.NewRegistry(t.TempDir(), nil, nil, 0)
@@ -35,10 +38,15 @@ func TestWeChatBuiltin(t *testing.T) {
 	if len(conns) != 1 || conns[0].ID != "wechat" || !slices.Equal(conns[0].Capabilities, []string{"status", "login"}) {
 		t.Fatalf("connectors %+v", conns)
 	}
-	if got := p.Manifest.Topics(); !slices.Equal(got, []string{"agent.finished", "agent.needs_you"}) {
+	if got := p.Manifest.Topics(); len(got) != 0 {
 		t.Fatalf("topics %v", got)
 	}
-	if !p.Record.Granted.HubAPI || !slices.Equal(p.Record.Granted.Network, []string{"*.weixin.qq.com"}) {
+	chans := p.Manifest.Channels()
+	if len(chans) != 1 || chans[0].ID != "wechat" || chans[0].Connector != "wechat" || chans[0].Capabilities.Asks != channel.AsksText ||
+		chans[0].Capabilities.Format != channel.FormatPlain || chans[0].Capabilities.MaxText != 3500 {
+		t.Fatalf("channel %+v", chans)
+	}
+	if p.Record.Granted.HubAPI || !slices.Equal(p.Record.Granted.Network, []string{"*.weixin.qq.com"}) {
 		t.Fatalf("granted %+v", p.Record.Granted)
 	}
 	if filepath.Base(p.Manifest.Runtime.Command.Path) != "jarvisd-wechat" {
@@ -54,16 +62,33 @@ func TestWeChatProgramIsAPlugin(t *testing.T) {
 	hubR, progW := io.Pipe()
 	exited := make(chan error, 1)
 	go func() {
-		exited <- serve.Main(context.Background(), progR, progW, func(_ json.RawMessage, s connector.Secrets) (connector.Connector, error) {
-			return wechat.New(wechat.Options{Hub: wechat.NewHub("http://127.0.0.1:1", "tok")}, s), nil
+		exited <- serve.MainWith(context.Background(), progR, progW, func(init serve.Init, s connector.Secrets) (connector.Connector, error) {
+			return wechat.New(wechat.Options{Hub: init.Channel}, s), nil
 		})
 		_ = progW.Close()
 	}()
 	res := conformance.Check(t, m, conformance.Run{ToProgram: hubW, FromProgram: hubR, Exited: exited},
-		plugin.InitializeParams{Plugin: plugin.PluginInfo{ID: m.ID, Version: m.Version}, Active: map[string][]string{"connectors": {"wechat"}}})
+		plugin.InitializeParams{Plugin: plugin.PluginInfo{ID: m.ID, Version: m.Version}, Active: map[string][]string{"connectors": {"wechat"}, "channel": {"wechat"}}})
 	var items []plugin.ConnectorItem
 	_ = json.Unmarshal(res.Contributes["connectors"], &items)
 	if len(items) != 1 || items[0].ID != "wechat" {
 		t.Fatalf("%+v", res)
 	}
+}
+
+// jarvisd-wechat's program as a channel (docs/channels.md「协议」): not bound, it has nowhere to send to yet.
+func TestWeChatProgramIsAChannel(t *testing.T) {
+	h := newTestHub(t)
+	m := wechatManifest(h, "/opt/persona/jarvisd-wechat")
+	progR, hubW := io.Pipe()
+	hubR, progW := io.Pipe()
+	exited := make(chan error, 1)
+	go func() {
+		exited <- serve.MainWith(context.Background(), progR, progW, func(init serve.Init, s connector.Secrets) (connector.Connector, error) {
+			return wechat.New(wechat.Options{Hub: init.Channel}, s), nil
+		})
+		_ = progW.Close()
+	}()
+	chconf.Check(t, m, conformance.Run{ToProgram: hubW, FromProgram: hubR, Exited: exited},
+		plugin.InitializeParams{Active: map[string][]string{"connectors": {"wechat"}, "channel": {"wechat"}}})
 }

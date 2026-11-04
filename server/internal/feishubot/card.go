@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"regexp"
 	"strings"
+
+	"github.com/nwverse/persona/server/internal/channel"
 )
 
 // Card is a message card (card JSON 2.0: Markdown with headings, tables and code blocks; Feishu 7.20 and later).
@@ -228,61 +230,8 @@ func Code(s string) string {
 	return "`" + s + "`"
 }
 
-// Split cuts long Markdown into pieces of at most n runes, at line breaks where it can and never inside a code
-// block without closing and reopening it.
-func Split(s string, n int) []string {
-	if len([]rune(s)) <= n {
-		return []string{s}
-	}
-	var out []string
-	var cur strings.Builder
-	curLen := 0
-	fence := ""
-	flush := func() {
-		if curLen == 0 {
-			return
-		}
-		piece := cur.String()
-		if fence != "" {
-			piece = strings.TrimRight(piece, "\n") + "\n```"
-		}
-		out = append(out, strings.TrimRight(piece, "\n"))
-		cur.Reset()
-		curLen = 0
-		if fence != "" {
-			cur.WriteString(fence + "\n")
-			curLen = len([]rune(fence)) + 1
-		}
-	}
-	room := n - 8 // what a closing fence takes
-	for _, line := range strings.SplitAfter(s, "\n") {
-		runes := []rune(line)
-		if curLen+len(runes) > room {
-			flush()
-		}
-		for curLen+len(runes) > room { // one line longer than a piece: cut it
-			cut := room - curLen
-			cur.WriteString(string(runes[:cut]))
-			curLen += cut
-			runes = runes[cut:]
-			flush()
-		}
-		cur.WriteString(string(runes))
-		curLen += len(runes)
-		if t := strings.TrimSpace(string(runes)); strings.HasPrefix(t, "```") {
-			if fence == "" {
-				fence = string([]rune(t)[:min(len([]rune(t)), 20)]) // reopened on every piece: keep it short
-			} else {
-				fence = ""
-			}
-		}
-	}
-	if curLen > 0 {
-		fence = ""
-		out = append(out, strings.TrimRight(cur.String(), "\n"))
-	}
-	return out
-}
+// Split cuts long Markdown into pieces of at most n runes (channel.Split).
+func Split(s string, n int) []string { return channel.Split(s, n) }
 
 // PostMarkdown is a rich-text message whose one paragraph is Markdown: what is sent when a card is refused.
 func PostMarkdown(md string) string {

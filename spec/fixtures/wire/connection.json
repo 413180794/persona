@@ -51,6 +51,7 @@
         "desktops",
         "sessions_delta",
         "connectors",
+        "channels",
         "runtime_cli"
       ],
       "fp": "",
@@ -114,6 +115,7 @@
           "desktops",
           "sessions_delta",
           "connectors",
+          "channels",
           "runtime_cli"
         ],
         "/type": "hello"
@@ -169,6 +171,7 @@
         "desktops",
         "sessions_delta",
         "connectors",
+        "channels",
         "runtime_cli"
       ],
       "fp": "",
@@ -223,6 +226,7 @@
           "desktops",
           "sessions_delta",
           "connectors",
+          "channels",
           "runtime_cli"
         ],
         "/ok": true,

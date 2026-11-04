@@ -1,12 +1,11 @@
 // jarvisd-wechat is the WeChat plugin as a program of its own (docs/wechat.md): the hub starts it as a built-in plugin
-// and talks to it over stdin / stdout; it reaches the hub's API with the address and token the hub hands it (hub_api).
+// and talks to it over stdin / stdout, as its connector and its channel (docs/channels.md).
 // It is built, released and updated together with jarvisd, and the hub runs it only when its build is the hub's own
 // (`version -v`).
 package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,7 +16,6 @@ import (
 
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
-	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/update"
 	"github.com/nwverse/persona/server/internal/wechat"
 )
@@ -48,15 +46,10 @@ func main() {
 	}
 	_ = commit
 	log.SetFlags(0) // the hub prefixes each line it keeps
-	hubURL, token := identity.Getenv("PERSONA_HUB_URL"), identity.Getenv("PERSONA_HUB_TOKEN")
-	if hubURL == "" || token == "" {
-		log.Printf("no hub address or token (the plugin needs hub_api)")
-	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	hub := wechat.NewHub(hubURL, token)
-	err := serve.Main(ctx, os.Stdin, os.Stdout, func(_ json.RawMessage, secrets connector.Secrets) (connector.Connector, error) {
-		return wechat.New(wechat.Options{Hub: hub, Agent: "Persona/" + version}, secrets), nil
+	err := serve.MainWith(ctx, os.Stdin, os.Stdout, func(init serve.Init, secrets connector.Secrets) (connector.Connector, error) {
+		return wechat.New(wechat.Options{Hub: init.Channel, Agent: "Persona/" + version}, secrets), nil
 	})
 	if err != nil && ctx.Err() == nil && !errors.Is(err, io.EOF) { // EOF: the hub went away
 		log.Printf("stopped: %v", err)

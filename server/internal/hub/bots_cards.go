@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/feishubot"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -36,13 +37,13 @@ func (h *Hub) botInteraction(ix proto.Interaction) {
 		b.cards = map[string]botCard{}
 	}
 	b.cards[ix.ID] = botCard{} // claimed: a second announce of the same card does not post twice
+	b.mu.Unlock()
 	reply := ""
-	for _, r := range b.st.Runs {
-		if r.Target.MachineID == ix.MachineID && r.Target.SessionID == ix.SessionID {
-			reply = r.MessageID
+	for _, r := range h.channelRuns(feishuChannelID) {
+		if r.MachineID == ix.MachineID && r.SessionID == ix.SessionID {
+			reply = r.ReplyTo
 		}
 	}
-	b.mu.Unlock()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
@@ -67,21 +68,19 @@ func (h *Hub) botInteraction(ix proto.Interaction) {
 func (h *Hub) botDrives(machine, session string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	b := &h.bots
-	b.mu.Lock()
-	cur := b.st.Current
-	for _, r := range b.st.Runs {
-		if r.Target.MachineID == machine && r.Target.SessionID == session {
-			b.mu.Unlock()
+	for _, r := range h.channelRuns(feishuChannelID) {
+		if r.MachineID == machine && r.SessionID == session {
 			return true
 		}
 		// The hub's own approvals (mail_send) do not name the conversation: one on the assistant's machine while a
 		// Persona run goes on is most likely that run's.
-		if session == "" && !r.Target.agent() && r.Target.MachineID == machine {
-			b.mu.Unlock()
+		if session == "" && r.TargetKind != targetAgent && r.MachineID == machine {
 			return true
 		}
 	}
+	b := &h.bots
+	b.mu.Lock()
+	cur := b.st.Current
 	for _, t := range b.st.Threads {
 		if t.Target.MachineID == machine && t.Target.SessionID == session && b.clock().Sub(t.At) < 24*time.Hour {
 			b.mu.Unlock()
@@ -574,7 +573,8 @@ func (h *Hub) botStartAgent(machine, cwd, prompt, cardID string) {
 	}
 	h.rememberBotThread(mid, t, label)
 	if prompt != "" && mid != "" {
-		h.startRun(&botRun{ID: "fb_" + mid, MessageID: mid, Target: t, Label: label, StartedAt: time.Now().UTC()})
+		h.startChannelRun(&channel.Run{ID: "fb_" + mid, Channel: feishuChannelID, ReplyTo: mid, MachineID: t.MachineID, SessionID: t.SessionID,
+			TargetKind: t.Kind, Label: label, Started: time.Now().UTC()})
 	}
 }
 
@@ -653,7 +653,7 @@ func (h *Hub) botMirror(machine, session string) {
 	if strings.Contains(asked, "title=\"飞书机器人\"") {
 		return // its own message: answered by the run
 	}
-	parts := turnAnswer(res.Items)
+	parts := channel.Answer(res.Items)
 	if len(parts) == 0 {
 		return
 	}

@@ -8867,6 +8867,173 @@ class H(BaseHTTPRequestHandler):
         self.close_connection = True
 
 
+# ---------- MOCK_CHANNELS: 设置 › 插件 › 渠道 (docs/channels.md) ----------
+# MOCK_CHANNELS=1 lists the channels: the apps, the Feishu bot and WeChat bound, /agent off (hub.json's), a third-party
+# chat app's plugin channel waiting to be bound with a token, one broken, and one in a market not installed. Their
+# settings, binding (WeChat's QR code, the Feishu bot's pairing code, a token) and test messages live in memory. The
+# main conversation's first message came from WeChat (client_msg_id wechat-…) and conversations carry `channels`.
+CHANNELS_MODE = os.environ.get("MOCK_CHANNELS", "")
+_TEXT_CAPS = {"images_in": True, "voice_in": True, "format": "plain", "max_text": 3500, "asks": "text", "push": True, "typing": True}
+
+
+def _plugin_features(on):
+    return [{"id": "asks", "title": "提问和批准", "description": "它在驱动的对话（发到的对话、在等回答的）要你回答或批准时，发到这里", "on": on.get("asks", True)},
+            {"id": "all_asks", "title": "所有 Agent 的提问", "description": "各台电脑上所有 Agent 的提问和批准都发到这里", "on": on.get("all_asks", False)},
+            {"id": "pushes", "title": "推送也发到这里", "description": "通知推到手机的同时发一份；定时任务那段对话的回答也发", "on": on.get("pushes", False)},
+            {"id": "sync", "title": "同步主对话", "description": "主对话里不是从这里发起的一轮结束时，把回答发过来", "on": on.get("sync", False)}]
+
+
+CHANNELS = {
+    "app": {"id": "app", "name": "Persona", "kind": "app", "source": "builtin", "installed": True, "enabled": True, "state": "connected",
+            "bind": "none", "read_only": True, "description": "Persona 自己的各端：在哪一端说的话都进同一段对话，提问和批准在卡片上原地作答",
+            "surfaces": ["iPhone", "Mac", "Apple Watch", "Android", "网页", "Siri"],
+            "capabilities": {"images_in": True, "files_in": True, "voice_in": True, "format": "markdown", "asks": "buttons", "push": True,
+                             "typing": True, "progress": True}},
+    "feishu": {"id": "feishu", "name": "飞书机器人", "kind": "im", "source": "builtin", "installed": True, "enabled": True, "state": "connected",
+               "account": {"name": "示例用户"}, "bind": "fields", "last_event_at": ago(minutes=12),
+               "description": "私聊飞书自建应用的机器人：消息进主对话，回答、进度和提问都是卡片",
+               "capabilities": {"images_in": True, "files_in": True, "voice_in": True, "format": "markdown", "max_text": 6000, "asks": "buttons",
+                                "push": True, "progress": True, "threads": True},
+               "target": {"kind": "main"},
+               "features": [{"id": "main", "title": "和 Persona 对话", "description": "消息发进主对话；/new 开新对话、/list 选最近的对话、/main 回主对话", "on": True},
+                            {"id": "cards", "title": "提问和批准", "description": "飞书在驱动的对话要回答 / 批准时发卡片", "on": True},
+                            {"id": "all_cards", "title": "所有 Agent 的提问", "description": "各台电脑上所有 Agent 的提问和批准都发卡片", "on": False},
+                            {"id": "pushes", "title": "推送也发到飞书", "description": "推到手机的同时发一份；定时任务那段对话的回答也发", "on": True},
+                            {"id": "sync", "title": "同步主对话", "description": "主对话里不是从飞书发起的一轮结束时，把回答发到飞书", "on": False},
+                            {"id": "agents", "title": "驱动 Agent", "description": "/agents 列出各台电脑上的 Agent，选一个之后的消息发给它", "on": False}]},
+    "wechat": {"id": "wechat", "name": "微信", "kind": "im", "source": "plugin", "plugin": "wechat", "installed": True, "enabled": True,
+               "state": "connected", "account": {"name": "微信用户 a1b2c3"}, "bind": "qr", "last_event_at": ago(minutes=3),
+               "description": "在个人微信里私聊机器人：扫码绑定，消息进主对话，回答以纯文字发回", "capabilities": dict(_TEXT_CAPS),
+               "target": {"kind": "main"}, "features": _plugin_features({})},
+    "lark_agent": {"id": "lark_agent", "name": "飞书 /agent", "kind": "mention", "source": "builtin", "installed": True, "enabled": False,
+                   "state": "disabled", "bind": "config", "read_only": True, "capabilities": {"format": "markdown", "asks": "none"},
+                   "description": "在飞书任何会话、文档评论里自己发「/agent …」，Agent 处理完以你的名义回复（hub.json 的 lark_agent）"},
+    "examplechat": {"id": "examplechat", "name": "Example Chat", "kind": "im", "source": "plugin", "plugin": "example-chat", "installed": True,
+                    "enabled": True, "state": "not_connected", "error": "还没绑定：填机器人的令牌", "bind": "fields",
+                    "description": "示例聊天软件的机器人（第三方插件）", "capabilities": dict(_TEXT_CAPS, format="markdown", max_text=4000),
+                    "target": {"kind": "main"}, "features": _plugin_features({})},
+    "examplebroken": {"id": "examplebroken", "name": "Example Team", "kind": "im", "source": "plugin", "plugin": "example-team", "installed": True,
+                      "enabled": True, "state": "error", "error": "令牌失效了，重新绑定", "bind": "fields", "account": {"name": "示例团队"},
+                      "description": "示例团队聊天的机器人", "capabilities": dict(_TEXT_CAPS, format="markdown"),
+                      "target": {"kind": "main"}, "features": _plugin_features({})},
+    "examplemarket": {"id": "examplemarket", "name": "Example Rooms", "kind": "im", "source": "market", "plugin": "example-rooms",
+                      "market": "example", "installed": False, "enabled": False, "state": "not_installed", "bind": "none",
+                      "description": "在示例聊天室里和 Persona 对话", "capabilities": {}},
+}
+CHANNEL_BIND = {"polls": 0}
+CHANNEL_TESTS = []  # ids test messages went to (GET /mock/channels)
+
+if CHANNELS_MODE:
+    ITEMS[ASK1][0]["client_msg_id"] = "wechat-message:1"
+    for _s in ASSISTANT:
+        if _s["session_id"] == ASK1:
+            _s["channels"] = ["wechat", "feishu"]
+        elif _s["session_id"] == ASK3:
+            _s["channels"] = ["feishu"]
+
+
+def _channel_detail(c):
+    d = dict(c)
+    d["waiting"] = {"answers": 1 if c["id"] == "wechat" else 0, "asks": 0}
+    if c["id"] in ("wechat", "feishu"):
+        d["conversations"] = [{"machine_id": "server", "session_id": ASK1, "title": "今天要处理的事", "at": ago(minutes=3)},
+                              {"machine_id": "server", "session_id": ASK3, "title": "帮我约周五和韩梅梅吃饭", "at": ago(hours=28)}]
+    d["settings_url"] = {"feishu": "settings/connectors/feishu-bot", "lark_agent": "settings/model-config"}.get(c["id"]) or (
+        "settings/plugins/" + c["plugin"] if c.get("source") == "plugin" else None)
+    return {k: v for k, v in d.items() if v is not None}
+
+
+def channels_route(handler, p, body):
+    """MOCK_CHANNELS: GET /api/v1/channels, one channel's page, its settings, binding and test. False otherwise."""
+    if not CHANNELS_MODE or not (p.startswith("/api/v1/channels") or p == "/mock/channels"):
+        return False
+    method = handler.command
+    if p == "/mock/channels":
+        return handler.send_json({"tests": CHANNEL_TESTS}) or True
+    if p == "/api/v1/channels" and method == "GET":
+        order = {"app": 0}
+        rank = lambda c: order.get(c["id"], 1 if c["state"] == "connected" else 3 if c["state"] == "not_installed" else 2)
+        return handler.send_json({"channels": sorted(CHANNELS.values(), key=rank)}) or True
+    parts = p.split("/")  # ['', 'api', 'v1', 'channels', id, ...]
+    c = CHANNELS.get(parts[4]) if len(parts) > 4 else None
+    if c is None:
+        return handler.send_json({"error": "no such channel", "code": "not_found"}, 404) or True
+    rest, req = parts[5:], json.loads(body or b"{}") if body else {}
+    if rest == [] and method == "GET":
+        return handler.send_json(_channel_detail(c)) or True
+    if c.get("read_only") or c["source"] == "market":
+        return handler.send_json({"error": c["name"] + " 不在这里设置", "code": "read_only"}, 409) or True
+    if rest == [] and method == "PUT":
+        if "enabled" in req:
+            c["enabled"] = bool(req["enabled"])
+            c["state"] = "disabled" if not c["enabled"] else ("connected" if c.get("account") else "not_connected")
+        if req.get("target"):
+            t = req["target"]
+            if t.get("kind") == "conversation" and not t.get("session_id"):
+                return handler.send_json({"error": "target conversation needs machine_id and session_id", "code": "invalid"}, 400) or True
+            title = next((s["title"] for s in ASSISTANT if s["session_id"] == t.get("session_id")), None)
+            c["target"] = {k: v for k, v in {"kind": t.get("kind"), "machine_id": t.get("machine_id"), "session_id": t.get("session_id"),
+                                             "title": title}.items() if v}
+        for fid, on in (req.get("features") or {}).items():
+            for f in c.get("features", []):
+                if f["id"] == fid:
+                    f["on"] = bool(on)
+        return handler.send_json(_channel_detail(c)) or True
+    if rest == ["bind"] and method == "POST":
+        step = req.get("step") or ""
+        if c["id"] == "wechat":
+            qr = {"step": "qr", "kind": "qr", "url": WECHAT_QR_URL, "interval": 1, "qr": {"size": len(WECHAT_QR_ROWS), "rows": WECHAT_QR_ROWS},
+                  "hint": "用微信扫一扫这个二维码，在手机上确认后这里会自动继续。在同一部手机上：先保存二维码，再在微信里扫一扫、从相册选它。"}
+            CHANNEL_BIND["polls"] = CHANNEL_BIND["polls"] + 1 if step == "qr" else 0
+            if step == "qr" and CHANNEL_BIND["polls"] >= 6 and not os.environ.get("MOCK_WECHAT_WAIT"):
+                c.update(state="connected", account={"name": "微信用户 a1b2c3"})
+                return handler.send_json({"done": True, "account": "微信用户 a1b2c3"}) or True
+            return handler.send_json(qr) or True
+        if c["id"] == "feishu":
+            CHANNEL_BIND["polls"] = CHANNEL_BIND["polls"] + 1 if step == "pair" else 0
+            if step == "pair" and CHANNEL_BIND["polls"] >= 6 and not os.environ.get("MOCK_WECHAT_WAIT"):
+                c.update(state="connected", account={"name": "示例用户"})
+                return handler.send_json({"done": True, "account": "示例用户"}) or True
+            return handler.send_json({"step": "pair", "kind": "pair_code", "user_code": "482913", "interval": 3,
+                                      "hint": "在飞书里私聊机器人，把这 6 位数字发给它（10 分钟内有效）"}) or True
+        fields = [{"name": "token", "label": "机器人令牌", "secret": True, "placeholder": "在 Example Chat 的开发者设置里生成"}]
+        if step == "token":
+            if (req.get("values") or {}).get("token") != "example-token":
+                return handler.send_json({"step": "token", "fields": fields, "error": "令牌不对"}) or True
+            c.update(state="connected", account={"name": "示例机器人"})
+            c.pop("error", None)
+            return handler.send_json({"done": True, "account": "示例机器人"}) or True
+        return handler.send_json({"step": "token", "fields": fields, "hint": "令牌在 Example Chat 的开发者设置里生成（示例：example-token）"}) or True
+    if rest == ["binding"] and method == "DELETE":
+        c.pop("account", None)
+        c["state"] = "not_connected"
+        return handler.send_json(_channel_detail(c)) or True
+    if rest == ["test"] and method == "POST":
+        if c["state"] != "connected":
+            return handler.send_json({"error": c["name"] + " 还没连上"}, 502) or True
+        CHANNEL_TESTS.append(c["id"])
+        return handler.send_json({"ok": True}) or True
+    return handler.send_json({"error": "not found"}, 404) or True
+
+
+_plugins_route_without_channels = plugins_route
+
+
+def plugins_route(handler, p, body):
+    return channels_route(handler, p, body) or _plugins_route_without_channels(handler, p, body)
+
+
+_features_without_channels = features
+
+
+def features():
+    return _features_without_channels() + (["channels"] if CHANNELS_MODE else [])
+
+
+MOCK_HELP.append("MOCK_CHANNELS=1  设置 › 插件 › 渠道：App、飞书机器人和微信已连接、飞书 /agent 只读、一个待绑定（令牌 example-token）、一个出错、一个在市场里；主对话第一条来自微信")
+
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="用于客户端测试的 mock hub")
     parser.add_argument("--tls-port", type=int, help="额外的 TLS 监听端口；0 表示自动分配")

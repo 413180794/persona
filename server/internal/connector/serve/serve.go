@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/plugin"
@@ -214,6 +215,9 @@ type Init struct {
 	Declared map[string]string
 	// DataDir is the plugin's own directory for caches (plugin protocol only).
 	DataDir string
+	// Channel is the hub for a connector that is also a channel (docs/channels.md): it hands the owner's messages
+	// over. Plugin protocol only; nil under the bare opening.
+	Channel channel.Hub
 }
 
 // Listener is a connector that also hears the hub's events: a plugin that contributes the events extension point
@@ -292,11 +296,133 @@ type server struct {
 	cid atomic.Pointer[string]
 	// once runs each actions.do once by its request id.
 	once writes
+	// chid is the channel the connector is (the plugin protocol's active channel; its own id when none).
+	chid string
+	// sent are the refs of the latest channel.send done, and what each answered: the hub sends one again when it
+	// did not hear back.
+	sent sentRefs
+}
+
+// channelHub is the hub as the connector calls it, as a channel.
+type channelHub struct{ s *server }
+
+func (c channelHub) id() string {
+	c.s.mu.Lock()
+	defer c.s.mu.Unlock()
+	if c.s.chid != "" {
+		return c.s.chid
+	}
+	if p := c.s.cid.Load(); p != nil {
+		return *p
+	}
+	return ""
+}
+
+func (c channelHub) Receive(ctx context.Context, m channel.Message) error {
+	return c.s.peer.Call(ctx, channel.InPlugin(channel.MReceive), channel.ReceiveParams{Contribution: c.id(), Message: m}, nil)
+}
+
+func (c channelHub) Status(ctx context.Context, p channel.StatusParams) error {
+	p.Contribution = c.id()
+	return c.s.peer.Call(ctx, channel.InPlugin(channel.MStatus), p, nil)
+}
+
+// channelCall answers the hub's calls in the channel namespace (method without it) with the connector's Transport.
+func (s *server) channelCall(ctx context.Context, method string, params json.RawMessage) (any, error) {
+	s.mu.Lock()
+	c, chid := s.c, s.chid
+	s.mu.Unlock()
+	if c == nil {
+		return nil, &rpc.Error{Code: CodeNotInitialized, Message: "not initialized"}
+	}
+	if chid == "" {
+		chid = c.ID()
+	}
+	if want := contributionOf(params); want != "" && want != chid {
+		return nil, &rpc.Error{Code: plugin.CodeNoContribution, Message: "no channel " + want}
+	}
+	t, ok := c.(channel.Transport)
+	if !ok {
+		return nil, noCapability(c, "channel")
+	}
+	cannot := func(err error) error {
+		if errors.Is(err, channel.ErrCannotSend) {
+			return &rpc.Error{Code: channel.CodeCannotSend, Message: err.Error()}
+		}
+		return err
+	}
+	switch method {
+	case channel.MSend:
+		var p channel.SendParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		if p.Ref == "" {
+			return nil, errors.New("channel.send without a ref")
+		}
+		res, err := s.sent.do(p.Ref, func() (channel.SendResult, error) { return t.Send(ctx, p) })
+		return res, cannot(err)
+	case channel.MTyping:
+		var p channel.TypingParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		if ty, ok := c.(channel.Typer); ok {
+			return struct{}{}, ty.Typing(ctx, p.On)
+		}
+		return struct{}{}, nil
+	case channel.MEdit:
+		var p channel.EditParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		ed, ok := c.(channel.Editor)
+		if !ok {
+			return nil, noCapability(c, "edit")
+		}
+		return struct{}{}, ed.Edit(ctx, p)
+	}
+	return nil, &rpc.Error{Code: CodeUnknownMethod, Message: "unknown method channel." + method}
+}
+
+// sentRefs runs each channel.send once by its ref (a failed one may go again): the latest doneMost.
+type sentRefs struct {
+	mu    sync.Mutex
+	done  map[string]channel.SendResult
+	order []string
+}
+
+func (r *sentRefs) do(ref string, send func() (channel.SendResult, error)) (channel.SendResult, error) {
+	r.mu.Lock()
+	if res, ok := r.done[ref]; ok {
+		r.mu.Unlock()
+		return res, nil
+	}
+	r.mu.Unlock()
+	res, err := send()
+	if err != nil {
+		return res, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.done == nil {
+		r.done = map[string]channel.SendResult{}
+	}
+	r.done[ref] = res
+	r.order = append(r.order, ref)
+	if len(r.order) > doneMost {
+		delete(r.done, r.order[0])
+		r.order = r.order[1:]
+	}
+	return res, nil
 }
 
 func (s *server) handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	if method == plugin.MInitialize {
 		return s.initialize(params)
+	}
+	if rest, ok := strings.CutPrefix(method, channel.Namespace+"."); ok {
+		return s.channelCall(ctx, rest, params)
 	}
 	if rest, ok := strings.CutPrefix(method, Namespace+"."); ok {
 		s.mu.Lock()
@@ -521,9 +647,12 @@ func (s *server) initialize(params json.RawMessage) (any, error) {
 		if ids := p.Active["connectors"]; len(ids) == 1 {
 			s.cid.Store(&ids[0])
 		}
+		if ids := p.Active["channel"]; len(ids) == 1 {
+			s.chid = ids[0]
+		}
 	}
 	s.mu.Unlock()
-	m, err := s.init(Init{Config: p.Config, Declared: p.Secrets, DataDir: p.Plugin.DataDir})
+	m, err := s.init(Init{Config: p.Config, Declared: p.Secrets, DataDir: p.Plugin.DataDir, Channel: channelHub{s}})
 	if err != nil {
 		return nil, err
 	}

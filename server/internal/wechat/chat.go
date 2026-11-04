@@ -4,25 +4,26 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
 	"log"
 	"net/http"
 	"slices"
 	"strings"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/wechat/ilink"
 )
 
 const (
 	maxSeen     = 200
-	maxImages   = 4
 	strangerGap = 10 * time.Minute
+	// typingFor: 「正在输入」 is let go when the hub has not asked for it again in this long (it asks every 5 s while a
+	// turn goes on): a hub that went away does not leave it on.
+	typingFor = 30 * time.Second
 )
 
-// handle takes one message the bot got: someone else's gets one line saying whose bot it is; the owner's is a
-// command, an answer to what an agent asked, or a message for the conversation it drives.
+// handle takes one message the bot got: someone else's gets one line saying whose bot it is; the owner's goes to the
+// hub, which knows what it is (a command, an answer to what was asked, a message for the conversation).
 func (b *Bot) handle(ctx context.Context, c *ilink.Client, creds ilink.Credentials, m ilink.Message) {
 	owner := m.From == creds.UserID
 	b.mu.Lock()
@@ -44,14 +45,18 @@ func (b *Bot) handle(ctx context.Context, c *ilink.Client, creds ilink.Credentia
 		b.stranger(ctx, c, m)
 		return
 	}
-	text := strings.TrimSpace(m.Text)
-	if strings.HasPrefix(text, "/") && b.command(ctx, c, creds, m, text) {
+	msg := b.compose(ctx, c, m)
+	if msg.Empty() {
 		return
 	}
-	if b.answerAsk(ctx, c, creds, m, text) {
+	if b.opt.Hub == nil {
+		log.Printf("wechat: no hub to hand the message to")
 		return
 	}
-	b.forward(ctx, c, creds, m)
+	if err := b.opt.Hub.Receive(ctx, msg); err != nil {
+		log.Printf("wechat: handing a message to the hub: %v", err)
+		b.send(ctx, c, m.From, m.ContextToken, "没交给 Persona：hub 那边出错了，等一下再发。")
+	}
 }
 
 // stranger: the bot only serves the WeChat that bound it; anyone else hears so, at most once in ten minutes.
@@ -98,16 +103,26 @@ func (b *Bot) send(ctx context.Context, c *ilink.Client, peer, contextToken, tex
 	return true
 }
 
-// tell sends text to the owner, in the chat of their latest message.
-func (b *Bot) tell(ctx context.Context, text string) bool {
+// Send is the hub's channel.send: text to the owner, in the chat of their latest message. Before the owner has
+// written to the bot there is no context token, and nothing can be sent: channel.ErrCannotSend.
+func (b *Bot) Send(ctx context.Context, p channel.SendParams) (channel.SendResult, error) {
 	b.mu.Lock()
 	c, creds, contextToken := b.client, b.st.Creds, b.st.Context
 	b.mu.Unlock()
-	if creds == nil {
-		return false
+	if creds == nil || c == nil || contextToken == "" {
+		return channel.SendResult{}, channel.ErrCannotSend
 	}
-	return b.send(ctx, c, creds.UserID, contextToken, text)
+	if !b.send(ctx, c, creds.UserID, contextToken, p.Text) {
+		return channel.SendResult{}, errSendFailed
+	}
+	return channel.SendResult{}, nil
 }
+
+type sendError string
+
+func (e sendError) Error() string { return string(e) }
+
+const errSendFailed = sendError("微信没收下这条消息")
 
 func clientID() string {
 	var r [12]byte
@@ -115,172 +130,27 @@ func clientID() string {
 	return "persona-" + hex.EncodeToString(r[:])
 }
 
-const help = `在这里说的话会发给 Persona 的主对话，回答发回这里。
-/new 开一段新对话（后面可以直接跟第一句话）
-/main 回到主对话
-/stop 停下正在做的这一轮
-/status 现在发给谁、在等几个回答
-/help 这些命令
-Agent 问你问题或要你批准时，直接回复序号或文字。`
-
-// command runs one of the bot's commands; false for one it does not know (sent on as a message: it may be the
-// conversation's own, /compact).
-func (b *Bot) command(ctx context.Context, c *ilink.Client, creds ilink.Credentials, m ilink.Message, text string) bool {
-	name, rest, _ := strings.Cut(text, " ")
-	rest = strings.TrimSpace(rest)
-	reply := func(s string) { b.send(ctx, c, m.From, m.ContextToken, s) }
-	switch strings.ToLower(name) {
-	case "/help":
-		reply(help)
-	case "/main":
-		b.mu.Lock()
-		b.st.Target = target{}
-		b.saveLocked(ctx)
-		b.mu.Unlock()
-		reply("之后的消息发给主对话。")
-	case "/new":
-		b.mu.Lock()
-		b.st.Target = target{Fresh: true}
-		b.saveLocked(ctx)
-		b.mu.Unlock()
-		if rest == "" {
-			reply("好，下一条消息会开一段新对话。/main 回到主对话。")
-			return true
-		}
-		m.Text = rest
-		b.forward(ctx, c, creds, m)
-	case "/stop":
-		machine, session, err := b.targetSession(ctx)
-		switch {
-		case err != nil:
-			reply("没停下来：" + err.Error())
-		case session == "":
-			reply("现在没有在做的。")
-		default:
-			if err := b.opt.Hub.Interrupt(ctx, machine, session); err != nil {
-				reply("没停下来：" + err.Error())
-				return true
-			}
-			b.dropRuns(ctx, machine, session)
-			reply("已停下。")
-		}
-	case "/status":
-		reply(b.statusText(ctx))
-	default:
-		return false
-	}
-	return true
-}
-
-// targetSession is the conversation messages go to now ("" when it is still to be started).
-func (b *Bot) targetSession(ctx context.Context) (machine, session string, err error) {
-	b.mu.Lock()
-	t := b.st.Target
-	b.mu.Unlock()
-	switch {
-	case t.Fresh:
-		return "", "", nil
-	case t.Session != "":
-		return t.Machine, t.Session, nil
-	}
-	return b.opt.Hub.Assistant(ctx)
-}
-
-func (b *Bot) statusText(ctx context.Context) string {
-	b.mu.Lock()
-	t, runs, asks := b.st.Target, len(b.st.Runs), len(b.st.Asks)
-	b.mu.Unlock()
-	where := "主对话"
-	switch {
-	case t.Fresh:
-		where = "下一条消息开的新对话"
-	case t.Session != "":
-		where = "用 /new 开的对话"
-		if s, err := b.opt.Hub.Session(ctx, t.Machine, t.Session); err == nil && s != nil && s.Title != "" {
-			where += "「" + s.Title + "」"
-		}
-	}
-	out := "消息发给：" + where
-	if runs > 0 {
-		out += fmt.Sprintf("\n在等 %d 个回答", runs)
-	}
-	if asks > 0 {
-		out += fmt.Sprintf("\n有 %d 个问题等你回复", asks)
-	}
-	return out
-}
-
-// forward sends the owner's message to the conversation they talk to (starting it when there is none yet) and waits
-// on its turn.
-func (b *Bot) forward(ctx context.Context, c *ilink.Client, creds ilink.Credentials, m ilink.Message) {
-	text, images := b.compose(ctx, c, m)
-	if strings.TrimSpace(text) == "" && len(images) == 0 {
-		return
-	}
-	reply := func(s string) { b.send(ctx, c, m.From, m.ContextToken, s) }
-	b.mu.Lock()
-	t := b.st.Target
-	b.mu.Unlock()
-	machine, session := t.Machine, t.Session
-	msgID, find := "wechat-"+m.ID, probe(m.Text)
-	base := 0
-	var err error
-	if t.main() {
-		machine, session, err = b.opt.Hub.Assistant(ctx)
-		if err != nil {
-			reply("没发出去，hub 那边出错了：" + err.Error())
-			return
-		}
-	}
-	if session == "" {
-		s, err := b.opt.Hub.Start(ctx, text, images, t.main())
-		if err != nil {
-			reply("没开成新对话：" + err.Error())
-			return
-		}
-		machine, session = s.MachineID, s.SessionID
-		msgID, find = "", "" // a new conversation: all of it answers this message
-		if t.Fresh {
-			b.mu.Lock()
-			b.st.Target = target{Machine: machine, Session: session}
-			b.saveLocked(ctx)
-			b.mu.Unlock()
-		}
-	} else {
-		if base, err = b.opt.Hub.LastSeq(ctx, machine, session); err != nil {
-			reply("没发出去：" + err.Error())
-			return
-		}
-		if err := b.opt.Hub.Send(ctx, machine, session, text, images, msgID); err != nil {
-			reply("没发出去：" + err.Error())
-			return
-		}
-	}
-	b.startRun(ctx, machine, session, base, msgID, find)
-}
-
-// compose is what goes to the conversation for m: the text with WeChat's note (prompts/wechat/message), and its
-// pictures. Files and videos are only named: the bot cannot pass them on yet.
-func (b *Bot) compose(ctx context.Context, c *ilink.Client, m ilink.Message) (string, []Image) {
-	var images []Image
-	var unsupported []string
+// compose is the owner's message as the hub takes it: the text (a voice message's transcript), the quote, the
+// pictures; files and videos are only named, the bot cannot pass them on yet.
+func (b *Bot) compose(ctx context.Context, c *ilink.Client, m ilink.Message) channel.Message {
+	out := channel.Message{ID: m.ID, Text: strings.TrimSpace(m.Text), Quote: m.Quote}
 	for _, md := range m.Media {
 		switch md.Kind {
 		case ilink.MediaImage:
-			if len(images) >= maxImages {
-				unsupported = append(unsupported, "更多的图片")
+			if len(out.Images) >= channel.ImagesMost {
+				out.Unsupported = append(out.Unsupported, "更多的图片")
 				continue
 			}
 			data, err := c.Download(ctx, md)
 			if err != nil {
 				log.Printf("wechat: downloading a picture: %v", err)
-				unsupported = append(unsupported, "一张没下载下来的图片")
+				out.Unsupported = append(out.Unsupported, "一张没下载下来的图片")
 				continue
 			}
-			images = append(images, Image{MIME: http.DetectContentType(data), Data: data})
+			out.Images = append(out.Images, channel.Blob{MIME: http.DetectContentType(data), Data: data})
 		case ilink.MediaVoice:
-			if strings.TrimSpace(m.Text) == "" {
-				unsupported = append(unsupported, "一段没有转写的语音")
+			if out.Text == "" {
+				out.Unsupported = append(out.Unsupported, "一段没有转写的语音")
 			}
 		case ilink.MediaFile:
 			name := md.FileName
@@ -289,26 +159,60 @@ func (b *Bot) compose(ctx context.Context, c *ilink.Client, m ilink.Message) (st
 			} else {
 				name = "文件「" + name + "」"
 			}
-			unsupported = append(unsupported, name)
+			out.Unsupported = append(out.Unsupported, name)
 		case ilink.MediaVideo:
-			unsupported = append(unsupported, "一段视频")
+			out.Unsupported = append(out.Unsupported, "一段视频")
 		}
 	}
-	unsupported = slices.Compact(unsupported)
-	if strings.TrimSpace(m.Text) == "" && m.Quote == "" && len(images) == 0 && len(unsupported) == 0 {
-		return "", nil
-	}
-	return prompts.RenderWeChatMessage(prompts.WeChatMessage{Text: strings.TrimSpace(m.Text), Quote: m.Quote, Unsupported: unsupported}), images
+	out.Unsupported = slices.Compact(out.Unsupported)
+	return out
 }
 
-// probe is a piece of what the owner wrote, to find the message in the transcript when the node does not tie items
-// to their send (client_msg_id).
-func probe(text string) string {
-	for _, line := range strings.Split(text, "\n") {
-		if line = strings.TrimSpace(line); line != "" {
-			r := []rune(line)
-			return string(r[:min(len(r), 24)])
-		}
+// typing is the owner's chat showing that the bot is writing.
+type typing struct {
+	ticket string
+	at     time.Time // when the hub last asked for it
+	shown  time.Time // when WeChat was last told
+}
+
+// Typing is the hub's channel.typing: on while a turn goes on (asked again every few seconds), off once answered.
+func (b *Bot) Typing(ctx context.Context, on bool) error {
+	b.mu.Lock()
+	c, creds, contextToken, t := b.client, b.st.Creds, b.st.Context, b.typing
+	now := b.opt.Now()
+	if !on {
+		b.typing = nil
 	}
-	return ""
+	b.mu.Unlock()
+	if c == nil || creds == nil || contextToken == "" {
+		return nil // presence is best effort
+	}
+	switch {
+	case !on && t != nil:
+		return c.SetTyping(ctx, creds.UserID, t.ticket, false)
+	case !on:
+		return nil
+	case t != nil && now.Sub(t.at) < typingFor:
+		b.mu.Lock()
+		t.at = now
+		b.mu.Unlock()
+		if now.Sub(t.shown) < channel.TypingEvery {
+			return nil
+		}
+		b.mu.Lock()
+		t.shown = now
+		b.mu.Unlock()
+		return c.SetTyping(ctx, creds.UserID, t.ticket, true) // WeChat clears it on its own
+	}
+	ticket, err := c.TypingTicket(ctx, creds.UserID, contextToken)
+	if err != nil {
+		return nil
+	}
+	if err := c.SetTyping(ctx, creds.UserID, ticket, true); err != nil {
+		return nil
+	}
+	b.mu.Lock()
+	b.typing = &typing{ticket: ticket, at: now, shown: now}
+	b.mu.Unlock()
+	return nil
 }

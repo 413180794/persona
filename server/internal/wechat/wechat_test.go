@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,8 +16,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/channel"
+
 	"github.com/nwverse/persona/server/internal/connector"
-	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/wechat/ilink"
 )
 
@@ -159,158 +161,27 @@ func (f *fakeILink) texts() []sentText {
 	return append([]sentText(nil), f.sent...)
 }
 
-// fakeHub is the hub's API: one machine m1 with the assistant's conversations.
+// fakeHub is the hub as the program reaches it (channel.receive): what it was handed.
 type fakeHub struct {
-	t            *testing.T
-	srv          *httptest.Server
-	mu           sync.Mutex
-	main         string
-	sessions     map[string]*proto.Session
-	items        map[string][]proto.Item
-	sends        []hubSend
-	starts       []hubSend
-	interactions []proto.Interaction
-	resolved     map[string]proto.Resolution
-	interrupted  []string
-	seq          int
+	mu   sync.Mutex
+	msgs []channel.Message
 }
 
-type hubSend struct {
-	Session, Text, ClientMsgID string
-	Images                     int
-	Main                       bool
-}
-
-func newFakeHub(t *testing.T) *fakeHub {
-	h := &fakeHub{t: t, main: "main1", sessions: map[string]*proto.Session{}, items: map[string][]proto.Item{}, resolved: map[string]proto.Resolution{}}
-	h.sessions["main1"] = &proto.Session{MachineID: "m1", SessionID: "main1", Status: "idle", State: "idle", Title: "主对话"}
-	h.srv = httptest.NewServer(http.HandlerFunc(h.serve))
-	t.Cleanup(h.srv.Close)
-	return h
-}
-
-func (h *fakeHub) add(session string, it proto.Item) {
-	h.seq++
-	it.Seq, it.ID = h.seq, "it"+strconv.Itoa(h.seq)
-	h.items[session] = append(h.items[session], it)
-}
-
-func (h *fakeHub) serve(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Authorization") != "Bearer tok" {
-		w.WriteHeader(401)
-		return
-	}
-	var body map[string]any
-	if b, _ := io.ReadAll(r.Body); len(b) > 0 {
-		_ = json.Unmarshal(b, &body)
-	}
+func (h *fakeHub) Receive(_ context.Context, m channel.Message) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	p := r.URL.Path
-	reply := func(v any) { _ = json.NewEncoder(w).Encode(v) }
-	images := func() int { a, _ := body["images"].([]any); return len(a) }
-	switch {
-	case p == "/api/v1/assistant":
-		reply(map[string]any{"machine_id": "m1", "main": h.main})
-	case p == "/api/v1/assistant/conversations":
-		id := "conv" + strconv.Itoa(len(h.starts)+1)
-		main, _ := body["main"].(bool)
-		h.starts = append(h.starts, hubSend{Session: id, Text: body["prompt"].(string), Images: images(), Main: main})
-		h.sessions[id] = &proto.Session{MachineID: "m1", SessionID: id, Status: "working", State: "working"}
-		h.add(id, proto.Item{Role: "user", Kind: proto.KindText, Text: body["prompt"].(string)})
-		if main {
-			h.main = id
-		}
-		reply(map[string]any{"session": h.sessions[id]})
-	case p == "/api/v1/sessions":
-		var list []proto.Session
-		for _, s := range h.sessions {
-			list = append(list, *s)
-		}
-		reply(map[string]any{"sessions": list})
-	case p == "/api/v1/interactions":
-		reply(map[string]any{"interactions": h.interactions})
-	case strings.HasPrefix(p, "/api/v1/interactions/") && strings.HasSuffix(p, "/resolve"):
-		id := strings.TrimSuffix(strings.TrimPrefix(p, "/api/v1/interactions/"), "/resolve")
-		for i, ix := range h.interactions {
-			if ix.ID == id {
-				var res proto.Resolution
-				b, _ := json.Marshal(body)
-				_ = json.Unmarshal(b, &res)
-				h.resolved[id] = res
-				h.interactions = append(h.interactions[:i], h.interactions[i+1:]...)
-				reply(map[string]any{"ok": true})
-				return
-			}
-		}
-		w.WriteHeader(http.StatusGone)
-		reply(map[string]any{"error": "not pending"})
-	case strings.HasPrefix(p, "/api/v1/sessions/m1/"):
-		rest := strings.Split(strings.TrimPrefix(p, "/api/v1/sessions/m1/"), "/")
-		sid := rest[0]
-		s := h.sessions[sid]
-		if s == nil {
-			w.WriteHeader(404)
-			return
-		}
-		switch rest[1] {
-		case "messages":
-			text := body["text"].(string)
-			id, _ := body["client_msg_id"].(string)
-			h.sends = append(h.sends, hubSend{Session: sid, Text: text, ClientMsgID: id, Images: images()})
-			h.add(sid, proto.Item{Role: "user", Kind: proto.KindText, Text: text, ClientMsgID: id})
-			s.Status, s.State = "working", "working"
-			reply(map[string]any{"ok": true})
-		case "interrupt":
-			h.interrupted = append(h.interrupted, sid)
-			reply(map[string]any{"ok": true})
-		case "items":
-			items := h.items[sid]
-			if r.URL.Query().Get("limit") == "1" {
-				to := 0
-				if len(items) > 0 {
-					to = items[len(items)-1].Seq
-				}
-				reply(map[string]any{"items": items[max(len(items)-1, 0):], "to_seq": to})
-				return
-			}
-			after, _ := strconv.Atoi(r.URL.Query().Get("after_seq"))
-			var out []proto.Item
-			for _, it := range items {
-				if it.Seq > after {
-					out = append(out, it)
-				}
-			}
-			reply(map[string]any{"items": out, "more_after": false})
-		}
-	default:
-		w.WriteHeader(404)
-	}
+	h.msgs = append(h.msgs, m)
+	return nil
 }
 
-// answer ends a session's turn: a tool call, then the assistant's words.
-func (h *fakeHub) answer(sid, text string, background int) {
+func (h *fakeHub) Status(context.Context, channel.StatusParams) error { return nil }
+
+func (h *fakeHub) got() []channel.Message {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.add(sid, proto.Item{Role: "assistant", Kind: proto.KindToolUse, ToolName: "Bash"})
-	h.add(sid, proto.Item{Role: "assistant", Kind: proto.KindText, Text: "我先看看。"})
-	h.add(sid, proto.Item{Role: "user", Kind: proto.KindToolResult, Text: "ok"})
-	h.add(sid, proto.Item{Role: "assistant", Kind: proto.KindText, Text: text})
-	s := h.sessions[sid]
-	s.Status, s.State = "idle", "unread"
-	s.Background = nil
-	for range background {
-		s.Background = append(s.Background, proto.BackgroundTask{})
-	}
+	return append([]channel.Message(nil), h.msgs...)
 }
 
-func (h *fakeHub) snapshot() (sends, starts []hubSend) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return append([]hubSend(nil), h.sends...), append([]hubSend(nil), h.starts...)
-}
-
-// clock is a time the test moves.
 type clock struct {
 	mu sync.Mutex
 	t  time.Time
@@ -342,13 +213,13 @@ const owner = "person@example.com"
 
 // newRig is a bot bound to owner's WeChat, running against the fakes.
 func newRig(t *testing.T, bound bool) *rig {
-	r := &rig{t: t, ilink: newFakeILink(t), hub: newFakeHub(t), secrets: &memSecrets{}, clock: &clock{t: time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC)}}
+	r := &rig{t: t, ilink: newFakeILink(t), hub: &fakeHub{}, secrets: &memSecrets{}, clock: &clock{t: time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC)}}
 	if bound {
 		st := state{Creds: &ilink.Credentials{Token: "BT", BotID: "person@example.com", UserID: owner, BaseURL: "https://ilinkai.weixin.qq.com/"}}
 		data, _ := json.Marshal(st)
 		r.secrets.data = data
 	}
-	r.bot = New(Options{Hub: NewHub(r.hub.srv.URL, "tok"), Agent: "Persona/test", Now: r.clock.now, Tick: 10 * time.Millisecond,
+	r.bot = New(Options{Hub: r.hub, Agent: "Persona/test", Now: r.clock.now,
 		NewClient: func(base, token string) (*ilink.Client, error) {
 			return ilink.New(ilink.Options{BaseURL: base, Token: token, Agent: "Persona/test", HTTP: &http.Client{Transport: r.ilink}})
 		}}, r.secrets)
@@ -425,186 +296,30 @@ func TestBindByQRCode(t *testing.T) {
 	}
 }
 
-func TestMessageToMainAndAnswerBack(t *testing.T) {
-	r := newRig(t, true)
-	r.ilink.say(owner, "明天有什么会？")
-	eventually(t, "the send", func() bool { s, _ := r.hub.snapshot(); return len(s) == 1 })
-	sends, _ := r.hub.snapshot()
-	if sends[0].Session != "main1" || !strings.HasPrefix(sends[0].ClientMsgID, "wechat-message:") ||
-		!strings.Contains(sends[0].Text, "微信机器人") || !strings.HasSuffix(sends[0].Text, "明天有什么会？") {
-		t.Fatalf("send %+v", sends[0])
-	}
-	r.hub.answer("main1", "**明天** 10 点有周会。", 0)
-	r.clock.add(30 * time.Second)
-	got := r.sentTo(owner, "10 点有周会")
-	if got.Context == "" || strings.Contains(got.Text, "我先看看") || !strings.HasPrefix(got.Text, "**明天**") { // WeChat shows bold
-		t.Fatalf("answer %+v", got)
-	}
-	eventually(t, "the run to end", func() bool { return len(r.secrets.state(t).Runs) == 0 })
-	if st := r.secrets.state(t); st.Cursor == "" || st.Context == "" {
-		t.Fatalf("cursor and context not kept: %+v", st)
-	}
-}
-
-func TestStrangerHearsOnce(t *testing.T) {
+// The owner's message goes to the hub as it is; someone else hears once whose bot it is, and nothing reaches the hub.
+func TestOwnerMessageGoesToTheHubStrangerHearsOnce(t *testing.T) {
 	r := newRig(t, true)
 	r.ilink.say("person@example.com", "你好")
 	r.sentTo("person@example.com", "只为绑定它的人服务")
 	r.ilink.say("person@example.com", "在吗")
-	r.ilink.say(owner, "/status")
-	r.sentTo(owner, "消息发给：主对话")
+	r.ilink.say(owner, "明天有什么会？")
+	eventually(t, "the message at the hub", func() bool { return len(r.hub.got()) == 1 })
+	m := r.hub.got()[0]
+	if m.Text != "明天有什么会？" || !strings.HasPrefix(m.ID, "message:") {
+		t.Fatalf("handed %+v", m)
+	}
 	n := 0
 	for _, s := range r.ilink.texts() {
 		if s.To == "person@example.com" {
 			n++
 		}
 	}
-	if sends, _ := r.hub.snapshot(); n != 1 || len(sends) != 0 {
-		t.Fatalf("stranger heard %d times; sends %+v", n, sends)
+	if n != 1 {
+		t.Fatalf("stranger heard %d times", n)
 	}
-}
-
-func TestNewConversationAndStop(t *testing.T) {
-	r := newRig(t, true)
-	r.ilink.say(owner, "/new 帮我写个周报")
-	eventually(t, "a new conversation", func() bool { _, s := r.hub.snapshot(); return len(s) == 1 })
-	_, starts := r.hub.snapshot()
-	if starts[0].Main || !strings.HasSuffix(starts[0].Text, "帮我写个周报") {
-		t.Fatalf("start %+v", starts[0])
+	if st := r.secrets.state(t); st.Cursor == "" || st.Context == "" {
+		t.Fatalf("cursor and context not kept: %+v", st)
 	}
-	eventually(t, "the target", func() bool { return r.secrets.state(t).Target.Session == "conv1" })
-	r.ilink.say(owner, "再加上下周计划")
-	eventually(t, "the send to the new one", func() bool { s, _ := r.hub.snapshot(); return len(s) == 1 && s[0].Session == "conv1" })
-	r.ilink.say(owner, "/stop")
-	r.sentTo(owner, "已停下")
-	r.hub.mu.Lock()
-	interrupted := r.hub.interrupted
-	r.hub.mu.Unlock()
-	if len(interrupted) != 1 || interrupted[0] != "conv1" {
-		t.Fatalf("interrupted %v", interrupted)
-	}
-	r.ilink.say(owner, "/main")
-	r.sentTo(owner, "主对话")
-	eventually(t, "back to main", func() bool { return r.secrets.state(t).Target.main() })
-}
-
-func TestNoMainConversationStartsOne(t *testing.T) {
-	r := newRig(t, true)
-	r.hub.mu.Lock()
-	r.hub.main = ""
-	r.hub.mu.Unlock()
-	r.ilink.say(owner, "你好")
-	eventually(t, "a main conversation", func() bool { _, s := r.hub.snapshot(); return len(s) == 1 && s[0].Main })
-	r.hub.answer("conv1", "你好，我在。", 0)
-	r.clock.add(30 * time.Second)
-	r.sentTo(owner, "你好，我在。")
-}
-
-func TestPermissionAnsweredInWeChat(t *testing.T) {
-	r := newRig(t, true)
-	ctx := context.Background()
-	eventually(t, "serving", func() bool { return r.bot.Status(ctx).State == connector.StateOK })
-	r.ilink.say(owner, "清一下临时文件")
-	eventually(t, "the send", func() bool { s, _ := r.hub.snapshot(); return len(s) == 1 })
-	r.hub.mu.Lock()
-	r.hub.interactions = []proto.Interaction{{ID: "ix1", MachineID: "m1", SessionID: "main1", Kind: proto.IxPermission, ToolName: "Bash",
-		ToolInput: json.RawMessage(`{"command":"rm -rf /tmp/x"}`), SessionTitle: "主对话"}}
-	r.hub.mu.Unlock()
-	r.bot.Hear(ctx, "agent.needs_you", json.RawMessage(`{"machine_id":"m1","session_id":"main1","interaction_id":"ix1","kind":"permission"}`))
-	r.sentTo(owner, "rm -rf /tmp/x")
-	r.ilink.say(owner, "嗯？")
-	r.sentTo(owner, "回复「允许」或「拒绝」")
-	r.ilink.say(owner, "允许")
-	r.sentTo(owner, "已允许")
-	r.hub.mu.Lock()
-	res := r.hub.resolved["ix1"]
-	r.hub.mu.Unlock()
-	if res.Allow == nil || !*res.Allow {
-		t.Fatalf("resolution %+v", res)
-	}
-	if sends, _ := r.hub.snapshot(); len(sends) != 1 {
-		t.Fatalf("an answer was sent as a message: %+v", sends)
-	}
-}
-
-func TestQuestionsOneAtATime(t *testing.T) {
-	r := newRig(t, true)
-	ctx := context.Background()
-	eventually(t, "serving", func() bool { return r.bot.Status(ctx).State == connector.StateOK })
-	r.ilink.say(owner, "部署一下")
-	eventually(t, "the send", func() bool { s, _ := r.hub.snapshot(); return len(s) == 1 })
-	r.hub.mu.Lock()
-	r.hub.interactions = []proto.Interaction{{ID: "ix2", MachineID: "m1", SessionID: "main1", Kind: proto.IxQuestion, Questions: []proto.Question{
-		{Question: "部署到哪？", Options: []proto.QuestionOption{{Label: "测试环境"}, {Label: "正式环境"}}},
-		{Question: "要通知谁？", MultiSelect: true, Options: []proto.QuestionOption{{Label: "张三"}, {Label: "李四"}, {Label: "王五"}}},
-	}}}
-	r.hub.mu.Unlock()
-	r.bot.Hear(ctx, "agent.needs_you", json.RawMessage(`{"machine_id":"m1","session_id":"main1","interaction_id":"ix2"}`))
-	r.sentTo(owner, "（1/2）Agent 问你：部署到哪？")
-	r.ilink.say(owner, "2")
-	r.sentTo(owner, "（2/2）Agent 问你：要通知谁？")
-	r.ilink.say(owner, "1 3")
-	r.sentTo(owner, "已回答")
-	r.hub.mu.Lock()
-	res := r.hub.resolved["ix2"]
-	r.hub.mu.Unlock()
-	if res.Answers["部署到哪？"] != "正式环境" || res.Answers["要通知谁？"] != "张三, 王五" {
-		t.Fatalf("answers %+v", res.Answers)
-	}
-}
-
-// A card answered in the app is let go: the next WeChat message is an ordinary one.
-func TestAnsweredElsewhere(t *testing.T) {
-	r := newRig(t, true)
-	ctx := context.Background()
-	r.ilink.say(owner, "/status") // a chat to send to (iLink needs the owner's latest message)
-	r.sentTo(owner, "消息发给")
-	r.hub.mu.Lock()
-	r.hub.interactions = []proto.Interaction{{ID: "ix3", MachineID: "m1", SessionID: "main1", Kind: proto.IxPlan, Plan: "1. 改代码"}}
-	r.hub.mu.Unlock()
-	r.bot.Hear(ctx, "agent.needs_you", json.RawMessage(`{"machine_id":"m1","session_id":"main1","interaction_id":"ix3"}`))
-	r.sentTo(owner, "1. 改代码")
-	r.hub.mu.Lock()
-	r.hub.interactions = nil
-	r.hub.mu.Unlock()
-	r.ilink.say(owner, "好的")
-	eventually(t, "sent as a message", func() bool { s, _ := r.hub.snapshot(); return len(s) == 1 })
-	if st := r.secrets.state(t); len(st.Asks) != 0 {
-		t.Fatalf("asks %+v", st.Asks)
-	}
-}
-
-// An agent not driven from WeChat asks: nothing goes to WeChat.
-func TestOtherAgentsStayQuiet(t *testing.T) {
-	r := newRig(t, true)
-	ctx := context.Background()
-	eventually(t, "serving", func() bool { return r.bot.Status(ctx).State == connector.StateOK })
-	r.hub.mu.Lock()
-	r.hub.interactions = []proto.Interaction{{ID: "ix4", MachineID: "m1", SessionID: "agent9", Kind: proto.IxPermission, ToolName: "Bash"}}
-	r.hub.mu.Unlock()
-	r.bot.Hear(ctx, "agent.needs_you", json.RawMessage(`{"machine_id":"m1","session_id":"agent9","interaction_id":"ix4"}`))
-	time.Sleep(100 * time.Millisecond)
-	if got := r.ilink.texts(); len(got) != 0 {
-		t.Fatalf("sent %+v", got)
-	}
-}
-
-func TestBackgroundWorkAnswersTwice(t *testing.T) {
-	r := newRig(t, true)
-	r.ilink.say(owner, "跑一下全量测试")
-	eventually(t, "the send", func() bool { s, _ := r.hub.snapshot(); return len(s) == 1 })
-	r.hub.answer("main1", "测试已经在后台跑了。", 1)
-	r.clock.add(30 * time.Second)
-	r.sentTo(owner, "后台还有 1 个任务")
-	eventually(t, "held", func() bool { st := r.secrets.state(t); return len(st.Runs) == 1 && st.Runs[0].Held })
-	r.hub.mu.Lock()
-	r.hub.add("main1", proto.Item{Role: "user", Kind: proto.KindNotice, Text: "task done"})
-	r.hub.sessions["main1"].Status, r.hub.sessions["main1"].State = "working", "working"
-	r.hub.mu.Unlock()
-	r.hub.answer("main1", "全部通过，142 个。", 0)
-	r.clock.add(30 * time.Second)
-	r.sentTo(owner, "全部通过，142 个")
-	eventually(t, "the run to end", func() bool { return len(r.secrets.state(t).Runs) == 0 })
 }
 
 func TestTokenReplacedUnbinds(t *testing.T) {
@@ -623,6 +338,7 @@ func TestTokenReplacedUnbinds(t *testing.T) {
 	}
 }
 
+// A picture goes with the message (decrypted); a file is named, the bot cannot pass it on.
 func TestPictureGoesWithTheMessage(t *testing.T) {
 	r := newRig(t, true)
 	key, _ := hex.DecodeString("00112233445566778899aabbccddeeff")
@@ -634,10 +350,11 @@ func TestPictureGoesWithTheMessage(t *testing.T) {
 	r.ilink.say(owner, "", map[string]any{"type": 2, "image_item": map[string]any{"aeskey": hex.EncodeToString(key),
 		"media": map[string]any{"encrypt_query_param": "Q"}}},
 		map[string]any{"type": 4, "file_item": map[string]any{"file_name": "合同.pdf", "media": map[string]any{"encrypt_query_param": "F"}}})
-	eventually(t, "the send", func() bool { s, _ := r.hub.snapshot(); return len(s) == 1 })
-	sends, _ := r.hub.snapshot()
-	if sends[0].Images != 1 || !strings.Contains(sends[0].Text, "文件「合同.pdf」") {
-		t.Fatalf("send %+v", sends[0])
+	eventually(t, "the message at the hub", func() bool { return len(r.hub.got()) == 1 })
+	m := r.hub.got()[0]
+	if len(m.Images) != 1 || m.Images[0].MIME != "image/png" || string(m.Images[0].Data) != string(png) ||
+		len(m.Unsupported) != 1 || m.Unsupported[0] != "文件「合同.pdf」" {
+		t.Fatalf("handed %+v", m)
 	}
 }
 
@@ -649,44 +366,50 @@ func TestDuplicateMessageHandledOnce(t *testing.T) {
 		r.ilink.queue = append(r.ilink.queue, map[string]any{"message_id": 9001, "from_user_id": owner, "context_token": "c", "message_type": 1, "item_list": item})
 	}
 	r.ilink.mu.Unlock()
-	eventually(t, "the send", func() bool { s, _ := r.hub.snapshot(); return len(s) >= 1 })
+	eventually(t, "the message at the hub", func() bool { return len(r.hub.got()) >= 1 })
 	time.Sleep(100 * time.Millisecond)
-	if s, _ := r.hub.snapshot(); len(s) != 1 {
-		t.Fatalf("sent %d times", len(s))
+	if n := len(r.hub.got()); n != 1 {
+		t.Fatalf("handed %d times", n)
 	}
 }
 
-// Before the owner has written to the bot there is no chat to ask in: nothing is kept as asked.
-func TestNoChatYetNothingAsked(t *testing.T) {
+// channel.send: nothing to send with before the owner's first message (cannot_send); then WeChat's Markdown, in the
+// chat of their latest message.
+func TestSendNeedsTheOwnersChat(t *testing.T) {
 	r := newRig(t, true)
 	ctx := context.Background()
 	eventually(t, "serving", func() bool { return r.bot.Status(ctx).State == connector.StateOK })
-	r.hub.mu.Lock()
-	r.hub.interactions = []proto.Interaction{{ID: "ix5", MachineID: "m1", SessionID: "main1", Kind: proto.IxPermission, ToolName: "Bash"}}
-	r.hub.mu.Unlock()
-	r.bot.Hear(ctx, "agent.needs_you", json.RawMessage(`{"machine_id":"m1","session_id":"main1","interaction_id":"ix5"}`))
-	time.Sleep(100 * time.Millisecond)
-	if st := r.secrets.state(t); len(st.Asks) != 0 {
-		t.Fatalf("asks %+v", st.Asks)
+	if _, err := r.bot.Send(ctx, channel.SendParams{Ref: "a", Text: "早"}); !errors.Is(err, channel.ErrCannotSend) {
+		t.Fatalf("before the first message: %v", err)
+	}
+	r.ilink.say(owner, "在吗")
+	eventually(t, "the message at the hub", func() bool { return len(r.hub.got()) == 1 })
+	if _, err := r.bot.Send(ctx, channel.SendParams{Ref: "b", Text: "**明天** 10 点有周会。![图](x.png)", Kind: channel.OutAnswer}); err != nil {
+		t.Fatal(err)
+	}
+	got := r.sentTo(owner, "10 点有周会")
+	if got.Context == "" || !strings.HasPrefix(got.Text, "**明天**") || strings.Contains(got.Text, "x.png") { // WeChat shows bold, not pictures
+		t.Fatalf("sent %+v", got)
 	}
 }
 
-// A picture with no words that starts a new conversation is answered as soon as its turn ends: there is nothing
-// before it to tell it apart from.
-func TestPictureStartsAConversation(t *testing.T) {
+// 「正在输入」 while the hub says so, off when it says it is done.
+func TestTypingWhileTheHubSays(t *testing.T) {
 	r := newRig(t, true)
-	key, _ := hex.DecodeString("00112233445566778899aabbccddeeff")
-	enc, _ := ilink.EncryptECB(append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 32)...), key)
+	ctx := context.Background()
+	r.ilink.say(owner, "在吗")
+	eventually(t, "the message at the hub", func() bool { return len(r.hub.got()) == 1 })
+	if err := r.bot.Typing(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	_ = r.bot.Typing(ctx, true) // again within 5 s: WeChat is not told twice
+	if err := r.bot.Typing(ctx, false); err != nil {
+		t.Fatal(err)
+	}
 	r.ilink.mu.Lock()
-	r.ilink.image = enc
+	typing := append([]bool(nil), r.ilink.typing...)
 	r.ilink.mu.Unlock()
-	r.hub.mu.Lock()
-	r.hub.main = ""
-	r.hub.mu.Unlock()
-	r.ilink.say(owner, "", map[string]any{"type": 2, "image_item": map[string]any{"aeskey": hex.EncodeToString(key),
-		"media": map[string]any{"encrypt_query_param": "Q"}}})
-	eventually(t, "a main conversation", func() bool { _, s := r.hub.snapshot(); return len(s) == 1 && s[0].Images == 1 })
-	r.hub.answer("conv1", "这是一张空白的图。", 0)
-	r.clock.add(30 * time.Second)
-	r.sentTo(owner, "这是一张空白的图。")
+	if len(typing) != 2 || !typing[0] || typing[1] {
+		t.Fatalf("typing %v", typing)
+	}
 }

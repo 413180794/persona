@@ -32,6 +32,7 @@ Persona 的插件底座（#1101）：开源仓库只放通用能力和**扩展�
 | `assistant`（版本 1） | `assistant.` | `id`、`skills?`（包里的目录，各有 `SKILL.md`）、`instructions?`（包里的 `.md`）、`gate?`（包里的 `.json`：技能里一个命令的闸门） | 包里有这些文件；`gate` 要有 `skills`，要凭据时进程说协议 | 助手的技能、说明和命令闸门，见下面「助手」 |
 | `ui`（版本 2） | `ui.` | `id`、`title`、`placement`（插槽，见「UI 插槽」：`plugin_page` / `launcher_section` / `nav_page` / `overview_card` / `machine_section`）、`hosts?`（只有 `launcher_section` 能写：网关主机名，可 `*.` 开头；不写就是任何启动器，插件自己判断）、`icon?`（只有 `nav_page`）、`opens?`（只有 `overview_card`） | 进程说协议；`launcher_section` 要权限 `launcher_keys` | 插件详情里的页面、启动器页上的一节、主导航、总览、机器详情，见下面「声明式 UI」「UI 插槽」 |
 | `agent_sources`（版本 1） | `agentsrc.` | `id`（`a-z0-9_-`，也是会话 id 的来源段 `<id>:<sessionKey>`）、`name`、`providers?`（`a-z0-9_`，如 `grok_bot`） | 进程说协议，`on_startup` | Agents 页的个人 Agent，和 hub 自己的 lark-connector 来源并列，见下面「个人 Agent 来源」 |
+| `channel`（版本 1） | `channel.` | `id`（`^[a-z][a-z0-9_]{0,31}$`，不能是 8 位十六进制）、`name`、`kind`（`im`）、`connector?`（绑定和状态来自同一个插件的这个连接器）、`bind?`（`qr` / `code` / `fields`）、`description?`、`capabilities`（收图片 / 文件 / 语音、`format`、`max_text`、`asks`、`push`、`typing`、`progress`、`threads`） | 进程说协议；没有 `connector` 时 `on_startup` | 和 Persona 对话的渠道：hub 跑统一管线（进对话、跟踪这一轮、答案发回、提问），插件只管和 IM 说话，见 [channels.md](channels.md) |
 | `events`（版本 1） | `event.` | `id`、`subscribe`（事件名的列表，见「事件」） | 进程说协议，`on_startup` | 只是告诉插件 hub 上发生了什么，见下面「事件」 |
 
 hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的），这一项不生效，预览和列表里有一条警告。以后加扩展点（知识库来源、链接识别……），在这张表里加一行。
@@ -703,9 +704,10 @@ hub 管理界面（[admin.md](admin.md)）的「插件」页（`web/src/admin/pa
 ## 内置插件：微信（`wechat`）
 
 `jarvisd-wechat` 在 personad 旁边时注册成内置插件 `wechat`（#1352，`docs/wechat.md`）：贡献连接器 `wechat`（只有 `status` 和扫码的 `login`，
-声明在 `wechat/spec`）和事件 `agent.needs_you`、`agent.finished`，权限 `hub_api`（经 hub 的 API 把微信消息发给主对话、回答提问）和
-`network: *.weixin.qq.com`。和 Telegram 一样要和 hub 同一次构建、跟着连接器的开关跑；订了事件却不写 `on_startup` 是有意的：关掉开关就完全停下，
-开着时进程在跑、事件照收。连接器程序要听事件，实现 `connector/serve.Listener`（`Hear`），`connector/serve` 把 `event.*` 转给它。
+声明在 `wechat/spec`）和渠道 `wechat`（`channel` 扩展点，#1466，[channels.md](channels.md)），权限只有 `network: *.weixin.qq.com`。
+和 Telegram 一样要和 hub 同一次构建、跟着连接器的开关跑。第一版用 `hub_api` + `events` 拼（插件自己轮询会话、跟踪这一轮），#1466 起这些都是 hub 的渠道管线，
+插件不再拿 hub 的 token、不订事件。连接器程序当渠道用：实现 `channel.Transport`（`Send`，可选 `Typing` / `Edit`），收到的消息交给 `serve.Init.Channel`（`Receive`），
+`connector/serve` 把 `channel.*` 转给它、按 `ref` 只发一次。
 
 ## 内置插件：操控电脑（`cua`）
 

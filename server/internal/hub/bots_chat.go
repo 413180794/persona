@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/feishubot"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -406,8 +407,11 @@ func (h *Hub) botSend(ctx context.Context, api *feishubot.Client, set FeishuBotS
 		return errors.New("这种消息还读不了")
 	}
 
-	run := &botRun{ID: "fb_" + msg.MessageID, MessageID: msg.MessageID, Reaction: reaction, StartedAt: time.Now().UTC(), Label: rt.label,
-		Probe: botProbe(content.Text, in)}
+	run := &channel.Run{ID: "fb_" + msg.MessageID, Channel: feishuChannelID, ReplyTo: msg.MessageID, Started: time.Now().UTC(), Label: rt.label,
+		Probe: botProbe(content.Text, in), Ext: map[string]string{}}
+	if reaction != "" {
+		run.Ext["reaction"] = reaction
+	}
 	if rt.isNew {
 		s, err := h.startAssistant(ctx, text, images, "", "", "")
 		if err != nil {
@@ -422,21 +426,23 @@ func (h *Hub) botSend(ctx context.Context, api *feishubot.Client, set FeishuBotS
 			}
 			h.keepMain(ctx)
 		}
-		run.Target = botTarget{Kind: targetJarvis, MachineID: s.MachineID, SessionID: s.SessionID}
+		run.MachineID, run.SessionID, run.TargetKind, run.Probe = s.MachineID, s.SessionID, targetJarvis, ""
 		if t.Kind == targetJarvis { // /new: the chat goes on in it
 			h.bots.mu.Lock()
-			h.bots.st.Current = run.Target
+			h.bots.st.Current = botTarget{Kind: targetJarvis, MachineID: s.MachineID, SessionID: s.SessionID}
 			h.saveBotStateLocked()
 			h.bots.mu.Unlock()
 		}
 	} else {
 		sid := rt.session.SessionID
-		run.Target = botTarget{Kind: t.Kind, MachineID: rt.m.cfg.ID, SessionID: sid}
-		if run.Target.Kind == targetMain {
-			run.Target.Kind = targetJarvis
+		run.MachineID, run.SessionID, run.TargetKind = rt.m.cfg.ID, sid, t.Kind
+		if run.TargetKind == targetMain {
+			run.TargetKind = targetJarvis
 		}
 		run.Base = h.lastSeq(ctx, rt.m, sid)
-		p := map[string]any{"session_id": sid, "text": text, "client_msg_id": "feishu-" + msg.MessageID}
+		id := channel.ClientMsgID(feishuChannelID, msg.MessageID)
+		run.MsgIDs = []string{id}
+		p := map[string]any{"session_id": sid, "text": text, "client_msg_id": id}
 		if len(images) > 0 {
 			p["images"] = images
 		}
@@ -454,26 +460,21 @@ func (h *Hub) botSend(ctx context.Context, api *feishubot.Client, set FeishuBotS
 		}
 	}
 	started = true
-	h.startRun(run)
+	h.startChannelRun(run)
 	return nil
 }
 
 // botProbe picks what of a message to look for in the transcript: its first line, else something only it has.
 func botProbe(text string, in prompts.BotMessage) string {
-	for _, l := range strings.Split(text, "\n") {
-		if l = strings.TrimSpace(l); l != "" {
-			return string([]rune(l)[:min(len([]rune(l)), 24)])
-		}
+	var fallbacks []string
+	if len(in.Files) > 0 {
+		fallbacks = append(fallbacks, in.Files[0])
 	}
-	switch {
-	case len(in.Files) > 0:
-		return in.Files[0]
-	case in.Forward != "":
-		return string([]rune(in.Forward)[:min(len([]rune(in.Forward)), 24)])
-	case in.Quote != nil:
-		return string([]rune(in.Quote.Text)[:min(len([]rune(in.Quote.Text)), 24)])
+	fallbacks = append(fallbacks, in.Forward)
+	if in.Quote != nil {
+		fallbacks = append(fallbacks, in.Quote.Text)
 	}
-	return ""
+	return channel.Probe(text, fallbacks...)
 }
 
 // botDeliver sends with the same once-only guard as the app (send.go): a message id is sent at most once.

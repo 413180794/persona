@@ -565,6 +565,19 @@ func TestGoldenBotMessage(t *testing.T) {
 	golden(t, "bot_message.only_files", prompts.RenderBotMessage(prompts.BotMessage{Jarvis: true, Files: []string{"/tmp/a.pdf", "/tmp/b.png"}}))
 }
 
+// A message to a plugin's chat app bot (docs/channels.md): plain text and text answers (WeChat), Markdown without
+// answering there, what came that cannot be passed on, a picture alone.
+func TestGoldenChannelMessage(t *testing.T) {
+	golden(t, "channel_message.plain", prompts.RenderChannelMessage(prompts.ChannelMessage{Persona: true, Name: "微信", Owner: "示例用户",
+		Plain: true, Asks: true, Text: "明天有什么会？"}))
+	golden(t, "channel_message.quote_unsupported", prompts.RenderChannelMessage(prompts.ChannelMessage{Persona: true, Name: "微信", Plain: true,
+		Asks: true, Text: "看下这个", Quote: "张三\n合同明天要签", Unsupported: []string{"文件「合同.pdf」", "一段视频"}}))
+	golden(t, "channel_message.markdown_files", prompts.RenderChannelMessage(prompts.ChannelMessage{Persona: true, Name: "Example Chat",
+		Text: "看下这个日志", Forward: "11-02 10:00 张三：构建挂了", Files: []string{"/tmp/jarvis-uploads/build.log"}}))
+	golden(t, "channel_message.only_unsupported", prompts.RenderChannelMessage(prompts.ChannelMessage{Persona: true, Name: "微信", Plain: true,
+		Asks: true, Unsupported: []string{"一段没有转写的语音"}}))
+}
+
 // An item about one of the user's tasks: the judge's input lists the tasks, the AI 分身 is told the linked one.
 func TestGoldenInboxTask(t *testing.T) {
 	items := goldenItems()

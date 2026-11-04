@@ -99,9 +99,7 @@ func (h *Hub) botCommand(ctx context.Context, api *feishubot.Client, set FeishuB
 		t := h.botTargetFor("", "")
 		var b strings.Builder
 		fmt.Fprintf(&b, "现在发给：**%s**\n", feishubot.EscapeMarkdown(h.targetLabel(ctx, t)))
-		h.bots.mu.Lock()
-		running := len(h.bots.st.Runs)
-		h.bots.mu.Unlock()
+		running := len(h.channelRuns(feishuChannelID))
 		if running > 0 {
 			fmt.Fprintf(&b, "在等 %d 个回答。\n", running)
 		}

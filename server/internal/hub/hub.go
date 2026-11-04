@@ -107,7 +107,8 @@ type Hub struct {
 	// larkAgent: /agent requests from Feishu and what became of them (lark_agent.go).
 	larkAgent larkAgents
 	// bots: the chat apps' bots the user talks to Persona through (bots.go).
-	bots botHub
+	bots     botHub
+	channels channelsHub
 	// launchers: 设置 › 模型 (launchers.go); launchersSeen is every machine's last ~/.zshrc list.
 	launchers     launcherState
 	launchersSeen map[string][]proto.Launcher
@@ -406,6 +407,7 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 	}
 	h.mu.Unlock()
 	titles, named := h.agentConversationTitles(), h.conversationTitles()
+	via := h.channelsOfConversations()
 	archived, relayed := h.archivedIDs(), h.queuedRelays()
 	main := h.mainConversation(m.cfg.ID, list, dir)
 	for i := range list {
@@ -418,6 +420,9 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 			list[i].Title = t // not the first line of the prompt the hub wrote for it
 		} else if t := named[list[i].SessionID]; t != "" && list[i].Assistant {
 			list[i].Title = t // 「MMDD | 类型 | 主题」 or the user's own (assistant_titles.go)
+		}
+		if ch := via[[2]string{m.cfg.ID, list[i].SessionID}]; len(ch) > 0 {
+			list[i].Channels = ch // where its messages came from (docs/channels.md「来源标记」)
 		}
 		if list[i].Assistant {
 			list[i].Archived = archived[list[i].SessionID]
@@ -723,6 +728,7 @@ func (h *Hub) announce(ix proto.Interaction) {
 		h.notifyInteraction(ix, h.machineName(ix.MachineID))
 	}
 	h.botInteraction(ix)
+	h.channelInteraction(ix)
 }
 
 func (h *Hub) machineName(id string) string {
@@ -967,6 +973,7 @@ func (h *Hub) finishInteraction(id string) {
 func (h *Hub) finished(p *pending) {
 	id := p.ix.ID
 	h.botInteractionDone(p.ix, "已结束")
+	h.channelInteractionDone(p.ix)
 	h.broadcast(map[string]any{"type": "interaction_resolved", "id": id})
 	if m := h.localMachine(p.ix.MachineID); m != nil {
 		h.broadcastSessions(m, h.decorated(m))

@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/channel"
+
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -374,7 +376,7 @@ func TestBotMessageGoesToTheMainConversationAndTheAnswerComesBack(t *testing.T) 
 	if n := len(w.node.sends); n != 1 {
 		t.Fatalf("%d sends, want 1", n)
 	}
-	if !w.h.botAnswered("main-1") {
+	if !w.h.channelAnswered("main-1") {
 		t.Fatal("the turn answered in Feishu must not also push 完成 to the phone")
 	}
 }
@@ -452,15 +454,15 @@ func TestTurnAnswerIsTheLastWords(t *testing.T) {
 		{Role: "assistant", Kind: proto.KindText, Text: "第一段"},
 		{Role: "assistant", Kind: proto.KindText, Text: "第二段"},
 	}
-	got := turnAnswer(items)
+	got := channel.Answer(items)
 	if len(got) != 2 || got[0].Text != "第一段" || got[1].Text != "第二段" {
 		t.Fatalf("got %+v", got)
 	}
 	// Ending on a tool call (stopped): its last text still answers.
-	if got := turnAnswer(items[:3]); len(got) != 1 || got[0].Text != "先看看" {
+	if got := channel.Answer(items[:3]); len(got) != 1 || got[0].Text != "先看看" {
 		t.Fatalf("ended on a tool: %+v", got)
 	}
-	if got := turnAnswer(nil); len(got) != 0 {
+	if got := channel.Answer(nil); len(got) != 0 {
 		t.Fatalf("nothing: %+v", got)
 	}
 }
@@ -579,7 +581,7 @@ func TestBotAnswerIsPostedOnceWhenChecksRace(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {
 		wg.Add(1)
-		go func() { defer wg.Done(); w.h.botTurnEnded("box", "main-1") }()
+		go func() { defer wg.Done(); w.h.channelTurnEnded("box", "main-1") }()
 	}
 	wg.Wait()
 	w.api.find(t, "只答一次")

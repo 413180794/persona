@@ -237,6 +237,7 @@ var Features = []string{
 	"desktops",               // register_desktop, the desktops event, NotifyPrefs.mute_while_desktop (手机静音)
 	"sessions_delta",         // ?features=sessions_delta on the WebSocket: a snapshot, then sessions_delta (docs/protocol.md「会话增量」)
 	"connectors",             // GET /api/v1/connectors (docs/plan-connectors.md)
+	"channels",               // GET /api/v1/channels and each channel's settings, binding, test (docs/channels.md)
 	"runtime_cli",            // phone_runtime_cli kept out of the phone's tools, POST /api/v1/phone/runtime-cli (docs/runtime-cli.md)
 }
 
@@ -524,6 +525,9 @@ type Session struct {
 	// Archived: an assistant conversation moved out of the sidebar's list (kept, listed under 已归档; hub
 	// assistant_conversations.go).
 	Archived bool `json:"archived,omitempty"`
+	// Channels are the channels messages came into this conversation from, newest first ("wechat", "feishu"):
+	// the conversation list draws the latest's icon (docs/channels.md「来源标记」). Set by the hub.
+	Channels []string `json:"channels,omitempty"`
 	// Space / slot generalize where an agent lives in its host tool: for herdr a workspace and a tab
 	// (docs/agent-states.md). Agents sharing a space are shown together as one collaborating group.
 	SpaceKind  string `json:"space_kind,omitempty"` // herdr

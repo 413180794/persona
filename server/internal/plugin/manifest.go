@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/nwverse/persona/server/internal/channel"
 )
 
 // ManifestMost is the largest persona-plugin.json read.
@@ -248,6 +250,16 @@ func (m *Manifest) Validate() error {
 		if name == "agent_sources" && !slices.Contains(m.Activation(), OnStartup) {
 			bad("contributes.agent_sources: the Agents tab lists it all the time: activation_events on_startup")
 		}
+		if name == "channel" {
+			for _, c := range m.Channels() {
+				switch {
+				case c.Connector != "" && !slices.Contains(m.Items("connectors"), c.Connector):
+					bad("contributes.channel: %s binds through connector %s, which the plugin does not contribute", c.ID, c.Connector)
+				case c.Connector == "" && !slices.Contains(m.Activation(), OnStartup):
+					bad("contributes.channel: %s has no connector to run with: activation_events on_startup", c.ID)
+				}
+			}
+		}
 		if name == "ui" {
 			uis := m.UIs()
 			for _, u := range uis {
@@ -458,6 +470,13 @@ func (m *Manifest) Providers() []ProviderItem {
 	return out
 }
 
+// Channels are the plugin's contributions to channel.
+func (m *Manifest) Channels() []channel.Item {
+	var out []channel.Item
+	_ = json.Unmarshal(m.Contributes["channel"], &out)
+	return out
+}
+
 // Contributions are the ids by extension point, the points this hub has only.
 func (m *Manifest) Contributions() map[string][]string {
 	out := map[string][]string{}
@@ -472,7 +491,7 @@ func (m *Manifest) Contributions() map[string][]string {
 // Kind is the first extension point the plugin contributes to, by a fixed order: what GET /api/v1/plugins has always
 // said as "kind" (voice for a voice plugin).
 func (m *Manifest) Kind() string {
-	for _, name := range []string{"voice", "connectors", "api", "quota", "providers", "agent_sources", "assistant", "ui", "events"} {
+	for _, name := range []string{"voice", "connectors", "channel", "api", "quota", "providers", "agent_sources", "assistant", "ui", "events"} {
 		if len(m.Items(name)) > 0 {
 			return name
 		}

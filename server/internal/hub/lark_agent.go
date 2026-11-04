@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/channel"
+
 	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/prompts"
@@ -236,6 +238,9 @@ func (h *Hub) runLarkAgent(ctx context.Context, cfg LarkAgentConfig, feedID stri
 	}
 	h.larkAgent.mu.Unlock()
 	h.saveLarkAgentRuns(ctx)
+	if err == nil {
+		h.noteChannelConversation(channel.LarkAgent, machineID, sessionID) // the conversation came from /agent (docs/channels.md「来源标记」)
+	}
 	if err != nil {
 		h.logf("lark agent: start for %s: %v", m.ID, err)
 		h.larkAgentPost(ctx, run, "这次没能开始处理（"+clip(oneLine(err.Error()), 80)+"）。")
