@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -33,6 +34,8 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+const homeFixtureName = ".persona-sandbox-home-fixture"
+
 // probeInside tries what a sandboxed program may and may not do, and prints a line for each.
 func probeInside(args []string) int {
 	data, home := args[0], args[1]
@@ -46,7 +49,7 @@ func probeInside(args []string) int {
 	say("write data", os.WriteFile(filepath.Join(data, "x"), []byte("x"), 0o600))
 	say("write home", os.WriteFile(filepath.Join(home, ".persona-sandbox-probe"), []byte("x"), 0o600))
 	say("write tmp", os.WriteFile(filepath.Join(os.TempDir(), "x"), []byte("x"), 0o600))
-	_, err := os.ReadDir(home)
+	_, err := os.ReadFile(filepath.Join(home, homeFixtureName))
 	say("read home", err)
 	c, err := net.DialTimeout("tcp", "192.0.2.1:80", 2*time.Second)
 	if c != nil {
@@ -147,7 +150,13 @@ func TestLinuxSandboxForReal(t *testing.T) {
 	if err := px.ListenUnix("probe", sock); err != nil {
 		t.Fatal(err)
 	}
-	home, _ := os.UserHomeDir()
+	// A sibling fixture, never the real user home or a parent made inside the sandbox for its mounts.
+	home := t.TempDir()
+	fixture := filepath.Join(home, homeFixtureName)
+	const contents = "synthetic protected home contents"
+	if err := os.WriteFile(fixture, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	plan := Plan{ID: "probe", Command: self, Args: []string{"probe", data, home}, Pkg: filepath.Dir(self), Data: data, Run: run,
 		ProxySocket: sock, Self: self}
 	name, args, env := Linux(sup.Bwrap, plan)
@@ -165,6 +174,12 @@ func TestLinuxSandboxForReal(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(data, "x")); err != nil {
 		t.Errorf("its data: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".persona-sandbox-probe")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("sandbox wrote to the protected host fixture: %v", err)
+	}
+	if got, err := os.ReadFile(fixture); err != nil || string(got) != contents {
+		t.Errorf("protected host fixture changed: %v", err)
 	}
 	if st := px.Stats("probe"); st.Allowed != 1 || st.Denied != 1 {
 		t.Errorf("proxy counts %+v", st)
