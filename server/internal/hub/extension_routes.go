@@ -31,6 +31,9 @@ type ExtensionDetail struct {
 	// UI are the pages it draws, opened from its settings (plugin_page, and nav_page also on the main navigation;
 	// POST /api/v1/plugins/{id}/-/ui/{ui}).
 	UI []UIPlace `json:"ui,omitempty"`
+	// Contributions are every contribution with its switch (docs/extensions.md「贡献的开关」); contributes (the ids by
+	// point) stays as it was.
+	Contributions []ContributionView `json:"contributions,omitempty"`
 }
 
 // PluginSecretView is a declared secret and whether it has a value (never the value).
@@ -43,9 +46,10 @@ type ExtensionSecretView struct {
 }
 
 func (ps *extensions) detail(ctx context.Context, p *extension.Extension) ExtensionDetail {
-	m := p.Manifest
+	m := p.Full
 	d := ExtensionDetail{ExtensionView: ps.view(ctx, p), Publisher: m.Publisher, Homepage: m.Homepage, Origin: p.Record.Origin,
-		PreviousVersion: p.Record.PreviousVersion, ReadOnly: p.ReadOnly(), Form: p.Schema, Permissions: extension.Explain(m)}
+		PreviousVersion: p.Record.PreviousVersion, ReadOnly: p.ReadOnly(), Form: p.Schema, Permissions: extension.Explain(m),
+		Contributions: ps.contributionViews(p)}
 	if d.Permissions == nil {
 		d.Permissions = []extension.PermissionLine{}
 	}
@@ -103,6 +107,7 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 	h.extensionUIRoutes(api)
 	h.marketRoutes(api)
 	h.upgradeRoutes(api)
+	h.contributionRoutes(api)
 	ps := func() *extensions { return h.extensions }
 	h.legacyExtensionRoutes(api, "/api/v1/plugins", "/api/v1/extensions")
 	api.HandleFunc("GET /api/v1/extensions", func(w http.ResponseWriter, r *http.Request) {

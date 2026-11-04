@@ -286,6 +286,28 @@ Finder 压缩的 `__MACOSX/`、`.DS_Store`），解包时一律跳过，不算�
 每一步都记进 `plugin_audit`（谁、什么时候、从哪个版本到哪个），不记配置的值和密钥。谁：`personad extension`（命令行）、`admin UI`（管理界面）、
 `hub token` / `device:<id>`（App 的开关、配置、密钥）。
 
+### 贡献的开关（#1854）
+
+除了整个扩展的开关，**每个贡献**（`<扩展点>/<id>`）都能单独关：比如只要一个扩展的连接器、不要它在主导航上的入口，或者一个供应商扩展只留其中几家。
+
+- 关掉的贡献不生效，扩展的其余部分照常：hub 按「去掉关掉的贡献」后的清单注册（`Extension.Manifest`；完整的清单是 `Extension.Full`），
+  UI 插槽、供应商预设、助手的技能和说明、事件订阅、App 接口、额度、个人 Agent 来源都看不到它；程序在 `initialize` 的 `active` 里只拿到开着的那些
+  （每个扩展点一项：`{"ui": ["usage"], "providers": ["fast"], …}`），扩展不用为关掉的贡献做任何事。改了开关扩展会重启（和改配置一样）。
+- 关掉的 id 仍然算这个扩展的：别的扩展不能拿它装进来；权限、权限摘要、升级时比较的都是完整的清单，关掉贡献不会让扩展「少要权限」。
+- **连接器**的开关就是连接器自己的开关（设置 › 连接器、收件箱和知识库原来就用它），这里只是同一个开关的另一个入口；绑在连接器上的**渠道**跟着那个连接器。
+  它们在列表里是 `via: "connector"`、`can_disable: false`，改的时候走连接器的开关（连接器还没起来时回 409 `not_running`）。
+- hub.json 来的扩展不能单独关（去 hub.json 改）。
+- 存在 `plugins.disabled_contributions`（迁移 `0363`，`["ui/usage", …]`）；升级、回滚后留着（新版本没有这一项了就不起作用）。
+
+接口（完整权限的设备）：
+
+| 接口 | 做什么 |
+| --- | --- |
+| `GET /api/v1/extensions/{id}/-/` | 详情多一个 `contributions: [{point, id, title?, enabled, can_disable, via?}]`（按扩展点、再按清单里的顺序）；老的 `contributes`（扩展点 → id）照旧是全部 |
+| `PUT /api/v1/extensions/{id}/-/contributions/{point}/{cid}` `{enabled}` | 开关一项，回详情；没有这一项 404，hub.json 的 409 `read_only`。老路径 `/api/v1/plugins/…` 同样能用 |
+
+命令行：`personad extension contributions <id>`（列出）、`personad extension contribution <id> <point>/<cid> on|off`。
+
 ### 命令行
 
 ```text
@@ -295,6 +317,8 @@ personad extension install <source> [--yes]          先打印它能做什么，
 personad extension upgrade <id> <source> [--yes]
 personad extension rollback <id>
 personad extension enable <id> | disable <id>
+personad extension contributions <id>                 每个贡献和它的开关
+personad extension contribution <id> <point>/<cid> on|off   单独开关一个贡献（连接器的就是连接器的开关）
 personad extension config <id> key=value …           值能解析成 JSON 就按 JSON，否则当文字；key= 删掉这一项
 personad extension secret <id> <name> [--delete]     值从标准输入读（终端里不回显），不进命令行参数
 personad extension uninstall <id> [--keep-data]

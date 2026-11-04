@@ -393,7 +393,10 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 		fmt.Fprintf(stdout, "卸载了 %s\n", positional[0])
 		return nil
 	}
-	return fmt.Errorf("unknown extension command %q\n%s", args[0], extensionUsage)
+	if done, err := extensionModelCommand(ctx, c, args[0], positional, stdout); done {
+		return err
+	}
+	return fmt.Errorf("unknown extension command %q\n%s\n%s", args[0], extensionUsage, extensionModelUsage)
 }
 
 func printPreview(w io.Writer, pv *extension.Preview) {

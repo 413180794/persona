@@ -210,7 +210,7 @@ func (ps *extensions) list() []ExtensionView {
 }
 
 func (ps *extensions) view(ctx context.Context, p *extension.Extension) ExtensionView {
-	m := p.Manifest
+	m := p.Full
 	v := ExtensionView{ID: p.Record.ID, Name: m.Name, Kind: m.Kind(), Version: p.Record.Version, Source: p.Record.Source,
 		Enabled: p.Record.Enabled, Description: m.Description, Contributes: m.Contributions(), Warnings: p.Warnings}
 	if c, ok := p.Legacy.(ExtensionConfig); ok {
@@ -686,6 +686,11 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 		}
 		for _, c := range m.Channels() {
 			params.Active["channel"] = append(params.Active["channel"], c.ID)
+		}
+		for point := range m.Contributes { // the rest, without what the user switched off (docs/extensions.md「贡献的开关」)
+			if ids := m.Items(point); len(ids) > 0 && point != "connectors" && point != "channel" {
+				params.Active[point] = ids
+			}
 		}
 		return params, nil
 	}

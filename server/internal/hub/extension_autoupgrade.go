@@ -248,7 +248,7 @@ func granted(p *extension.Extension) string {
 	if p.Record.GrantedDigest != "" {
 		return p.Record.GrantedDigest
 	}
-	return extension.Digest(p.Manifest)
+	return extension.Digest(p.Full)
 }
 
 // candidate is p's newer version in its market, and where it stands (ok false: none, or p is not a market plugin).

@@ -46,8 +46,11 @@ type Record struct {
 	Enabled         bool            `json:"enabled"`
 	Config          json.RawMessage `json:"config,omitempty"`
 	Remote          *Remote         `json:"remote,omitempty"`
-	InstalledAt     time.Time       `json:"installed_at"`
-	UpdatedAt       time.Time       `json:"updated_at"`
+	// DisabledContributions are the contributions the user switched off ("<point>/<id>", docs/extensions.md「贡献的开关」):
+	// they do not take effect while the rest of the extension runs. A connector's switch is the connector's own.
+	DisabledContributions []string  `json:"disabled_contributions,omitempty"`
+	InstalledAt           time.Time `json:"installed_at"`
+	UpdatedAt             time.Time `json:"updated_at"`
 }
 
 // Remote is a plugin that runs elsewhere and is reached on these sockets.
@@ -75,10 +78,14 @@ type Sealer interface {
 	Open(sealed string) (string, error)
 }
 
-// Plugin is one registered plugin.
+// Extension is one registered extension.
 type Extension struct {
-	Record   Record
+	Record Record
+	// Manifest is what takes effect: the manifest without the contributions the user switched off (Without). Full is
+	// the manifest as installed: what the extension may do (permissions, the ids it holds) and every contribution the
+	// user can switch.
 	Manifest *Manifest
+	Full     *Manifest
 	Schema   *Schema
 	// Dir is the package's directory ("" for a remote or hub.json plugin).
 	Dir string
@@ -180,7 +187,7 @@ func (r *Registry) AddHubJSON(m *Manifest, legacy any, enabled bool) error {
 	}
 	raw, _ := json.Marshal(m)
 	r.extensions[m.ID] = &Extension{Record: Record{ID: m.ID, Source: SourceHubJSON, Version: m.Version, Manifest: raw,
-		Granted: m.Permissions, GrantedDigest: Digest(m), Enabled: enabled}, Manifest: m, Legacy: legacy}
+		Granted: m.Permissions, GrantedDigest: Digest(m), Enabled: enabled}, Manifest: m, Full: m, Legacy: legacy}
 	return nil
 }
 
@@ -198,7 +205,7 @@ func (r *Registry) AddBuiltin(m *Manifest, dir string, enabled bool) error {
 	}
 	raw, _ := json.Marshal(m)
 	r.extensions[m.ID] = &Extension{Record: Record{ID: m.ID, Source: SourceBuiltin, Version: m.Version, Manifest: raw,
-		Granted: m.Permissions, GrantedDigest: Digest(m), Enabled: enabled}, Manifest: m, Schema: schema, Dir: dir}
+		Granted: m.Permissions, GrantedDigest: Digest(m), Enabled: enabled}, Manifest: m, Full: m, Schema: schema, Dir: dir}
 	return nil
 }
 
@@ -219,6 +226,8 @@ func (r *Registry) Load(ctx context.Context) error {
 		switch {
 		case row.Source == SourceBuiltin && cur != nil && cur.Record.Source == SourceBuiltin:
 			cur.Record.Enabled, cur.Record.Config = row.Enabled, row.Config
+			cur.Record.DisabledContributions = row.DisabledContributions
+			cur.Manifest = cur.Full.Without(row.DisabledContributions)
 			cur.Record.InstalledAt, cur.Record.UpdatedAt = row.InstalledAt, row.UpdatedAt
 		case row.Source == SourceInstalled && cur == nil:
 			r.extensions[row.ID] = r.fromRow(row)
@@ -238,10 +247,10 @@ func (r *Registry) fromRow(row Record) *Extension {
 		var loose Manifest
 		_ = json.Unmarshal(row.Manifest, &loose)
 		loose.ID = row.ID
-		p.Manifest, p.Problem = &loose, "清单读不了："+err.Error()
+		p.Manifest, p.Full, p.Problem = &loose, &loose, "清单读不了："+err.Error()
 		return p
 	}
-	p.Manifest = m
+	p.Full, p.Manifest = m, m.Without(row.DisabledContributions)
 	p.Schema, _ = ParseSchema(m.Configuration)
 	if row.Remote == nil {
 		p.Dir = r.installedDir(row.ID, row.Version)
@@ -359,9 +368,10 @@ func (r *Registry) PreviewMarket(ctx context.Context, mk *Market, marketID strin
 // MorePermissions says whether m asks for more than the installed cur was granted (its upgrade needs the user's
 // confirmation).
 func MorePermissions(cur *Extension, m *Manifest) bool {
-	return !cur.Record.Granted.Covers(m.Permissions) || (m.Runtime != nil && cur.Manifest.Runtime == nil) || NodeAdds(cur.Manifest, m) ||
-		slices.ContainsFunc(m.Topics(), func(t string) bool { return !slices.Contains(cur.Manifest.Topics(), t) }) ||
-		slices.ContainsFunc(m.Surfaces(), func(t string) bool { return !slices.Contains(cur.Manifest.Surfaces(), t) })
+	was := cur.Full
+	return !cur.Record.Granted.Covers(m.Permissions) || (m.Runtime != nil && was.Runtime == nil) || NodeAdds(was, m) ||
+		slices.ContainsFunc(m.Topics(), func(t string) bool { return !slices.Contains(was.Topics(), t) }) ||
+		slices.ContainsFunc(m.Surfaces(), func(t string) bool { return !slices.Contains(was.Surfaces(), t) })
 }
 
 // Discard drops a preview that will not be installed.
@@ -559,7 +569,7 @@ func (r *Registry) conflicts(m *Manifest) error {
 				errs = append(errs, fmt.Errorf("%s 里的 %q 已经是 %s 的", point, id, who))
 			}
 			for _, other := range r.extensions {
-				if other.Record.ID != m.ID && slices.Contains(other.Manifest.Items(point), id) {
+				if other.Record.ID != m.ID && slices.Contains(other.Full.Items(point), id) {
 					errs = append(errs, fmt.Errorf("%s 里的 %q 已经是扩展 %s 的", point, id, other.Record.ID))
 				}
 			}

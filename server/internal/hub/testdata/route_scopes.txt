@@ -287,6 +287,7 @@ agents.control       POST /api/v1/sessions/{mid}/{sid}/seen
 -                    PUT /api/v1/extensions/-/upgrades
 -                    PUT /api/v1/extensions/{id}/-/auto-upgrade
 -                    PUT /api/v1/extensions/{id}/-/config
+-                    PUT /api/v1/extensions/{id}/-/contributions/{point}/{cid}
 -                    PUT /api/v1/extensions/{id}/-/enabled
 -                    PUT /api/v1/extensions/{id}/-/secrets/{name}
 -                    PUT /api/v1/hub/update/settings

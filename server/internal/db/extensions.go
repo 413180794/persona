@@ -12,7 +12,7 @@ import (
 // Plugins are the registry's rows.
 func (d *DB) Extensions(ctx context.Context) ([]extension.Record, error) {
 	rows, err := d.pool.Query(ctx, `SELECT id, source, origin, version, previous_version, manifest, granted, granted_digest, enabled,
-		config, remote, installed_at, updated_at FROM plugins ORDER BY id`)
+		config, remote, disabled_contributions, installed_at, updated_at FROM plugins ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -20,12 +20,15 @@ func (d *DB) Extensions(ctx context.Context) ([]extension.Record, error) {
 	var out []extension.Record
 	for rows.Next() {
 		var r extension.Record
-		var granted, remote []byte
+		var granted, remote, disabled []byte
 		if err := rows.Scan(&r.ID, &r.Source, &r.Origin, &r.Version, &r.PreviousVersion, &r.Manifest, &granted, &r.GrantedDigest, &r.Enabled,
-			&r.Config, &remote, &r.InstalledAt, &r.UpdatedAt); err != nil {
+			&r.Config, &remote, &disabled, &r.InstalledAt, &r.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal(granted, &r.Granted); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(disabled, &r.DisabledContributions); err != nil {
 			return nil, err
 		}
 		if len(remote) > 0 && string(remote) != "null" {
@@ -55,12 +58,20 @@ func (d *DB) PutExtension(ctx context.Context, r extension.Record) error {
 	if len(config) == 0 {
 		config = json.RawMessage(`{}`)
 	}
+	disabled := r.DisabledContributions
+	if disabled == nil {
+		disabled = []string{}
+	}
+	off, err := json.Marshal(disabled)
+	if err != nil {
+		return err
+	}
 	_, err = d.pool.Exec(ctx, `INSERT INTO plugins (id, source, origin, version, previous_version, manifest, granted, granted_digest, enabled,
-		config, remote, installed_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		config, remote, installed_at, updated_at, disabled_contributions) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		ON CONFLICT (id) DO UPDATE SET source = $2, origin = $3, version = $4, previous_version = $5, manifest = $6, granted = $7,
-		granted_digest = $8, enabled = $9, config = $10, remote = $11, updated_at = $13`,
+		granted_digest = $8, enabled = $9, config = $10, remote = $11, updated_at = $13, disabled_contributions = $14`,
 		r.ID, r.Source, r.Origin, r.Version, r.PreviousVersion, []byte(r.Manifest), granted, r.GrantedDigest, r.Enabled,
-		[]byte(config), remote, r.InstalledAt, r.UpdatedAt)
+		[]byte(config), remote, r.InstalledAt, r.UpdatedAt, off)
 	return err
 }
 
