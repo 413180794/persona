@@ -1106,7 +1106,7 @@ struct FoldedWorkRow: View {
 }
 
 /// A tool that operates a Mac, in words (#1323): what it did as a line of steps (「点 AC → 6 → × → 7 → =」), the
-/// screenshot it brought back, 看画面; its JSON and what the driver answered folded under 原始参数.
+/// screenshot it brought back, VNC; its JSON and what the driver answered folded under 原始参数.
 struct ComputerToolDetail: View {
     var call: ToolCall
     var input: String

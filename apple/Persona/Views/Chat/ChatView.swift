@@ -1721,7 +1721,7 @@ struct ChatView: View {
                     Label(model.isMuted(key) ? "开启通知" : "屏蔽通知", systemImage: model.isMuted(key) ? Theme.Icon.unmute : Theme.Icon.mute)
                 }
             }
-            ScreenMenu(recent: computerActivity?.machine)
+            ScreenMenu(machine: session?.assistant == true ? nil : key.machineRef, recent: computerActivity?.machine)
             Divider()
             if let s = session {
                 if s.canTerminal {

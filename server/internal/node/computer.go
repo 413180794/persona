@@ -219,7 +219,7 @@ func computerCall(ctx context.Context, params json.RawMessage) (*proto.ComputerR
 		Session string          `json:"session"`
 		Tool    string          `json:"tool"`
 		Args    json.RawMessage `json:"args"`
-		// The Mac stays awake for a while after (awake.go), as the plugin's 「操作和看画面时保持唤醒」 says.
+		// The Mac stays awake for a while after (awake.go), as the plugin's 「操作或开着 VNC 时保持唤醒」 says.
 		KeepAwake bool `json:"keep_awake"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {

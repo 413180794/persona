@@ -256,7 +256,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   右上「最忙 X%」，悬停看每核数值）。
   「操控电脑」（#1326，`machines/ComputerSection.tsx`，逻辑 `lib/computer.ts`，照 iOS `ComputerSection`，[computer-use.md](computer-use.md)）：hub 的插件 cua 打开、这台是 Mac 时（机器带 `computer`）
   在 Agent 下面多一节：开关「允许助手操控这台电脑」（`PUT …/computer`，离线时不能改），打开后按状态给一行说明和下一步：没装时「安装 Cua Driver」（先弹窗确认）、
-  安装中的步骤和「取消」、缺权限时「去授权」、授权窗口弹出后「再请求一次」、可以操控时版本；那台 Mac 开着屏幕共享时有「看画面」（新标签页打开 `/screen/<机器>`），
+  安装中的步骤和「取消」、缺权限时「去授权」、授权窗口弹出后「再请求一次」、可以操控时版本；那台 Mac 开着屏幕共享时有「VNC」（新标签页打开 `/screen/<机器>`），
   没开时提示去哪里打开。打开页面时 `GET …/computer` 问一次，安装 / 授权进行中每 2 秒再问。hub 没有重启这类动作（`…/computer/reboot` 是 404），这里也没有。
   截图用 `MOCK_COMPUTER=permissions|missing|ready` 的假 hub。
 
@@ -477,13 +477,13 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 
 ### 机器和设置
 
-- **看画面**（`/screen/<机器 id>`，#1184，[computer-use.md](computer-use.md)「实时画面」）：单独的一页，不走登录和侧栏，noVNC 只在这一页按需加载；经 hub 的端口转发连那台 Mac 的屏幕共享（5900），默认只看，「接管」后键鼠交给它；App 在 WebView 里打开同一页，token 放在 fragment 里只留内存。
+- **VNC**（`/screen/<机器 id>`，#1184，[computer-use.md](computer-use.md)「实时画面」）：单独的一页，不走登录和侧栏，noVNC 只在这一页按需加载；经 hub 的端口转发连那台 Mac 的屏幕共享（5900），默认只看，「接管」后键鼠交给它；App 在 WebView 里打开同一页，token 放在 fragment 里只留内存。
 
 | 手机端的功能 | 网页 | 轮次 | 说明 |
 | --- | --- | --- | --- |
 | 机器列表（卡片、曲线、重连、重新部署） | 有 | — | 卡片点进机器页 |
 | 机器详情（Agent、1 / 6 / 24 小时曲线、系统信息、启动器） | 有 | #297 | |
-| 机器详情的「操控电脑」（开关、安装 Cua Driver、授权、屏幕共享、看画面） | 有 | #1326 | 「看画面」在新标签页打开网页的 `/screen/<机器>`（iOS 在 App 内的 WebView） |
+| 机器详情的「操控电脑」（开关、安装 Cua Driver、授权、屏幕共享、VNC） | 有 | #1326 | 「VNC」在新标签页打开网页的 `/screen/<机器>`（iOS 在 App 内的 WebView） |
 | 负载曲线、Linux 每核柱状图 | 有 | #433 | |
 | 终端引擎切换、Orca 启动器 | 另有 PR | — | #254 |
 | 外观：跟随系统 / 浅色 / 深色 | 有 | — | |

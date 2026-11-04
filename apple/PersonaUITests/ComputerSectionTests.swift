@@ -41,7 +41,7 @@ final class ComputerSectionTests: XCTestCase {
         shot(app, "computer-granted")
     }
 
-    /// 看画面 (#1184): the hub's live screen page in a web view, which reaches the Mac's Screen Sharing through the port
+    /// VNC (#1184): the hub's live screen page in a web view, which reaches the Mac's Screen Sharing through the port
     /// relay and asks for its sign-in. Needs the mock to serve the built page (MOCK_WEB=web/dist) and to relay to a real
     /// Screen Sharing on this Mac's 5900 (TEST_RUNNER_JARVIS_COMPUTER_SCREEN=1).
     @MainActor func testTheLiveScreenAsksForTheMacsSignIn() throws {
@@ -50,7 +50,7 @@ final class ComputerSectionTests: XCTestCase {
         }
         let (app, _, _) = try open()
         let look = app.buttons["computer-screen"].firstMatch
-        XCTAssertTrue(look.waitForExistence(timeout: 10), "no 看画面:\n\(app.debugDescription)")
+        XCTAssertTrue(look.waitForExistence(timeout: 10), "no VNC:\n\(app.debugDescription)")
         look.tap()
         let signIn = app.webViews.staticTexts["登录这台 Mac 的屏幕共享"].firstMatch
         XCTAssertTrue(signIn.waitForExistence(timeout: 30), "the Mac's Screen Sharing did not ask to sign in:\n\(app.debugDescription)")
@@ -60,7 +60,7 @@ final class ComputerSectionTests: XCTestCase {
         XCTAssertTrue(look.waitForExistence(timeout: 10), "back on the machine page")
     }
 
-    /// In the chat, under the assistant's 看电脑 / 操控电脑: 看画面 for the Mac it operated (MOCK_COMPUTER=ready has a
+    /// In the chat, under the assistant's 看电脑 / 操控电脑: VNC for the Mac it operated (MOCK_COMPUTER=ready has a
     /// conversation where it did 6 × 7 on MacBook).
     @MainActor func testTheChatOffersTheLiveScreen() throws {
         guard state == "ready", let hub = ProcessInfo.processInfo.environment["JARVIS_COMPUTER_HUB"] else {
@@ -80,13 +80,13 @@ final class ComputerSectionTests: XCTestCase {
         let picture = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "图片，点按查看大图")).firstMatch
         XCTAssertTrue(picture.waitForExistence(timeout: 10), "no screenshot under 看电脑:\n\(app.debugDescription)")
         let screen = app.buttons["tool-screen"].firstMatch
-        XCTAssertTrue(screen.waitForExistence(timeout: 10), "no 看画面 under the tool:\n\(app.debugDescription)")
+        XCTAssertTrue(screen.waitForExistence(timeout: 10), "no VNC under the tool:\n\(app.debugDescription)")
         for _ in 0..<4 where !screen.isHittable { screen.frame.minY < app.frame.midY ? app.swipeDown() : app.swipeUp() }
         shot(app, "computer-chat-tool")
     }
 
     /// The apps always allowed for the assistant on this Mac (#1507; MOCK_COMPUTER_APPS=1, JARVIS_COMPUTER_APPS=1):
-    /// listed under 看画面, each taken back with 移除 (asked about again next time).
+    /// listed under VNC, each taken back with 移除 (asked about again next time).
     @MainActor func testAllowedAppsCanBeTakenBack() throws {
         guard state == "ready", ProcessInfo.processInfo.environment["JARVIS_COMPUTER_APPS"] == "1" else {
             throw XCTSkip("MOCK_COMPUTER=ready MOCK_COMPUTER_APPS=1 (JARVIS_COMPUTER_APPS=1)")

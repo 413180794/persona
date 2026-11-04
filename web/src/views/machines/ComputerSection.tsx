@@ -1,7 +1,7 @@
 // 操控电脑 on a Mac's page while the hub's plugin cua is on (docs/computer-use.md, iOS ComputerSection): the switch that
 // lets the assistant operate it through Cua Driver, and whether it can now. What is missing comes with what to do:
 // 安装 Cua Driver (after a confirmation) when it is not there, 去授权 when a permission is missing (macOS asks on the
-// Mac's own screen), the node's progress while it works, and 看画面 (the web's live screen, /screen/<mid>) when
+// Mac's own screen), the node's progress while it works, and VNC (the web's live screen, /screen/<mid>) when
 // Screen Sharing is on. The hub is asked again when the page opens, and every 2 s while a job runs.
 import { useEffect, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
@@ -67,7 +67,7 @@ export function ComputerSection({ mid, computer, online }: { mid: string; comput
   const v = computerView(shown, online);
   const look = (prominent: boolean) => (
     <Button tone={prominent ? "primary" : "secondary"} icon="monitor" onClick={() => window.open(screenPath(mid), "_blank", "noopener")}>
-      看画面
+      VNC
     </Button>
   );
   const action = (title: string, what: ComputerAction, prominent = false) => (

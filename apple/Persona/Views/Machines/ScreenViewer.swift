@@ -8,9 +8,10 @@ import WebKit
 /// stores nothing. RootView presents it for `AppModel.screenOpen` (`model.openScreen(ref)`).
 struct ScreenDrawer: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
     let ref: MachineRef
     var unlock = false
+    /// Closes it (ScreenWindow's): down and away, then `AppModel.screenOpen` goes.
+    var onClose: () -> Void = {}
     @State private var offset: CGFloat = 0
     @State private var page = ScreenPageState()
     @State private var control = false
@@ -53,7 +54,7 @@ struct ScreenDrawer: View {
             Capsule().fill(Color.secondary.opacity(0.35)).scaledFrame(width: Theme.Size.wellXL, height: Theme.Size.grabber)
                 .scaledFrame(width: Theme.Size.box110, height: Theme.Size.wellS)
                 .contentShape(.rect)
-                .onTapGesture { Haptics.tap(); dismiss() }
+                .onTapGesture { Haptics.tap(); onClose() }
                 .accessibilityElement()
                 .accessibilityLabel("关闭画面")
                 .accessibilityAddTraits(.isButton)
@@ -74,7 +75,7 @@ struct ScreenDrawer: View {
         .gesture(DragGesture(minimumDistance: 4, coordinateSpace: .global)
             .onChanged { offset = max(0, $0.translation.height) }
             .onEnded { g in
-                if g.translation.height > 140 || g.predictedEndTranslation.height > 420 { dismiss() } else {
+                if g.translation.height > 140 || g.predictedEndTranslation.height > 420 { onClose() } else {
                     withAnimation(Theme.Motion.layout) { offset = 0 }
                 }
             })
@@ -167,18 +168,94 @@ struct ScreenOpen: Identifiable, Hashable {
     var phase: Phase = .checking
 }
 
-extension View {
-    /// Presents the live screen `AppModel.screenOpen` asks for: the terminal's kind of drawer on the phone, a large
-    /// sheet on the Mac.
-    func screenDrawer(_ model: AppModel) -> some View {
-        @Bindable var model = model
-        #if os(iOS)
-        return fullScreenCover(item: $model.screenOpen) { ScreenDrawer(ref: $0.machine, unlock: $0.unlock).presentationBackground(.clear) }
-        #else
-        return sheet(item: $model.screenOpen) { ScreenDrawer(ref: $0.machine, unlock: $0.unlock).macLargeSheet() }
-        #endif
+#if os(iOS)
+/// The live screen in a window of its own (#1604): over the shell's window and whatever it presents (a sheet, a page
+/// pushed in one), under the toasts' (`ToastWindow`). SwiftUI presents one thing at a time from the root, so a
+/// fullScreenCover there was swallowed while a machine page was up in a sheet. `AppModel.screenOpen` shows and hides it.
+@MainActor final class ScreenWindow {
+    static let shared = ScreenWindow()
+    private var window: UIWindow?
+    private weak var before: UIWindow?
+
+    func show(_ open: ScreenOpen?) {
+        guard let open else {
+            window?.isHidden = true
+            window = nil
+            before?.makeKey()
+            return
+        }
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        guard let scene = scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first else { return }
+        let shell = scene.windows.first { $0.isKeyWindow } ?? scene.windows.first
+        if window == nil { before = shell }
+        let w = window ?? UIWindow(windowScene: scene)
+        w.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.normal.rawValue + 0.5) // under ToastWindow's .normal + 1
+        w.backgroundColor = .clear
+        w.overrideUserInterfaceStyle = shell?.overrideUserInterfaceStyle ?? .unspecified
+        let host = UIHostingController(rootView: ScreenWindowRoot(open: open).environment(AppModel.shared))
+        host.view.backgroundColor = .clear
+        w.rootViewController = host
+        w.isHidden = false
+        w.makeKey()
+        window = w
     }
 }
+
+/// The drawer up from the bottom as it opens, and down again as it closes, then the window goes.
+private struct ScreenWindowRoot: View {
+    let open: ScreenOpen
+    @State private var visible = false
+
+    var body: some View {
+        ZStack {
+            if visible {
+                ScreenDrawer(ref: open.machine, unlock: open.unlock, onClose: close).transition(.move(edge: .bottom))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear { withAnimation(Theme.Motion.layout) { visible = true } }
+    }
+
+    private func close() {
+        withAnimation(Theme.Motion.layout) { visible = false } completion: { AppModel.shared.screenOpen = nil }
+    }
+}
+#else
+/// The live screen in a window of its own on the Mac (#1604), as `AppModel.screenOpen` says; closing it clears that.
+@MainActor final class ScreenWindow: NSObject, NSWindowDelegate {
+    static let shared = ScreenWindow()
+    private var window: NSWindow?
+
+    func show(_ open: ScreenOpen?) {
+        guard let open else {
+            let w = window
+            window = nil
+            w?.close()
+            return
+        }
+        let host = NSHostingController(rootView: ScreenDrawer(ref: open.machine, unlock: open.unlock) { AppModel.shared.screenOpen = nil }
+            .environment(AppModel.shared))
+        let w = window ?? NSWindow(contentViewController: host)
+        w.contentViewController = host
+        w.title = "VNC · " + (AppModel.shared.machine(open.machine)?.name ?? open.machine.id)
+        w.styleMask.insert([.resizable, .closable, .miniaturizable])
+        w.isReleasedWhenClosed = false
+        w.delegate = self
+        if window == nil {
+            w.setContentSize(NSApp.mainWindow.map { NSSize(width: $0.frame.width * 0.75, height: $0.frame.height * 0.8) } ?? w.frame.size)
+            w.center()
+        }
+        w.makeKeyAndOrderFront(nil)
+        window = w
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        guard window != nil else { return }
+        window = nil
+        AppModel.shared.screenOpen = nil
+    }
+}
+#endif
 
 /// The page in a web view that stores nothing; it posts its phase (`screen` message), and 只看 / 接管 is passed in.
 private final class ScreenBridge: NSObject, WKScriptMessageHandler {
@@ -293,7 +370,7 @@ private struct ScreenWebView: NSViewRepresentable {
 }
 #endif
 
-/// 看画面 under a tool that operates a Mac: the assistant's computer_state / computer_run (the machine it names), or an
+/// VNC under a tool that operates a Mac: the assistant's computer_state / computer_run (the machine it names), or an
 /// agent's own Cua Driver MCP tools (the agent's machine), while that Mac's live screen can be shown.
 struct ScreenEntry: View {
     @Environment(AppModel.self) private var model
@@ -303,7 +380,7 @@ struct ScreenEntry: View {
     var body: some View {
         if let ref = Self.machine(call.name, input: call.input, chat: scope?.machine, machines: model.machines), model.canShowScreen(ref) {
             Button { model.openScreen(ref) } label: {
-                Label("看画面", systemImage: Theme.Icon.screen).font(Theme.Font.labelStrong).lineLimit(1)
+                Label("VNC", systemImage: Theme.Icon.screen).font(Theme.Font.labelStrong).lineLimit(1)
             }
             .themedButton()
             .accessibilityIdentifier("tool-screen")
@@ -346,7 +423,7 @@ struct ComputerActivityPill: View {
                 .disabled(!model.canShowScreen(a.machine))
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel((a.running ? "正在操作 " : "刚操作 ") + a.machineName + "，" + a.step)
-                .accessibilityHint(model.canShowScreen(a.machine) ? "看画面" : "")
+                .accessibilityHint(model.canShowScreen(a.machine) ? "打开 VNC" : "")
                 .accessibilityIdentifier("computer-activity")
                 .transition(.opacity)
             }
@@ -358,24 +435,35 @@ struct ComputerActivityPill: View {
     static func shows(_ a: ComputerActivity?) -> Bool { a?.shown(at: .now) ?? false }
 }
 
-/// 看画面 in a chat's ··· menu (#1343): every Mac whose live screen can be shown, the one the chat's model operated
-/// last first; one alone is a button. Nothing when there is none.
+/// VNC in a chat's ··· menu (#1343, #1604): an agent's chat has its own Mac's, straight away, or none; the assistant's,
+/// the Mac it operated last, else every Mac whose live screen can be shown (a submenu when there are several).
 struct ScreenMenu: View {
     @Environment(AppModel.self) private var model
-    /// The Mac this chat's model operated last; nil: the one any chat did most recently.
-    var recent: MachineRef?
+    /// An agent's chat: its own Mac, the only one (nothing when it is not a Mac whose screen can be shown).
+    var machine: MachineRef? = nil
+    /// The assistant's: the Mac it operated last; with none, the Macs whose screen can be shown.
+    var recent: MachineRef? = nil
 
     var body: some View {
-        let first = recent ?? model.computerActivities.values.max { $0.at < $1.at }?.machine
-        let macs = model.screenMachines.sorted { a, b in a.ref == first && b.ref != first }
-        if macs.count == 1, let m = macs.first {
-            Button { model.openScreen(m.ref) } label: { Label("看画面 · \(m.name)", systemImage: Theme.Icon.screen).lineLimit(1) }
-        } else if !macs.isEmpty {
-            Menu {
-                ForEach(macs) { m in Button { model.openScreen(m.ref) } label: { Text(m.name).lineLimit(1) } }
-            } label: {
-                Label("看画面", systemImage: Theme.Icon.screen).lineLimit(1)
+        if let machine {
+            if model.canShowScreen(machine), let m = model.machine(machine) { item(m) }
+        } else if let recent, model.canShowScreen(recent), let m = model.machine(recent) {
+            item(m)
+        } else {
+            let macs = model.screenMachines
+            if macs.count == 1, let m = macs.first {
+                item(m)
+            } else if !macs.isEmpty {
+                Menu {
+                    ForEach(macs) { m in Button { model.openScreen(m.ref) } label: { Text(m.name).lineLimit(1) } }
+                } label: {
+                    Label("VNC", systemImage: Theme.Icon.screen).lineLimit(1)
+                }
             }
         }
+    }
+
+    private func item(_ m: Machine) -> some View {
+        Button { model.openScreen(m.ref) } label: { Label("VNC · \(m.name)", systemImage: Theme.Icon.screen).lineLimit(1) }
     }
 }

@@ -1,6 +1,6 @@
 import XCTest
 
-/// 看画面 remembers the Mac's Screen Sharing sign-in on this phone (#1322), against scripts/mock/mock_hub.py with
+/// VNC remembers the Mac's Screen Sharing sign-in on this phone (#1322), against scripts/mock/mock_hub.py with
 /// MOCK_COMPUTER=ready MOCK_WEB=web/dist MOCK_SCREEN=fake (a Screen Sharing of the mock's own that takes me / mock-pass;
 /// TEST_RUNNER_JARVIS_SCREEN_HUB, TEST_RUNNER_JARVIS_FAKE_SCREEN=1): signed in once with 「在这台手机上记住」, the
 /// screen comes up by itself next time; after the Mac's password changed the form says so and the new one replaces
@@ -19,7 +19,7 @@ final class ScreenPasswordTests: XCTestCase {
         app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "macbook", "-openScreenFresh", "YES"]
         app.launchPinned()
         let look = app.buttons["computer-screen"].firstMatch
-        XCTAssertTrue(look.waitForExistence(timeout: 30), "no 看画面:\n\(app.debugDescription)")
+        XCTAssertTrue(look.waitForExistence(timeout: 30), "no VNC:\n\(app.debugDescription)")
         for _ in 0..<6 where !look.isHittable { app.swipeUp() }
         XCTAssertFalse(app.buttons["screen-forget"].exists, "nothing remembered yet")
 
@@ -34,7 +34,7 @@ final class ScreenPasswordTests: XCTestCase {
         XCTAssertTrue(live(app), "signed in")
         close(app)
         let forget = app.buttons["screen-forget"].firstMatch
-        XCTAssertTrue(forget.waitForExistence(timeout: 10), "remembered: 忘记屏幕共享密码 next to 看画面")
+        XCTAssertTrue(forget.waitForExistence(timeout: 10), "remembered: 忘记屏幕共享密码 next to VNC")
         shot(app, "screen-password-forget")
 
         // Next time it signs in by itself.
@@ -80,7 +80,7 @@ final class ScreenPasswordTests: XCTestCase {
                                "-openScreenFresh", "YES", "-showUnlockWithoutAuth", "YES"]
         app.launchPinned()
         let look = app.buttons["computer-screen"].firstMatch
-        XCTAssertTrue(look.waitForExistence(timeout: 30), "no 看画面:\n\(app.debugDescription)")
+        XCTAssertTrue(look.waitForExistence(timeout: 30), "no VNC:\n\(app.debugDescription)")
         for _ in 0..<6 where !look.isHittable { app.swipeUp() }
         look.tap()
         XCTAssertTrue(app.webViews.staticTexts["登录这台 Mac 的屏幕共享"].firstMatch.waitForExistence(timeout: 30))

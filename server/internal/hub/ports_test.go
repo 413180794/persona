@@ -380,7 +380,7 @@ func TestTheLiveScreenTakesTheAppsDeviceToken(t *testing.T) {
 		t.Fatalf("Screen Sharing's greeting through the relay: %q %v", b, err)
 	}
 	if dials.Load() != 1 {
-		t.Fatal("someone is watching: the node keeps the Mac awake (「操作和看画面时保持唤醒」, on unless turned off)")
+		t.Fatal("someone is watching: the node keeps the Mac awake (「操作或开着 VNC 时保持唤醒」, on unless turned off)")
 	}
 
 	before := dialed.Load()

@@ -110,7 +110,7 @@ struct ComputerSection: View {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 line("这台 Mac 锁屏了，解锁后才能操控", ok: false)
                 if !c.screenSharing {
-                    Text("在那台 Mac 上解锁；打开它的「屏幕共享」后，也能在这里看画面、远程解锁。")
+                    Text("在那台 Mac 上解锁；打开它的「屏幕共享」后，也能在这里用 VNC 远程解锁。")
                         .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 } else if oneTap {
                     Text("点「一键解锁」，验证后把记住的密码输入它的锁屏。")
@@ -156,7 +156,7 @@ struct ComputerSection: View {
     }
 
     /// The way to Cua Driver's two permissions (#1280): what is allowed already, checked; the rest as numbered steps in
-    /// System Settings' own words; 去授权 (macOS's dialogs), 再检查一次, and 看画面 to do it from the phone.
+    /// System Settings' own words; 去授权 (macOS's dialogs), 再检查一次, and VNC to do it from the phone.
     private func grantGuide(_ c: MachineComputer, asking: Bool) -> some View {
         let steps = GrantGuide.steps(c)
         let failed = c.job.flatMap { $0.kind == "grant" && $0.state == "failed" ? $0.error : nil }
@@ -221,12 +221,12 @@ struct ComputerSection: View {
         .accessibilityIdentifier(identifier)
     }
 
-    /// 看画面: the Mac's live screen, where macOS's dialogs can be answered from the phone too.
+    /// VNC: the Mac's live screen, where macOS's dialogs can be answered from the phone too.
     private func look(prominent: Bool) -> some View {
         Button {
             model.openScreen(ref)
         } label: {
-            Label("看画面", systemImage: Theme.Icon.screen).font(Theme.Font.labelStrong).lineLimit(1)
+            Label("VNC", systemImage: Theme.Icon.screen).font(Theme.Font.labelStrong).lineLimit(1)
         }
         .themedButton(prominent: prominent)
         .accessibilityIdentifier("computer-screen")

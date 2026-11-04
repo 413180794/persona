@@ -94,7 +94,7 @@ struct BrowserSection: View {
         }
     }
 
-    /// Its first-run setup, done on the Mac: numbered steps in ego's own words, 打开 ego lite, 看画面, 再检查一次.
+    /// Its first-run setup, done on the Mac: numbered steps in ego's own words, 打开 ego lite, VNC, 再检查一次.
     private func setUpGuide(_ b: MachineBrowser) -> some View {
         let steps = BrowserGuide.setUpSteps(b)
         return VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -172,12 +172,12 @@ struct BrowserSection: View {
         .accessibilityIdentifier("browser-recheck")
     }
 
-    /// 看画面: the Mac's live screen, where ego's setup is done from the phone.
+    /// VNC: the Mac's live screen, where ego's setup is done from the phone.
     private func look(prominent: Bool) -> some View {
         Button {
             model.openScreen(ref)
         } label: {
-            Label("看画面", systemImage: Theme.Icon.screen).font(Theme.Font.labelStrong).lineLimit(1)
+            Label("VNC", systemImage: Theme.Icon.screen).font(Theme.Font.labelStrong).lineLimit(1)
         }
         .themedButton(prominent: prominent)
         .accessibilityIdentifier("browser-screen")
@@ -224,7 +224,7 @@ struct BrowserSection: View {
 nonisolated enum BrowserGuide {
     static func setUpSteps(_ b: MachineBrowser) -> [GrantGuide.Step] {
         [
-            GrantGuide.Step(id: "open", done: false, text: "点「打开 ego lite」，它会在那台 Mac 上打开（屏幕共享开着时可以「看画面」在手机上操作）"),
+            GrantGuide.Step(id: "open", done: false, text: "点「打开 ego lite」，它会在那台 Mac 上打开（屏幕共享开着时可以用「VNC」在手机上操作）"),
             GrantGuide.Step(id: "import", done: false, text: "首次设置里选从 Chrome（或别的浏览器）导入数据：网站的登录状态会一起带过来。macOS 会多次要钥匙串密码，每次都输那台 Mac 的登录密码。不想导入可以跳过"),
             GrantGuide.Step(id: "finish", done: false, text: "做完首次设置，它会装上 ego-browser 命令"),
             GrantGuide.Step(id: "recheck", done: false, text: "回到这里点「再检查一次」"),

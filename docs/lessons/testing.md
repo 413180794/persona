@@ -61,7 +61,7 @@
 - 手动给 XCUITest 传环境变量时，命令行使用 `TEST_RUNNER_<变量名>`，测试进程读取去掉前缀后的变量名（2026-11-03，#697）。直接 `JARVIS_MOCK_HUB=... xcodebuild test` 没传进 runner，测试因缺 mock 地址跳过，但整体仍打印 `TEST SUCCEEDED`。验收必须确认用例实际执行、跳过数量和断言结果，不能只看退出码；修好环境后，旧界面的四类配置回归确实失败。
 - 手动跑 `xcodebuild test` / `build-for-testing` 前先 `eval "$(python3 scripts/jarvis_config.py env)"`：配置里的 `xcode` 只经它变成 `DEVELOPER_DIR`。
   直接跑用的是系统默认的 Xcode，SDK 旧一档时报 `toolbarVerticalEdge` 之类「no exact matches in call to initializer」（2026-10-31 被当成别人的代码坏了，白查一下午）。
-- 量界面的跳动 / 闪动要看画面：`simctl io recordVideo` 录下来、ffmpeg 拆帧，逐帧跟踪一条像素；只闪一帧的跳只有这样看得到。
+- 量界面的跳动 / 闪动要VNC：`simctl io recordVideo` 录下来、ffmpeg 拆帧，逐帧跟踪一条像素；只闪一帧的跳只有这样看得到。
   App 里记的位置日志可能和屏幕上的不一致（2026-10-31 日志说表头在原位，画面上整页偏了 10pt），以画面为准。
 - XCUITest 的 `element.tap()` 在 iOS 27.0 模拟器上点在 frame 左上角往里约 4pt（27.1 上点在圆里）：圆形 `contentShape(.circle)` 的按钮
   （Persona 顶栏的玻璃圆钮「历史对话」「新对话」）点在圆外，什么都不发生，看上去像按钮坏了（2026-10-31 iPhone 17 Pro 上 `testButtonsAndPickingAConversation`

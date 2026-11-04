@@ -766,3 +766,11 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
   （这里用 hub 自己的 `seen_at`，不拿手机的时钟去比 hub 的时间），没证明就补发；等的这段时间按本地的改动显示，别让推送盖回去。
   WS 发普通消息的路径早就这样做了（`sendPending` 前面同时看 `connected` 和 `stalled`），新加这类消息时照着做。
 
+## 从 sheet 里的页面点 VNC 没反应：根视图上的 fullScreenCover 被吞了（2026-11-04，#1604）
+
+- **现象**：机器页本身在 sheet 里（或新外壳推出来的页面里）时，点「看画面」没反应；回到首页从别处点又能打开。
+- **原因**：画面挂在 `RootView` 的 `fullScreenCover(item:)` 上。根视图已经在 present 一个 sheet 时，SwiftUI 不再 present 第二个，什么也不报。Mac 的 `MacRootView` 干脆没挂。UI 测试是从设置 tab 里 push 进机器页的，没有 sheet，所以没测出来。
+- **以后**：
+  - 从任何地方都要能弹出的全屏层（画面这种），放进一个自己的窗口（iOS 的 `UIWindow`，level 在 shell 之上、toast 之下；Mac 的独立窗口），由模型的一个值驱动显示，不挂在某个视图的 present 链上。
+  - 测试要从 sheet 或新外壳的页面里点一次。
+

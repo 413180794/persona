@@ -222,7 +222,7 @@ nonisolated struct MachineComputer: Codable, Hashable, Sendable {
     var note: String? = nil
     /// Installing Cua Driver or asking for its permissions (the page's buttons): the running one, or the last.
     var job: ComputerJob? = nil
-    /// macOS's Screen Sharing answers on the Mac: its live screen can be shown (看画面).
+    /// macOS's Screen Sharing answers on the Mac: its live screen can be shown (VNC).
     var screenSharing = false
 
     enum CodingKeys: String, CodingKey {

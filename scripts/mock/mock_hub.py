@@ -6464,7 +6464,7 @@ def say(text, user=None, stream=False, steps=10, ms=300):
 
 if os.environ.get("MOCK_COMPUTER", "") not in ("", "off"):
     # The assistant operating MacBook (#1182, #1184), in a conversation of its own: its tools read 操控电脑 / 看电脑, the
-    # screenshot is a made-up Calculator (calculator_png), and under them 看画面 opens the live screen.
+    # screenshot is a made-up Calculator (calculator_png), and under them VNC opens the live screen.
     _steps = [{"click": {"app": "Calculator", "role": "button", "name": n}} for n in ("All Clear", "6", "Multiply", "7", "Equals")]
     _run = tool("mcp__jarvis__computer_run", {"machine": "macbook", "steps": _steps}, '{"ok":true,"executed":5,"total":5}', 1)
     _look = tool("mcp__jarvis__computer_state", {"machine": "macbook", "app": "Calculator"},
@@ -6753,7 +6753,7 @@ if MOCK_COMPUTER:
                            "description": "打开后，助手每次点击、输入、按键、打开或关闭 App 之前先在手机上问你；关着时直接做，记进 hub 的日志"},
                           {"name": "app_approval", "type": "boolean", "title": "第一次操作一个 App 时先问", "default": True,
                            "description": "助手第一次在一台 Mac 上操作某个 App（或看整个屏幕）时在手机上问一次，选「一直允许」后记住，在机器页可以移除；终端、系统设置、钥匙串访问、密码管理器和 Persona 每次都问"},
-                          {"name": "keep_awake", "type": "boolean", "title": "操作和看画面时保持唤醒", "default": True,
+                          {"name": "keep_awake", "type": "boolean", "title": "操作或开着 VNC 时保持唤醒", "default": True,
                            "description": "助手操作那台 Mac、或有人在看它的画面时，它不睡、不因空闲锁屏；最后一次操作 10 分钟后、画面关掉后就撤掉，不改系统设置"}]},
                       "config": {}, "secrets": [], "permissions": []}
 

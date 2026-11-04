@@ -47,7 +47,7 @@ final class BrowserSectionTests: XCTestCase {
         XCTAssertTrue(app.buttons["browser-open"].exists && app.buttons["browser-recheck"].exists && app.buttons["browser-screen"].exists)
         shot(app, "browser-setup")
         if ProcessInfo.processInfo.environment["JARVIS_BROWSER_SCREEN"] == "1" {
-            // 看画面 opens that Mac's live screen with only the plugin ego on for it (#1507), up to its sign-in
+            // VNC opens that Mac's live screen with only the plugin ego on for it (#1507), up to its sign-in
             // (MOCK_WEB, MOCK_SCREEN=fake).
             app.buttons["browser-screen"].tap()
             let signIn = app.webViews.staticTexts["登录这台 Mac 的屏幕共享"].firstMatch

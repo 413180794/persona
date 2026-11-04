@@ -2,7 +2,7 @@ import XCTest
 
 /// The live screen as a drawer (#1343): while a chat's model operates a Mac its running work says so (「正在操作
 /// MacBook · 点 AC → 9 → × → 8」) and opens the screen like the terminal's drawer, over it the step, dragged down it
-/// closes; the ··· menus have 看画面 whether or not the model is at it. Against scripts/mock/mock_hub.py with
+/// closes; the ··· menus have VNC whether or not the model is at it. Against scripts/mock/mock_hub.py with
 /// MOCK_COMPUTER=ready MOCK_COMPUTER_OPERATING=1 MOCK_WEB=web/dist (`TEST_RUNNER_JARVIS_SCREEN_HUB`); JARVIS_SHOTS keeps
 /// the screenshots, named by `TEST_RUNNER_JARVIS_LOOK`.
 final class ScreenDrawerTests: XCTestCase {
@@ -52,16 +52,36 @@ final class ScreenDrawerTests: XCTestCase {
         shot(app, "screen-pill-agent")
     }
 
+    /// From a machine page pushed in the new shell's pages (#1604): the screen came up nowhere there (a cover from the
+    /// root was swallowed while a page was presented); in a window of its own it comes up over it, and closes back to it.
+    @MainActor func testVNCFromTheShellsMachinePage() throws {
+        let app = try launch(["-ui.oldLayout", "NO", "-newAssistant", "YES", "-openShellPage", "machines"])
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "MacBook")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 30), "no MacBook on the machines page:\n\(app.debugDescription)")
+        row.tap()
+        let vnc = app.buttons["computer-screen"].firstMatch
+        XCTAssertTrue(vnc.waitForExistence(timeout: 20), "no VNC on its page:\n\(app.debugDescription)")
+        for _ in 0..<6 where !vnc.isHittable { app.swipeUp() }
+        XCTAssertTrue(vnc.label.contains("VNC"), vnc.label)
+        vnc.tap()
+        let drawer = app.descendants(matching: .any)["screen-drawer"].firstMatch
+        XCTAssertTrue(drawer.waitForExistence(timeout: 10), "the screen over the machine page:\n\(app.debugDescription)")
+        shot(app, "screen-from-machine-page")
+        app.descendants(matching: .any)["screen-close"].firstMatch.tap()
+        XCTAssertTrue(waitGone(drawer), "closed")
+        XCTAssertTrue(vnc.waitForExistence(timeout: 5), "back on the machine page")
+    }
+
     @MainActor func testTheMenusHaveTheScreen() throws {
         let app = try launch(["-app.tab", "assistant", "-tab", "assistant", "-openAssistant", calc])
         let face = app.buttons["jarvis-avatar"].firstMatch
         XCTAssertTrue(face.waitForExistence(timeout: 30))
         face.tap()
-        let item = app.buttons["看画面 · MacBook"].firstMatch
-        XCTAssertTrue(item.waitForExistence(timeout: 5), "no 看画面 in the menu:\n\(app.debugDescription)")
+        let item = app.buttons["VNC · MacBook"].firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "no VNC in the menu:\n\(app.debugDescription)")
         shot(app, "screen-menu")
         item.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["screen-drawer"].firstMatch.waitForExistence(timeout: 10), "the menu's 看画面 opens it")
+        XCTAssertTrue(app.descendants(matching: .any)["screen-drawer"].firstMatch.waitForExistence(timeout: 10), "the menu's VNC opens it")
     }
 
     private func waitGone(_ e: XCUIElement) -> Bool {

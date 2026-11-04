@@ -205,7 +205,7 @@ func TestComputerToolsCallTheNode(t *testing.T) {
 	}
 	for _, c := range calls {
 		if !c.KeepAwake {
-			t.Fatalf("「操作和看画面时保持唤醒」 is on unless turned off: %+v", c)
+			t.Fatalf("「操作或开着 VNC 时保持唤醒」 is on unless turned off: %+v", c)
 		}
 	}
 	if err := h.plugins.reg.SetConfig(ctx, cuaPluginID, json.RawMessage(`{"machines": ["mac"], "keep_awake": false, "app_approval": false}`), "test"); err != nil {

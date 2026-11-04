@@ -131,7 +131,7 @@ node 的探测：
 | 没装 | 「这台 Mac 上还没有装 Cua Driver」+「安装 Cua Driver」 |
 | 正在安装 | 转圈 + 当前步骤 +「取消」 |
 | 装失败 | 「没装上：<安装器最后几行>」+「重新安装」 |
-| 缺权限，或请求授权中 | 分步引导（#1280）：已允许的打勾，没允许的按顺序编号，用 macOS 26 系统设置里的原名（「系统设置 › 隐私与安全性 › 辅助功能」「录屏与系统录音」，旧版叫「屏幕录制」；应用在列表里叫「Cua Driver」）；缺录屏时多一步「系统提示退出重开或直接访问屏幕时选允许」；最后「回到这里点再检查一次」。按钮「去授权」「再检查一次」，屏幕共享开着时加「看画面」 |
+| 缺权限，或请求授权中 | 分步引导（#1280）：已允许的打勾，没允许的按顺序编号，用 macOS 26 系统设置里的原名（「系统设置 › 隐私与安全性 › 辅助功能」「录屏与系统录音」，旧版叫「屏幕录制」；应用在列表里叫「Cua Driver」）；缺录屏时多一步「系统提示退出重开或直接访问屏幕时选允许」；最后「回到这里点再检查一次」。按钮「去授权」「再检查一次」，屏幕共享开着时加「VNC」 |
 | 就绪 | 「现在可以操控 · Cua Driver 0.38.0」 |
 
 页面在有任务、或请求过授权还在等「允许」时每 2 秒问一次。
@@ -156,7 +156,7 @@ node 的探测：
 ### 授权（node 的 `computer.grant`）
 
 - node 执行 `cua-driver permissions grant`：它经 LaunchServices 打开 CuaDriver.app，弹出辅助功能、屏幕录制的系统窗口。
-- **这一步只能在那台 Mac 的屏幕上点「允许」**，App 替不了点。屏幕共享开着时，机器页给「看画面」（下一节），在手机上的画面里远程点。
+- **这一步只能在那台 Mac 的屏幕上点「允许」**，App 替不了点。屏幕共享开着时，机器页给「VNC」（下一节），在手机上的画面里远程点。
 - **做不到的**：那台 Mac 的屏幕共享也没开时，第一次授权必须本人在机器前操作。之后都能远程。
 - 卸载按钮没做，不是必须的。要卸载就运行 Cua 自己的 `https://cua.ai/driver/uninstall.sh`。
 
@@ -196,8 +196,8 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - 接受 noVNC 可能带的 `binary` 子协议。
   - 只读的设备（手表那种）照旧 403。
 - hub ⇄ node：`port.dial`，node 只连本机的 `127.0.0.1:5900`。
-- `computer.status` 多报一个 `screen_sharing`：node 连一下 `127.0.0.1:5900`，看对方是不是用 RFB 的版本号打招呼（macOS 是 `RFB 003.889`）。机器页据此决定给「看画面」，还是说明怎么打开屏幕共享。
-- 单个流的未确认上限仍是 512 KB：按 50 ms 往返算约 10 MB/s，看画面够用，没有改。
+- `computer.status` 多报一个 `screen_sharing`：node 连一下 `127.0.0.1:5900`，看对方是不是用 RFB 的版本号打招呼（macOS 是 `RFB 003.889`）。机器页据此决定给「VNC」，还是说明怎么打开屏幕共享。
+- 单个流的未确认上限仍是 512 KB：按 50 ms 往返算约 10 MB/s，VNC够用，没有改。
 
 **屏幕共享的局限**：
 - 它监听所有网卡，局域网里看得到 5900。这是系统的行为，Persona 不另开端口。要只留回环，需要 sudo 加一条 pf 规则，由用户自己决定。
@@ -231,17 +231,17 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 ### App
 
 - **机器页「操控电脑」**：
-  - 就绪时给「看画面」。
-  - 授权中、或请求过还缺权限时，给突出的「看画面」，在手机上远程点「允许」。
+  - 就绪时给「VNC」。
+  - 授权中、或请求过还缺权限时，给突出的「VNC」，在手机上远程点「允许」。
   - 屏幕共享没开时，说明在那台 Mac 的「系统设置 › 通用 › 共享」里打开。
-- **对话页**：工具详情下面也有「看画面」（`ScreenEntry`）。出现在两类工具下面，并且要那台 Mac 的插件开着、屏幕共享开着：
+- **对话页**：工具详情下面也有「VNC」（`ScreenEntry`）。出现在两类工具下面，并且要那台 Mac 的插件开着、屏幕共享开着：
   - 助手的 `computer_state` / `computer_run`：对应它点名的那台；
   - 电脑上的 Agent 自己注册的 Cua Driver MCP 工具（`mcp__cua-driver__…`）：对应这个 Agent 所在的那台。
 - **画面在抽屉里**（#1343，和终端的抽屉一样）：iOS 从底下铺满，拖顶上的把手往下或点把手关掉，没拖够弹回去；Mac 是大 sheet。
   - 顶上：机器名、连接的阶段（检查 / 连接 / 要登录 / 已连上 / 已断开），助手或 Agent 正在操作这台时多一行「正在：点 AC → 6 → × → 7 → =」。
   - 底下：「只看 / 接管」，经 WebView 的桥（`personaScreen.setControl`）切网页的 `viewOnly`；网页在 `embed=1` 时不画自己的顶栏，阶段经 `webkit.messageHandlers.screen` 报给 App。
   - 里面一个 WKWebView 打开 hub 上的 `/screen/<机器>#token=…&embed=1`，走 App 连 hub 的同一条路（SSH 隧道时经隧道）。网页数据用不落盘的存储（`nonPersistent`），页面的滚动关掉了，手势都交给远端画面。
-  - 只有一个抽屉，挂在 `RootView`（`AppModel.screenOpen`）：从哪里打开都是同一个。
+  - 只有一个抽屉，在它自己的窗口里（`ScreenWindow`，#1604）：iOS 上一个 `UIWindow` 在 shell 之上、toast 之下，Mac 上一个独立窗口，跟着 `AppModel.screenOpen` 显示和关掉。以前挂在 `RootView` 的 `fullScreenCover` 上，机器页在 sheet 里时 present 被吞掉，点了没反应；Mac 的根视图根本没挂。从哪里打开都是同一个。
 - **记住登录**（#1322）：
   - 登录框多一个「在这台手机上记住」（Mac 上是「在这台 Mac 上记住」），默认勾着。浏览器里打开的页面没有这一项，表单标好 `username` / `current-password`，交给浏览器自己的密码管理。
   - 存什么、存哪里：账号和密码按机器存在设备钥匙串（`ScreenCredentials`），用自己的 service。iOS 上是 `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`，不同步 iCloud 钥匙串；Mac 上在登录钥匙串里。不上传 hub，不进日志。
@@ -251,13 +251,13 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
     2. App 从钥匙串取出来，经 `personaScreen.signIn(…)` 交给页面内存，页面直接登录，不出表单。没有记住的就回 null，出表单。
     3. 页面不存，不写 localStorage。
   - 密码不对了（那台 Mac 改过密码）：表单回来，写「记住的密码不对了」，账号已填好。输入新的、连上以后替换掉记住的。
-  - 机器页「操控电脑」里，记住了的时候「看画面」旁边有「忘记屏幕共享密码」。
+  - 机器页「操控电脑」里，记住了的时候「VNC」旁边有「忘记屏幕共享密码」。
   - 一键解锁（上面方案 a-2）以后用同一份。
 - **从哪里打开**：
   - **正在操作的条**：对话里最近一次操作电脑的工具（助手的 `computer_*`，Agent 的 `mcp__cua-driver__*`）还在跑、或刚结束 6 秒内，输入框上面的任务条最前面多一个「正在操作 MacBook · 点 …」（`ComputerActivityPill`），点它打开那台的画面。
-  - **··· 菜单**：助手顶栏和 Agent 对话页的 ··· 里有「看画面 · <机器>」（`ScreenMenu`），列出插件开着、屏幕共享开着的 Mac，这个对话最近操作的那台排第一。
-  - 机器页「操控电脑」和工具详情里的「看画面」（`ScreenEntry`）也打开这个抽屉。
-- **工具写成人话**（#1323，`ComputerSteps`）：工具详情先是一行步骤（连续的点按合成「点 AC → 6 → × → 7 → =」，计算器的按键名换成符号），再是截图和「看画面」；原来的 JSON 收在「原始参数」里，点开才看。标题里的机器用它的名字（MacBook），按 id 或名字认（和 hub 一样），认不出才照工具里写的；放不下时截掉尾部（文件路径照旧截中间）。
+  - **··· 菜单**（`ScreenMenu`，#1604）：Agent 的对话里直接一项「VNC · <它所在的 Mac>」，那台不是 Mac、插件没开或屏幕共享没开就没有这一项；助手的对话里是它最近操作的那台，没有时才列出能看的 Mac（几台时是子菜单）。
+  - 机器页「操控电脑」和工具详情里的「VNC」（`ScreenEntry`）也打开这个抽屉。
+- **工具写成人话**（#1323，`ComputerSteps`）：工具详情先是一行步骤（连续的点按合成「点 AC → 6 → × → 7 → =」，计算器的按键名换成符号），再是截图和「VNC」；原来的 JSON 收在「原始参数」里，点开才看。标题里的机器用它的名字（MacBook），按 id 或名字认（和 hub 一样），认不出才照工具里写的；放不下时截掉尾部（文件路径照旧截中间）。
 - **以后可以做的**：要更好的手势和性能，可以换原生 VNC 库（RoyalVNCKit，MIT，Swift，支持 ARD 认证），经 App 已有的端口转发（`PortForwarder`）连。
 
 ## 锁屏、防睡眠、按 App 批准（方案，#1507，已拍板）
@@ -282,7 +282,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 - **Cua Driver 已经做了一半**：
   - 每次工具调用后，它持有一个 `PreventUserIdleDisplaySleep` 断言，最后一次调用后再持续 10 分钟。环境变量 `CUA_DRIVER_KEEP_DISPLAY_AWAKE=<秒>` 可以改时长，`0` 关掉。
   - 它不会叫醒已经睡着的显示器，也过不了锁。
-  - 这只管经 cua-driver 的调用。看画面、Agent 想得久（超过 10 分钟没调用）的时候不管。
+  - 这只管经 cua-driver 的调用。VNC、Agent 想得久（超过 10 分钟没调用）的时候不管。
 
 ### a) 锁屏时也能用
 
@@ -297,7 +297,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
    - **安全边界**：
      - 手机加 Face ID 就能解开那台 Mac。所以默认关、按 Mac 开，打开时在手机上确认一次。
      - 解开以后不会自动再锁。抽屉里提示「用完记得锁上」，并给一个「锁上」（`pmset displaysleepnow`，显示器一睡就锁）。
-   - **要用户在 Mac 上做一次的**：打开屏幕共享，已经是看画面的前提。没有别的了。
+   - **要用户在 Mac 上做一次的**：打开屏幕共享，已经是VNC的前提。没有别的了。
    - **管不了的**：
      - 重启后 FileVault 的开机解锁：屏幕共享在那一步连不上。
      - 合盖睡着的 MacBook，node 也是断的。
@@ -334,11 +334,11 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 - `-t`：时长（秒）；
 - `-w <pid>`：那个进程退出就撤。
 
-- **「操作和看画面时保持唤醒」**（已做，插件 `cua` 的 `keep_awake`，默认开）：
-  - 做成插件里的一个总开关，不按 Mac 分开。插件页按机器的开关没法默认开；它又只在操作、看画面期间生效，过后自己撤，按机器分开意义不大。按机器的只有下面的「不自动锁屏」。
+- **「操作和VNC时保持唤醒」**（已做，插件 `cua` 的 `keep_awake`，默认开）：
+  - 做成插件里的一个总开关，不按 Mac 分开。插件页按机器的开关没法默认开；它又只在操作、VNC期间生效，过后自己撤，按机器分开意义不大。按机器的只有下面的「不自动锁屏」。
   - node 持有 `caffeinate -dimsu -t <秒> -w <node 的 pid>`（`node/awake.go`），同一时间只有一个：
     - 助手的 `computer_*` 调用：hub 在 `computer.call` 里带 `keep_awake`，最后一次之后 10 分钟撤；
-    - 有人在看画面：hub 在 5900 的 `port.dial` 里带 `keep_awake`，流开着就一直续（快到期时换一个新的，中间不断），流关了就撤。只看不点不算本地活动，以前看着看着就锁了。
+    - 有人在VNC：hub 在 5900 的 `port.dial` 里带 `keep_awake`，流开着就一直续（快到期时换一个新的，中间不断），流关了就撤。只看不点不算本地活动，以前看着看着就锁了。
   - Agent 自己的 Cua MCP（`mcp__cua-driver__*`）不经 node。Cua 0.37 起每次调用后自己保持 10 分钟，所以 node 不去扫会话。
   - 只在 Mac 上。实测（`TestAwakeOnThisMac`，`PERSONA_AWAKE_E2E=1`）：`pmset -g assertions` 里有这个 caffeinate 的 `PreventUserIdleDisplaySleep`，撤掉后就没了。
 - **锁着时的「解锁」入口**（已做）：机器页「操控电脑」在那台锁屏时写「这台 Mac 锁屏了，解锁后才能操控」。屏幕共享开着时，给「解锁」打开实时画面：切到「接管」，在锁屏上输登录密码。node 的说明也改成「屏幕共享开着时，可以在它的画面上输登录密码解锁」。
@@ -376,14 +376,14 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 - **点击音效**：无 / 只前台点击 / 前台和后台点击，默认无。
   - Cua 的点按分两种：前台是真的鼠标事件，后台是按进程投递，不动光标。
   - node 每点一次放一下系统音效（`afplay /System/Library/Sounds/Tink.aiff`），坐在 Mac 旁边的人听得到 Agent 在动。
-- **显示 Agent 的光标**：默认开，看画面时知道它点在哪。
+- **显示 Agent 的光标**：默认开，VNC时知道它点在哪。
   - 关掉：用 `cua-driver serve --no-overlay` 重启 Cua 的后台进程。有报告说光标浮层空闲时也占不少 CPU。
   - 也能用 `set_agent_cursor_enabled` 按会话关。
 - **Office、信息（Messages）的单独权限**：不做。这些我们没有专门的接入；要读信息走以后的 iMessage 连接器（[plan-connectors.md](plan-connectors.md)）。
 
 ### 顺序
 
-1. **b**：「Agent 操作期间保持唤醒」，含看画面期间。锁着时给「解锁」入口，打开实时画面。小，先做。
+1. **b**：「Agent 操作期间保持唤醒」，含VNC期间。锁着时给「解锁」入口，打开实时画面。小，先做。
 2. **c**：按 App 批准，先管助手，再管 Agent 的 Cua MCP。
 3. **a-2**：一键解锁，和 #1322 一起。
 4. **b**：「插件开着时不自动锁屏」，等安全边界拍板后再做。
@@ -398,7 +398,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 3. **按 App 批准**：默认开。每个 App 第一次操作时问一次，之后记住，设置里可以移除。
 4. **默认拒绝清单**：终端、系统设置、钥匙串访问、密码管理器、Persona，就这些。
 5. **一键解锁**：做。Mac 密码存在手机钥匙串，经 VNC 打进锁屏的密码框。默认关、按 Mac 开，和 #1322「在这台手机上记住」一起做。
-6. **ego**：插件 `ego` 对那台 Mac 开着时，也放行那台的屏幕共享（看画面），页面也认 ego。
+6. **ego**：插件 `ego` 对那台 Mac 开着时，也放行那台的屏幕共享（VNC），页面也认 ego。
 
 按上面的「顺序」做，每块一个 PR。第 6 条和 b 一起，或者单独一个小 PR 先合。
 
@@ -415,8 +415,8 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - 内容：用 `run_steps` 在计算器里算 6×7，再读窗口，断言有 42，并写出截图。
   - 2026-11-04 实测：就绪、42、230×408 的 JPEG。会动这台 Mac 的计算器。
 - **网页**：`web/src/screen/aes.test.ts`（AES 替身对 FIPS-197 和 WebCrypto）、`screen.test.ts`（路径、fragment 里的 token、WebSocket 地址、预填的账号）。
-- **看画面端到端**：mock 带 `MOCK_WEB=web/dist`，托管构建好的页面，并把 5900 转到这台 Mac 自己的屏幕共享。
-  - `ComputerSectionTests.testTheLiveScreenAsksForTheMacsSignIn` 点「看画面」，App 的 WebView → 页面 → noVNC → mock 转发 → 本机屏幕共享，一直走到它要求登录（ARD）。
+- **VNC端到端**：mock 带 `MOCK_WEB=web/dist`，托管构建好的页面，并把 5900 转到这台 Mac 自己的屏幕共享。
+  - `ComputerSectionTests.testTheLiveScreenAsksForTheMacsSignIn` 点「VNC」，App 的 WebView → 页面 → noVNC → mock 转发 → 本机屏幕共享，一直走到它要求登录（ARD）。
   - 登录那一步要那台 Mac 的密码，测试不做。
   - `ScreenDrawerTests`（mock 加 `MOCK_COMPUTER_OPERATING=1`，助手和 Agent 的对话里各有一个在跑的操作）：点助手、Agent 的「正在操作」条和 ··· 菜单打开抽屉，往下拖关掉。
 - **截图**：mock 的 `MOCK_COMPUTER=ready|permissions|locked|missing|off`（[testing.md](testing.md)），配合 `-tab settings -openMachines YES -openMachineDetail macbook`。

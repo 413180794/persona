@@ -78,7 +78,7 @@ nonisolated enum ScreenUnlock {
     }
 }
 
-/// 忘记屏幕共享密码, next to 看画面 while this device remembers the Mac's sign-in: the live screen asks for it again.
+/// 忘记屏幕共享密码, next to VNC while this device remembers the Mac's sign-in: the live screen asks for it again.
 struct ScreenForgetButton: View {
     let ref: MachineRef
     @Binding var kept: Bool
