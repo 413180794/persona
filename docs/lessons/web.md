@@ -201,3 +201,8 @@
 - **srcdoc 沙盒里只能靠 CSP 断网**：sandbox 没有「禁止联网」的开关，不给脚本也照样加载 `<img src="https://…">`（跟踪像素）。要断网就得注入 `default-src 'none'`。
 
 - **沙盒里的页面要用同目录的文件，就由外面读好塞进去**（#1413）：srcdoc 框没有地址，`<img src="chart.png">` 解析到 `about:srcdoc` 下面，必然 404；放开联网也没用。外层页面（同源、带 token）经 `file/download` 读，转成 data URL / 内联样式和脚本再交给框；样式表里的 `url()` 要按样式表自己的目录解析，`@import` 递归拉进来。内联脚本里的 `</script` 要转义，不然提前结束元素。
+
+## 网页媒体（2026-11-04，#1422）
+
+- **`<video>` / `<audio>` 直接用 `file/download` 的地址就能拖动**：hub 用 `http.ServeContent` 回 Range，浏览器自己按需取；不要先 fetch 成 blob（大视频要等下完、占满内存）。地址里带 `?token=`，因为媒体元素发不了 Authorization 头。
+- **HEIC 只有 Safari 认**：Chrome / Firefox 的 `<img>` 直接报错。解码库 libheif 是 LGPL，不在可用许可证里，所以退到那台电脑画的缩略图（Mac 上 Quick Look 能读 HEIC）。

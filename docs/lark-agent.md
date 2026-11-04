@@ -72,6 +72,12 @@
   同一条评论里再写 `/agent` 接着上次的对话。Agent 不许改文档正文，要改就在回复里给写法。
 - 前提：写评论会让文档的 activityAt 变新（用户实测前是推断）。最晚约 20 秒内接到请求。
 
+## 插件接管（#1484）
+
+经 lark-connector 接飞书的插件启用后，/agent 由插件做：hub 自己的实时事件和 /agent 都停下，`lark_agent_reply` 让给插件的同名连接器工具（多一个参数 `request`：请求的消息 / 评论 id）。
+插件经 hub 的公开接口：`POST /api/v1/assistant/conversations` 带 `purpose: "lark.agent"` 和配置的机器（`machine_id`）开对话，`POST /api/v1/sessions/{m}/{s}/messages` 接着同一个话题，
+`GET /api/v1/kb/chats/{id}/context` 取知识库对这个会话 / 项目知道的。配置在插件里（`agent`、`agent_launcher`、`agent_machine`）；hub.json 的 `lark_agent` 不再生效。
+
 ## 还没做
 
 （想在飞书里随时和 Persona 主对话聊、在飞书里点卡片回答提问：那是飞书机器人，`docs/bots.md`。）

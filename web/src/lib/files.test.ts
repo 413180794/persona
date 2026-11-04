@@ -146,7 +146,10 @@ describe("viewer", () => {
     expect(viewKind(file("export", { text: "a,b", mime: "text/csv" }))).toBe("sheet");
     expect(viewKind(file("Book.xlsx", { stream: true, mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }))).toBe("sheet");
     expect(viewKind(file("old.xls", { data: "AA==" }))).toBe("sheet");
-    expect(viewKind(file("clip.mp4", { stream: true, mime: "video/mp4" }))).toBe("binary");
+    expect(viewKind(file("clip.mp4", { stream: true, mime: "video/mp4" }))).toBe("video");
+    expect(viewKind(file("IMG_0001.MOV", { data: "AA==", mime: "application/octet-stream" }))).toBe("video");
+    expect(viewKind(file("memo.m4a", { stream: true, mime: "audio/mp4" }))).toBe("audio");
+    expect(viewKind(file("logo.svg", { text: "<svg/>", mime: "text/plain; charset=utf-8" }))).toBe("image");
     expect(viewKind(file("Report.docx", { stream: true }))).toBe("office");
     expect(viewKind(file("analysis.ipynb", { text: "{}", mime: "application/x-ipynb+json" }))).toBe("notebook");
     expect(viewKind(file("report.html", { text: "<p>x</p>", mime: "text/html" }))).toBe("html");

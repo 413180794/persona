@@ -294,6 +294,9 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 - **HTML 预览**（#1413，`session/files/HtmlPreview.tsx`、`lib/html-preview.ts`；iOS / Mac 是 #1297）：.html / .htm / .xhtml 默认「预览」，可切「源码」。页面放进 srcdoc iframe，**任何时候都不给 `allow-same-origin`**（碰不到本页、存储和 token）；
   默认禁脚本（sandbox 不给 `allow-scripts`）、禁联网（在 doctype 后面注入 CSP `default-src 'none'`，只放 data: / blob: 图片、内联样式）。工具条的「脚本」「联网」各自打开，只对这次打开的这个文件有效，旁边写当前状态；「重新加载」重开一次。
   注入 `<base target="_blank">`，链接在新标签打开。页面引用的同目录文件（图片、样式表和其中的 `@import` / `url()` 字体图片、脚本、图标）经 hub 读出来放进页面本身（data: URL、内联 `<style>` / `<script>`，`lib/html-inline.ts`，用 DOMParser 解析，什么都不加载、不执行），隔离框仍不联网、无同源；最多 150 个、单个 10 MB、合计 40 MB，工具条写读入了几个、几个读不到。本机 dev server 的站点预览另算（端口转发那边）。整个文件最多读 16 MB，再大按源码显示。
+- **媒体**（#1422，`ui/Media.tsx`、`chat/FileCards.tsx`）：文件页的视频、音频直接播放，地址是 `file/download?inline=1`，浏览器按 Range 取，拖动不用等下载完；浏览器放不了的编码（Chrome / Firefox 里的 HEVC、多数 MKV）说清楚并给下载。
+  SVG 按图片显示（`<img>` 里它的脚本不运行），可切源码。HEIC / HEIF：Safari 直接显示；别的浏览器 `<img>` 报错后换成那台电脑画的预览（`file/thumb`，最长边 1024），再不行提示下载。
+  对话里手机发来的 `<jarvis-file kind="video" …/>`（`docs/protocol.md`「发送视频」）解析成卡片：视频 / 音频就地播放，带文件名、大小、时长，其他文件点开在文件面板里看；标签本身不显示，和 iOS 一致；时长以文件读出来的为准（向下取整，和播放器一致）。回答里写到的绝对路径（`/…`、`~/…`）如果是视频、音频、图片或文档，经 `stat` 确认那台电脑上有这个文件后，在回答下面画成同样的卡片（最多 8 个）。
 - **链接**：见下面「链接在页面里打开」。
 
 ### 链接在页面里打开

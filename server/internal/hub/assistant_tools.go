@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -33,6 +34,21 @@ func assistantTools() []proto.Tool {
 		tools = append(tools, mcpTool(n))
 	}
 	return tools
+}
+
+// ownAssistantTools are assistantTools as this hub offers them now: while a plugin serves Feishu, its /agent answers
+// with its own lark_agent_reply (a connector tool), so the hub's steps aside (connectors_migrate.go).
+func (h *Hub) ownAssistantTools() []proto.Tool {
+	tools := assistantTools()
+	if h.larkByPlugin() {
+		tools = slices.DeleteFunc(tools, func(t proto.Tool) bool { return t.Name == "lark_agent_reply" })
+	}
+	return tools
+}
+
+// isOwnAssistantTool is isAssistantTool for this hub now (ownAssistantTools).
+func (h *Hub) isOwnAssistantTool(name string) bool {
+	return isAssistantTool(name) && !(name == "lark_agent_reply" && h.larkByPlugin())
 }
 
 // mcpTool is one tool's definition from prompts/mcp.

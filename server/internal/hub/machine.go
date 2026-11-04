@@ -586,7 +586,7 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		if p.Assistant && isBrowserTool(p.Name) {
 			return m.hub.callBrowserTool(ctx, p.SessionID, p.Name, p.Args), nil
 		}
-		if p.Assistant && isAssistantTool(p.Name) {
+		if p.Assistant && m.hub.isOwnAssistantTool(p.Name) {
 			return m.hub.callAssistantTool(ctx, m, p.SessionID, p.Name, p.Args), nil
 		}
 		return m.hub.callTool(ctx, m.cfg.ID, p.Name, p.Args), nil

@@ -309,6 +309,10 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 			PermissionMode string        `json:"permission_mode"`
 			Effort         string        `json:"effort"`
 			Main           bool          `json:"main"` // becomes the main conversation
+			// Purpose is the model purpose it runs under ("assistant" when empty; a plugin's /agent asks for its own);
+			// MachineID one of the hub's machines instead of the assistant's (docs/protocol.md「助手」).
+			Purpose   string `json:"purpose"`
+			MachineID string `json:"machine_id"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<20)).Decode(&in); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
@@ -316,7 +320,17 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 110*time.Second)
 		defer cancel()
-		s, err := h.startAssistant(ctx, in.Prompt, in.Images, in.Launcher, in.PermissionMode, in.Effort)
+		if in.Purpose != "" {
+			if _, err := h.modelPurposeDef(ctx, in.Purpose); err != nil {
+				writeErr(w, http.StatusBadRequest, fmt.Errorf("purpose %q: %w", in.Purpose, err))
+				return
+			}
+		}
+		if in.MachineID != "" && h.localMachine(in.MachineID) == nil {
+			writeErr(w, http.StatusBadRequest, fmt.Errorf("no machine %q", in.MachineID))
+			return
+		}
+		s, err := h.startAssistantAt(ctx, in.MachineID, in.Prompt, in.Images, in.Launcher, in.PermissionMode, in.Effort, in.Purpose)
 		if err != nil {
 			callErr(w, err)
 			return
@@ -335,9 +349,22 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 }
 
 func (h *Hub) startAssistant(ctx context.Context, prompt string, images []proto.Image, launcher, mode, effort string, purposes ...string) (*proto.Session, error) {
+	purpose := ""
+	if len(purposes) > 0 {
+		purpose = purposes[0]
+	}
+	return h.startAssistantAt(ctx, "", prompt, images, launcher, mode, effort, purpose)
+}
+
+// startAssistantAt starts an assistant conversation on machineID ("" is the assistant's machine) under the model
+// purpose ("" is "assistant").
+func (h *Hub) startAssistantAt(ctx context.Context, machineID, prompt string, images []proto.Image, launcher, mode, effort, purpose string) (*proto.Session, error) {
 	cfg := h.assistantConfig(ctx)
 	if launcher != "" {
 		cfg.Launcher = launcher // one-off choice from the app; the saved default stays
+	}
+	if machineID != "" {
+		cfg.MachineID = machineID
 	}
 	m := h.localMachine(cfg.MachineID)
 	if m == nil {
@@ -354,9 +381,8 @@ func (h *Hub) startAssistant(ctx context.Context, prompt string, images []proto.
 		SessionID string `json:"session_id"`
 	}
 	params := map[string]any{"cwd": prep.Cwd, "launcher": launcher, "text": prompt, "images": images, "permission_mode": mode, "effort": effort}
-	purpose := "assistant"
-	if len(purposes) > 0 {
-		purpose = purposes[0]
+	if purpose == "" {
+		purpose = "assistant"
 	}
 	if err := h.applyModel(ctx, purpose, params); err != nil {
 		return nil, err

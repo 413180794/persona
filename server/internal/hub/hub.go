@@ -1104,7 +1104,7 @@ func (h *Hub) mcpTools(assistant bool) []proto.Tool {
 	ctx := context.Background()
 	tools = append(tools, h.connectors.ToolsFor(ctx, true)...)
 	if assistant {
-		tools = append(tools, assistantTools()...)
+		tools = append(tools, h.ownAssistantTools()...)
 		tools = append(tools, h.computerTools()...)
 		tools = append(tools, h.browserTools()...)
 		tools = append(tools, h.connectors.ToolsFor(ctx, false)...)

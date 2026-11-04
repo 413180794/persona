@@ -136,7 +136,7 @@ function WakeDrawerBody({ turn, live, now, mid, sid, expandFold }: { turn: Turn;
               <NoticeRow key={n.id} item={n} mid={mid} sid={sid} />
             ))}
           </div>
-          {g.answer && <Answer item={g.answer} />}
+          {g.answer && <Answer item={g.answer} mid={mid} sid={sid} />}
         </section>
       ))}
       {(work.steps.length > 0 || live) && <WorkRow seg={work} live={live} now={now} mid={mid} sid={sid} expandFold={expandFold} />}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chatLines, isLoopTick, mergeItems, parseUserText, segments, openRecap, toolChip, toolLabel, wakeDrawer, workSegment, workSummary } from "./turns";
+import { chatLines, isLoopTick, mergeItems, parseUserText, segments, openRecap, toolChip, toolLabel, wakeDrawer, workSegment, workSummary, formatDuration } from "./turns";
 import type { Item } from "./types";
 
 const u = (seq: number, text: string, extra: Partial<Item> = {}): Item => ({ id: `u${seq}#0`, seq, role: "user", kind: "text", text, ...extra });
@@ -232,4 +232,31 @@ it("toolLabel names an MCP tool by its own name, whatever the server is called",
   expect(toolLabel("mcp__plugin_lark_docs__fetch_doc")).toBe("fetch doc");
   expect(toolLabel("mcp__x")).toBe("x");
   expect(toolLabel("Bash")).toBe("运行");
+});
+
+describe("jarvis-file tags", () => {
+  it("become files on the message, not text", () => {
+    const p = parseUserText('上次的录屏，你看下按钮那里\n\n<jarvis-file kind="video" path="/tmp/录屏 1.mov" name="录屏.mov" size="25270000" duration="6.0"/>\n<jarvis-file kind="file" path="/tmp/a&amp;b.pdf"/>');
+    expect(p.text).toBe("上次的录屏，你看下按钮那里");
+    expect(p.files).toEqual([
+      { kind: "video", path: "/tmp/录屏 1.mov", name: "录屏.mov", size: 25270000, duration: 6 },
+      { kind: "file", path: "/tmp/a&b.pdf", name: "a&b.pdf", size: undefined, duration: undefined },
+    ]);
+    expect(parseUserText('<jarvis-file kind="video" name="x"/>').files).toEqual([]); // no path: nothing to play
+  });
+
+  it("formats durations", () => {
+    expect([formatDuration(6), formatDuration(65.4), formatDuration(3723)]).toEqual(["0:06", "1:05", "1:02:03"]);
+  });
+});
+
+describe("paths in answers", () => {
+  it("picks absolute paths to media and documents, not code or prose", async () => {
+    const { replyPaths, mediaKindOf } = await import("./turns");
+    expect(
+      replyPaths("视频已生成：`/Users/me/code/weather/media/preview.mp4`。报告在 ~/Desktop/季度 报告.pdf 和 (/tmp/a.png)，代码改了 /Users/me/x/main.swift，网址 https://example.com/x.pdf。"),
+    ).toEqual(["/Users/me/code/weather/media/preview.mp4", "/tmp/a.png"]);
+    expect(replyPaths("见 ~/notes/plan.docx, 以及 /data/clip.MOV")).toEqual(["~/notes/plan.docx", "/data/clip.MOV"]);
+    expect([mediaKindOf("/a/b.MOV"), mediaKindOf("x.m4a"), mediaKindOf("p.heic"), mediaKindOf("r.pdf")]).toEqual(["video", "audio", "image", "file"]);
+  });
 });

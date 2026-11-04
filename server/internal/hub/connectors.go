@@ -45,7 +45,7 @@ func (h *Hub) addConnector(c connector.Connector) error {
 // them now (the phone's by their prefix: they come and go with the app).
 func (h *Hub) builtinTools() []string {
 	names := []string{"phone_"}
-	for _, t := range assistantTools() {
+	for _, t := range h.ownAssistantTools() {
 		names = append(names, t.Name)
 	}
 	return names

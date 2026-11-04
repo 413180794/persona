@@ -256,7 +256,10 @@ export function splitDiff(diff: string): Record<string, string> {
 
 // ── the viewer ────────────────────────────────────────────
 
-export type ViewKind = "directory" | "markdown" | "json" | "notebook" | "html" | "code" | "image" | "pdf" | "sheet" | "office" | "binary";
+export type ViewKind = "directory" | "markdown" | "json" | "notebook" | "html" | "video" | "audio" | "code" | "image" | "pdf" | "sheet" | "office" | "binary";
+
+const VIDEO_EXTS = ["mp4", "m4v", "mov", "webm", "mkv", "ogv", "avi"];
+const AUDIO_EXTS = ["mp3", "m4a", "aac", "wav", "flac", "ogg", "oga", "opus", "caf", "aiff", "aif"];
 
 /** Office documents drawn in the browser (docx-preview, lib/pptx.ts); the rest go through the machine's LibreOffice. */
 export const OFFICE_RENDERED = ["docx", "docm", "dotx", "pptx", "pptm", "ppsx", "potx"];
@@ -278,6 +281,8 @@ export function viewKind(f: FileContent): ViewKind {
   const mime = f.mime ?? "";
   if (f.text === undefined || f.text === null) {
     if (mime.startsWith("image/")) return "image";
+    if (mime.startsWith("video/") || VIDEO_EXTS.includes(extOf(f.name))) return "video";
+    if (mime.startsWith("audio/") || AUDIO_EXTS.includes(extOf(f.name))) return "audio";
     if (mime === "application/pdf" || extOf(f.name) === "pdf") return "pdf";
     if (WORKBOOK_EXTS.includes(extOf(f.name))) return "sheet";
     if ([...OFFICE_RENDERED, ...OFFICE_CONVERTED].includes(extOf(f.name))) return "office";
@@ -287,6 +292,7 @@ export function viewKind(f: FileContent): ViewKind {
   if (ext === "rtf") return "office"; // RTF is text, but its source is markup nobody reads
   if (ext === "ipynb") return "notebook";
   if (["html", "htm", "xhtml"].includes(ext)) return "html";
+  if (ext === "svg") return "image"; // drawn by <img>, where its scripts never run
   if (DELIMITED_EXTS.includes(ext) || mime === "text/csv" || mime === "text/tab-separated-values") return "sheet";
   if (["md", "markdown", "mdx", "mkd"].includes(ext) || mime === "text/markdown") return ext ? "markdown" : "code";
   if (["json", "jsonc", "json5", "geojson", "webmanifest"].includes(ext) || (mime.includes("json") && !["jsonl", "ndjson"].includes(ext))) return "json";

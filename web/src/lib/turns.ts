@@ -26,6 +26,17 @@ export interface UserMessage {
   parts?: string[];
   /** The message sent from here it came from, as the hub tied it (Item.client_msg_id). */
   client_msg_id?: string;
+  /** Files it carries as <jarvis-file> tags (videos sent from the phone…), drawn as cards. */
+  files?: AttachedFile[];
+}
+
+/** A <jarvis-file kind="video" path="…" name="…" size="…" duration="…"/> in a message (docs/protocol.md「发送视频」). */
+export interface AttachedFile {
+  kind: string; // video | audio | file
+  path: string; // on the session's machine
+  name: string;
+  size?: number;
+  duration?: number; // seconds
 }
 
 export interface Context {
@@ -77,12 +88,55 @@ function unescapeAttr(s: string) {
   return s.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 }
 
-export function parseUserText(raw: string): { text: string; contexts: Context[] } {
+const FILE_RE = /<jarvis-file\b([^>]*?)\/?>(?:\s*<\/jarvis-file>)?/g;
+
+const VIDEO = ["mp4", "m4v", "mov", "webm", "mkv"];
+const AUDIO = ["mp3", "m4a", "aac", "wav", "flac", "ogg", "opus"];
+const IMAGE = ["png", "jpg", "jpeg", "gif", "webp", "heic", "svg"];
+const DOCS = ["pdf", "docx", "pptx", "xlsx", "csv", "ipynb", "html", "zip", "key", "pages", "numbers"];
+
+/** What a file is for its card: video / audio play in place, the rest open in the viewer. */
+export function mediaKindOf(path: string): string {
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  return VIDEO.includes(ext) ? "video" : AUDIO.includes(ext) ? "audio" : IMAGE.includes(ext) ? "image" : "file";
+}
+
+/**
+ * Absolute paths (/… or ~/…) to media and documents an answer names, in order, at most 8: shown as cards under it when
+ * they exist on the machine. Code files are left to the path links in the text.
+ */
+export function replyPaths(text: string): string[] {
+  const exts = [...VIDEO, ...AUDIO, ...IMAGE, ...DOCS].join("|");
+  const re = new RegExp(`(?:^|[\\s\`'"(（「:：])((?:~/|/(?!/))[^\\s\`'"()（）<>「」，。；！？]*\\.(?:${exts}))(?=$|[\\s\`'")）」，。；！？.,:;!?])`, "gim");
+  const out: string[] = [];
+  for (const m of text.matchAll(re)) if (!out.includes(m[1]) && out.length < 8) out.push(m[1]);
+  return out;
+}
+
+/** 1:05, 12:00:03 */
+export function formatDuration(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds)); // down, as players show it (2.5 s is 0:02)
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
+}
+
+export function parseUserText(raw: string): { text: string; contexts: Context[]; files: AttachedFile[] } {
   const contexts: Context[] = [];
+  const files: AttachedFile[] = [];
   let text = raw.replace(CONTEXT_RE, (_, attrs: string, body: string) => {
     const a: Record<string, string> = {};
     for (const m of attrs.matchAll(ATTR_RE)) a[m[1]] = unescapeAttr(m[2]);
     contexts.push({ kind: a.kind ?? "context", title: a.title, url: a.url, text: body.trim() });
+    return "";
+  });
+  text = text.replace(FILE_RE, (_, attrs: string) => {
+    const a: Record<string, string> = {};
+    for (const m of attrs.matchAll(ATTR_RE)) a[m[1]] = unescapeAttr(m[2]);
+    if (!a.path) return "";
+    const num = (v: string | undefined) => (v !== undefined && Number.isFinite(Number(v)) ? Number(v) : undefined);
+    files.push({ kind: a.kind || "file", path: a.path, name: a.name || a.path.split("/").pop() || a.path, size: num(a.size), duration: num(a.duration) });
     return "";
   });
   text = text
@@ -91,7 +145,7 @@ export function parseUserText(raw: string): { text: string; contexts: Context[] 
     .replace(/<attached_images>[\s\S]*?<\/attached_images>/g, "")
     .replace(/\[Image #\d+\]\s?/g, "")
     .trim();
-  return { text, contexts };
+  return { text, contexts, files };
 }
 
 function isUserMessage(i: Item) {
@@ -126,6 +180,7 @@ export function segments(items: Item[]): Segment[] {
         const p = parseUserText(it.text ?? "");
         cur.user!.text = cur.user!.text ? `${cur.user!.text}\n${p.text}` : p.text;
         cur.user!.contexts.push(...p.contexts);
+        if (p.files.length) cur.user!.files = [...(cur.user!.files ?? []), ...p.files];
       }
       continue;
     }
@@ -540,6 +595,7 @@ function turnLines(t: Turn, live: boolean, split: ReadonlySet<string>): ChatLine
         parts: users.map((u) => u.text).filter(Boolean),
         images: users.flatMap((u) => u.images),
         contexts: users.flatMap((u) => u.contexts),
+        files: users.flatMap((u) => u.files ?? []),
         ts: users[0].ts,
       };
       out.push({ kind: "segment", id: merged.id, seg: merged, live: false, group });

@@ -103,7 +103,7 @@ func (h *Hub) larkFollow(ctx context.Context, c *lark.Client) {
 			}
 			return
 		}
-		if primary {
+		if primary && !h.larkByPlugin() { // a plugin serving Feishu runs /agent itself
 			h.larkAgentEvent(ev) // a /agent request starts at once, not with the coalesced refresh
 		}
 		if h.larkByPlugin() {

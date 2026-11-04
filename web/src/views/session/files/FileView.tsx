@@ -2,7 +2,7 @@
 // rendered (or its source), code with line numbers and a little coloring, JSON indented, images, PDFs, folders.
 // Text files come a page (2 MB) at a time; only the lines on screen are rendered, so big files stay smooth.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
-import { api, enc, errorText, fileDownloadURL, isAbort } from "../../../lib/api";
+import { api, enc, errorText, fileDownloadURL, fileThumbURL, isAbort } from "../../../lib/api";
 import { delimitedSheet, type Sheet } from "../../../lib/sheets";
 import type { SheetReply, SheetRequest } from "../../../lib/sheets.worker";
 import {
@@ -30,12 +30,14 @@ import {
 } from "../../../lib/files";
 import { bytes, shortPath } from "../../../lib/format";
 import { Button, copyText, cx, IconButton, Loading, toast } from "../../../ui/atoms";
+import { Icon } from "../../../ui/icons";
 import { Markdown } from "../../../ui/Markdown";
 import { Lightbox } from "../../chat/Steps";
 import { PanelHeader } from "../../SidePanel";
 import { BackHeader, Empty, FileGlyph, Segmented, useWindow } from "./parts";
 import { parseNotebook } from "../../../lib/notebook";
 import { HtmlPreview } from "./HtmlPreview";
+import { MediaPlayer } from "../../../ui/Media";
 import { NotebookView } from "./NotebookView";
 import { OfficeView } from "./OfficeView";
 import { SheetView } from "./SheetView";
@@ -74,6 +76,7 @@ export async function fileBytes(mid: string, f: FileContent, cwd?: string, signa
 
 /** Where the browser can show a binary file itself (an image, a PDF): file/download inline, or the old base64. */
 function inlineSrc(mid: string, f: FileContent, cwd?: string): string {
+  if (typeof f.text === "string") return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(f.text)}`; // an SVG, read as text
   return f.stream ? fileDownloadURL(mid, f.path, cwd, { inline: true }) : `data:${f.mime};base64,${f.data ?? ""}`;
 }
 
@@ -278,6 +281,7 @@ export function FileView({
     <>
       {kind === "markdown" && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "预览"], ["source", "源码"]]} />}
       {kind === "json" && json?.pretty != null && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "格式化"], ["source", "原文"]]} />}
+      {kind === "image" && typeof f?.text === "string" && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "图片"], ["source", "源码"]]} />}
       {kind === "html" && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "预览"], ["source", "源码"]]} />}
       {kind === "notebook" && notebook?.nb && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "笔记本"], ["source", "源文件"]]} />}
       {kind === "sheet" && typeof f?.text === "string" && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "表格"], ["source", "源文件"]]} />}
@@ -308,8 +312,10 @@ export function FileView({
     );
   } else if (kind === "directory") {
     body = <FolderList file={f} onOpen={onOpenPath} />;
-  } else if (kind === "image") {
-    body = <ImageView file={f} src={inlineSrc(mid, f, cwd)} />;
+  } else if (kind === "image" && !(typeof f.text === "string" && mode === "source")) {
+    body = <ImageView file={f} src={inlineSrc(mid, f, cwd)} fallback={/^image\/hei[cf]/.test(f.mime ?? "") || /\.(heic|heif)$/i.test(f.name) ? fileThumbURL(mid, f.path, cwd, 1024) : undefined} />;
+  } else if (kind === "video" || kind === "audio") {
+    body = <MediaView mid={mid} cwd={cwd} file={f} kind={kind} />;
   } else if (kind === "pdf") {
     body = <PdfView file={f} src={f.stream ? inlineSrc(mid, f, cwd) : ""} />;
   } else if (kind === "html" && mode === "rendered" && !(doc.next > 0 && !wantAll)) {
@@ -626,9 +632,18 @@ function SheetLoader({ mid, cwd, doc, file, onDownload }: { mid: string; cwd?: s
 
 // ── images, PDFs, folders ─────────────────────────────────
 
-function ImageView({ file, src }: { file: FileContent; src: string }) {
+/**
+ * An image; `fallback` is what to show when this browser cannot draw it (HEIC outside Safari): the picture the machine
+ * draws for its thumbnail.
+ */
+function ImageView({ file, src: original, fallback }: { file: FileContent; src: string; fallback?: string }) {
   const [dims, setDims] = useState<[number, number] | null>(null);
   const [big, setBig] = useState(false);
+  const [stage, setStage] = useState<"original" | "fallback" | "failed">("original");
+  const src = stage === "fallback" && fallback ? fallback : original;
+  const failed = () => setStage((s) => (s === "original" && fallback ? "fallback" : "failed"));
+  if (stage === "failed")
+    return <Empty icon="image" title="这个浏览器显示不了这张图" detail={`${file.mime || "图片"} · ${bytes(file.size)}。Safari 能直接显示 HEIC；也可以下载到本机看。`} />;
   // A tiny image (an icon) is drawn bigger, pixel for pixel, so it can be seen.
   const scale = dims ? Math.max(1, Math.min(8, Math.floor(160 / Math.max(dims[0], dims[1])))) : 1;
   return (
@@ -645,6 +660,7 @@ function ImageView({ file, src }: { file: FileContent; src: string }) {
         <span>{bytes(file.size)}</span>
         <span>·</span>
         <span>{file.mime}</span>
+        {stage === "fallback" && <span className="truncate">· 浏览器不支持这种格式，显示的是那台电脑生成的预览（最长边 1024 像素）</span>}
         {scale > 1 && <span className="ml-auto">放大 {scale}×</span>}
       </div>
       <div
@@ -656,12 +672,39 @@ function ImageView({ file, src }: { file: FileContent; src: string }) {
             src={src}
             alt={file.name}
             onLoad={(e) => setDims([e.currentTarget.naturalWidth, e.currentTarget.naturalHeight])}
+            onError={failed}
             className="block max-h-full max-w-full shadow-hairline"
             style={dims && scale > 1 ? { width: dims[0] * scale, imageRendering: "pixelated" } : undefined}
           />
         </button>
       </div>
       {big && <Lightbox src={src} onClose={() => setBig(false)} />}
+    </>
+  );
+}
+
+/** A video or an audio file, playing from file/download by Range (or the old base64 when it is all there). */
+function MediaView({ mid, cwd, file, kind }: { mid: string; cwd?: string; file: FileContent; kind: "video" | "audio" }) {
+  if (!file.stream && file.truncated)
+    return <Empty icon="info" title="hub 版本太旧，放不了大文件" detail={`${bytes(file.size)} · 更新 hub 后可以直接播放，或者先下载。`} />;
+  return (
+    <>
+      <div className="flex min-h-8 shrink-0 items-center gap-2 border-b border-line px-3 py-1.5 text-[11.5px] whitespace-nowrap text-ink-3 tabular-nums">
+        <span>{bytes(file.size)}</span>
+        <span>·</span>
+        <span>{file.mime}</span>
+      </div>
+      <div className={cx("flex min-h-0 flex-1 items-center justify-center overflow-auto p-6", kind === "video" ? "bg-black/90" : "bg-inset")}>
+        {kind === "video" ? <MediaPlayer mid={mid} path={file.path} cwd={cwd} kind="video" className="max-h-full max-w-full" /> : (
+          <div className="flex w-full max-w-[560px] flex-col items-center gap-4 rounded-[16px] bg-surface p-6 shadow-hairline">
+            <span className="flex size-16 items-center justify-center rounded-full bg-accent-tint text-accent-ink">
+              <Icon name="play" size={26} />
+            </span>
+            <div className="max-w-full truncate text-[14px] font-medium text-ink">{file.name}</div>
+            <MediaPlayer mid={mid} path={file.path} cwd={cwd} kind="audio" />
+          </div>
+        )}
+      </div>
     </>
   );
 }

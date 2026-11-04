@@ -452,8 +452,8 @@ func (h *Hub) larkAgentLoop(ctx context.Context) {
 		if !h.larkAgentCfg().Enabled || h.isMember() {
 			continue
 		}
-		h.sweepLarkAgents(ctx, time.Now())
-		if n%4 == 0 { // every 20 s: doc comments have no realtime event
+		h.sweepLarkAgents(ctx, time.Now()) // the runs it started still finish
+		if n%4 == 0 && !h.larkByPlugin() { // every 20 s: doc comments have no realtime event; a plugin serving Feishu scans them itself
 			h.scanLarkAgentComments(ctx)
 		}
 	}

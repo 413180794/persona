@@ -4556,6 +4556,7 @@ GAP = os.environ.get("MOCK_GAP") == "1"
 # and two that are not there (another machine's path, a deleted file).
 FILES = {}
 FILE_PAGE = 2 << 20
+ROOT_MEDIA = "/Users/me/code/weather/media/"
 
 
 def stations_csv():
@@ -4853,7 +4854,7 @@ def office_pptx():
 
 
 # What the hub (node filemime.go) calls a binary file by its name; others are video/mp4 as before.
-MOCK_MIMES = {".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xls": "application/vnd.ms-excel",
+MOCK_MIMES = {".wav": "audio/wav", ".m4a": "audio/mp4", ".mp3": "audio/mpeg", ".heic": "image/heic", ".webm": "video/webm", ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xls": "application/vnd.ms-excel",
               ".pdf": "application/pdf", ".doc": "application/msword", ".pages": "application/vnd.apple.pages", ".png": "image/png", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
               ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation", ".mp3": "audio/mpeg", ".m4a": "audio/mp4"}
 
@@ -5585,6 +5586,20 @@ if os.environ.get("MOCK_HTML"):  # an HTML page for the web's sandboxed preview 
     # files beside it, read through the hub into the preview (#1413)
     FILES["/Users/me/code/weather/reports/chart.png"] = _bar_png(480, 200)
     FILES["/Users/me/code/weather/reports/周报.css"] = ".card.warn { outline: 3px solid #cf222e; } header::after { content: '（样式来自 周报.css）'; font-size: 13px; opacity: .8; }".encode()
+if os.environ.get("MOCK_MEDIA"):  # the web's media (#1422): a sound, an SVG, a HEIC this browser cannot draw (its thumbnail stands in)
+    import math, struct as _st
+    _rate, _secs = 22050, 3
+    _pcm = b"".join(_st.pack("<h", int(9000 * math.sin(2 * math.pi * (440 + 220 * (i // (_rate // 2) % 3)) * i / _rate) * min(1, (_rate * _secs - i) / 2000))) for i in range(_rate * _secs))
+    _wav = b"RIFF" + _st.pack("<I", 36 + len(_pcm)) + b"WAVEfmt " + _st.pack("<IHHIIHH", 16, 1, 1, _rate, _rate * 2, 2, 16) + b"data" + _st.pack("<I", len(_pcm)) + _pcm
+    MOCK_TREE.setdefault(MOCK_REPO + "/media/", None)
+    for _name, _data in (("提示音.wav", _wav), ("IMG_2048.heic", b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00mif1heic" + b"\x00" * 512)):
+        FILES[ROOT_MEDIA + _name] = _data
+        MOCK_TREE[MOCK_REPO + "/media/" + _name] = (MOCK_MIMES[os.path.splitext(_name)[1]], base64.b64encode(_data).decode())
+    MOCK_TREE[MOCK_REPO + "/media/logo.svg"] = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120"><rect width="240" height="120" rx="20" fill="#1f6feb"/>'
+                                                '<circle cx="60" cy="60" r="28" fill="#ffd33d"/><text x="104" y="72" font-family="sans-serif" font-size="34" font-weight="700" fill="#fff">天气</text>'
+                                                '<script>alert(1)</script></svg>')
+    if os.environ.get("MOCK_VIDEO_FILE"):
+        MOCK_TREE[MOCK_REPO + "/media/preview.mp4"] = ("video/mp4", "")
 if os.environ.get("MOCK_OFFICE"):  # the Office viewer's files (#1345): rendered in the browser, or converted by "LibreOffice"
     MOCK_TREE.setdefault(MOCK_REPO + "/reports/", None)
     MOCK_TREE[MOCK_REPO + "/reports/季度报告.docx"] = (MOCK_MIMES[".docx"], base64.b64encode(office_docx()).decode())
@@ -6959,6 +6974,16 @@ class H(BaseHTTPRequestHandler):
             if src.endswith((".pages", ".key")):
                 return self.send_json({"error": "LibreOffice is not installed on this machine", "code": "no_converter"}, 404)
             return self.send_json({"path": "/Users/me/Library/Caches/persona/convert/mock.pdf", "size": len(FILES.get("/Users/me/Library/Caches/persona/convert/mock.pdf", b"")), "mime": "application/pdf"})
+        if p.startswith("/api/v1/machines/") and p.endswith("/file/thumb"):  # node file.thumb: a drawn stand-in for a HEIC
+            if not q.get("path", [""])[0].lower().endswith((".heic", ".heif")):
+                return self.send_json({"error": "no thumbnail", "code": "no_thumbnail"}, 404)
+            body = _page_png(768, 1024)
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if p.startswith("/api/v1/machines/") and p.endswith("/file/download"):
             value, mime = mock_file_bytes(p.split("/")[4], q, text=True)
             if value is None: return self.send_json({"error": "no such file"}, 404)

@@ -729,6 +729,25 @@ func (h *Hub) kbRoutes(api *http.ServeMux) {
 		writeJSON(w, out)
 	})
 	// One day of a chat's archive, for reading a found message in place.
+	// What the knowledge base knows about one chat, for a prompt about it (a plugin's /agent): the chat's summary and
+	// its first three projects' (the same the hub puts into its own prompts, kbContext). Read only.
+	api.HandleFunc("GET /api/v1/kb/chats/{id}/context", func(w http.ResponseWriter, r *http.Request) {
+		e := engine(w)
+		if e == nil {
+			return
+		}
+		c, ok := e.Store.Chat(r.PathValue("id"))
+		if !ok {
+			writeErr(w, http.StatusNotFound, kb.ErrNotFound)
+			return
+		}
+		kc := h.kbContext(e, c)
+		projects := []map[string]string{}
+		for _, p := range kc.Projects {
+			projects = append(projects, map[string]string{"name": p.Name, "summary": p.Summary})
+		}
+		writeJSON(w, map[string]any{"chat_id": kc.ChatID, "chat_name": kc.ChatName, "kind": c.Kind, "summary": kc.Summary, "projects": projects})
+	})
 	api.HandleFunc("GET /api/v1/kb/chats/{id}/days/{day}", func(w http.ResponseWriter, r *http.Request) {
 		e := engine(w)
 		if e == nil {

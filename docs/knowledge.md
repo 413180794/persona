@@ -219,6 +219,7 @@ hub.json 的 `kb.extra_dirs` 列出 hub 机器上用户自己维护的笔记目�
 | `GET /api/v1/kb-search?q=&results=1` | App 的搜索：按条目合并、排好序（`results`：`entry`、`count`、前 3 行 `hits`，`in_name`），见下面「搜索」 |
 | `GET /api/v1/kb/{kind}/{id}?q=` | 从搜索打开：多带 `matches`（这个条目里每一处命中；消息带 `day` 和前后各两条 `before` / `after`），最多 40 处 |
 | `GET /api/v1/kb/moments/{id}` | 一帖存档的removed（`post`、`markdown`：正文 + 全部评论），项目的「相关removed」点开用 |
+| `GET /api/v1/kb/chats/{id}/context` | 一个会话知识库里知道什么（`chat_id`、`chat_name`、`kind`、`summary`、前三个项目的 `projects: [{name, summary}]`），和 hub 自己放进提示词的是同一份；只读，插件的 /agent 用（#1484） |
 | `GET /api/v1/kb/chats/{id}/days/{day}` | 会话某一天的全部消息（`messages[].n` 是在文件里的行号）和前后有消息的那天（`prev` / `next`） |
 
 ## 搜索
