@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -34,6 +35,42 @@ func TestDoPutsTheKeyInAndTakesItOut(t *testing.T) {
 	}
 	if resp.Status != 200 || resp.Headers["Set-Cookie"][0] != "session=s1" || !strings.Contains(resp.Body, KeyPlaceholder) {
 		t.Fatalf("%+v", resp)
+	}
+}
+
+// A key the URL escapes (/, +, =, space, &) is taken out in its escaped form too: from the error of a request that
+// failed and from a gateway that echoes the URL back. With no key the error is left as it is.
+func TestDoTakesOutTheEscapedKey(t *testing.T) {
+	gw := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Echo", r.URL.RawQuery)
+		_, _ = io.WriteString(w, `{"url":"`+r.URL.String()+`"}`)
+	}))
+	down := httptest.NewServer(http.NotFoundHandler())
+	down.Close()
+	defer gw.Close()
+	req := Request{URL: "/usage?k=" + KeyPlaceholder}
+	for _, key := range []string{"sk-a/b+c=d", "sk a&b"} {
+		forms := []string{key, url.QueryEscape(key), url.PathEscape(key)}
+		resp, err := Do(context.Background(), nil, gw.URL+"/v1", key, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = Do(context.Background(), nil, down.URL+"/v1", key, req)
+		if err == nil {
+			t.Fatal("a closed gateway answered")
+		}
+		for _, f := range forms {
+			if strings.Contains(err.Error(), f) || strings.Contains(resp.Body, f) || strings.Contains(strings.Join(resp.Headers["X-Echo"], ""), f) {
+				t.Fatalf("key %q came back as %q: err=%v resp=%+v", key, f, err, resp)
+			}
+		}
+		if !strings.Contains(err.Error(), KeyPlaceholder) || !strings.Contains(resp.Body, KeyPlaceholder) {
+			t.Fatalf("no placeholder where the key was: err=%v resp=%+v", err, resp)
+		}
+	}
+	_, err := Do(context.Background(), nil, down.URL+"/v1", "", Request{URL: "/usage"})
+	if err == nil || strings.Contains(err.Error(), KeyPlaceholder) {
+		t.Fatalf("with no key the error was rewritten: %v", err)
 	}
 }
 

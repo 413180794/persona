@@ -6,7 +6,6 @@
 package quota
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -190,7 +189,7 @@ func Do(ctx context.Context, client *http.Client, base, key string, r Request) (
 	}
 	resp, err := c.Do(req)
 	if err != nil {
-		return Response{}, errors.New(strings.ReplaceAll(err.Error(), key, KeyPlaceholder))
+		return Response{}, errors.New(takeKey(err.Error(), key))
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, ResponseBodyMost+1))
@@ -201,20 +200,23 @@ func Do(ctx context.Context, client *http.Client, base, key string, r Request) (
 		return Response{}, errors.New("网关的回答太大")
 	}
 	out := Response{Status: resp.StatusCode, Headers: map[string][]string{}}
-	take := func(s string) string {
-		if key == "" {
-			return s
-		}
-		return strings.ReplaceAll(s, key, KeyPlaceholder)
-	}
 	for k, vs := range resp.Header {
 		for _, v := range vs {
-			out.Headers[k] = append(out.Headers[k], take(v))
+			out.Headers[k] = append(out.Headers[k], takeKey(v, key))
 		}
 	}
-	if key != "" {
-		data = bytes.ReplaceAll(data, []byte(key), []byte(KeyPlaceholder))
-	}
-	out.Body = string(data)
+	out.Body = takeKey(string(data), key)
 	return out, nil
+}
+
+// takeKey replaces key in s with KeyPlaceholder, both as written and as escaped in a URL: a key in the query of a
+// request that failed shows up escaped in the error (and so does any echo of the URL).
+func takeKey(s, key string) string {
+	if key == "" {
+		return s
+	}
+	for _, form := range []string{key, url.QueryEscape(key), url.PathEscape(key)} {
+		s = strings.ReplaceAll(s, form, KeyPlaceholder)
+	}
+	return s
 }
