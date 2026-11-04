@@ -113,7 +113,11 @@
       "ts": "2026-01-01T11:05:19.767Z",
       "role": "system",
       "kind": "notice",
-      "text": "上下文已压缩"
+      "text": "上下文已压缩",
+      "compact": {
+        "trigger": "wmtg",
+        "pre_tokens": 874639
+      }
     },
     {
       "id": "53e100b9-7e72-6084-5ddb-1b47c5e1e172#0",

@@ -592,13 +592,90 @@ struct ThinkingRow: View {
     }
 }
 
+/// Where Claude Code compacted the context (`Item.compact`): a hairline across the chat, 「已压缩上下文」 in the middle with
+/// where it came from (手动 / 自动 / 空闲时, when known) and when. A tap shows the notes that came with it.
+struct CompactDivider: View {
+    var item: Item
+    @State private var open = false
+    /// Where the notes end on screen, to bring them into view once open (`ChatPin.show`).
+    @State private var notesBottom: CGFloat = 0
+    @Environment(\.chatPin) private var pin
+
+    private var title: String {
+        [String?("已压缩上下文"), item.compact?.source, item.ts.map { $0.formatted(date: .omitted, time: .shortened) }]
+            .compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private var notes: [String] {
+        var n = item.compact?.notes ?? [item.text ?? ""]
+        if let t = item.compact?.preTokens, t > 0 { n.append("压缩前约 \(t / 1000)k token") }
+        return n.filter { !$0.isEmpty }
+    }
+
+    private var rule: some View {
+        let beautiful = AppStyle.current.usesBeautifulUI
+        return Rectangle().fill(beautiful ? Theme.cardStroke : Color(uiColor: .separator))
+            .frame(height: beautiful ? Theme.Size.line : Theme.Size.hairline)
+            .frame(maxWidth: .infinity)
+    }
+
+    var body: some View {
+        VStack(spacing: Theme.Space.s) {
+            Button {
+                let opening = !open
+                toggleInPlace(pin, "compact-" + item.id, animation: Theme.Motion.state) { open.toggle() }
+                // The divider as the last row: the notes open under it, past the composer on a short screen.
+                guard opening, let pin else { return }
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(Theme.Motion.revealTime))
+                    if open { pin.show("compact-" + item.id, bottom: notesBottom) }
+                }
+            } label: {
+                HStack(spacing: Theme.Space.s) {
+                    rule
+                    HStack(spacing: Theme.Space.xs) {
+                        Text(title).lineLimit(1)
+                        Image(systemName: open ? Theme.Icon.collapse : Theme.Icon.expand).font(Theme.Font.caption)
+                    }
+                    .font(Theme.Font.label)
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                    rule
+                }
+                .padding(.vertical, Theme.Space.s)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .chatPinned("compact-" + item.id)
+            .accessibilityLabel(title + (open ? "，收起说明" : "，展开说明"))
+            .accessibilityIdentifier("compact-divider")
+            if open {
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                    ForEach(Array(notes.enumerated()), id: \.offset) { _, n in
+                        Text(n).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .font(Theme.Font.label)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.leading)
+                .padding(.horizontal, Theme.Space.m)
+                .padding(.vertical, Theme.Space.s)
+                .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+                .onGeometryChange(for: CGFloat.self, of: { $0.frame(in: .global).maxY }) { notesBottom = $0 }
+            }
+        }
+        .contextMenu { CopyButton(text: notes.joined(separator: "\n")) }
+    }
+}
+
 struct NoticeRow: View {
     var item: Item
     @State private var expanded = false
     @Environment(\.chatPin) private var pin
 
     var body: some View {
-        if item.wake == true { wake } else if item.task != nil { TaskNoteRow(item: item) } else if Self.isShort(item.text ?? "") { plain } else { long }
+        if item.compact != nil { CompactDivider(item: item) }
+        else if item.wake == true { wake } else if item.task != nil { TaskNoteRow(item: item) } else if Self.isShort(item.text ?? "") { plain } else { long }
     }
 
     /// One short line reads as a centered capsule ("已中断", "上下文已压缩"); anything longer would be a block of centered

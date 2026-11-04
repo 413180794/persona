@@ -4579,6 +4579,28 @@ def echo_sent(parts, body):
     threading.Timer(float(os.environ.get("MOCK_ECHO_SECONDS", "1.5")), written).start()
 
 
+# MOCK_COMPACT=1: compactions as Claude Code writes them, after the hub turned them into items: the Jarvis main
+# conversation compacted while idle after its last answer (the boundary, the summary it went on from, the idle note);
+# 检查 PR #42 compacted with /compact, then in the middle of a later turn (auto). For the chat's compaction divider.
+if os.environ.get("MOCK_COMPACT"):
+    def _compaction(ts, trigger, idle=False):
+        b = it("system", "notice", ts, text="上下文已压缩")
+        b["compact"] = {"trigger": trigger, "pre_tokens": 151467}
+        out = [b, it("system", "notice", ts, text="已从压缩的上下文继续")]
+        if idle:
+            out.append(it("system", "notice", ts, text="Compacted while idle, before the prompt cache expired · turn off with "
+                                                       "\"idleCompaction\": false in settings.json"))
+        return out
+    ITEMS[ASK1] = ITEMS[ASK1] + _compaction(1, "auto", idle=True)
+    ITEMS[REVIEW] = ITEMS[REVIEW] + [it("user", "text", 40, text="/compact")] + _compaction(40, "manual") + [
+        it("user", "text", 30, text="把命名的建议也改掉")] + tool("Read", {"file_path": "/Users/me/code/weather/Sources/Client.swift"}, "struct Client {}", 30) \
+        + _compaction(29, "auto") + tool("Edit", {"file_path": "/Users/me/code/weather/Sources/Client.swift"}, "ok", 28) + [
+        it("assistant", "text", 27, text="两处命名都改好了。")]
+    for _sid in (ASK1, REVIEW):  # seq goes up through the conversation
+        for _n, _x in enumerate(ITEMS[_sid]):
+            _x["seq"] = ITEMS[_sid][0]["seq"] + _n
+
+
 def assistant_run(sid, mid):
     """The running turn, in the rhythm of a real one (thinking, a call, its result; now and then a few words to the user
     streamed as deltas, then written, then more calls)."""

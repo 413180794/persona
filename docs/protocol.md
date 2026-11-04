@@ -326,6 +326,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
  "client_msg_id":"…",                                 // 这条来自 App 带这个 client_msg_id 发的消息（文字、图片，或 /compact 变成的 notice），
                                                       // 由 node 认出，见「待发消息的对应」；旧 hub / node 不带
  "wake":true,                                         // 仅 notice：后台任务完成时 Claude 已空闲，这条通知开启了新的一轮
+ "compact":{"trigger":"manual|auto","pre_tokens":151467}, // 仅 notice：这里压缩了上下文（Claude Code 的 compact_boundary）；App 画成一条分隔线，紧跟的「已从压缩的上下文继续」和空闲压缩的说明并进它
  "task":{"kind":"shell|monitor|agent|task",              // 仅 notice：后台任务的通知（命令、Monitor 事件 / 结束、子 Agent），text 是一行摘要
          "status":"completed|failed|killed|stopped|event|ended|waiting","title":"description 或命令第一行",
          "task_id":"…","tool_use_id":"toolu_…","exit_code":0,"output_file":"…",

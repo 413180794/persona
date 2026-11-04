@@ -638,3 +638,12 @@ Task 里只遍历这个序列，就能编过。选择器用 `preferredItemEncodi
 - **视图读的开关别标 `@ObservationIgnored`**：`MessageMenu.swipeQuotes` 在对话页的 `onAppear`（`bindMenu`）里才打开。
   - 一开始标了 `@ObservationIgnored`，`onAppear` 之前画好的行不会重画，于是没有挂上手势，十次里挂两三次。
   - 手势的日志显示失败那次的 recognizer 一个触摸都没收到，这才看出来。改成被观察以后十次全过。
+
+## 压缩上下文画成一条分隔线（2026-11-04，#1064）
+
+Claude Code 压缩一次写三样：`system/compact_boundary`（`compactMetadata.trigger` 是 `manual` 或 `auto`，空闲压缩也记 `auto`）、紧跟一条 `isCompactSummary` 的用户行、
+空闲压缩再多一条 `informational`（"Compacted while idle…"）。hub 转成两条提示加原样的说明，App 以前各画各的，还因为排在回答之后被折进这一轮的工作行，看不见。
+现在 `ChatStore.compactions` 把它们并成一条（`Item.compact`），`ChatLines` 把回答之后的压缩放在回答下面、只有压缩的一段不再包成工作行，`CompactDivider` 画细线。
+踩到的坑：一轮里除了回答，别的都进工作行，所以「回答之后才来的」提示会被收进折叠的工作行里，单元测试只造了没有工具的一轮就没发现，要连工具一起造。
+另一个坑：点开时 `ChatPin` 把标题按在原处，分隔线是对话最后一行时，卡片往下长就到了输入框后面（矮屏上露一半）。点开后再调 `ChatPin.show` 把卡片底边滚到列表底边以内，标题不出屏；行在最后、点开往下长的都该这样。
+

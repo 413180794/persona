@@ -34,6 +34,9 @@ import SwiftUI
         list.reflectScrolledClipView(list.contentView)
     }
 
+    /// iOS brings what opened at the newest end above the composer; a Mac window is tall enough that it stays in view.
+    func show(_ key: String, bottom: CGFloat) {}
+
     private static func offset(_ list: NSScrollView) -> CGFloat { list.contentView.bounds.origin.y }
 
     private static func within(_ list: NSScrollView, _ y: CGFloat) -> CGFloat {

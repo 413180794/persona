@@ -147,4 +147,71 @@ struct ChatLinesTests {
         let lines = ChatLines(openWork: []).build(blocks(items), live: nil)
         #expect(kinds(lines) == ["user", "answer", "other", "answer"], "\(lines.map(\.id))")
     }
+
+    // MARK: Compactions (a divider, `Item.compact`)
+
+    private func notice(_ seq: Int, _ text: String) -> Item { item(seq, .notice, role: "system", text: text) }
+
+    private func compactRows(_ lines: [ChatLine]) -> [Item] {
+        lines.compactMap { if case .row(.notice(let i)) = $0.content, i.compact != nil { i } else { nil } }
+    }
+
+    /// Compacted while idle, after a finished turn: one divider, no work line of notices to open (the user's screenshot:
+    /// 「上下文已压缩」「已从压缩的上下文继续」 and the idle note in a 「收起 3 步」 work line).
+    @Test func anIdleCompactionIsOneDivider() {
+        let items = [item(1, .text, role: "user", text: "看一下"), item(2, .text, text: "看完了"),
+                     notice(3, ChatStore.compactedText), notice(4, ChatStore.continuedText),
+                     notice(5, "Compacted while idle, before the prompt cache expired · turn off with \"idleCompaction\": false in settings.json")]
+        let lines = ChatLines(openWork: []).build(blocks(items), live: nil)
+        #expect(kinds(lines) == ["user", "answer", "row"], "\(lines.map(\.id))")
+        let c = compactRows(lines)
+        #expect(c.count == 1)
+        #expect(c.first?.compact?.trigger == "idle")
+        #expect(c.first?.compact?.source == "空闲时")
+        #expect(c.first?.compact?.notes?.count == 3)
+    }
+
+    /// /compact: the hub's trigger kept, the summary folded in, a divider after the command.
+    @Test func aManualCompactionIsADividerAfterTheCommand() {
+        var boundary = notice(2, ChatStore.compactedText)
+        boundary.compact = Compaction(trigger: "manual", preTokens: 151_467)
+        let items = [item(1, .text, role: "user", text: "/compact"), boundary, notice(3, ChatStore.continuedText)]
+        let lines = ChatLines(openWork: []).build(blocks(items), live: nil)
+        #expect(kinds(lines) == ["user", "row"], "\(lines.map(\.id))")
+        #expect(compactRows(lines).first?.compact?.source == "手动")
+        #expect(compactRows(lines).first?.compact?.notes == [ChatStore.compactedText, ChatStore.continuedText])
+    }
+
+    /// Compacted in the middle of work: it stays in the work line, as one step (not two notices).
+    @Test func aCompactionMidTurnIsOneStepOfItsWork() {
+        let items = [item(1, .text, role: "user", text: "做"), item(2, .toolUse, tool: "Bash", id: "a"), item(3, .toolResult, role: "user", text: "ok", id: "a"),
+                     notice(4, ChatStore.compactedText), notice(5, ChatStore.continuedText),
+                     item(6, .toolUse, tool: "Read", id: "b"), item(7, .toolResult, role: "user", text: "ok", id: "b"), item(8, .text, text: "好了")]
+        let lines = ChatLines(openWork: []).build(blocks(items), live: nil)
+        #expect(kinds(lines) == ["user", "work", "answer"])
+        guard case .work(_, let work, _, _, _)? = lines.first(where: { if case .work = $0.content { true } else { false } })?.content else {
+            Issue.record("no work line")
+            return
+        }
+        #expect(work.filter(ChatLines.isCompaction).count == 1)
+    }
+
+    /// The summary without its boundary (on an older page) is a divider by itself; Codex's lone notice too.
+    @Test func aSummaryAloneOrACodexNoticeIsADivider() {
+        let alone = ChatLines(openWork: []).build(blocks([notice(1, ChatStore.continuedText), item(2, .text, role: "user", text: "继续")]), live: nil)
+        #expect(compactRows(alone).count == 1)
+        let codex = ChatLines(openWork: []).build(blocks([item(1, .text, role: "user", text: "a"), item(2, .text, text: "b"), notice(3, ChatStore.compactedText)]), live: nil)
+        #expect(compactRows(codex).count == 1)
+    }
+
+    /// The same after a turn that did work: the divider comes after the answer, not hidden in its folded work line
+    /// (the Jarvis chat showed nothing of the compaction).
+    @Test func anIdleCompactionAfterWorkIsAfterTheAnswer() {
+        let items = [item(1, .text, role: "user", text: "看一下"), item(2, .toolUse, tool: "Bash", id: "a"), item(3, .toolResult, role: "user", text: "ok", id: "a"),
+                     item(4, .text, text: "看完了"), notice(5, ChatStore.compactedText), notice(6, ChatStore.continuedText)]
+        let lines = ChatLines(openWork: []).build(blocks(items), live: nil)
+        #expect(kinds(lines) == ["user", "work", "answer", "row"], "\(lines.map(\.id))")
+        guard case .work(_, let work, _, _, _)? = lines.first(where: { if case .work = $0.content { true } else { false } })?.content else { return }
+        #expect(!work.contains(where: ChatLines.isCompaction))
+    }
 }

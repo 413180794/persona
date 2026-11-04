@@ -63,6 +63,30 @@ import SwiftUI
         if !settling { settle() }
     }
 
+    /// After something opened under `key`'s header: brings its far edge (`bottom`, on screen) above the list's bottom
+    /// edge (the chat's last row: to the newest end), the header staying on screen. The header is held where it was, so a row at the newest end grows past the
+    /// composer: the notes under a compaction divider, the last row on a short screen, were half hidden until you
+    /// scrolled (2026-11-04).
+    func show(_ key: String, bottom: CGFloat) {
+        guard let list, let top = last[key]?.y, !list.isTracking, !list.isDecelerating else { return }
+        held = nil
+        want = nil
+        // The list is upside down: its content top inset is the composer side on screen, its bottom inset the far side.
+        let frame = list.convert(list.bounds, to: nil)
+        let inset = list.adjustedContentInset
+        let edge = frame.maxY - inset.top, gap = list.contentOffset.y + inset.top
+        let over = bottom - edge, room = top - (frame.minY + inset.bottom)
+        guard room >= 0.5 else { return }
+        // The chat's last row (nothing but a row's spacing between it and the newest end): back to the newest end, as it
+        // was before the tap. Left where the hold put it, a little short of it, the end marker was off screen and ↓
+        // came up over the notes.
+        let last = edge + gap - bottom <= Theme.Space.xxl
+        let by = last && gap <= room ? gap : min(over, room)
+        guard by >= 0.5 else { return }
+        // A smaller offset is toward the newest: what is on screen moves up.
+        list.setContentOffset(CGPoint(x: list.contentOffset.x, y: Self.within(list, list.contentOffset.y - by)), animated: true)
+    }
+
     /// The list goes as near `want` as it can now.
     private func put(_ list: UIScrollView) {
         guard let want else { return }

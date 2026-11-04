@@ -39,6 +39,10 @@ type entry struct {
 	IsSidechain      bool            `json:"isSidechain"`
 	IsMeta           bool            `json:"isMeta"`
 	IsCompactSummary bool            `json:"isCompactSummary"`
+	CompactMetadata  *struct {
+		Trigger   string `json:"trigger"`
+		PreTokens int    `json:"preTokens"`
+	} `json:"compactMetadata"`
 	Content          json.RawMessage `json:"content"`
 	Message          *struct {
 		Role    string          `json:"role"`
@@ -393,6 +397,12 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		}
 		it := mk(0, "system", proto.KindNotice)
 		it.Text = clip(text)
+		if e.Subtype == "compact_boundary" {
+			it.Compact = &proto.Compact{}
+			if m := e.CompactMetadata; m != nil {
+				it.Compact.Trigger, it.Compact.PreTokens = m.Trigger, m.PreTokens
+			}
+		}
 		return []proto.Item{it}
 	case "user":
 		if e.Message == nil {

@@ -706,8 +706,51 @@ final class ChatStore {
         return out + held
     }
 
+    /// A compaction is one divider: Claude Code writes the boundary (the hub's 「上下文已压缩」, Codex's too), then the summary
+    /// it carries on with (「已从压缩的上下文继续」), and after an idle one a note about it ("Compacted while idle…").
+    /// The boundary keeps the others as its notes; they are no rows of their own. A summary whose boundary is on an
+    /// older page stands in for it.
+    nonisolated static let compactedText = "上下文已压缩"
+    nonisolated static let continuedText = "已从压缩的上下文继续"
+    nonisolated static func compactions(_ items: [Item]) -> [Item] {
+        func isNotice(_ it: Item, _ text: String) -> Bool { it.kind == .notice && it.task == nil && it.wake != true && it.text == text }
+        func isIdleNote(_ it: Item) -> Bool { it.kind == .notice && (it.text ?? "").hasPrefix("Compacted while idle") }
+        guard items.contains(where: { $0.compact != nil || isNotice($0, compactedText) || isNotice($0, continuedText) }) else { return items }
+        var out: [Item] = []
+        out.reserveCapacity(items.count)
+        var open: Int? // the boundary in `out` that the notes after it still join
+        for it in items {
+            if it.compact != nil || isNotice(it, compactedText) {
+                var b = it
+                var c = it.compact ?? Compaction()
+                c.notes = (c.notes ?? []) + [it.text ?? compactedText]
+                b.compact = c
+                out.append(b)
+                open = out.count - 1
+                continue
+            }
+            if isNotice(it, continuedText) || isIdleNote(it) {
+                if let i = open {
+                    out[i].compact?.notes?.append(it.text ?? "")
+                    if isIdleNote(it) { out[i].compact?.trigger = "idle" }
+                    continue
+                }
+                if isNotice(it, continuedText) { // its boundary is not here
+                    var b = it
+                    b.compact = Compaction(notes: [it.text ?? continuedText])
+                    out.append(b)
+                    open = out.count - 1
+                    continue
+                }
+            }
+            open = nil // anything else ends it
+            out.append(it)
+        }
+        return out
+    }
+
     nonisolated static func buildRows(_ items: [Item]) -> [ChatRow] {
-        let items = picturesAfterTheirText(items)
+        let items = compactions(picturesAfterTheirText(items))
         var results: [String: Item] = [:]
         var images: [String: [ImagePayload]] = [:]
         for it in items {

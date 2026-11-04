@@ -189,6 +189,14 @@ func TestCompactBoundaryAndSummary(t *testing.T) {
 		t.Fatalf("unexpected boundary notice %+v", it)
 	}
 
+	if it := only(t, items); it.Compact == nil || it.Compact.Trigger != "" {
+		t.Fatalf("a boundary without metadata still says it is one: %+v", it.Compact)
+	}
+	items, _ = parse(t, `{"type":"system","subtype":"compact_boundary","uuid":"s2","compactMetadata":{"trigger":"manual","preTokens":151467}}`)
+	if it := only(t, items); it.Compact == nil || it.Compact.Trigger != "manual" || it.Compact.PreTokens != 151467 {
+		t.Fatalf("the boundary's trigger and size: %+v", it.Compact)
+	}
+
 	items, _ = parse(t, `{"type":"user","uuid":"u10","isCompactSummary":true,"message":{"role":"user","content":"long summary"}}`)
 	if it := only(t, items); it.Kind != proto.KindNotice || it.Text != "已从压缩的上下文继续" {
 		t.Fatalf("unexpected summary notice %+v", it)

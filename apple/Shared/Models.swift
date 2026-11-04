@@ -753,6 +753,31 @@ nonisolated struct Fold: Codable, Hashable, Sendable {
     }
 }
 
+/// Where Claude Code compacted the context (`Item.compact`): from the transcript's compact_boundary line (`trigger`:
+/// manual for /compact, auto otherwise; idle when the app saw the note of an idle compaction after it), and the notes
+/// that came with it, shown when the divider is tapped.
+nonisolated struct Compaction: Codable, Hashable, Sendable {
+    var trigger: String?
+    var preTokens: Int?
+    /// The notices folded into the divider (the app's, never sent): 「上下文已压缩」「已从压缩的上下文继续」, the idle note.
+    var notes: [String]?
+
+    enum CodingKeys: String, CodingKey {
+        case trigger, notes
+        case preTokens = "pre_tokens"
+    }
+
+    /// 手动 / 自动 / 空闲时, for the divider; nil when the hub did not say.
+    var source: String? {
+        switch trigger {
+        case "manual": "手动"
+        case "auto": "自动"
+        case "idle": "空闲时"
+        default: nil
+        }
+    }
+}
+
 /// A background task reporting back (`Item.task` on a notice): a command run in the background, a Monitor's event or
 /// end, a subagent. The hub reads it from the notification (decoded); `TaskIndex` finds the call it came from.
 nonisolated struct TaskNote: Codable, Hashable, Sendable {
@@ -803,9 +828,12 @@ nonisolated struct Item: Codable, Identifiable, Hashable, Sendable {
     /// its images, a queued copy, or the notice it became (`/compact`). Nil from older hubs, or when the node could not
     /// tie it to one.
     var clientMsgID: String?
+    /// kind == .notice: the context was compacted here (the hub's `compact`, or recognized by the app,
+    /// `ChatStore.compactions`). Drawn as a divider across the chat (`CompactDivider`).
+    var compact: Compaction?
 
     enum CodingKeys: String, CodingKey {
-        case id, seq, ts, role, kind, text, image, queued, from, wake, fold, task
+        case id, seq, ts, role, kind, text, image, queued, from, wake, fold, task, compact
         case toolUseID = "tool_use_id", toolName = "tool_name", toolInput = "tool_input", isError = "is_error", fullSize = "full_size",
              clientMsgID = "client_msg_id"
     }

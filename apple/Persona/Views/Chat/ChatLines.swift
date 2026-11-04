@@ -66,14 +66,25 @@ struct ChatLines {
                     if !photos.isEmpty { out.append(.userImages(id: "img-" + photos[0].id, items: photos)) }
                     if let u = seg.user { out.append(.row(u)) }
                     let last = seg.rows.lastIndex { if case .assistant = $0 { true } else { false } }
-                    let items = Self.workItems(seg.rows.enumerated().filter { $0.offset != last }.map(\.element))
-                    if !items.isEmpty || live {
+                    // A compaction after the answer (Claude Code compacted once the turn was over: idle, /compact on
+                    // its own) is a divider after it, not a step hidden in the turn's work line.
+                    let after = Set(seg.rows.indices.filter { n in
+                        guard let l = last, n > l, case .notice(let i) = seg.rows[n] else { return false }
+                        return i.compact != nil
+                    })
+                    let work = seg.rows.enumerated().filter { $0.offset != last && !after.contains($0.offset) }.map(\.element)
+                    let items = Self.workItems(work)
+                    if !live, !items.isEmpty, items.allSatisfy(Self.isCompaction) {
+                        // Only compactions (/compact): dividers across the chat, no work line to open.
+                        out += work.filter { if case .notice(let i) = $0 { i.compact != nil } else { false } }.map { .row($0) }
+                    } else if !items.isEmpty || live {
                         let id = "w-" + (seg.user?.id ?? seg.rows.first?.id ?? t.id)
                         out.append(.work(id: id, items: items, live: live,
                                          start: seg.user?.firstTS ?? (k == 0 ? wokeAt : nil) ?? seg.rows.first?.firstTS ?? t.startedAt,
-                                         end: seg.rows.last?.lastTS))
+                                         end: work.last?.lastTS ?? seg.rows.last?.lastTS))
                     }
                     if let last { out.append(.row(seg.rows[last])) }
+                    out += after.sorted().map { .row(seg.rows[$0]) }
                 }
                 // After the answer: one small line for the background tasks; what they led to opens in a drawer.
                 if !t.wakes.isEmpty { out.append(.wakes(t, live: t.id == liveID && !t.tail.isEmpty)) }
@@ -221,6 +232,12 @@ struct ChatLines {
             if case .image(let i) = r, i.role == "user", i.toolUseID == nil, i.image != nil { return i }
             return nil
         }
+    }
+
+    /// A compaction (`Item.compact`), as a work line holds it.
+    static func isCompaction(_ w: WorkItem) -> Bool {
+        if case .step(.thought(let i)) = w, i.compact != nil { return true }
+        return false
     }
 
     /// What a work line folds from these rows: tools, thoughts, notices and the agent's words.

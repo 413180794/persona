@@ -636,6 +636,14 @@ type Item struct {
 	// Task: this notice is a background task reporting back (a command, a Monitor, a subagent).
 	Task         *TaskNote     `json:"task,omitempty"`
 	TurnDuration *TurnDuration `json:"turn_duration,omitempty"`
+	// Compact: this notice is where the context was compacted (Claude Code's compact_boundary).
+	Compact *Compact `json:"compact,omitempty"`
+}
+
+// Compact says how a compaction came about: Trigger "manual" (/compact) or "auto", and the context's size before it.
+type Compact struct {
+	Trigger   string `json:"trigger,omitempty"`
+	PreTokens int    `json:"pre_tokens,omitempty"`
 }
 
 // TurnDuration preserves a recorded whole-turn duration and its native association.
