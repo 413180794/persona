@@ -4,6 +4,8 @@
 import { useSyncExternalStore } from "react";
 import { api, enc } from "./api";
 import { onHubEvent, refreshTodos } from "./store";
+import { deleteTodo, type Todo } from "./todos";
+import { closePanel, getPanel } from "./panel";
 import type { ChatLine } from "./turns";
 import type { Item } from "./types";
 
@@ -171,6 +173,33 @@ export async function dismissPlan(plan: TaskPlan) {
   } finally {
     set({ busy: { ...st.busy, [plan.id]: false } });
   }
+}
+
+/**
+ * Why a task's agent did not start: the todo's own word (#1077), else — from a hub before it, which left the todo open
+ * — its plan's, while it has no agent. Undefined while it may still start.
+ */
+export function startFailure(todo: Todo, plans: Record<string, TaskPlan>): string | undefined {
+  if (todo.start_error) return todo.start_error;
+  if ((todo.agents ?? []).length > 0 || !todo.plan_id) return undefined;
+  return plans[todo.plan_id]?.tasks.find((t) => t.todo_id === todo.id)?.error || undefined;
+}
+
+/**
+ * Removes a task that does not run: its todo goes (its agents and their chats stay on the Agents page), and with it
+ * its card, pill and panel. One whose agents ran asks first; one whose agent never started goes at once. Answers
+ * whether it went.
+ */
+export async function removeTask(todo: Todo, ask: (message: string) => boolean = (m) => confirm(m)): Promise<boolean> {
+  if ((todo.agents ?? []).length > 0 && !ask(`移除「${todo.title}」？\n任务从这段对话里拿掉；它的 Agent 和对话记录还在 Agents 页。`)) return false;
+  await deleteTodo(todo.id);
+  const routes = { ...st.routes };
+  for (const [c, id] of Object.entries(routes)) if (id === todo.id) delete routes[c];
+  set({ routes });
+  const panel = getPanel();
+  if (panel?.kind === "task" && panel.todo === todo.id) closePanel();
+  await refreshTodos();
+  return true;
 }
 
 export function setRoute(conversation: string, todoId: string | null) {

@@ -7,9 +7,12 @@ import {
   dayLabel,
   dismissPlan,
   field,
+  getFeedState,
   isToday,
   later,
+  removeTask,
   sendMessage,
+  startFailure,
   setRoute,
   startPlan,
   useFeed,
@@ -19,12 +22,12 @@ import {
   type TaskPlan,
   type TodayBody,
 } from "../../lib/feed";
-import { makeSessionLookup, mostUrgentAgent, todoStatus, TODO_STATUS_INFO, type Todo, type TodoStatus } from "../../lib/todos";
+import { isRemovable, makeSessionLookup, mostUrgentAgent, todoStatus, TODO_STATUS_INFO, type SessionLookup, type Todo, type TodoStatus } from "../../lib/todos";
 import { navigate } from "../../lib/router";
 import { openPanel } from "../../lib/panel";
 import { getState, useStore } from "../../lib/store";
 import type { AgentState, Interaction, Session } from "../../lib/types";
-import { Button, cx, StatusDot, toast } from "../../ui/atoms";
+import { Button, cx, Menu, StatusDot, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { InteractionCard } from "../chat/Interactions";
 
@@ -39,9 +42,44 @@ export function useTodo(id: string | undefined): Todo | undefined {
   return useStore((s) => (id ? s.todos.find((t) => t.id === id) : undefined));
 }
 
+/** A task's status, failed too when a hub from before #1077 left it open and only its plan says the start failed. */
+function statusOf(todo: Todo, lookup: SessionLookup, plans: Record<string, TaskPlan>): TodoStatus {
+  const st = todoStatus(todo, lookup);
+  return st === "not_started" && startFailure(todo, plans) ? "failed" : st;
+}
+
+/** Removes a task (lib/feed removeTask), saying so when it did not go. */
+export function removeTaskNow(todo: Todo) {
+  removeTask(todo).then(
+    (gone) => gone && toast(`已移除「${todo.title}」`, "ok"),
+    (e) => toast(`没移除：${e instanceof Error ? e.message : e}`, "error"),
+  );
+}
+
+/** Right-click on a task's card, line or pill: 移除任务 when nothing of it runs (iOS: the long press). */
+function useTaskMenu(todo: Todo | undefined, status: TodoStatus | undefined) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const can = Boolean(todo && status && isRemovable(status));
+  return {
+    onContextMenu: (e: React.MouseEvent<HTMLElement>) => {
+      if (!can) return;
+      e.preventDefault();
+      setAnchor(e.currentTarget);
+    },
+    menu:
+      anchor && todo ? (
+        <Menu
+          anchor={anchor}
+          onClose={() => setAnchor(null)}
+          items={[{ key: "remove", label: "移除任务…", icon: "trash", danger: true, onSelect: () => removeTaskNow(todo) }]}
+        />
+      ) : null,
+  };
+}
+
 /** The task's state as an agent state, for its dot and tone. */
 function dotState(st: TodoStatus): AgentState {
-  return st === "needs_you" ? "needs_you" : st === "working" || st === "not_started" ? "working" : st === "unread" ? "unread" : st === "follow_up" ? "idle" : "offline";
+  return st === "needs_you" ? "needs_you" : st === "working" || st === "not_started" ? "working" : st === "unread" ? "unread" : st === "follow_up" ? "idle" : "offline"; // done, failed
 }
 
 const TONE: Record<string, string> = {
@@ -53,6 +91,7 @@ const TONE: Record<string, string> = {
 };
 
 function TaskMark({ status, size = 9 }: { status: TodoStatus; size?: number }) {
+  if (status === "failed") return <Icon name="info" size={size + 4} stroke={2.4} className="text-red" />;
   if (status === "done" || status === "unread")
     return <Icon name="check" size={size + 4} stroke={2.4} className={status === "done" ? "text-ink-3" : "text-green"} />;
   return <StatusDot state={dotState(status)} size={size} />;
@@ -61,9 +100,17 @@ function TaskMark({ status, size = 9 }: { status: TodoStatus; size?: number }) {
 function place(todo: Todo, lead?: Session): string {
   const a = (todo.agents ?? []).find((x) => !x.released_at) ?? todo.agents?.[0];
   const parts: string[] = [];
+  const machineName = (id: string) => getState().machines.find((m) => m.id === id)?.name ?? id;
   if (a) {
-    parts.push(getState().machines.find((m) => m.id === a.machine_id)?.name ?? a.machine_id);
+    parts.push(machineName(a.machine_id));
     if (a.cwd) parts.push(a.cwd.split("/").filter(Boolean).at(-1) ?? a.cwd);
+  } else {
+    // No agent (yet, or ever): where the plan meant it to run.
+    const planned = todo.plan_id ? getFeedState().plans[todo.plan_id]?.tasks.find((t) => t.todo_id === todo.id) : undefined;
+    if (planned) {
+      parts.push(machineName(planned.machine));
+      parts.push(planned.cwd.split("/").filter(Boolean).at(-1) ?? planned.cwd);
+    }
   }
   if (lead?.agent) parts.push(lead.agent);
   return parts.join(" · ");
@@ -172,47 +219,71 @@ function PlanTaskRow({ n, task, numbered }: { n: number; task: PlanTask; numbere
 export function TaskCard({ todoId, conversation }: { todoId: string; conversation: string }) {
   const todo = useTodo(todoId);
   const lookup = useTaskLookup();
-  if (!todo) return null;
-  const status = todoStatus(todo, lookup);
+  const plans = useFeed((s) => s.plans);
+  const status = todo ? statusOf(todo, lookup, plans) : undefined;
+  const menu = useTaskMenu(todo, status);
+  if (!todo || !status) return null;
   const lead = mostUrgentAgent(todo, lookup)?.session;
   const info = TODO_STATUS_INFO[status];
   const startError = todo.agents?.find((a) => a.start_error)?.start_error;
-  const now = status === "needs_you" ? "有事等你回答" : lead?.last_text?.trim() || (startError ? `没开起来：${startError}` : status === "not_started" ? "正在开 Agent" : "还没有动静");
+  const now =
+    status === "needs_you"
+      ? "有事等你回答"
+      : status === "failed"
+        ? `没开起来：${startFailure(todo, plans) ?? "原因不明"}`
+        : lead?.last_text?.trim() || (startError ? `没开起来：${startError}` : status === "not_started" ? "正在开 Agent" : "还没有动静");
   return (
     <div
       role="button"
       tabIndex={0}
       onClick={() => openTask(todo.id)}
       onKeyDown={(e) => e.key === "Enter" && openTask(todo.id)}
+      onContextMenu={menu.onContextMenu}
       className={cx("flex cursor-pointer flex-col gap-2 rounded-card bg-surface p-4 shadow-card transition-shadow hover:shadow-raised", status === "needs_you" && "ring-[1.5px] ring-red")}
     >
       <div className="flex items-center gap-2">
         <TaskMark status={status} />
         <span className="min-w-0 flex-1 truncate text-[14.5px] font-semibold">{todo.title}</span>
-        {status !== "done" && <span className="shrink-0 text-[12px] text-ink-3">{since(todo.created_at)}</span>}
+        {status !== "done" && status !== "failed" && <span className="shrink-0 text-[12px] text-ink-3">{since(todo.created_at)}</span>}
       </div>
       <div className="truncate text-[12px] text-ink-2">{place(todo, lead)}</div>
-      <div className={cx("flex items-start gap-2 rounded-control bg-field px-3 py-2 text-[13px]", status === "needs_you" && "text-red")}>
-        <Icon name={status === "needs_you" ? "hand" : "terminal"} size={13} className="mt-0.5 shrink-0 text-ink-2" />
+      <div className={cx("flex items-start gap-2 rounded-control bg-field px-3 py-2 text-[13px]", (status === "needs_you" || status === "failed") && "text-red")}>
+        <Icon name={status === "needs_you" ? "hand" : status === "failed" ? "info" : "terminal"} size={13} className="mt-0.5 shrink-0 text-ink-2" />
         <span className="line-clamp-2">{now}</span>
       </div>
       {status !== "done" && (
         <div className="flex items-center text-[12.5px]">
           <span className={cx("font-medium", TONE[info.tone])}>{info.label}</span>
           <span className="flex-1" />
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setRoute(conversation, todo.id);
-            }}
-            className="inline-flex items-center gap-1 font-semibold text-accent hover:underline"
-          >
-            <Icon name="send" size={12} />
-            说一句
-          </button>
+          {status === "failed" ? (
+            // Nothing to say a word to: the way out is on the card.
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                removeTaskNow(todo);
+              }}
+              className="inline-flex items-center gap-1 font-semibold text-red hover:underline"
+            >
+              <Icon name="trash" size={12} />
+              移除
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setRoute(conversation, todo.id);
+              }}
+              className="inline-flex items-center gap-1 font-semibold text-accent hover:underline"
+            >
+              <Icon name="send" size={12} />
+              说一句
+            </button>
+          )}
         </div>
       )}
+      {menu.menu}
     </div>
   );
 }
@@ -221,16 +292,21 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
 export function TaskLine({ todoId }: { todoId: string }) {
   const todo = useTodo(todoId);
   const lookup = useTaskLookup();
-  if (!todo) return null;
-  const status = todoStatus(todo, lookup);
+  const plans = useFeed((s) => s.plans);
+  const status = todo ? statusOf(todo, lookup, plans) : undefined;
+  const menu = useTaskMenu(todo, status);
+  if (!todo || !status) return null;
   const info = TODO_STATUS_INFO[status];
   return (
-    <button type="button" onClick={() => openTask(todo.id)} className="flex w-full items-center gap-2 rounded-control bg-field px-3 py-2 text-left text-[13px] hover:bg-hover">
+    <>
+    <button type="button" onClick={() => openTask(todo.id)} onContextMenu={menu.onContextMenu} className="flex w-full items-center gap-2 rounded-control bg-field px-3 py-2 text-left text-[13px] hover:bg-hover">
       <TaskMark status={status} />
       <span className="min-w-0 flex-1 truncate font-medium">{todo.title}</span>
       <span className={cx("shrink-0 text-[12px]", TONE[info.tone])}>{info.label}</span>
       <Icon name="chevronRight" size={13} className="text-ink-3" />
     </button>
+    {menu.menu}
+    </>
   );
 }
 
@@ -390,7 +466,8 @@ function MessageCard({ item, itemId }: { item: FeedItem; itemId: string }) {
       setBusy(false);
     }
   };
-  const status = todo ? todoStatus(todo, lookup) : undefined;
+  const plans = useFeed((s) => s.plans);
+  const status = todo ? statusOf(todo, lookup, plans) : undefined;
   return (
     <div className="flex flex-col gap-2.5 rounded-card bg-surface p-4 shadow-card">
       <div className="flex items-center gap-1.5 text-[12px] font-medium text-ink-2">
@@ -465,11 +542,14 @@ export function TaskQuestions({ conversation }: { conversation: string }) {
 export function TaskDock({ conversation }: { conversation: string }) {
   const todos = useStore((s) => s.todos);
   const lookup = useTaskLookup();
+  const plans = useFeed((s) => s.plans);
+  const [menuFor, setMenuFor] = useState<{ todo: Todo; el: HTMLElement } | null>(null);
   const mine = todos.filter((t) => t.origin === conversation);
   if (mine.length === 0) return null;
+  // Failed, done and stopped tasks are not in the dock.
   const rank: Partial<Record<TodoStatus, number>> = { needs_you: 0, working: 1, not_started: 1, unread: 2 };
   const going = mine
-    .map((t) => ({ t, st: todoStatus(t, lookup) }))
+    .map((t) => ({ t, st: statusOf(t, lookup, plans) }))
     .filter((x) => rank[x.st] !== undefined)
     .sort((a, b) => rank[a.st]! - rank[b.st]! || b.t.created_at.localeCompare(a.t.created_at));
   return (
@@ -479,6 +559,11 @@ export function TaskDock({ conversation }: { conversation: string }) {
           key={t.id}
           type="button"
           onClick={() => openTask(t.id)}
+          onContextMenu={(e) => {
+            if (!isRemovable(st)) return;
+            e.preventDefault();
+            setMenuFor({ todo: t, el: e.currentTarget });
+          }}
           className={cx("inline-flex h-8 max-w-[240px] shrink-0 items-center gap-2 rounded-full px-3 text-[12.5px] font-semibold", st === "needs_you" ? "bg-red-tint text-red" : "bg-field text-ink hover:bg-hover")}
         >
           <TaskMark status={st} size={8} />
@@ -490,6 +575,14 @@ export function TaskDock({ conversation }: { conversation: string }) {
         <Icon name="layers" size={13} />
         全部 {mine.length}
       </button>
+      {menuFor && (
+        <Menu
+          anchor={menuFor.el}
+          side="top"
+          onClose={() => setMenuFor(null)}
+          items={[{ key: "remove", label: "移除任务…", icon: "trash", danger: true, onSelect: () => removeTaskNow(menuFor.todo) }]}
+        />
+      )}
     </div>
   );
 }
@@ -517,10 +610,12 @@ export function DayLine({ date }: { date: Date }) {
 }
 
 /** A task's state for other views (the side panel's header). */
-export function useTaskState(todo?: Todo): { status: TodoStatus; lead?: Session } | undefined {
+export function useTaskState(todo?: Todo): { status: TodoStatus; lead?: Session; failure?: string } | undefined {
   const lookup = useTaskLookup();
+  const plans = useFeed((s) => s.plans);
   if (!todo) return undefined;
-  return { status: todoStatus(todo, lookup), lead: mostUrgentAgent(todo, lookup)?.session };
+  const status = statusOf(todo, lookup, plans);
+  return { status, lead: mostUrgentAgent(todo, lookup)?.session, failure: status === "failed" ? startFailure(todo, plans) : undefined };
 }
 
 export { TaskMark, place };

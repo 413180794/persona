@@ -1,12 +1,12 @@
 // A task's detail beside the assistant's conversation (docs/unified-entry.md「任务详情」; iOS TaskDetailSheet): its
 // agent's own chat — everything the Agents page does works here — and, with several agents, a switch between them.
 import { useState } from "react";
-import { TODO_STATUS_INFO } from "../../lib/todos";
+import { isRemovable, TODO_STATUS_INFO } from "../../lib/todos";
 import { useStore } from "../../lib/store";
-import { cx, StatusDot } from "../../ui/atoms";
+import { Button, cx, IconButton, Menu, StatusDot, useMenu } from "../../ui/atoms";
 import { ChatView } from "../chat/ChatView";
 import { PanelHeader } from "../SidePanel";
-import { place, useTaskState, useTodo } from "./Tasks";
+import { place, removeTaskNow, useTaskState, useTodo } from "./Tasks";
 import { stateOf } from "../../lib/format";
 
 export function TaskPanel({ todoId, onClose }: { todoId: string; onClose: () => void }) {
@@ -14,6 +14,7 @@ export function TaskPanel({ todoId, onClose }: { todoId: string; onClose: () => 
   const st = useTaskState(todo);
   const sessions = useStore((s) => s.sessions);
   const [picked, setPicked] = useState<string | null>(null);
+  const more = useMenu();
   if (!todo || !st) {
     return (
       <>
@@ -28,7 +29,27 @@ export function TaskPanel({ todoId, onClose }: { todoId: string; onClose: () => 
   const info = TODO_STATUS_INFO[st.status];
   return (
     <>
-      <PanelHeader icon="todo" title={todo.title} subtitle={`${info.label} · ${place(todo, lead)}`} onClose={onClose} />
+      <PanelHeader
+        icon="todo"
+        title={todo.title}
+        subtitle={[info.label, place(todo, lead)].filter(Boolean).join(" · ")}
+        actions={
+          isRemovable(st.status) ? (
+            <>
+              <IconButton icon="more" label="更多" onClick={more.open} active={Boolean(more.anchor)} />
+              {more.anchor && (
+                <Menu
+                  anchor={more.anchor}
+                  onClose={more.close}
+                  align="right"
+                  items={[{ key: "remove", label: "移除任务…", icon: "trash", danger: true, onSelect: () => removeTaskNow(todo) }]}
+                />
+              )}
+            </>
+          ) : undefined
+        }
+        onClose={onClose}
+      />
       {agents.length > 1 && (
         <div className="flex gap-2 overflow-x-auto border-b border-line px-3 py-2 [scrollbar-width:none]">
           {agents.map((a) => {
@@ -51,8 +72,16 @@ export function TaskPanel({ todoId, onClose }: { todoId: string; onClose: () => 
       <div className="flex min-h-0 flex-1 flex-col">
         {chosen ? (
           <ChatView key={`${chosen.machine_id}/${chosen.session_id}`} mid={chosen.machine_id} sid={chosen.session_id} />
+        ) : st.failure || todo.agents?.some((a) => a.start_error) ? (
+          <div className="flex flex-col items-start gap-3 p-6 text-[13px]">
+            <div className="font-semibold text-red">Agent 没开起来</div>
+            <div className="text-ink-2">{st.failure ?? todo.agents?.find((a) => a.start_error)?.start_error}</div>
+            <Button icon="trash" onClick={() => removeTaskNow(todo)}>
+              移除任务
+            </Button>
+          </div>
         ) : (
-          <div className="p-6 text-[13px] text-ink-2">{todo.agents?.find((a) => a.start_error)?.start_error ? `Agent 没开起来：${todo.agents.find((a) => a.start_error)!.start_error}` : "正在开 Agent，开好以后这里就是它的对话。"}</div>
+          <div className="p-6 text-[13px] text-ink-2">正在开 Agent，开好以后这里就是它的对话。</div>
         )}
       </div>
     </>

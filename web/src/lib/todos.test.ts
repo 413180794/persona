@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Machine, Session } from "./types";
 import {
   isAutoDone,
+  isRemovable,
+  TODO_STATUS_INFO,
   todoStatusLabel,
   buildTodoAgentGroups,
   findTodoForSpace,
@@ -143,6 +145,42 @@ describe("待办状态计算 (todoStatus)", () => {
       ],
     };
     expect(todoStatus(todo, lookup)).toBe("follow_up");
+  });
+});
+
+describe("Agent 没开起来的任务 (#1077 / #1142)", () => {
+  const failed: Todo = {
+    id: "t9",
+    title: "设置页按钮对齐",
+    created_at: "2026-11-04T10:00:00Z",
+    updated_at: "2026-11-04T10:00:05Z",
+    done_at: "2026-11-04T10:00:05Z",
+    start_error: "rpc: connection closed",
+    origin: "c1",
+    plan_id: "p1",
+    agents: [],
+  };
+
+  it("hub 结束掉的失败任务是「没开起来」，不是已完成", () => {
+    expect(todoStatus(failed)).toBe("failed");
+    expect(TODO_STATUS_INFO.failed).toEqual({ label: "没开起来", tone: "red" });
+    expect(todoStatusLabel(failed, "failed")).toBe("没开起来");
+    expect(todoStatus({ ...failed, start_error: undefined })).toBe("done");
+  });
+
+  it("排在已完成的待办里（底部）", () => {
+    const open: Todo = { id: "t1", title: "在做", created_at: "2026-11-04T09:00:00Z", updated_at: "2026-11-04T09:00:00Z", agents: [] };
+    expect(sortTodos([failed, open]).map((t) => t.id)).toEqual(["t1", "t9"]);
+  });
+
+  it("没在运行的才能移除", () => {
+    expect(isRemovable("failed")).toBe(true);
+    expect(isRemovable("done")).toBe(true);
+    expect(isRemovable("unread")).toBe(true);
+    expect(isRemovable("follow_up")).toBe(true);
+    expect(isRemovable("not_started")).toBe(true);
+    expect(isRemovable("working")).toBe(false);
+    expect(isRemovable("needs_you")).toBe(false);
   });
 });
 

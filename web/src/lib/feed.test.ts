@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { dayLabel, displayLines, mergeInto, quickResult, type FeedItem } from "./feed";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { dayLabel, displayLines, getFeedState, mergeInto, quickResult, removeTask, setRoute, startFailure, type FeedItem, type TaskPlan } from "./feed";
+import { getPanel, openPanel } from "./panel";
+import type { Todo } from "./todos";
 import type { ChatLine, Segment } from "./turns";
 import type { Item } from "./types";
 
@@ -44,5 +46,55 @@ describe("the assistant's feed among the chat's lines (docs/unified-entry.md)", 
     const y = new Date(now);
     y.setDate(now.getDate() - 1);
     expect(dayLabel(y, now)).toMatch(/^昨天 · /);
+  });
+});
+
+describe("a task whose agent did not start (#1077, #1142)", () => {
+  const todo = (patch: Partial<Todo> = {}): Todo => ({
+    id: "t1", title: "设置页按钮对齐", created_at: "2026-11-04T10:00:00Z", updated_at: "2026-11-04T10:00:00Z", origin: "c1", plan_id: "p1", agents: [], ...patch,
+  });
+  const plans: Record<string, TaskPlan> = {
+    p1: { id: "p1", conversation: "c1", state: "started", tasks: [{ title: "设置页按钮对齐", prompt: "", machine: "box", cwd: "/code/app", todo_id: "t1", error: "rpc: connection closed" }] },
+  };
+
+  it("says why from the todo, else from its plan while it has no agent", () => {
+    expect(startFailure(todo({ start_error: "launcher not found" }), {})).toBe("launcher not found");
+    expect(startFailure(todo(), plans)).toBe("rpc: connection closed"); // a hub before #1077 left the todo open
+    expect(startFailure(todo({ agents: [{ machine_id: "box", session_id: "s1", linked_at: "" }] }), plans)).toBeUndefined();
+    expect(startFailure(todo(), {})).toBeUndefined(); // may still be starting
+  });
+
+  describe("removing it", () => {
+    const ok = (body: unknown) => ({ ok: true, status: 200, text: async () => JSON.stringify(body) });
+    afterEach(() => vi.unstubAllGlobals());
+    const stub = () => {
+      const fetcher = vi.fn().mockResolvedValue(ok({ ok: true, todos: [] }));
+      vi.stubGlobal("localStorage", { getItem: () => "jd_test" });
+      vi.stubGlobal("fetch", fetcher);
+      return fetcher;
+    };
+
+    it("deletes a task that never had an agent at once, and drops its route and its panel", async () => {
+      const fetcher = stub();
+      setRoute("c1", "t1");
+      openPanel({ kind: "task", todo: "t1" });
+      const ask = vi.fn((_message: string) => true);
+      expect(await removeTask(todo({ start_error: "x", done_at: "2026-11-04T10:00:05Z" }), ask)).toBe(true);
+      expect(ask).not.toHaveBeenCalled();
+      expect(fetcher.mock.calls.some(([url, init]) => String(url).endsWith("/todos/t1") && init?.method === "DELETE")).toBe(true);
+      expect(getFeedState().routes.c1).toBeUndefined();
+      expect(getPanel()).toBeNull();
+    });
+
+    it("asks first when its agents ran, and keeps it when the user says no", async () => {
+      const fetcher = stub();
+      const ran = todo({ agents: [{ machine_id: "box", session_id: "s1", linked_at: "" }] });
+      expect(await removeTask(ran, () => false)).toBe(false);
+      expect(fetcher).not.toHaveBeenCalled();
+      const ask = vi.fn((_message: string) => true);
+      expect(await removeTask(ran, ask)).toBe(true);
+      expect(ask.mock.calls[0][0]).toContain("Agents 页");
+      expect(fetcher.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(true);
+    });
   });
 });

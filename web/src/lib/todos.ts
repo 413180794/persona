@@ -42,9 +42,11 @@ export interface Todo {
   done_reason?: string;
   /** When the user last reopened it after it was done. */
   reopened_at?: string | null;
+  /** The task's agent did not start, and why: the hub ended it there (done_at is set too, #1077). */
+  start_error?: string;
 }
 
-export type TodoStatus = "done" | "needs_you" | "unread" | "working" | "follow_up" | "not_started";
+export type TodoStatus = "done" | "needs_you" | "unread" | "working" | "follow_up" | "not_started" | "failed";
 
 export const TODO_STATUS_RANK: Record<TodoStatus, number> = {
   needs_you: 0,
@@ -53,6 +55,7 @@ export const TODO_STATUS_RANK: Record<TodoStatus, number> = {
   follow_up: 3,
   not_started: 4,
   done: 5,
+  failed: 6,
 };
 
 export const TODO_STATUS_INFO: Record<TodoStatus, { label: string; tone: "red" | "green" | "amber" | "idle" | "off" }> = {
@@ -62,7 +65,13 @@ export const TODO_STATUS_INFO: Record<TodoStatus, { label: string; tone: "red" |
   working: { label: "进行中", tone: "amber" },
   follow_up: { label: "待跟进", tone: "idle" },
   not_started: { label: "未开始", tone: "off" },
+  failed: { label: "没开起来", tone: "red" },
 };
+
+/** Nothing of the task runs (it ended, stopped, or never started): the user may remove it (#1142). */
+export function isRemovable(status: TodoStatus): boolean {
+  return status !== "working" && status !== "needs_you";
+}
 
 export type SessionLookup = (mid: string, sid: string) => Session | undefined;
 
@@ -87,6 +96,7 @@ export function makeSessionLookup(sessions: Session[] | Record<string, Session[]
 
 /**
  * 待办状态判定规则（取第一个成立的）：
+ * 0. 没开起来：从对话开的任务 Agent 没启动起来，hub 把它结束了（start_error，#1077）
  * 1. 已完成：用户点了完成（done_at != null）
  * 2. 等你：有挂着的 Agent 需要你（提问、审批）
  * 3. 待查看：有挂着的 Agent 完成了你还没看
@@ -95,6 +105,7 @@ export function makeSessionLookup(sessions: Session[] | Record<string, Session[]
  * 6. 未开始：没有挂着的 Agent
  */
 export function todoStatus(todo: Todo, lookup?: SessionLookup): TodoStatus {
+  if (todo.start_error) return "failed";
   if (todo.done_at) return "done";
   const active = (todo.agents ?? []).filter((a) => !a.released_at);
   if (active.length === 0) return "not_started";
