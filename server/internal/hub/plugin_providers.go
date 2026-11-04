@@ -187,20 +187,46 @@ func (h *Hub) presetModels(ctx context.Context, m *Machine, name string, res pro
 			return res
 		}
 	}
+	if l, ok := h.knownZshrcLauncher(ctx, m, name); ok && l.Agent == "" {
+		if pr, ok := presetFor(presets, "", l.BaseURL); ok {
+			return withPresetModels(res, pr)
+		}
+	}
+	return res
+}
+
+// knownZshrcLauncher is machine m's ~/.zshrc launcher name as last seen (in memory, else the stored list), so the
+// picker does not wait on a second node call; only a launcher never seen is asked for now.
+func (h *Hub) knownZshrcLauncher(ctx context.Context, m *Machine, name string) (proto.Launcher, bool) {
+	find := func(list []proto.Launcher) (proto.Launcher, bool) {
+		for _, l := range list {
+			if l.Name == name {
+				return l, true
+			}
+		}
+		return proto.Launcher{}, false
+	}
+	h.launchers.mu.Lock()
+	seen := h.launchersSeen[m.cfg.ID]
+	h.launchers.mu.Unlock()
+	if l, ok := find(seen); ok {
+		return l, true
+	}
+	if h.store != nil {
+		stored := map[string][]proto.Launcher{}
+		if ok, _ := h.store.Setting(ctx, launchersZshrcKey, &stored); ok {
+			if l, ok := find(stored[m.cfg.ID]); ok {
+				return l, true
+			}
+		}
+	}
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	list, err := h.machineLaunchers(cctx, m)
 	if err != nil {
-		return res
+		return proto.Launcher{}, false
 	}
-	for _, l := range list {
-		if l.Name == name && l.Agent == "" {
-			if pr, ok := presetFor(presets, "", l.BaseURL); ok {
-				return withPresetModels(res, pr)
-			}
-		}
-	}
-	return res
+	return find(list)
 }
 
 func (h *Hub) launcherPresetRoutes(api *http.ServeMux) {

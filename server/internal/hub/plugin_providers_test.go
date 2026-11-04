@@ -113,4 +113,25 @@ func TestLauncherModelsIncludeThePresetsModels(t *testing.T) {
 	if !h.launcherHasModel(t.Context(), m, "gw-alias", "gw-small") {
 		t.Fatal("a send with a preset model is checked against the list that offered it")
 	}
+
+	// A machine slow to list its launchers (tailcat right after a restart): the gateway it was last seen with is used,
+	// not a second node call that would time the picker out.
+	modelsNode(t, h, MachineConfig{ID: "slow"}, func(method string, p map[string]any) (any, error) {
+		if method == "launchers.list" {
+			return nil, fmt.Errorf("not now")
+		}
+		if method == "launchers.models" {
+			return proto.LauncherModels{Agent: "claude", Models: []proto.AgentModel{{ID: "default", Default: true}}}, nil
+		}
+		return map[string]any{}, nil
+	})
+	h.launchers.mu.Lock()
+	h.launchersSeen = map[string][]proto.Launcher{"slow": {{Name: "gw-alias", BaseURL: "https://gw.example.com"}}}
+	h.launchers.mu.Unlock()
+	w := modelsRequest(h, "GET", "/api/v1/machines/slow/launchers/gw-alias/models", "")
+	var res proto.LauncherModels
+	_ = json.Unmarshal(w.Body.Bytes(), &res)
+	if len(res.Models) != 3 {
+		t.Fatalf("the last seen gateway is not used: %d %s", w.Code, w.Body)
+	}
 }
