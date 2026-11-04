@@ -141,7 +141,7 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		cmd += " --model " + shellQuote(execution.Model)
 	}
 	if n.claudeLoadsPlugins(ctx) {
-		cmd += " --plugin-dir " + shellQuote(n.pluginDir())
+		cmd += " --plugin-dir " + shellQuote(n.pluginDir()) + " --allowedTools " + shellQuote(officeRule(n.agentOfficeScript()))
 	}
 	if hooks != "" {
 		cmd += " --plugin-dir " + shellQuote(hooks)

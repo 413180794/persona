@@ -265,6 +265,13 @@ func TestMain(t *testing.T) {
 	if code := Main([]string{"check", filepath.Join(dir, "deck.pptx")}, &out, &errOut); code != 0 || !strings.Contains(out.String(), `"type": "pptx"`) {
 		t.Fatalf("check: %d %s", code, out.String())
 	}
+	// -o is a file of its kind only: run without asking, it must not write over anything else.
+	if code := Main([]string{"docx", in, "-o", filepath.Join(dir, ".zshrc")}, io.Discard, &errOut); code != 2 || !strings.Contains(errOut.String(), "writes a .docx file") {
+		t.Errorf("-o .zshrc: %d %s", code, errOut.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".zshrc")); !os.IsNotExist(err) {
+		t.Error("wrote .zshrc")
+	}
 	for _, args := range [][]string{nil, {"pdf", in}, {"docx"}, {"docx", in, in}} {
 		if code := Main(args, io.Discard, io.Discard); code != 2 {
 			t.Errorf("%q: exit %d", args, code)

@@ -11,8 +11,10 @@ description: 生成 Word（.docx）、PowerPoint（.pptx）、Excel（.xlsx）�
 ## 步骤
 
 1. 把内容写成文件，放在当前工作目录里（比如 `周报.md`），用到的图片放在它旁边。
-2. 生成：`sh <这个 skill 的目录>/scripts/office.sh docx 周报.md -o 周报.docx --title "周报"`。
+2. 生成：**一条命令只生成一个文件**，写成 `sh <这个 skill 目录的绝对路径>/scripts/office.sh docx 周报.md -o 周报.docx --title "周报"`。
    pptx、xlsx 同理：`… pptx 发布会.md`、`… xlsx 销售.json`。不写 `-o` 就放在源文件旁边。
+   照这个样子写的命令 Persona 已经放行，不用用户批准。别用 shell 变量拼路径，也别用 `;`、`&&`、换行把几条连在一起：那样会在用户手机上弹审批卡。
+   `-o` 只能是同类的文件（`.docx` / `.pptx` / `.xlsx`）。
 3. 看命令输出的 `check`：标题、页数、每页标题、表格、公式数是不是你要的。不对就改源文件，再生成一次。
 4. 回复用户时，**单独一行写出生成文件的绝对路径**（输出里的 `file`）。Persona App 会把它显示成文件，点开就是预览，不用把内容再贴一遍。
 

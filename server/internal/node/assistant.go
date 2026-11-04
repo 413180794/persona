@@ -404,7 +404,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 	if hooks != "" {
 		args = append(args, "--plugin-dir", hooks)
 	}
-	args = append(args, "--mcp-config", string(mcp), "--allowedTools", assistantAllowedTools)
+	args = append(args, "--mcp-config", string(mcp), "--allowedTools", n.assistantTools())
 	if execution.Model != "" {
 		args = append(args, "--model", execution.Model)
 	}

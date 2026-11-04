@@ -7,6 +7,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -54,11 +55,22 @@ func TestAgentPlugin(t *testing.T) {
 		want := startCmd("claude", "--session-id "+startID, jarvisDir(home))
 		if tc.flag { // the hooks go in a plugin too, and Persona passes no --settings (hooksplugin.go)
 			want = "claude --session-id " + startID + " --mcp-config " + shellQuote(filepath.Join(jarvisDir(home), "mcp.json")) +
-				" --plugin-dir " + shellQuote(plugin) + " --plugin-dir " + shellQuote(filepath.Join(jarvisDir(home), "claude-hooks"))
+				" --plugin-dir " + shellQuote(plugin) +
+				" --allowedTools " + shellQuote("Bash(sh "+filepath.Join(plugin, "skills", "persona-office", "scripts", "office.sh")+" *)") +
+				" --plugin-dir " + shellQuote(filepath.Join(jarvisDir(home), "claude-hooks"))
 		}
 		if typed := f.trace("pane.send_input"); !slices.Contains(typed, call("pane.send_input", map[string]any{"pane_id": "w1:p2", "keys": []string{"Enter"}, "text": want})) {
 			t.Errorf("claude %q: typed %v, want %s", tc.version, typed, want)
 		}
 	}
 	claudeVersionOf = func(context.Context) string { return "" }
+}
+
+// The assistant is allowed Persona's tools and its own copy of the office skill's script, at its exact path.
+func TestAssistantAllowsTheOfficeScript(t *testing.T) {
+	n, home := testNode(t)
+	want := "mcp__jarvis,Bash(sh " + filepath.Join(identity.AssistantDir(home), ".claude", "skills", "persona-office", "scripts", "office.sh") + " *)"
+	if got := n.assistantTools(); got != want {
+		t.Fatalf("%s\nwant %s", got, want)
+	}
 }

@@ -24,6 +24,21 @@ skill 自带的 `office.sh` 找本机的 personad（先看 `PERSONA_BIN`，再�
   - 版本每次 hello 时问一次，启动时超过 10 分钟没问才再问（每次要起一个登录 shell）。
 - Persona 启动的 Codex Agent：还没带上。没找到按会话给 Codex 加 skill 目录、又不写 `CODEX_HOME/skills` 的办法。
 
+### 不用每次批准
+
+生成命令不在用户手机上弹审批卡：Persona 启动 claude 时用 `--allowedTools` 放行这一条，只认绝对路径，只对那一个会话有效。
+- Persona 启动的 Agent：`Bash(sh <node 目录>/agent-plugin/skills/persona-office/scripts/office.sh *)`，跟加载插件的 `--plugin-dir` 一起加（Claude Code 2.1 及以上）。
+- 助手：它目录里 `.claude/skills/persona-office/scripts/office.sh` 的同样一条，加在它原有的 `--allowedTools mcp__jarvis` 后面。
+- 不写进任何 settings 文件。用户自己开的会话不受影响，启动器自带的 `--settings` 也照样生效（#1462 之后 Persona 只给托管启动器传 `--settings`）。
+
+为什么这样做（2026-11-04 在真 claude 上试过）：
+- 不用 skill 的 `allowed-tools`：有了它，启动这个 skill 本身就要批准（`-p` 下直接被拒），而且写死在 SKILL.md 里的规则带不了各台机器的路径。
+- 不用 `*/persona-office/scripts/office.sh` 这种通配：Agent 在自己的目录里写一个同名脚本（acceptEdits 下不用问）也能被放行，试过，真的跑了。只认绝对路径就挡住了。
+- 不写进 Persona 的 settings 文件：#1462 之后，大多数启动已经不传它了。
+- `;`、`&&` 连起来的命令，Claude Code 会拆开逐条判断；`.claude/` 下的文件也不会不问就改。所以助手那份脚本没法被悄悄换掉。
+- `-o` 只能写同类的文件（`.docx` / `.pptx` / `.xlsx`），免得一条放行的命令把 `~/.zshrc` 之类的文件覆盖掉。
+- SKILL.md 因此要求一条命令只生成一个文件、写出脚本的绝对路径，不用 shell 变量拼。
+
 ## 命令
 
 | 命令 | 做什么 |

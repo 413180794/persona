@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/identity"
 )
 
 // The agents Persona starts get Persona's skills (persona-office, #1300) as a plugin in the node's own directory,
@@ -19,6 +21,28 @@ import (
 var pluginMinVersion = [3]int{2, 1, 0}
 
 func (n *Node) pluginDir() string { return filepath.Join(n.dir, "agent-plugin") }
+
+// The office skill's script runs without a card on the phone: the start allows exactly `sh <its script> …`, at the
+// absolute path the node itself wrote it to (--allowedTools: Claude Code's own rule, for that session only, added to
+// whatever settings the launcher brings). Not a pattern: `*/persona-office/scripts/office.sh` would also let through a
+// script of that name the agent wrote in its own directory (acceptEdits writes there without asking) — tested, it ran
+// (#1300). Nor the skill's allowed-tools: that makes starting the skill itself a permission request, and a static
+// SKILL.md cannot name the node's path. Claude Code splits `a; b` and `a && b` and asks for every part, and does not
+// write under .claude/ without asking, so the assistant's copy cannot be changed behind the rule either.
+func officeRule(script string) string { return "Bash(sh " + script + " *)" }
+
+func (n *Node) agentOfficeScript() string {
+	return filepath.Join(n.pluginDir(), "skills", "persona-office", "scripts", "office.sh")
+}
+
+// assistantTools are the assistant's --allowedTools: Persona's tools, and its copy of the office skill's script.
+func (n *Node) assistantTools() string {
+	return assistantAllowedTools + "," + officeRule(n.assistantOfficeScript())
+}
+
+func (n *Node) assistantOfficeScript() string {
+	return filepath.Join(identity.AssistantDir(n.home), ".claude", "skills", "persona-office", "scripts", "office.sh")
+}
 
 // claudeLoadsPlugins says whether this machine's claude takes --plugin-dir; not when its version is not known.
 func (n *Node) claudeLoadsPlugins(ctx context.Context) bool {

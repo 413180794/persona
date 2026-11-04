@@ -74,6 +74,12 @@ func Main(args []string, stdout, stderr io.Writer) int {
 	if *out == "" {
 		*out = strings.TrimSuffix(in, filepath.Ext(in)) + ext
 	}
+	// Only a file of its kind: Persona's agents may run this without asking (docs/office.md「不用每次批准」), so -o
+	// must not write over ~/.zshrc or anything else.
+	if !strings.EqualFold(filepath.Ext(*out), ext) {
+		fmt.Fprintf(stderr, "office %s writes a %s file: -o %s\n", kind, ext, *out)
+		return 2
+	}
 	src, err := os.ReadFile(in)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
