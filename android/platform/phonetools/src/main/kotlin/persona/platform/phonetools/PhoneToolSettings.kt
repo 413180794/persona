@@ -47,9 +47,17 @@ class PhonePermissions(private val context: Context) {
         PhoneSource.Notifications -> name == "phone_notifications_list" ||
             (permissions(source).all(::granted) && context.getSystemService(NotificationManager::class.java).areNotificationsEnabled() &&
                 context.getSystemService(NotificationManager::class.java).getNotificationChannel(PhoneNotifications.CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE)
+        PhoneSource.Health -> true
         else -> permissions(source).all(::granted)
     }
-    fun status(source: PhoneSource): String = when {
+    fun status(source: PhoneSource, healthGranted: Set<String>? = null): String = when {
+        source == PhoneSource.Health -> when {
+            !Health.available(context) -> Health.unavailableReason(context) ?: "不可用"
+            healthGranted == null -> "已授权"
+            healthGranted.containsAll(Health.permissions) -> "已授权"
+            healthGranted.any { it in Health.permissions } -> "部分授权"
+            else -> "未授权或已拒绝"
+        }
         source == PhoneSource.Photos && Build.VERSION.SDK_INT >= 33 &&
             !(granted(READ_MEDIA_IMAGES) && granted(READ_MEDIA_VIDEO)) && allowed("", source) -> "部分授权"
         source == PhoneSource.Location && granted(ACCESS_COARSE_LOCATION) && !granted(ACCESS_FINE_LOCATION) -> "仅大致位置"

@@ -9,7 +9,7 @@ PhoneToolCatalogTest compares against.
     python3 scripts/assets/export_ios_phone_tools.py           # rewrite the fixture
     python3 scripts/assets/export_ios_phone_tools.py --check   # exit 1 if the fixture is out of date
 
-Tools of iOS-only sources (reminders, health) are left out: Android has no system API for them.
+Tools of iOS-only sources (reminders) and write-only health tools (phone_health_write_sample) are left out.
 """
 import argparse
 import json
@@ -20,7 +20,8 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SOURCES = os.path.join(ROOT, "apple", "Persona", "PhoneTools")
 FIXTURE = os.path.join(ROOT, "android", "platform", "phonetools", "src", "test", "resources", "ios-phone-tools.json")
-IOS_ONLY = {"reminders", "health"}
+IOS_ONLY = {"reminders"}
+IOS_ONLY_TOOLS = {"phone_health_write_sample"}
 
 
 def matching(text, start):
@@ -70,6 +71,14 @@ def multiline(body):
 
 
 def schema_property(call):
+    if call.startswith("Schema.array("):
+        m = re.match(r'^Schema\.array\(\s*("""[\s\S]*?"""|"(?:[^"\\]|\\.)*")\s*,\s*of:\s*(.*)\)$', call, re.S)
+        if not m:
+            raise ValueError("unsupported array schema: %s" % call)
+        desc_raw = m.group(1)
+        desc = multiline(desc_raw[3:-3]) if desc_raw.startswith('"""') else swift_string(desc_raw[1:-1])
+        item_call = m.group(2).strip()
+        return {"type": "array", "description": desc, "items": schema_property(item_call)}
     m = re.fullmatch(r'Schema\.(string|integer|boolean)\(\s*"((?:[^"\\]|\\.)*)"\s*(.*)\)', call, re.S)
     if not m:
         raise ValueError("unsupported schema: %s" % call)
@@ -79,8 +88,13 @@ def schema_property(call):
         bound = re.search(r'\b%s:\s*(-?[\d_]+)' % key, rest)
         if bound:
             prop["minimum" if key == "min" else "maximum"] = int(bound.group(1).replace("_", ""))
-    if re.search(r'\bvalues:', rest):
-        raise ValueError("enum values are not exported yet: %s" % call)
+    val_m = re.search(r'\bvalues:\s*(\w+)', rest)
+    if val_m:
+        val_name = val_m.group(1)
+        if val_name == "metricNames":
+            prop["enum"] = ["steps", "distance", "active_energy", "heart_rate", "resting_heart_rate", "sleep", "weight"]
+        else:
+            raise ValueError("enum values are not exported yet: %s" % call)
     return prop
 
 
@@ -115,7 +129,7 @@ def tools():
             spec = text[spec_open:matching(text, spec_open)]
             tool = re.search(r'name:\s*"([^"]+)"', spec).group(1)
             source = re.match(r'\s*,\s*source:\s*\.(\w+)', text[spec_open + len(spec):]).group(1)
-            if source in IOS_ONLY:
+            if source in IOS_ONLY or tool in IOS_ONLY_TOOLS:
                 continue
             desc = re.search(r'description:\s*("""\n.*?\n[ ]*""")', spec, re.S)
             description = multiline(desc.group(1)[3:-3]) if desc else swift_string(

@@ -1,12 +1,12 @@
 # Android 手机工具
 
-本模块对应 `docs/redesign/android.md` 5.12、`parity.md` 第 21 节和设置中的「手机数据」。提供通讯录搜索、日历查询与新建、当前位置、照片元数据与缩放取图、剪贴板、设备信息、本地通知及 Jarvis 当前通知列表，共 11 个工具。
+本模块对应 `docs/redesign/android.md` 5.12、`parity.md` 第 21 节和设置中的「手机数据」。提供通讯录搜索、日历查询与新建、当前位置、照片元数据与缩放取图、剪贴板、设备信息、本地通知、健康数据汇总（Health Connect）及 Jarvis 当前通知列表，共 12 个工具。
 
-Android 没有统一的系统提醒事项接口，故不注册 `phone_reminders_*`。不注册健康工具，不申请通知监听权限，不读取其他 App 的通知。`phone_notifications_list` 是 Android 新增工具，只返回本应用当前显示的通知，不包含操作确认通知。
+Android 没有统一的系统提醒事项接口，故不注册 `phone_reminders_*`。健康数据通过 Health Connect 提供每天的汇总（`phone_health_summary`，安卓 14 起系统自带；写入健康数据 `phone_health_write_sample` 为 iOS 独有）。不申请通知监听权限，不读取其他 App 的通知。`phone_notifications_list` 是 Android 新增工具，只返回本应用当前显示的通知，不包含操作确认通知。
 
 ## 和 iOS 对齐（2026-11-02）
 
-hub 把各台手机同名的工具合并成一份定义（`server/internal/hub/hub.go` 的 `mcpTools` 取说明更长的那份），调用却可能发给任一台声明了它的手机（`phoneClient`）。所以除 `phone_notifications_list` 外，每个工具的名字、英文说明、参数（类型、说明、最小 / 最大值）和必填项都照 `apple/Persona/PhoneTools/*.swift` 逐字写（`PhoneToolCatalog`），连 iOS 说明里的「iOS version」「Allow Paste?」也不改。`PhoneToolCatalogTest` 拿 `src/test/resources/ios-phone-tools.json` 逐个比，夹具由 `python3 scripts/assets/export_ios_phone_tools.py` 从 iOS 源码导出（`--check` 只检查是否过期；iOS 独有的提醒事项、健康不导出）。
+hub 把各台手机同名的工具合并成一份定义（`server/internal/hub/hub.go` 的 `mcpTools` 取说明更长的那份），调用却可能发给任一台声明了它的手机（`phoneClient`）。所以除 `phone_notifications_list` 外，每个工具的名字、英文说明、参数（类型、说明、最小 / 最大值）和必填项都照 `apple/Persona/PhoneTools/*.swift` 逐字写（`PhoneToolCatalog`），连 iOS 说明里的「iOS version」「Allow Paste?」也不改。`PhoneToolCatalogTest` 拿 `src/test/resources/ios-phone-tools.json` 逐个比，夹具由 `python3 scripts/assets/export_ios_phone_tools.py` 从 iOS 源码导出（`--check` 只检查是否过期；iOS 独有的提醒事项和写健康数据不导出）。
 
 - 参数照 iOS 读：数字超出范围夹到范围内，不是数字的当没传、用默认值；多余参数忽略；字符串去掉首尾空白，空的当没传（剪贴板写入除外，空字符串就是清空）。必填项由各工具自己检查，缺了回「参数错误 / Invalid argument: title is required」这样的句子。
 - 返回结构和 iOS 一样：通讯录 `{query, count, results:[{id, name, nickname, company, job_title, phones[{label, number}], emails[{label, email}], birthday}]}`（没结果带英文 `note`，空查询按通讯录自己的顺序取前几个）；日程 `{start, end, count, truncated, events:[{id, title, start, end, all_day, calendar, location, notes 前 300 字, attendees[{name, role, status, is_current_user}]}]}`，`query` 同时查标题、地点和备注；照片 `{count, access: full|limited, assets:[{id, created, type, width, height, favorite, subtypes:["screenshot"], duration_seconds}]}`（没结果带 `note`，不传 `days` 不限时间）；取图是一段文字（`id, created, width, height, returned_width, returned_height, bytes`）加一个 `{"type":"image","data":…,"mime_type":"image/jpeg"}`；设备信息、剪贴板、通知、定位的键名也照 iOS（Android 用 `android_version` / `sdk` 代替 `ios_version`，定位多带 `provider` 和坐标系说明）。空字段不输出。时间一律是带偏移、到秒的 ISO 8601；只给日期或不带偏移的时间按手机时区读。

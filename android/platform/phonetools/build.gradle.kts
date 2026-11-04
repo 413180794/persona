@@ -19,6 +19,7 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(libs.datastore.preferences)
     implementation(libs.androidx.work)
+    implementation(libs.androidx.health.connect)
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
 }

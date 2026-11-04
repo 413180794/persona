@@ -7,6 +7,7 @@ enum class PhoneSource(val title: String, val detail: String, internal val key: 
     Contacts("通讯录", "搜索姓名、公司、电话和邮箱", "contacts"),
     Calendar("日历", "查看日程，新建日程须逐次确认", "calendar"),
     Location("位置", "仅在前台获取位置，不依赖 Google 服务", "location"),
+    Health("健康", "步数、心率、睡眠、活动能量等汇总", "health"),
     Photos("照片", "读取照片和视频，可只授权部分照片", "photos"),
     Clipboard("剪贴板", "只能在 App 打开时读写", "clipboard"),
     Device("设备信息", "系统、电量、存储和网络", "device"),
@@ -26,11 +27,17 @@ internal data class ToolDefinition(
  * of range are clamped instead of refused and unknown arguments are ignored. phone_notifications_list is Android's own.
  */
 internal object PhoneToolCatalog {
-    private fun string(description: String) = buildJsonObject { put("type", "string"); put("description", description) }
+    private fun string(description: String, values: List<String> = emptyList()) = buildJsonObject {
+        put("type", "string"); put("description", description)
+        if (values.isNotEmpty()) put("enum", JsonArray(values.map(::JsonPrimitive)))
+    }
     private fun integer(description: String, min: Int, max: Int) = buildJsonObject {
         put("type", "integer"); put("description", description); put("minimum", min); put("maximum", max)
     }
     private fun boolean(description: String) = buildJsonObject { put("type", "boolean"); put("description", description) }
+    private fun array(description: String, items: JsonObject) = buildJsonObject {
+        put("type", "array"); put("description", description); put("items", items)
+    }
 
     /** iOS Schema.object: no `properties` or `required` key when there are none. */
     private fun tool(
@@ -85,6 +92,16 @@ internal object PhoneToolCatalog {
                 "timezone and the timestamp of the fix (ISO 8601). Waits at most 15 seconds for a fix. Only call this when " +
                 "the user asks something that needs their location.",
             PhoneSource.Location, foreground = true),
+        tool("phone_health_summary",
+            "Summarize the user's health data per day. Metrics: steps, distance (meters), active_energy (kcal), " +
+                "heart_rate (bpm, average/min/max over the day), resting_heart_rate (bpm), sleep (hours asleep), weight (kg). " +
+                "Defaults to steps over the last 7 days. Only the requested metrics are read. Days run from local midnight to " +
+                "midnight; today's numbers are partial. Returns one row per day with only the days that have data. Read access is " +
+                "never reported to apps, so an empty result can also mean the user denied read access.",
+            PhoneSource.Health, mapOf(
+                "metrics" to array("Metrics to summarize. Default [\"steps\"].", string("One metric.", Health.metricNames)),
+                "days" to integer("How many days back from today, default 7, max 90.", 1, 90),
+            )),
         tool("phone_photos_recent",
             "List recent photos and videos, newest first. Each row has the Photos local identifier, creation date (ISO " +
                 "8601), media type (image/video), pixel width and height, whether it is a screenshot, whether it is a " +

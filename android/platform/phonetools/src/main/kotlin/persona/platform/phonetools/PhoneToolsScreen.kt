@@ -5,6 +5,8 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.PermissionController
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import persona.core.designsystem.*
@@ -37,6 +39,15 @@ fun PhoneToolsScreen(runtime: PhoneToolsRuntime, navigator: Navigator) {
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         runtime.refreshPermissions(); revision++
     }
+    var healthGranted by remember { mutableStateOf<Set<String>?>(null) }
+    LaunchedEffect(revision) {
+        healthGranted = Health.granted(context)
+    }
+    val healthLauncher = rememberLauncherForActivityResult(
+        PermissionController.createRequestPermissionResultContract()
+    ) {
+        runtime.refreshPermissions(); revision++
+    }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle, runtime) {
         val observer = LifecycleEventObserver { _, event ->
@@ -51,9 +62,21 @@ fun PhoneToolsScreen(runtime: PhoneToolsRuntime, navigator: Navigator) {
                 Modifier.padding(bottom = 16.dp), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
         }
         items(PhoneSource.entries, key = { it.name }) { source ->
-            val status = remember(revision, source) { runtime.permissions.status(source) }
+            val status = remember(revision, source, healthGranted) {
+                if (source == PhoneSource.Health) runtime.permissions.status(source, healthGranted)
+                else runtime.permissions.status(source)
+            }
+            val subtitle = when {
+                source == PhoneSource.Health && !Health.available(context) ->
+                    "${Health.unavailableReason(context)}，装好后再打开（安卓 14 起系统自带）"
+                source == PhoneSource.Health && source in enabled && healthGranted != null && healthGranted!!.isEmpty() ->
+                    "Health Connect 里没有允许读取，关掉再打开重新授权"
+                source == PhoneSource.Health && source in enabled && healthGranted != null && !healthGranted!!.containsAll(Health.permissions) ->
+                    "只允许了部分数据，缺的那些查不到"
+                else -> source.detail
+            }
             JGroupItem(GroupPosition.Single, Modifier.padding(bottom = 12.dp)) {
-                JSwitchRow(source.title, checked = source in enabled, subtitle = source.detail, onCheckedChange = { value ->
+                JSwitchRow(source.title, checked = source in enabled, subtitle = subtitle, onCheckedChange = { value ->
                     scope.launch {
                         try { runtime.settings.setEnabled(source, value); error = null }
                         catch (_: Exception) { error = "开关未保存，请重试。" }
@@ -61,7 +84,27 @@ fun PhoneToolsScreen(runtime: PhoneToolsRuntime, navigator: Navigator) {
                 })
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     JTag(status)
-                    if (runtime.permissions.permissions(source).isNotEmpty() || source == PhoneSource.Notifications) {
+                    if (source == PhoneSource.Health) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (!Health.available(context)) {
+                                JButton("获取", {
+                                    try { context.startActivity(Health.installIntent().addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                                    catch (_: Exception) { error = "未能打开应用商店。" }
+                                }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
+                            } else {
+                                JButton(if (status == "部分授权") "重新选择" else "授权", {
+                                    healthLauncher.launch(Health.permissions)
+                                }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
+                                JButton("Health Connect 设置", {
+                                    try { context.startActivity(Intent(HealthConnectClient.ACTION_HEALTH_CONNECT_SETTINGS)) }
+                                    catch (_: Exception) {
+                                        try { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))) }
+                                        catch (_: Exception) { error = "未能打开设置。" }
+                                    }
+                                }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
+                            }
+                        }
+                    } else if (runtime.permissions.permissions(source).isNotEmpty() || source == PhoneSource.Notifications) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             JButton(if (status == "部分授权") "重新选择" else "授权", {
                                 val permissions = runtime.permissions.permissions(source)
@@ -78,7 +121,7 @@ fun PhoneToolsScreen(runtime: PhoneToolsRuntime, navigator: Navigator) {
             }
         }
         item {
-            Text("Android 没有系统提醒事项接口。通知列表只包含 Persona 当前显示的通知；本模块不提供健康数据工具。",
+            Text("Android 没有系统提醒事项接口。通知列表只包含 Persona 当前显示的通知。健康数据通过 Health Connect 读取（安卓 14 起系统自带）。",
                 style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
         }
         error?.let { item { JNotice(it, Modifier.padding(top = 12.dp), status = Status.NeedsYou) } }
