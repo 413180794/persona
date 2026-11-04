@@ -6,7 +6,7 @@ import { useStore } from "../../lib/store";
 import { Button, cx, IconButton, Menu, StatusDot, useMenu } from "../../ui/atoms";
 import { ChatView } from "../chat/ChatView";
 import { PanelHeader } from "../SidePanel";
-import { place, removeTaskNow, useTaskState, useTodo } from "./Tasks";
+import { place, removeTaskNow, retryTaskNow, useRetrying, useTaskState, useTodo } from "./Tasks";
 import { sessionTitle, stateOf } from "../../lib/format";
 
 export function TaskPanel({ todoId, onClose }: { todoId: string; onClose: () => void }) {
@@ -15,6 +15,7 @@ export function TaskPanel({ todoId, onClose }: { todoId: string; onClose: () => 
   const sessions = useStore((s) => s.sessions);
   const [picked, setPicked] = useState<string | null>(null);
   const more = useMenu();
+  const retrying = useRetrying(todoId);
   if (!todo || !st) {
     return (
       <>
@@ -76,9 +77,16 @@ export function TaskPanel({ todoId, onClose }: { todoId: string; onClose: () => 
           <div className="flex flex-col items-start gap-3 p-6 text-[13px]">
             <div className="font-semibold text-red">Agent 没开起来</div>
             <div className="text-ink-2">{st.failure ?? todo.agents?.find((a) => a.start_error)?.start_error}</div>
-            <Button icon="trash" onClick={() => removeTaskNow(todo)}>
-              移除任务
-            </Button>
+            <div className="flex gap-2">
+              {st.status === "failed" && (
+                <Button icon="retry" busy={retrying} disabled={retrying} onClick={() => retryTaskNow(todo)}>
+                  重试
+                </Button>
+              )}
+              <Button icon="trash" onClick={() => removeTaskNow(todo)}>
+                移除任务
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="p-6 text-[13px] text-ink-2">正在开 Agent，开好以后这里就是它的对话。</div>

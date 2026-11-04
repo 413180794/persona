@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -90,11 +91,13 @@ type tasksState struct {
 	// receipt is due when the task settles after working since the last one.
 	working   map[string]time.Time
 	receipted map[string]time.Time
+	// retrying: the tasks whose agent is starting again after a failed start (one start at a time, #1396).
+	retrying map[string]bool
 }
 
 func newTasksState() tasksState {
 	return tasksState{plans: map[string]*TaskPlan{}, feed: map[string][]FeedItem{},
-		working: map[string]time.Time{}, receipted: map[string]time.Time{}}
+		working: map[string]time.Time{}, receipted: map[string]time.Time{}, retrying: map[string]bool{}}
 }
 
 // ---- plans and the feed: storage ----
@@ -413,7 +416,7 @@ func (h *Hub) startPlan(ctx context.Context, id string, edits []PlanTask, rememb
 	h.broadcast(map[string]any{"type": "task_plan", "plan": p})
 	for i := range p.Tasks {
 		if p.Tasks[i].TodoID != "" {
-			go h.startPlanTask(p.ID, p.Conversation, i, p.Tasks[i])
+			go h.startPlanTask(p.ID, p.Conversation, i, p.Tasks[i], false)
 		}
 	}
 	return p, nil
@@ -444,10 +447,15 @@ func applyPlanEdit(t *PlanTask, e PlanTask) {
 	}
 }
 
+// taskStartTimeout bounds one start of a task's agent: a busy machine's shell can take minutes to run claude
+// (node's claudeStartWait, #1396).
+const taskStartTimeout = 5 * time.Minute
+
 // startPlanTask starts one task's agent and links it to the task's todo. A failure ends the task: the todo is done
-// with why (so nothing shows it as going on, #1077), the plan keeps the error, and the conversation gets a receipt.
-func (h *Hub) startPlanTask(planID, conversation string, i int, t PlanTask) {
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+// with why (so nothing shows it as going on, #1077), the plan keeps the error, and the conversation gets a receipt —
+// one per task: a retry that fails again (retry) updates the error the receipt shows (clients read it off the todo).
+func (h *Hub) startPlanTask(planID, conversation string, i int, t PlanTask, retry bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), taskStartTimeout)
 	defer cancel()
 	sid, err := h.startTaskAgent(ctx, t)
 	if err != nil && transientStartErr(err) && ctx.Err() == nil {
@@ -479,8 +487,116 @@ func (h *Hub) startPlanTask(planID, conversation string, i int, t PlanTask) {
 	h.tasks.mu.Lock()
 	h.tasks.receipted[t.TodoID] = time.Now()
 	h.tasks.mu.Unlock()
+	if retry {
+		return
+	}
 	_, _ = h.appendFeed(ctx, conversation, feedReceipt, t.TodoID, receiptBody{Title: t.Title, State: "failed",
 		Summary: "没开起来：" + reason})
+}
+
+var (
+	errTaskNotRetryable = errors.New("只有助手派出、没开起来的任务能重试")
+	errTaskNotInPlan    = errors.New("找不到这个任务的计划，没法照原样再开一次")
+	errMachineOffline   = errors.New("现在离线，等它连上再重试")
+)
+
+// retryTask starts again the agent of a task that did not start (#1396): the same task as its plan has it (machine,
+// directory, prompt, launcher, model, permission, title), in the same todo — reopened, its error and the plan's
+// cleared — so the task shows as starting where it was, not as a second one. A task already starting again, or
+// started since, is answered as it is: a double tap starts one agent. A machine that is offline is refused before
+// anything changes.
+func (h *Hub) retryTask(ctx context.Context, todoID string) (Todo, error) {
+	if err := h.ensureTodosLoaded(ctx); err != nil {
+		return Todo{}, err
+	}
+	cur, ok := h.todoNow(todoID)
+	if !ok {
+		return Todo{}, db.ErrTodoNotFound
+	}
+	if cur.PlanID == "" || cur.Origin == "" {
+		return Todo{}, errTaskNotRetryable
+	}
+	h.tasks.mu.Lock()
+	busy := h.tasks.retrying[todoID]
+	if !busy && cur.DoneAt != nil && cur.StartError != "" {
+		h.tasks.retrying[todoID] = true
+	}
+	h.tasks.mu.Unlock()
+	if busy || cur.DoneAt == nil || cur.StartError == "" {
+		if !busy && cur.DoneAt != nil {
+			return Todo{}, errTaskNotRetryable // done by hand or by the hub, not a failed start
+		}
+		return formatTodo(cur), nil
+	}
+	started := false
+	defer func() {
+		if !started {
+			h.tasks.mu.Lock()
+			delete(h.tasks.retrying, todoID)
+			h.tasks.mu.Unlock()
+		}
+	}()
+	p, err := h.loadPlan(ctx, cur.PlanID)
+	if err != nil {
+		return Todo{}, err
+	}
+	i := slices.IndexFunc(p.Tasks, func(t PlanTask) bool { return t.TodoID == todoID })
+	if i < 0 {
+		return Todo{}, errTaskNotInPlan
+	}
+	t := p.Tasks[i]
+	m := h.machineByName(t.Machine)
+	if m == nil {
+		return Todo{}, fmt.Errorf("没有这台电脑 %q", t.Machine)
+	}
+	if !m.reachable() {
+		return Todo{}, fmt.Errorf("「%s」%w", m.cfg.Name, errMachineOffline)
+	}
+
+	now := time.Now().UTC()
+	var out Todo
+	if h.store != nil {
+		row, ok, err := h.store.RetryTodo(ctx, todoID, now)
+		if err != nil {
+			return Todo{}, err
+		}
+		if !ok { // another hub sharing the store reopened it first
+			cur, _ := h.todoNow(todoID)
+			return formatTodo(cur), nil
+		}
+		out, _ = h.applyTodoRow(todoID, *row, nil)
+	} else {
+		row := db.TodoRow{ID: cur.ID, Title: cur.Title, Notes: cur.Notes, CreatedAt: cur.CreatedAt, UpdatedAt: now,
+			Origin: cur.Origin, PlanID: cur.PlanID, ReopenedAt: &now}
+		out, _ = h.applyTodoRow(todoID, row, nil)
+	}
+	p.Tasks[i].Error = ""
+	if _, err := h.movePlan(ctx, p, planStarted); err != nil {
+		h.logf("plan %s: %v", p.ID, err)
+	}
+	h.broadcast(map[string]any{"type": "task_plan", "plan": p})
+	h.logf("task %s: retrying its start on %s", todoID, m.cfg.ID)
+	started = true
+	go func() {
+		defer func() {
+			h.tasks.mu.Lock()
+			delete(h.tasks.retrying, todoID)
+			h.tasks.mu.Unlock()
+		}()
+		h.startPlanTask(p.ID, p.Conversation, i, t, true)
+	}()
+	return out, nil
+}
+
+// todoNow is a copy of todo id as the hub has it.
+func (h *Hub) todoNow(id string) (Todo, bool) {
+	h.todos.mu.RLock()
+	defer h.todos.mu.RUnlock()
+	t, ok := h.todos.todos[id]
+	if !ok {
+		return Todo{}, false
+	}
+	return copyTodoLocked(t), true
 }
 
 // taskStartRetryDelay is how long a task waits before its one retry after a dropped link (tests shorten it).
@@ -912,6 +1028,23 @@ func (h *Hub) taskRoutes(api *http.ServeMux) {
 			return
 		}
 		writeJSON(w, map[string]any{"plan": p})
+	})
+	api.HandleFunc("POST /api/v1/todos/{id}/retry", func(w http.ResponseWriter, r *http.Request) {
+		if principalOf(r.Context()).Role != roleFull {
+			writeErr(w, http.StatusForbidden, errors.New("read-only role cannot start tasks"))
+			return
+		}
+		t, err := h.retryTask(r.Context(), r.PathValue("id"))
+		switch {
+		case err == nil:
+			writeJSON(w, map[string]any{"todo": t})
+		case errors.Is(err, db.ErrTodoNotFound):
+			writeErr(w, http.StatusNotFound, err)
+		case errors.Is(err, errTaskNotRetryable), errors.Is(err, errTaskNotInPlan), errors.Is(err, errMachineOffline):
+			writeErr(w, http.StatusConflict, err)
+		default:
+			planErr(w, err)
+		}
 	})
 	api.HandleFunc("GET /api/v1/assistant/conversations/{id}/feed", func(w http.ResponseWriter, r *http.Request) {
 		var since time.Time

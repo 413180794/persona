@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { answeredItems, dayLabel, displayLines, getFeedState, mergeInto, quickResult, removeTask, setRoute, startFailure, type FeedItem, type TaskPlan } from "./feed";
+import { answeredItems, dayLabel, displayLines, getFeedState, mergeInto, quickResult, removeTask, retryKey, retryTask, setRoute, startFailure, type FeedItem, type TaskPlan } from "./feed";
 import { getPanel, openPanel } from "./panel";
 import type { Todo } from "./todos";
 import type { ChatLine, Segment } from "./turns";
@@ -84,6 +84,32 @@ describe("a task whose agent did not start (#1077, #1142)", () => {
       expect(fetcher.mock.calls.some(([url, init]) => String(url).endsWith("/todos/t1") && init?.method === "DELETE")).toBe(true);
       expect(getFeedState().routes.c1).toBeUndefined();
       expect(getPanel()).toBeNull();
+    });
+
+    it("retries it in place: one POST however many taps, the todo the hub answers put in at once (#1396)", async () => {
+      let answer: (v: unknown) => void = () => {};
+      const fetcher = vi.fn((_url: string, init?: RequestInit) =>
+        init?.method === "POST" ? new Promise((r) => (answer = r)) : Promise.resolve(ok({ todos: [] })),
+      );
+      vi.stubGlobal("localStorage", { getItem: () => "jd_test" });
+      vi.stubGlobal("fetch", fetcher);
+      const failed = todo({ start_error: "claude did not become ready within 1m0s", done_at: "2026-11-04T10:00:05Z" });
+      const first = retryTask(failed);
+      const second = retryTask(failed);
+      expect(getFeedState().busy[retryKey("t1")]).toBe(true);
+      answer(ok({ todo: { ...failed, start_error: "", done_at: null } }));
+      await Promise.all([first, second]);
+      const posts = fetcher.mock.calls.filter(([, init]) => init?.method === "POST");
+      expect(posts).toHaveLength(1);
+      expect(String(posts[0][0])).toMatch(/\/todos\/t1\/retry$/);
+      expect(getFeedState().busy[retryKey("t1")]).toBe(false);
+    });
+
+    it("says why when the hub refuses the retry, and can be tapped again", async () => {
+      vi.stubGlobal("localStorage", { getItem: () => "jd_test" });
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 409, text: async () => JSON.stringify({ error: "「公司 Mac」现在离线，等它连上再重试" }) }));
+      await expect(retryTask(todo({ start_error: "x", done_at: "2026-11-04T10:00:05Z" }))).rejects.toThrow("离线");
+      expect(getFeedState().busy[retryKey("t1")]).toBe(false);
     });
 
     it("asks first when its agents ran, and keeps it when the user says no", async () => {

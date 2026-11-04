@@ -25,6 +25,8 @@ class TasksContractTest {
         val todos = JsonCodec.decodeFromString<TodosResponse>("""{"todos":[{"id":"t","title":"x","origin":"c","plan_id":"p",
             "agents":[{"machine_id":"box","session_id":"s1"},{"machine_id":"box","session_id":"s0","released_at":"2026-11-03T09:00:00Z"}]}]}""")
         assertEquals(listOf("s1"), todos.todos.single().activeAgents.map { it.sessionId })
+        val failed = JsonCodec.decodeFromString<Todo>("""{"id":"t","done_at":"2026-11-04T07:52:25Z","start_error":"claude did not become ready within 1m0s"}""")
+        assertEquals("claude did not become ready within 1m0s", failed.startError)
         val ix = JsonCodec.decodeFromString<Interaction>("""{"id":"ix","machine_id":"box","session_id":"s1","kind":"permission","task_title":"修登录崩溃"}""")
         assertEquals("修登录崩溃", ix.taskTitle)
     }

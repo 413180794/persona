@@ -412,6 +412,7 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | PUT | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | 整组挂工作区项目到待办 → 200 `{"ok":true,"linked":N}`；`space` 为 URL 编码的项目名（通配接住）；已完成 409，不存在 404，只读设备 403 |
 | DELETE | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | 解除整组挂（物理删除待办下该项目的 space 关联 Agents） → 200 `{"ok":true}`；不存在 404，只读设备 403 |
 | PUT | `/api/v1/todos/{id}/agents/{mid}/{sid}` | 关联已有 Agent → 200 `{"ok":true}`；同一 Agent 原挂在别处标 released，清掉 dismissed，已完成 409，不存在 404，只读设备 403 |
+| POST | `/api/v1/todos/{id}/retry` | 重试没开起来的任务（#1396）：照计划里的这个任务（机器、目录、提示词、启动器 / 模型、权限、标题）在同一个待办上再开 Agent；待办马上重新打开（`done_at`、`start_error` 清空，`reopened_at` 记下），计划里这个任务的 `error` 清空并推 `task_plan`，Agent 在后台开 → 200 `{"todo":Todo}`。已经在重开或已经开起来了也是 200（原样返回，不再开一次）；再失败照常写回 `done_at` + `start_error`、更新计划的 `error`，不追加第二条回执。目标机器离线 409 `「某电脑」现在离线，等它连上再重试`（待办不变），不是助手派出的任务或不是启动失败（比如手动完成的）409，不存在 404，只读设备 403 |
 | GET | `/api/v1/task-plans/{id}` | 一个计划（`TaskPlan`，见下面「任务和对话动态」） → 200 `{"plan":TaskPlan}`；不存在 404 |
 | POST | `/api/v1/task-plans/{id}/start` | 开始计划 `{"tasks"?:[PlanTask],"remember"?:bool}`：`tasks` 按下标覆盖用户在卡片上改过的字段（空的不改），`remember` 记住「这类以后直接开」；每个任务建一个待办（`origin`、`plan_id`）、在后台开 Agent → 200 `{"plan":TaskPlan}`；已开始或不开了 409，不存在 404，只读设备 403 |
 | POST | `/api/v1/task-plans/{id}/dismiss` | 不开了 → 200 `{"plan":TaskPlan}`；已开始 409 |
@@ -662,9 +663,9 @@ Agent blocked 而没有 hook 交互时，hub 读一次屏幕（`session.screen`�
 hub 还要先等小模型起完标签名（约 2 秒）。现在 `POST /api/v1/sessions` 带 `async`：
 
 - node 只做便宜的检查（启动器名、目录存在、权限模式），记下会话（`sessionState`，对话页取历史回空列表、订阅等 transcript 出现），马上回会话；
-  开标签页、跑启动器、等就绪、发 `prompt` 在后台做（最多 2 分钟）。
+  开标签页、跑启动器、等就绪、发 `prompt` 在后台做（最多 4 分半：shell 跑起 claude 最多等 3 分钟，claude 起来后等输入框最多 1 分钟，#1396）。
 - 启动期间会话列表里有它：`status: idle`、`starting: true`（不算一轮，不计时、不推送「完成」）。启动失败就变成 `offline` 加 `start_error`，留 10 分钟。
-- 启动期间发来的消息（`session.send`）在 node 上等它就绪再按顺序打进去；hub 给这种发送 3 分钟（平时 90 秒）。启动失败时这些发送拿到同一个错误，App 的气泡变成「重发」。
+- 启动期间发来的消息（`session.send`）在 node 上等它就绪再按顺序打进去；hub 给这种发送和发给没在运行、要先恢复的会话的 5 分钟（平时 90 秒）。启动失败时这些发送拿到同一个错误，App 的气泡变成「重发」。
 - App 的第一条消息不放在 `prompt` 里，而是进对话后当普通消息发（马上上屏、带发送状态），起名用 `name_hint`。对话页输入框上方显示「正在启动 Claude…」或失败原因（`StartingNote`）。
 - node 重启会丢掉还在启动的记录：这时会话既不在列表里也没有 transcript，App 那边的发送会失败、可以重发。
 - Codex 的启动器（`agent: "codex"`）不走 `async`：Codex 收到第一条消息才建 thread、定下会话 id，所以 App 把第一条消息放在 `prompt` 里同步新建，

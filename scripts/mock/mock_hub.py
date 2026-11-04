@@ -1448,6 +1448,61 @@ if MOCK_TASKS:
         TASK_FEED[ASK1] = [x for x in TASK_FEED[ASK1] if x["at"] <= _cut_at]
 
 
+RETRY_TASK_STARTED = "a1f3c2d4-0000-4000-8000-0000000000a1"
+RETRY_MODE = {"mode": os.environ.get("MOCK_RETRY", "")}
+
+
+def retry_task(h, tid):
+    """POST /api/v1/todos/{id}/retry (#1396): a task that did not start reopens at once without its error (its plan's
+    too), and its agent comes up a moment later in a new session, working. MOCK_RETRY=fail: that start fails again with
+    a new error; =offline: refused, the machine offline (or GET /mock/retry?mode=…, which also puts the failed task back
+    as it was: scripts/test/web_task_retry_e2e.py). A task already started again answers as it is."""
+    t = next((x for x in TODOS if x["id"] == tid), None)
+    if not t:
+        return h.send_json({"error": "todo not found"}, 404)
+    mode = RETRY_MODE["mode"]
+    if not t.get("start_error"):
+        if t.get("done_at") or not t.get("plan_id"):
+            return h.send_json({"error": "只有助手派出、没开起来的任务能重试"}, 409)
+        return h.send_json({"todo": format_todo(t)})
+    if mode == "offline":
+        return h.send_json({"error": "「MacBook」现在离线，等它连上再重试"}, 409)
+    plan = TASK_PLANS.get(t.get("plan_id"))
+
+    def plan_error(err):
+        if not plan:
+            return
+        for pt in plan["tasks"]:
+            if pt.get("todo_id") == tid:
+                pt["error"] = err
+        for send, _ in list(LIVE):
+            try: send({"type": "task_plan", "plan": plan})
+            except Exception: pass
+
+    t.update(done_at=None, start_error="", reopened_at=ago(), updated_at=ago())
+    plan_error("")
+    push_todos()
+
+    def started():
+        time.sleep(1.5)
+        if mode == "fail":
+            err = "claude did not start within 3m0s: the tab's shell had not run it yet (is the machine busy?)"
+            t.update(done_at=ago(), start_error=err, updated_at=ago())
+            plan_error(err)
+        else:
+            if not any(x["session_id"] == RETRY_TASK_STARTED for x in SESSIONS):
+                SESSIONS.append(sess("macbook", RETRY_TASK_STARTED, t["title"], "/Users/me/code/weather", "working", "working",
+                                     "weather", 1, "align", 9, 0, "在看设置页底部两个按钮的布局约束。"))
+            t["agents"] = [{"machine_id": "macbook", "session_id": RETRY_TASK_STARTED, "linked_at": ago(), "released_at": None,
+                            "title": t["title"], "cwd": "/Users/me/code/weather", "agent": "claude", "start_error": "",
+                            "source": "manual", "via": ""}]
+            push_machine("macbook")
+        push_todos()
+
+    threading.Thread(target=started, daemon=True).start()
+    h.send_json({"todo": format_todo(t)})
+
+
 def tasks_area(h, method, p, raw):
     """The unified entry's endpoints (MOCK_TASKS=1): the feed, starting / dismissing a plan, routing to a task."""
     if not MOCK_TASKS:
@@ -1486,6 +1541,19 @@ def tasks_area(h, method, p, raw):
             return True
         plan["state"] = "dismissed" if p.endswith("/dismiss") else "started"
         h.send_json({"plan": plan})
+        return True
+    if method == "POST" and p.startswith("/api/v1/todos/") and p.endswith("/retry"):
+        retry_task(h, p.split("/")[4])
+        return True
+    if p == "/mock/retry":
+        RETRY_MODE["mode"] = parse_qs(urlparse(h.path).query).get("mode", [""])[0]
+        base = next(x for x in TODOS_INIT if x["id"] == "todo_task_align")
+        TODOS[:] = [copy.deepcopy(base) if x["id"] == base["id"] else x for x in TODOS]
+        for pt in TASK_PLANS["plan_mock_4"]["tasks"]:
+            pt["error"] = base["start_error"]
+        SESSIONS[:] = [x for x in SESSIONS if x["session_id"] != RETRY_TASK_STARTED]
+        push_todos()
+        h.send_json({"ok": True, "mode": RETRY_MODE["mode"]})
         return True
     if method == "POST" and p.startswith("/api/v1/assistant/conversations/") and p.endswith("/route"):
         body = json.loads(raw or b"{}")

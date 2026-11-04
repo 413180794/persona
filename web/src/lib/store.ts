@@ -397,6 +397,11 @@ export function setSpacesSupported(supported: boolean) {
   set({ spacesSupported: supported });
 }
 
+/** Puts a todo the hub just answered in place of the one we have (a retried task shows starting at once). */
+export function putTodo(todo: Todo) {
+  set({ todos: state.todos.map((t) => (t.id === todo.id ? { ...t, ...todo } : t)) });
+}
+
 export async function refreshTodos() {
   try {
     const res = await api<{ todos: Todo[] }>("/todos");

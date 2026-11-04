@@ -12,6 +12,8 @@ import {
   isToday,
   later,
   removeTask,
+  retryKey,
+  retryTask,
   sendMessage,
   startFailure,
   setRoute,
@@ -137,6 +139,16 @@ if (import.meta.env.DEV && typeof location !== "undefined") {
   if (t) setTimeout(() => openTask(t), 0);
 }
 
+/** 重试 on a task that did not start (lib/feed retryTask), saying why when the hub refused (the machine offline…). */
+export function retryTaskNow(todo: Todo) {
+  retryTask(todo).catch((e) => toast(`没重试：${e instanceof Error ? e.message : e}`, "error"));
+}
+
+/** A task's 重试 is on its way to the hub. */
+export function useRetrying(todoId: string | undefined): boolean {
+  return useFeed((s) => (todoId ? Boolean(s.busy[retryKey(todoId)]) : false));
+}
+
 // ── the plan card ──
 
 const PERMISSION: Record<string, string> = { acceptEdits: "可以改文件", plan: "先出方案", bypassPermissions: "全部放行", default: "每步都问" };
@@ -224,6 +236,7 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
   const plans = useFeed((s) => s.plans);
   const status = todo ? statusOf(todo, lookup, plans) : undefined;
   const menu = useTaskMenu(todo, status);
+  const retrying = useRetrying(todoId);
   if (!todo || !status) return null;
   const lead = mostUrgentAgent(todo, lookup)?.session;
   const info = TODO_STATUS_INFO[status];
@@ -258,18 +271,32 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
           <span className={cx("font-medium", TONE[info.tone])}>{info.label}</span>
           <span className="flex-1" />
           {status === "failed" ? (
-            // Nothing to say a word to: the way out is on the card.
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                removeTaskNow(todo);
-              }}
-              className="inline-flex items-center gap-1 font-semibold text-red hover:underline"
-            >
-              <Icon name="trash" size={12} />
-              移除
-            </button>
+            // Nothing to say a word to: the ways out are on the card — start it again as it was, or let it go.
+            <span className="flex items-center gap-4">
+              <button
+                type="button"
+                disabled={retrying}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  retryTaskNow(todo);
+                }}
+                className="inline-flex items-center gap-1 whitespace-nowrap font-semibold text-accent hover:underline disabled:opacity-50 disabled:hover:no-underline"
+              >
+                <Icon name="retry" size={12} />
+                {retrying ? "正在重试" : "重试"}
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeTaskNow(todo);
+                }}
+                className="inline-flex items-center gap-1 whitespace-nowrap font-semibold text-red hover:underline"
+              >
+                <Icon name="trash" size={12} />
+                移除
+              </button>
+            </span>
           ) : (
             <button
               type="button"
@@ -393,15 +420,39 @@ export function AnsweredLine({ item, title, onOpenTask }: { item: FeedItem; titl
 
 function ReceiptCard({ item }: { item: FeedItem }) {
   const failed = field(item, "state") === "failed";
+  // A failed start's banner follows its task: 重试 while it is still failed (with its latest error), a quiet line once
+  // it was started again, so no stale error stays in the conversation (#1396).
+  const todo = useTodo(failed ? item.ref : undefined);
+  const lookup = useTaskLookup();
+  const plans = useFeed((s) => s.plans);
+  const retrying = useRetrying(todo?.id);
+  const status = todo ? statusOf(todo, lookup, plans) : undefined;
   const pr = field(item, "pr");
   const prN = pr?.split("/").at(-1);
+  const title = field(item, "title") ?? "任务";
+  if (failed && todo && status && status !== "failed") {
+    const again = status === "not_started" ? "正在重新开" : "重试后开起来了";
+    return (
+      <button type="button" onClick={() => openTask(todo.id)} className="flex items-center gap-1.5 self-start text-left text-[13px] text-ink-2 hover:text-ink">
+        <Icon name={status === "not_started" ? "retry" : "check"} size={13} />
+        「{title}」{again}
+      </button>
+    );
+  }
+  const failure = failed && todo ? startFailure(todo, plans) : undefined;
+  const summary = failure ? `没开起来：${failure}` : field(item, "summary");
   return (
     <div className={cx("flex gap-3 rounded-card p-4", failed ? "bg-red-tint" : "bg-green-tint")}>
       <Icon name={failed ? "info" : "check"} size={18} stroke={2.4} className={failed ? "text-red" : "text-green"} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="text-[14.5px] font-semibold">{failed ? `${field(item, "title") ?? "任务"}没开起来` : `${field(item, "title") ?? "任务"} 完成`}</div>
-        {field(item, "summary") && <div className="line-clamp-4 text-[13px] text-ink-2">{field(item, "summary")}</div>}
+        <div className="text-[14.5px] font-semibold">{failed ? `${title}没开起来` : `${title} 完成`}</div>
+        {summary && <div className="line-clamp-4 text-[13px] text-ink-2">{summary}</div>}
         <div className="mt-1 flex gap-2">
+          {failed && todo && (
+            <Button icon="retry" busy={retrying} disabled={retrying} onClick={() => retryTaskNow(todo)}>
+              重试
+            </Button>
+          )}
           {pr && (
             <Button icon="git" onClick={() => window.open(pr, "_blank", "noopener")}>
               PR #{prN}

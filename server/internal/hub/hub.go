@@ -212,6 +212,7 @@ type Store interface {
 	UpdateTodo(ctx context.Context, id string, title *string, notes *string, done *bool, updatedAt time.Time) (*db.TodoRow, error)
 	FailTodo(ctx context.Context, id, startError string, at time.Time) (*db.TodoRow, error)
 	AutoDoneTodo(ctx context.Context, id, reason string, at, workSince time.Time) (*db.TodoRow, bool, error)
+	RetryTodo(ctx context.Context, id string, at time.Time) (*db.TodoRow, bool, error)
 	DeleteTodo(ctx context.Context, id string) error
 	LinkTodoSpace(ctx context.Context, todoID, machineID, space string, linkedAt time.Time) (string, error)
 	UnlinkTodoSpace(ctx context.Context, todoID, machineID, space string) error

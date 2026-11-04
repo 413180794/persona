@@ -141,3 +141,12 @@ Claude Code 每轮做完会在输入框里用暗色字（SGR 2）放一句建议
   `;`、`&&` 连起来的命令 Claude Code 会拆开逐条判断；`.claude/` 下的文件 acceptEdits 也要问。
 - 放行之后这条命令能做的事就不用人看了：参数里能写文件路径的（`-o`）要在命令自己里限制住。
 - 测试时需要用户手机审批的卡片不要代批：先用规则放行，或者交给用户批。
+
+## 「claude did not become ready within 1m0s」多半是 shell 慢，不是 claude 慢（#1396）
+
+一台 Mac 上同时跑着十来个 Agent 时（15 分钟平均负载 69，18 核），从对话派出的任务报这个错。查实那次：herdr 开出的标签页里 zsh
+2 秒后就起来了，加载 `~/.zshrc` 却用了 54 秒才执行到 `claude`（`ps -o lstart` 看 zsh 和 claude 进程的启动时间），而 node 从敲下命令就开始计 60 秒，
+claude 刚出来 7 秒就判了超时；标签页留在那里，里面的 claude 过一会儿照常起来、空等，没有绑定到任何会话。就绪检测（输入框出现两次、herdr 认出 claude）
+本身没问题。现在分两段计：shell 跑起 claude（herdr 认出 claude 或出现信任对话框）最多 3 分钟，之后等输入框最多 1 分钟；超时的报错分得出是哪一段
+（`claude did not start within 3m0s: the tab's shell had not run it yet` / `… did not become ready within 1m0s of starting`），失败时把这次开的标签页关掉，
+重试不会再留一个空等的 claude。hub 那边等启动的上限跟着放宽（任务启动 5 分钟，启动中 / 要恢复的会话的发送 5 分钟）。

@@ -105,6 +105,8 @@ data class Todo(
     @WireTime @SerialName("created_at") val createdAt: String? = null,
     val origin: String? = null,
     @SerialName("plan_id") val planId: String? = null,
+    /** Why the task's agent did not start (#1077): the hub ended the todo with it; 重试 clears it (#1396). */
+    @SerialName("start_error") val startError: String? = null,
     val agents: List<TodoAgent> = emptyList(),
 ) {
     val activeAgents get() = agents.filter { it.releasedAt == null }

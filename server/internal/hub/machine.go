@@ -295,6 +295,22 @@ func (m *Machine) call(ctx context.Context, method string, params any, out any) 
 	return p.Call(ctx, method, params, out)
 }
 
+// reachable: a call would go out now (call answers errOffline otherwise).
+func (m *Machine) reachable() bool {
+	m.mu.Lock()
+	p := m.peer
+	m.mu.Unlock()
+	if p == nil {
+		return false
+	}
+	select {
+	case <-p.Done():
+		return false
+	default:
+		return true
+	}
+}
+
 // notify sends the node a one-way event; events arrive in the order sent.
 func (m *Machine) notify(event string, params any) error {
 	m.mu.Lock()

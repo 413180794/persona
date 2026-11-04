@@ -26,6 +26,8 @@ type taskNode struct {
 	n      int
 	// failStart: session.start answers this error instead of a session.
 	failStart error
+	// gate: when set, session.start waits for it to close (a start that takes a while).
+	gate chan struct{}
 	// items: what session.items answers (the agent's latest turn).
 	items []proto.Item
 }
@@ -48,6 +50,12 @@ func connectTaskNode(t *testing.T, h *Hub, id string) *taskNode {
 	nodePeer.OnRequest = func(ctx context.Context, method string, raw json.RawMessage) (any, error) {
 		var p map[string]any
 		_ = json.Unmarshal(raw, &p)
+		tn.mu.Lock()
+		gate := tn.gate
+		tn.mu.Unlock()
+		if gate != nil && method == "session.start" {
+			<-gate
+		}
 		tn.mu.Lock()
 		defer tn.mu.Unlock()
 		switch method {
@@ -205,6 +213,225 @@ func TestTaskStartFailedEndsTheTodo(t *testing.T) {
 	}
 	if got := taskTodos(h)[0]; got.DoneAt != nil || got.StartError != "" {
 		t.Fatalf("reopened todo = %+v", got)
+	}
+}
+
+// retryReq posts a task's retry as the app does.
+func retryReq(h *Hub, todoID string) *httptest.ResponseRecorder {
+	r := todoRequest("POST", "/api/v1/todos/"+todoID+"/retry", nil)
+	r.Header.Set("Authorization", "Bearer "+h.cfg.Token)
+	w := httptest.NewRecorder()
+	h.routes().ServeHTTP(w, r)
+	return w
+}
+
+// Retrying a task that did not start starts the same task again in the same todo (#1396): reopened and starting at
+// once, the plan's error gone, the agent started with what the first start had, and linked; one receipt in all.
+func TestTaskRetryStartsTheSameTask(t *testing.T) {
+	h, tn := newTaskHub(t)
+	tn.failStart = errors.New("claude did not become ready within 1m0s")
+	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+		t.Fatal(err)
+	}
+	todo := failedStart(t, h, "did not become ready")
+	tn.mu.Lock()
+	tn.failStart, tn.gate = nil, make(chan struct{})
+	tn.mu.Unlock()
+
+	w := retryReq(h, todo.ID)
+	if w.Code != http.StatusOK {
+		t.Fatalf("retry: %d %s", w.Code, w.Body)
+	}
+	var res struct{ Todo Todo }
+	_ = json.Unmarshal(w.Body.Bytes(), &res)
+	if res.Todo.ID != todo.ID || res.Todo.DoneAt != nil || res.Todo.StartError != "" {
+		t.Fatalf("answered %+v", res.Todo)
+	}
+	if st := taskState(taskTodos(h)[0], nil); st != "not_started" {
+		t.Fatalf("while it starts again the task is %q, not starting", st)
+	}
+	if p, _ := h.loadPlan(context.Background(), todo.PlanID); p.Tasks[0].Error != "" {
+		t.Fatalf("the plan still says %q", p.Tasks[0].Error)
+	}
+	close(tn.gate)
+	waitFor(t, "the agent to link", func() bool { ts := taskTodos(h); return len(ts) == 1 && len(ts[0].Agents) == 1 })
+	if got := taskTodos(h)[0]; got.ID != todo.ID || got.DoneAt != nil || got.StartError != "" {
+		t.Fatalf("todo = %+v", got)
+	}
+	starts, _ := tn.calls()
+	if len(starts) != 2 {
+		t.Fatalf("%d starts", len(starts))
+	}
+	for _, k := range []string{"prompt", "cwd", "permission_mode", "launcher", "tab_name"} {
+		if fmt.Sprint(starts[1][k]) != fmt.Sprint(starts[0][k]) {
+			t.Errorf("retry's %s = %v, first start's %v", k, starts[1][k], starts[0][k])
+		}
+	}
+	if got := strings.Join(feedKinds(h, "conv1"), ","); got != "plan,task,receipt" {
+		t.Fatalf("feed = %s", got)
+	}
+	// Retrying a task that runs is nothing to do.
+	if w := retryReq(h, todo.ID); w.Code != http.StatusOK {
+		t.Fatalf("retry of a running task: %d %s", w.Code, w.Body)
+	}
+	if starts, _ := tn.calls(); len(starts) != 2 {
+		t.Fatalf("a running task was started again: %d starts", len(starts))
+	}
+}
+
+// A retry that fails again ends the task again with the new error (todo and plan), and adds no second receipt.
+func TestTaskRetryFailsAgain(t *testing.T) {
+	h, tn := newTaskHub(t)
+	tn.failStart = errors.New("claude did not become ready within 1m0s")
+	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+		t.Fatal(err)
+	}
+	todo := failedStart(t, h, "did not become ready")
+	tn.mu.Lock()
+	tn.failStart = errors.New("launcher not found")
+	tn.mu.Unlock()
+	if w := retryReq(h, todo.ID); w.Code != http.StatusOK {
+		t.Fatalf("retry: %d %s", w.Code, w.Body)
+	}
+	waitFor(t, "the retry to fail", func() bool {
+		got := taskTodos(h)[0]
+		return got.DoneAt != nil && strings.Contains(got.StartError, "launcher not found")
+	})
+	waitFor(t, "the plan's new error", func() bool {
+		p, _ := h.loadPlan(context.Background(), todo.PlanID)
+		return p != nil && strings.Contains(p.Tasks[0].Error, "launcher not found")
+	})
+	if st := taskState(taskTodos(h)[0], nil); st != "failed" {
+		t.Fatalf("taskState = %q", st)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if n := receipts(h); n != 1 {
+		t.Fatalf("%d receipts", n)
+	}
+	// It can be retried again.
+	h.tasks.mu.Lock()
+	busy := h.tasks.retrying[todo.ID]
+	h.tasks.mu.Unlock()
+	if busy {
+		t.Fatal("a finished retry is still marked as starting")
+	}
+}
+
+// Tapping 重试 again and again while the agent starts starts it once: every tap answers the task as starting.
+func TestTaskRetryTwiceStartsOnce(t *testing.T) {
+	h, tn := newTaskHub(t)
+	tn.failStart = errors.New("claude did not become ready within 1m0s")
+	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+		t.Fatal(err)
+	}
+	todo := failedStart(t, h, "did not become ready")
+	tn.mu.Lock()
+	tn.failStart, tn.gate = nil, make(chan struct{})
+	tn.mu.Unlock()
+	var wg sync.WaitGroup
+	codes := make(chan int, 8)
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			codes <- retryReq(h, todo.ID).Code
+		}()
+	}
+	wg.Wait()
+	close(codes)
+	for c := range codes {
+		if c != http.StatusOK {
+			t.Fatalf("a tap answered %d", c)
+		}
+	}
+	close(tn.gate)
+	waitFor(t, "the agent to link", func() bool { ts := taskTodos(h); return len(ts) == 1 && len(ts[0].Agents) == 1 })
+	time.Sleep(50 * time.Millisecond)
+	if starts, _ := tn.calls(); len(starts) != 2 {
+		t.Fatalf("%d starts: the taps started more than one agent", len(starts))
+	}
+}
+
+// The machine offline: the retry is refused saying so, and the task stays failed as it was.
+func TestTaskRetryWithTheMachineOffline(t *testing.T) {
+	h, tn := newTaskHub(t)
+	tn.failStart = errors.New("claude did not become ready within 1m0s")
+	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+		t.Fatal(err)
+	}
+	todo := failedStart(t, h, "did not become ready")
+	m := h.byID["box"]
+	m.mu.Lock()
+	m.peer = nil
+	m.mu.Unlock()
+	w := retryReq(h, todo.ID)
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "离线") {
+		t.Fatalf("retry: %d %s", w.Code, w.Body)
+	}
+	if got := taskTodos(h)[0]; got.DoneAt == nil || !strings.Contains(got.StartError, "did not become ready") {
+		t.Fatalf("todo = %+v", got)
+	}
+	h.tasks.mu.Lock()
+	busy := h.tasks.retrying[todo.ID]
+	h.tasks.mu.Unlock()
+	if busy {
+		t.Fatal("a refused retry is marked as starting")
+	}
+	// Not a failed start: a task done by hand, or a todo nobody dispatched, is not retried.
+	tn.mu.Lock()
+	tn.failStart = nil
+	tn.mu.Unlock()
+	m.mu.Lock()
+	m.peer = nil
+	m.mu.Unlock()
+	plain, err := h.createTodo(context.Background(), "买牛奶", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := retryReq(h, plain.ID); w.Code != http.StatusConflict {
+		t.Fatalf("retry of a plain todo: %d %s", w.Code, w.Body)
+	}
+	if w := retryReq(h, "todo_nope"); w.Code != http.StatusNotFound {
+		t.Fatalf("retry of no todo: %d %s", w.Code, w.Body)
+	}
+}
+
+// With the store: the retry reopens the stored todo once however many taps come in, and the stored plan loses its error.
+func TestTaskRetryWithTheStore(t *testing.T) {
+	database := setupTestDB(t)
+	h := newTestHub(t)
+	h.store = database
+	h.initTodos(context.Background())
+	tn := connectTaskNode(t, h, "box")
+	tn.failStart = errors.New("claude did not become ready within 1m0s")
+	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+		t.Fatal(err)
+	}
+	todo := failedStart(t, h, "did not become ready")
+	tn.mu.Lock()
+	tn.failStart, tn.gate = nil, make(chan struct{})
+	tn.mu.Unlock()
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if w := retryReq(h, todo.ID); w.Code != http.StatusOK {
+				t.Errorf("retry: %d %s", w.Code, w.Body)
+			}
+		}()
+	}
+	wg.Wait()
+	if row, err := database.GetTodo(context.Background(), todo.ID); err != nil || row.DoneAt != nil || row.StartError != "" {
+		t.Fatalf("stored todo = %+v %v", row, err)
+	}
+	if p, _ := h.loadPlan(context.Background(), todo.PlanID); p.Tasks[0].Error != "" {
+		t.Fatalf("the stored plan still says %q", p.Tasks[0].Error)
+	}
+	close(tn.gate)
+	waitFor(t, "the agent to link", func() bool { ts := taskTodos(h); return len(ts) == 1 && len(ts[0].Agents) == 1 })
+	if starts, _ := tn.calls(); len(starts) != 2 {
+		t.Fatalf("%d starts", len(starts))
 	}
 }
 

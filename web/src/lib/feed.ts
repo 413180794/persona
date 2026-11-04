@@ -3,7 +3,7 @@
 // the quick results. A task is a todo whose `origin` is the conversation; its state is the todo's (lib/todos.ts).
 import { useSyncExternalStore } from "react";
 import { api, enc } from "./api";
-import { onHubEvent, refreshTodos } from "./store";
+import { onHubEvent, putTodo, refreshTodos } from "./store";
 import { deleteTodo, type Todo } from "./todos";
 import { closePanel, getPanel } from "./panel";
 import type { ChatLine } from "./turns";
@@ -196,6 +196,27 @@ export async function dismissPlan(plan: TaskPlan) {
     set({ plans: { ...st.plans, [res.plan.id]: res.plan } });
   } finally {
     set({ busy: { ...st.busy, [plan.id]: false } });
+  }
+}
+
+/** The busy key of a task's 重试 (busy is keyed by plan id otherwise). */
+export const retryKey = (todoId: string) => `retry:${todoId}`;
+
+/**
+ * 重试 on a task whose agent did not start (#1396): the hub starts the same task again (its plan's machine, directory,
+ * prompt, launcher, model and permission) in the same todo, which it reopens at once — the card shows it starting
+ * where it was. Taps while one is on its way do nothing; the hub starts one agent however many arrive.
+ */
+export async function retryTask(todo: Todo) {
+  const key = retryKey(todo.id);
+  if (st.busy[key]) return;
+  set({ busy: { ...st.busy, [key]: true } });
+  try {
+    const res = await api<{ todo: Todo }>(`/todos/${enc(todo.id)}/retry`, { method: "POST" });
+    if (res.todo) putTodo(res.todo);
+    void refreshTodos();
+  } finally {
+    set({ busy: { ...st.busy, [key]: false } });
   }
 }
 

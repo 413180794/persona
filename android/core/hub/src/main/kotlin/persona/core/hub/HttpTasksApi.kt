@@ -53,6 +53,14 @@ class HttpTasksApi internal constructor(
 
     override suspend fun dismissPlan(id: String): TaskPlan = plan(call(path("task-plans", id, "dismiss"), "POST", JsonObject(emptyMap())))
 
+    override suspend fun retryTask(todoId: String): Todo =
+        JsonCodec.decodeFromJsonElement(call(path("todos", todoId, "retry"), "POST", JsonObject(emptyMap()))["todo"]
+            ?: error("no todo in the answer"))
+
+    override suspend fun removeTask(todoId: String) {
+        call(path("todos", todoId), "DELETE")
+    }
+
     override suspend fun route(conversation: String, todoId: String, text: String): FeedItem =
         item(call(path("assistant", "conversations", conversation, "route"), "POST",
             buildJsonObject { put("todo_id", todoId); put("text", text) }))

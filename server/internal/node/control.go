@@ -158,9 +158,19 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		return nil, fmt.Errorf("run launcher: %w", err)
 	}
 
-	a, err := n.waitReady(ctx, pane, 60*time.Second)
+	a, err := n.waitReady(ctx, pane)
 	if err != nil {
 		screen, _ := n.readPane(ctx, pane, "recent-unwrapped", 30)
+		// Close the tab: a claude that comes up after we gave up would sit there unbound, and a retry opens another.
+		if org, ok := launch.(host.Organizer); ok {
+			space := ws
+			if space == "" {
+				space = created.SpaceID
+			}
+			cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+			_ = org.Close(cctx, created.Pane, space, created.SlotID)
+			cancel()
+		}
 		return nil, fmt.Errorf("%v\n%s", err, lastLines(screen, 12))
 	}
 	n.bindPane(pane, id)
@@ -260,10 +270,26 @@ func (n *Node) workspaceFor(ctx context.Context, launch host.Launcher, cwd strin
 	return "", nil
 }
 
+// claudeStartWait is how long a new tab's shell may take to run claude: on a machine busy with a dozen agents,
+// loading ~/.zshrc took most of a minute (#1396). claudeReadyWait is how long claude then has to show its input box.
+// Tests shorten both.
+var claudeStartWait, claudeReadyWait = 3 * time.Minute, time.Minute
+
+// startWait bounds a whole start: the shell, claude, and the first message after.
+func startWait() time.Duration { return claudeStartWait + claudeReadyWait + 30*time.Second }
+
 // waitReady polls until claude's input box is on screen, accepting the folder-trust dialog on the way.
-// herdr reports the trust dialog as idle, so the screen is the source of truth.
-func (n *Node) waitReady(ctx context.Context, pane string, timeout time.Duration) (*host.Agent, error) {
-	deadline := time.Now().Add(timeout)
+// herdr reports the trust dialog as idle, so the screen is the source of truth. The wait for the input box starts
+// once claude runs in the pane: a slow shell before it is not claude being slow.
+func (n *Node) waitReady(ctx context.Context, pane string) (*host.Agent, error) {
+	deadline := time.Now().Add(claudeStartWait)
+	running := false
+	started := func() {
+		if !running {
+			running = true
+			deadline = time.Now().Add(claudeReadyWait)
+		}
+	}
 	readyStreak := 0
 	for time.Now().Before(deadline) {
 		select {
@@ -276,6 +302,7 @@ func (n *Node) waitReady(ctx context.Context, pane string, timeout time.Duration
 			continue
 		}
 		if keys := trustKeys(screen); keys != nil {
+			started()
 			_ = n.sendKeys(ctx, pane, keys...)
 			readyStreak = 0
 			time.Sleep(time.Second)
@@ -297,6 +324,7 @@ func (n *Node) waitReady(ctx context.Context, pane string, timeout time.Duration
 			readyStreak = 0
 			continue
 		}
+		started()
 		if a.AgentStatus == proto.StatusBlocked {
 			return a, nil // some other dialog; the phone shows it as a screen interaction
 		}
@@ -309,7 +337,10 @@ func (n *Node) waitReady(ctx context.Context, pane string, timeout time.Duration
 		}
 		readyStreak = 0
 	}
-	return nil, fmt.Errorf("claude did not become ready within %s", timeout)
+	if !running {
+		return nil, fmt.Errorf("claude did not start within %s: the tab's shell had not run it yet (is the machine busy?)", claudeStartWait)
+	}
+	return nil, fmt.Errorf("claude did not become ready within %s of starting", claudeReadyWait)
 }
 
 // inputBoxVisible reports whether Claude Code's prompt footer is rendered.

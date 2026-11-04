@@ -34,10 +34,13 @@ import persona.core.domain.lines.WorkItem
 
 /** Where a task is, from its todo and its agents' states (docs/todos.md「状态计算规则」). */
 enum class TaskState(val label: String, val rank: Int) {
-    NeedsYou("等你", 0), Working("在做", 1), NotStarted("正在开", 1), Unread("做完了", 2), Followup("停着", 3), Done("完成", 4);
+    NeedsYou("等你", 0), Working("在做", 1), NotStarted("正在开", 1), Unread("做完了", 2), Followup("停着", 3), Done("完成", 4),
+    /** Its agent did not start (#1077): the hub ended it with why; 重试 starts it again (#1396). */
+    Failed("没开起来", 4);
 
     companion object {
         fun of(todo: Todo, agents: List<AgentState>): TaskState = when {
+            todo.doneAt != null && !todo.startError.isNullOrBlank() -> Failed
             todo.doneAt != null -> Done
             AgentState.NeedsYou in agents -> NeedsYou
             AgentState.Unread in agents -> Unread
@@ -256,6 +259,25 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
         val p = api.dismissPlan(plan.id); _plans.update { it + (p.id to p) }
     }
 
+    /**
+     * 重试 on a task whose agent did not start (#1396): the hub starts the same task again in the same todo, which it
+     * answers reopened — put in at once, so its card shows it starting where it was. Taps while one is on its way do
+     * nothing ([busy] under [retryKey]); the hub starts one agent however many arrive.
+     */
+    fun retryTask(todo: Todo, onError: (Throwable) -> Unit) = act(retryKey(todo.id), onError) {
+        val t = api.retryTask(todo.id)
+        _todos.update { list -> list.map { if (it.id == t.id) t else it } }
+        reloadTodos()
+    }
+
+    /** Removes a task that does not run (one whose agent never started): its todo goes, and any route to it. */
+    fun removeTask(todo: Todo, onError: (Throwable) -> Unit) = act("remove:${todo.id}", onError) {
+        api.removeTask(todo.id)
+        _todos.update { list -> list.filterNot { it.id == todo.id } }
+        routes.update { r -> r.filterValues { it != todo.id } }
+        reloadTodos()
+    }
+
     private fun act(id: String, onError: (Throwable) -> Unit, block: suspend () -> Unit) {
         if (id in busy.value) return
         busy.update { it + id }
@@ -282,4 +304,9 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
     }
 
     fun putOff(itemId: String) = later.update { it + itemId }
+
+    companion object {
+        /** The [busy] key of a task's 重试. */
+        fun retryKey(todoId: String) = "retry:$todoId"
+    }
 }

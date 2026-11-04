@@ -97,6 +97,24 @@ func TestTodos(t *testing.T) {
 	if _, err := d.FailTodo(ctx, "nope", "x", failTime); err != ErrTodoNotFound {
 		t.Fatalf("FailTodo on a missing todo: %v", err)
 	}
+	// RetryTodo (#1396): a failed start reopens to start again, once; a todo that is not failed is left alone.
+	retryTime := now.Add(4*time.Minute + 40*time.Second)
+	retried, ok, err := d.RetryTodo(ctx, "t1", retryTime)
+	if err != nil || !ok {
+		t.Fatalf("RetryTodo: %v %v", ok, err)
+	}
+	if retried.DoneAt != nil || retried.StartError != "" || retried.ReopenedAt == nil || !retried.ReopenedAt.Equal(retryTime) {
+		t.Fatalf("retried todo = %+v", retried)
+	}
+	if again, ok, err := d.RetryTodo(ctx, "t1", retryTime.Add(time.Second)); err != nil || ok || again != nil {
+		t.Fatalf("a second RetryTodo reopened it again: %+v %v %v", again, ok, err)
+	}
+	if _, _, err := d.RetryTodo(ctx, "nope", retryTime); err != ErrTodoNotFound {
+		t.Fatalf("RetryTodo on a missing todo: %v", err)
+	}
+	if _, err := d.FailTodo(ctx, "t1", "rpc: connection closed", failTime); err != nil { // failed again
+		t.Fatalf("FailTodo after the retry: %v", err)
+	}
 	up, err = d.UpdateTodo(ctx, "t1", nil, nil, &doneFalse, reopenTime)
 	if err != nil {
 		t.Fatalf("UpdateTodo reopen after failure: %v", err)

@@ -12,7 +12,7 @@ import (
 )
 
 // Starting a session in the background (docs/protocol.md「新建会话」). Opening a herdr tab and waiting for claude's
-// input box takes seconds (up to a minute behind a slow ~/.zshrc or a trust dialog), so `session.start` with async
+// input box takes seconds (minutes behind a slow ~/.zshrc on a busy machine, or a trust dialog), so `session.start` with async
 // answers right away with the session as it will be (id, directory, launcher) and starts it after. Until then the
 // session is listed as idle with `starting` (not a turn: nothing is timed or pushed), its chat is empty instead of an error, and messages sent to it wait
 // for claude to be ready and then go in, in order. A start that fails stays listed for a while with its error, and
@@ -170,7 +170,7 @@ func (n *Node) startAsync(id, cwd, launcher, prompt, workspaceID, mode, effort, 
 	n.state.put(id, sessionState{Launcher: launcher, Cwd: cwd, StartedAt: now})
 	n.noteModes(id, mode, effort)
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), startWait())
 		defer cancel()
 		_, err := n.start(ctx, cwd, launcher, prompt, "", workspaceID, mode, effort, tabName, id, "", execution)
 		if err != nil {

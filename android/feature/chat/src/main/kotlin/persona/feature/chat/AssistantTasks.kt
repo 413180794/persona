@@ -85,11 +85,14 @@ private fun TaskState.status(): Status = when (this) {
     TaskState.Unread -> Status.Unread
     TaskState.Followup -> Status.Idle
     TaskState.Done -> Status.Offline
+    TaskState.Failed -> Status.NeedsYou // red, as the web's 没开起来
 }
 
 @Composable
 private fun TaskMark(state: TaskState) {
-    if (state == TaskState.Done || state == TaskState.Unread) {
+    if (state == TaskState.Failed) {
+        JIcon(PhIcons.WarningCircle, decorative = true, size = Tokens.Space.l, tint = PersonaTheme.palette.danger.dot)
+    } else if (state == TaskState.Done || state == TaskState.Unread) {
         JIcon(PhIcons.CheckCircle, decorative = true, size = Tokens.Space.l,
             tint = if (state == TaskState.Done) PersonaTheme.palette.ink3 else PersonaTheme.palette.positive)
     } else JStatusDot(state.status())
@@ -251,8 +254,10 @@ private fun PlanCard(plan: TaskPlan, host: AssistantTaskHost) {
 private fun TaskCard(todo: Todo, host: AssistantTaskHost) {
     val state = host.tasks.stateOf(todo, host.sessions)
     val lead = host.tasks.lead(todo, host.sessions)
+    val busy by host.tasks.busy.collectAsStateWithLifecycle()
     val now = when {
         state == TaskState.NeedsYou -> "有事等你回答"
+        state == TaskState.Failed -> "没开起来：" + todo.startError.orEmpty().trim()
         !lead?.lastText.isNullOrBlank() -> lead?.lastText.orEmpty().trim()
         todo.agents.any { !it.startError.isNullOrBlank() } -> "没开起来：" + todo.agents.first { !it.startError.isNullOrBlank() }.startError
         state == TaskState.NotStarted -> "正在开 Agent"
@@ -264,16 +269,23 @@ private fun TaskCard(todo: Todo, host: AssistantTaskHost) {
                 TaskMark(state)
                 Text(todo.title, Modifier.weight(1f), style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (state != TaskState.Done) since(todo.createdAt)?.let { Text(it, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) }
+                if (state != TaskState.Done && state != TaskState.Failed) since(todo.createdAt)?.let { Text(it, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) }
             }
             Text(todo.place(host, lead), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(now, Modifier.fillMaxWidth().clip(PersonaTheme.shapes.controlShape).background(PersonaTheme.palette.sunken)
                 .padding(horizontal = Tokens.Space.m, vertical = Tokens.Space.s), style = PersonaTheme.type.callout, maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                color = if (state == TaskState.NeedsYou) PersonaTheme.palette.status(Status.NeedsYou).text else PersonaTheme.palette.ink)
+                color = if (state == TaskState.NeedsYou || state == TaskState.Failed) PersonaTheme.palette.status(Status.NeedsYou).text
+                else PersonaTheme.palette.ink)
             if (state != TaskState.Done) Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(state.label, Modifier.weight(1f), style = PersonaTheme.type.caption, color = PersonaTheme.palette.status(state.status()).text)
-                JButton("说一句", { host.tasks.setRoute(host.conversation, todo.id) }, kind = JButtonKind.Quiet, size = JButtonSize.Small,
+                if (state == TaskState.Failed) {
+                    // Nothing to say a word to: the ways out are on the card — start it again as it was, or let it go.
+                    JButton("重试", { host.tasks.retryTask(todo, host.onError) }, kind = JButtonKind.Quiet, size = JButtonSize.Small,
+                        icon = PhIcons.ArrowClockwise, loading = TasksStore.retryKey(todo.id) in busy)
+                    JButton("移除", { host.tasks.removeTask(todo, host.onError) }, kind = JButtonKind.Destructive, size = JButtonSize.Small,
+                        icon = PhIcons.Trash)
+                } else JButton("说一句", { host.tasks.setRoute(host.conversation, todo.id) }, kind = JButtonKind.Quiet, size = JButtonSize.Small,
                     icon = PhIcons.PaperPlaneTilt)
             }
         }
@@ -296,14 +308,32 @@ private fun TaskLine(todo: Todo, host: AssistantTaskHost) {
 @Composable
 private fun ReceiptCard(item: FeedItem, host: AssistantTaskHost, todos: List<Todo>) {
     val failed = item.field("state") == "failed"
+    val todo = todos.firstOrNull { it.id == item.ref }
+    val title = item.field("title") ?: "任务"
+    // A failed start's banner follows its task: 重试 while it is still failed (with its latest error), a quiet line once
+    // it was started again, so no stale error stays in the conversation (#1396).
+    val state = todo?.let { host.tasks.stateOf(it, host.sessions) }
+    if (failed && todo != null && state != TaskState.Failed) {
+        Row(Modifier.clip(PersonaTheme.shapes.controlShape).clickable { openTask(host, todo) }.padding(vertical = Tokens.Space.xs),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+            JIcon(if (state == TaskState.NotStarted) PhIcons.ArrowClockwise else PhIcons.Check, decorative = true, size = Tokens.Space.m,
+                tint = PersonaTheme.palette.ink2)
+            Text("「$title」" + if (state == TaskState.NotStarted) "正在重新开" else "重试后开起来了", style = PersonaTheme.type.caption,
+                color = PersonaTheme.palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        return
+    }
+    val busy by host.tasks.busy.collectAsStateWithLifecycle()
     val tone = if (failed) PersonaTheme.palette.danger else PersonaTheme.palette.done
+    val summary = todo?.startError?.takeIf { failed && it.isNotBlank() }?.let { "没开起来：" + it.trim() } ?: item.field("summary")
     Row(Modifier.fillMaxWidth().clip(PersonaTheme.shapes.cardShape).background(tone.tint).padding(Tokens.Space.l),
         horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
         JIcon(if (failed) PhIcons.WarningCircle else PhIcons.CheckCircle, decorative = true, tint = tone.dot)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
-            Text((item.field("title") ?: "任务") + if (failed) "没开起来" else " 完成", style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
-            item.field("summary")?.let { Text(it, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2, maxLines = 4, overflow = TextOverflow.Ellipsis) }
-            val todo = todos.firstOrNull { it.id == item.ref }
+            Text(title + if (failed) "没开起来" else " 完成", style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
+            summary?.let { Text(it, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2, maxLines = 4, overflow = TextOverflow.Ellipsis) }
+            if (failed && todo != null) JButton("重试", { host.tasks.retryTask(todo, host.onError) }, kind = JButtonKind.Secondary,
+                size = JButtonSize.Small, icon = PhIcons.ArrowClockwise, loading = TasksStore.retryKey(todo.id) in busy)
             if (!failed && todo != null) JButton("看看", { openTask(host, todo) }, kind = JButtonKind.Secondary, size = JButtonSize.Small)
         }
     }

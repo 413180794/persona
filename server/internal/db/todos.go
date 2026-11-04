@@ -208,6 +208,26 @@ func (d *DB) FailTodo(ctx context.Context, id, startError string, at time.Time) 
 	return &r, nil
 }
 
+// RetryTodo reopens a todo whose agent did not start, to start it again (#1396): not done, no error, reopened now.
+// False (and no error) when it is not failed any more: a retry that came first already reopened it.
+func (d *DB) RetryTodo(ctx context.Context, id string, at time.Time) (*TodoRow, bool, error) {
+	var r TodoRow
+	err := d.pool.QueryRow(ctx, `UPDATE todos SET done_at = NULL, start_error = '', done_by = '', done_reason = '',
+		reopened_at = $2, updated_at = $2 WHERE id = $1 AND done_at IS NOT NULL AND start_error <> ''
+		RETURNING `+todoColumns, id, at).
+		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError, &r.DoneBy, &r.DoneReason, &r.ReopenedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		if _, gerr := d.GetTodo(ctx, id); gerr != nil {
+			return nil, false, gerr
+		}
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return &r, true, nil
+}
+
 // AutoDoneTodo marks a task done by the hub (DoneByAuto, with why) when it is still open and the user has not
 // reopened it since workSince, the start of the work that was judged; false (and no error) when either changed.
 func (d *DB) AutoDoneTodo(ctx context.Context, id, reason string, at, workSince time.Time) (*TodoRow, bool, error) {

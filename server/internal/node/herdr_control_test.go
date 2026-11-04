@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -274,6 +275,83 @@ func TestHerdrStartFailsWhenTheTabCannotBeMade(t *testing.T) {
 	}
 	trace := slices.DeleteFunc(f.trace(), func(c string) bool { return c == call("session.snapshot", nil) })
 	assertTrace(t, trace, []string{call("tab.create", map[string]any{"workspace_id": "w9", "cwd": home, "label": "agent-1", "focus": false})})
+}
+
+// withStartWaits shortens how long a start waits for the shell to run claude, then for claude's input box.
+func withStartWaits(t *testing.T, start, ready time.Duration) {
+	t.Helper()
+	oldStart, oldReady := claudeStartWait, claudeReadyWait
+	claudeStartWait, claudeReadyWait = start, ready
+	t.Cleanup(func() { claudeStartWait, claudeReadyWait = oldStart, oldReady })
+}
+
+// A busy machine's shell takes longer than claude's whole ready wait to run claude (#1396: ~/.zshrc took 54 s with a
+// dozen agents working): the wait for the input box starts once claude runs, so the start still succeeds.
+func TestHerdrStartWaitsForASlowShell(t *testing.T) {
+	withStartWaits(t, 20*time.Second, 1500*time.Millisecond)
+	n, f, home := herdrNode(t)
+	f.reply("session.snapshot", snapshot(nil, nil, nil, nil))
+	f.reply("tab.create", map[string]any{"tab": map[string]any{"tab_id": "w1:t2"}, "root_pane": map[string]any{"pane_id": "w1:p2"}})
+	var mu sync.Mutex
+	gets := 0
+	f.handle("agent.get", func(map[string]any) any {
+		mu.Lock()
+		defer mu.Unlock()
+		if gets++; gets <= 6 { // ~3 s of a shell still loading
+			return map[string]any{"agent": map[string]any{"agent": "", "agent_status": "unknown", "pane_id": "w1:p2"}}
+		}
+		return map[string]any{"agent": map[string]any{"agent": "claude", "agent_status": proto.StatusIdle, "pane_id": "w1:p2",
+			"tab_id": "w1:t2", "workspace_id": "w1"}}
+	})
+	f.setScreen("w1:p2", screenFixture(t, "claude-2.1.312-empty-162.txt"))
+	res, err := request(t, n, "session.start", map[string]any{"cwd": home, "workspace_id": "w1", "prompt": "hi"})
+	if err != nil {
+		t.Fatalf("a slow shell failed the start: %v", err)
+	}
+	if s := decodeSessions(t, []any{res["session"]})[0]; s.PaneID != "w1:p2" {
+		t.Errorf("session %+v", s)
+	}
+	if got := f.trace("tab.close"); len(got) != 0 {
+		t.Errorf("a started tab was closed: %v", got)
+	}
+}
+
+// A shell that never runs claude fails the start after claudeStartWait, saying so, and closes the tab it made: a
+// claude that came up later would sit there unbound, and a retry opens a new one.
+func TestHerdrStartThatNeverRunsClaudeClosesItsTab(t *testing.T) {
+	withStartWaits(t, 1500*time.Millisecond, time.Minute)
+	n, f, home := herdrNode(t)
+	f.reply("session.snapshot", snapshot(nil, nil, nil, nil))
+	f.reply("tab.create", map[string]any{"tab": map[string]any{"tab_id": "w1:t2"}, "root_pane": map[string]any{"pane_id": "w1:p2"}})
+	f.reply("agent.get", map[string]any{"agent": map[string]any{"agent": "", "agent_status": "unknown", "pane_id": "w1:p2"}})
+	f.reply("pane.list", map[string]any{"panes": []any{map[string]any{"pane_id": "w1:p2", "tab_id": "w1:t2"}}})
+	f.setScreen("w1:p2", "~/proj %")
+	_, err := request(t, n, "session.start", map[string]any{"cwd": home, "workspace_id": "w1", "prompt": "hi"})
+	if err == nil || !strings.Contains(err.Error(), "claude did not start within") {
+		t.Fatalf("start: %v", err)
+	}
+	if got := f.trace("tab.close"); len(got) != 1 || got[0] != call("tab.close", map[string]any{"tab_id": "w1:t2"}) {
+		t.Errorf("closed %v", got)
+	}
+}
+
+// Claude runs but never shows its input box: the start fails claudeReadyWait after claude came up.
+func TestHerdrStartThatNeverGetsReady(t *testing.T) {
+	withStartWaits(t, time.Minute, 1500*time.Millisecond)
+	n, f, home := herdrNode(t)
+	f.reply("session.snapshot", snapshot(nil, nil, nil, nil))
+	f.reply("tab.create", map[string]any{"tab": map[string]any{"tab_id": "w1:t2"}, "root_pane": map[string]any{"pane_id": "w1:p2"}})
+	startHerdr(f, "w1:p2", proto.StatusWorking)
+	f.reply("pane.list", map[string]any{"panes": []any{map[string]any{"pane_id": "w1:p2", "tab_id": "w1:t2"}}})
+	f.setScreen("w1:p2", "Claude Code\n loading…")
+	began := time.Now()
+	_, err := request(t, n, "session.start", map[string]any{"cwd": home, "workspace_id": "w1", "prompt": "hi"})
+	if err == nil || !strings.Contains(err.Error(), "did not become ready within 1.5s of starting") {
+		t.Fatalf("start: %v", err)
+	}
+	if d := time.Since(began); d > 10*time.Second {
+		t.Errorf("waited %s, not claudeReadyWait after claude came up", d)
+	}
 }
 
 // Resuming a session that is already live does nothing in herdr but refresh the layout; herdr not running fails
