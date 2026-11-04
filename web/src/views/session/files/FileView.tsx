@@ -34,6 +34,8 @@ import { Markdown } from "../../../ui/Markdown";
 import { Lightbox } from "../../chat/Steps";
 import { PanelHeader } from "../../SidePanel";
 import { BackHeader, Empty, FileGlyph, Segmented, useWindow } from "./parts";
+import { parseNotebook } from "../../../lib/notebook";
+import { NotebookView } from "./NotebookView";
 import { OfficeView } from "./OfficeView";
 import { SheetView } from "./SheetView";
 
@@ -45,6 +47,7 @@ const COLOR_LINES = 100_000;
 const COLOR_BYTES = 8 << 20;
 const PRETTY_BYTES = 8 << 20; // bigger JSON shows as read, not re-indented
 const MAX_TABLE_TEXT = 64 << 20; // a CSV is read whole up to this, then parsed
+const MAX_NOTEBOOK = 64 << 20; // a notebook is read whole up to this (its outputs' pictures are inside)
 const MAX_TABLE_BYTES = 200 << 20; // a workbook bigger than this is not opened in the browser
 
 // stream=1: a binary file comes described, its bytes from file/download by Range (docs/protocol.md「文件预览」); an
@@ -208,11 +211,19 @@ export function FileView({
   const [saving, setSaving] = useState(false);
 
   // JSON is indented from the whole text: read the rest first (as the app does), up to a cap.
-  const wantAll = kind === "json" && doc.next > 0 && (f?.size ?? 0) <= MAX_JSON;
+  const wantAll = (kind === "json" || kind === "notebook") && doc.next > 0 && (f?.size ?? 0) <= (kind === "notebook" ? MAX_NOTEBOOK : MAX_JSON);
   const { all } = doc;
   useEffect(() => {
-    if (wantAll) void all(MAX_JSON);
-  }, [wantAll, all]);
+    if (wantAll) void all(kind === "notebook" ? MAX_NOTEBOOK : MAX_JSON);
+  }, [wantAll, all, kind]);
+  const notebook = useMemo(() => {
+    if (kind !== "notebook" || doc.next > 0) return null;
+    try {
+      return { nb: parseNotebook(doc.text), error: "" };
+    } catch (e) {
+      return { nb: null, error: e instanceof Error ? e.message : String(e) };
+    }
+  }, [kind, doc.next, doc.text]);
   const json = useMemo(() => {
     if (kind !== "json" || doc.next > 0) return null;
     if (doc.text.length > PRETTY_BYTES) return { pretty: null, error: "", big: true };
@@ -264,6 +275,7 @@ export function FileView({
     <>
       {kind === "markdown" && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "预览"], ["source", "源码"]]} />}
       {kind === "json" && json?.pretty != null && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "格式化"], ["source", "原文"]]} />}
+      {kind === "notebook" && notebook?.nb && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "笔记本"], ["source", "源文件"]]} />}
       {kind === "sheet" && typeof f?.text === "string" && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "表格"], ["source", "源文件"]]} />}
       <IconButton icon="copy" label="拷贝路径" onClick={() => copyText(f?.path || path)} />
       {kind !== "directory" && <IconButton icon="arrowDown" label={saving ? "正在下载" : "下载"} onClick={download} disabled={!f || saving} />}
@@ -296,6 +308,14 @@ export function FileView({
     body = <ImageView file={f} src={inlineSrc(mid, f, cwd)} />;
   } else if (kind === "pdf") {
     body = <PdfView file={f} src={f.stream ? inlineSrc(mid, f, cwd) : ""} />;
+  } else if (kind === "notebook" && mode === "rendered" && !notebook?.error && !(doc.next > 0 && !wantAll)) {
+    body = notebook?.nb ? (
+      <NotebookView nb={notebook.nb} />
+    ) : (
+      <div className="flex flex-1 items-center justify-center">
+        <Loading label={`正在读取笔记本 · ${bytes(f.size)}`} />
+      </div>
+    );
   } else if (kind === "office") {
     body = <OfficeView mid={mid} cwd={cwd} file={f} onDownload={download} />;
   } else if (kind === "sheet" && mode === "rendered") {
@@ -318,7 +338,11 @@ export function FileView({
   } else {
     const shown = kind === "json" && mode === "rendered" && json?.pretty != null ? json.pretty : doc.text;
     const note =
-      kind === "json" && wantAll
+      kind === "notebook" && notebook?.error
+        ? `${notebook.error}，按文本显示`
+        : kind === "notebook" && doc.next > 0 && !wantAll
+          ? "笔记本太大，按文本显示"
+          : kind === "json" && wantAll
         ? `已读 ${bytes(doc.next)} / ${bytes(f.size)}，正在读完整个文件…`
         : kind === "json" && doc.next > 0
           ? "文件太大，按文本显示"
@@ -346,7 +370,7 @@ export function FileView({
 
 // ── code ──────────────────────────────────────────────────
 
-const TOKEN_CLASS: Record<TokenKind, string> = {
+export const TOKEN_CLASS: Record<TokenKind, string> = {
   comment: "text-ink-3",
   string: "text-green",
   number: "text-accent-ink",

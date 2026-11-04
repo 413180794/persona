@@ -256,7 +256,7 @@ export function splitDiff(diff: string): Record<string, string> {
 
 // ── the viewer ────────────────────────────────────────────
 
-export type ViewKind = "directory" | "markdown" | "json" | "code" | "image" | "pdf" | "sheet" | "office" | "binary";
+export type ViewKind = "directory" | "markdown" | "json" | "notebook" | "code" | "image" | "pdf" | "sheet" | "office" | "binary";
 
 /** Office documents drawn in the browser (docx-preview, lib/pptx.ts); the rest go through the machine's LibreOffice. */
 export const OFFICE_RENDERED = ["docx", "docm", "dotx", "pptx", "pptm", "ppsx", "potx"];
@@ -285,6 +285,7 @@ export function viewKind(f: FileContent): ViewKind {
   }
   const ext = extOf(f.name);
   if (ext === "rtf") return "office"; // RTF is text, but its source is markup nobody reads
+  if (ext === "ipynb") return "notebook";
   if (DELIMITED_EXTS.includes(ext) || mime === "text/csv" || mime === "text/tab-separated-values") return "sheet";
   if (["md", "markdown", "mdx", "mkd"].includes(ext) || mime === "text/markdown") return ext ? "markdown" : "code";
   if (["json", "jsonc", "json5", "geojson", "webmanifest"].includes(ext) || (mime.includes("json") && !["jsonl", "ndjson"].includes(ext))) return "json";

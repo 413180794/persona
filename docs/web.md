@@ -286,6 +286,10 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 - **Mermaid**（#1376，`ui/Mermaid.tsx`、`lib/mermaid.ts`；iOS / Mac 是 #1295）：对话和文件查看器的 Markdown 里 ```mermaid 代码块画成图，Mermaid 支持的图都行（流程、时序、类、状态、甘特、饼、ER、思维导图……）。
   Mermaid（MIT）第一次画图时才加载（约 670 KB），`securityLevel: "strict"`（自带 DOMPurify 清洗，没有点击回调、标签里的 HTML 不执行）；一次只画一张（它画的时候有全局状态），按主题缓存 60 张，滚回去不重画。
   跟随深浅色（换主题重画）；饼图换成 App 的图表色（Mermaid 自带的深色饼几乎是黑的、浅色是粉彩）；最高 460px，大图点「放大」全屏看。流式输出时代码停下 350ms 再画，画出来之前显示源码；语法错误显示源码和「这张图有语法错误（第 N 行）」，Mermaid 的英文原文收在可展开的详情里。悬停有看源码 / 看图、放大、拷贝。
+- **Jupyter**（#1407，`session/files/NotebookView.tsx`、`lib/notebook.ts`；iOS / Mac 是 #1296）：.ipynb 渲染成笔记本（nbformat 4，兼容 3 的 worksheets），「笔记本 / 源文件」可切。
+  Markdown 单元走同一个 Markdown（公式、Mermaid），单元附件里的图在渲染后换上（react-markdown 不放 data: URL，先写成 `#nb-attachment=` 再替换）；代码单元按内核语言上色、带 `[n]:`；
+  每个输出只显示一种：图片（PNG / JPEG / GIF / WebP / SVG）> HTML > Markdown > LaTeX（转成 `$$`）> JSON > 纯文本；相邻同名的 stdout / stderr 合并，stderr 红底；报错显示去掉 ANSI 颜色码的完整 traceback（横向滚动，不折行、不截断）；其他单个文本输出超过 2000 行截断并写剩几行。
+  HTML 输出（pandas 表格等）放进 `sandbox=""` 的 srcdoc iframe，CSP 禁联网，配色跟随网页深浅色，高度按行数估、可拖。整个文件最多读 64 MB。
 - **链接**：见下面「链接在页面里打开」。
 
 ### 链接在页面里打开

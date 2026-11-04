@@ -5527,6 +5527,29 @@ if os.environ.get("MOCK_SHEETS"):  # the table viewer's files (#1310), in the br
     MOCK_TREE[MOCK_REPO + "/data/stations.csv"] = stations_csv()
     MOCK_TREE.setdefault(MOCK_REPO + "/reports/", None)
     MOCK_TREE[MOCK_REPO + "/reports/季度报告.xlsx"] = (MOCK_MIMES[".xlsx"], base64.b64encode(quarterly_xlsx()).decode())
+if os.environ.get("MOCK_NOTEBOOK"):  # a Jupyter notebook for the web's viewer (#1407): Markdown with math, code, a table, a plot, an error
+    _rows = [("华东", 120000, 128000, 141000), ("华北", 151337, 157011, 168133), ("海外", 245348, 244044, 249532)]
+    _table = ("<table class=\"dataframe\"><thead><tr><th></th><th>区域</th><th>7 月</th><th>8 月</th><th>9 月</th></tr></thead><tbody>"
+              + "".join("<tr><th>%d</th><td>%s</td><td>%d</td><td>%d</td><td>%d</td></tr>" % ((i,) + r) for i, r in enumerate(_rows)) + "</tbody></table>")
+    _nb = {"nbformat": 4, "nbformat_minor": 5,
+           "metadata": {"kernelspec": {"name": "python3", "display_name": "Python 3 (ipykernel)", "language": "python"}, "language_info": {"name": "python"}},
+           "cells": [
+               {"cell_type": "markdown", "metadata": {}, "source": ["# 第三季度收入分析\n", "\n", "环比增长按 $g = \\frac{x_9}{x_8} - 1$ 计算，数据是示例。"]},
+               {"cell_type": "code", "execution_count": 1, "metadata": {}, "source": ["import pandas as pd\n", "df = pd.read_csv(\"data/revenue.csv\")  # 三个区域\n", "df.head()"],
+                "outputs": [{"output_type": "execute_result", "execution_count": 1, "metadata": {}, "data": {"text/plain": ["  区域 ..."], "text/html": [_table]}}]},
+               {"cell_type": "code", "execution_count": 2, "metadata": {}, "source": ["growth = df[\"9 月\"] / df[\"8 月\"] - 1\n", "print(growth.round(3).to_dict())\n", "ax = df.plot.bar(x=\"区域\")"],
+                "outputs": [{"output_type": "stream", "name": "stdout", "text": ["{0: 0.102, 1: 0.071, 2: 0.023}\n"]},
+                            {"output_type": "stream", "name": "stderr", "text": ["UserWarning: Glyph missing from current font.\n"]},
+                            {"output_type": "display_data", "metadata": {}, "data": {"text/plain": ["<Figure size 640x480 with 1 Axes>"], "image/png": base64.b64encode(_bar_png(480, 200)).decode()}}]},
+               {"cell_type": "code", "execution_count": 3, "metadata": {}, "source": ["df[\"10 月\"].sum()"],
+                "outputs": [{"output_type": "error", "ename": "KeyError", "evalue": "'10 月'", "traceback": ["\u001b[0;31m---------------------------------------------------------------------------\u001b[0m",
+                                                                                                          "\u001b[0;31mKeyError\u001b[0m                                  Traceback (most recent call last)",
+                                                                                                          "Cell \u001b[0;32mIn[3], line 1\u001b[0m\n\u001b[0;32m----> 1\u001b[0m df[\u001b[38;5;124m\"10 月\"\u001b[39m]\u001b[38;5;241m.\u001b[39msum()",
+                                                                                                          "\u001b[0;31mKeyError\u001b[0m: '10 月'"]}]},
+               {"cell_type": "markdown", "metadata": {}, "source": ["## 结论\n", "\n", "- 华东增长最快\n", "- 海外基本持平"]},
+           ]}
+    MOCK_TREE.setdefault(MOCK_REPO + "/notebooks/", None)
+    MOCK_TREE[MOCK_REPO + "/notebooks/收入分析.ipynb"] = json.dumps(_nb, ensure_ascii=False, indent=1)
 if os.environ.get("MOCK_OFFICE"):  # the Office viewer's files (#1345): rendered in the browser, or converted by "LibreOffice"
     MOCK_TREE.setdefault(MOCK_REPO + "/reports/", None)
     MOCK_TREE[MOCK_REPO + "/reports/季度报告.docx"] = (MOCK_MIMES[".docx"], base64.b64encode(office_docx()).decode())

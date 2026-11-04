@@ -189,3 +189,8 @@
 - **先 `parse` 再 `render`，并开 `suppressErrorRendering`**：不然语法错误时 Mermaid 会在页面底部留下一个「Syntax error」的炸弹图。
 - **默认主题的饼图不能用**：dark 主题的扇区接近黑色，default 主题是粉彩，且默认 `pieOpacity` 0.7 在白底上发白。用 `themeVariables` 的 `pie1…pie8` 和 `pieOpacity: "1"`。
 - **`ui/Markdown.tsx` 不能 import `views/` 里的组件**：`views/chat/Steps.tsx` 反过来 import Markdown，循环依赖在模块初始化时会拿到 undefined；Mermaid 的放大层自己写了一个。
+
+## Jupyter 笔记本（2026-11-04，#1407）
+
+- **react-markdown 默认滤掉 data: URL**（`defaultUrlTransform` 只放常见协议），笔记本单元附件 `attachment:x.png` 直接换成 data URL 会变成空 src：先改写成 `#nb-attachment=名字` 这种它放行的片段地址，渲染后在 layout effect 里换成真图。
+- **traceback 里全是 ANSI 颜色码**，而且按终端宽度排好了列：去掉颜色码后用 `white-space: pre` 横向滚动，折行（pre-wrap）会把 Traceback 那一行拆得乱七八糟。
