@@ -205,6 +205,20 @@ extension Theme {
         static let laptop = "laptopcomputer"
         /// A Mac's live screen (VNC, docs/computer-use.md「实时画面」).
         static let screen = "display"
+        /// The Mac's pointer drawn over its screen in the app's VNC (#1343), when the Mac sends none of its own.
+        static let pointer = "cursorarrow"
+        /// VNC in a small window over everything (picture in picture).
+        static let pictureInPicture = "pip.enter"
+        /// 触控板模式: the screen moves the pointer like a trackpad.
+        static let trackpad = "rectangle.and.hand.point.up.left"
+        /// 指针居中: the pointer back to the middle.
+        static let pointerCenter = "scope"
+        /// The Mac's clipboard and the phone's, both ways.
+        static let clipboard = "clipboard"
+        /// How to use it (帮助).
+        static let help = "questionmark.circle"
+        /// 我完成了: the Mac handed back to the agent.
+        static let handBack = "hand.thumbsup"
         /// Signing in with a code entered on a web page instead of a computer's login (GitHub's device flow).
         static let deviceCode = "key"
         /// A website whose sign-in (cookies) a browser keeps (a Mac's 浏览器登录, #1304).

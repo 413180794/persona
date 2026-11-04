@@ -346,6 +346,15 @@ nonisolated struct APIClient: Sendable {
     func computerJob(machine: String, _ action: String) async throws -> MachineComputer {
         try JSON.decoder.decode(MachineComputer.self, from: await request("POST", "/api/v1/machines/\(machine)/computer/\(action)"))
     }
+    /// The Mac's clipboard through its node (#1343: text RFB's own cannot carry), read and set.
+    func computerClipboard(machine: String) async throws -> String {
+        struct Out: Decodable { var text: String }
+        return try JSON.decoder.decode(Out.self, from: await request("GET", "/api/v1/machines/\(machine)/computer/clipboard")).text
+    }
+    func setComputerClipboard(machine: String, _ text: String) async throws {
+        struct Body: Encodable { var text: String }
+        _ = try await request("POST", "/api/v1/machines/\(machine)/computer/clipboard", body: Body(text: text))
+    }
     /// The apps always allowed for the assistant on this Mac (#1507), and taking one back (asked again next time).
     func computerApps(machine: String) async throws -> [ComputerApp] {
         struct Out: Decodable { var apps: [ComputerApp] }

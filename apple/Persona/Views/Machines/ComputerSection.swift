@@ -224,7 +224,7 @@ struct ComputerSection: View {
     /// VNC: the Mac's live screen, where macOS's dialogs can be answered from the phone too.
     private func look(prominent: Bool) -> some View {
         Button {
-            model.openScreen(ref)
+            model.openVNC(ref)
         } label: {
             Label("VNC", systemImage: Theme.Icon.screen).font(Theme.Font.labelStrong).lineLimit(1)
         }

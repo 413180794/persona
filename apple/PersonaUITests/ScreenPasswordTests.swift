@@ -25,10 +25,10 @@ final class ScreenPasswordTests: XCTestCase {
 
         // The first time: the form, 记住 ticked.
         look.tap()
-        let signIn = app.webViews.staticTexts["登录这台 Mac 的屏幕共享"].firstMatch
+        let signIn = app.staticTexts["登录这台 Mac 的屏幕共享"].firstMatch
         XCTAssertTrue(signIn.waitForExistence(timeout: 30), "the form:\n\(app.debugDescription)")
-        let remember = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "在这台手机上记住")).firstMatch
-        XCTAssertTrue(remember.exists, "记住:\n\(app.debugDescription)")
+        let remember = app.switches["vnc-remember"].firstMatch
+        XCTAssertTrue(remember.exists && remember.label.contains("在这台手机上记住") && remember.value as? String == "1", "记住, on:\n\(app.debugDescription)")
         shot(app, "screen-password-form")
         type("mock-pass", in: app)
         XCTAssertTrue(live(app), "signed in")
@@ -37,29 +37,33 @@ final class ScreenPasswordTests: XCTestCase {
         XCTAssertTrue(forget.waitForExistence(timeout: 10), "remembered: 忘记屏幕共享密码 next to VNC")
         shot(app, "screen-password-forget")
 
-        // Next time it signs in by itself.
+        // Next time it signs in by itself, into the small window.
+        letGo()
         look.tap()
-        XCTAssertTrue(live(app), "the screen with no form")
+        XCTAssertTrue(openedByItself(app), "the small window (or the page), signed in by itself:\n\(app.debugDescription)")
         XCTAssertFalse(signIn.exists)
-        close(app)
+        XCTAssertTrue(waitSignedIn(hub, count: 2), "it signed in with the kept one")
 
         // The Mac's password changed: the form says the kept one no longer works; the new one replaces it.
         try mock(hub, "/mock/screen-password?p=new-pass")
+        letGo()
         look.tap()
-        let stale = app.webViews.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "记住的密码不对了")).firstMatch
+        let stale = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "记住的密码不对了")).firstMatch
         XCTAssertTrue(stale.waitForExistence(timeout: 30), "the kept password refused:\n\(app.debugDescription)")
         shot(app, "screen-password-stale")
         type("new-pass", in: app)
         XCTAssertTrue(live(app), "the new password")
         close(app)
+        letGo()
         look.tap()
-        XCTAssertTrue(live(app), "the new one is the kept one")
-        close(app)
+        XCTAssertTrue(waitSignedIn(hub, count: 5), "the new one is the kept one")
+        XCTAssertTrue(openedByItself(app))
 
         // Forgotten: the form again.
         XCTAssertTrue(forget.waitForExistence(timeout: 10))
         forget.tap()
         XCTAssertTrue(waitGone(forget))
+        letGo()
         look.tap()
         XCTAssertTrue(signIn.waitForExistence(timeout: 30), "asked again")
         close(app)
@@ -83,7 +87,7 @@ final class ScreenPasswordTests: XCTestCase {
         XCTAssertTrue(look.waitForExistence(timeout: 30), "no VNC:\n\(app.debugDescription)")
         for _ in 0..<6 where !look.isHittable { app.swipeUp() }
         look.tap()
-        XCTAssertTrue(app.webViews.staticTexts["登录这台 Mac 的屏幕共享"].firstMatch.waitForExistence(timeout: 30))
+        XCTAssertTrue(app.staticTexts["登录这台 Mac 的屏幕共享"].firstMatch.waitForExistence(timeout: 30))
         type("mock-pass", in: app)
         XCTAssertTrue(live(app), "signed in, kept")
         close(app)
@@ -112,6 +116,24 @@ final class ScreenPasswordTests: XCTestCase {
         XCTAssertTrue(lock.waitForExistence(timeout: 15), "unlocked: 锁上 again, not 一键解锁")
     }
 
+    /// The mock's Screen Sharing has taken count good sign-ins.
+    private func waitSignedIn(_ hub: String, count: Int) -> Bool {
+        let deadline = Date.now.addingTimeInterval(20)
+        while Date.now < deadline {
+            var ok = 0
+            let done = expectation(description: "signins")
+            URLSession.shared.dataTask(with: URL(string: hub + "/mock/screen-password")!) { data, _, _ in
+                let s = (data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] })?["signins"] as? [[String: Any]] ?? []
+                ok = s.filter { $0["ok"] as? Bool == true }.count
+                done.fulfill()
+            }.resume()
+            wait(for: [done], timeout: 10)
+            if ok >= count { return true }
+            usleep(500_000)
+        }
+        return false
+    }
+
     private func typed(_ hub: String) throws -> String {
         var out = ""
         let done = expectation(description: "typed")
@@ -124,11 +146,11 @@ final class ScreenPasswordTests: XCTestCase {
     }
 
     @MainActor private func type(_ password: String, in app: XCUIApplication) {
-        let field = app.webViews.secureTextFields["密码"].firstMatch
+        let field = app.secureTextFields["vnc-password"].firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap()
         field.typeText(password)
-        app.webViews.buttons["连接"].firstMatch.tap()
+        app.buttons["vnc-connect"].firstMatch.tap()
     }
 
     /// The drawer says 已连接.
@@ -138,6 +160,23 @@ final class ScreenPasswordTests: XCTestCase {
         while Date.now < deadline { if phase.exists, phase.label.contains("已连接") { return true }; usleep(250_000) }
         return false
     }
+
+    /// Signed in with the kept one: the small window, or where there is no picture in picture (the simulators) the
+    /// whole page, live, then closed again.
+    @MainActor private func openedByItself(_ app: XCUIApplication) -> Bool {
+        let pip = app.descendants(matching: .any)["vnc-pip-on"].firstMatch
+        let page = app.descendants(matching: .any)["screen-drawer"].firstMatch
+        let deadline = Date.now.addingTimeInterval(20)
+        while Date.now < deadline, !pip.exists, !page.exists { usleep(250_000) }
+        if pip.exists { return true }
+        guard page.exists, live(app) else { return false }
+        close(app)
+        return true
+    }
+
+    /// The connection closes a moment after the page and the small window let it go (VNC.release): the next VNC signs
+    /// in afresh.
+    private func letGo() { sleep(3) }
 
     @MainActor private func close(_ app: XCUIApplication) {
         app.descendants(matching: .any)["screen-close"].firstMatch.tap()

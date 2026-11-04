@@ -175,7 +175,7 @@ struct BrowserSection: View {
     /// VNC: the Mac's live screen, where ego's setup is done from the phone.
     private func look(prominent: Bool) -> some View {
         Button {
-            model.openScreen(ref)
+            model.openVNC(ref)
         } label: {
             Label("VNC", systemImage: Theme.Icon.screen).font(Theme.Font.labelStrong).lineLimit(1)
         }

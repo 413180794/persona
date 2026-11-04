@@ -105,8 +105,15 @@ nonisolated final class RFBClient: @unchecked Sendable {
     private let reader: RFBReader
     private let credentials: @Sendable () async -> Credentials?
     private(set) var framebuffer = RFBFramebuffer(width: 1, height: 1)
+    /// Held while an update writes the framebuffer: whoever copies it out takes it too (withFramebuffer).
+    private let framebufferLock = NSLock()
+
+    /// The framebuffer as it is between two writes (a frame copied out, at its own pace).
+    func withFramebuffer<T>(_ body: (RFBFramebuffer) -> T) -> T { framebufferLock.withLock { body(framebuffer) } }
     private let zrle = RFBZRLE()
     private var task: Task<Void, Never>?
+    /// The pointer, keys and clipboard, sent one after another in the order they came (from the handshake's end on).
+    private let outbox = AsyncStream<[UInt8]>.makeStream(of: [UInt8].self)
 
     var onState: @Sendable (State) -> Void = { _ in }
     /// After each update: the framebuffer, and the part of it that changed.
@@ -128,7 +135,12 @@ nonisolated final class RFBClient: @unchecked Sendable {
             onState(.connecting)
             do {
                 try await handshake()
-                try await run()
+                try await withThrowingTaskGroup(of: Void.self) { g in
+                    g.addTask { [self] in for await m in outbox.stream { try await transport.send(m) } }
+                    g.addTask { [self] in try await run() }
+                    try await g.next()
+                    g.cancelAll()
+                }
             } catch let Failure.refused(why) {
                 onState(.refused(why))
             } catch {
@@ -140,6 +152,7 @@ nonisolated final class RFBClient: @unchecked Sendable {
 
     func close() {
         task?.cancel()
+        outbox.continuation.finish()
         transport.close()
         onState(.closed)
     }
@@ -163,9 +176,7 @@ nonisolated final class RFBClient: @unchecked Sendable {
         send([6, 0, 0, 0] + RFBAuth.be32(UInt32(bytes.count)) + bytes)
     }
 
-    private func send(_ bytes: [UInt8]) {
-        Task { try? await transport.send(bytes) }
-    }
+    private func send(_ bytes: [UInt8]) { outbox.continuation.yield(bytes) }
 
     // MARK: In
 
@@ -190,7 +201,7 @@ nonisolated final class RFBClient: @unchecked Sendable {
         let width = try await reader.u16(), height = try await reader.u16()
         _ = try await reader.bytes(16) // its pixel format: the client asks for its own next
         let name = String(decoding: try await reader.bytes(Int(try await reader.u32())), as: UTF8.self)
-        framebuffer = RFBFramebuffer(width: width, height: height)
+        framebufferLock.withLock { framebuffer = RFBFramebuffer(width: width, height: height) }
         // SetPixelFormat: 32 bits, depth 24, little-endian, true colour, 8 bits each, red at 16, green 8, blue 0.
         try await transport.send([0, 0, 0, 0, 32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0, 0, 0])
         var setEncodings: [UInt8] = [2, 0, 0, UInt8(Self.encodings.count)]
@@ -268,15 +279,16 @@ nonisolated final class RFBClient: @unchecked Sendable {
             switch encoding {
             case 0:
                 let data = try await reader.bytes(w * h * 4)
-                data.withUnsafeBytes { framebuffer.raw(x: x, y: y, w: w, h: h, $0) }
+                framebufferLock.withLock { data.withUnsafeBytes { framebuffer.raw(x: x, y: y, w: w, h: h, $0) } }
             case 1:
                 let sx = try await reader.u16(), sy = try await reader.u16()
-                framebuffer.copy(x: x, y: y, w: w, h: h, from: sx, sy)
+                framebufferLock.withLock { framebuffer.copy(x: x, y: y, w: w, h: h, from: sx, sy) }
             case 16:
                 let compressed = try await reader.bytes(Int(try await reader.u32()))
-                try zrle.draw(try zrle.inflate(compressed), x: x, y: y, w: w, h: h, into: framebuffer)
+                let tiles = try zrle.inflate(compressed)
+                try framebufferLock.withLock { try zrle.draw(tiles, x: x, y: y, w: w, h: h, into: framebuffer) }
             case -223:
-                framebuffer.resize(width: w, height: h)
+                framebufferLock.withLock { framebuffer.resize(width: w, height: h) }
                 dirty = CGRect(x: 0, y: 0, width: w, height: h)
                 continue
             case -239:

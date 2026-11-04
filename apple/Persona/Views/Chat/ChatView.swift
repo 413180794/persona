@@ -1284,7 +1284,7 @@ struct ChatView: View {
                 if style == .assistant, viewing == nil { taskFooter }
                 // An agent operating a Mac (its own Cua Driver): with its running work, over the box (#1343).
                 if style == .dev, viewing == nil, ComputerActivityPill.shows(computerActivity) {
-                    ComputerActivityPill(activity: computerActivity).frame(maxWidth: .infinity, alignment: .leading)
+                    ComputerActivityPill(activity: computerActivity, from: key).frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if !pendingCards.isEmpty {
                     PendingCards(cards: pendingCards, room: footerRoom)
@@ -1726,7 +1726,7 @@ struct ChatView: View {
                     Label(model.isMuted(key) ? "开启通知" : "屏蔽通知", systemImage: model.isMuted(key) ? Theme.Icon.unmute : Theme.Icon.mute)
                 }
             }
-            ScreenMenu(machine: session?.assistant == true ? nil : key.machineRef, recent: computerActivity?.machine)
+            ScreenMenu(machine: session?.assistant == true ? nil : key.machineRef, recent: computerActivity?.machine, from: key)
             Divider()
             if let s = session {
                 if s.canTerminal {

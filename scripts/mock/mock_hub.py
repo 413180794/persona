@@ -6287,9 +6287,11 @@ def fake_screen_sharing():
                         old = (80 + (t * 7) % 300, 120 + (t * 3) % 120)
                         t += 1
                         frame = fake_frame(t)
+                        ms = int(time.time() * 1000) & 0xffffff  # when it was sent, for the app to measure (RFBFrameSink)
+                        frame[0], frame[1] = (255, 0, 255), (ms >> 16, (ms >> 8) & 255, ms & 255)
                         new = (80 + (t * 7) % 300, 120 + (t * 3) % 120)
                         x0, y0 = min(old[0], new[0]), min(old[1], new[1])
-                        update([(x0, y0, min(FAKE_W - x0, abs(new[0] - old[0]) + 40), min(FAKE_H - y0, abs(new[1] - old[1]) + 40))])
+                        update([(0, 0, 2, 1), (x0, y0, min(FAKE_W - x0, abs(new[0] - old[0]) + 40), min(FAKE_H - y0, abs(new[1] - old[1]) + 40))])
                 elif kind == 4:  # a key: what is typed on the lock screen (一键解锁, #1507 a-2), Return as \n
                     down, _, key = struct.unpack(">BHI", exact(c, 7))
                     if down and key == 0xff0d: FAKE_SCREEN["typed"] += "\n"
@@ -7577,6 +7579,8 @@ class H(BaseHTTPRequestHandler):
             return self.send_json(browser_now(machine))
         if p.startswith("/api/v1/machines/") and p.endswith("/computer/apps"):  # the apps always allowed (#1507)
             return self.send_json({"apps": COMPUTER_APPS.get(p.split("/")[4], [])})
+        if p.startswith("/api/v1/machines/") and p.endswith("/computer/clipboard") and os.environ.get("MOCK_SCREEN") == "fake":
+            return self.send_json({"text": FAKE_SCREEN["clipboard"]})  # the Mac's clipboard through its node (#1343)
         if p.startswith("/api/v1/machines/") and p.endswith("/computer"):  # the plugin cua (MOCK_COMPUTER)
             machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
             if machine is None or "computer" not in machine:
@@ -8084,6 +8088,9 @@ class H(BaseHTTPRequestHandler):
         if chat_pins_route(self, p, parse_qs(urlparse(self.path).query)): return
         if history_route(self, p, parse_qs(urlparse(self.path).query)): return
         if plugins_route(self, p, self.last_body): return
+        if p.startswith("/api/v1/machines/") and p.endswith("/computer/clipboard") and os.environ.get("MOCK_SCREEN") == "fake":
+            FAKE_SCREEN["clipboard"] = json.loads(self.last_body or b"{}").get("text", "")  # pbcopy on the Mac (#1343)
+            return self.send_json({"ok": True})
         if p == "/test/lark-pins/state" and os.environ.get("MOCK_LARK_PINS"):
             req = json.loads(self.last_body or b"{}")
             for key in ("count", "account", "offline", "reverse", "unread", "newest"):

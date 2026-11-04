@@ -69,6 +69,10 @@ nonisolated enum ScreenUnlock {
         UserDefaults.standard.set(macs.sorted(), forKey: key)
     }
 
+    /// Off for every Mac (`-openScreenFresh YES`, with the sign-ins: else one kept from an earlier run comes back on
+    /// with the next sign-in).
+    static func forgetAll() { UserDefaults.standard.removeObject(forKey: key) }
+
     /// The owner of this device, by Face ID, Touch ID or the passcode.
     static func authenticate(_ name: String) async -> Bool {
         #if DEBUG

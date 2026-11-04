@@ -128,7 +128,7 @@ struct SessionModeBar: View {
     /// The switchable options plus the current one when it is not among them (bypassPermissions, an unknown mode).
     private func options(_ list: [SessionModes.Option], current: String?) -> [SessionModes.Option] {
         guard let current, !list.contains(where: { $0.id == current }) else { return list }
-        return list + [SessionModes.mode(current) ?? .init(id: current, title: current, detail: "", symbol: "questionmark.circle")]
+        return list + [SessionModes.mode(current) ?? .init(id: current, title: current, detail: "", symbol: Theme.Icon.help)]
     }
 
     private func change(mode: String? = nil, effort: String? = nil) {

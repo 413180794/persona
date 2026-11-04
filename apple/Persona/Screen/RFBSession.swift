@@ -1,0 +1,405 @@
+import AVFoundation
+import CoreMedia
+import CoreVideo
+import Observation
+import SwiftUI
+
+/// One Mac's VNC (#1343): the native client (RFBClient) over the hub's relay, signed in with the sign-in this device
+/// keeps (ScreenCredentials, #1322) or the one typed in, and its frames for every layer that shows them (the page's,
+/// the picture-in-picture's). One per Mac at a time (`VNC.session`); it goes when nothing shows it any more.
+@MainActor @Observable final class RFBSession {
+    enum Phase: Equatable {
+        case connecting
+        /// The Mac wants its account and password: none kept, or the kept one refused (failed says so).
+        case signIn(failed: String?)
+        case live
+        case closed(String?)
+    }
+
+    let ref: MachineRef
+    private(set) var phase: Phase = .connecting
+    /// The Mac's screen, in its pixels.
+    private(set) var size: CGSize = .zero
+    /// Where the pointer is, on the Mac's screen (the last one sent; the middle before any).
+    private(set) var pointer: CGPoint = .zero
+    private(set) var cursor: RFBClient.Cursor?
+    /// What the Mac last put on its clipboard (ServerCutText).
+    private(set) var macClipboard: String?
+    /// Frames a second shown, and how long the last one took from the mock's Screen Sharing to here (its stamp).
+    private(set) var fps: Double = 0
+    private(set) var latency: Double?
+
+    @ObservationIgnored private var client: RFBClient?
+    @ObservationIgnored private let sink = RFBFrameSink()
+    @ObservationIgnored private var asked: CheckedContinuation<RFBClient.Credentials?, Never>?
+    @ObservationIgnored private var typed: (RFBClient.Credentials, remember: Bool)?
+    @ObservationIgnored private var refusedKept = false
+    @ObservationIgnored private var buttons: UInt8 = 0
+
+    init(ref: MachineRef) { self.ref = ref }
+
+    func start() {
+        guard client == nil, let api = AppModel.shared.api(ref.group) else {
+            if AppModel.shared.api(ref.group) == nil { phase = .closed("连不上 hub") }
+            return
+        }
+        let c = RFBClient(transport: RFBWebSocket(api: api, machine: ref.id)) { [weak self] in await self?.credentials() }
+        c.onState = { [weak self] s in Task { @MainActor in self?.state(s) } }
+        c.onCutText = { [weak self] text in Task { @MainActor in self?.macClipboard = text } }
+        c.onCursor = { [weak self] cursor in Task { @MainActor in self?.cursor = cursor } }
+        sink.attach(c) { [weak self] fps, latency in
+            Task { @MainActor in
+                self?.fps = fps
+                self?.latency = latency
+            }
+        }
+        client = c
+        phase = .connecting
+        c.start()
+    }
+
+    func close() {
+        sink.detach()
+        client?.close()
+        client = nil
+        asked?.resume(returning: nil)
+        asked = nil
+        if case .closed = phase {} else { phase = .closed(nil) }
+    }
+
+    /// Shown in this layer from now on (until it goes).
+    func show(in layer: AVSampleBufferDisplayLayer) { sink.add(layer) }
+    func hide(from layer: AVSampleBufferDisplayLayer) { sink.remove(layer) }
+
+    // MARK: Signing in
+
+    /// What the client asks when the Mac wants a sign-in: the kept one first, else wait for the form.
+    private func credentials() async -> RFBClient.Credentials? {
+        if !refusedKept, let kept = ScreenCredentials.load(ref) {
+            typed = nil
+            return .init(account: kept.account, password: kept.password)
+        }
+        if let t = typed { return t.0 }
+        return await withCheckedContinuation { k in
+            asked = k
+            phase = .signIn(failed: refusedKept ? "记住的密码不对了（那台 Mac 可能改过密码）：重新输入，连上后替换记住的那个" : nil)
+        }
+    }
+
+    /// The form's account and password; `remember`: kept on this device once the Mac takes them.
+    func signIn(account: String, password: String, remember: Bool) {
+        let c = RFBClient.Credentials(account: account, password: password)
+        typed = (c, remember)
+        phase = .connecting
+        if let k = asked {
+            asked = nil
+            k.resume(returning: c)
+        } else {
+            restart()
+        }
+    }
+
+    private func restart() {
+        sink.detach()
+        client?.close()
+        client = nil
+        start()
+    }
+
+    private func state(_ s: RFBClient.State) {
+        switch s {
+        case .connecting, .signingIn:
+            if case .signIn = phase {} else { phase = .connecting }
+        case let .live(width, height, _):
+            size = CGSize(width: width, height: height)
+            if pointer == .zero { pointer = CGPoint(x: width / 2, y: height / 2) }
+            phase = .live
+            if let t = typed {
+                if t.remember { ScreenCredentials.save(.init(account: t.0.account, password: t.0.password), for: ref) } else { ScreenCredentials.forget(ref) }
+                typed = nil
+            }
+            refusedKept = false
+        case .refused(let why):
+            if typed == nil, ScreenCredentials.load(ref) != nil, !refusedKept {
+                refusedKept = true // the kept one: ask for a new one, on a new connection
+                restart()
+                return
+            }
+            typed = nil
+            phase = .signIn(failed: why.isEmpty || why.contains("Authentication") ? "账号或密码不对" : "没登录上：\(why)")
+            client = nil
+        case .failed(let why):
+            if case .closed = phase { return }
+            phase = .closed(why)
+            client = nil
+        case .closed:
+            break
+        }
+    }
+
+    // MARK: Pointer, keys, clipboard
+
+    /// The pointer to p on the Mac's screen, with these buttons down.
+    func move(to p: CGPoint, buttons: UInt8? = nil) {
+        let q = CGPoint(x: min(max(0, p.x), max(0, size.width - 1)), y: min(max(0, p.y), max(0, size.height - 1)))
+        pointer = q
+        if let buttons { self.buttons = buttons }
+        client?.pointer(x: Int(q.x), y: Int(q.y), buttons: self.buttons)
+    }
+
+    func click(at p: CGPoint, button: UInt8 = 1) {
+        move(to: p, buttons: 0)
+        move(to: p, buttons: button)
+        move(to: p, buttons: 0)
+    }
+
+    /// The wheel: up (positive) or down, a notch at a time.
+    func scroll(notches: Int, at p: CGPoint) {
+        let b: UInt8 = notches > 0 ? 8 : 16
+        for _ in 0..<min(abs(notches), 20) {
+            move(to: p, buttons: buttons | b)
+            move(to: p, buttons: buttons & ~b)
+        }
+    }
+
+    func key(_ keysym: UInt32, down: Bool) { client?.key(keysym, down: down) }
+
+    /// A key pressed and let go, with these modifiers held around it.
+    func press(_ keysym: UInt32, with modifiers: [UInt32] = []) {
+        for m in modifiers { key(m, down: true) }
+        key(keysym, down: true)
+        key(keysym, down: false)
+        for m in modifiers.reversed() { key(m, down: false) }
+    }
+
+    /// Text typed: Latin-1 a key at a time; anything else (Chinese from the input method) by the Mac's clipboard and
+    /// ⌘V, through its node (`computer/clipboard`).
+    func type(_ text: String) {
+        var plain = ""
+        func flush() {
+            for ch in plain.unicodeScalars { press(Self.keysym(ch)) }
+            plain = ""
+        }
+        var other = ""
+        for ch in text.unicodeScalars {
+            if ch.value < 256 || ch == "\n" || ch == "\t" {
+                if !other.isEmpty { paste(other); other = "" }
+                plain.unicodeScalars.append(ch)
+            } else {
+                flush()
+                other.unicodeScalars.append(ch)
+            }
+        }
+        flush()
+        if !other.isEmpty { paste(other) }
+    }
+
+    nonisolated static func keysym(_ ch: Unicode.Scalar) -> UInt32 {
+        switch ch {
+        case "\n", "\r": return 0xff0d
+        case "\t": return 0xff09
+        default: return ch.value < 256 ? ch.value : 0x0100_0000 + ch.value
+        }
+    }
+
+    /// Text onto the Mac's clipboard, then ⌘V there.
+    func paste(_ text: String, thenPaste: Bool = true) {
+        Task {
+            await setMacClipboard(text)
+            if thenPaste { press(0x76, with: [Self.command]) }
+        }
+    }
+
+    /// Onto the Mac's clipboard: Latin-1 through RFB; anything else through its node.
+    func setMacClipboard(_ text: String) async {
+        if text.unicodeScalars.allSatisfy({ $0.value < 256 }) {
+            client?.cutText(text)
+            return
+        }
+        _ = try? await AppModel.shared.api(ref.group)?.setComputerClipboard(machine: ref.id, text)
+    }
+
+    /// The Mac's clipboard now: through its node, else what it last sent.
+    func readMacClipboard() async -> String? {
+        if let text = try? await AppModel.shared.api(ref.group)?.computerClipboard(machine: ref.id), !text.isEmpty { return text }
+        return macClipboard
+    }
+
+    /// The keysyms of the modifiers (macOS's Screen Sharing: ⌘ as Super, ⌥ as Alt).
+    static let command: UInt32 = 0xffeb, option: UInt32 = 0xffe9, control: UInt32 = 0xffe3, shift: UInt32 = 0xffe1
+}
+
+/// Every Mac's VNC session (one each), and how many hold it (the page, the small window): closed a moment after the
+/// last lets go, so passing it from one to the other keeps the connection.
+@MainActor enum VNC {
+    private static var sessions: [MachineRef: (session: RFBSession, holders: Int)] = [:]
+    private static var closing: [MachineRef: Task<Void, Never>] = [:]
+
+    static func hold(_ ref: MachineRef) -> RFBSession {
+        closing.removeValue(forKey: ref)?.cancel()
+        if let s = sessions[ref] {
+            sessions[ref] = (s.session, s.holders + 1)
+            if case .closed = s.session.phase { s.session.start() }
+            return s.session
+        }
+        let s = RFBSession(ref: ref)
+        sessions[ref] = (s, 1)
+        s.start()
+        return s
+    }
+
+    static func release(_ ref: MachineRef) {
+        guard let s = sessions[ref] else { return }
+        sessions[ref] = (s.session, max(0, s.holders - 1))
+        guard s.holders <= 1 else { return }
+        closing[ref] = Task {
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, let now = sessions[ref], now.holders == 0 else { return }
+            sessions[ref] = nil
+            closing[ref] = nil
+            now.session.close()
+        }
+    }
+
+    static func current(_ ref: MachineRef) -> RFBSession? { sessions[ref]?.session }
+}
+
+nonisolated private struct SampleBox: @unchecked Sendable { let sample: CMSampleBuffer }
+nonisolated private struct LayersBox: @unchecked Sendable { let layers: [AVSampleBufferDisplayLayer] }
+
+/// The frames out of the client into the layers that show them: a CVPixelBuffer copied from the framebuffer at most
+/// 30 times a second (a last copy after a burst, so nothing is left out), as a sample buffer to display at once.
+nonisolated final class RFBFrameSink: @unchecked Sendable {
+    private let lock = NSLock()
+    private let queue = DispatchQueue(label: "persona.vnc.frames")
+    private weak var client: RFBClient?
+    private var layers = NSHashTable<AVSampleBufferDisplayLayer>.weakObjects()
+    private var dirty = false, scheduled = false
+    private var last = Date.distantPast
+    private var pool: CVPixelBufferPool?
+    private var poolSize = (0, 0)
+    private var shown: [Date] = []
+    private var report: (@Sendable (Double, Double?) -> Void)?
+    private var latest: CMSampleBuffer?
+
+    func attach(_ client: RFBClient, report: @escaping @Sendable (Double, Double?) -> Void) {
+        lock.withLock {
+            self.client = client
+            self.report = report
+        }
+        client.onFrame = { [weak self] _, _ in self?.changed() }
+    }
+
+    func detach() { lock.withLock { client = nil } }
+
+    func add(_ layer: AVSampleBufferDisplayLayer) {
+        let frame = lock.withLock { () -> CMSampleBuffer? in
+            layers.add(layer)
+            return latest
+        }
+        if let frame {
+            let box = SampleBox(sample: frame), one = LayersBox(layers: [layer])
+            Task { @MainActor in for l in one.layers { Self.enqueue(box.sample, in: l) } }
+        }
+    }
+
+    func remove(_ layer: AVSampleBufferDisplayLayer) { lock.withLock { layers.remove(layer) } }
+
+    private func changed() {
+        lock.withLock {
+            dirty = true
+            guard !scheduled else { return }
+            scheduled = true
+            let wait = max(0, 1.0 / 30 - Date().timeIntervalSince(last))
+            queue.asyncAfter(deadline: .now() + wait) { [weak self] in self?.copy() }
+        }
+    }
+
+    private func copy() {
+        guard let client = lock.withLock({ () -> RFBClient? in
+            scheduled = false
+            dirty = false
+            last = Date()
+            return self.client
+        }) else { return }
+        var stamp: Double?
+        let buffer: CVPixelBuffer? = client.withFramebuffer { fb in
+            guard fb.width > 1, let pb = pixelBuffer(fb.width, fb.height) else { return nil }
+            CVPixelBufferLockBaseAddress(pb, [])
+            if let dst = CVPixelBufferGetBaseAddress(pb) {
+                let row = CVPixelBufferGetBytesPerRow(pb)
+                if row == fb.bytesPerRow {
+                    memcpy(dst, fb.pixels, fb.bytesPerRow * fb.height)
+                } else {
+                    for y in 0..<fb.height { memcpy(dst + y * row, fb.pixels + y * fb.bytesPerRow, fb.bytesPerRow) }
+                }
+            }
+            CVPixelBufferUnlockBaseAddress(pb, [])
+            stamp = Self.stamp(fb)
+            return pb
+        }
+        guard let buffer, let sample = Self.sample(buffer) else { return }
+        let (targets, report, fps) = lock.withLock { () -> ([AVSampleBufferDisplayLayer], (@Sendable (Double, Double?) -> Void)?, Double) in
+            latest = sample
+            let now = Date()
+            shown.append(now)
+            shown.removeAll { now.timeIntervalSince($0) > 1 }
+            return (layers.allObjects, self.report, Double(shown.count))
+        }
+        let latency = stamp.map { Date().timeIntervalSince1970 * 1000 - $0 }
+        report?(fps, latency.flatMap { $0 >= 0 && $0 < 60_000 ? $0 : nil })
+        let box = SampleBox(sample: sample), shown = LayersBox(layers: targets)
+        Task { @MainActor in for l in shown.layers { Self.enqueue(box.sample, in: l) } }
+        if lock.withLock({ dirty && !scheduled }) { changed() }
+    }
+
+    /// The mock's Screen Sharing stamps when it sent a frame (MOCK_SCREEN_ANIMATE) in its first two pixels: a marker
+    /// (pure magenta) then the low 24 bits of its clock in milliseconds; nil on any other screen.
+    private static func stamp(_ fb: RFBFramebuffer) -> Double? {
+        let m = fb.pixel(0, 0)
+        guard m[0] == 255, m[1] == 0, m[2] == 255 else { return nil }
+        let t = fb.pixel(1, 0)
+        let low = Double(Int(t[2]) << 16 | Int(t[1]) << 8 | Int(t[0]))
+        let now = Date().timeIntervalSince1970 * 1000
+        let base = now - now.truncatingRemainder(dividingBy: 16_777_216)
+        let sent = base + low
+        return sent > now ? sent - 16_777_216 : sent
+    }
+
+    private func pixelBuffer(_ w: Int, _ h: Int) -> CVPixelBuffer? {
+        if pool == nil || poolSize != (w, h) {
+            let attrs: [String: Any] = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                                        kCVPixelBufferWidthKey as String: w, kCVPixelBufferHeightKey as String: h,
+                                        kCVPixelBufferIOSurfacePropertiesKey as String: [:]]
+            CVPixelBufferPoolCreate(nil, nil, attrs as CFDictionary, &pool)
+            poolSize = (w, h)
+        }
+        var pb: CVPixelBuffer?
+        guard let pool, CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pb) == kCVReturnSuccess else { return nil }
+        return pb
+    }
+
+    private static func sample(_ pb: CVPixelBuffer) -> CMSampleBuffer? {
+        var format: CMVideoFormatDescription?
+        guard CMVideoFormatDescriptionCreateForImageBuffer(allocator: nil, imageBuffer: pb, formatDescriptionOut: &format) == noErr,
+              let format else { return nil }
+        var timing = CMSampleTimingInfo(duration: .invalid, presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()),
+                                        decodeTimeStamp: .invalid)
+        var sample: CMSampleBuffer?
+        guard CMSampleBufferCreateReadyWithImageBuffer(allocator: nil, imageBuffer: pb, formatDescription: format,
+                                                       sampleTiming: &timing, sampleBufferOut: &sample) == noErr, let sample else { return nil }
+        if let attachments = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: true),
+           CFArrayGetCount(attachments) > 0 {
+            let dict = unsafeBitCast(CFArrayGetValueAtIndex(attachments, 0), to: CFMutableDictionary.self)
+            CFDictionarySetValue(dict, Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque(),
+                                 Unmanaged.passUnretained(kCFBooleanTrue).toOpaque())
+        }
+        return sample
+    }
+
+    @MainActor private static func enqueue(_ sample: CMSampleBuffer, in layer: AVSampleBufferDisplayLayer) {
+        let r = layer.sampleBufferRenderer
+        if r.status == .failed { r.flush() }
+        r.enqueue(sample)
+    }
+}

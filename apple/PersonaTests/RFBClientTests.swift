@@ -107,14 +107,28 @@ struct RFBClientTests {
         #expect(await seen.snapshot.states.contains(.refused("Authentication failed")))
     }
 
-    @Test func pointerKeysAndClipboardOut() async throws {
-        let t = ScriptedTransport([])
+    /// The pointer, keys and clipboard go out once signed in, in the order they came (a key's down before its up).
+    @Test func pointerKeysAndClipboardOutInOrder() async throws {
+        let t = ScriptedTransport([Array("RFB 003.889\n".utf8), [1, 1], RFBAuth.be32(0),
+                                   [0, 4, 0, 3] + [UInt8](repeating: 0, count: 16) + RFBAuth.be32(0)], holds: true)
+        let seen = Seen()
         let client = RFBClient(transport: t) { nil }
-        client.pointer(x: 300, y: 2, buttons: 1)
-        client.key(0xff0d, down: true)
+        client.onState = { s in Task { await seen.state(s) } }
+        client.pointer(x: 1, y: 1, buttons: 0) // before the sign-in: held until it is done, not in the middle of it
+        client.start()
+        try await seen.until { $0.states.contains { if case .live = $0 { true } else { false } } }
+        var out: [[UInt8]] = [[5, 0, 0, 1, 0, 1]]
+        for i in 0..<40 {
+            client.pointer(x: 300 + i, y: 2, buttons: 1)
+            client.key(0xff0d, down: true)
+            client.key(0xff0d, down: false)
+            out += [[5, 1, 1, UInt8(44 + i), 0, 2], [4, 1, 0, 0, 0, 0, 0xff, 0x0d], [4, 0, 0, 0, 0, 0, 0xff, 0x0d]]
+        }
         client.cutText("hi é")
-        try await Task.sleep(for: .milliseconds(200))
-        #expect(Set(t.sent) == [[5, 1, 1, 44, 0, 2], [4, 1, 0, 0, 0, 0, 0xff, 0x0d], [6, 0, 0, 0, 0, 0, 0, 4] + [104, 105, 32, 0xe9]])
+        out.append([6, 0, 0, 0, 0, 0, 0, 4] + [104, 105, 32, 0xe9])
+        try await Task.sleep(for: .milliseconds(300))
+        client.close()
+        #expect(t.sent.filter { $0.first == 4 || $0.first == 5 || $0.first == 6 } == out)
     }
 }
 
@@ -125,12 +139,19 @@ private final class ScriptedTransport: RFBTransport, @unchecked Sendable {
     private var _sent: [[UInt8]] = []
     var sent: [[UInt8]] { lock.withLock { _sent } }
 
-    init(_ script: [[UInt8]]) { self.script = script }
+    /// holds: once the script is said, it stays open (and quiet) instead of closing.
+    private let holds: Bool
+
+    init(_ script: [[UInt8]], holds: Bool = false) {
+        self.script = script
+        self.holds = holds
+    }
 
     func send(_ bytes: [UInt8]) async throws { lock.withLock { _sent.append(bytes) } }
 
     func receive() async throws -> [UInt8] {
         try await Task.sleep(for: .milliseconds(2))
+        while holds, lock.withLock({ script.isEmpty }) { try await Task.sleep(for: .milliseconds(20)) }
         return try lock.withLock {
             guard !script.isEmpty else { throw URLError(.networkConnectionLost) }
             return script.removeFirst()

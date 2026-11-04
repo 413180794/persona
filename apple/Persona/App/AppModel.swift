@@ -588,10 +588,28 @@ final class AppModel {
     nonisolated static func showsScreen(_ m: Machine) -> Bool {
         (m.computer.map { $0.enabled && $0.screenSharing } ?? false) || (m.browser.map { $0.enabled && $0.screenSharing } ?? false)
     }
-    /// Brings up ref's live screen; `unlock`: and types its kept password on the lock screen (一键解锁, #1507 a-2).
-    func openScreen(_ ref: MachineRef, unlock: Bool = false) {
+    /// Brings up ref's VNC on the whole screen; `unlock`: and types its kept password on the lock screen (一键解锁,
+    /// #1507 a-2); `from`: the chat it came from (我完成了 hands back to its agent).
+    func openScreen(_ ref: MachineRef, unlock: Bool = false, from: SessionKey? = nil) {
         guard api(ref.group) != nil else { toast = Toast("尚未连接 hub", style: .error); return }
-        screenOpen = ScreenOpen(machine: ref, unlock: unlock)
+        if VNCPiP.shared.ref == ref { VNCPiP.shared.handOver() }
+        screenOpen = ScreenOpen(machine: ref, unlock: unlock, from: from)
+    }
+
+    /// The Mac whose VNC is in the small window now (picture in picture, #1343).
+    var vncPiP: MachineRef?
+
+    /// VNC for ref, from an entry (a machine's page, a tool, the running work, a chat's ··· menu): straight into the
+    /// small window when this device keeps the Mac's sign-in, else the whole screen, where it is signed in to.
+    func openVNC(_ ref: MachineRef, from: SessionKey? = nil) {
+        guard api(ref.group) != nil else { toast = Toast("尚未连接 hub", style: .error); return }
+        let kept = ScreenCredentials.load(ref) != nil
+        VNCPiP.log.notice("VNC: small window supported \(VNCPiP.supported) page up \(self.screenOpen != nil) kept \(kept)")
+        if VNCPiP.supported, screenOpen == nil, kept {
+            VNCPiP.shared.start(ref, from: from)
+        } else {
+            openScreen(ref, from: from)
+        }
     }
     /// A machine of the hub-level group (the assistant's, a hub setting's).
     func hubRef(_ id: String) -> MachineRef { MachineRef(group: hub?.group ?? "", id: id) }

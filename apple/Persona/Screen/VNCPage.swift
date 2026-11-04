@@ -1,0 +1,400 @@
+import SwiftUI
+
+/// A Mac's VNC on the whole screen (#1343), where it can be operated: its picture, the touches as the mode says (鼠标 /
+/// 触控板), the clipboard both ways, the keyboard with a row of the Mac's shortcuts, 帮助, and 小窗 back to picture in
+/// picture. When the agent whose chat opened it waits on the user, 「我完成了」 hands the Mac back (closing does too).
+struct VNCPage: View {
+    @Environment(AppModel.self) private var model
+    let ref: MachineRef
+    var unlock = false
+    var from: SessionKey?
+    var onClose: () -> Void
+    @State private var session: RFBSession?
+    @State private var mode: VNCMode = .mouse
+    @State private var help = false
+    @State private var typing = false
+    @State private var unlocked = false
+    #if os(iOS)
+    @State private var screenView: VNCScreenUIView?
+    @State private var modifiers = VNCModifiers()
+    #endif
+
+    private var name: String { model.machine(ref)?.name ?? ref.id }
+    /// The agent that opened it waits on the user: there is something to hand back.
+    private var waiting: Bool { from.flatMap { model.session($0) }?.state == .needsYou }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            topBar
+            TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                if let a = model.computerActivities[ref], a.shown(at: ctx.date) { stepLine(a) }
+            }
+            ZStack {
+                Color.black
+                if let s = session { content(s) }
+            }
+            #if os(iOS)
+            // Over the keyboard while it is up (the bars ride above it).
+            if typing, let s = session { VNCShortcutBar(session: s, modifiers: modifiers) }
+            #endif
+            bottomBar
+        }
+        .background(Color.black.ignoresSafeArea())
+        .environment(\.colorScheme, .dark)
+        .onAppear {
+            session = VNC.hold(ref)
+            mode = VNCMode.of(ref)
+        }
+        .onDisappear { VNC.release(ref) }
+        .onChange(of: session?.phase) { _, phase in
+            if phase == .live, unlock, !unlocked {
+                unlocked = true
+                session?.unlockWithKeptPassword()
+            }
+        }
+        .sheet(isPresented: $help) { VNCHelp() }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("screen-drawer")
+    }
+
+    // MARK: Bars
+
+    private var topBar: some View {
+        HStack(spacing: Theme.Space.s) {
+            Button { close() } label: {
+                Image(systemName: Theme.Icon.close).font(Theme.Font.labelStrong).scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
+            }
+            .themedButton()
+            .accessibilityLabel("关闭画面")
+            .accessibilityIdentifier("screen-close")
+            Spacer(minLength: Theme.Space.s)
+            HStack(spacing: Theme.Space.xs) {
+                Circle().fill(dot).scaledFrame(width: Theme.Size.dot, height: Theme.Size.dot)
+                Text(name).font(Theme.Font.bodyStrong).lineLimit(1)
+                Text(phaseLabel).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("screen-phase")
+            Spacer(minLength: Theme.Space.s)
+            Button { help = true } label: { Image(systemName: Theme.Icon.help).font(Theme.Font.labelStrong) }
+                .themedButton()
+                .accessibilityLabel("帮助")
+                .accessibilityIdentifier("vnc-help")
+            moreMenu
+        }
+        .padding(.horizontal, Theme.Space.page)
+        .padding(.vertical, Theme.Space.s)
+    }
+
+    private var moreMenu: some View {
+        Menu {
+            Picker("模式", selection: Binding(get: { mode }, set: { mode = $0; VNCMode.set($0, for: ref) })) {
+                Label("鼠标模式", systemImage: Theme.Icon.pointer).tag(VNCMode.mouse)
+                Label("触控板模式", systemImage: Theme.Icon.trackpad).tag(VNCMode.trackpad)
+            }
+            Button { centerPointer() } label: { Label("指针居中", systemImage: Theme.Icon.pointerCenter) }
+            #if os(iOS)
+            if VNCPiP.supported {
+                Button { toPictureInPicture() } label: { Label("小窗", systemImage: Theme.Icon.pictureInPicture) }
+            }
+            #else
+            Button { toPictureInPicture() } label: { Label("小窗", systemImage: Theme.Icon.pictureInPicture) }
+            #endif
+            #if DEBUG
+            if let s = session { Text(String(format: "%.0f 帧/秒", s.fps) + (s.latency.map { String(format: " · %.0f 毫秒", $0) } ?? "")) }
+            #endif
+        } label: {
+            Image(systemName: Theme.Icon.more).font(Theme.Font.labelStrong)
+        }
+        .themedButton()
+        .accessibilityLabel("更多")
+        .accessibilityIdentifier("vnc-more")
+    }
+
+    private var bottomBar: some View {
+        HStack(spacing: Theme.Space.m) {
+            Menu {
+                Button { Task { await pasteFromPhone(andPaste: true) } } label: { Label(Self.fromPhone, systemImage: Theme.Icon.paste) }
+                Button { Task { await pasteFromPhone(andPaste: false) } } label: { Label("只放进 Mac 的剪贴板", systemImage: Theme.Icon.clipboard) }
+                Button { Task { await copyToPhone() } } label: { Label(Self.toPhone, systemImage: Theme.Icon.copy) }
+            } label: {
+                Image(systemName: Theme.Icon.clipboard).font(Theme.Font.heading).scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
+            }
+            .themedButton()
+            .accessibilityLabel("剪贴板")
+            .accessibilityIdentifier("vnc-clipboard")
+            Spacer(minLength: Theme.Space.s)
+            if waiting {
+                Button { handBack() } label: {
+                    Label("我完成了", systemImage: Theme.Icon.handBack).font(Theme.Font.labelStrong).lineLimit(1)
+                }
+                .themedButton(prominent: true)
+                .accessibilityIdentifier("vnc-done")
+                Spacer(minLength: Theme.Space.s)
+            }
+            #if os(iOS)
+            Button { typing.toggle() } label: {
+                Image(systemName: Theme.Icon.keyboard).font(Theme.Font.heading).scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
+            }
+            .themedButton(prominent: typing)
+            .accessibilityLabel("键盘")
+            .accessibilityIdentifier("vnc-keyboard")
+            #endif
+        }
+        .padding(.horizontal, Theme.Space.page)
+        .padding(.vertical, Theme.Space.s)
+        #if os(iOS)
+        .background { if let s = session { VNCKeyCatcher(session: s, modifiers: modifiers, typing: $typing).frame(width: Theme.Size.hairline, height: Theme.Size.hairline) } }
+        #endif
+    }
+
+    #if os(iOS)
+    static let fromPhone = "从 iPhone 粘贴", toPhone = "复制到 iPhone"
+    #else
+    static let fromPhone = "从这台 Mac 粘贴", toPhone = "复制到这台 Mac"
+    #endif
+
+    private func stepLine(_ a: ComputerActivity) -> some View {
+        Text("正在：\(a.step)").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Theme.Space.page)
+            .padding(.bottom, Theme.Space.xs)
+            .accessibilityIdentifier("screen-step")
+    }
+
+    // MARK: Content
+
+    @ViewBuilder private func content(_ s: RFBSession) -> some View {
+        switch s.phase {
+        case .live:
+            #if os(iOS)
+            VNCScreen(session: s, mode: mode, interactive: true) { v in DispatchQueue.main.async { screenView = v } }
+            #else
+            VNCScreen(session: s, mode: mode, interactive: true)
+            #endif
+        case .signIn(let failed):
+            VNCSignIn(name: name, account: Self.account(model.machine(ref)?.home), failed: failed) { account, password, remember in
+                s.signIn(account: account, password: password, remember: remember)
+            }
+        case .connecting:
+            VStack(spacing: Theme.Space.s) {
+                ProgressView()
+                Text("正在连接 \(name) 的屏幕…").font(Theme.Font.secondary).foregroundStyle(.secondary)
+            }
+        case .closed(let why):
+            VStack(spacing: Theme.Space.m) {
+                Text(why ?? "已断开。").font(Theme.Font.secondary).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Button("重新连接") { s.start() }.themedButton(prominent: true).lineLimit(1)
+            }
+            .padding(Theme.Space.xl)
+        }
+    }
+
+    /// The Mac account's short name, from its home directory (/Users/<name>).
+    static func account(_ home: String?) -> String {
+        guard let home, home.hasPrefix("/Users/") else { return "" }
+        return String(home.dropFirst("/Users/".count).split(separator: "/").first ?? "")
+    }
+
+    private var dot: Color {
+        switch session?.phase {
+        case .live: Theme.positive
+        case .closed: Theme.danger
+        default: Theme.caution
+        }
+    }
+
+    private var phaseLabel: String {
+        switch session?.phase {
+        case .live: "已连接"
+        case .signIn: "要登录"
+        case .closed: "没连上"
+        default: "连接中"
+        }
+    }
+
+    // MARK: Actions
+
+    private func centerPointer() {
+        #if os(iOS)
+        screenView?.centerPointer()
+        #else
+        if let s = session { s.move(to: CGPoint(x: s.size.width / 2, y: s.size.height / 2)) }
+        #endif
+    }
+
+    private func toPictureInPicture() {
+        VNCPiP.shared.start(ref)
+        onClose()
+    }
+
+    private func handBack() {
+        guard let from else { return }
+        Task { _ = await model.send(from, text: "我在电脑上操作完了，你继续吧。") }
+        onClose()
+    }
+
+    private func close() {
+        if waiting { handBack() } else { onClose() }
+    }
+
+    private func pasteFromPhone(andPaste: Bool) async {
+        #if os(iOS)
+        let text = UIPasteboard.general.string
+        #else
+        let text = NSPasteboard.general.string(forType: .string)
+        #endif
+        guard let text, !text.isEmpty, let s = session else {
+            model.toast = Toast("剪贴板里没有文字", style: .error)
+            return
+        }
+        if andPaste { s.paste(text) } else { await s.setMacClipboard(text) }
+        model.toast = Toast(andPaste ? "已粘贴到 \(name)" : "已放进 \(name) 的剪贴板")
+    }
+
+    private func copyToPhone() async {
+        guard let s = session, let text = await s.readMacClipboard(), !text.isEmpty else {
+            model.toast = Toast("\(name) 的剪贴板里没有文字", style: .error)
+            return
+        }
+        #if os(iOS)
+        UIPasteboard.general.string = text
+        #else
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #endif
+        model.toast = Toast("已复制 \(name) 的剪贴板")
+    }
+}
+
+/// The Mac's sign-in for its Screen Sharing, when this device keeps none (or the kept one was refused).
+private struct VNCSignIn: View {
+    let name: String
+    @State var account: String
+    let failed: String?
+    let submit: (String, String, Bool) -> Void
+    @State private var password = ""
+    @State private var remember = true
+
+    init(name: String, account: String, failed: String?, submit: @escaping (String, String, Bool) -> Void) {
+        self.name = name
+        _account = State(initialValue: account)
+        self.failed = failed
+        self.submit = submit
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            Text("登录这台 Mac 的屏幕共享").font(Theme.Font.heading)
+            Text("用 \(name) 上的 macOS 账号和密码。只发给那台 Mac" + (remember ? "；记住的话存在这台设备的钥匙串里，不上传。" : "，不保存。"))
+                .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if let failed {
+                Text(failed).font(Theme.Font.label).foregroundStyle(Theme.danger).fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("vnc-signin-failed")
+            }
+            TextField("账号", text: $account)
+                .textContentType(.username)
+                #if os(iOS)
+                .textInputAutocapitalization(.never)
+                #endif
+                .autocorrectionDisabled()
+                .textFieldStyle(.roundedBorder)
+                .accessibilityIdentifier("vnc-account")
+            SecureField("密码", text: $password)
+                .textContentType(.password)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit(go)
+                .accessibilityIdentifier("vnc-password")
+            Toggle(ScreenKeep.label, isOn: $remember).font(Theme.Font.secondary).accessibilityIdentifier("vnc-remember")
+            Button(action: go) { Text("连接").font(Theme.Font.labelStrong).lineLimit(1).frame(maxWidth: .infinity) }
+                .themedButton(prominent: true)
+                .disabled(account.trimmingCharacters(in: .whitespaces).isEmpty || password.isEmpty)
+                .accessibilityIdentifier("vnc-connect")
+        }
+        .padding(Theme.Space.l)
+        .card()
+        .padding(Theme.Space.l)
+        .frame(maxWidth: Theme.Size.box380)
+    }
+
+    private func go() {
+        let a = account.trimmingCharacters(in: .whitespaces)
+        guard !a.isEmpty, !password.isEmpty else { return }
+        submit(a, password, remember)
+        password = ""
+    }
+}
+
+/// 「在这台手机上记住」 on the phone, 「在这台 Mac 上记住」 on the Mac.
+enum ScreenKeep {
+    #if os(macOS)
+    static let label = "在这台 Mac 上记住"
+    #else
+    static let label = "在这台手机上记住"
+    #endif
+}
+
+/// 帮助: how the touches, the keyboard and the clipboard work, and handing the Mac back.
+struct VNCHelp: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("移动操作") {
+                    row(Theme.Icon.pointer, "鼠标模式（默认）", "轻点在那里点击；单指拖动就是拖拽；两指拖动滚动；两指轻点或按住不放是右键。")
+                    row(Theme.Icon.search, "放大", "双指开合放大、缩小。放大以后，两指拖动是移动画面，不再滚动。")
+                }
+                Section("输入和剪贴板") {
+                    row(Theme.Icon.keyboard, "打字", "点底栏的键盘。键盘上面一排是 Mac 的快捷键：⌘ ⌥ ⌃ ⇧ 点一下按住、再点松开，还有 Esc、Tab、方向键和 ⌘C ⌘V ⌘Z ⌘Tab ⌘空格。中文照常输入，上屏的字经剪贴板粘贴过去。")
+                    row(Theme.Icon.clipboard, "复制和粘贴", "点底栏的剪贴板：「\(VNCPage.fromPhone)」把这边的文字放进 Mac 的剪贴板并粘贴；「\(VNCPage.toPhone)」把 Mac 剪贴板里的文字拿过来。")
+                }
+                Section("何时用触控板模式") {
+                    row(Theme.Icon.trackpad, "触控板模式", "从右上角「…」里打开。手指在屏幕上移动指针；轻点在指针处点击；轻点后马上拖动是拖拽。指针跑偏了用「指针居中」。")
+                }
+                Section("小窗") {
+                    row(Theme.Icon.pictureInPicture, "小窗", "「…」里的「小窗」把画面放进画中画，切到别的 App 或回到桌面也浮着；点小窗回到这里。小窗只能看，关掉小窗就断开。")
+                }
+                Section("交还电脑") {
+                    row(Theme.Icon.handBack, "我完成了", "Agent 等你在电脑上操作时，做完点底栏的「我完成了」，它就接着做。直接关掉画面也算交还。")
+                }
+            }
+            .navigationTitle("使用 VNC")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { dismiss() } label: { Image(systemName: Theme.Icon.close) }.accessibilityIdentifier("vnc-help-close")
+                }
+            }
+        }
+        .accessibilityIdentifier("vnc-help-page")
+    }
+
+    private func row(_ icon: String, _ title: String, _ text: String) -> some View {
+        Label {
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                Text(title).font(Theme.Font.body)
+                Text(text).font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        } icon: {
+            Image(systemName: icon).foregroundStyle(Theme.accent)
+        }
+    }
+}
+
+extension RFBSession {
+    /// 一键解锁 (#1507 a-2): a Shift wakes the lock screen and puts the cursor in its password field, then the kept
+    /// password and Return; the hub only notes that it was unlocked.
+    func unlockWithKeptPassword() {
+        guard let kept = ScreenCredentials.load(ref) else { return }
+        press(Self.shift)
+        Task {
+            try? await Task.sleep(for: .milliseconds(800))
+            for ch in kept.password.unicodeScalars { press(Self.keysym(ch)) }
+            press(VNCKeys.enter)
+            _ = try? await AppModel.shared.api(ref.group)?.computerJob(machine: ref.id, "unlocking")
+        }
+    }
+}

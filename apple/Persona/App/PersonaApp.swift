@@ -70,8 +70,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
         // `-openRecapsFresh YES`: no away recap closed yet, so the newest shows open again (RecapInFlowTests).
         if d.bool(forKey: "openRecapsFresh") { d.removeObject(forKey: "closedRecaps") }
-        // `-openScreenFresh YES`: no Mac's Screen Sharing sign-in remembered (ScreenPasswordTests, #1322).
-        if d.bool(forKey: "openScreenFresh") { ScreenCredentials.forgetAll() }
+        // `-openScreenFresh YES`: no Mac's Screen Sharing sign-in remembered, 一键解锁 off (ScreenPasswordTests, #1322).
+        if d.bool(forKey: "openScreenFresh") {
+            ScreenCredentials.forgetAll()
+            ScreenUnlock.forgetAll()
+        }
         // `-lark-connectorSendFresh YES`: no Feishu draft and no outbox (unsent, failed messages) from an earlier run:
         // LarkSendTests found earlier runs' failed messages and drafts in the chat (#1627).
         if d.bool(forKey: "lark-connectorSendFresh") {

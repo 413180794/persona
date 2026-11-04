@@ -16,7 +16,7 @@ final class ScreenDrawerTests: XCTestCase {
         continueAfterFailure = false
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
-        app.launchArguments = ["-pairURL", pair] + args
+        app.launchArguments = ["-pairURL", pair, "-openScreenFresh", "YES"] + args // no Mac sign-in kept from another test
         app.launchPinned()
         return app
     }
@@ -32,16 +32,14 @@ final class ScreenDrawerTests: XCTestCase {
         let step = app.descendants(matching: .any)["screen-step"].firstMatch
         XCTAssertTrue(step.waitForExistence(timeout: 10), "no drawer:\n\(app.debugDescription)")
         XCTAssertTrue(step.label.contains("正在：点 AC → 9 → × → 8"), step.label)
-        let signIn = app.webViews.staticTexts["登录这台 Mac 的屏幕共享"].firstMatch
+        let signIn = app.staticTexts["登录这台 Mac 的屏幕共享"].firstMatch
         XCTAssertTrue(signIn.waitForExistence(timeout: 30), "the screen did not come up:\n\(app.debugDescription)")
         XCTAssertTrue(app.descendants(matching: .any)["screen-phase"].firstMatch.label.contains("要登录"))
         shot(app, "screen-drawer")
 
-        // Dragged down, it closes (the terminal's drawer).
-        let handle = app.descendants(matching: .any)["screen-close"].firstMatch
-        handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98)))
-        XCTAssertTrue(waitGone(step), "dragged down, still up")
+        // × closes it.
+        app.descendants(matching: .any)["screen-close"].firstMatch.tap()
+        XCTAssertTrue(waitGone(step), "closed, still up")
     }
 
     @MainActor func testAnAgentsOperationShows() throws {

@@ -809,3 +809,9 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
 - 外壳靠 `rootViewController.additionalSafeAreaInsets.top` 给状态行让位，收起时 Agents 的导航栈重新排版，列表有 100–200 ms 读到 inset 和 offset 都是 0，一帧跳约 210pt，
   导航栏偶尔把这当成一次滚动，把拉出来的搜索框收了。从 UIKit 改 SwiftUI 托管的导航控制器、负的 safeAreaPadding、开合时关 `hidesSearchBarWhenScrolling`，都会被 SwiftUI 改回去或带出别的跳动。
 - 结论：常驻、会来去的提示别让位，浮在一个不接触摸的窗口里（`ToastWindow`）；要让位的只能是不会频繁变的东西。判断用录屏逐帧看加探针逐帧记，不要只看最后停在哪。
+
+## 模拟器没有画中画；发 RFB 消息别每条开一个 Task（2026-11-04，#1343）
+
+- **画中画**：`AVPictureInPictureController.isPictureInPictureSupported()` 在 iOS 27.0、27.1 的模拟器上（iPhone、iPhone Duo）都是 false，`AVSampleBufferDisplayLayer` 的小窗在模拟器上起不来。App 这时退回整页（`AppModel.openVNC`），UI 测试照这个分支走（`VNCTests` 看到整页就跳过小窗那段）。小窗的录屏和验收只能用真机。
+- **发送顺序**：原生 RFB 客户端起先每条指针、按键、剪贴板消息各开一个 `Task { try await transport.send(…) }`。这些 Task 谁先跑没有保证，按下和松开、移动和点击会乱序到 Mac，快速打字时最明显。改成一个发件队列（`AsyncStream`），握手完后由一个任务按顺序发；握手前来的也排在握手之后，不会插进握手中间。别的「多条消息、顺序有意义」的通道（终端按键、WS）同理。
+- **测试读剪贴板**：UI 测试的 runner 写了 `UIPasteboard.general`，App 去读时没弹「允许粘贴」，送到 mock 的剪贴板却是空的（runner 那时在后台，写的没有生效或读不到）。剪贴板的 UI 测试改成在 App 里来回：先「复制到 iPhone」，再「只放进 Mac 的剪贴板」送回 mock，比对 mock 收到的。

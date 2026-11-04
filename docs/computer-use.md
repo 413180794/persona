@@ -246,7 +246,8 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - 编码按优先顺序是 ZRLE（16）、CopyRect（1）、Raw（0），还有 DesktopSize、Cursor、LastRect 三个伪编码。
   - ZRLE 的 zlib 流整个连接一条，用 Compression 的 raw DEFLATE，跳过开头两字节的 zlib 头。
   - ZRLE 的五种 tile 都认：raw、solid、packed palette、plain RLE、palette RLE。
-- **回去的**：指针（按键位：左、中、右，滚轮上下）、按键（keysym）、剪贴板（ClientCutText，RFB 只能带 Latin-1，别的字以后经 node）。
+- **回去的**：指针（按键位：左、中、右，滚轮上下）、按键（keysym）、剪贴板（ClientCutText，RFB 只能带 Latin-1，别的字经 node，见下面「剪贴板」）。
+  - 都进同一个发件队列（`AsyncStream`），握手完了由一个任务按来的顺序发：以前每条各开一个 `Task`，按下和松开、移动和点击可能乱序到 Mac。握手前来的先存着，不会插进握手中间。
 - **测试**：
   - `RFBClientTests`：
     - 大数对照 Python；
@@ -254,7 +255,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
     - ZRLE 对照 Python 的编码器，五种 tile 跨两个矩形共用一条流；
     - 照一段脚本走完整个会话，逐字节核对发出去的；
     - ARD 握手和登录被拒；
-    - 指针、按键、剪贴板的字节。
+    - 指针、按键、剪贴板的字节和顺序（握手前来的排在握手之后，120 条按原样的顺序）。
   - mock 的 `MOCK_SCREEN=fake` 现在像 macOS 一样先给 ARD（DH 在 Python 里算，AES 用 openssl），按客户端要的给 ZRLE 或 Raw。它记下指针、点击、滚轮、剪贴板（`/mock/screen-password` 读，`?clip=…` 让它往客户端发剪贴板）。`MOCK_SCREEN_ANIMATE=1` 时画面里有个方块按大约每秒 30 帧移动，用来量帧率。
 
 ### App
@@ -266,28 +267,38 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 - **对话页**：工具详情下面也有「VNC」（`ScreenEntry`）。出现在两类工具下面，并且要那台 Mac 的插件开着、屏幕共享开着：
   - 助手的 `computer_state` / `computer_run`：对应它点名的那台；
   - 电脑上的 Agent 自己注册的 Cua Driver MCP 工具（`mcp__cua-driver__…`）：对应这个 Agent 所在的那台。
-- **画面在抽屉里**（#1343，和终端的抽屉一样）：iOS 从底下铺满，拖顶上的把手往下或点把手关掉，没拖够弹回去；Mac 是大 sheet。
-  - 顶上：机器名、连接的阶段（检查 / 连接 / 要登录 / 已连上 / 已断开），助手或 Agent 正在操作这台时多一行「正在：点 AC → 6 → × → 7 → =」。
-  - 底下：「只看 / 接管」，经 WebView 的桥（`personaScreen.setControl`）切网页的 `viewOnly`；网页在 `embed=1` 时不画自己的顶栏，阶段经 `webkit.messageHandlers.screen` 报给 App。
-  - 里面一个 WKWebView 打开 hub 上的 `/screen/<机器>#token=…&embed=1`，走 App 连 hub 的同一条路（SSH 隧道时经隧道）。网页数据用不落盘的存储（`nonPersistent`），页面的滚动关掉了，手势都交给远端画面。
-  - 只有一个抽屉，在它自己的窗口里（`ScreenWindow`，#1604）：iOS 上一个 `UIWindow` 在 shell 之上、toast 之下，Mac 上一个独立窗口，跟着 `AppModel.screenOpen` 显示和关掉。以前挂在 `RootView` 的 `fullScreenCover` 上，机器页在 sheet 里时 present 被吞掉，点了没反应；Mac 的根视图根本没挂。从哪里打开都是同一个。
+- **整页**（`VNCPage`，#1343）：原生客户端的画面铺满屏幕，在它自己的窗口里（`ScreenWindow`，#1604：iOS 上一个 `UIWindow` 在 shell 之上、toast 之下，Mac 上一个独立窗口，跟着 `AppModel.screenOpen`；以前挂在 `RootView` 的 `fullScreenCover` 上，机器页在 sheet 里时 present 被吞掉）。原来的网页抽屉（WKWebView + noVNC + 桥）去掉了，网页端照旧用 noVNC。
+  - 顶栏：关闭、连接的阶段（连接中 / 要登录 / 已连接 / 已断开）和机器名、帮助、「…」（鼠标模式 / 触控板模式、指针居中、小窗）。助手或 Agent 正在操作这台时多一行「正在：点 AC → 6 → × → 7 → =」。
+  - 底栏：剪贴板、「我完成了」（打开它的 Agent 在等你时才有）、键盘。
+  - **两种模式**（按 Mac 记住，`vnc.mode.<组>/<机器>`）：
+    - 鼠标模式（默认）：指针跟着手指。轻点就点在那里；单指拖动是拖拽；两指拖动滚动；两指轻点或长按是右键；双指开合放大，放大后两指拖动是移动画面。
+    - 触控板模式：手指移动指针（相对移动），轻点在指针处点击，轻点后马上拖动是拖拽。指针跑偏了用「指针居中」。
+    - 指针画 Mac 发来的光标（Cursor 伪编码），没有时画一个箭头。
+  - **键盘**：底栏的键盘弹出系统键盘，打的字直接发给 Mac（`VNCKeyInputView`）。键盘上面一排 Mac 的键（`VNCShortcutBar`，放在页面里，跟着键盘上去）：⌘ ⌥ ⌃ ⇧ 点一下按住、再点松开，Esc、Tab、方向键、⌘C ⌘V ⌘Z ⌘Tab ⌘空格。Latin-1 的字按键发；中文等别的字经剪贴板粘贴过去（放进 Mac 的剪贴板再按 ⌘V）。⌘ 发的是 Super_L（0xffeb），macOS 的屏幕共享当 Command。
+  - **剪贴板**：「从 iPhone 粘贴」把手机剪贴板的字放进 Mac 的剪贴板并按 ⌘V；「只放进 Mac 的剪贴板」不按；「复制到 iPhone」把 Mac 剪贴板的字拿过来。Latin-1 走 RFB 的 cut text，别的字和读 Mac 的剪贴板走 node（`computer.clipboard`：`pbcopy` / `pbpaste`，最多 1 MB；hub 的 `GET/POST /api/v1/machines/{mid}/computer/clipboard`，和 5900 的转发一样要插件 `cua` 或 `ego` 对那台开着）。读手机剪贴板里别的 App 复制的字时，iOS 会问一次「允许粘贴」。
+  - **我完成了**：Agent 等你在电脑上操作时（它的对话打开了这页），点了往它的对话发「我在电脑上操作完了，你继续吧。」。直接关掉也算交还。
+  - **帮助**：「使用 VNC」一页，分移动操作、输入和剪贴板、何时用触控板模式、小窗、交还电脑。
+- **小窗**（`VNCPiP`，#1343）：
+  - iOS 是系统的画中画：`AVPictureInPictureController` + `AVSampleBufferDisplayLayer`，浮在别的 App 和桌面上，能拖、能缩放。小窗只能看，操作都在整页。点小窗的还原（或点小窗）回到整页；整页的「…」› 小窗放回小窗。
+  - 后台：音频会话用 `.playback`（`mixWithOthers`，不出声、不打断别的声音），`UIBackgroundModes` 有 `audio`，切到后台小窗照样在动。关掉小窗就断开（整页还开着时除外）。
+  - Mac 是一个浮在别的窗口上的面板（`NSPanel`，`.floating`，所有桌面都在）；点它打开整页窗口，关掉就断开。
+  - 一台 Mac 一条连接（`VNC.hold` / `release`）：整页和小窗共用，最后一个放手 2 秒后才断，来回切换不重连。
+  - 帧：`RFBFrameSink` 在更新之间从帧缓冲（加锁）拷进 `CVPixelBufferPool`（32BGRA、IOSurface），最多每秒 30 帧，标 DisplayImmediately，送给每个显示层（整页一个、小窗一个）。
+  - **模拟器没有画中画**（`isPictureInPictureSupported()` 在 iOS 27.0、27.1 的模拟器上都是 false），这时点「VNC」直接打开整页。小窗只能在真机上看。
+- **从哪里打开「VNC」**：记住了那台 Mac 的登录、整页没开、设备有画中画时直接进小窗（`AppModel.openVNC`），否则打开整页（要登录时总是整页）。
 - **记住登录**（#1322）：
   - 登录框多一个「在这台手机上记住」（Mac 上是「在这台 Mac 上记住」），默认勾着。浏览器里打开的页面没有这一项，表单标好 `username` / `current-password`，交给浏览器自己的密码管理。
   - 存什么、存哪里：账号和密码按机器存在设备钥匙串（`ScreenCredentials`），用自己的 service。iOS 上是 `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`，不同步 iCloud 钥匙串；Mac 上在登录钥匙串里。不上传 hub，不进日志。
   - 什么时候存：那台 Mac 接受了这次登录才存。没勾「记住」就删掉原来记住的。
-  - 怎么用上：
-    1. 那台 Mac 要求登录时，页面先问 App（`{credentials: "wanted"}`）。
-    2. App 从钥匙串取出来，经 `personaScreen.signIn(…)` 交给页面内存，页面直接登录，不出表单。没有记住的就回 null，出表单。
-    3. 页面不存，不写 localStorage。
+  - 怎么用上：那台 Mac 要求登录时，原生客户端（`RFBSession`）先用钥匙串里记住的，没有才出登录框。密码只在 App 的内存里交给客户端，不经网页。
   - 密码不对了（那台 Mac 改过密码）：表单回来，写「记住的密码不对了」，账号已填好。输入新的、连上以后替换掉记住的。
   - 机器页「操控电脑」里，记住了的时候「VNC」旁边有「忘记屏幕共享密码」。
   - 一键解锁（上面方案 a-2）以后用同一份。
 - **从哪里打开**：
   - **正在操作的条**：对话里最近一次操作电脑的工具（助手的 `computer_*`，Agent 的 `mcp__cua-driver__*`）还在跑、或刚结束 6 秒内，输入框上面的任务条最前面多一个「正在操作 MacBook · 点 …」（`ComputerActivityPill`），点它打开那台的画面。
   - **··· 菜单**（`ScreenMenu`，#1604）：Agent 的对话里直接一项「VNC · <它所在的 Mac>」，那台不是 Mac、插件没开或屏幕共享没开就没有这一项；助手的对话里是它最近操作的那台，没有时才列出能看的 Mac（几台时是子菜单）。
-  - 机器页「操控电脑」和工具详情里的「VNC」（`ScreenEntry`）也打开这个抽屉。
+  - 机器页「操控电脑」和工具详情里的「VNC」（`ScreenEntry`）也是同一个（小窗或整页）。
 - **工具写成人话**（#1323，`ComputerSteps`）：工具详情先是一行步骤（连续的点按合成「点 AC → 6 → × → 7 → =」，计算器的按键名换成符号），再是截图和「VNC」；原来的 JSON 收在「原始参数」里，点开才看。标题里的机器用它的名字（MacBook），按 id 或名字认（和 hub 一样），认不出才照工具里写的；放不下时截掉尾部（文件路径照旧截中间）。
-- **以后可以做的**：要更好的手势和性能，可以换原生 VNC 库（RoyalVNCKit，MIT，Swift，支持 ARD 认证），经 App 已有的端口转发（`PortForwarder`）连。
 
 ## 锁屏、防睡眠、按 App 批准（方案，#1507，已拍板）
 
@@ -343,9 +354,8 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - 机器页「操控电脑」在记住了屏幕共享登录（#1322）后多一个「在这台手机上一键解锁」（`ScreenUnlock`，存在这台设备，按 Mac），默认关，打开时确认一次。忘记屏幕共享密码时它跟着关。
   - 那台锁屏时给「一键解锁」：
     1. 先过 Face ID / Touch ID / 设备密码（`LAContext`）。
-    2. 打开抽屉（`unlock=1`），页面用记住的账号登录屏幕共享。
-    3. 连上后问 App 要密码（`{credentials: "unlock"}`）；App 经 `personaScreen.unlock(…)` 交给页面内存。
-    4. 页面暂时退出「只看」，按一下 Shift 叫醒锁屏，再按 keysym 打出密码和回车。
+    2. 打开整页（`unlock`），原生客户端用记住的账号登录屏幕共享。
+    3. 连上后按一下 Shift 叫醒锁屏，再按 keysym 打出记住的密码和回车（`RFBSession.unlockWithKeptPassword`）。密码只在 App 的内存里。
   - hub 只记一行「谁、什么时候、解了哪台」（`POST …/computer/unlocking`），密码不经过它的存储和日志。
   - 一键解锁打开时，解开以后机器页有「锁上」（`POST …/computer/lock` → node 的 `pmset displaysleepnow`：显示器立即睡，「需要密码」是立即时就锁）。
   - 局限：重启后的 FileVault 解锁、合盖睡着的 MacBook 不行（屏幕共享连不上）。
@@ -444,10 +454,12 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - 内容：用 `run_steps` 在计算器里算 6×7，再读窗口，断言有 42，并写出截图。
   - 2026-11-04 实测：就绪、42、230×408 的 JPEG。会动这台 Mac 的计算器。
 - **网页**：`web/src/screen/aes.test.ts`（AES 替身对 FIPS-197 和 WebCrypto）、`screen.test.ts`（路径、fragment 里的 token、WebSocket 地址、预填的账号）。
-- **VNC端到端**：mock 带 `MOCK_WEB=web/dist`，托管构建好的页面，并把 5900 转到这台 Mac 自己的屏幕共享。
-  - `ComputerSectionTests.testTheLiveScreenAsksForTheMacsSignIn` 点「VNC」，App 的 WebView → 页面 → noVNC → mock 转发 → 本机屏幕共享，一直走到它要求登录（ARD）。
-  - 登录那一步要那台 Mac 的密码，测试不做。
-  - `ScreenDrawerTests`（mock 加 `MOCK_COMPUTER_OPERATING=1`，助手和 Agent 的对话里各有一个在跑的操作）：点助手、Agent 的「正在操作」条和 ··· 菜单打开抽屉，往下拖关掉。
+- **VNC端到端**（App 的原生客户端 → hub 的 5900 转发 → mock 自己的屏幕共享，`MOCK_SCREEN=fake`，[testing.md](testing.md)）：
+  - `ComputerSectionTests.testTheLiveScreenAsksForTheMacsSignIn` 点「VNC」，一直走到它要求登录（ARD）。
+  - `ScreenDrawerTests`（mock 加 `MOCK_COMPUTER_OPERATING=1`，助手和 Agent 的对话里各有一个在跑的操作）：点助手、Agent 的「正在操作」条和 ··· 菜单打开整页，点 × 关掉。
+  - `ScreenPasswordTests`：记住、下次自己登录（真机进小窗，模拟器进整页）、密码改了重输、忘记；一键解锁。
+  - `VNCTests`：小窗（真机：菜单 → 小窗 → 回桌面还在 → 还原成整页 → 回小窗；模拟器没有画中画，只验证退回整页）；整页上两种模式各点一下、拖一下、指针居中（mock 记下的点击和指针位置）、剪贴板来回、键盘打字和 Mac 的那排键、帮助页。`TEST_RUNNER_JARVIS_VNC_PAUSE=2` 放慢，录屏用；`testMeasure`（`MOCK_SCREEN_ANIMATE=1`、`TEST_RUNNER_JARVIS_VNC_MEASURE=1`）打印帧率和延迟。
+  - 连真实 Mac 的登录那一步要那台 Mac 的密码，测试不做。
 - **截图**：mock 的 `MOCK_COMPUTER=ready|permissions|locked|missing|off`（[testing.md](testing.md)），配合 `-tab settings -openMachines YES -openMachineDetail macbook`。
 - **部署后验收**：
   1. 在「设置 › 插件」打开「操控电脑（Cua）」。

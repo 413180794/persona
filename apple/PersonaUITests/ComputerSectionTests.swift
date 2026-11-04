@@ -15,7 +15,7 @@ final class ComputerSectionTests: XCTestCase {
         continueAfterFailure = false
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
-        app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "macbook"]
+        app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "macbook", "-openScreenFresh", "YES"]
         app.launchPinned()
         let toggle = app.switches["computer-switch"].firstMatch
         XCTAssertTrue(toggle.waitForExistence(timeout: 30), "no 操控电脑 switch:\n\(app.debugDescription)")
@@ -52,9 +52,9 @@ final class ComputerSectionTests: XCTestCase {
         let look = app.buttons["computer-screen"].firstMatch
         XCTAssertTrue(look.waitForExistence(timeout: 10), "no VNC:\n\(app.debugDescription)")
         look.tap()
-        let signIn = app.webViews.staticTexts["登录这台 Mac 的屏幕共享"].firstMatch
+        let signIn = app.staticTexts["登录这台 Mac 的屏幕共享"].firstMatch
         XCTAssertTrue(signIn.waitForExistence(timeout: 30), "the Mac's Screen Sharing did not ask to sign in:\n\(app.debugDescription)")
-        XCTAssertTrue(app.webViews.textFields["账号"].exists && app.webViews.secureTextFields["密码"].exists)
+        XCTAssertTrue(app.textFields["vnc-account"].exists && app.secureTextFields["vnc-password"].exists)
         shot(app, "computer-screen-signin")
         app.descendants(matching: .any)["screen-close"].firstMatch.tap() // the drawer's handle (#1343)
         XCTAssertTrue(look.waitForExistence(timeout: 10), "back on the machine page")

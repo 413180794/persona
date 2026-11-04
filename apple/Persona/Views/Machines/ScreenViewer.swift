@@ -1,114 +1,11 @@
 import SwiftUI
-import WebKit
 
-/// A Mac's live screen (docs/computer-use.md「实时画面」; #1343): the hub's /screen/<machine> page, which draws macOS's
-/// Screen Sharing through the hub's port relay with noVNC, in a drawer like the terminal's — up from the bottom,
-/// dragged down to close. Over the picture, what the chat's model is doing on that Mac; under it, 只看 / 接管. The
-/// app's device token goes in the fragment (never sent to a server): the page keeps it in memory, and the web view
-/// stores nothing. RootView presents it for `AppModel.screenOpen` (`model.openScreen(ref)`).
-struct ScreenDrawer: View {
-    @Environment(AppModel.self) private var model
-    let ref: MachineRef
-    var unlock = false
-    /// Closes it (ScreenWindow's): down and away, then `AppModel.screenOpen` goes.
-    var onClose: () -> Void = {}
-    @State private var offset: CGFloat = 0
-    @State private var page = ScreenPageState()
-    @State private var control = false
+// A Mac's VNC (docs/computer-use.md「实时画面」, #1343): opened from a machine's page, a tool, the running work or a
+// chat's ··· menu (`AppModel.openVNC`), it comes up in the small window (VNCPiP) when this device keeps the Mac's
+// sign-in, else on the whole screen (VNCPage) in a window of its own (ScreenWindow). The app draws it itself
+// (RFBSession); the hub's /screen/<machine> page is the web's.
 
-    private var name: String { model.machine(ref)?.name ?? ref.id }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            header
-            TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                if let a = model.computerActivities[ref], a.shown(at: ctx.date) { stepLine(a) }
-            }
-            if let url = ScreenViewer.url(model, ref, unlock: unlock) {
-                ScreenWebView(url: url, control: control, page: page, machine: ref)
-                    .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
-                    .padding(.horizontal, Theme.Space.s)
-            } else {
-                EmptyStateView(symbol: Theme.Icon.screen, title: "连不上 hub", message: "连上 hub 后再看这台 Mac 的画面。")
-                    .frame(maxHeight: .infinity)
-            }
-            footer
-        }
-        .background(Theme.systemCard, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
-        #if os(iOS)
-        .padding(.horizontal, Theme.Space.xs)
-        .padding(.bottom, Theme.Space.xxs)
-        .offset(y: offset)
-        .background {
-            // The page shows through, dimmed less as the drawer goes down (TerminalCover's).
-            Color.black.opacity(Double(0.4 * (1 - min(offset / 500, 1)))).ignoresSafeArea()
-        }
-        #endif
-        .accessibilityElement(children: .contain) // its parts keep their own identifiers
-        .accessibilityIdentifier("screen-drawer")
-    }
-
-    /// The handle (a tap closes, a drag down closes), the Mac's name and how the connection is.
-    private var header: some View {
-        ZStack {
-            Capsule().fill(Color.secondary.opacity(0.35)).scaledFrame(width: Theme.Size.wellXL, height: Theme.Size.grabber)
-                .scaledFrame(width: Theme.Size.box110, height: Theme.Size.wellS)
-                .contentShape(.rect)
-                .onTapGesture { Haptics.tap(); onClose() }
-                .accessibilityElement()
-                .accessibilityLabel("关闭画面")
-                .accessibilityAddTraits(.isButton)
-                .accessibilityIdentifier("screen-close")
-            HStack(spacing: Theme.Space.sm) {
-                Image(systemName: Theme.Icon.screen).font(Theme.Font.captionStrong).foregroundStyle(.secondary)
-                Text(name).font(Theme.Font.captionStrong).lineLimit(1)
-                Spacer(minLength: Theme.Size.box110)
-                if page.phase != .live { ProgressView().controlSize(.mini).opacity(page.phase.waiting ? 1 : 0) }
-                Text(page.phase.label).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
-                    .accessibilityIdentifier("screen-phase")
-            }
-        }
-        .padding(.horizontal, Theme.Space.m)
-        .scaledFrame(height: Theme.Size.wellM)
-        .contentShape(.rect)
-        #if os(iOS)
-        .gesture(DragGesture(minimumDistance: 4, coordinateSpace: .global)
-            .onChanged { offset = max(0, $0.translation.height) }
-            .onEnded { g in
-                if g.translation.height > 140 || g.predictedEndTranslation.height > 420 { onClose() } else {
-                    withAnimation(Theme.Motion.layout) { offset = 0 }
-                }
-            })
-        #endif
-    }
-
-    /// What the chat's model is doing (or just did) on this Mac.
-    private func stepLine(_ a: ComputerActivity) -> some View {
-        HStack(spacing: Theme.Space.sm) {
-            if a.running { ProgressView().controlSize(.mini) } else { Image(systemName: Theme.Icon.success).foregroundStyle(Theme.positive) }
-            Text((a.running ? "正在" : "刚才") + "：" + a.step).font(Theme.Font.label).lineLimit(1).truncationMode(.middle)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, Theme.Space.m)
-        .padding(.bottom, Theme.Space.s)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("screen-step")
-    }
-
-    private var footer: some View {
-        HStack {
-            SegmentedChoice("只看或接管", [(false, "只看"), (true, "接管")], selection: $control)
-                .disabled(page.phase != .live)
-                .accessibilityIdentifier("screen-control")
-        }
-        .padding(Theme.Space.m)
-    }
-
-    /// The page's address for ref, through the way the app reaches its hub (its SSH tunnel when that is the way).
-    @MainActor static func url(_ model: AppModel, _ ref: MachineRef) -> URL? { ScreenViewer.url(model, ref) }
-}
-
-/// Builds the page's address.
+/// Builds the web page's address (the hub's /screen/<machine>, for a browser).
 enum ScreenViewer {
     @MainActor static func url(_ model: AppModel, _ ref: MachineRef, unlock: Bool = false) -> URL? {
         guard let api = model.api(ref.group) else { return nil }
@@ -145,27 +42,9 @@ struct ScreenOpen: Identifiable, Hashable {
     let machine: MachineRef
     /// 一键解锁: once signed in, the kept password goes onto the Mac's lock screen.
     var unlock = false
+    /// The chat it was opened from: when its agent waits on the user, the page offers 我完成了.
+    var from: SessionKey? = nil
     var id: MachineRef { machine }
-}
-
-/// How the page says it is (it posts its phase to the app: web/src/screen/ScreenView.tsx).
-@Observable final class ScreenPageState {
-    enum Phase: String {
-        case checking, blocked, connecting, signin, live, closed
-
-        var label: String {
-            switch self {
-            case .checking, .connecting: "连接中"
-            case .signin: "要登录"
-            case .live: "已连接"
-            case .blocked, .closed: "没连上"
-            }
-        }
-
-        var waiting: Bool { self == .checking || self == .connecting }
-    }
-
-    var phase: Phase = .checking
 }
 
 #if os(iOS)
@@ -201,7 +80,7 @@ struct ScreenOpen: Identifiable, Hashable {
     }
 }
 
-/// The drawer up from the bottom as it opens, and down again as it closes, then the window goes.
+/// The page fading in as it opens, and out again as it closes, then the window goes.
 private struct ScreenWindowRoot: View {
     let open: ScreenOpen
     @State private var visible = false
@@ -209,7 +88,7 @@ private struct ScreenWindowRoot: View {
     var body: some View {
         ZStack {
             if visible {
-                ScreenDrawer(ref: open.machine, unlock: open.unlock, onClose: close).transition(.move(edge: .bottom))
+                VNCPage(ref: open.machine, unlock: open.unlock, from: open.from, onClose: close).transition(.opacity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -233,7 +112,7 @@ private struct ScreenWindowRoot: View {
             w?.close()
             return
         }
-        let host = NSHostingController(rootView: ScreenDrawer(ref: open.machine, unlock: open.unlock) { AppModel.shared.screenOpen = nil }
+        let host = NSHostingController(rootView: VNCPage(ref: open.machine, unlock: open.unlock, from: open.from) { AppModel.shared.screenOpen = nil }
             .environment(AppModel.shared))
         let w = window ?? NSWindow(contentViewController: host)
         w.contentViewController = host
@@ -257,119 +136,6 @@ private struct ScreenWindowRoot: View {
 }
 #endif
 
-/// The page in a web view that stores nothing; it posts its phase (`screen` message), and 只看 / 接管 is passed in.
-private final class ScreenBridge: NSObject, WKScriptMessageHandler {
-    let page: ScreenPageState
-    let machine: MachineRef
-    init(page: ScreenPageState, machine: MachineRef) {
-        self.page = page
-        self.machine = machine
-    }
-
-    /// The page's phase, and the Mac's sign-in (#1322): asked for when the Mac wants one (answered from the keychain,
-    /// or null for the form), handed over once it worked and 「在这台手机上记住」 was on, or forgotten when it was off.
-    func userContentController(_ c: WKUserContentController, didReceive message: WKScriptMessage) {
-        MainActor.assumeIsolated {
-            guard let body = message.body as? [String: Any] else { return }
-            if let raw = body["phase"] as? String, let phase = ScreenPageState.Phase(rawValue: raw) { page.phase = phase }
-            switch body["credentials"] as? String {
-            case "wanted":
-                message.webView?.evaluateJavaScript("window.personaScreen && window.personaScreen.signIn(\(Self.script(ScreenCredentials.load(machine))))")
-            case "worked":
-                if let account = body["account"] as? String, let password = body["password"] as? String {
-                    ScreenCredentials.save(.init(account: account, password: password), for: machine)
-                }
-            case "unlock":
-                // The page is in and asks to unlock: the kept password, typed on the lock screen; the hub only logs it.
-                guard let saved = ScreenCredentials.load(machine) else { break }
-                message.webView?.evaluateJavaScript("window.personaScreen && window.personaScreen.unlock(\(Self.script(saved)))")
-                Task { _ = try? await AppModel.shared.api(machine.group)?.computerJob(machine: machine.id, "unlocking") }
-            case "forget":
-                ScreenCredentials.forget(machine)
-                ScreenUnlock.set(false, for: machine)
-            default:
-                break
-            }
-        }
-    }
-
-    /// Saved as a JavaScript value: a JSON object, or null.
-    static func script(_ saved: ScreenCredentials.Saved?) -> String {
-        guard let saved, let data = try? JSONSerialization.data(withJSONObject: ["account": saved.account, "password": saved.password]),
-              let json = String(data: data, encoding: .utf8) else { return "null" }
-        return json
-    }
-
-    static func configuration(_ bridge: ScreenBridge) -> WKWebViewConfiguration {
-        let c = WKWebViewConfiguration()
-        c.websiteDataStore = .nonPersistent()
-        c.userContentController.add(bridge, name: "screen")
-        return c
-    }
-
-    static func setControl(_ on: Bool, in v: WKWebView) {
-        v.evaluateJavaScript("window.personaScreen && window.personaScreen.setControl(\(on))")
-    }
-}
-
-#if os(iOS)
-private struct ScreenWebView: UIViewRepresentable {
-    let url: URL
-    var control: Bool
-    let page: ScreenPageState
-    let machine: MachineRef
-
-    func makeCoordinator() -> ScreenBridge { ScreenBridge(page: page, machine: machine) }
-
-    func makeUIView(context: Context) -> WKWebView {
-        let v = WKWebView(frame: .zero, configuration: ScreenBridge.configuration(context.coordinator))
-        v.isOpaque = false
-        v.backgroundColor = .clear
-        v.scrollView.isScrollEnabled = false // the page fits; pinching and dragging are the remote screen's
-        v.scrollView.contentInsetAdjustmentBehavior = .never
-        v.scrollView.showsVerticalScrollIndicator = false
-        v.scrollView.showsHorizontalScrollIndicator = false
-        #if DEBUG
-        v.isInspectable = true
-        #endif
-        v.load(URLRequest(url: url))
-        return v
-    }
-
-    func updateUIView(_ v: WKWebView, context: Context) { ScreenBridge.setControl(control, in: v) }
-
-    static func dismantleUIView(_ v: WKWebView, coordinator: ScreenBridge) {
-        v.stopLoading()
-        v.configuration.userContentController.removeScriptMessageHandler(forName: "screen")
-    }
-}
-#else
-private struct ScreenWebView: NSViewRepresentable {
-    let url: URL
-    var control: Bool
-    let page: ScreenPageState
-    let machine: MachineRef
-
-    func makeCoordinator() -> ScreenBridge { ScreenBridge(page: page, machine: machine) }
-
-    func makeNSView(context: Context) -> WKWebView {
-        let v = WKWebView(frame: .zero, configuration: ScreenBridge.configuration(context.coordinator))
-        v.setValue(false, forKey: "drawsBackground")
-        #if DEBUG
-        v.isInspectable = true
-        #endif
-        v.load(URLRequest(url: url))
-        return v
-    }
-
-    func updateNSView(_ v: WKWebView, context: Context) { ScreenBridge.setControl(control, in: v) }
-
-    static func dismantleNSView(_ v: WKWebView, coordinator: ScreenBridge) {
-        v.configuration.userContentController.removeScriptMessageHandler(forName: "screen")
-    }
-}
-#endif
-
 /// VNC under a tool that operates a Mac: the assistant's computer_state / computer_run (the machine it names), or an
 /// agent's own Cua Driver MCP tools (the agent's machine), while that Mac's live screen can be shown.
 struct ScreenEntry: View {
@@ -379,7 +145,7 @@ struct ScreenEntry: View {
 
     var body: some View {
         if let ref = Self.machine(call.name, input: call.input, chat: scope?.machine, machines: model.machines), model.canShowScreen(ref) {
-            Button { model.openScreen(ref) } label: {
+            Button { model.openVNC(ref) } label: {
                 Label("VNC", systemImage: Theme.Icon.screen).font(Theme.Font.labelStrong).lineLimit(1)
             }
             .themedButton()
@@ -405,11 +171,13 @@ struct ScreenEntry: View {
 struct ComputerActivityPill: View {
     @Environment(AppModel.self) private var model
     var activity: ComputerActivity?
+    /// The chat it is in (VNC offers 我完成了 while its agent waits).
+    var from: SessionKey? = nil
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
             if let a = activity, a.shown(at: ctx.date) {
-                Button { Haptics.tap(); model.openScreen(a.machine) } label: {
+                Button { Haptics.tap(); model.openVNC(a.machine, from: from) } label: {
                     DockPillLabel(title: (a.running ? "正在操作 " : "刚操作 ") + a.machineName + " · " + a.step, state: .working, waiting: false,
                                   maxWidth: Theme.Size.box280) {
                         if a.running {
@@ -443,6 +211,8 @@ struct ScreenMenu: View {
     var machine: MachineRef? = nil
     /// The assistant's: the Mac it operated last; with none, the Macs whose screen can be shown.
     var recent: MachineRef? = nil
+    /// The chat it is in.
+    var from: SessionKey? = nil
 
     var body: some View {
         if let machine {
@@ -455,7 +225,7 @@ struct ScreenMenu: View {
                 item(m)
             } else if !macs.isEmpty {
                 Menu {
-                    ForEach(macs) { m in Button { model.openScreen(m.ref) } label: { Text(m.name).lineLimit(1) } }
+                    ForEach(macs) { m in Button { model.openVNC(m.ref, from: from) } label: { Text(m.name).lineLimit(1) } }
                 } label: {
                     Label("VNC", systemImage: Theme.Icon.screen).lineLimit(1)
                 }
@@ -464,6 +234,6 @@ struct ScreenMenu: View {
     }
 
     private func item(_ m: Machine) -> some View {
-        Button { model.openScreen(m.ref) } label: { Label("VNC · \(m.name)", systemImage: Theme.Icon.screen).lineLimit(1) }
+        Button { model.openVNC(m.ref, from: from) } label: { Label("VNC · \(m.name)", systemImage: Theme.Icon.screen).lineLimit(1) }
     }
 }

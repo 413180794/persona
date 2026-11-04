@@ -15,7 +15,7 @@ final class BrowserSectionTests: XCTestCase {
         continueAfterFailure = false
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
-        app.launchArguments = ["-pairURL", pair] + args
+        app.launchArguments = ["-pairURL", pair, "-openScreenFresh", "YES"] + args // no Mac sign-in kept from another test
         app.launchPinned()
         let toggle = app.switches["browser-switch"].firstMatch
         if args.contains("-openMachineDetail") {
@@ -50,7 +50,7 @@ final class BrowserSectionTests: XCTestCase {
             // VNC opens that Mac's live screen with only the plugin ego on for it (#1507), up to its sign-in
             // (MOCK_WEB, MOCK_SCREEN=fake).
             app.buttons["browser-screen"].tap()
-            let signIn = app.webViews.staticTexts["登录这台 Mac 的屏幕共享"].firstMatch
+            let signIn = app.staticTexts["登录这台 Mac 的屏幕共享"].firstMatch
             XCTAssertTrue(signIn.waitForExistence(timeout: 30), "the live screen with ego only:\n\(app.debugDescription)")
             shot(app, "browser-screen")
             app.descendants(matching: .any)["screen-close"].firstMatch.tap()

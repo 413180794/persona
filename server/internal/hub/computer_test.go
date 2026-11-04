@@ -32,6 +32,7 @@ func computerMac(t *testing.T, h *Hub, id string) (*Machine, func() (statuses in
 	var mu sync.Mutex
 	statuses, calls := 0, []computerCallSeen{}
 	var job *proto.ComputerJob // the node's install or grant, as computer.status says it
+	board := ""                // its clipboard
 	nodeSide.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -40,6 +41,16 @@ func computerMac(t *testing.T, h *Hub, id string) (*Machine, func() (statuses in
 			statuses++
 			return proto.Computer{Installed: true, Version: "0.38.0", Daemon: true, Accessibility: "granted", ScreenRecording: "granted",
 				Desktop: "active", Ready: true, Job: job, Checked: time.Now()}, nil
+		case "computer.clipboard": // a clipboard of its own
+			var p struct {
+				Set *string `json:"set"`
+			}
+			_ = json.Unmarshal(params, &p)
+			if p.Set != nil {
+				board = *p.Set
+				return map[string]any{"ok": true}, nil
+			}
+			return map[string]any{"text": board}, nil
 		case "computer.lock":
 			calls = append(calls, computerCallSeen{Tool: method})
 			return proto.Computer{Installed: true, Daemon: true, Desktop: "locked", Checked: time.Now()}, nil

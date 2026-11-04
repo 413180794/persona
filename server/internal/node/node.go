@@ -859,6 +859,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "computer.cancel":
 		cancelJob()
 		return computerStatus(ctx), nil
+	case "computer.clipboard": // the live screen's 剪贴板: text RFB cannot carry (Chinese), and reading it (clipboard.go)
+		return macClipboard(ctx, params)
 	case "computer.lock": // 锁上 from the app, after a one-tap unlock (awake.go)
 		if err := lockScreen(ctx); err != nil {
 			return nil, err
