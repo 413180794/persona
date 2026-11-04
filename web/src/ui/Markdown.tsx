@@ -15,6 +15,7 @@ import "katex/contrib/mhchem";
 import { copyText } from "./atoms";
 import { Icon } from "./icons";
 import { MermaidBlock } from "./Mermaid";
+import { AssistantCard, CARD_LANGUAGES } from "./AssistantCard";
 import { rehypePathLinks, textPaths, writtenText } from "./PathLinks";
 import { usePathLinks } from "../lib/path-presence";
 import { StreamChunk } from "./stream/Chunk";
@@ -356,7 +357,13 @@ function Link({ href, children, mid, cwd, line, title: hover }: { href?: string;
 
 export const markdownComponents: Components = {
   a: ({ href, children }) => <Link href={href}>{children}</Link>,
-  pre: ({ children }) => (codeLanguage(children) === "mermaid" ? <MermaidBlock code={textOf(children).replace(/\n$/, "")} /> : <CodeBlock>{children}</CodeBlock>),
+  pre: ({ children }) => {
+    const lang = codeLanguage(children);
+    if (lang === "mermaid") return <MermaidBlock code={textOf(children).replace(/\n$/, "")} />;
+    // the assistant's cards (#1850): drawn with the extensions' components; a block that does not read stays code
+    if (CARD_LANGUAGES.includes(lang)) return <AssistantCard lang={lang} code={textOf(children)} fallback={<CodeBlock>{children}</CodeBlock>} />;
+    return <CodeBlock>{children}</CodeBlock>;
+  },
 };
 
 /** The language a fenced block names (```mermaid → "mermaid"), from its <code>'s class. */

@@ -218,6 +218,9 @@ button:disabled { cursor: default; }
 .prose-compact :is(h1, h2, h3, h4, h5, h6) { font-size: 1em; line-height: inherit; letter-spacing: 0; color: inherit; }
 .prose-compact li { margin: 0; }
 .prose-compact hr { margin: .4em 0; }
+/* An assistant's card in a reply (ui/AssistantCard.tsx) is drawn like an extension's page: the reply's prose rules stop at it and
+   its components keep their own classes (revert-layer: back to the utilities), except inside a markdown item, prose again. */
+.prose-j .card-ui :is(p, h1, h2, h3, h4, h5, ul, ol, li, a, code, pre, table, thead, tbody, tr, th, td, img):not(.card-ui .prose-j *) { all: revert-layer; }
 .prose-compact pre { padding: 6px 10px; font-size: 12px; line-height: 1.5; }
 
 /* 团子, the default persona (views/assistant/MochiFace.tsx): the app icon's colors, not the page's accent. */

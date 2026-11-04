@@ -23,6 +23,8 @@ export const pageRoute = (extension: string, ui: string): Route => ({ name: "ext
 export function ExtensionNavPage({ extension, ui, onToggleSidebar }: { extension: string; ui: string; onToggleSidebar: () => void }) {
   const place = useExtensionPlace(extension, ui);
   const [n, setN] = useState(0);
+  // a page a card or a section pushed opens here with the state it was pushed with (?state=)
+  const state = useMemo(() => new URLSearchParams(location.search).get("state") ?? undefined, [extension, ui]);
   const title = place?.title || ui;
   return (
     <div className="flex h-full flex-col">
@@ -38,7 +40,7 @@ export function ExtensionNavPage({ extension, ui, onToggleSidebar }: { extension
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-[880px] flex-col px-4 py-6 sm:px-8">
-          <ExtensionUI key={`${extension}/${ui}/${n}`} extension={extension} ui={ui} title={title} bare />
+          <ExtensionUI key={`${extension}/${ui}/${n}`} extension={extension} ui={ui} title={title} bare state={state} />
         </div>
       </div>
     </div>
@@ -121,7 +123,7 @@ function MachineSection({ place, mid, heading }: { place: UIPlace; mid: string; 
           </span>
         ),
       )}
-      <ExtensionUI extension={place.extension} ui={place.id} context={context} bare title={place.title} onMissing={() => setGone(true)} />
+      <ExtensionUI extension={place.extension} ui={place.id} context={context} bare title={place.title} pages="open" onMissing={() => setGone(true)} />
     </section>
   );
 }

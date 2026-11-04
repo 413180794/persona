@@ -9,7 +9,7 @@ import { api, ApiError, enc } from "./api";
 import { extRoot } from "./extension-api";
 
 /** The UI version the web draws (context.ui_version). */
-export const UI_VERSION = 2;
+export const UI_VERSION = 3;
 
 export type UITone = "neutral" | "positive" | "caution" | "danger";
 
@@ -19,6 +19,16 @@ export interface UIAction {
   confirm?: string;
   /** Send every field's value along. */
   submit?: boolean;
+  /** UI version 3: open another page of the extension on top of this one, without asking the extension first. */
+  push?: UIPush;
+}
+
+/** A page pushed on the navigation stack (docs/extensions.md「页面跳转」): drawn with this state, by this ui (the same one
+ *  when empty); the title shows until its view says its own. */
+export interface UIPush {
+  state?: string;
+  title?: string;
+  ui?: string;
 }
 
 export interface UIChoice {
@@ -56,6 +66,40 @@ export interface UIItem {
   stacked?: boolean;
   /** stat_grid */
   stats?: UIStat[];
+  /** UI version 3. Any item: what it is in this view, kept across draws (the list keeps its place, an item its state). */
+  key?: string;
+  /** row: one of an icon (ROW_ICONS), a picture with initials to fall back on, a thumbnail; empty: also its icon */
+  icon?: string;
+  avatar?: { url?: string; text?: string };
+  thumbnail?: { url: string; aspect?: "square" | "wide" | string };
+  /** table */
+  columns?: { title: string; align?: "start" | "end" | string }[];
+  rows?: string[][];
+  caption?: string;
+  /** empty: a button to do something about it */
+  button?: { title: string; action: UIAction };
+}
+
+/** A view's search box (UI version 3): what the user types goes to the extension as `q`, 0.3 s after they stop. */
+export interface UISearch {
+  placeholder?: string;
+  value?: string;
+  action: UIAction;
+}
+
+/** A view's filter next to its search box: one of a few, sent as `{name: value}` (with the search's `q`) at once. */
+export interface UIFilter {
+  name: string;
+  title?: string;
+  choices: UIChoice[];
+  value?: string;
+  action: UIAction;
+}
+
+/** A section's last line: more of the same, asked for when it scrolls into view (once) or when pressed. */
+export interface UIMore {
+  title?: string;
+  action: UIAction;
 }
 
 /** One line, or one color of bars; no tone: the web's own series colors, in order. */
@@ -84,6 +128,8 @@ export interface UISection {
   title?: string;
   footer?: string;
   items: UIItem[];
+  key?: string;
+  more?: UIMore;
 }
 
 export interface UIView {
@@ -93,6 +139,8 @@ export interface UIView {
   state?: string;
   /** Draw again after this many seconds while on screen (30 at least, a day at most; 0 never). */
   refresh_after?: number;
+  search?: UISearch;
+  filter?: UIFilter;
 }
 
 /** Where an extension draws (GET /api/v1/extensions/-/ui, and an extension detail's `ui`). */
@@ -125,6 +173,9 @@ export interface UIActionResult {
   view?: UIView;
   toast?: string;
   open_url?: string;
+  /** UI version 3: open another page (a saved form's detail), or go back a page (the one below is drawn again). */
+  push?: UIPush;
+  pop?: boolean;
 }
 
 /** Where a view is drawn: the launcher (launcher_section), the machine (machine_section), the inbox item (inbox_item), the size (a card). */
@@ -275,10 +326,67 @@ export function blocks(items: UIItem[]): UIBlock[] {
  * open the inbox item's own source page (an inbox_item's open_url persona://inbox/<item>/source, for the item it is
  * drawn for).
  */
-export function outcome(r: UIActionResult, item?: string): { view?: UIView; reload: boolean; toast?: string; url?: string; source?: true } {
+export function outcome(
+  r: UIActionResult,
+  item?: string,
+): { view?: UIView; reload: boolean; toast?: string; url?: string; source?: true; push?: UIPush; pop?: true } {
   const url = r.open_url && isHttps(r.open_url) ? r.open_url : undefined;
   const source = !!item && !!r.open_url && inboxSourceItem(r.open_url) === item;
-  return { view: r.view, reload: !r.view && !r.toast && !r.open_url, toast: r.toast || undefined, url, ...(source ? { source: true as const } : {}) };
+  const push = readPush(r.push);
+  const pop = r.pop === true && !push;
+  return {
+    view: r.view,
+    reload: !r.view && !r.toast && !r.open_url && !push && !pop,
+    toast: r.toast || undefined,
+    url,
+    ...(source ? { source: true as const } : {}),
+    ...(push ? { push } : {}),
+    ...(pop ? { pop: true as const } : {}),
+  };
+}
+
+/** How deep the pages pushed on one another go (docs/extensions.md「页面跳转」): a push past it replaces the top one. */
+export const MAX_STACK = 8;
+
+/** One page of the navigation stack: drawn by `ui` with `state`; `title` until the view says its own. */
+export interface UIPage {
+  ui: string;
+  state?: string;
+  title?: string;
+}
+
+/** The stack after a push from the top page of `ui`. */
+export function pushPage(stack: readonly UIPage[], push: UIPush, ui: string): UIPage[] {
+  const page: UIPage = { ui: push.ui || ui, ...(push.state !== undefined ? { state: push.state } : {}), ...(push.title ? { title: push.title } : {}) };
+  const out = [...stack, page];
+  return out.length > MAX_STACK ? [...out.slice(0, MAX_STACK - 1), page] : out;
+}
+
+/** The fixed icons a row may have (docs/extensions.md「声明式 UI」): each app draws its own; unknown ones are left out. */
+export const ROW_ICONS = [
+  "extension", "plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "person", "chat", "mail", "link", "folder",
+  "star", "check", "warning", "clock", "tag", "search", "settings",
+] as const;
+export type RowIcon = (typeof ROW_ICONS)[number];
+
+/** A row's icon the web knows; undefined (no icon) for any other. */
+export const rowIcon = (name?: string): RowIcon | undefined => ((ROW_ICONS as readonly string[]).includes(name ?? "") ? (name as RowIcon) : undefined);
+
+/** Only https pictures load (no credentials go with them). */
+export const imageURL = (url?: string): string | undefined => (url && isHttps(url) ? url : undefined);
+
+/** The one or two letters a picture falls back on: the extension's, else the first letter of the title. */
+export function initials(text?: string, title?: string): string {
+  const t = (text ?? "").trim();
+  if (t) return Array.from(t).slice(0, 2).join("");
+  const first = Array.from((title ?? "").trim())[0];
+  return first ? first.toUpperCase() : "";
+}
+
+/** A table's cells, as many as it has columns (missing ones blank, extra ones dropped), at most 100 rows. */
+export function tableRows(item: UIItem): string[][] {
+  const n = item.columns?.length ?? 0;
+  return (item.rows ?? []).slice(0, 100).map((r) => Array.from({ length: n }, (_, i) => (typeof r[i] === "string" ? r[i] : r[i] == null ? "" : String(r[i]))));
 }
 
 /**
@@ -298,7 +406,10 @@ export function inboxSourceItem(url: string): string | undefined {
 // ── reading what the hub sent (UI version 2) ─────────────
 
 /** The item types the web draws; any other is skipped (an extension newer than the web). */
-export const KNOWN_ITEMS: readonly string[] = ["text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented"];
+export const KNOWN_ITEMS: readonly string[] = [
+  "text", "metric", "progress", "row", "button", "link", "field", "divider", "chart", "stat_grid", "segmented",
+  "markdown", "table", "empty", "loading", // UI version 3
+];
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
@@ -314,6 +425,12 @@ function drawable(it: unknown): it is UIItem {
       return Array.isArray(it.stats) && it.stats.length > 0 && it.stats.every(isObject);
     case "segmented":
       return typeof it.name === "string" && !!it.name && isObject(it.action) && Array.isArray(it.choices) && it.choices.length > 0;
+    case "markdown":
+      return typeof it.text === "string";
+    case "table":
+      return Array.isArray(it.columns) && it.columns.length > 0 && it.columns.every((c) => isObject(c) && typeof c.title === "string") && Array.isArray(it.rows) && it.rows.every(Array.isArray);
+    case "empty":
+      return typeof it.title === "string" && !!it.title;
     default:
       return true;
   }
@@ -329,16 +446,82 @@ export function readView(raw: unknown): UIView {
   for (const s of raw.sections) {
     if (!isObject(s)) continue;
     const items = Array.isArray(s.items) ? s.items : [];
-    const kept = items.filter(drawable);
+    const kept = items.filter(drawable).map(readItem);
     const footer = typeof s.footer === "string" ? s.footer : undefined;
-    if (items.length > 0 && kept.length === 0 && !footer) continue;
-    sections.push({ ...(typeof s.title === "string" ? { title: s.title } : {}), ...(footer ? { footer } : {}), items: kept });
+    const more = isObject(s.more) && readAction(s.more.action) ? { ...(typeof s.more.title === "string" && s.more.title ? { title: s.more.title } : {}), action: readAction(s.more.action)! } : undefined;
+    if (items.length > 0 && kept.length === 0 && !footer && !more) continue;
+    sections.push({
+      ...(typeof s.title === "string" ? { title: s.title } : {}),
+      ...(footer ? { footer } : {}),
+      items: kept,
+      ...(typeof s.key === "string" && s.key ? { key: s.key } : {}),
+      ...(more ? { more } : {}),
+    });
   }
   const view: UIView = { sections };
   if (typeof raw.title === "string") view.title = raw.title;
   if (typeof raw.state === "string") view.state = raw.state;
   if (typeof raw.refresh_after === "number") view.refresh_after = raw.refresh_after;
+  if (isObject(raw.search) && readAction(raw.search.action)) {
+    view.search = {
+      action: readAction(raw.search.action)!,
+      ...(typeof raw.search.placeholder === "string" ? { placeholder: raw.search.placeholder } : {}),
+      ...(typeof raw.search.value === "string" ? { value: raw.search.value } : {}),
+    };
+  }
+  const f = raw.filter;
+  if (isObject(f) && typeof f.name === "string" && f.name && readAction(f.action) && Array.isArray(f.choices)) {
+    const choices = f.choices.filter((c): c is UIChoice => isObject(c) && typeof c.value === "string");
+    if (choices.length > 1) {
+      view.filter = {
+        name: f.name,
+        choices,
+        action: readAction(f.action)!,
+        ...(typeof f.title === "string" ? { title: f.title } : {}),
+        ...(typeof f.value === "string" ? { value: f.value } : {}),
+      };
+    }
+  }
   return view;
+}
+
+/** An action as the web uses it (an id at least), its push read too; undefined when it is not one. */
+export function readAction(raw: unknown): UIAction | undefined {
+  if (!isObject(raw) || typeof raw.id !== "string" || !raw.id) return undefined;
+  const a: UIAction = { id: raw.id };
+  if (typeof raw.confirm === "string") a.confirm = raw.confirm;
+  if (raw.submit === true) a.submit = true;
+  const p = readPush(raw.push);
+  if (p) a.push = p;
+  return a;
+}
+
+/** A push as the web keeps it: the state as text (an extension may send an object: it gets it back as JSON). */
+export function readPush(raw: unknown): UIPush | undefined {
+  if (raw === true) return {};
+  if (!isObject(raw)) return undefined;
+  const p: UIPush = {};
+  if (typeof raw.state === "string") p.state = raw.state;
+  else if (raw.state !== undefined && raw.state !== null) p.state = JSON.stringify(raw.state);
+  if (typeof raw.title === "string" && raw.title) p.title = raw.title;
+  if (typeof raw.ui === "string" && raw.ui) p.ui = raw.ui;
+  return p;
+}
+
+/** An item with its actions read; an empty's button (`action: {title, action}`) under `button`. */
+function readItem(it: UIItem): UIItem {
+  const raw = it as unknown as Record<string, unknown>;
+  if (it.type === "empty") {
+    const b = raw.button ?? raw.action;
+    const out: UIItem = { ...it, action: undefined, button: undefined };
+    if (isObject(b) && typeof b.title === "string" && readAction(b.action)) out.button = { title: b.title, action: readAction(b.action)! };
+    return out;
+  }
+  if (isObject(raw.action)) {
+    const a = readAction(raw.action);
+    return a ? { ...it, action: a } : { ...it, action: undefined };
+  }
+  return it;
 }
 
 /** How long until a view is drawn again, in ms: refresh_after held to 30 s … a day; 0 never. */

@@ -257,11 +257,19 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   hub 的 features 有 `extension_ui_slots`（老 hub 是 `plugin_ui_slots`）才问。`GET /extensions/-/ui`（不带 placement）一次拿齐，重连（hello）、在这里启用 / 停用 / 改设置 / 装 / 升级 / 卸载扩展后、标签页隔一分钟以上回到前台时再拿；
   `nav_page` 是侧边栏「机器」和「设置」之间一页一行（固定的八个图标换成网页的，不认识的画成扩展图标；角标按 tone 上色，收到 `extension_ui` 事件（老 hub 是 `plugin_ui`）就地改，不重拉），点进 `/extension/<扩展>/<页面>`；
   `overview_card` 是总览问候语下面一排卡片（一张占满，多张两列），紧凑画法（`context.size: compact`），点卡片空白处或标题打开 `opens`，卡片里的按钮、行、图照常能点；
-  `machine_section` 是机器页最后（启动器后面）每个扩展一节，带 `context.machine`。每次画、每个动作都带 `context: {tz, locale, platform: "web", ui_version: 2, …}`；
+  `machine_section` 是机器页最后（启动器后面）每个扩展一节，带 `context.machine`。每次画、每个动作都带 `context: {tz, locale, platform: "web", ui_version: 3, …}`；
   不认识的条目跳过、被它们清空的一节拿掉（有 footer 的留着），只有整个 View 读不出来才显示出错。`chart` 是 SVG 柱状图（并排 / 堆叠，柱宽不超过 24px、圆角在自由端、堆叠段之间 2px 间隙）和折线图，
   悬停或方向键看这个标签下每个系列的值，横轴标签隔几个写一个、不重叠，紧凑时只画首尾标签；没 tone 的系列按 `--series-1…4`（第一个是主色，避开 green / orange / red 三个角色色，深浅色两套）取色。
   `stat_grid` 窄时一行 2 个、够宽 3 个、很宽一行放全；`segmented` 选了马上发 `ui.action`（`values: {name: 选的值}`）。`refresh_after` 只在页面可见、组件还在时按时重画，回到前台已经过点就马上画。
   截图用 `MOCK_PLUGINS=1` 的假 hub（`example-gateway` 的用量页、今天的用量卡片、机器页的「网关调用」）。
+  **UI 版本 3**（#1850，`docs/extensions.md`「声明式 UI」；画法 `views/extensions/ViewBody.tsx`，加载和跳转 `settings/ExtensionView.tsx`，读法 `lib/extension-ui.ts`）：
+  `markdown` 只画安全的一部分（标题、段落、列表、强调、代码、引用、https 链接；不认 HTML 和图片，链接在网页里打开），`table` 窄时横向滚动、单元格不换行，`empty` 是空状态加一个按钮，`loading` 是一行转圈；
+  行可以带固定图标（`icon`，换成网页的图标）、头像（https 图片，加载不了画首字母）或缩略图（https，不带任何凭据）；组件的 `key` 用作 React 的 key，重画时列表停在原处。
+  View 的 `search` 是顶上的搜索框（停 0.3 秒后发 `values: {q}`），`filter` 是旁边的下拉（选了马上发，连同 `q`）；一节的 `more` 是最后一行「加载更多」，滚到时自动问一次（每个新 View 一次），也能点。
+  动作的 `push` 不问扩展，直接在这个视图自己的页面栈上推一页（画那个 `ui`，带 `state`），回答里的 `push` / `pop` 同理；栈最多 8 层，整页时浏览器的后退会退回上一页，顶上一行「‹ 上一页的标题」；
+  卡片和别的页面里的一节（总览、机器页、启动器页）没有栈：push 打开扩展的整页 `/extension/<扩展>/<页面>?state=…`。`extension_ui {invalidate}` 让正在显示的页重画（一秒最多一次），不在屏幕上的等回来再画。
+  助手回答里的 ```` ```persona-view ```` 和 ```` ```persona-card ```` 用同一套组件画（`ui/AssistantCard.tsx`、`lib/assistant-view.ts`）：前者是一个 View 或一个组件，后者按 `sdk/go/wire/personacard.go` 的规则换成 View，
+  `schema/extension/examples/persona-card/` 的每个用例都在单元测试里逐个比对；按钮、字段这类会动的不画，读不出来（还没写完、写错了）的照旧是代码块。截图：`MOCK_PLUGINS=1` 的 `example-gateway` 的「笔记（组件 v3）」页、`MOCK_CARDS=1` 的主对话。
   `inbox_item`（#1681，`docs/extensions.md`「收件箱条目」）：同一个缓存的列表里带 `connector` 的那几项，打开一件事时按条目的 `source` 找（`useInboxItemPlace`），不另外问 hub；
   找到了就由 `views/inbox/InboxExtensionBody.tsx` 在详情的头部下面画扩展的 View（`context.item` 是条目 id），条目的 `version` 变了（来了新消息）就重画、正在填的字段留着；
   hub 回 403 / 404（只读设备、条目没了、连接器不归它）直接画原来的正文，扩展出错时也画原来的正文，上面一行「…的详情没画出来」和「重试」。

@@ -1,24 +1,24 @@
-// An extension's View (docs/extensions.md「声明式 UI」「UI 插槽」), drawn with the web's design system: an extension page in
-// 设置 › 扩展 or from the sidebar, a section on a launcher's or a machine's page, a card on 总览. Every kind of item
-// (text, metric, progress, row, button, link, field, divider, chart, stat_grid, segmented); an unknown one is left out.
-// A tone becomes a role color; a button's confirm asks first, submit sends the fields' values, a segmented acts when
-// chosen, and what the press answers (a new view, a word, a link) is carried out. A view with refresh_after is drawn
-// again while it is on screen. Logic in lib/extension-ui.ts.
+// An extension's View (docs/extensions.md「声明式 UI」「UI 插槽」「页面跳转」), loaded and carried out: an extension page in
+// 设置 › 扩展 or from the sidebar, a section on a launcher's or a machine's page, a card on 总览, an inbox item's body.
+// How the items look is views/extensions/ViewBody.tsx. Here: a button's confirm asks first, submit sends the fields'
+// values, a segmented acts when chosen, and what the press answers (a new view, a word, a link, a page pushed or popped)
+// is carried out. UI version 3: a page can push another one (list → detail → edit), kept on a stack here (8 deep, the
+// browser's back pops it on a full page); the view's search box and filter and a section's 加载更多 go to the
+// extension; extension_ui {invalidate} draws the view on screen again (one off screen when it comes back). A view with
+// refresh_after is drawn again while it is on screen. Logic in lib/extension-ui.ts.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, errorText } from "../../lib/api";
+import { extIdOf } from "../../lib/extension-api";
 import { openLink } from "../../lib/links";
 import {
-  actUI, blocks, fieldValues, isHttps, isUnsupported, numberProblem, outcome, percent, refreshDelay, renderUI, submitValues, toneOf, uiPlaces,
-  type UIAction, type UIContext, type UIItem, type UIPlace, type UISection, type UITone, type UIView,
+  actUI, fieldValues, isUnsupported, numberProblem, outcome, pushPage, refreshDelay, renderUI, submitValues, uiPlaces,
+  type UIAction, type UIContext, type UIItem, type UIMore, type UIPage, type UIPlace, type UIPush, type UIView,
 } from "../../lib/extension-ui";
-import { ExtensionChart } from "../extensions/ExtensionChart";
-import { Button, cx, Dialog, EASE, Loading, Spinner, toast } from "../../ui/atoms";
+import { navigate } from "../../lib/router";
+import { onHubEvent } from "../../lib/store";
+import { ViewSections } from "../extensions/ViewBody";
+import { Button, cx, Dialog, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
-import { Pill, Switch } from "./SettingsParts";
-
-const TEXT: Record<UITone, string> = { neutral: "text-ink", positive: "text-green", caution: "text-orange", danger: "text-red" };
-const BAR: Record<UITone, string> = { neutral: "bg-accent", positive: "bg-green", caution: "bg-orange", danger: "bg-red" };
-const BADGE: Record<UITone, "green" | "orange" | "red" | undefined> = { neutral: undefined, positive: "green", caution: "orange", danger: "red" };
 
 const inputClass =
   "h-8 w-full rounded-control bg-field px-2.5 text-[12.5px] text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-60";
@@ -49,20 +49,75 @@ function useRefresh(delay: number, drawnAt: number, draw: () => void) {
   }, [delay, drawnAt]);
 }
 
+
+/**
+ * extension_ui {invalidate} for this extension (and this ui, or all of its): `draw` now when the page is visible, else
+ * once it is visible again. At most once a second.
+ */
+function useInvalidate(extension: string, ui: string, draw: () => void) {
+  const drawRef = useRef(draw);
+  drawRef.current = draw;
+  useEffect(() => {
+    let dirty = false;
+    let last = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const fire = () => {
+      dirty = false;
+      last = Date.now();
+      drawRef.current();
+    };
+    const now = () => {
+      if (document.visibilityState !== "visible") {
+        dirty = true;
+        return;
+      }
+      const wait = last + 1000 - Date.now();
+      clearTimeout(timer);
+      if (wait <= 0) fire();
+      else timer = setTimeout(fire, wait);
+    };
+    const off = onHubEvent("extension_ui", (msg) => {
+      if (msg.invalidate !== true || extIdOf(msg) !== extension) return;
+      const id = typeof msg.id === "string" ? msg.id : "";
+      if (id && id !== ui) return;
+      now();
+    });
+    const shown = () => {
+      if (dirty && document.visibilityState === "visible") now();
+    };
+    document.addEventListener("visibilitychange", shown);
+    return () => {
+      off();
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", shown);
+    };
+  }, [extension, ui]);
+}
+
+/** Where a pushed page opens when the view cannot hold a stack (a card, a section on another page): the full page. */
+export function pageHref(extension: string, ui: string, state?: string): string {
+  return `/extension/${encodeURIComponent(extension)}/${encodeURIComponent(ui)}${state ? `?state=${encodeURIComponent(state)}` : ""}`;
+}
+
 /**
  * Loads and draws one of an extension's views. `embedded`: inside another page (a launcher's), lighter, and gone when the
  * extension says the launcher is not its (404 unsupported) instead of showing an error. `compact`: a card (总览), no
  * chrome of its own, small charts. `bare`: no heading of its own (the page around it has one). `onFailed`: the first
  * draw failed (no view yet), and the page around it shows something else instead of the error. `revision`: what it is
  * drawn for changed (an inbox item took new messages): drawn again, the fields typed into kept. `onOpenSource`: a press
- * opened the inbox item's own source page (persona://inbox/<context.item>/source).
+ * opened the inbox item's own source page (persona://inbox/<context.item>/source). `pages`: where a pushed page goes —
+ * on this view's own stack (`stack`, the default; with `history`, the browser's back pops it), or the full page of it
+ * (`open`, the default for a card and a section inside another page). `state`: the first page's state (a full page opened by a push).
  */
 export function ExtensionUI({
-  extension, ui, context, embedded, compact, bare, title, onUnsupported, onMissing, onFailed, revision, onOpenSource,
+  extension, ui, context, embedded, compact, bare, title, onUnsupported, onMissing, onFailed, revision, onOpenSource, pages, history: withHistory, state: firstState,
 }: {
   extension: string; ui: string; context?: UIContext; embedded?: boolean; compact?: boolean; bare?: boolean; title?: string;
   onUnsupported?: () => void; onMissing?: () => void; onFailed?: (e: unknown) => void; revision?: string; onOpenSource?: () => void;
+  pages?: "stack" | "open"; history?: boolean; state?: string;
 }) {
+  const [stack, setStack] = useState<UIPage[]>(() => [{ ui, ...(firstState ? { state: firstState } : {}) }]);
+  const top = stack[stack.length - 1];
   const [view, setView] = useState<UIView | null>(null);
   const [error, setError] = useState("");
   const [unsupported, setUnsupported] = useState(false);
@@ -71,9 +126,18 @@ export function ExtensionUI({
   const [busy, setBusy] = useState("");
   const [confirming, setConfirming] = useState<{ action: UIAction; destructive: boolean } | null>(null);
   const [drawnAt, setDrawnAt] = useState(0);
-  const stateRef = useRef<string | undefined>(undefined);
+  const [query, setQuery] = useState(""); // the search box as typed
+  const stateRef = useRef<string | undefined>(top.state);
   const drawnRef = useRef(false); // a view has been drawn
   const ctxKey = `${context?.launcher ?? ""}\n${context?.machine ?? ""}\n${context?.item ?? ""}\n${context?.size ?? ""}`;
+  const mode = pages ?? (compact || embedded ? "open" : "stack");
+  const depth = stack.length;
+  const pageKey = `${depth}\n${top.ui}`;
+
+  // the first page follows the props (a different extension or page opened in the same place)
+  useEffect(() => {
+    setStack([{ ui, ...(firstState ? { state: firstState } : {}) }]);
+  }, [extension, ui, firstState]);
 
   // keep: drawn again for the same thing, the fields typed into stay as typed
   const show = (v: UIView, keep = false) => {
@@ -82,16 +146,17 @@ export function ExtensionUI({
     setValues((old) => (keep ? Object.fromEntries(Object.entries(start).map(([k, x]) => [k, old[k] ?? x])) : start));
     stateRef.current = v.state;
     drawnRef.current = true;
+    if (!keep) setQuery(v.search?.value ?? "");
     setError("");
     setDrawnAt(Date.now());
   };
   const load = useCallback((keep?: boolean) => {
     setLoading(true);
-    renderUI(extension, ui, context, stateRef.current)
+    renderUI(extension, top.ui, context, stateRef.current)
       .then((v) => show(v, keep === true))
       .catch((e) => {
         if (isUnsupported(e)) (setUnsupported(true), onUnsupported?.());
-        else if (onMissing && e instanceof ApiError && e.status === 404) onMissing();
+        else if (onMissing && e instanceof ApiError && e.status === 404 && depth === 1) onMissing();
         else if (onFailed && !drawnRef.current) onFailed(e);
         else {
           setError(errorText(e));
@@ -100,10 +165,21 @@ export function ExtensionUI({
       })
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [extension, ui, ctxKey]);
-  useEffect(() => load(), [load]);
+  }, [extension, pageKey, ctxKey]);
+  // a new page (pushed, popped, another one): its own state, a fresh view
+  useEffect(() => {
+    stateRef.current = top.state;
+    drawnRef.current = false;
+    setView(null);
+    setError("");
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load]);
   useRefresh(refreshDelay(view), drawnAt, () => {
-    if (!busy) load();
+    if (!busy) load(true);
+  });
+  useInvalidate(extension, top.ui, () => {
+    if (!busy) load(true);
   });
   const drawnFor = useRef(revision);
   useEffect(() => {
@@ -112,7 +188,38 @@ export function ExtensionUI({
     if (drawnRef.current) load(true);
   }, [revision, load]);
 
+  // the browser's back pops a page pushed here (a full page only: a section or a card never holds one)
+  const historied = withHistory ?? (!embedded && !compact && mode === "stack");
+  useEffect(() => {
+    if (!historied) return;
+    const onPop = (e: PopStateEvent) => {
+      const at = typeof (e.state as { extPage?: unknown } | null)?.extPage === "number" ? (e.state as { extPage: number }).extPage : 1;
+      setStack((s) => (at < s.length ? s.slice(0, Math.max(1, at)) : s));
+    };
+    addEventListener("popstate", onPop);
+    return () => removeEventListener("popstate", onPop);
+  }, [historied]);
+
+  const push = (p: UIPush) => {
+    if (mode === "open") {
+      navigate(pageHref(extension, p.ui || top.ui, p.state));
+      return;
+    }
+    const next = pushPage(stack, p, top.ui);
+    if (historied && next.length > stack.length) history.pushState({ ...(history.state ?? {}), extPage: next.length }, "", location.href);
+    setStack(next);
+  };
+  const pop = () => {
+    if (stack.length <= 1) return;
+    if (historied) history.back(); // the popstate above takes the page off
+    else setStack((s) => s.slice(0, -1));
+  };
+
   const run = async (action: UIAction, extra?: Record<string, string>) => {
+    if (action.push) {
+      push(action.push);
+      return;
+    }
     const sent = action.submit ? { ...submitValues(view, values), ...extra } : extra;
     if (sent && view) {
       const bad = view.sections.flatMap((s) => s.items).find((it) => it.type === "field" && it.kind === "number" && it.name && numberProblem(sent[it.name] ?? ""));
@@ -123,11 +230,13 @@ export function ExtensionUI({
     }
     setBusy(action.id);
     try {
-      const r = outcome(await actUI(extension, ui, action.id, { context, state: stateRef.current, values: sent }), context?.item);
-      if (r.view) show(r.view);
+      const r = outcome(await actUI(extension, top.ui, action.id, { context, state: stateRef.current, values: sent }), context?.item);
+      if (r.view) show(r.view, !!(extra && "q" in extra)); // a search keeps what is typed
       if (r.toast) toast(r.toast, "ok");
       if (r.url) openLink(r.url);
       if (r.source) onOpenSource?.();
+      if (r.push) push(r.push);
+      if (r.pop) pop();
       if (r.reload) load();
     } catch (e) {
       if (isUnsupported(e)) (setUnsupported(true), onUnsupported?.());
@@ -147,6 +256,30 @@ export function ExtensionUI({
     setValues((x) => ({ ...x, [item.name!]: value }));
     void run(item.action, { [item.name]: value });
   };
+  // the search box, the filter and 加载更多 send what the list is narrowed to: the text typed and the filter's choice
+  const listValues = (): Record<string, string> => ({
+    ...(view?.search ? { q: query } : {}),
+    ...(view?.filter ? { [view.filter.name]: values[view.filter.name] ?? view.filter.value ?? view.filter.choices[0]?.value ?? "" } : {}),
+  });
+  const more = useCallback((m: UIMore) => {
+    if (!busy) void run(m.action, listValues());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy, view, query, values]);
+  // typed into the search box: asked 0.3 s after the last key
+  const searched = useRef(query);
+  useEffect(() => {
+    const s = view?.search;
+    if (!s || query === searched.current) return;
+    const t = setTimeout(() => {
+      searched.current = query;
+      void run(s.action, listValues());
+    }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+  useEffect(() => {
+    searched.current = view?.search?.value ?? "";
+  }, [pageKey, view?.search?.value]);
 
   if (unsupported) {
     return embedded || compact ? null : (
@@ -154,14 +287,61 @@ export function ExtensionUI({
     );
   }
 
-  const heading = view?.title || title;
+  const heading = view?.title || top.title || (depth === 1 ? title : undefined);
+  const below = depth > 1 ? stack[depth - 2].title || (depth === 2 ? title : undefined) || "返回" : "";
   const light = embedded || compact;
   return (
     <div className={cx("flex flex-col", compact ? "gap-1" : embedded ? "gap-3" : "gap-6")}>
-      {!light && !bare && heading && (
+      {depth > 1 && (
+        <div className="-mb-3 flex items-center px-1">
+          <Button tone="quiet" icon="chevronLeft" onClick={pop} className="-ml-2 max-w-full">
+            <span className="truncate">{below}</span>
+          </Button>
+        </div>
+      )}
+      {!light && (!bare || depth > 1) && heading && (
         <div className="flex items-center gap-2 px-1">
           <h2 className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">{heading}</h2>
           {loading && view && <Spinner />}
+        </div>
+      )}
+      {view && (view.search || view.filter) && (
+        <div className={cx("flex items-center gap-2", compact ? "px-4" : "px-0")}>
+          {view.search && (
+            <label className="relative min-w-0 flex-1">
+              <Icon name="search" size={13} className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-ink-3" />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={view.search.placeholder || "搜索"}
+                aria-label={view.search.placeholder || "搜索"}
+                spellCheck={false}
+                autoComplete="off"
+                className={cx(inputClass, "pl-8")}
+              />
+            </label>
+          )}
+          {view.filter && (
+            <select
+              aria-label={view.filter.title || view.filter.name}
+              value={values[view.filter.name] ?? view.filter.value ?? view.filter.choices[0]?.value ?? ""}
+              disabled={!!busy}
+              onChange={(e) => {
+                const f = view.filter!;
+                setValues((x) => ({ ...x, [f.name]: e.target.value }));
+                void run(f.action, { ...listValues(), [f.name]: e.target.value });
+              }}
+              className={cx(inputClass, "w-auto max-w-[200px] shrink-0")}
+            >
+              {view.filter.choices.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.title || c.value}
+                </option>
+              ))}
+            </select>
+          )}
+          {busy && <Spinner />}
         </div>
       )}
       {!view && !error && (
@@ -192,9 +372,19 @@ export function ExtensionUI({
           </Button>
         </div>
       )}
-      {view?.sections.map((s, i) => (
-        <Section key={i} section={s} embedded={embedded} compact={compact} values={values} setValue={(k, v) => setValues((x) => ({ ...x, [k]: v }))} busy={busy} onPress={press} onChoose={choose} />
-      ))}
+      {view && (
+        <ViewSections
+          view={view}
+          embedded={embedded}
+          compact={compact}
+          values={values}
+          setValue={(k, v) => setValues((x) => ({ ...x, [k]: v }))}
+          busy={busy}
+          onPress={press}
+          onChoose={choose}
+          onMore={more}
+        />
+      )}
       {confirming && (
         <Dialog
           open
@@ -221,313 +411,6 @@ export function ExtensionUI({
         >
           <p className="text-[13px] leading-relaxed break-words text-ink-2">{confirming.action.confirm}</p>
         </Dialog>
-      )}
-    </div>
-  );
-}
-
-interface SectionProps {
-  section: UISection;
-  embedded?: boolean;
-  compact?: boolean;
-  values: Record<string, string>;
-  setValue: (name: string, v: string) => void;
-  busy: string;
-  onPress: (a: UIAction, destructive?: boolean) => void;
-  onChoose: (item: UIItem, value: string) => void;
-}
-
-function Section({ section, embedded, compact, ...rest }: SectionProps) {
-  const bs = blocks(section.items ?? []);
-  return (
-    <section style={{ animation: `fade-up 280ms ${EASE} both` }}>
-      {section.title && <h3 className={cx("font-medium text-ink-3", compact ? "px-4 pt-1 text-[11.5px]" : embedded ? "mb-1.5 px-1 text-[11.5px]" : "mb-1.5 px-1 text-[12px]")}>{section.title}</h3>}
-      <div className={cx("overflow-hidden", compact ? "" : embedded ? "rounded-control bg-inset shadow-hairline" : "rounded-card bg-surface shadow-card")}>
-        {bs.map((b, i) => {
-          // rows that follow each other read as a list, and charts one under another as separate charts: a hairline between them
-          const prev = i > 0 && bs[i - 1].kind === "item" ? (bs[i - 1] as { item: UIItem }).item.type : "";
-          const afterRow = b.kind === "item" && ((b.item.type === "row" && prev === "row") || (b.item.type === "chart" && prev === "chart"));
-          if (b.kind === "metrics") return <Metrics key={i} items={b.items} />;
-          if (b.kind === "buttons")
-            return (
-              <div key={i} className="flex flex-wrap items-center gap-2 px-4 py-2.5">
-                {b.items.map((it, j) => (
-                  <ItemButton key={j} item={it} busy={rest.busy} onPress={rest.onPress} />
-                ))}
-              </div>
-            );
-          return (
-            <div key={i} className={cx(afterRow && "border-t border-line")}>
-              <Item item={b.item} compact={compact} {...rest} />
-            </div>
-          );
-        })}
-      </div>
-      {section.footer && <p className={cx("leading-relaxed text-ink-3", compact ? "px-4 pb-1 text-[11px]" : "mt-1.5 px-1 text-[11.5px]")}>{section.footer}</p>}
-    </section>
-  );
-}
-
-function Metrics({ items }: { items: UIItem[] }) {
-  return (
-    <div className={cx("grid gap-x-4 gap-y-3 px-4 py-3", items.length === 1 ? "grid-cols-1" : items.length === 2 ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3")}>
-      {items.map((it, i) => (
-        <div key={i} className="min-w-0">
-          <div className="truncate text-[11.5px] text-ink-3">{it.label}</div>
-          <div className={cx("mt-0.5 truncate text-[20px] leading-tight font-semibold tabular-nums", TEXT[toneOf(it.tone)])}>{it.value}</div>
-          {it.detail && <div className="mt-0.5 truncate text-[11.5px] text-ink-3">{it.detail}</div>}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ItemButton({ item, busy, onPress }: { item: UIItem; busy: string; onPress: SectionProps["onPress"] }) {
-  if (!item.action) return null;
-  const destructive = item.role === "destructive";
-  return (
-    <Button
-      tone={item.action.submit ? "primary" : "secondary"}
-      busy={busy === item.action.id}
-      disabled={!!busy && busy !== item.action.id}
-      onClick={() => onPress(item.action!, destructive)}
-      className={cx(destructive && "text-red")}
-    >
-      {item.title}
-    </Button>
-  );
-}
-
-function Item({ item: it, compact, values, setValue, busy, onPress, onChoose }: Omit<SectionProps, "section" | "embedded"> & { item: UIItem }) {
-  switch (it.type) {
-    case "chart":
-      return <ExtensionChart item={it} compact={compact} />;
-    case "stat_grid":
-      return <StatGrid item={it} compact={compact} />;
-    case "segmented":
-      return <Segmented item={it} value={values[it.name ?? ""] ?? it.value ?? ""} busy={!!busy} pending={busy === it.action?.id} onChoose={(v) => onChoose(it, v)} />;
-    case "text": {
-      const style = it.style ?? "body";
-      if (style === "code")
-        return (
-          <div className="px-4 py-2.5">
-            <pre className="overflow-x-auto rounded-[8px] bg-inset px-2.5 py-2 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap break-all text-ink-2 shadow-hairline select-text">{it.text}</pre>
-          </div>
-        );
-      return (
-        <p className={cx("px-4 py-2.5 leading-relaxed whitespace-pre-wrap break-words select-text", style === "secondary" ? "text-[12.5px] text-ink-2" : style === "caption" ? "text-[11.5px] text-ink-3" : "text-[13px] text-ink")}>
-          {it.text}
-        </p>
-      );
-    }
-    case "metric":
-      return <Metrics items={[it]} />;
-    case "progress": {
-      const pct = percent(it.ratio);
-      const tone = toneOf(it.tone);
-      return (
-        <div className="px-4 py-2.5">
-          <div className="flex items-baseline gap-3">
-            <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{it.label}</span>
-            {it.detail && <span className={cx("shrink-0 truncate text-[12px] tabular-nums", tone === "neutral" ? "text-ink-3" : TEXT[tone])}>{it.detail}</span>}
-          </div>
-          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-hover-2" role="progressbar" aria-label={it.label} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-            <div className={cx("h-full rounded-full transition-[width] duration-300", BAR[tone])} style={{ width: `${pct}%`, transitionTimingFunction: EASE }} />
-          </div>
-        </div>
-      );
-    }
-    case "row": {
-      const body = (
-        <>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[13px] text-ink">{it.title}</div>
-            {it.subtitle && <div className="mt-0.5 truncate text-[11.5px] text-ink-3">{it.subtitle}</div>}
-          </div>
-          {it.value && <span className="shrink-0 truncate text-[12.5px] text-ink-2 tabular-nums">{it.value}</span>}
-          {it.badge?.text && <Pill tone={BADGE[toneOf(it.badge.tone)]}>{it.badge.text}</Pill>}
-          {it.action && (busy === it.action.id ? <Spinner /> : <Icon name="chevronRight" size={12} stroke={2} className="shrink-0 text-ink-3" />)}
-        </>
-      );
-      return it.action ? (
-        <button type="button" disabled={!!busy} onClick={() => onPress(it.action!)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left whitespace-nowrap transition-colors enabled:hover:bg-hover">
-          {body}
-        </button>
-      ) : (
-        <div className="flex items-center gap-3 px-4 py-2.5 whitespace-nowrap">{body}</div>
-      );
-    }
-    case "button":
-      return (
-        <div className="px-4 py-2.5">
-          <ItemButton item={it} busy={busy} onPress={onPress} />
-        </div>
-      );
-    case "link": {
-      if (!isHttps(it.url)) return null;
-      const host = new URL(it.url!).host;
-      return (
-        <a
-          href={it.url}
-          target="_blank"
-          rel="noreferrer noopener"
-          onClick={(e) => {
-            if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
-            e.preventDefault();
-            openLink(it.url!, it.title);
-          }}
-          className="flex items-center gap-3 px-4 py-2.5 whitespace-nowrap transition-colors hover:bg-hover"
-        >
-          <span className="min-w-0 flex-1 truncate text-[13px] text-accent-ink">{it.title || host}</span>
-          <span className="min-w-0 shrink truncate text-[12px] text-ink-3">{host}</span>
-          <Icon name="external" size={12} className="shrink-0 text-ink-3" />
-        </a>
-      );
-    }
-    case "field":
-      return <Field item={it} value={values[it.name ?? ""] ?? ""} onChange={(v) => it.name && setValue(it.name, v)} />;
-    case "divider":
-      return <div role="separator" className="mx-4 my-1 border-t border-line" />;
-    default:
-      return null;
-  }
-}
-
-// stat_grid: 2 a row when narrow, 3 when there is room, all in one row when wide (a container query: a card is narrow
-// on a wide page)
-const STAT_COLS: Record<number, string> = {
-  1: "grid-cols-1",
-  2: "grid-cols-2",
-  3: "grid-cols-2 @xs:grid-cols-3",
-  4: "grid-cols-2 @lg:grid-cols-4",
-  5: "grid-cols-2 @xs:grid-cols-3 @2xl:grid-cols-5",
-  6: "grid-cols-2 @xs:grid-cols-3 @2xl:grid-cols-6",
-};
-
-function StatGrid({ item, compact }: { item: UIItem; compact?: boolean }) {
-  const stats = (item.stats ?? []).slice(0, 6);
-  return (
-    <div className="@container">
-      <div className={cx("grid gap-x-4 gap-y-3 px-4", compact ? "py-2" : "py-3", STAT_COLS[stats.length] ?? STAT_COLS[6])}>
-        {stats.map((st, i) => {
-          const tone = toneOf(st.tone);
-          return (
-            <div key={i} className="min-w-0">
-              <div className="truncate text-[11.5px] text-ink-3">{st.label}</div>
-              <div className={cx("mt-0.5 truncate leading-tight font-semibold text-ink", compact ? "text-[18px]" : "text-[20px]")} title={st.value}>
-                {st.value}
-              </div>
-              {st.detail && <div className={cx("mt-0.5 truncate text-[11.5px] tabular-nums", tone === "neutral" ? "text-ink-3" : TEXT[tone])}>{st.detail}</div>}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/** segmented: one of a few, acting as soon as it is chosen (the choice shows at once, the view follows). */
-function Segmented({ item, value, busy, pending, onChoose }: { item: UIItem; value: string; busy: boolean; pending: boolean; onChoose: (v: string) => void }) {
-  const choices = item.choices ?? [];
-  return (
-    <div className="flex items-center gap-2 px-4 py-2.5">
-      <div role="radiogroup" aria-label={item.label || item.name} className="flex max-w-full items-center gap-0.5 overflow-x-auto rounded-control bg-inset p-0.5 shadow-hairline">
-        {choices.map((c) => {
-          const on = c.value === value;
-          return (
-            <button
-              key={c.value}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              disabled={busy && !on}
-              onClick={() => !on && onChoose(c.value)}
-              className={cx(
-                "flex h-7 shrink-0 items-center whitespace-nowrap rounded-[7px] px-2.5 text-[12px] transition-[background-color,color] duration-150 disabled:opacity-60",
-                on ? "bg-surface font-medium text-ink shadow-btn" : "text-ink-3 hover:text-ink-2",
-              )}
-            >
-              {c.title || c.value}
-            </button>
-          );
-        })}
-      </div>
-      {pending && <Spinner />}
-    </div>
-  );
-}
-
-function Field({ item: it, value, onChange }: { item: UIItem; value: string; onChange: (v: string) => void }) {
-  const id = `extension-ui-${it.name}`;
-  if (it.kind === "toggle")
-    return (
-      <div className="flex items-center gap-3 px-4 py-2.5">
-        <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{it.label}</span>
-        <Switch on={value === "true"} onChange={(on) => onChange(on ? "true" : "false")} label={it.label || it.name || ""} />
-      </div>
-    );
-  const problem = it.kind === "number" ? numberProblem(value) : "";
-  let control: React.ReactNode;
-  if (it.kind === "choice") {
-    const choices = it.choices ?? [];
-    control =
-      choices.length <= 4 ? (
-        <div id={id} role="radiogroup" aria-label={it.label} className="flex flex-wrap gap-1.5">
-          {choices.map((c) => {
-            const on = value === c.value;
-            return (
-              <button
-                key={c.value}
-                type="button"
-                role="radio"
-                aria-checked={on}
-                onClick={() => onChange(c.value)}
-                className={cx(
-                  "flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[12px] transition-[background-color,box-shadow,color] duration-150",
-                  on ? "bg-accent-tint font-medium text-accent-ink shadow-[inset_0_0_0_1px_var(--accent)]" : "text-ink-2 shadow-hairline hover:bg-hover",
-                )}
-              >
-                {on && <Icon name="check" size={12} stroke={2.2} />}
-                {c.title || c.value}
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className={cx(inputClass, "max-w-[320px]")}>
-          {choices.map((c) => (
-            <option key={c.value} value={c.value}>
-              {c.title || c.value}
-            </option>
-          ))}
-        </select>
-      );
-  } else {
-    control = (
-      <input
-        id={id}
-        type={it.kind === "secret" ? "password" : "text"}
-        inputMode={it.kind === "number" ? "decimal" : undefined}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={it.placeholder}
-        spellCheck={false}
-        autoComplete={it.kind === "secret" ? "new-password" : "off"}
-        autoCapitalize="off"
-        className={cx(inputClass, it.kind === "number" && "max-w-[200px] font-mono", it.kind === "secret" && "font-mono", problem && "shadow-[inset_0_0_0_1px_var(--red)]")}
-      />
-    );
-  }
-  return (
-    <div className="px-4 py-2.5">
-      <label htmlFor={id} className="mb-1.5 block text-[12px] font-medium text-ink-2">
-        {it.label}
-      </label>
-      {control}
-      {problem && (
-        <p role="alert" className="mt-1 text-[11.5px] text-red">
-          {problem}
-        </p>
       )}
     </div>
   );
