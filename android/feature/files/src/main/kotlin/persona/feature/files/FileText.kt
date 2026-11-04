@@ -55,7 +55,7 @@ internal fun fileLines(text: String, diff: Boolean): List<FileTextLine> {
 // One ordered scan keeps comment and string tokens from receiving overlapping keyword spans.
 private val syntax = Regex("\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*'|//.*|#.*|\\b(?:fun|func|val|var|let|const|class|struct|interface|enum|object|import|package|return|if|else|for|while|when|switch|case|break|continue|try|catch|throw|throws|async|await|suspend|public|private|internal|static|final|override|def|from|in|true|false|null|nil|None|True|False)\\b|\\b\\d+(?:\\.\\d+)?\\b")
 
-private fun highlighted(text: String, keyword: Color, string: Color, comment: Color): AnnotatedString {
+internal fun highlighted(text: String, keyword: Color, string: Color, comment: Color): AnnotatedString {
     val result = AnnotatedString.Builder(text)
     syntax.findAll(text).forEach { match ->
         val color = when {

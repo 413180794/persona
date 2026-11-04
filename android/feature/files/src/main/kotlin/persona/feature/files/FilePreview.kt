@@ -40,6 +40,7 @@ internal fun FilePreview(state: FilesState, controller: FilesController, images:
     val table = file != null && isTable(file)
     // A CSV / TSV is text too: ⋯ switches between the grid and its source.
     val delimited = table && file?.text != null
+    val notebook = file?.text != null && Notebooks.isNotebook(file.name)
     var source by rememberSaveable(selection.toString()) { mutableStateOf(false) }
     val path = when (selection) {
         is FileSelection.File -> file?.path?.ifEmpty { null } ?: selection.path
@@ -69,6 +70,10 @@ internal fun FilePreview(state: FilesState, controller: FilesController, images:
                 item { RetryState(if (selection is FileSelection.Diff) "读不到改动" else "打不开这个文件", error, controller::reload) }
             }
             file != null && table && !source -> key(file.path) { SheetFile(file, padding, header) }
+            file != null && notebook && !source -> key(file.path) {
+                NotebookFile(file.text.orEmpty(), FilesPaths.parent(file.path) ?: controller.cwd, padding, header,
+                    onOpenPath = { controller.push(FileSelection.File(it)) }, loadImage = images::load, truncated = file.truncated)
+            }
             file != null -> key(file.path) { FileBody(file, markdown && !source, padding, header, controller, images) }
             diff != null -> key(selection) {
                 if (diff.diff.isBlank()) LazyColumn(contentPadding = padding) {
@@ -81,6 +86,7 @@ internal fun FilePreview(state: FilesState, controller: FilesController, images:
     if (menu) JActionSheet(buildList {
         if (markdown) add(JAction(if (source) "渲染 Markdown" else "查看源文件", if (source) PhIcons.FileText else PhIcons.Code) { source = !source })
         if (delimited) add(JAction(if (source) "查看表格" else "查看源文件", if (source) PhIcons.SquaresFour else PhIcons.Code) { source = !source })
+        if (notebook) add(JAction(if (source) "查看笔记本" else "查看源文件", if (source) PhIcons.BookOpen else PhIcons.Code) { source = !source })
         if (path != null) add(JAction("拷贝路径", PhIcons.Copy) { copyText(context, path, feedback, "已拷贝路径") })
         file?.text?.let { text -> add(JAction("拷贝内容", PhIcons.Copy) { copyText(context, text, feedback, "已拷贝内容") }) }
         state.diff?.diff?.takeIf { it.isNotEmpty() }?.let { text -> add(JAction("拷贝 diff", PhIcons.Copy) { copyText(context, text, feedback, "已拷贝 diff") }) }

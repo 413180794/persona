@@ -61,51 +61,18 @@ internal fun FileMarkdown(
     }
     val parent = LocalUriHandler.current
     val open by rememberUpdatedState(onOpenPath)
-    val links = remember(parent, base) {
-        object : UriHandler {
-            override fun openUri(uri: String) {
-                when {
-                    uri.trim().startsWith("#") -> Unit
-                    else -> FileMarkdownText.target(uri, base)?.let { open(it) } ?: parent.openUri(uri)
-                }
-            }
-        }
-    }
+    val links = rememberFileLinks(parent, base) { open(it) }
     val load by rememberUpdatedState(loadImage)
-    val images = remember(base) { MachineImages(base) { load(it) } }
-    val palette = PersonaTheme.palette
-    val type = PersonaTheme.type
-    val body = type.body
+    val images = remember(base) { MachineImages(base, emptyMap()) { load(it) } }
     val side = pagePadding
     CompositionLocalProvider(LocalUriHandler provides links) {
         Markdown(
             state = state,
-            colors = markdownColor(text = palette.ink, codeBackground = palette.sunken, inlineCodeBackground = palette.sunken,
-                dividerColor = palette.line, tableBackground = palette.surface, darkTheme = palette.dark,
-                highlightText = palette.ink, highlightBackground = palette.marker),
-            typography = markdownTypography(h1 = type.largeTitle, h2 = type.title, h3 = type.headline,
-                h4 = type.bodyStrong, h5 = type.callout, h6 = type.caption,
-                text = body, paragraph = body, code = type.code, inlineCode = type.code,
-                quote = type.callout.copy(color = palette.ink2), ordered = body,
-                bullet = body, list = body, table = body, alertTitle = type.bodyStrong,
-                textLink = TextLinkStyles(SpanStyle(color = palette.accent, textDecoration = TextDecoration.Underline))),
+            colors = fileMarkdownColors(),
+            typography = fileMarkdownTypography(),
             padding = markdownPadding(block = Tokens.Space.m),
             imageTransformer = images,
-            components = markdownComponents(
-                orderedList = { model -> MarkdownOrderedList(model.content, model.node, depth = model.listDepth,
-                    markerModifier = { Modifier.alignBy(FirstBaseline).padding(end = Tokens.Space.s) },
-                    listModifier = { Modifier.weight(1f).alignBy(FirstBaseline) }) },
-                unorderedList = { model -> MarkdownBulletList(model.content, model.node, depth = model.listDepth,
-                    markerModifier = { Modifier.alignBy(FirstBaseline).padding(end = Tokens.Space.s) },
-                    listModifier = { Modifier.weight(1f).alignBy(FirstBaseline) }) },
-                codeFence = { model ->
-                    val raw = model.content.substring(model.node.startOffset, model.node.endOffset)
-                    val lines = raw.lines()
-                    val closed = lines.drop(1).lastOrNull()?.trim()?.let { it.startsWith("```") || it.startsWith("~~~") } == true
-                    JCodeBlock(lines.drop(1).let { if (closed) it.dropLast(1) else it }.joinToString("\n"), small = true)
-                },
-                codeBlock = { model -> JCodeBlock(model.content.substring(model.node.startOffset, model.node.endOffset).trimIndent(), small = true) },
-            ),
+            components = fileMarkdownComponents(),
             success = { success, components, modifier ->
                 // Blocks that draw something: the line breaks between them become the block spacing, and a link's
                 // reference definition ("[api]: https://…") draws nothing, so it must not add a gap either.
@@ -127,6 +94,83 @@ internal fun FileMarkdown(
     }
 }
 
+/**
+ * A piece of Markdown in the file viewer's look, laid out in place (not lazily): a notebook's Markdown cell or output.
+ * [attachments] are pictures the text names as `attachment:<name>` (base64), the way notebooks paste images.
+ */
+@Composable
+internal fun MarkdownText(
+    text: String,
+    base: String,
+    onOpenPath: (String) -> Unit,
+    loadImage: suspend (String) -> ByteArray?,
+    modifier: Modifier = Modifier,
+    attachments: Map<String, String> = emptyMap(),
+) {
+    val parsed by produceState<State?>(null, text) {
+        value = withContext(Dispatchers.Default) { parseMarkdown(FileMarkdownText.prepare(text)) }
+    }
+    val state = parsed ?: return
+    val parent = LocalUriHandler.current
+    val open by rememberUpdatedState(onOpenPath)
+    val links = rememberFileLinks(parent, base) { open(it) }
+    val load by rememberUpdatedState(loadImage)
+    val images = remember(base, attachments) { MachineImages(base, attachments) { load(it) } }
+    CompositionLocalProvider(LocalUriHandler provides links) {
+        Markdown(state = state, colors = fileMarkdownColors(), typography = fileMarkdownTypography(),
+            padding = markdownPadding(block = Tokens.Space.m), imageTransformer = images, components = fileMarkdownComponents(),
+            modifier = modifier)
+    }
+}
+
+/** Links in a file's Markdown: in-page anchors do nothing, files open in the files pane, web links in the link sheet. */
+@Composable
+private fun rememberFileLinks(parent: UriHandler, base: String, open: (String) -> Unit): UriHandler = remember(parent, base) {
+    object : UriHandler {
+        override fun openUri(uri: String) {
+            when {
+                uri.trim().startsWith("#") -> Unit
+                else -> FileMarkdownText.target(uri, base)?.let { open(it) } ?: parent.openUri(uri)
+            }
+        }
+    }
+}
+
+@Composable
+private fun fileMarkdownColors() = PersonaTheme.palette.let { palette ->
+    markdownColor(text = palette.ink, codeBackground = palette.sunken, inlineCodeBackground = palette.sunken,
+        dividerColor = palette.line, tableBackground = palette.surface, darkTheme = palette.dark,
+        highlightText = palette.ink, highlightBackground = palette.marker)
+}
+
+@Composable
+private fun fileMarkdownTypography() = PersonaTheme.type.let { type ->
+    val body = type.body
+    markdownTypography(h1 = type.largeTitle, h2 = type.title, h3 = type.headline,
+        h4 = type.bodyStrong, h5 = type.callout, h6 = type.caption,
+        text = body, paragraph = body, code = type.code, inlineCode = type.code,
+        quote = type.callout.copy(color = PersonaTheme.palette.ink2), ordered = body,
+        bullet = body, list = body, table = body, alertTitle = type.bodyStrong,
+        textLink = TextLinkStyles(SpanStyle(color = PersonaTheme.palette.accent, textDecoration = TextDecoration.Underline)))
+}
+
+@Composable
+private fun fileMarkdownComponents() = markdownComponents(
+    orderedList = { model -> MarkdownOrderedList(model.content, model.node, depth = model.listDepth,
+        markerModifier = { Modifier.alignBy(FirstBaseline).padding(end = Tokens.Space.s) },
+        listModifier = { Modifier.weight(1f).alignBy(FirstBaseline) }) },
+    unorderedList = { model -> MarkdownBulletList(model.content, model.node, depth = model.listDepth,
+        markerModifier = { Modifier.alignBy(FirstBaseline).padding(end = Tokens.Space.s) },
+        listModifier = { Modifier.weight(1f).alignBy(FirstBaseline) }) },
+    codeFence = { model ->
+        val raw = model.content.substring(model.node.startOffset, model.node.endOffset)
+        val lines = raw.lines()
+        val closed = lines.drop(1).lastOrNull()?.trim()?.let { it.startsWith("```") || it.startsWith("~~~") } == true
+        JCodeBlock(lines.drop(1).let { if (closed) it.dropLast(1) else it }.joinToString("\n"), small = true)
+    },
+    codeBlock = { model -> JCodeBlock(model.content.substring(model.node.startOffset, model.node.endOffset).trimIndent(), small = true) },
+)
+
 private val invisibleBlocks = setOf(MarkdownTokenTypes.EOL, MarkdownTokenTypes.WHITE_SPACE, MarkdownElementTypes.LINK_DEFINITION)
 
 private val sectionHeadings = setOf(MarkdownElementTypes.ATX_1, MarkdownElementTypes.ATX_2, MarkdownElementTypes.ATX_3,
@@ -136,9 +180,24 @@ private val sectionHeadings = setOf(MarkdownElementTypes.ATX_1, MarkdownElementT
  * Images in a Markdown file: a path (relative to the file's folder [base], absolute or "~") is read from the machine
  * through the hub; web images are not fetched (the app has no image network stack), they show nothing.
  */
-private class MachineImages(private val base: String, private val load: suspend (String) -> ByteArray?) : ImageTransformer {
+private class MachineImages(
+    private val base: String,
+    private val attachments: Map<String, String>,
+    private val load: suspend (String) -> ByteArray?,
+) : ImageTransformer {
     @Composable
     override fun transform(link: String): ImageData? {
+        if (link.startsWith("attachment:")) {
+            val name = link.removePrefix("attachment:")
+            // Decoded off the main thread: a pasted screenshot can be megabytes of base64.
+            val decoded by produceState<ByteArray?>(null, name, attachments) {
+                value = withContext(Dispatchers.Default) {
+                    attachments[name]?.let { runCatching { java.util.Base64.getMimeDecoder().decode(it) }.getOrNull() }
+                }
+            }
+            val bytes = decoded ?: return null
+            return ImageData(rememberAsyncImagePainter(bytes), contentDescription = name)
+        }
         val path = remember(link, base) { FileMarkdownText.target(link, base) } ?: return null
         val bytes by produceState<ByteArray?>(null, path) { value = load(path) }
         val data = bytes ?: return null
