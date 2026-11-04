@@ -226,9 +226,12 @@ transcript 晚到以后只显示一次。连 mock 并让第一行晚写：`PORT=
 `TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18927 xcodebuild test … -only-testing:PersonaUITests/NewConversationEntryTests`（新外壳和旧布局各一个用例）。
 
 弱网 / 断网（`ConnectionTests`，`docs/ios.md`「连接状态」）连普通 mock：`PORT=18760 python3 scripts/mock/mock_hub.py &`，
-`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/ConnectionTests`：hub 断 10 秒标题变「连接中…」、
+`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/ConnectionTests`：hub 断 16 秒，前 8 秒（断开的宽限，`docs/hub-restart.md`）标题不变、之后变「连接中…」、
 恢复后换回；断 0.2 秒（重连约一秒）标题完全不变；断网时发的消息显示「连上后自动发送」，恢复后 hub 只收到一次：
 中间再断几次、进后台（后台不重连，hub 回来了也要等回到前台才发）、退出 App 再打开（发件箱在磁盘上）都恰好一次。hub 重启后的去重在服务端测试（`TestSendRetryAfterRestartAndRefusal`）。
+hub 计划内重启（#1634）：`MOCK_RESTART=1` 启动 mock，`GET /mock/restart?gap_ms=1500&missed=todos,inbox` 发 `hub_restarting`、以 1001 关掉所有 WebSocket，
+之后 `gap_ms` 内的新连接排队（像 socket activation 的 backlog），`missed` 的广播带序号记下、续传时紧跟 hello 补发；加 `&drop_post=1` 时下一个带 op id 的写请求执行了但不回应答，
+同一个 op id 再来只回第一次的结果。`GET /mock/restart` 看重启次数、每次连接是否续传、带 op id 的请求和各 GET 的次数（续传后不应再多出 `GET /api/v1/interactions` 等）。
 mock 的开关：`GET /mock/down?s=<秒>`（这段时间里 WebSocket 全断、新连接不应答就关）、`GET /mock/delay?s=<秒>`（之后每个请求和 pong 都晚这么久，0 关掉；
 启动时也可以 `MOCK_DELAY=<秒>`）。手动测真断开：只杀监听端口的进程 `kill $(lsof -i TCP:18760 -sTCP:LISTEN -t)`——
 `lsof -i :18760` 还会列出连着它的模拟器 App，一起杀掉 App 就没了。截图：`-showConnection …`（见 `docs/ios.md`）。
@@ -355,7 +358,7 @@ Agents 列表、Agent 对话、Persona 对话各拖、甩约 20 秒，同时 moc
   - 一直按着也 5 s 内落地（断言 5.5 s）；
   - 固定种子的随机序列（滚动、推送、churn、进出对话、前后台、断网时推送）之后 8 s 内收敛；`TEST_RUNNER_JARVIS_SEED` 重放；
   - 甩完立刻点行，打开的是看到的那个 Agent；
-  - 断网时标题 3 s 内显示，连回 25 s 内消失：重连按 1、2、4…最多 20 s 退避，断 8 s 后下一次大约在 15 s。
+  - 断网时标题在 8 s 的宽限之后显示（11 s 内），连回 25 s 内消失：重连按 1、2、4…最多 20 s 退避（±20%）。
 - 两种布局、两种风格各跑，种子 7、21、42 各一轮。
 
 ### 体验模式（`DemoModeTests`、`DemoHubTests`）

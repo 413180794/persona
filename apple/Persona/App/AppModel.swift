@@ -1044,24 +1044,33 @@ final class AppModel {
     private func didConnect(_ group: String) {
         guard let link = link(group) else { return }
         registerPhone(link)
+        // The hub resumed its broadcasts (docs/hub-restart.md): what this app missed follows the hello, and the
+        // connection's snapshot (machines, sessions, pending interactions) is whole: nothing to fetch again, no 更新中….
+        let plan = ReconnectPlan(resumed: link.live.resumed)
         if group == hub?.group {
             // The hub's version and whether an update is out or under way (an older hub has no such page: nil).
             Task { hubUpdate = try? await api?.hubUpdate() }
-            Task { await personas.refresh(api) }
-            LarkSync.shared.reconnected()
-            InboxStore.shared.reload()
-            TodoStore.shared.reload()
-            TasksStore.shared.reconnected()
+            if plan.refetch {
+                Task { await personas.refresh(api) }
+                LarkSync.shared.reconnected()
+                InboxStore.shared.reload()
+                TodoStore.shared.reload()
+                TasksStore.shared.reconnected()
+            }
         }
-        AgentSync.shared.schedule()
-        // 更新中… until the open chats' backlog and the pending interactions are in (ConnectionStatus).
+        if plan.refetch { AgentSync.shared.schedule() }
         let mine = subscribed.filter { $0.group == group }
-        connection.startCatchUp(group, [Self.interactionsPart(group)] + mine.map(Self.catchUpPart))
+        // 更新中… until the open chats' backlog and the pending interactions are in (ConnectionStatus); nothing when
+        // resumed (an empty catch-up only lets the outbox go).
+        connection.startCatchUp(group, plan.refetch ? [Self.interactionsPart(group)] + mine.map(Self.catchUpPart) : [])
         for key in mine {
             deltas.drop(key)
-            chat(key).liveText = "" // a delta that cleared it may have been lost with the old socket
+            // A delta that cleared it may have been lost with the old socket. A resumed hub sends the current one
+            // right after the catch-up, so the answer goes on being written instead of blanking for a moment.
+            if plan.refetch { chat(key).liveText = "" }
             link.live.send(subscribeMessage(key))
         }
+        guard plan.refetch else { return }
         // Questions answered on the computer while the socket was down are gone from the hub: drop their cards.
         Task {
             defer { connection.caughtUp(Self.interactionsPart(group)) }
@@ -1402,8 +1411,12 @@ final class AppModel {
         guard connection.networkUp else { notDone(); return }
         interactions[ix.uid] = nil
         endedInteractionIDs.insert(ix.id)
+        // One op id for this answer: a retry through a hub restart (the request died with the old process, a proxy
+        // answered 502) goes with it again, and the hub presses the keys once. The card stays away meanwhile, for up
+        // to a minute (OpRetry.limit), then comes back with the error.
+        let op = UUID()
         do {
-            let res = try await api.resolve(ix.id, r)
+            let res = try await OpRetry.untilDelivered { try await api.resolve(ix.id, r, opID: op) }
             if res.already == true, let existing = res.resolution {
                 // Resolved already on server, show what was effective
                 let lines = Answered.answerLines(ix, existing)
@@ -1492,13 +1505,33 @@ final class AppModel {
     func retry(_ key: SessionKey, _ msg: PendingMessage, clearDraft: String? = nil) {
         guard allowSend(key) else { return }
         guard let i = chat(key).pending.firstIndex(where: { $0.id == msg.id }) else { return }
-        if chat(key).pending[i].mayHaveArrived == true {
-            // The user looked and wants it sent again: as a new message (the old id is answered "may have arrived").
-            chat(key).pending[i].id = UUID()
-            chat(key).pending[i].mayHaveArrived = nil
+        guard chat(key).pending[i].mayHaveArrived == true else {
+            chat(key).pending[i].state = .sending
+            deliver(key, chat(key).pending[i], clearDraft: clearDraft)
+            return
         }
         chat(key).pending[i].state = .sending
-        deliver(key, chat(key).pending[i], clearDraft: clearDraft)
+        Task {
+            // First ask the hub what became of the old id (`GET /api/v1/ops/{id}`): done means it went, and a resend
+            // would type it twice; pending means the first try is still running: the same id again waits for its
+            // answer. Anything else (failed, still unknown, no receipt) is the user's call, which they made: as a new
+            // message (the old id would be answered from its first try).
+            let state = try? await api(key.group)?.opState(msg.id)
+            guard let j = chat(key).pending.firstIndex(where: { $0.id == msg.id }) else { return }
+            if state == "done" {
+                chat(key).pending[j].mayHaveArrived = nil
+                settleSend(key, msg.id, .sent)
+                return
+            }
+            if state == "pending" {
+                chat(key).pending[j].mayHaveArrived = nil
+                deliver(key, chat(key).pending[j], clearDraft: clearDraft)
+                return
+            }
+            chat(key).pending[j].id = UUID()
+            chat(key).pending[j].mayHaveArrived = nil
+            deliver(key, chat(key).pending[j], clearDraft: clearDraft)
+        }
     }
 
     func discard(_ key: SessionKey, _ msg: PendingMessage) {
@@ -1510,7 +1543,8 @@ final class AppModel {
         Task {
             // The hub is out of reach: the message waits (clock, 连上后自动发送) instead of failing after a timeout.
             let socket = socket(key.group)
-            let outcome: SendOutcome = socket?.state == .connected && socket?.stalled == false
+            // A socket that dropped a moment ago (a hub restart) is coming back: send, it keeps trying through the gap.
+            let outcome: SendOutcome = socket?.takesWrites == true
                 ? await sendPending(key, msg, clearDraft: clearDraft) : .waiting
             settleSend(key, msg.id, outcome)
         }

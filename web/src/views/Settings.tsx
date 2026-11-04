@@ -57,6 +57,8 @@ interface LauncherView {
   custom_model_description?: string;
   args?: string[];
   has_key?: boolean;
+  /** Managed: how the key goes to the gateway (x-api-key by default, or Authorization: Bearer). */
+  auth?: "api_key" | "bearer";
   machines?: string[];
   hidden?: boolean;
   definitions?: Record<string, string>;
@@ -559,6 +561,7 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
               {l.kind !== "api" && l.custom_model && <KVRow k="自定义模型" v={l.custom_model} mono />}
               {l.kind !== "api" && l.custom_model_name && <KVRow k="自定义模型名" v={l.custom_model_name} />}
               <KVRow k="API Key" v={l.has_key ? "已设置（不显示）" : "未设置"} />
+              {l.api !== "responses" && <KVRow k="认证方式" v={l.auth === "bearer" ? "Bearer" : "x-api-key"} />}
               {l.kind !== "api" && l.args?.length ? <KVRow k="额外参数" v={l.args.join(" ")} mono /> : null}
             </KV>
           )}
@@ -657,7 +660,7 @@ function DetailBlock({ d, place }: { d: LauncherDetail; place?: string }) {
 function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView | "new" | null; onClose: () => void; onSaved: () => void }) {
   const isNew = existing === "new";
   const old = existing && existing !== "new" ? existing : null;
-  const [f, setF] = useState({ name: "", base_url: "", api_key: "", model: "", small_model: "", subagent_model: "", custom_model: "", custom_model_name: "", custom_model_description: "", args: "", kind: "launcher", api: "messages" });
+  const [f, setF] = useState({ name: "", base_url: "", api_key: "", model: "", small_model: "", subagent_model: "", custom_model: "", custom_model_name: "", custom_model_description: "", args: "", kind: "launcher", api: "messages", auth: "api_key" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   // 从插件添加 (docs/plugins.md「模型供应商」): only when adding, and only when the hub's plugins offer providers.
@@ -693,10 +696,12 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
 
   useEffect(() => {
     setError("");
-    setF(old ? { name: old.name, base_url: old.base_url ?? "", api_key: "", model: old.model ?? "", small_model: old.small_model ?? "", subagent_model: old.subagent_model ?? "", custom_model: old.custom_model ?? "", custom_model_name: old.custom_model_name ?? "", custom_model_description: old.custom_model_description ?? "", args: (old.args ?? []).join(" "), kind: old.kind ?? "launcher", api: old.api ?? "messages" } : { name: "", base_url: "", api_key: "", model: "", small_model: "", subagent_model: "", custom_model: "", custom_model_name: "", custom_model_description: "", args: "", kind: "launcher", api: "messages" });
+    setF(old ? { name: old.name, base_url: old.base_url ?? "", api_key: "", model: old.model ?? "", small_model: old.small_model ?? "", subagent_model: old.subagent_model ?? "", custom_model: old.custom_model ?? "", custom_model_name: old.custom_model_name ?? "", custom_model_description: old.custom_model_description ?? "", args: (old.args ?? []).join(" "), kind: old.kind ?? "launcher", api: old.api ?? "messages", auth: old.auth ?? "api_key" } : { name: "", base_url: "", api_key: "", model: "", small_model: "", subagent_model: "", custom_model: "", custom_model_name: "", custom_model_description: "", args: "", kind: "launcher", api: "messages", auth: "api_key" });
   }, [existing]);
 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
+  // The Responses API always takes the key as Bearer: nothing to choose.
+  const responses = f.kind === "api" && f.api === "responses";
   const ready = fromPlugin ? presetReady : f.name.trim() && f.base_url.trim() && f.model.trim() && (!isNew || f.api_key.trim());
   const save = async () => {
     if (busy || !ready) return;
@@ -711,7 +716,7 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
         onClose();
         return;
       }
-      const body = { name: f.name.trim(), kind: f.kind, api: f.kind === "api" ? f.api : "messages", base_url: f.base_url.trim(), model: f.model.trim(), small_model: f.kind === "api" ? "" : f.small_model.trim(), subagent_model: f.kind === "api" ? "" : f.subagent_model.trim(), custom_model: f.kind === "api" ? "" : f.custom_model.trim(), custom_model_name: f.kind === "api" ? "" : f.custom_model_name.trim(), custom_model_description: f.kind === "api" ? "" : f.custom_model_description.trim(), args: f.kind === "api" ? [] : f.args.split(/\s+/).filter(Boolean), api_key: f.api_key || undefined };
+      const body = { name: f.name.trim(), kind: f.kind, api: f.kind === "api" ? f.api : "messages", base_url: f.base_url.trim(), model: f.model.trim(), small_model: f.kind === "api" ? "" : f.small_model.trim(), subagent_model: f.kind === "api" ? "" : f.subagent_model.trim(), custom_model: f.kind === "api" ? "" : f.custom_model.trim(), custom_model_name: f.kind === "api" ? "" : f.custom_model_name.trim(), custom_model_description: f.kind === "api" ? "" : f.custom_model_description.trim(), args: f.kind === "api" ? [] : f.args.split(/\s+/).filter(Boolean), api_key: f.api_key || undefined, auth: responses ? "api_key" : f.auth };
       await api(isNew ? "/launchers" : enLauncher(body.name), { method: isNew ? "POST" : "PUT", json: body });
       toast(isNew ? `已新增 ${body.name}` : `已保存 ${body.name}`, "ok");
       onSaved();
@@ -795,6 +800,15 @@ function LauncherEditor({ existing, onClose, onSaved }: { existing: LauncherView
         {field("name", "名字", { placeholder: "比如 jv_strong", hint: "字母、数字、_ 和 -；在模型配置中按这个名字选。", mono: true, disabled: !isNew })}
         {field("base_url", "Base URL", { placeholder: "https://…", hint: f.api === "responses" ? "Responses 兼容 API 的基础地址。" : "Messages 兼容 API 的基础地址。", mono: true })}
         {field("api_key", isNew || !old?.has_key ? "API Key" : "API Key（不改就留空）", { type: "password", hint: "加密存在 hub，接口不会再返回。" })}
+        {!responses && <label className="block">
+          <span className="mb-1 block text-[12px] font-medium text-ink-2">认证方式</span>
+          <select value={f.auth} onChange={(e) => setF((x) => ({ ...x, auth: e.target.value }))}
+            className="h-9 w-full rounded-control bg-field px-3 text-[13px] text-ink shadow-inset-field outline-none">
+            <option value="api_key">x-api-key（ANTHROPIC_API_KEY）</option>
+            <option value="bearer">Bearer（ANTHROPIC_AUTH_TOKEN）</option>
+          </select>
+          <span className="mt-1 block text-[11px] text-ink-3">网关只认 Authorization: Bearer 时选 Bearer。</span>
+        </label>}
         <div className={f.kind === "api" ? "" : "grid grid-cols-2 gap-3"}>
           {field("model", "默认模型", { placeholder: "主模型", mono: true })}
           {f.kind !== "api" && field("small_model", "小模型（可选）", { placeholder: "默认同模型", mono: true })}

@@ -20,8 +20,10 @@ func TestManagedLauncherRunsThroughJarvisd(t *testing.T) {
 		t.Fatalf("a managed one runs as jarvisd launch: %q", got)
 	}
 	env := n.launcherEnv("jv_strong")["env"].([]string)
-	for _, want := range []string{"ANTHROPIC_BASE_URL=http://gw.example.com", "ANTHROPIC_API_KEY=k", "ANTHROPIC_MODEL=m1",
-		"ANTHROPIC_DEFAULT_OPUS_MODEL=m1", "ANTHROPIC_SMALL_FAST_MODEL=m1"} {
+	// ANTHROPIC_AUTH_TOKEN is there and empty: Claude Code would otherwise take one from ~/.claude/settings.json and
+	// send it as a second credential.
+	for _, want := range []string{"ANTHROPIC_BASE_URL=http://gw.example.com", "ANTHROPIC_API_KEY=k", "ANTHROPIC_AUTH_TOKEN=",
+		"ANTHROPIC_MODEL=m1", "ANTHROPIC_DEFAULT_OPUS_MODEL=m1", "ANTHROPIC_SMALL_FAST_MODEL=m1"} {
 		if !slices.Contains(env, want) {
 			t.Errorf("env lacks %s: %v", want, env)
 		}
@@ -67,6 +69,49 @@ func TestClaudeExecutableFallsBackToInstallLocations(t *testing.T) {
 	got, err := claudeExecutable()
 	if err != nil || got != want {
 		t.Fatalf("got %q %v, want %q", got, err, want)
+	}
+}
+
+func TestManagedLauncherBearerAuth(t *testing.T) {
+	n := &Node{bin: "jarvisd"}
+	n.setManaged([]proto.ManagedLauncher{{Name: "gw", BaseURL: "http://gw.example.com", Model: "m1", APIKey: "k", Auth: "bearer"}})
+	env := n.launcherEnv("gw")["env"].([]string)
+	if !slices.Contains(env, "ANTHROPIC_AUTH_TOKEN=k") || !slices.Contains(env, "ANTHROPIC_API_KEY=") {
+		t.Fatalf("a bearer launcher's key goes in ANTHROPIC_AUTH_TOKEN, and ANTHROPIC_API_KEY is empty: %v", env)
+	}
+	if err := approveClaudeAPIKey(append(env, "CLAUDE_CONFIG_DIR="+t.TempDir())); err != nil {
+		t.Fatalf("no API key, nothing to approve: %v", err)
+	}
+	// The --settings env (launcher_settings.go) carries the same: the key, and the other variable empty, so the user's
+	// settings.json cannot fill it in.
+	for _, l := range []proto.ManagedLauncher{
+		{BaseURL: "http://gw.example.com", APIKey: "k", Auth: "bearer"},
+		{BaseURL: "http://gw.example.com", APIKey: "k"},
+	} {
+		got := managedSettingsEnv(l)
+		key, other := "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"
+		if l.BearerAuth() {
+			key, other = other, key
+		}
+		if v, ok := got[other]; got[key] != "k" || !ok || v != "" {
+			t.Errorf("auth %q: settings env %v", l.Auth, got)
+		}
+	}
+}
+
+// Without a key (none stored, or the hub could not open it) no credential variable is set, not even an empty one:
+// Claude keeps what its settings or sign-in give it.
+func TestManagedLauncherWithoutKeySetsNoCredential(t *testing.T) {
+	for _, auth := range []string{"", "bearer"} {
+		env := managedEnv(proto.ManagedLauncher{Name: "gw", BaseURL: "http://gw.example.com", Model: "m1", Auth: auth})
+		for _, kv := range env {
+			if strings.HasPrefix(kv, "ANTHROPIC_API_KEY=") || strings.HasPrefix(kv, "ANTHROPIC_AUTH_TOKEN=") {
+				t.Errorf("auth %q: %s set without a key: %v", auth, kv, env)
+			}
+		}
+		if _, ok := managedSettingsEnv(proto.ManagedLauncher{BaseURL: "http://gw.example.com", Auth: auth})["ANTHROPIC_AUTH_TOKEN"]; ok {
+			t.Errorf("auth %q: the --settings env blanks a credential without a key", auth)
+		}
 	}
 }
 

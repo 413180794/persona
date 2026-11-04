@@ -256,6 +256,24 @@ final class LiveConnection {
     private(set) var rtt: TimeInterval?
     /// When the next attempt starts while the hub is out of reach.
     private(set) var nextTry: Date?
+    /// The socket went while connected and is not back yet (docs/hub-restart.md): nil once it is, or after
+    /// `disconnect`.
+    private(set) var drop: LinkDrop?
+    /// Within the drop's grace (8 s, 30 s after the hub said it was restarting): the app keeps looking connected and
+    /// writes keep trying instead of waiting in the outbox. Off once connected again, or when the grace runs out.
+    private(set) var inGrace = false { didSet { if inGrace != oldValue { onChange?() } } }
+    /// The grace ran out without the socket coming back: the titles say so right away (no second delay on top).
+    private(set) var graceOver = false
+    /// Connected, or dropped a moment ago and coming back: what the app shows as "connected".
+    var looksConnected: Bool { state == .connected || inGrace }
+    /// A write may go now: connected and answering, or in a drop's grace (it keeps trying through the gap; after the
+    /// grace it waits in the outbox).
+    var takesWrites: Bool { (state == .connected && !stalled) || inGrace }
+    /// This connection's hello resumed the hub's broadcast stream (`resumed: true`): it replays what this app missed,
+    /// so nothing needs fetching again (AppModel.didConnect). Set before `onConnected`.
+    @ObservationIgnored private(set) var resumed = false
+    /// Where the app is in the hub's numbered broadcasts: kept across reconnects, cleared with another hub.
+    @ObservationIgnored private(set) var cursor = EventCursor()
     @ObservationIgnored var onEvent: ((ServerEvent) -> Void)?
     /// The state or `stalled` changed.
     @ObservationIgnored var onChange: (() -> Void)?
@@ -274,6 +292,13 @@ final class LiveConnection {
     @ObservationIgnored static var makeLocal: (() -> LocalSocket)?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var backoff: TimeInterval = 1
+    /// The hub said `hub_restarting` on this socket: its close is a restart whatever the close code.
+    @ObservationIgnored private var restartNotice = false
+    /// Attempts since the drop: in the quick phase after a restart, and after it (LinkDrop.retryDelay).
+    @ObservationIgnored private var fastTries = 0
+    @ObservationIgnored private var tries = 0
+    /// The heartbeat gave up on a quiet socket: our own close, not the hub's 1001.
+    @ObservationIgnored private var closedQuiet = false
     @ObservationIgnored private let session = URLSession(configuration: .default)
     /// When the hub last answered (any message or a pong): a socket that went quiet on a network change can sit
     /// "connected" forever, and the chat would silently stop updating.
@@ -290,6 +315,7 @@ final class LiveConnection {
     @ObservationIgnored var suspended = false
 
     func connect(_ config: ServerConfig) {
+        if config != self.config { cursor = EventCursor() } // another hub or pairing: its stream is not ours
         self.config = config
         backoff = 1
         open()
@@ -301,6 +327,7 @@ final class LiveConnection {
         task = nil
         local?.close()
         local = nil
+        endDrop()
         state = .idle
         stalled = false
         nextTry = nil
@@ -373,11 +400,11 @@ final class LiveConnection {
     private func openSocket(_ config: ServerConfig, _ gen: Int) {
         var comps = URLComponents(url: config.url.appending(path: "/api/v1/ws"), resolvingAgainstBaseURL: false)!
         comps.scheme = config.url.scheme == "https" ? "wss" : "ws"
-        // A hub that has it sends session lists as deltas (an older one ignores the question and sends whole lists).
-        comps.queryItems = [URLQueryItem(name: "features", value: "sessions_delta")]
+        comps.queryItems = Self.queryItems(cursor)
         var req = URLRequest(url: HubTransport.resolve(comps.url!, hub: config.url))
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
         req.timeoutInterval = 15
+        resumed = false // until this socket's hello says so
         let t = session.webSocketTask(with: req)
         t.maximumMessageSize = 64 << 20
         task = t
@@ -389,6 +416,12 @@ final class LiveConnection {
         heartbeat(t, gen)
     }
 
+    /// The socket URL's query: session lists as deltas (an older hub ignores the question and sends whole lists), and
+    /// where to resume the broadcasts from once a hello gave a stream.
+    static func queryItems(_ cursor: EventCursor) -> [URLQueryItem] {
+        [URLQueryItem(name: "features", value: "sessions_delta")] + cursor.queryItems
+    }
+
     private func heartbeat(_ t: URLSessionWebSocketTask, _ gen: Int) {
         Task { @MainActor [weak self] in
             while true {
@@ -396,6 +429,7 @@ final class LiveConnection {
                 guard let self, gen == self.generation else { return }
                 guard self.state == .connected else { continue }
                 if Date.now.timeIntervalSince(self.lastHeard) > Self.deadAfter {
+                    self.closedQuiet = true
                     t.cancel(with: .goingAway, reason: nil) // its receive fails and schedules the reconnect
                     return
                 }
@@ -431,18 +465,23 @@ final class LiveConnection {
         t.receive { [weak self, prepare] result in
             // Decode here, off the main thread: session lists are large and arrive every second while agents
             // work (decoding them on the main thread showed up in scrolling profiles).
-            let event: ServerEvent? = switch result {
-            case .success(.string(let s)): s.data(using: .utf8).flatMap(ServerEvent.decode)
-            case .success(.data(let d)): ServerEvent.decode(d)
+            let data: Data? = switch result {
+            case .success(.string(let s)): s.data(using: .utf8)
+            case .success(.data(let d)): d
             default: nil
             }
+            let event = data.flatMap(ServerEvent.decode)
+            let meta = data.map(FrameMeta.read) ?? FrameMeta()
             if let event { prepare?(event) }
             Task { @MainActor in
                 guard let self, gen == self.generation else { return }
                 switch result {
                 case .success:
                     self.lastHeard = .now
-                    if self.state != .connected {
+                    let first = self.state != .connected
+                    if first { self.endDrop() }
+                    self.note(meta) // before onConnected: it reads whether this hello resumed
+                    if first {
                         self.state = .connected
                         self.backoff = 1
                         self.onConnected?()
@@ -450,6 +489,8 @@ final class LiveConnection {
                     if let event { self.onEvent?(event) }
                     self.receive(t, gen)
                 case .failure(let err):
+                    let planned = self.restartNotice || (!self.closedQuiet && t.closeCode == .goingAway)
+                    self.dropped(restart: planned)
                     self.state = .failed(err.localizedDescription)
                     self.stalled = false
                     self.scheduleReconnect(gen)
@@ -480,9 +521,68 @@ final class LiveConnection {
         }
     }
 
+    /// What a message says about the connection: the broadcast stream's place, whether this hello resumed it, a
+    /// restart coming.
+    private func note(_ meta: FrameMeta) {
+        if meta.type == "hello" {
+            resumed = meta.resumed && meta.eventStream != nil && meta.eventStream == cursor.stream
+            cursor = cursor.afterHello(stream: meta.eventStream, seq: meta.eventSeq, resumed: resumed)
+        } else {
+            cursor = cursor.afterEvent(meta.eventSeq)
+        }
+        if meta.isRestarting { restartNotice = true }
+    }
+
+    /// The socket failed. One that was connected starts a drop and its grace (a planned restart: the longer one);
+    /// a failed attempt during a drop keeps it.
+    private func dropped(restart: Bool) {
+        restartNotice = false
+        closedQuiet = false
+        if drop == nil, state == .connected {
+            let d = LinkDrop(at: .now, restart: restart)
+            drop = d
+            fastTries = 0
+            tries = 0
+            graceOver = false
+            inGrace = true
+            Task { @MainActor [weak self] in
+                // Until this drop's grace is over, however long it is by then (a restart can lengthen it).
+                while let self, let now = self.drop, now.at == d.at, self.state != .connected {
+                    let left = now.graceUntil.timeIntervalSinceNow
+                    guard left > 0 else {
+                        self.graceOver = true
+                        self.inGrace = false
+                        return
+                    }
+                    try? await Task.sleep(for: .seconds(left))
+                }
+            }
+        } else if restart, var d = drop, !d.restart {
+            d.restart = true // the hub said so on a socket that came back only for a moment: the longer grace
+            drop = d
+        }
+    }
+
+    private func endDrop() {
+        drop = nil
+        graceOver = false
+        inGrace = false
+        restartNotice = false
+        closedQuiet = false
+    }
+
     private func scheduleReconnect(_ gen: Int) {
-        let delay = backoff
-        backoff = min(backoff * 2, 20)
+        let delay: TimeInterval
+        if let drop {
+            let since = Date.now.timeIntervalSince(drop.at)
+            let fast = drop.restart && since < LinkDrop.restartFast
+            delay = LinkDrop.retryDelay(attempt: fast ? fastTries : tries, restart: drop.restart, sinceDrop: since,
+                                        rand: Double.random(in: 0..<1))
+            if fast { fastTries += 1 } else { tries += 1 }
+        } else {
+            delay = backoff
+            backoff = min(backoff * 2, 20)
+        }
         nextTry = .now + delay
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(delay))

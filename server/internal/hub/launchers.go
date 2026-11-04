@@ -62,6 +62,7 @@ type LauncherView struct {
 	CustomModelDescription string   `json:"custom_model_description,omitempty"`
 	Args                   []string `json:"args,omitempty"`
 	HasKey                 bool     `json:"has_key,omitempty"`
+	Auth                   string   `json:"auth,omitempty"`     // managed: api_key (x-api-key) or bearer
 	Machines               []string `json:"machines,omitempty"` // zshrc: the machines whose ~/.zshrc defines it
 	Hidden                 bool     `json:"hidden,omitempty"`
 	// Definition per machine (zshrc launchers, detail only): the function body, secrets masked.
@@ -238,7 +239,7 @@ func (h *Hub) launcherViews(ctx context.Context) []LauncherView {
 		managed[s.Name] = true
 		out = append(out, LauncherView{Kind: s.Kind, API: s.API, Name: s.Name, Source: "jarvis", BaseURL: s.BaseURL, Model: s.Model, SmallModel: s.SmallModel,
 			SubagentModel: s.SubagentModel, CustomModel: s.CustomModel, CustomModelName: s.CustomModelName,
-			CustomModelDescription: s.CustomModelDescription, Args: s.Args, HasKey: s.KeySealed != ""})
+			CustomModelDescription: s.CustomModelDescription, Args: s.Args, HasKey: s.KeySealed != "", Auth: s.Auth})
 	}
 	hidden := h.hiddenLaunchers(ctx)
 	byName := map[string]*LauncherView{}
@@ -330,6 +331,7 @@ type launcherInput struct {
 	CustomModelDescription string   `json:"custom_model_description"`
 	Args                   []string `json:"args"`
 	APIKey                 *string  `json:"api_key"` // nil or "" on an update keeps the key
+	Auth                   string   `json:"auth"`    // api_key (x-api-key, the default) or bearer (Authorization: Bearer)
 	// Preset is a plugin's provider it is added from (GET /api/v1/launchers/presets): what is left empty is filled in.
 	Preset string `json:"preset,omitempty"`
 }
@@ -345,6 +347,9 @@ func (in launcherInput) check() error {
 	}
 	if in.Kind != "api" && in.API == "responses" {
 		return errors.New("Claude 启动器只支持 Messages 接入")
+	}
+	if in.Auth != "" && in.Auth != "api_key" && in.Auth != "bearer" {
+		return errors.New("认证方式不支持")
 	}
 	if in.Kind == "api" && (len(in.Args) != 0 || in.SmallModel != "" || in.SubagentModel != "" || in.CustomModel != "") {
 		return errors.New("直接 API 接入不能设置启动参数、小模型或子 Agent 模型")
@@ -576,6 +581,14 @@ func (h *Hub) saveLauncher(w http.ResponseWriter, r *http.Request, in launcherIn
 	if in.Preset != "" {
 		s.Preset = in.Preset
 	}
+	switch {
+	case in.API == "responses": // always goes as Bearer: nothing to keep
+		s.Auth = ""
+	case in.Auth == "bearer":
+		s.Auth = in.Auth
+	case in.Auth == "api_key":
+		s.Auth = ""
+	} // no auth in the request (an app from before it): a change keeps what is stored
 	if in.APIKey != nil && strings.TrimSpace(*in.APIKey) != "" {
 		sealed, err := h.sealKey(strings.TrimSpace(*in.APIKey))
 		if err != nil {
@@ -597,7 +610,7 @@ func (h *Hub) saveLauncher(w http.ResponseWriter, r *http.Request, in launcherIn
 	h.pushManaged(ctx)
 	writeJSON(w, map[string]any{"launcher": LauncherView{Kind: s.Kind, API: s.API, Name: s.Name, Source: "jarvis", BaseURL: s.BaseURL, Model: s.Model,
 		SmallModel: s.SmallModel, SubagentModel: s.SubagentModel, CustomModel: s.CustomModel, CustomModelName: s.CustomModelName,
-		CustomModelDescription: s.CustomModelDescription, Args: s.Args, HasKey: s.KeySealed != ""}})
+		CustomModelDescription: s.CustomModelDescription, Args: s.Args, HasKey: s.KeySealed != "", Auth: s.Auth}})
 }
 
 // --- the new-agent picker's launchers, with the agent each starts ---

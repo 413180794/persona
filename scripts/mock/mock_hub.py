@@ -4076,7 +4076,7 @@ LAUNCHERS = [
     {"name": "cc_test", "source": "zshrc", "base_url": "https://relay.example.com", "model": "model_api/experimental", "machines": ["macbook"], "hidden": True},
 ]
 if os.environ.get("MOCK_MANAGED_LAUNCHER"):  # one added in Jarvis (LauncherSwipeTests swipes it to 删除)
-    LAUNCHERS.insert(0, {"name": "jv_strong", "source": "jarvis", "base_url": "https://gateway.example.com", "model": "claude-opus-5-5", "has_key": True})
+    LAUNCHERS.insert(0, {"name": "jv_strong", "source": "jarvis", "base_url": "https://gateway.example.com", "model": "claude-opus-5-5", "has_key": True, "auth": "bearer"})
 def _w(label, ratio=None, used=None, limit=None, unit="percent", resets=None, exhausted=False):
     w = {"label": label, "unit": unit}
     if ratio is not None: w["used_ratio"] = ratio
@@ -9446,6 +9446,7 @@ class H(BaseHTTPRequestHandler):
         # (hub/sessions_push.go); MOCK_WHOLE_LISTS=1 is an older hub that ignores the question.
         asked = parse_qs(urlparse(self.path).query).get("features", [""])[0].split(",")
         delta = "sessions_delta" in asked and not os.environ.get("MOCK_WHOLE_LISTS")
+        restart_backlog()  # MOCK_RESTART: a connection during the restart waits in the socket's backlog
         have = {}  # machine -> {session id: its JSON}: what this app has
         key = self.headers.get("Sec-WebSocket-Key", "")
         accept = base64.b64encode(hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest()).decode()
@@ -9472,8 +9473,16 @@ class H(BaseHTTPRequestHandler):
         send({"type": "hello", "server_version": "mock", "client_id": uuid.uuid4().hex[:8], "channel": "release",
               "build": 202611021500, "protocol": 1, "min_app_build": 0,
               **identity(), "endpoints": list(ENDPOINTS), **mesh_hello(),
-              "features": features() + (["sessions_delta"] if delta else [])})
-        client = {"send": send, "features": set()}
+              "features": features() + (["sessions_delta"] if delta else []), **restart_hello(self.path)})
+        restart_replay(send, self.path)  # a resumed hello: what this socket missed, right after it
+
+        def close_going_away(reason=b"hub restarting"):
+            body = struct.pack(">H", 1001) + reason
+            with lock:
+                self.wfile.write(bytes([0x88, len(body)]) + body); self.wfile.flush()
+            self.connection.shutdown(socket.SHUT_RDWR)
+
+        client = {"send": send, "features": set(), "close": close_going_away}
         heartbeat = {"interval": 20, "pong_timeout": 15}
         hb_condition = threading.Condition()
         hb_state = {"next": None, "pending": None, "sent": 0, "closed": False}
@@ -10003,6 +10012,125 @@ if DOC_COMMENTS:
 
     H.do_GET = _doc_get
     H.do_POST = _doc_post
+# ---------- area: hub restarts the app does not notice (docs/hub-restart.md, #1634) ----------
+# MOCK_RESTART=1: hello carries event_stream / event_seq / resumed and the numbered broadcasts are kept, like the hub's
+# event log; GET /mock/restart?gap_ms=1500&missed=todos,inbox says hub_restarting and closes every socket with 1001,
+# connections in the next gap_ms wait (the socket's backlog), the `missed` broadcasts are numbered while nobody is
+# connected and replayed after a resumed hello; &drop_post=1: the next write with an op id is done but its answer
+# lost (the old process went). Writes with X-Jarvis-Op-Id are done once: a repeat gets the first answer.
+# GET /mock/restart (no gap_ms): what happened (restarts, connects and whether they resumed, op ids, GET hits).
+RESTART_MODE = os.environ.get("MOCK_RESTART") == "1"
+RESTART = {"stream": "mock-" + uuid.uuid4().hex[:8], "seq": 0, "log": [], "gap_until": 0.0, "drop_post": False,
+           "restarts": 0, "connects": [], "ops": {}, "op_posts": []}
+RESTART_LOCK = threading.Lock()
+
+
+def restart_backlog():
+    if not RESTART_MODE: return
+    wait = RESTART["gap_until"] - time.time()
+    if wait > 0: time.sleep(wait)
+
+
+def restart_hello(path):
+    if not RESTART_MODE: return {}
+    q = parse_qs(urlparse(path).query)
+    stream, seq = q.get("event_stream", [""])[0], q.get("event_seq", [""])[0]
+    with RESTART_LOCK:
+        resumed = stream == RESTART["stream"] and seq.isdigit() and int(seq) <= RESTART["seq"]
+        RESTART["connects"].append({"at": time.time(), "asked": bool(stream), "resumed": resumed, "from": int(seq) if seq.isdigit() else None})
+        return {"event_stream": RESTART["stream"], "event_seq": RESTART["seq"], "resumed": resumed}
+
+
+def restart_replay(send, path):
+    if not RESTART_MODE: return
+    with RESTART_LOCK:
+        last = RESTART["connects"][-1] if RESTART["connects"] else {}
+        missed = [e for e in RESTART["log"] if last.get("resumed") and e["event_seq"] > last["from"]]
+    for e in missed: send(dict(e))
+
+
+def restart_broadcast(kind):
+    with RESTART_LOCK:
+        RESTART["seq"] += 1
+        event = {"type": kind, "event_seq": RESTART["seq"]}
+        RESTART["log"].append(event)
+    for send, _ in list(LIVE):
+        try: send(dict(event))
+        except Exception: pass
+
+
+def restart_now(gap_ms, missed, drop_post):
+    with FAULT_LOCK:
+        clients = list(CLIENTS.values())
+    for c in clients:
+        try: c["send"]({"type": "hub_restarting", "back_in_ms": 3000})
+        except Exception: pass
+    time.sleep(0.05)
+    with RESTART_LOCK:
+        RESTART["gap_until"] = time.time() + gap_ms / 1000
+        RESTART["restarts"] += 1
+        RESTART["drop_post"] = drop_post
+    for c in clients:
+        try: c["close"]()
+        except Exception: pass
+    for kind in missed: restart_broadcast(kind)  # nobody is connected: only the log has them
+
+
+if RESTART_MODE:
+    _get_before_restart, _post_before_restart = H.do_GET, H.do_POST
+
+    def _restart_get(handler):
+        u = urlparse(handler.path)
+        if u.path != "/mock/restart":
+            return _get_before_restart(handler)
+        q = parse_qs(u.query)
+        if "gap_ms" in q:
+            missed = [k for k in q.get("missed", [""])[0].split(",") if k]
+            restart_now(int(q["gap_ms"][0]), missed, q.get("drop_post", [""])[0] == "1")
+        elif "event" in q:
+            restart_broadcast(q["event"][0])
+        with RESTART_LOCK:
+            state = {k: RESTART[k] for k in ("stream", "seq", "restarts", "connects", "op_posts")}
+        return handler.send_json({**state, "hits": HITS})
+
+    def _restart_post(handler):
+        op = (handler.headers.get("X-Jarvis-Op-Id") or "").lower()
+        if not op:
+            return _post_before_restart(handler)
+        path = urlparse(handler.path).path
+        with RESTART_LOCK:
+            RESTART["op_posts"].append({"op": op, "path": path})
+            first = RESTART["ops"].get(op)
+        if first is not None:  # done once already: its first answer, nothing done again
+            handler.body()
+            body = json.dumps(first["body"], ensure_ascii=False).encode()
+            handler.send_response(first["status"]); handler.send_header("Content-Type", "application/json")
+            handler.send_header("Content-Length", str(len(body))); handler.end_headers(); handler.wfile.write(body)
+            return
+        sent = {}
+        original = handler.send_json
+
+        def keep(obj, status=200):
+            sent.update(body=obj, status=status)
+            with RESTART_LOCK:
+                RESTART["ops"][op] = {"body": obj, "status": status}
+                drop = RESTART["drop_post"]
+                RESTART["drop_post"] = False
+            if drop:  # done, but the answer went with the old process
+                handler.close_connection = True
+                handler.connection.shutdown(socket.SHUT_RDWR)
+                return
+            original(obj, status)
+
+        handler.send_json = keep
+        try:
+            return _post_before_restart(handler)
+        finally:
+            handler.send_json = original
+
+    H.do_GET, H.do_POST = _restart_get, _restart_post
+MOCK_HELP.append("MOCK_RESTART=1  hub 无感重启（#1634）：hello 带 event_stream / event_seq / resumed；GET /mock/restart?gap_ms=1500&missed=todos,inbox[&drop_post=1] 模拟一次计划内重启（hub_restarting + 1001，期间的连接排队，漏掉的广播在续传时补发），?event=todos 发一条带序号的广播，不带参数看连接 / 续传 / op id / GET 次数")
+
 MOCK_HELP.append("MOCK_DOC_COMMENTS=1  飞书文档阅读页能写评论（#1290）：features 带 lark_doc_comments，每篇文档三条编造的评论，回复 / 新评论 / 解决 / 重新打开 / @人都改它们；GET /mock/doc-comments 看写了什么")
 
 

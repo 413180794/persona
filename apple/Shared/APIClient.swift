@@ -32,6 +32,8 @@ nonisolated struct LocalRequest: Sendable {
     var path: String
     var query: [String: String]
     var body: Data?
+    /// The headers that change what the hub does (`X-Jarvis-Op-Id`); the rest of a real request's are not kept.
+    var headers: [String: String] = [:]
 }
 
 nonisolated struct APIError: LocalizedError, Sendable {
@@ -146,12 +148,18 @@ nonisolated struct APIClient: Sendable {
         return q
     }
 
+    /// `opID`: the write's op id (`X-Jarvis-Op-Id`, docs/protocol.md「操作回执」): the hub does it once however often
+    /// it arrives. A repeat it cannot answer yet comes back `202 {"state":"pending" | "unknown"}`: thrown as an
+    /// APIError with `OpReceipt.pendingCode` / `unknownCode`, so no caller takes it for done.
     func request(_ method: String, _ path: String, query: [String: String] = [:], body: (any Encodable)? = nil,
-                 timeout: TimeInterval = 30) async throws -> Data {
+                 timeout: TimeInterval = 30, opID: UUID? = nil) async throws -> Data {
         let query = larkScoped(path, query)
+        let headers = opID.map { [OpRetry.header: $0.uuidString.lowercased()] } ?? [:]
         if let answer = transport ?? (config.isDemo ? Self.local : nil) {
-            return try await answer(LocalRequest(method: method, path: path, query: query.filter { !$0.value.isEmpty },
-                                                 body: try body.map { try JSON.encoder.encode(AnyEncodable($0)) }))
+            let data = try await answer(LocalRequest(method: method, path: path, query: query.filter { !$0.value.isEmpty },
+                                                     body: try body.map { try JSON.encoder.encode(AnyEncodable($0)) }, headers: headers))
+            if opID != nil { try Self.checkReceipt(data, status: nil) }
+            return data
         }
         if config.isDemo { throw APIError(status: 503, message: "体验模式不可用") }
         var req = URLRequest(url: url(path, query: query), timeoutInterval: timeout)
@@ -159,12 +167,29 @@ nonisolated struct APIClient: Sendable {
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
         let requestID = String(UUID().uuidString.prefix(8)).lowercased()
         req.setValue(requestID, forHTTPHeaderField: "X-Client-Request-Id")
+        for (name, value) in headers { req.setValue(value, forHTTPHeaderField: name) }
         if let body {
             req.httpBody = try JSON.encoder.encode(AnyEncodable(body))
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
         let (data, resp) = try await session.data(for: req)
-        return try checked(data, resp, requestID: requestID)
+        let ok = try checked(data, resp, requestID: requestID)
+        if opID != nil { try Self.checkReceipt(ok, status: (resp as? HTTPURLResponse)?.statusCode ?? 0) }
+        return ok
+    }
+
+    /// A repeated write the hub could not answer from its receipt: `202 {"state":"pending"}` (the first is still
+    /// running) or `{"state":"unknown"}` (nobody knows whether it ran). Only a 202 (a fake transport has no status, nil:
+    /// its body alone).
+    static func checkReceipt(_ data: Data, status: Int?) throws {
+        guard status == 202 || status == nil, data.count < 256,
+              case .object(let obj)? = try? JSON.decoder.decode(JSONValue.self, from: data), obj.count == 1,
+              let state = obj["state"]?.string else { return }
+        switch state {
+        case "pending": throw APIError(status: 202, message: "上一次的请求还在处理", fields: ["code": OpReceipt.pendingCode])
+        case "unknown": throw APIError(status: 202, message: "不确定上一次有没有执行", fields: ["code": OpReceipt.unknownCode])
+        default: return
+        }
     }
 
     private func checked(_ data: Data, _ resp: URLResponse, requestID: String) throws -> Data {
@@ -282,8 +307,8 @@ nonisolated struct APIClient: Sendable {
     }
 
     @discardableResult
-    func post(_ path: String, body: (any Encodable)? = nil, timeout: TimeInterval = 30) async throws -> Data {
-        try await request("POST", path, body: body ?? [String: String](), timeout: timeout)
+    func post(_ path: String, body: (any Encodable)? = nil, timeout: TimeInterval = 30, opID: UUID? = nil) async throws -> Data {
+        try await request("POST", path, body: body ?? [String: String](), timeout: timeout, opID: opID)
     }
 
     func delete(_ path: String) async throws {
@@ -583,10 +608,12 @@ nonisolated struct APIClient: Sendable {
     /// launcher / model switch what a headless (assistant) conversation runs on from this message on. clientMsgID
     /// stays the same on a retry (the node types it once); clearDraft is the computer's draft the user agreed to
     /// clear first.
+    /// opID: the message's op id (the outbox passes its id, the same as clientMsgID: docs/protocol.md「操作回执」).
     func send(_ k: SessionKey, text: String, images: [ImagePayload] = [], launcher: String? = nil, model: String? = nil,
-              clientMsgID: String? = nil, clearDraft: String? = nil, todoID: String? = nil) async throws {
+              clientMsgID: String? = nil, clearDraft: String? = nil, todoID: String? = nil, opID: UUID? = nil) async throws {
         try await post(sp(k) + "/messages", body: SendBody(text: text, images: images.isEmpty ? nil : images, launcher: launcher,
-                                                           model: model, clientMsgID: clientMsgID, clearDraft: clearDraft, todoID: todoID), timeout: 100)
+                                                           model: model, clientMsgID: clientMsgID, clearDraft: clearDraft, todoID: todoID),
+                       timeout: 100, opID: opID)
     }
     func interrupt(_ k: SessionKey) async throws { try await post(sp(k) + "/interrupt") }
     func attach(_ k: SessionKey) async throws { try await post(sp(k) + "/attach") }
@@ -958,8 +985,20 @@ nonisolated struct APIClient: Sendable {
         stamp(try await get("/api/v1/interactions", as: InteractionsResponse.self).interactions)
     }
     @discardableResult
-    func resolve(_ id: String, _ r: Resolution) async throws -> ResolveResult {
-        try await post("/api/v1/interactions/\(id)/resolve", body: r, as: ResolveResult.self)
+    /// opID: one per answer (the same on every retry of it), so a retry through a hub restart presses nothing twice.
+    func resolve(_ id: String, _ r: Resolution, opID: UUID = UUID()) async throws -> ResolveResult {
+        try JSON.decoder.decode(ResolveResult.self, from: try await post("/api/v1/interactions/\(id)/resolve", body: r, opID: opID))
+    }
+
+    /// What the hub recorded for an op (`GET /api/v1/ops/{id}`): pending / done / failed / unknown; nil when it has no
+    /// such op (an older hub, or one past its 30 days).
+    func opState(_ id: UUID) async throws -> String? {
+        struct Op: Decodable { var state: String? }
+        do {
+            return try await get("/api/v1/ops/\(id.uuidString.lowercased())", as: Op.self).state
+        } catch let e as APIError where e.status == 404 {
+            return nil
+        }
     }
 
     struct DeviceBody: Encodable {

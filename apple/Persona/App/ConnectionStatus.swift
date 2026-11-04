@@ -26,7 +26,9 @@ final class ConnectionStatus {
     }
 
     /// What the titles show: `phase` once it has lasted `delay`. Reconnecting after coming back to the app or
-    /// switching networks usually takes well under that, and the title would just flash.
+    /// switching networks usually takes well under that, and the title would just flash. A socket that dropped while
+    /// connected counts as connected for its grace (8 s, 30 s for a hub restart: LiveConnection.inGrace); when that
+    /// runs out the titles change at once.
     private(set) var shown: Phase = .online {
         didSet { if shown != oldValue { onShown?(shown) } }
     }
@@ -99,8 +101,12 @@ final class ConnectionStatus {
 
     /// The state the links are in right now, before the delay.
     var phase: Phase {
-        Self.phase(network: networkUp, links: lives().map { ($0.state, $0.stalled) }, catchingUp: catchingUp)
+        Self.phase(network: networkUp, links: lives().map { ($0.inGrace ? .connected : $0.state, $0.inGrace ? false : $0.stalled) },
+                   catchingUp: catchingUp)
     }
+
+    /// How long a phase must last before the titles show it: none after a drop's grace ran out (it waited already).
+    static func showDelay(graceOver: Bool) -> Duration { graceOver ? .zero : delay }
 
     static func phase(network: Bool, link: LiveConnection.State, stalled: Bool, catchingUp: Bool) -> Phase {
         if link == .idle { return .online } // not paired, or in the background (the socket is closed on purpose)
@@ -140,9 +146,16 @@ final class ConnectionStatus {
             if shown != now { shown = now }
             return
         }
+        let wait = Self.showDelay(graceOver: lives().contains { $0.graceOver })
+        if wait == .zero {
+            due?.cancel()
+            due = nil
+            shown = now
+            return
+        }
         guard due == nil else { return }
         due = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: Self.delay)
+            try? await Task.sleep(for: wait)
             guard let self, !Task.isCancelled else { return }
             self.due = nil
             let p = self.phase

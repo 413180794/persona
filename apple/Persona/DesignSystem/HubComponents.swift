@@ -68,7 +68,8 @@ struct HubStatusDot: View {
     }
 
     private var color: Color {
-        switch live.state {
+        if live.inGrace { return Theme.positive } // dropped a moment ago and coming back (a hub restart): nothing to say
+        return switch live.state {
         case .connected: live.stalled ? Theme.caution : Theme.positive
         case .connecting: Theme.caution
         case .idle, .failed: Color.secondary

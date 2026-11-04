@@ -49,7 +49,7 @@ struct SettingsView: View {
                                     Text(model.config?.url.absoluteString ?? "").font(Theme.Font.code).foregroundStyle(.secondary).lineLimit(1)
                                 }
                                 HStack(spacing: Theme.Space.sm) {
-                                    Circle().fill(model.live.state == .connected ? Theme.positive : Theme.caution).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
+                                    Circle().fill(model.live.looksConnected ? Theme.positive : Theme.caution).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
                                     Text(linkState).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                                 }
                             }
@@ -247,7 +247,7 @@ struct SettingsView: View {
 
     /// The header's line about the link: connected (and how, when it goes through the hub's SSH tunnel), or why not.
     private var linkState: String {
-        guard model.live.state == .connected else { return model.connection.phase == .online ? "未连接" : model.connection.phase.title }
+        guard model.live.looksConnected else { return model.connection.phase == .online ? "未连接" : model.connection.phase.title }
         let tunneled = model.hub.flatMap { model.tunnel($0.group) }?.routed == true
         return tunneled ? "已连接 hub · 经 SSH 隧道" : "已连接 hub"
     }

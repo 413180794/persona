@@ -81,15 +81,25 @@ func shellDirQ(p string, q func(string) string) string {
 }
 
 // managedEnv is the environment a managed launcher sets: the gateway, its key, the model for every tier, the
-// subagent / custom model entries when it has them, and Artifacts off (artifactsOff).
+// subagent / custom model entries when it has them, and Artifacts off (artifactsOff). The key goes in
+// ANTHROPIC_AUTH_TOKEN (sent as Bearer) for a gateway that takes only that, else in ANTHROPIC_API_KEY (x-api-key), and
+// the other one is set empty. Claude Code fills a variable the launcher does not set from the env of
+// ~/.claude/settings.json, so a token kept there for another gateway would otherwise go out as a second credential
+// next to this key, and a gateway that sees two (relay-history) answers 401. An empty one stops that. Without a key (none
+// stored, or the hub could not open it) neither is set, as before: Claude uses whatever settings or sign-in it has
+// rather than nothing.
 func managedEnv(l proto.ManagedLauncher) []string {
 	small := l.SmallModel
 	if small == "" {
 		small = l.Model
 	}
 	env := []string{"ANTHROPIC_BASE_URL=" + l.BaseURL}
-	if l.APIKey != "" {
-		env = append(env, "ANTHROPIC_API_KEY="+l.APIKey)
+	switch {
+	case l.APIKey == "":
+	case l.BearerAuth():
+		env = append(env, "ANTHROPIC_AUTH_TOKEN="+l.APIKey, "ANTHROPIC_API_KEY=")
+	default:
+		env = append(env, "ANTHROPIC_API_KEY="+l.APIKey, "ANTHROPIC_AUTH_TOKEN=")
 	}
 	if l.Model != "" {
 		for _, k := range []string{"ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL",

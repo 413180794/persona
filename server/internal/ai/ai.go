@@ -30,6 +30,9 @@ type Config struct {
 	Model  string `json:"model"`
 	// ReasoningEffort is sent as reasoning.effort to the Responses API when set (e.g. "low").
 	ReasoningEffort string `json:"reasoning_effort"`
+	// Bearer sends the key to the Messages API as Authorization: Bearer instead of x-api-key, for gateways that take
+	// only that (what Claude Code does with ANTHROPIC_AUTH_TOKEN). The Responses API always uses Bearer.
+	Bearer bool `json:"bearer,omitempty"`
 }
 
 // Over is c with its empty fields taken from base: a task that uses another model names only what differs.
@@ -37,8 +40,8 @@ func (c Config) Over(base Config) Config {
 	if c.API == "" {
 		c.API = base.API
 	}
-	if c.BaseURL == "" {
-		c.BaseURL = base.BaseURL
+	if c.BaseURL == "" { // the gateway, and how it takes the key
+		c.BaseURL, c.Bearer = base.BaseURL, base.Bearer
 	}
 	if c.APIKeyFile == "" {
 		c.APIKeyFile = base.APIKeyFile
@@ -153,7 +156,11 @@ func (c *Client) messages(ctx context.Context, key, system, user string, maxToke
 		return "", false, false, err
 	}
 	req.Header.Set("content-type", "application/json")
-	req.Header.Set("x-api-key", key)
+	if c.cfg.Bearer {
+		req.Header.Set("authorization", "Bearer "+key)
+	} else {
+		req.Header.Set("x-api-key", key)
+	}
 	req.Header.Set("anthropic-version", "2023-06-01")
 	resp, err := c.http.Do(req)
 	if err != nil {

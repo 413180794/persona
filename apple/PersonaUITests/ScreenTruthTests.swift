@@ -312,14 +312,14 @@ final class ScreenTruthTests: XCTestCase {
         }
     }
 
-    // Stale is visible: the hub out of reach, the title says so within 3 s (it waits 1.5 s, a reconnect usually takes
-    // less), and says so until the link is back: within 25 s of the hub coming back (the reconnect backs off, 1 s
-    // doubling up to 20 s: after 8 s down the next try is at about 15 s).
+    // Stale is visible: the hub out of reach, the title says so right after the drop's grace (8 s: a hub restart or a
+    // short drop shows nothing, docs/hub-restart.md), and says so until the link is back: within 25 s of the hub coming
+    // back (the reconnect backs off, 1 s doubling up to 20 s: after 14 s down the next try is at about 15–23 s).
     func testStaleShows() {
         launch()
         struct Conn: Decodable { var shown: String }
-        mock("down?s=8")
-        eventually("the title shows the link is down", within: 3) {
+        mock("down?s=14")
+        eventually("the title shows the link is down", within: 11) {
             let s = app.probe("connection", as: Conn.self)?.shown ?? "?"
             return s == "online" ? ["shown: online"] : []
         }

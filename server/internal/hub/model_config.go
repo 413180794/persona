@@ -339,7 +339,7 @@ func (h *Hub) apiConfig(ctx context.Context, b ModelBinding) (ai.Config, error) 
 				if s.Kind != "api" && s.API == "responses" {
 					return c, errors.New("启动器不能作为 Responses API")
 				}
-				c = ai.Config{API: s.API, BaseURL: s.BaseURL, Model: s.Model}
+				c = ai.Config{API: s.API, BaseURL: s.BaseURL, Model: s.Model, Bearer: s.BearerAuth()}
 				key, err := h.openKey(s.KeySealed)
 				if err != nil {
 					return c, errors.New("供应商密钥解密失败")

@@ -295,6 +295,7 @@ struct ModelLauncherDetailView: View {
                         if let d = l.customModelDescription, !d.isEmpty { LabeledContent("自定义模型说明", value: d) }
                     }
                     if l.managed { LabeledContent("API Key", value: l.hasKey == true ? "已设置（不显示）" : "未设置") }
+                    if l.managed, l.api != "responses" { LabeledContent("认证方式", value: l.bearerAuth ? "Bearer" : "x-api-key") }
                     if let a = l.args, !a.isEmpty { mono("额外参数", a.joined(separator: " ")) }
                     if let ids = l.machines, !ids.isEmpty {
                         LabeledContent("电脑", value: ids.map { model.machine(model.hubRef($0))?.name ?? $0 }.joined(separator: "、"))
@@ -480,6 +481,7 @@ struct LauncherEditor: View {
     @State private var args = ""
     @State private var kind = "launcher"
     @State private var protocolName = "messages"
+    @State private var auth = "api_key"
     @State private var saving = false
     @State private var error: String?
     /// The fields as the sheet opened: 取消 asks first once they differ (Mac).
@@ -490,10 +492,12 @@ struct LauncherEditor: View {
 
     private var isNew: Bool { existing == nil }
     private var usesPreset: Bool { isNew && fromPlugin && !presets.presets.isEmpty }
+    /// The Responses API always takes the key as Bearer: nothing to choose.
+    private var usesResponses: Bool { kind == "api" && protocolName == "responses" }
     /// What was typed in either form (a preset's model is filled in as it loads, so it does not count).
     private var fields: [String] {
         [name, baseURL, apiKey, modelName, smallModel, subagentModel, customModel, customModelName, customModelDescription, args, kind,
-         protocolName, presets.name, presets.apiKey]
+         protocolName, auth, presets.name, presets.apiKey]
     }
 
     var body: some View {
@@ -547,6 +551,7 @@ struct LauncherEditor: View {
                 args = (e.args ?? []).joined(separator: " ")
                 kind = e.kind ?? "launcher"
                 protocolName = e.api ?? "messages"
+                auth = e.bearerAuth ? "bearer" : "api_key"
             }
         }
         #if os(macOS)
@@ -581,7 +586,16 @@ struct LauncherEditor: View {
                 .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
             SecretField(isNew || existing?.hasKey != true ? "API Key" : "API Key（不改就留空）", filled: "已填写，点保存",
                         text: $apiKey, identifier: "launcher.editor.key")
-        } header: { Text("网关") } footer: { Text("填写所选协议兼容的地址。Key 加密存在 hub，不会返回到客户端。") }
+            if !usesResponses {
+                Picker("认证方式", selection: $auth) {
+                    Text("x-api-key").tag("api_key")
+                    Text("Bearer").tag("bearer")
+                }
+            }
+        } header: { Text("网关") } footer: {
+            Text(usesResponses ? "填写所选协议兼容的地址。Key 加密存在 hub，不会返回到客户端。"
+                : "填写所选协议兼容的地址。Key 加密存在 hub，不会返回到客户端。网关只认 Authorization: Bearer（ANTHROPIC_AUTH_TOKEN）时选 Bearer。")
+        }
         Section {
             TextField("默认模型", text: $modelName).textInputAutocapitalization(.never).autocorrectionDisabled()
             if kind == "launcher" {
@@ -633,7 +647,7 @@ struct LauncherEditor: View {
                                   customModelDescription: kind == "api" ? "" : customModelDescription.trimmingCharacters(in: .whitespaces),
                                   args: kind == "api" ? [] : args.split(whereSeparator: \.isWhitespace).map(String.init),
                                   apiKey: apiKey.isEmpty ? nil : apiKey, kind: kind,
-                                  api: kind == "api" ? protocolName : "messages")
+                                  api: kind == "api" ? protocolName : "messages", auth: usesResponses ? "api_key" : auth)
         do {
             try await api.saveLauncher(input, isNew: isNew)
             model.launchersChanged()

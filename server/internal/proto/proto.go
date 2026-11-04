@@ -482,7 +482,13 @@ type ManagedLauncher struct {
 	// Args go before the caller's (e.g. --dangerously-skip-permissions).
 	Args   []string `json:"args,omitempty"`
 	APIKey string   `json:"api_key,omitempty"`
+	// Auth is how the key goes to the gateway: "api_key" (x-api-key, ANTHROPIC_API_KEY; the default) or "bearer"
+	// (Authorization: Bearer, ANTHROPIC_AUTH_TOKEN), for gateways that take only that.
+	Auth string `json:"auth,omitempty"`
 }
+
+// BearerAuth: the launcher's key goes as Authorization: Bearer (ANTHROPIC_AUTH_TOKEN) rather than x-api-key.
+func (l ManagedLauncher) BearerAuth() bool { return l.Auth == "bearer" }
 
 type DirEntry struct {
 	Name  string `json:"name"`

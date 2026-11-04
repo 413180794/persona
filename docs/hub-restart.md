@@ -216,6 +216,13 @@ hub 记住每个会话最后一条 `session.delta`（空串清掉，机器真正
 
 改动前的对照（同一台机器 2026-11-04 19:30 那次部署的 journal）：端口关约 1.3 s，期间连接被拒绝；本机 node 和它的助手进程被杀；两台 Mac 2.4 s、8 s 后才连回，期间显示离线。
 
-## iOS / Mac
+## iOS / Mac（#1634）
 
-LiveConnection 的改动单独派：#1634（续传序号、静默重连阈值、写操作排队和幂等重放，以及 hub 已经提供的协议）。
+规则和网页、安卓相同，Apple 端的实现（iOS 和 Mac 共用）：
+
+- 纯逻辑在 `apple/Shared/Reconnect.swift`：`LinkDrop`（宽限 8 s / 30 s、重连节奏）、`EventCursor`（续传序号）、`FrameMeta`（解码时顺带读 `event_seq`、`event_stream`、`resumed`、`hub_restarting`）、
+  `ReconnectPlan`（`resumed` 时重连后不重拉）、`OpRetry`（同一个 op id 重试，最多 60 s，`Error.isGap` 判断是不是「请求可能没到 hub」）。
+- `LiveConnection` 记下断开（`drop`、`inGrace`、`graceOver`），宽限内 `ConnectionStatus` 把它当成连着；关闭码用 `URLSessionWebSocketTask.closeCode`（自己因为心跳超时关的不算 1001）。
+- `AppModel.didConnect` 在 `resumed` 时只注册手机和重新订阅；发消息（`SendSafety.sendPending`）和回答（`AppModel.resolve`）带 op id。界面上的行为见 `docs/ios.md`「连接状态」。
+- 验证：`PersonaTests/HubRestartTests`（含一个 Network.framework 的回环 WebSocket：`hub_restarting` + 1001 → 宽限、不到 1 秒重连、`resumed`）；
+  mock hub 的 `MOCK_RESTART=1`（`GET /mock/restart?gap_ms=…&missed=…&drop_post=1` 模拟一次计划内重启，`docs/testing.md`）配模拟器看界面和请求。

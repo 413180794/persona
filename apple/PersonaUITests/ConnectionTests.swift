@@ -18,6 +18,11 @@ final class ConnectionTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair] + args
         app.launchPinned()
+        // A fresh install asks for notifications first, over the page (these tests only wait, so no interruption
+        // monitor would ever fire). A short look: the tests time the hub's outage against the app's launch.
+        let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons
+            .matching(NSPredicate(format: "label IN %@", ["允许", "Allow"])).firstMatch
+        if allow.waitForExistence(timeout: 1) { allow.tap() }
         return app
     }
 
@@ -48,20 +53,22 @@ final class ConnectionTests: XCTestCase {
         add(s)
     }
 
-    /// The hub goes away for a while: 连接中… in the title, then the title comes back on its own.
+    /// The hub goes away for a while: nothing for the drop's grace (8 s, docs/hub-restart.md), then 连接中… in the
+    /// title, then the title comes back on its own.
     @MainActor func testOutageShowsConnectingThenRecovers() throws {
         let hub = try hub()
         let app = launch(hub, ["-tab", "dev", "-dev.openChat", ""]) // not the chat an earlier test left open
         XCTAssertTrue(app.buttons["新建会话"].waitForExistence(timeout: 15))
         sleep(3)
         XCTAssertFalse(status(app).exists, "a status while connected")
-        _ = mock(hub, "/mock/down?s=10")
+        _ = mock(hub, "/mock/down?s=16")
+        XCTAssertFalse(shows(status(app), within: 6), "a status within the drop's grace")
         XCTAssertTrue(status(app).waitForExistence(timeout: 6), "no 连接中… while the hub is down:\n\(app.debugDescription)")
         XCTAssertTrue(status(app).label.hasPrefix("连接中…"), status(app).label)
         shot("connecting")
         let gone = NSPredicate(format: "exists == false")
         expectation(for: gone, evaluatedWith: status(app))
-        waitForExpectations(timeout: 30) // back up after 10 s, plus the backoff
+        waitForExpectations(timeout: 30) // back up after 16 s, plus the backoff
     }
 
     /// A drop shorter than the delay (coming back to the app, switching networks) shows nothing at all.
@@ -74,7 +81,8 @@ final class ConnectionTests: XCTestCase {
         XCTAssertFalse(shows(status(app), within: 4), "the title flashed for a reconnect that took about a second")
     }
 
-    /// Written while the hub is down: the bubble says 连上后自动发送, and the message reaches the hub once it is back.
+    /// Written while the hub is down: once the drop's grace is over the bubble says 连上后自动发送 (within it the send
+    /// keeps trying), and the message reaches the hub once it is back.
     @MainActor func testMessageWaitsForTheHub() throws {
         let hub = try hub()
         let text = "断网时写的消息 \(Int.random(in: 1000...9999))"
@@ -96,7 +104,7 @@ final class ConnectionTests: XCTestCase {
         let text = "几次断网的消息 \(Int.random(in: 1000...9999))"
         let app = launch(hub, ["-openSession", "macbook/" + widget, "-openSendMessage", text, "-openSendDelay", "9"])
         sleep(4)
-        _ = mock(hub, "/mock/down?s=8")
+        _ = mock(hub, "/mock/down?s=14") // past the drop's grace (8 s)
         XCTAssertTrue(app.staticTexts["连上后自动发送"].waitForExistence(timeout: 12), "no waiting bubble")
         _ = mock(hub, "/mock/down?s=6") // longer down while it waits
         assertArrivesOnce(hub, text, settle: 0)
@@ -114,7 +122,7 @@ final class ConnectionTests: XCTestCase {
         let text = "进后台前写的消息 \(Int.random(in: 1000...9999))"
         let app = launch(hub, ["-openSession", "macbook/" + widget, "-openSendMessage", text, "-openSendDelay", "9"])
         sleep(4)
-        _ = mock(hub, "/mock/down?s=10")
+        _ = mock(hub, "/mock/down?s=16") // past the drop's grace (8 s)
         XCTAssertTrue(app.staticTexts["连上后自动发送"].waitForExistence(timeout: 12), "no waiting bubble")
         XCUIDevice.shared.press(.home)
         sleep(12) // the hub is back while the app is away

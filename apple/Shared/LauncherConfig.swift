@@ -17,6 +17,8 @@ nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
     var hasKey: Bool?
     var kind: String?
     var api: String?
+    /// Managed: how the key goes to the gateway, `api_key` (x-api-key, the default) or `bearer`.
+    var auth: String?
     var machines: [String]?
     var hidden: Bool?
     var definitions: [String: String]?
@@ -26,11 +28,13 @@ nonisolated struct LauncherView: Codable, Identifiable, Hashable, Sendable {
     var managed: Bool { source == "jarvis" }
 
     enum CodingKeys: String, CodingKey {
-        case name, source, model, args, machines, hidden, definitions, details, kind, api
+        case name, source, model, args, machines, hidden, definitions, details, kind, api, auth
         case baseURL = "base_url", smallModel = "small_model", hasKey = "has_key"
         case subagentModel = "subagent_model", customModel = "custom_model"
         case customModelName = "custom_model_name", customModelDescription = "custom_model_description"
     }
+
+    var bearerAuth: Bool { auth == "bearer" }
 }
 
 /// One model a launcher offers in its /model menu (the chat's model picker, node/launcher_models.go).
@@ -104,8 +108,9 @@ nonisolated struct LauncherInput: Encodable, Sendable {
     var api: String? = nil
     /// A plugin's provider it is added from (`<plugin>/<provider>`): the hub fills in what is left empty.
     var preset: String? = nil
+    var auth: String? = nil
     enum CodingKeys: String, CodingKey {
-        case name, model, args, kind, api, preset
+        case name, model, args, kind, api, preset, auth
         case baseURL = "base_url", smallModel = "small_model", apiKey = "api_key"
         case subagentModel = "subagent_model", customModel = "custom_model"
         case customModelName = "custom_model_name", customModelDescription = "custom_model_description"

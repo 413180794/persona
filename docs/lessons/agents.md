@@ -22,6 +22,13 @@
   后者要再传一个 `--settings`（只认最后一个，见上条）。`jarvisd launch` 现在启动前把 Key 记成已允许（`docs/launchers.md`「Persona 管理的怎么跑」）。
   写之前拿 Claude 自己的配置锁（`<配置路径>.lock` 目录，10 秒算过期），否则和正在运行的 claude 同时写会丢一边的改动。
   Claude Code 2.1.317 里有 `storageV5` 配置后端（默认没开）；它变成默认后全局配置可能不再读 `.claude.json`，升级 Claude Code 时要重新确认这条还有效。
+- 启动器接 relay-history 报 401 时别先怀疑头：relay-history 从第一版起 `Authorization: Bearer` 和 `x-api-key` 都认（`internal/middleware/auth.go` 的 `credentials`）。
+  看 `POST /v1/messages` 的报错分辨 Claude 实际发了什么（2026-11-04 用假 Key 实测）：`invalid x-api-key` 是只带了 `x-api-key` 但 Key 不对；
+  `invalid or missing API key` 是请求里有 `Authorization` 头（或什么都没带）；`API key has expired` 是过期。两个凭据一起来时 relay-history 要求恰好一个对得上。
+- 托管启动器只设 `ANTHROPIC_API_KEY`，但 hub 机器的 `~/.claude/settings.json` 的 `env` 里有 `ANTHROPIC_AUTH_TOKEN`（给别的网关的兜底）：
+  Claude Code 用 settings 的 `env` 补环境里**没有**的变量，于是 `Authorization: Bearer <那个 Token>` 和 `x-api-key` 一起发，relay-history 回 401
+  `invalid or missing API key`（2026-11-04，误判成过「网关只认 Bearer」）。环境里已有的变量（包括空值）不会被 settings 盖掉，`jarvisd launch` 现在把另一个设成空。
+  复现：假网关记请求头，`CLAUDE_CONFIG_DIR=<临时目录>` 放一份带 `env` 的 `settings.json`，跑 `claude -p`。
 - 用户自己起的 claude（启动器、profile 目录）没有 Persona 的 hooks，AskUserQuestion 只能靠读屏幕的卡片答。读屏卡得认得 2.1.316 的多选：`[ ]`/`[✔]` 是状态不是文字，数字只勾不交，要挪到 Submit 行按 enter 再在确认页按 1；光标在自由回答行上按数字会写进去，在 Submit 行上按数字没反应；几个键一次发会丢，一次一个（`docs/claude-integration.md`「多选提问的屏幕卡」）。
 - AskUserQuestion 的选项带预览时，数字只挪光标，要再按 enter 才选；读屏卡只按数字会「答了没生效」。按键后要看屏幕确认问题真的往下走了（`docs/claude-integration.md`「带预览的提问」）。
 - 屏幕卡因为 Agent 不再 blocked 撤掉时，数据库里也要记成结束（cancelled），不然历史里一直挂着 pending，直到 hub 重启。

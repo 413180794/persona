@@ -63,7 +63,14 @@ func TestLauncherInputCheck(t *testing.T) {
 	if err := ok.check(); err != nil {
 		t.Fatal(err)
 	}
+	for _, auth := range []string{"api_key", "bearer"} {
+		ok.Auth = auth
+		if err := ok.check(); err != nil {
+			t.Fatalf("auth %s: %v", auth, err)
+		}
+	}
 	for _, bad := range []launcherInput{
+		{Name: "x", BaseURL: "https://gw.example.com", Model: "m", Auth: "basic"},
 		{Name: "claude", BaseURL: "https://gw.example.com", Model: "m"},
 		{Name: "a b", BaseURL: "https://gw.example.com", Model: "m"},
 		{Name: "x", BaseURL: "gw.example.com", Model: "m"},

@@ -26,19 +26,26 @@ extension AppModel {
         guard session.canSend else { return .failed }
         guard msg.mayHaveArrived != true else { return .failed }
         guard let api = api(key.group) else { return .failed }
+        let socket = socket(key.group)
         do {
-            try await api.send(key, text: msg.text, images: msg.images, launcher: assistantLaunchers[key],
-                               model: assistantModels[key], clientMsgID: msg.id.uuidString, clearDraft: clearDraft)
+            // The message's id is its op id too (docs/protocol.md「操作回执」): however often it arrives, the hub
+            // types it once. Through a short drop (a hub restart) it keeps trying with that id instead of going to
+            // the outbox's clock; once the drop's grace is over the outbox takes it (flushOutbox).
+            let launcher = assistantLaunchers[key], model = assistantModels[key]
+            try await OpRetry.untilDelivered(keepTrying: { socket?.takesWrites == true }) {
+                try await api.send(key, text: msg.text, images: msg.images, launcher: launcher, model: model,
+                                   clientMsgID: msg.id.uuidString, clearDraft: clearDraft, opID: msg.id)
+            }
             return .sent
         } catch let e as APIError where e.code == "input_draft" {
             Haptics.attention()
             sendRefusal = SendRefusal(key: key, messageID: msg.id, draft: e.fields["draft"] ?? "", clearable: e.fields["clearable"])
             return .failed
-        } catch let e as APIError where e.fields["delivered"] == "unknown" {
+        } catch let e as APIError where e.fields["delivered"] == "unknown" || e.code == OpReceipt.unknownCode {
             toast = Toast("可能已经送到电脑上了：先看看对话里有没有，再决定要不要重发", style: .error)
             if let i = chat(key).pending.firstIndex(where: { $0.id == msg.id }) { chat(key).pending[i].mayHaveArrived = true }
             return .failed
-        } catch where error.isOffline || error.isTimeout {
+        } catch where error.isOffline || error.isTimeout || error.isGap {
             return .waiting
         } catch {
             show(error)

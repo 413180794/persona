@@ -8,7 +8,7 @@ node 把名字敲进 herdr 窗格的交互式 shell 里跑，函数和 alias 都
 
 | 来源 | 在哪定义 | 能做什么 |
 | --- | --- | --- |
-| **Persona 管理** | App 里新增：名字、Base URL、API Key、模型、小模型、子 Agent 模型、自定义模型项、额外参数 | 改、删 |
+| **Persona 管理** | App 里新增：名字、Base URL、API Key、认证方式、模型、小模型、子 Agent 模型、自定义模型项、额外参数 | 改、删 |
 | **~/.zshrc** | 各台电脑 `~/.zshrc` 里的函数，打开这页时同步（node 缓存 1 分钟） | 看每台电脑上的函数定义（Key / Token 打码）、在 Persona 里隐藏 / 恢复 |
 
 - 范围是**全局一份**：Persona 管理的每台电脑都能用；~/.zshrc 的标出来自哪几台（同名的合成一行）。离线电脑的列表用上次同步的（settings `launchers.zshrc`）。
@@ -46,7 +46,7 @@ node 在登录 shell（`zsh -ic`，先加载 `~/.zshrc`）里一次取两样，�
 - 存在 settings `launchers.managed`；API Key 用 `~/.persona/secret.key`（和邮箱凭据同一把）AES-GCM 加密，**接口从不返回 Key**。
 - hub 在 node 连上时、每次改动后把完整设置（含 Key）推给所有 node（`launchers.managed`），node 只放内存。
 - 启动时 node 敲进 herdr 窗格（或无头助手执行）的是 `jarvisd launch <名字> …`：这个子命令经本机 node.sock 取设置
-  （`launcher.env`），去掉 shell 里已有的 `ANTHROPIC_*` 等变量，设上 `ANTHROPIC_BASE_URL`、`ANTHROPIC_API_KEY`、各档模型
+  （`launcher.env`），去掉 shell 里已有的 `ANTHROPIC_*` 等变量，设上 `ANTHROPIC_BASE_URL`、Key（见下「认证方式」）、各档模型
   （`ANTHROPIC_MODEL`、`ANTHROPIC_DEFAULT_*_MODEL`；小模型给 haiku / small fast；子 Agent 模型给 `CLAUDE_CODE_SUBAGENT_MODEL`，留空时跟主模型；
   自定义模型项给 `ANTHROPIC_CUSTOM_MODEL_OPTION` 和它的名字 / 说明），再 exec claude。
   Key 不进终端、不在命令行上。终端里也能直接敲 `jarvisd launch <名字>`。
@@ -57,6 +57,14 @@ node 在登录 shell（`zsh -ic`，先加载 `~/.zshrc`）里一次取两样，�
   settings 文件里还写 `"enableArtifact": false`（Claude Code 认 `--settings` 里的关）。Artifacts 是发布到 claude.ai 的，走网关 + API Key 本来就用不了；
   Claude Code 从 2.1.26x 起默认打开它，交互式会话会在 system 消息里带上 Artifacts 的技能说明，有的网关在能力检查里直接拒
   （`400 request is not representable on this edge: Claude Code Artifacts are enabled`），herdr 里新开的 Agent 第一轮就失败，`claude -p` 不受影响。
+- **认证方式**（`auth`，2026-11-04）：Key 放哪个变量。`api_key`（默认，已有的启动器都是它）放 `ANTHROPIC_API_KEY`，Claude Code 发
+  `x-api-key`，官方 API 只认这个；`bearer` 放 `ANTHROPIC_AUTH_TOKEN`，发 `Authorization: Bearer`，给只认 Bearer 的兼容网关用
+  （relay-history 两种都认，不用改）。hub 拿启动器直接调 Messages API（分拣、翻译等用途）也按它发头；Responses 协议本来就用 Bearer，不用选。
+  改启动器时请求里没带 `auth`（还没升级的 App）就保留原来的值。
+- **另一个认证变量设成空**：Claude Code 把各处 settings 的 `env` 合在一起，启动器**没设**的变量照样从用户的 `~/.claude/settings.json` 来。
+  那里放着别的网关的 `ANTHROPIC_AUTH_TOKEN` 时，Claude 会把它当 `Authorization: Bearer` 和启动器的 `x-api-key` 一起发；relay-history 收到两个凭据，
+  除非恰好一个对得上，否则 401 `invalid or missing API key`。所以有 Key 的启动器总把没用的那个（`ANTHROPIC_AUTH_TOKEN` 或 `ANTHROPIC_API_KEY`）
+  设成空，环境和上面的 `--settings` 里都有；设成空的变量不会再被用户的 settings 补上（2026-11-04 用 Claude Code 2.1.308 实测）。没有 Key 时两个都不设，照旧。
 - 交互模式的 Claude Code 第一次见到 `ANTHROPIC_API_KEY` 里的 Key 会问「Do you want to use this API key?」，默认选中「No (recommended)」，
   回车（或手机上的对话框卡片点了默认项）就把这个 Key 记成拒绝，之后这个启动器起的会话都没有凭据。Key 是用户在 设置 › 模型 里自己填的，
   所以 `jarvisd launch` 在 exec claude 前把它记成已允许，和在对话框里选 Yes 一样：Key 的最后 20 个字符（Claude Code 用它认 Key）写进
@@ -111,7 +119,7 @@ Persona 管理的左滑是「删除」，连 hub 里存的 Key 一起删、不�
 | `GET /api/v1/launchers` | 全部（先同步各台电脑的 ~/.zshrc） |
 | `GET /api/v1/launchers/{name}` | 一个；~/.zshrc 的带 `definitions`（每台电脑的函数，打码）和 `details`（跑一遍得到的参数） |
 | `POST /api/v1/launchers/{name}/check?machine=` | 测试可用性 |
-| `POST /api/v1/launchers` | 新增 `{name, base_url, model, small_model?, subagent_model?, custom_model?, custom_model_name?, custom_model_description?, args?, api_key, preset?}`；带 `preset` 时没填的从预设补上（见下面「从插件添加」） |
+| `POST /api/v1/launchers` | 新增 `{name, base_url, model, small_model?, subagent_model?, custom_model?, custom_model_name?, custom_model_description?, args?, api_key, auth?, preset?}`；`auth` 是 `api_key`（默认）或 `bearer`；带 `preset` 时没填的从预设补上（见下面「从插件添加」） |
 | `GET /api/v1/launchers/presets` | 插件提供的供应商预设（`docs/plugins.md`「模型供应商」）；旧 hub 回 404，App 当成没有 |
 | `PUT /api/v1/launchers/{name}` | 改（`api_key` 不填就不变）；只对 Persona 管理的 |
 | `DELETE /api/v1/launchers/{name}` | Persona 管理的删除；~/.zshrc 的隐藏 |

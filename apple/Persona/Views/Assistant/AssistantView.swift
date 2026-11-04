@@ -441,9 +441,9 @@ struct AssistantWelcome: View {
                 }
                 #if os(macOS)
                 // What this chip shows is this device's own link to the hub: on the Mac, this Mac.
-                Chip(text: ConnectorText.device, symbol: model.live.state == .connected ? Theme.Icon.laptop : Theme.Icon.laptopOffline)
+                Chip(text: ConnectorText.device, symbol: model.live.looksConnected ? Theme.Icon.laptop : Theme.Icon.laptopOffline)
                 #else
-                Chip(text: "iPhone", symbol: model.live.state == .connected ? Theme.Icon.phone : "iphone.slash")
+                Chip(text: "iPhone", symbol: model.live.looksConnected ? Theme.Icon.phone : "iphone.slash")
                 #endif
             }
         }

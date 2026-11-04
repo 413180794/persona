@@ -46,6 +46,20 @@ func TestJSONCallsMessagesAPI(t *testing.T) {
 	}
 }
 
+func TestMessagesAPIWithBearer(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("authorization") != "Bearer k" || r.Header.Get("x-api-key") != "" {
+			t.Errorf("a bearer gateway gets only Authorization: %q, x-api-key %q", r.Header.Get("authorization"), r.Header.Get("x-api-key"))
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"content": []any{map[string]any{"type": "text", "text": "ok"}}})
+	}))
+	defer srv.Close()
+	text, err := New(Config{BaseURL: srv.URL, APIKey: "k", Model: "m", Bearer: true}).Complete(context.Background(), "sys", "user", 16)
+	if err != nil || text != "ok" {
+		t.Fatalf("text = %q, %v", text, err)
+	}
+}
+
 func TestJSONCallsResponsesAPI(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {

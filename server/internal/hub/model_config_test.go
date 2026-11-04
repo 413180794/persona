@@ -229,6 +229,54 @@ func TestAllAPIModelPurposesReachTheSelectedModel(t *testing.T) {
 	}
 }
 
+// A launcher for a gateway that takes only Bearer keeps that when added in the app, goes to the nodes with it, and the
+// hub's own Messages calls through it send Authorization: Bearer.
+func TestBearerLauncherSavedSentAndCalled(t *testing.T) {
+	h, mux := modelTestHub(t)
+	h.launcherRoutes(mux)
+	ctx := context.Background()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("authorization") != "Bearer private-test-key" || r.Header.Get("x-api-key") != "" {
+			t.Errorf("credential sent as authorization %q, x-api-key %q", r.Header.Get("authorization"), r.Header.Get("x-api-key"))
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"content": []any{map[string]any{"type": "text", "text": "ok"}}})
+	}))
+	defer srv.Close()
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest("POST", "/api/v1/launchers",
+		strings.NewReader(`{"name":"gw","base_url":"`+srv.URL+`","model":"m","api_key":"private-test-key","auth":"bearer"}`)))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"auth":"bearer"`) {
+		t.Fatalf("save: %d %s", rec.Code, rec.Body.String())
+	}
+	if managed := h.managedForNodes(ctx); len(managed) != 1 || !managed[0].BearerAuth() || managed[0].APIKey != "private-test-key" {
+		t.Fatalf("sent to nodes: %+v", managed)
+	}
+	config, err := h.apiConfig(ctx, ModelBinding{Provider: "launcher.gw"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text, err := ai.New(config).Complete(ctx, "", "hi", 10); err != nil || text != "ok" {
+		t.Fatalf("complete: %q %v", text, err)
+	}
+	// A change from an app that predates auth sends none: the launcher stays bearer. One that says api_key changes it.
+	for _, step := range []struct {
+		body   string
+		bearer bool
+	}{
+		{`{"base_url":"` + srv.URL + `","model":"m2"}`, true},
+		{`{"base_url":"` + srv.URL + `","model":"m2","auth":"api_key"}`, false},
+	} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest("PUT", "/api/v1/launchers/gw", strings.NewReader(step.body)))
+		if rec.Code != 200 {
+			t.Fatalf("update %s: %d %s", step.body, rec.Code, rec.Body.String())
+		}
+		if managed := h.managedForNodes(ctx); len(managed) != 1 || managed[0].BearerAuth() != step.bearer || managed[0].APIKey != "private-test-key" {
+			t.Fatalf("after %s: %+v", step.body, managed)
+		}
+	}
+}
+
 func TestModelProviderSwitchDoesNotInheritAnotherProvidersModel(t *testing.T) {
 	b := mergeModel(ModelBinding{Provider: "legacy.ai", Model: "old-model", Effort: "high"}, ModelBinding{Provider: "launcher.other"})
 	if b.Model != "" || b.Effort != "" {
