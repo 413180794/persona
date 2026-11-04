@@ -163,3 +163,11 @@ claude 刚出来 7 秒就判了超时；标签页留在那里，里面的 claude
 - herdr 按 `HERDR_PANE_ID` 把 SessionStart 记到窗格上，这个变量会被窗格外的进程继承：在 herdr 窗格里第一次起的 tmux 服务器（botmux 的
   `tmux new-session -d`）留着它，之后 botmux 起的每个 claude 都报进同一个窗格，main 标签显示成 botmux 的会话（2026-11-04）。
   herdr 报的会话要和窗格里 claude 进程自己的 `sessions/<pid>.json` 对一下（`docs/claude-integration.md`「会话 id 与 transcript」）。
+
+## 恢复外部开的会话别默认用裸 claude（2026-11-05，#411）
+
+- 很多机器上的 `claude` 本身没登录，平时都靠启动器（`~/.zshrc` 的函数、Persona 里加的启动器）设好网关和 key。
+  在 Persona 之外开、已经退出的会话，启动器推断不出（网关地址写法不同、`inferLauncher` 对不上）时，用裸 `claude --resume` 恢复出来的
+  只有「Not logged in · Please run /login」。用户在「新建 Agent」里选过能用的启动器，就该用它（hub 带给 node，node 只在前两种都没有时用）。
+- 恢复时沿用会话原来的模型（`sessionState.Model`）：只在用 hub 选的启动器时换成「新建 Agent」的模型。
+

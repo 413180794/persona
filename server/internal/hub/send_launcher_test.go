@@ -263,3 +263,75 @@ func TestSendDropsAModelTheLauncherNoLongerOffers(t *testing.T) {
 		})
 	}
 }
+
+// newAgentStore answers 新建 Agent's model setting with b.
+type newAgentStore struct {
+	*memStore
+	b ModelBinding
+}
+
+func (s *newAgentStore) Setting(_ context.Context, key string, out any) (bool, error) {
+	if key != modelKey("agent.new") {
+		return false, nil
+	}
+	raw, _ := json.Marshal(modelRecord{Binding: s.b})
+	return true, json.Unmarshal(raw, out)
+}
+
+// A message to a session that is not running and whose launcher nobody knows (started outside Jarvis) carries 新建
+// Agent's launcher and model, so the node resumes it on them instead of plain claude; a known launcher, a running
+// session and a launcher the app picked are left alone.
+func TestOfflineSessionWithoutLauncherResumesOnNewAgents(t *testing.T) {
+	h := newTestHub(t)
+	h.store = &newAgentStore{memStore: newMemStore(), b: ModelBinding{Provider: "launcher.work", Model: "m-1"}}
+	m := newMachine(h, MachineConfig{ID: "box", Name: "box"})
+	h.byID["box"] = m
+	h.machines = append(h.machines, m)
+	hubIn, nodeOut := io.Pipe()
+	nodeIn, hubOut := io.Pipe()
+	hubPeer, nodePeer := rpc.New("h", hubOut), rpc.New("n", nodeOut)
+	var mu sync.Mutex
+	var got map[string]any
+	nodePeer.OnRequest = func(_ context.Context, method string, params json.RawMessage) (any, error) {
+		if method == "session.send" {
+			mu.Lock()
+			got = map[string]any{}
+			_ = json.Unmarshal(params, &got)
+			mu.Unlock()
+		}
+		return map[string]any{"ok": true}, nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() { _ = hubPeer.Serve(ctx, hubIn) }()
+	go func() { _ = nodePeer.Serve(ctx, nodeIn) }()
+	m.mu.Lock()
+	m.peer, m.online = hubPeer, true
+	m.sessions = []proto.Session{
+		{SessionID: "gone-1", Status: proto.StatusOffline},
+		{SessionID: "known-2", Status: proto.StatusOffline, Launcher: "mine", StartedByJarvis: true},
+		{SessionID: "live-3", Status: proto.StatusIdle},
+		{SessionID: "codex-4", Status: proto.StatusOffline, Agent: "codex"},
+	}
+	m.mu.Unlock()
+
+	mux := h.routes()
+	for _, c := range []struct{ sid, body, launcher, model string }{
+		{"gone-1", `{"text":"hi"}`, "work", "m-1"},
+		{"gone-1", `{"text":"hi","launcher":"other"}`, "other", ""},
+		{"known-2", `{"text":"hi"}`, "", ""},
+		{"live-3", `{"text":"hi"}`, "", ""},
+		{"codex-4", `{"text":"hi"}`, "", ""},
+	} {
+		if code, out := call(t, mux, "POST", "/api/v1/sessions/box/"+c.sid+"/messages", h.cfg.Token, c.body); code != 200 {
+			t.Fatalf("%s: %d %v", c.sid, code, out)
+		}
+		mu.Lock()
+		l, _ := got["launcher"].(string)
+		model, _ := got["model"].(string)
+		mu.Unlock()
+		if l != c.launcher || model != c.model {
+			t.Errorf("%s %s: launcher %q model %q, want %q %q", c.sid, c.body, l, model, c.launcher, c.model)
+		}
+	}
+}

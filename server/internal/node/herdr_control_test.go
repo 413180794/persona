@@ -485,6 +485,41 @@ func TestHerdrSendResumesAnOfflineSession(t *testing.T) {
 	})
 }
 
+// A session that is not running and that nothing says which launcher it ran with (started outside Jarvis) is
+// resumed with the launcher the hub sends (新建 Agent's), not plain claude; the launcher Jarvis started it with
+// still wins over the hub's.
+func TestHerdrSendResumesWithTheHubsLauncher(t *testing.T) {
+	for _, tc := range []struct {
+		name, recorded, want string
+	}{
+		{"unknown", "", "work"},
+		{"recorded", "mine", "mine"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			n, f, home := herdrNode(t)
+			cwd := mkdir(t, filepath.Join(home, "proj"))
+			writeTranscript(t, home, cwd, sidA, time.Now(),
+				`{"type":"user","timestamp":"2026-01-01T00:00:00Z","cwd":"`+cwd+`","message":{"role":"user","content":"hello"}}`)
+			if tc.recorded != "" {
+				n.state.put(sidA, sessionState{Launcher: tc.recorded, Cwd: cwd})
+			}
+			f.reply("workspace.list", map[string]any{"workspaces": []any{}})
+			f.reply("workspace.create", map[string]any{"workspace": map[string]any{"workspace_id": "w7"},
+				"tab": map[string]any{"tab_id": "w7:t1"}, "root_pane": map[string]any{"pane_id": "w7:p1"}})
+			startHerdr(f, "w7:p1", proto.StatusIdle)
+			f.setScreens("w7:p1", screenFixture(t, "claude-2.1.312-empty-162.txt"), screenFixture(t, "claude-2.1.312-empty-162.ansi"))
+			if _, err := request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "go on", "launcher": "work"}); err != nil {
+				t.Fatal(err)
+			}
+			want := call("pane.send_input", map[string]any{"pane_id": "w7:p1", "keys": []string{"Enter"},
+				"text": startCmd(tc.want, "--resume "+sidA, jarvisDir(home))})
+			if !slices.Contains(f.trace(), want) {
+				t.Fatalf("resumed with another launcher than %q:\n%s", tc.want, strings.Join(f.trace(), "\n"))
+			}
+		})
+	}
+}
+
 // session.keys: pre_keys first (their own send_keys), then the text, then the keys; session.interrupt is esc.
 // A session herdr does not have is looked for in one snapshot and refused.
 func TestHerdrKeysWithPreKeys(t *testing.T) {

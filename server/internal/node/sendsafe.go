@@ -59,6 +59,30 @@ type sendOpts struct {
 	ClientMsgID string `json:"client_msg_id"`
 	// ClearDraft is the draft the user saw in a refusal and chose to clear: cleared only if the box still shows it.
 	ClearDraft string `json:"clear_draft"`
+	// Launcher (and its model) resumes a session that is not running when nothing on this machine says which
+	// launcher it ran with: the hub sends 新建 Agent's (hub/send.go). A recorded or inferred launcher wins.
+	Launcher         string `json:"launcher"`
+	Model            string `json:"model"`
+	Effort           string `json:"effort"`
+	ModelFingerprint string `json:"model_fingerprint"`
+}
+
+// resumeLauncher is the launcher an offline session is resumed with to take a message, and the model to run it
+// with: the one Jarvis started it with; else the one whose base URL and model its transcript shows (a session
+// started outside Jarvis); else the hub's pick, with its model; plain claude only when there is none of them. The
+// first two keep the model it ran with.
+func (n *Node) resumeLauncher(st sessionState, id string, opts sendOpts) (string, modelExecution) {
+	ran := modelExecution{Model: st.Model, Fingerprint: st.ModelFingerprint}
+	if st.Launcher != "" {
+		return st.Launcher, ran
+	}
+	if l := n.inferLauncher(id); l != "" {
+		return l, ran
+	}
+	if opts.Launcher != "" {
+		return opts.Launcher, modelExecution{Model: opts.Model, Effort: opts.Effort, UseEffort: opts.ModelFingerprint != "", Fingerprint: opts.ModelFingerprint}
+	}
+	return "claude", ran
 }
 
 // Delivery states a failed send reports: "none" when nothing reached the pane (safe to resend), "unknown" when the

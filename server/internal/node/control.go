@@ -531,12 +531,9 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 		if r := n.notRunningRefusal(ctx, id); r != nil {
 			return r
 		}
-		// Offline: resume with the launcher that started it (or plain claude) and then send.
+		// Offline: resume (with the launcher that started it, see resumeLauncher) and then send.
 		st, _ := n.state.get(id)
-		launcher := st.Launcher
-		if launcher == "" {
-			launcher = "claude"
-		}
+		launcher, execution := n.resumeLauncher(st, id, opts)
 		cwd := st.Cwd
 		if cwd == "" {
 			if p := n.transcriptPath(id); p != "" {
@@ -546,8 +543,7 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 			}
 		}
 		mode, effort := n.modesOf(id) // resume with what it ran with: modes, model, and the tab's name from its title
-		s, err := n.start(ctx, cwd, launcher, "", id, "", mode, effort, n.resumeTabName(id), "", "",
-			modelExecution{Model: st.Model, Fingerprint: st.ModelFingerprint})
+		s, err := n.start(ctx, cwd, launcher, "", id, "", mode, effort, n.resumeTabName(id), "", "", execution)
 		if err != nil {
 			return err
 		}

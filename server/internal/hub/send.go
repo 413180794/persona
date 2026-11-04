@@ -206,6 +206,8 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 		if text, ok := p["text"].(string); ok && h.isMainConversation(r.Context(), m, sid) {
 			p["text"] = h.handoffFor(r.Context(), sid, text) // a new main conversation started empty (assistant_main.go)
 		}
+	} else if l, _ := p["launcher"].(string); l == "" && known && resumesWithoutLauncher(s) {
+		h.applyResumeLauncher(r.Context(), sid, p)
 	}
 	// The send carries on when the phone stops waiting (backgrounded, network gone): it may be typing already, and
 	// its outcome is what the retry gets. Resuming an offline session can take a while (shell + claude startup).
@@ -381,4 +383,27 @@ func writeRaw(w http.ResponseWriter, status int, body []byte) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_, _ = w.Write(body)
+}
+
+// resumesWithoutLauncher: a message to this session resumes it (it is not running) and nothing on its machine says
+// which launcher it ran with (started outside Jarvis, no launcher matches its base URL and model). The node would
+// fall back to plain claude, which may not be signed in there (node/sendsafe.go resumeLauncher).
+func resumesWithoutLauncher(s proto.Session) bool {
+	return s.Status == proto.StatusOffline && s.Launcher == "" && !s.Assistant && s.SourceKind == "" &&
+		(s.Agent == "" || s.Agent == "claude")
+}
+
+// applyResumeLauncher adds 新建 Agent's launcher and model to the send: the ones the user picked for agents. When
+// the purpose cannot run as a launcher the send goes as before (plain claude).
+func (h *Hub) applyResumeLauncher(ctx context.Context, sid string, p map[string]any) {
+	q := map[string]any{}
+	if err := h.applyModel(ctx, "agent.new", q); err != nil {
+		h.logf("resume %s: 新建 Agent's launcher not applied: %v", sid, err)
+		return
+	}
+	for _, k := range []string{"launcher", "model", "effort", "model_fingerprint"} {
+		if v, ok := q[k]; ok {
+			p[k] = v
+		}
+	}
 }

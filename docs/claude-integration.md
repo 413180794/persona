@@ -11,6 +11,10 @@ node 的 `session.start`：
 2. `pane run <pane> "<启动器> --session-id <uuid> --mcp-config ~/.persona/mcp.json --plugin-dir ~/.persona/agent-plugin --plugin-dir ~/.persona/claude-hooks"`
    （本机 Claude Code ≥ 2.1；更老的或读不到版本时是 `<启动器> --session-id <uuid> --settings ~/.persona/claude-settings.json --mcp-config ~/.persona/mcp.json`，
    见下「Hooks」）。启动器是 `~/.zshrc` 里的函数（`cc_ds`、`cc_max`、`ccc`……），它们最后都 `claude … "$@"`，所以参数能透传。恢复会话用 `--resume <id>`。
+   给没在运行的会话发消息时先恢复它，用哪个启动器按这个顺序选（`node/sendsafe.go` 的 `resumeLauncher`，#411）：
+   Persona 启动它时记下的启动器 → 按 transcript 里的网关地址和模型推断出的（`inferLauncher`，外部开的会话）→
+   hub 带来的「新建 Agent」的启动器和模型（hub 只给没在运行、启动器不明的 Claude 会话带，`hub/send.go`）→ 裸 `claude`。
+   前两种沿用它原来的模型。以前推断不出就用裸 `claude`，平时靠启动器登录的机器上会话只显示「Not logged in」，消息发不出去。
 3. `waitReady`：每 500ms 读屏幕（`pane read --source visible`）+ `agent get`：
    - 屏幕上有信任目录对话框（"trust this folder"）→ 按光标位置算 `down`/`up` + `enter` 选「Yes, I trust」。
      **herdr 把这个对话框报成 idle**，所以不能只看 agent 状态；之前直接发首条消息，文字被当成对话框输入，选中了 "No, exit"，claude 直接退出。
