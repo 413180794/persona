@@ -166,6 +166,71 @@ func TestInputBoxVisible(t *testing.T) {
 	}
 }
 
+// A machine whose Claude Code has never run shows the first-run theme picker with the cursor already on the first
+// choice, so accepting it is one Enter (2.1.318, "Choose the text style that looks best with your terminal").
+func TestThemePickerAcceptKeys(t *testing.T) {
+	screen := strings.Join([]string{
+		"╭──────────────────────────────────────────────╮",
+		"│ Choose the text style that looks best with   │",
+		"│ your terminal                                │",
+		"│                                              │",
+		"│ ❯ 1. Dark mode                               │",
+		"│   2. Light mode                              │",
+		"│   3. Dark mode (colorblind-friendly)         │",
+		"│   4. Auto (match terminal)                   │",
+		"╰──────────────────────────────────────────────╯",
+	}, "\n")
+	if got := themePickerKeys(screen); !reflect.DeepEqual(got, []string{"enter"}) {
+		t.Fatalf("got %v", got)
+	}
+
+	// The cursor on a later choice walks back up to the first one.
+	onLight := strings.Join([]string{
+		"Choose the text style that looks best with your terminal",
+		"  1. Dark mode",
+		"❯ 2. Light mode",
+		"  3. Auto (match terminal)",
+	}, "\n")
+	if got := themePickerKeys(onLight); !reflect.DeepEqual(got, []string{"up", "enter"}) {
+		t.Fatalf("got %v", got)
+	}
+}
+
+// Anything that is not the theme picker produces no keys, so waitReady keeps polling instead of pressing Enter into
+// a prompt that would send it as the first message.
+func TestThemePickerNotShown(t *testing.T) {
+	for _, screen := range []string{
+		"",
+		"⏺ done\n\n> \n  ? for shortcuts",
+		"Do you trust this folder?",
+		"Choose the text style…", // a truncated render, before the question completes
+		"Select login method:",
+	} {
+		if got := themePickerKeys(screen); got != nil {
+			t.Fatalf("screen %q produced %v", screen, got)
+		}
+	}
+}
+
+// A first-run screen the node cannot complete by itself is named at once rather than after the whole timeout.
+func TestFirstRunScreenAwaitingThePerson(t *testing.T) {
+	login := strings.Join([]string{
+		"Welcome to Claude Code",
+		"Select login method:",
+		"❯ 1. Claude account with subscription",
+		"  2. Anthropic Console account",
+	}, "\n")
+	if got := firstRunScreen(login); !strings.Contains(got, "sign-in screen") {
+		t.Fatalf("login screen: %q", got)
+	}
+	if got := firstRunScreen("Choose the text style that looks best with your terminal"); got != "" {
+		t.Fatalf("the theme picker is handled, not reported: %q", got)
+	}
+	if got := firstRunScreen("⏺ done\n\n> \n  ? for shortcuts"); got != "" {
+		t.Fatalf("a ready screen is not a first-run screen: %q", got)
+	}
+}
+
 func TestToolSummary(t *testing.T) {
 	cases := []struct {
 		name  string

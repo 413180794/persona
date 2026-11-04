@@ -281,6 +281,17 @@ func (n *Node) waitReady(ctx context.Context, pane string, timeout time.Duration
 			time.Sleep(time.Second)
 			continue
 		}
+		// A machine that never ran claude stops at its first-run screens: the style picker is answered with its default,
+		// and a screen that waits for a person ends the wait now instead of at the timeout.
+		if keys := themePickerKeys(screen); keys != nil {
+			_ = n.sendKeys(ctx, pane, keys...)
+			readyStreak = 0
+			time.Sleep(time.Second)
+			continue
+		}
+		if reason := firstRunScreen(unframed(screen)); reason != "" {
+			return nil, errors.New(reason)
+		}
 		a, err := n.paneAgent(ctx, pane)
 		if err != nil || a.Agent != "claude" {
 			readyStreak = 0
@@ -339,6 +350,85 @@ func trustKeys(screen string) []string {
 		keys = append(keys, "up")
 	}
 	return append(keys, "enter")
+}
+
+// themePickerQuestion is the first-run style picker's prompt (Claude Code 2.1.318, "Choose the text style that looks
+// best with your terminal"). The node accepts its default so an agent can start on a machine where claude never ran.
+const themePickerQuestion = "Choose the text style that looks best with your terminal"
+
+// themePickerKeys returns the keys that accept the default theme on Claude Code's first-run style picker: the cursor
+// starts on the first choice, so walking it back to the top and pressing Enter selects it.
+func themePickerKeys(screen string) []string {
+	if !strings.Contains(unframed(screen), themePickerQuestion) {
+		return nil
+	}
+	cur, top := -1, -1
+	for i, l := range strings.Split(screen, "\n") {
+		if top < 0 && styleChoice(l) != "" {
+			top = i
+		}
+		if strings.Contains(l, "❯") {
+			cur = i
+		}
+	}
+	if top < 0 {
+		return nil
+	}
+	if cur < top {
+		cur = top // no cursor rendered yet: the first choice is already selected
+	}
+	var keys []string
+	for i := cur; i > top; i-- {
+		keys = append(keys, "up")
+	}
+	return append(keys, "enter")
+}
+
+// unframed is the screen with a box's borders and padding taken out and its wrapped lines joined, which is how the
+// picker's question spans two lines inside its frame.
+func unframed(screen string) string {
+	var b strings.Builder
+	for _, l := range strings.Split(screen, "\n") {
+		t := strings.TrimSpace(strings.Trim(strings.TrimSpace(l), "│|╭╮╰╯─"))
+		if t == "" {
+			continue
+		}
+		b.WriteString(t)
+		b.WriteByte(' ')
+	}
+	return b.String()
+}
+
+// styleChoice is the option text of one line of the picker, or "" when the line is not one. The picker may be drawn
+// inside a box, so the choice is found anywhere in the line.
+func styleChoice(line string) string {
+	t := strings.TrimSpace(strings.Trim(strings.TrimSpace(line), "│|"))
+	for i := 0; i < len(t); i++ {
+		if t[i] < '0' || t[i] > '9' {
+			continue
+		}
+		j := i
+		for j < len(t) && t[j] >= '0' && t[j] <= '9' {
+			j++
+		}
+		if j+1 < len(t) && t[j] == '.' && t[j+1] == ' ' {
+			return strings.TrimSpace(strings.TrimRight(t[j+1:], "│| "))
+		}
+		i = j
+	}
+	return ""
+}
+
+// firstRunScreen names the first-run screen the node cannot complete on its own, or "" when the screen is not one.
+// These wait for a person, so the caller reports them at once instead of polling until the timeout.
+func firstRunScreen(screen string) string {
+	switch {
+	case strings.Contains(screen, "Select login method:"):
+		return "this machine's Claude Code has not been set up yet: it is showing the sign-in screen, run claude once in a terminal there"
+	case strings.Contains(screen, "Welcome to Claude Code") && strings.Contains(screen, "Select"):
+		return "this machine's Claude Code has not been set up yet: it is showing its first-run screen, run claude once in a terminal there"
+	}
+	return ""
 }
 
 func lastLines(s string, n int) string {
