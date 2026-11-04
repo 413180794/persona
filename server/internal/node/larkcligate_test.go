@@ -150,10 +150,11 @@ func TestLarkCLIInComplexCommands(t *testing.T) {
 
 // The phone card shows what the write does and the command as typed.
 func TestLarkCLISummary(t *testing.T) {
-	v := classifyLark(`lark-cli im +messages-send --chat-id oc_x --text "下午三点开会" && lark-cli im messages delete --params '{"message_id":"om_x"}' && lark-cli wiki +move --node x`, "", "", fakeRisk)
+	v := classifyLark(`lark-cli im +messages-send --chat-id oc_x --text "下午三点开会" && lark-cli im messages delete --params '{"message_id":"om_x"}' && lark-cli wiki +move --node x && lark-cli im +messages-reply --as bot --message-id om_y --text 收到`, "", "", fakeRisk)
 	s := larkSummary(v.calls)
 	for _, want := range []string{"以你的身份在飞书上发消息\nlark-cli im +messages-send --chat-id oc_x --text 下午三点开会",
-		"撤回消息（lark-cli 标为高风险）", "写文档（lark-cli 没给出风险等级）\nlark-cli wiki +move --node x"} {
+		"撤回消息（lark-cli 标为高风险）", "写文档（lark-cli 没给出风险等级）\nlark-cli wiki +move --node x",
+		"以机器人身份在飞书上回复消息\nlark-cli im +messages-reply --as bot --message-id om_y --text 收到"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("summary misses %q:\n%s", want, s)
 		}

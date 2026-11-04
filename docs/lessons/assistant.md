@@ -38,3 +38,6 @@
 - `ssh_host` 是 hub 那台机器 `~/.ssh/config` 里的别名，只在 hub 本机有效：给跑在别的电脑上的东西（助手的说明）写 `ssh <别名>` 等于给了一条执行不了的命令。
 - npm 装的 lark-cli 是 `#!/usr/bin/env node` 的脚本，node 和它都在 nvm 这类目录里，systemd 起的 jarvisd 的 PATH 里没有（2026-11-03，#273）：
   按命令名直接执行会「找不到」，找到了也会因为 `env node` 失败。node 先用登录 shell `command -v` 找到绝对路径，执行时把它所在的目录放到 PATH 最前（`node/larkcligate.go`）；助手 PATH 上的包装同理。
+- lark-cli 以用户身份发消息要应用开了 `im:message.send_as_user`，默认的应用没有（2026-11-04，#273）：`auth login --domain all` 拿到两百多个权限也没有它，
+  `im +messages-send --as user` 回 `missing_scope`，提示的 `auth login --scope …` 也补不上（应用没开的权限用户授权不了）。机器人身份有 `im:message`，
+  所以助手发消息、回复一律 `--as bot`，手机卡片按 `--as` 写身份。这次是手机上点了同意之后才在飞书那边失败的：闸门只能确认「要不要做」，做不做得成要看权限。

@@ -430,7 +430,7 @@ func larkSummary(calls []larkCall) string {
 			}
 		}
 		if c.CLI {
-			b.WriteString("以你的身份在飞书上" + what + larkRiskNote(c) + "\n" + prettyBody("lark-cli "+shellJoin(c.Args)))
+			b.WriteString(larkCLIActor(c.Args) + "在飞书上" + what + larkRiskNote(c) + "\n" + prettyBody("lark-cli "+shellJoin(c.Args)))
 			continue
 		}
 		b.WriteString("以你的身份在飞书上" + what + "\n" + c.Method + " " + c.Path)

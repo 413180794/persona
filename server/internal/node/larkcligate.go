@@ -112,6 +112,15 @@ func larkRiskNote(c larkCall) string {
 	return ""
 }
 
+// larkCLIActor is who a lark-cli write acts as, for the card: the app's bot with --as bot, the user otherwise (the
+// app usually has no send_as_user scope, so the assistant sends messages as the bot).
+func larkCLIActor(args []string) string {
+	if flagValue(args, "--as") == "bot" {
+		return "以机器人身份"
+	}
+	return "以你的身份"
+}
+
 // shellJoin is the arguments as the user would type them, for the card: quoted only where a shell needs it.
 func shellJoin(args []string) string {
 	out := make([]string, len(args))

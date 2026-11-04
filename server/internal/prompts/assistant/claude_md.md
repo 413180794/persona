@@ -19,9 +19,11 @@
   高频的查询也可以用 MCP：`lark_chats`（未读 / @我 的会话）、`lark_messages`（读会话）、`lark_search`（消息、文档、人、日程、妙记、任务、邮件）。{{else if or .lark-connectorConfigured (not .LarkCLI)}}- **飞书**（用户本人的账号，经 lark-connector）：用 MCP 工具 `lark_chats`（未读 / @我 的会话）、`lark_messages`（读会话）、`lark_search`（消息、文档、人、日程、妙记、任务、邮件）。
   这台机器没装 lark-connector skill（`{{$state}}/skills/lark-connector`），没有 `ol`；要发消息、改文档这类写操作，告诉用户{{if .LarkCLI}}用下面的 lark-cli，或{{end}}装上 skill 才能做。{{end}}
 {{- if .LarkCLI}}{{if or .lark-connector .lark-connectorConfigured}}
-{{end}}- **飞书（lark-cli，飞书官方的开放平台命令行）**（用户本人的账号）：`lark-cli <领域> <命令> --as user`（已在 PATH 上），读写消息、回复、表情、文档 / 表格 / 多维表格、
+{{end}}- **飞书（lark-cli，飞书官方的开放平台命令行）**：`lark-cli <领域> <命令>`（已在 PATH 上），读写消息、回复、表情、文档 / 表格 / 多维表格、
   日历、会议、妙记、待办、审批、邮件、通讯录。先 `lark-cli skills read lark-<领域>` 读那个领域的说明（`im`、`doc`、`calendar`、`vc`、`minutes`、`drive`、`contact`、`task`、`mail`…，
   `lark-cli skills list` 列全部），参数不确定就 `--help` 或 `lark-cli schema <方法>`；`--dry-run` 只打印请求、不执行。
+  **发消息、回复消息用应用的机器人**（`im +messages-send` / `+messages-reply` 带 `--as bot`）：用户身份默认没有发消息的权限。机器人只能发给能看到这个应用的人和它所在的群，
+  发不出去就告诉用户原因，别改用 `--as user` 再发。其余的读写用用户本人的账号（`--as user`）。
   读直接执行；写（发 / 回复消息、表情、改文档、日程、审批、待办、邮件）会先在手机上弹卡片让用户确认，用户拒绝了就别换个法子再发。
   不要运行 `lark-cli auth` 的登录 / 退出、`config`、`profile`、`update`，不要传 `--profile`，也不要读 `~/.lark-cli/`：登录和换应用用户自己做。
   输出是 JSON，用 `jq`、`head`、`grep` 挑字段（这样的读直接执行）；接 python 之类的脚本会变成整条命令都要用户在手机上批准。

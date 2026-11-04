@@ -1,6 +1,6 @@
 # 计划：没有 lark-connector 时用 lark-cli 接飞书
 
-状态：方案（#273），2026-11-03 用户拍板了四项（见「已拍板」），按「分步计划」做，做完的步骤打勾；全部做完后把设计部分并进
+状态：方案（#273），用户拍板的事项见「已拍板」，按「分步计划」做，做完的步骤打勾；全部做完后把设计部分并进
 `docs/feishu.md`、`docs/knowledge.md`、`docs/inbox.md`，删掉这份计划。
 
 ## 背景
@@ -15,14 +15,14 @@
 
 ## lark-cli 能做什么（1.0.72 实测，2026-11-02）
 
-全部用用户身份（`--as user`），输出 JSON（`--format json`）。
+读和大部分写用用户身份（`--as user`），发消息、回复消息用应用的机器人（`--as bot`，见下表「发送」），输出 JSON（`--format json`）。
 
 | 能力 | 命令 | 说明 |
 | --- | --- | --- |
 | 会话列表 | `im +chat-list --types p2p,group --sort active_time` | 有 `chat_id`、名字、类型、单聊对象；**没有未读数、最后一条消息、@我标记** |
 | 读消息 | `im +chat-messages-list`、`im +threads-messages-list`、`im +messages-mget` | `message_id`、`create_time`、发送者（带名字）、`content`（开放平台的 JSON）、话题位置 |
 | 搜消息 | `im +messages-search` | 不带关键词也能搜：只给 `--start` 就是这段时间里我能看到的全部消息；`--is-at-me`、`--chat-type p2p`、`--sender`、`--query` 可叠加；结果带会话名、`mentions`、`thread_id` |
-| 发送 | `im +messages-send`、`im +messages-reply`（可回在话题里、markdown）、`im reactions create / delete` | 以用户身份 |
+| 发送 | `im +messages-send`、`im +messages-reply`（可回在话题里、markdown）、`im reactions create / delete` | 用机器人身份（`--as bot`）：用户身份要应用开 `im:message.send_as_user`，默认的应用没有（2026-11-04 实测 `missing_scope`）；机器人只能发给能看到这个应用的人和它所在的群 |
 | 文档 | `docs +fetch --doc-format markdown`、`drive +search`、评论（`drive`）、`sheets`、`base` | 没有 lark-connector 那种 JSON 节点树、`header`、`ai-summary` |
 | 日程 / 会议 / 妙记 | `calendar +agenda`、`vc +search / +detail`、`minutes +search / +detail` | |
 | 人 | `contact` | 按姓名搜、按 id 查 |
@@ -181,6 +181,7 @@ Codex 的 app-server 审批走同一个 `larkCheck`。
 | lark-cli 来源的收件箱收什么 | **@我、和我的私聊、话题群里我参与的话题的新回复**（「收件箱收什么」） |
 | 轮询频率 | **先按方案定的**：收件箱、归档 2 分钟，`/agent` 20 秒；开放平台的限流在 L3 实测后再调 |
 | 权限 | **能开的都开**：`lark-cli auth login --domain all`；要管理员审批的在设置页列出来（「配置」） |
+| 发消息用谁的身份（2026-11-04） | **机器人**：发消息、回复消息带 `--as bot`，手机卡片写「以机器人身份」；其余读写仍用用户身份 |
 
 ## 风险
 
