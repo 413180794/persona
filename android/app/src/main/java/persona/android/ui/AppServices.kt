@@ -50,6 +50,7 @@ class ShellSession(
     val voice: VoicePlugins? = null,
     /** The phone's hub groups; a demo has none. */
     val groups: HubGroups = HubGroups.None,
+    val tasks: persona.core.domain.tasks.TasksStore? = null,
 ) {
     val agents = object : AgentsDependencies {
         override fun sessions() = this@ShellSession.sessions
@@ -59,6 +60,7 @@ class ShellSession(
         override fun preferences() = this@ShellSession.preferences
         override fun wiring() = this@ShellSession.agentsWiring
         override fun groups() = this@ShellSession.groups
+        override fun tasks() = this@ShellSession.tasks
     }
 }
 
@@ -137,10 +139,11 @@ class AppServices @Inject constructor(
                         catch (error: Exception) { feedback.failure(error, true); throw error }
                     }
                 }
+                val tasksStore = persona.core.domain.tasks.TasksStore(persona.core.hub.HttpTasksApi(socket), runtime, data.coroutineScope)
                 // Files, chat actions and machine metrics go to the group of the machine they name (one group: this hub).
                 mutableSession.value = ShellSession(data.scope.path, runtime, sessions, chats, boundInteractions, sender,
                     assistant, inbox, preferences, HubTerminalTransport(socket), shell.files, mergedMetrics,
-                    knowledgeConnection, shell.actions, phone, agentsWiring = agentsWiring, machines = machineManagement, voice = voice, groups = hubGroups)
+                    knowledgeConnection, shell.actions, phone, agentsWiring = agentsWiring, machines = machineManagement, voice = voice, groups = hubGroups, tasks = tasksStore)
                 try {
                     coroutineScope {
                         launch {

@@ -2,6 +2,8 @@ package persona.core.domain.sort
 
 import persona.core.contracts.AgentState
 import persona.core.contracts.Machine
+import persona.core.contracts.Todo
+import persona.core.contracts.state
 
 /** Kept IDs retain membership, not a previous row position. Reselecting a filter replaces kept. */
 data class AgentListSettings(
@@ -16,13 +18,17 @@ data class AgentListSettings(
 )
 
 enum class AgentGrouping {
-    MachineSpace, State,
+    MachineSpace, State, Todo,
     // Retained for callers of the original list projection; stored preferences migrate to MachineSpace.
     Space, Machine;
 
     companion object {
-        fun fromPreference(value: String?): AgentGrouping = if (value == State.name) State else MachineSpace
-        val selectable = listOf(MachineSpace, State)
+        fun fromPreference(value: String?): AgentGrouping = when (value) {
+            State.name -> State
+            Todo.name -> Todo
+            else -> MachineSpace
+        }
+        val selectable = listOf(MachineSpace, State, Todo)
     }
 }
 enum class AgentQuickFilter(val state: AgentState?) {
@@ -75,6 +81,7 @@ fun buildAgentList(
     pins: AgentPreferences = AgentPreferences(),
     mutes: AgentPreferences = AgentPreferences(),
     settings: AgentListSettings = AgentListSettings(),
+    todos: List<Todo> = emptyList(),
 ): AgentListResult {
     val base = sessions.filter { row ->
         val s = row.session
@@ -133,6 +140,49 @@ fun buildAgentList(
                 val rows = ordered(byRank[rank].orEmpty())
                 if (rows.isNotEmpty()) result += group("state/$key", title, rows,
                     if (key == "idle" && !showIdle("state-idle")) emptyList() else rows)
+            }
+        }
+        AgentGrouping.Todo -> {
+            val sessionMap = sessions.associateBy { it.session.key }
+            val uncompletedTodos = todos.filter { !it.isDone }.sortedWith(
+                compareBy<Todo> { it.state { k -> sessionMap[k]?.session }.rank }
+                    .thenByDescending { it.created ?: java.time.Instant.EPOCH }
+                    .thenBy { it.id }
+            )
+            val claimed = mutableSetOf<persona.core.contracts.SessionKey>()
+            for (todo in uncompletedTodos) {
+                val linkedKeys = todo.currentAgents.map { it.key }.toSet()
+                val matched = live.filter { (it.session.todo?.id == todo.id && it.session.todo?.id?.isNotEmpty() == true) || it.session.key in linkedKeys }
+                if (matched.isNotEmpty()) {
+                    val rows = ordered(matched)
+                    val folded = "todo/${todo.id}" in settings.folded
+                    val visible = if (folded) emptyList() else rows
+                    val stateCounts = AgentState.entries.associateWith { state -> rows.count { it.state == state } }
+                    result += AgentListGroup(
+                        id = "todo/${todo.id}",
+                        title = todo.title,
+                        rows = rows,
+                        visibleRows = visible,
+                        folded = folded,
+                        stateCounts = stateCounts
+                    )
+                    claimed.addAll(matched.map { it.session.key })
+                }
+            }
+            val unlinked = live.filter { it.session.key !in claimed }
+            if (unlinked.isNotEmpty()) {
+                val rows = ordered(unlinked)
+                val folded = "todo/none" in settings.folded
+                val visible = if (folded) emptyList() else rows
+                val stateCounts = AgentState.entries.associateWith { state -> rows.count { it.state == state } }
+                result += AgentListGroup(
+                    id = "todo/none",
+                    title = "没有待办",
+                    rows = rows,
+                    visibleRows = visible,
+                    folded = folded,
+                    stateCounts = stateCounts
+                )
             }
         }
         AgentGrouping.Machine -> machines.forEach { machine ->

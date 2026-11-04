@@ -130,6 +130,13 @@ data class SessionCapabilities(
 )
 
 @KeepGeneratedSerializer
+@Serializable(with = SessionTodoSerializer::class)
+data class SessionTodo(
+    val id: String = "",
+    val title: String = "",
+)
+
+@KeepGeneratedSerializer
 @Serializable(with = SessionSerializer::class)
 data class Session(
     @SerialName("machine_id") val machineId: String = "",
@@ -197,6 +204,7 @@ data class Session(
      * 「来源标记」): the conversation list draws the latest's mark. Older hubs never send it.
      */
     @SerialName("channels") val channels: List<String> = emptyList(),
+    val todo: SessionTodo? = null,
 ) {
     val key: SessionKey get() = SessionKey(machineId, sessionId)
     val agentState: AgentState get() = AgentState.of(state, status)
@@ -389,6 +397,7 @@ object DetectedEngineSerializer : WireSerializer<DetectedEngine>(DetectedEngine.
 object LoopInfoSerializer : WireSerializer<LoopInfo>(LoopInfo.generatedSerializer())
 object BackgroundTaskSerializer : WireSerializer<BackgroundTask>(BackgroundTask.generatedSerializer())
 object SessionCapabilitiesSerializer : WireSerializer<SessionCapabilities>(SessionCapabilities.generatedSerializer())
+object SessionTodoSerializer : WireSerializer<SessionTodo>(SessionTodo.generatedSerializer())
 object SessionSerializer : WireSerializer<Session>(Session.generatedSerializer())
 object ImagePayloadSerializer : WireSerializer<ImagePayload>(ImagePayload.generatedSerializer())
 object ItemSerializer : WireSerializer<Item>(Item.generatedSerializer())

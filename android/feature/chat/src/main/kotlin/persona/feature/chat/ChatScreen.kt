@@ -440,6 +440,7 @@ private fun ChatPage(
                                 chrome.onOpenSession, chrome.onConnectionDetails, onOverlay = { headerOverlay = it },
                                 onFiles = chrome.onFiles, onGit = chrome.onGit, gitLabel = chrome.gitLabel,
                                 statusState = status, onDetails = { statusSheet = true },
+                                onOpenTodo = chrome.onOpenTodo,
                                 onSearch = { search.open(chatList) { timeline.freeze(currentItems, currentLive); timelineVersion++ } }) {
                                 // A session without a terminal (a Codex thread, an agent runtime's) has nothing to open or explain.
                                 if (!readOnly && canTerminal && renderStyle != ChatRenderStyle.Assistant) JIconButton(PhIcons.TerminalWindow, if (terminal != null) "打开终端" else "终端处理说明",

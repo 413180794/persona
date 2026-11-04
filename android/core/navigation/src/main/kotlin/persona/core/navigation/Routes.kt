@@ -30,6 +30,8 @@ sealed interface RouteSource {
 @Serializable @SerialName("jarvis.core.navigation.LarkChatRoute") data class LarkChatRoute(val chatId: String) : NavKey
 @Serializable @SerialName("jarvis.core.navigation.InteractionRoute") data class InteractionRoute(val chat: ChatRoute, val requestId: String) : NavKey
 @Serializable @SerialName("jarvis.core.navigation.PairingRoute") data object PairingRoute : NavKey
+@Serializable @SerialName("jarvis.core.navigation.TodosRoute") data object TodosRoute : NavKey
+@Serializable @SerialName("jarvis.core.navigation.TodoDetailRoute") data class TodoDetailRoute(val todoId: String) : NavKey
 @Serializable enum class SettingsPage { Diagnostics, Readiness, Notifications, PhoneData, Appearance, Devices, About, Pairing, Assistant, ClaudeCode, ModelConfig, Hubs, Persona, Plugins, Mail, Feishu, Channels }
 @Serializable @SerialName("jarvis.core.navigation.SettingsPageRoute") data class SettingsPageRoute(val page: SettingsPage) : NavKey
 

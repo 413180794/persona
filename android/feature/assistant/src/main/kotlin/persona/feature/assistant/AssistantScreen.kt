@@ -88,6 +88,9 @@ fun AssistantScreen(
     onTogglePin: (suspend (SessionKey) -> Unit)? = null,
     /** 语音对话 in the title menu, when the hub runs a voice plugin. */
     onVoice: (() -> Unit)? = null,
+    onTodos: (() -> Unit)? = null,
+    todoCount: Int = 0,
+    showTodos: Boolean = true,
 ) = PersonaTheme {
     val snapshot by repository.assistant.collectAsStateWithLifecycle()
     val outbox by (mainConversationSender?.outbox ?: messageSender.outbox).collectAsStateWithLifecycle()
@@ -318,6 +321,9 @@ fun AssistantScreen(
             onCopy = { copyId(it.key) },
             showAllRecent = showAllRecent,
             onShowAllRecent = { showAllRecent = true },
+            onTodos = onTodos?.let { action -> { scope.launch { drawerOpen = false }; action() } },
+            todoCount = todoCount,
+            showTodos = showTodos,
         )
     }
     val body: @Composable (Boolean) -> Unit = { wide ->
@@ -552,6 +558,7 @@ private fun AssistantDrawer(
     onNew: () -> Unit, onHome: () -> Unit, onSettings: () -> Unit,
     onPin: ((Session) -> Unit)? = null, onUnpinAll: (() -> Unit)? = null, onCopy: (Session) -> Unit = {},
     showAllRecent: Boolean = false, onShowAllRecent: () -> Unit = {},
+    onTodos: (() -> Unit)? = null, todoCount: Int = 0, showTodos: Boolean = true,
 ) {
     Column(Modifier.fillMaxHeight().padding(horizontal = 12.dp)) {
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 12.dp)) {
@@ -609,12 +616,19 @@ private fun AssistantDrawer(
                     if (query.isBlank()) "发一句话，开始和 Persona 聊聊。" else "换个关键词再试试。") }
             }
             item { JSectionHeader("更多") }
-            item { JGroupItem(GroupPosition.of(0, 6)) { DrawerItem("返回首页", PhIcons.House, onHome) } }
-            item { JGroupItem(GroupPosition.of(1, 6)) { DrawerItem("资料页", PhIcons.UserCircle) { onInfo("资料页") } } }
-            item { JGroupItem(GroupPosition.of(2, 6)) { DrawerItem("定时任务", PhIcons.Clock) { onInfo("定时任务") } } }
-            item { JGroupItem(GroupPosition.of(3, 6)) { DrawerItem("知识库", PhIcons.BookOpen) { onInfo("知识库") } } }
-            item { JGroupItem(GroupPosition.of(4, 6)) { DrawerItem("会话信息", PhIcons.Info) { onInfo("会话信息") } } }
-            item { JGroupItem(GroupPosition.of(5, 6)) { DrawerItem("启动器", PhIcons.RocketLaunch) { onInfo("启动器") } } }
+            val totalMore = if (showTodos && onTodos != null) 7 else 6
+            var moreIndex = 0
+            item { JGroupItem(GroupPosition.of(moreIndex++, totalMore)) { DrawerItem("返回首页", PhIcons.House, onHome) } }
+            if (showTodos && onTodos != null) {
+                item { JGroupItem(GroupPosition.of(moreIndex++, totalMore)) {
+                    DrawerItem("待办", PhIcons.ListChecks, badge = todoCount, onClick = onTodos)
+                } }
+            }
+            item { JGroupItem(GroupPosition.of(moreIndex++, totalMore)) { DrawerItem("资料页", PhIcons.UserCircle) { onInfo("资料页") } } }
+            item { JGroupItem(GroupPosition.of(moreIndex++, totalMore)) { DrawerItem("定时任务", PhIcons.Clock) { onInfo("定时任务") } } }
+            item { JGroupItem(GroupPosition.of(moreIndex++, totalMore)) { DrawerItem("知识库", PhIcons.BookOpen) { onInfo("知识库") } } }
+            item { JGroupItem(GroupPosition.of(moreIndex++, totalMore)) { DrawerItem("会话信息", PhIcons.Info) { onInfo("会话信息") } } }
+            item { JGroupItem(GroupPosition.of(moreIndex++, totalMore)) { DrawerItem("启动器", PhIcons.RocketLaunch) { onInfo("启动器") } } }
         }
         Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             JButton("新对话", onNew, Modifier.weight(1f), icon = PhIcons.NotePencil)
@@ -673,6 +687,16 @@ internal fun conversationActions(pinned: Boolean, live: Boolean, onPin: (() -> U
 @Composable
 private fun DrawerItem(title: String, icon: PhIcon, onClick: () -> Unit) {
     JRow(title, leadingIcon = icon, onClick = onClick)
+}
+
+@Composable
+private fun DrawerItem(title: String, icon: PhIcon, badge: Int, onClick: () -> Unit) {
+    JRow(
+        title,
+        leadingIcon = icon,
+        onClick = onClick,
+        trailing = if (badge > 0) ({ JBadge(badge) }) else null
+    )
 }
 
 @Composable

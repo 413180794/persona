@@ -24,6 +24,7 @@ data class AgentSession(
     val updatedAt: Instant? get() = parseTime(session.updatedAt)
     val sortDate: Instant? get() = if (state == AgentState.Working) parseTime(stateSince) ?: updatedAt else updatedAt
     val spacePreferenceKey: String? get() = session.spaceName?.let { "${session.machineId}/$it" }
+    val todo get() = session.todo
 
     companion object {
         fun fromJson(value: JsonObject) = AgentSession(

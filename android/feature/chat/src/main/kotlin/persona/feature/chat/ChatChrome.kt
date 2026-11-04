@@ -30,6 +30,7 @@ internal fun ChatHeader(
     onFiles: (() -> Unit)? = null, onGit: (() -> Unit)? = null, gitLabel: String = "Git",
     onSearch: (() -> Unit)? = null,
     statusState: StatusLineState = StatusLineState(), onDetails: () -> Unit = {},
+    onOpenTodo: ((String) -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     var menu by remember { mutableStateOf(false) }
@@ -73,6 +74,9 @@ internal fun ChatHeader(
         JIconButton(PhIcons.DotsThree, "更多操作", { menu = true })
     }
     if (menu) ChatActionsSheet(title = "会话操作", onDismiss = { menu = false }, actions = buildList {
+        session?.todo?.let { todo ->
+            add(JAction("待办 · ${todo.title}", PhIcons.ListChecks) { onOpenTodo?.invoke(todo.id) })
+        }
         onSearch?.let { add(JAction("搜索", PhIcons.MagnifyingGlass, onClick = it)) }
         onFiles?.let { add(JAction("文件", PhIcons.FolderSimple, onClick = it)) }
         onGit?.let { add(JAction(gitLabel, onClick = it)) }
@@ -134,7 +138,7 @@ internal fun ChatHeader(
             JDialog(onDismiss = { dialog = null }, title = confirmation.title, text = confirmation.message,
                 confirm = "关闭 Agent" to { dialog = null; state.run(target, ChatAction.Close) }, destructive = true, confirmEnabled = canAct)
         }
-        "info" -> session?.let { target -> ChatSessionInfoSheet(target, machine, state, onDismiss = { dialog = null }) }
+        "info" -> session?.let { target -> ChatSessionInfoSheet(target, machine, state, onOpenTodo = onOpenTodo, onDismiss = { dialog = null }) }
         "peers" -> JSheet(onDismiss = { dialog = null }, title = "同空间的 Agent") {
             if (peers.isEmpty()) JEmptyState("没有同伴会话", "这个空间暂时没有其他 Agent。")
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 400.dp), contentPadding = PaddingValues(bottom = 16.dp)) {

@@ -2,7 +2,10 @@ package persona.feature.agents
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -15,13 +18,20 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import persona.core.contracts.api.*
 import persona.core.contracts.SessionKey
+import persona.core.contracts.Todo
+import persona.core.contracts.api.AgentStartRequest
+import persona.core.contracts.api.AgentStartResult
 import persona.core.designsystem.PlaceholderScreen
 import persona.core.navigation.AgentsRoute
+import persona.core.navigation.ChatRoute
 import persona.core.navigation.ConnectionSettingsRoute
 import persona.core.navigation.Navigator
 import persona.core.navigation.NewAgentRoute
+import persona.core.navigation.TodoDetailRoute
+import persona.core.navigation.TodosRoute
 import persona.core.domain.answer.requestSourceLabel
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -34,6 +44,7 @@ interface AgentsDependencies {
     fun wiring(): AgentsWiring = AgentsWiring.Empty
     /** The phone's hub groups: the list labels and filters by them when there is more than one. */
     fun groups(): persona.core.contracts.api.HubGroups = persona.core.contracts.api.HubGroups.None
+    fun tasks(): persona.core.domain.tasks.TasksStore? = null
 }
 
 /** Supply one immutable pairing scope; close callbacks synchronize navigation and notifications. */
@@ -80,9 +91,10 @@ fun EntryProviderScope<NavKey>.agentsEntries(
             LocalAgentsDraftSource provides (wiring.drafts ?: LocalAgentsDraftSource.current),
         ) {
             val operations = LocalAgentsOperations.current
+            val tasksStore = dependencies.tasks() ?: wiring.tasks
             val model = viewModel(key = "agents:${wiring.scope}:${operations?.operations?.scope.orEmpty()}") {
                 AgentsViewModel(dependencies.sessions(), dependencies.interactions(), dependencies.connection(), dependencies.sender(), dependencies.preferences(), operations, wiring.mainSender,
-                    wiring.scope.ifEmpty { operations?.operations?.scope.orEmpty() }, renamer)
+                    wiring.scope.ifEmpty { operations?.operations?.scope.orEmpty() }, renamer, tasksStore)
                     .also { it.machine(initialMachine) }
             }
             val source = LocalAgentsDraftSource.current
@@ -114,4 +126,89 @@ fun EntryProviderScope<NavKey>.agentsEntries(
     }
     entry<ConnectionSettingsRoute> { connectionSettingsContent() }
     entry<NewAgentRoute> { NewAgentDestination(it, navigator, dependenciesOverride) }
+    entry<TodosRoute> {
+        val context = LocalContext.current.applicationContext
+        val dependencies = remember(context, dependenciesOverride) {
+            dependenciesOverride ?: EntryPointAccessors.fromApplication(context, AgentsDependencies::class.java)
+        }
+        val wiring by dependencies.wiring().state.collectAsStateWithLifecycle()
+        val tasksStore = dependencies.tasks() ?: wiring.tasks
+        val sessions by dependencies.sessions().sessions.collectAsStateWithLifecycle()
+        val todos by (tasksStore?.todos ?: flowOf(emptyList())).collectAsStateWithLifecycle(emptyList())
+        TodosScreen(
+            todos = todos,
+            sessions = sessions,
+            tasks = tasksStore,
+            onBack = { navigator.back() },
+            onOpenTodo = { todoId -> navigator.navigate(TodoDetailRoute(todoId)) }
+        )
+    }
+    entry<TodoDetailRoute> { route ->
+        val context = LocalContext.current.applicationContext
+        val dependencies = remember(context, dependenciesOverride) {
+            dependenciesOverride ?: EntryPointAccessors.fromApplication(context, AgentsDependencies::class.java)
+        }
+        val wiring by dependencies.wiring().state.collectAsStateWithLifecycle()
+        val tasksStore = dependencies.tasks() ?: wiring.tasks
+        val sessions by dependencies.sessions().sessions.collectAsStateWithLifecycle()
+        val machines by dependencies.sessions().machines.collectAsStateWithLifecycle()
+        val todos by (tasksStore?.todos ?: flowOf(emptyList())).collectAsStateWithLifecycle(emptyList())
+        val creationService = wiring.creation ?: LocalAgentCreationService.current
+        var handOffTodo by remember { mutableStateOf<Todo?>(null) }
+        val scope = rememberCoroutineScope()
+        TodoDetailScreen(
+            todoId = route.todoId,
+            todos = todos,
+            machines = machines,
+            sessions = sessions,
+            tasks = tasksStore,
+            onBack = { navigator.back() },
+            onOpenSession = { key -> navigator.navigate(ChatRoute(key.machineId, key.sessionId)) },
+            onHandOff = { todo -> handOffTodo = todo }
+        )
+        handOffTodo?.let { targetTodo ->
+            TodoHandOffSheet(
+                todo = targetTodo,
+                machines = machines,
+                sessions = sessions,
+                onDismiss = { handOffTodo = null },
+                onHandOffNew = { machineId, cwd, launcher, permissionMode, prompt ->
+                    scope.launch {
+                        try {
+                            val opId = java.util.UUID.randomUUID().toString()
+                            val res = creationService?.start(
+                                AgentStartRequest(
+                                    machineId = machineId,
+                                    cwd = cwd,
+                                    launcher = launcher,
+                                    permissionMode = permissionMode,
+                                    prompt = null,
+                                    nameHint = "待办 · ${targetTodo.title}",
+                                    async = true,
+                                    todoId = targetTodo.id
+                                ),
+                                operationId = opId
+                            )
+                            if (res is AgentStartResult.Created) {
+                                dependencies.sessions().adopt(res.session)
+                                dependencies.sender().send(res.session.key, prompt, java.util.UUID.randomUUID().toString())
+                                handOffTodo = null
+                                navigator.navigate(ChatRoute(res.session.machineId, res.session.sessionId))
+                            }
+                        } catch (_: Exception) {}
+                    }
+                },
+                onHandOffExisting = { target, prompt ->
+                    scope.launch {
+                        try {
+                            tasksStore?.linkTodoAgent(targetTodo.id, target.machineId, target.sessionId)
+                            dependencies.sender().send(target, prompt, java.util.UUID.randomUUID().toString())
+                            handOffTodo = null
+                            navigator.navigate(ChatRoute(target.machineId, target.sessionId))
+                        } catch (_: Exception) {}
+                    }
+                }
+            )
+        }
+    }
 }

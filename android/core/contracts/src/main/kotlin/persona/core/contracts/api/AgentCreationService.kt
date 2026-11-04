@@ -94,6 +94,7 @@ data class AgentStartRequest(
     @SerialName("name_hint") val nameHint: String? = null,
     /** The model picked for this start (an id of [AgentCreationService.launcherModels]); null: the default one. */
     val model: String? = null,
+    @SerialName("todo_id") val todoId: String? = null,
 )
 
 sealed interface AgentStartResult {

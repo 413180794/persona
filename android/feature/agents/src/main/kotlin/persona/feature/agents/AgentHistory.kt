@@ -10,9 +10,10 @@ internal fun agentRangeKey(scope: String) = stringPreferencesKey("agent-range:$s
 
 internal fun scopedAgentList(
     rows: List<AgentSession>, machines: List<Machine>, preferences: AgentsPreferencesSnapshot, settings: AgentListSettings,
+    todos: List<persona.core.contracts.Todo> = emptyList(),
 ): AgentListResult {
     if (preferences.range == AgentRange.Running)
-        return buildAgentList(rows, machines, preferences.pins, preferences.mutes, settings)
+        return buildAgentList(rows, machines, preferences.pins, preferences.mutes, settings, todos)
     val history = rows.filter { row ->
         val s = row.session
         !s.isLive && !s.assistant && (settings.machineFilter.isEmpty() || settings.machineFilter == s.machineId) &&
@@ -26,7 +27,7 @@ internal fun scopedAgentList(
         AgentListGroup(id, project.second.ifBlank { "未知目录" }, ordered, if (folded) emptyList() else ordered, folded)
     }.sortedWith(compareByDescending<AgentListGroup> { it.rows.first().updatedAt }.thenBy { it.id })
     val running = if (preferences.range == AgentRange.All)
-        buildAgentList(rows.filter { it.session.isLive }, machines, preferences.pins, preferences.mutes, settings)
+        buildAgentList(rows.filter { it.session.isLive }, machines, preferences.pins, preferences.mutes, settings, todos)
     else AgentListResult(emptyMap(), emptyList(), emptyList())
     return running.copy(groups = running.groups + groups, counts = AgentQuickFilter.entries.associateWith { filter ->
         (running.counts[filter] ?: 0) + history.count(filter::matches)

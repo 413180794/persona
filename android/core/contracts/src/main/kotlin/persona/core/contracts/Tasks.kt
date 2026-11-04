@@ -1,5 +1,6 @@
 package persona.core.contracts
 
+import java.time.Instant
 import kotlinx.serialization.KeepGeneratedSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -96,16 +97,31 @@ data class FeedItem(
 data class AnsweredItem(val question: String, val answer: String)
 
 @KeepGeneratedSerializer
+@Serializable(with = TodoSpaceSerializer::class)
+data class TodoSpace(
+    @SerialName("machine_id") val machineId: String = "",
+    val space: String = "",
+    @WireTime @SerialName("linked_at") val linkedAt: String? = null,
+)
+
+@KeepGeneratedSerializer
 @Serializable(with = TodoAgentSerializer::class)
 data class TodoAgent(
     @SerialName("machine_id") val machineId: String = "",
     @SerialName("session_id") val sessionId: String = "",
+    @WireTime @SerialName("linked_at") val linkedAt: String? = null,
     val title: String? = null,
     val cwd: String? = null,
     val agent: String? = null,
     @SerialName("start_error") val startError: String? = null,
     @WireTime @SerialName("released_at") val releasedAt: String? = null,
-)
+    val source: String? = null,
+    val via: String? = null,
+    @WireTime @SerialName("dismissed_at") val dismissedAt: String? = null,
+) {
+    val key: SessionKey get() = SessionKey(machineId, sessionId)
+    val isCurrent: Boolean get() = releasedAt == null
+}
 
 /** A todo (docs/todos.md); a task is one whose [origin] is an assistant conversation. */
 @KeepGeneratedSerializer
@@ -113,15 +129,92 @@ data class TodoAgent(
 data class Todo(
     val id: String,
     val title: String = "",
+    val notes: String = "",
     @WireTime @SerialName("done_at") val doneAt: String? = null,
     @WireTime @SerialName("created_at") val createdAt: String? = null,
+    @WireTime @SerialName("updated_at") val updatedAt: String? = null,
     val origin: String? = null,
     @SerialName("plan_id") val planId: String? = null,
+    @SerialName("done_by") val doneBy: String? = null,
+    @SerialName("done_reason") val doneReason: String? = null,
+    @WireTime @SerialName("reopened_at") val reopenedAt: String? = null,
     /** Why the task's agent did not start (#1077): the hub ended the todo with it; 重试 clears it (#1396). */
     @SerialName("start_error") val startError: String? = null,
     val agents: List<TodoAgent> = emptyList(),
+    val spaces: List<TodoSpace>? = null,
 ) {
+    val isDone: Boolean get() = doneAt != null
     val activeAgents get() = agents.filter { it.releasedAt == null }
+    val currentAgents: List<TodoAgent> get() = activeAgents
+    val releasedAgents: List<TodoAgent> get() = agents.filter { it.releasedAt != null }
+    val created: Instant? get() = parseTime(createdAt)
+    val updated: Instant? get() = parseTime(updatedAt)
+    val done: Instant? get() = parseTime(doneAt)
+}
+
+/**
+ * Todo states in order of rank (umbrella.final.md / docs/todos.md「状态计算规则」):
+ * 已完成 -> 等你 -> 待查看 -> 进行中 -> 待跟进 -> 未开始
+ */
+enum class TodoState(val title: String, val rank: Int) {
+    Done("已完成", 0),
+    NeedsYou("等你", 1),
+    Unread("待查看", 2),
+    Working("进行中", 3),
+    FollowUp("待跟进", 4),
+    NotStarted("未开始", 5);
+}
+
+/**
+ * Calculates a todo's state from its current active agents and their session states.
+ */
+fun Todo.state(sessionLookup: (SessionKey) -> Session?): TodoState {
+    if (isDone) return TodoState.Done
+    val cur = currentAgents
+    if (cur.isEmpty()) return TodoState.NotStarted
+    val sessions = cur.map { a -> sessionLookup(a.key) }
+    val states = sessions.map { it?.agentState ?: AgentState.Idle }
+    val isStarting = sessions.any { it?.starting == true }
+    return when {
+        states.any { it == AgentState.NeedsYou } -> TodoState.NeedsYou
+        states.any { it == AgentState.Unread } -> TodoState.Unread
+        isStarting || states.any { it == AgentState.Working } -> TodoState.Working
+        else -> TodoState.FollowUp
+    }
+}
+
+/**
+ * Sorts todos: uncompleted first (in TodoState rank order, then newest created first, then by id);
+ * completed todos at the bottom (newest done/created first).
+ */
+fun List<Todo>.ordered(sessionLookup: (SessionKey) -> Session?): List<Todo> {
+    val uncompleted = filter { !it.isDone }
+    val completed = filter { it.isDone }
+    val sortedUncompleted = uncompleted.sortedWith(
+        compareBy<Todo> { it.state(sessionLookup).rank }
+            .thenByDescending { it.created ?: Instant.EPOCH }
+            .thenBy { it.id }
+    )
+    val sortedCompleted = completed.sortedWith(
+        compareByDescending<Todo> { it.done ?: it.created ?: Instant.EPOCH }
+            .thenBy { it.id }
+    )
+    return sortedUncompleted + sortedCompleted
+}
+
+/**
+ * Formats the todo context tag as in protocol.md and docs/todos.md.
+ */
+fun todoContextXml(title: String, notes: String): String =
+    """<jarvis-context kind="context" title="待办 · $title" url="">$notes</jarvis-context>"""
+
+/**
+ * The prompt to send when handing off a todo to an agent.
+ */
+fun todoHandOffPrompt(title: String, notes: String, instruction: String): String {
+    val contextTag = todoContextXml(title, notes)
+    val ins = instruction.trim()
+    return if (ins.isEmpty()) contextTag else "$contextTag\n\n$ins"
 }
 
 @KeepGeneratedSerializer
@@ -148,6 +241,7 @@ data class TaskPlanEvent(val plan: TaskPlan) : ServerEvent
 object PlanTaskSerializer : WireSerializer<PlanTask>(PlanTask.generatedSerializer())
 object TaskPlanSerializer : WireSerializer<TaskPlan>(TaskPlan.generatedSerializer())
 object FeedItemSerializer : WireSerializer<FeedItem>(FeedItem.generatedSerializer())
+object TodoSpaceSerializer : WireSerializer<TodoSpace>(TodoSpace.generatedSerializer())
 object TodoAgentSerializer : WireSerializer<TodoAgent>(TodoAgent.generatedSerializer())
 object TodoSerializer : WireSerializer<Todo>(Todo.generatedSerializer())
 object TodosResponseSerializer : WireSerializer<TodosResponse>(TodosResponse.generatedSerializer())

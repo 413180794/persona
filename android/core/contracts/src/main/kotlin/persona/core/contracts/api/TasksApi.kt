@@ -8,6 +8,12 @@ import persona.core.contracts.Todo
 /** Tasks dispatched from an assistant conversation (docs/unified-entry.md; docs/protocol.md「任务和对话动态」). */
 interface TasksApi {
     suspend fun todos(): List<Todo>
+    suspend fun createTodo(title: String, notes: String = ""): Todo = error("createTodo not implemented")
+    suspend fun patchTodo(id: String, title: String? = null, notes: String? = null, done: Boolean? = null): Todo = error("patchTodo not implemented")
+    suspend fun deleteTodo(id: String) = Unit
+    suspend fun linkTodoAgent(todoId: String, machineId: String, sessionId: String) = Unit
+    suspend fun unlinkTodoAgent(todoId: String, machineId: String, sessionId: String) = Unit
+
     /** A conversation's feed after [since] (an ISO time; null: all of it), with the plans its `plan` items name. */
     suspend fun feed(conversation: String, since: String?): FeedResponse
     suspend fun startPlan(id: String, remember: Boolean): TaskPlan

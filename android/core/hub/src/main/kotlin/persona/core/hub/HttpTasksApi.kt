@@ -44,6 +44,31 @@ class HttpTasksApi internal constructor(
     override suspend fun todos(): List<Todo> =
         JsonCodec.decodeFromJsonElement<TodosResponse>(call(path("todos"))).todos
 
+    override suspend fun createTodo(title: String, notes: String): Todo =
+        JsonCodec.decodeFromJsonElement(call(path("todos"), "POST", buildJsonObject {
+            put("title", title)
+            put("notes", notes)
+        })["todo"] ?: error("no todo in the answer"))
+
+    override suspend fun patchTodo(id: String, title: String?, notes: String?, done: Boolean?): Todo =
+        JsonCodec.decodeFromJsonElement(call(path("todos", id), "PATCH", buildJsonObject {
+            title?.let { put("title", it) }
+            notes?.let { put("notes", it) }
+            done?.let { put("done", it) }
+        })["todo"] ?: error("no todo in the answer"))
+
+    override suspend fun deleteTodo(id: String) {
+        call(path("todos", id), "DELETE")
+    }
+
+    override suspend fun linkTodoAgent(todoId: String, machineId: String, sessionId: String) {
+        call(path("todos", todoId, "agents", machineId, sessionId), "PUT", JsonObject(emptyMap()))
+    }
+
+    override suspend fun unlinkTodoAgent(todoId: String, machineId: String, sessionId: String) {
+        call(path("todos", todoId, "agents", machineId, sessionId), "DELETE")
+    }
+
     override suspend fun feed(conversation: String, since: String?): FeedResponse =
         JsonCodec.decodeFromJsonElement(call(path("assistant", "conversations", conversation, "feed",
             query = since?.let { mapOf("since" to it) } ?: emptyMap())))

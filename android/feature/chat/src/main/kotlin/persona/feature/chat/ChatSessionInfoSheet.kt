@@ -27,7 +27,7 @@ internal fun formatTokens(count: Long): String = when {
 }
 
 /** One fact of 会话信息; a null value reads as —. [copy] names what tapping it copies. */
-internal data class SessionInfoRow(val label: String, val value: String?, val copy: String? = null)
+internal data class SessionInfoRow(val label: String, val value: String?, val copy: String? = null, val onClick: (() -> Unit)? = null)
 internal data class SessionInfoSection(val title: String, val rows: List<SessionInfoRow>)
 
 /**
@@ -35,19 +35,29 @@ internal data class SessionInfoSection(val title: String, val rows: List<Session
  * copy. The resume command only for a session in a terminal (an agent runtime's is picked up in its own UI); a Codex
  * thread resumes by its own thread id.
  */
-internal fun sessionInfoSections(session: Session, info: SessionInfo, zone: ZoneId = ZoneId.systemDefault()): List<SessionInfoSection> {
+internal fun sessionInfoSections(
+    session: Session,
+    info: SessionInfo,
+    zone: ZoneId = ZoneId.systemDefault(),
+    onOpenTodo: ((String) -> Unit)? = null,
+): List<SessionInfoSection> {
     fun String?.orSession(fallback: String?) = this?.takeIf(String::isNotBlank) ?: fallback?.takeIf(String::isNotBlank)
     val cwd = info.cwd.orSession(session.cwd)
     val id = info.sessionId.ifBlank { session.sessionId }
-    return listOf(
-        SessionInfoSection("运行", listOf(
+    return buildList {
+        session.todo?.let { todo ->
+            add(SessionInfoSection("待办", listOf(
+                SessionInfoRow("关联待办", todo.title, copy = todo.id, onClick = onOpenTodo?.let { { it(todo.id) } })
+            )))
+        }
+        add(SessionInfoSection("运行", listOf(
             SessionInfoRow("模型", info.model.orSession(session.model)),
             SessionInfoRow("启动器", info.launcher.orSession(session.launcher)),
             SessionInfoRow(if (session.isClaude) "Claude Code" else session.agentLabel, info.version.orSession(null)),
             SessionInfoRow("权限", SessionModes.modeLabel(info.permissionMode.orSession(session.permissionMode))),
             SessionInfoRow("思考强度", SessionModes.effortLabel(info.effort.orSession(session.effort))),
-        )),
-        SessionInfoSection("用量", buildList {
+        )))
+        add(SessionInfoSection("用量", buildList {
             add(SessionInfoRow("上下文", "${formatTokens(info.contextTokens)} tokens"))
             if (info.compactions > 0) add(SessionInfoRow("压缩", "${info.compactions} 次"))
             add(SessionInfoRow("对话", "${info.turns} 轮"))
@@ -55,20 +65,26 @@ internal fun sessionInfoSections(session: Session, info: SessionInfo, zone: Zone
             parseTime(info.startedAt)?.let {
                 add(SessionInfoRow("开始", DateTimeFormatter.ofPattern("M月d日 HH:mm", Locale.ROOT).format(it.atZone(zone))))
             }
-        }),
-        SessionInfoSection("位置", listOfNotNull(
+        }))
+        add(SessionInfoSection("位置", listOfNotNull(
             SessionInfoRow("目录", cwd, copy = cwd?.let { "目录" }),
             info.gitBranch.orSession(null)?.let { SessionInfoRow("分支", it, copy = "分支") },
-        )),
-        SessionInfoSection("拷贝", listOfNotNull(
+        )))
+        add(SessionInfoSection("拷贝", listOfNotNull(
             SessionInfoRow("session id", id, copy = "session id"),
             session.resumeCommand(cwd = cwd.orEmpty())?.let { SessionInfoRow("恢复命令", it, copy = "恢复命令") },
-        )),
-    )
+        )))
+    }
 }
 
 @Composable
-internal fun ChatSessionInfoSheet(session: Session, machine: Machine?, state: ChatChromeState, onDismiss: () -> Unit) {
+internal fun ChatSessionInfoSheet(
+    session: Session,
+    machine: Machine?,
+    state: ChatChromeState,
+    onOpenTodo: ((String) -> Unit)? = null,
+    onDismiss: () -> Unit,
+) {
     val clipboard = LocalClipboardManager.current
     val feedback = LocalAppFeedback.current
     var info by remember(session.key) { mutableStateOf<SessionInfo?>(null) }
@@ -91,13 +107,15 @@ internal fun ChatSessionInfoSheet(session: Session, machine: Machine?, state: Ch
         }
         val loaded = info
         when {
-            loaded != null -> sessionInfoSections(session, loaded).filter { it.rows.isNotEmpty() }.forEach { section ->
+            loaded != null -> sessionInfoSections(session, loaded, onOpenTodo = onOpenTodo).filter { it.rows.isNotEmpty() }.forEach { section ->
                 JSectionHeader(section.title)
                 section.rows.forEachIndexed { index, row ->
                     JGroupItem(GroupPosition.of(index, section.rows.size)) {
                         val value = row.value ?: "—"
                         val copy = row.copy?.takeIf { row.value != null }
-                        if (copy != null) JRow(row.label, subtitle = value, subtitleLines = 4,
+                        if (row.onClick != null) JRow(row.label, subtitle = value, subtitleLines = 4,
+                            chevron = true, onClick = { onDismiss(); row.onClick.invoke() })
+                        else if (copy != null) JRow(row.label, subtitle = value, subtitleLines = 4,
                             trailing = { JIcon(PhIcons.Copy, "拷贝$copy", tint = PersonaTheme.palette.ink2) }, onClick = {
                                 clipboard.setText(AnnotatedString(value)); feedback?.notice("已拷贝$copy")
                             })

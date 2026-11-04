@@ -10,6 +10,7 @@ data class MessageRequest(
     val text: String,
     val clientMessageId: String,
     val clearDraft: String? = null,
+    val todoId: String? = null,
 ) {
     val headers: Map<String, String> get() = mapOf("X-Jarvis-Op-Id" to clientMessageId)
 }

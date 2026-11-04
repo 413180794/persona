@@ -198,6 +198,9 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
     val connection by session.connection.state.collectAsStateWithLifecycle()
     val pins by session.assistant.pinned.collectAsStateWithLifecycle()
     val preferences by session.preferences.snapshots.collectAsStateWithLifecycle(AgentsPreferencesSnapshot())
+    val todos by (session.tasks?.todos ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsStateWithLifecycle()
+    val todosSupported by (session.tasks?.todosSupported ?: kotlinx.coroutines.flow.MutableStateFlow(false)).collectAsStateWithLifecycle()
+    val uncompletedTodosCount = remember(todos) { todos.count { !it.isDone } }
     fun kind(key: SessionKey): ConversationKind? = when {
         key == assistant.mainSession || assistant.conversations.any { it.key == key } -> ConversationKind.Assistant
         else -> sessions.firstOrNull { it.key == key }?.let { if (it.assistant) ConversationKind.Assistant else ConversationKind.Agent }
@@ -247,9 +250,12 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
     val agentsWiring by session.agentsWiring.state.collectAsStateWithLifecycle()
     val navigationWiring = remember { MutableStateFlow(agentsWiring) }
     SideEffect {
-        navigationWiring.value = agentsWiring.copy(operations = agentsWiring.operations?.let { bindings ->
-            bindings.copy(onSessionClosed = { key -> bindings.onSessionClosed(key); navigator.sessionClosed(key) })
-        })
+        navigationWiring.value = agentsWiring.copy(
+            operations = agentsWiring.operations?.let { bindings ->
+                bindings.copy(onSessionClosed = { key -> bindings.onSessionClosed(key); navigator.sessionClosed(key) })
+            },
+            tasks = session.tasks,
+        )
     }
     val agents = remember(session, navigator) {
         object : AgentsDependencies by session.agents {
@@ -415,7 +421,10 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
                     needsYou = needsYou, onOpenNeed = { line -> selected = openResolved(needsYouRoute(line)) },
                     onOpenInbox = { navigator.selectTab(AppTab.Inbox) },
                     onTogglePin = { key -> session.preferences.togglePin(key.path) },
-                    onVoice = voicePlugin?.let { plugin -> { navigator.navigate(VoiceRoute(plugin.id, plugin.name)) } })
+                    onVoice = voicePlugin?.let { plugin -> { navigator.navigate(VoiceRoute(plugin.id, plugin.name)) } },
+                    onTodos = { navigator.navigate(persona.core.navigation.TodosRoute) },
+                    todoCount = uncompletedTodosCount,
+                    showTodos = todosSupported)
             }
             agentsEntries(navigator, agents, machine, { machine = it })
             spaceEntries(navigator, agents)

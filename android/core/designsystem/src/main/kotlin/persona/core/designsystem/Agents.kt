@@ -166,6 +166,9 @@ fun AgentTreeHeader(
     counts: List<Pair<Status, Int>> = emptyList(),
     onMonitor: (() -> Unit)? = null,
     tag: String? = null,
+    onAction: (() -> Unit)? = null,
+    actionIcon: PhIcon? = null,
+    actionLabel: String? = null,
 ) {
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
@@ -195,6 +198,7 @@ fun AgentTreeHeader(
             }
             StateCounts(counts)
             if (onMonitor != null) { Spacer(Modifier.width(Tokens.Space.xs)); HeadingAction(PhIcons.Gauge, "机器监控", onMonitor) }
+            if (onAction != null) { Spacer(Modifier.width(Tokens.Space.xs)); HeadingAction(actionIcon ?: PhIcons.CaretRight, actionLabel ?: "详情", onAction) }
         }
     }
 }

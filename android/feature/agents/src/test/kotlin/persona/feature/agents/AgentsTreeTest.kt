@@ -71,4 +71,21 @@ class AgentsTreeTest {
         val searched = buildAgentList(rows, machines, settings = AgentListSettings(query = "api")).groups.flatMap { it.rows }
         assertEquals(listOf(0, 1, 0), machineCounts(machines, searched).map { it.count })
     }
+
+    @Test fun byTodoGroupingTreeFlattensIntoSectionsWithDetailAction() {
+        val todo = Todo(id = "todo_1", title = "待办一", agents = listOf(TodoAgent("mac", "a")))
+        val list = buildAgentList(
+            rows, machines,
+            settings = AgentListSettings(grouping = AgentGrouping.Todo),
+            todos = listOf(todo)
+        )
+        val entries = agentTreeEntries(list, "")
+        assertTrue(entries.none { it is TreeMachineEntry })
+        val groups = entries.filterIsInstance<TreeGroupEntry>()
+        assertEquals(listOf("todo/todo_1", "todo/none"), groups.map { it.group.id })
+        assertEquals("待办一", groups[0].group.title)
+        assertEquals("没有待办", groups[1].group.title)
+        val rowsInTodo1 = entries.filterIsInstance<TreeRowEntry>().filter { it.row.session.sessionId == "a" }
+        assertEquals(1, rowsInTodo1.size)
+    }
 }

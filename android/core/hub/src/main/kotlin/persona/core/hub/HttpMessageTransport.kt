@@ -119,6 +119,7 @@ class HttpMessageTransport(
             put("text", request.text)
             put("client_msg_id", request.clientMessageId)
             request.clearDraft?.let { put("clear_draft", it) }
+            request.todoId?.let { put("todo_id", it) }
         }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
         return try {
             // Non-2xx replies throw HubFailure (handled below); a 2xx body may still be a pending receipt.

@@ -200,6 +200,8 @@ object AssistantLines {
 class TasksStore(private val api: TasksApi, connection: HubConnection, private val scope: CoroutineScope) {
     private val _todos = MutableStateFlow<List<Todo>>(emptyList())
     val todos: StateFlow<List<Todo>> = _todos.asStateFlow()
+    private val _todosSupported = MutableStateFlow(true)
+    val todosSupported: StateFlow<Boolean> = _todosSupported.asStateFlow()
     private val _plans = MutableStateFlow<Map<String, TaskPlan>>(emptyMap())
     val plans: StateFlow<Map<String, TaskPlan>> = _plans.asStateFlow()
     private val _feeds = MutableStateFlow<Map<String, List<FeedItem>>>(emptyMap())
@@ -228,7 +230,64 @@ class TasksStore(private val api: TasksApi, connection: HubConnection, private v
     }
 
     fun reloadTodos() {
-        scope.launch { runCatching { api.todos() }.onSuccess { list -> if (list != _todos.value) _todos.value = list } }
+        scope.launch {
+            runCatching { api.todos() }
+                .onSuccess { list ->
+                    _todosSupported.value = true
+                    if (list != _todos.value) _todos.value = list
+                }
+                .onFailure { error ->
+                    val status = (error as? Exception)?.let { e ->
+                        val prop = e::class.java.methods.firstOrNull { it.name == "getStatus" }
+                        prop?.invoke(e) as? Int
+                    }
+                    if (status == 404 || error.message?.contains("404") == true) {
+                        _todosSupported.value = false
+                        _todos.value = emptyList()
+                    }
+                }
+        }
+    }
+
+    suspend fun createTodo(title: String, notes: String = ""): Todo {
+        val created = api.createTodo(title, notes)
+        reloadTodos()
+        return created
+    }
+
+    suspend fun setTodoDone(todo: Todo, done: Boolean): Todo {
+        val before = _todos.value
+        val now = Instant.now().toString()
+        _todos.update { list -> list.map { if (it.id == todo.id) it.copy(doneAt = if (done) now else null, doneBy = if (done) "user" else null) else it } }
+        return try {
+            val updated = api.patchTodo(todo.id, done = done)
+            _todos.update { list -> list.map { if (it.id == updated.id) updated else it } }
+            updated
+        } catch (t: Throwable) {
+            _todos.value = before
+            throw t
+        }
+    }
+
+    suspend fun updateTodo(id: String, title: String? = null, notes: String? = null): Todo {
+        val updated = api.patchTodo(id, title = title, notes = notes)
+        _todos.update { list -> list.map { if (it.id == updated.id) updated else it } }
+        return updated
+    }
+
+    suspend fun deleteTodo(id: String) {
+        api.deleteTodo(id)
+        _todos.update { list -> list.filterNot { it.id == id } }
+    }
+
+    suspend fun linkTodoAgent(todoId: String, machineId: String, sessionId: String) {
+        api.linkTodoAgent(todoId, machineId, sessionId)
+        reloadTodos()
+    }
+
+    suspend fun unlinkTodoAgent(todoId: String, machineId: String, sessionId: String) {
+        api.unlinkTodoAgent(todoId, machineId, sessionId)
+        reloadTodos()
     }
 
     fun load(conversation: String) {

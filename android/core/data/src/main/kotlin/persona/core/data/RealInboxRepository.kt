@@ -781,6 +781,7 @@ class RealInboxRepository(
                         is LarkPart.File -> "附件：${part.name}（${part.mimeType}）"
                         is LarkPart.Image -> part.description
                         is LarkPart.External -> "${part.title}\n${part.larkUrl}"
+                        else -> ""
                     } }
                     "${message.senderName} ${message.time}\n$body"
                 }

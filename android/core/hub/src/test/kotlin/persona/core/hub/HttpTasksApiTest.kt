@@ -69,4 +69,43 @@ class HttpTasksApiTest {
             assertEquals("/api/v1/todos/todo_1", req.path)
         }
     }
+
+    @Test fun createPatchDeleteAndLinkTodo() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"todo":{"id":"todo_new","title":"测试待办","notes":"说明","agents":[]}}"""))
+            val created = api(server).createTodo("测试待办", "说明")
+            val createReq = server.takeRequest()
+            assertEquals("POST", createReq.method)
+            assertEquals("/api/v1/todos", createReq.path)
+            assertEquals("todo_new", created.id)
+            assertEquals("测试待办", created.title)
+            assertEquals("说明", created.notes)
+
+            server.enqueue(MockResponse().setBody("""{"todo":{"id":"todo_new","title":"新标题","done_at":"2026-11-04T10:00:00Z","agents":[]}}"""))
+            val patched = api(server).patchTodo("todo_new", title = "新标题", done = true)
+            val patchReq = server.takeRequest()
+            assertEquals("PATCH", patchReq.method)
+            assertEquals("/api/v1/todos/todo_new", patchReq.path)
+            assertEquals("新标题", patched.title)
+            assertTrue(patched.isDone)
+
+            server.enqueue(MockResponse().setBody("""{"ok":true}"""))
+            api(server).linkTodoAgent("todo_new", "m1", "s1")
+            val linkReq = server.takeRequest()
+            assertEquals("PUT", linkReq.method)
+            assertEquals("/api/v1/todos/todo_new/agents/m1/s1", linkReq.path)
+
+            server.enqueue(MockResponse().setBody("""{"ok":true}"""))
+            api(server).unlinkTodoAgent("todo_new", "m1", "s1")
+            val unlinkReq = server.takeRequest()
+            assertEquals("DELETE", unlinkReq.method)
+            assertEquals("/api/v1/todos/todo_new/agents/m1/s1", unlinkReq.path)
+
+            server.enqueue(MockResponse().setBody("""{"ok":true}"""))
+            api(server).deleteTodo("todo_new")
+            val deleteReq = server.takeRequest()
+            assertEquals("DELETE", deleteReq.method)
+            assertEquals("/api/v1/todos/todo_new", deleteReq.path)
+        }
+    }
 }

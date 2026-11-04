@@ -48,6 +48,8 @@ internal fun AgentsScreen(
     val notice by model.notice.collectAsStateWithLifecycle()
     val operations by model.operationState.collectAsStateWithLifecycle()
     var operationDialog by remember { mutableStateOf<AgentOperationDialog?>(null) }
+    var pickingTodoForSession by remember { mutableStateOf<Session?>(null) }
+    val todos by (model.tasks?.todos ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val feedback = persona.core.designsystem.LocalAppFeedback.current
     var menu by remember { mutableStateOf(false) }
@@ -114,7 +116,9 @@ internal fun AgentsScreen(
             },
             onClose = { operationDialog = AgentOperationDialog.Close(row.session) },
             // A Codex app-server thread the phone may join live (iOS 实时接入).
-            onAttach = if (row.session.canAttach) ({ model.attach(row.session) }) else null)
+            onAttach = if (row.session.canAttach) ({ model.attach(row.session) }) else null,
+            onLinkTodo = { pickingTodoForSession = row.session },
+            onUnlinkTodo = row.session.todo?.let { todo -> { model.unlinkTodo(todo.id, row.session) } })
     }
     // In the list the space menu also opens the space page; the space page itself puts it in its bar.
     val spaceMenu: @Composable (AgentSpace, Boolean) -> Unit = { space, inList ->
@@ -148,6 +152,7 @@ internal fun AgentsScreen(
             titleBusy = connection in setOf(ConnectionState.Connecting, ConnectionState.Updating),
             onTitleClick = ::connectionSettings, refreshing = refreshing, onRefresh = model::refresh,
             actions = {
+                JIconButton(PhIcons.ListChecks, "待办", { navigator.navigate(persona.core.navigation.TodosRoute) })
                 JIconButton(PhIcons.Plus, "新建会话", { newSession() })
                 JIconButton(PhIcons.SlidersHorizontal, "列表设置", { menu = true })
             },
@@ -210,7 +215,13 @@ internal fun AgentsScreen(
                                 if (space != null && space.preferenceKey in page.preferences.pins.spaces) add(RowFlag("空间已置顶", PhIcons.PushPin))
                                 if (space != null && space.preferenceKey in page.preferences.mutes.spaces) add(RowFlag("空间已屏蔽", PhIcons.Prohibit))
                             }, menu = space?.let { { spaceMenu(it, true) } })
-                        else AgentTreeHeader(group.title, group.folded, { model.fold(group) }, first = entry.first,
+                        else if (group.id.startsWith("todo/") && group.id != "todo/none") {
+                            val todoId = group.id.removePrefix("todo/")
+                            AgentTreeHeader(group.title, group.folded, { model.fold(group) }, first = entry.first,
+                                icon = PhIcons.ListChecks, counts = group.headingCounts,
+                                onAction = { navigator.navigate(persona.core.navigation.TodoDetailRoute(todoId)) },
+                                actionIcon = PhIcons.CaretRight, actionLabel = "查看待办")
+                        } else AgentTreeHeader(group.title, group.folded, { model.fold(group) }, first = entry.first,
                             icon = PhIcons.PushPin.takeIf { group.id == "pinned" }, counts = group.headingCounts)
                     }
                     is TreeRowEntry -> item(entry.key, contentType = "session") {
@@ -272,6 +283,17 @@ internal fun AgentsScreen(
         }
     }
     operationDialog?.let { AgentOperationDialog(it, model, names[it.session.machineId]) { operationDialog = null } }
+    pickingTodoForSession?.let { targetSession ->
+        TodoPickerSheet(
+            todos = todos,
+            sessionLookup = { k -> page.sessions.firstOrNull { it.key == k } },
+            onDismiss = { pickingTodoForSession = null },
+            onPick = { todo ->
+                model.linkTodo(todo.id, targetSession)
+                pickingTodoForSession = null
+            }
+        )
+    }
     if (newAgent) {
         if (creationModel != null) NewAgentDialog(creationModel, page.machines, connection == ConnectionState.Online) { newAgent = false }
         else JDialog(onDismiss = { newAgent = false }, title = "新建会话",
@@ -347,6 +369,7 @@ internal fun SlotRow(
             if (source?.readOnly == true) add(RowFact("仅查看", caution = true))
             if (located) listOfNotNull(machine, session.spaceName?.takeIf { it.isNotBlank() } ?: session.folderName.takeIf { it.isNotBlank() })
                 .joinToString(" / ").takeIf { it.isNotBlank() }?.let { add(RowFact(it)) }
+            session.todo?.let { add(RowFact("待办 · ${it.title}")) }
             slotLabel?.let { add(RowFact(it)) }
             if (requestCount > 0) add(RowFact("$requestCount 件事等你定", caution = true))
             session.loop?.let { add(RowFact(it.nextRunLabel(now).replaceFirst("循环 · ", "循环，"))) }
@@ -382,12 +405,19 @@ internal fun AgentSessionMenuItems(
     onOpen: () -> Unit, onPin: () -> Unit, onMute: () -> Unit, onRead: () -> Unit,
     onRename: () -> Unit, onStopLoop: () -> Unit, onHandoff: () -> Unit, onClose: () -> Unit,
     onAttach: (() -> Unit)? = null,
+    onLinkTodo: (() -> Unit)? = null,
+    onUnlinkTodo: (() -> Unit)? = null,
 ): List<JAction> {
     val clipboard = LocalClipboardManager.current
     val session = row.session
     return buildList {
         add(JAction(if (pinned) "取消置顶" else "置顶", PhIcons.PushPin, enabled = !busy, onClick = onPin))
         add(JAction(if (muted) "取消屏蔽" else "屏蔽", PhIcons.Prohibit, enabled = !busy, onClick = onMute))
+        if (session.todo != null && onUnlinkTodo != null) {
+            add(JAction("解除关联待办", PhIcons.ListChecks, enabled = !busy, onClick = onUnlinkTodo))
+        } else if (onLinkTodo != null) {
+            add(JAction("关联到待办…", PhIcons.ListChecks, enabled = !busy, onClick = onLinkTodo))
+        }
         onAttach?.let { add(JAction("实时接入", PhIcons.PlugsConnected, enabled = !busy, onClick = it)) }
         // Renaming changes the terminal tab and Claude's /rename; a session without a terminal has neither.
         if (session.canTerminal) add(JAction("重命名", PhIcons.NotePencil, enabled = !busy, onClick = onRename))
@@ -411,7 +441,11 @@ private val ConnectionState.title: String get() = when (this) {
     ConnectionState.CertificateMismatch -> "hub 的证书变了"
     ConnectionState.Revoked -> "配对已失效"
 }
-private val AgentGrouping.label: String get() = if (this == AgentGrouping.State) "按状态" else "按电脑和空间"
+private val AgentGrouping.label: String get() = when (this) {
+    AgentGrouping.State -> "按状态"
+    AgentGrouping.Todo -> "按待办"
+    else -> "按电脑和空间"
+}
 private val AgentQuickFilter.label: String get() = when (this) { AgentQuickFilter.All -> "全部"; AgentQuickFilter.NeedsYou -> "需要你"; AgentQuickFilter.Unread -> "未读"; AgentQuickFilter.Working -> "工作中" }
 internal val AgentState.designStatus: Status get() = when (this) {
     AgentState.NeedsYou -> Status.NeedsYou

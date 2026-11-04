@@ -44,6 +44,7 @@ internal class AgentsViewModel(
     private val mainConversationSender: MainConversationSender? = null,
     private val pairingScope: String = bindings?.operations?.scope.orEmpty(),
     private val renamer: SessionRenamer? = null,
+    val tasks: persona.core.domain.tasks.TasksStore? = null,
 ) : ViewModel() {
     private val operations = bindings?.operations?.let { AgentOperationsState(it, preferences.hubCache) }
     val operationState = operations?.state ?: MutableStateFlow(AgentOperationsSnapshot())
@@ -67,8 +68,9 @@ internal class AgentsViewModel(
     private val _failure = MutableStateFlow<Throwable?>(null)
     val failure = _failure.asStateFlow()
     fun clearFailure() { _failure.value = null }
+    private val todosFlow = tasks?.todos ?: MutableStateFlow(emptyList())
     val page = combine(renamer?.project(repository.sessions) ?: repository.sessions, repository.machines, preferences.snapshots(pairingScope),
-        settings.combine(groupFilter, ::Pair), operationState) { everySession, everyMachine, localPrefs, (settings, group), ops ->
+        settings.combine(groupFilter, ::Pair), combine(operationState, todosFlow, ::Pair)) { everySession, everyMachine, localPrefs, (settings, group), (ops, todos) ->
         val source = if (group == null) everySession else everySession.filter { group.admits(it.machineId) }
         val machines = if (group == null) everyMachine else everyMachine.filter { group.admits(it.id) }
         val sessions = ops.project(source)
@@ -78,15 +80,15 @@ internal class AgentsViewModel(
         val knownMachines = machines + sessions.map { it.machineId }.distinct().filter { id -> machines.none { it.id == id } }
             .map { Machine(it, "机器信息待更新") }
         val effective = settings.copy(grouping = prefs.grouping)
-        val context = listOf(prefs.range, effective.grouping, effective.quick, effective.query, effective.machineFilter, prefs.pins)
+        val context = listOf(prefs.range, effective.grouping, effective.quick, effective.query, effective.machineFilter, prefs.pins, todos)
         if (context != previousContext) previous = null
         previousContext = context
-        val sorted = scopedAgentList(rows, knownMachines, prefs, effective)
+        val sorted = scopedAgentList(rows, knownMachines, prefs, effective, todos)
         val result = retainOpenedRows(sorted, previous, effective.kept).also { previous = it }
         val all = scopedAgentList(rows, knownMachines, prefs,
-            effective.copy(quick = AgentQuickFilter.All, kept = emptySet()))
+            effective.copy(quick = AgentQuickFilter.All, kept = emptySet()), todos)
         // The chips count what each computer would show under the current range, search and quick filter.
-        val everywhere = scopedAgentList(rows, knownMachines, prefs, effective.copy(machineFilter = "", kept = emptySet()))
+        val everywhere = scopedAgentList(rows, knownMachines, prefs, effective.copy(machineFilter = "", kept = emptySet()), todos)
             .groups.flatMap { it.rows }
         AgentsPageState(sessions, knownMachines, prefs, effective, result, all.groups.sumOf { it.rows.size },
             machineCounts(knownMachines, everywhere), everywhere.size, groupCounts(everySession, everyMachine, prefs, effective, ops))
@@ -270,6 +272,28 @@ internal class AgentsViewModel(
         settings.update { it.copy(expandedIdle = it.expandedIdle + key) }
     }
     fun clearNotice() { _notice.value = null }
+
+    fun linkTodo(todoId: String, session: Session) {
+        viewModelScope.launch {
+            try {
+                tasks?.linkTodoAgent(todoId, session.machineId, session.sessionId)
+                _notice.value = "已关联到待办"
+            } catch (e: Exception) {
+                _notice.value = "关联待办失败：${e.message}"
+            }
+        }
+    }
+
+    fun unlinkTodo(todoId: String, session: Session) {
+        viewModelScope.launch {
+            try {
+                tasks?.unlinkTodoAgent(todoId, session.machineId, session.sessionId)
+                _notice.value = "已解除关联"
+            } catch (e: Exception) {
+                _notice.value = "解除关联失败：${e.message}"
+            }
+        }
+    }
     fun refresh() {
         if (_refreshing.value) return
         viewModelScope.launch {

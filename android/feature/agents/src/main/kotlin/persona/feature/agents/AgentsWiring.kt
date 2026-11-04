@@ -25,4 +25,5 @@ data class AgentsWiringState(
     val drafts: AgentsDraftSource? = null,
     val mainSender: MainConversationSender? = null,
     val creationPreferences: DataStore<Preferences>? = null,
+    val tasks: persona.core.domain.tasks.TasksStore? = null,
 )

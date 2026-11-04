@@ -29,6 +29,7 @@ data class ChatChromeBindings(
     val onHandToPersona: ((String) -> Unit)? = null,
     /** The assistant conversation's tasks (docs/unified-entry.md); null for an agent's chat. */
     val tasks: persona.core.domain.tasks.TasksStore? = null,
+    val onOpenTodo: ((String) -> Unit)? = null,
 )
 
 @EntryPoint
