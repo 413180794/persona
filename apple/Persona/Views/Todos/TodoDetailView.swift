@@ -189,7 +189,8 @@ struct TodoDetailView: View {
                 .padding(.vertical, Theme.Space.xs)
             }
 
-            TodoSpacesSection(todo: todo, sessions: sessions, machineName: machineName)
+            TodoSpacesSection(todo: todo, sessions: sessions, machineName: machineName, hubGroup: model.hub?.group,
+                              machineOnline: { model.machine(model.hubRef($0))?.online ?? false })
 
             Section {
                 if activeAgents.isEmpty {

@@ -117,9 +117,16 @@ nonisolated enum TodosLogic {
         }
     }
 
-    static func hasLiveAgent(in space: TodoItem.Space, sessions: [Session]) -> Bool {
-        sessions.contains { session in
-            guard session.machineID == space.machineID, session.state.isLive else { return false }
+    /// Whether a project of a todo has an Agent running on it (else the detail says 「当前没有 Agent」): a live session
+    /// in that project, on the todos' hub group (`isOnTodosHub`: another group's computer may share the id and the
+    /// project's name), on a computer that is connected (as the web: a disconnected computer's sessions turn unknown,
+    /// not offline).
+    static func hasLiveAgent(in space: TodoItem.Space, sessions: [Session], hubGroup: String?,
+                             machineOnline: (String) -> Bool) -> Bool {
+        guard machineOnline(space.machineID) else { return false }
+        return sessions.contains { session in
+            guard session.machineID == space.machineID, session.state.isLive,
+                  isOnTodosHub(sessionGroup: session.group, hubGroup: hubGroup) else { return false }
             let name = session.spaceName.flatMap { $0.isEmpty ? nil : $0 } ?? session.spaceID
             return name == space.space
         }

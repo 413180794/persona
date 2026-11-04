@@ -978,6 +978,13 @@ TODOS_INIT = [
         "agents": [],
     },
 ]
+# MOCK_TODO_OFFLINE=1: the weather todo also has a project on the NAS, which is disconnected; its session there is
+# unknown (what the hub makes of a disconnected computer's sessions), so the todo's detail says 「当前没有 Agent」 (#1110).
+if os.environ.get("MOCK_TODO_OFFLINE") == "1" and not MOCK_MACHINES:
+    TODOS_INIT[0]["spaces"].append({"machine_id": "nas", "space": "backup", "linked_at": ago(minutes=20)})
+    SESSIONS.append(sess("nas", "a1f3c2d4-0000-4000-8000-0000000000b1", "备份照片库", "/home/me/backup", "unknown",
+                         "unknown", "backup", 1, "1", 1, 180, "开始同步照片库。"))
+
 TODOS = copy.deepcopy(TODOS_INIT)
 
 

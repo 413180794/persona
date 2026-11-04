@@ -345,14 +345,37 @@ struct TodosLogicTests {
         #expect(TodosLogic.agentSource(agent, lookup: lookup) == "派生")
     }
 
+    /// `hasLiveAgent` on the default group with every computer connected.
+    private func live(_ project: TodoItem.Space, _ sessions: [Session]) -> Bool {
+        TodosLogic.hasLiveAgent(in: project, sessions: sessions, hubGroup: nil, machineOnline: { _ in true })
+    }
+
+    @Test func anotherGroupsComputerWithTheSameIDDoesNotCount() {
+        let project = TodoItem.Space(machineID: "m", space: "project")
+        var other = session("s", state: .working)
+        other.spaceName = "project"
+        other.group = "home"
+        #expect(!TodosLogic.hasLiveAgent(in: project, sessions: [other], hubGroup: nil, machineOnline: { _ in true }))
+        #expect(!TodosLogic.hasLiveAgent(in: project, sessions: [other], hubGroup: "work", machineOnline: { _ in true }))
+        #expect(TodosLogic.hasLiveAgent(in: project, sessions: [other], hubGroup: "home", machineOnline: { _ in true }))
+    }
+
+    @Test func aDisconnectedComputersAgentsDoNotCount() {
+        let project = TodoItem.Space(machineID: "m", space: "project")
+        var active = session("s", state: .unknown) // what the hub makes of a disconnected computer's sessions
+        active.spaceName = "project"
+        #expect(!TodosLogic.hasLiveAgent(in: project, sessions: [active], hubGroup: nil, machineOnline: { $0 != "m" }))
+        #expect(TodosLogic.hasLiveAgent(in: project, sessions: [active], hubGroup: nil, machineOnline: { $0 == "m" }))
+    }
+
     @Test func projectWithoutALiveAgentRemainsVisibleAsEmpty() {
         let project = TodoItem.Space(machineID: "m", space: "project")
         var active = session("s", state: .working)
         active.spaceName = "project"
-        #expect(TodosLogic.hasLiveAgent(in: project, sessions: [active]))
+        #expect(live(project, [active]))
         active.state = .offline
-        #expect(!TodosLogic.hasLiveAgent(in: project, sessions: [active]))
-        #expect(!TodosLogic.hasLiveAgent(in: project, sessions: []))
+        #expect(!live(project, [active]))
+        #expect(!live(project, []))
     }
 
     @Test func projectPresenceUsesAllOnlineSessionsAndTheHubKey() {
@@ -361,14 +384,14 @@ struct TodosLogicTests {
         active.spaceID = "project"
         active.spaceName = ""
         active.todo = SessionTodoRef(id: "other", title: "Other")
-        #expect(TodosLogic.hasLiveAgent(in: project, sessions: [active]))
+        #expect(live(project, [active]))
         active.spaceName = nil
-        #expect(TodosLogic.hasLiveAgent(in: project, sessions: [active]))
+        #expect(live(project, [active]))
         active.machineID = "other"
-        #expect(!TodosLogic.hasLiveAgent(in: project, sessions: [active]))
+        #expect(!live(project, [active]))
         active.machineID = "m"
         active.state = .offline
-        #expect(!TodosLogic.hasLiveAgent(in: project, sessions: [active]))
+        #expect(!live(project, [active]))
     }
 
     @Test func sessionMarkerControlsUnlinkAndCurrentHighlightWithoutTheList() {

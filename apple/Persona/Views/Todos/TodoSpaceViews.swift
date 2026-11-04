@@ -64,6 +64,9 @@ struct TodoSpacesSection: View {
     let todo: TodoItem
     let sessions: [Session]
     var machineName: (String) -> String
+    /// The todos' hub group and whether a computer of it is connected (`TodosLogic.hasLiveAgent`).
+    var hubGroup: String?
+    var machineOnline: (String) -> Bool
 
     var body: some View {
         if TodoStore.shared.spacesSupported, let spaces = todo.spaces, !spaces.isEmpty {
@@ -73,7 +76,7 @@ struct TodoSpacesSection: View {
                         VStack(alignment: .leading, spacing: Theme.Space.xs) {
                             Text("\(project.space) · \(machineName(project.machineID))")
                                 .font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
-                            if !TodosLogic.hasLiveAgent(in: project, sessions: sessions) {
+                            if !TodosLogic.hasLiveAgent(in: project, sessions: sessions, hubGroup: hubGroup, machineOnline: machineOnline) {
                                 Text("当前没有 Agent").font(Theme.Font.caption).foregroundStyle(.secondary)
                             }
                         }

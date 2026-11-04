@@ -605,3 +605,8 @@ Task 里只遍历这个序列，就能编过。选择器用 `preferredItemEncodi
 其实 `ChatView` 的 `Composer` 只在环境值 `shellChat` 为真时才用它，而这个值只有 `AssistantView` 给自己的 `ChatView` 设；Agents 页推进来的是同一个
 `ChatView`、默认值 false，走的是 `ComposerRow` / `PromptComposer`。结果按钮一样了，位置不一样（麦克风在胶囊外面），TestFlight 上一眼就看出来。
 说两处「共用」之前，从两个页面各自的调用处往下看一遍走的是哪个分支（环境值、风格、旧布局开关都可能分叉），截图也要两页并排拍同一个状态。
+
+### 「有没有在线的 Agent」不能只看会话状态（#1110）
+
+电脑断连时 hub 不把它的会话标成 offline，而是 unknown，`AgentState.isLive` 仍为真；待办详情的「当前没有 Agent」只看状态，电脑断了还以为有人在做，网页却会显示（它还要求电脑在线）。
+另外 `model.allSessions` 是所有 hub 组的会话，只比电脑 id 和项目名会把别的组里同 id、同名项目的会话算进来。凡是「这台电脑 / 这个项目现在有没有 Agent」的判断：先 `isOnTodosHub`（或对应的组判断）筛组，再看 `model.machine(...)?.online`，最后才看会话状态。

@@ -17,9 +17,12 @@ import Testing
 
     @Test func todoSpaceUsesOnlyWorkspaceIDsAndTheHubProjectKey() {
         var s = session("s", state: "working")
+        // One group either way, so the nils below are the group's, not a list with no group in it.
         s.spaceID = nil
+        #expect(SpaceGroup.build([s]).count == 1)
         #expect(SpaceGroup.build([s]).first?.todoSpace == nil)
         s.spaceID = ""
+        #expect(SpaceGroup.build([s]).count == 1)
         #expect(SpaceGroup.build([s]).first?.todoSpace == nil)
         s.spaceID = "workspace"
         s.spaceName = "Project"

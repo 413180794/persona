@@ -159,6 +159,9 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 `MOCK_ASK_USER=1 PORT=18797 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/AskUserRowTests`，
 截图在 `/tmp/persona-ask-user-*`（`TEST_RUNNER_SHOT_SUFFIX` 区分深浅色和风格）。
 
+待办详情的「当前没有 Agent」（#1110）：`MOCK_TODO_OFFLINE=1` 给「天气 App 发 1.3 版」多挂一个断连的 NAS 上的项目 backup，那里的会话状态是 unknown；
+`-openSession macbook/a1f3c2d4-0000-4000-8000-000000000002 -openTodoDetail YES` 打开详情，backup 那行标「当前没有 Agent」，weather 那行不标。
+
 端口转发（`PortForwardTests`，`docs/ports.md`）：会话顶部和回复里的 `:端口` Badge 带页面标题、停掉的变灰，点开在网页卡片里经 mock 的
 `…/ports/{port}/connect` 加载 mock 自己起的页面（`GET /mock/ports` 看连接记录），点灰的提示「已经没有在监听」：
 `MOCK_PORTS=1 PORT=18791 python3 scripts/mock/mock_hub.py &`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18791 xcodebuild test … -only-testing:PersonaUITests/PortForwardTests`；
