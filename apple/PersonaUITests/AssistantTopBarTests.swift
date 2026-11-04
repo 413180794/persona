@@ -106,10 +106,14 @@ final class AssistantTopBarTests: XCTestCase {
         history.tapCenter()
         XCTAssertTrue(sidebar(app).waitForExistence(timeout: 3), "历史对话 did not open the sidebar:\n\(app.debugDescription)")
         // 豆包's layout (2026-10-31): what to start, 置顶 with the main conversation, 最近, Persona and 设置 at the foot.
-        for row in ["新对话", "定时任务", "知识库", "置顶", "最近", "主对话"] {
+        for row in ["新对话", "定时任务", "知识库", "置顶", "最近"] {
             XCTAssertTrue(app.staticTexts[row].firstMatch.exists, "no \(row) in the sidebar:\n\(app.debugDescription)")
         }
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Persona，")).firstMatch.exists, "no Persona at the foot")
+        // The main conversation is named Persona (#2004).
+        XCTAssertTrue(app.buttons.matching(identifier: "sidebar-conversation").matching(NSPredicate(format: "label BEGINSWITH %@", "Persona")).firstMatch.exists,
+                      "no Persona (the main conversation) under 置顶:\n\(app.debugDescription)")
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label ENDSWITH %@", "Persona，", "查看资料")).firstMatch.exists,
+                      "no Persona at the foot")
         XCTAssertTrue(app.buttons["搜索对话"].exists, "no search button")
         shot(app, "sidebar")
         let pick = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "早报 · 周三")).firstMatch

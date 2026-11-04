@@ -172,6 +172,12 @@ struct SettingsView: View {
 
                 Section {
                     Group {
+                        // Persona's profile, where the shell's sidebar had it before the main conversation took its
+                        // place (#2004).
+                        NavigationLink(value: SettingsPage.assistant) {
+                            SettingsRow(title: "认识 \(model.persona.name)", symbol: Theme.Icon.info, tint: Theme.persona)
+                        }
+                        .accessibilityIdentifier("settings-about-persona")
                         let version = "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))"
                         // The commit this build was made from (stamped at build time, `project.yml`): which one is on the phone.
                         let commit = Bundle.main.object(forInfoDictionaryKey: "JarvisCommit") as? String ?? "未知"

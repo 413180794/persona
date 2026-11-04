@@ -81,11 +81,12 @@ final class AssistantArchiveTests: XCTestCase {
         archiveAndBringBack("old")
     }
 
-    /// The main conversation has no 归档.
+    /// The main conversation has no 归档. In the shell it is the drawer's first row, 「Persona」, not again under 置顶 (#2004).
     @MainActor func testTheMainConversationStays() {
         launch(oldLayout: false)
-        let main = conversation("主对话")
-        XCTAssertTrue(main.exists)
+        let main = app.buttons["sidebar-main"].firstMatch
+        XCTAssertTrue(main.waitForExistence(timeout: 5), "no Persona row at the top of the drawer")
+        XCTAssertFalse(conversation("Persona").exists, "the main conversation is under 置顶 too")
         main.swipeLeft()
         sleep(1)
         XCTAssertFalse(app.buttons["归档"].exists, "the main conversation offered 归档")

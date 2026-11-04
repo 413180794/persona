@@ -108,9 +108,9 @@ struct IconVocabularyTests {
     /// Every brand mark is in the app's asset catalog, an OS mark for each distribution included.
     @Test @MainActor func everyBrandIsAnImage() {
         let families: [OSFamily] = [.ubuntu, .debian, .fedora, .redhat, .centos, .rocky, .alma, .arch, .alpine, .opensuse, .nixos, .linux]
-        let names = [Theme.Brand.claude, Theme.Brand.openAI, Theme.Brand.lark, Theme.Brand.google, Theme.Brand.gmail]
+        let names = [Theme.Brand.claude, Theme.Brand.openAI, Theme.Brand.lark, Theme.Brand.google, Theme.Brand.gmail, Theme.Brand.persona]
             + families.compactMap(Theme.Brand.os)
-        #expect(names.count == 17)
+        #expect(names.count == 18)
         let missing = names.filter { UIImage(named: $0) == nil }
         #expect(missing.isEmpty, "not in Assets.xcassets: \(missing)")
     }

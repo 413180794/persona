@@ -656,8 +656,9 @@ private struct SidebarClosed: View {
 }
 
 /// What the sidebar lists (2026-10-31, laid out like 豆包's): Persona's name with a search button; the things to start
-/// (新对话, 定时任务, 知识库); 置顶 (the main conversation first) and 最近, one line each with a round mark; Persona's face,
-/// where it runs and 设置 at the foot.
+/// (新对话, 定时任务, 知识库); 置顶 (the main conversation first, as 「Persona」 with the app's logo) and 最近, one line
+/// each with a round mark; Persona's face, where it runs and 设置 at the foot. The shell's drawer starts with the main
+/// conversation instead, then a line and the places to go (#2004).
 struct AssistantSidebar: View {
     /// The open conversation's row. On the Mac, the shade the shell's other lists select with (`macSelected`): the
     /// phone's `well` on the Mac's lighter fills (#1169) was hard to find there.
@@ -731,7 +732,7 @@ struct AssistantSidebar: View {
             List {
                 Group {
                     if query.isEmpty {
-                        actions
+                        actions(all)
                         VStack { Divider() }.padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s) // a row lays a bare Divider out upright
                         conversations(all, archived: archived)
                     } else {
@@ -848,23 +849,13 @@ struct AssistantSidebar: View {
 
     // MARK: What to start
 
-    @ViewBuilder private var actions: some View {
+    @ViewBuilder private func actions(_ all: [Session]) -> some View {
         if let openInbox, let onMachines {
-            // The shell's: Persona's own page first (认识 Persona, like ChatGPT's 认识 Dot), then the places to go.
+            // The shell's: Persona (the main conversation) first, a line, then the places to go. 认识 Persona is in
+            // 设置 › 关于 (#2004).
             VStack(alignment: .leading, spacing: 0) {
-                Button(action: openProfile) {
-                    HStack(spacing: Theme.Space.l) {
-                        PersonaAvatar(size: Theme.Size.icon)
-                            .scaledFrame(width: Theme.Size.icon)
-                        Text("认识 \(model.persona.name)").font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, Theme.Space.m)
-                    .scaledFrame(minHeight: Theme.Size.box50)
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("sidebar-profile")
+                mainItem(all)
+                Divider().padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
                 action("收件箱", Theme.Icon.inbox, id: "sidebar-inbox", count: InboxStore.shared.actionCount, run: openInbox)
                 if TodoStore.shared.isSupported {
                     action("待办", Theme.Icon.todo, id: "sidebar-todos", count: TodoStore.shared.badgeCount, run: { (openTodos ?? openInbox)() })
@@ -881,6 +872,47 @@ struct AssistantSidebar: View {
             }
         }
     }
+
+    /// The shell's first row: the main conversation as 「Persona」 with the app's logo (#2004). Only the name shown is
+    /// Persona's: it is the same conversation, its key and its data unchanged. Its state (working, waiting, unread) on
+    /// the right, as on a conversation's row.
+    private func mainItem(_ all: [Session]) -> some View {
+        let key = model.assistantMain
+        let main = all.first { $0.key == key }
+        let selected = key != nil && key == current
+        return Button { if let key { open(key) } } label: {
+            HStack(spacing: Theme.Space.l) {
+                BrandMark(Theme.Brand.persona, side: Theme.Size.icon)
+                Text(Self.mainTitle).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
+                Spacer(minLength: 0)
+                if let main { mark(main) }
+            }
+            .padding(.horizontal, Theme.Space.m)
+            .scaledFrame(minHeight: Theme.Size.box50)
+            .background {
+                if selected { RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous).fill(Self.selectedFill) }
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel([Self.mainTitle, main.flatMap(stateWord)].compactMap { $0 }.joined(separator: "，"))
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier("sidebar-main")
+        .contextMenu {
+            if let main {
+                Button {
+                    UIPasteboard.general.string = main.sessionID
+                    model.toast = Toast("已拷贝会话 ID", style: .success)
+                } label: { Label("拷贝会话 ID", systemImage: Theme.Icon.id) }
+                if main.status.isLive {
+                    Button(role: .destructive) { ending = main } label: { Label("结束…", systemImage: Theme.Icon.end) }
+                }
+            }
+        }
+    }
+
+    /// The main conversation's name in the sidebar (it was 主对话).
+    static let mainTitle = "Persona"
 
     @ViewBuilder private func action(_ title: String, _ symbol: String, id: String? = nil, count: Int = 0, run: @escaping () -> Void) -> some View {
         if AppStyle.current.usesBeautifulUI {
@@ -917,7 +949,10 @@ struct AssistantSidebar: View {
 
     @ViewBuilder private func conversations(_ all: [Session], archived: Int) -> some View {
         let main = model.assistantMain
-        let pinned = all.filter(isPinned).sorted { $0.key == main && $1.key != main } // the main one first
+        // The shell has the main conversation at the top already (`mainItem`): not again under 置顶.
+        let pinned = all.filter { isPinned($0) && !(isShell && $0.key == main) }
+            .sorted { $0.key == main && $1.key != main } // the main one first
+        let mainAbove = isShell && all.contains { $0.key == main }
         if !pinned.isEmpty {
             heading("置顶") {
                 if pinned.contains(where: { $0.key != main }) {
@@ -928,7 +963,7 @@ struct AssistantSidebar: View {
         }
         let rest = AssistantSidebarGroups.newestFirst(all.filter { !isPinned($0) })
         if rest.isEmpty {
-            Text(pinned.isEmpty ? "还没有对话：点上面的新对话开始" : "还没有别的对话")
+            Text(pinned.isEmpty && !mainAbove ? "还没有对话：点上面的新对话开始" : "还没有别的对话")
                 .font(Theme.Font.secondary).foregroundStyle(.secondary)
                 .padding(.horizontal, Theme.Space.m).padding(.top, Theme.Space.xl)
         } else {
@@ -1054,7 +1089,7 @@ struct AssistantSidebar: View {
     private func row(_ s: Session) -> some View {
         let selected = s.key == current
         let isMain = s.key == model.assistantMain
-        let title = isMain ? "主对话" : s.title.isEmpty || s.title == "Claude Code" ? "新对话" : s.title
+        let title = isMain ? Self.mainTitle : s.title.isEmpty || s.title == "Claude Code" ? "新对话" : s.title
         let preview = s.lastText.map { Fmt.plain($0).replacingOccurrences(of: "\n", with: " ") } ?? ""
         return Button { open(s.key) } label: {
             HStack(spacing: Theme.Space.m) {
@@ -1062,7 +1097,7 @@ struct AssistantSidebar: View {
                 if isShell {
                     EmptyView()
                 } else if isMain {
-                    PersonaAvatar(size: Theme.Size.wellM)
+                    BrandMark(Theme.Brand.persona, side: Theme.Size.wellM)
                 } else {
                     ConversationMark(id: s.sessionID)
                 }

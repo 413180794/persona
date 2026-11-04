@@ -376,6 +376,8 @@ extension Theme {
         static let iosHealth = "ios-app-health"
         static let iosPhotos = "ios-app-photos"
         static let iosMaps = "ios-app-maps"
+        /// Persona's own logo: the app's default icon (纸色, any / dark), drawn as an app icon. The sidebar's Persona row.
+        static let persona = "app-icon-default"
 
         /// How much of its square box a mark's artwork fills, so marks of different shapes look the same size side by
         /// side (`BrandMark`). The assets have no padding of their own (brand-lark's viewBox is cropped to the bird), and
@@ -394,7 +396,7 @@ extension Theme {
         static let onTile: CGFloat = 0.62
 
         /// iPhone apps' icons: drawn whole in an app icon's squircle with its edge, not fitted as a mark.
-        static func isAppIcon(_ asset: String) -> Bool { asset.hasPrefix("ios-app-") }
+        static func isAppIcon(_ asset: String) -> Bool { asset.hasPrefix("ios-app-") || asset == persona }
 
         /// A Linux distribution's mark; macOS uses the system's apple.logo.
         static func os(_ f: OSFamily) -> String? {
