@@ -344,3 +344,76 @@ func TestElsewhere(t *testing.T) {
 	go http.Serve(hl, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "ok") }))
 	waitState(t, far, StateRunning)
 }
+
+// observed records what an Observer is told.
+type observed struct {
+	mu    sync.Mutex
+	calls []string // method code
+	runs  []string // event detail
+	logs  []string // source: line
+}
+
+func (o *observed) Call(method string, took time.Duration, code string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.calls = append(o.calls, strings.TrimSpace(method+" "+code))
+}
+
+func (o *observed) Run(event, detail string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.runs = append(o.runs, strings.TrimSpace(event+" "+detail))
+}
+
+func (o *observed) Log(source, line string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.logs = append(o.logs, source+": "+line)
+}
+
+func (o *observed) snapshot() (calls, runs, logs []string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return append([]string(nil), o.calls...), append([]string(nil), o.runs...), append([]string(nil), o.logs...)
+}
+
+// The host tells the Observer each call with its code, each run and why it ended, and the host's lines about it.
+func TestObserver(t *testing.T) {
+	o := &observed{}
+	s := spec(t, "rpc")
+	s.OnCall, s.Observe = true, o
+	p := Start(context.Background(), s)
+	defer p.Stop()
+	if err := p.Call(context.Background(), "demo.echo", map[string]any{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	_ = p.Call(context.Background(), "demo.nothing", map[string]any{}, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_ = p.Call(ctx, "demo.echo", map[string]any{}, nil)
+	_ = p.Call(context.Background(), "demo.exit", map[string]any{}, nil)
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, runs, _ := o.snapshot(); len(runs) >= 2 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	calls, runs, logs := o.snapshot()
+	want := []string{"demo.echo", "demo.nothing " + extension.CodeUnknownMethod, "demo.echo " + CodeCanceled, "demo.exit"}
+	if strings.Join(calls, "|") != strings.Join(want, "|") {
+		t.Fatalf("calls %q, want %q", calls, want)
+	}
+	if len(runs) < 2 || runs[0] != RunStart || !strings.HasPrefix(runs[1], RunExit+" ") {
+		t.Fatalf("runs %q", runs)
+	}
+	found := false
+	for _, l := range logs {
+		if strings.HasPrefix(l, LogHub+": ") && strings.Contains(l, "again in") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the host's line about the exit: %q", logs)
+	}
+}

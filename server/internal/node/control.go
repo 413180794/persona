@@ -715,7 +715,16 @@ type watch struct {
 	cancel context.CancelFunc
 }
 
+// watch keeps a session's transcript streaming to the hub. Outside of a hub connection (tests that drive the method
+// directly) there is nothing to end it but session.unwatch; Serve's calls go through watchFor, so the stream stops
+// when its connection does.
 func (n *Node) watch(id string, since int) error {
+	return n.watchFor(context.Background(), id, since)
+}
+
+// watchFor is watch for the hub connection that owns parent: the transcript loop ends with that connection, so a
+// resident node that opens a new Node per reconnect is not left with a reader per watch from the one before.
+func (n *Node) watchFor(parent context.Context, id string, since int) error {
 	f, err := n.file(id)
 	if err != nil {
 		if !n.startingSession(id) {
@@ -726,6 +735,9 @@ func (n *Node) watch(id string, since int) error {
 		go func() {
 			for i := 0; i < 120; i++ {
 				time.Sleep(500 * time.Millisecond)
+				if parent.Err() != nil { // the connection ended before the transcript appeared
+					return
+				}
 				f, err := n.file(id)
 				if err != nil {
 					continue
@@ -736,7 +748,7 @@ func (n *Node) watch(id string, since int) error {
 					since = n.catchUp(id, f, since)
 				}
 				mu.Unlock()
-				_ = n.watch(id, since)
+				_ = n.watchFor(parent, id, since)
 				return
 			}
 		}()
@@ -747,7 +759,7 @@ func (n *Node) watch(id string, since int) error {
 		n.mu.Unlock()
 		return nil
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(parent)
 	n.watches[id] = &watch{cancel: cancel}
 	n.mu.Unlock()
 
@@ -846,6 +858,13 @@ func (n *Node) watchLoop(ctx context.Context, id string, f *transcript.File) {
 	for {
 		select {
 		case <-ctx.Done():
+			// Drop the entry so the session is not left looking watched; a watch that ended with its connection has
+			// nobody to send to, and an unwatch for it never comes.
+			n.mu.Lock()
+			if w, ok := n.watches[id]; ok && w.cancel != nil {
+				delete(n.watches, id)
+			}
+			n.mu.Unlock()
 			return
 		case <-t.C:
 			n.refresh(id, f)

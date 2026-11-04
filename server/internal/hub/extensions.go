@@ -106,6 +106,8 @@ type hubExtension struct {
 
 	// agentSources are its agent_sources registered with the agents service (plugin_agents.go).
 	agentSources []string
+	// stats count its calls, runs and log (extension_metrics.go); nil in tests that make one by hand.
+	stats *extensionStats
 }
 
 // healthy says whether its HTTP side answers /health.
@@ -116,7 +118,11 @@ type extensions struct {
 	dir  string // the hub's data directory
 	root string // where the extensions are kept: <dir>/extensions (extensionsRoot)
 	reg  *extension.Registry
-	logf func(string, ...any)
+	// logf is the hub's log, each line about an extension kept with its log too; journal only the hub's (the host's
+	// lines reach the extension's log through its Observe).
+	logf, journal func(string, ...any)
+	// stats are how the extensions run (extension_metrics.go).
+	stats *extensionMetrics
 
 	h    *Hub
 	ctx  context.Context
@@ -140,7 +146,13 @@ type extensions struct {
 // join when the hub attaches its database (attachPlugins).
 func newExtensions(dir string, cfgs []ExtensionConfig, logf func(string, ...any)) *extensions {
 	root := extensionsRoot(dir, logf)
-	ps := &extensions{dir: dir, root: root, reg: extension.NewRegistry(root, nil, nil, 0), logf: logf, byID: map[string]*hubExtension{}}
+	ps := &extensions{dir: dir, root: root, reg: extension.NewRegistry(root, nil, nil, 0), journal: logf, byID: map[string]*hubExtension{},
+		stats: newExtensionMetrics()}
+	// The hub's lines about an extension go into its log too (the host's own go there through the spec's Observe).
+	ps.logf = func(format string, args ...any) {
+		logf(format, args...)
+		ps.stats.hubLine(fmt.Sprintf(format, args...))
+	}
 	for _, c := range cfgs {
 		if !extensionIDPattern.MatchString(c.ID) || (c.Command == "" && c.Socket == "") {
 			logf("plugin %q: skipped (needs an id of a-z0-9_- and a command or a socket)", c.ID)
@@ -154,7 +166,7 @@ func newExtensions(dir string, cfgs []ExtensionConfig, logf func(string, ...any)
 			continue
 		}
 		// Known before it runs: its socket (the model settings ask a voice plugin for its models through it).
-		hp := &hubExtension{id: c.ID, kind: c.Kind, socket: ps.legacySocket(c), status: host.StateStarting, pending: true}
+		hp := &hubExtension{id: c.ID, kind: c.Kind, socket: ps.legacySocket(c), status: host.StateStarting, pending: true, stats: ps.stats.of(c.ID)}
 		if c.Disabled {
 			hp.status = extensionDisabled
 		}
@@ -430,7 +442,7 @@ func (ps *extensions) apply(ctx context.Context, id string) {
 	if p == nil {
 		return
 	}
-	hp := &hubExtension{id: id, kind: p.Manifest.Kind()}
+	hp := &hubExtension{id: id, kind: p.Manifest.Kind(), stats: ps.stats.of(id)}
 	if c, ok := p.Legacy.(ExtensionConfig); ok {
 		hp.kind = c.Kind
 	}
@@ -516,10 +528,21 @@ func (hp *hubExtension) setProxy(id string) {
 	}
 }
 
-// servePluginHTTP hands one request to the plugin's HTTP side.
+// servePluginHTTP hands one request to the plugin's HTTP side, counted by route (extension_metrics.go).
 func (hp *hubExtension) serveExtensionHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Del("Cache-Control") // set by the hub's auth for its own answers: the plugin's own goes instead
-	hp.proxy.ServeHTTP(w, r)
+	if hp.stats == nil {
+		hp.proxy.ServeHTTP(w, r)
+		return
+	}
+	sw := &relayStatusWriter{ResponseWriter: w}
+	start := time.Now()
+	hp.proxy.ServeHTTP(sw, r)
+	took := time.Since(start)
+	if sw.status == http.StatusSwitchingProtocols {
+		took = -1 // a WebSocket: how long it was open is not a latency
+	}
+	hp.stats.Call(httpRoute(hp.id, r.URL.Path), took, httpCode(r, sw.status))
 }
 
 // selfExecutable is this very binary (a built-in plugin's "personad").
@@ -541,7 +564,10 @@ func (ps *extensions) spec(ctx context.Context, p *extension.Extension, hp *hubE
 func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hubExtension) (host.Spec, error) {
 	m := p.Manifest
 	id := p.Record.ID
-	s := host.Spec{ID: id, Name: m.Name, Logf: ps.logf}
+	s := host.Spec{ID: id, Name: m.Name, Logf: ps.hostLogf()}
+	if st := ps.stats.of(id); st != nil {
+		s.Observe = st
+	}
 	hubEnv := ps.hubEnv()
 	var hubToken startToken // its token of the hub's API this start (extension_scopes.go)
 

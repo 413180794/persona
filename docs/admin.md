@@ -167,6 +167,7 @@ hub 自带的网页管理界面：看 hub 的状态、加 / 删电脑、管设�
 | `DELETE extensions/{id}` `{"keep_data"}` | 卸载；内置的和 hub.json 来的 409 `uninstall_failed` |
 | `GET extensions/-/markets`、`POST extensions/-/markets` `{"spec", "token"?}`、`DELETE extensions/-/markets/{id}`、`POST extensions/-/markets/{id}/refresh`、`PUT extensions/-/markets/{id}/token` `{"token"}` | 扩展市场，和 App 的 `/api/v1/extensions/-/markets…` 同一套（[extensions.md](extensions.md)「扩展市场」）；登记前先读一次索引，读不到 400 `market_failed`（`error` 是给人看的原因），token 只写不回显 |
 | `GET extensions/-/catalog?q=&market=&refresh=1`、`POST extensions/-/catalog/preview` `{"market", "extension"}`（老键 `plugin` 也认） | 市场的目录（`{markets, extensions, platform}`），和从市场预览（回同样的预览，多一个 `market`）；拿到预览后照常 `extensions/install` / `extensions/{id}/upgrade` |
+| `GET extensions/-/metrics?window=`、`GET extensions/{id}/metrics?window=`、`GET extensions/{id}/logs?since=&q=&limit=`、`GET extensions/{id}/logs/stream?since=` | 扩展的运行情况（调用次数、错误率、延迟、重启）和日志（server-sent events 实时跟），见 [extensions.md](extensions.md)「运行情况」 |
 | 没有扩展底座的 hub | `extensions*` 写操作 503 `no_plugins`；更老的 hub 没有这些路由（404），页面提示先升级 hub |
 | 老路径 `plugins…` | #1844 之前的路由，hub 照样认，回老字段名（`plugins`、`plugin`、`plugin_name`，市场的个数 `plugins`）；页面先读一次列表，`extensions` 回 404 就整页改用老路由（老 hub，`web/src/admin/api.ts`） |
 

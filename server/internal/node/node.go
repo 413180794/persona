@@ -798,7 +798,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		page, more, span := f.Page(p.BeforeSeq, limit)
 		return withSpan(map[string]any{"items": items(fold(page)), "has_more": more}, span, false), nil
 	case "session.watch":
-		return ok(n.watch(p.SessionID, p.SinceSeq))
+		return ok(n.watchFor(ctx, p.SessionID, p.SinceSeq))
 	case "session.unwatch":
 		n.unwatch(p.SessionID)
 		return ok(nil)

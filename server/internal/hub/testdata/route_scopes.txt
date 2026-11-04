@@ -35,7 +35,11 @@ inbox.write          DELETE /api/v1/inbox/mutes/{id}
 -                    DELETE {base}/markets/{mid}
 -                    GET /api/v1/admin/devices
 -                    GET /api/v1/admin/extensions
+-                    GET /api/v1/admin/extensions/-/metrics
 -                    GET /api/v1/admin/extensions/{id}
+-                    GET /api/v1/admin/extensions/{id}/logs
+-                    GET /api/v1/admin/extensions/{id}/logs/stream
+-                    GET /api/v1/admin/extensions/{id}/metrics
 -                    GET /api/v1/admin/machines
 -                    GET /api/v1/admin/mesh
 -                    GET /api/v1/admin/network

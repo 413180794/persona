@@ -94,7 +94,38 @@ type Spec struct {
 	// OnUp is called each time it becomes ready.
 	OnUp func()
 	Logf func(string, ...any)
+	// Observe, when set, is told what the host sees of the plugin (docs/extensions.md「运行情况」): every call, every
+	// run, every line of its log and of the host's own about it.
+	Observe Observer
 }
+
+// Observer takes what the host sees of one plugin. Its methods are called from the host's goroutines and must not
+// block.
+type Observer interface {
+	// Call is one call: how long it took, and "" when it was answered, else the error code (the plugin's own code,
+	// CodeTimeout, CodeNotRunning, CodeCanceled when the caller gave up, CodeError for one without a code).
+	Call(method string, took time.Duration, code string)
+	// Run is a run starting (RunStart), ending because nothing needed it (RunStop), or ending in error (RunExit,
+	// detail is why; it is started again after a backoff).
+	Run(event, detail string)
+	// Log is a line of the program's own log (LogProgram: its stderr, or its stdout without the protocol) or of the
+	// host's about it (LogHub).
+	Log(source, line string)
+}
+
+// What an Observer is told.
+const (
+	RunStart = "start"
+	RunStop  = "stop"
+	RunExit  = "exit"
+
+	LogProgram = "program"
+	LogHub     = "hub"
+
+	CodeNotRunning = "not_running"
+	CodeCanceled   = "canceled"
+	CodeError      = "error"
+)
 
 func (s *Spec) idle() time.Duration {
 	if s.Idle > 0 {
@@ -288,6 +319,32 @@ func (p *Proc) Ready() bool {
 // any other is ErrNotRunning. A call that times out is answered with the timeout code, and the program is
 // restarted after StrikesToKill of them in a row.
 func (p *Proc) Call(ctx context.Context, method string, params, out any) error {
+	if p.spec.Observe == nil {
+		return p.call(ctx, method, params, out)
+	}
+	start := time.Now()
+	err := p.call(ctx, method, params, out)
+	p.spec.Observe.Call(method, time.Since(start), callCode(ctx, err))
+	return err
+}
+
+// callCode is how an Observer is told a call ended.
+func callCode(ctx context.Context, err error) string {
+	var re *rpc.Error
+	switch {
+	case err == nil:
+		return ""
+	case errors.As(err, &re) && re.Code != "":
+		return re.Code
+	case errors.Is(err, ErrNotRunning):
+		return CodeNotRunning
+	case ctx.Err() != nil:
+		return CodeCanceled
+	}
+	return CodeError
+}
+
+func (p *Proc) call(ctx context.Context, method string, params, out any) error {
 	if !p.spec.RPC {
 		return fmt.Errorf("%s does not speak the plugin protocol", p.spec.Name)
 	}
@@ -358,7 +415,7 @@ func (p *Proc) strike(why string) {
 	}
 	p.mu.Unlock()
 	if n >= StrikesToKill && kill != nil {
-		p.spec.Logf("plugin %s: %s, %d times in a row: restarting it", p.spec.ID, why, n)
+		p.note("%s, %d times in a row: restarting it", why, n)
 		kill()
 	}
 }
@@ -426,6 +483,7 @@ func (p *Proc) loop(ctx context.Context) {
 			return
 		}
 		if err == nil { // nothing needed it any more
+			p.run(RunStop, "")
 			p.set(StateStopped, "")
 			wait = RestartFirst
 			continue
@@ -434,7 +492,8 @@ func (p *Proc) loop(ctx context.Context) {
 			wait = RestartFirst
 		}
 		p.set(StateError, err.Error())
-		p.spec.Logf("plugin %s: %v (again in %s)", p.spec.ID, err, wait)
+		p.run(RunExit, err.Error())
+		p.note("%v (again in %s)", err, wait)
 		select {
 		case <-ctx.Done():
 			p.set(StateStopped, "")
@@ -482,6 +541,7 @@ func (p *Proc) runOnce(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	p.run(RunStart, "")
 	runCtx, stopRun := context.WithCancel(ctx)
 	defer stopRun()
 	var s *session
@@ -767,6 +827,25 @@ func (p *Proc) logLines(r io.Reader) {
 			line = line[:LogLineMost] + "…"
 		}
 		p.spec.Logf("plugin %s: %s", p.spec.ID, line)
+		if p.spec.Observe != nil {
+			p.spec.Observe.Log(LogProgram, line)
+		}
+	}
+}
+
+// note is a line of the host's own about the plugin: in the hub's log, and its Observer's.
+func (p *Proc) note(format string, args ...any) {
+	line := fmt.Sprintf(format, args...)
+	p.spec.Logf("plugin %s: %s", p.spec.ID, line)
+	if p.spec.Observe != nil {
+		p.spec.Observe.Log(LogHub, line)
+	}
+}
+
+// run tells the Observer about a run.
+func (p *Proc) run(event, detail string) {
+	if p.spec.Observe != nil {
+		p.spec.Observe.Run(event, detail)
 	}
 }
 

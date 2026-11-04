@@ -369,6 +369,8 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	go h.noLockLoop(ctx)         // 「扩展开着时不自动锁屏」 said again to its Macs (computer_nolock.go)
 	go h.extensionLeaseLoop(ctx) // plugins' programs on computers keep running (extension_nodes.go)
 	h.extensions = newExtensions(cfg.dir, cfg.extensionConfigs(h.logf), h.logf)
+	// The hub's token, whatever extension's log it turns up in (extension_metrics.go).
+	h.extensions.stats.redact = h.redactOwnSecrets
 	h.loadAssistantProfile(ctx) // the user's zone and the main conversation before the assistant reports (assistant_profile.go)
 	h.startConnectors(ctx)      // the plugins' connectors join here (attachPlugins)
 	h.upd.start(ctx)
@@ -376,6 +378,8 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	h.startExtensions(ctx)
 	// Market plugins' newer versions (plugin_autoupgrade.go).
 	go h.extensionUpgradeLoop(ctx)
+	// How they run, to the database once an hour (extension_metrics.go).
+	go h.extensionMetricsLoop(ctx)
 	go h.adminStartup(ctx) // the admin UI's first-run setup code, while it has no password (admin_setupcode.go)
 	if err := h.startPublic(ctx); err != nil {
 		return err

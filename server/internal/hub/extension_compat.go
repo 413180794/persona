@@ -40,7 +40,10 @@ func extKey(r *http.Request, current, legacy string) string {
 // legacyExtensionRoutes answers from…, from/… by rewriting them to to…, to/… on mux.
 func (h *Hub) legacyExtensionRoutes(mux *http.ServeMux, from, to string) {
 	rewrite := func(w http.ResponseWriter, r *http.Request) {
-		h.legacyCalls.add(r.Method, r.URL.Path, from, h.logf)
+		route := h.legacyCalls.add(r.Method, r.URL.Path, from, h.logf)
+		if h.extensions != nil { // kept with the extensions' counts, so they outlast a restart (extension_metrics.go)
+			h.extensions.stats.of(legacyStatsID).Count(route, 1)
+		}
 		r2 := r.Clone(context.WithValue(r.Context(), legacyExtensionsKey{}, true))
 		r2.URL.Path = to + strings.TrimPrefix(r.URL.Path, from)
 		if r.URL.RawPath != "" {
@@ -61,8 +64,8 @@ type legacyCalls struct {
 	total  map[string]int64 // since the hub started
 }
 
-// add counts one call of method path under prefix.
-func (c *legacyCalls) add(method, path, prefix string, logf func(string, ...any)) {
+// add counts one call of method path under prefix; the route it was counted as.
+func (c *legacyCalls) add(method, path, prefix string, logf func(string, ...any)) string {
 	route := method + " " + legacyRoute(path, prefix)
 	now := time.Now()
 	c.mu.Lock()
@@ -78,6 +81,7 @@ func (c *legacyCalls) add(method, path, prefix string, logf func(string, ...any)
 	}
 	c.window[route]++
 	c.total[route]++
+	return route
 }
 
 // Snapshot is the calls under the old paths since the hub started, by route.

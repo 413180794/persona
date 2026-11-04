@@ -144,6 +144,7 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/admin/extensions/{id}", one(func(w http.ResponseWriter, r *http.Request, ps *extensions, p *extension.Extension) {
 		writeJSON(w, detailOut(r, ps.detail(r.Context(), p)))
 	}))
+	h.adminExtensionMetricsRoutes(mux, ps, one)
 	mux.HandleFunc("POST /api/v1/admin/extensions/preview", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Source  string `json:"source"`

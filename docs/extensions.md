@@ -447,8 +447,35 @@ README 写了只用 openssl 验证的步骤。
   不用区分；是否在跑只在详情里用小字写（「正在运行」/「暂未运行，用到时自动启动」）。按需启动和空闲回收照旧（省资源和电量，#1670）。
 - 调用默认 30 秒超时（连接器 2 分钟），超时回 `timeout`；连续 3 次超时就重启它。说协议的扩展每 30 秒 `ping` 一次，连续 3 次没回就重启。
 - 停进程：先关 stdin，5 秒后对进程组 SIGTERM，再 5 秒 SIGKILL（不说协议的直接 SIGTERM）。子进程跟着一起结束。
-- 一个扩展出事只影响它自己的贡献；hub 启动从不等扩展。stderr（不说协议的连 stdout）逐行进 hub 的日志，前缀 `plugin <id>:`，单行截到 4 KB。
+- 一个扩展出事只影响它自己的贡献；hub 启动从不等扩展。stderr（不说协议的连 stdout）逐行进 hub 的日志，前缀 `plugin <id>:`，单行截到 4 KB；
+  同时进这个扩展自己的日志（下面「运行情况」），管理界面里按扩展看。
 - 不限 CPU / 内存，没有沙箱（见 `docs/plan-extensions.md`「十」）。
+
+## 运行情况（#1857）
+
+hub 按扩展记它跑得怎么样，管理界面的扩展页看（[admin.md](admin.md)「扩展」）。代码在 `server/internal/hub/extension_metrics.go`，
+宿主一侧（每次调用、每次运行、每行日志）是 `extension/host` 的 `Observer`。
+
+- **调用**：按方法（`connector.status`、`ui.render`……）记次数、错误数（按错误码）、延迟的直方图（1 ms 到 60 s 的 15 个桶，再慢的一个桶；p50 / p95 / p99 在桶里线性插值）。
+  hub 转发给扩展的 HTTP 也算，按路由记：扩展自己路径下是 `HTTP /<第一段>`，`api` 贡献的那段接口是 `HTTP /api/v1/<prefix>`（更深的段多半是 id，不拆开）；
+  5xx、连不上算错误（`http_5xx`），4xx 只记码（`http_4xx`）不算扩展的错，WebSocket 只算次数不算延迟。调用方自己放弃的（`canceled`）也不算错误。
+  每个扩展最多分开记 64 个方法，再多的记在 `other`。
+- **运行**：每次启动、因为没东西需要它而停、出错退出（退避后重启）各记一次，退出的原因按桶计数（每桶最多 16 种），最近 20 次退出带时间。
+- **日志**：每个扩展留最近 2000 行（单行 4 KB），来源是 `program`（它的 stderr，不说协议的连 stdout）或 `hub`（hub 关于它的话：重启、超时、回滚，即 hub 日志里 `plugin <id>: …` 的那些）。
+  进这里之前按规则抹掉像凭据的东西（`Authorization` / `Cookie` 头、`Bearer …`、`token=` / `secret=` / `password=` / `api_key=` 一类、网址里的 `?token=` / `key=`）和 hub 自己的 token，换成 `***`；
+  抹不干净的扩展自己负责：日志里不写密钥、正文、号码（见「进程扩展协议」）。hub 的系统日志（journal）照旧是原样的那一份。
+- **存多久**：5 分钟一桶，内存里留 24 小时；每小时把收口的桶写进数据库（`extension_metrics` 表，迁移 `0358`，hub 停的时候连当前的桶一起写），留 7 天；
+  hub 重启后从数据库读回最近 24 小时。日志只在内存里，hub 重启就没了。
+- **老接口的调用**（#1924）：`/api/v1/plugins…`、`/api/v1/admin/plugins…` 每次调用按路由记进一个叫 `-legacy` 的计数（同样落库），概览里列出来，用来判断兼容层能不能删。
+
+**接口**（只有管理界面登录的会话；老路径 `/api/v1/admin/plugins/…` 一样能用）：
+
+| 接口 | 回什么 |
+| --- | --- |
+| `GET /api/v1/admin/extensions/-/metrics?window=1h\|24h\|7d` | `{window, from, to, extensions: [{id, calls, errors, error_rate, p95_ms, starts, exits, last_exit?}], legacy_calls: [{route, calls（窗口内）, since_start（hub 这次启动以来）}]}`；`window` 不写是 `24h` |
+| `GET /api/v1/admin/extensions/{id}/metrics?window=` | `{extension, window, from, to, step_seconds, total, methods: [{method, …}], series: [{at, calls, errors, p95_ms}], starts, stops, exits, exit_reasons, recent_exits: [{at, reason}], counters}`；`total` 和每个方法是 `{calls, errors, error_rate, p50_ms, p95_ms, p99_ms, codes}`（没有计时的调用时几个分位数是 `null`）。序列的步长：1h 是 5 分钟，24h 是 1 小时，7d 是 6 小时 |
+| `GET /api/v1/admin/extensions/{id}/logs?since=<seq>&q=<文字>&limit=<行数>` | `{lines: [{seq, at, source, text}], next, kept}`：`since` 之后的行（不写是全部），`q` 不分大小写地筛，`limit`（默认 500）留最新的那些；`next` 是下一行的序号 |
+| `GET /api/v1/admin/extensions/{id}/logs/stream?since=<seq>` | server-sent events：先发 `since`（或 `Last-Event-ID`）之后留着的行（都没有时最近 200 行），再实时发新的，每行一个事件（`id` 是序号，`data` 是那一行的 JSON），每 25 秒一行注释保活 |
 
 ## 配置和密钥怎么到扩展
 
