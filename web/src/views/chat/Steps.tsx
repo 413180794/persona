@@ -61,7 +61,7 @@ export function WorkRow({
 
   const last = seg.steps[seg.steps.length - 1];
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col" data-work-row>
       <button
         type="button"
         aria-expanded={open}
@@ -82,18 +82,22 @@ export function WorkRow({
         )}
       </button>
       {/* the newest step peeks out while the agent works */}
-      {live && !open && last && last.kind !== "fold" && (
-        <div className="mt-0.5 ml-[5px] border-l border-line pl-3.5" style={{ animation: "fade-in 250ms ease-out both" }} key={last.id}>
-          <StepRow step={last} live mid={mid} sid={sid} />
-        </div>
-      )}
-      <Collapse open={open}>
+      {/* the newest step peeks out while the agent works; it folds away as the trace unfolds */}
+      <Collapse open={live && !open && !!last && last.kind !== "fold"} lazy>
+        {last && (
+          <div className="mt-0.5 ml-[5px] border-l border-line pl-3.5" style={{ animation: "fade-in 250ms ease-out both" }} key={last.id}>
+            <StepRow step={last} live mid={mid} sid={sid} />
+          </div>
+        )}
+      </Collapse>
+      <Collapse open={open} lazy>
         <div className="relative mt-1 ml-[5px] pl-3.5">
           <span aria-hidden className="absolute top-0 bottom-2 left-0 w-px bg-line" />
           <div className="flex flex-col gap-0.5 py-0.5">
-            {open && seg.steps.map((st, i) => <StepRow key={st.id} step={st} live={live && i === seg.steps.length - 1} mid={mid} sid={sid} />)}
-            {open && seg.steps.length > 8 && (
-              <button type="button" onClick={() => setOpen(false)} className="mt-1 w-fit rounded-[6px] px-1.5 py-0.5 text-[12px] text-ink-3 transition-colors hover:bg-hover hover:text-ink-2">
+            {seg.steps.map((st, i) => <StepRow key={st.id} step={st} live={live && i === seg.steps.length - 1} mid={mid} sid={sid} />)}
+            {seg.steps.length > 8 && (
+              // folding from the end keeps the row's end where it is: the header comes down to here (ChatView)
+              <button type="button" data-fold-from-end onClick={() => setOpen(false)} className="mt-1 w-fit rounded-[6px] px-1.5 py-0.5 text-[12px] whitespace-nowrap text-ink-3 transition-colors hover:bg-hover hover:text-ink-2">
                 收起 {seg.steps.length} 步
               </button>
             )}
@@ -214,8 +218,8 @@ function Disclosure({
         <span className="ml-auto flex shrink-0 items-center pl-1">{status}</span>
       </button>
       {detail && (
-        <Collapse open={open}>
-          <div className="mt-0.5 mb-1.5 ml-2 border-l border-line py-0.5 pl-3.5">{open && detail}</div>
+        <Collapse open={open} lazy>
+          <div className="mt-0.5 mb-1.5 ml-2 border-l border-line py-0.5 pl-3.5">{detail}</div>
         </Collapse>
       )}
     </div>

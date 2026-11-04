@@ -33,12 +33,10 @@ export function ContextGroup({ contexts }: { contexts: Context[] }) {
         <span className="min-w-0 truncate">{contextSummary(contexts)}</span>
         <Icon name="chevron" size={13} stroke={2.2} className="shrink-0 transition-transform duration-300" style={{ transform: open ? "rotate(180deg)" : "none" }} />
       </button>
-      <Collapse open={open} className="w-full">
-        {open && (
-          <div className="mt-1 flex flex-col overflow-hidden rounded-[10px] bg-inset shadow-hairline">
-            {one ? <ContextBody c={contexts[0]} /> : contexts.map((c, i) => <ContextRow key={i} c={c} first={i === 0} />)}
-          </div>
-        )}
+      <Collapse open={open} lazy className="w-full">
+        <div className="mt-1 flex flex-col overflow-hidden rounded-[10px] bg-inset shadow-hairline">
+          {one ? <ContextBody c={contexts[0]} /> : contexts.map((c, i) => <ContextRow key={i} c={c} first={i === 0} />)}
+        </div>
       </Collapse>
     </div>
   );
@@ -59,7 +57,7 @@ function ContextRow({ c, first }: { c: Context; first: boolean }) {
         {!c.text && <span className="shrink-0 text-[11.5px] text-ink-3">空</span>}
         <Icon name="chevronRight" size={13} stroke={2.2} className="shrink-0 text-ink-3 transition-transform duration-200" style={{ transform: open ? "rotate(90deg)" : "none" }} />
       </button>
-      <Collapse open={open}>{open && <ContextBody c={c} />}</Collapse>
+      <Collapse open={open} lazy><ContextBody c={c} /></Collapse>
     </div>
   );
 }

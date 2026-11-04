@@ -18,6 +18,7 @@ import { unlinkAgentFromTodo } from "../../lib/todos";
 import { LinkTodoDialog } from "../LinkTodoDialog";
 import { chatLines, parseUserText, segments, withoutShownRecap, type UserMessage } from "../../lib/turns";
 import type { Item, Session, Subagent } from "../../lib/types";
+import { anchoredScroll, type ScrollAnchor } from "../../lib/disclosure";
 import { Button, copyText, cx, Dialog, IconButton, Loading, Menu, StatePill, StatusDot, toast, useMenu, useNow, type MenuItem } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Composer, type Outgoing } from "./Composer";
@@ -143,12 +144,63 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     }
   }, [tr.items, pending, outbox, tr.streaming, interactions.length]);
 
-  // content that grows by itself (images loading, a row expanding at the end) keeps the end in view
+  // A row that unfolds or folds stays where it was on screen while its height runs (#1124, lib/disclosure.ts): the
+  // clicked header's top, or a work row's end when it folds from its 收起 button. At the end it keeps following.
+  // Held until the sizes stop changing for a moment, or the reader scrolls.
+  const anchor = useRef<(ScrollAnchor & { el: Element; quiet: number }) | null>(null);
+  useEffect(() => {
+    const sc = scroller.current;
+    if (!sc) return;
+    const drop = () => {
+      if (anchor.current) clearTimeout(anchor.current.quiet);
+      anchor.current = null;
+    };
+    const onClick = (e: MouseEvent) => {
+      const t = e.target instanceof Element ? e.target : null;
+      const fromEnd = t?.closest("[data-fold-from-end]")?.closest("[data-work-row]");
+      const el = fromEnd ?? t?.closest("button[aria-expanded]");
+      if (!el || !sc.contains(el)) return;
+      drop();
+      const r = el.getBoundingClientRect();
+      anchor.current = { el, edge: fromEnd ? "bottom" : "top", at: fromEnd ? r.bottom : r.top, follow: atEnd.current, quiet: window.setTimeout(drop, 1000) };
+    };
+    sc.addEventListener("click", onClick, true);
+    for (const ev of ["wheel", "touchstart", "keydown"]) sc.addEventListener(ev, drop, { passive: true });
+    return () => {
+      drop();
+      sc.removeEventListener("click", onClick, true);
+      for (const ev of ["wheel", "touchstart", "keydown"]) sc.removeEventListener(ev, drop);
+    };
+  }, []);
+
+  // content that grows by itself (images loading, a row expanding at the end) keeps the end in view; a held row stays
+  // put. A ResizeObserver runs after layout and before paint, so the offset moves in the same frame as the height.
   useEffect(() => {
     const el = scroller.current?.firstElementChild;
     if (!el) return;
     const ro = new ResizeObserver(() => {
-      if (atEnd.current && scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
+      const sc = scroller.current;
+      if (!sc) return;
+      const a = anchor.current;
+      if (a && a.el.isConnected) {
+        const r = a.el.getBoundingClientRect();
+        const next = anchoredScroll(a, {
+          scrollTop: sc.scrollTop, scrollHeight: sc.scrollHeight, clientHeight: sc.clientHeight,
+          viewTop: sc.getBoundingClientRect().top, edgeAt: a.edge === "top" ? r.top : r.bottom, elTop: r.top,
+        });
+        if (Math.abs(next.scrollTop - sc.scrollTop) >= 0.5) sc.scrollTop = next.scrollTop;
+        if (a.follow && !next.follow) {
+          // following would push the row off the top: hold it from here
+          a.follow = false;
+          a.edge = "top";
+          a.at = a.el.getBoundingClientRect().top;
+          atEnd.current = false;
+        }
+        clearTimeout(a.quiet);
+        a.quiet = window.setTimeout(() => (anchor.current = null), 600);
+        return;
+      }
+      if (atEnd.current) sc.scrollTop = sc.scrollHeight;
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -158,7 +210,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     const el = scroller.current;
     if (!el) return;
     const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
-    atEnd.current = gap < 40;
+    // a held row decides; following picks up again once the reader is back at the end
+    if (!anchor.current || anchor.current.follow) atEnd.current = gap < 40;
     setShowDown(gap > 400);
     if (el.scrollTop < 300 && tr.hasMore && !tr.loadingEarlier && !first.current) {
       before.current = { h: el.scrollHeight, top: el.scrollTop };

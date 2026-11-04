@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { stateColor, STATE_LABEL } from "../lib/format";
 import type { AgentState } from "../lib/types";
 import { Icon, type IconName } from "./icons";
+import { collapseMounted } from "../lib/disclosure";
 
 export const EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
 
@@ -198,13 +199,48 @@ export function Kbd({ children }: { children: React.ReactNode }) {
 }
 
 // Height-animating disclosure (grid 0fr → 1fr), the expand grammar every Beautiful UI trace uses.
-export function Collapse({ open, children, className = "" }: { open: boolean; children: React.ReactNode; className?: string }) {
+/** Folds its children up and down: the grid's row runs between 0fr and 1fr in CSS (no heights measured in JS), with
+ *  a fade. `lazy`: the children mount when it opens and stay while it closes, so they go down with the height instead of
+ *  vanishing, then unmount (a long trace costs nothing while folded). Once closed, the content is inert. A chat list holds
+ *  the clicked row still while the height runs (`anchoredScroll`, #1124). */
+export function Collapse({ open, children, className = "", lazy = false }: { open: boolean; children: React.ReactNode; className?: string; lazy?: boolean }) {
+  const [closing, setClosing] = useState(false);
+  const [moving, setMoving] = useState(false);
+  // A lazy one's new content is laid out at 0fr first and the row opens a frame later: a long trace's first layout
+  // would otherwise land inside the transition, which then starts most of the way open.
+  const [laidOut, setLaidOut] = useState(open || !lazy);
+  const [was, setWas] = useState(open);
+  if (was !== open) {
+    // adjusted while rendering: the first frame of the change already has the content (opening) or keeps it (closing)
+    setWas(open);
+    setMoving(true);
+    setClosing(!open);
+    if (open && lazy && !closing) setLaidOut(false);
+  }
+  const settle = () => {
+    setMoving(false);
+    setClosing(false);
+  };
+  useEffect(() => {
+    if (!moving) return;
+    const t = setTimeout(settle, 450); // transitionend may not come (hidden tab, interrupted, no change in height)
+    return () => clearTimeout(t);
+  }, [moving, open]);
+  useEffect(() => {
+    if (!open || laidOut) return;
+    const f = requestAnimationFrame(() => setLaidOut(true));
+    return () => cancelAnimationFrame(f);
+  }, [open, laidOut]);
+  const shown = open && laidOut;
   return (
     <div
       className={`grid transition-[grid-template-rows,opacity] duration-300 ${className}`}
-      style={{ gridTemplateRows: open ? "1fr" : "0fr", opacity: open ? 1 : 0, transitionTimingFunction: EASE }}
+      style={{ gridTemplateRows: shown ? "1fr" : "0fr", opacity: shown ? 1 : 0, transitionTimingFunction: EASE, willChange: moving ? "opacity" : undefined }}
+      onTransitionEnd={(e) => e.target === e.currentTarget && e.propertyName === "grid-template-rows" && settle()}
+      // inert once closed, not while it closes: switching a long trace inert is a full style pass (34 ms for 650 steps)
+      inert={(!open && !moving) || undefined}
     >
-      <div className="min-h-0 overflow-hidden">{children}</div>
+      <div className="min-h-0 overflow-hidden [contain:layout_paint]">{collapseMounted(lazy, open, closing) && children}</div>
     </div>
   );
 }
