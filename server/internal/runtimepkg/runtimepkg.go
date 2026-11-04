@@ -34,6 +34,8 @@ var embedded embed.FS
 var Packages = map[string][]string{
 	"jarvis-dsh-runtime": {"dsh/package.json", "dsh/lib/*.js", "runtime-sdk/package.json", "runtime-sdk/index.js", "runtime-sdk/lib/*.js"},
 	"jarvis-pi-runtime":  {"pi/package.json", "pi/index.js", "pi/companion.mjs", "pi/lib/*.js", "runtime-sdk/package.json", "runtime-sdk/index.js", "runtime-sdk/lib/*.js"},
+	// The Paseo bridge is not loaded by another program: the node writes it out and runs it (node/paseobridge.go).
+	"jarvis-paseo-runtime": {"paseo/package.json", "paseo/bridge.mjs", "paseo/lib/*.js", "runtime-sdk/package.json", "runtime-sdk/index.js", "runtime-sdk/lib/*.js"},
 }
 
 // OverrideEnv names a directory whose <package>/ trees replace the embedded ones: end-to-end runs offer a package

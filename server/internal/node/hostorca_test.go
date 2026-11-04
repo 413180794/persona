@@ -28,6 +28,8 @@ func TestMain(m *testing.M) {
 	os.Setenv("ORCA_USER_DATA_PATH", "/tmp/jarvis-test-no-orca")
 	// Nor the user's botmux: a node registers no botmux host unless a test gives it one.
 	botmuxBin = func() string { return "" }
+	// Nor the user's Paseo: its home points nowhere (a test that wants one sets its own).
+	os.Setenv("PASEO_HOME", "/tmp/jarvis-test-no-paseo")
 	os.Exit(m.Run())
 }
 

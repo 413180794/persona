@@ -11,6 +11,8 @@ Persona 里的 Agent 有两种来路，接法不同：
 | 一台机器 | 只选一个引擎 | 任意多个，和引擎并存 |
 | App 怎么知道能做什么 | 宿主的能力（终端、按键…） | 会话带 `source_kind: "runtime"` 和 `capabilities`（和 Codex app-server 会话同一套字段），由 runtime 声明的 `caps` 算出 |
 
+Paseo 两边都沾：它没有终端，经 runtime 协议接入，却是一台机器可选的引擎（`docs/paseo.md`）。
+
 这份文档是第二种的规范：一个新的 runtime 怎么接进来、要实现什么、怎么验收。线上协议见 `docs/protocol.md`「Runtime ↔ node」，
 node 的实现是 `server/internal/node/runtimes.go`。
 
@@ -37,7 +39,7 @@ runtime 不用知道 hub 在哪、不用开端口、不用鉴权（同一个系�
 
 | driver 方法 | 返回 |
 | --- | --- |
-| `listSessions()` | 会话行：`session_id`、`title`、`cwd`、`status`（`working` / `blocked` / `done` / `idle` / `offline`）、`updated_at`、`rev`（内容一变就变，App 据此拉新内容）、`last_text`、`space_id` / `space_name`（同一个空间的会话在 App 里分在一组）、`model` |
+| `listSessions()` | 会话行：`session_id`、`title`、`cwd`、`status`（`working` / `blocked` / `done` / `idle` / `offline`）、`updated_at`、`rev`（内容一变就变，App 据此拉新内容）、`last_text`、`space_id` / `space_name`（同一个空间的会话在 App 里分在一组）、`model`；可选 `permission_mode` / `effort`（现在用的模式）、`transcript`（这个会话的对话就是本机一份 Claude 对话记录：内容归 node，见下「跑 Claude Code 的 runtime」） |
 | `items(params)` | 一页 item（参数和返回同 `session.items`：从最后往前 `turns` / `limit`，`before_seq` 往前翻，`after_seq` 往后补，`from_seq` + `through_seq` 取一段），带 `history`、`to_seq` |
 
 可选的（有哪个，SDK 就在 `runtime.hello` 里声明哪个能力；没有的，node 替你回「不支持」，App 照常显示）：
@@ -49,6 +51,13 @@ runtime 不用知道 hub 在哪、不用开端口、不用鉴权（同一个系�
 | `send({session_id, text, images, client_msg_id})` | 从手机发消息。**按 `client_msg_id` 去重**：App 在重连时会重发 |
 | `interrupt` / `rename` / `close` / `start({cwd, prompt})` | 中断、改名、关闭、从手机新建（有 `start` 且配了 `launcher` 时新建表单里多一个启动器） |
 | `hasLocalClient()` | 这个 runtime 自己的界面开着没有（决定授权先给谁，见下） |
+| `modes({session_id, permission_mode, effort})` | 手机切权限模式 / 思考强度（`caps.modes`；值是 Persona 的：`default` / `acceptEdits` / `plan` / `auto` / `bypassPermissions`，`low` … `max`） |
+| `watchChanged(id, watching, {transcript})` | 手机开始 / 停止看一个会话（新的 node 连上、runtime 停下时，所有的都停）：只在有人看时才跟会话的 runtime 用（Paseo 按会话订阅 timeline） |
+
+`createRuntime` 的选项里，跑多个 Agent 的 runtime 还可以给 `launchers: [{name, model, agent, models}]`：除 `launcher` 之外，新建表单还有这些项，一个 provider 一项，
+各带它起的 Agent 和模型；以后变了调 `rt.launchersChanged(list)`。`resume: true`：`start` 接 `{resume: <Claude 会话 id>}`，接手一个它没有的 Claude 会话、
+沿用这个 id（`caps.resume`，给当引擎的 runtime 接着「未运行」的会话用）。`start` 还会收到表单的选择（`launcher`、`model`、`permission_mode`、`effort`、
+`workspace_id`），见 `docs/protocol.md`「Runtime ↔ node」。
 
 事情发生时调 SDK：
 
@@ -133,6 +142,14 @@ rt.start()
 // 内容落盘时：rt.append(id, { items: [light(item)], fromSeq, toSeq, history })
 // 要人决定时：const res = await rt.ask({ id, kind: 'permission', session_id, tool_name, tool_input })
 ```
+
+## 跑 Claude Code 的 runtime（可选）
+
+runtime 里跑的是 Claude Code（经 SDK，比如 Paseo，`docs/paseo.md`）时，它的会话本来就有一份本机的 Claude 对话记录。会话行带上
+`transcript: <Claude 会话 id>`，node 就从这份对话记录给内容：items、图片、watch、`session.info`、子 Agent、行上的最后一句和「在做什么」，
+和 herdr 里的 Claude 会话同一套解析、同一个样子；这份对话记录自己的「未运行」行不再列。runtime 只管状态、发送、卡片、模式，
+watch 时收到 `transcript: true`，只推逐字文字（SDK 自动丢掉这种会话的 `append`）。还没写出对话记录的会话照常由 runtime 给内容，
+文件出现后 node 自动换过去。daemon 不能这样做（会读到本机别的会话）。
 
 ## 子 Agent 和后台任务（可选）
 

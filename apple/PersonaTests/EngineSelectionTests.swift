@@ -32,7 +32,7 @@ import Testing
         #expect(!EngineSelectionModel.canSelect(future, on: m))
         m.engines = []
         #expect(!EngineSelectionModel.canSelect(future, on: m))
-        #expect(EngineSelectionModel.options(m).map(\.id) == ["herdr", "herdr-core", "herdr-both", "orca"])
+        #expect(EngineSelectionModel.options(m).map(\.id) == ["herdr", "herdr-core", "herdr-both", "orca", "paseo"])
     }
 
     @Test func combinedEngineIsAKnownChoice() throws {
@@ -44,6 +44,15 @@ import Testing
         #expect(m.engine == .herdrBoth)
         m.engines = [.init(id: "herdr-both", name: "herdr + Herdr App", available: true)]
         #expect(EngineSelectionModel.options(m).contains { $0.id == "herdr-both" })
+    }
+
+    @Test func paseoIsAKnownChoice() throws {
+        let paseo = MachineEngine.paseo
+        #expect(paseo.rawValue == "paseo" && paseo.name == "Paseo")
+        #expect(paseo.detail == "Paseo 里的 Agent")
+        #expect(EngineSelectionModel.canSelect(paseo, on: try machine()), "selectable offline, as the other engines")
+        let m = try machine(",\"engine\":\"paseo\",\"engines\":[{\"id\":\"paseo\",\"name\":\"Paseo\",\"available\":true,\"version\":\"0.14.0\"}]")
+        #expect(m.engine == .paseo && m.engines.first?.version == "0.14.0")
     }
 
     @Test func pairingTargetAndPreselection() throws {

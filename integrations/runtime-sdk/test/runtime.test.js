@@ -312,3 +312,90 @@ test('a refusal with data reaches the node with its data (delivered: none)', asy
   await n.ready
   await assert.rejects(n.peer.call('session.send', { session_id: 's1', text: 'x' }), (err) => err.code === 'handover' && err.data?.delivered === 'none')
 })
+
+test('a runtime running several agents: launchers in hello and when they change, modes, takeovers', async (t) => {
+  const n = await startFakeNode(t)
+  const got = []
+  const launchers = [{ name: 'paseo-claude', agent: 'claude', model: 'Opus', models: [{ id: 'opus', name: 'Opus', default: true }] }]
+  const rt = createRuntime(minimal({
+    start: async (p) => {
+      got.push(['start', p])
+      return { session: { session_id: p.resume ?? 'new', status: 'idle' } }
+    },
+    modes: async (p) => got.push(['modes', p]),
+  }), { runtime: 'paseo', socketPath: n.path, retryMs: 20, launchers, resume: true })
+  t.after(() => rt.stop())
+  rt.start()
+  await n.ready
+  assert.equal(n.hello.caps.modes, true)
+  assert.equal(n.hello.caps.resume, true)
+  assert.deepEqual(n.hello.launchers, launchers)
+  await n.peer.call('session.modes', { session_id: 's1', permission_mode: 'plan', effort: 'high' })
+  const res = await n.peer.call('session.start', { cwd: '/w', resume: 'cccccccc-0000-0000-0000-000000000001', launcher: 'paseo-claude', model: 'opus' })
+  assert.equal(res.session.session_id, 'cccccccc-0000-0000-0000-000000000001')
+  assert.deepEqual(got[0], ['modes', { session_id: 's1', permission_mode: 'plan', effort: 'high' }])
+  assert.equal(got[1][1].model, 'opus')
+  rt.launchersChanged([{ name: 'paseo-codex', agent: 'paseo' }])
+  await until('runtime.launchers', () => n.last('runtime.launchers'))
+  assert.deepEqual(n.last('runtime.launchers').launchers, [{ name: 'paseo-codex', agent: 'paseo' }])
+})
+
+test('a watch for a session the node reads from its transcript streams live text only', async (t) => {
+  const n = await startFakeNode(t)
+  let paged = 0
+  const rt = createRuntime(minimal({ items: async () => { paged++; return { items: [], to_seq: 5 } } }), { runtime: 'paseo', socketPath: n.path, retryMs: 20 })
+  t.after(() => rt.stop())
+  rt.start()
+  await n.ready
+  await n.peer.call('session.watch', { session_id: 's1', since_seq: 0, transcript: true })
+  assert.equal(paged, 0, 'no catch-up: the items are the transcript\'s')
+  assert.ok(rt.watching('s1'))
+  rt.append('s1', { items: [{ id: 'x', seq: 6 }], fromSeq: 5, toSeq: 6, history: 'h' })
+  rt.stream('s1', 'thinking about')
+  await until('the live text', () => n.all('session.delta').length === 1)
+  await new Promise((r) => setTimeout(r, 150))
+  assert.equal(n.all('session.items').length, 0)
+  assert.equal(n.all('session.delta')[0].text, 'thinking about')
+})
+
+test('the driver hears which sessions are watched: started, stopped, and all of them when the node is new', async (t) => {
+  const n = await startFakeNode(t)
+  const heard = []
+  const rt = createRuntime(minimal({ cursor: async () => 0, watchChanged: (id, on, o) => heard.push([id, on, o?.transcript]) }),
+    { runtime: 'toy', socketPath: n.path, retryMs: 20 })
+  t.after(() => rt.stop())
+  rt.start()
+  await n.ready
+  await n.peer.call('session.watch', { session_id: 's1', since_seq: 0 })
+  await n.peer.call('session.watch', { session_id: 's2', since_seq: 0, transcript: true })
+  await n.peer.call('session.unwatch', { session_id: 's1' })
+  await n.peer.call('session.unwatch', { session_id: 'never' })
+  assert.deepEqual(heard, [['s1', true, false], ['s2', true, true], ['s1', false, undefined]])
+  n.peer.close(new Error('node restarting'))
+  await until('a new hello', () => n.hellos === 2)
+  assert.deepEqual(heard.at(-1), ['s2', false, undefined], 'a new node asks again for what it watches')
+})
+
+test('a card for a session not listed yet: the list goes out first, so the node takes the card', async (t) => {
+  const n = await startFakeNode(t)
+  let rows = []
+  const rt = createRuntime(minimal({ listSessions: async () => rows }), { runtime: 'toy', socketPath: n.path, retryMs: 20, pushDelayMs: 5000 })
+  t.after(() => rt.stop())
+  rt.start()
+  await n.ready
+  await until('the first list', () => n.last('runtime.sessions'))
+  const order = []
+  const orig = n.peer.onEvent
+  n.peer.onEvent = (event, params) => {
+    if (event === 'runtime.sessions') order.push(['list', params.sessions.map((s) => s.session_id)])
+    orig(event, params)
+  }
+  n.resolve = (ix) => {
+    order.push(['card', ix.session_id])
+    return { allow: true }
+  }
+  rows = [{ session_id: 'new', status: 'working' }]
+  const res = await rt.ask({ id: 'toy-1', kind: 'permission', session_id: 'new', tool_name: 'Bash', tool_input: {} })
+  assert.deepEqual(res, { allow: true })
+  assert.deepEqual(order.slice(0, 2), [['list', ['new']], ['card', 'new']])
+})

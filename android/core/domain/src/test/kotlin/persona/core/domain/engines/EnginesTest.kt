@@ -42,8 +42,8 @@ class EnginesTest {
         val future = DetectedEngine("future", "Future", available = true)
         assertEquals(listOf("herdr", "future"), Engines.options(machine(engines = listOf(herdr, future))).map { it.id })
         val fallback = Engines.options(machine())
-        assertEquals(listOf("herdr", "herdr-core", "orca"), fallback.map { it.id })
-        assertEquals(listOf("herdr", "Herdr App", "Orca"), fallback.map { it.name })
+        assertEquals(listOf("herdr", "herdr-core", "orca", "paseo"), fallback.map { it.id })
+        assertEquals(listOf("herdr", "Herdr App", "Orca", "Paseo"), fallback.map { it.name })
         assertTrue(fallback.none { it.available })
     }
 
@@ -54,6 +54,8 @@ class EnginesTest {
         assertFalse(Engines.canSelect("nothing", m))
         // Known engines stay selectable offline and without detection (applied on connect).
         assertTrue(Engines.canSelect("orca", machine(online = false)))
+        assertTrue(Engines.canSelect("paseo", machine(online = false)))
+        assertEquals("Paseo 里的 Agent", Engines.detail("paseo"))
     }
 
     @Test fun detectionNamesAndNotes() {

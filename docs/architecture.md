@@ -66,6 +66,7 @@ hub 保留 `listen`（默认 HTTP `:18660`），TLS 用 `public.tls_listen` 单�
 - **没有终端的 Agent 是 runtime，不是宿主**：宿主是「终端开在哪」（herdr / Herdr App / Orca，一机一引擎，`docs/engines.md`），node 从窗格和
   transcript 认会话。DSH 这种自己管会话、没有终端的 Agent 运行时，经 `runtime.sock` 的 runtime 协议挂进来：自己报会话、推内容、问手机，
   和这台机器选的引擎并存；hub 和 App 不用改，新的 runtime 也不用改 Persona（`docs/runtimes.md`：协议 + SDK + 验收清单）。
+  Paseo 是例外：它没有终端、经 runtime 协议接入（node 自己运行它的桥），却是一台机器可选的引擎，新建和接着会话都交给它（`docs/paseo.md`）。
 - **hub 在一台常开的机器上**：它常在线、能连 Gmail（已验证 imap.gmail.com:993 / smtp.gmail.com:465 直连可达），所有 Mac 都经它中转。
 
 ## 关键流程

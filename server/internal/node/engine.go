@@ -87,6 +87,8 @@ func engineHosts(engine string, logf func(format string, args ...any)) []host.Ho
 		c := orcart.New()
 		c.Log = logf
 		return []host.Host{newOrcaHost(c)}
+	case proto.EnginePaseo:
+		return nil // not a terminal: its sessions are its runtime's (runtimecontrol.go)
 	case proto.EngineHerdrBoth:
 		hc := herdr.New()
 		hc.Log = logf
@@ -260,6 +262,7 @@ func (n *Node) engines(ctx context.Context, herdrVersion string) []proto.Engine 
 		// already shows each runtime's version on its own row).
 		{ID: proto.EngineHerdrBoth, Name: proto.EngineNames[proto.EngineHerdrBoth], Available: herdrAvailable && coreAvailable},
 		orcaEngine(ctx, orcaClient()),
+		n.paseoEngine(ctx),
 	}
 }
 

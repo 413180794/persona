@@ -531,6 +531,10 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 			return err
 		}
 	} else {
+		// On a machine whose engine is a runtime (Paseo) the session is continued there (runtimecontrol.go).
+		if _, ok := engineRuntimes[n.engine()]; ok {
+			return n.continueInRuntime(ctx, id, text, images, opts.ClientMsgID)
+		}
 		if r := n.notRunningRefusal(ctx, id); r != nil {
 			return r
 		}

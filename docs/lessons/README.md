@@ -10,6 +10,7 @@
 | `workflow.md` | 多个 Agent 同时改仓库：模拟器、mock 端口、worktree、rebase、迁移号、等后台任务的脚本 |
 | `rename.md` | 产品改名：固定审计基准、源码 / 显示 / 系统身份分开、target 与 module、ActivityAttributes、双 scheme / header parser、XcodeGen 源头与更新包 ID |
 | `agents.md` | 改 node 里驱动 Claude Code / Codex / TRAEX 的部分：herdr 的行为、认窗格和会话、配置目录、发送、`/effort`、生图、启动超时 |
+| `paseo.md` | 改 Paseo 引擎的桥（`integrations/paseo`）或 node 运行它的部分、对着真的 Paseo 测试：只认 `paseo.pid` 的地址、计划正文在哪、请求被裁剪、只读命令不问权限、等不及的回复、订阅和回复同一次读到 |
 | `dsh.md` | 改 DSH 插件（`integrations/dsh`）或 runtime 接入（`runtime.sock`、`integrations/runtime-sdk`）：DSH 的应答链、事件来源、seq、日志格式、端到端测试的坑 |
 | `assistant.md` | 改「Persona」tab 的无头助手：ask_user、权限、后台任务、定时任务、飞书写操作闸门 |
 | `server.md` | 改 hub / node 的进程、连接、推送、代理、端口转发、机器监控、远程部署、知识库的写入和保留期；工作区独立发现、物理目录和动态机器 alias |

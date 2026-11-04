@@ -99,3 +99,6 @@ An early-closing grep can make Docker's output forwarding fail with exit 255
 under pipefail even when the expected text was printed. Command substitution
 keeps the command's own failure fatal and consumes its complete output before
 applying the same content assertion.
+
+- zsh 里没匹配到任何文件的通配符（`rm -rf /tmp/x-*`）会让整条命令报错（nomatch），`&&` 后面的都不执行（2026-11-04：端到端没跑，结果却被当成失败记了下来）。
+  清临时目录用 `find /tmp -maxdepth 1 -name 'x-*' -exec rm -rf {} +` 或先 `setopt nullglob`；记录检查结果前先确认那条命令真的跑了。

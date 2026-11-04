@@ -103,6 +103,9 @@ const (
 	EngineHerdrCore = "herdr-core" // the runtime of the Herdr desktop app
 	EngineHerdrBoth = "herdr-both" // classic herdr and herdr-core together
 	EngineOrca      = "orca"       // the Orca desktop app's runtime
+	// EnginePaseo is not a terminal: the Paseo daemon's agents, through its runtime (node/runtimecontrol.go,
+	// docs/paseo.md). New sessions and sessions to continue go to Paseo.
+	EnginePaseo = "paseo"
 )
 
 // EngineNames are the engines a machine may use, with the names the app shows.
@@ -111,6 +114,7 @@ var EngineNames = map[string]string{
 	EngineHerdrCore: "Herdr App",
 	EngineHerdrBoth: "herdr + Herdr App",
 	EngineOrca:      "Orca",
+	EnginePaseo:     "Paseo",
 }
 
 // Engine is one engine as found on a machine: Available when its socket is reachable (herdr: or its binary is there).

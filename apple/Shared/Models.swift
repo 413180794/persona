@@ -166,7 +166,9 @@ nonisolated struct MachineEngine: RawRepresentable, Codable, Hashable, CaseItera
     static let herdrApp = Self(rawValue: "herdr-core")
     static let herdrBoth = Self(rawValue: "herdr-both")
     static let orca = Self(rawValue: "orca")
-    static let allCases: [Self] = [.herdr, .herdrApp, .herdrBoth, .orca]
+    /// Paseo's agents (docs/paseo.md): no terminal; the node runs a bridge to the Paseo daemon.
+    static let paseo = Self(rawValue: "paseo")
+    static let allCases: [Self] = [.herdr, .herdrApp, .herdrBoth, .orca, .paseo]
     var id: String { rawValue }
     var name: String {
         switch self {
@@ -174,6 +176,7 @@ nonisolated struct MachineEngine: RawRepresentable, Codable, Hashable, CaseItera
         case .herdrApp: "Herdr App"
         case .herdrBoth: "herdr + Herdr App"
         case .orca: "Orca"
+        case .paseo: "Paseo"
         default: rawValue
         }
     }
@@ -183,6 +186,7 @@ nonisolated struct MachineEngine: RawRepresentable, Codable, Hashable, CaseItera
         case .herdrApp: "桌面 App 里开的终端"
         case .herdrBoth: "终端和桌面 App 的会话都显示"
         case .orca: "Orca 里的终端"
+        case .paseo: "Paseo 里的 Agent"
         default: nil
         }
     }

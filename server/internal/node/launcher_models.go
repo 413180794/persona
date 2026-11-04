@@ -51,6 +51,9 @@ func (n *Node) launcherModels(ctx context.Context, name, agentType string, refre
 	if name != "claude" && !nameRe.MatchString(name) {
 		return proto.LauncherModels{}, fmt.Errorf("invalid launcher %q", name)
 	}
+	if res, ok := n.runtimeLauncherModels(name); ok { // a runtime's launcher: the models it said (runtimecontrol.go)
+		return res, nil
+	}
 	agent := n.launcherModelsAgent(ctx, name, agentType)
 	key := n.home + "\x00" + name + "\x00" + agent + "\x00" + n.executionFingerprint(name, modelExecution{})
 	launcherModelsCache.Lock()

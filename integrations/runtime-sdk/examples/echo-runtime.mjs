@@ -48,9 +48,10 @@ export function createEchoRuntime(options = {}) {
         return
       }
     }
+    // Slower than the SDK's 120 ms between live texts: some of it goes out before the end (only the first would at 20).
     for (let i = 1; i <= answer.length; i += 4) {
       rt.stream(s.id, answer.slice(0, i))
-      await new Promise((r) => setTimeout(r, 20))
+      await new Promise((r) => setTimeout(r, 50))
     }
     rt.streamEnd(s.id)
     add(s, { role: 'assistant', kind: 'text', text: answer })

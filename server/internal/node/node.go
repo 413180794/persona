@@ -451,6 +451,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		if err := n.useEngine(ctx, e.Engine); err != nil {
 			return nil, err
 		}
+		if n.runtimeHost != nil { // Paseo's agents come through its bridge, which the node runs (paseobridge.go)
+			n.runtimeHost.setPaseoBridge(n.engine() == proto.EnginePaseo)
+		}
 		n.configured()
 		return map[string]any{"engine": n.engine()}, nil
 	case "node.configure":
@@ -549,10 +552,16 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		if p.TabName != nil {
 			tab = *p.TabName
 		}
+		rp := runtimeStartParams{Cwd: p.Cwd, Prompt: p.Prompt, Launcher: p.Launcher, Model: p.Model, PermissionMode: p.PermissionMode,
+			Effort: p.Effort, WorkspaceID: p.WorkspaceID, Resume: p.ResumeSessionID}
 		if p.ResumeSessionID == "" {
-			if s, err, ok := n.runtimeStart(ctx, p.Launcher, p.Cwd, p.Prompt); ok { // a runtime's launcher
+			if s, err, ok := n.runtimeStart(ctx, rp); ok { // a runtime's launcher
 				return map[string]any{"session": s}, err
 			}
+		}
+		if _, ok := engineRuntimes[n.engine()]; ok { // the engine is a runtime (Paseo): every start is its (runtimecontrol.go)
+			s, err := n.startOnEngineRuntime(ctx, rp)
+			return map[string]any{"session": s}, err
 		}
 		// Only Claude Code has a session id before it starts; another agent picks its own (start_agent.go).
 		if p.Async && p.ResumeSessionID == "" && (p.AgentType == "" || p.AgentType == "claude") {
@@ -932,31 +941,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		n.syncAssistantSkills(dir)
 		return map[string]any{"cwd": dir, "plugin_skills_need": need}, nil
 	case "session.info":
-		f, err := n.file(p.SessionID)
-		if err != nil {
-			if src, ok := n.codexSource(p.SessionID); ok {
-				return map[string]any{"session_id": p.SessionID, "source_kind": "codex_app_server", "source_thread_id": src.thread, "transcript_path": "", "cwd": "", "model": "", "launcher": "", "git_branch": "", "version": "", "permission_mode": "", "effort": "", "context_tokens": 0, "output_tokens": 0, "compactions": 0, "turns": 0, "history_unavailable": true}, nil
-			}
-			return nil, err
-		}
-		n.refresh(p.SessionID, f)
-		m := f.Meta()
-		st, _ := n.state.get(p.SessionID)
-		if st.Launcher == "" {
-			st.Launcher = n.inferLauncher(p.SessionID)
-		}
-		mode, effort := n.modesOf(p.SessionID)
-		if pane, err := n.paneFor(ctx, p.SessionID); err == nil && !n.isAssistantSession(p.SessionID) {
-			if screen, err := n.readPane(ctx, pane, "visible", 60); err == nil && tuiMode(screen) != "" {
-				mode = tuiMode(screen) // shift+tab in the terminal shows up in the transcript only with the next prompt
-			}
-		}
-		return map[string]any{
-			"session_id": p.SessionID, "transcript_path": f.Path, "cwd": m.Cwd, "model": m.Model, "launcher": st.Launcher,
-			"git_branch": m.GitBranch, "version": m.Version, "permission_mode": mode, "effort": effort,
-			"context_tokens": m.ContextTokens, "output_tokens": m.OutputTokens, "compactions": m.Compactions,
-			"turns": m.Turns, "started_at": m.StartedAt, "last_activity": m.LastActivity,
-		}, nil
+		return n.sessionInfo(ctx, p.SessionID)
 	case "session.queue.edit":
 		var a struct {
 			Keep []int `json:"keep"`
@@ -989,6 +974,36 @@ func ok(err error) (any, error) {
 
 // withSpan says where a batch of items sits in the transcript (transcript.Span): history, to_seq, and from_seq for
 // batches that continue from a seq (catch-up, live pushes, after_seq) rather than pages counted back from the end.
+// sessionInfo is session.info for a session with a transcript here: what the transcript says (counts, model, version,
+// branch), its launcher, and the modes it runs with now.
+func (n *Node) sessionInfo(ctx context.Context, id string) (map[string]any, error) {
+	f, err := n.file(id)
+	if err != nil {
+		if src, ok := n.codexSource(id); ok {
+			return map[string]any{"session_id": id, "source_kind": "codex_app_server", "source_thread_id": src.thread, "transcript_path": "", "cwd": "", "model": "", "launcher": "", "git_branch": "", "version": "", "permission_mode": "", "effort": "", "context_tokens": 0, "output_tokens": 0, "compactions": 0, "turns": 0, "history_unavailable": true}, nil
+		}
+		return nil, err
+	}
+	n.refresh(id, f)
+	m := f.Meta()
+	st, _ := n.state.get(id)
+	if st.Launcher == "" {
+		st.Launcher = n.inferLauncher(id)
+	}
+	mode, effort := n.modesOf(id)
+	if pane, err := n.paneFor(ctx, id); err == nil && !n.isAssistantSession(id) {
+		if screen, err := n.readPane(ctx, pane, "visible", 60); err == nil && tuiMode(screen) != "" {
+			mode = tuiMode(screen) // shift+tab in the terminal shows up in the transcript only with the next prompt
+		}
+	}
+	return map[string]any{
+		"session_id": id, "transcript_path": f.Path, "cwd": m.Cwd, "model": m.Model, "launcher": st.Launcher,
+		"git_branch": m.GitBranch, "version": m.Version, "permission_mode": mode, "effort": effort,
+		"context_tokens": m.ContextTokens, "output_tokens": m.OutputTokens, "compactions": m.Compactions,
+		"turns": m.Turns, "started_at": m.StartedAt, "last_activity": m.LastActivity,
+	}, nil
+}
+
 func withSpan(m map[string]any, sp transcript.Span, continues bool) map[string]any {
 	if sp.History != "" {
 		m["history"] = sp.History

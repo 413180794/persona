@@ -62,6 +62,9 @@ type runtimeHello struct {
 	Launcher string `json:"launcher,omitempty"`
 	// LauncherModel is what the form shows next to the launcher (e.g. the runtime's default model).
 	LauncherModel string `json:"launcher_model,omitempty"`
+	// Launchers are more entries for the form, each with the agent it starts and its models: a runtime running
+	// several agents (Paseo: one per provider, runtimecontrol.go). runtime.launchers replaces them later.
+	Launchers []runtimeLauncher `json:"launchers,omitempty"`
 	// Package is the code the runtime runs when this node can keep it up to date (runtimepkg, docs/runtimes.md「自动更新」):
 	// its package name and hash. A different hash than the node's gets an update offer in the reply.
 	Package *struct {
@@ -76,6 +79,11 @@ type runtimeHello struct {
 		Close     bool `json:"close"`
 		// Assistant: its launcher may run the Persona assistant (assistant_runtime.go; docs/runtimes.md「助手」).
 		Assistant bool `json:"assistant"`
+		// Modes: the phone's permission mode and effort for its sessions go to it (session.modes).
+		Modes bool `json:"modes"`
+		// Resume: session.start with resume takes a Claude session it does not have over, under that id (the machine's
+		// engine continuing a session not running anywhere, runtimecontrol.go).
+		Resume bool `json:"resume"`
 	} `json:"caps"`
 }
 
@@ -92,9 +100,12 @@ type runtimeConn struct {
 	sessions []proto.Session // its last runtime.sessions
 	watched  map[string]bool // sessions this connection was asked to watch
 	// What its list said beyond the rows the apps see: the terminal pane a session runs in (pane_id: the extension of a
-	// pi in a herdr pane, pi.go) and how the terminal engine resumes one it lists offline (resume_argv).
-	panes  map[string]string
-	resume map[string][]string
+	// pi in a herdr pane, pi.go), how the terminal engine resumes one it lists offline (resume_argv), and the Claude
+	// session whose transcript holds a session's conversation (transcript: a runtime running Claude Code through its
+	// SDK, Paseo; runtimetranscript.go).
+	panes       map[string]string
+	resume      map[string][]string
+	transcripts map[string]string
 	// daemon is its id in daemons.json when the node dialed it (daemons.go), "" for a runtime on the socket.
 	daemon string
 }
@@ -581,17 +592,20 @@ func (b *runtimeRegistry) launcherOwners() map[string]*runtimeConn {
 	ownerIDs := map[string]string{}
 	for _, h := range conns {
 		h.mu.Lock()
-		name, rt, ok := h.hello.Launcher, h.hello.Runtime, h.ready && h.hello.Caps.Start && h.hello.Launcher != ""
+		rt, ok := h.hello.Runtime, h.ready && h.hello.Caps.Start
 		h.mu.Unlock()
 		if !ok {
 			continue
 		}
-		if owners[name] != nil {
-			b.warnOnce(fmt.Sprintf("launcher %d %s", h.serial, name), "runtime %s #%d: launcher %q is offered by runtime %s already; not offered twice",
-				rt, h.serial, name, ownerIDs[name])
-			continue
+		for _, l := range h.launcherList() {
+			name := l.Name
+			if owners[name] != nil {
+				b.warnOnce(fmt.Sprintf("launcher %d %s", h.serial, name), "runtime %s #%d: launcher %q is offered by runtime %s already; not offered twice",
+					rt, h.serial, name, ownerIDs[name])
+				continue
+			}
+			owners[name], ownerIDs[name] = h, rt
 		}
-		owners[name], ownerIDs[name] = h, rt
 	}
 	return owners
 }
@@ -604,19 +618,23 @@ func (b *runtimeRegistry) launchers() []proto.Launcher {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	var out []proto.Launcher
-	for _, h := range b.launcherOwners() {
+	for name, h := range b.launcherOwners() {
+		l, _ := h.launcherNamed(name)
 		h.mu.Lock()
 		// Agent, as for a Codex launcher (proto.Launcher.Agent): what it starts is not Claude Code, so the apps do
 		// not offer it where only Claude Code or Codex can run (the Persona assistant).
-		agent := h.hello.Agent
+		agent := l.Agent
+		if agent == "" {
+			agent = h.hello.Agent
+		}
 		if agent == "" {
 			agent = h.hello.Runtime
 		}
 		if agent == "claude" {
 			agent = ""
 		}
-		out = append(out, proto.Launcher{Name: h.hello.Launcher, Model: h.hello.LauncherModel, Source: h.hello.Runtime, Agent: agent,
-			Assistant: h.hello.Caps.Assistant})
+		out = append(out, proto.Launcher{Name: name, Model: l.Model, Source: h.hello.Runtime, Agent: agent,
+			Assistant: h.hello.Caps.Assistant && name == h.hello.Launcher})
 		h.mu.Unlock()
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
@@ -712,6 +730,9 @@ func (n *Node) runtimeEvent(h *runtimeConn, event string, params json.RawMessage
 		}
 		if json.Unmarshal(params, &p) != nil || !n.runtimes.owns(h, p.SessionID) {
 			return
+		}
+		if n.runtimeTranscript(p.SessionID) != "" {
+			return // its items are the transcript's, which the node pushes itself (runtimetranscript.go)
 		}
 		last := 0
 		if len(p.Items) > 0 {
@@ -815,11 +836,16 @@ func normalizeRuntimeSessions(h *runtimeConn, list []proto.Session) []proto.Sess
 	return out
 }
 
-// runtimeWatch asks a runtime to push a session's new items, from since on.
+// runtimeWatch asks a runtime to push a session's new items, from since on; for a session whose conversation is a
+// transcript here (transcript: true), only its live text.
 func (n *Node) runtimeWatch(h *runtimeConn, id string, since int) {
 	ctx, cancel := context.WithTimeout(context.Background(), runtimeCallTimeout)
 	defer cancel()
-	if err := h.peer.Call(ctx, "session.watch", map[string]any{"session_id": id, "since_seq": since}, nil); err != nil {
+	params := map[string]any{"session_id": id, "since_seq": since}
+	if n.runtimeTranscript(id) != "" {
+		params["since_seq"], params["transcript"] = 0, true
+	}
+	if err := h.peer.Call(ctx, "session.watch", params, nil); err != nil {
 		n.logger.Printf("runtime %s: watch %s: %v", h.id(), id, err)
 	}
 }
@@ -865,6 +891,14 @@ func (n *Node) runtimeAsk(ctx context.Context, h *runtimeConn, params json.RawMe
 	}
 	if label == "" {
 		label = rt
+	}
+	// A runtime running several agents (Paseo: Claude Code and others) says which one each session runs: the card is
+	// that agent's.
+	if s, ok := h.row(ix.SessionID); ok && s.Agent != "" && s.Agent != agent {
+		agent = s.Agent
+		if s.AgentLabel != "" {
+			label = s.AgentLabel
+		}
 	}
 	if agent == "claude" {
 		ix.Agent, ix.AgentLabel = "", ""
@@ -1045,6 +1079,22 @@ func errRuntimeUnsupported(label, what string) error {
 	return &rpc.Error{Message: fmt.Sprintf("unsupported: %s 的会话不支持%s", label, what), Code: "unsupported"}
 }
 
+// runtimeCallParams are the parameters of a hub call about a runtime's session that the node looks at.
+type runtimeCallParams struct {
+	SessionID      string        `json:"session_id"`
+	Text           string        `json:"text"`
+	Images         []proto.Image `json:"images"`
+	SinceSeq       int           `json:"since_seq"`
+	FoldWork       bool          `json:"fold_work"`
+	LazyImages     bool          `json:"lazy_images"`
+	AfterSeq       *int          `json:"after_seq"`
+	ThroughSeq     int           `json:"through_seq"`
+	Title          *string       `json:"title"`
+	ItemID         string        `json:"item_id"`
+	PermissionMode string        `json:"permission_mode"`
+	Effort         string        `json:"effort"`
+}
+
 // runtimeHandle serves a hub call for a session a runtime lists; handled is false for methods that are not about one
 // session (the node answers those itself).
 func (n *Node) runtimeHandle(ctx context.Context, h *runtimeConn, method string, params json.RawMessage) (res any, err error, handled bool) {
@@ -1062,20 +1112,17 @@ func (n *Node) runtimeHandle(ctx context.Context, h *runtimeConn, method string,
 		}
 		return out, err
 	}
-	var p struct {
-		SessionID  string          `json:"session_id"`
-		Text       string          `json:"text"`
-		Images     []proto.Image   `json:"images"`
-		SinceSeq   int             `json:"since_seq"`
-		FoldWork   bool            `json:"fold_work"`
-		LazyImages bool            `json:"lazy_images"`
-		AfterSeq   *int            `json:"after_seq"`
-		ThroughSeq int             `json:"through_seq"`
-		Title      *string         `json:"title"`
-		ItemID     string          `json:"item_id"`
-		Raw        json.RawMessage `json:"-"`
-	}
+	var p runtimeCallParams
 	_ = json.Unmarshal(params, &p)
+	// A session whose conversation is a Claude transcript here (runtimetranscript.go): its content is the node's.
+	if n.runtimeTranscript(p.SessionID) != "" {
+		if transcriptCalls[method] {
+			return nil, nil, false // node.handle reads the transcript (n.file)
+		}
+		if res, err, handled := n.runtimeTranscriptCall(ctx, h, method, p, call); handled {
+			return res, err, true
+		}
+	}
 	// A session in a terminal pane (a pi in herdr, pi.go): the pane is the engine's — the screen, the keys, closing
 	// it, its tab's name — and the rest is the runtime's.
 	if a, inPane := n.agent(p.SessionID); inPane && a.PaneID != "" {
@@ -1137,6 +1184,9 @@ func (n *Node) runtimeHandle(ctx context.Context, h *runtimeConn, method string,
 			at := time.Now()
 			if opts.ClientMsgID != "" {
 				after = n.runtimes.lastPushed(p.SessionID)
+				if n.runtimeTranscript(p.SessionID) != "" { // its items are the transcript's: its copy comes after its end
+					after = n.echoBase(p.SessionID)
+				}
 			}
 			_, err := call("session.send", map[string]any{"session_id": p.SessionID, "text": p.Text, "images": p.Images,
 				"client_msg_id": opts.ClientMsgID})
@@ -1174,19 +1224,32 @@ func (n *Node) runtimeHandle(ctx context.Context, h *runtimeConn, method string,
 	case "session.screen":
 		return map[string]any{"text": "", "status": n.runtimeStatus(h, p.SessionID)}, nil, true
 	case "session.info":
+		// The counts a transcript gives are unknown here: zero, which the apps read as "none yet" (an iOS app older
+		// than this decodes them as required numbers).
+		info := map[string]any{"session_id": p.SessionID, "agent": h.agent(), "context_tokens": 0, "output_tokens": 0,
+			"compactions": 0, "turns": 0}
 		for _, s := range h.sessionsCopy() {
 			if s.SessionID == p.SessionID {
-				return map[string]any{"session_id": s.SessionID, "cwd": s.Cwd, "model": s.Model, "agent": s.Agent,
-					"last_activity": s.UpdatedAt}, nil, true
+				info["cwd"], info["model"], info["agent"], info["last_activity"] = s.Cwd, s.Model, s.Agent, s.UpdatedAt
+				info["permission_mode"], info["effort"] = s.PermissionMode, s.Effort
 			}
 		}
 		// Not in its list (an older session it still has): what the node knows without the list.
-		return map[string]any{"session_id": p.SessionID, "agent": h.agent()}, nil, true
+		return info, nil, true
 	case "session.keys", "session.screen.before", "terminal.watch":
 		return nil, errRuntimeUnsupported(label, "终端"), true
 	case "terminal.unwatch":
 		return okResult(nil), nil, true
-	case "session.modes", "session.queue.edit":
+	case "session.modes":
+		if !caps.Modes || strings.Contains(p.SessionID, subagentSep) {
+			return nil, errRuntimeUnsupported(label, "这个操作"), true
+		}
+		if err := validModes(p.PermissionMode, p.Effort); err != nil {
+			return nil, err, true
+		}
+		_, err := call("session.modes", map[string]any{"session_id": p.SessionID, "permission_mode": p.PermissionMode, "effort": p.Effort})
+		return okResult(err), err, true
+	case "session.queue.edit":
 		return nil, errRuntimeUnsupported(label, "这个操作"), true
 	}
 	return nil, nil, false
@@ -1263,22 +1326,42 @@ func rpcCode(err error) string {
 	return ""
 }
 
-// runtimeStart starts a session in the runtime offering launcher; nil when no runtime does.
-func (n *Node) runtimeStart(ctx context.Context, launcher, cwd, prompt string) (*proto.Session, error, bool) {
-	h := n.runtimes.launcherRuntime(launcher)
-	if h == nil || shellLauncherNames()[launcher] { // the login shell's launcher of that name runs, as the form lists
+// runtimeStart starts a session in the runtime offering the launcher; nil when no runtime does.
+func (n *Node) runtimeStart(ctx context.Context, p runtimeStartParams) (*proto.Session, error, bool) {
+	h := n.runtimes.launcherRuntime(p.Launcher)
+	if h == nil || shellLauncherNames()[p.Launcher] { // the login shell's launcher of that name runs, as the form lists
 		return nil, nil, false
 	}
+	s, err := n.runtimeStartOn(ctx, h, p)
+	return s, err, true
+}
+
+// runtimeStartOn starts a session in runtime h (session.start): the directory, the first message, the launcher picked
+// and what the form chose with it (model, permission mode, effort), the session to continue. Fields are sent only when
+// set: a runtime that knows none of them still starts its own way.
+func (n *Node) runtimeStartOn(ctx context.Context, h *runtimeConn, p runtimeStartParams) (*proto.Session, error) {
 	ctx, cancel := context.WithTimeout(ctx, runtimeCallTimeout)
 	defer cancel()
+	params := map[string]any{"cwd": p.Cwd, "prompt": p.Prompt}
+	for k, v := range map[string]string{"launcher": p.Launcher, "model": p.Model, "permission_mode": p.PermissionMode,
+		"effort": p.Effort, "workspace_id": p.WorkspaceID, "resume": p.Resume} {
+		if v != "" {
+			params[k] = v
+		}
+	}
+	if p.Shell {
+		params["shell_launcher"] = true
+	}
+	if p.OpenElsewhere {
+		params["open_elsewhere"] = true
+	}
 	var res struct {
 		Session proto.Session `json:"session"`
 	}
-	if err := h.peer.Call(ctx, "session.start", map[string]any{"cwd": cwd, "prompt": prompt}, &res); err != nil {
-		return nil, err, true
+	if err := h.peer.Call(ctx, "session.start", params, &res); err != nil {
+		return nil, err
 	}
-	s, err := n.listStarted(h, res.Session)
-	return s, err, true
+	return n.listStarted(h, res.Session)
 }
 
 // listStarted lists a session h just started right away, before the runtime's next runtime.sessions, so the chat

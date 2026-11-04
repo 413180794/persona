@@ -52,7 +52,13 @@ export function defaultSocketPath() {
  * @property {(params: {cwd: string, prompt?: string}) => Promise<{session: object}>} [start]
  * @property {(params: {session_id: string, title: string}) => Promise<void>} [rename]
  * @property {(params: {session_id: string}) => Promise<void>} [close]
+ * @property {(params: {session_id: string, permission_mode?: string, effort?: string}) => Promise<void>} [modes] - the
+ *   phone's permission mode / effort for a session (caps.modes; values are Persona's: default / acceptEdits / plan /
+ *   auto / bypassPermissions, low … max).
  * @property {() => boolean} [hasLocalClient] - the runtime's own UI is open (the policy gives it first turn).
+ * @property {(sessionId: string, watching: boolean, o?: { transcript: boolean }) => void} [watchChanged] - the phone
+ *   started (or stopped) watching a session: a runtime that follows a session only while it is watched (Paseo's
+ *   timeline subscription) starts and ends that here. transcript: the node reads its items (only live text from here).
  */
 
 /**
@@ -63,7 +69,12 @@ export function defaultSocketPath() {
  *   refreshMs?: number, requires?: string[], onHub?: (connected: boolean) => void, assistant?: boolean,
  *   listen?: { port?: number, host?: string, path?: string, token: string | (() => string) } | boolean,
  *   token?: string | (() => string), package?: { name: string, hash: string }, instance?: string,
- *   onUpdate?: (offer: { name: string, hash: string, version?: string }) => void }} options -
+ *   onUpdate?: (offer: { name: string, hash: string, version?: string }) => void,
+ *   launchers?: { name: string, model?: string, agent?: string, models?: object[] }[], resume?: boolean }} options -
+ *   launchers: more entries for the new-session form than options.launcher (a runtime running several agents: one
+ *   per provider, each with the agent it starts and its models); rt.launchersChanged replaces them. resume: start
+ *   takes {resume: <Claude session id>} — taking a session it does not have over, under that id (caps.resume; the
+ *   machine's engine continuing a session not running anywhere).
  *   assistant: its launcher may run the Persona assistant (caps.assistant; docs/runtimes.md「助手」). requires: node
  *   features (runtime.hello's features) this runtime cannot do without; on a node lacking one it does not stay
  *   connected, and tries again once the node restarts (its socket file is replaced) or after 10 minutes. onHub: called
@@ -95,6 +106,8 @@ export function createRuntime(driver, options) {
   // claiming the same runtime id is not, and the node refuses it (runtime_conflict).
   const instance = typeof options.instance === 'string' && options.instance !== '' ? options.instance : randomUUID()
   let warnedConflict = false
+  // The form's entries beside options.launcher (runtime.hello's launchers), replaced by launchersChanged.
+  let launchers = Array.isArray(options.launchers) ? options.launchers : undefined
 
   let peer
   let stopped = false
@@ -187,6 +200,9 @@ export function createRuntime(driver, options) {
       // It runs the Persona assistant's conversations (docs/runtimes.md「助手」): what that asks of it is the runtime's.
       assistant: options.assistant === true && typeof driver.start === 'function' && typeof driver.send === 'function',
     }
+    // Said only when on: a runtime without them says what it always did.
+    if (typeof driver.modes === 'function') caps.modes = true
+    if (options.resume === true && caps.start) caps.resume = true
     const h = { runtime: options.runtime, name: options.name ?? options.runtime, version: options.version ?? '', instance, caps }
     if (options.package?.name && options.package?.hash) h.package = { name: options.package.name, hash: options.package.hash }
     if (options.agent) h.agent = options.agent
@@ -194,6 +210,7 @@ export function createRuntime(driver, options) {
       h.launcher = options.launcher
       if (options.launcherModel) h.launcher_model = options.launcherModel
     }
+    if (Array.isArray(launchers) && caps.start) h.launchers = launchers
     return h
   }
 
@@ -229,8 +246,7 @@ export function createRuntime(driver, options) {
     const p = new Peer(socket, { prefix: 'd', onRequest: (m, params) => request(m, params), onEvent: (event, params) => {
       if (event === 'runtime.hub' && peer === p && setHub(params?.connected !== false)) hubChanged()
     } })
-    for (const w of watched.values()) clearTimeout(w.timer)
-    watched.clear() // a new node asks again for what the phone watches
+    unwatchAll() // a new node asks again for what the phone watches
     listed.clear()
     peer = p // bound before hello: the node may call back the moment it has answered
     try {
@@ -343,6 +359,13 @@ export function createRuntime(driver, options) {
     pushTimer.unref?.()
   }
 
+  /** Push the list now and wait until it went (after a push already under way). */
+  async function listNow() {
+    clearTimeout(pushTimer)
+    for (let i = 0; pushing && i < 250; i++) await sleep(20)
+    await pushSessions()
+  }
+
   async function pushSessions() {
     if (!peer) return
     if (pushing) {
@@ -385,8 +408,16 @@ export function createRuntime(driver, options) {
     const since = typeof params.since_seq === 'number' ? params.since_seq : 0
     const prev = watched.get(id)
     if (prev) clearTimeout(prev.timer)
+    if (params.transcript === true) {
+      // The node reads this session's items from its Claude transcript (the row's transcript): only the live text
+      // goes from here; what append gets for it is dropped.
+      watched.set(id, { last: 0, catchingUp: false, held: [], batch: undefined, timer: undefined, transcript: true })
+      watchChanged(id, true, { transcript: true })
+      return { ok: true }
+    }
     const w = { last: since, catchingUp: true, held: [], batch: undefined, timer: undefined }
     watched.set(id, w)
+    watchChanged(id, true, { transcript: false })
     try {
       if (since > 0) {
         // Catch up after since, then the live batches go on from where it ends.
@@ -419,7 +450,26 @@ export function createRuntime(driver, options) {
     const w = watched.get(params.session_id)
     if (w) clearTimeout(w.timer)
     watched.delete(params.session_id)
+    if (w) watchChanged(params.session_id, false)
     return { ok: true }
+  }
+
+  /** Every watch ends (a new node asks again for what the phone watches; the runtime stops). */
+  function unwatchAll() {
+    for (const [id, w] of watched) {
+      clearTimeout(w.timer)
+      watchChanged(id, false)
+    }
+    watched.clear()
+  }
+
+  function watchChanged(id, watching, o) {
+    if (typeof driver.watchChanged !== 'function') return
+    try {
+      driver.watchChanged(id, watching, o)
+    } catch (err) {
+      log(`jarvis: watchChanged ${id}: ${err.message}`)
+    }
   }
 
   /**
@@ -434,6 +484,7 @@ export function createRuntime(driver, options) {
       if (listed.has(sessionId)) schedulePush(2000) // rev moved: the phone pulls sessions it does not watch
       return
     }
+    if (w.transcript) return // the node pushes its transcript's items
     const a = { items, fromSeq: typeof fromSeq === 'number' ? fromSeq : undefined, toSeq, history }
     if (w.catchingUp) {
       w.held.push(a)
@@ -551,6 +602,8 @@ export function createRuntime(driver, options) {
           continue
         }
         try {
+          // The node takes a card only for a session it has listed: one that just appeared goes out first.
+          if (!listed.has(sessionId)) await listNow()
           const params = { interaction }
           if (timeoutSeconds) params.timeout_seconds = timeoutSeconds
           return await p.call('interaction.create', params, { timeoutMs: 0, signal })
@@ -621,6 +674,10 @@ export function createRuntime(driver, options) {
         await need(driver.close, 'close')(params)
         schedulePush()
         return { ok: true }
+      case 'session.modes':
+        await need(driver.modes, 'modes')(params)
+        schedulePush()
+        return { ok: true }
       case 'session.start': {
         const res = await need(driver.start, 'start')(params)
         const id = res?.session?.session_id
@@ -658,13 +715,22 @@ export function createRuntime(driver, options) {
       clearTimeout(retryTimer)
       clearTimeout(pushTimer)
       clearInterval(refreshTimer)
-      for (const w of watched.values()) clearTimeout(w.timer)
+      unwatchAll()
       for (const s of streams.values()) clearTimeout(s.timer)
       peer?.close(new Error('runtime stopped'))
       peer = undefined
     },
     /** The session list changed (a session appeared, went away, started or ended a turn, was renamed…). */
     sessionsChanged: (delayMs) => schedulePush(delayMs),
+    /**
+     * The launchers changed (options.launchers: a provider came or went, its models were found): the node offers
+     * these from now on, and the next hello says them.
+     * @param {{ name: string, model?: string, agent?: string, models?: object[] }[]} list
+     */
+    launchersChanged(list) {
+      launchers = Array.isArray(list) ? list : []
+      if (typeof driver.start === 'function') peer?.notify('runtime.launchers', { launchers })
+    },
     append,
     stream,
     streamEnd,

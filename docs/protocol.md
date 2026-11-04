@@ -442,7 +442,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | POST | `/api/v1/workspace-board` | `{revision,action,...}` → 更新后的完整看板；仅 `full`，过期版本 409 `conflict` |
 | GET | `/api/v1/workspaces` | `{workspaces:[Workspace],errors?:[{machine_id,error}]}`；独立于 Agent 的工作区发现，失败保留历史信息，`answer` 可读 |
 | POST | `/api/v1/machines/{mid}/reconnect` | 重连该机器的 node |
-| PUT | `/api/v1/machines/{mid}/engine` | `{"engine":"herdr"\|"herdr-core"\|"herdr-both"\|"orca"}` → 200 更新后的 Machine；不认识的引擎 400 `{"error"}`，没有这台机器 404。离线也能改（存下，连上时生效）；改完照常推 `machines`（下面「引擎」） |
+| PUT | `/api/v1/machines/{mid}/engine` | `{"engine":"herdr"\|"herdr-core"\|"herdr-both"\|"orca"\|"paseo"}` → 200 更新后的 Machine；不认识的引擎 400 `{"error"}`，没有这台机器 404。离线也能改（存下，连上时生效）；改完照常推 `machines`（下面「引擎」） |
 | GET | `/api/v1/machines/{mid}/computer` | 这台 Mac 现在有没有 Cua Driver、能不能被助手操控（hub 当场问 node 的 `computer.status`）→ 200 `Computer`（`{enabled, installed, version?, daemon, accessibility?, screen_recording?, desktop?, screen_sharing, ready, note?, job?}`，[computer-use.md](computer-use.md)）；插件 `cua` 没开、或不是 Mac → 404 |
 | PUT | `/api/v1/machines/{mid}/computer` | `{"enabled": bool}`：机器页「允许助手操控这台电脑」开关，写进插件 `cua` 配置里的 `machines` → 200 `Computer`；插件没开、不是 Mac → 404。改完照常推 `machines` |
 | POST | `/api/v1/machines/{mid}/computer/{install\|grant\|cancel}` | 机器页的「安装 Cua Driver」「去授权」「取消」：node 在后台跑（`computer.install` / `computer.grant` / `computer.cancel`），→ 200 `Computer`，进度在它的 `job`（`{kind, state: running\|done\|failed\|cancelled, step?, error?, started}`），页面接着 GET。插件没对这台打开 404；离线、已有任务、node 太旧 409 |
@@ -956,6 +956,13 @@ App 和网页在一轮的回复下面放一条「这一轮看过的图片」（#
   `version` 是各自报的版本，没有就不带。旧 node 只报前两个。
 - 并列时没有窗格的操作（新建、继续会话、改名）固定走经典 herdr（node 的 `defaultHost` / `defaultHostKind`）；
   每个窗格的操作（读屏、发送、按键、关闭）按窗格 id 的 host kind 路由，herdr-core 的窗格只受 herdr-core 能力限制。
+- **`paseo`（显示名「Paseo」，`docs/paseo.md`）不是终端宿主**：node 不注册宿主，自己运行 Paseo 的桥（`node/paseobridge.go`）。
+  桥是 runtime id 为 `paseo` 的 runtime（下面「Runtime ↔ node」），它的会话就是这台机器的会话。
+  - **新建会话**：都交给它。表单里选的是登录 shell 的启动器时，带上 `shell_launcher: true`。
+  - **继续未运行的 Claude 会话**：用 `session.start {resume}` 交给它接手，会话 id 不变；接手之后，消息照常用 `session.send` 发过去。
+  - **桥没连上时**，新建和继续都回错误 `engine_missing`，什么都不发。
+  - **检测**：`engines` 里的 Paseo 在两种情况下算可用。一是桥连着，这时 `version` 是 Paseo 的版本。二是 Paseo home 里 `paseo.pid` 写的地址有回应；
+    这时如果桥起不来，`note` 写原因。
 
 ## hub ↔ node RPC
 
@@ -1211,8 +1218,25 @@ runtime → node：
 
 | 消息 | 说明 |
 | --- | --- |
-| 请求 `runtime.hello {runtime, name?, agent?, version?, instance?, launcher?, launcher_model?, caps: {start, send, interrupt, rename, close, assistant?}, package?: {name, hash}}` → `{protocol, node_version, hub, features, update?: {name, hash, version}}` | 必须第一个发；`instance` 是这个进程的标识（SDK 每个 runtime 一个，重连不变）：同一个 runtime id 已有一条活连接、它的 `instance` 不同时，回错误 `code: runtime_conflict`（另一个进程配了同样的 id，连不上，SDK 每 30 秒再试一次、不抢）；相同时是这个进程重连了，旧连接被关掉；没带 `instance` 的旧 runtime 照旧（最新的连接为准）；`hub` 是 node 现在有没有连着 hub（旧 node 不带，当作有）；`features` 是 node 在第一版协议之外支持的能力：`prefer_running`（两个 runtime 列同一个会话时，列成非 `offline` 的那个负责它，所以 runtime 可以把只在磁盘上的会话列成 `offline`）、`resume_argv`（认会话行里的 `resume_argv`）、`handover`（发消息被回 `code: handover` 时交给接手的 runtime，见下面 `session.send`）；之前的事件 node 一律丢掉。`runtime` 是 id（`[A-Za-z0-9][A-Za-z0-9_.-]*`，如 `dsh`），也是会话的 `space_kind`；`agent` 是它的会话跑的 Agent，不填就是 `runtime` 自己；`name` 是 App 里的叫法（`DSH`），这种会话带 `agent_label: name`，App 不用为新 runtime 发版。`caps` 说明支持哪些操作，没声明的 node 直接回 `unsupported`。`launcher` 非空且 `caps.start` 时，node 的 `launchers.list` 多一项 `{name: launcher, model: launcher_model, source: runtime}`，新建会话选它就交给这个 runtime。两个 runtime 报同一个启动器名时只有先连上的那个提供（另一个记一行日志）；和登录 shell 里的启动器同名时 shell 的那个为准，runtime 的不列。`caps.assistant`（要有 start 和 send）：它的启动器能跑 Persona 的助手，`launchers.list` 里带 `assistant: true`；node 怎么驱动它见 `docs/runtimes.md`「助手」 |
-| 事件 `runtime.sessions {sessions: [Session]}` | 它的全部会话，变化时推全量。字段是 `Session` 的子集：`session_id`（`[A-Za-z0-9][A-Za-z0-9_.-]{0,127}`，比 Claude 的 uuid 宽，DSH 是 `session-<uuid>`）、`title`、`cwd`、`status`（`working / blocked / done / idle / offline`，别的当 `unknown`）、`agent`、`model`、`updated_at`、`last_text`、`rev`（变了 App 就拉新内容）、`space_*`，以及还在跑的子 Agent 和后台任务 `subagents` / `background`（`docs/runtimes.md`「子 Agent 和后台任务」：子 Agent 的 `session_id` 由 node 写成 `<会话>@<id>`，这个 id 的调用交给父会话所属的 runtime，它推内容也用这个 id；后台任务的 `output_file` 清掉）。node 清掉 `machine_id`、`state` 这些 hub 算的字段，补 `agent` / `agent_label` / `space_kind`，并按「Codex 来源与能力」的同一套字段标来源：`source_kind: "runtime"`、`source_instance_id` 是 runtime id、`capabilities` = `{read: true, send: caps.send, interrupt: caps.interrupt, approve: true, terminal: false, attach: false}`（没声明 `send` 的带 `read_only_reason`），App 和 hub 按它们开关按钮、守发送；合并进 `sessions.list` 立刻推 `sessions.changed`；同一个 id 两条连接都报时，列成非 `offline` 的那条负责，同等时新的为准（`prefer_running`）。两个 node 用、App 看不到的字段：`pane_id`（这个会话跑在这台机器终端引擎的哪个窗格：herdr 窗格里的 pi，node 把它和引擎的窗格合成一行 herdr 会话，调用里终端那部分给引擎，其余给 runtime，`docs/pi.md`）、`resume_argv`（列成 `offline` 的会话怎么在终端引擎里接着：手机发消息时 node 在引擎里开新标签、经 `jarvisd tab-start` 运行它、等 runtime 再列出这个会话为运行中后把消息发过去；引擎不在就拒绝，`resume_argv` 特性）。连接断开，它的会话就从列表里消失。**列表只是「现在给 App 看哪些」，不是归属**：runtime 只列它最近的会话（DSH 是几千个里最近的 80 个），node 记着每个会话是哪个 runtime 列过的（按 runtime id，重连后还是它），对一个不在列表里的老会话的调用照样交给它；这台机器上什么都没有（没有 Agent、没有 transcript）的会话，`session.send` / `items` / `watch` 这类调用先用 `session.items {session_id, limit: 1}` 问一遍连着的 runtime，答得上来的就归它（问不到的一分钟内不再问）。属于某个 runtime、它却没连着时，回错误 `code: runtime_away`（`delivered: none`），不会当成 Claude 会话去终端里恢复 |
+| 请求 `runtime.hello {runtime, name?, agent?, version?, instance?, launcher?, launcher_model?, launchers?, caps: {start, send, interrupt, rename, close, assistant?, modes?, resume?}, package?: {name, hash}}` → `{protocol, node_version, hub, features, update?: {name, hash, version}}` | 必须第一个发；`instance` 是这个进程的标识（SDK 每个 runtime 一个，重连不变）：同一个 runtime id 已有一条活连接、它的 `instance` 不同时，回错误 `code: runtime_conflict`（另一个进程配了同样的 id，连不上，SDK 每 30 秒再试一次、不抢）；相同时是这个进程重连了，旧连接被关掉；没带 `instance` 的旧 runtime 照旧（最新的连接为准）；`hub` 是 node 现在有没有连着 hub（旧 node 不带，当作有）；`features` 是 node 在第一版协议之外支持的能力：`prefer_running`（两个 runtime 列同一个会话时，列成非 `offline` 的那个负责它，所以 runtime 可以把只在磁盘上的会话列成 `offline`）、`resume_argv`（认会话行里的 `resume_argv`）、`handover`（发消息被回 `code: handover` 时交给接手的 runtime，见下面 `session.send`）、`transcript`（认会话行里的 `transcript`）、`launchers`（认 hello 的 `launchers` 和事件 `runtime.launchers`）、`start_params`（`session.start` 带上表单的选择）、`modes`（`session.modes`）、`resume`（`session.start {resume}`）；daemon 只拿到 `prefer_running`、`start_params`。之前的事件 node 一律丢掉。`runtime` 是 id（`[A-Za-z0-9][A-Za-z0-9_.-]*`，如 `dsh`），也是会话的 `space_kind`；`agent` 是它的会话跑的 Agent，不填就是 `runtime` 自己；`name` 是 App 里的叫法（`DSH`），这种会话带 `agent_label: name`，App 不用为新 runtime 发版。`caps` 说明支持哪些操作，没声明的 node 直接回 `unsupported`。`launcher` 非空且 `caps.start` 时，node 的 `launchers.list` 多一项 `{name: launcher, model: launcher_model, source: runtime}`，新建会话选它就交给这个 runtime。两个 runtime 报同一个启动器名时只有先连上的那个提供（另一个记一行日志）；和登录 shell 里的启动器同名时 shell 的那个为准，runtime 的不列。`caps.assistant`（要有 start 和 send）：它的启动器能跑 Persona 的助手，`launchers.list` 里带 `assistant: true`；node 怎么驱动它见 `docs/runtimes.md`「助手」。
+`launchers`（要有 `caps.start`）：除了 `launcher` 之外，新建表单里还有这些项。每项是 `{name, model?, agent?, models?}`：
+  - 跑多个 Agent 的 runtime（Paseo）一个 provider 一项。
+  - `agent` 是这一项起的 Agent：`claude` 时表单给 Claude Code 的选择，App 按 Claude 画。
+  - `models` 是 `launchers.models` 返回的模型和它们的思考强度。
+  - 名字规则同 shell 的启动器；超过 64 项、每项超过 200 个模型的部分丢掉。
+
+`caps.modes`：接受手机切权限模式 / 思考强度（`session.modes`）。`caps.resume`：能接手一个它没有的 Claude 会话（`session.start {resume}`）。 |
+| 事件 `runtime.sessions {sessions: [Session]}` | 它的全部会话，变化时推全量。字段是 `Session` 的子集：`session_id`（`[A-Za-z0-9][A-Za-z0-9_.-]{0,127}`，比 Claude 的 uuid 宽，DSH 是 `session-<uuid>`）、`title`、`cwd`、`status`（`working / blocked / done / idle / offline`，别的当 `unknown`）、`agent`、`model`、`updated_at`、`last_text`、`rev`（变了 App 就拉新内容）、`space_*`、`launcher`、`permission_mode` / `effort`（它现在用的模式，`session.info` 也报这个），以及还在跑的子 Agent 和后台任务 `subagents` / `background`（`docs/runtimes.md`「子 Agent 和后台任务」：子 Agent 的 `session_id` 由 node 写成 `<会话>@<id>`，这个 id 的调用交给父会话所属的 runtime，它推内容也用这个 id；后台任务的 `output_file` 清掉）。node 清掉 `machine_id`、`state` 这些 hub 算的字段，补 `agent` / `agent_label` / `space_kind`，并按「Codex 来源与能力」的同一套字段标来源：`source_kind: "runtime"`、`source_instance_id` 是 runtime id、`capabilities` = `{read: true, send: caps.send, interrupt: caps.interrupt, approve: true, terminal: false, attach: false}`（没声明 `send` 的带 `read_only_reason`），App 和 hub 按它们开关按钮、守发送；合并进 `sessions.list` 立刻推 `sessions.changed`；同一个 id 两条连接都报时，列成非 `offline` 的那条负责，同等时新的为准（`prefer_running`）。两个 node 用、App 看不到的字段：`pane_id`（这个会话跑在这台机器终端引擎的哪个窗格：herdr 窗格里的 pi，node 把它和引擎的窗格合成一行 herdr 会话，调用里终端那部分给引擎，其余给 runtime，`docs/pi.md`）、`resume_argv`（列成 `offline` 的会话怎么在终端引擎里接着：手机发消息时 node 在引擎里开新标签、经 `jarvisd tab-start` 运行它、等 runtime 再列出这个会话为运行中后把消息发过去；引擎不在就拒绝，`resume_argv` 特性）、`transcript`（这个会话的对话就是这台电脑上的一份 Claude 对话记录，值是 Claude 会话 id，`transcript` 特性）。
+
+**带 `transcript` 的会话**（跑 Claude Code 的 runtime，比如 Paseo）：
+  - **node 管的部分**：从对话记录给出内容，`session.items` / `item` / `image`、watch、`session.info`、子 Agent 都是 node 的，和终端里的 Claude 会话同一套。
+    行上的 `last_text`、`rev`、「在做什么」、后台任务也取自对话记录。
+  - **runtime 管的部分**：状态、标题、模型、模式、发送、卡片。它只推逐字文字，推来的 items 被丢掉。
+  - **列表**：这份对话记录自己的「未运行」行不再列出。
+  - **只算 node 找得到的对话记录**：第一轮刚开始还没写出来、或者在 node 不认识的配置目录里的，内容先归 runtime。
+    等文件出现，下一次列表一到，node 就换到对话记录：正在 watch 的改订，`history` 跟着变，App 整页重取。
+  - **限制**：daemon 不能带这个字段。连接断开，它的会话就从列表里消失。**列表只是「现在给 App 看哪些」，不是归属**：runtime 只列它最近的会话（DSH 是几千个里最近的 80 个），node 记着每个会话是哪个 runtime 列过的（按 runtime id，重连后还是它），对一个不在列表里的老会话的调用照样交给它；这台机器上什么都没有（没有 Agent、没有 transcript）的会话，`session.send` / `items` / `watch` 这类调用先用 `session.items {session_id, limit: 1}` 问一遍连着的 runtime，答得上来的就归它（问不到的一分钟内不再问）。属于某个 runtime、它却没连着时，回错误 `code: runtime_away`（`delivered: none`），不会当成 Claude 会话去终端里恢复 |
+| 事件 `runtime.launchers {launchers}` | 换掉 hello 里的 `launchers`：provider 多了少了，或者它的模型现在才知道 |
 | 事件 `session.items {session_id, items, history, from_seq, to_seq}` | 被看着的会话的新内容，原样转给 hub（形状同 node → hub 的 `session.items`，连续性规则见「items 的连续性」）。它没列出的会话不转 |
 | 事件 `session.delta {session_id, text}` | 正在生成的整段文字，空串表示这段结束；原样转给 hub，App 画成逐字输出 |
 | 请求 `interaction.create {interaction, timeout_seconds?}` → `Resolution` | 提问（`question`）、计划（`plan`）、授权（`permission`）三种，形状同上面的 `Interaction`；node 补 `created_at` / `expires_at`（默认同 hook 的 30 分钟，`timeout_seconds` 只能更短）、会话标题、目录，以及 `agent` / `agent_label`（runtime 跑的 Agent 和它的名字；跑 Claude Code 的不标，App 画成 Claude 的卡），经 hub 推给手机，阻塞到回答。没人回答（过期、手机「交回电脑」、没有 hub）回 `{dismiss: true}`，runtime 就交给自己的界面。带 `tool_use_id` 的交互 `resumable`：runtime 给的 `id`（或 node 按 runtime + 会话 + 种类 + tool_use_id 算的）不变，node 中途没了时回错误 `code: node_gone`，runtime 连上下一个 node 后用同一个 id 再问，hub 挂回原来的卡 |
@@ -1228,10 +1252,18 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 | --- | --- |
 | `session.items` | 参数和返回同 hub → node 的 `session.items`（`before_seq` / `turns` / `limit` / `after_seq` / `from_seq` + `through_seq`），图片一律是占位（`lazy`），内容从 `session.image` 取。`fold_work` 由 node 在返回上做（`transcript.FoldWork`），runtime 不管 |
 | `session.image {session_id, item_id}` → `{mime, data}`、`session.item {session_id, item_id}` → `Item` | 图片原始数据、被截断的 item 全文 |
-| `session.watch {session_id, since_seq}` / `session.unwatch` | 开始 / 停止推这个会话的新内容；`since_seq > 0` 时先补发其后的全部。node 记着每个被看着的会话推到了哪，runtime 重连后列出它时按那个 seq 再 watch |
+| `session.watch {session_id, since_seq, transcript?}` / `session.unwatch` | 开始 / 停止推这个会话的新内容；`since_seq > 0` 时先补发其后的全部。node 记着每个被看着的会话推到了哪，runtime 重连后列出它时按那个 seq 再 watch。`transcript: true`：内容 node 从对话记录推，runtime 只推逐字文字 |
 | `session.send {session_id, text, images, client_msg_id, assistant?, context?, mode?, memory_dir?}` | 发消息（`assistant` 和后面几个只发给声明了 `caps.assistant` 的 runtime 的助手对话：`docs/runtimes.md`「助手」）；`client_msg_id` 交给 runtime 做幂等（node 自己也按它去重 10 分钟），node 也按它在 runtime 推来的 item 里认出这条消息（「待发消息的对应」）；runtime 自己知道哪个 item 是这条消息时可以直接在 item 上带 `client_msg_id`，node 原样转发。runtime 回错误 `code: handover`（`data.delivered: "none"`）表示它不接这个会话、已经让能跑它的程序起来（只读磁盘的伴随进程）：node 等另一条连接把这个会话列成非 `offline`，或者每 2 秒问一遍别的 runtime 有没有这个会话（`session.items {limit: 1}`），先到的那个收到这条消息；45 秒内都没有就回 `not_running`，什么都没发 |
 | `session.interrupt {session_id}`、`session.rename {session_id, title}`、`session.close {session_id}` | 各按 `caps` 放行，没有的回错误 `code: unsupported`（文字以 `unsupported` 开头，同宿主缺能力）。只带 `tab_name` 的改名直接成功（这些会话没有标签页） |
-| `session.start {cwd, prompt?, assistant?}` → `{session}` | 选了它的 launcher 时；返回的会话马上进列表。`assistant: true`：助手用它的启动器开新对话（`cwd` 是助手目录，不带 `prompt`，第一条消息随后用 `session.send` 发） |
+| `session.start {cwd, prompt?, assistant?, launcher?, model?, permission_mode?, effort?, workspace_id?, resume?, shell_launcher?, open_elsewhere?}` → `{session}` | 选了它的 launcher 时，或者它是这台机器的引擎时；返回的会话马上进列表。`assistant: true`：助手用它的启动器开新对话（`cwd` 是助手目录，不带 `prompt`，第一条消息随后用 `session.send` 发）。其余字段只在有值时带，见下 |
+| `session.modes {session_id, permission_mode?, effort?}` | 手机切权限模式 / 思考强度（声明了 `caps.modes` 的；值先由 node 校验） |
+
+`session.start` 带的字段，都只在有值时才带：
+  - **表单的选择**：`launcher`、`model`、`permission_mode`、`effort`。`workspace_id` 是在它的哪个空间里新建（它的会话的 `space_id`）。
+  - **`shell_launcher: true`**：`launcher` 是登录 shell 的启动器，由 runtime 自己挑同名的那个，没有同名的就用它的默认。
+  - **`resume`**：要接手的 Claude 会话 id（`caps.resume`，这台机器的引擎接着一个没在运行的会话）。返回的会话 id 必须和它相同。
+  - **`open_elsewhere: true`**：有一个活着的 claude 正开着这个会话。不是 runtime 自己的就要拒绝，错误码是 `open_elsewhere`，免得两个进程同时写；
+    node 把拒绝换成说明在哪开着的那条提示。
 
 终端相关的调用（`session.keys`、`session.screen.before`、`terminal.watch`）对 runtime 的会话回 `unsupported`，`session.screen` 回空屏；
 这些会话没有 `pane_id`，App 本来就不显示终端。

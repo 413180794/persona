@@ -1,0 +1,790 @@
+// The Paseo bridge (docs/paseo.md): the agents of the Paseo daemon on this machine as the sessions of its engine in
+// Persona, through the runtime SDK. Paseo runs every agent through its SDK, with no terminal; the bridge follows its
+// directory of agents (one subscription), its pending requests (cards on the phone, withdrawn when answered in Paseo),
+// and — only while the phone watches a session — that agent's timeline (live text; items for agents that are not
+// Claude Code's). An agent running Claude Code names its transcript: the node shows it from there, as in herdr.
+// Everything Paseo-specific comes in through deps.paseo, so the tests drive it with a fake daemon.
+
+import { createHash, randomUUID } from 'node:crypto'
+import { statSync } from 'node:fs'
+import { basename } from 'node:path'
+import { createRuntime, light, page, RpcError, snippet } from '../../runtime-sdk/index.js'
+import {
+  EFFORTS, MODES, RUNTIME, SESSION_LABEL, agentRoot, agentRow, appAgent, claudeId, defaultProvider, interactionOf,
+  launchersOf, providerRoots, responseOf, sessionIdOf, timelineItems, transcriptOf,
+} from './map.js'
+import { PaseoClient } from './paseo.js'
+
+export const BRIDGE_VERSION = '0.1.0'
+const AWAY_GRACE = 30_000 // ms: Paseo gone this long and the bridge leaves the node (its sessions go with it)
+const CALL_WAIT = 25_000 // ms: the node waits 30 s for a start or a send; Paseo's answer may take longer
+const LIST_MAX = 300 // sessions listed at most (those running or waiting always)
+const REFRESH_DELAY = 120 // ms: a watched agent's timeline is read again this long after it moved
+const LAST_TEXT_DELAY = 3000 // ms: an agent's last words are read again this long after it changed
+const PAGES_MAX = 10 // directory pages read at connect (200 agents each)
+const EVENTS = ['agent_permission_request', 'agent_permission_resolved', 'providers_snapshot_update', 'status.daemon_config_changed']
+const TIMEOUT = Symbol('timeout')
+
+/**
+ * @param {{ paseo?: object, log?: (msg: string) => void, connect?: (path: string) => import('node:net').Socket }} [deps]
+ *   paseo: a PaseoClient (default: one for options.home).
+ * @param {{ home?: string, socketPath?: string, retryMs?: number, pushDelayMs?: number, refreshMs?: number,
+ *   awayGrace?: number, callWait?: number }} [options]
+ */
+export function createPaseoBridge(deps = {}, options = {}) {
+  const log = deps.log ?? (() => {})
+  const paseo = deps.paseo ?? new PaseoClient({ home: options.home, log, appVersion: `persona-paseo-bridge/${BRIDGE_VERSION}` })
+  const awayGrace = options.awayGrace ?? AWAY_GRACE
+  const callWait = options.callWait ?? CALL_WAIT
+
+  const agents = new Map() // agent id → { agent, project }
+  const bySession = new Map() // session id → agent id
+  let configProviders = {} // provider id → { extends, label } (nothing else of the daemon's config is kept)
+  let entries = [] // the providers snapshot
+  let roots = {}
+  let labels = {} // provider id → its label
+  let launchers = []
+  const watches = new Map() // session id → watch (see watchChanged)
+  const asks = new Map() // permission id → { abort, agentId }
+  const handedBack = new Set() // permission ids the phone handed back to the computer: Paseo's own app answers them
+  const echoes = new Map() // Paseo message id → the client_msg_id the phone sent it with
+  const lastTexts = new Map() // agent id → its last words (agents whose content is not a transcript)
+  const lastTextTimers = new Map()
+  const timelines = new Map() // agent id → { key, at, tl, history } (the last whole read)
+  let runtimeOn = false
+  let awayTimer
+  let started = false
+
+  const meta = {
+    runtime: RUNTIME,
+    name: 'Paseo',
+    agent: RUNTIME,
+    // runtime.hello's version is Paseo's (the engine's version in node.info), read at each hello.
+    version: '',
+    launchers: [],
+    resume: true,
+    socketPath: options.socketPath,
+    connect: deps.connect,
+    log,
+    retryMs: options.retryMs,
+    pushDelayMs: options.pushDelayMs,
+    refreshMs: options.refreshMs,
+    onHub: (connected) => {
+      if (connected) askPending()
+    },
+  }
+  const rt = createRuntime({
+    listSessions, items, cursor, item, send, interrupt, start, rename, close, modes, watchChanged,
+  }, meta)
+
+  // ---- Paseo's state ----
+
+  function keepProviders(providers) {
+    const out = {}
+    for (const [id, p] of Object.entries(providers ?? {})) {
+      // Only what says which provider is which: a provider's env and command (keys, gateways) are not kept.
+      out[id] = { extends: typeof p?.extends === 'string' ? p.extends : undefined, label: typeof p?.label === 'string' ? p.label : undefined }
+    }
+    return out
+  }
+
+  function providersChanged() {
+    roots = providerRoots(configProviders, entries)
+    labels = {}
+    for (const e of entries) if (e?.provider && e.label) labels[e.provider] = e.label
+    for (const [id, p] of Object.entries(configProviders)) if (p.label && !labels[id]) labels[id] = p.label
+    // One launcher per provider, Paseo's default first (the form's first choice).
+    const def = defaultProvider(entries, roots)
+    launchers = launchersOf(entries, roots).sort((a, b) => (b.name === def) - (a.name === def))
+    rt.launchersChanged(launchers)
+    reindex()
+  }
+
+  /** Which agent each session id is: the one not closed, else the latest, when two claim one id. */
+  function reindex() {
+    bySession.clear()
+    for (const { agent } of agents.values()) index(agent)
+  }
+
+  function index(agent) {
+    const id = sessionIdOf(agent, roots)
+    if (!id) return
+    const cur = agents.get(bySession.get(id))?.agent
+    if (cur && cur.id !== agent.id) {
+      const better = (a) => [a.status !== 'closed' ? 1 : 0, Date.parse(a.updatedAt) || 0]
+      const [x, y] = [better(agent), better(cur)]
+      if (x[0] < y[0] || (x[0] === y[0] && x[1] <= y[1])) return
+    }
+    bySession.set(id, agent.id)
+  }
+
+  function sessionOf(agentId) {
+    const a = agents.get(agentId)?.agent
+    const id = a ? sessionIdOf(a, roots) : undefined
+    return id && bySession.get(id) === agentId ? id : undefined
+  }
+
+  function upsert(agent, project) {
+    if (!agent?.id) return
+    const prev = agents.get(agent.id)
+    if (prev && (Date.parse(prev.agent.updatedAt) || 0) > (Date.parse(agent.updatedAt) || 0) && prev.agent.status === agent.status) return
+    if (agent.archivedAt) return remove(agent.id)
+    const oldSession = prev ? sessionIdOf(prev.agent, roots) : undefined
+    agents.set(agent.id, { agent, project: project ?? prev?.project })
+    if (oldSession && oldSession !== sessionIdOf(agent, roots)) reindex()
+    else index(agent)
+    // Its requests: new ones to the phone, those no longer pending off it.
+    const pending = new Set((agent.pendingPermissions ?? []).map((r) => r?.id))
+    for (const r of agent.pendingPermissions ?? []) askFor(agent.id, r)
+    for (const [id, a] of asks) if (a.agentId === agent.id && !pending.has(id)) a.abort()
+    if (!transcriptOf(agent, roots) && agent.status !== 'closed' && prev?.agent.updatedAt !== agent.updatedAt) lastTextSoon(agent.id)
+    for (const [sid, w] of watches) if (w.agentId === agent.id) scheduleRefresh(sid)
+  }
+
+  function remove(agentId) {
+    const a = agents.get(agentId)
+    if (!a) return
+    agents.delete(agentId)
+    timelines.delete(agentId)
+    lastTexts.delete(agentId)
+    for (const [id, x] of asks) if (x.agentId === agentId) x.abort()
+    reindex()
+  }
+
+  // ---- connecting ----
+
+  paseo.on('connected', (info) => void onPaseo(info))
+  paseo.on('disconnected', (why) => {
+    log(`paseo: disconnected (${why})`)
+    clearTimeout(awayTimer)
+    // Paseo restarting (an update) comes back in seconds: the sessions stay meanwhile. Longer, and the engine is away.
+    awayTimer = setTimeout(() => {
+      if (paseo.connected || !runtimeOn) return
+      log('paseo: away; leaving the node until it is back')
+      rt.stop()
+      runtimeOn = false
+    }, awayGrace)
+    awayTimer.unref?.()
+  })
+
+  async function onPaseo(info) {
+    clearTimeout(awayTimer)
+    const version = String(info?.version ?? '')
+    log(`paseo: connected to Paseo ${version || '(version unknown)'}`)
+    try {
+      const cfg = await paseo.request('get_daemon_config_request', {})
+      configProviders = keepProviders(cfg?.config?.providers)
+      await paseo.subscribe('session.events.set_subscription.request', { events: EVENTS }, onSessionEvent)
+      const snap = await paseo.request('get_providers_snapshot_request', {})
+      entries = Array.isArray(snap?.entries) ? snap.entries : []
+      providersChanged()
+      void settleProviders()
+      await loadAgents()
+    } catch (err) {
+      log(`paseo: reading its state: ${err.message}; connecting again`)
+      paseo.ws?.close(4000, 'setup failed')
+      return
+    }
+    // Paseo's version is the runtime's: a new one says hello again.
+    if (runtimeOn && meta.version !== version) {
+      rt.stop()
+      runtimeOn = false
+    }
+    meta.version = version
+    if (!runtimeOn) {
+      runtimeOn = true
+      rt.start()
+    }
+    for (const id of watches.keys()) void follow(id)
+    askPending()
+    rt.sessionsChanged(0)
+  }
+
+  /**
+   * Providers still loading their models (Paseo warms them up when asked): their update comes as an event; asked again
+   * meanwhile too, so the form's models come even if it does not.
+   */
+  async function settleProviders() {
+    for (let i = 0; i < 20 && paseo.connected && entries.some((e) => e?.enabled && e.status === 'loading'); i++) {
+      await new Promise((r) => setTimeout(r, 1500))
+      try {
+        const snap = await paseo.request('get_providers_snapshot_request', {})
+        if (Array.isArray(snap?.entries) && JSON.stringify(snap.entries) !== JSON.stringify(entries)) {
+          entries = snap.entries
+          providersChanged()
+          rt.sessionsChanged()
+        }
+      } catch {}
+    }
+  }
+
+  async function loadAgents() {
+    const seen = new Set()
+    const take = (list) => {
+      for (const e of list ?? []) {
+        if (!e?.agent?.id) continue
+        seen.add(e.agent.id)
+        upsert(e.agent, e.project)
+      }
+    }
+    const first = await paseo.subscribe('fetch_agents_request', { subscribe: {}, page: { limit: 200 } }, onAgentUpdate, { timeoutMs: 60_000 })
+    take(first?.entries)
+    let info = first?.pageInfo
+    for (let i = 1; info?.hasMore && info.nextCursor && i < PAGES_MAX; i++) {
+      const p = await paseo.request('fetch_agents_request', { page: { limit: 200, cursor: info.nextCursor } }, { timeoutMs: 60_000 })
+      take(p?.entries)
+      info = p?.pageInfo
+    }
+    // Gone while Paseo was away.
+    if (!info?.hasMore) for (const id of [...agents.keys()]) if (!seen.has(id)) remove(id)
+  }
+
+  function onAgentUpdate(inner) {
+    const p = inner.payload
+    if (inner.type !== 'agent_update' || !p) return
+    if (p.kind === 'upsert' && p.agent) upsert(p.agent, p.project ?? undefined)
+    else if (p.kind === 'remove' && p.agentId) remove(p.agentId)
+    rt.sessionsChanged()
+  }
+
+  function onSessionEvent(inner) {
+    const p = inner.payload ?? {}
+    switch (inner.type) {
+      case 'agent_permission_request': {
+        const a = agents.get(p.agentId)?.agent
+        if (a && p.request?.id && !(a.pendingPermissions ?? []).some((r) => r?.id === p.request.id)) {
+          a.pendingPermissions = [...(a.pendingPermissions ?? []), p.request]
+        }
+        askFor(p.agentId, p.request)
+        rt.sessionsChanged(50)
+        break
+      }
+      case 'agent_permission_resolved': {
+        const a = agents.get(p.agentId)?.agent
+        if (a) a.pendingPermissions = (a.pendingPermissions ?? []).filter((r) => r?.id !== p.requestId)
+        asks.get(p.requestId)?.abort()
+        handedBack.delete(p.requestId)
+        rt.sessionsChanged(50)
+        break
+      }
+      case 'providers_snapshot_update':
+        if (Array.isArray(p.entries)) {
+          entries = p.entries
+          providersChanged()
+          rt.sessionsChanged()
+        }
+        break
+      case 'status':
+        if (p.status === 'daemon_config_changed' && p.config) {
+          configProviders = keepProviders(p.config.providers)
+          providersChanged()
+          rt.sessionsChanged()
+        }
+        break
+    }
+  }
+
+  // ---- cards ----
+
+  /** Put a pending request on the phone (once); the answer goes back to Paseo. Answered in Paseo: withdrawn. */
+  function askFor(agentId, request) {
+    if (!request?.id || asks.has(request.id) || handedBack.has(request.id) || !rt.connected) return
+    const sessionId = sessionOf(agentId)
+    if (!sessionId) return
+    const ac = new AbortController()
+    const entry = { agentId, abort: () => ac.abort(new Error('answered elsewhere')) }
+    asks.set(request.id, entry)
+    withPlan(agentId, request).then((r) => rt.ask(interactionOf(sessionId, r), { signal: ac.signal })).then(async (res) => {
+      if (asks.get(request.id) !== entry) return
+      asks.delete(request.id)
+      const agent = agents.get(agentId)?.agent
+      const out = responseOf(request, res, agentRoot(agent, roots))
+      if (!out) {
+        // Handed back (or no hub to ask: asked again when it is back): Paseo's app answers it meanwhile.
+        if (rt.hubConnected) handedBack.add(request.id)
+        return
+      }
+      try {
+        await paseo.request('agent_permission_response', { agentId, response: out.response },
+          { requestId: request.id, expect: 'agent_permission_resolved', timeoutMs: 30_000 })
+        if (out.setMode) {
+          const r = await paseo.request('set_agent_mode_request', { agentId, modeId: out.setMode })
+          if (r?.accepted === false) log(`paseo: mode ${out.setMode} for ${agentId}: ${r.error ?? 'refused'}`)
+        }
+      } catch (err) {
+        log(`paseo: answer ${request.id} of ${agentId}: ${err.message}`)
+      }
+    }, () => {
+      if (asks.get(request.id) === entry) asks.delete(request.id)
+    })
+  }
+
+  /**
+   * A plan request with its plan: Claude Code gives Paseo's permission no input for ExitPlanMode (the plan is in the
+   * tool call), so it is read from the call in the agent's timeline, as Paseo's own app shows it.
+   */
+  async function withPlan(agentId, request) {
+    const has = typeof request.metadata?.planText === 'string' || typeof request.input?.plan === 'string'
+    if (request.kind !== 'plan' || has) return request
+    try {
+      const res = await paseo.request('fetch_agent_timeline_request', { agentId, direction: 'tail', limit: 40 }, { timeoutMs: 15_000 })
+      const useId = request.metadata?.toolUseId
+      const call = (res?.entries ?? []).map((e) => e.item).reverse()
+        .find((it) => it?.type === 'tool_call' && it.detail?.type === 'plan' && (!useId || it.callId === useId))
+      if (typeof call?.detail?.text === 'string') return { ...request, metadata: { ...request.metadata, planText: call.detail.text } }
+    } catch (err) {
+      log(`paseo: the plan of ${agentId}: ${err.message}`)
+    }
+    return request
+  }
+
+  /** Every request still pending that is not on the phone (after a reconnect, the hub back). */
+  function askPending() {
+    for (const { agent } of agents.values()) for (const r of agent.pendingPermissions ?? []) askFor(agent.id, r)
+  }
+
+  // ---- the driver ----
+
+  function agentFor(sessionId) {
+    const id = bySession.get(sessionId)
+    const a = id ? agents.get(id) : undefined
+    if (a) return a.agent
+    if (!paseo.connected) throw new RpcError('Paseo 现在没有连上（没在运行，或正在重启），稍后再试。这次什么都没做。', 'unavailable')
+    throw new RpcError(`Paseo 里没有这个会话（${sessionId}）：可能已经归档或删除了`, 'not_found')
+  }
+
+  async function listSessions() {
+    const rows = []
+    for (const [sid, agentId] of bySession) {
+      const a = agents.get(agentId)
+      const row = a && agentRow(a.agent, { project: a.project, roots, labels, lastText: lastTexts.get(agentId) })
+      if (row && row.session_id === sid) rows.push(row)
+    }
+    return rt.recent(rows, { days: 3650, max: LIST_MAX, pinned: (r) => r.status === 'working' || r.status === 'blocked' })
+  }
+
+  const history = (agentId, epoch) => `paseo:${agentId}:${epoch ?? ''}`
+
+  /** A timeline page from Paseo: the whole of it (after: only from there on). Errors come back in the answer. */
+  async function fetchTimeline(agentId, after) {
+    const req = { agentId, limit: 0, direction: after ? 'after' : 'tail' }
+    if (after) req.cursor = after
+    const res = await paseo.request('fetch_agent_timeline_request', req, { timeoutMs: 60_000 })
+    if (res?.error) throw new RpcError(`Paseo：${res.error}`, 'paseo')
+    return res
+  }
+
+  /** An agent's whole conversation as items (read again only when the agent moved). */
+  async function timeline(agent) {
+    const key = `${agent.updatedAt}|${agent.status}`
+    const c = timelines.get(agent.id)
+    if (c && c.key === key && (agent.status !== 'running' || Date.now() - c.at < 500)) return c
+    const res = await fetchTimeline(agent.id)
+    const tl = timelineItems(res.entries, { maxSeq: res.window?.maxSeq, running: isRunning(res.agent ?? agent), echoes })
+    const out = { key, at: Date.now(), tl, history: history(agent.id, res.epoch), epoch: res.epoch }
+    timelines.set(agent.id, out)
+    if (tl.lastText) lastTexts.set(agent.id, tl.lastText)
+    return out
+  }
+
+  const isRunning = (a) => a?.status === 'running' || a?.status === 'initializing' || Boolean(a?.activeTurn)
+
+  async function items(params) {
+    const agent = agentFor(params.session_id)
+    const t = await timeline(agent)
+    const res = page(t.tl.items, params, { history: t.history, toSeq: t.tl.toSeq })
+    const w = watches.get(params.session_id)
+    if (w && !w.transcript && params.after_seq !== undefined && typeof res.to_seq === 'number') {
+      // The SDK catching a watch up: live pushes go on from here.
+      w.last = Math.max(w.last, res.to_seq)
+      w.safe = Math.min(w.safe ?? Infinity, t.tl.safeSeq, w.last)
+      w.epoch = t.epoch
+    }
+    return res
+  }
+
+  async function cursor(sessionId) {
+    const agent = agentFor(sessionId)
+    const t = await timeline(agent)
+    const w = watches.get(sessionId)
+    if (w && !w.transcript) {
+      w.last = t.tl.toSeq
+      w.safe = t.tl.safeSeq
+      w.epoch = t.epoch
+    }
+    return t.tl.toSeq
+  }
+
+  async function item(params) {
+    const agent = agentFor(params.session_id)
+    const t = await timeline(agent)
+    const it = t.tl.items.find((x) => x.id === params.item_id)
+    if (!it) throw new RpcError(`no item ${params.item_id}`, 'not_found')
+    return it
+  }
+
+  /** A promise's value, or TIMEOUT once ms passed (the promise goes on; its failure is logged). */
+  function within(p, ms, what) {
+    let timer
+    return Promise.race([
+      p.finally(() => clearTimeout(timer)),
+      new Promise((r) => {
+        timer = setTimeout(() => {
+          p.catch((err) => log(`paseo: ${what}: ${err.message}`))
+          r(TIMEOUT)
+        }, ms)
+        timer.unref?.()
+      }),
+    ])
+  }
+
+  async function send(params) {
+    const agent = agentFor(params.session_id)
+    const text = typeof params.text === 'string' ? params.text : ''
+    const images = (params.images ?? []).filter((i) => i?.data).map((i) => ({ data: i.data, mimeType: i.mime || 'image/jpeg' }))
+    if (!text.trim() && images.length === 0) throw new RpcError('消息是空的', 'bad_request')
+    // The same id for a retry of one message: Paseo delivers a message id once.
+    const messageId = params.client_msg_id ? uuidOf(`persona:${agent.id}:${params.client_msg_id}`) : randomUUID()
+    if (params.client_msg_id) {
+      echoes.set(messageId, params.client_msg_id)
+      while (echoes.size > 1000) echoes.delete(echoes.keys().next().value)
+    }
+    // Into the turn when it works (as Claude Code takes a message typed while it works), a new turn otherwise.
+    const req = { agentId: agent.id, text, messageId, activeTurnBehavior: 'steer' }
+    if (images.length) req.images = images
+    const res = await within(paseo.request('send_agent_message_request', req, { timeoutMs: 120_000 }), callWait, `send to ${agent.id}`)
+    if (res === TIMEOUT) return // the agent is still starting (loading a closed one): Paseo has the message
+    if (res?.accepted === false) throw new RpcError(`Paseo 没有收下这条消息：${res.error ?? '原因不明'}`, 'rejected')
+  }
+
+  async function interrupt(params) {
+    const agent = agentFor(params.session_id)
+    const res = await paseo.request('cancel_agent_request', { agentId: agent.id })
+    if (res?.error) throw new RpcError(`Paseo：${res.error}`, 'paseo')
+  }
+
+  async function rename(params) {
+    const agent = agentFor(params.session_id)
+    const title = String(params.title ?? '').trim()
+    if (!title) return
+    const res = await paseo.request('update_agent_request', { agentId: agent.id, name: title })
+    if (res?.accepted === false) throw new RpcError(`Paseo 没有改名：${res.error ?? '原因不明'}`, 'rejected')
+  }
+
+  /** Closing a session is archiving its agent: it stops, and leaves Paseo's list (and this one). */
+  async function close(params) {
+    const agent = agentFor(params.session_id)
+    await paseo.request('archive_agent_request', { agentId: agent.id })
+    remove(agent.id)
+  }
+
+  /** The thinking options of an agent's model ([] when Paseo has not said). */
+  function thinkingOptions(agent) {
+    const e = entries.find((x) => x?.provider === agent.provider)
+    const m = (e?.models ?? []).find((x) => x?.id === agent.model) ?? (e?.models ?? []).find((x) => x?.isDefault)
+    return (m?.thinkingOptions ?? []).map((t) => t?.id).filter(Boolean)
+  }
+
+  async function modes(params) {
+    const agent = agentFor(params.session_id)
+    const mode = params.permission_mode
+    if (mode) {
+      if (agentRoot(agent, roots) !== 'claude' || !MODES.includes(mode)) {
+        throw new RpcError('这个 Agent 没有 Claude Code 的权限模式', 'unsupported')
+      }
+      if ((agent.availableModes ?? []).length && !agent.availableModes.some((m) => m?.id === mode)) {
+        throw new RpcError(`Paseo 里这个 Agent 没有「${mode}」模式`, 'bad_request')
+      }
+      const res = await paseo.request('set_agent_mode_request', { agentId: agent.id, modeId: mode })
+      if (res?.accepted === false) throw new RpcError(`Paseo 没有换模式：${res.error ?? '原因不明'}`, 'rejected')
+    }
+    const effort = params.effort
+    if (effort) {
+      const opts = thinkingOptions(agent)
+      if (!EFFORTS.includes(effort) || (opts.length && !opts.includes(effort))) {
+        throw new RpcError(`${agent.model ?? '这个模型'} 没有「${effort}」这一档思考强度`, 'bad_request')
+      }
+      const res = await paseo.request('set_agent_thinking_request', { agentId: agent.id, thinkingOptionId: effort })
+      if (res?.accepted === false) throw new RpcError(`Paseo 没有换思考强度：${res.error ?? '原因不明'}`, 'rejected')
+    }
+  }
+
+  function isDir(p) {
+    try {
+      return statSync(p).isDirectory()
+    } catch {
+      return false
+    }
+  }
+
+  function rowOf(agent) {
+    const a = agents.get(agent.id)
+    return agentRow(agent, { project: a?.project, roots, labels, lastText: lastTexts.get(agent.id) })
+  }
+
+  /**
+   * A new session (the form, or the machine's engine starting one): a new agent of the provider the launcher names
+   * (a launcher of the login shell's that Paseo does not have: its default provider), with the form's model, mode and
+   * effort, and its first message. Its id is chosen here (paseo-<agent id>) and kept on the agent as a label.
+   */
+  async function start(params) {
+    if (params.resume) return takeOver(params)
+    if (!paseo.connected) throw new RpcError('Paseo 现在没有连上（没在运行，或正在重启），这次没有新建。', 'unavailable')
+    const cwd = typeof params.cwd === 'string' ? params.cwd : ''
+    if (!cwd || !isDir(cwd)) throw new RpcError(`没有这个目录：${cwd || '（空）'}`, 'bad_request')
+    let provider = launchers.some((l) => l.name === params.launcher) ? params.launcher : undefined
+    if (!provider) {
+      provider = defaultProvider(entries, roots)
+      if (!provider) throw new RpcError('Paseo 里没有能用的 provider：在 Paseo 的设置里打开一个再试', 'unavailable')
+      if (params.launcher) log(`paseo: Paseo has no provider ${params.launcher}; starting with ${provider}`)
+    }
+    const root = roots[provider] ?? provider
+    const config = { provider, cwd }
+    if (typeof params.model === 'string' && params.model) config.model = params.model
+    if (root === 'claude' && MODES.includes(params.permission_mode)) config.modeId = params.permission_mode
+    if (EFFORTS.includes(params.effort)) {
+      const opts = thinkingOptions({ provider, model: config.model })
+      if (!opts.length || opts.includes(params.effort)) config.thinkingOptionId = params.effort
+    }
+    const agentId = randomUUID()
+    const sessionId = `${RUNTIME}-${agentId}`
+    const req = { agentId, config, labels: { [SESSION_LABEL]: sessionId } }
+    const prompt = typeof params.prompt === 'string' ? params.prompt : ''
+    if (prompt.trim()) req.initialPrompt = prompt
+    if (typeof params.workspace_id === 'string' && [...agents.values()].some((a) => a.agent.workspaceId === params.workspace_id)) {
+      req.workspaceId = params.workspace_id
+    }
+    const created = paseo.request('agent.create.request', req, { timeoutMs: 0 })
+    created.then((res) => res?.agent && upsert(res.agent), () => {})
+    const res = await within(created, callWait, `start ${agentId}`)
+    if (res !== TIMEOUT && !res?.agent) throw new RpcError(`Paseo 没能新建：${res?.error ?? '原因不明'}`, 'start_failed')
+    if (res !== TIMEOUT) {
+      upsert(res.agent)
+      const row = rowOf(res.agent)
+      if (row) return { session: row }
+    }
+    // Still being created (its provider starting): the row it will have.
+    return {
+      session: {
+        session_id: sessionId, cwd, title: prompt.trim() ? snippet(prompt) : basename(cwd),
+        status: prompt.trim() ? 'working' : 'idle', updated_at: new Date().toISOString(), rev: Date.now(),
+        space_id: cwd, space_name: basename(cwd), agent: appAgent(root), launcher: provider,
+        ...(config.model ? { model: config.model } : {}),
+      },
+    }
+  }
+
+  /**
+   * Take a Claude session over (the machine's engine continuing a session not running anywhere): the Paseo agent
+   * that has it already, else Paseo imports it — its conversation goes on in Paseo under the same id. Refused when
+   * a claude Paseo does not run has it open (two writers of one transcript).
+   */
+  async function takeOver(params) {
+    const id = params.resume
+    if (!paseo.connected) throw new RpcError('Paseo 现在没有连上（没在运行，或正在重启），这次没有发送。', 'unavailable')
+    let mine
+    for (const { agent } of agents.values()) {
+      if (claudeId(agent) === id && agentRoot(agent, roots) === 'claude' && (!mine || mine.status === 'closed')) mine = agent
+    }
+    if (mine) {
+      const row = rowOf(mine)
+      if (row) return { session: row }
+    }
+    if (params.open_elsewhere) {
+      throw new RpcError('这个会话正在别处的 Claude Code 里开着（Paseo 之外），Paseo 再接着它就会有两个进程写同一个会话。先在那边关掉它。这次没有发送。', 'open_elsewhere')
+    }
+    const cwd = typeof params.cwd === 'string' ? params.cwd : ''
+    if (!cwd || !isDir(cwd)) throw new RpcError(`接不上这个会话：它的目录不在了（${cwd || '未知'}）`, 'bad_request')
+    // The provider: the launcher's when it runs Claude Code, else the one this machine's Claude agents use most lately.
+    let provider = launchers.some((l) => l.name === params.launcher && roots[l.name] === 'claude') ? params.launcher : undefined
+    if (!provider) {
+      let latest
+      for (const { agent } of agents.values()) {
+        if (agentRoot(agent, roots) === 'claude' && entries.some((e) => e.provider === agent.provider && e.enabled) &&
+          (!latest || (Date.parse(agent.updatedAt) || 0) > (Date.parse(latest.updatedAt) || 0))) latest = agent
+      }
+      provider = latest?.provider ?? defaultProvider(entries.filter((e) => roots[e.provider] === 'claude'), roots)
+    }
+    if (!provider) throw new RpcError('Paseo 里没有跑 Claude Code 的 provider，接不了这个会话', 'unavailable')
+    const res = await paseo.request('import_agent_request', { provider, sessionId: id, cwd, labels: { [SESSION_LABEL]: id } },
+      { expect: 'status:agent_resumed', timeoutMs: callWait })
+    if (!res?.agent) throw new RpcError('Paseo 没有接上这个会话', 'start_failed')
+    upsert(res.agent)
+    const row = rowOf(res.agent)
+    if (!row) throw new RpcError('Paseo 接上了这个会话，但它没有会话 id', 'start_failed')
+    return { session: row }
+  }
+
+  // ---- watching: live text, and new items for agents whose content is not a transcript ----
+
+  /**
+   * The phone watches a session (or stops). Paseo sends an agent's timeline only to a subscription for it: one per
+   * watched session.
+   */
+  function watchChanged(sessionId, watching, o) {
+    const old = watches.get(sessionId)
+    if (!watching) {
+      if (old) {
+        watches.delete(sessionId)
+        clearTimeout(old.timer)
+        paseo.release(old.sub)
+        rt.streamEnd(sessionId)
+      }
+      return
+    }
+    const agentId = bySession.get(sessionId)
+    if (!agentId) return
+    if (old) {
+      old.transcript = o?.transcript === true
+      return
+    }
+    watches.set(sessionId, { agentId, transcript: o?.transcript === true, sub: undefined, last: 0, safe: undefined, epoch: undefined,
+      timer: undefined, fetching: false, again: false, live: { key: '', text: '' } })
+    void follow(sessionId)
+  }
+
+  async function follow(sessionId) {
+    const w = watches.get(sessionId)
+    if (!w || !paseo.connected) return
+    w.sub = undefined
+    try {
+      const res = await paseo.subscribe('agent.timeline.set_subscription.request', { agentIds: [w.agentId] }, (inner) => onTimeline(sessionId, w, inner))
+      if (watches.get(sessionId) !== w) paseo.release(res?.subscriptionId)
+      else w.sub = res?.subscriptionId
+    } catch (err) {
+      log(`paseo: follow ${w.agentId}: ${err.message}`)
+    }
+  }
+
+  function onTimeline(sessionId, w, inner) {
+    if (watches.get(sessionId) !== w) return
+    const p = inner.payload ?? {}
+    if (inner.type === 'agent.timeline.replacement') {
+      // Its history was rewritten (a rewind): the phone takes the conversation again.
+      w.epoch = undefined
+      timelines.delete(w.agentId)
+      scheduleRefresh(sessionId)
+      return
+    }
+    if (inner.type !== 'agent_stream') return
+    const ev = p.event ?? {}
+    if (ev.type === 'timeline' && ev.item?.type === 'assistant_message') {
+      // Paseo sends what was added since the last chunk: the live text is all of this message's so far.
+      const key = `${ev.turnId ?? ''}|${ev.item.messageId ?? ''}`
+      if (w.live.key !== key) w.live = { key, text: '' }
+      w.live.text += ev.item.text ?? ''
+      if (w.live.text) rt.stream(sessionId, w.live.text)
+    } else if (ev.type === 'timeline' || ev.type?.startsWith('turn_')) {
+      if (w.live.text) rt.streamEnd(sessionId)
+      w.live = { key: '', text: '' }
+    }
+    if (ev.type?.startsWith('turn_')) rt.sessionsChanged(0)
+    if (!w.transcript) scheduleRefresh(sessionId)
+  }
+
+  function scheduleRefresh(sessionId) {
+    const w = watches.get(sessionId)
+    if (!w || w.transcript || w.timer) return
+    w.timer = setTimeout(() => {
+      w.timer = undefined
+      void refresh(sessionId)
+    }, REFRESH_DELAY)
+    w.timer.unref?.()
+  }
+
+  /** Push what a watched agent's timeline has new: read from where something can still change, push what is final. */
+  async function refresh(sessionId) {
+    const w = watches.get(sessionId)
+    if (!w || w.transcript) return
+    if (w.fetching) {
+      w.again = true
+      return
+    }
+    w.fetching = true
+    try {
+      const agent = agents.get(w.agentId)?.agent
+      if (!agent || !paseo.connected) return
+      const incremental = w.epoch !== undefined && w.safe !== undefined
+      let res = await fetchTimeline(agent.id, incremental ? { epoch: w.epoch, seq: w.safe } : undefined)
+      if (watches.get(sessionId) !== w) return
+      const moved = !incremental || res.reset || res.staleCursor || res.gap || res.epoch !== w.epoch
+      if (moved && incremental) res = await fetchTimeline(agent.id)
+      const tl = timelineItems(res.entries, { maxSeq: res.window?.maxSeq, running: isRunning(res.agent ?? agent), echoes })
+      const h = history(agent.id, res.epoch)
+      if (moved && w.epoch !== undefined && w.epoch !== res.epoch) {
+        // Another history: the phone takes the whole conversation again.
+        rt.append(sessionId, { items: [], toSeq: tl.toSeq, history: h })
+        w.last = tl.toSeq
+      } else {
+        const fresh = tl.items.filter((it) => it.seq > w.last)
+        if (fresh.length || tl.toSeq > w.last) {
+          rt.append(sessionId, { items: fresh.map(light), fromSeq: w.last, toSeq: Math.max(tl.toSeq, w.last), history: h })
+          w.last = Math.max(w.last, tl.toSeq)
+        }
+      }
+      w.epoch = res.epoch
+      w.safe = Math.min(tl.safeSeq, w.last)
+      if (tl.lastText) lastTexts.set(agent.id, tl.lastText)
+    } catch (err) {
+      log(`paseo: timeline of ${w.agentId}: ${err.message}`)
+    } finally {
+      w.fetching = false
+      if (w.again) {
+        w.again = false
+        scheduleRefresh(sessionId)
+      }
+    }
+  }
+
+  /** An agent whose content is not a transcript: its last words for the list, read a while after it changed. */
+  function lastTextSoon(agentId) {
+    if (lastTextTimers.has(agentId)) return
+    const t = setTimeout(async () => {
+      lastTextTimers.delete(agentId)
+      const agent = agents.get(agentId)?.agent
+      if (!agent || agent.status === 'closed' || !paseo.connected) return // reading a closed agent would load it
+      try {
+        const res = await paseo.request('fetch_agent_timeline_request', { agentId, direction: 'tail', limit: 8 }, { timeoutMs: 30_000 })
+        const { lastText } = timelineItems(res?.entries, { maxSeq: res?.window?.maxSeq, running: isRunning(res?.agent ?? agent) })
+        if (lastText && lastText !== lastTexts.get(agentId)) {
+          lastTexts.set(agentId, lastText)
+          rt.sessionsChanged()
+        }
+      } catch {}
+    }, LAST_TEXT_DELAY)
+    t.unref?.()
+    lastTextTimers.set(agentId, t)
+  }
+
+  return {
+    /** Connect to Paseo; the bridge joins the node once Paseo answers. */
+    start() {
+      if (started) return
+      started = true
+      paseo.start()
+    },
+    stop() {
+      started = false
+      clearTimeout(awayTimer)
+      for (const t of lastTextTimers.values()) clearTimeout(t)
+      lastTextTimers.clear()
+      for (const a of asks.values()) a.abort()
+      rt.stop()
+      runtimeOn = false
+      paseo.stop()
+    },
+    runtime: rt,
+    paseo,
+    /** Tests: the bridge's view. */
+    state: { agents, bySession, watches, asks, handedBack, echoes, get launchers() { return launchers } },
+  }
+}
+
+/** A UUID (v5-shaped) that is the same for the same text. */
+export function uuidOf(text) {
+  const h = createHash('sha256').update(text).digest()
+  h[6] = (h[6] & 0x0f) | 0x50
+  h[8] = (h[8] & 0x3f) | 0x80
+  const x = h.subarray(0, 16).toString('hex')
+  return `${x.slice(0, 8)}-${x.slice(8, 12)}-${x.slice(12, 16)}-${x.slice(16, 20)}-${x.slice(20)}`
+}

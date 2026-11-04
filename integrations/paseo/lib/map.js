@@ -1,0 +1,470 @@
+// Pure mapping between Paseo's shapes and Persona's (docs/paseo.md「映射」): an agent → a session row, its timeline →
+// items, its providers → launchers, a permission request ↔ an interaction and its answer. No I/O: the bridge
+// (bridge.js) hands in what the daemon said; the tests feed recorded shapes.
+
+import { basename } from 'node:path'
+import { appToolName, clipInput, interactionId, snippet, summaryOf } from '../../runtime-sdk/index.js'
+
+/** The runtime id: the engine's (proto.EnginePaseo), the space kind, the agent of sessions the apps do not know. */
+export const RUNTIME = 'paseo'
+/** The label keeping a session's id in Persona (sessions started or taken over from Persona). */
+export const SESSION_LABEL = 'persona.session'
+/** Persona's effort levels, weakest first (proto.EffortLevels). */
+export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
+/** Persona's permission modes (proto.PermissionModes): Claude Code's, which Paseo's Claude providers take as they are. */
+export const MODES = ['default', 'acceptEdits', 'plan', 'auto', 'bypassPermissions']
+/** A launcher name (the node's nameRe: what a shell function may be called). */
+export const LAUNCHER_NAME = /^[A-Za-z_][A-Za-z0-9_-]*$/
+/** A session id the node takes (runtimeIDRe). */
+export const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/
+/** A Claude Code session id (the node's idRe). */
+export const CLAUDE_ID = /^[0-9a-fA-F-]{8,64}$/
+
+// ---- providers ----
+
+/**
+ * The built-in provider under each provider: a custom one extends another (maybe another custom one, a chain).
+ * config: get_daemon_config's providers; entries: the providers snapshot's.
+ * @returns {Record<string, string>} provider id → built-in id
+ */
+export function providerRoots(config = {}, entries = []) {
+  const ids = new Set([...Object.keys(config ?? {}), ...(entries ?? []).map((e) => e?.provider).filter(Boolean)])
+  const roots = {}
+  for (const id of ids) {
+    let cur = id
+    const seen = new Set()
+    while (typeof config?.[cur]?.extends === 'string' && config[cur].extends && !seen.has(cur)) {
+      seen.add(cur)
+      cur = config[cur].extends
+    }
+    roots[id] = cur
+  }
+  return roots
+}
+
+/** The built-in provider an agent runs on: what its persistence records (Paseo writes it), else its provider's root. */
+export function agentRoot(agent, roots = {}) {
+  const m = agent?.persistence?.metadata?.provider
+  if (typeof m === 'string' && m) return m
+  return roots[agent?.provider] ?? agent?.provider ?? ''
+}
+
+/** The agent the apps know a root as: Claude Code and Codex by name, the rest as Paseo's. */
+export function appAgent(root) {
+  return root === 'claude' ? 'claude' : root === 'codex' ? 'codex' : RUNTIME
+}
+
+/** A Paseo model as the new-session form's (proto.AgentModel): Persona's efforts among its thinking options. */
+export function formModel(m) {
+  const ids = new Set((m?.thinkingOptions ?? []).map((t) => t?.id))
+  const efforts = EFFORTS.filter((e) => ids.has(e))
+  const out = { id: String(m.id), name: String(m.label || m.id) }
+  if (m.description) out.description = String(m.description)
+  if (m.isDefault) out.default = true
+  if (efforts.length) {
+    out.efforts = efforts
+    if (efforts.includes(m.defaultThinkingOptionId)) out.default_effort = m.defaultThinkingOptionId
+  }
+  return out
+}
+
+/**
+ * The new-session form's launchers: one per provider that can start an agent (enabled, not failing, named like a
+ * launcher), with the agent it starts and its models.
+ */
+export function launchersOf(entries = [], roots = {}) {
+  const out = []
+  for (const e of entries ?? []) {
+    if (!e?.enabled || e.status === 'unavailable' || e.status === 'error' || !LAUNCHER_NAME.test(e.provider ?? '')) continue
+    const models = (e.models ?? []).filter((m) => m && m.id && m.isSelectable !== false).map(formModel)
+    const def = models.find((m) => m.default) ?? models[0]
+    const l = { name: e.provider, agent: appAgent(roots[e.provider] ?? e.provider), models }
+    const model = def?.name ?? e.label
+    if (model) l.model = String(model)
+    out.push(l)
+  }
+  return out
+}
+
+/**
+ * The provider a new session runs on when the form named none Paseo has (a launcher of the login shell's): Claude
+ * Code's own if it is on, else the first one running Claude Code, else the first one there is.
+ */
+export function defaultProvider(entries = [], roots = {}) {
+  const usable = (entries ?? []).filter((e) => e?.enabled && e.status !== 'unavailable' && e.status !== 'error')
+  return (usable.find((e) => e.provider === 'claude') ?? usable.find((e) => roots[e.provider] === 'claude') ?? usable[0])?.provider
+}
+
+// ---- sessions ----
+
+/**
+ * The id a Paseo agent has in Persona, undefined while it has none: the label Persona left on it (it started or took
+ * the session over); else, for Claude Code, its Claude session id — the id the same conversation has everywhere in
+ * Persona (未运行, herdr) — once Paseo has one; else paseo-<agent id>.
+ */
+export function sessionIdOf(agent, roots = {}) {
+  const l = agent?.labels?.[SESSION_LABEL]
+  if (typeof l === 'string' && SESSION_ID.test(l)) return l
+  if (agentRoot(agent, roots) === 'claude') {
+    const c = claudeId(agent)
+    return c && SESSION_ID.test(c) ? c : undefined
+  }
+  return typeof agent?.id === 'string' && agent.id ? `${RUNTIME}-${agent.id}` : undefined
+}
+
+/** The Claude session an agent of Claude Code runs: the one persisted, else the one its runtime starts with. */
+export function claudeId(agent) {
+  for (const id of [agent?.persistence?.sessionId, agent?.runtimeInfo?.sessionId]) {
+    if (typeof id === 'string' && CLAUDE_ID.test(id)) return id
+  }
+  return undefined
+}
+
+/**
+ * The transcript holding an agent's conversation (runtime.sessions' transcript): its persisted Claude session — on
+ * disk by then — for an agent of Claude Code; none for any other.
+ */
+export function transcriptOf(agent, roots = {}) {
+  if (agentRoot(agent, roots) !== 'claude') return undefined
+  const id = agent?.persistence?.sessionId
+  return typeof id === 'string' && CLAUDE_ID.test(id) ? id : undefined
+}
+
+/** A session row's status for an agent: needing you while a request waits, working, done, or 未运行 when closed. */
+export function rowStatus(agent) {
+  if ((agent?.pendingPermissions?.length ?? 0) > 0) return 'blocked'
+  switch (agent?.status) {
+    case 'running':
+    case 'initializing':
+      return 'working'
+    case 'closed':
+      return 'offline'
+    case 'error':
+      return 'done'
+    default:
+      return agent?.lastUserMessageAt ? 'done' : 'idle'
+  }
+}
+
+/**
+ * The runtime.sessions row of an agent (docs/runtimes.md「列表」), undefined for one not listed.
+ * @param {object} agent - an AgentSnapshotPayload
+ * @param {{ project?: object, roots?: Record<string, string>, labels?: Record<string, string>, lastText?: string }} [o]
+ *   project: its ProjectPlacement; labels: provider id → its label (the name of a provider the apps do not know).
+ */
+export function agentRow(agent, o = {}) {
+  const roots = o.roots ?? {}
+  const id = sessionIdOf(agent, roots)
+  if (!id || agent?.archivedAt) return undefined
+  const root = agentRoot(agent, roots)
+  const cwd = typeof agent.cwd === 'string' ? agent.cwd : ''
+  const p = o.project
+  const row = {
+    session_id: id,
+    title: (typeof agent.title === 'string' && agent.title.trim()) || basename(cwd),
+    cwd,
+    status: rowStatus(agent),
+    updated_at: new Date(Date.parse(agent.updatedAt) || Date.now()).toISOString(),
+    rev: Date.parse(agent.updatedAt) || 0,
+    space_id: agent.workspaceId || p?.projectKey || cwd,
+    space_name: p?.workspaceName || p?.projectName || basename(cwd),
+    agent: appAgent(root),
+    launcher: agent.provider,
+  }
+  if (row.agent === RUNTIME && o.labels?.[agent.provider]) row.agent_label = o.labels[agent.provider]
+  const model = agent.model ?? agent.runtimeInfo?.model
+  if (typeof model === 'string' && model) row.model = model
+  if (root === 'claude' && MODES.includes(agent.currentModeId)) row.permission_mode = agent.currentModeId
+  const effort = agent.effectiveThinkingOptionId ?? agent.thinkingOptionId
+  if (EFFORTS.includes(effort)) row.effort = effort
+  const t = transcriptOf(agent, roots)
+  if (t) row.transcript = t
+  const last = agent.status === 'error' && agent.lastError ? `出错了：${agent.lastError}` : o.lastText
+  if (last) row.last_text = snippet(last)
+  return row
+}
+
+// ---- the timeline ----
+
+const ts = (t) => new Date(Date.parse(t) || Date.now()).toISOString()
+
+/** A tool call's detail as the apps draw that tool: Claude Code's name and arguments. */
+export function toolCall(name, detail) {
+  const d = detail && typeof detail === 'object' ? detail : {}
+  switch (d.type) {
+    case 'shell':
+      return { name: 'Bash', input: dropEmpty({ command: d.command, cwd: d.cwd }) }
+    case 'read':
+      return { name: 'Read', input: dropEmpty({ file_path: d.filePath, offset: d.offset, limit: d.limit }) }
+    case 'edit':
+      return { name: 'Edit', input: clipInput(dropEmpty({ file_path: d.filePath, old_string: d.oldString, new_string: d.newString })) }
+    case 'write':
+      return { name: 'Write', input: clipInput(dropEmpty({ file_path: d.filePath, content: d.content })) }
+    case 'search': {
+      const tool = { grep: 'Grep', glob: 'Glob', web_search: 'WebSearch' }[d.toolName] ?? 'Grep'
+      return { name: tool, input: dropEmpty(tool === 'WebSearch' ? { query: d.query } : { pattern: d.query }) }
+    }
+    case 'fetch':
+      return { name: 'WebFetch', input: dropEmpty({ url: d.url, prompt: d.prompt }) }
+    case 'sub_agent':
+      return { name: 'Task', input: dropEmpty({ subagent_type: d.subAgentType, description: d.description }) }
+    case 'plan':
+      return { name: 'ExitPlanMode', input: clipInput({ plan: d.text ?? '' }) }
+    case 'worktree_setup':
+      return { name: 'WorktreeSetup', input: dropEmpty({ path: d.worktreePath, branch: d.branchName }) }
+    case 'plain_text':
+      return { name: appToolName(name || d.label || 'tool'), input: clipInput(dropEmpty({ text: d.text, label: d.label })) }
+    default: {
+      const input = d.input && typeof d.input === 'object' && !Array.isArray(d.input) ? d.input : d.input === undefined || d.input === null ? {} : { input: d.input }
+      return { name: appToolName(name || 'tool'), input: clipInput(input) }
+    }
+  }
+}
+
+/** What a finished tool call gave back, as the text of its result. */
+export function toolOutput(item) {
+  const d = item?.detail ?? {}
+  let out
+  switch (d.type) {
+    case 'shell':
+      out = d.output ?? ''
+      if (typeof d.exitCode === 'number' && d.exitCode !== 0) out += `${out ? '\n' : ''}（退出码 ${d.exitCode}）`
+      break
+    case 'read':
+    case 'write':
+      out = d.type === 'read' ? d.content ?? '' : ''
+      break
+    case 'edit':
+      out = d.unifiedDiff ?? ''
+      break
+    case 'search':
+      out = d.content ?? (Array.isArray(d.filePaths) && d.filePaths.length ? d.filePaths.join('\n') : '')
+      if (!out && Array.isArray(d.webResults)) out = d.webResults.map((r) => `${r.title}\n${r.url}`).join('\n\n')
+      break
+    case 'fetch':
+      out = d.result ?? ''
+      break
+    case 'sub_agent':
+      out = d.log || (d.actions ?? []).map((a) => `${a.toolName}${a.summary ? ` ${a.summary}` : ''}`).join('\n')
+      break
+    case 'worktree_setup':
+      out = d.log ?? ''
+      break
+    case 'plain_text':
+      out = d.text ?? ''
+      break
+    case 'plan':
+      out = ''
+      break
+    default:
+      out = d.output === undefined || d.output === null ? '' : typeof d.output === 'string' ? d.output : JSON.stringify(d.output, null, 2)
+  }
+  if (item?.status === 'failed' && item.error) {
+    const e = typeof item.error === 'string' ? item.error : item.error?.message ?? JSON.stringify(item.error)
+    out = out ? `${out}\n${e}` : e
+  } else if (item?.status === 'canceled' && !out) out = '（已取消）'
+  return String(out)
+}
+
+/** Whether a finished tool call failed. */
+function toolFailed(item) {
+  return item?.status === 'failed' || (item?.detail?.type === 'shell' && typeof item.detail.exitCode === 'number' && item.detail.exitCode !== 0)
+}
+
+/**
+ * The items of one projected timeline entry (fetch_agent_timeline's). Where each lands: a message, a thought or a
+ * note at its first row (seqStart); a tool call at its first row, its result — once it finished — at its last
+ * (seqEnd). echoes: Paseo message id → the client_msg_id the phone sent it with.
+ */
+export function entryItems(entry, echoes) {
+  const it = entry?.item
+  const s = Number(entry?.seqStart)
+  if (!it || !Number.isSafeInteger(s) || s < 1) return []
+  const e = Number.isSafeInteger(Number(entry.seqEnd)) ? Math.max(s, Number(entry.seqEnd)) : s
+  const at = ts(entry.timestamp)
+  const out = []
+  const add = (seq, x) => out.push({ id: `${seq}#${out.filter((o) => o.seq === seq).length}`, seq, ts: at, ...x })
+  switch (it.type) {
+    case 'user_message': {
+      if (!it.text) break
+      const x = { role: 'user', kind: 'text', text: it.text }
+      const cm = echoes?.get?.(it.clientMessageId ?? it.messageId)
+      if (cm) x.client_msg_id = cm
+      add(s, x)
+      break
+    }
+    case 'assistant_message':
+      if (it.text) add(s, { role: 'assistant', kind: 'text', text: it.text })
+      break
+    case 'reasoning':
+      if (it.text) add(s, { role: 'assistant', kind: 'thinking', text: it.text })
+      break
+    case 'tool_call': {
+      const call = toolCall(it.name, it.detail)
+      const useId = it.callId || `paseo-${s}`
+      add(s, { role: 'assistant', kind: 'tool_use', tool_name: call.name, tool_use_id: useId, tool_input: call.input })
+      if (it.status && it.status !== 'running') add(e, { role: 'user', kind: 'tool_result', tool_use_id: useId, is_error: toolFailed(it), text: toolOutput(it) })
+      break
+    }
+    case 'todo': {
+      const todos = (it.items ?? []).map((t) => dropEmpty({ content: t.text, status: t.status ?? (t.completed ? 'completed' : 'pending'), activeForm: t.activeForm }))
+      add(s, { role: 'assistant', kind: 'tool_use', tool_name: 'TodoWrite', tool_use_id: `paseo-todo-${s}`, tool_input: { todos } })
+      break
+    }
+    case 'error':
+      add(s, { role: 'system', kind: 'notice', text: `出错了：${snippet(it.message ?? '')}` })
+      break
+    case 'notification':
+      if (it.message) add(s, { role: 'system', kind: 'notice', text: snippet(it.message) })
+      break
+    case 'compaction':
+      if (it.status === 'completed') {
+        const compact = dropEmpty({ trigger: it.trigger, pre_tokens: it.preTokens })
+        add(s, { role: 'system', kind: 'notice', text: '已压缩上下文', ...(Object.keys(compact).length ? { compact } : {}) })
+      }
+      break
+    // plugin items: a Paseo plugin's own rendering, nothing the apps can show
+  }
+  return out
+}
+
+/**
+ * A timeline page as items, and how far they are final. running: the agent is in a turn — its last entry, when it is
+ * text or a thought, is still being written: its item waits (toSeq stops before it) and the text goes live instead.
+ * safeSeq: from where a later fetch must start to see every entry that can still change (running tools, that text).
+ * @param {object[]} entries - projected entries, oldest first
+ * @param {{ maxSeq: number, running?: boolean, echoes?: Map<string, string> }} o
+ * @returns {{ items: object[], toSeq: number, safeSeq: number, lastText: string }}
+ */
+export function timelineItems(entries, { maxSeq, running = false, echoes } = {}) {
+  const list = (entries ?? []).filter((x) => Number.isSafeInteger(Number(x?.seqStart))).sort((a, b) => a.seqStart - b.seqStart)
+  let toSeq = Math.max(0, Number(maxSeq) || 0)
+  for (const x of list) toSeq = Math.max(toSeq, Number(x.seqEnd) || 0)
+  let safeSeq = toSeq
+  const items = []
+  let lastText = ''
+  list.forEach((x, i) => {
+    const type = x.item?.type
+    const open = running && i === list.length - 1 && (type === 'assistant_message' || type === 'reasoning')
+    if (open) {
+      toSeq = Math.min(toSeq, x.seqStart - 1)
+      safeSeq = Math.min(safeSeq, x.seqStart - 1)
+      return
+    }
+    if (type === 'tool_call' && x.item.status === 'running') safeSeq = Math.min(safeSeq, x.seqStart - 1)
+    if (type === 'assistant_message' && x.item.text) lastText = x.item.text
+    items.push(...entryItems(x, echoes))
+  })
+  items.sort((a, b) => a.seq - b.seq || a.id.localeCompare(b.id))
+  return { items: items.filter((it) => it.seq <= toSeq), toSeq, safeSeq: Math.max(0, safeSeq), lastText }
+}
+
+// ---- requests for the user ----
+
+/** The questions of a request, in the apps' shape; undefined when it asks none. */
+function questionsOf(input) {
+  const qs = Array.isArray(input?.questions) ? input.questions : undefined
+  if (!qs?.length) return undefined
+  const out = []
+  for (const q of qs) {
+    if (!q || typeof q.question !== 'string') return undefined
+    out.push({
+      question: q.question,
+      header: typeof q.header === 'string' ? q.header : '',
+      multi_select: q.multiSelect === true,
+      options: (Array.isArray(q.options) ? q.options : []).map((o) => typeof o === 'string' ? { label: o, description: '' } : { label: String(o?.label ?? ''), description: String(o?.description ?? '') }).filter((o) => o.label),
+    })
+  }
+  return out
+}
+
+/** The rule an "always allow" adds, in words (`Bash(npm test)`), and where it applies. */
+function alwaysLabel(suggestions) {
+  const s = (suggestions ?? []).find((x) => x && x.type === 'addRules' && x.behavior === 'allow' && Array.isArray(x.rules) && x.rules.length)
+  if (!s) return undefined
+  const rules = s.rules.map((r) => (r?.ruleContent ? `${r.toolName}(${r.ruleContent})` : r?.toolName)).filter(Boolean).join('、')
+  if (!rules) return undefined
+  const where = s.destination === 'session' ? '本会话' : s.destination === 'userSettings' ? '所有项目' : '这个项目'
+  return snippet(`${where}不再问：${rules}`)
+}
+
+/**
+ * The interaction a pending request becomes on the phone (docs/protocol.md Interaction): a question, a plan, or a
+ * permission. The id is stable (interactionId), so a restart hangs the same request on the card already shown.
+ */
+export function interactionOf(sessionId, request) {
+  const r = request ?? {}
+  const input = r.input && typeof r.input === 'object' ? r.input : {}
+  const base = { session_id: sessionId }
+  const useId = r.metadata?.toolUseId
+  if (typeof useId === 'string' && useId) base.tool_use_id = useId
+  const questions = r.kind === 'question' ? questionsOf(input) : undefined
+  if (questions) {
+    return { ...base, id: interactionId(RUNTIME, sessionId, 'question', r.id), kind: 'question', tool_name: 'AskUserQuestion', questions }
+  }
+  if (r.kind === 'plan') {
+    const plan = typeof r.metadata?.planText === 'string' ? r.metadata.planText : typeof input.plan === 'string' ? input.plan : r.description ?? ''
+    return { ...base, id: interactionId(RUNTIME, sessionId, 'plan', r.id), kind: 'plan', tool_name: 'ExitPlanMode', plan }
+  }
+  const claude = r.provider === 'claude' && typeof r.name === 'string' && r.name
+  const call = claude ? { name: r.name, input: clipInput(input) } : toolCall(r.name, r.detail ?? { type: 'unknown', input })
+  const ix = {
+    ...base, id: interactionId(RUNTIME, sessionId, 'permission', r.id), kind: 'permission',
+    tool_name: call.name, tool_input: call.input,
+    summary: snippet(r.title || r.description || summaryOf(call.name, call.input) || call.name),
+  }
+  if (r.description && r.title) ix.reason = snippet(r.description)
+  const always = alwaysLabel(r.suggestions)
+  if (always) ix.always_label = always
+  return ix
+}
+
+/**
+ * The answer to send for a request (agent_permission_response's response), undefined when the phone handed it back
+ * (Paseo's own app answers it). mode: for an approved plan, the mode the phone chose; the response picks the plan's
+ * action, and setMode is what is left to set after it (Paseo's implement switches to acceptEdits).
+ * @returns {{ response: object, setMode?: string } | undefined}
+ */
+export function responseOf(request, res, root) {
+  if (!res || res.dismiss) return undefined
+  const r = request ?? {}
+  if (r.kind === 'question' && res.answers && typeof res.answers === 'object') {
+    const qs = Array.isArray(r.input?.questions) ? r.input.questions : []
+    const answers = {}
+    for (const q of qs) {
+      const a = res.answers[q?.question] ?? (q?.header ? res.answers[q.header] : undefined)
+      if (typeof a !== 'string') continue
+      // Claude Code's AskUserQuestion takes the question text (Paseo maps headers to it); the others, Paseo's card's key.
+      answers[root === 'claude' || !q.header ? q.question : q.header] = a
+    }
+    if (!Object.keys(answers).length) return undefined
+    return { response: { behavior: 'allow', updatedInput: { answers } } }
+  }
+  if (r.kind === 'plan' && typeof res.approve === 'boolean') {
+    const ids = new Set((r.actions ?? []).map((a) => a?.id))
+    if (!res.approve) {
+      const msg = res.feedback?.trim() ? `用户在手机上打回了这个计划。修改意见：${res.feedback.trim()}` : '用户在手机上打回了这个计划。'
+      return { response: { behavior: 'deny', message: msg, ...(ids.has('reject') ? { selectedActionId: 'reject' } : {}) } }
+    }
+    const mode = MODES.includes(res.mode) ? res.mode : 'bypassPermissions'
+    if (ids.has('implement_resume') && (mode === 'bypassPermissions' || mode === 'auto')) {
+      return { response: { behavior: 'allow', selectedActionId: 'implement_resume' } }
+    }
+    if (ids.has('implement')) return { response: { behavior: 'allow', selectedActionId: 'implement' }, ...(mode !== 'acceptEdits' ? { setMode: mode } : {}) }
+    return { response: { behavior: 'allow' }, ...(root === 'claude' ? { setMode: mode } : {}) }
+  }
+  if (typeof res.allow === 'boolean') {
+    if (!res.allow) return { response: { behavior: 'deny', message: res.message?.trim() || '用户在手机上拒绝了' } }
+    const response = { behavior: 'allow' }
+    if (res.always) {
+      const rules = (r.suggestions ?? []).filter((x) => x && ['addRules', 'replaceRules', 'removeRules'].includes(x.type) && Array.isArray(x.rules))
+      if (rules.length) response.updatedPermissions = rules
+    }
+    return { response }
+  }
+  return undefined
+}
+
+function dropEmpty(o) {
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== null && v !== ''))
+}

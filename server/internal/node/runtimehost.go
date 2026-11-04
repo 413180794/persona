@@ -43,6 +43,11 @@ type RuntimeHost struct {
 	daemons    map[string]*daemonRun
 	daemonsSum [32]byte      // daemons.json as last applied
 	dtimes     daemonTimings // zero: defaultDaemonTimings (tests make them quick)
+
+	// ctx is Listen's: what runs for the socket's sake (the Paseo bridge) ends with it.
+	ctx context.Context
+	// paseo runs the Paseo bridge while the machine's engine is Paseo (paseobridge.go).
+	paseo paseoBridge
 }
 
 // NewRuntimeHost is a runtime socket at path (RuntimeSocketPath when empty) for a resident node; Attach starts it.
@@ -101,6 +106,7 @@ func (rh *RuntimeHost) Listen(ctx context.Context) error {
 	if _, err := rh.listenOnce(ctx); err != nil {
 		return err
 	}
+	rh.ctx = ctx
 	rh.startDaemons(ctx)
 	go func() {
 		t := time.NewTicker(15 * time.Second)
@@ -196,6 +202,7 @@ func (rh *RuntimeHost) request(ctx context.Context, h *runtimeConn, method strin
 			return nil, fmt.Errorf("runtime.hello: bad agent %q", hello.Agent)
 		}
 		hello.Instance = strings.TrimSpace(hello.Instance)
+		hello.Launchers = cleanLaunchers(hello.Launchers)
 		stale, err := rh.reg.hello(h, hello, rh.reservedID)
 		if err != nil {
 			rh.logger.Printf("runtime %s #%d refused: %v", hello.Runtime, h.serial, err)
@@ -215,8 +222,13 @@ func (rh *RuntimeHost) request(ctx context.Context, h *runtimeConn, method strin
 		// one running it answers for it (runtimes.go recomputeOwners), so a runtime may list sessions it only has on disk.
 		// resume_argv: a session listed offline with resume_argv is resumed in the terminal engine (pi.go).
 		// handover: a send refused with the handover code goes to the runtime that takes the session over (handOver).
+		// transcript: a session listed with a Claude transcript has its content read from it here (runtimetranscript.go).
+		// launchers: hello's launchers and runtime.launchers are offered; start_params: session.start carries the
+		// launcher picked and the form's model, permission mode, effort and space; modes: session.modes reaches a
+		// runtime with caps.modes; resume: a runtime with caps.resume that is the machine's engine is asked to take
+		// sessions over (runtimecontrol.go).
 		res := map[string]any{"protocol": RuntimeProtocol, "node_version": rh.version, "hub": rh.current() != nil,
-			"features": []string{"prefer_running", "resume_argv", "handover"}}
+			"features": []string{"prefer_running", "resume_argv", "handover", "transcript", "launchers", "start_params", "modes", "resume"}}
 		if offer := rh.packageOffer(h, hello); offer != nil {
 			res["update"] = offer
 		}
@@ -296,6 +308,15 @@ func (rh *RuntimeHost) event(h *runtimeConn, event string, params json.RawMessag
 		return // hello first
 	}
 	n := rh.current()
+	if event == "runtime.launchers" { // its launchers changed (runtimecontrol.go)
+		var p struct {
+			Launchers []runtimeLauncher `json:"launchers"`
+		}
+		if json.Unmarshal(params, &p) == nil {
+			h.setLaunchers(cleanLaunchers(p.Launchers))
+		}
+		return
+	}
 	if event == "runtime.sessions" {
 		var p struct {
 			Sessions []proto.Session `json:"sessions"`
@@ -303,12 +324,22 @@ func (rh *RuntimeHost) event(h *runtimeConn, event string, params json.RawMessag
 		if json.Unmarshal(params, &p) != nil {
 			return
 		}
+		var moved []string
 		if !h.isDaemon() { // a daemon's offline sessions are not resumed in this machine's terminal engine
 			h.setResume(resumeArgvs(params))
+			// …nor read from this machine's transcripts: a daemon names none (runtimetranscript.go).
+			ts := runtimeTranscripts(params)
+			if n != nil {
+				ts = n.foundTranscripts(ts)
+			}
+			moved = h.setTranscripts(ts)
 		}
 		rewatch := rh.reg.setSessions(h, normalizeRuntimeSessions(h, p.Sessions))
 		if n == nil {
 			return
+		}
+		for _, id := range moved {
+			n.transcriptMoved(h, id)
 		}
 		for id, since := range rewatch {
 			go n.runtimeWatch(h, id, since)

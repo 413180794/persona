@@ -342,6 +342,10 @@ func (n *Node) startingSession(id string) bool {
 // (resumed under another profile: the new writes go to the new copy, the old one stays): the newest is the one.
 // A path a hook reported is Claude's own word; one found here is looked for again after half a minute.
 func (n *Node) transcriptPath(id string) string {
+	// A runtime's session whose conversation is a Claude transcript (runtimetranscript.go): that one's file.
+	if t := n.runtimes.transcriptOf(id); t != "" {
+		id = t
+	}
 	if n.codexBlocked(id) {
 		return ""
 	}
@@ -430,6 +434,12 @@ func (n *Node) file(id string) (*transcript.File, error) {
 	if _, _, sub := splitSubagent(id); sub {
 		var err error
 		if f, err = n.subagentFile(id); err != nil {
+			return nil, err
+		}
+	} else if parent, agent, ok := strings.Cut(id, subagentSep); ok && n.runtimes.transcriptOf(parent) != "" {
+		// A subagent of a runtime's session whose conversation is a Claude transcript: that transcript's subagent.
+		var err error
+		if f, err = n.subagentFile(n.runtimes.transcriptOf(parent) + subagentSep + agent); err != nil {
 			return nil, err
 		}
 	} else {
@@ -606,6 +616,10 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 			if n.runtimeAssistant(s.SessionID) { // the assistant keeps its mode (assistant_runtime.go)
 				s.PermissionMode = n.assistantModeOf(s.SessionID)
 			}
+			// A conversation in a Claude transcript here (runtimetranscript.go): what it says, and its own row goes.
+			if t := n.mergeRuntimeTranscript(&s); t != "" {
+				seen[t] = true
+			}
 			out = append(out, s)
 			seen[s.SessionID] = true
 		}
@@ -639,6 +653,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 var offlineCache struct {
 	sync.Mutex
 	at   time.Time
+	home string // whose scan it is: another node's (tests run many in one process) scans its own
 	list []proto.Session
 }
 
@@ -646,9 +661,9 @@ var offlineCache struct {
 func (n *Node) offline(live map[string]bool) []proto.Session {
 	offlineCache.Lock()
 	defer offlineCache.Unlock()
-	if time.Since(offlineCache.at) > 20*time.Second {
+	if time.Since(offlineCache.at) > 20*time.Second || offlineCache.home != n.home {
 		offlineCache.list = n.scanOffline()
-		offlineCache.at = time.Now()
+		offlineCache.at, offlineCache.home = time.Now(), n.home
 	}
 	var out []proto.Session
 	for _, s := range offlineCache.list {

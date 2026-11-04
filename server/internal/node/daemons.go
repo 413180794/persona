@@ -15,7 +15,7 @@ package node
 //     collide with this machine's or another runtime's — and a call about a session without its prefix (the node
 //     asking every runtime who has an unknown session) is answered by the link, never shown to the daemon;
 //   - only the protocol's caps (start, send, interrupt, rename, close), no mcp.* (phone and Persona tools), and no
-//     pane_id / resume_argv (a pane to claim, a command to run in the terminal engine).
+//     pane_id / resume_argv / transcript (a pane to claim, a command to run in the terminal engine, a transcript to read).
 
 import (
 	"bytes"
@@ -33,6 +33,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -553,12 +554,14 @@ func (l *daemonLink) fromDaemon(ctx context.Context, method string, params json.
 			}
 			return nil, err
 		}
-		// resume_argv and handover are for runtimes on the socket: what a daemon lists offline is not resumed in a
-		// terminal here, and a send it refuses is not handed to another runtime (the link turns that code away).
+		// resume_argv, handover and transcript are for runtimes on the socket: what a daemon lists offline is not
+		// resumed in a terminal here, a send it refuses is not handed to another runtime (the link turns that code
+		// away), and its sessions are not read from this machine's transcripts. launchers, modes and resume need what
+		// the link does not pass on (more launchers than the config's one, caps beyond daemonCaps).
 		if f, ok := res["features"].([]any); ok {
 			kept := []any{}
 			for _, x := range f {
-				if x != "resume_argv" && x != runtimeHandover {
+				if !slices.Contains([]any{"resume_argv", runtimeHandover, "transcript", "launchers", "modes", "resume"}, x) {
 					kept = append(kept, x)
 				}
 			}
@@ -652,7 +655,7 @@ func (l *daemonLink) row(s map[string]json.RawMessage) (map[string]json.RawMessa
 	}
 	s["session_id"] = rawJSON(outer)
 	// No terminal of this machine's, and no name but the config's (the node labels its sessions).
-	for _, k := range []string{"pane_id", "resume_argv", "tab_id", "workspace_id", "agent_label"} {
+	for _, k := range []string{"pane_id", "resume_argv", "transcript", "tab_id", "workspace_id", "agent_label"} {
 		delete(s, k)
 	}
 	var space string

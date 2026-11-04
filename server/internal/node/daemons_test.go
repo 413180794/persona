@@ -285,8 +285,8 @@ func TestDaemonIsARuntimeUnderTheConfigNames(t *testing.T) {
 		t.Fatalf("a daemon ran the assistant, or chose its own instance: %+v", hello)
 	}
 	res, _, _ := d.hellod()
-	if f, _ := res["features"].([]any); len(f) != 1 || f[0] != "prefer_running" {
-		t.Fatalf("features told to the daemon: %v", res["features"])
+	if f, _ := json.Marshal(res["features"]); string(f) != `["prefer_running","start_params"]` {
+		t.Fatalf("features told to the daemon: %s", f)
 	}
 
 	// The hub's calls reach it with its own ids.
@@ -428,6 +428,21 @@ func TestDaemonStaysInItsCorner(t *testing.T) {
 	}
 	if len(other.got("session.items")) != 0 || len(other.got("session.send")) != 0 {
 		t.Fatal("a daemon's send was handed to another runtime")
+	}
+	// It cannot point a session at a transcript of this machine's (runtimetranscript.go): its content stays its own.
+	sdkTranscript(t, n, sdkSession, "local secrets")
+	d.push(t, "runtime.sessions", map[string]any{"sessions": []map[string]any{{"session_id": "s2", "transcript": sdkSession, "status": "idle"}}})
+	waitFor(t, "listed", func() bool { _, ok := listed(t, n)["acme.s2"]; return ok })
+	before := len(d.got("session.items"))
+	if raw, _ := nodeCall(t, n, "session.items", map[string]any{"session_id": "acme.s2", "limit": 5}); strings.Contains(string(raw), "local secrets") {
+		t.Fatal("a daemon's session was read from this machine's transcript")
+	}
+	if len(d.got("session.items")) != before+1 {
+		t.Fatal("the daemon was not asked for its own session's items")
+	}
+	freshOffline()
+	if s, ok := listed(t, n)[sdkSession]; !ok || s.SourceKind != "" {
+		t.Fatal("the transcript's own row was hidden by a daemon's")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

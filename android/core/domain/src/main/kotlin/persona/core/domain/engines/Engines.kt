@@ -18,6 +18,7 @@ object Engines {
         Known("herdr", "herdr", "终端里的 herdr"),
         Known("herdr-core", "Herdr App", "桌面 App 里开的终端"),
         Known("orca", "Orca", "Orca 里的终端"),
+        Known("paseo", "Paseo", "Paseo 里的 Agent"),
     )
 
     fun detail(id: String): String? = known.firstOrNull { it.id == id }?.detail
