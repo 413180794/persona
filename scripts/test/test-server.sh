@@ -8,8 +8,12 @@ H="$JARVIS_HUB_SSH"
 # One copy per checkout: worktrees testing at the same time must not rsync over each other.
 D=".cache/jarvis-test-$(basename "$PWD")"
 python3 scripts/persona_identity.py --service hub --prepare --prefix scripts/deploy/db.sh | ssh "$H" 'bash -s' >/dev/null
-ssh "$H" "mkdir -p ~/$D"
+ssh "$H" "mkdir -p ~/$D/sdk ~/$D/schema"
 rsync -a --delete --exclude bin server/ "$H":"$D/server/"
+# Go's local SDK replacement must keep the same sibling path as in this checkout, including embedded schemas.
+rsync -a --delete sdk/go/ "$H":"$D/sdk/go/"
+# Extension conformance tests read the source schemas' valid and invalid examples outside the Go module.
+rsync -a --delete schema/extension/ "$H":"$D/schema/extension/"
 # Wire, continuity and resolution tests read the shared fixtures next to server/ (../../../spec from a package),
 # and the resolution ones check the apps' Swift sources against them.
 rsync -a --delete spec/ "$H":"$D/spec/"

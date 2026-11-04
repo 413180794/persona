@@ -299,6 +299,10 @@
 - `scripts/test/test-server.sh` 只同步了 `server/`，#630 带进来的 `spec/fixtures` 测试（`TestWireSamples`、续传、resolution）读 `../../../spec` 和 `apple/` 的 Swift 源码，
   在 hub 上全量跑必挂（`open ../../../spec/fixtures/wire: no such file`），看着像自己的改动坏了。现在脚本连 `spec/` 和 `apple/**/*.swift` 一起同步（#642）；
   再有测试读 `server/` 以外的文件，同样要加进脚本（2026-11-03）。
+- Go module 的本地 `replace` 也属于远端测试快照（#2028）：`server/go.mod` 引入 `../sdk/go` 后，只复制 `server/` 会在 setup 阶段报 `replacement directory ../sdk/go does not exist`。
+  将完整 `sdk/go/`（含嵌入的 schema）同步到同一个 checkout 独立缓存的 `sdk/go/`，保留相对目录，并用 `--delete` 移除该 SDK 快照的过期文件；不要共享别的测试或部署车道的源码目录。
+  扩展一致性测试还读取源码根的 `schema/extension/examples`（包含正常样例和 `invalid/` 反例）；同步 SDK 的嵌入 schema 不能代替这份样例快照，`schema/extension/` 也要保持同样相对目录及过期文件清理。
+  合成 rsync 不能只创建空目录：假 Go 要读取本次 SDK 源码、嵌入文件及正常 / 非法样例，先测试冷启动，再检查更新后的源码及过期文件删除，避免同步漏项也能假通过。
 
 ## 附件草稿的重启回归（2026-11-03）
 

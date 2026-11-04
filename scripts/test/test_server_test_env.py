@@ -143,8 +143,20 @@ class ServerTestEnvironmentTests(unittest.TestCase):
             tools = root / "tools"
             remote = root / "remote"
             profile = remote / "live-profile"
-            for path in (checkout / "scripts/test", tools, profile):
+            for path in (checkout / "scripts/test", checkout / "server", checkout / "spec", checkout / "apple",
+                         checkout / "sdk/go/ext", checkout / "sdk/go/wire/schema",
+                         checkout / "schema/extension/examples/invalid", tools, profile):
                 path.mkdir(parents=True)
+            sdk = checkout / "sdk/go"
+            (sdk / "go.mod").write_text("module example.invalid/fixture-sdk\n")
+            (sdk / "wire/schema/view.schema.json").write_text('{"fixture":true}\n')
+            sdk_capture = root / "sdk-sync.json"
+            remote_sdk = remote / ".cache/jarvis-test-checkout/sdk/go"
+            schema = checkout / "schema/extension"
+            (schema / "examples/View.fixture.json").write_text('{"valid":true}\n')
+            (schema / "examples/invalid/View.fixture.json").write_text('{"valid":false}\n')
+            schema_capture = root / "schema-sync.json"
+            remote_schema = remote / ".cache/jarvis-test-checkout/schema/extension"
             shutil.copy2(ROOT / "scripts/test/test-server.sh", checkout / "scripts/test/test-server.sh")
             shutil.copy2(ROOT / "scripts/test/server_test_env.py", checkout / "scripts/test/server_test_env.py")
             (checkout / "scripts/jarvis_config.py").write_text("print('export JARVIS_HUB_SSH=fake-hub')\n")
@@ -169,16 +181,31 @@ class ServerTestEnvironmentTests(unittest.TestCase):
                  # Map the remote toolchain directory to the synthetic tool directory, not the host's real Go.
                  f"command=command.replace('/usr/local/go/bin', {str(tools)!r})\n"
                  "sys.exit(subprocess.run(['bash','-c',command],env=env).returncode)\n")
-            tool("rsync", "import os,pathlib,shutil,sys\n"
+            tool("rsync", "import json,os,pathlib,shutil,sys\n"
                  "source=pathlib.Path(sys.argv[-2]); target=sys.argv[-1].split(':',1)[1]\n"
                  "destination=pathlib.Path(os.environ['HOME'])/target\n"
                  "if source.is_file():\n destination.parent.mkdir(parents=True,exist_ok=True); shutil.copy2(source,destination)\n"
-                 "else:\n destination.mkdir(parents=True,exist_ok=True)\n")
+                 "else:\n"
+                 " assert source.is_dir() and destination.parent.is_dir()\n"
+                 " if '--delete' in sys.argv and destination.exists(): shutil.rmtree(destination)\n"
+                 " shutil.copytree(source,destination,dirs_exist_ok=True)\n"
+                 "if str(source)=='sdk/go':\n"
+                 f" pathlib.Path({str(sdk_capture)!r}).write_text(json.dumps(sys.argv[1:]))\n"
+                 "if str(source)=='schema/extension':\n"
+                 f" pathlib.Path({str(schema_capture)!r}).write_text(json.dumps(sys.argv[1:]))\n")
             tool("go", "import json,os,pathlib,sys\n"
                  "if sys.argv[1:2]==['env']:\n"
                  f" pathlib.Path({str(cache_capture)!r}).write_text(json.dumps(dict(os.environ)))\n"
                  f" print(json.dumps({caches!r})); sys.exit(0)\n"
-                 f"pathlib.Path({str(capture)!r}).write_text(json.dumps({{'args':sys.argv[1:],'env':dict(os.environ)}}))\n"
+                 "sdk=pathlib.Path.cwd().parent/'sdk/go'\n"
+                 "assert (sdk/'go.mod').read_text()=='module example.invalid/fixture-sdk\\n'\n"
+                 "assert (sdk/'wire/schema/view.schema.json').read_text()=='{\"fixture\":true}\\n'\n"
+                 "assert not (sdk/'stale.go').exists()\n"
+                 "schema=pathlib.Path.cwd().parent/'schema/extension'\n"
+                 "assert (schema/'examples/View.fixture.json').read_text()=='{\"valid\":true}\\n'\n"
+                 "assert (schema/'examples/invalid/View.fixture.json').read_text()=='{\"valid\":false}\\n'\n"
+                 "assert not (schema/'stale.json').exists()\n"
+                 f"pathlib.Path({str(capture)!r}).write_text(json.dumps({{'args':sys.argv[1:],'env':dict(os.environ),'sdk_source':(sdk/'ext/fixture.go').read_text()}}))\n"
                  "sys.exit(int(os.environ.get('FAKE_GO_EXIT','0')))\n")
             environment = {
                 "PATH": str(tools) + os.pathsep + os.environ["PATH"], "HOME": str(remote),
@@ -191,17 +218,31 @@ class ServerTestEnvironmentTests(unittest.TestCase):
                 "PGSERVICE": "live", "PGSERVICEFILE": str(profile / "service"),
                 "PGPASSFILE": str(profile / "passwords"), "PGOPTIONS": "synthetic", "PG_FUTURE_SETTING": "synthetic",
             }
-            for args, expected, extra in (
+            for index, (args, expected, extra) in enumerate((
                 ([], ["test", "-count=1", "-p", "1", "./..."], {}),
                 (["-run", "TestFixture", "./internal/example"], ["test", "-count=1", "-p", "1", "-run", "TestFixture", "./internal/example"], {}),
                 ([], ["test", "-count=1", "-p", "1", "./..."], {"FAKE_GO_EXIT": "19"}),
-            ):
+            )):
+                source = f"package fixture // snapshot {index}\n"
+                (sdk / "ext/fixture.go").write_text(source)
+                if index and remote_sdk.is_dir():
+                    (remote_sdk / "stale.go").write_text("package stale\n")
+                if index and remote_schema.is_dir():
+                    (remote_schema / "stale.json").write_text("{}\n")
                 with self.subTest(args=args, extra=extra):
                     result = subprocess.run(["bash", str(checkout / "scripts/test/test-server.sh"), *args],
                                             env={**environment, **extra}, capture_output=True, text=True, timeout=30)
                     self.assertEqual(result.returncode, int(extra.get("FAKE_GO_EXIT", "0")), result.stderr)
                     recorded = json.loads(capture.read_text())
                     child = recorded["env"]
+                    self.assertEqual(recorded["sdk_source"], source)
+                    self.assertEqual(json.loads(sdk_capture.read_text()),
+                                     ["-a", "--delete", "sdk/go/", "fake-hub:.cache/jarvis-test-checkout/sdk/go/"])
+                    self.assertFalse((remote_sdk / "stale.go").exists())
+                    self.assertEqual(json.loads(schema_capture.read_text()),
+                                     ["-a", "--delete", "schema/extension/",
+                                      "fake-hub:.cache/jarvis-test-checkout/schema/extension/"])
+                    self.assertFalse((remote_schema / "stale.json").exists())
                     self.assertEqual(recorded["args"], expected)
                     self.assertEqual({key for key in child if key.startswith(("PERSONA_", "JARVIS_"))},
                                      {"PERSONA_TEST_DATABASE_URL", "JARVIS_TEST_DATABASE_URL"})
@@ -217,8 +258,8 @@ class ServerTestEnvironmentTests(unittest.TestCase):
                     self.assertNotIn("synthetic-live-token", result.stdout + result.stderr)
                     self.assertNotIn("synthetic-live-password", result.stdout + result.stderr)
                     self.assertNotIn("postgres://", result.stdout + result.stderr)
-            capture.unlink()
-            cache_capture.unlink()
+            capture.unlink(missing_ok=True)
+            cache_capture.unlink(missing_ok=True)
             for source in (
                 "postgres://user:synthetic@localhost/custom",
                 "postgres://user:synthetic@localhost/jarvis?dbname=jarvis",
