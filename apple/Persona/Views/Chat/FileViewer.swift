@@ -169,9 +169,6 @@ struct FileViewer: View {
                 .task(id: ref) { await open() }
                 .onAppear { FrameMeter.shared.start((ref.path as NSString).lastPathComponent) }
                 .onDisappear { FrameMeter.shared.stop() }
-                #if os(macOS)
-                .macLargeSheet(bars: true) // code wants the room; sized to its toolbar the sheet was 470 × 280
-                #endif
         }
         .environment(\.openLink, openLink)
         .environment(\.openURL, OpenURLAction { url in
@@ -187,6 +184,9 @@ struct FileViewer: View {
         })
         #if os(macOS)
         .macLinkPanel($link, key: key)
+        // Outside the panel: its GeometryReader takes any size, so a minimum inside it never reached the sheet and the
+        // sheet opened at its toolbar's 470 × 80 (#1502). The stack's bars are the sheet window's, still on top of this.
+        .macLargeSheet(bars: true)
         #else
         .sheet(item: $link) { target in LinkSheet(target: target, key: key) }
         #endif

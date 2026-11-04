@@ -181,3 +181,8 @@
   窗口拉起来只有约 4 fps。在常显示、重的视图里用 `@StoredValue`（只在自己那个键的值变了时重算）。
 - 这台开发机的 Instruments 录不到 Animation Hitches 的显示数据（开发者模式关着、要 sudo），`CGEvent.postToPid` 发的滚轮事件被系统过滤（发事件的进程没有辅助功能授权），
   看起来都「成功」但什么都没发生。量顺不顺用 App 自己的 display link（`MacPerfHarness`），看主线程用 `sample`。
+- sheet 的最小尺寸要放在 sheet 内容的最外层，中间隔着 `GeometryReader` 就传不出去（2026-11-04，#1502）：Mac 的 sheet 按内容的最小尺寸开，
+  `GeometryReader` 接受任何尺寸、最小是 0，里面再写 `.frame(minWidth:minHeight:)` 也到不了 sheet。#813 给文件查看器的栈外面套了 `.macLinkPanel`（最外层是 `GeometryReader`），
+  `.macLargeSheet` 还留在栈的内容上，sheet 就缩成了工具栏的 470 × 80，什么文件都看不见。`MacFileViewerSheetTests` 用 `NSHostingView.fittingSize` 量 sheet 会开多大，加了外层修饰符时跑它。
+  挪到栈外面也还是要 `bars: true`：栈的标题栏和底部工具栏是 sheet 窗口自己加的，量不进 `fittingSize`。写成 `bars: false` 时 sheet 有 1216 × 821，比 820 高的主窗口还高，
+  第一次启动就在 SwiftUI 的窗口布局里断言崩了（`EXC_BREAKPOINT`，栈上全是 `_layoutSubtreeWithOldSize`）。
