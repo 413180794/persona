@@ -193,6 +193,49 @@ def csv_text(rows=240):
     return "\n".join(out) + "\n"
 
 
+def _png(w, h, rgb):
+    """A small solid PNG with a darker band (a made-up chart), standard library only."""
+    import struct, zlib
+    rows = b"".join(b"\x00" + b"".join(bytes(rgb if y > h // 3 and x % 8 < 5 and y > h - (x * 7 % h) else (245, 247, 250)) for x in range(w)) for y in range(h))
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b"")
+
+
+def notebook():
+    """A made-up analysis notebook: Markdown with a formula, code, stdout / stderr, an HTML table with its text
+    version, a chart, and an error with a colored traceback."""
+    import base64, json
+    def md(src):
+        return {"cell_type": "markdown", "metadata": {}, "source": src.splitlines(True)}
+    def code(n, src, outputs):
+        return {"cell_type": "code", "execution_count": n, "metadata": {}, "source": src.splitlines(True), "outputs": outputs}
+    table_html = ("<table><thead><tr><th>城市</th><th>降雨概率</th></tr></thead><tbody><tr><td>上海</td><td>0.62</td></tr>"
+                  "<tr><td>Tokyo</td><td>0.35</td></tr></tbody></table>")
+    cells = [
+        md("# 降雨概率分析\n\n示例数据，模型是逻辑回归：$p = \\sigma(w^\\top x + b)$。"),
+        code(1, "import pandas as pd\ndf = pd.read_csv(\"data/observations.csv\")\nprint(len(df), \"行\")",
+             [{"output_type": "stream", "name": "stdout", "text": ["240 行\n"]},
+              {"output_type": "stream", "name": "stderr", "text": ["UserWarning: 列「备注」有空值\n"]}]),
+        code(2, "df.groupby(\"城市\")[\"降雨 mm\"].mean().round(2).head(2)",
+             [{"output_type": "execute_result", "execution_count": 2, "metadata": {},
+               "data": {"text/html": table_html, "text/plain": "城市\n上海     0.62\nTokyo    0.35\nName: 降雨 mm, dtype: float64"}}]),
+        code(3, "df.plot(x=\"时间\", y=\"温度 °C\")",
+             [{"output_type": "display_data", "metadata": {},
+               "data": {"image/png": base64.b64encode(_png(160, 72, (10, 132, 255))).decode(), "text/plain": "<Figure size 640x288>"}}]),
+        code(4, "df[\"风速\"].max()",
+             [{"output_type": "error", "ename": "KeyError", "evalue": "'风速'",
+               "traceback": ["\u001b[0;31m---------------------------------------------------------------------------\u001b[0m",
+                             "\u001b[0;31mKeyError\u001b[0m                                  Traceback (most recent call last)",
+                             "Cell \u001b[0;32mIn[4], line 1\u001b[0m\n\u001b[0;32m----> 1\u001b[0m df[\u001b[38;5;124m\"风速\"\u001b[39m]\u001b[38;5;241m.\u001b[39mmax()",
+                             "\u001b[0;31mKeyError\u001b[0m: '风速'"]}]),
+        md("## 结论\n\n- 上海的降雨概率最高\n- 下一步：加上气压特征"),
+    ]
+    return json.dumps({"cells": cells, "metadata": {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
+                                                    "language_info": {"name": "python"}}, "nbformat": 4, "nbformat_minor": 5},
+                      ensure_ascii=False, indent=1)
+
+
 # The weather app's sample documents (docs/ is where the tree keeps them).
 SAMPLES = {
     "季度报告.docx": lambda: docx("天气 App 第四季度报告", [
@@ -211,6 +254,7 @@ SAMPLES = {
         ("下一季", ["锁屏小组件", "雷阵雨提醒", "Apple Watch 表盘"]),
     ]),
     "城市观测.csv": lambda: csv_text(),
+    "分析.ipynb": lambda: notebook(),
     "发布说明.rtf": lambda: rtf("天气 App 4.2 发布说明", [
         "新增：主屏幕小组件，显示当前温度和接下来 6 小时的降雨。", "改进：后台刷新更省电。", "修复：深色模式下标题的对比度。"]),
 }

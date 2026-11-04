@@ -231,13 +231,15 @@ struct FileViewer: View {
                     }
                 }
                 .themedPage()
+            case .notebook where !page.showSource && page.notebook != nil:
+                if let notebook = page.notebook { NotebookFileView(notebook: notebook) }
             case .table where !page.showSource:
                 if let table = page.table { TableFileView(model: table) }
             case .table where page.preview != nil:
                 if let preview = page.preview { QuickLookFileView(model: preview) }
             case .markdown where !page.showSource:
                 MarkdownFile(page: page, home: model.machine(ref.machineRef)?.home, loadImage: loadImageFile)
-            case .markdown, .json, .code, .table:
+            case .markdown, .json, .code, .table, .notebook:
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
                     meta(page).padding(.horizontal, Theme.Space.l)
                     if let source = page.shownSource {
@@ -282,6 +284,10 @@ struct FileViewer: View {
                 case .markdown:
                     Button { page.showSource.toggle() } label: {
                         Label(page.showSource ? "渲染 Markdown" : "查看源文件", systemImage: page.showSource ? "doc.richtext" : Theme.Icon.code)
+                    }
+                case .notebook where page.notebook != nil:
+                    Button { page.showSource.toggle() } label: {
+                        Label(page.showSource ? "按笔记本查看" : "查看源文件", systemImage: page.showSource ? Theme.Icon.document : Theme.Icon.code)
                     }
                 case .table:
                     Button { page.showSource.toggle() } label: {
@@ -417,7 +423,7 @@ private struct MarkdownFile: View {
 /// the code document, the JSON outline or the Markdown pieces off the main thread, and fetches further pages.
 @MainActor @Observable
 final class FileViewerModel {
-    enum Kind { case directory, markdown, json, code, image, pdf, video, quickLook, table, binary }
+    enum Kind { case directory, markdown, json, code, image, pdf, video, quickLook, table, notebook, binary }
 
     let ref: FileRef
     @ObservationIgnored private let api: APIClient?
@@ -430,6 +436,8 @@ final class FileViewerModel {
     private(set) var preview: QuickLookFileModel?
     /// CSV / TSV / xlsx as a table (`TableFileView`); an xlsx also has `preview`, the menu's QuickLook.
     private(set) var table: TableFileModel?
+    /// An .ipynb read and parsed (`NotebookFileView`); nil while it loads or when it cannot be read (then the text).
+    private(set) var notebook: Notebook?
     /// The source as text (code, Markdown's source, JSON before its outline or when it is not JSON).
     private(set) var code: CodeFileSource?
     private(set) var outline: JSONOutlineSource?
@@ -526,11 +534,13 @@ final class FileViewerModel {
             kind = .table
             table = TableFileModel(ref: ref, file: f, api: api)
         }
+        if ext == "ipynb" { kind = .notebook }
         let doc = await Task.detached(priority: .userInitiated) { CodeDocument(text: text, language: lang) }.value
         setCode(CodeFileSource(doc))
         switch kind {
         case .markdown: await renderMarkdown()
         case .json: await buildOutline()
+        case .notebook: await buildNotebook()
         default: break
         }
         if f.truncated, f.next == nil { note = "文件太大，只显示了前 \(ByteCountFormatter.string(fromByteCount: Int64(text.utf8.count), countStyle: .file))" }
@@ -597,13 +607,29 @@ final class FileViewerModel {
         }.value
     }
 
-    /// JSON is read to the end (up to maxJSONBytes) and parsed; until then (and when it is not valid JSON) the text.
-    private func buildOutline() async {
+    /// The rest of the file, up to maxJSONBytes (JSON and notebooks are parsed whole).
+    private func readAll() async {
         while next > 0, next < Self.maxJSONBytes {
             let before = next
             await loadMore()
             if next == before { break }
         }
+    }
+
+    /// A notebook is read to the end and parsed; until then (and when it cannot be read) the text.
+    private func buildNotebook() async {
+        await readAll()
+        let data = Data(text_.joined().utf8)
+        let parsed = await Task.detached(priority: .userInitiated) { Result { try Notebook(data: data) } }.value
+        switch parsed {
+        case .success(let n): notebook = n
+        case .failure(let e): note = next > 0 ? "文件太大，按文本显示" : e.localizedDescription
+        }
+    }
+
+    /// JSON is read to the end (up to maxJSONBytes) and parsed; until then (and when it is not valid JSON) the text.
+    private func buildOutline() async {
+        await readAll()
         let text = text_.joined()
         let parsed = await Task.detached(priority: .userInitiated) { () -> Result<JSONOutline, Error> in
             Result { try JSONOutline(text: text) }
