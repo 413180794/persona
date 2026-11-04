@@ -12,12 +12,14 @@
 - 每条消息有固定 client_id。文件选择后保存私有快照，重试不再读取可能变化或失去访问权限的原文件；启动时清理上次进程遗留的选取副本，持久化媒体使用独立目录，不在清理范围。
 - 请求成功保存 message_id；回显按 client_id / message_id 替换本机消息，附件不按空文本、文件名或超时删除。
 - 失败保留附件，支持重发、放回输入框或删除；退出聊天再进入仍能恢复。队列按 Hub 组、实际飞书账号与会话隔离。
-- 引用文字仍走主线回复接口，话题回复保持主线行为。文字与附件分别发送，附件暂不支持引用 / 话题回复。
+- 引用文字仍走主线回复接口，话题回复保持主线行为。文字与附件分别发送。
+- 引用一条消息时，图片和文件也带上引用（#1035）：每个附件各自引用那条消息，不会悄悄作为普通消息另发。这要 Hub 上的飞书扩展声明 `lark_attachment_reply`；没有时（旧版扩展会忽略引用照样发出）不发，提示「需要更新 Hub 上的飞书扩展，才能引用消息发送图片和文件」，文字、附件和引用都留在输入区。发件箱记录同时保存引用、是否进话题和话题根（`threadRoot`），重启恢复后重发仍是同一个引用 / 话题。话题页里发附件是下一步（同一 issue 的第二个 PR）。
 
 ## Hub 接口
 
 专用 `images` / `files` 接口绑定 Hub 配置的 lark-connector 账号，复用设备认证与角色权限，不开放通用写代理。
 图片校验编码大小与真实 MIME，文件流式上传并限制 Content-Length；保留 lark-connector 的登录失效错误码。老 Hub 提示先升级后发送附件。
+引用 / 话题（扩展的 `lark_attachment_reply`）：`images` 的 JSON 多 `reply_to`（引用的消息）和 `thread`（进它的话题）；`files` 的查询多 `reply_to` 和 `thread_root`（话题根）。上游对应 lark-connector 的 `images` + `replyTo`、`image-uploads` + `messages/{id}/replies`（`replyMode: thread`）、`files` + `replyTo` / `threadRootId`；文件不经 lark-connector 发件箱，没有幂等重试，结果未知时先查历史，不自动重传。
 
 ## 限制与回归
 
@@ -30,7 +32,7 @@
 
 重启恢复仅在打开该会话时加载和核对，不在后台批量重发。状态文件损坏或版本过新时停止发送，用户可点“恢复输入”，确认“清除草稿并重新开始”后删除此会话的本机记录及媒体，同时清理旧版恢复备份；存储读写失败仅提供重试，不伪装成版本不兼容。临时选取副本随引用释放；持久副本在新状态原子写入后清理。
 
-`LarkAttachmentTests` 覆盖快照隔离、大小边界、请求原始字节、重试幂等键、精确回显、引用路由与账号隔离。
+`LarkAttachmentTests` 覆盖快照隔离、大小边界、请求原始字节、重试幂等键、精确回显、引用路由与账号隔离、附件的引用 / 话题字段、功能开关和重启后保留引用与话题根。`LarkAttachmentFlowTests.testQuotedPhotoFollowsWhatTheHubCanCarry` 分别对新旧两种 mock（`MOCK_LARK_OLD_ATTACHMENTS=1`）跑：带上引用，或提示并保留草稿。
 `LarkAttachmentFlowTests` 和 `LarkSendTests` 使用本地 mock Hub 验证预览、下拉关闭、失败退出重进、重试、普通文字、引用和话题回复。
 截图见 [附件回归记录](screenshots/lark-attachments/README.md) 和 [持久化回归记录](screenshots/lark-durable/README.md)。真实账号仅只读检查，不发送测试消息。
 

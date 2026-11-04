@@ -65,7 +65,8 @@ struct LarkComposer: View {
 
     private var mentionQuery: String? { typing?.query }
 
-    private var showsSend: Bool { Self.canSend(text) || (hasAttachments && replyTo == nil) }
+    /// Attachments go with a quote too when the hub can carry it (#1035); when it cannot, sending says so and keeps the draft.
+    private var showsSend: Bool { Self.canSend(text) || hasAttachments }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {

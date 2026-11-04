@@ -224,4 +224,61 @@ import Testing
         #expect(!queue.hidesEcho(message))
     }
 
+
+    // MARK: Quoting and threads (#1035)
+
+    @Test func aQuotedOrThreadedPhotoSaysSoAndAPlainOneDoesNot() async throws {
+        let photo = try await LarkAttachment.stagePhoto(Data(base64Encoded: "R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==")!)
+        let hub = FakeHub(), path = "/api/v1/lark/conversations/123/images"
+        hub.on("POST", path, json: #"{"message_id":"999"}"#)
+        let quote = LarkReplyTo(id: "m7", senderName: "示例成员", text: "原消息")
+        _ = try await LarkOutbox.deliver(LarkOutgoing(text: "", attachment: photo), feed: "123", api: hub.client)
+        _ = try await LarkOutbox.deliver(LarkOutgoing(text: "", replyTo: quote, attachment: photo), feed: "123", api: hub.client)
+        _ = try await LarkOutbox.deliver(LarkOutgoing(text: "", replyTo: quote, thread: true, threadRoot: "m1", attachment: photo),
+                                         feed: "123", api: hub.client)
+        let bodies = try hub.sent("POST", path).map { try JSONSerialization.jsonObject(with: $0.body!) as! [String: Any] }
+        #expect(bodies.count == 3)
+        #expect(bodies[0]["reply_to"] == nil && bodies[0]["thread"] == nil, "a plain photo is unchanged")
+        #expect(bodies[1]["reply_to"] as? String == "m7" && bodies[1]["thread"] == nil)
+        #expect(bodies[2]["reply_to"] as? String == "m7" && bodies[2]["thread"] as? Bool == true)
+    }
+
+    @Test func aQuotedOrThreadedFileSaysSoInItsQuery() async throws {
+        let source = try file()
+        defer { try? FileManager.default.removeItem(at: source.deletingLastPathComponent()) }
+        let attachment = try await LarkAttachment.stageFile(source)
+        let hub = FakeHub(), path = "/api/v1/lark/conversations/123/files"
+        hub.on("POST", path, json: #"{"message_id":"999"}"#)
+        let quote = LarkReplyTo(id: "m7", senderName: "示例成员", text: "原消息")
+        _ = try await LarkOutbox.deliver(LarkOutgoing(text: "", replyTo: quote, attachment: attachment), feed: "123", api: hub.client)
+        _ = try await LarkOutbox.deliver(LarkOutgoing(text: "", replyTo: quote, thread: true, threadRoot: "m1", attachment: attachment),
+                                         feed: "123", api: hub.client)
+        _ = try await LarkOutbox.deliver(LarkOutgoing(text: "", replyTo: quote, thread: true, attachment: attachment), feed: "123", api: hub.client)
+        let sent = hub.sent("POST", path)
+        #expect(sent.count == 3)
+        #expect(sent[0].query["reply_to"] == "m7" && sent[0].query["thread_root"] == nil)
+        #expect(sent[1].query["reply_to"] == "m7" && sent[1].query["thread_root"] == "m1")
+        #expect(sent[2].query["thread_root"] == "m7", "a thread started on the quoted message")
+    }
+
+    @Test func onlyAHubThatSaysSoCarriesAnAttachmentsQuote() {
+        #expect(LarkFeatures(hub: ["lark", "lark_attachment_reply"]).attachmentReplies)
+        #expect(!LarkFeatures(hub: ["lark"]).attachmentReplies)
+        #expect(!LarkFeatures(hub: []).attachmentReplies, "unknown is not this")
+        #expect(!LarkFeatures(hub: ["lark_attachments"]).attachmentReplies, "a hub from before the plugin")
+    }
+
+    @Test func theQuoteAndThreadOfAQueuedAttachmentSurviveARestart() async throws {
+        let source = try file()
+        defer { try? FileManager.default.removeItem(at: source.deletingLastPathComponent()) }
+        let root = URL.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let identity = LarkOutboxIdentity(group: "", account: "fixture-account")
+        let quote = LarkReplyTo(id: "m7", senderName: "示例成员", text: "原消息")
+        let item = LarkOutgoing(text: "", replyTo: quote, thread: true, threadRoot: "m1", attachment: try await LarkAttachment.stageFile(source))
+        _ = try await LarkOutboxStore(identity: identity, feed: "123", base: root).save(.init(items: [item]))
+        let back = try await LarkOutboxStore(identity: identity, feed: "123", base: root).load()
+        let restored = try #require(back?.items.first)
+        #expect(restored.replyTo?.id == "m7" && restored.thread && restored.threadRoot == "m1" && restored.attachment != nil)
+    }
 }

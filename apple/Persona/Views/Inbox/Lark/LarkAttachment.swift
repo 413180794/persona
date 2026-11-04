@@ -113,17 +113,27 @@ nonisolated struct LarkSendReceipt: Decodable, Sendable {
 }
 
 extension APIClient {
-    func larkSendAttachment(_ feed: String, attachment: LarkAttachment, clientID: String) async throws -> LarkSendReceipt {
+    /// `replyTo`: the message it quotes, or with `thread` the one it answers in its thread (`threadRoot`, the thread's
+    /// first message, places a file there). Only when the hub says `lark_attachment_reply` (#1035): an older plugin
+    /// drops these and sends the attachment on its own.
+    func larkSendAttachment(_ feed: String, attachment: LarkAttachment, clientID: String, replyTo: String? = nil,
+                            thread: Bool = false, threadRoot: String? = nil) async throws -> LarkSendReceipt {
         let root = "/api/v1/lark/conversations/\(feed)"
         var receipt: LarkSendReceipt
         switch attachment.kind {
         case .image:
-            struct Body: Encodable { var client_id: String; var name: String; var mime: String; var data: Data }
+            struct Body: Encodable {
+                var client_id: String; var name: String; var mime: String; var data: Data
+                var reply_to: String?; var thread: Bool?
+            }
             let bytes = try Data(contentsOf: attachment.file)
-            receipt = try await post(root + "/images", body: Body(client_id: clientID, name: attachment.name, mime: attachment.mime, data: bytes), timeout: 180)
+            receipt = try await post(root + "/images", body: Body(client_id: clientID, name: attachment.name, mime: attachment.mime, data: bytes,
+                                                                  reply_to: replyTo, thread: replyTo != nil && thread ? true : nil), timeout: 180)
         case .file:
-            let data = try await uploadBytes(file: attachment.file, path: root + "/files",
-                                            query: ["client_id": clientID, "name": attachment.name, "mime": attachment.mime],
+            var query = ["client_id": clientID, "name": attachment.name, "mime": attachment.mime]
+            if let replyTo { query["reply_to"] = replyTo }
+            if replyTo != nil, thread { query["thread_root"] = threadRoot ?? replyTo }
+            let data = try await uploadBytes(file: attachment.file, path: root + "/files", query: query,
                                             timeout: LarkAttachment.uploadTimeout(bytes: attachment.size))
             receipt = try JSON.decoder.decode(LarkSendReceipt.self, from: data)
         }

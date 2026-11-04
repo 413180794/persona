@@ -33,11 +33,17 @@ func TestHerdrRetire(t *testing.T) {
 		writeTranscript(t, home, cwd, id, time.Now(), `{"type":"user","cwd":"`+cwd+`","message":{"role":"user","content":"hi"}}`)
 	}
 	n.state.put(sidA, sessionState{Launcher: "cc", Cwd: cwd, Model: "opus"})
-	seedAgents(t, n, f,
+	f.reply("session.snapshot", snapshot(nil, nil, []any{
 		claudeAgent(sidA, proto.StatusDone, "w1:p1", "w1:t1", "w1", cwd, ""),
 		claudeAgent(sidB, proto.StatusWorking, "w1:p2", "w1:t2", "w1", cwd, ""),
 		claudeAgent(sidC, proto.StatusBlocked, "w1:p3", "w1:t3", "w1", cwd, ""),
-		claudeAgent(sidD, proto.StatusIdle, "w1:p4", "w1:t4", "w1", cwd, "")) // no transcript
+		claudeAgent(sidD, proto.StatusIdle, "w1:p4", "w1:t4", "w1", cwd, ""), // no transcript
+	}, nil))
+	listSessions(t, n)
+	// sidA was started by Persona: the refresh gives herdr its resume command in the background (backfillResume),
+	// once. Wait for it, or it lands among retire's calls.
+	waitCalls(t, f, "pane.report_agent_session", 1)
+	f.reset()
 
 	res, err := request(t, n, "session.retire", map[string]any{"session_id": sidA})
 	if err != nil || res["closed"] != true {

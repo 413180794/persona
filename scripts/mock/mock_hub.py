@@ -1162,6 +1162,7 @@ KB_DETAIL = {
 }
 
 LARK_UPLOADS = {}
+LARK_UPLOAD_REPLIES = {}
 LARK_UPLOAD_BYTES = {}
 LARK_UPLOAD_ATTEMPTS = {}
 
@@ -7911,6 +7912,7 @@ class H(BaseHTTPRequestHandler):
         if chat_pins_route(self, p, parse_qs(urlparse(self.path).query)): return
         if history_route(self, p, parse_qs(urlparse(self.path).query)): return
         if p == "/mock/ports": return self.send_json({"connects": PORT_LOG})
+        if p == "/mock/lark/uploads": return self.send_json(LARK_UPLOAD_REPLIES)  # #1035: what each attachment quoted
         if MOCK_WEB and (p.startswith("/screen/") or p.startswith("/assets/")): return self.web_file(p)
         if p.startswith("/api/v1/machines/") and "/ports/" in p:
             parts = p.split("/")  # ['', 'api', 'v1', 'machines', mid, 'ports', port, ('connect')]
@@ -8912,6 +8914,13 @@ class H(BaseHTTPRequestHandler):
             LARK_UPLOAD_BYTES[media_key] = (base64.b64decode(body["data"]) if image else self.last_body, body.get("mime", "application/octet-stream"))
             m["parts"] = [{"kind": "image" if image else "file", "text": body.get("name", "附件"),
                            "url": "/api/v1/lark/media/" + media_key, "metadata": {"size": len(self.last_body), **({"width": 1024, "height": 1024} if image else {})}}]
+            # #1035: what it quotes or which thread it goes into, as the plugin passes them on (GET /mock/lark/uploads).
+            reply = body.get("reply_to") or None
+            thread = body.get("thread") in (True, "1", "true") or bool(body.get("thread_root"))
+            LARK_UPLOAD_REPLIES[key] = {"reply_to": reply, "thread": thread, "thread_root": body.get("thread_root") or None}
+            quoted = next((x for x in msgs if x["id"] == reply), None) if reply and not thread else None
+            if quoted:
+                m["reply_to"] = {"id": quoted["id"], "sender_name": quoted.get("sender_name", ""), "text": quoted.get("text", "")}
             msgs.append(m)
             LARK_UPLOADS[key] = m["id"]
             if body.get("name") == "lost-receipt.txt":
@@ -9963,7 +9972,9 @@ MOCK_HELP.append("MOCK_CHANNELS=1  设置 › 插件 › 渠道：App、飞书�
 # `lark_moments` (公司圈) to the features, its `lark_attachments` / `lark_native_encryption` with them. MOCK_NO_LARK=1: a
 # hub without the plugin: none of those features, /api/v1/lark/… 404 and no 飞书 connector.
 NO_LARK = os.environ.get("MOCK_NO_LARK") == "1"
-LARK_PLUGIN_FEATURES = ("lark", "lark_moments", "lark_attachments", "lark_native_encryption")
+LARK_PLUGIN_FEATURES = ("lark", "lark_moments", "lark_attachments", "lark_native_encryption", "lark_attachment_reply")
+# MOCK_LARK_OLD_ATTACHMENTS=1: a plugin from before attachments could quote or go into a thread (#1035).
+OLD_ATTACHMENTS = os.environ.get("MOCK_LARK_OLD_ATTACHMENTS") == "1"
 
 _features_without_lark = features
 
@@ -9972,7 +9983,8 @@ def features():
     f = _features_without_lark()
     if NO_LARK:
         return [x for x in f if x not in LARK_PLUGIN_FEATURES]
-    return f + [x for x in ("lark", "lark_moments") if x not in f]
+    extra = ("lark", "lark_moments") + (() if OLD_ATTACHMENTS else ("lark_attachment_reply",))
+    return f + [x for x in extra if x not in f]
 
 
 if NO_LARK:

@@ -17,14 +17,18 @@ nonisolated struct LarkFeatures: Hashable, Sendable {
     /// `lark_doc_comments`: the document reader can reply to, write, resolve and reopen comments (#1290). Not part of
     /// "unknown is everything": a hub that does not say so has no such routes.
     var docComments = false
+    /// `lark_attachment_reply`: a picture or file can quote a message or go into a thread (#1035). Not part of
+    /// "unknown is everything" either: an older plugin ignores the reply and would send the attachment on its own.
+    var attachmentReplies = false
 
     static let all = LarkFeatures(chats: true, moments: true)
     static let none = LarkFeatures(chats: false, moments: false)
 
-    init(chats: Bool, moments: Bool, docComments: Bool = false) {
+    init(chats: Bool, moments: Bool, docComments: Bool = false, attachmentReplies: Bool = false) {
         self.chats = chats
         self.moments = chats && moments
         self.docComments = chats && docComments
+        self.attachmentReplies = chats && attachmentReplies
     }
 
     /// From the hub's hello features.
@@ -33,7 +37,8 @@ nonisolated struct LarkFeatures: Hashable, Sendable {
             self = .all // unknown, or a hub that serves Feishu itself (from before the plugin)
         } else {
             self.init(chats: features.contains("lark"), moments: features.contains("lark_moments"),
-                      docComments: features.contains("lark_doc_comments"))
+                      docComments: features.contains("lark_doc_comments"),
+                      attachmentReplies: features.contains("lark_attachment_reply"))
         }
     }
 }

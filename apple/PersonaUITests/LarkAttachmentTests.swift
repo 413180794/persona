@@ -2,14 +2,14 @@ import XCTest
 
 /// Mock-only sends; the same draft, preview, outbox and transport as a picked attachment.
 final class LarkAttachmentFlowTests: XCTestCase {
-    @MainActor private func open(_ draft: String) throws -> XCUIApplication {
+    @MainActor private func open(_ draft: String, quote: String? = nil) throws -> XCUIApplication {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs mock Hub") }
         continueAfterFailure = false
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-demo.on", "NO", "-ui.oldLayout", "NO",
                                "-inbox.source", "", "-inbox.kind", "mention", "-openInboxFirst", "NO",
-                               "-showLarkAttachmentDraft", draft]
+                               "-showLarkAttachmentDraft", draft] + (quote.map { ["-showLarkQuoteDraft", $0] } ?? [])
         app.launchPinned()
         let chat = app.staticTexts["设计评审"].firstMatch
         XCTAssertTrue(chat.waitForExistence(timeout: 20)); chat.tapCenter()
@@ -240,6 +240,40 @@ final class LarkAttachmentFlowTests: XCTestCase {
         app.buttons["移除 legacy-draft.txt"].tapCenter()
         app.buttons["发送"].tapCenter()
         XCTAssertTrue(app.buttons["lark.send"].waitForNonExistence(timeout: 5))
+        app.terminate()
+    }
+
+    /// #1035: a photo quoting a message keeps the quote when the hub can carry it, and stays in the box with a reason
+    /// when it cannot (an older Feishu extension would send it on its own). Run against both kinds of mock.
+    @MainActor func testQuotedPhotoFollowsWhatTheHubCanCarry() async throws {
+        let hub = try XCTUnwrap(ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"])
+        var health = URLRequest(url: try XCTUnwrap(URL(string: hub + "/api/v1/health")))
+        health.setValue("Bearer mock", forHTTPHeaderField: "Authorization")
+        let (data, _) = try await URLSession.shared.data(for: health)
+        let features = (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["features"] as? [String] ?? []
+        let carries = features.contains("lark_attachment_reply")
+        let app = try open("photo", quote: "m201")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "标签栏的图标偏细")).firstMatch
+            .waitForExistence(timeout: 10), "the box quotes the message")
+        shot(app, carries ? "lark-photo-quote-draft" : "lark-photo-quote-old-draft")
+        app.buttons["发送"].tapCenter()
+        if carries {
+            XCTAssertTrue(app.buttons["移除 照片.jpg"].waitForNonExistence(timeout: 5))
+            let sending = app.descendants(matching: .any).matching(identifier: "lark.outgoing.sending").firstMatch
+            XCTAssertTrue(sending.waitForNonExistence(timeout: 15))
+            let (uploads, _) = try await URLSession.shared.data(from: try XCTUnwrap(URL(string: hub + "/mock/lark/uploads")))
+            let sent = try XCTUnwrap(JSONSerialization.jsonObject(with: uploads) as? [String: [String: Any]])
+            XCTAssertTrue(sent.values.contains { $0["reply_to"] as? String == "m201" && $0["thread"] as? Bool == false },
+                          "the photo went out quoting the message, not on its own: \(sent)")
+            try await Task.sleep(for: .seconds(2))
+            shot(app, "lark-photo-quote-sent")
+        } else {
+            XCTAssertTrue(app.staticTexts["需要更新 Hub 上的飞书扩展，才能引用消息发送图片和文件"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["移除 照片.jpg"].exists, "the photo stays in the box")
+            XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "标签栏的图标偏细")).firstMatch.exists,
+                          "and so does the quote")
+            shot(app, "lark-photo-quote-old-plugin")
+        }
         app.terminate()
     }
 }

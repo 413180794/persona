@@ -14,6 +14,8 @@ nonisolated struct LarkOutgoing: Identifiable, Equatable, Sendable {
     var replyTo: LarkReplyTo? = nil
     /// With `replyTo`: true goes into its thread, false quotes it in the chat.
     var thread = false
+    /// The thread's first message, when `thread` and it is known (a file goes into the thread by its root, #1035).
+    var threadRoot: String? = nil
     var attachment: LarkAttachment?
     var messageID: String?
     /// Persisted before the first network write; queued rows remain safely retryable after a restart.
@@ -59,7 +61,8 @@ enum LarkOutbox {
             return try await api.larkSendEncrypted(encrypted, clientID: o.clientID, replyID: o.replyTo?.id)
         }
         if let attachment = o.attachment {
-            return try await api.larkSendAttachment(feed, attachment: attachment, clientID: o.clientID)
+            return try await api.larkSendAttachment(feed, attachment: attachment, clientID: o.clientID,
+                                                    replyTo: o.replyTo?.id, thread: o.thread, threadRoot: o.threadRoot)
         }
         if let reply = o.replyTo {
             return try await api.larkReply(messageID: reply.id, text: o.text, thread: o.thread, clientID: o.clientID, mentions: o.mentions)

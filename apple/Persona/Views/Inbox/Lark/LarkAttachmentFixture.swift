@@ -28,6 +28,16 @@ enum LarkAttachmentFixture {
         } catch { /* The ordinary UI still reports a storage error. */ }
     }
 
+    /// `-showLarkQuoteDraft <message id>`: the box quotes that message, once (#1035: an attachment quoting it).
+    static func quote(config: ServerConfig?, in messages: [LarkMessage]) -> LarkReplyTo? {
+        guard !quoted, let config, ["127.0.0.1", "localhost"].contains(config.url.host ?? ""), config.token == "mock",
+              let id = UserDefaults.standard.string(forKey: "showLarkQuoteDraft"),
+              let m = messages.first(where: { $0.id == id }) else { return nil }
+        quoted = true
+        return LarkReply.quote(m)
+    }
+    private static var quoted = false
+
     static func load(config: ServerConfig?) async -> [LarkAttachment] {
         guard !used, let config, ["127.0.0.1", "localhost"].contains(config.url.host ?? ""), config.token == "mock",
               let kind = UserDefaults.standard.string(forKey: "showLarkAttachmentDraft") else { return [] }

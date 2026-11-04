@@ -196,6 +196,7 @@ struct LarkChatView: View {
             await display
             #if DEBUG
             if attachments.isEmpty { attachments = await LarkAttachmentFixture.load(config: chatAPI?.config) }
+            if let quote = LarkAttachmentFixture.quote(config: chatAPI?.config, in: pager.messages) { replyTo = quote }
             #endif
             if let api = chatAPI, (try? await outbox.checkAccount(using: api)) != nil {
                 try? await outbox.settle(pager.messages)
@@ -467,7 +468,9 @@ struct LarkChatView: View {
                 .padding(.horizontal, Theme.Space.m)
                 .accessibilityIdentifier("lark.draft.attachments")
                 if replyTo != nil || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text(replyTo == nil ? "文字和附件将分别发送" : "添加回复文字，或取消引用后发送附件").font(Theme.Font.label).foregroundStyle(.secondary)
+                    Text(replyTo == nil ? "文字和附件将分别发送"
+                         : model.larkFeatures.attachmentReplies ? "文字和附件将分别引用发送" : "更新 Hub 上的飞书扩展后才能引用发送附件")
+                        .font(Theme.Font.label).foregroundStyle(.secondary)
                         .padding(.horizontal, Theme.Space.m)
                 }
             }
@@ -1111,8 +1114,12 @@ struct LarkChatView: View {
         }
         let queue = outbox
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard draftLoaded, !savingOutgoing, !preparingAttachment,
-              !t.isEmpty || (!attachments.isEmpty && replyTo == nil) else { return }
+        guard draftLoaded, !savingOutgoing, !preparingAttachment, !t.isEmpty || !attachments.isEmpty else { return }
+        // A picture or file quoting a message needs the hub to carry the quote (#1035); an older one would send it on
+        // its own, so nothing goes and the draft stays.
+        if replyTo != nil, !attachments.isEmpty, !model.larkFeatures.attachmentReplies {
+            model.toast = Toast("需要更新 Hub 上的飞书扩展，才能引用消息发送图片和文件", style: .error); return
+        }
         let encrypted = encryptionDraft
         if let encrypted {
             guard messageComposer, attachments.isEmpty, !isTopic else {
@@ -1122,7 +1129,7 @@ struct LarkChatView: View {
         }
         var batch: [LarkOutgoing] = []
         if !t.isEmpty { batch.append(LarkOutgoing(text: t, replyTo: replyTo, mentions: LarkMentions.mentions(in: t, picked: mentions))) }
-        batch += attachments.map { LarkOutgoing(text: "", attachment: $0) }
+        batch += attachments.map { LarkOutgoing(text: "", replyTo: replyTo, attachment: $0) }
         savingOutgoing = true
         Task {
             defer { savingOutgoing = false }
@@ -1460,7 +1467,12 @@ struct LarkMessageRow: View {
         let m = message
         let parts = m.parts ?? []
         if let localAttachment {
-            LarkAttachmentView(attachment: localAttachment)
+            // A picture or file quoting a message shows the quote above it (#1035), as one block: next to the sending
+            // mark the row is a horizontal stack, and two loose views went side by side.
+            VStack(alignment: LarkChatLayout.side(of: m).horizontal, spacing: Theme.Space.xs) {
+                if let reply = m.replyTo { LarkReplyQuote(reply: reply) }
+                LarkAttachmentView(attachment: localAttachment)
+            }
         } else if !display.showsBody(of: m) {
             Text(recallNotice).font(Theme.Font.caption).foregroundStyle(.tertiary).italic()
                 .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
@@ -1480,11 +1492,14 @@ struct LarkMessageRow: View {
                 }
             }
         } else if LarkPartsView.isBare(parts) {
-            if let reply = m.replyTo { LarkReplyQuote(reply: reply).padding(.horizontal, Theme.Space.xs) }
-            LarkPartsView(parts: parts)
-                .environment(\.larkContext, LarkRenderContext(messageID: m.recalled ? nil : m.id, images: LarkPartsView.imageURLs(parts)))
-                .frame(maxWidth: parts.contains { $0.kind == "card" || $0.kind == "link" } ? .infinity : nil, alignment: .leading)
-                .contextMenu { menu }
+            // One block (see the local attachment above): the quote over the picture, not beside it.
+            VStack(alignment: LarkChatLayout.side(of: m).horizontal, spacing: Theme.Space.xs) {
+                if let reply = m.replyTo { LarkReplyQuote(reply: reply).padding(.horizontal, Theme.Space.xs) }
+                LarkPartsView(parts: parts)
+                    .environment(\.larkContext, LarkRenderContext(messageID: m.recalled ? nil : m.id, images: LarkPartsView.imageURLs(parts)))
+                    .frame(maxWidth: parts.contains { $0.kind == "card" || $0.kind == "link" } ? .infinity : nil, alignment: .leading)
+                    .contextMenu { menu }
+            }
         } else {
             bubble {
                 VStack(alignment: .leading, spacing: Theme.Space.sm) {
