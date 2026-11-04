@@ -756,3 +756,13 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
   UI 测试 `PluginMarketTests.testASecretFieldIsNotAPassword`、`testManageMarkets` 用 `PasswordPrompt.assertNone` 查系统的「保存密码？」sheet（标题「保存密码？」、按钮「以后」）。
 - 真机：同样的启发式，行为应该一致；真机上还取决于 iCloud 钥匙串 / 密码 App 的「自动填充密码」开关，关着的设备本来就不弹，没在真机上复现过。
 - iOS 截图里正在输入的隐藏框整块是空白（连占位文字都没有），改动前后一样，不是 bug。
+
+## 「全部标为已读」过一会儿全部变回未读：WS 消息没有回执（2026-11-04，#1588）
+
+- 现象：点「全部标为已读」，列表先清空，过一会儿又全部回到未读；hub 的 `session_views` 里一条也没有，而 HTTP 和 WS 单独标一个都正常。
+- 原因：`sendSeen` 只看 `state == .connected` 就往 WebSocket 里写，不看 `stalled`；`URLSessionWebSocketTask.send` 的失败和 HTTP 的 `try?`
+  都被丢掉。hub 刚重启、手机刚从后台回来时连接是半开的，写进去的消息全丢了；重新连上后 hub 的列表里它们还是未读，本地的乐观改动就被盖回去。
+- 做法：发出去不等于送到。会改 hub 状态、又没有回执的 WS 消息，要么连接卡住时改走 HTTP，要么记下来，等 hub 推来的状态证明它收到了
+  （这里用 hub 自己的 `seen_at`，不拿手机的时钟去比 hub 的时间），没证明就补发；等的这段时间按本地的改动显示，别让推送盖回去。
+  WS 发普通消息的路径早就这样做了（`sendPending` 前面同时看 `connected` 和 `stalled`），新加这类消息时照着做。
+

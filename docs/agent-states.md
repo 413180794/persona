@@ -23,8 +23,11 @@ Agents 列表另有「待唤醒」：状态是已看，但 `/loop` 还没到点�
 
 - herdr 的看过 = 在电脑上聚焦那个 tab（CLI 读取不算）。Persona **不会**为了标已看去聚焦 tab（会抢电脑上的焦点），所以手机上看过之后，
   电脑上 herdr 侧边栏的绿点仍在。
-- App 的看过：打开对话页、在对话页里看着它完成、在列表里左滑「标为已看」、手表打开会话。App 发 WS `{"type":"seen"}`（或
-  `POST /api/v1/sessions/{mid}/{sid}/seen`），hub 存进 Postgres `session_views`。
+- App 的看过：打开对话页、在对话页里看着它完成、在列表里左滑「标为已看」、「全部标为已读」、手表打开会话。App 发 WS `{"type":"seen"}`
+  （连接卡住时、或者 WS 发出 5 秒后 hub 还没记下时，改发 `POST /api/v1/sessions/{mid}/{sid}/seen`），hub 存进 Postgres `session_views`。
+  WS 消息没有回执，连接半开时会悄悄丢掉（#1588），所以 App 把还没被 hub 记下的已读放在 `SeenOutbox`：hub 发来的列表里这个会话的
+  `seen_at` 比标记时晚，才算记下；这期间它照旧显示已看，重新连上时再发一次；它又干了一轮、开始工作或需要你、从列表里消失、
+  或者 10 分钟还没记下，就不再等。
 - 判定：herdr `done` 且 `seen_at` 早于会话最后更新时间（transcript 的修改时间，即这一轮结束的时间）→ `unread`，否则 `idle`。
   所以看过之后它又干了一轮，会重新变成完成未看。
 

@@ -1086,6 +1086,9 @@ final class AppModel {
     /// Session lists received and not applied yet (`applyPendingSessions`), by machine.
     @ObservationIgnored private var pendingSessions: [MachineRef: [Session]] = [:]
     @ObservationIgnored private var sessionsFlushScheduled = false
+    /// Agents marked seen that the hub has not taken yet (#1588): shown seen, sent again until it has.
+    @ObservationIgnored private var seenOutbox = SeenOutbox()
+    @ObservationIgnored private var seenCheckScheduled = false
     /// How long session lists wait for the rest of a burst: under a frame and a half, too short to see.
     static let sessionsCoalesce: TimeInterval = 0.025
 
@@ -1101,6 +1104,7 @@ final class AppModel {
     /// current in the background (`AgentSync`) follow them. The one place the lists land (msg-render's SessionStore
     /// replaces its inside, docs/ios-state.md).
     func applySessions(_ byMachine: [MachineRef: [Session]]) {
+        let byMachine = seenOutbox.land(byMachine, at: Date())
         var lists = sessionsByMachine
         var olds: [(old: [Session], new: [Session])] = []
         for (machineID, list) in byMachine {
@@ -1143,6 +1147,8 @@ final class AppModel {
             #endif
             for (key, handler) in terminalHandlers where key.group == group { handler(.reconnected) }
             learned(hello, group: group)
+            // Marks the last socket may have swallowed, or an HTTP request that failed, go again over this one.
+            for key in seenOutbox.unanswered(group: group, at: Date()) { deliverSeen(key) }
         case .terminal(let key, let event):
             terminalHandlers[key]?(event)
         case .machines(let list):
@@ -1444,10 +1450,34 @@ final class AppModel {
     }
 
     private func sendSeen(_ key: SessionKey) {
-        if let socket = socket(key.group), socket.state == .connected {
+        if let s = sessionIndex[key] { seenOutbox.mark(key, s, at: Date()) }
+        deliverSeen(key)
+    }
+
+    /// Over the socket while it answers its pings, else over HTTP. Nothing says whether the socket's went through: an
+    /// unread one not taken within `SeenOutbox.confirmWithin` goes again over HTTP (#1588).
+    private func deliverSeen(_ key: SessionKey, overHTTP: Bool = false) {
+        if !overHTTP, let socket = socket(key.group), socket.state == .connected, !socket.stalled {
+            seenOutbox.sent(key, .socket, at: Date())
             socket.send(["type": "seen", "machine_id": key.machineID, "session_id": key.sessionID])
+            scheduleSeenCheck()
         } else if let api = api(key.group) {
-            Task { try? await api.post("/api/v1/sessions/\(key.machineID)/\(key.sessionID)/seen") }
+            seenOutbox.sent(key, .http, at: Date())
+            Task {
+                // A failed one waits for the socket to come back (`hello`).
+                if (try? await api.post("/api/v1/sessions/\(key.machineID)/\(key.sessionID)/seen")) != nil { seenOutbox.answered(key) }
+            }
+        }
+    }
+
+    private func scheduleSeenCheck() {
+        guard !seenCheckScheduled, let at = seenOutbox.nextDue(at: Date()) else { return }
+        seenCheckScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(at.timeIntervalSinceNow, 0.1)) { [weak self] in
+            guard let self else { return }
+            seenCheckScheduled = false
+            for key in seenOutbox.due(at: Date()) { deliverSeen(key, overHTTP: true) }
+            scheduleSeenCheck()
         }
     }
 
@@ -1923,6 +1953,7 @@ final class AppModel {
             } else {
                 for (ref, list) in rest { lists[ref] = list }
             }
+            lists = seenOutbox.land(lists, at: Date())
             if lists != sessionsByMachine { sessionsByMachine = lists }
             replaceInteractions(group, ixs)
             link.live.ensureConnected()
