@@ -16,6 +16,7 @@ import { BuiltinFace, PersonaPicker } from "./assistant/Persona";
 import { Connectors } from "./settings/Connectors";
 import { TranslationSettings } from "./settings/TranslationSettings";
 import { Plugins } from "./settings/Plugins";
+import { HubSettings } from "./settings/HubSettings";
 import { LauncherQuota } from "./settings/LauncherQuota";
 import { launcherNameProblem, loadPresets, presetBody, presetChoices, presetDefaultModel, presetModelLabel, presetSubtitle, type LauncherPreset } from "../lib/launcher-presets";
 import { Segmented } from "./assistant/parts";
@@ -86,8 +87,8 @@ export function tokens(n: number): string {
 
 // ── page ────────────────────────────────────────────────
 
-type Tab = "general" | "assistant" | "models" | "model-config" | "claude" | "codex" | "connectors" | "plugins" | "translate" | "devices";
-const TABS: Tab[] = ["general", "assistant", "models", "model-config", "claude", "codex", "connectors", "plugins", "translate", "devices"];
+type Tab = "general" | "assistant" | "models" | "model-config" | "claude" | "codex" | "connectors" | "plugins" | "translate" | "devices" | "hub";
+const TABS: Tab[] = ["general", "assistant", "models", "model-config", "claude", "codex", "connectors", "plugins", "translate", "devices", "hub"];
 // The tab whose page opens one of its items, and the query parameter that names it.
 const SUB: Partial<Record<Tab, string>> = { "model-config": "purpose", plugins: "plugin" };
 
@@ -115,6 +116,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     ...(hasPlugins || tab === "plugins" ? [{ k: "plugins" as Tab, label: "插件", icon: "plugin" as IconName }] : []),
     { k: "translate", label: "翻译", icon: "translate" },
     { k: "devices", label: "设备", icon: "key" },
+    { k: "hub", label: "hub", icon: "hub" },
   ];
   const pick = (k: Tab, id: string | null = null) => {
     setTab(k);
@@ -156,6 +158,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           {tab === "plugins" && <Plugins open={sub} onOpen={(id) => pick("plugins", id)} />}
           {tab === "translate" && <TranslationSettings onConfigure={() => pick("model-config", "translate")} />}
           {tab === "devices" && <Devices />}
+          {tab === "hub" && <HubSettings />}
         </div>
       </div>
     </div>

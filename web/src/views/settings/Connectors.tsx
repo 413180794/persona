@@ -9,6 +9,7 @@ import { ago } from "../../lib/format";
 import { Button, cx, Dialog, EASE, IconButton, Loading, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { Group, Pill } from "./SettingsParts";
+import { FeishuBot } from "./FeishuBot";
 
 interface LarkStatus {
   configured: boolean;
@@ -27,6 +28,7 @@ export function Connectors() {
       </p>
       <Mail />
       <Feishu />
+      <FeishuBot />
     </>
   );
 }

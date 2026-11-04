@@ -13,6 +13,7 @@ import { Button, cx, Dialog, Loading, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
 import { Group, Pill, Row } from "../settings/SettingsParts";
+import { SkillsGroup } from "./Skills";
 import { Tag, textareaClass } from "../assistant/parts";
 import { PersonaAvatar, usePersona } from "../assistant/Persona";
 
@@ -117,6 +118,8 @@ export function AssistantSettings({ bare }: { /** Without its header (the profil
           </button>
         )}
       </Group>
+
+      <SkillsGroup />
 
       <Group
         title="运行在"

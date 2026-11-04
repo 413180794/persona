@@ -146,14 +146,18 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 
   ![网页版侧边栏的个人 Agent：按来源分组，带头像、未读数、搜索和筛选按钮](screenshots/web-personal-agents.png)
 
-- **设置**（`/settings`，侧边栏和左上角菜单进入，`src/views/Settings.tsx`）：九个分类（hub 带 `plugin_manager` 时十个），和 App 的设置同一套接口。
+- **设置**（`/settings`，侧边栏和左上角菜单进入，`src/views/Settings.tsx`）：十个分类（hub 带 `plugin_manager` 时十一个），和 App 的设置同一套接口。
   「通用」是外观（跟随系统 / 浅色 / 深色）、形象、Persona 助手的运行位置（模型在「模型配置」tab，#1291）、这个浏览器（hub 地址、hub 名、互联的 hub、断开）；
   「助手」（`settings/AssistantSettings.tsx`）：主动做事（进定时任务）、关于我（`PUT /assistant {notes}`，点保存或离开时存）、
-  记忆（`/assistant/memory`：标题先取 MEMORY.md 索引里的中文标题，查看 / 编辑整个文件 / 删除，索引只读）、运行在哪（只读；没有模型入口，模型在「模型配置 › 主对话」）；
+  记忆（`/assistant/memory`：标题先取 MEMORY.md 索引里的中文标题，查看 / 编辑整个文件 / 删除，索引只读）、Skills（`GET /skills`，跑助手那台电脑上的 skill，只读，`settings/Skills.tsx`）、运行在哪（只读；没有模型入口，模型在「模型配置 › 主对话」）；
   「Claude Code」「Codex」（`settings/AgentSettings.tsx`）：选一台在线电脑，白名单设置（开关 / 下拉 / 文字）改了立即 `PUT`，「同时改所有在线机器」默认开，
   每行「⋯」恢复默认（文字项清空也是 null）、推到所有在线机器，失败回滚；
   「连接器」（`settings/Connectors.tsx`）：邮箱（列表、添加 IMAP / 飞书邮箱、删除；Gmail 只能在手机上加：它的 Google 授权客户端是 iOS 类型，回调是只有 App 能接的自定义 scheme）、
-  飞书（`/lark/status` 只读）；「这台 iPhone」只在手机上有；
+  飞书（`/lark/status` 只读）、飞书机器人（`settings/FeishuBot.tsx`，逻辑 `lib/feishu-bot.ts`，`docs/bots.md`；一行状态，点开是弹窗（`?tab=connectors&connector=feishu-bot` 直接打开）：开关、应用凭证「验证并保存」、
+  配对码和倒计时（等配对时每 3 秒刷新）、测试消息、解除配对先确认、「能做什么」六个开关、飞书里聊过的 Agent、怎么建机器人；同 iOS `FeishuBotView`）；「这台 iPhone」只在手机上有；
+  「hub」（`settings/HubSettings.tsx`，逻辑 `lib/hub-update.ts`，`docs/hub-update.md`「App 里」）：版本、渠道、上次检查、检查更新，新版本和说明、回滚过 / 自动更新不装的提示、
+  「更新 hub」，等空闲时列出在忙的 Agent 和「现在就更新…」（先确认），Docker 部署给要改的镜像和命令（可复制），自动更新开关、首次「已开启」提示、各台电脑上的 personad 版本、更新记录；
+  跟着 `hub_update` 推送刷新，旧 hub（没有这个接口）只显示一句说明；
   「插件」（`settings/Plugins.tsx`，逻辑 `lib/plugins.ts`，`?tab=plugins`，`&plugin=<id>` 直接进详情；hub 的 features 有 `plugin_manager` 才出现，#1207）：
   和 iOS 同一套（`docs/plugins.md`「App：设置 › 插件」）。列表是名字、状态圆点和文字、还缺什么 / 错误，标题旁写个数和几个要处理；详情是状态 · 版本 · 来源、描述、还缺、错误，
   「启用」开关（立即 `PUT …/-/enabled`），按 `form.fields` 画的表单（文字、数字、开关、选择、文字列表 / 多选，对象单独一组），改了底部浮出「还原 / 保存」，整份 `PUT …/-/config`，
@@ -380,6 +384,9 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。
 | Claude Code 设置、Codex 设置 | 有 | #297 | |
 | 连接器：邮箱 | 有 | #297 | Gmail 只能在手机上加（Google 授权客户端是 iOS 类型） |
 | 连接器：飞书 | 有 | #297 | 只读状态 |
+| 连接器：飞书机器人（状态、凭证、配对、能做什么） | 有 | #1325 | 设置 › 连接器，点开是弹窗；拷贝配对码用剪贴板（http 下退回 execCommand） |
+| hub 版本和更新（检查、更新、现在就更新、自动更新、记录、Docker 的命令） | 有 | #1325 | 设置 › hub；Agents 列表上方那行 hub 提示没做，提示在设置 › hub 顶部 |
+| 助手的 Skills | 有 | #1325 | 设置 › 助手，只读（同 iOS） |
 | 插件（列表、开关、按 schema 的表单、只写的密钥） | 有 | #1207 | 安装、升级、卸载在 hub 机器上（同 iOS） |
 | 翻译 | 有 | #433 | 存在当前浏览器、不同步到 hub：hub 的翻译偏好挂在手机的推送设备 id 上，网页没有；网页打开时按需翻 |
 | 设备（token 列表、撤销） | 有 | — | |
