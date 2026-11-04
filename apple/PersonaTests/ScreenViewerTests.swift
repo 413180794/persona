@@ -30,6 +30,8 @@ struct ScreenViewerTests {
         #expect(plain.absoluteString == "http://127.0.0.1:18660/screen/macstudio#token=jd_cafe00a1&embed=1")
         let kept = try #require(ScreenViewer.url(page, token: "jd_cafe00a1", name: nil, keep: "phone"))
         #expect(read(kept)["keep"] == "phone", "this device remembers the Mac's sign-in (#1322)")
+        let unlock = try #require(ScreenViewer.url(page, token: "jd_cafe00a1", name: nil, keep: "phone", unlock: true))
+        #expect(read(unlock)["unlock"] == "1" && read(kept)["unlock"] == nil, "一键解锁 asks the page to type it (#1507 a-2)")
     }
 
     /// The Mac's Screen Sharing sign-in, kept on this device (#1322): by machine, readable only while it is unlocked,
@@ -51,8 +53,17 @@ struct ScreenViewerTests {
         #expect(attributes[kSecAttrAccessible as String] as? String == kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String)
         #expect((attributes[kSecAttrSynchronizable as String] as? Bool ?? false) == false)
 
+        // 一键解锁 is this device's, per Mac, and only with the sign-in kept (#1507 a-2).
+        ScreenUnlock.set(true, for: ref)
+        #expect(ScreenUnlock.isOn(ref) && !ScreenUnlock.isOn(MachineRef(group: "", id: "another-mac")))
+        ScreenUnlock.set(false, for: ref)
+        #expect(!ScreenUnlock.isOn(ref))
+        ScreenUnlock.set(true, for: ref)
+
         #expect(!ScreenCredentials.save(.init(account: "me", password: ""), for: ref), "nothing to keep")
         ScreenCredentials.forget(ref)
         #expect(ScreenCredentials.load(ref) == nil)
+        #expect(!ScreenUnlock.isOn(ref), "nothing kept: nothing to type")
+        ScreenUnlock.set(false, for: ref)
     }
 }

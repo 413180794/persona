@@ -10,6 +10,7 @@ struct ScreenDrawer: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let ref: MachineRef
+    var unlock = false
     @State private var offset: CGFloat = 0
     @State private var page = ScreenPageState()
     @State private var control = false
@@ -22,7 +23,7 @@ struct ScreenDrawer: View {
             TimelineView(.periodic(from: .now, by: 1)) { ctx in
                 if let a = model.computerActivities[ref], a.shown(at: ctx.date) { stepLine(a) }
             }
-            if let url = ScreenViewer.url(model, ref) {
+            if let url = ScreenViewer.url(model, ref, unlock: unlock) {
                 ScreenWebView(url: url, control: control, page: page, machine: ref)
                     .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
                     .padding(.horizontal, Theme.Space.s)
@@ -108,14 +109,14 @@ struct ScreenDrawer: View {
 
 /// Builds the page's address.
 enum ScreenViewer {
-    @MainActor static func url(_ model: AppModel, _ ref: MachineRef) -> URL? {
+    @MainActor static func url(_ model: AppModel, _ ref: MachineRef, unlock: Bool = false) -> URL? {
         guard let api = model.api(ref.group) else { return nil }
         #if os(macOS)
         let keep = "mac"
         #else
         let keep = "phone"
         #endif
-        return url(api.url("/screen/\(ref.id)"), token: api.config.token, name: model.machine(ref)?.name, keep: keep)
+        return url(api.url("/screen/\(ref.id)"), token: api.config.token, name: model.machine(ref)?.name, keep: keep, unlock: unlock)
     }
 
     /// RFC 3986's unreserved characters, the only ones that go into the fragment as they are.
@@ -125,11 +126,12 @@ enum ScreenViewer {
     /// each value percent-encoded once: the page reads them back with URLSearchParams. Set as the encoded fragment,
     /// since `URLComponents.fragment` encodes a second time (a `jd_` token arrived as `jd%5F`, #1498). `keep`: this
     /// device remembers the Mac's sign-in (phone | mac, #1322), the page offers 「在这台手机上记住」.
-    nonisolated static func url(_ page: URL, token: String, name: String?, keep: String? = nil) -> URL? {
+    nonisolated static func url(_ page: URL, token: String, name: String?, keep: String? = nil, unlock: Bool = false) -> URL? {
         func encoded(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: unreserved) ?? "" }
         var parts = ["token=" + encoded(token)]
         if let name, !name.isEmpty { parts.append("name=" + encoded(name)) }
         if let keep { parts.append("keep=" + encoded(keep)) }
+        if unlock { parts.append("unlock=1") } // 一键解锁 (#1507 a-2): the page asks for the password once it is in
         parts.append("embed=1")
         var c = URLComponents(url: page, resolvingAgainstBaseURL: false)
         c?.percentEncodedFragment = parts.joined(separator: "&")
@@ -140,6 +142,8 @@ enum ScreenViewer {
 /// The live screen asked for (`AppModel.screenOpen`).
 struct ScreenOpen: Identifiable, Hashable {
     let machine: MachineRef
+    /// 一键解锁: once signed in, the kept password goes onto the Mac's lock screen.
+    var unlock = false
     var id: MachineRef { machine }
 }
 
@@ -169,9 +173,9 @@ extension View {
     func screenDrawer(_ model: AppModel) -> some View {
         @Bindable var model = model
         #if os(iOS)
-        return fullScreenCover(item: $model.screenOpen) { ScreenDrawer(ref: $0.machine).presentationBackground(.clear) }
+        return fullScreenCover(item: $model.screenOpen) { ScreenDrawer(ref: $0.machine, unlock: $0.unlock).presentationBackground(.clear) }
         #else
-        return sheet(item: $model.screenOpen) { ScreenDrawer(ref: $0.machine).macLargeSheet() }
+        return sheet(item: $model.screenOpen) { ScreenDrawer(ref: $0.machine, unlock: $0.unlock).macLargeSheet() }
         #endif
     }
 }
@@ -198,8 +202,14 @@ private final class ScreenBridge: NSObject, WKScriptMessageHandler {
                 if let account = body["account"] as? String, let password = body["password"] as? String {
                     ScreenCredentials.save(.init(account: account, password: password), for: machine)
                 }
+            case "unlock":
+                // The page is in and asks to unlock: the kept password, typed on the lock screen; the hub only logs it.
+                guard let saved = ScreenCredentials.load(machine) else { break }
+                message.webView?.evaluateJavaScript("window.personaScreen && window.personaScreen.unlock(\(Self.script(saved)))")
+                Task { _ = try? await AppModel.shared.api(machine.group)?.computerJob(machine: machine.id, "unlocking") }
             case "forget":
                 ScreenCredentials.forget(machine)
+                ScreenUnlock.set(false, for: machine)
             default:
                 break
             }

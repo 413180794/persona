@@ -7,7 +7,7 @@ import { getToken } from "../lib/api";
 
 /** `name`: the machine as the app calls it (Mac Studio), shown until the hub says; else its id. `keep`: the app that
  * opened it remembers the Mac's sign-in (#1322: "phone" | "mac"), "" in a browser. */
-export type ScreenTarget = { mid: string; token: string; embedded: boolean; name: string; keep: "" | "phone" | "mac" };
+export type ScreenTarget = { mid: string; token: string; embedded: boolean; name: string; keep: "" | "phone" | "mac"; unlock: boolean };
 
 /** /screen/<mid> → mid; anything else is not the live screen. */
 export function screenMachine(pathname: string): string | null {
@@ -29,9 +29,11 @@ export function screenTarget(href: string, stored: () => string = getToken): { t
   hash.delete("embed");
   hash.delete("name");
   hash.delete("keep");
+  const unlock = keep !== "" && hash.get("unlock") === "1"; // 一键解锁 (#1507 a-2): only where the app keeps the sign-in
+  hash.delete("unlock");
   const rest = u.pathname + u.search + (hash.toString() ? "#" + hash.toString() : "");
   if (!mid) return { target: null, rest };
-  return { target: { mid, token: token || stored(), embedded, name: name || mid, keep }, rest };
+  return { target: { mid, token: token || stored(), embedded, name: name || mid, keep, unlock }, rest };
 }
 
 /** The WebSocket that carries the Mac's VNC (its port 5900) through the hub's port relay (docs/ports.md). */
@@ -55,4 +57,16 @@ export function keepLabel(keep: ScreenTarget["keep"]): string {
 export function toApp(message: Record<string, unknown>): void {
   const w = window as unknown as { webkit?: { messageHandlers?: { screen?: { postMessage(m: unknown): void } } } };
   w.webkit?.messageHandlers?.screen?.postMessage(message);
+}
+
+/** The keysyms that type text on a Mac's lock screen (一键解锁): printable Latin-1 as itself, anything else as X11's
+ * Unicode keysym (0x01000000 + its code point), then Return. */
+export function keysymsOf(text: string): number[] {
+  const out: number[] = [];
+  for (const ch of text) {
+    const cp = ch.codePointAt(0) ?? 0;
+    out.push((cp >= 0x20 && cp <= 0x7e) || (cp >= 0xa0 && cp <= 0xff) ? cp : 0x01000000 + cp);
+  }
+  out.push(0xff0d);
+  return out;
 }

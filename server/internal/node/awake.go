@@ -7,15 +7,38 @@ package node
 // caffeinate's and goes with it, and -w ties it to this node.
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
 
 var caffeinatePath = "/usr/bin/caffeinate"
+
+var pmsetPath = "/usr/bin/pmset"
+
+// lockScreen puts the display to sleep now (pmset displaysleepnow): with macOS asking for the password once the
+// display sleeps (the default), the Mac locks. The operations' hold goes first; a screen still watched keeps its own
+// (the Mac is locked behind it all the same).
+func lockScreen(ctx context.Context) error {
+	if installOS != "darwin" {
+		return errors.New("只有 Mac 能锁上")
+	}
+	awake.mu.Lock()
+	awake.opsUntil = time.Time{}
+	awake.reconcile()
+	awake.mu.Unlock()
+	if out, err := exec.CommandContext(ctx, pmsetPath, "displaysleepnow").CombinedOutput(); err != nil {
+		return fmt.Errorf("没锁上：%s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
 
 // awakeAfter is how long the last operation keeps the Mac awake, and how far ahead the screen being watched does.
 var awakeAfter = 10 * time.Minute

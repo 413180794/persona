@@ -40,6 +40,9 @@ func computerMac(t *testing.T, h *Hub, id string) (*Machine, func() (statuses in
 			statuses++
 			return proto.Computer{Installed: true, Version: "0.38.0", Daemon: true, Accessibility: "granted", ScreenRecording: "granted",
 				Desktop: "active", Ready: true, Job: job, Checked: time.Now()}, nil
+		case "computer.lock":
+			calls = append(calls, computerCallSeen{Tool: method})
+			return proto.Computer{Installed: true, Daemon: true, Desktop: "locked", Checked: time.Now()}, nil
 		case "computer.install", "computer.grant", "computer.cancel":
 			calls = append(calls, computerCallSeen{Tool: method})
 			job = &proto.ComputerJob{Kind: strings.TrimPrefix(method, "computer."), State: "running", Step: "下载安装器"}
@@ -278,12 +281,19 @@ func TestComputerJobs(t *testing.T) {
 		t.Fatalf("%v", out)
 	}
 	call(t, mux, "POST", "/api/v1/machines/mac/computer/grant", h.cfg.Token, "")
+	// 锁上 and the app's word that it unlocks it over the live screen (#1507 a-2): the second only goes to the log.
+	if code, out := call(t, mux, "POST", "/api/v1/machines/mac/computer/unlocking", h.cfg.Token, ""); code != 200 || out["enabled"] != true {
+		t.Fatalf("unlocking: %d %v", code, out)
+	}
+	if code, out := call(t, mux, "POST", "/api/v1/machines/mac/computer/lock", h.cfg.Token, ""); code != 200 || out["desktop"] != "locked" {
+		t.Fatalf("锁上: %d %v", code, out)
+	}
 	var asked []string
 	_, calls := seen()
 	for _, c := range calls {
 		asked = append(asked, c.Tool)
 	}
-	if strings.Join(asked, " ") != "computer.install computer.cancel computer.grant" {
+	if strings.Join(asked, " ") != "computer.install computer.cancel computer.grant computer.lock" {
 		t.Fatalf("%v", asked)
 	}
 	same := proto.Computer{Job: &proto.ComputerJob{Kind: "install", State: "running"}}

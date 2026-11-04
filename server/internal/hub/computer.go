@@ -206,14 +206,25 @@ func (h *Hub) setPluginMachine(ctx context.Context, plugin, machine string, on b
 // postComputerJob: POST /api/v1/machines/{mid}/computer/{install|grant|cancel}, the machine page's 安装 Cua Driver,
 // 去授权 and 取消. The node runs the job in the background; its state comes back as Computer.job (the page asks
 // again while it runs).
+// Also 锁上 (lock: the node sleeps the display now) and the app's word that it is unlocking the Mac over its live
+// screen (unlocking: only logged, who and which Mac; the password goes to the Mac alone), #1507 a-2.
 func (h *Hub) postComputerJob(w http.ResponseWriter, r *http.Request, m *Machine) {
 	action := r.PathValue("action")
-	if action != "install" && action != "grant" && action != "cancel" {
+	if action != "install" && action != "grant" && action != "cancel" && action != "lock" && action != "unlocking" {
 		writeErr(w, http.StatusNotFound, errors.New("unknown action"))
 		return
 	}
 	if c := h.computerOf(m); c == nil || !c.Enabled {
 		writeErr(w, http.StatusNotFound, errors.New("操控电脑没有对这台打开"))
+		return
+	}
+	if action == "unlocking" {
+		who := principalOf(r.Context()).Name
+		if who == "" {
+			who = "the hub's token"
+		}
+		h.logf("[%s] unlocked over its live screen from %s", m.cfg.ID, who)
+		writeJSON(w, h.computerOf(m))
 		return
 	}
 	if !m.isOnline() {
@@ -226,7 +237,7 @@ func (h *Hub) postComputerJob(w http.ResponseWriter, r *http.Request, m *Machine
 	var c proto.Computer
 	if err := m.call(ctx, "computer."+action, map[string]any{}, &c); err != nil {
 		if strings.Contains(err.Error(), "unknown method") {
-			err = errors.New("这台电脑上的 personad 太旧，还不会安装 Cua Driver：重新部署它")
+			err = errors.New("这台电脑上的 personad 太旧，还不会" + map[bool]string{true: "锁屏", false: "安装 Cua Driver"}[action == "lock"] + "：重新部署它")
 		}
 		writeErr(w, http.StatusConflict, err)
 		return

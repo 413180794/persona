@@ -310,6 +310,17 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
    - Cua 有同样的打算（#1745 第二阶段：`cua-driver unlock-screen --purpose … --duration 30s`），还没有实现。
    - **不做**。等 Cua 出了这个能力，再评估接它的，不自己写系统插件。
 
+- **一键解锁（a-2，已做）**：
+  - 机器页「操控电脑」在记住了屏幕共享登录（#1322）后多一个「在这台手机上一键解锁」（`ScreenUnlock`，存在这台设备，按 Mac），默认关，打开时确认一次。忘记屏幕共享密码时它跟着关。
+  - 那台锁屏时给「一键解锁」：
+    1. 先过 Face ID / Touch ID / 设备密码（`LAContext`）。
+    2. 打开抽屉（`unlock=1`），页面用记住的账号登录屏幕共享。
+    3. 连上后问 App 要密码（`{credentials: "unlock"}`）；App 经 `personaScreen.unlock(…)` 交给页面内存。
+    4. 页面暂时退出「只看」，按一下 Shift 叫醒锁屏，再按 keysym 打出密码和回车。
+  - hub 只记一行「谁、什么时候、解了哪台」（`POST …/computer/unlocking`），密码不经过它的存储和日志。
+  - 一键解锁打开时，解开以后机器页有「锁上」（`POST …/computer/lock` → node 的 `pmset displaysleepnow`：显示器立即睡，「需要密码」是立即时就锁）。
+  - 局限：重启后的 FileVault 解锁、合盖睡着的 MacBook 不行（屏幕共享连不上）。
+
 ### b) 防睡眠、不自动锁屏（插件 `cua` 的设置，按机器两个开关）
 
 都用 `caffeinate`，不改系统设置（不碰「锁定屏幕」里的时间和「需要密码」）。关掉或 node 退出就恢复原样。

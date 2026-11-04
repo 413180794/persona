@@ -560,10 +560,10 @@ final class AppModel {
     nonisolated static func showsScreen(_ m: Machine) -> Bool {
         (m.computer.map { $0.enabled && $0.screenSharing } ?? false) || (m.browser.map { $0.enabled && $0.screenSharing } ?? false)
     }
-    /// Brings up ref's live screen.
-    func openScreen(_ ref: MachineRef) {
+    /// Brings up ref's live screen; `unlock`: and types its kept password on the lock screen (一键解锁, #1507 a-2).
+    func openScreen(_ ref: MachineRef, unlock: Bool = false) {
         guard api(ref.group) != nil else { toast = Toast("尚未连接 hub", style: .error); return }
-        screenOpen = ScreenOpen(machine: ref)
+        screenOpen = ScreenOpen(machine: ref, unlock: unlock)
     }
     /// A machine of the hub-level group (the assistant's, a hub setting's).
     func hubRef(_ id: String) -> MachineRef { MachineRef(group: hub?.group ?? "", id: id) }

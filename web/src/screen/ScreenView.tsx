@@ -7,7 +7,7 @@ import { api, ApiError, errorText } from "../lib/api";
 import { cx, Spinner } from "../ui/atoms";
 import "../views/theme"; // follows the system's light / dark while open (index.html picked the first one)
 import { ensureSubtleAES } from "./aes";
-import { accountOf, keepLabel, screenSocket, toApp, type ScreenTarget } from "./screen";
+import { accountOf, keepLabel, keysymsOf, screenSocket, toApp, type ScreenTarget } from "./screen";
 
 type Phase =
   | { kind: "checking" }
@@ -28,6 +28,8 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
   const [control, setControl] = useState(false);
+  const controlRef = useRef(false);
+  controlRef.current = control;
   const [attempt, setAttempt] = useState(0);
   // The app keeps the Mac's sign-in (#1322): 「在这台手机上记住」, on unless unticked.
   const canKeep = target.embedded && target.keep !== "";
@@ -36,6 +38,7 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
   const sent = useRef<Credentials | null>(null); // sent on this connection, until the Mac says yes or no
   const waiting = useRef(false); // this connection asked for a sign-in and has none yet
   const answer = useRef<((c: Credentials) => void) | null>(null);
+  const unlockAsked = useRef(false); // 一键解锁 asked for its password once per page
   // Set once the hub says there is a screen to connect to: the connection lives from then on, whatever the page
   // shows (asking to sign in is part of it), until 重新连接 or the page goes.
   const [go, setGo] = useState(false);
@@ -112,6 +115,11 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
     };
     r.addEventListener("connect", () => {
       setPhase({ kind: "live" });
+      // 一键解锁 (#1507 a-2): in, so the app hands over the kept password for the lock screen (personaScreen.unlock).
+      if (target.unlock && !unlockAsked.current) {
+        unlockAsked.current = true;
+        toApp({ credentials: "unlock" });
+      }
       const c = sent.current;
       sent.current = null;
       // What worked goes to the app's keychain when 记住 was on; off, what it kept goes.
@@ -167,6 +175,19 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
     if (!target.embedded) return;
     (window as unknown as { personaScreen?: unknown }).personaScreen = {
       setControl: (on: boolean) => setControl(on),
+      // The app's answer to { credentials: "unlock" }: a key wakes the lock screen and puts the cursor in its password
+      // field, then the password and Return; 只看 again after.
+      unlock: (kept: { password?: string } | null) => {
+        const r = rfb.current;
+        if (!r || !kept?.password) return;
+        const password = kept.password;
+        r.viewOnly = false;
+        r.sendKey(0xffe1, "ShiftLeft");
+        setTimeout(() => {
+          for (const k of keysymsOf(password)) r.sendKey(k, null);
+          r.viewOnly = !controlRef.current;
+        }, 800);
+      },
       // The app's answer to { credentials: "wanted" }: the Mac's sign-in it kept, or null (the form).
       signIn: (kept: { account?: string; password?: string } | null) => {
         if (kept?.account && kept.password) {

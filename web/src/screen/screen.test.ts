@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accountOf, keepLabel, screenMachine, screenSocket, screenTarget } from "./screen";
+import { accountOf, keepLabel, keysymsOf, screenMachine, screenSocket, screenTarget } from "./screen";
 
 describe("the live screen's page", () => {
   it("is /screen/<machine>", () => {
@@ -11,14 +11,14 @@ describe("the live screen's page", () => {
 
   it("takes the app's token from the fragment, out of the address bar", () => {
     const { target, rest } = screenTarget("http://hub.example:18660/screen/macbook#token=t0k&embed=1", () => "stored");
-    expect(target).toEqual({ mid: "macbook", token: "t0k", embedded: true, name: "macbook", keep: "" });
+    expect(target).toEqual({ mid: "macbook", token: "t0k", embedded: true, name: "macbook", keep: "", unlock: false });
     expect(rest).toBe("/screen/macbook");
   });
 
   // #1498: the address the app builds (ScreenViewer.url): a device token (jd_…) and the Mac's name, each encoded once.
   it("reads the app's device token and the Mac's name as they were", () => {
     const { target, rest } = screenTarget("http://127.0.0.1:18660/screen/macstudio#token=jd_cafe00a1&name=Mac%20Studio&embed=1", () => "stored");
-    expect(target).toEqual({ mid: "macstudio", token: "jd_cafe00a1", embedded: true, name: "Mac Studio", keep: "" });
+    expect(target).toEqual({ mid: "macstudio", token: "jd_cafe00a1", embedded: true, name: "Mac Studio", keep: "", unlock: false });
     expect(rest).toBe("/screen/macstudio");
     const odd = screenTarget("http://127.0.0.1/screen/m#token=a%2Bb%2Fc%3D%26d&embed=1").target;
     expect(odd?.token).toBe("a+b/c=&d");
@@ -34,8 +34,16 @@ describe("the live screen's page", () => {
     expect(keepLabel("mac")).toBe("在这台 Mac 上记住");
   });
 
+  // #1507 a-2: 一键解锁 only from the app that keeps the sign-in; the password typed as keysyms, then Return.
+  it("unlocks only where the app keeps the sign-in, and types the password as keysyms", () => {
+    expect(screenTarget("http://h/screen/m#token=t&keep=phone&unlock=1&embed=1").target?.unlock).toBe(true);
+    expect(screenTarget("http://h/screen/m#token=t&unlock=1&embed=1").target?.unlock).toBe(false);
+    expect(keysymsOf("aZ9!é")).toEqual([0x61, 0x5a, 0x39, 0x21, 0xe9, 0xff0d]);
+    expect(keysymsOf("密")).toEqual([0x01000000 + 0x5bc6, 0xff0d]);
+  });
+
   it("uses the browser's own token without one", () => {
-    expect(screenTarget("https://hub.example/screen/macbook", () => "stored").target).toEqual({ mid: "macbook", token: "stored", embedded: false, name: "macbook", keep: "" });
+    expect(screenTarget("https://hub.example/screen/macbook", () => "stored").target).toEqual({ mid: "macbook", token: "stored", embedded: false, name: "macbook", keep: "", unlock: false });
     expect(screenTarget("https://hub.example/inbox#token=x", () => "stored").target).toBeNull();
   });
 

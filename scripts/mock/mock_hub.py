@@ -6137,7 +6137,7 @@ def png(w, h, rgb):
 # MOCK_SCREEN=fake (#1322): the live screen's 5900 goes to a Screen Sharing of the mock's own instead of this Mac's: it
 # signs in with VeNCrypt Plain (noVNC asks for an account and a password, as for macOS's), takes FAKE_SCREEN's account
 # and password (GET /mock/screen-password?p=… changes the password: the Mac's was changed), then shows one frame.
-FAKE_SCREEN = {"account": "me", "password": "mock-pass", "port": 0, "signins": []}
+FAKE_SCREEN = {"account": "me", "password": "mock-pass", "port": 0, "signins": [], "typed": ""}  # typed: keys after signing in
 
 
 def fake_screen_sharing():
@@ -6187,7 +6187,15 @@ def fake_screen_sharing():
                             r, g, b = (236, 236, 238) if bar else (250, 250, 252) if inside else (40 + y // 6, 90 + y // 8, 160)
                             px += bytes([r, g, b, 0])
                     c.sendall(struct.pack(">BxH", 0, 1) + struct.pack(">HHHHi", 0, 0, w, h, 0) + bytes(px))
-                elif kind == 4: exact(c, 7)
+                elif kind == 4:  # a key: what is typed on the lock screen (一键解锁, #1507 a-2), Return as \n
+                    down, _, key = struct.unpack(">BHI", exact(c, 7))
+                    if down and key == 0xff0d: FAKE_SCREEN["typed"] += "\n"
+                    elif down and (0x20 <= key <= 0xff): FAKE_SCREEN["typed"] += chr(key)
+                    elif down and key >= 0x01000000: FAKE_SCREEN["typed"] += chr(key - 0x01000000)
+                    if FAKE_SCREEN["typed"].endswith(FAKE_SCREEN["password"] + "\n"):  # the right password: unlocked
+                        for m in MACHINES:
+                            if m.get("computer", {}).get("desktop") == "locked":
+                                m["computer"] = {**COMPUTER_STATES["ready"], "enabled": True}
                 elif kind == 5: exact(c, 5)
                 elif kind == 6: exact(c, 7); exact(c, struct.unpack(">I", exact(c, 4))[0])
                 else: return
@@ -7345,9 +7353,10 @@ class H(BaseHTTPRequestHandler):
             if "mode" in q:
                 GIT_PULL_STATE.update(behind=28, mode=q["mode"][0], pulls=0)
             return self.send_json(GIT_PULL_STATE)
-        if p == "/mock/screen-password":  # MOCK_SCREEN=fake: the Mac's password changed; and who signed in how
+        if p == "/mock/screen-password":  # MOCK_SCREEN=fake: the Mac's password changed; who signed in how; what was typed
             if "p" in q: FAKE_SCREEN["password"] = q["p"][0]
-            return self.send_json({"signins": FAKE_SCREEN["signins"]})
+            if "clear" in q: FAKE_SCREEN["typed"] = ""
+            return self.send_json({"signins": FAKE_SCREEN["signins"], "typed": FAKE_SCREEN["typed"]})
         if p == "/mock/churn":
             CHURN["rounds"] = 0
             threading.Thread(target=churn, args=(int(q.get("n", ["20"])[0]), int(q.get("ms", ["300"])[0]),
@@ -8240,6 +8249,10 @@ class H(BaseHTTPRequestHandler):
                 if machine["id"] in COMPUTER_JOBS: COMPUTER_JOBS[machine["id"]]["cancelled"] = True
             elif action in ("install", "grant"):
                 COMPUTER_JOBS[machine["id"]] = {"kind": action, "at": time.time(), "started": ago()}
+            elif action == "lock":  # 锁上 (#1507 a-2): locked until unlocked on the screen (GET /mock/unlock)
+                machine["computer"] = {**COMPUTER_STATES["locked"], "enabled": True}
+            elif action == "unlocking":
+                pass
             else:
                 return self.send_json({"error": "unknown action"}, 404)
             return self.send_json(computer_now(machine))

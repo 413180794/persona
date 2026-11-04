@@ -1,3 +1,4 @@
+import LocalAuthentication
 import Security
 import SwiftUI
 
@@ -53,6 +54,30 @@ nonisolated enum ScreenCredentials {
     static func forgetAll() { SecItemDelete(query(nil) as CFDictionary) }
 }
 
+/// 一键解锁 for a Mac on this device (#1507 a-2): off unless turned on here, and only while its sign-in is kept, which
+/// is the Mac account's password the live screen types on its lock screen after Face ID (or the device passcode).
+nonisolated enum ScreenUnlock {
+    private static let key = "screen.oneTapUnlock"
+
+    static func isOn(_ ref: MachineRef) -> Bool {
+        (UserDefaults.standard.stringArray(forKey: key) ?? []).contains(ScreenCredentials.key(ref)) && ScreenCredentials.load(ref) != nil
+    }
+
+    static func set(_ on: Bool, for ref: MachineRef) {
+        var macs = Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
+        if on { macs.insert(ScreenCredentials.key(ref)) } else { macs.remove(ScreenCredentials.key(ref)) }
+        UserDefaults.standard.set(macs.sorted(), forKey: key)
+    }
+
+    /// The owner of this device, by Face ID, Touch ID or the passcode.
+    static func authenticate(_ name: String) async -> Bool {
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "showUnlockWithoutAuth") { return true } // UI tests: no Face ID on the simulator
+        #endif
+        return (try? await LAContext().evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "在「\(name)」的锁屏上输入记住的密码")) ?? false
+    }
+}
+
 /// 忘记屏幕共享密码, next to 看画面 while this device remembers the Mac's sign-in: the live screen asks for it again.
 struct ScreenForgetButton: View {
     let ref: MachineRef
@@ -61,6 +86,7 @@ struct ScreenForgetButton: View {
     var body: some View {
         Button {
             ScreenCredentials.forget(ref)
+            ScreenUnlock.set(false, for: ref)
             kept = false
             Haptics.success()
         } label: {

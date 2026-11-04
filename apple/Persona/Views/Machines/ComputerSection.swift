@@ -14,8 +14,10 @@ struct ComputerSection: View {
     @State private var saving = false
     @State private var asking = false
     @State private var checking = false
-    /// This device remembers the Mac's Screen Sharing sign-in (#1322).
+    /// This device remembers the Mac's Screen Sharing sign-in (#1322), and unlocks it with one tap (#1507 a-2).
     @State private var screenKept = false
+    @State private var oneTap = false
+    @State private var askOneTap = false
     /// The apps always allowed for the assistant here (#1507).
     @State private var apps: [ComputerApp] = []
 
@@ -56,7 +58,20 @@ struct ComputerSection: View {
                 await refresh()
             }
         }
-        .task(id: model.screenOpen == nil) { screenKept = ScreenCredentials.load(ref) != nil } // the drawer may have saved it
+        .task(id: model.screenOpen == nil) { // the drawer may have saved the sign-in, or unlocked the Mac
+            screenKept = ScreenCredentials.load(ref) != nil
+            oneTap = ScreenUnlock.isOn(ref)
+            if model.screenOpen == nil, online, shown.enabled { await refresh() }
+        }
+        .confirmationDialog("打开\(Self.oneTapTitle)？", isPresented: $askOneTap, titleVisibility: .visible) {
+            Button("打开") {
+                ScreenUnlock.set(true, for: ref)
+                oneTap = true
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("这台 Mac 锁屏时，点「一键解锁」并验证面容（或设备密码），就把记住的登录密码输入它的锁屏。解开后它不会自己再锁上，用完点「锁上」。")
+        }
     }
 
     // MARK: State
@@ -94,7 +109,21 @@ struct ComputerSection: View {
             // screen shows the lock screen, where the password is typed (docs/computer-use.md「锁屏」).
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 line("这台 Mac 锁屏了，解锁后才能操控", ok: false)
-                if c.screenSharing {
+                if !c.screenSharing {
+                    Text("在那台 Mac 上解锁；打开它的「屏幕共享」后，也能在这里看画面、远程解锁。")
+                        .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                } else if oneTap {
+                    Text("点「一键解锁」，验证后把记住的密码输入它的锁屏。")
+                        .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: Theme.Space.s) {
+                        Button { Task { await unlockNow() } } label: {
+                            Label("一键解锁", systemImage: Theme.Icon.locked).font(Theme.Font.labelStrong).lineLimit(1)
+                        }
+                        .themedButton(prominent: true)
+                        .accessibilityIdentifier("computer-unlock-now")
+                        look(prominent: false)
+                    }
+                } else {
                     Text("点「解锁」打开它的画面，切到「接管」，在锁屏上输那台 Mac 的登录密码。")
                         .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     Button { model.openScreen(ref) } label: {
@@ -102,10 +131,8 @@ struct ComputerSection: View {
                     }
                     .themedButton(prominent: true)
                     .accessibilityIdentifier("computer-unlock")
-                } else {
-                    Text("在那台 Mac 上解锁；打开它的「屏幕共享」后，也能在这里看画面、远程解锁。")
-                        .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
+                if c.screenSharing, screenKept { unlockRow(locked: true) }
             }
         } else if c.daemon, !c.missingPermissions.isEmpty {
             grantGuide(c, asking: false)
@@ -120,6 +147,7 @@ struct ComputerSection: View {
                 } else {
                     Self.noScreenSharing
                 }
+                if c.screenSharing, screenKept { unlockRow(locked: false) }
                 if !apps.isEmpty { allowedApps }
             }
         } else {
@@ -219,6 +247,48 @@ struct ComputerSection: View {
         guard let api = model.api(ref.group) else { return }
         if let c = try? await api.computer(machine: ref.id) { fresh = c }
         if let a = try? await api.computerApps(machine: ref.id) { apps = a }
+    }
+
+    #if os(macOS)
+    static let oneTapTitle = "在这台 Mac 上一键解锁"
+    #else
+    static let oneTapTitle = "在这台手机上一键解锁"
+    #endif
+
+    /// 一键解锁 on this device (it needs the sign-in kept), and 锁上 while it is on (#1507 a-2).
+    private func unlockRow(locked: Bool) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            Toggle(isOn: Binding(get: { oneTap }, set: { on in
+                if on {
+                    askOneTap = true
+                } else {
+                    ScreenUnlock.set(false, for: ref)
+                    oneTap = false
+                }
+            })) {
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                    Text(Self.oneTapTitle).font(Theme.Font.body).lineLimit(1).minimumScaleFactor(0.8)
+                    Text("锁屏时验证一下，就把记住的密码输入它的锁屏").font(Theme.Font.label).foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityIdentifier("computer-one-tap")
+            if oneTap, !locked {
+                Button { Task { await run("lock") } } label: {
+                    Label("锁上", systemImage: Theme.Icon.locked).font(Theme.Font.labelStrong).lineLimit(1)
+                }
+                .themedButton()
+                .disabled(asking)
+                .accessibilityIdentifier("computer-lock")
+            }
+        }
+        .padding(.top, Theme.Space.xs)
+    }
+
+    /// Face ID (or the passcode), then the live screen signs in and types the kept password on the lock screen.
+    private func unlockNow() async {
+        let name = model.machine(ref)?.name ?? ref.id
+        guard await ScreenUnlock.authenticate(name) else { return }
+        model.openScreen(ref, unlock: true)
     }
 
     /// The apps always allowed here (#1507): each can be taken back, and is asked about again the next time.

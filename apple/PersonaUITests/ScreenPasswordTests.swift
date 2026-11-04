@@ -65,6 +65,64 @@ final class ScreenPasswordTests: XCTestCase {
         close(app)
     }
 
+    /// 一键解锁 and 锁上 (#1507 a-2): signed in once with 记住, 一键解锁 turned on (confirmed); 锁上 locks the Mac, and
+    /// 一键解锁 types the kept password on its lock screen: the mock's Screen Sharing gets it and Return, and unlocks.
+    /// Face ID is skipped on the simulator (-showUnlockWithoutAuth).
+    @MainActor func testOneTapUnlock() throws {
+        guard let hub, ProcessInfo.processInfo.environment["JARVIS_FAKE_SCREEN"] == "1" else {
+            throw XCTSkip("needs the mock's own Screen Sharing: MOCK_SCREEN=fake (JARVIS_FAKE_SCREEN=1)")
+        }
+        continueAfterFailure = false
+        try mock(hub, "/mock/screen-password?p=mock-pass&clear=1")
+        let app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
+        app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "macbook",
+                               "-openScreenFresh", "YES", "-showUnlockWithoutAuth", "YES"]
+        app.launchPinned()
+        let look = app.buttons["computer-screen"].firstMatch
+        XCTAssertTrue(look.waitForExistence(timeout: 30), "no 看画面:\n\(app.debugDescription)")
+        for _ in 0..<6 where !look.isHittable { app.swipeUp() }
+        look.tap()
+        XCTAssertTrue(app.webViews.staticTexts["登录这台 Mac 的屏幕共享"].firstMatch.waitForExistence(timeout: 30))
+        type("mock-pass", in: app)
+        XCTAssertTrue(live(app), "signed in, kept")
+        close(app)
+
+        let oneTap = app.switches["computer-one-tap"].firstMatch
+        XCTAssertTrue(oneTap.waitForExistence(timeout: 10), "一键解锁, once the sign-in is kept:\n\(app.debugDescription)")
+        for _ in 0..<4 where !oneTap.isHittable { app.swipeUp() }
+        oneTap.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        let confirm = app.buttons["打开"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "asked first:\n\(app.debugDescription)")
+        confirm.tap()
+        let lock = app.buttons["computer-lock"].firstMatch
+        XCTAssertTrue(lock.waitForExistence(timeout: 10), "锁上 while it is on")
+        shot(app, "screen-unlock-on")
+        lock.tap()
+        let unlock = app.buttons["computer-unlock-now"].firstMatch
+        XCTAssertTrue(unlock.waitForExistence(timeout: 10), "locked: 一键解锁:\n\(app.debugDescription)")
+        shot(app, "screen-unlock-locked")
+        unlock.tap()
+        XCTAssertTrue(live(app), "signed in by itself")
+        let deadline = Date.now.addingTimeInterval(15)
+        var typed = ""
+        while Date.now < deadline, typed != "mock-pass\n" { typed = try self.typed(hub); usleep(300_000) }
+        XCTAssertEqual(typed, "mock-pass\n", "the kept password and Return on the lock screen")
+        close(app)
+        XCTAssertTrue(lock.waitForExistence(timeout: 15), "unlocked: 锁上 again, not 一键解锁")
+    }
+
+    private func typed(_ hub: String) throws -> String {
+        var out = ""
+        let done = expectation(description: "typed")
+        URLSession.shared.dataTask(with: URL(string: hub + "/mock/screen-password")!) { data, _, _ in
+            out = (data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] })?["typed"] as? String ?? ""
+            done.fulfill()
+        }.resume()
+        wait(for: [done], timeout: 10)
+        return out
+    }
+
     @MainActor private func type(_ password: String, in app: XCUIApplication) {
         let field = app.webViews.secureTextFields["密码"].firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10))

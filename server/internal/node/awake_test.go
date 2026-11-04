@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -121,4 +122,29 @@ func TestAwakeOnThisMac(t *testing.T) {
 		t.Fatal("still held after letting go")
 	}
 	t.Logf("caffeinate %d held PreventUserIdleDisplaySleep, then let go", pid)
+}
+
+// 锁上: the operations' hold goes, then the display sleeps now.
+func TestLockScreen(t *testing.T) {
+	fakeCaffeinate(t)
+	dir := t.TempDir()
+	log := filepath.Join(dir, "pmset")
+	bin := filepath.Join(dir, "pmset.sh")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\necho \"$@\" >> "+log+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := pmsetPath
+	pmsetPath = bin
+	t.Cleanup(func() { pmsetPath = old })
+	awake.operated()
+	if err := lockScreen(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if awake.held() != 0 || strings.TrimSpace(readFile(t, log)) != "displaysleepnow" {
+		t.Fatalf("held %v, pmset %q", awake.held(), readFile(t, log))
+	}
+	installOS = "linux"
+	if lockScreen(context.Background()) == nil {
+		t.Fatal("only a Mac")
+	}
 }

@@ -51,6 +51,8 @@
 	<string>Persona lets Claude read and add calendar events when you ask, for example to check whether you are free on Friday afternoon or to book a meeting.</string>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
 	<string>Persona adds events to your calendar when you ask Claude to, for example to save a meeting it scheduled for you.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Persona asks for Face ID before it types a Mac's remembered password on that Mac's lock screen, when you tap 一键解锁 on the Mac's page.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Persona uses the camera to scan the pairing QR code printed by `personad hub pair`, for example when you first connect to your hub.</string>
 	<key>NSContactsUsageDescription</key>

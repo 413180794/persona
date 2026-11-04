@@ -826,6 +826,11 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	case "computer.cancel":
 		cancelJob()
 		return computerStatus(ctx), nil
+	case "computer.lock": // 锁上 from the app, after a one-tap unlock (awake.go)
+		if err := lockScreen(ctx); err != nil {
+			return nil, err
+		}
+		return computerStatus(ctx), nil
 	case "browser.status": // ego lite on this Mac, asked only while the user has the plugin on (browser.go)
 		return browserStatus(ctx), nil
 	case "browser.install", "browser.open": // background jobs; their state comes back with browser.status
