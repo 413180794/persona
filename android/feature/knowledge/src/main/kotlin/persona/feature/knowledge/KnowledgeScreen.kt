@@ -42,6 +42,7 @@ import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
 import com.mikepenz.markdown.model.State as MarkdownState
 import com.mikepenz.markdown.model.parseMarkdown
+import com.mikepenz.markdown.compose.components.CurrentComponentsBridge
 import persona.core.contracts.AgentState
 import persona.core.contracts.Session
 import persona.core.contracts.api.*
@@ -459,16 +460,17 @@ private fun Note(text: String) {
 @Composable
 private fun KnowledgeMarkdown(text: String) {
     val parsed by produceState<MarkdownState?>(null, text) {
-        value = withContext(Dispatchers.Default) { parseMarkdown(text) }
+        value = withContext(Dispatchers.Default) { parseMarkdown(MathMarkdown.rewrite(text)) }
     }
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     val body = type.body
+    val formulas = rememberMathImages()
     SelectionContainer {
         // The conversation's look (ChatMarkdown, FileMarkdown): the library's own Material styles drew small bullets
         // sitting above the line and headings bigger than the page title.
         parsed?.let {
-            Markdown(it, modifier = Modifier.fillMaxWidth(),
+            Markdown(it, modifier = Modifier.fillMaxWidth(), imageTransformer = formulas,
                 colors = markdownColor(text = palette.ink, codeBackground = palette.sunken, inlineCodeBackground = palette.sunken,
                     dividerColor = palette.line, tableBackground = palette.surface, darkTheme = palette.dark,
                     highlightText = palette.ink, highlightBackground = palette.marker),
@@ -485,6 +487,9 @@ private fun KnowledgeMarkdown(text: String) {
                     unorderedList = { model -> MarkdownBulletList(model.content, model.node, depth = model.listDepth,
                         markerModifier = { Modifier.alignBy(FirstBaseline).padding(end = Tokens.Space.s) },
                         listModifier = { Modifier.weight(1f).alignBy(FirstBaseline) }) },
+                    codeFence = { model ->
+                        MarkdownFence(model.content.substring(model.node.startOffset, model.node.endOffset)) { CurrentComponentsBridge.codeFence(model) }
+                    },
                 ))
         } ?: Text(text, style = body, color = palette.ink)
     }

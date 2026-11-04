@@ -52,7 +52,7 @@ internal fun FileMarkdown(
     header: LazyListScope.() -> Unit = {},
 ) {
     val parsed by produceState<State?>(null, text) {
-        value = withContext(Dispatchers.Default) { parseMarkdown(FileMarkdownText.prepare(text)) }
+        value = withContext(Dispatchers.Default) { parseMarkdown(FileMarkdownText.prepare(MathMarkdown.rewrite(text))) }
     }
     val state = parsed
     if (state == null) {
@@ -63,7 +63,7 @@ internal fun FileMarkdown(
     val open by rememberUpdatedState(onOpenPath)
     val links = rememberFileLinks(parent, base) { open(it) }
     val load by rememberUpdatedState(loadImage)
-    val images = remember(base) { MachineImages(base, emptyMap()) { load(it) } }
+    val images = fileImages(base, emptyMap()) { load(it) }
     val side = pagePadding
     CompositionLocalProvider(LocalUriHandler provides links) {
         Markdown(
@@ -108,19 +108,26 @@ internal fun MarkdownText(
     attachments: Map<String, String> = emptyMap(),
 ) {
     val parsed by produceState<State?>(null, text) {
-        value = withContext(Dispatchers.Default) { parseMarkdown(FileMarkdownText.prepare(text)) }
+        value = withContext(Dispatchers.Default) { parseMarkdown(FileMarkdownText.prepare(MathMarkdown.rewrite(text))) }
     }
     val state = parsed ?: return
     val parent = LocalUriHandler.current
     val open by rememberUpdatedState(onOpenPath)
     val links = rememberFileLinks(parent, base) { open(it) }
     val load by rememberUpdatedState(loadImage)
-    val images = remember(base, attachments) { MachineImages(base, attachments) { load(it) } }
+    val images = fileImages(base, attachments) { load(it) }
     CompositionLocalProvider(LocalUriHandler provides links) {
         Markdown(state = state, colors = fileMarkdownColors(), typography = fileMarkdownTypography(),
             padding = markdownPadding(block = Tokens.Space.m), imageTransformer = images, components = fileMarkdownComponents(),
             modifier = modifier)
     }
+}
+
+/** A file's images from the machine, and its inline formulas drawn in the text's colour. */
+@Composable
+private fun fileImages(base: String, attachments: Map<String, String>, load: suspend (String) -> ByteArray?): ImageTransformer {
+    val machine = remember(base, attachments) { MachineImages(base, attachments, load) }
+    return rememberMathImages(images = machine)
 }
 
 /** Links in a file's Markdown: in-page anchors do nothing, files open in the files pane, web links in the link sheet. */
@@ -163,10 +170,7 @@ private fun fileMarkdownComponents() = markdownComponents(
         markerModifier = { Modifier.alignBy(FirstBaseline).padding(end = Tokens.Space.s) },
         listModifier = { Modifier.weight(1f).alignBy(FirstBaseline) }) },
     codeFence = { model ->
-        val raw = model.content.substring(model.node.startOffset, model.node.endOffset)
-        val lines = raw.lines()
-        val closed = lines.drop(1).lastOrNull()?.trim()?.let { it.startsWith("```") || it.startsWith("~~~") } == true
-        JCodeBlock(lines.drop(1).let { if (closed) it.dropLast(1) else it }.joinToString("\n"), small = true)
+        MarkdownFence(model.content.substring(model.node.startOffset, model.node.endOffset)) { JCodeBlock(it.code, small = true) }
     },
     codeBlock = { model -> JCodeBlock(model.content.substring(model.node.startOffset, model.node.endOffset).trimIndent(), small = true) },
 )

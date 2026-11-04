@@ -60,7 +60,7 @@ internal class ChatMarkdownCache {
     @Synchronized fun cached(id: String, text: String) = entries[id]?.takeIf { it.first == text }?.second
     suspend fun parse(id: String, text: String): MarkdownResult {
         cached(id, text)?.let { return it }
-        val parsed = withContext(Dispatchers.Default) { parseMarkdown(ChatLinks.markdown(text)) }
+        val parsed = withContext(Dispatchers.Default) { parseMarkdown(ChatLinks.markdown(MathMarkdown.rewrite(text))) }
         synchronized(this) { entries[id] = text to parsed }
         return parsed
     }
@@ -98,7 +98,7 @@ private fun ChatMarkdownBody(text: String, id: String, bodyStyle: TextStyle, col
     val uriHandler = remember(outer, open) { if (open == null) outer else PathLinks.handler(outer, open) }
     CompositionLocalProvider(LocalUriHandler provides uriHandler) {
         if (parsed == null) ChatLinkText(text, Modifier.fillMaxWidth(), bodyStyle.copy(color = color))
-        else Markdown(parsed!!, modifier = Modifier.fillMaxWidth(),
+        else Markdown(parsed!!, modifier = Modifier.fillMaxWidth(), imageTransformer = rememberMathImages(color, bodyStyle),
             colors = markdownColor(text = color, codeBackground = palette.sunken,
                 inlineCodeBackground = palette.sunken, dividerColor = palette.line,
                 tableBackground = palette.surface, darkTheme = palette.dark,
@@ -117,10 +117,9 @@ private fun ChatMarkdownBody(text: String, id: String, bodyStyle: TextStyle, col
                     markerModifier = { Modifier.alignBy(FirstBaseline).padding(end = 8.dp) },
                     listModifier = { Modifier.weight(1f).alignBy(FirstBaseline) }) },
                 codeFence = { model ->
-                    val raw = model.content.substring(model.node.startOffset, model.node.endOffset)
-                    val lines = raw.lines()
-                    val code = lines.drop(1).let { if (it.lastOrNull()?.trim()?.startsWith("```") == true || it.lastOrNull()?.trim()?.startsWith("~~~") == true) it.dropLast(1) else it }.joinToString("\n")
-                    CodeText(code, lines.firstOrNull()?.trim()?.trimStart('`', '~').orEmpty())
+                    MarkdownFence(model.content.substring(model.node.startOffset, model.node.endOffset), color, bodyStyle) {
+                        CodeText(it.code, it.language)
+                    }
                 },
                 codeBlock = { model -> CodeText(model.content.substring(model.node.startOffset, model.node.endOffset).trimIndent()) },
             ))
