@@ -84,6 +84,29 @@ export function isLive(s: Session) {
   return stateOf(s) !== "offline";
 }
 
+/** Why it waits for you, in its host's words (a botmux attention), while it needs you; a reason left over from before
+ *  (offline, seen) stays out. */
+export function attentionReason(s: Session): string | undefined {
+  const reason = s.attention_reason?.trim();
+  return reason && stateOf(s) === "needs_you" ? reason : undefined;
+}
+
+/** The line a list row shows for it: why it waits for you when its host says so, else its last words (iOS listPreview). */
+export function sessionPreview(s: Session): string {
+  return attentionReason(s) ?? s.last_text ?? "";
+}
+
+/** 在飞书打开: the session's place outside Persona, a web (https) link only (iOS externalLink). */
+export function externalLink(s?: Pick<Session, "external_url">): string | undefined {
+  const raw = s?.external_url?.trim();
+  if (!raw) return undefined;
+  try {
+    return new URL(raw).protocol === "https:" ? raw : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function sessionTitle(s: Pick<Session, "title" | "cwd">): string {
   return s.title?.trim() || baseName(s.cwd) || "未命名会话";
 }

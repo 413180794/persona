@@ -4,7 +4,7 @@
 // each core now (Linux), the system, the launchers. A Mac the hub's plugin cua is on for gets 操控电脑 after its agents. The metrics refresh only while the page is visible.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, enc, errorText, isAbort } from "../../lib/api";
-import { ago, sessionTitle, stateOf } from "../../lib/format";
+import { ago, sessionPreview, sessionTitle, stateOf } from "../../lib/format";
 import {
   agentMeta,
   agentsBySpace,
@@ -386,6 +386,7 @@ function AgentRow({ s }: { s: Session }) {
   const st = stateOf(s);
   const to = { name: "session" as const, mid: s.machine_id, sid: s.session_id };
   const meta = agentMeta(s);
+  const preview = sessionPreview(s);
   return (
     <a href={href(to)} onClick={(e) => onLinkClick(e, to)} className="group flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-hover">
       <span className="flex size-4 shrink-0 items-center justify-center">
@@ -396,10 +397,10 @@ function AgentRow({ s }: { s: Session }) {
           <span className="truncate text-[13px] font-medium text-ink">{sessionTitle(s)}</span>
           {meta && <span className="hidden shrink-0 font-mono text-[11px] text-ink-3 sm:inline">{meta}</span>}
         </span>
-        {(s.last_text || meta) && (
+        {(preview || meta) && (
           <span className="mt-0.5 block truncate text-[12px] text-ink-3">
-            {meta && <span className="font-mono text-[11px] sm:hidden">{meta}{s.last_text ? " · " : ""}</span>}
-            {s.last_text}
+            {meta && <span className="font-mono text-[11px] sm:hidden">{meta}{preview ? " · " : ""}</span>}
+            {preview}
           </span>
         )}
       </span>

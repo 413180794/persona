@@ -130,6 +130,10 @@ export interface Session {
   todo?: { id: string; title: string };
   /** Works (or worked) for a quiet task (#1731): not in the global badge; the main conversation tells about it. */
   quiet?: boolean;
+  /** Why it waits for the user, in its host's words (a botmux attention's reason); only while it needs you (docs/engines.md「botmux」). */
+  attention_reason?: string;
+  /** Where it lives outside Persona (a botmux session's Feishu topic): 在飞书打开. */
+  external_url?: string;
 }
 
 /** A /loop: Claude re-runs a prompt on its own, scheduling each wakeup ("wakeup") or by cron ("cron"). */

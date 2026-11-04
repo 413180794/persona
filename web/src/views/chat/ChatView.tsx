@@ -1,8 +1,9 @@
 // One conversation: an agent in herdr on one of your computers, or a Persona assistant conversation.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, attachSession, errorText, sessionPath } from "../../lib/api";
-import { ago, resumeCommand, sessionCan, sessionDeletable, sessionMenuActions, sourceSubtitle, sessionTitle, shortPath, stateOf, tabLabel, uuid } from "../../lib/format";
+import { ago, attentionReason, externalLink, resumeCommand, sessionCan, sessionDeletable, sessionMenuActions, sourceSubtitle, sessionTitle, shortPath, stateOf, tabLabel, uuid } from "../../lib/format";
 import { navigate } from "../../lib/router";
+import { openLink } from "../../lib/links";
 import { togglePanel, usePanel } from "../../lib/panel";
 import { machineWithHub } from "../../lib/mesh";
 import { hasModes, isMuted, toggleMute } from "../../lib/session-actions";
@@ -530,6 +531,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         {interactions.map((ix) => (
           <InteractionCard key={ix.id} ix={ix} />
         ))}
+        {session && !assistant && <AttentionNote session={session} />}
         {session && queued.length > 0 && <QueueStrip session={session} draftKey={draftKey} canEdit={canCompose && !assistant} />}
         <Composer
           draftKey={draftKey}
@@ -589,6 +591,26 @@ function ComposerFooter({ session, assistant }: { session: Session; assistant?: 
       {assistant && <AssistantLauncherChip session={session} />}
       <span className="min-w-0 truncate" title={[sourceSubtitle(session), session.cwd].filter(Boolean).join(" · ")}>{parts.join(" · ")}</span>
     </span>
+  );
+}
+
+/** Above the composer while a session needs you and its host says why (a botmux attention, iOS AttentionNote):
+ *  the reason and 在飞书打开 its topic. */
+function AttentionNote({ session }: { session: Session }) {
+  const reason = attentionReason(session);
+  if (!reason) return null;
+  const link = externalLink(session);
+  return (
+    <div role="status" data-testid="chat-attention" className="flex items-start gap-2 rounded-[12px] bg-red-tint px-3 py-2 text-[12.5px]" style={{ animation: "fade-up 200ms ease-out both" }}>
+      <span className="flex h-[18px] shrink-0 items-center"><StatusDot state="needs_you" size={7} /></span>
+      <span className="line-clamp-3 min-w-0 flex-1 text-ink-2">{reason}</span>
+      {link && (
+        <a href={link} target="_blank" rel="noopener noreferrer" className="flex shrink-0 items-center gap-1 whitespace-nowrap font-medium text-accent hover:underline">
+          <Icon name="external" size={12} />
+          在飞书打开
+        </a>
+      )}
+    </div>
   );
 }
 
@@ -664,6 +686,7 @@ function Header({
   const openGit = () => session && togglePanel({ kind: "git", mid: session.machine_id, sid: session.session_id, cwd: session.cwd });
   const othersNeed = others.some((s) => stateOf(s) === "needs_you");
   const assistantItems = useAssistantMenu(assistant ? session : undefined);
+  const feishu = externalLink(session);
 
   const items: MenuItem[] = session
     ? [
@@ -712,6 +735,7 @@ function Header({
         ...(showTerminal ? [{ key: "terminal", label: "终端", icon: "terminal" as const, checked: here(panel, "terminal"), onSelect: openTerminal }] : []),
         ...(showFiles ? [{ key: "files", label: "文件", icon: "folder" as const, checked: here(panel, "files"), onSelect: openFiles }, { key: "git", label: "Git", icon: "git" as const, checked: here(panel, "git"), onSelect: openGit }] : []),
         ...(allowed.includes("stop") ? [{ key: "stop", label: "中断", icon: "stop" as const, hint: "Esc", onSelect: onInterrupt }] : []),
+        ...(feishu ? [{ key: "feishu", label: "在飞书打开", icon: "external" as const, onSelect: () => openLink(feishu) }] : []),
         { key: "info", label: "会话信息", icon: "info", onSelect: () => setDialog("info") },
         ...(!main && sessionCan(session, "send") && (session.assistant || !session.source_kind) ? [{ key: "rename", label: "重命名…", icon: "pencil" as const, onSelect: () => setDialog("rename") }] : []),
         ...(!assistant && session.space_id && !session.source_kind ? [{ key: "space", label: "重命名空间…", icon: "folder" as const, onSelect: () => setDialog("space") }] : []),

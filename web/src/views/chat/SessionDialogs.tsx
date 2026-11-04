@@ -1,7 +1,8 @@
 // The chat's ⋯ menu dialogs: session info, rename (the agent / its space), delete, and the run-mode chips under the composer.
 import { useEffect, useState } from "react";
 import { api, enc, errorText, sessionPath } from "../../lib/api";
-import { ago, resumeCommand, sessionTitle, shortPath } from "../../lib/format";
+import { ago, externalLink, resumeCommand, sessionTitle, shortPath } from "../../lib/format";
+import { openLink } from "../../lib/links";
 import { EFFORTS, effortTitle, modeTitle, renameBody, SWITCHABLE_MODES } from "../../lib/session-actions";
 import { href, navigate } from "../../lib/router";
 import { dropSession, refresh, refreshAssistant, upsertSession } from "../../lib/store";
@@ -65,6 +66,11 @@ export function SessionInfoDialog({ session, machineName, open, onClose }: { ses
           <Button tone="quiet" icon="copy" onClick={() => copyText(session.session_id)}>
             拷贝会话 ID
           </Button>
+          {externalLink(session) && (
+            <Button tone="secondary" icon="external" onClick={() => openLink(externalLink(session)!)}>
+              在飞书打开
+            </Button>
+          )}
           {!session.assistant && (
             <Button tone="secondary" icon="terminal" onClick={() => copyText(resumeCommand(session))}>
               拷贝恢复命令

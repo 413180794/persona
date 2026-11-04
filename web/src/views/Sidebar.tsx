@@ -9,7 +9,7 @@ import { api, errorText, setToken } from "../lib/api";
 import { useInboxBadge } from "../lib/inbox";
 import { useLarkHome } from "../lib/lark-chats";
 import { machineWithHub } from "../lib/mesh";
-import { ago, baseName, sessionDeletable, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
+import { ago, baseName, sessionDeletable, sessionPreview, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
 import { agentKey, isSpacePinned, pinnedSessions } from "../lib/pins";
 import { NAV_PAGES, otherConversations, pluginNavKey, sidebarActiveKey } from "../lib/persona-nav";
 import { usePluginSlot } from "../lib/plugin-slots";
@@ -743,6 +743,7 @@ function NavRow({ k, reg, hover, active, to, go, icon, label, badge, badgeTone, 
 function SessionRow({ s, k, reg, hover, active, to, go, tab, label, hint, showState = true, showTodoTag, onMenu, onContextMenu }: { s: Session; k: string; reg: RegFn; hover: (k: string | null) => void; active: boolean; to: Route; go: GoFn; tab?: boolean; label?: string; hint?: string; showState?: boolean; showTodoTag?: boolean; onMenu?: RowMenuFn; onContextMenu?: (el: HTMLElement) => void }) {
   const st = stateOf(s);
   const t = [sourceSubtitle(s), hint ?? (tab ? tabLabel(s) : "")].filter(Boolean).join(" · ");
+  const preview = sessionPreview(s);
   const row = useRef<HTMLAnchorElement | null>(null);
   const link = (
     <a
@@ -766,7 +767,7 @@ function SessionRow({ s, k, reg, hover, active, to, go, tab, label, hint, showSt
       onFocus={() => hover(k)}
       onBlur={() => hover(null)}
       aria-current={active ? "page" : undefined}
-      title={`${sessionTitle(s)}${sourceSubtitle(s) ? `\n${sourceSubtitle(s)}` : ""}${hint ? `\n${hint}` : ""}${s.todo ? `\n待办：${s.todo.title}` : ""}${s.last_text ? `\n${s.last_text}` : ""}`}
+      title={`${sessionTitle(s)}${sourceSubtitle(s) ? `\n${sourceSubtitle(s)}` : ""}${hint ? `\n${hint}` : ""}${s.todo ? `\n待办：${s.todo.title}` : ""}${preview ? `\n${preview}` : ""}`}
       className="relative z-10 flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] transition-transform duration-150 active:scale-[0.98]"
     >
       <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusDot state={st} size={7} /> : <Icon name="chat" size={12} className="text-ink-3" />}</span>

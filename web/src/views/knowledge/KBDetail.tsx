@@ -3,7 +3,7 @@
 // a chat's last 7 days and the folder (docs/ios.md 信息架构 知识库). 打标 in the header.
 import { useEffect, useState } from "react";
 import { api, enc, errorText, isAbort } from "../../lib/api";
-import { ago, sessionTitle, shortPath, stateOf, tabLabel } from "../../lib/format";
+import { ago, sessionPreview, sessionTitle, shortPath, stateOf, tabLabel } from "../../lib/format";
 import {
   agentPreset,
   askPersonaText,
@@ -483,6 +483,7 @@ function Agents({ agents }: { agents: Session[] }) {
         {live.map((s) => {
           const to = { name: "session" as const, mid: s.machine_id, sid: s.session_id };
           const st = stateOf(s);
+          const preview = sessionPreview(s);
           return (
             <a key={`${s.machine_id}/${s.session_id}`} href={href(to)} onClick={(ev) => onLinkClick(ev, to)} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-hover">
               <span className="flex w-3 shrink-0 justify-center">
@@ -492,7 +493,7 @@ function Agents({ agents }: { agents: Session[] }) {
                 <span className="block truncate text-[13px] font-medium text-ink">{sessionTitle(s)}</span>
                 <span className="block truncate text-[11.5px] text-ink-3">
                   {[machineWithHub(s.machine_id, machines), s.space_name, tabLabel(s)].filter(Boolean).join(" › ")}
-                  {s.last_text ? ` · ${s.last_text}` : ""}
+                  {preview ? ` · ${preview}` : ""}
                 </span>
               </span>
               <StatePill state={st} />
