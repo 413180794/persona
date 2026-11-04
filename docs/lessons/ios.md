@@ -724,3 +724,9 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
   - 自己编过的值放进 `percentEncodedFragment` / `percentEncodedQuery`，没编过的才用 `fragment` / `queryItems`，两样不要叠。
   - 只放过 RFC 3986 的非保留字符（`A–Z a–z 0–9 - . _ ~`），`+` 要编（页面的 URLSearchParams 把裸的 `+` 读成空格）。
   - 测试用和真的一样形状的 token（`jd_…`），并按页面的读法读回来比对。
+
+## 后台执行的 Intent 参数一律声明为可选（2026-11-04，#1144）
+
+- 后台执行的 intent（实时活动按钮、快捷指令、控制中心控件）参数若声明为非可选（如 `@Parameter var interactionID: String`），系统在后台拉起 App 进程执行 `perform()` 时如果由于跨构建升级、扩展与 App 元数据不一致或系统未还原参数，Swift AppIntents 会在读取 `wrappedValue` 时直接触发断言失败（`EXC_BREAKPOINT (SIGTRAP) SIGNAL 5`），导致 App 退出崩溃。
+- 后台 intent 参数一律声明为可选（`@Parameter var interactionID: String?`），提供无参 `init()`，并在 `perform()` 中先判空安全返回，切勿在锁屏或后台按钮上追问参数或抛出未捕获错误。
+

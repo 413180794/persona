@@ -1,5 +1,6 @@
 import AppIntents
 import Foundation
+import OSLog
 
 // The buttons on the Fleet activity (docs/live-activity.md). LiveActivityIntent runs `perform` in the app's process
 // (launched in the background if needed), so the extension only needs the types to draw `Button(intent:)`; the bodies
@@ -10,13 +11,17 @@ struct AllowPermissionIntent: LiveActivityIntent {
     nonisolated static let isDiscoverable = false
     nonisolated static var authenticationPolicy: IntentAuthenticationPolicy { .requiresAuthentication }
 
-    @Parameter(title: "交互") var interactionID: String
+    @Parameter(title: "交互") var interactionID: String?
 
     nonisolated init() {}
-    nonisolated init(interactionID: String) { self.interactionID = interactionID }
+    nonisolated init(interactionID: String?) { self.interactionID = interactionID }
 
     nonisolated func perform() async throws -> some IntentResult {
         #if !WIDGET_EXTENSION
+        guard let interactionID, !interactionID.isEmpty else {
+            Logger(subsystem: "jarvis", category: "live-activity").warning("AllowPermissionIntent performed without interactionID")
+            return .result()
+        }
         await FleetActions.run(.allow, interactionID)
         #endif
         return .result()
@@ -28,13 +33,17 @@ struct DenyPermissionIntent: LiveActivityIntent {
     nonisolated static let isDiscoverable = false
     nonisolated static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
 
-    @Parameter(title: "交互") var interactionID: String
+    @Parameter(title: "交互") var interactionID: String?
 
     nonisolated init() {}
-    nonisolated init(interactionID: String) { self.interactionID = interactionID }
+    nonisolated init(interactionID: String?) { self.interactionID = interactionID }
 
     nonisolated func perform() async throws -> some IntentResult {
         #if !WIDGET_EXTENSION
+        guard let interactionID, !interactionID.isEmpty else {
+            Logger(subsystem: "jarvis", category: "live-activity").warning("DenyPermissionIntent performed without interactionID")
+            return .result()
+        }
         await FleetActions.run(.deny, interactionID)
         #endif
         return .result()
@@ -48,13 +57,17 @@ struct ApprovePlanIntent: LiveActivityIntent {
     nonisolated static let isDiscoverable = false
     nonisolated static var authenticationPolicy: IntentAuthenticationPolicy { .requiresAuthentication }
 
-    @Parameter(title: "交互") var interactionID: String
+    @Parameter(title: "交互") var interactionID: String?
 
     nonisolated init() {}
-    nonisolated init(interactionID: String) { self.interactionID = interactionID }
+    nonisolated init(interactionID: String?) { self.interactionID = interactionID }
 
     nonisolated func perform() async throws -> some IntentResult {
         #if !WIDGET_EXTENSION
+        guard let interactionID, !interactionID.isEmpty else {
+            Logger(subsystem: "jarvis", category: "live-activity").warning("ApprovePlanIntent performed without interactionID")
+            return .result()
+        }
         await FleetActions.run(.approvePlan, interactionID)
         #endif
         return .result()

@@ -7,6 +7,7 @@ import dagger.hilt.components.SingletonComponent
 import persona.core.contracts.GroupKeys
 import persona.core.contracts.PluginUiEvent
 import persona.core.contracts.api.*
+import persona.core.hub.HttpConnectorsManagement
 import persona.core.hub.HttpMachineManagement
 import persona.core.hub.HttpModelConfiguration
 import persona.core.hub.HttpPluginManagement
@@ -97,5 +98,23 @@ object MachineManagementModule {
         override suspend fun install(preview: PluginPreview) = api().install(preview)
         override suspend fun upgrade(id: String, preview: PluginPreview) = api().upgrade(id, preview)
         override suspend fun uninstall(id: String, keepData: Boolean) = api().uninstall(id, keepData)
+    }
+
+    // A hub-level page: the selected group's connectors (docs/connectors.md).
+    @Provides @Singleton fun connectors(runtime: ConnectionRuntime): ConnectorsManagement = object : ConnectorsManagement {
+        private fun api() = HttpConnectorsManagement(runtime.connection())
+        override suspend fun connectors(all: Boolean) = api().connectors(all)
+        override suspend fun setConnectorEnabled(id: String, enabled: Boolean) = api().setConnectorEnabled(id, enabled)
+        override suspend fun setConnectorFeed(id: String, feed: String, on: Boolean) = api().setConnectorFeed(id, feed, on)
+        override suspend fun deleteConnectorData(id: String) = api().deleteConnectorData(id)
+        override suspend fun deleteConnectorArchive(id: String) = api().deleteConnectorArchive(id)
+        override suspend fun mailAccounts() = api().mailAccounts()
+        override suspend fun addMailAccount(req: AddMailAccountRequest) = api().addMailAccount(req)
+        override suspend fun deleteMailAccount(id: String) = api().deleteMailAccount(id)
+        override suspend fun testMailAccount(id: String) = api().testMailAccount(id)
+        override suspend fun googleSignInStart(loginHint: String?) = api().googleSignInStart(loginHint)
+        override suspend fun googleSignInFinish(finish: GoogleFinish) = api().googleSignInFinish(finish)
+        override suspend fun larkStatus() = api().larkStatus()
+        override suspend fun larkAccounts() = api().larkAccounts()
     }
 }

@@ -8,5 +8,16 @@
     <application>
         <activity android:name="persona.feature.settings.PairingScanActivity" android:exported="false" android:theme="@android:style/Theme.Material.NoActionBar" />
         <activity android:name="persona.feature.settings.InstallResultActivity" android:exported="false" android:excludeFromRecents="true" android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+        <activity
+            android:name="persona.feature.settings.OAuthRedirectActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="${googleOAuthScheme}" android:path="/oauth2redirect" />
+            </intent-filter>
+        </activity>
     </application>
 </manifest>

@@ -23,6 +23,8 @@ private val pages = mapOf(
     "machines" to ResolvedRoute(AppTab.Agents, MachinesRoute),
     "knowledge" to ResolvedRoute(AppTab.Jarvis, KnowledgeRoute),
     "phone" to ResolvedRoute(AppTab.Settings, PhoneToolsRoute),
+    "mail" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Mail)),
+    "feishu" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Feishu)),
     "catalog" to ResolvedRoute(AppTab.Settings, ComponentCatalogRoute),
     "voice" to ResolvedRoute(AppTab.Jarvis, persona.core.navigation.VoiceRoute("voice", "语音")),
 )

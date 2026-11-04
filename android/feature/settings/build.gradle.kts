@@ -8,6 +8,9 @@ android {
     namespace = "persona.feature.settings"
     // Plugins' views are rendered on the JVM (Robolectric's native graphics) for their pixel checks and screenshots.
     testOptions { unitTests { isIncludeAndroidResources = true } }
+    defaultConfig {
+        manifestPlaceholders["googleOAuthScheme"] = "persona.oauth.unset"
+    }
 }
 
 dependencies {

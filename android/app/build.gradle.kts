@@ -13,6 +13,13 @@ val appId = providers.gradleProperty("personaApplicationId")
 val appLabel = providers.gradleProperty("personaAppLabel")
     .orElse(providers.gradleProperty("jarvisAppLabel"))
     .getOrElse("Persona")
+// Gmail's Google sign-in: the redirect scheme of the hub's Google OAuth client (docs/mail.md「Android」).
+val googleOAuthScheme = providers.gradleProperty("personaGoogleOAuthScheme")
+    .orElse(providers.gradleProperty("jarvisGoogleOAuthScheme"))
+    .orNull?.takeIf { it.isNotBlank() }
+    ?: System.getenv("PERSONA_GOOGLE_OAUTH_SCHEME")?.takeIf { it.isNotBlank() }
+    ?: System.getenv("JARVIS_GOOGLE_OAUTH_SCHEME")?.takeIf { it.isNotBlank() }
+    ?: "persona.oauth.unset"
 
 android {
     namespace = "persona.android"
@@ -24,6 +31,7 @@ android {
         versionCode = 1
         versionName = "0.1"
         manifestPlaceholders["appLabel"] = appLabel
+        manifestPlaceholders["googleOAuthScheme"] = googleOAuthScheme
     }
     buildTypes {
         release {

@@ -25,4 +25,30 @@ struct FleetIntentsTests {
         #expect(DenyPermissionIntent.isDiscoverable == false)
         #expect(ApprovePlanIntent.isDiscoverable == false)
     }
+
+    /// Background intent execution must not crash when interactionID parameter fails to restore.
+    @Test func missingInteractionDoesNotCrash() async throws {
+        var allow = AllowPermissionIntent()
+        #expect(allow.interactionID == nil)
+        _ = try await allow.perform()
+
+        var deny = DenyPermissionIntent()
+        #expect(deny.interactionID == nil)
+        _ = try await deny.perform()
+
+        var plan = ApprovePlanIntent()
+        #expect(plan.interactionID == nil)
+        _ = try await plan.perform()
+    }
+
+    @Test func explicitInteractionIsPreserved() {
+        let allow = AllowPermissionIntent(interactionID: "ix_123")
+        #expect(allow.interactionID == "ix_123")
+
+        let deny = DenyPermissionIntent(interactionID: "ix_456")
+        #expect(deny.interactionID == "ix_456")
+
+        let plan = ApprovePlanIntent(interactionID: "ix_789")
+        #expect(plan.interactionID == "ix_789")
+    }
 }

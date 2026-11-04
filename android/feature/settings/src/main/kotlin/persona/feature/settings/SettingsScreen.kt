@@ -98,6 +98,19 @@ private fun SettingsContent(
     val pluginService = services.plugins.takeUnless { services.demo }
     val pluginsAvailable by remember(pluginService) { pluginService?.available ?: kotlinx.coroutines.flow.flowOf(false) }.collectAsState(false)
     var pluginSummary by remember { mutableStateOf<String?>(null) }
+    val connectorsService = services.connectors.takeUnless { services.demo }
+    var mailAccounts by remember { mutableStateOf<List<MailAccount>?>(null) }
+    var larkStatus by remember { mutableStateOf<LarkStatus?>(null) }
+    var hubConnectors by remember { mutableStateOf<List<HubConnector>>(emptyList()) }
+    val phoneOn = remember(page) {
+        listOf(
+            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.READ_CALENDAR,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+        ).count {
+            androidx.core.content.ContextCompat.checkSelfPermission(context, it) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+    }
     // The row's count, read again whenever the settings list is shown or the hub reconnects.
     LaunchedEffect(pluginService, pluginsAvailable, page, connection) {
         if (pluginService == null || !pluginsAvailable || page != "settings" || connection != ConnectionState.Online) return@LaunchedEffect
@@ -111,7 +124,18 @@ private fun SettingsContent(
     LaunchedEffect(slots, page, connection) {
         if (slots != null && page == "settings" && connection == ConnectionState.Online) slots.load()
     }
-    val back: () -> Unit = onBack ?: { page = "settings" }
+    LaunchedEffect(connectorsService, page, connection) {
+        if (connectorsService == null || page != "settings" || connection != ConnectionState.Online) return@LaunchedEffect
+        try {
+            mailAccounts = runCatching { connectorsService.mailAccounts() }.getOrNull()
+            larkStatus = runCatching { connectorsService.larkStatus() }.getOrNull()
+            hubConnectors = runCatching { connectorsService.connectors(all = true) }.getOrDefault(emptyList())
+        } catch (_: Exception) {}
+    }
+    val back: () -> Unit = onBack ?: {
+        if (page == "mail-add") page = "mail"
+        else page = "settings"
+    }
     BackHandler(page != "settings" && onBack == null, onBack = back)
     val detailKey = LocalDetailKey.current
     fun open(destination: SettingsPage) {
@@ -171,7 +195,14 @@ private fun SettingsContent(
             item { Action("管理权限") { PhoneReadiness.open(context, listOf(appDetails)) } }
             item { deviceFeedback() }
         }
-        else -> JListPage(title = "设置") {
+        "mail" -> MailAccountsPage(connectorsService, onBack = back, onAdd = { page = "mail-add" })
+        "mail-add" -> AddMailAccountPage(connectorsService, onBack = { page = "mail" }, onAdded = { page = "mail" })
+        "feishu" -> FeishuConnectorPage(connectorsService, onBack = back, onAgentModel = {
+            onNavigate?.invoke(persona.core.navigation.ModelPurposeRoute("lark.agent")) ?: run { purpose = "lark.agent" }
+        })
+        else -> if (page.startsWith("connector/")) {
+            HubConnectorPage(connectorsService, connectorId = page.removePrefix("connector/"), onBack = back)
+        } else JListPage(title = "设置") {
             if (services.demo) {
                 item { JNotice("示例数据，不会连接 hub 或安装更新", title = "体验模式") }
                 onExitDemo?.let { exit ->
@@ -213,8 +244,64 @@ private fun SettingsContent(
             }
             item { JSectionHeader("电脑") }
             item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ClaudeCode), title = "Claude Code 设置", leadingIcon = PhIcons.TerminalWindow, subtitle = "各台电脑上的常用选项，可以一起改", onClick = { open(SettingsPage.ClaudeCode) }) } }
-            item { JSectionHeader("交给 AI 的手机数据") }
-            item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.PhoneData), title = "手机数据", leadingIcon = PhIcons.AddressBook, subtitle = "通讯录、日历、照片、位置和剪贴板", onClick = { if (onOpen == null && onPhoneData != null) onPhoneData() else open(SettingsPage.PhoneData) }) } }
+            item { JSectionHeader("连接器") }
+            val extraHubConnectors = hubConnectors.filter { it.id != "mail" && it.id != "lark" }
+            val connectorRowCount = 3 + extraHubConnectors.size
+            item {
+                JGroupItem(GroupPosition.of(0, connectorRowCount)) {
+                    JRow(
+                        selected = detailKey == SettingsPageRoute(SettingsPage.PhoneData),
+                        title = "这台手机",
+                        leadingIcon = PhIcons.DeviceMobile,
+                        subtitle = "通讯录、日历、照片、位置和剪贴板",
+                        value = ConnectorText.device(phoneOn),
+                        onClick = { if (onOpen == null && onPhoneData != null) onPhoneData() else open(SettingsPage.PhoneData) },
+                    )
+                }
+            }
+            item {
+                JGroupItem(GroupPosition.of(1, connectorRowCount)) {
+                    JRow(
+                        selected = detailKey == SettingsPageRoute(SettingsPage.Mail),
+                        title = "邮箱",
+                        leadingIcon = PhIcons.EnvelopeSimple,
+                        subtitle = "Gmail、飞书邮箱和其他 IMAP",
+                        value = ConnectorText.mail(mailAccounts),
+                        onClick = { open(SettingsPage.Mail) },
+                    )
+                }
+            }
+            item {
+                JGroupItem(GroupPosition.of(2, connectorRowCount)) {
+                    JRow(
+                        selected = detailKey == SettingsPageRoute(SettingsPage.Feishu),
+                        title = "飞书",
+                        leadingIcon = PhIcons.ChatCircleDots,
+                        subtitle = "lark-connector 连接状态与账号",
+                        value = ConnectorText.lark(larkStatus),
+                        onClick = { open(SettingsPage.Feishu) },
+                    )
+                }
+            }
+            extraHubConnectors.forEachIndexed { i, c ->
+                item {
+                    JGroupItem(GroupPosition.of(3 + i, connectorRowCount)) {
+                        JRow(
+                            title = c.name,
+                            leadingIcon = PhIcons.PlugsConnected,
+                            subtitle = listOfNotNull(c.account, c.via).joinToString(" · ").ifEmpty { ConnectorText.state(c) },
+                            value = ConnectorText.summary(c),
+                            onClick = { page = "connector/${c.id}" },
+                        )
+                    }
+                }
+            }
+            item {
+                SettingsCaption(
+                    "Persona 能读、能替你操作的数据来源：助手、AI 分身和 Agent 通过它们查日程、读消息、发邮件；替你出面的操作都会先问你。",
+                    Modifier.padding(horizontal = pagePadding, vertical = Tokens.Space.s),
+                )
+            }
             item { JSectionHeader("外观") }
             item { JGroupItem(GroupPosition.of(0, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Persona), title = "形象", leadingIcon = PhIcons.Robot, value = LocalPersonaDesign.current.title, onClick = { open(SettingsPage.Persona) }) } }
             item { JGroupItem(GroupPosition.of(1, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Appearance), title = "界面风格", leadingIcon = PhIcons.SquaresFour, value = PersonaTheme.style.label, onClick = { open(SettingsPage.Appearance) }) } }

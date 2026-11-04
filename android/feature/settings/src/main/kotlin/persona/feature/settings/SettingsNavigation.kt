@@ -18,6 +18,8 @@ fun SettingsPage.toInitialPage(): String = when (this) {
     SettingsPage.Hubs -> "hubs"
     SettingsPage.Persona -> "persona"
     SettingsPage.Plugins -> "plugins"
+    SettingsPage.Mail -> "mail"
+    SettingsPage.Feishu -> "feishu"
 }
 
 /** The root and unknown page names have no detail destination. */
