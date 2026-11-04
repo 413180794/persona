@@ -291,6 +291,8 @@ internal fun SessionFiles.inGroup(names: GroupNames): SessionFiles {
         override suspend fun log(machineId: String, cwd: String, skip: Int, limit: Int) = source.log(names.rawMachine(machineId), cwd, skip, limit)
         override suspend fun show(machineId: String, cwd: String, hash: String) = source.show(names.rawMachine(machineId), cwd, hash)
         override suspend fun stat(machineId: String, cwd: String, paths: List<String>) = source.stat(names.rawMachine(machineId), cwd, paths)
+        override suspend fun download(machineId: String, cwd: String, path: String, into: java.io.File) =
+            source.download(names.rawMachine(machineId), cwd, path, into)
     }
 }
 

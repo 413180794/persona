@@ -118,6 +118,7 @@ private fun FileBody(file: SessionFileContent, rendered: Boolean, padding: Paddi
             FileImage(file, Modifier.weight(1f))
         }
         file.data != null && mime.substringBefore(';').trim() == "application/pdf" -> PdfPages(file, padding, header)
+        AudioFiles.isAudio(file) -> AudioFile(file, controller::download, padding, header)
         else -> LazyColumn(contentPadding = padding) {
             header()
             item { JEmptyState("无法预览", "${mime.ifEmpty { "二进制文件" }}，${fileSize(file.size)}。可以插入路径或分享。") }

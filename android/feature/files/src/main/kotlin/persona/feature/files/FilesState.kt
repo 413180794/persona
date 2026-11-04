@@ -190,6 +190,9 @@ class FilesController(
     /** Reloads the page shown now. */
     fun reload() = show(state.value.stack, fresh = true)
 
+    /** A file's whole bytes into [into] (audio plays from a local copy); see [SessionFiles.download]. */
+    suspend fun download(path: String, into: java.io.File): Long = api.download(machineId, cwd, path, into)
+
     /**
      * Back: closes the page on top (to the conversation when it was opened from there), then goes up to the
      * breadcrumb's top. False when there is nothing left to go back to here: the caller returns to the conversation.

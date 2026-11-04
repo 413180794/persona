@@ -17,6 +17,12 @@ interface SessionFiles {
      */
     suspend fun stat(machineId: String, cwd: String, paths: List<String>): SessionPathStats =
         throw UnsupportedOperationException("stat")
+    /**
+     * A file's whole bytes (file/download, not capped at the 2 MB of [file]) written to [into]; the byte count.
+     * Transports that can't stream say so with [UnsupportedOperationException].
+     */
+    suspend fun download(machineId: String, cwd: String, path: String, into: java.io.File): Long =
+        throw UnsupportedOperationException("download")
 }
 
 /** `GET /api/v1/machines/{id}/stat`: each path as asked, `file`, `dir`, `denied` (macOS keeps it from the node) or `missing`. */

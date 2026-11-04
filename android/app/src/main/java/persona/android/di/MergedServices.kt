@@ -131,6 +131,8 @@ internal class MergedShellServices(private val stacks: GroupStacks) {
         override suspend fun log(machineId: String, cwd: String, skip: Int, limit: Int) = of(machineId).log(machineId, cwd, skip, limit)
         override suspend fun show(machineId: String, cwd: String, hash: String) = of(machineId).show(machineId, cwd, hash)
         override suspend fun stat(machineId: String, cwd: String, paths: List<String>) = of(machineId).stat(machineId, cwd, paths)
+        override suspend fun download(machineId: String, cwd: String, path: String, into: java.io.File) =
+            of(machineId).download(machineId, cwd, path, into)
     }
 
     val actions: ChatActions = object : ChatActions {

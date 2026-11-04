@@ -57,6 +57,29 @@ class GroupRoutingTest {
         assertEquals(SessionKey("m", "s"), other.raw(SessionKey("m~g0a1b2c3d", "s")))
     }
 
+    @Test fun anotherGroupsFilesReachItsMachineByThePlainId() = runBlocking<Unit> {
+        val calls = mutableListOf<String>()
+        val files = object : SessionFiles {
+            override suspend fun directory(machineId: String, cwd: String, path: String) = error("unused")
+            override suspend fun file(machineId: String, cwd: String, path: String) = error("unused")
+            override suspend fun status(machineId: String, cwd: String) = error("unused")
+            override suspend fun diff(machineId: String, cwd: String, path: String, staged: Boolean) = error("unused")
+            override suspend fun log(machineId: String, cwd: String, skip: Int, limit: Int) = error("unused")
+            override suspend fun show(machineId: String, cwd: String, hash: String) = error("unused")
+            override suspend fun stat(machineId: String, cwd: String, paths: List<String>): SessionPathStats {
+                calls += "stat $machineId"; return SessionPathStats()
+            }
+            override suspend fun download(machineId: String, cwd: String, path: String, into: java.io.File): Long {
+                calls += "download $machineId $path"; return 3
+            }
+        }
+        // The methods with a default implementation are the ones a hand-written forwarder can silently drop.
+        val wrapped = files.inGroup(other)
+        assertEquals(3L, wrapped.download("macbook~g0a1b2c3d", "/w", "a.mp3", java.io.File("unused")))
+        wrapped.stat("macbook~g0a1b2c3d", "/w", listOf("a"))
+        assertEquals(listOf("download macbook a.mp3", "stat macbook"), calls)
+    }
+
     @Test fun aGroupsDraftsAreStoredWithItsPlainKeys() = runBlocking<Unit> {
         val stored = mutableListOf<DraftKey>()
         val scope = HubScope("hub", "gen")

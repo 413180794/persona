@@ -14,7 +14,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertTrue
@@ -53,8 +53,9 @@ class NotebookShotsTest {
     private fun out(): File = File(System.getProperty("persona.shots") ?: "build/files-shots").also { it.mkdirs() }
 
     private fun capture(name: String) {
+        // The notebook parses off the main thread, which waitForIdle doesn't wait for.
+        rule.waitUntil(10_000) { rule.onAllNodesWithText("ZeroDivisionError: division by zero", substring = true).fetchSemanticsNodes().isNotEmpty() }
         rule.waitForIdle()
-        rule.onNodeWithText("ZeroDivisionError: division by zero", substring = true).assertExists()
         val bitmap = rule.onNodeWithTag("shot").captureToImage().asAndroidBitmap()
         val background = bitmap.getPixel(1, bitmap.height - 2)
         var other = 0
