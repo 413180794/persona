@@ -2,7 +2,6 @@ package persona.feature.assistant.settings
 
 import android.content.Context
 import persona.core.contracts.Machine
-import persona.core.contracts.api.AgentLauncher
 import persona.core.contracts.api.AssistantConfig
 import persona.core.contracts.api.AssistantConfigUpdate
 import persona.core.contracts.api.AssistantManagement
@@ -21,7 +20,6 @@ import java.util.TimeZone
 internal interface AssistantSettingsApi {
     suspend fun config(): AssistantConfig
     suspend fun updateConfig(update: AssistantConfigUpdate): AssistantConfig
-    suspend fun launchers(machineId: String): List<AgentLauncher>
     suspend fun memory(): List<MemoryFile>
     suspend fun saveMemory(name: String, content: String)
     suspend fun deleteMemory(name: String)
@@ -32,7 +30,6 @@ internal fun AssistantManagement.settingsApi(): AssistantSettingsApi {
     return object : AssistantSettingsApi {
         override suspend fun config() = management.config()
         override suspend fun updateConfig(update: AssistantConfigUpdate) = management.updateConfig(update)
-        override suspend fun launchers(machineId: String) = management.launchers(machineId)
         override suspend fun memory() = management.memory()
         override suspend fun saveMemory(name: String, content: String) = management.saveMemory(name, content)
         override suspend fun deleteMemory(name: String) = management.deleteMemory(name)
@@ -92,18 +89,10 @@ internal data class AssistantSettingsUiState(
     val loadFailed: Boolean = false,
     val busy: Boolean = false,
     val notice: SettingsNotice? = null,
-    /** The Claude launchers on the assistant's machine; null until read. */
-    val launchers: List<AgentLauncher>? = null,
-    val launchersLoading: Boolean = false,
-    val launchersFailed: Boolean = false,
     val move: MachineMove? = null,
     val memory: MemoryState = MemoryState(),
-    val followPhone: Boolean = true,
-) {
-    /** The saved launcher is not one the machine offers: new conversations would fail to start. */
-    val launcherMissing: Boolean get() = config != null && launchers != null && launchers.isNotEmpty() &&
-        launchers.none { it.name == config.launcher }
-}
+    val followPhone: Boolean = true
+)
 
 /** Mutations run one at a time; every outcome lands in [state] (the page shows it, nothing is thrown). */
 internal class AssistantSettingsState(
@@ -132,18 +121,6 @@ internal class AssistantSettingsState(
         finally { set { copy(loading = false) } }
     }
 
-    suspend fun loadLaunchers() {
-        val machine = state.value.config?.machineId?.takeIf { it.isNotBlank() } ?: return
-        set { copy(launchersLoading = true, launchersFailed = false) }
-        try {
-            // The assistant is headless Claude Code (claude -p): Codex and TRAEX launchers cannot run it.
-            val claude = api.launchers(machine).filter { it.agentType == "claude" }
-            if (state.value.config?.machineId == machine) set { copy(launchers = claude) }
-        } catch (error: CancellationException) { throw error }
-        catch (_: Exception) { if (state.value.config?.machineId == machine) set { copy(launchers = null, launchersFailed = true) } }
-        finally { set { copy(launchersLoading = false) } }
-    }
-
     fun requestMove(to: Machine, machines: List<Machine>) {
         val config = state.value.config ?: return
         if (state.value.busy || to.id == config.machineId) return
@@ -159,23 +136,12 @@ internal class AssistantSettingsState(
         val moved = perform("没换成，Persona 还在「${move.fromName}」上运行，请重试。") {
             // The main conversation is a transcript on the old machine; the next message starts a new one here.
             val config = api.updateConfig(AssistantConfigUpdate(machineId = move.to.id, main = AssistantConfigUpdate.CLEAR_MAIN))
-            set { copy(config = config, launchers = null, launchersFailed = false, memory = MemoryState()) }
+            set { copy(config = config, memory = MemoryState()) }
             done("Persona 换到「${move.to.displayName}」上了，新对话从这里开始。")
         }
         if (!moved) return
         quietly { onMoved() }
-        loadLaunchers()
         loadMemory()
-    }
-
-    suspend fun chooseLauncher(name: String) {
-        val config = state.value.config ?: return
-        if (name.isBlank() || name == config.launcher) return
-        perform("启动器没换成，请重试。") {
-            val updated = api.updateConfig(AssistantConfigUpdate(launcher = name))
-            set { copy(config = updated) }
-            done("新对话将使用 $name")
-        }
     }
 
     suspend fun setFollowPhone(follow: Boolean) {

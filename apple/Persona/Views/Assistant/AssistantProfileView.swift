@@ -89,15 +89,13 @@ struct AssistantProfileView: View {
                 Text("「关于我」是你告诉 Persona 的；「记忆」是它在对话里自己记下的，都可以改。")
             }
             Section {
-                ModelConfigurationLink(title: "对话模型", purposeID: "assistant", summary: model.assistantConfig?.launcher)
-                ModelConfigurationLink()
                 NavigationLink { SkillsPage() } label: { row("Skills", Theme.Icon.skills, detail: nil) }
                 LabeledContent("运行在", value: machineName)
                 LabeledContent("工作目录", value: assistantCwd)
             } header: {
                 Text("设置")
             } footer: {
-                Text("每段对话在 \(machineName) 的这个目录里后台运行一个 Claude，不进 herdr。换启动器后，主对话从下一条消息起用新的启动器（接着原来的上下文），新对话也用它；其他对话在各自的菜单里换。")
+                Text("每段对话在 \(machineName) 的这个目录里后台运行一个 Claude，不进 herdr。用哪个模型在「设置 › 模型配置 › 主对话」里选，单段对话在它自己的菜单里换。")
             }
             Section {
                 Label(machinesLine, systemImage: Theme.Icon.machines)
@@ -145,9 +143,7 @@ struct AssistantProfileView: View {
                         buiRow("记忆", "brain", detail: memoryCount.flatMap { $0 > 0 ? "\($0) 条" : nil })
                     }
                 }
-                BUIListSection("设置", footer: "每段对话在 \(machineName) 的这个目录里后台运行一个 Claude，不进 herdr。换启动器后，主对话从下一条消息起用新的启动器（接着原来的上下文），新对话也用它；其他对话在各自的菜单里换。") {
-                    ModelConfigurationLink(title: "对话模型", purposeID: "assistant", summary: model.assistantConfig?.launcher)
-                    ModelConfigurationLink()
+                BUIListSection("设置", footer: "每段对话在 \(machineName) 的这个目录里后台运行一个 Claude，不进 herdr。用哪个模型在「设置 › 模型配置 › 主对话」里选，单段对话在它自己的菜单里换。") {
                     NavigationLink { SkillsPage() } label: { buiRow("Skills", Theme.Icon.skills, detail: nil) }
                     BUIListRow("运行在", value: machineName)
                     BUIListRow("工作目录", value: assistantCwd)

@@ -69,7 +69,8 @@ struct SettingsView: View {
                             SettingsRow(title: "模型配置", symbol: Theme.Icon.model, tint: Theme.ai)
                         }
                         NavigationLink(value: SettingsPage.assistant) {
-                            SettingsRow(title: "助手", symbol: Theme.Icon.ai, tint: Theme.ai, value: model.assistantConfig?.launcher ?? "", look: .code)
+                            // No model here: the assistant's model is 模型配置 › 主对话 (#1291).
+                            SettingsRow(title: "助手", symbol: Theme.Icon.ai, tint: Theme.ai)
                         }
                         NavigationLink(value: SettingsPage.claude) {
                             SettingsRow(title: "Claude Code 设置", symbol: Theme.Icon.options, tint: Theme.Hue.orange)

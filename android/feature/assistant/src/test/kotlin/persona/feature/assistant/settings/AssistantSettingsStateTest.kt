@@ -1,7 +1,6 @@
 package persona.feature.assistant.settings
 
 import persona.core.contracts.Machine
-import persona.core.contracts.api.AgentLauncher
 import persona.core.contracts.api.AssistantConfig
 import persona.core.contracts.api.AssistantConfigUpdate
 import persona.core.contracts.api.MemoryFile
@@ -15,11 +14,6 @@ class AssistantSettingsStateTest {
         var config = AssistantConfig(machineId = "server", launcher = "claude", cwd = "/home/me/.jarvis/assistant",
             timezone = "Asia/Shanghai", notesEffective = "from hub.json", main = "main-id")
         val updates = mutableListOf<AssistantConfigUpdate>()
-        val launcherCalls = mutableListOf<String>()
-        var launchers = mapOf(
-            "server" to listOf(AgentLauncher("claude", model = "opus"), AgentLauncher("example_wrapper", agentType = "codex")),
-            "laptop" to listOf(AgentLauncher("example_launcher", model = "sonnet")),
-        )
         var memory = listOf(
             MemoryFile("MEMORY.md", "- [早报格式](morning.md) — 一屏以内\n- [周报](weekly.md) — 先给草稿", "2026-10-31T08:00:00Z"),
             MemoryFile("morning.md", "---\nname: morning-format\ndescription: 早报一屏以内\nmetadata:\n  type: feedback\n---\n\n早报一屏以内，结论先行。",
@@ -44,11 +38,6 @@ class AssistantSettingsStateTest {
             )
             return config
         }
-        override suspend fun launchers(machineId: String): List<AgentLauncher> {
-            launcherCalls += machineId
-            check(!fail) { "machine is offline" }
-            return launchers[machineId].orEmpty()
-        }
         override suspend fun memory(): List<MemoryFile> { check(!fail) { "assistant machine is offline" }; return memory }
         override suspend fun saveMemory(name: String, content: String) {
             check(!fail) { "write failed" }
@@ -68,46 +57,12 @@ class AssistantSettingsStateTest {
     private val laptop = Machine("laptop", name = "笔记本", kind = "ssh", online = true, home = "/Users/me")
     private val offline = Machine("lab", name = "实验室", kind = "ssh", online = false)
 
-    @Test fun readsWhereItRunsAndWritesTheLauncher() = runTest {
+    @Test fun readsWhereItRuns() = runTest {
         val api = FakeApi()
         val state = AssistantSettingsState(api, Zone())
         state.load()
         assertEquals("server", state.state.value.config?.machineId)
         assertTrue("the phone and the hub already agree on the zone", api.updates.isEmpty())
-
-        state.loadLaunchers()
-        // The assistant is headless Claude Code: other agent types are not offered.
-        assertEquals(listOf("claude"), state.state.value.launchers?.map { it.name })
-        assertFalse(state.state.value.launcherMissing)
-
-        state.chooseLauncher("claude")
-        assertTrue("choosing the current launcher writes nothing", api.updates.isEmpty())
-        api.launchers = api.launchers + ("server" to listOf(AgentLauncher("claude"), AgentLauncher("example_launcher")))
-        state.loadLaunchers()
-        state.chooseLauncher("example_launcher")
-        assertEquals(listOf(AssistantConfigUpdate(launcher = "example_launcher")), api.updates)
-        assertEquals("example_launcher", state.state.value.config?.launcher)
-        assertEquals(SettingsNotice("新对话将使用 example_launcher", error = false), state.state.value.notice)
-
-        api.fail = true
-        state.chooseLauncher("claude")
-        assertEquals("example_launcher", state.state.value.config?.launcher)
-        assertTrue(state.state.value.notice!!.error)
-        assertFalse(state.state.value.busy)
-    }
-
-    @Test fun aLauncherTheMachineDoesNotOfferIsFlagged() = runTest {
-        val api = FakeApi()
-        api.config = api.config.copy(launcher = "example_gone")
-        val state = AssistantSettingsState(api, Zone())
-        state.load()
-        state.loadLaunchers()
-        assertTrue(state.state.value.launcherMissing)
-
-        api.fail = true
-        state.loadLaunchers()
-        assertTrue(state.state.value.launchersFailed)
-        assertFalse("nothing to compare against while the list is unreadable", state.state.value.launcherMissing)
     }
 
     @Test fun movingWarnsThatMemoryAndConversationsStayAndStartsAFreshMainConversation() = runTest {
@@ -138,13 +93,10 @@ class AssistantSettingsStateTest {
             assertEquals("laptop", config?.machineId)
             assertNull(config?.main)
             assertNull(this.move)
-            assertEquals(listOf("example_launcher"), launchers?.map { it.name })
             assertNotNull("memory is read again from the new machine", memory.entries)
             assertFalse(notice!!.error)
         }
         assertEquals(1, moved)
-        assertEquals("laptop", api.launcherCalls.last())
-        assertTrue("the saved launcher is not on the new machine", state.state.value.launcherMissing)
     }
 
     @Test fun movingToAnOfflineMachineSaysSoAndAFailedMoveChangesNothing() = runTest {

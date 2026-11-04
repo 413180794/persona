@@ -398,7 +398,7 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 用户要求（2026-11-02）：「jarvis 的会话和记忆等等内容，是运行在哪个设备上的，现在也完全没有设置选项」。代码在 `feature/assistant/…/settings/`：页面 `AssistantSettingsScreen`，状态和请求 `AssistantSettingsState`，接口用 `AssistantManagement` 的 `config` / `updateConfig` / `launchers`（`GET` / `PUT /api/v1/assistant`、`GET /api/v1/machines/{id}/launchers`）和原有的记忆接口。
 
 - 入口：设置列表「助手 › Persona」（`SettingsPage.Assistant`，深链 `jarvis://open?target=settings&page=assistant`；宽窗口在设置列表右栏打开，页内的子页也在右栏）。Persona tab 标题菜单的「助手设置」、右上角的「助手资料」按钮、抽屉里的「资料页」「启动器」在 Persona tab 里原地打开同一页。体验模式没有这页，显示说明。
-- 在哪运行：机器（在线状态；`kind: local` 的写「hub 所在的机器」）、启动器和模型、工作目录（按那台机器的 home 缩成 `~/.persona/assistant`）。启动器列表取那台机器的 launchers，只列 Claude 类型：助手是无头的 `claude -p`，Codex / TRAEX 的启动器起不了它。保存的启动器不在那台机器的列表里时提示换一个，否则新对话起不来。
+- 在哪运行：机器（在线状态；`kind: local` 的写「hub 所在的机器」）、工作目录（按那台机器的 home 缩成 `~/.persona/assistant`）。启动器和模型不在这里：统一在「设置 › 模型配置 › 主对话」里选（#1291），那里也显示供应商离线、缺失等状态。
 - 换机器：先确认，确认框写明「记忆和会话记录在原来那台机器上，不会跟过去」，目标离线时另外写明；确认后 `PUT {"machine_id":…,"main":"-"}`。主对话是原来那台机器上的 transcript，换过去接不上，所以一起清掉，下一条消息在新机器上开新的主对话；原来的会话和记忆留在那台机器上，换回来还在（原来的主对话成了普通会话）。换完刷新 Persona 的会话列表，重新读启动器和记忆。
 - 数据存在哪里：会话记录和记忆在助手所在的机器；关于我、定时任务和设置在 hub；知识库在 hub 所在的机器（`~/.persona/data`）。
 - 了解你：「关于我」编辑 `notes`。还没在 App 里保存过时打开的是 hub.json 的内容，并说明保存后以这里为准；清空也照样保存（告诉助手什么都不写）。记忆列出 `memory/*.md`，新的在前，标题先取 `MEMORY.md` 索引行，其次 front matter 的 name，类型标成用户 / 反馈 / 项目 / 参考；点开看正文，可以编辑整个文件（含 front matter）或删除（hub 同时删索引行）。`MEMORY.md` 只能看。

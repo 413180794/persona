@@ -146,9 +146,9 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   ![网页版侧边栏的个人 Agent：按来源分组，带头像、未读数、搜索和筛选按钮](screenshots/web-personal-agents.png)
 
 - **设置**（`/settings`，侧边栏和左上角菜单进入，`src/views/Settings.tsx`）：九个分类（hub 带 `plugin_manager` 时十个），和 App 的设置同一套接口。
-  「通用」是外观（跟随系统 / 浅色 / 深色）、形象、Persona 助手的运行位置和统一模型配置入口、这个浏览器（hub 地址、hub 名、互联的 hub、断开）；
+  「通用」是外观（跟随系统 / 浅色 / 深色）、形象、Persona 助手的运行位置（模型在「模型配置」tab，#1291）、这个浏览器（hub 地址、hub 名、互联的 hub、断开）；
   「助手」（`settings/AssistantSettings.tsx`）：主动做事（进定时任务）、关于我（`PUT /assistant {notes}`，点保存或离开时存）、
-  记忆（`/assistant/memory`：标题先取 MEMORY.md 索引里的中文标题，查看 / 编辑整个文件 / 删除，索引只读）、运行在哪（只读）；
+  记忆（`/assistant/memory`：标题先取 MEMORY.md 索引里的中文标题，查看 / 编辑整个文件 / 删除，索引只读）、运行在哪（只读；没有模型入口，模型在「模型配置 › 主对话」）；
   「Claude Code」「Codex」（`settings/AgentSettings.tsx`）：选一台在线电脑，白名单设置（开关 / 下拉 / 文字）改了立即 `PUT`，「同时改所有在线机器」默认开，
   每行「⋯」恢复默认（文字项清空也是 null）、推到所有在线机器，失败回滚；
   「连接器」（`settings/Connectors.tsx`）：邮箱（列表、添加 IMAP / 飞书邮箱、删除；Gmail 只能在手机上加：它的 Google 授权客户端是 iOS 类型，回调是只有 App 能接的自定义 scheme）、

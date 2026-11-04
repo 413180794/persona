@@ -99,7 +99,7 @@ Persona 管理的左滑是「删除」，连 hub 里存的 Key 一起删、不�
 | `GET /api/v1/launchers/{name}/quota?machine=&refresh=1` | 额度（见下）：`{machine, checked_at, quota}`，查不了时 `{error, unsupported}`；hub 缓存一分钟，`refresh=1` 重读 |
 | `GET /api/v1/machines/{mid}/launchers` | 这台能启动的（选择器用）：它的 ~/.zshrc 去掉隐藏的，加上 Persona 管理的；每项带 `source` |
 
-「设置 › 助手」中的对话模型入口和定时任务的模型入口都打开统一的「模型配置」。供应商负责接入与默认值，用途负责具体选择，见 `docs/model-config.md`。
+助手的模型只在「模型配置 › 主对话」里选（「设置 › 助手」不再有模型入口，#1291）；定时任务的模型入口打开统一的「模型配置」。供应商负责接入与默认值，用途负责具体选择，见 `docs/model-config.md`。
 
 ## 直接 API 供应商
 

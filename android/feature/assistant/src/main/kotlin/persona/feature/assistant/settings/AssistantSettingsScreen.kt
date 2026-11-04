@@ -16,7 +16,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.EntryPointAccessors
 import persona.core.contracts.Machine
 import persona.core.contracts.SessionKey
-import persona.core.contracts.api.AgentLauncher
 import persona.core.contracts.api.AssistantConfig
 import persona.core.contracts.api.AssistantManagement
 import persona.core.designsystem.*
@@ -31,7 +30,6 @@ import persona.feature.assistant.LocalAssistantHost
 import persona.feature.assistant.conversationTime
 import persona.feature.assistant.proactive.AssistantProactiveScreen
 import kotlinx.coroutines.launch
-import java.net.URI
 
 /**
  * 设置 › 助手 as a destination of its own (a wide window shows it beside the settings list). It needs the pairing's
@@ -64,10 +62,10 @@ object AssistantSettingsPreview {
 }
 
 private enum class SettingsPart { Home, Notes, Memory, MemoryFile, Proactive }
-private enum class SettingsSheet { Machine, Launcher, Zone }
+private enum class SettingsSheet { Machine, Zone }
 
 /**
- * Where the assistant runs (machine, launcher, directory, and what lives where), what it knows about the user
+ * Where the assistant runs (machine, directory, and what lives where; its model is 模型配置 › 主对话, #1291), what it knows about the user
  * (关于我, memory) and its time zone. Sub-pages stay inside this destination, so they open in the same pane.
  */
 @Composable
@@ -99,13 +97,11 @@ internal fun AssistantSettingsScreen(
     var memoryName by rememberSaveable { mutableStateOf<String?>(null) }
     var sheet by remember { mutableStateOf(when (preview) {
         "machine" -> SettingsSheet.Machine
-        "launcher" -> SettingsSheet.Launcher
         "timezone" -> SettingsSheet.Zone
         else -> null
     }) }
     LaunchedEffect(controller) {
         controller.load()
-        launch { controller.loadLaunchers() }
         controller.loadMemory()
     }
     // Captures of a memory file and of the move warning wait for the data they show.
@@ -136,7 +132,6 @@ internal fun AssistantSettingsScreen(
     fun refresh() {
         scope.launch {
             controller.load()
-            launch { controller.loadLaunchers() }
             controller.loadMemory()
         }
     }
@@ -158,11 +153,6 @@ internal fun AssistantSettingsScreen(
         SettingsSheet.Machine -> MachineSheet(machines, state.config?.machineId, onDismiss = { sheet = null }) {
             sheet = null
             controller.requestMove(it, machines)
-        }
-        SettingsSheet.Launcher -> LauncherSheet(state, machineName, onDismiss = { sheet = null },
-            onRetry = { scope.launch { controller.loadLaunchers() } }) {
-            sheet = null
-            scope.launch { controller.chooseLauncher(it) }
         }
         SettingsSheet.Zone -> ZoneSheet(state.config?.timezone, controller.phoneZone, onDismiss = { sheet = null }) {
             sheet = null
@@ -226,25 +216,18 @@ private fun SettingsHome(
         state.notice?.let { notice -> item("notice") { JNotice(notice.text, status = if (notice.error) Status.NeedsYou else Status.Unknown) } }
         if (config != null) {
             item("where") { JSectionHeader("在哪运行") }
-            val launcher = state.launchers?.firstOrNull { it.name == config.launcher }
             rows("where", listOf(
                 { JRow("机器", value = machineName, subtitle = machineState(machine), leadingIcon = machineIcon(machine),
                     enabled = ready, onClick = { sheet(SettingsSheet.Machine) }) },
-                { JRow("启动器", value = config.launcher.ifBlank { "claude" }, subtitle = launcher?.model?.takeIf { it.isNotBlank() },
-                    leadingIcon = PhIcons.RocketLaunch, enabled = ready, onClick = { sheet(SettingsSheet.Launcher) }) },
                 { JRow("工作目录", value = homeRelative(config.cwd, machine?.home).ifBlank { "~/.jarvis/assistant" },
                     leadingIcon = PhIcons.FolderSimple) },
             ))
-            if (state.launcherMissing) item("launcher-missing") {
-                JNotice("「$machineName」上没有启动器 ${config.launcher}，新对话会起不来，请换一个。", Modifier.padding(top = Tokens.Space.m),
-                    status = Status.NeedsYou, actionLabel = "选择启动器", onAction = { sheet(SettingsSheet.Launcher) })
-            }
             if (machine != null && !machine.online) item("offline") {
                 JNotice("「$machineName」现在离线，连上之前 Persona 不能回复，记忆也读不到。", Modifier.padding(top = Tokens.Space.m),
                     status = Status.Offline)
             }
             item("where-caption") {
-                Caption("每段对话都在这台机器的这个目录里后台运行一个 Claude Code，不进 herdr。换启动器只影响之后的新对话。")
+                Caption("每段对话都在这台机器的这个目录里后台运行一个 Claude Code，不进 herdr。用哪个模型在「设置 › 模型配置 › 主对话」里选。")
             }
 
             item("proactive") { JSectionHeader("主动做事") }
@@ -479,46 +462,6 @@ private fun MachineSheet(machines: List<Machine>, current: String?, onDismiss: (
         }
     }
 }
-
-@Composable
-private fun LauncherSheet(
-    state: AssistantSettingsUiState, machineName: String, onDismiss: () -> Unit, onRetry: () -> Unit, onPick: (String) -> Unit,
-) {
-    var query by remember { mutableStateOf("") }
-    val launchers = state.launchers.orEmpty()
-    val shown = launchers.filter { query.isBlank() || it.name.contains(query.trim(), true) || it.model.orEmpty().contains(query.trim(), true) }
-    JSheet(onDismiss = onDismiss, title = "启动器") {
-        Text("新对话用哪个启动器（模型）起 Claude Code；已经开着的对话不变。", style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
-        Spacer(Modifier.height(Tokens.Space.m))
-        if (launchers.size > 8) {
-            JSearchField(query, { query = it }, "搜索启动器或模型")
-            Spacer(Modifier.height(Tokens.Space.m))
-        }
-        LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false), contentPadding = PaddingValues(bottom = Tokens.Space.l)) {
-            when {
-                state.launchersLoading && state.launchers == null -> item { JLoading(text = "正在读取「$machineName」的启动器") }
-                state.launchersFailed -> item {
-                    JNotice("读不到「$machineName」的启动器，它可能不在线。", status = Status.NeedsYou, actionLabel = "重试", onAction = onRetry)
-                }
-                state.launchers != null && launchers.isEmpty() -> item {
-                    JEmptyState("没有 Claude 启动器", "「$machineName」上没有找到能运行 Persona 的 Claude 启动器。", icon = PhIcons.RocketLaunch)
-                }
-            }
-            itemsIndexed(shown, key = { _, launcher -> launcher.name }) { index, launcher ->
-                JGroupItem(GroupPosition.of(index, shown.size)) {
-                    JRow(launcher.name, subtitle = launcherDetail(launcher), subtitleLines = 2,
-                        leading = { JRadio(launcher.name == state.config?.launcher, null) }, chevron = false,
-                        onClick = { onPick(launcher.name) })
-                }
-            }
-        }
-    }
-}
-
-private fun launcherDetail(launcher: AgentLauncher): String? = listOfNotNull(
-    launcher.model?.takeIf { it.isNotBlank() },
-    launcher.baseUrl?.let { runCatching { URI(it).host }.getOrNull() }?.takeIf { it.isNotBlank() },
-).joinToString("\n").ifBlank { null }
 
 @Composable
 private fun ZoneSheet(current: String?, phoneZone: String, onDismiss: () -> Unit, onPick: (String) -> Unit) {

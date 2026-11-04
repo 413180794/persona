@@ -1,12 +1,11 @@
 // 设置 › 助手 (docs/assistant.md「资料页和头像」, the iOS app's AssistantProfileView / AssistantNotesView /
 // AssistantMemoryView, Android's 助手设置): what Persona does on its own (a line into 定时任务), what it knows about you
 // (关于我 = `notes`, saved on 保存 or when leaving; 记忆 = its memory files: read, edit the whole file, delete), and where
-// it runs (read-only here) with its conversation model (模型配置).
+// it runs (read-only here). Its model is 设置 › 模型配置 › 主对话, not here (#1291).
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
 import { ago } from "../../lib/format";
 import { MEMORY_INDEX, memoryEntries, memoryTypeLabel, memoryTypeTone, parseMemory, type MemoryEntry, type MemoryFile } from "../../lib/memory";
-import { modelPurpose, modelSummary, type ModelPurposeBody } from "../../lib/model-config";
 import { navigate } from "../../lib/router";
 import { momentLabel, upcoming, type Task } from "../../lib/routines";
 import { refreshAssistant, useStore } from "../../lib/store";
@@ -27,7 +26,7 @@ interface AssistantState {
   notes_effective?: string;
 }
 
-export function AssistantSettings({ onConfigure, bare }: { onConfigure?: () => void; /** Without its header (the profile page has its own). */ bare?: boolean } = {}) {
+export function AssistantSettings({ bare }: { /** Without its header (the profile page has its own). */ bare?: boolean } = {}) {
   const persona = usePersona();
   const machines = useStore((s) => s.machines);
   const [info, setInfo] = useState<AssistantState | null>(null);
@@ -35,7 +34,6 @@ export function AssistantSettings({ onConfigure, bare }: { onConfigure?: () => v
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [files, setFiles] = useState<MemoryFile[] | null>(null);
   const [memoryError, setMemoryError] = useState("");
-  const [model, setModel] = useState<ModelPurposeBody | null>(null);
   const [open, setOpen] = useState<{ file: MemoryFile; index?: boolean } | null>(null);
 
   const loadMemory = async () => {
@@ -52,7 +50,6 @@ export function AssistantSettings({ onConfigure, bare }: { onConfigure?: () => v
   useEffect(() => {
     api<AssistantState>("/assistant").then(setInfo, (e) => setError(errorText(e)));
     api<{ tasks: Task[] }>("/assistant/tasks").then((r) => setTasks(r.tasks ?? []), () => setTasks([]));
-    modelPurpose("assistant").then(setModel, () => {});
     void loadMemory();
   }, []);
 
@@ -62,7 +59,6 @@ export function AssistantSettings({ onConfigure, bare }: { onConfigure?: () => v
   const index = files?.find((f) => f.name === MEMORY_INDEX);
   const on = tasks?.filter((t) => t.enabled).length ?? 0;
   const next = tasks ? upcoming(tasks, 1)[0] : undefined;
-  const configure = onConfigure ?? (() => location.assign("/settings?tab=model-config&purpose=assistant"));
 
   if (!info && !error) return <Loading />;
 
@@ -124,11 +120,8 @@ export function AssistantSettings({ onConfigure, bare }: { onConfigure?: () => v
 
       <Group
         title="运行在"
-        footer={`每段对话在 ${machineName ?? "hub 所在的机器"} 的这个目录里后台运行，不进 herdr。会话记录和记忆在这台机器上；关于我、定时任务和设置在 hub。`}
+        footer={`每段对话在 ${machineName ?? "hub 所在的机器"} 的这个目录里后台运行，不进 herdr。会话记录和记忆在这台机器上；关于我、定时任务和设置在 hub。用哪个模型在「模型配置 › 主对话」里选。`}
       >
-        <Row label="对话模型" hint={model ? modelSummary(model.purpose, model.providers) : info?.launcher} onClick={configure}>
-          <span>模型配置</span>
-        </Row>
         <Row label="机器">
           <span className="max-w-[220px] truncate">{machineName ?? "—"}</span>
         </Row>

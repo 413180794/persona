@@ -82,7 +82,7 @@ export function Profile({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             <PersonaPicker builtin={<BuiltinFace size={56} />} />
           </Group>
 
-          <AssistantSettings bare onConfigure={() => navigate("/settings?tab=model-config&purpose=assistant")} />
+          <AssistantSettings bare />
 
           <Group title="能访问" footer="发飞书消息、发邮件、新建日程这类会替你出面的操作，都先在手机上问你。">
             {reach.map((r) => (

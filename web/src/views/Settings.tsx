@@ -1,4 +1,4 @@
-// 设置 (docs/web.md): appearance, the assistant's launcher, 模型 (every launcher: ~/.zshrc ones synced, Persona ones
+// 设置 (docs/web.md): appearance, where the assistant runs, 模型 (every launcher: ~/.zshrc ones synced, Persona ones
 // kept by the hub — docs/launchers.md), this browser and the other devices, about. The same data as the app's 设置.
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError, enc, errorText, setToken } from "../lib/api";
@@ -16,7 +16,6 @@ import { BuiltinFace, PersonaPicker } from "./assistant/Persona";
 import { Connectors } from "./settings/Connectors";
 import { TranslationSettings } from "./settings/TranslationSettings";
 import { Plugins } from "./settings/Plugins";
-import { modelPurpose, modelSummary, type ModelPurpose } from "../lib/model-config";
 import { launcherNameProblem, loadPresets, presetBody, presetChoices, presetDefaultModel, presetModelLabel, presetSubtitle, type LauncherPreset } from "../lib/launcher-presets";
 import { Segmented } from "./assistant/parts";
 
@@ -147,10 +146,10 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div key={tab} className="mx-auto max-w-[760px] px-5 py-6 sm:px-8" style={{ animation: `fade-up 320ms ${EASE} both` }}>
-          {tab === "general" && <General onConfigure={() => pick("model-config", "assistant")} />}
+          {tab === "general" && <General />}
           {tab === "models" && <Models />}
           {tab === "model-config" && <ModelConfiguration open={sub} onOpen={(id) => pick("model-config", id)} onProviders={() => pick("models")} />}
-          {tab === "assistant" && <AssistantSettings onConfigure={() => pick("model-config", "assistant")} />}
+          {tab === "assistant" && <AssistantSettings />}
           {(tab === "claude" || tab === "codex") && <AgentSettings key={tab} agent={tab} />}
           {tab === "connectors" && <Connectors />}
           {tab === "plugins" && <Plugins open={sub} onOpen={(id) => pick("plugins", id)} />}
@@ -178,15 +177,13 @@ interface AssistantState {
   cwd?: string;
 }
 
-function General({ onConfigure }: { onConfigure: () => void }) {
+function General() {
   const theme = useTheme();
   const machines = useStore((s) => s.machines);
   const [assistant, setAssistant] = useState<AssistantState | null>(null);
-  const [purpose, setPurpose] = useState<ModelPurpose | null>(null);
 
   useEffect(() => {
     api<AssistantState>("/assistant").then(setAssistant).catch((e) => toast(errorText(e), "error"));
-    modelPurpose("assistant").then((r) => setPurpose(r.purpose)).catch(() => {});
   }, []);
 
   const themes: { k: Theme; label: string; icon: IconName }[] = [
@@ -223,9 +220,6 @@ function General({ onConfigure }: { onConfigure: () => void }) {
       </Group>
 
       <Group title="Persona 助手" footer={`每段对话在 ${machineName ?? "hub 所在的机器"} 的 ${assistant?.cwd ?? "~/.persona/assistant"} 里后台运行。模型与启动器统一在「模型配置」中选择，连接与凭据在「模型供应商」中管理。`}>
-        <Row label="对话模型" hint={purpose ? modelSummary(purpose) : assistant?.launcher} onClick={onConfigure}>
-          <span>模型配置</span>
-        </Row>
         <Row label="运行在">{machineName ?? "—"}</Row>
       </Group>
 
