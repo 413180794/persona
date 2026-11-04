@@ -220,7 +220,8 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
 - Mac 的表单把输入框的标题画在左边、框在右边：标题写字段名，要填什么写进 `prompt`；标题本身就是提示的（屏蔽目录、Claude 设置的文本项）在 Mac 上 `.labelsHidden()`。
 - 单选在 Mac 上用 `.radioGroup`；空的分组在 Mac 上不画（表单里会留一块空白）。
 - 页尾单独一个按钮（添加 hub、清除全部缓存、登录某个连接器）在 Mac 上是一张卡片里靠右的标准按钮（同系统设置）；`.listRowBackground(Color.clear)` 在 Mac 的分组表单里不起作用，卡片去不掉（`FormAction`）。
-- 已经换的页：通知、Claude Code 设置、Codex 设置、飞书机器人（第一批）；设备、翻译、存储空间、hub、hub 列表、Skills（第二批）；邮箱、飞书、GitHub / Telegram、信息、插件和插件详情（第三批）；其余逐页换，见 #1221。
+- 已经换的页：通知、Claude Code 设置、Codex 设置、飞书机器人（第一批）；设备、翻译、存储空间、hub、hub 列表、Skills（第二批）；邮箱、飞书、GitHub / Telegram、信息、插件和插件详情（第三批）；模型配置和用途、模型供应商和某个供应商、形象、主题色、界面风格（第四批）。
+  助手（`AssistantProfileView`）、机器（卡片）、信息 › 会话 这类不是表单的页面不换。
 
 ## SSH 隧道（Mac）
 
@@ -404,7 +405,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 2026-11-01 全部过了一遍：分 5 组并行，每组用离屏截图（体验模式和 `scripts/mock/mock_hub.py` 的假数据，深浅色）和单元测试（`JarvisMacTests`）逐条核对，顺手修了能修的；再由一个 reviewer 逐条试着推翻打的勾，推翻了的不勾，写清看到了什么、没看到什么。
 核对后 106 条 [x]、118 条 [ ]。没勾的每条下面都写了原因：「要到 Mac 前看」是要解锁后在 Mac 上点、按、看的，「没做」是还没做的，「Mac 上没有」是 Mac 上本来就不该有的。
-2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 140 条 [x]、82 条 [ ]。
+2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 141 条 [x]、81 条 [ ]。
 待你确认：`-showSampleScreen` 的示例「终端在问你」里原来有像内部工具 / 服务的名字，已在提交「chore: the sample terminal dialog uses made-up names only」里全换成编造的名字；以前拍的截图里可能还是旧文字。
 
 ### 真窗口验收怎么分工（2026-11-03 起）
@@ -449,6 +450,8 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - sheet 里的东西不要按 sheet 截图的像素点（2026-11-04）：macOS 26 的 SwiftUI sheet（`SheetPresentationWindow`）报的位置大小和 cua 截到的画面对不上
   （画面里是主窗口那一块缩放进来的），按截图像素换出的屏幕坐标是偏的，点了没反应，像按钮坏了（#1132 就这样误报过）。
   写明用主窗口无障碍树里 `AXSheet` 下那个元素：能按就按（AXPress），要真鼠标就取它的 frame，用屏幕坐标（`scope:"desktop"`）点中心。
+- sheet 里靠手势的东西（双击锁定修饰键、快捷命令的单击 / 双击）要真鼠标：按无障碍元素 double_click 只是两次 AXPress，App 当成慢点两下；
+  取 `AXSheet` 下那个元素的 frame，用 `scope:"desktop"` 的屏幕坐标点中心（双击用 `count:2`）（2026-11-04 执行者因此报过两项存疑）。
 - 测终端翻历史，用不接管的终端（mock 只加 `MOCK_TERMINAL_STREAM=1`）：接管时滚轮按设计发给终端里的程序（`terminal_input.scroll`），
   假 hub 只记下、不翻，执行者就报「翻不上去」（2026-11-03 s5c）。
 
@@ -690,17 +693,20 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac 真窗口（2026-11-03）：切换「长行换行」后长行在折行和截断之间切换；配色换成 Solarized 后背景和文字色跟着变，再换回墨黑；⌘= 两次字变大（终端从 132×24 变成 116×21），⌘- 两次复原。还剩触控板捏合没试（cua 模拟不了捏合）。
 - [ ] Selection (long-press word, drag, 拷贝 / 全选), OSC 8 / URL tap → in-app link — TerminalView.swift (SelectionHandle)
   - Mac 真窗口（2026-11-03）：拖选第一行 ⌘C 拷出「Welcome to Claude Code」，双击选中一个词，⌘A ⌘C 拷出整屏；右键弹出 拷贝（没选中时灰）/ 粘贴 / 全选，系统还会自动加一项「自动填充」。还剩点带下划线的 OSC 8 链接在 App 里打开没试。
+  - OSC 8 链接：录制的帧和假 hub 里都没有 OSC 8 链接（2026-11-04 查过），要先给假 hub 加一条才能在真窗口点。
 - [x] Scrollback loading 200 lines at a time (screen/before), 回到最新, ~1000-line limit notice — SessionPanes.swift
   - Mac 真窗口（2026-11-04，mock `MOCK_TERMINAL_STREAM=1`，不接管）：滚轮往上翻，接上了更早的输出（Step15 → Step3 → 翻到最前面的 Step1，假 hub 的约 430 行分两页加载），
     底部出现「回到最新」，用鼠标点（按无障碍树的位置点）和 AXPress 都回到最新一屏。还差：翻到头没有「约 1000 行」/「已到最前面」的提示（浮层的细顶栏没带这行字，iOS 同样，#1133）。
   - 接管时（`MOCK_TERMINAL_CONTROL=1`）滚轮按设计发给程序，不翻 App 自己的历史（2026-11-03 执行者因此报过不通过）。
   - #1133 之后（2026-11-04）：翻到头在「回到最新」上面出现「— herdr 只保留最近约 1000 行，更早的过程在「对话」里 —」：真窗口（`-openTerminal YES -terminalPages 3`，流式 mock，浅色的 Persona 终端配色，提示条白底）、离屏截图的深色终端和单独的终端窗口（`-openTerminalWindow`）、iPhone 模拟器都看过。接管时不显示。
-- [ ] Link status bar (last update, retry backoff, 重试) — SessionPanes.swift (TerminalLinkStatus)
+- [x] Link status bar (last update, retry backoff, 重试) — SessionPanes.swift (TerminalLinkStatus)
   - 要到 Mac 前看：mock hub 加 `MOCK_SCREEN_FAIL_AFTER=3:14`，状态条出现（最后更新、退避、重试）后再恢复。体验模式和正常的 mock 都不出这条。
+  - Mac 真窗口（2026-11-04，执行者跑，`MOCK_SCREEN_FAIL_AFTER=100:150`）：读屏失败后终端上方出红色状态条「上次更新 50 秒前」「11 秒后重试 · node macbook: not connected（请求 …）」带「重试」；倒计时在走，点「重试」马上重发；恢复后状态条消失、终端接着刷新。
 - [ ] Key bar: sticky/locked/held ctrl/alt/shift, esc, tab, ⌃C, D-pad, paste, shortcuts — Views/Chat/TerminalKeys.swift (TerminalKeyBar, KeyCap, DirectionPad)
   - 要到 Mac 前看：修饰键的一次 / 锁定 / 按住、方向键盘、粘贴，以及深色下文字键近乎黑底黑字是不是真的。键栏截图里画出来了。
   - Mac 真窗口（2026-11-03，接管的终端）：点一下 Ctrl 变成高亮（无障碍值「已按下」），再点一下取消；esc、tab、展开方向键后的上、左都发出去了（终端里显示 `[A[D`）；
     「粘贴」弹出确认「粘贴 21 行到终端？多行文字在 shell 里可能被逐行执行。」带取消 / 粘贴。还剩：锁定和按住两种状态、深色下键的对比。
+  - Mac 真窗口（2026-11-04，复核）：快速点两下 Ctrl（屏幕坐标真双击；按无障碍元素双击是两次 AXPress，App 当成慢点两下，锁不上）变成「已锁定」，发 esc 后仍锁定，再点一下解除。还剩：按住、深色下键的对比。
 - [ ] Input: field mode + direct typing mode (UIKeyInput / UITextInput, hardware arrow keys) — Terminal/TerminalInput.swift
   - 要到 Mac 前看：真键盘打字、拼音组字、方向键、⌃ 组合。Mac 走自己的 keyDown（映射有 `MacTerminalKeysTests`）。
   - Mac 真窗口（2026-11-03，接管的终端）：点终端底部的输入行后打 hello jarvis，2 秒内出现在「>」后面，回车发出。还剩拼音组字、方向键、⌃ 组合。
@@ -712,6 +718,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - 大 sheet（2026-11-01，`Mac/Design/MacLargeSheet.swift`）：终端、图片查看 / 编辑（Compat 的 fullScreenCover）、文件查看器、Git 的改动 / 提交在 Mac 上按主窗口内容区减两边 xxl 打开，最小 640×520；原来终端 640×520、文件查看器 470×280。坑：sheet 只认最小尺寸不认 ideal；固定 frame 设在 NavigationStack 上栈会变矮，要设在栈的内容上。fullScreenCover 统一按有标题栏和工具栏算（`macSheetBars` 116pt），终端也被多减了这一截（够大，没分开处理）。
   - 终端在 Mac 上的说法（`TerminalHelpText`，有测试）：上滑 → 往上滚动、左右滑 → 左右滚动；终端设置的「手势」在 Mac 上叫「操作」（点击、滚轮 / 触控板、拖选、⌘C / ⌘V、右键、⌘± / 捏合、三指轻扫），没有听写、长按、弹出键盘；「只看 · 接管」的图标是窗口。快捷命令在 Mac 上没有编辑模式，每条右键菜单里上移 / 下移 / 删除（`MacShortcutOrder`）。没修：深色截图里键栏的文字键几乎黑底黑字（⚡、粘贴是白的），分不清是不是截图的问题，要解锁看真窗口；链接状态条体验模式里不出现，没看。
   - 要到 Mac 前看：单击填入、双击发送、右键上移 / 下移、补全（2026-11-01）。`-openShortcutsPanel YES` 截图里面板和「编辑」画出来了（离屏是深底深字，同键栏）。
+  - Mac 真窗口（2026-11-04，复核）：⚡ 打开面板「快捷 · 单击输入，双击执行」，列 git status / git diff --stat / ls -la / /compact / /status；单击 git status 只填入（假 hub 收到 `text: "git status"`、没有回车），面板关上；双击 ls -la 直接发送（`ls -la` 加 `enter`）。还剩补全。
 
 ## 8. Files / Git / code viewer
 - Mac（2026-11-01）：文件面板路径栏的 ⋯ 原来被 Mac 的弹出按钮挤成两个点，改成纯图标菜单；Git 的 diff / 提交 sheet 用大 sheet（`-macGitSheet diff|commit`，示例改成 `scripts/mock/mock_hub.py` 的 `MOCK_FILES=1` 里有的改动和提交）。连 mock_hub 截到了有数据的列表、diff 和提交。

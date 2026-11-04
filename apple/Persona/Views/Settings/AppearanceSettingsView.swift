@@ -64,7 +64,7 @@ struct PersonaSettingsPage: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        List {
+        SettingsForm {
             Section {
                 PersonaPicker()
                     .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
@@ -87,7 +87,7 @@ struct PersonaSettingsPage: View {
 /// 设置 › 外观 › 主题色: the sample of the look and the colors.
 struct ThemeColorSettingsPage: View {
     var body: some View {
-        List {
+        SettingsForm {
             Section {
                 ThemeColorPicker()
                     .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
@@ -106,7 +106,7 @@ struct StyleSettingsPage: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        List {
+        SettingsForm {
             Section {
                 StylePicker()
                     .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
@@ -129,6 +129,9 @@ struct StyleSettingsPage: View {
                                 ForEach(TextSize.allCases) { Text($0.title).tag($0) }
                             }
                             .pickerStyle(.segmented)
+                            #if os(macOS)
+                            .labelsHidden() // the row says 字号; a Mac form drew it again after the control (#1221)
+                            #endif
                             .fixedSize()
                         }
                     }

@@ -13,7 +13,7 @@ struct ModelConfigurationView: View {
     @State private var editing: ModelPurposeRoute?
 
     var body: some View {
-        List {
+        SettingsForm {
             if let error = page.error {
                 Section {
                     Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger)
@@ -131,7 +131,7 @@ struct ModelPurposeEditorView: View {
     @State private var confirmReload = false
 
     var body: some View {
-        List {
+        SettingsForm {
             if let purpose = page.purpose {
                 Section("当前生效") {
                     LabeledContent("模型", value: page.summary(purpose).isEmpty ? "未配置" : page.summary(purpose))
@@ -149,10 +149,17 @@ struct ModelPurposeEditorView: View {
                     if purpose.supports("model") {
                         if purpose.kind == "plugin" { pluginModelPicker }
                         else {
+                            #if os(macOS)
+                            // A Mac form: the field's name on the left, what to type in the box (#1221).
+                            TextField("具体模型", text: optional(\.model), prompt: Text("留空跟随默认"))
+                                .font(Theme.Font.body.monospaced())
+                                .accessibilityIdentifier("model-config-model")
+                            #else
                             TextField("具体模型（留空跟随默认）", text: optional(\.model))
                                 .font(Theme.Font.body.monospaced())
                                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                                 .accessibilityIdentifier("model-config-model")
+                            #endif
                         }
                     }
                     if purpose.supports("effort") && allowsEffort {

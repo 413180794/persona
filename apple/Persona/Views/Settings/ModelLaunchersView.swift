@@ -27,7 +27,7 @@ struct ModelLaunchersView: View {
     }
 
     var body: some View {
-        List {
+        SettingsForm {
             if let all = launchers {
                 let launchers = all.filter(matches)
                 let managed = launchers.filter(\.managed)
@@ -122,6 +122,18 @@ struct ModelLaunchersView: View {
         // Swipe left to hide a ~/.zshrc launcher or bring a hidden one back (2026-11-01 user request). No
         // confirmation: it only changes what Persona lists and is undone the same way. A Persona one is deleted, key
         // and all, so that one asks first.
+        #if os(macOS)
+        // A Mac form has no swipe: the same actions in the row's menu (#1221).
+        .contextMenu {
+            if l.managed {
+                Button("删除…", role: .destructive) { pendingDelete = l }
+            } else if l.hidden == true {
+                Button("恢复") { Task { await setHidden(l, false) } }
+            } else {
+                Button("隐藏") { Task { await setHidden(l, true) } }
+            }
+        }
+        #endif
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if l.managed {
                 Button { pendingDelete = l } label: { Label("删除", systemImage: Theme.Icon.delete) }.tint(Theme.danger)
@@ -240,7 +252,7 @@ struct ModelLauncherDetailView: View {
     private func groups(_ l: LauncherView) -> Int { detailGroups(l).count }
 
     var body: some View {
-        List {
+        SettingsForm {
             if let l = launcher {
                 Section {
                     LabeledContent("来源", value: l.managed ? "Persona 管理" : "~/.zshrc 里的函数")
