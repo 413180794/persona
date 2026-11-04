@@ -401,7 +401,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 2026-11-01 全部过了一遍：分 5 组并行，每组用离屏截图（体验模式和 `scripts/mock/mock_hub.py` 的假数据，深浅色）和单元测试（`JarvisMacTests`）逐条核对，顺手修了能修的；再由一个 reviewer 逐条试着推翻打的勾，推翻了的不勾，写清看到了什么、没看到什么。
 核对后 106 条 [x]、118 条 [ ]。没勾的每条下面都写了原因：「要到 Mac 前看」是要解锁后在 Mac 上点、按、看的，「没做」是还没做的，「Mac 上没有」是 Mac 上本来就不该有的。
-2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 139 条 [x]、83 条 [ ]。
+2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 140 条 [x]、82 条 [ ]。
 待你确认：`-showSampleScreen` 的示例「终端在问你」里原来有像内部工具 / 服务的名字，已在提交「chore: the sample terminal dialog uses made-up names only」里全换成编造的名字；以前拍的截图里可能还是旧文字。
 
 ### 真窗口验收怎么分工（2026-11-03 起）
@@ -613,14 +613,17 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - 要到 Mac 前看：打开一个还没加载过的对话、新起一个 Agent，看「正在启动…」和失败时的「没有启动起来」。本地假 hub 加载太快，`-openChatsFresh` 加 DELAY 2 也没截到。
   - Mac（2026-11-02 核对）：`MOCK_DELAY=4` + `-openChatsFresh` 离屏截到骨架屏（几条灰条，标题「对话 · 连接中…」）。还剩「正在启动…」「没有启动起来」（要新起一个 Agent）。
   - Mac（2026-11-02 Mac mini 真窗口）：新对话 › 开始对话后，对话页空状态「还没有消息」，输入框上方「正在启动 Claude，消息会在它就绪后发出」。还剩「没有启动起来」。
-- [ ] Long-press message action bar: 复制 / 选择 / 引用 / 分享 / 编辑 (own); select-text sheet — Views/Chat/MessageMenu.swift
+- [x] Long-press message action bar: 复制 / 选择 / 引用 / 分享 / 编辑 (own); select-text sheet — Views/Chat/MessageMenu.swift
   - 要到 Mac 前看：右键一条消息打开操作条，自己的消息上有「编辑」，「选择」打开选字 sheet。`-showMenu`（DELAY 11 秒左右）截图里操作条画出来了。
   - Mac（2026-11-02 Mac mini 真窗口）：在消息上真的右键、Control-点击都不出操作条（同一窗口里列表行的右键菜单正常），见 #501。分享卡片（下一条）的入口在操作条上，也跟着挡住。
+  - Mac 真窗口（2026-11-04，执行者跑，#854 之后）：右键自己的消息出操作条 复制 / 选择 / 引用 / 分享 / 编辑，右键回答出 复制 / 选择 / 引用 / 分享（没有编辑）；「选择」打开「选择文本」sheet（回答全文，可选中，带「全部拷贝」「完成」），「完成」关掉。
 - [ ] Share card image (light/dark, save to Photos, share image/text) — Views/Chat/ShareCard.swift
   - 要到 Mac 前看：分享卡片里存到照片（会弹权限）和分享图片 / 文字。`-showShareCard` 截图里卡片画出来了。
+  - Mac 真窗口（2026-11-04，执行者跑）：操作条「分享」打开「分享消息」sheet，卡片画出这段回答和头像，按钮 保存图片 / 分享图片 / 分享文字 / 完成；「分享文字」弹出系统分享菜单（邮件、信息、备忘录、拷贝……），「完成」关掉。还剩「保存图片」（会弹照片权限）和「分享图片」没点。
 - [ ] Image viewer (all chat images, paging, zoom, save/edit/share/copy) — Views/Chat/ImageViewer.swift
   - 要到 Mac 前看：←/→ 翻页、缩放、保存。`-openFirstImage` 截图里查看器和保存 / 编辑 / 分享 / 拷贝都在。
   - Mac（2026-11-02 核对）：`MOCK_CHAT_IMAGES=1 -openFirstImage YES` 离屏截图：查看器、✕、保存 / 编辑 / 分享 / 拷贝都在。还剩翻页、缩放、保存（要真窗口）。
+  - Mac 真窗口（2026-11-04，执行者跑，`MOCK_CHAT_IMAGES=many`）：单击对话里的竖图打开看图器（1/2，关闭、保存、编辑、分享、拷贝、下一张箭头）；点箭头翻到第 2 张再翻回来；双击放大、再双击还原；Esc 关掉。还剩键盘 ←/→ 和「保存」（会弹照片权限）。
 - [x] Image editor (box / pen, 6 colors, undo/clear, 加到输入框) — Views/Chat/ImageEditor.swift
   - Mac（2026-11-01 核对）：`-openEditor YES` 原来只在 iOS 有钩子，`ImageViewer.swift` 的 macOS 分支补上后截图看到框 / 笔、6 个颜色、撤销 / 清除、加到输入框。用鼠标画、把标记画进图片（macOS 的 NSImage 分支）还要到 Mac 前试。
 - [x] File path chips (verified via /stat), tool-row paths clickable — Views/Chat/FileViewer.swift (FileChips, LookUpFiles), Code/FilePresence.swift
@@ -651,6 +654,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-01 核对）读代码：`AppModel.drafts` 存 UserDefaults、没有平台限制，Mac 的输入框绑的是同一个 Composer。
 - [ ] Quote bars inside the input box (from 引用, web selection / doc / other session) — DesignSystem/QuoteViews.swift (QuoteBar)
   - 要到 Mac 前看：在 Mac 的链接面板里选一段字点「作为上下文」，输入框里出引用条。要先选字才有，没截到。
+  - Mac 真窗口（2026-11-04，执行者跑）：右键回答点「引用」，输入框上方出「引用 Claude」条（回答开头），输入框拿到焦点；✕ 去掉。还剩链接面板选字「作为上下文」那条路。
 - [ ] Optimistic send with pending bubble, client_msg_id, retry/discard — Shared/ChatStore.swift, AppModel.send/retry/discard
   - Mac（2026-11-01 核对）：只读了代码（`AppModel.send/retry/discard` 和 ChatStore 共用，没有平台限制）；§4 截到过发送失败的气泡、§24 截到过离线的待发气泡，重发 / 删除没点过。
 
