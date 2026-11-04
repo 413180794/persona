@@ -880,6 +880,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return browserStatus(ctx), nil
 	case "browser.call":
 		return browserCall(ctx, params)
+	case "browser.cookies.list", "browser.cookies.import", "browser.cookies.clear": // sign-ins in ego's profile (browser_cookies.go)
+		return browserCookies(ctx, method, params)
 	case "fs.stat":
 		return map[string]any{"stats": n.statPaths(p.Paths, p.Cwd)}, nil
 	case "space.rename":

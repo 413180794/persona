@@ -46,6 +46,10 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("GET /api/v1/machines/{mid}/browser", h.withMachine(h.getBrowser))
 	api.HandleFunc("PUT /api/v1/machines/{mid}/browser", h.withMachine(h.putBrowser))
 	api.HandleFunc("POST /api/v1/machines/{mid}/browser/{action}", h.withMachine(h.postBrowserJob))
+	// sign-ins in ego lite (browser_cookies.go): only the user's own apps, the hub keeps nothing
+	api.HandleFunc("GET /api/v1/machines/{mid}/browser/cookies", h.withMachine(h.browserCookies))
+	api.HandleFunc("POST /api/v1/machines/{mid}/browser/cookies", h.withMachine(h.browserCookies))
+	api.HandleFunc("DELETE /api/v1/machines/{mid}/browser/cookies", h.withMachine(h.browserCookies))
 	api.HandleFunc("POST /api/v1/machines/{mid}/deploy", h.withMachine(func(w http.ResponseWriter, r *http.Request, m *Machine) {
 		if err := m.startDeploy(); err != nil {
 			writeErr(w, http.StatusConflict, err)

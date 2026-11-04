@@ -40,6 +40,7 @@ import { Button, cx, EASE, IconButton, Loading, StatePill, StatusDot, toast } fr
 import { Icon } from "../../ui/icons";
 import { MetricChart, type ChartSeries } from "./MetricChart";
 import { MachineDeploy } from "./MachineDeploy";
+import { BrowserLogins } from "./BrowserLogins";
 import { ComputerSection } from "./ComputerSection";
 import { MachinePluginSections } from "../plugins/PluginSlots";
 
@@ -247,6 +248,7 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
       </section>
 
       {m.computer && <ComputerSection mid={mid} computer={m.computer} online={online} />}
+      {m.browser?.set_up && <BrowserLogins mid={mid} online={online} />}
 
       {/* monitoring */}
       <section>

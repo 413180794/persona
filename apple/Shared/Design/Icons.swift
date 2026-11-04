@@ -207,6 +207,8 @@ extension Theme {
         static let screen = "display"
         /// Signing in with a code entered on a web page instead of a computer's login (GitHub's device flow).
         static let deviceCode = "key"
+        /// A website whose sign-in (cookies) a browser keeps (a Mac's 浏览器登录, #1304).
+        static let siteLogin = "lock"
         /// This Mac out of the hub's reach (the Persona page's device chip on the Mac).
         static let laptopOffline = "laptopcomputer.slash"
         static let server = "server.rack"

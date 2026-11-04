@@ -351,6 +351,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   来源有两处：展开着的工作里带 `tool_use_id` 的 image item，和折起来的工作的 `fold.images`（`docs/protocol.md`「折叠的工作」：`item_id` 走 items/{id}/image，没有的只有 `path` 走 `file/thumb`）。同一路径一次，没路径的按 mime + 大小 + 宽高去重，按第一次出现排。
   只有缩略图，不加标题或说明文字：多张是高 60px 的横滑条，宽度按图的比例（方到 16:9 之间），超出时边缘渐隐；一张就是一个略大的缩略图（高 88px）。名字（文件名或「截图 · 机器」）和尺寸只在悬停和画廊里出现。点开是画廊：← / → 和底部缩略图切换，Esc 关，下载、拷贝路径、在文件页打开。
   缩略图懒加载；条的高度固定、每张有自己的 key，工作中新图追加在末尾，不让上面的内容移动。
+- **浏览器登录**（#1304，`machines/BrowserLogins.tsx`、`lib/cookies.ts`）：插件 ego 打开、这台 Mac 的 ego lite 做完首次设置后，机器页列出 ego 里有登录的网站（条数、最晚过期，不显示内容），可按网站或全部清除，可导入 cookies.txt / JSON（页面里解析，勾选网站后经 hub 直转那台 Mac，hub 不保存），见 `docs/plan-ego-browser.md`。
 - **链接**：见下面「链接在页面里打开」。
 
 ### 链接在页面里打开

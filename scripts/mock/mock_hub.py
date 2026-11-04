@@ -6721,6 +6721,32 @@ def browser_now(machine):
     return {"enabled": True, **browser_state("ready"), "job": {"kind": "open", "state": "done", "started": job["started"]}}
 
 
+# Sign-ins in ego (#1304): the sites with cookies on MacBook, as browser.cookies.list gives them (no names, no values).
+MOCK_COOKIE_SITES = {"github.com": [4, "2027-05-12T08:00:00Z"], "notion.so": [7, "2026-12-30T10:00:00Z"], "example.com": [2, None]}
+
+
+def cookie_sites():
+    return {"sites": [{"domain": d, "count": c, **({"expires": e} if e else {})} for d, (c, e) in sorted(MOCK_COOKIE_SITES.items())]}
+
+
+def cookie_call(method, q, body):
+    """GET / POST / DELETE …/browser/cookies like the hub: the import's cookies are counted by site and dropped."""
+    if method == "POST":
+        cookies = json.loads(body or b"{}").get("cookies") or []
+        if not cookies: return {"error": "没有要导入的 cookie"}, 400
+        for c in cookies:
+            site = ".".join(c.get("domain", "").lstrip(".").split(".")[-2:])
+            n, e = MOCK_COOKIE_SITES.get(site, [0, None])
+            exp = c.get("expires")
+            MOCK_COOKIE_SITES[site] = [n + 1, datetime.fromtimestamp(exp, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if exp else e]
+        return {**cookie_sites(), "imported": len(cookies)}, 200
+    if method == "DELETE":
+        gone = list(MOCK_COOKIE_SITES) if q.get("all", [""])[0] == "1" else [x for x in q.get("site", []) if x in MOCK_COOKIE_SITES]
+        removed = sum(MOCK_COOKIE_SITES.pop(x)[0] for x in gone)
+        return {**cookie_sites(), "removed": removed}, 200
+    return cookie_sites(), 200
+
+
 if MOCK_BROWSER:
     for _m in MACHINES:
         if _m.get("os") == "darwin":
@@ -7542,6 +7568,8 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/hub/update/history": return self.send_json({"history": hub_update_history()})
         if p == "/api/v1/skills": return self.send_json({"machine_id": "macbook", "machine": "MacBook", "skills": MOCK_SKILLS})
         if p == "/api/v1/machines": return self.send_json({"machines": out_machines()})
+        if p.startswith("/api/v1/machines/") and p.endswith("/browser/cookies") and MOCK_BROWSER:  # sign-ins in ego (#1304)
+            return self.send_json(*cookie_call("GET", q, None))
         if p.startswith("/api/v1/machines/") and p.endswith("/browser"):  # the plugin ego (MOCK_BROWSER)
             machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
             if machine is None or "browser" not in machine:
@@ -8361,6 +8389,8 @@ class H(BaseHTTPRequestHandler):
         if self.command == "DELETE" and p == "/api/v1/imessage/data":  # what the hub kept, once 交给 Jarvis is off
             if IMESSAGE_STATUS.get("ai"): return self.send_json({"error": "先关掉「交给 Jarvis」再删除", "code": "ai_on"}, 409)
             return self.send_json({"chats": 6, "people": 9, "inbox": 1})
+        if p.startswith("/api/v1/machines/") and p.endswith("/browser/cookies") and MOCK_BROWSER:  # sign-ins in ego (#1304)
+            return self.send_json(*cookie_call(self.command, parse_qs(urlparse(self.path).query), self.last_body))
         if p.startswith("/api/v1/machines/") and (p.endswith("/browser") or "/browser/" in p):  # the plugin ego (MOCK_BROWSER)
             machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
             if machine is None or "browser" not in machine:

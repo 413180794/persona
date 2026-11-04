@@ -205,6 +205,8 @@ mock 第六次问时确认，页面自己变成已连接。mock 的登录状态�
 三节列表（Persona / 已接入 / 可以安装）、微信的页面（账号、消息发到、功能）、用令牌绑定（错的令牌原地报错）、飞书机器人解绑后用 6 位配对码重新配对、
 主对话第一条下面的「来自 微信」。mock 的绑定状态留在进程里，换深色再跑先重启 mock；`-openChannels YES` / `-openChannel <id>` 直接打开列表 / 某个渠道。
 
+浏览器登录（#1304）：`MOCK_BROWSER=ready PORT=<独立端口> python3 scripts/mock/mock_hub.py`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口>` 跑 `BrowserLoginsTests`：机器页列网站、选一个 cookies.txt（`-openCookieFile <路径>` 代替系统的文件选择器）后默认一个不勾、过期的勾不了、导入、清除；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 存截图。
+
 已知会挂、修好之前不进验收的 UI 测试先跳过，`TEST_RUNNER_JARVIS_KNOWN_ISSUES=1` 才跑，跳过的说明里写 issue 号：
 现在只有 `ShellRoomScrollTests`（外壳状态行收起时 Agents 搜索框闪一下，#413，`docs/shell.md`「状态行」）。
 

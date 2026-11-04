@@ -53,6 +53,7 @@ struct MachineDetailView: View {
                     agentsSection(machine)
                     if let computer = machine.computer { ComputerSection(ref: ref, computer: computer, online: online) }
                     if let browser = machine.browser { BrowserSection(ref: ref, browser: browser, online: online) }
+                    if machine.browser?.setUp == true { BrowserLoginsSection(ref: ref, online: online) }
                     VStack(alignment: .leading, spacing: Theme.Space.m) {
                         heading("监控")
                         if let s = data?.latest, online { NowGrid(sample: s, cores: system?.cores) }

@@ -176,6 +176,36 @@ type Browser struct {
 	Checked       time.Time    `json:"checked,omitempty"`
 }
 
+// BrowserCookie is one cookie imported into ego lite's default profile (hub → node browser.cookies.import, #1304). The
+// client parses the file the user picked (cookies.txt or an extension's JSON) into these; the hub passes them on and
+// keeps nothing. Expires is Unix seconds, 0 for a session cookie; HostOnly: Domain is the host itself (no leading dot).
+type BrowserCookie struct {
+	Name     string  `json:"name"`
+	Value    string  `json:"value"`
+	Domain   string  `json:"domain"`
+	Path     string  `json:"path,omitempty"`
+	Expires  float64 `json:"expires,omitempty"`
+	Secure   bool    `json:"secure,omitempty"`
+	HTTPOnly bool    `json:"http_only,omitempty"`
+	SameSite string  `json:"same_site,omitempty"` // Strict | Lax | None
+	HostOnly bool    `json:"host_only,omitempty"`
+}
+
+// BrowserCookieSite is a site with cookies in ego lite's profile (browser.cookies.list): never a value or a name.
+type BrowserCookieSite struct {
+	Domain  string    `json:"domain"` // the registrable part shown to the user: example.com for .example.com and www.example.com
+	Count   int       `json:"count"`
+	Expires time.Time `json:"expires,omitzero"` // the latest, zero when all are session cookies
+}
+
+// BrowserCookies answers browser.cookies.*: the sites now (after an import or a clear), and what was done.
+type BrowserCookies struct {
+	Sites    []BrowserCookieSite `json:"sites"`
+	Imported int                 `json:"imported,omitempty"`
+	Skipped  int                 `json:"skipped,omitempty"` // expired or malformed
+	Removed  int                 `json:"removed,omitempty"`
+}
+
 // ComputerJob is one install or grant the node runs in the background (docs/computer-use.md「一键安装」).
 type ComputerJob struct {
 	Kind  string `json:"kind"`  // install | grant | open

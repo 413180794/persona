@@ -49,6 +49,15 @@ func egoMac(t *testing.T, h *Hub, id string) (*Machine, func() []browserCallSeen
 					Image: &proto.Image{Mime: "image/jpeg", Data: "AAAA"}}, nil
 			}
 			return proto.ComputerResult{Output: json.RawMessage(`{"value":"Example Domain"}`)}, nil
+		case "browser.cookies.list", "browser.cookies.import", "browser.cookies.clear":
+			out := proto.BrowserCookies{Sites: []proto.BrowserCookieSite{{Domain: "example.com", Count: 2}}}
+			if cs, ok := p["cookies"].([]any); ok {
+				out.Imported = len(cs)
+			}
+			if p["all"] == true {
+				out.Removed, out.Sites = 2, nil
+			}
+			return out, nil
 		}
 		return nil, &rpc.Error{Message: "unknown method " + method}
 	}

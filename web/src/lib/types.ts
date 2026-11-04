@@ -34,6 +34,8 @@ export interface Machine {
     enabled: boolean; installed?: boolean; daemon?: boolean; ready?: boolean; accessibility?: string; screen_recording?: string;
     desktop?: string; screen_sharing?: boolean; note?: string;
   };
+  /** ego lite (the hub's plugin ego, docs/plan-ego-browser.md): only while the plugin is on and it is a Mac. */
+  browser?: { enabled: boolean; installed?: boolean; set_up?: boolean; ready?: boolean; note?: string };
 }
 
 /** The hubs of this hub's interconnected group, from the signed-in hello (docs/plan-hub-mesh.md 2.6). */

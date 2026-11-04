@@ -1,0 +1,65 @@
+import XCTest
+
+/// 浏览器登录 on a Mac's page (#1304) against scripts/mock/mock_hub.py with MOCK_BROWSER=ready (JARVIS_MOCK_HUB): the
+/// sites ego lite keeps sign-ins for, a cookie file's sites to tick (none at first; the expired one cannot be), the
+/// import, and clearing a site. `-openCookieFile` stands in for the system's file picker. With JARVIS_SHOTS each step is
+/// saved there (JARVIS_SHOTS_APPEARANCE names them).
+final class BrowserLoginsTests: XCTestCase {
+    private var hub = ""
+
+    override func setUpWithError() throws {
+        guard let h = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else {
+            throw XCTSkip("needs scripts/mock/mock_hub.py with MOCK_BROWSER=ready (JARVIS_MOCK_HUB)")
+        }
+        hub = h
+        continueAfterFailure = false
+    }
+
+    @MainActor private func shot(_ app: XCUIApplication, _ name: String) throws {
+        let env = ProcessInfo.processInfo.environment
+        let a = XCTAttachment(screenshot: app.screenshot())
+        a.name = name
+        a.lifetime = .keepAlways
+        add(a)
+        guard let dir = env["JARVIS_SHOTS"] else { return }
+        try app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(dir)/cookies-\(env["JARVIS_SHOTS_APPEARANCE"] ?? "unknown")-\(name).png"))
+    }
+
+    @MainActor func testSitesImportAndClear() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("cookies.txt")
+        try [".example.com\tTRUE\t/\tTRUE\t2000000000\tsid\tmade-up-1", "#HttpOnly_.example.com\tTRUE\t/\tTRUE\t2000000000\ttoken\tmade-up-2",
+             ".shop.example.org\tTRUE\t/\tFALSE\t2000000000\tcart\tmade-up-3", ".news.example.net\tTRUE\t/\tFALSE\t1000\told\tmade-up-4"]
+            .joined(separator: "\n").write(to: file, atomically: true, encoding: .utf8)
+        let app = XCUIApplication()
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "macbook", "-openCookieFile", file.path]
+        app.launchPinned()
+
+        let sites = app.descendants(matching: .any).matching(identifier: "browser-logins-site")
+        let page = app.scrollViews.firstMatch
+        for _ in 0..<8 where !sites.firstMatch.isHittable { page.swipeUp(velocity: .slow) }
+        // the file's sheet comes up once the sites are read
+        let confirm = app.buttons["browser-logins-confirm"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 20), "no pick sheet")
+        XCTAssertFalse(confirm.isEnabled, "something was ticked before the user did")
+        let picks = app.buttons.matching(identifier: "browser-logins-pick")
+        XCTAssertEqual(picks.count, 3)
+        XCTAssertFalse(picks.element(boundBy: 1).isEnabled, "the expired site can be ticked")
+        picks.element(boundBy: 0).tap()
+        picks.element(boundBy: 2).tap()
+        XCTAssertEqual(confirm.label, "导入 3 条")
+        try shot(app, "pick")
+        confirm.tap()
+        XCTAssertTrue(confirm.waitForNonExistence(timeout: 15), "the sheet stayed")
+        let org = app.staticTexts["example.org"]
+        XCTAssertTrue(org.waitForExistence(timeout: 10), "the imported site is not listed")
+        for _ in 0..<4 where !org.isHittable { page.swipeUp(velocity: .slow) }
+        try shot(app, "list")
+        app.buttons.matching(identifier: "browser-logins-clear").firstMatch.tap()
+        try shot(app, "clear")
+        let sure = app.buttons.matching(identifier: "browser-logins-clear-confirm").firstMatch
+        XCTAssertTrue(sure.waitForExistence(timeout: 5), "no confirmation")
+        sure.tap()
+        XCTAssertTrue(app.staticTexts["example.com"].waitForNonExistence(timeout: 10), "the site was not cleared")
+    }
+}

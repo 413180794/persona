@@ -371,6 +371,21 @@ nonisolated struct APIClient: Sendable {
         try JSON.decoder.decode(MachineBrowser.self, from: await request("POST", "/api/v1/machines/\(machine)/browser/\(action)"))
     }
 
+    /// 浏览器登录 (#1304): the sites with cookies in the Mac's ego lite; only the user's own apps may ask.
+    func browserCookies(machine: String) async throws -> BrowserCookies {
+        try JSON.decoder.decode(BrowserCookies.self, from: await request("GET", "/api/v1/machines/\(machine)/browser/cookies", timeout: 150))
+    }
+    /// Imports the cookies the user ticked; the hub passes them on and keeps nothing.
+    func importBrowserCookies(machine: String, _ cookies: [BrowserCookie]) async throws -> BrowserCookies {
+        struct Body: Encodable { var cookies: [BrowserCookie] }
+        return try JSON.decoder.decode(BrowserCookies.self, from: await request("POST", "/api/v1/machines/\(machine)/browser/cookies", body: Body(cookies: cookies), timeout: 150))
+    }
+    /// Clears a site's sign-ins, or (nil) all of them.
+    func clearBrowserCookies(machine: String, site: String?) async throws -> BrowserCookies {
+        let query = site.map { ["site": $0] } ?? ["all": "1"]
+        return try JSON.decoder.decode(BrowserCookies.self, from: await request("DELETE", "/api/v1/machines/\(machine)/browser/cookies", query: query, timeout: 150))
+    }
+
     /// The group on what the hub returned (docs/multi-hub.md).
     func stamp(_ list: [Machine]) -> [Machine] { group.isEmpty ? list : list.map { var m = $0; m.group = group; return m } }
     func stamp(_ list: [Session]) -> [Session] { group.isEmpty ? list : list.map { var s = $0; s.group = group; return s } }

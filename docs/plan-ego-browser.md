@@ -183,3 +183,12 @@ cookies 就是登录凭据：拿到就等于登录了。下面每一步都按「
 5. 从另一台电脑导（c）要不要做，还是先只做 a、b、d？
 6. ego 的「使用分析」：引导里提示关掉就行，还是能关就由 node 自动关（要实测有没有开关）？
 7. **需要用户在这台 Mac 上完成一次 ego 的首次设置**（导入那一步可以先跳过）：之后我才能实测完成标记、CLI、截图、`Network.setCookies` 和投屏。
+
+## 导入 cookies 做了什么（#1304，2026-11-04）
+
+- **实测**（这台开发 Mac 的 ego lite，只碰 example.com，测完即删）：任务空间页面上的 `page.cdp("Network.setCookies", {cookies})` 能写（域 cookie 和 host-only 都行），`Network.getCookies` 读回 flags 正确，`Network.deleteCookies` 能删，`Network.getAllCookies` 能列整个 profile。`Storage.*` 不行：`task.cdp` 只放 `Target.` / `Browser.`，所以全走 Network 域。
+- **node**（`node/browser_cookies.go`）：`browser.cookies.list` / `.import` / `.clear`。每次在 Persona 自己的任务空间「persona cookies」里跑一段脚本，结束时 `task.finish`。cookie 经脚本的 stdin 给 `ego-browser nodejs`，不进命令行、不落文件；回给 hub 的只有网站、条数、最晚过期时间和导入 / 跳过 / 删除的条数，ego 出错时也不把它的输出带回（可能回显脚本）。按 CDP 的格式换：host-only 去掉开头的点、域 cookie 补上；SameSite=None 补 Secure；过期的和格式不对的跳过。网站按公共后缀表归并（`www.example.com`、`.example.com` 都算 example.com）。用户正在接管任务空间时提示先交还。
+- **hub**（`hub/browser_cookies.go`）：`GET / POST / DELETE /api/v1/machines/{mid}/browser/cookies`。只认用户自己登录的 App / 网页（`byOwnDevice`）：hub.json 的配对 token（CLI、助手的进程）、手表、机器、别的 hub 都是 403，助手没有对应的工具。导入的内容直接转给 node，不进数据库、不写盘、不进日志；日志只记「哪台、谁、几条、哪些网站」。目标 Mac 离线时 409。插件 ego 打开、这台是 Mac 才有。
+- **网页**（机器页「浏览器登录」，`views/machines/BrowserLogins.tsx`、`lib/cookies.ts`）：列网站（条数、最晚过期，不显示内容），每个网站「清除」、「全部清除」（都先确认）；「导入 cookie 文件」：Netscape `cookies.txt`（含 `#HttpOnly_` 行）或 Cookie-Editor / EditThisCookie / `{cookies: [...]}` 的 JSON，在页面里解析，按网站列出（默认一个不勾，过期的不导），只把勾选的发给 hub；发出后页面里不再留着文件内容。
+- **iOS**（机器页「浏览器登录」，`Views/Machines/BrowserLoginsSection.swift`、`Shared/BrowserCookies.swift`）：和网页同一套：列网站、清除（确认）、「导入」用系统的文件选择器选 cookies.txt / JSON，在手机上解析（`CookieFile`，`BrowserCookiesTests` 和网页的测试是同一组例子），弹出按网站勾选的表单，只发勾选的。
+- 还没做：来源 a「从 Chrome 导入」按钮、来源 c 另一台电脑。

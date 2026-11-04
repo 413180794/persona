@@ -328,3 +328,9 @@
 - **`filepath.EvalSymlinks` 也不行**：它一段段 `Lstat`，跟着链接走进 iCloud 之后还会 lstat 里面的下一段，判断放在它返回之后已经晚了。
   现在自己逐段走（`node/pathguard.go` 的 `realPath`），每一段在 `Lstat` 之前先过 `offLimits`；macOS 默认不分大小写，比较前转小写。
 - **一次 stat 挂住不能拖住整批**：网络盘、休眠的硬盘也会卡，`statPaths` 并发 8 个、整批最多等 3 秒，没答上的当 `missing`。
+
+## ego 的 cookie（2026-11-04，#1304）
+
+- **`task.cdp` 只放 Target / Browser**：cookie 要走页面的 `page.cdp("Network.setCookies" / "getAllCookies" / "deleteCookies")`，`Storage.getCookies` 会报「task.cdp only supports Target. and Browser. commands」。
+- **ego-browser 出错时的输出可能回显脚本**：cookie 值在脚本里，所以出错只报退出码，不把 stdout / stderr 带回 hub。
+- **「是不是用户本人」用 `byOwnDevice`**：hub.json 的配对 token 也是 full 角色，但它在 CLI 和助手的进程手里；凭据类的操作只认带设备 id 的 token。
