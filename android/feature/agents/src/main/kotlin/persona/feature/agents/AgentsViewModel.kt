@@ -45,6 +45,8 @@ internal class AgentsViewModel(
     private val pairingScope: String = bindings?.operations?.scope.orEmpty(),
     private val renamer: SessionRenamer? = null,
     val tasks: persona.core.domain.tasks.TasksStore? = null,
+    val hubUpdates: persona.core.contracts.api.HubUpdates? = null,
+    val appBuild: Long = 1L,
 ) : ViewModel() {
     private val operations = bindings?.operations?.let { AgentOperationsState(it, preferences.hubCache) }
     val operationState = operations?.state ?: MutableStateFlow(AgentOperationsSnapshot())
@@ -68,6 +70,68 @@ internal class AgentsViewModel(
     private val _failure = MutableStateFlow<Throwable?>(null)
     val failure = _failure.asStateFlow()
     fun clearFailure() { _failure.value = null }
+    private val _hubUpdate = MutableStateFlow<HubUpdateStatus?>(null)
+    private val _hubHello = MutableStateFlow<Hello?>(null)
+    private val _hubNoticeDismissed = MutableStateFlow<Set<String>>(emptySet())
+    val hubNotice: StateFlow<HubNotice?> = combine(
+        _hubUpdate,
+        _hubHello,
+        connection.state,
+        _hubNoticeDismissed
+    ) { update, hello, connState, dismissed ->
+        val compat = HubCompat.of(
+            protocolVersion = hello?.protocol,
+            minAppBuild = hello?.minAppBuild,
+            appBuild = appBuild,
+            connected = connState == ConnectionState.Online,
+        )
+        HubNotice.of(update, compat, dismissed)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun dismissHubNotice(notice: HubNotice) {
+        val key = notice.dismissKey ?: return
+        _hubNoticeDismissed.update { (it + key).takeLast(8).toSet() }
+    }
+
+    fun setAutoUpdate(on: Boolean) {
+        viewModelScope.launch {
+            try {
+                val updated = hubUpdates?.settings(auto = on)
+                if (updated != null) _hubUpdate.value = updated
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                _notice.value = "保存失败：${persona.core.designsystem.failureReason(e)}"
+            }
+        }
+    }
+
+    fun noticeSeen() {
+        viewModelScope.launch {
+            try {
+                val updated = hubUpdates?.settings(noticeSeen = true)
+                if (updated != null) _hubUpdate.value = updated
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                _notice.value = "保存失败：${persona.core.designsystem.failureReason(e)}"
+            }
+        }
+    }
+
+    fun startHubUpdate() {
+        viewModelScope.launch {
+            try {
+                val updated = hubUpdates?.start(now = false)
+                if (updated != null) _hubUpdate.value = updated
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                _notice.value = "没能开始更新：${persona.core.designsystem.failureReason(e)}"
+            }
+        }
+    }
+
     private val todosFlow = tasks?.todos ?: MutableStateFlow(emptyList())
     val page = combine(renamer?.project(repository.sessions) ?: repository.sessions, repository.machines, preferences.snapshots(pairingScope),
         settings.combine(groupFilter, ::Pair), combine(operationState, todosFlow, ::Pair)) { everySession, everyMachine, localPrefs, (settings, group), (ops, todos) ->
@@ -95,6 +159,31 @@ internal class AgentsViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AgentsPageState())
 
     init {
+        if (hubUpdates != null) {
+            viewModelScope.launch {
+                try {
+                    _hubUpdate.value = hubUpdates.status()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: HubUpdatesUnsupported) {
+                    // Legacy hub without update API
+                } catch (_: Exception) {
+                    // Ignored on initial poll
+                }
+            }
+            viewModelScope.launch {
+                hubUpdates.events.collect { update ->
+                    _hubUpdate.value = update
+                }
+            }
+        }
+        viewModelScope.launch {
+            connection.events.collect { event ->
+                if (event is Hello) {
+                    _hubHello.value = event
+                }
+            }
+        }
         viewModelScope.launch {
             var previous = emptyList<Interaction>()
             interactions.pending.collect { pending ->

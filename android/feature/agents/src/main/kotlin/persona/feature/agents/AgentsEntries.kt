@@ -45,6 +45,7 @@ interface AgentsDependencies {
     /** The phone's hub groups: the list labels and filters by them when there is more than one. */
     fun groups(): persona.core.contracts.api.HubGroups = persona.core.contracts.api.HubGroups.None
     fun tasks(): persona.core.domain.tasks.TasksStore? = null
+    fun hubUpdates(): persona.core.contracts.api.HubUpdates? = null
 }
 
 /** Supply one immutable pairing scope; close callbacks synchronize navigation and notifications. */
@@ -94,7 +95,7 @@ fun EntryProviderScope<NavKey>.agentsEntries(
             val tasksStore = dependencies.tasks() ?: wiring.tasks
             val model = viewModel(key = "agents:${wiring.scope}:${operations?.operations?.scope.orEmpty()}") {
                 AgentsViewModel(dependencies.sessions(), dependencies.interactions(), dependencies.connection(), dependencies.sender(), dependencies.preferences(), operations, wiring.mainSender,
-                    wiring.scope.ifEmpty { operations?.operations?.scope.orEmpty() }, renamer, tasksStore)
+                    wiring.scope.ifEmpty { operations?.operations?.scope.orEmpty() }, renamer, tasksStore, hubUpdates = dependencies.hubUpdates())
                     .also { it.machine(initialMachine) }
             }
             val source = LocalAgentsDraftSource.current

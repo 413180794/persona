@@ -42,6 +42,10 @@ data class Hello(
     @SerialName("event_seq") val eventSeq: Long? = null,
     /** The hub replays every broadcast this client missed right after the hello: no refetch is needed. */
     val resumed: Boolean? = null,
+    val channel: String? = null,
+    val build: Long? = null,
+    val protocol: Int? = null,
+    @SerialName("min_app_build") val minAppBuild: Int? = null,
 ) : ServerEvent
 
 @KeepGeneratedSerializer

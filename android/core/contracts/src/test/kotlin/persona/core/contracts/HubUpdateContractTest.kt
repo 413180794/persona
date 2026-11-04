@@ -22,4 +22,13 @@ class HubUpdateContractTest {
         val event = HubUpdateEvent(persona.core.contracts.api.HubUpdateStatus(version = "1.0.0", state = "idle"))
         assertEquals(event, ServerEvent.decode(JsonCodec.encodeToString(ServerEvent.serializer(), event)))
     }
+
+    @Test fun helloDecodesUpdateCompatFields() {
+        val event = ServerEvent.decode("""{"type":"hello","features":["x"],"channel":"release","build":202611021500,"protocol":1,"min_app_build":95}""")
+        val hello = event as Hello
+        assertEquals("release", hello.channel)
+        assertEquals(202611021500L, hello.build)
+        assertEquals(1, hello.protocol)
+        assertEquals(95, hello.minAppBuild)
+    }
 }

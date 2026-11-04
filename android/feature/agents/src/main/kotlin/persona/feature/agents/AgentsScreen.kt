@@ -46,6 +46,7 @@ internal fun AgentsScreen(
     val requestHistory by model.requestHistory.collectAsStateWithLifecycle()
     val refreshing by model.refreshing.collectAsStateWithLifecycle()
     val notice by model.notice.collectAsStateWithLifecycle()
+    val hubNotice by model.hubNotice.collectAsStateWithLifecycle()
     val operations by model.operationState.collectAsStateWithLifecycle()
     var operationDialog by remember { mutableStateOf<AgentOperationDialog?>(null) }
     var pickingTodoForSession by remember { mutableStateOf<Session?>(null) }
@@ -173,6 +174,20 @@ internal fun AgentsScreen(
                 QuickFilterBar(AgentQuickFilter.entries.map { filter ->
                     Bay(filter.label, if (filter == AgentQuickFilter.All) page.allCount else page.list.counts[filter] ?: 0, filter.state?.designStatus)
                 }, AgentQuickFilter.entries.indexOf(page.settings.quick), { model.filter(AgentQuickFilter.entries[it]) }, Modifier.padding(vertical = Tokens.Space.s))
+            }
+            val currentNotice = hubNotice
+            if (currentNotice != null && page.settings.query.isEmpty() && page.preferences.range != AgentRange.History) {
+                item("hub-notice") {
+                    HubNoticeRow(
+                        notice = currentNotice,
+                        onClick = { navigator.navigate(SettingsPageRoute(SettingsPage.HubUpdate)) },
+                        onAutoOff = { model.setAutoUpdate(false) },
+                        onNoticeSeen = model::noticeSeen,
+                        onUpdate = model::startHubUpdate,
+                        onDismiss = model::dismissHubNotice,
+                        modifier = Modifier.padding(bottom = Tokens.Space.xs),
+                    )
+                }
             }
             if (connection != ConnectionState.Online) item("connection") { ConnectionNotice(connection, ::connectionSettings) }
             if (page.preferences.range != AgentRange.History && requests.isNotEmpty()) {
