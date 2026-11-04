@@ -144,7 +144,7 @@ func TestPluginProgramOnThisComputer(t *testing.T) {
 	if res, _ := pluginCall(t, n, "plugin.node.have", prog); !res.(proto.PluginNodeHave).Have {
 		t.Fatal("no package after it came")
 	}
-	if _, err := os.Stat(filepath.Join(n.dir, "plugins", "notes", "1.0.0", "README")); err != nil {
+	if _, err := os.Stat(filepath.Join(n.dir, nodePluginsDir, "notes", "1.0.0", "README")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -162,7 +162,7 @@ func TestPluginProgramOnThisComputer(t *testing.T) {
 	out, _ = pluginCall(t, n, "plugin.node.call", proto.PluginNodeCall{ID: "notes", Method: "demo.env"})
 	var env map[string]string
 	_ = json.Unmarshal(out.(json.RawMessage), &env)
-	if env["hub"] != "" || env["data"] != filepath.Join(n.dir, "plugins", "notes", "data") || env["mode"] != "rpc" {
+	if env["hub"] != "" || env["data"] != filepath.Join(n.dir, nodePluginsDir, "notes", "data") || env["mode"] != "rpc" {
 		t.Fatalf("no hub token, its data directory, its own variables: %v", env)
 	}
 	waitFor(t, "the program's event", func() bool {
@@ -228,27 +228,76 @@ func TestPluginProgramUpgradeRollbackAndSync(t *testing.T) {
 	}
 
 	// Should run: 2.0.0's version (as the hub says); 1.1.0 stays as the one to fall back to, 1.0.0 goes.
-	_ = os.WriteFile(filepath.Join(n.dir, "plugins", "notes", "data", "kept"), []byte("x"), 0o600)
+	_ = os.WriteFile(filepath.Join(n.dir, nodePluginsDir, "notes", "data", "kept"), []byte("x"), 0o600)
 	pluginCall(t, n, "plugin.node.sync", proto.PluginNodeSync{Programs: []proto.PluginNodeProgram{{ID: "notes", Version: "2.0.0"}}, Installed: []string{"notes"}})
 	if st := n.plugins().status().Programs; len(st) != 0 {
 		t.Fatalf("1.1.0 runs on though the hub wants 2.0.0: %+v", st)
 	}
 	for v, want := range map[string]bool{"1.0.0": false, "1.1.0": true, "2.0.0": true} {
-		if _, err := os.Stat(filepath.Join(n.dir, "plugins", "notes", v)); (err == nil) != want {
+		if _, err := os.Stat(filepath.Join(n.dir, nodePluginsDir, "notes", v)); (err == nil) != want {
 			t.Errorf("version %s there: %v", v, err == nil)
 		}
 	}
 	// Switched off here, still installed: packages go, data stays; not installed any more: all of it goes.
 	pluginCall(t, n, "plugin.node.sync", proto.PluginNodeSync{Programs: []proto.PluginNodeProgram{}, Installed: []string{"notes"}})
-	if _, err := os.Stat(filepath.Join(n.dir, "plugins", "notes", "data", "kept")); err != nil {
+	if _, err := os.Stat(filepath.Join(n.dir, nodePluginsDir, "notes", "data", "kept")); err != nil {
 		t.Fatal("the data of a plugin still installed:", err)
 	}
-	if _, err := os.Stat(filepath.Join(n.dir, "plugins", "notes", "2.0.0")); err == nil {
+	if _, err := os.Stat(filepath.Join(n.dir, nodePluginsDir, "notes", "2.0.0")); err == nil {
 		t.Fatal("a package of a plugin switched off here")
 	}
 	pluginCall(t, n, "plugin.node.sync", proto.PluginNodeSync{Programs: []proto.PluginNodeProgram{}, Installed: []string{}})
-	if _, err := os.Stat(filepath.Join(n.dir, "plugins", "notes")); err == nil {
+	if _, err := os.Stat(filepath.Join(n.dir, nodePluginsDir, "notes")); err == nil {
 		t.Fatal("a plugin not installed any more left something")
+	}
+}
+
+// On the hub's machine the node shares the persona dir with the hub (#1933): its sync leaves the hub's plugins/ alone
+// (installed/, data/, staging/, markets/, node-packages/, the sockets, and what a #1921 node left there), and in its
+// own directory removes only what it made: not a directory without its mark, nor one named as the hub's.
+func TestPluginSyncLeavesTheHubsPluginsAlone(t *testing.T) {
+	n, _ := pluginTestNode(t)
+	hubs := []string{
+		"plugins/installed/example-chat/0.5.2/persona-plugin.json",
+		"plugins/installed/example-notes/0.1.2/bin/example-notes-linux-amd64",
+		"plugins/data/example-chat/cache",
+		"plugins/staging/0123456789ab/pkg/persona-plugin.json",
+		"plugins/markets/0123456789/persona-extensions.json",
+		"plugins/node-packages/notes/1.0.0-linux-amd64.tgz",
+		"plugins/example-chat.sock",
+		"plugins/notes/1.0.0/.persona-digest",  // a #1921 node's package, where it put them
+		nodePluginsDir + "/stray/1.0.0/README", // made by something else: no mark
+		nodePluginsDir + "/installed/" + pluginOwnMark,
+	}
+	for _, f := range hubs {
+		p := filepath.Join(n.dir, filepath.FromSlash(f))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	prog, pkg := testPackage(t, "1.0.0")
+	if err := put(t, n, prog, pkg); err != nil {
+		t.Fatal(err)
+	}
+	if res, _ := pluginCall(t, n, "plugin.node.start", startParams("1.0.0", "rpc")); res.(proto.PluginNodeState).State != "running" {
+		t.Fatalf("%+v", res)
+	}
+	if _, err := os.Stat(filepath.Join(n.dir, nodePluginsDir, "notes", pluginOwnMark)); err != nil {
+		t.Fatal("the node's own directory is not marked:", err)
+	}
+	for _, installed := range [][]string{{"notes", "example-chat"}, {}} { // switched off here, then uninstalled
+		pluginCall(t, n, "plugin.node.sync", proto.PluginNodeSync{Programs: []proto.PluginNodeProgram{}, Installed: installed})
+	}
+	for _, f := range hubs {
+		if _, err := os.Stat(filepath.Join(n.dir, filepath.FromSlash(f))); err != nil {
+			t.Errorf("%s: %v", f, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(n.dir, nodePluginsDir, "notes")); err == nil {
+		t.Fatal("the node's own plugin, uninstalled, stayed")
 	}
 }
 

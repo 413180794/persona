@@ -214,7 +214,7 @@ hub.json 的旧配置迁到插件：装上插件后在 设置 › 插件（或 `
 
 - 新的 RPC `plugin.node.put`（begin / chunk / commit，1 MB 一块，带 sha256），分块和校验复用 `node.update.*` 的代码；
 - 按内容摘要去重，和 skills 下发（`assistant.prepare`）一样，同一版本不重复传；
-- node 上放在 `~/.persona/plugins/<id>/<ver>/`，数据目录 `~/.persona/plugins/<id>/data/` 跨版本保留。
+- node 上放在 `~/.persona/node-plugins/<id>/<ver>/`，数据目录 `~/.persona/node-plugins/<id>/data/` 跨版本保留（不和 hub 的 `~/.persona/plugins/` 共用，#1933）。
 
 **升级**：
 

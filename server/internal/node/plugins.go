@@ -5,6 +5,11 @@ package node
 // (…call); the programs' events go back as plugin.node.event. They belong to this process, not to one connection: a
 // hub that reconnects finds them running; one gone longer than their lease finds them stopped (keep "always": still
 // running). Secrets reach a program in initialize only and are never written here.
+//
+// They live in <persona dir>/node-plugins, never in <persona dir>/plugins: on the hub's machine the node shares the
+// persona dir with the hub, whose plugins/ holds its installed plugins (installed/, data/, staging/, markets…). A
+// node of #1921 kept its packages there and its sync took installed/ for a plugin no longer installed (#1933).
+// What it left there is not moved nor removed: the hub sends the packages again.
 
 import (
 	"context"
@@ -37,7 +42,14 @@ const (
 	pluginUploadTTL    = 10 * time.Minute
 	// pluginNotRunning is the code of a call to a program that is not running here.
 	pluginNotRunning = "not_running"
+	// nodePluginsDir is where this node keeps plugins' programs, in the persona dir.
+	nodePluginsDir = "node-plugins"
+	// pluginOwnMark is in each plugin's directory the node made (<dir>/<id>/): sync removes only those (#1933).
+	pluginOwnMark = ".persona-node"
 )
+
+// hubPluginNames are the hub's own in its plugins directory: never a node's, whatever is in them (#1933).
+var hubPluginNames = []string{"installed", "data", "staging", "markets", "node-packages"}
 
 var digestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
@@ -53,7 +65,7 @@ func (n *Node) plugins() *pluginHost {
 	defer pluginHosts.Unlock()
 	ph := pluginHosts.byDir[n.dir]
 	if ph == nil {
-		ph = &pluginHost{dir: filepath.Join(n.dir, "plugins"), running: map[string]*pluginRun{}, uploads: map[string]*pluginUpload{},
+		ph = &pluginHost{dir: filepath.Join(n.dir, nodePluginsDir), running: map[string]*pluginRun{}, uploads: map[string]*pluginUpload{},
 			logf: n.logger.Printf, now: time.Now}
 		pluginHosts.byDir[n.dir] = ph
 		go ph.watchLeases()
@@ -67,7 +79,7 @@ func (n *Node) plugins() *pluginHost {
 }
 
 type pluginHost struct {
-	dir  string // <persona dir>/plugins: <id>/<version>/ the packages, <id>/data/ the programs' own
+	dir  string // <persona dir>/node-plugins: <id>/<version>/ the packages, <id>/data/ the programs' own, <id>/.persona-node
 	logf func(string, ...any)
 	now  func() time.Time
 
@@ -182,6 +194,28 @@ func (ph *pluginHost) versionDir(id, version string) string {
 }
 func (ph *pluginHost) dataDir(id string) string { return filepath.Join(ph.dir, id, "data") }
 
+// own makes id's directory, marked as this node's (pluginOwnMark): the only kind sync removes.
+func (ph *pluginHost) own(id string) error {
+	at := filepath.Join(ph.dir, id)
+	if err := os.MkdirAll(at, 0o700); err != nil {
+		return err
+	}
+	mark := filepath.Join(at, pluginOwnMark)
+	if _, err := os.Stat(mark); err == nil {
+		return nil
+	}
+	return os.WriteFile(mark, []byte("plugin "+id+": a program the hub runs on this computer (node/plugins.go)\n"), 0o600)
+}
+
+// owns says whether id's directory is one this node made (not the hub's, nor anything else that is there).
+func (ph *pluginHost) owns(id string) bool {
+	if slices.Contains(hubPluginNames, id) {
+		return false
+	}
+	st, err := os.Stat(filepath.Join(ph.dir, id, pluginOwnMark))
+	return err == nil && st.Mode().IsRegular()
+}
+
 // has: the package of that version is here, and is the one with that digest.
 func (ph *pluginHost) has(p proto.PluginNodeProgram) bool {
 	if checkProgram(p) != nil {
@@ -262,6 +296,9 @@ func (ph *pluginHost) commit(uploadID string) error {
 	}
 	if got := hex.EncodeToString(u.sum.Sum(nil)); got != u.prog.Digest {
 		return fmt.Errorf("plugin %s: the package's sha256 is %s, not %s", u.prog.ID, got, u.prog.Digest)
+	}
+	if err := ph.own(u.prog.ID); err != nil {
+		return err
 	}
 	dir := ph.versionDir(u.prog.ID, u.prog.Version)
 	tmp := dir + ".unpacking"
@@ -363,6 +400,9 @@ func (ph *pluginHost) run(s proto.PluginNodeStart, sum string) (*pluginRun, erro
 	if s.Command == "" || filepath.IsAbs(rel) || strings.HasPrefix(filepath.Clean(rel), "..") {
 		return nil, fmt.Errorf("plugin %s: command %q", s.ID, s.Command)
 	}
+	if err := ph.own(s.ID); err != nil {
+		return nil, err
+	}
 	data := ph.dataDir(s.ID)
 	if err := os.MkdirAll(data, 0o700); err != nil {
 		return nil, err
@@ -430,7 +470,8 @@ func (ph *pluginHost) stop(id string) {
 }
 
 // sync stops what should not run here and removes its packages: of a plugin still to run, the version to run and the
-// one before it (what an upgrade falls back to); of one not installed any more, its data too.
+// one before it (what an upgrade falls back to); of one not installed any more, its data too. It removes only what this
+// node made (owns): a directory without its mark is left alone, whatever its name (#1933).
 func (ph *pluginHost) sync(p proto.PluginNodeSync) proto.PluginNodeStates {
 	want := map[string]string{}
 	for _, prog := range p.Programs {
@@ -452,7 +493,7 @@ func (ph *pluginHost) sync(p proto.PluginNodeSync) proto.PluginNodeStates {
 	entries, _ := os.ReadDir(ph.dir)
 	for _, e := range entries {
 		id := e.Name()
-		if !e.IsDir() || !extension.ValidID(id) {
+		if !e.IsDir() || !extension.ValidID(id) || !ph.owns(id) {
 			continue
 		}
 		version, wanted := want[id]

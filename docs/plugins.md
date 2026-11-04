@@ -857,7 +857,9 @@ node 照做（`node/plugins.go`）。什么时候对齐：这台电脑连上时�
 
 - **包**：hub 按这台电脑的平台做一份 tar.gz（`extension.NodePackage`：去掉别的平台的程序和 hub 上的程序，固定顺序、不带时间和属主，同一个包每次字节一样），
   sha256 当摘要；电脑上没有这一份（`plugin.node.have`）才分块发过去（`plugin.node.put.begin/chunk/commit`，1 MB 一块，node 校验 sha256 后解包，检查同安装）。
-  放在那台电脑的 `~/.persona/plugins/<id>/<版本>/`，程序自己的数据在 `~/.persona/plugins/<id>/data/`，跨版本保留。
+  放在那台电脑的 `~/.persona/node-plugins/<id>/<版本>/`，程序自己的数据在 `~/.persona/node-plugins/<id>/data/`，跨版本保留。
+  **不用 `~/.persona/plugins/`**：hub 那台电脑上 node 和 hub 共用 `~/.persona`，`plugins/` 是 hub 装插件的地方（`installed/`、`data/`、`staging/`……）。
+  node 建的每个插件目录里有一个标记 `.persona-node`，对账只删有这个标记的；#1921 的 node 放在 `plugins/` 下，对账时把 hub 的 `installed/` 当成不再安装的插件删了（#1933）。
 - **起**：`plugin.node.start`，hub 带上配置和 `node.secrets` 里的密钥（只在 `initialize` 里，不落那台电脑的盘），**不带 hub 的 token**（电脑上的程序没有 `hub_api`）。
   环境变量 `PERSONA_PLUGIN_ID`、`PERSONA_PLUGIN_DIR`、`PERSONA_PLUGIN_DATA`（有 `http` 时还有 `PERSONA_PLUGIN_SOCKET`），环境是干净的（同 hub 上装的插件）。
   和正在跑的完全一样（版本、配置、密钥）就不动它；版本不同先停旧的；新版本 30 秒内没起来就停掉、把上一版再起起来，错误报给 hub。
