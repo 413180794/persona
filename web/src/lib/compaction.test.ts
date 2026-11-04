@@ -102,6 +102,15 @@ describe("the divider", () => {
     expect(ls[1].kind === "compact" && ls[1].item.id).toBe("n6#0");
   });
 
+  it("takes in the command claude -p writes after the boundary (#1865)", () => {
+    // The order a /compact sent to an idle claude -p left in a real transcript: boundary, summary, command, note.
+    const ls = chatLines([u(1, "hi"), a(2, "done"), boundary(3, { trigger: "manual", pre_tokens: 89119 }), notice(4, "已从压缩的上下文继续"),
+      notice(5, "压缩上下文"), notice(6, "Compacted")]);
+    expect(ls.map((l) => l.kind)).toEqual(["segment", "compact"]);
+    expect(ls[1].kind === "compact" && ls[1].item.compact?.notes).toEqual(["上下文已压缩", "已从压缩的上下文继续", "压缩上下文", "Compacted"]);
+    expect(ls[1].kind === "compact" && compactionLabel(ls[1].item.compact)).toBe("以上内容已压缩 · 手动 · 压缩前 8.9 万 token");
+  });
+
   it("stays a step of the work when compacted in the middle of it", () => {
     const ls = chatLines([u(1, "do"), tool(2, "x"), res(3, "x"), boundary(4, { trigger: "auto" }), notice(5, "已从压缩的上下文继续"), tool(6, "y"), res(7, "y"), a(8, "done")]);
     expect(ls.map((l) => l.kind)).toEqual(["segment"]);

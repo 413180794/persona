@@ -92,7 +92,7 @@ export function isCompaction(it: Item): boolean {
 }
 
 /**
- * One compaction is one item: the /compact that asked for it, the boundary, the summary after it and Claude Code's idle
+ * One compaction is one item: the /compact that asked for it (before the boundary, or after it as claude -p writes it), the boundary, the summary after it and Claude Code's idle
  * note fold into the boundary (its `compact`, the texts in `notes`). A summary whose boundary is on an older page
  * stands in for it; a /compact with no boundary after it (still running, or it failed) stays as it is.
  */
@@ -107,6 +107,12 @@ export function foldCompactions(items: Item[]): Item[] {
   };
   for (const it of items) {
     if (isNotice(it, COMMAND_TEXT)) {
+      // claude -p writes a /compact's command after its boundary and summary (#1865): it joins that divider.
+      const d = open >= 0 ? out[open] : undefined;
+      if (d?.compact) {
+        out[open] = { ...d, compact: { ...d.compact, notes: [...(d.compact.notes ?? []), it.text ?? COMMAND_TEXT] } };
+        continue;
+      }
       flushCommand();
       command = it;
       open = -1;
