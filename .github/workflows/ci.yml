@@ -20,6 +20,24 @@ jobs:
         run: python3 scripts/privacy_check.py
       - name: Issue-link workflow tests
         run: node scripts/test/pr_needs_issue_test.mjs
+  extension-schema:
+    # schema/extension is the one truth of the extension protocol and views: the generated Go / TS / Swift / Kotlin
+    # types match it and the examples hold to it (#1849).
+    name: Extension schema
+    runs-on: ${{ github.repository_owner == 'nwverse' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: sdk/go/go.mod
+      - name: Generated types and examples
+        run: python3 scripts/test/test_extension_schema.py
+      - name: Go wire types round-trip the examples
+        working-directory: sdk/go
+        run: go test ./...
   windows-build:
     # The server is built and tested on macOS and Linux; nothing else notices when a change breaks the Windows node
     # (docs/windows.md). Cross-compiled here: vet type-checks the tests too.

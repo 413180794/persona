@@ -281,6 +281,45 @@ func TestInboxTriageUnconfigured(t *testing.T) {
 	}
 }
 
+// inboxPushes counts the {"type":"inbox"} messages the apps were sent.
+func inboxPushes(h *Hub) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	n := 0
+	if h.events != nil {
+		for _, e := range h.events.events {
+			if strings.Contains(string(e.Body), `"type":"inbox"`) {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// The apps are told when the triage status moves even though no item came in (their banner follows it, #1773), and
+// not again while it stays the same.
+func TestInboxTriageStatusIsPushed(t *testing.T) {
+	th := genericThing("example-org/example-repo#7", "a", "示例")
+	c := &inboxConnector{things: []connector.InboxThing{th}}
+	h, _ := admitHub(t, nil, c)
+	collectAndAdmit(h)
+	if n := inboxPushes(h); n != 1 {
+		t.Fatalf("%d inbox push(es) after the first hold", n)
+	}
+	collectAndAdmit(h)
+	if n := inboxPushes(h); n != 1 {
+		t.Fatalf("%d inbox push(es) with the status unchanged", n)
+	}
+	c.things = nil // the connector has nothing new any more: nothing waits
+	collectAndAdmit(h)
+	if _, status := inboxTriageOf(t, h); status.State != "ok" {
+		t.Fatalf("triage %+v", status)
+	}
+	if n := inboxPushes(h); n != 2 {
+		t.Fatalf("%d inbox push(es) once nothing waits", n)
+	}
+}
+
 // More new items than a round sorts in its window: the ones started come in, the rest wait for the next round,
 // which is asked for at once.
 func TestInboxAdmitWindow(t *testing.T) {

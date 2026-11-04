@@ -12,6 +12,7 @@
 | `diag/` | 推送回放、窗格诊断、transcript 脱敏及统计 | `diag/agentsync_replay.py`、`diag/pane_probe.py`、`diag/redact_transcript.py` |
 | `test/` | 服务端、真实运行时联调、GitHub 流程及目录结构回归 | `test/test-server.sh`、`test/test-herdr.sh`、`test/test-codex.sh` |
 | `hooks/` | Git 提交前的隐私检查 | `git config core.hooksPath scripts/hooks` |
+| `gen/` | 从 schema 生成代码：扩展协议和 View 的四端类型（`schema/extension/`） | `gen/extension_schema.py`（`--check` 只比对） |
 
 ## 顶层公共脚本
 

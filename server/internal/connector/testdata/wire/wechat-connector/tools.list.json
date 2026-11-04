@@ -10,7 +10,7 @@
     },
     {
       "name": "wechat-connector_chats",
-      "description": "列出最近的微信会话（最新在前）：会话、名字、私聊或群聊、最后一条的时间和预览。结果只含 wechat-connector 能提供的消息（事件推送开启期间、保留期之内），不是微信的完整历史；空结果不代表没有消息。图片、语音、视频只显示占位。全文检索请用 kb_search。",
+      "description": "列出最近的微信会话（最新在前）：会话、名字、私聊或群聊、最后一条的时间和预览。结果只含 wechat-connector 能提供的消息（事件推送开启期间、保留期之内），不是微信的完整历史；空结果不代表没有消息。图片、语音、视频只有占位，链接、文件、引用等只有 wechat-connector 给出的摘要；群里标着「发言人未确认」的名字是 wechat-connector 没能确认的发言人。全文检索请用 kb_search。",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -27,7 +27,7 @@
     },
     {
       "name": "wechat-connector_messages",
-      "description": "读一个会话的消息，旧的在前，每行「时间 名字：内容」。翻更早的消息用上一次返回的 before。结果只含 wechat-connector 能提供的消息（事件推送开启期间、保留期之内），不是微信的完整历史；空结果不代表没有消息。图片、语音、视频只显示占位。全文检索请用 kb_search。",
+      "description": "读一个会话的消息，旧的在前，每行「时间 名字：内容」。翻更早的消息用上一次返回的 before。结果只含 wechat-connector 能提供的消息（事件推送开启期间、保留期之内），不是微信的完整历史；空结果不代表没有消息。图片、语音、视频只有占位，链接、文件、引用等只有 wechat-connector 给出的摘要；群里标着「发言人未确认」的名字是 wechat-connector 没能确认的发言人。全文检索请用 kb_search。",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -51,13 +51,13 @@
     },
     {
       "name": "wechat-connector_search",
-      "description": "在 wechat-connector 保存的微信消息里按原文找字：区分大小写的字面子串，只查纯文本消息，不分词、不支持通配。每次只查看最近一段（最多 5000 条记录），返回 cursor 时可用它继续往更早找；没找到不代表没有。跨会话按意思找以前的消息请先用 kb_search。结果只含 wechat-connector 能提供的消息（事件推送开启期间、保留期之内），不是微信的完整历史；空结果不代表没有消息。图片、语音、视频只显示占位。全文检索请用 kb_search。",
+      "description": "在 wechat-connector 保存的微信消息里找字：空格分开的几个词（最多 8 个）都要出现，不区分大小写，也查链接标题、文件名、引用等的摘要；按字找，不按意思找，不支持通配。较旧的 wechat-connector 只支持区分大小写的字面子串、只查纯文本（返回的 match 会写明）。每次只查看一段（最多 5000 条记录），返回 cursor 时可用它继续往更早找，结果可能少于 limit 甚至为空；没找到不代表没有。跨会话按意思找以前的消息请先用 kb_search。结果只含 wechat-connector 能提供的消息（事件推送开启期间、保留期之内），不是微信的完整历史；空结果不代表没有消息。图片、语音、视频只有占位，链接、文件、引用等只有 wechat-connector 给出的摘要；群里标着「发言人未确认」的名字是 wechat-connector 没能确认的发言人。全文检索请用 kb_search。",
       "input_schema": {
         "type": "object",
         "properties": {
           "query": {
             "type": "string",
-            "description": "要找的原文，1 到 100 个字符。"
+            "description": "要找的词，1 到 256 个字符，多个词用空格分开。"
           },
           "chat": {
             "type": "string",
@@ -78,6 +78,35 @@
       }
     },
     {
+      "name": "wechat-connector_resolve",
+      "description": "按名字（备注、昵称或微信号）找会话，用来确定收件人或要读的会话：返回候选列表（最匹配的在前），每项带 chat、名字、类型和现在能不能发。多个候选时把列表给用户，由用户选；只有一个候选也要让用户核对；不要自己挑，也不要拿第一个就发。没找到不代表没有这个人（wechat-connector 只认识缓存里的联系人和见过的会话）。",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "要找的名字，1 到 128 个字符，不区分大小写的子串。"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "user",
+              "group",
+              "any"
+            ],
+            "description": "user 只找个人，group 只找群，any（默认）都找。"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "最多返回几个候选，1 到 50，默认 10。"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
       "name": "wechat-connector_contacts",
       "description": "查微信联系人（昵称和 username），用来找收件人。来自 wechat-connector 联系人接口的缓存，刚启动时可能还是空的。",
       "input_schema": {
@@ -90,6 +119,71 @@
           "limit": {
             "type": "integer",
             "description": "最多返回几条，1 到 50，默认 20。"
+          }
+        }
+      }
+    },
+    {
+      "name": "wechat-connector_transcript",
+      "description": "读一个会话最近一段时间的文字记录，旧的在前，每行「时间 名字：内容」；时间窗内超过 limit 条时只给最新的 limit 条（truncated 为 true）。非文本消息只有摘要。适合「这个群今天聊了什么」。结果只含 wechat-connector 能提供的消息（事件推送开启期间、保留期之内），不是微信的完整历史；空结果不代表没有消息。",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "chat": {
+            "type": "string",
+            "description": "会话，格式 <账号>.<username>，从 wechat-connector_chats、wechat-connector_resolve 或 wechat-connector_contacts 里取。"
+          },
+          "hours": {
+            "type": "integer",
+            "description": "最近多少小时，1 到 720，默认 24。"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "最多几条，1 到 200，默认 50。"
+          }
+        },
+        "required": [
+          "chat"
+        ]
+      }
+    },
+    {
+      "name": "wechat-connector_members",
+      "description": "列出一个群里 wechat-connector 见过发言的人（observed_speakers）和各自的发言条数。这是 wechat-connector 在这个群里见过发言的人（按发言条数排序），不是完整的群成员名单：没发过言、或发言早于保留期的人不会出现，不能据此判断某人在不在群里。",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "chat": {
+            "type": "string",
+            "description": "群聊，格式 <账号>.<群 id>@chatroom。"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "最多几个人，1 到 200，默认 50。"
+          }
+        },
+        "required": [
+          "chat"
+        ]
+      }
+    },
+    {
+      "name": "wechat-connector_digest",
+      "description": "最近一段时间有新消息的会话（最新的在前）：新消息条数、最后一条、提到我的消息，用来回答「有什么新消息」「谁 @ 了我」。new_messages 是这段时间里 wechat-connector 收到的条数，不是未读数（微信没有已读回执）。mentions 是按文字猜的 @ 我或 @所有人，可能漏判或误判，群昵称和微信昵称不同时尤其如此。结果只含 wechat-connector 能提供的消息（事件推送开启期间、保留期之内），不是微信的完整历史；空结果不代表没有消息。",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "hours": {
+            "type": "integer",
+            "description": "最近多少小时，1 到 168，默认 24。"
+          },
+          "mentions_only": {
+            "type": "boolean",
+            "description": "只看有人 @ 我的会话，默认 false。"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "每个账号最多几个会话，1 到 50，默认 20。"
           }
         }
       }

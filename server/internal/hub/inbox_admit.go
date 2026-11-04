@@ -67,9 +67,12 @@ func (h *Hub) admitInbox(ctx context.Context, batch *inboxBatch, todo []*InboxIt
 	}
 	if len(todo) == 0 {
 		h.inbox.mu.Lock()
-		h.recordHeld(batch, nil)
+		changed := h.recordHeld(batch, nil)
 		h.inbox.mu.Unlock()
 		h.inbox.admitting.Unlock()
+		if changed {
+			h.broadcast(map[string]any{"type": "inbox"}) // the triage status moved: the apps' banner follows
+		}
 		return
 	}
 	ctx = context.WithoutCancel(ctx) // the round (a pull to refresh) does not wait for it
@@ -135,9 +138,12 @@ func (h *Hub) admit(ctx context.Context, batch *inboxBatch, todo []*InboxItem) {
 		h.inbox.items[it.ID] = it
 		in = append(in, it)
 	}
-	h.recordHeld(batch, held)
+	changed := h.recordHeld(batch, held)
 	h.inbox.mu.Unlock()
 	h.saveInbox(ctx, in)
+	if changed && len(in) == 0 {
+		h.broadcast(map[string]any{"type": "inbox"}) // nothing came in, but the triage status moved (saveInbox tells otherwise)
+	}
 	if len(in) > 0 {
 		h.handInbox(ctx) // a new 需要你 may be the AI 分身's
 	}
@@ -157,8 +163,8 @@ type inboxHeld struct {
 
 // recordHeld keeps a round's held-back counts, under h.inbox.mu: the sources it read get theirs (none: nothing
 // waits); the others keep their last ones while they are still registered. A source's first hold (or a new reason)
-// is logged once.
-func (h *Hub) recordHeld(batch *inboxBatch, held map[string]inboxHeld) {
+// is logged once. It says whether the status the apps see (GET /api/v1/inbox triage) changed.
+func (h *Hub) recordHeld(batch *inboxBatch, held map[string]inboxHeld) bool {
 	next := map[string]inboxHeld{}
 	for src, x := range h.inbox.held {
 		if _, again := batch.read[src]; !again && h.connectors.Get(src) != nil {
@@ -176,7 +182,13 @@ func (h *Hub) recordHeld(batch *inboxBatch, held map[string]inboxHeld) {
 		}
 		next[src] = x
 	}
+	changed := len(next) != len(h.inbox.held)
+	for src, x := range next {
+		prev, ok := h.inbox.held[src]
+		changed = changed || !ok || prev.Name != x.Name || prev.State != x.State || prev.Reason != x.Reason || prev.Waiting != x.Waiting
+	}
 	h.inbox.held = next
+	return changed
 }
 
 // InboxTriage is how triage stands for the apps (GET /api/v1/inbox triage): the new items held back by the last

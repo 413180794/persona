@@ -243,12 +243,12 @@ conformance.CheckProgram(t, m, progconf.Program(t, "bin/my-connector"), plugin.I
 Persona 一改 Go 类型（改名、删字段）这些测试就红，提醒程序一侧跟上。`wechat-connector` 这一组按当前插件包的真实输出整理（标识换成上面的示例值），插件的输出变了要在这里同步；它不会自动跟着插件更新。
 
 **跨仓库活测试**：`Testwechat-connectorProgramLive` 跑任意一个实现了连接器协议的外部程序，对着任意一个兼容 wechat-connector 开发者 API 的夹具服务。
-路径由两个环境变量给出：`PERSONA_TEST_wechat-connector_PROGRAM` 指向连接器程序的启动脚本（插件包 `bin/` 下的程序）；`wechat-connector_FIXTURE_SERVER` 指向夹具服务的脚本，
+路径由两个环境变量给出：`PERSONA_TEST_wechat-connector_PROGRAM` 指向连接器程序的启动脚本（插件清单 `runtime.command` 指向的那个程序）；`wechat-connector_FIXTURE_SERVER` 指向夹具服务的脚本，
 测试用 Node 运行它（`PORT=0`，起在回环地址上）。需要 Node，两个环境变量有一个没设就 `t.Skip`，所以现有的测试和 CI 不受影响：
 
 ```sh
 cd server
-PERSONA_TEST_wechat-connector_PROGRAM=<插件包>/bin/<程序> \
+PERSONA_TEST_wechat-connector_PROGRAM=<插件目录>/<runtime.command> \
 wechat-connector_FIXTURE_SERVER=<夹具服务脚本> \
 go test ./internal/connector/conformance -run wechat-connector -v
 ```
