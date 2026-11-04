@@ -9,13 +9,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -94,7 +93,60 @@ func newTaskHub(t *testing.T) (*Hub, *taskNode) {
 	old := taskSettleDelay
 	taskSettleDelay = func(NotifyConfig) time.Duration { return 0 }
 	t.Cleanup(func() { taskSettleDelay = old })
+	connectAssistant(t, h)
 	return h, tn
+}
+
+// taskPlan is the assistant's task_plan tool, called from conversation conv.
+func taskPlan(h *Hub, conv string, args json.RawMessage) (string, error) {
+	r := h.asst().Tool(context.Background(), assistant.ToolCall{Name: "task_plan", Arguments: args, MachineID: "box", SessionID: conv})
+	if r.IsError {
+		return "", errors.New(r.Content[0].Text)
+	}
+	return r.Content[0].Text, nil
+}
+
+// assistantGet is a GET on the assistant's routes, as the hub relays it, once the assistant took what the hub told it.
+func assistantGet(h *Hub, path string, out any) int {
+	settleAssistant(h)
+	mux := http.NewServeMux()
+	h.assistantRoutesRelayed(mux)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+	_ = json.Unmarshal(w.Body.Bytes(), out)
+	return w.Code
+}
+
+// feed is a conversation's feed and the plans it names, as the app reads them.
+func feed(h *Hub, conv string) ([]assistant.FeedItem, map[string]*assistant.TaskPlan) {
+	var got struct {
+		Items []assistant.FeedItem
+		Plans map[string]*assistant.TaskPlan
+	}
+	assistantGet(h, "/api/v1/assistant/conversations/"+conv+"/feed", &got)
+	return got.Items, got.Plans
+}
+
+// loadPlan is a plan as the app reads it (nil: none).
+func loadPlan(h *Hub, id string) *assistant.TaskPlan {
+	var got struct{ Plan *assistant.TaskPlan }
+	assistantGet(h, "/api/v1/task-plans/"+id, &got)
+	return got.Plan
+}
+
+// taskLine is the task's line in the live context a message to conv1 starts with: 「标题（id）：状态…」.
+func taskLine(h *Hub, todo Todo) string {
+	if a, ok := testAssistants.Load(h); ok {
+		a.(*testAssistant).svc.ProfileChanged(context.Background()) // a fresh snapshot, not the one kept for 45 s
+	}
+	res, _ := h.asst().Context(context.Background(), assistant.ContextParams{SessionID: "conv1"})
+	text := res.Text
+	for _, l := range strings.Split(text, "\n") {
+		if strings.Contains(l, todo.Title+"（"+todo.ID+"）：") {
+			return strings.TrimSpace(l)
+		}
+	}
+	return ""
 }
 
 func planArgs(readonly bool) json.RawMessage {
@@ -106,7 +158,7 @@ func planArgs(readonly bool) json.RawMessage {
 }
 
 func feedKinds(h *Hub, conv string) []string {
-	items, _, _ := h.feed(context.Background(), conv, time.Time{})
+	items, _ := feed(h, conv)
 	var out []string
 	for _, it := range items {
 		out = append(out, it.Kind)
@@ -128,7 +180,7 @@ func taskTodos(h *Hub) []Todo {
 // the plan and the task in the conversation's feed.
 func TestTaskPlanReadOnlyStartsAtOnce(t *testing.T) {
 	h, tn := newTaskHub(t)
-	res, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true))
+	res, err := taskPlan(h, "conv1", planArgs(true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,8 +203,8 @@ func TestTaskPlanReadOnlyStartsAtOnce(t *testing.T) {
 	if got := strings.Join(feedKinds(h, "conv1"), ","); got != "plan,task" {
 		t.Fatalf("feed = %s", got)
 	}
-	p, _ := h.loadPlan(context.Background(), todo.PlanID)
-	if p.State != planStarted || p.Tasks[0].TodoID != todo.ID {
+	p := loadPlan(h, todo.PlanID)
+	if p.State != "started" || p.Tasks[0].TodoID != todo.ID {
 		t.Fatalf("plan = %+v", p)
 	}
 }
@@ -166,25 +218,21 @@ func failedStart(t *testing.T, h *Hub, want string) Todo {
 	if !strings.Contains(todo.StartError, want) || len(todo.Agents) != 0 {
 		t.Fatalf("todo = %+v", todo)
 	}
-	if st := taskState(todo, h.taskAgents(todo)); st != "failed" {
-		t.Fatalf("taskState = %q", st)
-	}
-	snap := h.snapshotTasks()
-	if len(snap) != 1 || snap[0].State != "没开起来" {
-		t.Fatalf("snapshot = %+v", snap)
+	if line := taskLine(h, todo); !strings.HasSuffix(line, "：没开起来") {
+		t.Fatalf("the live context = %q", line)
 	}
 	if got := h.inboxTasks(); len(got) != 0 {
 		t.Fatalf("the inbox still sees a failed task: %+v", got)
 	}
 	waitFor(t, "the receipt", func() bool { return strings.Contains(strings.Join(feedKinds(h, "conv1"), ","), "receipt") })
-	items, _, _ := h.feed(context.Background(), "conv1", time.Time{})
-	var rb receiptBody
+	items, _ := feed(h, "conv1")
+	var rb struct{ State, Summary string }
 	_ = json.Unmarshal(items[len(items)-1].Body, &rb)
 	if rb.State != "failed" || !strings.Contains(rb.Summary, want) {
 		t.Fatalf("receipt = %+v", rb)
 	}
 	waitFor(t, "the plan's error", func() bool {
-		p, _ := h.loadPlan(context.Background(), todo.PlanID)
+		p := loadPlan(h, todo.PlanID)
 		return p != nil && strings.Contains(p.Tasks[0].Error, want)
 	})
 	return todo
@@ -194,7 +242,7 @@ func failedStart(t *testing.T, h *Hub, want string) Todo {
 func TestTaskStartFailedEndsTheTodo(t *testing.T) {
 	h, tn := newTaskHub(t)
 	tn.failStart = errors.New("launcher not found")
-	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+	if _, err := taskPlan(h, "conv1", planArgs(true)); err != nil {
 		t.Fatal(err)
 	}
 	todo := failedStart(t, h, "launcher not found")
@@ -232,7 +280,7 @@ func retryReq(h *Hub, todoID string) *httptest.ResponseRecorder {
 func TestTaskRetryStartsTheSameTask(t *testing.T) {
 	h, tn := newTaskHub(t)
 	tn.failStart = errors.New("claude did not become ready within 1m0s")
-	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+	if _, err := taskPlan(h, "conv1", planArgs(true)); err != nil {
 		t.Fatal(err)
 	}
 	todo := failedStart(t, h, "did not become ready")
@@ -249,10 +297,10 @@ func TestTaskRetryStartsTheSameTask(t *testing.T) {
 	if res.Todo.ID != todo.ID || res.Todo.DoneAt != nil || res.Todo.StartError != "" {
 		t.Fatalf("answered %+v", res.Todo)
 	}
-	if st := taskState(taskTodos(h)[0], nil); st != "not_started" {
+	if st := todoState(taskTodos(h)[0]); st != "not_started" {
 		t.Fatalf("while it starts again the task is %q, not starting", st)
 	}
-	if p, _ := h.loadPlan(context.Background(), todo.PlanID); p.Tasks[0].Error != "" {
+	if p := loadPlan(h, todo.PlanID); p.Tasks[0].Error != "" {
 		t.Fatalf("the plan still says %q", p.Tasks[0].Error)
 	}
 	close(tn.gate)
@@ -285,7 +333,7 @@ func TestTaskRetryStartsTheSameTask(t *testing.T) {
 func TestTaskRetryFailsAgain(t *testing.T) {
 	h, tn := newTaskHub(t)
 	tn.failStart = errors.New("claude did not become ready within 1m0s")
-	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+	if _, err := taskPlan(h, "conv1", planArgs(true)); err != nil {
 		t.Fatal(err)
 	}
 	todo := failedStart(t, h, "did not become ready")
@@ -300,30 +348,28 @@ func TestTaskRetryFailsAgain(t *testing.T) {
 		return got.DoneAt != nil && strings.Contains(got.StartError, "launcher not found")
 	})
 	waitFor(t, "the plan's new error", func() bool {
-		p, _ := h.loadPlan(context.Background(), todo.PlanID)
+		p := loadPlan(h, todo.PlanID)
 		return p != nil && strings.Contains(p.Tasks[0].Error, "launcher not found")
 	})
-	if st := taskState(taskTodos(h)[0], nil); st != "failed" {
+	if st := todoState(taskTodos(h)[0]); st != "failed" {
 		t.Fatalf("taskState = %q", st)
 	}
 	time.Sleep(50 * time.Millisecond)
 	if n := receipts(h); n != 1 {
 		t.Fatalf("%d receipts", n)
 	}
-	// It can be retried again.
-	h.tasks.mu.Lock()
-	busy := h.tasks.retrying[todo.ID]
-	h.tasks.mu.Unlock()
-	if busy {
-		t.Fatal("a finished retry is still marked as starting")
+	// It can be retried again: a finished retry is not still marked as starting.
+	if w := retryReq(h, todo.ID); w.Code != http.StatusOK {
+		t.Fatalf("retry again: %d %s", w.Code, w.Body)
 	}
+	waitFor(t, "a third start", func() bool { starts, _ := tn.calls(); return len(starts) == 3 })
 }
 
 // Tapping 重试 again and again while the agent starts starts it once: every tap answers the task as starting.
 func TestTaskRetryTwiceStartsOnce(t *testing.T) {
 	h, tn := newTaskHub(t)
 	tn.failStart = errors.New("claude did not become ready within 1m0s")
-	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+	if _, err := taskPlan(h, "conv1", planArgs(true)); err != nil {
 		t.Fatal(err)
 	}
 	todo := failedStart(t, h, "did not become ready")
@@ -358,12 +404,13 @@ func TestTaskRetryTwiceStartsOnce(t *testing.T) {
 func TestTaskRetryWithTheMachineOffline(t *testing.T) {
 	h, tn := newTaskHub(t)
 	tn.failStart = errors.New("claude did not become ready within 1m0s")
-	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+	if _, err := taskPlan(h, "conv1", planArgs(true)); err != nil {
 		t.Fatal(err)
 	}
 	todo := failedStart(t, h, "did not become ready")
 	m := h.byID["box"]
 	m.mu.Lock()
+	tnPeer := m.peer
 	m.peer = nil
 	m.mu.Unlock()
 	w := retryReq(h, todo.ID)
@@ -373,12 +420,14 @@ func TestTaskRetryWithTheMachineOffline(t *testing.T) {
 	if got := taskTodos(h)[0]; got.DoneAt == nil || !strings.Contains(got.StartError, "did not become ready") {
 		t.Fatalf("todo = %+v", got)
 	}
-	h.tasks.mu.Lock()
-	busy := h.tasks.retrying[todo.ID]
-	h.tasks.mu.Unlock()
-	if busy {
-		t.Fatal("a refused retry is marked as starting")
+	// A refused retry is not marked as starting: back online, the next one starts it.
+	m.mu.Lock()
+	m.peer = tnPeer
+	m.mu.Unlock()
+	if w := retryReq(h, todo.ID); w.Code != http.StatusOK {
+		t.Fatalf("retry back online: %d %s", w.Code, w.Body)
 	}
+	waitFor(t, "the retried start", func() bool { starts, _ := tn.calls(); return len(starts) == 2 })
 	// Not a failed start: a task done by hand, or a todo nobody dispatched, is not retried.
 	tn.mu.Lock()
 	tn.failStart = nil
@@ -405,8 +454,9 @@ func TestTaskRetryWithTheStore(t *testing.T) {
 	h.store = database
 	h.initTodos(context.Background())
 	tn := connectTaskNode(t, h, "box")
+	connectAssistant(t, h)
 	tn.failStart = errors.New("claude did not become ready within 1m0s")
-	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+	if _, err := taskPlan(h, "conv1", planArgs(true)); err != nil {
 		t.Fatal(err)
 	}
 	todo := failedStart(t, h, "did not become ready")
@@ -427,7 +477,7 @@ func TestTaskRetryWithTheStore(t *testing.T) {
 	if row, err := database.GetTodo(context.Background(), todo.ID); err != nil || row.DoneAt != nil || row.StartError != "" {
 		t.Fatalf("stored todo = %+v %v", row, err)
 	}
-	if p, _ := h.loadPlan(context.Background(), todo.PlanID); p.Tasks[0].Error != "" {
+	if p := loadPlan(h, todo.PlanID); p.Tasks[0].Error != "" {
 		t.Fatalf("the stored plan still says %q", p.Tasks[0].Error)
 	}
 	close(tn.gate)
@@ -437,71 +487,10 @@ func TestTaskRetryWithTheStore(t *testing.T) {
 	}
 }
 
-// A dropped link is retried once: the machine back by then, the task starts as usual; still down, the task ends.
-func TestTaskStartRetriesADroppedLink(t *testing.T) {
-	old := taskStartRetryDelay
-	taskStartRetryDelay = 300 * time.Millisecond
-	t.Cleanup(func() { taskStartRetryDelay = old })
-
-	h, tn := newTaskHub(t)
-	m := h.byID["box"]
-	m.mu.Lock()
-	peer := m.peer
-	m.peer = nil // offline when the task starts
-	m.mu.Unlock()
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		m.mu.Lock()
-		m.peer = peer
-		m.mu.Unlock()
-	}()
-	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "the retried start to link", func() bool { ts := taskTodos(h); return len(ts) == 1 && len(ts[0].Agents) == 1 })
-	if todo := taskTodos(h)[0]; todo.DoneAt != nil || todo.StartError != "" {
-		t.Fatalf("todo = %+v", todo)
-	}
-	if starts, _ := tn.calls(); len(starts) != 1 {
-		t.Fatalf("%d starts", len(starts))
-	}
-
-	h2, tn2 := newTaskHub(t)
-	m2 := h2.byID["box"]
-	m2.mu.Lock()
-	m2.peer = nil // and it stays down
-	m2.mu.Unlock()
-	if _, err := h2.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
-		t.Fatal(err)
-	}
-	failedStart(t, h2, "offline")
-	if starts, _ := tn2.calls(); len(starts) != 0 {
-		t.Fatalf("%d starts reached a machine that was down", len(starts))
-	}
-}
-
-func TestTransientStartErr(t *testing.T) {
-	for _, c := range []struct {
-		err  error
-		want bool
-	}{
-		{rpc.ErrClosed, true},
-		{fmt.Errorf("box: %w", errOffline), true},
-		{fmt.Errorf("wrapped: %w", rpc.ErrClosed), true},
-		{&rpc.Error{Message: "rpc: connection closed"}, true}, // a link further on dropped
-		{&rpc.Error{Message: "session.start: no such launcher"}, false},
-		{errors.New("launcher not found"), false},
-	} {
-		if got := transientStartErr(c.err); got != c.want {
-			t.Errorf("transientStartErr(%v) = %v", c.err, got)
-		}
-	}
-}
-
 // A plan that edits waits for the user; starting it takes their edits once, a second start or a dismiss is refused.
 func TestTaskPlanWaitsForTheUser(t *testing.T) {
 	h, tn := newTaskHub(t)
-	res, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(false))
+	res, err := taskPlan(h, "conv1", planArgs(false))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -511,8 +500,8 @@ func TestTaskPlanWaitsForTheUser(t *testing.T) {
 	if len(taskTodos(h)) != 0 {
 		t.Fatal("a plan that edits started without the user")
 	}
-	items, plans, _ := h.feed(context.Background(), "conv1", time.Time{})
-	if len(items) != 1 || items[0].Kind != feedPlan || plans[items[0].Ref] == nil || plans[items[0].Ref].State != planOpen {
+	items, plans := feed(h, "conv1")
+	if len(items) != 1 || items[0].Kind != "plan" || plans[items[0].Ref] == nil || plans[items[0].Ref].State != "open" {
 		t.Fatalf("feed = %+v plans = %+v", items, plans)
 	}
 	id := items[0].Ref
@@ -548,48 +537,10 @@ func TestTaskPlanWaitsForTheUser(t *testing.T) {
 	}
 }
 
-// When the task's agent ends a turn and waits for nothing, the conversation gets one receipt with the agent's last
-// words and its PR; the next turn's end after more work gets another.
-func TestTaskReceipt(t *testing.T) {
-	h, _ := newTaskHub(t)
-	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "the link", func() bool { ts := taskTodos(h); return len(ts) == 1 && len(ts[0].Agents) == 1 })
-	m := h.byID["box"]
-	sess := func(status, text string) proto.Session {
-		return proto.Session{SessionID: "s1", Cwd: "/code/app", Agent: "claude", Status: status, LastText: text, UpdatedAt: time.Now()}
-	}
-	m.setSessions([]proto.Session{sess(proto.StatusWorking, "")})
-	m.setSessions([]proto.Session{sess(proto.StatusDone, "修好了，提了 https://github.com/o/r/pull/901")})
-	waitFor(t, "a receipt", func() bool { return strings.Contains(strings.Join(feedKinds(h, "conv1"), ","), "receipt") })
-	items, _, _ := h.feed(context.Background(), "conv1", time.Time{})
-	var rb receiptBody
-	_ = json.Unmarshal(items[len(items)-1].Body, &rb)
-	if rb.State != "done" || rb.PR != "https://github.com/o/r/pull/901" || rb.Title != "修登录崩溃" {
-		t.Fatalf("receipt = %+v", rb)
-	}
-	// The same stillness again is no new receipt.
-	m.setSessions([]proto.Session{sess(proto.StatusIdle, "修好了")})
-	time.Sleep(100 * time.Millisecond)
-	if n := strings.Count(strings.Join(feedKinds(h, "conv1"), ","), "receipt"); n != 1 {
-		t.Fatalf("%d receipts", n)
-	}
-	time.Sleep(5 * time.Millisecond)
-	m.setSessions([]proto.Session{sess(proto.StatusWorking, "")})
-	waitFor(t, "work noted", func() bool {
-		h.tasks.mu.Lock()
-		defer h.tasks.mu.Unlock()
-		return h.tasks.working[taskTodos(h)[0].ID].After(h.tasks.receipted[taskTodos(h)[0].ID])
-	})
-	m.setSessions([]proto.Session{sess(proto.StatusDone, "又改了一处")})
-	waitFor(t, "a second receipt", func() bool { return strings.Count(strings.Join(feedKinds(h, "conv1"), ","), "receipt") == 2 })
-}
-
 // Answering a task's card leaves a line in the conversation; a message to a task goes to its agent.
 func TestTaskAnsweredAndRouted(t *testing.T) {
 	h, tn := newTaskHub(t)
-	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+	if _, err := taskPlan(h, "conv1", planArgs(true)); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the link", func() bool { ts := taskTodos(h); return len(ts) == 1 && len(ts[0].Agents) == 1 })
@@ -599,10 +550,10 @@ func TestTaskAnsweredAndRouted(t *testing.T) {
 	yes := true
 	h.taskAnswered(proto.Interaction{MachineID: "box", SessionID: "s1", Kind: proto.IxPermission, ToolName: "Bash"},
 		proto.Resolution{Allow: &yes, Always: true}, "resolved")
-	items, _, _ := h.feed(context.Background(), "conv1", time.Time{})
-	var ab answeredBody
+	items, _ := feed(h, "conv1")
+	var ab struct{ Question, Answer string }
 	_ = json.Unmarshal(items[len(items)-1].Body, &ab)
-	if items[len(items)-1].Kind != feedAnswered || ab.Question != "使用 Bash" || ab.Answer != "批准了 · 以后同类不再问" {
+	if items[len(items)-1].Kind != "answered" || ab.Question != "使用 Bash" || ab.Answer != "批准了 · 以后同类不再问" {
 		t.Fatalf("answered = %+v %+v", items[len(items)-1], ab)
 	}
 
@@ -633,8 +584,8 @@ func TestTaskAnsweredAndRouted(t *testing.T) {
 	w = httptest.NewRecorder()
 	mux.ServeHTTP(w, r)
 	var got struct {
-		Items []FeedItem
-		Plans map[string]*TaskPlan
+		Items []assistant.FeedItem
+		Plans map[string]*assistant.TaskPlan
 	}
 	_ = json.Unmarshal(w.Body.Bytes(), &got)
 	kinds := []string{}
@@ -645,98 +596,15 @@ func TestTaskAnsweredAndRouted(t *testing.T) {
 		t.Fatalf("feed = %v plans = %d", kinds, len(got.Plans))
 	}
 
-	snap := h.snapshotTasks()
-	if len(snap) != 1 || snap[0].ID != todo.ID || snap[0].State != "在做" || snap[0].Session != "s1" {
-		t.Fatalf("snapshot = %+v", snap)
-	}
-}
-
-func TestResolutionAnswer(t *testing.T) {
-	yes, no := true, false
-	q := proto.Interaction{Kind: proto.IxQuestion, Questions: []proto.Question{{Question: "怎么改？"}}}
-	for _, c := range []struct {
-		ix   proto.Interaction
-		r    proto.Resolution
-		want string
-	}{
-		{q, proto.Resolution{Answers: map[string]string{"怎么改？": "B"}}, "B"},
-		{q, proto.Resolution{Dismiss: true}, "忽略了"},
-		{proto.Interaction{Kind: proto.IxPlan}, proto.Resolution{Approve: &yes}, "批准了"},
-		{proto.Interaction{Kind: proto.IxPermission}, proto.Resolution{Allow: &no, Message: "先别跑"}, "拒绝了：先别跑"},
-	} {
-		if got := resolutionAnswer(c.ix, c.r); got != c.want {
-			t.Errorf("resolutionAnswer(%+v) = %q, want %q", c.r, got, c.want)
-		}
-	}
-	if got := interactionQuestion(proto.Interaction{Kind: proto.IxPlan}); got != "批准计划" {
-		t.Errorf("plan question = %q", got)
-	}
-}
-
-// The 今天 card: one a day per conversation, at the start of the day, with what finished and what waits.
-func TestTodayCard(t *testing.T) {
-	h, _ := newTaskHub(t)
-	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "the link", func() bool { ts := taskTodos(h); return len(ts) == 1 && len(ts[0].Agents) == 1 })
-	todo := taskTodos(h)[0]
-	h.byID["box"].setSessions([]proto.Session{{SessionID: "s1", Cwd: "/code/app", Agent: "claude", Status: proto.StatusBlocked,
-		State: proto.StateNeedsYou, PendingInteractions: 1, UpdatedAt: time.Now()}})
-	if _, err := h.appendFeed(context.Background(), "conv1", feedReceipt, "todo_old", receiptBody{Title: "夜里的活", State: "done"}); err != nil {
-		t.Fatal(err)
-	}
-	it, made, err := h.ensureToday(context.Background(), "conv1")
-	if err != nil || !made || it.Kind != feedToday {
-		t.Fatalf("today = %+v made=%v err=%v", it, made, err)
-	}
-	var body todayBody
-	_ = json.Unmarshal(it.Body, &body)
-	if len(body.Done) != 1 || body.Done[0].Title != "夜里的活" || body.Date != it.Ref {
-		t.Fatalf("body = %+v", body)
-	}
-	if len(body.Waiting) != 1 || body.Waiting[0].ID != todo.ID {
-		t.Fatalf("waiting = %+v (state %s)", body.Waiting, taskState(todo, h.taskAgents(todo)))
-	}
-	loc := h.userLocation()
-	now := time.Now().In(loc)
-	if want := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc); !it.At.Equal(want) {
-		t.Fatalf("at %v, want the start of the day %v", it.At, want)
-	}
-	again, made, err := h.ensureToday(context.Background(), "conv1")
-	if err != nil || made || again.ID != it.ID {
-		t.Fatalf("second call made another: %+v made=%v err=%v", again, made, err)
-	}
-}
-
-// Kinds remembered with 这类以后直接开 are listed and can be forgotten (Postgres: on the hub machine).
-func TestTaskTrust(t *testing.T) {
-	database := setupTestDB(t)
-	h := newTestHub(t)
-	h.store = database
-	h.trustKinds(context.Background(), []PlanTask{{Machine: "box", Cwd: "/code/app"}, {Machine: "box", Cwd: "/code/docs", Readonly: true}})
-	list := h.trustList(context.Background())
-	if len(list) != 2 || list[0].Key != "box|/code/app|edit" || list[1].Readonly != true {
-		t.Fatalf("list = %+v", list)
-	}
-	if !h.planStartsAtOnce(context.Background(), []PlanTask{{Machine: "box", Cwd: "/code/app"}}) {
-		t.Fatal("a trusted kind should start at once")
-	}
-	if ok, err := h.forgetTrust(context.Background(), "box|/code/app|edit"); !ok || err != nil {
-		t.Fatalf("forget: %v %v", ok, err)
-	}
-	if h.planStartsAtOnce(context.Background(), []PlanTask{{Machine: "box", Cwd: "/code/app"}}) {
-		t.Fatal("a forgotten kind still starts at once")
-	}
-	if ok, _ := h.forgetTrust(context.Background(), "nope"); ok {
-		t.Fatal("forgot a kind that was never remembered")
+	if line := taskLine(h, todo); !strings.HasSuffix(line, "：在做，box session_id=s1") {
+		t.Fatalf("the live context = %q", line)
 	}
 }
 
 // An interaction of a task's agent names the task when the hub sends it (the watch shows it).
 func TestInteractionNamesItsTask(t *testing.T) {
 	h, _ := newTaskHub(t)
-	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+	if _, err := taskPlan(h, "conv1", planArgs(true)); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the link", func() bool { ts := taskTodos(h); return len(ts) == 1 && len(ts[0].Agents) == 1 })
@@ -753,41 +621,15 @@ func TestInteractionNamesItsTask(t *testing.T) {
 	}
 }
 
-// A task's line in the snapshot follows its agent as the cards do (#1583): the step of one that has only run tools
-// and said nothing, its words and step while it works, its words once it stopped, and its running subagents on top
-// of its own progress, never instead of it.
-func TestSnapshotTaskFollowsTheAgent(t *testing.T) {
-	now := time.Date(2026, 11, 4, 11, 52, 0, 0, time.UTC)
-	todo := Todo{ID: "todo_1", Title: "hub 重启无感"}
-	started := now.Add(-3*time.Minute - 10*time.Second)
-	lead := proto.Session{MachineID: "mac-a", SessionID: "b00502b8-82a3", State: proto.StateWorking, UpdatedAt: now,
-		Activity: "在跑测试", ActivityAt: &started}
-
-	got := snapshotTask(todo, "working", []proto.Session{lead}, now)
-	if got.Last != "" || got.Doing != "在跑测试" || got.DoingFor != "3 分钟" || got.Session != "b00502b8" {
-		t.Fatalf("tools only, no words: %+v", got)
+// todoState is a task's state as far as its todo tells it (docs/todos.md「状态计算规则」): failed, done, not started.
+func todoState(t Todo) string {
+	switch {
+	case t.DoneAt != nil && t.StartError != "":
+		return "failed"
+	case t.DoneAt != nil:
+		return "done"
+	case len(t.Agents) == 0:
+		return "not_started"
 	}
-
-	lead.LastText = "已建 issue 并认领，\n两个只读子任务在调查"
-	lead.Subagents = []proto.Subagent{
-		{ID: "a1", Description: "Hub children lifecycle survey", Running: true, LastText: "子任务的话"},
-		{ID: "a2", Description: "Client reconnect survey", Running: true},
-		{ID: "a3", Description: "早就做完的", Running: false},
-	}
-	got = snapshotTask(todo, "working", []proto.Session{lead}, now)
-	if got.Last != "已建 issue 并认领， 两个只读子任务在调查" || got.Doing != "在跑测试" ||
-		!reflect.DeepEqual(got.Subagents, []string{"Hub children lifecycle survey", "Client reconnect survey"}) {
-		t.Fatalf("with subagents: %+v", got)
-	}
-	golden(t, "assistant_snapshot.tasks", prompts.RenderSnapshot(prompts.Snapshot{Now: now, Zone: "UTC",
-		Tasks: []prompts.SnapshotTask{
-			snapshotTask(Todo{ID: "todo_2", Title: "只跑工具"}, "working", []proto.Session{{MachineID: "mac-a",
-				SessionID: "c1", State: proto.StateWorking, UpdatedAt: now, Activity: "在读 tasks.go", ActivityAt: &started}}, now),
-			got,
-		}}))
-
-	lead.State, lead.Subagents = proto.StateUnread, nil
-	if got = snapshotTask(todo, "unread", []proto.Session{lead}, now); got.Doing != "" || got.DoingFor != "" || got.Last == "" {
-		t.Fatalf("stopped: its words, not the step it stopped on: %+v", got)
-	}
+	return "open"
 }

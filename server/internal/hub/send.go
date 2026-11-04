@@ -12,8 +12,8 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
-
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -130,12 +130,11 @@ func (h *Hub) assistantSendModel(ctx context.Context, m *Machine, sid string, p 
 	return h.applyModel(ctx, "assistant", p)
 }
 
-// isTaskConversation: sid on machine is a scheduled task's own conversation (Task.RunSessionID).
-func (h *Hub) isTaskConversation(ctx context.Context, machine, sid string) bool {
-	s := h.loadSchedule(ctx)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return slices.ContainsFunc(s.tasks, func(t Task) bool { return t.RunSessionID == sid && t.RunMachineID == machine })
+// isTaskConversation: sid on machine is a scheduled task's own conversation (its RunSessionID, as the assistant
+// reported its tasks).
+func (h *Hub) isTaskConversation(_ context.Context, machine, sid string) bool {
+	tasks, _ := h.assistantTasks()
+	return slices.ContainsFunc(tasks, func(t assistantwire.TaskView) bool { return t.RunSessionID == sid && t.RunMachineID == machine })
 }
 
 func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
@@ -191,8 +190,8 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 		p = said
 	}
 	if s, ok := m.session(sid); ok && isAssistant(s, m.assistantCwd()) {
-		h.unarchiveOnSend(m.cfg.ID, sid) // the user is talking in it again: back in the list
-		h.userSpoke(sid)                 // and it works for them, not for a chain of conversations
+		// The user is talking in it again: back in the list, and it works for them, not for a chain of conversations.
+		h.asst().UserSpoke(r.Context(), assistantwire.SessionRef{MachineID: m.cfg.ID, SessionID: sid})
 	}
 	s, known := m.session(sid)
 	if h.isMainConversation(r.Context(), m, sid) || (known && (s.Assistant || isAssistant(s, m.assistantCwd()))) {

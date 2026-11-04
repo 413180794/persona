@@ -166,7 +166,7 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 
 从助手对话派出去的任务（`task_plan` 开的待办，`origin` 不为空）做完以后由 hub 自动标成完成，不用用户逐个点；用户手建的待办（`origin` 为空）一律不自动完成，仍然是「用户点了完成」才算完成。
 
-**什么时候判断**：任务的 Agent 全部停下（没有在工作、没有等用户回答、没有待处理的卡片）、hub 往对话里发 done 回执的同一处（`tasks.go` 的 `taskTurnEnded`，一段工作只发一次回执，也只判断一次）。
+**什么时候判断**：任务的 Agent 全部停下（没有在工作、没有等用户回答、没有待处理的卡片）、hub 往对话里发 done 回执的同一处（`assistant/tasks.go` 的 `taskTurnEnded`，一段工作只发一次回执，也只判断一次）。
 
 **怎么判断**：Agent 停下不等于做完了：停在「没有全改完……」「等待审核」的都不该关。hub 用判断模型（模型配置里的「AI 分身判断器」`inbox.judge`，即 hub.json 的 `inbox.judge_ai`，没配时继承 `ai`）看三样东西：任务标题、派活时的要求（待办的 `notes`）、每个活跃 Agent 最近一轮的内容（经 `session.items` 读：这一轮里用户给它的话和它最后一条完整回复；读不到时用会话列表里截短的 `last_text`）。用户后来又给 Agent 发了新的要求时，要求以后来的为准（原来的已在之前几轮处理过）；后来的话只是确认、回答它的问题（「好」「👌」「按 A」）时仍以派活时的要求为准（#1116）。模型答五选一：
 

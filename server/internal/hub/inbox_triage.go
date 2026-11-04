@@ -263,7 +263,7 @@ func (h *Hub) replyInboxAs(ctx context.Context, id, text, clientID string, chang
 		h.inbox.mu.Lock()
 		out := it.listed()
 		h.inbox.mu.Unlock()
-		h.markCardsSent(ctx, id, now, text, true)
+		h.markCardsSent(ctx, id, now, text)
 		return out, nil
 	}
 	h.inbox.mu.Lock()
@@ -272,7 +272,7 @@ func (h *Hub) replyInboxAs(ctx context.Context, id, text, clientID string, chang
 	h.inbox.mu.Unlock()
 	h.saveInbox(ctx, []*InboxItem{it})
 	// The item's cards in the assistant's conversations show it sent, wherever it was sent from.
-	h.markCardsSent(ctx, id, now, text, true)
+	h.markCardsSent(ctx, id, now, text)
 	return out, nil
 }
 

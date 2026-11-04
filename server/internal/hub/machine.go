@@ -15,14 +15,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/apierr"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
-	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 	"github.com/nwverse/persona/server/internal/streams"
 )
 
-var errOffline = errors.New("machine is offline")
+var errOffline = apierr.ErrOffline
 
 // Machine is the hub's connection to one node: a local subprocess, `ssh host jarvisd node --stdio`, a tailcat
 // connection to its resident node, or a stream on the link the computer's jarvis-link keeps to the hub (kind link,
@@ -348,19 +349,20 @@ func (m *Machine) setSessions(list []proto.Session) {
 		switch {
 		case s.Status == proto.StatusWorking && prev != proto.StatusWorking:
 			m.hub.turns.working(key, now)
-			go m.hub.taskWorking(m.cfg.ID, s.SessionID)
+			go m.hub.asst().TurnStarted(context.Background(), assistantwire.SessionRef{MachineID: m.cfg.ID, SessionID: s.SessionID})
 		case prev == proto.StatusWorking && (s.Status == proto.StatusDone || s.Status == proto.StatusIdle):
 			go m.notifyFinished(s.SessionID, m.hub.turns.ended(key, now))
-			go m.hub.titleAfterTurn(m, s.SessionID) // a new assistant conversation is named after its first turn
+			// A new assistant conversation is named after its first turn; a task from one may be done.
+			go m.hub.asst().TurnEnded(context.Background(), assistantwire.SessionRef{MachineID: m.cfg.ID, SessionID: s.SessionID})
 			go m.hub.channelTurnEnded(m.cfg.ID, s.SessionID)
-			go m.taskTurnEnded(s.SessionID) // a task from an assistant conversation may be done (tasks.go)
 		}
 	}
 	m.sessions = list
 	m.lastSeen = time.Now().UTC()
 	m.mu.Unlock()
 	m.hub.sessionsChanged(m)
-	m.hub.drainRelays(m, list) // messages from other conversations, for those no longer running
+	// Messages from other conversations, for those no longer running.
+	m.hub.asst().SessionsChanged(context.Background(), assistantwire.DeviceSessions{MachineID: m.cfg.ID, Sessions: list})
 }
 
 func (m *Machine) sessionList() []proto.Session {
@@ -610,7 +612,7 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 		if p.Assistant && isBrowserTool(p.Name) {
 			return m.hub.callBrowserTool(ctx, p.SessionID, p.Name, p.Args), nil
 		}
-		if p.Assistant && isAssistantTool(p.Name) {
+		if p.Assistant && m.hub.isAssistantTool(ctx, p.Name) {
 			return m.hub.callAssistantTool(ctx, m, p.SessionID, p.Name, p.Args), nil
 		}
 		return m.hub.callTool(ctx, m.cfg.ID, p.Name, p.Args), nil
@@ -634,9 +636,7 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 			SessionID string `json:"session_id"`
 		}
 		_ = json.Unmarshal(params, &p)
-		text := prompts.RenderAssistantContext(prompts.AssistantContext{Snapshot: m.hub.assistantSnapshot(ctx), Owner: m.hub.ownerName(),
-			Main: p.SessionID != "" && p.SessionID == m.hub.assistantConfig(ctx).Main})
-		return map[string]any{"text": text}, nil
+		return m.hub.asst().Context(ctx, assistantwire.ContextParams{SessionID: p.SessionID})
 	}
 	return nil, fmt.Errorf("unknown method %s", method)
 }

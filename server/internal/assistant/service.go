@@ -1,0 +1,372 @@
+package assistant
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"maps"
+	"net/http"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// Options are what a Service runs with.
+type Options struct {
+	Hub Hub
+	// Store is read on every use: nil, or a func returning nil, means no database (unit tests); the state then lives
+	// in memory only.
+	Store func() Store
+	Logf  func(format string, args ...any)
+}
+
+// Service is the assistant. It implements Handler.
+type Service struct {
+	hub   Hub
+	store func() Store
+	logf  func(format string, args ...any)
+
+	mux    *http.ServeMux
+	routes []string
+
+	epoch string
+	pubMu sync.Mutex
+	seq   uint64
+
+	titles    titleBook    // titles.go
+	archived  archiveBook  // conversations.go
+	relays    relayBook    // conversations.go
+	sched     schedule     // schedule.go
+	tasks     tasksState   // tasks.go
+	questions questions    // tools.go (ask_user)
+	live      contextState // context.go
+}
+
+var _ Handler = (*Service)(nil)
+
+// New makes the assistant; nothing runs until the hub calls it.
+func New(o Options) *Service {
+	s := &Service{hub: o.Hub, store: o.Store, logf: o.Logf, mux: http.NewServeMux(), epoch: randomHex(8), tasks: newTasksState()}
+	if s.store == nil {
+		s.store = func() Store { return nil }
+	}
+	if s.logf == nil {
+		s.logf = func(string, ...any) {}
+	}
+	s.archiveRoutes()
+	s.scheduleRoutes()
+	s.taskRoutes()
+	s.todayRoutes()
+	return s
+}
+
+// handle adds one of the routes the hub relays.
+func (s *Service) handle(pattern string, fn http.HandlerFunc) {
+	s.routes = append(s.routes, pattern)
+	s.mux.HandleFunc(pattern, fn)
+}
+
+func (s *Service) Routes() []string { return append([]string(nil), s.routes...) }
+
+func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
+
+// fullRole: the request came from a device that may do everything (RoleHeader; none: a test's own request).
+func fullRole(r *http.Request) bool {
+	role := r.Header.Get(RoleHeader)
+	return role == "" || role == roleFull
+}
+
+// owner is how the assistant calls the user: hub.json's assistant.owner, else 「用户」.
+func (s *Service) owner(ctx context.Context) string {
+	if o := strings.TrimSpace(s.hello(ctx).Owner); o != "" {
+		return o
+	}
+	return "用户"
+}
+
+// hello is the hub's answer to manager.hello (Hub.Hello); an error leaves it empty.
+func (s *Service) hello(ctx context.Context) Hello {
+	h, err := s.hub.Hello(ctx)
+	if err != nil {
+		s.logf("assistant: hello: %v", err)
+	}
+	return h
+}
+
+// call is a DeviceCall whose answer is read into out (nil: not read).
+func (s *Service) call(ctx context.Context, device, method string, params, out any) error {
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return err
+	}
+	res, err := s.hub.DeviceCall(ctx, DeviceCall{Device: device, Method: method, Params: raw})
+	if err != nil || out == nil || len(res) == 0 {
+		return err
+	}
+	return json.Unmarshal(res, out)
+}
+
+// appCall is an AppCall whose answer is read into out (nil: not read).
+func (s *Service) appCall(ctx context.Context, app, method string, params, out any) error {
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return err
+	}
+	res, err := s.hub.AppCall(ctx, AppCall{AppID: app, Method: method, Params: raw})
+	if err != nil || out == nil || len(res) == 0 {
+		return err
+	}
+	return json.Unmarshal(res, out)
+}
+
+// sessions are a machine's sessions as the apps get them; ErrNoDevice when the hub has no such machine.
+func (s *Service) sessions(ctx context.Context, machine string) ([]proto.Session, error) {
+	var res struct {
+		Sessions []proto.Session `json:"sessions"`
+	}
+	err := s.call(ctx, machine, DeviceSessionsList, map[string]any{}, &res)
+	return res.Sessions, err
+}
+
+// session is one session as the node listed it.
+func (s *Service) session(ctx context.Context, machine, id string) (proto.Session, bool) {
+	var res struct {
+		Session proto.Session `json:"session"`
+		OK      bool          `json:"ok"`
+	}
+	if err := s.call(ctx, machine, DeviceSessionGet, map[string]any{"session_id": id}, &res); err != nil {
+		return proto.Session{}, false
+	}
+	return res.Session, res.OK
+}
+
+// devices are the user's machines.
+func (s *Service) devices(ctx context.Context) []Device {
+	devices, _ := s.devicesAndPhone(ctx)
+	return devices
+}
+
+// devicesAndPhone are the user's machines, and whether the phone's app is connected (phone_* tools work now).
+func (s *Service) devicesAndPhone(ctx context.Context) ([]Device, bool) {
+	var res struct {
+		Devices     []Device `json:"devices"`
+		PhoneOnline bool     `json:"phone_online"`
+	}
+	if err := s.call(ctx, DeviceAll, DeviceDevicesList, map[string]any{}, &res); err != nil {
+		s.logf("assistant: devices: %v", err)
+	}
+	return res.Devices, res.PhoneOnline
+}
+
+// device is the machine by id; false when the hub has none.
+func (s *Service) device(ctx context.Context, id string) (Device, bool) {
+	for _, d := range s.devices(ctx) {
+		if d.ID == id {
+			return d, true
+		}
+	}
+	return Device{}, false
+}
+
+// startParams are what a new conversation starts with.
+type startParams struct {
+	Text           string `json:"text"`
+	PermissionMode string `json:"permission_mode,omitempty"`
+	Purpose        string `json:"purpose,omitempty"` // the model configuration's purpose; "" is the assistant's
+}
+
+// startConversation starts a new conversation on the assistant's machine (DeviceAssistantStart).
+func (s *Service) startConversation(ctx context.Context, p startParams) (proto.Session, error) {
+	machine := s.hello(ctx).Assistant.MachineID
+	var res struct {
+		Session proto.Session `json:"session"`
+	}
+	err := s.call(ctx, machine, DeviceAssistantStart, p, &res)
+	if errors.Is(err, ErrNoDevice) {
+		return proto.Session{}, errors.New("assistant machine is not configured")
+	}
+	return res.Session, err
+}
+
+// applyModel fills params (a node call's) with what purpose runs on (ModelsApply).
+func (s *Service) applyModel(ctx context.Context, purpose string, params map[string]any) error {
+	var res struct {
+		Params map[string]any `json:"params"`
+	}
+	if err := s.appCall(ctx, AppModels, ModelsApply, map[string]any{"purpose": purpose, "params": params}, &res); err != nil {
+		return err
+	}
+	clear(params)
+	maps.Copy(params, res.Params)
+	return nil
+}
+
+// assistantSendModel puts into params (a message for one of the assistant's conversations, sid on machine) which
+// launcher and model run it, as the phone's messages get them (ModelsAssistantSend, the hub's assistantSendModel).
+func (s *Service) assistantSendModel(ctx context.Context, machine, sid string, params map[string]any) error {
+	var res struct {
+		Params map[string]any `json:"params"`
+	}
+	if err := s.appCall(ctx, AppModels, ModelsAssistantSend, map[string]any{"machine_id": machine, "session_id": sid, "params": params}, &res); err != nil {
+		return err
+	}
+	clear(params)
+	maps.Copy(params, res.Params)
+	return nil
+}
+
+// resolveModel is what purpose runs on (ModelsResolve).
+func (s *Service) resolveModel(ctx context.Context, purpose string) (ModelBinding, error) {
+	var b ModelBinding
+	err := s.appCall(ctx, AppModels, ModelsResolve, map[string]any{"purpose": purpose}, &b)
+	return b, err
+}
+
+// kbReady: the hub has a knowledge base.
+func (s *Service) kbReady(ctx context.Context) bool {
+	var res struct {
+		Ready bool `json:"ready"`
+	}
+	return s.appCall(ctx, AppKB, KBStatus, map[string]any{}, &res) == nil && res.Ready
+}
+
+// push asks the hub to push n to the user (notify.request).
+func (s *Service) push(ctx context.Context, n Notification) {
+	n.ID, n.Kind = "ntf_"+randomHex(8), NotifyPush
+	if err := s.hub.NotifyRequest(ctx, NotifyRequest{Notification: n}); err != nil {
+		s.logf("assistant: push: %v", err)
+	}
+}
+
+// event tells the apps what changed (ws.broadcast: the hub sends ev to them as it is).
+func (s *Service) event(ctx context.Context, ev map[string]any) {
+	raw, err := json.Marshal(ev)
+	if err != nil {
+		return
+	}
+	s.hub.Broadcast(ctx, Broadcast{Message: raw})
+}
+
+// ---- the snapshot ----
+
+// publish reports the whole snapshot (manager.snapshot) after a change; the hub shows it.
+func (s *Service) publish(ctx context.Context) {
+	s.pubMu.Lock()
+	snap := s.snapshot(ctx)
+	s.seq++
+	snap.Epoch, snap.Seq, snap.At = s.epoch, s.seq, time.Now().UTC()
+	s.pubMu.Unlock()
+	if _, err := s.hub.Snapshot(ctx, snap); err != nil && !errors.Is(err, ErrStaleSnapshot) {
+		s.logf("assistant: snapshot: %v", err)
+	}
+}
+
+func (s *Service) Resync(ctx context.Context) { s.publish(ctx) }
+
+// snapshot is what the assistant shows now; parts that could not be read are left out and the snapshot is partial.
+func (s *Service) snapshot(ctx context.Context) Snapshot {
+	views := map[string]*SessionView{}
+	view := func(id, machine string) *SessionView {
+		v := views[id]
+		if v == nil {
+			v = &SessionView{MachineID: machine, SessionID: id}
+			views[id] = v
+		}
+		return v
+	}
+	var snap Snapshot
+	titles, ok := s.conversationTitles()
+	snap.Partial = snap.Partial || !ok
+	for id, t := range titles {
+		view(id, t.machine).Title = t.title
+	}
+	archived, ok := s.archivedSet()
+	snap.Partial = snap.Partial || !ok
+	for id, machine := range archived {
+		view(id, machine).Archived = true
+	}
+	queued, ok := s.queuedRelays()
+	snap.Partial = snap.Partial || !ok
+	if len(queued) > 0 {
+		here := s.hello(ctx).Assistant.MachineID // a conversation sent to is on the assistant's machine
+		for id, q := range queued {
+			view(id, here).Queued = q
+		}
+	}
+	snap.Interactions = s.pendingQuestions()
+	snap.Tasks = s.taskViews(ctx)
+	snap.Partial = snap.Partial || snap.Tasks == nil
+	snap.Sessions = make([]SessionView, 0, len(views))
+	for _, v := range views {
+		snap.Sessions = append(snap.Sessions, *v)
+	}
+	sort.Slice(snap.Sessions, func(i, j int) bool { return snap.Sessions[i].SessionID < snap.Sessions[j].SessionID })
+	return snap
+}
+
+// ---- what the hub saw ----
+
+func (s *Service) ConversationStarted(_ context.Context, c ConversationStarted) {
+	s.titleNew(c.MachineID, c.SessionID, c.Started, c.Task)
+}
+
+func (s *Service) ConversationRenamed(_ context.Context, c ConversationRenamed) {
+	s.titleSet(c.MachineID, c.SessionID, c.Title, titleByUser)
+}
+
+// UserSpoke: the user is talking in the conversation again: back in the list, and it works for them, not for a chain
+// of conversations.
+func (s *Service) UserSpoke(_ context.Context, r SessionRef) {
+	s.unarchiveOnSend(r.MachineID, r.SessionID)
+	s.userSpoke(r.SessionID)
+}
+
+// TurnStarted: one of a task's agents is working.
+func (s *Service) TurnStarted(ctx context.Context, r SessionRef) {
+	s.taskWorking(ctx, r.MachineID, r.SessionID)
+}
+
+// TurnEnded: a task's agent may be done (in the background: it waits for the agents to settle); a new conversation is
+// named after its first turn.
+func (s *Service) TurnEnded(ctx context.Context, r SessionRef) {
+	go s.taskTurnEnded(context.WithoutCancel(ctx), r.MachineID, r.SessionID)
+	s.titleAfterTurn(ctx, r.MachineID, r.SessionID)
+}
+
+// InteractionResolved: the user dealt with a card of a task's agent: the conversation keeps a record of it.
+func (s *Service) InteractionResolved(ctx context.Context, r InteractionResolved) {
+	s.taskAnswered(ctx, r.Interaction, r.Resolution, r.Status)
+}
+
+// InboxMessage: a message about a task, with the reply the inbox drafted, goes into the task's conversation.
+func (s *Service) InboxMessage(ctx context.Context, m InboxMessage) {
+	s.messageCard(ctx, m.ItemID, m.Message)
+}
+
+// ActiveTasks are the tasks going on (assistant.tasks).
+func (s *Service) ActiveTasks(ctx context.Context) []prompts.InboxTask { return s.activeTasks(ctx) }
+
+func (s *Service) CardSent(ctx context.Context, p CardSentParams) (bool, error) {
+	return s.cardSent(ctx, p.CardID, p.ItemID)
+}
+
+func (s *Service) CardsSent(ctx context.Context, p CardsSentParams) {
+	s.markCardsSent(ctx, p.ItemID, p.At, p.Text, true)
+}
+
+// SessionsChanged: messages from other conversations go to those no longer running.
+func (s *Service) SessionsChanged(_ context.Context, d DeviceSessions) {
+	s.drainRelays(d.MachineID, d.Sessions)
+}
+
+func randomHex(n int) string {
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}

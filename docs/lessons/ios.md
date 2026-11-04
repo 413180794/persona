@@ -57,6 +57,13 @@
   - 键盘改 inset 的同时发起的带动画 `scrollTo` 会被吞掉：phase 进了 `.animating`，offset 却不动。
   - `LazyVStack` 报的内容高度在两个估计值之间来回跳（实测差 39pt），按它算出来的 offset 会差一截。
   - 做法（`LarkFollow.swift`）：跟随时用 `defaultScrollAnchor(.bottom, for: .sizeChanges)`，滚动视图自己知道行的真实高度；不在底部时补一个不带动画的 `scrollTo(edge: .bottom)`。原来的锚点按 role 拆开（`.initialOffset`、`.alignment` 不变）。
+- 正着放的聊天列表（`LazyVStack` + `scrollTargetLayout` + `ScrollPosition`）在顶上插一页（2026-11-04，#1033，模拟器实测）：
+  滚动位置按 id 保持的是第一个滚动目标，那是列表顶上的「历史」头而不是消息，正在读的消息被推下去整整一页（这一页的高度，像素对得上），还立刻又挨着顶、再要一页；
+  `defaultScrollAnchor(.bottom, for: .sizeChanges)` 也没用（和插入同一次更新里切换的锚点只管之后的变化，提前切也一样）；把头挪出 `LazyVStack` 包一层 `VStack` 直接白屏。
+  做法（`LarkHistoryHold`）：页落下时从 `onScrollTargetVisibilityChange` 取屏幕中间的一条当锚，只给这一行挂 `onGeometryChange` 报它在内容坐标里的位置，
+  每变一次就按差值直接改 `UIScrollView.contentOffset`（同 `ChatPin`）；内容坐标不随滚动变，手指和惯性照常，下面新到的消息不影响。别按整个内容高度的变化补：锚那一行自己的时间分隔条挪走了也算在里面，差 58pt。
+- `onScrollGeometryChange` 只在值变了时回调，第一次的值不报：内容不够一屏的会话一开始就「接近顶部」，只用一个 Bool 永远等不到回调，一次都不自动加载（#1033）。值里带上内容高度，首次布局就会报。
+  反过来，首屏落地、账号确认、回到前台这几个时刻列表还没到它打开的位置：带着待发消息重新打开会话时，列表先在最顶上（offset 等于上 inset）停了一下，立刻要了一页历史（日志实测）。这些时刻都等列表落定再按滚动视图的实际几何判断（`requestHistoryWhenSettled`）。
 - 倒置聊天列表往上翻时的「冻结」不能按行 id 截：行 id 会随轮次推进变（答案收进工作行、多条消息的轮合并成 `wt-`），
   找不到 id 冻结就失效、可见内容被顶走（修前实测 319pt）。按「离开最新端时的 item 快照」重建行（`ChatView.Frozen`），验证用 `-showFreezeProbe`。
 - BeautifulUI 的组件放进聊天列表前，先看它每次出现时做了什么。懒加载列表滚动时会反复重建行，每次出现都起 `.task`、挂入场动画（`buiEntrance`）的组件，
@@ -612,7 +619,7 @@ Task 里只遍历这个序列，就能编过。选择器用 `preferredItemEncodi
 对话里的工具行按工具名取标签、参数（`ToolPresentation.verb` / `subject`）和展开的样子（`ToolDetail`），不认识的名字走默认：
 标签是原名，参数取输入里第一个字符串值。`ask_user` 的输入只有 `questions` 数组，参数就是空字符串，BeautifulUI 的 `ToolChipRow` 照样画出参数框，
 于是成了「ask_user + 一个空灰框」；卡片答完一收，对话里再也看不到问了什么、选了什么，看着像「没显示问题」。
-当时线上 hub 的交互记录里问题建了、推了、21 秒后答了，问题出在 App 怎么画。给助手加只给它用的工具（`hub/assistant_tools.go`）时，
+当时线上 hub 的交互记录里问题建了、推了、21 秒后答了，问题出在 App 怎么画。给助手加只给它用的工具（`assistant/tools.go`）时，
 顺手在 `ToolPresentation` 里给它起中文名、挑参数；它的结果是给模型看的英文时，展开后换成用户看得懂的（`AskUserDetail` 从结果里读回选了哪项）。
 
 ## 「两页共用一个组件」要从调用处查到底（2026-11-04，#1079 → #1091）

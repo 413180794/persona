@@ -1,10 +1,7 @@
-package hub
+package assistant
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"net/http"
 	"regexp"
 	"slices"
 	"strings"
@@ -24,36 +21,11 @@ import (
 // assistant isn't asked to do anything. A scheduled task's conversation is 「MMDD | 定时 | 任务名」 from the start,
 // with no model call; it stays the same however many runs go into it.
 //
-// The titles live in the hub (settings assistant.titles) and are put on the session lists the apps get
-// (decorated), so Claude and Codex conversations are named the same way and nothing is written into transcripts.
-// A conversation is named once: a rename in the app (POST …/rename with a title) is recorded as the user's and
-// is never replaced; conversations from before this are left as they were.
-
-// mainTitle is the main conversation's title on the lists the apps get: it has no title of its own (conversation_rename
-// refuses it, the apps show the persona there), so neither its first message (the node's title for a transcript
-// without one) nor a model's name nor a rename shows up as one (#1313).
-const mainTitle = "Persona"
-
-var errRenameMain = errors.New("主对话没有标题可以改")
-
-// mainConversation is the main conversation's session id when machine is the assistant's and list holds an assistant
-// conversation, else "" (the setting is only read when it can matter: decorated runs on every push).
-func (h *Hub) mainConversation(machine string, list []proto.Session, dir string) string {
-	if !slices.ContainsFunc(list, func(s proto.Session) bool { return isAssistant(s, dir) }) {
-		return ""
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	if cfg := h.assistantConfigLegacy(ctx); cfg.MachineID == machine {
-		return cfg.Main
-	}
-	return ""
-}
-
-// isMain: id is the main conversation (the assistant's machine is not checked: session ids are unique).
-func (h *Hub) isMain(ctx context.Context, id string) bool {
-	return id != "" && h.assistantConfigLegacy(ctx).Main == id
-}
+// The titles live in the assistant's store (settings assistant.titles) and go to the hub in the snapshot, which puts
+// them on the session lists the apps get, so Claude and Codex conversations are named the same way and nothing is
+// written into transcripts. A conversation is named once: a rename in the app (POST …/rename with a title) is
+// recorded as the user's and is never replaced; conversations from before this are left as they were. The main
+// conversation has no title of its own (the hub shows it as 「Persona」, #1313).
 
 var titleKinds = []string{"功能", "设计", "修复", "优化", "发布", "探索", "文档", "研究", "评审", "定时"}
 
@@ -88,16 +60,21 @@ type titleBook struct {
 	naming map[string]bool       // a model call is out for these
 }
 
+// isMain: id is the main conversation (the assistant's machine is not checked: session ids are unique).
+func (s *Service) isMain(ctx context.Context, id string) bool {
+	return id != "" && s.hello(ctx).Assistant.Main == id
+}
+
 // titlesLocked reads the book once; b.mu is held. A failed read leaves it unloaded (nothing is saved over it).
-func (h *Hub) titlesLocked(ctx context.Context) bool {
-	b := &h.titles
+func (s *Service) titlesLocked(ctx context.Context) bool {
+	b := &s.titles
 	if b.loaded {
 		return true
 	}
 	m := map[string]*convTitle{}
-	if h.store != nil {
-		if _, err := h.store.Setting(ctx, titlesKey, &m); err != nil {
-			h.logf("load assistant titles: %v", err)
+	if st := s.store(); st != nil {
+		if _, err := st.Setting(ctx, titlesKey, &m); err != nil {
+			s.logf("load assistant titles: %v", err)
 			return false
 		}
 	}
@@ -108,58 +85,57 @@ func (h *Hub) titlesLocked(ctx context.Context) bool {
 	return true
 }
 
-func (h *Hub) saveTitlesLocked() {
-	if h.store == nil {
+func (s *Service) saveTitlesLocked() {
+	st := s.store()
+	if st == nil {
 		return
 	}
 	// A conversation that never finished its first turn in a day won't: forget it.
-	for id, t := range h.titles.m {
+	for id, t := range s.titles.m {
 		if t.By == titlePending && time.Since(t.Started) > 24*time.Hour {
-			delete(h.titles.m, id)
+			delete(s.titles.m, id)
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := h.store.PutSetting(ctx, titlesKey, h.titles.m); err != nil {
-		h.logf("save assistant titles: %v", err)
+	if err := st.PutSetting(ctx, titlesKey, s.titles.m); err != nil {
+		s.logf("save assistant titles: %v", err)
 	}
 }
 
 // titleNew notes a conversation the hub just started. task: the scheduled task's name when a task started it (the
 // title is set now); "" to name it after its first turn.
-func (h *Hub) titleNew(machine, id string, started time.Time, task string) {
+func (s *Service) titleNew(machine, id string, started time.Time, task string) {
 	if id == "" {
 		return
 	}
+	ctx := context.Background()
 	t := &convTitle{MachineID: machine, By: titlePending, Started: started.UTC()}
 	if task != "" {
-		t.Title, t.By = titleDay(started, h.userLocation())+" | "+titleTask+" | "+titleTopic(task), titleByTask
+		t.Title, t.By = titleDay(started, s.location(ctx))+" | "+titleTask+" | "+titleTopic(task), titleByTask
 	}
-	b := &h.titles
+	b := &s.titles
 	b.mu.Lock()
-	if !h.titlesLocked(context.Background()) {
+	if !s.titlesLocked(ctx) {
 		b.mu.Unlock()
 		return
 	}
 	if _, ok := b.m[id]; !ok {
 		b.m[id] = t
-		h.saveTitlesLocked()
+		s.saveTitlesLocked()
 	}
 	b.mu.Unlock()
 	if task != "" {
-		h.retitled(machine)
+		s.publish(ctx)
 	}
 }
 
-// titleRenamed records the user's own title (the app's 重命名) so it is shown as it is and never replaced.
-func (h *Hub) titleRenamed(machine, id, title string) { h.titleSet(machine, id, title, titleByUser) }
-
 // titleOf is who named a conversation ("" when the hub never noted it) and when it started.
-func (h *Hub) titleOf(id string) (by string, started time.Time) {
-	b := &h.titles
+func (s *Service) titleOf(id string) (by string, started time.Time) {
+	b := &s.titles
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if !h.titlesLocked(context.Background()) {
+	if !s.titlesLocked(context.Background()) {
 		return "", time.Time{}
 	}
 	if t := b.m[id]; t != nil {
@@ -169,14 +145,14 @@ func (h *Hub) titleOf(id string) (by string, started time.Time) {
 }
 
 // titleSet records a title someone gave (by: user or assistant); a pending automatic one is not made any more.
-func (h *Hub) titleSet(machine, id, title, by string) {
+func (s *Service) titleSet(machine, id, title, by string) {
 	title = strings.Join(strings.Fields(title), " ")
 	if title == "" {
 		return
 	}
-	b := &h.titles
+	b := &s.titles
 	b.mu.Lock()
-	if !h.titlesLocked(context.Background()) {
+	if !s.titlesLocked(context.Background()) {
 		b.mu.Unlock()
 		return
 	}
@@ -186,85 +162,51 @@ func (h *Hub) titleSet(machine, id, title, by string) {
 		b.m[id] = t
 	}
 	t.Title, t.By = title, by
-	h.saveTitlesLocked()
+	s.saveTitlesLocked()
 	b.mu.Unlock()
-	h.retitled(machine)
-}
-
-// renameSession is POST /api/v1/sessions/{mid}/{sid}/rename ({"title", "tab_name"}): the node renames the tab and /
-// or the session; an assistant conversation's new title is also the user's from now on (titleRenamed).
-func (h *Hub) renameSession(w http.ResponseWriter, r *http.Request, m *Machine) {
-	p := map[string]any{}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&p); err != nil && !errors.Is(err, errEOF) {
-		writeErr(w, http.StatusBadRequest, err)
-		return
-	}
-	sid := r.PathValue("sid")
-	p["session_id"] = sid
-	title, _ := p["title"].(string)
-	s, _ := m.session(sid)
-	assistant := isAssistant(s, m.assistantCwd())
-	if t, _ := p["title"].(string); assistant && strings.TrimSpace(t) != "" && h.isMain(r.Context(), sid) {
-		writeErr(w, http.StatusBadRequest, errRenameMain) // the apps show the persona there (#1313)
-		return
-	}
-	if assistant && s.Agent == "codex" {
-		delete(p, "title") // only the hub's title for Codex (renameConversation)
-	}
-	out := json.RawMessage(`{"ok":true}`)
-	if p["title"] != nil || p["tab_name"] != nil {
-		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-		defer cancel()
-		if err := m.call(ctx, "session.rename", p, &out); err != nil {
-			callErr(w, err)
-			return
-		}
-	}
-	if assistant && strings.TrimSpace(title) != "" {
-		h.titleRenamed(m.cfg.ID, sid, title)
-	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_, _ = w.Write(out)
+	s.publish(context.Background())
 }
 
 // renameConversation names an assistant conversation for the assistant's conversation_rename: like the app's 重命名,
-// Claude's transcript gets the title too (its own lists show it); a Codex conversation's title is only the hub's
-// (the node would write Claude's custom-title line into the Codex rollout).
-func (h *Hub) renameConversation(ctx context.Context, m *Machine, s proto.Session, title, by string) error {
-	if s.Agent != "codex" {
+// Claude's transcript gets the title too (its own lists show it); a Codex conversation's title is only the
+// assistant's (the node would write Claude's custom-title line into the Codex rollout).
+func (s *Service) renameConversation(ctx context.Context, c proto.Session, title, by string) error {
+	if c.Agent != "codex" {
 		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
-		if err := m.call(cctx, "session.rename", map[string]any{"session_id": s.SessionID, "title": title}, nil); err != nil {
+		if err := s.call(cctx, c.MachineID, DeviceSessionRename, map[string]any{"session_id": c.SessionID, "title": title}, nil); err != nil {
 			return err
 		}
 	}
-	h.titleSet(m.cfg.ID, s.SessionID, title, by)
+	s.titleSet(c.MachineID, c.SessionID, title, by)
 	return nil
 }
 
-// conversationTitles are the titles to show, by session id.
-func (h *Hub) conversationTitles() map[string]string {
-	b := &h.titles
+type shownTitle struct{ title, machine string }
+
+// conversationTitles are the titles to show, by session id; false while they could not be read.
+func (s *Service) conversationTitles() (map[string]shownTitle, bool) {
+	b := &s.titles
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if !h.titlesLocked(context.Background()) {
-		return nil
+	if !s.titlesLocked(context.Background()) {
+		return nil, false
 	}
-	out := make(map[string]string, len(b.m))
+	out := make(map[string]shownTitle, len(b.m))
 	for id, t := range b.m {
 		if t.Title != "" {
-			out[id] = t.Title
+			out[id] = shownTitle{t.Title, t.MachineID}
 		}
 	}
-	return out
+	return out, true
 }
 
 // titleAfterTurn runs when an assistant conversation's turn ends: a conversation the hub started and nobody has
-// named yet is named now, in the background.
-func (h *Hub) titleAfterTurn(m *Machine, id string) {
-	b := &h.titles
+// named yet is named now (the hub calls it in the background).
+func (s *Service) titleAfterTurn(ctx context.Context, machine, id string) {
+	b := &s.titles
 	b.mu.Lock()
-	if !h.titlesLocked(context.Background()) {
+	if !s.titlesLocked(context.Background()) {
 		b.mu.Unlock()
 		return
 	}
@@ -273,9 +215,9 @@ func (h *Hub) titleAfterTurn(m *Machine, id string) {
 		b.mu.Unlock()
 		return
 	}
-	if h.isMain(context.Background(), id) { // it has no title: not worth a model call (#1313)
+	if s.isMain(context.Background(), id) { // it has no title: not worth a model call (#1313)
 		delete(b.m, id)
-		h.saveTitlesLocked()
+		s.saveTitlesLocked()
 		b.mu.Unlock()
 		return
 	}
@@ -286,36 +228,29 @@ func (h *Hub) titleAfterTurn(m *Machine, id string) {
 	started := t.Started
 	b.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 	defer cancel()
-	first, reply := h.firstExchange(ctx, m, id)
-	title := h.makeTitle(ctx, started, first, reply)
+	first, reply := s.firstExchange(ctx, machine, id)
+	title := s.makeTitle(ctx, started, first, reply)
 
 	b.mu.Lock()
 	delete(b.naming, id)
 	if t := b.m[id]; t != nil && t.By == titlePending { // the user may have renamed it meanwhile
 		t.Title, t.By = title, titleAuto
-		h.saveTitlesLocked()
+		s.saveTitlesLocked()
 	}
 	b.mu.Unlock()
-	h.logf("assistant conversation %s: titled %q", short(id), title)
-	h.retitled(m.cfg.ID)
-}
-
-// retitled pushes the machine's list again so the apps show the new title now.
-func (h *Hub) retitled(machine string) {
-	if m := h.localMachine(machine); m != nil {
-		h.sessionsChanged(m)
-	}
+	s.logf("assistant conversation %s: titled %q", short(id), title)
+	s.publish(context.Background())
 }
 
 // firstExchange is the conversation's first message and the answer to it (it has had one turn).
-func (h *Hub) firstExchange(ctx context.Context, m *Machine, id string) (first, reply string) {
+func (s *Service) firstExchange(ctx context.Context, machine, id string) (first, reply string) {
 	var res struct {
 		Items []proto.Item `json:"items"`
 	}
-	if err := m.call(ctx, "session.items", map[string]any{"session_id": id, "turns": 1}, &res); err != nil {
-		h.logf("title %s: %v", short(id), err)
+	if err := s.call(ctx, machine, DeviceSessionItems, map[string]any{"session_id": id, "turns": 1}, &res); err != nil {
+		s.logf("title %s: %v", short(id), err)
 	}
 	for _, it := range res.Items {
 		if it.Kind != proto.KindText || strings.TrimSpace(it.Text) == "" {
@@ -329,8 +264,8 @@ func (h *Hub) firstExchange(ctx context.Context, m *Machine, id string) (first, 
 		}
 	}
 	if first == "" { // the list has the first message as the title of a conversation nobody named
-		if s, ok := m.session(id); ok {
-			first = s.Title
+		if c, ok := s.session(ctx, machine, id); ok {
+			first = c.Title
 		}
 	}
 	// A conversation another one started (conversation_new) opens with a note on where it comes from: not its topic.
@@ -340,29 +275,32 @@ func (h *Hub) firstExchange(ctx context.Context, m *Machine, id string) (first, 
 
 // makeTitle asks the model for 「类型 | 主题」, once more when that breaks the format, and falls back to
 // 「探索 | the first message's first 14 characters」.
-func (h *Hub) makeTitle(ctx context.Context, started time.Time, first, reply string) string {
-	day := titleDay(started, h.userLocation())
+func (s *Service) makeTitle(ctx context.Context, started time.Time, first, reply string) string {
+	day := titleDay(started, s.location(ctx))
 	if strings.TrimSpace(first) != "" {
 		retry := ""
 		for range 2 {
 			cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-			out, err := h.purposeModel("assistant.title").Complete(cctx, prompts.RenderSessionTitle(),
-				prompts.RenderSessionTitleInput(prompts.SessionTitleInput{First: first, Reply: reply, Retry: retry}), 200)
+			var res struct {
+				Text string `json:"text"`
+			}
+			err := s.appCall(cctx, AppModels, ModelsComplete, map[string]any{"purpose": "assistant.title", "system": prompts.RenderSessionTitle(),
+				"input": prompts.RenderSessionTitleInput(prompts.SessionTitleInput{First: first, Reply: reply, Retry: retry}), "max_tokens": 200}, &res)
 			cancel()
 			if err != nil {
 				if !ai.IsPaused(err) {
-					h.logf("title: %v", err)
+					s.logf("title: %v", err)
 				}
 				break
 			}
-			kind, topic, ok := parseTitle(out)
+			kind, topic, ok := parseTitle(res.Text)
 			if ok {
 				return day + " | " + kind + " | " + topic
 			}
 			if kind != "" && retry != "" { // a known kind and a topic that is still too long: cut it
 				return day + " | " + kind + " | " + titleTopic(topic)
 			}
-			retry = cutRunes(oneLine(out), 60)
+			retry = cutRunes(oneLine(res.Text), 60)
 		}
 	}
 	topic := titleTopic(first)

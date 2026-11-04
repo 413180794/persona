@@ -101,6 +101,7 @@ func (h *Hub) stopWebSockets(ctx context.Context) error {
 	}
 	links := h.stopLinks() // their streams end now; jarvis-link comes back to the next hub on the 1001
 	h.stopPeerLinks()      // the other hubs of the mesh group hear a 1001 too (peer_link.go)
+	buses := h.stopBus()   // the services reconnect to the next hub on the 1001 (bus.go)
 
 	var closes sync.WaitGroup
 	for _, c := range clients {
@@ -116,6 +117,13 @@ func (h *Hub) stopWebSockets(ctx context.Context) error {
 		go func() {
 			defer closes.Done()
 			_ = l.conn.Close(websocket.StatusGoingAway, "hub stopping")
+		}()
+	}
+	for _, c := range buses {
+		closes.Add(1)
+		go func() {
+			defer closes.Done()
+			_ = c.ws.Close(websocket.StatusGoingAway, "hub stopping")
 		}()
 	}
 	closed := make(chan struct{})
@@ -134,6 +142,9 @@ func (h *Hub) stopWebSockets(ctx context.Context) error {
 	}
 	for _, l := range links {
 		_ = l.conn.CloseNow()
+	}
+	for _, c := range buses {
+		_ = c.ws.CloseNow()
 	}
 	done := make(chan struct{})
 	go func() {

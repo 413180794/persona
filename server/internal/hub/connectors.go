@@ -42,10 +42,11 @@ func (h *Hub) addConnector(c connector.Connector) error {
 }
 
 // builtinTools are the names of every tool the hub offers besides connectors', whether or not it is set up to offer
-// them now (the phone's by their prefix: they come and go with the app).
+// them now (the phone's by their prefix: they come and go with the app), the assistant's as it last listed them (none
+// while it has not connected yet: connectors register as the hub starts, and do not wait for it).
 func (h *Hub) builtinTools() []string {
 	names := []string{"phone_"}
-	for _, t := range assistantTools() {
+	for _, t := range h.assistantToolsNow() {
 		names = append(names, t.Name)
 	}
 	return names

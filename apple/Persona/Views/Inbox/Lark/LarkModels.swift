@@ -241,8 +241,10 @@ extension APIClient {
         var newerCursor: String?
         /// The chat is a topic group and these are its topics (the hub found out even when the request did not say so).
         var topic: Bool?
+        var accountID: String? = nil
         enum CodingKeys: String, CodingKey {
             case messages, topic
+            case accountID = "account_id"
             case hasOlder = "has_older", hasNewer = "has_newer", olderCursor = "older_cursor", newerCursor = "newer_cursor"
         }
     }

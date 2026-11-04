@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/prompts"
@@ -223,7 +224,6 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 			cfg.Timezone = in.Timezone
 			h.mu.Lock()
 			h.userTZ = in.Timezone
-			h.forgetSnapshotLocked()
 			h.mu.Unlock()
 		}
 		if in.Notes != nil {
@@ -250,6 +250,7 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
+		h.assistantUpdated()
 		if in.Main != "" {
 			h.keepMain(r.Context())
 		}
@@ -294,8 +295,7 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"ok": true})
 	})
-	h.scheduleRoutes(api)
-	h.archiveRoutes(api)
+	h.assistantRoutesRelayed(api)
 	api.HandleFunc("POST /api/v1/assistant/conversations", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Prompt         string        `json:"prompt"`
@@ -330,7 +330,7 @@ func (h *Hub) assistantRoutes(api *http.ServeMux) {
 			callErr(w, err)
 			return
 		}
-		h.titleNew(s.MachineID, s.SessionID, time.Now(), "")
+		h.asst().ConversationStarted(ctx, assistantwire.ConversationStarted{MachineID: s.MachineID, SessionID: s.SessionID, Started: time.Now()})
 		if in.Main && h.store != nil {
 			cfg := h.assistantConfig(ctx)
 			cfg.Main = s.SessionID
@@ -354,17 +354,20 @@ func (h *Hub) startAssistant(ctx context.Context, prompt string, images []proto.
 // startAssistantAt starts an assistant conversation on machineID ("" is the assistant's machine) under the model
 // purpose ("" is "assistant").
 func (h *Hub) startAssistantAt(ctx context.Context, machineID, prompt string, images []proto.Image, launcher, mode, effort, purpose string) (*proto.Session, error) {
-	cfg := h.assistantConfig(ctx)
-	if launcher != "" {
-		cfg.Launcher = launcher // one-off choice from the app; the saved default stays
+	if machineID == "" {
+		machineID = h.assistantConfig(ctx).MachineID
 	}
-	if machineID != "" {
-		cfg.MachineID = machineID
-	}
-	m := h.localMachine(cfg.MachineID)
+	m := h.localMachine(machineID)
 	if m == nil {
 		return nil, errors.New("assistant machine is not configured")
 	}
+	return h.startAssistantOn(ctx, m, prompt, images, launcher, mode, effort, purpose)
+}
+
+// startAssistantOn starts a new conversation on m, the assistant's machine (also the assistant's device.call
+// assistant.start): the directory prepared, the model configuration of purpose ("" is "assistant") applied, then the
+// node's assistant.send.
+func (h *Hub) startAssistantOn(ctx context.Context, m *Machine, prompt string, images []proto.Image, launcher, mode, effort, purpose string) (*proto.Session, error) {
 	var prep struct {
 		Cwd string `json:"cwd"`
 	}
@@ -382,11 +385,11 @@ func (h *Hub) startAssistantAt(ctx context.Context, machineID, prompt string, im
 	if err := h.applyModel(ctx, purpose, params); err != nil {
 		return nil, err
 	}
-	cfg.Launcher, _ = params["launcher"].(string)
+	used, _ := params["launcher"].(string)
 	if err := m.call(ctx, "assistant.send", params, &res); err != nil {
 		return nil, err
 	}
-	s := proto.Session{SessionID: res.SessionID, Cwd: prep.Cwd, Status: proto.StatusWorking, Launcher: cfg.Launcher,
+	s := proto.Session{SessionID: res.SessionID, Cwd: prep.Cwd, Status: proto.StatusWorking, Launcher: used,
 		PermissionMode: mode, Effort: effort, StartedByJarvis: true, UpdatedAt: time.Now().UTC()}
 	s.MachineID = m.cfg.ID
 	s.Assistant = true
@@ -444,21 +447,20 @@ func (h *Hub) keptSessions(ctx context.Context, machine string) []string {
 	if cfg.Main != "" && cfg.MachineID == machine {
 		out = append(out, cfg.Main)
 	}
-	// Scheduled tasks' own conversations too: a weekly one would drop out of the list in between, and with it the
-	// app's link to it and the check that its last run is still going (runTask).
-	s := h.loadSchedule(ctx)
-	s.mu.Lock()
-	for _, t := range s.tasks {
+	// Scheduled tasks' own conversations too (the assistant reports them): a weekly one would drop out of the list in
+	// between, and with it the app's link to it and the check that its last run is still going.
+	tasks, _ := h.assistantTasks()
+	for _, t := range tasks {
 		if t.RunSessionID != "" && t.RunMachineID == machine && !slices.Contains(out, t.RunSessionID) {
 			out = append(out, t.RunSessionID)
 		}
 	}
-	s.mu.Unlock()
 	return out
 }
 
-// keepMain tells the assistant's node the main conversation changed.
+// keepMain tells the assistant's node, and the assistant, the main conversation changed.
 func (h *Hub) keepMain(ctx context.Context) {
+	h.assistantUpdated()
 	cfg := h.assistantConfig(ctx)
 	m := h.localMachine(cfg.MachineID)
 	if m == nil {
@@ -488,4 +490,81 @@ func (h *Hub) runtimeAssistantLauncher(ctx context.Context, m *Machine, launcher
 		}
 	}
 	return false
+}
+
+// The main conversation is the hub's to know (settings assistant, above); the assistant titles the others
+// (internal/assistant, titles.go).
+
+// mainTitle is the main conversation's title on the lists the apps get: it has no title of its own (conversation_rename
+// refuses it, the apps show the persona there), so neither its first message (the node's title for a transcript
+// without one) nor a model's name nor a rename shows up as one (#1313).
+const mainTitle = "Persona"
+
+var errRenameMain = errors.New("主对话没有标题可以改")
+
+// mainConversation is the main conversation's session id when machine is the assistant's and list holds an assistant
+// conversation, else "" (the setting is only read when it can matter: decorated runs on every push).
+func (h *Hub) mainConversation(machine string, list []proto.Session, dir string) string {
+	if !slices.ContainsFunc(list, func(s proto.Session) bool { return isAssistant(s, dir) }) {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if cfg := h.assistantConfigLegacy(ctx); cfg.MachineID == machine {
+		return cfg.Main
+	}
+	return ""
+}
+
+// isMain: id is the main conversation (the assistant's machine is not checked: session ids are unique).
+func (h *Hub) isMain(ctx context.Context, id string) bool {
+	return id != "" && h.assistantConfigLegacy(ctx).Main == id
+}
+
+// renameSession is POST /api/v1/sessions/{mid}/{sid}/rename ({"title", "tab_name"}): the node renames the tab and /
+// or the session; an assistant conversation's new title is also the user's from now on (the assistant keeps it).
+func (h *Hub) renameSession(w http.ResponseWriter, r *http.Request, m *Machine) {
+	p := map[string]any{}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&p); err != nil && !errors.Is(err, errEOF) {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	sid := r.PathValue("sid")
+	p["session_id"] = sid
+	title, _ := p["title"].(string)
+	s, _ := m.session(sid)
+	conv := isAssistant(s, m.assistantCwd())
+	if t, _ := p["title"].(string); conv && strings.TrimSpace(t) != "" && h.isMain(r.Context(), sid) {
+		writeErr(w, http.StatusBadRequest, errRenameMain) // the apps show the persona there (#1313)
+		return
+	}
+	if conv && s.Agent == "codex" {
+		delete(p, "title") // only the assistant's title for Codex (its conversation_rename does the same)
+	}
+	out := json.RawMessage(`{"ok":true}`)
+	if p["title"] != nil || p["tab_name"] != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		if err := m.call(ctx, "session.rename", p, &out); err != nil {
+			callErr(w, err)
+			return
+		}
+	}
+	if conv && strings.TrimSpace(title) != "" {
+		h.asst().ConversationRenamed(r.Context(), assistantwire.ConversationRenamed{MachineID: m.cfg.ID, SessionID: sid, Title: title})
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_, _ = w.Write(out)
+}
+
+// conversationName is how the Feishu bot calls an assistant conversation (the assistant has the same for its tools).
+func conversationName(s proto.Session, main string) string {
+	if s.SessionID == main {
+		return "主对话"
+	}
+	// Not named yet: the node's title is then the directory's name ("assistant") or Claude Code's default.
+	if t := strings.TrimSpace(s.Title); t != "" && t != "Claude Code" && t != path.Base(s.Cwd) {
+		return t
+	}
+	return "新对话"
 }

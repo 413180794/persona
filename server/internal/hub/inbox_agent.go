@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -407,7 +408,7 @@ func (h *Hub) toolInboxDraft(ctx context.Context, sessionID string, args json.Ra
 	h.inbox.mu.Unlock()
 	h.saveInbox(ctx, []*InboxItem{it})
 	if card != nil {
-		h.messageCard(ctx, it.ID, *card)
+		h.asst().InboxMessage(ctx, assistantwire.InboxMessage{ItemID: it.ID, Message: *card})
 	}
 	return "The draft is in the user's inbox; they will send it. You're done.", nil
 }

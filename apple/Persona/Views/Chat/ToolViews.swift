@@ -596,7 +596,7 @@ nonisolated enum ToolTextMemo {
 }
 
 /// What the user picked in an ask_user card, read back from the tool's result: the hub answers the model with
-/// "The user answered:\n- <question> → <answer>\n" per question (hub/assistant_tools.go), and with "The user did
+/// "The user answered:\n- <question> → <answer>\n" per question (server/internal/assistant/tools.go), and with "The user did
 /// not answer …" when the card was dismissed or expired. A multi-select answer joins its labels with ", ".
 nonisolated enum AskUserAnswers {
     struct Question: Equatable, Sendable {

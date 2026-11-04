@@ -1,4 +1,5 @@
 import SwiftUI
+import OSLog
 
 /// Message positions are decimal strings that can outgrow Int64 in theory; compare them as numbers.
 nonisolated enum LarkPosition {
@@ -54,7 +55,14 @@ struct LarkChatView: View {
     @State private var pager = LarkPager()
     /// The hub answered with a topic group's topics for a chat opened without `isTopic` (from a profile, an old inbox item).
     @State private var foundTopic = false
-    @State private var loadingOlder = false
+    @State private var history = LarkHistoryPaging()
+    @State private var historyTask: Task<Void, Never>?
+    @State private var nearHistory = false
+    @State private var historyVisible = false
+    /// Keeps the message being read in place while an older page goes in above it (not observed).
+    @State private var historyHold = LarkHistoryHold()
+    /// The one message that reports where it is while a page goes in above it.
+    @State private var historyAnchor: String?
     @State private var loadingNewer = false
     /// The first load is on its way (the page shows a spinner when nothing was cached).
     @State private var loading = true
@@ -84,7 +92,7 @@ struct LarkChatView: View {
     @State private var legacyDraft: LarkOutboxSnapshot?
     @State private var legacyStore: LarkOutboxStore?
     @State private var confirmLegacyDraft = false
-    @State private var position = ScrollPosition(edge: .bottom)
+    @State private var position = ScrollPosition(idType: String.self)
     @State private var fileRequest: (url: String, name: String)?
     /// Read position when the chat was opened: the divider sits above the first message after it. Frozen for the visit.
     @State private var anchor: String?
@@ -194,6 +202,19 @@ struct LarkChatView: View {
         }
         // Back in front: what came on screen while it was in the back is reported now.
         .onTabVisibility(appear: reportSoon, disappear: flushRead)
+        .onTabVisibility(appear: {
+            historyVisible = true
+            Task { await requestHistoryWhenSettled("visible") }
+        }, disappear: {
+            historyVisible = false
+            cancelHistory()
+        })
+        .onChange(of: landed) { Task { await requestHistoryWhenSettled("landed") } }
+        .onChange(of: outbox.identity) { _, _ in cancelHistory(); Task { await requestHistoryWhenSettled("account") } }
+        .onChange(of: outbox.invalidated) { _, invalid in if invalid { cancelHistory() } }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await requestHistoryWhenSettled("active") } } else { cancelHistory() }
+        }
         .onChange(of: anchor) { pager.seen.formUnion(book.seen) }
         .onChange(of: mention) { pager.seen.formUnion(book.seen) }
         // Outermost, so the sheets above (a thread, a profile, a reaction picker) are about the same account.
@@ -205,7 +226,7 @@ struct LarkChatView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if pager.hasOlder {
-                    LarkLoadOlderButton(title: "加载更早的消息", loading: loadingOlder) { Task { await loadOlder() } }
+                    historyHeader
                 }
                 if hasContent, let line = problem?.inline { Label(line, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger).padding(.bottom, Theme.Space.s) }
                 ForEach(Array(messages.enumerated()), id: \.element.id) { i, m in
@@ -216,6 +237,7 @@ struct LarkChatView: View {
                         let grouped = LarkChatLayout.continues(m, after: prev)
                         LarkMessageRow(message: m, grouped: grouped, isGroup: conversation.isGroup, feedID: conversation.id,
                                        readState: receiptStates[m.id])
+                            .background { if historyAnchor == m.id { historyAnchorReport(m.id) } }
                             .padding(.top, LarkChatLayout.gap(grouped: grouped))
                     }
                     .background { if flash?.line == m.id { QuoteFlash().id(flash?.id).padding(.horizontal, -Theme.Space.m) } }
@@ -224,6 +246,7 @@ struct LarkChatView: View {
                         receiptAppeared(m)
                     }
                     .onDisappear { book.receipts.disappeared(m.id) }
+                    .id(m.id)
                 }
                 if pager.hasNewer {
                     ProgressView().controlSize(.small).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.tapTarget)
@@ -232,12 +255,16 @@ struct LarkChatView: View {
                     outgoingRows
                 }
             }
+            .scrollTargetLayout()
+            .coordinateSpace(.named(LarkHistoryHold.space))
+            .background(LarkHistoryHold.Finder(hold: historyHold))
+            .onAppear { historyHold.letGo = { [position = $position] in position.wrappedValue = ScrollPosition(idType: String.self) } }
             .padding(.horizontal, Theme.Space.m)
             .padding(.vertical, Theme.Space.m)
         }
         .scrollPosition($position)
         // Where it opens and how it aligns; size changes (the keyboard, the box, new rows) are larkFollowsEnd's.
-        .larkFollowsEnd($position, following: $following, resting: openingAnchor, active: landed)
+        .larkFollowsEnd($position, following: $following, resting: isTopic ? openingAnchor : nil, active: landed)
         .defaultScrollAnchor(openingAnchor, for: .initialOffset)
         .defaultScrollAnchor(openingAnchor, for: .alignment)
         // The visible part ends above the composer (bottom inset); containerSize leaves out both insets, so it can't be added to
@@ -245,6 +272,15 @@ struct LarkChatView: View {
         .onScrollGeometryChange(for: Bool.self) { g in
             g.visibleRect.maxY - g.contentInsets.bottom >= g.contentSize.height - 80
         } action: { _, v in atBottom = v }
+        .onScrollTargetVisibilityChange(idType: String.self) { historyHold.visible = $0 }
+        // With the content's height in it, the first layout reports too: a list too short to scroll is near its top
+        // from the start, and the change-only callback never said so (measured: no request at all).
+        .onScrollGeometryChange(for: LarkHistoryReach.self) { g in
+            LarkHistoryReach(near: g.contentOffset.y + g.contentInsets.top <= g.containerSize.height / 2, content: g.contentSize.height)
+        } action: { _, reach in
+            nearHistory = reach.near
+            if reach.near { requestHistory(why: "near") }
+        }
         .overlay { placeholder }
         .overlay(alignment: .bottomTrailing) { jumpToLatestButton }
         .overlay(alignment: .topTrailing) { mentionButton }
@@ -477,6 +513,7 @@ struct LarkChatView: View {
     // MARK: Loading
 
     private func apply(_ r: APIClient.LarkMessages) {
+        resetHistory()
         if r.topic == true { foundTopic = true }
         pager.replace(with: r)
         if !r.hasNewer.map({ $0 }).isTrue { StateCache.save(LarkMessage.cacheName(conversation), Array(r.messages.suffix(80))) }
@@ -584,12 +621,104 @@ struct LarkChatView: View {
         withAnimation(Theme.Motion.standard) { pager.add(fresh) }
     }
 
-    private func loadOlder() async {
-        guard let api = chatAPI, let cursor = pager.olderRequest, !loadingOlder else { return }
-        loadingOlder = true
-        defer { loadingOlder = false }
-        guard let r = try? await api.larkMessages(conversation.id, before: cursor, topic: isTopic) else { return }
-        pager.prepend(r)
+    private static let historyLog = Logger(subsystem: "jarvis", category: "lark-history")
+
+    /// Picks a message on screen and waits (a few frames at most) until it has said where it is.
+    private func holdHistoryAnchor() async {
+        // Following the newest end, the list stays there by itself (larkFollowsEnd).
+        guard !following, let id = historyHold.pick(in: pager.messages.map(\.id)) else { return }
+        historyHold.begin(id)
+        historyAnchor = id
+        for _ in 0..<10 where !historyHold.ready {
+            try? await Task.sleep(for: .milliseconds(16))
+        }
+    }
+
+    private func releaseHistoryAnchor() {
+        historyHold.end()
+        if historyAnchor != nil { historyAnchor = nil }
+    }
+
+    private func historyAnchorReport(_ id: String) -> some View {
+        Color.clear.onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(LarkHistoryHold.space)).minY } action: {
+            historyHold.moved(id, to: $0)
+        }
+    }
+
+    @ViewBuilder private var historyHeader: some View {
+        if let problem = history.problem {
+            Button { requestHistory(retry: true) } label: {
+                ViewThatFits(in: .horizontal) {
+                    Text(problem.text)
+                    Text(problem.short)
+                }
+                .font(Theme.Font.label).lineLimit(1).minimumScaleFactor(0.7)
+                .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.well)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).foregroundStyle(LarkColor.blue)
+            .accessibilityLabel(problem.text)
+            .accessibilityIdentifier("lark.history.retry")
+        } else if isTopic {
+            LarkLoadOlderButton(title: "加载更早的消息", loading: history.pending != nil) { requestHistory(retry: true) }
+        } else {
+            Group {
+                if history.pending != nil { ProgressView().controlSize(.small).accessibilityLabel("正在加载更早的消息") }
+                else { Color.clear }
+            }
+            .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.well, maxHeight: Theme.Size.well)
+            .accessibilityIdentifier("lark.history.loading")
+        }
+    }
+
+    private func cancelHistory() {
+        historyTask?.cancel()
+        historyTask = nil
+        history.cancel()
+        releaseHistoryAnchor()
+    }
+
+    private func resetHistory() { cancelHistory(); history = LarkHistoryPaging() }
+
+    /// The first page lands, the account is confirmed, the page comes back to the front: each before the list has
+    /// gone to where it opens. For a moment even a long chat opened at its newest stood at its top (offset at the inset,
+    /// logged on reopening with messages still in the outbox) and asked for history at once. Asks once it has settled.
+    private func requestHistoryWhenSettled(_ why: String) async {
+        historyHold.settling = true
+        try? await Task.sleep(for: .milliseconds(400))
+        historyHold.settling = false
+        requestHistory(why: why)
+    }
+
+    private func requestHistory(retry: Bool = false, why: String = "retry") {
+        guard historyVisible, scenePhase == .active, landed, pager.hasOlder,
+              retry || ((historyHold.nearTop ?? nearHistory) && !isTopic && !historyHold.settling), !outbox.invalidated,
+              let account = outbox.identity?.account, let link = chatLink, let api = chatAPI,
+              let request = history.begin(cursor: pager.olderRequest, retry: retry) else { return }
+        Self.historyLog.notice("older page before \(request.cursor, privacy: .public) on \(why, privacy: .public): \(historyHold.describe, privacy: .public)")
+        historyTask = Task {
+            do {
+                let page = try await api.larkOlderMessages(conversation.id, before: request.cursor, account: account, topic: isTopic)
+                guard !Task.isCancelled, historyVisible, model.link(link.group) === link,
+                      outbox.identity?.account == account, !outbox.invalidated else { return }
+                // Rows added above keep the visible ones where they are (LarkHistoryHold); a topic group's
+                // list keeps its own anchor, as before.
+                if !isTopic { await holdHistoryAnchor() }
+                guard !Task.isCancelled, history.finish(request, page: page, pager: &pager) else { releaseHistoryAnchor(); return }
+                // Let the new rows lay out before deciding whether a short page
+                // still needs filling. The near-top geometry reported meanwhile is
+                // stale (the content grew before the hold moved the list).
+                historyHold.settling = true
+                defer { historyHold.settling = false }
+                try await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                historyHold.settling = false
+                requestHistory(why: "page")
+            } catch {
+                guard !Task.isCancelled else { return }
+                history.fail(request, problem: LarkHistoryPaging.problem(for: error))
+            }
+        }
     }
 
     private func loadNewer() async {
@@ -635,6 +764,7 @@ struct LarkChatView: View {
         pinTarget = nil
         if target.root != nil { pinThread = target; return }
         following = false
+        resetHistory()
         pager.replace(with: target.page)
         Task { await scroll(to: target.message.id); flash = QuoteFlashMark(line: target.message.id) }
     }

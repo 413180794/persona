@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -270,15 +271,13 @@ func TestTaskModelConfigurationSurvivesOrdinaryTaskSave(t *testing.T) {
 	h, mux := modelTestHub(t)
 	ctx := context.Background()
 	h.cfg.Assistant.Launcher = "claude"
-	s := h.loadSchedule(ctx)
-	s.mu.Lock()
-	s.tasks = []Task{{ID: "one", Title: "任务", Prompt: "x", Repeat: repeatInterval, EveryMinutes: 30, Enabled: true}}
-	s.mu.Unlock()
+	seedTasks(t, h, assistant.Task{ID: "one", Title: "任务", Prompt: "x", Repeat: "interval", EveryMinutes: 30, Enabled: true})
+	connectAssistant(t, h)
 	r := modelRequest(mux, "PATCH", "assistant", `{"revision":0,"provider":"launcher.claude","model":"exact","effort":"high"}`)
 	if r.Code != 200 {
 		t.Fatal(r.Body.String())
 	}
-	h.scheduleRoutes(mux)
+	h.assistantRoutesRelayed(mux)
 	request := httptest.NewRequest("PUT", "/api/v1/assistant/tasks/one", strings.NewReader(`{"title":"新任务","prompt":"y","repeat":"interval","every_minutes":45,"enabled":true}`))
 	result := httptest.NewRecorder()
 	mux.ServeHTTP(result, request)

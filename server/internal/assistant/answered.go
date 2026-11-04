@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"context"
@@ -39,16 +39,16 @@ const (
 const answeredSecret = "（已填写，不保存）"
 
 // taskAnswered: the user dealt with a card of one of the task's agents; the conversation keeps a record of it.
-func (h *Hub) taskAnswered(ix proto.Interaction, r proto.Resolution, status string) {
-	t, ok := h.taskOf(ix.MachineID, ix.SessionID)
+func (s *Service) taskAnswered(ctx context.Context, ix proto.Interaction, r proto.Resolution, status string) {
+	t, ok := s.taskOf(ctx, ix.MachineID, ix.SessionID)
 	if !ok || status == "failed" {
 		return
 	}
 	body := answeredBody{Question: interactionQuestion(ix), Answer: resolutionAnswer(ix, r), Items: answeredItems(ix, r)}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
-	if _, err := h.appendFeed(ctx, t.Origin, feedAnswered, t.ID, body); err != nil {
-		h.logf("task %s: answered: %v", t.ID, err)
+	if _, err := s.appendFeed(cctx, t.Origin, feedAnswered, t.ID, body); err != nil {
+		s.logf("task %s: answered: %v", t.ID, err)
 	}
 }
 

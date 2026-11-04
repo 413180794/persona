@@ -240,6 +240,7 @@ func (h *Hub) setAssistantNotes(ctx context.Context, v json.RawMessage) (*selfCh
 			if err := h.store.PutSetting(ctx, "assistant", cfg); err != nil {
 				return "", err
 			}
+			h.assistantUpdated()
 			return "关于我 updated; new conversations read it (this one keeps what it started with).", nil
 		}}, nil
 }

@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/db"
-	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -54,7 +54,7 @@ func stubJudge(t *testing.T, h *Hub, status int, reply string) *judgeStub {
 // startedTask opens a read-only task from conv1 and waits for its agent (s1 on box) to be linked.
 func startedTask(t *testing.T, h *Hub) Todo {
 	t.Helper()
-	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+	if _, err := taskPlan(h, "conv1", planArgs(true)); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the link", func() bool { ts := taskTodos(h); return len(ts) == 1 && len(ts[0].Agents) == 1 })
@@ -107,14 +107,8 @@ func TestTaskAutoDone(t *testing.T) {
 	if _, ok := h.taskOf("box", "s1"); ok {
 		t.Fatal("a done task is still followed")
 	}
-	var label string
-	for _, st := range h.snapshotTasks() {
-		if st.ID == todo.ID {
-			label = st.State
-		}
-	}
-	if label != taskStateLabel("auto_done") {
-		t.Fatalf("snapshot state = %q", label)
+	if line := taskLine(h, todo); !strings.Contains(line, "）：已完成（hub 判断做完了，自动关的）") {
+		t.Fatalf("the live context = %q", line)
 	}
 	for _, it := range h.inboxTasks() {
 		if it.ID == todo.ID {
@@ -195,10 +189,11 @@ func TestTaskReopenedNotAutoDoneAgain(t *testing.T) {
 		t.Fatal("a reopened task is not followed again")
 	}
 
-	// The same stretch of work, judged again (a late turn end, a receipt lost to a restart): left open, model not asked.
+	// The same stretch of work, judged again (a late turn end): left open, model not asked. (A receipt lost to a
+	// restart is the assistant's own test, TestAutoFinishLeavesAReopenedTask.)
 	calls := js.calls.Load()
-	h.autoFinishTask(todoNow(h, todo.ID), re.ReopenedAt.Add(-time.Second), true)
-	h.autoFinishTask(todoNow(h, todo.ID), time.Time{}, false)
+	h.asst().TurnEnded(context.Background(), assistant.SessionRef{MachineID: "box", SessionID: "s1"})
+	time.Sleep(50 * time.Millisecond)
 	if got := todoNow(h, todo.ID); got.DoneAt != nil || js.calls.Load() != calls {
 		t.Fatalf("closed again by the same work: %+v (%d calls)", got, js.calls.Load()-calls)
 	}
@@ -224,43 +219,30 @@ func TestTaskReopenedNotAutoDoneAgain(t *testing.T) {
 
 // Only tasks opened from a conversation are closed by the hub; done-check judges without writing.
 func TestTaskDoneSkipAndCheck(t *testing.T) {
-	now := time.Now()
-	reopened := now.Add(-time.Minute)
-	for _, tc := range []struct {
-		t      Todo
-		work   time.Time
-		worked bool
-		want   string
-	}{
-		{Todo{}, now, true, "not_a_task"},
-		{Todo{Origin: "c", DoneAt: &now}, now, true, "done"},
-		{Todo{Origin: "c", ReopenedAt: &reopened}, now.Add(-2 * time.Minute), true, "reopened"},
-		{Todo{Origin: "c", ReopenedAt: &reopened}, time.Time{}, false, "reopened"},
-		{Todo{Origin: "c", ReopenedAt: &reopened}, now, true, ""},
-		{Todo{Origin: "c"}, time.Time{}, false, ""},
-	} {
-		if got := autoDoneSkip(tc.t, tc.work, tc.worked); got != tc.want {
-			t.Errorf("autoDoneSkip(%+v, worked %v) = %q, want %q", tc.t, tc.worked, got, tc.want)
-		}
-	}
-
 	h, _ := newTaskHub(t)
 	stubJudge(t, h, http.StatusOK, `{"verdict":"waiting","reason":"等审核"}`)
 	todo := startedTask(t, h)
 	h.byID["box"].setSessions([]proto.Session{{SessionID: "s1", Cwd: "/code/app", Agent: "claude", Status: proto.StatusIdle,
 		LastText: "已提交，等待审核", UpdatedAt: time.Now()}})
 	handler := h.routes()
-	check := func(id string) (int, taskDoneCheck) {
+	type doneCheck struct {
+		Verdict    string `json:"verdict"`
+		Reason     string `json:"reason"`
+		WouldClose bool   `json:"would_close"`
+		Skip       string `json:"skip"`
+		Replies    int    `json:"replies"`
+	}
+	check := func(id string) (int, doneCheck) {
 		req := todoRequest("POST", "/api/v1/todos/"+id+"/done-check", nil)
 		req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
-		var c taskDoneCheck
+		var c doneCheck
 		_ = json.Unmarshal(w.Body.Bytes(), &c)
 		return w.Code, c
 	}
 	code, c := check(todo.ID)
-	if code != http.StatusOK || c.Verdict != verdictWaiting || c.Reason != "等审核" || c.WouldClose || c.Replies != 1 {
+	if code != http.StatusOK || c.Verdict != "waiting" || c.Reason != "等审核" || c.WouldClose || c.Replies != 1 {
 		t.Fatalf("done-check = %d %+v", code, c)
 	}
 	if got := todoNow(h, todo.ID); got.DoneAt != nil {
@@ -279,33 +261,20 @@ func TestTaskDoneSkipAndCheck(t *testing.T) {
 	if err := h.linkTodoAgent(context.Background(), hand.ID, "box", "s2", "", "/code/app", "", ""); err != nil {
 		t.Fatal(err)
 	}
-	h.autoFinishTask(todoNow(h, hand.ID), time.Now(), true)
+	// Its agent works and stops: no receipt, no judgment (it is no task of a conversation).
+	m := h.byID["box"]
+	s2 := func(status string) proto.Session {
+		return proto.Session{SessionID: "s2", Cwd: "/code/app", Agent: "claude", Status: status, LastText: "做完了", UpdatedAt: time.Now()}
+	}
+	m.setSessions([]proto.Session{s2(proto.StatusWorking)})
+	time.Sleep(20 * time.Millisecond)
+	m.setSessions([]proto.Session{s2(proto.StatusDone)})
+	time.Sleep(50 * time.Millisecond)
 	if got := todoNow(h, hand.ID); got.DoneAt != nil {
 		t.Fatalf("a hand-made todo was closed: %+v", got)
 	}
 	if _, c := check(hand.ID); c.Skip != "not_a_task" || c.WouldClose {
 		t.Fatalf("done-check on a hand-made todo = %+v", c)
-	}
-}
-
-func TestDoneSignals(t *testing.T) {
-	for _, tc := range []struct {
-		text      string
-		pr, build bool
-	}{
-		{"PR https://github.com/o/r/pull/12 已合并", true, false},
-		{"提了 https://github.com/o/r/pull/12，等 review", false, false},
-		{"merged https://github.com/o/r/pull/12; TestFlight build 202611041200 is up", true, true},
-		{"发了 TestFlight，构建号 1234", false, true},
-		{"没有全改完", false, false},
-	} {
-		got := doneSignals([]prompts.TaskDoneReply{{Text: tc.text}})
-		if got.MergedPR != tc.pr || got.Build != tc.build {
-			t.Errorf("doneSignals(%q) = %+v", tc.text, got)
-		}
-	}
-	if s := clipMiddle(strings.Repeat("a", 10)+strings.Repeat("b", 10), 4); s != "aaaa\n…\nbbbb" {
-		t.Fatalf("clipMiddle = %q", s)
 	}
 }
 
@@ -334,10 +303,6 @@ func TestTaskDoneReadsTheLatestTurn(t *testing.T) {
 		t.Errorf("judge input has an earlier reply of the turn: %s", in)
 	}
 
-	if !sameRequest("<jarvis-context kind=\"context\">x</jarvis-context>\niPad 横屏时登录页崩溃，修好并补测试", "iPad 横屏时登录页崩溃，修好并补测试") ||
-		sameRequest("再把「全部 N」挪到最左边", "iPad 横屏时登录页崩溃，修好并补测试") {
-		t.Fatal("sameRequest")
-	}
 }
 
 // A turn the model service cut off (#1516) is no end of the work: the receipt says the task was interrupted (not the
@@ -353,7 +318,7 @@ func TestTaskInterruptedByAPIError(t *testing.T) {
 	cut := "API Error: Connection lost mid-response. The response above may be incomplete."
 	runTurn(h, cut)
 	waitFor(t, "a receipt", func() bool { return receipts(h) == 1 })
-	items, _, _ := h.feed(context.Background(), "conv1", time.Time{})
+	items, _ := feed(h, "conv1")
 	var rb receiptBody
 	_ = json.Unmarshal(items[len(items)-1].Body, &rb)
 	if rb.State != "interrupted" || rb.Summary != interruptedSummary || rb.Error != cut || rb.PR != "" {
@@ -363,18 +328,9 @@ func TestTaskInterruptedByAPIError(t *testing.T) {
 	if got := todoNow(h, todo.ID); got.DoneAt != nil || js.calls.Load() != before {
 		t.Fatalf("todo = %+v, %d judge calls", got, js.calls.Load()-before)
 	}
-	stateNow := func() string { return taskState(todoNow(h, todo.ID), h.taskAgents(todoNow(h, todo.ID))) }
-	if st := stateNow(); st != "interrupted" {
-		t.Fatalf("state = %q", st)
-	}
-	var label string
-	for _, st := range h.snapshotTasks() {
-		if st.ID == todo.ID {
-			label = st.State
-		}
-	}
-	if label != taskStateLabel("interrupted") || !strings.Contains(label, "中断") {
-		t.Fatalf("snapshot state = %q", label)
+	// Its state is the assistant's: the line the snapshot has for it (taskLine).
+	if line := taskLine(h, todo); !strings.Contains(line, "模型服务出错，中断了（没做完，等用户让它继续）") {
+		t.Fatalf("snapshot state = %q", line)
 	}
 	inbox := false
 	for _, it := range h.inboxTasks() {
@@ -383,12 +339,12 @@ func TestTaskInterruptedByAPIError(t *testing.T) {
 	if !inbox {
 		t.Fatal("an interrupted task is not going on for the inbox")
 	}
-	today, _, err := h.ensureToday(context.Background(), "conv1")
-	if err != nil {
-		t.Fatal(err)
+	var today struct{ Item assistant.FeedItem }
+	if code := assistantPost(h, "/api/v1/assistant/conversations/conv1/today", &today); code != http.StatusOK {
+		t.Fatalf("today: %d", code)
 	}
-	var tb todayBody
-	_ = json.Unmarshal(today.Body, &tb)
+	var tb struct{ Waiting, Done []struct{ ID string } }
+	_ = json.Unmarshal(today.Item.Body, &tb)
 	if len(tb.Waiting) != 1 || len(tb.Done) != 0 {
 		t.Fatalf("today = %+v", tb)
 	}
@@ -406,19 +362,19 @@ func TestTaskInterruptedByAPIError(t *testing.T) {
 	}
 	wg.Wait()
 	_, sends := tn.calls()
-	if len(sends) != 1 || sends[0]["session_id"] != "s1" || sends[0]["text"] != continueText {
+	if len(sends) != 1 || sends[0]["session_id"] != "s1" || sends[0]["text"] != "继续" {
 		t.Fatalf("sends = %v", sends)
 	}
 
 	m := h.byID["box"]
 	m.setSessions([]proto.Session{{SessionID: "s1", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, LastText: cut, UpdatedAt: time.Now()}})
-	if st := stateNow(); st != "working" {
-		t.Fatalf("state after 继续 = %q", st)
+	if line := taskLine(h, todo); !strings.Contains(line, "在做") {
+		t.Fatalf("state after 继续 = %q", line)
 	}
 	time.Sleep(20 * time.Millisecond)
 	m.setSessions([]proto.Session{{SessionID: "s1", Cwd: "/code/app", Agent: "claude", Status: proto.StatusDone, LastText: "修好了，补了测试", UpdatedAt: time.Now()}})
 	waitFor(t, "auto done", func() bool { return todoNow(h, todo.ID).DoneAt != nil })
-	items, _, _ = h.feed(context.Background(), "conv1", time.Time{})
+	items, _ = feed(h, "conv1")
 	rb = receiptBody{}
 	_ = json.Unmarshal(items[len(items)-1].Body, &rb)
 	if receipts(h) != 2 || rb.State != "done" || rb.Summary != "修好了，补了测试" || rb.Error != "" {
@@ -473,9 +429,13 @@ func TestTaskDoneJudgeSkipsACutOffTurn(t *testing.T) {
 		{Kind: proto.KindText, Role: "assistant", Text: "API Error: Connection lost mid-response. The response above may be incomplete."},
 	}
 	tn.mu.Unlock()
-	c, err := h.judgeTaskDone(context.Background(), todo)
-	if err != nil || c.Verdict != verdictNotDone || c.WouldClose || js.calls.Load() != before {
-		t.Fatalf("check = %+v, %v, %d calls", c, err, js.calls.Load()-before)
+	var c struct {
+		Verdict    string `json:"verdict"`
+		WouldClose bool   `json:"would_close"`
+	}
+	if code := assistantPost(h, "/api/v1/todos/"+todo.ID+"/done-check", &c); code != http.StatusOK || c.Verdict != "not_done" || c.WouldClose ||
+		js.calls.Load() != before {
+		t.Fatalf("check = %d %+v, %d calls", code, c, js.calls.Load()-before)
 	}
 }
 
@@ -498,4 +458,26 @@ func TestTurnError(t *testing.T) {
 			t.Errorf("turnError(%s, %q) = %q", tc.state, tc.text, got)
 		}
 	}
+}
+
+// receiptBody is a receipt in a conversation's feed, as the app reads it.
+type receiptBody struct {
+	Title   string `json:"title"`
+	State   string `json:"state"`
+	Summary string `json:"summary"`
+	PR      string `json:"pr"`
+	Machine string `json:"machine"`
+	Error   string `json:"error"`
+}
+
+// assistantPost is a POST on the assistant's routes, as the hub relays it from a full device, once the assistant
+// took what the hub told it.
+func assistantPost(h *Hub, path string, out any) int {
+	settleAssistant(h)
+	r := todoRequest(http.MethodPost, path, nil)
+	r.Header.Set("Authorization", "Bearer "+h.cfg.Token)
+	w := httptest.NewRecorder()
+	h.routes().ServeHTTP(w, r)
+	_ = json.Unmarshal(w.Body.Bytes(), out)
+	return w.Code
 }

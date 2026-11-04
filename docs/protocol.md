@@ -18,6 +18,7 @@
   转给中心，成员加入时把它签过的凭据（hash）交给中心，所以配对在成员上的设备照常能用。中心连不上时成员回
   `503 {"code":"center_unreachable","center":{"hub_id","name"}}`。
 - 公网鉴权失败按 IPv4 单地址、IPv6 /64 计数，封禁检查在查库前；`429 rate_limited` 带秒数形式的 `Retry-After`。内网 / VPN 不计数，参数见 [网络配置](network.md#hubjson-网络配置)。
+- 服务（助手等独立进程）连 hub 的总线用另一种 token（`jb_…`），只能开 `GET /api/v1/bus`，见下文「总线」。
 - 每个响应带 `X-Request-Id`；请求可带 `X-Client-Request-Id`（4–32 位十六进制 / `-`），hub 就用它（`docs/server.md`「运维」）。
 
 ### 健康检查与能力位
@@ -1021,6 +1022,104 @@ hub 连不进去的电脑（笔记本）由 jarvis-link 主动连 hub 的 TLS �
 - hub 按配对链接里的 `fp` 钉扎连 `<address>`（可经 `socks5://` 代理）：`POST /api/v1/connector/pair {code,token,machine,hub_id,hub_name}` 一次；
   之后 `GET /api/v1/connector/info`（每 30 秒，探活和 RTT）、`GET /api/v1/connector/stream`（WebSocket，node 的字节流），都带 `Authorization: Bearer <凭据>`。
 - 401：5 分钟内不再拨；429：按 `Retry-After`；503 `node_unavailable`：显示原因、照常退避；流以 4002 关：要重新配对，不再试；1001：照常退避。
+
+## 总线（服务 ↔ hub，`GET /api/v1/bus`）
+
+hub 要变成只是一条通道：助手（以后还有别的服务）是另一个进程，主动连 hub 的总线、一直连着，而不是住在 hub 里。hub 不认识任何服务的业务语义；
+默认 hub 把助手当作自己的子进程起起来（`personad assistant`），助手也可以跑在别处（`docs/assistant.md`「进程」）。
+通道本身是鉴权、握手、名册、按方法名派发、两个方向的调用；助手经它和 hub 互相调用，见下「助手用的方法」。
+
+**身份和 token**
+
+- 每个服务一个身份。现在只有 `manager` 一种角色（一个管理者进程，即助手；id 形如 `assistant`，小写字母开头，最多 32 个字符）；表里留着角色一列，以后加别的角色不用改表，别的角色的 token 现在在升级时就被拒（401）。
+- token 以 `jb_` 开头，只能开 `/api/v1/bus`：设备 token、主 token 都开不了总线，`jb_` 也开不了 App 的接口（401）。hub 只存 sha256（表 `bus_identities`，迁移 0311）。
+- 只认 `Authorization: Bearer`，不收 `?token=`。公网来源要 TLS（否则 `403 tls_required`），失败计数和 `429 rate_limited` 同 App 的接口；回环、内网不计数。
+- 生成和撤销是 hub 里的函数（`createBusToken`、`revokeBusToken`，在 `server/internal/hub/bustokens.go`）。hub 每次启动给助手生成一个、从子进程的 stdin 交给它；
+  助手跑在别处时用 `personad hub assistant-token` 生成（`docs/config.md` 的 `assistant.external`）。没有接口和界面。
+  同一身份再生成一次就换掉旧 token：旧的立刻失效，用它连着的连接以 4002 断开。
+- 互联的成员 hub 不把总线转给中心：服务连的是哪台 hub，就是哪台的。
+
+**线上格式**：每条 WebSocket 文本消息是一行 `internal/rpc` JSON（和 hub ↔ node 同一套），permessage-deflate，单条最大 64 MiB，两个方向都能调用：
+
+```jsonc
+{"id":"s1","method":"manager.hello","params":{"id":"assistant"}}
+{"id":"s1","result":{"name":"助手","role":"manager","managers":[{"id":"assistant","name":"助手","role":"manager","online":true}],
+                     "timezone":"Asia/Shanghai","owner":"","owner_notes":"","assistant":{"machine_id":"server","main":"…"},"done_delay_ms":60000}}
+{"id":"s2","error":{"code":"stale_connection","message":"…"}}
+{"event":"managers","params":{"managers":[{"id":"assistant","name":"助手","role":"manager","online":false}]}}
+```
+
+- 两边每 30 秒 ping，20 秒没有 pong 就断开。连上后 40 秒内没完成握手，hub 以 4003 断开。
+- 一个身份的新连接在**握手成功时**替换旧连接，旧的以 4001 断开。
+- 握手之前、被替换之后，这条连接上的调用一律回 `stale_connection`，发的事件丢掉；hub 也不调没握手的连接。
+- 关闭码：4001 被同一身份的新连接替换、4002 token 撤销或换了、4003 握手不对或超时、1001 hub 停机。
+
+### 握手
+
+`manager.hello {id,host?,os?,arch?,deploy?,version?,apps?,…}`。`id` 必须与 token 一致，否则回 `wrong_identity` 并断开（4003）。
+名册里只记 `host`、`os`、`arch`、`deploy`（hub 起的助手报 `child`，别处的报 `external`）、`version`；`apps` 和机器摘要现在不处理。
+回答 `{name,role,managers:[{id,name,role,online}],timezone,owner,owner_notes,assistant:{machine_id,main,standby?},done_delay_ms}`：
+
+- `name`、`role`：hub 给这个身份记的名字和角色（以 hub 为准，hello 里报的角色不算）；
+- `managers`：hub 有 token 的所有管理者，`online` 是现在是否连着；
+- 其余是助手要的那份（`assistantwire.Hello`）：`owner` 是 hub.json 的 `assistant.owner`，`owner_notes` 是助手的备注（App 里改过的，否则 hub.json 的 `assistant.notes`），
+  `timezone` 是用户的时区（手机报的 IANA 名），没有就是空字符串；`assistant` 是助手的对话跑在哪台机器、主对话是哪段、`standby` 这台 hub 是互联组的成员（定时任务由中心跑）；
+  `done_delay_ms` 是 hub.json notify 的完成推送延迟（任务的 Agent 停多久才算停下）。
+- 助手记着这份回答。hub 在它可能变了的地方（`PUT /api/v1/assistant`、换主对话、`jarvis_settings` 改关于我、互联组换中心、机器列表变了）合并 200 毫秒后重算一次，和上次给的不同就发
+  `manager.updated`，参数就是新的这份（同上，不带 `name`、`role`、`managers`）。
+
+同一条连接可以再握手一次（更新名册里的信息），不算替换。
+
+### 名册
+
+hub 在内存里记着每个身份当前的连接（握手成功的那一条）：id、角色、名字、握手时报的机器信息、连上的时间。hub 重启后为空，服务重连、再握手。
+管理者上线、下线时，hub 给其他在线的管理者发 `managers {managers:[{id,name,role,online}]}`；刚连上的那个从握手的回答里拿到同一份列表。
+
+### 方法
+
+- 服务 → hub：hub 按方法名登记处理函数（`server/internal/hub/bus.go` 的 `handleBus`，单向事件用 `handleBusEvent`），处理函数所在的文件在 `init` 里登记，hub 没有别的方法清单。
+  握手之外内置的只有 `ping {}` → `{}`。没登记的方法回 `unknown_method`，参数解析不了回 `invalid_params`；处理函数返回的 `rpc.Error` 带着它的 `code` 原样到服务。
+- hub → 服务：`callBus(身份, 方法, 参数)` 调这个身份当前的连接（调用方没给期限时两分钟后放弃），`notifyBus` 发单向事件；不在线返回「不在线」的错误，服务回的错误码原样带回。
+
+### 助手用的方法
+
+hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assistant_link.go`）用 hub 自己的函数回答助手的调用，同一个文件里用 `handleBusCall` 登记的处理函数只做编解码
+（参数解成那个方法自己的类型，解不了回 `invalid_params`），不另写一份逻辑。hub 不跑助手的代码（`go list -deps ./internal/hub` 里没有 `internal/assistant`），
+两边共用的只有消息的类型、方法名、错误码和助手的路由表（`server/internal/assistantwire`）。方法和参数的意思见 `docs/assistant.md`「和 hub 的边界」。
+
+- 助手 → hub：`device.call`、`app.call` → 结果原样；`notify.request {notification}` → `{ok:true}`；`manager.snapshot` → `{ok,seq}`；单向事件 `ws.broadcast`（见下）。
+  hub 的错误带码回去，助手按码认回原来的错误：`no_device`（没有这台机器）、`machine_offline`、`node_closed`（node 的连接断了）、`stale_snapshot`、`model_paused`；node 自己回的 `rpc.Error` 原样。
+- hub → 助手，调用：`http.request`（下面的转发）、`manager.action`（App 回答了它的提问）、`assistant.tools {}` → `{tools:[…]}`（hub 在它每次连上时要一次、记着，断开后也留着）、
+  `assistant.tool {name,arguments,machine_id,session_id}` → `{content,is_error}`、`assistant.context {session_id}` → `{text,…}`（node 每条消息前要）、`assistant.tasks {}` → `{tasks:[…]}`、
+  `assistant.card_sent {card_id,item_id}` → `{sent}`（收件箱从消息卡片「发送」前问：发过的不再发）、`assistant.cards_sent {item_id,at,text?}` → `{}`（这个条目的回复发出去了，它的卡片记下、告诉 App）。
+- hub → 助手，单向事件：`conversation.started`、`conversation.renamed`、`session.user_spoke`、`session.turn_started`、`session.turn_ended`、`sessions.changed`、`interaction.resolved`、`inbox.message`、
+  `manager.updated`（上面的握手）、`manager.resync {}`（hub 还没有它的快照或只有不完整的一份，要它报整份：最多 5 秒一次）。助手按到达的顺序一条一条处理，`session.turn_ended` 另起（要问模型、等任务的 Agent 停下）。
+- 助手没连着时：转发的接口回 `503 {"code":"assistant_offline","error":"助手暂时连不上，稍后再试"}`，助手的工具同样失败（`is_error`，同一句话），`assistant.context` 也失败（node 那条消息不带实时快照）；
+  给它的事件不发（它连上后报整份快照，要的东西现问）。hub 留着它最后报的快照，会话列表照常显示标题和归档。
+
+**转发 App 的请求**：App 打到助手接口的请求（鉴权之后）由 hub 作为 `http.request` 交给助手，它的回答原样写回。助手接口是 `assistantwire.Routes`（助手那边有一个测试保证它服务的正是这些）：
+`POST /api/v1/assistant/conversations/{id}/archive`、`…/unarchive`、`…/route`、`…/today`，`GET …/{id}/feed`，`/api/v1/assistant/tasks…`、`/api/v1/assistant/runs`、`/api/v1/assistant/routines…`、
+`/api/v1/assistant/followups…`、`/api/v1/task-plans/{id}…`、`/api/v1/task-trust`、`POST /api/v1/todos/{id}/done-check`、`POST /api/v1/todos/{id}/retry`。`GET/PUT /api/v1/assistant`、`POST /api/v1/assistant/conversations`、记忆、`/api/v1/skills` 还是 hub 自己的。
+
+```jsonc
+// hub → 助手
+{"id":"h3","method":"http.request","params":{"method":"POST","path":"/api/v1/assistant/conversations/c1/archive","query":"",
+  "header":{"Content-Type":["application/json"],"X-Persona-Role":["full"]},"body":"<base64>"}}
+// 助手 → hub
+{"id":"h3","result":{"status":200,"header":{"Content-Type":["application/json"]},"body":"<base64>"}}
+```
+
+- `header` 不带 `Authorization`、`Cookie` 和逐跳的头；`X-Persona-Role` 是 hub 鉴权得出的设备角色（App 自己带的会被换掉）。请求体最大 32 MiB。
+- 助手没连着、或在请求中途断开回 `503 assistant_offline`，它回的 `rpc.Error` 变成 `502`（带它的 `code`）；没给期限的请求 5 分钟后放弃。
+
+**发给 App 的消息**：助手发单向事件 `ws.broadcast {message}`，`message` 是一个带字符串 `type` 的 JSON 对象（`assistant_schedule`、`assistant_feed`、`task_plan`），hub 原样发给每个 App 的 WebSocket（加上每条消息都有的 `event_seq`）；没有 `type` 的丢掉。
+
+### 服务这一侧（`server/internal/bus`）
+
+`Dial`、`Conn`（WebSocket 和 rpc 行之间的适配）、`Keepalive`，以及 `Client`：拨号、握手（`HelloMethod`、`HelloParams`、`OnHello`）、回答 hub 的调用和事件，断了就重连：
+1 秒起翻倍到 1 分钟，连上超过 1 分钟后再断就从 1 秒重新算；token 被拒（401、关闭码 4002 / 4003、握手回 `wrong_identity`）每次都等最长的 1 分钟。
+没连上（或握手还没完成）时 `Call`、`Notify` 返回 `ErrOffline`。
+助手用的是它包一层的 `assistant.BusHub`（`server/internal/assistant/bus.go`）：记着握手的回答、把 hub 的错误码认回来、按顺序处理 hub 的事件、每次连上报整份快照。
 
 ## hook / mcp ↔ node（unix socket `~/.persona/node.sock`）
 

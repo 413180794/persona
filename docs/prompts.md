@@ -13,11 +13,11 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | 文件 | 是什么 | 谁用 |
 | --- | --- | --- |
 | `assistant/claude_md.md` | 助手目录 `~/.persona/assistant/CLAUDE.md`：能访问的数据、怎么互动、做事方式；机器列表、关于我、知识库外的笔记目录是可选段 | `hub/assistant.go` `assistantClaudeMD` |
-| `assistant/snapshot.md`、`snapshot_agents.md` | 实时快照：时间、电脑、Agents、iPhone、知识库重点、飞书未读、今天的会、已安排的跟进（一行一节，node 按节比较） | `hub/assistant_snapshot.go` |
+| `assistant/snapshot.md`、`snapshot_agents.md` | 实时快照：时间、电脑、Agents、iPhone、知识库重点、飞书未读、今天的会、已安排的跟进（一行一节，node 按节比较） | `assistant/context.go` |
 | `assistant/turn_context.md` | 消息开头的 `<jarvis-context>`：全量，或和上一份比变了的几节 | `node/assistant_context.go` |
 | `assistant/context.md` | 快照外面那层：主对话时开头多一句「这是主对话」 | `hub/machine.go` `assistant.context` |
-| `assistant/task_run.md`、`routine_kb_hint.md` | 定时任务 / 跟进到点发给助手的消息（⏰ 行、晚了多久、会自己重复；每天的任务加知识库提示） | `hub/assistant_schedule.go` `taskPrompt` |
-| `assistant/task_done.md`、`task_done_input.md` | 从对话派出去的任务停下后判断做没做完（done / not_done / waiting / needs_user / unsure），只有 done 才自动完成待办（`docs/todos.md`「自动完成」）；用判断模型 `inbox.judge` | `hub/tasks_done.go` |
+| `assistant/task_run.md`、`routine_kb_hint.md` | 定时任务 / 跟进到点发给助手的消息（⏰ 行、晚了多久、会自己重复；每天的任务加知识库提示） | `assistant/schedule.go` `taskPrompt` |
+| `assistant/task_done.md`、`task_done_input.md` | 从对话派出去的任务停下后判断做没做完（done / not_done / waiting / needs_user / unsure），只有 done 才自动完成待办（`docs/todos.md`「自动完成」）；用判断模型 `inbox.judge` | `assistant/done.go` |
 | `assistant/routine_morning.md`、`routine_evening.md` | 默认的早报、晚间回顾任务的内容（存进任务列表后用户可以改） | `defaultRoutines` |
 | `assistant/lost_tasks.md` | personad 重启后告诉对话哪些后台任务没了 | `node/assistant.go` |
 | `assistant/codex_memory.md`、`codex_instructions.md` | Codex 跑助手时的 developer instructions：和 Claude 共用的记忆（目录、格式、当前索引；快照随消息带） | `node/assistant_codex.go` |
@@ -59,7 +59,7 @@ hub 提供给 Agent / 助手的 MCP 工具，每个一个文件：`mcp/<场景>/
 
 | 目录 | 工具 | 谁提供 |
 | --- | --- | --- |
-| `mcp/assistant/` | `ask_user`、`notify_user`、`jarvis_settings`（设置读写与手机确认） | 助手对话（`hub/assistant_tools.go` 的 `assistantTools`） |
+| `mcp/assistant/` | `ask_user`、`notify_user`、`jarvis_settings`（设置读写与手机确认） | 助手对话（`assistant/tools.go` 的 `toolNames`） |
 | `mcp/schedule/` | `schedule_followup`、`schedule_routine`、`delete_routine`、`list_followups`、`cancel_followup` | 同上 |
 | `mcp/agents/` | `agents_list`、`agent_read`、`agent_send`、`agent_start`、`interaction_answer` | 同上 |
 | `mcp/inbox/` | `inbox_draft`（AI 分身交草稿） | 同上 |
@@ -94,12 +94,12 @@ hub 提供给 Agent / 助手的 MCP 工具，每个一个文件：`mcp/<场景>/
 ## 改一个提示词
 
 1. 改 `server/internal/prompts/` 里的文件。
-2. 跑金标准测试，看差异是不是想要的：`cd server && go test ./internal/hub ./internal/kb ./internal/node -run Golden`。
-3. 确认后更新 golden：`UPDATE_GOLDEN=1 go test ./internal/hub ./internal/kb ./internal/node -run Golden`，把 `testdata/prompts/*.golden` 的 diff 一起提交。
+2. 跑金标准测试，看差异是不是想要的：`cd server && go test ./internal/hub ./internal/assistant ./internal/kb ./internal/node -run Golden`。
+3. 确认后更新 golden：`UPDATE_GOLDEN=1 go test ./internal/hub ./internal/assistant ./internal/kb ./internal/node -run Golden`，把 `testdata/prompts/*.golden` 的 diff 一起提交。
    `TestGoldenAssistantContextMain` 要 Postgres（`scripts/test/test-server.sh` 里才跑），要更新它就在 hub 机器上带 `UPDATE_GOLDEN=1` 跑
    （`GOCMD='env UPDATE_GOLDEN=1 go test -count=1 -run TestGoldenAssistantContextMain' ./scripts/test/test-server.sh ./internal/hub`），再把那两个文件拷回来。
 
-注意 `hub/assistant_schedule.go` 的 `scheduleHeader` 按 `assistant/task_run.md` 的头几行认出抄回来的旧头部：改那几行的写法要一起改它。
+注意 `assistant/schedule.go` 的 `scheduleHeader` 按 `assistant/task_run.md` 的头几行认出抄回来的旧头部：改那几行的写法要一起改它。
 
 ## 加一个提示词
 
@@ -112,6 +112,7 @@ hub 提供给 Agent / 助手的 MCP 工具，每个一个文件：`mcp/<场景>/
 
 MCP 工具的 golden 是 `hub/mcp_tools_golden_test.go`（助手有 / 没有飞书、普通对话三种列表）和 `mail/mcp_golden_test.go`，比的是 `json.Marshal` 发出去的内容（golden 里缩进了方便看，缩进前后一一对应）。
 
-`hub/prompts_golden_test.go`、`kb/prompts_golden_test.go`、`node/prompts_golden_test.go` 从调用方那一层测（假的 lark-connector、假的模型记下收到的
+`hub/prompts_golden_test.go`、`assistant/prompts_golden_test.go`、`kb/prompts_golden_test.go`、`node/prompts_golden_test.go` 从调用方那一层测（假的 lark-connector、假的模型记下收到的
 system / user、临时目录的知识库），所以数据转换也一起测到。快照里「现在」那行的时钟换成占位后再比。
 2026-11-01 搬家前先用原来的代码生成了这些 golden，搬完后同样的输入逐字节一致。
+2026-11-04 助手的业务逻辑搬进 `server/internal/assistant`（`docs/assistant.md`「和 hub 的边界」）时，它写的提示词的 golden 跟着搬到 `assistant/testdata/prompts/`，文件原样挪过去，没有重新生成。

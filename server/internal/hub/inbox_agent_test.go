@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
@@ -230,6 +231,7 @@ func TestInboxItemAboutATask(t *testing.T) {
 	ctx := context.Background()
 	h := agentHub(t)
 	h.initTodos(ctx)
+	connectAssistant(t, h) // the judge sees the tasks it is working on (assistant.tasks)
 	todo, err := h.createTodo(ctx, "修登录崩溃", "", "conv1", "plan_1")
 	if err != nil {
 		t.Fatal(err)
@@ -268,11 +270,11 @@ func TestInboxItemAboutATask(t *testing.T) {
 	if _, err := h.toolInboxDraft(ctx, "s_agent", json.RawMessage(`{"text":"测试已经过了，十点前提 PR"}`)); err != nil {
 		t.Fatal(err)
 	}
-	items, _, _ := h.feed(ctx, "conv1", time.Time{})
-	if len(items) != 1 || items[0].Kind != feedMessage || items[0].Ref != it.ID {
+	items, _ := feed(h, "conv1")
+	if len(items) != 1 || items[0].Kind != "message" || items[0].Ref != it.ID {
 		t.Fatalf("feed = %+v", items)
 	}
-	var mb messageBody
+	var mb assistant.MessageCard
 	_ = json.Unmarshal(items[0].Body, &mb)
 	if mb.TodoID != todo.ID || mb.Draft != "测试已经过了，十点前提 PR" || mb.Sender != "陈晓" || mb.Chat != "客户端发版群" {
 		t.Fatalf("card = %+v", mb)

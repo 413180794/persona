@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/feishubot"
 	"github.com/nwverse/persona/server/internal/prompts"
@@ -417,7 +418,7 @@ func (h *Hub) botSend(ctx context.Context, api *feishubot.Client, set FeishuBotS
 		if err != nil {
 			return err
 		}
-		h.titleNew(s.MachineID, s.SessionID, time.Now(), "")
+		h.asst().ConversationStarted(ctx, assistantwire.ConversationStarted{MachineID: s.MachineID, SessionID: s.SessionID, Started: time.Now()})
 		if rt.main && h.store != nil {
 			cfg := h.assistantConfig(ctx)
 			cfg.Main = s.SessionID
@@ -447,8 +448,7 @@ func (h *Hub) botSend(ctx context.Context, api *feishubot.Client, set FeishuBotS
 			p["images"] = images
 		}
 		if !t.agent() {
-			h.unarchiveOnSend(rt.m.cfg.ID, sid)
-			h.userSpoke(sid)
+			h.asst().UserSpoke(ctx, assistantwire.SessionRef{MachineID: rt.m.cfg.ID, SessionID: sid})
 			if rt.main {
 				if err := h.applyModel(ctx, "assistant", p); err != nil {
 					return err

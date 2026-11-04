@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -49,15 +50,10 @@ func turnError(s proto.Session) string {
 }
 
 // cutOff: an agent's answer is the model API error that ended its turn.
-func cutOff(answer string) bool {
-	answer = strings.TrimSpace(answer)
-	for _, marker := range apiErrorMarkers {
-		if strings.HasPrefix(answer, marker) {
-			return true
-		}
-	}
-	return false
-}
+func cutOff(answer string) bool { return assistantwire.CutOff(answer) }
+
+// interruptedSummary is what a task or a push says of a turn the model service cut off (#1516).
+const interruptedSummary = assistantwire.InterruptedSummary
 
 type stateMark struct {
 	state string

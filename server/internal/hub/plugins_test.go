@@ -17,6 +17,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/db/dbtest"
 )
 
@@ -45,6 +46,12 @@ func TestMain(m *testing.M) {
 	}
 	if os.Getenv("JARVIS_TEST_PLUGIN") == "agentsrc" {
 		serveAgentSourcePluginForTest()
+		return
+	}
+	if os.Getenv("JARVIS_TEST_ASSISTANT") == "1" { // the assistant's process (TestAssistantProcessIsSupervised)
+		if err := assistant.Main(context.Background(), "test", os.Stdin); err != nil {
+			log.Fatal(err)
+		}
 		return
 	}
 	os.Exit(dbtest.Main(m))

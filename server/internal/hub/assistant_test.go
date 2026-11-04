@@ -15,12 +15,11 @@ func TestAskUserReturnsAnswers(t *testing.T) {
 	h := newTestHub(t)
 	m := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "local"})
 	h.machines, h.byID["box"] = []*Machine{m}, m
+	connectAssistant(t, h)
 	args := json.RawMessage(`{"questions":[{"question":"发吗？","options":[{"label":"发"},{"label":"不发"}]}]}`)
 	done := make(chan proto.ToolResult, 1)
 	go func() { done <- h.callAssistantTool(context.Background(), m, "conv-1", "ask_user", args) }()
-	for len(h.pendingInteractions()) == 0 {
-		time.Sleep(5 * time.Millisecond)
-	}
+	eventually(t, 10*time.Second, "the question on the phone", func() bool { return len(h.pendingInteractions()) > 0 })
 	ix := h.pendingInteractions()[0]
 	if ix.Kind != proto.IxQuestion || ix.SessionID != "conv-1" || ix.MachineID != "box" || len(ix.Questions) != 1 {
 		t.Fatalf("unexpected interaction %+v", ix)
@@ -43,11 +42,15 @@ func TestAgentsListAndFind(t *testing.T) {
 		{SessionID: "aaaaaaaa-1", Title: "修登录", Cwd: "/code/app", Status: proto.StatusWorking, UpdatedAt: now, LastText: "正在跑测试"},
 		{SessionID: "bbbbbbbb-2", Title: "旧的", Cwd: "/code/old", Status: proto.StatusIdle, UpdatedAt: now.Add(-time.Hour)},
 	}
-	out := h.describeAgents("", "", "")
+	connectAssistant(t, h)
+	agents := func(args string) string {
+		return textOf(h.callAssistantTool(context.Background(), m, "", "agents_list", json.RawMessage(args)))
+	}
+	out := agents(`{}`)
 	if !strings.Contains(out, "修登录") || strings.Contains(out, "旧的") || !strings.Contains(out, "正在跑测试") {
 		t.Fatalf("active list:\n%s", out)
 	}
-	if all := h.describeAgents("all", "", "old"); !strings.Contains(all, "旧的") || strings.Contains(all, "修登录") {
+	if all := agents(`{"state":"all","query":"old"}`); !strings.Contains(all, "旧的") || strings.Contains(all, "修登录") {
 		t.Fatalf("query filter:\n%s", all)
 	}
 	if _, s, err := h.findAgent("", "aaaaaaaa"); err != nil || s.SessionID != "aaaaaaaa-1" {
@@ -62,8 +65,9 @@ func TestAssistantToolsOnlyForAssistant(t *testing.T) {
 	h := newTestHub(t)
 	h.connectors = connector.NewRegistry(nil)
 	h.registerConnectors()
+	connectAssistant(t, h)
 	for _, tool := range h.mcpTools(false) {
-		if isAssistantTool(tool.Name) || strings.HasPrefix(tool.Name, "lark_") {
+		if h.isAssistantTool(context.Background(), tool.Name) || strings.HasPrefix(tool.Name, "lark_") {
 			t.Fatalf("%s leaked to ordinary sessions", tool.Name)
 		}
 	}

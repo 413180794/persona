@@ -7,12 +7,13 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
 func TestFourModelCategoriesCatalog(t *testing.T) {
 	h, mux := modelTestHub(t)
-	setTasks(h, Task{ID: "one", Title: "不应出现在模型配置里的任务", Enabled: true})
+	seedTasks(t, h, assistant.Task{ID: "one", Title: "不应出现在模型配置里的任务", Enabled: true})
 	r := modelRequest(mux, "GET", "", "")
 	if r.Code != http.StatusOK {
 		t.Fatal(r.Body.String())
@@ -38,7 +39,8 @@ func TestFourModelCategoriesCatalog(t *testing.T) {
 func TestModelUsesAreReadOnlyAndIgnoreDeprecatedOverrides(t *testing.T) {
 	h, mux := modelTestHub(t)
 	ctx := context.Background()
-	setTasks(h, Task{ID: "one", Title: "任务", Launcher: "old-task", Model: "old-model", Effort: "low", Enabled: true})
+	seedTasks(t, h, assistant.Task{ID: "one", Title: "任务", Launcher: "old-task", Model: "old-model", Effort: "low", Enabled: true})
+	connectAssistant(t, h) // the hub knows the tasks as the assistant reports them
 	bindings := map[string]ModelBinding{
 		"assistant":    {Provider: "launcher.conversation", Model: "conversation", Effort: "high"},
 		"agent.new":    {Provider: "launcher.agent", Model: "agent", Effort: "xhigh"},
@@ -95,7 +97,11 @@ func TestScheduledExecutionUsesMainConversationCategoryAndNoOldOverrides(t *test
 	if err := h.saveModelRecord(ctx, "schedule", 0, ModelBinding{Provider: "launcher.old-schedule"}); err != nil {
 		t.Fatal(err)
 	}
-	setTasks(h, Task{ID: "one", Title: "任务", Prompt: "执行任务", Launcher: "old-task", Model: "old-model", Effort: "low", PermissionMode: "bypassPermissions", Repeat: repeatInterval, EveryMinutes: 30, Enabled: true})
+	task := assistant.Task{ID: "one", Title: "任务", Prompt: "执行任务", Launcher: "old-task", Model: "old-model", Effort: "low", PermissionMode: "bypassPermissions", Repeat: "interval", EveryMinutes: 30, Enabled: true}
+	fromSource := task // the same task from a conversation: its runs go there first
+	fromSource.ID, fromSource.SessionID, fromSource.MachineID = "two", "source", "server"
+	seedTasks(t, h, task, fromSource)
+	connectAssistant(t, h)
 	for i := 0; i < 2; i++ {
 		if _, err := runNow(t, h, "one"); err != nil {
 			t.Fatal(err)
@@ -108,24 +114,11 @@ func TestScheduledExecutionUsesMainConversationCategoryAndNoOldOverrides(t *test
 	n.m.mu.Lock()
 	n.m.sessions = []proto.Session{{SessionID: "source", Launcher: "old-source"}}
 	n.m.mu.Unlock()
-	s := h.loadSchedule(ctx)
-	s.mu.Lock()
-	s.tasks[0].SessionID, s.tasks[0].MachineID = "source", "server"
-	s.mu.Unlock()
-	if _, err := runNow(t, h, "one"); err != nil {
+	if _, err := runNow(t, h, "two"); err != nil {
 		t.Fatal(err)
 	}
 	p := n.lastSend(t)
 	if p["session_id"] != "source" || p["launcher"] != "old-source" || p["model"] != nil || p["effort"] != nil || p["permission_mode"] != "bypassPermissions" {
 		t.Fatalf("delivery into the source conversation changed its launcher or kept an old override: %+v", p)
-	}
-}
-
-func TestTaskEditsCannotCreateModelOverrides(t *testing.T) {
-	old := Task{ID: "one", Launcher: "old", Model: "old-model", Effort: "high"}
-	in := Task{Title: "任务", Launcher: "requested", Model: "requested-model", Effort: "low", PermissionMode: "bypassPermissions"}
-	task := editTask(old, in, old.CreatedAt)
-	if task.Launcher != "" || task.Model != "" || task.Effort != "" || task.PermissionMode != "bypassPermissions" {
-		t.Fatalf("task edit created a hidden model override: %+v", task)
 	}
 }

@@ -129,6 +129,7 @@ func (h *Hub) saveGroup(g meshGroup) {
 // groupChanged acts on a new center: this hub's role may have changed (it starts or stops driving its computers and
 // serving apps), every hub's record says the new center, and a member hands its credentials over.
 func (h *Hub) groupChanged(oldCenter, newCenter string) {
+	defer h.assistantUpdated() // a member's assistant stands by
 	self := h.hubID()
 	switch {
 	case oldCenter == self && newCenter != self:

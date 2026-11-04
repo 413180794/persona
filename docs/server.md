@@ -15,6 +15,9 @@ Go，单一二进制，`server/cmd/personad`。模式见 `docs/architecture.md`�
 | `internal/herdrcore` | herdr-core（Herdr 桌面版背后的 `hc`）的 JSON-RPC 客户端和事件订阅，见 `docs/plan-orca-support.md`「herdr-core 宿主」 |
 | `internal/node` | node：会话列表、启动、发送、屏幕采样、hook / mcp 的 unix socket、runtime 的 `runtime.sock`（`runtimes.go`，`docs/runtimes.md`） |
 | `internal/hub` | hub：HTTP / WebSocket、机器连接、交互队列、手机工具转发、APNs |
+| `internal/assistant` | `personad assistant`：「Persona」tab 的助手，自己的进程，经总线连 hub（默认是 hub 的子进程），`docs/assistant.md`「进程」 |
+| `internal/assistantwire` | 助手和 hub 之间的消息：类型、方法名、错误码、助手的路由表（两边都 import 它，hub 不 import `internal/assistant`） |
+| `internal/bus` | 服务连 hub 总线的客户端（拨号、握手、重连、保活），`docs/protocol.md`「总线」 |
 | `internal/netaddr` | 本机地址、Linux netlink 标志和地址变化通知；不证明公网可达 |
 | `internal/db` | Postgres：连接池、内嵌 SQL 迁移（`migrations/NNNN_*.sql`）、各表读写 |
 | `internal/mail` | IMAP/SMTP、加密账号存储、邮件 HTTP 接口和 MCP 工具（`docs/mail.md`） |

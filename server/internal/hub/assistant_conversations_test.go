@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -38,6 +39,7 @@ func conversationsHub(t *testing.T) (*Hub, *assistantNode) {
 	for _, s := range n.m.sessions {
 		n.known[s.SessionID] = true
 	}
+	connectAssistant(t, h)
 	return h, n
 }
 
@@ -111,7 +113,8 @@ func TestArchiveConversations(t *testing.T) {
 	// Kept across a restart (the database's settings, not memory).
 	h2 := newTestHub(t)
 	h2.store = h.store
-	if !h2.archivedIDs()["trip-0002"] {
+	connectAssistant(t, h2)
+	if !shown(h2, "trip-0002").Archived {
 		t.Fatal("not kept")
 	}
 
@@ -119,7 +122,7 @@ func TestArchiveConversations(t *testing.T) {
 		t.Fatalf("unarchive: %d %s", c, list(""))
 	}
 	post("/api/v1/assistant/conversations/codex-0004/archive")
-	if !h.unarchiveOnSend("server", "codex-0004") || h.archivedIDs()["codex-0004"] {
+	if userSpoke(h, "server", "codex-0004"); shown(h, "codex-0004").Archived {
 		t.Fatal("the user's message brings it back")
 	}
 }
@@ -143,8 +146,8 @@ func TestConversationsListTool(t *testing.T) {
 	if !strings.HasPrefix(out, "1 conversation(s)") || !strings.Contains(out, "trip-0002") {
 		t.Fatalf("the query matches the last message: %s", out)
 	}
-	if _, err := h.setArchived(context.Background(), "server", "codex-0004", true, titleByUser); err != nil {
-		t.Fatal(err)
+	if c := archive(t, h, "codex-0004", true); c != http.StatusOK {
+		t.Fatal(c)
 	}
 	if out, _ = tool(t, h, n, "", "conversations_list", `{}`); strings.Contains(out, "codex-0004") || !strings.Contains(out, "archived ones left out") {
 		t.Fatalf("archived ones hidden: %s", out)
@@ -179,17 +182,17 @@ func TestConversationReadTool(t *testing.T) {
 func TestConversationRenameTool(t *testing.T) {
 	h, n := conversationsHub(t)
 	started := time.Now().Add(-20 * time.Hour) // a pending title older than a day is forgotten
-	h.titleNew("server", "trip-0002", started, "")
-	want := titleDay(started, h.userLocation()) + " | 研究 | 周末出游的酒店和路线安排比较"
+	noteStarted(h, "server", "trip-0002", started, "")
+	want := started.In(h.userLocation()).Format("0102") + " | 研究 | 周末出游的酒店和路线安排比较"
 	out, isErr := tool(t, h, n, "trip-0002", "conversation_rename", `{"id":"trip-0002","kind":"研究","topic":"周末出游的酒店和路线安排比较表"}`)
-	if isErr || h.conversationTitles()["trip-0002"] != want || !strings.Contains(out, "this conversation") {
-		t.Fatalf("%v %s %q", isErr, out, h.conversationTitles()["trip-0002"])
+	if isErr || shown(h, "trip-0002").Title != want || !strings.Contains(out, "this conversation") {
+		t.Fatalf("%v %s %q", isErr, out, shown(h, "trip-0002").Title)
 	}
 	if p := n.lastSend(t)["rename"].(map[string]any); p["title"] != want {
 		t.Fatalf("Claude's transcript gets it too: %v", p)
 	}
-	h.titleAfterTurn(n.m, "trip-0002")
-	if h.conversationTitles()["trip-0002"] != want {
+	turnEnded(t, h, "server", "trip-0002")
+	if shown(h, "trip-0002").Title != want {
 		t.Fatal("the automatic title does not replace the assistant's")
 	}
 
@@ -200,21 +203,21 @@ func TestConversationRenameTool(t *testing.T) {
 		t.Fatal("the main conversation has no title")
 	}
 
-	h.titleRenamed("server", "code-0003", "我自己起的")
+	userRenamed(h, "server", "code-0003", "我自己起的")
 	if out, isErr = tool(t, h, n, "x", "conversation_rename", `{"id":"code-0003","kind":"修复","topic":"登录"}`); !isErr || !strings.Contains(out, "我自己起的") {
 		t.Fatalf("the user's title stays: %s", out)
 	}
 	if _, isErr = tool(t, h, n, "x", "conversation_rename", `{"id":"code-0003","kind":"修复","topic":"登录","user_asked":true}`); isErr {
 		t.Fatal("the user asked")
 	}
-	if by, _ := h.titleOf("code-0003"); by != titleByUser {
+	if by := titleBy(t, h, "code-0003"); by != "user" {
 		t.Fatalf("asked for by the user: theirs, %q", by)
 	}
 
 	sends := n.sent()
 	if _, isErr = tool(t, h, n, "x", "conversation_rename", `{"id":"codex-0004","kind":"功能","topic":"导出"}`); isErr || n.sent() != sends ||
-		!strings.HasSuffix(h.conversationTitles()["codex-0004"], " | 功能 | 导出") {
-		t.Fatalf("a Codex conversation's title is the hub's only: %d calls, %q", n.sent()-sends, h.conversationTitles()["codex-0004"])
+		!strings.HasSuffix(shown(h, "codex-0004").Title, " | 功能 | 导出") {
+		t.Fatalf("a Codex conversation's title is the assistant's only: %d calls, %q", n.sent()-sends, shown(h, "codex-0004").Title)
 	}
 }
 
@@ -224,18 +227,18 @@ func TestConversationArchiveTool(t *testing.T) {
 		t.Fatalf("not the main one: %s", out)
 	}
 	out, isErr := tool(t, h, n, "trip-0002", "conversation_archive", `{"id":"trip-0002"}`)
-	if isErr || !strings.Contains(out, "this conversation") || !h.archivedIDs()["trip-0002"] {
+	if isErr || !strings.Contains(out, "this conversation") || !shown(h, "trip-0002").Archived {
 		t.Fatalf("itself: %s", out)
 	}
 	if out, _ = tool(t, h, n, "x", "conversation_archive", `{"id":"trip-0002"}`); !strings.Contains(out, "already") {
 		t.Fatal(out)
 	}
 	// Long out of the node's list: the id alone brings it back.
-	h.setArchived(context.Background(), "server", "gone-0009", true, titleByUser)
-	if out, isErr = tool(t, h, n, "x", "conversation_unarchive", `{"id":"gone-0009"}`); isErr || h.archivedIDs()["gone-0009"] {
+	archive(t, h, "gone-0009", true)
+	if out, isErr = tool(t, h, n, "x", "conversation_unarchive", `{"id":"gone-0009"}`); isErr || shown(h, "gone-0009").Archived {
 		t.Fatalf("%s", out)
 	}
-	if out, isErr = tool(t, h, n, "x", "conversation_unarchive", `{"id":"trip-0002"}`); isErr || h.archivedIDs()["trip-0002"] {
+	if out, isErr = tool(t, h, n, "x", "conversation_unarchive", `{"id":"trip-0002"}`); isErr || shown(h, "trip-0002").Archived {
 		t.Fatalf("%s", out)
 	}
 }
@@ -253,10 +256,10 @@ func TestConversationNewAndSend(t *testing.T) {
 		!strings.Contains(sent, "第 1 跳") || !strings.HasSuffix(sent, "把行程整理成表格") {
 		t.Fatalf("the opening message: %q", sent)
 	}
-	if h.hopOf("s1") != 1 {
+	if hopOf(t, h, "s1") != 1 {
 		t.Fatal("the new conversation works at hop 1")
 	}
-	if first := strings.TrimSpace(contextBlock.ReplaceAllString(sent, "")); first != "把行程整理成表格" {
+	if first := strings.TrimSpace(regexp.MustCompile(`(?s)<jarvis-context\b[^>]*>.*?</jarvis-context>`).ReplaceAllString(sent, "")); first != "把行程整理成表格" {
 		t.Fatalf("its title is made from the message, not the note: %q", first)
 	}
 
@@ -296,11 +299,11 @@ func TestConversationNewAndSend(t *testing.T) {
 	if p := n.lastSend(t); p["session_id"] != "code-0003" {
 		t.Fatalf("%v", p)
 	}
-	for h.queuedFor("code-0003") != 0 && time.Now().Before(deadline) {
+	for len(shown(h, "code-0003").Queued) != 0 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
-	if h.queuedFor("code-0003") != 0 || h.hopOf("code-0003") != 1 {
-		t.Fatalf("off the queue, working at hop 1: %d %d", h.queuedFor("code-0003"), h.hopOf("code-0003"))
+	if len(shown(h, "code-0003").Queued) != 0 || hopOf(t, h, "code-0003") != 1 {
+		t.Fatalf("off the queue, working at hop 1: %d %d", len(shown(h, "code-0003").Queued), hopOf(t, h, "code-0003"))
 	}
 
 	// The chain: code-0003 (hop 1) → codex (2) → trip (3) → refused at 4.
@@ -314,7 +317,7 @@ func TestConversationNewAndSend(t *testing.T) {
 		t.Fatalf("hop 4: %s", out)
 	}
 	// The user speaks in it: back to hop 0, and it may send again.
-	h.userSpoke("trip-0002")
+	userSpoke(h, "server", "trip-0002")
 	if _, isErr = tool(t, h, n, "trip-0002", "conversation_send", `{"id":"main-0001","text":"d"}`); isErr {
 		t.Fatal("after the user spoke")
 	}
@@ -330,9 +333,9 @@ func TestConversationNewAndSend(t *testing.T) {
 // Sending to an archived conversation brings it back.
 func TestConversationSendUnarchives(t *testing.T) {
 	h, n := conversationsHub(t)
-	h.setArchived(context.Background(), "server", "trip-0002", true, titleByUser)
+	archive(t, h, "trip-0002", true)
 	out, isErr := tool(t, h, n, "main-0001", "conversation_send", `{"id":"trip-0002","text":"还在吗"}`)
-	if isErr || !strings.Contains(out, "back in the list") || h.archivedIDs()["trip-0002"] {
+	if isErr || !strings.Contains(out, "back in the list") || shown(h, "trip-0002").Archived {
 		t.Fatalf("%s", out)
 	}
 }

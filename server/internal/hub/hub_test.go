@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/nwverse/persona/server/internal/db"
 	"io"
 	"log"
 	"net/url"
@@ -13,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/db"
 
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -274,7 +275,7 @@ func newTestHub(t *testing.T) *Hub {
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{},
 		interactions: map[string]*pending{}, calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{}, turns: newTurnTracker(),
 		push:  newPusher(cfg.dir, nil, func(string, ...any) {}),
-		todos: newTodosState(), tasks: newTasksState(),
+		todos: newTodosState(),
 	}
 	h.live = newLiveActivities(h)
 	h.push.hubID = h.hubID

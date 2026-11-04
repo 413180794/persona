@@ -165,6 +165,27 @@ NAS 上常见的两种反向代理接法，连 hub 时来源都会变成网关�
 - **在 NAS 上调 hub 的接口**同理：`curl http://127.0.0.1:18660/…` 会被当公网，换成局域网地址，或进容器调
   （`docker compose exec hub wget -qO- --header "Authorization: Bearer <token>" http://127.0.0.1:18660/api/v1/machines`）。
 
+### Docker Desktop / OrbStack 的明文连接
+
+如果健康检查正常，但 App、网页或内网反向代理请求返回 `403 tls_required`，先检查容器看到的真实对端。Docker Desktop 的 gvisor 网络可能把所有端口映射连接显示成同一个公网形态的地址，而不是 Docker 网络的网关；本机和局域网客户端也会如此。入口脚本识别到 Desktop 环境时会提示这一点，提示独立于 `JARVIS_ADMIN_ACCESS`。
+
+保持客户端连接，在 compose 目录运行：
+
+```sh
+docker compose exec hub netstat -tn
+docker compose logs hub
+```
+
+在 `netstat` 的本地地址列找 18660 端口，读取对应的 **Foreign Address**（去掉端口）。短连接可反复请求并重复查看；`docker network inspect` 的 `Gateway` 不足以确定转发来源，认证日志的 `source` 又是脱敏后的网段，不能直接拿来放行整个网段。
+
+优先给 hub 配置 TLS，并映射 TLS 监听端口（[network.md](network.md)）。仅本机 HTTP 试用时：
+
+- 先在 `.env` 里设置 `JARVIS_PORT=127.0.0.1:18660`，运行 `docker compose up -d` 重新创建端口映射。
+- 把观察到的远端地址写进 `data/hub.json` 的 `security.trusted_cidrs`（IPv4 用单地址 `/32`，IPv6 用 `/128`，保留已有配置），再 `docker compose restart hub`。
+- 需要管理界面时，另设 `JARVIS_ADMIN_ACCESS=cidrs`、`JARVIS_ADMIN_CIDRS=<实际转发来源>/32`（IPv6 为 `/128`），运行 `docker compose up -d`。管理界面的白名单和 API 的 `security.trusted_cidrs` 各管各的。
+
+需要局域网客户端访问时，可把 `JARVIS_PORT` 绑定到明确的局域网地址，并用宿主机防火墙限定受控客户端后再信任转发来源；检查 Docker 实际转发规则，确保公网不能经该端口或反向代理进入。转发来源可能同时代表公网连接，单凭它是固定地址就加入白名单会放行这些连接；保持公网使用 TLS，也不要用 `allow_public_plaintext` 解决来源折叠。
+
 ## 管理界面
 
 `<JARVIS_PUBLIC_URL>/admin` 是 hub 自带的管理界面（[admin.md](admin.md)）：第一次打开设管理员密码，之后在网页上加电脑、管设备、改网络。
@@ -175,9 +196,7 @@ NAS 上常见的两种反向代理接法，连 hub 时来源都会变成网关�
   公网来的也一样（Docker 没开 IPv6 时的 IPv6 请求、宿主机上的反向代理转进来的），所以网关永远不算局域网。Linux 上局域网里的电脑经
   iptables DNAT 进来，容器看到的是它的真实地址，照常能打开。App 的接口同理：网关来的请求按公网处理（不能用主 token、明文接口回 `403 tls_required`），
   见 [network.md](network.md)「来源判断与反向代理」。
-- **Docker Desktop / OrbStack**：所有经端口映射的连接都来自网关，`lan` 下打不开管理界面（入口脚本会提示）。开发机上试用时：
-  端口只映射到 `127.0.0.1`，再在 `.env` 里 `JARVIS_ADMIN_ACCESS=cidrs`、`JARVIS_ADMIN_CIDRS=<网关地址>/32`（`docker network inspect`
-  里的 `Gateway`；这等于放行所有经映射进来的请求，只有端口只对本机开时才安全）。
+- **Docker Desktop / OrbStack**：转发来源可能是网关，也可能是 gvisor 提供的公网形态地址。按上面的「Docker Desktop / OrbStack 的明文连接」查实际对端；仅本机试用时，端口绑定 `127.0.0.1`，再把实际来源填入 `JARVIS_ADMIN_CIDRS`。API 的白名单需另设 `security.trusted_cidrs`。
 - **`loopback`** 在容器里是容器自己：`docker compose exec hub wget -qO- http://127.0.0.1:18660/admin` 这类用法，平时基本用不上。
 - **`any`** 要 hub 开 TLS（`data/hub.json` 的 `public.tls_listen`），并在 compose 里把 TLS 端口也映射出来。
 - 忘了密码：`docker compose exec hub personad hub admin reset-password`。

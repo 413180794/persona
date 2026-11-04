@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"context"
@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/apierr"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -219,133 +221,104 @@ var errScheduleUnavailable = errors.New("暂时读不到定时任务（数据库
 
 // loadSchedule reads the task list and the run history once. A failed read leaves the schedule unloaded, so the next
 // call reads again and saveLocked writes nothing: saving the defaults then would overwrite the stored tasks.
-func (h *Hub) loadSchedule(ctx context.Context) *schedule {
-	s := &h.sched
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.loaded {
-		return s
+func (s *Service) loadSchedule(ctx context.Context) *schedule {
+	sc := &s.sched
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	if sc.loaded {
+		return sc
 	}
-	if h.store == nil {
-		s.loaded = true
-		s.tasks = tasksFrom(defaultRoutines(), nil)
-		return s
+	st := s.store()
+	if st == nil {
+		sc.loaded = true
+		sc.tasks = tasksFrom(defaultRoutines(), nil)
+		return sc
 	}
 	var tasks []Task
-	ok, err := h.store.Setting(ctx, tasksKey, &tasks)
+	ok, err := st.Setting(ctx, tasksKey, &tasks)
 	if err != nil {
-		h.logf("load tasks: %v", err)
-		return s
+		s.logf("load tasks: %v", err)
+		return sc
 	}
 	if !ok || tasks == nil {
 		// First start with one list: move the routines and follow-ups over, then empty the old follow-ups so an
 		// older hub started again can't run them a second time.
 		routines := defaultRoutines()
 		var rs []Routine
-		ok, err := h.store.Setting(ctx, routinesKey, &rs)
+		ok, err := st.Setting(ctx, routinesKey, &rs)
 		if err != nil {
-			h.logf("load routines: %v", err)
-			return s
+			s.logf("load routines: %v", err)
+			return sc
 		}
 		if ok {
 			routines = rs
 		}
 		var fs []Followup
-		if _, err := h.store.Setting(ctx, followupsKey, &fs); err != nil {
-			h.logf("load follow-ups: %v", err)
-			return s
+		if _, err := st.Setting(ctx, followupsKey, &fs); err != nil {
+			s.logf("load follow-ups: %v", err)
+			return sc
 		}
 		tasks = tasksFrom(routines, fs)
-		if err := h.store.PutSetting(ctx, tasksKey, tasks); err != nil {
-			h.logf("save tasks: %v", err)
-			return s
+		if err := st.PutSetting(ctx, tasksKey, tasks); err != nil {
+			s.logf("save tasks: %v", err)
+			return sc
 		}
 		if len(fs) > 0 {
-			if err := h.store.PutSetting(ctx, followupsKey, []Followup{}); err != nil {
-				h.logf("empty the old follow-ups: %v", err)
+			if err := st.PutSetting(ctx, followupsKey, []Followup{}); err != nil {
+				s.logf("empty the old follow-ups: %v", err)
 			}
 		}
-		h.logf("schedule: %d routines and %d follow-ups moved into one task list", len(routines), len(fs))
+		s.logf("schedule: %d routines and %d follow-ups moved into one task list", len(routines), len(fs))
 	}
 	var runs []ScheduleRun
-	if _, err := h.store.Setting(ctx, runsKey, &runs); err != nil {
-		h.logf("load schedule runs: %v", err)
-		return s
+	if _, err := st.Setting(ctx, runsKey, &runs); err != nil {
+		s.logf("load schedule runs: %v", err)
+		return sc
 	}
-	s.tasks, s.runs, s.loaded = tasks, runs, true
-	return s
+	sc.tasks, sc.runs, sc.loaded = tasks, runs, true
+	return sc
 }
 
 // lockedSchedule returns the schedule locked, or errScheduleUnavailable (and nothing locked) while it could not be
 // read: a change made then would only live in memory and be lost on the next successful read, and a view of it would
 // show no tasks at all. Writes fail (503 for the app, an error for the assistant's tools), the scheduler skips its turn.
-func (h *Hub) lockedSchedule(ctx context.Context) (*schedule, error) {
-	s := h.loadSchedule(ctx)
-	s.mu.Lock()
-	if !s.loaded {
-		s.mu.Unlock()
+func (s *Service) lockedSchedule(ctx context.Context) (*schedule, error) {
+	sc := s.loadSchedule(ctx)
+	sc.mu.Lock()
+	if !sc.loaded {
+		sc.mu.Unlock()
 		return nil, errScheduleUnavailable
 	}
-	return s, nil
+	return sc, nil
 }
 
 // scheduleReadable is lockedSchedule for a view: nil once the schedule was read (it stays read).
-func (h *Hub) scheduleReadable(ctx context.Context) error {
-	s, err := h.lockedSchedule(ctx)
+func (s *Service) scheduleReadable(ctx context.Context) error {
+	sc, err := s.lockedSchedule(ctx)
 	if err == nil {
-		s.mu.Unlock()
+		sc.mu.Unlock()
 	}
 	return err
 }
 
-// saveLocked persists the list; s.mu is held.
-func (h *Hub) saveLocked(s *schedule) {
-	if h.store == nil || !s.loaded {
+// saveLocked persists the list; sc.mu is held.
+func (s *Service) saveLocked(sc *schedule) {
+	st := s.store()
+	if st == nil || !sc.loaded {
 		return
 	}
-	if s.tasks == nil {
-		s.tasks = []Task{} // null would read as "never moved over"
+	if sc.tasks == nil {
+		sc.tasks = []Task{} // null would read as "never moved over"
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := h.store.PutSetting(ctx, tasksKey, s.tasks); err != nil {
-		h.logf("save tasks: %v", err)
+	if err := st.PutSetting(ctx, tasksKey, sc.tasks); err != nil {
+		s.logf("save tasks: %v", err)
 	}
 }
 
-func (s *schedule) indexLocked(id string) int {
-	return slices.IndexFunc(s.tasks, func(t Task) bool { return t.ID == id })
-}
-
-// userLocation is the phone's time zone (the app reports it), else the hub's.
-func (h *Hub) userLocation() *time.Location {
-	h.mu.Lock()
-	tz := h.userTZ
-	h.mu.Unlock()
-	if tz == "" && h.store != nil {
-		var cfg AssistantConfig
-		if ok, _ := h.store.Setting(context.Background(), "assistant", &cfg); ok && cfg.Timezone != "" {
-			tz = cfg.Timezone
-			h.mu.Lock()
-			h.userTZ = tz
-			h.mu.Unlock()
-		}
-	}
-	if tz != "" {
-		if loc, err := time.LoadLocation(tz); err == nil {
-			return loc
-		}
-	}
-	return time.Local
-}
-
-// userTZName is the user's time zone by name ("Asia/Shanghai"), "" when only the hub's own is known: for what goes to
-// another program (a gateway's daily windows).
-func (h *Hub) userTZName() string {
-	if loc := h.userLocation(); loc != time.Local {
-		return loc.String()
-	}
-	return ""
+func (sc *schedule) indexLocked(id string) int {
+	return slices.IndexFunc(sc.tasks, func(t Task) bool { return t.ID == id })
 }
 
 var hhmm = regexp.MustCompile(`^([01]?\d|2[0-3]):([0-5]\d)$`)
@@ -445,7 +418,7 @@ func sameText(a, b string) bool {
 	return a != "" && oneLine(stripScheduleHeader(a)) == oneLine(stripScheduleHeader(b))
 }
 
-func (h *Hub) toolScheduleFollowup(ctx context.Context, m *Machine, sessionID string, args json.RawMessage) (string, error) {
+func (s *Service) toolScheduleFollowup(ctx context.Context, machine, sessionID string, args json.RawMessage) (string, error) {
 	var a struct {
 		At              string `json:"at"`
 		Every           string `json:"every"`
@@ -460,7 +433,7 @@ func (h *Hub) toolScheduleFollowup(ctx context.Context, m *Machine, sessionID st
 	if prompt == "" {
 		return "", errors.New("prompt is required")
 	}
-	loc, now := h.userLocation(), time.Now()
+	loc, now := s.location(ctx), time.Now()
 	every := 0
 	if a.Every != "" {
 		d, ok := relative(a.Every)
@@ -484,25 +457,25 @@ func (h *Hub) toolScheduleFollowup(ctx context.Context, m *Machine, sessionID st
 	if at.Before(now.Add(-time.Minute)) {
 		return "", fmt.Errorf("%s is in the past", at.In(loc).Format("2006-01-02 15:04"))
 	}
-	if out, ok := h.scheduleOwn(ctx, sessionID, a.Title, prompt, a.At, at, every); ok {
+	if out, ok := s.scheduleOwn(ctx, sessionID, a.Title, prompt, a.At, at, every); ok {
 		return out, nil
 	}
 	t := Task{ID: "fu_" + randomHex(4), Title: strings.TrimSpace(a.Title), Prompt: prompt, Repeat: repeatOnce, At: at.UTC(), Enabled: true,
-		MachineID: m.cfg.ID, CreatedBy: "assistant", CreatedAt: now.UTC()}
+		MachineID: machine, CreatedBy: "assistant", CreatedAt: now.UTC()}
 	if every > 0 {
 		t.Repeat, t.EveryMinutes = repeatInterval, every
 	}
 	if !a.NewConversation {
 		t.SessionID = sessionID
 	}
-	s, err := h.lockedSchedule(ctx)
+	sc, err := s.lockedSchedule(ctx)
 	if err != nil {
 		return "", err
 	}
-	s.tasks = append(s.tasks, t)
-	h.saveLocked(s)
-	s.mu.Unlock()
-	h.broadcastSchedule()
+	sc.tasks = append(sc.tasks, t)
+	s.saveLocked(sc)
+	sc.mu.Unlock()
+	s.broadcastSchedule()
 	if every > 0 {
 		return fmt.Sprintf("Scheduled %s every %s, first at %s (%s). It repeats by itself: don't schedule the next run from a run.",
 			t.ID, everyText(every), at.In(loc).Format("01-02 15:04 Mon"), until(at)), nil
@@ -515,26 +488,26 @@ func (h *Hub) toolScheduleFollowup(ctx context.Context, m *Machine, sessionID st
 // follow-up per run. A one-off rescheduled by a relative time becomes a task every that long; one that already
 // repeats stays as it is (a changed prompt is taken). ok is false when this conversation isn't one of the task's runs
 // or the title and prompt are another task's.
-func (h *Hub) scheduleOwn(ctx context.Context, sessionID, title, prompt, atArg string, at time.Time, every int) (string, bool) {
+func (s *Service) scheduleOwn(ctx context.Context, sessionID, title, prompt, atArg string, at time.Time, every int) (string, bool) {
 	if sessionID == "" {
 		return "", false
 	}
-	loc := h.userLocation()
-	s, err := h.lockedSchedule(ctx)
+	loc := s.location(ctx)
+	sc, err := s.lockedSchedule(ctx)
 	if err != nil {
 		return "", false // the caller's own write says why
 	}
 	i := -1
-	for j := len(s.runs) - 1; j >= 0 && i < 0; j-- {
-		if s.runs[j].SessionID == sessionID {
-			i = s.indexLocked(s.runs[j].RefID)
+	for j := len(sc.runs) - 1; j >= 0 && i < 0; j-- {
+		if sc.runs[j].SessionID == sessionID {
+			i = sc.indexLocked(sc.runs[j].RefID)
 		}
 	}
-	if i < 0 || !(sameText(title, s.tasks[i].Title) || sameText(prompt, s.tasks[i].Prompt)) {
-		s.mu.Unlock()
+	if i < 0 || !(sameText(title, sc.tasks[i].Title) || sameText(prompt, sc.tasks[i].Prompt)) {
+		sc.mu.Unlock()
 		return "", false
 	}
-	t := &s.tasks[i]
+	t := &sc.tasks[i]
 	if title = strings.TrimSpace(title); title != "" {
 		t.Title = title
 	}
@@ -560,9 +533,9 @@ func (h *Hub) scheduleOwn(ctx context.Context, sessionID, title, prompt, atArg s
 			out = fmt.Sprintf("Rescheduled %s「%s」 for %s (%s).", t.ID, t.label(), at.In(loc).Format("01-02 15:04 Mon"), until(at))
 		}
 	}
-	h.saveLocked(s)
-	s.mu.Unlock()
-	h.broadcastSchedule()
+	s.saveLocked(sc)
+	sc.mu.Unlock()
+	s.broadcastSchedule()
 	return out, true
 }
 
@@ -578,35 +551,35 @@ func until(t time.Time) string {
 }
 
 // deleteTask removes a task (cancel_followup, delete_routine, the app); false when there is none.
-func (h *Hub) deleteTask(ctx context.Context, id string) (bool, error) {
-	s, err := h.lockedSchedule(ctx)
+func (s *Service) deleteTask(ctx context.Context, id string) (bool, error) {
+	sc, err := s.lockedSchedule(ctx)
 	if err != nil {
 		return false, err
 	}
-	i := s.indexLocked(id)
+	i := sc.indexLocked(id)
 	if i >= 0 {
-		s.tasks = slices.Delete(s.tasks, i, i+1)
-		h.saveLocked(s)
+		sc.tasks = slices.Delete(sc.tasks, i, i+1)
+		s.saveLocked(sc)
 	}
-	s.mu.Unlock()
+	sc.mu.Unlock()
 	if i >= 0 {
-		h.broadcastSchedule()
+		s.broadcastSchedule()
 	}
 	return i >= 0, nil
 }
 
-func (h *Hub) describeSchedule(ctx context.Context) string {
-	loc := h.userLocation()
+func (s *Service) describeSchedule(ctx context.Context) string {
+	loc := s.location(ctx)
 	now := time.Now()
-	s, err := h.lockedSchedule(ctx)
+	sc, err := s.lockedSchedule(ctx)
 	if err != nil {
 		return err.Error()
 	}
-	defer s.mu.Unlock()
+	defer sc.mu.Unlock()
 	var b strings.Builder
 	b.WriteString("Scheduled tasks (the user sees and edits them in Persona › 定时任务; launcher / permission mode are theirs to set):\n")
 	n := 0
-	for _, t := range s.tasks {
+	for _, t := range sc.tasks {
 		if t.done() {
 			continue
 		}
@@ -637,7 +610,7 @@ func (h *Hub) describeSchedule(ctx context.Context) string {
 }
 
 // toolScheduleRoutine adds a daily task from a conversation ("每天 9 点给我早报"), or changes one by id.
-func (h *Hub) toolScheduleRoutine(ctx context.Context, args json.RawMessage) (string, error) {
+func (s *Service) toolScheduleRoutine(ctx context.Context, args json.RawMessage) (string, error) {
 	var a struct {
 		ID       string `json:"id"`
 		Title    string `json:"title"`
@@ -649,19 +622,19 @@ func (h *Hub) toolScheduleRoutine(ctx context.Context, args json.RawMessage) (st
 	if err := json.Unmarshal(args, &a); err != nil {
 		return "", err
 	}
-	loc := h.userLocation()
-	s, err := h.lockedSchedule(ctx)
+	loc := s.location(ctx)
+	sc, err := s.lockedSchedule(ctx)
 	if err != nil {
 		return "", err
 	}
 	var t Task
 	i := -1
 	if a.ID != "" {
-		if i = s.indexLocked(a.ID); i < 0 {
-			s.mu.Unlock()
+		if i = sc.indexLocked(a.ID); i < 0 {
+			sc.mu.Unlock()
 			return "", fmt.Errorf("no task %q (list_followups lists them)", a.ID)
 		}
-		t = s.tasks[i]
+		t = sc.tasks[i]
 	} else {
 		t = Task{ID: "rt_" + randomHex(4), Repeat: repeatDaily, Enabled: true, CreatedBy: "assistant", CreatedAt: time.Now().UTC()}
 	}
@@ -684,17 +657,17 @@ func (h *Hub) toolScheduleRoutine(ctx context.Context, args json.RawMessage) (st
 		t.Enabled = *a.Enabled
 	}
 	if err := checkTask(&t, time.Now()); err != nil {
-		s.mu.Unlock()
+		sc.mu.Unlock()
 		return "", err
 	}
 	if i < 0 {
-		s.tasks = append(s.tasks, t)
+		sc.tasks = append(sc.tasks, t)
 	} else {
-		s.tasks[i] = t
+		sc.tasks[i] = t
 	}
-	h.saveLocked(s)
-	s.mu.Unlock()
-	h.broadcastSchedule()
+	s.saveLocked(sc)
+	sc.mu.Unlock()
+	s.broadcastSchedule()
 	state := "off"
 	if next := t.next(time.Now(), loc); !next.IsZero() {
 		state = "next run " + next.In(loc).Format("01-02 15:04 Mon") + " (" + until(next) + ")"
@@ -783,18 +756,21 @@ func weekdayText(ds []int) string {
 	return b.String()
 }
 
+// Run runs what the assistant does on its own until ctx ends: the scheduled tasks.
+func (s *Service) Run(ctx context.Context) { s.scheduleLoop(ctx) }
+
 // scheduleLoop starts due tasks. It sleeps until the next one is due (at most scheduleIdle, so a time zone change is
 // picked up) and wakes early when the list changes; the old 20-second poll ran follow-ups up to 20 seconds late
 // (measured: 21 s on 2026-10-30).
-func (h *Hub) scheduleLoop(ctx context.Context) {
-	wake := h.sched.wakeup()
+func (s *Service) scheduleLoop(ctx context.Context) {
+	wake := s.sched.wakeup()
 	for {
 		now := time.Now()
-		if !h.isMember() { // a member's tasks wait while the center runs the group's (mesh_group.go)
-			h.runDue(ctx, now)
+		if !s.hello(ctx).Assistant.Standby { // a mesh member's tasks wait while the center runs the group's (docs/mesh.md)
+			s.runDue(ctx, now)
 		}
 		wait := scheduleIdle
-		if next := h.nextDue(ctx, now); !next.IsZero() && next.Sub(now) < wait {
+		if next := s.nextDue(ctx, now); !next.IsZero() && next.Sub(now) < wait {
 			wait = max(next.Sub(now), 50*time.Millisecond)
 		}
 		t := time.NewTimer(wait)
@@ -811,25 +787,25 @@ func (h *Hub) scheduleLoop(ctx context.Context) {
 
 const scheduleIdle = 30 * time.Second
 
-func (s *schedule) wakeup() chan struct{} {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.wake == nil {
-		s.wake = make(chan struct{}, 1)
+func (sc *schedule) wakeup() chan struct{} {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	if sc.wake == nil {
+		sc.wake = make(chan struct{}, 1)
 	}
-	return s.wake
+	return sc.wake
 }
 
 // nextDue is the earliest moment an enabled task is due; zero when nothing is scheduled.
-func (h *Hub) nextDue(ctx context.Context, now time.Time) time.Time {
-	loc := h.userLocation()
-	s, err := h.lockedSchedule(ctx)
+func (s *Service) nextDue(ctx context.Context, now time.Time) time.Time {
+	loc := s.location(ctx)
+	sc, err := s.lockedSchedule(ctx)
 	if err != nil {
 		return time.Time{} // read again on the next idle wake-up
 	}
-	defer s.mu.Unlock()
+	defer sc.mu.Unlock()
 	var next time.Time
-	for _, t := range s.tasks {
+	for _, t := range sc.tasks {
 		if n := t.next(now, loc); !n.IsZero() && (next.IsZero() || n.Before(next)) {
 			next = n
 		}
@@ -842,17 +818,17 @@ type dueTask struct {
 	due time.Time
 }
 
-func (h *Hub) runDue(ctx context.Context, now time.Time) {
-	loc := h.userLocation()
-	s, err := h.lockedSchedule(ctx)
+func (s *Service) runDue(ctx context.Context, now time.Time) {
+	loc := s.location(ctx)
+	sc, err := s.lockedSchedule(ctx)
 	if err != nil {
 		return // this turn is skipped: a task run now could not be marked as run
 	}
 	var due []dueTask
 	var skipped []ScheduleRun
 	changed := false
-	for i := range s.tasks {
-		t := &s.tasks[i]
+	for i := range sc.tasks {
+		t := &sc.tasks[i]
 		if !t.Enabled {
 			continue
 		}
@@ -888,31 +864,31 @@ func (h *Hub) runDue(ctx context.Context, now time.Time) {
 		}
 	}
 	// A one-off that ran a day ago is only history now.
-	kept := s.tasks[:0:0]
-	for _, t := range s.tasks {
+	kept := sc.tasks[:0:0]
+	for _, t := range sc.tasks {
 		if t.done() && now.Sub(t.LastRun) > doneKeep {
 			changed = true
 			continue
 		}
 		kept = append(kept, t)
 	}
-	s.tasks = kept
+	sc.tasks = kept
 	if changed {
-		h.saveLocked(s)
+		s.saveLocked(sc)
 	}
-	s.mu.Unlock()
+	sc.mu.Unlock()
 	if !changed {
 		return
 	}
 	for _, r := range skipped {
-		h.recordRun(r)
+		s.recordRun(r)
 	}
-	h.broadcastSchedule()
+	s.broadcastSchedule()
 	for _, d := range due {
-		s.inflight.Add(1)
+		sc.inflight.Add(1)
 		go func() {
-			defer s.inflight.Done()
-			_, _ = h.runTask(d.t, d.due, now, false, false)
+			defer sc.inflight.Done()
+			_, _ = s.runTask(d.t, d.due, now, false, false)
 		}()
 	}
 }
@@ -920,63 +896,63 @@ func (h *Hub) runDue(ctx context.Context, now time.Time) {
 // recordRun appends to the history, and sets the task's last status unless a newer run has started since this one
 // (r.of before the task's LastRun): runs record when they end, and a slow one — an assistant that takes a minute to
 // give up — must not overwrite the status of the run or skip that came after it (#556).
-func (h *Hub) recordRun(r ScheduleRun) string {
+func (s *Service) recordRun(r ScheduleRun) string {
 	r.ID = "run_" + randomHex(4)
-	s, err := h.lockedSchedule(context.Background())
+	sc, err := s.lockedSchedule(context.Background())
 	if err != nil {
-		h.logf("schedule run %s %s not recorded: %v", r.Kind, r.RefID, err)
+		s.logf("schedule run %s %s not recorded: %v", r.Kind, r.RefID, err)
 		return ""
 	}
-	s.runs = append(s.runs, r)
-	if len(s.runs) > maxRuns {
-		s.runs = append([]ScheduleRun(nil), s.runs[len(s.runs)-maxRuns:]...)
+	sc.runs = append(sc.runs, r)
+	if len(sc.runs) > maxRuns {
+		sc.runs = append([]ScheduleRun(nil), sc.runs[len(sc.runs)-maxRuns:]...)
 	}
-	if i := s.indexLocked(r.RefID); i >= 0 && (r.of.IsZero() || !s.tasks[i].LastRun.After(r.of)) {
-		t := &s.tasks[i]
+	if i := sc.indexLocked(r.RefID); i >= 0 && (r.of.IsZero() || !sc.tasks[i].LastRun.After(r.of)) {
+		t := &sc.tasks[i]
 		t.LastStatus, t.LastError = r.Status, r.Error
 		if r.SessionID != "" {
 			t.LastSessionID = r.SessionID
 		}
 	}
-	h.saveLocked(s)
-	if h.store != nil { // under the lock: two runs finishing together must not save their lists out of order
+	s.saveLocked(sc)
+	if st := s.store(); st != nil { // under the lock: two runs finishing together must not save their lists out of order
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		if err := h.store.PutSetting(ctx, runsKey, s.runs); err != nil {
-			h.logf("save schedule runs: %v", err)
+		if err := st.PutSetting(ctx, runsKey, sc.runs); err != nil {
+			s.logf("save schedule runs: %v", err)
 		}
 		cancel()
 	}
-	s.mu.Unlock()
-	h.broadcastSchedule()
+	sc.mu.Unlock()
+	s.broadcastSchedule()
 	return r.ID
 }
 
 // updateRun rewrites a recorded run's outcome (a run that was sent but whose turn ended in an API error) and the
 // task's last status when this run is still the newest.
-func (h *Hub) updateRun(r ScheduleRun, status, errText string) {
-	s, err := h.lockedSchedule(context.Background())
+func (s *Service) updateRun(r ScheduleRun, status, errText string) {
+	sc, err := s.lockedSchedule(context.Background())
 	if err != nil {
 		return
 	}
-	i := slices.IndexFunc(s.runs, func(x ScheduleRun) bool { return x.ID == r.ID })
+	i := slices.IndexFunc(sc.runs, func(x ScheduleRun) bool { return x.ID == r.ID })
 	if i < 0 {
-		s.mu.Unlock()
+		sc.mu.Unlock()
 		return
 	}
-	s.runs[i].Status, s.runs[i].Error = status, errText
-	if j := s.indexLocked(r.RefID); j >= 0 && (r.of.IsZero() || !s.tasks[j].LastRun.After(r.of)) {
-		s.tasks[j].LastStatus, s.tasks[j].LastError = status, errText
+	sc.runs[i].Status, sc.runs[i].Error = status, errText
+	if j := sc.indexLocked(r.RefID); j >= 0 && (r.of.IsZero() || !sc.tasks[j].LastRun.After(r.of)) {
+		sc.tasks[j].LastStatus, sc.tasks[j].LastError = status, errText
 	}
-	h.saveLocked(s)
-	if h.store != nil {
+	s.saveLocked(sc)
+	if st := s.store(); st != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		if err := h.store.PutSetting(ctx, runsKey, s.runs); err != nil {
-			h.logf("save schedule runs: %v", err)
+		if err := st.PutSetting(ctx, runsKey, sc.runs); err != nil {
+			s.logf("save schedule runs: %v", err)
 		}
 		cancel()
 	}
-	s.mu.Unlock()
-	h.broadcastSchedule()
+	sc.mu.Unlock()
+	s.broadcastSchedule()
 }
 
 // errTaskBusy: the task's last run is still going; this one is skipped (and recorded) rather than queued behind it.
@@ -991,93 +967,98 @@ var errTaskBusy = errors.New("上一轮还在运行，这次跳过")
 // A repeating task whose own conversation is still on its last run (working, or waiting on the user) is skipped,
 // not queued: two runs stacked in one conversation answer twice in a row, and the second one only sees the first
 // half done. The skip is in the history like a missed one. A one-off still goes in (it would be lost otherwise).
-func (h *Hub) runTask(t Task, due, now time.Time, manual, retried bool) (proto.Session, error) {
+func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (proto.Session, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	loc, kb := h.userLocation(), h.kb.eng != nil
+	loc, kb := s.location(ctx), s.kbReady(ctx)
 	run := ScheduleRun{Kind: t.kind(), RefID: t.ID, Title: t.label(), Due: due.UTC(), At: time.Now().UTC(), Manual: manual, Status: runOK,
 		Retried: retried, of: now.UTC()}
-	if !h.sched.begin(t.ID) { // the same task is being sent right now (立即运行 as it came due)
-		return proto.Session{}, h.skipRun(run, errTaskBusy)
+	if !s.sched.begin(t.ID) { // the same task is being sent right now (立即运行 as it came due)
+		return proto.Session{}, s.skipRun(run, errTaskBusy)
 	}
-	defer h.sched.end(t.ID)
+	defer s.sched.end(t.ID)
 	if t.SessionID != "" {
-		if m := h.localMachine(t.MachineID); m != nil {
+		if m, ok := s.device(ctx, t.MachineID); ok {
 			// A follow-up the assistant scheduled for itself is a turn of that conversation: it keeps the
 			// conversation's launcher like a message from the phone does. On the task's category launcher (Agents
 			// then) it moved the main conversation onto another one (plain claude, not logged in there) for good (#1518).
 			params := map[string]any{"session_id": t.SessionID, "text": taskPrompt(t, due, now, loc, manual, kb, false), "permission_mode": t.PermissionMode}
-			err := h.assistantSendModel(ctx, m, t.SessionID, params)
+			err := s.assistantSendModel(ctx, t.MachineID, t.SessionID, params)
 			if err == nil {
-				err = m.call(ctx, "assistant.send", params, nil)
+				err = s.call(ctx, m.ID, DeviceAssistantSend, params, nil)
 			}
 			if err == nil {
 				run.MachineID, run.SessionID = t.MachineID, t.SessionID
-				h.logf("task %s ran %s after its time", t.ID, lateness(due, time.Now()))
-				h.startScheduledRun(run, t, m)
+				s.logf("task %s ran %s after its time", t.ID, lateness(due, time.Now()))
+				s.startScheduledRun(run, t, &m)
 				return proto.Session{MachineID: t.MachineID, SessionID: t.SessionID}, nil
 			}
-			h.logf("task %s into %s: %v; starting a new conversation", t.ID, t.SessionID, err)
+			s.logf("task %s into %s: %v; starting a new conversation", t.ID, t.SessionID, err)
 		}
 	}
-	cfg := h.assistantConfig(ctx)
-	binding, err := h.resolveModel(ctx, "task."+t.ID)
+	here := s.hello(ctx).Assistant.MachineID
+	binding, err := s.resolveModel(ctx, "task."+t.ID)
 	if err != nil {
 		run.Status, run.Error = runFailed, err.Error()
-		h.recordRun(run)
+		s.recordRun(run)
 		return proto.Session{}, err
 	}
 	launcher := strings.TrimPrefix(binding.Provider, "launcher.")
 	if t.RunSessionID != "" {
-		m := h.localMachine(t.RunMachineID)
+		m, ok := s.device(ctx, t.RunMachineID)
 		switch {
 		case t.RunLauncher != launcher:
-			h.logf("task %s: launcher %s → %s, its conversation %s can't go on; starting a new one", t.ID, t.RunLauncher, launcher, short(t.RunSessionID))
-		case t.RunMachineID != cfg.MachineID || m == nil:
-			h.logf("task %s: the assistant moved off %s, its conversation %s stays there; starting a new one", t.ID, t.RunMachineID, short(t.RunSessionID))
-		case t.Repeat != repeatOnce && sessionBusy(m, t.RunSessionID):
-			h.logf("task %s: its conversation %s is still on the last run; skipped", t.ID, short(t.RunSessionID))
+			s.logf("task %s: launcher %s → %s, its conversation %s can't go on; starting a new one", t.ID, t.RunLauncher, launcher, short(t.RunSessionID))
+		case t.RunMachineID != here || !ok:
+			s.logf("task %s: the assistant moved off %s, its conversation %s stays there; starting a new one", t.ID, t.RunMachineID, short(t.RunSessionID))
+		case t.Repeat != repeatOnce && s.sessionBusy(ctx, m.ID, t.RunSessionID):
+			s.logf("task %s: its conversation %s is still on the last run; skipped", t.ID, short(t.RunSessionID))
 			run.MachineID, run.SessionID = t.RunMachineID, t.RunSessionID
-			return proto.Session{}, h.skipRun(run, errTaskBusy)
+			return proto.Session{}, s.skipRun(run, errTaskBusy)
 		default:
 			params := map[string]any{"session_id": t.RunSessionID, "text": taskPrompt(t, due, now, loc, manual, kb, true), "permission_mode": t.PermissionMode, "resume_only": true}
-			err := h.applyModel(ctx, "task."+t.ID, params)
+			err := s.applyModel(ctx, "task."+t.ID, params)
 			if err == nil {
-				err = m.call(ctx, "assistant.send", params, nil)
+				err = s.call(ctx, m.ID, DeviceAssistantSend, params, nil)
 			}
 			if err == nil {
 				run.MachineID, run.SessionID = t.RunMachineID, t.RunSessionID
-				h.logf("task %s ran %s after its time (its conversation %s)", t.ID, lateness(due, time.Now()), short(t.RunSessionID))
-				h.startScheduledRun(run, t, m)
+				s.logf("task %s ran %s after its time (its conversation %s)", t.ID, lateness(due, time.Now()), short(t.RunSessionID))
+				s.startScheduledRun(run, t, &m)
 				return proto.Session{MachineID: t.RunMachineID, SessionID: t.RunSessionID}, nil
 			}
-			h.logf("task %s into its conversation %s: %v; starting a new one", t.ID, short(t.RunSessionID), err)
+			s.logf("task %s into its conversation %s: %v; starting a new one", t.ID, short(t.RunSessionID), err)
 		}
 	}
-	sess, err := h.startAssistant(ctx, taskPrompt(t, due, now, loc, manual, kb, false), nil, "", t.PermissionMode, "", "task."+t.ID)
+	sess, err := s.startConversation(ctx, startParams{Text: taskPrompt(t, due, now, loc, manual, kb, false), PermissionMode: t.PermissionMode,
+		Purpose: "task." + t.ID})
 	if err != nil {
-		h.logf("task %s: %v", t.ID, err)
+		s.logf("task %s: %v", t.ID, err)
 		run.Status, run.Error = runFailed, err.Error()
-		h.recordRun(run)
+		s.recordRun(run)
 		return proto.Session{}, err
 	}
 	run.MachineID, run.SessionID = sess.MachineID, sess.SessionID
-	h.logf("task %s ran %s after its time (new conversation %s, kept for the next runs)", t.ID, lateness(due, time.Now()), short(sess.SessionID))
-	h.adoptConversation(t.ID, sess.MachineID, sess.SessionID, sess.Launcher)
-	h.titleNew(sess.MachineID, sess.SessionID, time.Now(), t.label()) // 「MMDD | 定时 | 任务名」, the same for every run in it
-	h.startScheduledRun(run, t, h.localMachine(sess.MachineID))
-	return *sess, nil
+	s.logf("task %s ran %s after its time (new conversation %s, kept for the next runs)", t.ID, lateness(due, time.Now()), short(sess.SessionID))
+	s.adoptConversation(t.ID, sess.MachineID, sess.SessionID, sess.Launcher)
+	s.titleNew(sess.MachineID, sess.SessionID, time.Now(), t.label()) // 「MMDD | 定时 | 任务名」, the same for every run in it
+	var m *Device
+	if d, ok := s.device(ctx, sess.MachineID); ok {
+		m = &d
+	}
+	s.startScheduledRun(run, t, m)
+	return sess, nil
 }
 
 // sessionBusy: the conversation is on a turn or waiting for the user (an approval, a question).
-func sessionBusy(m *Machine, id string) bool {
-	s, ok := m.session(id)
-	return ok && (s.Status == proto.StatusWorking || s.State == proto.StateWorking || s.State == proto.StateNeedsYou)
+func (s *Service) sessionBusy(ctx context.Context, machine, id string) bool {
+	c, ok := s.session(ctx, machine, id)
+	return ok && (c.Status == proto.StatusWorking || c.State == proto.StateWorking || c.State == proto.StateNeedsYou)
 }
 
-func (h *Hub) skipRun(run ScheduleRun, why error) error {
+func (s *Service) skipRun(run ScheduleRun, why error) error {
 	run.Status, run.Error = runSkipped, why.Error()
-	h.recordRun(run)
+	s.recordRun(run)
 	return why
 }
 
@@ -1088,30 +1069,29 @@ var runRetryDelay = 3 * time.Minute
 
 // startRun records a sent run and follows its turn. The node accepts `assistant.send` before the model answers, so a
 // run whose turn ends in an API error (quota, no such model, upstream 503) used to stay "ok" and the user was never
-// told; the watcher records it as failed, pushes it, and retries once.
-func (h *Hub) startScheduledRun(run ScheduleRun, t Task, m *Machine) {
-	run.ID = h.recordRun(run)
+// told; the watcher records it as failed, pushes it, and retries once. m is the machine the run went to (nil: none).
+func (s *Service) startScheduledRun(run ScheduleRun, t Task, m *Device) {
+	run.ID = s.recordRun(run)
 	if m == nil || run.ID == "" {
 		return
 	}
-	go h.watchScheduledRun(run, t, m)
+	go s.watchScheduledRun(run, t, *m)
 }
 
-func (h *Hub) watchScheduledRun(run ScheduleRun, t Task, m *Machine) {
+func (s *Service) watchScheduledRun(run ScheduleRun, t Task, m Device) {
 	ctx, cancel := context.WithTimeout(context.Background(), runWatchTimeout)
 	defer cancel()
-	if !h.waitTurnEnd(ctx, m, run.SessionID) {
+	if !s.waitTurnEnd(ctx, m.ID, run.SessionID) {
 		return
 	}
-	text := h.lastTurnAPIError(ctx, m, run.SessionID)
+	text := s.lastTurnAPIError(ctx, m.ID, run.SessionID)
 	if text == "" {
 		return
 	}
 	text = clip(oneLine(text), 300)
-	h.logf("task %s run %s failed: %s", t.ID, run.ID, text)
-	h.updateRun(run, runFailed, text)
-	machine := m.cfg.Name
-	h.notifyDone("assistant", m.cfg.ID, machine, run.SessionID, "定时任务失败："+t.label(), text, pushWants{})
+	s.logf("task %s run %s failed: %s", t.ID, run.ID, text)
+	s.updateRun(run, runFailed, text)
+	s.push(ctx, Notification{Subtitle: m.Name, DeviceID: m.ID, SessionID: run.SessionID, Title: "定时任务失败：" + t.label(), Body: text})
 	if run.Retried {
 		return
 	}
@@ -1120,15 +1100,15 @@ func (h *Hub) watchScheduledRun(run ScheduleRun, t Task, m *Machine) {
 		return
 	case <-time.After(runRetryDelay):
 	}
-	if _, err := h.runTask(t, time.Now(), time.Now(), false, true); err != nil {
-		h.logf("task %s retry: %v", t.ID, err)
+	if _, err := s.runTask(t, time.Now(), time.Now(), false, true); err != nil {
+		s.logf("task %s retry: %v", t.ID, err)
 	}
 }
 
 // waitTurnEnd waits until the sent turn is over; false when ctx ended. An immediate failure (a bad model) is idle
 // before the first poll sees it working, so a changed last item also means it ended.
-func (h *Hub) waitTurnEnd(ctx context.Context, m *Machine, sid string) bool {
-	before := h.lastItemID(ctx, m, sid)
+func (s *Service) waitTurnEnd(ctx context.Context, machine, sid string) bool {
+	before := s.lastItemID(ctx, machine, sid)
 	ran := false
 	idle := 0
 	for {
@@ -1137,15 +1117,15 @@ func (h *Hub) waitTurnEnd(ctx context.Context, m *Machine, sid string) bool {
 			return false
 		case <-time.After(2 * time.Second):
 		}
-		s, ok := m.session(sid)
-		if ok && (s.Status == proto.StatusWorking || s.State == proto.StateWorking || s.State == proto.StateNeedsYou) {
+		c, ok := s.session(ctx, machine, sid)
+		if ok && (c.Status == proto.StatusWorking || c.State == proto.StateWorking || c.State == proto.StateNeedsYou) {
 			ran, idle = true, 0
-			if s.State == proto.StateNeedsYou {
+			if c.State == proto.StateNeedsYou {
 				return true // waiting on the user counts as ended
 			}
 			continue
 		}
-		if h.lastItemID(ctx, m, sid) != before {
+		if s.lastItemID(ctx, machine, sid) != before {
 			return true
 		}
 		if ran {
@@ -1157,26 +1137,26 @@ func (h *Hub) waitTurnEnd(ctx context.Context, m *Machine, sid string) bool {
 }
 
 // lastItemID is the newest item's id, "" when there is none.
-func (h *Hub) lastItemID(ctx context.Context, m *Machine, sid string) string {
+func (s *Service) lastItemID(ctx context.Context, machine, sid string) string {
 	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var res struct {
 		Items []proto.Item `json:"items"`
 	}
-	if err := m.call(cctx, "session.items", map[string]any{"session_id": sid, "limit": 1, "lazy_images": true}, &res); err != nil || len(res.Items) == 0 {
+	if err := s.call(cctx, machine, DeviceSessionItems, map[string]any{"session_id": sid, "limit": 1, "lazy_images": true}, &res); err != nil || len(res.Items) == 0 {
 		return ""
 	}
 	return res.Items[len(res.Items)-1].ID
 }
 
 // lastTurnAPIError is the text of the turn's last answer when it is a model API error; "" otherwise.
-func (h *Hub) lastTurnAPIError(ctx context.Context, m *Machine, sid string) string {
+func (s *Service) lastTurnAPIError(ctx context.Context, machine, sid string) string {
 	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	var res struct {
 		Items []proto.Item `json:"items"`
 	}
-	if err := m.call(cctx, "session.items", map[string]any{"session_id": sid, "limit": 8, "lazy_images": true}, &res); err != nil {
+	if err := s.call(cctx, machine, DeviceSessionItems, map[string]any{"session_id": sid, "limit": 8, "lazy_images": true}, &res); err != nil {
 		return ""
 	}
 	for i := len(res.Items) - 1; i >= 0; i-- {
@@ -1197,8 +1177,10 @@ func (h *Hub) lastTurnAPIError(ctx context.Context, m *Machine, sid string) stri
 }
 
 // apiErrorMarkers start what Claude Code answers when the model call itself failed (an error card in the app).
-var apiErrorMarkers = []string{"API Error:", "There's an issue with the selected model", "Failed to authenticate",
-	"OAuth token has expired", "Invalid API key"}
+var apiErrorMarkers = assistantwire.APIErrorMarkers
+
+// cutOff: an agent's answer is the model API error that ended its turn.
+func cutOff(answer string) bool { return assistantwire.CutOff(answer) }
 
 // apiErrorText: what Claude Code answers when the model call itself failed (an error card in the app).
 func apiErrorText(text string) bool {
@@ -1211,57 +1193,83 @@ func apiErrorText(text string) bool {
 }
 
 // begin marks task id as being sent; false when it already is. end clears the mark.
-func (s *schedule) begin(id string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.sending[id] {
+func (sc *schedule) begin(id string) bool {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	if sc.sending[id] {
 		return false
 	}
-	if s.sending == nil {
-		s.sending = map[string]bool{}
+	if sc.sending == nil {
+		sc.sending = map[string]bool{}
 	}
-	s.sending[id] = true
+	sc.sending[id] = true
 	return true
 }
 
-func (s *schedule) end(id string) {
-	s.mu.Lock()
-	delete(s.sending, id)
-	s.mu.Unlock()
+func (sc *schedule) end(id string) {
+	sc.mu.Lock()
+	delete(sc.sending, id)
+	sc.mu.Unlock()
 }
 
 // adoptConversation makes a new conversation task id's own (saved with the next recordRun), and keeps it listed on
-// its machine however quiet it gets (keptSessions), so the app can open it and the next run can see it is busy.
-func (h *Hub) adoptConversation(id, machine, session, launcher string) {
-	if s, err := h.lockedSchedule(context.Background()); err == nil {
-		if i := s.indexLocked(id); i >= 0 {
-			t := &s.tasks[i]
+// its machine however quiet it gets (keepListed), so the app can open it and the next run can see it is busy.
+func (s *Service) adoptConversation(id, machine, session, launcher string) {
+	if sc, err := s.lockedSchedule(context.Background()); err == nil {
+		if i := sc.indexLocked(id); i >= 0 {
+			t := &sc.tasks[i]
 			t.RunMachineID, t.RunSessionID, t.RunLauncher = machine, session, launcher
 		}
-		s.mu.Unlock()
+		sc.mu.Unlock()
 	}
-	go h.keepMain(context.Background())
+	go s.keepListed(context.Background())
+}
+
+// keepListed tells the assistant's machine which conversations to list however long they have been quiet: the main
+// conversation and scheduled tasks' own ones (node.configure keep_sessions). Otherwise a busy machine's 80 newest
+// transcripts crowd them out (2026-11-01: the main one, quiet for two days, was gone).
+func (s *Service) keepListed(ctx context.Context) {
+	here := s.hello(ctx).Assistant
+	keep := []string{}
+	if here.Main != "" {
+		keep = append(keep, here.Main)
+	}
+	// Scheduled tasks' own conversations too: a weekly one would drop out of the list in between, and with it the
+	// app's link to it and the check that its last run is still going (runTask).
+	sc := s.loadSchedule(ctx)
+	sc.mu.Lock()
+	for _, t := range sc.tasks {
+		if t.RunSessionID != "" && t.RunMachineID == here.MachineID && !slices.Contains(keep, t.RunSessionID) {
+			keep = append(keep, t.RunSessionID)
+		}
+	}
+	sc.mu.Unlock()
+	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	if err := s.call(cctx, here.MachineID, DeviceNodeConfigure, map[string]any{"keep_sessions": keep}, nil); err != nil && !errors.Is(err, ErrNoDevice) {
+		s.logf("assistant: keep main: %v", err)
+	}
 }
 
 // forgetConversation is 下次开新对话: the next run starts a new conversation (the old one stays in 对话).
-func (h *Hub) forgetConversation(ctx context.Context, id string) (Task, bool, error) {
-	s, err := h.lockedSchedule(ctx)
+func (s *Service) forgetConversation(ctx context.Context, id string) (Task, bool, error) {
+	sc, err := s.lockedSchedule(ctx)
 	if err != nil {
 		return Task{}, false, err
 	}
-	i := s.indexLocked(id)
+	i := sc.indexLocked(id)
 	if i >= 0 {
-		t := &s.tasks[i]
+		t := &sc.tasks[i]
 		t.RunMachineID, t.RunSessionID, t.RunLauncher = "", "", ""
-		h.saveLocked(s)
+		s.saveLocked(sc)
 	}
-	s.mu.Unlock()
+	sc.mu.Unlock()
 	if i < 0 {
 		return Task{}, false, nil
 	}
-	h.broadcastSchedule()
-	go h.keepMain(context.WithoutCancel(ctx))
-	t, ok := h.taskView(ctx, id)
+	s.broadcastSchedule()
+	go s.keepListed(context.WithoutCancel(ctx))
+	t, ok := s.taskView(ctx, id)
 	return t, ok, nil
 }
 
@@ -1297,25 +1305,44 @@ func humanDuration(d time.Duration) string {
 	return fmt.Sprintf("%d 天", int(d.Hours()/24))
 }
 
-func (h *Hub) broadcastSchedule() {
+// broadcastSchedule: the list changed. The scheduler re-reads it, the apps are told (event assistant_schedule) and
+// the hub gets the tasks in the snapshot.
+func (s *Service) broadcastSchedule() {
 	select { // the scheduler re-reads the list
-	case h.sched.wakeup() <- struct{}{}:
+	case s.sched.wakeup() <- struct{}{}:
 	default:
 	}
-	h.broadcast(map[string]any{"type": "assistant_schedule"})
+	ctx := context.Background()
+	s.publish(ctx)
+	s.event(ctx, map[string]any{"type": "assistant_schedule"})
+}
+
+// taskViews are the tasks as the snapshot reports them; nil while the schedule can't be read.
+func (s *Service) taskViews(ctx context.Context) []TaskView {
+	sc, err := s.lockedSchedule(ctx)
+	if err != nil {
+		return nil
+	}
+	defer sc.mu.Unlock()
+	out := make([]TaskView, 0, len(sc.tasks))
+	for _, t := range sc.tasks {
+		out = append(out, TaskView{ID: t.ID, Label: t.label(), Repeat: t.Repeat, Enabled: t.Enabled, At: t.At, EveryMinutes: t.EveryMinutes,
+			MachineID: t.MachineID, RunMachineID: t.RunMachineID, RunSessionID: t.RunSessionID})
+	}
+	return out
 }
 
 // tasksView is the list as the app sees it: next runs filled in, one-offs that already ran left out. Empty while the
 // schedule can't be read: the routes check scheduleReadable first.
-func (h *Hub) tasksView(ctx context.Context, keep func(Task) bool) []Task {
-	s := h.loadSchedule(ctx)
-	loc := h.userLocation()
-	machine := h.assistantConfig(ctx).MachineID
+func (s *Service) tasksView(ctx context.Context, keep func(Task) bool) []Task {
+	sc := s.loadSchedule(ctx)
+	loc := s.location(ctx)
+	machine := s.hello(ctx).Assistant.MachineID
 	now := time.Now()
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	out := []Task{}
-	for _, t := range s.tasks {
+	for _, t := range sc.tasks {
 		if t.done() || (keep != nil && !keep(t)) {
 			continue
 		}
@@ -1329,8 +1356,8 @@ func (h *Hub) tasksView(ctx context.Context, keep func(Task) bool) []Task {
 	return out
 }
 
-func (h *Hub) taskView(ctx context.Context, id string) (Task, bool) {
-	for _, t := range h.tasksView(ctx, nil) {
+func (s *Service) taskView(ctx context.Context, id string) (Task, bool) {
+	for _, t := range s.tasksView(ctx, nil) {
 		if t.ID == id {
 			return t, true
 		}
@@ -1365,132 +1392,132 @@ func editTask(old, in Task, now time.Time) Task {
 	return t
 }
 
-func (h *Hub) scheduleRoutes(api *http.ServeMux) {
-	api.HandleFunc("GET /api/v1/assistant/tasks", func(w http.ResponseWriter, r *http.Request) {
-		if err := h.scheduleReadable(r.Context()); err != nil {
-			writeErr(w, http.StatusServiceUnavailable, err)
+func (s *Service) scheduleRoutes() {
+	s.handle("GET /api/v1/assistant/tasks", func(w http.ResponseWriter, r *http.Request) {
+		if err := s.scheduleReadable(r.Context()); err != nil {
+			apierr.Write(w, http.StatusServiceUnavailable, err)
 			return
 		}
-		writeJSON(w, map[string]any{"tasks": h.tasksView(r.Context(), nil)})
+		apierr.WriteJSON(w, map[string]any{"tasks": s.tasksView(r.Context(), nil)})
 	})
-	api.HandleFunc("POST /api/v1/assistant/tasks", func(w http.ResponseWriter, r *http.Request) {
+	s.handle("POST /api/v1/assistant/tasks", func(w http.ResponseWriter, r *http.Request) {
 		var in Task
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+			apierr.Write(w, http.StatusBadRequest, err)
 			return
 		}
 		now := time.Now()
 		t := editTask(Task{ID: "task_" + randomHex(4), CreatedAt: now.UTC()}, in, now)
 		t.SessionID = ""
 		if err := checkTask(&t, now); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+			apierr.Write(w, http.StatusBadRequest, err)
 			return
 		}
-		s, err := h.lockedSchedule(r.Context())
+		sc, err := s.lockedSchedule(r.Context())
 		if err != nil {
-			writeErr(w, http.StatusServiceUnavailable, err)
+			apierr.Write(w, http.StatusServiceUnavailable, err)
 			return
 		}
-		s.tasks = append(s.tasks, t)
-		h.saveLocked(s)
-		s.mu.Unlock()
-		h.broadcastSchedule()
-		v, _ := h.taskView(r.Context(), t.ID)
-		writeJSON(w, map[string]any{"task": v})
+		sc.tasks = append(sc.tasks, t)
+		s.saveLocked(sc)
+		sc.mu.Unlock()
+		s.broadcastSchedule()
+		v, _ := s.taskView(r.Context(), t.ID)
+		apierr.WriteJSON(w, map[string]any{"task": v})
 	})
-	api.HandleFunc("PUT /api/v1/assistant/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
+	s.handle("PUT /api/v1/assistant/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
 		var raw map[string]json.RawMessage
 		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+			apierr.Write(w, http.StatusBadRequest, err)
 			return
 		}
-		s, err := h.lockedSchedule(r.Context())
+		sc, err := s.lockedSchedule(r.Context())
 		if err != nil {
-			writeErr(w, http.StatusServiceUnavailable, err)
+			apierr.Write(w, http.StatusServiceUnavailable, err)
 			return
 		}
-		i := s.indexLocked(r.PathValue("id"))
+		i := sc.indexLocked(r.PathValue("id"))
 		if i < 0 {
-			s.mu.Unlock()
-			writeErr(w, http.StatusNotFound, errors.New("这个定时任务已经不在了"))
+			sc.mu.Unlock()
+			apierr.Write(w, http.StatusNotFound, errors.New("这个定时任务已经不在了"))
 			return
 		}
 		var in Task
 		encoded, _ := json.Marshal(raw)
 		if err := json.Unmarshal(encoded, &in); err != nil {
-			s.mu.Unlock()
-			writeErr(w, 400, err)
+			sc.mu.Unlock()
+			apierr.Write(w, 400, err)
 			return
 		}
-		t := editTask(s.tasks[i], in, time.Now())
+		t := editTask(sc.tasks[i], in, time.Now())
 		if err := checkTask(&t, time.Now()); err != nil {
-			s.mu.Unlock()
-			writeErr(w, http.StatusBadRequest, err)
+			sc.mu.Unlock()
+			apierr.Write(w, http.StatusBadRequest, err)
 			return
 		}
-		s.tasks[i] = t
-		h.saveLocked(s)
-		s.mu.Unlock()
-		h.broadcastSchedule()
-		v, _ := h.taskView(r.Context(), t.ID)
-		writeJSON(w, map[string]any{"task": v})
+		sc.tasks[i] = t
+		s.saveLocked(sc)
+		sc.mu.Unlock()
+		s.broadcastSchedule()
+		v, _ := s.taskView(r.Context(), t.ID)
+		apierr.WriteJSON(w, map[string]any{"task": v})
 	})
-	api.HandleFunc("DELETE /api/v1/assistant/tasks/{id}", h.deleteTaskRoute)
-	api.HandleFunc("POST /api/v1/assistant/tasks/{id}/run", h.runTaskRoute)
-	api.HandleFunc("POST /api/v1/assistant/tasks/{id}/fresh", func(w http.ResponseWriter, r *http.Request) {
-		t, ok, err := h.forgetConversation(r.Context(), r.PathValue("id"))
+	s.handle("DELETE /api/v1/assistant/tasks/{id}", s.deleteTaskRoute)
+	s.handle("POST /api/v1/assistant/tasks/{id}/run", s.runTaskRoute)
+	s.handle("POST /api/v1/assistant/tasks/{id}/fresh", func(w http.ResponseWriter, r *http.Request) {
+		t, ok, err := s.forgetConversation(r.Context(), r.PathValue("id"))
 		if err != nil {
-			writeErr(w, http.StatusServiceUnavailable, err)
+			apierr.Write(w, http.StatusServiceUnavailable, err)
 			return
 		}
 		if !ok {
-			writeErr(w, http.StatusNotFound, errors.New("这个定时任务已经不在了"))
+			apierr.Write(w, http.StatusNotFound, errors.New("这个定时任务已经不在了"))
 			return
 		}
-		writeJSON(w, map[string]any{"task": t})
+		apierr.WriteJSON(w, map[string]any{"task": t})
 	})
-	api.HandleFunc("GET /api/v1/assistant/runs", func(w http.ResponseWriter, r *http.Request) {
-		s, err := h.lockedSchedule(r.Context())
+	s.handle("GET /api/v1/assistant/runs", func(w http.ResponseWriter, r *http.Request) {
+		sc, err := s.lockedSchedule(r.Context())
 		if err != nil {
-			writeErr(w, http.StatusServiceUnavailable, err)
+			apierr.Write(w, http.StatusServiceUnavailable, err)
 			return
 		}
-		runs := make([]ScheduleRun, 0, len(s.runs))
-		for i := len(s.runs) - 1; i >= 0; i-- { // newest first
-			if ref := r.URL.Query().Get("ref"); ref == "" || s.runs[i].RefID == ref {
-				runs = append(runs, s.runs[i])
+		runs := make([]ScheduleRun, 0, len(sc.runs))
+		for i := len(sc.runs) - 1; i >= 0; i-- { // newest first
+			if ref := r.URL.Query().Get("ref"); ref == "" || sc.runs[i].RefID == ref {
+				runs = append(runs, sc.runs[i])
 			}
 		}
-		s.mu.Unlock()
-		writeJSON(w, map[string]any{"runs": runs})
+		sc.mu.Unlock()
+		apierr.WriteJSON(w, map[string]any{"runs": runs})
 	})
 
 	// The two lists app builds from before 2026-10-31 read and write (a task's JSON is a superset of both):
 	// routines are the daily tasks; follow-ups the once and interval ones, by their next run.
-	api.HandleFunc("GET /api/v1/assistant/routines", func(w http.ResponseWriter, r *http.Request) {
-		if err := h.scheduleReadable(r.Context()); err != nil {
-			writeErr(w, http.StatusServiceUnavailable, err)
+	s.handle("GET /api/v1/assistant/routines", func(w http.ResponseWriter, r *http.Request) {
+		if err := s.scheduleReadable(r.Context()); err != nil {
+			apierr.Write(w, http.StatusServiceUnavailable, err)
 			return
 		}
-		writeJSON(w, map[string]any{"routines": h.tasksView(r.Context(), func(t Task) bool { return t.Repeat == repeatDaily })})
+		apierr.WriteJSON(w, map[string]any{"routines": s.tasksView(r.Context(), func(t Task) bool { return t.Repeat == repeatDaily })})
 	})
-	api.HandleFunc("PUT /api/v1/assistant/routines", func(w http.ResponseWriter, r *http.Request) {
+	s.handle("PUT /api/v1/assistant/routines", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Routines []Task `json:"routines"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-			writeErr(w, http.StatusBadRequest, err)
+			apierr.Write(w, http.StatusBadRequest, err)
 			return
 		}
 		now := time.Now()
-		s, err := h.lockedSchedule(r.Context())
+		sc, err := s.lockedSchedule(r.Context())
 		if err != nil {
-			writeErr(w, http.StatusServiceUnavailable, err)
+			apierr.Write(w, http.StatusServiceUnavailable, err)
 			return
 		}
 		var out []Task
 		old := map[string]Task{}
-		for _, t := range s.tasks {
+		for _, t := range sc.tasks {
 			if t.Repeat == repeatDaily {
 				old[t.ID] = t
 			} else {
@@ -1505,79 +1532,79 @@ func (h *Hub) scheduleRoutes(api *http.ServeMux) {
 			rt.Repeat, rt.Launcher, rt.Model, rt.PermissionMode, rt.Effort, rt.SessionID = repeatDaily, prev.Launcher, prev.Model, prev.PermissionMode, prev.Effort, prev.SessionID
 			t := editTask(prev, rt, now)
 			if err := checkTask(&t, now); err != nil {
-				s.mu.Unlock()
-				writeErr(w, http.StatusBadRequest, err)
+				sc.mu.Unlock()
+				apierr.Write(w, http.StatusBadRequest, err)
 				return
 			}
 			out = append(out, t)
 		}
-		s.tasks = out
-		h.saveLocked(s)
-		s.mu.Unlock()
-		h.broadcastSchedule()
-		writeJSON(w, map[string]any{"routines": h.tasksView(r.Context(), func(t Task) bool { return t.Repeat == repeatDaily })})
+		sc.tasks = out
+		s.saveLocked(sc)
+		sc.mu.Unlock()
+		s.broadcastSchedule()
+		apierr.WriteJSON(w, map[string]any{"routines": s.tasksView(r.Context(), func(t Task) bool { return t.Repeat == repeatDaily })})
 	})
-	api.HandleFunc("POST /api/v1/assistant/routines/{id}/run", h.runTaskRoute)
-	api.HandleFunc("GET /api/v1/assistant/followups", func(w http.ResponseWriter, r *http.Request) {
-		if err := h.scheduleReadable(r.Context()); err != nil {
-			writeErr(w, http.StatusServiceUnavailable, err)
+	s.handle("POST /api/v1/assistant/routines/{id}/run", s.runTaskRoute)
+	s.handle("GET /api/v1/assistant/followups", func(w http.ResponseWriter, r *http.Request) {
+		if err := s.scheduleReadable(r.Context()); err != nil {
+			apierr.Write(w, http.StatusServiceUnavailable, err)
 			return
 		}
-		list := h.tasksView(r.Context(), func(t Task) bool { return t.Repeat != repeatDaily && t.Enabled })
+		list := s.tasksView(r.Context(), func(t Task) bool { return t.Repeat != repeatDaily && t.Enabled })
 		for i := range list {
 			list[i].At = list[i].NextRun
 		}
 		sort.Slice(list, func(i, j int) bool { return list[i].At.Before(list[j].At) })
-		writeJSON(w, map[string]any{"followups": list})
+		apierr.WriteJSON(w, map[string]any{"followups": list})
 	})
-	api.HandleFunc("POST /api/v1/assistant/followups/{id}/run", h.runTaskRoute)
-	api.HandleFunc("DELETE /api/v1/assistant/followups/{id}", h.deleteTaskRoute)
+	s.handle("POST /api/v1/assistant/followups/{id}/run", s.runTaskRoute)
+	s.handle("DELETE /api/v1/assistant/followups/{id}", s.deleteTaskRoute)
 }
 
-func (h *Hub) deleteTaskRoute(w http.ResponseWriter, r *http.Request) {
-	ok, err := h.deleteTask(r.Context(), r.PathValue("id"))
+func (s *Service) deleteTaskRoute(w http.ResponseWriter, r *http.Request) {
+	ok, err := s.deleteTask(r.Context(), r.PathValue("id"))
 	if err != nil {
-		writeErr(w, http.StatusServiceUnavailable, err)
+		apierr.Write(w, http.StatusServiceUnavailable, err)
 		return
 	}
 	if !ok {
-		writeErr(w, http.StatusNotFound, errors.New("这个定时任务已经不在了"))
+		apierr.Write(w, http.StatusNotFound, errors.New("这个定时任务已经不在了"))
 		return
 	}
-	writeJSON(w, map[string]any{"ok": true})
+	apierr.WriteJSON(w, map[string]any{"ok": true})
 }
 
 // runTaskRoute is 立即运行: the task runs now; a one-off is then done, a repeating one keeps its schedule.
-func (h *Hub) runTaskRoute(w http.ResponseWriter, r *http.Request) {
+func (s *Service) runTaskRoute(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
-	s, err := h.lockedSchedule(r.Context())
+	sc, err := s.lockedSchedule(r.Context())
 	if err != nil {
-		writeErr(w, http.StatusServiceUnavailable, err)
+		apierr.Write(w, http.StatusServiceUnavailable, err)
 		return
 	}
-	i := s.indexLocked(r.PathValue("id"))
+	i := sc.indexLocked(r.PathValue("id"))
 	var t Task
 	if i >= 0 {
-		t = s.tasks[i]
+		t = sc.tasks[i]
 		if t.Repeat == repeatOnce {
-			s.tasks[i].Enabled, s.tasks[i].LastRun = false, now.UTC()
-			h.saveLocked(s)
+			sc.tasks[i].Enabled, sc.tasks[i].LastRun = false, now.UTC()
+			s.saveLocked(sc)
 		}
 	}
-	s.mu.Unlock()
+	sc.mu.Unlock()
 	if i < 0 {
-		writeErr(w, http.StatusNotFound, errors.New("这个定时任务已经不在了"))
+		apierr.Write(w, http.StatusNotFound, errors.New("这个定时任务已经不在了"))
 		return
 	}
-	h.broadcastSchedule()
-	sess, err := h.runTask(t, now, now, true, false)
+	s.broadcastSchedule()
+	sess, err := s.runTask(t, now, now, true, false)
 	if errors.Is(err, errTaskBusy) {
-		writeErr(w, http.StatusConflict, errors.New("上一轮还在运行，等它跑完再试"))
+		apierr.Write(w, http.StatusConflict, errors.New("上一轮还在运行，等它跑完再试"))
 		return
 	}
 	if err != nil {
-		callErr(w, err)
+		apierr.Call(w, err)
 		return
 	}
-	writeJSON(w, map[string]any{"session_id": sess.SessionID, "machine_id": sess.MachineID})
+	apierr.WriteJSON(w, map[string]any{"session_id": sess.SessionID, "machine_id": sess.MachineID})
 }

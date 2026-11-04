@@ -19,6 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/osproc"
 
+	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/hub"
 	"github.com/nwverse/persona/server/internal/mcpserver"
 	"github.com/nwverse/persona/server/internal/node"
@@ -65,6 +66,9 @@ const usage = `usage:
   personad hub doctor       只读检查 hub 配置、网络和证书
   personad hub admin …      the admin UI on this machine: access <scope>, reset-password (docs/admin.md)
   personad hub tailcat-key  print the hub's tailcat key (created the first time), for "node tailcat init --hub"
+  personad hub assistant-token  print a new bus token for an assistant run elsewhere (hub.json assistant.external)
+  personad assistant        the assistant (the Persona tab's) as its own process on the hub's bus; the hub starts it
+                           unless hub.json says assistant.external (token: stdin or PERSONA_ASSISTANT_TOKEN)
   personad node --stdio     run the node protocol on stdin/stdout (started by the hub over ssh); with a resident
                            node running on this machine, relay to it instead
   personad node --attach    resident node (launchd, in the login session): serves what --stdio relays, so what it
@@ -161,6 +165,12 @@ func main() {
 			err = hub.AdminCommand(ctx, os.Args[3:], os.Stdin, os.Stdout, os.Stderr)
 		case "peer":
 			err = hub.PeerCommand(os.Args[3:], os.Stdin, os.Stdout)
+		case "assistant-token": // a token for an assistant run elsewhere (hub.json assistant.external, docs/assistant.md)
+			if len(os.Args) != 3 {
+				err = fmt.Errorf("hub assistant-token 不接受额外参数")
+			} else {
+				err = hub.AssistantToken(ctx, os.Stdout)
+			}
 		case "tailcat-key":
 			var k *tunnel.HubKey
 			if k, err = tunnel.LoadOrCreateHubKey(tunnel.HubKeyPath()); err == nil {
@@ -169,6 +179,8 @@ func main() {
 		default:
 			err = fmt.Errorf("unknown hub command %q", sub)
 		}
+	case "assistant": // the assistant as its own process on the hub's bus (the hub starts it, docs/assistant.md)
+		err = assistant.Main(ctx, buildInfo().Version, os.Stdin)
 	case "node":
 		if len(os.Args) > 2 && os.Args[2] == "--attach" {
 			err = runResident(ctx)

@@ -3,10 +3,12 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -47,7 +49,7 @@ func answerArgs(t *testing.T, v any) json.RawMessage {
 func TestInteractionAnswerAnswersAQuestion(t *testing.T) {
 	h, m, ix := interactionAnswerHub(t)
 	p := h.interactions[ix.ID]
-	out, err := h.runAssistantTool(context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
+	out, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
 		"machine": "mac", "session_id": "abcdef12", "interaction_id": ix.ID,
 		"answers": map[string]string{"发吗？": "发"},
 	}))
@@ -91,7 +93,7 @@ func TestInteractionAnswerRefusesApprovals(t *testing.T) {
 		ix.ID, ix.MachineID, ix.SessionID = "ix_"+tc.kind, "mac", "abcdef12-agent"
 		ix.CreatedAt, ix.ExpiresAt = time.Now().UTC(), time.Now().Add(time.Hour).UTC()
 		h.interactions[ix.ID] = &pending{ix: ix, done: make(chan proto.Resolution, 1)}
-		_, err := h.runAssistantTool(context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
+		_, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
 			"machine": "mac", "session_id": "abcdef12", "interaction_id": ix.ID,
 			"answers": map[string]string{"any": "yes"},
 		}))
@@ -104,7 +106,7 @@ func TestInteractionAnswerRefusesApprovals(t *testing.T) {
 // The assistant never answers its own conversation's question.
 func TestInteractionAnswerRefusesAssistantConversation(t *testing.T) {
 	h, m, ix := interactionAnswerHub(t)
-	if _, err := h.runAssistantTool(context.Background(), m, ix.SessionID, "interaction_answer", answerArgs(t, map[string]any{
+	if _, err := answerTool(h, context.Background(), m, ix.SessionID, "interaction_answer", answerArgs(t, map[string]any{
 		"machine": "mac", "session_id": "abcdef12", "interaction_id": ix.ID,
 		"answers": map[string]string{"发吗？": "发"},
 	})); err == nil || !strings.Contains(err.Error(), "assistant conversation") {
@@ -117,7 +119,7 @@ func TestInteractionAnswerRefusesAssistantConversation(t *testing.T) {
 	}
 	h.interactions[own.ID] = &pending{ix: own, done: make(chan proto.Resolution, 1)}
 	m.sessions = append(m.sessions, proto.Session{SessionID: "conv-assistant", Title: "Persona", Assistant: true, UpdatedAt: time.Now().UTC()})
-	if _, err := h.runAssistantTool(context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
+	if _, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
 		"machine": "mac", "session_id": "conv-assist", "interaction_id": own.ID,
 		"answers": map[string]string{"发吗？": "发"},
 	})); err == nil || !strings.Contains(err.Error(), "assistant conversation") {
@@ -139,7 +141,7 @@ func TestInteractionAnswerValidatesAnswers(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h, m, ix := interactionAnswerHub(t)
-			_, err := h.runAssistantTool(context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
+			_, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
 				"machine": "mac", "session_id": "abcdef12", "interaction_id": ix.ID, "answers": tc.answers,
 			}))
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
@@ -165,7 +167,7 @@ func TestInteractionAnswerSingleAndMultiSelect(t *testing.T) {
 	}
 	p := &pending{ix: multi, done: make(chan proto.Resolution, 1)}
 	h.interactions[multi.ID] = p
-	if _, err := h.runAssistantTool(context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
+	if _, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
 		"machine": "mac", "session_id": "abcdef12", "interaction_id": multi.ID,
 		"answers": map[string]any{"哪几个？": []string{"A", "C"}},
 	})); err != nil {
@@ -181,7 +183,7 @@ func TestInteractionAnswerSingleAndMultiSelect(t *testing.T) {
 	}
 
 	single := h.interactions[ix.ID]
-	if _, err := h.runAssistantTool(context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
+	if _, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
 		"machine": "mac", "session_id": "abcdef12", "interaction_id": ix.ID,
 		"answers": map[string]any{"发吗？": []string{"发", "不发"}},
 	})); err == nil || !strings.Contains(err.Error(), "one option") {
@@ -201,7 +203,7 @@ func TestInteractionAnswerExpiredAnsweredAndUnknown(t *testing.T) {
 		CreatedAt: time.Now().Add(-2 * time.Hour).UTC(), ExpiresAt: time.Now().Add(-time.Hour).UTC(),
 	}
 	h.interactions[expired.ID] = &pending{ix: expired, done: make(chan proto.Resolution, 1)}
-	if _, err := h.runAssistantTool(context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
+	if _, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
 		"machine": "mac", "session_id": "abcdef12", "interaction_id": expired.ID,
 		"answers": map[string]string{"发吗？": "发"},
 	})); err == nil || !strings.Contains(err.Error(), "expired") {
@@ -211,14 +213,14 @@ func TestInteractionAnswerExpiredAnsweredAndUnknown(t *testing.T) {
 	// Answered elsewhere: only the history knows it, and it says how it ended.
 	h.store.(*memStore).status["ix_gone"] = "resolved"
 	h.store.(*memStore).res["ix_gone"] = &proto.Resolution{Answers: map[string]string{"发吗？": "发"}}
-	if _, err := h.runAssistantTool(context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
+	if _, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
 		"machine": "mac", "session_id": "abcdef12", "interaction_id": "ix_gone",
 		"answers": map[string]string{"发吗？": "发"},
 	})); err == nil || !strings.Contains(err.Error(), "already answered") {
 		t.Fatalf("already answered: %v", err)
 	}
 
-	if _, err := h.runAssistantTool(context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
+	if _, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
 		"machine": "mac", "session_id": "abcdef12", "interaction_id": "ix_never",
 		"answers": map[string]string{"发吗？": "发"},
 	})); err == nil || !strings.Contains(err.Error(), "no pending interaction") {
@@ -229,7 +231,7 @@ func TestInteractionAnswerExpiredAnsweredAndUnknown(t *testing.T) {
 // The machine and session named must be the interaction's own.
 func TestInteractionAnswerKeepsToItsTarget(t *testing.T) {
 	h, m, ix := interactionAnswerHub(t)
-	if _, err := h.runAssistantTool(context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
+	if _, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
 		"machine": "another", "session_id": "abcdef12", "interaction_id": ix.ID,
 		"answers": map[string]string{"发吗？": "发"},
 	})); err == nil {
@@ -239,7 +241,7 @@ func TestInteractionAnswerKeepsToItsTarget(t *testing.T) {
 	h.machines = append(h.machines, other)
 	h.byID["box"] = other
 	other.sessions = []proto.Session{{SessionID: "99999999-agent", Title: "别的", Cwd: "/code/other", UpdatedAt: time.Now().UTC()}}
-	if _, err := h.runAssistantTool(context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
+	if _, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
 		"machine": "mac", "session_id": "99999999", "interaction_id": ix.ID,
 		"answers": map[string]string{"发吗？": "发"},
 	})); err == nil {
@@ -252,8 +254,9 @@ func TestInteractionAnswerKeepsToItsTarget(t *testing.T) {
 
 // agents_list carries what answering needs: the interaction's id and each question's options.
 func TestAgentsListShowsInteractionAndOptions(t *testing.T) {
-	h, _, ix := interactionAnswerHub(t)
-	out := h.describeAgents("needs_you", "", "")
+	h, m, ix := interactionAnswerHub(t)
+	connectAssistant(t, h) // agents_list is the assistant's
+	out := textOf(h.callAssistantTool(context.Background(), m, "conv-assistant", "agents_list", json.RawMessage(`{"state":"needs_you"}`)))
 	for _, want := range []string{ix.ID, "发吗？", "发", "不发"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("agents_list has no %q:\n%s", want, out)
@@ -275,7 +278,7 @@ func TestInteractionResolvedSaysWhoAnswered(t *testing.T) {
 				if err := h.resolve(ix.ID, proto.Resolution{Answers: map[string]string{"发吗？": "发"}}); err != nil {
 					t.Fatal(err)
 				}
-			} else if _, err := h.runAssistantTool(context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
+			} else if _, err := answerTool(h, context.Background(), m, "conv-assistant", "interaction_answer", answerArgs(t, map[string]any{
 				"machine": "mac", "session_id": "abcdef12", "interaction_id": ix.ID,
 				"answers": map[string]string{"发吗？": "发"},
 			})); err != nil {
@@ -303,4 +306,21 @@ func TestInteractionResolvedSaysWhoAnswered(t *testing.T) {
 			t.Fatal("no interaction_resolved broadcast")
 		})
 	}
+}
+
+// answerTool runs one of the assistant's tools that is the hub's (app.tool), as the assistant asks for it: interaction_answer.
+func answerTool(h *Hub, ctx context.Context, m *Machine, sessionID, name string, args json.RawMessage) (string, error) {
+	params, _ := json.Marshal(map[string]any{"name": name, "arguments": args, "machine_id": m.cfg.ID, "session_id": sessionID})
+	raw, err := h.appTool(ctx, assistantwire.AppInteractions, params)
+	if err != nil {
+		return "", err
+	}
+	var r proto.ToolResult
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return "", err
+	}
+	if r.IsError {
+		return "", errors.New(textOf(r))
+	}
+	return textOf(r), nil
 }

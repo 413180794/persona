@@ -3,11 +3,15 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistant"
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 )
 
@@ -31,25 +35,40 @@ func cardHub(t *testing.T) (*Hub, *replierConnector, *InboxItem) {
 		Connector: &InboxConnector{Thread: "example-org/example-repo#12", CanReply: true},
 		Agent:     &InboxAgent{State: AgentRunning, SessionID: "s1", TodoID: todo.ID}}
 	h.inbox.items[it.ID] = it
+	connectAssistant(t, h) // the cards are the assistant's, in conv1's feed
 	return h, rc, it
 }
 
-func cards(t *testing.T, h *Hub, since time.Time) []FeedItem {
+// cards is conv1's feed after since, as the app reads it.
+func cards(t *testing.T, h *Hub, since time.Time) []assistant.FeedItem {
 	t.Helper()
-	items, _, err := h.feed(context.Background(), "conv1", since)
-	if err != nil {
-		t.Fatal(err)
+	path := "/api/v1/assistant/conversations/conv1/feed"
+	if !since.IsZero() {
+		path += "?since=" + url.QueryEscape(since.Format(time.RFC3339Nano))
 	}
-	return items
+	var got struct{ Items []assistant.FeedItem }
+	if code := assistantGet(h, path, &got); code != http.StatusOK {
+		t.Fatalf("feed: %d", code)
+	}
+	return got.Items
 }
 
-func cardBody(t *testing.T, it FeedItem) messageBody {
+func cardBody(t *testing.T, it assistant.FeedItem) assistantwire.MessageCard {
 	t.Helper()
-	var b messageBody
+	var b assistantwire.MessageCard
 	if err := json.Unmarshal(it.Body, &b); err != nil {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// cardSentAt is when a message card's reply went out; nil while it has not.
+func cardSentAt(it assistant.FeedItem) *time.Time {
+	var b struct {
+		SentAt *time.Time `json:"sent_at"`
+	}
+	_ = json.Unmarshal(it.Body, &b)
+	return b.SentAt
 }
 
 // 发送 on a card: the reply goes out once, the card says so for good — on a reload, after the item opens again and

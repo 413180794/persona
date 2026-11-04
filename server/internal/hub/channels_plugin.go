@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/plugin"
 	"github.com/nwverse/persona/server/internal/prompts"
@@ -372,7 +373,7 @@ func (h *Hub) channelForward(ctx context.Context, id string, m channel.Message) 
 		if err != nil {
 			return fmt.Errorf("没开成新对话：%w", err)
 		}
-		h.titleNew(s.MachineID, s.SessionID, time.Now(), "")
+		h.asst().ConversationStarted(ctx, assistantwire.ConversationStarted{MachineID: s.MachineID, SessionID: s.SessionID, Started: time.Now()})
 		if rt.main && h.store != nil {
 			cfg := h.assistantConfig(ctx)
 			cfg.Main = s.SessionID
@@ -400,8 +401,7 @@ func (h *Hub) channelForward(ctx context.Context, id string, m channel.Message) 
 		if len(images) > 0 {
 			p["images"] = images
 		}
-		h.unarchiveOnSend(rt.m.cfg.ID, sid)
-		h.userSpoke(sid)
+		h.asst().UserSpoke(ctx, assistantwire.SessionRef{MachineID: rt.m.cfg.ID, SessionID: sid}) // unarchived, and its title the user's to keep
 		if rt.main {
 			if err := h.applyModel(ctx, "assistant", p); err != nil {
 				return err

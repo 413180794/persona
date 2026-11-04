@@ -4093,7 +4093,7 @@ if os.environ.get("MOCK_LONG_SLOTS"):
 
 
 # MOCK_ASK_USER=1: Jarvis's main conversation ends with two ask_user calls (#677): one answered (a pick, and a
-# multi-select), one the user let go; the hub's answers to the model are as hub/assistant_tools.go writes them.
+# multi-select), one the user let go; the hub's answers to the model are as assistant/tools.go writes them.
 if os.environ.get("MOCK_ASK_USER"):
     ITEMS[ASK1] = ITEMS[ASK1] + [it("user", "text", 2, text="用 ask user 问我一下先做什么")] + tool(
         "mcp__jarvis__ask_user", {"questions": [
@@ -6764,6 +6764,20 @@ if HISTORY_MODE:
 
 # Separate from conversation pinning: opening this list marks message Pins read.
 CHAT_PINS_FIXTURE = None
+HISTORY_FIXTURE = None
+if os.environ.get("MOCK_LARK_HISTORY"):
+    from lark_history import HistoryFixture
+    HISTORY_FIXTURE = HistoryFixture(LARK_ACCOUNT_ID, lark_window, fs_push)
+    # Read chats open at their newest message, where paging back starts.
+    for _c in LARK_CHATS:
+        if _c["id"] in ("f1", "f2"):
+            _c.update(unread=0, at_me=False); _c.pop("read_position", None)
+
+
+def history_route(handler, path, query):
+    return HISTORY_FIXTURE is not None and HISTORY_FIXTURE.route(handler, path, query)
+
+
 if os.environ.get("MOCK_LARK_CHAT_PINS"):
     from lark_chat_pins import ChatPinsFixture
     CHAT_PINS_FIXTURE = ChatPinsFixture(LARK_MESSAGES, LARK_THREADS, lark_window, LARK_ACCOUNT_ID)
@@ -7506,6 +7520,7 @@ class H(BaseHTTPRequestHandler):
         if voice_route(self, p, q): return
         if pins_route(self, p): return
         if chat_pins_route(self, p, parse_qs(urlparse(self.path).query)): return
+        if history_route(self, p, parse_qs(urlparse(self.path).query)): return
         if p == "/mock/ports": return self.send_json({"connects": PORT_LOG})
         if MOCK_WEB and (p.startswith("/screen/") or p.startswith("/assets/")): return self.web_file(p)
         if p.startswith("/api/v1/machines/") and "/ports/" in p:
@@ -8034,6 +8049,7 @@ class H(BaseHTTPRequestHandler):
         p = urlparse(self.path).path
         if pins_route(self, p): return
         if chat_pins_route(self, p, parse_qs(urlparse(self.path).query)): return
+        if history_route(self, p, parse_qs(urlparse(self.path).query)): return
         if plugins_route(self, p, self.last_body): return
         if p == "/test/lark-pins/state" and os.environ.get("MOCK_LARK_PINS"):
             req = json.loads(self.last_body or b"{}")

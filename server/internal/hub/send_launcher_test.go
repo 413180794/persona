@@ -8,23 +8,46 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// assistantStore answers the "assistant" setting with cfg.
+// assistantStore answers the "assistant" setting with cfg, and keeps the others written to it (the assistant's).
 type assistantStore struct {
 	*memStore
-	cfg AssistantConfig
+	cfg  AssistantConfig
+	mu   sync.Mutex
+	vals map[string][]byte
 }
 
 func (s *assistantStore) Setting(_ context.Context, key string, out any) (bool, error) {
 	if key != "assistant" {
-		return false, nil
+		s.mu.Lock()
+		b, ok := s.vals[key]
+		s.mu.Unlock()
+		if !ok {
+			return false, nil
+		}
+		return true, json.Unmarshal(b, out)
 	}
 	b, _ := json.Marshal(s.cfg)
 	return true, json.Unmarshal(b, out)
+}
+
+func (s *assistantStore) PutSetting(_ context.Context, key string, v any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.vals == nil {
+		s.vals = map[string][]byte{}
+	}
+	s.vals[key] = b
+	return nil
 }
 
 // A message to Persona' main conversation without a launcher goes out on 设置 › 助手's launcher (it used to keep the
@@ -69,7 +92,8 @@ func TestMainConversationFollowsTheAssistantLauncher(t *testing.T) {
 		{SessionID: "side-3", Launcher: "gone", Assistant: true, Cwd: "/home/u/.jarvis/assistant"},
 		{SessionID: "daily-4", Launcher: "sss", Assistant: true, Cwd: "/home/u/.jarvis/assistant"}}
 	m.mu.Unlock()
-	setTasks(h, Task{ID: "r", Title: "早报", Repeat: repeatDaily, Time: "09:00", Enabled: true, RunMachineID: "box", RunSessionID: "daily-4"})
+	seedTasks(t, h, assistant.Task{ID: "r", Title: "早报", Repeat: "daily", Time: "09:00", Enabled: true, RunMachineID: "box", RunSessionID: "daily-4"})
+	connectAssistant(t, h) // the hub knows a task's own conversation from what the assistant reports
 
 	mux := h.routes()
 	for _, c := range []struct{ sid, body, want, wantModel string }{

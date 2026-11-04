@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -49,70 +50,6 @@ func replies(t *testing.T, out ...string) (*ai.Client, func() []capturedCall) {
 	}
 }
 
-func TestParseTitle(t *testing.T) {
-	for _, c := range []struct {
-		out, kind, topic string
-		ok               bool
-	}{
-		{"修复 | 搜索框和顶栏重叠", "修复", "搜索框和顶栏重叠", true},
-		{"  \n「研究｜竞品定价」\n", "研究", "竞品定价", true},
-		{"1101 | 发布 | 周五灰度安排。", "发布", "周五灰度安排", true}, // a date it added anyway, a full stop
-		{"闲聊 | 周末去哪", "", "周末去哪", false},              // not a kind
-		{"修复 | 搜索框在搜索时和顶栏重叠而且键盘弹起后错位", "修复", "搜索框在搜索时和顶栏重叠而且键盘弹起后错位", false},
-		{"修复搜索框", "", "", false},
-		{"", "", "", false},
-	} {
-		kind, topic, ok := parseTitle(c.out)
-		if kind != c.kind || topic != c.topic || ok != c.ok {
-			t.Errorf("parseTitle(%q) = %q %q %v", c.out, kind, topic, ok)
-		}
-	}
-}
-
-// MMDD is the day in the user's time zone though the hub runs in UTC; a broken answer is asked for once more, then
-// cut or replaced by 「探索 | the first 14 characters」.
-func TestMakeTitle(t *testing.T) {
-	h := newTestHub(t)
-	h.userTZ = "Asia/Shanghai"
-	started := time.Date(2026, 11, 1, 16, 30, 0, 0, time.UTC) // 00:30 on 11-02 in Shanghai
-	ctx := context.Background()
-	first, reply := "搜索的时候搜索框和顶栏叠在一起了，帮我看看", "是 safeAreaBar 和搜索框抽屉一起用导致的……"
-
-	model, calls := replies(t, "修复 | 搜索框和顶栏重叠")
-	h.ai = model
-	if got := h.makeTitle(ctx, started, first, reply); got != "1102 | 修复 | 搜索框和顶栏重叠" {
-		t.Fatalf("%q", got)
-	}
-	if c := onlyCall(t, calls()); !strings.Contains(c.User, first) || !strings.Contains(c.User, reply) {
-		t.Fatalf("the model reads the first exchange: %q", c.User)
-	}
-
-	model, calls = replies(t, "Bug fix: search bar", "修复 | 搜索框和顶栏重叠")
-	h.ai = model
-	if got := h.makeTitle(ctx, started, first, reply); got != "1102 | 修复 | 搜索框和顶栏重叠" {
-		t.Fatalf("retried once: %q", got)
-	}
-	if c := calls(); len(c) != 2 || !strings.Contains(c[1].User, "Bug fix: search bar") {
-		t.Fatalf("the retry says what was wrong: %+v", c)
-	}
-
-	model, _ = replies(t, "修复 | 搜索框在搜索时和顶栏重叠而且键盘弹起后错位")
-	h.ai = model
-	if got := h.makeTitle(ctx, started, first, reply); got != "1102 | 修复 | 搜索框在搜索时和顶栏重叠而且" {
-		t.Fatalf("a topic still too long is cut: %q", got)
-	}
-
-	model, _ = replies(t, "随便聊聊")
-	h.ai = model
-	if got := h.makeTitle(ctx, started, "<jarvis-context>\n今天\n</jarvis-context>\n**帮我** 看看明天的会议安排和要准备的材料", ""); got != "1102 | 探索 | 帮我 看看明天的会议安排和要" {
-		t.Fatalf("the fallback: %q", got)
-	}
-	h.ai = nil
-	if got := h.makeTitle(ctx, started, "", ""); got != "1102 | 探索 | 新对话" {
-		t.Fatalf("no model, no message: %q", got)
-	}
-}
-
 // A conversation the hub started is named once, after its first turn; the user's own name wins and stays; a
 // conversation from before (not noted) is left alone; the list the apps get shows the title.
 func TestAConversationIsNamedOnceAfterItsFirstTurn(t *testing.T) {
@@ -124,18 +61,19 @@ func TestAConversationIsNamedOnceAfterItsFirstTurn(t *testing.T) {
 		{Role: "assistant", Kind: proto.KindText, Text: "查到三家……"}}
 	model, calls := replies(t, "研究 | 竞品定价")
 	h.ai = model
+	connectAssistant(t, h)
 	started := time.Date(2026, 11, 1, 2, 0, 0, 0, time.UTC)
-	h.titleNew("server", "new", started, "")
+	noteStarted(h, "server", "new", started, "")
 
-	h.titleAfterTurn(n.m, "old") // from before: not noted, not named
+	turnEnded(t, h, "server", "old") // from before: not noted, not named
 	if len(calls()) != 0 {
 		t.Fatal("an old conversation is not named")
 	}
-	h.titleAfterTurn(n.m, "new")
-	if got := h.conversationTitles()["new"]; got != "1101 | 研究 | 竞品定价" {
+	turnEnded(t, h, "server", "new")
+	if got := shown(h, "new").Title; got != "1101 | 研究 | 竞品定价" {
 		t.Fatalf("%q", got)
 	}
-	h.titleAfterTurn(n.m, "new") // the second turn
+	turnEnded(t, h, "server", "new") // the second turn
 	if len(calls()) != 1 {
 		t.Fatal("named once")
 	}
@@ -157,7 +95,7 @@ func TestAConversationIsNamedOnceAfterItsFirstTurn(t *testing.T) {
 	if err != nil || res.StatusCode != http.StatusOK {
 		t.Fatalf("%v %v", res, err)
 	}
-	if got := h.conversationTitles()["new"]; got != "竞品 定价表" {
+	if got := shown(h, "new").Title; got != "竞品 定价表" {
 		t.Fatalf("the user's title: %q", got)
 	}
 	if p := n.lastSend(t)["rename"].(map[string]any); p["title"] != "竞品  定价表" {
@@ -165,19 +103,19 @@ func TestAConversationIsNamedOnceAfterItsFirstTurn(t *testing.T) {
 	}
 
 	// Renamed before its first turn ended: nothing replaces it.
-	h.titleNew("server", "early", started, "")
-	h.titleRenamed("server", "early", "我自己起的")
-	h.titleAfterTurn(n.m, "early")
-	if got := h.conversationTitles()["early"]; got != "我自己起的" || len(calls()) != 1 {
+	noteStarted(h, "server", "early", started, "")
+	userRenamed(h, "server", "early", "我自己起的")
+	turnEnded(t, h, "server", "early")
+	if got := shown(h, "early").Title; got != "我自己起的" || len(calls()) != 1 {
 		t.Fatalf("%q, %d calls", got, len(calls()))
 	}
 
-	// A Codex conversation's title is the hub's only: the node would write Claude's line into the rollout.
+	// A Codex conversation's title is the assistant's only: the node would write Claude's line into the rollout.
 	n.m.sessions = append(n.m.sessions, proto.Session{SessionID: "cx", Cwd: "/home/me/.jarvis/assistant", Agent: "codex"})
 	sends := n.sent()
 	res, _ = http.Post(srv.URL+"/r/cx", "application/json", strings.NewReader(`{"title":"codex 的对话"}`))
-	if res.StatusCode != http.StatusOK || n.sent() != sends || h.conversationTitles()["cx"] != "codex 的对话" {
-		t.Fatalf("%d, %d calls to the node, %q", res.StatusCode, n.sent()-sends, h.conversationTitles()["cx"])
+	if res.StatusCode != http.StatusOK || n.sent() != sends || shown(h, "cx").Title != "codex 的对话" {
+		t.Fatalf("%d, %d calls to the node, %q", res.StatusCode, n.sent()-sends, shown(h, "cx").Title)
 	}
 }
 
@@ -188,20 +126,21 @@ func TestATaskConversationIsTitledAfterTheTask(t *testing.T) {
 	n := newAssistantNode(t, h)
 	model, calls := replies(t, "探索 | 不该用到")
 	h.ai = model
-	setTasks(h, Task{ID: "r", Title: "早报", Prompt: "给我今天的早报", Repeat: repeatDaily, Time: "09:00", Enabled: true})
+	seedTasks(t, h, assistant.Task{ID: "r", Title: "早报", Prompt: "给我今天的早报", Repeat: "daily", Time: "09:00", Enabled: true})
+	connectAssistant(t, h)
 	first, err := runNow(t, h, "r")
 	if err != nil {
 		t.Fatal(err)
 	}
 	day := time.Now().In(h.userLocation()).Format("0102")
-	if got := h.conversationTitles()[first.SessionID]; got != day+" | 定时 | 早报" {
+	if got := shown(h, first.SessionID).Title; got != day+" | 定时 | 早报" {
 		t.Fatalf("%q", got)
 	}
-	h.titleAfterTurn(n.m, first.SessionID)
+	turnEnded(t, h, n.m.cfg.ID, first.SessionID)
 	if _, err := runNow(t, h, "r"); err != nil {
 		t.Fatal(err)
 	}
-	if got := h.conversationTitles()[first.SessionID]; got != day+" | 定时 | 早报" || len(calls()) != 0 {
+	if got := shown(h, first.SessionID).Title; got != day+" | 定时 | 早报" || len(calls()) != 0 {
 		t.Fatalf("the same title every run, no model: %q, %d calls", got, len(calls()))
 	}
 }
@@ -214,8 +153,14 @@ func TestTheMainConversationIsAlwaysPersona(t *testing.T) {
 	h.ai = model
 	// The node's title for a transcript without one is its first message.
 	n.m.sessions[0].Title = "我的邮箱里最近有哪些需要我处理或回复的邮件？挑重要的说。"
-	h.titleSet("server", "trip-0002", "1030 | 探索 | 周末出游", titleAuto)
+	// Named after its first turn (by the model): what the assistant keeps, read when it first shows its titles.
+	if err := h.store.PutSetting(context.Background(), "assistant.titles", map[string]any{
+		"trip-0002": map[string]any{"machine_id": "server", "title": "1030 | 探索 | 周末出游", "by": "auto"}}); err != nil {
+		t.Fatal(err)
+	}
+	restartAssistant(t, h) // it reads them when it starts
 	byID := func() map[string]string {
+		settleAssistant(h)
 		out := map[string]string{}
 		for _, s := range h.decorated(n.m) {
 			out[s.SessionID] = s.Title
@@ -227,12 +172,12 @@ func TestTheMainConversationIsAlwaysPersona(t *testing.T) {
 	}
 
 	// Noted when it started (POST /assistant/conversations with main): not named when its first turn ends.
-	h.titleNew("server", "main-0001", time.Now(), "")
-	h.titleAfterTurn(n.m, "main-0001")
-	if len(calls()) != 0 || h.conversationTitles()["main-0001"] != "" {
-		t.Fatalf("named the main conversation: %d calls, %q", len(calls()), h.conversationTitles()["main-0001"])
+	noteStarted(h, "server", "main-0001", time.Now(), "")
+	turnEnded(t, h, "server", "main-0001")
+	if len(calls()) != 0 || shown(h, "main-0001").Title != "" {
+		t.Fatalf("named the main conversation: %d calls, %q", len(calls()), shown(h, "main-0001").Title)
 	}
-	if by, _ := h.titleOf("main-0001"); by != "" {
+	if by := titleBy(t, h, "main-0001"); by != "" {
 		t.Fatalf("the pending note stays: %q", by)
 	}
 

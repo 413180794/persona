@@ -73,7 +73,7 @@
 | 回复（markdown，回在话题里） | `+messages-reply` | 能做 |
 | 文档评论里的 `/agent`（`documents/recent` + 评论） | 没有「最近打开的文档」 | 第一版不做 |
 
-### 助手（`node/larkgate.go`、`hub/assistant_tools.go`）
+### 助手（`node/larkgate.go`、`assistant/tools.go`）
 
 | 现在 | lark-cli | 降级 |
 | --- | --- | --- |

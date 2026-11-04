@@ -73,6 +73,7 @@ func (toolConnector) Call(context.Context, string, json.RawMessage) (string, err
 func TestConnectorsShadowNoBuiltinTool(t *testing.T) {
 	h := newTestHub(t)
 	h.connectors = connector.NewRegistry(nil)
+	connectAssistant(t, h) // kb_search, lark_agent_reply and agent_send are on its list
 	for _, c := range []toolConnector{{"kb", []string{"kb_search"}}, {"phone", []string{"phone_contacts"}},
 		{"agent", []string{"agent_send"}}} {
 		if err := h.addConnector(c); err == nil {

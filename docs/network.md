@@ -119,7 +119,9 @@ Docker 发布端口时还要检查容器相关的转发规则，不能只凭 ufw
 
 hub 只信任连接的来源地址和本地接收地址，**不读取 `X-Forwarded-For` 或 `Forwarded` 来决定信任**。回环、私网 / ULA、链路本地、与本机接口同链路的 IPv6 前缀（/64 或更长），以及 `trusted_cidrs` 命中来源，按本地网络处理。共享运营商 IPv4 地址空间不会自动受信任，只有落在本机 VPN 接口上的连接或显式白名单才算内网。
 
-**容器网关例外**：hub 跑在容器里时，本容器的网关地址（默认路由的下一跳、各网段的第一个地址，`server/internal/hub/admin_gateway.go`）不算本地网络，按公网处理，除非写进 `trusted_cidrs`。Docker 的用户态代理（docker-proxy）把转进来的连接一律显示成网关地址，公网的也一样（Docker 没开 IPv6 时的 IPv6 请求；Docker Desktop、OrbStack 上是所有连接），不排除的话公网请求能用主 token、走明文。Linux 上经 iptables DNAT 进来的局域网电脑保留真实地址，不受影响；`--network host` 部署也不受影响。Docker Desktop 上要让本机明文连，把网关写进 `trusted_cidrs`（只在端口只映射到 127.0.0.1 时安全）。
+**容器网关例外**：hub 跑在容器里时，本容器的网关地址（默认路由的下一跳、各网段的第一个地址，`server/internal/hub/admin_gateway.go`）不算本地网络，按公网处理，除非写进 `trusted_cidrs`。Docker 的用户态代理（docker-proxy）可能把来自内网和公网的连接都显示成网关地址，不排除的话公网请求能用主 token、走明文。Linux 上经 iptables DNAT 进来的局域网电脑保留真实地址，不受影响；`--network host` 部署也不受影响。
+
+**Docker Desktop / OrbStack 的转发来源**不保证是网关：Docker Desktop 的 gvisor 网络可能让本机、局域网客户端都显示成同一个公网形态的地址。hub 仍按实际对端判断，所以明文 API 会回 `403 tls_required`；仅把 `docker network inspect` 中的网关加入白名单不一定有效。客户端连接时，用 `docker compose exec hub netstat -tn` 查看容器 18660 端口对应的远端地址，按 [Docker 排查说明](docker.md#docker-desktop--orbstack-的明文连接) 配置。优先使用 hub 的 TLS；仅本机试用时，先把端口绑定到 `127.0.0.1`，再把观测到的转发来源以单地址 CIDR 写进 `security.trusted_cidrs`。该来源可能代表所有经映射进来的客户端，白名单不会还原原始客户端身份。
 
 本地反向代理终止 TLS 后再连 hub，会让来源变成回环；远端代理也会让来源变成代理地址。这会影响公网明文限制、主 token 限制、health 裁剪和限流。增加转发头不能恢复这些检查。若使用反向代理，需要由代理承担公网 TLS、访问控制和限流，并阻止公网借代理访问仅限本机的配对码接口；优先直接使用 hub 自带 TLS 监听。
 

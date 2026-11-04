@@ -128,15 +128,13 @@ func (h *Hub) modelPurposeDef(ctx context.Context, id string) (ModelPurpose, err
 		}
 	}
 	if strings.HasPrefix(id, "task.") {
-		s := h.loadSchedule(ctx)
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		if !s.loaded {
+		tasks, ok := h.assistantTasks() // the assistant's scheduled tasks, as it reported them
+		if !ok {
 			return ModelPurpose{}, errors.New("读不到定时任务")
 		}
-		for _, t := range s.tasks {
+		for _, t := range tasks {
 			if id == "task."+t.ID {
-				return ModelPurpose{ID: id, CategoryID: "assistant", Name: t.label(), Group: "主对话", Kind: "launcher", Parent: "assistant", MachineID: t.MachineID}, nil
+				return ModelPurpose{ID: id, CategoryID: "assistant", Name: t.Label, Group: "主对话", Kind: "launcher", Parent: "assistant", MachineID: t.MachineID}, nil
 			}
 		}
 	}

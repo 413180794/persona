@@ -22,6 +22,7 @@ func TestGoldenMCPTools(t *testing.T) {
 		return string(b) + "\n"
 	}
 	h := newTestHub(t)
+	connectAssistant(t, h)        // its tools are its to list (assistant.tools)
 	h.mail = (*mail.Service)(nil) // Tools() reads nothing from the service
 	register := func() {          // the connectors as the hub registers them (mail's and Feishu's tools come from them)
 		h.connectors = connector.NewRegistry(nil)

@@ -21,7 +21,6 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/mail"
-	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 	"github.com/nwverse/persona/server/internal/screen"
@@ -37,6 +36,7 @@ type Hub struct {
 	wsConnections map[*client]struct{}  // includes connections still registering their device session
 	links         map[*hubLink]struct{} // live jarvis-link links (link.go), guarded by mu
 	linkPing      [2]time.Duration      // tests: heartbeat interval and timeout of new links
+	bus           busState              // the services' connections and the roster (bus.go)
 
 	cfg      *Config
 	version  string
@@ -84,29 +84,23 @@ type Hub struct {
 	seen          map[[2]string]time.Time // (machine, session) -> when the user last looked at it
 	stateSince    map[[2]string]stateMark // (machine, session) -> its state and when it entered it
 	userTZ        string                  // the phone's time zone (assistant settings)
-	snap          *prompts.Snapshot       // the assistant's last live snapshot (assistant_snapshot.go)
-	snapAt        time.Time
-	snapping      chan struct{}        // closed when the snapshot being taken is in
-	wokeAt        map[string]time.Time // device -> last silent push to wake it for a tool call
-	notified      map[string]time.Time // assistant conversation -> when it last pushed with notify_user
-	kbAgentLogged map[string]time.Time // agent -> when its result last went into a project timeline (kb.go)
-	turns         *turnTracker         // "machine/session" -> the turn in progress, for the finished push (notify.go)
-	live          *liveActivities      // the lock screen / Dynamic Island activity (liveactivity.go)
-	usage         usageBook            // token usage of every machine (usage.go)
-	metrics       metricsBook          // OS and load of every machine (metrics.go)
+	wokeAt        map[string]time.Time    // device -> last silent push to wake it for a tool call
+	notified      map[string]time.Time    // assistant conversation -> when it last pushed with notify_user
+	kbAgentLogged map[string]time.Time    // agent -> when its result last went into a project timeline (kb.go)
+	turns         *turnTracker            // "machine/session" -> the turn in progress, for the finished push (notify.go)
+	live          *liveActivities         // the lock screen / Dynamic Island activity (liveactivity.go)
+	usage         usageBook               // token usage of every machine (usage.go)
+	metrics       metricsBook             // OS and load of every machine (metrics.go)
 
 	// codexAnnounced: Codex card id -> when it was announced (codexcards.go)
 	codexAnnounced map[string]time.Time
 
-	sched  schedule  // the assistant's scheduled tasks (assistant_schedule.go)
-	titles titleBook // assistant conversations' titles (assistant_titles.go)
-	ports  portOpens // ports the user opened in the app (ports.go)
-	// archived and relays: archived assistant conversations, and messages between them (assistant_conversations.go).
-	archived archiveBook
-	deleted  deletedBook // conversations taken out of the apps' lists (deleted_sessions.go)
-	relays   relayBook
-	inbox    inbox   // the unified inbox (inbox.go)
-	kb       kbState // the knowledge base under ~/.jarvis/data (kb.go)
+	ports portOpens // ports the user opened in the app (ports.go)
+	// assistant: what the assistant (internal/assistant, its own process on the bus) last reported (assistant_link.go).
+	assistant assistantState
+	deleted   deletedBook // conversations taken out of the apps' lists (deleted_sessions.go)
+	inbox     inbox       // the unified inbox (inbox.go)
+	kb        kbState     // the knowledge base under ~/.jarvis/data (kb.go)
 	// bots: the chat apps' bots the user talks to Persona through (bots.go).
 	bots     botHub
 	channels channelsHub
@@ -123,7 +117,6 @@ type Hub struct {
 	fleet fleet     // the machines and their paths, the members' computers among them (mesh_paths.go)
 
 	todos todosState
-	tasks tasksState // tasks opened from assistant conversations (tasks.go)
 
 	connectors *connector.Registry // sources of the user's information (connectors.go)
 	// migrated are the hub's own connectors a plugin took over (connectors_migrate.go): id → the hub's, for when the plugin goes.
@@ -289,7 +282,6 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{}, interactions: map[string]*pending{},
 		calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{}, turns: newTurnTracker(),
 		todos: newTodosState(),
-		tasks: newTasksState(),
 	}
 	h.live = newLiveActivities(h)
 	h.upd = newUpdater(h)
@@ -381,7 +373,7 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	go h.expireLoop(ctx)
 	go h.terminalKeepalive(ctx)
 	go h.live.run(ctx)
-	go h.scheduleLoop(ctx)
+	go h.superviseAssistant(ctx) // the assistant, its own process on the bus (assistant_process.go)
 	h.startBots(ctx)
 	go h.agentsLoop(ctx)
 	go h.inboxLoop(ctx)
@@ -405,6 +397,7 @@ func (h *Hub) logf(format string, args ...any) { h.logger.Printf(format, args...
 func (h *Hub) broadcastMachines() {
 	h.broadcast(map[string]any{"type": "machines", "machines": h.machineList()})
 	h.meshTouch() // a member's record says which of its computers the center can reach through it
+	h.assistantUpdated()
 }
 
 // decorated returns a machine's sessions with pending interaction counts filled in.
@@ -427,9 +420,8 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 		}
 	}
 	h.mu.Unlock()
-	named := h.conversationTitles()
+	shown := h.assistantShown()
 	via := h.channelsOfConversations()
-	archived, relayed := h.archivedIDs(), h.queuedRelays()
 	main := h.mainConversation(m.cfg.ID, list, dir)
 	for i := range list {
 		list[i].MachineID = m.cfg.ID
@@ -437,16 +429,16 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 		list[i].Assistant = isAssistant(list[i], dir)
 		if list[i].Assistant && list[i].SessionID == main {
 			list[i].Title = mainTitle // never its first message, a model's name or a rename (#1313)
-		} else if t := named[list[i].SessionID]; t != "" && list[i].Assistant {
-			list[i].Title = t // 「MMDD | 类型 | 主题」 or the user's own (assistant_titles.go)
+		} else if t := shown[list[i].SessionID].Title; t != "" && list[i].Assistant {
+			list[i].Title = t // 「MMDD | 类型 | 主题」 or the user's own (assistant/titles.go)
 		}
 		if ch := via[[2]string{m.cfg.ID, list[i].SessionID}]; len(ch) > 0 {
 			list[i].Channels = ch // where its messages came from (docs/channels.md「来源标记」)
 		}
 		if list[i].Assistant {
-			list[i].Archived = archived[list[i].SessionID]
-			// Messages from other conversations wait in the hub while it runs: shown like typed-ahead input.
-			if q := relayed[list[i].SessionID]; len(q) > 0 {
+			list[i].Archived = shown[list[i].SessionID].Archived
+			// Messages from other conversations wait in the assistant while it runs: shown like typed-ahead input.
+			if q := shown[list[i].SessionID].Queued; len(q) > 0 {
 				list[i].Queued = append(slices.Clip(list[i].Queued), q...) // the node's slice is shared: never write into it
 			}
 		}
@@ -1142,7 +1134,7 @@ func (h *Hub) mcpTools(assistant bool) []proto.Tool {
 	ctx := context.Background()
 	tools = append(tools, h.connectors.ToolsFor(ctx, true)...)
 	if assistant {
-		tools = append(tools, assistantTools()...)
+		tools = append(tools, h.asst().Tools(ctx)...)
 		tools = append(tools, h.computerTools()...)
 		tools = append(tools, h.browserTools()...)
 		tools = append(tools, h.connectors.ToolsFor(ctx, false)...)

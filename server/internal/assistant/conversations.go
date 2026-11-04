@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"context"
@@ -14,16 +14,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The assistant manages its own conversations (docs/assistant.md「管理自己的对话」, the user's ask on 2026-11-01):
 // list, read, rename, archive, start one and message another. Archiving only hides a conversation (the app's 已归档
-// lists it, nothing is deleted); the set is in the hub (settings assistant.archived), so Claude and Codex
-// conversations are archived alike. Messages between conversations are queued in the hub while the receiver runs
-// and carry where they come from; a chain of them is cut after a few hops and a few per pair in ten minutes, so two
-// conversations can't keep each other going.
+// lists it, nothing is deleted); the set is the assistant's (settings assistant.archived), so Claude and Codex
+// conversations are archived alike. Messages between conversations are queued by the assistant while the receiver
+// runs and carry where they come from; a chain of them is cut after a few hops and a few per pair in ten minutes, so
+// two conversations can't keep each other going.
 
 const (
 	archivedKey = "assistant.archived"
@@ -49,15 +50,15 @@ type archiveBook struct {
 }
 
 // archivedLocked reads the set once; b.mu is held. A failed read leaves it unloaded (nothing is saved over it).
-func (h *Hub) archivedLocked(ctx context.Context) bool {
-	b := &h.archived
+func (s *Service) archivedLocked(ctx context.Context) bool {
+	b := &s.archived
 	if b.loaded {
 		return true
 	}
 	m := map[string]*convArchived{}
-	if h.store != nil {
-		if _, err := h.store.Setting(ctx, archivedKey, &m); err != nil {
-			h.logf("load archived conversations: %v", err)
+	if st := s.store(); st != nil {
+		if _, err := st.Setting(ctx, archivedKey, &m); err != nil {
+			s.logf("load archived conversations: %v", err)
 			return false
 		}
 	}
@@ -68,36 +69,41 @@ func (h *Hub) archivedLocked(ctx context.Context) bool {
 	return true
 }
 
-// archivedIDs are the archived conversations' ids.
-func (h *Hub) archivedIDs() map[string]bool {
-	b := &h.archived
+// archivedSet is the archived conversations' machines by id; false while the set could not be read.
+func (s *Service) archivedSet() (map[string]string, bool) {
+	b := &s.archived
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if !h.archivedLocked(context.Background()) {
-		return nil
+	if !s.archivedLocked(context.Background()) {
+		return nil, false
 	}
-	out := make(map[string]bool, len(b.m))
-	for id := range b.m {
-		out[id] = true
+	out := make(map[string]string, len(b.m))
+	for id, a := range b.m {
+		out[id] = a.MachineID
 	}
-	return out
+	return out, true
+}
+
+func (s *Service) isArchived(id string) bool {
+	set, _ := s.archivedSet()
+	_, ok := set[id]
+	return ok
 }
 
 var errArchiveMain = errors.New("主对话不能归档")
 
 // setArchived archives (on) or brings back a conversation; by is who did it. It reports whether anything changed.
-func (h *Hub) setArchived(ctx context.Context, machine, id string, on bool, by string) (bool, error) {
-	if on {
-		if cfg := h.assistantConfig(ctx); cfg.Main == id {
-			return false, errArchiveMain
-		}
+func (s *Service) setArchived(ctx context.Context, machine, id string, on bool, by string) (bool, error) {
+	if on && s.hello(ctx).Assistant.Main == id {
+		return false, errArchiveMain
 	}
-	if h.store == nil {
+	st := s.store()
+	if st == nil {
 		return false, errors.New("no database")
 	}
-	b := &h.archived
+	b := &s.archived
 	b.mu.Lock()
-	if !h.archivedLocked(ctx) {
+	if !s.archivedLocked(ctx) {
 		b.mu.Unlock()
 		return false, errors.New("archived conversations could not be read")
 	}
@@ -111,7 +117,7 @@ func (h *Hub) setArchived(ctx context.Context, machine, id string, on bool, by s
 	} else {
 		delete(b.m, id)
 	}
-	err := h.store.PutSetting(ctx, archivedKey, b.m)
+	err := st.PutSetting(ctx, archivedKey, b.m)
 	if err != nil { // keep memory as the database has it
 		if on {
 			delete(b.m, id)
@@ -123,47 +129,47 @@ func (h *Hub) setArchived(ctx context.Context, machine, id string, on bool, by s
 	if err != nil {
 		return false, err
 	}
-	h.retitled(machine) // the apps get the list with the flag now
+	s.publish(ctx) // the apps get the list with the flag now
 	return true, nil
 }
 
 // unarchiveOnSend brings an archived conversation back when something is sent to it (the user from the app,
 // another conversation): what happens in it should be in the list.
-func (h *Hub) unarchiveOnSend(machine, id string) bool {
-	if !h.archivedIDs()[id] {
+func (s *Service) unarchiveOnSend(machine, id string) bool {
+	if !s.isArchived(id) {
 		return false
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	changed, err := h.setArchived(ctx, machine, id, false, titleByUser)
+	changed, err := s.setArchived(ctx, machine, id, false, titleByUser)
 	if err != nil {
-		h.logf("unarchive %s: %v", short(id), err)
+		s.logf("unarchive %s: %v", short(id), err)
 	}
 	return changed
 }
 
 // archiveRoutes: POST /api/v1/assistant/conversations/{id}/archive and …/unarchive.
-func (h *Hub) archiveRoutes(api *http.ServeMux) {
+func (s *Service) archiveRoutes() {
 	for _, op := range []struct {
 		path string
 		on   bool
 	}{{"archive", true}, {"unarchive", false}} {
-		api.HandleFunc("POST /api/v1/assistant/conversations/{id}/"+op.path, func(w http.ResponseWriter, r *http.Request) {
+		s.handle("POST /api/v1/assistant/conversations/{id}/"+op.path, func(w http.ResponseWriter, r *http.Request) {
 			id := r.PathValue("id")
 			if !validSessionID(id) {
-				writeErr(w, http.StatusBadRequest, errors.New("invalid conversation id"))
+				apierr.Write(w, http.StatusBadRequest, errors.New("invalid conversation id"))
 				return
 			}
-			cfg := h.assistantConfig(r.Context())
-			if _, err := h.setArchived(r.Context(), cfg.MachineID, id, op.on, titleByUser); err != nil {
+			machine := s.hello(r.Context()).Assistant.MachineID
+			if _, err := s.setArchived(r.Context(), machine, id, op.on, titleByUser); err != nil {
 				status := http.StatusInternalServerError
 				if errors.Is(err, errArchiveMain) {
 					status = http.StatusBadRequest
 				}
-				writeErr(w, status, err)
+				apierr.Write(w, status, err)
 				return
 			}
-			writeJSON(w, map[string]any{"ok": true, "archived": op.on})
+			apierr.WriteJSON(w, map[string]any{"ok": true, "archived": op.on})
 		})
 	}
 }
@@ -202,51 +208,52 @@ type relayBook struct {
 	draining map[string]bool
 }
 
-func (h *Hub) relayLocked(ctx context.Context) bool {
-	b := &h.relays
+func (s *Service) relayLocked(ctx context.Context) bool {
+	b := &s.relays
 	if b.loaded {
 		return true
 	}
-	st := relayState{}
-	if h.store != nil {
-		if _, err := h.store.Setting(ctx, relayKey, &st); err != nil {
-			h.logf("load conversation relay: %v", err)
+	rs := relayState{}
+	if st := s.store(); st != nil {
+		if _, err := st.Setting(ctx, relayKey, &rs); err != nil {
+			s.logf("load conversation relay: %v", err)
 			return false
 		}
 	}
-	if st.Queue == nil {
-		st.Queue = map[string][]relayMsg{}
+	if rs.Queue == nil {
+		rs.Queue = map[string][]relayMsg{}
 	}
-	if st.Hops == nil {
-		st.Hops = map[string]relayHop{}
+	if rs.Hops == nil {
+		rs.Hops = map[string]relayHop{}
 	}
-	b.st, b.loaded = st, true
+	b.st, b.loaded = rs, true
 	b.sent, b.draining = map[[2]string][]time.Time{}, map[string]bool{}
 	return true
 }
 
-func (h *Hub) saveRelayLocked() {
-	if h.store == nil {
+func (s *Service) saveRelayLocked() {
+	st := s.store()
+	if st == nil {
 		return
 	}
-	for id, hp := range h.relays.st.Hops {
+	for id, hp := range s.relays.st.Hops {
 		if time.Since(hp.At) > relayHopMemory {
-			delete(h.relays.st.Hops, id)
+			delete(s.relays.st.Hops, id)
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := h.store.PutSetting(ctx, relayKey, h.relays.st); err != nil {
-		h.logf("save conversation relay: %v", err)
+	if err := st.PutSetting(ctx, relayKey, s.relays.st); err != nil {
+		s.logf("save conversation relay: %v", err)
 	}
 }
 
 // hopOf is how many relayed messages away from the user's own the conversation's current work is (0: the user).
-func (h *Hub) hopOf(id string) int {
-	b := &h.relays
+func (s *Service) hopOf(id string) int {
+	b := &s.relays
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if !h.relayLocked(context.Background()) {
+	if !s.relayLocked(context.Background()) {
 		return 0
 	}
 	if hp, ok := b.st.Hops[id]; ok && time.Since(hp.At) <= relayHopMemory {
@@ -256,28 +263,28 @@ func (h *Hub) hopOf(id string) int {
 }
 
 // userSpoke: the user sent a message to the conversation, which works for them again (hop 0).
-func (h *Hub) userSpoke(id string) {
-	b := &h.relays
+func (s *Service) userSpoke(id string) {
+	b := &s.relays
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if !h.relayLocked(context.Background()) {
+	if !s.relayLocked(context.Background()) {
 		return
 	}
 	if _, ok := b.st.Hops[id]; ok {
 		delete(b.st.Hops, id)
-		h.saveRelayLocked()
+		s.saveRelayLocked()
 	}
 }
 
 // relayAllowed checks the hop and rate limits for a message from → to and counts it when allowed.
-func (h *Hub) relayAllowed(from, to string, hop int, now time.Time) error {
+func (s *Service) relayAllowed(from, to string, hop int, now time.Time) error {
 	if hop > relayMaxHops {
 		return fmt.Errorf("not sent: this would be hop %d from the user's own message (at most %d). Tell the user what you have instead", hop, relayMaxHops)
 	}
-	b := &h.relays
+	b := &s.relays
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if !h.relayLocked(context.Background()) {
+	if !s.relayLocked(context.Background()) {
 		return errors.New("the relay state could not be read")
 	}
 	pair, all := 0, 0
@@ -313,25 +320,29 @@ func relayText(msg relayMsg) string {
 }
 
 // queueRelay keeps a message for a running conversation until its turn ends.
-func (h *Hub) queueRelay(to string, msg relayMsg) int {
-	b := &h.relays
+func (s *Service) queueRelay(to string, msg relayMsg) int {
+	b := &s.relays
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if !h.relayLocked(context.Background()) {
+	if !s.relayLocked(context.Background()) {
 		return 0
 	}
 	b.st.Queue[to] = append(b.st.Queue[to], msg)
-	h.saveRelayLocked()
+	s.saveRelayLocked()
 	return len(b.st.Queue[to])
 }
 
-// queuedRelays are the texts waiting for a conversation (shown above its composer, like typed-ahead input).
-func (h *Hub) queuedRelays() map[string][]string {
-	b := &h.relays
+// queuedRelays are the texts waiting for a conversation (shown above its composer, like typed-ahead input); false
+// while they could not be read.
+func (s *Service) queuedRelays() (map[string][]string, bool) {
+	b := &s.relays
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if !h.relayLocked(context.Background()) || len(b.st.Queue) == 0 {
-		return nil
+	if !s.relayLocked(context.Background()) {
+		return nil, false
+	}
+	if len(b.st.Queue) == 0 {
+		return nil, true
 	}
 	out := map[string][]string{}
 	for id, q := range b.st.Queue {
@@ -339,38 +350,38 @@ func (h *Hub) queuedRelays() map[string][]string {
 			out[id] = append(out[id], "来自「"+msg.FromTitle+"」："+msg.Text)
 		}
 	}
-	return out
+	return out, true
 }
 
 // deliverRelay sends one message into an assistant conversation and notes the hop it is working on.
-func (h *Hub) deliverRelay(ctx context.Context, m *Machine, to string, msg relayMsg) error {
-	if err := m.call(ctx, "assistant.send", map[string]any{"session_id": to, "text": relayText(msg), "resume_only": true}, nil); err != nil {
+func (s *Service) deliverRelay(ctx context.Context, machine, to string, msg relayMsg) error {
+	if err := s.call(ctx, machine, DeviceAssistantSend, map[string]any{"session_id": to, "text": relayText(msg), "resume_only": true}, nil); err != nil {
 		return err
 	}
-	b := &h.relays
+	b := &s.relays
 	b.mu.Lock()
-	if h.relayLocked(ctx) {
+	if s.relayLocked(ctx) {
 		b.st.Hops[to] = relayHop{Hop: msg.Hop, At: time.Now().UTC()}
-		h.saveRelayLocked()
+		s.saveRelayLocked()
 	}
 	b.mu.Unlock()
 	return nil
 }
 
-// drainRelays delivers the next queued message to every conversation of m that is not running (called whenever m's
-// list changes: a turn that just ended, or the hub starting with messages still queued).
-func (h *Hub) drainRelays(m *Machine, list []proto.Session) {
-	b := &h.relays
+// drainRelays delivers the next queued message to every conversation of the machine that is not running (called
+// whenever its list changes: a turn that just ended, or the hub starting with messages still queued).
+func (s *Service) drainRelays(machine string, list []proto.Session) {
+	b := &s.relays
 	b.mu.Lock()
-	if !h.relayLocked(context.Background()) || len(b.st.Queue) == 0 {
+	if !s.relayLocked(context.Background()) || len(b.st.Queue) == 0 {
 		b.mu.Unlock()
 		return
 	}
 	var due []string
-	for _, s := range list {
-		if len(b.st.Queue[s.SessionID]) > 0 && s.Status != proto.StatusWorking && !s.Starting && !b.draining[s.SessionID] {
-			b.draining[s.SessionID] = true
-			due = append(due, s.SessionID)
+	for _, c := range list {
+		if len(b.st.Queue[c.SessionID]) > 0 && c.Status != proto.StatusWorking && !c.Starting && !b.draining[c.SessionID] {
+			b.draining[c.SessionID] = true
+			due = append(due, c.SessionID)
 		}
 	}
 	b.mu.Unlock()
@@ -386,11 +397,12 @@ func (h *Hub) drainRelays(m *Machine, list []proto.Session) {
 			msg := q[0]
 			b.mu.Unlock()
 			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-			err := h.deliverRelay(ctx, m, id, msg)
+			err := s.deliverRelay(ctx, machine, id, msg)
 			cancel()
 			b.mu.Lock()
 			delete(b.draining, id)
 			// Delivered, or the conversation is gone for good: off the queue. Another failure (offline) keeps it.
+			taken := false
 			if err == nil || strings.Contains(err.Error(), "is gone") {
 				if q := b.st.Queue[id]; len(q) > 0 {
 					b.st.Queue[id] = q[1:]
@@ -398,11 +410,15 @@ func (h *Hub) drainRelays(m *Machine, list []proto.Session) {
 				if len(b.st.Queue[id]) == 0 {
 					delete(b.st.Queue, id)
 				}
-				h.saveRelayLocked()
+				s.saveRelayLocked()
+				taken = true
 			}
 			b.mu.Unlock()
+			if taken {
+				s.publish(context.Background()) // it no longer shows waiting
+			}
 			if err != nil {
-				h.logf("relay to %s: %v", short(id), err)
+				s.logf("relay to %s: %v", short(id), err)
 			}
 		}(id)
 	}
@@ -411,50 +427,64 @@ func (h *Hub) drainRelays(m *Machine, list []proto.Session) {
 // --- the tools (definitions in prompts/mcp/assistant) ---
 
 // assistantConversation finds an assistant conversation by full id or prefix on the assistant's machine.
-func (h *Hub) assistantConversation(ctx context.Context, id string) (*Machine, proto.Session, error) {
-	cfg := h.assistantConfig(ctx)
-	m := h.localMachine(cfg.MachineID)
-	if m == nil {
-		return nil, proto.Session{}, errors.New("the assistant's machine is not configured")
+func (s *Service) assistantConversation(ctx context.Context, id string) (proto.Session, error) {
+	list, err := s.sessions(ctx, s.hello(ctx).Assistant.MachineID)
+	if errors.Is(err, ErrNoDevice) {
+		return proto.Session{}, errors.New("the assistant's machine is not configured")
+	}
+	if err != nil {
+		return proto.Session{}, err
 	}
 	id = strings.TrimSpace(id)
 	if id == "" {
-		return nil, proto.Session{}, errors.New("id is required")
+		return proto.Session{}, errors.New("id is required")
 	}
 	var found []proto.Session
-	for _, s := range h.decorated(m) {
-		if !s.Assistant {
+	for _, c := range list {
+		if !c.Assistant {
 			continue
 		}
-		if s.SessionID == id {
-			return m, s, nil
+		if c.SessionID == id {
+			return c, nil
 		}
-		if len(id) >= 8 && strings.HasPrefix(s.SessionID, id) {
-			found = append(found, s)
+		if len(id) >= 8 && strings.HasPrefix(c.SessionID, id) {
+			found = append(found, c)
 		}
 	}
 	switch len(found) {
 	case 1:
-		return m, found[0], nil
+		return found[0], nil
 	case 0:
-		return nil, proto.Session{}, fmt.Errorf("no conversation %q (conversations_list has the ids)", id)
+		return proto.Session{}, fmt.Errorf("no conversation %q (conversations_list has the ids)", id)
 	}
-	return nil, proto.Session{}, fmt.Errorf("%q is the start of %d conversations: give more of the id", id, len(found))
+	return proto.Session{}, fmt.Errorf("%q is the start of %d conversations: give more of the id", id, len(found))
+}
+
+// conversations are the assistant's conversations on its machine (archived ones too when asked) and the main one.
+func (s *Service) conversations(ctx context.Context, withArchived bool) (list []proto.Session, main string) {
+	here := s.hello(ctx).Assistant
+	all, _ := s.sessions(ctx, here.MachineID) // none on no machine
+	for _, c := range all {
+		if c.Assistant && (withArchived || !c.Archived) {
+			list = append(list, c)
+		}
+	}
+	return list, here.Main
 }
 
 // conversationName is how a conversation is called in tool results and relayed messages.
-func conversationName(s proto.Session, main string) string {
-	if s.SessionID == main {
+func conversationName(c proto.Session, main string) string {
+	if c.SessionID == main {
 		return "主对话"
 	}
 	// Not named yet: the node's title is then the directory's name ("assistant") or Claude Code's default.
-	if t := strings.TrimSpace(s.Title); t != "" && t != "Claude Code" && t != path.Base(s.Cwd) {
+	if t := strings.TrimSpace(c.Title); t != "" && t != "Claude Code" && t != path.Base(c.Cwd) {
 		return t
 	}
 	return "新对话"
 }
 
-func (h *Hub) toolConversationsList(ctx context.Context, self string, args json.RawMessage) (string, error) {
+func (s *Service) toolConversationsList(ctx context.Context, self string, args json.RawMessage) (string, error) {
 	var a struct {
 		Query           string `json:"query"`
 		IncludeArchived bool   `json:"include_archived"`
@@ -465,16 +495,15 @@ func (h *Hub) toolConversationsList(ctx context.Context, self string, args json.
 		a.Limit = 30
 	}
 	a.Limit = min(a.Limit, 100)
-	v := h.assistantState(ctx, a.IncludeArchived)
-	list := v.Conversations
+	list, main := s.conversations(ctx, a.IncludeArchived)
 	sort.SliceStable(list, func(i, j int) bool { return list[i].UpdatedAt.After(list[j].UpdatedAt) })
 	q := strings.ToLower(strings.TrimSpace(a.Query))
-	loc := h.userLocation()
+	loc := s.location(ctx)
 	var b strings.Builder
 	n := 0
-	for _, s := range list {
-		name := conversationName(s, v.Main)
-		if q != "" && !strings.Contains(strings.ToLower(name+"\n"+s.LastText), q) {
+	for _, c := range list {
+		name := conversationName(c, main)
+		if q != "" && !strings.Contains(strings.ToLower(name+"\n"+c.LastText), q) {
 			continue
 		}
 		if n >= a.Limit {
@@ -483,29 +512,29 @@ func (h *Hub) toolConversationsList(ctx context.Context, self string, args json.
 		}
 		n++
 		var tags []string
-		if s.SessionID == v.Main {
+		if c.SessionID == main {
 			tags = append(tags, "main")
 		}
-		if s.SessionID == self {
+		if c.SessionID == self {
 			tags = append(tags, "this conversation")
 		}
-		if s.Status == proto.StatusWorking || s.Starting {
+		if c.Status == proto.StatusWorking || c.Starting {
 			tags = append(tags, "running")
 		}
-		if s.Archived {
+		if c.Archived {
 			tags = append(tags, "archived")
 		}
-		if s.Agent == "codex" {
+		if c.Agent == "codex" {
 			tags = append(tags, "codex")
 		}
-		fmt.Fprintf(&b, "- %s 「%s」", s.SessionID, name)
+		fmt.Fprintf(&b, "- %s 「%s」", c.SessionID, name)
 		if len(tags) > 0 {
 			fmt.Fprintf(&b, " [%s]", strings.Join(tags, ", "))
 		}
-		if !s.UpdatedAt.IsZero() {
-			fmt.Fprintf(&b, " · last active %s (%s)", s.UpdatedAt.In(loc).Format("01-02 15:04"), ago(s.UpdatedAt))
+		if !c.UpdatedAt.IsZero() {
+			fmt.Fprintf(&b, " · last active %s (%s)", c.UpdatedAt.In(loc).Format("01-02 15:04"), ago(c.UpdatedAt))
 		}
-		if t := oneLine(s.LastText); t != "" {
+		if t := oneLine(c.LastText); t != "" {
 			fmt.Fprintf(&b, "\n  last: %s", clip(t, 160))
 		}
 		b.WriteString("\n")
@@ -526,13 +555,13 @@ func (h *Hub) toolConversationsList(ctx context.Context, self string, args json.
 	return head + ":\n" + b.String(), nil
 }
 
-func (h *Hub) toolConversationRead(ctx context.Context, args json.RawMessage) (string, error) {
+func (s *Service) toolConversationRead(ctx context.Context, args json.RawMessage) (string, error) {
 	var a struct {
 		ID    string `json:"id"`
 		Turns int    `json:"turns"`
 	}
 	_ = json.Unmarshal(args, &a)
-	m, s, err := h.assistantConversation(ctx, a.ID)
+	c, err := s.assistantConversation(ctx, a.ID)
 	if err != nil {
 		return "", err
 	}
@@ -542,14 +571,14 @@ func (h *Hub) toolConversationRead(ctx context.Context, args json.RawMessage) (s
 	var res struct {
 		Items []proto.Item `json:"items"`
 	}
-	if err := m.call(ctx, "session.items", map[string]any{"session_id": s.SessionID, "turns": min(a.Turns, 10)}, &res); err != nil {
+	if err := s.call(ctx, c.MachineID, DeviceSessionItems, map[string]any{"session_id": c.SessionID, "turns": min(a.Turns, 10)}, &res); err != nil {
 		return "", err
 	}
-	head := fmt.Sprintf("「%s」 %s (%s)", conversationName(s, h.assistantConfig(ctx).Main), s.SessionID, stateNames[s.State])
+	head := fmt.Sprintf("「%s」 %s (%s)", conversationName(c, s.hello(ctx).Assistant.Main), c.SessionID, stateNames[c.State])
 	return transcriptText(head, res.Items), nil
 }
 
-func (h *Hub) toolConversationRename(ctx context.Context, self string, args json.RawMessage) (string, error) {
+func (s *Service) toolConversationRename(ctx context.Context, self string, args json.RawMessage) (string, error) {
 	var a struct {
 		ID        string `json:"id"`
 		Kind      string `json:"kind"`
@@ -557,11 +586,11 @@ func (h *Hub) toolConversationRename(ctx context.Context, self string, args json
 		UserAsked bool   `json:"user_asked"`
 	}
 	_ = json.Unmarshal(args, &a)
-	m, s, err := h.assistantConversation(ctx, a.ID)
+	c, err := s.assistantConversation(ctx, a.ID)
 	if err != nil {
 		return "", err
 	}
-	if s.SessionID == h.assistantConfig(ctx).Main {
+	if c.SessionID == s.hello(ctx).Assistant.Main {
 		return "", errors.New("the main conversation is always shown as 主对话: it has no title to change")
 	}
 	if !slices.Contains(titleKinds, a.Kind) {
@@ -571,37 +600,37 @@ func (h *Hub) toolConversationRename(ctx context.Context, self string, args json
 	if topic == "" {
 		return "", errors.New("topic is empty")
 	}
-	by, started := h.titleOf(s.SessionID)
+	by, started := s.titleOf(c.SessionID)
 	if by == titleByUser && !a.UserAsked {
-		return "", fmt.Errorf("the user named this conversation 「%s」 themselves: rename it only when they ask you to, and then pass user_asked", s.Title)
+		return "", fmt.Errorf("the user named this conversation 「%s」 themselves: rename it only when they ask you to, and then pass user_asked", c.Title)
 	}
-	if started.IsZero() { // started before the hub kept titles: today's day is the best guess
+	if started.IsZero() { // started before titles were kept: today's day is the best guess
 		started = time.Now()
 	}
-	title := titleDay(started, h.userLocation()) + " | " + a.Kind + " | " + topic
+	title := titleDay(started, s.location(ctx)) + " | " + a.Kind + " | " + topic
 	who := titleByAssistant
 	if a.UserAsked {
 		who = titleByUser // the user's choice, said in words: it stays like one typed in the app
 	}
-	if err := h.renameConversation(ctx, m, s, title, who); err != nil {
+	if err := s.renameConversation(ctx, c, title, who); err != nil {
 		return "", err
 	}
-	if s.SessionID == self {
+	if c.SessionID == self {
 		return fmt.Sprintf("Renamed this conversation to 「%s」.", title), nil
 	}
-	return fmt.Sprintf("Renamed %s to 「%s」.", s.SessionID, title), nil
+	return fmt.Sprintf("Renamed %s to 「%s」.", c.SessionID, title), nil
 }
 
-func (h *Hub) toolConversationArchive(ctx context.Context, self string, args json.RawMessage, on bool) (string, error) {
+func (s *Service) toolConversationArchive(ctx context.Context, self string, args json.RawMessage, on bool) (string, error) {
 	var a struct {
 		ID string `json:"id"`
 	}
 	_ = json.Unmarshal(args, &a)
-	m, s, err := h.assistantConversation(ctx, a.ID)
+	c, err := s.assistantConversation(ctx, a.ID)
 	if err != nil {
 		if !on { // an archived conversation may be long out of the node's list: the id alone will do
-			if id := strings.TrimSpace(a.ID); h.archivedIDs()[id] {
-				_, err := h.setArchived(ctx, h.assistantConfig(ctx).MachineID, id, false, titleByAssistant)
+			if id := strings.TrimSpace(a.ID); s.isArchived(id) {
+				_, err := s.setArchived(ctx, s.hello(ctx).Assistant.MachineID, id, false, titleByAssistant)
 				if err != nil {
 					return "", err
 				}
@@ -610,8 +639,8 @@ func (h *Hub) toolConversationArchive(ctx context.Context, self string, args jso
 		}
 		return "", err
 	}
-	name := conversationName(s, h.assistantConfig(ctx).Main)
-	changed, err := h.setArchived(ctx, m.cfg.ID, s.SessionID, on, titleByAssistant)
+	name := conversationName(c, s.hello(ctx).Assistant.Main)
+	changed, err := s.setArchived(ctx, c.MachineID, c.SessionID, on, titleByAssistant)
 	if err != nil {
 		return "", err
 	}
@@ -622,13 +651,13 @@ func (h *Hub) toolConversationArchive(ctx context.Context, self string, args jso
 		return fmt.Sprintf("「%s」 is not archived.", name), nil
 	case !on:
 		return fmt.Sprintf("Unarchived 「%s」: it is back in the list.", name), nil
-	case s.SessionID == self:
+	case c.SessionID == self:
 		return "Archived this conversation: it is out of the list (under 已归档). This turn finishes as usual; a new message from the user brings it back.", nil
 	}
 	return fmt.Sprintf("Archived 「%s」 (under 已归档 in the app; nothing is deleted).", name), nil
 }
 
-func (h *Hub) toolConversationNew(ctx context.Context, self string, args json.RawMessage) (string, error) {
+func (s *Service) toolConversationNew(ctx context.Context, self string, args json.RawMessage) (string, error) {
 	var a struct {
 		Text string `json:"text"`
 	}
@@ -636,32 +665,32 @@ func (h *Hub) toolConversationNew(ctx context.Context, self string, args json.Ra
 	if strings.TrimSpace(a.Text) == "" {
 		return "", errors.New("text is empty")
 	}
-	from, hop, err := h.relayFrom(ctx, self)
+	from, hop, err := s.relayFrom(ctx, self)
 	if err != nil {
 		return "", err
 	}
-	if err := h.relayAllowed(self, "new", hop, time.Now()); err != nil {
+	if err := s.relayAllowed(self, "new", hop, time.Now()); err != nil {
 		return "", err
 	}
 	msg := relayMsg{From: self, FromTitle: from, Tool: "conversation_new", Text: a.Text, Hop: hop, At: time.Now().UTC()}
 	sctx, cancel := context.WithTimeout(ctx, 100*time.Second)
 	defer cancel()
-	s, err := h.startAssistant(sctx, relayText(msg), nil, "", "", "")
+	c, err := s.startConversation(sctx, startParams{Text: relayText(msg)})
 	if err != nil {
 		return "", err
 	}
-	h.titleNew(s.MachineID, s.SessionID, time.Now(), "")
-	b := &h.relays
+	s.titleNew(c.MachineID, c.SessionID, time.Now(), "")
+	b := &s.relays
 	b.mu.Lock()
-	if h.relayLocked(ctx) {
-		b.st.Hops[s.SessionID] = relayHop{Hop: hop, At: time.Now().UTC()}
-		h.saveRelayLocked()
+	if s.relayLocked(ctx) {
+		b.st.Hops[c.SessionID] = relayHop{Hop: hop, At: time.Now().UTC()}
+		s.saveRelayLocked()
 	}
 	b.mu.Unlock()
-	return fmt.Sprintf("Started conversation %s; it is working on the message now and is named after its first turn. It shows up in the app's sidebar.", s.SessionID), nil
+	return fmt.Sprintf("Started conversation %s; it is working on the message now and is named after its first turn. It shows up in the app's sidebar.", c.SessionID), nil
 }
 
-func (h *Hub) toolConversationSend(ctx context.Context, self string, args json.RawMessage) (string, error) {
+func (s *Service) toolConversationSend(ctx context.Context, self string, args json.RawMessage) (string, error) {
 	var a struct {
 		ID   string `json:"id"`
 		Text string `json:"text"`
@@ -670,54 +699,54 @@ func (h *Hub) toolConversationSend(ctx context.Context, self string, args json.R
 	if strings.TrimSpace(a.Text) == "" {
 		return "", errors.New("text is empty")
 	}
-	m, s, err := h.assistantConversation(ctx, a.ID)
+	c, err := s.assistantConversation(ctx, a.ID)
 	if err != nil {
 		return "", err
 	}
-	if s.SessionID == self {
+	if c.SessionID == self {
 		return "", errors.New("that is this conversation: you can't send a message to yourself")
 	}
-	from, hop, err := h.relayFrom(ctx, self)
+	from, hop, err := s.relayFrom(ctx, self)
 	if err != nil {
 		return "", err
 	}
-	if err := h.relayAllowed(self, s.SessionID, hop, time.Now()); err != nil {
+	if err := s.relayAllowed(self, c.SessionID, hop, time.Now()); err != nil {
 		return "", err
 	}
 	msg := relayMsg{From: self, FromTitle: from, Tool: "conversation_send", Text: a.Text, Hop: hop, At: time.Now().UTC()}
-	name := conversationName(s, h.assistantConfig(ctx).Main)
+	name := conversationName(c, s.hello(ctx).Assistant.Main)
 	back := ""
-	if h.unarchiveOnSend(m.cfg.ID, s.SessionID) {
+	if s.unarchiveOnSend(c.MachineID, c.SessionID) {
 		back = " It was archived; it is back in the list."
 	}
-	if s.Status == proto.StatusWorking || s.Starting || h.queuedFor(s.SessionID) > 0 {
-		n := h.queueRelay(s.SessionID, msg)
-		h.sessionsChanged(m) // the receiver shows it waiting above its composer
+	if c.Status == proto.StatusWorking || c.Starting || s.queuedFor(c.SessionID) > 0 {
+		n := s.queueRelay(c.SessionID, msg)
+		s.publish(ctx) // the receiver shows it waiting above its composer
 		return fmt.Sprintf("「%s」 is running: the message is queued (%d waiting) and goes in when its current turn ends.%s", name, n, back), nil
 	}
-	if err := h.deliverRelay(ctx, m, s.SessionID, msg); err != nil {
+	if err := s.deliverRelay(ctx, c.MachineID, c.SessionID, msg); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("Sent to 「%s」 (%s).%s", name, s.SessionID, back), nil
+	return fmt.Sprintf("Sent to 「%s」 (%s).%s", name, c.SessionID, back), nil
 }
 
 // relayFrom is the sending conversation's name and the hop its message would be.
-func (h *Hub) relayFrom(ctx context.Context, self string) (string, int, error) {
+func (s *Service) relayFrom(ctx context.Context, self string) (string, int, error) {
 	if self == "" {
 		return "", 0, errors.New("only a Persona conversation can do this")
 	}
 	name := "另一段对话"
-	if _, s, err := h.assistantConversation(ctx, self); err == nil {
-		name = conversationName(s, h.assistantConfig(ctx).Main)
+	if c, err := s.assistantConversation(ctx, self); err == nil {
+		name = conversationName(c, s.hello(ctx).Assistant.Main)
 	}
-	return name, h.hopOf(self) + 1, nil
+	return name, s.hopOf(self) + 1, nil
 }
 
-func (h *Hub) queuedFor(id string) int {
-	b := &h.relays
+func (s *Service) queuedFor(id string) int {
+	b := &s.relays
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if !h.relayLocked(context.Background()) {
+	if !s.relayLocked(context.Background()) {
 		return 0
 	}
 	return len(b.st.Queue[id])

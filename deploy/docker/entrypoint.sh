@@ -28,15 +28,18 @@ elif ! id -un >/dev/null 2>&1; then
   echo "warning: running as uid $(id -u), which has no user in the image: PUID / PGID are ignored and ssh will" \
     "not work. Start the container as root (no user:) and set PUID / PGID instead." >&2
 fi
+# Desktop relays can hide the original peer behind a gateway or a synthetic public address.
+if getent hosts host.docker.internal >/dev/null 2>&1; then
+  echo "note: this looks like Docker Desktop / OrbStack: port-mapped peers may appear as the bridge gateway or" \
+    "a synthetic public address (gvisor). If API requests return 403 tls_required, inspect the peer with" \
+    "docker compose exec hub netstat -tn while a client connects. Prefer TLS; for local HTTP publish on" \
+    "127.0.0.1 only before adding the observed peer to security.trusted_cidrs (docs/docker.md)." >&2
+  case "${JARVIS_ADMIN_ACCESS:-}" in '' | lan)
+    echo "note: for the admin UI, publish on 127.0.0.1 only and use JARVIS_ADMIN_ACCESS=cidrs with the observed" \
+      "peer in JARVIS_ADMIN_CIDRS (docs/admin.md), or use docker compose exec hub jarvisd hub admin." >&2 ;;
+  esac
+fi
 # Who may open the admin UI (docs/admin.md): the deployment's choice, or a reminder that nobody made one.
-case "${JARVIS_ADMIN_ACCESS:-}" in '' | lan)
-  # Docker Desktop and OrbStack relay every port-mapped connection from the bridge's gateway, which is never LAN.
-  if getent hosts host.docker.internal >/dev/null 2>&1; then
-    echo "note: this looks like Docker Desktop / OrbStack: every browser reaches the hub from the bridge's gateway," \
-      "which the admin UI never counts as LAN. Publish the port on 127.0.0.1 only and list the gateway in" \
-      "JARVIS_ADMIN_CIDRS (docs/admin.md), or manage the hub with docker compose exec hub jarvisd hub admin." >&2
-  fi ;;
-esac
 case "${JARVIS_ADMIN_ACCESS:-}" in
 '') echo "reminder: JARVIS_ADMIN_ACCESS is not set in .env: the admin UI (/admin) follows hub.json's admin.access," \
   "lan (private addresses) unless set there. Choose loopback, lan, cidrs or any (docs/admin.md)." >&2 ;;

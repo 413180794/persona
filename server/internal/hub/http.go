@@ -15,10 +15,11 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/nwverse/persona/server/internal/apierr"
+	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/link"
 	"github.com/nwverse/persona/server/internal/proto"
-	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 func (h *Hub) routes() http.Handler {
@@ -243,8 +244,6 @@ func (h *Hub) routes() http.Handler {
 	h.agentRoutes(api)
 	h.inboxRoutes(api)
 	h.todoRoutes(api)
-	h.taskRoutes(api)
-	h.todayRoutes(api)
 	h.connectorRoutes(api)
 	h.translateRoutes(api)
 	h.pluginRoutes(api)
@@ -265,6 +264,7 @@ func (h *Hub) routes() http.Handler {
 	centerAPI := h.auth(h.pluginAPIs(jsonRouteErrors(api), api))
 	h.mesh.centerAPI.Store(centerAPI)
 	appAPI := h.gate(h.memberForward(centerAPI))
+	h.busRoutes(mux)
 	mux.Handle("/api/", appAPI)
 	mux.Handle("/", h.adminRoutes(mux, appAPI, webApp(filepath.Join(h.cfg.dir, "web"))))
 	return logRequests(h, jsonRouteErrors(mux))
@@ -361,7 +361,7 @@ func logRequests(h *Hub, next http.Handler) http.Handler {
 // longLived requests (WebSockets, a plugin's sockets and streams, a forwarded port's connections: ports.go) are not
 // slow requests however long they last.
 func longLived(path string) bool {
-	return path == "/api/v1/ws" || path == link.Path || path == link.StreamPath ||
+	return path == "/api/v1/ws" || path == link.Path || path == link.StreamPath || path == bus.Path ||
 		strings.HasPrefix(path, "/api/v1/plugins/") || strings.HasSuffix(path, "/connect")
 }
 
@@ -373,10 +373,7 @@ func requestID(client string) string {
 	return randomHex(4)
 }
 
-func writeJSON(w http.ResponseWriter, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(v)
-}
+func writeJSON(w http.ResponseWriter, v any) { apierr.WriteJSON(w, v) }
 
 func atoi(s string) int {
 	n := 0
@@ -400,48 +397,7 @@ func (h *Hub) withMachine(fn func(http.ResponseWriter, *http.Request, *Machine))
 	}
 }
 
-func callErr(w http.ResponseWriter, err error) {
-	status := http.StatusBadGateway
-	if errors.Is(err, errOffline) {
-		status = http.StatusServiceUnavailable
-	}
-	code := nodeErrorCode(err)
-	var re *rpc.Error
-	if errors.As(err, &re) && re.Code != "" {
-		code = re.Code
-		switch code {
-		case "internal", "node_unreachable", "timeout":
-			status = http.StatusBadGateway
-		default:
-			status = http.StatusConflict
-		}
-	}
-	body := errorBody(status, code, err)
-	// delivered stays what the node said (sendsafe.go): the iOS app treats "unknown" as "maybe typed" and stops
-	// retrying by itself, so a bare timeout must not claim it. Newer clients read code (timeout, node_unreachable).
-	if re != nil {
-		// Keep refusal details flat for existing clients, including draft and clearable.
-		var data map[string]any
-		if json.Unmarshal(re.Data, &data) == nil {
-			for key, value := range data {
-				if key == "retryable" {
-					if _, ok := value.(bool); !ok {
-						continue
-					}
-				}
-				if key == "delivered" && value != "none" && value != "unknown" && value != "yes" {
-					continue
-				}
-				body[key] = value
-			}
-		}
-		if re.Code != "" || len(re.Data) > 0 {
-			body["error"] = re.Message
-		}
-		body["code"] = code
-	}
-	writeErrorBody(w, status, body)
-}
+func callErr(w http.ResponseWriter, err error) { apierr.Call(w, err) }
 
 // proxy forwards a GET to the machine's node and returns its result verbatim.
 func (h *Hub) proxy(method string, params func(*http.Request) any) http.HandlerFunc {

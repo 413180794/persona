@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -82,20 +83,20 @@ func autoDoneSkip(t Todo, work time.Time, worked bool) string {
 
 // taskReplies are the last replies of t's active agents: the whole last answer read from the agent's transcript, or
 // the session list's clipped last_text when that cannot be read.
-func (h *Hub) taskReplies(ctx context.Context, t Todo) []prompts.TaskDoneReply {
+func (s *Service) taskReplies(ctx context.Context, t Todo) []prompts.TaskDoneReply {
 	var out []prompts.TaskDoneReply
 	for _, a := range t.Agents {
 		if a.ReleasedAt != nil || a.DismissedAt != nil {
 			continue
 		}
-		m := h.localMachine(a.MachineID)
-		if m == nil {
+		m, ok := s.device(ctx, a.MachineID)
+		if !ok {
 			continue
 		}
-		ask, text := lastTurn(ctx, m, a.SessionID)
+		ask, text := s.lastTurn(ctx, m.ID, a.SessionID)
 		if text == "" {
-			if s, ok := m.session(a.SessionID); ok {
-				text = strings.TrimSpace(s.LastText)
+			if c, ok := s.session(ctx, m.ID, a.SessionID); ok {
+				text = strings.TrimSpace(c.LastText)
 			}
 		}
 		if text == "" {
@@ -104,7 +105,7 @@ func (h *Hub) taskReplies(ctx context.Context, t Todo) []prompts.TaskDoneReply {
 		if sameRequest(ask, t.Notes) {
 			ask = "" // the turn that answers the task's own prompt: the prompt is already in the input
 		}
-		out = append(out, prompts.TaskDoneReply{Machine: m.cfg.Name, Ask: clipMiddle(ask, 500), Text: clipMiddle(text, 1500)})
+		out = append(out, prompts.TaskDoneReply{Machine: m.Name, Ask: clipMiddle(ask, 500), Text: clipMiddle(text, 1500)})
 	}
 	return out
 }
@@ -112,13 +113,13 @@ func (h *Hub) taskReplies(ctx context.Context, t Todo) []prompts.TaskDoneReply {
 // lastTurn is the agent's latest turn: what the user asked in it (its first user message; "" when none) and its last
 // reply ("" when the turn cannot be read). The user may have sent the agent a follow-up since the task's prompt: the
 // work to judge is then that.
-func lastTurn(ctx context.Context, m *Machine, sid string) (ask, answer string) {
+func (s *Service) lastTurn(ctx context.Context, machine, sid string) (ask, answer string) {
 	var res struct {
 		Items []proto.Item `json:"items"`
 	}
 	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	if err := m.call(cctx, "session.items", map[string]any{"session_id": sid, "turns": 1}, &res); err != nil {
+	if err := s.call(cctx, machine, DeviceSessionItems, map[string]any{"session_id": sid, "turns": 1}, &res); err != nil {
 		return "", ""
 	}
 	for _, it := range res.Items {
@@ -157,8 +158,8 @@ func clipMiddle(s string, n int) string {
 }
 
 // judgeTaskDone asks the judge model whether t's work is finished. An error: no model, or no answer to go by.
-func (h *Hub) judgeTaskDone(ctx context.Context, t Todo) (taskDoneCheck, error) {
-	replies := h.taskReplies(ctx, t)
+func (s *Service) judgeTaskDone(ctx context.Context, t Todo) (taskDoneCheck, error) {
+	replies := s.taskReplies(ctx, t)
 	c := taskDoneCheck{Replies: len(replies), Signals: doneSignals(replies)}
 	if len(replies) == 0 {
 		c.Verdict, c.Reason = verdictUnsure, "没读到 Agent 的回复"
@@ -170,14 +171,14 @@ func (h *Hub) judgeTaskDone(ctx context.Context, t Todo) (taskDoneCheck, error) 
 			return c, nil
 		}
 	}
-	system := prompts.RenderTaskDone(prompts.TaskDone{Owner: h.ownerName()})
+	system := prompts.RenderTaskDone(prompts.TaskDone{Owner: s.owner(ctx)})
 	input := prompts.RenderTaskDoneInput(prompts.TaskDoneInput{Title: t.Title, Prompt: clipMiddle(strings.TrimSpace(t.Notes), 1500),
 		Replies: replies, MergedPR: c.Signals.MergedPR, Build: c.Signals.Build})
 	var out struct {
 		Verdict string `json:"verdict"`
 		Reason  string `json:"reason"`
 	}
-	if err := h.judgeModel().JSON(ctx, system, input, &out); err != nil {
+	if err := s.appCall(ctx, AppModels, ModelsJSON, map[string]any{"purpose": "inbox.judge", "system": system, "input": input}, &out); err != nil {
 		return c, err
 	}
 	switch v := strings.ToLower(strings.TrimSpace(out.Verdict)); v {
@@ -193,24 +194,24 @@ func (h *Hub) judgeTaskDone(ctx context.Context, t Todo) (taskDoneCheck, error) 
 
 // autoFinishTask: t's receipt went out (its agents all stopped). work is when one of them last started a turn. The
 // todo is marked done when the judge finds the work finished; otherwise it stays as it is.
-func (h *Hub) autoFinishTask(t Todo, work time.Time, worked bool) {
+func (s *Service) autoFinishTask(t Todo, work time.Time, worked bool) {
 	if skip := autoDoneSkip(t, work, worked); skip != "" {
 		if skip == "reopened" {
-			h.logf("task %s: reopened by the user and no new turn since: not judged", t.ID)
+			s.logf("task %s: reopened by the user and no new turn since: not judged", t.ID)
 		}
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), taskDoneTimeout)
 	defer cancel()
-	c, err := h.judgeTaskDone(ctx, t)
+	c, err := s.judgeTaskDone(ctx, t)
 	if err != nil {
 		if !ai.IsPaused(err) {
-			h.logf("task %s: done judge: %v (left open)", t.ID, err)
+			s.logf("task %s: done judge: %v (left open)", t.ID, err)
 		}
 		return
 	}
 	if !c.WouldClose {
-		h.logf("task %s: not closed: %s (%s)", t.ID, c.Verdict, c.Reason)
+		s.logf("task %s: not closed: %s (%s)", t.ID, c.Verdict, c.Reason)
 		return
 	}
 	reason := c.Reason
@@ -220,91 +221,63 @@ func (h *Hub) autoFinishTask(t Todo, work time.Time, worked bool) {
 	if !worked {
 		work = t.CreatedAt
 	}
-	ok, err := h.autoDoneTodo(ctx, t.ID, reason, work)
+	ok, err := s.autoDoneTodo(ctx, t.ID, reason, work)
 	switch {
 	case err != nil:
-		h.logf("task %s: auto done: %v", t.ID, err)
+		s.logf("task %s: auto done: %v", t.ID, err)
 	case ok:
-		h.logf("task %s: done (auto): %s", t.ID, reason)
+		s.logf("task %s: done (auto): %s", t.ID, reason)
 	default:
-		h.logf("task %s: changed while judged: left as it is", t.ID)
+		s.logf("task %s: changed while judged: left as it is", t.ID)
 	}
 }
 
-// autoDoneTodo marks todo id done by the hub when it is still open and was not reopened after work began; false when
-// the user got there first (done it, reopened it) or it is gone.
-func (h *Hub) autoDoneTodo(ctx context.Context, id, reason string, work time.Time) (bool, error) {
-	now := time.Now().UTC()
-	var row db.TodoRow
-	if h.store != nil {
-		r, ok, err := h.store.AutoDoneTodo(ctx, id, reason, now, work)
-		if errors.Is(err, db.ErrTodoNotFound) {
-			return false, nil
-		}
-		if err != nil || !ok {
-			return false, err
-		}
-		row = *r
-	} else {
-		h.todos.mu.RLock()
-		t := h.todos.todos[id]
-		if t != nil {
-			row = db.TodoRow{ID: t.ID, Title: t.Title, Notes: t.Notes, CreatedAt: t.CreatedAt, Origin: t.Origin, PlanID: t.PlanID,
-				ReopenedAt: t.ReopenedAt}
-		}
-		h.todos.mu.RUnlock()
-		if t == nil {
-			return false, nil
-		}
-		row.DoneAt, row.DoneBy, row.DoneReason, row.UpdatedAt = &now, db.DoneByAuto, reason, now
+// autoDoneTodo marks todo id done by the assistant's judge when it is still open and was not reopened after work
+// began; false when the user got there first (done it, reopened it) or it is gone.
+func (s *Service) autoDoneTodo(ctx context.Context, id, reason string, work time.Time) (bool, error) {
+	var res struct {
+		OK bool `json:"ok"`
 	}
-	_, ok := h.applyTodoRow(id, row, func(t *Todo) bool {
-		if t.UpdatedAt.After(row.UpdatedAt) { // the user changed it after the store did: theirs stands
-			return false
-		}
-		return h.store != nil || t.DoneAt == nil && (t.ReopenedAt == nil || t.ReopenedAt.Before(work))
-	})
-	return ok, nil
+	err := s.appCall(ctx, AppTodos, TodosAutoDone, map[string]any{"todo_id": id, "reason": reason, "work": work}, &res)
+	return res.OK, err
 }
 
 // doneCheckRoute: POST /api/v1/todos/{id}/done-check runs the judgment on a todo as it is and answers it; nothing is
 // written (for looking into why a task was or was not closed).
-func (h *Hub) doneCheckRoute(api *http.ServeMux) {
-	api.HandleFunc("POST /api/v1/todos/{id}/done-check", func(w http.ResponseWriter, r *http.Request) {
-		if principalOf(r.Context()).Role != roleFull {
-			writeErr(w, http.StatusForbidden, errors.New("read-only role cannot judge todos"))
+func (s *Service) doneCheckRoute() {
+	s.handle("POST /api/v1/todos/{id}/done-check", func(w http.ResponseWriter, r *http.Request) {
+		if !fullRole(r) {
+			apierr.Write(w, http.StatusForbidden, errors.New("read-only role cannot judge todos"))
 			return
 		}
-		if err := h.ensureTodosLoaded(r.Context()); err != nil {
-			writeErr(w, http.StatusServiceUnavailable, errors.New("todos service unavailable"))
+		if err := s.todosLoad(r.Context()); err != nil {
+			apierr.Write(w, http.StatusServiceUnavailable, errors.New("todos service unavailable"))
 			return
 		}
 		id := r.PathValue("id")
-		h.todos.mu.RLock()
-		tp := h.todos.todos[id]
-		var t Todo
-		if tp != nil {
-			t = copyTodoLocked(tp)
-		}
-		h.todos.mu.RUnlock()
-		if tp == nil {
-			writeErr(w, http.StatusNotFound, db.ErrTodoNotFound)
+		t, ok, err := s.todo(r.Context(), id)
+		if err != nil {
+			apierr.Write(w, http.StatusServiceUnavailable, errors.New("todos service unavailable"))
 			return
 		}
-		h.tasks.mu.Lock()
-		work, worked := h.tasks.working[id]
-		h.tasks.mu.Unlock()
+		if !ok {
+			apierr.Write(w, http.StatusNotFound, db.ErrTodoNotFound)
+			return
+		}
+		s.tasks.mu.Lock()
+		work, worked := s.tasks.working[id]
+		s.tasks.mu.Unlock()
 		ctx, cancel := context.WithTimeout(r.Context(), taskDoneTimeout)
 		defer cancel()
-		c, err := h.judgeTaskDone(ctx, t)
+		c, err := s.judgeTaskDone(ctx, t)
 		if err != nil {
-			writeErr(w, http.StatusBadGateway, err)
+			apierr.Write(w, http.StatusBadGateway, err)
 			return
 		}
 		c.Skip = autoDoneSkip(t, work, worked)
 		if c.Skip != "" {
 			c.WouldClose = false
 		}
-		writeJSON(w, c)
+		apierr.WriteJSON(w, c)
 	})
 }

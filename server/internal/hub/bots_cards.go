@@ -685,13 +685,11 @@ func (h *Hub) botMirror(machine, session string) {
 }
 
 // taskOfConversation is the name of the scheduled task whose own conversation this is, or "".
-func (h *Hub) taskOfConversation(ctx context.Context, machine, session string) string {
-	s := h.loadSchedule(ctx)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, t := range s.tasks {
+func (h *Hub) taskOfConversation(_ context.Context, machine, session string) string {
+	tasks, _ := h.assistantTasks() // the assistant's, as it reported them
+	for _, t := range tasks {
 		if t.RunSessionID == session && t.RunMachineID == machine {
-			return t.label()
+			return t.Label
 		}
 	}
 	return ""

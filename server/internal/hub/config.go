@@ -84,6 +84,9 @@ type AssistantProfile struct {
 	// Defaults until changed in the app: the machine it runs on (default: the hub's own) and the launcher.
 	Machine  string `json:"machine,omitempty"`
 	Launcher string `json:"launcher,omitempty"`
+	// External: the assistant's process (personad assistant) runs elsewhere and connects with a token of its own
+	// (personad hub assistant-token); the hub does not start one (assistant_process.go).
+	External bool `json:"external,omitempty"`
 }
 
 // MicrosoftConfig is Outlook's "Sign in with Microsoft" (docs/mail.md「Outlook 接入方式」): an optional default client

@@ -130,6 +130,7 @@ func TestSelfSettingsRulesAndNotesPersist(t *testing.T) {
 
 func TestSelfSettingsToolOnlyForAssistant(t *testing.T) {
 	h := newTestHub(t)
+	connectAssistant(t, h)
 	for _, tool := range h.mcpTools(false) {
 		if tool.Name == "jarvis_settings" {
 			t.Fatal("ordinary agent gets self settings")
@@ -139,7 +140,7 @@ func TestSelfSettingsToolOnlyForAssistant(t *testing.T) {
 	for _, tool := range h.mcpTools(true) {
 		found = found || tool.Name == "jarvis_settings"
 	}
-	if !found || !isAssistantTool("jarvis_settings") {
+	if !found || !h.isAssistantTool(context.Background(), "jarvis_settings") {
 		t.Fatal("assistant lacks self settings")
 	}
 	out, err := h.toolJarvisSettings(context.Background(), nil, "", json.RawMessage(`{}`))

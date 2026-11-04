@@ -67,10 +67,9 @@ func TestWSNotifyDone(t *testing.T) {
 
 func TestWSNotifyInteractionAndAssistant(t *testing.T) {
 	c := &client{device: "test-device", out: make(chan []byte, 4)}
-	h := &Hub{
-		clients: map[*client]struct{}{c: {}}, push: newPusher(t.TempDir(), nil, t.Logf),
-		notified: map[string]time.Time{},
-	}
+	h := newTestHub(t)
+	h.clients, h.push = map[*client]struct{}{c: {}}, newPusher(t.TempDir(), nil, t.Logf)
+	connectAssistant(t, h) // notify_user is its tool; the push is the hub's (notify.request)
 	h.onClientMessage(context.Background(), c, []byte(`{"type":"client_hello","features":["ws_notify"]}`))
 	<-c.out
 	ix := proto.Interaction{
@@ -102,8 +101,8 @@ func TestWSNotifyInteractionAndAssistant(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := &Machine{cfg: MachineConfig{ID: "test-machine"}}
-	if _, err := h.runAssistantTool(context.Background(), m, "test-session", "notify_user", json.RawMessage(`{"title":"提醒","body":"任务有新进展"}`)); err != nil {
-		t.Fatal(err)
+	if r := h.callAssistantTool(context.Background(), m, "test-session", "notify_user", json.RawMessage(`{"title":"提醒","body":"任务有新进展"}`)); r.IsError {
+		t.Fatal(r.Content[0].Text)
 	}
 	select {
 	case raw := <-c.out:

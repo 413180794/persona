@@ -1,4 +1,4 @@
-package hub
+package assistant
 
 import (
 	"context"
@@ -63,30 +63,31 @@ func TestParseWhen(t *testing.T) {
 	}
 }
 
-func setTasks(h *Hub, tasks ...Task) *schedule {
-	s := h.loadSchedule(context.Background())
-	s.mu.Lock()
-	s.tasks = tasks
-	s.mu.Unlock()
-	return s
+func setTasks(s *Service, tasks ...Task) *schedule {
+	sc := s.loadSchedule(context.Background())
+	sc.mu.Lock()
+	sc.tasks = tasks
+	sc.mu.Unlock()
+	return sc
 }
 
-func taskByID(h *Hub, id string) (Task, bool) {
-	s := h.loadSchedule(context.Background())
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if i := s.indexLocked(id); i >= 0 {
-		return s.tasks[i], true
+func taskByID(s *Service, id string) (Task, bool) {
+	sc := s.loadSchedule(context.Background())
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	if i := sc.indexLocked(id); i >= 0 {
+		return sc.tasks[i], true
 	}
 	return Task{}, false
 }
 
 func TestDueTasksRunOnceAndStaleDailyOnesAreSkipped(t *testing.T) {
-	h := newTestHub(t)
-	h.userTZ = "Asia/Shanghai"
+	f := newFakeHub()
+	f.hello.Timezone = "Asia/Shanghai"
+	h := newStorelessService(t, f)
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	at := func(hh, mm int) time.Time { return time.Date(2026, 10, 26, hh, mm, 0, 0, loc) }
-	s := setTasks(h,
+	sc := setTasks(h,
 		Task{ID: "r", Title: "早报", Prompt: "x", Repeat: repeatDaily, Time: "09:00", Enabled: true, LastRun: at(9, 0).Add(-24 * time.Hour)},
 		Task{ID: "f1", Repeat: repeatOnce, At: at(9, 0).Add(30 * time.Second), Prompt: "y", Enabled: true},
 		Task{ID: "f2", Repeat: repeatOnce, At: at(12, 0), Prompt: "z", Enabled: true},
@@ -108,9 +109,9 @@ func TestDueTasksRunOnceAndStaleDailyOnesAreSkipped(t *testing.T) {
 		t.Fatalf("a little late, the patrol runs now and stays on its half hours: %+v", p)
 	}
 	// Down for longer than an interval: once now, then every 30 minutes from here.
-	s.mu.Lock()
-	s.tasks[3].At = at(7, 0)
-	s.mu.Unlock()
+	sc.mu.Lock()
+	sc.tasks[3].At = at(7, 0)
+	sc.mu.Unlock()
 	h.runDue(context.Background(), at(9, 2))
 	h.sched.inflight.Wait() // the runs it started give up (no machine) before we look
 	if p, _ := taskByID(h, "p"); !p.At.Equal(at(9, 32)) {
@@ -120,9 +121,9 @@ func TestDueTasksRunOnceAndStaleDailyOnesAreSkipped(t *testing.T) {
 		t.Fatal("the app doesn't list a one-off that already ran")
 	}
 	// A hub that was down all morning does not send the 早报 at noon.
-	s.mu.Lock()
-	s.tasks[0].LastRun = at(9, 0).Add(-24 * time.Hour)
-	s.mu.Unlock()
+	sc.mu.Lock()
+	sc.tasks[0].LastRun = at(9, 0).Add(-24 * time.Hour)
+	sc.mu.Unlock()
 	h.runDue(context.Background(), at(11, 0))
 	h.sched.inflight.Wait() // the runs it started give up (no machine) before we look
 	if r, _ := taskByID(h, "r"); !r.LastRun.Equal(at(11, 0)) || r.LastStatus != runSkipped {
@@ -139,8 +140,9 @@ func TestDueTasksRunOnceAndStaleDailyOnesAreSkipped(t *testing.T) {
 // A run that ends after a newer run or skip of its task started is history only: the slow 09:01 run (an assistant
 // that takes a while to give up) records its failure after the 11:00 skip, and the task still says skipped (#556).
 func TestALateRunDoesNotOverwriteANewerStatus(t *testing.T) {
-	h := newTestHub(t)
-	h.userTZ = "Asia/Shanghai"
+	f := newFakeHub()
+	f.hello.Timezone = "Asia/Shanghai"
+	h := newStorelessService(t, f)
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	at := func(hh, mm int) time.Time { return time.Date(2026, 10, 26, hh, mm, 0, 0, loc) }
 	setTasks(h, Task{ID: "r", Title: "早报", Prompt: "x", Repeat: repeatDaily, Time: "09:00", Enabled: true,
@@ -151,10 +153,10 @@ func TestALateRunDoesNotOverwriteANewerStatus(t *testing.T) {
 	if r.LastStatus != runSkipped || r.LastError != "Persona 停机，错过了时间" {
 		t.Fatalf("the late run overwrote the newer status: %+v", r)
 	}
-	s := h.loadSchedule(context.Background())
-	s.mu.Lock()
-	n := len(s.runs)
-	s.mu.Unlock()
+	sc := h.loadSchedule(context.Background())
+	sc.mu.Lock()
+	n := len(sc.runs)
+	sc.mu.Unlock()
 	if n != 1 {
 		t.Fatalf("the late run is not in the history: %d runs", n)
 	}
@@ -173,9 +175,10 @@ func TestALateRunDoesNotOverwriteANewerStatus(t *testing.T) {
 // prompt), so it was a new one-off every time, gone from the app while a run was stuck. Now its first re-schedule
 // turns it into one task every 30 minutes, with the launcher and mode the user picked, and later ones change nothing.
 func TestARunReschedulingItselfKeepsOneTask(t *testing.T) {
-	h := newTestHub(t)
-	h.userTZ = "Asia/Shanghai"
-	m := &Machine{cfg: MachineConfig{ID: "server"}}
+	f := newFakeHub()
+	f.hello.Timezone = "Asia/Shanghai"
+	h := newStorelessService(t, f)
+	m := "server"
 	prompt := "按手册巡检一次，最后用 schedule_followup（new_conversation=true，at=30m，prompt 和本条相同）安排下一次。"
 	setTasks(h, Task{ID: "fu_1", Title: "30 分钟巡检", Prompt: prompt, Repeat: repeatOnce, At: time.Now().Add(-time.Minute),
 		LastRun: time.Now(), MachineID: "server", PermissionMode: "acceptEdits", Launcher: "claude-fast"})
@@ -211,10 +214,10 @@ func TestARunReschedulingItselfKeepsOneTask(t *testing.T) {
 		t.Fatalf("no second task, same next run: %+v", tasks)
 	}
 	// Turned off in the app: a run doesn't turn it back on.
-	s := h.loadSchedule(context.Background())
-	s.mu.Lock()
-	s.tasks[0].Enabled = false
-	s.mu.Unlock()
+	sc := h.loadSchedule(context.Background())
+	sc.mu.Lock()
+	sc.tasks[0].Enabled = false
+	sc.mu.Unlock()
 	if out, _ = h.toolScheduleFollowup(context.Background(), m, "run-2", args); !strings.Contains(out, "turned off") {
 		t.Fatalf("off: %q", out)
 	}
@@ -232,8 +235,8 @@ func TestARunReschedulingItselfKeepsOneTask(t *testing.T) {
 }
 
 func TestScheduleFollowupEvery(t *testing.T) {
-	h := newTestHub(t)
-	m := &Machine{cfg: MachineConfig{ID: "server"}}
+	h := newStorelessService(t, newFakeHub())
+	m := "server"
 	setTasks(h)
 	out, err := h.toolScheduleFollowup(context.Background(), m, "s1", json.RawMessage(`{"every":"2h","prompt":"看看部署","title":"部署巡检"}`))
 	if err != nil || !strings.Contains(out, "every 2 小时") {
@@ -308,12 +311,11 @@ func TestEditTask(t *testing.T) {
 }
 
 func TestTaskRoutes(t *testing.T) {
-	h := newTestHub(t)
+	h := newStorelessService(t, newFakeHub())
 	setTasks(h, Task{ID: "morning", Title: "早报", Prompt: "x", Repeat: repeatDaily, Time: "09:00", Enabled: true},
 		Task{ID: "fu_1", Title: "巡检", Prompt: "y", Repeat: repeatInterval, EveryMinutes: 30, At: time.Now().Add(time.Minute), Enabled: true,
 			MachineID: "server"})
-	mux := http.NewServeMux()
-	h.scheduleRoutes(mux)
+	mux := h // the routes the hub relays
 	do := func(method, path, body string) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, httptest.NewRequest(method, path, strings.NewReader(body)))
@@ -333,7 +335,7 @@ func TestTaskRoutes(t *testing.T) {
 	rec = do("POST", "/api/v1/assistant/tasks", `{"title":"喝水","prompt":"提醒我喝水","repeat":"once","at":"2099-01-01T09:00:00Z","enabled":true,"session_id":"s9"}`)
 	var created struct{ Task Task }
 	_ = json.Unmarshal(rec.Body.Bytes(), &created)
-	if rec.Code != 200 || created.Task.ID == "" || created.Task.SessionID != "" || created.Task.MachineID == "" && h.assistantConfig(context.Background()).MachineID != "" {
+	if rec.Code != 200 || created.Task.ID == "" || created.Task.SessionID != "" || created.Task.MachineID == "" && h.hello(context.Background()).Assistant.MachineID != "" {
 		t.Fatalf("create: %d %s", rec.Code, rec.Body)
 	}
 	// Builds from before keep working: routines are the daily tasks, follow-ups the rest.
@@ -364,21 +366,22 @@ func TestTaskRoutes(t *testing.T) {
 }
 
 func TestScheduleRoutineTool(t *testing.T) {
-	h := newTestHub(t)
-	h.userTZ = "Asia/Shanghai"
+	f := newFakeHub()
+	f.hello.Timezone = "Asia/Shanghai"
+	h := newStorelessService(t, f)
 	out, err := h.toolScheduleRoutine(context.Background(), json.RawMessage(`{"title":"周报","prompt":"起草周报","time":"17:00","weekdays":[5]}`))
 	if err != nil || !strings.Contains(out, "周五 17:00") {
 		t.Fatalf("create: %q, %v", out, err)
 	}
-	s := h.loadSchedule(context.Background())
-	r := s.tasks[len(s.tasks)-1]
+	sc := h.loadSchedule(context.Background())
+	r := sc.tasks[len(sc.tasks)-1]
 	if r.CreatedBy != "assistant" || !r.Enabled || r.Title != "周报" || r.Repeat != repeatDaily {
 		t.Fatalf("routine %+v", r)
 	}
 	if _, err := h.toolScheduleRoutine(context.Background(), json.RawMessage(`{"id":"`+r.ID+`","enabled":false,"weekdays":[1,2,3,4,5,6,7]}`)); err != nil {
 		t.Fatal(err)
 	}
-	if r2 := s.tasks[len(s.tasks)-1]; r2.Enabled || r2.Weekdays != nil || r2.Prompt != "起草周报" {
+	if r2 := sc.tasks[len(sc.tasks)-1]; r2.Enabled || r2.Weekdays != nil || r2.Prompt != "起草周报" {
 		t.Fatalf("an update changes only the fields given: %+v", r2)
 	}
 	if _, err := h.toolScheduleRoutine(context.Background(), json.RawMessage(`{"title":"x","prompt":"y","time":"9am"}`)); err == nil {
@@ -445,14 +448,14 @@ func scheduleStore(t *testing.T) *db.DB {
 	return database
 }
 
-func waitRuns(t *testing.T, h *Hub, n int) []ScheduleRun {
+func waitRuns(t *testing.T, s *Service, n int) []ScheduleRun {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		s := h.loadSchedule(context.Background())
-		s.mu.Lock()
-		runs := append([]ScheduleRun(nil), s.runs...)
-		s.mu.Unlock()
+		sc := s.loadSchedule(context.Background())
+		sc.mu.Lock()
+		runs := append([]ScheduleRun(nil), sc.runs...)
+		sc.mu.Unlock()
 		if len(runs) >= n {
 			return runs
 		}
@@ -481,11 +484,10 @@ func TestTasksMovedFromTheOldLists(t *testing.T) {
 		Prompt: "⏰ 30 分钟巡检（你之前安排的跟进）\n\n巡检", MachineID: "server"}}); err != nil {
 		t.Fatal(err)
 	}
-	boot := func() *Hub {
-		h := newTestHub(t)
-		h.store = store
-		h.userTZ = loc.String()
-		return h
+	boot := func() *Service {
+		f := newFakeHub()
+		f.hello.Timezone = loc.String()
+		return newServiceOn(t, f, store)
 	}
 	h1 := boot()
 	tasks := h1.tasksView(ctx, nil)
@@ -516,21 +518,20 @@ func TestScheduleAcrossHubRestart(t *testing.T) {
 	store := scheduleStore(t)
 	loc, _ := time.LoadLocation("Asia/Shanghai")
 	at := func(h, m int) time.Time { return time.Date(2026, 10, 26, h, m, 0, 0, loc) }
-	boot := func() *Hub {
-		h := newTestHub(t)
-		h.store = store
-		h.userTZ = "Asia/Shanghai"
-		return h
+	boot := func() *Service {
+		f := newFakeHub()
+		f.hello.Timezone = "Asia/Shanghai"
+		return newServiceOn(t, f, store)
 	}
 	h1 := boot()
-	s := h1.loadSchedule(context.Background())
-	s.mu.Lock()
-	s.tasks = []Task{{ID: "r9", Title: "早报", Prompt: "x", Repeat: repeatDaily, Time: "09:00", Enabled: true, LastRun: at(9, 0).Add(-24 * time.Hour)},
+	sc := h1.loadSchedule(context.Background())
+	sc.mu.Lock()
+	sc.tasks = []Task{{ID: "r9", Title: "早报", Prompt: "x", Repeat: repeatDaily, Time: "09:00", Enabled: true, LastRun: at(9, 0).Add(-24 * time.Hour)},
 		{ID: "r11", Title: "午报", Prompt: "x", Repeat: repeatDaily, Time: "11:00", Enabled: true, LastRun: at(11, 0).Add(-24 * time.Hour)},
 		{ID: "f1", Repeat: repeatOnce, At: at(9, 0), Prompt: "y", Enabled: true},
 		{ID: "f2", Repeat: repeatOnce, At: at(10, 0), Title: "看部署", Prompt: "z", Enabled: true}}
-	h1.saveLocked(s)
-	s.mu.Unlock()
+	h1.saveLocked(sc)
+	sc.mu.Unlock()
 
 	h1.runDue(context.Background(), at(9, 0).Add(2*time.Second))
 	runs := waitRuns(t, h1, 2) // no assistant machine in tests: both runs fail to start, and say so
@@ -568,11 +569,11 @@ func TestScheduleAcrossHubRestart(t *testing.T) {
 
 	// A third boot sees the same history and the tasks' last status.
 	h3 := boot()
-	s3 := h3.loadSchedule(context.Background())
-	if len(s3.runs) != 4 {
-		t.Fatalf("reloaded %d runs", len(s3.runs))
+	sc3 := h3.loadSchedule(context.Background())
+	if len(sc3.runs) != 4 {
+		t.Fatalf("reloaded %d runs", len(sc3.runs))
 	}
-	for _, r := range s3.tasks {
+	for _, r := range sc3.tasks {
 		if r.LastStatus == "" {
 			t.Fatalf("task %s has no last status", r.ID)
 		}
@@ -584,7 +585,7 @@ func TestScheduleAcrossHubRestart(t *testing.T) {
 
 // flakyScheduleStore keeps settings in memory; reads fail while failRead is set.
 type flakyScheduleStore struct {
-	Store
+	noPlans
 	mu       sync.Mutex
 	failRead bool
 	data     map[string][]byte
@@ -630,9 +631,8 @@ func TestScheduleReadFailureNeverOverwrites(t *testing.T) {
 		before[k] = string(v)
 	}
 	store.puts, store.failRead = 0, true
-	h := newTestHub(t)
-	h.store = store
-	m := &Machine{cfg: MachineConfig{ID: "server"}}
+	h := newServiceOn(t, newFakeHub(), store)
+	m := "server"
 
 	if _, err := h.toolScheduleRoutine(ctx, json.RawMessage(`{"title":"x","prompt":"y","time":"09:00"}`)); !errors.Is(err, errScheduleUnavailable) {
 		t.Fatalf("schedule_routine while unreadable: %v", err)
@@ -651,8 +651,7 @@ func TestScheduleReadFailureNeverOverwrites(t *testing.T) {
 	if next := h.nextDue(ctx, time.Now()); !next.IsZero() {
 		t.Fatalf("next due while unreadable: %v", next)
 	}
-	mux := http.NewServeMux()
-	h.scheduleRoutes(mux)
+	mux := h // the routes the hub relays
 	for _, req := range []struct{ method, path, body string }{
 		{"GET", "/api/v1/assistant/tasks", ""},
 		{"GET", "/api/v1/assistant/routines", ""},
@@ -701,12 +700,21 @@ func TestScheduleReadFailureNeverOverwrites(t *testing.T) {
 // With nothing stored yet (a new hub), the defaults are the schedule and saving them is fine.
 func TestScheduleDefaultsWhenNothingStored(t *testing.T) {
 	ctx := context.Background()
-	h := newTestHub(t)
-	h.store = &flakyScheduleStore{data: map[string][]byte{}}
+	h := newServiceOn(t, newFakeHub(), &flakyScheduleStore{data: map[string][]byte{}})
 	if err := h.scheduleReadable(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if tasks := h.tasksView(ctx, nil); len(tasks) != len(defaultRoutines()) {
 		t.Fatalf("defaults: %+v", tasks)
+	}
+}
+
+// From the model configuration (docs/model-config.md): a task never carries a model of its own.
+func TestTaskEditsCannotCreateModelOverrides(t *testing.T) {
+	old := Task{ID: "one", Launcher: "old", Model: "old-model", Effort: "high"}
+	in := Task{Title: "任务", Launcher: "requested", Model: "requested-model", Effort: "low", PermissionMode: "bypassPermissions"}
+	task := editTask(old, in, old.CreatedAt)
+	if task.Launcher != "" || task.Model != "" || task.Effort != "" || task.PermissionMode != "bypassPermissions" {
+		t.Fatalf("task edit created a hidden model override: %+v", task)
 	}
 }

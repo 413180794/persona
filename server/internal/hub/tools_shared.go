@@ -1,0 +1,155 @@
+package hub
+
+import (
+	"encoding/json"
+	"fmt"
+	"path"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// What the hub's own features use of what used to be the assistant's tools (the assistant's are internal/assistant,
+// tools.go): MCP tool definitions, finding an agent by name (the channels, computer use), and the formatting both
+// write with.
+
+// mcpTool is one tool's definition from prompts/mcp.
+func mcpTool(name string) proto.Tool {
+	t := prompts.Tool(name)
+	return proto.Tool{Name: t.Name, Description: t.Description, InputSchema: t.InputSchema}
+}
+
+func (h *Hub) machineByName(id string) *Machine {
+	if m := h.localMachine(id); m != nil {
+		return m
+	}
+	for _, m := range h.machinesNow() {
+		if strings.EqualFold(m.cfg.Name, id) || strings.EqualFold(m.cfg.SSHHost, id) {
+			return m
+		}
+	}
+	return nil
+}
+
+// findAgent resolves a session by full id or prefix; an empty machine searches all of them.
+func (h *Hub) findAgent(machine, id string) (*Machine, proto.Session, error) {
+	id = strings.TrimSpace(id)
+	if len(id) < 6 {
+		return nil, proto.Session{}, fmt.Errorf("session_id is required (at least its first 8 characters)")
+	}
+	var found *Machine
+	var session proto.Session
+	for _, m := range h.machinesNow() {
+		if machine != "" && h.machineByName(machine) != m {
+			continue
+		}
+		for _, s := range h.decorated(m) {
+			if s.SessionID == id || strings.HasPrefix(s.SessionID, id) {
+				if found != nil {
+					return nil, proto.Session{}, fmt.Errorf("session_id %s is ambiguous; use the full id and machine", id)
+				}
+				found, session = m, s
+			}
+		}
+	}
+	if found != nil {
+		return found, session, nil
+	}
+	return nil, proto.Session{}, fmt.Errorf("no agent %s (use agents_list)", id)
+}
+
+func agentLabel(s proto.Session) string {
+	title := s.Title
+	if title == "" || title == "Claude Code" {
+		title = path.Base(s.Cwd)
+	}
+	if s.SpaceName != "" {
+		slot := s.SlotName
+		if slot == "" || slot == title {
+			return s.SpaceName + " › " + title
+		}
+		return s.SpaceName + " › " + slot + "「" + title + "」"
+	}
+	return title
+}
+
+var stateNames = map[string]string{
+	proto.StateNeedsYou: "需要你", proto.StateWorking: "工作中", proto.StateUnread: "完成未看", proto.StateIdle: "空闲",
+	proto.StateOffline: "离线", proto.StateUnknown: "未知",
+}
+
+// compactJSON drops media / avatar noise and cuts long answers so they fit in the model's context.
+func compactJSON(raw json.RawMessage, max int) string {
+	var v any
+	if json.Unmarshal(raw, &v) != nil {
+		return clip(string(raw), max)
+	}
+	v = prune(v)
+	b, _ := json.Marshal(v)
+	if len(b) > max {
+		return string(b[:max]) + "…(cut; narrow the query or page)"
+	}
+	return string(b)
+}
+
+func prune(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, val := range t {
+			lk := strings.ToLower(k)
+			if strings.Contains(lk, "avatar") || strings.HasSuffix(lk, "thumbnail") || lk == "highlights" || lk == "emojikey" {
+				delete(t, k)
+				continue
+			}
+			if val == nil || val == "" || val == false {
+				delete(t, k)
+				continue
+			}
+			t[k] = prune(val)
+		}
+	case []any:
+		for i := range t {
+			t[i] = prune(t[i])
+		}
+	}
+	return v
+}
+
+// ---- formatting ----
+
+func clip(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	r := []rune(s)
+	return string(r[:n]) + "…"
+}
+
+func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+func ago(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "刚刚"
+	case d < time.Hour:
+		return fmt.Sprintf("%d 分钟前", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%d 小时前", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%d 天前", int(d.Hours()/24))
+	}
+}
+
+func short(id string) string {
+	if len(id) > 8 {
+		return id[:8]
+	}
+	return id
+}

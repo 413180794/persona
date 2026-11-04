@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/lark"
@@ -204,8 +205,8 @@ func snapshotHub(t *testing.T, full bool) *Hub {
 	goldenMachines(h)
 	h.connectors = connector.NewRegistry(nil)
 	if !full { // no live state: chats and calendar left out
-		h.sched.loaded = true
-		return h
+		connectAssistant(t, h)
+		return h // no database: the assistant's schedule is its default routines, no follow-ups
 	}
 	if err := h.addConnector(goldenSnapshot{}); err != nil {
 		t.Fatal(err)
@@ -225,27 +226,36 @@ func snapshotHub(t *testing.T, full bool) *Hub {
 	}
 	h.byID["laptop"].sessions = working
 	h.kb.eng = goldenKB(t)
-	h.sched.loaded = true
 	at := time.Date(2099, 1, 2, 1, 30, 0, 0, time.UTC)
-	h.sched.tasks = []Task{
-		{ID: "a", Title: "看 CI", Repeat: repeatOnce, At: at, Enabled: true},
-		{ID: "b", Prompt: "巡检一下各台电脑上的 Agent 有没有卡住的，这句话会被截断", Repeat: repeatInterval, EveryMinutes: 30, At: at, Enabled: true},
-		{ID: "c", Title: "早报", Repeat: repeatDaily, Time: "09:00", Enabled: true},
-		{ID: "d", Title: "停了的", Repeat: repeatOnce, At: at, Enabled: false},
-		{ID: "e", Repeat: repeatInterval, EveryMinutes: 120, At: at, Enabled: true, Prompt: "x"},
-	}
+	seedTasks(t, h, // the assistant's, which it reports to the hub
+		assistant.Task{ID: "a", Title: "看 CI", Repeat: "once", At: at, Enabled: true},
+		assistant.Task{ID: "b", Prompt: "巡检一下各台电脑上的 Agent 有没有卡住的，这句话会被截断", Repeat: "interval", EveryMinutes: 30, At: at, Enabled: true},
+		assistant.Task{ID: "c", Title: "早报", Repeat: "daily", Time: "09:00", Enabled: true},
+		assistant.Task{ID: "d", Title: "停了的", Repeat: "once", At: at, Enabled: false},
+		assistant.Task{ID: "e", Repeat: "interval", EveryMinutes: 120, At: at, Enabled: true, Prompt: "x"},
+	)
+	connectAssistant(t, h)
 	return h
 }
 
+// The snapshot is the assistant's (internal/assistant, context.go), read through the hub as a node asks for it: a side
+// conversation's context is the snapshot alone.
 func TestGoldenAssistantSnapshot(t *testing.T) {
 	ctx := context.Background()
-	golden(t, "assistant_snapshot.full", normalSnapshot(t, snapshotHub(t, true).assistantSnapshot(ctx)))
-	golden(t, "assistant_snapshot.bare", normalSnapshot(t, snapshotHub(t, false).assistantSnapshot(ctx)))
+	snapshot := func(h *Hub) string {
+		res, err := h.asst().Context(ctx, assistant.ContextParams{SessionID: "side-session"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res.Text
+	}
+	golden(t, "assistant_snapshot.full", normalSnapshot(t, snapshot(snapshotHub(t, true))))
+	golden(t, "assistant_snapshot.bare", normalSnapshot(t, snapshot(snapshotHub(t, false))))
 }
 
 // The main conversation's context starts with a line saying so (needs Postgres for the saved main conversation).
 func TestGoldenAssistantContextMain(t *testing.T) {
-	store := scheduleStore(t)
+	store := testDB(t)
 	ctx := context.Background()
 	if err := store.PutSetting(ctx, "assistant", AssistantConfig{Main: "main-session"}); err != nil {
 		t.Fatal(err)
@@ -254,12 +264,13 @@ func TestGoldenAssistantContextMain(t *testing.T) {
 	h := snapshotHub(t, false)
 	h.store = store
 	h.cfg.Assistant.Owner = "示例用户"
+	helloChanged(t, h)
 	raw, _ := json.Marshal(map[string]string{"session_id": "main-session"})
 	res, err := h.byID["server"].onRequest(ctx, "assistant.context", raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := res.(map[string]any)["text"].(string)
+	text := contextOf(t, res)
 	prefix, rest, ok := strings.Cut(text, "\n\n")
 	if !ok {
 		t.Fatalf("%q", text)
@@ -267,38 +278,20 @@ func TestGoldenAssistantContextMain(t *testing.T) {
 	golden(t, "assistant_context.main", prefix+"\n\n"+normalSnapshot(t, rest))
 	raw, _ = json.Marshal(map[string]string{"session_id": "side-session"})
 	res, _ = h.byID["server"].onRequest(ctx, "assistant.context", raw)
-	golden(t, "assistant_context.side", normalSnapshot(t, res.(map[string]any)["text"].(string)))
+	golden(t, "assistant_context.side", normalSnapshot(t, contextOf(t, res)))
 }
 
-func TestGoldenTaskPrompt(t *testing.T) {
-	loc, _ := time.LoadLocation("Asia/Shanghai") // passed in: the output doesn't depend on the machine's zone
-	due := time.Date(2026, 10, 31, 1, 0, 0, 0, time.UTC)
-	for _, c := range []struct {
-		name      string
-		task      Task
-		late      time.Duration
-		manual    bool
-		kb        bool
-		continued bool
-	}{
-		{"once_late", Task{Title: "看 CI", Prompt: "看看 CI 跑完没有", Repeat: repeatOnce}, 25 * time.Minute, false, true, false},
-		{"once_untitled", Task{Prompt: "提醒我喝水", Repeat: repeatOnce}, time.Minute, false, true, false},
-		{"interval_late", Task{Prompt: "巡检各台电脑上的 Agent，有卡住的告诉我", Repeat: repeatInterval, EveryMinutes: 120}, 3 * time.Hour, false, false, false},
-		{"interval_manual", Task{Title: "巡检", Prompt: "巡检", Repeat: repeatInterval, EveryMinutes: 30}, 3 * time.Hour, true, true, false},
-		{"daily_kb", Task{Title: "早报", Prompt: "给我今天的早报", Repeat: repeatDaily}, 2 * time.Hour, false, true, false},
-		{"daily_nokb", Task{Title: "早报", Prompt: "给我今天的早报", Repeat: repeatDaily}, 0, false, false, false},
-		// Later runs in the task's own conversation: no knowledge-base hint or "don't reschedule" again.
-		{"daily_continued", Task{Title: "早报", Prompt: "给我今天的早报", Repeat: repeatDaily}, 0, false, true, true},
-		{"interval_continued_late", Task{Title: "巡检", Prompt: "巡检", Repeat: repeatInterval, EveryMinutes: 30}, 3 * time.Hour, false, true, true},
-	} {
-		golden(t, "task_prompt."+c.name, taskPrompt(c.task, due, due.Add(c.late), loc, c.manual, c.kb, c.continued))
+// contextOf is the text of the node's assistant.context answer, as it goes on the wire.
+func contextOf(t *testing.T, res any) string {
+	t.Helper()
+	raw, _ := json.Marshal(res)
+	var out struct {
+		Text string `json:"text"`
 	}
-}
-
-func TestGoldenDefaultRoutines(t *testing.T) {
-	for _, r := range defaultRoutines() {
-		golden(t, "routine."+r.ID, r.Prompt)
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatal(err)
 	}
+	return out.Text
 }
 
 func goldenItems() map[string]*InboxItem {
@@ -427,23 +420,6 @@ func TestGoldenTabName(t *testing.T) {
 	goldenCall(t, "tab_name", onlyCall(t, calls()))
 }
 
-func TestGoldenSessionTitle(t *testing.T) {
-	h := newTestHub(t)
-	h.userTZ = "Asia/Shanghai"
-	started := time.Date(2026, 11, 1, 2, 0, 0, 0, time.UTC)
-	model, calls := replies(t, "改个名字", "修复 | 搜索框和顶栏重叠")
-	h.ai = model
-	if got := h.makeTitle(context.Background(), started, "搜索的时候搜索框和顶栏叠在一起了", "是两个组件一起用导致的。"); got != "1101 | 修复 | 搜索框和顶栏重叠" {
-		t.Fatalf("%q", got)
-	}
-	c := calls()
-	if len(c) != 2 {
-		t.Fatalf("%d calls", len(c))
-	}
-	goldenCall(t, "session_title", c[0])
-	golden(t, "session_title.retry", c[1].User)
-}
-
 func TestGoldenTranslateTexts(t *testing.T) {
 	h := newTestHub(t)
 	model, calls := captureModel(t, `{"texts":["你好","明天见"]}`)
@@ -472,11 +448,6 @@ func TestGoldenTranslateMail(t *testing.T) {
 		t.Fatal(err)
 	}
 	goldenCall(t, "translate_mail", onlyCall(t, calls()))
-}
-
-func TestGoldenRelay(t *testing.T) {
-	golden(t, "relay", relayText(relayMsg{From: "b2e4d6f8-0000-4000-8000-000000000002", FromTitle: `1101 | 研究 | "示例"<主题>`,
-		Tool: "conversation_send", Text: "示例消息：把结果整理一下", Hop: 2}))
 }
 
 func TestGoldenBotMessage(t *testing.T) {
