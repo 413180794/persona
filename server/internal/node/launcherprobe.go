@@ -30,23 +30,28 @@ const probeMarker = "__JARVIS_LAUNCHER_PROBE__"
 // (NUL-separated KEY=VALUE on one line), "<marker> agent <name>", "<marker> arg <arg>" lines, then "<marker> env" and
 // the environment the agent got. Only what the launcher changed counts: the node's own environment (a claude it runs
 // in, a gateway exported in ~/.zshrc for everything) is not the launcher's.
+//
+// The script runs in the login shell (loginShellProgram): zsh, but bash on machines without zsh and Git Bash on
+// Windows, so it is written for both: printf rather than zsh's print, the environment read line by line rather than
+// with ${(f)…}, and a `;` before the `}` of every one-line function, which bash requires (#1386).
 func probeScript(name string, args ...string) string {
 	command := name
 	for _, arg := range args {
 		command += " " + shellQuote(arg)
 	}
 	return fmt.Sprintf(`
+__jp_env() { /usr/bin/env | while IFS= read -r __jp_line; do printf '%%s\0' "$__jp_line"; done; }
 __jp_report() {
-  print -r -- "%[1]s agent $1"; shift
-  local a; for a in "$@"; do print -r -- "%[1]s arg $a"; done
-  print -rn -- "%[1]s env "; print -rn -N -- ${(f)"$(/usr/bin/env)"}; print
+  printf '%%s\n' "%[1]s agent $1"; shift
+  local a; for a in "$@"; do printf '%%s\n' "%[1]s arg $a"; done
+  printf '%%s' "%[1]s env "; __jp_env; printf '\n'
   exit 0
 }
-function claude { __jp_report claude "$@" }
-function codex { __jp_report codex "$@" }
-function traex { __jp_report traex "$@" }
-function dsh { __jp_report dsh "$@" }
-function command { case "$1" in claude|codex|traex|dsh) local w=$1; shift; __jp_report $w "$@" ;; *) builtin command "$@" ;; esac }
+function claude { __jp_report claude "$@"; }
+function codex { __jp_report codex "$@"; }
+function traex { __jp_report traex "$@"; }
+function dsh { __jp_report dsh "$@"; }
+function command { case "$1" in claude|codex|traex|dsh) local w=$1; shift; __jp_report $w "$@" ;; *) builtin command "$@" ;; esac; }
 function env {
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -58,7 +63,7 @@ function env {
   done
   "$@"
 }
-print -rn -- "%[1]s base "; print -rn -N -- ${(f)"$(/usr/bin/env)"}; print
+printf '%%s' "%[1]s base "; __jp_env; printf '\n'
 ( %[2]s ) </dev/null
 `, probeMarker, command)
 }

@@ -182,6 +182,10 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 Telegram 会话页的回复框（`ConnectorThreadReplyTests`，#1190）：发出去马上出现在页面里，页面上没有「确认卡片」的提示、也没有「允许」：
 `MOCK_TELEGRAM=signed_in MOCK_TELEGRAM_INBOX=1 PORT=18857 python3 scripts/mock/mock_hub.py &`，
 `TEST_RUNNER_JARVIS_MOCK_HUB_TELEGRAM_THREAD=http://127.0.0.1:18857 xcodebuild test … -only-testing:PersonaUITests/ConnectorThreadReplyTests`。
+
+扫码登录（`QRSignInTests`，#1351）：`MOCK_WECHAT=signed_out PORT=<独立端口> python3 scripts/mock/mock_hub.py &`，
+`TEST_RUNNER_JARVIS_MOCK_HUB_QR=http://127.0.0.1:<端口> xcodebuild test … -only-testing:PersonaUITests/QRSignInTests`：设置 › 微信 › 登录出二维码和「保存二维码」，
+mock 第六次问时确认，页面自己变成已连接。mock 的登录状态留在进程里，再跑一次（比如换深色）先重启 mock；`MOCK_WECHAT_WAIT=1` 让它一直停在二维码，方便截图。
 用户自己的回复不弹卡片是 hub 定的（mock 不分设备），hub 一侧见 `TestConnectorThreadReplyFromTheUsersDevice`。
 
 已知会挂、修好之前不进验收的 UI 测试先跳过，`TEST_RUNNER_JARVIS_KNOWN_ISSUES=1` 才跑，跳过的说明里写 issue 号：

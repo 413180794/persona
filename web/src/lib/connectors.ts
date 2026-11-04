@@ -166,21 +166,60 @@ export function otherConnectors(list: HubConnector[]): HubConnector[] {
   return list.filter((c) => c.id !== "mail" && c.id !== "lark");
 }
 
-/** Which mark a connector has of its own; others draw the generic one. */
+// ── brand and wording, by id ─────────────────────────────
+
+/** The marks that exist as files (ui/BrandMark.tsx); a connector with none of its own draws the generic icon. */
 export type BrandId = "github" | "telegram" | "lark";
+
+/** What this client knows about one connector by id. Everything is optional: a connector that is not in the table (any
+ * plugin's) gets the generic icon and the generic wording, built from its own `name`. Whether a plugin may bring its own
+ * wording in its manifest is a protocol question, not settled here. */
+interface ConnectorProfile {
+  brand?: BrandId;
+  /** The inbox button for an item answered in the app itself ("在 Telegram 里回复"). */
+  openTitle?: string;
+  /** What switching it on brings in, in the switch's footer; the default is 它的内容. */
+  reads?: string;
+  /** The sign-in step's footer: where the credentials live and what is shown of them. */
+  signInFooter?: string;
+}
+
+// A Map, not an object: a plugin's id may be `constructor` or `valueOf`.
+const PROFILES = new Map<string, ConnectorProfile>([
+  ["github", { brand: "github" }],
+  ["lark", { brand: "lark" }],
+  [
+    "telegram",
+    {
+      brand: "telegram",
+      openTitle: "在 Telegram 里回复",
+      reads: "它的私聊和群",
+      signInFooter: "API 凭据和登录状态加密存在 hub 上，只显示 api_id；退出登录时一起删掉。",
+    },
+  ],
+  // No brand yet: the mark and its terms of use are undecided, so 微信 draws the generic icon until they are.
+  ["wechat-connector", { signInFooter: "应用密钥加密存在 hub 上，只显示账号名；退出登录时一起删掉。" }],
+]);
+
+/** Which mark a connector has of its own; others draw the generic one. */
 export function connectorBrand(id: string): BrandId | undefined {
-  return id === "github" || id === "telegram" || id === "lark" ? id : undefined;
+  return PROFILES.get(id)?.brand;
+}
+
+/** The inbox button for a connector's item that is answered in the app itself; undefined for a connector with no wording of its own. */
+export function connectorOpenTitle(id: string): string | undefined {
+  return PROFILES.get(id)?.openTitle;
 }
 
 // ── its page ─────────────────────────────────────────────
 
 export function switchFooter(c: HubConnector): string {
   if (isEnabled(c)) return `关掉后不再读 ${c.name}；登录状态和已经存下的数据都留着。`;
-  return c.id === "telegram" ? "打开后才能登录，登录后它的私聊和群进知识库和收件箱，助手也能查。" : "打开后才能登录，登录后它的内容进知识库和收件箱，助手也能查。";
+  return `打开后才能登录，登录后${PROFILES.get(c.id)?.reads ?? "它的内容"}进知识库和收件箱，助手也能查。`;
 }
 
 export function signInFooter(c: HubConnector): string {
-  return c.id === "telegram" ? "API 凭据和登录状态加密存在 hub 上，只显示 api_id；退出登录时一起删掉。" : "登录状态加密存在 hub 上，退出登录时删掉。";
+  return PROFILES.get(c.id)?.signInFooter ?? "登录状态加密存在 hub 上，退出登录时删掉。";
 }
 
 export function feedsFooter(c: HubConnector): string {

@@ -95,6 +95,10 @@ func (h *Hub) connectorRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusBadGateway, err)
 			return
 		}
+		if err := withQR(&p); err != nil {
+			writeErr(w, http.StatusBadGateway, err)
+			return
+		}
 		writeJSON(w, p)
 	})
 	api.HandleFunc("POST /api/v1/connectors/{id}/logout", func(w http.ResponseWriter, r *http.Request) {
@@ -265,6 +269,23 @@ func (h *Hub) forgetInbox(ctx context.Context, source string) (int, error) {
 		h.broadcast(map[string]any{"type": "inbox"})
 	}
 	return len(ids), nil
+}
+
+// withQR draws a QR step's code for the app (whatever the connector sent as QR is replaced: the code is always URL's).
+func withQR(p *connector.Prompt) error {
+	p.QR = nil
+	if p.Kind != connector.PromptQRCode {
+		return nil
+	}
+	if p.URL == "" {
+		return errors.New("a QR sign-in step without a URL")
+	}
+	rows, size, err := qrRows(p.URL)
+	if err != nil {
+		return err
+	}
+	p.QR = &connector.QRCode{Size: size, Rows: rows}
+	return nil
 }
 
 // connectorLogin is connector id's sign-in, or writes why there is none.

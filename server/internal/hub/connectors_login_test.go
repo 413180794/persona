@@ -292,3 +292,76 @@ func TestConnectorDataDelete(t *testing.T) {
 		t.Error("Feishu's inbox item is gone")
 	}
 }
+
+// qrConnector signs in by a QR code to scan: the first step shows it, polling it again says it was scanned.
+type qrConnector struct {
+	exampleConnector
+	polls int
+}
+
+func (*qrConnector) ID() string   { return "example" }
+func (*qrConnector) Name() string { return "Example" }
+func (*qrConnector) Manifest() connector.Manifest {
+	return connector.Manifest{Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapActions,
+		connector.CapLogin}}
+}
+
+func (c *qrConnector) LoginStep(_ context.Context, step string, _ map[string]string) (connector.Prompt, error) {
+	if step == "qr" {
+		c.polls++
+	}
+	if c.polls == 2 {
+		return connector.Prompt{Done: true, Account: "示例用户"}, nil
+	}
+	// What a connector puts in QR is not passed on: the hub draws URL.
+	return connector.Prompt{Step: "qr", Kind: connector.PromptQRCode, URL: "https://example.com/scan/abc", Interval: 2,
+		Hint: "用另一台设备扫码", QR: &connector.QRCode{Size: 1, Rows: []string{"1"}}}, nil
+}
+
+func (*qrConnector) Logout(context.Context) error { return nil }
+
+// A QR step reaches the app with the code's modules, drawn by the hub from the URL; polling the same step goes on
+// until Done.
+func TestConnectorLoginQR(t *testing.T) {
+	h := newTestHub(t)
+	h.connectors = connector.NewRegistry(nil)
+	if err := h.addConnector(&qrConnector{}); err != nil {
+		t.Fatal(err)
+	}
+	mux := h.routes()
+	code, out := call(t, mux, "POST", "/api/v1/connectors/example/login", h.cfg.Token, `{"step":""}`)
+	if code != 200 || out["kind"] != "qr" || out["url"] != "https://example.com/scan/abc" || out["interval"] != float64(2) {
+		t.Fatalf("%d %v", code, out)
+	}
+	qr, _ := out["qr"].(map[string]any)
+	rows, _ := qr["rows"].([]any)
+	want, size, err := qrRows("https://example.com/scan/abc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if qr["size"] != float64(size) || len(rows) != size || rows[0] != want[0] || size < 21 {
+		t.Fatalf("qr %v", qr)
+	}
+	for _, r := range rows {
+		if s := r.(string); len(s) != size || strings.Trim(s, "01") != "" {
+			t.Fatalf("row %q", s)
+		}
+	}
+	if _, out := call(t, mux, "POST", "/api/v1/connectors/example/login", h.cfg.Token, `{"step":"qr"}`); out["qr"] == nil {
+		t.Fatalf("polling %v", out)
+	}
+	if _, out := call(t, mux, "POST", "/api/v1/connectors/example/login", h.cfg.Token, `{"step":"qr"}`); out["done"] != true || out["qr"] != nil {
+		t.Fatalf("done %v", out)
+	}
+}
+
+// A field step never carries a QR code, whatever the connector put there.
+func TestWithQROnlyForQRSteps(t *testing.T) {
+	p := connector.Prompt{Step: "code", URL: "https://example.com", QR: &connector.QRCode{Size: 1, Rows: []string{"1"}}}
+	if err := withQR(&p); err != nil || p.QR != nil {
+		t.Fatalf("%v %+v", err, p.QR)
+	}
+	if err := withQR(&connector.Prompt{Kind: connector.PromptQRCode}); err == nil {
+		t.Fatal("a QR step without a URL")
+	}
+}

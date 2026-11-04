@@ -9,6 +9,7 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { api, enc, errorText, getToken } from "./api";
 import type { AgentMutes } from "./agent-groups";
+import { connectorOpenTitle } from "./connectors";
 import { baseName } from "./format";
 import type { Route } from "./router";
 import { onHubEvent } from "./store";
@@ -155,9 +156,9 @@ export function canDraft(it: InboxItem): boolean {
 
 /** The button that opens a connector item's `open_url`, where the user answers it. */
 export function openTitle(it: InboxItem): string {
-  if (it.connector?.open_url?.startsWith("sms:")) return "在信息里回复";
-  if (it.source === "telegram") return "在 Telegram 里回复";
-  return "打开";
+  const url = it.connector?.open_url;
+  if (url?.startsWith("sms:")) return "在信息里回复";
+  return connectorOpenTitle(it.source) ?? (url ? `在 ${it.account_name || it.source} 里打开` : "打开");
 }
 
 /** A connector item's `open_url` as the browser opens it; an sms: one carries the AI 分身's draft as its body. */

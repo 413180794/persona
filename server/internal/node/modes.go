@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/screen"
 )
 
 // Permission mode and effort level of a Claude session, chosen from the app (docs/ios.md「思考强度和权限模式」).
@@ -241,15 +242,33 @@ func tuiPromptEmpty(screen string) bool {
 	return false
 }
 
+// promptHasDraft: something the user typed sits in Claude's input box. Read with colors where the host can, so the
+// grey next-message suggestion Claude Code shows after a turn (and its new-session tip) count as empty; a plain read
+// can only tell the tip apart (tuiPromptEmpty).
+func (n *Node) promptHasDraft(ctx context.Context, pane string) (bool, error) {
+	if !n.plainScreen(pane) {
+		if s, err := n.readPaneANSI(ctx, pane, "visible", 60); err == nil {
+			if in := screen.ClaudeInput(s); in.Box {
+				return in.Draft, nil
+			}
+		}
+	}
+	plain, err := n.readPane(ctx, pane, "visible", 60)
+	if err != nil {
+		return false, err
+	}
+	return !tuiPromptEmpty(plain), nil
+}
+
 // tuiSetEffort opens the /effort picker, moves to the level and confirms it for this session. Two pickers exist: the
 // older list ("for this session only", "s" picks it for the session) and, from Claude Code 2.1.2xx, a slider
 // ("←/→ to adjust · Enter to confirm") whose leftmost stop is low and that confirms with Enter.
 func (n *Node) tuiSetEffort(ctx context.Context, pane, effort string) error {
-	screen, err := n.readPane(ctx, pane, "visible", 60)
+	draft, err := n.promptHasDraft(ctx, pane)
 	if err != nil {
 		return err
 	}
-	if !tuiPromptEmpty(screen) {
+	if draft {
 		return fmt.Errorf("终端的输入框里有还没发出的文字，先在电脑上处理掉再改思考强度")
 	}
 	if !n.canTypeText(pane) { // a host that types only whole submissions (herdr-core): the command is one

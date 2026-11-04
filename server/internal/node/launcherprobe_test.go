@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -252,5 +253,57 @@ func TestProbeReadsTheSettingsEnv(t *testing.T) {
 		if _, ok := got.Env["ANTHROPIC_BASE_URL"]; ok || got.Env["ANTHROPIC_MODEL"] != "from-shell" {
 			t.Errorf("%s %v: changed: %v", p.Agent, p.Args, got.Env)
 		}
+	}
+}
+
+// inLoginShell runs script the way loginShell does (`<shell> -ic`), with defs as the shell's rc file and nothing else
+// from this machine: zsh reads $ZDOTDIR/.zshrc, bash ~/.bashrc.
+func inLoginShell(t *testing.T, shell, defs, script string) string {
+	t.Helper()
+	path, err := exec.LookPath(shell)
+	if err != nil {
+		t.Skip("no " + shell)
+	}
+	dir := t.TempDir()
+	rc := map[string]string{"zsh": ".zshrc", "bash": ".bashrc"}[shell]
+	if err := os.WriteFile(filepath.Join(dir, rc), []byte(defs), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.CommandContext(context.Background(), path, "-ic", script)
+	cmd.Env = []string{"HOME=" + dir, "ZDOTDIR=" + dir, "PATH=/usr/bin:/bin", "USER=tester", "TERM=dumb"}
+	out, _ := cmd.Output()
+	return string(out)
+}
+
+// Machines without zsh run the probe in bash (loginShellProgram), Windows in Git Bash: the harness has to parse there
+// too, follow functions and aliases to the agent, and see what they set, or every send that names a model fails
+// (#1386).
+func TestProbeInBashAndZsh(t *testing.T) {
+	for _, shell := range []string{"bash", "zsh"} {
+		t.Run(shell, func(t *testing.T) {
+			for _, tc := range []struct {
+				defs, launcher string
+				args           []string
+				foo            string
+			}{
+				{"", "claude", []string{"--model", "m-1"}, ""},
+				{`alias claude='claude --verbose'`, "claude", []string{"--verbose", "--model", "m-1"}, ""},
+				{`envcc() { env FOO=bar claude --dangerously-skip-permissions "$@"; }`, "envcc",
+					[]string{"--dangerously-skip-permissions", "--model", "m-1"}, "bar"},
+				{`alias aliascc='FOO=bar claude --teammate-mode in-process'`, "aliascc",
+					[]string{"--teammate-mode", "in-process", "--model", "m-1"}, "bar"},
+			} {
+				p, ok := parseProbe(inLoginShell(t, shell, tc.defs+"\n", probeScript(tc.launcher, "--model", "m-1")))
+				if !ok {
+					t.Fatalf("%s: no probe output", tc.launcher)
+				}
+				if p.Agent != "claude" || !slices.Equal(p.Args, tc.args) || p.Env["FOO"] != tc.foo {
+					t.Errorf("%s: agent %q, args %q, FOO %q", tc.launcher, p.Agent, p.Args, p.Env["FOO"])
+				}
+				if err := forwardedModel(p, "m-1"); err != nil {
+					t.Errorf("%s: %v", tc.launcher, err)
+				}
+			}
+		})
 	}
 }

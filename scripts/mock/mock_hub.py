@@ -2530,6 +2530,85 @@ def github_area(h, method, p, raw):
     return h.send_json(device) or True
 
 
+# MOCK_WECHAT=signed_out|signed_in: the WeChat plugin's connector (status + login only, #1352), signed in by a QR code to
+# scan (#1351): the hub sends the code's modules with the step (`qr`, drawn from `url` by the hub); after five more asks
+# (a second apart) it is confirmed, unless MOCK_WECHAT_WAIT keeps it waiting for a screenshot. The code is of a made-up
+# URL.
+WECHAT_MODE = os.environ.get("MOCK_WECHAT", "")
+WECHAT = {"enabled": True, "signed_in": WECHAT_MODE == "signed_in", "polls": 0}
+WECHAT_QR_URL = "https://example.com/wechat/qr/mock"
+WECHAT_QR_ROWS = [
+    "11111110010011001011001111111",
+    "10000010001110111001101000001",
+    "10111010111011101000001011101",
+    "10111010011101110011001011101",
+    "10111010001000100111001011101",
+    "10000010010001000101101000001",
+    "11111110101010101010101111111",
+    "00000000111011101100100000000",
+    "11101111101100111100011000100",
+    "10001001001100110100101001001",
+    "00011110010001000010001110111",
+    "01111000000100000110110010010",
+    "01111011100010011101111001011",
+    "00111000100111001110011001001",
+    "01011110101110100000010111011",
+    "10110100111011100101110101010",
+    "00010011101100101111111001011",
+    "00001000110100101000111001101",
+    "10100011100001000100011010011",
+    "01111000011100001110100111010",
+    "10101110001010011101111110000",
+    "00000000110111001111100010111",
+    "11111110101110100011101011011",
+    "10000010101011111110100011011",
+    "10111010100100111100111110001",
+    "10111010001100101110110010111",
+    "10111010100001000110100111001",
+    "10000010100100001101101000010",
+    "11111110111010011111100110011",
+]
+
+
+def wechat_connector():
+    c = {"id": "wechat", "name": "微信", "enabled": WECHAT["enabled"], "capabilities": ["status", "login"]}
+    if not WECHAT["enabled"]:
+        c.update(status="disabled")
+    elif WECHAT["signed_in"]:
+        c.update(status="ok", account="示例用户", last_sync=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
+    else:
+        c.update(status="not_signed_in", error="还没绑定微信")
+    return c
+
+
+def wechat_area(h, method, p, raw):
+    """The WeChat connector's sign-in and switch; True when it answered."""
+    if not WECHAT_MODE or not p.startswith("/api/v1/connectors/wechat"):
+        return False
+    w, body = WECHAT, json.loads(raw or b"{}")
+    if method == "PUT" and p == "/api/v1/connectors/wechat/settings":
+        if "enabled" in body:
+            w["enabled"] = bool(body["enabled"])
+        return h.send_json(wechat_connector()) or True
+    if method != "POST":
+        return False
+    if p.endswith("/logout"):
+        w.update(signed_in=False, polls=0)
+        return h.send_json({"ok": True}) or True
+    if not p.endswith("/login"):
+        return False
+    qr = {"step": "qr", "kind": "qr", "url": WECHAT_QR_URL, "interval": 1, "qr": {"size": len(WECHAT_QR_ROWS), "rows": WECHAT_QR_ROWS},
+          "hint": "用微信扫一扫这个二维码，在手机上确认后这里会自动继续。在同一部手机上：先保存二维码，再在微信里扫一扫、从相册选它。"}
+    if (body.get("step") or "") == "qr":
+        w["polls"] += 1
+        if w["polls"] < 6 or os.environ.get("MOCK_WECHAT_WAIT"):
+            return h.send_json(qr) or True
+        w["signed_in"] = True
+        return h.send_json({"done": True, "account": "示例用户"}) or True
+    w["polls"] = 0
+    return h.send_json(qr) or True
+
+
 TELEGRAM_MODE = os.environ.get("MOCK_TELEGRAM", "")
 TELEGRAM = {"enabled": TELEGRAM_MODE not in ("", "off"), "creds": TELEGRAM_MODE in ("signed_in", "limited"),
             "signed_in": TELEGRAM_MODE in ("signed_in", "limited"), "limited": TELEGRAM_MODE == "limited",
@@ -6757,11 +6836,13 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/mail/messages": return self.send_json({"messages": [], "has_more": False})
         if p == "/api/v1/lark/unread-count": return self.send_json({"count": 4})
         if telegram_area(self, "GET", p, b""): return
+        if wechat_area(self, "GET", p, b""): return
         if github_thread_area(self, "GET", p, b""): return
         if github_area(self, "GET", p, b""): return
         if p == "/api/v1/connectors":  # 设置 › 连接器 › GitHub; MOCK_GITHUB=signed_out: its gh login has expired
             listed = [GITHUB_CONNECTOR, {k: v for k, v in IMESSAGE_CONNECTOR.items() if v is not None}] + ([telegram_connector()] if TELEGRAM_MODE else [])
             listed += [PLUGIN_CONNECTOR] if PLUGIN_CONNECTOR else []
+            listed += [wechat_connector()] if WECHAT_MODE else []
             return self.send_json({"connectors": (LEGACY_CONNECTORS if q.get("all") == ["1"] else []) + listed})
         if p == "/api/v1/imessage":  # 设置 › 连接器 › 信息; MOCK_IMESSAGE=denied: no Full Disk Access on the Mac
             return self.send_json(IMESSAGE_STATUS)
@@ -7103,6 +7184,7 @@ class H(BaseHTTPRequestHandler):
                 s.update(state="restarting" if body.get("now") else "waiting_idle")
             return self.send_json(s)
         if telegram_area(self, self.command, p, self.last_body): return
+        if wechat_area(self, self.command, p, self.last_body): return
         if github_thread_area(self, self.command, p, self.last_body): return
         if github_area(self, self.command, p, self.last_body): return
         if plugin_connector_area(self, self.command, p, self.last_body): return

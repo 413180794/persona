@@ -70,6 +70,13 @@ nonisolated enum Theme {
     /// Count badges on rows (unread messages): white text on it is ≥ 4.5:1 in both appearances.
     static let countBadge = Color(light: 0x636366, dark: 0x636366)
     static let onSolid = Color.white
+
+    /// A code to scan with another app (a QR code): dark modules on a light ground in both appearances, the way
+    /// cameras read them.
+    enum Scan {
+        static let module = Color.black
+        static let ground = Color.white
+    }
     /// The disc behind a monogram that has no color of its own (a mail sender).
     #if os(watchOS)
     static let monogramFill = Color.white.opacity(0.16)

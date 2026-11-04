@@ -82,7 +82,10 @@ hub 只对这些连接器读它：条目保持 hub 原来自己做的样子（�
 `messages` 里每条：`id`、`position`、`sender_id`、`sender_name`、`mine`、`type`、`text`、`at`、`media`、
 `sender_handles: [{kind, value}]`（身份线索，原值；hub 只存它的 HMAC，`docs/knowledge.md`「身份线索」）。
 
-`Prompt`：`step`、`fields: [{name, label, secret?, placeholder?}]`、`hint`、`error`（用户能改的错，同一步再问一次）、`done`、`account`。
+`Prompt`：`step`、`fields: [{name, label, secret?, placeholder?}]`、`hint`、`error`（用户能改的错，同一步再问一次）、`done`、`account`，
+以及不填字段的两种步骤：`kind: "device_code"`（`url`、`user_code`、`interval`：显示验证码、去网页输入）和 `kind: "qr"`（`url`、`interval`：
+`url` 是要用别的 App 扫的二维码内容，比如微信，#1351）。这两种 App 都每隔 `interval` 秒带同一个 `step`（不带值）再问一次，直到回来别的步骤或 `done`；
+二维码过期了就回一个新的 `url`（同一步）。程序只给 `url`，二维码的点阵由 hub 画（`qr`），程序给了也会被换掉。
 
 ## 程序调 hub
 

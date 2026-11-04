@@ -119,7 +119,7 @@ func effortSent(pane string, rights int) []string {
 		keys = append(keys, "right")
 	}
 	return []string{
-		readVisible(pane),
+		readANSI(pane), // the box, colored: Claude's grey suggestion is not a draft
 		call("pane.send_text", map[string]any{"pane_id": pane, "text": "/effort"}),
 		sendKeys(pane, "enter"),
 		readVisible(pane), // the picker
@@ -164,19 +164,48 @@ func TestHerdrTUISetEffortRefusesADraftAndEscapesWithoutAPicker(t *testing.T) {
 	if err := setModes(t, n, sidA, "", "low"); err == nil {
 		t.Fatal("typed /effort after a draft")
 	}
-	assertTrace(t, f.trace(), []string{readVisible("w1:p1")})
+	assertTrace(t, f.trace(), []string{readANSI("w1:p1")})
 
 	f.reset()
 	f.setScreen("w1:p2", screenFixture(t, "claude-2.1.312-empty-162.txt"))
 	if err := setModes(t, n, sidB, "", "low"); err == nil || !strings.Contains(err.Error(), "/effort") {
 		t.Fatalf("err %v", err)
 	}
-	want := []string{readVisible("w1:p2"),
+	want := []string{readANSI("w1:p2"),
 		call("pane.send_text", map[string]any{"pane_id": "w1:p2", "text": "/effort"}), sendKeys("w1:p2", "enter")}
 	for range 15 {
 		want = append(want, readVisible("w1:p2"))
 	}
 	assertTrace(t, f.trace(), append(want, sendKeys("w1:p2", "esc")))
+}
+
+// The grey next-message suggestion Claude Code shows after a turn is not a draft: the effort changes over it (#1434).
+// Words typed over it are, and are left alone.
+func TestHerdrTUISetEffortOverASuggestion(t *testing.T) {
+	n, f, _ := herdrNode(t)
+	seedAgents(t, n, f,
+		claudeAgent(sidA, proto.StatusIdle, "w1:p1", "w1:t1", "w1", "/tmp/e", ""),
+		claudeAgent(sidB, proto.StatusIdle, "w1:p2", "w1:t2", "w1", "/tmp/e", ""))
+	f.setScreens("w1:p1", screenFixture(t, "claude-2.1.312-suggestion-171.txt"), screenFixture(t, "claude-2.1.312-suggestion-171.ansi"))
+	done := screenFixture(t, "claude-2.1.312-empty-162.txt") + "\n  ⎿  Set effort level to high (this session only)\n"
+	steps := []string{listPicker, done}
+	f.after(func(c herdrCall) {
+		if str(c.Params["pane_id"]) == "w1:p1" && (isKeys("enter")(c) || isKeys("s")(c)) && len(steps) > 0 {
+			f.setScreen("w1:p1", steps[0])
+			steps = steps[1:]
+		}
+	})
+	if err := setModes(t, n, sidA, "", "high"); err != nil {
+		t.Fatal(err)
+	}
+	assertTrace(t, f.trace(), append(effortSent("w1:p1", 2), sendKeys("w1:p1", "s"), readVisible("w1:p1")))
+
+	f.reset()
+	f.setScreens("w1:p2", screenFixture(t, "claude-2.1.312-suggestion-typed-171.txt"), screenFixture(t, "claude-2.1.312-suggestion-typed-171.ansi"))
+	if err := setModes(t, n, sidB, "", "low"); err == nil || !strings.Contains(err.Error(), "还没发出的文字") {
+		t.Fatalf("err %v", err)
+	}
+	assertTrace(t, f.trace(), []string{readANSI("w1:p2")})
 }
 
 // While Persona drives the effort picker herdr reports the agent blocked; the list shows it idle until the change is

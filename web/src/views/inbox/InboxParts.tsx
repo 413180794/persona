@@ -107,7 +107,7 @@ export function ItemAvatar({ it, size = 40 }: { it: InboxItem; size?: number }) 
           style={{ width: badge, height: badge, right: -3, bottom: -3 }}
           title={it.account_name || it.source}
         >
-          {brand ? <BrandMark brand={brand} size={Math.round(badge * (brand === "telegram" ? 1 : 0.72))} /> : <Icon name="link" size={Math.round(badge * 0.62)} stroke={2.4} />}
+          {brand ? <BrandMark brand={brand} size={badge} fit="badge" /> : <Icon name="link" size={Math.round(badge * 0.62)} stroke={2.4} />}
         </span>
       </span>
     );

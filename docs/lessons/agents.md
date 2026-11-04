@@ -121,3 +121,9 @@
   （`~/.config/herdr/herdr.sock`）互不可见。「App remote 连到本机开的会话找不到」时先看 herdr-core 的 `terminal.list`，别只查经典 socket。
   一台机器两套都用时引擎选 `herdr-both`：node 并行刷两个宿主、事件按宿主隔离（`watcherSignals`），新建 / 恢复会话固定走经典 herdr
   （`docs/engines.md`「并列」、`docs/plan-orca-support.md`「并列引擎」）。别再退回「刷新顺序问所有宿主」——herdr-core 慢 2 秒会拖慢 herdr。
+
+## 判断 Claude 的输入框空不空，要按颜色读（#1434）
+
+Claude Code 每轮做完会在输入框里用暗色字（SGR 2）放一句建议的下一句（`❯ 现在部署一下 hub`），纯文本读屏幕看起来和真打进去的字一样。
+改思考强度前的检查只读纯文本，把建议当成了草稿，一直报「终端的输入框里有还没发出的文字」。要知道输入框里有没有用户的字，一律用
+`readPaneANSI` + `screen.ClaudeInput`（`Draft` 已经排除了建议、新会话的 `Try "…"` 提示和光标）；只有宿主读不出颜色（`plainScreen`）时才退回纯文本。

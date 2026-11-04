@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  canSendStep, connectorState, connectorSummary, connectorTone, deletedLine, feedsFooter, fieldInput, githubInboxFooter, githubMachineLine,
+  canSendStep, connectorBrand, connectorOpenTitle, connectorState, connectorSummary, connectorTone, deletedLine, feedsFooter, fieldInput, githubInboxFooter, githubMachineLine,
   githubOptions, githubScopeAdvice, isDeviceCode, isStarting, labelColor, listConnectors, mediaLine, mergeNewest, mergeOlder, mutableRepo,
-  otherConnectors, setGitHubAuth, signsInHere, startsGroup, switchFooter, undescribed,
+  otherConnectors, setGitHubAuth, signInFooter, signsInHere, startsGroup, switchFooter, undescribed,
   type HubConnector, type ThreadMessage, type ThreadPage,
 } from "./connectors";
 
@@ -41,9 +41,30 @@ describe("连接器的状态", () => {
     expect(otherConnectors(list).map((c) => c.id)).toEqual(["github", "telegram"]);
   });
 
+  it("has a mark only for the connectors that have one; the rest draw the generic icon", () => {
+    expect(["github", "telegram", "lark"].map(connectorBrand)).toEqual(["github", "telegram", "lark"]);
+    // 微信 is listed for its wording but has no brand image yet (D7); a plugin's id may also be an Object.prototype name
+    expect(["wechat-connector", "example", "constructor"].map(connectorBrand)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("words a listed connector from the table and any other from its own name, never Telegram's", () => {
+    const off = (id: string, name: string) => conn("disabled", { id, name, enabled: false });
+    expect(switchFooter(off("telegram", "Telegram"))).toContain("私聊和群");
+    expect(signInFooter(conn("not_signed_in", { id: "telegram", name: "Telegram" }))).toContain("api_id");
+    expect(signInFooter(conn("not_signed_in", { id: "wechat-connector", name: "微信" }))).toBe("应用密钥加密存在 hub 上，只显示账号名；退出登录时一起删掉。");
+    expect(connectorOpenTitle("telegram")).toBe("在 Telegram 里回复");
+
+    // not in the table: the generic wording, with the connector's own name where one is shown
+    const plugin = off("example", "示例");
+    expect(switchFooter(plugin)).toBe("打开后才能登录，登录后它的内容进知识库和收件箱，助手也能查。");
+    expect(signInFooter(plugin)).toBe("登录状态加密存在 hub 上，退出登录时删掉。");
+    expect(connectorOpenTitle("example")).toBeUndefined();
+    expect(switchFooter({ ...plugin, enabled: true })).toContain("关掉后不再读 示例");
+    for (const text of [switchFooter(plugin), signInFooter(plugin)]) expect(text).not.toMatch(/Telegram|api_id|私聊和群/);
+  });
+
   it("words the footers", () => {
     expect(switchFooter(conn("ok"))).toContain("关掉后不再读 GitHub");
-    expect(switchFooter(conn("disabled", { id: "telegram", name: "Telegram", enabled: false }))).toContain("私聊和群");
     expect(feedsFooter(conn("ok", { archive: true, inbox: false }))).toBe(
       "进知识库：GitHub 的内容存进知识库，助手和 AI 分身都能查。关掉后不再存新的，已存的留着。\n不进收件箱：不再收新的，已有的条目留着。",
     );

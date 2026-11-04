@@ -143,19 +143,33 @@ nonisolated struct ConnectorPrompt: Codable, Equatable, Sendable {
     var error: String?
     var done: Bool?
     var account: String?
-    /// "device_code": show `userCode` to enter at `url`; the same step is sent again every `interval` seconds.
+    /// "device_code": show `userCode` to enter at `url`; "qr": show `qr`, the code of `url`, to scan with another app.
+    /// For both the same step is sent again every `interval` seconds.
     var kind: String?
     var url: String?
     var userCode: String?
     var interval: Int?
+    /// The QR code's modules, drawn by the hub for a "qr" step.
+    var qr: QRModules?
+
+    nonisolated struct QRModules: Codable, Equatable, Sendable {
+        var size: Int
+        var rows: [String]
+    }
 
     enum CodingKeys: String, CodingKey {
-        case step, fields, hint, error, done, account, kind, url, interval
+        case step, fields, hint, error, done, account, kind, url, interval, qr
         case userCode = "user_code"
     }
 
     /// A code to enter on a web page (GitHub's device flow), asked again until the user has.
     var isDeviceCode: Bool { kind == "device_code" && userCode != nil }
+    /// A QR code to scan with another app (WeChat), asked again until it is scanned and confirmed there.
+    var isQRCode: Bool { kind == "qr" && !(qr?.rows.isEmpty ?? true) }
+    /// The step is asked again on its own until the user has acted somewhere else.
+    var polls: Bool { isDeviceCode || isQRCode }
+    /// What the polling follows: a new code starts it over.
+    var pollKey: String? { isDeviceCode ? userCode : isQRCode ? qr?.rows.joined() : nil }
 }
 
 /// Where a hub connector's things go besides the assistant's tools, each switched on its page.

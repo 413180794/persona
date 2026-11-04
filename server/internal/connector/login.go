@@ -15,16 +15,31 @@ type Field struct {
 // seconds until the user has (GitHub's device flow).
 const PromptDeviceCode = "device_code"
 
+// PromptQRCode is a step that shows URL as a QR code to scan with another app (WeChat) and is asked again every
+// Interval seconds until the answer is another step or Done. Opening URL as a link does nothing useful: the app draws
+// the code from QR, which the hub adds.
+const PromptQRCode = "qr"
+
+// QRCode is a QR code's modules: Size rows of Size "0" / "1", without the quiet zone; the app draws them in its own
+// colors.
+type QRCode struct {
+	Size int      `json:"size"`
+	Rows []string `json:"rows"`
+}
+
 // Prompt is where a sign-in stands: the step to fill in next, or Done.
 type Prompt struct {
 	Step   string  `json:"step,omitempty"`
 	Fields []Field `json:"fields,omitempty"`
-	// Kind is "" for fields to fill in, PromptDeviceCode for a code: UserCode to enter at URL; the app sends the
-	// same step (no values) every Interval seconds until the answer is another step or Done.
+	// Kind is "" for fields to fill in, PromptDeviceCode for a code: UserCode to enter at URL, PromptQRCode for URL
+	// as a QR code to scan; for both the app sends the same step (no values) every Interval seconds until the answer
+	// is another step or Done.
 	Kind     string `json:"kind,omitempty"`
 	URL      string `json:"url,omitempty"`
 	UserCode string `json:"user_code,omitempty"`
 	Interval int    `json:"interval,omitempty"`
+	// QR is URL's QR code for PromptQRCode: the hub fills it in on the way to the app (a connector leaves it out).
+	QR *QRCode `json:"qr,omitempty"`
 	// Hint is for people: where the code went (「验证码发到了你别的 Telegram 设备上」), the password's hint.
 	Hint string `json:"hint,omitempty"`
 	// Error is what was wrong with the values just given (「验证码不对」), for people: the same step is asked again.

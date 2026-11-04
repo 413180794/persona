@@ -18,6 +18,8 @@ struct ConnectorDeps {
     let id: String
     /// The step on screen; nil when not signing in.
     private(set) var prompt: ConnectorPrompt?
+    /// A QR step's code as a picture for 保存二维码, drawn once per code.
+    private(set) var qrImage: UIImage?
     var values: [String: String] = [:]
     private(set) var busy = false
     /// What the last delete removed, said for people.
@@ -46,10 +48,10 @@ struct ConnectorDeps {
         return await send(step: step, values: values)
     }
 
-    /// A code on screen (GitHub's device flow): asks again every interval the hub gave until the user has entered it
-    /// (true: signed in) or the step changes; cancelled with the page.
-    func waitForDeviceCode() async -> Bool {
-        while let p = prompt, p.isDeviceCode, !Task.isCancelled {
+    /// A code on screen (GitHub's device flow, a QR code to scan): asks again every interval the hub gave until the user
+    /// has entered or scanned it (true: signed in) or the step changes; cancelled with the page.
+    func waitForAuthorization() async -> Bool {
+        while let p = prompt, p.polls, !Task.isCancelled {
             try? await Task.sleep(for: .seconds(max(p.interval ?? 5, 1)))
             if Task.isCancelled || prompt?.step != p.step { return false }
             if await send(step: p.step ?? "", values: [:]) { return true }
@@ -59,6 +61,7 @@ struct ConnectorDeps {
 
     func cancel() {
         prompt = nil
+        qrImage = nil
         values = [:]
     }
 
@@ -75,6 +78,11 @@ struct ConnectorDeps {
                 return true
             }
             if p.step != prompt?.step { self.values = [:] } // a new step: its fields start empty
+            if !p.isQRCode {
+                qrImage = nil
+            } else if let rows = p.qr?.rows, rows != prompt?.qr?.rows || qrImage == nil {
+                qrImage = QRCodeView.image(rows)
+            }
             prompt = p
         } catch {
             deps.report(error)
@@ -332,6 +340,8 @@ struct ConnectorSignInSteps: View {
                 }
                 if p.isDeviceCode {
                     deviceCode(p)
+                } else if p.isQRCode {
+                    qrCode(p)
                 } else {
                     ForEach(p.fields ?? []) { f in
                         field(f)
@@ -340,8 +350,8 @@ struct ConnectorSignInSteps: View {
             } header: {
                 SettingsHeading("登录")
             }
-            .task(id: p.isDeviceCode ? p.userCode : nil) {
-                if await model.waitForDeviceCode() { await reload() }
+            .task(id: p.pollKey) {
+                if await model.waitForAuthorization() { await reload() }
             }
             Section {
                 if p.isDeviceCode {
@@ -365,6 +375,16 @@ struct ConnectorSignInSteps: View {
                         .listRowBackground(Color.clear)
                         .accessibilityIdentifier("connector.openVerification")
                         #endif
+                    }
+                } else if p.isQRCode {
+                    if let image = model.qrImage {
+                        FormAction {
+                            ShareLink(item: Image(uiImage: image), preview: SharePreview("二维码", image: Image(uiImage: image))) {
+                                Label("保存二维码", systemImage: Theme.Icon.share).lineLimit(1).formActionWidth()
+                            }
+                            .formButton(prominent: false)
+                            .accessibilityIdentifier("connector.shareQR")
+                        }
                     }
                 } else {
                     FormAction {
@@ -427,6 +447,19 @@ struct ConnectorSignInSteps: View {
         }
     }
 
+    /// The QR code to scan with the other app: the page asks the hub again on its own until it is scanned and
+    /// confirmed there. On the phone that runs the other app, 保存二维码 below puts it in the photo library to scan from.
+    @ViewBuilder private func qrCode(_ p: ConnectorPrompt) -> some View {
+        QRCodeView(rows: p.qr?.rows ?? [])
+            .scaledFrame(width: Theme.Size.box200, height: Theme.Size.box200)
+            .frame(maxWidth: .infinity)
+            .accessibilityIdentifier("connector.qrCode")
+        HStack(spacing: Theme.Space.s) {
+            ProgressView()
+            Text("等你扫码确认…").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
+        }
+    }
+
     @ViewBuilder private func field(_ f: ConnectorPrompt.Field) -> some View {
         let text = Binding(get: { model.values[f.name] ?? "" }, set: { model.values[f.name] = $0 })
         let prompt = Text(f.placeholder ?? f.label)
@@ -454,3 +487,4 @@ struct ConnectorSignInSteps: View {
         }
     }
 }
+

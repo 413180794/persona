@@ -27,7 +27,7 @@ function Mark({ id, size }: { id: string; size: number }) {
   if (brand) {
     return (
       <span className="flex shrink-0 items-center justify-center rounded-[9px] bg-surface shadow-hairline" style={{ width: size, height: size }}>
-        <BrandMark brand={brand} size={Math.round(size * (brand === "telegram" ? 0.78 : 0.6))} />
+        <BrandMark brand={brand} size={size} fit="tile" />
       </span>
     );
   }
