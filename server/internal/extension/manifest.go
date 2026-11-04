@@ -46,10 +46,14 @@ type Manifest struct {
 	Runtime          *Runtime                   `json:"runtime,omitempty"`
 	Node             *NodeRuntime               `json:"node,omitempty"`
 	ActivationEvents []string                   `json:"activation_events,omitempty"`
-	Contributes      map[string]json.RawMessage `json:"contributes"`
-	Configuration    json.RawMessage            `json:"configuration,omitempty"`
-	Secrets          []SecretSpec               `json:"secrets,omitempty"`
-	Permissions      Permissions                `json:"permissions,omitzero"`
+	Contributes      map[string]json.RawMessage `json:"contributes,omitempty"`
+	// Depends, Exports and ExtensionPack are the extension model (docs/extensions.md「依赖、导出和合集」, model.go).
+	Depends       []Dependency    `json:"depends,omitempty"`
+	Exports       *Exports        `json:"exports,omitempty"`
+	ExtensionPack []PackMember    `json:"extension_pack,omitempty"`
+	Configuration json.RawMessage `json:"configuration,omitempty"`
+	Secrets       []SecretSpec    `json:"secrets,omitempty"`
+	Permissions   Permissions     `json:"permissions,omitzero"`
 }
 
 // Engines are what the extension runs on.
@@ -321,13 +325,14 @@ func (m *Manifest) Validate() error {
 	if slices.Contains(m.ActivationEvents, OnHTTP) && (m.Runtime == nil || !m.Runtime.HTTP) {
 		bad("activation_events: on_http without runtime.http")
 	}
-	if len(m.Contributes) == 0 {
+	if len(m.Contributes) == 0 && len(m.ExtensionPack) == 0 {
 		bad("contributes: nothing")
 	}
+	errs = append(errs, m.validateModel()...)
 	for _, name := range sortedKeys(m.Contributes) {
 		p, known := Points[name]
 		if !known {
-			continue // a newer hub's: Lint warns, it does not take effect
+			continue // a newer hub's (Lint warns, it does not take effect), or another extension's (validateModel)
 		}
 		var items []json.RawMessage
 		if err := json.Unmarshal(m.Contributes[name], &items); err != nil {
@@ -603,13 +608,13 @@ func (m *Manifest) Items(point string) []string {
 	if json.Unmarshal(m.Contributes[point], &items) != nil {
 		return nil
 	}
-	p, ok := Points[point]
+	item, ok := ItemOf(point)
 	if !ok {
 		return nil
 	}
 	var out []string
 	for _, raw := range items {
-		if id, err := p.Item(raw); err == nil {
+		if id, err := item(raw); err == nil {
 			out = append(out, id)
 		}
 	}
@@ -741,6 +746,9 @@ func (m *Manifest) Kind() string {
 	if len(keys) > 0 {
 		return keys[0]
 	}
+	if len(m.ExtensionPack) > 0 {
+		return "extension_pack"
+	}
 	return ""
 }
 
@@ -749,7 +757,7 @@ func (m *Manifest) Kind() string {
 func (m *Manifest) Lint() []string {
 	var out []string
 	for _, name := range sortedKeys(m.Contributes) {
-		if _, ok := Points[name]; !ok {
+		if _, ok := ItemOf(name); !ok {
 			out = append(out, fmt.Sprintf("contributes.%s: this hub has no such extension point (a newer hub's?); it does not take effect", name))
 		}
 	}

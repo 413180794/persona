@@ -368,6 +368,7 @@ func (ps *extensions) changed(c extension.Change) {
 		ctx = context.Background()
 	}
 	ps.apply(ctx, c.ID)
+	ps.modelChanged(ctx, c)
 	if now := ps.reg.Get(c.ID); ps.h != nil && (now != nil && now.Manifest.Node != nil || c.Old != nil && c.Old.Manifest.Node != nil) {
 		ps.h.syncExtensionNodesEverywhere(ctx) // its program on computers starts, changes or stops there (extension_nodes.go)
 	}
@@ -715,6 +716,9 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 			if ids := m.Items(point); len(ids) > 0 && point != "connectors" && point != "channel" {
 				params.Active[point] = ids
 			}
+		}
+		if m.Exports != nil {
+			params.ContributionsToMe = ps.reg.ContributionsTo(id)
 		}
 		return params, nil
 	}

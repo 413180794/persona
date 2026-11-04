@@ -157,7 +157,13 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 		if s == nil {
 			return
 		}
-		gated(w, func() (*extension.Preview, error) { return s.reg.Preview(r.Context(), in.Source, in.Upgrade) })
+		gated(w, func() (*extension.Preview, error) {
+			pv, err := s.reg.Preview(r.Context(), in.Source, in.Upgrade)
+			if err == nil {
+				h.resolveBundle(r.Context(), pv, "") // its missing dependencies, a pack's members (extension_model.go)
+			}
+			return pv, err
+		})
 	})
 	// The package itself as the body (application/octet-stream), its file name and what it upgrades in the query.
 	mux.HandleFunc("POST "+adminUploadPath, func(w http.ResponseWriter, r *http.Request) {
@@ -176,13 +182,18 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 		}
 		body := http.MaxBytesReader(w, r.Body, extension.PackageMost+1)
 		gated(w, func() (*extension.Preview, error) {
-			return s.reg.PreviewUpload(r.Context(), q.Get("name"), body, q.Get("upgrade"))
+			pv, err := s.reg.PreviewUpload(r.Context(), q.Get("name"), body, q.Get("upgrade"))
+			if err == nil {
+				h.resolveBundle(r.Context(), pv, "")
+			}
+			return pv, err
 		})
 	})
 	mux.HandleFunc("POST /api/v1/admin/extensions/install", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			PreviewID string `json:"preview_id"`
-			Digest    string `json:"permissions_digest"`
+			PreviewID string      `json:"preview_id"`
+			Digest    string      `json:"permissions_digest"`
+			Bundle    []bundleRef `json:"bundle,omitempty"`
 		}
 		if !readAdminJSON(w, r, &in) {
 			return
@@ -193,6 +204,10 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 		}
 		if in.Digest == "" {
 			writeErrCode(w, http.StatusBadRequest, "confirm_required", errors.New("先看过它能做什么，确认后带上 permissions_digest 安装"))
+			return
+		}
+		if err := h.installBundle(r.Context(), s.reg.PreviewOf(in.PreviewID), in.Digest, in.Bundle, adminActor); err != nil {
+			writeExtensionErr(w, http.StatusBadRequest, "install_failed", err)
 			return
 		}
 		p, err := s.reg.Install(r.Context(), in.PreviewID, in.Digest, adminActor)
@@ -231,8 +246,12 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/v1/admin/extensions/{id}/enabled", one(func(w http.ResponseWriter, r *http.Request, ps *extensions, p *extension.Extension) {
 		var in struct {
 			Enabled bool `json:"enabled"`
+			Cascade bool `json:"cascade"` // switch off the extensions that depend on it too
 		}
 		if !readAdminJSON(w, r, &in) {
+			return
+		}
+		if !in.Enabled && !h.takeDependents(w, r, p.Record.ID, in.Cascade) {
 			return
 		}
 		if err := ps.reg.SetEnabled(r.Context(), p.Record.ID, in.Enabled, adminActor); err != nil {
@@ -247,15 +266,30 @@ func (h *Hub) adminExtensionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/v1/admin/extensions/{id}", one(func(w http.ResponseWriter, r *http.Request, ps *extensions, p *extension.Extension) {
 		var in struct {
 			KeepData bool `json:"keep_data"`
+			Cascade  bool `json:"cascade"` // switch off the extensions that depend on it
+			Members  bool `json:"members"` // a pack's members go with it
 		}
 		if !readAdminJSON(w, r, &in) {
 			return
+		}
+		if !h.takeDependents(w, r, p.Record.ID, in.Cascade) {
+			return
+		}
+		var members []string
+		if in.Members {
+			members = ps.packMembers(p)
 		}
 		if err := ps.reg.Uninstall(r.Context(), p.Record.ID, in.KeepData, adminActor); err != nil {
 			writeErrCode(w, http.StatusConflict, "uninstall_failed", err)
 			return
 		}
+		var removed []string
+		for _, m := range members {
+			if err := ps.reg.Uninstall(r.Context(), m, in.KeepData, adminActor); err == nil {
+				removed = append(removed, m)
+			}
+		}
 		h.logf("admin: uninstalled plugin %s (keep data: %v)", p.Record.ID, in.KeepData)
-		writeJSON(w, map[string]any{"ok": true})
+		writeJSON(w, map[string]any{"ok": true, "removed_members": removed})
 	}))
 }

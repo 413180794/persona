@@ -63,8 +63,9 @@ export function program(): Program {
       if (c.greeting) greeting = c.greeting;
       apiKey = init.secrets?.api_key ?? "";
     },
+    // Contribution ids are the manifest's: unique among every extension's on the hub.
     ui: {
-      home: {
+      "{{id}}": {
         render: home,
         action(r) {
           const s = decodeState<PageState>(r, { q: "", open: "" });
@@ -73,7 +74,7 @@ export function program(): Program {
           r.state = encodeState(s); // nothing returned: the page draws again with the new state
         },
       },
-      today: {
+      "{{id}}-today": {
         render: () => ({
           sections: [{ items: [{ type: "stat_grid", stats: [{ label: "条目", value: `${items().length}` }, { label: "问候", value: greeting }] }] }],
         }),

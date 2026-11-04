@@ -21,6 +21,7 @@ func program() ext.Program {
 	return ext.Program{
 		ID: m.ID, Version: m.Version, Manifest: manifest,
 		Init: a.init,
-		UI:   map[string]ext.Page{"home": {Render: a.home, Action: a.homeAction}, "today": {Render: a.today}},
+		// Contribution ids are the manifest's: unique among every extension's on the hub.
+		UI: map[string]ext.Page{"{{id}}": {Render: a.home, Action: a.homeAction}, "{{id}}-today": {Render: a.today}},
 	}
 }

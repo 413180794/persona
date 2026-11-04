@@ -15,8 +15,8 @@
   },
   "contributes": {
     "ui": [
-      {"id": "home", "title": "{{name}}", "placement": "nav_page", "icon": "list"},
-      {"id": "today", "title": "{{name}} 今天", "placement": "overview_card", "opens": "home"}
+      {"id": "{{id}}", "title": "{{name}}", "placement": "nav_page", "icon": "list"},
+      {"id": "{{id}}-today", "title": "{{name}} 今天", "placement": "overview_card", "opens": "{{id}}"}
     ]
   },
   "configuration": {

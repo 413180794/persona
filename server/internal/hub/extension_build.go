@@ -88,8 +88,8 @@ func dirArg(positional []string) string {
 
 // newExtension writes a new extension from a template, with the SDK copied in (sdk/go or sdk/ts).
 func newExtension(id, template, name, dir string, stdout io.Writer) error {
-	if !extension.ValidID(id) {
-		return fmt.Errorf("id %q：小写字母、数字、- 和 _，字母或数字开头，最长 32", id)
+	if !extension.ValidID(id) || len(id) > 26 {
+		return fmt.Errorf("id %q：小写字母、数字、- 和 _，字母或数字开头，最长 26（模板的贡献 id 是 <id>-today）", id)
 	}
 	if template == "" {
 		template = "go"

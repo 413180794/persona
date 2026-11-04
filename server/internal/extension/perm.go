@@ -204,6 +204,10 @@ func Explain(m *Manifest) []PermissionLine {
 	if m.Permissions.LauncherKeys {
 		out = append(out, launcherKeys)
 	}
+	if to := m.ContributesTo(); len(to) > 0 {
+		out = append(out, PermissionLine{Key: "contributes_to", Title: "给别的扩展提供内容",
+			Detail: "它在清单里写的贡献交给这些扩展：" + strings.Join(to, "、")})
+	}
 	if chans := m.Channels(); len(chans) > 0 {
 		var names []string
 		for _, c := range chans {

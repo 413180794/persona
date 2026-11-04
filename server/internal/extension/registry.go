@@ -306,6 +306,13 @@ type Preview struct {
 	AddedPermissions []PermissionLine `json:"added_permissions,omitempty"`
 	// Market is the market it comes from (a full-rights device may install it, docs/extensions.md「扩展市场」).
 	Market string `json:"market,omitempty"`
+	// Depends are its dependencies on this hub (docs/extensions.md「依赖」); Bundle the previews of what installs with it,
+	// before it: its missing dependencies from the markets, or a pack's members. Each has its own id and digest, and
+	// installing sends them all (the user agreed to every one on one screen).
+	Depends []DependencyState `json:"depends,omitempty"`
+	Bundle  []*Preview        `json:"bundle,omitempty"`
+	// Unresolved are the dependencies or members no registered market has (it does not install while one is missing).
+	Unresolved []string `json:"unresolved,omitempty"`
 
 	source  Source
 	root    string // the staged package
@@ -450,6 +457,7 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 	}
 	pv.Manifest, pv.Digest, pv.Permissions = m, Digest(m), Explain(m)
 	pv.Warnings = m.Lint()
+	pv.Depends = r.Dependencies(m)
 	fail := func(err error) (*Preview, error) {
 		if pv.staging != "" {
 			_ = os.RemoveAll(pv.staging)
@@ -482,7 +490,7 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 	if upgrade != "" {
 		pv.Upgrade, pv.From = true, cur.Record.Version
 		pv.MorePermissions = MorePermissions(cur, m)
-		pv.AddedPermissions = Added(cur.Manifest, m)
+		pv.AddedPermissions = Added(cur.Full, m)
 	}
 	r.previews[pv.ID] = pv
 	return pv, nil
@@ -1058,7 +1066,7 @@ func (r *Registry) Missing(ctx context.Context, p *Extension) []string {
 	if err := p.Schema.Check(raw); err != nil {
 		out = append(out, "配置（"+err.Error()+"）")
 	}
-	return out
+	return append(out, r.dependencyProblems(p.Manifest)...)
 }
 
 // Audit records what the hub changed about extension id outside the registry (its sandbox).

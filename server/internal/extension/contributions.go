@@ -39,7 +39,7 @@ func (m *Manifest) Without(disabled []string) *Manifest {
 	}
 	var out *Manifest
 	for _, name := range sortedKeys(m.Contributes) {
-		p, known := Points[name]
+		item, known := ItemOf(name)
 		if !known {
 			continue
 		}
@@ -49,7 +49,7 @@ func (m *Manifest) Without(disabled []string) *Manifest {
 		}
 		kept := items[:0:0]
 		for _, raw := range items {
-			id, err := p.Item(raw)
+			id, err := item(raw)
 			if err == nil && slices.Contains(disabled, ContributionKey(name, id)) && !m.SwitchedElsewhere(name, id) {
 				continue
 			}
@@ -79,12 +79,12 @@ func (m *Manifest) Without(disabled []string) *Manifest {
 func ContributionTitle(m *Manifest, point, id string) string {
 	var items []json.RawMessage
 	_ = json.Unmarshal(m.Contributes[point], &items)
-	p, ok := Points[point]
+	item, ok := ItemOf(point)
 	if !ok {
 		return id
 	}
 	for _, raw := range items {
-		if got, err := p.Item(raw); err != nil || got != id {
+		if got, err := item(raw); err != nil || got != id {
 			continue
 		}
 		var named struct {

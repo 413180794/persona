@@ -34,12 +34,14 @@ const extensionUsage = `usage: personad extension <command> (also: personad ext,
                                     shows what it may do and asks first unless --yes
   upgrade <id> <source> [--yes]     a newer version of an installed extension
   rollback <id>                     back to the version before the last upgrade
-  enable <id> | disable <id>
+  enable <id> | disable <id> [--cascade]
+                                    --cascade: the extensions that depend on it are switched off too
   sandbox <id> on|off|default       run it in a sandbox or not (default: on unless from a trusted market)
   config <id> key=value …           set settings (a value is JSON when it parses, text otherwise)
   secret <id> <name>                set a secret, read from stdin (never an argument)
   secret <id> <name> --delete
-  uninstall <id> [--keep-data]
+  uninstall <id> [--keep-data] [--cascade] [--members]
+                                    --members: a pack's members go with it
   market list                       the extension markets this hub reads
   market add <spec> [--token]       a market: https://example.com/extensions/ (its persona-extensions.json, or the
                                     older persona-plugins.json), a .json URL, github:owner/repo[@ref] or
@@ -158,11 +160,12 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 			return err
 		}
 		printPreview(stdout, &pv)
+		printBundle(stdout, &pv)
 		if !flag("--yes") && !confirm(stdin, stdout) {
 			return errors.New("没有装")
 		}
 		var d ExtensionDetail
-		body := map[string]string{"preview_id": pv.ID, "permissions_digest": pv.Digest}
+		body := map[string]any{"preview_id": pv.ID, "permissions_digest": pv.Digest, "bundle": bundleRefs(&pv)}
 		path := "/api/v1/extensions/-/install"
 		if upgrade != "" {
 			path = "/api/v1/extensions/" + url.PathEscape(upgrade) + "/-/upgrade"
@@ -331,7 +334,8 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 			return err
 		}
 		var d ExtensionDetail
-		if err := c.do(ctx, "PUT", "/api/v1/extensions/"+url.PathEscape(positional[0])+"/-/enabled", map[string]bool{"enabled": args[0] == "enable"}, &d); err != nil {
+		body := map[string]bool{"enabled": args[0] == "enable", "cascade": flag("--cascade")}
+		if err := c.do(ctx, "PUT", "/api/v1/extensions/"+url.PathEscape(positional[0])+"/-/enabled", body, &d); err != nil {
 			return err
 		}
 		fmt.Fprintf(stdout, "%s：%s\n", d.ID, d.Status)
@@ -421,9 +425,15 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 		if err := need(1); err != nil {
 			return err
 		}
+		q := url.Values{}
+		for f, k := range map[string]string{"--keep-data": "keep_data", "--cascade": "cascade", "--members": "members"} {
+			if flag(f) {
+				q.Set(k, "1")
+			}
+		}
 		path := "/api/v1/extensions/" + url.PathEscape(positional[0]) + "/-/"
-		if flag("--keep-data") {
-			path += "?keep_data=1"
+		if len(q) > 0 {
+			path += "?" + q.Encode()
 		}
 		if err := c.do(ctx, "DELETE", path, nil, nil); err != nil {
 			return err

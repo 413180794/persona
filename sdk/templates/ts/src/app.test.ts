@@ -21,7 +21,7 @@ function hub() {
 test("search and open", async () => {
   const call = hub();
   await call("initialize", { protocol: 1, hub: { build: 0 }, extension: { id: "{{id}}", version: "0.1.0" }, config: { greeting: "早" }, granted: {} });
-  const ctx = { contribution: "home", placement: "nav_page", size: "full", ui_version: 3 };
+  const ctx = { contribution: "{{id}}", placement: "nav_page", size: "full", ui_version: 3 };
   let { result } = await call("ui.action", { ...ctx, action: "search", values: { q: "条目 2" } });
   expect(result.view.sections[0].items[0].text).toBe("早");
   expect(result.view.search.value).toBe("条目 2");

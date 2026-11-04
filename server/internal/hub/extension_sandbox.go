@@ -225,6 +225,9 @@ func (ps *extensions) forgetEgress(id string) {
 // forgetSandbox drops the owner's choice for an extension no longer installed: installed again, it starts from the
 // default.
 func (ps *extensions) forgetSandbox(ctx context.Context, id string) {
+	if id != "" && ps.root != "" {
+		_ = os.RemoveAll(filepath.Join(ps.root, "run", id)) // its sockets
+	}
 	sb := &ps.sandboxes
 	sb.mu.Lock()
 	_, ok := sb.settings.On[id]
@@ -267,7 +270,11 @@ func (ps *extensions) setSandbox(ctx context.Context, p *extension.Extension, on
 	st := ps.sandboxOf(ctx, p)
 	ps.reg.Audit(ctx, p.Record.ID, "sandbox", who, map[string]any{"enabled": st.Enabled, "chosen": st.Chosen})
 	ps.logf("extension %s: sandbox %v (by %s)", p.Record.ID, st.Enabled, who)
-	ps.apply(ctx, p.Record.ID)
+	run := ps.ctx // its program lives as long as the extensions do, not as long as this request
+	if run == nil {
+		run = context.Background()
+	}
+	ps.apply(run, p.Record.ID)
 	return nil
 }
 

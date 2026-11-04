@@ -152,8 +152,9 @@ func TestExtensionSandbox(t *testing.T) {
 		t.Fatalf("proxy counts %+v", st)
 	}
 
-	// Off: it runs as before sandboxes, outside and not pointed at the proxy.
-	code, d = call(t, mux, "PUT", "/api/v1/extensions/boxed/-/sandbox", master, `{"enabled": false}`)
+	// Off: it runs as before sandboxes, outside and not pointed at the proxy. The switch is a request: the program it
+	// restarts outlives it.
+	code, d = callCanceled(t, mux, "PUT", "/api/v1/extensions/boxed/-/sandbox", master, `{"enabled": false}`)
 	if sb, _ := d["sandbox"].(map[string]any); code != 200 || sb["enabled"] != false || sb["chosen"] != true {
 		t.Fatalf("off: %d %v", code, d)
 	}
@@ -193,6 +194,24 @@ func TestExtensionSandbox(t *testing.T) {
 	if _, ok := s.On["boxed"]; ok {
 		t.Fatalf("an uninstalled extension's choice stays: %+v", s)
 	}
+	if _, err := os.Stat(filepath.Join(h.extensions.root, "run", "boxed")); !os.IsNotExist(err) {
+		t.Fatalf("an uninstalled extension's run directory stays: %v", err)
+	}
+}
+
+// callCanceled is call with the request's context canceled once it is answered, as a real server does.
+func callCanceled(t *testing.T, h http.Handler, method, path, token, body string) (int, map[string]any) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	req := httptest.NewRequest(method, path, strings.NewReader(body)).WithContext(ctx)
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	cancel()
+	out := map[string]any{}
+	_ = json.Unmarshal(w.Body.Bytes(), &out)
+	return w.Code, out
 }
 
 // What decides the default: where it came from, and whether the hub trusts that market's signing key; the extensions

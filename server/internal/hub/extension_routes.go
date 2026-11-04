@@ -172,8 +172,13 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 	api.HandleFunc("PUT /api/v1/extensions/{id}/-/enabled", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
 		var in struct {
 			Enabled bool `json:"enabled"`
+			// Cascade: switching off one others depend on switches them off too (else 409 has_dependents).
+			Cascade bool `json:"cascade"`
 		}
 		if !readExtensionJSON(w, r, &in) {
+			return
+		}
+		if !in.Enabled && !h.takeDependents(w, r, p.Record.ID, in.Cascade) {
 			return
 		}
 		if err := ps().reg.SetEnabled(r.Context(), p.Record.ID, in.Enabled, actor(r)); err != nil {
@@ -236,14 +241,29 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 			writeErrCode(w, http.StatusBadRequest, "invalid_plugin", err)
 			return
 		}
+		h.resolveBundle(r.Context(), pv, "")
 		writeJSON(w, pv)
 	}))
 	api.HandleFunc("POST /api/v1/extensions/-/install", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			PreviewID string `json:"preview_id"`
 			Digest    string `json:"permissions_digest"`
+			// Bundle are the previews that install with it (its preview's bundle), each with its digest.
+			Bundle []bundleRef `json:"bundle,omitempty"`
 		}
-		if !readExtensionJSON(w, r, &in) || !marketOr(w, r, func() bool { return ps().reg.PreviewMarketOf(in.PreviewID) != "" }) {
+		ofMarket := func() bool {
+			for _, b := range in.Bundle {
+				if ps().reg.PreviewMarketOf(b.PreviewID) == "" {
+					return false
+				}
+			}
+			return ps().reg.PreviewMarketOf(in.PreviewID) != ""
+		}
+		if !readExtensionJSON(w, r, &in) || !marketOr(w, r, ofMarket) {
+			return
+		}
+		if err := h.installBundle(r.Context(), ps().reg.PreviewOf(in.PreviewID), in.Digest, in.Bundle, actorOr(r, "personad extension")); err != nil {
+			writeExtensionErr(w, http.StatusBadRequest, "install_failed", err)
 			return
 		}
 		p, err := ps().reg.Install(r.Context(), in.PreviewID, in.Digest, actorOr(r, "personad extension"))
@@ -255,11 +275,20 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 	})
 	api.HandleFunc("POST /api/v1/extensions/{id}/-/upgrade", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			PreviewID string `json:"preview_id"`
-			Digest    string `json:"permissions_digest"`
+			PreviewID string      `json:"preview_id"`
+			Digest    string      `json:"permissions_digest"`
+			Bundle    []bundleRef `json:"bundle,omitempty"`
 		}
 		if !readExtensionJSON(w, r, &in) || !marketOr(w, r, func() bool { return ps().reg.PreviewMarketOf(in.PreviewID) != "" }) {
 			return
+		}
+		if pv := ps().reg.PreviewOf(in.PreviewID); pv != nil && len(pv.Bundle) > 0 {
+			// A newer version needing what is not installed yet: those first (the upgrade's digest is optional, so the
+			// bundle is held to its own).
+			if err := h.installBundle(r.Context(), pv, pv.Digest, in.Bundle, actorOr(r, "personad extension")); err != nil {
+				writeExtensionErr(w, http.StatusBadRequest, "upgrade_failed", err)
+				return
+			}
 		}
 		p, err := ps().reg.Upgrade(r.Context(), r.PathValue("id"), in.PreviewID, in.Digest, actorOr(r, "personad extension"))
 		if err != nil {
@@ -289,11 +318,27 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 		if !marketOr(w, r, fromMarket(r)) {
 			return
 		}
-		if err := ps().reg.Uninstall(r.Context(), r.PathValue("id"), r.URL.Query().Get("keep_data") == "1", actorOr(r, "personad extension")); err != nil {
+		id, q, who := r.PathValue("id"), r.URL.Query(), actorOr(r, "personad extension")
+		// cascade=1: the extensions that depend on it are switched off (else 409 has_dependents); members=1: a pack's
+		// members go with it.
+		if !h.takeDependents(w, r, id, q.Get("cascade") == "1") {
+			return
+		}
+		var members []string
+		if p := ps().reg.Get(id); p != nil && q.Get("members") == "1" {
+			members = ps().packMembers(p)
+		}
+		if err := ps().reg.Uninstall(r.Context(), id, q.Get("keep_data") == "1", who); err != nil {
 			writeErrCode(w, http.StatusBadRequest, "uninstall_failed", err)
 			return
 		}
-		writeJSON(w, map[string]any{"ok": true})
+		var removed []string
+		for _, m := range members {
+			if err := ps().reg.Uninstall(r.Context(), m, q.Get("keep_data") == "1", who); err == nil {
+				removed = append(removed, m)
+			}
+		}
+		writeJSON(w, map[string]any{"ok": true, "removed_members": removed})
 	})
 
 	// A plugin's program on a computer: the app's requests to it (extension_nodes.go).

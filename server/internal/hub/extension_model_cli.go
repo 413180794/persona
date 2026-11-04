@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/url"
 	"strings"
+
+	"github.com/nwverse/persona/server/internal/extension"
 )
 
 // The extension model's commands (docs/extensions.md「贡献的开关」), next to extensionUsage's.
@@ -44,6 +46,41 @@ func extensionModelCommand(ctx context.Context, c *extensionClient, cmd string, 
 		return true, nil
 	}
 	return false, nil
+}
+
+// printBundle says what installs with a preview: its dependencies and their state, the previews that come along
+// (each with what it may do), and what no market has.
+func printBundle(w io.Writer, pv *extension.Preview) {
+	for _, d := range pv.Depends {
+		state := map[string]string{extension.DepOK: "已装", extension.DepMissing: "没装", extension.DepDisabled: "停用着",
+			extension.DepOld: "版本不够（" + d.Installed + "）"}[d.State]
+		fmt.Fprintf(w, "要用：%s %s（%s）\n", d.ID, d.Version, state)
+	}
+	if len(pv.Bundle) > 0 {
+		fmt.Fprintln(w, "一起装：")
+	}
+	for _, b := range pv.Bundle {
+		verb := "安装"
+		if b.Upgrade {
+			verb = "升级到"
+		}
+		fmt.Fprintf(w, "  %s %s %s（%s）\n", verb, b.Manifest.ID, b.Manifest.Version, b.Manifest.Name)
+		for _, l := range b.Permissions {
+			fmt.Fprintf(w, "    · %s：%s\n", l.Title, l.Detail)
+		}
+	}
+	for _, u := range pv.Unresolved {
+		fmt.Fprintf(w, "找不到：%s\n", u)
+	}
+}
+
+// bundleRefs are a preview's bundle as the install request sends it back.
+func bundleRefs(pv *extension.Preview) []bundleRef {
+	out := []bundleRef{}
+	for _, b := range pv.Bundle {
+		out = append(out, bundleRef{PreviewID: b.ID, Digest: b.Digest})
+	}
+	return out
 }
 
 func printContributions(w io.Writer, cs []ContributionView) {

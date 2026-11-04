@@ -22,13 +22,19 @@ nonisolated struct ExtensionManifest: Codable, Equatable, Sendable {
     var engines: ExtensionEngines?
     var runtime: ExtensionRuntime?
     var activationEvents: [String]?
-    var contributes: ExtensionContributes
+    var contributes: ExtensionContributes?
+    /// Extensions it needs installed and on (docs「依赖」): while one is missing, off or too old it waits in needs_setup.
+    var depends: [ExtensionDependency]?
+    var exports: ExtensionExports?
+    /// An extension pack (docs「扩展合集」): installing it installs these. A pack has no runtime and no contributes of its
+    /// own.
+    var extensionPack: [ExtensionPackMember]?
     /// The configuration's JSON Schema, in the subset every app draws as a form (docs「配置：表单的子集」).
     var configuration: JSONValue?
     var secrets: [ExtensionSecretSpec]?
     var permissions: ExtensionPermissions?
 
-    init(manifestVersion: Int = 0, id: String = "", name: String = "", version: String = "", description: String? = nil, publisher: String? = nil, homepage: String? = nil, engines: ExtensionEngines? = nil, runtime: ExtensionRuntime? = nil, activationEvents: [String]? = nil, contributes: ExtensionContributes = ExtensionContributes(), configuration: JSONValue? = nil, secrets: [ExtensionSecretSpec]? = nil, permissions: ExtensionPermissions? = nil) {
+    init(manifestVersion: Int = 0, id: String = "", name: String = "", version: String = "", description: String? = nil, publisher: String? = nil, homepage: String? = nil, engines: ExtensionEngines? = nil, runtime: ExtensionRuntime? = nil, activationEvents: [String]? = nil, contributes: ExtensionContributes? = nil, depends: [ExtensionDependency]? = nil, exports: ExtensionExports? = nil, extensionPack: [ExtensionPackMember]? = nil, configuration: JSONValue? = nil, secrets: [ExtensionSecretSpec]? = nil, permissions: ExtensionPermissions? = nil) {
         self.manifestVersion = manifestVersion
         self.id = id
         self.name = name
@@ -40,6 +46,9 @@ nonisolated struct ExtensionManifest: Codable, Equatable, Sendable {
         self.runtime = runtime
         self.activationEvents = activationEvents
         self.contributes = contributes
+        self.depends = depends
+        self.exports = exports
+        self.extensionPack = extensionPack
         self.configuration = configuration
         self.secrets = secrets
         self.permissions = permissions
@@ -57,6 +66,9 @@ nonisolated struct ExtensionManifest: Codable, Equatable, Sendable {
         case runtime
         case activationEvents = "activation_events"
         case contributes
+        case depends
+        case exports
+        case extensionPack = "extension_pack"
         case configuration
         case secrets
         case permissions
@@ -74,10 +86,113 @@ nonisolated struct ExtensionManifest: Codable, Equatable, Sendable {
         self.engines = try? c.decodeIfPresent(ExtensionEngines.self, forKey: .engines)
         self.runtime = try? c.decodeIfPresent(ExtensionRuntime.self, forKey: .runtime)
         self.activationEvents = try? c.decodeIfPresent([String].self, forKey: .activationEvents)
-        self.contributes = (try? c.decodeIfPresent(ExtensionContributes.self, forKey: .contributes)) ?? ExtensionContributes()
+        self.contributes = try? c.decodeIfPresent(ExtensionContributes.self, forKey: .contributes)
+        self.depends = try? c.decodeIfPresent([ExtensionDependency].self, forKey: .depends)
+        self.exports = try? c.decodeIfPresent(ExtensionExports.self, forKey: .exports)
+        self.extensionPack = try? c.decodeIfPresent([ExtensionPackMember].self, forKey: .extensionPack)
         self.configuration = try? c.decodeIfPresent(JSONValue.self, forKey: .configuration)
         self.secrets = try? c.decodeIfPresent([ExtensionSecretSpec].self, forKey: .secrets)
         self.permissions = try? c.decodeIfPresent(ExtensionPermissions.self, forKey: .permissions)
+    }
+}
+
+nonisolated struct ExtensionDependency: Codable, Equatable, Sendable {
+    var id: String
+    /// A range of its versions: >=1.2.0, <2.0.0, or both with a space between.
+    var version: String?
+
+    init(id: String = "", version: String? = nil) {
+        self.id = id
+        self.version = version
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case version
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.version = try? c.decodeIfPresent(String.self, forKey: .version)
+    }
+}
+
+/// Extension points it opens to other extensions: they contribute under contributes["<this id>.<point id>"] and
+/// depend on it.
+nonisolated struct ExtensionExports: Codable, Equatable, Sendable {
+    var extensionPoints: [ExtensionExportedPoint]
+
+    init(extensionPoints: [ExtensionExportedPoint] = []) {
+        self.extensionPoints = extensionPoints
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case extensionPoints = "extension_points"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.extensionPoints = (try? c.decodeIfPresent([ExtensionExportedPoint].self, forKey: .extensionPoints)) ?? []
+    }
+}
+
+nonisolated struct ExtensionExportedPoint: Codable, Equatable, Sendable {
+    var id: String
+    var version: Int
+    var description: String?
+    /// Each contribution's JSON Schema, in the configuration's subset (docs「配置：表单的子集」); id is always there and
+    /// required.
+    var schema: JSONValue?
+
+    init(id: String = "", version: Int = 0, description: String? = nil, schema: JSONValue? = nil) {
+        self.id = id
+        self.version = version
+        self.description = description
+        self.schema = schema
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case version
+        case description
+        case schema
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.version = (try? c.decodeIfPresent(Int.self, forKey: .version)) ?? 0
+        self.description = try? c.decodeIfPresent(String.self, forKey: .description)
+        self.schema = try? c.decodeIfPresent(JSONValue.self, forKey: .schema)
+    }
+}
+
+nonisolated struct ExtensionPackMember: Codable, Equatable, Sendable {
+    var id: String
+    /// The address of the market it comes from (github:owner/repo, https://…), as the hub registered it; empty: the
+    /// pack's own market, else the first registered market that has it.
+    var market: String?
+    /// A range of its versions, as in depends.
+    var version: String?
+
+    init(id: String = "", market: String? = nil, version: String? = nil) {
+        self.id = id
+        self.market = market
+        self.version = version
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case market
+        case version
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? ""
+        self.market = try? c.decodeIfPresent(String.self, forKey: .market)
+        self.version = try? c.decodeIfPresent(String.self, forKey: .version)
     }
 }
 
@@ -964,8 +1079,11 @@ nonisolated struct ExtensionInitializeParams: Codable, Equatable, Sendable {
     var granted: ExtensionPermissions
     /// The contributions this run is for, by extension point.
     var active: [String: [String]]?
+    /// The contributions of the other extensions that are on to the points it exports, by its point id (event
+    /// extension.contributions_changed says them again when they change).
+    var contributionsToMe: [String: [ExtensionExportedContribution]]?
 
-    init(`protocol`: Int = 0, hub: ExtensionHubInfo = ExtensionHubInfo(), `extension`: ExtensionInfo? = nil, plugin: ExtensionInfo? = nil, config: JSONValue? = nil, secrets: [String: String]? = nil, granted: ExtensionPermissions = ExtensionPermissions(), active: [String: [String]]? = nil) {
+    init(`protocol`: Int = 0, hub: ExtensionHubInfo = ExtensionHubInfo(), `extension`: ExtensionInfo? = nil, plugin: ExtensionInfo? = nil, config: JSONValue? = nil, secrets: [String: String]? = nil, granted: ExtensionPermissions = ExtensionPermissions(), active: [String: [String]]? = nil, contributionsToMe: [String: [ExtensionExportedContribution]]? = nil) {
         self.protocol = `protocol`
         self.hub = hub
         self.extension = `extension`
@@ -974,6 +1092,7 @@ nonisolated struct ExtensionInitializeParams: Codable, Equatable, Sendable {
         self.secrets = secrets
         self.granted = granted
         self.active = active
+        self.contributionsToMe = contributionsToMe
     }
 
     enum CodingKeys: String, CodingKey {
@@ -985,6 +1104,7 @@ nonisolated struct ExtensionInitializeParams: Codable, Equatable, Sendable {
         case secrets
         case granted
         case active
+        case contributionsToMe = "contributions_to_me"
     }
 
     init(from decoder: Decoder) throws {
@@ -997,6 +1117,30 @@ nonisolated struct ExtensionInitializeParams: Codable, Equatable, Sendable {
         self.secrets = try? c.decodeIfPresent([String: String].self, forKey: .secrets)
         self.granted = (try? c.decodeIfPresent(ExtensionPermissions.self, forKey: .granted)) ?? ExtensionPermissions()
         self.active = try? c.decodeIfPresent([String: [String]].self, forKey: .active)
+        self.contributionsToMe = try? c.decodeIfPresent([String: [ExtensionExportedContribution]].self, forKey: .contributionsToMe)
+    }
+}
+
+nonisolated struct ExtensionExportedContribution: Codable, Equatable, Sendable {
+    /// The extension it comes from.
+    var `extension`: String
+    /// The contribution, as that extension's manifest wrote it.
+    var item: JSONValue
+
+    init(`extension`: String = "", item: JSONValue = .null) {
+        self.extension = `extension`
+        self.item = item
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case `extension`
+        case item
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.extension = (try? c.decodeIfPresent(String.self, forKey: .`extension`)) ?? ""
+        self.item = (try? c.decodeIfPresent(JSONValue.self, forKey: .item)) ?? .null
     }
 }
 

@@ -19,21 +19,55 @@ const (
 var ActivationEvents = []string{"on_startup", "on_call", "on_http"}
 
 type Manifest struct {
-	ManifestVersion  int         `json:"manifest_version"`
-	ID               string      `json:"id"`
-	Name             string      `json:"name"`
-	Version          string      `json:"version"`
-	Description      string      `json:"description,omitempty"`
-	Publisher        string      `json:"publisher,omitempty"`
-	Homepage         string      `json:"homepage,omitempty"`
-	Engines          *Engines    `json:"engines,omitempty"`
-	Runtime          *Runtime    `json:"runtime,omitempty"`
-	ActivationEvents []string    `json:"activation_events,omitempty"`
-	Contributes      Contributes `json:"contributes"`
+	ManifestVersion  int          `json:"manifest_version"`
+	ID               string       `json:"id"`
+	Name             string       `json:"name"`
+	Version          string       `json:"version"`
+	Description      string       `json:"description,omitempty"`
+	Publisher        string       `json:"publisher,omitempty"`
+	Homepage         string       `json:"homepage,omitempty"`
+	Engines          *Engines     `json:"engines,omitempty"`
+	Runtime          *Runtime     `json:"runtime,omitempty"`
+	ActivationEvents []string     `json:"activation_events,omitempty"`
+	Contributes      *Contributes `json:"contributes,omitempty"`
+	// Extensions it needs installed and on (docs「依赖」): while one is missing, off or too old it waits in needs_setup.
+	Depends []Dependency `json:"depends,omitempty"`
+	Exports *Exports     `json:"exports,omitempty"`
+	// An extension pack (docs「扩展合集」): installing it installs these. A pack has no runtime and no contributes of its own.
+	ExtensionPack []PackMember `json:"extension_pack,omitempty"`
 	// The configuration's JSON Schema, in the subset every app draws as a form (docs「配置：表单的子集」).
 	Configuration json.RawMessage `json:"configuration,omitempty"`
 	Secrets       []SecretSpec    `json:"secrets,omitempty"`
 	Permissions   *Permissions    `json:"permissions,omitempty"`
+}
+
+type Dependency struct {
+	ID string `json:"id"`
+	// A range of its versions: >=1.2.0, <2.0.0, or both with a space between.
+	Version string `json:"version,omitempty"`
+}
+
+// Exports: extension points it opens to other extensions: they contribute under contributes["<this id>.<point id>"]
+// and depend on it.
+type Exports struct {
+	ExtensionPoints []ExportedPoint `json:"extension_points"`
+}
+
+type ExportedPoint struct {
+	ID          string `json:"id"`
+	Version     int    `json:"version"`
+	Description string `json:"description,omitempty"`
+	// Each contribution's JSON Schema, in the configuration's subset (docs「配置：表单的子集」); id is always there and required.
+	Schema json.RawMessage `json:"schema,omitempty"`
+}
+
+type PackMember struct {
+	ID string `json:"id"`
+	// The address of the market it comes from (github:owner/repo, https://…), as the hub registered it; empty: the
+	// pack's own market, else the first registered market that has it.
+	Market string `json:"market,omitempty"`
+	// A range of its versions, as in depends.
+	Version string `json:"version,omitempty"`
 }
 
 // Engines: what the extension runs on. extension_protocol is plugin_protocol's new name; a hub reads either.
@@ -326,6 +360,16 @@ type InitializeParams struct {
 	Granted Permissions       `json:"granted"`
 	// The contributions this run is for, by extension point.
 	Active map[string][]string `json:"active,omitempty"`
+	// The contributions of the other extensions that are on to the points it exports, by its point id (event
+	// extension.contributions_changed says them again when they change).
+	ContributionsToMe map[string][]ExportedContribution `json:"contributions_to_me,omitempty"`
+}
+
+type ExportedContribution struct {
+	// The extension it comes from.
+	Extension string `json:"extension"`
+	// The contribution, as that extension's manifest wrote it.
+	Item json.RawMessage `json:"item"`
 }
 
 type HubInfo struct {
@@ -955,6 +999,10 @@ type CardPart struct {
 // newDef makes a value of each definition, for tests that read examples by definition name.
 var newDef = map[string]func() any{
 	"Manifest":              func() any { return new(Manifest) },
+	"Dependency":            func() any { return new(Dependency) },
+	"Exports":               func() any { return new(Exports) },
+	"ExportedPoint":         func() any { return new(ExportedPoint) },
+	"PackMember":            func() any { return new(PackMember) },
 	"Engines":               func() any { return new(Engines) },
 	"Runtime":               func() any { return new(Runtime) },
 	"Resources":             func() any { return new(Resources) },
@@ -979,6 +1027,7 @@ var newDef = map[string]func() any{
 	"Frame":                 func() any { return new(Frame) },
 	"RPCError":              func() any { return new(RPCError) },
 	"InitializeParams":      func() any { return new(InitializeParams) },
+	"ExportedContribution":  func() any { return new(ExportedContribution) },
 	"HubInfo":               func() any { return new(HubInfo) },
 	"ExtensionInfo":         func() any { return new(ExtensionInfo) },
 	"InitializeResult":      func() any { return new(InitializeResult) },

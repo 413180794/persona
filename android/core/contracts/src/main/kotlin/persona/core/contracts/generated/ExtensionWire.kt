@@ -40,13 +40,67 @@ data class ExtensionManifest(
     val engines: ExtensionEngines? = null,
     val runtime: ExtensionRuntime? = null,
     @SerialName("activation_events") val activationEvents: List<String>? = null,
-    val contributes: ExtensionContributes = ExtensionContributes(),
+    val contributes: ExtensionContributes? = null,
+    /**
+     * Extensions it needs installed and on (docs「依赖」): while one is missing, off or too old it waits in needs_setup.
+     */
+    val depends: List<ExtensionDependency>? = null,
+    val exports: ExtensionExports? = null,
+    /**
+     * An extension pack (docs「扩展合集」): installing it installs these. A pack has no runtime and no contributes of its
+     * own.
+     */
+    @SerialName("extension_pack") val extensionPack: List<ExtensionPackMember>? = null,
     /**
      * The configuration's JSON Schema, in the subset every app draws as a form (docs「配置：表单的子集」).
      */
     val configuration: JsonElement? = null,
     val secrets: List<ExtensionSecretSpec>? = null,
     val permissions: ExtensionPermissions? = null,
+)
+
+@Serializable
+data class ExtensionDependency(
+    val id: String = "",
+    /**
+     * A range of its versions: >=1.2.0, <2.0.0, or both with a space between.
+     */
+    val version: String? = null,
+)
+
+/**
+ * Extension points it opens to other extensions: they contribute under contributes["<this id>.<point id>"] and depend
+ * on it.
+ */
+@Serializable
+data class ExtensionExports(
+    @SerialName("extension_points") val extensionPoints: List<ExtensionExportedPoint> = emptyList(),
+)
+
+@Serializable
+data class ExtensionExportedPoint(
+    val id: String = "",
+    val version: Int = 0,
+    val description: String? = null,
+    /**
+     * Each contribution's JSON Schema, in the configuration's subset (docs「配置：表单的子集」); id is always there and
+     * required.
+     */
+    val schema: JsonElement? = null,
+)
+
+@Serializable
+data class ExtensionPackMember(
+    val id: String = "",
+    /**
+     * The address of the market it comes from (github:owner/repo, https://…), as the hub registered it; empty: the
+     * pack's own market, else the first registered market that has it.
+     */
+    val market: String? = null,
+    /**
+     * A range of its versions, as in depends.
+     */
+    val version: String? = null,
 )
 
 /**
@@ -415,6 +469,23 @@ data class ExtensionInitializeParams(
      * The contributions this run is for, by extension point.
      */
     val active: Map<String, List<String>>? = null,
+    /**
+     * The contributions of the other extensions that are on to the points it exports, by its point id (event
+     * extension.contributions_changed says them again when they change).
+     */
+    @SerialName("contributions_to_me") val contributionsToMe: Map<String, List<ExtensionExportedContribution>>? = null,
+)
+
+@Serializable
+data class ExtensionExportedContribution(
+    /**
+     * The extension it comes from.
+     */
+    val extension: String = "",
+    /**
+     * The contribution, as that extension's manifest wrote it.
+     */
+    val item: JsonElement = JsonNull,
 )
 
 @Serializable

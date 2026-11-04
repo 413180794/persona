@@ -15,11 +15,56 @@ export interface Manifest {
   engines?: Engines;
   runtime?: Runtime;
   activation_events?: ActivationEvent[];
-  contributes: Contributes;
+  contributes?: Contributes;
+  /**
+   * Extensions it needs installed and on (docs「依赖」): while one is missing, off or too old it waits in needs_setup.
+   */
+  depends?: Dependency[];
+  exports?: Exports;
+  /**
+   * An extension pack (docs「扩展合集」): installing it installs these. A pack has no runtime and no contributes of its
+   * own.
+   */
+  extension_pack?: PackMember[];
   /** The configuration's JSON Schema, in the subset every app draws as a form (docs「配置：表单的子集」). */
   configuration?: unknown;
   secrets?: SecretSpec[];
   permissions?: Permissions;
+}
+
+export interface Dependency {
+  id: string;
+  /** A range of its versions: >=1.2.0, <2.0.0, or both with a space between. */
+  version?: string;
+}
+
+/**
+ * Extension points it opens to other extensions: they contribute under contributes["<this id>.<point id>"] and depend
+ * on it.
+ */
+export interface Exports {
+  extension_points: ExportedPoint[];
+}
+
+export interface ExportedPoint {
+  id: string;
+  version: number;
+  description?: string;
+  /**
+   * Each contribution's JSON Schema, in the configuration's subset (docs「配置：表单的子集」); id is always there and required.
+   */
+  schema?: unknown;
+}
+
+export interface PackMember {
+  id: string;
+  /**
+   * The address of the market it comes from (github:owner/repo, https://…), as the hub registered it; empty: the
+   * pack's own market, else the first registered market that has it.
+   */
+  market?: string;
+  /** A range of its versions, as in depends. */
+  version?: string;
 }
 
 /**
@@ -299,6 +344,18 @@ export interface InitializeParams {
   granted: Permissions;
   /** The contributions this run is for, by extension point. */
   active?: Record<string, string[]>;
+  /**
+   * The contributions of the other extensions that are on to the points it exports, by its point id (event
+   * extension.contributions_changed says them again when they change).
+   */
+  contributions_to_me?: Record<string, ExportedContribution[]>;
+}
+
+export interface ExportedContribution {
+  /** The extension it comes from. */
+  extension: string;
+  /** The contribution, as that extension's manifest wrote it. */
+  item: unknown;
 }
 
 export interface HubInfo {

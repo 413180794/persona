@@ -133,7 +133,8 @@ hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的�
 | `runtime` | 否 | 没有就是纯声明扩展。`command`：包里的相对路径，或 `{"<GOOS>-<GOARCH>": 路径}`，没有这台 hub 的平台就装不上；不能是绝对路径、不能跳出包（`..`、指向包外的链接都查），必须可执行；`personad` 只有内置扩展能用。`args`；`env`（不能是 `PERSONA_` / `JARVIS_` 开头，密钥不放这里）；`rpc`：`stdio`（默认）/ `none`；`http`：在 `PERSONA_EXTENSION_SOCKET` 上起 HTTP。`rpc: none` 又没有 `http` 装不上 |
 | `node` | 否 | 在你选的电脑上运行的程序（#1830，`docs/plan-extensions.md`「七」）。`command`：只能按平台写 `{"darwin-<arch>" \| "linux-<arch>": 路径}`，路径规则同 `runtime`，不能是 `personad`；有哪些平台就是能在哪些电脑上跑，包里每个平台的程序都要在、要可执行（hub 不检查自己的平台）。`machines`：选电脑的配置字段名，这个字段必须是 `format: machine` 的数组，`items` 的 `x-os` 要写、且只能是 `command` 有程序的系统（要限定只能一台就写 `maxItems`）。`args`、`env`、`rpc`、`http` 同 `runtime`；`keep_running`：`lease`（默认，hub 半小时没续就停）/ `always`；`secrets`：发给电脑的密钥名（必须是 `secrets` 里的），其余只留在 hub；`permissions`：`network`（主机名）、`files`、`macos_privacy`，见「权限」。可以只有 `node` 没有 `runtime`（贡献的扩展点要不需要 hub 上的程序）。怎么跑见「在电脑上运行的程序」 |
 | `activation_events` | 否 | `on_startup` / `on_call` / `on_http`，见「什么时候跑」；有 `runtime` 时默认 `on_call`；`rpc: none` 的只能 `on_startup` |
-| `contributes` | 是 | 见「扩展点」，至少一项 |
+| `contributes` | 是（合集除外） | 见「扩展点」，至少一项；往别的扩展导出的扩展点贡献写 `"<扩展 id>.<扩展点 id>"`，见「依赖、导出和合集」 |
+| `depends`、`exports`、`extension_pack` | 否 | 依赖的扩展、开给别的扩展的扩展点、合集的成员，见「依赖、导出和合集」 |
 | `configuration` | 否 | 配置的 JSON Schema，只能用下面的子集 |
 | `secrets` | 否 | `[{name, title, description?, required?}]`，`name` 是 `^[a-z][a-z0-9_]{0,31}$`，最多 32 个 |
 | `permissions` | 否 | 见「权限」 |
@@ -360,6 +361,36 @@ Finder 压缩的 `__MACOSX/`、`.DS_Store`），解包时一律跳过，不算�
 
 命令行：`personad extension contributions <id>`（列出）、`personad extension contribution <id> <point>/<cid> on|off`。
 
+### 依赖、导出和合集（#1854）
+
+**依赖** `depends: [{id, version?}]`：这个扩展要别的扩展装着、开着（`version` 是版本范围：`>=1.2.0`、`<2.0.0` 或两个都写，空格隔开；不写是任何版本）。
+
+- **装、升级时**：预览的 `depends` 列出每一项在这台 hub 上的样子（`state`：`ok` / `missing` 没装 / `disabled` 停用着 / `old` 版本不够，`installed` 是装着的版本）。
+  没装的、版本不够的，hub 去登记的市场里找（先找它自己来自的市场，再按 id 找别的），找到的作为**一起装**的预览放进 `bundle`（依赖的依赖也跟着，最多 4 层），找不到的写进 `unresolved`。
+  安装 / 升级请求要带上 `bundle: [{preview_id, permissions_digest}]`，**每一个**都要和预览里的一致（用户在同一屏上看过它们各自能做什么），hub 先按顺序装它们、再装这一个；
+  有 `unresolved`、或者还有没装又不在 `bundle` 里的依赖，就什么都不装（400）。不是从市场来的扩展（目录、文件、上传）同样会去市场找依赖。
+- **运行时**：依赖没装、停用、版本不够时，这个扩展是 `needs_setup`，「还缺」写「先装扩展「X」」「先启用扩展「X」」「扩展「X」要 >=2.0.0（现在是 1.0.0）」，不启动；满足了自己起来（hub 在被依赖的扩展变了以后重新看一遍依赖它的）。
+- **停用、卸载被依赖的**：还有开着的扩展依赖它时，`PUT …/-/enabled {enabled: false}` 和 `DELETE …/-/` 回 409 `{code: "has_dependents", dependents: [{id, name}], error}`；
+  带上 `cascade`（`{"enabled": false, "cascade": true}`、`?cascade=1`）就先把它们停用（只停用，不连带卸载）。管理界面的接口同样（`cascade` 在请求体里）。不支持循环依赖（装不上第二个）。
+
+**导出扩展点** `exports: {extension_points: [{id, version, description?, schema?}]}`：扩展开自己的扩展点，别的扩展往上贡献。
+
+- 贡献方写 `contributes["<导出方 id>.<扩展点 id>"]: [{id, …}]`，并且必须在 `depends` 里写导出方；每一项是带 `id`（`a-z0-9_-`，最长 64）的对象，同一个扩展点里 id 全局唯一（和 hub 自己的扩展点一样）。
+- `schema` 是每一项的 JSON Schema（配置的那个子集，必须声明字符串的 `id`）：不合的、导出方没有这个扩展点的，贡献方 `needs_setup` 并写明原因。
+- 导出方在 `initialize` 的 `contributions_to_me` 里拿到开着的扩展给它的全部贡献（`{<扩展点 id>: [{extension, item}]}`），之后变了（装、升级、开关、单独关掉一项、卸载）hub 发事件
+  `extension.contributions_changed {contributions_to_me}`。hub 不替它们转发调用：要调用对方用各自的 HTTP，或 hub 的接口（范围 `extensions.call:<id>`，见「权限」）。
+- 往别的扩展的扩展点贡献，安装前的「它可以」里多一行「给别的扩展提供内容」。这些贡献和别的贡献一样能单独关（`<导出方>.<扩展点>/<id>`）。
+- schema 生成的类型（`sdk/go/wire` 等）里的 `Contributes` 只有 hub 自己的扩展点，往别的扩展的扩展点贡献的那几项在生成的类型里读不到（清单照样合 schema）。
+
+**扩展合集** `extension_pack: [{id, market?, version?}]`：只有成员、没有 `runtime` / `contributes` / 设置 / 密钥 / 权限 / 依赖 / 导出的扩展。
+
+- 装它 = 一次装好一组：预览的 `bundle` 是没装的（或版本不够的）成员和它们的依赖，各自的权限都列出来，一次确认（同上，带 `bundle`）。`market` 写市场的地址（`github:owner/repo`），
+  不写就是合集自己的市场、再按 id 找别的。合集本身作为一个已安装的扩展列出（`kind` 是 `extension_pack`，状态「启动」）。
+- 卸载：`DELETE …/-/?members=1`（管理界面 `{"members": true}`）连同装着的成员一起卸，回 `removed_members`；不带就只卸合集，成员留着。
+- 命令行：`personad extension install …` 打印要用的依赖、一起装的和找不到的，确认后一起装；`disable <id> --cascade`、`uninstall <id> [--cascade] [--members]`。
+
+**兼容**：这三个字段是新的，老 hub（#1854 之前）严格读清单，有它们的扩展装不上、市场里的条目被丢掉并给一条警告；用它们的扩展在 `engines.persona` 写上带 #1854 的 hub 构建号。
+
 ### 命令行
 
 ```text
@@ -368,13 +399,13 @@ personad extension show <id>
 personad extension install <source> [--yes]          先打印它能做什么，确认后才装
 personad extension upgrade <id> <source> [--yes]
 personad extension rollback <id>
-personad extension enable <id> | disable <id>
+personad extension enable <id> | disable <id> [--cascade]   --cascade：依赖它的扩展一起停用
 personad extension sandbox <id> on|off|default  在沙箱里跑不跑（default：受信任市场的不开，别的开），见「沙箱」
 personad extension contributions <id>                 每个贡献和它的开关
 personad extension contribution <id> <point>/<cid> on|off   单独开关一个贡献（连接器的就是连接器的开关）
 personad extension config <id> key=value …           值能解析成 JSON 就按 JSON，否则当文字；key= 删掉这一项
 personad extension secret <id> <name> [--delete]     值从标准输入读（终端里不回显），不进命令行参数
-personad extension uninstall <id> [--keep-data]
+personad extension uninstall <id> [--keep-data] [--cascade] [--members]   --members：合集的成员一起卸
 personad extension market list | add <spec> [--token] | remove <id> | refresh <id>
 personad extension market trust <id>                  市场换了签名的 key（或不再签名）：和发布方确认过再接受，见「扩展市场」「签名」
 personad extension search [关键词]
@@ -1253,7 +1284,7 @@ hub 管理界面（[admin.md](admin.md)）的「扩展」页（`web/src/admin/pa
  "active": {"connectors": ["examplenotes"]}}
 ```
 
-`active` 是这次要用的贡献（关着的连接器不在里面）。`hub.role`（#1503）是这台 hub 在互联组里的角色：`center`（独自一台，或组的中心：服务 App、驱动电脑）或
+`active` 是这次要用的贡献，每个扩展点一项（关着的连接器、单独关掉的贡献不在里面，见「贡献的开关」）；导出了扩展点的扩展另有 `contributions_to_me`（见「依赖、导出和合集」）。`hub.role`（#1503）是这台 hub 在互联组里的角色：`center`（独自一台，或组的中心：服务 App、驱动电脑）或
 `member`（别的 hub 是中心：替组做的事，比如响应聊天服务的实时事件、跑 /agent、爬全量，交给中心那台）；角色变了，hub 重启贡献了 `connectors` 或 `api` 的扩展。
 `hub.timezone` 是用户的时区（IANA 名字，和用户设备上报的一样），给扩展显示时间用（「今天」、一条消息的时间）；只知道 hub 自己的时钟时为空，每次启动时读。
 `hub.capabilities`（#1680）是这台 hub 做得了、扩展可以据此换做法的事：`inbox_group`（把连接器交来的一批新消息关联到收件箱里的事件，`docs/inbox.md`「事件合成」）。
@@ -1352,7 +1383,7 @@ func main() {
 ### 模板
 
 `sdk/templates/go`、`sdk/templates/ts`：一个能直接跑的扩展，主导航上一页（搜索框、带图标的列表、点一行 push 出详情（`markdown`）、没结果时 `empty`）、
-总览上一张卡片（`stat_grid`）、一个设置项（问候语）、一个密钥（API Key，只显示设没设）、测试（Go：`exttest` 一致性检查 + 搜索和打开；TS：经协议走一遍）。
+总览上一张卡片（`stat_grid`），贡献 id 是 `<id>` 和 `<id>-today`（贡献 id 在一个扩展点里对整台 hub 唯一，所以 `new` 的 id 最长 26）、一个设置项（问候语）、一个密钥（API Key，只显示设没设）、测试（Go：`exttest` 一致性检查 + 搜索和打开；TS：经协议走一遍）。
 给 UI 版本 3 以前的 App 画的样子也在里面（搜索框换成输入框加按钮，详情页带「返回」），作为「画给老 App」的例子。
 
 **push / pop 和老 App**：两个 SDK 都替扩展兼容 UI 版本 3 以前的 App（它们不认识 `push` / `pop`，点了会拿动作的 `id` 调 `ui.action`）：

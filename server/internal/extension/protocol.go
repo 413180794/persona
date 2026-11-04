@@ -77,6 +77,9 @@ type InitializeParams struct {
 	Granted Permissions `json:"granted"`
 	// Active are the contributions this run is for, by extension point (a switched-off connector is not in it).
 	Active map[string][]string `json:"active,omitempty"`
+	// ContributionsToMe are the other extensions' contributions to the points it exports (docs/extensions.md「导出扩展点」),
+	// by point id; the event extension.contributions_changed says them again when they change.
+	ContributionsToMe map[string][]ExportedContribution `json:"contributions_to_me,omitempty"`
 }
 
 func (p InitializeParams) MarshalJSON() ([]byte, error) {

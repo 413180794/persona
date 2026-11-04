@@ -707,6 +707,7 @@ func (h *Hub) marketRoutesAt(api *http.ServeMux, base string, allow func(w http.
 			writeErrCode(w, http.StatusBadRequest, "invalid_plugin", err)
 			return
 		}
+		h.resolveBundle(r.Context(), pv, rec.ID) // its missing dependencies, a pack's members (extension_model.go)
 		writeJSON(w, pv)
 	}))
 }
