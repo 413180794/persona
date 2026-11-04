@@ -244,8 +244,8 @@ var Points = map[string]Point{
 		if !slices.Contains(UIPlacements, u.Placement) {
 			return u.ID, fmt.Errorf("ui %s: placement is %s", u.ID, strings.Join(UIPlacements, " or "))
 		}
-		if u.Placement == "launcher_section" && len(u.Hosts) == 0 {
-			return u.ID, fmt.Errorf("ui %s: a launcher_section names the gateways' hosts", u.ID)
+		if u.Placement != "launcher_section" && len(u.Hosts) > 0 {
+			return u.ID, fmt.Errorf("ui %s: only a launcher_section has hosts", u.ID)
 		}
 		for _, h := range u.Hosts {
 			if !hostPattern.MatchString(h) {

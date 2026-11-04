@@ -52,7 +52,7 @@ func (ps *plugins) uiPlaces(placement, base string) []UIPlace {
 			continue
 		}
 		for _, u := range p.Manifest.UIs() {
-			if u.Placement != placement || (placement == "launcher_section" && (host == "" || !hostMatches(host, u.Hosts) || !p.Record.Granted.LauncherKeys)) {
+			if u.Placement != placement || (placement == "launcher_section" && (host == "" || (len(u.Hosts) > 0 && !hostMatches(host, u.Hosts)) || !p.Record.Granted.LauncherKeys)) {
 				continue
 			}
 			out = append(out, UIPlace{Plugin: p.Record.ID, ID: u.ID, Title: u.Title, Placement: u.Placement})
@@ -103,7 +103,7 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (plugin
 			return res, err
 		}
 		root, err := quota.Root(gw.base)
-		if err != nil || !hostMatches(root.Hostname(), item.Hosts) {
+		if err != nil || (len(item.Hosts) > 0 && !hostMatches(root.Hostname(), item.Hosts)) {
 			return res, errors.New("这个启动器的网关不是这个插件的")
 		}
 		var b [12]byte
@@ -125,6 +125,9 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (plugin
 	if err := hp.proc.Call(cctx, method, raw, &out); err != nil {
 		var re *rpc.Error
 		if errors.As(err, &re) {
+			if re.Code == plugin.CodeUnsupported {
+				return res, errUnsupportedGateway
+			}
 			return res, errors.New(re.Message)
 		}
 		return res, err
@@ -153,7 +156,12 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (plugin
 	return res, nil
 }
 
-var errNoPlugin = errors.New("no such plugin")
+var (
+	errNoPlugin = errors.New("no such plugin")
+	// errUnsupportedGateway: a launcher section without hosts whose plugin says the launcher's gateway is not its own;
+	// the apps leave the section out.
+	errUnsupportedGateway = errors.New("not this plugin's gateway")
+)
 
 func (h *Hub) pluginUIRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/plugins/-/ui", func(w http.ResponseWriter, r *http.Request) {
@@ -182,6 +190,8 @@ func (h *Hub) pluginUIRoutes(api *http.ServeMux) {
 		switch {
 		case errors.Is(err, errNoPlugin):
 			writeErrCode(w, http.StatusNotFound, "not_found", err)
+		case errors.Is(err, errUnsupportedGateway):
+			writeErrCode(w, http.StatusNotFound, "unsupported", err)
 		case errors.Is(err, errOffline):
 			writeErrCode(w, http.StatusServiceUnavailable, "offline", err)
 		case err != nil:

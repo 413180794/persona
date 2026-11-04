@@ -141,3 +141,10 @@
 - 跟随最新处时，折叠的步骤取回来会一帧长几千像素：照样贴底就把组头一下子甩到顶上。一帧里要挪超过 64px 就停止跟随、按住这一行。
 - 验证：Playwright（`playwright-core` + 缓存的 Chrome for Testing）+ CDP 的 `Emulation.setCPUThrottlingRate`、`long-animation-frame`、`Page.startScreencast` 录帧；Playwright 自带的 ffmpeg 只解 MJPEG，录帧用 jpeg，没有管道就先拼成一个文件再读。
   `recordVideo` 在这台机器上不出文件（ffmpeg 版本号对不上时报错，链过去之后静默）。量开发版（`vite`）没意义：React 开发模式一次展开 700ms，生产构建才是用户看到的。
+
+## 表格查看器（2026-11-04，#1310）
+
+- **npm 上的 `xlsx` 是停更的旧版**：SheetJS 2023 年起只从自己的 CDN 发新版，npm 的 0.18.5 有公开漏洞（读不可信文件时的原型污染、ReDoS）。仓库的隐私扫描和 Dockerfile 都只认 registry.npmjs.org，直接 `npm i https://cdn.sheetjs.com/…` 会被 `prebuild` 拦下（`unapproved npm source`）。做法是把 tarball 放进 `web/vendor/`，用 `file:` 相对路径装，Dockerfile 的检查放行 `file:vendor/`。
+- **拖选格子会把表格横着滚走**：格子是普通文字，按下拖动时浏览器在做文字选择，碰到边缘就自动滚动滚动容器。按下时 `preventDefault()` 加 `select-none`。
+- **半透明的选中底色会透出下面的格子**：行号列是 sticky 的，横向滚动时格子从它下面滑过，选中行号用 `bg-accent/12` 时被盖住的格子文字透了出来。sticky 的那层要不透明：`color-mix(in srgb, var(--accent) 14%, var(--inset))`。
+- **估列宽别按平均字宽**：12.5px 的数字和大写字母比平均宽，按 7.2px 一个字符算，`SO-260000`、`2026-08-04` 这类定长值被截成省略号；按 8px 算才放得下。文件里设的列宽（Excel 的字符宽）常常也偏窄，取两者中大的。

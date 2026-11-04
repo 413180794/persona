@@ -2,7 +2,9 @@
 // rendered (or its source), code with line numbers and a little coloring, JSON indented, images, PDFs, folders.
 // Text files come a page (2 MB) at a time; only the lines on screen are rendered, so big files stay smooth.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
-import { api, enc, errorText, isAbort } from "../../../lib/api";
+import { api, enc, errorText, fileDownloadURL, isAbort } from "../../../lib/api";
+import { delimitedSheet, type Sheet } from "../../../lib/sheets";
+import type { SheetReply, SheetRequest } from "../../../lib/sheets.worker";
 import {
   base64Bytes,
   columns,
@@ -31,6 +33,7 @@ import { Markdown } from "../../../ui/Markdown";
 import { Lightbox } from "../../chat/Steps";
 import { PanelHeader } from "../../SidePanel";
 import { BackHeader, Empty, FileGlyph, Segmented, useWindow } from "./parts";
+import { SheetView } from "./SheetView";
 
 const LH = 20; // px per code line
 const PAD = 8; // px above the first line
@@ -39,9 +42,55 @@ const MAX_JSON = 24 << 20; // JSON is read whole up to this, then indented
 const COLOR_LINES = 100_000;
 const COLOR_BYTES = 8 << 20;
 const PRETTY_BYTES = 8 << 20; // bigger JSON shows as read, not re-indented
+const MAX_TABLE_TEXT = 64 << 20; // a CSV is read whole up to this, then parsed
+const MAX_TABLE_BYTES = 200 << 20; // a workbook bigger than this is not opened in the browser
 
+// stream=1: a binary file comes described, its bytes from file/download by Range (docs/protocol.md「文件预览」); an
+// older hub ignores it and sends base64 as before.
 export function fileURL(mid: string, path: string, cwd?: string, offset = 0) {
-  return `/machines/${enc(mid)}/file?path=${enc(path)}&cwd=${enc(cwd ?? "")}${offset > 0 ? `&offset=${offset}` : ""}`;
+  return `/machines/${enc(mid)}/file?path=${enc(path)}&cwd=${enc(cwd ?? "")}${offset > 0 ? `&offset=${offset}` : ""}&stream=1`;
+}
+
+/** A binary file's whole bytes: from file/download when the hub streams it, else the base64 an older hub sent. */
+export async function fileBytes(mid: string, f: FileContent, cwd?: string, signal?: AbortSignal): Promise<ArrayBuffer> {
+  if (!f.stream && typeof f.data === "string") {
+    if (f.truncated) throw new Error("文件超过 2 MB，hub 版本太旧，更新后才能预览");
+    return base64Bytes(f.data).buffer;
+  }
+  const res = await fetch(fileDownloadURL(mid, f.path, cwd), { signal });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}) as Record<string, unknown>);
+    throw new Error(typeof body.error === "string" ? body.error : `HTTP ${res.status}`);
+  }
+  return res.arrayBuffer();
+}
+
+/** Where the browser can show a binary file itself (an image, a PDF): file/download inline, or the old base64. */
+function inlineSrc(mid: string, f: FileContent, cwd?: string): string {
+  return f.stream ? fileDownloadURL(mid, f.path, cwd, { inline: true }) : `data:${f.mime};base64,${f.data ?? ""}`;
+}
+
+/** Parses a table file in a worker: a workbook's bytes, or delimited text (small ones right here). */
+function parseSheets(req: SheetRequest, signal: AbortSignal): Promise<Sheet[]> {
+  if ("text" in req && req.text.length < 256 << 10) return Promise.resolve([delimitedSheet(req.name, req.text)]);
+  return new Promise((resolve, reject) => {
+    const w = new Worker(new URL("../../../lib/sheets.worker.ts", import.meta.url), { type: "module" });
+    const done = () => w.terminate();
+    signal.addEventListener("abort", () => {
+      done();
+      reject(new DOMException("aborted", "AbortError"));
+    });
+    w.onmessage = (e: MessageEvent<SheetReply>) => {
+      done();
+      if ("error" in e.data) reject(new Error(e.data.error));
+      else resolve(e.data.sheets);
+    };
+    w.onerror = (e) => {
+      done();
+      reject(new Error(e.message || "表格解析失败"));
+    };
+    w.postMessage(req, "bytes" in req ? [req.bytes] : []);
+  });
 }
 
 // ── loading ───────────────────────────────────────────────
@@ -177,6 +226,16 @@ export function FileView({
 
   const download = async () => {
     if (!f) return;
+    if (f.stream) {
+      // the hub sends it as an attachment, by Range: the browser saves it without holding it here
+      const a = document.createElement("a");
+      a.href = fileDownloadURL(mid, f.path, cwd);
+      a.download = f.name || fileName(path);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
     setSaving(true);
     try {
       const blob =
@@ -203,6 +262,7 @@ export function FileView({
     <>
       {kind === "markdown" && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "预览"], ["source", "源码"]]} />}
       {kind === "json" && json?.pretty != null && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "格式化"], ["source", "原文"]]} />}
+      {kind === "sheet" && typeof f?.text === "string" && <Segmented label="显示方式" value={mode} onChange={setMode} options={[["rendered", "表格"], ["source", "源文件"]]} />}
       <IconButton icon="copy" label="拷贝路径" onClick={() => copyText(f?.path || path)} />
       {kind !== "directory" && <IconButton icon="arrowDown" label={saving ? "正在下载" : "下载"} onClick={download} disabled={!f || saving} />}
     </>
@@ -231,9 +291,11 @@ export function FileView({
   } else if (kind === "directory") {
     body = <FolderList file={f} onOpen={onOpenPath} />;
   } else if (kind === "image") {
-    body = <ImageView file={f} />;
+    body = <ImageView file={f} src={inlineSrc(mid, f, cwd)} />;
   } else if (kind === "pdf") {
-    body = <PdfView file={f} />;
+    body = <PdfView file={f} src={f.stream ? inlineSrc(mid, f, cwd) : ""} />;
+  } else if (kind === "sheet" && mode === "rendered") {
+    body = <SheetLoader mid={mid} cwd={cwd} doc={doc} file={f} />;
   } else if (kind === "binary") {
     body = (
       <Empty
@@ -478,10 +540,48 @@ function MarkdownView({ doc, file, mid, onOpenPath }: { doc: FileDoc; file: File
   );
 }
 
+// ── tables ────────────────────────────────────────────────
+
+/** Reads a table file whole (a CSV's remaining pages, a workbook's bytes) and parses it off the main thread. */
+function SheetLoader({ mid, cwd, doc, file }: { mid: string; cwd?: string; doc: FileDoc; file: FileContent }) {
+  const [state, setState] = useState<{ sheets?: Sheet[]; error?: string; note?: string }>({});
+  const { all } = doc;
+  useEffect(() => {
+    const ac = new AbortController();
+    setState({});
+    (async () => {
+      let req: SheetRequest;
+      let note = "";
+      if (typeof file.text === "string") {
+        const text = await all(MAX_TABLE_TEXT);
+        if (ac.signal.aborted) return;
+        if (text.length < file.size && file.size > MAX_TABLE_TEXT) note = `文件太大，只读了前 ${bytes(text.length)}`;
+        req = { name: file.name, text };
+      } else {
+        if (file.size > MAX_TABLE_BYTES) throw new Error(`文件有 ${bytes(file.size)}，太大了，下载后用表格软件打开`);
+        req = { name: file.name, bytes: await fileBytes(mid, file, cwd, ac.signal) };
+      }
+      const sheets = await parseSheets(req, ac.signal);
+      if (!ac.signal.aborted) setState({ sheets, note });
+    })().catch((e) => {
+      if (!isAbort(e) && !ac.signal.aborted) setState({ error: errorText(e) });
+    });
+    return () => ac.abort();
+  }, [mid, cwd, file, all]);
+  if (state.error) return <Empty icon="info" title="表格打不开" detail={state.error} />;
+  if (!state.sheets)
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <Loading label={typeof file.text === "string" ? "正在读取表格" : `正在读取表格 · ${bytes(file.size)}`} />
+      </div>
+    );
+  if (!state.sheets.length) return <Empty icon="info" title="表格里没有工作表" />;
+  return <SheetView sheets={state.sheets} note={state.note} />;
+}
+
 // ── images, PDFs, folders ─────────────────────────────────
 
-function ImageView({ file }: { file: FileContent }) {
-  const src = `data:${file.mime};base64,${file.data ?? ""}`;
+function ImageView({ file, src }: { file: FileContent; src: string }) {
   const [dims, setDims] = useState<[number, number] | null>(null);
   const [big, setBig] = useState(false);
   // A tiny image (an icon) is drawn bigger, pixel for pixel, so it can be seen.
@@ -521,13 +621,18 @@ function ImageView({ file }: { file: FileContent }) {
   );
 }
 
-function PdfView({ file }: { file: FileContent }) {
-  const [url, setUrl] = useState("");
+/** A PDF in the browser's own viewer: straight from file/download (it reads by Range), or a blob of the old base64. */
+function PdfView({ file, src }: { file: FileContent; src: string }) {
+  const [url, setUrl] = useState(src);
   useEffect(() => {
+    if (src) {
+      setUrl(src);
+      return;
+    }
     const u = URL.createObjectURL(new Blob([base64Bytes(file.data ?? "")], { type: "application/pdf" }));
     setUrl(u);
     return () => URL.revokeObjectURL(u);
-  }, [file]);
+  }, [file, src]);
   return url ? <iframe src={url} title={file.name} className="min-h-0 w-full flex-1 border-0 bg-inset" /> : null;
 }
 

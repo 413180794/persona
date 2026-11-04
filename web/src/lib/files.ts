@@ -256,7 +256,11 @@ export function splitDiff(diff: string): Record<string, string> {
 
 // ── the viewer ────────────────────────────────────────────
 
-export type ViewKind = "directory" | "markdown" | "json" | "code" | "image" | "pdf" | "binary";
+export type ViewKind = "directory" | "markdown" | "json" | "code" | "image" | "pdf" | "sheet" | "binary";
+
+/** Tables: delimited text, and workbooks SheetJS reads (lib/sheets.ts). */
+const DELIMITED_EXTS = ["csv", "tsv", "tab"];
+const WORKBOOK_EXTS = ["xlsx", "xlsm", "xlsb", "xls", "ods", "numbers"];
 
 export function extOf(name: string): string {
   const n = fileName(name).toLowerCase();
@@ -271,20 +275,23 @@ export function viewKind(f: FileContent): ViewKind {
   if (f.text === undefined || f.text === null) {
     if (mime.startsWith("image/")) return "image";
     if (mime === "application/pdf" || extOf(f.name) === "pdf") return "pdf";
+    if (WORKBOOK_EXTS.includes(extOf(f.name))) return "sheet";
     return "binary";
   }
   const ext = extOf(f.name);
+  if (DELIMITED_EXTS.includes(ext) || mime === "text/csv" || mime === "text/tab-separated-values") return "sheet";
   if (["md", "markdown", "mdx", "mkd"].includes(ext) || mime === "text/markdown") return ext ? "markdown" : "code";
   if (["json", "jsonc", "json5", "geojson", "webmanifest"].includes(ext) || (mime.includes("json") && !["jsonl", "ndjson"].includes(ext))) return "json";
   return "code";
 }
 
 /** The icon family of a name in a listing. */
-export function glyphOf(name: string): "image" | "doc" | "data" | "pdf" | "code" | "file" {
+export function glyphOf(name: string): "image" | "doc" | "data" | "sheet" | "pdf" | "code" | "file" {
   const ext = extOf(name);
   if (["png", "jpg", "jpeg", "gif", "webp", "heic", "bmp", "ico", "svg", "avif", "tiff"].includes(ext)) return "image";
   if (["md", "markdown", "txt", "rst", "log", "rtf"].includes(ext)) return "doc";
-  if (["json", "jsonl", "yml", "yaml", "toml", "plist", "xml", "csv", "ini", "env", "lock"].includes(ext)) return "data";
+  if (["json", "jsonl", "yml", "yaml", "toml", "plist", "xml", "ini", "env", "lock"].includes(ext)) return "data";
+  if ([...DELIMITED_EXTS, ...WORKBOOK_EXTS].includes(ext)) return "sheet";
   if (ext === "pdf") return "pdf";
   if (!ext) return "file";
   return "code";

@@ -209,8 +209,18 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   没做：只看时打字（iOS 只看时经 `/keys` 能打字）、终端配色和字体选择、键栏自选键 / 自动收起 / 输入框模式 / 补全、触屏手势（双指切 Agent、双击粘贴、捏合）、换行模式下 OSC 8 链接。
 - **文件和 Git**（`session/FilesPanel.tsx`、`GitPanel.tsx`、`FileViewer.tsx`、`session/files/`、`src/lib/files.ts`）：从会话目录逐级进入、面包屑、Git 标记、隐藏文件开关；
   查看器：代码带行号和轻量着色（注释 / 字符串 / 数字，只渲染看得见的行，两万行也不卡）、Markdown（可看源码，README 的 HTML 转成 Markdown，相对图片从那台机器读）、
-  JSON（只重新缩进，不改键序、不丢大数精度）、图片、PDF、分页「继续加载」、打开到某一行、拷贝路径、下载。Git：分支和上游、改动和 diff（暂存 / 未暂存切换）、提交历史和每个提交的 diff，只读。
+  JSON（只重新缩进，不改键序、不丢大数精度）、图片、PDF、表格（见下）、分页「继续加载」、打开到某一行、拷贝路径、下载。二进制文件按 `file?stream=1` 只取描述，
+  图片 / PDF 直接用 `file/download?inline=1` 的地址（浏览器按 Range 读），下载走附件，不再把整份 base64 放进页面（`docs/protocol.md`「文件预览」）；旧 hub 不认 `stream` 时照旧用 base64。Git：分支和上游、改动和 diff（暂存 / 未暂存切换）、提交历史和每个提交的 diff，只读。
   对话里 Read / Edit / Write / MultiEdit / NotebookEdit 的路径可点，打开查看器（Read 带 offset 时到那一行）。
+- **表格**（#1310，`session/files/SheetView.tsx`、`lib/sheets.ts`、`lib/sheets.worker.ts`；iOS / Mac 是 #1294）：CSV、TSV、xlsx / xlsm / xlsb / xls、ods、numbers 打开成表格。
+  列字母和行号固定、首行冻结（可关，记在浏览器里）、列宽按前 300 行的文字估算（文件设得更宽就用文件的），拖表头右边改宽、双击还原；只画看得见的格子，几十万行照样顺；
+  合并单元格、单元格自己的数字 / 日期格式（SheetJS 的格式化文本）；点选、拖选、Shift 扩选、点列字母 / 行号选整列 / 整行、⌘A，选中部分合并块时扩到整块；
+  ⌘C 复制成 TSV（能直接贴回表格软件）；选区显示计数，有数字时显示求和、平均；多个工作表在底部切换。CSV / TSV 可切「源文件」看原文。
+  - **CSV 不猜类型**：自己按 RFC 4180 解析（引号、`""`、引号里的换行、CRLF、BOM），值原样显示，`001` 不会变成 `1`；分隔符按扩展名，否则看前几行哪个多（`,` `;` 制表符）。
+  - **解析放 Worker**：大文件读完（CSV 最多 64 MB，工作簿最多 200 MB）交给 `sheets.worker.ts`，小 CSV 直接在主线程；一个工作簿最多留 2000 万格、每表 50 万行，超出提示只显示了前面。
+  - **SheetJS 用官方包**：npm 上的 `xlsx` 停在 0.18.5（有原型污染、ReDoS 的公开漏洞），官方新版只从 cdn.sheetjs.com 发 tarball（Apache-2.0）。
+    隐私扫描只认 npm 官方源或仓库里的相对路径，所以放在 `web/vendor/xlsx-0.20.3.tgz`，`package.json` 写 `file:vendor/…`；Docker 构建先拷 `web/vendor/` 再 `npm ci`。升级：下载新 tarball 换掉旧的、`npm i ./vendor/<新文件>`。
+  - Worker 那块 SheetJS 约 500 KB，只在打开表格时才加载。
 - **链接**：见下面「链接在页面里打开」。
 
 ### 链接在页面里打开

@@ -29,7 +29,7 @@ Persona 的插件底座（#1101）：开源仓库只放通用能力和**扩展�
 | `providers`（版本 1） | `provider.` | `id`、`name`、`description?`、`kind?`（`launcher` / `api`）、`api?`（`messages` / `responses`）、`base_url`、`model?`、`small_model?`、`models?: [{id, name?}]`、`dynamic_models?`、`key_hint?` | 纯声明即可；`dynamic_models` 要进程说协议 | 设置 › 模型供应商的「从插件添加」，见下面「模型供应商」 |
 | `api`（版本 1） | `api.` | `id`、`prefix`（一段路径）、`features?`、`events?` | `runtime.http`，`on_startup`；有 `events` 要进程说协议 | App 用的一段接口 `/api/v1/<prefix>/…`，见下面「App 接口」 |
 | `assistant`（版本 1） | — | `id`、`skills?`（包里的目录，各有 `SKILL.md`）、`instructions?`（包里的 `.md`） | 包里有这些文件 | 助手的技能和说明，见下面「助手」 |
-| `ui`（版本 1） | `ui.` | `id`、`title`、`placement`（`plugin_page` / `launcher_section`）、`hosts?`（`launcher_section` 必须有，网关主机名，可 `*.` 开头） | 进程说协议；`launcher_section` 要权限 `launcher_keys` | 插件详情里的页面、启动器页上的一节，见下面「声明式 UI」 |
+| `ui`（版本 1） | `ui.` | `id`、`title`、`placement`（`plugin_page` / `launcher_section`）、`hosts?`（只有 `launcher_section` 能写：网关主机名，可 `*.` 开头；不写就是任何启动器，插件自己判断） | 进程说协议；`launcher_section` 要权限 `launcher_keys` | 插件详情里的页面、启动器页上的一节，见下面「声明式 UI」 |
 | `events`（版本 1） | `event.` | `id`、`subscribe`（事件名的列表，见「事件」） | 进程说协议，`on_startup` | 只是告诉插件 hub 上发生了什么，见下面「事件」 |
 
 hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的），这一项不生效，预览和列表里有一条警告。以后加扩展点（知识库来源、链接识别……），在这张表里加一行。
@@ -332,14 +332,15 @@ personad plugin install market:<市场 id>/<插件 id>  从市场装；已装的
 | placement | 出现在 | 额外 |
 | --- | --- | --- |
 | `plugin_page` | 设置 › 插件 › 这个插件，一行进入一页 | — |
-| `launcher_section` | 启动器的详情页，网关主机名在 `hosts` 里的启动器 | 像额度一样能用这个启动器的 Key 访问网关（插件看不到 Key），要权限 `launcher_keys` |
+| `launcher_section` | 启动器的详情页：网关主机名在 `hosts` 里的启动器；不写 `hosts` 就是每个启动器（自部署、主机不固定的网关），插件画的时候认出不是自己的网关就回错误码 `unsupported`，hub 回 404 `unsupported`，App 不显示这一节（不算出错） | 像额度一样能用这个启动器的 Key 访问网关（插件看不到 Key），要权限 `launcher_keys` |
 
 **hub 的接口**（完整权限的设备）：
 
 - `GET /api/v1/plugins/-/ui?placement=<p>[&launcher=<名字>&machine=<机器>]` → `{ui: [{plugin, id, title, placement}]}`：启用、在跑的插件在这里画什么；
   `launcher_section` 要带 `launcher`，只列网关对得上的。插件详情里也有 `ui`（它的 `plugin_page`）。
 - `POST /api/v1/plugins/{id}/-/ui/{ui}` `{context?: {launcher, machine}, state?, action?, values?}`：不带 `action` 是画（回 `{view}`），
-  带 `action` 是点了按钮（回 `{view?, toast?, open_url?}`；什么都没有就重新画一次）。插件不在、没启用回 404；插件出错、View 画不了回 502 `plugin_failed`。
+  带 `action` 是点了按钮（回 `{view?, toast?, open_url?}`；什么都没有就重新画一次）。插件不在、没启用回 404；不写 `hosts` 的一节插件说不是它的网关回 404 `unsupported`；
+  插件出错、View 画不了回 502 `plugin_failed`。
 
 **hub 调插件**：`ui.render {contribution, state, launcher?}` → View；`ui.action {contribution, state, action, values, launcher?}` → `{view?, toast?, open_url?}`。
 `launcher` 是 `{name, base_url, query_id}`：`launcher_section` 才有，插件拿 `query_id` 调 hub 的 `gateway.http`（和「额度」的 `quota.http` 一样：

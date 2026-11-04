@@ -9,10 +9,12 @@
 FROM --platform=$BUILDPLATFORM node:22-alpine AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
+# Packages the project keeps in web/vendor/ (SheetJS publishes its current releases only as a tarball, docs/web.md「表格」).
+COPY web/vendor/ ./vendor/
 # A lockfile written against a mirror names the mirror's host, which no other network can reach: refuse it rather
 # than fail later in npm (docs/lessons/server.md).
-RUN if grep -E '"resolved": "' package-lock.json | grep -vq '"https://registry.npmjs.org/'; then \
-      echo "web/package-lock.json resolves packages from somewhere other than registry.npmjs.org" >&2; exit 1; \
+RUN if grep -E '"resolved": "' package-lock.json | grep -v '"file:vendor/' | grep -vq '"https://registry.npmjs.org/'; then \
+      echo "web/package-lock.json resolves packages from somewhere other than registry.npmjs.org or web/vendor" >&2; exit 1; \
     fi \
  && npm ci --no-audit --no-fund
 COPY web/ ./

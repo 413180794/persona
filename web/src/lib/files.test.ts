@@ -141,10 +141,18 @@ describe("viewer", () => {
     expect(viewKind(file("icon.png", { data: "AA==", mime: "image/png" }))).toBe("image");
     expect(viewKind(file("a.pdf", { data: "AA==", mime: "application/pdf" }))).toBe("pdf");
     expect(viewKind(file("a.bin", { data: "AA==", mime: "application/octet-stream" }))).toBe("binary");
+    expect(viewKind(file("a.csv", { text: "a,b", mime: "text/csv" }))).toBe("sheet");
+    expect(viewKind(file("a.tsv", { text: "a\tb" }))).toBe("sheet");
+    expect(viewKind(file("export", { text: "a,b", mime: "text/csv" }))).toBe("sheet");
+    expect(viewKind(file("Book.xlsx", { stream: true, mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }))).toBe("sheet");
+    expect(viewKind(file("old.xls", { data: "AA==" }))).toBe("sheet");
+    expect(viewKind(file("clip.mp4", { stream: true, mime: "video/mp4" }))).toBe("binary");
     expect(viewKind(file("docs", { is_dir: true, entries: ["icon.png"] }))).toBe("directory");
     expect(glyphOf("icon.png")).toBe("image");
     expect(glyphOf("Package.swift")).toBe("code");
     expect(glyphOf("config.yaml")).toBe("data");
+    expect(glyphOf("export.csv")).toBe("sheet");
+    expect(glyphOf("Budget.xlsx")).toBe("sheet");
   });
 
   it("counts columns with wide characters taking two", () => {

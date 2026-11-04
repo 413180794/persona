@@ -18,7 +18,8 @@ type UIItem struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
 	// Placement: plugin_page (a page opened from the plugin's settings) or launcher_section (a section on the page of
-	// a launcher whose gateway is one of Hosts; the plugin may send requests there with the key, as quota does).
+	// a launcher whose gateway is one of Hosts, or of any launcher when there are none: the plugin then answers
+	// unsupported for gateways not its own; it may send requests there with the key, as quota does).
 	Placement string   `json:"placement"`
 	Hosts     []string `json:"hosts,omitempty"`
 }

@@ -4394,6 +4394,110 @@ GAP = os.environ.get("MOCK_GAP") == "1"
 # and two that are not there (another machine's path, a deleted file).
 FILES = {}
 FILE_PAGE = 2 << 20
+
+
+def stations_csv():
+    """A table for the sheet viewer (#1310): 3 000 readings, quoted fields with commas and newlines, Chinese text."""
+    import random
+    r = random.Random(11)
+    cities = ["上海", "北京", "Tokyo", "Lisbon", "Reykjavík", "São Paulo", "Nairobi", "Seattle"]
+    lines = ["id,station,city,date,temp_c,rain_mm,wind_kmh,status,note"]
+    for i in range(3000):
+        note = r.choice(["", "", "", "传感器重启后数据回补", '"晴, 有薄雾"', '风速计偏高，\n已复核'])
+        if note and not note.startswith('"'):
+            note = '"' + note.replace("\n", "\n") + '"'
+        lines.append("%04d,ST-%03d,%s,2026-10-%02d,%.1f,%.2f,%.1f,%s,%s" % (
+            i + 1, i % 120, cities[i % len(cities)], 1 + i % 28, r.uniform(-8, 34), r.uniform(0, 12), r.uniform(0, 40),
+            r.choice(["正常", "正常", "正常", "延迟", "离线"]), note))
+    return "\n".join(lines) + "\n"
+
+
+def quarterly_xlsx():
+    """A small workbook for the sheet viewer (#1310), written by hand (SpreadsheetML in a zip): three sheets, a merged
+    title, set column widths, number and percent formats."""
+    import io, zipfile
+    from xml.sax.saxutils import escape
+
+    def col(c):
+        s = ""
+        c += 1
+        while c:
+            c, m = divmod(c - 1, 26)
+            s = chr(65 + m) + s
+        return s
+
+    def sheet_xml(rows, merges=(), widths=(), styles=None):
+        out = ['<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">']
+        if widths:
+            out.append("<cols>" + "".join('<col min="%d" max="%d" width="%s" customWidth="1"/>' % (i + 1, i + 1, w) for i, w in enumerate(widths)) + "</cols>")
+        out.append("<sheetData>")
+        for r, row in enumerate(rows):
+            out.append('<row r="%d">' % (r + 1))
+            for c, v in enumerate(row):
+                ref = "%s%d" % (col(c), r + 1)
+                st = (styles or {}).get(c, 0) if r > 1 and not isinstance(v, str) else 0
+                if v is None:
+                    continue
+                if isinstance(v, str):
+                    out.append('<c r="%s" t="inlineStr"><is><t>%s</t></is></c>' % (ref, escape(v)))
+                else:
+                    out.append('<c r="%s" s="%d"><v>%s</v></c>' % (ref, st, v))
+            out.append("</row>")
+        out.append("</sheetData>")
+        if merges:
+            out.append('<mergeCells count="%d">' % len(merges) + "".join('<mergeCell ref="%s"/>' % m for m in merges) + "</mergeCells>")
+        out.append("</worksheet>")
+        return "".join(out)
+
+    regions = ["华东", "华北", "华南", "西南", "海外"]
+    summary = [["2026 年第三季度销售汇总", None, None, None, None], ["区域", "7 月", "8 月", "9 月", "环比"]]
+    for i, reg in enumerate(regions):
+        a, b, c = 120000 + i * 31337, 128000 + i * 29011, 141000 + i * 27133
+        summary.append([reg, a, b, c, round((c - b) / b, 4)])
+    summary.append(["合计", sum(r[1] for r in summary[2:]), sum(r[2] for r in summary[2:]), sum(r[3] for r in summary[2:]), None])
+    detail = [["订单明细", None, None, None, None, None], ["订单号", "日期", "区域", "产品", "数量", "金额"]]
+    products = ["天气小组件 Pro", "家庭版订阅", "企业版订阅", "数据接口", "定制服务"]
+    for i in range(1200):
+        detail.append(["SO-%06d" % (260000 + i), "2026-%02d-%02d" % (7 + i % 3, 1 + i % 28), regions[i % 5], products[(i * 7) % 5], 1 + i % 9, round(199.0 * (1 + i % 9) * (1 + (i % 5) / 10), 2)])
+    notes = [["说明"], ["数据来自示例系统，仅用于演示表格预览。"], ["金额单位：元；环比 = 9 月 / 8 月 - 1。"]]
+    sheets = [("汇总", sheet_xml(summary, merges=["A1:E1"], widths=[14, 14, 14, 14, 10], styles={1: 1, 2: 1, 3: 1, 4: 2})),
+              ("明细", sheet_xml(detail, merges=["A1:F1"], widths=[14, 12, 8, 18, 8, 12], styles={4: 0, 5: 1})),
+              ("说明", sheet_xml(notes, widths=[48]))]
+    styles = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+              '<numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0.00"/></numFmts>'
+              '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills>'
+              '<borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs>'
+              '<cellXfs count="3"><xf numFmtId="0"/><xf numFmtId="164" applyNumberFormat="1"/><xf numFmtId="10" applyNumberFormat="1"/></cellXfs></styleSheet>')
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                   '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'
+                   '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+                   '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+                   + "".join('<Override PartName="/xl/worksheets/sheet%d.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' % (i + 1) for i in range(len(sheets)))
+                   + "</Types>")
+        z.writestr("_rels/.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                   '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>')
+        z.writestr("xl/workbook.xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+                   'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'
+                   + "".join('<sheet name="%s" sheetId="%d" r:id="rId%d"/>' % (n, i + 1, i + 1) for i, (n, _) in enumerate(sheets)) + "</sheets></workbook>")
+        z.writestr("xl/_rels/workbook.xml.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                   + "".join('<Relationship Id="rId%d" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet%d.xml"/>' % (i + 1, i + 1) for i in range(len(sheets)))
+                   + '<Relationship Id="rId%d" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' % (len(sheets) + 1))
+        z.writestr("xl/styles.xml", styles)
+        for i, (_, xml) in enumerate(sheets):
+            z.writestr("xl/worksheets/sheet%d.xml" % (i + 1), xml)
+    return buf.getvalue()
+
+
+# What the hub (node filemime.go) calls a binary file by its name; others are video/mp4 as before.
+MOCK_MIMES = {".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xls": "application/vnd.ms-excel",
+              ".pdf": "application/pdf", ".png": "image/png", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation", ".mp3": "audio/mpeg", ".m4a": "audio/mp4"}
+
+
+def mock_mime(path):
+    return MOCK_MIMES.get(os.path.splitext(path)[1].lower(), "video/mp4")
 if os.environ.get("MOCK_FILES"):
     import random
     rnd = random.Random(7)
@@ -4494,6 +4598,11 @@ if os.environ.get("MOCK_FILES"):
         "hub 上的 `~/.jarvis/personas/doudou` 不在这台电脑上，`/Users/me/code/weather/old/Removed.swift` 也已经删掉了。"
         "其余的都在：`Sources/App.swift`、`server/handlers.go`、`data/forecast.json`、`/Users/me/code/weather/README.md`、"
         "`config/app.yaml` 和 `/Users/me/code/weather/logs/api.log`。"))]
+    # MOCK_SHEETS=1 (with MOCK_FILES): a CSV and a workbook for the table viewer (#1310), named in one more message
+    if os.environ.get("MOCK_SHEETS"):
+        FILES[ROOT + "/data/stations.csv"] = stations_csv()
+        FILES[ROOT + "/reports/季度报告.xlsx"] = quarterly_xlsx()
+        ITEMS[WIDGET].append(it("assistant", "text", 0, text="表格在 `data/stations.csv` 和 `/Users/me/code/weather/reports/季度报告.xlsx`。"))
 
 
 def file_path(path, cwd):
@@ -4530,7 +4639,7 @@ if os.environ.get("MOCK_SENT_VIDEO"):
                             % (SENT_VIDEO_PATH, len(FILES[SENT_VIDEO_PATH]))))
 
 
-def file_read(path, cwd, offset):
+def file_read(path, cwd, offset, stream=False):
     p = file_path(path, cwd)
     kind = file_kind(p) if p else "missing"
     if kind == "missing":
@@ -4542,7 +4651,10 @@ def file_read(path, cwd, offset):
         return {"path": p, "name": name, "size": 0, "is_dir": True, "entries": names, "truncated": False}
     value = FILES[p]
     if isinstance(value, bytes):
-        return {"path": p, "name": name, "size": len(value), "mime": "video/mp4", "data": base64.b64encode(value[:FILE_PAGE]).decode(),
+        if stream:  # file?stream=1 (docs/protocol.md「文件预览」): described, the bytes from …/file/download
+            return {"path": p, "name": name, "size": len(value), "mime": mock_mime(p), "stream": True, "revision": "%x-1" % len(value),
+                    "truncated": False, "is_dir": False}
+        return {"path": p, "name": name, "size": len(value), "mime": mock_mime(p), "data": base64.b64encode(value[:FILE_PAGE]).decode(),
                 "truncated": len(value) > FILE_PAGE, "is_dir": False}
     data = value.encode()
     page = data[offset:offset + FILE_PAGE]
@@ -4550,7 +4662,7 @@ def file_read(path, cwd, offset):
     if more:
         page = page[:page.rfind(b"\n") + 1]
     ext = os.path.splitext(name)[1].lower()
-    mime = {".json": "application/json", ".md": "text/markdown"}.get(ext, "text/plain; charset=utf-8")
+    mime = {".json": "application/json", ".md": "text/markdown", ".csv": "text/csv"}.get(ext, "text/plain; charset=utf-8")
     return {"path": p, "name": name, "size": len(data), "mime": mime, "text": page.decode(), "truncated": more,
             "is_dir": False, "offset": offset, "next": offset + len(page) if more else 0}
 
@@ -5039,6 +5151,11 @@ def mock_pdf():
 
 
 MOCK_TREE[MOCK_REPO + "/docs/guide.pdf"] = ("application/pdf", mock_pdf())
+if os.environ.get("MOCK_SHEETS"):  # the table viewer's files (#1310), in the browser's tree too
+    MOCK_TREE.setdefault(MOCK_REPO + "/data/", None)
+    MOCK_TREE[MOCK_REPO + "/data/stations.csv"] = stations_csv()
+    MOCK_TREE.setdefault(MOCK_REPO + "/reports/", None)
+    MOCK_TREE[MOCK_REPO + "/reports/季度报告.xlsx"] = (MOCK_MIMES[".xlsx"], base64.b64encode(quarterly_xlsx()).decode())
 MOCK_TREE["Desktop/"] = None  # listed, but macOS keeps it from jarvisd (mock_denied)
 MOCK_COMMITS[2]["refs"] = "tag: v0.1.0"
 TIME_OFFSET = os.environ.get("MOCK_TIME_OFFSET", "")
@@ -5092,9 +5209,9 @@ def mock_files(p, q):
 if FILES:
     _file_read_big = file_read
 
-    def file_read(path, cwd, offset):
+    def file_read(path, cwd, offset, stream=False):
         """The big-file set first; the browser's tree (images, the PDF, folders) for anything it does not have."""
-        found = _file_read_big(path, cwd, offset)
+        found = _file_read_big(path, cwd, offset, stream)
         if found or offset: return found
         answer = mock_files("/api/v1/machines/macbook/file", {"path": [path], "cwd": [cwd]})
         return answer[0] if answer and answer[1] == 200 else None
@@ -6244,13 +6361,13 @@ class H(BaseHTTPRequestHandler):
             value = FILES.get(file_path(q.get("path", [""])[0], q.get("cwd", [""])[0]))
             if not isinstance(value, bytes): return self.send_json({"error": "no such video"}, 404)
             self.send_response(200)
-            self.send_header("Content-Type", "video/mp4")
+            self.send_header("Content-Type", mock_mime(file_path(q.get("path", [""])[0], q.get("cwd", [""])[0])))
             self.send_header("Content-Length", str(len(value)))
             self.end_headers()
             self.wfile.write(value)
             return
         if p.startswith("/api/v1/machines/") and p.endswith("/file") and FILES:
-            f = file_read(q.get("path", [""])[0], q.get("cwd", [""])[0], int(q.get("offset", ["0"])[0] or 0))
+            f = file_read(q.get("path", [""])[0], q.get("cwd", [""])[0], int(q.get("offset", ["0"])[0] or 0), q.get("stream", [""])[0] == "1")
             if not f: return self.send_json({"error": "stat %s: no such file or directory" % q.get("path", [""])[0]}, 404)
             return self.send_json(f)
         if p == "/api/v1/personas": return self.send_json({"personas": personas()})

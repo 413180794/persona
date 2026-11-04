@@ -395,9 +395,8 @@ func TestUIAndEventsPoints(t *testing.T) {
 		"placement": func(m map[string]any) {
 			m["contributes"] = map[string]any{"ui": []any{map[string]any{"id": "x", "title": "x", "placement": "sidebar"}}}
 		},
-		"section without hosts": func(m map[string]any) {
-			m["permissions"] = map[string]any{"launcher_keys": true}
-			m["contributes"] = map[string]any{"ui": []any{map[string]any{"id": "x", "title": "x", "placement": "launcher_section"}}}
+		"hosts on a page": func(m map[string]any) {
+			m["contributes"] = map[string]any{"ui": []any{map[string]any{"id": "x", "title": "x", "placement": "plugin_page", "hosts": []any{"gw.example.com"}}}}
 		},
 		"section without keys": func(m map[string]any) {
 			m["contributes"] = map[string]any{"ui": []any{map[string]any{"id": "x", "title": "x", "placement": "launcher_section", "hosts": []any{"gw.example.com"}}}}

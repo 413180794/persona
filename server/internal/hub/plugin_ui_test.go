@@ -16,6 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/plugin"
 	pserve "github.com/nwverse/persona/server/internal/plugin/serve"
 	"github.com/nwverse/persona/server/internal/quota"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // serveUIPluginForTest draws a page (a metric, a field, a button), a launcher section that reads the gateway through
@@ -43,6 +44,8 @@ func serveUIPluginForTest() {
 				return nil, err
 			}
 			return map[string]any{"sections": []any{map[string]any{"items": []any{map[string]any{"type": "text", "text": r.Body}}}}}, nil
+		case p.Contribution == "any":
+			return nil, &rpc.Error{Code: plugin.CodeUnsupported, Message: "not mine"}
 		case p.Contribution == "broken":
 			return map[string]any{"sections": []any{map[string]any{"items": []any{map[string]any{"type": "iframe"}}}}}, nil
 		}
@@ -81,7 +84,8 @@ func uiPackage(t *testing.T) string {
 		"contributes": {
 			"ui": [{"id": "home", "title": "概况", "placement": "plugin_page"},
 			       {"id": "broken", "title": "坏的", "placement": "plugin_page"},
-			       {"id": "panel", "title": "网关面板", "placement": "launcher_section", "hosts": ["127.0.0.1"]}],
+			       {"id": "panel", "title": "网关面板", "placement": "launcher_section", "hosts": ["127.0.0.1"]},
+			       {"id": "any", "title": "任意网关", "placement": "launcher_section"}],
 			"events": [{"id": "agents", "subscribe": ["agent.finished"]}]},
 		"permissions": {"launcher_keys": true}}`, runtime.GOOS+"-"+runtime.GOARCH)
 	_ = os.WriteFile(filepath.Join(dir, plugin.ManifestFile), []byte(manifest), 0o644)
@@ -136,8 +140,11 @@ func TestPluginUIAndEvents(t *testing.T) {
 	}
 
 	_, places := call(t, mux, "GET", "/api/v1/plugins/-/ui?placement=launcher_section&launcher=panellauncher", master, "")
-	if list, _ := places["ui"].([]any); len(list) != 1 || list[0].(map[string]any)["id"] != "panel" {
-		t.Fatalf("the launcher's sections: %v", places)
+	if list, _ := places["ui"].([]any); len(list) != 2 || fmt.Sprint(list) != fmt.Sprint([]any{list[0], list[1]}) || !strings.Contains(fmt.Sprint(list), "id:panel") || !strings.Contains(fmt.Sprint(list), "id:any") {
+		t.Fatalf("the launcher's sections (by host, and one for any gateway): %v", places)
+	}
+	if code, out := call(t, mux, "POST", "/api/v1/plugins/example-ui/-/ui/any", master, `{"context": {"launcher": "panellauncher"}}`); code != 404 || out["code"] != "unsupported" {
+		t.Fatalf("a section for any gateway, not this one's: %d %v", code, out)
 	}
 	_, out = call(t, mux, "POST", "/api/v1/plugins/example-ui/-/ui/panel", master, `{"context": {"launcher": "panellauncher"}}`)
 	text := fmt.Sprint(out["view"])
