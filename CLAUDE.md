@@ -20,6 +20,8 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 - **先认领 issue 再动手**（多人和各自的 Agent 同时在改，出现过两人修同一个 bug）：开工前查同一件事的 open issue / PR，
   别人认领了、24 小时内有更新就不碰（可以补充信息）；认领写成 issue 评论，谁在做以评论的 GitHub 账号为准，不用 assign；
   PR 不关联 issue 会被 Action 关闭。流程、评论模板和 gh 命令见 `docs/collaboration.md`。
+- **TestFlight 来的反馈要标出来源**（2026-11-04 用户要求）：崩溃报告、测试员的文字 / 截图反馈建 issue 时一律加 `testflight` 标签，没有加标签的权限就在标题前加 `[TestFlight]`；
+  正文脱敏（不放测试员身份、设备 / 崩溃标识、路径、内存地址、原始附件），末尾带去重标记，见 `docs/collaboration.md`「TestFlight 反馈」。
 - **所有 commit 必须用英文**：commit 的标题和正文，以及 PR 的标题和正文都用英文，
   因为 squash 合并直接把 PR 标题和正文当成 master 上的 commit 信息。代码注释也用英文；文档、issue 用中文；App 界面文案用中文。
 - **随时沉淀经验**：踩坑、怪异行为当场写进 `docs/lessons/<主题>.md`（索引 `docs/lessons/README.md`），设计取舍写进 `docs/<主题>.md`；

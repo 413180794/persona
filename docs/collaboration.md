@@ -112,6 +112,22 @@ EOF
 
 需求加 `enhancement`，fix 加 `bug`，文档加 `documentation`。命令最后打印 issue 链接，末尾的数字就是号。
 
+#### TestFlight 反馈
+
+来自 TestFlight 的反馈（App Store Connect 里的崩溃报告、测试员的文字 / 截图反馈）建 issue 时要能按来源筛出来：
+
+- **一律加 `testflight` 标签**（和 `bug` / `enhancement` 一起加）；没有加标签的权限时，在标题前加 `[TestFlight]` 前缀，有权限的人看到后补上标签。
+- **先查重**：同一条反馈只建一个 issue。正文末尾带去重标记 `<!-- testflight-intake:<sha256(反馈 submission id)> -->`，
+  建之前用 `gh search issues --repo <owner/repo> "testflight-intake:<hash>"` 查有没有建过；同一个崩溃原因已有 issue 时在原 issue 下「补充：」。
+- **脱敏**：只放技术摘要和只保留符号的调用栈（去掉地址）、App 版本、系统版本、设备型号。不放测试员邮箱和身份、
+  崩溃 / 安装 / 设备的各种标识、Bundle ID、内存地址和镜像 UUID、容器及个人路径、网络 / 电量 / 存储、语言和时区、精确时间、
+  具体构建号和原始附件；原始日志只留在本机 0600 的文件里。正文末尾写一段「隐私处理」说明去掉了什么。
+  例子见 #752、#1144。
+
+```sh
+gh issue create --label bug --label testflight --title "<一句话说清楚现象>" --body-file <脱敏后的正文>
+```
+
 ### 4. 认领、续期、接手、放弃
 
 ```sh
