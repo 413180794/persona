@@ -20,12 +20,25 @@ import (
 // messaging people, touching someone else's MR) is only ever a card. Each action checks, the moment before, that the
 // session is still stopped on the same turn with nothing pending or queued: whatever the user did meanwhile wins.
 
-// TriageConfig is hub.json agents.triage. Unset switches are on.
+// TriageSwitches turn the triage and each of its actions on, all off until the user turns them on (设置 › Agents ›
+// 会话分诊, settings agents.triage): the triage calls a model on every stopped turn, and a 继续 or a wake runs a turn
+// of the agent on its own model (docs/agent-work.md「开关」).
+type TriageSwitches struct {
+	Enabled      bool `json:"enabled"`       // triage stopped turns: the lists' line, done no longer unread
+	AutoContinue bool `json:"auto_continue"` // 继续 after a transient model error
+	Wake         bool `json:"wake"`          // wake agents whose wait should be over
+	Decide       bool `json:"decide"`        // cards for what the user is to decide
+}
+
+const triageSettingKey = "agents.triage"
+
+// TriageConfig is hub.json agents.triage: the limits. Its switches are what a hub that never had them saved starts
+// with (unset: off).
 type TriageConfig struct {
 	Enabled      *bool `json:"enabled,omitempty"`
-	AutoContinue *bool `json:"auto_continue,omitempty"` // 继续 after a transient model error
-	Wake         *bool `json:"wake,omitempty"`          // wake agents whose wait should be over
-	Decide       *bool `json:"decide,omitempty"`        // cards for what the user is to decide
+	AutoContinue *bool `json:"auto_continue,omitempty"`
+	Wake         *bool `json:"wake,omitempty"`
+	Decide       *bool `json:"decide,omitempty"`
 	// MaxRetries: 继续 sent for one run of transient errors before asking the user. Default 3.
 	MaxRetries int `json:"max_retries,omitempty"`
 	// MaxWakes: wakes for one wait before asking the user. Default 6.
@@ -39,7 +52,11 @@ type AgentsConfig struct {
 	Triage TriageConfig `json:"triage,omitzero"`
 }
 
-func on(b *bool) bool { return b == nil || *b }
+func set(b *bool) bool { return b != nil && *b }
+
+func (c TriageConfig) switches() TriageSwitches {
+	return TriageSwitches{Enabled: set(c.Enabled), AutoContinue: set(c.AutoContinue), Wake: set(c.Wake), Decide: set(c.Decide)}
+}
 
 func (c TriageConfig) maxRetries() int { return cmp0(c.MaxRetries, 3) }
 func (c TriageConfig) maxWakes() int   { return cmp0(c.MaxWakes, 6) }
@@ -101,6 +118,7 @@ type workBook struct {
 	sent     map[[2]string]time.Time // when the hub itself last sent the session something
 	seen     map[[2]string]time.Time // the turn whose first look was recorded
 	approved map[[2]string]string    // a risky next step the user said yes to (its wait.then)
+	switches *TriageSwitches         // the saved switches, once read (nil: not read yet)
 	sampleAt time.Time
 	pruneAt  time.Time
 	// testEvents collects the events when there is no store (tests).
@@ -130,7 +148,75 @@ func (h *Hub) triageCfg() TriageConfig {
 	return h.cfg.Agents.Triage
 }
 
-func (h *Hub) workOn() bool { return on(h.triageCfg().Enabled) }
+// triageSwitches are the switches in force: the saved ones, else hub.json's. Read from the database once; while it
+// cannot be read, hub.json's (off when unset).
+func (h *Hub) triageSwitches() TriageSwitches {
+	h.work.mu.Lock()
+	sw := h.work.switches
+	h.work.mu.Unlock()
+	if sw != nil {
+		return *sw
+	}
+	def := h.triageCfg().switches()
+	if h.store == nil {
+		return def
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	var saved TriageSwitches
+	ok, err := h.store.Setting(ctx, triageSettingKey, &saved)
+	if err != nil {
+		return def // read again next time
+	}
+	if !ok {
+		saved = def
+	}
+	h.work.mu.Lock()
+	h.work.switches = &saved
+	h.work.mu.Unlock()
+	return saved
+}
+
+func (h *Hub) workOn() bool { return h.triageSwitches().Enabled }
+
+// putTriageSwitches saves the switches. What they turn off stops at once: the hub's cards are withdrawn, due retries
+// and wakes dropped.
+func (h *Hub) putTriageSwitches(ctx context.Context, sw TriageSwitches) error {
+	if h.store != nil {
+		if err := h.store.PutSetting(ctx, triageSettingKey, sw); err != nil {
+			return err
+		}
+	}
+	h.work.mu.Lock()
+	h.work.init()
+	h.work.switches = &sw
+	var cards []string
+	var stale []db.SessionWork
+	for _, e := range h.work.entries {
+		off := !sw.Enabled || e.Work.On == proto.WaitTransient && !sw.AutoContinue ||
+			(e.Work.On == proto.WaitExternal || e.Work.On == proto.WaitAgent) && !sw.Wake
+		if e.InteractionID != "" && (!sw.Enabled || !sw.Decide) {
+			cards = append(cards, e.InteractionID)
+			e.InteractionID, e.Work.InteractionID = "", ""
+			stale = append(stale, *e)
+		} else if e.WakeAt != nil && off {
+			e.WakeAt, e.Work.WakeAt = nil, nil
+			stale = append(stale, *e)
+		}
+	}
+	h.work.mu.Unlock()
+	for _, id := range cards {
+		h.withdrawCard(id)
+	}
+	for _, e := range stale {
+		h.saveWork(e)
+	}
+	h.broadcast(map[string]any{"type": "agents.triage", "triage": sw})
+	for _, m := range h.machinesNow() {
+		h.broadcastSessions(m, h.decorated(m))
+	}
+	return nil
+}
 
 func (h *Hub) workDB() workStore {
 	s, _ := h.store.(workStore)
@@ -521,7 +607,7 @@ func risky(texts ...string) bool {
 // actOn decides what the hub does about e's work state and records it on e (wake_at, a card). It sends nothing:
 // the tick does, after checking again.
 func (h *Hub) actOn(m *Machine, s proto.Session, e *db.SessionWork) {
-	cfg := h.triageCfg()
+	cfg, sw := h.triageCfg(), h.triageSwitches()
 	w := &e.Work
 	now := time.Now()
 	k := [2]string{e.MachineID, e.SessionID}
@@ -530,7 +616,7 @@ func (h *Hub) actOn(m *Machine, s proto.Session, e *db.SessionWork) {
 	}
 	switch w.On {
 	case proto.WaitTransient:
-		if !on(cfg.AutoContinue) {
+		if !sw.AutoContinue {
 			w.Line = clip(oneLine("模型服务出错："+w.Wait), 60)
 			return
 		}
@@ -558,7 +644,7 @@ func (h *Hub) actOn(m *Machine, s proto.Session, e *db.SessionWork) {
 					Options: []proto.QuestionOption{{Label: answerGo, Description: "它会自己查，好了再做"}, {Label: answerHold}}}}}
 			break
 		}
-		if !on(cfg.Wake) {
+		if !sw.Wake {
 			return
 		}
 		if e.Wakes >= cfg.maxWakes() {
@@ -573,7 +659,7 @@ func (h *Hub) actOn(m *Machine, s proto.Session, e *db.SessionWork) {
 		return
 	}
 	// On the user: a card.
-	if w.On != proto.WaitUser || !on(cfg.Decide) || h.muted(e.MachineID, e.SessionID) {
+	if w.On != proto.WaitUser || !sw.Decide || h.muted(e.MachineID, e.SessionID) {
 		return
 	}
 	if len(w.Questions) == 0 {
@@ -856,6 +942,12 @@ func (h *Hub) workWake(k [2]string, now time.Time) {
 	default:
 		h.logf("work %s/%s: not woken: %s", k[0], short(k[1]), why)
 		e.WakeAt, e.Work.WakeAt = nil, nil
+		h.putWork(e)
+		return
+	}
+	sw := h.triageSwitches()
+	if e.Work.On == proto.WaitTransient && !sw.AutoContinue || e.Work.On != proto.WaitTransient && !sw.Wake {
+		e.WakeAt, e.Work.WakeAt = nil, nil // turned off since it was set
 		h.putWork(e)
 		return
 	}

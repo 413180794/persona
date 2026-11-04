@@ -305,9 +305,9 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   `api` 取 `messages`（Anthropic Messages，默认）或 `responses`（OpenAI Responses，总是流式请求，兼容只接受 `stream: true` 的转发服务）；
   `base_url` 拼上 `/v1/messages` 或 `/v1/responses`；`api_key_file` 是 hub 机器上的 key 文件（0600，调用时才读）；`model`；
   `reasoning_effort` 只对 `responses` 生效（比如 `low`）。
-- `agents.triage`：一轮停下后的分诊和自动动作（[agent-work.md](agent-work.md)，不写就全开）：`enabled`（总开关）、`auto_continue`（瞬时的模型 API 错误后自动发「继续」）、
-  `wake`（等部署 / CI / 另一个 Agent 时到点叫醒）、`decide`（要你决定的事开卡片）；`max_retries`（默认 3）、`max_wakes`（默认 6）、
-  `settle_seconds`（停下多久才分诊，默认 15）。用的模型是「设置 › 模型配置」里的「会话分诊」（`agent.triage`，默认跟收件箱分拣一样）。
+- `agents.triage`：一轮停下后的分诊（[agent-work.md](agent-work.md)「开关」）。开关在 App 的「设置 › 会话分诊」里（存 hub 的 settings，默认全关），
+  这里只放上限：`max_retries`（自动继续最多几次，默认 3）、`max_wakes`（叫醒最多几次，默认 6）、`settle_seconds`（停下多久才分诊，默认 15）；
+  `enabled` / `auto_continue` / `wake` / `decide` 只是 App 里从没保存过时的初始值（不写就是关）。
 - `notify`：「做完了」推送的时机（`hub/notify.go`，不写就用默认值）：`done_delay_seconds`（做完后等多久没人看才推，默认 60）、
   `long_turn_seconds`（多长的一轮算「长任务」，默认 60）、`background_hold_minutes`（等后台任务结束最多等多久，默认 120）、
   `live_metrics_seconds`（实时活动只有数字变了时，给一台设备推送的最短间隔，默认 60；`docs/live-activity.md`「推送预算」）。

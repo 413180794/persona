@@ -107,6 +107,7 @@ func workHub(t *testing.T) (*Hub, *Machine, *workNode) {
 	t.Helper()
 	h := newTestHub(t)
 	m, n := workMachine(t, h)
+	h.work.switches = &TriageSwitches{Enabled: true, AutoContinue: true, Wake: true, Decide: true}
 	return h, m, n
 }
 
@@ -546,8 +547,7 @@ func TestSummarizeWork(t *testing.T) {
 
 func TestTriageOff(t *testing.T) {
 	h, m, _ := workHub(t)
-	off := false
-	h.cfg.Agents.Triage.Enabled = &off
+	h.work.switches = &TriageSwitches{}
 	setWorkSessions(m, stopped("s1", "API Error: 503 upstream"))
 	h.workTurnEnded(m, "s1")
 	s := workSession(t, h, m, "s1")
@@ -607,6 +607,7 @@ func TestGoldenAgentTriage(t *testing.T) {
 // The snapshot tells the assistant what stopped agents wait for, and what the finished ones concluded.
 func TestGoldenAssistantSnapshotWork(t *testing.T) {
 	h := snapshotHub(t, false)
+	h.work.switches = &TriageSwitches{Enabled: true, AutoContinue: true, Wake: true, Decide: true}
 	srv := h.byID["server"]
 	srv.online = true
 	at := time.Now().Add(-10 * time.Minute).UTC()
@@ -630,4 +631,35 @@ func TestGoldenAssistantSnapshotWork(t *testing.T) {
 		t.Fatal(err)
 	}
 	golden(t, "assistant_snapshot.work", normalSnapshot(t, res.Text))
+}
+
+// Off until the user turns it on; turning a part off stops what it had going.
+func TestTriageSwitches(t *testing.T) {
+	if sw := newTestHub(t).triageSwitches(); sw != (TriageSwitches{}) {
+		t.Fatalf("default %+v, want all off", sw)
+	}
+	h, m, n := workHub(t)
+	h.triageAI, _ = workModel(t, `{"phase":"blocked","on":"user","line":"选哪个","questions":[{"question":"A 还是 B？","options":[{"label":"A"},{"label":"B"}]}]}`)
+	setWorkSessions(m, stopped("s1", "A 还是 B？"), stopped("s2", "API Error: 503 upstream"))
+	h.triageTurn(m, workSession(t, h, m, "s1"))
+	h.triageTurn(m, workSession(t, h, m, "s2"))
+	if len(pendingWorkCards(h)) != 1 || entryOf(t, h, "s2").WakeAt == nil {
+		t.Fatal("setup")
+	}
+	if err := h.putTriageSwitches(context.Background(), TriageSwitches{Enabled: true, Wake: true}); err != nil {
+		t.Fatal(err)
+	}
+	if len(pendingWorkCards(h)) != 0 || entryOf(t, h, "s1").InteractionID != "" {
+		t.Fatal("card stayed with decide off")
+	}
+	if entryOf(t, h, "s2").WakeAt != nil {
+		t.Fatal("retry stayed with auto_continue off")
+	}
+	h.workTick(context.Background(), time.Now().Add(time.Hour))
+	if got := n.sends(); len(got) != 0 {
+		t.Fatalf("sent %v", got)
+	}
+	if s := workSession(t, h, m, "s2"); s.State != proto.StateUnread {
+		t.Fatalf("a cut turn nobody retries is unread again: %s", s.State)
+	}
 }

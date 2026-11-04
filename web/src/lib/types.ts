@@ -73,6 +73,33 @@ export interface SessionCapabilities {
   attach?: boolean;
 }
 
+/** A session's work state (docs/agent-work.md): working, blocked on a named precondition, or done. */
+export interface WorkState {
+  phase: "working" | "blocked" | "done";
+  /** What a blocked one waits on: user (a decision), agent, external (a deploy, CI, a time), transient (a model error). */
+  on?: "user" | "agent" | "external" | "transient";
+  /** One line for the lists: what it waits for, or what it concluded. */
+  line?: string;
+  wait?: string;
+  then?: string;
+  /** When the hub acts next on its own: 继续 (transient) or a wake (external, agent). */
+  wake_at?: string;
+  attempts?: number;
+  max?: number;
+  agent?: { machine_id: string; session_id: string; label?: string };
+  link?: { url: string; expires_at?: string };
+  artifacts?: { kind: string; ref: string }[];
+  interaction_id?: string;
+}
+
+/** 设置 › 会话分诊 (GET / PUT /agents/triage): all off until the user turns them on. */
+export interface TriageSwitches {
+  enabled: boolean;
+  auto_continue: boolean;
+  wake: boolean;
+  decide: boolean;
+}
+
 export interface Session {
   /** Node-verified physical working directory; the original cwd stays available for existing session flows. */
   workspace_cwd?: string;
@@ -116,6 +143,8 @@ export interface Session {
   activity_at?: string;
   /** Its latest turn ended in a model API error (the hub sets it while it is stopped, #1516): its task is interrupted. */
   turn_error?: string;
+  /** Where it stands in its work (docs/agent-work.md): set by the hub once it triaged a stopped turn. */
+  work?: WorkState;
   pending_interactions?: number;
   queued?: string[];
   subagents?: Subagent[];

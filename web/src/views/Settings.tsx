@@ -16,6 +16,7 @@ import { AgentSettings } from "./settings/AgentSettings";
 import { AssistantSettings } from "./settings/AssistantSettings";
 import { BuiltinFace, PersonaPicker } from "./assistant/Persona";
 import { Connectors } from "./settings/Connectors";
+import { TriageSettings } from "./settings/TriageSettings";
 import { TranslationSettings } from "./settings/TranslationSettings";
 import { Plugins } from "./settings/Plugins";
 import { HubSettings } from "./settings/HubSettings";
@@ -154,7 +155,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div key={tab} className="mx-auto max-w-[760px] px-5 py-6 sm:px-8" style={{ animation: `fade-up 320ms ${EASE} both` }}>
-          {tab === "general" && <General />}
+          {tab === "general" && <General onTriageModel={() => pick("model-config", "agent.triage")} />}
           {tab === "models" && <Models />}
           {tab === "model-config" && <ModelConfiguration open={sub} onOpen={(id) => pick("model-config", id)} onProviders={() => pick("models")} />}
           {tab === "assistant" && <AssistantSettings />}
@@ -186,7 +187,7 @@ interface AssistantState {
   cwd?: string;
 }
 
-function General() {
+function General({ onTriageModel }: { onTriageModel: () => void }) {
   const theme = useTheme();
   const machines = useStore((s) => s.machines);
   const [assistant, setAssistant] = useState<AssistantState | null>(null);
@@ -231,6 +232,8 @@ function General() {
       <Group title="Persona 助手" footer={`每段对话在 ${machineName ?? "hub 所在的机器"} 的 ${assistant?.cwd ?? "~/.persona/assistant"} 里后台运行。模型与启动器统一在「模型配置」中选择，连接与凭据在「模型供应商」中管理。`}>
         <Row label="运行在">{machineName ?? "—"}</Row>
       </Group>
+
+      <TriageSettings onModel={onTriageModel} />
 
       <HubList />
       <About />

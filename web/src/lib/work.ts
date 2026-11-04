@@ -1,0 +1,29 @@
+// A session's work state as the lists show it (docs/agent-work.md): the hub triages each stopped turn into done or
+// blocked on something named, with one line for the row.
+import type { Session, WorkState } from "./types";
+
+/** The hub waits it out: it wakes it (wake_at), or it wakes itself (its background tasks, a /loop). */
+export function hubWaits(w?: WorkState): boolean {
+  if (!w || w.phase !== "blocked" || w.on === "user") return false;
+  return Boolean(w.wake_at) || (w.on === "external" && !w.wait && !w.agent);
+}
+
+/** The row's line for a stopped session the hub triaged: 「✓ 结论」 when done, what it waits for when blocked (with
+ *  when the hub acts next); undefined while it works or before the hub triaged its turn. */
+export function workLine(s: Pick<Session, "work" | "state" | "status">, now = Date.now()): string | undefined {
+  const w = s.work;
+  if (!w?.line || w.phase === "working" || s.state === "working") return undefined;
+  if (w.phase === "done") return `✓ ${w.line}`;
+  if (!w.wake_at) return w.line;
+  const ms = Date.parse(w.wake_at) - now;
+  const verb = w.on === "transient" ? "重试" : "叫醒";
+  const when = Number.isNaN(ms) || ms < 60_000 ? `马上${verb}` : `${inMinutes(ms)}后${verb}`;
+  return `${w.line}（${when}）`;
+}
+
+// 「12 分钟」「1 小时 5 分」: when the hub acts next, minutes are enough (format.ts shortDuration, which imports this).
+function inMinutes(ms: number): string {
+  const m = Math.round(ms / 60_000);
+  if (m < 60) return `${m} 分钟`;
+  return m % 60 ? `${Math.floor(m / 60)} 小时 ${m % 60} 分` : `${m / 60} 小时`;
+}

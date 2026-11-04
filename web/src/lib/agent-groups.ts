@@ -1,4 +1,5 @@
 import { byAttention, stateOf } from "./format";
+import { hubWaits } from "./work";
 import { hubLabel } from "./mesh";
 import type { AgentState, Machine, Session } from "./types";
 
@@ -73,7 +74,7 @@ export function buildSpaces(live: Session[], machines: Machine[]): { spaces: Spa
 }
 
 export function isWaiting(s: Session): boolean {
-  return ["idle", "unknown"].includes(stateOf(s)) && Boolean(s.loop || s.background?.length || s.subagents?.some((a) => a.running));
+  return ["idle", "unknown"].includes(stateOf(s)) && Boolean(s.loop || s.background?.length || s.subagents?.some((a) => a.running) || hubWaits(s.work));
 }
 
 export function isQuiet(s: Session): boolean {

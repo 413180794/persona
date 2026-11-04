@@ -507,6 +507,30 @@ if os.environ.get("MOCK_BOTMUX"):
              "筛选条件加好了，在补测试。", **_bmx, pane_id="botmux:" + BOTMUX_WORKING,
              external_url="https://applink.example.com/client/thread/open?chat=demo&thread=t2"),
     ]
+# MOCK_WORK=1: stopped agents the hub triaged (docs/agent-work.md): one done with its conclusion, one waiting for a
+# deploy the hub will wake it after, one cut off by a 503 the hub retries, one waiting for the user's decision on a card;
+# 设置 › 会话分诊 reads and writes TRIAGE.
+TRIAGE = {"enabled": bool(os.environ.get("MOCK_WORK")), "auto_continue": bool(os.environ.get("MOCK_WORK")),
+          "wake": bool(os.environ.get("MOCK_WORK")), "decide": bool(os.environ.get("MOCK_WORK"))}
+if os.environ.get("MOCK_WORK"):
+    def _soon(minutes):
+        return (datetime.now(timezone.utc) + timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    SESSIONS += [
+        sess("server", "a9000000-0000-4000-8000-000000000001", "登录页崩溃", "/home/me/code/app", "done", "idle", "app", 7, "fix", 1, 4,
+             "修好了，PR 已合并，测试全过。还有一个小的样式问题，要我顺便改吗？",
+             work={"phase": "done", "line": "已合并 PR #12，测试全过", "artifacts": [{"kind": "pr", "ref": "https://github.com/example/app/pull/12"}]}),
+        sess("server", "a9000000-0000-4000-8000-000000000002", "线上回归", "/home/me/code/app", "done", "idle", "app", 7, "e2e", 2, 6,
+             "已经触发部署，部署完我再跑线上测试。",
+             work={"phase": "blocked", "on": "external", "line": "等部署跑完再跑线上测试", "wait": "部署跑完", "then": "跑线上测试",
+                   "every_minutes": 10, "wake_at": _soon(9), "attempts": 0, "max": 6}),
+        sess("server", "a9000000-0000-4000-8000-000000000003", "导出报表", "/home/me/code/report", "done", "idle", "report", 8, "", 1, 1,
+             "API Error: 503 no eligible upstream account", turn_error="API Error: 503 no eligible upstream account",
+             work={"phase": "blocked", "on": "transient", "line": "模型服务暂时出错，自动重试", "wake_at": _soon(0.4), "attempts": 1, "max": 3}),
+        sess("server", "a9000000-0000-4000-8000-000000000004", "方案评审", "/home/me/code/report", "done", "needs_you", "report", 8, "design", 2, 12,
+             "设计写好了。D2 / D4 选哪个？要不要推到 beta？", pending=1,
+             work={"phase": "blocked", "on": "user", "line": "等你选 D2 / D4，要不要推到 beta"}),
+    ]
+
 # MOCK_SOURCES=1: sessions that do not live in a terminal engine (docs/protocol.md「Codex 来源与能力」): a live Codex
 # app-server thread the phone can write to and join (POST …/attach; joining lets it approve), a Codex history thread it
 # can only read, and an agent runtime's session (DSH: agent_label, no terminal) whose permission card has no
@@ -2700,6 +2724,17 @@ def wechat_connector():
     else:
         c.update(status="not_signed_in", error="还没绑定微信")
     return c
+
+
+def triage_route(h, method, p, raw):
+    """设置 › 会话分诊 (GET / PUT /api/v1/agents/triage); True when it answered."""
+    if p != "/api/v1/agents/triage":
+        return False
+    if method == "PUT":
+        body = json.loads(raw or b"{}")
+        for k in TRIAGE:
+            TRIAGE[k] = bool(body.get(k))
+    return h.send_json(TRIAGE) or True
 
 
 def wechat_area(h, method, p, raw):
@@ -7839,6 +7874,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/mail/messages": return self.send_json({"messages": [], "has_more": False})
         if p == "/api/v1/lark/unread-count": return self.send_json({"count": 4})
         if telegram_area(self, "GET", p, b""): return
+        if triage_route(self, "GET", p, b""): return
         if wechat_area(self, "GET", p, b""): return
         if github_thread_area(self, "GET", p, b""): return
         if github_area(self, "GET", p, b""): return
@@ -8238,6 +8274,7 @@ class H(BaseHTTPRequestHandler):
                 s.update(state="restarting" if body.get("now") else "waiting_idle")
             return self.send_json(s)
         if telegram_area(self, self.command, p, self.last_body): return
+        if triage_route(self, self.command, p, self.last_body): return
         if wechat_area(self, self.command, p, self.last_body): return
         if github_thread_area(self, self.command, p, self.last_body): return
         if github_area(self, self.command, p, self.last_body): return

@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"path/filepath"
@@ -269,6 +270,25 @@ type waitStats struct {
 }
 
 func (h *Hub) workStatsRoutes(api *http.ServeMux) {
+	api.HandleFunc("GET /api/v1/agents/triage", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, h.triageSwitches())
+	})
+	api.HandleFunc("PUT /api/v1/agents/triage", func(w http.ResponseWriter, r *http.Request) {
+		if principalOf(r.Context()).Role != roleFull {
+			writeErr(w, http.StatusForbidden, errors.New("read-only role cannot change the triage"))
+			return
+		}
+		var in TriageSwitches
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := h.putTriageSwitches(r.Context(), in); err != nil {
+			writeErr(w, http.StatusServiceUnavailable, err)
+			return
+		}
+		writeJSON(w, in)
+	})
 	api.HandleFunc("GET /api/v1/agents/work/stats", func(w http.ResponseWriter, r *http.Request) {
 		hours, _ := strconv.Atoi(r.URL.Query().Get("hours"))
 		if hours <= 0 || hours > 24*30 {

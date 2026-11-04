@@ -1,4 +1,5 @@
 import type { AgentState, Session, SessionCapabilities } from "./types";
+import { workLine } from "./work";
 
 // Missing session metadata is not permission to write; legacy sources retain their existing behavior.
 export function sessionCan(s: Session | undefined, operation: keyof SessionCapabilities): boolean {
@@ -91,9 +92,10 @@ export function attentionReason(s: Session): string | undefined {
   return reason && stateOf(s) === "needs_you" ? reason : undefined;
 }
 
-/** The line a list row shows for it: why it waits for you when its host says so, else its last words (iOS listPreview). */
+/** The line a list row shows for it: why it waits for you when its host says so, else where its work stands when the
+ *  hub triaged its turn (docs/agent-work.md), else its last words (iOS listPreview). */
 export function sessionPreview(s: Session): string {
-  return attentionReason(s) ?? s.last_text ?? "";
+  return attentionReason(s) ?? workLine(s) ?? s.last_text ?? "";
 }
 
 /** 在飞书打开: the session's place outside Persona, a web (https) link only (iOS externalLink). */
