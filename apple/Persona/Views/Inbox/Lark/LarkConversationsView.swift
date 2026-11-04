@@ -78,7 +78,7 @@ private struct LarkConversationsPage: View {
                     Button { openConnectionSettings() } label: { Label("飞书设置", systemImage: Theme.Icon.settings) }
                 }
             }
-            .navigationDestination(for: LarkConversation.self) { LarkChatView(conversation: $0) }
+            .navigationDestination(for: LarkConversation.self) { LarkChatView(conversation: $0, messageComposer: true) }
         }
         .onChange(of: path.isEmpty, initial: true) { _, root in shell?.feishuAtRoot = root }
         .tabActiveTask(id: model.connection.shown == .online) {

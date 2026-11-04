@@ -28,6 +28,8 @@ type Config struct {
 	Container string `json:"container"`         // docker container to read lark-connector_AGENT_TOKEN from when Token is empty (no default)
 	Token     string `json:"token,omitempty"`   // agent token; kept for the client's lifetime (never dropped on a 401)
 
+	NativeOLKToken string `json:"native_olk_token,omitempty"` // independent native OLK grant; never shared with assistant tools
+
 	// CLI is Feishu's official open-platform CLI (lark-cli) as a second source beside lark-connector (docs/plan-lark-cli.md);
 	// nil: not used.
 	CLI *CLIConfig `json:"cli,omitempty"`
@@ -45,6 +47,9 @@ type CLIConfig struct {
 func (cfg Config) lark-connectorConfigured() bool { return cfg.Token != "" || cfg.Container != "" }
 
 func (cfg Config) Validate() error {
+	if cfg.NativeOLKToken != "" && (!nativeOLKToken.MatchString(cfg.NativeOLKToken) || cfg.NativeOLKToken == cfg.Token || !cfg.lark-connectorConfigured()) {
+		return errors.New("lark.native_olk_token requires a separate native grant and configured lark-connector")
+	}
 	if cfg.Account < 0 || cfg.Account > 999999999 {
 		return errors.New("lark.account must be an integer between 1 and 999999999 (or 0 for the primary account)")
 	}

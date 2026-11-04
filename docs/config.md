@@ -247,6 +247,9 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   修改后重启 hub（`systemctl --user restart jarvisd`），收件箱、默认飞书请求、媒体和实时事件统一切换，不需要更新 iOS。
   助手的 `ol` 在新进程启动时继承所选账号；已有助手进程保留启动时的环境，需要重新启动才切换。
   不同账号的服务端收件箱记录隔离并保留，切回后可继续查看；不会同时聚合多个账号。
+- `lark.native_olk_token`（可选）：手机解锁与加密发送的独立授权，默认关闭，不从普通 Agent token 自动派生或读取。
+  必须与 lark-connector 的 `lark-connector_NATIVE_OLK_TOKEN` 相同，并在 lark-connector 绑定实际飞书用户 ID；不会下发给 App 或助手。
+  需要两侧升级并重启，详见 [加密消息部署与授权](lark-encryption.md#部署与授权)。
 - `lark.cli`（可选）：飞书官方的开放平台命令行 lark-cli，作为 lark-connector 之外的第二种飞书来源（`docs/plan-lark-cli.md`）：
   `"lark": {"cli": {"bin": "lark-cli", "profile": ""}}`。`bin` 是命令名或绝对路径，默认 `lark-cli`，不是绝对路径时在登录 shell 里找
   （npm 全局装的常在 nvm 这类目录下，systemd 的 PATH 里没有）；`profile` 是 lark-cli 的 `--profile`，空的用它的默认档。

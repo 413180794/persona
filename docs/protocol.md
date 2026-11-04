@@ -1189,6 +1189,11 @@ lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/v1/lark/status` | `{"configured","connected","name","error","last_event_at"}`：设置 › 连接器 › 飞书。configured = hub.json 有 lark；connected 每次现问 lark-connector 的 `/accounts`；last_event_at 最近一条实时事件（Unix 秒） |
+| GET | `/api/v1/lark/encryption` | 原生加密状态 `{accountId,configured,locked,unifiedPassword}`。须有独立 native OLK 授权；不返回密钥或凭据，`Cache-Control: no-store` |
+| POST | `/api/v1/lark/encryption/unlock` | `{account_id,password}` → 同上。只允许完整写权限；按实际飞书账号校验，共享网页的密码尝试限制；密码不存储 |
+| POST | `/api/v1/lark/conversations/{id}/encryption/covers` | `{account_id}` → `{lines:[string]}`；候选历史外显复用 lark-connector 网页规则 |
+| POST | `/api/v1/lark/conversations/{id}/encryption/prepare` | `{account_id,text,cover}` → `{accountId,feedId,messages:[{text}]}`。只生成带外显的密文，不发送；身份不一致、未授权、未解锁或无收件公钥时拒绝 |
+| POST | `/api/v1/lark/conversations/{id}/encrypted-messages` | `{account_id,ciphertext,client_id,reply_id?}` → `{ok,message_id?}`。必需稳定 UUID，仅接受 OLK2/OLK3 wire shape，重新校验原生授权与实际账号；上游写入携带 `expectedSenderId`。多段按顺序发送，仅最后一段可引用；每段单独保存去重回执。所有原生加密响应 `no-store`，失败不会改走普通文字接口；协议与限制见 [加密消息](lark-encryption.md) |
 | GET | `/api/v1/lark/conversations?scope=&cursor=&limit=` | `{"conversations":[LarkConversation],"next_cursor"}`；scope：`chats`（默认，飞书「消息」：不含已完成 / 折叠，按标签显示规则过滤）、`unread`、`done`（已完成）、`label:<id>`、`inbox`、`mentions`、`muted`、`p2p`、`group`、`thread`、`later` |
 | GET | `/api/v1/lark/pinned` | 全部置顶会话（读 inbox + done 两个 scope 的头部合并，按置顶顺序） |
 | GET | `/api/v1/lark/labels` | `{"labels":[{"id","name","count"}]}` |

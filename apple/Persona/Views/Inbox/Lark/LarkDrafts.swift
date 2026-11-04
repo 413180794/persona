@@ -3,12 +3,13 @@ import Foundation
 /// What was typed into a Feishu box and not sent: the words, and the message the chat's quote bar answers.
 nonisolated struct LarkDraft: Codable, Hashable, Sendable {
     var text = ""
+    var encryption: LarkEncryptedDraft? = nil
     var replyTo: LarkReplyTo?
     /// Picked with the @ picker (their `@name` is in `text`); nil in drafts kept before there was one.
     var mentions: [LarkMention]?
 
     /// Nothing worth keeping: no words (blank lines do not count) and no quote.
-    var isEmpty: Bool { replyTo == nil && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var isEmpty: Bool { encryption == nil && replyTo == nil && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 }
 
 /// Unsent Feishu drafts, one per chat (keyed by the chat's feed id) and one per thread sheet (keyed by the thread's

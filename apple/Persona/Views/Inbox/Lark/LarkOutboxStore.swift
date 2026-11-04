@@ -15,8 +15,10 @@ actor LarkOutboxStore {
     let directory: URL
     private let files = FileManager.default
     private var invalidated = false
+    private let sealer: LarkOutboxSealer
 
-    init(identity: LarkOutboxIdentity, feed: String, base: URL = URL.applicationSupportDirectory, legacyConfig: ServerConfig? = nil) {
+    init(identity: LarkOutboxIdentity, feed: String, base: URL = URL.applicationSupportDirectory, legacyConfig: ServerConfig? = nil, sealer: LarkOutboxSealer = LarkOutboxSealer()) {
+        self.sealer = sealer
         self.identity = identity
         if let legacyConfig {
             let key = legacyConfig.url.absoluteString + "\n" + legacyConfig.token + "\n" + feed
@@ -49,7 +51,10 @@ actor LarkOutboxStore {
         guard !invalidated else { throw LarkOutboxIdentity.Failure.removed }
         let record = directory.appending(path: "state.json")
         guard files.fileExists(atPath: record.path) else { return nil }
-        let bytes = try Data(contentsOf: record)
+        let bytes: Data
+        do { bytes = try sealer.open(Data(contentsOf: record)) }
+        catch let error as LarkOutboxSealer.Failure { throw error }
+        catch { throw Failure.corrupt }
         struct Header: Decodable { var version: Int }
         let header: Header
         do { header = try JSON.decoder.decode(Header.self, from: bytes) }
@@ -61,7 +66,7 @@ actor LarkOutboxStore {
         return LarkOutboxSnapshot(draft: saved.draft,
             attachments: saved.attachments.map(attachment),
             items: saved.items.map { item in
-                LarkOutgoing(id: item.id, text: item.text, at: item.at,
+                LarkOutgoing(id: item.id, text: item.text, encrypted: item.encrypted, at: item.at,
                              state: item.state == .sending
                                 ? (item.attempted == false ? .failed("尚未发送，点按重试") : .unconfirmed) : item.state,
                              replyTo: item.replyTo, thread: item.thread,
@@ -102,7 +107,10 @@ actor LarkOutboxStore {
             }
         }
         let record = Record(snapshot: candidate)
-        let data = try JSON.encoder.encode(record)
+        var data = try JSON.encoder.encode(record)
+        if candidate.draft.encryption != nil || candidate.items.contains(where: { $0.encrypted != nil }) {
+            data = try sealer.seal(data)
+        }
         let url = directory.appending(path: "state.json")
         #if os(iOS)
         try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
@@ -196,6 +204,7 @@ actor LarkOutboxStore {
     private struct Outgoing: Codable {
         var id: UUID
         var text: String
+        var encrypted: LarkEncryptedPayload?
         var at: Date
         var state: LarkOutgoing.State
         var replyTo: LarkReplyTo?
@@ -206,6 +215,7 @@ actor LarkOutboxStore {
         var attempted: Bool?
 
         init(_ value: LarkOutgoing) {
+            encrypted = value.encrypted
             id = value.id; text = value.text; at = value.at; state = value.state; replyTo = value.replyTo
             thread = value.thread; attachment = value.attachment.map(Media.init); messageID = value.messageID
             mentions = value.mentions.isEmpty ? nil : value.mentions

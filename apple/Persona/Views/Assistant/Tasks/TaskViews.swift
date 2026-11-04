@@ -647,7 +647,8 @@ struct TaskQuestions: View {
     }
 }
 
-/// The dock: a pill for each task going on (waiting for the user first), then 全部 for the board.
+/// The dock: 全部 for the board, held at the leading edge so it never scrolls out of reach, then a pill for each task
+/// going on (waiting for the user first), scrolling sideways beside it.
 struct TaskDock: View {
     var conversation: String
     @State private var removing: TodoItem?
@@ -657,28 +658,39 @@ struct TaskDock: View {
         let dock = store.dock(conversation)
         let all = store.tasks(of: conversation)
         if !all.isEmpty {
-            ScrollView(.horizontal) {
-                HStack(spacing: Theme.Space.s) {
-                    ForEach(dock) { todo in pill(todo) }
-                    Button {
-                        store.showBoard = true
-                    } label: {
-                        Label("全部 \(all.count)", systemImage: Theme.Icon.taskBoard)
-                            .font(Theme.Font.captionMedium)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .padding(.horizontal, Theme.Space.m)
-                            .padding(.vertical, Theme.Space.sm)
-                            .background(Theme.Fill.chip, in: .capsule)
+            HStack(spacing: Theme.Space.s) {
+                board(all.count)
+                if !dock.isEmpty {
+                    ScrollView(.horizontal) {
+                        HStack(spacing: Theme.Space.s) {
+                            ForEach(dock) { todo in pill(todo) }
+                        }
                     }
-                    .buttonStyle(.plain)
+                    .scrollIndicators(.hidden)
+                    .animation(Theme.Motion.layout, value: dock.map(\.id))
                 }
-                .padding(.horizontal, Theme.Space.xs)
             }
-            .scrollIndicators(.hidden)
-            .animation(Theme.Motion.layout, value: dock.map(\.id))
+            .padding(.horizontal, Theme.Space.xs)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .confirmTaskRemoval($removing)
         }
+    }
+
+    private func board(_ count: Int) -> some View {
+        Button {
+            store.showBoard = true
+        } label: {
+            Label("全部 \(count)", systemImage: Theme.Icon.taskBoard)
+                .font(Theme.Font.captionMedium)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .padding(.horizontal, Theme.Space.m)
+                .padding(.vertical, Theme.Space.sm)
+                .background(Theme.Fill.chip, in: .capsule)
+                .fixedSize() // the pills give way, 全部 does not
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("task-dock.board")
     }
 
     private func pill(_ todo: TodoItem) -> some View {
@@ -700,6 +712,7 @@ struct TaskDock: View {
             .scaledFrame(maxWidth: Theme.Size.box200)
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("task-dock.pill")
         .menuPreviewShape(.capsule)
         .contextMenu { TaskRemoveMenuItem(todo: todo, state: state, pending: $removing) }
         .transition(.scale.combined(with: .opacity))

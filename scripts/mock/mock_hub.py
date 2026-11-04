@@ -1275,6 +1275,18 @@ if MOCK_TASKS:
                         "/Users/me/code/weather", 8, "plan_mock_4"),
              done_at=ago(minutes=7.9), start_error="rpc: connection closed", agents=[]),
     ]
+    # MOCK_TASKS_DOCK=2: only the two tasks going on (the widget fix and the unit tests), for the dock with few pills;
+    # =many: four more tasks going on (working, needing you, two still opening), for a dock wider than the screen.
+    _dock = os.environ.get("MOCK_TASKS_DOCK", "")
+    if _dock == "2":
+        TODOS_INIT[:] = [t for t in TODOS_INIT if t.get("origin") != ASK1 or t["id"] in ("todo_task_widget", "todo_task_tests")]
+    elif _dock == "many":
+        TODOS_INIT += [
+            _task_todo("todo_task_orders", "排查 /orders 接口变慢", "", "server", ORDERS, "/home/me/code/shop-api", 20, "plan_mock_2"),
+            _task_todo("todo_task_photos", "照片同步支持 HEIC", "", "studio", PHOTOS, "/Users/me/code/photo-sync", 18, "plan_mock_2"),
+            dict(_task_todo("todo_task_pay", "接入支付回调", "", "macbook", "", "/Users/me/code/shop-api", 1, "plan_mock_2"), agents=[]),
+            dict(_task_todo("todo_task_skeleton", "首页加骨架屏", "", "macbook", "", "/Users/me/code/weather", 1, "plan_mock_2"), agents=[]),
+        ]
     TODOS = copy.deepcopy(TODOS_INIT)
 
     def _plan(pid, state, minutes, tasks):
@@ -2753,6 +2765,8 @@ LARK_DOCUMENT = {"title": "新版图标评审", "partial": False, "authority": {
         {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "小尺寸下的描边粗细"}]}]}]},
     {"type": "codeBlock", "attrs": {"language": "text"}, "content": [{"type": "text", "text": "icon-v2/\n  app.svg\n  widget.svg"}]},
 ]}}
+
+LARK_NATIVE_OLK = {"locked": True, "prepared": {}, "sent": {}}
 
 # MOCK_LARK_OLK=1 exercises the authorized read projection with synthetic content only.
 if os.environ.get("MOCK_LARK_OLK"):
@@ -5702,7 +5716,7 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({k: v for k, v in st.items() if v is not None})
         if p == "/api/v1/lark/raw/accounts":
             return self.send_json({"activeId": "1", "accounts": [{"id": "1", "active": True,
-                "signedIn": not bool(os.environ.get("MOCK_LARK_LOGGED_OUT")), "userId": "mock-lark-account"}]})
+                "signedIn": not bool(os.environ.get("MOCK_LARK_LOGGED_OUT")), "userId": "123" if os.environ.get("MOCK_LARK_NATIVE_OLK") else "mock-lark-account"}]})
         if p.startswith("/api/v1/lark/raw/messages/"):
             mid = p.rsplit("/", 1)[-1]
             for feed, messages in LARK_MESSAGES.items():
@@ -5711,6 +5725,8 @@ class H(BaseHTTPRequestHandler):
                         return self.send_json({"item": {"id": mid, "feedId": feed,
                             "isMine": message.get("is_mine", False), "localState": message.get("local_state", "synced")}})
             return self.send_json({"error": "消息不存在"}, 404)
+        if p == "/api/v1/lark/encryption" and os.environ.get("MOCK_LARK_NATIVE_OLK"):
+            return self.send_json({"accountId": "123", "configured": True, "locked": LARK_NATIVE_OLK["locked"], "unifiedPassword": False})
         if p == "/api/v1/lark/status":  # 设置 › 连接器 › 飞书
             return self.send_json({"configured": True, "connected": True, "name": "我", "last_event_at": int(time.time()) - 95})
         lark_read = p in ("/api/v1/lark/conversations", "/api/v1/lark/pinned") or (
@@ -6208,6 +6224,42 @@ class H(BaseHTTPRequestHandler):
                 if kind == "projects": meta["kind"], meta["status"] = e["extra"].split(" · ")
             KB_UPDATES.append({"kind": kind, "id": eid, **body})
             return self.send_json({"ok": True})
+        if os.environ.get("MOCK_LARK_NATIVE_OLK") and (p == "/test/lark-encryption/reset" or p == "/api/v1/lark/encryption/unlock" or p.endswith(("/encryption/covers", "/encryption/prepare", "/encrypted-messages"))):
+            body = json.loads(self.last_body or b"{}")
+            if p == "/test/lark-encryption/reset":
+                LARK_NATIVE_OLK.update(locked=body.get("locked", True), fail_once=body.get("fail_once", False), prepared={}, sent={})
+                LARK_MESSAGES["f2"] = [m for m in LARK_MESSAGES["f2"] if not m.get("client_id")]
+                return self.send_json({"ok": True})
+            if p == "/api/v1/lark/encryption/unlock":
+                if body.get("password") != "synthetic-password":
+                    return self.send_json({"error": "密码不正确，请重试", "code": "OLK_VAULT_INVALID_PASSWORD"}, 401)
+                LARK_NATIVE_OLK["locked"] = False
+                return self.send_json({"accountId": "123", "configured": True, "locked": False, "unifiedPassword": False})
+            if p.endswith("/encryption/covers"):
+                return self.send_json({"lines": ["下周再聊", "午饭后再确认", "我看看"]})
+            if p.endswith("/encryption/prepare"):
+                if LARK_NATIVE_OLK["locked"]:
+                    return self.send_json({"error": "请先解锁密钥库", "code": "OLK_VAULT_LOCKED"}, 409)
+                key = body["cover"] + "".join(chr(0xe0100 + b - 16) for b in ("OLK3." + str(len(LARK_NATIVE_OLK["prepared"]))).encode())
+                LARK_NATIVE_OLK["prepared"][key] = body
+                return self.send_json({"accountId": "123", "feedId": p.split("/")[5], "messages": [{"text": key}]})
+            if p.endswith("/encrypted-messages"):
+                key, cid, feed = body.get("ciphertext"), body.get("client_id"), p.split("/")[5]
+                if cid in LARK_NATIVE_OLK["sent"]:
+                    return self.send_json({"message_id": LARK_NATIVE_OLK["sent"][cid]})
+                if LARK_NATIVE_OLK.pop("fail_once", False):
+                    return self.send_json({"error": "请求过于频繁，请稍后重试"}, 429)
+                original = LARK_NATIVE_OLK["prepared"].get(key)
+                if not original: return self.send_json({"error": "not prepared"}, 400)
+                msgs = LARK_MESSAGES.setdefault(feed, [])
+                pos = str(max([int(m["position"]) for m in msgs] or [0]) + 1)
+                message = _lm(pos, "我", original["text"], mine=True, mins=0)
+                message.update(client_id=cid, local_state="synced", olk={"version": 1, "state": "decrypted",
+                    "publicParts": [{"kind": "text", "text": original["cover"]}],
+                    "bodyParts": [{"kind": "text", "text": original["text"]}]})
+                msgs.append(message)
+                LARK_NATIVE_OLK["sent"][cid] = message["id"]
+                return self.send_json({"message_id": message["id"]})
         if p.startswith("/api/v1/lark/conversations/") and p.endswith(("/images", "/files")):
             image = p.endswith("/images")
             body = json.loads(self.last_body or b"{}") if image else {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}

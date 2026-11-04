@@ -7,6 +7,7 @@ nonisolated struct LarkOutgoing: Identifiable, Equatable, Sendable {
 
     var id = UUID()
     var text: String
+    var encrypted: LarkEncryptedPayload? = nil
     var at = Date()
     var state: State = .sending
     /// The message this answers (id, sender, a one-line summary); nil for a plain message to the chat.
@@ -34,9 +35,15 @@ nonisolated struct LarkOutgoing: Identifiable, Equatable, Sendable {
 
     /// Drawn like my other messages: my name and avatar from the last one I sent here.
     func message(like mine: LarkMessage?) -> LarkMessage {
-        LarkMessage(id: "outgoing-\(id.uuidString)", position: "", senderID: mine?.senderID, senderName: mine?.senderName ?? "我",
+        var message = LarkMessage(id: "outgoing-\(id.uuidString)", position: "", senderID: mine?.senderID, senderName: mine?.senderName ?? "我",
                     senderAvatar: mine?.senderAvatar, senderType: mine?.senderType, isMine: true, type: "TEXT", text: text,
                     createdAt: at, recalled: false, replyCount: 0, replyTo: thread ? nil : replyTo)
+        if let encrypted {
+            message.olk = LarkEncryption(version: 1, state: "decrypted",
+                publicParts: [LarkPart(kind: "text", text: encrypted.cover ?? "")],
+                bodyParts: [LarkPart(kind: "text", text: text)])
+        }
+        return message
     }
 }
 
@@ -47,6 +54,10 @@ enum LarkOutbox {
     /// Hands one outgoing message to the hub: a reply when it answers a message, else a plain send to the chat.
     @discardableResult
     static func deliver(_ o: LarkOutgoing, feed: String, api: APIClient) async throws -> LarkSendReceipt {
+        if let encrypted = o.encrypted {
+            guard encrypted.feedId == feed, !o.thread, o.attachment == nil else { throw LarkOutboxIdentity.Failure.changed }
+            return try await api.larkSendEncrypted(encrypted, clientID: o.clientID, replyID: o.replyTo?.id)
+        }
         if let attachment = o.attachment {
             return try await api.larkSendAttachment(feed, attachment: attachment, clientID: o.clientID)
         }
@@ -79,7 +90,7 @@ enum LarkOutbox {
                 }
                 return true
             }
-            if o.attachment != nil { return true }
+            if o.attachment != nil || o.encrypted != nil { return true }
             if now.timeIntervalSince(o.at) > copyWait { return false }
             let text = o.text.trimmingCharacters(in: .whitespacesAndNewlines)
             // One copy answers one message (the same words sent twice need two). A quoted reply's copy quotes the

@@ -18,6 +18,7 @@ import (
 // larkRoutes exposes Feishu chats from the user's lark-connector instance to the app's 信息 tab.
 func (h *Hub) larkRoutes(api *http.ServeMux) {
 	h.larkAttachmentRoutes(api)
+	h.larkEncryptionRoutes(api)
 	api.HandleFunc("GET /api/v1/lark/status", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, h.larkStatus(r.Context()))
 	})

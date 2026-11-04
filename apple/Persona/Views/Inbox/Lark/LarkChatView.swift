@@ -31,6 +31,11 @@ struct LarkChatView: View {
     @Environment(\.tabIsActive) private var tabActive
     @Environment(\.scenePhase) private var scenePhase
     var conversation: LarkConversation
+    var messageComposer = false
+    @State private var encryptionDraft: LarkEncryptedDraft?
+    @State private var encryptionStatus: LarkNativeEncryptionStatus?
+    @State private var showEncryptionCovers = false
+    @State private var showEncryptionUnlock = false
     @State private var pager = LarkPager()
     /// The hub answered with a topic group's topics for a chat opened without `isTopic` (from a profile, an old inbox item).
     @State private var foundTopic = false
@@ -83,8 +88,9 @@ struct LarkChatView: View {
     /// What rows coming on and off screen keep track of (LarkChatBook).
     @State private var book = LarkChatBook()
 
-    init(conversation: LarkConversation) {
+    init(conversation: LarkConversation, messageComposer: Bool = false) {
         self.conversation = conversation
+        self.messageComposer = messageComposer
         // Restore only after binding the composer to its Hub credential.
         _text = State(initialValue: "")
         _replyTo = State(initialValue: nil)
@@ -229,6 +235,19 @@ struct LarkChatView: View {
         })
         .modifier(LarkFileOpener(request: $fileRequest))
         .sheet(item: $person) { LarkProfileView(person: $0) }
+        .sheet(isPresented: $showEncryptionCovers) {
+            if let api = chatAPI, let account = outbox.identity?.account {
+                LarkEncryptionCoverPicker(api: api, account: account, feed: conversation.id) { cover in
+                    guard encryptionDraft != nil else { return }
+                    encryptionDraft?.cover = cover
+                }
+            }
+        }
+        .sheet(isPresented: $showEncryptionUnlock) {
+            if let api = chatAPI, let account = outbox.identity?.account {
+                LarkEncryptionUnlockSheet(api: api, account: account, unified: encryptionStatus?.unifiedPassword == true) { send() }
+            }
+        }
         .sheet(item: $debugPick) { m in LarkReactionPicker(message: m) { react(m, $0) } }
         .sheet(isPresented: Binding(get: { debugPost != nil }, set: { if !$0 { debugPost = nil } })) {
             if let id = debugPost { LarkMomentsPostView(postID: id) }
@@ -279,22 +298,40 @@ struct LarkChatView: View {
         } message: {
             Text("旧版草稿没有记录所属账号。确认后恢复到当前会话，待发送内容不会自动发送。")
         }
-        .onChange(of: LarkDraft(text: text, replyTo: replyTo, mentions: mentions.isEmpty ? nil : mentions)) { _, _ in saveDraft() }
+        .onChange(of: LarkDraft(text: text, encryption: encryptionDraft, replyTo: replyTo, mentions: mentions.isEmpty ? nil : mentions)) { _, _ in saveDraft() }
         .onChange(of: attachments) { _, _ in saveDraft(immediately: true) }
         .onChange(of: scenePhase) { _, phase in
+            guard tabActive else { return }
             if phase != .active { saveDraft(immediately: true) }
             else { Task { await restoreDraft() } }
         }
         .onChange(of: outbox.storageProblem) { _, problem in
             if let problem { model.toast = Toast(problem, style: .error) }
         }
-        .onDisappear { saveDraft(immediately: true) }
+        .onTabVisibility(appear: {
+            if draftLoaded { applyDraft() }
+        }, disappear: {
+            saveDraft(immediately: true, leavingPage: true)
+        })
         .modifier(LarkAttachmentPicker(attachments: $attachments, photos: $showPhotos, files: $showFiles, preparing: $preparingAttachment))
         .onChange(of: pager.messages) { _, now in settleOutgoing(now) }
     }
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
+            if messageComposer {
+                LarkEncryptionModeBar(draft: $encryptionDraft, canEncrypt: attachments.isEmpty && !isTopic) { showEncryptionCovers = true }
+            }
+            if !messageComposer, encryptionDraft != nil {
+                #if os(iOS)
+                Button("前往消息，继续编辑加密草稿") { model.selectedTab = .feishu }
+                    .font(Theme.Font.label).lineLimit(1)
+                    .padding(.horizontal, Theme.Space.page)
+                #else
+                Text("请从消息列表继续编辑加密草稿")
+                    .font(Theme.Font.label).padding(.horizontal, Theme.Space.page)
+                #endif
+            }
             if !attachments.isEmpty {
                 ScrollView(.horizontal) {
                     HStack(spacing: Theme.Space.s) {
@@ -326,15 +363,16 @@ struct LarkChatView: View {
             LarkComposer(placeholder: "回复 \(conversation.name)", text: $text, focused: $composerFocused,
                          replyTo: replyTo, cancelReply: { replyTo = nil },
                          attachmentPicker: { pickAttachment(photo: $0) },
-                         canAddAttachments: attachments.count < LarkAttachment.selectionLimit,
+                         canAddAttachments: encryptionDraft == nil && attachments.count < LarkAttachment.selectionLimit,
                          hasAttachments: !attachments.isEmpty, preparingAttachment: preparingAttachment,
-                          mentionFeed: conversation.isGroup ? conversation.id : nil,
+                          mentionFeed: encryptionDraft == nil && conversation.isGroup ? conversation.id : nil,
                           me: pager.messages.last(where: \.isMine)?.senderID, mentions: $mentions, send: send)
+                .disabled(!messageComposer && encryptionDraft != nil)
         }
         .disabled(savingOutgoing || !draftLoaded || outbox.invalidated)
         .padding(.top, !attachments.isEmpty || preparingAttachment ? Theme.Space.s : 0)
         .background {
-            if !attachments.isEmpty || preparingAttachment {
+            if messageComposer || encryptionDraft != nil || !attachments.isEmpty || preparingAttachment {
                 Theme.pageBackground.ignoresSafeArea(edges: .bottom)
             }
         }
@@ -735,33 +773,61 @@ struct LarkChatView: View {
         text = composer.draft.text
         replyTo = composer.draft.replyTo
         mentions = composer.draft.mentions ?? []
+        encryptionDraft = composer.draft.encryption
         attachments = composer.attachments
+        if !messageComposer, text.isEmpty, replyTo == nil, attachments.isEmpty { encryptionDraft = nil }
         draftLoaded = true
     }
 
-    private func saveDraft(immediately: Bool = false) {
-        guard draftLoaded, !savingOutgoing else { return }
-        let draft = LarkDraft(text: text, replyTo: replyTo, mentions: mentions.isEmpty ? nil : mentions)
+    private func saveDraft(immediately: Bool = false, leavingPage: Bool = false) {
+        guard draftLoaded, !savingOutgoing, tabActive || leavingPage else { return }
+        let draft = LarkDraft(text: text, encryption: encryptionDraft, replyTo: replyTo, mentions: mentions.isEmpty ? nil : mentions)
         outbox.scheduleDraft(draft, attachments: attachments, immediately: immediately)
     }
 
     /// The durable composer-to-outbox transaction finishes before the input clears and sending starts.
     private func send() {
-        guard let api = chatAPI, outbox.identity != nil else {
+        guard let api = chatAPI, let identity = outbox.identity else {
             model.toast = Toast("请重新打开此会话后发送", style: .error); return
         }
         let queue = outbox
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard draftLoaded, !savingOutgoing, !preparingAttachment,
               !t.isEmpty || (!attachments.isEmpty && replyTo == nil) else { return }
+        let encrypted = encryptionDraft
+        if let encrypted {
+            guard messageComposer, attachments.isEmpty, !isTopic else {
+                model.toast = Toast("请从消息页发送加密文字", style: .error); return
+            }
+            guard !encrypted.cover.isEmpty else { showEncryptionCovers = true; return }
+        }
         var batch: [LarkOutgoing] = []
         if !t.isEmpty { batch.append(LarkOutgoing(text: t, replyTo: replyTo, mentions: LarkMentions.mentions(in: t, picked: mentions))) }
         batch += attachments.map { LarkOutgoing(text: "", attachment: $0) }
         savingOutgoing = true
         Task {
+            defer { savingOutgoing = false }
+            if let encrypted {
+                do {
+                    let status = try await api.larkEncryptionStatus()
+                    guard status.accountId == identity.account, outbox === queue, !queue.invalidated else { throw LarkOutboxIdentity.Failure.changed }
+                    encryptionStatus = status
+                    guard status.configured else {
+                        model.toast = Toast("请先在 lark-connector 网页创建密钥库", style: .error); return
+                    }
+                    if status.locked { showEncryptionUnlock = true; return }
+                    let payload = try await api.larkPrepareEncryption(account: identity.account, feed: conversation.id, text: t, cover: encrypted.cover)
+                    guard outbox === queue, !queue.invalidated else { throw LarkOutboxIdentity.Failure.changed }
+                    batch[0].encrypted = payload
+                    batch[0].mentions = []
+                } catch {
+                    if (error as? APIError)?.code == "OLK_VAULT_LOCKED" { showEncryptionUnlock = true }
+                    else { model.toast = Toast(error.shown ?? "未能加密，消息保留在输入框", style: .error) }
+                    return
+                }
+            }
             do { try await queue.enqueue(batch) }
             catch {
-                savingOutgoing = false
                 model.toast = Toast("消息未发送，无法保存到本机，请检查存储空间", style: .error); return
             }
             if outbox === queue {
@@ -809,7 +875,12 @@ struct LarkChatView: View {
     private func restore(_ outgoing: LarkOutgoing) {
         guard !savingOutgoing else { return }
         let queue = outbox
-        var draft = LarkDraft(text: text, replyTo: replyTo, mentions: mentions.isEmpty ? nil : mentions), files = attachments
+        if outgoing.encrypted != nil && (!text.isEmpty || !attachments.isEmpty) || outgoing.encrypted == nil && encryptionDraft != nil {
+            model.toast = Toast("请先处理输入框中的草稿，再恢复这条消息", style: .error)
+            return
+        }
+        var draft = LarkDraft(text: text, encryption: encryptionDraft, replyTo: replyTo, mentions: mentions.isEmpty ? nil : mentions), files = attachments
+        if let encrypted = outgoing.encrypted { draft.encryption = LarkEncryptedDraft(cover: encrypted.cover ?? "") }
         if let attachment = outgoing.attachment {
             guard files.count < LarkAttachment.selectionLimit else {
                 model.toast = Toast("请先移除一个附件，再放回输入框", style: .error)

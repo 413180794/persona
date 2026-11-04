@@ -199,6 +199,9 @@ final class LarkChatOutbox {
                 guard let current = client() else { throw LarkOutboxIdentity.Failure.removed }
                 api = current
                 try await checkAccount(using: api)
+                if let encrypted = outgoing.encrypted, encrypted.accountId != identity?.account || encrypted.feedId != feed {
+                    throw LarkOutboxIdentity.Failure.changed
+                }
             } catch {
                 // No write has been attempted: even a preflight timeout is safe to retry explicitly.
                 try? await change { state in
