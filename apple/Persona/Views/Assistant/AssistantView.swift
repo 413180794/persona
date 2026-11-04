@@ -43,19 +43,16 @@ struct AssistantView: View {
         } else if widthClass == .regular {
             // The split keeps both columns clear of the fold when the device is partly folded.
             #if os(macOS)
-            // The history list in the content column, flush with the window and the conversation; the sidebar column
-            // (a floating glass card on macOS 26) stays empty: the shell's sections are the window's sidebar.
-            NavigationSplitView(columnVisibility: $columns) {
-                SplitColumns.noSidebar
-            } content: {
-                sidebar(column: true).modifier(SidebarWidth())
+            // The history list beside the conversation, flush with the window; 历史对话 folds it away. Not a
+            // NavigationSplitView: the Mac's would not fold the list's column (#856, `MacListBeside`).
+            MacListBeside(listShown: columns != .detailOnly, widthKey: "mac.assistant.listWidth") {
+                sidebar(column: true)
                     // The list's name and search are the title bar's row, beside the traffic lights: the row stood
                     // empty above them (#830). Nothing of the window's toolbar sits over this column.
                     .ignoresSafeArea(.container, edges: .top)
-            } detail: {
+            } page: {
                 stack
             }
-            .navigationSplitViewStyle(.balanced)
             #else
             NavigationSplitView(columnVisibility: $columns) {
                 // The system sizes the column on iPhone Duo (and moves the divide onto the fold); iPad, as the other tabs.

@@ -165,11 +165,13 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   详情栏打开空间页、机器页（页面带自己的 ⋯ / ⓘ）时就排到了侧栏按钮前面（2026-11-02，`docs/lessons/macos.md`）。
   按钮（`themedButton`）在 Mac 上是自己画的胶囊（`Mac/Design/MacCapsuleButton.swift`）：主要的是主题色底白字，其余是主题色字配一层浅的主题色底，
   和收件箱草稿卡片上的「发送 / 修改」、筛选 chip 一样；系统的玻璃按钮在活跃窗口里会整个填成主题色（见 `docs/lessons/macos.md`）。
-  `horizontalSizeClass` 在 Mac 上恒为 `.regular`，所以 Agents、收件箱、设置、Persona 走的是 iPad / iPhone Duo 打开时的分栏布局。
+  `horizontalSizeClass` 在 Mac 上恒为 `.regular`，所以 Agents、收件箱、设置走的是 iPad / iPhone Duo 打开时的分栏布局；Persona 页是列表在旁边的 `MacListBeside`（见下面）。
   外层不用 `NavigationSplitView`：页面自己是分栏，分栏套在另一个分栏的详情栏里时，里面的详情栏按外层侧栏还在前面排版，对话被挤到右边、输入框被裁掉。
   页面的分栏在 Mac 上是三栏、第一栏空着（`SplitColumns`）：macOS 26 把分栏的侧栏画成离窗口四边一点的玻璃卡片，周围露出窗口底色
   （2026-11-02 用户：像浮在背景板上，有缺口），没有关掉的 API；内容栏是贴边的，列表放在内容栏，内容栏里的 `NavigationLink(value:)` 照样推进详情栏。
-  代价：Agents、收件箱、设置的列表栏在 Mac 上不能收起（原来工具栏上的「隐藏列表」在红绿灯旁边，正好压在六项这一列上），Persona 页的历史列表照旧用顶栏的按钮收起。
+  代价：Agents、收件箱、设置的列表栏在 Mac 上不能收起（原来工具栏上的「隐藏列表」在红绿灯旁边，正好压在六项这一列上）。
+  Persona 页的历史列表要用顶栏的「历史对话」收起，Mac 上不是分栏，是 `MacListBeside`（列表 | 可拖的分隔线 | 对话，宽度在 `Theme.Size.sidebarMin`–`sidebarMax` 之间、记在 `mac.assistant.listWidth`）：
+  三栏分栏收不起内容栏，设成 `.detailOnly` 会被系统马上改回 `.all`，空的侧栏那一栏冒出来、列表还在（#856）。
   ⌘1…⌘7 切换；`Settings` 场景（⌘,）放设置；`onOpenURL` 处理 `jarvis://pair`；App 变成活跃时 `ensureConnected` + `refresh`。
   App 在后台不断开 WebSocket（Mac 应用常驻，hub 靠这条连接找到它）。
 - 兼容层（`Mac/Compat/`）：`UIKitTypes.swift`（UIColor / UIImage / UIFont / UIEdgeInsets 的别名，UIPasteboard、UIApplication.open、UIDevice（含电池）、
@@ -469,6 +471,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac 上没有：窗口恒为 regular，侧栏是分栏的一列加开关按钮；抽屉（`AssistantDrawer+Mac.swift`）没有拖动，而且主窗口里走不到（`horizontalSizeClass` 恒为 regular，窗口再窄也是分栏），`DrawerPan` / `DrawerProbe` 只在 iOS 编译。
 - [x] Regular width: sidebar = split view left column, toggle button — AssistantView.swift, SplitNavigation.swift
   - Mac（2026-11-01 核对）截图：Persona 侧栏是 NavigationSplitView 的左栏，顶部右侧有开关按钮。
+  - Mac（2026-11-04，#856）：改成列表在对话左边的 `MacListBeside`（三栏分栏收不起列表那一栏）；真窗口里「历史对话」收起 / 展开，分区列开着、收着，浅色、深色都看过，展开时和原来一样。
 - [x] Persona avatar (mask face, eyes move when working) — Views/Assistant/AssistantAvatar.swift
   - Mac（2026-11-03 Mac mini 真窗口，执行者跑）：打开工作中、还没有回复的对话（「思考中」），顶栏头像上方思考泡泡里的三个点轮流动，连拍几张各不相同；空闲的主对话上不动。工作中的眼睛（2026-11-03 离屏截图，`-showPersonaState working`，启动后第 5 / 5.4 / 5.8 / 6.3 秒各拍一张，裁出头像放大）：两只眼睛第 5 秒偏左、5.4 秒偏右、6.3 秒居中，在左右扫。
 - [x] Profile page: identity, machine, online/working, 「接下来」 3 items, 主动做事 (tasks, run history), 了解你 (关于我, 记忆), 设置 (launcher, 管理启动器), capabilities list — Views/Assistant/AssistantProfileView.swift (AssistantProfileView, AssistantUpcomingRow, AssistantRunsView, AssistantRunRow)

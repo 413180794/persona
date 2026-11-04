@@ -155,7 +155,7 @@ extension View {
 }
 
 /// The sections column and the section's page side by side. Not a `NavigationSplitView`: the pages are split views
-/// themselves (Agents, Persona, 收件箱 in regular width), and a split nested in another one's detail column laid its
+/// themselves (Agents, 收件箱, 设置 in regular width; Persona lays its list beside it, `MacListBeside`), and a split nested in another one's detail column laid its
 /// own detail out as if the outer sidebar were still in front of it (the chat sat a sidebar's width to the right,
 /// its composer cut off). The page's split is the window's; this column sits at its leading edge.
 private struct MacShell: View {

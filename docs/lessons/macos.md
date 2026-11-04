@@ -21,7 +21,7 @@
 
 - Mac 版（`JarvisMac`，`docs/mac.md`）和 iOS 共用页面：iOS 专用的 SwiftUI 修饰符 / 枚举成员在 `apple/Mac/Compat/` 里写同名的 Mac 版本（被标成 unavailable 的系统符号会让位给模块里的同名声明），
   UIKit 视图在 `apple/Mac/` 下写同名的 AppKit 类型；iOS 文件只加 `#if os(iOS)`。Mac target 和 App 一样默认 MainActor 隔离：Compat 里的纯数据类型、给解码线程用的 `NSImage` 辅助都要标 `nonisolated`。
-- 别把页面的分栏（`SplitNavigation`、Persona 页的 `NavigationSplitView`）放进另一个 `NavigationSplitView` 的详情栏：里面的详情栏会按外层侧栏还在前面来排，
+- 别把页面的分栏（`SplitNavigation`、iOS 上 Persona 页的 `NavigationSplitView`）放进另一个 `NavigationSplitView` 的详情栏：里面的详情栏会按外层侧栏还在前面来排，
   对话整个往右挪一个侧栏宽、输入框被裁掉（2026-10-31）。Mac 壳的六项侧栏是 HStack 里的一列。
 - Mac 锁屏时 `screencapture` 只拍到锁屏：截图用 `scripts/app/mac_shot.sh`（App 自己 `cacheDisplay` 出 PNG，`docs/mac.md`「构建、运行、截图」）。
   它画不出毛玻璃 / Liquid Glass；SwiftUI `List` 的行要单独再画一遍；深色下 List 行文字是浅色方案的颜色，还没确认是不是截图的问题。
@@ -54,6 +54,9 @@
   看上去像浮在背景板上（2026-11-02 用户：非常丑）；SwiftUI 和 `NSSplitViewItem` 都没有关掉它的 API，`.listStyle`、`.background` 只改卡片里面。
   内容栏和详情栏是贴边的：Mac 上分栏写成三栏，侧栏一栏放 `Color.clear.toolbar(removing: .sidebarToggle)`、可见性 `.doubleColumn`，
   列表放内容栏（`SplitColumns`）。内容栏里的列表要自己 `.listStyle(.sidebar)` + `.scrollContentBackground(.hidden)`，否则有行分隔线、页脚被截断、底色发灰。
+- 这样的三栏分栏收不起内容栏（2026-11-04，#856）：`columnVisibility` 从 `.doubleColumn` 设成 `.detailOnly`，几毫秒后系统经绑定写回 `.all`，
+  空的侧栏那一栏冒出来成一条灰栏，列表也还在；去掉动画一样。要收起的列表（Persona 页的历史）不用分栏，用 `MacListBeside`（HStack：列表、
+  `MacPanelResizeHandle`、页面），收起时页面的身份不变。查这类问题：在 `.onChange(of: columns)` 里打日志，看系统有没有改写绑定。
 - 离屏截图画不出玻璃，看材质要截真窗口：解锁时另起一个体验模式实例（`open -n Jarvis.app --args -demo.on YES -ApplePersistenceIgnoreState YES …`），
   用有屏幕录制权限的 computer-use 工具（比如 cua-driver 的 `get_window_state` 加 `screenshot_out_file`）截这个实例的窗口，窗口不在当前屏幕上也截得到；
   这是 `CLAUDE.md`「截图验证不用 computer-use」的 Mac 例外：只截图、不操作，后台发的快捷键到不了菜单（窗口不是 key），要点按就别用这条路。
