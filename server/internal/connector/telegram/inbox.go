@@ -35,6 +35,7 @@ type inboxState struct {
 	seen     map[string]dialog        // conversations the tg CLI's reads listed, for its writes to name (cli.go)
 	peers    map[string]peer          // people and chats the conversation pages named, for their pictures (thread.go)
 	locs     map[string]*fileLoc      // where the pages' pictures are, by media ref (thread.go)
+	members  map[string]headcount     // group key -> how many are in it, as asked (thread.go)
 	refresh  sync.Mutex               // one refresh at a time
 }
 

@@ -51,6 +51,23 @@ func (e entities) peerOf(p tg.PeerClass) (peer, bool) {
 	return peer{}, false
 }
 
+// membersOf is how many are in a group or channel, as far as its object says: always for a basic group, only
+// sometimes for a supergroup or a channel (0 then).
+func (e entities) membersOf(p tg.PeerClass) int {
+	switch p := p.(type) {
+	case *tg.PeerChat:
+		if c, ok := e.chats[p.ChatID].(*tg.Chat); ok {
+			return c.ParticipantsCount
+		}
+	case *tg.PeerChannel:
+		if c, ok := e.chats[p.ChannelID].(*tg.Channel); ok {
+			n, _ := c.GetParticipantsCount()
+			return n
+		}
+	}
+	return 0
+}
+
 // nameOf is how a peer shows: a person's name, a group's title.
 func (e entities) nameOf(p tg.PeerClass) string {
 	switch p := p.(type) {
@@ -113,7 +130,7 @@ func dialogsOf(ds []tg.DialogClass, msgs []tg.MessageClass, e entities, archived
 		}
 		x := dialog{Peer: p, Name: e.nameOf(d.Peer), Top: d.TopMessage, Unread: d.UnreadCount, Mentions: d.UnreadMentionsCount,
 			ReadMax: d.ReadInboxMaxID, Archived: archived || d.FolderID == 1, Muted: int64(d.NotifySettings.MuteUntil) > now.Unix(), Kind: "group",
-			Photo: e.photoOf(d.Peer)}
+			Photo: e.photoOf(d.Peer), Members: e.membersOf(d.Peer)}
 		switch pp := d.Peer.(type) {
 		case *tg.PeerUser:
 			x.Kind = "dm"
@@ -379,7 +396,7 @@ func (g *gotdClient) Search(ctx context.Context, query string, in *dialog, since
 	for _, m := range msgs {
 		pc := peerOfMessage(m)
 		p, _ := e.peerOf(pc)
-		d := dialog{Peer: p, Name: e.nameOf(pc), Kind: "group"}
+		d := dialog{Peer: p, Name: e.nameOf(pc), Kind: "group", Members: e.membersOf(pc)}
 		switch pp := pc.(type) {
 		case *tg.PeerUser:
 			d.Kind = "dm"

@@ -111,6 +111,20 @@ struct ConnectorThreadTests {
         #expect(ThreadLayout.bubbleShare > 0.74 && ThreadLayout.bubbleShare < 0.81)
     }
 
+    /// The line under the title: the source and the kind of chat, and how many are in a group or channel when the hub
+    /// knows.
+    @Test func subtitles() throws {
+        func chat(_ json: String) throws -> ThreadChat { try JSON.decoder.decode(ThreadChat.self, from: Data(json.utf8)) }
+        let zh = Locale(identifier: "zh_CN")
+        #expect(ThreadLayout.subtitle(try chat(#"{"id":"c2","name":"示例群","kind":"group","members":1234}"#), source: "Telegram", locale: zh)
+                == "Telegram 群聊 · 1,234 位成员")
+        #expect(ThreadLayout.subtitle(try chat(#"{"id":"c2","name":"示例群","kind":"group"}"#), source: "Telegram", locale: zh) == "Telegram 群聊")
+        #expect(ThreadLayout.subtitle(try chat(#"{"id":"c5","name":"示例频道","kind":"channel","members":12}"#), source: "Telegram", locale: zh)
+                == "Telegram 频道 · 12 位订阅者")
+        #expect(ThreadLayout.subtitle(try chat(#"{"id":"u1","name":"示例用户","kind":"dm","members":3}"#), source: "Telegram", locale: zh) == "Telegram")
+        #expect(ThreadLayout.subtitle(nil, source: "Telegram", locale: zh) == "Telegram")
+    }
+
     /// Like the Feishu chat: a time above a new day or a pause; one avatar and name for a run from the same person,
     /// mine apart from theirs, an event apart from both.
     @Test func runsAndSeparators() throws {

@@ -7,18 +7,28 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
 )
 
 // The inbox's conversations as the app's conversation page (connector.Threads, docs/plan-telegram.md「会话页」): a page
 // of messages a request (and one more for the messages they reply to that the page does not have), and each picture
-// when the app shows it, a request a part. Everything goes through the connector's gate: nothing during a flood wait.
+// when the app shows it, a request a part. A group's headcount comes with its chat when Telegram said it there; else
+// its first page asks once (Info) and that answer holds for membersFor. Everything goes through the connector's gate:
+// nothing during a flood wait.
 
 const (
-	locsMost  = 4000 // pictures' locations kept for the pages read
-	peersMost = 4000
+	locsMost   = 4000 // pictures' locations kept for the pages read
+	peersMost  = 4000
+	membersFor = 12 * time.Hour
 )
+
+// headcount is a group's member count as Info said it, or 0 when asking failed; at is when it was asked.
+type headcount struct {
+	n  int
+	at time.Time
+}
 
 // Media refs, opaque to the hub and the app: "a.<peer key>.<photo id>" (a person's or a chat's picture, which a new
 // one gets a new id for), "m.<chat key>.<message id>.f|t" (a message's picture: the media itself, or its thumbnail).
@@ -73,7 +83,40 @@ func (c *Conn) Thread(ctx context.Context, thread, before string, limit int) (co
 	for _, m := range msgs {
 		page.Messages = append(page.Messages, c.threadMessage(d, m, quotes))
 	}
+	if from == 0 && d.Kind == "group" {
+		page.Chat.Members = c.members(ctx, cl, d) // last: a flood wait here costs the count, not the page
+	}
 	return page, nil
+}
+
+// members is how many are in group d: what its chat said, else Info's answer, asked at most once in membersFor (a
+// failure too: an error is not asked again sooner). 0: not known.
+func (c *Conn) members(ctx context.Context, cl client, d dialog) int {
+	if d.Members > 0 {
+		return d.Members
+	}
+	key := d.Peer.key()
+	c.box.mu.Lock()
+	h, ok := c.box.members[key]
+	c.box.mu.Unlock()
+	if ok && time.Since(h.at) < membersFor {
+		return h.n
+	}
+	info, err := cl.Info(ctx, d)
+	if errors.As(err, new(heldError)) || ctx.Err() != nil {
+		return h.n // nothing was asked
+	}
+	h = headcount{n: info.Members, at: time.Now()}
+	if err != nil {
+		h.n = 0
+	}
+	c.box.mu.Lock()
+	if c.box.members == nil || len(c.box.members) > peersMost {
+		c.box.members = map[string]headcount{}
+	}
+	c.box.members[key] = h
+	c.box.mu.Unlock()
+	return h.n
 }
 
 func (c *Conn) threadChat(d dialog) connector.ThreadChat {

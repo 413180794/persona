@@ -26,6 +26,7 @@ struct InboxConnectorDetailView: View {
         } else {
             ConnectorThreadView(model: thread)
                 .navigationTitle(thread.chat?.name ?? item.title)
+                .navigationSubtitle(ThreadLayout.subtitle(thread.chat, source: item.accountName))
                 .navigationBarTitleDisplayMode(.inline)
         }
     }

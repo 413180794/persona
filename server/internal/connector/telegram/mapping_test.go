@@ -9,15 +9,17 @@ import (
 
 // Telegram's objects, made up: two people (one a bot), a supergroup, a broadcast channel, a basic group.
 func exampleEntities() entities {
+	group := &tg.Channel{ID: 2, AccessHash: 22, Title: "示例群", Megagroup: true}
+	group.SetParticipantsCount(128) // said only sometimes: a flag
 	return entitiesOf(
 		[]tg.UserClass{
 			&tg.User{ID: 1, AccessHash: 11, FirstName: "示例", LastName: "用户", Username: "example"},
 			&tg.User{ID: 3, AccessHash: 33, FirstName: "示例机器人", Bot: true},
 		},
 		[]tg.ChatClass{
-			&tg.Channel{ID: 2, AccessHash: 22, Title: "示例群", Megagroup: true},
+			group,
 			&tg.Channel{ID: 5, AccessHash: 55, Title: "示例频道", Broadcast: true},
-			&tg.Chat{ID: 6, Title: "示例小群"},
+			&tg.Chat{ID: 6, Title: "示例小群", ParticipantsCount: 5},
 		})
 }
 
@@ -45,13 +47,14 @@ func TestDialogsOf(t *testing.T) {
 		dm.TopText != "示例消息" || dm.TopFrom != "示例 用户" || dm.Username != "example" || !dm.kept() {
 		t.Fatalf("dm %+v", dm)
 	}
-	if group.Kind != "group" || group.Peer != (peer{'c', 2, 22}) || !group.Muted || group.Mentions != 1 || !group.TopOut || group.Broadcast || !group.kept() {
+	if group.Kind != "group" || group.Peer != (peer{'c', 2, 22}) || !group.Muted || group.Mentions != 1 || !group.TopOut || group.Broadcast || !group.kept() ||
+		group.Members != 128 {
 		t.Fatalf("supergroup %+v", group)
 	}
 	if !channel.Broadcast || channel.kept() {
 		t.Fatalf("a broadcast channel is kept: %+v", channel)
 	}
-	if small.Peer.Kind != 'g' || !small.Archived || small.Name != "示例小群" {
+	if small.Peer.Kind != 'g' || !small.Archived || small.Name != "示例小群" || small.Members != 5 || channel.Members != 0 || dm.Members != 0 {
 		t.Fatalf("basic group %+v", small)
 	}
 	if !bot.Bot || bot.kept() {

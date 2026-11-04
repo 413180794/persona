@@ -190,6 +190,17 @@ nonisolated enum ThreadLayout {
         return m.edited == true ? "已编辑 " + time : time
     }
 
+    /// The line under the page's title, as the Feishu chat's (飞书 / 飞书话题群): the source, the kind of chat, and how
+    /// many are in it when the hub knows — Telegram 群聊 · 128 位成员.
+    static func subtitle(_ chat: ThreadChat?, source: String, locale: Locale = .current) -> String {
+        let count = chat?.members.flatMap { $0 > 0 ? $0.formatted(.number.locale(locale)) : nil }
+        switch chat?.kind {
+        case "group": return source + " 群聊" + (count.map { " · \($0) 位成员" } ?? "")
+        case "channel": return source + " 频道" + (count.map { " · \($0) 位订阅者" } ?? "")
+        default: return source
+        }
+    }
+
     /// The run's first message shows its sender; a time separator goes above a new day or `LarkChatLayout.separatorGap`
     /// of quiet.
     static func separates(_ m: ThreadMessage, after prev: ThreadMessage?, calendar: Calendar = .current) -> Bool {

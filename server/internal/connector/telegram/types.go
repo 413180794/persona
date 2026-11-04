@@ -33,6 +33,7 @@ type dialog struct {
 	Muted    bool
 	Archived bool  // in the archive folder
 	Photo    int64 // the chat's (person's, group's) picture, 0 without one
+	Members  int   // a group's members, a channel's subscribers, when Telegram said with the chat (0: not said)
 	// What the archive leaves out: a bot, the account's own chat (Saved Messages), a broadcast channel.
 	Bot, Self, Broadcast bool
 }

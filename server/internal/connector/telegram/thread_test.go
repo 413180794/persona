@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gotd/td/tgerr"
 	"github.com/nwverse/persona/server/internal/connector"
@@ -154,5 +155,59 @@ func TestThreadDuringAFloodWait(t *testing.T) {
 	}
 	if st := c.Status(ctx); st.State != connector.StateRateLimited {
 		t.Fatalf("status %+v", st)
+	}
+}
+
+// A group's first page says how many are in it: as its chat said in the dialogs (no request), else Info's answer,
+// asked once in membersFor, a failure too. Older pages and private chats do not ask.
+func TestThreadMembers(t *testing.T) {
+	c, f, ctx := threadAccount(t)
+	f.mu.Lock()
+	f.infos = map[string]chatInfo{"c2": {Members: 128}}
+	f.mu.Unlock()
+	for range 2 {
+		if page, err := c.Thread(ctx, "c2", "", 30); err != nil || page.Chat.Members != 128 {
+			t.Fatalf("members %+v %v", page.Chat, err)
+		}
+	}
+	if n := requests(f, "Info"); n != 1 {
+		t.Fatalf("asked %d times", n)
+	}
+	if page, err := c.Thread(ctx, "c2", "12", 30); err != nil || page.Chat.Members != 0 || requests(f, "Info") != 1 {
+		t.Fatalf("an older page: %+v %v, asked %d times", page.Chat, err, requests(f, "Info"))
+	}
+	if page, err := c.Thread(ctx, "u1", "", 30); err != nil || page.Chat.Members != 0 || requests(f, "Info") != 1 {
+		t.Fatalf("a private chat: %+v %v, asked %d times", page.Chat, err, requests(f, "Info"))
+	}
+
+	// After membersFor it asks again; a failure counts as asked.
+	c.box.mu.Lock()
+	c.box.members["c2"] = headcount{n: 128, at: time.Now().Add(-membersFor - time.Minute)}
+	c.box.mu.Unlock()
+	f.mu.Lock()
+	f.fail = func(method string) error {
+		if method == "Info" {
+			return tgerr.New(400, "CHANNEL_PRIVATE")
+		}
+		return nil
+	}
+	f.mu.Unlock()
+	for range 2 {
+		if page, err := c.Thread(ctx, "c2", "", 30); err != nil || page.Chat.Members != 0 {
+			t.Fatalf("a failed ask: %+v %v", page.Chat, err)
+		}
+	}
+	if n := requests(f, "Info"); n != 2 {
+		t.Fatalf("asked %d times after a failure", n)
+	}
+
+	// Said with the chat: no ask at all.
+	c, f, ctx = threadAccount(t)
+	f.mu.Lock()
+	f.dialogs[0].Members = 42
+	f.mu.Unlock()
+	c.refreshInbox(ctx)
+	if page, err := c.Thread(ctx, "c2", "", 30); err != nil || page.Chat.Members != 42 || requests(f, "Info") != 0 {
+		t.Fatalf("from the dialogs: %+v %v, asked %d times", page.Chat, err, requests(f, "Info"))
 	}
 }
