@@ -579,10 +579,7 @@ private struct PluginSecretSheet: View {
         NavigationStack {
             List {
                 Section {
-                    SecureField(secret.set ? "输入新的值替换" : "输入", text: $value)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .accessibilityIdentifier("plugin-secret-value")
+                    SecretField(secret.set ? "输入新的值替换" : "输入", filled: "已填写，点保存", text: $value, identifier: "plugin-secret-value")
                 } footer: {
                     Text(secret.description?.isEmpty == false ? secret.description! : "存在 hub 上，只交给这个插件。")
                 }
@@ -593,6 +590,7 @@ private struct PluginSecretSheet: View {
                         } label: {
                             Text("清除").lineLimit(1)
                         }
+                        .tint(Theme.danger) // a Mac form draws a button in the accent whatever its role (#1512)
                         .disabled(busy)
                     }
                 }

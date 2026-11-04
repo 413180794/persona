@@ -68,6 +68,7 @@ final class PluginSettingsTests: XCTestCase {
         app.buttons["plugin-secret-save"].tap()
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "已设置")).firstMatch.waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "s3cret")).firstMatch.exists, "a secret is never shown")
+        PasswordPrompt.assertNone(app, "a plugin's secret")
         for _ in 0..<6 { app.swipeDown() }
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "运行中")).firstMatch.waitForExistence(timeout: 5),
                       "set up, it runs:\n\(app.debugDescription)")

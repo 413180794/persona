@@ -375,6 +375,8 @@ private struct PluginActionButton<Content: View>: View {
         } label: {
             label
         }
+        // A Mac form draws a button in the accent whatever its role: red as on the phone (#1512).
+        .tint(destructive ? Theme.danger : nil)
         .disabled(model.running != nil)
         .accessibilityIdentifier("plugin-ui-action-\(action.id)")
         .confirmationDialog(action.confirm ?? "", isPresented: $asking, titleVisibility: .visible) {
@@ -425,11 +427,7 @@ private struct PluginFieldItem: View {
                     Text(item.label ?? name).lineLimit(2)
                 }
             case "secret":
-                labeled {
-                    SecureField(item.placeholder ?? "", text: text)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
+                labeled { SecretField(item.placeholder ?? "", filled: "已填写，提交时发送", text: text) }
             case "number":
                 labeled {
                     TextField(item.placeholder ?? "", text: text).keyboardType(.decimalPad)

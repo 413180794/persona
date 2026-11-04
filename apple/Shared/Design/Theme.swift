@@ -241,6 +241,12 @@ nonisolated enum Theme {
         static let labelStrong = label.weight(.semibold)
         static let labelMedium = label.weight(.medium)
         static let labelHeavy = label.weight(.bold)
+
+        #if os(iOS)
+        /// `body` for a UIKit control inside a SwiftUI page (the hidden `SecretField`): the same text style, so it
+        /// follows Dynamic Type with the rest.
+        static var uiBody: UIFont { .preferredFont(forTextStyle: .body) }
+        #endif
         #endif
     }
 

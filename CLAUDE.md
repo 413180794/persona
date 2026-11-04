@@ -146,7 +146,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | 风格、主题色 | `StyleSpec.current`：界面风格（`ComponentSpec`）× 主题色（`ColorSpec`）组合成的一个值；`Shared/Design/Styles/` 每种风格一个文件（连同它自己的颜色）；形象的配色是主题色的一个选项「跟随形象」（`docs/persona.md`） |
 
 - **组件和配方**在 `apple/Persona/DesignSystem`：表面 `.surface(…)`、按钮 `.themedButton(…)`、页面 `.themedPage()` / `.themedGroupedPage()`、plain 列表行 `.themedRow()`；
-  `Chip`、`CountBadge`、`EmptyStateView`、`Monogram`、`Loadable`。不直接写 `glassEffect` / `.glass`，不在页面里拼一个同样的小组件。
+  `Chip`、`CountBadge`、`EmptyStateView`、`Monogram`、`Loadable`、`SecretField`（token、API Key、密钥：iOS 不弹「保存密码？」，不直接写 `SecureField`）。不直接写 `glassEffect` / `.glass`，不在页面里拼一个同样的小组件。
 - **缺什么先加**：先在设计系统里加一个有名字的 token 或组件，再用。加风格就是写一个 `ComponentSpec` 加一个 `AppStyle` case，加主题色就是写一个 `ColorSpec` 加一个 `ThemeColor` case，
   别处只读 `StyleSpec.current`、不 `switch AppStyle` / `ThemeColor`。
   换视觉风格只能做成新风格（见上面「不许直接改已有界面的样子」）；BeautifulUI 的组件只在 BeautifulUI 风格下用，库代码不在 Persona 里改。

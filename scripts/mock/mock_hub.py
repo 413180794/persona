@@ -6859,7 +6859,8 @@ def _ui_view(ui, launcher=""):
 def _ui_action(ui, action, values):
     if action == "save":
         _UI_STATE.update({k: v for k, v in (values or {}).items() if k in ("note", "auto", "plan")})
-        return {"toast": "已保存", "view": _ui_view(ui)}
+        # The secret comes back in the toast's words only as "it came": the UI test checks a typed secret is sent (#1512).
+        return {"toast": "已保存，Token 已更新" if (values or {}).get("token") else "已保存", "view": _ui_view(ui)}
     if action == "refresh":
         _UI_STATE["refreshed"] += 1
         return {"toast": "已刷新"}

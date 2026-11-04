@@ -192,3 +192,8 @@
   `.macLargeSheet` 还留在栈的内容上，sheet 就缩成了工具栏的 470 × 80，什么文件都看不见。`MacFileViewerSheetTests` 用 `NSHostingView.fittingSize` 量 sheet 会开多大，加了外层修饰符时跑它。
   挪到栈外面也还是要 `bars: true`：栈的标题栏和底部工具栏是 sheet 窗口自己加的，量不进 `fittingSize`。写成 `bars: false` 时 sheet 有 1216 × 821，比 820 高的主窗口还高，
   第一次启动就在 SwiftUI 的窗口布局里断言崩了（`EXC_BREAKPOINT`，栈上全是 `_layoutSubtreeWithOldSize`）。
+- 插件页面的进度条、额度条在 Mac 上是灰的（2026-11-04，#1512）：只在**非活动窗口**里灰，窗口在前台、是 key window 时按 `.tint` 画（主题色 / 红 / 橙），
+  同一个窗口里的开关、按钮底色也一起变灰，这是系统对非活动窗口的统一画法，不是 tint 没生效，不改。结论要用两张图对比：同一个实例分别在活动、非活动时 `screencapture -l <窗口号>`。
+  截图别把 App 强行拉到前台（`osascript … set frontmost`、每张都重启 App）：用户在这台 Mac 上干活，一直被打断；要活动窗口的图就请用户自己把窗口切到前面。
+- `Button(role: .destructive)` 在 Mac 的 grouped `Form` 里画成主题色（蓝），不像 iPhone 的列表那样自动变红（2026-11-04，#1512 截图发现）。
+  要红就 `.tint(Theme.danger)`（Form 里的按钮）或 `.foregroundStyle(Theme.danger)`（borderless 按钮）；确认框（`confirmationDialog`）里的不用管，系统按 role 画。

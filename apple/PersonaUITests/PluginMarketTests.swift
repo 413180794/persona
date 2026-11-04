@@ -124,6 +124,7 @@ final class PluginMarketTests: XCTestCase {
         let added = app.staticTexts["https://example.com/private/"]
         XCTAssertTrue(added.waitForExistence(timeout: 10), "the market is not listed:\n\(app.debugDescription)")
         XCTAssertTrue(spec.waitForNonExistence(timeout: 5), "the sheet stays")
+        PasswordPrompt.assertNone(app, "a market's token")
         shot(app, "markets-added")
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "t0ken")).firstMatch.exists, "a token is never shown")
 
@@ -178,6 +179,46 @@ final class PluginMarketTests: XCTestCase {
         shot(app, "confirm")
         app.buttons["plugin-ui-confirm"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["已停用"].waitForExistence(timeout: 10))
+    }
+
+    /// A plugin page's secret field, filled in and left: the page goes away without iOS offering to save the secret as
+    /// a password (#1512).
+    @MainActor func testASecretFieldIsNotAPassword() throws {
+        let app = try launch(["-openPlugin", "example-gateway"])
+        let page = app.buttons["plugin-page-home"]
+        XCTAssertTrue(page.waitForExistence(timeout: 15), "no 页面 row:\n\(app.debugDescription)")
+        page.tap()
+        XCTAssertTrue(app.staticTexts["¥ 182.40"].waitForExistence(timeout: 10), "the view is not drawn:\n\(app.debugDescription)")
+        // A text field and a hidden one, both typed in: what a login form looks like to AutoFill.
+        let note = app.textFields.matching(NSPredicate(format: "placeholderValue == %@", "写点什么")).firstMatch
+        scrollTo(note, in: app)
+        XCTAssertTrue(note.waitForExistence(timeout: 5), "no 备注 field:\n\(app.debugDescription)")
+        note.tap()
+        note.typeText("me")
+        let secret = app.secureTextFields.matching(NSPredicate(format: "placeholderValue == %@", "不回显")).firstMatch
+        scrollTo(secret, in: app)
+        XCTAssertTrue(secret.waitForExistence(timeout: 5), "no 管理 Token field:\n\(app.debugDescription)")
+        secret.tap()
+        secret.typeText("t0ken-\(Int.random(in: 1000...9999))\n")
+        // Out of the field it is empty, says it is filled in, and still goes with the form.
+        let filled = app.secureTextFields.matching(NSPredicate(format: "placeholderValue == %@", "已填写，提交时发送")).firstMatch
+        XCTAssertTrue(filled.waitForExistence(timeout: 5), "the field does not say it is filled in:\n\(app.debugDescription)")
+        shot(app, "page-secret")
+        let save = app.buttons["plugin-ui-action-save"]
+        scrollTo(save, in: app)
+        save.tap()
+        XCTAssertTrue(app.staticTexts["已保存，Token 已更新"].waitForExistence(timeout: 10), "the secret is not sent:\n\(app.debugDescription)")
+
+        // Typed again and left with the keyboard still up: the hardest case.
+        let again = app.secureTextFields.matching(NSPredicate(format: "placeholderValue == %@", "不回显")).firstMatch
+        scrollTo(again, in: app)
+        XCTAssertTrue(again.waitForExistence(timeout: 5), "the field is not empty again after the save:\n\(app.debugDescription)")
+        again.tap()
+        again.typeText("t0ken-2")
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(page.waitForExistence(timeout: 5), "not back on the plugin:\n\(app.debugDescription)")
+        PasswordPrompt.assertNone(app, "a plugin page's secret field")
+        XCTAssertTrue(page.isHittable, "something covers the plugin's page:\n\(app.debugDescription)")
     }
 
     @MainActor func testALauncherShowsThePluginsSection() throws {

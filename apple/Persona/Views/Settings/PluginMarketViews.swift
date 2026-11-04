@@ -265,6 +265,7 @@ struct MarketPluginDetailView: View {
                 Button(role: .destructive) { confirmRemove = true } label: {
                     Label { Text("卸载").lineLimit(1) } icon: { Image(systemName: Theme.Icon.delete) }
                 }
+                .tint(Theme.danger) // a Mac form draws a button in the accent whatever its role (#1512)
                 .disabled(page.working)
                 .accessibilityIdentifier("market-uninstall")
                 .confirmationDialog("卸载「\(p.name)」？", isPresented: $confirmRemove, titleVisibility: .visible) {
@@ -563,10 +564,8 @@ private struct MarketTokenSheet: View {
                     }
                 }
                 Section {
-                    SecureField(hasToken ? "输入新的 token 替换" : (asksSpec ? "公开的市场不用填" : "输入 token"), text: $token)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .accessibilityIdentifier("market-token")
+                    SecretField(hasToken ? "输入新的 token 替换" : (asksSpec ? "公开的市场不用填" : "输入 token"), filled: "已填写，点保存",
+                                text: $token, identifier: "market-token")
                 } header: {
                     SettingsHeading(asksSpec ? "Token（可选）" : "Token")
                 } footer: {
@@ -575,6 +574,7 @@ private struct MarketTokenSheet: View {
                 if !asksSpec && hasToken {
                     Section {
                         Button(role: .destructive) { submit(clearing: true) } label: { Text("去掉 token").lineLimit(1) }
+                            .tint(Theme.danger)
                             .disabled(busy)
                     }
                 }

@@ -743,3 +743,16 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
 
 - **内容规则的 `url-filter` 不认 `|`**：写成 `^(about|data):` 整张表编译失败，没有报错（`try?`），预览按设计退回「无法隔离网络」页。一个协议写一条 `ignore-previous-rules`。
 - **`loadHTMLString(_, baseURL: nil)` 的页面地址是 `applewebdata://…`，不是 about:**：只放行 about: 的规则和导航判断把页面自己挡了。`baseURL` 给 `about:blank`，两个协议都放行。
+
+## 填 token / 密钥的框弹「保存密码？」：`.oneTimeCode` 挡不住（2026-11-04，#1512）
+
+- 现象：插件市场的 token、插件页面的 secret 字段、插件的密钥，输完离开页面（返回、关 sheet）系统弹「保存密码？」。iOS 27 模拟器上能稳定复现，
+  条件是**旁边有一个填了字的普通输入框**（市场的地址、插件页面的备注）：AutoFill 把它当成用户名、把隐藏框当成密码。只有一个隐藏框的 sheet（插件密钥）在模拟器上不弹。
+- `.textContentType(.oneTimeCode)` 不够：SwiftUI 的 `SecureField` 加上它照样弹，连 UIKit 的 `UITextField` 直接设 `textContentType = .oneTimeCode` 也弹（同一个 UI 测试试过）。
+  配对页那次（上面「SSH 隧道」）管用，是因为那里是推下一页、隐藏框还在；这里是框被移出界面。
+- 管用的是**框离开界面时是空的**：设计系统的 `SecretField`（`DesignSystem/SecretEntry.swift`）在 iOS 上是一个 `UITextField`，交出键盘（`resignFirstResponder`）或离开窗口前先把自己清空，
+  值留在绑定里，框里写「已填写…」。用 `.onChange(of: focus)` 在 SwiftUI 里清不行：键盘还在时直接点返回，清空赶不上，照样弹。
+- 以后凡是 token、API Key、别人的密钥（不是这个 App 的登录密码）都用 `SecretField`，不直接写 `SecureField`。
+  UI 测试 `PluginMarketTests.testASecretFieldIsNotAPassword`、`testManageMarkets` 用 `PasswordPrompt.assertNone` 查系统的「保存密码？」sheet（标题「保存密码？」、按钮「以后」）。
+- 真机：同样的启发式，行为应该一致；真机上还取决于 iCloud 钥匙串 / 密码 App 的「自动填充密码」开关，关着的设备本来就不弹，没在真机上复现过。
+- iOS 截图里正在输入的隐藏框整块是空白（连占位文字都没有），改动前后一样，不是 bug。
