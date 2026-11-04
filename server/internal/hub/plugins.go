@@ -70,6 +70,12 @@ type PluginView struct {
 	Contributes map[string][]string `json:"contributes,omitempty"`
 	NeedsSetup  []string            `json:"needs_setup,omitempty"`
 	Warnings    []string            `json:"warnings,omitempty"`
+
+	// A plugin from a market (plugin_autoupgrade.go): its own auto-upgrade switch, its newer version and what
+	// happened last with an upgrade.
+	AutoUpgrade *bool              `json:"auto_upgrade,omitempty"`
+	Upgrade     *PluginUpgrade     `json:"upgrade,omitempty"`
+	UpgradeNote *PluginUpgradeNote `json:"upgrade_note,omitempty"`
 }
 
 // Statuses besides the host's.
@@ -116,8 +122,9 @@ type plugins struct {
 	// skillsSent remembers which skill digests each machine was sent (machine id → *sync.Map of name → digest), so
 	// the files go once (again after the hub restarts).
 	skillsSent sync.Map
-	// markets are the plugin markets (plugin_market.go).
-	markets markets
+	// markets are the plugin markets (plugin_market.go); upgrades their plugins' auto-upgrade (plugin_autoupgrade.go).
+	markets  markets
+	upgrades pluginUpgrades
 	// badges are the plugins' badges on their nav_pages' entries ("<plugin>/<ui>" → plugin.Badge; plugin_ui.go).
 	badges sync.Map
 }
@@ -209,6 +216,9 @@ func (ps *plugins) view(ctx context.Context, p *plugin.Plugin) PluginView {
 		if len(v.NeedsSetup) > 0 {
 			v.Status = pluginNeedsSetup
 		}
+	}
+	if ps.h != nil {
+		ps.h.pluginUpgrades().decorate(ctx, &v, p)
 	}
 	return v
 }
@@ -331,17 +341,27 @@ func (ps *plugins) changed(c plugin.Change) {
 			ps.h.forgetConnector(ctx, id)
 		}
 	}
-	if c.Kind == "upgraded" {
-		go ps.watchUpgrade(ctx, c.ID)
+	if c.Kind == "upgraded" && c.Old != nil {
+		from := c.Old.Record.Version
+		to := ""
+		if p := ps.reg.Get(c.ID); p != nil {
+			to = p.Record.Version
+		}
+		go func() {
+			rolledBack, why := ps.watchUpgrade(ctx, c.ID)
+			if ps.h != nil {
+				ps.h.pluginUpgrades().watched(ctx, c.ID, from, to, rolledBack, why)
+			}
+		}()
 	}
 }
 
 // watchUpgrade rolls an upgraded plugin back when it does not come up (only one that runs by itself or for a
-// connector that is on: a plugin started by calls is not started for this).
-func (ps *plugins) watchUpgrade(ctx context.Context, id string) {
+// connector that is on: a plugin started by calls is not started for this), and says whether it did and why.
+func (ps *plugins) watchUpgrade(ctx context.Context, id string) (rolledBack bool, why string) {
 	hp := ps.get(id)
 	if hp == nil || hp.proc == nil {
-		return
+		return false, ""
 	}
 	wctx, cancel := context.WithTimeout(ctx, host.ReadyWithin+5*time.Second)
 	defer cancel()
@@ -349,19 +369,21 @@ func (ps *plugins) watchUpgrade(ctx context.Context, id string) {
 		state, why := hp.proc.Status()
 		switch state {
 		case host.StateRunning:
-			return
+			return false, ""
 		case host.StateError:
 			ps.logf("plugin %s: the new version does not come up (%s): back to the one before", id, why)
 			if _, err := ps.reg.Rollback(ctx, id, "hub"); err != nil {
 				ps.logf("plugin %s: rollback: %v", id, err)
+				return false, ""
 			}
-			return
+			return true, why
 		}
 		select {
 		case <-wctx.Done():
 		case <-hp.proc.Changes():
 		}
 	}
+	return false, ""
 }
 
 // apply makes plugin id run as the registry says: whatever ran of it stops (its connectors leave the registry), and

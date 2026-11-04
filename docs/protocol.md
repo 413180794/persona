@@ -40,7 +40,7 @@
 
 - P0 新增：`tls`、`endpoints`、`client_hello`、`heartbeat`、`app_ping`、`error_codes`、`client_ops`、`ws_notify`、`lock_test`、`android_update`。
 - 已有：`client_msg_id`、`send_refusals`、`screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`、`terminal_stream`、`terminal_control`、`terminal_scroll`、`terminal_click`、`file_upload`。
-- 另有：`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](plugins.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[plugins.md](plugins.md)「UI 插槽」）、`desktops`（桌面端登记，见下文 `register_desktop`）。
+- 另有：`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](plugins.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[plugins.md](plugins.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[plugins.md](plugins.md)「自动升级」）、`desktops`（桌面端登记，见下文 `register_desktop`）。
 
 能力位表示实现支持；`tls` 不代表已经开启监听，要同时看 `tls_port` / `fp`。新客户端遇到旧 hub 时按能力位退回旧行为。机器列表的 `node_version` / `node_mismatch` 用来提示 node 与 hub 的部署版本是否一致（那台电脑上的 personad 不是 hub 这次部署的，`deploy.sh` 只部署了一部分；hub 连上时也记一行日志）。新字段都是可选的，App 目前靠字段在不在判断；以后有「旧 hub 会误解」的新请求时先查这里。
 

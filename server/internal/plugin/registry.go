@@ -330,6 +330,21 @@ func (r *Registry) PreviewMarket(ctx context.Context, mk *Market, marketID strin
 	return pv, nil
 }
 
+// MorePermissions says whether m asks for more than the installed cur was granted (its upgrade needs the user's
+// confirmation).
+func MorePermissions(cur *Plugin, m *Manifest) bool {
+	return !cur.Record.Granted.Covers(m.Permissions) || (m.Runtime != nil && cur.Manifest.Runtime == nil) ||
+		slices.ContainsFunc(m.Topics(), func(t string) bool { return !slices.Contains(cur.Manifest.Topics(), t) }) ||
+		slices.ContainsFunc(m.Surfaces(), func(t string) bool { return !slices.Contains(cur.Manifest.Surfaces(), t) })
+}
+
+// Discard drops a preview that will not be installed.
+func (r *Registry) Discard(previewID string) {
+	if pv, _ := r.take(previewID); pv != nil {
+		r.dropStaging(pv)
+	}
+}
+
 // PreviewMarketOf is the market a preview's package comes from ("" when it does not, or the preview is gone).
 func (r *Registry) PreviewMarketOf(previewID string) string {
 	r.mu.Lock()
@@ -422,9 +437,7 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 	}
 	if upgrade != "" {
 		pv.Upgrade, pv.From = true, cur.Record.Version
-		pv.MorePermissions = !cur.Record.Granted.Covers(m.Permissions) || (m.Runtime != nil && cur.Manifest.Runtime == nil) ||
-			slices.ContainsFunc(m.Topics(), func(t string) bool { return !slices.Contains(cur.Manifest.Topics(), t) }) ||
-			slices.ContainsFunc(m.Surfaces(), func(t string) bool { return !slices.Contains(cur.Manifest.Surfaces(), t) })
+		pv.MorePermissions = MorePermissions(cur, m)
 		pv.AddedPermissions = Added(cur.Manifest, m)
 	}
 	r.previews[pv.ID] = pv

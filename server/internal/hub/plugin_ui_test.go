@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -78,7 +79,7 @@ func serveUIPluginForTest() {
 			map[string]any{"type": "field", "name": "note", "label": "备注", "kind": "text"},
 			map[string]any{"type": "button", "title": "保存", "action": map[string]any{"id": "save", "submit": true}}}}}}, nil
 	}
-	_ = pserve.Serve(context.Background(), os.Stdin, os.Stdout, pserve.Program{ID: "example-ui", Version: "1.0.0",
+	_ = pserve.Serve(context.Background(), os.Stdin, os.Stdout, pserve.Program{ID: "example-ui", Version: cmp.Or(os.Getenv("EXAMPLE_UI_VERSION"), "1.0.0"),
 		Init: func(_ context.Context, _ plugin.InitializeParams, h *pserve.Hub) (map[string]any, error) {
 			hub = h
 			return nil, nil

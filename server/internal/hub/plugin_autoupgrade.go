@@ -1,0 +1,573 @@
+package hub
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"math/rand/v2"
+	"net/http"
+	"slices"
+	"sync"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/plugin"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// Plugins upgrade themselves from their markets (docs/plugins.md「自动升级」): the hub reads the registered markets
+// every few hours and installs a newer version of a plugin it installed from one, when the version asks for nothing
+// more than the user granted and nothing is using the plugin. One that asks for more waits for the user; one that
+// does not come up is rolled back (watchUpgrade) and not tried again. Built-in, hub.json's and plugins installed
+// from elsewhere (a directory, a file, a URL, a remote socket) are never upgraded by the hub.
+
+const (
+	pluginUpgradesKey  = "plugin_upgrades"
+	pluginUpgradeActor = "自动升级"
+	// pluginUpgradeEvery is how often it looks (reading a market only when its index is due); pluginUpgradeFirst is
+	// the first look after the hub starts.
+	pluginUpgradeEvery = time.Minute
+	pluginUpgradeFirst = 2 * time.Minute
+	// marketJitter spreads the markets' reads; marketBackoff is the first wait after a read failed (doubling, up to
+	// marketStale).
+	marketJitter  = 30 * time.Minute
+	marketBackoff = 15 * time.Minute
+)
+
+// States of a newer version (PluginUpgrade.State).
+const (
+	upgradeAvailable    = "available"        // it goes in at the next look
+	upgradeWaitingIdle  = "waiting_idle"     // the plugin (or the assistant) is busy
+	upgradeNeedsConsent = "needs_permission" // it asks for more: the user confirms it in the app
+	upgradeOff          = "off"              // auto-upgrade is off for it (or for all)
+	upgradeSkipped      = "skipped"          // this version rolled back: not tried again
+	upgradeFailed       = "failed"           // installing it failed: tried again after the market's next read
+	upgradeIncompatible = "incompatible"     // no package for this hub, or a newer hub needed
+)
+
+// pluginUpgradeSettings are the switches and what the hub remembers (the hub's settings, key plugin_upgrades).
+type pluginUpgradeSettings struct {
+	Auto *bool    `json:"auto,omitempty"` // nil: on
+	Off  []string `json:"off,omitempty"`  // plugins the user switched off
+	// Skipped: plugin → the version that rolled back; Notified: plugin → the version the user was told asks for more.
+	Skipped  map[string]string            `json:"skipped,omitempty"`
+	Notified map[string]string            `json:"notified,omitempty"`
+	Last     map[string]PluginUpgradeNote `json:"last,omitempty"`
+}
+
+// PluginUpgradeNote is what happened last with a plugin's upgrade, for its page in the app.
+type PluginUpgradeNote struct {
+	Kind   string    `json:"kind"` // upgraded | rolled_back | needs_permission | failed
+	From   string    `json:"from"`
+	To     string    `json:"to"`
+	Detail string    `json:"detail,omitempty"`
+	At     time.Time `json:"at"`
+}
+
+// PluginUpgrade is a newer version of a market plugin (GET /api/v1/plugins/-/upgrades, PluginView.upgrade).
+type PluginUpgrade struct {
+	ID               string                  `json:"id"`
+	Name             string                  `json:"name"`
+	Market           string                  `json:"market"`
+	From             string                  `json:"from"`
+	To               string                  `json:"to"`
+	State            string                  `json:"state"`
+	AddedPermissions []plugin.PermissionLine `json:"added_permissions,omitempty"`
+	Detail           string                  `json:"detail,omitempty"`
+}
+
+type pluginUpgrades struct {
+	h   *Hub
+	run sync.Mutex // one look at a time
+
+	mu       sync.Mutex
+	loaded   bool
+	settings pluginUpgradeSettings
+	waiting  map[string]string // plugin → why it waits (the last look found it busy)
+	failed   map[string]string // plugin → the version that failed to install
+	inflight map[string]string // plugin → the version being installed by the hub
+	fails    map[string]int    // market → reads failed in a row
+	jitter   map[string]time.Duration
+	// busy says why plugin id may not be upgraded now ("" when it may); tests replace it.
+	busy func(id string) string
+}
+
+// pluginUpgrades is the hub's auto-upgrade (nil without plugins).
+func (h *Hub) pluginUpgrades() *pluginUpgrades {
+	if h.plugins == nil {
+		return nil
+	}
+	u := &h.plugins.upgrades
+	u.mu.Lock()
+	if u.h == nil {
+		u.h = h
+		u.busy = h.pluginBusy
+	}
+	u.mu.Unlock()
+	return u
+}
+
+// pluginBusy is why plugin id is in use: a call or a request in flight, or the assistant working (it may call the
+// plugin's tools next).
+func (h *Hub) pluginBusy(id string) string {
+	if hp := h.plugins.get(id); hp != nil && hp.proc != nil && !hp.proc.Idle() {
+		return "插件正在用"
+	}
+	for _, m := range h.machinesNow() {
+		for _, s := range h.decorated(m) {
+			if s.Assistant && (s.State == proto.StateWorking || s.Status == proto.StatusWorking) {
+				return "助手正在工作"
+			}
+		}
+	}
+	return ""
+}
+
+// pluginUpgradeLoop looks for newer versions until ctx ends.
+func (h *Hub) pluginUpgradeLoop(ctx context.Context) {
+	u := h.pluginUpgrades()
+	if u == nil {
+		return
+	}
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(pluginUpgradeFirst):
+	}
+	t := time.NewTicker(pluginUpgradeEvery)
+	defer t.Stop()
+	for {
+		u.check(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
+// check reads the markets that are due and upgrades what may be.
+func (u *pluginUpgrades) check(ctx context.Context) {
+	if !u.run.TryLock() {
+		return
+	}
+	defer u.run.Unlock()
+	h := u.h
+	if h.marketStore() == nil || !h.plugins.reg.HasStore() || h.marketsLoad(ctx) != nil {
+		return
+	}
+	u.load(ctx)
+	u.readMarkets(ctx)
+	u.upgrade(ctx)
+}
+
+// load reads the settings once.
+func (u *pluginUpgrades) load(ctx context.Context) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.loaded {
+		return
+	}
+	if u.h.store != nil {
+		if _, err := u.h.store.Setting(ctx, pluginUpgradesKey, &u.settings); err != nil {
+			return // tried again at the next look
+		}
+	}
+	u.loaded = true
+}
+
+// change changes the settings and keeps them.
+func (u *pluginUpgrades) change(ctx context.Context, f func(s *pluginUpgradeSettings)) error {
+	u.load(ctx)
+	u.mu.Lock()
+	f(&u.settings)
+	s := u.settings
+	u.mu.Unlock()
+	if u.h.store == nil {
+		return nil
+	}
+	return u.h.store.PutSetting(ctx, pluginUpgradesKey, s)
+}
+
+func (s *pluginUpgradeSettings) note(id string, n PluginUpgradeNote) {
+	if s.Last == nil {
+		s.Last = map[string]PluginUpgradeNote{}
+	}
+	s.Last[id] = n
+}
+
+// readMarkets reads each market whose index is due: marketStale (and a jitter of its own) after the last read, or
+// after a backoff when that one failed. A market is logged when it stops answering and when it answers again.
+func (u *pluginUpgrades) readMarkets(ctx context.Context) {
+	h := u.h
+	now := time.Now()
+	for _, v := range h.marketViews() {
+		u.mu.Lock()
+		if u.jitter == nil {
+			u.jitter, u.fails = map[string]time.Duration{}, map[string]int{}
+		}
+		j, ok := u.jitter[v.ID]
+		if !ok {
+			j = rand.N(marketJitter)
+			u.jitter[v.ID] = j
+		}
+		wait := marketStale + j
+		if v.Error != "" {
+			wait = min(marketBackoff<<min(max(u.fails[v.ID]-1, 0), 8), marketStale)
+		}
+		u.mu.Unlock()
+		if v.FetchedAt != nil && now.Sub(*v.FetchedAt) < wait {
+			continue
+		}
+		rctx, cancel := context.WithTimeout(ctx, 4*time.Minute)
+		_, err := h.marketRead(rctx, v.ID)
+		cancel()
+		u.mu.Lock()
+		n := u.fails[v.ID]
+		if err != nil {
+			u.fails[v.ID] = n + 1
+		} else {
+			delete(u.fails, v.ID)
+			for id := range u.failed { // a fresh index: what failed may be tried again
+				if p := h.plugins.reg.Get(id); p == nil || plugin.FromMarket(p.Record.Origin) == v.ID {
+					delete(u.failed, id)
+				}
+			}
+		}
+		u.mu.Unlock()
+		switch {
+		case err != nil && n == 0:
+			h.logf("plugin market %s: %v (trying again later)", v.ID, err)
+		case err == nil && n > 0:
+			h.logf("plugin market %s: answering again", v.ID)
+		}
+	}
+}
+
+// granted is the digest of what the user granted plugin p.
+func granted(p *plugin.Plugin) string {
+	if p.Record.GrantedDigest != "" {
+		return p.Record.GrantedDigest
+	}
+	return plugin.Digest(p.Manifest)
+}
+
+// candidate is p's newer version in its market, and where it stands (ok false: none, or p is not a market plugin).
+func (u *pluginUpgrades) candidate(p *plugin.Plugin) (up PluginUpgrade, rec plugin.MarketRecord, e *plugin.MarketEntry, ok bool) {
+	mid := plugin.FromMarket(p.Record.Origin)
+	if p.Record.Source != plugin.SourceInstalled || mid == "" {
+		return up, rec, nil, false
+	}
+	rec, e, err := u.h.marketEntry(mid, p.Record.ID)
+	if err != nil || !plugin.NewerVersion(e.Parsed.Version, p.Record.Version) {
+		return up, rec, nil, false
+	}
+	m := e.Parsed
+	id := p.Record.ID
+	up = PluginUpgrade{ID: id, Name: p.Manifest.Name, Market: mid, From: p.Record.Version, To: m.Version}
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	s := u.settings
+	switch _, engines := plugin.CheckEngines(m, u.h.build.Number); {
+	case e.PackageFor(plugin.Platform()) == nil:
+		up.State, up.Detail = upgradeIncompatible, "没有这台 hub（"+plugin.Platform()+"）能用的包"
+	case engines != nil:
+		up.State, up.Detail = upgradeIncompatible, engines.Error()
+	case s.Skipped[id] == m.Version:
+		up.State, up.Detail = upgradeSkipped, "这个版本上次起不来，已回到原来的版本"
+	case plugin.MorePermissions(p, m) || plugin.Digest(m) != granted(p):
+		up.State, up.AddedPermissions = upgradeNeedsConsent, plugin.Added(p.Manifest, m)
+	case (s.Auto != nil && !*s.Auto) || slices.Contains(s.Off, id):
+		up.State = upgradeOff
+	case u.failed[id] == m.Version:
+		up.State = upgradeFailed
+		if n, ok := s.Last[id]; ok && n.Kind == upgradeFailed {
+			up.Detail = n.Detail
+		}
+	case u.waiting[id] != "":
+		up.State, up.Detail = upgradeWaitingIdle, u.waiting[id]
+	default:
+		up.State = upgradeAvailable
+	}
+	return up, rec, e, true
+}
+
+// upgrade installs every newer version that may go in now, and tells the user once of one that asks for more.
+func (u *pluginUpgrades) upgrade(ctx context.Context) {
+	h := u.h
+	for _, p := range h.plugins.reg.List() {
+		id := p.Record.ID
+		up, rec, e, ok := u.candidate(p)
+		if !ok {
+			u.mu.Lock()
+			n, had := u.settings.Last[id]
+			u.mu.Unlock()
+			if had && (n.Kind == upgradeNeedsConsent || n.Kind == upgradeFailed) { // the user upgraded it
+				_ = u.change(ctx, func(s *pluginUpgradeSettings) { delete(s.Last, id) })
+			}
+			continue
+		}
+		switch up.State {
+		case upgradeNeedsConsent:
+			u.mu.Lock()
+			told := u.settings.Notified[id] == up.To
+			u.mu.Unlock()
+			if !told {
+				n := PluginUpgradeNote{Kind: upgradeNeedsConsent, From: up.From, To: up.To, Detail: morePermissionsText(up.AddedPermissions), At: time.Now()}
+				_ = u.change(ctx, func(s *pluginUpgradeSettings) {
+					if s.Notified == nil {
+						s.Notified = map[string]string{}
+					}
+					s.Notified[id] = up.To
+					s.note(id, n)
+				})
+				u.tell(id, n, "插件有新版本", fmt.Sprintf("%s %s %s，去确认", up.Name, up.To, n.Detail))
+			}
+		case upgradeAvailable, upgradeWaitingIdle:
+			why := u.busy(id)
+			u.mu.Lock()
+			if u.waiting == nil {
+				u.waiting = map[string]string{}
+			}
+			if why != "" {
+				u.waiting[id] = why
+			} else {
+				delete(u.waiting, id)
+			}
+			u.mu.Unlock()
+			if why == "" {
+				u.install(ctx, p, rec, e, up)
+			}
+		}
+	}
+}
+
+// morePermissionsText says what a newer version asks for more.
+func morePermissionsText(added []plugin.PermissionLine) string {
+	if len(added) == 0 {
+		return "要的权限有变化"
+	}
+	count := []string{"", "一", "两", "三", "四", "五"}
+	text := fmt.Sprintf("要多 %d 项权限：", len(added))
+	if len(added) < len(count) {
+		text = "要多" + count[len(added)] + "项权限："
+	}
+	for i, l := range added {
+		if i > 0 {
+			text += "、"
+		}
+		text += l.Title
+		if l.Detail != "" {
+			text += "（" + l.Detail + "）"
+		}
+	}
+	return text
+}
+
+// install upgrades p to up.To from its market (watchUpgrade then says whether it came up: watched).
+func (u *pluginUpgrades) install(ctx context.Context, p *plugin.Plugin, rec plugin.MarketRecord, e *plugin.MarketEntry, up PluginUpgrade) {
+	h, reg, id := u.h, u.h.plugins.reg, p.Record.ID
+	mk, err := h.market(rec)
+	var pv *plugin.Preview
+	if err == nil {
+		pv, err = reg.PreviewMarket(ctx, mk, rec.ID, e, id)
+	}
+	if err == nil && (pv.MorePermissions || len(pv.AddedPermissions) > 0 || pv.Digest != granted(p)) {
+		reg.Discard(pv.ID) // the index said the same as the package, so this does not happen
+		err = errors.New("下载的包要的权限比索引里写的多")
+	}
+	if err == nil {
+		u.mu.Lock()
+		if u.inflight == nil {
+			u.inflight = map[string]string{}
+		}
+		u.inflight[id] = up.To
+		u.mu.Unlock()
+		if _, err = reg.Upgrade(ctx, id, pv.ID, "", pluginUpgradeActor); err != nil {
+			u.mu.Lock()
+			delete(u.inflight, id)
+			u.mu.Unlock()
+		}
+	}
+	if err == nil {
+		h.logf("plugin %s: upgraded itself from %s to %s", id, up.From, up.To)
+		return
+	}
+	h.logf("plugin %s: upgrading to %s: %v", id, up.To, err)
+	u.mu.Lock()
+	if u.failed == nil {
+		u.failed = map[string]string{}
+	}
+	u.failed[id] = up.To
+	u.mu.Unlock()
+	n := PluginUpgradeNote{Kind: upgradeFailed, From: up.From, To: up.To, Detail: err.Error(), At: time.Now()}
+	_ = u.change(ctx, func(s *pluginUpgradeSettings) { s.note(id, n) })
+	h.broadcast(map[string]any{"type": "plugin_upgrade", "plugin": id, "note": n})
+}
+
+// watched is how an upgrade of plugin id from one version to another ended: rolled back (that version is skipped from
+// now on, whoever upgraded it), or up (told when the hub upgraded it).
+func (u *pluginUpgrades) watched(ctx context.Context, id, from, to string, rolledBack bool, why string) {
+	if u == nil {
+		return
+	}
+	u.mu.Lock()
+	auto := u.inflight[id] == to
+	delete(u.inflight, id)
+	u.mu.Unlock()
+	name := id
+	if p := u.h.plugins.reg.Get(id); p != nil {
+		name = p.Manifest.Name
+	}
+	if rolledBack {
+		n := PluginUpgradeNote{Kind: "rolled_back", From: from, To: to, Detail: why, At: time.Now()}
+		_ = u.change(ctx, func(s *pluginUpgradeSettings) {
+			if s.Skipped == nil {
+				s.Skipped = map[string]string{}
+			}
+			s.Skipped[id] = to
+			s.note(id, n)
+		})
+		u.tell(id, n, "插件升级没成功", fmt.Sprintf("%s %s 起不来，已回到 %s，不再自动升级到这个版本", name, to, from))
+		return
+	}
+	if !auto {
+		_ = u.change(ctx, func(s *pluginUpgradeSettings) { delete(s.Last, id) })
+		return
+	}
+	n := PluginUpgradeNote{Kind: "upgraded", From: from, To: to, At: time.Now()}
+	_ = u.change(ctx, func(s *pluginUpgradeSettings) { s.note(id, n) })
+	u.tell(id, n, "插件已自动升级", fmt.Sprintf("%s 升级到了 %s", name, to))
+}
+
+// tell tells the apps (the plugin's page) and sends a quiet push, like the hub's own update.
+func (u *pluginUpgrades) tell(id string, n PluginUpgradeNote, title, body string) {
+	u.h.broadcast(map[string]any{"type": "plugin_upgrade", "plugin": id, "note": n})
+	u.h.push.send(map[string]any{
+		"aps": map[string]any{"alert": map[string]any{"title": title, "body": body}, "thread-id": "plugin_upgrade",
+			"interruption-level": "passive"},
+		"plugin_upgrade": map[string]any{"plugin": id, "kind": n.Kind, "version": n.To},
+	}, "plugin_upgrade."+id, nil)
+}
+
+// auto says whether plugin id upgrades itself (both switches on).
+func (u *pluginUpgrades) auto(id string) (global, own bool) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.settings.Auto == nil || *u.settings.Auto, !slices.Contains(u.settings.Off, id)
+}
+
+// decorate adds to a market plugin's view its switch, its newer version and what happened last.
+func (u *pluginUpgrades) decorate(ctx context.Context, v *PluginView, p *plugin.Plugin) {
+	if u == nil || p.Record.Source != plugin.SourceInstalled || plugin.FromMarket(p.Record.Origin) == "" {
+		return
+	}
+	u.load(ctx)
+	_, own := u.auto(p.Record.ID)
+	v.AutoUpgrade = &own
+	if up, _, _, ok := u.candidate(p); ok {
+		v.Upgrade = &up
+	}
+	u.mu.Lock()
+	if n, ok := u.settings.Last[p.Record.ID]; ok {
+		v.UpgradeNote = &n
+	}
+	u.mu.Unlock()
+}
+
+// upgradesView is GET /api/v1/plugins/-/upgrades.
+type upgradesView struct {
+	Auto     bool                         `json:"auto"`
+	Upgrades []PluginUpgrade              `json:"upgrades"`
+	Off      []string                     `json:"off"`
+	Last     map[string]PluginUpgradeNote `json:"last"`
+}
+
+func (u *pluginUpgrades) view(ctx context.Context) upgradesView {
+	u.load(ctx)
+	v := upgradesView{Upgrades: []PluginUpgrade{}}
+	for _, p := range u.h.plugins.reg.List() {
+		if up, _, _, ok := u.candidate(p); ok {
+			v.Upgrades = append(v.Upgrades, up)
+		}
+	}
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	v.Auto = u.settings.Auto == nil || *u.settings.Auto
+	v.Off = append([]string{}, u.settings.Off...)
+	v.Last = map[string]PluginUpgradeNote{}
+	for id, n := range u.settings.Last {
+		v.Last[id] = n
+	}
+	return v
+}
+
+// upgradeRoutes are the auto-upgrade's switches and list (a device with full rights).
+func (h *Hub) upgradeRoutes(api *http.ServeMux) {
+	gate := func(f http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if principalOf(r.Context()).Role != roleFull {
+				writeErr(w, http.StatusForbidden, errors.New("this device can only read and answer"))
+				return
+			}
+			if h.pluginUpgrades() == nil {
+				writeErrCode(w, http.StatusServiceUnavailable, "no_plugins", errors.New("plugins are not set up"))
+				return
+			}
+			f(w, r)
+		}
+	}
+	api.HandleFunc("GET /api/v1/plugins/-/upgrades", gate(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, h.pluginUpgrades().view(r.Context()))
+	}))
+	api.HandleFunc("PUT /api/v1/plugins/-/upgrades", gate(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Auto *bool `json:"auto"`
+		}
+		if !readPluginJSON(w, r, &in) {
+			return
+		}
+		if in.Auto == nil {
+			writeErrCode(w, http.StatusBadRequest, "bad_request", errors.New("auto is missing"))
+			return
+		}
+		u := h.pluginUpgrades()
+		if err := u.change(r.Context(), func(s *pluginUpgradeSettings) { s.Auto = in.Auto }); err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, u.view(r.Context()))
+	}))
+	api.HandleFunc("PUT /api/v1/plugins/{id}/-/auto-upgrade", gate(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Auto *bool `json:"auto"`
+		}
+		if !readPluginJSON(w, r, &in) {
+			return
+		}
+		if in.Auto == nil {
+			writeErrCode(w, http.StatusBadRequest, "bad_request", errors.New("auto is missing"))
+			return
+		}
+		id := r.PathValue("id")
+		p := h.plugins.reg.Get(id)
+		if p == nil {
+			writeErrCode(w, http.StatusNotFound, "not_found", errors.New("no such plugin"))
+			return
+		}
+		if p.Record.Source != plugin.SourceInstalled || plugin.FromMarket(p.Record.Origin) == "" {
+			writeErrCode(w, http.StatusBadRequest, "not_from_market", errors.New("只有从插件市场装的插件会自动升级"))
+			return
+		}
+		u := h.pluginUpgrades()
+		if err := u.change(r.Context(), func(s *pluginUpgradeSettings) {
+			s.Off = slices.DeleteFunc(s.Off, func(x string) bool { return x == id })
+			if !*in.Auto {
+				s.Off = append(s.Off, id)
+			}
+		}); err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, h.plugins.detail(r.Context(), h.plugins.reg.Get(id)))
+	}))
+}

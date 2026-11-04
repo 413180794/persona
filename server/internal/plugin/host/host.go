@@ -129,6 +129,7 @@ type Proc struct {
 	change   chan struct{} // closed and replaced whenever state, sess or ready change
 	holds    int
 	openHTTP int
+	calls    int // in flight
 	lastUse  time.Time
 	strikes  int
 	kill     func() // ends the current run (a restart); nil between runs
@@ -220,6 +221,14 @@ func (p *Proc) wantedLocked() bool {
 	return p.spec.Startup || p.holds > 0 || p.openHTTP > 0 || lazy
 }
 
+// Idle says whether nothing is using it now: no call in flight, no HTTP request or WebSocket open (a connector's hold
+// does not count: it holds the plugin for as long as it is on).
+func (p *Proc) Idle() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.calls == 0 && p.openHTTP == 0
+}
+
 // Hold keeps it running until release is called (a switched-on connector holds its plugin).
 func (p *Proc) Hold() (release func()) {
 	p.mu.Lock()
@@ -283,7 +292,9 @@ func (p *Proc) Call(ctx context.Context, method string, params, out any) error {
 	s := p.sess
 	lazy := p.spec.OnCall
 	starting := p.state == StateStarting
+	p.calls++
 	p.mu.Unlock()
+	defer func() { p.mu.Lock(); p.calls--; p.mu.Unlock() }()
 	if lazy {
 		// The call keeps it running while it waits and runs (a slow start must not look idle).
 		release := p.Hold()

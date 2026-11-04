@@ -279,6 +279,11 @@ curl -fsSL <publish.site_url>/install.sh | sh   # 装到 ~/.persona/bin/personad
 - 下载包是 `jarvisd-<os>-<arch>.gz`：原始二进制先过隐私扫描，再用 `gzip -n -9` 压缩，`SHA256SUMS` 校验压缩包；安装脚本校验通过后解压安装，校验失败 / 解压失败不覆盖旧版本。
   Workers 静态资源每个文件最多 25 MiB（[官方限制](https://developers.cloudflare.com/workers/platform/limits/#static-assets)），上传前 `check_asset_sizes.py` 检查整个发布目录；本地 `build-publish/bin` 保留未压缩二进制供排查，但不上传。
   回归：`python3 -B -m unittest discover -s scripts/deploy -p 'test_compressed_publish.py'`。
+- **hub 比 App 先发时，先过一遍已发布 App 的兼容**（#1693）：这一版 hub 让客户端多画一种东西（连接器登录的新 `kind`、新的 interaction 类型、
+  新的卡片 / 事件字段），而最新的 TestFlight 还没有对应的客户端改动时，已装的 App 会把它画成空白或报错（微信插件的 `kind: qr` 在没有 #1401 的 App 上
+  是一个空表单加永远灰着的「下一步」）。发 hub 前对照最新 TestFlight 的提交（`git merge-base --is-ancestor <客户端改动> <TestFlight 的提交>`）：
+  没包含就先发 TestFlight，或者让新东西在旧 App 上有能看懂的退路，或者把 `proto.MinAppBuild`（`server/internal/proto/proto.go`，hello 和
+  `latest.json` 的 `min_app_build`）提到包含它的构建号，让旧 App 提示更新。提高 `min_app_build` 会让所有旧 App 都用不了这版 hub，先问用户。
 - 只托管最新一版：每次部署整个替换 `dl/`。部署用配置的 `publish.wrangler`（没有就 `npx wrangler`）；cf 的 OAuth 一小时过期，
   报鉴权错就 `cf auth login` 再跑。部署后会读回 `dl/VERSION`、`dl/SHA256SUMS`、`dl/latest.json` 确认上去的就是刚编的。
   推送中继在同一个 Worker 里（`/relay/*`），每次发布会把它一起重新部署。

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -42,7 +43,9 @@ const pluginUsage = `usage:
                                                 a .json URL, or github:owner/repo[@ref]; --token reads one from stdin
   personad plugin market remove <id> | refresh <id>
   personad plugin search [words]                the markets' plugins
-  personad plugin install market:<market>/<id>  install (or upgrade) one of a market's plugins`
+  personad plugin install market:<market>/<id>  install (or upgrade) one of a market's plugins
+  personad plugin auto-upgrade on|off [<id>]    market plugins upgrade themselves (all of them, or one)
+  personad plugin upgrades                      newer versions: going in, waiting for your confirmation, skipped`
 
 // PluginCommand runs `personad plugin <args>`.
 func PluginCommand(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
@@ -234,6 +237,38 @@ func PluginCommand(ctx context.Context, args []string, stdin io.Reader, stdout, 
 			}
 			fmt.Fprintf(stdout, "market:%s/%s  %s %s%s\n    %s\n", p.Market, p.ID, p.Name, p.Version, state, p.Description)
 		}
+		return nil
+	case "auto-upgrade":
+		if err := need(1); err != nil {
+			return err
+		}
+		if positional[0] != "on" && positional[0] != "off" {
+			return errors.New(pluginUsage)
+		}
+		on := positional[0] == "on"
+		if len(positional) > 1 {
+			var d PluginDetail
+			if err := c.do(ctx, "PUT", "/api/v1/plugins/"+url.PathEscape(positional[1])+"/-/auto-upgrade", map[string]bool{"auto": on}, &d); err != nil {
+				return err
+			}
+			fmt.Fprintf(stdout, "%s：自动升级%s\n", d.ID, map[bool]string{true: "开", false: "关"}[on])
+			return nil
+		}
+		var v upgradesView
+		if err := c.do(ctx, "PUT", "/api/v1/plugins/-/upgrades", map[string]bool{"auto": on}, &v); err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "插件自动升级：%s\n", map[bool]string{true: "开", false: "关"}[v.Auto])
+		if v.Auto && len(v.Off) > 0 {
+			fmt.Fprintf(stdout, "单独关掉的：%s\n", strings.Join(v.Off, "、"))
+		}
+		return nil
+	case "upgrades":
+		var v upgradesView
+		if err := c.do(ctx, "GET", "/api/v1/plugins/-/upgrades", nil, &v); err != nil {
+			return err
+		}
+		printUpgrades(stdout, v)
 		return nil
 	case "rollback":
 		if err := need(1); err != nil {
@@ -445,4 +480,48 @@ func (c *pluginClient) do(ctx context.Context, method, path string, body, out an
 		return json.Unmarshal(data, out)
 	}
 	return nil
+}
+
+// printUpgrades lists the newer versions by what happens to them.
+func printUpgrades(w io.Writer, v upgradesView) {
+	fmt.Fprintf(w, "插件自动升级：%s\n", map[bool]string{true: "开", false: "关"}[v.Auto])
+	groups := []struct {
+		title  string
+		states []string
+	}{
+		{"可升级", []string{upgradeAvailable, upgradeWaitingIdle, upgradeOff, upgradeFailed, upgradeIncompatible}},
+		{"等你确认", []string{upgradeNeedsConsent}},
+		{"已跳过", []string{upgradeSkipped}},
+	}
+	what := map[string]string{upgradeAvailable: "下次检查时装", upgradeWaitingIdle: "等空闲", upgradeOff: "自动升级关着",
+		upgradeFailed: "没装上", upgradeIncompatible: "装不了", upgradeSkipped: "回滚过，不再自动装"}
+	any := false
+	for _, g := range groups {
+		var lines []string
+		for _, up := range v.Upgrades {
+			if !slices.Contains(g.states, up.State) {
+				continue
+			}
+			line := fmt.Sprintf("  %-20s %s → %s", up.ID, up.From, up.To)
+			switch {
+			case up.State == upgradeNeedsConsent:
+				line += "  " + morePermissionsText(up.AddedPermissions) + "（App 的 设置 › 插件，或 personad plugin install market:" + up.Market + "/" + up.ID + "）"
+			case up.Detail != "":
+				line += "  " + what[up.State] + "：" + up.Detail
+			default:
+				line += "  " + what[up.State]
+			}
+			lines = append(lines, line)
+		}
+		if len(lines) > 0 {
+			any = true
+			fmt.Fprintln(w, g.title+"：")
+			for _, l := range lines {
+				fmt.Fprintln(w, l)
+			}
+		}
+	}
+	if !any {
+		fmt.Fprintln(w, "从插件市场装的插件都是最新的")
+	}
 }

@@ -388,6 +388,8 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	h.upd.start(ctx)
 	h.startKB(ctx, cfg.KB, cfg.dir)
 	h.startPlugins(ctx)
+	// Market plugins' newer versions (plugin_autoupgrade.go).
+	go h.pluginUpgradeLoop(ctx)
 	go h.adminStartup(ctx) // the admin UI's first-run setup code, while it has no password (admin_setupcode.go)
 	if err := h.startPublic(ctx); err != nil {
 		return err

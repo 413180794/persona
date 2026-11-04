@@ -186,6 +186,8 @@ personad plugin uninstall <id> [--keep-data]
 personad plugin market list | add <spec> [--token] | remove <id> | refresh <id>
 personad plugin search [关键词]
 personad plugin install market:<市场 id>/<插件 id>  从市场装；已装的就是升级
+personad plugin auto-upgrade on|off [<id>]        市场插件自动升级的总开关，带 id 是这一个插件的开关
+personad plugin upgrades                          有新版本的市场插件：可升级 / 等你确认 / 已跳过
 ```
 
 ## 插件市场
@@ -247,6 +249,36 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 包由市场索引的 sha256 钉死，装之前同样列出权限。只能读和回答的设备都不行。
 
 **发布一个市场**：仓库根目录放 `persona-plugins.json`，包放进 Release 附件（或仓库里、网站上），`sha256sum` 写进索引。插件仓库的打包脚本顺手生成索引。
+
+## 自动升级
+
+从插件市场装的插件（来源 `market:<市场 id>/<插件 id>`），市场里出了新版本时 hub 自己升级（#1699）。内置的、hub.json 里的、从别处装的
+（`dir:`、`file:`、`https://…`、`remote:`）一律不参与。代码在 `server/internal/hub/plugin_autoupgrade.go`。
+
+- **读市场**：hub 每分钟看一次哪些市场该读了：上次读过 6 小时（每个市场再加一个 0–30 分钟的随机量，错开）；读失败的按 15 分钟、30 分钟……翻倍退避，最多 6 小时。
+  日志只在一个市场读不到时记一行、恢复时记一行，不每次都记。App 打开目录（`catalog`）时照旧会在后台重读超过 6 小时的。
+- **什么时候升级**：新版本比已装的高、这台 hub 能用（有它平台的包、`engines` 满足）、总开关和这个插件自己的开关都开着（默认都开）、
+  **要的不比用户批准过的多**（`MorePermissions` 为假，权限摘要和 `granted_digest` 一样），并且插件空闲：没有在途的调用、没有开着的 HTTP 请求或 WebSocket
+  （连接器一直持有插件，不算在用），助手也没在工作（它下一步可能调这个插件的工具）。忙的下一分钟再看。
+- **怎么升级**：和手动升级同一条路：按市场索引下载、校验 sha256、预览，再升级（审计里谁是 `自动升级`）；停旧起新，新版本 30 秒内起不来就回滚到旧版本（`watchUpgrade`，审计里谁是 `hub`）。
+  **回滚过的版本记为跳过**，以后不再自动装（不管当初是谁升级的）；市场出了更高的版本再说。装失败（下载、校验不过）的这个版本等市场下次读到新索引再试。
+- **权限变多**：不升级，只告诉用户一次（「Example UI 1.2.0 要多一项权限：访问更多网络（api.example.com），去确认」），用户在 App 里确认
+  （走市场的预览和升级，带权限摘要）后才升级。
+- **告诉用户**：升级成功、回滚、等确认、装失败都记在插件上（`PluginView.upgrade_note`），在线的 App 收到 `{"type": "plugin_upgrade", "plugin", "note"}`；
+  前三种另发一条安静的推送（`thread-id` `plugin_upgrade`、`interruption-level` `passive`，带 `plugin_upgrade: {plugin, kind, version}`）。
+- **存在哪**：hub 的设置 `plugin_upgrades`（总开关、关掉的插件、跳过的版本、告诉过的版本、每个插件最后一次的结果），不加表。
+
+`PluginView` 对市场插件多三个字段：`auto_upgrade`（这个插件的开关）、`upgrade`（有新版本时：`{id, name, market, from, to, state, added_permissions?, detail?}`，
+`state` 是 `available` 下次检查时装 / `waiting_idle` 等空闲 / `needs_permission` 等你确认 / `off` 开关关着 / `skipped` 回滚过 / `failed` 没装上 / `incompatible` 装不了）、
+`upgrade_note`（`{kind: upgraded | rolled_back | needs_permission | failed, from, to, detail?, at}`）。
+
+**接口**（完整权限的设备；`features` 里有 `plugin_auto_upgrade` 时才有）：
+
+| 接口 | 做什么 |
+| --- | --- |
+| `GET /api/v1/plugins/-/upgrades` | `{auto（总开关）, upgrades: [上面的 upgrade], off（单独关掉的插件）, last（插件 → upgrade_note）}` |
+| `PUT /api/v1/plugins/-/upgrades` `{auto}` | 总开关；回上面那份 |
+| `PUT /api/v1/plugins/{id}/-/auto-upgrade` `{auto}` | 这个插件的开关；不是从市场装的回 400 `not_from_market`；回详情 |
 
 ## 什么时候跑；崩溃和超时
 

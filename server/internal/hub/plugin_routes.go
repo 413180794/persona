@@ -102,6 +102,7 @@ func readPluginJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 func (h *Hub) pluginRoutes(api *http.ServeMux) {
 	h.pluginUIRoutes(api)
 	h.marketRoutes(api)
+	h.upgradeRoutes(api)
 	ps := func() *plugins { return h.plugins }
 	api.HandleFunc("GET /api/v1/plugins", func(w http.ResponseWriter, r *http.Request) {
 		if ps() == nil {
