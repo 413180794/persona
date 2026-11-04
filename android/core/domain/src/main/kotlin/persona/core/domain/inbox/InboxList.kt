@@ -17,6 +17,8 @@ data class InboxItem(
     val tier: String? = null,
     val updatedAt: String? = null,
     val doneAt: String? = null,
+    /** What the item holds as listed (the hub's `version`): a bulk 已处理 sends it back. */
+    val version: String? = null,
 ) {
     val triage: InboxTier get() = InboxTier.entries.firstOrNull { it.wire == tier } ?: InboxTier.Action
     val isTriaged: Boolean get() = !tier.isNullOrEmpty()

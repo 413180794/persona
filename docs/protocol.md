@@ -1146,6 +1146,7 @@ hub 后台采集飞书和邮件，聚合成「件」（`docs/inbox.md`，`server
 | GET | `/api/v1/inbox` | `{items:[InboxItem]}`：未处理的 + 3 天内处理过的，按 `updated_at` 倒序；不含 `context`。默认只有飞书和邮件；带 `?sources=all` 才有连接器（GitHub…）的条目（带 `connector` 块的），旧 App、手表、Android 不带，所以不会把 PR 当邮件画 |
 | GET | `/api/v1/inbox/{id}` | 一件，带 `context`（这段对话 / 邮件的纯文本，给 AI 用）；邮件额外带 `reply_target:{uid,version}` |
 | POST | `/api/v1/inbox/{id}/done` | `{done: bool}`：标已处理 / 移回，返回这件 |
+| POST | `/api/v1/inbox/done` | `{done: bool, items:[{id, version?}]}` → `{changed:[InboxItem], unchanged:[id], skipped:[{id, reason}]}`：一次标多件（全部标为已处理、全部看过 / 全部清除、它们的撤销），一次写库、一次推 `inbox`。`version` 是列表里这件的 `version`：标已处理时不一致（列出以后又有新消息并进来）就不标，`skipped` 里 `reason=changed`；没有这件 `reason=missing`；已经是这个状态的放进 `unchanged`、不改 `done_at`（重试、另一台设备同时点都不会重复写）。移回不比版本。最多 1000 件，多了 413；没有 `done` 400。只记在 Persona，不回写来源的已读（`docs/inbox.md`「全部标为已处理」）；旧 hub 没有这个接口（405），App 退回逐件 `/{id}/done` |
 | GET | `/api/v1/inbox/mutes` | `{mutes:[{id, source, source_name, tag, value, name, created_at}]}`：用户的静音（`tag` 是 `repo` / `chat` / `sender`，`docs/inbox.md`「静音」）。列表里每件事带 `mutes:[{tag, value, name}]`，说它能按什么静音（旧 hub 没有） |
 | POST | `/api/v1/inbox/mutes` | `{item_id, tag}` → `{mute, settled}`：静音这件事在 `tag` 下的值（hub 从这件事上读），同一来源里被覆盖的打开条目收掉（`settled` 件），以后的进来就收掉；同一个静音只有一份 |
 | DELETE | `/api/v1/inbox/mutes/{id}` | 取消静音：以后的照常进来，已经收掉的不回来 |
@@ -1160,7 +1161,7 @@ hub 后台采集飞书和邮件，聚合成「件」（`docs/inbox.md`，`server
 
 `InboxItem`：`id`、`source`（lark / mail，或连接器的 id：github）、`kind`（dm / mention / group / bot / mail；连接器的是它自己的：review_requested / mention / team_mention / author / ci_failed / assign）、`account`（`feishu` 或邮箱账号 id）、
 `account_name`、`title`（会话名 / 邮件主题）、`sender`、`avatar`、`preview`（最新一条）、`count`、`started_at`、`updated_at`、
-`tier`（action / fyi / noise，分拣前为空）、`summary`、`reason`、`read`（在别处看过）、`done_at`、`done_by`（user / read / replied）、
+`tier`（action / fyi / noise，分拣前为空）、`summary`、`reason`、`read`（在别处看过）、`done_at`、`done_by`（user / read / replied）、`version`（这件现在装着什么，有新消息并进来就变；批量已处理时带回，旧 hub 没有）、
 `lark{feed_id,is_group,is_topic,start_position,read_position,mention_position,at_all,reply_to,thread_kind}`（`read_position`：这个会话在飞书里的已读位置，每次采集都刷新；`reply_to`：最后一条别人发的消息的 id，`thread_kind`：它在哪，空 = 在会话里、`topic` = 话题群的话题、`thread` = 普通群里的话题回复，这两个在采到新消息时刷新，旧数据没有）、`mail{account_id,mailbox,uids,message_id,from,direct,thread}`、
 `translations{<目标语言>:{subject,preview}}`（hub 提前翻好的外文邮件，`docs/ios.md`「翻译」）、`doc{url,link,type(docx/doc/sheet/base/other),notice(mention/comment/reply),notice_id,rows:[{ref,table,title,fields:[{name,value}],status:[{field,name,value,options:[{name,color}]}]}],reply{kind(thread/record/cell/doc),label,…},error}`
 （`kind=doc`，`docs/inbox.md`「云文档」）；`agent.changes:[{ref,field,value}]` 是 AI 分身随草稿提议的改状态；

@@ -2,6 +2,7 @@ package persona.core.hub
 
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.api.InboxAssistantTransport
+import persona.core.contracts.api.InboxDoneTarget
 import persona.core.contracts.api.LarkThreadTransport
 import persona.core.contracts.api.MailReplyTarget
 import persona.core.contracts.api.MailReplyTargetChanged
@@ -69,6 +70,13 @@ class HttpInboxAssistantTransport private constructor(
     )
     override suspend fun setDone(itemId: String, done: Boolean) = json(url("api", "v1", "inbox", itemId, "done"),
         buildJsonObject { put("done", done) })
+    override suspend fun setDone(items: List<InboxDoneTarget>, done: Boolean) = json(url("api", "v1", "inbox", "done"),
+        buildJsonObject {
+            put("done", done)
+            put("items", buildJsonArray {
+                items.forEach { t -> add(buildJsonObject { put("id", t.id); t.version?.let { put("version", it) } }) }
+            })
+        })
     override suspend fun reply(itemId: String?, feedId: String?, text: String, clientId: String): JsonObject {
         require(clientId.isNotBlank() && text.isNotBlank())
         require((itemId == null) != (feedId == null))

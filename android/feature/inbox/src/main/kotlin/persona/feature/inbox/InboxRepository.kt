@@ -56,6 +56,12 @@ interface InboxRepository : persona.core.contracts.api.InboxRepository {
     suspend fun latestConversation(feedId: String) = refreshConversation(feedId)
     suspend fun markVisible(feedId: String, messages: List<LarkMessage>) = Unit
     suspend fun setDone(itemId: String, done: Boolean)
+    /**
+     * 全部标为已处理 / 全部看过 / 全部清除 and their 撤销: [items] done (or back) in one request, each as listed, so one
+     * that took new messages since stays open ([InboxBulkResult.changedSince]).
+     */
+    suspend fun setDone(items: List<persona.core.contracts.api.InboxDoneTarget>, done: Boolean): InboxBulkResult =
+        error("批量处理尚未接入")
     suspend fun readDraft(target: ReplyTarget): ReplyDraft?
     suspend fun saveDraft(target: ReplyTarget, draft: ReplyDraft)
 

@@ -404,19 +404,24 @@ export function Dialog({
 
 // ── toasts ──────────────────────────────────────────────
 
-type Toast = { id: number; text: string; tone: "info" | "error" | "ok" };
+/** A button on a toast (撤销): it runs, and the toast goes. */
+export type ToastAction = { label: string; run: () => void };
+type Toast = { id: number; text: string; tone: "info" | "error" | "ok"; action?: ToastAction };
 let toasts: Toast[] = [];
 const toastListeners = new Set<() => void>();
 let toastId = 0;
 
-export function toast(text: string, tone: Toast["tone"] = "info") {
-  const id = ++toastId;
-  toasts = [...toasts.slice(-2), { id, text, tone }];
+function dropToast(id: number) {
+  toasts = toasts.filter((t) => t.id !== id);
   toastListeners.forEach((l) => l());
-  setTimeout(() => {
-    toasts = toasts.filter((t) => t.id !== id);
-    toastListeners.forEach((l) => l());
-  }, tone === "error" ? 5200 : 2800);
+}
+
+export function toast(text: string, tone: Toast["tone"] = "info", action?: ToastAction) {
+  const id = ++toastId;
+  toasts = [...toasts.slice(-2), { id, text, tone, action }];
+  toastListeners.forEach((l) => l());
+  // One with a button stays long enough to reach it.
+  setTimeout(() => dropToast(id), action ? 6000 : tone === "error" ? 5200 : 2800);
 }
 
 export function Toasts() {
@@ -435,6 +440,12 @@ export function Toasts() {
           {t.tone === "error" && <span className="size-1.5 shrink-0 rounded-full bg-red" />}
           {t.tone === "ok" && <Icon name="check" size={13} stroke={2.6} className="text-green" />}
           <span className="min-w-0">{t.text}</span>
+          {t.action && (
+            <button type="button" className="ml-1 shrink-0 whitespace-nowrap font-semibold text-accent hover:underline"
+              onClick={() => { t.action?.run(); dropToast(t.id); }}>
+              {t.action.label}
+            </button>
+          )}
         </div>
       ))}
     </div>,

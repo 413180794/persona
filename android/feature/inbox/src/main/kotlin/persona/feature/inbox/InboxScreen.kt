@@ -110,7 +110,38 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
             finally { pending.remove(id) }
         }
     }
+    // 全部标为已处理 / 全部看过 / 全部清除, and their 撤销: one request for them all (the hub skips the ones that took new
+    // messages since this list), shown at once, then a notice with 撤销 when something was filed.
+    fun markAll(targets: List<persona.core.contracts.api.InboxDoneTarget>, done: Boolean, undoable: Boolean = true) {
+        val asked = targets.filter { it.id !in pending }
+        if (asked.isEmpty()) return
+        asked.forEach { pending[it.id] = done }
+        scope.launch {
+            try {
+                val result = repository.setDone(asked, done)
+                error = null
+                val notice = if (undoable) bulkNotice(result) else null
+                if (notice != null) {
+                    val back = result.changed.map { persona.core.contracts.api.InboxDoneTarget(it) }
+                    val undo = if (back.isEmpty()) null else FeedbackAction("撤销") { markAll(back, false, undoable = false) }
+                    if (undo != null) feedback?.notice(notice, undo) else feedback?.notice(notice)
+                }
+            }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { if (feedback?.failure(e) != true) error = "操作失败，已恢复原来的状态" }
+            finally { asked.forEach { pending.remove(it.id) } }
+        }
+    }
     LaunchedEffect(repository) { refresh(collectNow = false) }
+    val bulk = bulkTargets(groups, records)
+    val scopeText = bulkScope(section, sources.firstOrNull { it.first == source && source.isNotEmpty() }?.second,
+        if (kind == "agent") "Agent" else kindLabel(kind), query)
+    var showMore by remember { mutableStateOf(false) }
+    if (showMore) {
+        JActionSheet(title = "收件箱", onDismiss = { showMore = false },
+            actions = listOf(JAction(bulkLabel(bulk.size, scopeText), PhIcons.Checks, enabled = bulk.isNotEmpty()) { markAll(bulk, true) }),
+            note = (if (scopeText == null) "整个收件箱里还没处理的。" else "只标当前筛选：$scopeText。") + "只记在 Persona，不改飞书和邮件里的已读。")
+    }
     if (showFilters) {
         JActionSheet(title = "筛选收件箱", onDismiss = { showFilters = false }, actions = listOf(
             JAction("来源：${sources.firstOrNull { it.first == source }?.second ?: "所有来源"}", PhIcons.Tray) { filterPage = "source" },
@@ -149,6 +180,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
             state = scroll, refreshing = refreshing, onRefresh = { refresh() },
             actions = {
                 JIconButton(PhIcons.FunnelSimple, "筛选", { showFilters = true }, badge = source.isNotEmpty() || kind.isNotEmpty())
+                JIconButton(PhIcons.DotsThree, "更多", { showMore = true })
             },
         ) {
             item("filters") {
@@ -188,7 +220,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
                         }),
                         action = if (group.id in setOf("fyi", "noise")) ({
                             JTextButton(if (group.id == "fyi") "全部看过" else "全部清除", {
-                                group.rows.filter { it.type == InboxRowType.Item }.forEach { markDone(it.id, true) }
+                                markAll(bulkTargets(listOf(group), records), true)
                             })
                         }) else null,
                     )

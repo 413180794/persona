@@ -325,11 +325,12 @@ struct ShellWindowHooks: UIViewRepresentable {
         over = shell
         guard let scene = shell.windowScene else { return }
         let w = PassThrough(windowScene: scene)
+        let hit = w.touchable
         w.windowLevel = .normal + 1
         w.backgroundColor = .clear
         // 设置 › 外观 › 深浅色 reaches every window of the scene as it changes (`ColorSchemeChoice`); this one starts as the shell's.
         w.overrideUserInterfaceStyle = shell.overrideUserInterfaceStyle
-        let host = UIHostingController(rootView: ToastWindowRoot(model: AppModel.shared, notices: notices))
+        let host = UIHostingController(rootView: ToastWindowRoot(model: AppModel.shared, notices: notices) { hit.rect = $0 })
         host.view.backgroundColor = .clear
         w.rootViewController = host
         w.isHidden = false
@@ -341,9 +342,19 @@ struct ShellWindowHooks: UIViewRepresentable {
         window = nil
     }
 
-    /// Takes no touch: every one goes to the windows below.
+    /// Where a touch is taken: the toast's button (撤销), a little around it; nowhere when it has none.
+    final class Touchable {
+        var rect = CGRect.null
+    }
+
+    /// Takes no touch but on the toast's button: every other one goes to the windows below.
     private final class PassThrough: UIWindow {
-        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? { nil }
+        let touchable = Touchable()
+
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+            guard !touchable.rect.isNull, touchable.rect.insetBy(dx: -Theme.Space.s, dy: -Theme.Space.s).contains(point) else { return nil }
+            return super.hitTest(point, with: event)
+        }
     }
 }
 
@@ -354,10 +365,11 @@ private struct ToastWindowRoot: View {
     @Environment(\.dynamicTypeSize) private var systemTypeSize
     let model: AppModel
     let notices: ShellNotices
+    let onActionFrame: (CGRect) -> Void
 
     var body: some View {
         let size = model.textSize.applied(to: systemTypeSize)
-        ToastOverlay(tapToDismiss: false)
+        ToastOverlay(tapToDismiss: false, onActionFrame: onActionFrame)
             .padding(.top, notices.room + ShellNavigationClearance.needed(at: size))
             .animation(Theme.Motion.standard, value: notices.room)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

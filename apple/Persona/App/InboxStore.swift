@@ -74,10 +74,51 @@ final class InboxStore {
         WatchSync.shared.push(summary: AppModel.shared.watchSummary())
     }
 
-    /// 全部看过 / 全部清除: a whole section at once.
-    func setDone(_ list: [InboxItem], _ done: Bool) {
-        for it in list { setDone(it, done, haptic: false) }
-        Haptics.success()
+    /// 全部标为已处理 (the view's open items), 全部看过 / 全部清除 (a section), and their 撤销: one request for them
+    /// all (docs/inbox.md「全部标为已处理」). Shown at once; the hub files each as the list showed it, so one that took
+    /// new messages since stays open (it goes back here too), and a failure puts them all back. Filing ends with a
+    /// toast and its 撤销, which brings back what was filed.
+    func setDone(_ list: [InboxItem], _ done: Bool, undoable: Bool = true) {
+        guard let api = AppModel.shared.api else { return }
+        let targets = InboxBulk.targets(list.compactMap { it in items.first { $0.id == it.id } }, done: done)
+        guard !targets.isEmpty else { return }
+        let before = Dictionary(targets.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        items = InboxBulk.marking(items, ids: Set(before.keys), done: done, now: .now)
+        done ? Haptics.success() : Haptics.tap()
+        Task {
+            do {
+                let result: InboxBulkResult
+                do {
+                    result = try await api.setInboxDone(targets, done)
+                } catch let e as APIError where e.status == 404 || e.status == 405 {
+                    result = try await setEach(targets, done, api: api) // a hub from before the bulk request
+                }
+                items = InboxBulk.settle(items, before: before, result: result)
+                let snapshot = items
+                saver.run { StateCache.save(Self.stateName, snapshot) }
+                if InboxBulk.changedSince(result) > 0 { reload() }
+                let moved = result.changed
+                let undo = undoable && !moved.isEmpty
+                    ? Toast.Action(title: "撤销") { [weak self] in self?.setDone(moved, !done, undoable: false) } : nil
+                AppModel.shared.toast = Toast(InboxBulk.message(done: done, result: result), style: .success, action: undo)
+            } catch {
+                items = items.map { before[$0.id] ?? $0 }
+                AppModel.shared.show(error)
+            }
+        }
+    }
+
+    /// The bulk request one item at a time, for an older hub: no versions there, so each is filed as it is.
+    private func setEach(_ targets: [InboxItem], _ done: Bool, api: APIClient) async throws -> InboxBulkResult {
+        var changed: [InboxItem] = []
+        for it in targets {
+            try await api.setInboxDone(it.id, done)
+            var moved = it
+            moved.doneAt = done ? .now : nil
+            moved.doneBy = done ? "user" : nil
+            changed.append(moved)
+        }
+        return InboxBulkResult(changed: changed, unchanged: [], skipped: [])
     }
 
     func setDone(_ item: InboxItem, _ done: Bool, haptic: Bool = true) {

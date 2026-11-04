@@ -5,13 +5,16 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.map
 
 class FeedbackGate(
     private val connection: () -> ConnectionState,
     private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
 ) : AppFeedback {
-    private val queue = MutableSharedFlow<String>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-    val messages = queue.asSharedFlow()
+    private val queue = MutableSharedFlow<FeedbackNotice>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    /** What to show, with its button (撤销) when it has one. */
+    val notices = queue.asSharedFlow()
+    val messages = notices.map { it.message }
     private val lastOffline = mutableMapOf<String, Long>()
     private val lastNotices = mutableMapOf<String, Long>()
 
@@ -33,7 +36,14 @@ class FeedbackGate(
         lastNotices.entries.removeAll { now - it.value >= 4_000 }
         if (lastNotices[message]?.let { now - it < 4_000 } == true) return true
         lastNotices[message] = now
-        queue.tryEmit(message)
+        queue.tryEmit(FeedbackNotice(message))
+        return true
+    }
+
+    /** Never folded into an earlier one: each carries its own 撤销. */
+    @Synchronized
+    override fun notice(message: String, action: FeedbackAction): Boolean {
+        queue.tryEmit(FeedbackNotice(message, action))
         return true
     }
 }

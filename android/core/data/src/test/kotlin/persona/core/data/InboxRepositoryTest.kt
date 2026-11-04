@@ -410,6 +410,53 @@ class InboxRepositoryTest {
         }
     }
 
+    @Test fun bulkDoneIsOneRequestWithVersionsAndPutsBackWhatTheHubDidNotFile() = runBlocking {
+        val directory = Files.createTempDirectory("inbox-bulk-test").toFile()
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            fun item(id: String, version: String) = buildJsonObject {
+                put("id", id); put("source", "mail"); put("kind", "mail"); put("title", id); put("version", version)
+            }
+            val transport = FakeTransport().apply {
+                items = JsonArray(listOf(item("a", "va"), item("b", "vb"), item("c", "vc")))
+                onBulk = { _, _ ->
+                    // As the hub: a is filed; b took a new mail (its version moved), so it is not.
+                    val filedA = buildJsonObject {
+                        put("id", "a"); put("source", "mail"); put("kind", "mail"); put("title", "a"); put("version", "va")
+                        put("done_at", "2026-11-04T08:00:00Z"); put("done_by", "user")
+                    }
+                    items = JsonArray(listOf(filedA, item("b", "vb2"), item("c", "vc")))
+                    buildJsonObject {
+                    put("changed", JsonArray(listOf(filedA)))
+                    put("unchanged", JsonArray(emptyList()))
+                    put("skipped", JsonArray(listOf(buildJsonObject { put("id", "b"); put("reason", "changed") })))
+                } }
+            }
+            val repository = repository(transport, directory, owner, FakeHub())
+            withTimeout(5_000) { repository.snapshot.first { it.contentSource != null } }
+            repository.refresh()
+            val listed = repository.snapshot.value.records.associate { it.item.id to it.item.version }
+            assertEquals(mapOf("a" to "va", "b" to "vb", "c" to "vc"), listed)
+
+            val result = repository.setDone(listOf(InboxDoneTarget("a", "va"), InboxDoneTarget("b", "vb")), true)
+            // One request carrying each version; b took new messages since and stays open; c was not asked for.
+            assertEquals(listOf(listOf(InboxDoneTarget("a", "va"), InboxDoneTarget("b", "vb")) to true), transport.bulk)
+            assertEquals(listOf("a"), result.changed)
+            assertEquals(listOf("b"), result.changedSince)
+            // Refreshed for b's new mail: its new version is what the next bulk sends.
+            val after = repository.snapshot.value.records.associate { it.item.id to (it.item.isDone to it.item.version) }
+            assertEquals(mapOf("a" to (true to "va"), "b" to (false to "vb2"), "c" to (false to "vc")), after)
+
+            // A failure puts every item back.
+            transport.onBulk = { _, _ -> throw IOException("offline") }
+            assertThrows(IOException::class.java) { runBlocking { repository.setDone(listOf(InboxDoneTarget("c", "vc")), true) } }
+            assertFalse(repository.snapshot.value.records.first { it.item.id == "c" }.item.isDone)
+        } finally {
+            owner.coroutineContext[Job]!!.cancelAndJoin()
+            directory.deleteRecursively()
+        }
+    }
+
     private suspend fun awaitState(state: StateFlow<LarkConversation>, predicate: (LarkConversation) -> Boolean) =
         withTimeout(5_000) { state.first(predicate) }
 
@@ -458,6 +505,9 @@ class InboxRepositoryTest {
         override suspend fun reply(itemId: String?, feedId: String?, text: String, clientId: String) = onReply(clientId)
         override suspend fun inbox() = buildJsonObject { put("items", items) }
         override suspend fun setDone(itemId: String, done: Boolean) = JsonObject(emptyMap())
+        val bulk = mutableListOf<Pair<List<InboxDoneTarget>, Boolean>>()
+        var onBulk: suspend (List<InboxDoneTarget>, Boolean) -> JsonObject = { _, _ -> JsonObject(emptyMap()) }
+        override suspend fun setDone(items: List<InboxDoneTarget>, done: Boolean): JsonObject { bulk += items to done; return onBulk(items, done) }
         override suspend fun messages(feedId: String, around: Long?, before: String?, after: String?) = onMessages(around, before, after)
         override suspend fun assistant() = JsonObject(emptyMap())
         override suspend fun createConversation(main: Boolean) = JsonObject(emptyMap())

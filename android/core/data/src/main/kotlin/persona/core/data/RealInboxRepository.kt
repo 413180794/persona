@@ -240,6 +240,33 @@ class RealInboxRepository(
         }
     }
 
+    override suspend fun setDone(items: List<InboxDoneTarget>, done: Boolean): InboxBulkResult {
+        val result = refreshLock.withLock {
+            val transport = requireTransport()
+            val ids = items.map { it.id }.toSet()
+            val old = current.value.records.filter { it.item.id in ids }
+            val doneAt = if (done) Instant.now().toString() else null
+            current.update { it.copy(records = it.records.map { record ->
+                if (record.item.id in ids) record.copy(item = record.item.copy(doneAt = doneAt)) else record
+            }) }
+            try {
+                val data = transport.setDone(items, done)
+                val result = InboxBulkResult.from(data)
+                if (owns(transport)) {
+                    data.array("changed").forEach { replaceRecord(record(it.jsonObject, transport)) }
+                    // Not moved here (new messages came in, gone, already so): back to the hub's state until the refresh.
+                    old.filter { it.item.id !in result.changed }.forEach(::replaceRecord)
+                }
+                result
+            } catch (e: Exception) {
+                if (owns(transport)) old.forEach(::replaceRecord)
+                throw e
+            }
+        }
+        if (result.changedSince.isNotEmpty()) quietly { refresh() }
+        return result
+    }
+
     override suspend fun readDraft(target: ReplyTarget): ReplyDraft? {
         val transport = requireTransport()
         val document = journal.read(transport.scope)
@@ -796,7 +823,7 @@ class RealInboxRepository(
         return InboxRecord(
             InboxItem(data.string("id"), data.string("account"), data.string("kind"), data.string("title"),
                 data.optional("sender"), data.string("preview"), data.optional("summary"), data.optional("tier"),
-                data.optional("updated_at"), data.optional("done_at")),
+                data.optional("updated_at"), data.optional("done_at"), data.optional("version")),
             sourceLabel = data.optional("account_name") ?: if (data.string("source") == "lark") "飞书" else "邮件",
             feedId = lark?.optional("feed_id"), startPosition = lark?.number("start_position"), count = data.number("count")?.toInt() ?: 0,
             agent = agent?.let { InboxAgent(it.string("state"), it.string("draft"), it.optional("note") ?: it.string("reason"),

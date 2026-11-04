@@ -15,6 +15,8 @@ extension Theme {
         static let success = "checkmark.circle"
         static let successFilled = "checkmark.circle.fill"
         static let done = "checkmark"
+        /// Many items filed at once (收件箱 › 全部标为已处理).
+        static let doneAll = "checkmark.rectangle.stack"
         static let info = "info.circle"
         static let infoFilled = "info.circle.fill"
         static let offline = "wifi.exclamationmark"

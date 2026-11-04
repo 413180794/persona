@@ -1951,13 +1951,20 @@ struct PhoneConfirmation: Identifiable {
 
 struct Toast: Identifiable, Equatable {
     enum Style { case info, success, error }
+    /// A button on the toast (撤销): it runs, and the toast goes.
+    struct Action {
+        let title: String
+        let run: @MainActor () -> Void
+    }
     let id = UUID()
     let message: String
     let style: Style
+    let action: Action?
 
-    init(_ message: String, style: Style = .info) {
+    init(_ message: String, style: Style = .info, action: Action? = nil) {
         self.message = message
         self.style = style
+        self.action = action
     }
 
     static func == (a: Toast, b: Toast) -> Bool { a.id == b.id }

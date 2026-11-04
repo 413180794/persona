@@ -38,6 +38,9 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     var connector: Connector?
     /// What it can be muted by (the row's menu: 静音这个仓库 / 会话 / 发件人); older hubs leave it out.
     var mutes: [MuteOption]?
+    /// What it holds now, as the hub listed it: a bulk 已处理 sends it back so an item that took new messages since
+    /// is left open (older hubs leave it out).
+    var version: String?
 
     /// One thing an item can be muted by: a repository, a chat or a sender of its source.
     nonisolated struct MuteOption: Codable, Hashable, Sendable {
@@ -229,7 +232,7 @@ nonisolated struct InboxItem: Codable, Identifiable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, source, kind, account, title, sender, avatar, preview, count, tier, summary, reason, read, lark, mail, doc, moment, context, agent, translations, connector, mutes
+        case id, source, kind, account, title, sender, avatar, preview, count, tier, summary, reason, read, lark, mail, doc, moment, context, agent, translations, connector, mutes, version
         case accountName = "account_name", startedAt = "started_at", updatedAt = "updated_at", doneAt = "done_at", doneBy = "done_by"
     }
 
@@ -297,6 +300,13 @@ extension APIClient {
         try await post("/api/v1/inbox/" + id + "/done", body: ["done": done])
     }
 
+    /// Files (or brings back) many items in one request (全部标为已处理, 全部看过, their 撤销): each with the version it
+    /// was listed at, so the hub leaves one that took new messages since open.
+    func setInboxDone(_ items: [InboxItem], _ done: Bool) async throws -> InboxBulkResult {
+        try await post("/api/v1/inbox/done", body: InboxBulkBody(done: done, items: items.map { .init(id: $0.id, version: $0.version) }),
+                       as: InboxBulkResult.self)
+    }
+
     private nonisolated struct InboxMutes: Decodable, Sendable { var mutes: [InboxMute] }
     private nonisolated struct MuteBody: Encodable, Sendable { var itemID: String; var tag: String
         enum CodingKeys: String, CodingKey { case tag, itemID = "item_id" }
@@ -359,3 +369,21 @@ nonisolated struct InboxMute: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+
+private nonisolated struct InboxBulkBody: Encodable, Sendable {
+    struct Target: Encodable, Sendable { var id: String; var version: String? }
+    var done: Bool
+    var items: [Target]
+}
+
+/// What a bulk 已处理 / 撤销 did: the items it moved (as the hub has them now), the ones already so, and the ones it
+/// left (`changed`: new messages since the list; `missing`: gone from the hub).
+nonisolated struct InboxBulkResult: Decodable, Sendable, Equatable {
+    nonisolated struct Skip: Decodable, Sendable, Equatable {
+        var id: String
+        var reason: String
+    }
+    var changed: [InboxItem]
+    var unchanged: [String]
+    var skipped: [Skip]
+}

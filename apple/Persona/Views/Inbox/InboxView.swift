@@ -55,6 +55,9 @@ struct InboxPage: View {
     @State private var showingMutes = false     // 已静音
     private var store: InboxStore { .shared }
 
+    /// The kind filters, by key.
+    static let kinds = [("mention", "@我"), ("dm", "私聊"), ("group", "群聊"), ("mail", "邮件"), ("agent", "Agent")]
+
     private func matches(_ it: InboxItem) -> Bool {
         if !source.isEmpty && it.account != source { return false }
         if !kind.isEmpty && !(it.kind == kind || kind == "group" && it.kind == "bot" || kind == "mention" && (it.kind == "doc" || it.kind == "moment" && it.kindLabel == "@我")) { return false }
@@ -107,11 +110,13 @@ struct InboxPage: View {
 
                         // Mail accounts are managed in 设置 › 连接器 › 邮箱 (2026-11-01, with this device's data and 飞书).
                         Menu {
+                            markAllButton
                             Button { composing = ComposeDraft(accountID: accounts.first?.id ?? "") } label: { Label("写邮件", systemImage: Theme.Icon.compose) }
                                 .disabled(accounts.isEmpty)
                             Button { showingMutes = true } label: { Label("已静音", systemImage: Theme.Icon.mute) }
                         } label: { Image(systemName: Theme.Icon.moreMenu) }
                         .accessibilityLabel("更多")
+                        .accessibilityIdentifier("inbox.more")
                     }
                 }
                 .sheet(item: $composing) { d in ComposeView(draft: d, accounts: accounts) }
@@ -135,6 +140,36 @@ struct InboxPage: View {
                     }
                     #endif
                 }
+    }
+
+    // MARK: 全部标为已处理
+
+    /// The names of the filters on now (飞书, a mailbox, a connector; @我, 私聊…), for what 全部标为已处理 covers.
+    private var filterNames: [String] {
+        var names: [String] = []
+        if source == "feishu" {
+            names.append("飞书")
+        } else if let a = accounts.first(where: { $0.id == source }) {
+            names.append(Self.short(a.email))
+        } else if let c = connectorSources.first(where: { $0.id == source }) {
+            names.append(c.name)
+        }
+        if let k = Self.kinds.first(where: { $0.0 == kind }) { names.append(k.1) }
+        return names
+    }
+
+    /// 全部标为已处理: the open items the list shows now (its filters and search), in one request, with 撤销 after.
+    /// The Agents waiting at the top are not inbox items: they wait for an answer, not to be filed.
+    private var markAllButton: some View {
+        let scope = kind == "agent" ? [] : openItems
+        return Button {
+            withAnimation(Theme.Motion.standard) { store.setDone(scope, true) }
+        } label: {
+            Label("全部标为已处理", systemImage: Theme.Icon.doneAll)
+            Text(InboxBulk.scopeLine(filters: filterNames, query: query, count: scope.count))
+        }
+        .disabled(scope.isEmpty)
+        .accessibilityIdentifier("inbox.markAllDone")
     }
 
     private var list: some View {
@@ -282,7 +317,7 @@ struct InboxPage: View {
                 ForEach(connectorSources, id: \.id) { c in
                     filterChip(c.name, on: source == c.id) { source = source == c.id ? "" : c.id }
                 }
-                ForEach([("mention", "@我"), ("dm", "私聊"), ("group", "群聊"), ("mail", "邮件"), ("agent", "Agent")], id: \.0) { k, title in
+                ForEach(Self.kinds, id: \.0) { k, title in
                     filterChip(title, on: kind == k) { kind = kind == k ? "" : k }
                 }
             }
@@ -312,7 +347,7 @@ struct InboxPage: View {
                     chip(c.name, symbol: Theme.Icon.connectors, on: source == c.id) { source = source == c.id ? "" : c.id }
                 }
                 Divider().scaledFrame(height: Theme.Size.badge)
-                ForEach([("mention", "@我"), ("dm", "私聊"), ("group", "群聊"), ("mail", "邮件"), ("agent", "Agent")], id: \.0) { k, title in
+                ForEach(Self.kinds, id: \.0) { k, title in
                     chip(title, on: kind == k) { kind = kind == k ? "" : k }
                 }
             }

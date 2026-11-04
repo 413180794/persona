@@ -161,6 +161,14 @@ final class MacInboxState {
         return Sections(tiers: tiers, done: done)
     }
 
+    /// 全部标为已处理: the open items the list shows (its filter and search); the agents waiting are not items.
+    var openInView: [InboxItem] { kind == "agent" ? [] : store.items.filter { !$0.isDone && matches($0) } }
+
+    /// What 全部标为已处理 covers and how many, for its help tag.
+    var markAllScope: String {
+        InboxBulk.scopeLine(filters: filter == .all ? [] : [filter.title], query: query, count: openInView.count)
+    }
+
     /// The rows in the order the list shows them (closed sections left out): for moving the selection on.
     func visibleOrder(_ model: AppModel) -> [MacInboxSelection] {
         let s = sections(model)

@@ -6,6 +6,10 @@ import SwiftUI
 /// a moment; what lasts (the hub's link: 等待网络, 连接中…) is the shell's status row's (docs/shell.md「状态行」).
 struct ToastCapsule: View {
     let toast: Toast
+    /// Closes the toast after its button (撤销) ran.
+    var dismiss: () -> Void = {}
+    /// Told where its button is, in global coordinates (the shell's toast window lets touches through but there).
+    var onActionFrame: ((CGRect) -> Void)?
 
     var body: some View {
         let row = HStack(spacing: Theme.Space.m) {
@@ -14,6 +18,23 @@ struct ToastCapsule: View {
             Text(toast.message)
                 .font(Theme.Font.secondaryMedium)
                 .lineLimit(3)
+            if let action = toast.action {
+                Button {
+                    action.run()
+                    dismiss()
+                } label: {
+                    Text(action.title)
+                        .font(Theme.Font.labelStrong)
+                        .foregroundStyle(Theme.accent)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("toast-action")
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { onActionFrame?($0) }
+                .onDisappear { onActionFrame?(.null) }
+            }
         }
         .padding(.horizontal, Theme.Space.l)
         .padding(.vertical, Theme.Space.m)
@@ -24,8 +45,8 @@ struct ToastCapsule: View {
         }
     }
 
-    /// How long it stays.
-    static func shown(_ toast: Toast) -> Duration { .seconds(toast.style == .error ? 4 : 2.5) }
+    /// How long it stays: an error longer, one with a button (撤销) long enough to reach it.
+    static func shown(_ toast: Toast) -> Duration { .seconds(toast.action != nil ? 5 : toast.style == .error ? 4 : 2.5) }
 }
 
 /// The app's toast at the top of what it covers, over the content (it moves nothing), gone after `ToastCapsule.shown`.
@@ -34,15 +55,17 @@ struct ToastCapsule: View {
 struct ToastOverlay: View {
     @Environment(AppModel.self) private var model
     var tapToDismiss = true
+    /// Where the toast's button is (`ToastCapsule.onActionFrame`).
+    var onActionFrame: ((CGRect) -> Void)?
 
     var body: some View {
         ZStack {
             if let toast = model.toast {
-                ToastCapsule(toast: toast)
+                ToastCapsule(toast: toast, dismiss: { withAnimation(Theme.Motion.standard) { model.toast = nil } }, onActionFrame: onActionFrame)
                     .padding(.horizontal, Theme.Space.xl)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .onTapGesture { if tapToDismiss { model.toast = nil } }
-                    .accessibilityElement(children: .combine)
+                    .accessibilityElement(children: toast.action == nil ? .combine : .contain)
                     .accessibilityIdentifier("toast")
                     .task(id: toast.id) {
                         #if os(iOS)

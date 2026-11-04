@@ -94,7 +94,16 @@ fun PersonaRoot(
         else if (hub == null) entering = true
     }
     val link = MainActivity.pendingPairLink.value
-    LaunchedEffect(shell) { shell.feedback.messages.collect { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar(it) } }
+    LaunchedEffect(shell) {
+        shell.feedback.notices.collect { notice ->
+            snackbar.currentSnackbarData?.dismiss()
+            // A notice with 撤销 waits its own few seconds; collecting the next one dismisses it, as for the others.
+            launch {
+                val result = snackbar.showSnackbar(notice.message, actionLabel = notice.action?.label, duration = SnackbarDuration.Short)
+                if (result == SnackbarResult.ActionPerformed) notice.action?.run?.invoke()
+            }
+        }
+    }
     CompositionLocalProvider(LocalAppFeedback provides shell.feedback) {
         Surface(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize()) {

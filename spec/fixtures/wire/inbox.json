@@ -41,7 +41,8 @@
               "value": "feed_example",
               "name": "示例讨论"
             }
-          ]
+          ],
+          "version": "d45aefe6809ea192"
         },
         {
           "id": "mail:account_example:thread_example:11",
@@ -77,7 +78,8 @@
               "value": "sender@example.com",
               "name": "小王"
             }
-          ]
+          ],
+          "version": "e9cde9aed8019733"
         }
       ]
     },

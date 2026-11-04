@@ -122,6 +122,13 @@ struct MacInboxList: View {
             // ⌘R is 显示 › 刷新's, which refreshes the inbox while it is on screen.
             Button { Task { await store.refresh() } } label: { Label("刷新", systemImage: Theme.Icon.retry) }
                 .help("刷新（⌘R）")
+            Button { withAnimation(Theme.Motion.standard) { store.setDone(state.openInView, true) } } label: {
+                Label("全部标为已处理", systemImage: Theme.Icon.doneAll)
+            }
+            .disabled(state.openInView.isEmpty)
+            .keyboardShortcut("e", modifiers: [.command, .shift])
+            .help("全部标为已处理：\(state.markAllScope)（⇧⌘E）")
+            .accessibilityIdentifier("mac.inbox.markAllDone")
             Button { state.composing = ComposeDraft(accountID: state.accounts.first?.id ?? "") } label: {
                 Label("写邮件", systemImage: Theme.Icon.compose)
             }

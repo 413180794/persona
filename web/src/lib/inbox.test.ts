@@ -10,9 +10,9 @@ vi.mock("./store", () => ({
 vi.mock("../ui/atoms", () => ({ toast: vi.fn() }));
 
 import {
-  badgeCount, cardText, contextXML, conversationRoute, docChangeLine, emojiLabel, fromLine, getInbox, handOffMessage, interactionAsk,
+  badgeCount, bulkMessage, bulkScope, cardText, contextXML, conversationRoute, docChangeLine, emojiLabel, fromLine, getInbox, handOffMessage, interactionAsk,
   interactionMuted, interactionTitle, itemPath, kindLabel, labelIsUrgent, mailAccounts, mergeMessages, momentText, nextLarkPosition, partRuns, reloadInbox,
-  replyLarkMessage, resetInboxForTests, sections, sendLarkMessage, sendReply, setDocStatus, setDone, shortTime, triage, unsentReplies, waitingAgents, withToken,
+  replyLarkMessage, resetInboxForTests, sections, sendLarkMessage, sendReply, setAllDone, setDocStatus, setDone, shortTime, triage, unsentReplies, waitingAgents, withToken,
   type InboxFilter, type InboxItem, type LarkMessage,
 } from "./inbox";
 import { toast } from "../ui/atoms";
@@ -234,6 +234,19 @@ describe("飞书消息", () => {
   });
 });
 
+describe("全部标为已处理的文案", () => {
+  it("范围和件数", () => {
+    expect(bulkScope(["", ""], "", 12)).toBe("全部 · 12 件");
+    expect(bulkScope(["飞书", "@我"], "", 3)).toBe("飞书 · @我 · 3 件");
+    expect(bulkScope([], " 周报 ", 2)).toBe("搜索「周报」 · 2 件");
+    expect(bulkScope(["飞书"], "", 0)).toBe("没有未处理的");
+  });
+  it("结果", () => {
+    expect(bulkMessage(true, { changed: [], unchanged: ["a"], skipped: [] })).toBe("没有要标的");
+    expect(bulkMessage(false, { changed: [], unchanged: [], skipped: [{ id: "a", reason: "missing" }] })).toBe("没有要移回的");
+  });
+});
+
 describe("列表状态", () => {
   const ok = (body: unknown) => ({ ok: true, status: 200, text: async () => JSON.stringify(body) });
   const fail = (status: number, error: string) => ({ ok: false, status, text: async () => JSON.stringify({ error }) });
@@ -272,6 +285,38 @@ describe("列表状态", () => {
     const [url, init] = fetcher.mock.calls[1];
     expect(url).toBe("/api/v1/inbox/lark:f1:1/done");
     expect(JSON.parse(init.body)).toEqual({ done: true });
+  });
+
+  it("全部标为已处理：一次请求带版本；有新消息的留着；撤销移回；失败全部恢复", async () => {
+    const versioned = [{ ...dm, version: "v1" }, { ...doc, version: "v2" }, { ...mail, version: "v3" }];
+    fetcher.mockReset().mockResolvedValueOnce(ok({ items: versioned }));
+    await reloadInbox();
+    const [a, b] = getInbox().items;
+    // The hub files a; b took a new message since the list.
+    fetcher.mockResolvedValueOnce(ok({ changed: [{ ...a, done_at: at(0), done_by: "user" }], unchanged: [], skipped: [{ id: b.id, reason: "changed" }] }))
+      .mockResolvedValueOnce(ok({ items: versioned }));
+    await setAllDone([a, b, a], true);
+    const [url, init] = fetcher.mock.calls[1];
+    expect(url).toBe("/api/v1/inbox/done");
+    expect(JSON.parse(init.body)).toEqual({ done: true, items: [{ id: a.id, version: "v1" }, { id: b.id, version: "v2" }] });
+    expect(fetcher).toHaveBeenCalledTimes(3); // the list again, for b's new message
+    const [message, tone, action] = vi.mocked(toast).mock.lastCall!;
+    expect([message, tone]).toEqual(["已将 1 件标为已处理，1 件有新消息，留在收件箱", "ok"]);
+    expect(action?.label).toBe("撤销");
+
+    // 撤销 sends back only what was filed.
+    vi.mocked(toast).mockClear();
+    fetcher.mockReset().mockResolvedValueOnce(ok({ changed: [a], unchanged: [], skipped: [] }));
+    action!.run();
+    await vi.waitFor(() => expect(toast).toHaveBeenCalled());
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ done: false, items: [{ id: a.id, version: "v1" }] });
+    expect(vi.mocked(toast).mock.lastCall).toEqual(["已移回 1 件", "ok", undefined]);
+
+    // A failure puts every item back.
+    fetcher.mockReset().mockResolvedValueOnce(fail(502, "boom"));
+    await setAllDone(getInbox().items, true);
+    expect(getInbox().items.every((x) => !x.done_at)).toBe(true);
+    expect(toast).toHaveBeenLastCalledWith("没标成已处理：boom", "error");
   });
 
   it("发送：成功标为已处理；失败放回、留下草稿", async () => {

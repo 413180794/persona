@@ -84,6 +84,8 @@ export interface InboxItem {
   read?: boolean;
   done_at?: string | null;
   done_by?: string | null;
+  /** What it holds now, as listed: a bulk 已处理 sends it back (an item with new messages since stays open). */
+  version?: string;
   lark?: { feed_id: string; is_group: boolean; is_topic?: boolean; start_position?: string; mention_position?: string; at_all?: boolean };
   mail?: { account_id: string; mailbox: string; uids: number[]; message_id?: string; from?: { name?: string; email?: string }; direct?: boolean; thread?: string };
   doc?: InboxDoc;
@@ -625,9 +627,52 @@ export async function setDone(item: InboxItem, done: boolean): Promise<void> {
   }
 }
 
-/** 全部看过 / 全部清除: a whole section at once. */
-export function setAllDone(items: InboxItem[], done: boolean) {
-  for (const it of items) void setDone(it, done);
+/** What a bulk 已处理 / 撤销 did (POST /api/v1/inbox/done): the items it moved as the hub has them now, the ones
+ * already so, and the ones it left (`changed`: new messages since the list; `missing`: gone from the hub). */
+export type BulkResult = { changed: InboxItem[]; unchanged: string[]; skipped: { id: string; reason: string }[] };
+
+/** The toast after a bulk request. */
+export function bulkMessage(done: boolean, r: BulkResult): string {
+  const moved = r.changed.length;
+  const fresh = r.skipped.filter((s) => s.reason === "changed").length;
+  const head = done ? (moved ? `已将 ${moved} 件标为已处理` : "没有要标的") : (moved ? `已移回 ${moved} 件` : "没有要移回的");
+  return fresh ? `${head}，${fresh} 件有新消息，留在收件箱` : head;
+}
+
+/** What 全部标为已处理 covers, for its label: the filters' names and the search, or 全部. */
+export function bulkScope(filters: string[], query: string, count: number): string {
+  const parts = filters.filter(Boolean);
+  if (query.trim()) parts.push(`搜索「${query.trim()}」`);
+  return count ? `${parts.length ? parts.join(" · ") : "全部"} · ${count} 件` : "没有未处理的";
+}
+
+/** 全部标为已处理 (the view's open items), 全部看过 / 全部清除 (a section), and their 撤销: one request for them all,
+ * each with the version it was listed at, so the hub leaves one that took new messages since open (it goes back here
+ * too, and the list is pulled again). Shown at once; a failure puts them all back. Filing ends with 撤销 on the toast. */
+export async function setAllDone(items: InboxItem[], done: boolean, undoable = true): Promise<void> {
+  const seen = new Set<string>();
+  const targets = items
+    .map((it) => state.items.find((x) => x.id === it.id))
+    .filter((it): it is InboxItem => !!it && isDone(it) !== done && !seen.has(it.id) && !!seen.add(it.id));
+  if (!targets.length) return;
+  const before = new Map(targets.map((it) => [it.id, it]));
+  const now = new Date().toISOString();
+  set({ items: state.items.map((it) => (before.has(it.id) ? { ...it, done_at: done ? now : null, done_by: done ? "user" : null } : it)) });
+  try {
+    const r = await api<BulkResult>("/inbox/done", {
+      method: "POST",
+      json: { done, items: targets.map((it) => ({ id: it.id, version: it.version })) },
+    });
+    const fresh = new Map((r.changed ?? []).map((it) => [it.id, it]));
+    const left = new Set((r.skipped ?? []).map((s) => s.id));
+    set({ items: state.items.map((it) => fresh.get(it.id) ?? (left.has(it.id) ? before.get(it.id) ?? it : it)) });
+    if ((r.skipped ?? []).some((s) => s.reason === "changed")) void reloadInbox();
+    const moved = r.changed ?? [];
+    toast(bulkMessage(done, r), "ok", undoable && moved.length ? { label: "撤销", run: () => void setAllDone(moved, !done, false) } : undefined);
+  } catch (e) {
+    set({ items: state.items.map((it) => before.get(it.id) ?? it) });
+    toast(`${done ? "没标成已处理" : "没移回"}：${errorText(e)}`, "error");
+  }
 }
 
 /** 发送: the hub replies in the chat / by mail / in the document (moving the rows' status in `changes` first) and

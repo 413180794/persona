@@ -4,12 +4,21 @@ import persona.core.contracts.SessionKey
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.JsonObject
 
+/** An item of a bulk 已处理: its id and the `version` it was listed at (null: as it is now). */
+data class InboxDoneTarget(val id: String, val version: String? = null)
+
 /** One immutable pairing owns a transport and all its requests, including media. */
 interface InboxAssistantTransport {
     val scope: String
     suspend fun inbox(): JsonObject
     suspend fun larkConversations(cursor: String? = null): JsonObject = throw UnsupportedOperationException("Conversation metadata unavailable")
     suspend fun setDone(itemId: String, done: Boolean): JsonObject
+    /**
+     * Many items done (or back) in one request (`POST /api/v1/inbox/done`): each with the version it was listed at,
+     * so one that took new messages since stays open. Answers `{changed: [items], unchanged: [ids], skipped: [{id, reason}]}`.
+     */
+    suspend fun setDone(items: List<InboxDoneTarget>, done: Boolean): JsonObject =
+        throw UnsupportedOperationException("Bulk done unavailable")
     suspend fun reply(itemId: String?, feedId: String?, text: String, clientId: String): JsonObject
     suspend fun replyMail(itemId: String, text: String, clientId: String, target: MailReplyTarget): JsonObject =
         throw UnsupportedOperationException("Checked mail replies unavailable")

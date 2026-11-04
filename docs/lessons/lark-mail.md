@@ -115,3 +115,10 @@ Hub 在 400ms 内合并事件时，设置变化必须独立累积为 `settings_c
 SwiftUI List 默认行 inset 会叠加内容自己的 padding。#957 在 iOS 27 实测：46 pt 头像 + 上下各 8 pt 内容留白，最终行高却是 92 pt；显式把行上下 inset 设为 0 并用现有 48 pt 头像 token 后，普通行是 64 pt。不要用固定高度掩盖重复留白，动态字体应允许增高。仅在消息列表的 NavigationLink 上设定，避免改变共用收件箱。
 
 - When merging message-display controls with interactive quotes, keep the shared `QuoteCard` and `larkJump` action. Apply recall visibility to the card summary before rendering; UI tests should query the quote button, not the former static text.
+
+## 采集读消息时条目被标处理（#1105）
+
+- `applyLark` 先在锁里找到这个会话打开的那件，放开锁去读消息，再上锁写进去。中间用户把这件标成已处理（左滑、全部标为已处理），
+  以前新消息照样写进那件已处理的条目，`done_at` 不变，于是谁都看不到。现在重新上锁后先看这件还开着没有，已处理就把它当成「上一件」，新消息另开一件。
+  别的来源（邮件、文档、removed、连接器）的合并都在一把锁里做完，没有这个空档；新加采集时也别在锁外读完再往锁外拿到的条目里写。
+- 批量已处理带列表里的 `version`，在锁里比：用户看到的那份之后又并进来新消息的那件不标。

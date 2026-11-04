@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   agentDraft, agentWorking, conversationRoute, fromLine, interactionAgentTitle, interactionAsk, interactionTitle, isDone, isLark,
-  KIND_FILTERS, kindLabel, labelIsUrgent, mailAccounts, mailShort, sections, sendReply, setAllDone, setDone, shortTime, TIERS,
+  bulkScope, KIND_FILTERS, kindLabel, labelIsUrgent, mailAccounts, mailShort, sections, sendReply, setAllDone, setDone, shortTime, TIERS,
   useInbox, waitingAgents, type InboxItem, type Tier,
 } from "../../lib/inbox";
 import { useMailAccounts } from "../../lib/mail";
@@ -52,6 +52,13 @@ export function InboxList({ selected }: { selected?: string }) {
   const agents = useMemo(() => waitingAgents(interactions, sessions, mutes, { source, kind, query }), [interactions, sessions, mutes, source, kind, query]);
   const chips = mailAccounts(accounts, items);
   const empty = !s.tiers.action.length && !s.tiers.fyi.length && !s.tiers.noise.length && !agents.length;
+  // 全部标为已处理: the open items the list shows (its filters and search); the agents waiting are not items.
+  const openInView = kind === "agent" ? [] : [...s.tiers.action, ...s.tiers.fyi, ...s.tiers.noise];
+  const filterNames = [
+    source === "feishu" ? "飞书" : mailShort(chips.find((a) => a.id === source)?.email ?? ""),
+    KIND_FILTERS.find((k) => k.key === kind)?.label ?? "",
+  ];
+  const scope = bulkScope(filterNames, query, openInView.length);
   const toggle = (k: string) => setOpen((o) => {
     const n = new Set(o);
     if (n.has(k)) n.delete(k);
@@ -86,6 +93,17 @@ export function InboxList({ selected }: { selected?: string }) {
           {KIND_FILTERS.map((k) => (
             <Chip key={k.key} on={kind === k.key} onClick={() => pickKind(k.key)}>{k.label}</Chip>
           ))}
+          <button
+            type="button"
+            disabled={!openInView.length}
+            title={`全部标为已处理：${scope}`}
+            onClick={() => void setAllDone(openInView, true)}
+            className="ml-auto inline-flex h-7 items-center gap-1.5 rounded-control bg-surface px-2.5 text-[12px] whitespace-nowrap text-ink-2 shadow-btn transition-colors duration-150 hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-45"
+          >
+            <Icon name="check" size={12} stroke={2.6} />
+            全部标为已处理
+            <span className="text-ink-3">{scope}</span>
+          </button>
         </div>
 
         {error && !items.length && <p className="mt-4 text-[12.5px] text-red">{error}</p>}

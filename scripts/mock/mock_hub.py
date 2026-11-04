@@ -2233,10 +2233,44 @@ def mute_item(item_id, tag):
     return mute, settled
 
 
+def inbox_version(x):
+    """What the item holds now (the hub's inboxVersion): it moves when something new comes in."""
+    return hashlib.sha256((x["id"] + "\0" + str(x.get("updated_at")) + str(x.get("count"))).encode()).hexdigest()[:16]
+
+
 def inbox_for(query):
     """The list as the hub gives it: connectors' items only with ?sources=all."""
     all_sources = (query.get("sources") or [""])[0] == "all"
-    return [{k: v for k, v in x.items() if k != "context"} for x in INBOX if all_sources or "connector" not in x]
+    return [dict({k: v for k, v in x.items() if k != "context"}, version=inbox_version(x)) for x in INBOX if all_sources or "connector" not in x]
+
+
+# What each bulk 已处理 / 撤销 asked for (POST /api/v1/inbox/done), kept at /mock/inbox_bulk.
+INBOX_BULK = []
+
+
+def inbox_bulk(body):
+    """POST /api/v1/inbox/done: files (or brings back) the items named, as the hub does: an item already in that state
+    is unchanged, one whose version moved since the list is skipped."""
+    INBOX_BULK.append(body)
+    done, out = bool(body.get("done")), {"changed": [], "unchanged": [], "skipped": []}
+    seen = set()
+    for t in body.get("items") or []:
+        if t.get("id") in seen: continue
+        seen.add(t.get("id"))
+        x = next((x for x in INBOX if x["id"] == t.get("id")), None)
+        if x is None:
+            out["skipped"].append({"id": t.get("id"), "reason": "missing"})
+        elif bool(x.get("done_at")) == done:
+            out["unchanged"].append(x["id"])
+        elif done and t.get("version") and t["version"] != inbox_version(x):
+            out["skipped"].append({"id": x["id"], "reason": "changed"})
+        else:
+            if done:
+                x["done_at"], x["done_by"] = ago(minutes=0), "user"
+            else:
+                x.pop("done_at", None), x.pop("done_by", None)
+            out["changed"].append(dict({k: v for k, v in x.items() if k != "context"}, version=inbox_version(x)))
+    return out
 
 
 # Mail bodies (GET /api/v1/mail/messages/{aid}/{uid}); 504 is in English, for 设置 › 翻译.
@@ -5671,6 +5705,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/terminal_input": return self.send_json({"input": TERMINAL_INPUT})
         if p == "/mock/kb_updates": return self.send_json({"updates": KB_UPDATES})
         if p == "/mock/inbox_drafts": return self.send_json({"drafts": INBOX_DRAFTS})
+        if p == "/mock/inbox_bulk": return self.send_json({"requests": INBOX_BULK})
         if p.startswith("/api/v1/devices/") and p.endswith("/prefs"): return self.send_json(PREFS)
         if p == "/api/v1/pins": return self.send_json(PINS)
         if p == "/api/v1/mutes": return self.send_json({"spaces": [], "sessions": TREE_MUTED, "allowed": []})
@@ -6489,6 +6524,14 @@ class H(BaseHTTPRequestHandler):
                 SENT.append(body)
             return self.send_json({"ok": True})
         if p == "/api/v1/inbox/refresh": return self.send_json({"items": inbox_for(parse_qs(urlparse(self.path).query))})
+        if p == "/api/v1/inbox/done" and self.command == "POST":  # 全部标为已处理 / 撤销
+            body = json.loads(self.last_body or b"{}")
+            if body.get("done") is None: return self.send_json({"error": "done and items are required"}, 400)
+            res = inbox_bulk(body)
+            for send, _ in list(LIVE):
+                try: send({"type": "inbox"})
+                except Exception: pass
+            return self.send_json(res)
         if p == "/api/v1/inbox/mutes" and self.command == "POST":
             body = json.loads(self.last_body or b"{}")
             mute, settled = mute_item(body.get("item_id"), body.get("tag"))

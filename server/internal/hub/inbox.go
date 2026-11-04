@@ -84,6 +84,9 @@ type InboxItem struct {
 	Agent *InboxAgent `json:"agent,omitempty"`
 	// Mutes are what it can be muted by (listed only; inbox_mutes.go).
 	Mutes []MuteOption `json:"mutes,omitempty"`
+	// Version names what the item holds now (listed only): a bulk 已处理 sends it back, so an item that took new
+	// messages since the list was drawn is not filed with them (inbox_bulk.go).
+	Version string `json:"version,omitempty"`
 
 	// Bookkeeping: persisted, not listed (GET /api/v1/inbox/{id} returns Context).
 	Last      string `json:"last,omitempty"`       // newest message position / mail uid in the item
@@ -147,6 +150,7 @@ func (it *InboxItem) listed() InboxItem {
 	c := *it
 	c.Context, c.Last, c.TriagedAt, c.BodyOf, c.JudgedAt = "", "", "", "", ""
 	c.Mutes = mutesOf(it)
+	c.Version = inboxVersion(it)
 	if it.Agent != nil { // the copy is encoded after the lock is released
 		a := *it.Agent
 		c.Agent = &a
@@ -502,6 +506,11 @@ func (b *inbox) applyLark(convs []lark.Conversation, fetch func(lark.Conversatio
 			msgs = msgs[len(msgs)-c.Unread:]
 		}
 		b.mu.Lock()
+		if open != nil && !open.open() {
+			// Filed while the messages were read (by hand, or a bulk 已处理): what is new starts a new item instead of
+			// going unseen into the done one.
+			open, done = nil, open
+		}
 		if open == nil && done != nil {
 			var fresh []lark.Message
 			for _, m := range msgs {
@@ -826,6 +835,7 @@ var errCannotReply = errors.New("this item cannot be replied to")
 func (h *Hub) inboxRoutes(api *http.ServeMux) {
 	h.inbox.init()
 	h.inboxMuteRoutes(api)
+	h.inboxBulkRoutes(api)
 	// Items of connectors (GitHub…) only go to apps that draw them (?sources=all): an older app would show a PR as
 	// a mail and send a reply as one.
 	api.HandleFunc("GET /api/v1/inbox", func(w http.ResponseWriter, r *http.Request) {
