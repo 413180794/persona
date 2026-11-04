@@ -3,7 +3,7 @@
 Persona 的扩展底座（#1101）：开源仓库只放通用能力和**扩展点**，只对某个公司、某个服务有意义的东西做成扩展，装上就有，不装也能跑。
 骨架学 VS Code（清单 + `contributes` + 按需激活 + 独立进程），权限学 Chrome（显式声明、安装时展示），WordPress 只借事件通知、不借 filter。
 设计取舍、分步和还没做的在 `docs/plan-extensions.md`。代码：清单、schema 子集、权限、注册表 `server/internal/extension`，进程宿主 `extension/host`，
-程序一侧 `extension/serve`，一致性测试 `extension/conformance`；hub 里的接线 `server/internal/hub/extensions.go`、`extension_routes.go`、`extension_cli.go`，管理界面的接口 `admin_extensions.go`。
+程序一侧是官方 SDK `sdk/go/ext`（hub 内置的程序经 `extension/serve` 用它），一致性测试 `extension/conformance`；hub 里的接线 `server/internal/hub/extensions.go`、`extension_routes.go`、`extension_cli.go`，管理界面的接口 `admin_extensions.go`。
 
 扩展从三个地方来，App 和接口里是同一个列表：
 
@@ -798,7 +798,7 @@ View 带 `refresh_after`（秒）：这个 View 在屏幕上时，App 过这么�
 | `agent.needs_you` | `machine_id`、`machine`、`session_id`、`interaction_id`、`kind`、`summary`：有 Agent 在等你回答或批准 |
 | `agent.finished` | `machine_id`、`machine`、`session_id`、`title`：有 Agent 做完了 |
 
-用 `extension/serve` 写的程序在 `Namespaces["event"]` 里收（方法名是事件名）。
+用 SDK 写的程序在 `Namespaces["event"]` 里收（方法名是事件名）。
 
 ## 模型供应商
 
@@ -927,7 +927,7 @@ hub 管理界面（[admin.md](admin.md)）的「扩展」页（`web/src/admin/pa
 **错误码**：`not_initialized`、`unknown_method`、`wrong_protocol`、`no_capability`、`no_contribution`（没有这个贡献）、`permission_denied`、`timeout`（hub 本地生成）。
 其余错误只有 `message`，是给人看的一句话，不带密钥和正文。改了字段的意思或删了字段就加协议版本；只加可选字段不加。
 
-用 Go 写扩展可以直接用 `extension/serve`（`serve.Serve(ctx, os.Stdin, os.Stdout, serve.Program{…})`）；连接器程序用 `connector/serve.MainWith`，它同时认两种开头。
+写扩展用官方 SDK（下面「写扩展：SDK、模板和命令行」）；hub 内置的连接器程序用 `connector/serve.MainWith`，它同时认两种开头。
 
 ## 在电脑上运行的程序（`node` 段，#1830）
 
@@ -964,6 +964,29 @@ node 照做（`node/plugins.go`）。什么时候对齐：这台电脑连上时�
 外部程序的一个完整例子是微信（wechat-connector）：外部 API 服务 wechat-connector 的连接器扩展，不在本仓库，以扩展包（`.tar.gz` 加 sha256）交付，
 用 `file:` 安装或在管理界面上传，用扩展协议 1 加连接器协议 v2 和 hub 说话。接入手册见 [wechat-connector.md](wechat-connector.md)；
 连接器一侧逐个能力的检查（`CheckProgram`、合成的线上夹具）见 [connector-protocol.md](connector-protocol.md)「一致性测试」。
+
+## 写扩展：SDK、模板和命令行
+
+扩展包里只放各平台的可执行文件：hub 不内置 node、不依赖机器上的任何运行时（#1853）。官方 SDK 在主仓库的 `sdk/`，**零依赖、自成一体**，
+扩展仓库按版本拷一份（主仓库是私有的，扩展仓库的 CI 不该为拉 SDK 去拿它的 token），生成的协议和 View 类型来自 `schema/extension/`。
+
+### Go：`sdk/go`
+
+module `github.com/nwverse/persona/sdk/go`，只依赖标准库。hub 自己也用它（`server/go.mod` 用 `replace` 指向同一份代码，Docker 构建把 `sdk/go/` 一起拷进去），
+内置的程序经 `server/internal/extension/serve` 这一层薄的转发（换成 hub 自己的 `InitializeParams` 和 `rpc.Error`）。
+
+| 包 | 内容 |
+| --- | --- |
+| `wire` | 生成的类型：清单、协议的帧和错误码、`initialize`、`UIParams`、View 和组件、`ActionResult`……（别手改） |
+| `ext` | 运行时：`ext.Main(ext.Program{…})` 在 stdin / stdout 上说协议（`initialize`、`ping`、`manifest`、`not_initialized` / `wrong_protocol` / `unknown_method` / `no_contribution`），按命名空间把调用交给 `Namespaces`，`UI` 按贡献 id 路由 `ui.render` / `ui.action`（动作什么都不回就重画），`HTTP` 在 hub 给的 socket 上起 HTTP（`/health` 由 SDK 回）；`Hub.Call` / `Notify` / `Badge` / `Invalidate`；`Env()` 认三套环境变量名；`Init.Info()` 认 `extension` 和老的 `plugin`；错误用 `*ext.Error{Code, Message}` |
+| `exttest` | 扩展自己的 `go test` 里跑的一致性检查：`exttest.Check(t, manifest, exttest.Serve(t, program))`（或 `exttest.Program(t, 路径)` 跑构建好的程序）：握手、错误码、snake_case、每个 `ui` 贡献按插槽画一次并检查 View（按 `schema/extension` 校验，加上 https、条数和字数、卡片的限制）、关 stdin 后退出。`personad extension test` 用的是 hub 自己更严的那套（同安装、画的时候的检查） |
+
+```go
+func main() {
+	ext.Main(ext.Program{ID: "example", Version: "1.0.0", Manifest: manifest,
+		UI: map[string]ext.Page{"home": {Render: home, Action: act}}})
+}
+```
 
 ## Telegram：从内置扩展到扩展（#1704）
 

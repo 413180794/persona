@@ -41,6 +41,9 @@ type Error struct {
 
 func (e *Error) Error() string { return e.Message }
 
+// WireError is its code and data, for the extension SDK (sdk/go/ext) to send as they are.
+func (e *Error) WireError() (string, json.RawMessage) { return e.Code, e.Data }
+
 var ErrClosed = errors.New("rpc: connection closed")
 
 type Peer struct {

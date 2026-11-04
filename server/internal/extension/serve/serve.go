@@ -1,30 +1,28 @@
-// Package serve is a plugin program's side of the plugin protocol (docs/extensions.md「进程扩展协议」): it answers
-// initialize and ping and hands each namespaced call (connector.status, …) to the handler of its namespace. A
-// third party's program written in Go can use it as is; one in another language does the same on the wire and is
-// held to it by plugin/conformance.
+// Package serve is the hub's built-in programs' side of the process protocol (docs/extensions.md「进程扩展协议」),
+// on the official Go SDK (sdk/go/ext): the same code a third party's extension uses, with the hub's own types for
+// initialize and its rpc errors, so the connector and channel programs built into personad keep their shape.
 package serve
 
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
-	"strings"
-	"sync"
 
+	"github.com/nwverse/persona/sdk/go/ext"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // Handler answers the calls of one namespace: method is without the namespace ("status" for connector.status),
 // params as sent (with "contribution").
-type Handler func(ctx context.Context, method string, params json.RawMessage) (any, error)
+type Handler = ext.Handler
 
-// Program is a plugin program.
+// Program is an extension program.
 type Program struct {
 	ID, Version string
-	// Manifest is its persona-plugin.json, answered to manifest (a plugin elsewhere must have it; one the hub starts
-	// from its package may leave it out).
+	// Manifest is its persona-extension.json, answered to manifest (an extension elsewhere must have it; one the
+	// hub starts from its package may leave it out).
 	Manifest json.RawMessage
 	// Init is called once, with what the hub sent; it says what the program contributes this run (a subset of its
 	// manifest's), and may start the program's own work with ctx (which ends with the program).
@@ -34,107 +32,40 @@ type Program struct {
 }
 
 // Hub is the hub, for a program's calls and events.
-type Hub struct{ peer *rpc.Peer }
+type Hub struct{ h *ext.Hub }
 
-// Call calls a method of the hub's (connector.secrets.load, …).
+// Call calls a method of the hub's (connector.secrets.load, …); its errors are the hub's *rpc.Error.
 func (h *Hub) Call(ctx context.Context, method string, params, out any) error {
-	return h.peer.Call(ctx, method, params, out)
+	return rpcError(h.h.Call(ctx, method, params, out))
 }
 
 // Notify sends the hub an event (connector.changed, …).
-func (h *Hub) Notify(event string, params any) error { return h.peer.Notify(event, params) }
+func (h *Hub) Notify(event string, params any) error { return rpcError(h.h.Notify(event, params)) }
 
 // Serve serves prog on in / out until the hub closes them (the program should then exit) or ctx ends.
 func Serve(ctx context.Context, in io.Reader, out io.Writer, prog Program) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	peer := rpc.New("p", out)
-	s := &server{prog: prog, hub: &Hub{peer: peer}, ctx: ctx}
-	peer.OnRequest = s.handle
-	peer.OnEvent = s.event
-	return peer.Serve(ctx, in)
-}
-
-type server struct {
-	prog Program
-	hub  *Hub
-	ctx  context.Context
-
-	mu          sync.Mutex
-	initialized bool
-	contributes map[string]any
-}
-
-func (s *server) handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
-	if method == extension.MInitialize {
-		return s.initialize(params)
-	}
-	if method == extension.MManifest {
-		if len(s.prog.Manifest) == 0 {
-			return nil, &rpc.Error{Code: extension.CodeUnknownMethod, Message: "no manifest here: it is in the package"}
-		}
-		return s.prog.Manifest, nil
-	}
-	s.mu.Lock()
-	ok := s.initialized
-	s.mu.Unlock()
-	if !ok {
-		return nil, &rpc.Error{Code: extension.CodeNotInitialized, Message: "not initialized"}
-	}
-	if method == extension.MPing {
-		return struct{}{}, nil
-	}
-	ns, rest, found := strings.Cut(method, ".")
-	h := s.prog.Namespaces[ns]
-	if !found || h == nil {
-		return nil, &rpc.Error{Code: extension.CodeUnknownMethod, Message: "unknown method " + method}
-	}
-	return h(ctx, rest, params)
-}
-
-// event hands an event the hub tells (event.<topic>) to its namespace's handler; nothing is answered.
-func (s *server) event(method string, params json.RawMessage) {
-	s.mu.Lock()
-	ok := s.initialized
-	s.mu.Unlock()
-	ns, rest, found := strings.Cut(method, ".")
-	if h := s.prog.Namespaces[ns]; ok && found && h != nil {
-		go func() { _, _ = h(s.ctx, rest, params) }()
-	}
-}
-
-func (s *server) initialize(raw json.RawMessage) (any, error) {
-	var p extension.InitializeParams
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return nil, err
-	}
-	if p.Protocol != extension.Protocol {
-		return nil, &rpc.Error{Code: extension.CodeWrongProtocol, Message: fmt.Sprintf("protocol %d, not %d", p.Protocol, extension.Protocol)}
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if !s.initialized {
-		var contributes map[string]any
-		if s.prog.Init != nil {
-			var err error
-			if contributes, err = s.prog.Init(s.ctx, p, s.hub); err != nil {
+	p := ext.Program{ID: prog.ID, Version: prog.Version, Manifest: prog.Manifest, Namespaces: prog.Namespaces}
+	if prog.Init != nil {
+		p.Init = func(ctx context.Context, in *ext.Init, hub *ext.Hub) (map[string]any, error) {
+			var params extension.InitializeParams
+			if err := json.Unmarshal(in.Raw, &params); err != nil {
 				return nil, err
 			}
-		}
-		s.initialized, s.contributes = true, contributes
-	}
-	res := extension.InitializeResult{Protocol: extension.Protocol, ID: s.prog.ID, Version: s.prog.Version}
-	if len(s.contributes) > 0 {
-		res.Contributes = map[string]json.RawMessage{}
-		for k, v := range s.contributes {
-			b, err := json.Marshal(v)
-			if err != nil {
-				return nil, err
-			}
-			res.Contributes[k] = b
+			return prog.Init(ctx, params, &Hub{h: hub})
 		}
 	}
-	return res, nil
+	return ext.Serve(ctx, in, out, p)
+}
+
+func rpcError(err error) error {
+	var e *ext.Error
+	switch {
+	case errors.As(err, &e):
+		return &rpc.Error{Message: e.Message, Code: e.Code, Data: e.Data}
+	case errors.Is(err, ext.ErrClosed):
+		return rpc.ErrClosed
+	}
+	return err
 }
 
 // NoContribution is the error for a call to a contribution the program does not have.
@@ -143,11 +74,7 @@ func NoContribution(id string) error {
 }
 
 // Contribution reads the contribution a call is for ("" when the call did not say).
-func Contribution(params json.RawMessage) string {
-	var t extension.Target
-	_ = json.Unmarshal(params, &t)
-	return t.Contribution
-}
+func Contribution(params json.RawMessage) string { return ext.Contribution(params) }
 
 // UnknownMethod is the error for a method the namespace does not have.
 func UnknownMethod(method string) error {
