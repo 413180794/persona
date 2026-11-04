@@ -291,8 +291,9 @@ func (h *Hub) extensionRoutes(api *http.ServeMux) {
 	// A plugin's program on a computer: the app's requests to it (extension_nodes.go).
 	api.HandleFunc("/api/v1/extensions/{id}/-/machines/{mid}/", h.serveNodeExtensionHTTP)
 	api.HandleFunc("/api/v1/extensions/{id}/", func(w http.ResponseWriter, r *http.Request) {
-		// A plugin can do anything the hub can (it may hold its token): not for an answer-only device.
-		if principalOf(r.Context()).Role != roleFull {
+		// A plugin can do anything the hub can (it may hold its token): not for an answer-only device. An extension
+		// gets here with the scope to call this one (extensions.call:<id>).
+		if answerOnly(r) {
 			writeErr(w, http.StatusForbidden, errors.New("this device can only read and answer"))
 			return
 		}

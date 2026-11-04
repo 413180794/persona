@@ -201,7 +201,8 @@ hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的�
 | --- | --- | --- | --- |
 | 运行程序（有 `runtime` 就有） | — | 在 hub 机器上以 hub 的系统用户运行，能读写这个用户能读写的文件 | 只展示：**没有沙箱** |
 | `network` | 主机名列表，可以 `*.` 开头，小写，不带协议、端口、路径 | 会访问哪些地方 | 只展示和记录；hub 暂不拦截别的地址 |
-| `hub_api` | `true` | 拿到 hub 的地址和完整 token（`PERSONA_HUB_URL`、`PERSONA_HUB_TOKEN`），能做 hub 主人能做的一切 | 没接受就不给这两个变量 |
+| `hub` | 范围的列表，见下面「hub 的接口：范围」 | 用 hub 的哪几部分接口（读知识库、驱动 Agent……） | 扩展拿到的 token 只开这些范围的路由，别的回 403 `permission_denied` |
+| `hub_api`（旧写法） | `true` | 拿到 hub 的地址和完整 token（`PERSONA_HUB_URL`、`PERSONA_HUB_TOKEN`），能做 hub 主人能做的一切 | 没接受就不给这两个变量；安装页写成「完整权限（旧写法）」并给警告。同时写了 `hub` 的以 `hub` 为准 |
 | `launcher_keys` | `true` | 用启动器的 Key 访问它的网关（贡献 `quota`、`launcher_section` 的 `ui` 必须有） | 扩展看不到 Key：hub 或那台电脑替它发请求，只发到启动器自己的网关；没接受就不问它 |
 | 显示在 App 里（有 `nav_page` / `overview_card` / `machine_section` / `inbox_item` 的 `ui` 就有） | — | 在主导航、总览、机器详情页、收件箱条目的详情里显示自己的界面（列出每处的标题） | 和事件一样不用写在 `permissions` 里，按贡献算进安装前给人看的「它可以」和权限摘要；升级时多了一处要重新同意，见「UI 插槽」「权限」 |
 | 密钥（有 `secrets` 就有） | — | 用你填的密钥 | 每个扩展只拿到自己的 |
@@ -211,7 +212,39 @@ hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的�
 | `node.permissions.macos_privacy` | `true` | 会请求 Mac 的完全磁盘访问、辅助功能这类系统权限 | 只展示；系统权限要用户在那台 Mac 上同意 |
 | 发给电脑的密钥（`node.secrets`） | — | 这几个密钥会发到选中的电脑上 | 只在内存里交给程序，不落那台电脑的盘 |
 
-后面的扩展点会加细的权限（`kb.read`、`inbox.read`、`agents.control`……），按接受的权限放行 hub 提供给扩展的方法，没接受回 `permission_denied`。
+#### hub 的接口：范围（#1855）
+
+扩展要调 hub 的 HTTP 接口，就在 `permissions.hub` 里列出用到的范围，不再要完整 token：
+
+```json
+"permissions": {"hub": ["kb.read", "agents.read"]}
+```
+
+| 范围 | 安装页的说法 | 开哪些路由 |
+| --- | --- | --- |
+| `kb.read` | 读知识库 | `GET /api/v1/kb/…`、`GET /api/v1/kb-search` |
+| `kb.write` | 改知识库里的条目 | `PUT /api/v1/kb/{kind}/{id}` |
+| `inbox.read` | 读收件箱 | `GET /api/v1/inbox`、`/inbox/{id}`、`/inbox/mutes` |
+| `inbox.write` | 处理收件箱 | 标为已处理、起草、回复（只能是文字：带 `changes` 或 `/agent` 的回复照旧只认完整权限）、文档状态、静音、刷新 |
+| `agents.read` | 看各台电脑上的 Agent 和对话 | `GET /api/v1/sessions…`（列表、信息、条目、图片、屏幕）、`/interactions`、`/agents…`（个人 Agent）、`/workspaces`、`/workspace-board` |
+| `agents.control` | 驱动 Agent | `POST /api/v1/sessions`（新建）、对话的 `messages` / `interrupt` / `queue` / `seen`、`POST /api/v1/interactions/{id}/resolve`、个人 Agent 的发消息和已读 |
+| `machines.read` | 看你的各台电脑 | `GET /api/v1/machines`、`/machines/{id}/metrics`、`/machines/{mid}/stat` |
+| `notify` | 给你的设备发通知 | `POST /api/v1/notify`（#1576 合并后登记） |
+| `assistant.ask` | 给 Persona 开对话、读对话动态 | `GET /api/v1/assistant`、`POST /api/v1/assistant/conversations`、`GET …/conversations/{id}/feed` |
+| `extensions.call:<扩展 id>` | 调用扩展「…」的接口 | 那个扩展自己的 HTTP：`/api/v1/extensions/<id>/…`（不含 hub 的 `/-/` 接口） |
+
+- **哪条路由属于哪个范围**登记在 `server/internal/hub/extension_scopes.go` 的 `routeScopes`（按路由注册时的 pattern）；**没登记的路由只认完整的凭据**，扩展的 token 一律 403。
+  hub 的全部路由和各自的决定列在 `server/internal/hub/testdata/route_scopes.txt`（`-` 是只认完整凭据），`TestRouteScopes` 守着它：加了路由测试就失败，
+  要先决定扩展能不能调（要的话加进 `routeScopes`），再 `PERSONA_UPDATE_ROUTE_SCOPES=1 go test ./internal/hub -run TestRouteScopes`，在 diff 里看清楚。
+- **token**：`pext_` 开头。hub 每次启动扩展的程序时签一个新的（旧的同时作废），经环境变量 `PERSONA_HUB_URL` / `PERSONA_HUB_TOKEN`（旧名 `JARVIS_*` 一起给）
+  和 `initialize` 的 `hub.url` / `hub.token` / `hub.scopes` 给它（跑在别处的扩展只有 `initialize` 这一条）。扩展停用、升级、改配置、卸载时作废，下次启动再签。
+  token 只在 hub 的内存里：扩展的进程是 hub 的子进程，随 hub 一起重启（`docs/hub-restart.md`），新 hub 会再签新的；以后把扩展挪出 hub 的 cgroup 时再落库。
+- 只认本机：扩展的 token 从公网来的请求回 403 `extension_token_local_only`。没有范围的路由回 403 `{"code": "permission_denied"}`，缺范围的再带 `scope`（缺的那个）。
+- 扩展用 token 调这些路由时和完整权限的设备一样（不受手表那种只读设备的限制：回答卡片、发消息照常），收件箱带 `changes` / `/agent` 的回复除外。
+- **兼容**：`hub_api: true` 的老扩展照旧拿 hub 的完整 token（只在环境变量里），装、升级时多一条警告「hub_api 是旧写法」；hub.json 里的扩展照旧拿完整 token。
+  完整 token 涵盖所有范围：从 `hub_api` 升级到只要几个范围的新版本不用重新同意；反过来要。
+- 权限摘要算上范围（规范化：排序、去重）；没有 `hub` 的扩展摘要和以前一样。升级时多了范围要重新同意，`added_permissions` 里是「使用 hub 的更多功能」。
+
 **权限摘要**：`permissions`（规范化后）加上「运行不运行程序」的 sha256；有 `node` 的再加上它的系统、node 侧权限和发给电脑的密钥名（没有 `node` 的扩展摘要和以前一样，已装的不用重新同意）。安装要回传预览给的摘要；升级时权限变多了也要（没变多不用重新同意，但仍要明确执行升级）。
 接受的那一份存在 `plugins.granted`。
 
@@ -424,7 +457,7 @@ README 写了只用 openssl 验证的步骤。
 - 说协议的扩展在 `initialize` 里拿到 `config`、`secrets`；不说协议的经环境变量 `PERSONA_EXTENSION_CONFIG`、`PERSONA_EXTENSION_SECRETS`（都是 JSON）。
   每个扩展只拿到自己的。改了配置、密钥或开关，hub 重启这个扩展的进程（不做热更新）。
 - 环境变量：`PERSONA_EXTENSION_ID`、`PERSONA_EXTENSION_DIR`（包目录）、`PERSONA_EXTENSION_DATA`（`~/.persona/extensions/data/<id>/`，扩展自己的缓存和数据，卸载时删）、
-  `PERSONA_EXTENSION_SOCKET`（有 `http` 时）；接受了 `hub_api` 的还有 `PERSONA_HUB_URL`、`PERSONA_HUB_TOKEN`。旧的 `JARVIS_*` 名字一起给。
+  `PERSONA_EXTENSION_SOCKET`（有 `http` 时）；要了 `hub` 范围的还有 `PERSONA_HUB_URL`、`PERSONA_HUB_TOKEN`（只开那些范围，每次启动换新，见「权限」「hub 的接口：范围」），接受了 `hub_api`（旧写法）的拿到的是完整 token。旧的 `JARVIS_*` 名字一起给。
 - **安装的扩展拿不到 hub 自己的环境变量**：hub 的环境里可能有它自己的凭据（Docker 部署时的数据库连接串），所以安装的扩展只继承一份白名单
   （`PATH`、`HOME`、`USER`、`LANG`、`TZ`、`TMPDIR`、代理和证书的几个，`host.PassEnv`），再加上面这些。内置的和 hub.json 来的照旧继承 hub 的全部环境。
 - 连接器运行中自己存的状态（Telegram 的会话）照旧走 `connector.secrets.*`，存 `connector_secrets`，按连接器 id 一份：那是程序自己写的，和用户填的密钥分开。
@@ -658,7 +691,7 @@ App 画一个插槽时在 `context` 里说清楚是给谁画、画在哪，hub �
   App 每次画、每个动作都带 `item`，hub 每次重新读这一条（扩展按钮做完事后重画，看到的是最新的）。
 - **画在哪**：App 自己的头部（标题、来源、已处理、✦ 摘要、AI 草拟回复 / 交给 AI）不变，扩展画的是下面的正文，代替原来的会话页 / 正文
   （插槽不能改 App 自己的页面和行为，见上面）。所以扩展不重复画标题、分级、总结和已处理，画 meta 里才有的：涉及的人、时间跨度、「接着《…》」、消息链。
-  按钮走 `ui.action`：回复是输入框加提交，扩展经 `hub_api` 调现有的 `POST /api/v1/inbox/{id}/reply`（App 收到 `inbox` 推送照常刷新）；已处理在 App 的头部里，扩展不画。
+  按钮走 `ui.action`：回复是输入框加提交，扩展用 `inbox.write` 范围（老扩展是 `hub_api`）调现有的 `POST /api/v1/inbox/{id}/reply`（App 收到 `inbox` 推送照常刷新）；已处理在 App 的头部里，扩展不画。
 - **在会话里看**（通用，不认飞书）：`ui.action` 回 `open_url: "persona://inbox/<条目 id>/source"`（id 按一段路径转义，`extension.InboxSourceURL`；`lark:F1:1051` 这样的原样）。
   `open_url` 本来只收 https，hub 只为 `inbox_item`、只为这次画的那一条（`context.item`）放行这一个 app 内链接，别的 `persona:` 链接、别的条目的、其他插槽的都回 502 `plugin_failed`。
   App 收到就打开这件事来源的原生页面，也就是没有插槽时点开这件事进的那一页：飞书是会话页，按条目的 `lark.start_position` 停在这件事的第一条（扩展写 `extra` 时就填事件的第一条）。
@@ -790,7 +823,7 @@ View 带 `refresh_after`（秒）：这个 View 在屏幕上时，App 过这么�
 ## 事件
 
 扩展贡献 `events`，订阅 hub 上发生的事。只是**告诉**它（事件 `event.<名字>`，不等回答），它不能借此拦住或改动什么；要做事就用自己有的权限
-（比如 `hub_api`）。订阅的事件和权限一样在安装前列出来，升级时多订了也要重新同意。扩展必须 `on_startup`（事件只发给在跑的扩展，不为一个事件拉起进程）。
+（比如 `hub` 的范围）。订阅的事件和权限一样在安装前列出来，升级时多订了也要重新同意。扩展必须 `on_startup`（事件只发给在跑的扩展，不为一个事件拉起进程）。
 
 | 事件 | 参数 |
 | --- | --- |

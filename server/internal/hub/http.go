@@ -26,6 +26,7 @@ func (h *Hub) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/health", h.health)
 	api := http.NewServeMux()
+	h.apiMux = api
 	h.workspaceBoardRoutes(api)
 	if h.upd != nil {
 		h.upd.routes(api)
@@ -167,7 +168,7 @@ func (h *Hub) routes() http.Handler {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
-		if principalOf(r.Context()).Role != roleFull && !answerMayResolve(res) {
+		if answerOnly(r) && !answerMayResolve(res) {
 			writeErr(w, http.StatusForbidden, errors.New("this device can only answer with a card's own choices"))
 			return
 		}
@@ -312,7 +313,21 @@ func (h *Hub) auth(next http.Handler) http.Handler {
 			h.securityError(w, r, http.StatusForbidden, "master_token_local_only", 0)
 			return
 		}
-		if !allowed(p, r.Method, r.URL.Path) {
+		if p.Role == roleExtension {
+			// An extension's token is for the hub it runs beside, on this machine (hub.url).
+			if public {
+				h.securityError(w, r, http.StatusForbidden, "extension_token_local_only", 0)
+				return
+			}
+			if ok, scope := h.extensionMay(p, r); !ok {
+				body := errorBody(http.StatusForbidden, "permission_denied", errors.New("this extension was not granted this part of the hub's API"))
+				if scope != "" {
+					body["scope"] = scope
+				}
+				writeErrorBody(w, http.StatusForbidden, body)
+				return
+			}
+		} else if !allowed(p, r.Method, r.URL.Path) {
 			msg := "this device can only read and answer"
 			if p.Role == roleLink || p.Role == roleLinkPair {
 				msg = "a Persona Link credential only opens its machine's link"

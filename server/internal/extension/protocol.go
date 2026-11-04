@@ -119,6 +119,12 @@ type HubInfo struct {
 	// Capabilities are what this hub does that a plugin may go by ("inbox_group": it relates a connector's batches of
 	// new messages to inbox events, docs/inbox.md「事件合成」). Absent or without one: the hub does not do it.
 	Capabilities []string `json:"capabilities,omitempty"`
+	// URL and Token are the hub's API on this machine and a token of the scopes it was granted (permissions.hub; also
+	// PERSONA_HUB_URL / PERSONA_HUB_TOKEN when the hub runs it): a new one each start, revoked when it stops for good.
+	// An extension granted the full token the old way (hub_api) has it in the environment only.
+	URL    string   `json:"url,omitempty"`
+	Token  string   `json:"token,omitempty"`
+	Scopes []string `json:"scopes,omitempty"`
 }
 
 // Hub capabilities (HubInfo.Capabilities).

@@ -117,7 +117,7 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 			p["text"] = h.withTodoDecisions(r.Context(), todoID, text)
 		}
 	}
-	if principalOf(r.Context()).Role != roleFull {
+	if answerOnly(r) {
 		// An answer-only device says something to a conversation it can see, no more. A message to an id nobody has starts
 		// an agent on the computer; which program runs it, and whatever else a send can shape, are a full device's to pick;
 		// and it is text for the agent, not keys for the terminal.

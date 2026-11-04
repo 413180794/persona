@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -62,6 +63,8 @@ type Spec struct {
 	Args    []string
 	Dir     string
 	Env     []string // added to the hub's environment
+	// StartEnv is more environment, asked at each start of the program (a credential made new each time).
+	StartEnv func() []string
 	// CleanEnv: the program gets only the basics of the hub's environment (PassEnv), not all of it: the hub's may
 	// hold its own credentials (a database URL). An installed plugin's is clean; the hub's own and hub.json's are not.
 	CleanEnv bool
@@ -672,7 +675,11 @@ func (p *Proc) spawn(ctx context.Context) (*child, io.Reader, error) {
 	if p.spec.CleanEnv {
 		base = basics(base)
 	}
-	cmd.Env = identity.Environment(base, p.spec.Env...)
+	env := p.spec.Env
+	if p.spec.StartEnv != nil {
+		env = append(slices.Clone(env), p.spec.StartEnv()...)
+	}
+	cmd.Env = identity.Environment(base, env...)
 	cmd.SysProcAttr = osproc.GroupAttr() // so stopping it takes its children too
 	ch := &child{cmd: cmd, exited: make(chan error, 1)}
 	var out io.Reader

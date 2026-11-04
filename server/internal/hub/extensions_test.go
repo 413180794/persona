@@ -48,6 +48,10 @@ func TestMain(m *testing.M) {
 		serveAPIExtensionForTest()
 		return
 	}
+	if os.Getenv("JARVIS_TEST_PLUGIN") == "scoped" {
+		serveScopedExtensionForTest()
+		return
+	}
 	if os.Getenv("JARVIS_TEST_PLUGIN") == "agentsrc" {
 		serveAgentSourceExtensionForTest()
 		return

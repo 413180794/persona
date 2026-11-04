@@ -64,8 +64,11 @@ type SecretSpec struct {
 
 // Permissions: A closed vocabulary: a permission the hub does not know fails the install.
 type Permissions struct {
-	Network      []string `json:"network,omitempty"`
-	HubAPI       bool     `json:"hub_api,omitempty"`
+	Network []string `json:"network,omitempty"`
+	// The old way: the hub's full token. With hub scopes, the scopes win.
+	HubAPI bool `json:"hub_api,omitempty"`
+	// The scopes of the hub's API it calls: its token opens their routes only.
+	Hub          []string `json:"hub,omitempty"`
 	LauncherKeys bool     `json:"launcher_keys,omitempty"`
 }
 
@@ -286,6 +289,11 @@ type HubInfo struct {
 	Role            string         `json:"role,omitempty"`
 	Timezone        string         `json:"timezone,omitempty"`
 	Capabilities    []string       `json:"capabilities,omitempty"`
+	// The hub's API on this machine, for the token below.
+	URL string `json:"url,omitempty"`
+	// A token of the scopes it was granted (permissions.hub): new each start.
+	Token  string   `json:"token,omitempty"`
+	Scopes []string `json:"scopes,omitempty"`
 }
 
 type ExtensionInfo struct {

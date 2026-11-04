@@ -677,14 +677,17 @@ func (m *Manifest) Kind() string {
 	return ""
 }
 
-// Lint are warnings that do not stop an install: extension points this hub does not have, configuration properties
-// that look like secrets.
+// Lint are warnings that do not stop an install: extension points this hub does not have, the hub's full token asked
+// the old way, configuration properties that look like secrets.
 func (m *Manifest) Lint() []string {
 	var out []string
 	for _, name := range sortedKeys(m.Contributes) {
 		if _, ok := Points[name]; !ok {
 			out = append(out, fmt.Sprintf("contributes.%s: this hub has no such extension point (a newer hub's?); it does not take effect", name))
 		}
+	}
+	if m.Permissions.FullHub() {
+		out = append(out, "permissions.hub_api is the old way: it gets the hub's full token; ask for the scopes it uses under permissions.hub")
 	}
 	if s, err := ParseSchema(m.Configuration); err == nil && s != nil {
 		for _, f := range s.Fields {

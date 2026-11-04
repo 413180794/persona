@@ -90,7 +90,14 @@ data class ExtensionSecretSpec(
 @Serializable
 data class ExtensionPermissions(
     val network: List<String>? = null,
+    /**
+     * The old way: the hub's full token. With hub scopes, the scopes win.
+     */
     @SerialName("hub_api") val hubApi: Boolean? = null,
+    /**
+     * The scopes of the hub's API it calls: its token opens their routes only.
+     */
+    val hub: List<String>? = null,
     @SerialName("launcher_keys") val launcherKeys: Boolean? = null,
 )
 
@@ -355,6 +362,15 @@ data class ExtensionHubInfo(
     val role: String? = null,
     val timezone: String? = null,
     val capabilities: List<String>? = null,
+    /**
+     * The hub's API on this machine, for the token below.
+     */
+    val url: String? = null,
+    /**
+     * A token of the scopes it was granted (permissions.hub): new each start.
+     */
+    val token: String? = null,
+    val scopes: List<String>? = null,
 )
 
 @Serializable

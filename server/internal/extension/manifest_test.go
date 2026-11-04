@@ -143,6 +143,10 @@ func TestParseRefuses(t *testing.T) {
 		"secret without title": func(m map[string]any) { m["secrets"] = []any{map[string]any{"name": "k"}} },
 		"network with scheme":  func(m map[string]any) { m["permissions"] = map[string]any{"network": []any{"https://example.com"}} },
 		"unknown permission":   func(m map[string]any) { m["permissions"] = map[string]any{"files": true} },
+		"unknown hub scope":    func(m map[string]any) { m["permissions"] = map[string]any{"hub": []any{"kb.delete"}} },
+		"bad extension to call": func(m map[string]any) {
+			m["permissions"] = map[string]any{"hub": []any{"extensions.call:Bad ID"}}
+		},
 		"schema keyword": func(m map[string]any) {
 			m["configuration"] = map[string]any{"type": "object", "properties": map[string]any{"a": map[string]any{"type": "string", "$ref": "#"}}}
 		},
@@ -224,6 +228,48 @@ func TestDigestAndCovers(t *testing.T) {
 	}
 	if strings.Join(keys, ",") != "runs_code,network,hub_api,secrets" {
 		t.Fatal(keys)
+	}
+	if !strings.Contains(strings.Join(c.Lint(), "\n"), "hub_api is the old way") {
+		t.Fatal("the full token asked the old way warns")
+	}
+}
+
+// Scopes of the hub's API: shown by what they open, in a digest of their own, an upgrade asking for one more says so.
+func TestHubScopes(t *testing.T) {
+	a, _ := Parse([]byte(exampleManifest))
+	s, err := Parse(with(t, func(m map[string]any) {
+		m["permissions"] = map[string]any{"network": []any{"notes.example.com"}, "hub": []any{"inbox.read", "kb.read", "kb.read", "extensions.call:other"}}
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if Digest(a) == Digest(s) {
+		t.Fatal("scopes are in the digest")
+	}
+	var hub PermissionLine
+	for _, l := range Explain(s) {
+		if l.Key == "hub_api" {
+			t.Fatal("scopes are not the full token")
+		}
+		if l.Key == "hub" {
+			hub = l
+		}
+	}
+	if hub.Detail != "读知识库；读收件箱；调用扩展「other」的接口" {
+		t.Fatalf("%+v", hub)
+	}
+	if len(s.Lint()) != 0 {
+		t.Fatal(s.Lint())
+	}
+	more, _ := Parse(with(t, func(m map[string]any) {
+		m["permissions"] = map[string]any{"network": []any{"notes.example.com"}, "hub": []any{"inbox.read", "kb.read", "agents.control"}}
+	}))
+	added := Added(s, more)
+	if len(added) != 1 || added[0].Key != "hub" || added[0].Detail != "驱动 Agent（新建、发消息、打断、回答提问和批准）" {
+		t.Fatalf("%+v", added)
+	}
+	if s.Permissions.Covers(more.Permissions) || !more.Permissions.Covers(a.Permissions) {
+		t.Fatal("covers")
 	}
 }
 

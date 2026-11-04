@@ -176,18 +176,23 @@ nonisolated struct ExtensionSecretSpec: Codable, Equatable, Sendable {
 /// A closed vocabulary: a permission the hub does not know fails the install.
 nonisolated struct ExtensionPermissions: Codable, Equatable, Sendable {
     var network: [String]?
+    /// The old way: the hub's full token. With hub scopes, the scopes win.
     var hubApi: Bool?
+    /// The scopes of the hub's API it calls: its token opens their routes only.
+    var hub: [String]?
     var launcherKeys: Bool?
 
-    init(network: [String]? = nil, hubApi: Bool? = nil, launcherKeys: Bool? = nil) {
+    init(network: [String]? = nil, hubApi: Bool? = nil, hub: [String]? = nil, launcherKeys: Bool? = nil) {
         self.network = network
         self.hubApi = hubApi
+        self.hub = hub
         self.launcherKeys = launcherKeys
     }
 
     enum CodingKeys: String, CodingKey {
         case network
         case hubApi = "hub_api"
+        case hub
         case launcherKeys = "launcher_keys"
     }
 
@@ -195,6 +200,7 @@ nonisolated struct ExtensionPermissions: Codable, Equatable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.network = try? c.decodeIfPresent([String].self, forKey: .network)
         self.hubApi = try? c.decodeIfPresent(Bool.self, forKey: .hubApi)
+        self.hub = try? c.decodeIfPresent([String].self, forKey: .hub)
         self.launcherKeys = try? c.decodeIfPresent(Bool.self, forKey: .launcherKeys)
     }
 }
@@ -879,13 +885,21 @@ nonisolated struct ExtensionHubInfo: Codable, Equatable, Sendable {
     var role: String?
     var timezone: String?
     var capabilities: [String]?
+    /// The hub's API on this machine, for the token below.
+    var url: String?
+    /// A token of the scopes it was granted (permissions.hub): new each start.
+    var token: String?
+    var scopes: [String]?
 
-    init(build: Int64 = 0, extensionPoints: [String: Int] = [:], role: String? = nil, timezone: String? = nil, capabilities: [String]? = nil) {
+    init(build: Int64 = 0, extensionPoints: [String: Int] = [:], role: String? = nil, timezone: String? = nil, capabilities: [String]? = nil, url: String? = nil, token: String? = nil, scopes: [String]? = nil) {
         self.build = build
         self.extensionPoints = extensionPoints
         self.role = role
         self.timezone = timezone
         self.capabilities = capabilities
+        self.url = url
+        self.token = token
+        self.scopes = scopes
     }
 
     enum CodingKeys: String, CodingKey {
@@ -894,6 +908,9 @@ nonisolated struct ExtensionHubInfo: Codable, Equatable, Sendable {
         case role
         case timezone
         case capabilities
+        case url
+        case token
+        case scopes
     }
 
     init(from decoder: Decoder) throws {
@@ -903,6 +920,9 @@ nonisolated struct ExtensionHubInfo: Codable, Equatable, Sendable {
         self.role = try? c.decodeIfPresent(String.self, forKey: .role)
         self.timezone = try? c.decodeIfPresent(String.self, forKey: .timezone)
         self.capabilities = try? c.decodeIfPresent([String].self, forKey: .capabilities)
+        self.url = try? c.decodeIfPresent(String.self, forKey: .url)
+        self.token = try? c.decodeIfPresent(String.self, forKey: .token)
+        self.scopes = try? c.decodeIfPresent([String].self, forKey: .scopes)
     }
 }
 

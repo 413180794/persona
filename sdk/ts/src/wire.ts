@@ -57,7 +57,10 @@ export interface SecretSpec {
  */
 export interface Permissions {
   network?: string[];
+  /** The old way: the hub's full token. With hub scopes, the scopes win. */
   hub_api?: boolean;
+  /** The scopes of the hub's API it calls: its token opens their routes only. */
+  hub?: string[];
   launcher_keys?: boolean;
 }
 
@@ -261,6 +264,11 @@ export interface HubInfo {
   role?: HubRole;
   timezone?: string;
   capabilities?: string[];
+  /** The hub's API on this machine, for the token below. */
+  url?: string;
+  /** A token of the scopes it was granted (permissions.hub): new each start. */
+  token?: string;
+  scopes?: string[];
 }
 
 export interface ExtensionInfo {

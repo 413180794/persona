@@ -14,6 +14,8 @@
 - 电脑链路的凭据（[link.md](link.md)）：`POST /api/v1/auth/tokens {"kind":"link","machine":"<hub.json 里 kind 为 link 的机器>"}` → `role: link`，
   只能开 `/api/v1/link` 和 `/api/v1/link/stream`，其他接口 403；列表里带 `machine_id`。用给这台生成的配对码（下文 `{"machine"}`）兑换时，
   kind 和 machine 由配对码决定，请求里写别的机器返回 403。
+- 扩展的 token（`pext_` 开头，#1855）：hub 按扩展接受了的范围（`permissions.hub`）签发，只开那些范围登记的路由，其余 403 `permission_denied`（缺范围时带 `scope`），
+  只认本机来的请求；见 [extensions.md](extensions.md)「权限」「hub 的接口：范围」。
 - hub 互联（[mesh.md](mesh.md)）：另一台 hub 的凭据 kind / role 都是 `peer`（`machine_id` 是对方的 hub_id），只能开 `GET /api/v1/peer`；
   互联码 `jx_…` 只能 `POST /api/v1/peer/pair`；别的接口一律 403。组里只有**中心 hub** 认 App 的凭据：成员把 App 的请求原样（带 `Authorization`）
   转给中心，成员加入时把它签过的凭据（hash）交给中心，所以配对在成员上的设备照常能用。中心连不上时成员回

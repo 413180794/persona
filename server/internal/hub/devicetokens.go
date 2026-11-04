@@ -43,6 +43,9 @@ type principal struct {
 	PairHash    string
 	PairExpires time.Time
 	Machine     string // roleLink, roleLinkPair: the machine in hub.json it is bound to; rolePeer: the peer's hub_id
+	// roleExtension: the extension the token was made for and the scopes it opens (extension_scopes.go).
+	Extension string
+	Scopes    []string
 }
 
 type principalKey struct{}
@@ -96,6 +99,9 @@ func (h *Hub) authenticate(ctx context.Context, tok string) (principal, bool) {
 	}
 	if subtle.ConstantTimeCompare([]byte(tok), []byte(h.cfg.Token)) == 1 {
 		return principal{Role: roleFull}, true
+	}
+	if strings.HasPrefix(tok, extTokenPrefix) {
+		return h.extTokens.lookup(tok)
 	}
 	if h.store == nil {
 		return principal{}, false

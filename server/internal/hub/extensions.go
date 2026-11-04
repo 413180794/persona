@@ -408,6 +408,11 @@ func (ps *extensions) apply(ctx context.Context, id string) {
 	old := ps.byID[id]
 	delete(ps.byID, id)
 	ps.mu.Unlock()
+	if ps.h != nil {
+		// Switched off, upgraded (maybe to fewer scopes), uninstalled or reconfigured: its token goes now, and a new
+		// one comes with its next start.
+		ps.h.extTokens.revoke(id)
+	}
 	if old != nil {
 		ps.removeAgentSources(old)
 		for _, c := range old.conns {
@@ -536,6 +541,8 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 	id := p.Record.ID
 	s := host.Spec{ID: id, Name: m.Name, Logf: ps.logf}
 	hubEnv := ps.hubEnv()
+	var hubToken startToken // its token of the hub's API this start (extension_scopes.go)
+
 	if c, ok := p.Legacy.(ExtensionConfig); ok { // hub.json's, exactly as it has always run
 		hp.socket = ps.legacySocket(c)
 		s.HTTP, s.Socket, s.Startup = true, hp.socket, true
@@ -595,8 +602,13 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 			s.HTTP, s.Socket = true, hp.socket
 			s.Env = append(s.Env, "PERSONA_PLUGIN_SOCKET="+hp.socket)
 		}
-		if p.Record.Granted.HubAPI {
+		if p.Record.Granted.FullHub() {
 			s.Env = append(s.Env, hubEnv...)
+		} else if len(p.Record.Granted.Hub) > 0 && ps.h != nil {
+			url := hubLocalURL(ps.h.cfg.Listen)
+			s.StartEnv = func() []string {
+				return []string{"JARVIS_HUB_URL=" + url, "JARVIS_HUB_TOKEN=" + hubToken.renew(ps, p)}
+			}
 		}
 		if !s.RPC { // no initialize to carry them
 			secrets, err := ps.reg.Secrets(ctx, id)
@@ -631,6 +643,14 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 		params := extension.InitializeParams{Hub: extension.HubInfo{Build: build, ExtensionPoints: extension.PointVersions(), Role: role, Timezone: tz,
 			Capabilities: extension.HubCapabilities()}, Extension: info,
 			Config: ps.reg.Config(p), Secrets: secrets, Granted: p.Record.Granted, Active: map[string][]string{}}
+		if g := p.Record.Granted; !g.FullHub() && len(g.Hub) > 0 && ps.h != nil {
+			// The program the hub started has it already (StartEnv); one elsewhere gets its first here.
+			tok := hubToken.current()
+			if tok == "" || p.Record.Remote != nil {
+				tok = hubToken.renew(ps, p)
+			}
+			params.Hub.URL, params.Hub.Token, params.Hub.Scopes = hubLocalURL(ps.h.cfg.Listen), tok, slices.Clone(g.Hub)
+		}
 		for _, c := range conns {
 			if ps.h == nil || ps.h.connectors.Enabled(c.ID) {
 				params.Active["connectors"] = append(params.Active["connectors"], c.ID)

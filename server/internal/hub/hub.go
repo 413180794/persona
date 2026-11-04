@@ -111,11 +111,14 @@ type Hub struct {
 	launchers     launcherState
 	launchersSeen map[string][]proto.Launcher
 	devtok        devTokens   // device token lookups (devicetokens.go)
+	extTokens     extTokens   // the extensions' tokens (extension_scopes.go)
 	public        publicState // TLS identity, listener and advertised addresses (public.go)
 	sends         sendLog     // messages being / just sent, by client_msg_id (send.go)
 	extensions    *extensions // the extension registry and what runs of it (extensions.go, docs/extensions.md)
 	legacyCalls   legacyCalls // calls under the old /api/v1/plugins paths (extension_compat.go)
 	admin         adminState  // the admin UI (admin.go, docs/admin.md)
+
+	apiMux *http.ServeMux // the API's routes: the one a request goes to decides what an extension's token may do
 
 	mesh  meshState // the other hubs of the mesh group (mesh.go)
 	fleet fleet     // the machines and their paths, the members' computers among them (mesh_paths.go)

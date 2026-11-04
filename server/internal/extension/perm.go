@@ -17,8 +17,11 @@ type Permissions struct {
 	// Network are the hosts it reaches ("api.example.com", "*.example.com"). Shown and recorded; the hub does not
 	// enforce them yet.
 	Network []string `json:"network,omitempty"`
-	// HubAPI: it gets the hub's address and full token (PERSONA_HUB_URL, PERSONA_HUB_TOKEN).
+	// HubAPI: it gets the hub's address and full token (PERSONA_HUB_URL, PERSONA_HUB_TOKEN). The old way: a manifest
+	// naming Hub scopes gets a token of those only, whatever HubAPI says.
 	HubAPI bool `json:"hub_api,omitempty"`
+	// Hub are the parts of the hub's API it calls (HubScopes): it gets a token that opens those routes and no other.
+	Hub []string `json:"hub,omitempty"`
 	// LauncherKeys: it reads launchers' quota with their keys — never seeing them: the hub (or the machine with the
 	// launcher) sends its requests, to the launcher's own gateway only (docs/extensions.md「额度」).
 	LauncherKeys bool `json:"launcher_keys,omitempty"`
@@ -33,22 +36,36 @@ func (p Permissions) validate() error {
 			errs = append(errs, fmt.Errorf("permissions.network: %q is not a host name (lowercase, no scheme, port or path; *. allowed first)", h))
 		}
 	}
+	for _, s := range p.Hub {
+		if _, ok := ScopeTitle(s); !ok {
+			errs = append(errs, fmt.Errorf("permissions.hub: %q is not a scope of the hub's API (%s, %s<extension id>)", s,
+				strings.Join(HubScopes, ", "), ScopeCallPrefix))
+		}
+	}
 	return errors.Join(errs...)
 }
 
-// normalized is p with the hosts sorted and once each.
+// normalized is p with the hosts and scopes sorted and once each.
 func (p Permissions) normalized() Permissions {
 	out := p
-	out.Network = slices.Clone(p.Network)
-	slices.Sort(out.Network)
-	out.Network = slices.Compact(out.Network)
+	out.Network = slices.Compact(slices.Sorted(slices.Values(p.Network)))
+	out.Hub = slices.Compact(slices.Sorted(slices.Values(p.Hub)))
 	return out
 }
 
-// Covers says whether p grants everything q asks (an upgrade asking for no more needs no new consent).
+// FullHub says whether it gets the hub's full token: hub_api, the old way, without scopes.
+func (p Permissions) FullHub() bool { return p.HubAPI && len(p.Hub) == 0 }
+
+// Covers says whether p grants everything q asks (an upgrade asking for no more needs no new consent). The full token
+// covers every scope; scopes never cover the full token.
 func (p Permissions) Covers(q Permissions) bool {
-	if q.HubAPI && !p.HubAPI || q.LauncherKeys && !p.LauncherKeys {
+	if q.FullHub() && !p.FullHub() || q.LauncherKeys && !p.LauncherKeys {
 		return false
+	}
+	for _, s := range q.Hub {
+		if !p.FullHub() && !slices.Contains(p.Hub, s) {
+			return false
+		}
 	}
 	for _, h := range q.Network {
 		if !slices.Contains(p.Network, h) {
@@ -101,7 +118,7 @@ type PermissionLine struct {
 var (
 	runsCode     = PermissionLine{Key: "runs_code", Title: "在 hub 机器上运行程序", Detail: "以 hub 的系统用户运行，能读写这个用户能读写的文件；不在沙箱里"}
 	launcherKeys = PermissionLine{Key: "launcher_keys", Title: "用启动器的 Key 访问它的网关", Detail: "查额度、画启动器页上的面板；它看不到 Key：hub 或有这个启动器的电脑替它发请求，只发到启动器自己的网关"}
-	hubAPI       = PermissionLine{Key: "hub_api", Title: "完整使用 hub", Detail: "拿到 hub 的地址和 token，能做 hub 主人能做的一切：读知识库、驱动各台电脑上的 Agent……"}
+	hubAPI       = PermissionLine{Key: "hub_api", Title: "完整权限（旧写法）", Detail: "拿到 hub 的完整 token，能做 hub 主人能做的一切：读知识库、驱动各台电脑上的 Agent……；新的扩展只要用得到的那几项（permissions.hub）"}
 	nodeFiles    = PermissionLine{Key: "node_files", Title: "读写这些电脑上的文件", Detail: "不只是它自己的数据目录"}
 	nodePrivacy  = PermissionLine{Key: "node_macos_privacy", Title: "请求 Mac 的系统权限", Detail: "完全磁盘访问、辅助功能这类，要你在那台 Mac 上同意"}
 )
@@ -179,8 +196,10 @@ func Explain(m *Manifest) []PermissionLine {
 		out = append(out, PermissionLine{Key: "network", Title: "访问网络",
 			Detail: strings.Join(m.Permissions.normalized().Network, "、") + "（hub 暂不拦截别的地址）"})
 	}
-	if m.Permissions.HubAPI {
+	if m.Permissions.FullHub() {
 		out = append(out, hubAPI)
+	} else if hub := m.Permissions.normalized().Hub; len(hub) > 0 {
+		out = append(out, hubLine("使用 hub 的这些功能", hub))
 	}
 	if m.Permissions.LauncherKeys {
 		out = append(out, launcherKeys)
@@ -235,8 +254,18 @@ func Added(old, m *Manifest) []PermissionLine {
 	if len(hosts) > 0 {
 		out = append(out, PermissionLine{Key: "network", Title: "访问更多网络", Detail: strings.Join(hosts, "、")})
 	}
-	if m.Permissions.HubAPI && !old.Permissions.HubAPI {
+	if m.Permissions.FullHub() && !old.Permissions.FullHub() {
 		out = append(out, hubAPI)
+	} else if !m.Permissions.FullHub() && !old.Permissions.FullHub() {
+		var more []string
+		for _, s := range m.Permissions.normalized().Hub {
+			if !slices.Contains(old.Permissions.Hub, s) {
+				more = append(more, s)
+			}
+		}
+		if len(more) > 0 {
+			out = append(out, hubLine("使用 hub 的更多功能", more))
+		}
 	}
 	if m.Permissions.LauncherKeys && !old.Permissions.LauncherKeys {
 		out = append(out, launcherKeys)
