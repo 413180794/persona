@@ -1361,8 +1361,8 @@ module `github.com/nwverse/persona/sdk/go`，只依赖标准库。hub 自己也�
 | 包 | 内容 |
 | --- | --- |
 | `wire` | 生成的类型：清单、协议的帧和错误码、`initialize`、`UIParams`、View 和组件、`ActionResult`……（别手改） |
-| `ext` | 运行时：`ext.Main(ext.Program{…})` 在 stdin / stdout 上说协议（`initialize`、`ping`、`manifest`、`not_initialized` / `wrong_protocol` / `unknown_method` / `no_contribution`），按命名空间把调用交给 `Namespaces`，`UI` 按贡献 id 路由 `ui.render` / `ui.action`（动作什么都不回就重画），`HTTP` 在 hub 给的 socket 上起 HTTP（`/health` 由 SDK 回）；`Hub.Call` / `Notify` / `Badge` / `Invalidate`；`Env()` 认三套环境变量名；`Init.Info()` 认 `extension` 和老的 `plugin`；错误用 `*ext.Error{Code, Message}` |
-| `exttest` | 扩展自己的 `go test` 里跑的一致性检查：`exttest.Check(t, manifest, exttest.Serve(t, program))`（或 `exttest.Program(t, 路径)` 跑构建好的程序）：握手、错误码、snake_case、每个 `ui` 贡献按插槽画一次并检查 View（按 `schema/extension` 校验，加上 https、条数和字数、卡片的限制）、关 stdin 后退出。`personad extension test` 用的是 hub 自己更严的那套（同安装、画的时候的检查） |
+| `ext` | 运行时：`ext.Main(ext.Program{…})` 在 stdin / stdout 上说协议（`initialize`、`ping`、`manifest`、`not_initialized` / `wrong_protocol` / `unknown_method` / `no_contribution`），按命名空间把调用交给 `Namespaces`，`UI` 按贡献 id 路由 `ui.render` / `ui.action`（动作什么都不回就重画），`HTTP` 在 hub 给的 socket 上起 HTTP（`/health` 由 SDK 回）；`Hub.Call` / `Notify` / `Badge` / `Invalidate`；`Env()` 认三套环境变量名；`Init.Info()` 认 `extension` 和老的 `plugin`；错误用 `*ext.Error{Code, Message}`；系统级位置（「系统级位置」）：小组件就是 `placement: widget` 的 `Page`，`UIRequest.Widget()` / `Family()` 说画的是哪种，`Shortcuts` 按贡献 id 回 `shortcut.run`（`ShortcutRequest` 带 `Values`，回 `wire.ShortcutResult{Text, View}`） |
+| `exttest` | 扩展自己的 `go test` 里跑的一致性检查：`exttest.Check(t, manifest, exttest.Serve(t, program))`（或 `exttest.Program(t, 路径)` 跑构建好的程序）：握手、错误码、snake_case、每个 `ui` 贡献按插槽画一次（小组件按它的每个 `families` 各画一次）并检查 View（按 `schema/extension` 校验，加上 https、条数和字数、卡片的限制），每个快捷指令跑一次 `shortcut.run`（空的 values，可以用文字拒绝，不能是 `unknown_method` / `no_contribution`）、关 stdin 后退出。`personad extension test` 用的是 hub 自己更严的那套（同安装、画的时候的检查） |
 
 ```go
 func main() {
@@ -1375,7 +1375,7 @@ func main() {
 
 `@persona/extension`（不发 npm，扩展仓库拷一份），给 Bun 用：`main({id, version, manifest, init, namespaces, ui, fetch})` 和 Go 的 `ext.Main` 一一对应
 （`connect(prog, write)` 是不带 stdin 的同一套，测试用）；`Hub` 的 `call` / `notify` / `badge` / `invalidate`，`env()`，`decodeState` / `encodeState`，`ExtError`；
-`wire.ts` 是生成的类型。紧跟在 `initialize` 后面、没等它回答就发来的调用会等它做完。
+`shortcuts`（`shortcut.run`）、`isWidget()`；`wire.ts` 是生成的类型。紧跟在 `initialize` 后面、没等它回答就发来的调用会等它做完。
 
 **打包**：`bun build --compile --minify --target=bun-<linux|darwin>-<x64|arm64> src/main.ts --outfile bin/<id>-<平台>`，四个平台都能在一台 Linux 上交叉编译，
 一个文件 60–80 MB（带着 Bun 自己）。包里只有这个可执行文件，hub 和电脑上都不需要 node / bun。

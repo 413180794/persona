@@ -43,6 +43,14 @@ export interface UIRequest extends wire.UIParams {
   hub: Hub;
 }
 
+/** A shortcut.run: its params' values (strings), for whom; and the hub to call while running. */
+export interface ShortcutRequest extends wire.ShortcutRunParams {
+  hub: Hub;
+}
+
+/** Whether a page draws a widget (placement widget); its size is then the family: draw less, nothing to tap. */
+export const isWidget = (req: { placement?: string }) => req.placement === "widget";
+
 export interface Init extends wire.InitializeParams {
   /** The extension's own (id, version, directories), under whichever key the hub sent it. */
   info: wire.ExtensionInfo;
@@ -57,8 +65,10 @@ export interface Program {
   init?(init: Init, hub: Hub): Record<string, unknown> | void | Promise<Record<string, unknown> | void>;
   /** Handlers by namespace ("connector", "quota", "event", …). */
   namespaces?: Record<string, Handler>;
-  /** Pages by ui contribution id. */
+  /** Pages by ui contribution id (widgets too: placement widget, drawn per family; see isWidget). */
   ui?: Record<string, Page>;
+  /** Shortcuts by contribution id: shortcut.run goes to them (docs/extensions.md「系统级位置」). */
+  shortcuts?: Record<string, (req: ShortcutRequest) => wire.ShortcutResult | void | Promise<wire.ShortcutResult | void>>;
   /** If set, served on the hub's socket (runtime.http in the manifest) by main(). */
   fetch?(req: Request): Response | Promise<Response>;
 }
@@ -188,6 +198,12 @@ export function connect(prog: Program, write: Write) {
     const h = prog.namespaces?.[ns];
     if (h) return h(rest, params ?? {});
     if (ns === "ui" && prog.ui) return ui(rest, params ?? {});
+    if (ns === "shortcut" && prog.shortcuts) {
+      if (rest !== "run") throw unknownMethod(method);
+      const run = prog.shortcuts[params?.contribution];
+      if (!run) throw noContribution(params?.contribution);
+      return (await run({ ...params, values: params.values ?? {}, hub })) ?? {};
+    }
     throw unknownMethod(method);
   }
 

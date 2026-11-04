@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { connect, decodeState, encodeState, ExtError, open, type Program } from "./index.ts";
+import { connect, decodeState, encodeState, ExtError, isWidget, open, type Program } from "./index.ts";
 
 // A hub's end of connect(): send a request, wait for its answer.
 function harness(prog: Program) {
@@ -103,4 +103,18 @@ test("push for apps before UI version 3", async () => {
     toast: "存好了",
   });
   expect((await call("ui.action", { contribution: "home", ui_version: 3, action: "save" })).result).toEqual({ pop: true, toast: "存好了" });
+});
+
+test("shortcuts and widgets", async () => {
+  const { call } = harness({
+    id: "example",
+    version: "1.0.0",
+    ui: { glance: { render: (r) => ({ title: isWidget(r) ? `widget ${r.size}` : "page", sections: [] }) } },
+    shortcuts: { count: (r) => ({ text: `${r.values.what}：3 个` }) },
+  });
+  await call("initialize", { protocol: 1, hub: { build: 0 }, granted: {} });
+  expect((await call("shortcut.run", { contribution: "count", values: { what: "苹果" } })).result).toEqual({ text: "苹果：3 个" });
+  expect((await call("shortcut.run", { contribution: "nope" })).error.code).toBe("no_contribution");
+  expect((await call("shortcut.list", {})).error.code).toBe("unknown_method");
+  expect((await call("ui.render", { contribution: "glance", placement: "widget", size: "small", ui_version: 3 })).result.title).toBe("widget small");
 });

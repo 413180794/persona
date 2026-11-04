@@ -46,8 +46,11 @@ type Program struct {
 	Init func(ctx context.Context, init *Init, hub *Hub) (contributes map[string]any, err error)
 	// Namespaces are the handlers by namespace ("connector", "quota", …). "ui" is UI's unless given here.
 	Namespaces map[string]Handler
-	// UI are the pages by ui contribution id: ui.render and ui.action go to them.
+	// UI are the pages by ui contribution id: ui.render and ui.action go to them (widgets too: placement widget).
 	UI map[string]Page
+	// Shortcuts are the shortcuts by contribution id: shortcut.run goes to them. "shortcut" is Shortcuts' unless
+	// given in Namespaces.
+	Shortcuts map[string]Shortcut
 	// HTTP, if set, is served on the socket the hub gives (runtime.http in the manifest) by Main.
 	HTTP http.Handler
 }
@@ -207,6 +210,9 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 	}
 	if ns == "ui" && s.prog.UI != nil {
 		return s.ui(ctx, rest, params)
+	}
+	if ns == "shortcut" && s.prog.Shortcuts != nil {
+		return s.shortcut(ctx, rest, params)
 	}
 	return nil, UnknownMethod(method)
 }
