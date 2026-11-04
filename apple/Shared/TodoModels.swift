@@ -79,7 +79,7 @@ nonisolated enum TodosLogic {
     }
 
     /// Modern hub JSON errors always carry a code; older hubs without this route return plain-text 404s.
-    /// Use raw fields: message parsing can fall back when the response also includes non-string retryable.
+    /// Reads the raw fields (the status, `code` and the router's literal "Not Found"), not `message`, which is text for people.
     static func isLegacySpacesRoute(_ error: Error) -> Bool {
         guard let api = error as? APIError, api.status == 404 else { return false }
         let code = api.fields["code"] ?? ""

@@ -63,6 +63,8 @@ nonisolated struct APIError: LocalizedError, Sendable {
     static func message(in data: Data) -> String? {
         if let flat = (try? JSON.decoder.decode([String: String].self, from: data))?["error"] { return flat }
         guard let obj = try? JSON.decoder.decode(JSONValue.self, from: data), let err = obj["error"] else { return nil }
+        // The hub's error body can also carry non-string fields such as `retryable`, which the flat decode above rejects.
+        if case .string(let text) = err { return text }
         let message = err["message"]?.string
         let code = err["code"]?.string
         switch (message, code) {
