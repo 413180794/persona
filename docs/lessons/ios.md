@@ -684,3 +684,8 @@ DEBUG 构建启动后主线程常常一直 100%：RootView 的 body 每次新建
 modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay 还是整块矩形，于是四个圆角外侧的侧栏底色也被压暗了一层，像露出了别的灰色底。
 画在卡片上的东西（压暗、描边）一律用卡片自己的形状（`card.fill(…)`、`card.strokeBorder(…)`），点按区域可以另用 `.contentShape(.rect)`。
 核对时别只看整张截图：裁出圆角附近放大、取圆角外侧和侧栏同一行的像素比（`-openAssistantSidebar YES|0.5`，浅色 / 深色）。
+
+## QuickLook 看 Office 文件（2026-11-04，#1300）
+
+- **xlsx 只显示文件里存的公式值**，不会自己算：没存值的公式格子是空的（合计行一片空白）。生成工作簿时要把值一起写进去（`personad office` 写的时候就算好，`docs/office.md`「公式的值」）。
+- docx 里只写在表格样式里的边框、`startOverride` 起始编号、分页符（显示成方块），QuickLook 都不认；做法见 `docs/office.md`「怎么验证的」。

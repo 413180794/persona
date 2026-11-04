@@ -23,6 +23,7 @@ import (
 	"github.com/nwverse/persona/server/internal/mcpserver"
 	"github.com/nwverse/persona/server/internal/node"
 	"github.com/nwverse/persona/server/internal/nodeupdate"
+	"github.com/nwverse/persona/server/internal/office"
 	"github.com/nwverse/persona/server/internal/relay"
 	"github.com/nwverse/persona/server/internal/sysmon"
 	"github.com/nwverse/persona/server/internal/tgcli"
@@ -79,6 +80,9 @@ const usage = `usage:
   personad hook             Claude Code hook entry (reads hook JSON on stdin)
   personad mcp              Claude Code MCP server (stdio)
   personad tg …             the user's Telegram through the hub, for the assistant (the telegram skill): personad tg --help
+  personad office docx|pptx|xlsx|check …
+                           write a Word document or a deck from Markdown, a workbook from JSON / CSV, or say what is in
+                           one (the office skill): personad office --help
   personad codex-start <file>
                            run the Codex launcher in file (written by the node, removed once read) with the first
                            message as its last argument, no shell in between (docs/codex.md「从手机新建」)
@@ -214,6 +218,8 @@ func main() {
 		err = mcpserver.Serve(ctx, version, os.Stdin, os.Stdout)
 	case "tg":
 		os.Exit(tgcli.Main(ctx, os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+	case "office":
+		os.Exit(office.Main(os.Args[2:], os.Stdout, os.Stderr))
 	case "voice":
 		err = voice.Run(ctx)
 	case "plugin":
