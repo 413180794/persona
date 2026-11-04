@@ -348,3 +348,9 @@
 `server/internal/runtimepkg` 的 `go generate` 读 `integrations/<名字>/`，而镜像的构建上下文只有 `.dockerignore` 放行的目录、
 构建阶段只有 `Dockerfile` COPY 进去的目录。#1668 加了 `jarvis-paseo-runtime`，两处都没加，`v0.1.4` 的镜像构建在 `go generate` 失败；
 PR 冒烟按路径触发、不含 `integrations/**`，所以合并前没跑。加 runtime 包时 `.dockerignore`、`Dockerfile` 一起改，镜像 workflow 的 PR 路径现在包含 `integrations/**`。
+
+## 插件的权限摘要加字段时，旧插件的摘要不能变（2026-11-05，#1830）
+
+- `plugin.Digest` 是用户同意过的那一份（存在 `plugins.granted`，安装 / 升级回传对比）。给清单加新东西（这次是 `node` 段）时，新字段放进摘要要用 `omitempty` 的指针：
+  没有这个字段的插件算出来的摘要和以前一字不差，否则所有已装的插件一升级 hub 都会被当成「要了更多权限」。`TestDigestWithoutNodeIsAsBefore` 按旧的结构重算一遍对比。
+- 「要了更多」（`MorePermissions`）不能只看 `granted` 里的 `Permissions`：node 段的权限不在那张表里，按新旧清单比（`NodeAdds`）。

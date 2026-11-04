@@ -160,3 +160,176 @@ hub.json 的旧配置迁到插件：装上插件后在 设置 › 插件（或 `
 - WordPress 的 filter（插件改 hub 的数据）：永远不做；事件钩子只通知。
 - hub 互联：插件属于装它的那台 hub，第 1 步不在组内同步；App 经中心 hub 看到的是中心的插件。
 - 清单的多语言（`name`、`description`、表单标题）：先只有一种，以后加 `l10n`。
+
+## 七、插件在指定电脑上运行（node 侧程序，方案，#1830）
+
+**要解决什么**：现在插件的程序只在 hub 上跑（`runtime`），有的能力却只能在某台电脑上做：
+
+- iMessage：读 iMessage 的数据库。现在是写死在 node 里的 5 个方法（`connector.*`），由 hub.json 的 `imessage.machine` 指定一台机器。
+- cua / ego：驱动 cua-driver、ego lite。现在是编进 personad 的 node 代码（`node/computer*.go`、`node/browser*.go`），加上只有声明的内置插件。
+- 第三方插件：做不了这类事。
+
+### 清单：`node` 段
+
+和 `runtime` 并列。两段可以都有（hub 上一个程序、电脑上一个程序），也可以只有一段。
+
+```json
+"node": {
+  "command": {"darwin-arm64": "node/bin/helper", "darwin-amd64": "node/bin/helper-x64", "linux-amd64": "node/bin/helper-linux"},
+  "args": [], "env": {},
+  "machines": "machines",
+  "rpc": "stdio",
+  "http": true,
+  "keep_running": "lease",
+  "secrets": ["api_key"],
+  "permissions": ["network", "files", "macos_privacy"]
+}
+```
+
+各字段：
+
+- `command`：和 `runtime.command` 的写法一样，按平台取（`Command.For`）。支持哪些平台就看它有哪些键，不另写平台列表。
+- `machines`：用哪个配置字段选机器。这个字段必须是 `type: array`、`items.format: machine`，开关照旧是每台机器一个（`format: machine` 已有的画法）。
+  `items` 的 `x-os` 要写，且只能是 `command` 有程序的系统（hub 校验），不支持的机器选不了；只能一台就在这个字段上写 `maxItems: 1`。
+- `rpc` / `http`：插件协议 1 走 stdio；要 HTTP 就在 `PERSONA_PLUGIN_SOCKET` 上开，和 hub 侧一样。
+- `keep_running`：hub 连不上时这个程序怎么办，见下「node 离线时」。
+- `secrets`：发给 node 的是哪几个（`secrets[]` 里声明过的名字），其余只留在 hub。
+- `permissions`：node 侧的权限，见下「权限展示」。
+
+校验：
+
+- `machines` 指向的字段要存在、形状对，`x-os` 和程序的平台对得上；
+- `secrets` 只能写 `secrets[]` 里有的；
+- 装的时候不再要求 hub 的平台有程序，只要 `runtime`（如果有）能在 hub 上跑、`node` 至少有一个平台。
+
+### 安装、升级怎么下发到 node
+
+**包**：
+
+- 同一个包里放它支持的各平台的 node 程序（比如 `node/` 目录），装的时候每个都检查在、可执行。
+- 市场不用改：它按 hub 的平台挑一个包，这个包里带着所有电脑平台的程序（包会大一些；以后真嫌大，再给市场条目加按平台的 `{url, sha256}`）。
+- 装好后各平台的程序就在 `installed/<id>/<ver>/` 里，hub 给每台机器发它那个平台的。
+
+**下发**：
+
+- 新的 RPC `plugin.node.put`（begin / chunk / commit，1 MB 一块，带 sha256），分块和校验复用 `node.update.*` 的代码；
+- 按内容摘要去重，和 skills 下发（`assistant.prepare`）一样，同一版本不重复传；
+- node 上放在 `~/.persona/plugins/<id>/<ver>/`，数据目录 `~/.persona/plugins/<id>/data/` 跨版本保留。
+
+**升级**：
+
+- hub 侧先升（现在的流程），再逐台升：下发新版本 → node 停旧的、起新的 → 程序 30 秒内 `initialize` 成功才算好，否则 node 自己退回上一版。
+- 和 hub 侧一样只留一个旧版本。
+- 每台的结果记下来，设置页里显示。
+
+**版本**：
+
+- node 侧和 hub 侧必须是同一个版本（同一个包）。
+- 离线时错过了升级的机器，连上后先补下发。补上之前对它的调用回 409 `plugin_updating`，不拿旧程序硬跑。
+
+**停用、去掉一台、卸载**：
+
+- node 停掉程序、删掉版本目录；
+- 卸载时数据目录一起删，停用、去掉一台时留着。
+
+### node 离线时
+
+**对账，不排队**：
+
+- hub 只存「应该是什么样」：Postgres 里插件的 config、版本、选了哪些机器（都已经有）。
+- node 每次连上（`Machine.serve` 的重连钩子，和 `refreshComputer` 在同一处），hub 发一次全量对账 `plugin.node.sync`：应该跑哪些插件、哪个版本、摘要。
+- node 补下发缺的、停掉不该跑的、删掉不在名单上的。
+- 所以离线期间的安装、升级、停用、卸载都不用排队，连上就对齐。
+
+**离线时调用**：
+
+- 和现在 cua / ego 一样，HTTP 回 409「机器离线」，插件的 hub 侧收到错误。
+- App 设置页每台机器显示「运行中 / 离线 / 待更新 / 出错」，出错时带原因。
+
+**hub 连不上 node 时，电脑上的程序**：
+
+- `keep_running: "lease"`（默认）：hub 每 10 分钟续一次租约（同 `computer.nolock`），超过 30 分钟没续，node 停掉它，连上再起。
+- `keep_running: "always"`：hub 断开时不停，给 iMessage 这种要一直收、hub 重启也不该断的。
+
+**密钥不落 node 的盘**：
+
+- 只在 `plugin.node.start` 里经现有的 hub↔node 连接带过去，在内存里交给程序（`initialize.secrets`）。
+- 所以 node 重启后，程序要等 hub 连上才起。`always` 只是「hub 断开时不停」，不是「node 重启后自己起」。
+
+### hub 怎么起停、转发
+
+**宿主**：把 `plugin/host` 里的进程管理（起停、退避重启、关 stdin → SIGTERM → SIGKILL）抽成 hub 和 node 共用的，node 上跑同一套。
+
+**RPC**：
+
+- `plugin.node.start{id, version, config, secrets}`、`plugin.node.stop{id}`、`plugin.node.status`；
+- `plugin.node.call{id, method, params}`：转给程序的插件协议方法；
+- 程序发的通知（`changed` 等）由 node 转成 `plugin.node.event` 发给 hub，hub 交给 hub 侧程序或连接器框架。
+
+**hub 侧程序调电脑上的程序**：插件协议加 `nodes.call{machine, method, params}`。有 `node` 段就能用，不另加权限。只有 `node` 段的插件，hub 把 App 的请求直接转过去。
+
+**HTTP**：
+
+- 路由 `/api/v1/plugins/{id}/machines/{mid}/…`：hub → 流（`internal/streams`，现在只拨 TCP 端口，加一个「拨插件的 unix socket」的目标）→ node 上程序的 socket。
+- 普通请求和 WebSocket 都走流。和 hub 侧的 HTTP 一样，只给 full 设备，去掉 `Authorization`。
+
+### 权限展示
+
+**「运行程序」那行按位置写**（`perm.Explain` 现在固定写「在 hub 机器上运行程序」）：
+
+- 有 `runtime`：「在 hub 机器上运行程序」；
+- 有 `node`：「会在这些电脑上运行程序：MacBook、Mac Studio」，列实际选中的机器，没选时写「会在你选的电脑上运行程序」。
+
+**node 侧的权限另起一组**：
+
+- `network`：联网；
+- `files`：读写自己数据目录以外的文件；
+- `macos_privacy`：会请求完全磁盘访问、辅助功能这类系统权限。
+
+**要重新同意的情况**：
+
+- `perm.Digest` 把 node 段（平台、权限、发给 node 的密钥名）也算进去，变了就要重新同意（现有的 `Added` 列出新增的）。
+- 给插件加一台机器也要确认：打开那台的开关时，弹出「将在 <机器> 上运行 <插件> 的程序」（`x-confirm`）。
+
+### cua / ego 怎么迁
+
+**第一步只换路，不换代码**：
+
+- 它们的 node 代码留在 personad 里，注册成「内置的 node 侧程序」：进程内实现同一个接口，不起子进程，清单里 `node.command` 写 `builtin`。
+- hub 改用 `plugin.node.call{id: "cua", …}`。旧的 `computer.*`、`browser.*` 方法名保留一个版本，给还没升级的 node。
+- `machines` 字段、机器页上的开关、`PUT /machines/{mid}/computer|browser` 都不变，用户看不到变化。
+
+**换来的**：
+
+- 权限页的「会在这些电脑上运行」、离线对账、设置页里每台机器的状态，三个插件共用一套；
+- `refreshComputer`、`refreshBrowser`、`tellNoLock` 这类各写一份的重连代码，收进 `plugin.node.sync`。
+
+**以后**：要拆成独立的程序（比如挪到私有仓库）时，再按普通 node 程序发；现在没有这个需要，不拆。
+
+### iMessage 怎么用它
+
+- **成为插件 `imessage`**：`node.command` 只有 `darwin-*`，选机器的字段 `maxItems: 1`，`keep_running: "always"`。
+- **node 程序**：就是现在的 Reader（`connector/imessage`），在 stdio 上按连接器协议回答 `connector.list/chats/older/changes/search`。
+  hub 侧的连接器框架把调用经 `plugin.node.call` 转过去，把 `changed` 转回来。连接器的一致性测试照跑。
+- **配置**：从 hub.json 的 `imessage.machine` 换成插件的 `machines` 字段。迁移时第一次启动读旧值写进去，旧字段保留一个版本、只读。「交给 Persona」的开关不动。
+- **完全磁盘访问**：macOS 把子进程的权限算在「负责的进程」，也就是拉起它的 node 头上，所以第一步和现在一样，要给 node 授权。
+  `plan-connectors.md` 里「有自己权限的 helper」要做成 LaunchAgent，留作后续：`node.launch: "launchd"`，由 node 用 launchd 起它，第一步不做。
+- **以后的发送**：走闸门（`connector_gate`），和现在的规划一样。
+
+### 分步
+
+1. 清单的 `node` 段、校验、权限文案和摘要、包里带 node 程序：只动 hub，有测试。node 还不会起程序之前，有 `node` 段的包装不上（`plugin.NodePrograms`），第 2 步打开。
+2. node 侧宿主和 `plugin.node.*`：下发（分块、摘要、去重）、起停、对账、租约，加上 hub 侧的重连钩子；用假 node 和真进程测试。
+3. HTTP / WebSocket 转发：流能拨 unix socket。
+4. App（iOS、Mac、网页）：每台机器的状态、加机器时的确认、权限页的新行；截图给用户看。
+5. cua / ego 换成内置的 node 程序，不改界面。
+6. iMessage 迁成插件，迁移 hub.json 里的配置。
+
+第 1–3 步做完就能装第三方的 node 侧插件；第 5、6 步各自一个 PR。
+
+### 拍板结果（2026-11-05，用户同意按方案推进）
+
+- **hub 连不上时，电脑上的程序**：默认停（租约 30 分钟），插件可以声明 `always`。
+- **版本**：必须和 hub 侧一致。
+- **只有 `node` 段、没有 hub 侧程序的插件**：允许，App 的请求直接转到 node。
+- **node 侧程序能不能调 hub 的 API（`hub_api`）**：不给，要用就经 hub 侧程序。

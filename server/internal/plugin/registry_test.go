@@ -640,3 +640,44 @@ func TestBuiltinYieldsToAnInstalledOne(t *testing.T) {
 		t.Fatal("the installed row is gone:", store.rows)
 	}
 }
+
+// A package with a program on computers: refused until this hub's nodes can run one (NodePrograms); then every
+// platform's program has to be in it, executable, whatever this hub's own platform is.
+func TestPackageWithNodePrograms(t *testing.T) {
+	ctx := context.Background()
+	r, _, _ := newTestRegistry(t)
+	pkg := t.TempDir()
+	writePackage(t, pkg, func(m map[string]any) {
+		m["node"] = map[string]any{"command": map[string]any{"darwin-arm64": "node/helper", "linux-amd64": "node/helper-linux"}, "machines": "computers"}
+		m["configuration"].(map[string]any)["properties"].(map[string]any)["computers"] = map[string]any{"type": "array",
+			"items": map[string]any{"type": "string", "format": "machine", "x-os": []any{"darwin", "linux"}}}
+	})
+	if _, err := r.Preview(ctx, "dir:"+pkg, ""); err == nil || !strings.Contains(err.Error(), "还不能在电脑上运行") {
+		t.Fatalf("installed before nodes can run it: %v", err)
+	}
+	NodePrograms = true
+	t.Cleanup(func() { NodePrograms = false })
+	if _, err := r.Preview(ctx, "dir:"+pkg, ""); err == nil || !strings.Contains(err.Error(), "node/helper") {
+		t.Fatalf("no program for the computers in the package: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(pkg, "node"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(pkg, "node", "helper"), []byte("#!/bin/sh\n"), 0o755)
+	_ = os.WriteFile(filepath.Join(pkg, "node", "helper-linux"), []byte("not a program"), 0o644)
+	if _, err := r.Preview(ctx, "dir:"+pkg, ""); err == nil || !strings.Contains(err.Error(), "helper-linux 不是可执行文件") {
+		t.Fatalf("one not executable: %v", err)
+	}
+	_ = os.Chmod(filepath.Join(pkg, "node", "helper-linux"), 0o755)
+	pv, err := r.Preview(ctx, "dir:"+pkg, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keys []string
+	for _, l := range pv.Permissions {
+		keys = append(keys, l.Key)
+	}
+	if !slices.Contains(keys, "node_runs_code") {
+		t.Fatal(keys)
+	}
+}

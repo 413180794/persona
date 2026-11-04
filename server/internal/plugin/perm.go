@@ -58,15 +58,35 @@ func (p Permissions) Covers(q Permissions) bool {
 	return true
 }
 
+// nodeConsent is what the user agrees to of a program on computers: the systems it runs on, what it asks for there,
+// and which secrets go to the computers.
+type nodeConsent struct {
+	Systems     []string        `json:"systems"`
+	Permissions NodePermissions `json:"permissions"`
+	Secrets     []string        `json:"secrets,omitempty"`
+}
+
+func (r *NodeRuntime) consent() *nodeConsent {
+	if r == nil {
+		return nil
+	}
+	c := &nodeConsent{Systems: r.Systems(), Permissions: r.Permissions, Secrets: slices.Clone(r.Secrets)}
+	c.Permissions.Network = slices.Compact(slices.Sorted(slices.Values(r.Permissions.Network)))
+	slices.Sort(c.Secrets)
+	return c
+}
+
 // Digest is what the user agrees to when installing: the permissions and whether it runs code, as a sha256 of their
 // canonical JSON. Install and upgrade carry the digest of the preview the user saw, so what installs is what they saw.
+// A plugin without a node program digests as it did before there were any (what installed plugins were granted holds).
 func Digest(m *Manifest) string {
 	b, _ := json.Marshal(struct {
-		RunsCode    bool        `json:"runs_code"`
-		Permissions Permissions `json:"permissions"`
-		Events      []string    `json:"events,omitempty"`
-		Surfaces    []string    `json:"surfaces,omitempty"`
-	}{m.Runtime != nil, m.Permissions.normalized(), m.Topics(), m.Surfaces()})
+		RunsCode    bool         `json:"runs_code"`
+		Permissions Permissions  `json:"permissions"`
+		Events      []string     `json:"events,omitempty"`
+		Surfaces    []string     `json:"surfaces,omitempty"`
+		Node        *nodeConsent `json:"node,omitempty"`
+	}{m.Runtime != nil, m.Permissions.normalized(), m.Topics(), m.Surfaces(), m.Node.consent()})
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
 }
@@ -82,7 +102,72 @@ var (
 	runsCode     = PermissionLine{Key: "runs_code", Title: "在 hub 机器上运行程序", Detail: "以 hub 的系统用户运行，能读写这个用户能读写的文件；不在沙箱里"}
 	launcherKeys = PermissionLine{Key: "launcher_keys", Title: "用启动器的 Key 访问它的网关", Detail: "查额度、画启动器页上的面板；它看不到 Key：hub 或有这个启动器的电脑替它发请求，只发到启动器自己的网关"}
 	hubAPI       = PermissionLine{Key: "hub_api", Title: "完整使用 hub", Detail: "拿到 hub 的地址和 token，能做 hub 主人能做的一切：读知识库、驱动各台电脑上的 Agent……"}
+	nodeFiles    = PermissionLine{Key: "node_files", Title: "读写这些电脑上的文件", Detail: "不只是它自己的数据目录"}
+	nodePrivacy  = PermissionLine{Key: "node_macos_privacy", Title: "请求 Mac 的系统权限", Detail: "完全磁盘访问、辅助功能这类，要你在那台 Mac 上同意"}
 )
+
+// systemNames are how the install screen names the systems a node program runs on.
+var systemNames = map[string]string{"darwin": "Mac", "linux": "Linux 电脑"}
+
+// nodeRunsCode is the line for a program that runs on the computers the user picks.
+func nodeRunsCode(r *NodeRuntime) PermissionLine {
+	var on []string
+	for _, sys := range r.Systems() {
+		on = append(on, systemNames[sys])
+	}
+	return PermissionLine{Key: "node_runs_code", Title: "在你选的电脑上运行程序",
+		Detail: strings.Join(on, "、") + "；每台打开时会再问一次。以 node 的系统用户运行，能读写这个用户能读写的文件；不在沙箱里"}
+}
+
+// nodeLines are the lines of what r asks for on the computers, of all it asks (old nil) or what it asks more than old.
+func nodeLines(r, old *NodeRuntime) []PermissionLine {
+	var out []PermissionLine
+	if old == nil {
+		out = append(out, nodeRunsCode(r))
+	} else if slices.ContainsFunc(r.Systems(), func(sys string) bool { return !slices.Contains(old.Systems(), sys) }) {
+		line := nodeRunsCode(r)
+		line.Title = "在更多种电脑上运行程序"
+		out = append(out, line)
+	}
+	var hosts []string
+	for _, h := range r.consent().Permissions.Network {
+		if old == nil || !slices.Contains(old.Permissions.Network, h) {
+			hosts = append(hosts, h)
+		}
+	}
+	if len(hosts) > 0 {
+		out = append(out, PermissionLine{Key: "node_network", Title: "在这些电脑上访问网络", Detail: strings.Join(hosts, "、")})
+	}
+	if r.Permissions.Files && (old == nil || !old.Permissions.Files) {
+		out = append(out, nodeFiles)
+	}
+	if r.Permissions.MacOSPrivacy && (old == nil || !old.Permissions.MacOSPrivacy) {
+		out = append(out, nodePrivacy)
+	}
+	return out
+}
+
+// nodeSecrets are the titles of the secrets m sends to the computers that old (nil: none) did not.
+func nodeSecrets(m, old *Manifest) []string {
+	var out []string
+	for _, name := range m.Node.Secrets {
+		if old != nil && old.Node != nil && slices.Contains(old.Node.Secrets, name) {
+			continue
+		}
+		for _, s := range m.Secrets {
+			if s.Name == name {
+				out = append(out, s.Title)
+			}
+		}
+	}
+	return out
+}
+
+// NodeAdds says whether m's program on computers asks for more than old's: a first one, more systems, hosts,
+// permissions or secrets sent to the computers.
+func NodeAdds(old, m *Manifest) bool {
+	return m.Node != nil && (len(nodeLines(m.Node, old.Node)) > 0 || len(nodeSecrets(m, old)) > 0)
+}
 
 // Explain is every line the user is shown before installing m.
 func Explain(m *Manifest) []PermissionLine {
@@ -124,6 +209,12 @@ func Explain(m *Manifest) []PermissionLine {
 			names = append(names, s.Title)
 		}
 		out = append(out, PermissionLine{Key: "secrets", Title: "使用你填的密钥", Detail: strings.Join(names, "、")})
+	}
+	if m.Node != nil {
+		out = append(out, nodeLines(m.Node, nil)...)
+		if names := nodeSecrets(m, nil); len(names) > 0 {
+			out = append(out, PermissionLine{Key: "node_secrets", Title: "把密钥发给这些电脑", Detail: strings.Join(names, "、")})
+		}
 	}
 	return out
 }
@@ -176,6 +267,12 @@ func Added(old, m *Manifest) []PermissionLine {
 	}
 	if len(names) > 0 {
 		out = append(out, PermissionLine{Key: "secrets", Title: "使用更多密钥", Detail: strings.Join(names, "、")})
+	}
+	if m.Node != nil {
+		out = append(out, nodeLines(m.Node, old.Node)...)
+		if names := nodeSecrets(m, old); len(names) > 0 {
+			out = append(out, PermissionLine{Key: "node_secrets", Title: "把更多密钥发给这些电脑", Detail: strings.Join(names, "、")})
+		}
 	}
 	return out
 }

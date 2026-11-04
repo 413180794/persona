@@ -1,6 +1,8 @@
 package plugin
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -626,5 +628,156 @@ func TestParseGate(t *testing.T) {
 		if _, err := ParseGate([]byte(bad)); err == nil {
 			t.Errorf("%s: parsed", name)
 		}
+	}
+}
+
+// withNode is the example manifest with a program on computers: macOS ones, picked in the field machines.
+func withNode(t *testing.T, change func(node, machines map[string]any)) []byte {
+	t.Helper()
+	return with(t, func(m map[string]any) {
+		node := map[string]any{"command": map[string]any{"darwin-arm64": "node/helper", "darwin-amd64": "node/helper-x64"},
+			"machines": "macs", "secrets": []any{"api_key"}}
+		machines := map[string]any{"type": "array", "title": "在哪些 Mac 上运行", "items": map[string]any{"type": "string", "format": "machine", "x-os": []any{"darwin"}}}
+		m["node"] = node
+		m["configuration"].(map[string]any)["properties"].(map[string]any)["macs"] = machines
+		if change != nil {
+			change(node, machines)
+		}
+	})
+}
+
+func TestParseNodeProgram(t *testing.T) {
+	m, err := Parse(withNode(t, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := m.Node.Systems(); fmt.Sprint(got) != "[darwin]" {
+		t.Fatal(got)
+	}
+	if f := m.NodeMachines(); f == nil || f.Name != "macs" {
+		t.Fatal(f)
+	}
+	// Only on computers: no program on the hub (what it contributes needs none there).
+	var raw map[string]any
+	_ = json.Unmarshal(withNode(t, nil), &raw)
+	delete(raw, "runtime")
+	delete(raw, "activation_events")
+	raw["contributes"] = map[string]any{"providers": []any{map[string]any{"id": "example-ai", "name": "Example AI", "kind": "api",
+		"api": "responses", "base_url": "https://api.example.com/v1", "models": []any{map[string]any{"id": "example-large"}}}}}
+	b, _ := json.Marshal(raw)
+	if m, err := Parse(b); err != nil || m.Runtime != nil {
+		t.Fatalf("a plugin whose only program runs on computers: %v", err)
+	}
+	// Its protocol is still the hub's to speak.
+	raw["engines"] = map[string]any{"plugin_protocol": 9}
+	b, _ = json.Marshal(raw)
+	if _, err := Parse(b); err == nil {
+		t.Fatal("a node program speaking another protocol")
+	}
+}
+
+func TestParseRefusesNodeProgram(t *testing.T) {
+	cases := map[string]func(node, machines map[string]any){
+		"one path for every platform": func(n, _ map[string]any) { n["command"] = "node/helper" },
+		"no platform":                 func(n, _ map[string]any) { n["command"] = map[string]any{} },
+		"windows":                     func(n, _ map[string]any) { n["command"] = map[string]any{"windows-amd64": "node/x.exe"} },
+		"outside the package":         func(n, _ map[string]any) { n["command"] = map[string]any{"darwin-arm64": "../x"} },
+		"the hub's binary":            func(n, _ map[string]any) { n["command"] = map[string]any{"darwin-arm64": "personad"} },
+		"rpc value":                   func(n, _ map[string]any) { n["rpc"] = "tcp" },
+		"no way to talk":              func(n, _ map[string]any) { n["rpc"] = "none" },
+		"keep_running":                func(n, _ map[string]any) { n["keep_running"] = "forever" },
+		"hub's env":                   func(n, _ map[string]any) { n["env"] = map[string]any{"PERSONA_HUB_TOKEN": "x"} },
+		"unknown secret":              func(n, _ map[string]any) { n["secrets"] = []any{"password"} },
+		"secret twice":                func(n, _ map[string]any) { n["secrets"] = []any{"api_key", "api_key"} },
+		"host":                        func(n, _ map[string]any) { n["permissions"] = map[string]any{"network": []any{"https://x.example.com"}} },
+		"unknown permission":          func(n, _ map[string]any) { n["permissions"] = map[string]any{"camera": true} },
+		"no machines field":           func(n, _ map[string]any) { delete(n, "machines") },
+		"missing machines field":      func(n, _ map[string]any) { n["machines"] = "computers" },
+		"machines not machines":       func(_, f map[string]any) { f["items"] = map[string]any{"type": "string"} },
+		"machines not a list":         func(_, f map[string]any) { delete(f, "items"); f["type"] = "string"; f["format"] = "machine" },
+		"x-os missing":                func(_, f map[string]any) { delete(f["items"].(map[string]any), "x-os") },
+		"x-os with no program":        func(_, f map[string]any) { f["items"].(map[string]any)["x-os"] = []any{"darwin", "linux"} },
+		"unknown field":               func(n, _ map[string]any) { n["max_machines"] = 1 },
+	}
+	for name, change := range cases {
+		if _, err := Parse(withNode(t, change)); err == nil {
+			t.Errorf("%s: parsed", name)
+		}
+	}
+	// Linux too: x-os may name both.
+	if _, err := Parse(withNode(t, func(n, f map[string]any) {
+		n["command"].(map[string]any)["linux-amd64"] = "node/helper-linux"
+		f["items"].(map[string]any)["x-os"] = []any{"darwin", "linux"}
+	})); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// What installed plugins were granted holds: a manifest without a node program digests as before there were any.
+func TestDigestWithoutNodeIsAsBefore(t *testing.T) {
+	m, _ := Parse([]byte(exampleManifest))
+	b, _ := json.Marshal(struct {
+		RunsCode    bool        `json:"runs_code"`
+		Permissions Permissions `json:"permissions"`
+		Events      []string    `json:"events,omitempty"`
+		Surfaces    []string    `json:"surfaces,omitempty"`
+	}{true, m.Permissions.normalized(), m.Topics(), m.Surfaces()})
+	sum := sha256.Sum256(b)
+	if Digest(m) != hex.EncodeToString(sum[:]) {
+		t.Fatal("the digest of a plugin without a node program changed")
+	}
+	n, _ := Parse(withNode(t, nil))
+	if Digest(n) == Digest(m) {
+		t.Fatal("a program on computers is agreed to")
+	}
+	more, _ := Parse(withNode(t, func(node, _ map[string]any) { node["permissions"] = map[string]any{"files": true} }))
+	if Digest(more) == Digest(n) {
+		t.Fatal("more asked on the computers, another digest")
+	}
+	hosts, _ := Parse(withNode(t, func(node, _ map[string]any) {
+		node["permissions"] = map[string]any{"network": []any{"b.example.com", "a.example.com", "a.example.com"}}
+	}))
+	sorted, _ := Parse(withNode(t, func(node, _ map[string]any) {
+		node["permissions"] = map[string]any{"network": []any{"a.example.com", "b.example.com"}}
+	}))
+	if Digest(hosts) != Digest(sorted) {
+		t.Fatal("the same hosts in another order")
+	}
+}
+
+func TestExplainAndAddedNodeProgram(t *testing.T) {
+	base, _ := Parse([]byte(exampleManifest))
+	n, _ := Parse(withNode(t, func(node, _ map[string]any) {
+		node["permissions"] = map[string]any{"network": []any{"notes.example.com"}, "macos_privacy": true}
+	}))
+	keys := func(lines []PermissionLine) string {
+		var out []string
+		for _, l := range lines {
+			out = append(out, l.Key)
+		}
+		return strings.Join(out, ",")
+	}
+	if got := keys(Explain(n)); got != "runs_code,network,secrets,node_runs_code,node_network,node_macos_privacy,node_secrets" {
+		t.Fatal(got)
+	}
+	if l := Explain(n)[3]; !strings.Contains(l.Detail, "Mac") || strings.Contains(l.Detail, "Linux") {
+		t.Fatal(l)
+	}
+	if got := keys(Added(base, n)); got != "node_runs_code,node_network,node_macos_privacy,node_secrets" || !NodeAdds(base, n) {
+		t.Fatal(got)
+	}
+	if got := Added(n, n); len(got) != 0 || NodeAdds(n, n) {
+		t.Fatal("nothing more", got)
+	}
+	linux, _ := Parse(withNode(t, func(node, f map[string]any) {
+		node["command"].(map[string]any)["linux-amd64"] = "node/helper-linux"
+		f["items"].(map[string]any)["x-os"] = []any{"darwin", "linux"}
+		node["permissions"] = map[string]any{"network": []any{"notes.example.com"}, "macos_privacy": true}
+	}))
+	if got := keys(Added(n, linux)); got != "node_runs_code" || !NodeAdds(n, linux) {
+		t.Fatal("Linux computers too", got)
+	}
+	if got := keys(Added(n, base)); got != "" {
+		t.Fatal("no program on computers any more adds nothing", got)
 	}
 }

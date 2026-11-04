@@ -44,6 +44,7 @@ type Manifest struct {
 	Homepage         string                     `json:"homepage,omitempty"`
 	Engines          Engines                    `json:"engines,omitzero"`
 	Runtime          *Runtime                   `json:"runtime,omitempty"`
+	Node             *NodeRuntime               `json:"node,omitempty"`
 	ActivationEvents []string                   `json:"activation_events,omitempty"`
 	Contributes      map[string]json.RawMessage `json:"contributes"`
 	Configuration    json.RawMessage            `json:"configuration,omitempty"`
@@ -71,6 +72,61 @@ type Runtime struct {
 
 // SpeaksRPC says whether the program speaks the plugin protocol.
 func (r *Runtime) SpeaksRPC() bool { return r != nil && r.RPC != "none" }
+
+// NodeRuntime is the plugin's program that runs on computers, not on the hub (docs/plan-plugins.md「七」): on each
+// machine the user switched on in the configuration field Machines, started and stopped by that machine's node.
+type NodeRuntime struct {
+	// Command is one per platform ("darwin-arm64": "node/bin/x"); its platforms are the computers it runs on.
+	Command Command           `json:"command"`
+	Args    []string          `json:"args,omitempty"`
+	Env     map[string]string `json:"env,omitempty"`
+	// Machines names the configuration field that picks the computers: an array of format machine, its x-os the
+	// systems Command has programs for (its maxItems, when it may run on one only: iMessage's Mac).
+	Machines string `json:"machines"`
+	RPC      string `json:"rpc,omitempty"`
+	HTTP     bool   `json:"http,omitempty"`
+	// KeepRunning is what it does while the hub cannot reach its machine: "lease" (the default) stops half an hour
+	// after the hub last renewed it; "always" goes on (one that has to keep receiving, as iMessage).
+	KeepRunning string `json:"keep_running,omitempty"`
+	// Secrets are the names (of Manifest.Secrets) its machines get; the others stay on the hub.
+	Secrets     []string        `json:"secrets,omitempty"`
+	Permissions NodePermissions `json:"permissions,omitzero"`
+}
+
+// NodePermissions are what the program on the computers asks for, shown before installing and before a machine is
+// switched on. Like Permissions, shown and recorded; the node does not enforce them yet.
+type NodePermissions struct {
+	// Network are the hosts it reaches from the computers.
+	Network []string `json:"network,omitempty"`
+	// Files: it reads and writes files outside its own data directory.
+	Files bool `json:"files,omitempty"`
+	// MacOSPrivacy: it asks for macOS's privacy permissions (Full Disk Access, Accessibility…), granted on that Mac.
+	MacOSPrivacy bool `json:"macos_privacy,omitempty"`
+}
+
+// Keep-running choices of a node program.
+const (
+	KeepLease  = "lease"
+	KeepAlways = "always"
+)
+
+// nodeSystems are the systems a node program can be for.
+var nodeSystems = []string{"darwin", "linux"}
+
+// SpeaksRPC says whether the program speaks the plugin protocol.
+func (r *NodeRuntime) SpeaksRPC() bool { return r != nil && r.RPC != "none" }
+
+// Systems are the systems the program has a build for ("darwin", "linux"), sorted, once each.
+func (r *NodeRuntime) Systems() []string {
+	var out []string
+	for platform := range r.Command.ByPlatform {
+		if sys, _, ok := strings.Cut(platform, "-"); ok && !slices.Contains(out, sys) {
+			out = append(out, sys)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
 
 // Command is one path, or one per platform ("linux-amd64": "bin/x").
 type Command struct {
@@ -177,11 +233,14 @@ func (m *Manifest) Validate() error {
 			bad("engines.persona: %v", err)
 		}
 	}
+	if (m.Runtime != nil || m.Node != nil) && m.Engines.PluginProtocol != Protocol {
+		bad("engines.plugin_protocol %d: this hub speaks %d", m.Engines.PluginProtocol, Protocol)
+	}
 	if m.Runtime != nil {
-		if m.Engines.PluginProtocol != Protocol {
-			bad("engines.plugin_protocol %d: this hub speaks %d", m.Engines.PluginProtocol, Protocol)
-		}
 		errs = append(errs, m.Runtime.validate()...)
+	}
+	if m.Node != nil {
+		errs = append(errs, m.Node.validate(m)...)
 	}
 	for _, e := range m.ActivationEvents {
 		if !slices.Contains([]string{OnStartup, OnCall, OnHTTP}, e) {
@@ -346,15 +405,93 @@ func (r *Runtime) validate() []error {
 	if !r.SpeaksRPC() && !r.HTTP {
 		bad("runtime: rpc none and no http: the hub could not talk to it")
 	}
-	for k := range r.Env {
+	return append(errs, checkEnv("runtime.env", r.Env)...)
+}
+
+func checkEnv(at string, env map[string]string) []error {
+	var errs []error
+	for k := range env {
 		if !envPattern.MatchString(k) {
-			bad("runtime.env: %q is not a variable name", k)
+			errs = append(errs, fmt.Errorf("%s: %q is not a variable name", at, k))
 		}
 		if strings.HasPrefix(k, "PERSONA_") || strings.HasPrefix(k, "JARVIS_") {
-			bad("runtime.env: %q is the hub's to set", k)
+			errs = append(errs, fmt.Errorf("%s: %q is the hub's to set", at, k))
 		}
 	}
 	return errs
+}
+
+func (r *NodeRuntime) validate(m *Manifest) []error {
+	var errs []error
+	bad := func(format string, args ...any) { errs = append(errs, fmt.Errorf(format, args...)) }
+	if len(r.Command.ByPlatform) == 0 {
+		bad("node.command: one program per platform (\"darwin-arm64\": \"node/bin/x\")")
+	}
+	for platform, p := range r.Command.ByPlatform {
+		sys, _, _ := strings.Cut(platform, "-")
+		if !platformKey.MatchString(platform) || !slices.Contains(nodeSystems, sys) {
+			bad("node.command: platform %q is not darwin-<arch> or linux-<arch>", platform)
+		}
+		if IsBuiltinCommand(p) {
+			bad("node.command: the hub's own binary is not a plugin's program on computers")
+		} else if err := checkCommandPath(p); err != nil {
+			bad("node.command %q: %v", p, err)
+		}
+	}
+	if r.RPC != "" && r.RPC != "stdio" && r.RPC != "none" {
+		bad("node.rpc %q: stdio or none", r.RPC)
+	}
+	if !r.SpeaksRPC() && !r.HTTP {
+		bad("node: rpc none and no http: the hub could not talk to it")
+	}
+	if r.KeepRunning != "" && r.KeepRunning != KeepLease && r.KeepRunning != KeepAlways {
+		bad("node.keep_running %q: lease or always", r.KeepRunning)
+	}
+	errs = append(errs, checkEnv("node.env", r.Env)...)
+	seen := map[string]bool{}
+	for _, name := range r.Secrets {
+		if !slices.ContainsFunc(m.Secrets, func(s SecretSpec) bool { return s.Name == name }) {
+			bad("node.secrets: %q is not one of secrets", name)
+		}
+		if seen[name] {
+			bad("node.secrets: %q twice", name)
+		}
+		seen[name] = true
+	}
+	for _, h := range r.Permissions.Network {
+		if !hostPattern.MatchString(h) || len(h) > 253 {
+			bad("node.permissions.network: %q is not a host name (lowercase, no scheme, port or path; *. allowed first)", h)
+		}
+	}
+	f := m.NodeMachines()
+	switch {
+	case r.Machines == "":
+		bad("node.machines: the configuration field that picks the computers")
+	case f == nil:
+		bad("node.machines: configuration has no field %q", r.Machines)
+	case f.Type != "array" || f.Items == nil || f.Items.Format != "machine":
+		bad("configuration.%s: picks the computers: an array of format machine", r.Machines)
+	case len(f.Items.OS) == 0 || slices.ContainsFunc(f.Items.OS, func(sys string) bool { return !slices.Contains(r.Systems(), sys) }):
+		bad("configuration.%s: x-os %v: node.command has programs for %v", r.Machines, f.Items.OS, r.Systems())
+	}
+	return errs
+}
+
+// NodeMachines is the configuration field that picks the computers of the node program; nil without one.
+func (m *Manifest) NodeMachines() *Field {
+	if m.Node == nil || m.Node.Machines == "" {
+		return nil
+	}
+	sc, err := ParseSchema(m.Configuration)
+	if err != nil || sc == nil {
+		return nil
+	}
+	for i := range sc.Fields {
+		if sc.Fields[i].Name == m.Node.Machines {
+			return &sc.Fields[i]
+		}
+	}
+	return nil
 }
 
 // checkCommandPath: a path inside the package (relative, no ..), or the hub's own binary.

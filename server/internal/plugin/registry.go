@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -358,7 +359,7 @@ func (r *Registry) PreviewMarket(ctx context.Context, mk *Market, marketID strin
 // MorePermissions says whether m asks for more than the installed cur was granted (its upgrade needs the user's
 // confirmation).
 func MorePermissions(cur *Plugin, m *Manifest) bool {
-	return !cur.Record.Granted.Covers(m.Permissions) || (m.Runtime != nil && cur.Manifest.Runtime == nil) ||
+	return !cur.Record.Granted.Covers(m.Permissions) || (m.Runtime != nil && cur.Manifest.Runtime == nil) || NodeAdds(cur.Manifest, m) ||
 		slices.ContainsFunc(m.Topics(), func(t string) bool { return !slices.Contains(cur.Manifest.Topics(), t) }) ||
 		slices.ContainsFunc(m.Surfaces(), func(t string) bool { return !slices.Contains(cur.Manifest.Surfaces(), t) })
 }
@@ -503,6 +504,17 @@ func (r *Registry) checkPackage(m *Manifest, root string) error {
 			}
 		}
 	}
+	if m.Node != nil {
+		if !NodePrograms {
+			return errors.New("这个版本的 hub 还不能在电脑上运行插件的程序（node 段），先升级 hub")
+		}
+		// Every computer's program is in the package: the hub sends each machine the one for its platform.
+		for _, platform := range slices.Sorted(maps.Keys(m.Node.Command.ByPlatform)) {
+			if err := checkProgram(root, "node.command", m.Node.Command.ByPlatform[platform]); err != nil {
+				return err
+			}
+		}
+	}
 	if m.Runtime == nil {
 		return nil
 	}
@@ -513,18 +525,27 @@ func (r *Registry) checkPackage(m *Manifest, root string) error {
 	if IsBuiltinCommand(cmd) {
 		return errors.New("runtime.command: only a built-in plugin runs the hub's own binary")
 	}
+	return checkProgram(root, "runtime.command", cmd)
+}
+
+// NodePrograms says whether this hub runs plugins' programs on computers (docs/plan-plugins.md「七」): until nodes
+// can start them (step 2), a package with a node program does not install, rather than install and never run there.
+var NodePrograms = false
+
+// checkProgram holds a program a manifest names (at: which field) to being an executable file inside the package.
+func checkProgram(root, at, cmd string) error {
 	p := filepath.Join(root, filepath.FromSlash(cmd))
 	resolved, err := filepath.EvalSymlinks(p)
 	if err != nil {
-		return fmt.Errorf("runtime.command %s 不在包里", cmd)
+		return fmt.Errorf("%s %s 不在包里", at, cmd)
 	}
 	rootResolved, _ := filepath.EvalSymlinks(root)
 	if rel, err := filepath.Rel(rootResolved, resolved); err != nil || !inside(filepath.ToSlash(rel)) {
-		return fmt.Errorf("runtime.command %s 跳出了包", cmd)
+		return fmt.Errorf("%s %s 跳出了包", at, cmd)
 	}
 	fi, err := os.Stat(resolved)
 	if err != nil || !fi.Mode().IsRegular() || fi.Mode()&0o111 == 0 {
-		return fmt.Errorf("runtime.command %s 不是可执行文件", cmd)
+		return fmt.Errorf("%s %s 不是可执行文件", at, cmd)
 	}
 	return nil
 }
