@@ -476,7 +476,8 @@ internal fun LarkPartContent(
     var opening by remember { mutableStateOf(false) }
     when (part) {
         is LarkPart.Text -> {
-            val postId = LarkMoments.postId(part.text)
+            // A company-feed share is a card while the hub reads the feed (`lark_moments`); else the plain link.
+            val postId = (larkNativeLink(part.text, LocalLarkFeatures.current) as? LarkNativeLink.MomentsPost)?.postId
             if (postId != null) {
                 val open = LocalLarkLinkOpener.current
                 LarkMomentsCard(postId = postId, url = part.text, repository = repository, onClick = {

@@ -102,6 +102,7 @@ private fun SettingsContent(
     val connectorsService = services.connectors.takeUnless { services.demo }
     var mailAccounts by remember { mutableStateOf<List<MailAccount>?>(null) }
     var larkStatus by remember { mutableStateOf<LarkStatus?>(null) }
+    val larkChats = LocalLarkFeatures.current.chats
     var hubConnectors by remember { mutableStateOf<List<HubConnector>>(emptyList()) }
     val phoneOn = remember(page) {
         listOf(
@@ -134,11 +135,12 @@ private fun SettingsContent(
         channelList = try { channelService.channels() }
         catch (error: CancellationException) { throw error } catch (_: Exception) { channelList }
     }
-    LaunchedEffect(connectorsService, page, connection) {
+    LaunchedEffect(connectorsService, page, connection, larkChats) {
         if (connectorsService == null || page != "settings" || connection != ConnectionState.Online) return@LaunchedEffect
         try {
             mailAccounts = runCatching { connectorsService.mailAccounts() }.getOrNull()
-            larkStatus = runCatching { connectorsService.larkStatus() }.getOrNull()
+            // 飞书's status is the lark-connector plugin's (`/api/v1/lark/status`): only asked while the hub has it.
+            larkStatus = if (larkChats) runCatching { connectorsService.larkStatus() }.getOrNull() else null
             hubConnectors = runCatching { connectorsService.connectors(all = true) }.getOrDefault(emptyList())
         } catch (_: Exception) {}
     }
@@ -265,10 +267,10 @@ private fun SettingsContent(
             item { JSectionHeader("电脑") }
             item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ClaudeCode), title = "Claude Code 设置", leadingIcon = PhIcons.TerminalWindow, subtitle = "各台电脑上的常用选项，可以一起改", onClick = { open(SettingsPage.ClaudeCode) }) } }
             item { JSectionHeader("连接器") }
-            val extraHubConnectors = hubConnectors.filter { it.id != "mail" && it.id != "lark" }
-            val connectorRowCount = 3 + extraHubConnectors.size
+            val connectorRows = connectorRows(hubConnectors, lark = larkChats)
+            fun connectorPosition(row: ConnectorRow) = GroupPosition.of(connectorRows.indexOf(row), connectorRows.size)
             item {
-                JGroupItem(GroupPosition.of(0, connectorRowCount)) {
+                JGroupItem(connectorPosition(ConnectorRow.Phone)) {
                     JRow(
                         selected = detailKey == SettingsPageRoute(SettingsPage.PhoneData),
                         title = "这台手机",
@@ -280,7 +282,7 @@ private fun SettingsContent(
                 }
             }
             item {
-                JGroupItem(GroupPosition.of(1, connectorRowCount)) {
+                JGroupItem(connectorPosition(ConnectorRow.Mail)) {
                     JRow(
                         selected = detailKey == SettingsPageRoute(SettingsPage.Mail),
                         title = "邮箱",
@@ -291,8 +293,8 @@ private fun SettingsContent(
                     )
                 }
             }
-            item {
-                JGroupItem(GroupPosition.of(2, connectorRowCount)) {
+            if (ConnectorRow.Lark in connectorRows) item {
+                JGroupItem(connectorPosition(ConnectorRow.Lark)) {
                     JRow(
                         selected = detailKey == SettingsPageRoute(SettingsPage.Feishu),
                         title = "飞书",
@@ -303,9 +305,10 @@ private fun SettingsContent(
                     )
                 }
             }
-            extraHubConnectors.forEachIndexed { i, c ->
+            connectorRows.filterIsInstance<ConnectorRow.Hub>().forEach { row ->
+                val c = row.connector
                 item {
-                    JGroupItem(GroupPosition.of(3 + i, connectorRowCount)) {
+                    JGroupItem(connectorPosition(row)) {
                         JRow(
                             title = c.name,
                             leadingIcon = PhIcons.PlugsConnected,

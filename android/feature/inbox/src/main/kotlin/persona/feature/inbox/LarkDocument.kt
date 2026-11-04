@@ -1,6 +1,7 @@
 package persona.feature.inbox
 
 import kotlinx.serialization.json.*
+import persona.core.contracts.LarkFeatures
 import java.net.URI
 
 internal fun larkWebUrl(value: String): String? = runCatching {
@@ -14,6 +15,24 @@ fun isLarkDocumentUrl(value: String): Boolean = runCatching {
     listOf("feishu.cn", "larksuite.com", "larkoffice.com").any { host == it || host.endsWith(".$it") } &&
         Regex("^/(docx|docs|doc|wiki|sheets|base|mindnotes|slides)/[^/]+").containsMatchIn(uri.path)
 }.getOrDefault(false)
+
+/** A Feishu link that opens in a native view rather than as a web page. */
+sealed interface LarkNativeLink {
+    /** A Feishu document: the native reader (`/api/v1/lark/raw/documents/…`). */
+    data class Document(val url: String) : LarkNativeLink
+    /** A company-feed (公司圈) share link: the post and its comments (`/api/v1/lark/moments/…`). */
+    data class MomentsPost(val postId: String) : LarkNativeLink
+}
+
+/**
+ * The native view [url] opens in while the hub has what it reads ([lark], the lark-connector plugin's features, #1530);
+ * null: an ordinary web page, as every Feishu link is on a hub without the plugin.
+ */
+fun larkNativeLink(url: String, lark: LarkFeatures): LarkNativeLink? = when {
+    lark.chats && isLarkDocumentUrl(url) -> LarkNativeLink.Document(url)
+    lark.moments -> LarkMoments.postId(url)?.let(LarkNativeLink::MomentsPost)
+    else -> null
+}
 
 data class LarkDocument(
     val title: String, val blocks: List<LarkDocumentBlock>, val partial: Boolean, val copyAllowed: Boolean,

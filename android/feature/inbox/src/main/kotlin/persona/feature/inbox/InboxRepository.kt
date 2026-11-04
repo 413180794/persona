@@ -122,7 +122,7 @@ data class InboxRecord(
     val isLark: Boolean get() = feedId != null || source == "lark"
 }
 
-/** A removed post reference on an inbox item. */
+/** A 公司圈 post reference on an inbox item. */
 data class InboxMomentRef(
     val postId: String,
     val notice: String? = null,

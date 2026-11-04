@@ -781,7 +781,11 @@ class RealInboxRepository(
                         is LarkPart.File -> "附件：${part.name}（${part.mimeType}）"
                         is LarkPart.Image -> part.description
                         is LarkPart.External -> "${part.title}\n${part.larkUrl}"
-                        else -> ""
+                        is LarkPart.Code -> "代码：\n${part.code}"
+                        is LarkPart.Audio -> "语音（${part.durationMs / 1000} 秒）"
+                        is LarkPart.Video -> "视频（${part.durationMs / 1000} 秒）"
+                        is LarkPart.Sticker -> part.description
+                        is LarkPart.MergeForward -> "聊天记录：${part.title}（${part.messages.size} 条）"
                     } }
                     "${message.senderName} ${message.time}\n$body"
                 }

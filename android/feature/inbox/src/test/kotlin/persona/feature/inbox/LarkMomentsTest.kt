@@ -49,13 +49,13 @@ class LarkMomentsTest {
             item = InboxItem("i3", kind = "moment"),
             moment = InboxMomentRef(postId = "p1", notice = "comment")
         )
-        assertEquals("removed", kindLabel(comment))
+        assertEquals("公司圈", kindLabel(comment))
 
         val reply = InboxRecord(
             item = InboxItem("i4", kind = "moment"),
             moment = InboxMomentRef(postId = "p1", notice = "reply")
         )
-        assertEquals("removed", kindLabel(reply))
+        assertEquals("公司圈", kindLabel(reply))
     }
 
     @Test

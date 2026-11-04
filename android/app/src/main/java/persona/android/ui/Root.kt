@@ -146,6 +146,8 @@ fun PersonaRoot(
                             persona.core.designsystem.LocalPersonaDesign provides if (demo) persona.core.designsystem.PersonaDesign.Default else persona.core.designsystem.LocalPersonaDesign.current,
                             persona.core.designsystem.LocalPersonaPack provides if (demo) null else persona.core.designsystem.LocalPersonaPack.current,
                             persona.core.designsystem.LocalPersonaName provides if (demo) "Persona" else persona.core.designsystem.LocalPersonaName.current,
+                            // The demo serves its own Feishu chats, whatever the paired hub has.
+                            persona.core.designsystem.LocalLarkFeatures provides if (demo) persona.core.contracts.LarkFeatures.All else persona.core.designsystem.LocalLarkFeatures.current,
                         ) {
                             PersonaShell(displayed, openNavigation, services.copy(connection = displayed.connection, sessions = displayed.sessions, demo = displayed.demo != null), shell)
                         }

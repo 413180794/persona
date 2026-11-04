@@ -46,15 +46,15 @@ internal fun LarkLinkHost(repository: InboxRepository, content: @Composable () -
     var momentLink by remember { mutableStateOf<String?>(null) }
     val parentOccluded = LocalLarkReadOccluded.current
     val scope = rememberCoroutineScope()
+    val lark = LocalLarkFeatures.current
     // A web page over the page: no glass may sample its WebView, here or in the page around it (LocalWebSheets).
     WebSheetShown(target != null || momentPostId != null)
     CompositionLocalProvider(LocalLarkLinkOpener provides { url, source ->
-        val postId = LarkMoments.postId(url)
-        if (postId != null) {
-            momentPostId = postId
-            momentLink = url
-        } else {
-            larkWebUrl(url)?.let { target = LarkLink(it, source) }
+        // Native views only while the hub has them (the lark-connector plugin's features, #1530); else a web page.
+        when (val native = larkNativeLink(url, lark)) {
+            is LarkNativeLink.MomentsPost -> { momentPostId = native.postId; momentLink = url }
+            is LarkNativeLink.Document -> larkWebUrl(url)?.let { target = LarkLink(it, source) }
+            null -> larkWebUrl(url)?.let { target = LarkLink(it, null) }
         }
     }, LocalLarkReadOccluded provides (parentOccluded || target != null || momentPostId != null)) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -82,7 +82,7 @@ internal fun LarkLinkHost(repository: InboxRepository, content: @Composable () -
                                 .background(PersonaTheme.palette.ink3, PersonaTheme.shapes.controlShape))
                             Row(Modifier.fillMaxWidth().padding(end = Tokens.Space.m), verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                                InboxConnectionTitle(repository, if (isLarkDocumentUrl(link.url)) "飞书文档" else "网页",
+                                InboxConnectionTitle(repository, if (link.source != null && isLarkDocumentUrl(link.url)) "飞书文档" else "网页",
                                     Modifier.weight(1f).padding(start = Tokens.Space.m))
                                 JIconButton(if (drag.currentValue == ReaderDetent.Full) PhIcons.CaretDown else PhIcons.CaretUp,
                                     if (drag.currentValue == ReaderDetent.Full) "收起" else "展开", onClick = {

@@ -43,3 +43,20 @@ object ConnectorText {
         else -> Status.Offline
     }
 }
+
+/** A row of 设置 › 连接器, in order (iOS `ConnectorRow`). */
+internal sealed interface ConnectorRow {
+    data object Phone : ConnectorRow
+    data object Mail : ConnectorRow
+    /** 飞书: its page reads `/api/v1/lark/…`, the lark-connector plugin's (`LarkFeatures`, #1530). */
+    data object Lark : ConnectorRow
+    data class Hub(val connector: HubConnector) : ConnectorRow
+}
+
+/**
+ * 设置 › 连接器's rows: this phone, mail, 飞书 while the hub has Feishu chats ([lark], `LarkFeatures.chats`), then the
+ * hub's other connectors (mail and Feishu have rows of their own).
+ */
+internal fun connectorRows(hubConnectors: List<HubConnector>, lark: Boolean): List<ConnectorRow> =
+    listOfNotNull(ConnectorRow.Phone, ConnectorRow.Mail, ConnectorRow.Lark.takeIf { lark }) +
+        hubConnectors.filter { it.id != "mail" && it.id != "lark" }.map(ConnectorRow::Hub)

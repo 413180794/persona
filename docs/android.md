@@ -434,6 +434,17 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 
 单测：`feature/inbox` 的 `InboxHandOffTest`（和 iOS 一样的交接消息、最近在线 Agent、操作 ID、行标签）、`InboxDraftTest`（instruction 拼法、AI 标记的来去、发送中不换草稿、AI 分身草稿只填没动过的回复、确认文案）；`core/data` 的 `InboxHandOffRepositoryTest`（`at_all` / `mail` / `direct` 的解析、AI 草稿和手打草稿的行状态、交给 Persona 和交给 Agent 走哪个 outbox、草拟走 actions）；`core/hub` 的 `InboxActionsTransportTest`（draft 的路径、请求体、空草稿和失败）、`KnowledgeRepositoryTest`（agents 只留在线非助手、PUT 只发设置了的字段）；`feature/knowledge` 的 `KnowledgePresentationTest`（项目分段、六类、命中的条目 / 来源 / 文本、按条目合并、逐词加粗、时间线、档案去重、代码目录、开 Agent 的预填、打标表单和请求体）、`KnowledgeTaggingFlowTest`（保存失败留在浮层、保存后条目和列表都重读、Agent 只留在线非助手）；`core:designsystem` 的 `SliderTest`。
 
+## 飞书经插件：按 hub 的 features 显示（#1530）
+
+经 lark-connector 接飞书由私有插件提供，hub 只在装了插件时有 `/api/v1/lark/…`，插件往 hello 的 features 里加 `lark`、`lark_moments`（还有 `lark_attachments`、`lark_native_encryption`）。
+Android 用一个判断（`core/contracts` 的 `LarkFeatures.of(features)`，和 iOS `LarkFeatures`、网页 `larkOn` 同一个规则）：features 为空（还没收到 hello）或只有 `lark_attachments` 没有 `lark`（插件之前自己接飞书的 hub）按原样全部显示；否则 `chats` 看 `lark`，`moments` 还要 `lark_moments`。
+外壳从选中的 hub 的 hello 算出来，经 `LocalLarkFeatures`（`core/designsystem`）给各页；体验模式一律全部显示（演示数据自带飞书）。
+
+- 设置 › 连接器的「飞书」一行（它的页读 `/api/v1/lark/status`）只在 `chats` 时出现，也只在这时去读状态（`connectorRows`）。
+- 对话里的链接（`ChatLinkHost`）和收件箱 / 飞书会话里的链接（`LarkLinkHost`）经 `larkNativeLink(url, lark)` 决定：飞书文档要 `chats` 才进原生阅读器，公司圈帖子要 `moments` 才进帖子浮层、会话里才画成公司圈卡片；没有时照普通网页打开。
+- 收件箱里带 `lark` / `doc` / `moment` 的事项只有插件给，照常画，点开照旧进飞书会话 / 公司圈帖子页。Android 没有「消息」页、翻译设置和后台拉飞书会话，知识库也不显示存档的公司圈帖子，这几处 iOS / 网页有的开关这里没有对应。
+- 「removed」一律叫「公司圈」。单测 `LarkFeaturesTest`（`core:contracts`）、`LarkNativeLinkTest`（`feature:inbox`）、`SettingsConnectorsTest.feishuRowOnlyWhileTheHubHasFeishu`；截图用 `MOCK_NO_LARK=1` 的假 hub 对比设置页。
+
 ## 常驻通知和桌面入口（2026-11-02 从主线旧 App 移植）
 
 iPhone 的实时活动、小组件和快捷指令在 Android 上的对应物。四处说同样的话：文案和挑选规则在 `core:domain` 的 `FleetSummary` / `FleetText`（照 iOS `FleetText` 和 hub `buildFleet`），数据都来自 `:platform:notify` 的 `FleetFeed`。

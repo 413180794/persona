@@ -37,7 +37,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-/** removed share links (`…/client/moments/detail?postId=…`). */
+/** 公司圈 share links (`…/client/moments/detail?postId=…`). */
 object LarkMoments {
     fun postId(link: String?): String? {
         link ?: return null
@@ -59,7 +59,7 @@ internal fun formatMomentTime(ms: Double?): String = runCatching {
     DateTimeFormatter.ofPattern("MM-dd HH:mm").format(instant.atZone(zone))
 }.getOrDefault("")
 
-/** A shared removed post in a chat. */
+/** A shared 公司圈 post in a chat. */
 @Composable
 internal fun LarkMomentsCard(
     postId: String,
@@ -75,8 +75,8 @@ internal fun LarkMomentsCard(
     val card = preview?.card
     JCard(modifier.fillMaxWidth().clickable(onClick = onClick), padding = Tokens.Space.m) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            Icon(PhIcons.ChatsCircle.regular, contentDescription = "removed", tint = PersonaTheme.palette.accent, modifier = Modifier.size(20.dp))
-            Text(preview?.title ?: "removed动态", style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
+            Icon(PhIcons.ChatsCircle.regular, contentDescription = "公司圈", tint = PersonaTheme.palette.accent, modifier = Modifier.size(20.dp))
+            Text(preview?.title ?: "公司圈动态", style = PersonaTheme.type.headline, color = PersonaTheme.palette.ink)
         }
         card?.author?.let { author ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
@@ -95,7 +95,7 @@ internal fun LarkMomentsCard(
     }
 }
 
-/** One removed post page opened from an inbox item. */
+/** One 公司圈 post page opened from an inbox item. */
 @Composable
 fun LarkMomentsScreen(
     repository: InboxRepository,
@@ -146,7 +146,7 @@ fun LarkMomentsScreen(
     val feishuUrl = "https://applink.feishu.cn/client/moments/detail?postId=${route.postId}"
 
     JListPage(
-        title = "removed",
+        title = "公司圈",
         subtitle = post?.userName?.takeIf { it.isNotBlank() }?.let { "$it 的动态" },
         onBack = navigator::back,
         refreshing = loading,
@@ -251,7 +251,7 @@ fun LarkMomentsScreen(
     }
     if (confirmSend && record != null && composer != null) {
         SendAsYouDialog(
-            sendConfirmation(record, composer.state.value.draft.text),
+            sendConfirmation(record, reply.draft.text),
             onSend = {
                 confirmSend = false
                 composer.send()
@@ -264,7 +264,7 @@ fun LarkMomentsScreen(
     }
 }
 
-/** Bottom sheet for a removed post opened from a share link inside a conversation. */
+/** Bottom sheet for a 公司圈 post opened from a share link inside a conversation. */
 @Composable
 internal fun LarkMomentsSheet(
     postId: String,
@@ -297,7 +297,7 @@ internal fun LarkMomentsSheet(
 
     val feishuUrl = link ?: "https://applink.feishu.cn/client/moments/detail?postId=$postId"
 
-    JSheet(onDismiss = onDismiss, title = "removed", scrollable = false) {
+    JSheet(onDismiss = onDismiss, title = "公司圈", scrollable = false) {
         Row(Modifier.fillMaxWidth().padding(bottom = Tokens.Space.s), horizontalArrangement = Arrangement.End) {
             JButton(
                 "在飞书中打开",

@@ -27,7 +27,8 @@ import androidx.lifecycle.compose.currentStateAsState
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.feature.inbox.LarkDocumentLink
-import persona.feature.inbox.isLarkDocumentUrl
+import persona.feature.inbox.LarkNativeLink
+import persona.feature.inbox.larkNativeLink
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -61,6 +62,7 @@ fun ChatLinkHost(
     val lifecycleState by lifecycle.currentStateAsState()
     val feedback = LocalAppFeedback.current
     val appLinks by rememberUpdatedState(LocalChatAppLinks.current)
+    val lark = LocalLarkFeatures.current
     var url by remember { mutableStateOf<String?>(null) }
     var unsupported by remember { mutableStateOf(false) }
     var external by remember { mutableStateOf<String?>(null) }
@@ -217,7 +219,8 @@ fun ChatLinkHost(
                         }
                     }
                     if (!view.gone) key(view) {
-                        if (isLarkDocumentUrl(target)) LarkDocumentLink(target, Modifier.fillMaxWidth().weight(1f)) {
+                        // Feishu documents in the native reader while the hub has it (the lark-connector plugin, #1530).
+                        if (larkNativeLink(target, lark) is LarkNativeLink.Document) LarkDocumentLink(target, Modifier.fillMaxWidth().weight(1f)) {
                             AndroidView(factory = { view }, modifier = Modifier.fillMaxSize(), onRelease = { pool.release(it) })
                         } else JPage(title = "网页", modifier = Modifier.fillMaxWidth().weight(1f), topBar = {}) { padding ->
                             AndroidView(factory = { view },

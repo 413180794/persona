@@ -318,7 +318,7 @@ internal fun inboxSummary(inbox: InboxListResult, working: (InboxRow) -> Boolean
 }
 
 private fun kindLabel(kind: String) = when (kind) {
-    "mention" -> "@我"; "dm" -> "私聊"; "group" -> "群聊"; "bot" -> "机器人"; "mail" -> "邮件"; "moment" -> "removed"; else -> ""
+    "mention" -> "@我"; "dm" -> "私聊"; "group" -> "群聊"; "bot" -> "机器人"; "mail" -> "邮件"; "moment" -> "公司圈"; else -> ""
 }
 
 /** The row's kind: an @ of everyone is 「@所有人」, a mail the user was only copied on is 「抄送」 (the old app's labels). */
@@ -327,7 +327,7 @@ internal fun kindLabel(record: InboxRecord): String = when {
     record.item.kind == "mention" && record.atAll -> "@所有人"
     record.item.kind == "mail" && record.mail?.direct == false -> "抄送"
     record.moment != null || record.item.kind == "moment" ->
-        if (record.moment?.notice?.startsWith("atIn") == true) "@我" else "removed"
+        if (record.moment?.notice?.startsWith("atIn") == true) "@我" else "公司圈"
     else -> kindLabel(record.item.kind)
 }
 

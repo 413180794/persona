@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,7 @@ import persona.android.platform.PlatformPairing
 import persona.android.platform.PlatformRoot
 import persona.android.ui.AppServices
 import persona.android.ui.AppearanceOverride
+import persona.core.contracts.LarkFeatures
 import persona.core.contracts.api.HubConnection
 import persona.core.designsystem.GlassThrottle
 import persona.core.designsystem.PersonaTheme
@@ -43,6 +45,11 @@ import persona.core.designsystem.LocalPersonaDesign
 import persona.core.navigation.*
 import persona.feature.settings.SettingsServices
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -69,6 +76,7 @@ class MainActivity : ComponentActivity() {
             ?.let { Class.forName(it).getDeclaredConstructor().newInstance() as LaunchAdapter }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -95,9 +103,15 @@ class MainActivity : ComponentActivity() {
             // Levels are ordered best first, so the lower of the two choices is the later one.
             val glassLevel = maxOf(app.appearance.deviceLevel(glassPreference), GlassThrottle.ceiling.value)
             val channels by channelDirectory.channels.collectAsStateWithLifecycle()
+            // What the selected hub offers of Feishu through the lark-connector plugin, from its hello (#1530).
+            val lark by remember(app) {
+                app.hub.flatMapLatest { it?.connection?.serverFeatures ?: flowOf(emptySet()) }
+                    .map(LarkFeatures::of).distinctUntilChanged()
+            }.collectAsStateWithLifecycle(LarkFeatures.All)
             AppearanceOverride(forced) { CompositionLocalProvider(
                 LocalDeveloperTools provides launchAdapter?.tools,
                 persona.core.designsystem.LocalChannels provides channels,
+                persona.core.designsystem.LocalLarkFeatures provides lark,
                 LocalAppStyleStore provides app.appearance,
                 LocalGlassLevel provides glassLevel,
                 LocalPersonaDesign provides face,
