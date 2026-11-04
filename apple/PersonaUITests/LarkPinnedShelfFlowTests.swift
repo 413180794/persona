@@ -28,8 +28,13 @@ final class LarkPinnedShelfFlowTests: XCTestCase {
         app.launchPinned()
         XCTAssertTrue(app.buttons["shell-feishu"].firstMatch.waitForExistence(timeout: 20))
         app.buttons["shell-feishu"].firstMatch.tapCenter()
-        XCTAssertTrue(app.buttons["feishu-chat-f2"].waitForExistence(timeout: 20))
+        XCTAssertTrue(chats(app).firstMatch.waitForExistence(timeout: 20))
         return app
+    }
+
+    /// Rows of the list under the shelf (the shelf's own buttons are `feishu-pin-…`).
+    @MainActor private func chats(_ app: XCUIApplication) -> XCUIElementQuery {
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "feishu-chat-"))
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
@@ -55,7 +60,10 @@ final class LarkPinnedShelfFlowTests: XCTestCase {
         XCTAssertTrue(toggle.waitForExistence(timeout: 10))
         wait(toggle, "label == %@", "展开置顶会话")
         shot(app, "pins-compact")
-        XCTAssertLessThanOrEqual(app.buttons["feishu-chat-f2"].frame.height, 66, "normal rows retain the compact 64 pt layout")
+        XCTAssertLessThanOrEqual(chats(app).firstMatch.frame.height, 66, "normal rows retain the compact 64 pt layout")
+        // A pinned chat sits on the shelf only, not again at the head of the list.
+        XCTAssertTrue(app.buttons["feishu-pin-f2"].exists)
+        XCTAssertFalse(app.buttons["feishu-chat-f2"].exists)
         toggle.tapCenter()
         wait(toggle, "label == %@", "收起置顶会话")
         shot(app, "pins-expanded")
@@ -110,6 +118,8 @@ final class LarkPinnedShelfFlowTests: XCTestCase {
         _ = try await fixture(["count": 0])
         XCTAssertTrue(toggle.waitForNonExistence(timeout: 10))
         XCTAssertFalse(app.buttons["feishu-pin-other-pin-15"].exists)
+        // Unpinned chats go back into the list.
+        XCTAssertTrue(app.buttons["feishu-chat-other-f2"].waitForExistence(timeout: 10))
         shot(app, "pins-empty")
         app.terminate()
     }

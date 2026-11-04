@@ -28,10 +28,7 @@ private struct LarkConversationsPage: View {
     }
 
     private var filtered: [LarkConversation] {
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return q.isEmpty ? store.conversations : store.conversations.filter {
-            $0.name.localizedStandardContains(q) || $0.preview.localizedStandardContains(q)
-        }
+        LarkConversationsModel.listed(store.conversations, pinned: store.pinned, query: query)
     }
 
     var body: some View {

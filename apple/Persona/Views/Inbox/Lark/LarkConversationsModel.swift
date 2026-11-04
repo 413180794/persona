@@ -47,6 +47,18 @@ final class LarkConversationsModel {
     @ObservationIgnored private var pending: Snapshot?
     @ObservationIgnored private var pageWaiters: [CheckedContinuation<Void, Never>] = []
 
+    /// The rows under the pinned shelf. The hub's pages start with the pinned chats, which the shelf already shows;
+    /// a search hides the shelf, so its results keep them.
+    nonisolated static func listed(_ conversations: [LarkConversation], pinned: [LarkConversation], query: String) -> [LarkConversation] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q.isEmpty else {
+            return conversations.filter { $0.name.localizedStandardContains(q) || $0.preview.localizedStandardContains(q) }
+        }
+        guard !pinned.isEmpty else { return conversations }
+        let shelf = Set(pinned.map(\.id))
+        return conversations.filter { !shelf.contains($0.id) }
+    }
+
     init(deps: Deps) {
         self.deps = deps
         if let saved = deps.cached(), !saved.accountID.isEmpty {
@@ -114,11 +126,19 @@ final class LarkConversationsModel {
     }
 
     func more() async {
+        // A refresh landing while the page is on its way drops it. The spinner asking for it keys on the cursor, which
+        // the refresh leaves as it was, so it would not ask again: ask here once the refresh is done.
+        while await morePage() == .superseded {}
+    }
+
+    private enum PageOutcome { case done, superseded }
+
+    private func morePage() async -> PageOutcome {
         while loading || scrolling {
             await withCheckedContinuation { pageWaiters.append($0) }
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else { return .done }
         }
-        guard let cursor = nextCursor, let owner = accountID, !loadingMore, !Task.isCancelled else { return }
+        guard let cursor = nextCursor, let owner = accountID, !loadingMore, !Task.isCancelled else { return .done }
         let request = revision
         loadingMore = true
         defer { loadingMore = false; wakePageWaiters() }
@@ -131,10 +151,12 @@ final class LarkConversationsModel {
             pageFailed = false
             publish(fresh)
         } catch {
-            guard request == revision, !Self.cancelled(error) else { return }
+            if request != revision, !Task.isCancelled { return .superseded }
+            guard !Self.cancelled(error) else { return .done }
             handle(error)
             pageFailed = true
         }
+        return .done
     }
 
     /// Keep a moving list stable. The newest atomic snapshot lands as soon as scrolling rests.

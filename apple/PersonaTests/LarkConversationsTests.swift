@@ -27,6 +27,39 @@ import Testing
         #expect(saved == store.conversations)
     }
 
+    @Test func pinnedChatsShowOnlyOnTheShelfUntilASearch() {
+        let rows = [chat("pinned-a", "hello"), chat("pinned-b"), chat("plain", "hello")]
+        let pinned = [chat("pinned-b"), chat("pinned-a")]
+        #expect(LarkConversationsModel.listed(rows, pinned: pinned, query: "").map(\.id) == ["plain"])
+        #expect(LarkConversationsModel.listed(rows, pinned: [], query: "").map(\.id) == ["pinned-a", "pinned-b", "plain"])
+        #expect(LarkConversationsModel.listed(rows, pinned: pinned, query: " hello ").map(\.id) == ["pinned-a", "plain"])
+        #expect(LarkConversationsModel.listed(rows, pinned: [chat("pinned-a")], query: "").map(\.id) == ["pinned-b", "plain"])
+    }
+
+    @Test func aPageDroppedByARefreshIsAskedForAgain() async {
+        var asks = 0
+        var refreshing: Task<Void, Never>?
+        var store: LarkConversationsModel!
+        store = LarkConversationsModel(deps: .init(
+            page: { cursor, _ in
+                guard cursor == "next" else { return reply(conversations: [chat("a")], nextCursor: "next") }
+                asks += 1
+                if asks == 1 {
+                    // A push refreshes the list while this page is on its way.
+                    refreshing = Task { await store.refresh() }
+                    for _ in 0..<5 { await Task.yield() }
+                }
+                return reply(conversations: [chat("b")])
+            },
+            pinned: { reply(conversations: []) }, status: { .init(configured: true, connected: true) }, cached: { nil }, save: { _ in }))
+        await store.refresh()
+        await store.more()
+        await refreshing?.value
+        #expect(asks >= 2)
+        #expect(store.conversations.map(\.id) == ["a", "b"])
+        #expect(store.nextCursor == nil)
+    }
+
     @Test func paginationDeduplicatesAndStopsOnRepeatedCursor() async {
         let store = LarkConversationsModel(deps: .init(
             page: { cursor, _ in reply(conversations: cursor == nil ? [chat("a")] : [chat("a"), chat("b")], nextCursor: "same") },
