@@ -107,7 +107,9 @@ scripts/app/personactl.py idle && scripts/app/personactl.py screenshot out.png
 要和冷启动一样，有三件事（都踩过）：
 - **新的界面树**：在原树上导航，Agents 页推进去的对话、收件箱顶栏的玻璃底都留着。
 - **对话冷加载**（`coldChats`）：已在内存里的对话打开时内容一次到位，冷启动是先出页面、内容后到，两者滚动不一样。
-  只清内存不清磁盘：启动本来就读磁盘缓存。
+  只清内存不清磁盘：启动本来就读磁盘缓存。`navigate` 带 `coldChats` 时，目标对话（chat / assistant 的 `session`）还会
+  像启动时一样先走 HTTP 拉第一页（`AppModel.loadInitial`）再返回：启动时实时连接还没连上，第一页走 HTTP（一整页）；
+  已连上的 App 里打开只拿到订阅的回放（最后两轮），error 场景就只剩最后一段、卡片上是「连续 2 次」（#739）。
 - **等历史从 hub 到**（`wait-loaded`）：冷加载的对话先画磁盘缓存里的，hub 的历史后到；画面这时已经是静止的，`settle`
   以为好了，`idle`（mock 0.8 s 没新请求）也会在历史请求发出前就判断为空闲。`id-cli.py` 的 chat 和 error 场景 `navigate` 后先 `wait-loaded`。
 - **按页面自己的计时等**：对话的顶栏闲置 3 s 自己折叠（`ChatView.chromeIdleSeconds`），老方法 7 s 后截一定是折叠的；

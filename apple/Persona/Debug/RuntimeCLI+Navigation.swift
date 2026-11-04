@@ -94,6 +94,9 @@ extension RuntimeCLI {
             m.settingsPath = path
         }
         if a["keep"] as? Bool == true { route() } else { await rebuild(route: route) }
+        // A launch loads the chat's first page over HTTP (its socket is not up yet: AppModel.subscribe); a connected
+        // app only gets the subscription's replay, the last exchanges. Cold, the page is loaded as after a launch.
+        if a["coldChats"] as? Bool == true, let k = chat ?? assistant.flatMap({ $0 }) { await m.loadInitial(k) }
         return state()
     }
 
