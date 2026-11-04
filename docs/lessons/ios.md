@@ -668,3 +668,12 @@ Claude Code 压缩一次写三样：`system/compact_boundary`（`compactMetadata
   `interactive: false`（没用）、去掉玻璃（好了）。
 - 修法：玻璃画在后面（`.background { Color.clear.surface(…) }`），不包住会溢出的内容；改前改后同一个画面逐像素比，输入框只有抗锯齿级的差别。
 - 推广：会往外溢出的菜单、气泡别放进 `glassEffect` / `.surface` 包住的视图里；玻璃用 background 画。
+
+## 在 body 里写 `@Observable` 的存储属性，这个 body 就依赖上了它（2026-11-04，#1204）
+
+DEBUG 构建启动后主线程常常一直 100%：RootView 的 body 每次新建 `ShellView()`，`@State` 的初始值 `ShellState(...)` 每次 init 都会算一遍
+（SwiftUI 只留第一份），它让自己的 pager `slide`，`slide` 在 DEBUG 下 `ShellTrace.shared.note(...)`。`events.append` 走的是宏生成的 `_modify`，
+里面先 `access(keyPath:)` 再改，于是 RootView 的 body 一边写 `events` 一边登记了读取，写完就失效、重算，再新建一个 `ShellView`……永远停不下来
+（runtime CLI ping 不通、XCUITest「Timed out while evaluating UI query」都是它）。`sample <pid>` 里能看到这条链。
+只给别人看、自己不读的记录（trace、计数）：存储标 `@ObservationIgnored`，读取的计算属性里手动 `access`，写入时包在 `withMutation` 里，
+调用它的 body 就不会依赖它。另外，`@State` 的初始值表达式不要有副作用，它不只算一次。

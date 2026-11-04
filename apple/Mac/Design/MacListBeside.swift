@@ -16,6 +16,8 @@ struct MacListBeside<ListContent: View, Page: View>: View {
     @AppStorage private var width: Double
     /// The width while the divider is being dragged.
     @State private var dragging: CGFloat?
+    /// The whole width, list and page.
+    @State private var total: CGFloat = 0
 
     init(listShown: Bool, widthKey: String, @ViewBuilder list: () -> ListContent, @ViewBuilder page: () -> Page) {
         self.listShown = listShown
@@ -26,10 +28,18 @@ struct MacListBeside<ListContent: View, Page: View>: View {
 
     static func clamped(_ w: CGFloat) -> CGFloat { min(max(w, Theme.Size.sidebarMin), Theme.Size.sidebarMax) }
 
+    /// The list's width in a page `total` wide: the remembered one, narrowed (down to its least) so the page keeps
+    /// `macDetailMin` (#1200: in the narrowest window the page beside a 400-point list was cut off). 0: not measured yet.
+    static func fitted(_ w: CGFloat, in total: CGFloat) -> CGFloat {
+        let wanted = clamped(w)
+        guard total > 0 else { return wanted }
+        return max(Theme.Size.sidebarMin, min(wanted, total - Theme.Size.macResizeHitWidth - Theme.Size.macDetailMin))
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             if listShown {
-                list.frame(width: Self.clamped(dragging ?? CGFloat(width)))
+                list.frame(width: Self.fitted(dragging ?? CGFloat(width), in: total))
                 MacPanelResizeHandle { delta in
                     dragging = Self.clamped((dragging ?? CGFloat(width)) + delta)
                 } ended: {
@@ -41,5 +51,6 @@ struct MacListBeside<ListContent: View, Page: View>: View {
             }
             page.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { total = $0 }
     }
 }

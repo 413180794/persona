@@ -137,6 +137,17 @@ struct MacInboxItemWindow: View {
 struct MacInboxPage: View {
     @AppStorage("mac.inbox.listWidth") private var listWidth: Double = Theme.Size.macInboxListIdeal
     @State private var dragging: Double?
+    /// The page's whole width: filters, list and detail.
+    @State private var total: CGFloat = 0
+
+    /// The list's width: the one dragged to, narrowed (down to its least) while the detail would get less than
+    /// `macDetailMin` (#1200: in the narrowest window the detail was cut off at the window's edge).
+    private var listShown: CGFloat {
+        let wanted = min(max(dragging ?? listWidth, Theme.Size.macInboxListMin), Theme.Size.macInboxListMax)
+        guard total > 0 else { return wanted }
+        let room = total - Theme.Size.macInboxFiltersWidth - Theme.Size.line - Theme.Size.macResizeHitWidth - Theme.Size.macDetailMin
+        return max(Theme.Size.macInboxListMin, min(wanted, room))
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -146,7 +157,7 @@ struct MacInboxPage: View {
                 .frame(maxHeight: .infinity)
             Divider()
             MacInboxList()
-                .frame(width: min(max(dragging ?? listWidth, Theme.Size.macInboxListMin), Theme.Size.macInboxListMax))
+                .frame(width: listShown)
             MacPanelResizeHandle { delta in
                 dragging = min(max((dragging ?? listWidth) + delta, Theme.Size.macInboxListMin), Theme.Size.macInboxListMax)
             } ended: {
@@ -156,6 +167,7 @@ struct MacInboxPage: View {
             MacInboxDetail()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { total = $0 }
         // The pages' color, as Agents and Persona have: the window's own took the wallpaper's tint in dark mode, brown
         // beside the other pages' gray (2026-11-02).
         .background(Theme.pageBackground)

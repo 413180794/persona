@@ -55,6 +55,19 @@ struct MacListBesideTests {
         #expect(widths.page < 1000 - Theme.Size.sidebarMin)
     }
 
+    /// The narrowest window (#1200): the list gives way, down to its least width, before the page beside it gets less
+    /// than `macDetailMin`; a wide window keeps the width the list was dragged to.
+    @Test func theListGivesWayInANarrowWindow() {
+        typealias Beside = MacListBeside<EmptyView, EmptyView>
+        let gap = Theme.Size.macResizeHitWidth + Theme.Size.macDetailMin
+        #expect(Beside.fitted(420, in: 1400) == 420)
+        #expect(Beside.fitted(420, in: 380 + gap) == 380)
+        #expect(Beside.fitted(420, in: 200 + gap) == Theme.Size.sidebarMin, "never narrower than the list's least")
+        #expect(Beside.fitted(420, in: 0) == 420, "not measured yet: the remembered width")
+        // The narrowest main window, less the sections column, fits the list's least and the page's.
+        #expect(Theme.Size.macWindowMinWidth - Theme.Size.macSidebarIdeal - Theme.Size.line >= Theme.Size.sidebarMin + gap)
+    }
+
     @Test func theListIsDraggedWithinTheSplitsBounds() {
         #expect(MacListBeside<EmptyView, EmptyView>.clamped(100) == Theme.Size.sidebarMin)
         #expect(MacListBeside<EmptyView, EmptyView>.clamped(420) == 420)

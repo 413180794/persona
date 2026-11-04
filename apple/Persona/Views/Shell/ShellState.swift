@@ -175,17 +175,27 @@ extension EnvironmentValues {
 #if DEBUG
 /// What happened to the shell lately (switch taps, routes, slides, settles), for UI tests that chase a lost tap: the
 /// probe's label.
+///
+/// `note` writes without reading (#1204): it is called from bodies too (RootView's builds a `ShellView`, whose throwaway
+/// `ShellState` slides its pager), and the stored property's accessors would make that body depend on the trace it
+/// just wrote and draw itself again, for ever. Only the probe, which reads `events`, follows it.
 @MainActor @Observable final class ShellTrace {
     static let shared = ShellTrace()
-    private(set) var events: [String] = []
+    var events: [String] {
+        access(keyPath: \.events)
+        return recent
+    }
+    @ObservationIgnored private var recent: [String] = []
     @ObservationIgnored private var serial = 0
     /// Each event says when, in seconds since the trace began: a test that waited too long tells what took the time.
     @ObservationIgnored private let start = Date()
 
     func note(_ s: String) {
         serial += 1
-        events.append("\(serial) @\(String(format: "%.2f", Date().timeIntervalSince(start))) \(s)")
-        if events.count > 24 { events.removeFirst(events.count - 24) }
+        withMutation(keyPath: \.events) {
+            recent.append("\(serial) @\(String(format: "%.2f", Date().timeIntervalSince(start))) \(s)")
+            if recent.count > 24 { recent.removeFirst(recent.count - 24) }
+        }
     }
 }
 #endif

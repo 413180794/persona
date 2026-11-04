@@ -9,8 +9,10 @@ extension Theme.Size {
     static let macSheetMinHeight: CGFloat = 520
     /// A sheet's title bar and bottom toolbar together, on top of the height its navigation stack's content asks for.
     static let macSheetBars: CGFloat = 116
-    /// The main window: its smallest, and its size the first time it opens.
-    static let macWindowMinWidth: CGFloat = 820
+    /// The main window: its smallest, and its size the first time it opens. The smallest fits the sections column,
+    /// a list at its narrowest (`sidebarMin`) and a page beside it at `macDetailMin` (#1200: at 820 the page beside a
+    /// list got about 200 points and was cut off at the window's edge).
+    static let macWindowMinWidth: CGFloat = 920
     static let macWindowMinHeight: CGFloat = 560
     static let macWindowWidth: CGFloat = 1280
     static let macWindowHeight: CGFloat = 820
@@ -53,6 +55,9 @@ extension Theme.Size {
     static let macInspectorMin: CGFloat = 260
     static let macInspector: CGFloat = 300
     static let macInspectorMax: CGFloat = 420
+    /// The least a page beside a list keeps (a chat: its composer and a readable line): the list gives way first,
+    /// down to its own least width (#1200).
+    static let macDetailMin: CGFloat = 360
     /// A split's detail column narrower than this is logged as squeezed (no page fits in it).
     static let macSplitSquished: CGFloat = 200
 }

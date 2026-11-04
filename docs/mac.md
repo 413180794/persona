@@ -182,6 +182,8 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   代价：Agents、收件箱、设置的列表栏在 Mac 上不能收起（原来工具栏上的「隐藏列表」在红绿灯旁边，正好压在六项这一列上）。
   Persona 页的历史列表要用顶栏的「历史对话」收起，Mac 上不是分栏，是 `MacListBeside`（列表 | 可拖的分隔线 | 对话，宽度在 `Theme.Size.sidebarMin`–`sidebarMax` 之间、记在 `mac.assistant.listWidth`）：
   三栏分栏收不起内容栏，设成 `.detailOnly` 会被系统马上改回 `.all`，空的侧栏那一栏冒出来、列表还在（#856）。
+  窗口最小 920×560（#1200）：分区列 210 + 列表最窄 340 + 旁边的页面最窄 360（`macDetailMin`）。窗口变窄时列表先让：Persona 的 `MacListBeside`、收件箱的列表收到各自的最小宽度，
+  分栏的详情栏有最小宽度。原来最小是 820，旁边的页面只剩约 200，对话、收件箱详情被窗口右边裁掉。收件箱多一列筛选，最窄时详情只有约 220，排得开但挤（要更宽得把筛选列收起，见 #1169 的清单）。
   ⌘1…⌘7 切换；`Settings` 场景（⌘,）放设置；`onOpenURL` 处理 `jarvis://pair`；App 变成活跃时 `ensureConnected` + `refresh`。
   App 在后台不断开 WebSocket（Mac 应用常驻，hub 靠这条连接找到它）。
 - 兼容层（`Mac/Compat/`）：`UIKitTypes.swift`（UIColor / UIImage / UIFont / UIEdgeInsets 的别名，UIPasteboard、UIApplication.open、UIDevice（含电池）、
