@@ -201,7 +201,7 @@ func TestConnectorsListTheSameCapabilities(t *testing.T) {
 	want := []string{
 		"lark tools,chats,items hosts=[] options=false",
 		"mail tools,actions,archive hosts=[] options=false",
-		"github status,tools,actions,events,hosts,inbox,archive,login,options hosts=[github.com] options=true",
+		"github status,tools,actions,events,hosts,inbox,archive,login,options,threads hosts=[github.com] options=true",
 		"imessage status,tools,events,inbox,archive hosts=[] options=false",
 		"telegram status,tools,actions,events,inbox,archive,login,threads hosts=[] options=false", // actions: the tg CLI's writes; threads: #1054
 	}

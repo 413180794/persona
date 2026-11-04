@@ -50,7 +50,7 @@ hub 只用 `connector.As[接口](c)` 找能力：清单声明了才去断言。`
 | `archive`、`chats`、`items` | `Archive`、`Chats`、`Items` | 进知识库的三种形状 | 见上表 |
 | `inbox`、`settle` | `Inbox`、`InboxSettler` | 收件箱的候选和回复（`Reply` 拿到整条 `InboxReply`：会话、条目、回的是哪一步、正文）；按规则收掉旧的 | GitHub、信息、Telegram；`settle` 只有 GitHub |
 | `login` | `Login` | 分步登录 | Telegram |
-| `threads` | `Threads` | 收件箱的会话在 App 里打开成会话页：`Thread(thread, before, limit)` 一页消息（发送人、头像、媒体、引用、游标），`Media(ref)` 头像和媒体的字节；只读，回复走 `ThreadChat.Reply` 指的 action（过闸门）。App 按 `ThreadChat.Kind` 选页面：dm / group / channel 画成气泡，pr / issue 画成 GitHub 的版式 | Telegram（#1054）、GitHub（ovis） |
+| `threads` | `Threads` | 收件箱的会话在 App 里打开成会话页：`Thread(thread, before, limit)` 一页消息（发送人、头像、媒体、引用、游标），`Media(ref)` 头像和媒体的字节；只读，回复走 `ThreadChat.Reply` 指的 action（过闸门）。App 按 `ThreadChat.Kind` 选页面：dm / group / channel 画成气泡，pr / issue 画成 GitHub 的版式 | Telegram（#1054）、GitHub（#1055，`docs/plan-connectors.md`「会话页」） |
 
 `Runner`（自己的循环）、`Machines`（某台电脑连上了）是怎么跑的，不是能力，照旧按类型断言。收件箱的档是 `connector.Tier`（`TierAction`、`TierFYI`、`TierNoise`），
 hub 收到不认识的档就丢掉、交给模型分拣。

@@ -435,6 +435,8 @@ func (c *Connector) Reply(ctx context.Context, r connector.InboxReply) error {
 	if _, _, err := c.request(ctx, http.MethodPost, fmt.Sprintf("/repos/%s/issues/%s/comments", m[1], m[2]), nil, body, nil); err != nil {
 		return err
 	}
+	n, _ := strconv.Atoi(m[2])
+	c.forget(m[1], n)
 	st := &c.inbox
 	st.mu.Lock()
 	if t := st.things[thread]; t != nil {

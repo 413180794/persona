@@ -341,6 +341,36 @@ hub 没有公网入口，webhook 收不到。`GET /notifications` 带上次的 `
 有新通知再去读对应的 PR / issue / check runs（每轮封顶 30 个线程，剩下的下一轮）。`X-RateLimit-Remaining` 低于 10% 时状态变 `rate_limited`、
 只保留通知轮询。
 
+### 会话页（#1055）
+
+用户要求：「github&Telegram 的 UI，都支持丰富一下，参考飞书的对话页面，GitHub 的 thread 页面」。收件箱点开 PR / issue，
+不再是 hub 收集的一块纯文本，而是原生的 GitHub thread 页（`apple/Persona/Views/Inbox/ConnectorThread/GitHubThreadView.swift`）。
+接口和 Telegram 共用连接器的 `threads` 能力（`docs/connectors.md`），App 按 `ThreadChat.Kind`（pr / issue）选这个页面。
+
+- **页面**：
+  - 页头卡片：仓库 · #号、标题、状态（打开绿、合并紫、PR 关闭红、issue 关闭紫、草稿灰）、发起人头像、`head → base`、标签（底色取标签自己的颜色，字一律主色，浅色标签也看得清）、「在 GitHub 打开」。
+  - 描述：Markdown，当作第一条评论。
+  - 时间线（旧的在前）：
+    - 评论；
+    - review，状态有颜色：批准绿、要求修改红，卡片左边一条状态色；
+    - 行内评论：`文件:行`，上面是 diff 的最后 6 行；回复显示引用，不重复 diff；
+    - CI 检查：连续的检查合成一张卡，写「3 项检查 · 1 项失败」，第一个失败的日志末尾（最后 40 行）默认展开；
+    - 灰色的事件行：加标签、请人 review、改标题、合并、关闭、强制推送……
+  - 更早的动态：在描述和时间线之间的「显示更早的动态」，同 GitHub 的 Load more。
+  - 回复：底部回复框，长按评论「引用回复」把原文变成 Markdown 引用（不带 @，免得通知人家）。
+    发送走 `github_comment`（`{chat, text}` 和助手用的 `{repo, number, body}` 都认），过闸门，默认在手机上确认。
+  - 「AI 草拟回复」「交给 AI」照旧在收件箱的顶栏。CI 失败的通知不是 PR / issue，照旧显示 hub 收集的文本。
+- **数据**（`server/internal/connector/github/thread.go`）：
+  - 每次读：issue、评论、事件；PR 再读 PR、reviews、行内评论，打开的 PR 再读 head 提交的 check runs。每个列表最多 5 页 × 100 条。
+  - 合起来按时间排序，在内存里分页：游标是上一页最旧那条的 id。
+- **缓存**：
+  - 每个接口的回答连同 ETag 留在内存里（最多 400 个，最久没用的先丢），下次带 `If-None-Match`；304 不算速率限制。
+  - 15 秒内再读同一个接口（往前翻页）不发请求。
+  - 失败的 job 日志按 job id 只读一次。
+  - 自己发了评论或 review 后，那个 PR / issue 的缓存清掉，刷新就能看到。
+- **头像**：媒体 ref 是 `avatar:<login>:<v>`（`v` 取 GitHub 头像地址里的版本号），hub 从 GitHub 的头像域名取 96 像素的，不带 token。
+  hub 重启后没见过的 login 先问一次 `/users/<login>`。
+
 ### 凭据
 
 **已定（2026-11-01 用户）：从某台机器的 `gh` 登录读。** 用户原话：「github 能不能支持自动从 gh cli 读，从某台机器上读取来授权登录」。

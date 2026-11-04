@@ -2371,6 +2371,101 @@ if os.environ.get("MOCK_GITHUB") == "device":
                         "hosts": ["github.com"], "options": {"ci": "mine", "muted_repos": [], "ignore_branches": ["train/*"]}}
 
 
+# GitHub's thread page (connector/github/thread.go, MOCK_GITHUB_INBOX=1): the made-up pull request
+# example-org/example-repo#12 as the hub reads it — header, description, comments, reviews, comments on a line, checks
+# and events; a reply is added as a comment of mine. Other threads (a CI run) cannot be opened, as on the hub.
+GH_AVATAR_COLORS = {"alice": (214, 120, 160), "bob": (90, 150, 220), "sam": (110, 180, 120), "ci-bot[bot]": (140, 140, 150)}
+GH_SENT = []
+
+
+def gh_thread_page():
+    now = datetime.now(timezone.utc)
+    def at(**kw):
+        return (now - timedelta(**kw)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    def who(login):
+        return {"id": login, "name": login, "avatar": "avatar:%s:4" % login}
+    hunk = ("@@ -36,9 +36,12 @@ func upload(ctx context.Context, f File) error {\n"
+            " \tfor attempt := 0; attempt < 3; attempt++ {\n"
+            " \t\tif err = send(ctx, f); err == nil {\n"
+            " \t\t\treturn nil\n"
+            " \t\t}\n"
+            "-\t\ttime.Sleep(time.Second)\n"
+            "+\t\ttime.Sleep(backoff(attempt))")
+    log = "\n".join(["=== RUN   TestUploadRetries", "    retry_test.go:58: attempt 1 failed: connection reset",
+                      "    retry_test.go:58: attempt 2 failed: connection reset", "    retry_test.go:71: waited 7s, want at most 6s",
+                      "--- FAIL: TestUploadRetries (7.01s)", "FAIL", "FAIL\texample.com/uploader\t7.214s", "Error: Process completed with exit code 1."])
+    msgs = [
+        {"id": "e1", "at": at(days=2, hours=3), "sender": who("alice"), "event": True, "text": "alice 加了标签 enhancement"},
+        {"id": "e2", "at": at(days=2, hours=3, minutes=-1), "sender": who("alice"), "event": True, "text": "alice 请 sam review"},
+        {"id": "c1", "at": at(days=2, hours=2), "sender": who("ci-bot[bot]"), "format": "markdown",
+         "text": "预览已部署：https://example.com/preview/12", "url": "https://github.com/example-org/example-repo/pull/12#issuecomment-1"},
+        {"id": "r1", "at": at(days=1, hours=6), "sender": who("bob"), "kind": "review", "review": "changes_requested", "format": "markdown",
+         "text": "退避要有**上限**，不然网络一直不好时会越等越久。", "url": "https://github.com/example-org/example-repo/pull/12#pullrequestreview-1"},
+        {"id": "rc1", "at": at(days=1, hours=6, minutes=-1), "sender": who("bob"), "kind": "code", "format": "markdown",
+         "code": {"path": "uploader/retry.go", "line": 42, "hunk": hunk},
+         "text": "这里最好加一点抖动（jitter），免得一批上传同时重试。", "url": "https://github.com/example-org/example-repo/pull/12#discussion_r1"},
+        {"id": "rc2", "at": at(days=1, hours=2), "sender": who("alice"), "kind": "code", "format": "markdown",
+         "code": {"path": "uploader/retry.go", "line": 42}, "reply_to": {"id": "rc1", "from": "bob", "text": "这里最好加一点抖动（jitter），免得一批上传同时重试。"},
+         "text": "好，加上了 `rand.Int63n`，上限 8 秒。", "url": "https://github.com/example-org/example-repo/pull/12#discussion_r2"},
+        {"id": "e3", "at": at(days=1, hours=1), "sender": who("alice"), "event": True, "text": "alice 强制推送了分支"},
+        {"id": "ck1", "at": at(hours=20), "sender": {"name": "github-actions"}, "kind": "check",
+         "check": {"name": "lint", "state": "success", "url": "https://github.com/example-org/example-repo/actions/runs/1/job/1"}},
+        {"id": "ck2", "at": at(hours=19, minutes=50), "sender": {"name": "github-actions"}, "kind": "check",
+         "check": {"name": "test", "state": "failure", "url": "https://github.com/example-org/example-repo/actions/runs/1/job/2", "log": log}},
+        {"id": "ck3", "at": at(hours=19, minutes=45), "sender": {"name": "github-actions"}, "kind": "check",
+         "check": {"name": "build", "state": "success", "url": "https://github.com/example-org/example-repo/actions/runs/1/job/3"}},
+        {"id": "r2", "at": at(hours=3), "sender": who("bob"), "kind": "review", "review": "approved", "format": "markdown",
+         "text": "上限和抖动都好了，LGTM。", "url": "https://github.com/example-org/example-repo/pull/12#pullrequestreview-2"},
+        {"id": "c2", "at": at(minutes=25), "sender": who("alice"), "format": "markdown", "text": "请看一下重试的退避时间",
+         "url": "https://github.com/example-org/example-repo/pull/12#issuecomment-2"},
+    ] + GH_SENT
+    chat = {"id": "example-org/example-repo#12", "name": "Add retries to the example uploader", "kind": "pr",
+            "url": "https://github.com/example-org/example-repo/pull/12", "reply": "github_comment", "state": "open",
+            "author": who("alice"), "labels": [{"name": "enhancement", "color": "a2eeef"}, {"name": "uploader", "color": "d4c5f9"},
+                                               {"name": "needs review", "color": "fbca04"}],
+            "branch": {"head": "feat/upload-retries", "base": "main"}, "body_format": "markdown",
+            "body": "上传失败时按指数退避重试三次。\n\n## 改了什么\n- 新增 `uploader/retry.go`：等 1、2、4 秒再试\n"
+                    "- 上传失败的错误里带上试了几次\n\n## 怎么测\n`go test ./uploader/...`"}
+    return chat, msgs
+
+
+def github_thread_area(h, method, p, raw):
+    """GitHub's thread page (MOCK_GITHUB_INBOX=1); True when it answered."""
+    if not os.environ.get("MOCK_GITHUB_INBOX") or not p.startswith("/api/v1/connectors/github/"):
+        return False
+    q = parse_qs(urlparse(h.path).query)
+    what = p.rsplit("/", 1)[1]
+    if what == "thread" and method == "GET":
+        if q.get("thread", [""])[0] != "example-org/example-repo#12":
+            return h.send_json({"error": "notification:7 is not a pull request or an issue"}, 502) or True
+        chat, msgs = gh_thread_page()
+        limit, before = int(q.get("limit", ["30"])[0]), q.get("before", [""])[0]
+        end = next((i for i, m in enumerate(msgs) if m["id"] == before), len(msgs)) if before else len(msgs)
+        start = max(0, end - limit)
+        out = {"chat": chat, "messages": msgs[start:end]}
+        if start > 0:
+            out["before"] = msgs[start]["id"]
+        return h.send_json(out) or True
+    if what == "media" and method == "GET":
+        parts = q.get("ref", [""])[0].split(":")
+        if len(parts) != 3 or parts[1] not in GH_AVATAR_COLORS:
+            return h.send_json({"error": "不认识这个媒体"}, 502) or True
+        data = png(96, 96, GH_AVATAR_COLORS[parts[1]])
+        h.send_response(200)
+        h.send_header("Content-Type", "image/png"); h.send_header("Content-Length", str(len(data)))
+        h.send_header("Cache-Control", "private, max-age=31536000, immutable")
+        h.end_headers(); h.wfile.write(data)
+        return True
+    if p.endswith("/thread/reply") and method == "POST":  # the real hub asks on the phone first (connector_gate)
+        body = json.loads(raw or b"{}")
+        GH_SENT.append({"id": "c%d" % (100 + len(GH_SENT)), "at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+                        "sender": {"id": "sam", "name": "sam", "avatar": "avatar:sam:4"}, "mine": True, "format": "markdown",
+                        "text": body.get("text", "")})
+        SENT.append({"thread": body.get("thread", ""), "action": body.get("action", ""), "text": body.get("text", "")})
+        return h.send_json({"ok": True, "result": "Commented on example-org/example-repo#12"}) or True
+    return False
+
+
 def github_area(h, method, p, raw):
     """GitHub's device-flow sign-in (MOCK_GITHUB=device); True when it answered."""
     if p == "/api/v1/connectors/github/auth" and (os.environ.get("MOCK_GITHUB") in ("device", "scopes") or os.environ.get("MOCK_GITHUB_LOGIN")):
@@ -5802,6 +5897,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/v1/mail/messages": return self.send_json({"messages": [], "has_more": False})
         if p == "/api/v1/lark/unread-count": return self.send_json({"count": 4})
         if telegram_area(self, "GET", p, b""): return
+        if github_thread_area(self, "GET", p, b""): return
         if github_area(self, "GET", p, b""): return
         if p == "/api/v1/connectors":  # 设置 › 连接器 › GitHub; MOCK_GITHUB=signed_out: its gh login has expired
             listed = [GITHUB_CONNECTOR, {k: v for k, v in IMESSAGE_CONNECTOR.items() if v is not None}] + ([telegram_connector()] if TELEGRAM_MODE else [])
@@ -6112,6 +6208,7 @@ class H(BaseHTTPRequestHandler):
                 s.update(state="restarting" if body.get("now") else "waiting_idle")
             return self.send_json(s)
         if telegram_area(self, self.command, p, self.last_body): return
+        if github_thread_area(self, self.command, p, self.last_body): return
         if github_area(self, self.command, p, self.last_body): return
         if mail_area(self, self.command, p, parse_qs(urlparse(self.path).query)): return
         if MOCK_LARK and fs_post(self, p, parse_qs(urlparse(self.path).query), self.last_body): return  # area: feishu chat page

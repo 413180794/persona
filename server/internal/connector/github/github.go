@@ -97,6 +97,7 @@ type Connector struct {
 
 	inbox inboxState   // inbox.go
 	opts  InboxOptions // rules.go
+	etags etagCache    // thread.go: answers kept for If-None-Match, failed checks' logs, avatars
 
 	// Where the token comes from (source.go): a computer's gh login (machineID, through fetch) or the device flow.
 	source    string
@@ -151,11 +152,11 @@ func New(cfg Config, machine string, fetch TokenSource) *Connector {
 func (c *Connector) ID() string   { return "github" }
 func (c *Connector) Name() string { return "GitHub" }
 
-// Manifest: everything but signing in from the app (it reads a computer's gh login) and chats of their own.
+// Manifest: everything; a PR's or issue's thread opens as GitHub's own page (threads).
 func (c *Connector) Manifest() connector.Manifest {
 	return connector.Manifest{
 		Capabilities: []connector.Capability{connector.CapStatus, connector.CapTools, connector.CapActions, connector.CapEvents,
-			connector.CapInbox, connector.CapSettle, connector.CapArchive, connector.CapLogin, connector.CapOptions},
+			connector.CapInbox, connector.CapSettle, connector.CapArchive, connector.CapLogin, connector.CapOptions, connector.CapThreads},
 		Hosts: []string{c.cfg.host()},
 		Kinds: []string{"review_requested", "mention", "team_mention", "assign", "author", "ci_failed"},
 	}

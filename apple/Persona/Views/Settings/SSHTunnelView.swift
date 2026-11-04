@@ -133,6 +133,9 @@ struct SSHTunnelForm<Status: View>: View {
                     .accessibilityIdentifier("ssh.problem")
                 }
             }
+            #if os(macOS)
+            macActions
+            #else
             Section {
                 Button { Task { await testAndSave() } } label: {
                     HStack(spacing: Theme.Space.s) {
@@ -158,8 +161,12 @@ struct SSHTunnelForm<Status: View>: View {
                     .bareListRow()
                 }
             }
+            #endif
         }
         .themedPage()
+        #if os(macOS)
+        .modifier(MacFormChrome(inSheet: dismissOnSave, cancel: { dismiss() }, save: saveButton))
+        #endif
         .onAppear(perform: load)
         .onChange(of: host) { _, _ in serverChanged() }
         .onChange(of: port) { _, _ in serverChanged() }
@@ -206,19 +213,32 @@ struct SSHTunnelForm<Status: View>: View {
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("ssh.publicKey")
+                #if os(macOS)
+                // Standard push buttons side by side, as a Mac form has them, not two tinted rows (#1170).
+                HStack(spacing: Theme.Space.s) {
+                    Spacer(minLength: 0)
+                    Button { copy(line) } label: { Label("复制公钥", systemImage: Theme.Icon.sshKey).lineLimit(1) }
+                        .accessibilityIdentifier("ssh.copyKey")
+                    Button { copy(authorizedKeysLine(key)) } label: {
+                        Label("复制 authorized_keys 行", systemImage: Theme.Icon.copy).lineLimit(1)
+                    }
+                    .accessibilityIdentifier("ssh.copyAuthorizedKeys")
+                }
+                .buttonStyle(.bordered)
+                #else
                 Button { copy(line) } label: {
                     SettingsRow(title: "复制公钥", symbol: Theme.Icon.sshKey, tint: Theme.accent)
                 }
                 .modifier(SettingsButtonLook())
                 .accessibilityIdentifier("ssh.copyKey")
                 .bareListRow()
-                Button { copy(key.authorizedKeysLine(targetHost: targetHostValue, targetPort: Int(targetPort) ?? SSHRoute.defaultTargetPort,
-                                                     comment: SSHKeys.comment)) } label: {
+                Button { copy(authorizedKeysLine(key)) } label: {
                     SettingsRow(title: "复制 authorized_keys 行", symbol: Theme.Icon.copy, tint: Theme.accent)
                 }
                 .modifier(SettingsButtonLook())
                 .accessibilityIdentifier("ssh.copyAuthorizedKeys")
                 .bareListRow()
+                #endif
             } else if let keyProblem {
                 Text(keyProblem).font(Theme.Font.secondary).foregroundStyle(Theme.danger)
             }
@@ -228,6 +248,46 @@ struct SSHTunnelForm<Status: View>: View {
             Text("把「authorized_keys 行」加到 SSH 服务器上这个用户的 ~/.ssh/authorized_keys：它带着 restrict 和 permitopen，这把钥匙只能转发到下面的隧道目标，不能登录 shell。私钥只存在这台设备的钥匙串里。")
         }
     }
+
+    private func authorizedKeysLine(_ key: SSHIdentity) -> String {
+        key.authorizedKeysLine(targetHost: targetHostValue, targetPort: Int(targetPort) ?? SSHRoute.defaultTargetPort, comment: SSHKeys.comment)
+    }
+
+    #if os(macOS)
+    // MARK: Mac buttons
+
+    /// 测试连接并保存 as a Mac button: the sheet's default button in its bar, or a standard one at the page's end.
+    private var saveButton: some View {
+        Button { Task { await testAndSave() } } label: {
+            HStack(spacing: Theme.Space.s) {
+                if checking { ProgressView().controlSize(.small) }
+                Text(checking ? "正在测试…" : "测试连接并保存").lineLimit(1)
+            }
+        }
+        .disabled(checking || draft == nil)
+        .accessibilityIdentifier("ssh.save")
+    }
+
+    /// The page's own buttons at the end of the form (in a sheet, saving is in its bar): standard ones at the trailing
+    /// edge, not full-width tinted capsules (#1170).
+    @ViewBuilder private var macActions: some View {
+        if saved != nil || !dismissOnSave {
+        Section {
+            HStack(spacing: Theme.Space.s) {
+                if saved != nil {
+                    Button(role: .destructive) { removing = true } label: { Text("删除 SSH 隧道…").lineLimit(1) }
+                        .buttonStyle(.bordered)
+                }
+                Spacer(minLength: 0)
+                if !dismissOnSave { saveButton.buttonStyle(.borderedProminent) }
+            }
+            .listRowBackground(Color.clear)
+        } footer: {
+            Text("会用上面的设置登录 SSH 服务器，并打开一次到隧道目标的转发。")
+        }
+        }
+    }
+    #endif
 
     private func copy(_ s: String) {
         UIPasteboard.general.string = s
@@ -366,3 +426,26 @@ extension SSHTunnelForm where Status == EmptyView {
         self.init(saved: saved, onSave: onSave, dismissOnSave: dismissOnSave, status: { EmptyView() })
     }
 }
+
+#if os(macOS)
+/// The SSH form's frame on the Mac: a sheet's size and bar (取消, and saving as the default button), or the page's
+/// grouped form in the detail column.
+private struct MacFormChrome<Save: View>: ViewModifier {
+    var inSheet: Bool
+    var cancel: () -> Void
+    var save: Save
+
+    func body(content: Content) -> some View {
+        if inSheet {
+            content
+                .macSheet()
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("取消", action: cancel) }
+                    ToolbarItem(placement: .confirmationAction) { save }
+                }
+        } else {
+            content.formStyle(.grouped)
+        }
+    }
+}
+#endif

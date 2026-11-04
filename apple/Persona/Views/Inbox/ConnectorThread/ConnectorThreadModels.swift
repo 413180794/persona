@@ -47,6 +47,8 @@ nonisolated struct ThreadChat: Codable, Hashable, Sendable {
     /// A chat app's conversation, drawn as bubbles (others on the left, mine on the right).
     var isChat: Bool { ["dm", "group", "channel"].contains(kind) }
     var isGroup: Bool { kind != "dm" }
+    /// A GitHub pull request or issue, drawn as GitHub's thread (GitHubThreadView).
+    var isGitHub: Bool { kind == "pr" || kind == "issue" }
 }
 
 nonisolated struct ThreadPerson: Codable, Hashable, Sendable {

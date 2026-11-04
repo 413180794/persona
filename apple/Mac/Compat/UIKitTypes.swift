@@ -302,7 +302,14 @@ nonisolated enum UIUserInterfaceIdiom { case unspecified, phone, pad, mac }
 
 @MainActor final class UIDevice {
     static let current = UIDevice()
-    var name: String { Host.current().localizedName ?? "Mac" }
+    var name: String {
+        #if DEBUG
+        // Screenshots (`-macSnapshot`) go into PRs: not this Mac's own name, which is often its owner's (it shows in
+        // the SSH key's comment, 设置 › hub › SSH 隧道).
+        if UserDefaults.standard.string(forKey: "macSnapshot") != nil { return "Mac" }
+        #endif
+        return Host.current().localizedName ?? "Mac"
+    }
     var model: String { "Mac" }
     var systemName: String { "macOS" }
     var systemVersion: String {

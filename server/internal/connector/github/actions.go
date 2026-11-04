@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,6 +33,14 @@ type writeArgs struct {
 	Number int    `json:"number"`
 	Body   string `json:"body"`
 	Event  string `json:"event"`
+	// The thread page's reply (POST /api/v1/connectors/github/thread/reply): {chat: "owner/repo#12", text}.
+	Chat string `json:"chat"`
+	Text string `json:"text"`
+}
+
+func atoi(s string) int {
+	n, _ := strconv.Atoi(s)
+	return n
 }
 
 func (a writeArgs) ref() string { return fmt.Sprintf("%s#%d", a.Repo, a.Number) }
@@ -40,6 +49,12 @@ func parseWrite(name string, args json.RawMessage) (writeArgs, error) {
 	var a writeArgs
 	if err := json.Unmarshal(args, &a); err != nil {
 		return a, fmt.Errorf("invalid arguments: %v", err)
+	}
+	if m := threadRef.FindStringSubmatch(a.Chat); m != nil && a.Repo == "" && a.Number == 0 {
+		a.Repo, a.Number = m[1], atoi(m[2])
+	}
+	if a.Body == "" {
+		a.Body = a.Text
 	}
 	a.Body = strings.TrimSpace(a.Body)
 	switch {
@@ -104,6 +119,7 @@ func (c *Connector) Do(ctx context.Context, name string, args json.RawMessage) (
 		if _, _, err := c.request(ctx, http.MethodPost, fmt.Sprintf("/repos/%s/issues/%d/comments", a.Repo, a.Number), nil, body, &out); err != nil {
 			return "", err
 		}
+		c.forget(a.Repo, a.Number)
 		return "Commented on " + a.ref() + ": " + out.HTMLURL, nil
 	case "github_review":
 		req := map[string]string{"event": a.Event}
@@ -114,6 +130,7 @@ func (c *Connector) Do(ctx context.Context, name string, args json.RawMessage) (
 		if _, _, err := c.request(ctx, http.MethodPost, fmt.Sprintf("/repos/%s/pulls/%d/reviews", a.Repo, a.Number), nil, body, &out); err != nil {
 			return "", err
 		}
+		c.forget(a.Repo, a.Number)
 		return "Review (" + a.Event + ") submitted on " + a.ref() + ": " + out.HTMLURL, nil
 	}
 	return "", fmt.Errorf("unknown tool %s", name)

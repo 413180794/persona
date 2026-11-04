@@ -570,7 +570,7 @@ struct KnowledgeDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { editing = true } label: { Label("打标", systemImage: "tag") }
+                Button { editing = true } label: { Label("打标", systemImage: Theme.Icon.label) }
                     .accessibilityLabel("打标")
             }
         }

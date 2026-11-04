@@ -5,7 +5,8 @@ import SwiftUI
 // read it, and the page itself in the app's link sheet.
 
 /// A connector's item opened: a chat app's conversation as its own page (ConnectorThreadView, a connector with
-/// `threads`: Telegram); otherwise, or while that cannot be read, what the hub collected about it.
+/// `threads`: Telegram), a GitHub pull request or issue as GitHub's thread (GitHubThreadView); otherwise, or while
+/// that cannot be read (a CI run, a rate limit), what the hub collected about it.
 struct InboxConnectorDetailView: View {
     var item: InboxItem
     @State private var thread: ConnectorThreadModel
@@ -16,8 +17,12 @@ struct InboxConnectorDetailView: View {
     }
 
     var body: some View {
-        if thread.loaded && (thread.unavailable || thread.chat?.isChat == false) {
+        if thread.loaded && (thread.unavailable || thread.chat.map { !$0.isChat && !$0.isGitHub } == true) {
             InboxConnectorTextView(item: item, problem: thread.failure)
+        } else if thread.chat?.isGitHub == true {
+            GitHubThreadView(model: thread, item: item)
+                .navigationTitle(item.accountName)
+                .navigationBarTitleDisplayMode(.inline)
         } else {
             ConnectorThreadView(model: thread)
                 .navigationTitle(thread.chat?.name ?? item.title)

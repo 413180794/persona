@@ -144,48 +144,9 @@ struct ConnectorThreadView: View {
     }
 
     private var composer: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            HStack(alignment: .bottom, spacing: Theme.Space.s) {
-                VStack(alignment: .leading, spacing: 0) {
-                    if let r = replyTo {
-                        QuoteBarRow(heading: "回复 \(r.isMine ? "自己" : r.sender.name)", summary: r.summary, lines: 1, tint: LarkColor.blue,
-                                    removeLabel: "取消回复") { replyTo = nil }
-                            .padding(.leading, Theme.Space.l)
-                            .padding(.trailing, Theme.Space.xs)
-                            .padding(.top, Theme.Space.s)
-                    }
-                    TextField("回复 \(model.chat?.name ?? "")", text: $text, selection: $selection, axis: .vertical)
-                        .lineLimit(1...5)
-                        .focused($focused)
-                        .disabled(model.sending)
-                        .accessibilityIdentifier("thread.box")
-                        .padding(.horizontal, Theme.Space.l)
-                        .padding(.vertical, Theme.Space.s)
-                }
-                .surface(interactive: true, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
-                if model.sending {
-                    ProgressView().scaledFrame(width: Theme.Size.wellL, height: Theme.Size.wellL)
-                } else if LarkComposer.canSend(text) {
-                    Button(action: send) {
-                        Image(systemName: Theme.Icon.send).font(Theme.Font.heading)
-                            .scaledFrame(width: Theme.Size.wellL, height: Theme.Size.wellL)
-                    }
-                    .themedButton(prominent: true)
-                    .clipShape(.circle)
-                    .accessibilityLabel("发送")
-                    .accessibilityIdentifier("thread.send")
-                    .transition(.scale.combined(with: .opacity))
-                }
-            }
-            if model.sending {
-                Text("在手机上弹出的确认卡片里点「允许」后发出").font(Theme.Font.caption).foregroundStyle(.secondary)
-                    .padding(.horizontal, Theme.Space.l)
-            }
-        }
-        .padding(.horizontal, Theme.Space.m)
-        .padding(.bottom, Theme.Space.s)
-        .animation(Theme.Motion.standard, value: replyTo)
-        .animation(Theme.Motion.standard, value: model.sending)
+        ThreadComposer(placeholder: "回复 \(model.chat?.name ?? "")", text: $text, selection: $selection, focused: $focused,
+                       quote: replyTo.map { ("回复 \($0.isMine ? "自己" : $0.sender.name)", $0.summary) }, sending: model.sending,
+                       cancelQuote: { replyTo = nil }, send: send)
     }
 
     private func send() {

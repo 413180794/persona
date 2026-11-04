@@ -189,6 +189,11 @@ struct SettingsView: View {
                 Button("断开", role: .destructive) { model.unpair() }
             }
             .sheet(isPresented: $showPair) { PairView() }
+            #if os(macOS) && DEBUG
+            // `-tab settings -openPairSheet YES` (体验模式, or paired: 重新配对): the 连接 hub sheet, for screenshots
+            // (scripts/app/mac_shot.sh; with `-openPairSSH YES` its SSH 隧道 sheet over it).
+            .onAppear { if UserDefaults.standard.bool(forKey: "openPairSheet") { showPair = true } }
+            #endif
         } empty: {
             SplitPlaceholder(symbol: Theme.Icon.settings, title: "设置", message: "左边选一项。")
         }
@@ -611,6 +616,9 @@ struct PairView: View {
     @State private var token = ""
     /// The SSH tunnel set up here, for a hub this device cannot reach directly (docs/network.md「经 SSH 隧道连 hub」).
     @State private var ssh: SSHRoute?
+    #if os(macOS)
+    @State private var editingSSH = false
+    #endif
     @State private var connecting = false
     @State private var error: String?
     @State private var scanning = DataScannerViewController.isSupported && DataScannerViewController.isAvailable
@@ -655,6 +663,20 @@ struct PairView: View {
                     #endif
                 }
                 Section {
+                    #if os(macOS)
+                    // A sheet of its own over this one, with its own 取消 / 保存, not a page pushed inside the sheet: a
+                    // pushed page got an iPhone's round back button, and the sheet shrank to the page's minimum width
+                    // while the form kept its own, cut off on the right (#1170).
+                    LabeledContent {
+                        HStack(spacing: Theme.Space.s) {
+                            if let ssh { Text(ssh.label).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle) }
+                            Button(ssh == nil ? "设置…" : "修改…") { editingSSH = true }
+                                .accessibilityIdentifier("pair.ssh")
+                        }
+                    } label: {
+                        Label("经 SSH 隧道连接", systemImage: Theme.Icon.sshTunnel).lineLimit(1)
+                    }
+                    #else
                     NavigationLink {
                         SSHTunnelForm(saved: ssh, dismissOnSave: true) { ssh = $0 }.navigationTitle("SSH 隧道")
                     } label: {
@@ -662,6 +684,7 @@ struct PairView: View {
                                     value: ssh.map { $0.label } ?? "", look: .oneLine)
                     }
                     .accessibilityIdentifier("pair.ssh")
+                    #endif
                 } footer: {
                     Text(ssh == nil ? "这台设备访问不到 hub 的地址时（不在同一个网络、没开 VPN），可以经一台能访问 hub 的 SSH 服务器转过去。"
                                     : ssh!.always ? "总是经 SSH 隧道连接这台 hub。" : "先直连这个地址，连不上再经 SSH 隧道。")
@@ -673,6 +696,15 @@ struct PairView: View {
             // A window sheet does not take the main window's grouped forms: without this the Mac laid the fields out
             // in two columns, the labels flush against the sheet's left edge (2026-11-02).
             .macSheet()
+            .sheet(isPresented: $editingSSH) {
+                NavigationStack {
+                    SSHTunnelForm(saved: ssh, dismissOnSave: true) { ssh = $0 }.navigationTitle("SSH 隧道")
+                }
+            }
+            #if DEBUG
+            // `-openPairSheet YES -openPairSSH YES`: this sheet's SSH 隧道 sheet, for screenshots.
+            .onAppear { if UserDefaults.standard.bool(forKey: "openPairSSH") { editingSSH = true } }
+            #endif
             // ⌘V lands in the focused field (the address field has it when the sheet opens), not on the paste button:
             // a pairing link pasted there pairs as the button does; an address stays an address.
             .onChange(of: url) { _, typed in
@@ -904,7 +936,14 @@ struct SettingsRow: View {
                 Label(title, systemImage: symbol)
             }
         } else {
+            #if os(macOS)
+            // The settings list is a sidebar-style list on the Mac (SplitNavigation), which draws a row that is only a
+            // Label as a source list's vibrant label: off its material it came out gray, as if disabled, beside the
+            // rows with a value (#1170). Laid out as those rows are, it is drawn as they are.
+            LabeledContent { EmptyView() } label: { Label(title, systemImage: symbol) }
+            #else
             Label(title, systemImage: symbol)
+            #endif
         }
     }
 }

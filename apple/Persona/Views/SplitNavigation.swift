@@ -160,7 +160,11 @@ private struct SplitDetailPage: ViewModifier {
     @Environment(\.splitDetail) private var split
 
     func body(content: Content) -> some View {
+        #if os(macOS)
+        content.modifier(MacDetailBack(shown: split?.isFirstPage == false))
+        #else
         content.navigationBarBackButtonHidden(split?.isFirstPage == true)
+        #endif
     }
 }
 

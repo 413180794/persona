@@ -214,7 +214,9 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
 和 iOS 同一套（`apple/Packages/PersonaSSH`，见 [network.md「经 SSH 隧道连 hub」](network.md#经-ssh-隧道连-hub直连不通时的后备)、[ios.md「SSH 隧道」](ios.md#ssh-隧道直连不通时的后备891)）：设置 › hub › SSH 隧道，配对页的「经 SSH 隧道连接」。
 沙盒里的 App 调不了 `/usr/bin/ssh`、读不到 `~/.ssh`，所以隧道在进程里实现、密钥由 App 自己生成；本机回环上的监听用已有的 `com.apple.security.network.server`
 权限（端口转发也用它）。Mac 不进后台，隧道一直开着，直连通了会在 2 分钟内换回直连。
-截图：`mac_shot.sh` 的 `-macSnapshot` 不读钥匙串，用 `-seedSSHKey` 给定测试密钥（`docs/testing.md`「SSH 隧道」）。
+截图：`mac_shot.sh` 的 `-macSnapshot` 不读钥匙串，用 `-seedSSHKey` 给定测试密钥（`docs/testing.md`「SSH 隧道」）；截图模式下公钥注释里的设备名一律是「Mac」（不露这台 Mac 自己的名字）。
+配对页（`-tab settings -openPairSheet YES`）上的「经 SSH 隧道连接」在 Mac 上是一行加「设置…」按钮，点开是盖在配对 sheet 上的第二个 sheet（`-openPairSSH YES`），底栏「取消」「测试连接并保存」；
+不在配对 sheet 里推页面（推进去 sheet 会变窄、表单被裁，#1170）。设置 › hub › SSH 隧道 在详情栏里，复制公钥的两个按钮是并排的标准按钮，「测试连接并保存」在页尾右边。
 
 ## 菜单栏、Dock 角标、通知（Mac）
 

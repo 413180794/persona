@@ -271,6 +271,13 @@ extension Theme {
         static let routeToTask = "arrowshape.turn.up.right"
         /// A pull request a task opened.
         static let pullRequest = "arrow.triangle.pull"
+        /// GitHub's thread page: a merged pull request, an open issue, a review asking for changes, a check skipped
+        /// or cancelled, a label.
+        static let merged = "arrow.triangle.merge"
+        static let issueOpen = "smallcircle.filled.circle"
+        static let changesRequested = "plusminus.circle"
+        static let skipped = "minus.circle"
+        static let label = "tag"
         /// A group chat (群聊).
         static let groupChat = "rectangle.3.group.bubble"
         /// 信息 (the Messages app's data on a Mac) as a connector, and its conversations.

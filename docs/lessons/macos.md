@@ -117,3 +117,10 @@
   Markdown 主题的基础字号也乘它（主题是点数，`PerTextScale` 按比例缓存），改设置后 `macLook` 用 `.id(model.textSize)` 让整窗重画（SwiftUI 不观察这个静态值）。
   在别处把 `Theme.Font.xxx` 存进 `static let` 会停在第一次的字号（`CompactList` 改成了计算属性）；兼容层的 `UIFontMetrics` 原来按 iOS 的 body 表（16 / 17 / 19）换算，一档 6–12%，和 Mac 的一点一档对不上，改成 Mac 自己的表。
   按比例缩，「小」会把 11 pt 那几级（caption / label / code）压到约 10.2，违反 #779 用户定的「不小于 11」：`Theme.Font.pointSize` 在 Mac 上取 `max(级别 × scale, 11)`，只有这几级在「小」时停在 11，别的照比例。
+- 设置列表在 Mac 上一半的行是灰的，像禁用了（2026-11-04，#1170）：列表在分栏的内容栏里用 `.listStyle(.sidebar)`（`SplitNavigation`），
+  侧栏样式把一行里只有一个 `Label` 的行当源列表的行来画，文字是「活力」色，要靠背后的侧栏材质才显白；内容栏没有那层材质，就成了灰的。
+  行其实能点。带值的行是 `LabeledContent`，不受影响，所以只有「模型供应商」「设备」这些没有值的行灰。Mac 上没有值的行也包一层 `LabeledContent`（`SettingsRow`）。
+- sheet 里的 `NavigationStack` 推进一页时，sheet 会缩到新页面的最小宽度，表单却按原来的宽度排，右边被裁掉，返回键还是 iPhone 那种圆形玻璃键（同上）。
+  Mac 的 sheet 里别推页面：要再填一组东西就在上面再开一个 sheet，自己的「取消」放 `.cancellationAction`，「保存」放 `.confirmationAction`（配对页的「经 SSH 隧道连接…」）。
+- 分栏详情栏里推进第二层的页面（设置 › hub › SSH 隧道），系统的返回键不在这一栏，而是在窗口工具栏的最左边、红绿灯旁边，压在分区列上，画成圆形玻璃键（同上）。
+  `splitDetailPage()` 在 Mac 上隐藏系统的返回键，在这一栏标题栏那一行的左边画一个 ‹（`MacDetailBack`）。这一行能点：内容延伸到标题栏下面，按钮照常收到点击（真窗口里实测过）。
