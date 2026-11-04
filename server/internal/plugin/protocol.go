@@ -65,6 +65,9 @@ type HubInfo struct {
 	// the apps and drives the computers) or "member" (another hub is the center; work the center does for the group,
 	// like answering a chat service's realtime events, is not this one's). A change restarts the plugin.
 	Role string `json:"role,omitempty"`
+	// Timezone is the user's time zone by name (IANA, as their devices say it): for the times a plugin shows people
+	// ("today", a message's time). Empty while only the hub's own clock is known. Read at each start.
+	Timezone string `json:"timezone,omitempty"`
 }
 
 // PluginInfo is the plugin as the hub installed it.

@@ -270,6 +270,8 @@ func (h *Hub) attachPlugins(ctx context.Context) {
 		if err := reg.AddBuiltin(telegramManifest(h, path), filepath.Dir(path), true); err != nil {
 			h.logf("plugin telegram: %v", err)
 		}
+		// The Telegram plugin from the market takes its place (#1704): the connector id and the sign-in stay.
+		reg.Yields(telegramPluginID)
 	}
 	if path := siblingProgram(wechat.Program); path != "" {
 		if err := reg.AddBuiltin(wechatManifest(h, path), filepath.Dir(path), true); err != nil {
@@ -337,7 +339,11 @@ func (ps *plugins) changed(c plugin.Change) {
 		ps.h.browserChanged(ctx)
 	}
 	if c.Kind == "removed" && c.Old != nil && ps.h != nil {
+		now := ps.reg.Get(c.ID) // a built-in the removed plugin had taken the place of (Yields) keeps its connectors' sign-in
 		for _, id := range c.Old.Manifest.Items("connectors") {
+			if now != nil && slices.Contains(now.Manifest.Items("connectors"), id) {
+				continue
+			}
 			ps.h.forgetConnector(ctx, id)
 		}
 	}
@@ -599,11 +605,14 @@ func (ps *plugins) spec(ctx context.Context, p *plugin.Plugin, hp *hubPlugin) (h
 		if ps.h != nil {
 			build = ps.h.build.Number
 		}
-		role := "center"
+		role, tz := "center", ""
 		if ps.h != nil && ps.h.isMember() {
 			role = "member"
 		}
-		params := plugin.InitializeParams{Hub: plugin.HubInfo{Build: build, ExtensionPoints: plugin.PointVersions(), Role: role}, Plugin: info,
+		if ps.h != nil {
+			tz = ps.h.userTZName()
+		}
+		params := plugin.InitializeParams{Hub: plugin.HubInfo{Build: build, ExtensionPoints: plugin.PointVersions(), Role: role, Timezone: tz}, Plugin: info,
 			Config: ps.reg.Config(p), Secrets: secrets, Granted: p.Record.Granted, Active: map[string][]string{}}
 		if builtin && id == telegramPluginID && ps.h != nil {
 			params.Config = ps.h.telegramSettings()

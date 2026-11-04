@@ -380,3 +380,91 @@ func TestPluginConfirmAlwaysReachesTheGate(t *testing.T) {
 		t.Fatalf("not declared: %s", got)
 	}
 }
+
+// An installed plugin takes the place of a built-in that yields (Telegram from the market, #1704), shown with the
+// example connector: the built-in's program has stopped once the installed one is in, the connector keeps its id and
+// its sign-in (the hub's sealed secret, never forgotten), and uninstalling the plugin brings the built-in back with
+// the sign-in still there.
+func TestInstalledPluginTakesTheBuiltinsPlace(t *testing.T) {
+	h, store := pluginTestHub(t)
+	mux := h.routes()
+	master := h.cfg.Token
+	ctx := context.Background()
+	builtinDir := notesPackage(t, "0.9.0")
+	raw, _ := os.ReadFile(filepath.Join(builtinDir, plugin.ManifestFile))
+	m, err := plugin.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.plugins.reg.AddBuiltin(m, builtinDir, true); err != nil {
+		t.Fatal(err)
+	}
+	h.plugins.reg.Yields("example-notes")
+	_ = store.PutConnectorSecret(ctx, "examplenotes", "sealed session")
+	if code, out := call(t, mux, "PUT", "/api/v1/plugins/example-notes/-/secrets/api_key", master, `{"value": "k3y"}`); code != 200 {
+		t.Fatalf("%d %v", code, out)
+	}
+	ok := func() bool {
+		c := h.connectors.Get("examplenotes")
+		return c != nil && connector.StatusOf(ctx, c).State == connector.StateOK
+	}
+	waitLong(t, "the built-in's connector registered", func() bool { return h.connectors.Get("examplenotes") != nil })
+	if err := h.setConnectorEnabled(ctx, "examplenotes", true); err != nil { // a built-in's starts off; the user turned it on
+		t.Fatal(err)
+	}
+	waitLong(t, "the built-in's connector", ok)
+	builtin := h.plugins.get("example-notes").proc
+
+	pkg := notesPackage(t, "1.0.0")
+	code, pv := call(t, mux, "POST", "/api/v1/plugins/-/preview", master, `{"source": "dir:`+pkg+`"}`)
+	if code != 200 {
+		t.Fatalf("the built-in's id is free to install over: %d %v", code, pv)
+	}
+	code, out := call(t, mux, "POST", "/api/v1/plugins/-/install", master, fmt.Sprintf(`{"preview_id": %q, "permissions_digest": %q}`, pv["preview_id"], pv["permissions_digest"]))
+	if code != 200 || out["source"] != "installed" || out["version"] != "1.0.0" {
+		t.Fatalf("installed: %d %v", code, out)
+	}
+	if st, _ := builtin.Status(); st != "stopped" {
+		t.Fatalf("the built-in's program still runs (%s): two would hold one sign-in", st)
+	}
+	waitLong(t, "the installed plugin's connector", ok)
+	if hp := h.plugins.get("example-notes"); hp == nil || hp.proc == builtin {
+		t.Fatal("the installed plugin does not run")
+	}
+	if sealed, kept, _ := store.ConnectorSecret(ctx, "examplenotes"); !kept || sealed != "sealed session" {
+		t.Fatal("the connector's sign-in did not carry over")
+	}
+
+	if code, out = call(t, mux, "DELETE", "/api/v1/plugins/example-notes/-/", master, ""); code != 200 {
+		t.Fatalf("%d %v", code, out)
+	}
+	if p := h.plugins.reg.Get("example-notes"); p == nil || p.Record.Source != plugin.SourceBuiltin {
+		t.Fatalf("the built-in is not back: %+v", p)
+	}
+	if sealed, kept, _ := store.ConnectorSecret(ctx, "examplenotes"); !kept || sealed != "sealed session" {
+		t.Fatal("uninstalling the plugin forgot the sign-in the built-in uses")
+	}
+}
+
+// Every plugin learns the user's time zone at its start (initialize's hub.timezone), as the built-in Telegram did
+// through its settings: an installed Telegram plugin shows times as the user reads them (#1704).
+func TestPluginsGetTheUserTimezone(t *testing.T) {
+	h, _ := pluginTestHub(t)
+	mux := h.routes()
+	pkg := notesPackage(t, "1.0.0")
+	_, pv := call(t, mux, "POST", "/api/v1/plugins/-/preview", h.cfg.Token, `{"source": "dir:`+pkg+`"}`)
+	if code, out := call(t, mux, "POST", "/api/v1/plugins/-/install", h.cfg.Token, fmt.Sprintf(`{"preview_id": %q, "permissions_digest": %q}`, pv["preview_id"], pv["permissions_digest"])); code != 200 {
+		t.Fatalf("%d %v", code, out)
+	}
+	for _, tz := range []string{"", "Asia/Shanghai"} {
+		h.userTZ = tz
+		s, err := h.plugins.spec(context.Background(), h.plugins.reg.Get("example-notes"), &hubPlugin{id: "example-notes"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		params, err := s.Init(context.Background())
+		if err != nil || params.Hub.Timezone != tz {
+			t.Fatalf("%q: %+v %v", tz, params.Hub, err)
+		}
+	}
+}

@@ -580,3 +580,63 @@ func TestStageArchives(t *testing.T) {
 		t.Fatal(s, err)
 	}
 }
+
+// A built-in that yields (Telegram moving into a package, #1704): an installed plugin of its id takes its place —
+// installing tells the hub what ran before (Old, the built-in), a restart finds the installed one, uninstalling brings
+// the built-in back. One that does not yield refuses the id as before.
+func TestBuiltinYieldsToAnInstalledOne(t *testing.T) {
+	ctx := context.Background()
+	r, store, changes := newTestRegistry(t)
+	builtin := func(id string) *Manifest {
+		m, err := Parse(with(t, func(m map[string]any) {
+			m["id"] = id
+			m["runtime"] = map[string]any{"command": "personad"}
+			m["engines"] = map[string]any{"plugin_protocol": 1}
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	if err := r.AddBuiltin(builtin("example-notes"), "/opt/persona", true); err != nil {
+		t.Fatal(err)
+	}
+	pkg := t.TempDir()
+	writePackage(t, pkg, nil) // example-notes 1.2.0
+	if _, err := r.Preview(ctx, pkg, ""); err == nil || !strings.Contains(err.Error(), "已经有一个叫 example-notes 的插件") {
+		t.Fatal("a built-in that does not yield keeps its id:", err)
+	}
+	r.Yields("example-notes")
+	pv, err := r.Preview(ctx, pkg, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := r.Install(ctx, pv.ID, pv.Digest, "cli")
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := (*changes)[len(*changes)-1]
+	if got := r.Get("example-notes"); got != p || got.Record.Source != SourceInstalled ||
+		last.Kind != "installed" || last.Old == nil || last.Old.Record.Source != SourceBuiltin {
+		t.Fatalf("installed in the built-in's place: %+v / %+v", got.Record, last)
+	}
+	// After a restart: the built-in is registered again, then its row puts the installed one in its place.
+	r2 := NewRegistry(r.dir, store, rot13{}, 202611100000)
+	_ = r2.AddBuiltin(builtin("example-notes"), "/opt/persona", true)
+	r2.Yields("example-notes")
+	if err := r2.Load(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := r2.Get("example-notes"); got.Record.Source != SourceInstalled || got.Record.Version != "1.2.0" {
+		t.Fatalf("restarted: %+v", got.Record)
+	}
+	if err := r2.Uninstall(ctx, "example-notes", true, "cli"); err != nil {
+		t.Fatal(err)
+	}
+	if got := r2.Get("example-notes"); got == nil || got.Record.Source != SourceBuiltin || got.Dir != "/opt/persona" {
+		t.Fatalf("the built-in is back: %+v", got)
+	}
+	if len(store.rows) != 0 {
+		t.Fatal("the installed row is gone:", store.rows)
+	}
+}

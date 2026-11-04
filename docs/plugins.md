@@ -721,7 +721,7 @@ hub 管理界面（[admin.md](admin.md)）的「插件」页（`web/src/admin/pa
 
 ```json
 {"protocol": 1,
- "hub": {"build": 202611050000, "extension_points": {"computer": 1, "connectors": 2, "voice": 1}},
+ "hub": {"build": 202611050000, "extension_points": {"computer": 1, "connectors": 2, "voice": 1}, "role": "center", "timezone": "Asia/Shanghai"},
  "plugin": {"id": "example-notes", "version": "1.2.0", "dir": "…", "data_dir": "…"},
  "config": {"base_url": "https://notes.example.com", "folders": ["work"], "include_shared": false},
  "secrets": {"api_key": "…"},
@@ -730,7 +730,8 @@ hub 管理界面（[admin.md](admin.md)）的「插件」页（`web/src/admin/pa
 ```
 
 `active` 是这次要用的贡献（关着的连接器不在里面）。`hub.role`（#1503）是这台 hub 在互联组里的角色：`center`（独自一台，或组的中心：服务 App、驱动电脑）或
-`member`（别的 hub 是中心：替组做的事，比如响应聊天服务的实时事件、跑 /agent、爬全量，交给中心那台）；角色变了，hub 重启贡献了 `connectors` 或 `api` 的插件。程序回 `{"protocol": 1, "id", "version", "contributes"?}`：`protocol` 不一致回错误 `wrong_protocol`
+`member`（别的 hub 是中心：替组做的事，比如响应聊天服务的实时事件、跑 /agent、爬全量，交给中心那台）；角色变了，hub 重启贡献了 `connectors` 或 `api` 的插件。
+`hub.timezone` 是用户的时区（IANA 名字，和用户设备上报的一样），给插件显示时间用（「今天」、一条消息的时间）；只知道 hub 自己的时钟时为空，每次启动时读。程序回 `{"protocol": 1, "id", "version", "contributes"?}`：`protocol` 不一致回错误 `wrong_protocol`
 （或 hub 看到不对就停掉它）；`id`、`version` 必须和清单一致；`contributes` 是清单的子集，和清单不一致时 hub 记日志、以清单为准。
 
 基础方法：`initialize`、`ping`（`initialize` 之后，回 `{}`）、`manifest`（`initialize` 之前也能调，回 `persona-plugin.json`；跑在别处的插件必须有，hub 从包里起的可以没有）。

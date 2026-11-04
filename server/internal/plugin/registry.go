@@ -117,12 +117,30 @@ type Registry struct {
 	reserved map[string]map[string]string // point → contribution id → who has it (the hub's own)
 	previews map[string]*Preview
 	now      func() time.Time
+	// yields: built-in plugins an installed one of the same id takes the place of (Yields); yielded: those put aside.
+	yields  map[string]bool
+	yielded map[string]*Plugin
 }
 
 // NewRegistry is a registry for the hub of build, keeping packages under dir.
 func NewRegistry(dir string, store Store, seal Sealer, build int64) *Registry {
 	return &Registry{dir: dir, store: store, seal: seal, build: build, platform: runtime.GOOS + "-" + runtime.GOARCH,
-		plugins: map[string]*Plugin{}, reserved: map[string]map[string]string{}, previews: map[string]*Preview{}, now: time.Now}
+		plugins: map[string]*Plugin{}, reserved: map[string]map[string]string{}, previews: map[string]*Preview{}, now: time.Now,
+		yields: map[string]bool{}, yielded: map[string]*Plugin{}}
+}
+
+// Yields marks the built-in plugin id as one an installed plugin of the same id takes the place of, while it moves out
+// of personad into a package (Telegram, docs/plan-plugins.md): installing that plugin puts the built-in aside (the hub
+// stops its program before the installed one starts), uninstalling it brings the built-in back.
+func (r *Registry) Yields(id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.yields[id] = true
+}
+
+// yielding says whether cur is a built-in an installed plugin may take the place of. Called with r.mu held.
+func (r *Registry) yielding(cur *Plugin) bool {
+	return cur != nil && cur.Record.Source == SourceBuiltin && r.yields[cur.Record.ID]
 }
 
 // Dirs.
@@ -198,6 +216,9 @@ func (r *Registry) Load(ctx context.Context) error {
 			cur.Record.Enabled, cur.Record.Config = row.Enabled, row.Config
 			cur.Record.InstalledAt, cur.Record.UpdatedAt = row.InstalledAt, row.UpdatedAt
 		case row.Source == SourceInstalled && cur == nil:
+			r.plugins[row.ID] = r.fromRow(row)
+		case row.Source == SourceInstalled && r.yielding(cur):
+			r.yielded[row.ID] = cur
 			r.plugins[row.ID] = r.fromRow(row)
 		}
 	}
@@ -423,7 +444,7 @@ func (r *Registry) preview(ctx context.Context, src Source, upgrade string, stag
 	defer r.mu.Unlock()
 	cur := r.plugins[m.ID]
 	switch {
-	case upgrade == "" && cur != nil:
+	case upgrade == "" && cur != nil && !r.yielding(cur):
 		return fail(fmt.Errorf("已经有一个叫 %s 的插件（%s）：要换新版本用升级", m.ID, cur.Record.Source))
 	case upgrade != "" && upgrade != m.ID:
 		return fail(fmt.Errorf("这个包是 %s，不是 %s", m.ID, upgrade))
@@ -567,7 +588,8 @@ func (r *Registry) Install(ctx context.Context, previewID, digest, actor string)
 		return nil, err
 	}
 	r.mu.Lock()
-	if r.plugins[m.ID] != nil {
+	builtin := r.plugins[m.ID]
+	if builtin != nil && !r.yielding(builtin) {
 		r.mu.Unlock()
 		return nil, fmt.Errorf("已经有一个叫 %s 的插件", m.ID)
 	}
@@ -581,10 +603,13 @@ func (r *Registry) Install(ctx context.Context, previewID, digest, actor string)
 	}
 	p := r.fromRow(row)
 	r.mu.Lock()
+	if builtin != nil {
+		r.yielded[m.ID] = builtin
+	}
 	r.plugins[m.ID] = p
 	r.mu.Unlock()
 	r.audit(ctx, m.ID, "install", actor, map[string]any{"version": m.Version, "origin": row.Origin, "permissions": m.Permissions})
-	r.changed(Change{ID: m.ID, Kind: "installed"})
+	r.changed(Change{ID: m.ID, Kind: "installed", Old: builtin}) // the hub stops what ran of id first (the built-in)
 	return p, nil
 }
 
@@ -709,6 +734,11 @@ func (r *Registry) Uninstall(ctx context.Context, id string, keepData bool, acto
 	}
 	r.mu.Lock()
 	delete(r.plugins, id)
+	back := r.yielded[id]
+	if back != nil { // the built-in it took the place of comes back
+		delete(r.yielded, id)
+		r.plugins[id] = back
+	}
 	r.mu.Unlock()
 	_ = os.RemoveAll(filepath.Join(r.dir, "installed", id))
 	if !keepData {
