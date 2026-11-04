@@ -237,10 +237,10 @@ struct AssistantTopBar: View {
     /// Each launcher's /model list; a failure just leaves the submenu without entries.
     private func loadModelOptions() async {
         let machine = model.hubRef(machineID)
-        guard let api = model.api, !launchers.isEmpty else { return }
+        guard let api = model.api(machine.group), !launchers.isEmpty else { return }
         await withTaskGroup(of: (String, [AgentModelOption]).self) { group in
             for l in launchers {
-                group.addTask { (l.name, (try? await api.launcherModels(machine: machine, launcher: l.name)) ?? []) }
+                group.addTask { (l.name, (try? await api.launcherModels(machine: machine.id, launcher: l.name)) ?? []) }
             }
             for await (name, options) in group {
                 if !options.isEmpty { modelOptions[name] = options }
