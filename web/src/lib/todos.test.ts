@@ -15,7 +15,9 @@ import {
   makeSessionLookup,
   mostUrgentAgent,
   resolveLinkCurrentTodoId,
+  runningSubagents,
   sortTodos,
+  taskNow,
   todoStatus,
   type Todo,
   type TodoAgent,
@@ -657,5 +659,46 @@ describe("模型服务出错中断的任务 (#1516)", () => {
       canContinue: false,
     });
     expect(interruption(mockSession("mac-1", "s1", "unread", { last_text: "修好了" }))).toBeUndefined();
+  });
+});
+
+describe("任务卡片的进度 (taskNow, #1583)", () => {
+  const base: Session = { machine_id: "example-machine", session_id: "s1", title: "", cwd: "/code", status: "working", state: "working" };
+
+  it("只调了工具、还没说过话：显示这一步和开始时间，不是「还没有动静」", () => {
+    const s = { ...base, activity: "在跑测试", activity_at: "2026-11-04T11:50:00Z" };
+    expect(taskNow(s, true)).toEqual({ kind: "step", text: "在跑测试", since: "2026-11-04T11:50:00Z" });
+  });
+
+  it("说过一句话后接着调工具：工作中显示这一步，停下来显示那句话", () => {
+    const s = { ...base, last_text: "已建 issue 并认领", activity: "在读 tasks.go", activity_at: "2026-11-04T11:50:00Z" };
+    expect(taskNow(s, true)).toEqual({ kind: "step", text: "在读 tasks.go", since: "2026-11-04T11:50:00Z" });
+    expect(taskNow({ ...s, state: "unread" }, false)).toEqual({ kind: "words", text: "已建 issue 并认领" });
+  });
+
+  it("停在一次工具调用上、从没说过话：还是显示这一步，但不计时", () => {
+    expect(taskNow({ ...base, activity: "在跑测试", activity_at: "2026-11-04T11:50:00Z" }, false)).toEqual({ kind: "step", text: "在跑测试", since: undefined });
+  });
+
+  it("有了新的话（hub 不再下发这一步）就显示话；什么都没有是 null", () => {
+    expect(taskNow({ ...base, last_text: "测试过了" }, true)).toEqual({ kind: "words", text: "测试过了" });
+    expect(taskNow(base, true)).toBeNull();
+    expect(taskNow(undefined, true)).toBeNull();
+  });
+
+  it("有子 Agent：主 Agent 的进度不变，在跑的子 Agent 另外列出来", () => {
+    const s: Session = {
+      ...base,
+      last_text: "两个只读子任务在调查",
+      activity: "在搜 Shutdown",
+      subagents: [
+        { id: "a1", session_id: "s1@a1", description: "Hub children lifecycle survey", running: true, last_text: "子任务的话" },
+        { id: "a2", session_id: "s1@a2", type: "Explore", running: true },
+        { id: "a3", session_id: "s1@a3", description: "做完的", running: false },
+      ],
+    };
+    expect(taskNow(s, true)).toEqual({ kind: "step", text: "在搜 Shutdown", since: undefined });
+    expect(runningSubagents(s)).toEqual(["Hub children lifecycle survey", "Explore"]);
+    expect(runningSubagents(base)).toEqual([]);
   });
 });

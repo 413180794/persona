@@ -47,6 +47,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import persona.core.contracts.AgentState
 import persona.core.contracts.FeedItem
 import persona.core.contracts.Session
 import persona.core.contracts.SessionKey
@@ -69,6 +70,7 @@ import persona.core.domain.tasks.AssistantExtra
 import persona.core.domain.tasks.AssistantLines
 import persona.core.domain.tasks.QuickResult
 import persona.core.domain.tasks.Interruption
+import persona.core.domain.tasks.TaskNow
 import persona.core.domain.tasks.TaskState
 import persona.core.domain.tasks.receiptState
 import persona.core.domain.lines.ApiErrorInfo
@@ -117,9 +119,9 @@ private fun Todo.place(host: AssistantTaskHost, lead: Session?): String = buildL
     lead?.agentLabel?.let(::add)
 }.joinToString(" · ")
 
-private fun since(iso: String?): String? {
+private fun since(iso: String?, now: Instant = Instant.now()): String? {
     val t = AssistantLines.time(iso) ?: return null
-    val m = ((Instant.now().toEpochMilli() - t.toEpochMilli()) / 60_000).coerceAtLeast(0)
+    val m = ((now.toEpochMilli() - t.toEpochMilli()) / 60_000).coerceAtLeast(0)
     return when {
         m < 1 -> "刚开始"
         m < 60 -> "$m 分钟"
@@ -266,11 +268,13 @@ private fun TaskCard(todo: Todo, host: AssistantTaskHost) {
     val lead = host.tasks.lead(todo, host.sessions)
     val busy by host.tasks.busy.collectAsStateWithLifecycle()
     val cut = if (state == TaskState.Interrupted) Interruption.of(lead) else null
+    val progress = TaskNow.of(lead, lead?.agentState == AgentState.Working)
+    val clock by rememberNow(30_000, state == TaskState.Working) // how long its step has gone on
     val now = when {
         state == TaskState.NeedsYou -> "有事等你回答"
         cut != null -> "模型服务出错，中断了：" + cut.reason
         state == TaskState.Failed -> "没开起来：" + todo.startError.orEmpty().trim()
-        !lead?.lastText.isNullOrBlank() -> lead?.lastText.orEmpty().trim()
+        progress != null -> progress.text
         todo.agents.any { !it.startError.isNullOrBlank() } -> "没开起来：" + todo.agents.first { !it.startError.isNullOrBlank() }.startError
         state == TaskState.NotStarted -> "正在开 Agent"
         else -> "还没有动静"
@@ -284,11 +288,19 @@ private fun TaskCard(todo: Todo, host: AssistantTaskHost) {
                 if (state != TaskState.Done && state != TaskState.Failed) since(todo.createdAt)?.let { Text(it, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) }
             }
             Text(todo.place(host, lead), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(now, Modifier.fillMaxWidth().clip(PersonaTheme.shapes.controlShape).background(PersonaTheme.palette.sunken)
-                .padding(horizontal = Tokens.Space.m, vertical = Tokens.Space.s), style = PersonaTheme.type.callout, maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                color = if (state == TaskState.NeedsYou || state == TaskState.Failed || cut != null) PersonaTheme.palette.status(Status.NeedsYou).text
-                else PersonaTheme.palette.ink)
+            val stepFor = (progress as? TaskNow.Step)?.takeIf { it.text == now }?.since?.let { since(it, clock) }
+            // Its subagents add to its own progress, below it, and never stand in for it.
+            val subagents = if (state == TaskState.Working || state == TaskState.NeedsYou) TaskNow.subagents(lead) else emptyList()
+            Column(Modifier.fillMaxWidth().clip(PersonaTheme.shapes.controlShape).background(PersonaTheme.palette.sunken)
+                .padding(horizontal = Tokens.Space.m, vertical = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xxs)) {
+                Text(if (stepFor != null) "$now · $stepFor" else now, style = PersonaTheme.type.callout, maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = if (state == TaskState.NeedsYou || state == TaskState.Failed || cut != null) PersonaTheme.palette.status(Status.NeedsYou).text
+                    else PersonaTheme.palette.ink)
+                if (subagents.isNotEmpty()) Text("子 Agent 在跑：" + subagents.take(3).joinToString("、") +
+                    (if (subagents.size > 3) " 等 ${subagents.size} 个" else ""), style = PersonaTheme.type.caption,
+                    color = PersonaTheme.palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
             if (state != TaskState.Done) Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(state.label, Modifier.weight(1f), style = PersonaTheme.type.caption, color = PersonaTheme.palette.status(state.status()).text)
                 if (state == TaskState.Failed) {
@@ -508,7 +520,8 @@ private fun MessageCard(item: FeedItem, host: AssistantTaskHost, todos: List<Tod
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
                     TaskMark(state)
                     Text(todo.title, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink, maxLines = 1)
-                    Text(host.tasks.lead(todo, host.sessions)?.lastText ?: state.label, Modifier.weight(1f), style = PersonaTheme.type.caption,
+                    val lead = host.tasks.lead(todo, host.sessions)
+                    Text(TaskNow.of(lead, lead?.agentState == AgentState.Working)?.text ?: state.label, Modifier.weight(1f), style = PersonaTheme.type.caption,
                         color = PersonaTheme.palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }

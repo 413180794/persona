@@ -69,6 +69,10 @@ type SnapshotTask struct {
 	ID, Title, State string
 	Machine, Session string // its latest agent, when it has one
 	Last             string // what that agent said last, in a line
+	// Doing: the step that agent is on (its latest tool call, transcript.Activity) while it works or has said nothing
+	// yet, and DoingFor how long that step has gone on ("3 分钟"), "" when unknown or not working.
+	Doing, DoingFor string
+	Subagents       []string // that agent's running subagents, what each is for: on top of its own step, never instead
 }
 
 // Snapshot is the live context a starting assistant gets in its system prompt.

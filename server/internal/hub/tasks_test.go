@@ -9,11 +9,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -748,5 +750,44 @@ func TestInteractionNamesItsTask(t *testing.T) {
 	}
 	if got["ix_t"] != "修登录崩溃" || got["ix_o"] != "" {
 		t.Fatalf("task titles = %v", got)
+	}
+}
+
+// A task's line in the snapshot follows its agent as the cards do (#1583): the step of one that has only run tools
+// and said nothing, its words and step while it works, its words once it stopped, and its running subagents on top
+// of its own progress, never instead of it.
+func TestSnapshotTaskFollowsTheAgent(t *testing.T) {
+	now := time.Date(2026, 11, 4, 11, 52, 0, 0, time.UTC)
+	todo := Todo{ID: "todo_1", Title: "hub 重启无感"}
+	started := now.Add(-3*time.Minute - 10*time.Second)
+	lead := proto.Session{MachineID: "example-machine", SessionID: "b00502b8-82a3", State: proto.StateWorking, UpdatedAt: now,
+		Activity: "在跑测试", ActivityAt: &started}
+
+	got := snapshotTask(todo, "working", []proto.Session{lead}, now)
+	if got.Last != "" || got.Doing != "在跑测试" || got.DoingFor != "3 分钟" || got.Session != "b00502b8" {
+		t.Fatalf("tools only, no words: %+v", got)
+	}
+
+	lead.LastText = "已建 issue 并认领，\n两个只读子任务在调查"
+	lead.Subagents = []proto.Subagent{
+		{ID: "a1", Description: "Hub children lifecycle survey", Running: true, LastText: "子任务的话"},
+		{ID: "a2", Description: "Client reconnect survey", Running: true},
+		{ID: "a3", Description: "早就做完的", Running: false},
+	}
+	got = snapshotTask(todo, "working", []proto.Session{lead}, now)
+	if got.Last != "已建 issue 并认领， 两个只读子任务在调查" || got.Doing != "在跑测试" ||
+		!reflect.DeepEqual(got.Subagents, []string{"Hub children lifecycle survey", "Client reconnect survey"}) {
+		t.Fatalf("with subagents: %+v", got)
+	}
+	golden(t, "assistant_snapshot.tasks", prompts.RenderSnapshot(prompts.Snapshot{Now: now, Zone: "UTC",
+		Tasks: []prompts.SnapshotTask{
+			snapshotTask(Todo{ID: "todo_2", Title: "只跑工具"}, "working", []proto.Session{{MachineID: "example-machine",
+				SessionID: "c1", State: proto.StateWorking, UpdatedAt: now, Activity: "在读 tasks.go", ActivityAt: &started}}, now),
+			got,
+		}}))
+
+	lead.State, lead.Subagents = proto.StateUnread, nil
+	if got = snapshotTask(todo, "unread", []proto.Session{lead}, now); got.Doing != "" || got.DoingFor != "" || got.Last == "" {
+		t.Fatalf("stopped: its words, not the step it stopped on: %+v", got)
 	}
 }

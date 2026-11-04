@@ -46,7 +46,16 @@
   （2026-11-04 统计一台机器两天的 transcript：两段文字之间连调 ≥3 次工具的 6069 段，中位 84 秒、p90 约 6 分钟、p99 约 20 分钟），卡片看着像卡住了。
   所以 node 从 transcript 取最近一次工具调用，概括成一行（`transcript.Activity`：「在跑测试」「在读 tasks.go」「在等 CI」「在提 PR」……），
   随会话列表下发 `activity` / `activity_at`（只在工具调用比最后一段文字新时才有）。卡片在 Agent 工作中时显示这一步和它持续了多久（每 30 秒重画一次），
-  有了新文字就换回文字；停下来以后显示最后一段文字。App 端的规则在 `TaskNow`。
+  有了新文字就换回文字；停下来以后显示最后一段文字。App 端的规则在 `TaskNow`（iOS）、`taskNow`（网页 `web/src/lib/todos.ts`）、`TaskNow`（安卓 `core:domain`），
+  三端和快照用同一套规则；从没说过话、停在一次工具调用上的，也显示这一步（不计时），不显示「还没有动静」。
+- 最后一句话不能因为 transcript 太长丢掉（#1583）：node 只读 transcript 末尾 384 KB，Agent 说完一句接着调工具，工具结果和钩子回执很快超过 384 KB，
+  那句话被挤出窗口，`last_text` 就空了（现场：1.5 MB 的 transcript，最后一句在 665 KB 处，卡片显示了 7 分钟「还没有动静」）。
+  现在末尾窗口里没有文字时，沿用上一次读到的（文件只追加，上次读过以后新写的都在窗口里），没有上一次就往前一段段找，最多 8 MB。
+- 在跑的子 Agent（`subagents` 里 `running` 的）在卡片上另起一行「子 Agent 在跑：A、B」，只作补充：卡片的主行始终是主 Agent 自己的话或这一步。
+  子 Agent 的 transcript 是单独的文件（`<会话>/subagents/agent-*.jsonl`），不会混进主 Agent 的 `last_text` / `activity`。
+- 快照里的任务（`snapshotTasks`）同样带最近一句、工作中的这一步和持续时间、在跑的子 Agent：「在做，<机器> session_id=…：最近一句；现在在跑测试（3 分钟了）；子 Agent 在跑：…」。
+- 链路时延（2026-11-04 在 hub 机器上量）：Claude Code 写出一行 0.1–3 秒；node 每秒重建一次列表，增长中的 transcript 最多每 3 秒重读一次（`metaMinInterval`），
+  列表一变（含新的 `activity`）立刻推给 hub，hub 直接广播，网页收到即替换。这一段没有模型生成摘要的环节，卡片和快照都用原文，做完的回执也是 Agent 最后一段话截断。
 - 卡片读会话用 `AppModel.sessionWithLine`，不用 `session(_:)`：后者为了少重绘，只有 `last_text` / `updated_at` / `rev` 变了的推送不算变化，
   卡片会一直停在状态上次变化时的那句话（`docs/lessons/ios.md`）。
 - 任务的进展**不往对话里插新消息**。只有三种情况在对话底部追加：要你回答（问题卡）、答完了（收成一行）、做完了（回执）。

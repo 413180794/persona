@@ -190,6 +190,9 @@ data class Session(
     @SerialName("loop") val loop: LoopInfo? = null,
     @WireTime @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("last_text") val lastText: String? = null,
+    /** Its latest step when that is a tool call no text came after (「在跑测试」「在读 tasks.go」), and when it started. */
+    @SerialName("activity") val activity: String? = null,
+    @WireTime @SerialName("activity_at") val activityAt: String? = null,
     /** Its latest turn ended in a model API error (the hub sets it while it is stopped, #1516): its task is interrupted. */
     @SerialName("turn_error") val turnError: String? = null,
     @SerialName("pending_interactions") val pendingInteractions: Int = 0,

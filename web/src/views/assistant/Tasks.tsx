@@ -28,7 +28,7 @@ import {
   type TaskPlan,
   type TodayBody,
 } from "../../lib/feed";
-import { dockAgents, interruption, isRemovable, makeSessionLookup, mostUrgentAgent, todoStatus, TODO_STATUS_INFO, type SessionLookup, type Todo, type TodoStatus } from "../../lib/todos";
+import { dockAgents, interruption, isRemovable, makeSessionLookup, mostUrgentAgent, runningSubagents, taskNow, todoStatus, TODO_STATUS_INFO, type SessionLookup, type Todo, type TodoStatus } from "../../lib/todos";
 import { parseAPIError } from "../../lib/api-errors";
 import { navigate } from "../../lib/router";
 import { openPanel } from "../../lib/panel";
@@ -36,10 +36,10 @@ import { plainMarkdown } from "../../lib/plain-markdown";
 import { Markdown } from "../../ui/Markdown";
 import { getState, useStore } from "../../lib/store";
 import type { AgentState, Interaction, Session } from "../../lib/types";
-import { Button, Collapse, cx, Menu, StatusDot, toast } from "../../ui/atoms";
+import { Button, Collapse, cx, Menu, StatusDot, toast, useNow } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { InteractionCard } from "../chat/Interactions";
-import { clock, sessionTitle } from "../../lib/format";
+import { clock, sessionTitle, stateOf } from "../../lib/format";
 
 // ── what a task is now ──
 
@@ -132,6 +132,12 @@ function since(iso?: string): string | undefined {
   if (m < 1) return "刚开始";
   if (m < 60) return `${m} 分钟`;
   return m % 60 ? `${Math.floor(m / 60)} 小时 ${m % 60} 分` : `${m / 60} 小时`;
+}
+
+/** What a task's lead agent says or does now, in a line (lib/todos taskNow): its words, or the step it is on. */
+function progressOf(lead: Session | undefined) {
+  const now = taskNow(lead, !!lead && stateOf(lead) === "working");
+  return now && { text: now.kind === "words" ? plainMarkdown(now.text) : now.text, for: now.kind === "step" ? since(now.since) : undefined };
 }
 
 /** Opens a task's detail beside the conversation: its agent's own chat (the side panel). */
@@ -245,11 +251,13 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
   const status = todo ? statusOf(todo, lookup, plans) : undefined;
   const menu = useTaskMenu(todo, status);
   const retrying = useRetrying(todoId);
+  useNow(30_000, status === "working"); // how long its step has gone on
   if (!todo || !status) return null;
   const lead = mostUrgentAgent(todo, lookup)?.session;
   const info = TODO_STATUS_INFO[status];
   const startError = todo.agents?.find((a) => a.start_error)?.start_error;
   const cut = status === "interrupted" ? interruption(lead) : undefined;
+  const progress = progressOf(lead);
   const now =
     status === "needs_you"
       ? "有事等你回答"
@@ -257,7 +265,10 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
         ? `模型服务出错，中断了：${cut.reason}`
         : status === "failed"
         ? `没开起来：${startFailure(todo, plans) ?? "原因不明"}`
-        : plainMarkdown(lead?.last_text) || (startError ? `没开起来：${startError}` : status === "not_started" ? "正在开 Agent" : "还没有动静");
+        : progress?.text || (startError ? `没开起来：${startError}` : status === "not_started" ? "正在开 Agent" : "还没有动静");
+  const stepFor = now === progress?.text ? progress.for : undefined;
+  // Its subagents add to its own progress, below it, and never stand in for it.
+  const subagents = status === "working" || status === "needs_you" ? runningSubagents(lead) : [];
   return (
     <div
       role="button"
@@ -275,7 +286,18 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
       <div className="truncate text-[12px] text-ink-2">{place(todo, lead)}</div>
       <div className={cx("flex items-start gap-2 rounded-control bg-field px-3 py-2 text-[13px]", (status === "needs_you" || status === "failed" || cut) && "text-red")}>
         <Icon name={status === "needs_you" ? "hand" : status === "failed" || cut ? "info" : "terminal"} size={13} className="mt-0.5 shrink-0 text-ink-2" />
-        <span className="line-clamp-2">{now}</span>
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="line-clamp-2">
+            {now}
+            {stepFor && <span className="text-ink-3"> · {stepFor}</span>}
+          </span>
+          {subagents.length > 0 && (
+            <span className="truncate text-[12px] text-ink-3">
+              子 Agent 在跑：{subagents.slice(0, 3).join("、")}
+              {subagents.length > 3 && ` 等 ${subagents.length} 个`}
+            </span>
+          )}
+        </span>
       </div>
       {status !== "done" && (
         <div className="flex items-center text-[12.5px]">
@@ -651,7 +673,7 @@ function MessageCard({ item }: { item: FeedItem }) {
         <button type="button" onClick={() => openTask(todo.id)} className="flex items-center gap-2 rounded-control bg-field px-3 py-2 text-left text-[12.5px] hover:bg-hover">
           <TaskMark status={status} />
           <span className="font-semibold">{todo.title}</span>
-          <span className="min-w-0 flex-1 truncate text-ink-2">{plainMarkdown(mostUrgentAgent(todo, lookup)?.session?.last_text) || TODO_STATUS_INFO[status].label}</span>
+          <span className="min-w-0 flex-1 truncate text-ink-2">{progressOf(mostUrgentAgent(todo, lookup)?.session)?.text || TODO_STATUS_INFO[status].label}</span>
           <Icon name="chevronRight" size={13} className="text-ink-3" />
         </button>
       )}

@@ -548,3 +548,24 @@ export function dockAgents(sessions: Session[], todos: Todo[], conversation: str
       `${a.session.machine_id}/${a.session.session_id}`.localeCompare(`${b.session.machine_id}/${b.session.session_id}`),
   );
 }
+
+/** What a task's lead agent says or does now (iOS TaskNow). */
+export type TaskNow = { kind: "words"; text: string } | { kind: "step"; text: string; since?: string };
+
+/**
+ * A working agent's step (its latest tool call, which the hub only sends when it is newer than its words) comes
+ * before its words; once it stopped, its words do (a turn cut short on a tool call), and the step only stands in for
+ * words it never said. Null when it has said and done nothing yet (docs/unified-entry.md「任务卡片的进度」, #1583).
+ */
+export function taskNow(lead: Session | undefined, working: boolean): TaskNow | null {
+  const words = lead?.last_text?.trim() ?? "";
+  const step = lead?.activity?.trim() ?? "";
+  if (step && (working || !words)) return { kind: "step", text: step, since: working ? lead?.activity_at : undefined };
+  if (words) return { kind: "words", text: words };
+  return null;
+}
+
+/** What each of an agent's running subagents is for: shown under its own progress, never instead of it. */
+export function runningSubagents(s: Session | undefined): string[] {
+  return (s?.subagents ?? []).filter((a) => a.running).map((a) => a.description?.trim() || a.type || "子任务");
+}

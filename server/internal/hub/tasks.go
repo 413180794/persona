@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -1158,23 +1159,43 @@ func (h *Hub) snapshotTasks() []prompts.SnapshotTask {
 		if st == "done" && t.DoneBy == db.DoneByAuto {
 			st = "auto_done"
 		}
-		task := prompts.SnapshotTask{ID: t.ID, Title: t.Title, State: taskStateLabel(st)}
-		var last proto.Session
-		for _, s := range agents {
-			if s.UpdatedAt.After(last.UpdatedAt) {
-				last = s
-			}
-		}
-		if last.SessionID != "" {
-			task.Machine, task.Session = last.MachineID, short(last.SessionID)
-			task.Last = clip(oneLine(last.LastText), 80)
-		}
-		out = append(out, task)
+		out = append(out, snapshotTask(t, st, agents, time.Now()))
 		if len(out) == 12 {
 			break
 		}
 	}
 	return out
+}
+
+// snapshotTask is one task in the snapshot, in state st: its latest agent's last words, the step it is on while it
+// works (or has said nothing yet: an agent that only runs tools, #1583) and its running subagents, as the task cards
+// show them (docs/unified-entry.md「任务卡片的进度」).
+func snapshotTask(t Todo, st string, agents []proto.Session, now time.Time) prompts.SnapshotTask {
+	task := prompts.SnapshotTask{ID: t.ID, Title: t.Title, State: taskStateLabel(st)}
+	var last proto.Session
+	for _, s := range agents {
+		if s.UpdatedAt.After(last.UpdatedAt) {
+			last = s
+		}
+	}
+	if last.SessionID == "" {
+		return task
+	}
+	task.Machine, task.Session = last.MachineID, short(last.SessionID)
+	task.Last = clip(oneLine(last.LastText), 80)
+	working := last.State == proto.StateWorking
+	if doing := strings.TrimSpace(last.Activity); doing != "" && (working || task.Last == "") {
+		task.Doing = doing
+		if working && last.ActivityAt != nil && now.Sub(*last.ActivityAt) >= time.Minute {
+			task.DoingFor = humanDuration(now.Sub(*last.ActivityAt))
+		}
+	}
+	for _, sa := range last.Subagents {
+		if sa.Running && len(task.Subagents) < 3 {
+			task.Subagents = append(task.Subagents, clip(oneLine(cmp.Or(sa.Description, sa.Type, "子任务")), 40))
+		}
+	}
+	return task
 }
 
 // taskState follows docs/todos.md「状态计算规则」(clients compute the same).

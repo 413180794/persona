@@ -2,6 +2,7 @@ package node
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -387,6 +388,85 @@ func TestListKeySeesANewStep(t *testing.T) {
 	again.ActivityAt = &later // the same kind of step again (another file read)
 	if listKey([]proto.Session{base}) == listKey([]proto.Session{again}) {
 		t.Fatal("the same step started again must be pushed (its time resets on the card)")
+	}
+}
+
+// An agent that said a line and then only ran tools, whose results pushed that line out of the tail: the list still
+// has its words (they were gone, and the task card said 还没有动静 for 7 minutes, #1583), and its step.
+func TestQuickMetaKeepsWordsOutOfTheTail(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	lines := []string{
+		`{"type":"user","timestamp":"2026-11-04T11:44:55Z","message":{"role":"user","content":"hub 重启无感"}}`,
+		`{"type":"assistant","timestamp":"2026-11-04T11:48:02Z","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"已建 issue 并认领"}]}}`,
+	}
+	step := func(i int) {
+		lines = append(lines,
+			fmt.Sprintf(`{"type":"assistant","timestamp":"2026-11-04T11:%02d:00Z","message":{"id":"t%d","role":"assistant","content":[{"type":"tool_use","id":"u%d","name":"Read","input":{"file_path":"/a/f%d.go"}}]}}`, 49+i/10, i, i, i),
+			fmt.Sprintf(`{"type":"user","timestamp":"2026-11-04T11:%02d:01Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"u%d","content":"%s"}]}}`, 49+i/10, i, strings.Repeat("x", 60<<10)))
+	}
+	for i := range 10 { // 600 KB of tool results
+		step(i)
+	}
+	write := func() os.FileInfo {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		st, _ := os.Stat(path)
+		return st
+	}
+	st := write()
+	if st.Size() < quickTail+200<<10 {
+		t.Fatalf("the words have to be out of the tail: %d bytes", st.Size())
+	}
+	m := readQuickMeta(path, st) // the first read: looks further back
+	if m.lastText != "已建 issue 并认领" || m.doing != "在读 f9.go" {
+		t.Fatalf("first read: last text %q, doing %q", m.lastText, m.doing)
+	}
+	step(10)
+	if m = readQuickMetaSince(path, write(), m); m.lastText != "已建 issue 并认领" || m.doing != "在读 f10.go" {
+		t.Fatalf("grown: last text %q, doing %q", m.lastText, m.doing)
+	}
+	// Kept from the last read, not looked for again: a read that knew no words keeps none.
+	if k := readQuickMetaSince(path, st, quickMeta{size: st.Size() - 10, lastText: "上一次读到的"}); k.lastText != "上一次读到的" {
+		t.Fatalf("kept %q", k.lastText)
+	}
+	// A last read from before the tail could have missed words since: looked for again.
+	if k := readQuickMetaSince(path, st, quickMeta{size: 100, lastText: "很久以前"}); k.lastText != "已建 issue 并认领" {
+		t.Fatalf("stale last read: %q", k.lastText)
+	}
+	lines = append(lines, `{"type":"assistant","timestamp":"2026-11-04T12:10:00Z","message":{"id":"m9","role":"assistant","content":[{"type":"text","text":"服务端改完了"}]}}`)
+	if m = readQuickMetaSince(path, write(), m); m.lastText != "服务端改完了" || m.doing != "" {
+		t.Fatalf("new words: %q, doing %q", m.lastText, m.doing)
+	}
+}
+
+// An agent with background subagents: their transcripts are files of their own, so the main agent's words and step
+// are its own, however much its subagents say.
+func TestQuickMetaWithSubagentsIsTheMainAgents(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "s.jsonl")
+	lines := []string{
+		`{"type":"user","timestamp":"2026-11-04T11:44:55Z","message":{"role":"user","content":"调查重连"}}`,
+		`{"type":"assistant","timestamp":"2026-11-04T11:46:00Z","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"两个子任务在调查"}]}}`,
+		`{"type":"assistant","timestamp":"2026-11-04T11:47:00Z","message":{"id":"m2","role":"assistant","content":[{"type":"tool_use","id":"a1","name":"Agent","input":{"description":"Client reconnect survey","prompt":"…","run_in_background":true}}]}}`,
+		`{"type":"user","timestamp":"2026-11-04T11:47:01Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"a1","content":"Async agent launched"}]}}`,
+		`{"type":"assistant","timestamp":"2026-11-04T11:48:00Z","message":{"id":"m3","role":"assistant","content":[{"type":"tool_use","id":"g1","name":"Grep","input":{"pattern":"Shutdown"}}]}}`,
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sub := filepath.Join(dir, "s", "subagents")
+	if err := os.MkdirAll(sub, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	subLine := `{"type":"assistant","isSidechain":true,"timestamp":"2026-11-04T11:49:00Z","message":{"id":"x1","role":"assistant","content":[{"type":"text","text":"子任务的话"}]}}` + "\n"
+	if err := os.WriteFile(filepath.Join(sub, "agent-a1.jsonl"), []byte(subLine), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := os.Stat(path)
+	if m := readQuickMeta(path, st); m.lastText != "两个子任务在调查" || m.doing != "在搜 Shutdown" {
+		t.Fatalf("last text %q, doing %q", m.lastText, m.doing)
 	}
 }
 

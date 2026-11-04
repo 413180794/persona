@@ -76,6 +76,33 @@ data class Interruption(val reason: String, val canContinue: Boolean) {
     }
 }
 
+/** What a task's lead agent says or does now (iOS TaskNow, web taskNow; docs/unified-entry.md「任务卡片的进度」, #1583). */
+sealed interface TaskNow {
+    val text: String
+
+    data class Words(override val text: String) : TaskNow
+    /** [since]: when the step started, while the agent works. */
+    data class Step(override val text: String, val since: String?) : TaskNow
+
+    companion object {
+        /** A working agent's step (the hub sends one only when it is newer than its words) comes before its words; once it
+         *  stopped, its words do, and the step only stands in for words it never said. Null when it said and did nothing. */
+        fun of(lead: Session?, working: Boolean): TaskNow? {
+            val words = lead?.lastText?.trim().orEmpty()
+            val step = lead?.activity?.trim().orEmpty()
+            return when {
+                step.isNotEmpty() && (working || words.isEmpty()) -> Step(step, if (working) lead?.activityAt else null)
+                words.isNotEmpty() -> Words(words)
+                else -> null
+            }
+        }
+
+        /** What each of an agent's running subagents is for: shown under its own progress, never instead of it. */
+        fun subagents(s: Session?): List<String> =
+            s?.subagents.orEmpty().filter { it.running }.map { it.description?.trim()?.takeIf(String::isNotEmpty) ?: it.type.ifEmpty { "子任务" } }
+    }
+}
+
 /** A reminder or an event the assistant added on the phone, read from its tool call. */
 data class QuickResult(val reminder: Boolean, val callId: String, val title: String, val time: String?, val place: String?) {
     companion object {

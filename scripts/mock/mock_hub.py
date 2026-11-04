@@ -388,6 +388,12 @@ SESSIONS = [
          "小组件的时间线已经能按小时刷新了，正在跑测试确认降雨概率的格式化没问题。", permission_mode="acceptEdits",
          # Only tool calls since that line (#1108): the task card shows this step and how long it has gone on.
          activity="在跑测试", activity_at=ago(minutes=4),
+         # MOCK_TASKS_SUBAGENTS=1: two subagents running (#1583): a line under the task card's own progress.
+         **({"subagents": [
+             {"id": "a1", "session_id": f"{WIDGET}@a1", "type": "Explore", "description": "查小组件的刷新预算", "running": True,
+              "background": True, "started_at": ago(minutes=3)},
+             {"id": "a2", "session_id": f"{WIDGET}@a2", "type": "Explore", "description": "核对降雨概率的格式", "running": True,
+              "background": True, "started_at": ago(minutes=2)}]} if os.environ.get("MOCK_TASKS_SUBAGENTS") == "1" else {}),
          loop={"kind": "wakeup", "prompt": "/loop 每 30 分钟检查 CI，红了就修", "interval_seconds": 1800,
                "next_at": (datetime.now(timezone.utc) + timedelta(minutes=17)).isoformat().replace("+00:00", "Z"), "ticks": 3},
          background=[{"id": "b1", "kind": "shell", "description": "跑小组件快照测试",

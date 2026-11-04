@@ -161,7 +161,7 @@ func (n *Node) meta(path string, st os.FileInfo) quickMeta {
 		}
 		return m
 	}
-	m = readQuickMeta(path, st)
+	m = readQuickMetaSince(path, st, m) // m: the last read's, zero when there is none
 	m.readAt = time.Now()
 	m.bg, m.loop, m.bgWait = n.backgroundTasks(path)
 	n.mu.Lock()
@@ -171,6 +171,12 @@ func (n *Node) meta(path string, st os.FileInfo) quickMeta {
 }
 
 func readQuickMeta(path string, st os.FileInfo) quickMeta {
+	return readQuickMetaSince(path, st, quickMeta{})
+}
+
+// readQuickMetaSince reads a transcript's quick meta; prev is its meta from the last read (zero when there is none),
+// whose last text stands when the tail has none and the file only grew within the tail since.
+func readQuickMetaSince(path string, st os.FileInfo, prev quickMeta) quickMeta {
 	m := quickMeta{size: st.Size(), mtime: st.ModTime()}
 	f, err := os.Open(path)
 	if err != nil {
@@ -226,11 +232,54 @@ func readQuickMeta(path string, st os.FileInfo) quickMeta {
 	}
 	m.title, m.cwd, m.model, m.lastText, m.first, m.activity, m.queue = tm.Title, tm.Cwd, tm.Model, tm.LastText, first, tm.LastActivity, tm.Queue
 	m.wake, m.turnClosed = tm.LastTurnWake, tm.TurnClosed
+	if m.lastText == "" && off > 0 {
+		// An agent that said a line and then ran tools for a while: their results and hook lines push its words out of
+		// the tail (a 1.5 MB transcript whose last text was 900 KB back, 2026-11-04) and its task card said 还没有动静.
+		if prev.size > 0 && prev.size >= off && prev.size <= st.Size() {
+			m.lastText = prev.lastText // nothing written since the last read is out of the tail: no newer words
+		} else {
+			m.lastText = lastWordsBefore(f, off)
+		}
+	}
 	if t := tm.LastTool; t != nil {
 		m.doing, m.doingAt = transcript.Activity(t.Name, t.Input), t.At
 	}
 	m.mode, m.modeAt, m.effort, m.effortAt, m.sandbox = tm.PermissionMode, tm.ModeAt, tm.Effort, tm.EffortAt, tm.CodexSandbox
 	return m
+}
+
+// lastWordsReach: how far before the tail lastWordsBefore looks for an agent's last words.
+const lastWordsReach = 8 << 20
+
+// lastWordsBefore is the last assistant text in the transcript before end, read backwards a chunk at a time (each
+// twice the last) up to lastWordsReach; "" when there is none in that reach.
+func lastWordsBefore(f *os.File, end int64) string {
+	for chunk, read := int64(quickTail), int64(0); end > 0 && read < lastWordsReach; chunk *= 2 {
+		start := max(end-chunk, 0)
+		buf := make([]byte, end-start)
+		if n, err := f.ReadAt(buf, start); err != nil && n < len(buf) {
+			return ""
+		}
+		read += end - start
+		lines := bytes.Split(buf, []byte("\n"))
+		next := start
+		if start > 0 && len(lines) > 0 {
+			next += int64(len(lines[0])) // a partial line: whole in the next chunk
+			lines = lines[1:]
+		}
+		var tm transcript.Meta
+		for _, line := range lines {
+			if len(line) == 0 || bytes.Contains(line, []byte(`"type":"user"`)) && len(line) > 8<<10 {
+				continue
+			}
+			transcript.ParseLine(0, line, &tm)
+		}
+		if tm.LastText != "" {
+			return tm.LastText
+		}
+		end = next
+	}
+	return ""
 }
 
 // codexStaleWorking: how long herdr may say a Codex agent works while its rollout says the turn is over. Codex writes

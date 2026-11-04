@@ -24,6 +24,7 @@ import {
   updateTodo,
   type Todo,
   type TodoAgent,
+  taskNow,
 } from "../lib/todos";
 import type { Interaction, Launcher, Machine } from "../lib/types";
 import { Button, cx, Dialog, IconButton, Menu, StatusDot, toast, useMenu } from "../ui/atoms";
@@ -302,6 +303,7 @@ function TodoListItem({
   const status = todoStatus(todo, lookup);
   const statusInfo = TODO_STATUS_INFO[status];
   const urgent = mostUrgentAgent(todo, lookup);
+  const urgentNow = urgent?.session && taskNow(urgent.session, stateOf(urgent.session) === "working");
   const activeCount = (todo.agents ?? []).filter((a) => !a.released_at).length;
 
   const toneClass = {
@@ -384,14 +386,14 @@ function TodoListItem({
         )}
 
         {/* Most Urgent Agent Line */}
-        {!todo.done_at && urgent?.session?.last_text && (
+        {!todo.done_at && urgent?.session && urgentNow && (
           <div className="mt-1 truncate text-[11.5px] text-ink-3">
             {urgent.status === "needs_you" && (
               <span className="font-medium text-red">
                 {urgent.agent.title || urgent.session.title || "Agent"} {urgentKicker}：
               </span>
             )}
-            {plainMarkdown(urgent.session.last_text)}
+            {urgentNow.kind === "words" ? plainMarkdown(urgentNow.text) : urgentNow.text}
           </div>
         )}
       </div>
@@ -644,6 +646,7 @@ function TodoDetail({
             {activeAgents.map((agent) => {
               const session = lookup(agent.machine_id, agent.session_id);
               const st = session ? stateOf(session) : "offline";
+              const now = taskNow(session, st === "working");
               const isExpired = !session && !agent.start_error;
               const displayTitle = session?.title || agent.title || "未命名会话";
 
@@ -703,12 +706,12 @@ function TodoDetail({
                           移除
                         </button>
                       </div>
-                    ) : session?.last_text ? (
+                    ) : now ? (
                       <div className="mt-1 line-clamp-2 text-[12.5px] text-ink-2">
                         {st === "needs_you" && (
                           <span className="font-medium text-red">{kicker}：</span>
                         )}
-                        {plainMarkdown(session.last_text)}
+                        {now.kind === "words" ? plainMarkdown(now.text) : now.text}
                       </div>
                     ) : null}
                   </div>
