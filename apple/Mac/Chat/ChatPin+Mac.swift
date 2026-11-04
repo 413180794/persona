@@ -11,13 +11,14 @@ import SwiftUI
 
     nonisolated struct Spot: Equatable, Sendable { var y: CGFloat; var content: CGFloat }
 
-    private struct Held { var key: String; var at: Spot; var base: CGFloat; var until: Date; var slow: Bool }
+    private struct Held { var key: String; var at: Spot; var base: CGFloat; var until: Date; var slow: Bool; var rise: CGFloat }
     private var held: Held?
     private var last: [String: Spot] = [:]
 
-    func hold(_ key: String, from: String? = nil, slow: Bool = false) {
+    /// `rise`: how far up the header may go to show what opens under it (as on iOS).
+    func hold(_ key: String, from: String? = nil, slow: Bool = false, rise: CGFloat = 0) {
         guard let list, let at = last[from ?? key] else { return }
-        held = Held(key: key, at: at, base: Self.offset(list), until: .now.addingTimeInterval(1.5), slow: slow)
+        held = Held(key: key, at: at, base: Self.offset(list), until: .now.addingTimeInterval(1.5), slow: slow, rise: max(rise, 0))
         letGo()
     }
 
@@ -28,7 +29,8 @@ import SwiftUI
         guard let h = held, h.key == key, let list else { return }
         if Date.now > h.until { held = nil; return }
         if !h.slow, abs(spot.y - h.at.y) < 0.5 { held = nil; return }
-        let target = Self.within(list, h.base + spot.content - h.at.content)
+        let grown = spot.content - h.at.content
+        let target = Self.within(list, h.base + (grown > 0 ? max(grown - h.rise, 0) : grown))
         guard abs(target - Self.offset(list)) >= 0.5 else { return }
         list.contentView.scroll(to: NSPoint(x: list.contentView.bounds.origin.x, y: target))
         list.reflectScrolledClipView(list.contentView)

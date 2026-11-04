@@ -109,6 +109,32 @@ final class RunningChatTests: XCTestCase {
         sample(seconds: 60, label: "running chat")
     }
 
+    /// Opening the running work line at the newest end of a chat taller than the screen shows its steps: the header goes
+    /// up toward the top bar and its steps come in under it. Held where it was tapped, the steps opened under the
+    /// composer, out of sight, and the tap seemed to do nothing; the next tap folded it, and what had arrived in
+    /// between came in at once, moving the page up.
+    func testOpeningAtTheNewestShowsTheSteps() {
+        launch()
+        let ready = Date.now
+        while Date.now.timeIntervalSince(ready) < 20 {
+            if let r = app.probe("chat-rows", as: Rows.self, page: "assistant") ?? app.probe("chat-rows", as: Rows.self),
+               r.visible > 0, r.newest { break }
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        sleep(3) // landed at the newest
+        let work = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "正在工作")).firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 10) && work.isHittable, "the running work line's header on screen")
+        let y0 = work.frame.minY
+        work.tap() // open
+        sleep(2) // its steps loaded and the hold over
+        XCTAssertTrue(work.isHittable, "the header stays on screen")
+        // XCUITest calls a step under the composer hittable too: what shows is where the header went. Its steps run
+        // past the screen, so it goes up most of the way (it stayed within a point of where it was).
+        let rose = y0 - work.frame.minY
+        print(String(format: "TRUTH opened at the newest: header went up %.0f pt", rose))
+        XCTAssertGreaterThan(rose, y0 / 2, "the header goes up for its steps to show")
+    }
+
     /// Samples the content area's ink and `probe.chat-rows` for `seconds`: fails on a blank content area, a line-less
     /// list, or the top line moving by itself (away from the newest).
     /// `settle`: a blank in the first seconds does not count.

@@ -23,7 +23,7 @@ import SwiftUI
     /// the mark, and back, when one of the two lagged the other by a frame.
     nonisolated struct Spot: Equatable, Sendable { var y: CGFloat; var content: CGFloat }
 
-    private struct Held { var key: String; var at: Spot; var base: CGFloat; var until: Date; var slow: Bool }
+    private struct Held { var key: String; var at: Spot; var base: CGFloat; var until: Date; var slow: Bool; var rise: CGFloat }
     private var held: Held?
     /// The offset that puts the held header back, when the list could not go there yet (`settle`).
     private var want: CGFloat?
@@ -34,10 +34,11 @@ import SwiftUI
 
     /// Before opening or closing: keep `key` where `from` (the header before, if it changes id) is now. `slow`: what
     /// opens comes later (a work line's steps load from the hub), so the hold lasts its full 1.5 s; otherwise it ends
-    /// as soon as the header is back.
-    func hold(_ key: String, from: String? = nil, slow: Bool = false) {
+    /// as soon as the header is back. `rise`: how far up the header may go to show what opens under it. Opened at the
+    /// newest end, the steps came in under the composer and the header held still: the tap seemed to do nothing.
+    func hold(_ key: String, from: String? = nil, slow: Bool = false, rise: CGFloat = 0) {
         guard let list, let at = last[from ?? key] else { return }
-        held = Held(key: key, at: at, base: list.contentOffset.y, until: .now.addingTimeInterval(1.5), slow: slow)
+        held = Held(key: key, at: at, base: list.contentOffset.y, until: .now.addingTimeInterval(1.5), slow: slow, rise: max(rise, 0))
         want = nil
         reach = 0
         letGo()
@@ -54,8 +55,10 @@ import SwiftUI
         if Date.now > h.until || list.isTracking || list.isDecelerating { held = nil; return }
         if !h.slow, abs(spot.y - h.at.y) < 0.5 { held = nil; return }
         // The content runs newest first: rows opening under the header on screen push it further into the content,
-        // and the offset has to grow by as much to keep it on screen where it was (as far as the list can go).
-        let wanted = h.base + spot.content - h.at.content
+        // and the offset has to grow by as much to keep it on screen where it was (as far as the list can go). Allowed to
+        // rise, the header goes up by that much first: the list moves only for what opened past it.
+        let grown = spot.content - h.at.content
+        let wanted = h.base + (grown > 0 ? max(grown - h.rise, 0) : grown)
         let settling = want != nil
         want = wanted
         reach = spot.content

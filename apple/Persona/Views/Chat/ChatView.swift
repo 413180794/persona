@@ -592,8 +592,15 @@ struct ChatView: View {
         }
     }
 
-    /// Closing a work line: its steps fold away first, then go.
+    /// Closing a work line: its steps fold away first, then go. Under a header near the top (opened at the newest, it
+    /// goes up there), its steps are all the screen holds: fading away they left it blank for the fade, so they go at
+    /// once, as they come at once there (#754).
     private func concealWork(_ id: String, fromHeader: Bool) {
+        if let y = scratch.workHeadY[id], scratch.listFrame.height > 0,
+           y < scratch.listFrame.minY + headerRoom + scratch.listFrame.height / 3 {
+            revealUntil[id] = nil
+            return changeWork(id, fromHeader: fromHeader, run: false, wasOpen: true)
+        }
         concealing.insert(id)
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(Theme.Motion.concealTime))
@@ -604,7 +611,10 @@ struct ChatView: View {
     }
 
     private func changeWork(_ id: String, fromHeader: Bool, run: Bool, wasOpen: Bool) {
-        if fromHeader { pin.hold(headLine(id, open: !wasOpen), from: headLine(id, open: wasOpen), slow: true) }
+        if fromHeader {
+            pin.hold(headLine(id, open: !wasOpen), from: headLine(id, open: wasOpen), slow: true,
+                     rise: !run && !wasOpen ? workRise(id) : 0)
+        }
         if wasOpen { scratch.foldedAt = .now }
         // The user took the list, as with a drag: what they opened or closed stays where it is, and the newest no longer
         // pulls it away. At the newest of a running turn it did, as soon as the pin let go: the header went off the
@@ -620,6 +630,15 @@ struct ChatView: View {
         #if PERF_SIGNPOST
         PerfTrace.event("Work toggle", "open=\(!wasOpen) held=\(fromHeader)")
         #endif
+    }
+
+    /// How far up a work line opened at the newest end may go (`ChatPin.hold`'s `rise`): to the top of the list, under
+    /// the header. Held where it was, its steps came in under the composer, out of sight: the first tap seemed to do
+    /// nothing, and what arrived meanwhile was held back until the next tap folded it, when it all came in at once.
+    /// Elsewhere it stays where it was tapped.
+    private func workRise(_ id: String) -> CGFloat {
+        guard scratch.atNewest, let y = scratch.workHeadY[id], scratch.listFrame.height > 0 else { return 0 }
+        return y - (scratch.listFrame.minY + headerRoom + Theme.Space.l)
     }
 
     /// A step of the work line `group`, as it opens and closes: steps appearing just after it opened reveal themselves.
