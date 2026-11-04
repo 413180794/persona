@@ -167,6 +167,9 @@ internal fun MachineManagement.inGroup(names: GroupNames): MachineManagement {
     val source = this
     return object : MachineManagement {
         override suspend fun launchers(machineId: String) = source.launchers(names.rawMachine(machineId))
+        // The machine that read it comes back in the merged ids the pages look machines up by.
+        override suspend fun launcherQuota(machineId: String, name: String, refresh: Boolean) =
+            source.launcherQuota(names.rawMachine(machineId), name, refresh).let { a -> a.copy(machine = a.machine?.takeIf { it.isNotBlank() }?.let(names::machineId)) }
         override suspend fun reconnect(machineId: String) = source.reconnect(names.rawMachine(machineId))
         override suspend fun deploy(machineId: String) = source.deploy(names.rawMachine(machineId))
         override suspend fun setEngine(machineId: String, engine: String) = names.machine(source.setEngine(names.rawMachine(machineId), engine))

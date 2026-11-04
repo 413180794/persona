@@ -22,6 +22,12 @@ interface MachineManagement {
     /** `GET /api/v1/machines/{id}/launchers`. */
     suspend fun launchers(machineId: String): List<AgentLauncher>
 
+    /**
+     * `GET /api/v1/launchers/{name}/quota?machine=`: [name]'s quota at its gateway, read by [machineId] when it has the
+     * launcher (the hub picks another that does otherwise); [refresh] reads again instead of the hub's minute-old answer.
+     */
+    suspend fun launcherQuota(machineId: String, name: String, refresh: Boolean = false): LauncherQuotaAnswer
+
     /** `POST /api/v1/machines/{id}/reconnect`: the hub drops and redials the node; the result shows in `machines`. */
     suspend fun reconnect(machineId: String)
 

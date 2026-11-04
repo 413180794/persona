@@ -1,5 +1,10 @@
 package persona.feature.settings
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import persona.core.navigation.ChannelRoute
@@ -50,6 +55,12 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
         ChannelPage(services.channels.takeUnless { demo }, route.channelId, onBack = navigator::back, onOpen = navigator::navigate)
     }
     entry<LauncherRoute> { route ->
-        LauncherPage(services.machines.takeUnless { demo }, services.plugins.takeUnless { demo }, route.machineId, route.name, onBack = navigator::back)
+        // Only the machines' names (for 额度's footer): their live metrics change all the time and would redraw the page.
+        val names by remember(services.sessions) {
+            services.sessions.machines.map { list -> list.associate { it.id to it.name } }.distinctUntilChanged()
+        }.collectAsState(emptyMap())
+        val machineName = remember(names) { { id: String -> names[id]?.takeIf { it.isNotBlank() } ?: id } }
+        LauncherPage(services.machines.takeUnless { demo }, services.plugins.takeUnless { demo }, route.machineId, route.name, onBack = navigator::back,
+            machineName = machineName)
     }
 }

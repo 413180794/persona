@@ -140,6 +140,8 @@ class GroupRoutingTest {
     private class FakeMachines(val hub: String) : MachineManagement {
         val calls = mutableListOf<String>()
         override suspend fun launchers(machineId: String) = emptyList<AgentLauncher>().also { calls += "launchers $machineId" }
+        override suspend fun launcherQuota(machineId: String, name: String, refresh: Boolean) =
+            persona.core.contracts.api.LauncherQuotaAnswer(machine = machineId).also { calls += "quota $machineId $name $refresh" }
         override suspend fun reconnect(machineId: String) { calls += "reconnect $machineId" }
         override suspend fun deploy(machineId: String) { calls += "deploy $machineId" }
         override suspend fun setEngine(machineId: String, engine: String) = Machine(machineId, "").also { calls += "engine $machineId $engine" }
@@ -160,9 +162,12 @@ class GroupRoutingTest {
         managed.deploy("macbook~g0a1b2c3d")
         managed.launchers("macbook~g0a1b2c3d")
         managed.claudeSettings("macbook~g0a1b2c3d")
+        // the machine that read the quota is named back in the merged ids
+        assertEquals("macbook~g0a1b2c3d", managed.launcherQuota("macbook~g0a1b2c3d", "cc_main", refresh = true).machine)
         managed.setClaudeSetting("macbook~g0a1b2c3d", "model", kotlinx.serialization.json.JsonPrimitive("opus"))
         val changed = managed.setEngine("macbook~g0a1b2c3d", "orca")
-        assertEquals(listOf("reconnect macbook", "deploy macbook", "launchers macbook", "settings macbook", "set macbook model",
+        assertEquals(listOf("reconnect macbook", "deploy macbook", "launchers macbook", "settings macbook",
+            "quota macbook cc_main true", "set macbook model",
             "engine macbook orca"), work.calls)
         // the machine it hands back is the merged list's, so the page finds it again
         assertEquals("macbook~g0a1b2c3d", changed.id)

@@ -15,7 +15,7 @@ class HttpMachineManagementTest {
     private fun <T> withHub(block: suspend (MockWebServer, HttpMachineManagement) -> T): T = runBlocking {
         MockWebServer().use { server ->
             val http = OkHttpClient.Builder().retryOnConnectionFailure(false).build()
-            block(server, HttpMachineManagement { path, method, body ->
+            block(server, HttpMachineManagement { path, method, body, _ ->
                 http.newCall(Request.Builder().url(server.url(path)).method(method, body).build()).execute()
             })
         }
@@ -38,6 +38,30 @@ class HttpMachineManagementTest {
         assertEquals(409, refused.status)
         assertEquals("这台电脑已经是 hub 这一版", refused.message)
         server.takeRequest().let { assertEquals("POST", it.method); assertEquals("/api/v1/machines/mac/deploy", it.path) }
+    }
+
+    @Test fun readsALaunchersQuotaOnTheMachine() = withHub { server, machines ->
+        server.enqueue(MockResponse().setBody("""{"machine":"mac","checked_at":"2026-11-04T06:00:00Z","quota":{"gateway":"example-gateway",
+            "gateway_name":"示例网关","key_name":"cc_main","budget":[{"label":"每周预算","used_ratio":0.62,"used":496,"limit":800,"unit":"usd",
+            "resets_at":"2026-11-06T07:00:00Z"}],"pools":[{"name":"账号 B","state":"cooldown","detail":"冷却中","windows":[{"label":"5 小时",
+            "used_ratio":1,"exhausted":true}],"models":[{"model":"example-flash","windows":[{"label":"TPM","used_ratio":0.02}]}]}],
+            "usage":[{"label":"今日","requests":287,"tokens":210552323,"cost_usd":123.12}],"a_newer_field":1}}"""))
+        val answer = machines.launcherQuota("mac", "cc main")
+        assertEquals("/api/v1/launchers/cc%20main/quota?machine=mac", server.takeRequest().path)
+        assertEquals("mac", answer.machine)
+        val q = answer.quota!!
+        assertEquals("示例网关", q.gatewayName)
+        assertEquals(800.0, q.budget.single().limit!!, 0.0)
+        assertTrue(q.pools.single().windows.single().exhausted)
+        assertEquals("example-flash", q.pools.single().models.single().model)
+        assertEquals(210552323L, q.usage.single().tokens)
+
+        // ↻ reads again; nothing to read is an answer, not a failure
+        server.enqueue(MockResponse().setBody("""{"machine":"mac","checked_at":"2026-11-04T06:00:00Z","error":"这个网关没有能查的额度：没有装能读它的额度插件","unsupported":true}"""))
+        val none = machines.launcherQuota("mac", "plain", refresh = true)
+        assertEquals("/api/v1/launchers/plain/quota?machine=mac&refresh=1", server.takeRequest().path)
+        assertTrue(none.unsupported)
+        assertNull(none.quota)
     }
 
     @Test fun putsTheEngineAndDecodesTheMachine() = withHub { server, machines ->

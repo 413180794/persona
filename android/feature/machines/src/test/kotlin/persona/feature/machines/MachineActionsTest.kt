@@ -32,6 +32,7 @@ class MachineActionsTest {
             calls += "launchers:$machineId"; failure?.let { throw it }
             return listOf(AgentLauncher("claude", model = "anthropic/claude-opus-5"), AgentLauncher("plain"))
         }
+        override suspend fun launcherQuota(machineId: String, name: String, refresh: Boolean) = persona.core.contracts.api.LauncherQuotaAnswer()
         override suspend fun reconnect(machineId: String) { calls += "reconnect:$machineId"; failure?.let { throw it }; onReconnect() }
         override suspend fun deploy(machineId: String) { calls += "deploy:$machineId"; failure?.let { throw it } }
         override suspend fun setEngine(machineId: String, engine: String) = Machine(machineId, engine = engine)

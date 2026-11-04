@@ -101,6 +101,8 @@ internal fun mergedPreferences(stacks: GroupStacks): HubPreferences = object : H
  */
 internal fun mergedMachineManagement(routes: MachineRoutes): MachineManagement = object : MachineManagement {
     override suspend fun launchers(machineId: String) = routes.on(machineId) { it.launchers(machineId) }
+    override suspend fun launcherQuota(machineId: String, name: String, refresh: Boolean) =
+        routes.on(machineId) { it.launcherQuota(machineId, name, refresh) }
     override suspend fun reconnect(machineId: String) = routes.on(machineId) { it.reconnect(machineId) }
     override suspend fun deploy(machineId: String) = routes.on(machineId) { it.deploy(machineId) }
     override suspend fun setEngine(machineId: String, engine: String) = routes.on(machineId) { it.setEngine(machineId, engine) }

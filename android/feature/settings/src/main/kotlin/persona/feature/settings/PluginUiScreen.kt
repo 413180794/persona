@@ -77,11 +77,13 @@ internal fun LazyListScope.pluginPages(pages: List<PluginUiPlace>, onOpen: (Plug
 }
 
 /**
- * A launcher of a machine (opened from its row on the machine's page): what it runs, and the sections plugins draw
- * for its gateway. A section whose plugin says the gateway is not its own is left out without a word.
+ * A launcher of a machine (opened from its row on the machine's page): what it runs, its 额度 at its gateway, and the
+ * sections plugins draw for the gateway. A section whose plugin says the gateway is not its own is left out without a word.
+ * [machineName] names the machine that read the quota.
  */
 @Composable
-fun LauncherPage(machines: MachineManagement?, plugins: PluginManagement?, machineId: String, name: String, onBack: () -> Unit) {
+fun LauncherPage(machines: MachineManagement?, plugins: PluginManagement?, machineId: String, name: String, onBack: () -> Unit,
+                 machineName: (String) -> String = { it }) {
     val scope = rememberCoroutineScope()
     var launcher by remember(machineId, name) { mutableStateOf<AgentLauncher?>(null) }
     var launcherError by remember(machineId, name) { mutableStateOf<String?>(null) }
@@ -93,6 +95,9 @@ fun LauncherPage(machines: MachineManagement?, plugins: PluginManagement?, machi
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { launcherError = "读不到启动器：${failureReason(error)}" }
     }
+    val quota = remember(machines, machineId, name) { machines?.let { LauncherQuotaModel(it, machineId, name) } }
+    val quotaState = quota?.state?.collectAsState()?.value
+    LaunchedEffect(quota) { quota?.load() }
     // The plugin calls go to the hub, which knows its machines by their own ids (no group prefix).
     val context = remember(machineId, name) { PluginUiContext(launcher = name, machine = GroupKeys.raw(machineId)) }
     val places = remember(plugins, context) { plugins?.let { PluginPlacesModel(it, "launcher_section", context) } }
@@ -108,11 +113,13 @@ fun LauncherPage(machines: MachineManagement?, plugins: PluginManagement?, machi
         }
     }
     fun reload() = scope.launch {
+        quota?.let { launch { it.load(refresh = true) } }
         places?.load()
         models.forEach { (_, model) -> launch { model.load() } }
     }
     JListPage(title = name, onBack = onBack, largeTitle = false,
-        refreshing = placesState.loading || sections.any { it.second.loading && it.second.view != null }, onRefresh = { reload() }) {
+        refreshing = placesState.loading || sections.any { it.second.loading && it.second.view != null } ||
+            quotaState?.let { it.loading && it.answer != null } == true, onRefresh = { reload() }) {
         item("launcher") {
             JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.s)) {
                 JRow(name, leadingIcon = PhIcons.RocketLaunch, subtitle = "启动器")
@@ -130,6 +137,8 @@ fun LauncherPage(machines: MachineManagement?, plugins: PluginManagement?, machi
                 JGroupItem(GroupPosition.of(index, rows.size)) { JRow(label, value = value) }
             }
         }
+        // How much is left comes before the plugins' sections, as on iOS and the web.
+        if (quota != null && quotaState != null) launcherQuotaItems(quotaState, machineName, onRefresh = { scope.launch { quota.load(refresh = true) } })
         if (plugins != null) {
             placesState.error?.let { error ->
                 item("places-error") {

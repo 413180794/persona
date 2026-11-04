@@ -4,6 +4,7 @@ import persona.core.contracts.JsonCodec
 import persona.core.contracts.Machine
 import persona.core.contracts.api.AgentLauncher
 import persona.core.contracts.api.ClaudeSetting
+import persona.core.contracts.api.LauncherQuotaAnswer
 import persona.core.contracts.api.MachineManagement
 import kotlinx.serialization.json.*
 import okhttp3.HttpUrl
@@ -17,13 +18,24 @@ import okhttp3.Response
  * route, adds the token and turns refusals into [HubFailure] (the hub's own words in its message).
  */
 class HttpMachineManagement internal constructor(
-    private val request: suspend (String, String, RequestBody?) -> Response,
+    private val request: suspend (String, String, RequestBody?, Long?) -> Response,
 ) : MachineManagement {
-    constructor(connection: OkHttpHubConnection) : this({ path, method, body -> connection.request(path, method, body) })
+    constructor(connection: OkHttpHubConnection) : this({ path, method, body, timeout ->
+        connection.request(path, method, body, readTimeoutSeconds = timeout)
+    })
 
     override suspend fun launchers(machineId: String): List<AgentLauncher> =
         (call(api("machines", machineId, "launchers"), "GET")["launchers"] as? JsonArray).orEmpty()
             .map { JsonCodec.decodeFromJsonElement<AgentLauncher>(it) }
+
+    override suspend fun launcherQuota(machineId: String, name: String, refresh: Boolean): LauncherQuotaAnswer {
+        require(name.isNotBlank())
+        val path = HttpUrl.Builder().scheme("https").host("example.com").addPathSegments("api/v1/launchers").addPathSegment(name)
+            .addPathSegment("quota").addQueryParameter("machine", machineId)
+            .apply { if (refresh) addQueryParameter("refresh", "1") }.build().let { "${it.encodedPath}?${it.encodedQuery}" }
+        // The hub gives the plugin and the machine that has the key 45 s (a ~/.zshrc launcher is probed first).
+        return JsonCodec.decodeFromJsonElement(call(path, "GET", timeout = 50))
+    }
 
     override suspend fun reconnect(machineId: String) { call(api("machines", machineId, "reconnect"), "POST", buildJsonObject { }) }
 
@@ -53,8 +65,8 @@ class HttpMachineManagement internal constructor(
     private fun settings(body: JsonObject): List<ClaudeSetting> =
         (body["settings"] as? JsonArray).orEmpty().map { JsonCodec.decodeFromJsonElement<ClaudeSetting>(it) }
 
-    private suspend fun call(path: String, method: String, body: JsonObject? = null): JsonObject =
-        request(path, method, body?.toString()?.toRequestBody("application/json; charset=utf-8".toMediaType())).use {
+    private suspend fun call(path: String, method: String, body: JsonObject? = null, timeout: Long? = null): JsonObject =
+        request(path, method, body?.toString()?.toRequestBody("application/json; charset=utf-8".toMediaType()), timeout).use {
             if (!it.isSuccessful) throw HubFailure.from(it)
             val text = it.body?.string().orEmpty()
             if (text.isBlank()) buildJsonObject { } else JsonCodec.parseToJsonElement(text).jsonObject

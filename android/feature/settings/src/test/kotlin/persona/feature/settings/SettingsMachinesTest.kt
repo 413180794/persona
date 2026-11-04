@@ -94,6 +94,7 @@ class ClaudeSettingsModelTest {
             return listOf(ClaudeSetting(key, "回复语言", value = value))
         }
         override suspend fun launchers(machineId: String) = emptyList<AgentLauncher>()
+        override suspend fun launcherQuota(machineId: String, name: String, refresh: Boolean) = persona.core.contracts.api.LauncherQuotaAnswer()
         override suspend fun reconnect(machineId: String) = Unit
         override suspend fun deploy(machineId: String) = Unit
         override suspend fun setEngine(machineId: String, engine: String) = Machine(machineId)
