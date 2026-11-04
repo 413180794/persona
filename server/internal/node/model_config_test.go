@@ -57,27 +57,68 @@ func TestModelFingerprintTracksManagedProviderChanges(t *testing.T) {
 	}
 }
 
-func TestModelChangeDoesNotKillBackgroundTasks(t *testing.T) {
+// A conversation answering or running background tasks takes a message whose model changed on what it runs: a new
+// process would kill the tasks, and refusing it left the user unable to send while it kept starting more (#1554). The
+// switch waits for the first message after it is idle.
+func TestModelChangeWhileBusyGoesToTheRunningProcess(t *testing.T) {
+	for _, mode := range []string{"", proto.ModeBypass} {
+		t.Run("mode="+mode, func(t *testing.T) {
+			n := codexTestNode(t)
+			withFakeHub(t, n)
+			// The model check would run this machine's claude through its login shell; on one where that doesn't start
+			// (the hub) the send failed there, before the hold this is about.
+			modelProbeCache.Lock()
+			modelProbeCache.results[n.home+"\x00claude\x00new"] = modelProbeResult{at: time.Now(), agent: "claude"}
+			modelProbeCache.Unlock()
+			old := modelExecution{Model: "old", Fingerprint: "before"}
+			in := &stdinBuf{}
+			p := &assistantProc{id: testThread, agent: "claude", launcher: "claude", cwd: t.TempDir(), stdin: in, exited: make(chan struct{}), born: time.Now(),
+				mode: "default", model: old, fingerprint: n.executionFingerprint("claude", old), tasks: []string{"background work"}}
+			n.procs[testThread] = p
+			n.state.put(testThread, sessionState{Launcher: "claude", Cwd: p.cwd, StartedAt: time.Now().UTC(), Model: "old", ModelFingerprint: "before", Tasks: p.tasks})
+			if _, err := n.assistantSend(context.Background(), testThread, p.cwd, "claude", "hello", nil, mode, "", modelExecution{Model: "new", Fingerprint: "after"}); err != nil {
+				t.Fatalf("a busy conversation refused the message: %v", err)
+			}
+			if !p.alive() || n.procs[testThread] != p {
+				t.Fatal("background process killed")
+			}
+			if !strings.Contains(in.String(), "hello") {
+				t.Fatalf("the message did not reach the running process: %q", in.String())
+			}
+			state, _ := n.state.get(testThread)
+			if state.Model != "old" || state.ModelFingerprint != "before" || len(state.Tasks) != 1 {
+				t.Fatalf("the state no longer says what the process runs: %+v", state)
+			}
+			// bypassPermissions is start-only: not noted as applied, so the next message after it is idle restarts it.
+			if p.mode == proto.ModeBypass || strings.Contains(in.String(), "set_permission_mode") {
+				t.Fatalf("bypassPermissions noted on a process started without it: %q", in.String())
+			}
+		})
+	}
+}
+
+// After a restart the node tells a conversation it lost its background tasks by itself: on the launcher and model the
+// hub runs its messages on, so the next one from the phone finds it on them (#1554); on its own with an older hub.
+func TestAssistantModelComesFromTheHub(t *testing.T) {
 	n := codexTestNode(t)
-	withFakeHub(t, n)
-	// The model check would run this machine's claude through its login shell; on one where that doesn't start (the
-	// hub) the send failed there, before the hold this is about.
-	modelProbeCache.Lock()
-	modelProbeCache.results[n.home+"\x00claude\x00new"] = modelProbeResult{at: time.Now(), agent: "claude"}
-	modelProbeCache.Unlock()
-	old := modelExecution{Model: "old", Fingerprint: "before"}
-	p := &assistantProc{id: testThread, agent: "claude", launcher: "claude", cwd: t.TempDir(), exited: make(chan struct{}), born: time.Now(), model: old, fingerprint: n.executionFingerprint("claude", old), tasks: []string{"background work"}}
-	n.procs[testThread] = p
-	n.state.put(testThread, sessionState{Launcher: "claude", Cwd: p.cwd, StartedAt: time.Now().UTC(), Model: "old", ModelFingerprint: "before", Tasks: p.tasks})
-	_, err := n.assistantSend(context.Background(), testThread, p.cwd, "claude", "hello", nil, "", "", modelExecution{Model: "new", Fingerprint: "after"})
-	if err == nil || !strings.Contains(err.Error(), "当前任务结束") {
-		t.Fatalf("model change was not held: %v", err)
+	fh := withFakeHub(t, n)
+	fh.mu.Lock()
+	fh.model = map[string]any{"launcher": "conv", "effort": "high", "model_fingerprint": "fp"}
+	fh.mu.Unlock()
+	l, m := n.assistantModel(context.Background(), testThread)
+	if l != "conv" || m != (modelExecution{Effort: "high", UseEffort: true, Fingerprint: "fp"}) {
+		t.Fatalf("assistantModel = %q %+v", l, m)
 	}
-	if !p.alive() || n.procs[testThread] != p {
-		t.Fatal("background process killed")
+	fh.mu.Lock()
+	got := fh.queried["assistant.model"]
+	fh.mu.Unlock()
+	if got != testThread {
+		t.Fatalf("asked the hub about %q", got)
 	}
-	state, _ := n.state.get(testThread)
-	if state.Model != "old" || len(state.Tasks) != 1 {
-		t.Fatalf("rejected send changed state: %+v", state)
+	fh.mu.Lock()
+	fh.model = nil // an older hub: unknown method
+	fh.mu.Unlock()
+	if l, m := n.assistantModel(context.Background(), testThread); l != "" || m != (modelExecution{}) {
+		t.Fatalf("without the hub's answer: %q %+v", l, m)
 	}
 }

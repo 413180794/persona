@@ -237,11 +237,20 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 		active := p.busy || len(p.tasks) > 0
 		p.mu.Unlock()
 		if active && p.alive() {
-			return "", errors.New("模型配置已更新，请等当前任务结束后再发送")
+			// Answering, or running background tasks a new process would kill: the message goes to this process on
+			// what it runs, and the switch waits for the first message after it is idle. Refusing it left the user
+			// unable to send while the conversation kept starting tasks (#1554).
+			p.mu.Lock()
+			launcher, execution = p.launcher, p.model
+			if p.agent == "claude" && mode == proto.ModeBypass && p.mode != mode {
+				mode = "" // start-only: noted as applied, it would never get its new process
+			}
+			p.mu.Unlock()
+		} else {
+			n.stopAssistant(id) // model switch, dead process or bypassPermissions (start-only): resume in a fresh one
+			n.rememberTasks(id, nil)
+			p = nil
 		}
-		n.stopAssistant(id) // model switch, dead process or bypassPermissions (start-only): resume in a fresh one
-		n.rememberTasks(id, nil)
-		p = nil
 	}
 	n.noteModes(id, mode, effort)
 	if p == nil {

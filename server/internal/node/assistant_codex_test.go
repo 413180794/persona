@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -109,10 +110,12 @@ func newFakeCodex(t *testing.T, n *Node, cwd string) (*assistantProc, *codexConn
 
 // fakeHub answers the node's calls the way the hub would: lark-connector config, the snapshot, and the phone's answers.
 type fakeHub struct {
-	mu     sync.Mutex
-	asked  []proto.Interaction
-	answer func(proto.Interaction) proto.Resolution
-	deltas []string
+	mu      sync.Mutex
+	asked   []proto.Interaction
+	answer  func(proto.Interaction) proto.Resolution
+	deltas  []string
+	model   map[string]any    // assistant.model's answer; nil: an older hub without it
+	queried map[string]string // the session id the node asked about, by method
 }
 
 func (h *fakeHub) interactions() []proto.Interaction {
@@ -135,6 +138,21 @@ func withFakeHub(t *testing.T, n *Node) *fakeHub {
 			return proto.AssistantLark{Base: "http://lark.example:8443/agent/v1", Token: "t"}, nil
 		case "assistant.context":
 			return map[string]any{"text": "snapshot"}, nil
+		case "assistant.model":
+			var p struct {
+				SessionID string `json:"session_id"`
+			}
+			_ = json.Unmarshal(params, &p)
+			fh.mu.Lock()
+			defer fh.mu.Unlock()
+			if fh.queried == nil {
+				fh.queried = map[string]string{}
+			}
+			fh.queried[method] = p.SessionID
+			if fh.model == nil {
+				return nil, fmt.Errorf("unknown method %s", method)
+			}
+			return fh.model, nil
 		case "interaction.create":
 			var p struct {
 				Interaction proto.Interaction `json:"interaction"`

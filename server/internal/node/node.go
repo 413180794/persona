@@ -265,7 +265,8 @@ func (n *Node) loadState(ctx context.Context) {
 	go n.recoverAssistantTasks(func(id, text string) error {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		_, err := n.assistantSend(ctx, id, "", "", text, nil, "", "")
+		launcher, execution := n.assistantModel(ctx, id)
+		_, err := n.assistantSend(ctx, id, "", launcher, text, nil, "", "", execution)
 		return err
 	})
 	panes := n.state.panes()

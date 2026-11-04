@@ -606,6 +606,21 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 			return m.hub.callAssistantTool(ctx, m, p.SessionID, p.Name, p.Args), nil
 		}
 		return m.hub.callTool(ctx, m.cfg.ID, p.Name, p.Args), nil
+	case "assistant.model":
+		// Which launcher and model a message the node sends a conversation by itself runs on: the same as one from the
+		// phone (assistantSendModel), so the next message from the phone finds it on them (#1554).
+		var p struct {
+			SessionID string `json:"session_id"`
+		}
+		_ = json.Unmarshal(params, &p)
+		out := map[string]any{}
+		if _, known := m.session(p.SessionID); !known && !m.hub.isMainConversation(ctx, m, p.SessionID) {
+			return out, nil // not listed yet (the node just started): another conversation keeps its own, not 主对话's
+		}
+		if err := m.hub.assistantSendModel(ctx, m, p.SessionID, out); err != nil {
+			return nil, err
+		}
+		return out, nil
 	case "assistant.context":
 		var p struct {
 			SessionID string `json:"session_id"`

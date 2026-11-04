@@ -443,3 +443,39 @@ func TestAFollowUpKeepsItsConversationsLauncher(t *testing.T) {
 		t.Fatalf("a task's own conversation runs on the Agents launcher: %v", p)
 	}
 }
+
+// What the node asks before it tells a conversation by itself that a restart lost its background tasks (#1554): the
+// launcher and model a message from the phone runs on. The main conversation follows 模型配置 › 主对话, not the model it
+// last ran (which left the phone's next message on another model than the running process, refused while it was busy).
+func TestAssistantModelIsWhatThePhonesMessageRunsOn(t *testing.T) {
+	h, _ := modelTestHub(t)
+	n := newAssistantNode(t, h)
+	ctx := context.Background()
+	if err := h.store.PutSetting(ctx, "assistant", AssistantConfig{MachineID: "server", Main: "main"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.saveModelRecord(ctx, "assistant", 0, ModelBinding{Provider: "launcher.conv", Effort: "high"}); err != nil {
+		t.Fatal(err)
+	}
+	n.m.mu.Lock()
+	n.m.sessions = []proto.Session{{SessionID: "main", Launcher: "conv", Model: "picked-once", Assistant: true, Status: proto.StatusIdle}}
+	n.m.mu.Unlock()
+	params, _ := json.Marshal(map[string]any{"session_id": "main"})
+	got, err := n.m.onRequest(ctx, "assistant.model", params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	phone := map[string]any{}
+	if err := h.assistantSendModel(ctx, n.m, "main", phone); err != nil {
+		t.Fatal(err)
+	}
+	p := got.(map[string]any)
+	if p["launcher"] != "conv" || p["model"] != nil || p["effort"] != "high" || p["model_fingerprint"] == nil || p["model_fingerprint"] != phone["model_fingerprint"] {
+		t.Fatalf("assistant.model = %v, the phone's message runs on %v", p, phone)
+	}
+	// Another conversation the hub doesn't list yet (the node just started) keeps its own: nothing to say.
+	params, _ = json.Marshal(map[string]any{"session_id": "side"})
+	if got, err := n.m.onRequest(ctx, "assistant.model", params); err != nil || len(got.(map[string]any)) != 0 {
+		t.Fatalf("an unlisted conversation: %v %v", got, err)
+	}
+}
