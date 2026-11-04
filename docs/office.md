@@ -19,7 +19,7 @@ skill 自带的 `office.sh` 找本机的 personad（先看 `PERSONA_BIN`，再�
 
 - 助手：和别的内置 skill 一样装进它的目录（`assistantskills.Sync`：`.claude/skills`、`.agents/skills`，Codex 助手经 extraRoots）。
 - Persona 启动的 Claude Agent：node 启动时把 skill 写成一个插件（`<node 目录>/agent-plugin`，`assistantskills.WritePlugin`，`ForAgents` 列出给 Agent 的），
-  启动命令加 `--plugin-dir`，和 `--settings`、`--mcp-config` 一样只作用于这一个会话。在会话里它叫 `persona:persona-office`。
+  启动命令加 `--plugin-dir`，和 `--mcp-config`、Persona 的 hooks 插件一样只作用于这一个会话。在会话里它叫 `persona:persona-office`。
   - 只在 Claude Code 2.1 及以上加（`pluginMinVersion`）：更老的会拒绝不认识的参数、整个启动失败；版本问不出来时也不加，照旧启动。
   - 版本每次 hello 时问一次，启动时超过 10 分钟没问才再问（每次要起一个登录 shell）。
 - Persona 启动的 Codex Agent：还没带上。没找到按会话给 Codex 加 skill 目录、又不写 `CODEX_HOME/skills` 的办法。

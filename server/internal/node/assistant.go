@@ -395,10 +395,16 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 		"command": n.bin, "args": []string{"mcp"}, "env": map[string]string{"PERSONA_ASSISTANT": "1", "JARVIS_ASSISTANT": "1", "PERSONA_SESSION_ID": id, "JARVIS_SESSION_ID": id},
 	}}})
 	args := []string{"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
-		"--include-partial-messages",
-		"--settings", n.claudeSettings(context.Background(), launcher, filepath.Join(n.dir, "assistant-settings.json"), cwd),
-		"--mcp-config", string(mcp),
-		"--allowedTools", assistantAllowedTools}
+		"--include-partial-messages"}
+	// Persona's hooks: a plugin, or in --settings for a claude that loads none (hooksplugin.go).
+	settings, hooks := n.claudeStartSettings(context.Background(), launcher, "assistant", cwd)
+	if settings != "" {
+		args = append(args, "--settings", settings)
+	}
+	if hooks != "" {
+		args = append(args, "--plugin-dir", hooks)
+	}
+	args = append(args, "--mcp-config", string(mcp), "--allowedTools", assistantAllowedTools)
 	if execution.Model != "" {
 		args = append(args, "--model", execution.Model)
 	}

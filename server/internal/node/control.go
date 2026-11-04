@@ -130,14 +130,21 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	if resume != "" && n.transcriptPath(id) != "" {
 		args = "--resume " + id
 	}
-	cmd := fmt.Sprintf("%s %s%s --settings %s --mcp-config %s", n.launcherCommand(launcher), args, modeFlags(mode, effort),
-		shellQuote(n.claudeSettings(ctx, launcher, filepath.Join(n.dir, "claude-settings.json"), cwd)),
-		shellQuote(filepath.Join(n.dir, "mcp.json")))
+	// Persona's hooks: a plugin, or in --settings for a claude that loads none (hooksplugin.go).
+	settings, hooks := n.claudeStartSettings(ctx, launcher, "claude", cwd)
+	cmd := n.launcherCommand(launcher) + " " + args + modeFlags(mode, effort)
+	if settings != "" {
+		cmd += " --settings " + shellQuote(settings)
+	}
+	cmd += " --mcp-config " + shellQuote(filepath.Join(n.dir, "mcp.json"))
 	if execution.Model != "" {
 		cmd += " --model " + shellQuote(execution.Model)
 	}
 	if n.claudeLoadsPlugins(ctx) {
 		cmd += " --plugin-dir " + shellQuote(n.pluginDir())
+	}
+	if hooks != "" {
+		cmd += " --plugin-dir " + shellQuote(hooks)
 	}
 	st := sessionState{Pane: pane, Launcher: launcher, Cwd: cwd, StartedAt: time.Now().UTC(), Model: execution.Model, ModelFingerprint: execution.Fingerprint}
 	if prev, ok := n.state.get(id); ok && resume != "" {

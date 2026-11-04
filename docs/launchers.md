@@ -30,12 +30,16 @@ node 在登录 shell（`zsh -ic`，先加载 `~/.zshrc`）里一次取两样，�
   跟 Agent 无关的（`ll`、`gst`…）。都没有时只有默认的 `claude`。
 - 列表里只有名字、网关、模型；alias 里的 Key / Token 不出 node。「查看定义」对 alias 显示的是 `whence -f` 给的原文，Key 照样打码。
 - 函数写的启动器还是要靠 `_claude_launchers` 列出来：函数体里最后跑什么，不真跑一遍看不出来（见下「启动器页面上的参数」）。
-- **alias 自带 `--settings`**（`alias work="claude --settings ~/.claude/settings.work.json …"`，网关、Token、模型在那个文件的 `env` 里）：
-  Persona 起 claude 时自己也要传一个 `--settings`（把提问、授权、做完转到手机的 hooks），而 Claude Code 只认**最后一个** `--settings`。
-  所以 node 启动时把 alias 的那份和 Persona 的合成一个文件（alias 的所有设置 + 两边的 hooks，Persona 的排在后面），写到
-  `~/.persona/launcher-settings/<启动器>-<claude|assistant>-settings.json`（0600，里面有 Token），作为最后一个 `--settings` 传进去；
+- **启动器自带 `--settings`**（`alias work="claude --settings ~/.claude/settings.work.json …"`，或者函数里这样调 claude；网关、Token、模型在那个文件的 `env` 里）：
+  Claude Code 只认**最后一个** `--settings`，所以 Persona 不拿 `--settings` 带自己的 hooks（把提问、授权、做完转到手机的那些）。本机 Claude Code ≥ 2.1 时
+  hooks 是只在这次会话加载的插件（`--plugin-dir ~/.persona/claude-hooks`，助手是 `assistant-hooks`，`node/hooksplugin.go`），启动器自己的 `--settings`
+  原样生效，alias 和函数都一样；Persona 只给它管理的启动器传 `--settings`（见下「Persona 管理的怎么跑」）。
+  更老的 Claude Code（或读不到版本）只能把 hooks 放进 `--settings`：node 启动时把 alias 的那份和 Persona 的合成一个文件（alias 的所有设置 + 两边的 hooks，
+  Persona 的排在后面），写到 `~/.persona/launcher-settings/<启动器>-<claude|assistant>-settings.json`（0600，里面有 Token），作为最后一个 `--settings` 传进去；
   每次启动重写一遍（`node/launcher_settings.go`）。`~`、`$HOME`、相对路径（按会话目录）、`--settings '{…}'` 都认；文件读不了时退回只传 Persona 的。
-  函数写的启动器里的 `--settings` 看不到，照样会被顶掉。
+  函数写的启动器里的 `--settings` 看不到，在这种 claude 上照样会被顶掉。
+- 列模型（`node/launcher_models.go`）为了不触发 hooks 会传 `--settings '{"disableAllHooks":true}'`（alias、托管启动器的照样合并进去），函数里自带的
+  `--settings` 在这里仍会被顶掉，列出来的是没有它时的模型：关掉 hooks 只能写在 `--settings` 里，要合并就得先读出函数传的那份（#1411）。
 
 ## Persona 管理的怎么跑
 
@@ -45,7 +49,10 @@ node 在登录 shell（`zsh -ic`，先加载 `~/.zshrc`）里一次取两样，�
   （`launcher.env`），去掉 shell 里已有的 `ANTHROPIC_*` 等变量，设上 `ANTHROPIC_BASE_URL`、`ANTHROPIC_API_KEY`、各档模型
   （`ANTHROPIC_MODEL`、`ANTHROPIC_DEFAULT_*_MODEL`；小模型给 haiku / small fast；子 Agent 模型给 `CLAUDE_CODE_SUBAGENT_MODEL`，留空时跟主模型；
   自定义模型项给 `ANTHROPIC_CUSTOM_MODEL_OPTION` 和它的名字 / 说明），再 exec claude。
-  Key 不进文件、不进终端、不在命令行上。终端里也能直接敲 `jarvisd launch <名字>`。
+  Key 不进终端、不在命令行上。终端里也能直接敲 `jarvisd launch <名字>`。
+- settings 里的 `env` 压过进程环境，用户全局 `~/.claude/settings.json` 的 `env` 里有另一个网关时会把上面这些盖掉，所以 Persona 起它时还把同样的变量（含 Key）
+  写进 `~/.persona/launcher-settings/<名字>-env-settings.json`（0600），作为 `--settings` 传进去（`node/launcher_settings.go`）；更老的 Claude Code 上它和
+  Persona 的 hooks 合在 `<名字>-<claude|assistant>-settings.json` 里。
 - 交互模式的 Claude Code 第一次见到 `ANTHROPIC_API_KEY` 里的 Key 会问「Do you want to use this API key?」，默认选中「No (recommended)」，
   回车（或手机上的对话框卡片点了默认项）就把这个 Key 记成拒绝，之后这个启动器起的会话都没有凭据。Key 是用户在 设置 › 模型 里自己填的，
   所以 `jarvisd launch` 在 exec claude 前把它记成已允许，和在对话框里选 Yes 一样：Key 的最后 20 个字符（Claude Code 用它认 Key）写进

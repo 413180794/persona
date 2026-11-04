@@ -61,7 +61,7 @@
 - **token**：node 起进程前向 hub 要（RPC `assistant.lark`，只回给 assistant 所在的机器）：hub.json `lark.base_url` 去掉 `/agent/v1` 作为
   `lark-connector_AGENT_BASE`，`lark.token`（没写就照旧从 lark-connector 容器读）作为 `lark-connector_AGENT_TOKEN`，只放进这个进程的环境变量，不落盘、不进日志。
   ol.sh 找 token 的顺序是这个环境变量 → `lark-connector_ENV_FILE` → 所在仓库的 `.env`；副本不在仓库里，只靠环境变量（实测通）。
-- **闸门**（`node/larkgate.go`）：助手进程用单独的 `assistant-settings.json`，多一个 Bash 的 PreToolUse hook（herdr 里的 Agent 不受影响）。
+- **闸门**（`node/larkgate.go`）：助手进程用单独的一组 hooks（插件 `assistant-hooks`，更老的 Claude Code 是 `assistant-settings.json`，`docs/claude-integration.md`「Hooks」），多一个 Bash 的 PreToolUse hook（herdr 里的 Agent 不受影响）。
   hook 读整条命令：
   - 只有 `ol` 调用（和 jq / head / grep / echo / cd / `timeout N` 这类只输出的命令）时逐个判断：读（GET、只读的 POST 如 `/context/harvest`、
     `/search/page`）直接放行；只影响他自己的（标已读、`/todos/*/complete` 带 `scope:self`、找单聊 `POST /conversations {type:p2p}`）放行；

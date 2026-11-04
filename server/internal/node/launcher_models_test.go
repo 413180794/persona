@@ -222,7 +222,8 @@ func TestLauncherModelsLockedByFixedModel(t *testing.T) {
 func TestLauncherModelsOnlyRunsKnownLaunchers(t *testing.T) {
 	home := fakeCLIHome(t)
 	n, _ := testNode(t)
-	n.home = home
+	// A node directory of its own: the managed launcher's merged settings would otherwise land in the source tree.
+	n.home, n.dir = home, filepath.Join(home, ".jarvis")
 	marker := filepath.Join(home, "ran")
 	f, err := os.OpenFile(filepath.Join(home, ".zshrc"), os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {

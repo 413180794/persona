@@ -57,7 +57,9 @@ hub 保留 `listen`（默认 HTTP `:18660`），TLS 用 `public.tls_listen` 单�
 - **交互走 hooks 而不是模拟按键**：hook 能拿到结构化的问题 / 计划，回答也是结构化的（实测见 `docs/claude-integration.md`）。
   模拟按键（`herdr agent send-keys`）只作兜底：任何 hook 覆盖不到的 TUI 对话框（信任目录、模型选择……），App 显示屏幕快照 +
   按键面板。
-- **hooks 只注入 Persona 启动的会话**（`--settings ~/.persona/claude-settings.json`），不改全局 settings，不影响用户自己开的 claude。
+- **hooks 只注入 Persona 启动的会话**（只在这次会话加载的插件 `--plugin-dir ~/.persona/claude-hooks`；更老的 Claude Code 用
+  `--settings ~/.persona/claude-settings.json`），不改全局 settings，不影响用户自己开的 claude。用插件是因为 `--plugin-dir` 能叠加，
+  而 `--settings` 只认最后一个，会顶掉启动器自己的（网关、Key、模型，`docs/claude-integration.md`「Hooks」）。
   不是 Persona 启动的 herdr claude 也能在 App 里看（按 herdr 报告的 session id 找 transcript）、发消息、按键回答。
 - **node 经 SSH stdio**：复用 `~/.ssh/config` 里已有的 `ssh <机器>` 这类别名，不开新端口、不新增认证面；连接断了 hub 自动重连。
   ssh 进不去的电脑（NAT 后面、别的内网）退到 tailcat 打洞（`docs/server.md`「tailcat 打洞」），先 ssh、不行再 tailcat。
@@ -71,7 +73,8 @@ hub 保留 `listen`（默认 HTTP `:18660`），TLS 用 `public.tls_listen` 单�
 ### 新建会话
 1. App：选机器 → 选目录（最近的项目 / 浏览）→ 选启动器 → 可选首条消息。
 2. hub → node `session.start`：在 herdr workspace `jarvis`（没有就建）里新建 tab（cwd=目录，label=目录名），
-   `pane run "<launcher> --session-id <uuid> --settings ~/.persona/claude-settings.json --mcp-config ~/.persona/mcp.json"`。
+   `pane run "<launcher> --session-id <uuid> --mcp-config ~/.persona/mcp.json --plugin-dir ~/.persona/agent-plugin --plugin-dir ~/.persona/claude-hooks"`
+   （更老的 Claude Code：`--settings ~/.persona/claude-settings.json` 代替两个插件）。
 3. node 等 agent 就绪（`agent wait`）；若 blocked（信任目录等）就把屏幕作为 `screen` 交互推给手机。就绪后发首条消息。
 4. node 开始 tail transcript，事件经 hub 推给订阅的 App。
 

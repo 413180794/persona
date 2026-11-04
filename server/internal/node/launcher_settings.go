@@ -17,7 +17,9 @@ import (
 // after the launcher's words (the hooks that bring questions, permission requests and turn ends to the phone), and
 // Claude Code keeps only the last --settings it is given: the launcher's file was dropped, and the claude it started
 // answered every prompt with "Not logged in". So the start passes one file that is both: the launcher's settings
-// with Persona's hooks added to its own, as the last --settings.
+// with Persona's hooks added to its own, as the last --settings. That is for a claude that does not load plugins: one
+// that does gets the hooks as a plugin (hooksplugin.go), and nothing of the launcher's is replaced, a function's
+// --settings too, which no merge can see.
 
 // claudeSettings is the --settings a claude start of launcher passes: ours (a file in n.dir), or, when the launcher
 // is an alias with its own --settings, the two merged into launcher-settings/<launcher>-<ours>. cwd is where claude
@@ -85,25 +87,30 @@ func (n *Node) mergeLauncherSettings(launcher, own, ours, cwd string) (string, e
 	if err != nil {
 		return "", err
 	}
-	return writeSettings(n.dir, launcher, ours, out)
+	return writeSettings(n.dir, launcher+"-"+filepath.Base(ours), out)
 }
 
-// mergeManagedSettings writes ours with the managed launcher's env on top and says where (see writeSettings).
+// mergeManagedSettings writes ours with the managed launcher's env on top and says where (see writeSettings). ours
+// "": the env alone, for a start whose hooks go in a plugin (hooksplugin.go).
 func (n *Node) mergeManagedSettings(launcher string, l proto.ManagedLauncher, ours string) (string, error) {
 	mine := map[string]any{}
-	b, err := os.ReadFile(ours)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		// Not written yet (the node writes it as it starts serving; a test's node never does): the launcher's env
-		// alone, rather than no settings with the gateway at all (#1364).
-	case err != nil:
-		return "", err
-	default:
-		if err := json.Unmarshal(b, &mine); err != nil {
+	name := launcher + "-env-settings.json"
+	if ours != "" {
+		name = launcher + "-" + filepath.Base(ours)
+		b, err := os.ReadFile(ours)
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			// Not written yet (the node writes it as it starts serving; a test's node never does): the launcher's env
+			// alone, rather than no settings with the gateway at all (#1364).
+		case err != nil:
 			return "", err
-		}
-		if mine == nil { // the file says null
-			mine = map[string]any{}
+		default:
+			if err := json.Unmarshal(b, &mine); err != nil {
+				return "", err
+			}
+			if mine == nil { // the file says null
+				mine = map[string]any{}
+			}
 		}
 	}
 	env := map[string]any{}
@@ -120,18 +127,18 @@ func (n *Node) mergeManagedSettings(launcher string, l proto.ManagedLauncher, ou
 	if err != nil {
 		return "", err
 	}
-	return writeSettings(n.dir, launcher, ours, out)
+	return writeSettings(n.dir, name, out)
 }
 
-// writeSettings stores merged settings for launcher under n.dir and returns the path. A temporary file of its own:
-// two starts of the same launcher at once must not rename each other's away.
-func writeSettings(dir, launcher, ours string, out []byte) (string, error) {
+// writeSettings stores a launcher's merged settings under n.dir as name and returns the path. A temporary file of its
+// own: two starts of the same launcher at once must not rename each other's away.
+func writeSettings(dir, name string, out []byte) (string, error) {
 	d := filepath.Join(dir, "launcher-settings")
 	if err := os.MkdirAll(d, 0o700); err != nil {
 		return "", err
 	}
-	path := filepath.Join(d, launcher+"-"+filepath.Base(ours))
-	tmp, err := os.CreateTemp(d, "."+launcher+"-*")
+	path := filepath.Join(d, name)
+	tmp, err := os.CreateTemp(d, "."+name+"-*")
 	if err != nil {
 		return "", err
 	}

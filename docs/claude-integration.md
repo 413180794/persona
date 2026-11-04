@@ -8,8 +8,9 @@ node 的 `session.start`：
 
 1. 找 label 等于目录名的 herdr workspace（用户习惯一个项目一个 workspace），有就在里面 `tab create --label jarvis`，没有就
    `workspace create --label <目录名>`。都带 `--cwd <目录>`、`--no-focus`，不抢电脑上的焦点。
-2. `pane run <pane> "<启动器> --session-id <uuid> --settings ~/.persona/claude-settings.json --mcp-config ~/.persona/mcp.json"`。
-   启动器是 `~/.zshrc` 里的函数（`cc_ds`、`cc_max`、`ccc`……），它们最后都 `claude … "$@"`，所以参数能透传。恢复会话用 `--resume <id>`。
+2. `pane run <pane> "<启动器> --session-id <uuid> --mcp-config ~/.persona/mcp.json --plugin-dir ~/.persona/agent-plugin --plugin-dir ~/.persona/claude-hooks"`
+   （本机 Claude Code ≥ 2.1；更老的或读不到版本时是 `<启动器> --session-id <uuid> --settings ~/.persona/claude-settings.json --mcp-config ~/.persona/mcp.json`，
+   见下「Hooks」）。启动器是 `~/.zshrc` 里的函数（`cc_ds`、`cc_max`、`ccc`……），它们最后都 `claude … "$@"`，所以参数能透传。恢复会话用 `--resume <id>`。
 3. `waitReady`：每 500ms 读屏幕（`pane read --source visible`）+ `agent get`：
    - 屏幕上有信任目录对话框（"trust this folder"）→ 按光标位置算 `down`/`up` + `enter` 选「Yes, I trust」。
      **herdr 把这个对话框报成 idle**，所以不能只看 agent 状态；之前直接发首条消息，文字被当成对话框输入，选中了 "No, exit"，claude 直接退出。
@@ -67,7 +68,16 @@ base URL 和模型都相同的启动器只有一个就是它；否则如果这�
 
 ## Hooks（只注入 Persona 启动的会话）
 
-`~/.persona/claude-settings.json`（node 启动时生成，命令是 node 二进制自身的 `hook` 模式）：
+node 启动时把同一组 hooks 写两份（命令是 node 二进制自身的 `hook` 模式，`node/hooksplugin.go`）：
+
+- **插件** `~/.persona/claude-hooks/`（`.claude-plugin/plugin.json` + `hooks/hooks.json`，插件名 `persona-hooks`）：本机 Claude Code ≥ 2.1
+  （和 `agent-plugin` 用同一个判断，`node/agentplugin.go`）时启动传 `--plugin-dir`，只在这次会话加载。`--plugin-dir` 可以传多个，和启动器自己的
+  `--settings`、`--plugin-dir` 叠加；Claude Code 却只认最后一个 `--settings`，启动器（alias 或函数）自己的 `--settings` 里常有网关、Key 和模型，
+  Persona 再传一个就把它顶掉，起来的 claude 要求登录（#1411）。所以这时 Persona 只给自己管理的启动器传 `--settings`（只有网关的环境变量，`docs/launchers.md`）。
+- **settings 文件** `~/.persona/claude-settings.json`：给更老的 Claude Code（或读不到版本、插件没写出来时）用 `--settings` 传，alias 自带的合并进去。
+
+2026-11-04 在 Claude Code 2.1.318 上实测，插件里的 hooks 和 `--settings` 里的一样：SessionStart、UserPromptSubmit、Stop 触发，PreToolUse 返回
+`deny`、PermissionRequest 返回 `allow` 都生效（交互模式和 `-p` 都试过）。
 
 | 事件 | matcher | 作用 |
 | --- | --- | --- |
@@ -85,7 +95,7 @@ base URL 和模型都相同的启动器只有一个就是它；否则如果这�
     **单纯 `{behavior: "allow"}` 不生效，TUI 仍弹「Would you like to proceed?」**。
   - 打回：`{behavior: "deny", message: "…修改意见"}`，message 作为 is_error 的 tool_result 交给模型，模型会改计划再提交。
 - 用户的启动器都带 `--dangerously-skip-permissions`，普通工具不会触发 PermissionRequest；不带的会话每个工具调用都会到手机。
-- `--settings` 里的 hooks 只在启动时读，改了要重启 claude；hook 命令本身每次重新执行。
+- 插件和 `--settings` 里的 hooks 都只在启动时读，改了要重启 claude；hook 命令本身每次重新执行。
 - hook 等待手机超过 30 分钟（`hook_timeout_minutes`）或连不上 node → 不输出，TUI 照常弹框；手机上也可以点「交给电脑上的终端处理」。
   等的过程中 node 没了（部署重启 hub / node）→ hook 重连下一个 node，手机上的卡片不丢（`docs/protocol.md`「交互挺过重启」）。
   hook 进程被杀（用户在电脑上 Esc）→ node 发现 socket 断开 → 通知 hub 撤销交互。
@@ -185,7 +195,8 @@ node 的答法（`node/dialogmulti.go`）：每一步重读屏幕，算下一步
 ## 无头助手（「对话」tab）
 
 助手不进 herdr：node 直接起 `zsh -ic '<启动器> "$@"' -p --input-format stream-json --output-format stream-json --verbose
---include-partial-messages --session-id|--resume <id> --settings … --mcp-config …`（`node/assistant.go`，2026-10-25 实测）：
+--include-partial-messages --session-id|--resume <id> --plugin-dir ~/.persona/assistant-hooks --mcp-config …`（`node/assistant.go`，2026-10-25 实测；
+hooks 和上面一样是插件，比 agent 的多一个 Bash 上的飞书闸门，更老的 Claude Code 改传 `--settings ~/.persona/assistant-settings.json`）：
 
 - 一个进程能通过 stdin 连续多轮（每行一个 `{"type":"user","message":{…}}`，图片直接放 base64 image block）。
 - `stream_event` 里的 `content_block_delta/text_delta` 是逐字输出 → WS `delta`；`result` 表示这轮结束。结构化消息仍从 transcript 读。

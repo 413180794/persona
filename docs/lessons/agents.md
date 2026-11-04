@@ -9,7 +9,12 @@
 - Claude Code 的 `--settings` 只认最后一个，不合并（2026-11-02 实测：`--settings A --settings B` 时 A 的 `env` 全没了）。启动器 alias 自己带
   `--settings`、凭据在那个文件的 `env` 里时，Persona 再追加一个 `--settings` 就把它顶掉，从手机起的会话和助手每条消息都回
   `Not logged in · Please run /login`（transcript 里是 `isApiErrorMessage` + `authentication_failed`），在 herdr 里自己敲同一个 alias 却正常。
-  node 现在把两份合成一个文件再传（`docs/launchers.md`「~/.zshrc 里怎么认」）。
+  合并两份只救得了 alias：函数里的 `--settings` 读不到（#1411）。所以 Persona 要给 claude 加的东西走能叠加的参数（`--plugin-dir`、`--mcp-config`），
+  不占 `--settings`：hooks 是一个插件（`docs/claude-integration.md`「Hooks」），只有更老的 Claude Code 还合并。用户自己在启动器函数里按 Persona 的目录名
+  认出它的 `--settings` 来让位，也不可取：数据目录从 `~/.jarvis` 换成 `~/.persona` 后就认不出了。
+- 插件（`--plugin-dir`）里的 hooks 和 `--settings` 里的行为一样（2026-11-04 实测 2.1.318：SessionStart、UserPromptSubmit、Stop 触发，PreToolUse 的
+  `deny`、PermissionRequest 的 `allow` 生效，交互和 `-p` 都是），和启动器自带的其他 `--plugin-dir` 一起加载。只要关掉 hooks（`disableAllHooks`）还得用
+  `--settings`：`--bare` 也会跳过 hooks，但它只认 `ANTHROPIC_API_KEY` / `apiKeyHelper`，用登录或 `ANTHROPIC_AUTH_TOKEN` 的启动器都会失败。
 - Persona 管理的启动器用 `ANTHROPIC_API_KEY` 传 Key：交互模式的 claude 第一次见到这个 Key 会先弹「Detected a custom API key … Do you want to use this API key?」，
   默认选中 No（2026-11-03 实测 2.1.309）。选了 No 之后 Key 进 `customApiKeyResponses.rejected`，这个启动器起的会话都报未登录；`-p` 模式不问，
   所以启动器的「检查」能过、从手机新建却卡住。`ANTHROPIC_AUTH_TOKEN`（发 `Authorization: Bearer`）和 `apiKeyHelper` 不问，但前者官方 API 不认、

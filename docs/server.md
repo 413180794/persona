@@ -437,7 +437,7 @@ hub 启动时自动执行未跑过的迁移（`schema_migrations` 记录，advis
 | `secret.key` | 邮箱凭据的加密密钥（32 字节） |
 | `apns.json`、`apns_key.p8` | 推送配置和 key；有就直连 APNs，没有就经每台手机登记的推送中继（`docs/push-relay.md`），手机也没登记中继就不推 |
 
-每台机器 `~/.persona/` 下还有 node 生成的 `claude-settings.json`（hooks）、`mcp.json`、`node.sock`、`uploads/`。
+每台机器 `~/.persona/` 下还有 node 生成的 hooks（插件 `claude-hooks/`、`assistant-hooks/`，给更老的 Claude Code 的 `claude-settings.json`、`assistant-settings.json`）、`mcp.json`、`node.sock`、`uploads/`。
 
 配对：hub 机器上 `~/.persona/bin/personad hub pair` 通过 HTTP 回环调用运行中的 hub，打印临时配对链接、二维码、到期时间，以及已开启 TLS 时的公钥指纹。`listen` 必须能接受 IPv4 回环连接。临时 token 有效期 10 分钟，只能兑换一次设备 token，兑换后最多宽限 2 分钟（均为协议策略）。`--legacy` 离线打印主 token 和旧格式二维码，不用于公网。二维码新参数见 [协议](protocol.md#临时配对)。
 

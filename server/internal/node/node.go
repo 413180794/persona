@@ -293,12 +293,20 @@ func (n *Node) writeClaudeConfig() error {
 		"UserPromptSubmit":  []any{notify},
 		"SessionStart":      []any{notify},
 	}}
+	// Each set twice: as a plugin for a claude that loads plugins, in a settings file for one that does not
+	// (hooksplugin.go).
 	if err := writeJSON(filepath.Join(n.dir, "claude-settings.json"), settings); err != nil {
+		return err
+	}
+	if err := writeHooksPlugin(n.hooksPlugin("claude"), settings["hooks"]); err != nil {
 		return err
 	}
 	// The assistant's own settings add the lark-connector gate on Bash (larkgate.go); herdr agents never pay for that hook.
 	settings["hooks"].(map[string]any)["PreToolUse"] = []any{blocking("AskUserQuestion"), blocking("Bash")}
 	if err := writeJSON(filepath.Join(n.dir, "assistant-settings.json"), settings); err != nil {
+		return err
+	}
+	if err := writeHooksPlugin(n.hooksPlugin("assistant"), settings["hooks"]); err != nil {
 		return err
 	}
 	mcp := map[string]any{"mcpServers": map[string]any{"jarvis": map[string]any{"command": n.bin, "args": []string{"mcp"}}}}

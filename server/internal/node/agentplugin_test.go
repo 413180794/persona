@@ -52,8 +52,9 @@ func TestAgentPlugin(t *testing.T) {
 		}
 		waitCalls(t, f, "pane.send_input", 1)
 		want := startCmd("claude", "--session-id "+startID, jarvisDir(home))
-		if tc.flag {
-			want += " --plugin-dir " + shellQuote(plugin)
+		if tc.flag { // the hooks go in a plugin too, and Persona passes no --settings (hooksplugin.go)
+			want = "claude --session-id " + startID + " --mcp-config " + shellQuote(filepath.Join(jarvisDir(home), "mcp.json")) +
+				" --plugin-dir " + shellQuote(plugin) + " --plugin-dir " + shellQuote(filepath.Join(jarvisDir(home), "claude-hooks"))
 		}
 		if typed := f.trace("pane.send_input"); !slices.Contains(typed, call("pane.send_input", map[string]any{"pane_id": "w1:p2", "keys": []string{"Enter"}, "text": want})) {
 			t.Errorf("claude %q: typed %v, want %s", tc.version, typed, want)
