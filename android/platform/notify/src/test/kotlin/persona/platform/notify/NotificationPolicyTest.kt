@@ -79,6 +79,7 @@ class NotificationPolicyTest {
     }
 
     @Test fun onlyHubNotifyPostsCompletionAndOnlyVisibleConversationIsSuppressed() {
+        assertEquals("alert", NotificationPolicy.channel(NotifyEvent("alert", "machine", "session")))
         assertEquals(Notifier.CH_DONE, NotificationPolicy.channel(NotifyEvent("done", "machine", "session")))
         assertEquals(Notifier.CH_ASSISTANT, NotificationPolicy.channel(NotifyEvent("assistant", "machine", "session")))
         assertNull(NotificationPolicy.channel(NotifyEvent("interaction", "machine", "session")))
@@ -88,6 +89,22 @@ class NotificationPolicyTest {
         assertFalse(NotificationPolicy.suppressed(session, false, session))
         assertFalse(NotificationPolicy.suppressed(session, true, SessionKey("machine", "other")))
         assertFalse(NotificationPolicy.suppressed(session, true, null))
+    }
+
+    @Test fun separatePluginAlertsCoexistAndOnlyCompleteSessionKeysCanOpenAConversation() {
+        val alert = NotifyEvent("alert", "machine", "session")
+        assertEquals(SessionKey("machine", "session"), NotificationPolicy.session(alert))
+        for (event in listOf(alert.copy(machineId = ""), alert.copy(sessionId = ""),
+            alert.copy(machineId = " ", sessionId = " "))) {
+            assertNull(NotificationPolicy.session(event))
+        }
+        val first = NotificationPolicy.tag(alert)
+        val second = NotificationPolicy.tag(alert.copy(body = "另一个提醒"))
+        assertTrue(first.startsWith("alert:"))
+        assertNotEquals(first, second)
+        assertNotEquals(NotificationPolicy.tag(alert.copy(machineId = "", sessionId = "")), first)
+        assertEquals("done:machine/session", NotificationPolicy.tag(alert.copy(kind = "done")))
+        assertEquals("assistant:machine/session", NotificationPolicy.tag(alert.copy(kind = "assistant")))
     }
 
     private fun interaction(kind: String) = Interaction("request", kind = kind,

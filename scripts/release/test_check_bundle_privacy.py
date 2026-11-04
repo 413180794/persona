@@ -1,4 +1,5 @@
 from contextlib import redirect_stdout
+import hashlib
 import io
 import ipaddress
 from pathlib import Path
@@ -196,6 +197,114 @@ class PublicConstantTests(unittest.TestCase):
         self.assertEqual(self.kinds("foobar", words=("foo",)), set())
         self.assertEqual(self.kinds("FOO foo", words=("foo",)), {"private value (3 chars)"})
         self.assertEqual(cbp.text_kinds("foobar", ("foo",)), {"private value (3 chars)"})
+
+
+class PinnedPublicJSTests(unittest.TestCase):
+    filename = "mermaid.min.js"
+    fixture = b'const label = "remarkable";\n'
+
+    def scan(self, data, words=("mark",), filename=None, pin=None, extra=None):
+        with tempfile.TemporaryDirectory(prefix="bundle-privacy-js-") as directory:
+            (Path(directory) / (filename or self.filename)).write_bytes(data)
+            if extra is not None:
+                (Path(directory) / "private.js").write_bytes(extra)
+            output = io.StringIO()
+            pins = {self.filename: pin or hashlib.sha256(self.fixture).hexdigest()}
+            with patch.object(sys, "argv", ["check_bundle_privacy.py", directory]), \
+                    patch.object(cbp.pc, "module_paths", return_value=None), \
+                    patch.object(cbp.pc, "terms", return_value=(words, set())), \
+                    patch.object(cbp.jarvis_config, "load", return_value={}), \
+                    patch.object(cbp, "PUBLIC_JS_SHA256", pins), redirect_stdout(output):
+                try:
+                    cbp.main()
+                except SystemExit as error:
+                    return error.code, output.getvalue()
+            return 0, output.getvalue()
+
+    def test_only_the_exact_resource_name_and_bytes_are_verified(self):
+        resource = Path(cbp.pc.ROOT) / "apple/Persona/Resources/Render" / self.filename
+        data = resource.read_bytes()
+        self.assertTrue(cbp.verified_public_js(resource, data))
+        self.assertFalse(cbp.verified_public_js("another.js", data))
+        self.assertFalse(cbp.verified_public_js(resource, data + b" "))
+        self.assertFalse(cbp.verified_public_js(resource, b"x" + data[1:]))
+        self.assertFalse(cbp.verified_public_js(resource, data[:-1]))
+        self.assertFalse(cbp.verified_public_js(resource, b""))
+
+    def test_pinned_short_fragment_is_not_a_complete_private_word(self):
+        code, output = self.scan(self.fixture)
+        self.assertEqual(code, 0, output)
+        code, output = self.scan(self.fixture, pin="0" * 64)
+        self.assertNotEqual(code, 0)
+        self.assertIn("private value", output)
+        self.assertNotIn('"mark"', output)
+
+    def test_changed_appended_and_truncated_resources_fall_back_to_strict_matching(self):
+        for data in (self.fixture + b" ", b" " + self.fixture, self.fixture[:-1],
+                     self.fixture + b'const account = "mark";'):
+            with self.subTest(bytes=len(data)):
+                code, output = self.scan(data)
+                self.assertNotEqual(code, 0)
+                self.assertIn("private value", output)
+        code, output = self.scan(self.fixture, filename="another.js")
+        self.assertNotEqual(code, 0)
+        self.assertIn("private value", output)
+
+    def test_complete_short_words_and_nonletter_values_still_fail(self):
+        for text, word in (("'mark'", "mark"), ("'MARK'", "MARK"), ("'mark'", "MARK"),
+                           ("remarkable", "remark"),
+                           ("prefix1234suffix", "1234"), ("prefixa1b2suffix", "a1b2"),
+                           ("prefixab-csuffix", "ab-c")):
+            with self.subTest(length=len(word)):
+                data = text.encode()
+                code, output = self.scan(data, words=(word,), pin=hashlib.sha256(data).hexdigest())
+                self.assertNotEqual(code, 0)
+                self.assertIn("private value", output)
+                self.assertNotIn(text, output)
+
+    def test_generic_emails_and_private_ips_are_not_classified(self):
+        address = str(NETWORKS[0].network_address + 17)
+        data = (self.fixture.decode() + EMAIL + "\n" + address).encode()
+        code, output = self.scan(data, pin=hashlib.sha256(data).hexdigest())
+        self.assertNotEqual(code, 0)
+        self.assertIn("email", output)
+        self.assertIn("private IP", output)
+        self.assertNotIn(EMAIL, output)
+        self.assertNotIn(address, output)
+
+    def test_other_files_remain_strict_even_next_to_a_pinned_resource(self):
+        code, output = self.scan(self.fixture, extra=self.fixture)
+        self.assertNotEqual(code, 0)
+        self.assertIn("private.js: private value", output)
+        self.assertNotIn(self.filename + ": private value", output)
+
+    def test_normalized_fragments_cannot_use_the_public_resource_boundary(self):
+        text = "remarkable"
+        self.assertEqual(cbp.text_kinds(text, ("mark",), public_js=True, original_text=text), set())
+        self.assertIn("private value (4 chars)",
+                      cbp.text_kinds(text, ("mark",), public_js=True, original_text="other" + text))
+        self.assertIn("private value (4 chars)", cbp.text_kinds(text, ("mark",)))
+
+    def test_provenance_and_scanning_share_the_same_byte_snapshot(self):
+        with tempfile.TemporaryDirectory(prefix="bundle-privacy-snapshot-") as directory:
+            path = Path(directory) / self.filename
+            path.write_bytes(self.fixture)
+            snapshot = path.read_bytes()
+            path.write_bytes(b"different content")
+            fields = list(cbp.texts(str(path), snapshot))
+            self.assertEqual(fields, [self.fixture.decode().rstrip("\n")])
+            self.assertNotEqual(fields, list(cbp.texts(str(path))))
+
+    def test_actual_mermaid_resource_regression_and_complete_word_detection(self):
+        resource = Path(cbp.pc.ROOT) / "apple/Persona/Resources/Render" / self.filename
+        data = resource.read_bytes()
+        code, output = self.scan(data, words=("ouch",), pin=cbp.PUBLIC_JS_SHA256[self.filename])
+        self.assertEqual(code, 0, output)
+        code, output = self.scan(data, words=("ouch",), pin="0" * 64)
+        self.assertNotEqual(code, 0)
+        code, output = self.scan(data, words=("body",), pin=cbp.PUBLIC_JS_SHA256[self.filename])
+        self.assertNotEqual(code, 0)
+        self.assertIn("private value", output)
 
 
 class GoDependenciesTests(unittest.TestCase):

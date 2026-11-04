@@ -2,6 +2,8 @@
 
 新的多模块安卓 App（`android/`，`docs/android.md`、`docs/android-design.md`）踩过的坑。主线旧 App（单模块）的经验在 `docs/android.md`「经验」的「主线旧 App 的经验」一节。
 
+- 插件提醒 `notify.kind=alert` 没有交互编号，同一会话可以有多个不同提醒；通知 tag 要逐条区分，不能沿用完成提醒的 `kind:machine/session` 覆盖规则（#1654）。空的机器或会话标识表示普通提醒，不要拿它刷新会话列表或生成空会话深链。展示前在交付和构建通知两处核对 `input` 偏好，避免异步刷新期间关闭开关后仍弹出提醒。
+
 ## 界面与 Compose
 
 - `activity-alias` 不继承目标 Activity 的 metadata（2026-11-03，#758）：保留旧 launcher alias 后，读取 `componentName` 会拿到 alias 的空 metadata，DEBUG 启动适配器因此不加载，假 hub、风格与深浅色参数都被忽略。查询 canonical `MainActivity` 的 metadata，保留原 key 和唯一 launcher；Release 仍不注册 DEBUG 适配器。截图脚本必须核对配对状态、实际 mock 请求和每个子进程退出码，不能把欢迎页或后续 `printf` 的成功退出算作截图验收。

@@ -2,6 +2,7 @@
 
 踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
 
+- 新建开发会话的最近目录要在 node 汇总 transcript 和运行中 Agent 的目录后，用 `identity.IsAssistantDir` 排除助手目录，再排序、取前 15 个（#1662）。助手的 transcript 持续更新，未经筛选就会占据默认建议；不要只按目录名 `assistant` 排除，以免误伤同名项目。筛选只影响建议，保留已有会话和显式目录浏览。
 - herdr 里新开 tab 启动 claude 时，若 cwd 未被信任会先弹「trust this folder」，`agent prompt` 发的文字会被当成选择 → 选了 No 退出。
   node 启动会话后要检查 blocked 屏幕（`docs/claude-integration.md`）。
 - Claude 输入框里的灰字（预测的下一句、新会话的 `Try "…"`）在纯文本读屏里和用户打的字一模一样：判断有没有草稿要用 ansi 读屏看 dim（SGR 2）。

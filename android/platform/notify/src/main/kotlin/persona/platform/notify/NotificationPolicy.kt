@@ -16,6 +16,7 @@ import persona.core.domain.answer.AnswerDraft
 import persona.core.domain.answer.AnswerRetry
 import persona.core.domain.answer.RequestExpiry
 import java.time.Instant
+import java.util.UUID
 
 internal data class NotificationAction(
     val key: String,
@@ -88,6 +89,13 @@ internal object NotificationPolicy {
     fun channel(event: NotifyEvent): String? = when (event.kind) {
         "done" -> Notifier.CH_DONE
         "assistant" -> Notifier.CH_ASSISTANT
+        "alert" -> Notifier.CH_ALERT
         else -> null
     }
+
+    fun session(event: NotifyEvent): SessionKey? =
+        if (event.machineId.isBlank() || event.sessionId.isBlank()) null else SessionKey(event.machineId, event.sessionId)
+
+    fun tag(event: NotifyEvent): String = if (event.kind == "alert") "alert:${UUID.randomUUID()}"
+        else "${event.kind}:${SessionKey(event.machineId, event.sessionId).path}"
 }

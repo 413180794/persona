@@ -21,6 +21,44 @@ class NotificationExecutionTest {
     private val now = Instant.parse("2030-01-01T00:00:00Z")
     private val request = Interaction("request", machineId = "machine", sessionId = "session", kind = "permission")
 
+    @Test fun pluginAlertsRespectInputAndVisibilityWithoutRefreshingForSessionlessMessages() = runBlocking {
+        val center = Center(request)
+        var refreshes = 0
+        val sessions = object : SessionsRepository {
+            override val machines = MutableStateFlow<List<Machine>>(emptyList())
+            override val sessions = MutableStateFlow<List<Session>>(emptyList())
+            override suspend fun refresh() { refreshes++ }
+        }
+        var settings: persona.core.contracts.api.DeviceNotificationPreferences? =
+            persona.core.contracts.api.DeviceNotificationPreferences(input = false)
+        var visible = false
+        val posted = mutableListOf<NotifyEvent>()
+        val delivery = NotificationDelivery(center, sessions, { visible }, { fail("Not an interaction") },
+            { posted += it }, {}, { settings })
+        val alert = NotifyEvent("alert", "machine", "session", title = "提醒", body = "请查看任务")
+        delivery.accept(alert)
+        assertTrue(posted.isEmpty())
+        assertEquals(0, refreshes)
+        settings = persona.core.contracts.api.DeviceNotificationPreferences()
+        visible = true
+        delivery.accept(alert)
+        assertTrue(posted.isEmpty())
+        visible = false
+        delivery.accept(alert)
+        assertEquals(listOf(alert), posted)
+        assertEquals(1, refreshes)
+        // An unscoped reminder is a message, even while a conversation is visible.
+        visible = true
+        val sessionless = alert.copy(machineId = "", sessionId = "")
+        delivery.accept(sessionless)
+        assertEquals(listOf(alert, sessionless), posted)
+        assertEquals(1, refreshes)
+        settings = null
+        delivery.accept(sessionless)
+        assertEquals(2, posted.size)
+        assertEquals(0, center.refreshes)
+    }
+
     @Test fun deadlineGuardsAnswerAndApprovalEvenWhenPersistenceCrossesTheDeadline() = runBlocking {
         val deadline = now.plusSeconds(1)
         val requests = listOf(

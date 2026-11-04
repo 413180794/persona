@@ -7,6 +7,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WireCompatibilityTest {
+    @Test fun pluginAlertsPreserveTheirKindWithAndWithoutASession() {
+        for ((machine, session) in listOf("machine" to "session", "" to "")) {
+            val event = ServerEvent.decode("""{"type":"notify","kind":"alert","machine_id":"$machine","session_id":"$session","title":"任务提醒","body":"任务需要查看"}""") as NotifyEvent
+            assertEquals("alert", event.kind)
+            assertEquals(machine, event.machineId)
+            assertEquals(session, event.sessionId)
+            assertEquals("任务提醒", event.title)
+            assertEquals(event, ServerEvent.decode(JsonCodec.encodeToString<ServerEvent>(event)))
+        }
+    }
+
     @Test fun connectionEventsAndOptionalFieldsFollowD5() {
         val endpoint = """{"url":"https://example.com:443","kind":"name","port":443,"scheme":"https","seen_at":"2026-01-02T03:04:05Z"}"""
         val hello = ServerEvent.decode("""{"type":"hello","server_version":"example","client_id":"c1","hub_id":"hub_example","tls_port":443,"fp":"example","endpoints":[$endpoint],"features":["endpoints"]}""") as Hello

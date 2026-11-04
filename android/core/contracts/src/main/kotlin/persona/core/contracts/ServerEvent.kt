@@ -132,7 +132,7 @@ data class Pong(
 @KeepGeneratedSerializer
 @Serializable(with = NotifyEventSerializer::class)
 data class NotifyEvent(
-    @WireEnum("interaction", "done", "assistant", "unknown") val kind: String,
+    @WireEnum("interaction", "done", "assistant", "alert", "unknown") val kind: String,
     @SerialName("machine_id") val machineId: String,
     @SerialName("session_id") val sessionId: String,
     val title: String = "", val subtitle: String = "", val body: String = "",

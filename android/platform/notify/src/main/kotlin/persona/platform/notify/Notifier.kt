@@ -56,6 +56,7 @@ class Notifier @Inject constructor(
             deleteNotificationChannel("ongoing")
             createNotificationChannels(listOf(
                 NotificationChannel(CH_INPUT, "需要你", NotificationManager.IMPORTANCE_HIGH),
+                NotificationChannel(CH_ALERT, "提醒", NotificationManager.IMPORTANCE_HIGH),
                 NotificationChannel(CH_DONE, "做完了", NotificationManager.IMPORTANCE_DEFAULT),
                 NotificationChannel(CH_ASSISTANT, "Persona", NotificationManager.IMPORTANCE_DEFAULT),
                 NotificationChannel(CH_STATUS, "实时状态", NotificationManager.IMPORTANCE_LOW).apply {
@@ -222,13 +223,16 @@ class Notifier @Inject constructor(
         val channel = NotificationPolicy.channel(event) ?: return
         val settings = preferences.preferences.value ?: return
         if (channel == CH_DONE && settings.done == DoneNotification.Off) return
-        val session = SessionKey(event.machineId, event.sessionId)
-        post("${event.kind}:${session.path}", EVENT_ID, base(channel).forSession(session)
-            .setContentTitle(event.title.ifBlank { if (channel == CH_DONE) "做完了" else "Persona" })
+        if (channel == CH_ALERT && !settings.input) return
+        val session = NotificationPolicy.session(event)
+        post(NotificationPolicy.tag(event), EVENT_ID, base(channel).forSession(session)
+            .setContentTitle(event.title.ifBlank { when (channel) { CH_DONE -> "做完了"; CH_ALERT -> "提醒"; else -> "Persona" } })
             .setContentText(event.body.ifBlank { event.subtitle })
             .setSubText(event.subtitle.takeIf { it.isNotBlank() })
             .setStyle(NotificationCompat.BigTextStyle().bigText(event.body.take(2000)))
-            .setAutoCancel(true).setContentIntent(open(session, if (event.kind == "assistant") true else isAssistant(session))).build())
+            .setAutoCancel(true).apply {
+                if (session != null) setContentIntent(open(session, if (event.kind == "assistant") true else isAssistant(session)))
+            }.build())
     }
 
     fun retract(id: String) = manager.cancel(interactionTag(id), EVENT_ID)
@@ -280,7 +284,7 @@ class Notifier @Inject constructor(
     fun clear() {
         context.getSystemService(NotificationManager::class.java).activeNotifications
             .filter { it.id == EVENT_ID && it.tag?.let { tag ->
-                tag == "stopped" || listOf("interaction:", "failure:", "done:", "assistant:").any(tag::startsWith)
+                tag == "stopped" || listOf("interaction:", "failure:", "done:", "assistant:", "alert:").any(tag::startsWith)
             } == true }.forEach { manager.cancel(it.tag, it.id) }
     }
 
@@ -303,6 +307,7 @@ class Notifier @Inject constructor(
 
     companion object {
         const val CH_INPUT = "input"
+        const val CH_ALERT = "alert"
         const val CH_DONE = "done"
         const val CH_ASSISTANT = "assistant"
         const val CH_STATUS = "realtime_status"

@@ -20,13 +20,16 @@ that equal a value in another case.
 The repo's own Go module path (it names the GitHub owner) is in every Go binary's imports and is removed too, as
 scripts/privacy_check.py does for the sources. --whole-short: a value of four characters or fewer only counts as a
 whole word, not inside a longer one (a Go binary carries Unicode tables and minified JavaScript, where short values turn
-up inside ordinary words: a surname inside "touchend"); app bundles keep the strict substring match.
+up inside ordinary words); app bundles keep the strict substring match except for short alphabetic fragments inside
+word tokens of the exact SHA-256-pinned, unmodified public Mermaid resource. Complete words, nonalphabetic values,
+long values and generic IP/email checks remain active there; any changed byte falls back to strict app matching.
 Prints the file and the kind of hit, never the value.
 For public Go builds, narrowly scoped dependency constants are classified separately from private data. This requires
 unreplaced dependencies whose build-info checksums match server/go.sum; registered personal values always win.
 The seven known swift-nio-ssh algorithm/certificate names are also classified as a complete original printable field
 or a complete comma-separated list; that fallback excludes URLs, surrounding context and normalized fragments.
 """
+import hashlib
 import ipaddress
 import os
 import re
@@ -42,6 +45,18 @@ import privacy_check as pc  # noqa: E402
 
 SKIP = {"embedded.mobileprovision", "embedded.provisionprofile", "CodeResources"}
 PRINTABLE = re.compile(rb"[\x20-\x7e]{4,}")
+
+# npm mermaid@12.3.0, package/dist/mermaid.min.js; verified against the registry tarball's SHA-512 integrity.
+PUBLIC_JS_SHA256 = {
+    "mermaid.min.js": "336df803d87a38b70a01e736e666c8f7601d2ce42f5e47c8fafe5d721074b9a3",
+}
+
+
+def verified_public_js(path, data):
+    """Use the same byte snapshot for provenance and scanning, not a second file read or a mutable manifest."""
+    digest = PUBLIC_JS_SHA256.get(os.path.basename(path))
+    return digest is not None and hashlib.sha256(data).hexdigest() == digest
+
 
 # These are protocol and standards constants, not accounts or deployment addresses. Keep contexts narrow:
 # SSH wire identifiers, the upstream web client's exact contact link, and complete RFC 1918 networks.
@@ -142,10 +157,16 @@ def generic_text(text, dependencies, original_text=None):
     return pc.IPV4.sub(public_address, text)
 
 
-def text_kinds(text, words, whole_short=False, dependencies=frozenset(), original_text=None):
+def text_kinds(text, words, whole_short=False, dependencies=frozenset(), original_text=None, public_js=False):
     kinds = set()
     for word in words:
-        if whole_short and len(word) <= 4:
+        pinned_short = (public_js and (original_text is None or text == original_text)
+                        and len(word) <= 4 and word.isascii() and word.isalpha())
+        if pinned_short:
+            if re.search(r"(?<![A-Za-z0-9_$])(%s|%s)(?![A-Za-z0-9_$])" %
+                         (re.escape(word), re.escape(word.lower())), text):
+                kinds.add("private value (%d chars)" % len(word))
+        elif whole_short and len(word) <= 4:
             if re.search(r"(?<![A-Za-z])(%s|%s)(?![A-Za-z])" % (re.escape(word), re.escape(word.lower())), text):
                 kinds.add("private value (%d chars)" % len(word))
         elif word in text or word.lower() in text:
@@ -253,9 +274,10 @@ def signature_ranges(data):
     return ranges
 
 
-def texts(path: str):
-    with open(path, "rb") as source:
-        data = source.read()
+def texts(path: str, data=None):
+    if data is None:
+        with open(path, "rb") as source:
+            data = source.read()
     if data[:3] == b"bvx":  # lzfse (App Intents metadata): compressed, values would be split across matches
         data = subprocess.run(["compression_tool", "-decode", "-a", "lzfse", "-i", path, "-o", "/dev/stdout"],
                               capture_output=True).stdout
@@ -318,7 +340,10 @@ def main():
             path = os.path.join(dirpath, f)
             kinds = set()
             dependencies = go_dependencies(path) if whole_short else set()
-            for t in texts(path):
+            with open(path, "rb") as source:
+                data = source.read()
+            public_js = not whole_short and verified_public_js(path, data)
+            for t in texts(path, data):
                 original_text = t
                 if not whole_short:
                     t = remove_public_relay_url(t, jarvis_config.get(cfg, "app.push_relay", ""))
@@ -328,7 +353,7 @@ def main():
                     t = t.replace(v, "")
                 if modules:
                     t = modules.sub("", t)
-                kinds.update(text_kinds(t, words, whole_short, dependencies, original_text))
+                kinds.update(text_kinds(t, words, whole_short, dependencies, original_text, public_js=public_js))
             bad += [(os.path.relpath(path, root), k) for k in sorted(kinds)]
     for f, k in bad:
         print("%s: %s" % (f, k))

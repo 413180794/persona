@@ -24,21 +24,21 @@ internal class NotificationDelivery(
         when (event) {
             is InteractionResolvedEvent -> retract(event.id)
             is NotifyEvent -> {
-                val session = SessionKey(event.machineId, event.sessionId)
-                if (suppressed(session)) return
+                val session = NotificationPolicy.session(event)
+                if (session != null && suppressed(session)) return
                 if (event.kind != "interaction" && NotificationPolicy.channel(event) == null) return
                 val settings = preferences() ?: return
-                if (event.kind == "interaction" && !settings.input) return
+                if ((event.kind == "interaction" || event.kind == "alert") && !settings.input) return
                 if (event.kind == "done" && settings.done == DoneNotification.Off) return
                 // Long/Always and session mute/seen suppression remain the hub's decision.
-                if (event.kind != "assistant" && sessions.sessions.value.none { it.key == session }) sessions.refresh()
+                if (session != null && event.kind != "assistant" && sessions.sessions.value.none { it.key == session }) sessions.refresh()
                 if (event.kind == "interaction") {
                     val id = event.interactionId ?: return
                     interactions.refresh()
                     val ix = interactions.pending.value.firstOrNull { it.id == id && it.sessionKey == session } ?: return
                     if (NotificationPolicy.expired(ix)) { retract(id); return }
-                    if (!suppressed(session)) postInteraction(ix)
-                } else if (!suppressed(session)) postNotify(event)
+                    if (session != null && !suppressed(session)) postInteraction(ix)
+                } else if (session == null || !suppressed(session)) postNotify(event)
             }
             else -> Unit
         }

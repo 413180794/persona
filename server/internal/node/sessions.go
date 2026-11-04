@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/transcript"
 )
@@ -1835,6 +1836,9 @@ func (n *Node) recentDirs() []proto.RecentDir {
 	n.mu.Unlock()
 	var out []proto.RecentDir
 	for p, t := range last {
+		if identity.IsAssistantDir(p) {
+			continue
+		}
 		if st, err := os.Stat(p); err != nil || !st.IsDir() {
 			continue
 		}
