@@ -333,6 +333,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 
 // Interaction：需要人处理的事
 {"id":"ix_…","machine_id":"server","session_id":"uuid","session_title":"…","cwd":"…",
+ "task_title":"…",   // 提问的 Agent 在为从助手对话开的任务干活时，hub 发给客户端时填上任务名（docs/unified-entry.md）
  "kind":"question|plan|permission|screen|elicitation",
  "created_at":"…","expires_at":"…","tool_name":"AskUserQuestion","tool_use_id":"…",
  "questions":[{"question":"…","header":"…","multi_select":false,

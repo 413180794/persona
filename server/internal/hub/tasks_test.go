@@ -499,3 +499,23 @@ func TestTaskTrust(t *testing.T) {
 		t.Fatal("forgot a kind that was never remembered")
 	}
 }
+
+// An interaction of a task's agent names the task when the hub sends it (the watch shows it).
+func TestInteractionNamesItsTask(t *testing.T) {
+	h, _ := newTaskHub(t)
+	if _, err := h.toolTaskPlan(context.Background(), "conv1", planArgs(true)); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the link", func() bool { ts := taskTodos(h); return len(ts) == 1 && len(ts[0].Agents) == 1 })
+	h.mu.Lock()
+	h.interactions["ix_t"] = &pending{ix: proto.Interaction{ID: "ix_t", MachineID: "box", SessionID: "s1", Kind: proto.IxPermission}}
+	h.interactions["ix_o"] = &pending{ix: proto.Interaction{ID: "ix_o", MachineID: "box", SessionID: "other", Kind: proto.IxPermission}}
+	h.mu.Unlock()
+	got := map[string]string{}
+	for _, ix := range h.pendingInteractions() {
+		got[ix.ID] = ix.TaskTitle
+	}
+	if got["ix_t"] != "修登录崩溃" || got["ix_o"] != "" {
+		t.Fatalf("task titles = %v", got)
+	}
+}

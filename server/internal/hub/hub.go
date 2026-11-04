@@ -664,7 +664,7 @@ func trimScreen(s string) string {
 }
 
 func (h *Hub) announce(ix proto.Interaction) {
-	h.broadcast(map[string]any{"type": "interaction", "interaction": ix})
+	h.broadcast(map[string]any{"type": "interaction", "interaction": h.withTask(ix)})
 	if m := h.localMachine(ix.MachineID); m != nil {
 		h.broadcastSessions(m, h.decorated(m))
 	}
@@ -940,10 +940,13 @@ func (h *Hub) cancelMachineInteractions(machineID string) {
 
 func (h *Hub) pendingInteractions() []proto.Interaction {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	out := []proto.Interaction{}
 	for _, p := range h.interactions {
 		out = append(out, p.ix)
+	}
+	h.mu.Unlock()
+	for i := range out { // after h.mu: the task comes from the todos' lock
+		out[i] = h.withTask(out[i])
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
 	return out

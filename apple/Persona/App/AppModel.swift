@@ -1901,7 +1901,14 @@ final class AppModel {
             .sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
         // The watch does not draw connectors' items (GitHub…) yet.
         let inbox = InboxStore.shared.items.filter { !$0.isDone && $0.triage == .action && $0.connector == nil }
-        return WatchSummary(sessions: Array(sessions.prefix(20)), interactions: pendingInteractions, machines: machines,
+        // A task's agent asking: the watch names the task (docs/unified-entry.md「手表」).
+        let tasks = TasksStore.shared
+        let interactions = pendingInteractions.map { ix in
+            var ix = ix
+            ix.taskTitle = tasks.task(of: ix.sessionKey)?.title
+            return ix
+        }
+        return WatchSummary(sessions: Array(sessions.prefix(20)), interactions: interactions, machines: machines,
                             inbox: Array(inbox.prefix(20)))
     }
 }

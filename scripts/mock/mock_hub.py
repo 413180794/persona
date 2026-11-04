@@ -1619,6 +1619,9 @@ def mock_interactions():
         # MOCK_TASKS_NO_ASKS=1: the tasks' agents ask nothing, so the conversation shows above the composer whole.
         if os.environ.get("MOCK_TASKS_NO_ASKS") == "1":
             out = [x for x in out if x.get("session_id") not in (TESTS, WIDGET, RELEASE)]
+        if MOCK_TASKS:  # a task's agent asking: the hub names the task (task_title)
+            titles = {a["session_id"]: t["title"] for t in TODOS if t.get("origin") and not t.get("done_at") for a in t.get("agents", [])}
+            out = [dict(x, task_title=titles[x["session_id"]]) if x.get("session_id") in titles else x for x in out]
         return out
 
 

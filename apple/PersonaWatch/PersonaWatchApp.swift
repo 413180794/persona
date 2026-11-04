@@ -222,7 +222,8 @@ struct WatchRootView: View {
                                             .font(.footnote.weight(.semibold))
                                             .foregroundStyle(Theme.needsYou)
                                         Text(ix.watchSummary).font(.headline).lineLimit(3)
-                                        Text(ix.sessionTitle ?? "").font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                                        Text(ix.taskTitle.map { "任务 · " + $0 } ?? ix.sessionTitle ?? "")
+                                            .font(.footnote).foregroundStyle(.secondary).lineLimit(1)
                                     }
                                 }
                                 .watchCard()

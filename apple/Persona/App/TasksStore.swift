@@ -56,7 +56,10 @@ final class TasksStore {
             if let list = try? await api.todos() {
                 var map: [String: TodoItem] = [:]
                 for t in list { map[t.id] = t }
-                if map != todos { todos = map }
+                if map != todos {
+                    todos = map
+                    WatchSync.shared.push(summary: AppModel.shared.watchSummary()) // its questions name their tasks
+                }
             }
         }
     }
@@ -111,6 +114,14 @@ final class TasksStore {
     func tasks(of conversation: String) -> [TodoItem] {
         todos.values.filter { $0.origin == conversation }
             .sorted { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) }
+    }
+
+    /// The task (a todo from an assistant conversation, not done) an agent works for.
+    func task(of key: SessionKey) -> TodoItem? {
+        guard key.group == (AppModel.shared.hub?.group ?? "") else { return nil }
+        return todos.values.first { t in
+            t.origin != nil && t.doneAt == nil && t.activeAgents.contains { $0.machineID == key.machineID && $0.sessionID == key.sessionID }
+        }
     }
 
     /// The task's agents as the app knows them now (the Agents page's sessions).

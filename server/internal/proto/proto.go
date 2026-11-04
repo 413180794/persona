@@ -676,6 +676,7 @@ type Interaction struct {
 	MachineID       string          `json:"machine_id"`
 	SessionID       string          `json:"session_id"`
 	SessionTitle    string          `json:"session_title,omitempty"`
+	TaskTitle       string          `json:"task_title,omitempty"` // the task its agent works for (docs/unified-entry.md), set when sent to clients
 	Cwd             string          `json:"cwd,omitempty"`
 	Kind            string          `json:"kind"`
 	CreatedAt       time.Time       `json:"created_at"`

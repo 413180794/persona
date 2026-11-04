@@ -125,7 +125,7 @@ hub 往对话里插的条目，不进 Claude 的 transcript（插进去会多跑
 | `message` | 收件箱里一条和任务有关的消息，AI 分身起草好了回复 | 收件箱条目 id；任务、来源、会话、谁、原话、草稿 |
 | `today` | 当天第一次打开这段对话（App 调 `POST …/today`） | 日期；夜里做完的任务、等你的任务、在做几个、飞书今天接下来的会、@我 的会话、其他未读数 |
 
-- `GET /api/v1/assistant/{id}/feed?since=`，WebSocket `assistant_feed` 推新条目。App 把它和 transcript 按时间合在一起画。
+- `GET /api/v1/assistant/conversations/{id}/feed?since=`，WebSocket `assistant_feed` 推新条目。App 把它和 transcript 按时间合在一起画。
 - 计划卡、任务卡的实时状态不存在动态里：卡片按 `ref` 读计划 / 待办 / 会话的当前状态，所以原地更新。
 
 ### 钩子
@@ -133,7 +133,7 @@ hub 往对话里插的条目，不进 Claude 的 transcript（插进去会多跑
 - **做完**：`Machine.setSessions` 发现挂在带 `origin` 的待办上的 Agent 从 working 变成 done / idle、没有待处理的交互时（和 `notifyFinished` 同一处），
   写 `receipt`。同一个任务的几个 Agent 都停了才算任务做完。
 - **等你**：不写动态。App 直接用待办挂着的 Agent 的 `pending_interactions`；处理后（`resolve`）写 `answered`。
-- **对任务说话**：`POST /api/v1/assistant/{id}/route {todo_id, text}`：hub 用 `session.send` 发给那个任务最要紧的 Agent，写 `routed`。
+- **对任务说话**：`POST /api/v1/assistant/conversations/{id}/route {todo_id, text}`：hub 用 `session.send` 发给那个任务最要紧的 Agent，写 `routed`。
 - **Persona 知道**：实时快照多一节「这段对话开的任务」：每个任务的状态、最近一句、和上一份比的变化（做完了、在等你）。不额外触发一轮。
 
 ## App（iOS）
@@ -183,7 +183,7 @@ hub 往对话里插的条目，不进 Claude 的 transcript（插进去会多跑
 | 2 ✅ | hub：迁移（`todos.origin` / `plan_id`、`task_plans`、`assistant_feed`）、`task_plan` 工具和提示词、计划开始 / 不开接口、对话动态的接口和推送、做完 / 答过 / 路由的钩子、快照里的任务 |
 | 3 ✅ | iOS：模型和 `FakeHub`、对话动态合并、计划卡、任务卡、任务坞、问题卡、回执、`@` 和路由、任务详情浮层、任务板 |
 | 4 ✅ | 秒办结果卡、主对话的「今天」卡片、按天分段和折叠、`tasks.trust` 的设置页（消息卡关联任务另做） |
-| 5 | 网页 ✅（`docs/web.md`「主对话统一入口」）；手表和实时活动（只放在做几个、等你几个，手表能批准和选选项）；Android 对齐 |
+| 5 | 网页 ✅（`docs/web.md`「主对话统一入口」）；手表 ✅（提问带 `task_title`，「需要你」里写「任务 · xx」；在做几个、等你几个本来就在实时活动和手表里，任务的 Agent 也算在内）；Android 对齐 |
 
 ## 已拍板（2026-11-03）
 

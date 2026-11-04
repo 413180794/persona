@@ -587,6 +587,14 @@ func (h *Hub) taskOf(mid, sid string) (Todo, bool) {
 	return copyTodoLocked(t), true
 }
 
+// withTask names, on an interaction sent to clients, the task its agent works for (the watch and the cards show it).
+func (h *Hub) withTask(ix proto.Interaction) proto.Interaction {
+	if t, ok := h.taskOf(ix.MachineID, ix.SessionID); ok {
+		ix.TaskTitle = t.Title
+	}
+	return ix
+}
+
 // taskAgents are the sessions of t's active agents, as the clients see them (with state).
 func (h *Hub) taskAgents(t Todo) []proto.Session {
 	var out []proto.Session
