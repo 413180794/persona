@@ -79,7 +79,7 @@ final class SecretFieldTests: XCTestCase {
         XCTAssertEqual(launchers.first { $0["name"] as? String == name }?["has_key"] as? Bool, true, "the key did not reach the hub")
     }
 
-    /// 新增供应商 › 从插件添加: a plugin's provider, a name and its key; saved, the sheet closes.
+    /// 新增供应商 › 从扩展添加: a plugin's provider, a name and its key; saved, the sheet closes.
     @MainActor func testAPresetKey() throws {
         let app = try launch(["-tab", "settings", "-openModelLaunchers", "YES", "-openLauncherEditor", "preset", "-dev.openChat", ""])
         let preset = app.buttons["launcher.preset.example-gateway/team"]

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 新增供应商 › 从插件添加 (docs/plugins.md「模型供应商」): the providers the hub's plugins offer, then only the name, the
+/// 新增供应商 › 从扩展添加 (docs/extensions.md「模型供应商」): the providers the hub's plugins offer, then only the name, the
 /// key and maybe another of the provider's models; the address and the kind come from the plugin.
 struct LauncherPresetSections: View {
     @Bindable var model: LauncherPresetModel
@@ -12,7 +12,7 @@ struct LauncherPresetSections: View {
             Text("供应商")
         } footer: {
             if let p = model.selected {
-                Text("地址、接入方式和模型由插件「\(p.plugin)」提供；加好以后和自己填写的一样可以编辑。")
+                Text("地址、接入方式和模型由扩展「\(p.plugin)」提供；加好以后和自己填写的一样可以编辑。")
             }
         }
         Section {
@@ -49,7 +49,7 @@ struct LauncherPresetSections: View {
                 Text("默认模型")
             } footer: {
                 if let e = p.modelsError, !e.isEmpty {
-                    Text("读不到插件的模型列表（\(e)），这里是它声明的。")
+                    Text("读不到扩展的模型列表（\(e)），这里是它声明的。")
                 } else {
                     Text("各用途的具体选择在「模型配置」里统一管理；未单独指定时使用这里的默认。")
                 }

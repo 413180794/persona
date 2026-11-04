@@ -1,12 +1,12 @@
 import SwiftUI
 
-/// A plugin's View drawn with the app's design system (docs/plugins.md「声明式 UI」): each section a section of the form
+/// A plugin's View drawn with the app's design system (docs/extensions.md「声明式 UI」): each section a section of the form
 /// (a divider starts another one), each item a row — text, a number with what it is, a bar, a list row, a button, a
 /// link opened in the app, a field to fill in. Tones are the app's role colors. Buttons that ask first ask; the ones
 /// that submit take the page's fields along; what comes back (a new view, a word, a link) is handled here.
-struct PluginViewRenderer: View {
-    var view: PluginUIView
-    var model: PluginViewModel
+struct ExtensionViewRenderer: View {
+    var view: ExtensionUIView
+    var model: ExtensionViewModel
     /// The first section's title when it has none of its own (a launcher's section: what the plugin calls it).
     var heading: String? = nil
     /// Where links and `open_url` open: the page's link card.
@@ -41,7 +41,7 @@ struct PluginViewRenderer: View {
         ForEach(groups) { g in
             Section {
                 ForEach(Array(g.items.enumerated()), id: \.offset) { _, item in
-                    PluginItemRow(item: item, model: model, link: $link)
+                    ExtensionItemRow(item: item, model: model, link: $link)
                 }
             } header: {
                 if let t = g.title, !t.isEmpty { SettingsHeading(t) }
@@ -53,7 +53,7 @@ struct PluginViewRenderer: View {
 }
 
 /// How a plugin's words map onto the app's look.
-enum PluginUIStyle {
+enum ExtensionUIStyle {
     /// neutral | positive | caution | danger → the role colors; anything else reads as neutral.
     static func tone(_ t: String?) -> Color {
         switch t {
@@ -97,30 +97,30 @@ enum PluginUIStyle {
 }
 
 /// One item of a plugin's View.
-struct PluginItemRow: View {
+struct ExtensionItemRow: View {
     var item: PluginUIItem
-    @Bindable var model: PluginViewModel
+    @Bindable var model: ExtensionViewModel
     @Binding var link: LinkTarget?
 
     var body: some View {
         switch item.type {
         case "text":
             Text(item.text ?? "")
-                .font(PluginUIStyle.font(item.style))
+                .font(ExtensionUIStyle.font(item.style))
                 .foregroundStyle(item.style == "secondary" || item.style == "caption" ? Color.secondary : Color.primary)
                 .textSelection(.enabled)
         case "metric": metric
         case "progress": progress
         case "row":
             if let action = item.action {
-                PluginActionButton(action: action, title: item.title ?? "", model: model, link: $link) { rowLabel(chevron: true) }
+                ExtensionActionButton(action: action, title: item.title ?? "", model: model, link: $link) { rowLabel(chevron: true) }
                     .foregroundStyle(Color.primary)
             } else {
                 rowLabel(chevron: false)
             }
         case "button":
             if let action = item.action {
-                PluginActionButton(action: action, title: item.title ?? "", destructive: item.role == "destructive", model: model, link: $link) {
+                ExtensionActionButton(action: action, title: item.title ?? "", destructive: item.role == "destructive", model: model, link: $link) {
                     HStack(spacing: Theme.Space.s) {
                         Text(item.title ?? "").lineLimit(1).minimumScaleFactor(0.8)
                         if model.running == action.id { ProgressView().controlSize(.small) }
@@ -134,10 +134,10 @@ struct PluginItemRow: View {
                 }
                 .accessibilityIdentifier("plugin-ui-link")
             }
-        case "field": PluginFieldItem(item: item, model: model)
-        case "chart": PluginChartItem(item: item)
-        case "stat_grid": PluginStatGrid(stats: item.stats ?? [])
-        case "segmented": PluginSegmented(item: item, model: model, link: $link)
+        case "field": ExtensionFieldItem(item: item, model: model)
+        case "chart": ExtensionChartItem(item: item)
+        case "stat_grid": ExtensionStatGrid(stats: item.stats ?? [])
+        case "segmented": ExtensionSegmented(item: item, model: model, link: $link)
         // An item this app does not know (a newer plugin's): left out, the rest drawn as usual.
         default: EmptyView()
         }
@@ -146,7 +146,7 @@ struct PluginItemRow: View {
     private var metric: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
             Text(item.label ?? "").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
-            Text(item.value ?? "").font(Theme.Font.title.monospacedDigit()).foregroundStyle(PluginUIStyle.ink(item.tone)).lineLimit(1)
+            Text(item.value ?? "").font(Theme.Font.title.monospacedDigit()).foregroundStyle(ExtensionUIStyle.ink(item.tone)).lineLimit(1)
                 .minimumScaleFactor(0.6)
             if let d = item.detail, !d.isEmpty { Text(d).font(Theme.Font.label).foregroundStyle(.secondary) }
         }
@@ -161,9 +161,9 @@ struct PluginItemRow: View {
                 Text(item.label ?? "").font(Theme.Font.caption).lineLimit(1)
                 Spacer(minLength: Theme.Space.s)
                 Text("\(Int((ratio * 100).rounded()))%").font(Theme.Font.caption.monospacedDigit())
-                    .foregroundStyle(item.tone == nil || item.tone == "neutral" ? Color.secondary : PluginUIStyle.tone(item.tone)).lineLimit(1)
+                    .foregroundStyle(item.tone == nil || item.tone == "neutral" ? Color.secondary : ExtensionUIStyle.tone(item.tone)).lineLimit(1)
             }
-            ProgressView(value: ratio).tint(PluginUIStyle.bar(item.tone))
+            ProgressView(value: ratio).tint(ExtensionUIStyle.bar(item.tone))
             if let d = item.detail, !d.isEmpty { Text(d).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2) }
         }
         .padding(.vertical, Theme.Space.xxs)
@@ -178,7 +178,7 @@ struct PluginItemRow: View {
             }
             Spacer(minLength: Theme.Space.s)
             if let v = item.value, !v.isEmpty { Text(v).font(Theme.Font.body.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1) }
-            if let b = item.badge { Chip(text: b.text, look: b.tone == nil || b.tone == "neutral" ? .neutral : .tint(PluginUIStyle.tone(b.tone))) }
+            if let b = item.badge { Chip(text: b.text, look: b.tone == nil || b.tone == "neutral" ? .neutral : .tint(ExtensionUIStyle.tone(b.tone))) }
             if chevron {
                 if let a = item.action, model.running == a.id {
                     ProgressView().controlSize(.small)
@@ -194,7 +194,7 @@ struct PluginItemRow: View {
 /// A plugin's `chart`: its title, the chart (bars or lines, stacked when it says so), what it says under it. A series'
 /// tone is a role color, without one it takes the next data hue; values the plugin did not write are compact numbers
 /// with its unit. Compact (a card) when the environment says so.
-struct PluginChartItem: View {
+struct ExtensionChartItem: View {
     var item: PluginUIItem
     @Environment(\.pluginUICompact) private var compact
 
@@ -211,7 +211,7 @@ struct PluginChartItem: View {
                 DataChart(kind: item.kind == "line" ? .line : .bar, labels: labels,
                           series: series.enumerated().map { i, s in
                               DataChart.Series(name: s.name?.isEmpty == false ? s.name! : "系列 \(i + 1)",
-                                               color: PluginUIStyle.series(s.tone), values: s.points.map(\.value),
+                                               color: ExtensionUIStyle.series(s.tone), values: s.points.map(\.value),
                                                displays: s.points.map(\.display))
                           },
                           stacked: item.stacked == true, format: format, compact: compact)
@@ -232,7 +232,7 @@ struct PluginChartItem: View {
 
 /// A plugin's `stat_grid`: a few numbers side by side (two or three a row on an iPhone, all of them in a row when
 /// there is room), each with what it is and a line under it in its tone.
-struct PluginStatGrid: View {
+struct ExtensionStatGrid: View {
     var stats: [PluginUIItem.Stat]
 
     var body: some View {
@@ -269,7 +269,7 @@ struct PluginStatGrid: View {
             Text(s.label).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             Text(s.value).font(Theme.Font.heading.monospacedDigit()).lineLimit(1).minimumScaleFactor(0.6)
             if let d = s.detail, !d.isEmpty {
-                Text(d).font(Theme.Font.label).foregroundStyle(PluginUIStyle.tone(s.tone)).lineLimit(1).minimumScaleFactor(0.8)
+                Text(d).font(Theme.Font.label).foregroundStyle(ExtensionUIStyle.tone(s.tone)).lineLimit(1).minimumScaleFactor(0.8)
             }
         }
         .accessibilityElement(children: .combine)
@@ -278,10 +278,10 @@ struct PluginStatGrid: View {
 
 /// A plugin's `segmented`: a few choices, one picked; picking another sends it to the plugin at once (its action, with
 /// `{name: value}`), whose answer is the view for it.
-struct PluginSegmented: View {
+struct ExtensionSegmented: View {
     @Environment(AppModel.self) private var app
     var item: PluginUIItem
-    var model: PluginViewModel
+    var model: ExtensionViewModel
     @Binding var link: LinkTarget?
 
     private var name: String { item.name ?? "" }
@@ -318,10 +318,10 @@ extension EnvironmentValues {
 }
 
 /// A plugin's View on a page that is not a list (a machine's page, a card): each section a heading and a card of its
-/// items, a divider a line between them. The same items as `PluginViewRenderer`, drawn by `PluginItemRow`.
-struct PluginViewStack: View {
-    var view: PluginUIView
-    var model: PluginViewModel
+/// items, a divider a line between them. The same items as `ExtensionViewRenderer`, drawn by `ExtensionItemRow`.
+struct ExtensionViewStack: View {
+    var view: ExtensionUIView
+    var model: ExtensionViewModel
     /// The first section's heading when it has none of its own.
     var heading: String? = nil
     /// Draw the sections' cards (a page); false: the caller's card holds them (an overview card).
@@ -341,7 +341,7 @@ struct PluginViewStack: View {
                         let body = VStack(alignment: .leading, spacing: Theme.Space.m) {
                             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                                 if item.type == "divider" { Divider() } else {
-                                    PluginItemRow(item: item, model: model, link: $link)
+                                    ExtensionItemRow(item: item, model: model, link: $link)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                             }
@@ -359,12 +359,12 @@ struct PluginViewStack: View {
 
 /// A button or row that sends its action back to the plugin, asking first when it says so; the answer's word is a
 /// toast, its link opens in the app.
-private struct PluginActionButton<Content: View>: View {
+private struct ExtensionActionButton<Content: View>: View {
     @Environment(AppModel.self) private var app
-    var action: PluginUIAction
+    var action: ExtensionUIAction
     var title: String
     var destructive = false
-    var model: PluginViewModel
+    var model: ExtensionViewModel
     @Binding var link: LinkTarget?
     @ViewBuilder var label: Content
     @State private var asking = false
@@ -401,9 +401,9 @@ private struct PluginActionButton<Content: View>: View {
 }
 
 /// A field of a plugin's View: text, a secret (typed in hidden, never filled in for you), a number, a switch, a choice.
-private struct PluginFieldItem: View {
+private struct ExtensionFieldItem: View {
     var item: PluginUIItem
-    @Bindable var model: PluginViewModel
+    @Bindable var model: ExtensionViewModel
 
     private var name: String { item.name ?? "" }
     private var text: Binding<String> {
@@ -463,13 +463,13 @@ extension View {
         #if os(macOS)
         macLinkPanel(link)
         #else
-        modifier(PluginLinkSheet(link: link))
+        modifier(ExtensionLinkSheet(link: link))
         #endif
     }
 }
 
 #if os(iOS) || os(visionOS)
-private struct PluginLinkSheet: ViewModifier {
+private struct ExtensionLinkSheet: ViewModifier {
     @Environment(AppModel.self) private var model
     @Binding var link: LinkTarget?
 
@@ -479,21 +479,21 @@ private struct PluginLinkSheet: ViewModifier {
 }
 #endif
 
-/// 设置 › 插件 › a plugin › one of its pages (placement plugin_page): its View as a page of its own.
-struct PluginPageView: View {
-    @State private var page: PluginViewModel
+/// 设置 › 扩展 › a plugin › one of its pages (placement plugin_page): its View as a page of its own.
+struct ExtensionPageView: View {
+    @State private var page: ExtensionViewModel
     @State private var link: LinkTarget?
     var title: String
 
     init(plugin: String, ui: String, title: String) {
-        _page = State(initialValue: PluginViewModel(plugin: plugin, ui: ui))
+        _page = State(initialValue: ExtensionViewModel(plugin: plugin, ui: ui))
         self.title = title
     }
 
     var body: some View {
         SettingsForm {
             if let v = page.view {
-                PluginViewRenderer(view: v, model: page, link: $link)
+                ExtensionViewRenderer(view: v, model: page, link: $link)
             } else if let e = page.error {
                 Section {
                     EmptyStateView(symbol: Theme.Icon.error, title: "读不到这一页", message: e,
@@ -502,7 +502,7 @@ struct PluginPageView: View {
                 .listRowBackground(Color.clear)
             } else if page.unsupported {
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.plugins, title: "这里没有内容", message: "插件现在不在这里显示东西。")
+                    EmptyStateView(symbol: Theme.Icon.plugins, title: "这里没有内容", message: "扩展现在不在这里显示东西。")
                 }
                 .listRowBackground(Color.clear)
             }
@@ -520,15 +520,15 @@ struct PluginPageView: View {
 
 /// A launcher's page › what plugins draw for it (placement launcher_section): a section each, after its quota. A plugin
 /// that says the launcher's gateway is not its own (404 unsupported) draws nothing, and that is not an error. The page
-/// owns the model and loads it (`PluginLauncherModel.load`, with a hub that has the plugin base).
-struct PluginLauncherSections: View {
-    var page: PluginLauncherModel
+/// owns the model and loads it (`ExtensionLauncherModel.load`, with a hub that has the plugin base).
+struct ExtensionLauncherSections: View {
+    var page: ExtensionLauncherModel
     @Binding var link: LinkTarget?
 
     var body: some View {
         ForEach(page.shown) { entry in
             if let v = entry.model.view {
-                PluginViewRenderer(view: v, model: entry.model, heading: entry.place.title, link: $link)
+                ExtensionViewRenderer(view: v, model: entry.model, heading: entry.place.title, link: $link)
                     .pluginRefresh(entry.model)
             } else {
                 Section {

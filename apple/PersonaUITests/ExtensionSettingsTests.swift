@@ -1,11 +1,11 @@
 import XCTest
 
-/// 设置 › 插件 (docs/plugins.md): the list, a plugin's page with its form drawn from its schema, a secret filled in
+/// 设置 › 扩展 (docs/extensions.md): the list, a plugin's page with its form drawn from its schema, a secret filled in
 /// (and never shown again), a setting the hub refuses shown beside its field. Against scripts/mock/mock_hub.py with
 /// MOCK_PLUGINS=1: `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<端口>`; `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the
 /// screenshots, named by `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` (light / dark: set with `simctl ui … appearance`).
-final class PluginSettingsTests: XCTestCase {
-    @MainActor func testSetUpAPlugin() throws {
+final class ExtensionSettingsTests: XCTestCase {
+    @MainActor func testSetUpAnExtension() throws {
         let env = ProcessInfo.processInfo.environment
         guard let hub = env["JARVIS_PLUGINS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_PLUGINS=1 (JARVIS_PLUGINS_HUB)") }
         let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"

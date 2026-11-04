@@ -117,7 +117,7 @@ nonisolated struct LauncherInput: Encodable, Sendable {
     }
 }
 
-/// A model provider a plugin offers (GET /api/v1/launchers/presets, docs/plugins.md「模型供应商」): a launcher added from
+/// A model provider a plugin offers (GET /api/v1/launchers/presets, docs/extensions.md「模型供应商」): a launcher added from
 /// it takes the address, kind and models from here; the user fills in only the name and the key.
 nonisolated struct LauncherPreset: Decodable, Hashable, Sendable, Identifiable {
     nonisolated struct Model: Decodable, Hashable, Sendable, Identifiable {

@@ -1,7 +1,7 @@
 import Observation
 import SwiftUI
 
-// 设置 › 插件 › 渠道 (docs/channels.md): every way of talking to Persona — the apps, the Feishu bot, WeChat, /agent in
+// 设置 › 扩展 › 渠道 (docs/channels.md): every way of talking to Persona — the apps, the Feishu bot, WeChat, /agent in
 // Feishu, voice, the chat app bots plugins contribute — as GET /api/v1/channels lists them; one channel's page (its
 // switch, binding a step at a time, where its messages go, what it does, a test message); and the source of a message
 // that came from one (its client_msg_id is `<channel>-<message id>`). Only with a hub whose features have `channels`.
@@ -76,11 +76,11 @@ enum ChannelText {
                  channels: list.filter(\.isApp)),
          Section(title: "已接入", footer: "这些地方发给机器人的消息会交给 Persona，回答和 Agent 的提问发回原处。只认绑定的那一个人。",
                  channels: list.filter { !$0.isApp && !$0.isMarket }),
-         Section(title: "可以安装", footer: "插件市场里提供渠道的插件：装好后在这里绑定。", channels: list.filter(\.isMarket))]
+         Section(title: "可以安装", footer: "扩展市场里提供渠道的扩展：装好后在这里绑定。", channels: list.filter(\.isMarket))]
             .filter { !$0.channels.isEmpty }
     }
 
-    /// 设置 › 插件's 渠道 row: how many are connected, and how many went wrong.
+    /// 设置 › 扩展's 渠道 row: how many are connected, and how many went wrong.
     static func summary(_ list: [HubChannel]?) -> String {
         guard let list else { return "" }
         let on = list.filter { !$0.isApp && $0.state == "connected" }.count
@@ -130,8 +130,10 @@ enum ChannelText {
         case "connectors/feishu": return .feishu
         case "model-config": return .modelConfiguration
         default:
-            if rest.hasPrefix("plugins/"), case let id = String(rest.dropFirst("plugins/".count)), !id.isEmpty, !id.contains("/") {
-                return .plugin(id)
+            // settings/extensions/<id>, or settings/plugins/<id> as hubs from before the rename write it (#1844).
+            for prefix in ["extensions/", "plugins/"] where rest.hasPrefix(prefix) {
+                let id = String(rest.dropFirst(prefix.count))
+                if !id.isEmpty, !id.contains("/") { return .plugin(id) }
             }
             if rest.hasPrefix("connectors/"), case let id = String(rest.dropFirst("connectors/".count)), !id.isEmpty, !id.contains("/") {
                 return .connector(id)
@@ -193,7 +195,7 @@ enum ChannelText {
     func update(_ l: [HubChannel]) { list = l }
 }
 
-/// 设置 › 插件 › 渠道: the list.
+/// 设置 › 扩展 › 渠道: the list.
 @Observable final class ChannelsModel {
     struct Deps {
         var api: () -> APIClient?
@@ -225,7 +227,7 @@ enum ChannelText {
     }
 }
 
-/// 设置 › 插件 › 渠道 › one: its switch, where its messages go, its features, unbinding and a test message. Binding a
+/// 设置 › 扩展 › 渠道 › one: its switch, where its messages go, its features, unbinding and a test message. Binding a
 /// step at a time is `ConnectorSignInModel` on the channel's bind (`ChannelModel.binding`).
 @Observable final class ChannelModel {
     struct Deps {

@@ -1,12 +1,12 @@
 import XCTest
 
-/// 设置 › 插件 › 插件市场 and a plugin's own page (docs/plugins.md「插件市场」「声明式 UI」): a plugin installed from a market
+/// 设置 › 扩展 › 扩展市场 and a plugin's own page (docs/extensions.md「扩展市场」「声明式 UI」): a plugin installed from a market
 /// (preview, its permissions agreed to, installed, then removed so the next run finds it as before), a plugin page's
 /// form filled in and saved (the plugin's toast, its new view), and a launcher's page with the plugin's section — the
 /// one that says unsupported (#1339) not there at all. Against scripts/mock/mock_hub.py with MOCK_PLUGINS=1:
 /// `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<端口>`; `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the screenshots, named
 /// by `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` (light / dark) and the style.
-final class PluginMarketTests: XCTestCase {
+final class ExtensionMarketTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
 
     @MainActor private func launch(_ args: [String] = []) throws -> XCUIApplication {
@@ -41,7 +41,7 @@ final class PluginMarketTests: XCTestCase {
         scrollTo(entry, in: app)
         entry.tap()
 
-        // 插件市场 is there: the hub has markets.
+        // 扩展市场 is there: the hub has markets.
         let market = app.buttons["plugins-market"]
         XCTAssertTrue(market.waitForExistence(timeout: 15), "no 插件市场:\n\(app.debugDescription)")
         shot(app, "plugins")
@@ -100,12 +100,12 @@ final class PluginMarketTests: XCTestCase {
         XCTAssertTrue(upgrade.waitForExistence(timeout: 5))
     }
 
-    /// A market plugin's 升级 section (docs/plugins.md「自动升级」): its own switch, the newer version that waits for the
+    /// A market plugin's 升级 section (docs/extensions.md「自动升级」): its own switch, the newer version that waits for the
     /// user with what it asks for more, opening the market's upgrade; the 市场 page's switch for all of them. The mock's
     /// MOCK_PLUGIN_UPGRADE picks the state (needs_permission by default; the screenshots of the others are named by it).
     @MainActor func testAutoUpgrade() throws {
         let state = env["JARVIS_PLUGIN_UPGRADE"] ?? "needs_permission"
-        let app = try launch(["-openPlugin", "example-gateway"])
+        let app = try launch(["-openExtension", "example-gateway"])
         let toggle = app.switches["plugin-auto-upgrade"].firstMatch
         XCTAssertTrue(toggle.waitForExistence(timeout: 15), "no 自动升级 switch:\n\(app.debugDescription)")
         XCTAssertEqual(toggle.value as? String, "1", "on by default")
@@ -127,7 +127,7 @@ final class PluginMarketTests: XCTestCase {
     }
 
     @MainActor func testAutoUpgradeForAll() throws {
-        let app = try launch(["-openPluginMarkets", "YES"])
+        let app = try launch(["-openExtensionMarkets", "YES"])
         let all = app.switches["market-auto-upgrade"].firstMatch
         XCTAssertTrue(all.waitForExistence(timeout: 15), "no switch for all:\n\(app.debugDescription)")
         XCTAssertEqual(all.value as? String, "1")
@@ -135,10 +135,10 @@ final class PluginMarketTests: XCTestCase {
     }
 
     @MainActor func testManageMarkets() throws {
-        let app = try launch(["-openPluginMarkets", "YES"])
+        let app = try launch(["-openExtensionMarkets", "YES"])
         let add = app.buttons["market-add"]
         XCTAssertTrue(add.waitForExistence(timeout: 15), "no 市场:\n\(app.debugDescription)")
-        XCTAssertTrue(app.staticTexts["第 3 个插件：没有 manifest"].exists, "a market's warning is shown")
+        XCTAssertTrue(app.staticTexts["第 3 个扩展：没有 manifest"].exists, "a market's warning is shown")
         shot(app, "markets")
         add.tap()
 
@@ -176,8 +176,8 @@ final class PluginMarketTests: XCTestCase {
         XCTAssertTrue(added.waitForNonExistence(timeout: 10), "the market is still listed:\n\(app.debugDescription)")
     }
 
-    @MainActor func testSaveOnAPluginPage() throws {
-        let app = try launch(["-openPlugin", "example-gateway"])
+    @MainActor func testSaveOnAnExtensionPage() throws {
+        let app = try launch(["-openExtension", "example-gateway"])
         let page = app.buttons["plugin-page-home"]
         XCTAssertTrue(page.waitForExistence(timeout: 15), "no 页面 row:\n\(app.debugDescription)")
         page.tap()
@@ -218,7 +218,7 @@ final class PluginMarketTests: XCTestCase {
     /// A plugin page's secret field, filled in and left: the page goes away without iOS offering to save the secret as
     /// a password (#1512).
     @MainActor func testASecretFieldIsNotAPassword() throws {
-        let app = try launch(["-openPlugin", "example-gateway"])
+        let app = try launch(["-openExtension", "example-gateway"])
         let page = app.buttons["plugin-page-home"]
         XCTAssertTrue(page.waitForExistence(timeout: 15), "no 页面 row:\n\(app.debugDescription)")
         page.tap()
@@ -255,7 +255,7 @@ final class PluginMarketTests: XCTestCase {
         XCTAssertTrue(page.isHittable, "something covers the plugin's page:\n\(app.debugDescription)")
     }
 
-    @MainActor func testALauncherShowsThePluginsSection() throws {
+    @MainActor func testALauncherShowsTheExtensionsSection() throws {
         let app = try launch(["-openLauncherPage", "cc_main"])
         XCTAssertTrue(app.navigationBars.firstMatch.waitForExistence(timeout: 20))
         // After the quota and the test rows: down the page.

@@ -85,6 +85,12 @@ nonisolated enum DemoText {
     static let code = "demo"
 }
 
+extension Set where Element == String {
+    /// A hub feature of the extension system under its new name or the one hubs from before #1844 say: "ui_slots" is
+    /// extension_ui_slots or plugin_ui_slots, "manager" extension_manager or plugin_manager.
+    nonisolated func hasExtensionFeature(_ name: String) -> Bool { contains("extension_" + name) || contains("plugin_" + name) }
+}
+
 /// REST client for the hub. All endpoints return JSON objects; errors are `{"error": "..."}`.
 nonisolated struct APIClient: Sendable {
     typealias Transport = @Sendable (LocalRequest) async throws -> Data
@@ -99,6 +105,9 @@ nonisolated struct APIClient: Sendable {
     /// The Feishu account (lark-connector account number) the `/api/v1/lark` requests are about, sent as `ol_account`
     /// (docs/feishu.md「多账号」). nil: the hub's own (lark.account).
     var larkAccount: Int?
+    /// The hub has the extension routes (`features` has `extensions`, #1844): extension requests go to
+    /// /api/v1/extensions and answer with the new keys; an older hub only has /api/v1/plugins (docs/extensions.md「命名和兼容」).
+    var extensionsAPI = false
     /// Answers the demo config's requests (DemoHub registers it at launch); every endpoint goes through `request`.
     nonisolated(unsafe) static var local: (@Sendable (LocalRequest) async throws -> Data)?
 
@@ -131,6 +140,10 @@ nonisolated struct APIClient: Sendable {
         if p.range(of: "%[0-9A-Fa-f]{2}", options: .regularExpression) != nil { return p }
         return p.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? p
     }
+
+    /// An extension route: `rest` ("", "/-/markets", "/<id>/-/…") under /api/v1/extensions, or under /api/v1/plugins on a
+    /// hub from before the rename.
+    func extensionPath(_ rest: String) -> String { (extensionsAPI ? "/api/v1/extensions" : "/api/v1/plugins") + rest }
 
     /// This client for one Feishu account's chats; nil: the hub's own.
     func lark(_ account: Int?) -> APIClient {
@@ -366,7 +379,7 @@ nonisolated struct APIClient: Sendable {
         struct Body: Encodable { var enabled: Bool }
         return try JSON.decoder.decode(MachineComputer.self, from: await request("PUT", "/api/v1/machines/\(machine)/computer", body: Body(enabled: enabled)))
     }
-    /// 「插件开着时不自动锁屏」 for this Mac (#1507 b2; asked on the phone first).
+    /// 「扩展开着时不自动锁屏」 for this Mac (#1507 b2; asked on the phone first).
     func setComputerNoAutoLock(machine: String, _ on: Bool) async throws -> MachineComputer {
         struct Body: Encodable { var no_auto_lock: Bool }
         return try JSON.decoder.decode(MachineComputer.self, from: await request("PUT", "/api/v1/machines/\(machine)/computer", body: Body(no_auto_lock: on)))

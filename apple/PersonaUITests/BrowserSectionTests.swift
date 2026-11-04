@@ -72,10 +72,10 @@ final class BrowserSectionTests: XCTestCase {
         shot(app, "browser-ready")
     }
 
-    /// 设置 › 插件 › 浏览器: a switch per Mac, how ego lite is on each.
-    @MainActor func testThePluginListsTheMacs() throws {
+    /// 设置 › 扩展 › 浏览器: a switch per Mac, how ego lite is on each.
+    @MainActor func testTheExtensionListsTheMacs() throws {
         guard state == "ready" else { throw XCTSkip("MOCK_BROWSER=ready") }
-        let (app, _) = try open(["-tab", "settings", "-openPlugin", "ego"])
+        let (app, _) = try open(["-tab", "settings", "-openExtension", "ego"])
         let macbook = app.switches.matching(NSPredicate(format: "label BEGINSWITH %@", "MacBook、")).firstMatch
         XCTAssertTrue(macbook.waitForExistence(timeout: 30), "no switch per Mac:\n\(app.debugDescription)")
         XCTAssertTrue(macbook.label.contains("在线 · ego 就绪"), macbook.label)

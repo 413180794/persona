@@ -2,13 +2,13 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 插件市场 (PluginMarketModel, MarketPluginModel) and a plugin's declarative UI (PluginViewModel, PluginLauncherModel):
+/// 扩展市场 (ExtensionMarketModel, MarketExtensionModel) and a plugin's declarative UI (ExtensionViewModel, ExtensionLauncherModel):
 /// what the hub sends decodes; the catalog is searched and filtered by market; markets are added (the hub's reason
 /// comes back), refreshed, given a token and removed; installing and upgrading go preview → the digest agreed to;
 /// removing is only for a plugin from this market; a View's fields go back on submit, a secret never prefilled; a
 /// launcher section that says unsupported is hidden without an error.
 @MainActor
-struct PluginMarketModelTests {
+struct ExtensionMarketModelTests {
     private static let markets = #"""
     [{"id":"m1","spec":"https://plugins.example.com/","name":"Example 插件","has_token":false,"plugins":2,"warnings":[],
       "fetched_at":"2026-11-04T06:00:00Z","added_at":"2026-11-01T08:00:00Z"},
@@ -37,7 +37,7 @@ struct PluginMarketModelTests {
 
     private static let detail = #"{"id":"example-calendar","name":"Example 日历","kind":"connectors","status":"running"}"#
 
-    private func market(_ hub: FakeHub) -> PluginMarketModel { PluginMarketModel(deps: .init(api: { hub.client })) }
+    private func market(_ hub: FakeHub) -> ExtensionMarketModel { ExtensionMarketModel(deps: .init(api: { hub.client })) }
 
     @Test func theCatalogDecodesAndSaysHowEachStands() async throws {
         let hub = FakeHub()
@@ -46,8 +46,8 @@ struct PluginMarketModelTests {
         await page.load()
         let items = try #require(page.items)
         #expect(page.error == nil && items.count == 4 && page.markets.count == 2 && page.platform == "linux-amd64")
-        #expect(items.map(PluginMarketText.step) == [.install, .upgrade, .unavailable, .upToDate])
-        #expect(PluginMarketText.state(items[1]) == "可升级 · 1.0.0 → 1.1.0")
+        #expect(items.map(ExtensionMarketText.step) == [.install, .upgrade, .unavailable, .upToDate])
+        #expect(ExtensionMarketText.state(items[1]) == "可升级 · 1.0.0 → 1.1.0")
         #expect(items[0].id == "m1/example-calendar" && items[0].marketName == "Example 插件")
         #expect(page.markets[1].hasToken && page.markets[1].error == "读不到索引" && page.markets[1].warnings == ["第 3 个插件：没有 manifest"])
         #expect(page.markets[0].fetchedAt != nil)
@@ -124,7 +124,7 @@ struct PluginMarketModelTests {
             return Data(Self.detail.utf8)
         }
         hub.on("DELETE", "/api/v1/plugins/example-calendar/-/", json: #"{"ok":true}"#)
-        let page = MarketPluginModel(market: "m1", id: "example-calendar", deps: .init(api: { hub.client }))
+        let page = MarketExtensionModel(market: "m1", id: "example-calendar", deps: .init(api: { hub.client }))
         await page.load()
         #expect(page.step == .install && !page.canUninstall)
         #expect(await page.uninstall() == false, "nothing to remove yet")
@@ -151,7 +151,7 @@ struct PluginMarketModelTests {
             upgraded = try JSON.decoder.decode(JSONValue.self, from: req.body ?? Data())
             return Data(#"{"id":"example-gateway","name":"Example 网关面板","kind":"ui","status":"running"}"#.utf8)
         }
-        let page = MarketPluginModel(market: "m1", id: "example-gateway", deps: .init(api: { hub.client }))
+        let page = MarketExtensionModel(market: "m1", id: "example-gateway", deps: .init(api: { hub.client }))
         await page.load()
         #expect(page.step == .upgrade && page.canUninstall)
         await page.prepare()
@@ -166,17 +166,17 @@ struct PluginMarketModelTests {
         hub.on("POST", "/api/v1/plugins/-/catalog/preview") { _ in
             throw APIError(status: 400, message: "没有这台 hub 能用的包", fields: ["code": "invalid_plugin"])
         }
-        let page = MarketPluginModel(market: "m2", id: "team-windows", deps: .init(api: { hub.client }))
+        let page = MarketExtensionModel(market: "m2", id: "team-windows", deps: .init(api: { hub.client }))
         await page.load()
         #expect(page.step == .unavailable)
         await page.prepare()
         #expect(page.preview == nil && page.error == "没有这台 hub 能用的包" && !page.working)
     }
 
-    @Test func thePluginListSaysWhetherThereAreMarkets() async throws {
+    @Test func theExtensionListSaysWhetherThereAreMarkets() async throws {
         let hub = FakeHub()
         hub.on("GET", "/api/v1/plugins", json: #"{"plugins":[],"can_install":true,"markets":true}"#)
-        let page = PluginsModel(deps: .init(api: { hub.client }))
+        let page = ExtensionsModel(deps: .init(api: { hub.client }))
         await page.load()
         #expect(page.markets && page.plugins?.isEmpty == true)
         hub.on("GET", "/api/v1/plugins", json: #"{"plugins":[]}"#)
@@ -187,15 +187,15 @@ struct PluginMarketModelTests {
          "ui":[{"plugin":"example-gateway","id":"home","title":"概况","placement":"plugin_page"},
                {"plugin":"example-gateway","id":"panel","title":"面板","placement":"launcher_section"}]}
         """#)
-        let detail = PluginModel(id: "example-gateway", deps: .init(api: { hub.client }))
+        let detail = ExtensionModel(id: "example-gateway", deps: .init(api: { hub.client }))
         await detail.load()
         #expect(detail.detail?.ui.map(\.id) == ["home"])
     }
 }
 
-/// A plugin's View (docs/plugins.md「声明式 UI」).
+/// A plugin's View (docs/extensions.md「声明式 UI」).
 @MainActor
-struct PluginViewModelTests {
+struct ExtensionViewModelTests {
     private static let view = #"""
     {"view":{"title":"Example 网关","state":"tab=overview","sections":[
       {"title":"概况","items":[{"type":"metric","label":"余额","value":"¥ 182.40","tone":"positive"},
@@ -212,15 +212,15 @@ struct PluginViewModelTests {
     @Test func aViewDecodesAndItsFieldsStartAsTheySay() async throws {
         let hub = FakeHub()
         hub.on("POST", "/api/v1/plugins/example-gateway/-/ui/home", json: Self.view)
-        let page = PluginViewModel(plugin: "example-gateway", ui: "home", deps: .init(api: { hub.client }))
+        let page = ExtensionViewModel(plugin: "example-gateway", ui: "home", deps: .init(api: { hub.client }))
         await page.load()
         let v = try #require(page.view)
         #expect(v.title == "Example 网关" && v.sections.count == 2 && v.sections[0].items.map(\.type) == ["metric", "progress", "divider", "row"])
         #expect(v.sections[0].items[1].ratio == 0.93 && v.sections[0].items[3].badge?.tone == "positive")
         #expect(v.sections[1].items[3].choices?.map(\.label) == ["个人", "team"])
         #expect(page.values == ["note": "hi", "token": "", "auto": "false", "plan": "team"], "a secret is never prefilled")
-        #expect(PluginUIStyle.tone("danger") == Theme.danger && PluginUIStyle.tone("bogus") == .secondary)
-        // Drawing sends no action and no values; the context says where and for whom (docs/plugins.md「UI 插槽」上下文).
+        #expect(ExtensionUIStyle.tone("danger") == Theme.danger && ExtensionUIStyle.tone("bogus") == .secondary)
+        // Drawing sends no action and no values; the context says where and for whom (docs/extensions.md「UI 插槽」上下文).
         let body = try JSON.decoder.decode(JSONValue.self, from: hub.requests.last?.body ?? Data())
         #expect(body["action"] == nil && body["values"] == nil && body["state"] == nil)
         #expect(body["context"]?["ui_version"] == .number(2) && body["context"]?["platform"] == .string("ios"))
@@ -241,21 +241,21 @@ struct PluginViewModelTests {
             default: return Data(Self.view.utf8)
             }
         }
-        let page = PluginViewModel(plugin: "example-gateway", ui: "home", context: PluginUIContext(launcher: "work"), deps: .init(api: { hub.client }))
+        let page = ExtensionViewModel(plugin: "example-gateway", ui: "home", context: PluginUIContext(launcher: "work"), deps: .init(api: { hub.client }))
         await page.load()
         page.values["token"] = "s3cret"
         page.values["auto"] = "true"
-        let saved = await page.perform(PluginUIAction(id: "save", submit: true))
+        let saved = await page.perform(ExtensionUIAction(id: "save", submit: true))
         #expect(saved == .init(toast: "已保存"))
         #expect(bodies[1]["context"]?["launcher"] == .string("work"))
         var sent = bodies[1]
         if case .object(var o) = sent { o["context"] = nil; sent = .object(o) }
         #expect(sent == .object(["state": .string("tab=overview"), "action": .string("save"),
                                       "values": .object(["note": .string("hi"), "token": .string("s3cret"), "auto": .string("true"), "plan": .string("team")])]))
-        let opened = await page.perform(PluginUIAction(id: "key:work"))
+        let opened = await page.perform(ExtensionUIAction(id: "key:work"))
         #expect(opened.url?.absoluteString == "https://example.com/console/keys")
         #expect(bodies[2]["values"] == nil, "only a submit sends the fields")
-        #expect(await page.perform(PluginUIAction(id: "bad")).url == nil, "only https opens")
+        #expect(await page.perform(ExtensionUIAction(id: "bad")).url == nil, "only https opens")
         // Nothing in the answer: drawn again.
         hub.on("POST", "/api/v1/plugins/example-gateway/-/ui/home") { req in
             let b = try JSON.decoder.decode(JSONValue.self, from: req.body ?? Data())
@@ -263,7 +263,7 @@ struct PluginViewModelTests {
             return Data((b["action"] == nil ? Self.view : "{}").utf8)
         }
         let before = bodies.count
-        #expect(await page.perform(PluginUIAction(id: "noop")) == .init())
+        #expect(await page.perform(ExtensionUIAction(id: "noop")) == .init())
         #expect(bodies.count == before + 2 && bodies.last?["action"] == nil)
     }
 
@@ -272,7 +272,7 @@ struct PluginViewModelTests {
         hub.on("POST", "/api/v1/plugins/example-gateway/-/ui/home") { _ in
             throw APIError(status: 502, message: "插件没有回答", fields: ["code": "plugin_failed"])
         }
-        let page = PluginViewModel(plugin: "example-gateway", ui: "home", deps: .init(api: { hub.client }))
+        let page = ExtensionViewModel(plugin: "example-gateway", ui: "home", deps: .init(api: { hub.client }))
         await page.load()
         #expect(page.view == nil && page.error == "插件没有回答" && !page.unsupported)
         hub.on("POST", "/api/v1/plugins/example-gateway/-/ui/home", json: Self.view)
@@ -292,7 +292,7 @@ struct PluginViewModelTests {
         hub.on("POST", "/api/v1/plugins/example-gateway/-/ui/elsewhere") { _ in
             throw APIError(status: 404, message: "not this plugin's gateway", fields: ["code": "unsupported"])
         }
-        let page = PluginLauncherModel(launcher: "work", deps: .init(api: { hub.client }))
+        let page = ExtensionLauncherModel(launcher: "work", deps: .init(api: { hub.client }))
         await page.load()
         #expect(hub.sent("GET", "/api/v1/plugins/-/ui").last?.query == ["placement": "launcher_section", "launcher": "work"])
         #expect(page.shown.map(\.place.id) == ["panel"])
@@ -302,7 +302,7 @@ struct PluginViewModelTests {
         hub.on("POST", "/api/v1/plugins/example-gateway/-/ui/elsewhere") { _ in
             throw APIError(status: 404, message: "no such plugin", fields: ["code": "not_found"])
         }
-        let other = PluginViewModel(plugin: "example-gateway", ui: "elsewhere", deps: .init(api: { hub.client }))
+        let other = ExtensionViewModel(plugin: "example-gateway", ui: "elsewhere", deps: .init(api: { hub.client }))
         await other.load()
         #expect(!other.unsupported && other.error == "no such plugin")
     }

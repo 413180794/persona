@@ -1313,7 +1313,7 @@ final class AppModel {
         case .desktops(let list):
             link(group)?.desktops = list
         case .pluginBadge(let plugin, let id, let badge):
-            if isHub { PluginSlots.shared.received(plugin: plugin, id: id, badge: badge) }
+            if isHub { ExtensionSlots.shared.received(plugin: plugin, id: id, badge: badge) }
         case .items(let key, let items, let backlog, let hasMore, let span, let moreAfter):
             if backlog { connection.caughtUp(Self.catchUpPart(key)) }
             let store = chat(key)

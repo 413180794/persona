@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// 设置 › 模型供应商 › 新增 › 从插件添加 (docs/plugins.md「模型供应商」): the providers the hub's plugins offer; pick one,
+/// 设置 › 模型供应商 › 新增 › 从扩展添加 (docs/extensions.md「模型供应商」): the providers the hub's plugins offer; pick one,
 /// give the launcher a name and a key (and maybe another of the provider's models), and the hub fills in the rest
 /// (POST /api/v1/launchers with `preset`).
 @Observable final class LauncherPresetModel {
@@ -83,7 +83,7 @@ import Observation
     }
 }
 
-/// How a preset reads in 从插件添加.
+/// How a preset reads in 从扩展添加.
 enum LauncherPresetText {
     /// "直接 API · api.example.com", "Claude Code 启动器 · gateway.example.com".
     static func subtitle(_ p: LauncherPreset) -> String {

@@ -61,7 +61,7 @@ nonisolated enum ServerEvent: Sendable {
     case assistantFeed(FeedItem)
     case taskPlan(TaskPlan)
     case terminal(SessionKey, TerminalEvent)
-    /// A plugin changed the badge on one of its main-navigation entries (docs/plugins.md「UI 插槽」角标): nil clears it.
+    /// A plugin changed the badge on one of its main-navigation entries (docs/extensions.md「UI 插槽」角标): nil clears it.
     case pluginBadge(plugin: String, id: String, badge: PluginBadge?)
     case error(SessionKey?, String)
 
@@ -118,12 +118,15 @@ nonisolated enum ServerEvent: Sendable {
         var item: FeedItem?
         var plan: TaskPlan?
         var plugin: String?
+        /// extension_ui's (plugin_ui says `plugin`).
+        var extensionID: String?
         var badge: PluginBadge?
 
         enum CodingKeys: String, CodingKey {
             case type, machines, sessions, upsert, remove, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
             case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, mesh, channel, build, update, item, plan
             case plugin, badge
+            case extensionID = "extension"
             case hubID = "hub_id", hubName = "hub_name", protocolVersion = "protocol", minAppBuild = "min_app_build"
             case settingsChanged = "settings_changed", olAccount = "ol_account"
             case machineID = "machine_id", sessionID = "session_id", hasMore = "has_more", callID = "call_id",
@@ -193,8 +196,9 @@ nonisolated enum ServerEvent: Sendable {
             if let error = e.error { return .terminal(key, .ended(error, unsupported: e.unsupported ?? false)) }
             guard let epoch = e.epoch, let seq = e.seq, let data = e.data.flatMap({ Data(base64Encoded: $0) }) else { return nil }
             return .terminal(key, .frame(epoch: epoch, seq: seq, full: e.full ?? false, cols: e.cols ?? 0, rows: e.rows ?? 0, data: data))
-        case "plugin_ui":
-            guard let plugin = e.plugin, let id = e.id else { return nil }
+        // A hub from #1844 on sends each as plugin_ui and then extension_ui; the badge is set, so twice does no harm.
+        case "plugin_ui", "extension_ui":
+            guard let plugin = e.extensionID ?? e.plugin, let id = e.id else { return nil }
             return .pluginBadge(plugin: plugin, id: id, badge: e.badge.flatMap { $0.text.isEmpty ? nil : $0 })
         case "terminal_control":
             guard let key, let state = e.state else { return nil }

@@ -1,11 +1,11 @@
 import XCTest
 
-/// A plugin's list of machines (schema format machine, docs/plugins.md): a switch per Mac, by name and how it is, no
+/// A plugin's list of machines (schema format machine, docs/extensions.md): a switch per Mac, by name and how it is, no
 /// machine ids typed in; a switch takes effect at once and is the machine page's 允许助手操控这台电脑 too. Against
 /// scripts/mock/mock_hub.py with MOCK_PLUGINS=1 MOCK_COMPUTER=ready (`TEST_RUNNER_JARVIS_PLUGINS_HUB`), which has the
 /// plugin cua on for MacBook; `TEST_RUNNER_JARVIS_SHOTS` keeps the screenshots, named by
 /// `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE`.
-final class PluginMachineSwitchesTests: XCTestCase {
+final class ExtensionMachineSwitchesTests: XCTestCase {
     @MainActor func testMacsAreSwitches() throws {
         let env = ProcessInfo.processInfo.environment
         guard let hub = env["JARVIS_PLUGINS_HUB"], env["JARVIS_PLUGINS_COMPUTER"] == "1" else {
@@ -15,7 +15,7 @@ final class PluginMachineSwitchesTests: XCTestCase {
         let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
-        app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openPlugin", "cua"]
+        app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openExtension", "cua"]
         app.launchPinned()
 
         // By name and state (the field's identifier is on the whole row, as for every field).
@@ -42,7 +42,7 @@ final class PluginMachineSwitchesTests: XCTestCase {
         XCTAssertTrue(waitUntil { (try? self.enabledMacs(hub)) == ["macbook"] }, "and off again")
     }
 
-    /// A list with x-confirm (the plugin cua's 插件开着时不自动锁屏, #1507 b2): turning a Mac on asks first, 取消 leaves
+    /// A list with x-confirm (the plugin cua's 扩展开着时不自动锁屏, #1507 b2): turning a Mac on asks first, 取消 leaves
     /// it off, 打开 turns it on (the hub has it); turning it off does not ask.
     @MainActor func testAListWithAConfirmAsksFirst() throws {
         let env = ProcessInfo.processInfo.environment
@@ -53,7 +53,7 @@ final class PluginMachineSwitchesTests: XCTestCase {
         let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
-        app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openPlugin", "cua"]
+        app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openExtension", "cua"]
         app.launchPinned()
 
         let noLock = app.switches.matching(NSPredicate(format: "identifier == %@ AND label BEGINSWITH %@", "plugin-field-no_auto_lock", "MacBook、")).firstMatch
@@ -94,7 +94,7 @@ final class PluginMachineSwitchesTests: XCTestCase {
         }
     }
 
-    /// The Macs the hub says 插件开着时不自动锁屏 is on for (machine.computer.no_auto_lock), by id.
+    /// The Macs the hub says 扩展开着时不自动锁屏 is on for (machine.computer.no_auto_lock), by id.
     private func noLockMacs(_ hub: String) throws -> [String] {
         try machines(hub).filter { $0.computer?.no_auto_lock == true }.map(\.id).sorted()
     }

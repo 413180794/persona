@@ -1227,8 +1227,8 @@ struct AssistantSidebar: View {
                 }
                 .buttonStyle(.plain)
                 .surface(interactive: true, in: .circle)
-                // The plugins' entries are in 设置 (docs/plugins.md「UI 插槽」角标): their badges add up here.
-                .overlay(alignment: .topTrailing) { PluginSettingsBadge() }
+                // The plugins' entries are in 设置 (docs/extensions.md「UI 插槽」角标): their badges add up here.
+                .overlay(alignment: .topTrailing) { ExtensionSettingsBadge() }
                 .accessibilityLabel("设置")
                 .accessibilityIdentifier("sidebar-settings")
             }

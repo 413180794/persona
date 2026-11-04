@@ -20,7 +20,7 @@ struct MachineDetailView: View {
     @State private var launcherError: String?
     @State private var reconnecting = false
     @State private var allAgents = false
-    @State private var plugins = PluginMachineModel()
+    @State private var plugins = ExtensionMachineModel()
     @State private var pluginLink: LinkTarget?
 
     /// A machine's agents: live ones, not the 对话 tab's assistant conversations (the Agents tab leaves those out too).
@@ -69,8 +69,8 @@ struct MachineDetailView: View {
                         }
                     }
                     launchersSection(machine)
-                    // What plugins draw for this machine (docs/plugins.md「UI 插槽」machine_section).
-                    PluginMachineSections(page: plugins, link: $pluginLink)
+                    // What plugins draw for this machine (docs/extensions.md「UI 插槽」machine_section).
+                    ExtensionMachineSections(page: plugins, link: $pluginLink)
                     VStack(alignment: .leading, spacing: Theme.Space.m) {
                         if online { connection(machine) }
                         Text("监控历史保留 24 小时。最近 1 小时每 10 秒一个点，更早的每分钟一个点；中间断开的时段不连线。")
@@ -113,13 +113,13 @@ struct MachineDetailView: View {
         // Again when it comes online (after 重新连接): an offline machine has no launchers to list.
         .task(id: machine?.online == true) { await loadLaunchers(refresh: false) }
         // Again once the hub says it has the slots (the page can open before its hello).
-        .task(id: PluginsKey(ref: ref, slots: model.features(ref.group).contains("plugin_ui_slots"))) {
+        .task(id: ExtensionsKey(ref: ref, slots: model.features(ref.group).hasExtensionFeature("ui_slots"))) {
             await plugins.load(ref, app: model, redraw: false)
         }
     }
 
     nonisolated private struct Poll: Hashable, Sendable { var range: MetricRange; var active: Bool }
-    nonisolated private struct PluginsKey: Hashable, Sendable { var ref: MachineRef; var slots: Bool }
+    nonisolated private struct ExtensionsKey: Hashable, Sendable { var ref: MachineRef; var slots: Bool }
 
     private func heading(_ title: String, count: Int? = nil) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.sm) {

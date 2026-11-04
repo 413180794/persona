@@ -1,13 +1,13 @@
 import Foundation
 import Observation
 
-// 设置 › 插件 › 插件市场 (docs/plugins.md「插件市场」): the plugins of the markets the hub has, searched and filtered by
+// 设置 › 扩展 › 扩展市场 (docs/extensions.md「扩展市场」): the plugins of the markets the hub has, searched and filtered by
 // market; one plugin's page with what it may do, installed or upgraded after its preview (the permissions agreed to
 // are the preview's digest) and removed when it came from that market; and the markets themselves (added with an
 // optional token that is never shown again, refreshed, removed). Only with a hub that says `markets: true`.
 
 /// One of GET /api/v1/plugins/-/markets.
-nonisolated struct PluginMarket: Codable, Hashable, Sendable, Identifiable {
+nonisolated struct ExtensionMarket: Codable, Hashable, Sendable, Identifiable {
     var id: String
     /// What was added: https://… or github:owner/repo.
     var spec: String
@@ -31,8 +31,29 @@ nonisolated struct PluginMarket: Codable, Hashable, Sendable, Identifiable {
     }
 }
 
+extension ExtensionMarket {
+    private enum NewKeys: String, CodingKey { case extensions }
+
+    /// The count is `extensions` under /api/v1/extensions, `plugins` under the old path (#1844).
+    nonisolated init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        spec = try c.decodeIfPresent(String.self, forKey: .spec) ?? ""
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        homepage = try c.decodeIfPresent(String.self, forKey: .homepage)
+        hasToken = try c.decodeIfPresent(Bool.self, forKey: .hasToken) ?? false
+        plugins = try c.decodeIfPresent(Int.self, forKey: .plugins)
+            ?? decoder.container(keyedBy: NewKeys.self).decodeIfPresent(Int.self, forKey: .extensions)
+        warnings = try c.decodeIfPresent([String].self, forKey: .warnings)
+        error = try c.decodeIfPresent(String.self, forKey: .error)
+        fetchedAt = try c.decodeIfPresent(Date.self, forKey: .fetchedAt)
+        addedAt = try c.decodeIfPresent(Date.self, forKey: .addedAt)
+    }
+}
+
 /// One plugin of the catalog (`CatalogItem`): what a market says of it, and how it stands on this hub.
-nonisolated struct PluginCatalogItem: Codable, Hashable, Sendable, Identifiable {
+nonisolated struct ExtensionCatalogItem: Codable, Hashable, Sendable, Identifiable {
     var market: String
     var marketName: String?
     var pluginID: String
@@ -43,7 +64,7 @@ nonisolated struct PluginCatalogItem: Codable, Hashable, Sendable, Identifiable 
     var homepage: String?
     var tags: [String]?
     var contributes: [String: [String]]?
-    var permissions: [PluginPermission]?
+    var permissions: [ExtensionPermission]?
     /// Why this hub cannot install it (no package for its platform, a newer hub needed).
     var problem: String?
     /// The version installed, if it is.
@@ -61,23 +82,25 @@ nonisolated struct PluginCatalogItem: Codable, Hashable, Sendable, Identifiable 
 }
 
 /// GET /api/v1/plugins/-/catalog.
-nonisolated struct PluginCatalog: Decodable, Sendable {
-    var markets: [PluginMarket]
-    var plugins: [PluginCatalogItem]
+nonisolated struct ExtensionCatalog: Decodable, Sendable {
+    var markets: [ExtensionMarket]
+    var plugins: [ExtensionCatalogItem]
     var platform: String?
 
-    private enum CodingKeys: String, CodingKey { case markets, plugins, platform }
+    private enum CodingKeys: String, CodingKey { case markets, plugins, extensions, platform }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        markets = try c.decodeIfPresent([PluginMarket].self, forKey: .markets) ?? []
-        plugins = try c.decodeIfPresent([PluginCatalogItem].self, forKey: .plugins) ?? []
+        markets = try c.decodeIfPresent([ExtensionMarket].self, forKey: .markets) ?? []
+        // `extensions` under /api/v1/extensions, `plugins` under the old path (#1844).
+        plugins = try c.decodeIfPresent([ExtensionCatalogItem].self, forKey: .extensions)
+            ?? c.decodeIfPresent([ExtensionCatalogItem].self, forKey: .plugins) ?? []
         platform = try c.decodeIfPresent(String.self, forKey: .platform)
     }
 }
 
 /// What installing (or upgrading to) a plugin of a market would be: downloaded and checked, its permissions to agree to.
-nonisolated struct PluginPreview: Decodable, Hashable, Sendable, Identifiable {
+nonisolated struct ExtensionPreview: Decodable, Hashable, Sendable, Identifiable {
     struct Manifest: Decodable, Hashable, Sendable {
         var id: String
         var name: String?
@@ -87,7 +110,7 @@ nonisolated struct PluginPreview: Decodable, Hashable, Sendable, Identifiable {
 
     var previewID: String
     var manifest: Manifest
-    var permissions: [PluginPermission]
+    var permissions: [ExtensionPermission]
     var permissionsDigest: String
     var warnings: [String]?
     var expiresAt: Date?
@@ -96,7 +119,7 @@ nonisolated struct PluginPreview: Decodable, Hashable, Sendable, Identifiable {
     var from: String?
     var morePermissions: Bool?
     /// What the new version may do that the installed one may not.
-    var addedPermissions: [PluginPermission]?
+    var addedPermissions: [ExtensionPermission]?
     var market: String?
 
     var id: String { previewID }
@@ -109,67 +132,67 @@ nonisolated struct PluginPreview: Decodable, Hashable, Sendable, Identifiable {
 }
 
 extension APIClient {
-    func pluginMarkets() async throws -> [PluginMarket] {
-        struct List: Decodable { var markets: [PluginMarket]? }
-        let list: List = try await get("/api/v1/plugins/-/markets")
+    func pluginMarkets() async throws -> [ExtensionMarket] {
+        struct List: Decodable { var markets: [ExtensionMarket]? }
+        let list: List = try await get(extensionPath("/-/markets"))
         return list.markets ?? []
     }
 
-    func addPluginMarket(spec: String, token: String?) async throws -> PluginMarket {
+    func addExtensionMarket(spec: String, token: String?) async throws -> ExtensionMarket {
         struct Body: Encodable { var spec: String; var token: String? }
-        return try JSON.decoder.decode(PluginMarket.self, from: try await request("POST", "/api/v1/plugins/-/markets",
+        return try JSON.decoder.decode(ExtensionMarket.self, from: try await request("POST", extensionPath("/-/markets"),
                                                                                    body: Body(spec: spec, token: token), timeout: 60))
     }
 
-    func deletePluginMarket(_ id: String) async throws {
-        _ = try await request("DELETE", "/api/v1/plugins/-/markets/\(id)")
+    func deleteExtensionMarket(_ id: String) async throws {
+        _ = try await request("DELETE", extensionPath("/-/markets/\(id)"))
     }
 
-    func refreshPluginMarket(_ id: String) async throws -> PluginMarket {
-        try JSON.decoder.decode(PluginMarket.self, from: try await request("POST", "/api/v1/plugins/-/markets/\(id)/refresh", timeout: 60))
+    func refreshExtensionMarket(_ id: String) async throws -> ExtensionMarket {
+        try JSON.decoder.decode(ExtensionMarket.self, from: try await request("POST", extensionPath("/-/markets/\(id)/refresh"), timeout: 60))
     }
 
-    func setPluginMarket(_ id: String, token: String) async throws -> PluginMarket {
-        try JSON.decoder.decode(PluginMarket.self, from: try await request("PUT", "/api/v1/plugins/-/markets/\(id)/token",
+    func setExtensionMarket(_ id: String, token: String) async throws -> ExtensionMarket {
+        try JSON.decoder.decode(ExtensionMarket.self, from: try await request("PUT", extensionPath("/-/markets/\(id)/token"),
                                                                             body: ["token": token], timeout: 60))
     }
 
-    func pluginCatalog(query: String = "", market: String? = nil, refresh: Bool = false) async throws -> PluginCatalog {
-        try await get("/api/v1/plugins/-/catalog", query: ["q": query, "market": market ?? "", "refresh": refresh ? "1" : ""])
+    func pluginCatalog(query: String = "", market: String? = nil, refresh: Bool = false) async throws -> ExtensionCatalog {
+        try await get(extensionPath("/-/catalog"), query: ["q": query, "market": market ?? "", "refresh": refresh ? "1" : ""])
     }
 
-    func previewCatalogPlugin(market: String, plugin: String) async throws -> PluginPreview {
-        try JSON.decoder.decode(PluginPreview.self, from: try await request("POST", "/api/v1/plugins/-/catalog/preview",
-                                                                             body: ["market": market, "plugin": plugin], timeout: 120))
+    func previewCatalogExtension(market: String, plugin: String) async throws -> ExtensionPreview {
+        try JSON.decoder.decode(ExtensionPreview.self, from: try await request("POST", extensionPath("/-/catalog/preview"),
+                                                                             body: ["market": market, extensionsAPI ? "extension" : "plugin": plugin], timeout: 120))
     }
 
-    func installPlugin(preview: PluginPreview) async throws -> HubPluginDetail {
-        try JSON.decoder.decode(HubPluginDetail.self, from: try await request(
-            "POST", "/api/v1/plugins/-/install", body: ["preview_id": preview.previewID, "permissions_digest": preview.permissionsDigest], timeout: 120))
+    func installExtension(preview: ExtensionPreview) async throws -> HubExtensionDetail {
+        try JSON.decoder.decode(HubExtensionDetail.self, from: try await request(
+            "POST", extensionPath("/-/install"), body: ["preview_id": preview.previewID, "permissions_digest": preview.permissionsDigest], timeout: 120))
     }
 
-    func upgradePlugin(_ id: String, preview: PluginPreview) async throws -> HubPluginDetail {
-        try JSON.decoder.decode(HubPluginDetail.self, from: try await request(
-            "POST", "/api/v1/plugins/\(id)/-/upgrade", body: ["preview_id": preview.previewID, "permissions_digest": preview.permissionsDigest], timeout: 120))
+    func upgradeExtension(_ id: String, preview: ExtensionPreview) async throws -> HubExtensionDetail {
+        try JSON.decoder.decode(HubExtensionDetail.self, from: try await request(
+            "POST", extensionPath("/\(id)/-/upgrade"), body: ["preview_id": preview.previewID, "permissions_digest": preview.permissionsDigest], timeout: 120))
     }
 
-    func uninstallPlugin(_ id: String) async throws {
-        _ = try await request("DELETE", "/api/v1/plugins/\(id)/-/", timeout: 60)
+    func uninstallExtension(_ id: String) async throws {
+        _ = try await request("DELETE", extensionPath("/\(id)/-/"), timeout: 60)
     }
 }
 
 /// How a catalog plugin stands on this hub, in words and as the one thing to do.
-enum PluginMarketText {
+enum ExtensionMarketText {
     enum Step: Equatable { case install, upgrade, upToDate, unavailable }
 
-    static func step(_ p: PluginCatalogItem) -> Step {
+    static func step(_ p: ExtensionCatalogItem) -> Step {
         if p.problem?.isEmpty == false { return p.installed == nil ? .unavailable : .upToDate }
         if p.installed == nil { return .install }
         return p.upgradable == true ? .upgrade : .upToDate
     }
 
     /// The row's word on it: 可安装 / 可升级到 1.1.0 / 已安装 1.2.0 / 装不了.
-    static func state(_ p: PluginCatalogItem) -> String {
+    static func state(_ p: ExtensionCatalogItem) -> String {
         switch step(p) {
         case .install: "可安装"
         case .upgrade: "可升级 · \(p.installed ?? "") → \(p.version)"
@@ -179,23 +202,23 @@ enum PluginMarketText {
     }
 
     /// A market's line: how many plugins, when it was read.
-    static func marketSummary(_ m: PluginMarket) -> String {
-        var parts = ["\(m.plugins ?? 0) 个插件"]
+    static func marketSummary(_ m: ExtensionMarket) -> String {
+        var parts = ["\(m.plugins ?? 0) 个扩展"]
         if m.hasToken { parts.append("有 token") }
         if let t = m.fetchedAt { parts.append(Fmt.relative(t) + "读取") }
         return parts.joined(separator: " · ")
     }
 }
 
-/// 插件市场: the catalog (searched, filtered by market) and the markets (added, refreshed, given a token, removed).
-@Observable final class PluginMarketModel {
+/// 扩展市场: the catalog (searched, filtered by market) and the markets (added, refreshed, given a token, removed).
+@Observable final class ExtensionMarketModel {
     struct Deps {
         var api: () -> APIClient?
         static var live: Deps { .init(api: { AppModel.shared.api }) }
     }
 
-    private(set) var items: [PluginCatalogItem]?
-    private(set) var markets: [PluginMarket] = []
+    private(set) var items: [ExtensionCatalogItem]?
+    private(set) var markets: [ExtensionMarket] = []
     private(set) var platform: String?
     private(set) var loading = false
     private(set) var error: String?
@@ -248,7 +271,7 @@ enum PluginMarketText {
         let before = autoUpgrade
         autoUpgrade = on
         do {
-            autoUpgrade = try await api().setPluginUpgrades(auto: on).auto
+            autoUpgrade = try await api().setExtensionUpgrades(auto: on).auto
             error = nil
         } catch {
             autoUpgrade = before
@@ -262,7 +285,7 @@ enum PluginMarketText {
         let token = token.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !spec.isEmpty else { return "填市场的地址" }
         do {
-            let m = try await api().addPluginMarket(spec: spec, token: token.isEmpty ? nil : token)
+            let m = try await api().addExtensionMarket(spec: spec, token: token.isEmpty ? nil : token)
             markets.removeAll { $0.id == m.id }
             markets.append(m)
             return nil
@@ -273,27 +296,27 @@ enum PluginMarketText {
 
     func removeMarket(_ id: String) async {
         await busy(id) {
-            try await $0.deletePluginMarket(id)
+            try await $0.deleteExtensionMarket(id)
             self.markets.removeAll { $0.id == id }
             if self.market == id { self.market = nil }
         }
     }
 
     func refreshMarket(_ id: String) async {
-        await busy(id) { self.replace(try await $0.refreshPluginMarket(id)) }
+        await busy(id) { self.replace(try await $0.refreshExtensionMarket(id)) }
     }
 
     /// A new token (empty: none); the hub reads the index again with it. nil: done.
     func setToken(_ id: String, token: String) async -> String? {
         do {
-            replace(try await api().setPluginMarket(id, token: token.trimmingCharacters(in: .whitespacesAndNewlines)))
+            replace(try await api().setExtensionMarket(id, token: token.trimmingCharacters(in: .whitespacesAndNewlines)))
             return nil
         } catch {
             return error.localizedDescription
         }
     }
 
-    private func replace(_ m: PluginMarket) {
+    private func replace(_ m: ExtensionMarket) {
         if let i = markets.firstIndex(where: { $0.id == m.id }) { markets[i] = m } else { markets.append(m) }
     }
 
@@ -314,27 +337,27 @@ enum PluginMarketText {
     }
 }
 
-/// 插件市场 › one plugin: what it is and may do; installing or upgrading goes preview → agree → install, removing is
+/// 扩展市场 › one plugin: what it is and may do; installing or upgrading goes preview → agree → install, removing is
 /// only for one installed from this market.
-@Observable final class MarketPluginModel {
+@Observable final class MarketExtensionModel {
     let market: String
     let pluginID: String
-    private(set) var item: PluginCatalogItem?
+    private(set) var item: ExtensionCatalogItem?
     private(set) var loading = false
     private(set) var error: String?
     /// The preview waiting for the user's yes (the sheet with the permissions).
-    var preview: PluginPreview?
+    var preview: ExtensionPreview?
     /// Previewing, installing, upgrading or removing.
     private(set) var working = false
-    @ObservationIgnored private let deps: PluginMarketModel.Deps
+    @ObservationIgnored private let deps: ExtensionMarketModel.Deps
 
-    init(market: String, id: String, deps: PluginMarketModel.Deps = .live) {
+    init(market: String, id: String, deps: ExtensionMarketModel.Deps = .live) {
         self.market = market
         self.pluginID = id
         self.deps = deps
     }
 
-    var step: PluginMarketText.Step? { item.map(PluginMarketText.step) }
+    var step: ExtensionMarketText.Step? { item.map(ExtensionMarketText.step) }
     var canUninstall: Bool { item?.fromThisMarket == true && item?.installed != nil }
 
     func load() async {
@@ -343,7 +366,7 @@ enum PluginMarketText {
         do {
             let c = try await api().pluginCatalog(market: market)
             guard let it = c.plugins.first(where: { $0.pluginID == pluginID }) else {
-                throw APIError(status: 404, message: "这个市场里已经没有这个插件了")
+                throw APIError(status: 404, message: "这个市场里已经没有这个扩展了")
             }
             item = it
             error = nil
@@ -354,14 +377,14 @@ enum PluginMarketText {
 
     /// Downloads and checks the package, for the permissions to agree to (the sheet opens with `preview`).
     func prepare() async {
-        await work { self.preview = try await $0.previewCatalogPlugin(market: self.market, plugin: self.pluginID) }
+        await work { self.preview = try await $0.previewCatalogExtension(market: self.market, plugin: self.pluginID) }
     }
 
     /// Installs or upgrades with the preview agreed to. true: done (the catalog read again).
     func confirm() async -> Bool {
         guard let pv = preview else { return false }
         let ok = await work {
-            if pv.upgrade == true { _ = try await $0.upgradePlugin(self.pluginID, preview: pv) } else { _ = try await $0.installPlugin(preview: pv) }
+            if pv.upgrade == true { _ = try await $0.upgradeExtension(self.pluginID, preview: pv) } else { _ = try await $0.installExtension(preview: pv) }
         }
         preview = nil
         if ok { await load() }
@@ -370,7 +393,7 @@ enum PluginMarketText {
 
     func uninstall() async -> Bool {
         guard canUninstall else { return false }
-        let ok = await work { try await $0.uninstallPlugin(self.pluginID) }
+        let ok = await work { try await $0.uninstallExtension(self.pluginID) }
         if ok { await load() }
         return ok
     }

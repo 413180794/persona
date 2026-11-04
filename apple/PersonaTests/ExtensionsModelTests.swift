@@ -2,10 +2,10 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 设置 › 插件's logic (PluginsModel, PluginModel): what the hub sends decodes, the form's draft is edited by path and
+/// 设置 › 扩展's logic (ExtensionsModel, ExtensionModel): what the hub sends decodes, the form's draft is edited by path and
 /// saved as a whole without the emptied fields, a field the hub refuses comes back beside that field.
 @MainActor
-struct PluginsModelTests {
+struct ExtensionsModelTests {
     private static let detail = #"""
     {"id":"example-notes","name":"Example Notes","kind":"connectors","status":"needs_setup","version":"1.2.0","source":"installed",
      "enabled":true,"contributes":{"connectors":["examplenotes"]},"needs_setup":["密钥「API Key」"],"previous_version":"1.1.0",
@@ -20,32 +20,32 @@ struct PluginsModelTests {
      "permissions":[{"key":"runs_code","title":"在 hub 机器上运行程序","detail":"…"}]}
     """#
 
-    private func make(_ hub: FakeHub) -> PluginModel { PluginModel(id: "example-notes", deps: .init(api: { hub.client })) }
+    private func make(_ hub: FakeHub) -> ExtensionModel { ExtensionModel(id: "example-notes", deps: .init(api: { hub.client })) }
 
     @Test func listDecodesAndSummarizes() async {
         let hub = FakeHub()
         hub.on("GET", "/api/v1/plugins", json: #"{"plugins":[{"id":"voice","name":"语音","kind":"voice","status":"running"},"# +
                #"{"id":"example-notes","name":"Example Notes","kind":"connectors","status":"needs_setup","source":"installed","enabled":true}],"can_install":true}"#)
-        let page = PluginsModel(deps: .init(api: { hub.client }))
+        let page = ExtensionsModel(deps: .init(api: { hub.client }))
         await page.load()
         #expect(page.error == nil && page.plugins?.count == 2)
-        #expect(PluginText.listSummary(page.plugins) == "2 个 · 1 个要处理")
-        #expect(PluginText.summary(page.plugins![0]) == "启动")
-        #expect(PluginText.listSummary([]) == "没有")
+        #expect(ExtensionText.listSummary(page.plugins) == "2 个 · 1 个要处理")
+        #expect(ExtensionText.summary(page.plugins![0]) == "启动")
+        #expect(ExtensionText.listSummary([]) == "没有")
     }
 
     /// On or off to the user (#1684): running and idle are both 启动, and only the detail's small print tells them apart;
     /// the other states keep their words.
     @Test func statesReadAsOnOrOff() throws {
-        func plugin(_ status: String) throws -> HubPlugin {
-            try JSON.decoder.decode(HubPlugin.self, from: Data(#"{"id":"p","name":"P","kind":"connectors","status":"\#(status)"}"#.utf8))
+        func plugin(_ status: String) throws -> HubExtension {
+            try JSON.decoder.decode(HubExtension.self, from: Data(#"{"id":"p","name":"P","kind":"connectors","status":"\#(status)"}"#.utf8))
         }
-        let words = try ["running", "stopped", "disabled", "starting", "needs_setup", "incompatible", "error", "new"].map { try PluginText.state(plugin($0)) }
+        let words = try ["running", "stopped", "disabled", "starting", "needs_setup", "incompatible", "error", "new"].map { try ExtensionText.state(plugin($0)) }
         #expect(words == ["启动", "启动", "停用", "正在启动", "需要设置", "这台 hub 用不了", "出错了", "状态未知"])
-        #expect(try PluginText.runNote(plugin("running")) == "正在运行")
-        #expect(try PluginText.runNote(plugin("stopped")) == "暂未运行，用到时自动启动")
+        #expect(try ExtensionText.runNote(plugin("running")) == "正在运行")
+        #expect(try ExtensionText.runNote(plugin("stopped")) == "暂未运行，用到时自动启动")
         for status in ["disabled", "starting", "needs_setup", "incompatible", "error"] {
-            #expect(try PluginText.runNote(plugin(status)) == nil)
+            #expect(try ExtensionText.runNote(plugin(status)) == nil)
         }
     }
 
@@ -102,7 +102,7 @@ struct PluginsModelTests {
             sent = try JSON.decoder.decode(JSONValue.self, from: req.body ?? Data())
             return Data(cua.replacingOccurrences(of: #""machines":["macbook"]"#, with: #""machines":["macbook","studio"]"#).utf8)
         }
-        let page = PluginModel(id: "cua", deps: .init(api: { hub.client }))
+        let page = ExtensionModel(id: "cua", deps: .init(api: { hub.client }))
         await page.load()
         let field = try #require(page.detail?.form.first)
         #expect(field.items?.format == "machine" && field.items?.os == ["darwin"])
@@ -116,13 +116,13 @@ struct PluginsModelTests {
 
     /// The footer says which switches take effect at once and that the rest waits for 保存.
     @Test func theFooterSaysWhatIsSavedAtOnce() {
-        func field(_ name: String, _ type: String, machines: Bool = false) -> PluginField {
-            PluginField(name: name, type: type, title: name == "machines" ? "能操控的电脑" : nil,
-                        items: machines ? PluginItems(type: "string", format: "machine") : nil)
+        func field(_ name: String, _ type: String, machines: Bool = false) -> ExtensionField {
+            ExtensionField(name: name, type: type, title: name == "machines" ? "能操控的电脑" : nil,
+                        items: machines ? ExtensionItems(type: "string", format: "machine") : nil)
         }
-        #expect(PluginText.saveFooter([field("url", "string")]).hasPrefix("改完点右上角「保存」"))
-        #expect(PluginText.saveFooter([field("machines", "array", machines: true)]) == "「能操控的电脑」的开关即时生效，不用保存。")
-        #expect(PluginText.saveFooter([field("machines", "array", machines: true), field("confirm", "boolean")])
+        #expect(ExtensionText.saveFooter([field("url", "string")]).hasPrefix("改完点右上角「保存」"))
+        #expect(ExtensionText.saveFooter([field("machines", "array", machines: true)]) == "「能操控的电脑」的开关即时生效，不用保存。")
+        #expect(ExtensionText.saveFooter([field("machines", "array", machines: true), field("confirm", "boolean")])
             .hasPrefix("「能操控的电脑」的开关即时生效；其他项改完点右上角「保存」"))
     }
 

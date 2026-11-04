@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 新增供应商 › 从插件添加 (LauncherPresetModel) and the quota's gateway name: what the hub sends decodes, a launcher
+/// 新增供应商 › 从扩展添加 (LauncherPresetModel) and the quota's gateway name: what the hub sends decodes, a launcher
 /// added from a preset sends only the name, the key, the preset and a model picked other than the default, and an
 /// older hub without presets or without gateway_name still works.
 @MainActor

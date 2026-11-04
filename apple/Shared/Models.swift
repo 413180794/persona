@@ -228,7 +228,7 @@ nonisolated struct MachineComputer: Codable, Hashable, Sendable {
     var job: ComputerJob? = nil
     /// macOS's Screen Sharing answers on the Mac: its live screen can be shown (VNC).
     var screenSharing = false
-    /// 「插件开着时不自动锁屏」 is on for it (#1507 b2).
+    /// 「扩展开着时不自动锁屏」 is on for it (#1507 b2).
     var noAutoLock = false
 
     enum CodingKeys: String, CodingKey {

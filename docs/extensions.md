@@ -973,23 +973,31 @@ App 里是「设置 › 模型供应商 › 新增」的「从扩展添加」（
 ## App：设置 › 扩展
 
 iOS（Mac 共用同一套页面）在 hub 带 `extension_manager` 时，设置首页连接器下面多一行「扩展」（个数，和几个要处理）。代码在
-`apple/Persona/Views/Settings/PluginsModel.swift`（数据、接口、视图模型）和 `PluginsViews.swift`。
+`apple/Persona/Views/Settings/ExtensionsModel.swift`（数据、接口、视图模型）和 `ExtensionsViews.swift`。
+
+**新老 hub**（#1859）：hub 的 `features` 有 `extensions` 时，扩展的请求都发到 `/api/v1/extensions/…`（`APIClient.extensionsAPI`，`HubLink.api` 按 features 设上；
+路径一律经 `APIClient.extensionPath`），否则（老 hub）发到 `/api/v1/plugins/…`。回答两套键都认：列表和目录 `extensions` / `plugins`，
+UI 的位置 `extension` / `extension_name` 和 `plugin` / `plugin_name`，市场的个数 `extensions` / `plugins`；从市场预览的请求体在新 hub 写 `extension`、老 hub 写 `plugin`。
+features 认新名字也认老的（`hasExtensionFeature("ui_slots")` 即 `extension_ui_slots` 或 `plugin_ui_slots`，`"manager"` 同理）；事件 `extension_ui` 和 `plugin_ui`
+都收（新 hub 两份都发，角标是设置值，收两次没关系）；渠道的 `settings_url` 认 `settings/extensions/<id>` 和 `settings/plugins/<id>`。
+画 View 的几个类型（`PluginUIPlace`、`PluginUIItem`、`PluginUIContext`、`PluginBadge`、`PluginChoice`）暂时还叫这个名字：
+schema 生成的同名类型（`apple/Shared/Generated/ExtensionWire.swift`）在 #1860 替换它们。
 
 - 列表：每个扩展的名字和状态（启动 / 正在启动 / 需要设置 / 停用 / 这台 hub 用不了 / 出错了；`running`、`stopped` 都是「启动」），点进详情；页脚写明在 hub 的管理界面（`/admin`）或 hub 机器上（`personad extension`）装。
 - 详情：状态、版本、来源、描述、是否在跑的小字（「正在运行」/「暂未运行，用到时自动启动」）、「还缺：…」和错误；「启用」开关；「设置」是按 `form.fields` 画的表单（文字、数字、开关、选择、文字列表 / 多选，
   对象是单独一节），右上角「保存」整份提交，hub 拒绝的字段把原因显示在那一项下面、草稿留着；「密钥」每项只显示已设置 / 未设置，点开在单独的表单里输入（不回显），
   已设置的可以清除；「提供」「它可以」「关于」（版本、上一个版本、来源、安装自、发布者、主页、警告）。hub.json 来的只能看，不显示开关和表单。
 - 页面（#1328，「声明式 UI」）：详情里扩展的每个 `plugin_page` 一行（「页面」一节），点进去是一页；启动器详情页在额度、可用性后面每个
-  `launcher_section` 一节。`PluginViewRenderer`（`PluginViewRenderer.swift`）用设计系统画 8 种条目：分隔线把一节分成两组（标题跟第一组，页脚跟最后一组），
+  `launcher_section` 一节。`ExtensionViewRenderer`（`ExtensionViewRenderer.swift`）用设计系统画 8 种条目：分隔线把一节分成两组（标题跟第一组，页脚跟最后一组），
   `tone` 换成 `Theme.positive` / `caution` / `danger`（neutral：次要色，进度条用强调色），`field` 的 5 种 kind（`secret` 用 SecureField、
   永远不预填），按钮文字单行；`confirm` 先弹确认，`submit` 带上这一页全部字段；回 `view` 就换掉，`toast` 走 App 的提示，`open_url` 和 `link`
   在 App 内的链接卡片（Mac 是侧边面板）打开，只认 https；出错有空状态和重试。画启动器那一节时扩展回 404 `{"code":"unsupported"}`
-  （没写 `hosts` 的会列在每个启动器上，#1339）就整节不画，也不算出错。逻辑在 `PluginUIModel.swift`（`PluginViewModel`、`PluginLauncherModel`）。
-- UI 插槽（#1517，「UI 插槽」）：hub 的 `features` 有 `extension_ui_slots` 才问、才画。`PluginSlots`（`PluginSlots.swift`）不带 `placement` 一次拿到
+  （没写 `hosts` 的会列在每个启动器上，#1339）就整节不画，也不算出错。逻辑在 `ExtensionUIModel.swift`（`ExtensionViewModel`、`ExtensionLauncherModel`）。
+- UI 插槽（#1517，「UI 插槽」）：hub 的 `features` 有 `extension_ui_slots` 才问、才画。`ExtensionSlots`（`ExtensionSlots.swift`）不带 `placement` 一次拿到
   `nav_page` 和 `overview_card`，`extension_ui` 事件就地改角标。iPhone / iPad：设置首页头部下面先是卡片（紧凑，点卡片推 `opens` 指的页），
   再是「扩展」一节，每个 `nav_page` 一行（`icon` 换成 `Theme.Icon.plugin…`，不认识的是扩展图标；角标数字用 `CountBadge`、文字用 `Chip`），
   设置 tab 和新外壳抽屉里的设置按钮加上角标之和（只有文字时是一个点）。Mac：`nav_page` 在左边分区列的设置前面（`MacShellState.pluginPage`），
-  卡片在设置 › 扩展列表上面。机器详情页在机器自己的各节后面每个 `machine_section` 一节（`PluginMachineModel`，按机器所在的 hub 组），
+  卡片在设置 › 扩展列表上面。机器详情页在机器自己的各节后面每个 `machine_section` 一节（`ExtensionMachineModel`，按机器所在的 hub 组），
   hub 回 404 就整节不画。每次画、每个动作带 `context`（`PluginUIContext`：`tz`、`locale`、`platform`、`ui_version: 2`、`size`、`launcher` / `machine`）。
   新条目：`chart` 用 Swift Charts 画（`DataChart`：并排 / 叠起来的柱子、折线，系列没 `tone` 时取数据色，按住或悬停一列显示各系列的 `display`，
   紧凑时不写坐标轴、只留首尾标签，标签多时隔几个写一个），`stat_grid`（`ViewThatFits`：放得下一行放全，不然一行 3 个或 2 个），`segmented`
@@ -999,12 +1007,12 @@ iOS（Mac 共用同一套页面）在 hub 带 `extension_manager` 时，设置�
 - 收件箱条目的正文（#1682，`inbox_item`，见上面「收件箱条目」）：hub 有 `extension_ui_slots` 时（App 刚启动、hello 还没到时也问：启动就点开的一件不能因此定成原来的正文，
   不认识这个插槽的 hub 只回空列表），每台 hub 问一次 `GET /api/v1/extensions/-/ui?placement=inbox_item`（配对 / 换 hub、打开收件箱时再问），
   记下哪些连接器有扩展画（`InboxItemSlots`，`connector` 对条目的 `source`）。打开这些来源的条目时 `POST …/-/ui/{ui}`、`context.item` 是条目 id，
-  拿到 View 就用 `PluginViewRenderer` 画在详情的头部下面，代替原来的会话 / 正文（和 `plugin_page` 一样，下拉刷新、`refresh_after`），条目变了（新消息、已处理 / 移回）再画一次。
+  拿到 View 就用 `ExtensionViewRenderer` 画在详情的头部下面，代替原来的会话 / 正文（和 `plugin_page` 一样，下拉刷新、`refresh_after`），条目变了（新消息、已处理 / 移回）再画一次。
   头部照旧：iPhone 导航栏下的操作条（✦ 摘要、AI 草拟回复 / 交给 AI）和右上角已处理，Mac 右边一栏。列表里没有它的来源不等，马上是原来的正文；还没问过时先转一下圈。
   403 / 404 / `unsupported` 安静地画原来的正文；扩展出错（502）、连不上 hub、没有 View 时也画原来的正文，上面一行「<扩展名>的详情没画出来：<原因>」和「重试」。
   按钮回 `open_url: persona://inbox/<这一条>/source`（在会话里看，`InboxSourceLink`；只认这次画的那一条）就换成原来的正文（飞书会话停在这件事的第一条），
-  上面一行「回到<页面标题>」回到扩展的页（同一个 `PluginViewModel`，状态和填的字都在）；别的 `open_url`、链接照扩展页面的规矩，经页面的 `openURL` 打开
-  （飞书文档进阅读器，Mac 在旁边的面板）。代码 `Persona/Views/Inbox/InboxItemSlot.swift`（`InboxItemSlots`、`InboxItemSlotModel`、`InboxPluginItemPage`），
+  上面一行「回到<页面标题>」回到扩展的页（同一个 `ExtensionViewModel`，状态和填的字都在）；别的 `open_url`、链接照扩展页面的规矩，经页面的 `openURL` 打开
+  （飞书文档进阅读器，Mac 在旁边的面板）。代码 `Persona/Views/Inbox/InboxItemSlot.swift`（`InboxItemSlots`、`InboxItemSlotModel`、`InboxExtensionItemPage`），
   单元测试 `InboxItemSlotTests`；截图：mock 加 `MOCK_INBOX_ITEM_UI=1`（扩展 `example-chat`），`-ui.oldLayout YES -tab mail -openInboxItem lark:f1:100`
   （`lark:f3:300` 是群聊、扩展出错的那一条）。
 - 扩展市场（#1328，「扩展市场」）：`GET /api/v1/extensions` 回 `markets: true` 时列表最上面一行「扩展市场」。目录有搜索框（停 0.3 秒再问 hub）、
@@ -1013,8 +1021,8 @@ iOS（Mac 共用同一套页面）在 hub 带 `extension_manager` 时，设置�
   确认后带 `permissions_digest` 安装 / 升级；「卸载」只对 `from_this_market` 的开放（先确认）。右上角「市场」是市场管理：每个市场的地址、个数、
   读取时间、错误和警告，一行「刷新」「设 / 换 token」「删除」；「添加」填地址和可选 token（token 只写不回显），地址原样交给 hub、不在 App 里校验格式，
   hub 拒绝的原因留在表单里（#1373：https、`github:owner/repo`、`git:<地址>[#分支]` 三种写法，git 的用 hub 机器的 SSH 凭据、不用 token）。
-  逻辑在 `PluginMarketModel.swift`（`PluginMarketModel`、`MarketPluginModel`），页面 `PluginMarketViews.swift`。
-- 自动升级（#1699，「自动升级」）：从市场装的扩展（`PluginView.auto_upgrade` 有值）的详情里，「启用」下面多一节「升级」，内容如下。
+  逻辑在 `ExtensionMarketModel.swift`（`ExtensionMarketModel`、`MarketExtensionModel`），页面 `ExtensionMarketViews.swift`。
+- 自动升级（#1699，「自动升级」）：从市场装的扩展（`ExtensionView.auto_upgrade` 有值）的详情里，「启用」下面多一节「升级」，内容如下。
   - 「自动升级」开关（`PUT …/{id}/-/auto-upgrade`）。
   - 有新版本时一行「有新版本 1.1.0」，下面一行小字写它怎么样：空闲时自动升级 / 自动升级关着 / 要多一项权限：…（橙色）/ 上次起不来、不再自动升级（橙色）/ 没装上 / 装不了。
     要你做的，行尾写「去确认」或「去升级」，点了打开它在市场里的升级页，那里列权限、确认。
@@ -1022,15 +1030,15 @@ iOS（Mac 共用同一套页面）在 hub 带 `extension_manager` 时，设置�
 
   市场管理页最上面是全部扩展的「自动升级扩展」总开关（`GET/PUT /api/v1/extensions/-/upgrades`）：读不到这个接口的老 hub 不显示，没有市场时也不显示。
   列表里等确认的扩展，状态后面加「· 新版本待确认」。假 hub 的 `MOCK_PLUGIN_UPGRADE`（`needs_permission`（默认）/ `waiting_idle` / `skipped` / `upgraded`）
-  决定 `example-gateway` 处在哪种情况；UI 测试 `PluginMarketTests.testAutoUpgrade`、`testAutoUpgradeForAll`，单元测试 `PluginUpgradeTests`。
-- 截图：`MOCK_PLUGINS=1` 的假 hub 有五个状态各不相同的示例扩展，另有 `example-gateway` 的页面、启动器上的一节（外加一个总回 unsupported 的）、
-  两个市场和它们的目录；`-tab settings -openPlugins YES`（`-openPlugin <id>` 直接进详情，再加 `-openPluginPage <ui>` 进它的页面）、
-  `-openPluginMarket YES`（目录）、`-openPluginMarkets YES`（市场管理）、`-openMarketPlugin <市场 id>/<扩展 id>`、`-openLauncherPage <启动器>`。
-  UI 插槽：`-tab settings` 就是卡片和入口，`-openPlugin example-gateway -openPluginPage usage` 是用量页，`-openMachines YES -openMachineDetail macbook`
-  看机器上的一节；Mac 用 `scripts/app/mac_shot.sh`（`DEMO=0` 加 `-pairURL`），`-openMacPluginPage example-gateway/usage` 打开侧栏里的那一页。
-  UI 测试 `PluginSettingsTests`、`PluginMarketTests`（从市场装、升级预览、市场管理、扩展页面里保存、启动器那一节；`TEST_RUNNER_JARVIS_PLUGINS_HUB`）、
-  `PluginSlotsTests`（卡片、入口和角标、用量页的 segmented 和图、卡片点开、机器上的一节），
-  单元测试 `PluginsModelTests`、`PluginMarketModelTests`、`PluginViewModelTests`、`PluginSlotsModelTests`。
+  决定 `example-gateway` 处在哪种情况；UI 测试 `ExtensionMarketTests.testAutoUpgrade`、`testAutoUpgradeForAll`，单元测试 `ExtensionUpgradeTests`。
+- 截图：`MOCK_PLUGINS=1` 的假 hub（像新 hub：报 `extensions` 和 `extension_*`，`/api/v1/extensions/…` 回新键；加 `MOCK_PLUGINS_LEGACY=1` 是改名前的老 hub）有五个状态各不相同的示例扩展，另有 `example-gateway` 的页面、启动器上的一节（外加一个总回 unsupported 的）、
+  两个市场和它们的目录；`-tab settings -openExtensions YES`（`-openExtension <id>` 直接进详情，再加 `-openExtensionPage <ui>` 进它的页面；老的 `-openPlugin…` 写法照旧能用）、
+  `-openExtensionMarket YES`（目录）、`-openExtensionMarkets YES`（市场管理）、`-openMarketExtension <市场 id>/<扩展 id>`、`-openLauncherPage <启动器>`。
+  UI 插槽：`-tab settings` 就是卡片和入口，`-openExtension example-gateway -openExtensionPage usage` 是用量页，`-openMachines YES -openMachineDetail macbook`
+  看机器上的一节；Mac 用 `scripts/app/mac_shot.sh`（`DEMO=0` 加 `-pairURL`），`-openMacExtensionPage example-gateway/usage` 打开侧栏里的那一页。
+  UI 测试 `ExtensionSettingsTests`、`ExtensionMarketTests`（从市场装、升级预览、市场管理、扩展页面里保存、启动器那一节；`TEST_RUNNER_JARVIS_PLUGINS_HUB`）、
+  `ExtensionSlotsTests`（卡片、入口和角标、用量页的 segmented 和图、卡片点开、机器上的一节），
+  单元测试 `ExtensionsModelTests`、`ExtensionMarketModelTests`、`ExtensionViewModelTests`、`ExtensionSlotsModelTests`。
 - 网页（#1207）：设置 › 扩展，同样的列表和详情（`web/src/views/settings/Extensions.tsx`、`web/src/lib/extensions.ts`，`/settings?tab=extensions&extension=<id>`；老链接 `?tab=plugins&plugin=<id>` 照样打开），见 `docs/web.md`「设置」。
   #1330 加上声明式 UI（`settings/ExtensionView.tsx`、`lib/extension-ui.ts`：扩展详情的「页面」、启动器详情里的一节）和扩展市场（`settings/ExtensionMarket.tsx`、`lib/extension-market.ts`：目录、详情、管理市场）。
   #1699 加上自动升级（「自动升级」）：市场扩展的详情里一组「升级」（开关、新版本那一行和「去确认」、上次的结果，`UpgradeGroup`），管理市场最上面是全部扩展的总开关，和 App 同样的文字（`lib/extensions.ts` 的 `upgradeDetail` 等）。

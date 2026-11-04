@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// 设置 › 插件 › 渠道 (docs/channels.md): what the hub sends decodes (and what it leaves out falls back), the list's
+/// 设置 › 扩展 › 渠道 (docs/channels.md): what the hub sends decodes (and what it leaves out falls back), the list's
 /// sections and words, a channel's changes go out as only what changed, binding is the connectors' steps on …/bind
 /// (a QR code, the Feishu bot's pairing code), and a message's source is read from its client_msg_id. Made-up values.
 @MainActor
@@ -58,7 +58,7 @@ struct ChannelsModelTests {
         #expect(list[2].isBound && list[2].bindsHere) // broken, with an account: unbind, not bind
         #expect(!list[3].bindsHere && !list[3].editable) // /agent: hub.json's
         #expect(!list[4].bindsHere && !list[4].editable)
-        #expect(ChannelsView.destination(list[4]) == .marketPlugin(market: "example", id: "example-rooms"))
+        #expect(ChannelsView.destination(list[4]) == .marketExtension(market: "example", id: "example-rooms"))
         #expect(ChannelsView.destination(wechat) == .channel("wechat"))
     }
 

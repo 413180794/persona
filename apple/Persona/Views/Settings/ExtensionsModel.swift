@@ -1,13 +1,13 @@
 import Foundation
 import Observation
 
-// 设置 › 插件 (docs/plugins.md「hub 的接口」): the hub's plugins, each one's switch, its configuration as a form drawn
-// from its schema (`form.fields`), its secrets, write-only, and the pages it draws (`ui`, PluginUIModel). Installing,
+// 设置 › 扩展 (docs/extensions.md「hub 的接口」): the hub's plugins, each one's switch, its configuration as a form drawn
+// from its schema (`form.fields`), its secrets, write-only, and the pages it draws (`ui`, ExtensionUIModel). Installing,
 // upgrading and removing are done on the hub's machine (`personad plugin`), or from a plugin market the hub has
-// (PluginMarketModel: only what a market lists).
+// (ExtensionMarketModel: only what a market lists).
 
 /// One of GET /api/v1/plugins.
-nonisolated struct HubPlugin: Codable, Hashable, Sendable, Identifiable {
+nonisolated struct HubExtension: Codable, Hashable, Sendable, Identifiable {
     var id: String
     var name: String
     var kind: String
@@ -26,10 +26,10 @@ nonisolated struct HubPlugin: Codable, Hashable, Sendable, Identifiable {
     var needsSetup: [String]?
     var warnings: [String]?
     /// A plugin from a market (a hub with plugin_auto_upgrade): its own auto-upgrade switch, its newer version and what
-    /// happened last with an upgrade (docs/plugins.md「自动升级」).
+    /// happened last with an upgrade (docs/extensions.md「自动升级」).
     var autoUpgrade: Bool?
-    var upgrade: PluginUpgrade?
-    var upgradeNote: PluginUpgradeNote?
+    var upgrade: ExtensionUpgrade?
+    var upgradeNote: ExtensionUpgradeNote?
 
     enum CodingKeys: String, CodingKey {
         case id, name, kind, status, error, version, source, enabled, description, contributes, warnings, upgrade
@@ -37,8 +37,8 @@ nonisolated struct HubPlugin: Codable, Hashable, Sendable, Identifiable {
     }
 }
 
-/// A market plugin's newer version and where it stands (PluginView.upgrade, GET /api/v1/plugins/-/upgrades).
-nonisolated struct PluginUpgrade: Codable, Hashable, Sendable, Identifiable {
+/// A market plugin's newer version and where it stands (ExtensionView.upgrade, GET /api/v1/plugins/-/upgrades).
+nonisolated struct ExtensionUpgrade: Codable, Hashable, Sendable, Identifiable {
     var id: String
     var name: String?
     var market: String
@@ -46,7 +46,7 @@ nonisolated struct PluginUpgrade: Codable, Hashable, Sendable, Identifiable {
     var to: String
     /// available | waiting_idle | needs_permission | off | skipped | failed | incompatible
     var state: String
-    var addedPermissions: [PluginPermission]?
+    var addedPermissions: [ExtensionPermission]?
     var detail: String?
 
     enum CodingKeys: String, CodingKey {
@@ -56,7 +56,7 @@ nonisolated struct PluginUpgrade: Codable, Hashable, Sendable, Identifiable {
 }
 
 /// What happened last with a plugin's upgrade.
-nonisolated struct PluginUpgradeNote: Codable, Hashable, Sendable {
+nonisolated struct ExtensionUpgradeNote: Codable, Hashable, Sendable {
     /// upgraded | rolled_back | needs_permission | failed
     var kind: String
     var from: String
@@ -66,13 +66,13 @@ nonisolated struct PluginUpgradeNote: Codable, Hashable, Sendable {
 }
 
 /// GET /api/v1/plugins/-/upgrades: the global switch and the newer versions.
-nonisolated struct PluginUpgrades: Decodable, Hashable, Sendable {
+nonisolated struct ExtensionUpgrades: Decodable, Hashable, Sendable {
     var auto: Bool
-    var upgrades: [PluginUpgrade]
+    var upgrades: [ExtensionUpgrade]
 }
 
 /// One field of a plugin's configuration form (`form.fields`): the hub's reading of the manifest's JSON Schema subset.
-nonisolated struct PluginField: Codable, Hashable, Sendable, Identifiable {
+nonisolated struct ExtensionField: Codable, Hashable, Sendable, Identifiable {
     var name: String
     /// string | integer | number | boolean | array | object
     var type: String
@@ -88,13 +88,13 @@ nonisolated struct PluginField: Codable, Hashable, Sendable, Identifiable {
     var minimum: Double?
     var maximum: Double?
     /// An array's items (strings, maybe from a list of choices).
-    var items: PluginItems?
+    var items: ExtensionItems?
     var minItems: Int?
     var maxItems: Int?
     var uniqueItems: Bool?
     /// An object's fields (a group of the form).
-    var fields: [PluginField]?
-    /// What to ask before a switch of it is turned on (x-confirm; the plugin cua's 「插件开着时不自动锁屏」).
+    var fields: [ExtensionField]?
+    /// What to ask before a switch of it is turned on (x-confirm; the plugin cua's 「扩展开着时不自动锁屏」).
     var confirm: String?
 
     var id: String { name }
@@ -108,10 +108,10 @@ nonisolated struct PluginField: Codable, Hashable, Sendable, Identifiable {
 }
 
 /// An array field's items.
-nonisolated struct PluginItems: Codable, Hashable, Sendable {
+nonisolated struct ExtensionItems: Codable, Hashable, Sendable {
     var type: String
     var `enum`: [PluginChoice]?
-    /// machine: the hub's machines by id, drawn as a switch each (`PluginMachineSwitches`).
+    /// machine: the hub's machines by id, drawn as a switch each (`ExtensionMachineSwitches`).
     var format: String?
     /// For machine: only machines of these systems (darwin, linux, windows); nil, any.
     var os: [String]?
@@ -126,7 +126,7 @@ nonisolated struct PluginChoice: Codable, Hashable, Sendable, Identifiable {
 }
 
 /// A declared secret and whether it has a value (never the value).
-nonisolated struct PluginSecret: Codable, Hashable, Sendable, Identifiable {
+nonisolated struct ExtensionSecret: Codable, Hashable, Sendable, Identifiable {
     var name: String
     var title: String
     var description: String?
@@ -136,7 +136,7 @@ nonisolated struct PluginSecret: Codable, Hashable, Sendable, Identifiable {
 }
 
 /// A line of what a plugin may do (`permissions`).
-nonisolated struct PluginPermission: Codable, Hashable, Sendable, Identifiable {
+nonisolated struct ExtensionPermission: Codable, Hashable, Sendable, Identifiable {
     var key: String
     var title: String
     var detail: String?
@@ -144,29 +144,29 @@ nonisolated struct PluginPermission: Codable, Hashable, Sendable, Identifiable {
 }
 
 /// GET /api/v1/plugins/{id}/-/: the plugin with its form, settings, secrets and permissions.
-nonisolated struct HubPluginDetail: Decodable, Hashable, Sendable {
-    var plugin: HubPlugin
+nonisolated struct HubExtensionDetail: Decodable, Hashable, Sendable {
+    var plugin: HubExtension
     var publisher: String?
     var homepage: String?
     var origin: String?
     var previousVersion: String?
     /// hub.json's: switched and set up there only.
     var readOnly: Bool
-    var form: [PluginField]
+    var form: [ExtensionField]
     var config: [String: JSONValue]
-    var secrets: [PluginSecret]
-    var permissions: [PluginPermission]
+    var secrets: [ExtensionSecret]
+    var permissions: [ExtensionPermission]
     /// The pages it draws (placement plugin_page), a row each.
     var ui: [PluginUIPlace]
 
-    private struct Form: Decodable { var fields: [PluginField]? }
+    private struct Form: Decodable { var fields: [ExtensionField]? }
     private enum CodingKeys: String, CodingKey {
         case publisher, homepage, origin, form, config, secrets, permissions, ui
         case previousVersion = "previous_version", readOnly = "read_only"
     }
 
     init(from decoder: Decoder) throws {
-        plugin = try HubPlugin(from: decoder)
+        plugin = try HubExtension(from: decoder)
         let c = try decoder.container(keyedBy: CodingKeys.self)
         publisher = try c.decodeIfPresent(String.self, forKey: .publisher)
         homepage = try c.decodeIfPresent(String.self, forKey: .homepage)
@@ -175,72 +175,74 @@ nonisolated struct HubPluginDetail: Decodable, Hashable, Sendable {
         readOnly = try c.decodeIfPresent(Bool.self, forKey: .readOnly) ?? false
         form = try c.decodeIfPresent(Form.self, forKey: .form)?.fields ?? []
         config = try c.decodeIfPresent([String: JSONValue].self, forKey: .config) ?? [:]
-        secrets = try c.decodeIfPresent([PluginSecret].self, forKey: .secrets) ?? []
-        permissions = try c.decodeIfPresent([PluginPermission].self, forKey: .permissions) ?? []
+        secrets = try c.decodeIfPresent([ExtensionSecret].self, forKey: .secrets) ?? []
+        permissions = try c.decodeIfPresent([ExtensionPermission].self, forKey: .permissions) ?? []
         ui = (try c.decodeIfPresent([PluginUIPlace].self, forKey: .ui) ?? []).filter { ($0.placement ?? "plugin_page") == "plugin_page" }
     }
 }
 
-/// GET /api/v1/plugins: the plugins, and whether this hub has plugin markets (`markets`: 设置 › 插件 › 插件市场).
-nonisolated struct HubPluginList: Decodable, Sendable {
-    var plugins: [HubPlugin]
+/// GET /api/v1/plugins: the plugins, and whether this hub has plugin markets (`markets`: 设置 › 扩展 › 扩展市场).
+nonisolated struct HubExtensionList: Decodable, Sendable {
+    var plugins: [HubExtension]
     var canInstall: Bool
     var markets: Bool
 
     private enum CodingKeys: String, CodingKey {
-        case plugins, markets
+        case plugins, extensions, markets
         case canInstall = "can_install"
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        plugins = try c.decodeIfPresent([HubPlugin].self, forKey: .plugins) ?? []
+        // `extensions` under /api/v1/extensions, `plugins` under the old path (#1844).
+        plugins = try c.decodeIfPresent([HubExtension].self, forKey: .extensions)
+            ?? c.decodeIfPresent([HubExtension].self, forKey: .plugins) ?? []
         canInstall = try c.decodeIfPresent(Bool.self, forKey: .canInstall) ?? false
         markets = try c.decodeIfPresent(Bool.self, forKey: .markets) ?? false
     }
 }
 
 extension APIClient {
-    func plugins() async throws -> [HubPlugin] { try await pluginList().plugins }
+    func plugins() async throws -> [HubExtension] { try await pluginList().plugins }
 
-    func pluginList() async throws -> HubPluginList { try await get("/api/v1/plugins") }
+    func pluginList() async throws -> HubExtensionList { try await get(extensionPath("")) }
 
-    func plugin(_ id: String) async throws -> HubPluginDetail { try await get("/api/v1/plugins/\(id)/-/") }
+    func plugin(_ id: String) async throws -> HubExtensionDetail { try await get(extensionPath("/\(id)/-/")) }
 
-    func setPlugin(_ id: String, autoUpgrade: Bool) async throws -> HubPluginDetail {
-        try JSON.decoder.decode(HubPluginDetail.self, from: try await request("PUT", "/api/v1/plugins/\(id)/-/auto-upgrade", body: ["auto": autoUpgrade]))
+    func setExtension(_ id: String, autoUpgrade: Bool) async throws -> HubExtensionDetail {
+        try JSON.decoder.decode(HubExtensionDetail.self, from: try await request("PUT", extensionPath("/\(id)/-/auto-upgrade"), body: ["auto": autoUpgrade]))
     }
 
-    func pluginUpgrades() async throws -> PluginUpgrades { try await get("/api/v1/plugins/-/upgrades") }
+    func pluginUpgrades() async throws -> ExtensionUpgrades { try await get(extensionPath("/-/upgrades")) }
 
-    func setPluginUpgrades(auto: Bool) async throws -> PluginUpgrades {
-        try JSON.decoder.decode(PluginUpgrades.self, from: try await request("PUT", "/api/v1/plugins/-/upgrades", body: ["auto": auto]))
+    func setExtensionUpgrades(auto: Bool) async throws -> ExtensionUpgrades {
+        try JSON.decoder.decode(ExtensionUpgrades.self, from: try await request("PUT", extensionPath("/-/upgrades"), body: ["auto": auto]))
     }
 
-    func setPlugin(_ id: String, enabled: Bool) async throws -> HubPluginDetail {
-        try JSON.decoder.decode(HubPluginDetail.self, from: try await request("PUT", "/api/v1/plugins/\(id)/-/enabled", body: ["enabled": enabled]))
+    func setExtension(_ id: String, enabled: Bool) async throws -> HubExtensionDetail {
+        try JSON.decoder.decode(HubExtensionDetail.self, from: try await request("PUT", extensionPath("/\(id)/-/enabled"), body: ["enabled": enabled]))
     }
 
-    func setPlugin(_ id: String, config: [String: JSONValue]) async throws -> HubPluginDetail {
+    func setExtension(_ id: String, config: [String: JSONValue]) async throws -> HubExtensionDetail {
         struct Body: Encodable { var config: [String: JSONValue] }
-        return try JSON.decoder.decode(HubPluginDetail.self, from: try await request("PUT", "/api/v1/plugins/\(id)/-/config", body: Body(config: config)))
+        return try JSON.decoder.decode(HubExtensionDetail.self, from: try await request("PUT", extensionPath("/\(id)/-/config"), body: Body(config: config)))
     }
 
-    func setPlugin(_ id: String, secret name: String, value: String) async throws -> HubPluginDetail {
-        try JSON.decoder.decode(HubPluginDetail.self, from: try await request("PUT", "/api/v1/plugins/\(id)/-/secrets/\(name)", body: ["value": value]))
+    func setExtension(_ id: String, secret name: String, value: String) async throws -> HubExtensionDetail {
+        try JSON.decoder.decode(HubExtensionDetail.self, from: try await request("PUT", extensionPath("/\(id)/-/secrets/\(name)"), body: ["value": value]))
     }
 
-    func clearPlugin(_ id: String, secret name: String) async throws -> HubPluginDetail {
-        try JSON.decoder.decode(HubPluginDetail.self, from: try await request("DELETE", "/api/v1/plugins/\(id)/-/secrets/\(name)"))
+    func clearExtension(_ id: String, secret name: String) async throws -> HubExtensionDetail {
+        try JSON.decoder.decode(HubExtensionDetail.self, from: try await request("DELETE", extensionPath("/\(id)/-/secrets/\(name)")))
     }
 }
 
 /// What a plugin is called and says in the settings.
-enum PluginText {
+enum ExtensionText {
     /// To the user a plugin is on or off (#1684, as the web and Android since #1670): an idle one starts by itself when
     /// it is used, so running and idle are both 启动; whether it runs right now is the detail page's small print
     /// (`runNote`). hub's `status` values are unchanged.
-    static func state(_ p: HubPlugin) -> String {
+    static func state(_ p: HubExtension) -> String {
         switch p.status {
         case "running", "stopped": "启动"
         case "starting": "正在启动"
@@ -253,7 +255,7 @@ enum PluginText {
     }
 
     /// Whether an enabled plugin's program runs right now, under its description; nil for any other state.
-    static func runNote(_ p: HubPlugin) -> String? {
+    static func runNote(_ p: HubExtension) -> String? {
         switch p.status {
         case "running": "正在运行"
         case "stopped": "暂未运行，用到时自动启动"
@@ -261,8 +263,8 @@ enum PluginText {
         }
     }
 
-    /// Broken: the state's dot is red (`PluginStateDot`: yellow waiting on the user, green on, gray otherwise).
-    static func isProblem(_ p: HubPlugin) -> Bool { p.status == "error" || p.status == "incompatible" }
+    /// Broken: the state's dot is red (`ExtensionStateDot`: yellow waiting on the user, green on, gray otherwise).
+    static func isProblem(_ p: HubExtension) -> Bool { p.status == "error" || p.status == "incompatible" }
 
     static func source(_ s: String?) -> String? {
         switch s {
@@ -282,26 +284,26 @@ enum PluginText {
     }
 
     /// The row's value: its state (the version is on its page).
-    static func summary(_ p: HubPlugin) -> String {
+    static func summary(_ p: HubExtension) -> String {
         p.upgrade?.state == "needs_permission" ? state(p) + " · 新版本待确认" : state(p)
     }
 
-    /// Under the form: which switches take effect at once (lists of machines, `PluginModel.saveNow`) and that the rest
+    /// Under the form: which switches take effect at once (lists of machines, `ExtensionModel.saveNow`) and that the rest
     /// waits for 保存.
-    static func saveFooter(_ fields: [PluginField]) -> String {
+    static func saveFooter(_ fields: [ExtensionField]) -> String {
         let all = fields.flatMap { $0.type == "object" ? ($0.fields ?? []) : [$0] }
         let now = all.filter { $0.items?.format == "machine" }.map { "「\($0.label)」" }
-        if now.isEmpty { return "改完点右上角「保存」；保存后插件会重新启动。留空的项用插件的默认值。" }
+        if now.isEmpty { return "改完点右上角「保存」；保存后扩展会重新启动。留空的项用扩展的默认值。" }
         if now.count == all.count { return now.joined(separator: "、") + "的开关即时生效，不用保存。" }
-        return now.joined(separator: "、") + "的开关即时生效；其他项改完点右上角「保存」，保存后插件会重新启动。留空的项用插件的默认值。"
+        return now.joined(separator: "、") + "的开关即时生效；其他项改完点右上角「保存」，保存后扩展会重新启动。留空的项用扩展的默认值。"
     }
 
-    /// The 升级 section's line for a newer version: what happens to it (docs/plugins.md「自动升级」).
-    static func upgradeDetail(_ u: PluginUpgrade) -> String {
+    /// The 升级 section's line for a newer version: what happens to it (docs/extensions.md「自动升级」).
+    static func upgradeDetail(_ u: ExtensionUpgrade) -> String {
         let why = u.detail.flatMap { $0.isEmpty ? nil : "：" + $0 } ?? ""
         switch u.state {
         case "needs_permission": return morePermissions(u.addedPermissions ?? [])
-        case "waiting_idle": return "插件空闲时自动升级"
+        case "waiting_idle": return "扩展空闲时自动升级"
         case "available": return "稍后自动升级"
         case "off": return "自动升级关着"
         case "skipped": return "上次升级后起不来，已回到 \(u.from)，不再自动升级到这个版本"
@@ -312,7 +314,7 @@ enum PluginText {
     }
 
     /// Whether the line asks something of the user (its row opens the upgrade in the market).
-    static func upgradeAction(_ u: PluginUpgrade) -> String? {
+    static func upgradeAction(_ u: ExtensionUpgrade) -> String? {
         switch u.state {
         case "needs_permission": return "去确认"
         case "off", "skipped", "failed": return "去升级"
@@ -321,7 +323,7 @@ enum PluginText {
     }
 
     /// What a newer version asks for more, as the hub says it in its notice.
-    static func morePermissions(_ added: [PluginPermission]) -> String {
+    static func morePermissions(_ added: [ExtensionPermission]) -> String {
         guard !added.isEmpty else { return "要的权限有变化" }
         let count = ["", "一", "两", "三", "四", "五"]
         let lines = added.map { p in p.title + (p.detail.flatMap { $0.isEmpty ? nil : "（\($0)）" } ?? "") }
@@ -329,7 +331,7 @@ enum PluginText {
     }
 
     /// The last upgrade, when it is news of its own (asking and failing are the newer version's line).
-    static func upgradeNote(_ n: PluginUpgradeNote) -> String? {
+    static func upgradeNote(_ n: ExtensionUpgradeNote) -> String? {
         switch n.kind {
         case "upgraded": return "已自动升级到 \(n.to)（原来是 \(n.from)）"
         case "rolled_back": return "\(n.to) 起不来，已回到 \(n.from)"
@@ -338,7 +340,7 @@ enum PluginText {
     }
 
     /// 设置's row: how many, and how many need the user.
-    static func listSummary(_ list: [HubPlugin]?) -> String {
+    static func listSummary(_ list: [HubExtension]?) -> String {
         guard let list else { return "" }
         if list.isEmpty { return "没有" }
         let attention = list.filter { $0.status == "needs_setup" || isProblem($0) }.count
@@ -346,15 +348,15 @@ enum PluginText {
     }
 }
 
-/// 设置 › 插件: the list.
-@Observable final class PluginsModel {
+/// 设置 › 扩展: the list.
+@Observable final class ExtensionsModel {
     struct Deps {
         var api: () -> APIClient?
         static var live: Deps { .init(api: { AppModel.shared.api }) }
     }
 
-    private(set) var plugins: [HubPlugin]?
-    /// The hub has plugin markets: the list shows 插件市场.
+    private(set) var plugins: [HubExtension]?
+    /// The hub has plugin markets: the list shows 扩展市场.
     private(set) var markets = false
     private(set) var loading = false
     private(set) var error: String?
@@ -378,15 +380,15 @@ enum PluginText {
     }
 }
 
-/// 设置 › 插件 › one: its switch, its form (a draft saved as a whole), its secrets.
-@Observable final class PluginModel {
+/// 设置 › 扩展 › one: its switch, its form (a draft saved as a whole), its secrets.
+@Observable final class ExtensionModel {
     struct Deps {
         var api: () -> APIClient?
         static var live: Deps { .init(api: { AppModel.shared.api }) }
     }
 
     let id: String
-    private(set) var detail: HubPluginDetail?
+    private(set) var detail: HubExtensionDetail?
     private(set) var loading = false
     private(set) var saving = false
     private(set) var error: String?
@@ -422,11 +424,11 @@ enum PluginText {
     }
 
     func setEnabled(_ on: Bool) async {
-        await run { api in try await api.setPlugin(self.id, enabled: on) }
+        await run { api in try await api.setExtension(self.id, enabled: on) }
     }
 
     func setAutoUpgrade(_ on: Bool) async {
-        await run { api in try await api.setPlugin(self.id, autoUpgrade: on) }
+        await run { api in try await api.setExtension(self.id, autoUpgrade: on) }
     }
 
     func save() async -> Bool {
@@ -434,7 +436,7 @@ enum PluginText {
         saving = true
         defer { saving = false }
         fieldErrors = [:]
-        let ok = await run { api in try await api.setPlugin(self.id, config: Self.compact(self.draft)) }
+        let ok = await run { api in try await api.setExtension(self.id, config: Self.compact(self.draft)) }
         if ok { numberText = [:] }
         return ok
     }
@@ -447,7 +449,7 @@ enum PluginText {
         set(value, at: path) // shows at once
         saving = true
         defer { saving = false }
-        let ok = await run { api in try await api.setPlugin(self.id, config: Self.compact(Self.setting(saved, path[...], value))) }
+        let ok = await run { api in try await api.setExtension(self.id, config: Self.compact(Self.setting(saved, path[...], value))) }
         // run took the hub's answer as the draft: the other edits go back on top of it.
         draft = Self.setting(editing, path[...], ok ? self.value(path) : Self.value(in: saved, path))
     }
@@ -455,15 +457,15 @@ enum PluginText {
     func setSecret(_ name: String, value: String) async -> Bool {
         let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return false }
-        return await run { api in try await api.setPlugin(self.id, secret: name, value: value) }
+        return await run { api in try await api.setExtension(self.id, secret: name, value: value) }
     }
 
     func clearSecret(_ name: String) async {
-        await run { api in try await api.clearPlugin(self.id, secret: name) }
+        await run { api in try await api.clearExtension(self.id, secret: name) }
     }
 
     /// Puts the hub's answer in (the draft follows it), or its error: a field it refused goes beside that field.
-    @discardableResult private func run(_ call: @escaping (APIClient) async throws -> HubPluginDetail) async -> Bool {
+    @discardableResult private func run(_ call: @escaping (APIClient) async throws -> HubExtensionDetail) async -> Bool {
         do {
             guard let api = deps.api() else { throw APIError(status: 0, message: "还没连接 hub") }
             let d = try await call(api)

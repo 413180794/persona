@@ -5,12 +5,12 @@ import Testing
 /// Feishu through lark-connector is a plugin's (#1530): what the app shows of it goes by the hub's features
 /// (`LarkFeatures`), and the company feed has no tenant's name built in (`KBMoments`).
 @MainActor struct LarkFeaturesTests {
-    @Test func thePluginsFeatures() {
+    @Test func theExtensionsFeatures() {
         #expect(LarkFeatures(hub: ["tls", "lark", "lark_moments", "lark_attachments"]) == .all)
         #expect(LarkFeatures(hub: ["tls", "lark", "lark_attachments"]) == LarkFeatures(chats: true, moments: false))
     }
 
-    @Test func noPluginNoFeishu() {
+    @Test func noExtensionNoFeishu() {
         #expect(LarkFeatures(hub: ["tls", "connectors", "plugins"]) == .none)
         // The company feed alone is nothing to open: its posts are read through the chats' routes.
         #expect(LarkFeatures(hub: ["lark_moments"]) == .none)

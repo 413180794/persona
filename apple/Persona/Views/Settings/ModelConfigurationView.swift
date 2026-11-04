@@ -355,7 +355,7 @@ struct ModelPurposeEditorView: View {
         let id = page.draft.provider ?? page.purpose?.effective.provider
         let models = page.providers.first { $0.id == id }?.models ?? []
         return Picker("具体模型", selection: optional(\.model)) {
-            Text("跟随插件默认").tag("")
+            Text("跟随扩展默认").tag("")
             ForEach(models) { Text($0.name ?? $0.id).tag($0.id) }
             if let model = page.draft.model, !models.contains(where: { $0.id == model }) {
                 Text("\(model)（当前配置）").tag(model)

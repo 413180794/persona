@@ -46,10 +46,10 @@ struct RootView: View {
                 WelcomeView()
             }
         }
-        // The plugins' main-navigation entries and cards, for 设置's badge (docs/plugins.md「UI 插槽」).
-        .task(id: PluginSlots.source(model)) {
-            let hub = PluginSlots.source(model).hub
-            await PluginSlots.shared.reload(for: hub)
+        // The plugins' main-navigation entries and cards, for 设置's badge (docs/extensions.md「UI 插槽」).
+        .task(id: ExtensionSlots.source(model)) {
+            let hub = ExtensionSlots.source(model).hub
+            await ExtensionSlots.shared.reload(for: hub)
             // Which inbox sources a plugin draws (placement inbox_item): known before an item is opened.
             await InboxItemSlots.shared.reload(for: hub)
         }
@@ -224,13 +224,13 @@ private struct TabPage<Page: View>: View, Equatable {
             }
             .equatable()
         }
-        .badge(badge) // 体验模式 is left from 设置; the plugins' entries are on it (docs/plugins.md「UI 插槽」角标)
+        .badge(badge) // 体验模式 is left from 设置; the plugins' entries are on it (docs/extensions.md「UI 插槽」角标)
     }
 
     /// 体验; else what the plugins' main-navigation entries' badges add up to (only words: a dot).
     private var badge: Text? {
         if model.isDemo { return Text("体验") }
-        let total = PluginSlots.shared.total
+        let total = ExtensionSlots.shared.total
         if total.count > 0 { return Text(total.count > 99 ? "99+" : "\(total.count)") }
         return total.dot ? Text("•") : nil
     }

@@ -1,8 +1,8 @@
 import Foundation
 import Observation
 
-// A plugin's declarative UI (docs/plugins.md「声明式 UI」): the plugin sends a View made of a few fixed kinds of items, the
-// app draws them with its own design system (PluginViewRenderer) and sends the buttons back. Nothing of the plugin
+// A plugin's declarative UI (docs/extensions.md「声明式 UI」): the plugin sends a View made of a few fixed kinds of items, the
+// app draws them with its own design system (ExtensionViewRenderer) and sends the buttons back. Nothing of the plugin
 // runs here; its tones become the app's role colors, it gives no colors, sizes or icons.
 
 /// One of GET /api/v1/plugins/-/ui (and a plugin detail's `ui`): something a plugin draws, and where.
@@ -10,7 +10,7 @@ nonisolated struct PluginUIPlace: Codable, Hashable, Sendable, Identifiable {
     var plugin: String
     var id: String
     var title: String
-    /// plugin_page | launcher_section | nav_page | overview_card | machine_section | inbox_item (docs/plugins.md「UI 插槽」);
+    /// plugin_page | launcher_section | nav_page | overview_card | machine_section | inbox_item (docs/extensions.md「UI 插槽」);
     /// one the app does not know is left out where it lists them.
     var placement: String?
     /// The plugin's name (its entries say whose they are).
@@ -31,11 +31,32 @@ nonisolated struct PluginUIPlace: Codable, Hashable, Sendable, Identifiable {
         case pluginName = "plugin_name"
     }
 
+    private enum NewKeys: String, CodingKey {
+        case `extension`
+        case extensionName = "extension_name"
+    }
+
+    /// `extension` / `extension_name` under /api/v1/extensions, `plugin` / `plugin_name` under the old path (#1844).
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let n = try decoder.container(keyedBy: NewKeys.self)
+        plugin = try n.decodeIfPresent(String.self, forKey: .extension) ?? c.decode(String.self, forKey: .plugin)
+        pluginName = try n.decodeIfPresent(String.self, forKey: .extensionName) ?? c.decodeIfPresent(String.self, forKey: .pluginName)
+        id = try c.decode(String.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        placement = try c.decodeIfPresent(String.self, forKey: .placement)
+        size = try c.decodeIfPresent(String.self, forKey: .size)
+        icon = try c.decodeIfPresent(String.self, forKey: .icon)
+        opens = try c.decodeIfPresent(String.self, forKey: .opens)
+        badge = try c.decodeIfPresent(PluginBadge.self, forKey: .badge)
+        connector = try c.decodeIfPresent(String.self, forKey: .connector)
+    }
+
     /// The slots this app draws (anything else from a newer hub is ignored).
     static let slots: Set<String> = ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item"]
 }
 
-/// Where and for whom a plugin's View is drawn (docs/plugins.md「UI 插槽」上下文): the hub checks it and hands it on.
+/// Where and for whom a plugin's View is drawn (docs/extensions.md「UI 插槽」上下文): the hub checks it and hands it on.
 nonisolated struct PluginUIContext: Encodable, Hashable, Sendable {
     /// launcher_section's launcher name.
     var launcher: String?
@@ -75,9 +96,9 @@ nonisolated struct PluginUIContext: Encodable, Hashable, Sendable {
 }
 
 /// A View: sections of items, and the plugin's own state, sent back as it was.
-nonisolated struct PluginUIView: Codable, Hashable, Sendable {
+nonisolated struct ExtensionUIView: Codable, Hashable, Sendable {
     var title: String?
-    var sections: [PluginUISection]
+    var sections: [ExtensionUISection]
     var state: String?
     /// Seconds after which the app draws it again while it is on screen (the hub keeps it at 30 or more); nil or 0: never.
     var refreshAfter: Int?
@@ -88,7 +109,7 @@ nonisolated struct PluginUIView: Codable, Hashable, Sendable {
     }
 }
 
-nonisolated struct PluginUISection: Codable, Hashable, Sendable {
+nonisolated struct ExtensionUISection: Codable, Hashable, Sendable {
     var title: String?
     var footer: String?
     var items: [PluginUIItem]
@@ -109,7 +130,7 @@ nonisolated struct PluginUIItem: Codable, Hashable, Sendable {
     var title: String?
     var subtitle: String?
     var badge: Badge?
-    var action: PluginUIAction?
+    var action: ExtensionUIAction?
     /// button's: normal | destructive
     var role: String?
     var url: String?
@@ -160,7 +181,7 @@ nonisolated struct PluginUIItem: Codable, Hashable, Sendable {
 }
 
 /// What a button or a row does: `confirm` is asked first; `submit` sends the page's fields along.
-nonisolated struct PluginUIAction: Codable, Hashable, Sendable {
+nonisolated struct ExtensionUIAction: Codable, Hashable, Sendable {
     var id: String
     var confirm: String?
     var submit: Bool?
@@ -168,7 +189,7 @@ nonisolated struct PluginUIAction: Codable, Hashable, Sendable {
 
 /// `persona://inbox/<item id>/source` (the id path-escaped): an inbox_item page asking to open its item's own source
 /// page, what opening the item showed before the slot (a Feishu chat at the item's first message). The only `open_url`
-/// that is not https, and only for the item the page is drawn for (docs/plugins.md「收件箱条目」).
+/// that is not https, and only for the item the page is drawn for (docs/extensions.md「收件箱条目」).
 nonisolated enum InboxSourceLink {
     /// The item `url` opens the source of, nil when it is no such link.
     static func item(_ url: URL) -> String? {
@@ -182,8 +203,8 @@ nonisolated enum InboxSourceLink {
 }
 
 /// The answer to a button: a new view, a word to show, a link to open (none: draw again).
-nonisolated struct PluginUIResult: Decodable, Sendable {
-    var view: PluginUIView?
+nonisolated struct ExtensionUIResult: Decodable, Sendable {
+    var view: ExtensionUIView?
     var toast: String?
     var openURL: String?
 
@@ -195,18 +216,18 @@ nonisolated struct PluginUIResult: Decodable, Sendable {
 
 extension APIClient {
     /// What enabled plugins draw at a placement (a launcher's section: only the plugins whose gateway it is).
-    /// No placement: every slot's but launchers' sections (docs/plugins.md「UI 插槽」). Placements this app does not draw
+    /// No placement: every slot's but launchers' sections (docs/extensions.md「UI 插槽」). Placements this app does not draw
     /// are left out.
     func pluginUI(placement: String?, launcher: String? = nil, machine: String? = nil) async throws -> [PluginUIPlace] {
         struct List: Decodable { var ui: [PluginUIPlace]? }
         let query = ["placement": placement, "launcher": launcher, "machine": machine].compactMapValues { $0?.isEmpty == false ? $0 : nil }
-        let list: List = try await get("/api/v1/plugins/-/ui", query: query)
+        let list: List = try await get(extensionPath("/-/ui"), query: query)
         return (list.ui ?? []).filter { $0.placement.map(PluginUIPlace.slots.contains) ?? true }
     }
 
     /// Draws (no action) or presses a button (an action, with the fields' values when it submits).
     func pluginUI(_ plugin: String, _ ui: String, context: PluginUIContext, state: String?, action: String? = nil,
-                  values: [String: String]? = nil) async throws -> PluginUIResult {
+                  values: [String: String]? = nil) async throws -> ExtensionUIResult {
         struct Body: Encodable {
             var context: PluginUIContext
             var state: String?
@@ -214,12 +235,12 @@ extension APIClient {
             var values: [String: String]?
         }
         let body = Body(context: context, state: state, action: action, values: values)
-        return try JSON.decoder.decode(PluginUIResult.self, from: try await request("POST", "/api/v1/plugins/\(plugin)/-/ui/\(ui)", body: body))
+        return try JSON.decoder.decode(ExtensionUIResult.self, from: try await request("POST", extensionPath("/\(plugin)/-/ui/\(ui)"), body: body))
     }
 }
 
 /// One plugin view on a page: drawing it, the fields' values as typed, pressing its buttons.
-@Observable final class PluginViewModel {
+@Observable final class ExtensionViewModel {
     struct Deps {
         var api: () -> APIClient?
         static var live: Deps { .init(api: { AppModel.shared.api }) }
@@ -236,7 +257,7 @@ extension APIClient {
     let ui: String
     /// Where it is drawn: the launcher or machine, the size, and the app's time zone, language and platform.
     let context: PluginUIContext
-    private(set) var view: PluginUIView?
+    private(set) var view: ExtensionUIView?
     private(set) var loading = false
     private(set) var error: String?
     /// The hub's status when the last draw failed (403, 404, 502…); nil when it did not fail or never got an answer.
@@ -268,7 +289,7 @@ extension APIClient {
             let r = try await call(nil, values: nil)
             failedStatus = nil
             show(r.view)
-            if r.view == nil { error = "插件没有返回内容" }
+            if r.view == nil { error = "扩展没有返回内容" }
         } catch let e as APIError where Self.isUnsupported(e) || (context.machine != nil && e.status == 404) {
             // A machine's section the hub says is not there (404: no such machine, or not the plugin's business) is
             // not drawn at all.
@@ -283,7 +304,7 @@ extension APIClient {
 
     /// Presses a button (asked first by the page when it has `confirm`): a new view replaces this one, nothing in the
     /// answer draws it again.
-    func perform(_ action: PluginUIAction, with chosen: [String: String] = [:]) async -> Outcome {
+    func perform(_ action: ExtensionUIAction, with chosen: [String: String] = [:]) async -> Outcome {
         guard running == nil else { return Outcome() }
         running = action.id
         defer { running = nil }
@@ -347,7 +368,7 @@ extension APIClient {
         show(v, keeping: values)
     }
 
-    private func show(_ v: PluginUIView?, keeping typed: [String: String] = [:]) {
+    private func show(_ v: ExtensionUIView?, keeping typed: [String: String] = [:]) {
         guard let v else { return }
         view = v
         drawnAt = .now
@@ -366,7 +387,7 @@ extension APIClient {
         values = next
     }
 
-    private func call(_ action: String?, values: [String: String]?) async throws -> PluginUIResult {
+    private func call(_ action: String?, values: [String: String]?) async throws -> ExtensionUIResult {
         guard let api = deps.api() else { throw APIError(status: 0, message: "还没连接 hub") }
         return try await api.pluginUI(plugin, ui, context: context, state: view?.state, action: action, values: values)
     }
@@ -383,13 +404,13 @@ extension APIClient {
 }
 
 /// The sections a launcher's page shows from plugins (placement launcher_section).
-@Observable final class PluginLauncherModel {
+@Observable final class ExtensionLauncherModel {
     let launcher: String
     private(set) var places: [PluginUIPlace] = []
-    private(set) var models: [String: PluginViewModel] = [:]
-    @ObservationIgnored private let deps: PluginViewModel.Deps
+    private(set) var models: [String: ExtensionViewModel] = [:]
+    @ObservationIgnored private let deps: ExtensionViewModel.Deps
 
-    init(launcher: String, deps: PluginViewModel.Deps = .live) {
+    init(launcher: String, deps: ExtensionViewModel.Deps = .live) {
         self.launcher = launcher
         self.deps = deps
     }
@@ -398,7 +419,7 @@ extension APIClient {
         guard let api = deps.api(), let list = try? await api.pluginUI(placement: "launcher_section", launcher: launcher) else { return }
         places = list
         for p in list where models[key(p)] == nil {
-            models[key(p)] = PluginViewModel(plugin: p.plugin, ui: p.id, context: PluginUIContext(launcher: launcher), deps: deps)
+            models[key(p)] = ExtensionViewModel(plugin: p.plugin, ui: p.id, context: PluginUIContext(launcher: launcher), deps: deps)
         }
         // Each draws on its own: a slow plugin does not hold the others' sections.
         let pending = list.compactMap { models[key($0)] }
@@ -409,7 +430,7 @@ extension APIClient {
 
     struct Entry: Identifiable {
         var place: PluginUIPlace
-        var model: PluginViewModel
+        var model: ExtensionViewModel
         var id: String { place.plugin + "/" + place.id }
     }
 

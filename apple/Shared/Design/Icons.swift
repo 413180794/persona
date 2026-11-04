@@ -245,16 +245,16 @@ extension Theme {
         static let hubUpdate = "arrow.down.to.line.circle"
         /// The assistant's skills (~/.jarvis/skills).
         static let skills = "puzzlepiece.extension"
-        /// A plugin of the hub's (设置 › 插件, docs/plugins.md).
+        /// A plugin of the hub's (设置 › 扩展, docs/extensions.md).
         static let plugins = "powerplug"
-        /// 插件市场: the markets' catalog of plugins to install.
+        /// 扩展市场: the markets' catalog of plugins to install.
         static let pluginMarket = "storefront"
         /// A plugin installed from a market / upgraded to its newer version.
         static let install = "arrow.down.app"
         static let upgrade = "arrow.up.square"
         /// A page a plugin draws (its declarative UI).
         static let pluginPage = "chart.bar.doc.horizontal"
-        /// A plugin's main-navigation entry by the `icon` it asks for (docs/plugins.md「UI 插槽」): one meaning each,
+        /// A plugin's main-navigation entry by the `icon` it asks for (docs/extensions.md「UI 插槽」): one meaning each,
         /// anything else is `plugins`.
         static let pluginChart = "chart.bar"
         static let pluginGauge = "gauge.with.needle"
@@ -289,7 +289,7 @@ extension Theme {
         static let mailAccounts = "envelope.badge"
         /// A chat app's bot the user talks to Persona through (设置 › 连接器 › 飞书机器人).
         static let chatBot = "message.badge.waveform"
-        /// 设置 › 插件 › 渠道: the ways of talking to Persona (docs/channels.md).
+        /// 设置 › 扩展 › 渠道: the ways of talking to Persona (docs/channels.md).
         static let channels = "ellipsis.bubble"
         /// A voice channel (talking to Persona out loud).
         static let voiceChannel = "waveform.and.mic"

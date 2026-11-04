@@ -1,7 +1,7 @@
 import Observation
 import SwiftUI
 
-// The inbox_item slot (docs/plugins.md「UI 插槽」, #1682): a plugin that contributes a UI with placement inbox_item for
+// The inbox_item slot (docs/extensions.md「UI 插槽」, #1682): a plugin that contributes a UI with placement inbox_item for
 // one of its connectors draws the detail of that connector's inbox items. The app asks the hub which sources have one
 // (GET /api/v1/plugins/-/ui?placement=inbox_item, read once per hub); an item of such a source opens as the plugin's
 // View, drawn as a plugin_page is, with `context.item` the item's id. Anything else opens today's detail: a source no
@@ -16,10 +16,10 @@ import SwiftUI
     private(set) var places: [PluginUIPlace]?
     @ObservationIgnored private var lastHub: String?
     @ObservationIgnored private var reading: Task<Void, Never>?
-    @ObservationIgnored private let deps: PluginViewModel.Deps
+    @ObservationIgnored private let deps: ExtensionViewModel.Deps
     @ObservationIgnored private let features: () -> Set<String>
 
-    init(deps: PluginViewModel.Deps = .live, features: @escaping () -> Set<String> = { AppModel.shared.hubFeatures }) {
+    init(deps: ExtensionViewModel.Deps = .live, features: @escaping () -> Set<String> = { AppModel.shared.hubFeatures }) {
         self.deps = deps
         self.features = features
     }
@@ -29,7 +29,7 @@ import SwiftUI
     /// nothing). One that said it has no slots is never asked, and its items open as they always did.
     var available: Bool {
         let f = features()
-        return f.isEmpty || f.contains("plugin_ui_slots")
+        return f.isEmpty || f.hasExtensionFeature("ui_slots")
     }
 
     /// The contribution that draws items of `source`: the first the hub lists for that connector.
@@ -95,7 +95,7 @@ import SwiftUI
 
     private(set) var phase: Phase
     /// The plugin's View of the item, once it drew one.
-    private(set) var page: PluginViewModel?
+    private(set) var page: ExtensionViewModel?
     /// The contribution drawing the item (its title says where 回到 goes back to).
     private(set) var place: PluginUIPlace?
     /// Why the plugin's page is not there, said in a line over today's body with 重试: the plugin failed (502), the hub
@@ -108,9 +108,9 @@ import SwiftUI
     @ObservationIgnored private let item: String
     @ObservationIgnored private let source: String
     @ObservationIgnored private let slots: InboxItemSlots
-    @ObservationIgnored private let deps: PluginViewModel.Deps
+    @ObservationIgnored private let deps: ExtensionViewModel.Deps
 
-    init(item: InboxItem, slots: InboxItemSlots = .shared, deps: PluginViewModel.Deps = .live) {
+    init(item: InboxItem, slots: InboxItemSlots = .shared, deps: ExtensionViewModel.Deps = .live) {
         self.item = item.id
         self.source = item.source
         self.slots = slots
@@ -128,7 +128,7 @@ import SwiftUI
             return
         }
         self.place = place
-        let page = PluginViewModel(plugin: place.plugin, ui: place.id, context: PluginUIContext(item: item), deps: deps)
+        let page = ExtensionViewModel(plugin: place.plugin, ui: place.id, context: PluginUIContext(item: item), deps: deps)
         await page.load()
         if page.view != nil, !page.unsupported {
             self.page = page
@@ -150,12 +150,12 @@ import SwiftUI
 
     /// A refused or empty draw is no failure to tell: 403 (a device that may only read), 404 (the item gone, the
     /// connector not the plugin's now), `unsupported` (the plugin does not draw this item).
-    private static func quiet(_ page: PluginViewModel) -> Bool {
+    private static func quiet(_ page: ExtensionViewModel) -> Bool {
         page.unsupported || page.failedStatus == 403 || page.failedStatus == 404
     }
 
     /// A link the plugin's page opens: the item's own source shows today's body (true); anything else is the page's
-    /// to open (false). Another item's source never gets here (`PluginViewModel.opens`), and is dropped if it does.
+    /// to open (false). Another item's source never gets here (`ExtensionViewModel.opens`), and is dropped if it does.
     func open(_ url: URL) -> Bool {
         guard let target = InboxSourceLink.item(url) else { return false }
         if target == item { showsSource = true }
@@ -190,7 +190,7 @@ struct InboxItemSlotContent<Plain: View>: View {
                 if slot.showsSource {
                     plain.safeAreaInset(edge: .top, spacing: 0) { back }
                 } else if let page = slot.page {
-                    InboxPluginItemPage(item: item, page: page, slot: slot)
+                    InboxExtensionItemPage(item: item, page: page, slot: slot)
                 }
             case .asking:
                 ProgressView()
@@ -203,7 +203,7 @@ struct InboxItemSlotContent<Plain: View>: View {
         .onChange(of: InboxItemSlotChange(item)) { Task { await slot.changed() } }
     }
 
-    private var name: String { slot.place.map { $0.pluginName?.isEmpty == false ? $0.pluginName! : $0.title } ?? "插件" }
+    private var name: String { slot.place.map { $0.pluginName?.isEmpty == false ? $0.pluginName! : $0.title } ?? "扩展" }
 
     /// The plugin failed: today's body under a line saying so, with 重试.
     private func failed(_ why: String) -> some View {
@@ -224,7 +224,7 @@ struct InboxItemSlotContent<Plain: View>: View {
     private var back: some View {
         InboxSlotStrip {
             Button { slot.showsSource = false } label: {
-                Label("回到" + (slot.place?.title ?? "插件"), systemImage: Theme.Icon.back).lineLimit(1)
+                Label("回到" + (slot.place?.title ?? "扩展"), systemImage: Theme.Icon.back).lineLimit(1)
             }
             .buttonStyle(.borderless)
             .accessibilityIdentifier("inbox-plugin-item-back")
@@ -262,13 +262,13 @@ nonisolated private struct InboxItemSlotChange: Hashable {
     }
 }
 
-/// An inbox item's body drawn by its plugin: the View as a plugin_page draws it (`PluginViewRenderer`), pulled to
+/// An inbox item's body drawn by its plugin: the View as a plugin_page draws it (`ExtensionViewRenderer`), pulled to
 /// refresh and drawn again after its `refresh_after`. The item's own source (在会话里看) switches to today's body;
 /// other links and `open_url` open as the inbox's other links do (`openURL`: a Feishu document in the reader, a web
 /// page in the link card, beside the item on a Mac).
-struct InboxPluginItemPage: View {
+struct InboxExtensionItemPage: View {
     var item: InboxItem
-    var page: PluginViewModel
+    var page: ExtensionViewModel
     var slot: InboxItemSlotModel
     @Environment(\.openURL) private var openURL
 
@@ -283,7 +283,7 @@ struct InboxPluginItemPage: View {
     var body: some View {
         SettingsForm {
             if let v = page.view {
-                PluginViewRenderer(view: v, model: page, link: links)
+                ExtensionViewRenderer(view: v, model: page, link: links)
             }
         }
         .themedPage()

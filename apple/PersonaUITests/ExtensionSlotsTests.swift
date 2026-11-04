@@ -1,11 +1,11 @@
 import XCTest
 
-/// The plugins' UI slots (docs/plugins.md「UI 插槽」) on the iPhone: 设置 opens on the plugin's overview card (a stat
+/// The plugins' UI slots (docs/extensions.md「UI 插槽」) on the iPhone: 设置 opens on the plugin's overview card (a stat
 /// grid and a small chart) above its main-navigation entry (with its badge); the entry opens the plugin's page (tabs,
 /// a stacked bar chart, a line chart), the card opens the same page; a machine's page ends with the plugin's section
 /// for that machine. Against scripts/mock/mock_hub.py with MOCK_PLUGINS=1: `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<端口>`;
 /// `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the screenshots, named by `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` and the style.
-final class PluginSlotsTests: XCTestCase {
+final class ExtensionSlotsTests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
 
     @MainActor private func launch(_ args: [String] = []) throws -> XCUIApplication {

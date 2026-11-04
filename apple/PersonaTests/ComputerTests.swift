@@ -11,7 +11,7 @@ struct ComputerTests {
         try JSON.decoder.decode(Machine.self, from: Data("{\"id\":\"macbook\",\"name\":\"MacBook\",\"kind\":\"ssh\",\"online\":true\(extra)}".utf8))
     }
 
-    @Test func theMachineListSaysItOnlyWhileThePluginIsOn() throws {
+    @Test func theMachineListSaysItOnlyWhileTheExtensionIsOn() throws {
         #expect(try machine().computer == nil, "plugin off, an older hub, not a Mac")
         let off = try machine(",\"computer\":{\"enabled\":false}")
         #expect(off.computer == MachineComputer(enabled: false))

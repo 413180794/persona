@@ -2,9 +2,9 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// The plugins' UI slots (docs/plugins.md「UI 插槽」): what the hub lists and the app keeps (entries, cards, badges),
+/// The plugins' UI slots (docs/extensions.md「UI 插槽」): what the hub lists and the app keeps (entries, cards, badges),
 /// the new items (chart, stat_grid), refresh_after, and the plugin_ui event.
-@MainActor struct PluginSlotsModelTests {
+@MainActor struct ExtensionSlotsModelTests {
     private static let all = #"""
     {"ui":[{"plugin":"example-gateway","plugin_name":"Example 网关面板","id":"usage","title":"用量","placement":"nav_page","size":"full",
             "icon":"chart","badge":{"text":"3","tone":"danger"}},
@@ -15,12 +15,12 @@ import Testing
            {"plugin":"example-gateway","id":"plain","title":"不能点的卡片","placement":"overview_card","size":"compact"}]}
     """#
 
-    private func slots(_ hub: FakeHub, features: Set<String> = ["plugin_ui_slots"]) -> PluginSlots {
+    private func slots(_ hub: FakeHub, features: Set<String> = ["plugin_ui_slots"]) -> ExtensionSlots {
         hub.on("GET", "/api/v1/plugins/-/ui") { req in
             #expect(req.query["placement"] == nil, "one list of every slot")
             return Data(Self.all.utf8)
         }
-        return PluginSlots(deps: .init(api: { hub.client }), features: { features })
+        return ExtensionSlots(deps: .init(api: { hub.client }), features: { features })
     }
 
     @Test func entriesCardsAndBadges() async throws {
@@ -30,7 +30,7 @@ import Testing
         #expect(s.pages.map(\.id) == ["usage", "alerts"], "a placement this app does not know is left out")
         #expect(s.pages[0].pluginName == "Example 网关面板" && s.pages[0].badge == PluginBadge(text: "3", tone: "danger"))
         #expect(s.cards.map(\.id) == ["today", "plain"])
-        #expect(PluginSlots.icon("chart") == Theme.Icon.pluginChart && PluginSlots.icon("sparkles") == Theme.Icon.plugins)
+        #expect(ExtensionSlots.icon("chart") == Theme.Icon.pluginChart && ExtensionSlots.icon("sparkles") == Theme.Icon.plugins)
         #expect(s.opened(by: s.cards[0])! == ("usage", "用量") && s.opened(by: s.cards[1]) == nil)
         #expect(s.total.count == 3 && !s.total.dot)
 
@@ -70,7 +70,7 @@ import Testing
         let hub = FakeHub()
         var draws = 0
         hub.on("POST", "/api/v1/plugins/example-gateway/-/ui/today") { _ in draws += 1; return Data(Self.chartView.utf8) }
-        let page = PluginViewModel(plugin: "example-gateway", ui: "today", context: PluginUIContext(machine: "macbook", size: "compact"),
+        let page = ExtensionViewModel(plugin: "example-gateway", ui: "today", context: PluginUIContext(machine: "macbook", size: "compact"),
                                    deps: .init(api: { hub.client }))
         await page.load()
         let v = try #require(page.view, "an item of a kind this app does not know does not lose the view")
@@ -81,8 +81,8 @@ import Testing
         #expect(chart.kind == "bar" && chart.stacked == true && chart.unit == "tokens" && chart.series?.count == 2)
         #expect(chart.series?[0].points[0].display == "1.2M" && chart.series?[0].points[1].display == nil)
         #expect(chart.series?[1].tone == "positive" && chart.series?[1].points.map(\.value) == [300000, 250000])
-        #expect(PluginUIStyle.series(nil) == nil && PluginUIStyle.series("positive") == Theme.positive)
-        #expect(PluginUIStyle.series("bogus") == PluginUIStyle.series("neutral"), "a tone this app does not know is neutral")
+        #expect(ExtensionUIStyle.series(nil) == nil && ExtensionUIStyle.series("positive") == Theme.positive)
+        #expect(ExtensionUIStyle.series("bogus") == ExtensionUIStyle.series("neutral"), "a tone this app does not know is neutral")
 
         // The context: the machine, the card's size, the app's time zone, platform and UI version.
         let body = try JSON.decoder.decode(JSONValue.self, from: hub.sent("POST", "/api/v1/plugins/example-gateway/-/ui/today")[0].body ?? Data())
@@ -101,7 +101,7 @@ import Testing
     @Test func refreshAfterHasAFloor() async throws {
         let hub = FakeHub()
         hub.on("POST", "/api/v1/plugins/p/-/ui/u", json: #"{"view":{"refresh_after":5,"sections":[]}}"#)
-        let page = PluginViewModel(plugin: "p", ui: "u", deps: .init(api: { hub.client }))
+        let page = ExtensionViewModel(plugin: "p", ui: "u", deps: .init(api: { hub.client }))
         await page.load()
         #expect(abs(try #require(page.refreshDue).timeIntervalSince(try #require(page.drawnAt)) - 30) < 0.01, "never sooner than 30 s")
         hub.on("POST", "/api/v1/plugins/p/-/ui/u", json: #"{"view":{"sections":[]}}"#)
@@ -109,7 +109,7 @@ import Testing
         #expect(page.refreshDue == nil, "no refresh_after: never by itself")
     }
 
-    @Test func thePluginUIEvent() throws {
+    @Test func theExtensionUIEvent() throws {
         let set = ServerEvent.decode(Data(#"{"type":"plugin_ui","plugin":"example-gateway","id":"usage","badge":{"text":"3","tone":"danger"}}"#.utf8))
         guard case .pluginBadge(let plugin, let id, let badge)? = set else { Issue.record("not decoded"); return }
         #expect(plugin == "example-gateway" && id == "usage" && badge == PluginBadge(text: "3", tone: "danger"))
@@ -139,7 +139,7 @@ import Testing
             guard let picked = b["values"]?["range"]?.string else { return Data(Self.segmentedView.utf8) }
             return Data(Self.segmentedView.replacingOccurrences(of: #""value":"7d""#, with: #""value":"\#(picked)""#).utf8)
         }
-        let page = PluginViewModel(plugin: "p", ui: "u", deps: .init(api: { hub.client }))
+        let page = ExtensionViewModel(plugin: "p", ui: "u", deps: .init(api: { hub.client }))
         await page.load()
         let seg = try #require(page.view?.sections[0].items[0])
         #expect(page.values["range"] == "7d")
@@ -154,10 +154,10 @@ import Testing
     @Test func aMachineTheHubDoesNotHaveDrawsNothing() async throws {
         let hub = FakeHub()
         hub.on("POST", "/api/v1/plugins/p/-/ui/gpu") { _ in throw APIError(status: 404, message: "没有这台机器") }
-        let section = PluginViewModel(plugin: "p", ui: "gpu", context: PluginUIContext(machine: "gone"), deps: .init(api: { hub.client }))
+        let section = ExtensionViewModel(plugin: "p", ui: "gpu", context: PluginUIContext(machine: "gone"), deps: .init(api: { hub.client }))
         await section.load()
         #expect(section.unsupported && section.error == nil)
-        let page = PluginViewModel(plugin: "p", ui: "gpu", deps: .init(api: { hub.client }))
+        let page = ExtensionViewModel(plugin: "p", ui: "gpu", deps: .init(api: { hub.client }))
         await page.load()
         #expect(!page.unsupported && page.error != nil, "elsewhere a 404 is an error to show")
     }

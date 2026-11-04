@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// 设置 › 插件 › 插件市场 (docs/plugins.md「插件市场」): the plugins of every market the hub has, searched and filtered by
+/// 设置 › 扩展 › 扩展市场 (docs/extensions.md「扩展市场」): the plugins of every market the hub has, searched and filtered by
 /// market; a row each with its name, version, what it does, its tags and how it stands on this hub. The markets
 /// themselves are one tap away (市场).
-struct PluginMarketView: View {
-    @State private var page = PluginMarketModel()
+struct ExtensionMarketView: View {
+    @State private var page = ExtensionMarketModel()
 
     var body: some View {
         SettingsForm {
@@ -29,28 +29,28 @@ struct PluginMarketView: View {
             if let items = page.items {
                 if page.markets.isEmpty {
                     Section {
-                        EmptyStateView(symbol: Theme.Icon.pluginMarket, title: "还没有插件市场",
-                                       message: "插件市场是一个仓库或网站发布的插件索引。添加一个市场后，这里列出它的插件，可以直接安装。")
+                        EmptyStateView(symbol: Theme.Icon.pluginMarket, title: "还没有扩展市场",
+                                       message: "扩展市场是一个仓库或网站发布的扩展索引。添加一个市场后，这里列出它的扩展，可以直接安装。")
                         NavigationLink(value: SettingsPage.pluginMarkets) { Text("添加市场").lineLimit(1) }
                             .accessibilityIdentifier("market-add-first")
                     }
                     .listRowBackground(Color.clear)
                 } else if items.isEmpty {
                     Section {
-                        EmptyStateView(symbol: Theme.Icon.search, title: "没有找到插件",
-                                       message: page.query.isEmpty ? "这个市场里还没有插件。" : "换个词试试，名字、说明、发布者和标签都能搜。")
+                        EmptyStateView(symbol: Theme.Icon.search, title: "没有找到扩展",
+                                       message: page.query.isEmpty ? "这个市场里还没有扩展。" : "换个词试试，名字、说明、发布者和标签都能搜。")
                     }
                     .listRowBackground(Color.clear)
                 } else {
                     Section {
                         ForEach(items) { p in
-                            NavigationLink(value: SettingsPage.marketPlugin(market: p.market, id: p.pluginID)) {
-                                MarketPluginRow(item: p, showsMarket: page.market == nil && page.markets.count > 1)
+                            NavigationLink(value: SettingsPage.marketExtension(market: p.market, id: p.pluginID)) {
+                                MarketExtensionRow(item: p, showsMarket: page.market == nil && page.markets.count > 1)
                             }
                             .accessibilityIdentifier("market-plugin-\(p.pluginID)")
                         }
                     } footer: {
-                        if let p = page.platform, !p.isEmpty { Text("这台 hub 是 \(p)；装之前会列出插件能做什么，你同意后才装。") }
+                        if let p = page.platform, !p.isEmpty { Text("这台 hub 是 \(p)；装之前会列出扩展能做什么，你同意后才装。") }
                     }
                 }
             }
@@ -80,7 +80,7 @@ struct PluginMarketView: View {
         .contentMargins(.top, Theme.Space.s, for: .scrollContent)
         #endif
         .overlay { if page.items == nil && page.error == nil { ProgressView() } }
-        .detailTitle("插件市场")
+        .detailTitle("扩展市场")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $page.query, placement: .navigationBarDrawer(displayMode: .always), prompt: "名字、说明、发布者或标签")
         #if os(iOS) || os(visionOS)
@@ -122,8 +122,8 @@ struct PluginMarketView: View {
 }
 
 /// A plugin of the catalog: name and version, what it does, its tags, how it stands here.
-private struct MarketPluginRow: View {
-    var item: PluginCatalogItem
+private struct MarketExtensionRow: View {
+    var item: ExtensionCatalogItem
     var showsMarket: Bool
 
     var body: some View {
@@ -155,10 +155,10 @@ private struct MarketPluginRow: View {
 
 /// 可安装 / 可升级 / 已安装 / 装不了, in its tone.
 private struct MarketStateChip: View {
-    var item: PluginCatalogItem
+    var item: ExtensionCatalogItem
 
     var body: some View {
-        switch PluginMarketText.step(item) {
+        switch ExtensionMarketText.step(item) {
         case .install: Chip(text: "可安装", look: .tint(Theme.accent))
         case .upgrade: Chip(text: "可升级", look: .tint(Theme.caution))
         case .upToDate: Chip(text: "已安装", look: .tint(Theme.positive))
@@ -167,14 +167,14 @@ private struct MarketStateChip: View {
     }
 }
 
-/// 插件市场 › one plugin: what it is, what it may do, and the one thing to do with it — install, upgrade (with what the
+/// 扩展市场 › one plugin: what it is, what it may do, and the one thing to do with it — install, upgrade (with what the
 /// new version asks for in addition), or remove when it came from this market.
-struct MarketPluginDetailView: View {
+struct MarketExtensionDetailView: View {
     @Environment(AppModel.self) private var app
-    @State private var page: MarketPluginModel
+    @State private var page: MarketExtensionModel
     @State private var confirmRemove = false
 
-    init(market: String, id: String) { _page = State(initialValue: MarketPluginModel(market: market, id: id)) }
+    init(market: String, id: String) { _page = State(initialValue: MarketExtensionModel(market: market, id: id)) }
 
     var body: some View {
         SettingsForm {
@@ -193,7 +193,7 @@ struct MarketPluginDetailView: View {
                 about(p)
             } else if let e = page.error {
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.error, title: "读不到这个插件", message: e,
+                    EmptyStateView(symbol: Theme.Icon.error, title: "读不到这个扩展", message: e,
                                    action: ("重试", { Task { await page.load() } }))
                 }
                 .listRowBackground(Color.clear)
@@ -201,10 +201,10 @@ struct MarketPluginDetailView: View {
         }
         .themedPage()
         .overlay { if page.item == nil && page.error == nil { ProgressView() } }
-        .detailTitle(page.item?.name ?? "插件")
+        .detailTitle(page.item?.name ?? "扩展")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $page.preview) { pv in
-            PluginInstallSheet(preview: pv, name: page.item?.name ?? pv.manifest.name ?? pv.manifest.id) {
+            ExtensionInstallSheet(preview: pv, name: page.item?.name ?? pv.manifest.name ?? pv.manifest.id) {
                 let upgrade = pv.upgrade == true
                 if await page.confirm() {
                     Haptics.success()
@@ -218,7 +218,7 @@ struct MarketPluginDetailView: View {
         .refreshable { await page.load() }
     }
 
-    @ViewBuilder private func header(_ p: PluginCatalogItem) -> some View {
+    @ViewBuilder private func header(_ p: ExtensionCatalogItem) -> some View {
         Section {
             HStack(spacing: Theme.Space.m) {
                 Image(systemName: Theme.Icon.plugins).resizable().scaledToFit().foregroundStyle(Theme.accent)
@@ -240,9 +240,9 @@ struct MarketPluginDetailView: View {
         }
     }
 
-    @ViewBuilder private func actions(_ p: PluginCatalogItem) -> some View {
+    @ViewBuilder private func actions(_ p: ExtensionCatalogItem) -> some View {
         Section {
-            switch PluginMarketText.step(p) {
+            switch ExtensionMarketText.step(p) {
             case .install:
                 primary("安装", symbol: Theme.Icon.install, id: "market-install")
             case .upgrade:
@@ -257,7 +257,7 @@ struct MarketPluginDetailView: View {
             }
             if p.installed != nil {
                 NavigationLink(value: SettingsPage.plugin(p.pluginID)) {
-                    Label { Text("打开插件设置").lineLimit(1) } icon: { Image(systemName: Theme.Icon.settings) }
+                    Label { Text("打开扩展设置").lineLimit(1) } icon: { Image(systemName: Theme.Icon.settings) }
                 }
                 .accessibilityIdentifier("market-open-plugin")
             }
@@ -280,7 +280,7 @@ struct MarketPluginDetailView: View {
             }
         } footer: {
             if p.installed != nil && !page.canUninstall && p.installedSource != nil {
-                Text("这个插件不是从这个市场装的，在 hub 的管理界面（/admin）或 hub 所在的机器上卸载。")
+                Text("这个扩展不是从这个市场装的，在 hub 的管理界面（/admin）或 hub 所在的机器上卸载。")
             }
         }
     }
@@ -300,7 +300,7 @@ struct MarketPluginDetailView: View {
         }
     }
 
-    @ViewBuilder private func about(_ p: PluginCatalogItem) -> some View {
+    @ViewBuilder private func about(_ p: ExtensionCatalogItem) -> some View {
         Section {
             LabeledContent("版本", value: p.version)
             if let v = p.installed, !v.isEmpty { LabeledContent("已安装的版本", value: v) }
@@ -308,7 +308,7 @@ struct MarketPluginDetailView: View {
             if let pub = p.publisher, !pub.isEmpty { LabeledContent("发布者", value: pub) }
             if let c = p.contributes, !c.isEmpty {
                 ForEach(c.keys.sorted(), id: \.self) { point in
-                    LabeledContent(PluginText.point(point)) {
+                    LabeledContent(ExtensionText.point(point)) {
                         Text((c[point] ?? []).joined(separator: "、")).lineLimit(2).multilineTextAlignment(.trailing)
                     }
                 }
@@ -324,7 +324,7 @@ struct MarketPluginDetailView: View {
 
 /// A line of what a plugin may do: what, and the detail under it.
 private struct PermissionLine: View {
-    var permission: PluginPermission
+    var permission: ExtensionPermission
     var tone: Color? = nil
 
     var body: some View {
@@ -338,8 +338,8 @@ private struct PermissionLine: View {
 
 /// The preview to agree to: the package downloaded and checked, what it may do (for an upgrade, what it asks for in
 /// addition first), then 安装 / 升级.
-private struct PluginInstallSheet: View {
-    var preview: PluginPreview
+private struct ExtensionInstallSheet: View {
+    var preview: ExtensionPreview
     var name: String
     var confirm: () async -> Bool
     @Environment(\.dismiss) private var dismiss
@@ -369,7 +369,7 @@ private struct PluginInstallSheet: View {
                 } header: {
                     SettingsHeading(upgrade ? "新版本可以" : "它可以")
                 } footer: {
-                    Text("插件以 hub 的系统用户运行，不在沙箱里。包已按市场给的校验和核对过。")
+                    Text("扩展以 hub 的系统用户运行，不在沙箱里。包已按市场给的校验和核对过。")
                 }
                 if let w = preview.warnings, !w.isEmpty {
                     Section {
@@ -406,18 +406,18 @@ private struct PluginInstallSheet: View {
     }
 }
 
-/// 插件市场 › 市场: the markets the hub reads, each with what it is, how many plugins, when it was read and what went
+/// 扩展市场 › 市场: the markets the hub reads, each with what it is, how many plugins, when it was read and what went
 /// wrong; added with an address and an optional token (written, never shown), refreshed, given a new token, removed.
-struct PluginMarketsView: View {
-    @State private var page = PluginMarketModel()
+struct ExtensionMarketsView: View {
+    @State private var page = ExtensionMarketModel()
     @State private var adding = false
-    @State private var tokenFor: PluginMarket?
+    @State private var tokenFor: ExtensionMarket?
 
     var body: some View {
         SettingsForm {
             if page.markets.isEmpty && !page.loading && page.error == nil {
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.pluginMarket, title: "还没有插件市场",
+                    EmptyStateView(symbol: Theme.Icon.pluginMarket, title: "还没有扩展市场",
                                    message: "填一个市场的地址：https://… 的索引、github:owner/repo（私有仓库要一个只读 token），或 git:…（用 hub 机器的 SSH 凭据）。",
                                    action: ("添加市场", { adding = true }))
                 }
@@ -426,12 +426,12 @@ struct PluginMarketsView: View {
             if let auto = page.autoUpgrade, !page.markets.isEmpty {
                 Section {
                     Toggle(isOn: Binding(get: { auto }, set: { on in Task { await page.setAutoUpgrade(on) } })) {
-                        Text("自动升级插件").lineLimit(1)
+                        Text("自动升级扩展").lineLimit(1)
                     }
                     .accessibilityIdentifier("market-auto-upgrade")
                 } footer: {
-                    Text(auto ? "从这些市场装的插件出了新版本，插件空闲时 hub 自动装上；要的权限变多时先问你。每个插件也可以在自己的页面里单独关掉。"
-                              : "关着：有新版本时只在插件的页面里提示，你自己去升级。")
+                    Text(auto ? "从这些市场装的扩展出了新版本，扩展空闲时 hub 自动装上；要的权限变多时先问你。每个扩展也可以在自己的页面里单独关掉。"
+                              : "关着：有新版本时只在扩展的页面里提示，你自己去升级。")
                 }
             }
             ForEach(page.markets) { m in
@@ -490,7 +490,7 @@ struct PluginMarketsView: View {
 /// (refresh now, a token, remove) in a row of their own.
 private struct MarketRow: View {
     enum Act { case refresh, token, remove }
-    var market: PluginMarket
+    var market: ExtensionMarket
     var busy: Bool
     var act: (Act) -> Void
     @State private var confirmRemove = false
@@ -504,7 +504,7 @@ private struct MarketRow: View {
             }
             Text(market.spec).font(Theme.Font.code).foregroundStyle(.secondary).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
             if let d = market.description, !d.isEmpty { Text(d).font(Theme.Font.secondary).foregroundStyle(.secondary) }
-            Text(PluginMarketText.marketSummary(market)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+            Text(ExtensionMarketText.marketSummary(market)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             if let e = market.error, !e.isEmpty {
                 Label { Text(e) } icon: { Image(systemName: Theme.Icon.error) }
                     .font(Theme.Font.label)
@@ -529,7 +529,7 @@ private struct MarketRow: View {
                     .accessibilityIdentifier("market-remove-confirm")
                 Button("取消", role: .cancel) {}
             } message: {
-                Text("hub 不再读这个市场；从它装的插件留着。")
+                Text("hub 不再读这个市场；从它装的扩展留着。")
             }
         }
         .font(Theme.Font.secondary)
@@ -571,7 +571,7 @@ private struct MarketTokenSheet: View {
                     } header: {
                         SettingsHeading("地址")
                     } footer: {
-                        Text(verbatim: "三种写法：https://example.com/plugins/（不以 .json 结尾的读它下面的 persona-plugins.json）；github:owner/repo（仓库根目录的那份，私有的要 token）；git:<地址>[#分支]（git@host:path.git、ssh://…、https://…，用 hub 机器自己的 SSH 凭据，不用 token）。")
+                        Text(verbatim: "三种写法：https://example.com/extensions/（不以 .json 结尾的读它下面的 persona-extensions.json，没有再读 persona-plugins.json）；github:owner/repo（仓库根目录的那份，私有的要 token）；git:<地址>[#分支]（git@host:path.git、ssh://…、https://…，用 hub 机器自己的 SSH 凭据，不用 token）。")
                     }
                 }
                 Section {

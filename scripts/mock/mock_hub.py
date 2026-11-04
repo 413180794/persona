@@ -7334,7 +7334,7 @@ PLUGINS = {
                       "warnings": ["contributes.quota: this hub has no such extension point (a newer hub's?); it does not take effect"],
                       "form": {"fields": []}, "config": {}, "secrets": [], "permissions": [_RUNS]},
     "example-weather": {"id": "example-weather", "name": "Example 天气", "kind": "connectors", "status": "incompatible", "version": "2.0.0",
-                        "source": "installed", "enabled": True, "error": "这个插件要 hub 的构建号 >=202612010000，这台是 202611041200",
+                        "source": "installed", "enabled": True, "error": "这个扩展要 hub 的构建号 >=202612010000，这台是 202611041200",
                         "contributes": {"connectors": ["exampleweather"]}, "form": {"fields": []}, "config": {}, "secrets": [], "permissions": [_RUNS]},
 }
 PLUGINS["example-gateway"] = {
@@ -7617,11 +7617,11 @@ def _ui_action(ui, action, values):
 # Previews, installs, upgrades and removals work in memory.
 _MARKET_A, _MARKET_B = "3f2a9c1d0b", "8e01b7c4a2"
 MARKETS = {
-    _MARKET_A: {"id": _MARKET_A, "spec": "https://plugins.example.com/persona/persona-extensions.json", "name": "Example 插件",
+    _MARKET_A: {"id": _MARKET_A, "spec": "https://plugins.example.com/persona/persona-extensions.json", "name": "Example 扩展",
                 "description": "Example 官方维护的插件。", "homepage": "https://plugins.example.com/", "has_token": False, "plugins": 3,
                 "warnings": [], "fetched_at": "2026-11-04T06:00:00Z", "added_at": "2026-11-01T08:00:00Z"},
-    _MARKET_B: {"id": _MARKET_B, "spec": "github:example/team-plugins", "name": "团队插件", "description": "团队内部用的插件（私有仓库）。",
-                "has_token": True, "plugins": 2, "warnings": ["第 3 个插件：没有 manifest"], "fetched_at": "2026-11-04T05:30:00Z",
+    _MARKET_B: {"id": _MARKET_B, "spec": "github:example/team-plugins", "name": "团队扩展", "description": "团队内部用的扩展（私有仓库）。",
+                "has_token": True, "plugins": 2, "warnings": ["第 3 个扩展：没有 manifest"], "fetched_at": "2026-11-04T05:30:00Z",
                 "added_at": "2026-11-02T08:00:00Z"},
 }
 _NET = lambda hosts: {"key": "network", "title": "访问网络", "detail": hosts + "（hub 暂不拦截别的地址）"}
@@ -7762,7 +7762,7 @@ def markets_route(handler, p, body):
         handler.send_json({k: v for k, v in _plugin_needs(pl).items() if v is not None}); return True
     if method == "DELETE" and len(parts) >= 6 and parts[3] == "plugins" and parts[5] == "-" and parts[6:] in ([], [""]) and parts[4] in PLUGINS:
         if not PLUGINS[parts[4]].get("origin", "").startswith("market:"):
-            handler.send_json({"error": "这个插件只能在 hub 机器上（personad plugin …）或 hub 的管理界面里装、升级和卸载；手机上只能装插件市场里的",
+            handler.send_json({"error": "这个扩展只能在 hub 机器上（personad extension …）或 hub 的管理界面里装、升级和卸载；手机上只能装扩展市场里的",
                                "code": "this_machine_only"}, 403); return True
         PLUGINS.pop(parts[4]); handler.send_json({"ok": True}); return True
     if p == "/api/v1/plugins/-/ui" and method == "GET":
@@ -10535,7 +10535,7 @@ def inbox_item_ui(ui, req):
     if ui != "event" or not it:
         return 404, {"error": "收件箱里没有这一条", "code": "not_found"}
     if it.get("source") != "lark":
-        return 403, {"error": "这一条不是这个插件的连接器收进来的", "code": "forbidden"}
+        return 403, {"error": "这一条不是这个扩展的连接器收进来的", "code": "forbidden"}
     if it.get("kind") == "group":  # the plugin fails on these: the apps draw the item's own body, and say so
         return 502, {"error": "插件画的界面这个 hub 画不了：section 0 item 0 (link): link needs title and an https url", "code": "plugin_failed"}
     action = req.get("action") or ""
@@ -10627,6 +10627,50 @@ def live_status_subscribe(send, mid, sid):
 
 
 MOCK_HELP.append("MOCK_LIVE_STATUS=1  Claude 会话的实时状态行（session_live，#1963）：声明了 session_live 的连接订阅后按 MOCK_LIVE_STATUS_TICK 秒（默认 1）一条推 live（思考中、thought for、token 增长、动词变化），最后推 null、会话变空闲；结束后再订阅会重来一轮")
+
+# ---------- MOCK_PLUGINS: a hub from #1844 on (docs/extensions.md「命名和兼容」) ----------
+# It says `extensions` and the extension_* features beside the old ones and answers /api/v1/extensions/… with the new keys
+# (extensions, extension, extension_name; a market's count extensions), by way of the old routes above.
+# MOCK_PLUGINS_LEGACY=1: a hub from before the rename, /api/v1/plugins only.
+EXTENSIONS_API = PLUGINS_MODE and not os.environ.get("MOCK_PLUGINS_LEGACY")
+_NEW_KEYS = {"plugins": "extensions", "plugin": "extension", "plugin_name": "extension_name"}
+
+
+def _new_keys(obj):
+    if isinstance(obj, list): return [_new_keys(x) for x in obj]
+    if not isinstance(obj, dict): return obj
+    return {_NEW_KEYS.get(k, k): _new_keys(v) for k, v in obj.items()}
+
+
+class _NewKeysHandler:
+    """The handler, with what is sent under the new path's keys."""
+    def __init__(self, h): self._h = h
+    def __getattr__(self, name): return getattr(self._h, name)
+    def send_json(self, obj, status=200): return self._h.send_json(_new_keys(obj), status)
+
+
+_plugins_route_without_extensions = plugins_route
+
+
+def plugins_route(handler, p, body):
+    if EXTENSIONS_API and (p == "/api/v1/extensions" or p.startswith("/api/v1/extensions/")):
+        if body:
+            try:
+                req = json.loads(body)
+                if isinstance(req, dict) and "extension" in req: body = json.dumps(dict(req, plugin=req["extension"])).encode()
+            except ValueError: pass
+        return _plugins_route_without_extensions(_NewKeysHandler(handler), "/api/v1/plugins" + p[len("/api/v1/extensions"):], body)
+    return _plugins_route_without_extensions(handler, p, body)
+
+
+_features_without_extensions = features
+
+
+def features():
+    f = _features_without_extensions()
+    new = ["extensions"] + ["extension_" + x[len("plugin_"):] for x in f if x.startswith("plugin_")] if EXTENSIONS_API else []
+    return f + [x for x in new if x not in f]
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="用于客户端测试的 mock hub")

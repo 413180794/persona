@@ -130,14 +130,14 @@ struct FeishuDocsCommentsTests {
     }
 
     /// Only a hub whose plugin says it can write comments offers it; a hub that says nothing (unknown) does not.
-    @Test func onlyAPluginThatSaysSoOffersComments() {
+    @Test func onlyAnExtensionThatSaysSoOffersComments() {
         #expect(LarkFeatures(hub: ["lark", "lark_doc_comments"]).docComments)
         #expect(!LarkFeatures(hub: ["lark"]).docComments)
         #expect(!LarkFeatures(hub: []).docComments)
         #expect(!LarkFeatures(hub: ["lark_doc_comments"]).docComments) // not without the plugin's lark
     }
 
-    @Test func theWriteSaysWhatThePluginReads() throws {
+    @Test func theWriteSaysWhatTheExtensionReads() throws {
         let w = FeishuDocsCommentWrite(url: "u", content: "@李雷 好", mentions: [LarkMention(userID: "ou_1", name: "李雷")],
                                        quote: "这段", blockID: "b2", clientID: "id-1")
         let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(w)) as! [String: Any]

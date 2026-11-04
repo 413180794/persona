@@ -8,8 +8,8 @@ struct SettingsView: View {
     @State private var confirmUnpair = false
     @State private var showPair = false
     @State private var storage: Int64?
-    @State private var plugins: [HubPlugin]?
-    /// Where links in the plugins' cards open (docs/plugins.md「UI 插槽」).
+    @State private var plugins: [HubExtension]?
+    /// Where links in the plugins' cards open (docs/extensions.md「UI 插槽」).
     @State private var pluginLink: LinkTarget?
     @StoredValue(TranslationPrefs.enabledKey) private var translating = false
     @StoredValue(TranslationPrefs.targetKey) private var translateTarget = TranslationPrefs.defaultTarget
@@ -22,7 +22,7 @@ struct SettingsView: View {
         return s.version
     }
 
-    nonisolated private struct SlotsKey: Hashable, Sendable { var source: PluginSlots.Source; var depth: Int }
+    nonisolated private struct SlotsKey: Hashable, Sendable { var source: ExtensionSlots.Source; var depth: Int }
 
     /// 翻译's row value: off, or the target language.
     private var translationSummary: String { translating ? TranslationPrefs.name(of: translateTarget) : "关闭" }
@@ -59,15 +59,15 @@ struct SettingsView: View {
                 }
                 #if os(iOS) || os(visionOS)
                 // On the section that is always there: the plugins' one is empty until they are read.
-                .task(id: SlotsKey(source: PluginSlots.source(model), depth: model.settingsPath.count)) {
-                    await PluginSlots.shared.reload()
+                .task(id: SlotsKey(source: ExtensionSlots.source(model), depth: model.settingsPath.count)) {
+                    await ExtensionSlots.shared.reload()
                 }
                 #endif
 
                 #if os(iOS) || os(visionOS)
-                // The plugins' cards and pages (docs/plugins.md「UI 插槽」): at the top, where the main navigation's
+                // The plugins' cards and pages (docs/extensions.md「UI 插槽」): at the top, where the main navigation's
                 // entries are on an iPhone (the Mac has them in its sidebar).
-                PluginSlotsSettingsSection(link: $pluginLink)
+                ExtensionSlotsSettingsSection(link: $pluginLink)
                 #endif
 
                 if model.isDemo {
@@ -100,13 +100,13 @@ struct SettingsView: View {
 
                 ConnectorsSection()
 
-                // 插件 (docs/plugins.md): only with a hub that has the plugin base.
-                if model.hubFeatures.contains("plugin_manager") {
+                // 扩展 (docs/extensions.md): only with a hub that has the plugin base.
+                if model.hubFeatures.hasExtensionFeature("manager") {
                     Section {
                         Group {
                             NavigationLink(value: SettingsPage.plugins) {
-                                SettingsRow(title: "插件", symbol: Theme.Icon.plugins, tint: Theme.Hue.purple,
-                                            value: PluginText.listSummary(plugins), look: .oneLine)
+                                SettingsRow(title: "扩展", symbol: Theme.Icon.plugins, tint: Theme.Hue.purple,
+                                            value: ExtensionText.listSummary(plugins), look: .oneLine)
                             }
                             .accessibilityIdentifier("settings-plugins")
                         }
@@ -226,8 +226,8 @@ struct SettingsView: View {
             // With `-tab settings`: `-openAssistantPage assistant|routines|routine|newRoutine|followups|memory|memoryFile|
             // memoryEdit|about`, `-openStorage YES` (存储空间), `-openNotificationSettings YES` (通知), `-openMachines YES` (机器;
             // with `-openMachineDetail <id>` that machine's page), `-openDevices YES` (设备), `-openHubUpdate YES` (hub),
-            // `-openSkills YES` (Skills), `-openPlugins YES` (插件; `-openPlugin <id>` one of them), `-openChannels YES`
-            // (插件 › 渠道; `-openChannel <id>` one of them).
+            // `-openSkills YES` (Skills), `-openExtensions YES` (扩展; `-openExtension <id>` one of them; the old `-openPlugin…` names too), `-openChannels YES`
+            // (扩展 › 渠道; `-openChannel <id>` one of them).
             .onAppear(perform: openDebugPage)
             #endif
             .confirmationDialog("断开后需要重新扫码配对。", isPresented: $confirmUnpair, titleVisibility: .visible) {
@@ -267,6 +267,9 @@ struct SettingsView: View {
         let d = UserDefaults.standard
         // Appended with their own types: a path of AnyHashable finds no destination.
         var p = NavigationPath()
+        // `-openExtension…` / `-openMarketExtension`; the `-openPlugin…` names from before 扩展 still work (#1859).
+        let str = { (name: String) in d.string(forKey: name) ?? d.string(forKey: name.replacingOccurrences(of: "Extension", with: "Plugin")) }
+        let flag = { (name: String) in d.bool(forKey: name) || d.bool(forKey: name.replacingOccurrences(of: "Extension", with: "Plugin")) }
         if d.bool(forKey: "openMachines") {
             p.append(MachineListRoute())
             if let id = d.string(forKey: "openMachineDetail") { p.append(MachineDetailRoute(id: id)) }
@@ -282,25 +285,25 @@ struct SettingsView: View {
         }
         else if d.bool(forKey: "openHubUpdate") { p.append(SettingsPage.hub) }
         else if d.bool(forKey: "openSkills") { p.append(SettingsPage.skills) }
-        else if d.bool(forKey: "openPlugins") || d.string(forKey: "openPlugin") != nil { // 设置 › 插件 (› one (› a page of it))
+        else if flag("openExtensions") || str("openExtension") != nil { // 设置 › 扩展 (› one (› a page of it))
             p.append(SettingsPage.plugins)
-            if let id = d.string(forKey: "openPlugin") {
+            if let id = str("openExtension") {
                 p.append(SettingsPage.plugin(id))
-                if let ui = d.string(forKey: "openPluginPage") { p.append(SettingsPage.pluginPage(plugin: id, ui: ui, title: "")) }
+                if let ui = str("openExtensionPage") { p.append(SettingsPage.pluginPage(plugin: id, ui: ui, title: "")) }
             }
         }
-        else if d.bool(forKey: "openChannels") || d.string(forKey: "openChannel") != nil { // 设置 › 插件 › 渠道 (› one)
+        else if d.bool(forKey: "openChannels") || d.string(forKey: "openChannel") != nil { // 设置 › 扩展 › 渠道 (› one)
             p.append(SettingsPage.plugins)
             p.append(SettingsPage.channels)
             if let id = d.string(forKey: "openChannel") { p.append(SettingsPage.channel(id)) }
         }
-        else if d.bool(forKey: "openPluginMarket") || d.bool(forKey: "openPluginMarkets") || d.string(forKey: "openMarketPlugin") != nil {
-            // 设置 › 插件 › 插件市场 (› 市场, or › <market>/<plugin>)
+        else if flag("openExtensionMarket") || flag("openExtensionMarkets") || str("openMarketExtension") != nil {
+            // 设置 › 扩展 › 扩展市场 (› 市场, or › <market>/<extension>)
             p.append(SettingsPage.plugins)
             p.append(SettingsPage.pluginMarket)
-            if d.bool(forKey: "openPluginMarkets") { p.append(SettingsPage.pluginMarkets) }
-            if let m = d.string(forKey: "openMarketPlugin"), let slash = m.firstIndex(of: "/") {
-                p.append(SettingsPage.marketPlugin(market: String(m[..<slash]), id: String(m[m.index(after: slash)...])))
+            if flag("openExtensionMarkets") { p.append(SettingsPage.pluginMarkets) }
+            if let m = str("openMarketExtension"), let slash = m.firstIndex(of: "/") {
+                p.append(SettingsPage.marketExtension(market: String(m[..<slash]), id: String(m[m.index(after: slash)...])))
             }
         }
         else if d.bool(forKey: "openCodexSettings") { p.append(SettingsPage.codex) }
@@ -371,16 +374,16 @@ enum SettingsPage: Hashable {
     case hub, skills
     /// A connector of the hub's by its id (GET /api/v1/connectors): GitHub…
     case connector(String)
-    /// 设置 › 插件, and one plugin by its id (docs/plugins.md).
+    /// 设置 › 扩展, and one plugin by its id (docs/extensions.md).
     case plugins
     case plugin(String)
-    /// A page a plugin draws (placement plugin_page, docs/plugins.md「声明式 UI」), titled until its View says otherwise.
+    /// A page a plugin draws (placement plugin_page, docs/extensions.md「声明式 UI」), titled until its View says otherwise.
     case pluginPage(plugin: String, ui: String, title: String)
-    /// 设置 › 插件 › 插件市场, one plugin of a market, and the markets (docs/plugins.md「插件市场」).
+    /// 设置 › 扩展 › 扩展市场, one plugin of a market, and the markets (docs/extensions.md「扩展市场」).
     case pluginMarket
-    case marketPlugin(market: String, id: String)
+    case marketExtension(market: String, id: String)
     case pluginMarkets
-    /// 设置 › 插件 › 渠道, and one channel by its id (docs/channels.md).
+    /// 设置 › 扩展 › 渠道, and one channel by its id (docs/channels.md).
     case channels
     case channel(String)
     /// 设置 › hub › SSH 隧道 of one paired hub (its id; docs/network.md「经 SSH 隧道连 hub」).
@@ -438,12 +441,12 @@ private struct SettingsDestinations: ViewModifier {
         case .sshTunnel(let id): HubSSHTunnelPage(hubID: id)
         case .hub: HubSettingsPage()
         case .skills: SkillsPage()
-        case .plugins: PluginsView()
-        case .plugin(let id): PluginDetailView(id: id)
-        case .pluginPage(let plugin, let ui, let title): PluginPageView(plugin: plugin, ui: ui, title: title)
-        case .pluginMarket: PluginMarketView()
-        case .marketPlugin(let market, let id): MarketPluginDetailView(market: market, id: id)
-        case .pluginMarkets: PluginMarketsView()
+        case .plugins: ExtensionsView()
+        case .plugin(let id): ExtensionDetailView(id: id)
+        case .pluginPage(let plugin, let ui, let title): ExtensionPageView(plugin: plugin, ui: ui, title: title)
+        case .pluginMarket: ExtensionMarketView()
+        case .marketExtension(let market, let id): MarketExtensionDetailView(market: market, id: id)
+        case .pluginMarkets: ExtensionMarketsView()
         case .channels: ChannelsView()
         case .channel(let id): ChannelDetailView(id: id)
         }

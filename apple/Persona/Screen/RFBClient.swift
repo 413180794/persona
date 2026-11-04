@@ -326,7 +326,7 @@ nonisolated final class RFBClient: @unchecked Sendable {
         switch error {
         case Failure.protocolError(let s): return s
         case Failure.noCredentials: return "没有登录这台 Mac 的屏幕共享"
-        case let e as URLError where e.code == .badServerResponse: return "hub 不让连这台的屏幕（插件没开，或这台设备只能看不能操作）"
+        case let e as URLError where e.code == .badServerResponse: return "hub 不让连这台的屏幕（扩展没开，或这台设备只能看不能操作）"
         default: return error.localizedDescription
         }
     }

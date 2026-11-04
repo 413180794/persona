@@ -2,37 +2,37 @@ import BeautifulUI
 import Observation
 import SwiftUI
 
-// The UI slots (docs/plugins.md「UI 插槽」): where plugins put their declarative UI beyond their own settings.
+// The UI slots (docs/extensions.md「UI 插槽」): where plugins put their declarative UI beyond their own settings.
 //
 // | placement        | iPhone / iPad                                             | Mac                                   |
 // | ---------------- | --------------------------------------------------------- | ------------------------------------- |
-// | nav_page         | 设置 home, the 插件 section at the top (badges add to 设置's) | the sidebar, before 设置               |
-// | overview_card    | 设置 home, above those entries                              | 设置 › 插件, above the list            |
+// | nav_page         | 设置 home, the 扩展 section at the top (badges add to 设置's) | the sidebar, before 设置               |
+// | overview_card    | 设置 home, above those entries                              | 设置 › 扩展, above the list            |
 // | machine_section  | a machine's page, after its own sections                  | the same page                         |
 //
 // Only with a hub that says `plugin_ui_slots`; an older hub is never asked about them.
 
 /// The plugins' main-navigation entries and overview cards of the hub, with their badges (`plugin_ui` events change
 /// them in place).
-@MainActor @Observable final class PluginSlots {
-    static let shared = PluginSlots()
+@MainActor @Observable final class ExtensionSlots {
+    static let shared = ExtensionSlots()
 
     /// nav_page entries, in the hub's order.
     private(set) var pages: [PluginUIPlace] = []
     /// overview_card entries, in the hub's order.
     private(set) var cards: [PluginUIPlace] = []
-    @ObservationIgnored private var cardModels: [String: PluginViewModel] = [:]
+    @ObservationIgnored private var cardModels: [String: ExtensionViewModel] = [:]
     @ObservationIgnored private var lastHub: String?
-    @ObservationIgnored private let deps: PluginViewModel.Deps
+    @ObservationIgnored private let deps: ExtensionViewModel.Deps
     @ObservationIgnored private let features: () -> Set<String>
 
-    init(deps: PluginViewModel.Deps = .live, features: @escaping () -> Set<String> = { AppModel.shared.hubFeatures }) {
+    init(deps: ExtensionViewModel.Deps = .live, features: @escaping () -> Set<String> = { AppModel.shared.hubFeatures }) {
         self.deps = deps
         self.features = features
     }
 
     /// The hub has the slots (and so the context, charts and badges).
-    var available: Bool { features().contains("plugin_ui_slots") }
+    var available: Bool { features().hasExtensionFeature("ui_slots") }
 
     /// Asks the hub again for the entries and the cards (a list that cannot be read keeps what there was).
     func reload(for hub: String? = nil) async {
@@ -69,10 +69,10 @@ import SwiftUI
     }
 
     /// A card's model, kept while the card is listed (a card drawn again keeps its state).
-    func model(for card: PluginUIPlace) -> PluginViewModel {
+    func model(for card: PluginUIPlace) -> ExtensionViewModel {
         let k = Self.key(card)
         if let m = cardModels[k] { return m }
-        let m = PluginViewModel(plugin: card.plugin, ui: card.id, context: PluginUIContext(size: "compact"), deps: deps)
+        let m = ExtensionViewModel(plugin: card.plugin, ui: card.id, context: PluginUIContext(size: "compact"), deps: deps)
         cardModels[k] = m
         return m
     }
@@ -100,7 +100,7 @@ import SwiftUI
     }
 
     static func source(_ app: AppModel) -> Source {
-        Source(hub: app.isPaired ? app.config?.url.absoluteString : nil, slots: app.hubFeatures.contains("plugin_ui_slots"))
+        Source(hub: app.isPaired ? app.config?.url.absoluteString : nil, slots: app.hubFeatures.hasExtensionFeature("ui_slots"))
     }
 
     /// An entry's icon: one of the few a plugin may ask for, anything else the plugin's.
@@ -122,14 +122,14 @@ import SwiftUI
 
 /// A plugin's badge: a number as the count badges are drawn, a word as a chip; in its tone (neutral: the usual red of a
 /// count, a quiet chip).
-struct PluginBadgeView: View {
+struct ExtensionBadgeView: View {
     var badge: PluginBadge
 
     var body: some View {
         if let n = Int(badge.text), n > 0 {
-            CountBadge(count: n, look: .solid(badge.tone == nil || badge.tone == "neutral" ? Theme.countBadge : PluginUIStyle.tone(badge.tone)))
+            CountBadge(count: n, look: .solid(badge.tone == nil || badge.tone == "neutral" ? Theme.countBadge : ExtensionUIStyle.tone(badge.tone)))
         } else {
-            Chip(text: badge.text, look: badge.tone == nil || badge.tone == "neutral" ? .neutral : .tint(PluginUIStyle.tone(badge.tone)))
+            Chip(text: badge.text, look: badge.tone == nil || badge.tone == "neutral" ? .neutral : .tint(ExtensionUIStyle.tone(badge.tone)))
                 .lineLimit(1)
         }
     }
@@ -137,9 +137,9 @@ struct PluginBadgeView: View {
 
 /// What the plugins' entries' badges add up to, on a way to 设置 that is not its tab (the shell drawer's 设置 button):
 /// the sum as a count badge, only words a dot, nothing without badges.
-struct PluginSettingsBadge: View {
+struct ExtensionSettingsBadge: View {
     var body: some View {
-        let total = PluginSlots.shared.total
+        let total = ExtensionSlots.shared.total
         if total.count > 0 {
             CountBadge(count: total.count, look: .solid(Theme.countBadge))
                 .offset(x: Theme.Space.xs, y: -Theme.Space.xs)
@@ -151,30 +151,30 @@ struct PluginSettingsBadge: View {
 
 // MARK: Entries and cards on 设置 (iPhone, iPad)
 
-/// 设置 home's 插件 section, at the top: the plugins' cards, then their pages, one row each (icon, title, badge).
+/// 设置 home's 扩展 section, at the top: the plugins' cards, then their pages, one row each (icon, title, badge).
 /// Nothing when no plugin puts anything there.
-struct PluginSlotsSettingsSection: View {
+struct ExtensionSlotsSettingsSection: View {
     @Environment(AppModel.self) private var model
     /// Where the cards' links open: the page's (`pluginLinks` on the page, not on a section of its list).
     @Binding var link: LinkTarget?
-    private var slots: PluginSlots { .shared }
+    private var slots: ExtensionSlots { .shared }
 
     var body: some View {
         if slots.available {
-            PluginCardsSection(link: $link)
+            ExtensionCardsSection(link: $link)
             if !slots.pages.isEmpty {
                 Section {
                     Group {
                         ForEach(slots.pages) { page in
                             NavigationLink(value: SettingsPage.pluginPage(plugin: page.plugin, ui: page.id, title: page.title)) {
-                                PluginNavRow(place: page)
+                                ExtensionNavRow(place: page)
                             }
                             .accessibilityIdentifier("plugin-nav-\(page.plugin)-\(page.id)")
                         }
                     }
                     .bareListRow()
                 } header: {
-                    SettingsHeading("插件")
+                    SettingsHeading("扩展")
                 }
             }
         }
@@ -182,20 +182,20 @@ struct PluginSlotsSettingsSection: View {
 }
 
 /// One plugin page on the navigation: its icon in the plugins' tile, its title on one line, its badge.
-struct PluginNavRow: View {
+struct ExtensionNavRow: View {
     var place: PluginUIPlace
 
     var body: some View {
-        let symbol = PluginSlots.icon(place.icon)
+        let symbol = ExtensionSlots.icon(place.icon)
         if AppStyle.current.usesBeautifulUI {
             BUIListRow(place.title) {
                 BUIIconTile(symbol, tint: Theme.Hue.purple)
             } trailing: {
-                if let b = place.badge { PluginBadgeView(badge: b) }
+                if let b = place.badge { ExtensionBadgeView(badge: b) }
             }
         } else {
             LabeledContent {
-                if let b = place.badge { PluginBadgeView(badge: b) }
+                if let b = place.badge { ExtensionBadgeView(badge: b) }
             } label: {
                 Label { Text(place.title).lineLimit(1) } icon: { Image(systemName: symbol) }
             }
@@ -205,17 +205,17 @@ struct PluginNavRow: View {
 
 /// The plugins' overview cards as sections of a settings list: the card's title (with a chevron when it opens a page),
 /// its View drawn compact. Tapping a card that opens a page pushes that page on 设置.
-struct PluginCardsSection: View {
+struct ExtensionCardsSection: View {
     @Environment(AppModel.self) private var model
     /// Where the cards' links open: the page's. On a Mac the link panel lays the page out beside it, which a list's
     /// section cannot hold (the card came out as its title alone).
     @Binding var link: LinkTarget?
-    private var slots: PluginSlots { .shared }
+    private var slots: ExtensionSlots { .shared }
 
     var body: some View {
         ForEach(slots.cards) { card in
             Section {
-                PluginCard(card: card, model: slots.model(for: card), link: $link) {
+                ExtensionCard(card: card, model: slots.model(for: card), link: $link) {
                     if let (ui, title) = slots.opened(by: card) {
                         model.settingsPath.append(SettingsPage.pluginPage(plugin: card.plugin, ui: ui, title: title))
                     }
@@ -228,9 +228,9 @@ struct PluginCardsSection: View {
 
 /// One overview card: its title line, then the plugin's View, compact. While loading a line of progress, a failure
 /// one line with 重试; a plugin that says it has nothing here draws nothing.
-struct PluginCard: View {
+struct ExtensionCard: View {
     var card: PluginUIPlace
-    var model: PluginViewModel
+    var model: ExtensionViewModel
     @Binding var link: LinkTarget?
     var open: () -> Void
 
@@ -252,7 +252,7 @@ struct PluginCard: View {
                     }
                 }
                 if let v = model.view {
-                    PluginViewStack(view: v, model: model, cards: false, link: $link)
+                    ExtensionViewStack(view: v, model: model, cards: false, link: $link)
                         .environment(\.pluginUICompact, true)
                         .buttonStyle(.borderless)
                 } else if let e = model.error {
@@ -283,23 +283,23 @@ struct PluginCard: View {
 
 /// What plugins draw on a machine's page (placement machine_section), for that machine: its hub group's API, the
 /// machine's id as context. The page owns it and loads it (so an empty list adds nothing to the page, not even spacing).
-@MainActor @Observable final class PluginMachineModel {
+@MainActor @Observable final class ExtensionMachineModel {
     private(set) var places: [PluginUIPlace] = []
-    private(set) var models: [String: PluginViewModel] = [:]
+    private(set) var models: [String: ExtensionViewModel] = [:]
 
     /// Asks the hub what plugins draw for `ref`; `redraw` (pull to refresh) draws the ones already there again.
     func load(_ ref: MachineRef, app: AppModel, redraw: Bool) async {
-        guard app.features(ref.group).contains("plugin_ui_slots"), let api = app.api(ref.group) else {
+        guard app.features(ref.group).hasExtensionFeature("ui_slots"), let api = app.api(ref.group) else {
             places = []
             return
         }
         guard let list = try? await api.pluginUI(placement: "machine_section", machine: ref.id) else { return }
         let shown = list.filter { $0.placement == nil || $0.placement == "machine_section" }
-        let deps = PluginViewModel.Deps(api: { [weak app] in app?.api(ref.group) })
-        var next: [String: PluginViewModel] = [:]
+        let deps = ExtensionViewModel.Deps(api: { [weak app] in app?.api(ref.group) })
+        var next: [String: ExtensionViewModel] = [:]
         for p in shown {
-            next[PluginSlots.key(p)] = models[PluginSlots.key(p)]
-                ?? PluginViewModel(plugin: p.plugin, ui: p.id, context: PluginUIContext(machine: ref.id), deps: deps)
+            next[ExtensionSlots.key(p)] = models[ExtensionSlots.key(p)]
+                ?? ExtensionViewModel(plugin: p.plugin, ui: p.id, context: PluginUIContext(machine: ref.id), deps: deps)
         }
         let kept = Set(models.keys)
         models = next
@@ -314,23 +314,23 @@ struct PluginCard: View {
 
 /// The plugins' sections on a machine's page, after its own: each a heading (the contribution's title) and its View's
 /// sections as the page's other cards. A plugin that says it has nothing for this machine draws nothing.
-struct PluginMachineSections: View {
-    var page: PluginMachineModel
+struct ExtensionMachineSections: View {
+    var page: ExtensionMachineModel
     /// Where links open: the machine page's.
     @Binding var link: LinkTarget?
 
     var body: some View {
         ForEach(page.places) { place in
-            if let m = page.models[PluginSlots.key(place)], !m.unsupported {
-                PluginMachineSection(place: place, model: m, link: $link)
+            if let m = page.models[ExtensionSlots.key(place)], !m.unsupported {
+                ExtensionMachineSection(place: place, model: m, link: $link)
             }
         }
     }
 }
 
-private struct PluginMachineSection: View {
+private struct ExtensionMachineSection: View {
     var place: PluginUIPlace
-    var model: PluginViewModel
+    var model: ExtensionViewModel
     @Binding var link: LinkTarget?
 
     var body: some View {
@@ -338,7 +338,7 @@ private struct PluginMachineSection: View {
             Text(model.view?.title ?? place.title).font(Theme.Font.heading).lineLimit(1)
                 .padding(.horizontal, Theme.Space.xs)
             if let v = model.view {
-                PluginViewStack(view: v, model: model, link: $link)
+                ExtensionViewStack(view: v, model: model, link: $link)
             } else if let e = model.error {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
                     Label(e, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger)
@@ -364,19 +364,19 @@ private struct PluginMachineSection: View {
 
 // MARK: Refresh
 
-nonisolated private struct PluginRefreshKey: Hashable, Sendable {
+nonisolated private struct ExtensionRefreshKey: Hashable, Sendable {
     var due: Date?
     var active: Bool
 }
 
 /// Draws a plugin's View again when its `refresh_after` is up, only while it is on screen with the app in front;
 /// coming back after the time has passed draws it at once.
-private struct PluginRefresh: ViewModifier {
-    var model: PluginViewModel
+private struct ExtensionRefresh: ViewModifier {
+    var model: ExtensionViewModel
     @Environment(\.scenePhase) private var phase
 
     func body(content: Content) -> some View {
-        content.tabActiveTask(id: PluginRefreshKey(due: model.refreshDue, active: phase == .active)) {
+        content.tabActiveTask(id: ExtensionRefreshKey(due: model.refreshDue, active: phase == .active)) {
             guard phase == .active, let due = model.refreshDue else { return }
             let wait = due.timeIntervalSinceNow
             if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
@@ -387,6 +387,6 @@ private struct PluginRefresh: ViewModifier {
 }
 
 extension View {
-    /// Draws `model`'s View again after its `refresh_after` while on screen (docs/plugins.md「UI 插槽」刷新).
-    func pluginRefresh(_ model: PluginViewModel) -> some View { modifier(PluginRefresh(model: model)) }
+    /// Draws `model`'s View again after its `refresh_after` while on screen (docs/extensions.md「UI 插槽」刷新).
+    func pluginRefresh(_ model: ExtensionViewModel) -> some View { modifier(ExtensionRefresh(model: model)) }
 }

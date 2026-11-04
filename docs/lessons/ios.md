@@ -789,7 +789,7 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
 - 管用的是**框离开界面时是空的**：设计系统的 `SecretField`（`DesignSystem/SecretEntry.swift`）在 iOS 上是一个 `UITextField`，交出键盘（`resignFirstResponder`）或离开窗口前先把自己清空，
   值留在绑定里，框里写「已填写…」。用 `.onChange(of: focus)` 在 SwiftUI 里清不行：键盘还在时直接点返回，清空赶不上，照样弹。
 - 以后凡是 token、API Key、别人的密钥（不是这个 App 的登录密码）都用 `SecretField`，不直接写 `SecureField`。
-  UI 测试 `PluginMarketTests.testASecretFieldIsNotAPassword`、`testManageMarkets` 用 `PasswordPrompt.assertNone` 查系统的「保存密码？」sheet（标题「保存密码？」、按钮「以后」）。
+  UI 测试 `ExtensionMarketTests.testASecretFieldIsNotAPassword`、`testManageMarkets` 用 `PasswordPrompt.assertNone` 查系统的「保存密码？」sheet（标题「保存密码？」、按钮「以后」）。
 - #1598 把其余的也换了：配对的 Token（iOS）、模型供应商的 API Key（自己填写 / 从插件添加）、飞书机器人的 App Secret（iOS）、连接器登录步骤里的隐藏字段（iOS；Telegram 的 api_hash、两步验证密码，渠道的令牌）、
   权限表单的隐藏字段、终端要的密码（sudo）、邮箱的密码 / 授权码。邮箱密码虽然是真的登录密码，但它属于邮件服务器、只在添加时填一次、hub 加密保存，
   存进「密码」只会挂在 Persona 名下成一条孤儿记录，国内邮箱填的还多是给单个客户端生成的授权码，所以也不让系统保存。

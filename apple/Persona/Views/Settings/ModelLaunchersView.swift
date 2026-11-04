@@ -114,7 +114,7 @@ struct ModelLaunchersView: View {
         .onAppear { if UserDefaults.standard.bool(forKey: "macLauncherEditor") { adding = true } } // `-macLauncherEditor YES`: 新增启动器
         #endif
         #if DEBUG
-        // `-openLauncherEditor YES` opens 新增供应商, `-openLauncherEditor preset` on 从插件添加.
+        // `-openLauncherEditor YES` opens 新增供应商, `-openLauncherEditor preset` on 从扩展添加.
         .onAppear { if UserDefaults.standard.string(forKey: "openLauncherEditor") != nil { adding = true } }
         #endif
         .confirmationDialog("删除启动器「\(pendingDelete?.name ?? "")」？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
@@ -253,8 +253,8 @@ struct ModelLauncherDetailView: View {
     @State private var showDefinition = false
     /// 测试可用性: per machine, running (nil) or done.
     @State private var checks: [String: LauncherCheck?] = [:]
-    /// What plugins draw on this page (docs/plugins.md「声明式 UI」), and the link one of them opens.
-    @State private var pluginSections: PluginLauncherModel?
+    /// What plugins draw on this page (docs/extensions.md「声明式 UI」), and the link one of them opens.
+    @State private var pluginSections: ExtensionLauncherModel?
     @State private var pluginLink: LinkTarget?
 
     /// Machines whose launcher sets the same, with that detail.
@@ -312,7 +312,7 @@ struct ModelLauncherDetailView: View {
                     LauncherQuotaSection(name: l.name)
                     availability(l)
                 }
-                if let pluginSections { PluginLauncherSections(page: pluginSections, link: $pluginLink) }
+                if let pluginSections { ExtensionLauncherSections(page: pluginSections, link: $pluginLink) }
                 // What the launcher really sets, once for the machines where it is the same.
                 ForEach(detailGroups(l), id: \.machines) { g in
                     LauncherDetailSections(detail: g.detail, place: groups(l) > 1 ? g.names : nil)
@@ -367,9 +367,9 @@ struct ModelLauncherDetailView: View {
             LauncherEditor(existing: launcher) { await load() }
         }
         .pluginLinks($pluginLink)
-        .task(id: model.hubFeatures.contains("plugin_manager")) {
-            guard model.hubFeatures.contains("plugin_manager") else { return }
-            let sections = pluginSections ?? PluginLauncherModel(launcher: name)
+        .task(id: model.hubFeatures.hasExtensionFeature("manager")) {
+            guard model.hubFeatures.hasExtensionFeature("manager") else { return }
+            let sections = pluginSections ?? ExtensionLauncherModel(launcher: name)
             pluginSections = sections
             await sections.load()
         }
@@ -486,12 +486,12 @@ struct LauncherEditor: View {
     @State private var error: String?
     /// The fields as the sheet opened: 取消 asks first once they differ (Mac).
     @State private var opened: [String]?
-    /// 从插件添加: the providers the hub's plugins offer (only when adding, and only when there are some).
+    /// 从扩展添加: the providers the hub's plugins offer (only when adding, and only when there are some).
     @State private var presets = LauncherPresetModel()
-    @State private var fromPlugin = false
+    @State private var fromExtension = false
 
     private var isNew: Bool { existing == nil }
-    private var usesPreset: Bool { isNew && fromPlugin && !presets.presets.isEmpty }
+    private var usesPreset: Bool { isNew && fromExtension && !presets.presets.isEmpty }
     /// The Responses API always takes the key as Bearer: nothing to choose.
     private var usesResponses: Bool { kind == "api" && protocolName == "responses" }
     /// What was typed in either form (a preset's model is filled in as it loads, so it does not count).
@@ -505,9 +505,9 @@ struct LauncherEditor: View {
             Form {
                 if isNew, !presets.presets.isEmpty {
                     Section {
-                        Picker("来源", selection: $fromPlugin) {
+                        Picker("来源", selection: $fromExtension) {
                             Text("自己填写").tag(false)
-                            Text("从插件添加").tag(true)
+                            Text("从扩展添加").tag(true)
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()
@@ -534,7 +534,7 @@ struct LauncherEditor: View {
                 guard isNew else { return }
                 await presets.load()
                 #if DEBUG
-                if UserDefaults.standard.string(forKey: "openLauncherEditor") == "preset" { fromPlugin = true }
+                if UserDefaults.standard.string(forKey: "openLauncherEditor") == "preset" { fromExtension = true }
                 #endif
             }
             .onAppear {

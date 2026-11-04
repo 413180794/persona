@@ -106,7 +106,7 @@ final class ComputerSectionTests: XCTestCase {
         XCTAssertTrue(screen.exists, "the other stays")
     }
 
-    /// 插件开着时不自动锁屏 (#1507 b2): off by default; turning it on asks first (取消 leaves it off, 打开 turns it on),
+    /// 扩展开着时不自动锁屏 (#1507 b2): off by default; turning it on asks first (取消 leaves it off, 打开 turns it on),
     /// turning it off does not ask. MOCK_COMPUTER=ready.
     @MainActor func testNoAutoLockAsksFirst() throws {
         guard state == "ready" else { throw XCTSkip("MOCK_COMPUTER=ready") }

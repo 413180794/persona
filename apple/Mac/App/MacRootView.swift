@@ -193,15 +193,15 @@ private struct MacShell: View {
         // No toolbar band across the window: the sections column reaches up behind the traffic lights, and the bar's
         // backdrop and hairline cut it off at the toolbar (2026-11-02).
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-        // The plugins' sidebar entries and cards (docs/plugins.md「UI 插槽」): with a hub that has them.
-        .task(id: PluginSlots.source(model)) {
-            let hub = PluginSlots.source(model).hub
-            await PluginSlots.shared.reload(for: hub)
+        // The plugins' sidebar entries and cards (docs/extensions.md「UI 插槽」): with a hub that has them.
+        .task(id: ExtensionSlots.source(model)) {
+            let hub = ExtensionSlots.source(model).hub
+            await ExtensionSlots.shared.reload(for: hub)
             // Which inbox sources a plugin draws (placement inbox_item): known before an item is opened.
             await InboxItemSlots.shared.reload(for: hub)
         }
         // A page whose plugin took it away (disabled, uninstalled) goes back to the section.
-        .onChange(of: PluginSlots.shared.pages) { if shell.pluginPage != nil, pluginPlace == nil { shell.pluginPage = nil } }
+        .onChange(of: ExtensionSlots.shared.pages) { if shell.pluginPage != nil, pluginPlace == nil { shell.pluginPage = nil } }
         // No page title in the bar: the system puts it after the items beside the traffic lights, over this column, and
         // a long one ran across the column's edge on a white backing (2026-11-02 user: 文字都超出去了). The selected
         // section and the selected row say where you are; the window keeps its title for the Window menu.
@@ -256,7 +256,7 @@ private struct MacShell: View {
     private var sections: some View {
         return VStack(spacing: Theme.Space.xxs) {
             ForEach(MacSection.visible(supportsTodos: TodoStore.shared.isSupported)) { section in
-                // The plugins' pages go with 机器 and 设置, right before 设置 (docs/plugins.md「UI 插槽」).
+                // The plugins' pages go with 机器 and 设置, right before 设置 (docs/extensions.md「UI 插槽」).
                 if section == .settings { pluginRows }
                 MacSidebarRow(icon: section.icon, title: section.title, selected: section == shown && shell.pluginPage == nil,
                               badge: badge(section), identifier: "mac.section.\(section.rawValue)") { shell.go(section, model) }
@@ -280,9 +280,9 @@ private struct MacShell: View {
 
     /// The plugins' main-navigation entries (nav_page): icon, title on one line, the plugin's badge.
     private var pluginRows: some View {
-        ForEach(PluginSlots.shared.pages) { p in
-            let key = PluginSlots.key(p)
-            MacSidebarRow(icon: PluginSlots.icon(p.icon), title: p.title, selected: shell.pluginPage == key,
+        ForEach(ExtensionSlots.shared.pages) { p in
+            let key = ExtensionSlots.key(p)
+            MacSidebarRow(icon: ExtensionSlots.icon(p.icon), title: p.title, selected: shell.pluginPage == key,
                           badge: p.badge.map { Int($0.text).map(MacSidebarRow.Badge.count) ?? .word($0.text) },
                           identifier: "mac.plugin.\(key)") { shell.pluginPage = key }
         }
@@ -290,7 +290,7 @@ private struct MacShell: View {
 
     /// The plugin page picked in the sidebar, while its plugin still has it.
     private var pluginPlace: PluginUIPlace? {
-        shell.pluginPage.flatMap { k in PluginSlots.shared.pages.first { PluginSlots.key($0) == k } }
+        shell.pluginPage.flatMap { k in ExtensionSlots.shared.pages.first { ExtensionSlots.key($0) == k } }
     }
 
     /// The iOS tab bar's badges (`RootView`).
@@ -310,10 +310,10 @@ private struct MacShell: View {
     @ViewBuilder private var page: some View {
         if let p = pluginPlace {
             NavigationStack {
-                PluginPageView(plugin: p.plugin, ui: p.id, title: p.title)
+                ExtensionPageView(plugin: p.plugin, ui: p.id, title: p.title)
                     .environment(\.macBelowTitleRow, true)
             }
-            .id(PluginSlots.key(p))
+            .id(ExtensionSlots.key(p))
         } else {
             sectionPage
         }

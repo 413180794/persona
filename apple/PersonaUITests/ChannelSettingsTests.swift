@@ -1,6 +1,6 @@
 import XCTest
 
-/// 设置 › 插件 › 渠道 (docs/channels.md): the 渠道 row on 设置 › 插件, the list in its three sections, WeChat's page
+/// 设置 › 扩展 › 渠道 (docs/channels.md): the 渠道 row on 设置 › 扩展, the list in its three sections, WeChat's page
 /// (bound: its account, 消息发到, its features), binding a channel with a token a step at a time, the Feishu bot's
 /// pairing code, and 「来自 微信」 under the main conversation's first message. Against scripts/mock/mock_hub.py with
 /// MOCK_CHANNELS=1: `TEST_RUNNER_JARVIS_CHANNELS_HUB=http://127.0.0.1:<端口>`; `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the
@@ -34,7 +34,7 @@ final class ChannelSettingsTests: XCTestCase {
     }
 
     @MainActor func testTheListAndAChannel() throws {
-        let app = try launch(["-tab", "settings", "-openPlugins", "YES"])
+        let app = try launch(["-tab", "settings", "-openExtensions", "YES"])
         let entry = app.buttons["plugins-channels"]
         XCTAssertTrue(entry.waitForExistence(timeout: 15), "no 渠道 row:\n\(app.debugDescription)")
         // The counts follow what the other tests bound on the same mock: the words are checked here, the counts in

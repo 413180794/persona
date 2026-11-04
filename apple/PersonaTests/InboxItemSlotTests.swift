@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// The inbox_item slot (docs/plugins.md「收件箱条目」, #1682): which sources' items a plugin draws, the item's body as
+/// The inbox_item slot (docs/extensions.md「收件箱条目」, #1682): which sources' items a plugin draws, the item's body as
 /// the plugin's View (`context.item`, its buttons), today's body whenever that cannot be (quietly, or with a line and
 /// 重试 when the plugin failed), and 在会话里看 (persona://inbox/<id>/source) back to today's body.
 @MainActor struct InboxItemSlotTests {
@@ -39,7 +39,7 @@ import Testing
         }
     }
 
-    @Test func theSourcesAPluginDraws() async throws {
+    @Test func theSourcesAnExtensionDraws() async throws {
         let hub = FakeHub()
         listing(hub)
         let s = slots(hub)
@@ -96,7 +96,7 @@ import Testing
         #expect(InboxItemSlotModel(item: try item("lark:F2:2", source: "lark"), slots: b).phase == .plain)
     }
 
-    @Test func thePluginDrawsTheItemAndTakesItsButtons() async throws {
+    @Test func theExtensionDrawsTheItemAndTakesItsButtons() async throws {
         let hub = FakeHub()
         listing(hub)
         var bodies: [JSONValue] = []
@@ -148,7 +148,7 @@ import Testing
         }
     }
 
-    @Test func aFailedPluginSaysSoAndTriesAgain() async throws {
+    @Test func aFailedExtensionSaysSoAndTriesAgain() async throws {
         // 502 (the plugin failed, a view the hub cannot draw), a hub out of reach, an answer without a view: today's body
         // under a line saying why, with 重试.
         for failure in [APIError(status: 502, message: "插件出错了", fields: ["code": "plugin_failed"]),
@@ -185,10 +185,10 @@ import Testing
         }
         // What a button may open: https anywhere; the item's own source only on that item's page.
         let source = try #require(URL(string: "persona://inbox/lark:F1:1051/source"))
-        #expect(PluginViewModel.opens(try #require(URL(string: "https://example.com/x")), item: nil))
-        #expect(PluginViewModel.opens(source, item: "lark:F1:1051"))
-        #expect(!PluginViewModel.opens(source, item: "lark:F2:7") && !PluginViewModel.opens(source, item: nil))
-        #expect(!PluginViewModel.opens(try #require(URL(string: "http://example.com/x")), item: "lark:F1:1051"))
+        #expect(ExtensionViewModel.opens(try #require(URL(string: "https://example.com/x")), item: nil))
+        #expect(ExtensionViewModel.opens(source, item: "lark:F1:1051"))
+        #expect(!ExtensionViewModel.opens(source, item: "lark:F2:7") && !ExtensionViewModel.opens(source, item: nil))
+        #expect(!ExtensionViewModel.opens(try #require(URL(string: "http://example.com/x")), item: "lark:F1:1051"))
     }
 
     @Test func openInChatShowsTheItemsOwnSource() async throws {
@@ -208,15 +208,15 @@ import Testing
         let page = try #require(slot.page)
 
         // 在会话里看: the item's own source, today's body; 回到 brings the plugin's page back as it was.
-        let open = await page.perform(PluginUIAction(id: "open"))
+        let open = await page.perform(ExtensionUIAction(id: "open"))
         let url = try #require(open.url)
         #expect(slot.open(url) && slot.showsSource && slot.phase == .plugin)
         slot.showsSource = false
         #expect(slot.page === page)
 
         // Another item's source is never opened; an https page is the page's to open.
-        #expect(await page.perform(PluginUIAction(id: "other")).url == nil)
-        let web = try #require(await page.perform(PluginUIAction(id: "web")).url)
+        #expect(await page.perform(ExtensionUIAction(id: "other")).url == nil)
+        let web = try #require(await page.perform(ExtensionUIAction(id: "web")).url)
         #expect(!slot.open(web) && !slot.showsSource)
     }
 

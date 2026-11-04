@@ -30,13 +30,26 @@ final class HubLink: Identifiable {
 
     /// The hub requests go to: the one the socket is on.
     var config: ServerConfig { live.currentConfig ?? fallback }
-    var api: APIClient { APIClient(config: config, group: group) }
+    var api: APIClient {
+        var c = APIClient(config: config, group: group)
+        c.extensionsAPI = hello.features.isEmpty ? Self.remembersExtensions(group) : features.contains("extensions")
+        return c
+    }
+
+    /// Whether the group's hub had the extension routes at its last hello (#1859): what requests made before this launch's
+    /// hello use, so a hub from #1844 on is not asked on its old /api/v1/plugins (counted there until nobody calls it).
+    /// Written only when it changes, so rarely.
+    private static func remembersExtensions(_ group: String) -> Bool {
+        UserDefaults.standard.bool(forKey: "hubExtensionsAPI." + group)
+    }
     var isDemo: Bool { config.isDemo }
 
     func received(_ hello: HubHello) {
         self.hello = hello
         let f = Set(hello.features)
         if f != features { features = f }
+        let ext = f.contains("extensions")
+        if !f.isEmpty, ext != Self.remembersExtensions(group) { UserDefaults.standard.set(ext, forKey: "hubExtensionsAPI." + group) }
     }
 }
 

@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// 设置 › 插件: every plugin of the hub's (built in, from hub.json, installed on the hub's machine), its state, and
-/// the way to its page. Plugins are installed on the hub's side only (docs/plugins.md「安装」): with `personad plugin` on
+/// 设置 › 扩展: every plugin of the hub's (built in, from hub.json, installed on the hub's machine), its state, and
+/// the way to its page. Extensions are installed on the hub's side only (docs/extensions.md「安装」): with `personad plugin` on
 /// its machine or in its admin UI (/admin); the footer says how.
-struct PluginsView: View {
-    @State private var page = PluginsModel()
+struct ExtensionsView: View {
+    @State private var page = ExtensionsModel()
     @State private var cardLink: LinkTarget?
 
     var body: some View {
@@ -12,16 +12,16 @@ struct PluginsView: View {
             // 渠道 (docs/channels.md「界面」): only with a hub that has channels.
             ChannelsEntryRow()
             #if os(macOS)
-            // The plugins' overview cards (docs/plugins.md「UI 插槽」): the Mac has no 总览, they lead this list (their
+            // The plugins' overview cards (docs/extensions.md「UI 插槽」): the Mac has no 总览, they lead this list (their
             // pages are in the sidebar). The iPhone has them on 设置 itself.
-            PluginCardsSection(link: $cardLink)
+            ExtensionCardsSection(link: $cardLink)
             #endif
-            // 插件市场 (docs/plugins.md「插件市场」): only with a hub that has markets.
+            // 扩展市场 (docs/extensions.md「扩展市场」): only with a hub that has markets.
             if page.markets {
                 Section {
                     Group {
                         NavigationLink(value: SettingsPage.pluginMarket) {
-                            SettingsRow(title: "插件市场", symbol: Theme.Icon.pluginMarket, tint: Theme.accent)
+                            SettingsRow(title: "扩展市场", symbol: Theme.Icon.pluginMarket, tint: Theme.accent)
                         }
                         .accessibilityIdentifier("plugins-market")
                     }
@@ -30,21 +30,21 @@ struct PluginsView: View {
             }
             if let plugins = page.plugins, plugins.isEmpty {
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.plugins, title: "没有插件",
-                                   message: "插件在 hub 的管理界面（/admin）或 hub 所在的机器上用 personad plugin install 安装，装好后在这里开关和设置。")
+                    EmptyStateView(symbol: Theme.Icon.plugins, title: "没有扩展",
+                                   message: "扩展在 hub 的管理界面（/admin）或 hub 所在的机器上用 personad extension install 安装，装好后在这里开关和设置。")
                         .listRowBackground(Color.clear)
                 }
             } else if let plugins = page.plugins {
                 Section {
                     Group {
                         ForEach(plugins) { p in
-                            NavigationLink(value: SettingsPage.plugin(p.id)) { PluginRowLabel(plugin: p) }
+                            NavigationLink(value: SettingsPage.plugin(p.id)) { ExtensionRowLabel(plugin: p) }
                                 .accessibilityIdentifier("plugin-\(p.id)")
                         }
                     }
                     .bareListRow()
                 } footer: {
-                    Text("插件在 hub 的管理界面（/admin）或 hub 所在的机器上（personad plugin）安装、升级和卸载，这里可以开关、改设置、填密钥。")
+                    Text("扩展在 hub 的管理界面（/admin）或 hub 所在的机器上（personad extension）安装、升级和卸载，这里可以开关、改设置、填密钥。")
                 }
             }
             if let error = page.error {
@@ -56,31 +56,31 @@ struct PluginsView: View {
         .pluginLinks($cardLink)
         #endif
         .overlay { if page.plugins == nil && page.loading { ProgressView() } }
-        .detailTitle("插件")
+        .detailTitle("扩展")
         .navigationBarTitleDisplayMode(.inline)
         .task { await page.load() }
         #if os(macOS)
-        .task { await PluginSlots.shared.reload() }
+        .task { await ExtensionSlots.shared.reload() }
         #endif
         .refreshable {
             await page.load()
-            await PluginSlots.shared.reload()
+            await ExtensionSlots.shared.reload()
         }
     }
 }
 
 /// A plugin's row: its name, and its state (or version) on the right with a dot that says whether it needs the user.
-private struct PluginRowLabel: View {
-    var plugin: HubPlugin
+private struct ExtensionRowLabel: View {
+    var plugin: HubExtension
 
     var body: some View {
         if AppStyle.current.usesBeautifulUI {
-            SettingsRow(title: plugin.name, symbol: Theme.Icon.plugins, tint: PluginStateDot.tone(plugin), value: PluginText.summary(plugin))
+            SettingsRow(title: plugin.name, symbol: Theme.Icon.plugins, tint: ExtensionStateDot.tone(plugin), value: ExtensionText.summary(plugin))
         } else {
             LabeledContent {
                 HStack(spacing: Theme.Space.sm) {
-                    PluginStateDot(plugin: plugin)
-                    Text(PluginText.summary(plugin)).lineLimit(1)
+                    ExtensionStateDot(plugin: plugin)
+                    Text(ExtensionText.summary(plugin)).lineLimit(1)
                 }
             } label: {
                 Label {
@@ -94,7 +94,7 @@ private struct PluginRowLabel: View {
 }
 
 /// A line of a plugin's 升级 section: what, and below it what happens (in the caution colour when it needs the user).
-private struct PluginUpgradeLine: View {
+private struct ExtensionUpgradeLine: View {
     var title: String
     var detail: String
     var attention: Bool
@@ -111,16 +111,16 @@ private struct PluginUpgradeLine: View {
 }
 
 /// The dot beside a plugin's state.
-private struct PluginStateDot: View {
-    var plugin: HubPlugin?
+private struct ExtensionStateDot: View {
+    var plugin: HubExtension?
 
     var body: some View {
         Circle().fill(Self.tone(plugin)).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
     }
 
-    static func tone(_ p: HubPlugin?) -> Color {
+    static func tone(_ p: HubExtension?) -> Color {
         guard let p else { return .secondary }
-        if PluginText.isProblem(p) { return Theme.danger }
+        if ExtensionText.isProblem(p) { return Theme.danger }
         switch p.status {
         case "running", "stopped": return Theme.positive // on, running or idle (#1684)
         case "needs_setup": return Theme.caution
@@ -129,14 +129,14 @@ private struct PluginStateDot: View {
     }
 }
 
-/// 设置 › 插件 › one: what it is and how it is doing, its switch, its settings as a form drawn from its schema, its
+/// 设置 › 扩展 › one: what it is and how it is doing, its switch, its settings as a form drawn from its schema, its
 /// secrets (set here, never shown again), what it contributes and what it may do. A plugin written in hub.json is only
 /// looked at here.
-struct PluginDetailView: View {
-    @State private var page: PluginModel
-    @State private var editingSecret: PluginSecret?
+struct ExtensionDetailView: View {
+    @State private var page: ExtensionModel
+    @State private var editingSecret: ExtensionSecret?
 
-    init(id: String) { _page = State(initialValue: PluginModel(id: id)) }
+    init(id: String) { _page = State(initialValue: ExtensionModel(id: id)) }
 
     var body: some View {
         SettingsForm {
@@ -144,7 +144,7 @@ struct PluginDetailView: View {
             if let d = page.detail {
                 if d.readOnly {
                     Section {
-                        Text("这个插件写在 hub.json 里：开关和设置在 hub 所在的机器上改。").font(Theme.Font.label).foregroundStyle(.secondary)
+                        Text("这个扩展写在 hub.json 里：开关和设置在 hub 所在的机器上改。").font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                 } else {
                     Section {
@@ -166,7 +166,7 @@ struct PluginDetailView: View {
             }
         }
         .themedPage()
-        .detailTitle(page.detail?.plugin.name ?? "插件")
+        .detailTitle(page.detail?.plugin.name ?? "扩展")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if page.detail?.readOnly == false && !(page.detail?.form.isEmpty ?? true) {
@@ -182,7 +182,7 @@ struct PluginDetailView: View {
             }
         }
         .sheet(item: $editingSecret) { secret in
-            PluginSecretSheet(secret: secret, save: { await page.setSecret(secret.name, value: $0) },
+            ExtensionSecretSheet(secret: secret, save: { await page.setSecret(secret.name, value: $0) },
                               clear: { await page.clearSecret(secret.name) })
         }
         .task { await page.load() }
@@ -199,7 +199,7 @@ struct PluginDetailView: View {
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text(page.detail?.plugin.name ?? page.id).font(Theme.Font.heading).lineLimit(1)
                     HStack(spacing: Theme.Space.sm) {
-                        PluginStateDot(plugin: page.detail?.plugin)
+                        ExtensionStateDot(plugin: page.detail?.plugin)
                         Text(stateText).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
                     }
                 }
@@ -208,7 +208,7 @@ struct PluginDetailView: View {
             }
             .padding(.vertical, Theme.Space.xs)
             let text = page.detail?.plugin.description ?? ""
-            let note = page.detail.flatMap { PluginText.runNote($0.plugin) }
+            let note = page.detail.flatMap { ExtensionText.runNote($0.plugin) }
             if !text.isEmpty || note != nil {
                 // Whether it runs right now is small print under what it is, in the same row (#1684).
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
@@ -230,23 +230,23 @@ struct PluginDetailView: View {
 
     private var stateText: String {
         guard let p = page.detail?.plugin else { return page.loading ? "正在读取…" : "读不到" }
-        return [PluginText.state(p), p.version, PluginText.source(p.source)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        return [ExtensionText.state(p), p.version, ExtensionText.source(p.source)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
-    /// A market plugin's upgrades (docs/plugins.md「自动升级」): its own switch, its newer version (opening the market's
+    /// A market plugin's upgrades (docs/extensions.md「自动升级」): its own switch, its newer version (opening the market's
     /// upgrade when it waits for the user) or what happened last.
-    @ViewBuilder private func upgrades(_ p: HubPlugin, auto: Bool) -> some View {
+    @ViewBuilder private func upgrades(_ p: HubExtension, auto: Bool) -> some View {
         Section {
             Toggle(isOn: Binding(get: { auto }, set: { on in Task { await page.setAutoUpgrade(on) } })) {
                 Text("自动升级").lineLimit(1)
             }
             .accessibilityIdentifier("plugin-auto-upgrade")
             if let u = p.upgrade {
-                if let action = PluginText.upgradeAction(u) {
-                    NavigationLink(value: SettingsPage.marketPlugin(market: u.market, id: u.id)) {
+                if let action = ExtensionText.upgradeAction(u) {
+                    NavigationLink(value: SettingsPage.marketExtension(market: u.market, id: u.id)) {
                         // The action stays at the end of the row however long what it asks for is.
                         HStack(spacing: Theme.Space.m) {
-                            PluginUpgradeLine(title: "有新版本 \(u.to)", detail: PluginText.upgradeDetail(u),
+                            ExtensionUpgradeLine(title: "有新版本 \(u.to)", detail: ExtensionText.upgradeDetail(u),
                                               attention: u.state == "needs_permission" || u.state == "skipped")
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             Text(action).foregroundStyle(Theme.accent).lineLimit(1).fixedSize()
@@ -254,22 +254,22 @@ struct PluginDetailView: View {
                     }
                     .accessibilityIdentifier("plugin-upgrade")
                 } else {
-                    PluginUpgradeLine(title: "有新版本 \(u.to)", detail: PluginText.upgradeDetail(u), attention: false)
+                    ExtensionUpgradeLine(title: "有新版本 \(u.to)", detail: ExtensionText.upgradeDetail(u), attention: false)
                         .accessibilityIdentifier("plugin-upgrade")
                 }
-            } else if let n = p.upgradeNote, let text = PluginText.upgradeNote(n) {
-                PluginUpgradeLine(title: text, detail: n.at.formatted(.relative(presentation: .named)), attention: n.kind == "rolled_back")
+            } else if let n = p.upgradeNote, let text = ExtensionText.upgradeNote(n) {
+                ExtensionUpgradeLine(title: text, detail: n.at.formatted(.relative(presentation: .named)), attention: n.kind == "rolled_back")
                     .accessibilityIdentifier("plugin-upgrade-note")
             }
         } header: {
             SettingsHeading("升级")
         } footer: {
-            Text("插件市场里出了新版本，插件空闲时自动装上；新版本要的权限变多时先问你。装上后起不来的会退回原来的版本。")
+            Text("扩展市场里出了新版本，扩展空闲时自动装上；新版本要的权限变多时先问你。装上后起不来的会退回原来的版本。")
         }
     }
 
-    /// The pages it draws (docs/plugins.md「声明式 UI」), a row each.
-    @ViewBuilder private func pages(_ d: HubPluginDetail) -> some View {
+    /// The pages it draws (docs/extensions.md「声明式 UI」), a row each.
+    @ViewBuilder private func pages(_ d: HubExtensionDetail) -> some View {
         if !d.ui.isEmpty {
             Section {
                 ForEach(d.ui) { place in
@@ -284,18 +284,18 @@ struct PluginDetailView: View {
         }
     }
 
-    private func form(_ d: HubPluginDetail) -> some View {
+    private func form(_ d: HubExtensionDetail) -> some View {
         Group {
             Section {
-                ForEach(d.form.filter { $0.type != "object" }) { f in PluginFieldRow(field: f, path: [f.name], page: page) }
+                ForEach(d.form.filter { $0.type != "object" }) { f in ExtensionFieldRow(field: f, path: [f.name], page: page) }
             } header: {
                 SettingsHeading("设置")
             } footer: {
-                Text(PluginText.saveFooter(d.form))
+                Text(ExtensionText.saveFooter(d.form))
             }
             ForEach(d.form.filter { $0.type == "object" }) { group in
                 Section {
-                    ForEach(group.fields ?? []) { f in PluginFieldRow(field: f, path: [group.name, f.name], page: page) }
+                    ForEach(group.fields ?? []) { f in ExtensionFieldRow(field: f, path: [group.name, f.name], page: page) }
                 } header: {
                     SettingsHeading(group.label)
                 } footer: {
@@ -305,7 +305,7 @@ struct PluginDetailView: View {
         }
     }
 
-    private func secrets(_ d: HubPluginDetail) -> some View {
+    private func secrets(_ d: HubExtensionDetail) -> some View {
         Section {
             ForEach(d.secrets) { s in
                 Button { editingSecret = s } label: {
@@ -323,15 +323,15 @@ struct PluginDetailView: View {
         } header: {
             SettingsHeading("密钥")
         } footer: {
-            Text("密钥加密存在 hub 上，只交给这个插件；存好后不再显示，只能换新的或清除。")
+            Text("密钥加密存在 hub 上，只交给这个扩展；存好后不再显示，只能换新的或清除。")
         }
     }
 
-    @ViewBuilder private func contributions(_ d: HubPluginDetail) -> some View {
+    @ViewBuilder private func contributions(_ d: HubExtensionDetail) -> some View {
         if let c = d.plugin.contributes, !c.isEmpty {
             Section {
                 ForEach(c.keys.sorted(), id: \.self) { point in
-                    LabeledContent(PluginText.point(point)) {
+                    LabeledContent(ExtensionText.point(point)) {
                         Text((c[point] ?? []).joined(separator: "、")).lineLimit(2).multilineTextAlignment(.trailing)
                     }
                 }
@@ -341,7 +341,7 @@ struct PluginDetailView: View {
         }
     }
 
-    @ViewBuilder private func permissions(_ d: HubPluginDetail) -> some View {
+    @ViewBuilder private func permissions(_ d: HubExtensionDetail) -> some View {
         if !d.permissions.isEmpty {
             Section {
                 ForEach(d.permissions) { p in
@@ -361,11 +361,11 @@ struct PluginDetailView: View {
         }
     }
 
-    @ViewBuilder private func about(_ d: HubPluginDetail) -> some View {
+    @ViewBuilder private func about(_ d: HubExtensionDetail) -> some View {
         Section {
             if let v = d.plugin.version, !v.isEmpty { LabeledContent("版本", value: v) }
             if let v = d.previousVersion, !v.isEmpty { LabeledContent("上一个版本", value: v) }
-            if let s = PluginText.source(d.plugin.source) { LabeledContent("来源", value: s) }
+            if let s = ExtensionText.source(d.plugin.source) { LabeledContent("来源", value: s) }
             if let o = d.origin, !o.isEmpty {
                 LabeledContent("安装自") { Text(o).lineLimit(2).truncationMode(.middle).textSelection(.enabled) }
             }
@@ -384,10 +384,10 @@ struct PluginDetailView: View {
 
 /// One field of a plugin's form, by its type: a text field, a number, a switch, a choice, a list of texts or of
 /// choices. Its title above, its description and the hub's word on it below.
-private struct PluginFieldRow: View {
-    var field: PluginField
+private struct ExtensionFieldRow: View {
+    var field: ExtensionField
     var path: [String]
-    @Bindable var page: PluginModel
+    @Bindable var page: ExtensionModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
@@ -414,9 +414,9 @@ private struct PluginFieldRow: View {
             }
         case "array":
             if field.items?.format == "machine" {
-                PluginMachineSwitches(field: field, title: title, path: path, page: page)
+                ExtensionMachineSwitches(field: field, title: title, path: path, page: page)
             } else {
-                PluginListField(field: field, title: title, path: path, page: page)
+                ExtensionListField(field: field, title: title, path: path, page: page)
             }
         default:
             if let choices = field.enum {
@@ -464,7 +464,7 @@ private struct PluginFieldRow: View {
         return "未设置"
     }
 
-    /// A number as typed: kept as text until it reads as one (PluginModel.numberProblems), then the value.
+    /// A number as typed: kept as text until it reads as one (ExtensionModel.numberProblems), then the value.
     private var numberBinding: Binding<String> {
         let key = path.joined(separator: ".")
         return Binding(get: { page.numberText[key] ?? page.value(path)?.string ?? "" }, set: { text in
@@ -475,15 +475,15 @@ private struct PluginFieldRow: View {
     }
 }
 
-/// A list of the hub's machines (schema format machine, docs/plugins.md): a switch per machine of the systems the field
-/// names, by its name and how it is, in effect at once (`PluginModel.saveNow`), the same setting as where else it
+/// A list of the hub's machines (schema format machine, docs/extensions.md): a switch per machine of the systems the field
+/// names, by its name and how it is, in effect at once (`ExtensionModel.saveNow`), the same setting as where else it
 /// shows (the 操控电脑 switch on a Mac's page). A value that names no machine still shows, to be turned off.
-private struct PluginMachineSwitches: View {
+private struct ExtensionMachineSwitches: View {
     @Environment(AppModel.self) private var model
-    var field: PluginField
+    var field: ExtensionField
     var title: String
     var path: [String]
-    @Bindable var page: PluginModel
+    @Bindable var page: ExtensionModel
 
     private var items: [String] { page.value(path)?.array?.compactMap(\.string) ?? [] }
     /// A machine waiting on the field's x-confirm before it is turned on.
@@ -580,11 +580,11 @@ private struct PluginMachineSwitches: View {
 }
 
 /// A list of texts (each editable, added and removed), or of choices (a switch each).
-private struct PluginListField: View {
-    var field: PluginField
+private struct ExtensionListField: View {
+    var field: ExtensionField
     var title: String
     var path: [String]
-    @Bindable var page: PluginModel
+    @Bindable var page: ExtensionModel
     @State private var adding = ""
 
     private var items: [String] { page.value(path)?.array?.compactMap(\.string) ?? field.default?.array?.compactMap(\.string) ?? [] }
@@ -647,8 +647,8 @@ private struct PluginListField: View {
 }
 
 /// Sets one of a plugin's secrets: typed in hidden, saved to the hub, never shown again; one set can be cleared.
-private struct PluginSecretSheet: View {
-    var secret: PluginSecret
+private struct ExtensionSecretSheet: View {
+    var secret: ExtensionSecret
     var save: (String) async -> Bool
     var clear: () async -> Void
     @Environment(\.dismiss) private var dismiss
@@ -661,7 +661,7 @@ private struct PluginSecretSheet: View {
                 Section {
                     SecretField(secret.set ? "输入新的值替换" : "输入", filled: "已填写，点保存", text: $value, identifier: "plugin-secret-value")
                 } footer: {
-                    Text(secret.description?.isEmpty == false ? secret.description! : "存在 hub 上，只交给这个插件。")
+                    Text(secret.description?.isEmpty == false ? secret.description! : "存在 hub 上，只交给这个扩展。")
                 }
                 if secret.set {
                     Section {

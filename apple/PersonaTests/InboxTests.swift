@@ -81,7 +81,7 @@ struct InboxTests {
 
     /// Without the lark-connector plugin (no `lark` in the hub's features) the native readers have nothing to read:
     /// Feishu documents and company-feed posts are ordinary web pages in the link sheet (#1530).
-    @Test func feishuLinksWithoutThePluginAreWebPages() throws {
+    @Test func feishuLinksWithoutTheExtensionAreWebPages() throws {
         let doc = try #require(URL(string: "https://open.feishu.cn/docx/ExampleDocument
         let post = try #require(URL(string: "https://applink.larkoffice.com/client/moments/detail?postId=7000000000000000001"))
         #expect(FeishuLinks.route(doc, lark: .none) == nil)

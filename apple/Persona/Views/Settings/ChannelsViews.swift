@@ -1,7 +1,7 @@
 import BeautifulUI
 import SwiftUI
 
-// 设置 › 插件 › 渠道 (docs/channels.md「界面」): the list and one channel's page; the 渠道 row on 设置 › 插件; the line on a
+// 设置 › 扩展 › 渠道 (docs/channels.md「界面」): the list and one channel's page; the 渠道 row on 设置 › 扩展; the line on a
 // connector's page that says it is a channel; the 「来自 …」 under a message and the mark beside a conversation's title.
 
 /// A channel's mark: its brand's (飞书), else a symbol of its kind in the accent color.
@@ -29,7 +29,7 @@ private struct ChannelStateDot: View {
     }
 }
 
-/// 设置 › 插件's first row: 渠道, how many are connected (red when one went wrong). Only with a hub that has channels.
+/// 设置 › 扩展's first row: 渠道, how many are connected (red when one went wrong). Only with a hub that has channels.
 struct ChannelsEntryRow: View {
     @Environment(AppModel.self) private var model
     @State private var channels: [HubChannel]?
@@ -66,7 +66,7 @@ struct ChannelsEntryRow: View {
     }
 }
 
-/// 设置 › 插件 › 渠道: every way of talking to Persona, in three sections (the apps, the installed, a market's).
+/// 设置 › 扩展 › 渠道: every way of talking to Persona, in three sections (the apps, the installed, a market's).
 struct ChannelsView: View {
     @State private var page = ChannelsModel()
 
@@ -108,7 +108,7 @@ struct ChannelsView: View {
     /// A market's opens its page in the plugin market; the rest their own.
     static func destination(_ c: HubChannel) -> SettingsPage {
         if c.isMarket {
-            if let market = c.market, let plugin = c.plugin { return .marketPlugin(market: market, id: plugin) }
+            if let market = c.market, let plugin = c.plugin { return .marketExtension(market: market, id: plugin) }
             return .pluginMarket
         }
         return .channel(c.id)
@@ -152,7 +152,7 @@ private struct ChannelRowLabel: View {
     }
 }
 
-/// 设置 › 插件 › 渠道 › one: its state, switch, binding, where its messages go, its features, what waits on it, what it
+/// 设置 › 扩展 › 渠道 › one: its state, switch, binding, where its messages go, its features, what waits on it, what it
 /// can do, a test message, and its own page if it has one. A read-only one (the apps, /agent) is only looked at.
 struct ChannelDetailView: View {
     @Environment(AppModel.self) private var model
@@ -259,7 +259,7 @@ struct ChannelDetailView: View {
     private func market(_ c: HubChannel) -> some View {
         Section {
             NavigationLink(value: ChannelsView.destination(c)) {
-                Label { Text("去插件市场安装").lineLimit(1) } icon: { Image(systemName: Theme.Icon.pluginMarket) }
+                Label { Text("去扩展市场安装").lineLimit(1) } icon: { Image(systemName: Theme.Icon.pluginMarket) }
             }
             .accessibilityIdentifier("channel-install")
         } footer: {
@@ -464,7 +464,7 @@ struct ChannelDetailView: View {
     private func moreTitle(_ dest: SettingsPage) -> String {
         switch dest {
         case .modelConfiguration: "模型配置"
-        case .plugin: "插件设置"
+        case .plugin: "扩展设置"
         default: "更多设置"
         }
     }
@@ -482,7 +482,7 @@ struct ChannelLinkSection: View {
                     Label {
                         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                             Text("这是一个对话渠道").lineLimit(1)
-                            Text("在 设置 › 插件 › 渠道 里设置").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                            Text("在 设置 › 扩展 › 渠道 里设置").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                         }
                     } icon: {
                         Image(systemName: Theme.Icon.channels).foregroundStyle(Theme.accent)
