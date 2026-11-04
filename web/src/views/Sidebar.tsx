@@ -14,6 +14,7 @@ import { reset, refresh, refreshTodos, useStore } from "../lib/store";
 import { buildTodoAgentGroups, findTodoForSpace, openTodoFromTag, TODO_STATUS_INFO, unlinkAgentFromTodo, type TodoStatus } from "../lib/todos";
 import type { Machine, Session } from "../lib/types";
 import { Collapse, cx, EASE, Kbd, Menu, StatusDot, toast, useMenu, type MenuItem } from "../ui/atoms";
+import { AppMark } from "../ui/AppMark";
 import { Icon, type IconName } from "../ui/icons";
 import { DeleteSessionDialog, RenameDialog, RenameSpaceDialog } from "./chat/SessionDialogs";
 import { AgentRowMenu, MarkSeenDialog, SpaceMenu } from "./AgentMenus";
@@ -415,9 +416,7 @@ function AccountRow({ conn, online, total }: { conn: string; online: number; tot
   return (
     <>
       <button type="button" onClick={menu.open} className="mb-2 flex w-full items-center gap-2.5 rounded-control p-1.5 text-left transition-[background-color,transform] duration-100 hover:bg-hover active:scale-[0.98]">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-[8px] bg-ink text-surface">
-          <Icon name="spark" size={15} />
-        </span>
+        <AppMark size={32} radius={8} className="shadow-hairline" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] leading-tight font-medium text-ink">Persona</span>
           <span className="flex items-center gap-1.5 truncate text-[11px] leading-tight text-ink-3">

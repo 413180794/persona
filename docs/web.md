@@ -246,6 +246,9 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。
 
 - 颜色只走 token（`src/styles.css` 的 `:root` / `.dark`），不写死色值；状态色：需要你红（呼吸）、工作中橙（呼吸）、完成未看绿、已看灰。
 - 主题：跟随系统 / 浅色 / 深色（左上角菜单），`index.html` 里在首帧前就决定，深色不闪白。
+- 品牌标志：侧边栏左上角（32 px、圆角 8）和登录页（44 px、圆角 12）是 iOS App 图标原图（`AppMark`，`public/app-icon.png` / `app-icon-dark.png`，
+  从 `AppIcon.appiconset` 的 `icon.png` / `icon-dark.png` 缩出来，不重画），按页面的深浅色换；favicon 是同一份的 64 px 版，按系统深浅色换（`<link media>`），管理页也用它。
+  网页没有 manifest 和 apple-touch-icon。形象里可选的「标志」（黑底白星）是另一回事，不动。
 - 按钮文字一律单行（`whitespace-nowrap`），放不下的用图标 + `title`。
 - 链接规则和 App 一样（`Links`）：裸链接在空白或非 ASCII 字符处结束，交给 Markdown 前写成 `<url>`（`src/ui/Markdown.tsx` 的 `linkify`），中文里的链接不会吞掉后半句。
 - 尊重 `prefers-reduced-motion`：所有动画缩成 1ms。
