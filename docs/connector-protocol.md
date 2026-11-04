@@ -137,7 +137,63 @@ hub 只对这些连接器读它：条目保持 hub 原来自己做的样子（�
 
 ## 一致性测试
 
-`conformance.Check(t, c)` 把一个连接器放在协议的程序一侧（`serve.Serve`，经一对管道），对清单声明的每个能力既直接调、也经协议调，
+`conformance.Check(t, c)` 把一个 Go 连接器放在协议的程序一侧（`serve.Serve`，经一对管道），对清单声明的每个能力既直接调、也经协议调，
 两边的结果编成 JSON 必须一字不差：字段在线上丢了、类型变了都会挂。两种开头各跑一遍（`init` + 原方法名，`initialize` + `connector.*`）；
 插件开头那一遍还查 `initialize` 回的贡献和清单一致、不认识的连接器回 `no_contribution`。程序整体是否守插件协议，由 `plugin/conformance` 查（`docs/plugins.md`「一致性测试」）。GitHub、信息、Telegram 的测试里都跑它；`TestWireTypesAreTagged` 检查
-线上的每个字段都有明确的 snake_case 名字。第三方的程序可以照着 `serve.Serve` 的接法，用同一份测试检查自己。
+线上的每个字段都有明确的 snake_case 名字。用 Go 写的第三方程序可以照着 `serve.Serve` 的接法，用同一份测试检查自己。
+
+### 别的语言写的程序：`CheckProgram`
+
+不是 Go 写的程序没有 Go 一侧可以对照。`conformance.CheckProgram(t, manifest, run, init, opts...)`（`server/internal/connector/conformance/program.go`，各方法的检查在 `program_wire.go`）
+把跑起来的程序放在 hub 的位置：对清单贡献的每个连接器，按 hub 用它的顺序各调一遍声明了的能力，把每个回应按 hub 读的 Go 类型**严格解码**
+（`DisallowUnknownFields`：多一个 hub 不认识的字段、键不是 snake_case、时间不是 RFC 3339 都算错；Go 解码键不分大小写，所以键另外查一遍），
+再查 hub 依赖的不变量：
+
+| 方法 | 解码成 | 还要满足 |
+| --- | --- | --- |
+| `initialize` | `plugin.InitializeResult` | id、版本和清单一致；贡献的连接器和清单逐字段一致（能力顺序除外） |
+| `status` | `connector.Status` | `state` 是已知状态；`ok` 不带 `error`；除 `not_configured` 外，不是 `ok` 的要有 `error` 或 `guide` |
+| `tools.list`、`actions.list` | `serve.ToolsResult` | 名字以 `<id>_` 开头、不重复、有描述，`input_schema` 是 `type: object`；工具和写操作不同名 |
+| `tools.call` | `serve.CallResult` | 每个只读工具用空参数调一次：回答，或拒绝（要有一句话） |
+| `actions.describe` | `serve.DescribeResult` | 每个写操作用空参数问一次：拒绝，或回答（有 `summary` 和 `action.visible`） |
+| `inbox.collect` | `serve.CollectResult` | 调两次；`thread` 非空、不重复、第二次还在；`kind` 在清单的 `kinds` 里；`tier`、`done` 是已知值；没有 `done` 的要有 `at` 和 `last`；`can_reply` 要有 `reply_to`；标签有 `key` 和 `value` |
+| `thread.page` | `connector.ThreadPage` | 取第一个收件箱条目的会话：旧的在前、不超过 `limit`；`id` 非空不重复、有 `at`；不是事件、不是自己发的有发送者名；没有文字的要有媒体；`chat.reply` 是自己的写操作，参数有 `chat` 和 `text`；有 `before` 就往前翻一页：没有重复、没有更新的消息 |
+| `thread.media` | `connector.Media` | 页面里有 ref 才调一次 |
+| `archive.changes` | `serve.ChangesResult` | 沿 `next` 走到 `more` 为假，再用最后的游标多问一次：有数据时 `next` 非空、不回到 `""`、不原地不动；同一会话的消息 id 不重复交付；消息有 `id`、`at`、文字或媒体（知识库只追加、不去重，会丢掉没日期、没内容的）；`sender_handles` 有 `kind` 和 `value` |
+| `items.list` | `serve.ItemsResult` | `kind` 是 `docs` / `meetings` / `events`，有 `id` 和 `title` |
+| `login.step` | `connector.Prompt` | 要么有 `fields`，要么 `done`，要么 `device_code`；要填的一步有名字（空名字是从头再来）；`done` 要有 `account` |
+| `logout` | `{}` | 只在 `WithLogin` 登录之后最后调：登出后状态不再是 `ok`，密钥从 hub 的存放里删掉了（`secrets.delete`） |
+| 事件 `connector.changed` | `serve.ChangedEvent` | `contribution` 是自己的连接器，且声明了 `events`；`scope` 是 hub 认得的 |
+| 程序调 `secrets.*` | `{contribution, data?}` | 带 `contribution`，是自己的连接器 |
+
+清单也要过：能力都是 hub 能在程序里用到的（`connector/proc.Conn` 实现的那些）、不重复，只有收件箱才有 `kinds`，`kind_descriptions` 的键都是声明过的 `kinds`。**从不调**的：`actions.do`（写只在 hub 的闸门之后）、`inbox.reply`
+（那是用户按的发送）。选项：`WithLogin(values)` 按字段名填登录的每一步，之后程序必须是 `ok`（只给装在夹具上的后端用，别给真账号的密钥），回应里出现了给它的密钥就挂；
+`RequireData()` 让 `inbox.collect`、`thread.page`、`archive.changes` 回空也算挂，免得什么都不回的程序也过。
+
+给自己的程序用：先用 `plugin/conformance` 查它作为插件的起停和握手，再用一份新起的程序跑 `CheckProgram`（`internal/` 包挡住了别的仓库的导入，所以测试放在这个仓库里）：
+
+```go
+m, _ := plugin.Parse(manifestJSON)                                // persona-plugin.json
+progconf.Check(t, m, progconf.Program(t, "bin/my-connector"), plugin.InitializeParams{})
+conformance.CheckProgram(t, m, progconf.Program(t, "bin/my-connector"), plugin.InitializeParams{},
+	conformance.WithLogin(map[string]string{"token": fixtureToken}), conformance.RequireData())
+```
+
+**线上夹具**：`server/internal/connector/testdata/wire/<程序>/*.json` 是程序对每个方法回的 JSON，**合成数据**（没有真账号、名字、群名、地址，示例只用
+`https://wechat-connector.example.com`、`wxid_example_a`、`127.0.0.1`），连同一份 `persona-plugin.json`。`Testwechat-connectorWireFixtures` 把每个夹具按上表严格解码、过不变量，
+一份没在表里的夹具也会挂；`TestCheckProgramCatchesDrift` 拿夹具喂一个纯 Go 的假程序，看改了字段名、顺序、游标时 `CheckProgram` 会不会红。所以即使 CI 里没有 Node，
+Persona 一改 Go 类型（改名、删字段）这些测试就红，提醒程序一侧同步夹具；程序一侧的仓库应保留同一批文件的副本，用同样的数据检查自己的输出，新增或改夹具时两边一起改。
+
+**跨仓库活测试**：`Testwechat-connectorProgramLive` 跑 wechat-connector 仓库里的真程序，对着它的夹具服务（一个假网关的平台，`PORT=0` 起在回环地址上）。需要 Node 和两个环境变量，
+有一个没设就 `t.Skip`，所以现有的测试和 CI 不受影响：
+
+```sh
+cd server
+PERSONA_TEST_wechat-connector_PROGRAM=<wechat-connector>/integrations/persona/bin/wechat-connector-persona \
+wechat-connector_FIXTURE_SERVER=<wechat-connector>/test/fixtures/persona-server.mjs \
+go test ./internal/connector/conformance -run wechat-connector -v
+```
+
+程序所在的包里 `persona-plugin.json` 在 `bin/` 的上一级。夹具服务起来后在 stdout 打印**一行** JSON：`base_url`、`outbound_sends_enabled`，和 `accounts`（每个账号的 `key` 是读取 + 事件的应用密钥，另有带发送范围的 `send_key`）。
+测试用 `base_url` 和第一个账号的 `key`，按字段名 `base_url`、`app_key` 填程序的登录那一步；`send_key` 从不用。`base_url` 不在回环地址上，或这一行没说外发是关的（`outbound_sends_enabled` 不是 `false`），测试就拒绝登录。
+夹具服务上外发保持关闭（和开发中的所有平台一样），测试不碰真账号、运行时目录和消息库。先对程序跑 `plugin/conformance.Check`（起停、握手、错误码），再用一份新起的程序跑 `CheckProgram`。

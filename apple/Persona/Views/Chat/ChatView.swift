@@ -1301,7 +1301,7 @@ struct ChatView: View {
         return closedRecap == i.id ? nil : i
     }
 
-    @AppStorage("closedRecaps") private var closedRecapsData = Data()
+    @StoredValue("closedRecaps") private var closedRecapsData = Data()
     private var closedRecap: String? {
         (try? JSONDecoder().decode([String: String].self, from: closedRecapsData))?[key.machineID + "/" + key.sessionID]
     }

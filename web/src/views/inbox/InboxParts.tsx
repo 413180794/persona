@@ -134,6 +134,21 @@ export function Tag({ children, urgent }: { children: ReactNode; urgent?: boolea
   );
 }
 
+/** A filter or choice that turns on and off: the inbox's sources and kinds, the 消息 page's Feishu accounts. */
+export function Chip({ on, onClick, children, title }: { on: boolean; onClick: () => void; children: ReactNode; title?: string }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-pressed={on}
+      onClick={onClick}
+      className={cx("h-7 rounded-control px-2.5 text-[12px] whitespace-nowrap transition-colors duration-150", on ? "bg-ink font-medium text-surface" : "bg-surface text-ink-2 shadow-btn hover:bg-hover hover:text-ink")}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function Count({ n, accent }: { n: number; accent?: boolean }) {
   return (
     <span className={cx("inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums", accent ? "bg-accent text-white" : "bg-field text-ink-2")}>

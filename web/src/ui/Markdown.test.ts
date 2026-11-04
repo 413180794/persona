@@ -144,3 +144,22 @@ describe("linkify", () => {
     expect(linkify("$5 见 https://example.com/path。说明 $10")).toBe("$5 见 <https://example.com/path>。说明 $10");
   });
 });
+
+describe("Mermaid blocks", () => {
+  it("are drawn by the Mermaid block, other fences stay code", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+    const { Markdown } = await import("./Markdown");
+    const html = renderToStaticMarkup(createElement(Markdown, { text: "```mermaid\ngraph TD; A-->B\n```\n\n```js\nlet a = 1\n```" }));
+    expect(html.match(/data-mermaid/g)?.length).toBe(1);
+    expect(html).toContain("graph TD; A--&gt;B"); // its source shows until the diagram is drawn
+    expect(html).toContain("let a = 1");
+  });
+
+  it("errors read in Chinese with the line, Mermaid's text kept", async () => {
+    const { mermaidProblem } = await import("../lib/mermaid");
+    const raw = "Parse error on line 3:\nflowchart TD A -->\n--------------^\nExpecting 'NODE', got 'EOF'";
+    expect(mermaidProblem(new Error(raw))).toEqual({ summary: "这张图有语法错误（第 3 行）", detail: raw });
+    expect(mermaidProblem(new Error("No diagram type detected")).summary).toBe("这张图画不出来");
+  });
+});

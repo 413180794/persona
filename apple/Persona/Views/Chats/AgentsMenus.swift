@@ -52,10 +52,10 @@ struct AgentsListMenu: View {
         func machinesPage() { onMachines() }
     }
 
-    @AppStorage("dev.machineFilter") private var machineFilter = ""
-    @AppStorage(HubFilter.key) private var hubFilter = ""
-    @AppStorage("dev.grouping") private var grouping: DevGrouping = .space
-    @AppStorage("dev.compact") private var compact = false
+    @StoredValue("dev.machineFilter") private var machineFilter = ""
+    @StoredValue(HubFilter.key) private var hubFilter = ""
+    @StoredValue("dev.grouping") private var grouping: DevGrouping = .space
+    @StoredValue("dev.compact") private var compact = false
 
     /// The shell (docs/ios.md「新外壳」) shows these inside its 工作 switch's menu: the items, without a button of their own.
     var inline = false

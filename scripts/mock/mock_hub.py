@@ -4991,6 +4991,15 @@ if os.environ.get("MOCK_VIDEO_FILE"):
         FILES[VIDEO_PATH] = video.read()
     ITEMS[WIDGET].append(it("assistant", "text", 0, text="视频已生成：`" + VIDEO_PATH + "`。"))
 
+# MOCK_MERMAID=1: a reply with Mermaid diagrams for the web's Markdown (#1376): a flowchart, a sequence diagram, a pie
+# chart and one with a syntax error (shown as its source and the error).
+if os.environ.get("MOCK_MERMAID"):
+    ITEMS[WIDGET].append(it("assistant", "text", 0, text=(
+        "小组件的数据流是这样的：\n\n```mermaid\nflowchart LR\n  A[天气接口] -->|每小时| B(共享缓存)\n  B --> C{小组件尺寸}\n  C -->|小号| D[当前温度]\n  C -->|中号| E[温度 + 6 小时降雨]\n```\n\n"
+        "刷新的时序：\n\n```mermaid\nsequenceDiagram\n  participant W as 小组件\n  participant A as App\n  participant S as 天气接口\n  W->>A: 时间线到期\n  A->>S: 拉取预报\n  S-->>A: 逐小时数据\n  A-->>W: 新的时间线\n```\n\n"
+        "各尺寸的使用占比：\n\n```mermaid\npie title 小组件尺寸\n  \"中号\" : 58\n  \"小号\" : 31\n  \"大号\" : 11\n```\n\n"
+        "这个写错了：\n\n```mermaid\nflowchart TD\n  A --> \n```")))
+
 # MOCK_SENT_VIDEO=<file>: a video the user sent from another device (#981): a <jarvis-file> card in the chat whose
 # file is only on the machine, so a tap downloads it before the system player opens.
 SENT_VIDEO_PATH = "/tmp/录屏-20261103-101500.mov"

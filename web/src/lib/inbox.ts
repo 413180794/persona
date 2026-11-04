@@ -10,6 +10,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { api, enc, errorText, getToken } from "./api";
 import type { AgentMutes } from "./agent-groups";
 import { connectorOpenTitle } from "./connectors";
+import { larkPath } from "./lark-accounts";
 import { baseName } from "./format";
 import type { Route } from "./router";
 import { onHubEvent } from "./store";
@@ -88,7 +89,11 @@ export interface InboxItem {
   done_by?: string | null;
   /** What it holds now, as listed: a bulk 已处理 sends it back (an item with new messages since stays open). */
   version?: string;
-  lark?: { feed_id: string; is_group: boolean; is_topic?: boolean; start_position?: string; mention_position?: string; at_all?: boolean };
+  lark?: {
+    feed_id: string; is_group: boolean; is_topic?: boolean; start_position?: string; mention_position?: string; at_all?: boolean;
+    /** The lark-connector account the chat is in; `ol_account` only when that is not the hub's own (docs/feishu.md「多账号」). */
+    account_id?: number; ol_account?: number;
+  };
   mail?: { account_id: string; mailbox: string; uids: number[]; message_id?: string; from?: { name?: string; email?: string }; direct?: boolean; thread?: string };
   doc?: InboxDoc;
   moment?: { post_id: string; notice?: string; reply_to?: string; my_post?: boolean; post_text?: string };
@@ -228,7 +233,8 @@ export function sourceLine(it: InboxItem): string {
   if (it.doc) return [docTypeName(it.doc.type), it.preview].filter(Boolean).join(" · ");
   if (it.moment) return it.moment.my_post ? "removed · 你的帖子" : "removed";
   if (it.connector) return [it.account_name || it.source, connectorReference(it)].filter(Boolean).join(" · ");
-  if (isLark(it)) return ["飞书", it.lark?.is_group ? "群聊" : it.kind === "bot" ? "机器人" : "私聊"].join(" · ");
+  // 飞书 · <name> while the hub reads more than one Feishu account
+  if (isLark(it)) return [it.account_name?.startsWith("飞书 · ") ? it.account_name : "飞书", it.lark?.is_group ? "群聊" : it.kind === "bot" ? "机器人" : "私聊"].join(" · ");
   const from = it.mail?.from;
   return [it.account_name, from?.name && from.email ? `${from.name} <${from.email}>` : from?.email || it.sender].filter(Boolean).join(" · ");
 }
@@ -426,7 +432,11 @@ export function contextXML(kind: string, title: string, url: string, text: strin
 export function handOffMessage(it: InboxItem, ask: string): string {
   const title = (it.connector ? `${it.account_name || it.source} · ` : isLark(it) ? "飞书 · " : "邮件 · ") + it.title;
   let text = it.context?.trim() ? it.context : [it.sender ?? "", it.preview].filter(Boolean).join("：");
-  if (it.lark) text += `\n\n（飞书会话 feedId ${it.lark.feed_id}，可用飞书工具读更多上下文或回复）`;
+  if (it.lark) {
+    const ol = it.lark.ol_account;
+    const account = ol ? `，在飞书账号 ${ol}（lark_messages 传 account=${ol}，ol 命令前加 lark-connector_ACCOUNT=${ol}）` : "";
+    text += `\n\n（飞书会话 feedId ${it.lark.feed_id}${account}，可用飞书工具读更多上下文或回复）`;
+  }
   if (it.connector?.url) text += `\n\n（${it.account_name || it.source}：${it.connector.url}）`;
   const uid = it.mail?.uids[it.mail.uids.length - 1];
   if (it.mail && uid !== undefined) text += `\n\n（邮件 account_id ${it.mail.account_id}，mailbox ${it.mail.mailbox}，uid ${uid}，可用 mail_read 读全文、mail_send 回复）`;
@@ -836,9 +846,9 @@ export function resetInboxForTests() {
   unsentReplies.clear();
 }
 
-/** Sends a message to a Feishu conversation via the native hub API. */
-export async function sendLarkMessage(feed: string, text: string, clientID?: string): Promise<{ message_id?: string }> {
-  return api<{ message_id?: string }>(`/lark/conversations/${enc(feed)}/messages`, {
+/** Sends a message to a Feishu conversation via the native hub API, as account `ol` (undefined: the hub's own). */
+export async function sendLarkMessage(feed: string, text: string, clientID?: string, ol?: number): Promise<{ message_id?: string }> {
+  return api<{ message_id?: string }>(larkPath(`/lark/conversations/${enc(feed)}/messages`, ol), {
     method: "POST",
     json: { text, client_id: clientID },
     token: getToken(),
@@ -851,8 +861,9 @@ export async function replyLarkMessage(
   text: string,
   thread = false,
   clientID?: string,
+  ol?: number,
 ): Promise<{ message_id?: string }> {
-  return api<{ message_id?: string }>(`/lark/messages/${enc(messageID)}/replies`, {
+  return api<{ message_id?: string }>(larkPath(`/lark/messages/${enc(messageID)}/replies`, ol), {
     method: "POST",
     json: { text, thread, client_id: clientID },
     token: getToken(),

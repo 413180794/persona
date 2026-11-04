@@ -4,6 +4,7 @@
 // open (the hub answers no-store). An unknown write result is never retried: the list is read again to see.
 import { api, ApiError, enc, errorText } from "./api";
 import type { LarkMessage, LarkPage } from "./inbox";
+import { larkPath } from "./lark-accounts";
 
 export interface ChatPin {
   id: string;
@@ -49,24 +50,25 @@ export const accountChanged = () => new ApiError(409, "飞书账号已切换，�
 export const resultUnknown = () => new ApiError(502, "尚未确认操作结果，请重新加载 Pin 列表查看；不会自动重试", { code: "lark_pin_result_unknown" });
 const incomplete = () => new ApiError(502, "Pin 列表暂时不完整，请重新加载", { code: "lark_pin_page_incomplete" });
 
-export function fetchChatPins(feed: string, account: string | undefined, cursor: string | undefined): Promise<ChatPinsPage> {
+/** `ol`: the Feishu account the chat is in (`ol_account`, lark-accounts.ts); undefined: the hub's own. */
+export function fetchChatPins(feed: string, account: string | undefined, cursor: string | undefined, ol?: number): Promise<ChatPinsPage> {
   const q = new URLSearchParams({ limit: "50" });
   if (account) q.set("account_id", account);
   if (cursor) q.set("cursor", cursor);
-  return pinRequest<ChatPinsPage>(`/lark/conversations/${enc(feed)}/pins?${q}`);
+  return pinRequest<ChatPinsPage>(larkPath(`/lark/conversations/${enc(feed)}/pins?${q}`, ol));
 }
 
-export async function locateChatPin(feed: string, message: string, account: string, topic: boolean): Promise<ChatPinTarget> {
+export async function locateChatPin(feed: string, message: string, account: string, topic: boolean, ol?: number): Promise<ChatPinTarget> {
   const r = await pinRequest<{ account_id: string; target: ChatPinTarget }>(
-    `/lark/conversations/${enc(feed)}/pin-messages/${enc(message)}?account_id=${enc(account)}&topic=${topic ? "1" : "0"}`,
+    larkPath(`/lark/conversations/${enc(feed)}/pin-messages/${enc(message)}?account_id=${enc(account)}&topic=${topic ? "1" : "0"}`, ol),
   );
   if (r.account_id !== account || r.target?.message?.id !== message) throw accountChanged();
   return r.target;
 }
 
 /** Adds (pin undefined) or removes a Pin; resolves only once the hub confirmed the new state. */
-export async function changeChatPin(feed: string, message: string, pin: string | undefined, account: string): Promise<void> {
-  const r = await pinRequest<{ account_id: string; pinned: boolean }>(`/lark/conversations/${enc(feed)}/pins`, {
+export async function changeChatPin(feed: string, message: string, pin: string | undefined, account: string, ol?: number): Promise<void> {
+  const r = await pinRequest<{ account_id: string; pinned: boolean }>(larkPath(`/lark/conversations/${enc(feed)}/pins`, ol), {
     method: "POST",
     json: pin ? { account_id: account, message_id: message, pin_id: pin, remove: true } : { account_id: account, message_id: message, remove: false },
   });
@@ -139,11 +141,11 @@ export interface ChatPinsDeps {
   locate: (message: string, account: string) => Promise<ChatPinTarget>;
 }
 
-export function liveChatPinsDeps(feed: string, topic: boolean): ChatPinsDeps {
+export function liveChatPinsDeps(feed: string, topic: boolean, ol?: number): ChatPinsDeps {
   return {
-    page: (account, cursor) => fetchChatPins(feed, account, cursor),
-    change: (message, pin, account) => changeChatPin(feed, message, pin, account),
-    locate: (message, account) => locateChatPin(feed, message, account, topic),
+    page: (account, cursor) => fetchChatPins(feed, account, cursor, ol),
+    change: (message, pin, account) => changeChatPin(feed, message, pin, account, ol),
+    locate: (message, account) => locateChatPin(feed, message, account, topic, ol),
   };
 }
 

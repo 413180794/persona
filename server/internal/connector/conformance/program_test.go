@@ -1,0 +1,447 @@
+package conformance
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/netip"
+	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"slices"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector/serve"
+	"github.com/nwverse/persona/server/internal/plugin"
+	progconf "github.com/nwverse/persona/server/internal/plugin/conformance"
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
+)
+
+// The wire fixtures are what a connector program for wechat-connector says: synthetic data, no real account, name or address.
+// Here they hold the Go types: a type that changes without the program following turns these tests red, with or
+// without Node to run the program.
+const wireDir = "../testdata/wire/wechat-connector"
+
+func fixture(t testing.TB, name string) json.RawMessage {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(wireDir, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func fixtureManifest(t testing.TB) *plugin.Manifest {
+	t.Helper()
+	m, err := plugin.Parse(fixture(t, "persona-plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+func ignore[T any](check func(json.RawMessage) (T, error)) func(json.RawMessage) error {
+	return func(raw json.RawMessage) error { _, err := check(raw); return err }
+}
+
+// Every fixture strictly decodes into the hub's types and keeps what the hub relies on; each is listed, so a new one
+// is not left unchecked.
+func Testwechat-connectorWireFixtures(t *testing.T) {
+	m := fixtureManifest(t)
+	items, err := connectorItems(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actions, err := checkToolList("wechat-connector", "actions", fixture(t, "actions.list.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	checks := map[string]func(json.RawMessage) error{
+		"persona-plugin.json": func(raw json.RawMessage) error { _, err := plugin.Parse(raw); return err },
+		"initialize.json":     func(raw json.RawMessage) error { return checkInitialize(m, items, raw) },
+		"status.json":         ignore(checkStatus),
+		"tools.list.json": ignore(func(raw json.RawMessage) ([]proto.Tool, error) {
+			return checkToolList("wechat-connector", "tools", raw)
+		}),
+		"tools.call.json":       func(raw json.RawMessage) error { return decodeWire(raw, &serve.CallResult{}) },
+		"actions.list.json":     ignore(func(raw json.RawMessage) ([]proto.Tool, error) { return checkToolList("wechat-connector", "actions", raw) }),
+		"actions.describe.json": func(raw json.RawMessage) error { return checkDescribe("wechat-connector_send", raw) },
+		"actions.do.json":       func(raw json.RawMessage) error { return decodeWire(raw, &serve.CallResult{}) },
+		"inbox.collect.json":    ignore(func(raw json.RawMessage) ([]connector.InboxThing, error) { return checkCollect(items[0].Kinds, raw) }),
+		"thread.page.json": ignore(func(raw json.RawMessage) (connector.ThreadPage, error) {
+			return checkThreadPage(programThreadLimit, actions, raw)
+		}),
+		"archive.changes.json": ignore(func(raw json.RawMessage) (serve.ChangesResult, error) {
+			return checkChanges("", programArchiveMost, raw)
+		}),
+		"login.step.json":         ignore(checkPrompt),
+		"login.step.refused.json": ignore(checkPrompt),
+		"login.step.done.json":    ignore(checkPrompt),
+		"changed.json":            func(raw json.RawMessage) error { return checkChanged(items, raw) },
+	}
+	files, err := os.ReadDir(wireDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		check, ok := checks[f.Name()]
+		if !ok {
+			t.Errorf("%s is not checked: add it to checks", f.Name())
+			continue
+		}
+		if err := check(fixture(t, f.Name())); err != nil {
+			t.Errorf("%s: %v", f.Name(), err)
+		}
+		delete(checks, f.Name())
+	}
+	for name := range checks {
+		t.Errorf("%s is listed and does not exist", name)
+	}
+}
+
+// A program that answers from the fixtures. edit changes the JSON of a fixture before it is sent (to see what
+// CheckProgram says of a program that drifted); redeliver has the archive give the same again from a later cursor.
+type fixtureProgram struct {
+	edit       map[string]func(map[string]any)
+	redeliver  bool
+	wrote      atomic.Bool // the program was asked to write: actions.do or inbox.reply
+	signedIn   atomic.Bool
+	announced  sync.Once
+	peerCaller *rpc.Peer
+}
+
+const goodKey = "wcpat_example"
+
+func (f *fixtureProgram) answer(t testing.TB, name string) json.RawMessage {
+	raw := fixture(t, name)
+	if edit := f.edit[name]; edit != nil {
+		var v map[string]any
+		if err := json.Unmarshal(raw, &v); err != nil {
+			t.Error(err)
+		}
+		edit(v)
+		raw, _ = json.Marshal(v)
+	}
+	return raw
+}
+
+func (f *fixtureProgram) secrets(ctx context.Context, method string, data []byte) {
+	params, _ := plugin.Targeted(serve.SecretData{Data: data}, "wechat-connector")
+	_ = f.peerCaller.Call(ctx, serve.InPlugin(method), params, nil)
+}
+
+// handle is the program's side: what a program in another language does on its stdin and stdout.
+func (f *fixtureProgram) handle(t testing.TB) rpc.Handler {
+	return func(ctx context.Context, method string, params json.RawMessage) (any, error) {
+		var args struct {
+			Step, Cursor, Before string
+			Values               map[string]string
+		}
+		_ = json.Unmarshal(params, &args)
+		switch method {
+		case plugin.MInitialize:
+			return f.answer(t, "initialize.json"), nil
+		case "connector.status":
+			f.announced.Do(func() { _ = f.peerCaller.Notify("connector.changed", f.answer(t, "changed.json")) })
+			if !f.signedIn.Load() {
+				return json.RawMessage(`{"state":"not_configured","guide":["在设置里登录微信"]}`), nil
+			}
+			return f.answer(t, "status.json"), nil
+		case "connector.tools.list":
+			return f.answer(t, "tools.list.json"), nil
+		case "connector.tools.call":
+			return f.answer(t, "tools.call.json"), nil
+		case "connector.actions.list":
+			return f.answer(t, "actions.list.json"), nil
+		case "connector.actions.describe":
+			return nil, errors.New("chat and text are required") // empty arguments: refused, as a program should
+		case "connector.inbox.collect":
+			return f.answer(t, "inbox.collect.json"), nil
+		case "connector.thread.page":
+			if args.Before != "" {
+				return json.RawMessage(`{"chat":{"id":"primary.wxid_example_a","name":"示例联系人","kind":"dm"}}`), nil
+			}
+			return f.answer(t, "thread.page.json"), nil
+		case "connector.archive.changes":
+			if args.Cursor == "" || f.redeliver {
+				return f.answer(t, "archive.changes.json"), nil
+			}
+			next, _ := json.Marshal(args.Cursor)
+			return json.RawMessage(`{"next":` + string(next) + `}`), nil
+		case "connector.login.step":
+			switch {
+			case args.Step == "":
+				return f.answer(t, "login.step.json"), nil
+			case args.Values["app_key"] == goodKey && args.Values["base_url"] != "":
+				f.signedIn.Store(true)
+				f.secrets(ctx, "secrets.save", []byte(`{"v":1}`))
+				return f.answer(t, "login.step.done.json"), nil
+			}
+			return f.answer(t, "login.step.refused.json"), nil
+		case "connector.actions.do", "connector.inbox.reply":
+			f.wrote.Store(true)
+			return json.RawMessage(`{"text":"sent"}`), nil
+		case "connector.logout":
+			f.signedIn.Store(false)
+			f.secrets(ctx, "secrets.delete", nil)
+			return struct{}{}, nil
+		}
+		return nil, &rpc.Error{Code: serve.CodeUnknownMethod, Message: "unknown method " + method}
+	}
+}
+
+func (f *fixtureProgram) start(t *testing.T) progconf.Run {
+	progR, hubW := io.Pipe()
+	hubR, progW := io.Pipe()
+	peer := rpc.New("c", progW)
+	f.peerCaller = peer
+	peer.OnRequest = f.handle(t)
+	exited := make(chan error, 1)
+	go func() { exited <- peer.Serve(context.Background(), progR) }()
+	t.Cleanup(func() { _ = hubW.Close(); _ = progW.Close(); _ = progR.Close(); _ = hubR.Close() })
+	return progconf.Run{ToProgram: hubW, FromProgram: hubR, Exited: exited}
+}
+
+// recorder is a testing.TB that keeps what fails, to see CheckProgram fail.
+type recorder struct {
+	testing.TB
+	mu   sync.Mutex
+	msgs []string
+}
+
+func (r *recorder) Helper()             {}
+func (r *recorder) Logf(string, ...any) {}
+func (r *recorder) Errorf(f string, a ...any) {
+	r.mu.Lock()
+	r.msgs = append(r.msgs, fmt.Sprintf(f, a...))
+	r.mu.Unlock()
+}
+func (r *recorder) Fatalf(f string, a ...any) { r.Errorf(f, a...); runtime.Goexit() }
+func (r *recorder) Fatal(a ...any)            { r.Fatalf("%s", fmt.Sprint(a...)) }
+
+// check runs CheckProgram on the program as a fresh sign-in would meet it and says what it found.
+func (f *fixtureProgram) check(t *testing.T, opts ...ProgramOption) string {
+	t.Helper()
+	run := f.start(t)
+	rec := &recorder{}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		CheckProgram(rec, fixtureManifest(t), run, plugin.InitializeParams{},
+			append([]ProgramOption{WithLogin(map[string]string{"base_url": "https://wechat-connector.example.com", "app_key": goodKey}), RequireData()}, opts...)...)
+	}()
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("CheckProgram did not end")
+	}
+	return strings.Join(rec.msgs, "\n")
+}
+
+func TestCheckProgramPassesWhatTheFixturesSay(t *testing.T) {
+	f := &fixtureProgram{}
+	if got := f.check(t); got != "" {
+		t.Fatalf("CheckProgram failed a program that says what the fixtures say:\n%s", got)
+	}
+	if f.wrote.Load() {
+		t.Fatal("CheckProgram asked the program to write (actions.do or inbox.reply): a check never sends")
+	}
+}
+
+// What the hub relies on, one program at a time that does not keep to it.
+func TestCheckProgramCatchesDrift(t *testing.T) {
+	first := func(v map[string]any, key string) map[string]any { return v[key].([]any)[0].(map[string]any) }
+	cases := []struct {
+		name, file, want string
+		edit             func(map[string]any)
+		redeliver        bool
+	}{
+		{"a field renamed", "inbox.collect.json", `unknown field "thread_id"`,
+			func(v map[string]any) { x := first(v, "things"); x["thread_id"] = x["thread"]; delete(x, "thread") }, false},
+		{"a key in the wrong case", "inbox.collect.json", `"Thread"`,
+			func(v map[string]any) { x := first(v, "things"); x["Thread"] = x["thread"]; delete(x, "thread") }, false},
+		{"a tool without the prefix", "tools.list.json", `does not start with "wechat-connector_"`,
+			func(v map[string]any) { first(v, "tools")["name"] = "status" }, false},
+		{"a page newest first", "thread.page.json", "oldest first",
+			func(v map[string]any) { slices.Reverse(v["messages"].([]any)) }, false},
+		{"a prompt with nothing to do", "login.step.json", "neither fields nor done", func(v map[string]any) { v["fields"] = []any{} }, false},
+		{"a cursor that starts over", "archive.changes.json", "start over", func(v map[string]any) { delete(v, "next") }, false},
+		{"a message delivered twice", "archive.changes.json", "delivered twice", func(v map[string]any) {}, true},
+		{"nothing where the backend has data", "inbox.collect.json", "the backend has data", func(v map[string]any) { v["things"] = []any{} }, false},
+		{"an event with a scope the hub drops", "changed.json", `scope "everything"`, func(v map[string]any) { v["scope"] = "everything" }, false},
+		{"the sign-in's secret said out loud", "status.json", "secret", func(v map[string]any) { v["guide"] = []any{"the key " + goodKey + " works"} }, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := &fixtureProgram{edit: map[string]func(map[string]any){c.file: c.edit}, redeliver: c.redeliver}
+			if got := f.check(t); !strings.Contains(got, c.want) {
+				t.Fatalf("CheckProgram should have failed with %q, said:\n%s", c.want, got)
+			}
+		})
+	}
+}
+
+// A program that refuses its sign-in values is told so, and no secret is in what it says.
+func TestCheckProgramReportsARefusedSignIn(t *testing.T) {
+	run := (&fixtureProgram{}).start(t)
+	rec := &recorder{}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		CheckProgram(rec, fixtureManifest(t), run, plugin.InitializeParams{}, WithLogin(map[string]string{"base_url": "https://wechat-connector.example.com", "app_key": "wcpat_wrong"}))
+	}()
+	<-done
+	if got := strings.Join(rec.msgs, "\n"); !strings.Contains(got, "cannot go on") {
+		t.Fatalf("a refused sign-in went unreported:\n%s", got)
+	}
+}
+
+// The program of wechat-connector itself (its repository's integrations/persona), against its fixture server: the real thing
+// on the other side of the wire. Needs Node and both paths, so it runs where someone sets them up and skips elsewhere:
+//
+//	PERSONA_TEST_wechat-connector_PROGRAM=<wechat-connector>/integrations/persona/bin/wechat-connector-persona \
+//	wechat-connector_FIXTURE_SERVER=<wechat-connector>/test/fixtures/persona-server.mjs \
+//	go test ./internal/connector/conformance -run wechat-connector -v
+//
+// The fixture server starts a platform with a fake gateway on a loopback port (PORT=0) and prints one JSON line on its
+// stdout once it is ready (see signInValues). Sending stays off on it, as it is on every platform in development.
+func Testwechat-connectorProgramLive(t *testing.T) {
+	program, server := os.Getenv("PERSONA_TEST_wechat-connector_PROGRAM"), os.Getenv("wechat-connector_FIXTURE_SERVER")
+	if program == "" || server == "" {
+		t.Skip("set PERSONA_TEST_wechat-connector_PROGRAM and wechat-connector_FIXTURE_SERVER to run wechat-connector's program (docs/connector-protocol.md「一致性测试」)")
+	}
+	login := startFixtureServer(t, server)
+	// The package is what the program sits in: persona-plugin.json next to bin/.
+	pkg := filepath.Dir(filepath.Dir(program))
+	raw, err := os.ReadFile(filepath.Join(pkg, plugin.ManifestFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := plugin.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := func() (progconf.Run, plugin.InitializeParams) {
+		data := t.TempDir()
+		t.Setenv("PERSONA_PLUGIN_DATA", data) // what the hub gives a plugin: its own directory, empty at first
+		return progconf.Program(t, program), plugin.InitializeParams{Plugin: plugin.PluginInfo{Dir: pkg, DataDir: data}}
+	}
+
+	run, init := start()
+	progconf.Check(t, m, run, init)
+	run, init = start()
+	CheckProgram(t, m, run, init, WithLogin(login), RequireData())
+}
+
+// fixtureLine is what the fixture server's ready line says that the live test reads. The line has more (ports, a
+// notice, and a send_key: a key with the send scope, which this test never uses).
+type fixtureLine struct {
+	BaseURL              string `json:"base_url"`
+	OutboundSendsEnabled *bool  `json:"outbound_sends_enabled"`
+	Accounts             []struct {
+		Key string `json:"key"` // scoped read and events
+	} `json:"accounts"`
+}
+
+// signInValues are the values for the program's sign-in (its field names) from the fixture server's ready line, or why
+// the test must not sign in: the server must be on loopback and say that outbound sending is off, and the program only
+// gets the first account's read-and-events key.
+func signInValues(line string) (map[string]string, error) {
+	var l fixtureLine
+	if err := json.Unmarshal([]byte(line), &l); err != nil {
+		return nil, errors.New("the fixture server's first line is not a JSON object")
+	}
+	if l.OutboundSendsEnabled == nil || *l.OutboundSendsEnabled {
+		return nil, errors.New("the fixture server does not say that outbound sends are off: refusing to sign in to it")
+	}
+	u, err := url.Parse(l.BaseURL)
+	if err != nil || u.Host == "" {
+		return nil, errors.New("the fixture server's line has no usable base_url")
+	}
+	if !isLoopbackHost(u.Hostname()) {
+		return nil, errors.New("the fixture server is not on loopback: refusing to sign in to it")
+	}
+	if len(l.Accounts) == 0 || l.Accounts[0].Key == "" {
+		return nil, errors.New("the fixture server's line has no account key")
+	}
+	return map[string]string{"base_url": l.BaseURL, "app_key": l.Accounts[0].Key}, nil
+}
+
+func isLoopbackHost(host string) bool {
+	addr, err := netip.ParseAddr(host)
+	return host == "localhost" || (err == nil && addr.IsLoopback())
+}
+
+// The ready line of the fixture server is where the sign-in must not go wrong: only the loopback server with sending off
+// is signed in to, and with the read key.
+func TestSignInValuesOnlyForALoopbackServerWithSendingOff(t *testing.T) {
+	const loopback = `{"base_url":"http://127.0.0.1:41000","outbound_sends_enabled":false,"port":41000,
+		"accounts":[{"account":"primary","key":"wcpat_example_read","send_key":"wcpat_example_send"},{"account":"vm-02","key":"wcpat_example_other"}]}`
+	got, err := signInValues(loopback)
+	if err != nil || got["base_url"] != "http://127.0.0.1:41000" || got["app_key"] != "wcpat_example_read" || len(got) != 2 {
+		t.Fatalf("the loopback fixture server: %v, %v", got, err)
+	}
+	for name, line := range map[string]string{
+		"outbound sends on":      strings.Replace(loopback, `"outbound_sends_enabled":false`, `"outbound_sends_enabled":true`, 1),
+		"outbound sends unsaid":  strings.Replace(loopback, `"outbound_sends_enabled":false,`, ``, 1),
+		"a server off loopback":  strings.Replace(loopback, "127.0.0.1", "wechat-connector.example.com", 1),
+		"no account":             strings.Replace(loopback, `"accounts":[`, `"accounts":[],"more":[`, 1),
+		"not a JSON object line": "listening on 127.0.0.1",
+	} {
+		if got, err := signInValues(line); err == nil {
+			t.Errorf("%s: signed in with %v", name, got)
+		}
+	}
+}
+
+// startFixtureServer runs the fixture server and returns the values for the program's sign-in from its ready line.
+func startFixtureServer(t *testing.T, script string) map[string]string {
+	t.Helper()
+	cmd := exec.Command("node", script)
+	cmd.Env = append(os.Environ(), "PORT=0")
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("fixture server: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		if t.Failed() && stderr.Len() > 0 {
+			t.Logf("fixture server stderr:\n%s", stderr.String())
+		}
+	})
+	lines := make(chan string, 1)
+	go func() {
+		if sc := bufio.NewScanner(out); sc.Scan() {
+			lines <- sc.Text()
+		}
+		close(lines)
+	}()
+	var line string
+	select {
+	case line = <-lines:
+	case <-time.After(30 * time.Second):
+		t.Fatal("the fixture server printed nothing in 30 seconds")
+	}
+	login, err := signInValues(line)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return login
+}

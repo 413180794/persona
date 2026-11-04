@@ -232,7 +232,7 @@ private struct MacShell: View {
         .onChange(of: model.assistantCurrent) { shell.section = nil }
     }
 
-    @AppStorage(MacSection.sidebarHiddenKey) private var sidebarHidden = false
+    @StoredValue(MacSection.sidebarHiddenKey) private var sidebarHidden = false
 
     /// The section on screen: the one picked in the column, else the tab's.
     private var shown: MacSection { MacSection.shown(override: shell.section, tab: model.selectedTab) }

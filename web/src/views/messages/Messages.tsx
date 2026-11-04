@@ -4,21 +4,26 @@
 // narrow: the chat takes the list's place, with a way back. The pinned chats sit on top as a row of faces.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { shortTime } from "../../lib/inbox";
+import { accountTitle, larkAccounts, useLarkAccounts, type LarkAccountsState } from "../../lib/lark-accounts";
 import {
-  arrangeConversations, conversationPreview, filterConversations, larkChats, unreadBadge, useLarkChats, useLarkHome, type LarkConversation,
+  arrangeConversations, conversationPreview, filterConversations, larkChatsFor, unreadBadge, useLarkChats, useLarkHome, type LarkChatsStore,
+  type LarkConversation,
 } from "../../lib/lark-chats";
 import { href, navigate, onLinkClick } from "../../lib/router";
 import { onHubEvent } from "../../lib/store";
 import { Button, cx, IconButton, Loading, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
-import { Count, Monogram } from "../inbox/InboxParts";
+import { Chip, Count, Monogram } from "../inbox/InboxParts";
 import { LarkThread } from "../inbox/LarkThread";
 
 const SETTINGS = "/settings?tab=connectors";
 
 export function Messages({ id, onToggleSidebar }: { id?: string; onToggleSidebar: () => void }) {
   const on = useLarkHome();
-  const s = useLarkChats();
+  const accounts = useLarkAccounts();
+  // The chosen Feishu account's list (docs/feishu.md「多账号」): each account keeps its own.
+  const larkChats = larkChatsFor(accounts.request);
+  const s = useLarkChats(larkChats);
   const [pins, setPins] = useState(false);
   const chat = useMemo(() => (id ? [...s.pinned, ...s.rows].find((c) => c.id === id) : undefined), [id, s.pinned, s.rows]);
 
@@ -26,18 +31,34 @@ export function Messages({ id, onToggleSidebar }: { id?: string; onToggleSidebar
   useEffect(() => {
     if (!on) return;
     void larkChats.refresh();
-    // A chat changed (the hub's coalesced `lark` push): read the loaded window again, once things settle.
+    void larkAccounts.refresh();
+    // A chat changed (the hub's coalesced `lark` push): read the loaded window again (and the accounts' unread counts),
+    // once things settle.
     let timer: ReturnType<typeof setTimeout> | undefined;
     const off = onHubEvent("lark", (msg) => {
       if (Array.isArray(msg.feed_ids) && !msg.feed_ids.length) return;
       clearTimeout(timer);
-      timer = setTimeout(() => void larkChats.refresh(), 800);
+      timer = setTimeout(() => {
+        void larkChats.refresh();
+        void larkAccounts.refresh();
+      }, 800);
     });
     return () => {
       off();
       clearTimeout(timer);
     };
-  }, [on]);
+  }, [on, larkChats]);
+
+  // Another account picked: an open chat of the account left behind closes (not when the list first arrives and puts
+  // the page on the account chosen last time).
+  const shownAccount = useRef(accounts.request);
+  const listed = useRef(false);
+  useEffect(() => {
+    const switched = listed.current && shownAccount.current !== accounts.request;
+    shownAccount.current = accounts.request;
+    listed.current = accounts.accounts.length > 0;
+    if (switched && id) navigate({ name: "messages" });
+  }, [accounts.request, accounts.accounts.length, id]);
 
   if (!on) {
     return (
@@ -71,14 +92,15 @@ export function Messages({ id, onToggleSidebar }: { id?: string; onToggleSidebar
       </header>
       <div className="flex min-h-0 flex-1">
         <section aria-label="会话列表" className={cx("min-h-0 w-full flex-col @4xl:flex @4xl:w-[380px] @4xl:shrink-0 @4xl:border-r @4xl:border-line", id ? "hidden" : "flex")}>
-          <ChatList selected={id} />
+          <ChatList selected={id} store={larkChats} accounts={accounts} />
         </section>
         <section aria-label="聊天" className={cx("min-h-0 min-w-0 flex-1 flex-col @4xl:flex", id ? "flex" : "hidden")}>
           {id ? (
             <div className="flex h-full min-h-0 flex-col">
-              <ChatHeader chat={chat} />
+              <ChatHeader chat={chat} account={accounts.selectedName} />
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <LarkThread key={id} chat={{ feed: id, title: chat?.name || "飞书会话", topic: chat?.is_topic }} pinsOpen={pins} onPinsOpen={setPins} />
+                <LarkThread key={`${accounts.request ?? ""}:${id}`} chat={{ feed: id, title: chat?.name || "飞书会话", topic: chat?.is_topic, account: accounts.request }}
+                  pinsOpen={pins} onPinsOpen={setPins} />
               </div>
             </div>
           ) : (
@@ -94,22 +116,23 @@ export function Messages({ id, onToggleSidebar }: { id?: string; onToggleSidebar
   );
 }
 
-/** The opened chat's name over it (wide only: narrow puts it in the page's title row). */
-function ChatHeader({ chat }: { chat?: LarkConversation }) {
+/** The opened chat's name over it (wide only: narrow puts it in the page's title row); whose account it is while
+ * more than one is signed in. */
+function ChatHeader({ chat, account }: { chat?: LarkConversation; account?: string }) {
   if (!chat) return null;
   return (
     <div className="hidden shrink-0 items-center gap-3 border-b border-line px-4 py-2.5 @4xl:flex sm:px-6">
       <Monogram name={chat.name} size={28} src={chat.avatar} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-[13.5px] font-semibold text-ink">{chat.name}</p>
-        <p className="truncate text-[11.5px] text-ink-3">{chat.is_topic ? "话题群" : chat.is_group ? "群聊" : "私聊"}</p>
+        <p className="truncate text-[11.5px] text-ink-3">{[chat.is_topic ? "话题群" : chat.is_group ? "群聊" : "私聊", account].filter(Boolean).join(" · ")}</p>
       </div>
     </div>
   );
 }
 
-function ChatList({ selected }: { selected?: string }) {
-  const s = useLarkChats();
+function ChatList({ selected, store: larkChats, accounts }: { selected?: string; store: LarkChatsStore; accounts: LarkAccountsState }) {
+  const s = useLarkChats(larkChats);
   const [query, setQuery] = useState("");
   const end = useRef<HTMLDivElement>(null);
   const { pinned, rest } = arrangeConversations(s.pinned, s.rows);
@@ -137,6 +160,19 @@ function ChatList({ selected }: { selected?: string }) {
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索已加载的会话" aria-label="搜索会话" className="min-w-0 flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink-3" />
           {query && <IconButton icon="x" label="清除" size={20} iconSize={11} onClick={() => setQuery("")} />}
         </label>
+
+        {accounts.accounts.length > 1 && (
+          <div role="group" aria-label="飞书账号" className="mt-2.5 flex gap-1.5 overflow-x-auto pb-0.5">
+            {accounts.accounts.map((a) => (
+              <Chip key={a.id} on={a.id === accounts.selected} onClick={() => larkAccounts.select(a.id)} title={a.tenant}>
+                <span className="inline-flex items-center gap-1.5">
+                  {accountTitle(a)}
+                  {a.unread > 0 && <span className="text-[11px] tabular-nums opacity-70">{a.unread > 99 ? "99+" : a.unread}</span>}
+                </span>
+              </Chip>
+            ))}
+          </div>
+        )}
 
         {s.problem && (
           <div className="mt-3 flex items-start gap-3 rounded-[14px] bg-surface px-3 py-3 shadow-card">

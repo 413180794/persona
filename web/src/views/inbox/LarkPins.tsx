@@ -3,20 +3,23 @@
 // says the chat changed while it is open; nothing reads it ahead of time. Pages come in as the list nears its end.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { shortTime } from "../../lib/inbox";
+import { olAccount } from "../../lib/lark-accounts";
 import { canOpenPin, canRemovePin, ChatPinsModel, liveChatPinsDeps, pinSummary, type ChatPin, type ChatPinTarget } from "../../lib/lark-pins";
 import { onHubEvent } from "../../lib/store";
 import { Button, cx, Dialog, IconButton, Loading, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Monogram } from "./InboxParts";
 
-export function LarkPinsDialog({ feed, topic, onClose, onOpen }: {
+export function LarkPinsDialog({ feed, topic, account, onClose, onOpen }: {
   feed: string;
   topic: boolean;
+  /** The Feishu account the chat is in (`ol_account`); undefined: the hub's own. */
+  account?: number;
   /** checked: the list was read cleanly, so an earlier unknown write is settled. */
   onClose: (checked: boolean) => void;
   onOpen: (target: ChatPinTarget) => void;
 }) {
-  const [model] = useState(() => new ChatPinsModel(liveChatPinsDeps(feed, topic)));
+  const [model] = useState(() => new ChatPinsModel(liveChatPinsDeps(feed, topic, account)));
   const s = useSyncExternalStore(model.subscribe, () => model.state);
   const [removing, setRemoving] = useState<string | null>(null);
   const end = useRef<HTMLDivElement>(null);
@@ -27,7 +30,7 @@ export function LarkPinsDialog({ feed, topic, onClose, onOpen }: {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const off = onHubEvent("lark", (msg) => {
       const ids = Array.isArray(msg.feed_ids) ? (msg.feed_ids as string[]) : [];
-      if (!ids.includes(feed)) return;
+      if (!ids.includes(feed) || olAccount(msg.ol_account) !== account) return;
       clearTimeout(timer);
       timer = setTimeout(() => void model.refresh(), 400);
     });
@@ -36,7 +39,7 @@ export function LarkPinsDialog({ feed, topic, onClose, onOpen }: {
       clearTimeout(timer);
       model.stop();
     };
-  }, [model, feed]);
+  }, [model, feed, account]);
 
   // The next page when the end of the list comes into view.
   useEffect(() => {

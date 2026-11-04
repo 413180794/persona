@@ -7,9 +7,11 @@ import { useEffect, useState } from "react";
 import { EMPTY_MAIL_FORM, MAIL_KINDS, mailAccountLine, mailErrors, mailRequest, mailSummary, type MailAccount, type MailForm } from "../../lib/agent-settings";
 import { api, enc, errorText } from "../../lib/api";
 import { ago } from "../../lib/format";
+import { accountTitle, type LarkAccount, type LarkAccountList } from "../../lib/lark-accounts";
 import { useStore } from "../../lib/store";
 import { Button, cx, Dialog, EASE, IconButton, Loading, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
+import { Count, Monogram } from "../inbox/InboxParts";
 import { ConnectorDetail, ConnectorList } from "./HubConnector";
 import { LarkHomeSwitch } from "./LarkHomeSwitch";
 import { Group, Pill } from "./SettingsParts";
@@ -290,12 +292,30 @@ const USES: { icon: IconName; title: string; detail: string }[] = [
   { icon: "agent", title: "/agent", detail: "在飞书任何地方以 /agent 开头说一句，就起一个 Agent 处理并替你回复" },
 ];
 
+function LarkAccountRow({ a, isDefault }: { a: LarkAccount; isDefault: boolean }) {
+  const detail = a.quarantined ? "无法打开，请在 lark-connector 里重试或移除" : !a.signed_in ? "未登录" : a.tenant || "已登录";
+  return (
+    <div data-account={a.id} className="flex items-center gap-3 px-4 py-2.5">
+      <Monogram name={accountTitle(a)} size={30} src={a.avatar} />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[13px] text-ink">{accountTitle(a)}</div>
+        <div className={cx("mt-0.5 truncate text-[11.5px]", a.signed_in ? "text-ink-3" : "text-red")}>{detail}</div>
+      </div>
+      {isDefault && <Pill>默认</Pill>}
+      {a.signed_in && a.unread > 0 && <Count n={a.unread} />}
+    </div>
+  );
+}
+
 function Feishu() {
   const [st, setSt] = useState<LarkStatus | null>(null);
+  const [accounts, setAccounts] = useState<LarkAccountList | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const load = () => {
     setLoading(true);
+    // the Feishu accounts on the hub's lark-connector (docs/feishu.md「多账号」); a hub from before them has none to list
+    api<LarkAccountList>("/lark/accounts").then(setAccounts).catch(() => setAccounts(null));
     api<LarkStatus>("/lark/status")
       .then((r) => (setSt(r), setError("")))
       .catch((e) => setError(errorText(e)))
@@ -332,6 +352,13 @@ function Feishu() {
         </div>
       )}
       {(st?.error || error) && <p className="px-4 py-2.5 text-[12px] break-words text-red">{st?.error || `读不到飞书的状态：${error}`}</p>}
+      {accounts && accounts.accounts.length > 1 && (
+        <>
+          <div className="px-4 pt-2.5 pb-1 text-[11.5px] font-medium text-ink-3">账号</div>
+          {accounts.accounts.map((a) => <LarkAccountRow key={a.id} a={a} isDefault={a.id === accounts.default} />)}
+          <p className="px-4 pt-1 pb-2.5 text-[11.5px] leading-snug text-ink-3">已登录的账号都会收进收件箱，「消息」页可以切换账号。/agent、助手和知识库使用默认账号；在 lark-connector 里添加或退出账号。</p>
+        </>
+      )}
       <LarkHomeSwitch />
       <div className="px-4 pt-2.5 pb-1 text-[11.5px] font-medium text-ink-3">Persona 用飞书做什么</div>
       {USES.map((u) => (

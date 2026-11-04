@@ -1,0 +1,11 @@
+{
+  "chat": {"id": "primary.wxid_example_a", "name": "示例联系人", "kind": "dm", "reply": "wechat-connector_send"},
+  "messages": [
+    {"id": "g1-l101", "at": "2026-11-04T07:58:00Z", "sender": {"id": "wxid_example_a", "name": "示例联系人"}, "text": "早"},
+    {"id": "g1-l102", "at": "2026-11-04T07:59:00Z", "sender": {"id": "primary", "name": "我"}, "mine": true, "text": "早上好"},
+    {"id": "g1-l103", "at": "2026-11-04T08:00:00Z", "sender": {"id": "wxid_example_a", "name": "示例联系人"}, "media": [{"kind": "image"}]},
+    {"id": "g1-l104", "at": "2026-11-04T08:00:30Z", "sender": {"name": ""}, "event": true, "text": "系统消息"},
+    {"id": "g1-l105", "at": "2026-11-04T08:01:00Z", "sender": {"id": "wxid_example_a", "name": "示例联系人"}, "text": "在吗"}
+  ],
+  "before": "eyJjIjoib3BhcXVlLWN1cnNvciIsInMiOjEwMX0"
+}

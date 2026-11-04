@@ -426,6 +426,14 @@ describe("列表状态", () => {
     expect(rep).toEqual({ message_id: "m_reply_456" });
     expect(fetcher.mock.calls[2][0]).toBe("/api/v1/lark/messages/root-msg/replies");
     expect(JSON.parse(fetcher.mock.calls[2][1].body)).toEqual({ text: "收到", thread: false, client_id: "client-2" });
+
+    // Another Feishu account's chat names it (docs/feishu.md「多账号」).
+    fetcher.mockResolvedValueOnce(ok({ message_id: "m_other" }));
+    await sendLarkMessage("feed-xyz", "你好", "client-3", 2);
+    expect(fetcher.mock.calls[3][0]).toBe("/api/v1/lark/conversations/feed-xyz/messages?ol_account=2");
+    fetcher.mockResolvedValueOnce(ok({ message_id: "m_other_reply" }));
+    await replyLarkMessage("root-msg", "收到", true, "client-4", 2);
+    expect(fetcher.mock.calls[4][0]).toBe("/api/v1/lark/messages/root-msg/replies?ol_account=2");
   });
 
   it("nextLarkPosition 能够基于现有消息计算下一个位置", () => {

@@ -1,0 +1,8 @@
+{
+  "step": "credentials",
+  "fields": [
+    {"name": "base_url", "label": "wechat-connector 地址", "placeholder": "https://wechat-connector.example.com"},
+    {"name": "app_key", "label": "应用密钥", "secret": true, "placeholder": "wcpat_…"}
+  ],
+  "error": "应用密钥无效或已被撤销"
+}

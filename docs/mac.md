@@ -235,6 +235,42 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
 - 体验模式下没有演示数据的页（模型供应商、飞书机器人）在 Mac 上用灰色说明「体验模式没有这部分的演示数据」，不显示红字错误（`LoadProblem`，#1224 A4）。
 - 待查（用户定）：Mac 兼容层的系统填充色（`quaternarySystemFill` 等）用 `withAlphaComponent` 换掉了标签色本来的透明度，比 iPhone 深好几倍（提问卡片的选项区就是这样，#1224 B5 只改了那一处：`Theme.Fill.macOptionsWell`）。
 
+## 卡顿怎么量（Mac，#1337）
+
+这台开发机的 Instruments 录不到显示 / 帧数据（`DevToolsSecurity` 关着、没有免密 sudo：Animation Hitches 的 hitches、display 表都是空的），
+从终端发的滚轮事件也会被系统过滤（发事件的进程没有辅助功能授权）。所以从 App 里面量（`Mac/App/MacPerfHarness.swift`，只在 DEBUG / PERF_SIGNPOST 构建）：
+
+- 主线程的 display link 记下每一帧能开始的时刻；主线程忙过一帧，下一帧就晚到。指标和 iOS 的 `FrameStats` 同一口径：晚于 1.5 帧算卡顿，
+  hitch 时间 = 超出一帧的部分（ms/s），掉帧数，最长一帧，P95，主线程 / 进程 CPU（ms/s），期间 UserDefaults 写了几次、哪些键变了。
+- `-showPerfRun scroll -showPerfPoint x,y -showPerfSpeed 33 -showPerfSeconds 6 [-showPerfGlide YES]`：按显示帧推动那一点下面的滚动视图
+  （33 pt/帧 = 60 Hz 下 2000 pt/s，同 iOS 的 `ListGlide`；`-showPerfGlide` 同 iOS 的走法：一个方向 3 秒、回来 3 秒，到头停；不加是来回弹）。
+- `-showPerfRun sections|chats`：一个一个切侧栏分区 / 打开对话，量动作到下一帧能开始的时间（主线程被占了多久）。
+- `-showPerfRun resize`：窗口宽度在最宽和最窄之间来回拉（同拖窗口边），`-showPerfRun launch`：进程启动到窗口第一帧。
+- `-showPerfOut <json> -showPerfQuit YES`，`-showPerfDelay <秒>`。构建：Release 配置（`-O`、整模块）加 `SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG PERF_SIGNPOST'`
+  （带 DEBUG 的启动参数，好配对 mock、打开页面），单独的 derivedData。窗口要在最前面（被挡住的窗口 AppKit 不画，数字会偏好看）。
+- 主线程在忙什么：跑的时候 `sample <pid> 5 1 -file x.txt`（系统自带），按主线程的调用树统计；`sample` 会暂停进程，那一轮的帧数据不算。
+
+2026-11-04 第一轮（Mac Studio，1920×1080@60Hz；mock：`MOCK_AGENTS=1`（137 个 Agent）`MOCK_LONG_HISTORY=1` `MOCK_LONG_ASSISTANT=1`；各 2 次）：
+
+| 场景 | Persona Mac | iPhone（17 Pro 模拟器，同一 mock、同一走法） |
+| --- | --- | --- |
+| Agents 列表滑动（2000 pt/s） | 5.6 / 91.4 ms/s，P95 16.7–28 ms | 13.5–14.3 ms/s，P95 16.7 ms |
+| 长 Agent 对话滑动 | 342–356 ms/s，P95 50 ms，主线程 590 ms/s | 9.7–18.8 ms/s，P95 16.7 ms |
+| Persona 长主对话滑动（60 轮） | 226–368 ms/s，最长 107–210 ms | — |
+| 收件箱列表滑动 | 1.5–2 ms/s | 15.6–15.9 ms/s |
+| 拖窗口改宽度 | 909–912 ms/s，P95 264–365 ms（约 4 fps） | — |
+| 打开对话 | 中位 293–356 ms | — |
+| 切侧栏分区 | 中位 132–136 ms（Agents、Persona 约 220 ms，最慢 555–727 ms） | — |
+| 冷启动到首帧 | 1.87–2.0 s | — |
+
+找到的原因（主线程采样）：
+- `@AppStorage` 在任何 UserDefaults 写入时都让持有它的视图重算：拖窗口时分栏每帧写一次 `NSSplitView Subview Frames …`，打开对话写 `dev.openChat`，
+  外壳和 Agents 列表跟着重算，137 行的 SwiftUI List 每次整表重新比对（`OutlineListCoordinator.diffRows`）：拖窗口时约占主线程的一半，打开对话时约 28%。
+  热的视图改用 `@StoredValue`（`Persona/App/StoredValue.swift`，用法同 `@AppStorage`，只有自己那个键的值变了才重算）。改后：拖窗口 P95 264–365 → 33–103 ms，
+  打开对话中位 293–356 → 196–224 ms。
+- 对话页滚动：每一帧都要从窗口根上走一遍 SwiftUI 布局（`NSHostingView.layout` 占主线程忙碌时间的约 80%），加上滚动中 `atBottom` 翻转、顶栏折叠让整页 `ChatView` 重算。
+- 外壳读 `MacTitleRowTaken` 这个 preference，每次更新都在整页上合并一遍（打开对话时约 9.5%）；打开对话时 `AppModel.siblings(of:)` 排序和 `Session` 结构体复制约 6.5%。
+
 ## SSH 隧道（Mac）
 
 和 iOS 同一套（`apple/Packages/PersonaSSH`，见 [network.md「经 SSH 隧道连 hub」](network.md#经-ssh-隧道连-hub直连不通时的后备)、[ios.md「SSH 隧道」](ios.md#ssh-隧道直连不通时的后备891)）：设置 › hub › SSH 隧道，配对页的「经 SSH 隧道连接」。

@@ -23,3 +23,15 @@ xcodebuild test -project apple/Persona.xcodeproj -scheme Persona \
   -destination 'platform=iOS Simulator,id=<simulator-id>' \
   -only-testing:PersonaUITests/LarkAccountsFlowTests
 ```
+
+## 网页
+
+`web/` 连 `MOCK_LARK_ACCOUNTS=1` 的 mock，`scripts/test/web_lark_accounts_e2e.py --shots` 拍的（Playwright Chromium，宽 1280 浅色 / 深色，窄 390），截图逐张查看。
+
+| 截图（`web/`） | 检查点 |
+|---|---|
+| `messages-second-*` | 搜索框下的账号按钮，切到工作号后只列工作号的会话和置顶 |
+| `messages-second-chat-*` | 工作号的会话按 `ol_account=2` 读取，会话头「群聊 · 工作号」 |
+| `inbox-second-*` | 收件箱里工作号的条目「飞书 · 工作号 · 群聊」，打开就是工作号的会话 |
+| `settings-accounts-*` | 设置 › 连接器 › 飞书的账号：默认、未读数、未登录 |
+| `messages-narrow-light` | 窄屏：账号按钮在列表上方 |

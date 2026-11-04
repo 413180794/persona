@@ -9,6 +9,7 @@ import "katex/dist/katex.min.css";
 import "katex/contrib/mhchem";
 import { copyText } from "./atoms";
 import { Icon } from "./icons";
+import { MermaidBlock } from "./Mermaid";
 
 // A link ends at whitespace or any non-ASCII character (Chinese text, full-width punctuation), without trailing
 // .,;:!? or an unbalanced ) ] (docs/lessons/ios.md: where a link ends). GFM's autolinks only end at whitespace, so
@@ -332,8 +333,15 @@ function Link({ href, children }: { href?: string; children?: React.ReactNode })
 
 export const markdownComponents: Components = {
   a: ({ href, children }) => <Link href={href}>{children}</Link>,
-  pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
+  pre: ({ children }) => (codeLanguage(children) === "mermaid" ? <MermaidBlock code={textOf(children).replace(/\n$/, "")} /> : <CodeBlock>{children}</CodeBlock>),
 };
+
+/** The language a fenced block names (```mermaid → "mermaid"), from its <code>'s class. */
+function codeLanguage(children: React.ReactNode): string {
+  const code = Array.isArray(children) ? children[0] : children;
+  const cls = code && typeof code === "object" && "props" in code ? String((code as { props: { className?: string } }).props.className ?? "") : "";
+  return /(?:^|\s)language-([\w-]+)/.exec(cls)?.[1]?.toLowerCase() ?? "";
+}
 
 function textOf(node: React.ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);

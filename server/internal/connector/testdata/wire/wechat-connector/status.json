@@ -1,0 +1,8 @@
+{
+  "state": "ok",
+  "account": "primary",
+  "via": "wechat-connector · ready",
+  "guide": ["中间有一段消息没有采集到。"],
+  "last_sync": "2026-11-04T08:01:00Z",
+  "last_event": "2026-11-04T08:00:30Z"
+}

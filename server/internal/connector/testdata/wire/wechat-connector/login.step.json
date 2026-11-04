@@ -1,0 +1,8 @@
+{
+  "step": "credentials",
+  "fields": [
+    {"name": "base_url", "label": "wechat-connector 地址", "placeholder": "https://wechat-connector.example.com"},
+    {"name": "app_key", "label": "应用密钥", "secret": true, "placeholder": "wcpat_…"}
+  ],
+  "hint": "在 wechat-connector 开发者中心创建一把「读取 + 事件」应用密钥。发送权限不用在这里配置。"
+}

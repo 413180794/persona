@@ -176,3 +176,8 @@
 - 子页面改了数据，下面那页在 Mac 上不会自己重拉（2026-11-04，#1433）：iOS 的 NavigationStack 弹回时下面那页重新出现，`.task` 会再跑一次（`ios.md` 里 NavigationStack 根视图那条）；
   Mac 上同一份代码回到列表，`.task` 不再跑，设置 › 模型供应商在启动器详情页隐藏之后列表还是旧的。只在 iOS 上验证会漏掉这个。
   子页面改了列表要用的数据时，在模型上加一个版本号，列表写 `.task(id: 版本号)`（`AppModel.launchersRevision`），不要指望页面重新出现。
+- `@AppStorage` 在任何 UserDefaults 写入时都让持有它的视图重算，不管写的是哪个键（2026-11-04，#1337，`_printChanges` 和写入计数确认）。
+  Mac 上拖窗口改大小时，`NavigationSplitView` 背后的 `NSSplitView` 每一帧都自动保存一次 `NSSplitView Subview Frames …`，外壳和 Agents 列表每帧重算、137 行整表比对，
+  窗口拉起来只有约 4 fps。在常显示、重的视图里用 `@StoredValue`（只在自己那个键的值变了时重算）。
+- 这台开发机的 Instruments 录不到 Animation Hitches 的显示数据（开发者模式关着、要 sudo），`CGEvent.postToPid` 发的滚轮事件被系统过滤（发事件的进程没有辅助功能授权），
+  看起来都「成功」但什么都没发生。量顺不顺用 App 自己的 display link（`MacPerfHarness`），看主线程用 `sample`。

@@ -15,7 +15,7 @@ import type { Interaction } from "../../lib/types";
 import { Collapse, cx, IconButton, Loading } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { DraftDialog } from "./InboxDialogs";
-import { AgentWorking, Count, DraftCard, Glyph, ItemAvatar, Spark, StatusMenu, Tag, type GlyphName } from "./InboxParts";
+import { AgentWorking, Chip, Count, DraftCard, Glyph, ItemAvatar, Spark, StatusMenu, Tag, type GlyphName } from "./InboxParts";
 
 function useStored(key: string): [string, (v: string) => void] {
   const [v, setV] = useState(() => localStorage.getItem(key) ?? "");
@@ -144,20 +144,6 @@ export function InboxList({ selected }: { selected?: string }) {
       </div>
       {editing && <DraftDialog item={editing} onClose={() => setEditing(null)} />}
     </div>
-  );
-}
-
-function Chip({ on, onClick, children, title }: { on: boolean; onClick: () => void; children: React.ReactNode; title?: string }) {
-  return (
-    <button
-      type="button"
-      title={title}
-      aria-pressed={on}
-      onClick={onClick}
-      className={cx("h-7 rounded-control px-2.5 text-[12px] whitespace-nowrap transition-colors duration-150", on ? "bg-ink font-medium text-surface" : "bg-surface text-ink-2 shadow-btn hover:bg-hover hover:text-ink")}
-    >
-      {children}
-    </button>
   );
 }
 

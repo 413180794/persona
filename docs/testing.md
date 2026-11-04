@@ -77,7 +77,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
 - 新建 Persona 对话（#511）：mock 照 hub 的样子做，会话列表立刻推，transcript 先是空的，`MOCK_ASSISTANT_TRANSCRIPT_SECONDS`（默认 1）秒后才有第一句并推给打开的对话。
   App 里发出后对话页一直是这句（不出「还没有消息」）、侧栏的新对话选中、带工作中转圈。`MOCK_ASSISTANT_START_SECONDS=<秒>` 让这个 POST 晚回，
   等待中看气泡和「Persona 正在准备…」。`scripts/mock/test_assistant_mock.py` 管着 mock 的这几件事。
-- 飞书多账号（#1321）：mock 加 `MOCK_LARK_ACCOUNTS=1`，`/api/v1/lark/accounts` 有「我」「工作号」和一个未登录的账号，`ol_account=2` 读到工作号自己的会话，收件箱最上面一件来自工作号；`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口>` 跑 `LarkAccountsFlowTests`（「消息」页切换账号、打开工作号的会话、设置 › 飞书的账号列表；`JARVIS_SHOTS` 存截图）。
+- 飞书多账号（#1321）：mock 加 `MOCK_LARK_ACCOUNTS=1`，`/api/v1/lark/accounts` 有「我」「工作号」和一个未登录的账号，`ol_account=2` 读到工作号自己的会话，收件箱最上面一件来自工作号；`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口>` 跑 `LarkAccountsFlowTests`（「消息」页切换账号、打开工作号的会话、设置 › 飞书的账号列表；`JARVIS_SHOTS` 存截图）；网页用 `scripts/test/web_lark_accounts_e2e.py <网页地址> [--shots <目录>]`（用法见脚本开头）。
 - 飞书 /agent 的上下文（#876）：mock 加 `MOCK_LARK_AGENT=1`，「帮我约周五…」变成一条飞书 /agent 请求（说明和 7 项上下文在 `<jarvis-context>` 里，标签外只有请求）；`-openSession server/b2e4d6f8-0000-4000-8000-000000000003`，`-showContexts YES` 让上下文组和第一项打开。
 - Persona 侧栏：mock 加 `MOCK_ASSISTANT_SIDEBAR=1`，「最近」多 36 个对话（超过显示的 30 个，出「查看全部」），前三个依次是需要你（红点）、未读（蓝点）、工作中（转圈）。
 - 跟到最新（`ChatFollowTests`，`MOCK_LONG_HISTORY=1`）：长会话打开在底部；在底部时来回复会跟到底（Persona 页的回复先按 `delta` 流式出）；往上翻出现「回到最新」、
@@ -105,6 +105,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   改了 mock 里某条消息的文字要先卸载 App：App 按 item id 缓存会话，同 id 的新文字不会盖掉旧的。
 - 表格查看器（网页 #1310）：mock 加 `MOCK_FILES=1 MOCK_SHEETS=1`，会话目录多出 `data/stations.csv`（3000 行，带引号、换行、中文）和 `reports/季度报告.xlsx`（三个工作表、合并标题、列宽、数字和百分比格式），文件面板里点开；二进制在 `file?stream=1` 时只回描述，内容从 `file/download` 取。
 - Office 预览（网页 #1345）：mock 再加 `MOCK_OFFICE=1`，`reports/` 下多出手写的 `季度报告.docx`（标题、表格、图片、页脚）、`季度回顾.pptx`（主题、母版、版式占位符、项目符号、图片、形状、表格、图表、备注）、`旧版说明.doc`（mock 的 `file/convert` 回一份 PDF）和 `路线图.pages`（回 `no_converter`）。
+- Mermaid（网页 #1376）：mock 加 `MOCK_MERMAID=1`，widget 对话末尾多一条带流程图、时序图、饼图和一张写错的图的回复。
 - 文件预览里的链接（`FilePreviewLinkTests`）：`MOCK_FILES=1 MOCK_FILE_LINKS=1 MOCK_PORTS=1 PORT=<独立端口> python3 scripts/mock/mock_hub.py`，`TEST_RUNNER_JARVIS_FILE_LINK_HUB=http://127.0.0.1:<端口>`。从旧布局的会话文件块（固定 `-ui.oldLayout YES -tab dev`，避免隐藏助手响应全局 DEBUG 参数）与默认新外壳的「文件」页打开 README，链接必须在关闭文件前立即可点；关闭后返回原文件位置，重复打开同一链接正常，关闭文件后不补弹旧链接。开发预览还要实际读到经 hub 转发的网页文字。
   两种风格分别切实际 light / dark 外观运行；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 保存截图，`TEST_RUNNER_JARVIS_FILE_LINK_APPEARANCE` 仅负责文件命名。
 - 视频预览：合成一个大于 2 MiB 的 H.264/AAC MP4（例如 `ffmpeg -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine=frequency=440:sample_rate=44100 -t 12 -c:v libx264 -b:v 3M -pix_fmt yuv420p -c:a aac -movflags +faststart /tmp/preview.mp4`）。mock 加 `MOCK_FILES=1 MOCK_VIDEO_FILE=/tmp/preview.mp4`，`VideoFileUITests` 检查原生播放器打开和重开（`TEST_RUNNER_JARVIS_VIDEO_HUB` 可单独指定视频 mock，避免新增视频回复改变原文件回归的可见区域）；用 `-openFilePath /Users/me/code/weather/media/preview.mp4` 单独检查两种风格的深浅色截图。用 `xcrun simctl ui <udid> appearance light|dark` 真正切换模拟器外观，再分别跑视频 UI 测试；`TEST_RUNNER_JARVIS_VIDEO_APPEARANCE` 只给截图命名，不改变外观，不能用 iOS 不生效的 `AppleInterfaceStyle` 启动默认值冒充切换。单测环境加 `TEST_RUNNER_JARVIS_VIDEO_FIXTURE=/tmp/preview.mp4`，`VideoFileTests/nativeVideoPlaysSeeksAndCleansUp` 验证完整字节、播放时钟推进、跳到 8 秒和临时文件清理；不传文件时该集成用例跳过，其他类型、下载及失败测试照常跑。node/hub 的 `TestDownload*` 验证大文件有界读取、Range、旧 node、无效范围、文件变化和取消。

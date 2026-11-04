@@ -113,7 +113,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 - Release 的 `SWIFT_REFLECTION_METADATA_LEVEL` 必须是 `all`：App Intents 靠反射里的属性名给 `@Parameter` 传值，去掉名字后快捷指令 / Siri 的参数全是空的、App 崩溃，Debug 和模拟器上看不出来（`lessons/ios.md`「快捷指令运行「问 Persona」」）。
 - App 和扩展共享的钥匙串组（灵动岛的形象、推送私钥）缺了就静默退回默认值、模拟器上却总是好的：发版的 ipa 要过 `scripts/release/entitlements.py check`，Info.plist 的组名用 `$(DEVELOPMENT_TEAM).` 不用 `$(AppIdentifierPrefix)`。（`release.md`）
 - 实时活动要画的东西放进 ContentState（hub 的推送里也带上），放不下的图放 App Group 容器的文件：实时活动的扩展在手机上读写不了钥匙串，模拟器上却可以（`live-activity.md`「为什么 build 103 的形象包还不对」）。
-- 常变的状态别写 UserDefaults：每写一次，App 里每个 `@AppStorage` 视图都重算（2026-11-01，每次推送都写，Agents 列表滚动中跟着重排、内容跳），放 `StateCache`。（`ios.md`）
+- 常变的状态别写 UserDefaults：每写一次，App 里每个 `@AppStorage` 视图都重算（2026-11-01，每次推送都写，Agents 列表滚动中跟着重排、内容跳），放 `StateCache`。Mac 上拖窗口时分栏自己每帧写一次，重的视图用 `@StoredValue`（只为自己的键重算，#1337）。（`ios.md`、`lessons/macos.md`）
 - App 目标默认 MainActor 隔离：交给系统在别的队列上回调的闭包写成 `{ @Sendable … in`，否则运行时崩；`apple/Shared` 的纯数据类型标 `nonisolated`。（`ios.md`）
 - 轮询和上报已读只该在页面在前台时做：新外壳的两页和不摘窗的容器里，藏起来的页不会触发 `onDisappear`，用 `.tabActiveTask`、`.onTabVisibility`；消息订阅、听写、计时不用。（`ios.md`）
 - 截图验证用 DEBUG 启动参数 + `simctl io screenshot`，不用 computer-use；界面改动必须真的看到截图（看不到是网关丢图，见 `testing.md`）。

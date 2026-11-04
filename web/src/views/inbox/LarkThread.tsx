@@ -2,13 +2,14 @@
 // Supports native Feishu messaging interactions: direct replies, quoting messages, copying, asking Persona for summary,
 // and reporting seen messages to Feishu (docs/inbox.md「看过的飞书消息按可见即读上报」, lark-read.ts). The chat's Pins
 // (lark-pins.ts) open over it; a Pin found in the chat replaces the window around it, a reply opens its thread.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, enc, errorText, getToken } from "../../lib/api";
 import { clock } from "../../lib/format";
 import {
   cardText, comparePosition, emojiLabel, isDone, mergeMessages, nextLarkPosition, partRuns, replyLarkMessage,
   sendLarkMessage, withToken, type InboxItem, type LarkMessage, type LarkPage, type LarkPart,
 } from "../../lib/inbox";
+import { larkPath, olAccount } from "../../lib/lark-accounts";
 import { larkAccount } from "../../lib/lark-chats";
 import { canAddPin, changeChatPin, needsRecheck, pinProblemText, type ChatPinTarget } from "../../lib/lark-pins";
 import { initialCursor, LarkReadTracker } from "../../lib/lark-read";
@@ -37,14 +38,27 @@ export interface LarkChatRef {
   topic?: boolean;
   /** Open at this position (the first new message) instead of the newest. */
   focus?: string;
+  /** The Feishu account the chat is in (`ol_account`, docs/feishu.md「多账号」); undefined: the hub's own. */
+  account?: number;
 }
 
 export function chatOfItem(item: InboxItem): LarkChatRef {
-  return { feed: item.lark!.feed_id, title: item.title, topic: item.lark?.is_topic, focus: !isDone(item) ? item.lark?.start_position : undefined };
+  return { feed: item.lark!.feed_id, title: item.title, topic: item.lark?.is_topic, focus: !isDone(item) ? item.lark?.start_position : undefined,
+    account: olAccount(item.lark?.ol_account) };
 }
 
-export function LarkThread({ chat, pinsOpen = false, onPinsOpen }: { chat: LarkChatRef; pinsOpen?: boolean; onPinsOpen?: (open: boolean) => void }) {
+/** The account of the chat a message is drawn in: its thread is read as that account. */
+const ChatAccount = createContext<number | undefined>(undefined);
+
+type LarkThreadProps = { chat: LarkChatRef; pinsOpen?: boolean; onPinsOpen?: (open: boolean) => void };
+
+export function LarkThread(props: LarkThreadProps) {
+  return <ChatAccount.Provider value={props.chat.account}><LarkThreadBody {...props} /></ChatAccount.Provider>;
+}
+
+function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps) {
   const feed = chat.feed;
+  const ol = chat.account;
   const focus = chat.focus;
   const [page, setPage] = useState<LarkPage | null>(null);
   const [error, setError] = useState("");
@@ -75,7 +89,7 @@ export function LarkThread({ chat, pinsOpen = false, onPinsOpen }: { chat: LarkC
     setReplyTo(null);
     setFlash(null);
     setPinThread(null);
-    api<LarkPage>(`${base}?limit=${PAGE}${focus ? `&around=${enc(focus)}` : ""}`)
+    api<LarkPage>(larkPath(`${base}?limit=${PAGE}${focus ? `&around=${enc(focus)}` : ""}`, ol))
       .then((r) => {
         if (!live) return;
         const messages = mergeMessages([], r.messages ?? []);
@@ -86,7 +100,7 @@ export function LarkThread({ chat, pinsOpen = false, onPinsOpen }: { chat: LarkC
     return () => {
       live = false;
     };
-  }, [base, focus, topic]);
+  }, [base, focus, topic, ol]);
 
   // New messages in this chat (the hub's `lark` push names the chats): read the newest page again when we show it.
   const pageRef = useRef(page);
@@ -96,15 +110,16 @@ export function LarkThread({ chat, pinsOpen = false, onPinsOpen }: { chat: LarkC
       onHubEvent("lark", (msg) => {
         const ids = Array.isArray(msg.feed_ids) ? (msg.feed_ids as string[]) : [];
         const p = pageRef.current;
-        if (!ids.includes(feed) || !p || p.has_newer) return;
-        api<LarkPage>(`${base}?limit=${PAGE}`)
+        // another account's push names its own chats (the same group can be in two accounts)
+        if (!ids.includes(feed) || olAccount(msg.ol_account) !== ol || !p || p.has_newer) return;
+        api<LarkPage>(larkPath(`${base}?limit=${PAGE}`, ol))
           .then((r) => setPage((cur) => cur && { ...cur, messages: mergeMessages(cur.messages, r.messages ?? []) }))
           .catch(() => {});
       }),
-    [base, feed],
+    [base, feed, ol],
   );
 
-  useReadReports(feed, scroller, tracker, pageRef, placed, page);
+  useReadReports(feed, ol, scroller, tracker, pageRef, placed, page);
 
   // First paint: at the first new message (a little of what came before shows above it), else at the bottom.
   useLayoutEffect(() => {
@@ -135,7 +150,7 @@ export function LarkThread({ chat, pinsOpen = false, onPinsOpen }: { chat: LarkC
     const cursor = dir === "older" ? p.older_cursor : p.newer_cursor;
     setMore(dir);
     try {
-      const r = await api<LarkPage>(`${base}?limit=${PAGE}&${dir === "older" ? "before" : "after"}=${enc(cursor ?? "")}`);
+      const r = await api<LarkPage>(larkPath(`${base}?limit=${PAGE}&${dir === "older" ? "before" : "after"}=${enc(cursor ?? "")}`, ol));
       if (dir === "older" && el) anchor.current = { height: el.scrollHeight, top: el.scrollTop };
       setPage((cur) => cur && {
         ...cur,
@@ -176,7 +191,7 @@ export function LarkThread({ chat, pinsOpen = false, onPinsOpen }: { chat: LarkC
     setAdding(null);
     setChangingPin(true);
     try {
-      await changeChatPin(feed, m.id, undefined, await larkAccount());
+      await changeChatPin(feed, m.id, undefined, await larkAccount(ol), ol);
       toast("已添加 Pin", "ok");
     } catch (e) {
       const recheck = needsRecheck(e);
@@ -186,7 +201,7 @@ export function LarkThread({ chat, pinsOpen = false, onPinsOpen }: { chat: LarkC
     } finally {
       setChangingPin(false);
     }
-  }, [feed, onPinsOpen]);
+  }, [feed, ol, onPinsOpen]);
 
   // Closing the list after it read cleanly settles an unknown add.
   const closePins = useCallback((checked: boolean) => {
@@ -196,7 +211,8 @@ export function LarkThread({ chat, pinsOpen = false, onPinsOpen }: { chat: LarkC
 
   const handleAskPersona = useCallback(async () => {
     const chatTitle = chat.title || "飞书会话";
-    const prompt = `读取我飞书会话「${chatTitle}」（lark-connector feedId ${feed}）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。`;
+    const where = ol ? `，在飞书账号 ${ol}：lark_messages 传 account=${ol}` : "";
+    const prompt = `读取我飞书会话「${chatTitle}」（lark-connector feedId ${feed}${where}）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。`;
     toast("正在交给 Persona 总结…", "ok");
     try {
       const r = await api<{ session: Session }>("/assistant/conversations", {
@@ -207,7 +223,7 @@ export function LarkThread({ chat, pinsOpen = false, onPinsOpen }: { chat: LarkC
     } catch (e) {
       toast(`总结失败：${errorText(e)}`, "error");
     }
-  }, [chat.title, feed]);
+  }, [chat.title, feed, ol]);
 
   const handleCopy = useCallback((m: LarkMessage) => {
     const text = m.text || (m.parts ?? []).map((p) => p.text ?? "").join("");
@@ -247,9 +263,9 @@ export function LarkThread({ chat, pinsOpen = false, onPinsOpen }: { chat: LarkC
     try {
       let res: { message_id?: string };
       if (replyTarget?.id) {
-        res = await replyLarkMessage(replyTarget.id, content, false, clientID);
+        res = await replyLarkMessage(replyTarget.id, content, false, clientID, ol);
       } else {
-        res = await sendLarkMessage(feed, content, clientID);
+        res = await sendLarkMessage(feed, content, clientID, ol);
       }
       setPage((cur) => {
         if (!cur) return cur;
@@ -268,7 +284,7 @@ export function LarkThread({ chat, pinsOpen = false, onPinsOpen }: { chat: LarkC
       });
       toast(`发送失败：${errorText(e)}`, "error");
     }
-  }, [feed]);
+  }, [feed, ol]);
 
   const handleRetry = useCallback(async (m: LarkMessage) => {
     const clientID = m.client_id || ("wmsg-" + Date.now().toString(36));
@@ -282,9 +298,9 @@ export function LarkThread({ chat, pinsOpen = false, onPinsOpen }: { chat: LarkC
     try {
       let res: { message_id?: string };
       if (m.reply_to?.id) {
-        res = await replyLarkMessage(m.reply_to.id, m.text ?? "", false, clientID);
+        res = await replyLarkMessage(m.reply_to.id, m.text ?? "", false, clientID, ol);
       } else {
-        res = await sendLarkMessage(feed, m.text ?? "", clientID);
+        res = await sendLarkMessage(feed, m.text ?? "", clientID, ol);
       }
       setPage((cur) => {
         if (!cur) return cur;
@@ -303,7 +319,7 @@ export function LarkThread({ chat, pinsOpen = false, onPinsOpen }: { chat: LarkC
       });
       toast(`重试失败：${errorText(e)}`, "error");
     }
-  }, [feed]);
+  }, [feed, ol]);
 
   if (!page) {
     return <div className="p-5">{error ? <p className="text-[12.5px] text-red">{error}</p> : <Loading label="正在读飞书消息" />}</div>;
@@ -355,7 +371,7 @@ export function LarkThread({ chat, pinsOpen = false, onPinsOpen }: { chat: LarkC
         onSend={handleSend}
         inputRef={inputRef}
       />
-      {pinsOpen && <LarkPinsDialog feed={feed} topic={topic} onClose={closePins} onOpen={openPin} />}
+      {pinsOpen && <LarkPinsDialog feed={feed} topic={topic} account={ol} onClose={closePins} onOpen={openPin} />}
       {pinThread && <PinThreadDialog target={pinThread} translateTo={translateTo} onClose={() => setPinThread(null)} />}
       <Dialog
         open={adding !== null}
@@ -399,6 +415,7 @@ function PinThreadDialog({ target, translateTo, onClose }: { target: ChatPinTarg
  * seen ones are reported 450 ms after the last one came into view, and when the page goes to the background or closes. */
 function useReadReports(
   feed: string,
+  ol: number | undefined,
   scroller: React.RefObject<HTMLDivElement | null>,
   tracker: React.RefObject<LarkReadTracker | null>,
   pageRef: React.RefObject<LarkPage | null>,
@@ -421,7 +438,7 @@ function useReadReports(
       const previous = t.cursor;
       const report = t.report(p.messages);
       if (!report) return;
-      api(`/lark/conversations/${enc(feed)}/read`, { method: "POST", json: report, token: getToken() }).catch(() => t.undo(report, previous));
+      api(larkPath(`/lark/conversations/${enc(feed)}/read`, ol), { method: "POST", json: report, token: getToken() }).catch(() => t.undo(report, previous));
     };
     // The gate (docs/redesign/ux.md 3.5): in front, placed, nothing covering the list.
     const look = () => {
@@ -463,7 +480,7 @@ function useReadReports(
       flush();
       seen.clear();
     };
-  }, [feed, ready, scroller, tracker, pageRef, placed]);
+  }, [feed, ol, ready, scroller, tracker, pageRef, placed]);
 
   // Messages added later (older / newer pages, pushes) are watched too.
   useEffect(() => {
@@ -520,6 +537,7 @@ function Message({
   /** Lit for a moment (a Pin jumped here); a new number lights it again. */
   flash?: number;
 }) {
+  const ol = useContext(ChatAccount);
   const [thread, setThread] = useState<LarkMessage[] | null>(null);
   const [opening, setOpening] = useState(false);
   if (isSystem(m)) {
@@ -533,7 +551,7 @@ function Message({
     if (thread) return setThread(null);
     setOpening(true);
     try {
-      const r = await api<LarkPage>(`/lark/messages/${enc(m.id)}/thread?limit=50`);
+      const r = await api<LarkPage>(larkPath(`/lark/messages/${enc(m.id)}/thread?limit=50`, ol));
       setThread(mergeMessages([], r.messages ?? []));
     } catch {
       setThread([]);

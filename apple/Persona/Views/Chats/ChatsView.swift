@@ -149,7 +149,7 @@ struct ChatsView: View {
     @State private var showNew = false
     /// The ⋯ menu's actions, kept current by the list (not observed: see `AgentsListMenu`).
     @State private var menuActions = AgentsListMenu.Actions()
-    @AppStorage("dev.machineFilter") private var machineFilter = ""
+    @StoredValue("dev.machineFilter") private var machineFilter = ""
 
     /// An active search keeps the system navigation bar up over what is pushed (the chat showed it over its own
     /// header; closing the search once pushed is too late): opening something from the results closes the search
@@ -311,16 +311,16 @@ private struct AgentsList: View {
 
     @State private var searchClose = SearchCloseWatcher()
     @Environment(\.tabIsActive) private var tabIsActive
-    @AppStorage("dev.machineFilter") private var machineFilter = ""
+    @StoredValue("dev.machineFilter") private var machineFilter = ""
     /// Several groups of hubs: the one the list shows ("" = all; `HubFilter`).
-    @AppStorage(HubFilter.key) private var hubFilter = ""
-    @AppStorage("dev.grouping") private var storedGrouping: DevGrouping = .space
+    @StoredValue(HubFilter.key) private var hubFilter = ""
+    @StoredValue("dev.grouping") private var storedGrouping: DevGrouping = .space
     /// The grouping in use (`DevGrouping.resolved`).
     private var grouping: DevGrouping { DevGrouping.resolved(storedGrouping, supportsTodos: TodoStore.shared.isSupported) }
     /// 细列表: one line per agent.
-    @AppStorage("dev.compact") private var compact = false
+    @StoredValue("dev.compact") private var compact = false
     /// Folded sections (spaces, machines, states), one id per line.
-    @AppStorage("dev.folded") private var foldedList = ""
+    @StoredValue("dev.folded") private var foldedList = ""
     @State private var quick: AgentFilter = .all
     /// Under a quick filter, the agents it showed stay until it is chosen again: one opened from 未读 is seen now
     /// but keeps its place, so the next one is still right below it.

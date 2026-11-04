@@ -182,3 +182,10 @@
 - 无头 Chrome 默认带 `--hide-scrollbars`，截图里永远没有滚动条：要看滚动条的情形，Playwright 启动时 `ignore_default_args=["--hide-scrollbars"]`（Linux 上就是常显的经典滚动条）。
 - 无头 Chrome 不理 CDP 的 `Input.synthesizeScrollGesture`，测触摸横滑用 `Input.dispatchTouchEvent` 发 touchStart / touchMove / touchEnd。
 - 没有桌面库的 Linux 开发机上 Playwright 的 WebKit 缺一堆系统库跑不了，WebKit 的检查放到 Mac 上跑（`ssh -R` 把网页端口转过去）。
+
+## Mermaid（2026-11-04，#1376）
+
+- **Mermaid 有全局状态，同时画两张会互相踩**：`initialize` 是全局的，`render` 期间往 body 里塞临时节点。所有渲染排进一个队列一张张画，主题变了才重新 `initialize`。
+- **先 `parse` 再 `render`，并开 `suppressErrorRendering`**：不然语法错误时 Mermaid 会在页面底部留下一个「Syntax error」的炸弹图。
+- **默认主题的饼图不能用**：dark 主题的扇区接近黑色，default 主题是粉彩，且默认 `pieOpacity` 0.7 在白底上发白。用 `themeVariables` 的 `pie1…pie8` 和 `pieOpacity: "1"`。
+- **`ui/Markdown.tsx` 不能 import `views/` 里的组件**：`views/chat/Steps.tsx` 反过来 import Markdown，循环依赖在模块初始化时会拿到 undefined；Mermaid 的放大层自己写了一个。

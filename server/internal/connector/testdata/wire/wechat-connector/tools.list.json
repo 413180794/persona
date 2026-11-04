@@ -1,0 +1,26 @@
+{
+  "tools": [
+    {
+      "name": "wechat-connector_status",
+      "description": "Say how wechat-connector is doing for each account: whether the WeChat account is signed in and its messages are being collected.",
+      "input_schema": {"type": "object", "properties": {}}
+    },
+    {
+      "name": "wechat-connector_chats",
+      "description": "List the latest chats the platform has seen (an observed cache, not WeChat's own history).",
+      "input_schema": {
+        "type": "object",
+        "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 50}, "query": {"type": "string"}}
+      }
+    },
+    {
+      "name": "wechat-connector_messages",
+      "description": "Read the latest messages of one chat, oldest first. For a full-text search use kb_search.",
+      "input_schema": {
+        "type": "object",
+        "properties": {"chat": {"type": "string"}, "limit": {"type": "integer", "minimum": 1, "maximum": 50}, "before": {"type": "string"}},
+        "required": ["chat"]
+      }
+    }
+  ]
+}

@@ -2,9 +2,11 @@
 // list, shown only when this browser turned on 设置 › 连接器 › 飞书 › 首页显示消息 (off by default, kept per browser like
 // the app keeps it per device). The list reads the hub's account-bound snapshots (`account_bound=1`): conversations a
 // page at a time and the pinned conversations on top. A chat opens in the inbox's Feishu chat view (LarkThread).
+// Each Feishu account has its own list (docs/feishu.md「多账号」, lark-accounts.ts); rows carry the account they are in.
 // Nothing is written to disk: the last list lives in memory for this tab only.
 import { useSyncExternalStore } from "react";
 import { api, ApiError, enc, errorText } from "./api";
+import { larkPath } from "./lark-accounts";
 
 // ── 首页显示消息 ─────────────────────────────────────────
 
@@ -65,6 +67,8 @@ export interface LarkConversation {
   updated_at: string;
   read_position?: string;
   mention_position?: string;
+  /** Client only: the Feishu account the chat is in (`ol_account`); undefined: the hub's own. */
+  ol_account?: number;
 }
 
 export interface LarkConversationPage {
@@ -149,11 +153,18 @@ export interface LarkChatsDeps {
   pinned: (account: string | undefined) => Promise<LarkConversationPage>;
 }
 
-export const liveChatsDeps: LarkChatsDeps = {
-  page: (cursor, account) =>
-    api<LarkConversationPage>(`/lark/conversations?scope=chats&limit=${CONVERSATION_PAGE}&account_bound=1${cursor ? `&cursor=${enc(cursor)}` : ""}${account ? `&account_id=${enc(account)}` : ""}`),
-  pinned: (account) => api<LarkConversationPage>(`/lark/pinned?account_bound=1${account ? `&account_id=${enc(account)}` : ""}`),
-};
+/** The reads of account `ol`'s list (undefined: the hub's own); its rows say which account they are in. */
+export function liveChatsDepsFor(ol?: number): LarkChatsDeps {
+  const stamp = (p: LarkConversationPage): LarkConversationPage =>
+    ol === undefined ? p : { ...p, conversations: (p.conversations ?? []).map((c) => ({ ...c, ol_account: ol })) };
+  return {
+    page: async (cursor, account) =>
+      stamp(await api<LarkConversationPage>(larkPath(`/lark/conversations?scope=chats&limit=${CONVERSATION_PAGE}&account_bound=1${cursor ? `&cursor=${enc(cursor)}` : ""}${account ? `&account_id=${enc(account)}` : ""}`, ol))),
+    pinned: async (account) => stamp(await api<LarkConversationPage>(larkPath(`/lark/pinned?account_bound=1${account ? `&account_id=${enc(account)}` : ""}`, ol))),
+  };
+}
+
+export const liveChatsDeps: LarkChatsDeps = liveChatsDepsFor();
 
 const isAccountChanged = (e: unknown) => e instanceof ApiError && e.code === "lark_account_changed";
 
@@ -273,17 +284,27 @@ export class LarkChatsStore {
   }
 }
 
-/** The tab's one list: opening 消息 again shows the last copy at once, then reads it again. */
+/** The tab's list of the hub's own account: opening 消息 again shows the last copy at once, then reads it again. */
 export const larkChats = new LarkChatsStore();
+const otherAccounts = new Map<number, LarkChatsStore>();
 
-export function useLarkChats(): LarkChatsState {
-  return useSyncExternalStore(larkChats.subscribe, () => larkChats.state);
+/** The tab's list of account `ol` (undefined: the hub's own). */
+export function larkChatsFor(ol?: number): LarkChatsStore {
+  if (ol === undefined) return larkChats;
+  let s = otherAccounts.get(ol);
+  if (!s) otherAccounts.set(ol, (s = new LarkChatsStore(liveChatsDepsFor(ol))));
+  return s;
 }
 
-/** The signed-in Feishu account as the hub last said (an add-Pin write carries it). */
-export async function larkAccount(): Promise<string> {
-  if (larkChats.state.account) return larkChats.state.account;
-  const p = await api<LarkConversationPage>("/lark/conversations?scope=chats&limit=1&account_bound=1");
+export function useLarkChats(store: LarkChatsStore = larkChats): LarkChatsState {
+  return useSyncExternalStore(store.subscribe, () => store.state);
+}
+
+/** The signed-in Feishu user of account `ol` as the hub last said (an add-Pin write carries it). */
+export async function larkAccount(ol?: number): Promise<string> {
+  const known = larkChatsFor(ol).state.account;
+  if (known) return known;
+  const p = await api<LarkConversationPage>(larkPath("/lark/conversations?scope=chats&limit=1&account_bound=1", ol));
   if (!p.account_id) throw new ApiError(426, "升级 Hub 后可使用 Pin 消息。请在设置中打开 Hub，检查更新。", { code: "lark_hub_upgrade_required" });
   return p.account_id;
 }

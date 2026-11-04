@@ -171,6 +171,9 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationC
         #if DEBUG
         MacSnapshot.scheduleIfAsked()
         #endif
+        #if DEBUG || PERF_SIGNPOST
+        MacPerfHarness.scheduleIfAsked(AppModel.shared) // `-showPerfRun …`: measure smoothness from inside (#1337)
+        #endif
         PushRegistrar.shared.registerIfPossible()
     }
 

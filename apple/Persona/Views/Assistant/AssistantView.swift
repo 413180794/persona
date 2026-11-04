@@ -29,8 +29,8 @@ struct AssistantView: View {
     @State private var showAvatars = false
     #endif
     /// Mode / effort for new conversations ("" = the launcher's own), remembered across launches.
-    @AppStorage("assistant.newMode") private var starterMode = ""
-    @AppStorage("assistant.newEffort") private var starterEffort = ""
+    @StoredValue("assistant.newMode") private var starterMode = ""
+    @StoredValue("assistant.newEffort") private var starterEffort = ""
 
     private var current: SessionKey? { model.assistantCurrent }
 

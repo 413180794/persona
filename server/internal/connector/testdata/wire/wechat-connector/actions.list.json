@@ -1,0 +1,13 @@
+{
+  "tools": [
+    {
+      "name": "wechat-connector_send",
+      "description": "Send a plain-text WeChat message to one chat (at most 4000 characters). The user confirms the full text on the phone first.",
+      "input_schema": {
+        "type": "object",
+        "properties": {"chat": {"type": "string"}, "text": {"type": "string", "maxLength": 4000}},
+        "required": ["chat", "text"]
+      }
+    }
+  ]
+}

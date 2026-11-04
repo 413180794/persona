@@ -676,7 +676,7 @@ struct AssistantSidebar: View {
     @State private var feed = SidebarFeed()
     @FocusState private var searching: Bool
     /// Conversations pinned on this phone (session ids, comma-separated); the main conversation always is.
-    @AppStorage("assistant.pinned") private var pinnedRaw = ""
+    @StoredValue("assistant.pinned") private var pinnedRaw = ""
 
     /// 最近 shows this many until 查看全部.
     private static let recentCount = 30

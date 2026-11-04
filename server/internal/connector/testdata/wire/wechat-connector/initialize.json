@@ -1,0 +1,21 @@
+{
+  "protocol": 1,
+  "id": "wechat-connector",
+  "version": "0.1.0",
+  "contributes": {
+    "connectors": [
+      {
+        "id": "wechat-connector",
+        "name": "微信",
+        "capabilities": ["status", "tools", "actions", "events", "inbox", "archive", "login", "threads"],
+        "poll_seconds": 60,
+        "kinds": ["dm", "mention", "group"],
+        "kind_descriptions": {
+          "dm": "微信私聊：对方发来消息，用户最后没有回复。",
+          "mention": "微信群里有人 @ 了用户（或 @所有人）。",
+          "group": "微信群里的新消息（没有 @ 用户）。"
+        }
+      }
+    ]
+  }
+}

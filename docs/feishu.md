@@ -78,6 +78,10 @@ Persona 都读（#1321，之前只读 `lark.account` 一个）：
 - **App（iOS）**：`APIClient.lark(_:)` 给 `/api/v1/lark/` 请求加 `ol_account`；`LarkConversation.account` 跟着会话走（聊天、话题、资料卡、
   卡片按钮、@成员、链接预览都按它），缓存和监听按 `LarkConversation.key`（`a<编号>-<feed>`）分开。「消息」页多于一个账号时
   列表上方一排账号胶囊（带未读数），各账号的列表和置顶分开缓存；聊天页副标题写「飞书 · <名字>」。设置 › 连接器 › 飞书列出所有账号。
+- **网页**：`web/src/lib/lark-accounts.ts`（账号列表、选择记在这个浏览器、`larkPath` 加 `ol_account`）。`LarkChatRef.account` 跟着会话走
+  （读取、已读上报、发送、回复、话题、Pin 都按它，`lark` 推送只认同一账号的）；「消息」页搜索框下一排账号按钮，每个账号一份列表
+  （`larkChatsFor`），会话头写「群聊 · <名字>」；收件箱条目按 `lark.ol_account` 打开；设置 › 连接器 › 飞书列出账号。
+  端到端：`scripts/test/web_lark_accounts_e2e.py`（`MOCK_LARK_ACCOUNTS=1` 的 mock）。Android 还没有账号切换，只用默认账号。
 
 ## 接口速查（hub 机器上实测过；助手现在用 lark-connector skill，lark-connector 的 references 为准）
 
