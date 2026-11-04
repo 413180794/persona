@@ -415,12 +415,15 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 
 ### d) 小配置
 
-- **点击音效**：无 / 只前台点击 / 前台和后台点击，默认无。
-  - Cua 的点按分两种：前台是真的鼠标事件，后台是按进程投递，不动光标。
-  - node 每点一次放一下系统音效（`afplay /System/Library/Sounds/Tink.aiff`），坐在 Mac 旁边的人听得到 Agent 在动。
-- **显示 Agent 的光标**：默认开，VNC时知道它点在哪。
-  - 关掉：用 `cua-driver serve --no-overlay` 重启 Cua 的后台进程。有报告说光标浮层空闲时也占不少 CPU。
-  - 也能用 `set_agent_cursor_enabled` 按会话关。
+- **点击音效**（已做，插件 `cua` 的 `click_sound`）：无 / 只前台点击 / 前台和后台点击，默认无。
+  - Cua 的点按分两种：前台（`delivery_mode: foreground`）把窗口提到前面、动真的鼠标；后台（默认）按进程投递，不动光标。
+  - hub 在 `computer.call` 里带上设置，node 数 `run_steps` 里的点按步骤（`click`、`double_click`、`right_click`，`{"click": {…}}` 和 `{tool, args}` 两种写法都认）。有要响的就放一下系统音效（`afplay /System/Library/Sounds/Tink.aiff`，不等它放完），一次调用响一下：这些步骤在 Cua 里一口气跑完，node 不知道每一下是什么时候点的。
+  - 管不到的：`run_script` 里的点按（在它的程序里），电脑上的 Agent 自己的 Cua MCP（不经 node）。
+- **显示 Agent 的光标**（已做，插件 `cua` 的 `show_cursor`）：默认开，VNC 时知道它点在哪。
+  - 光标浮层是 Cua 后台进程的，启动时定，`cua-driver config` 改不了（`agent_cursor.enabled` 只读）。关掉就停掉它、用 `open -g -b com.trycua.driver --args serve --no-overlay` 重新打开（`node/cua_extras.go` 的 `computer.cursor`），之后 node 自己启动它时也带上。正在进行的操作会断一下，设置的说明里写了。
+  - hub 在设置变了、node 连上时说一次（`hub/computer_cursor.go`）：插件对这台开着才照设置说，别的 Mac 都说「开」。
+  - 「开」只撤销这个 node 自己关的：用户自己带 `--no-overlay` 启动的 Cua 不去动。后台进程已经是要的样子、或没在跑，都不重启。
+  - 电脑上的 Agent 自己的 Cua MCP 用的是同一个后台进程，所以它们的光标也跟着关。
 - **Office、信息（Messages）的单独权限**：不做。这些我们没有专门的接入；要读信息走以后的 iMessage 连接器（[plan-connectors.md](plan-connectors.md)）。
 
 ### 顺序
@@ -429,7 +432,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 2. **c**：按 App 批准，先管助手，再管 Agent 的 Cua MCP。
 3. **a-2**：一键解锁，和 #1322 一起。
 4. **b2**：「插件开着时不自动锁屏」（已做）。
-5. **d**：点击音效、光标开关。
+5. **d**：点击音效、光标开关（已做）。
 
 每一步都在这台 Mac 上实测，开关、锁屏、恢复都要验证。锁屏的实测要用户在场：锁上以后得有人输密码。
 

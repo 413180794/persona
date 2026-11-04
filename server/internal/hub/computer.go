@@ -30,7 +30,9 @@ const cuaConfig = `{
     "confirm": {"type": "boolean", "title": "操作前在手机上确认", "description": "打开后，助手每次点击、输入、按键、打开或关闭 App 之前先在手机上问你；关着时直接做，记进 hub 的日志", "default": false},
     "app_approval": {"type": "boolean", "title": "第一次操作一个 App 时先问", "description": "助手第一次在一台 Mac 上操作某个 App（或看整个屏幕）时在手机上问一次，选「一直允许」后记住，在机器页可以移除；终端、系统设置、钥匙串访问、密码管理器和 Persona 每次都问", "default": true},
     "no_auto_lock": {"type": "array", "title": "插件开着时不自动锁屏", "description": "打开的 Mac 在插件开着时一直不因空闲锁屏（node 持有 caffeinate，不改系统设置）；和 hub 断开 30 分钟后自动恢复。手动锁屏、合盖照常", "items": {"type": "string", "format": "machine", "x-os": ["darwin"]}, "uniqueItems": true, "x-confirm": "打开后这台 Mac 在插件开着时一直不会因为空闲锁屏，坐在它前面的人能直接用它。和 hub 断开 30 分钟后自动恢复。"},
-    "keep_awake": {"type": "boolean", "title": "操作或开着 VNC 时保持唤醒", "description": "助手操作那台 Mac、或有人在看它的画面时，它不睡、不因空闲锁屏；最后一次操作 10 分钟后、画面关掉后就撤掉，不改系统设置", "default": true}
+    "keep_awake": {"type": "boolean", "title": "操作或开着 VNC 时保持唤醒", "description": "助手操作那台 Mac、或有人在看它的画面时，它不睡、不因空闲锁屏；最后一次操作 10 分钟后、画面关掉后就撤掉，不改系统设置", "default": true},
+    "click_sound": {"type": "string", "title": "点击音效", "description": "助手在 Mac 上点按时，那台 Mac 响一下系统提示音，坐在旁边的人听得到它在动。前台点击会把窗口提到前面、动真的鼠标；后台点击不动光标", "oneOf": [{"const": "none", "title": "无"}, {"const": "foreground", "title": "只前台点击"}, {"const": "all", "title": "前台和后台点击"}], "default": "none"},
+    "show_cursor": {"type": "boolean", "title": "显示 Agent 的光标", "description": "助手和电脑上的 Agent 经 Cua Driver 操作时在屏幕上画一个光标，看 VNC 时知道它点在哪。改了会重启插件打开的 Mac 上 Cua Driver 的后台进程，正在进行的操作会断一下", "default": true}
   }
 }`
 
@@ -53,7 +55,14 @@ type cuaSettings struct {
 	AppApproval *bool `json:"app_approval"`
 	// NoAutoLock: the Macs 「插件开着时不自动锁屏」 is on for (computer_nolock.go).
 	NoAutoLock []string `json:"no_auto_lock"`
+	// ClickSound: 「点击音效」, none (or empty), foreground or all; the node plays it (node/cua_extras.go).
+	ClickSound string `json:"click_sound"`
+	// ShowCursor: 「显示 Agent 的光标」, on unless turned off (computer_cursor.go).
+	ShowCursor *bool `json:"show_cursor"`
 }
+
+// cursor: Cua Driver draws the agent's cursor.
+func (s cuaSettings) cursor() bool { return s.ShowCursor == nil || *s.ShowCursor }
 
 // awake: a Mac it operates, or whose live screen is open, is kept awake.
 func (s cuaSettings) awake() bool { return s.KeepAwake == nil || *s.KeepAwake }
@@ -156,6 +165,7 @@ func (h *Hub) computerChanged(ctx context.Context) {
 			go h.refreshComputer(ctx, m)
 		}
 		go h.tellNoLock(ctx, m) // on, or off again (also once the plugin is off)
+		go h.tellCursor(ctx, m)
 	}
 	h.broadcastMachines()
 }
@@ -435,7 +445,8 @@ func (h *Hub) computerState(ctx context.Context, m *Machine, session, app, query
 // computerCall runs one Cua Driver tool on m's node.
 func (h *Hub) computerCall(ctx context.Context, m *Machine, session, tool string, args map[string]any) (*proto.ComputerResult, error) {
 	var res proto.ComputerResult
-	if err := m.call(ctx, "computer.call", map[string]any{"session": session, "tool": tool, "args": args, "keep_awake": h.cua().awake()}, &res); err != nil {
+	s := h.cua()
+	if err := m.call(ctx, "computer.call", map[string]any{"session": session, "tool": tool, "args": args, "keep_awake": s.awake(), "click_sound": s.ClickSound}, &res); err != nil {
 		return nil, err
 	}
 	return &res, nil

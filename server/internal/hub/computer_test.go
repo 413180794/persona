@@ -13,18 +13,21 @@ import (
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
-// fakeNoLock is what each fake Mac (computerMac) was told by computer.nolock, by machine id.
+// fakeNoLock and fakeCursor are what each fake Mac (computerMac) was told by computer.nolock and computer.cursor, by
+// machine id.
 var (
 	fakeNoLockMu sync.Mutex
 	fakeNoLock   = map[string][]bool{}
+	fakeCursor   = map[string][]bool{}
 )
 
 // computerCall is one computer.call a fake node got.
 type computerCallSeen struct {
-	Session   string         `json:"session"`
-	Tool      string         `json:"tool"`
-	Args      map[string]any `json:"args"`
-	KeepAwake bool           `json:"keep_awake"`
+	Session    string         `json:"session"`
+	Tool       string         `json:"tool"`
+	Args       map[string]any `json:"args"`
+	KeepAwake  bool           `json:"keep_awake"`
+	ClickSound string         `json:"click_sound"`
 }
 
 // computerMac is a Mac whose node answers computer.status and computer.call as a node with Cua Driver set up does, and
@@ -66,6 +69,15 @@ func computerMac(t *testing.T, h *Hub, id string) (*Machine, func() (statuses in
 			fakeNoLock[id] = append(fakeNoLock[id], p.On)
 			fakeNoLockMu.Unlock()
 			return map[string]any{"held": p.On}, nil
+		case "computer.cursor": // kept apart too (fakeCursor)
+			var p struct {
+				On bool `json:"on"`
+			}
+			_ = json.Unmarshal(params, &p)
+			fakeNoLockMu.Lock()
+			fakeCursor[id] = append(fakeCursor[id], p.On)
+			fakeNoLockMu.Unlock()
+			return map[string]any{"restarted": false}, nil
 		case "computer.lock":
 			calls = append(calls, computerCallSeen{Tool: method})
 			return proto.Computer{Installed: true, Daemon: true, Desktop: "locked", Checked: time.Now()}, nil

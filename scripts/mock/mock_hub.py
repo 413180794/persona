@@ -6972,7 +6972,12 @@ if MOCK_COMPUTER:
                            "confirm": "打开后这台 Mac 在插件开着时一直不会因为空闲锁屏，坐在它前面的人能直接用它。和 hub 断开 30 分钟后自动恢复。",
                            "items": {"name": "items", "type": "string", "format": "machine", "os": ["darwin"]}},
                           {"name": "keep_awake", "type": "boolean", "title": "操作或开着 VNC 时保持唤醒", "default": True,
-                           "description": "助手操作那台 Mac、或有人在看它的画面时，它不睡、不因空闲锁屏；最后一次操作 10 分钟后、画面关掉后就撤掉，不改系统设置"}]},
+                           "description": "助手操作那台 Mac、或有人在看它的画面时，它不睡、不因空闲锁屏；最后一次操作 10 分钟后、画面关掉后就撤掉，不改系统设置"},
+                          {"name": "click_sound", "type": "string", "title": "点击音效", "default": "none",
+                           "description": "助手在 Mac 上点按时，那台 Mac 响一下系统提示音，坐在旁边的人听得到它在动。前台点击会把窗口提到前面、动真的鼠标；后台点击不动光标",
+                           "enum": [{"value": "none", "title": "无"}, {"value": "foreground", "title": "只前台点击"}, {"value": "all", "title": "前台和后台点击"}]},
+                          {"name": "show_cursor", "type": "boolean", "title": "显示 Agent 的光标", "default": True,
+                           "description": "助手和电脑上的 Agent 经 Cua Driver 操作时在屏幕上画一个光标，看 VNC 时知道它点在哪。改了会重启插件打开的 Mac 上 Cua Driver 的后台进程，正在进行的操作会断一下"}]},
                       "config": {}, "secrets": [], "permissions": []}
 
 

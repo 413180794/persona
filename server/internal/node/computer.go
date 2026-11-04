@@ -208,6 +208,9 @@ var computerTools = map[string]bool{
 	"run_script": true, "run_steps": true,
 }
 
+// openPath opens an app (startCua); a test's stand-in records what it was asked.
+var openPath = "/usr/bin/open"
+
 // computerCallTimeout: a run_script may take up to 120 s (its timeout_ms); a read is a few seconds.
 const computerCallTimeout = 150 * time.Second
 
@@ -221,6 +224,8 @@ func computerCall(ctx context.Context, params json.RawMessage) (*proto.ComputerR
 		Args    json.RawMessage `json:"args"`
 		// The Mac stays awake for a while after (awake.go), as the plugin's 「操作或开着 VNC 时保持唤醒」 says.
 		KeepAwake bool `json:"keep_awake"`
+		// The plugin's 点击音效: none, foreground or all (cua_extras.go).
+		ClickSound string `json:"click_sound"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
 		return nil, err
@@ -244,6 +249,7 @@ func computerCall(ctx context.Context, params json.RawMessage) (*proto.ComputerR
 	if _, ok := args["session"]; !ok && p.Session != "" {
 		args["session"] = p.Session
 	}
+	playClicks(p.ClickSound, p.Tool, args)
 	input, _ := json.Marshal(args)
 	if out, _ := cuaRun(ctx, bin, "status"); !cuaDaemonRunning(out) {
 		startCua(ctx, bin)
@@ -283,9 +289,14 @@ func computerCall(ctx context.Context, params json.RawMessage) (*proto.ComputerR
 	return res, nil
 }
 
-// startCua opens CuaDriver.app in the background (its daemon, under its own permissions) and waits for it a little.
+// startCua opens CuaDriver.app in the background (its daemon, under its own permissions) and waits for it a little;
+// without the agent cursor while this node has turned that off (cua_extras.go).
 func startCua(ctx context.Context, bin string) {
-	if err := exec.CommandContext(ctx, "/usr/bin/open", "-g", "-b", cuaBundle).Run(); err != nil {
+	open := []string{"-g", "-b", cuaBundle}
+	if cursorOff.Load() {
+		open = append(open, "--args", "serve", "--no-overlay")
+	}
+	if err := exec.CommandContext(ctx, openPath, open...).Run(); err != nil {
 		return
 	}
 	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
