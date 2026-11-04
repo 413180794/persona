@@ -861,7 +861,8 @@ struct RecapCard: View {
     }
 }
 
-/// The newest recap in full, above the composer when you come back to a chat: a tap closes it.
+/// The newest recap in full, as the chat's last line when you come back to it (in the flow, #1360): a tap closes it
+/// back to the one-line `RecapCard`.
 struct RecapStrip: View {
     var item: Item
     var close: () -> Void
@@ -900,6 +901,7 @@ struct RecapStrip: View {
         .buttonStyle(.plain)
         .contextMenu { CopyButton(text: item.text ?? "") }
         .accessibilityLabel("离开期间回顾：" + (item.text ?? "") + "。点按关闭")
+        .accessibilityIdentifier("chat.recapStrip")
     }
 }
 

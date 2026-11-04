@@ -1270,10 +1270,6 @@ struct ChatView: View {
                 if let queued = session?.queued, !queued.isEmpty, style == .dev {
                     QueueStrip(key: key, queued: queued)
                 }
-                if viewing == nil, let recap = pendingRecap {
-                    RecapStrip(item: recap) { dismissRecap(recap) }
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
                 // The assistant takes modes on Codex too (the node maps them to Codex's sandbox / approvals).
                 // In the shell the modes are in the composer's model menu (ShellComposerBar, #1091).
                 if viewing == nil, !usesShellComposer, session?.canSend == true, session.map({ $0.assistant || $0.isClaude }) ?? true {
@@ -1292,14 +1288,14 @@ struct ChatView: View {
             .padding(.bottom, Theme.Space.s)
             .animation(Theme.Motion.standard, value: status)
             .animation(Theme.Motion.standard, value: model.interactions(for: key).map(\.id))
-            .animation(Theme.Motion.standard, value: pendingRecap?.id)
             .onChange(of: model.drafts[key] ?? "") { _, draft in
                 if !draft.isEmpty, let recap = pendingRecap { dismissRecap(recap) } // typing closes it
             }
     }
 
-    /// The agent's "while you were away" recap above the composer, while it is the newest thing in the chat and has
-    /// not been closed (a tap, or starting to type). The one-line marker in the chat stays.
+    /// The agent's "while you were away" recap shown open, while it is the newest thing in the chat and has not been
+    /// closed (a tap, or starting to type). It is the chat's last line, in the flow with the agent's words (#1360: above
+    /// the composer it covered the end of the reply): `recapInFlow`; closed, it is the one-line marker again.
     private var pendingRecap: Item? {
         guard style == .dev, case .row(.recap(let i))? = model.chat(key).blocks.last else { return nil }
         return closedRecap == i.id ? nil : i
@@ -1308,6 +1304,15 @@ struct ChatView: View {
     @AppStorage("closedRecaps") private var closedRecapsData = Data()
     private var closedRecap: String? {
         (try? JSONDecoder().decode([String: String].self, from: closedRecapsData))?[key.machineID + "/" + key.sessionID]
+    }
+
+    /// The open recap's line: the earlier recaps folded with it as their chip, then the newest in full.
+    private func recapInFlow(_ open: ChatLines.OpenRecap) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            if !open.earlier.isEmpty { RecapCard(items: open.earlier) }
+            RecapStrip(item: open.newest) { dismissRecap(open.newest) }
+        }
+        .transition(.opacity)
     }
 
     private func dismissRecap(_ recap: Item) {
@@ -1367,8 +1372,11 @@ struct ChatView: View {
                 // The oldest dozen lines start loading the page before them: by the time you reach the top it is
                 // usually there (pages with screenshots run to megabytes and take seconds).
                 let prefetch = Set(lines.prefix(12).map(\.id))
+                let openRecap = ChatLines.openRecap(lines, pending: viewing == nil ? pendingRecap : nil)
                 ForEach(lines.reversed()) { line in
-                    lineView(line)
+                    Group {
+                        if let openRecap, openRecap.line == line.id { recapInFlow(openRecap) } else { lineView(line) }
+                    }
                         .background { if quoteFlash?.line == line.id { QuoteFlash().id(quoteFlash?.id) } }
                         .flippedBack()
                         .debugLineY(line.id, scratch)

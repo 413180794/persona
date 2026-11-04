@@ -68,6 +68,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         if d.bool(forKey: "openAgentsFresh") {
             for k in ["dev.machineFilter", HubFilter.key, "dev.grouping", "dev.compact", "dev.folded"] { d.removeObject(forKey: k) }
         }
+        // `-openRecapsFresh YES`: no away recap closed yet, so the newest shows open again (RecapInFlowTests).
+        if d.bool(forKey: "openRecapsFresh") { d.removeObject(forKey: "closedRecaps") }
         #if os(iOS)
         PagePerf.runIfAsked()
         #endif

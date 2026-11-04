@@ -109,6 +109,38 @@ struct ChatLinesTests {
         #expect(!kept.contains { if case .recaps = $0.content { true } else { false } })
     }
 
+    /// The newest recap is drawn open as the chat's last line (#1360), in the flow: only while it is the last line and
+    /// still pending; the earlier recaps of a folded line stay a chip above it.
+    @Test func theOpenRecapIsTheLastLine() {
+        let one = ChatLines(openWork: []).build(blocks([item(1, .text, role: "user", text: "看一下"), item(2, .text, text: "好了"),
+                                                       item(3, .recap, text: "回顾")]), live: nil)
+        let recap = one.last.flatMap { if case .row(.recap(let i)) = $0.content { i } else { nil } }
+        let open = ChatLines.openRecap(one, pending: recap)
+        #expect(open?.line == one.last?.id)
+        #expect(open?.earlier.isEmpty == true)
+        #expect(open?.newest.text == "回顾")
+        #expect(ChatLines.openRecap(one, pending: nil) == nil, "closed: the one-line marker")
+
+        let three = ChatLines(openWork: []).build(blocks([item(1, .text, role: "user", text: "看一下"), item(2, .text, text: "好了"),
+                                                         item(3, .recap, text: "一"), item(4, .recap, text: "二"), item(5, .recap, text: "三")]), live: nil)
+        guard case .recaps(_, let items)? = three.last?.content else {
+            Issue.record("no merged recaps: \(three.map(\.id))")
+            return
+        }
+        let folded = ChatLines.openRecap(three, pending: items.last)
+        #expect(folded?.line == three.last?.id)
+        #expect(folded?.earlier.map(\.text) == ["一", "二"])
+        #expect(folded?.newest.text == "三")
+        #expect(ChatLines.openRecap(three, pending: items.first) == nil, "only the newest one opens")
+
+        // Something after it: no longer the newest thing, it is not open.
+        let after = ChatLines(openWork: []).build(blocks([item(1, .recap, text: "回顾"), item(2, .text, role: "user", text: "在吗"),
+                                                         item(3, .text, text: "在")]), live: nil)
+        let earlier = after.first.flatMap { if case .row(.recap(let i)) = $0.content { i } else { nil } }
+        #expect(earlier != nil)
+        #expect(ChatLines.openRecap(after, pending: earlier) == nil)
+    }
+
     /// A picture sent with a message to Jarvis: claude -p writes the message's line with the picture first and the
     /// text after it (an image block, then the text), where a pasted one in an Agents chat comes after the text. The
     /// picture belongs to that message, above its bubble, as it showed while it was being sent: it went to the

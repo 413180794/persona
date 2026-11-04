@@ -68,6 +68,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   答过的问题、回执、直接对任务说的话和最后一张待开始的计划卡；`MOCK_TASKS_AT=<分钟>` 把对话截到那么多分钟以前（更新的条目不要），
   不用滑动就能在屏幕底部看到更早的部分。`MOCK_TASKS_NO_ASKS=1` 让任务的 Agent 不提问，输入框上方不再被问题卡占住。`MOCK_TASKS_DOCK=2` 只留两个在做的任务（任务坞两个任务胶囊，后面还有两个手动开的 Agent），`=pair` 只留一个任务和一个等你的手动 Agent（两个胶囊），`=many` 再加四个任务（任务坞比屏幕宽，看「全部」固定在最左边）；不设时是四个没做完的任务加两个手动开的 Agent（#1113）。`-showTaskDetail <待办 id>`（如 `todo_task_widget`）打开任务详情，`-showTaskBoard YES` 打开任务板。
   任务提问的回答记录（#1231）：mock 里「补齐网络层的单元测试」那行有三个问题的完整问答，「修小组件横屏崩溃」那行是只有摘要的老记录；`MOCK_TASKS=1 MOCK_TASKS_NO_ASKS=1 MOCK_TASKS_AT=23` 让它们停在底部，`AnsweredLineTests`（`JARVIS_SHOTS` 写折叠 / 展开两张图）点开再收起。
+- 离开期间回顾在消息流里（#1360）：`MOCK_RECAP_LONG=1` 启动 mock，「检查 PR #42 的改动」前面多出八轮对话、比一屏高，结尾是一条回顾；`TEST_RUNNER_JARVIS_MOCK_HUB=<地址> xcodebuild test … -only-testing:PersonaUITests/RecapInFlowTests` 查展开的回顾在回复和输入框之间、往上翻跟着滚走、点了收成小条、重开还是关着（`-openRecapsFresh YES` 忘掉关过的回顾）；`TEST_RUNNER_JARVIS_SHOTS=<目录>` 和 `TEST_RUNNER_JARVIS_SHOTS_APPEARANCE=light|dark` 写展开 / 收起 × 贴底 / 往上翻四张图。`MOCK_RECAPS=1` 看三条折成一行时更早的两条留成小条。
 - 截断的长输出：`-openSession macbook/a1f3c2d4-0000-4000-8000-000000000002 -openWork YES -showFullOutput card`（展开「运行」卡片，
   看「已截断，看全文」）或 `sheet`（再打开全文浮层，mock 的 `/items/{id}/full` 回全文）。
 - 往上翻时内容不动（`ChatView` 的冻结）：`MOCK_STREAM=1` 启动 mock（第一个会话打开后每 2 秒来一条新步骤 / 回复，共 12 次），

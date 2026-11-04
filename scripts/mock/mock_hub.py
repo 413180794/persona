@@ -1237,7 +1237,14 @@ ITEMS[ORDERS] = (
     + tool("Bash", {"command": "go test ./internal/orders -run TestList -bench . -benchmem"}, "BenchmarkList-8   	     120	   9812345 ns/op", 6)
     + [it("assistant", "text", 1, text="慢在订单列表的 N+1 查询，正在改成一次 JOIN 并补索引。")]
 )
-ITEMS[REVIEW] = [it("user", "text", 100, text="看一下 PR #42")] + [it("assistant", "text", 95, text="PR #42 看完了：逻辑没问题，留了两条关于命名的小建议。")] + [
+# MOCK_RECAP_LONG=1: earlier exchanges before it, so the review chat (which ends with a recap) is taller than a screen and
+# can be scrolled up (RecapInFlowTests, #1360).
+_REVIEW_BEFORE = [x for n in range(8) for x in (
+    it("user", "text", 400 - n * 30, text=f"第 {n + 1} 个提交改了什么？"),
+    it("assistant", "text", 398 - n * 30, text=f"第 {n + 1} 个提交把天气缓存的过期时间从 10 分钟改成按接口返回的 max-age，"
+       "失败时退回旧值并在日志里记一条警告；测试补了过期、刷新失败两种情况，都通过了。"),
+)] if os.environ.get("MOCK_RECAP_LONG") else []
+ITEMS[REVIEW] = _REVIEW_BEFORE + [it("user", "text", 100, text="看一下 PR #42")] + [it("assistant", "text", 95, text="PR #42 看完了：逻辑没问题，留了两条关于命名的小建议。")] + [
     it("system", "recap", 30, text="在审 PR #42：逻辑没问题，留了两条命名建议（`fetchAll` → `loadAll`，`tmp` → `cached`）。下一步等作者改完再看一遍，顺便确认新加的重试测试在 CI 上稳定。")]
 # MOCK_RECAPS=1: three recaps in a row on the review chat (one line, newest first in its drawer).
 if os.environ.get("MOCK_RECAPS"):

@@ -115,6 +115,29 @@ struct ChatLines {
         return out
     }
 
+    /// The newest recap shown open, in full, as the chat's last line (#1360): in the flow with the agent's words, so it
+    /// scrolls with them and never covers them. Only while it is the last line and not closed (`pending`); the earlier
+    /// recaps folded into the same line stay a one-line chip above it.
+    struct OpenRecap: Equatable {
+        /// The line drawn open (the folded line's id, or the single recap's).
+        let line: String
+        /// The recaps before it in the same line, oldest first; empty for a single recap.
+        let earlier: [Item]
+        let newest: Item
+    }
+
+    static func openRecap(_ lines: [ChatLine], pending: Item?) -> OpenRecap? {
+        guard let pending, let last = lines.last else { return nil }
+        switch last.content {
+        case .row(.recap(let i)) where i.id == pending.id:
+            return OpenRecap(line: last.id, earlier: [], newest: i)
+        case .recaps(_, let items) where items.last?.id == pending.id:
+            return OpenRecap(line: last.id, earlier: Array(items.dropLast()), newest: pending)
+        default:
+            return nil
+        }
+    }
+
     /// Claude Code's "API Error: …" answers and the hub's API error notices become error cards; the same error
     /// again right after, with nothing but a retry ("继续") between, folds into the first with a count.
     static func foldAPIErrors(_ lines: [ChatLine]) -> [ChatLine] {
