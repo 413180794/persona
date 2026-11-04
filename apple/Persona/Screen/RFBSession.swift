@@ -28,6 +28,8 @@ import SwiftUI
     /// Frames a second shown, and how long the last one took from the mock's Screen Sharing to here (its stamp).
     private(set) var fps: Double = 0
     private(set) var latency: Double?
+    /// A frame has been shown: the small window can start (with an empty source the system ignores it, #1839).
+    private(set) var pictured = false
 
     @ObservationIgnored private var client: RFBClient?
     @ObservationIgnored private let sink = RFBFrameSink()
@@ -51,6 +53,7 @@ import SwiftUI
             Task { @MainActor in
                 self?.fps = fps
                 self?.latency = latency
+                if self?.pictured == false { self?.pictured = true }
             }
         }
         client = c

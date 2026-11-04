@@ -23,13 +23,16 @@ import SwiftUI
     private var watching: NSKeyValueObservation?
     /// The small window is asked for (not just made ready under the page).
     private var wanted = false
+    /// The system said it is starting (willStart): no more tries.
+    private var starting = false
     private var restoring = false
     private var waiting: Task<Void, Never>?
 
     static var supported: Bool { AVPictureInPictureController.isPictureInPictureSupported() }
     var active: Bool { controller?.isPictureInPictureActive == true }
-    /// How long a machine's VNC waits for the small window before the page instead.
+    /// How long a machine's VNC waits for the small window before the page instead, and how often it asks the system.
     static let patience: Duration = .seconds(15)
+    static let tries = 4
 
     /// Ready for ref's small window (the page, once it shows the Mac): the source, the controller and the playback
     /// audio session; `automatic`: it starts by itself when the app goes to the background.
@@ -81,37 +84,52 @@ import SwiftUI
         VNCPiPLog.add("要小窗")
         guard prepare(ref, from: from, automatic: false) else { return fallBack(ref, from, why: VNCPiPLog.last ?? "这台设备不支持画中画") }
         wanted = true
-        if let c = controller, c.isPictureInPicturePossible {
+        starting = false
+        // With the source still empty (connecting) the system takes the call and does nothing, not even failing
+        // (TestFlight 161's 小窗诊断): in the tap only once there is a picture, else as soon as there is one.
+        if let c = controller, c.isPictureInPicturePossible, VNC.current(ref)?.pictured == true {
             VNCPiPLog.add("在点按里开")
             c.startPictureInPicture()
         } else {
-            VNCPiPLog.add("等画面到了再开")
+            VNCPiPLog.add("画面还没到：到了再开")
         }
         waiting?.cancel()
         waiting = Task { [weak self] in
             let deadline = ContinuousClock.now + Self.patience
+            var tries = 0, lastTry = ContinuousClock.now, pictured = false
             while ContinuousClock.now < deadline {
                 try? await Task.sleep(for: .milliseconds(200))
                 guard let self, !Task.isCancelled, self.wanted, !self.active, self.ref == ref else { return }
-                switch VNC.current(ref)?.phase {
+                let session = VNC.current(ref)
+                switch session?.phase {
                 case .signIn: return self.fallBack(ref, self.from, why: nil) // the page asks for the sign-in
                 case .closed(let why): return self.fallBack(ref, self.from, why: why ?? "连接断了")
                 default: break
                 }
+                guard session?.pictured == true, !self.starting, let c = self.controller else { continue }
+                if !pictured {
+                    pictured = true
+                    VNCPiPLog.add("画面到了")
+                }
+                // Again every 1.5 s while the system has not started it, a few times.
+                guard c.isPictureInPicturePossible, tries < Self.tries,
+                      tries == 0 || ContinuousClock.now - lastTry >= .milliseconds(1500) else { continue }
+                tries += 1
+                lastTry = ContinuousClock.now
+                VNCPiPLog.add(tries == 1 ? "开（不在点按里）" : "系统没反应，再开一次（第 \(tries) 次）")
+                c.startPictureInPicture()
             }
             guard let self, !Task.isCancelled, self.wanted, !self.active, self.ref == ref else { return }
-            let possible = self.controller?.isPictureInPicturePossible == true
-            self.fallBack(ref, self.from, why: possible ? "系统没有开（\(Int(Self.patience.components.seconds)) 秒内）" : "画面没准备好（\(Int(Self.patience.components.seconds)) 秒内）")
+            let why = !pictured ? "画面没到（\(Int(Self.patience.components.seconds)) 秒内）"
+                : tries == 0 ? "系统说现在不能开" : "开了 \(tries) 次，系统都没反应"
+            self.fallBack(ref, self.from, why: why)
         }
     }
 
+    /// Said in 小窗诊断; the start waits for a picture (start's loop), not for this.
     private func possibleChanged(_ possible: Bool) {
         guard let c = controller, c.isPictureInPicturePossible == possible else { return }
         VNCPiPLog.add("现在能开：\(VNCPiPLog.yes(possible))")
-        if possible, wanted, !c.isPictureInPictureActive {
-            VNCPiPLog.add("画面到了，开（不在点按里）")
-            c.startPictureInPicture()
-        }
     }
 
     /// The whole page took it: the small window goes (the source stays ready for the page).
@@ -190,6 +208,7 @@ import SwiftUI
     nonisolated func pictureInPictureControllerWillStartPictureInPicture(_ c: AVPictureInPictureController) {
         MainActor.assumeIsolated {
             wanted = true // also when it starts by itself, the app going to the background with the page up
+            starting = true
             VNCPiPLog.add("小窗要开了")
         }
     }
@@ -219,6 +238,7 @@ import SwiftUI
         MainActor.assumeIsolated {
             VNCPiPLog.add("小窗关了")
             wanted = false
+            starting = false
             AppModel.shared.vncPiP = nil
             // Ready again under the page when it is up (and by itself again when the app goes to the background);
             // else the connection goes.
@@ -233,6 +253,7 @@ import SwiftUI
     nonisolated func pictureInPictureController(_ c: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
         Self.log.error("the small window failed to start: \(error.localizedDescription, privacy: .public)")
         MainActor.assumeIsolated {
+            starting = false
             guard let ref else { return }
             fallBack(ref, from, why: "系统没让开（\(error.localizedDescription)）")
         }

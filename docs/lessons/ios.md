@@ -870,3 +870,4 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
   - 能提前准备就提前准备（这里整页一连上就准备），让「开小窗」在点按的同一个事件里调 `startPictureInPicture`；需要后台自动开的设 `canStartPictureInPictureAutomaticallyFromInline`。
   - 带 `controlTimebase` 的层不要再收 DisplayImmediately 的样本（头文件里明说不建议），给它单独做带时间的样本。
   - 开不了一定要让用户看得到原因（提示 + 一个能复制的诊断页），真机问题才能一次说清卡在哪。
+  - 源里还没有画面时别开：`isPictureInPicturePossible` 在层一进窗口就是 true，可空的源上调 `startPictureInPicture` 系统直接忽略，不开也不调 `failedToStart`（TestFlight 161 的小窗诊断：机器页点 VNC 每次都这样，整页里有画面时点「小窗」就开了）。等第一帧到了再开，没反应就隔一会儿再试几次。

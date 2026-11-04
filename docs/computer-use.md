@@ -285,7 +285,8 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - 一台 Mac 一条连接（`VNC.hold` / `release`）：整页和小窗共用，最后一个放手 2 秒后才断，来回切换不重连。
   - 帧：`RFBFrameSink` 在更新之间从帧缓冲（加锁）拷进 `CVPixelBufferPool`（32BGRA、IOSurface），最多每秒 30 帧，时间戳取主机时钟（递增）。整页的层标 DisplayImmediately；小窗的源层有自己的 `controlTimebase`（主机时钟、速率 1），收不带 DisplayImmediately 的样本（AVFoundation 不建议两者混用）。
   - **小窗的源**（#1839）：一个按 Mac 画面比例、宽 192pt 的显示层（`Theme.Size.pictureInPictureSource`），放在 App 主窗口里、内容的后面：在窗口里、不隐藏、看不见。以前是 2×2pt，从整页开时还加在了整页自己的窗口上，整页一关就没了，真机上小窗起不来（TestFlight 161）。
-  - **什么时候开**：整页一连上就把小窗准备好（源、控制器、音频会话）。「…」› 小窗在点按里直接 `startPictureInPicture`，开起来以后整页再像点 × 一样关掉；整页开着时回桌面，小窗自己开（`canStartPictureInPictureAutomaticallyFromInline`）。从机器页、对话里点「VNC」（记住了登录）时立刻准备，画面到了就开；15 秒内开不了、系统不让开（`failedToStart`）或要重新登录，就提示「小窗打不开：原因，已改用整页」并打开整页。
+  - **什么时候开**：整页一连上就把小窗准备好（源、控制器、音频会话）。「…」› 小窗在点按里直接 `startPictureInPicture`，开起来以后整页再像点 × 一样关掉；整页开着时回桌面，小窗自己开（`canStartPictureInPictureAutomaticallyFromInline`）。从机器页、对话里点「VNC」（记住了登录）时立刻准备，第一帧到了源里再开（`RFBSession.pictured`）；系统没反应就每 1.5 秒再开一次，最多 4 次。15 秒内开不了、系统不让开（`failedToStart`）或要重新登录，就提示「小窗打不开：原因，已改用整页」并打开整页。
+  - 为什么等第一帧（TestFlight 161 的小窗诊断）：源还空着（还在连）时调 `startPictureInPicture`，`isPictureInPicturePossible` 已经是 true，系统却什么也不做，既不开也不报失败；整页里的「小窗」（已经有画面）一点就开。
   - **小窗诊断**（整页「…」里）：设备支不支持画中画、音频会话、后台音频，和小窗最近每一步（`VNCPiPLog`：点了 VNC、准备好了、能不能开、在点按里开还是等画面、开了、关了、为什么改用整页），「复制全部」发给我们。DEBUG 构建的 runtime CLI `state` 里是 `vncPiP`；系统日志里是子系统 jarvis、类别 vnc。
   - **模拟器没有画中画**（`isPictureInPictureSupported()` 在 iOS 27.0、27.1 的模拟器上都是 false），这时点「VNC」直接打开整页。小窗只能在真机上看。
 - **从哪里打开「VNC」**：记住了那台 Mac 的登录、整页没开、设备有画中画时直接进小窗（`AppModel.openVNC`），否则打开整页（要登录时总是整页）。
