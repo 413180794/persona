@@ -28,6 +28,7 @@ const cuaConfig = `{
   "properties": {
     "machines": {"type": "array", "title": "能操控的电脑", "description": "打开的 Mac，助手才能操控。开关即时生效，和它机器页上的「允许助手操控这台电脑」是同一个", "items": {"type": "string", "format": "machine", "x-os": ["darwin"]}, "uniqueItems": true},
     "confirm": {"type": "boolean", "title": "操作前在手机上确认", "description": "打开后，助手每次点击、输入、按键、打开或关闭 App 之前先在手机上问你；关着时直接做，记进 hub 的日志", "default": false},
+    "app_approval": {"type": "boolean", "title": "第一次操作一个 App 时先问", "description": "助手第一次在一台 Mac 上操作某个 App（或看整个屏幕）时在手机上问一次，选「一直允许」后记住，在机器页可以移除；终端、系统设置、钥匙串访问、密码管理器和 Persona 每次都问", "default": true},
     "keep_awake": {"type": "boolean", "title": "操作和看画面时保持唤醒", "description": "助手操作那台 Mac、或有人在看它的画面时，它不睡、不因空闲锁屏；最后一次操作 10 分钟后、画面关掉后就撤掉，不改系统设置", "default": true}
   }
 }`
@@ -47,6 +48,8 @@ type cuaSettings struct {
 	Confirm  bool     `json:"confirm"`
 	// KeepAwake: 「操作和看画面时保持唤醒」, on unless turned off (nil); the node holds caffeinate (node/awake.go).
 	KeepAwake *bool `json:"keep_awake"`
+	// AppApproval: 「第一次操作一个 App 时先问」, on unless turned off (computer_apps.go).
+	AppApproval *bool `json:"app_approval"`
 }
 
 // awake: a Mac it operates, or whose live screen is open, is kept awake.
@@ -270,7 +273,15 @@ func (h *Hub) callComputerTool(ctx context.Context, sessionID, name string, args
 		return proto.TextResult(err.Error(), true)
 	}
 	session := "persona-" + convID(sessionID)
+	declined := func(what string) proto.ToolResult {
+		h.logf("[%s] %s declined on the phone (%s)", m.cfg.ID, name, what)
+		return proto.TextResult("The user declined this on the phone. Do not retry it unless they ask.", true)
+	}
+	apps, whole := callApps(name, a.App, a.Script, a.Steps)
 	if name == "computer_state" {
+		if _, ok := h.approveApps(ctx, m, name, apps, whole, args); !ok {
+			return declined("look")
+		}
 		shot := a.Screenshot == nil || *a.Screenshot
 		return h.computerState(ctx, m, session, a.App, a.Query, shot)
 	}
@@ -296,9 +307,9 @@ func (h *Hub) callComputerTool(ctx context.Context, sessionID, name string, args
 		return proto.TextResult("give script (run_script) or steps (run_steps)", true)
 	}
 	what := computerSummary(tool, a.Script, a.Steps)
-	if h.cua().Confirm && !h.approve(ctx, m.cfg.ID, name, "在「"+m.cfg.Name+"」上"+what, args) {
-		h.logf("[%s] computer_run declined on the phone (%s)", m.cfg.ID, computerLogWhat(tool, a.Script, a.Steps))
-		return proto.TextResult("The user declined this on the phone. Do not retry it unless they ask.", true)
+	asked, ok := h.approveApps(ctx, m, name, apps, whole, args)
+	if !ok || (h.cua().Confirm && !asked && !h.approve(ctx, m.cfg.ID, name, "在「"+m.cfg.Name+"」上"+what, args)) {
+		return declined(computerLogWhat(tool, a.Script, a.Steps))
 	}
 	start := time.Now()
 	res, err := h.computerCall(ctx, m, session, tool, in)

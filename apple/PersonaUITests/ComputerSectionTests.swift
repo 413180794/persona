@@ -85,6 +85,26 @@ final class ComputerSectionTests: XCTestCase {
         shot(app, "computer-chat-tool")
     }
 
+    /// The apps always allowed for the assistant on this Mac (#1507; MOCK_COMPUTER_APPS=1, JARVIS_COMPUTER_APPS=1):
+    /// listed under 看画面, each taken back with 移除 (asked about again next time).
+    @MainActor func testAllowedAppsCanBeTakenBack() throws {
+        guard state == "ready", ProcessInfo.processInfo.environment["JARVIS_COMPUTER_APPS"] == "1" else {
+            throw XCTSkip("MOCK_COMPUTER=ready MOCK_COMPUTER_APPS=1 (JARVIS_COMPUTER_APPS=1)")
+        }
+        let (app, _, status) = try open()
+        XCTAssertTrue(status.waitForExistence(timeout: 10))
+        let calc = app.descendants(matching: .any)["computer-app-com.apple.calculator"].firstMatch
+        XCTAssertTrue(calc.waitForExistence(timeout: 10), "the allowed apps:\n\(app.debugDescription)")
+        XCTAssertTrue(calc.label.contains("计算器") || calc.staticTexts["计算器"].exists, calc.debugDescription)
+        let screen = app.descendants(matching: .any)["computer-app-screen"].firstMatch
+        XCTAssertTrue(screen.exists, "整个屏幕 too")
+        for _ in 0..<4 where !calc.isHittable { app.swipeUp() }
+        shot(app, "computer-apps")
+        calc.buttons["computer-app-remove"].firstMatch.tap()
+        XCTAssertTrue(waitGone(calc), "taken back")
+        XCTAssertTrue(screen.exists, "the other stays")
+    }
+
     @MainActor func testAnInstallCanBeCancelled() throws {
         guard state == "missing" else { throw XCTSkip("MOCK_COMPUTER=missing") }
         let (app, _, status) = try open()

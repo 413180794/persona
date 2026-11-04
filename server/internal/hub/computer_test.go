@@ -52,6 +52,8 @@ func computerMac(t *testing.T, h *Hub, id string) (*Machine, func() (statuses in
 			_ = json.Unmarshal(params, &c)
 			calls = append(calls, c)
 			switch c.Tool {
+			case "list_apps":
+				return proto.ComputerResult{Output: json.RawMessage(`{"apps": [{"name": "Calculator", "bundle_id": "com.apple.calculator"}, {"name": "Terminal", "bundle_id": "com.apple.Terminal"}]}`)}, nil
 			case "run_script":
 				return proto.ComputerResult{Output: json.RawMessage(`{"ok": true, "value": {"pid": 63, "window_id": 2318}}`)}, nil
 			case "get_window_state", "get_desktop_state":
@@ -172,7 +174,7 @@ func TestComputerToolsCallTheNode(t *testing.T) {
 		!strings.Contains(res.Content[0].Text, "not turned on") {
 		t.Fatalf("not on for the Mac yet: %+v", res)
 	}
-	if err := h.plugins.reg.SetConfig(ctx, cuaPluginID, json.RawMessage(`{"machines": ["mac"]}`), "test"); err != nil {
+	if err := h.plugins.reg.SetConfig(ctx, cuaPluginID, json.RawMessage(`{"machines": ["mac"], "app_approval": false}`), "test"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -203,7 +205,7 @@ func TestComputerToolsCallTheNode(t *testing.T) {
 			t.Fatalf("「操作和看画面时保持唤醒」 is on unless turned off: %+v", c)
 		}
 	}
-	if err := h.plugins.reg.SetConfig(ctx, cuaPluginID, json.RawMessage(`{"machines": ["mac"], "keep_awake": false}`), "test"); err != nil {
+	if err := h.plugins.reg.SetConfig(ctx, cuaPluginID, json.RawMessage(`{"machines": ["mac"], "keep_awake": false, "app_approval": false}`), "test"); err != nil {
 		t.Fatal(err)
 	}
 	h.callComputerTool(ctx, "conv1234-5678", "computer_run", json.RawMessage(`{"machine": "mac", "steps": `+steps+`}`))
@@ -218,7 +220,7 @@ func TestComputerToolsCallTheNode(t *testing.T) {
 	}
 
 	// Asking first, when the user set it: unanswered (or declined), nothing runs.
-	if err := h.plugins.reg.SetConfig(ctx, cuaPluginID, json.RawMessage(`{"machines": ["mac"], "confirm": true}`), "test"); err != nil {
+	if err := h.plugins.reg.SetConfig(ctx, cuaPluginID, json.RawMessage(`{"machines": ["mac"], "confirm": true, "app_approval": false}`), "test"); err != nil {
 		t.Fatal(err)
 	}
 	_, before := seen()

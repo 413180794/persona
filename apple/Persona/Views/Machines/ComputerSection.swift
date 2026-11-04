@@ -16,6 +16,8 @@ struct ComputerSection: View {
     @State private var checking = false
     /// This device remembers the Mac's Screen Sharing sign-in (#1322).
     @State private var screenKept = false
+    /// The apps always allowed for the assistant here (#1507).
+    @State private var apps: [ComputerApp] = []
 
     private var shown: MachineComputer { fresh ?? computer }
 
@@ -118,6 +120,7 @@ struct ComputerSection: View {
                 } else {
                     Self.noScreenSharing
                 }
+                if !apps.isEmpty { allowedApps }
             }
         } else {
             line(c.note ?? "还不知道能不能操控", ok: false)
@@ -215,6 +218,38 @@ struct ComputerSection: View {
     private func refresh() async {
         guard let api = model.api(ref.group) else { return }
         if let c = try? await api.computer(machine: ref.id) { fresh = c }
+        if let a = try? await api.computerApps(machine: ref.id) { apps = a }
+    }
+
+    /// The apps always allowed here (#1507): each can be taken back, and is asked about again the next time.
+    private var allowedApps: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            Text("已允许助手操作的 App").font(Theme.Font.label).foregroundStyle(.secondary)
+            ForEach(apps) { app in
+                HStack(spacing: Theme.Space.s) {
+                    Text(app.name).font(Theme.Font.secondary).lineLimit(1)
+                    Spacer(minLength: Theme.Space.s)
+                    Button { Task { await remove(app) } } label: {
+                        Text("移除").font(Theme.Font.labelStrong).lineLimit(1)
+                    }
+                    .themedButton()
+                    .accessibilityIdentifier("computer-app-remove")
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("computer-app-\(app.bundleID)")
+            }
+        }
+        .padding(.top, Theme.Space.xs)
+    }
+
+    private func remove(_ app: ComputerApp) async {
+        guard let api = model.api(ref.group) else { return }
+        do {
+            apps = try await api.removeComputerApp(machine: ref.id, bundleID: app.bundleID)
+            Haptics.success()
+        } catch {
+            if let m = error.shown { model.toast = Toast("移除失败：\(m)", style: .error) }
+        }
     }
 
     private func set(_ on: Bool) async {

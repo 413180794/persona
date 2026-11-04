@@ -322,6 +322,17 @@ nonisolated struct MachineBrowser: Codable, Hashable, Sendable {
 }
 
 /// One install or grant the node runs for the machine page (docs/computer-use.md「一键安装」).
+/// An app the user always allowed the assistant to operate on a Mac (docs/computer-use.md「锁屏、防睡眠、按 App 批准」c).
+nonisolated struct ComputerApp: Codable, Hashable, Sendable, Identifiable {
+    var bundleID: String
+    var name: String
+    var id: String { bundleID }
+
+    enum CodingKeys: String, CodingKey {
+        case bundleID = "bundle_id", name
+    }
+}
+
 nonisolated struct ComputerJob: Codable, Hashable, Sendable {
     /// install | grant
     var kind: String

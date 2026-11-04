@@ -6467,6 +6467,9 @@ COMPUTER_STATES = {
 # 安装 Cua Driver and 去授权 (#1183) move on by the clock: each step MOCK_COMPUTER_STEP seconds (default 2), then the
 # grant's dialogs, then 允许 is clicked on the Mac.
 COMPUTER_STEP = float(os.environ.get("MOCK_COMPUTER_STEP", "2"))
+# MOCK_COMPUTER_APPS=1: MacBook has two apps always allowed for the assistant (#1507), the machine page lists them.
+COMPUTER_APPS = {"macbook": [{"bundle_id": "com.apple.calculator", "name": "计算器", "at": "2026-11-04T10:00:00Z"},
+                             {"bundle_id": "screen", "name": "整个屏幕", "at": "2026-11-04T10:01:00Z"}]} if os.environ.get("MOCK_COMPUTER_APPS") == "1" else {}
 COMPUTER_JOBS = {}  # machine id -> {"kind": install|grant, "at": time started, "cancelled": bool}
 INSTALL_STEPS = ["下载安装器", "下载并校验 Cua Driver，装进「应用程序」", "关闭 Cua 的使用统计"]
 
@@ -6694,6 +6697,8 @@ if MOCK_COMPUTER:
                            "items": {"name": "items", "type": "string", "format": "machine", "os": ["darwin"]}},
                           {"name": "confirm", "type": "boolean", "title": "操作前在手机上确认", "default": False,
                            "description": "打开后，助手每次点击、输入、按键、打开或关闭 App 之前先在手机上问你；关着时直接做，记进 hub 的日志"},
+                          {"name": "app_approval", "type": "boolean", "title": "第一次操作一个 App 时先问", "default": True,
+                           "description": "助手第一次在一台 Mac 上操作某个 App（或看整个屏幕）时在手机上问一次，选「一直允许」后记住，在机器页可以移除；终端、系统设置、钥匙串访问、密码管理器和 Persona 每次都问"},
                           {"name": "keep_awake", "type": "boolean", "title": "操作和看画面时保持唤醒", "default": True,
                            "description": "助手操作那台 Mac、或有人在看它的画面时，它不睡、不因空闲锁屏；最后一次操作 10 分钟后、画面关掉后就撤掉，不改系统设置"}]},
                       "config": {}, "secrets": [], "permissions": []}
@@ -7354,6 +7359,8 @@ class H(BaseHTTPRequestHandler):
             if machine is None or "browser" not in machine:
                 return self.send_json({"error": "浏览器插件没打开，或这台不是 Mac"}, 404)
             return self.send_json(browser_now(machine))
+        if p.startswith("/api/v1/machines/") and p.endswith("/computer/apps"):  # the apps always allowed (#1507)
+            return self.send_json({"apps": COMPUTER_APPS.get(p.split("/")[4], [])})
         if p.startswith("/api/v1/machines/") and p.endswith("/computer"):  # the plugin cua (MOCK_COMPUTER)
             machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
             if machine is None or "computer" not in machine:
@@ -8191,6 +8198,10 @@ class H(BaseHTTPRequestHandler):
             else:
                 return self.send_json({"error": "unknown action"}, 404)
             return self.send_json(computer_now(machine))
+        if self.command == "DELETE" and p.startswith("/api/v1/machines/") and "/computer/apps/" in p:  # taken back (#1507)
+            mid, bundle = p.split("/")[4], unquote(p.rsplit("/", 1)[1])
+            COMPUTER_APPS[mid] = [a for a in COMPUTER_APPS.get(mid, []) if a["bundle_id"] != bundle]
+            return self.send_json({"apps": COMPUTER_APPS[mid]})
         if self.command == "PUT" and p.startswith("/api/v1/machines/") and p.endswith("/computer"):  # the plugin cua
             machine = next((m for m in MACHINES if m["id"] == p.split("/")[4]), None)
             if machine is None or "computer" not in machine:

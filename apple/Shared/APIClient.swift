@@ -346,6 +346,16 @@ nonisolated struct APIClient: Sendable {
     func computerJob(machine: String, _ action: String) async throws -> MachineComputer {
         try JSON.decoder.decode(MachineComputer.self, from: await request("POST", "/api/v1/machines/\(machine)/computer/\(action)"))
     }
+    /// The apps always allowed for the assistant on this Mac (#1507), and taking one back (asked again next time).
+    func computerApps(machine: String) async throws -> [ComputerApp] {
+        struct Out: Decodable { var apps: [ComputerApp] }
+        return try JSON.decoder.decode(Out.self, from: await request("GET", "/api/v1/machines/\(machine)/computer/apps")).apps
+    }
+    func removeComputerApp(machine: String, bundleID: String) async throws -> [ComputerApp] {
+        struct Out: Decodable { var apps: [ComputerApp] }
+        let id = bundleID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? bundleID
+        return try JSON.decoder.decode(Out.self, from: await request("DELETE", "/api/v1/machines/\(machine)/computer/apps/\(id)")).apps
+    }
 
     /// What the Mac has of ego lite now; 404 while the hub's plugin ego is off.
     func browser(machine: String) async throws -> MachineBrowser {

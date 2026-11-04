@@ -39,6 +39,8 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("GET /api/v1/machines/{mid}/computer", h.withMachine(h.getComputer))
 	api.HandleFunc("PUT /api/v1/machines/{mid}/computer", h.withMachine(h.putComputer))
 	api.HandleFunc("POST /api/v1/machines/{mid}/computer/{action}", h.withMachine(h.postComputerJob))
+	api.HandleFunc("GET /api/v1/machines/{mid}/computer/apps", h.withMachine(h.getComputerApps))
+	api.HandleFunc("DELETE /api/v1/machines/{mid}/computer/apps/{bundle}", h.withMachine(h.deleteComputerApp))
 	api.HandleFunc("GET /api/v1/machines/{mid}/browser", h.withMachine(h.getBrowser))
 	api.HandleFunc("PUT /api/v1/machines/{mid}/browser", h.withMachine(h.putBrowser))
 	api.HandleFunc("POST /api/v1/machines/{mid}/browser/{action}", h.withMachine(h.postBrowserJob))
