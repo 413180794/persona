@@ -3,12 +3,20 @@ package persona.core.hub
 import persona.core.contracts.Endpoint
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.api.ConnectionState
+import java.io.EOFException
 import java.net.InetAddress
+import java.net.ServerSocket
+import java.net.SocketException
+import java.net.SocketTimeoutException
+import java.security.cert.CertificateException
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
+import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLPeerUnverifiedException
+import kotlin.concurrent.thread
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -160,6 +168,52 @@ class HubNetworkingTest {
                 assertTrue(requests.all { it.path == "/api/v1/health" && it.getHeader("Authorization") == null })
             }
         } finally { servers.forEach { it.close() } }
+    }
+
+    /**
+     * A restarting hub behind a port proxy (Docker Desktop, adb reverse) takes the TCP connection and drops it in the
+     * middle of the handshake: a network error to retry, not 「hub 的证书变了」 (#1250). A wrong pin still is.
+     */
+    @Test fun aHandshakeCutShortIsRetriedNotACertificateChange() = runBlocking {
+        val certificate = HeldCertificate.Builder().commonName("example.com").build()
+        ServerSocket(0, 50, InetAddress.getLoopbackAddress()).use { proxy ->
+            thread(isDaemon = true) {
+                while (!proxy.isClosed) runCatching {
+                    proxy.accept().use { socket -> socket.getInputStream().read(ByteArray(512)) } // the ClientHello, then gone
+                }
+            }
+            val endpoint = Endpoint("https://${InetAddress.getLoopbackAddress().hostAddress}:${proxy.localPort}/", "lan")
+            HubHttpClient("test-hub", fingerprint(certificate), "test").use { client ->
+                val failure = failure { client.health(endpoint) }
+                assertNotEquals(HubError.CertificateMismatch, failure.kind)
+                assertTrue("a cut handshake is retried", failure.retryable)
+            }
+        }
+        tlsServer(certificate).use { server ->
+            server.enqueue(health())
+            val other = HeldCertificate.Builder().commonName("example.com").build()
+            HubHttpClient("test-hub", fingerprint(other), "test").use { wrongPin ->
+                val failure = failure { wrongPin.health(endpoint(server, "lan")) }
+                assertEquals(HubError.CertificateMismatch, failure.kind)
+                assertFalse(failure.retryable)
+            }
+        }
+    }
+
+    @Test fun onlyARefusedCertificateIsACertificateChange() {
+        val refused = SSLHandshakeException("handshake failed").apply { initCause(CertificateException("Hub SPKI mismatch")) }
+        assertEquals(HubError.CertificateMismatch, HubFailure.from(refused).kind)
+        assertEquals(HubError.CertificateMismatch, HubFailure.from(SSLPeerUnverifiedException("Hostname not verified")).kind)
+        for (cut in listOf(
+            SSLHandshakeException("Connection closed by peer"),
+            SSLHandshakeException("Remote host terminated the handshake").apply { initCause(EOFException("SSL peer shut down incorrectly")) },
+            SSLHandshakeException("Read error").apply { initCause(SocketException("Connection reset")) },
+        )) {
+            val failure = HubFailure.from(cut)
+            assertEquals(cut.message, HubError.Transport, failure.kind)
+            assertTrue(cut.message, failure.retryable)
+        }
+        assertEquals(HubError.Timeout, HubFailure.from(SSLHandshakeException("timed out").apply { initCause(SocketTimeoutException()) }).kind)
     }
 
     private fun health(id: String = "test-hub") = MockResponse().setBody("""{"ok":true,"hub_id":"$id"}""")

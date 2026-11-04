@@ -148,3 +148,8 @@
 
 - 多 hub（#634）：新接一个按机器 id 调用的服务时，别用「当前配对」的连接（`ConnectionRuntime.scopedData` / `connectionFor`）。页面拿到的机器 id 来自合并列表，别的组的带 `~<组 id>`，发给选中组的 hub 只会「找不到机器」，主组和别的组恰好有同名机器时更糟：改到了另一台。
   按 `GroupStacks.use(GroupKeys.namespaceOf(id))` 找组、在组里用 `inGroup(names)` 去掉后缀、把返回的机器再加上后缀；只有一台 hub 一份的（模型配置、语音、收件箱）才跟选中的组。
+
+## 连接和 TLS
+
+- 握手失败不等于证书变了（#1250）：hub 重启那几秒，Docker Desktop 的端口代理和 `adb reverse` 会先接下 TCP 连接、再因为后端不在而断开，握手中途断开也抛 `SSLHandshakeException`。原来凡是它都归成「hub 的证书变了」且永不重试，App 要杀进程才连得上。
+  只有拿到了证书、校验没过才算证书不符：`SpkiTrustManager` 拒了（异常链里有 `CertificateException`），或 hostname verifier 拒了（组里别的 hub 的 pin，`SSLPeerUnverifiedException`）。其余握手失败按普通网络错误退避重试（`HubFailure.from`）。

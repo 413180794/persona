@@ -7,7 +7,7 @@ import java.net.ConnectException
 import java.net.NoRouteToHostException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
-import javax.net.ssl.SSLHandshakeException
+import java.security.cert.CertificateException
 import javax.net.ssl.SSLPeerUnverifiedException
 import okhttp3.Response
 
@@ -33,7 +33,7 @@ class HubFailure(
             val causes = generateSequence(error) { it.cause }.take(16).toList()
             causes.filterIsInstance<HubFailure>().firstOrNull()?.let { return it }
             val kind = when {
-                causes.any { it is SSLHandshakeException || it is SSLPeerUnverifiedException } -> HubError.CertificateMismatch
+                causes.any(::isPinRejection) -> HubError.CertificateMismatch
                 causes.any { it is UnknownHostException } -> HubError.AddressNotFound
                 causes.any { it is NoRouteToHostException } -> HubError.Unreachable
                 causes.any { it is ConnectException } -> HubError.ConnectionRefused
@@ -42,6 +42,15 @@ class HubFailure(
             }
             return HubFailure(kind, retryable = kind != HubError.CertificateMismatch, cause = error)
         }
+
+        /**
+         * The hub's certificate was there and is not the paired one: [SpkiTrustManager] refused it (a
+         * [CertificateException] under the handshake failure) or the hostname verifier did (another group member's pin,
+         * [SSLPeerUnverifiedException]). A handshake cut short (EOF, a reset, a timeout — a restarting hub behind a port
+         * proxy accepts the TCP connection and drops it) is a network error to retry, not a changed certificate (#1250).
+         */
+        private fun isPinRejection(error: Throwable) =
+            error is SSLPeerUnverifiedException || error is CertificateException
 
         internal fun from(response: Response): HubFailure {
             val body = runCatching {
