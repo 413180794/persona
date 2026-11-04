@@ -13,7 +13,7 @@ func exampleEntities() entities {
 	group.SetParticipantsCount(128) // said only sometimes: a flag
 	return entitiesOf(
 		[]tg.UserClass{
-			&tg.User{ID: 1, AccessHash: 11, FirstName: "示例", LastName: "用户", Username: "example"},
+			&tg.User{ID: 1, AccessHash: 11, FirstName: "示例", LastName: "用户", Username: "example", Photo: &tg.UserProfilePhoto{PhotoID: 501, DCID: 4}},
 			&tg.User{ID: 3, AccessHash: 33, FirstName: "示例机器人", Bot: true},
 		},
 		[]tg.ChatClass{
@@ -44,7 +44,7 @@ func TestDialogsOf(t *testing.T) {
 	}
 	dm, group, channel, small, bot := got[0], got[1], got[2], got[3], got[4]
 	if dm.Kind != "dm" || dm.Peer != (peer{'u', 1, 11}) || dm.Name != "示例 用户" || dm.Unread != 2 || dm.ReadMax != 8 ||
-		dm.TopText != "示例消息" || dm.TopFrom != "示例 用户" || dm.Username != "example" || !dm.kept() {
+		dm.TopText != "示例消息" || dm.TopFrom != "示例 用户" || dm.Username != "example" || !dm.kept() || dm.Photo != 501 || dm.PhotoDC != 4 {
 		t.Fatalf("dm %+v", dm)
 	}
 	if group.Kind != "group" || group.Peer != (peer{'c', 2, 22}) || !group.Muted || group.Mentions != 1 || !group.TopOut || group.Broadcast || !group.kept() ||

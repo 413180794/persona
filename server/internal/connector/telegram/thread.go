@@ -75,6 +75,11 @@ func (c *Conn) Thread(ctx context.Context, thread, before string, limit int) (co
 		return connector.ThreadPage{}, c.writeError(err)
 	}
 	c.keepPeers(peers)
+	dcs := map[int64]int{d.Photo: d.PhotoDC}
+	for _, m := range msgs {
+		dcs[m.FromPhoto] = m.FromDC
+	}
+	c.keepPhotoDCs(dcs)
 	page := connector.ThreadPage{Chat: c.threadChat(d), Messages: make([]connector.ThreadMessage, 0, len(msgs))}
 	if len(msgs) == limit {
 		page.Before = strconv.Itoa(msgs[0].ID)
@@ -220,6 +225,20 @@ func (c *Conn) keepPeers(ps map[string]peer) {
 	}
 }
 
+// keepPhotoDCs keeps where the pictures the page names are (photo id -> data center), for fetching them there.
+func (c *Conn) keepPhotoDCs(dcs map[int64]int) {
+	c.box.mu.Lock()
+	defer c.box.mu.Unlock()
+	if c.box.photoDCs == nil || len(c.box.photoDCs) > peersMost {
+		c.box.photoDCs = map[int64]int{}
+	}
+	for id, dc := range dcs {
+		if id != 0 && dc != 0 {
+			c.box.photoDCs[id] = dc
+		}
+	}
+}
+
 func (c *Conn) keepLoc(ref string, f *fileLoc) {
 	c.box.mu.Lock()
 	defer c.box.mu.Unlock()
@@ -284,16 +303,20 @@ func (c *Conn) locate(ctx context.Context, cl client, ref string) (*fileLoc, err
 		}
 		c.box.mu.Lock()
 		p, ok := c.box.peers[parts[1]]
+		dc := c.box.photoDCs[photo]
 		c.box.mu.Unlock()
 		if !ok {
 			if d, err := pick(c.listed(), parts[1]); err == nil {
 				p, ok = d.Peer, true
+				if d.Photo == photo {
+					dc = d.PhotoDC
+				}
 			}
 		}
 		if !ok {
 			return nil, errNoMedia // a person no page read since the start: their initial instead
 		}
-		return avatarLoc(p, photo), nil
+		return avatarLoc(p, photo, dc), nil
 	case len(parts) == 4 && parts[0] == "m" && (parts[3] == "f" || parts[3] == "t"):
 		id, err := strconv.Atoi(parts[2])
 		if err != nil {

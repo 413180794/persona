@@ -33,9 +33,17 @@ func dialGotd(ctx context.Context, c creds, store sessionStore, g *gate, updated
 		}),
 	})
 	gc := &gotdClient{c: cl, creds: c, done: make(chan struct{})}
+	gc.pools = &dcPools{gate: g, open: func(ctx context.Context, dc int) (tg.Invoker, error) {
+		pool, err := cl.DC(ctx, dc, 1)
+		if err != nil {
+			return nil, err
+		}
+		return pool, nil
+	}}
 	ready := make(chan error, 1)
 	go func() {
 		defer close(gc.done)
+		defer gc.pools.close()
 		err := cl.Run(ctx, func(ctx context.Context) error {
 			ready <- nil
 			<-ctx.Done()
@@ -58,16 +66,16 @@ func dialGotd(ctx context.Context, c creds, store sessionStore, g *gate, updated
 }
 
 // gated sends every request of the client through g. One gotd makes while another is in the gate (a data center's
-// authorization transfer) is part of that one: it goes straight on, or it would wait for itself; its export is timed
-// for the trace.
+// authorization transfer for a request sent on) is part of that one: it goes straight on, or it would wait for itself.
+// An authorization's export is timed for the trace.
 func gated(g *gate) telegram.Middleware {
 	return telegram.MiddlewareFunc(func(next tg.Invoker) telegram.InvokeFunc {
 		return func(ctx context.Context, input bin.Encoder, output bin.Decoder) error {
+			if _, export := input.(*tg.AuthExportAuthorizationRequest); export && traceOf(ctx) != nil {
+				start := time.Now()
+				defer func() { traceOf(ctx).update(func(t *fetchTrace) { t.export += time.Since(start) }) }()
+			}
 			if inGate(ctx) {
-				if _, export := input.(*tg.AuthExportAuthorizationRequest); export && traceOf(ctx) != nil {
-					start := time.Now()
-					defer func() { traceOf(ctx).update(func(t *fetchTrace) { t.export += time.Since(start) }) }()
-				}
 				return next.Invoke(ctx, input, output)
 			}
 			return g.do(ctx, func(ctx context.Context) error { return next.Invoke(ctx, input, output) })
@@ -94,6 +102,7 @@ type gotdClient struct {
 	c     *telegram.Client
 	creds creds
 	done  chan struct{}
+	pools *dcPools // the other data centers' connections, for pictures kept there (dc.go)
 }
 
 func (g *gotdClient) Done() <-chan struct{} { return g.done }

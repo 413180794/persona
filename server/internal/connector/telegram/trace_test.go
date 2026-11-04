@@ -93,13 +93,21 @@ func TestTraceTransfer(t *testing.T) {
 	}
 }
 
-// The line, with a request sent on and a connection made.
+// The line: a picture asked on the account's data center and sent on (as before #1272), and one asked on its own
+// data center's new connection.
 func TestTraceLine(t *testing.T) {
-	tr := &fetchTrace{home: 5, requests: 1, queued: 620 * time.Millisecond, call: 4100 * time.Millisecond, sentOn: []int{4}, opened: []int{4},
+	tr := &fetchTrace{home: 5, from: 5, requests: 1, queued: 620 * time.Millisecond, call: 4100 * time.Millisecond, sentOn: []int{4}, opened: []int{4},
 		transfer: 1900 * time.Millisecond, export: 410 * time.Millisecond}
-	want := "Telegram avatar: 4.78 s; 1 request(s), queued 0.62 s, in Telegram 4.10 s; account on DC 5; sent on to DC 4; " +
+	want := "Telegram avatar: 4.78 s; from DC 5 (account on DC 5); 1 request(s), queued 0.62 s, in Telegram 4.10 s; sent on to DC 4; " +
 		"new connection to DC 4, authorization transfer 1.90 s (export 0.41 s)"
 	if got := tr.line("avatar", 4780*time.Millisecond, nil); got != want {
+		t.Fatalf("%q\nwant %q", got, want)
+	}
+	tr = &fetchTrace{home: 5, from: 4, requests: 2, queued: 10 * time.Millisecond, call: 800 * time.Millisecond, opened: []int{4},
+		connect: 4200 * time.Millisecond, transfer: 3900 * time.Millisecond, export: 350 * time.Millisecond}
+	want = "Telegram avatar: 4.70 s; from DC 4 (account on DC 5); 2 request(s), queued 0.01 s, in Telegram 0.80 s; not sent on; " +
+		"new connection to DC 4 in 4.20 s outside the gate, authorization transfer 3.90 s (export 0.35 s)"
+	if got := tr.line("avatar", 4700*time.Millisecond, nil); got != want {
 		t.Fatalf("%q\nwant %q", got, want)
 	}
 }

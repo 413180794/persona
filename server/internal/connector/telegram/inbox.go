@@ -36,6 +36,7 @@ type inboxState struct {
 	peers    map[string]peer          // people and chats the conversation pages named, for their pictures (thread.go)
 	locs     map[string]*fileLoc      // where the pages' pictures are, by media ref (thread.go)
 	members  map[string]headcount     // group key -> how many are in it, as asked (thread.go)
+	photoDCs map[int64]int            // picture id -> the data center it is on, from the pages read (thread.go)
 	refresh  sync.Mutex               // one refresh at a time
 }
 

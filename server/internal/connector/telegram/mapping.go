@@ -130,7 +130,8 @@ func dialogsOf(ds []tg.DialogClass, msgs []tg.MessageClass, e entities, archived
 		}
 		x := dialog{Peer: p, Name: e.nameOf(d.Peer), Top: d.TopMessage, Unread: d.UnreadCount, Mentions: d.UnreadMentionsCount,
 			ReadMax: d.ReadInboxMaxID, Archived: archived || d.FolderID == 1, Muted: int64(d.NotifySettings.MuteUntil) > now.Unix(), Kind: "group",
-			Photo: e.photoOf(d.Peer), Members: e.membersOf(d.Peer)}
+			Members: e.membersOf(d.Peer)}
+		x.Photo, x.PhotoDC = e.photoOf(d.Peer)
 		switch pp := d.Peer.(type) {
 		case *tg.PeerUser:
 			x.Kind = "dm"

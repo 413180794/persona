@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -15,9 +16,9 @@ func threadAccount(t *testing.T) (*Conn, *fakeTelegram, context.Context) {
 	t.Helper()
 	c, f, ctx := archiveAccount(t)
 	f.mu.Lock()
-	f.dialogs[0].Photo = 900
-	f.photos = map[string]int64{"u1": 501, "u7": 507}
-	f.media = map[string]*pageMedia{"c2/12": {Kind: "image", Mime: "image/jpeg", Width: 800, Height: 600, Full: &fileLoc{key: "photo 12", mime: "image/jpeg"}}}
+	f.dialogs[0].Photo, f.dialogs[0].PhotoDC = 900, 2
+	f.photos, f.photoDCs = map[string]int64{"u1": 501, "u7": 507}, map[string]int{"u1": 4, "u7": 1}
+	f.media = map[string]*pageMedia{"c2/12": {Kind: "image", Mime: "image/jpeg", Width: 800, Height: 600, Full: &fileLoc{key: "photo 12", mime: "image/jpeg", dc: 3}}}
 	f.files = map[string][]byte{"photo 12": []byte("made-up jpeg"), "avatar 501": []byte("made-up avatar 501"), "avatar 507": []byte("made-up avatar 507"),
 		"avatar 900": []byte("made-up group picture")}
 	f.history["u1"][2].ReplyTo = 1 // my reply to the oldest message, which a short page does not have
@@ -105,6 +106,12 @@ func TestThreadMedia(t *testing.T) {
 	}
 	if requests(f, "Locate") != 0 {
 		t.Fatal("located a picture its page had")
+	}
+	f.mu.Lock()
+	where := fmt.Sprint(f.fetched)
+	f.mu.Unlock()
+	if where != "map[avatar 507:1 avatar 900:2 photo 12:3]" { // a sender's and the group's from the page, a photo's its own
+		t.Fatalf("asked on %s", where)
 	}
 	c.box.mu.Lock()
 	c.box.locs = nil

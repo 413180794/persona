@@ -107,10 +107,15 @@ gotd 让二进制大 35 MB，所以 Telegram 不编进 personad，单独一个�
   - 头像：`a.<会话>.<照片 id>`，不需要 file reference。
   - 消息里的：`m.<会话>.<消息 id>.f|t`，位置记在内存里；程序重启后再读一次那条消息，拿新的 file reference。
   - 照片取长边不超过 1280 的那一档。静态贴纸取本身（WebP）；动的贴纸、视频取缩略图。语音只显示时长，文件只显示名字和大小。
+  - 去图片所在的数据中心取（#1272，量的结果见 #1255）：头像带着它的数据中心编号（`UserProfilePhoto.dc_id`、`ChatPhoto.dc_id`，从读过的页面和会话列表记下），
+    消息里的照片和文件也带着（`Photo.dc_id`、`Document.dc_id`），就直接去那个数据中心取。每个数据中心一个连接（`dc.go` 的 `dcPools`，gotd 的 `Client.DC`，仍然是 MTProto 直连），用到才连。
+    建连接、生成密钥、导入授权放在闸门外，只有导出授权那一个请求过闸门；同一个数据中心只建一次，不同的同时建。连接上的每个请求照旧过闸门。
+    编号不知道（重启前读的页面）、就是本号所在的数据中心、或者图搬走了（目标回 FILE_MIGRATE）时，走本号的连接，gotd 自己跟着 FILE_MIGRATE 走。限流中不建连接、不发请求。
+    之前每张跨数据中心的图要 2 个请求（先在本号的数据中心被打回）；第一次去一个数据中心的 4 秒左右整段占着闸门，别的请求都要等。
   - 计时（#1255）：每取一张，jarvisd-telegram 的日志写一行，只有时间和数据中心编号，不写 ref、id、名字、内容。例：
-    `Telegram avatar: 4.78 s; 1 request(s), queued 0.62 s, in Telegram 4.10 s; account on DC 5; sent on to DC 4; new connection to DC 4, authorization transfer 1.90 s (export 0.41 s)`。
-    `sent on` 是 Telegram 回了 FILE_MIGRATE（图在别的数据中心）；`new connection` 是这个进程第一次去那个数据中心，要转授权（导出 + 导入）。
-    数据来源：闸门（`gate.do`）记排队和调用，gotd 的 `OnTransfer` 记授权转移，闸门中间件里嵌套的导出请求记导出；gotd 的 Logger（`traceLog`）只对带计时的请求打开，从 gotd 自己的两条记录里取编号，本身什么都不打印。
+    `Telegram avatar: 4.70 s; from DC 4 (account on DC 1); 2 request(s), queued 0.01 s, in Telegram 0.80 s; not sent on; new connection to DC 4 in 4.20 s outside the gate, authorization transfer 3.90 s (export 0.35 s)`。
+    `from` 是在哪个数据中心取的；`sent on` 是 Telegram 回了 FILE_MIGRATE（在本号的连接上取了别的数据中心的图）；`new connection` 是这个进程第一次去那个数据中心（`outside the gate` 是在闸门外建连接用的时间），要转授权（导出 + 导入）。
+    数据来源：闸门（`gate.do`）记排队和调用，gotd 的 `OnTransfer` 记授权转移，闸门中间件记导出；gotd 的 Logger（`traceLog`）只对带计时的请求打开，从 gotd 自己的两条记录里取编号，本身什么都不打印。
 - **限流**：页面和媒体都走 #965 的闸门；限流中直接回「Telegram 限流中，N 秒后再试」，App 在页面上方提示，或者退回 hub 收集的文本。
 - **人数**（#1228）：标题下面和飞书会话页一样写来源，群和频道再加人数：「Telegram 群聊 · 128 位成员」「Telegram 频道 · 1,234 位订阅者」，私聊只写「Telegram」。
   人数先从 Telegram 已经给的对象里拿，不多发请求：列会话（`getDialogs`）时普通群的 `Chat.participants_count` 一定有，超级群和频道的有时有。

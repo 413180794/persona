@@ -81,9 +81,11 @@ type fakeTelegram struct {
 	writes  []string
 	// The conversation page's (thread_test.go): people's pictures by peer key, messages' media by "<chat>/<id>", and
 	// the bytes of every picture by its key.
-	photos map[string]int64
-	media  map[string]*pageMedia
-	files  map[string][]byte
+	photos   map[string]int64
+	photoDCs map[string]int // where those pictures are kept
+	media    map[string]*pageMedia
+	files    map[string][]byte
+	fetched  map[string]int // the data center each picture fetched was asked for, by its key
 }
 
 type sentRequest struct {
@@ -375,7 +377,7 @@ func (f *fakeTelegram) pageOf(chat string, m message) pageMessage {
 		var p peer
 		fmt.Sscanf(m.FromKey[1:], "%d", &p.ID)
 		p.Kind, p.Hash = m.FromKey[0], p.ID*11
-		pm.FromPeer, pm.FromPhoto = p, f.photos[m.FromKey]
+		pm.FromPeer, pm.FromPhoto, pm.FromDC = p, f.photos[m.FromKey], f.photoDCs[m.FromKey]
 	}
 	if md := f.media[fmt.Sprintf("%s/%d", chat, m.ID)]; md != nil {
 		pm.Media, pm.Caption = md, strings.TrimSpace(strings.TrimSuffix(m.Text, "[图片]"))
@@ -438,6 +440,10 @@ func (c *fakeClient) Fetch(ctx context.Context, f *fileLoc, most int) ([]byte, e
 	if !ok {
 		return nil, errors.New("FILE_REFERENCE_EXPIRED")
 	}
+	if c.f.fetched == nil {
+		c.f.fetched = map[string]int{}
+	}
+	c.f.fetched[key] = f.dc
 	if len(b) > most {
 		return nil, fmt.Errorf("more than %d bytes", most)
 	}

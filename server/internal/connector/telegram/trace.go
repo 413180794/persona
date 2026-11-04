@@ -20,11 +20,13 @@ import (
 type fetchTrace struct {
 	mu       sync.Mutex
 	home     int           // the account's data center (0: not known)
+	from     int           // the data center it was asked on
 	requests int           // through the gate
 	queued   time.Duration // waiting for the request before it, and the gap after it (gate.do)
 	call     time.Duration // the requests themselves, with all gotd did inside them
 	sentOn   []int         // data centers Telegram sent a request on to (FILE_MIGRATE)
 	opened   []int         // data centers a new connection was made to
+	connect  time.Duration // making one, outside the gate but for its export (dcPools.get)
 	transfer time.Duration // authorization transfers to them: export and import
 	export   time.Duration // the exports among them
 }
@@ -67,17 +69,24 @@ func (t *fetchTrace) line(kind string, took time.Duration, err error) string {
 	if err != nil {
 		b.WriteString(" (failed)")
 	}
-	fmt.Fprintf(&b, "; %d request(s), queued %s, in Telegram %s", t.requests, secs(t.queued), secs(t.call))
-	if t.home > 0 {
-		fmt.Fprintf(&b, "; account on DC %d", t.home)
+	if t.from > 0 {
+		fmt.Fprintf(&b, "; from DC %d", t.from)
 	}
+	if t.home > 0 {
+		fmt.Fprintf(&b, " (account on DC %d)", t.home)
+	}
+	fmt.Fprintf(&b, "; %d request(s), queued %s, in Telegram %s", t.requests, secs(t.queued), secs(t.call))
 	if len(t.sentOn) == 0 {
 		b.WriteString("; not sent on")
 	} else {
 		fmt.Fprintf(&b, "; sent on to DC %s", dcs(t.sentOn))
 	}
 	if len(t.opened) > 0 {
-		fmt.Fprintf(&b, "; new connection to DC %s, authorization transfer %s (export %s)", dcs(t.opened), secs(t.transfer), secs(t.export))
+		fmt.Fprintf(&b, "; new connection to DC %s", dcs(t.opened))
+		if t.connect > 0 {
+			fmt.Fprintf(&b, " in %s outside the gate", secs(t.connect))
+		}
+		fmt.Fprintf(&b, ", authorization transfer %s (export %s)", secs(t.transfer), secs(t.export))
 	}
 	return b.String()
 }

@@ -5,11 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 
-	"github.com/gotd/td/telegram/downloader"
 	"github.com/gotd/td/tg"
 )
 
@@ -22,6 +20,7 @@ type fileLoc struct {
 	mime string
 	size int64
 	key  string
+	dc   int // the data center it is kept on, 0 when not known (dc.go: then the account's finds it)
 }
 
 // fullEdge is the longest side of a photo the page fetches: sharp on a phone's screen, a few hundred KB.
@@ -57,7 +56,7 @@ func photoOf(p *tg.Photo) (*fileLoc, int, int) {
 		return nil, 0, 0
 	}
 	return &fileLoc{loc: &tg.InputPhotoFileLocation{ID: p.ID, AccessHash: p.AccessHash, FileReference: p.FileReference, ThumbSize: best},
-		mime: "image/jpeg"}, bw, bh
+		mime: "image/jpeg", dc: p.DCID}, bw, bh
 }
 
 // docThumb is a document's largest thumbnail (a video's, an animated sticker's), nil without one.
@@ -74,7 +73,8 @@ func docThumb(d *tg.Document) *fileLoc {
 	if strings.HasPrefix(d.MimeType, "application/x-tgsticker") || d.MimeType == "video/webm" || d.MimeType == "image/webp" {
 		mime = "image/webp" // a sticker's thumbnail is WebP
 	}
-	return &fileLoc{loc: &tg.InputDocumentFileLocation{ID: d.ID, AccessHash: d.AccessHash, FileReference: d.FileReference, ThumbSize: best}, mime: mime}
+	return &fileLoc{loc: &tg.InputDocumentFileLocation{ID: d.ID, AccessHash: d.AccessHash, FileReference: d.FileReference, ThumbSize: best}, mime: mime,
+		dc: d.DCID}
 }
 
 // pageMediaOf is a message's media for the page; nil for none (a link preview, whose link is in the text) and for
@@ -120,7 +120,7 @@ func pageMediaOf(mc tg.MessageMediaClass) *pageMedia {
 		}
 		if out.Kind == "sticker" && d.MimeType == "image/webp" && d.Size <= 1<<20 { // a static sticker: the sticker itself
 			out.Full = &fileLoc{loc: &tg.InputDocumentFileLocation{ID: d.ID, AccessHash: d.AccessHash, FileReference: d.FileReference},
-				mime: "image/webp", size: d.Size}
+				mime: "image/webp", size: d.Size, dc: d.DCID}
 		}
 		return out
 	}
@@ -137,7 +137,7 @@ func pageMessageOf(mc tg.MessageClass, e entities) pageMessage {
 			from = m.PeerID
 		}
 		out.FromPeer, _ = e.peerOf(from)
-		out.FromPhoto = e.photoOf(from)
+		out.FromPhoto, out.FromDC = e.photoOf(from)
 		out.Edited = m.EditDate != 0 && !m.EditHide
 		out.Media = pageMediaOf(m.Media)
 		var parts []string
@@ -168,34 +168,35 @@ func pageMessageOf(mc tg.MessageClass, e entities) pageMessage {
 	return out
 }
 
-// photoOf is a peer's picture id in the entities (a person's, a group's), 0 without one.
-func (e entities) photoOf(p tg.PeerClass) int64 {
+// photoOf is a peer's picture id in the entities (a person's, a group's), 0 without one, and the data center it is on.
+func (e entities) photoOf(p tg.PeerClass) (id int64, dc int) {
 	switch p := p.(type) {
 	case *tg.PeerUser:
 		if u := e.users[p.UserID]; u != nil {
 			if ph, ok := u.Photo.(*tg.UserProfilePhoto); ok {
-				return ph.PhotoID
+				return ph.PhotoID, ph.DCID
 			}
 		}
 	case *tg.PeerChat:
 		if c, ok := e.chats[p.ChatID].(*tg.Chat); ok {
 			if ph, ok := c.Photo.(*tg.ChatPhoto); ok {
-				return ph.PhotoID
+				return ph.PhotoID, ph.DCID
 			}
 		}
 	case *tg.PeerChannel:
 		if c, ok := e.chats[p.ChannelID].(*tg.Channel); ok {
 			if ph, ok := c.Photo.(*tg.ChatPhoto); ok {
-				return ph.PhotoID
+				return ph.PhotoID, ph.DCID
 			}
 		}
 	}
-	return 0
+	return 0, 0
 }
 
-// avatarLoc is where a peer's small picture is: no file reference needed, only the peer and the photo's id.
-func avatarLoc(p peer, photo int64) *fileLoc {
-	return &fileLoc{loc: &tg.InputPeerPhotoFileLocation{Peer: inputPeer(p), PhotoID: photo}, mime: "image/jpeg"}
+// avatarLoc is where a peer's small picture is: no file reference needed, only the peer and the photo's id (and its
+// data center, 0 when not known).
+func avatarLoc(p peer, photo int64, dc int) *fileLoc {
+	return &fileLoc{loc: &tg.InputPeerPhotoFileLocation{Peer: inputPeer(p), PhotoID: photo}, mime: "image/jpeg", dc: dc}
 }
 
 func (g *gotdClient) Page(ctx context.Context, d dialog, before, limit int) ([]pageMessage, map[string]peer, error) {
@@ -278,13 +279,10 @@ func (c *capped) Write(p []byte) (int, error) {
 }
 
 func (g *gotdClient) Fetch(ctx context.Context, f *fileLoc, most int) ([]byte, error) {
-	traceOf(ctx).update(func(t *fetchTrace) { t.home = g.c.Config().ThisDC })
-	w := &capped{n: most}
+	home := g.c.Config().ThisDC
+	traceOf(ctx).update(func(t *fetchTrace) { t.home, t.from = home, home })
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	// One part after another, each a request through the connector's gate.
-	if _, err := downloader.NewDownloader().Download(g.c.API(), f.loc).Stream(ctx, w); err != nil && !errors.Is(err, io.EOF) {
-		return nil, err
-	}
-	return w.buf.Bytes(), nil
+	// One part after another, each a request through the connector's gate (dc.go).
+	return fetchFrom(ctx, f, home, g.c, g.pools, most)
 }
