@@ -9,6 +9,11 @@
   停自己的 mock 按端口停（`kill $(lsof -t -iTCP:<端口> -sTCP:LISTEN)`），别 `pkill -f mock_hub.py`：会把别的车道正在用的 mock 一起杀掉（2026-10-31 踩过）。
   经 ssh 远程 `pkill -f <路径>` 也会匹配到 ssh 起的那个 `bash -c '…'` 自己（命令行里有同一个路径），把这次 ssh 连同后面的命令一起杀掉：按记下的 pid / 进程组停。
 - 脚本要在 macOS 自带的 Python 3.9 上跑（2026-11-03，#579）：新版 Python 上写的 `def f(x: str | None = None)` 在 3.9 上一 import 就 `TypeError: unsupported operand type(s) for |`，Mac mini 上发不了 TestFlight，而在新版 Python 上测试全过。注解里用 `X | None` 就在文件开头加 `from __future__ import annotations`；`isinstance(x, int | str)`、`A = int | None` 这种不在注解里的它也救不了，改用元组 / `Optional`。`datetime.fromisoformat` 在 3.9 上只认 3 或 6 位小数秒，Go 写的 RFC 3339 时间有 0–9 位，先补齐到 6 位再解析（`redact_transcript.py` 的 `ts`）。`scripts/test/test_script_layout.py` 按源码查注解里的 `X | Y` 和 3.9 以后才有的语法，不在注解里的 `|` 查不到。
+- 部署官网 / 发版的 worktree 要建在刚 fetch 过的 origin/master 上（2026-11-04）：`git worktree add --detach … origin/master` 用的是本地记的 origin/master，
+  几分钟没 fetch 就可能落后。那次 `SITE_ONLY=1 publish.sh` 的 worktree 比 #1164（香港入口、中继认入口转发的 IP）早 7 分钟，`wrangler deploy` 把线上的
+  `worker.mjs` 整个换回旧版，约 30 分钟里中继又只按入口的出口 IP 限流；旧的 `wrangler.jsonc` 还想把已经交给 DNS 的官网根域名绑回 Worker
+  （被 Cloudflare 拒了，报 `externally managed DNS records`，publish 退出 1，但脚本已经上传）。建 worktree 前先 `git fetch`，部署前 `git rev-parse HEAD origin/master`
+  核对一致；publish 报错时先看线上是不是已经换成了这份代码，再决定怎么补。
 - 两个会话同时发版会撞构建号（2026-11-04）：两边在同一分钟各自起 `release.sh`（不带构建号），拿到同一个按时间生成的号 `202611040002`，
   先传完的那次进了 TestFlight，后一次上传被 App Store Connect 拒（`Redundant Binary Upload`，exit 70），Organizer 里的同名归档也只剩一份。
   起发布前先 `pgrep -fl scripts/release/release.sh` 看有没有别人在发；要发就用 `asc_testflight.py next-build` 拿号、显式传给 `release.sh <构建号>`。
