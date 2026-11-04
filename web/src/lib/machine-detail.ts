@@ -2,6 +2,7 @@
 // the hover read-out, the number formats, the agents by space and the system facts. MachineDetail.tsx only draws.
 import { stateOf, tabLabel } from "./format";
 import type { AgentState, Machine, Session } from "./types";
+import type { MachineComputer } from "./computer";
 
 // ── wire types (GET /api/v1/machines/{id}/metrics, docs/protocol.md) ──
 
@@ -59,7 +60,8 @@ export interface DetailMetrics {
 }
 
 /** What the machine list carries beyond types.ts's Machine (the detail page reads these too). */
-export type DetailMachine = Machine & { ssh_host?: string; node_version?: string; system?: SystemInfo };
+/** computer: only while the hub's plugin cua is on, and only for a Mac (docs/computer-use.md). */
+export type DetailMachine = Machine & { ssh_host?: string; node_version?: string; system?: SystemInfo; computer?: MachineComputer };
 
 // ── ranges ──
 

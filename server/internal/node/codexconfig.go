@@ -14,7 +14,7 @@ import (
 // The same shape as Claude's (claudeconfig.go), so the app draws both with one page.
 var codexSettings = []ClaudeSetting{
 	{Key: "model", Title: "模型", Detail: "没指定模型时 Codex 用哪个，比如 gpt-5.5", Type: "string", Default: ""},
-	{Key: "model_reasoning_effort", Title: "思考强度", Detail: "越高越慢、越仔细", Type: "enum", Options: []string{"minimal", "low", "medium", "high", "xhigh"}, Default: "medium"},
+	{Key: "model_reasoning_effort", Title: "思考强度", Detail: "越高越慢、越仔细", Type: "enum", Options: []string{"minimal", "low", "medium", "high", "xhigh", "max", "ultra"}, Default: "medium"},
 	{Key: "model_reasoning_summary", Title: "思考摘要", Detail: "把模型的思考整理成摘要显示，none 不显示", Type: "enum", Options: []string{"auto", "concise", "detailed", "none"}, Default: "auto"},
 	{Key: "model_verbosity", Title: "回答详细程度", Detail: "回答写多长", Type: "enum", Options: []string{"low", "medium", "high"}, Default: "medium"},
 	{Key: "approval_policy", Title: "什么时候问你", Detail: "执行命令前要不要先确认；never 一律不问", Type: "enum", Options: []string{"untrusted", "on-failure", "on-request", "never"}, Default: "on-request"},

@@ -161,6 +161,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   已设置的可以清除（再点一次确认）；「提供」「它可以」「关于」（版本、上一个版本、来源、安装自、发布者、https 的主页、警告）。hub.json 来的只读：没有开关、表单、密钥。
   装、升级、卸载在 hub 的管理界面（`/admin`）或 hub 机器上（`personad plugin`）。截图用 `MOCK_PLUGINS=1` 的假 hub。
   「模型供应商」是全部接入（搜索；Persona 管理 / 来自 ~/.zshrc / 已隐藏），点开是弹窗：按电脑分组的真实参数（`docs/launchers.md`）、
+  「额度 · <网关名>」（非直接 API 的，#1326，`settings/LauncherQuota.tsx`，逻辑 `lib/quota.ts`，照 iOS `LauncherQuotaSection`：预算、各账号 / 供应商的窗口和进度条（≥ 70% 橙、≥ 90% 或用完红）、按模型折叠、这个 Key 的用量，右上刷新带 `refresh=1`，`docs/launchers.md`「额度」）、
   测试可用性、函数原文（折叠）、编辑、删除 / 隐藏；新增支持启动器或直接 API（Messages / Responses），hub 的插件有供应商预设时多一个「从插件添加」（`docs/launchers.md`「从插件添加」）；
   「模型配置」按 hub 的真实用途目录分组/搜索，编辑供应商、具体模型和支持的思考强度，显示继承与当前生效值。保存失败保留草稿，revision 冲突需重新加载（`docs/model-config.md`）；
   「翻译」（`settings/TranslationSettings.tsx`，`?tab=translate`）：自动翻译、翻译模型（跳到模型配置的 `translate` 用途）、目标语言、翻译范围（邮件、选中的飞书会话），
@@ -173,6 +174,11 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   整段没数据时只给一张卡片和「看最近 24 小时」），只在页面可见时刷新（1 小时档 10 秒、另两档每分钟，照 iOS）；系统信息、启动器。引擎切换在 #254。
   #433 加了「负载（1 分钟）」曲线（四张图 2×2，虚线标出核数，颜色 token `--chart-load` 取 iOS `MetricColor.load`）和「每个核心」柱状图（`latest.cores` 有两个以上且在线时，即 Linux 的 node，
   右上「最忙 X%」，悬停看每核数值）。
+  「操控电脑」（#1326，`machines/ComputerSection.tsx`，逻辑 `lib/computer.ts`，照 iOS `ComputerSection`，[computer-use.md](computer-use.md)）：hub 的插件 cua 打开、这台是 Mac 时（机器带 `computer`）
+  在 Agent 下面多一节：开关「允许助手操控这台电脑」（`PUT …/computer`，离线时不能改），打开后按状态给一行说明和下一步：没装时「安装 Cua Driver」（先弹窗确认）、
+  安装中的步骤和「取消」、缺权限时「去授权」、授权窗口弹出后「再请求一次」、可以操控时版本；那台 Mac 开着屏幕共享时有「看画面」（新标签页打开 `/screen/<机器>`），
+  没开时提示去哪里打开。打开页面时 `GET …/computer` 问一次，安装 / 授权进行中每 2 秒再问。hub 没有重启这类动作（`…/computer/reboot` 是 404），这里也没有。
+  截图用 `MOCK_COMPUTER=permissions|missing|ready` 的假 hub。
 
 ### 主对话统一入口（#930）
 
@@ -362,12 +368,14 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。
 | --- | --- | --- | --- |
 | 机器列表（卡片、曲线、重连、重新部署） | 有 | — | 卡片点进机器页 |
 | 机器详情（Agent、1 / 6 / 24 小时曲线、系统信息、启动器） | 有 | #297 | |
+| 机器详情的「操控电脑」（开关、安装 Cua Driver、授权、屏幕共享、看画面） | 有 | #1326 | 「看画面」在新标签页打开网页的 `/screen/<机器>`（iOS 在 App 内的 WebView） |
 | 负载曲线、Linux 每核柱状图 | 有 | #433 | |
 | 终端引擎切换、Orca 启动器 | 另有 PR | — | #254 |
 | 外观：跟随系统 / 浅色 / 深色 | 有 | — | |
 | 界面风格、主题色、布局 | 不适用 | — | 网页只有 Beautiful UI 一套；新风格按 CLAUDE.md 做成新选项 |
 | 形象 | 有 | #433 | 设置 › 通用、资料页 |
 | 模型供应商、模型配置 | 有 | — | |
+| 模型供应商的「额度」 | 有 | #1326 | 供应商弹窗里，「可用性」上面 |
 | 助手（主动做事、关于我、记忆、运行在哪） | 有 | #297 | 换助手所在的机器没做（iOS 也不能改） |
 | Claude Code 设置、Codex 设置 | 有 | #297 | |
 | 连接器：邮箱 | 有 | #297 | Gmail 只能在手机上加（Google 授权客户端是 iOS 类型） |

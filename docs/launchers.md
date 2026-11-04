@@ -131,7 +131,7 @@ node 一侧 `node/launcherquota.go`。
   Key 不离开那台电脑，地址也是那台电脑能到的地址。优先 hub 自己那台。旧 node 没有 `launchers.http` 时说「node 太旧」。
 - 几个额度插件时：声明了 `hosts` 且对得上网关主机名的先问，再问没声明 `hosts` 的；回 `unsupported` 的跳过，第一个回答的为准。都不认识就是「查不了」。
 - 结果缓存一分钟（`refresh=1` 重读）。报告的 `gateway` 是插件贡献的 id，`gateway_name` 是给人看的名字。
-- App：`LauncherQuotaSection`，放在「可用性」上面；标题是「额度 · <网关名>」，网关名用报告的 `gateway_name`（旧 hub 没有时显示 `gateway`），App 里不写死任何网关的名字。
+- App：`LauncherQuotaSection`，放在「可用性」上面（网页同样，`web/src/views/settings/LauncherQuota.tsx`）；标题是「额度 · <网关名>」，网关名用报告的 `gateway_name`（旧 hub 没有时显示 `gateway`），App 里不写死任何网关的名字。
   用量比例 ≥ 70% 橙色、≥ 90% 或用完红色；右上角刷新。DEBUG `-openLauncherPage <名字>` 直接打开。
   假 hub 的 `cc_main`、`cc_team` 带两个示例网关的额度（`示例网关`、`示例中转`），截图用。
 

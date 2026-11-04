@@ -1,7 +1,7 @@
 // 机器详情 (/machines/<id>, docs/machines.md「App」, iOS MachineDetailView): one page, the most used on top — how the
 // computer is (online, system, which hub when there are several), its agents by herdr space (a row opens the chat),
 // its values now, CPU / memory / network / load over 1, 6 or 24 hours (hover a chart to read a moment, all follow) and
-// each core now (Linux), the system, the launchers. The metrics refresh only while the page is visible.
+// each core now (Linux), the system, the launchers. A Mac the hub's plugin cua is on for gets 操控电脑 after its agents. The metrics refresh only while the page is visible.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, enc, errorText, isAbort } from "../../lib/api";
 import { ago, sessionTitle, stateOf } from "../../lib/format";
@@ -40,6 +40,7 @@ import { Button, cx, EASE, IconButton, Loading, StatePill, StatusDot, toast } fr
 import { Icon } from "../../ui/icons";
 import { MetricChart, type ChartSeries } from "./MetricChart";
 import { MachineDeploy } from "./MachineDeploy";
+import { ComputerSection } from "./ComputerSection";
 
 interface MachineLauncher {
   name: string;
@@ -243,6 +244,8 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
           </div>
         )}
       </section>
+
+      {m.computer && <ComputerSection mid={mid} computer={m.computer} online={online} />}
 
       {/* monitoring */}
       <section>

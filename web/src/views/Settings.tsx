@@ -16,6 +16,7 @@ import { BuiltinFace, PersonaPicker } from "./assistant/Persona";
 import { Connectors } from "./settings/Connectors";
 import { TranslationSettings } from "./settings/TranslationSettings";
 import { Plugins } from "./settings/Plugins";
+import { LauncherQuota } from "./settings/LauncherQuota";
 import { launcherNameProblem, loadPresets, presetBody, presetChoices, presetDefaultModel, presetModelLabel, presetSubtitle, type LauncherPreset } from "../lib/launcher-presets";
 import { Segmented } from "./assistant/parts";
 
@@ -482,6 +483,9 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
             ))}
             {l.hidden && <Pill tone="red">已隐藏</Pill>}
           </div>
+
+          {/* how much is left comes before trying it, as in the app */}
+          {l.kind !== "api" && <LauncherQuota name={l.name} />}
 
           {Object.keys(checks).length > 0 && (
             <KV title="可用性">
