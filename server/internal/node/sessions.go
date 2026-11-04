@@ -967,8 +967,12 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 			continue
 		}
 		if id := a.SessionID(); id != "" {
-			if parked[id] {
-				continue // its claude sent the session to the background: the pane shows Claude's agents view
+			if j, ok := parked[id]; ok {
+				// its claude sent the session to the background: the pane shows Claude's agents view, or the job
+				if bg := j.shownIn(a); bg != "" && !liveTaken(m, bg) {
+					m[bg] = a
+				}
+				continue
 			}
 			if liveTaken(m, id) && a.AgentStatus == proto.StatusOffline {
 				continue // the same session runs in another host's pane (botmux's parked row, herdr's resume)
@@ -993,8 +997,11 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 		// redeploy two panes showed sessions they had run days earlier). A guess (title, then newest transcript in
 		// the directory) is the last resort — six agents in one repo got each other's tab names that way.
 		id := n.sessionFromProcess(a.PaneID)
-		if parked[id] {
-			continue // the same, as the pane's own claude tells it
+		if j, ok := parked[id]; ok { // the same, as the pane's own claude tells it
+			if bg := j.shownIn(a); bg != "" && !liveTaken(m, bg) {
+				m[bg] = a
+			}
+			continue
 		}
 		if id == "" {
 			n.mu.Lock()

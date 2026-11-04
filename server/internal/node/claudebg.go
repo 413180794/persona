@@ -3,6 +3,7 @@ package node
 import (
 	"os"
 
+	"github.com/nwverse/persona/server/internal/host"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -17,6 +18,11 @@ import (
 // after the session its SessionStart hook reported and reads its state off the terminal title — a background
 // session's — so the parked session looked busy with another one's work, and a message to it went into the agents
 // view. As in Claude Code (a parked claude does not hold its session), such a pane is not taken for that session.
+//
+// The agents view opens the job the session went to (Claude's autoOpenJobId), and the pane then is that job's: its
+// conversation, its prompt, its name as the terminal title. Such a pane is the background session's (the job's
+// sessions/<pid>.json has jobId = the parkedJobId, and its name is the title), so it lists in its herdr tab and takes
+// what is typed (2026-11-04: tab 4 of a herdr workspace was missing on the phone, its session listed apart, read-only).
 
 const sourceClaudeBg = "claude_bg"
 
@@ -26,12 +32,19 @@ const claudeBgReadOnly = "Claude Code 的后台会话：手机上只能看，回
 // answered on the computer. Anything else is unknown.
 var claudeBgStatus = map[string]string{"busy": proto.StatusWorking, "idle": proto.StatusIdle, "waiting": proto.StatusBlocked}
 
-// parkedClaudeSessions are the sessions only parked claudes have open.
-func parkedClaudeSessions(procs []claudeProc) map[string]bool {
-	parked, held := map[string]bool{}, map[string]bool{}
+// parkedClaudeSessions are the sessions only parked claudes have open, each with the background job it went to.
+func parkedClaudeSessions(procs []claudeProc) map[string]parkedJob {
+	parked, held := map[string]parkedJob{}, map[string]bool{}
+	jobs := map[string]claudeProc{}
+	for _, c := range procs {
+		if c.Kind == "bg" && c.JobID != "" {
+			jobs[c.JobID] = c
+		}
+	}
 	for _, c := range procs {
 		if c.ParkedJobID != "" {
-			parked[c.SessionID] = true
+			j := jobs[c.ParkedJobID]
+			parked[c.SessionID] = parkedJob{SessionID: j.SessionID, Name: j.Name}
 		} else {
 			held[c.SessionID] = true
 		}
@@ -40,6 +53,17 @@ func parkedClaudeSessions(procs []claudeProc) map[string]bool {
 		delete(parked, id)
 	}
 	return parked
+}
+
+// parkedJob is the live background session a parked session went to: its id and name ("" when it is not running).
+type parkedJob struct{ SessionID, Name string }
+
+// shownIn is the job's session when the pane shows it (its name is the pane's title), else "".
+func (j parkedJob) shownIn(a host.Agent) string {
+	if j.SessionID == "" || !validID(j.SessionID) || j.Name == "" || a.Title != j.Name {
+		return ""
+	}
+	return j.SessionID
 }
 
 // claudeBgSessions lists the live background sessions not in seen that have a transcript.

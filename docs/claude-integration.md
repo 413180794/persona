@@ -56,6 +56,9 @@ base URL 和模型都相同的启动器只有一个就是它；否则如果这�
   `continued-in`），窗格里换成 Claude 的 agents 视图，回到会话时 `parkedJobId` 去掉。herdr 仍按 SessionStart 记下的 id 认这个窗格、
   按终端标题（agents 视图里打开的后台会话的）报状态，于是原会话显示「工作中」，手机发给它的消息会打进 agents 视图。node 和 Claude Code
   一样认为 parked 的进程不算开着这个会话：只有 parked 的进程开着的会话不占这个窗格，列成离线，claude 回到它后恢复。
+- agents 视图会打开会话转去的那个后台 job（后台会话的 `sessions/<pid>.json` 带 `jobId`，等于 `parkedJobId`），这时窗格显示的是它的
+  对话、输入框，终端标题是它的 `name`。窗格标题等于这个 job 的 `name` 时，node 把窗格认成这个后台会话：列在对应的 herdr 标签里，
+  按窗格收发，而不是另列一条只读的 `claude_bg`；停在 agents 列表（标题不同）时窗格不归任何会话（2026-11-04：herdr 有 4 个标签，手机上少一个）。
 
 ## 屏蔽配置目录（#676）
 

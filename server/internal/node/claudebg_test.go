@@ -117,3 +117,38 @@ func TestClaudeBackgroundSessionSendRefused(t *testing.T) {
 		}
 	}
 }
+
+// A session sent to the background with /background: the agents view opens the job it went to, so the pane shows
+// that job's conversation under its name. The pane is the background session's — listed in its herdr tab, not apart
+// and read-only — while the parked session is not in it. On the agents list (another title) the pane is nobody's.
+func TestParkedPaneShowingItsJob(t *testing.T) {
+	n, f, home := herdrNode(t)
+	cwd := home
+	bgTranscript(t, home, cwd, sidA, "lookup")
+	bgTranscript(t, home, cwd, sidB, "lark-connector lookup")
+	writeClaudeProc(t, home, os.Getppid(), map[string]any{"sessionId": sidA, "cwd": cwd, "kind": "interactive",
+		"entrypoint": "cli", "status": "idle", "parkedJobId": sidB[:8]})
+	writeClaudeProc(t, home, os.Getpid(), map[string]any{"sessionId": sidB, "cwd": cwd, "kind": "bg", "entrypoint": "cli",
+		"status": "idle", "jobId": sidB[:8], "name": "lark-connector lookup"})
+	shown := func(title string) map[string]proto.Session {
+		f.reply("session.snapshot", snapshot(nil, nil, []any{
+			claudeAgent(sidA, proto.StatusIdle, "w1:p4", "w1:t4", "w1", cwd, title)}, nil))
+		return byID(listSessions(t, n))
+	}
+
+	m := shown("lark-connector lookup")
+	if b := m[sidB]; b.PaneID != "w1:p4" || b.TabID != "w1:t4" || b.SourceKind == sourceClaudeBg || b.ReadOnlyReason != "" {
+		t.Errorf("job shown in the pane = %+v", b)
+	}
+	if a := m[sidA]; a.PaneID != "" || a.Status != proto.StatusOffline {
+		t.Errorf("parked session = %+v", a)
+	}
+
+	m = shown("agents")
+	if b := m[sidB]; b.PaneID != "" || b.SourceKind != sourceClaudeBg {
+		t.Errorf("job, pane on the agents list = %+v", b)
+	}
+	if a := m[sidA]; a.PaneID != "" {
+		t.Errorf("parked session, pane on the agents list = %+v", a)
+	}
+}

@@ -47,6 +47,7 @@ type claudeProc struct {
 	Status string `json:"status"`
 	// ParkedJobID is set while an interactive claude has sent its own session to the background (claudebg.go).
 	ParkedJobID string `json:"parkedJobId"`
+	JobID       string `json:"jobId"` // a background session's job (claudebg.go)
 	Spare       bool   `json:"spare"` // a warm background process no session has claimed yet
 }
 
