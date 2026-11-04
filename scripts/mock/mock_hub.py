@@ -2575,7 +2575,7 @@ def wechat_connector():
     if not WECHAT["enabled"]:
         c.update(status="disabled")
     elif WECHAT["signed_in"]:
-        c.update(status="ok", account="示例用户", last_sync=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
+        c.update(status="ok", account="示例用户", via="iLink（微信 AI 机器人）")  # no last_sync: it syncs nothing
     else:
         c.update(status="not_signed_in", error="还没绑定微信")
     return c

@@ -351,10 +351,11 @@ sys.exit(2)
 
     def test_actual_hub_deploy_replaces_service_binary_and_web_in_its_installed_profile(self):
         self.run_script('scripts/deploy/deploy.sh', '--admin-access', 'lan', 'hub-fixture')
-        for name in ('jarvisd', 'jarvisd-telegram', 'nodes/jarvisd-linux-amd64', 'nodes/jarvisd-darwin-arm64'):
+        for name in ('jarvisd', 'jarvisd-telegram', 'jarvisd-wechat', 'nodes/jarvisd-linux-amd64', 'nodes/jarvisd-darwin-arm64'):
             self.assertTrue((self.state / 'bin' / name).is_file(), name)
         self.assertTrue(os.path.samefile(self.state / 'bin/jarvisd', self.state / 'bin/personad'))
         self.assertTrue(os.path.samefile(self.state / 'bin/jarvisd-telegram', self.state / 'bin/personad-telegram'))
+        self.assertTrue(os.path.samefile(self.state / 'bin/jarvisd-wechat', self.state / 'bin/personad-wechat'))
         self.assertEqual((self.state / 'web/index.html').read_text(), 'Persona fixture web')
         self.assertEqual(identity.data_dir(self.remote, identity.service_environment(self.remote, {})), str(self.state))
         self.assertFalse((self.remote / '.jarvis').exists())

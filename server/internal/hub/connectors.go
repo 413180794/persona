@@ -568,7 +568,11 @@ func (h *Hub) registerConnectors() {
 }
 
 // telegramProgram is jarvisd-telegram next to the running jarvisd ("" when there is none).
-func telegramProgram() string {
+func telegramProgram() string { return siblingProgram("jarvisd-telegram") }
+
+// siblingProgram is a program released with jarvisd (update.ProgramNames) next to the running jarvisd ("" when there
+// is none).
+func siblingProgram(name string) string {
 	exe, err := os.Executable()
 	if err != nil {
 		return ""
@@ -576,7 +580,7 @@ func telegramProgram() string {
 	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = resolved
 	}
-	p := filepath.Join(filepath.Dir(exe), "jarvisd-telegram")
+	p := filepath.Join(filepath.Dir(exe), name)
 	if _, err := os.Stat(p); err != nil {
 		return ""
 	}
@@ -602,22 +606,23 @@ func telegramManifest(h *Hub, path string) *plugin.Manifest {
 		Runtime: &plugin.Runtime{Command: plugin.Command{Path: filepath.Base(path)}}, Contributes: map[string]json.RawMessage{"connectors": items}}
 }
 
-// telegramCheck holds the program to the hub's build: the two come from one build (`version -v` says the same).
-func telegramCheck(h *Hub, path string) func(context.Context) error {
+// sameBuild holds a built-in plugin's program (named name, for people) to the hub's build: the two come from one
+// build (`version -v` says the same).
+func sameBuild(h *Hub, name, path string) func(context.Context) error {
 	want := fmt.Sprintf("%s\nchannel %s, build %d", h.version, h.build.Channel, h.build.Number)
 	return func(ctx context.Context) error {
 		if _, err := os.Stat(path); err != nil {
-			return fmt.Errorf("没有找到 %s 的程序（%s）", spec.Name, path)
+			return fmt.Errorf("没有找到 %s 的程序（%s）", name, path)
 		}
 		vctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
 		out, err := exec.CommandContext(vctx, path, "version", "-v").Output()
 		if err != nil {
-			return fmt.Errorf("%s 的程序运行不了：%v", spec.Name, err)
+			return fmt.Errorf("%s 的程序运行不了：%v", name, err)
 		}
 		if got := strings.TrimSpace(string(out)); got != strings.TrimSpace(want) {
 			first := func(s string) string { line, _, _ := strings.Cut(s, "\n"); return line }
-			return fmt.Errorf("%s 的程序和 hub 不是同一个版本（%s / %s）", spec.Name, first(got), first(want))
+			return fmt.Errorf("%s 的程序和 hub 不是同一个版本（%s / %s）", name, first(got), first(want))
 		}
 		return nil
 	}

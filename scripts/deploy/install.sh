@@ -277,15 +277,17 @@ case ":$PATH:" in
 esac
 
 # On the computer that runs the hub, JARVIS_WITH=telegram also installs jarvisd-telegram, the Telegram connector's
-# program, next to jarvisd (docs/plan-telegram.md). Other computers do not need it; a hub that updates itself gets it
-# with its next update anyway.
-case ",${JARVIS_WITH:-}," in
-*,telegram,*)
-	get "jarvisd-telegram-$os-$arch" jarvisd-telegram
-	binary_alias personad-telegram jarvisd-telegram
-	echo "jarvisd-telegram installed at $DEST/jarvisd-telegram"
-	;;
-esac
+# program, next to jarvisd (docs/plan-telegram.md); JARVIS_WITH=wechat jarvisd-wechat, the WeChat bot's
+# (docs/wechat.md). Other computers do not need them; a hub that updates itself gets them with its next update anyway.
+for p in telegram wechat; do
+	case ",${JARVIS_WITH:-}," in
+	*,$p,*)
+		get "jarvisd-$p-$os-$arch" "jarvisd-$p"
+		binary_alias "personad-$p" "jarvisd-$p"
+		echo "jarvisd-$p installed at $DEST/jarvisd-$p"
+		;;
+	esac
+done
 
 # The places the node looks besides PATH (server/internal/node/node.go: ssh sessions get a minimal PATH).
 has_herdr() {

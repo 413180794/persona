@@ -22,6 +22,8 @@ func TestDeleteSessions(t *testing.T) {
 			StartError: "claude did not become ready within 1m0s"},
 		proto.Session{SessionID: "run-0009", Cwd: "/code/app", Status: proto.StatusWorking, UpdatedAt: now},
 		proto.Session{SessionID: "boot-0010", Cwd: "/code/app", Status: proto.StatusOffline, Starting: true, UpdatedAt: now},
+		proto.Session{SessionID: "done-0011", Cwd: "/code/app", Status: proto.StatusDone, UpdatedAt: now.Add(-time.Hour)},
+		proto.Session{SessionID: "busy-0012", Cwd: "/code/app", Status: proto.StatusBlocked, UpdatedAt: now},
 	)
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /api/v1/sessions/{mid}/{sid}", h.withMachine(h.deleteSession))
@@ -50,13 +52,13 @@ func TestDeleteSessions(t *testing.T) {
 		return ids(v.Sessions)
 	}
 
-	for _, id := range []string{"old-0007", "fail-0008"} {
+	for _, id := range []string{"old-0007", "fail-0008", "done-0011"} {
 		if c := del("/api/v1/sessions/server/" + id); c != http.StatusOK {
 			t.Fatalf("delete %s: %d", id, c)
 		}
 	}
 	got := listed()
-	if strings.Contains(got, "old-0007") || strings.Contains(got, "fail-0008") || !strings.Contains(got, "run-0009") {
+	if strings.Contains(got, "old-0007") || strings.Contains(got, "fail-0008") || strings.Contains(got, "done-0011") || !strings.Contains(got, "run-0009") {
 		t.Fatalf("deleted ones are left out of the list: %s", got)
 	}
 	if got := ids(h.shown("server", h.decorated(n.m))); strings.Contains(got, "old-0007") {
@@ -68,6 +70,7 @@ func TestDeleteSessions(t *testing.T) {
 	for path, want := range map[string]int{
 		"/api/v1/sessions/server/run-0009":  http.StatusConflict,
 		"/api/v1/sessions/server/boot-0010": http.StatusConflict,
+		"/api/v1/sessions/server/busy-0012": http.StatusConflict,
 		"/api/v1/sessions/server/trip-0002": http.StatusBadRequest, // the assistant's: archived instead
 		"/api/v1/sessions/server/nope-0000": http.StatusNotFound,
 		"/api/v1/sessions/elsewhere/x":      http.StatusNotFound,

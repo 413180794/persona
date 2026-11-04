@@ -181,6 +181,13 @@ type Init struct {
 	DataDir string
 }
 
+// Listener is a connector that also hears the hub's events: a plugin that contributes the events extension point
+// (docs/plugins.md「事件」) next to its connector. Hear gets the event's name without its namespace
+// ("agent.needs_you") and its parameters, on a goroutine of its own; nothing is answered.
+type Listener interface {
+	Hear(ctx context.Context, event string, params json.RawMessage)
+}
+
 // BuildWith is Build with all a program is started with.
 type BuildWith func(init Init, secrets connector.Secrets) (connector.Connector, error)
 
@@ -203,7 +210,23 @@ func MainWith(ctx context.Context, in io.Reader, out io.Writer, build BuildWith)
 	peer := rpc.New("c", out)
 	s := &server{peer: peer, build: build, ctx: ctx}
 	peer.OnRequest = s.handle
+	peer.OnEvent = s.event
 	return peer.Serve(ctx, in)
+}
+
+// event passes the hub's event.* notifications to a connector that listens (Listener); the others are dropped, as
+// before there were any.
+func (s *server) event(name string, params json.RawMessage) {
+	topic, ok := strings.CutPrefix(name, "event.")
+	if !ok {
+		return
+	}
+	s.mu.Lock()
+	l, ok := s.c.(Listener)
+	s.mu.Unlock()
+	if ok {
+		go l.Hear(s.ctx, topic, params)
+	}
 }
 
 // Serve serves c, built and running already (its Run and Watch are the caller's), on in / out: what a test holds a

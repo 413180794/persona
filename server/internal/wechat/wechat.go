@@ -1,0 +1,307 @@
+// Package wechat is the WeChat plugin's program (jarvisd-wechat, docs/wechat.md): a bot in the user's personal WeChat
+// through iLink (wechat/ilink). The user binds it by scanning a QR code (the connector's sign-in); their messages to
+// the bot go to the Persona tab's main conversation over the hub's API, and the turn's answer comes back as text.
+// What an agent it drives asks (a question, a permission, a plan) is sent as text too and answered by a reply.
+//
+// It keeps everything in one sealed blob in the hub (the connector's secrets): the bot token, the polling cursor, who
+// it talks to and the turns it waits on, so a restart picks up where it was.
+package wechat
+
+import (
+	"context"
+	"encoding/json"
+	"log"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/wechat/ilink"
+	"github.com/nwverse/persona/server/internal/wechat/spec"
+)
+
+// Clock and iLink are what tests replace.
+type Options struct {
+	Hub   *Hub
+	Agent string // the product token iLink sees ("Persona/<version>")
+	// NewClient makes the iLink client for a base URL and token (ilink.New when nil).
+	NewClient func(base, token string) (*ilink.Client, error)
+	Now       func() time.Time
+	// Tick is how often the turns are looked at (2 s when 0).
+	Tick time.Duration
+}
+
+// Bot is the connector and the bot behind it.
+type Bot struct {
+	opt     Options
+	secrets connector.Secrets
+
+	mu      sync.Mutex
+	st      state
+	loaded  bool
+	status  connector.Status
+	client  *ilink.Client // for the bound token; nil while not bound
+	qr      *pendingQR
+	wake    chan struct{}
+	nudge   chan struct{}
+	typing  map[string]*typing // by session: the peer's typing status while a turn runs
+	replied map[string]time.Time
+}
+
+// state is what is kept in the hub (sealed): never logged.
+type state struct {
+	Creds *ilink.Credentials `json:"creds,omitempty"`
+	// Old are bot tokens it had before (the last 10): a new authorization sends them so iLink knows it is this bot.
+	Old    []string `json:"old,omitempty"`
+	Cursor string   `json:"cursor,omitempty"`
+	// Context is the owner's latest message's context token: iLink needs one to send anything.
+	Context string `json:"context,omitempty"`
+	Target  target `json:"target"`
+	Runs    []*run `json:"runs,omitempty"`
+	Asks    []*ask `json:"asks,omitempty"`
+	// Seen are the ids of the latest messages handled (iLink may deliver one again).
+	Seen []string `json:"seen,omitempty"`
+}
+
+// target is where the owner's messages go: the main conversation, a conversation /new started, or (Fresh) the
+// conversation the next message starts.
+type target struct {
+	Machine string `json:"machine,omitempty"`
+	Session string `json:"session,omitempty"`
+	Fresh   bool   `json:"fresh,omitempty"`
+}
+
+func (t target) main() bool { return t.Session == "" && !t.Fresh }
+
+func New(opt Options, secrets connector.Secrets) *Bot {
+	if opt.NewClient == nil {
+		opt.NewClient = func(base, token string) (*ilink.Client, error) {
+			return ilink.New(ilink.Options{BaseURL: base, Token: token, Agent: opt.Agent})
+		}
+	}
+	if opt.Now == nil {
+		opt.Now = time.Now
+	}
+	if opt.Tick == 0 {
+		opt.Tick = 2 * time.Second
+	}
+	return &Bot{opt: opt, secrets: secrets, wake: make(chan struct{}, 1), nudge: make(chan struct{}, 1),
+		typing: map[string]*typing{}, replied: map[string]time.Time{},
+		status: connector.Status{State: connector.StateNotSignedIn, Error: "还没绑定微信"}}
+}
+
+func (*Bot) ID() string                   { return spec.ID }
+func (*Bot) Name() string                 { return spec.Name }
+func (*Bot) Manifest() connector.Manifest { return spec.Manifest() }
+
+// Status is answered from memory.
+func (b *Bot) Status(context.Context) connector.Status {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.status
+}
+
+func (b *Bot) setStatus(s connector.Status) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	s.LastEvent = b.status.LastEvent
+	b.status = s
+}
+
+// account is how the bound WeChat is shown: iLink gives an id, not a name.
+func account(c *ilink.Credentials) string {
+	id, _, _ := strings.Cut(c.UserID, "@")
+	if r := []rune(id); len(r) > 6 {
+		id = string(r[len(r)-6:])
+	}
+	return "微信用户 " + id
+}
+
+func (b *Bot) load(ctx context.Context) error {
+	b.mu.Lock()
+	if b.loaded {
+		b.mu.Unlock()
+		return nil
+	}
+	b.mu.Unlock()
+	data, err := b.secrets.Load(ctx)
+	if err != nil {
+		return err
+	}
+	var st state
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, &st); err != nil {
+			log.Printf("wechat: the stored state does not read, starting over: %v", err)
+			st = state{}
+		}
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if !b.loaded {
+		b.st, b.loaded = st, true
+	}
+	return nil
+}
+
+// saveLocked stores the state; b.mu is held.
+func (b *Bot) saveLocked(ctx context.Context) {
+	data, err := json.Marshal(b.st)
+	if err == nil {
+		err = b.secrets.Save(ctx, data)
+	}
+	if err != nil {
+		log.Printf("wechat: saving the state: %v", err)
+	}
+}
+
+func (b *Bot) save(ctx context.Context) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.saveLocked(ctx)
+}
+
+func (b *Bot) kick() {
+	select {
+	case b.wake <- struct{}{}:
+	default:
+	}
+}
+
+// Run polls iLink for the owner's messages while bound, and looks after the turns it waits on.
+func (b *Bot) Run(ctx context.Context) {
+	for ctx.Err() == nil {
+		if err := b.load(ctx); err == nil {
+			break
+		} else {
+			b.setStatus(connector.Status{State: connector.StateError, Error: "读不到存着的绑定：" + err.Error()})
+		}
+		if !sleep(ctx, 5*time.Second) {
+			return
+		}
+	}
+	go b.watchTurns(ctx)
+	for ctx.Err() == nil {
+		b.mu.Lock()
+		creds := b.st.Creds
+		b.mu.Unlock()
+		if creds == nil {
+			if b.Status(ctx).State != connector.StateNotSignedIn { // keep why it was unbound
+				b.setStatus(connector.Status{State: connector.StateNotSignedIn, Error: "还没绑定微信"})
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-b.wake:
+			}
+			continue
+		}
+		b.serve(ctx, *creds)
+	}
+}
+
+var backoff = []time.Duration{time.Second, 2 * time.Second, 5 * time.Second, 10 * time.Second, 30 * time.Second}
+
+// serve long-polls with creds until they change, are refused or ctx ends.
+func (b *Bot) serve(ctx context.Context, creds ilink.Credentials) {
+	c, err := b.opt.NewClient(creds.BaseURL, creds.Token)
+	if err != nil {
+		b.setStatus(connector.Status{State: connector.StateError, Account: account(&creds), Error: "微信的地址不对：" + err.Error()})
+		b.unbind(ctx, "")
+		return
+	}
+	b.mu.Lock()
+	b.client = c
+	b.mu.Unlock()
+	defer func() {
+		b.mu.Lock()
+		b.client = nil
+		b.mu.Unlock()
+	}()
+	ok := connector.Status{State: connector.StateOK, Account: account(&creds), Via: "iLink（微信 AI 机器人）"}
+	if err := c.NotifyStart(ctx); err != nil {
+		log.Printf("wechat: notify start: %v", err) // not needed to receive messages
+	}
+	b.setStatus(ok)
+	failures := 0
+	for ctx.Err() == nil {
+		b.mu.Lock()
+		still := b.st.Creds != nil && b.st.Creds.Token == creds.Token
+		cursor := b.st.Cursor
+		b.mu.Unlock()
+		if !still {
+			return
+		}
+		p, err := c.GetUpdates(ctx, cursor)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			switch {
+			case ilink.CodeOf(err) == ilink.CodeReplaced:
+				b.unbind(ctx, creds.Token)
+				b.setStatus(connector.Status{State: connector.StateNotSignedIn, Error: "微信那边的授权已经失效（在别处重新绑定过，或者被取消了），重新扫码绑定"})
+				return
+			case !ilink.Retryable(err):
+				b.setStatus(connector.Status{State: connector.StateError, Account: ok.Account, Error: "微信拒绝了请求：" + err.Error()})
+			default:
+				b.setStatus(connector.Status{State: connector.StateError, Account: ok.Account, Error: "连不上微信，正在重试：" + err.Error()})
+			}
+			wait := backoff[min(failures, len(backoff)-1)]
+			failures++
+			if !sleep(ctx, wait) {
+				return
+			}
+			continue
+		}
+		if failures > 0 {
+			b.setStatus(ok)
+			failures = 0
+		}
+		for _, m := range p.Messages {
+			b.handle(ctx, c, creds, m)
+		}
+		b.mu.Lock()
+		if b.st.Creds != nil && b.st.Creds.Token == creds.Token && b.st.Cursor != p.Cursor {
+			b.st.Cursor = p.Cursor
+			b.saveLocked(ctx)
+		}
+		b.mu.Unlock()
+	}
+	stop, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	_ = c.NotifyStop(stop)
+}
+
+// unbind forgets the bound token (only if it is still token, when given), keeping it among the old ones.
+func (b *Bot) unbind(ctx context.Context, token string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.st.Creds == nil || token != "" && b.st.Creds.Token != token {
+		return
+	}
+	b.st.Old = rememberToken(b.st.Old, b.st.Creds.Token)
+	b.st.Creds, b.st.Cursor, b.st.Context = nil, "", ""
+	b.st.Runs, b.st.Asks = nil, nil
+	b.saveLocked(ctx)
+}
+
+func rememberToken(old []string, token string) []string {
+	old = slices.DeleteFunc(old, func(t string) bool { return t == token })
+	old = append(old, token)
+	if len(old) > 10 {
+		old = old[len(old)-10:]
+	}
+	return old
+}
+
+func sleep(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
+}

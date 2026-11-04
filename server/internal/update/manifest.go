@@ -36,7 +36,7 @@ type Manifest struct {
 }
 
 // ProgramNames are the programs released with jarvisd, each built from server/cmd/<name>.
-var ProgramNames = []string{"jarvisd-telegram"}
+var ProgramNames = []string{"jarvisd-telegram", "jarvisd-wechat"}
 
 // program names the program a download belongs to ("jarvisd-telegram-linux-amd64.gz" -> "jarvisd-telegram"), "" for
 // jarvisd's own.

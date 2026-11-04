@@ -139,20 +139,21 @@ $command")
   fi
 }
 
-# install_telegram <hub machine id> <os-arch>: the Telegram connector's program next to the hub's jarvisd (only the hub
-# runs it, docs/plan-telegram.md), the same build as jarvisd: the hub starts it only when `version -v` matches.
-install_telegram() {
-  local id=$1 plat=$2 bin
-  bin="bin/jarvisd-telegram-$plat"
-  GOOS=${plat%-*} GOARCH=${plat#*-} CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "$bin" ./cmd/personad-telegram || return 1
+# install_program <hub machine id> <os-arch> <name>: a built-in plugin's program (telegram: the Telegram connector,
+# docs/plan-telegram.md; wechat: the WeChat bot, docs/wechat.md) next to the hub's jarvisd (only the hub runs it), the
+# same build as jarvisd: the hub starts it only when `version -v` matches.
+install_program() {
+  local id=$1 plat=$2 name=$3 bin
+  bin="bin/jarvisd-$name-$plat"
+  GOOS=${plat%-*} GOARCH=${plat#*-} CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" -o "$bin" "./cmd/personad-$name" || return 1
   if is_here "$id"; then
     local root
     root=$(state_root)
     mkdir -p "$root/bin"
-    cp "$bin" "$root/bin/jarvisd-telegram.new" && mv "$root/bin/jarvisd-telegram.new" "$root/bin/jarvisd-telegram"
-    [ ! -d "$root/bin/personad-telegram" ] && ln -sfn jarvisd-telegram "$root/bin/personad-telegram"
+    cp "$bin" "$root/bin/jarvisd-$name.new" && mv "$root/bin/jarvisd-$name.new" "$root/bin/jarvisd-$name"
+    [ ! -d "$root/bin/personad-$name" ] && ln -sfn "jarvisd-$name" "$root/bin/personad-$name"
   else
-    remote_state "$JARVIS_HUB_SSH" 'mkdir -p "$PERSONA_HOME/bin" && cat > "$PERSONA_HOME/bin/jarvisd-telegram.new" && chmod 755 "$PERSONA_HOME/bin/jarvisd-telegram.new" && mv "$PERSONA_HOME/bin/jarvisd-telegram.new" "$PERSONA_HOME/bin/jarvisd-telegram" && [ ! -d "$PERSONA_HOME/bin/personad-telegram" ] && ln -sfn jarvisd-telegram "$PERSONA_HOME/bin/personad-telegram"' < "$bin"
+    remote_state "$JARVIS_HUB_SSH" "mkdir -p \"\$PERSONA_HOME/bin\" && cat > \"\$PERSONA_HOME/bin/jarvisd-$name.new\" && chmod 755 \"\$PERSONA_HOME/bin/jarvisd-$name.new\" && mv \"\$PERSONA_HOME/bin/jarvisd-$name.new\" \"\$PERSONA_HOME/bin/jarvisd-$name\" && [ ! -d \"\$PERSONA_HOME/bin/personad-$name\" ] && ln -sfn jarvisd-$name \"\$PERSONA_HOME/bin/personad-$name\"" < "$bin"
   fi
 }
 
@@ -205,7 +206,8 @@ for t in "${TARGETS[@]}"; do
       done
       hub_plat="$(field "$t" os)-$( [ "$(field "$t" os)" = darwin ] && echo arm64 || echo amd64)"
       install_bin "$t" "bin/jarvisd-$hub_plat"
-      install_telegram "$t" "$hub_plat"
+      install_program "$t" "$hub_plat" telegram
+      install_program "$t" "$hub_plat" wechat
       ensure_herdr "$t"
       hub_admin_access
       python3 ../scripts/persona_identity.py --service hub --prepare --prefix ../scripts/deploy/hub-systemd.sh | ssh "$JARVIS_HUB_SSH" 'bash -s'

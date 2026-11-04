@@ -198,13 +198,21 @@ struct ConnectorSwitchSection: View {
                     await reload()
                 }
             })) {
-                Text("同步 \(connector.name)").lineLimit(1)
+                Text(connector.storesData ? "同步 \(connector.name)" : "启用 \(connector.name)").lineLimit(1)
             }
             .accessibilityIdentifier("connector.enabled")
         } footer: {
-            Text(connector.isEnabled ? "关掉后不再读 \(connector.name)；登录状态和已经存下的数据都留着。"
-                 : connector.id == "telegram" ? "打开后才能登录，登录后它的私聊和群进知识库和收件箱，助手也能查。"
-                 : "打开后才能登录，登录后它的内容进知识库和收件箱，助手也能查。")
+            Text(footer)
+        }
+    }
+
+    private var footer: String {
+        switch (connector.isEnabled, connector.storesData) {
+        case (true, true): "关掉后不再读 \(connector.name)；登录状态和已经存下的数据都留着。"
+        case (true, false): "关掉后 \(connector.name) 停下来；登录状态留着。"
+        case (false, false): "打开后才能登录。"
+        case (false, true) where connector.id == "telegram": "打开后才能登录，登录后它的私聊和群进知识库和收件箱，助手也能查。"
+        case (false, true): "打开后才能登录，登录后它的内容进知识库和收件箱，助手也能查。"
         }
     }
 }
@@ -279,20 +287,30 @@ struct ConnectorDataSection: View {
     @State private var confirmLogout = false
     @State private var confirmDelete = false
 
+    private var logout: Bool { showsLogout && (connector.isSignedIn || connector.via != nil) }
+
     var body: some View {
+        if logout || connector.storesData {
+            sections
+        }
+    }
+
+    private var sections: some View {
         Section {
-            if showsLogout && (connector.isSignedIn || connector.via != nil) {
+            if logout {
                 Button(role: .destructive) { confirmLogout = true } label: { Text("退出登录").lineLimit(1) }
                     .disabled(model.busy)
                     .accessibilityIdentifier("connector.logout")
             }
-            Button(role: .destructive) { confirmDelete = true } label: { Text("删除已存的数据").lineLimit(1) }
-                .disabled(model.busy)
-                .accessibilityIdentifier("connector.deleteData")
+            if connector.storesData {
+                Button(role: .destructive) { confirmDelete = true } label: { Text("删除已存的数据").lineLimit(1) }
+                    .disabled(model.busy)
+                    .accessibilityIdentifier("connector.deleteData")
+            }
         } footer: {
             if let deleted = model.deleted {
                 Text(deleted)
-            } else {
+            } else if connector.storesData {
                 Text("删除：知识库里从它来的会话和人、收件箱里它的条目，并关掉同步；登录状态不受影响。")
             }
         }
@@ -304,7 +322,8 @@ struct ConnectorDataSection: View {
                 }
             }
         } message: {
-            Text("hub 上存的 API 凭据和登录状态都会删掉，\(connector.name) 那边这个设备会话也会结束。再用要重新登录。")
+            Text(connector.storesData ? "hub 上存的 API 凭据和登录状态都会删掉，\(connector.name) 那边这个设备会话也会结束。再用要重新登录。"
+                 : "hub 上存的登录状态会删掉，再用要重新登录。")
         }
         .confirmationDialog("删除 \(connector.name) 存下的数据？", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("删除", role: .destructive) {

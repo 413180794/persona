@@ -63,7 +63,11 @@ enum ConnectorText {
 
     /// The symbol of a connector without a mark of its own.
     static func symbol(_ id: String) -> String {
-        id == "imessage" ? Theme.Icon.messagesApp : Theme.Icon.connectors
+        switch id {
+        case "imessage": Theme.Icon.messagesApp
+        case "wechat": Theme.Icon.conversation // a chat with a bot, not a feed
+        default: Theme.Icon.connectors
+        }
     }
 
     /// The connector's own mark (`Theme.Brand`), nil for one the app has none for.
@@ -121,6 +125,13 @@ nonisolated struct HubConnector: Codable, Hashable, Sendable, Identifiable {
 
     /// The user signs in to it here, a step at a time (Telegram), rather than on the hub's side.
     var signsInHere: Bool { capabilities?.contains("login") == true }
+
+    /// It brings things into the knowledge base or the inbox (Telegram), so it has data to delete and its switch syncs;
+    /// a chat bot (WeChat) only talks. Not described yet counts as bringing them, as before there were bots.
+    var storesData: Bool {
+        guard let caps = capabilities, !caps.isEmpty else { return true }
+        return caps.contains("archive") || caps.contains("inbox")
+    }
 
     /// A program the hub runs (Telegram) that has not said what it has: switched off since the hub started, or still
     /// starting. Its capabilities come from the program, so an empty list (nil is a hub from before them) does not
@@ -574,7 +585,7 @@ struct HubConnectorView: View {
         if let brand = ConnectorText.brand(id) {
             BrandMark(brand, side: Theme.Size.wellM)
         } else {
-            Image(systemName: Theme.Icon.connectors).resizable().scaledToFit().foregroundStyle(Theme.accent)
+            Image(systemName: ConnectorText.symbol(id)).resizable().scaledToFit().foregroundStyle(Theme.accent)
                 .scaledFrame(width: Theme.Size.wellM, height: Theme.Size.wellM)
         }
     }

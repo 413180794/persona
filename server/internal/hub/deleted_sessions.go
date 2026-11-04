@@ -70,8 +70,10 @@ func (h *Hub) deletedAt(machine string) map[string]time.Time {
 }
 
 // stillDeleted reports whether s stays out of the list given when it was deleted: it has not run or been used since.
+// Finished (done / unknown) counts like offline — a bot's leftover that is not running can go too.
 func stillDeleted(s proto.Session, at time.Time) bool {
-	return s.Status == proto.StatusOffline && !s.Starting && !s.Assistant && !s.UpdatedAt.After(at)
+	finished := s.Status == proto.StatusOffline || s.Status == proto.StatusDone || s.Status == proto.StatusUnknown
+	return finished && !s.Starting && !s.Assistant && !s.UpdatedAt.After(at)
 }
 
 // shown is list (a machine's decorated sessions) without the ones the user deleted: what the apps get.
@@ -118,7 +120,7 @@ func (h *Hub) deleteSession(w http.ResponseWriter, r *http.Request, m *Machine) 
 	case s.Assistant:
 		writeErr(w, http.StatusBadRequest, errDeleteAssistant)
 		return
-	case s.Status != proto.StatusOffline || s.Starting:
+	case s.Starting || s.Status == proto.StatusWorking || s.Status == proto.StatusBlocked:
 		writeErr(w, http.StatusConflict, errDeleteRunning)
 		return
 	}

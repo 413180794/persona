@@ -105,10 +105,13 @@ for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
     -o "../$OUT/bin/jarvis-link-${t%/*}-${t#*/}" ./cmd/jarvis-link)
 done
 # The programs released with jarvisd (update.ProgramNames): built the same way, on the same platforms; a hub swaps
-# them with jarvisd (docs/plan-telegram.md「架构」). jarvisd-telegram is Telegram's connector, too big to go into jarvisd.
+# them with jarvisd (docs/plan-telegram.md「架构」). jarvisd-telegram is Telegram's connector, too big to go into jarvisd;
+# jarvisd-wechat is the WeChat bot (docs/wechat.md), a plugin of its own.
 for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
-  (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
-    -o "../$OUT/bin/jarvisd-telegram-${t%/*}-${t#*/}" ./cmd/personad-telegram)
+  for p in telegram wechat; do
+    (cd server && GOOS=${t%/*} GOARCH=${t#*/} CGO_ENABLED=0 go build -tags public -trimpath -ldflags "$LDFLAGS" \
+      -o "../$OUT/bin/jarvisd-$p-${t%/*}-${t#*/}" "./cmd/personad-$p")
+  done
 done
 cleanup
 sed "s|@JARVIS_DL@|$JARVIS_PUBLISH_URL/dl|" scripts/deploy/install.sh > "$OUT/install.sh"
@@ -126,8 +129,10 @@ host_bin="$OUT/bin/jarvisd-$(uname -s | tr A-Z a-z)-$(uname -m | sed 's/x86_64/a
 host_link="$OUT/bin/jarvis-link-${host_bin##*/jarvisd-}"
 [ "$("$host_link" version)" = "$VERSION" ] || { echo "the built jarvis-link does not report $VERSION" >&2; exit 1; }
 "$host_bin" version -v | grep -qx "channel release, build $BUILD" || { echo "the built jarvisd is not release build $BUILD" >&2; exit 1; }
-host_tg="$OUT/bin/jarvisd-telegram-${host_bin##*/jarvisd-}"
-[ "$("$host_tg" version -v)" = "$("$host_bin" version -v)" ] || { echo "jarvisd-telegram is not the same build as jarvisd" >&2; exit 1; }
+for p in telegram wechat; do
+  host_p="$OUT/bin/jarvisd-$p-${host_bin##*/jarvisd-}"
+  [ "$("$host_p" version -v)" = "$("$host_bin" version -v)" ] || { echo "jarvisd-$p is not the same build as jarvisd" >&2; exit 1; }
+done
 
 # Releases only move forward: a larger build number than the one served, and the served commit an ancestor of this one.
 curl -fsSL "$JARVIS_PUBLISH_URL/dl/latest.json" -o "$OUT/served.json" 2>/dev/null || : > "$OUT/served.json"

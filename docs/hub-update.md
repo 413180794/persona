@@ -130,7 +130,7 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 ```
 
 - `ancestors`：这次的 commit 能到达的所有提交（`git rev-list <commit>`），每个取前 6 字节，排序后 base64（「防退回」）。
-- `programs`：和 personad 一起发布、hub 在旁边跑的程序（现在只有 `jarvisd-telegram`，`docs/plan-telegram.md`「架构」）：
+- `programs`：和 personad 一起发布、hub 在旁边跑的程序（`update.ProgramNames`：`jarvisd-telegram`，`docs/plan-telegram.md`「架构」；`jarvisd-wechat`，`docs/wechat.md`）：
   `{"jarvisd-telegram": {"linux-amd64": {name, size, sha256, binary_sha256}, …}}`。老 hub 不认这个字段，照旧只换 personad。
 
 - 下载的文件要同时对得上 `sha256`（压缩包）和 `binary_sha256`（解压后），新二进制的 `version -v` 还要报出清单里的版本和 build 号。

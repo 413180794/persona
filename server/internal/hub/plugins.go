@@ -24,6 +24,7 @@ import (
 	"github.com/nwverse/persona/server/internal/plugin"
 	"github.com/nwverse/persona/server/internal/plugin/host"
 	"github.com/nwverse/persona/server/internal/rpc"
+	wechat "github.com/nwverse/persona/server/internal/wechat/spec"
 )
 
 // Plugins (docs/plugins.md): one registry of every plugin — built into personad, written in hub.json, installed on
@@ -245,6 +246,11 @@ func (h *Hub) attachPlugins(ctx context.Context) {
 	if path := telegramProgram(); path != "" {
 		if err := reg.AddBuiltin(telegramManifest(h, path), filepath.Dir(path), true); err != nil {
 			h.logf("plugin telegram: %v", err)
+		}
+	}
+	if path := siblingProgram(wechat.Program); path != "" {
+		if err := reg.AddBuiltin(wechatManifest(h, path), filepath.Dir(path), true); err != nil {
+			h.logf("plugin wechat: %v", err)
 		}
 	}
 	if err := reg.AddBuiltin(cuaManifest(h), "", false); err != nil { // off until the user turns it on (computer.go)
@@ -561,8 +567,8 @@ func (ps *plugins) spec(ctx context.Context, p *plugin.Plugin, hp *hubPlugin) (h
 		}
 		return params, nil
 	}
-	if builtin && id == telegramPluginID && ps.h != nil {
-		s.Check = telegramCheck(ps.h, s.Command) // the program must be the hub's build
+	if builtin && (id == telegramPluginID || id == wechat.ID) && ps.h != nil {
+		s.Check = sameBuild(ps.h, p.Manifest.Name, s.Command) // the program must be the hub's build
 	}
 	s.Accept = func(res plugin.InitializeResult) error {
 		var said []plugin.ConnectorItem

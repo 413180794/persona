@@ -445,6 +445,8 @@ private fun ChatPage(
                                 if (!readOnly && canTerminal && renderStyle != ChatRenderStyle.Assistant) JIconButton(PhIcons.TerminalWindow, if (terminal != null) "打开终端" else "终端处理说明",
                                     terminal ?: { terminalHelp = true })
                             }
+                            // The space's other tabs under the title (iOS SiblingTabs); not for the assistant's conversation.
+                            if (showTopBar && renderStyle != ChatRenderStyle.Assistant) ChatSiblingTabs(session, sessionList, chrome.onOpenSession)
 
                             ChatTasks(projection.tasks, lines, chatList,
                                 onFreeze = { timeline.freeze(currentItems, currentLive); timelineVersion++ },

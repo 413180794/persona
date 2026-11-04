@@ -97,6 +97,9 @@ hub 只对这些连接器读它：条目保持 hub 原来自己做的样子（�
 | `secrets.delete` | `{}` → `{}` | |
 | 事件 `changed` | `{scope}` | `chats`、`items`、`inbox`：有新东西，hub 尽快来取；不认识的 scope 被丢掉并记日志 |
 
+插件同时贡献了 `events`（`docs/plugins.md`「事件」）时，hub 发来的 `event.<名字>` 交给实现了 `serve.Listener` 的连接器（`Hear(ctx, 名字, 参数)`，
+在自己的 goroutine 里，不回应）；没实现的照旧丢掉。微信机器人用它听 `agent.needs_you`（`docs/wechat.md`）。
+
 ## 错误
 
 `error.code`：`not_initialized`（`init` 之前调了别的）、`no_capability`（没声明的能力）、`unknown_method`、`wrong_protocol`。

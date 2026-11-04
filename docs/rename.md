@@ -15,6 +15,7 @@
 | Go module | `github.com/nwverse/persona/server` | 这是源码 import 路径；不据此改数据库、协议或服务单元 |
 | hub / node / hook / MCP 程序源码 | `server/cmd/personad` | `server/cmd/jarvisd` 指向同一实现；`personad` / `jarvisd` 均保留 |
 | Telegram 连接器程序源码 | `server/cmd/personad-telegram` | `server/cmd/jarvisd-telegram` 是旧入口别名 |
+| 微信机器人程序源码 | `server/cmd/personad-wechat` | `server/cmd/jarvisd-wechat` 是同样的别名（安装后的程序名是 `jarvisd-wechat`，旁边有 `personad-wechat`） |
 | 配置脚本 | `scripts/persona_config.py` | `scripts/jarvis_config.py` 是指向新实现的软链；配置格式、签名值不变 |
 | 服务运行根解析器 | `scripts/persona_identity.py --service hub\|node\|link` | 按服务角色恢复已安装根目录；不读取构建配置或凭据，规则见下文 |
 | DEBUG App 命令工具 | `scripts/app/personactl.py` | `scripts/app/jarvisctl.py` 仍是同一实现；命令语义和旧缓存位置不变 |

@@ -9,7 +9,7 @@ Persona 的插件底座（#1101）：开源仓库只放通用能力和**扩展�
 
 | 来源 | 是什么 | 能做什么 |
 | --- | --- | --- |
-| `builtin` | personad 自带，清单编在二进制里（Telegram 连接器，操控电脑 `cua`） | 开关、配置、密钥；不能卸载 |
+| `builtin` | personad 自带，清单编在二进制里（Telegram 连接器，微信机器人，操控电脑 `cua`） | 开关、配置、密钥；不能卸载 |
 | `hub.json` | hub.json 的 `plugins[]`，主人手写（现在的语音插件），见下面「hub.json 里的插件」 | 只读：去 hub.json 或管理界面改 |
 | `installed` | 用 `personad plugin install` 装在 hub 机器上的包，或跑在别处、经 socket 接入的插件 | 全部：开关、配置、密钥、升级、回滚、卸载 |
 
@@ -472,6 +472,13 @@ hub 管理界面（[admin.md](admin.md)）的「插件」页（`web/src/admin/pa
 `jarvisd-telegram` 在 personad 旁边时注册成内置插件 `telegram`，贡献连接器 `telegram`（能力在 `connector/telegram/spec`，程序没跑过也报得出）。
 程序必须和 hub 是同一次构建（`version -v` 一样），否则状态写明「不是同一个版本」、不启动。连接器 id、`connector_secrets` 里的会话、连接器的开关和选项都没变，
 默认关着；用户平时只碰连接器的开关（插件默认启用，开着连接器才跑进程）。
+
+## 内置插件：微信（`wechat`）
+
+`jarvisd-wechat` 在 personad 旁边时注册成内置插件 `wechat`（#1352，`docs/wechat.md`）：贡献连接器 `wechat`（只有 `status` 和扫码的 `login`，
+声明在 `wechat/spec`）和事件 `agent.needs_you`、`agent.finished`，权限 `hub_api`（经 hub 的 API 把微信消息发给主对话、回答提问）和
+`network: *.weixin.qq.com`。和 Telegram 一样要和 hub 同一次构建、跟着连接器的开关跑；订了事件却不写 `on_startup` 是有意的：关掉开关就完全停下，
+开着时进程在跑、事件照收。连接器程序要听事件，实现 `connector/serve.Listener`（`Hear`），`connector/serve` 把 `event.*` 转给它。
 
 ## 内置插件：操控电脑（`cua`）
 

@@ -244,6 +244,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/feishu.md` | 飞书在 Persona 里的定位（不做第二个飞书）：保留哪些、lark-connector 只读代理、给 AI 用的接口速查 |
 | `docs/lark-attachments.md` | iOS 飞书聊天发图片和文件（#410）：选择、预览、发送和确认 |
 | `docs/bots.md` | 飞书机器人：私聊机器人就是和 Persona 主对话说话，回答发回飞书，提问 / 批准在飞书里点卡片，推送和主对话同步，在飞书里驱动各台电脑上的 Agent；开放平台长连接、配对、只认主人、卡片 JSON 2.0 的坑 |
+| `docs/wechat.md` | 微信机器人（内置插件 `jarvisd-wechat`，腾讯 iLink）：扫码绑定，私聊机器人就是和主对话说话，回答发回微信，提问 / 批准用文字往返；为什么做成插件、用了哪些扩展点、和飞书机器人比 |
 | `docs/lark-agent.md` | 飞书里自己发 `/agent …`：hub 收集所在会话 / 话题 / 引用 / 文档 / 知识库的上下文，起 Agent 处理，以我的身份回复 |
 | `docs/phone-tools.md` | 手机数据工具（phone_*）、权限、需要确认的写操作、iOS 限制 |
 | `docs/computer-use.md` | 操控电脑：内置插件 `cua`（默认关、按机器开），助手经 hub → node → Cua Driver 看窗口、点按、截图（`computer_state` / `computer_run`），能力发现、会话、截图、写操作的日志和确认；一键安装和实时画面（屏幕共享经 hub 隧道）的方案 |

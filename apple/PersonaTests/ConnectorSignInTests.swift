@@ -112,6 +112,19 @@ struct ConnectorSignInTests {
         #expect(!old.undescribed)
     }
 
+    /// A chat bot (WeChat: a status and a sign-in) stores nothing: its switch enables it and there is nothing to delete.
+    /// A connector that feeds the knowledge base or the inbox, or one not described yet, is as before.
+    @Test func whatStoresData() throws {
+        func c(_ caps: String) throws -> HubConnector {
+            try JSON.decoder.decode(HubConnector.self, from: Data(#"{"id":"x","name":"X","status":"ok"\#(caps)}"#.utf8))
+        }
+        #expect(try !c(#","capabilities":["status","login"]"#).storesData)
+        #expect(try c(#","capabilities":["status","login","archive"]"#).storesData)
+        #expect(try c(#","capabilities":["status","inbox"]"#).storesData)
+        #expect(try c(#","capabilities":[]"#).storesData)
+        #expect(try c("").storesData)
+    }
+
     /// Switched off or not signed in is gray, not 出错了 in red; neither is a state from a newer hub.
     @Test func onlyAnErrorIsRed() throws {
         func c(_ status: String) throws -> HubConnector {
