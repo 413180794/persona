@@ -5,9 +5,14 @@ import SwiftUI
 
 #if os(iOS)
 /// A Mac's VNC in the system's picture in picture (#1343): it floats over the other apps and the home screen, can be
-/// dragged and resized, and only shows (touches are the full page's). Its source is a small layer in the app's window
-/// fed the session's frames; the playback audio session lets it run in the background (silent, mixed with what else
-/// plays). Restoring it opens the full page; closing it ends the connection unless the page has it.
+/// dragged and resized, and only shows (touches are the full page's). Restoring it opens the full page; closing it
+/// ends the connection unless the page has it.
+///
+/// Its source is a layer of the Mac's screen of a normal size (#1839: a 2×2 one in a window that went away never
+/// started), in the app's main window behind its content: in a window, not hidden, not seen. It is fed samples on the
+/// host clock and has a timebase of its own. The page makes it ready as soon as it shows a Mac, so that 小窗 (a tap)
+/// and going home start it at once; from a machine's VNC it starts once there is a picture, or the page opens with why
+/// not (VNCPiPLog, 小窗诊断).
 @MainActor final class VNCPiP: NSObject, AVPictureInPictureControllerDelegate, AVPictureInPictureSampleBufferPlaybackDelegate {
     static let shared = VNCPiP()
     nonisolated static let log = Logger(subsystem: "jarvis", category: "vnc")
@@ -15,66 +20,133 @@ import SwiftUI
     private var from: SessionKey?
     private var host: VNCScreenUIView?
     private var controller: AVPictureInPictureController?
+    private var watching: NSKeyValueObservation?
+    /// The small window is asked for (not just made ready under the page).
+    private var wanted = false
     private var restoring = false
+    private var waiting: Task<Void, Never>?
 
     static var supported: Bool { AVPictureInPictureController.isPictureInPictureSupported() }
     var active: Bool { controller?.isPictureInPictureActive == true }
+    /// How long a machine's VNC waits for the small window before the page instead.
+    static let patience: Duration = .seconds(15)
 
-    /// ref's screen in the small window (another Mac's, if one was up, goes).
-    func start(_ ref: MachineRef, from: SessionKey? = nil) {
-        if self.ref == ref, active { return }
-        stop()
-        self.from = from
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
-        try? AVAudioSession.sharedInstance().setActive(true)
+    /// Ready for ref's small window (the page, once it shows the Mac): the source, the controller and the playback
+    /// audio session; `automatic`: it starts by itself when the app goes to the background.
+    @discardableResult func prepare(_ ref: MachineRef, from: SessionKey?, automatic: Bool) -> Bool {
+        if self.ref == ref, let controller {
+            controller.canStartPictureInPictureAutomaticallyFromInline = automatic
+            if let from { self.from = from }
+            return true
+        }
+        end()
+        guard Self.supported else { return note("这台设备不支持画中画") }
+        let audio = AVAudioSession.sharedInstance()
+        do {
+            try audio.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
+            try audio.setActive(true)
+        } catch {
+            note("音频会话没打开：\(error.localizedDescription)")
+        }
+        guard let window = Self.mainWindow() else { return note("找不到 App 的主窗口") }
         let session = VNC.hold(ref)
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        guard let window = (scenes.first { $0.activationState == .foregroundActive } ?? scenes.first)?.windows.first(where: { $0.isKeyWindow })
-            ?? scenes.first?.windows.first else { VNC.release(ref); return }
-        let v = VNCScreenUIView(frame: CGRect(x: window.bounds.maxX - 2, y: window.bounds.maxY - 2, width: 2, height: 2))
+        let size = Self.sourceSize(session.size)
+        let v = VNCScreenUIView(frame: CGRect(x: 0, y: window.bounds.maxY - size.height, width: size.width, height: size.height))
         v.session = session
         v.isUserInteractionEnabled = false
         v.accessibilityElementsHidden = true
-        session.show(in: v.display)
-        window.addSubview(v)
-        let source = AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer: v.display, playbackDelegate: self)
-        let c = AVPictureInPictureController(contentSource: source)
+        Self.giveTimebase(v.display)
+        session.show(in: v.display, timed: true)
+        window.insertSubview(v, at: 0) // behind the app's content
+        let c = AVPictureInPictureController(contentSource: .init(sampleBufferDisplayLayer: v.display, playbackDelegate: self))
         c.delegate = self
         c.requiresLinearPlayback = true
+        c.canStartPictureInPictureAutomaticallyFromInline = automatic
         self.ref = ref
+        self.from = from
         host = v
         controller = c
-        AppModel.shared.vncPiP = ref
-        // It can start once the layer has a frame.
-        Task {
-            for _ in 0..<100 {
-                if c.isPictureInPicturePossible { c.startPictureInPicture(); return }
-                if case .signIn = session.phase { return stopForSignIn() }
-                if case .closed = session.phase { return stop() }
-                try? await Task.sleep(for: .milliseconds(100))
+        watching = c.observe(\.isPictureInPicturePossible, options: [.new]) { c, _ in
+            let possible = c.isPictureInPicturePossible
+            Task { @MainActor in VNCPiP.shared.possibleChanged(possible) }
+        }
+        VNCPiPLog.add("准备好了：源 \(Int(size.width))×\(Int(size.height))pt，\(automatic ? "回桌面时自己开" : "等开")，现在能开：\(VNCPiPLog.yes(c.isPictureInPicturePossible))")
+        return true
+    }
+
+    /// ref's screen in the small window: at once when it can be (in the tap that asked), else once there is a picture;
+    /// failing that, the page, saying why.
+    func start(_ ref: MachineRef, from: SessionKey? = nil) {
+        if self.ref == ref, active { return }
+        VNCPiPLog.add("要小窗")
+        guard prepare(ref, from: from, automatic: false) else { return fallBack(ref, from, why: VNCPiPLog.last ?? "这台设备不支持画中画") }
+        wanted = true
+        if let c = controller, c.isPictureInPicturePossible {
+            VNCPiPLog.add("在点按里开")
+            c.startPictureInPicture()
+        } else {
+            VNCPiPLog.add("等画面到了再开")
+        }
+        waiting?.cancel()
+        waiting = Task { [weak self] in
+            let deadline = ContinuousClock.now + Self.patience
+            while ContinuousClock.now < deadline {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard let self, !Task.isCancelled, self.wanted, !self.active, self.ref == ref else { return }
+                switch VNC.current(ref)?.phase {
+                case .signIn: return self.fallBack(ref, self.from, why: nil) // the page asks for the sign-in
+                case .closed(let why): return self.fallBack(ref, self.from, why: why ?? "连接断了")
+                default: break
+                }
             }
-            Self.log.error("the small window never became possible")
-            stop()
+            guard let self, !Task.isCancelled, self.wanted, !self.active, self.ref == ref else { return }
+            let possible = self.controller?.isPictureInPicturePossible == true
+            self.fallBack(ref, self.from, why: possible ? "系统没有开（\(Int(Self.patience.components.seconds)) 秒内）" : "画面没准备好（\(Int(Self.patience.components.seconds)) 秒内）")
         }
     }
 
+    private func possibleChanged(_ possible: Bool) {
+        guard let c = controller, c.isPictureInPicturePossible == possible else { return }
+        VNCPiPLog.add("现在能开：\(VNCPiPLog.yes(possible))")
+        if possible, wanted, !c.isPictureInPictureActive {
+            VNCPiPLog.add("画面到了，开（不在点按里）")
+            c.startPictureInPicture()
+        }
+    }
+
+    /// The whole page took it: the small window goes (the source stays ready for the page).
+    func handOver() {
+        wanted = false
+        waiting?.cancel()
+        if active, !restoring { controller?.stopPictureInPicture() }
+    }
+
+    /// The page went: nothing is left to show the small window for unless it is up or asked for.
+    func pageGone(_ ref: MachineRef) {
+        if self.ref == ref, !wanted, !active { end() }
+    }
+
     func stop() {
-        controller?.stopPictureInPicture()
+        wanted = false
+        if active { controller?.stopPictureInPicture() }
         end()
     }
 
-    /// The Mac wants a sign-in the phone does not keep: the page asks for it.
-    private func stopForSignIn() {
-        Self.log.notice("the Mac wants a sign-in: the page")
-        let ref = self.ref, from = self.from
+    private func fallBack(_ ref: MachineRef, _ from: SessionKey?, why: String?) {
+        let pageUp = AppModel.shared.screenOpen?.machine == ref
         end()
-        if let ref { AppModel.shared.openScreen(ref, from: from) }
+        if let why {
+            VNCPiPLog.add("改用整页：\(why)")
+            AppModel.shared.toast = Toast("小窗打不开：\(why)，已改用整页", style: .error)
+        }
+        if !pageUp { AppModel.shared.openScreen(ref, from: from) }
     }
-
-    /// The whole page took it (the session goes on with the page).
-    func handOver() { stop() }
 
     private func end() {
+        waiting?.cancel()
+        waiting = nil
+        watching = nil
+        wanted = false
         if let ref, let host { VNC.current(ref)?.hide(from: host.display) }
         host?.removeFromSuperview()
         host = nil
@@ -84,21 +156,76 @@ import SwiftUI
         AppModel.shared.vncPiP = nil
     }
 
+    @discardableResult private func note(_ why: String) -> Bool {
+        VNCPiPLog.add(why)
+        return false
+    }
+
+    /// The app's own window (not the page's, ScreenWindow, nor the toasts'): it stays while the small window is up.
+    private static func mainWindow() -> UIWindow? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+        return scene?.windows.first { $0.windowLevel == .normal && !$0.isHidden && $0.rootViewController != nil }
+    }
+
+    /// A normal size in the Mac's proportions (16:10 before it is known).
+    private static func sourceSize(_ mac: CGSize) -> CGSize {
+        let width = Theme.Size.pictureInPictureSource
+        let ratio = mac.width > 1 && mac.height > 1 ? mac.height / mac.width : 10.0 / 16
+        return CGSize(width: width, height: (width * ratio).rounded())
+    }
+
+    /// The layer's own clock, the host's, running: the samples' times (RFBFrameSink) are shown as they come.
+    private static func giveTimebase(_ layer: AVSampleBufferDisplayLayer) {
+        var timebase: CMTimebase?
+        guard CMTimebaseCreateWithSourceClock(allocator: kCFAllocatorDefault, sourceClock: CMClockGetHostTimeClock(), timebaseOut: &timebase) == noErr,
+              let timebase else { return }
+        CMTimebaseSetTime(timebase, time: CMClockGetTime(CMClockGetHostTimeClock()))
+        CMTimebaseSetRate(timebase, rate: 1)
+        layer.controlTimebase = timebase
+    }
+
     // MARK: AVPictureInPictureControllerDelegate
+
+    nonisolated func pictureInPictureControllerWillStartPictureInPicture(_ c: AVPictureInPictureController) {
+        MainActor.assumeIsolated {
+            wanted = true // also when it starts by itself, the app going to the background with the page up
+            VNCPiPLog.add("小窗要开了")
+        }
+    }
+
+    nonisolated func pictureInPictureControllerDidStartPictureInPicture(_ c: AVPictureInPictureController) {
+        MainActor.assumeIsolated {
+            waiting?.cancel()
+            VNCPiPLog.add("小窗开了")
+            // The small window has it now: the page closes as its × does (ScreenWindowRoot), its connection held here.
+            AppModel.shared.vncPiP = ref
+        }
+    }
 
     nonisolated func pictureInPictureController(_ c: AVPictureInPictureController,
                                                 restoreUserInterfaceForPictureInPictureStopWithCompletionHandler done: @escaping (Bool) -> Void) {
         MainActor.assumeIsolated {
-            // The small window's 还原 (or a tap on it): the full page, which holds the session before this lets go.
-            if let ref { AppModel.shared.openScreen(ref, from: from) }
+            // 还原 (or a tap on it): the full page, which holds the session before this lets go.
+            VNCPiPLog.add("还原成整页")
             restoring = true
+            if let ref { AppModel.shared.openScreen(ref, from: from) }
+            restoring = false
         }
         done(true)
     }
 
     nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ c: AVPictureInPictureController) {
         MainActor.assumeIsolated {
-            restoring = false
+            VNCPiPLog.add("小窗关了")
+            wanted = false
+            AppModel.shared.vncPiP = nil
+            // Ready again under the page when it is up (and by itself again when the app goes to the background);
+            // else the connection goes.
+            if let ref, AppModel.shared.screenOpen?.machine == ref {
+                controller?.canStartPictureInPictureAutomaticallyFromInline = true
+                return
+            }
             end()
         }
     }
@@ -106,9 +233,8 @@ import SwiftUI
     nonisolated func pictureInPictureController(_ c: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
         Self.log.error("the small window failed to start: \(error.localizedDescription, privacy: .public)")
         MainActor.assumeIsolated {
-            let ref = self.ref, from = self.from
-            end()
-            if let ref { AppModel.shared.openScreen(ref, from: from) } // no small window: the page
+            guard let ref else { return }
+            fallBack(ref, from, why: "系统没让开（\(error.localizedDescription)）")
         }
     }
 
@@ -122,6 +248,21 @@ import SwiftUI
     nonisolated func pictureInPictureController(_ c: AVPictureInPictureController, didTransitionToRenderSize size: CMVideoDimensions) {}
     nonisolated func pictureInPictureController(_ c: AVPictureInPictureController, skipByInterval interval: CMTime,
                                                 completion: @escaping () -> Void) { completion() }
+}
+
+/// What the small window did, step by step (#1839): the last few dozen lines, for 小窗诊断 on the page and the
+/// runtime CLI's state; each also goes to the system log (category vnc). No names or passwords.
+@MainActor enum VNCPiPLog {
+    private(set) static var lines: [String] = []
+    static var last: String? { lines.last.map { String($0.drop { $0 != " " }.dropFirst()) } }
+
+    static func yes(_ on: Bool) -> String { on ? "是" : "否" }
+
+    static func add(_ line: String) {
+        lines.append(Date.now.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).second(.twoDigits)) + " " + line)
+        if lines.count > 60 { lines.removeFirst(lines.count - 60) }
+        VNCPiP.log.notice("pip: \(line, privacy: .public)")
+    }
 }
 #else
 /// A Mac's VNC in a small window that floats over the other windows (#1343): it only shows; a click on it opens the

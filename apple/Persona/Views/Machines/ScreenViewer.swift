@@ -93,6 +93,8 @@ private struct ScreenWindowRoot: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { withAnimation(Theme.Motion.layout) { visible = true } }
+        // The small window took this Mac (#1839): the page closes as its × does.
+        .onChange(of: AppModel.shared.vncPiP) { _, now in if now == open.machine, visible { close() } }
     }
 
     private func close() {

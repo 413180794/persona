@@ -17,6 +17,7 @@ struct VNCPage: View {
     #if os(iOS)
     @State private var screenView: VNCScreenUIView?
     @State private var modifiers = VNCModifiers()
+    @State private var pipLog = false
     #endif
 
     private var name: String { model.machine(ref)?.name ?? ref.id }
@@ -45,14 +46,26 @@ struct VNCPage: View {
             session = VNC.hold(ref)
             mode = VNCMode.of(ref)
         }
-        .onDisappear { VNC.release(ref) }
+        .onDisappear {
+            #if os(iOS)
+            VNCPiP.shared.pageGone(ref)
+            #endif
+            VNC.release(ref)
+        }
         .onChange(of: session?.phase) { _, phase in
+            #if os(iOS)
+            // The small window ready (#1839): 小窗 starts it in the tap, and going home starts it by itself.
+            if phase == .live { VNCPiP.shared.prepare(ref, from: from, automatic: true) }
+            #endif
             if phase == .live, unlock, !unlocked {
                 unlocked = true
                 session?.unlockWithKeptPassword()
             }
         }
         .sheet(isPresented: $help) { VNCHelp() }
+        #if os(iOS)
+        .sheet(isPresented: $pipLog) { VNCPiPDiagnostics() }
+        #endif
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("screen-drawer")
     }
@@ -97,6 +110,7 @@ struct VNCPage: View {
             if VNCPiP.supported {
                 Button { toPictureInPicture() } label: { Label("小窗", systemImage: Theme.Icon.pictureInPicture) }
             }
+            Button { pipLog = true } label: { Label("小窗诊断", systemImage: Theme.Icon.help) }
             #else
             Button { toPictureInPicture() } label: { Label("小窗", systemImage: Theme.Icon.pictureInPicture) }
             #endif
@@ -224,8 +238,11 @@ struct VNCPage: View {
     }
 
     private func toPictureInPicture() {
-        VNCPiP.shared.start(ref)
+        VNCPiP.shared.start(ref, from: from)
+        #if os(macOS)
         onClose()
+        #endif
+        // iOS: the page goes once the small window has started (VNCPiP), or stays, saying why it could not.
     }
 
     private func handBack() {

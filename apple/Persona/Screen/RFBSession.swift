@@ -68,7 +68,7 @@ import SwiftUI
     }
 
     /// Shown in this layer from now on (until it goes).
-    func show(in layer: AVSampleBufferDisplayLayer) { sink.add(layer) }
+    func show(in layer: AVSampleBufferDisplayLayer, timed: Bool = false) { sink.add(layer, timed: timed) }
     func hide(from layer: AVSampleBufferDisplayLayer) { sink.remove(layer) }
 
     // MARK: Signing in
@@ -274,13 +274,16 @@ nonisolated final class RFBFrameSink: @unchecked Sendable {
     private let queue = DispatchQueue(label: "persona.vnc.frames")
     private weak var client: RFBClient?
     private var layers = NSHashTable<AVSampleBufferDisplayLayer>.weakObjects()
+    /// Layers with a timebase of their own (the small window's source, VNCPiP): their samples carry a time on the host
+    /// clock instead of DisplayImmediately, which AVFoundation advises against mixing with a timebase.
+    private var timed = NSHashTable<AVSampleBufferDisplayLayer>.weakObjects()
     private var dirty = false, scheduled = false
     private var last = Date.distantPast
     private var pool: CVPixelBufferPool?
     private var poolSize = (0, 0)
     private var shown: [Date] = []
     private var report: (@Sendable (Double, Double?) -> Void)?
-    private var latest: CMSampleBuffer?
+    private var latest: CVPixelBuffer?
 
     func attach(_ client: RFBClient, report: @escaping @Sendable (Double, Double?) -> Void) {
         lock.withLock {
@@ -292,18 +295,23 @@ nonisolated final class RFBFrameSink: @unchecked Sendable {
 
     func detach() { lock.withLock { client = nil } }
 
-    func add(_ layer: AVSampleBufferDisplayLayer) {
-        let frame = lock.withLock { () -> CMSampleBuffer? in
-            layers.add(layer)
+    func add(_ layer: AVSampleBufferDisplayLayer, timed isTimed: Bool = false) {
+        let frame = lock.withLock { () -> CVPixelBuffer? in
+            (isTimed ? timed : layers).add(layer)
             return latest
         }
-        if let frame {
-            let box = SampleBox(sample: frame), one = LayersBox(layers: [layer])
+        if let frame, let sample = Self.sample(frame, immediate: !isTimed) {
+            let box = SampleBox(sample: sample), one = LayersBox(layers: [layer])
             Task { @MainActor in for l in one.layers { Self.enqueue(box.sample, in: l) } }
         }
     }
 
-    func remove(_ layer: AVSampleBufferDisplayLayer) { lock.withLock { layers.remove(layer) } }
+    func remove(_ layer: AVSampleBufferDisplayLayer) {
+        lock.withLock {
+            layers.remove(layer)
+            timed.remove(layer)
+        }
+    }
 
     private func changed() {
         lock.withLock {
@@ -338,18 +346,23 @@ nonisolated final class RFBFrameSink: @unchecked Sendable {
             stamp = Self.stamp(fb)
             return pb
         }
-        guard let buffer, let sample = Self.sample(buffer) else { return }
-        let (targets, report, fps) = lock.withLock { () -> ([AVSampleBufferDisplayLayer], (@Sendable (Double, Double?) -> Void)?, Double) in
-            latest = sample
+        guard let buffer, let sample = Self.sample(buffer, immediate: true) else { return }
+        let (targets, timedTargets, report, fps) = lock.withLock {
+            () -> ([AVSampleBufferDisplayLayer], [AVSampleBufferDisplayLayer], (@Sendable (Double, Double?) -> Void)?, Double) in
+            latest = buffer
             let now = Date()
             shown.append(now)
             shown.removeAll { now.timeIntervalSince($0) > 1 }
-            return (layers.allObjects, self.report, Double(shown.count))
+            return (layers.allObjects, timed.allObjects, self.report, Double(shown.count))
         }
         let latency = stamp.map { Date().timeIntervalSince1970 * 1000 - $0 }
         report?(fps, latency.flatMap { $0 >= 0 && $0 < 60_000 ? $0 : nil })
         let box = SampleBox(sample: sample), onScreen = LayersBox(layers: targets)
         Task { @MainActor in for l in onScreen.layers { Self.enqueue(box.sample, in: l) } }
+        if !timedTargets.isEmpty, let atTime = Self.sample(buffer, immediate: false) {
+            let box = SampleBox(sample: atTime), small = LayersBox(layers: timedTargets)
+            Task { @MainActor in for l in small.layers { Self.enqueue(box.sample, in: l) } }
+        }
         if lock.withLock({ dirty && !scheduled }) { changed() }
     }
 
@@ -379,16 +392,18 @@ nonisolated final class RFBFrameSink: @unchecked Sendable {
         return pb
     }
 
-    private static func sample(_ pb: CVPixelBuffer) -> CMSampleBuffer? {
+    /// A sample of the frame at this moment on the host clock (rising from one to the next); `immediate`: shown at once
+    /// whatever the layer's time (the page's), else when its timebase reaches it (the small window's, at once too).
+    private static func sample(_ pb: CVPixelBuffer, immediate: Bool) -> CMSampleBuffer? {
         var format: CMVideoFormatDescription?
         guard CMVideoFormatDescriptionCreateForImageBuffer(allocator: nil, imageBuffer: pb, formatDescriptionOut: &format) == noErr,
               let format else { return nil }
-        var timing = CMSampleTimingInfo(duration: .invalid, presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()),
+        var timing = CMSampleTimingInfo(duration: CMTime(value: 1, timescale: 30), presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()),
                                         decodeTimeStamp: .invalid)
         var sample: CMSampleBuffer?
         guard CMSampleBufferCreateReadyWithImageBuffer(allocator: nil, imageBuffer: pb, formatDescription: format,
                                                        sampleTiming: &timing, sampleBufferOut: &sample) == noErr, let sample else { return nil }
-        if let attachments = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: true),
+        if immediate, let attachments = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: true),
            CFArrayGetCount(attachments) > 0 {
             let dict = unsafeBitCast(CFArrayGetValueAtIndex(attachments, 0), to: CFMutableDictionary.self)
             CFDictionarySetValue(dict, Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque(),

@@ -853,3 +853,15 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
 - **分栏左栏的 `NavigationLink(value:)` 不写进绑定的 `path`**（iOS 26，2026-11-04）：`NavigationSplitView` 把值推进右栏时，绑定的 `path`
   先被清空（`NavigationColumnState.ejectAll`），打开的页面不在 `path` 里。整棵树被换掉时（`RootView` 按宽度换新外壳和 tab），
   别指望 `path` 能把页面带回来，要按另外记下的（`dev.openChat`）重开；要走的那棵树的分栏也会清空它的 `path`，所以把 `path` 放进 model 共享也没用。
+
+## 画中画的源别放在会关的窗口里，也别太小；开它要在点按里（2026-11-05，#1839）
+
+- **现象**：VNC 小窗在 TestFlight 161 的真机上起不来，模拟器上看不出（模拟器本来就没有画中画）。
+- **原因**：
+  - 源（`AVSampleBufferDisplayLayer`）只有 2×2pt；从整页的「…」› 小窗开时，它被加到了当时的 key window，也就是整页自己的 `ScreenWindow` 上，紧接着整页关掉、窗口释放，源跟着没了。
+  - 从机器页点 VNC 时，连上、有画面以后才在一个 `Task` 里调 `startPictureInPicture`，已经不在用户点按的那一刻；失败只写系统日志，用户看到的就是「什么都没发生」或「直接进了整页」。
+- **以后**：
+  - 源用正常尺寸（这里宽 192pt），放在一直在的那个窗口（App 的主窗口）里、内容后面；不要 `isHidden`、不要零尺寸。
+  - 能提前准备就提前准备（这里整页一连上就准备），让「开小窗」在点按的同一个事件里调 `startPictureInPicture`；需要后台自动开的设 `canStartPictureInPictureAutomaticallyFromInline`。
+  - 带 `controlTimebase` 的层不要再收 DisplayImmediately 的样本（头文件里明说不建议），给它单独做带时间的样本。
+  - 开不了一定要让用户看得到原因（提示 + 一个能复制的诊断页），真机问题才能一次说清卡在哪。

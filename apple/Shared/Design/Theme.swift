@@ -322,6 +322,9 @@ nonisolated enum Theme {
     enum Size {
         // Lines, rules and bars: do not scale.
         static let hairline: CGFloat = 0.5
+        /// The width of the small window's source layer (VNC's picture in picture, #1839): a normal size, behind the
+        /// app's content; one too small never started.
+        static let pictureInPictureSource: CGFloat = 192
         static let line: CGFloat = 1
         static let lineMedium: CGFloat = 1.5
         static let rule: CGFloat = 2

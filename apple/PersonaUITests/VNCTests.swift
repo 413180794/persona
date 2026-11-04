@@ -155,6 +155,17 @@ final class VNCTests: XCTestCase {
         XCTAssertEqual(seen["typed"] as? String, "hello")
         app.buttons["vnc-keyboard"].tap()
 
+        // 小窗诊断 (#1839): what this device can and what the small window did, step by step.
+        app.buttons["vnc-more"].tap()
+        app.buttons["小窗诊断"].firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["vnc-pip-diagnostics"].firstMatch.waitForExistence(timeout: 5), "小窗诊断")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "点了 VNC")).firstMatch.exists,
+                      "the steps:\n\(app.debugDescription)")
+        rest()
+        shot(app, "vnc-pip-diagnostics")
+        app.buttons["关闭"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["vnc-help"].waitForExistence(timeout: 5))
+
         // 帮助.
         app.buttons["vnc-help"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["vnc-help-page"].firstMatch.waitForExistence(timeout: 5))

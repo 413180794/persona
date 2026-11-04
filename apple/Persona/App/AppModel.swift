@@ -604,7 +604,10 @@ final class AppModel {
     func openVNC(_ ref: MachineRef, from: SessionKey? = nil) {
         guard api(ref.group) != nil else { toast = Toast("尚未连接 hub", style: .error); return }
         let kept = ScreenCredentials.load(ref) != nil
-        VNCPiP.log.notice("VNC: small window supported \(VNCPiP.supported) page up \(self.screenOpen != nil) kept \(kept)")
+        #if os(iOS)
+        VNCPiPLog.add("点了 VNC：支持画中画 \(VNCPiPLog.yes(VNCPiP.supported))，整页开着 \(VNCPiPLog.yes(screenOpen != nil))，记住了登录 \(VNCPiPLog.yes(kept))"
+                      + (kept ? "" : "（先进整页登录）"))
+        #endif
         if VNCPiP.supported, screenOpen == nil, kept {
             VNCPiP.shared.start(ref, from: from)
         } else {
