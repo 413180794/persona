@@ -317,6 +317,8 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
   （它这时已经透明、也不接点击）。iPhone 不变（UIKit 的玻璃按钮透明了也点得到，要真藏起来）。改后（交替各 6 次，负载 21–30，中位数）：
   78.3 → 33.7 ms/s，P95 31.7 → 24.2 ms；折起时 VoiceOver 照样读不到它的按钮（cua 查无障碍树：开着有「更多」，折起前后都没有）。
   剩下的 30 ms/s 左右还是开 ↔ 折那几帧（高度、透明度、简版条插进来）；一直开着或一直折着是 6–11 ms/s。
+  用户定 Mac 上不折叠（2026-11-05）：顶栏一直开着。前后交替各 11 次（负载 15–40）：卡顿中位 56.7 → 41.3 ms/s，P95 25.0 → 24.6 ms，主线程 264 → 229 ms/s。
+  比前面安静时量的「一直开着 6–11」高：这一晚每一轮都比前一晚多 20–40 ms/s（两边都是，别的车道在用机器），还有两轮整轮变慢（287、342），原因没查到。
 - 推送让对话页整页重算（2026-11-04，#1337）：对话页的副标题、「正在操作」读了 `model.machines`，每台机器每次心跳整页带所有行重算；
   标签条读 `siblings(of:)`，它在里面读 `allSessions`。改成 `namedMachine(_:)`、每个空间一个格子之后，mock 推 20 轮心跳（`steps=0`）：
   `ChatView` 30 → 10 次（剩下的是那 5 句新话），气泡和正文 365 → 125 个，每次推送主线程 4.2 → 1.2 ms；带新步骤的推送 7.9 → 3.9 ms。
@@ -696,6 +698,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-01 核对）：只看到一张工具行里的图片解码显示；滚动时按需拉取、内存 / 磁盘缓存都没跑到。
 - [x] Collapsing self-drawn header (ChromeHeader: title, subtitle state·machine·space›tab, sibling row, loop/background chips), follows finger, auto-collapse after 3s idle — ChatView.swift
   - Mac（2026-11-02 Mac mini 真窗口核对）：往上滚时顶栏展开成完整版（标题、状态 · 机器 · 空间、同空间胶囊、⋯、循环 / 后台 chip），停下 3 秒收回胶囊，点胶囊展开。
+  - Mac 上不再折叠（2026-11-05 用户定，#1337）：顶栏一直是完整版，滚动、停下、落到消息上都不收（`ChatChrome.folds`）。折叠的那几帧滚动时卡（来回滚约 30 ms/s 的卡顿），Mac 窗口也够高。iPhone 照旧。
 - [x] Session info sheet (run / usage / location, copy id, copy resume command) — ChatView.swift (SessionInfoSheet)。Mac：对话右侧的检查器栏（⌥⌘I / 点标题），Persona 页是窗口 sheet
 - [x] ⋯ menu: 终端, 文件, Git (N), 空间里的所有 Agent, 重命名…, 屏蔽, 拷贝 session id, 拷贝恢复命令, 清空上下文 /clear, 关闭 Agent… — ChatView.swift
   - Mac（2026-11-02 Mac mini 真窗口核对）：对话 ⋯：终端、Git（N）、文件、中断（工作中才有）、重命名…、屏蔽通知、拷贝恢复命令、拷贝目录、空间里的所有 Agent、关闭 Agent…；在文件 / Git 面板里多一项「回到对话」。清单写旧了：「清空上下文 /clear」现在在输入框 + › 快捷指令里（能清的时候才有），「拷贝 session id」在会话信息里（iOS 同一份代码）。和行菜单同名的几项走同一组函数，在行菜单里逐项点过（见上面 Swipe 那条）。

@@ -279,7 +279,7 @@ struct ChatView: View {
         }
         // Left alone for a few seconds, the open chrome folds away by itself (the page goes back to being all chat).
         .task(id: style == .dev && pane == .chat) {
-            guard style == .dev, pane == .chat else { return }
+            guard style == .dev, pane == .chat, ChatChrome.folds else { return }
             scratch.lastActivity = .now
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(500))
@@ -940,7 +940,7 @@ struct ChatView: View {
                 try? await Task.sleep(for: .milliseconds(60))
                 if n == 1 { hideChrome() } // once the header has measured itself
                 guard let bottom = scratch.landingMaxY, scratch.listFrame.height > 0 else { continue }
-                let want = scratch.listFrame.minY + (style == .dev ? (sideBars ? sideHeaderHeight : ChatChrome.compactHeight) : AssistantTopBar.height) + Self.inputTail
+                let want = scratch.listFrame.minY + (style == .dev ? (sideBars ? sideHeaderHeight : chrome.settledHeight) : AssistantTopBar.height) + Self.inputTail
                 let off = want - bottom // > 0: too high; the flipped list scrolls toward older to lower it
                 if abs(off) < 1 { break }
                 scrollList(to: chrome.offset + off)
@@ -1932,7 +1932,7 @@ struct ChatView: View {
     }
 
     /// The Agents header: back, title (with the state), the terminal and ⋯; under them, when there are any, the other
-    /// agents of the space (a menu) and a /loop or background work. It folds into a slim bar as the list scrolls.
+    /// agents of the space (a menu) and a /loop or background work. It folds into a slim bar as the list scrolls (not on the Mac: `ChatChrome.folds`).
     private var devChrome: some View {
         ChromeHeader(chrome: chrome, touched: { scratch.lastActivity = .now }) {
             VStack(spacing: 0) {
@@ -3952,12 +3952,21 @@ private struct ChatStreamFollow: ViewModifier {
 @Observable
 final class ChatChrome {
     static let compactHeight: CGFloat = 40
+    /// Whether the header folds at all. Not on the Mac (#1337, the user's call): a window is tall enough, and each fold
+    /// and unfold while scrolling cost frames (about 30 ms of hitches a second scrolling up and down; 6–11 open).
+    #if os(macOS)
+    static let folds = false
+    #else
+    static let folds = true
+    #endif
     var collapse: CGFloat = 0
     /// The open header's height, measured.
     var height: CGFloat = 0
     /// The list's offset (0 = newest), kept for deciding where to settle.
     @ObservationIgnored var offset: CGFloat = 0
-    var maxCollapse: CGFloat { max(0, height - Self.compactHeight) }
+    var maxCollapse: CGFloat { Self.folds ? max(0, height - Self.compactHeight) : 0 }
+    /// The header's height once a landing has settled: the slim bar, or all of it where it does not fold.
+    var settledHeight: CGFloat { Self.folds ? Self.compactHeight : height }
 }
 
 /// The open header slides up under a shrinking clip while the slim bar fades in over it: one continuous motion,

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -13,6 +14,15 @@ import (
 )
 
 // Retiring a finished task's agent and resuming it on the next message (retire.go).
+
+// withoutAgentReports drops herdr's agent reports from a trace. The node reports a pane's agent — its state, and which
+// session runs in it — in the background (herdrevents.go, herdrresume.go), so one can land between any two calls of
+// whatever is being driven; a test that lists the calls it expects should not depend on where it fell (#1940).
+func withoutAgentReports(trace []string) []string {
+	return slices.DeleteFunc(slices.Clone(trace), func(c string) bool {
+		return strings.HasPrefix(c, "pane.report_agent")
+	})
+}
 
 // session.retire closes a stopped Claude that can be resumed (its pane, as session.close does), keeps what it was
 // started with, and refuses one that works, waits, or has no transcript to resume from; one not running is no error.
@@ -42,7 +52,7 @@ func TestHerdrRetire(t *testing.T) {
 			t.Errorf("%s: code %q", id, code)
 		}
 	}
-	assertTrace(t, f.trace(), []string{
+	assertTrace(t, withoutAgentReports(f.trace()), []string{
 		sendKeys("w1:p1", "ctrl+c"), sendKeys("w1:p1", "ctrl+c"),
 		call("pane.list", map[string]any{"workspace_id": "w1"}),
 		call("tab.close", map[string]any{"tab_id": "w1:t1"}),
