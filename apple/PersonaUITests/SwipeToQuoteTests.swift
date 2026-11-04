@@ -2,7 +2,7 @@ import XCTest
 
 /// Agents chats: a message dragged to the left is quoted, as Telegram's reply (#1058). Past the threshold it lands in
 /// the quote bar over the box and the keyboard comes up; a short drag or a vertical one (scrolling) does nothing. The
-/// drag no longer pages to the files: the header's folder button opens them, and the edge swipe back still works.
+/// drag no longer pages to the files: the header's ··· menu opens them, and the edge swipe back still works.
 ///   PORT=18797 MOCK_AGENTS=1 python3 scripts/mock/mock_hub.py &
 ///   TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:18797 xcodebuild test … -only-testing:PersonaUITests/SwipeToQuoteTests
 /// Both layouts (TEST_RUNNER_JARVIS_LAYOUT=shell) and both styles (TEST_RUNNER_JARVIS_UI_STYLE=beautiful).
@@ -104,19 +104,37 @@ final class SwipeToQuoteTests: XCTestCase {
         XCTAssertFalse(quotes.exists, "scrolling quoted a message")
     }
 
-    /// The header's folder button opens the files; tapped again it goes back to the chat.
-    @MainActor func testFolderButtonOpensFiles() {
+    /// Files are an item of the header's ··· menu (#1205; no button of their own, in the folded bar either: a tap on
+    /// it opens the header); from them, 回到对话 there goes back.
+    @MainActor func testMoreMenuOpensFiles() {
         launch()
-        let folder = app.buttons["chat.files"]
-        XCTAssertTrue(folder.waitForExistence(timeout: 15), "no folder button in the header")
+        let folded = app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "显示标题和标签")).firstMatch
+        XCTAssertTrue(folded.waitForExistence(timeout: 15), "the chat did not open")
+        sleep(6) // past the 3 s the header waits before folding, and the fold's animation
+        XCTAssertFalse(app.buttons["chat.files"].exists, "the folder button is still in the header")
+        shot("folded")
+        let more = app.buttons.matching(NSPredicate(format: "label == %@", "更多")).firstMatch
+        if !more.exists { folded.tap() }
+        XCTAssertTrue(more.waitForExistence(timeout: 5), "no ··· in the header")
+        XCTAssertFalse(app.buttons["chat.files"].exists, "the folder button is still in the header")
         sleep(1)
         shot("header")
-        folder.tap()
-        XCTAssertTrue(files.waitForExistence(timeout: 5), "the folder button did not open the files")
+        more.tap()
+        let item = app.buttons.matching(NSPredicate(format: "label == %@", "文件")).firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "no 文件 in the ··· menu")
+        sleep(1)
+        shot("menu")
+        item.tap()
+        XCTAssertTrue(files.waitForExistence(timeout: 5), "文件 did not open the files")
         sleep(1)
         shot("files")
-        folder.tap()
-        XCTAssertTrue(files.waitForNonExistence(timeout: 5), "the folder button did not go back to the chat")
+        if !more.exists { folded.tap() }
+        XCTAssertTrue(more.waitForExistence(timeout: 5), "no ··· on the files")
+        more.tap()
+        let chat = app.buttons.matching(NSPredicate(format: "label == %@", "回到对话")).firstMatch
+        XCTAssertTrue(chat.waitForExistence(timeout: 5), "no 回到对话 in the ··· menu on the files")
+        chat.tap()
+        XCTAssertTrue(files.waitForNonExistence(timeout: 5), "回到对话 did not go back to the chat")
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", answer)).firstMatch.waitForExistence(timeout: 5))
     }
 
