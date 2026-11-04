@@ -73,14 +73,23 @@ internal fun messageModel(raw: String, from: String? = null): MessageModel {
         }
         plain(text.substring(offset))
     }.let { parts ->
+        // A message the hub knows came from another session: all of it is that session's words, one 「来自」 card.
         if (!from.isNullOrBlank() && parts.none { it is MessagePart.Source })
-            listOf(MessagePart.Source(from, "")) + parts else parts
+            listOf(MessagePart.Source(from, parts.joinToString("\n\n") { (it as MessagePart.Text).text })) else parts
     }
     val photos = images.distinct()
     return MessageModel(parts, photos, files.distinct().filterNot { it in photos }.take(6), contexts)
 }
 
 internal fun messageParts(text: String, from: String? = null): List<MessagePart> = messageModel(text, from).parts
+
+/**
+ * Another session's words as Markdown with each single line break kept (Markdown joins a paragraph's lines; two spaces
+ * before the newline keep it a break), as in the message it was. Web `keepLineBreaks`, iOS `markdownSoftBreakMode`.
+ */
+internal fun keepLineBreaks(text: String): String = softBreak.replace(text, "$1  \n")
+
+private val softBreak = Regex("([^\n])\n(?=[^\n])")
 
 /** A reply's Markdown to parse ahead: the cache key and the text [MessageContent] draws under it. */
 internal data class MarkdownText(val key: String, val text: String)

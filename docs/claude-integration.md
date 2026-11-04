@@ -297,7 +297,7 @@ hooks 和上面一样是插件，比 agent 的多一个 Bash 上的飞书闸门�
 
 - 另一个 Claude 会话发来的消息：「Another Claude session sent a message:」+ `<cross-session-message from="uds:…" from-name="<名字>" from-mode="…">正文</cross-session-message>` + 一段英文说明。
   在空闲时是一条 user 消息；工作中进排队（queue-operation 的 content 是同样的文本），被吸收时是 `queued_command` 附件，`origin.kind:"peer"`、`origin.name`、`origin.body`。
-- 解析成 user 条目并带 `from`（发送方名字），排队条里显示为「【来自 名字】正文」；手机上画成左侧的灰色卡片「来自 名字」，不当成用户自己的消息。
+- 解析成 user 条目并带 `from`（发送方名字），排队条里显示为「【来自 名字】正文」；手机上画成左侧的灰色卡片「来自 名字」，正文按 Markdown 画（同回答），不当成用户自己的消息。
 
 
 ## transcript 里的特殊 XML（2026-10-26 扫了本机和 hub 机器）
@@ -309,7 +309,7 @@ hooks 和上面一样是插件，比 agent 的多一个 Bash 上的飞书闸门�
 | `<local-command-caveat>` | 给模型看的说明，去掉 |
 | `<task-notification>` | 后台任务完成提示（`docs/ios.md` 唤醒） |
 | `<cross-session-message from-name=…>` | 「来自另一个会话」的消息 |
-| `<teammate-message teammate_id=…>` | Agent 团队里队友的汇报，按「来自 teammate_id」显示 |
+| `<teammate-message teammate_id=…>` | Agent 团队里队友的汇报，按「来自 teammate_id」显示。正文是 Agent 团队的 JSON 通知时 hub 转成 Markdown（`transcript/teammate.go`）：`idle_notification` 是加粗的 `summary`、汇报正文 `result`、出错停下的原因；`task_assignment` 是「分配任务 #编号：标题」和说明；结束请求 / 同意 / 拒绝、计划提交 / 批准 / 退回各一行。不认识的类型、不是 JSON 的原样 |
 | `<bash-input>` → `<bash-stdout>` / `<bash-stderr>` | 在 Claude Code 里 `!` 直接跑的命令：用户一条「! 命令」，输出是它下面的一个 Bash 工具 |
 | `<system-reminder>` | 去掉 |
 | `<attached_images>` | 手机发来的图片路径，App 显示成缩略图 |

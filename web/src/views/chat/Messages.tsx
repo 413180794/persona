@@ -6,6 +6,7 @@ import type { UserMessage } from "../../lib/turns";
 import { Icon } from "../../ui/icons";
 import { FileCards } from "./FileCards";
 import { MessageActions } from "./MessageActions";
+import { Markdown } from "../../ui/Markdown";
 import { PathText } from "../../ui/PathLinks";
 import { Thumb } from "./Steps";
 
@@ -37,16 +38,23 @@ export function MergedBubble({ msg, mid, sid }: { msg: UserMessage; mid: string;
   );
 }
 
+// Its words are Markdown like an answer: agents write Markdown, and the hub turns a teammate's JSON status notes into it.
+// A single line break stays one, as in the message it was (iOS: markdownSoftBreakMode(.lineBreak)).
 export function PeerMessage({ msg }: { msg: UserMessage }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-card bg-inset px-3.5 py-2.5 shadow-hairline sm:mr-[12%]" title={clock(msg.ts)}>
+    <div className="flex min-w-0 flex-col gap-1.5 rounded-card bg-inset px-3.5 py-2.5 shadow-hairline sm:mr-[12%]" title={clock(msg.ts)}>
       <span className="flex items-center gap-1.5 text-[12px] font-medium whitespace-nowrap text-ink-3">
         <Icon name="loop" size={12} />
         来自 {msg.from}
       </span>
-      <span className="text-[14px] leading-[1.55] whitespace-pre-wrap text-ink [overflow-wrap:anywhere]">{msg.text}</span>
+      <Markdown text={keepLineBreaks(msg.text)} small />
     </div>
   );
+}
+
+// Markdown joins the lines of a paragraph; two spaces before the newline keep it a line break.
+export function keepLineBreaks(text: string): string {
+  return text.replace(/([^\n])\n(?=[^\n])/g, "$1  \n");
 }
 
 export function LoopTick({ msg }: { msg: UserMessage }) {

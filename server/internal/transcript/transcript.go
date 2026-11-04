@@ -747,7 +747,7 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 			from = n[1]
 		}
 		it := mk(0, "user", proto.KindText)
-		it.Text, it.From = clip(strings.TrimSpace(m[2])), from
+		it.Text, it.From = clip(teammateNote(strings.TrimSpace(m[2]))), from
 		return []proto.Item{it}
 	}
 	// "! cmd" typed in Claude Code runs the command directly: the input reads as the user's own line, its output

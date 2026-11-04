@@ -70,7 +70,8 @@ private fun MessageParts(parts: List<MessagePart>, user: Boolean, id: String, on
             is MessagePart.Source -> JGroupItem(GroupPosition.Single) {
                 Column(Modifier.fillMaxWidth().padding(10.dp)) {
                     Text("来自 ${part.name}", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
-                    if (part.text.isNotBlank()) ChatLinkText(part.text, style = PersonaTheme.type.body.copy(color = PersonaTheme.palette.ink))
+                    // Markdown like an answer: agents write Markdown, and the hub turns a teammate's JSON notes into it.
+                    if (part.text.isNotBlank()) ChatMarkdown(keepLineBreaks(part.text), "$id/$index", selectable = false)
                 }
             }
         }

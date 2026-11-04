@@ -226,20 +226,23 @@ extension UserBubble {
 }
 
 /// A message another Claude session sent this one: on the left like the agent's side, in a quiet card that names
-/// the sender — it was not typed by you.
+/// the sender — it was not typed by you. Its words are Markdown like an answer (agents write Markdown, and the hub
+/// turns a teammate's JSON status notes into it); a single line break stays one, as in the message it was.
 struct PeerMessage: View {
     var item: Item
     var from: String
+    @Environment(\.rowMemoScope) private var memoScope
 
     var body: some View {
+        let d = RowMemo.assistant(RowMemo.key(memoScope, item.id)) { _ in AssistantRowText(item.text ?? "") } // once per message
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             Label("来自 \(from)", systemImage: "arrow.left.arrow.right.circle")
                 .font(Theme.Font.labelStrong)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            Text(item.text ?? "")
-                .font(Theme.Font.body).lineHeight(.body)
-                .foregroundStyle(.primary)
+            Markdown(d.markdown)
+                .markdownSoftBreakMode(.lineBreak)
+                .markdownTheme(.jarvis)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(Theme.Space.m)

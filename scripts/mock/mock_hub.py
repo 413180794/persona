@@ -4395,6 +4395,11 @@ if os.environ.get("MOCK_CHAT_LINES") == "1":
     _l.append(it("assistant", "text", 85, text="两件都做好了：首页 12 张图都是懒加载，加载前显示骨架屏。"))
     _l.append(it("user", "text", 70, text="发版分支已经切好了，可以开始回归。", **{"from": "release-bot"}))
     _l.append(it("assistant", "text", 69, text="收到，开始跑回归。"))
+    # An agent-teams teammate's status note, as the hub hands it over: its JSON (summary, report) turned into Markdown.
+    _l.append(it("user", "text", 65, text="**[to reviewer] web branch rebased onto master; mock file matches**\n\n"
+                 "The web branch is now rebased onto master, the same base the iOS branch used. The mock file matches "
+                 "the iOS copy byte for byte again.\n\n- **Why the rebase:** master changed the mock file after the "
+                 "earlier base.\n- **Checks:** `npm test` and `npm run build` pass.", **{"from": "worker-1"}))
     _l.append(it("user", "text", 60, text="/loop 每 30 分钟检查 CI，红了就修"))
     _l += tool("Bash", {"command": "gh run list --limit 3", "description": "看 CI"}, "completed  success  main", 60)
     _l.append(it("assistant", "text", 59, text="CI 是绿的，30 分钟后再看。"))

@@ -51,4 +51,11 @@ class ContentPresentationTest {
         assertTrue(ChatRenderStyle.Assistant.collapseThoughts)
         assertTrue(ChatRenderStyle.Assistant.compactToolSummary)
     }
+
+    @Test fun aPeerMessageIsOneSourceCardWithAllItsWords() {
+        val text = "**web branch rebased**\n\nChecks pass."
+        assertEquals(listOf<MessagePart>(MessagePart.Source("worker-1", text)), messageParts(text, from = "worker-1"))
+        assertEquals(text, messageModel(text, "worker-1").plain)
+        assertEquals("Report is in /tmp/r.md  \nAll checks pass.\n\n- a  \n- b", keepLineBreaks("Report is in /tmp/r.md\nAll checks pass.\n\n- a\n- b"))
+    }
 }
