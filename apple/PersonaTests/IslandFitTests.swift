@@ -21,12 +21,18 @@ struct IslandFitTests {
             .frame(width: canvas.width, height: canvas.height)
             .environment(\.colorScheme, .dark))
         renderer.scale = scale
-        let cg = try #require(renderer.cgImage)
-        let w = cg.width, h = cg.height
+        let w = Int(ceil(canvas.width * scale)), h = Int(ceil(canvas.height * scale))
         var px = [UInt8](repeating: 0, count: w * h * 4)
         let ctx = try #require(CGContext(data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
                                          space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
-        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        // Keep the SwiftUI layout, but draw it into our bitmap instead of waiting for a cgImage provider pipeline.
+        renderer.render(rasterizationScale: scale) { size, draw in
+            #expect(size == canvas)
+            ctx.saveGState()
+            ctx.scaleBy(x: scale, y: scale)
+            draw(ctx)
+            ctx.restoreGState()
+        }
         var minX = w, minY = h, maxX = -1, maxY = -1
         var radius: CGFloat = 0
         let cx = CGFloat(w) / 2, cy = CGFloat(h) / 2
@@ -94,6 +100,20 @@ struct IslandFitTests {
         let drawn = try ink(IslandPairView(pair: try #require(IslandPair(.working(1234))), small: true), region: side)
         #expect(drawn.radius > IslandMetrics.limited / 2 + 0.5)
         #expect(!inside(drawn.rect, side))
+    }
+
+    /// A known shape checks the point-to-pixel scale and origin independently of the island components.
+    @Test func bitmapPreservesPointCoordinates() throws {
+        let side = CGSize(width: IslandMetrics.limited, height: IslandMetrics.limited)
+        let size = CGSize(width: 10, height: 14)
+        let offset = CGSize(width: 3, height: 2)
+        let drawn = try ink(Rectangle().fill(.white).frame(width: size.width, height: size.height)
+            .offset(x: offset.width, y: offset.height), region: side)
+        #expect(abs(drawn.rect.width - size.width) < 0.5)
+        #expect(abs(drawn.rect.height - size.height) < 0.5)
+        #expect(abs(drawn.rect.midX - offset.width) < 0.5)
+        #expect(abs(abs(drawn.rect.midY) - offset.height) < 0.5)
+        #expect(inside(drawn.rect, side))
     }
 
     @Test func glyphLooks() {
