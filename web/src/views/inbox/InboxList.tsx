@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   agentDraft, agentWorking, conversationRoute, fromLine, interactionAgentTitle, interactionAsk, interactionTitle, isDone, isLark,
-  bulkScope, KIND_FILTERS, kindLabel, labelIsUrgent, mailAccounts, mailShort, sections, sendReply, setAllDone, setDone, shortTime, TIERS,
+  bulkScope, connectorSources, KIND_FILTERS, kindLabel, labelIsUrgent, mailAccounts, mailShort, sections, sendReply, setAllDone, setDone, shortTime, TIERS,
   useInbox, waitingAgents, type InboxItem, type Tier,
 } from "../../lib/inbox";
 import { useMailAccounts } from "../../lib/mail";
@@ -51,11 +51,12 @@ export function InboxList({ selected }: { selected?: string }) {
   const s = useMemo(() => sections(items, { source, kind, query }), [items, source, kind, query]);
   const agents = useMemo(() => waitingAgents(interactions, sessions, mutes, { source, kind, query }), [interactions, sessions, mutes, source, kind, query]);
   const chips = mailAccounts(accounts, items);
+  const connectors = useMemo(() => connectorSources(items), [items]);
   const empty = !s.tiers.action.length && !s.tiers.fyi.length && !s.tiers.noise.length && !agents.length;
   // 全部标为已处理: the open items the list shows (its filters and search); the agents waiting are not items.
   const openInView = kind === "agent" ? [] : [...s.tiers.action, ...s.tiers.fyi, ...s.tiers.noise];
   const filterNames = [
-    source === "feishu" ? "飞书" : mailShort(chips.find((a) => a.id === source)?.email ?? ""),
+    source === "feishu" ? "飞书" : connectors.find((c) => c.id === source)?.name ?? mailShort(chips.find((a) => a.id === source)?.email ?? ""),
     KIND_FILTERS.find((k) => k.key === kind)?.label ?? "",
   ];
   const scope = bulkScope(filterNames, query, openInView.length);
@@ -88,6 +89,9 @@ export function InboxList({ selected }: { selected?: string }) {
           <Chip on={source === "feishu"} onClick={() => pickSource("feishu")}>飞书</Chip>
           {chips.map((a) => (
             <Chip key={a.id} on={source === a.id} onClick={() => pickSource(a.id)} title={a.email}>{mailShort(a.email)}</Chip>
+          ))}
+          {connectors.map((c) => (
+            <Chip key={`c:${c.id}`} on={source === c.id} onClick={() => pickSource(c.id)}>{c.name}</Chip>
           ))}
           <span aria-hidden className="mx-0.5 h-4 w-px bg-line-strong" />
           {KIND_FILTERS.map((k) => (
@@ -211,7 +215,7 @@ function ItemRow({ it, selected, showAccount, onEdit }: { it: InboxItem; selecte
               ) : (
                 <span className="line-clamp-2 text-[12.5px] leading-[1.5] text-ink-2">{from}</span>
               )}
-              {showAccount && !isLark(it) && <span className="mt-0.5 block truncate text-[11px] text-ink-3">{it.account_name}</span>}
+              {showAccount && !isLark(it) && !it.connector && <span className="mt-0.5 block truncate text-[11px] text-ink-3">{it.account_name}</span>}
             </span>
             {it.count > 1 && !done && <Count n={it.count} accent={it.kind === "mention"} />}
           </span>

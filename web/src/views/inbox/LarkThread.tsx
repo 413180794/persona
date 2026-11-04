@@ -1,6 +1,7 @@
 // A Feishu chat, opened at the item's first new message (docs/inbox.md: 「点开：飞书会话停在这件事的第一条新消息」).
 // Supports native Feishu messaging interactions: direct replies, quoting messages, copying, asking Persona for summary,
-// and reporting seen messages to Feishu (docs/inbox.md「看过的飞书消息按可见即读上报」, lark-read.ts).
+// and reporting seen messages to Feishu (docs/inbox.md「看过的飞书消息按可见即读上报」, lark-read.ts). The chat's Pins
+// (lark-pins.ts) open over it; a Pin found in the chat replaces the window around it, a reply opens its thread.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, enc, errorText, getToken } from "../../lib/api";
 import { clock } from "../../lib/format";
@@ -8,15 +9,18 @@ import {
   cardText, comparePosition, emojiLabel, isDone, mergeMessages, nextLarkPosition, partRuns, replyLarkMessage,
   sendLarkMessage, withToken, type InboxItem, type LarkMessage, type LarkPage, type LarkPart,
 } from "../../lib/inbox";
+import { larkAccount } from "../../lib/lark-chats";
+import { canAddPin, changeChatPin, needsRecheck, pinProblemText, type ChatPinTarget } from "../../lib/lark-pins";
 import { initialCursor, LarkReadTracker } from "../../lib/lark-read";
 import { clickLink, linkHref, prefetchLink } from "../../lib/links";
 import { navigate } from "../../lib/router";
 import { onHubEvent } from "../../lib/store";
 import { isForeignCached, requestTranslation, translatesChat, translationOf, useTranslatePrefs, useTranslations } from "../../lib/translate";
 import type { Session } from "../../lib/types";
-import { Button, cx, Loading, Spinner, toast } from "../../ui/atoms";
+import { Button, cx, Dialog, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Monogram } from "./InboxParts";
+import { LarkPinsDialog } from "./LarkPins";
 
 const PAGE = 30;
 
@@ -26,9 +30,22 @@ export interface LarkReplyTarget {
   text?: string;
 }
 
-export function LarkThread({ item }: { item: InboxItem }) {
-  const feed = item.lark!.feed_id;
-  const focus = !isDone(item) ? item.lark?.start_position : undefined;
+/** The chat a LarkThread shows: from an inbox item, or a row of 消息. */
+export interface LarkChatRef {
+  feed: string;
+  title: string;
+  topic?: boolean;
+  /** Open at this position (the first new message) instead of the newest. */
+  focus?: string;
+}
+
+export function chatOfItem(item: InboxItem): LarkChatRef {
+  return { feed: item.lark!.feed_id, title: item.title, topic: item.lark?.is_topic, focus: !isDone(item) ? item.lark?.start_position : undefined };
+}
+
+export function LarkThread({ chat, pinsOpen = false, onPinsOpen }: { chat: LarkChatRef; pinsOpen?: boolean; onPinsOpen?: (open: boolean) => void }) {
+  const feed = chat.feed;
+  const focus = chat.focus;
   const [page, setPage] = useState<LarkPage | null>(null);
   const [error, setError] = useState("");
   const [more, setMore] = useState<"" | "older" | "newer">("");
@@ -38,8 +55,14 @@ export function LarkThread({ item }: { item: InboxItem }) {
   const anchor = useRef<{ height: number; top: number } | null>(null);
   const placed = useRef(false);
   const base = `/lark/conversations/${enc(feed)}/messages`;
-  const topic = Boolean(item.lark?.is_topic);
+  const topic = Boolean(chat.topic);
   const tracker = useRef<LarkReadTracker | null>(null);
+  const [flash, setFlash] = useState<{ id: string; n: number } | null>(null);
+  const jumpTo = useRef<string | null>(null);
+  const [pinThread, setPinThread] = useState<ChatPinTarget | null>(null);
+  const [adding, setAdding] = useState<LarkMessage | null>(null);
+  const [changingPin, setChangingPin] = useState(false);
+  const [pinRecheck, setPinRecheck] = useState(false);
   const prefs = useTranslatePrefs();
   const translateTo = translatesChat(prefs, feed) ? prefs.target : undefined;
 
@@ -50,6 +73,8 @@ export function LarkThread({ item }: { item: InboxItem }) {
     setPage(null);
     setError("");
     setReplyTo(null);
+    setFlash(null);
+    setPinThread(null);
     api<LarkPage>(`${base}?limit=${PAGE}${focus ? `&around=${enc(focus)}` : ""}`)
       .then((r) => {
         if (!live) return;
@@ -85,6 +110,12 @@ export function LarkThread({ item }: { item: InboxItem }) {
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el || !page) return;
+    if (jumpTo.current) {
+      const target = el.querySelector<HTMLElement>(`[data-mid="${CSS.escape(jumpTo.current)}"]`);
+      jumpTo.current = null;
+      if (target) el.scrollTop = Math.max(0, target.offsetTop - el.clientHeight / 3);
+      return;
+    }
     if (anchor.current) {
       el.scrollTop = anchor.current.top + (el.scrollHeight - anchor.current.height);
       anchor.current = null;
@@ -127,8 +158,44 @@ export function LarkThread({ item }: { item: InboxItem }) {
     inputRef.current?.focus();
   }, []);
 
+  // A Pin found by the hub (lark-pins.ts locate): a reply opens its thread; a message replaces the window around it.
+  const openPin = useCallback((target: ChatPinTarget) => {
+    onPinsOpen?.(false);
+    if (target.root) {
+      setPinThread(target);
+      return;
+    }
+    placed.current = true;
+    anchor.current = null;
+    jumpTo.current = target.message.id;
+    setPage((cur) => ({ ...(cur ?? {}), ...target.page, messages: mergeMessages([], target.page.messages ?? []) }));
+    setFlash((f) => ({ id: target.message.id, n: (f?.n ?? 0) + 1 }));
+  }, [onPinsOpen]);
+
+  const addPin = useCallback(async (m: LarkMessage) => {
+    setAdding(null);
+    setChangingPin(true);
+    try {
+      await changeChatPin(feed, m.id, undefined, await larkAccount());
+      toast("已添加 Pin", "ok");
+    } catch (e) {
+      const recheck = needsRecheck(e);
+      setPinRecheck(recheck);
+      toast(pinProblemText(e), "error");
+      if (recheck) onPinsOpen?.(true);
+    } finally {
+      setChangingPin(false);
+    }
+  }, [feed, onPinsOpen]);
+
+  // Closing the list after it read cleanly settles an unknown add.
+  const closePins = useCallback((checked: boolean) => {
+    if (checked) setPinRecheck(false);
+    onPinsOpen?.(false);
+  }, [onPinsOpen]);
+
   const handleAskPersona = useCallback(async () => {
-    const chatTitle = item.title || "飞书会话";
+    const chatTitle = chat.title || "飞书会话";
     const prompt = `读取我飞书会话「${chatTitle}」（lark-connector feedId ${feed}）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。`;
     toast("正在交给 Persona 总结…", "ok");
     try {
@@ -140,7 +207,7 @@ export function LarkThread({ item }: { item: InboxItem }) {
     } catch (e) {
       toast(`总结失败：${errorText(e)}`, "error");
     }
-  }, [item.title, feed]);
+  }, [chat.title, feed]);
 
   const handleCopy = useCallback((m: LarkMessage) => {
     const text = m.text || (m.parts ?? []).map((p) => p.text ?? "").join("");
@@ -269,6 +336,8 @@ export function LarkThread({ item }: { item: InboxItem }) {
                 onAskPersona={handleAskPersona}
                 onCopy={handleCopy}
                 onRetry={handleRetry}
+                onPin={onPinsOpen && !changingPin && !pinRecheck ? setAdding : undefined}
+                flash={flash?.id === m.id ? flash.n : undefined}
               />
             </div>
           ))}
@@ -286,7 +355,43 @@ export function LarkThread({ item }: { item: InboxItem }) {
         onSend={handleSend}
         inputRef={inputRef}
       />
+      {pinsOpen && <LarkPinsDialog feed={feed} topic={topic} onClose={closePins} onOpen={openPin} />}
+      {pinThread && <PinThreadDialog target={pinThread} translateTo={translateTo} onClose={() => setPinThread(null)} />}
+      <Dialog
+        open={adding !== null}
+        onClose={() => setAdding(null)}
+        title="添加到 Pin 消息？"
+        footer={(
+          <>
+            <Button tone="quiet" onClick={() => setAdding(null)}>取消</Button>
+            <Button tone="accent" icon="pin" onClick={() => adding && void addPin(adding)}>添加 Pin</Button>
+          </>
+        )}
+      >
+        <p className="text-[12.5px] leading-relaxed text-ink-2">会话成员可以在 Pin 列表中找到这条消息。</p>
+        {adding && <p className="mt-2 line-clamp-3 rounded-[8px] bg-inset px-3 py-2 text-[12.5px] text-ink shadow-hairline">{adding.text || (adding.parts ?? []).map((p) => p.text ?? "").join("") || "消息"}</p>}
+      </Dialog>
     </div>
+  );
+}
+
+/** A pinned reply in its thread (iOS opens LarkThreadView): the thread's first message, then the replies the hub read
+ * up to the pinned one, which is brought into view and lit for a moment. */
+function PinThreadDialog({ target, translateTo, onClose }: { target: ChatPinTarget; translateTo?: string; onClose: () => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  const root = target.root!;
+  const replies = mergeMessages([], (target.page.messages ?? []).filter((m) => m.id !== root.id));
+  useLayoutEffect(() => {
+    box.current?.querySelector<HTMLElement>(`[data-mid="${CSS.escape(target.message.id)}"]`)?.scrollIntoView({ block: "center" });
+  }, [target]);
+  return (
+    <Dialog open onClose={onClose} title="话题" width={620}>
+      <div ref={box} className="-mx-2 max-h-[60vh] overflow-y-auto">
+        <Message m={root} nested translateTo={translateTo} flash={root.id === target.message.id ? 1 : undefined} />
+        <p className="mx-2 my-2 border-t border-line pt-2 text-[11.5px] font-medium text-ink-3">{replies.length} 条回复</p>
+        {replies.map((m) => <Message key={m.id} m={m} nested translateTo={translateTo} flash={m.id === target.message.id ? 1 : undefined} />)}
+      </div>
+    </Dialog>
   );
 }
 
@@ -399,6 +504,8 @@ function Message({
   onAskPersona,
   onCopy,
   onRetry,
+  onPin,
+  flash,
 }: {
   m: LarkMessage;
   prev?: LarkMessage;
@@ -408,6 +515,10 @@ function Message({
   onAskPersona?: () => void;
   onCopy?: (m: LarkMessage) => void;
   onRetry?: (m: LarkMessage) => void;
+  /** 添加 Pin, offered when the hub says the message may be pinned. */
+  onPin?: (m: LarkMessage) => void;
+  /** Lit for a moment (a Pin jumped here); a new number lights it again. */
+  flash?: number;
 }) {
   const [thread, setThread] = useState<LarkMessage[] | null>(null);
   const [opening, setOpening] = useState(false);
@@ -433,13 +544,16 @@ function Message({
   return (
     <div
       data-pos={m.position}
+      data-mid={m.id}
       data-seen-pos={nested ? undefined : m.position}
       className={cx(
         "group/msg relative flex gap-2.5 rounded-[10px] px-2",
         compact ? "py-0.5" : "pt-2 pb-0.5",
         m.at_me && "bg-accent-tint/60",
+        flash !== undefined && "isolate",
       )}
     >
+      {flash !== undefined && <span key={flash} aria-hidden className="pointer-events-none absolute inset-0 -z-10 rounded-[10px] bg-accent-tint" style={{ animation: "pin-flash 1.8s ease-out both" }} />}
       <span className="w-8 shrink-0">{!compact && <Monogram name={name} size={nested ? 24 : 32} src={m.sender_avatar} />}</span>
       <div className="min-w-0 flex-1">
         {!compact && (
@@ -510,6 +624,17 @@ function Message({
             >
               <Icon name="spark" size={11} />
               <span>总结</span>
+            </button>
+          )}
+          {onPin && !nested && canAddPin(m) && (
+            <button
+              type="button"
+              onClick={() => onPin(m)}
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] whitespace-nowrap text-ink-2 hover:bg-surface-hover hover:text-ink"
+              title="添加 Pin"
+            >
+              <Icon name="pin" size={11} />
+              <span>Pin</span>
             </button>
           )}
           {onCopy && (

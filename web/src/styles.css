@@ -160,6 +160,8 @@ body {
 @keyframes breathe{0%,to{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.82)}}
 @keyframes slide-up{0%{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:none}}
 @keyframes slide-in-right{0%{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
+/* a Feishu message a Pin jumped to: lit, then gone */
+@keyframes pin-flash{0%,35%{opacity:.9}to{opacity:0}}
 
 html, body, #root { height: 100%; }
 body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }

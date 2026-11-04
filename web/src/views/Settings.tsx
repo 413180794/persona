@@ -90,7 +90,7 @@ export function tokens(n: number): string {
 type Tab = "general" | "assistant" | "models" | "model-config" | "claude" | "codex" | "connectors" | "plugins" | "translate" | "devices" | "hub";
 const TABS: Tab[] = ["general", "assistant", "models", "model-config", "claude", "codex", "connectors", "plugins", "translate", "devices", "hub"];
 // The tab whose page opens one of its items, and the query parameter that names it.
-const SUB: Partial<Record<Tab, string>> = { "model-config": "purpose", plugins: "plugin" };
+const SUB: Partial<Record<Tab, string>> = { "model-config": "purpose", plugins: "plugin", connectors: "connector" };
 
 export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const [tab, setTab] = useState<Tab>(() => {
@@ -154,7 +154,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           {tab === "model-config" && <ModelConfiguration open={sub} onOpen={(id) => pick("model-config", id)} onProviders={() => pick("models")} />}
           {tab === "assistant" && <AssistantSettings />}
           {(tab === "claude" || tab === "codex") && <AgentSettings key={tab} agent={tab} />}
-          {tab === "connectors" && <Connectors />}
+          {tab === "connectors" && <Connectors open={sub} onOpen={(id) => pick("connectors", id)} />}
           {tab === "plugins" && <Plugins open={sub} onOpen={(id) => pick("plugins", id)} />}
           {tab === "translate" && <TranslationSettings onConfigure={() => pick("model-config", "translate")} />}
           {tab === "devices" && <Devices />}

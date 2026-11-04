@@ -11,6 +11,7 @@ export type Route =
   | { name: "history" }
   | { name: "profile" }
   | { name: "inbox"; id?: string }
+  | { name: "messages"; id?: string }
   | { name: "routines" }
   | { name: "kb"; kind?: string; id?: string }
   | { name: "machines" }
@@ -28,6 +29,7 @@ export function parse(path: string): Route {
   if (p[0] === "history") return { name: "history" };
   if (p[0] === "assistant") return { name: "profile" };
   if (p[0] === "inbox") return { name: "inbox", id: p[1] };
+  if (p[0] === "messages") return { name: "messages", id: p[1] };
   if (p[0] === "routines") return { name: "routines" };
   if (p[0] === "kb") return { name: "kb", kind: p[1], id: p[2] };
   if (p[0] === "machines") return p[1] ? { name: "machine", mid: p[1] } : { name: "machines" };
@@ -54,6 +56,8 @@ export function href(r: Route): string {
       return "/assistant";
     case "inbox":
       return r.id ? `/inbox/${encodeURIComponent(r.id)}` : "/inbox";
+    case "messages":
+      return r.id ? `/messages/${encodeURIComponent(r.id)}` : "/messages";
     case "routines":
       return "/routines";
     case "kb":

@@ -6,6 +6,7 @@ import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, buildSpaces, isQuiet,
 import { addSection, arrangeSessions, assignSection, GROUP_LABEL, isDefaultView, providerLabel, removeSection, resetView, setView, SHOW_LABEL, SORT_LABEL, toggleProvider, togglePin, totalUnread, updateAgentPrefs, useAgentList, useAgentPrefs, viewOf, type AgentPrefs, type AgentSession, type GroupBy, type ShowMode, type SortBy } from "../lib/agents";
 import { api, errorText, setToken } from "../lib/api";
 import { useInboxBadge } from "../lib/inbox";
+import { useLarkHome } from "../lib/lark-chats";
 import { machineWithHub } from "../lib/mesh";
 import { ago, baseName, sessionDeletable, sourceSubtitle, sessionTitle, stateOf, tabLabel } from "../lib/format";
 import { agentKey, isSpacePinned, pinnedSessions } from "../lib/pins";
@@ -104,6 +105,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const onSpaceMenu = (sp: Space, anchor: HTMLElement) => setSpaceMenu((m) => (m?.anchor === anchor ? null : { sp, anchor }));
   const counts = useCounts();
   const inbox = useInboxBadge();
+  const larkHome = useLarkHome();
   const nav = useRef<HTMLDivElement>(null);
   const rows = useRef(new Map<string, HTMLElement>());
   const [hovered, setHovered] = useState<string | null>(null);
@@ -153,6 +155,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   const pages: Record<(typeof NAV_PAGES)[number], React.ReactNode> = {
     home: <NavRow k="home" reg={reg} hover={setHovered} active={activeKey === "home"} to={{ name: "home" }} go={go} icon="home" label="总览" badge={counts.needs || undefined} badgeTone="red" />,
     inbox: <NavRow k="inbox" reg={reg} hover={setHovered} active={activeKey === "inbox"} to={{ name: "inbox" }} go={go} icon="inbox" label="收件箱" badge={inbox || undefined} badgeTone="red" />,
+    messages: larkHome && <NavRow k="messages" reg={reg} hover={setHovered} active={activeKey === "messages"} to={{ name: "messages" }} go={go} icon="chat" label="消息" />,
     todos: todosSupported !== false && <NavRow k="todos" reg={reg} hover={setHovered} active={activeKey === "todos"} to={{ name: "todos" }} go={go} icon="todo" label="待办" badge={uncompletedTodosCount || undefined} />,
     routines: <NavRow k="routines" reg={reg} hover={setHovered} active={activeKey === "routines"} to={{ name: "routines" }} go={go} icon="clock" label="定时任务" />,
     kb: <NavRow k="kb" reg={reg} hover={setHovered} active={activeKey === "kb"} to={{ name: "kb" }} go={go} icon="book" label="知识库" />,

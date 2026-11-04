@@ -1,4 +1,5 @@
-// The unified inbox (docs/inbox.md): the hub's items (Feishu chats, mail threads, Feishu documents, removed posts),
+// The unified inbox (docs/inbox.md): the hub's items (Feishu chats, mail threads, Feishu documents, removed posts, and
+// the connectors' threads: GitHub, Telegram…, drawn from their generic `connector` block),
 // kept in one module-level list so the sidebar's badge and the page share it. Pulled on first use, again on `inbox`
 // pushes and on (re)connect. Marking done applies at once and is sent in the background; a failure puts it back.
 //
@@ -67,7 +68,7 @@ export interface InboxAgent {
 
 export interface InboxItem {
   id: string;
-  source: string; // lark | mail
+  source: string; // lark | mail | a connector's id (github, telegram…)
   kind: string; // dm | mention | group | bot | mail | doc | moment
   account: string;
   account_name: string;
@@ -90,11 +91,27 @@ export interface InboxItem {
   mail?: { account_id: string; mailbox: string; uids: number[]; message_id?: string; from?: { name?: string; email?: string }; direct?: boolean; thread?: string };
   doc?: InboxDoc;
   moment?: { post_id: string; notice?: string; reply_to?: string; my_post?: boolean; post_text?: string };
+  /** A connector's thread (GitHub…): `source` is the connector's id, `account_name` its name. */
+  connector?: InboxConnector;
   /** Only in GET /inbox/{id}: the conversation as text. */
   context?: string;
   agent?: InboxAgent;
   /** New foreign mail translated by the hub as it came in (for a device whose 设置 › 翻译 asks), by target language. */
   translations?: Record<string, { subject: string; preview: string }>;
+}
+
+export interface InboxConnector {
+  thread: string;
+  /** The row's tag: 请你 review. */
+  label?: string;
+  /** The thread on the web. */
+  url?: string;
+  /** A link the system opens instead (sms:…, tg://…): where the user answers it. */
+  open_url?: string;
+  /** Where a reply goes and who sees it. */
+  reply_to?: string;
+  can_reply?: boolean;
+  rule_tier?: string;
 }
 
 export interface MailAccount {
@@ -125,8 +142,35 @@ export function isLark(it: InboxItem): boolean {
   return it.source === "lark";
 }
 
+/** The thread as people write it (example-org/example-repo#12), undefined when it is only an id. */
+export function connectorReference(it: InboxItem): string | undefined {
+  const t = it.connector?.thread;
+  return t && t.includes("#") ? t : undefined;
+}
+
+/** Whether 「AI 草拟回复」 applies: a connector's thread only when the hub can answer it (a CI run cannot). */
+export function canDraft(it: InboxItem): boolean {
+  return !it.connector || !!it.connector.can_reply;
+}
+
+/** The button that opens a connector item's `open_url`, where the user answers it. */
+export function openTitle(it: InboxItem): string {
+  if (it.connector?.open_url?.startsWith("sms:")) return "在信息里回复";
+  if (it.source === "telegram") return "在 Telegram 里回复";
+  return "打开";
+}
+
+/** A connector item's `open_url` as the browser opens it; an sms: one carries the AI 分身's draft as its body. */
+export function openURL(it: InboxItem): string | undefined {
+  const raw = it.connector?.open_url;
+  if (!raw) return undefined;
+  const draft = agentDraft(it);
+  return raw.startsWith("sms:") && draft ? `${raw}&body=${encodeURIComponent(draft)}` : raw;
+}
+
 /** The short tag next to the title. */
 export function kindLabel(it: InboxItem): string | undefined {
+  if (it.connector) return it.connector.label || undefined;
   switch (it.kind) {
     case "dm":
       return "私聊";
@@ -167,6 +211,11 @@ export function docTypeName(type?: string): string {
 export function fromLine(it: InboxItem, preview?: string): string {
   if (it.doc) return `${docTypeName(it.doc.type)} · ${it.preview}`; // the preview names who: 李雷提及了你
   if (it.moment) return `${it.sender ?? ""}：${it.preview}`;
+  if (it.connector) {
+    // example-org/example-repo#12 · bob：请看一下
+    const who = [it.sender ?? "", it.preview].filter(Boolean).join("：");
+    return [connectorReference(it) ?? "", who].filter(Boolean).join(" · ");
+  }
   if (preview && it.sender) return `${it.sender}：${preview}`;
   // a Feishu direct chat's title already is the sender
   if (!it.sender || (isLark(it) && it.lark && !it.lark.is_group)) return it.preview;
@@ -177,6 +226,7 @@ export function fromLine(it: InboxItem, preview?: string): string {
 export function sourceLine(it: InboxItem): string {
   if (it.doc) return [docTypeName(it.doc.type), it.preview].filter(Boolean).join(" · ");
   if (it.moment) return it.moment.my_post ? "removed · 你的帖子" : "removed";
+  if (it.connector) return [it.account_name || it.source, connectorReference(it)].filter(Boolean).join(" · ");
   if (isLark(it)) return ["飞书", it.lark?.is_group ? "群聊" : it.kind === "bot" ? "机器人" : "私聊"].join(" · ");
   const from = it.mail?.from;
   return [it.account_name, from?.name && from.email ? `${from.name} <${from.email}>` : from?.email || it.sender].filter(Boolean).join(" · ");
@@ -232,7 +282,7 @@ export function shortTime(iso?: string, now = new Date()): string {
 
 // ── filters and sections ─────────────────────────────────
 
-/** source: "" all, "feishu", or a mail account id; kind: "" all, mention, dm, group, mail, agent. */
+/** source: "" all, "feishu", a mail account id or a connector's id; kind: "" all, mention, dm, group, mail, agent. */
 export interface InboxFilter {
   source: string;
   kind: string;
@@ -287,6 +337,13 @@ export function sections(items: InboxItem[], f: InboxFilter): InboxSections {
 /** The sidebar badge: open items that need the user. */
 export function badgeCount(items: InboxItem[]): number {
   return items.filter((it) => !isDone(it) && triage(it) === "action").length;
+}
+
+/** The connectors with items in the list (GitHub…), one filter chip each, in the order they first come. */
+export function connectorSources(items: InboxItem[]): { id: string; name: string }[] {
+  const seen = new Map<string, string>();
+  for (const it of items) if (it.connector && !seen.has(it.account)) seen.set(it.account, it.account_name || it.source);
+  return [...seen].map(([id, name]) => ({ id, name }));
 }
 
 /** Mail accounts for the filter chips: the hub's list, else the ones the items name. */
@@ -366,9 +423,10 @@ export function contextXML(kind: string, title: string, url: string, text: strin
 
 /** The item as context the chat shows as a chip, then what to do with it (InboxHandOffSheet.message). */
 export function handOffMessage(it: InboxItem, ask: string): string {
-  const title = (isLark(it) ? "飞书 · " : "邮件 · ") + it.title;
+  const title = (it.connector ? `${it.account_name || it.source} · ` : isLark(it) ? "飞书 · " : "邮件 · ") + it.title;
   let text = it.context?.trim() ? it.context : [it.sender ?? "", it.preview].filter(Boolean).join("：");
   if (it.lark) text += `\n\n（飞书会话 feedId ${it.lark.feed_id}，可用飞书工具读更多上下文或回复）`;
+  if (it.connector?.url) text += `\n\n（${it.account_name || it.source}：${it.connector.url}）`;
   const uid = it.mail?.uids[it.mail.uids.length - 1];
   if (it.mail && uid !== undefined) text += `\n\n（邮件 account_id ${it.mail.account_id}，mailbox ${it.mail.mailbox}，uid ${uid}，可用 mail_read 读全文、mail_send 回复）`;
   return `${contextXML("context", title, "", text)}\n\n${ask.trim() || HANDOFF_PRESETS[0]}`;
@@ -408,6 +466,16 @@ export interface LarkMessage {
   sending?: boolean;
   failed?: boolean;
   client_id?: string;
+  /** lark-connector's capabilities as the hub passes them on: whether a Pin may be added / removed (lark-pins.ts). */
+  can_pin?: boolean;
+  can_unpin?: boolean;
+  deleted?: boolean;
+  local_state?: string;
+  /** The thread a message is in; "root", "reply" or "" (a plain message). */
+  thread_id?: string;
+  thread_kind?: string;
+  /** An encrypted message's public face is in text / parts already; its presence marks it encrypted. */
+  olk?: unknown;
 }
 
 export interface LarkPage {
@@ -588,7 +656,7 @@ export function reloadInbox(): Promise<void> {
     try {
       do {
         again = false;
-        const r = await api<{ items?: InboxItem[] }>("/inbox");
+        const r = await api<{ items?: InboxItem[] }>("/inbox?sources=all");
         set({ items: r.items ?? [], loaded: true, error: "" });
       } while (again);
     } catch (e) {
@@ -605,7 +673,7 @@ export function reloadInbox(): Promise<void> {
 export async function refreshInbox(): Promise<void> {
   set({ loading: true });
   try {
-    const r = await api<{ items?: InboxItem[] }>("/inbox/refresh", { method: "POST" });
+    const r = await api<{ items?: InboxItem[] }>("/inbox/refresh?sources=all", { method: "POST" });
     set({ items: r.items ?? [], loaded: true, error: "" });
   } catch (e) {
     toast(`没刷新成功：${errorText(e)}`, "error");

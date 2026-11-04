@@ -10,7 +10,7 @@
 
 - **由 hub 自己托管**：hub 把 `<hub 数据目录>/web`（默认 `~/.persona/web`）当静态站，和 API 同一个端口（hub 的 `listen`，默认 `:18660`，即所有网卡）。
   同源，所以没有 CORS，WebSocket 和图片也用同一个 token。没有这个目录时非 `/api/` 路径照旧 404。
-  不是文件的路径都回 `index.html`（前端路由：`/`（Persona 主对话）、`/overview`（总览）、`/s/<机器>/<会话>`、`/j`、`/j/<会话>`、`/j/new`、`/history`、`/inbox`、`/inbox/<件>`、`/routines`、
+  不是文件的路径都回 `index.html`（前端路由：`/`（Persona 主对话）、`/overview`（总览）、`/s/<机器>/<会话>`、`/j`、`/j/<会话>`、`/j/new`、`/history`、`/inbox`、`/inbox/<件>`、`/messages`、`/messages/<会话>`、`/routines`、
   `/kb`、`/kb/<类型>/<条目>`、`/machines`、`/machines/<机器>`、`/assistant`（助手资料页）、`/settings`）；
   `/assets/` 下是带内容哈希的文件，永久缓存，`index.html` 不缓存（`server/internal/hub/web.go`）。
 - 部署：`./scripts/deploy/deploy.sh web`（只构建、传网页，不重启 hub）；部署 hub 时也会顺带部署网页。
@@ -118,8 +118,13 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   编辑浮层改重复方式、提示词、运行方式（全部放行先确认），保存 / 删除 / 立即运行（跳到那段对话）/ 下次开新对话；「新建」可选模板，浮层只有「取消 / 添加」；
   右栏「接下来」和按天分组的运行记录。真实 hub 的 `PUT /assistant/tasks/{id}` 整体替换字段，所以连开关也带完整任务；
   启动器、思考强度只在这次改过才发（统一模型配置那边存的值不被盖回去，`docs/model-config.md`），hub 有统一模型配置时给一个跳过去的链接。
-- **收件箱**（`/inbox`、`/inbox/<件>`，`src/views/inbox/`，`src/lib/inbox.ts`，`docs/inbox.md`）：飞书、邮件、云文档、removed一个列表，
-  需要你 / 知悉即可（全部看过）/ 已折叠（全部清除）/ 已处理（收起，可移回）四段；筛选全部 / 飞书 / 每个邮箱 | @我 / 私聊 / 群聊 / 邮件 / Agent，搜标题、发件人、内容、摘要。
+- **收件箱**（`/inbox`、`/inbox/<件>`，`src/views/inbox/`，`src/lib/inbox.ts`，`docs/inbox.md`）：飞书、邮件、云文档、removed和连接器（GitHub、Telegram、信息、插件的）一个列表，
+  需要你 / 知悉即可（全部看过）/ 已折叠（全部清除）/ 已处理（收起，可移回）四段；筛选全部 / 飞书 / 每个邮箱 / 每个有条目的连接器 | @我 / 私聊 / 群聊 / 邮件 / Agent，搜标题、发件人、内容、摘要。
+  - **连接器的条目**（#1324，`?sources=all` 拉列表，按条目的 `connector` 块画，不认具体来源）：标签是 `connector.label`，第二行「example-org/example-repo#12 · 谁：内容」，头像角上是连接器自己的标志（GitHub、Telegram）或灰色的通用标。
+    详情（`ConnectorThread.tsx`）先读 `/connectors/<id>/thread`：GitHub 的 PR / issue 画成 GitHub 的时间线（状态、分支、标签、描述、评论、review、代码行评论带 diff、CI 结果和失败日志），
+    聊天类（Telegram）画成气泡（图片、贴纸、视频封面经 `/connectors/<id>/media`，语音和文件只描述），可加载更早；会话页带回复动作（`chat.reply`）时底部有输入框，走 `thread/reply`（聊天可引用某条）。
+    读不到会话页（CI 失败这种不是会话的、限流、没有 threads 的连接器）就显示 hub 收集的内容（`GET /inbox/<件>` 的 `context`）和「在 X 打开」；限流 / 不可用时上面说一句原因。
+    `can_reply` 的才有「AI 草拟回复」（回复走 `/inbox/<件>/reply`，弹窗里写明回复会到哪、谁能看到）；不能回复的有 `open_url` 就换成「在 Telegram 里回复」「在信息里回复」（`sms:` 带上 AI 分身的草稿），都没有就只有「交给 AI」。交给 AI 的标题是「连接器名 · 标题」，正文带上它的链接。
   等你的 Agent（待处理交互，屏蔽的除外）排在需要你最前，点了进那个对话。悬停一行出现「已处理 / 移回」（网页没有左滑），先改本地、失败恢复。
   AI 分身草拟好的行下面是草稿卡片（发送 / 修改），处理中写「AI 分身正在处理：…」。宽时左列表右详情，窄时详情盖住列表；按页面自己的宽度切（容器查询），开着侧边面板也不挤。
   详情：飞书会话只读（停在第一条新消息，「以下是新消息」分隔，可加载更早 / 更新，`lark` 推送命中时刷新；不做表情、资料卡、群设置——不做第二个飞书）；
@@ -134,6 +139,17 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   - **打开邮件标已读**：没处理、没读过的邮件打开时 `POST /mail/messages/{aid}/{uid}/flags {seen:true}`，失败忽略（同 iOS）。
   - **翻译**（`lib/translate.ts`）：开了翻译时，不是目标语言的邮件打开时 `POST /translate/mail`，正文换成译文、上面「已翻译成… · 显示原文」；hub 预翻好的（`translations[目标]`）直接用在列表行和标题上。
     设置里选中的飞书会话，别人发的外语消息下面一行译文（`POST /translate`，攒批）。语言判断按书写系统 + 常用词（浏览器没有 iOS 的 NaturalLanguage），拉丁语系之间可能判错。
+  - **飞书聊天的 Pin**（#1327，`lib/lark-pins.ts`、`inbox/LarkPins.tsx`，照 iOS `LarkChatPins`，`docs/lark-connector-migration.md`「聊天内 Pin 消息」）：飞书详情头部的图钉按钮打开 Pin 列表（对话框），
+    `GET /lark/conversations/{id}/pins` 按游标翻页、接近底部自动加载；lark-connector 读列表会把 Pin 标为已读，所以只在打开列表、改了 Pin、列表开着时收到这个会话的 `lark` 推送才读，不预取，只放页面内存。
+    点一条先 `GET …/pin-messages/{消息}` 确认能定位，再关列表：普通消息把聊天换成它周围那一页、滚到它并闪一下；话题里的回复在「话题」对话框里打开（话题首条 + 回复，高亮那条）；找不到时留在列表、聊天位置不动。
+    消息悬停条的「Pin」（hub 给的 `can_pin`，撤回 / 删除 / 发送中的不给）先确认再 `POST …/pins`，带当前飞书账号；列表里有 `can_unpin` 的可移除（行内确认）。
+    写入结果不明（超时、`lark_pin_result_unknown`）不重试，先重新读列表；换号 / 退出登录清空并停住。旧 hub（没有这个路由的 404 / 405）提示升级 Hub，旧 lark-connector 的 426 提示升级 lark-connector，原消息不存在不误报。
+- **消息**（`/messages`、`/messages/<会话>`，`src/views/messages/`，`src/lib/lark-chats.ts`，`docs/lark-connector-migration.md`「入口」）：#392 的窄例外，
+  只在这个浏览器打开了「设置 › 连接器 › 飞书 › 首页显示消息」（默认关，存 `localStorage` 的 `lark.homeMessages`，和 iOS 存在本机一样，不同步到 hub）时侧边栏才有「消息」。
+  浏览全部私聊和群聊：`GET /lark/conversations?scope=chats&account_bound=1`（60 条一页，滚到底加载更多）和 `GET /lark/pinned?account_bound=1`（置顶一排头像，顺序和未读跟服务端）；
+  点进去复用收件箱的飞书聊天页（`LarkThread`：消息流、回复、可见即读、Pin）。搜索只搜已加载的会话。`lark` 推送后重读已加载的分页窗口，整批成功才替换（退出的会话这时消失），失败保留原列表；
+  hub 说账号换了就立刻丢掉旧账号的行、迟到的回复不合并。列表只在这个标签页的内存里，不落盘。宽窄同收件箱；右上角进飞书设置。关着时打开这个地址只提示去设置里打开。
+  不做通讯录、工作台等页面（不做第二个飞书）。
 - **知识库**（`/kb`、`/kb/<类型>`、`/kb/<类型>/<条目>`，`src/views/knowledge/`，`src/lib/kb.ts`，`docs/knowledge.md`）：类型胶囊、按标签筛选、项目分重点 / 其他进行中 / 已完成 / 不是项目，
   全文搜索按条目合并（最多两处命中、加粗）；条目页：在做它的 Agent、时间线、档案、关联、代码目录、最近 7 天消息（某一天在弹窗里看）、目录路径，
   「打标」改重要级 / 相关性 / 标签 / 项目类型和状态，「问 Persona」发进主对话（没有就新开）。宽窄同收件箱，条目页盖住列表时列表不卸载，滚动和搜索都留着。
@@ -154,7 +170,12 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   每行「⋯」恢复默认（文字项清空也是 null）、推到所有在线机器，失败回滚；
   「连接器」（`settings/Connectors.tsx`）：邮箱（列表、添加 IMAP / 飞书邮箱、删除；Gmail 只能在手机上加：它的 Google 授权客户端是 iOS 类型，回调是只有 App 能接的自定义 scheme）、
   飞书（`/lark/status` 只读）、飞书机器人（`settings/FeishuBot.tsx`，逻辑 `lib/feishu-bot.ts`，`docs/bots.md`；一行状态，点开是弹窗（`?tab=connectors&connector=feishu-bot` 直接打开）：开关、应用凭证「验证并保存」、
-  配对码和倒计时（等配对时每 3 秒刷新）、测试消息、解除配对先确认、「能做什么」六个开关、飞书里聊过的 Agent、怎么建机器人；同 iOS `FeishuBotView`）；「这台 iPhone」只在手机上有；
+  配对码和倒计时（等配对时每 3 秒刷新）、测试消息、解除配对先确认、「能做什么」六个开关、飞书里聊过的 Agent、怎么建机器人；同 iOS `FeishuBotView`）；
+  hub 带 `connectors` 时下面是「更多连接器」（`settings/HubConnector.tsx`，逻辑 `lib/connectors.ts`，`&connector=<id>` 直接进详情，#1324）：
+  GitHub、Telegram、信息和插件提供的连接器，一行一个（标志、名字、状态圆点和账号）。详情照 iOS `HubConnectorView`：状态、登录来源、最近一次同步、错误（限流时灰字）和「怎么修好」的步骤；
+  能在这里登录的（`login`）有「同步 X」开关、分步登录（按 hub 给的字段填，`secret` 的是密码框；GitHub 的设备码大字显示、可复制、按 `interval` 自动再问）、进知识库 / 进收件箱、
+  删除已存的知识库内容、退出登录、删除已存的数据（都先确认）；刚打开、进程还没报能力的每秒再问一次（最多 15 秒）。GitHub 另有「从哪里登录」（各台电脑上的 gh 或设备码，`/connectors/github/auth`）、
+  权限不够时缺哪些 scope 和影响什么、收件箱选项（CI 失败档位、静音仓库，`PUT …/github/settings {options}`）。信息（iMessage）只看状态，「交给 Persona」和删除在手机上；「这台 iPhone」只在手机上有；
   「hub」（`settings/HubSettings.tsx`，逻辑 `lib/hub-update.ts`，`docs/hub-update.md`「App 里」）：版本、渠道、上次检查、检查更新，新版本和说明、回滚过 / 自动更新不装的提示、
   「更新 hub」，等空闲时列出在忙的 Agent 和「现在就更新…」（先确认），Docker 部署给要改的镜像和命令（可复制），自动更新开关、首次「已开启」提示、各台电脑上的 personad 版本、更新记录；
   跟着 `hub_update` 推送刷新，旧 hub（没有这个接口）只显示一句说明；
@@ -357,12 +378,15 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。
 | 等你的 Agent 并进「需要你」 | 有 | #297 | |
 | AI 草拟回复、交给 AI、AI 分身的草稿卡片 | 有 | #297 | |
 | 飞书会话页：消息流与直接回复 | 有 | #297, #950 | 支持直接打字回复、引用某条消息、拷贝、让 Persona 总结；乐观上屏与重试；表情回应、资料卡、群设置不做（不做第二个飞书） |
+| 飞书「消息」页（首页显示消息，#392） | 有 | #1327 | 开关存在当前浏览器；列表和置顶只在标签页内存（iOS 按 hub 和设备凭据缓存到本机）；置顶一排横滑，没有 iOS 的下拉展开 |
+| 飞书聊天的 Pin：列表、定位、添加 / 移除、升级提示 | 有 | #1327 | 话题里的回复在对话框里打开；撤回的 Pin 只写「消息已撤回」，不按防撤回设置显示原文；加密消息只显示 hub 给的对外展示 |
 | 飞书可见即读上报 | 有 | #433 | 首屏也报（按 `docs/inbox.md` 的决定，iOS 代码还是旧行为）；话题群不报（同 iOS） |
 | 邮件详情、AI 回复 | 有 | #297 | |
 | 写新邮件、手动回复、打开后标已读 | 有 | #433 | 纯文本、不带附件、草稿只在页面内存（同 iOS） |
 | 邮件翻译、飞书消息翻译 | 有 | #433 | 语言判断是启发式的（浏览器没有 NaturalLanguage） |
 | 云文档提到我的行和改状态 | 有 | #297 | |
 | removed帖子和评论 | 有 | #297 | 只读 |
+| 连接器的条目（GitHub、Telegram、信息、插件）：来源筛选、会话页、回复或「在 X 里打开」、交给 AI | 有 | #1324 | GitHub 时间线和 Telegram 气泡只读加回复；表情回应、转发、下载附件不做 |
 
 ### 机器和设置
 
@@ -384,9 +408,13 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。
 | Claude Code 设置、Codex 设置 | 有 | #297 | |
 | 连接器：邮箱 | 有 | #297 | Gmail 只能在手机上加（Google 授权客户端是 iOS 类型） |
 | 连接器：飞书 | 有 | #297 | 只读状态 |
+| 连接器：飞书 › 首页显示消息 | 有 | #1327 | 只对当前浏览器生效 |
 | 连接器：飞书机器人（状态、凭证、配对、能做什么） | 有 | #1325 | 设置 › 连接器，点开是弹窗；拷贝配对码用剪贴板（http 下退回 execCommand） |
 | hub 版本和更新（检查、更新、现在就更新、自动更新、记录、Docker 的命令） | 有 | #1325 | 设置 › hub；Agents 列表上方那行 hub 提示没做，提示在设置 › hub 顶部 |
 | 助手的 Skills | 有 | #1325 | 设置 › 助手，只读（同 iOS） |
+| 连接器：GitHub（登录来源、设备码登录、权限、收件箱选项） | 有 | #1324 | |
+| 连接器：Telegram、插件提供的连接器（开关、分步登录、进知识库 / 进收件箱、退出、删除） | 有 | #1324 | |
+| 连接器：信息（iMessage） | 部分 | #1324 | 只看状态；「交给 Persona」开关和删除数据只在手机上 |
 | 插件（列表、开关、按 schema 的表单、只写的密钥） | 有 | #1207 | 安装、升级、卸载在 hub 机器上（同 iOS） |
 | 翻译 | 有 | #433 | 存在当前浏览器、不同步到 hub：hub 的翻译偏好挂在手机的推送设备 id 上，网页没有；网页打开时按需翻 |
 | 设备（token 列表、撤销） | 有 | — | |

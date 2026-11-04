@@ -1,18 +1,21 @@
 // One item opened: what it is and where from, 已处理 on the right; the AI's summary with AI 草拟回复 / 交给 AI; then
 // the thing itself — the Feishu chat at its first new message, the mail, the document's rows, the removed post.
-import { useState } from "react";
-import { agentDraft, agentWorking, isDone, kindLabel, labelIsUrgent, setDone, shortTime, sourceLine, type InboxItem } from "../../lib/inbox";
+import { useEffect, useState } from "react";
+import { agentDraft, agentWorking, canDraft, isDone, kindLabel, labelIsUrgent, openTitle, openURL, setDone, shortTime, sourceLine, type InboxItem } from "../../lib/inbox";
 import { navigate } from "../../lib/router";
 import { hubTranslation, useTranslatePrefs } from "../../lib/translate";
-import { Button, cx, Loading } from "../../ui/atoms";
+import { Button, cx, IconButton, Loading } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { ConnectorBody, openSystem } from "./ConnectorThread";
 import { DocBody, MailBody, MomentBody } from "./InboxBodies";
 import { DraftDialog, HandOffDialog } from "./InboxDialogs";
 import { AgentWorking, ItemAvatar, Spark, Tag } from "./InboxParts";
-import { LarkThread } from "./LarkThread";
+import { chatOfItem, LarkThread } from "./LarkThread";
 
 export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolean }) {
   const [dialog, setDialog] = useState<"" | "draft" | "handoff">("");
+  const [pins, setPins] = useState(false);
+  useEffect(() => setPins(false), [item?.id]);
   const prefs = useTranslatePrefs();
   if (!item) {
     return (
@@ -38,6 +41,7 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
               </h2>
               <p className="mt-0.5 truncate text-[12px] text-ink-3">{[sourceLine(item), shortTime(item.updated_at)].filter(Boolean).join(" · ")}</p>
             </div>
+            {item.lark && <IconButton icon="pin" label="Pin 消息" onClick={() => setPins(true)} size={32} />}
             {done ? (
               <Button tone="secondary" icon="inbox" onClick={() => void setDone(item, false)}>移回</Button>
             ) : (
@@ -61,13 +65,18 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
           )}
           {!done && agentWorking(item) && <div className="mt-2"><AgentWorking it={item} /></div>}
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button tone="accent" icon="write" onClick={() => setDialog("draft")}>{draft && !done ? "查看草稿" : "AI 草拟回复"}</Button>
+            {canDraft(item) ? (
+              <Button tone="accent" icon="write" onClick={() => setDialog("draft")}>{draft && !done ? "查看草稿" : "AI 草拟回复"}</Button>
+            ) : (
+              // Answered in the source's own app (a CI run has nothing to answer: only 交给 AI).
+              openURL(item) && <Button tone="accent" icon="external" onClick={() => openSystem(openURL(item)!)}>{openTitle(item)}</Button>
+            )}
             <Button tone="secondary" icon="spark" onClick={() => setDialog("handoff")}>交给 AI</Button>
           </div>
         </div>
       </div>
-      <div className={cx("min-h-0 flex-1", item.lark ? "flex flex-col overflow-hidden" : "overflow-y-auto")}>
-        {item.doc ? <DocBody item={item} /> : item.moment ? <MomentBody item={item} /> : item.lark ? <LarkThread item={item} /> : item.mail ? <MailBody item={item} /> : (
+      <div className={cx("min-h-0 flex-1", item.lark || item.connector ? "flex flex-col overflow-hidden" : "overflow-y-auto")}>
+        {item.doc ? <DocBody item={item} /> : item.moment ? <MomentBody item={item} /> : item.lark ? <LarkThread chat={chatOfItem(item)} pinsOpen={pins} onPinsOpen={setPins} /> : item.connector ? <ConnectorBody item={item} /> : item.mail ? <MailBody item={item} /> : (
           <div className="mx-auto max-w-[760px] px-6 py-5 text-[13.5px] whitespace-pre-wrap text-ink">{item.preview}</div>
         )}
       </div>

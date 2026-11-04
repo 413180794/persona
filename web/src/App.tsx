@@ -23,6 +23,7 @@ import { History } from "./views/assistant/History";
 import { Profile } from "./views/assistant/Profile";
 import { Routines } from "./views/assistant/Routines";
 import { Inbox } from "./views/inbox/Inbox";
+import { Messages } from "./views/messages/Messages";
 import { Knowledge } from "./views/knowledge/Knowledge";
 import { MachineDetail } from "./views/machines/MachineDetail";
 import { TodosView } from "./views/Todos";
@@ -127,7 +128,7 @@ function Shell() {
   }, [at]);
 
   const title =
-    route.name === "session" ? "Agent" : route.name === "jarvis" ? "Persona" : route.name === "persona-new" ? "新对话" : route.name === "history" ? "Persona 的对话" : route.name === "profile" ? "Persona 的资料" : route.name === "inbox" ? "收件箱"
+    route.name === "session" ? "Agent" : route.name === "jarvis" ? "Persona" : route.name === "persona-new" ? "新对话" : route.name === "history" ? "Persona 的对话" : route.name === "profile" ? "Persona 的资料" : route.name === "inbox" ? "收件箱" : route.name === "messages" ? "消息"
       : route.name === "routines" ? "定时任务" : route.name === "kb" ? "知识库" : route.name === "todos" ? "待办" : route.name === "machines" || route.name === "machine" ? "机器" : route.name === "settings" ? "设置"
       : route.name === "agents" ? "个人 Agent" : "总览";
   useEffect(() => {
@@ -153,6 +154,9 @@ function Shell() {
       break;
     case "inbox":
       main = <Inbox id={route.id} onToggleSidebar={toggle} />;
+      break;
+    case "messages":
+      main = <Messages id={route.id} onToggleSidebar={toggle} />;
       break;
     case "routines":
       main = <Routines onToggleSidebar={toggle} />;

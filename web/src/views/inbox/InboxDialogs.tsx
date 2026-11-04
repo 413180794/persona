@@ -5,7 +5,7 @@ import { api, errorText } from "../../lib/api";
 import { noteSent, sendToSession } from "../../lib/outbox";
 import { sessionTitle, stateOf } from "../../lib/format";
 import {
-  agentDraft, conversationRoute, docChangeLine, HANDOFF_PRESETS, handOffMessage, isLark, itemPath, sendReply, setDone, unsentReplies,
+  agentDraft, connectorReference, conversationRoute, docChangeLine, HANDOFF_PRESETS, handOffMessage, isLark, itemPath, sendReply, setDone, unsentReplies,
   type DocChange, type InboxItem,
 } from "../../lib/inbox";
 import { machineWithHub } from "../../lib/mesh";
@@ -21,6 +21,11 @@ const changeKey = (c: DocChange) => `${c.ref}|${c.field}`;
 export function draftTitle(it: InboxItem): string {
   if (it.moment) return "评论removed";
   if (it.doc) return `评论 ${it.title}`;
+  if (it.connector) {
+    // A pull request / issue is commented on (评论 #12); a chat is answered.
+    const ref = connectorReference(it);
+    return ref ? `评论 ${ref.split("/").pop()}` : `回复 ${it.title}`;
+  }
   return isLark(it) ? `回复 ${it.title}` : "回复邮件";
 }
 
@@ -125,6 +130,7 @@ export function DraftDialog({ item, onClose }: { item: InboxItem; onClose: () =>
           })}
         </div>
       )}
+      {item.connector?.reply_to && <p className="mb-2 text-[11.5px] leading-relaxed text-ink-3">回复会{item.connector.reply_to}。</p>}
       <div className="relative">
         <textarea
           value={text}

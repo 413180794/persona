@@ -5,7 +5,9 @@ import {
   agentDraft, docChangeLine, isDone, isLark, movingKey, setDocStatus, useInbox, withToken,
   type DocRow, type DocStatus, type InboxItem,
 } from "../../lib/inbox";
+import { connectorBrand } from "../../lib/connectors";
 import { Button, cx, Menu, Spinner, useMenu } from "../../ui/atoms";
+import { BrandMark } from "../../ui/BrandMark";
 import { Icon } from "../../ui/icons";
 import larkMark from "./lark.svg";
 
@@ -94,6 +96,22 @@ export function ItemAvatar({ it, size = 40 }: { it: InboxItem; size?: number }) 
     face = <Monogram name={it.sender || it.title} size={size} neutral />;
   }
   const badge = Math.max(14, Math.round(size * 0.42));
+  // A connector's own mark on white in the corner; one without a mark a neutral gray, like mail.
+  if (it.connector) {
+    const brand = connectorBrand(it.source);
+    return (
+      <span className="relative shrink-0" style={{ width: size, height: size, opacity: isDone(it) ? 0.6 : 1 }}>
+        {face}
+        <span
+          className={cx("absolute flex items-center justify-center rounded-full shadow-[0_0_0_2px_var(--surface)]", brand ? "bg-surface" : "bg-ink-3 text-surface")}
+          style={{ width: badge, height: badge, right: -3, bottom: -3 }}
+          title={it.account_name || it.source}
+        >
+          {brand ? <BrandMark brand={brand} size={Math.round(badge * (brand === "telegram" ? 1 : 0.72))} /> : <Icon name="link" size={Math.round(badge * 0.62)} stroke={2.4} />}
+        </span>
+      </span>
+    );
+  }
   return (
     <span className="relative shrink-0" style={{ width: size, height: size, opacity: isDone(it) ? 0.6 : 1 }}>
       {face}

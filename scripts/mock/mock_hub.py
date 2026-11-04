@@ -2790,6 +2790,42 @@ if os.environ.get("MOCK_TELEGRAM_INBOX"):
     ]
 
 
+# MOCK_CONNECTOR_PLUGIN=1: a plugin's connector the apps know nothing about (the generic page: switch, a one-step
+# sign-in with a token, 进收件箱, sign-out, delete). The token is example-token; all made up.
+PLUGIN_CONNECTOR = {"id": "example-notes", "name": "示例笔记", "status": "not_signed_in", "enabled": True, "inbox": True,
+                    "error": "还没登录示例笔记", "capabilities": ["status", "tools", "inbox", "login"]} if os.environ.get("MOCK_CONNECTOR_PLUGIN") else None
+
+
+def plugin_connector_area(h, method, p, raw):
+    """MOCK_CONNECTOR_PLUGIN's routes; True when it answered."""
+    c = PLUGIN_CONNECTOR
+    if not c or not p.startswith("/api/v1/connectors/example-notes/"):
+        return False
+    what, body = p.rsplit("/", 1)[1], json.loads(raw or b"{}")
+    if what == "login" and method == "POST":
+        if body.get("step") == "token" and (body.get("values") or {}).get("token") == "example-token":
+            c.update(status="ok", account="示例账号")
+            c.pop("error", None)
+            return h.send_json({"done": True, "account": "示例账号"}) or True
+        prompt = {"step": "token", "fields": [{"name": "token", "label": "访问令牌", "secret": True, "placeholder": "在示例笔记的设置里生成"}],
+                  "hint": "在示例笔记的「设置 › 开发者」里生成一个访问令牌，粘贴到这里。"}
+        if body.get("step") == "token":
+            prompt["error"] = "令牌不对"
+        return h.send_json(prompt) or True
+    if what == "logout" and method == "POST":
+        c.update(status="not_signed_in", error="还没登录示例笔记")
+        c.pop("account", None)
+        return h.send_json({"ok": True}) or True
+    if what == "settings" and method == "PUT":
+        for k in ("enabled", "inbox"):
+            if k in body: c[k] = bool(body[k])
+        c["status"] = "disabled" if not c["enabled"] else ("ok" if c.get("account") else "not_signed_in")
+        return h.send_json(c) or True
+    if what == "data" and method == "DELETE":
+        c.update(enabled=False, status="disabled")
+        return h.send_json({"chats": 0, "people": 0, "inbox": 2}) or True
+    return False
+
 # 信息 (GET /api/v1/imessage…, docs/plan-connectors.md「五」): one Mac's Messages, read for the user's own eyes. Every
 # name, number (+1 555 01xx) and text is made up. MOCK_IMESSAGE=denied: that Mac's node has no Full Disk Access.
 IMESSAGE_DENIED = os.environ.get("MOCK_IMESSAGE") == "denied"
@@ -6011,6 +6047,7 @@ VOICE_VOICES = {
 # What --help lists after the options.
 MOCK_HELP = [
     "MOCK_PLUGINS=1  设置 › 插件：五个示例插件（需要设置 / 运行中 / hub.json / 已停用 / 不兼容），表单、密钥、开关在内存里",
+    "MOCK_CONNECTOR_PLUGIN=1  设置 › 连接器：一个插件提供的通用连接器「示例笔记」，令牌 example-token 一步登录",
     "PORT=<端口>  监听端口，默认 18760；0 表示自动分配（启动时打印 mock hub on <地址>:<端口>）",
     "MOCK_HUB_ID=<id>  固定 hub_id（默认每次启动随机）：换 MOCK_* 开关重启后，已配对的 App 不用重新配对",
     "MOCK_VOICE=1|drop|bad-model|missing-model|old-hub|error|off|slow  语音插件和它的 WebSocket（docs/android.md「语音对话」）",
@@ -6450,6 +6487,7 @@ class H(BaseHTTPRequestHandler):
         if github_area(self, "GET", p, b""): return
         if p == "/api/v1/connectors":  # 设置 › 连接器 › GitHub; MOCK_GITHUB=signed_out: its gh login has expired
             listed = [GITHUB_CONNECTOR, {k: v for k, v in IMESSAGE_CONNECTOR.items() if v is not None}] + ([telegram_connector()] if TELEGRAM_MODE else [])
+            listed += [PLUGIN_CONNECTOR] if PLUGIN_CONNECTOR else []
             return self.send_json({"connectors": (LEGACY_CONNECTORS if q.get("all") == ["1"] else []) + listed})
         if p == "/api/v1/imessage":  # 设置 › 连接器 › 信息; MOCK_IMESSAGE=denied: no Full Disk Access on the Mac
             return self.send_json(IMESSAGE_STATUS)
@@ -6788,6 +6826,7 @@ class H(BaseHTTPRequestHandler):
         if telegram_area(self, self.command, p, self.last_body): return
         if github_thread_area(self, self.command, p, self.last_body): return
         if github_area(self, self.command, p, self.last_body): return
+        if plugin_connector_area(self, self.command, p, self.last_body): return
         if mail_area(self, self.command, p, parse_qs(urlparse(self.path).query)): return
         if MOCK_LARK and fs_post(self, p, parse_qs(urlparse(self.path).query), self.last_body): return  # area: feishu chat page
         if tasks_area(self, self.command, p, self.last_body): return

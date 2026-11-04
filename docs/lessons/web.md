@@ -148,3 +148,9 @@
 - **拖选格子会把表格横着滚走**：格子是普通文字，按下拖动时浏览器在做文字选择，碰到边缘就自动滚动滚动容器。按下时 `preventDefault()` 加 `select-none`。
 - **半透明的选中底色会透出下面的格子**：行号列是 sticky 的，横向滚动时格子从它下面滑过，选中行号用 `bg-accent/12` 时被盖住的格子文字透了出来。sticky 的那层要不透明：`color-mix(in srgb, var(--accent) 14%, var(--inset))`。
 - **估列宽别按平均字宽**：12.5px 的数字和大写字母比平均宽，按 7.2px 一个字符算，`SO-260000`、`2026-08-04` 这类定长值被截成省略号；按 8px 算才放得下。文件里设的列宽（Excel 的字符宽）常常也偏窄，取两者中大的。
+
+## 打开时创建、关掉时 stop() 的模型（#1327 飞书 Pin 列表）
+
+- 用 `useState(() => new XxxModel())` 建、在 effect 里 `refresh()`、清理时 `stop()` 的模型，开发版的 StrictMode 会「挂上 → 清理 → 再挂上」：第二次挂上时模型已经 stop 了，
+  列表永远是空的，生产构建却正常。effect 里先 `start()` 再读；被作废的那次读取回来时不能直接 `return`，要接着跑排队的那次刷新，否则 `loading` 一直卡住。
+- 无头 Chromium 截中文是方块：这台机器没装中文字体。拿一个 Noto Sans CJK 放进临时目录，写一份 `fonts.conf`（include 系统的再加这个目录），`FONTCONFIG_FILE=…` 启动浏览器。

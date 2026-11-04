@@ -29,5 +29,6 @@ export function otherConversations(conversations: readonly Session[], main: stri
     .slice(0, limit);
 }
 
-/** The page entries under Persona, in the sidebar's order (the app's 助手 first, then the rest of its drawer). */
-export const NAV_PAGES = ["home", "inbox", "todos", "routines", "kb", "machines", "settings"] as const;
+/** The page entries under Persona, in the sidebar's order (the app's 助手 first, then the rest of its drawer). 消息 shows
+ * only in a browser that turned on 首页显示消息 (lark-chats.ts). */
+export const NAV_PAGES = ["home", "inbox", "messages", "todos", "routines", "kb", "machines", "settings"] as const;

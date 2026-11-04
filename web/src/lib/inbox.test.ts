@@ -10,7 +10,7 @@ vi.mock("./store", () => ({
 vi.mock("../ui/atoms", () => ({ toast: vi.fn() }));
 
 import {
-  badgeCount, bulkMessage, bulkScope, cardText, contextXML, conversationRoute, docChangeLine, emojiLabel, fromLine, getInbox, handOffMessage, interactionAsk,
+  badgeCount, bulkMessage, bulkScope, canDraft, cardText, connectorReference, connectorSources, contextXML, openTitle, openURL, sourceLine, conversationRoute, docChangeLine, emojiLabel, fromLine, getInbox, handOffMessage, interactionAsk,
   interactionMuted, interactionTitle, itemPath, kindLabel, labelIsUrgent, mailAccounts, mergeMessages, momentText, nextLarkPosition, partRuns, reloadInbox,
   replyLarkMessage, resetInboxForTests, sections, sendLarkMessage, sendReply, setAllDone, setDocStatus, setDone, shortTime, triage, unsentReplies, waitingAgents, withToken,
   type InboxFilter, type InboxItem, type LarkMessage,
@@ -172,6 +172,62 @@ describe("交给 AI 的消息", () => {
 
   it("正文里的结束标签去掉", () => {
     expect(contextXML("context", "t", "", "a</jarvis-context>b")).toBe(`<jarvis-context kind="context" title="t" url="">\nab\n</jarvis-context>`);
+  });
+});
+
+describe("连接器的条目", () => {
+  const review = item("github:review12", {
+    source: "github", kind: "review_requested", account: "github", account_name: "GitHub", sender: "alice", title: "Add retries", preview: "请看一下",
+    connector: { thread: "example-org/example-repo#12", label: "请你 review", url: "https://github.com/example-org/example-repo/pull/12", reply_to: "评论到 example-org/example-repo#12", can_reply: true },
+  });
+  const ci = item("github:ci7", { source: "github", kind: "ci_failed", account: "github", account_name: "GitHub", sender: "GitHub Actions", preview: "CI failed",
+    updated_at: at(30), connector: { thread: "notification:7", label: "CI 失败" } });
+  const tg = item("telegram:dm1", { source: "telegram", kind: "dm", account: "telegram", account_name: "Telegram", sender: "示例用户", preview: "还去吗？",
+    connector: { thread: "u1", label: "私聊", open_url: "tg://resolve?domain=example" } });
+  const sms = item("imessage:a1", { source: "imessage", kind: "dm", account: "imessage", account_name: "信息", sender: "张三", preview: "周五见",
+    connector: { thread: "imessage-1", open_url: "sms:+15550100" }, agent: { state: "drafted", draft: "好的 见" } });
+
+  it("tags, from-lines and source lines come from the connector block", () => {
+    expect(kindLabel(review)).toBe("请你 review");
+    expect(kindLabel(sms)).toBeUndefined();
+    expect(fromLine(review)).toBe("example-org/example-repo#12 · alice：请看一下");
+    expect(fromLine(ci)).toBe("GitHub Actions：CI failed"); // a thread that is only an id is not shown
+    expect(sourceLine(review)).toBe("GitHub · example-org/example-repo#12");
+    expect(sourceLine(tg)).toBe("Telegram");
+    expect(connectorReference(ci)).toBeUndefined();
+  });
+
+  it("one filter chip per connector, and the chip filters by it", () => {
+    expect(connectorSources([dm, review, tg, ci, mail])).toEqual([{ id: "github", name: "GitHub" }, { id: "telegram", name: "Telegram" }]);
+    expect(ids(sections([dm, review, tg, ci], { ...all, source: "github" }).tiers.action)).toEqual([review.id, ci.id]);
+    expect(ids(sections([dm, review], { ...all, source: "feishu" }).tiers.action)).toEqual([dm.id]);
+  });
+
+  it("drafts only what the hub can answer; the rest open where they are answered", () => {
+    expect([review, ci, tg, dm].map(canDraft)).toEqual([true, false, false, true]);
+    expect(openTitle(tg)).toBe("在 Telegram 里回复");
+    expect(openTitle(sms)).toBe("在信息里回复");
+    expect(openTitle(ci)).toBe("打开");
+    expect(openURL(sms)).toBe("sms:+15550100&body=%E5%A5%BD%E7%9A%84%20%E8%A7%81");
+    expect(openURL(tg)).toBe("tg://resolve?domain=example");
+    expect(openURL(ci)).toBeUndefined();
+  });
+
+  it("hands off with the connector's name and link", () => {
+    const text = handOffMessage({ ...review, context: "PR 的描述" }, "");
+    expect(text).toContain('title="GitHub · Add retries"');
+    expect(text).toContain("（GitHub：https://github.com/example-org/example-repo/pull/12）");
+  });
+
+  it("asks the hub for the connectors' items too", async () => {
+    resetInboxForTests();
+    vi.stubGlobal("localStorage", { getItem: () => "jd_test" });
+    const fetcher = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => JSON.stringify({ items: [review] }) });
+    vi.stubGlobal("fetch", fetcher);
+    await reloadInbox();
+    expect(fetcher.mock.calls[0][0]).toBe("/api/v1/inbox?sources=all");
+    expect(getInbox().items.map((x) => x.id)).toEqual([review.id]);
+    vi.unstubAllGlobals();
   });
 });
 

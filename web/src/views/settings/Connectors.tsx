@@ -1,13 +1,17 @@
 // 设置 › 连接器 (iOS ConnectorsSection, docs/mail.md): where Persona's data comes from — the mail accounts (list, add
-// one with a password or 授权码, delete) and 飞书 (the hub's lark-connector: read-only status). 这台 iPhone (phone_* tools)
-// is the phone's own and has no place in a browser; Gmail signs in with Google through the phone app (its OAuth
-// client is an iOS one whose callback only the app can catch), so the web form leaves it to the phone.
+// one with a password or 授权码, delete), 飞书 (the hub's lark-connector: read-only status), and the hub's other connectors
+// (GitHub, Telegram, a plugin's: GET /api/v1/connectors), each with a page of its own (HubConnector.tsx, `&connector=`).
+// 这台 iPhone (phone_* tools) is the phone's own and has no place in a browser; Gmail signs in with Google through the
+// phone app (its OAuth client is an iOS one whose callback only the app can catch), so the web form leaves it to the phone.
 import { useEffect, useState } from "react";
 import { EMPTY_MAIL_FORM, MAIL_KINDS, mailAccountLine, mailErrors, mailRequest, mailSummary, type MailAccount, type MailForm } from "../../lib/agent-settings";
 import { api, enc, errorText } from "../../lib/api";
 import { ago } from "../../lib/format";
+import { useStore } from "../../lib/store";
 import { Button, cx, Dialog, EASE, IconButton, Loading, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
+import { ConnectorDetail, ConnectorList } from "./HubConnector";
+import { LarkHomeSwitch } from "./LarkHomeSwitch";
 import { Group, Pill } from "./SettingsParts";
 import { FeishuBot } from "./FeishuBot";
 
@@ -19,7 +23,11 @@ interface LarkStatus {
   last_event_at?: number;
 }
 
-export function Connectors() {
+export function Connectors({ open, onOpen }: { open: string | null; onOpen: (id: string | null) => void }) {
+  // An older hub has no connectors API (feature "connectors"): only mail and Feishu, as before.
+  const hasConnectors = useStore((s) => s.features.includes("connectors"));
+  // "feishu-bot" is not a hub connector: FeishuBot reads it and opens its own dialog.
+  if (open && open !== "feishu-bot") return <ConnectorDetail key={open} id={open} onBack={() => onOpen(null)} />;
   return (
     <>
       <p className="mb-5 px-1 text-[12.5px] leading-relaxed text-ink-3">
@@ -29,6 +37,7 @@ export function Connectors() {
       <Mail />
       <Feishu />
       <FeishuBot />
+      {hasConnectors && <ConnectorList onOpen={onOpen} />}
     </>
   );
 }
@@ -323,6 +332,7 @@ function Feishu() {
         </div>
       )}
       {(st?.error || error) && <p className="px-4 py-2.5 text-[12px] break-words text-red">{st?.error || `读不到飞书的状态：${error}`}</p>}
+      <LarkHomeSwitch />
       <div className="px-4 pt-2.5 pb-1 text-[11.5px] font-medium text-ink-3">Persona 用飞书做什么</div>
       {USES.map((u) => (
         <div key={u.title} className="flex items-start gap-3 px-4 py-2.5">
