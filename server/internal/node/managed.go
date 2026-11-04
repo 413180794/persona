@@ -75,8 +75,8 @@ func shellDir(p string) string {
 	return shellQuote(p)
 }
 
-// managedEnv is the environment a managed launcher sets: the gateway, its key, the model for every tier, and the
-// subagent / custom model entries when it has them.
+// managedEnv is the environment a managed launcher sets: the gateway, its key, the model for every tier, the
+// subagent / custom model entries when it has them, and Artifacts off (artifactsOff).
 func managedEnv(l proto.ManagedLauncher) []string {
 	small := l.SmallModel
 	if small == "" {
@@ -108,8 +108,17 @@ func managedEnv(l proto.ManagedLauncher) []string {
 	if small != "" {
 		env = append(env, "ANTHROPIC_DEFAULT_HAIKU_MODEL="+small, "ANTHROPIC_SMALL_FAST_MODEL="+small)
 	}
-	return env
+	return append(env, artifactsOff)
 }
+
+// artifactsOff turns Claude Code's Artifact tool off for a claude a managed launcher runs. Artifacts publish to
+// claude.ai, which a gateway with an API key is not. Claude Code turns the tool on by default (since 2.1.26x), and an
+// interactive session then sends the Artifact skills in its system message; a gateway that cannot carry them refuses
+// the first request ("400 request is not representable on this edge: Claude Code Artifacts are enabled"), so every
+// Agent started in herdr through it failed on its first turn while `claude -p` went on working. The environment
+// variable reaches `jarvisd launch` (headless runs) and the settings env alike; the settings file also says
+// enableArtifact: false (mergeManagedSettings): off in --settings wins over the other settings sources.
+const artifactsOff = "CLAUDE_CODE_DISABLE_ARTIFACT=1"
 
 // managedSettingsEnv is managedEnv as a settings "env" map. Settings env wins over the process env, so the user's
 // ~/.claude/settings.json (another gateway, another token) would otherwise replace a managed launcher's.

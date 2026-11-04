@@ -52,7 +52,11 @@ node 在登录 shell（`zsh -ic`，先加载 `~/.zshrc`）里一次取两样，�
   Key 不进终端、不在命令行上。终端里也能直接敲 `jarvisd launch <名字>`。
 - settings 里的 `env` 压过进程环境，用户全局 `~/.claude/settings.json` 的 `env` 里有另一个网关时会把上面这些盖掉，所以 Persona 起它时还把同样的变量（含 Key）
   写进 `~/.persona/launcher-settings/<名字>-env-settings.json`（0600），作为 `--settings` 传进去（`node/launcher_settings.go`）；更老的 Claude Code 上它和
-  Persona 的 hooks 合在 `<名字>-<claude|assistant>-settings.json` 里。
+  Persona 的 hooks 合在 `<名字>-<claude|assistant>-settings.json` 里。这些文件每次启动都重写，手改的会被冲掉。
+- **Artifacts 一律关**：Persona 管理的启动器起的 claude 带 `CLAUDE_CODE_DISABLE_ARTIFACT=1`（`jarvisd launch` 的环境和上面 settings 的 `env` 都有），
+  settings 文件里还写 `"enableArtifact": false`（Claude Code 认 `--settings` 里的关）。Artifacts 是发布到 claude.ai 的，走网关 + API Key 本来就用不了；
+  Claude Code 从 2.1.26x 起默认打开它，交互式会话会在 system 消息里带上 Artifacts 的技能说明，有的网关在能力检查里直接拒
+  （`400 request is not representable on this edge: Claude Code Artifacts are enabled`），herdr 里新开的 Agent 第一轮就失败，`claude -p` 不受影响。
 - 交互模式的 Claude Code 第一次见到 `ANTHROPIC_API_KEY` 里的 Key 会问「Do you want to use this API key?」，默认选中「No (recommended)」，
   回车（或手机上的对话框卡片点了默认项）就把这个 Key 记成拒绝，之后这个启动器起的会话都没有凭据。Key 是用户在 设置 › 模型 里自己填的，
   所以 `jarvisd launch` 在 exec claude 前把它记成已允许，和在对话框里选 Yes 一样：Key 的最后 20 个字符（Claude Code 用它认 Key）写进

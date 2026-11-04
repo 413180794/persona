@@ -37,6 +37,10 @@ func TestManagedEnvSubagentAndCustomModel(t *testing.T) {
 	if env := managedEnv(base); !slices.Contains(env, "CLAUDE_CODE_SUBAGENT_MODEL=m1") {
 		t.Fatalf("subagents do not follow the model: %v", env)
 	}
+	// A gateway cannot carry Claude Code's Artifacts: off for every managed start (artifactsOff).
+	if env := managedEnv(base); !slices.Contains(env, "CLAUDE_CODE_DISABLE_ARTIFACT=1") {
+		t.Fatalf("Artifacts are not turned off: %v", env)
+	}
 	base.SubagentModel, base.CustomModel = "m2", "m3"
 	base.CustomModelName, base.CustomModelDescription = "Third", "a model"
 	env := managedEnv(base)

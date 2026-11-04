@@ -163,6 +163,14 @@ claude 刚出来 7 秒就判了超时；标签页留在那里，里面的 claude
 - herdr 按 `HERDR_PANE_ID` 把 SessionStart 记到窗格上，这个变量会被窗格外的进程继承：在 herdr 窗格里第一次起的 tmux 服务器（botmux 的
   `tmux new-session -d`）留着它，之后 botmux 起的每个 claude 都报进同一个窗格，main 标签显示成 botmux 的会话（2026-11-04）。
   herdr 报的会话要和窗格里 claude 进程自己的 `sessions/<pid>.json` 对一下（`docs/claude-integration.md`「会话 id 与 transcript」）。
+- **Claude Code 默认打开 Artifacts，网关拒掉 herdr 里每个新 Agent 的第一轮**（2026-11-04）：从 2.1.26x 起交互模式默认开 Artifact 工具，
+  system 消息里带上它的技能说明，有的网关按能力拒（`400 request is not representable on this edge: Claude Code Artifacts are enabled`），
+  `claude -p` 的主对话照常，看起来像是只有 Agent 坏了。一台机器的 Claude Code 落后很久（2.1.110）、一次升到新版时才冒出来，
+  所以别的机器早就在用户设置里关掉、没人报：先查版本跳了多少。`--disallowedTools Artifact` 不管用（技能说明照发），
+  启动器参数里再给一个 `--settings` 也不管用（Persona 后面的 `--settings` 会整个替换它）。
+  手改 `launcher-settings/<名字>-env-settings.json` 加 `enableArtifact: false` 看着没用：那个文件每次启动都被 node 重写，改动在下一个 Agent 启动前就没了。
+  `--settings` 里的 `enableArtifact: false` 和环境变量 `CLAUDE_CODE_DISABLE_ARTIFACT=1` 实测都管用（tmux 里起交互式 claude 对比三份配置），
+  现在 Persona 管理的启动器两样都带（`docs/launchers.md`「Persona 管理的怎么跑」）。
 
 ## 恢复外部开的会话别默认用裸 claude（2026-11-05，#411）
 

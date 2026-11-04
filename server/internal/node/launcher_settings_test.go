@@ -154,6 +154,9 @@ func TestManagedSettingsCarryTheLaunchersEnv(t *testing.T) {
 	if len(hookCommands(t, s, "Stop")) != 1 {
 		t.Errorf("Persona's hooks are missing: %v", s)
 	}
+	if s["enableArtifact"] != false || env["CLAUDE_CODE_DISABLE_ARTIFACT"] != "1" {
+		t.Errorf("Artifacts are not off for a gateway: enableArtifact %v, env %v", s["enableArtifact"], env["CLAUDE_CODE_DISABLE_ARTIFACT"])
+	}
 }
 
 // Persona's own settings not written yet (a test's node; a write that failed): the managed launcher's gateway still
@@ -169,6 +172,9 @@ func TestManagedSettingsWithoutPersonasFile(t *testing.T) {
 	}
 	if env, _ := readSettings(t, got)["env"].(map[string]any); env["ANTHROPIC_BASE_URL"] != "https://gw.example.com" {
 		t.Errorf("the launcher's gateway is missing: %v", env)
+	}
+	if readSettings(t, got)["enableArtifact"] != false {
+		t.Error("Artifacts are not off in the env-only settings (the hooks-as-plugin start)")
 	}
 	writeFile(t, ours, `null`)
 	if env, _ := readSettings(t, n.claudeSettings(context.Background(), "m", ours, home))["env"].(map[string]any); env["ANTHROPIC_API_KEY"] != "k" {

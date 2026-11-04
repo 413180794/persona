@@ -123,6 +123,7 @@ func (n *Node) mergeManagedSettings(launcher string, l proto.ManagedLauncher, ou
 		env[k] = v
 	}
 	mine["env"] = env
+	mine["enableArtifact"] = false // artifactsOff: a gateway cannot carry them
 	out, err := json.MarshalIndent(mine, "", "  ")
 	if err != nil {
 		return "", err
