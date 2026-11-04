@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,6 +28,21 @@ import (
 
 	"github.com/coder/websocket"
 )
+
+// nodeMissing says the resident node is not answering at target, and how this computer runs it (docs/link.md「装 node
+// 服务」): the hub shows it on the machine's page.
+func nodeMissing(goos, target string) error {
+	how := "让 jarvisd node --attach 一直跑"
+	switch goos {
+	case "windows":
+		how = "jarvis-link install --jarvisd <personad.exe 的路径> 装成登录时启动的计划任务（docs/windows.md）"
+	case "darwin":
+		how = "菜单栏 App「Persona Link」里的「安装本机 node 服务」，或者 jarvis-link node install"
+	case "linux":
+		how = "jarvis-link node install（systemd 用户服务）"
+	}
+	return fmt.Errorf("本机的常驻 node 没在运行（%s 连不上）：%s", target, how)
+}
 
 // These are settings, not measurements.
 const (
@@ -844,7 +860,7 @@ func (l *link) localGone() bool {
 func (l *link) forward(ctx context.Context, id, target string) error {
 	node, err := net.DialTimeout("unix", target, 2*time.Second)
 	if err != nil {
-		return fmt.Errorf("本机的常驻 node 没在运行（%s 连不上）：让 jarvisd node --attach 一直跑（scripts/node-launchd.sh install）", target)
+		return nodeMissing(runtime.GOOS, target)
 	}
 	defer node.Close()
 	dctx, dcancel := context.WithTimeout(ctx, dialTimeout) // the handshake only: the stream lives as long as the link

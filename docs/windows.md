@@ -49,6 +49,8 @@ go build -o jarvis-link.exe .\cmd\jarvis-link
 - **跑的是守护进程** `jarvis-link-service.exe supervise`（`supervise_windows.go`）：以 `CREATE_NO_WINDOW` 拉起 jarvis-link（`run --log ~/.persona/link.log`）
   和常驻 node（`jarvisd.exe node --attach`，日志 `~/.persona/node-attach.log`，满 10 MB 挪到 `.1`），谁退出了分别 5 秒、10 秒后重启（同 Linux 两个单元的 `RestartSec`）；
   它自己干了什么写 `~/.persona/link-service.log`（jarvis-link 崩溃时的输出也在这里）。一台电脑只跑一个守护进程（`~/.persona/link-service.run` 的文件锁）。
+  先起 node，等它重新建好 `node-attach.sock`（只看文件的修改时间，不去连：连一次就是一次 attach，会把 hub 的连接顶掉；最多等 10 秒）再起 jarvis-link：
+  反过来的话 hub 先连上链路、马上开流去连还没在听的 node，把这台报成离线一下，`install` 的结论也成了「hub 连不上本机的 node」（#1984）。
 - 守护进程把自己放进一个「最后一个句柄关掉就杀掉里面所有进程」的 Job：守护进程没了（结束任务、再 install / uninstall、注销、崩溃），
   jarvis-link 和 node 跟着没，计划任务再拉起它时不会和留下的旧进程抢。
 

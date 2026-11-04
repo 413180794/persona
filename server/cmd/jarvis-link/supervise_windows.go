@@ -55,21 +55,15 @@ func supervise(e *env, args []string) error {
 	vars := append(os.Environ(), "PERSONA_HOME="+root, "JARVIS_HOME="+root)
 	ctx := context.Background()
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		keepRunning(ctx, logger, "jarvis-link", linkRestart, func() *exec.Cmd {
-			cmd := exec.Command(e.binPath(), "run", "--log", e.logPath())
-			cmd.Env, cmd.Stderr = vars, slog // its log goes to link.log; what reaches stderr is a crash
-			return cmd
-		})
-	}()
+	// The node first: jarvis-link up before it, the hub would open a stream to a node not listening yet, call this
+	// computer's node offline and show it so for a moment.
 	if withNode {
 		nlog, err := openRotating(e.nodeLog(), nodeLogMax)
 		if err != nil {
 			return err
 		}
 		defer nlog.Close()
+		began := time.Now()
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -79,9 +73,38 @@ func supervise(e *env, args []string) error {
 				return cmd
 			})
 		}()
+		if !waitListening(link.AttachSocket(), began, nodeListenWait) {
+			logger.Printf("node has not made %s within %s; starting jarvis-link anyway", link.AttachSocket(), nodeListenWait)
+		}
 	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		keepRunning(ctx, logger, "jarvis-link", linkRestart, func() *exec.Cmd {
+			cmd := exec.Command(e.binPath(), "run", "--log", e.logPath())
+			cmd.Env, cmd.Stderr = vars, slog // its log goes to link.log; what reaches stderr is a crash
+			return cmd
+		})
+	}()
 	wg.Wait() // never: the task ends the supervisor
 	return nil
+}
+
+// nodeListenWait: how long jarvis-link waits for a node that is starting (it listens within a second here).
+const nodeListenWait = 10 * time.Second
+
+// waitListening waits, up to timeout, for a socket file made at or after began: the node removes a leftover one and
+// listens anew when it starts. The file is only looked at, never dialled, because a connection to the node's attach
+// socket is an attach: it would take the node from the hub.
+func waitListening(sock string, began time.Time, timeout time.Duration) bool {
+	for deadline := time.Now().Add(timeout); ; time.Sleep(100 * time.Millisecond) {
+		if fi, err := os.Stat(sock); err == nil && !fi.ModTime().Before(began.Add(-time.Second)) {
+			return true
+		}
+		if !time.Now().Before(deadline) {
+			return false
+		}
+	}
 }
 
 // keepRunning starts what mk makes, waits for it to exit and starts it again delay later, until ctx ends (the

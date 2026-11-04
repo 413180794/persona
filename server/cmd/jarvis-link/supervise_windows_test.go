@@ -78,6 +78,37 @@ func TestKeepRunningStartsItAgain(t *testing.T) {
 	}
 }
 
+// jarvis-link starts once the node has made its socket anew; a leftover socket file from before does not count.
+func TestWaitListening(t *testing.T) {
+	sock := filepath.Join(t.TempDir(), "node-attach.sock")
+	if err := os.WriteFile(sock, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(sock, old, old); err != nil { // left by a node that ran an hour ago
+		t.Fatal(err)
+	}
+	began := time.Now()
+	if waitListening(sock, began, 300*time.Millisecond) {
+		t.Fatal("a leftover socket file counted as the new node listening")
+	}
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		_ = os.Remove(sock)
+		_ = os.WriteFile(sock, nil, 0o600) // the node removes it and listens anew
+	}()
+	start := time.Now()
+	if !waitListening(sock, began, 5*time.Second) {
+		t.Fatal("the new socket was not seen")
+	}
+	if waited := time.Since(start); waited > 2*time.Second {
+		t.Fatalf("waited %v for a socket made after 200 ms", waited)
+	}
+	if waitListening(filepath.Join(t.TempDir(), "none.sock"), began, 200*time.Millisecond) {
+		t.Fatal("no socket at all counted")
+	}
+}
+
 // What the job is for: when the supervisor ends, however it ends (the task ended, a crash), what it started ends too.
 func TestWhatTheSupervisorStartsEndsWithIt(t *testing.T) {
 	sup := exec.Command(os.Args[0], "-test.run=TestSupervisorHelper")
