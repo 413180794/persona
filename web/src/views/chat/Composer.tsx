@@ -2,6 +2,7 @@
 // (paste, drop, pick; click one to mark it up), files uploaded to the session's machine, send — and stop while the
 // agent works and nothing is typed. Quotes, edits and edited images from the chat arrive as draft events (drafts.ts).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { LOOP_TEXT, loopHint } from "../../lib/loop-command";
 import { ApiError, api, enc, errorText } from "../../lib/api";
 import { uuid } from "../../lib/format";
 import { imagePayload, MAX_IMAGE, quotePath } from "../../lib/attachments";
@@ -42,6 +43,7 @@ export const AGENT_COMMANDS: Command[] = [
   { word: "/compact", desc: "压缩上下文", text: "/compact" },
   { word: "/context", desc: "查看上下文", text: "/context" },
   { word: "/model", desc: "切换模型", text: "/model " },
+  { word: "/loop", desc: "定时重复做一件事", text: LOOP_TEXT },
   { word: "/clear", desc: "清空对话，从头开始", text: "/clear", confirm: "清空这个 Agent 的对话？它会忘掉之前的上下文。" },
 ];
 
@@ -165,6 +167,8 @@ export function Composer({
   }, [draft]);
 
   const query = dismissed ? null : parseSlash(draft);
+  // A /loop draft gets a line under the box saying what it will do (only where the menu offers /loop: Claude agents).
+  const loop = commands.some((c) => c.text === LOOP_TEXT) ? loopHint(draft) : null;
   const rows = useMemo(() => (query === null ? [] : commands.filter((c) => c.word.slice(1).toLowerCase().startsWith(query) || c.desc.includes(query))), [query, commands]);
   useEffect(() => setActive(0), [query]);
   useLayoutEffect(() => {
@@ -431,6 +435,12 @@ export function Composer({
           aria-label="消息"
           className="min-h-6 w-full resize-none bg-transparent px-2 pt-1.5 text-[14px] leading-[21px] text-ink outline-none [overflow-wrap:anywhere] placeholder:text-ink-3 disabled:opacity-50"
         />
+        {loop && (
+          <div role="status" className={cx("flex items-center gap-1.5 px-2 text-[11.5px]", loop.missing ? "text-ink-3" : "text-ink-2")}>
+            <Icon name="loop" size={12} stroke={2.2} className="shrink-0" />
+            <span className="min-w-0 truncate">{loop.text}</span>
+          </div>
+        )}
         <div className="flex items-center gap-1">
           <input ref={fileInput} type="file" multiple hidden onChange={(e) => e.target.files && void addFiles(e.target.files).finally(() => (e.target.value = ""))} />
           <button

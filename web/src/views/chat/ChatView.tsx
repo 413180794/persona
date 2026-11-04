@@ -21,7 +21,8 @@ import type { Item, Session, Subagent } from "../../lib/types";
 import { anchoredScroll, foldTopLimit, followsAfterScroll, READER_WINDOW, type ScrollAnchor } from "../../lib/disclosure";
 import { Button, copyText, cx, Dialog, IconButton, Loading, Menu, StatePill, StatusDot, toast, useMenu, useNow, type MenuItem } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
-import { Composer, type Outgoing } from "./Composer";
+import { AGENT_COMMANDS, Composer, type Outgoing } from "./Composer";
+import { hasLoop, LOOP_TEXT } from "../../lib/loop-command";
 import { InteractionCard } from "./Interactions";
 import { UserBubble } from "./SegmentView";
 import { ActivityChips, AgentStrip, SubagentFooter } from "./Activity";
@@ -531,7 +532,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           disabled={!sessionCan(session, "send")}
           // Persona's conversations too, the main one included (#1467): the node stops their turn like an agent's
           onStop={sessionCan(session, "interrupt") ? interrupt : undefined}
-          commands={assistant ? [] : undefined}
+          commands={assistant ? [] : hasLoop(session) ? undefined : AGENT_COMMANDS.filter((c) => c.text !== LOOP_TEXT)}
           suggestion={session?.suggestion}
           mention={mention}
           autoFocus

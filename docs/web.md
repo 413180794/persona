@@ -105,6 +105,8 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     选文件插 `@路径`，选会话不插字、加一个上下文胶囊（随消息作为 `<jarvis-context>` 发出）。邮箱地址里的 @ 不弹。工具步骤折叠时（`fold_work`）没展开的那些文件不在列表里。
   - 交互卡片（提问 / 计划 / 授权 / 终端对话框）在输入框上方，Approval Card 的样子；× 是「交回电脑处理」（`dismiss`）。
   - 输入框（Prompt Bar）：Enter 发送、Shift+Enter 换行、输入法组字时 Enter 不发送；`/` 命令（同 App 的快捷消息，`/clear` 先确认）；
+    `/loop`（#1586，`lib/loop-command.ts`，App 还没有）：选中填入 `/loop `，草稿是 `/loop …` 时输入框下面一行说会做什么（「每 10 分钟重复：…」「由 Claude 自己定节奏重复：…」）或还缺什么，
+    原样发给 Claude Code；只有 Claude 的 Agent 有，Codex / TRAEX 的会话不显示；
     粘贴 / 拖入 / 选择图片作为附件，别的文件传到会话所在的电脑并把路径插到光标处（`docs/protocol.md`「发送文件」）；
     Claude 输入框里的灰色建议显示成占位文字，Tab 填入；Agent 工作中且没打字时发送键换成红色中断，Esc 也是中断；Persona 的对话（主对话也算）一样（#1467：之前助手的对话一律不给中断，hub 和 node 其实支持，claude -p 结束进程、下一条消息从 transcript 接着）。草稿按会话存在 localStorage。
   - 发送带 `client_msg_id`；被拒（`input_draft`）时弹窗显示电脑输入框里的字，能清空的给「清空并发送」（同一个 id 重发，带 `clear_draft`）。
