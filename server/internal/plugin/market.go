@@ -40,10 +40,10 @@ const (
 
 // MarketSpec is where a market's index is.
 type MarketSpec struct {
-	Kind string // https | github
-	// URL: the index's https URL (Kind https).
+	Kind string // https | github | git
+	// URL: the index's https URL (Kind https), or the repository's (Kind git).
 	URL string
-	// Owner, Repo, Ref: a GitHub repository (Kind github); Ref "" is the default branch.
+	// Owner, Repo, Ref: a GitHub repository (Kind github); Ref "" is the default branch (also of Kind git).
 	Owner, Repo, Ref string
 }
 
@@ -53,6 +53,9 @@ var githubName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$`)
 // directory it is in (persona-plugins.json is added).
 func ParseMarket(s string) (MarketSpec, error) {
 	s = strings.TrimSpace(s)
+	if spec, ok, err := parseGit(s); ok {
+		return spec, err
+	}
 	if rest, ok := strings.CutPrefix(s, "github:"); ok {
 		repo, ref, _ := strings.Cut(rest, "@")
 		owner, name, ok := strings.Cut(repo, "/")
@@ -92,6 +95,13 @@ func ParseMarket(s string) (MarketSpec, error) {
 
 // String is the spec as kept and shown.
 func (s MarketSpec) String() string {
+	if s.Kind == "git" {
+		out := "git:" + s.URL
+		if s.Ref != "" {
+			out += "#" + s.Ref
+		}
+		return out
+	}
 	if s.Kind == "github" {
 		out := "github:" + s.Owner + "/" + s.Repo
 		if s.Ref != "" {
@@ -239,6 +249,10 @@ type Market struct {
 	// Client and GitHubAPI: tests replace them.
 	Client    *http.Client
 	GitHubAPI string
+	// Dir is where git markets' clones are kept (the hub's data directory).
+	Dir string
+	// allowLocal lets tests clone a local repository.
+	allowLocal bool
 }
 
 func (m *Market) client() *http.Client {
@@ -323,11 +337,22 @@ func escapePath(p string) string {
 
 // Fetch reads the market's index.
 func (m *Market) Fetch(ctx context.Context) (*MarketIndex, []string, error) {
-	ctx, cancel := context.WithTimeout(ctx, marketFetchFor)
+	limit := marketFetchFor
+	if m.Spec.Kind == "git" {
+		limit = gitFor // a clone over SSH can be slow
+	}
+	ctx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	var b strings.Builder
 	var err error
-	if m.Spec.Kind == "github" {
+	if m.Spec.Kind == "git" {
+		if m.Token != "" {
+			return nil, nil, errors.New("git 市场用 hub 机器自己的凭据（SSH key），不收 token")
+		}
+		if err = m.syncGit(ctx); err == nil {
+			err = m.gitFile(IndexFile, &b, IndexMost)
+		}
+	} else if m.Spec.Kind == "github" {
 		err = m.get(ctx, m.contentsURL(IndexFile), "application/vnd.github.raw", &b, IndexMost)
 	} else {
 		err = m.get(ctx, m.Spec.URL, "application/json", &b, IndexMost)
@@ -401,6 +426,9 @@ func (m *Market) download(ctx context.Context, ref string, w io.Writer) (string,
 		clean := path.Clean("/" + ref)[1:]
 		if clean == "" || strings.HasPrefix(ref, "/") || clean != ref {
 			return "", errors.New("包的相对路径不能跳出市场")
+		}
+		if m.Spec.Kind == "git" {
+			return clean, m.gitFile(clean, w, PackageMost)
 		}
 		if m.Spec.Kind == "github" {
 			return clean, m.get(ctx, m.contentsURL(clean), "application/vnd.github.raw", w, PackageMost)

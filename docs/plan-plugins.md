@@ -71,6 +71,7 @@
 - [ ] 第 4 步（客户端）：iOS / Mac、Android、网页画 View（插件详情里的页面、启动器页上的一节）。
 - [x] **插件市场（服务端，#1303）**：仓库 / 网站发布 `persona-plugins.json`，hub 登记市场（GitHub 私有仓库带只读 token），目录、搜索，完整权限的设备从市场装、升级、卸载；
   命令行 `personad plugin market … / search / install market:…`。规格在 `docs/plugins.md`「插件市场」。
+- [x] git 仓库作为市场（#1373）：`git:<地址>`，hub 浅克隆、用 hub 机器的 SSH 凭据，给没有 token 读文件接口的私有 git 托管用。
 - [ ] 插件市场（客户端）：iOS / Mac、Android、网页、管理界面的「插件市场」页。
 
 ## 第 3 步的方案：lark-connector 迁成插件

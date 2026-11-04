@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -117,7 +118,7 @@ func (h *Hub) market(rec plugin.MarketRecord) (*plugin.Market, error) {
 	if err != nil {
 		return nil, err
 	}
-	mk := &plugin.Market{Spec: spec, Client: h.plugins.markets.client, GitHubAPI: h.plugins.markets.githubAPI}
+	mk := &plugin.Market{Spec: spec, Client: h.plugins.markets.client, GitHubAPI: h.plugins.markets.githubAPI, Dir: h.marketsDir()}
 	if rec.TokenSealed != "" {
 		if mk.Token, err = (hubSealer{h}).Open(rec.TokenSealed); err != nil {
 			return nil, errors.New("市场的 token 解不开（hub 的 secret.key 换过？）：重新填一次")
@@ -171,6 +172,9 @@ func mustJSON(v any) []byte {
 
 var errNoMarket = errors.New("没有这个市场")
 
+// marketsDir is where git markets' clones are kept.
+func (h *Hub) marketsDir() string { return filepath.Join(h.plugins.dir, "plugins", "markets") }
+
 func marketView(s *marketState) MarketView {
 	v := MarketView{ID: s.rec.ID, Spec: s.rec.Spec, Name: s.rec.Name, HasToken: s.rec.TokenSealed != "", Warnings: s.rec.Warnings,
 		Error: s.rec.Error, FetchedAt: s.rec.FetchedAt, AddedAt: s.rec.AddedAt}
@@ -221,7 +225,7 @@ func (h *Hub) marketAdd(ctx context.Context, specText, token string) (MarketView
 	if n >= plugin.MarketsMost {
 		return MarketView{}, errors.New("市场太多了：先删掉几个")
 	}
-	mk := &plugin.Market{Spec: spec, Token: token, Client: ms.client, GitHubAPI: ms.githubAPI}
+	mk := &plugin.Market{Spec: spec, Token: token, Client: ms.client, GitHubAPI: ms.githubAPI, Dir: h.marketsDir()}
 	ix, warnings, err := mk.Fetch(ctx)
 	if err != nil {
 		return MarketView{}, err
@@ -303,7 +307,7 @@ func (h *Hub) refreshStale() {
 	for _, id := range ids {
 		go func() {
 			defer func() { ms.mu.Lock(); delete(ms.reading, id); ms.mu.Unlock() }()
-			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 			defer cancel()
 			if _, err := h.marketRead(ctx, id); err != nil {
 				h.logf("plugin market %s: %v", id, err)
@@ -385,11 +389,14 @@ func (h *Hub) marketRoutesAt(api *http.ServeMux, base string, allow func(w http.
 		id := r.PathValue("mid")
 		ms := h.marketsState()
 		ms.mu.Lock()
-		_, ok := ms.byID[id]
+		s, ok := ms.byID[id]
 		ms.mu.Unlock()
 		if !ok {
 			fail(w, errNoMarket, "")
 			return
+		}
+		if mk, err := h.market(s.rec); err == nil {
+			mk.RemoveCheckout()
 		}
 		if err := h.marketStore().DeletePluginMarket(r.Context(), id); err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
