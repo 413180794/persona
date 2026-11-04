@@ -53,6 +53,7 @@ internal object PluginText {
 
     fun point(name: String): String = when (name) {
         "connectors" -> "连接器"
+        "channel" -> "对话渠道"
         "voice" -> "语音对话"
         "ui" -> "界面"
         "quota" -> "额度"

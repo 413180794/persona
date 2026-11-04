@@ -25,6 +25,7 @@ import persona.core.contracts.Machine
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.AssistantManagement
 import persona.core.contracts.api.AssistantRepository
+import persona.core.contracts.api.ChannelSources
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
@@ -633,10 +634,14 @@ private fun ConversationRow(
     pinned: Boolean = false, onPin: (() -> Unit)? = null, onCopy: () -> Unit = {},
 ) {
     var menu by remember { mutableStateOf(false) }
+    // The channel its latest message came in from (WeChat, the Feishu bot…), as a small mark after the title.
+    val channels = LocalChannels.current
+    val channel = remember(session.channels, channels) { ChannelSources.latest(session.channels, channels) }
     JGroupItem(position) {
         // The time goes on the line under the title, with the state: beside the title it left the title two or three
         // characters in the wide window's 300dp list (2026-11-02), and a narrow drawer cut it short too.
         JRow(session.conversationTitle(), onClick = onOpen, onLongClick = { menu = true },
+            titleAccessory = channel?.let { c -> { JChannelMark(c, size = MarkSize.Inline) } },
             subtitle = session.lastText?.takeIf { it.isNotBlank() },
             leading = { JIcon(if (selected) PhIcons.CheckCircle else PhIcons.ChatCircle, null,
                 selected = selected, tint = if (selected) PersonaTheme.palette.accent else PersonaTheme.palette.ink2) },

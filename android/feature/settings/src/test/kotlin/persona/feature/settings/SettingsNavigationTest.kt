@@ -23,6 +23,7 @@ class SettingsNavigationTest {
             SettingsPage.Plugins to "plugins",
             SettingsPage.Mail to "mail",
             SettingsPage.Feishu to "feishu",
+            SettingsPage.Channels to "channels",
         )
         assertEquals(SettingsPage.entries.toSet(), pages.keys)
         assertEquals(pages.size, pages.values.toSet().size)

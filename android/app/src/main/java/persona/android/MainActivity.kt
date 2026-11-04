@@ -51,6 +51,8 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var settingsServices: SettingsServices
+    /** The hubs' channels, for the 「来自 微信」 marks on messages and conversations (docs/channels.md「来源标记」). */
+    @Inject lateinit var channelDirectory: persona.core.contracts.api.ChannelDirectory
     @Inject lateinit var connection: HubConnection
     @Inject lateinit var shell: AppServices
     @Inject lateinit var platformPairing: PlatformPairing
@@ -94,8 +96,10 @@ class MainActivity : ComponentActivity() {
             val pack by app.personas.current.collectAsStateWithLifecycle()
             // Levels are ordered best first, so the lower of the two choices is the later one.
             val glassLevel = maxOf(app.appearance.deviceLevel(glassPreference), GlassThrottle.ceiling.value)
+            val channels by channelDirectory.channels.collectAsStateWithLifecycle()
             AppearanceOverride(forced) { CompositionLocalProvider(
                 LocalDeveloperTools provides launchAdapter?.tools,
+                persona.core.designsystem.LocalChannels provides channels,
                 LocalAppStyleStore provides app.appearance,
                 LocalGlassLevel provides glassLevel,
                 LocalPersonaDesign provides face,

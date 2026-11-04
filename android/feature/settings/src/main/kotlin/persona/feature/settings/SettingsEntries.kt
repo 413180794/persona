@@ -51,6 +51,8 @@ data class SettingsServices(
     val plugins: PluginManagement? = null,
     /** Where the selected hub's plugins draw (nav pages, cards, machine sections), kept by the shell; null without. */
     val pluginSlots: PluginSlots? = null,
+    /** 设置 › 插件 › 渠道 on the paired hub; null in 体验模式. */
+    val channels: ChannelManagement? = null,
     /** The phone's hub groups (settings › hub); null where there is no real pairing (体验模式). */
     val hubs: HubGroups? = null,
     /** Pairs one more hub instead of replacing the pairing (settings › hub › 添加 hub). */

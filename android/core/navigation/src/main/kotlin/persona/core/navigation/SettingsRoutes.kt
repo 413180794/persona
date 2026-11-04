@@ -30,3 +30,6 @@ data class PluginCatalogRoute(val marketId: String, val pluginId: String) : NavK
 /** One launcher of a machine: what it runs, and the sections plugins draw for its gateway (`launcher_section`). */
 @Serializable @SerialName("persona.core.navigation.LauncherRoute")
 data class LauncherRoute(val machineId: String, val name: String) : NavKey
+
+/** One channel of 设置 › 插件 › 渠道 (docs/channels.md「界面」), by the hub's channel id. */
+@Serializable @SerialName("persona.core.navigation.ChannelRoute") data class ChannelRoute(val channelId: String) : NavKey

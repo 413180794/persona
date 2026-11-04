@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import persona.core.contracts.Item
+import persona.core.contracts.api.ChannelSources
 import persona.core.designsystem.*
 import persona.core.designsystem.WorkStep as TimelineStep
 import persona.core.designsystem.icons.PhIcons
@@ -98,10 +99,17 @@ internal fun MergedUserBubble(items: List<Item>, updates: Map<String, ChatTextUp
         runCatching { java.time.format.DateTimeFormatter.ofPattern("HH:mm")
             .withZone(java.time.ZoneId.systemDefault()).format(requireNotNull(persona.core.contracts.parseTime(it))) }.getOrNull()
     } }
-    val footer: (@Composable () -> Unit)? = if (time == null && files.isEmpty()) null else ({
+    // A message that came in from a channel (WeChat, the Feishu bot…) says so under it; the app's own say nothing.
+    val channels = LocalChannels.current
+    val source = remember(items, channels) { items.firstNotNullOfOrNull { ChannelSources.of(it.clientMsgId, channels) } }
+    val footer: (@Composable () -> Unit)? = if (time == null && files.isEmpty() && source == null) null else ({
         Column(horizontalAlignment = Alignment.End) {
             FileChips(files, alignEnd = true)
-            time?.let { Text(it, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) }
+            if (source == null) time?.let { Text(it, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) }
+            else Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
+                JChannelSource(source)
+                time?.let { Text(it, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) }
+            }
         }
     })
     val uri = LocalUriHandler.current

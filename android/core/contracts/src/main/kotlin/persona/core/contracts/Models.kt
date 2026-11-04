@@ -192,6 +192,11 @@ data class Session(
     @SerialName("starting") val starting: Boolean = false,
     /** Why starting it failed; the session is offline and sends get the same error. */
     @SerialName("start_error") val startError: String? = null,
+    /**
+     * The channels messages came into this conversation from, newest first (`wechat`, `feishu`; docs/channels.md
+     * 「来源标记」): the conversation list draws the latest's mark. Older hubs never send it.
+     */
+    @SerialName("channels") val channels: List<String> = emptyList(),
 ) {
     val key: SessionKey get() = SessionKey(machineId, sessionId)
     val agentState: AgentState get() = AgentState.of(state, status)

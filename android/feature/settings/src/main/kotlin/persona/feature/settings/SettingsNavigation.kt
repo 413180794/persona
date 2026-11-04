@@ -20,6 +20,7 @@ fun SettingsPage.toInitialPage(): String = when (this) {
     SettingsPage.Plugins -> "plugins"
     SettingsPage.Mail -> "mail"
     SettingsPage.Feishu -> "feishu"
+    SettingsPage.Channels -> "channels"
 }
 
 /** The root and unknown page names have no detail destination. */

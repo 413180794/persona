@@ -186,6 +186,8 @@ fun JRow(
     destructive: Boolean = false,
     subtitleLines: Int = 2,
     selected: Boolean = false,
+    /** Drawn right after the title on its line (a small source mark); the title gives way to it when space is short. */
+    titleAccessory: (@Composable () -> Unit)? = null,
 ) {
     val palette = PersonaTheme.palette
     RowFrame(modifier, onClick, onLongClick, null, enabled, selected, value, trailing, chevron) {
@@ -195,7 +197,14 @@ fun JRow(
             Spacer(Modifier.width(16.dp))
         }
         Column(Modifier.weight(1f)) {
-            Text(title, style = PersonaTheme.type.body, color = if (destructive) palette.danger.text else palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val titleText: @Composable (Modifier) -> Unit = { m ->
+                Text(title, m, style = PersonaTheme.type.body, color = if (destructive) palette.danger.text else palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (titleAccessory == null) titleText(Modifier)
+            else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+                titleText(Modifier.weight(1f, fill = false))
+                titleAccessory()
+            }
             subtitle?.let { Text(it, style = PersonaTheme.type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink2, maxLines = subtitleLines, overflow = TextOverflow.Ellipsis) }
         }
     }

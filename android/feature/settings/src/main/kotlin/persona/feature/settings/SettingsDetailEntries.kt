@@ -2,6 +2,7 @@ package persona.feature.settings
 
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
+import persona.core.navigation.ChannelRoute
 import persona.core.navigation.EngineRoute
 import persona.core.navigation.ModelPurposeRoute
 import persona.core.navigation.Navigator
@@ -15,7 +16,8 @@ import persona.core.navigation.PluginUiRoute
 /**
  * Settings pages opened by key rather than from the settings list: a machine's engine (from its page in Agents) and
  * one AI use of 模型配置 (from that list, or from the voice page for its plugin's model), one plugin of 插件 and the
- * pages it draws, 插件市场 with its plugins and markets, and a launcher of a machine (from the machine's page).
+ * pages it draws, 插件市场 with its plugins and markets, a launcher of a machine (from the machine's page), and one channel
+ * of 渠道.
  */
 fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, services: SettingsServices) {
     val demo = services.demo
@@ -29,7 +31,8 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
     }
     entry<PluginRoute> { route ->
         PluginPage(services.plugins.takeUnless { demo }, route.pluginId, onBack = navigator::back,
-            onPage = { page -> navigator.navigate(PluginUiRoute(page.plugin.ifBlank { route.pluginId }, page.id, page.title.ifBlank { page.id })) })
+            onPage = { page -> navigator.navigate(PluginUiRoute(page.plugin.ifBlank { route.pluginId }, page.id, page.title.ifBlank { page.id })) },
+            onChannel = { navigator.navigate(ChannelRoute(it)) })
     }
     entry<PluginUiRoute> { route ->
         PluginUiPage(services.plugins.takeUnless { demo }, route.pluginId, route.uiId, route.title, onBack = navigator::back)
@@ -43,6 +46,9 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
             onInstalled = { navigator.navigate(PluginRoute(it)) })
     }
     entry<PluginMarketsRoute> { PluginMarketsPage(services.plugins.takeUnless { demo }, onBack = navigator::back) }
+    entry<ChannelRoute> { route ->
+        ChannelPage(services.channels.takeUnless { demo }, route.channelId, onBack = navigator::back, onOpen = navigator::navigate)
+    }
     entry<LauncherRoute> { route ->
         LauncherPage(services.machines.takeUnless { demo }, services.plugins.takeUnless { demo }, route.machineId, route.name, onBack = navigator::back)
     }

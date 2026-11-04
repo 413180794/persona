@@ -4,7 +4,11 @@ plugins {
     id("jarvis.hilt")
 }
 
-android { namespace = "persona.feature.chat" }
+android {
+    namespace = "persona.feature.chat"
+    // A message's source line is drawn on the JVM (Robolectric's native graphics) for its screenshots.
+    testOptions { unitTests { isIncludeAndroidResources = true } }
+}
 
 dependencies {
     implementation(project(":core:contracts"))
@@ -27,4 +31,9 @@ dependencies {
     implementation(libs.coil.compose)
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("androidx.compose.ui:ui-test-manifest")
+    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("androidx.test.ext:junit:1.3.0")
 }

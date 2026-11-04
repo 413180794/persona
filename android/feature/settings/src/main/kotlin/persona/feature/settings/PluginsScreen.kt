@@ -102,7 +102,11 @@ private fun PluginStateMark(plugin: HubPlugin?) {
  * looked at here.
  */
 @Composable
-fun PluginPage(plugins: PluginManagement?, pluginId: String, onBack: () -> Unit, onPage: ((PluginUiPlace) -> Unit)? = null) {
+fun PluginPage(
+    plugins: PluginManagement?, pluginId: String, onBack: () -> Unit, onPage: ((PluginUiPlace) -> Unit)? = null,
+    /** Opens one of the channels it contributes (设置 › 插件 › 渠道); without it the line is left out. */
+    onChannel: ((String) -> Unit)? = null,
+) {
     if (plugins == null) {
         JListPage(title = "插件", onBack = onBack) { item { JNotice("体验模式没有 hub 的插件。") } }
         return
@@ -125,6 +129,7 @@ fun PluginPage(plugins: PluginManagement?, pluginId: String, onBack: () -> Unit,
             }
         })) {
         header(pluginId, state, onRetry = { scope.launch { model.load() } })
+        if (detail != null && onChannel != null) channelLink(detail, onChannel)
         if (detail != null) {
             if (detail.readOnly) item("read-only") {
                 JNotice("这个插件写在 hub.json 里：开关和设置在 hub 所在的机器上改。", Modifier.padding(top = Tokens.Space.m))
@@ -181,6 +186,19 @@ private fun LazyListScope.header(id: String, state: PluginState, onRetry: () -> 
                 JInlineStatus(error, tone = InlineTone.Failed)
                 if (plugin == null) JButton("重试", onRetry, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary, enabled = !state.loading)
             }
+        }
+    }
+}
+
+/**
+ * A plugin that is a way of talking to Persona (it contributes a `channel`, docs/channels.md「界面」) says where that is
+ * set up: binding, its switch and where its messages go are on the channel's page; this page keeps working as before.
+ */
+private fun LazyListScope.channelLink(detail: PluginDetail, onChannel: (String) -> Unit) {
+    val id = detail.plugin.contributes.orEmpty()["channel"]?.firstOrNull { it.isNotBlank() } ?: return
+    item("channel-link") {
+        JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
+            JRow("这是一个对话渠道", subtitle = "在 设置 › 插件 › 渠道 里设置", leadingIcon = PhIcons.ChatsCircle, onClick = { onChannel(id) })
         }
     }
 }

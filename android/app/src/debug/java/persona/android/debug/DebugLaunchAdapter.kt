@@ -27,6 +27,7 @@ private val pages = mapOf(
     "feishu" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Feishu)),
     "catalog" to ResolvedRoute(AppTab.Settings, ComponentCatalogRoute),
     "voice" to ResolvedRoute(AppTab.Jarvis, persona.core.navigation.VoiceRoute("voice", "语音")),
+    "channels" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Channels)),
 )
 
 class DebugLaunchAdapter : LaunchAdapter {

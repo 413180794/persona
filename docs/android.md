@@ -836,6 +836,27 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
 - **截图（不用模拟器）**：`./gradlew :feature:settings:testDebugUnitTest --tests '*PluginSlotsShotsTest*'`，Robolectric 原生绘制，三种风格 × 深浅色，设置首页的「插件」一节和一个插件页（segmented、四个数、叠起来和并排的柱子、折线、30 个点的标签、选中一列），还有设置 tab 的点，PNG 在 `build/plugin-ui-shots/`（`-Dpersona.shots=<目录>` 换地方）。在真机 / 模拟器上看：`MOCK_PLUGINS=1` 的假 hub（`example-gateway` 有全部新插槽），`--es debug.openPage plugin-ui:example-gateway:usage` 直达插件页，`machine:<id>` 看机器上的一节。
 - **单测**：`HttpPluginManagementTest`（不带 placement 的列表、角标、上下文的正文、`refresh_after`、新条目、读不出的条目跳过、`not_found`），`PluginUiContractTest`（`plugin_ui` 事件），`ChartMathTest`（紧凑数字、范围、刻度、标签不重叠、点选），`PluginUiStateTest`（新条目画不画、图的转换和 tone、segmented 的动作和失败回退、`refresh_after` 在前台才刷新），`PluginSlotsTest`（只在有 `plugin_ui_slots` 且在线时读、不认识的插槽忽略、角标事件、tab 角标相加 / 点、图标、卡片打开哪一页）。
 
+## 渠道（设置 › 插件 › 渠道，#1466）
+
+规格见 [channels.md](channels.md)「接口」「界面」「来源标记」。hub 的 hello 带 `channels` 时，设置首页「扩展」一节在「插件」下面多一行「渠道」，右边写「N 个已连接」（Persona 自己的各端不算），有出错的写成「N 个已连接 · M 个出错」、危险色带警告图标（`ChannelText.listSummary`，回到设置首页、重连后重读）；hub 没有 `plugin_manager` 只有 `channels` 时这一节只有「渠道」。体验模式没有。
+
+- 数据：`core:contracts` 的 `ChannelManagement`（`available` 跟着所选 hub 的 features；列表、详情、`update` 只发带了的 `enabled` / `target` / `features`、`bind` 一步一步、解绑、测试；`conversations` 是所选 hub 的助手对话，用 hub 自己的 id，给「消息发到」选）、`HubChannel`（`channel.View`）、`ChannelDetail`（同一个对象里读两遍，加上 `waiting`、`conversations`、`settings_url`）、`BindPrompt`（`connector.Prompt`：字段、`qr` 带 `qr.rows`、`device_code`、`pair_code`；`polled` 是要自己再问的那几种）、`ChannelSources`（按 `client_msg_id` 第一个 `-` 前的前缀认渠道，`app` 和认不出的不标；会话的 `channels` 取最近一个）；`Session.channels`（老 hub 没有就是空）。`core:hub` 的 `HttpChannelManagement`：渠道 id 先校验；列表 404 是老 hub（`ChannelsUnsupported`），400 `invalid` → `ChannelRejected`、409 `read_only` → `ChannelReadOnly`、404 `not_found` → `ChannelNotFound`；绑定和测试要等 IM，读超时放到 40 秒。`app` 的 `ChannelsModule` 按当前配对注入；`ChannelStore`（`ChannelDirectory`）给每个打开的 hub 组各存一份列表，连上且 features 有 `channels` 时重读、断线时留着，合成一份（所选组的在前），`MainActivity` 经设计系统的 `LocalChannels` 往下给。
+- 设计系统：`Brand`（官方标志，和 iOS `Theme.Brand` 同一份图，`res/drawable/brand_lark.xml` 是 `brand-lark` 转成的矢量图，原样不改色）、`JBrandMark`、`JSourceMark`（有标志画标志，没有画名字首字，三种大小 `MarkSize.Inline` / `Row` / `Header`）、`channelBrand`（飞书机器人和飞书 `/agent` 用飞书的鸟，别的用首字：微信的标志还没定用不用）、`JChannelMark`、`JChannelSource`（「来自 微信」）、`JStateLabel`（状态点 + 文字，出错时危险色）、`JQrCode`（按 `qr.rows` 画，深色模块浅色底、带静区，深色模式也一样，`ScanColors`）、`qrBitmap`、`JCodeDisplay`（大号等宽的配对码）；`JRow` 多了 `titleAccessory`（标题后面的小标志，不传时和原来一像素不差）。
+- 页面：`feature:settings` 的 `ChannelsScreen.kt`（列表 `ChannelsPage`，一个渠道 `ChannelPage`，`ChannelRoute(channelId)` 是详情页，宽屏在右栏）和 `ChannelsState.kt`（文案 `ChannelText`、分节 `channelSections`、「消息发到」的选项 `targetOptions`、列表和详情的模型、绑定 `BindState`）。
+  - 列表：三节「Persona」（`app`，第二行是各端）、「已接入」、「可以安装」（`source: market`，点进去是插件市场的 `PluginCatalogRoute(market, plugin)`）；每行是标志、名字、第二行（出错的原因 / 账号 / 说明），右边是状态：已连接（绿点）/ 未连接（灰点）/ 出错（危险色）/ 已停用；每节下面一句说明。
+  - 详情：顶上是标志、名字、「状态 · 账号 · 最近一条 N 分钟前」，说明，出错时的原因和一句怎么修；「启用」开关；「绑定」：没绑时一个「绑定」/「扫码绑定」按钮，一步一步走：填字段（密钥不回显，同一步答错了保留填的、换一步清空）、扫码（画二维码，「保存二维码」存进相册的 Pictures/Persona，好在同一台手机上的微信里从相册扫）、配对码 / 验证码（大号显示、可复制），这三种每 `interval` 秒（至少 1 秒）自己再问一次，问失败了下次再问，直到下一步或 `done`；绑了以后是账号和「解除绑定」（先确认）；没启用时说先启用。「消息发到」：底部面板选主对话 / 新对话（下一条消息开）/ 这个渠道最近进过的对话和助手的其他对话（最多 20 段，当前选的那段一定在）；「功能」按 `features` 画开关（不认识的也画）；「最近」：在等几个回答、几个提问，最近进过的对话；「它能做什么」按能力写几句，`app` 多一行各端；已连接时「发一条测试消息」；`settings_url` 是 Android 有的页面时多一行「更多设置」（`settings/plugins/<id>` 进插件页，`settings/model-config` 进模型配置；飞书机器人自己的设置页 Android 没有，这行不画）。`read_only` 的（`app`、飞书 `/agent`、语音）只显示，不画开关、绑定、发到、功能和测试。
+  - 插件页：贡献了 `channel` 的插件（微信）详情顶上多一行「这是一个对话渠道 / 在 设置 › 插件 › 渠道 里设置」，点进那个渠道；插件页其余照旧。Android 没有连接器页和飞书机器人设置页，所以只有这一处。
+- 对话：从渠道来的用户消息气泡下面一行小字「来自 微信」（渠道标志 + 名字，次要色，和时间在一行），App 自己发的不标；Persona 的历史抽屉里，会话 `channels` 不空时标题后面画最近那个渠道的小标志。
+- 调试直达：`--es debug.openPage channels`（列表）、`--es debug.openPage channel:<id>`（一个渠道），也可以 `--es debug.openLink 'jarvis://open?target=settings&page=channels'`；假 hub 的渠道数据见 `scripts/mock/mock_hub.py` 的 `MOCK_CHANNELS`。
+- 单测：`core:hub` 的 `HttpChannelManagementTest`（MockWebServer：列表和读不懂的字段、老 hub、详情、只发改了的、分步绑定的正文和配对码 / 二维码 / 完成、解绑和测试的路径、读超时、`invalid` / `read_only` / `not_found` 和别的错误、不合法的 id、读不懂的回答），`core:contracts` 的 `ChannelSourcesTest`（前缀、UUID 和 `app` 不标、会话最近的渠道、几个 hub 合并、`Session.channels` 和老 hub），`feature:settings` 的 `ChannelsStateTest`（状态文案和点、第二行、三节、设置首页的个数和出错、能做什么、「更多设置」只进有的页、发到的文案和选项、能力、顶上一行和时间、列表读不到、只发改了的、拒绝的原因、读不到的渠道、填字段 → 配对码 → 自己再问 → 完成、二维码问失败了再问和取消、第一步失败和解绑）。
+- **截图（不用模拟器）**：`./gradlew :feature:settings:testDebugUnitTest --tests '*ChannelsShotsTest*' :feature:chat:testDebugUnitTest --tests '*ChannelSourceShotsTest*'`，Robolectric 原生绘制，三种风格 × 深浅色，假数据照假 hub 的 `MOCK_CHANNELS`：设置首页「扩展」里的「渠道」（正常 / 有一个出错）、渠道列表、微信的页面、扫码那一步（随手编的 21 × 21 格子，扫不出东西）、配对码那一步，还有对话里「来自 微信」「来自 飞书机器人」和 App 自己发的（不标）。PNG 在 `android/feature/settings/build/channel-shots/` 和 `android/feature/chat/build/channel-shots/`（`-Dpersona.shots=<目录>` 换地方）。在真机 / 模拟器上看：`MOCK_CHANNELS=1` 的假 hub 加上面的调试直达。
+
+![设置 › 插件 › 渠道（Glass，浅色）](screenshots/android-channels-light.png)
+
+![微信渠道的设置（Glass，深色）](screenshots/android-channel-wechat-dark.png)
+
+![对话里来自渠道的消息（Board，浅色）](screenshots/android-channel-source-light.png)
+
 ## 语音对话（hub 语音插件）
 
 和 hub 上的语音插件全双工对话（契约见 [plugins.md](plugins.md)「语音」）：页面开着就一直听，Persona 说话时直接开口就能打断。代码在 `feature/voice`，传输在 `core/hub` 的 `HttpVoicePlugins`，契约 `core/contracts` 的 `VoicePlugins`，路由 `VoiceRoute(pluginId, title)`。

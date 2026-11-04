@@ -15,7 +15,7 @@ internal fun isDetailDestination(key: NavKey): Boolean = when (key) {
     is ChatRoute, is InteractionRoute, is TerminalRoute, is LarkRoute, is LarkMomentRoute, is MailRoute, is InboxItemRoute, is LarkChatRoute,
     is SettingsPageRoute, PairingRoute, PhoneToolsRoute, MachinesRoute, is MachineDetailRoute,
     is EngineRoute, is ModelPurposeRoute, is PluginRoute, is PluginUiRoute, PluginMarketRoute, is PluginCatalogRoute,
-    PluginMarketsRoute, is LauncherRoute -> true
+    PluginMarketsRoute, is LauncherRoute, is ChannelRoute -> true
     // A space's page opens beside the Agents list too; a conversation opened from it goes on top of it.
     is SpaceRoute -> true
     else -> false

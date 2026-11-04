@@ -88,6 +88,19 @@ fun JStatusMark(status: Status, modifier: Modifier = Modifier, animated: Boolean
     }
 }
 
+/**
+ * A state in words with the style's dot before it (已连接, 未连接, 已停用), for a row's trailing side. [problem] puts a
+ * warning mark and the words in the danger colour instead (出错).
+ */
+@Composable
+fun JStateLabel(text: String, status: Status, modifier: Modifier = Modifier, problem: Boolean = false) {
+    val palette = PersonaTheme.palette
+    Row(modifier.semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (problem) JIcon(PhIcons.WarningCircle, null, size = 14.dp, tint = palette.danger.dot) else JStatusDot(status)
+        Text(text, style = PersonaTheme.type.caption, color = if (problem) palette.danger.text else palette.ink2, maxLines = 1, softWrap = false)
+    }
+}
+
 @Composable
 fun StatusLabel(status: Status, modifier: Modifier = Modifier, text: String = status.label) {
     Text(text, modifier, color = PersonaTheme.palette.status(status).text, style = PersonaTheme.type.caption, maxLines = 1, overflow = TextOverflow.Ellipsis)

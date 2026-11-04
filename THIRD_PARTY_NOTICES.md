@@ -3,7 +3,8 @@
 ## Brand marks
 
 `apple/Persona/Resources/Assets.xcassets/Brands` and `apple/PersonaWatch/Assets.xcassets/Brands` hold other products' marks
-(`web/src/views/inbox/lark.svg` is a copy of `brand-lark` for the web inbox),
+(`web/src/views/inbox/lark.svg` is a copy of `brand-lark` for the web inbox, and
+`android/core/designsystem/src/main/res/drawable/brand_lark.xml` the same mark as an Android vector drawable),
 shown next to the service Jarvis connects to. The marks are trademarks of their owners; using them here does not imply
 endorsement. They are drawn as published: not recolored (the one-color OS marks take the distribution's color), not
 redrawn.

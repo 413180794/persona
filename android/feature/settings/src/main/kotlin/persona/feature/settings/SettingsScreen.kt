@@ -68,6 +68,7 @@ private fun SettingsContent(
     var page by rememberSaveable(initialPage) { mutableStateOf(initialPage) }
     var purpose by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     var plugin by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
+    var channel by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val connection by services.connection.state.collectAsState()
@@ -124,6 +125,15 @@ private fun SettingsContent(
     LaunchedEffect(slots, page, connection) {
         if (slots != null && page == "settings" && connection == ConnectionState.Online) slots.load()
     }
+    val channelService = services.channels.takeUnless { services.demo }
+    val channelsAvailable by remember(channelService) { channelService?.available ?: kotlinx.coroutines.flow.flowOf(false) }.collectAsState(false)
+    var channelList by remember { mutableStateOf<List<HubChannel>?>(null) }
+    // Like 插件's: read again whenever the settings list is shown or the hub reconnects.
+    LaunchedEffect(channelService, channelsAvailable, page, connection) {
+        if (channelService == null || !channelsAvailable || page != "settings" || connection != ConnectionState.Online) return@LaunchedEffect
+        channelList = try { channelService.channels() }
+        catch (error: CancellationException) { throw error } catch (_: Exception) { channelList }
+    }
     LaunchedEffect(connectorsService, page, connection) {
         if (connectorsService == null || page != "settings" || connection != ConnectionState.Online) return@LaunchedEffect
         try {
@@ -162,6 +172,10 @@ private fun SettingsContent(
             ?: PluginsPage(services.plugins.takeUnless { services.demo }, back,
                 onPlugin = { id -> onNavigate?.invoke(persona.core.navigation.PluginRoute(id)) ?: run { plugin = id } },
                 onMarket = onNavigate?.let { navigate -> { navigate(persona.core.navigation.PluginMarketRoute) } })
+        "channels" -> channel?.let { id -> ChannelPage(channelService, id, onBack = { channel = null }, onOpen = onNavigate) }
+            ?: ChannelsPage(channelService, back,
+                onChannel = { id -> onNavigate?.invoke(persona.core.navigation.ChannelRoute(id)) ?: run { channel = id } },
+                onMarketPlugin = onNavigate?.let { navigate -> { market, id -> navigate(persona.core.navigation.PluginCatalogRoute(market, id)) } })
         "ready", "notify" -> {
             val preferences: LazyListScope.() -> Unit =
                 if (page == "notify") NotificationPreferences(deviceController, paired && services.deviceSettings != null) else ({})
@@ -238,9 +252,15 @@ private fun SettingsContent(
             item { JSectionHeader("AI") }
             item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ModelConfig), title = "模型配置", leadingIcon = PhIcons.Brain, subtitle = "对话、分拣、翻译和各项 AI 功能统一选择模型", onClick = { open(SettingsPage.ModelConfig) }) } }
             // 插件 shows only when the hub manages plugins (docs/plugins.md); its value says how many need the user.
+            // 渠道 right under it while the hub has channels (docs/channels.md「界面」): how many are connected, red when one went wrong.
+            val extensions = listOfNotNull("plugins".takeIf { pluginsAvailable }, "channels".takeIf { channelsAvailable })
+            if (extensions.isNotEmpty()) item { JSectionHeader("扩展") }
             if (pluginsAvailable) {
-                item { JSectionHeader("扩展") }
-                item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Plugins), title = "插件", leadingIcon = PhIcons.PuzzlePiece, subtitle = "开关、设置和密钥", value = pluginSummary, onClick = { open(SettingsPage.Plugins) }) } }
+                item { JGroupItem(GroupPosition.of(extensions.indexOf("plugins"), extensions.size)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Plugins), title = "插件", leadingIcon = PhIcons.PuzzlePiece, subtitle = "开关、设置和密钥", value = pluginSummary, onClick = { open(SettingsPage.Plugins) }) } }
+            }
+            if (channelsAvailable) item {
+                ChannelsSettingsRow(channelList, GroupPosition.of(extensions.indexOf("channels"), extensions.size),
+                    selected = detailKey == SettingsPageRoute(SettingsPage.Channels), onClick = { open(SettingsPage.Channels) })
             }
             item { JSectionHeader("电脑") }
             item { JGroupItem(GroupPosition.Single) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ClaudeCode), title = "Claude Code 设置", leadingIcon = PhIcons.TerminalWindow, subtitle = "各台电脑上的常用选项，可以一起改", onClick = { open(SettingsPage.ClaudeCode) }) } }
@@ -348,6 +368,7 @@ private fun SettingsContent(
     // An AI use opened inside 模型配置 (no navigation host) closes before the page does.
     BackHandler(page == "models" && purpose != null) { purpose = null }
     BackHandler(page == "plugins" && plugin != null) { plugin = null }
+    BackHandler(page == "channels" && channel != null) { channel = null }
     BackHandler(page == "hubs-add") { page = "hubs" }
     if (confirmDisconnect) JDialog(
         onDismiss = { confirmDisconnect = false }, title = "断开配对？",
