@@ -85,7 +85,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
    合并时 GitHub 自动关闭 issue。描述里没有关联 issue 的 PR 会被 Action（`.github/workflows/pr-needs-issue.yml`）评论并关闭，补上后自动重新打开。
 7. **自行合并**：不需要别人 review，**质量自己保证**：按「构建与验证」跑过测试，界面改动看过截图，正常情况下等 CI 通过后
    `gh pr merge <号> --squash --delete-branch`，确认 issue 已经关闭。
-   **CI 环境异常时，本地验证通过即可合并**（如 runner、付款 / 额度或服务故障导致 CI 无法正常运行），不必另等 CI 恢复或逐次询问豁免；
+   **CI 环境异常时，本地验证通过即可合并**（如 runner、付款 / 额度或服务故障导致 CI 无法正常运行；**CI 一直排不上**——job 长时间排队不开始、runner 积压——也算，2026-11-04 用户要求），不必另等 CI 恢复或逐次询问豁免；
    PR 中写明异常原因、本地验证命令和结果、未运行项，不能把 CI 未运行写成通过。代码或测试本身失败仍须修复，不能按环境异常跳过。
 
 ## 构建与验证
