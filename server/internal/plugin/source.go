@@ -246,6 +246,18 @@ func packageRoot(dir string) (string, error) {
 	return "", fmt.Errorf("包里没有 %s（根目录或唯一的顶层目录里）", ManifestFile)
 }
 
+// macMetadata says whether rel is what macOS puts into a package made on a Mac (Finder's zip, tar without
+// COPYFILE_DISABLE): __MACOSX/, AppleDouble ._ files, .DS_Store. Nothing of the plugin; left out when unpacking, so
+// the package's root is still its only top-level directory.
+func macMetadata(rel string) bool {
+	for _, part := range strings.Split(filepath.ToSlash(rel), "/") {
+		if part == "__MACOSX" || part == ".DS_Store" || strings.HasPrefix(part, "._") {
+			return true
+		}
+	}
+	return false
+}
+
 // budget keeps a package within PackageMost bytes and PackageFiles files.
 type budget struct{ bytes, files int64 }
 
@@ -303,6 +315,12 @@ func copyTree(from, to string) error {
 		}
 		if d.Name() == ".git" && d.IsDir() {
 			return filepath.SkipDir
+		}
+		if macMetadata(rel) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		info, err := d.Info()
 		if err != nil {
@@ -405,6 +423,9 @@ func untar(file, to string) error {
 		if !inside(rel) {
 			return fmt.Errorf("%s 跳出了包", hd.Name)
 		}
+		if macMetadata(rel) {
+			continue
+		}
 		dst := filepath.Join(to, filepath.FromSlash(rel))
 		switch hd.Typeflag {
 		case tar.TypeDir:
@@ -449,6 +470,9 @@ func unzip(file, to string) error {
 		}
 		if !inside(rel) {
 			return fmt.Errorf("%s 跳出了包", zf.Name)
+		}
+		if macMetadata(rel) {
+			continue
 		}
 		dst := filepath.Join(to, filepath.FromSlash(rel))
 		m := zf.Mode()

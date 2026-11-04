@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -487,6 +488,41 @@ func TestStageArchives(t *testing.T) {
 		t.Fatal("the program, executable", err)
 	}
 
+	// Made on a Mac: AppleDouble files beside the top-level directory (tar without COPYFILE_DISABLE), and Finder's
+	// __MACOSX/ and .DS_Store; none of them is unpacked, and the directory is still the package's root.
+	mac := tarGz(t, map[string]string{"._notes": "\x00\x05\x16\x07", "notes/": "", "notes/._" + ManifestFile: "x",
+		"notes/" + ManifestFile: manifest, "notes/bin/notes": "#!/bin/sh\n", "notes/bin/._notes": "x", "notes/.DS_Store": "x",
+		"__MACOSX/notes/._bin": "x"})
+	file = filepath.Join(t.TempDir(), "mac.tar.gz")
+	_ = os.WriteFile(file, mac, 0o644)
+	root, err = Stage(ctx, Source{Kind: "file", Path: file}, t.TempDir())
+	if err != nil {
+		t.Fatal("a package made on a Mac:", err)
+	}
+	var kept []string
+	_ = filepath.WalkDir(filepath.Dir(root), func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			rel, _ := filepath.Rel(filepath.Dir(root), p)
+			kept = append(kept, filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	if filepath.Base(root) != "notes" || strings.Join(kept, " ") != "notes/bin/notes notes/"+ManifestFile {
+		t.Fatalf("%s: %v", root, kept)
+	}
+	macDir := filepath.Join(t.TempDir(), "notes")
+	for rel, content := range map[string]string{ManifestFile: manifest, "._" + ManifestFile: "x", ".DS_Store": "x", "__MACOSX/x": "x"} {
+		_ = os.MkdirAll(filepath.Dir(filepath.Join(macDir, rel)), 0o755)
+		_ = os.WriteFile(filepath.Join(macDir, rel), []byte(content), 0o644)
+	}
+	root, err = Stage(ctx, Source{Kind: "dir", Path: macDir}, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entries, _ := os.ReadDir(root); len(entries) != 1 {
+		t.Fatalf("a directory made on a Mac keeps %d entries", len(entries))
+	}
+
 	for name, files := range map[string]map[string]string{
 		"escape":       {"../x": "x"},
 		"absolute":     {"/etc/x": "x"},
@@ -507,6 +543,8 @@ func TestStageArchives(t *testing.T) {
 	zw := zip.NewWriter(&zbuf)
 	w, _ := zw.Create(ManifestFile)
 	_, _ = io.WriteString(w, manifest)
+	w, _ = zw.Create("__MACOSX/._" + ManifestFile)
+	_, _ = io.WriteString(w, "x")
 	hd := &zip.FileHeader{Name: "bin/notes"}
 	hd.SetMode(0o755)
 	w, _ = zw.CreateHeader(hd)

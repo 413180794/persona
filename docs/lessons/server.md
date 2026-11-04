@@ -290,3 +290,9 @@
 - 查法：`journalctl --user -u jarvisd` 里每次启动的版本号（`git describe`），和线上 `web/index.html` 的修改时间（tar 保留了构建时间）；
   看线上 bundle 里有没有某个 PR 独有的字符串，就知道网页是哪一版。
 - 现在 `deploy.sh` 要求 HEAD 包含 `origin/master`，否则拒绝；要故意部署旧版本用 `PERSONA_DEPLOY_ANY_COMMIT=1`。
+
+## Mac 上打的插件包装不上（2026-11-04，#1590）
+
+- 在 Mac 上 `tar -czf` 不设 `COPYFILE_DISABLE=1`，每个文件旁边都多一个 `._<名字>` 的 AppleDouble 文件，连顶层目录也有（`._<插件 id>`）；
+  hub 认「根目录或唯一的顶层目录」里的清单，顶层成了两项就报「包里没有 persona-plugin.json」。Linux 上 `tar tzf` 能看见这些 `._*` 和 `LIBARCHIVE.xattr` 的提示。
+- 现在 hub 解包时跳过 `._*`、`__MACOSX/`、`.DS_Store`；打包脚本仍应 `export COPYFILE_DISABLE=1`，旧 hub 照样装不上带这些文件的包。
