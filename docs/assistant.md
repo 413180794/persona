@@ -49,6 +49,10 @@
 
 ## 飞书：lark-connector skill（2026-10-30）
 
+> **2026-11-04 起（#1468）**：闸门是通用的「命令闸门」：命令名、脚本、凭据、规则都由插件的 `assistant.gate` 给（`docs/plugins.md`「助手」），
+> node 里不再有 lark-connector 的默认规则；装了经 lark-connector 接飞书的插件时 `ol` 的闸门和凭据来自插件，没装时 hub 自己的 lark-connector 合成同样的闸门（3c 删掉）。
+> 下面说的行为（读放行、别人看得到的写在手机上确认、拒绝 token / 直接 curl）不变。
+
 用户要求：「lark-connector 自带 skill……现在只走我们的 MCP lark_* 工具，自由度低」「skill 弄一个副本就行，不搞整个 lark-connector 仓库丢进去」。
 
 - **副本**：仓库的 `skills/lark-connector/` 是 lark-connector 仓库 `.agents/skills/lark-connector` 的原样副本（`SKILL.md`、`references/`、

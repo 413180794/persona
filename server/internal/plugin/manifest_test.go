@@ -457,3 +457,30 @@ func mustParse(t *testing.T) func(b []byte) *Manifest {
 		return m
 	}
 }
+
+// A gate file: a plain command, a script in the package, a title; credential names only; rules and actions that read.
+func TestParseGate(t *testing.T) {
+	good := `{"command": "feed", "script": "feed/scripts/feed.sh", "title": "示例", "env": ["FEED_BASE", "FEED_TOKEN"], "base_env": "FEED_BASE",
+		"secret": ["FEED_TOKEN"], "rules": [{"method": "GET", "path": "**", "action": "allow"}], "actions": [{"pattern": "^POST /posts", "what": "发帖"}],
+		"tool": {"name": "feed_api", "description": "Run feed."}}`
+	if _, err := ParseGate([]byte(good)); err != nil {
+		t.Fatal(err)
+	}
+	for name, bad := range map[string]string{
+		"command":      `{"command": "Feed", "script": "f/x.sh", "title": "x"}`,
+		"lark-cli":     `{"command": "lark-cli", "script": "f/x.sh", "title": "x"}`,
+		"script":       `{"command": "f", "script": "../x.sh", "title": "x"}`,
+		"title":        `{"command": "f", "script": "f/x.sh"}`,
+		"hub env":      `{"command": "f", "script": "f/x.sh", "title": "x", "env": ["PERSONA_HUB_TOKEN"]}`,
+		"path":         `{"command": "f", "script": "f/x.sh", "title": "x", "env": ["PATH"]}`,
+		"base_env":     `{"command": "f", "script": "f/x.sh", "title": "x", "base_env": "X"}`,
+		"rule action":  `{"command": "f", "script": "f/x.sh", "title": "x", "rules": [{"method": "GET", "path": "**", "action": "maybe"}]}`,
+		"action regex": `{"command": "f", "script": "f/x.sh", "title": "x", "actions": [{"pattern": "(", "what": "x"}]}`,
+		"tool":         `{"command": "f", "script": "f/x.sh", "title": "x", "tool": {"name": "Bad"}}`,
+		"unknown":      `{"command": "f", "script": "f/x.sh", "title": "x", "extra": 1}`,
+	} {
+		if _, err := ParseGate([]byte(bad)); err == nil {
+			t.Errorf("%s: parsed", name)
+		}
+	}
+}

@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/plugin"
 	pserve "github.com/nwverse/persona/server/internal/plugin/serve"
 )
@@ -41,7 +42,20 @@ func serveAPIPluginForTest() {
 				_ = h.Notify("api.broadcast", map[string]any{"type": "sessions", "n": 2})
 			}()
 			return nil, nil
-		}})
+		},
+		Namespaces: map[string]pserve.Handler{"assistant": func(_ context.Context, method string, params json.RawMessage) (any, error) {
+			switch method {
+			case "credentials":
+				return map[string]any{"env": map[string]string{"FEED_BASE": "http://127.0.0.1:9", "FEED_TOKEN": "feed-secret", "PERSONA_HUB_TOKEN": "stolen"}}, nil
+			case "summary":
+				var p struct {
+					Summary string `json:"summary"`
+				}
+				_ = json.Unmarshal(params, &p)
+				return map[string]any{"summary": strings.ReplaceAll(p.Summary, "c42", "示例频道")}, nil
+			}
+			return nil, fmt.Errorf("unknown %s", method)
+		}}})
 }
 
 func apiPackage(t *testing.T) string {
@@ -52,13 +66,18 @@ func apiPackage(t *testing.T) string {
 	_ = os.WriteFile(filepath.Join(dir, "bin", "feed"), []byte("#!/bin/sh\nJARVIS_TEST_PLUGIN=api exec "+self+" \"$@\"\n"), 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "skills", "example-feed", "SKILL.md"), []byte("---\nname: example-feed\ndescription: Read the example feed.\n---\nUse it.\n"), 0o644)
 	_ = os.WriteFile(filepath.Join(dir, "assistant.md"), []byte("## Example feed\n\nThe example feed is read with its skill.\n"), 0o644)
+	_ = os.MkdirAll(filepath.Join(dir, "skills", "example-feed", "scripts"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "skills", "example-feed", "scripts", "feed.sh"), []byte("#!/bin/bash\n"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "gate.json"), []byte(`{"command": "feed", "script": "example-feed/scripts/feed.sh", "title": "示例",
+		"connector": "examplefeed", "env": ["FEED_BASE", "FEED_TOKEN"], "base_env": "FEED_BASE", "secret": ["FEED_TOKEN"],
+		"rules": [{"method": "GET", "path": "**", "action": "allow"}], "tool": {"name": "example_feed", "description": "Run feed."}}`), 0o644)
 	manifest := fmt.Sprintf(`{"manifest_version": 1, "id": "example-feed", "name": "Example feed", "version": "1.0.0",
 		"engines": {"plugin_protocol": 1}, "runtime": {"command": {%q: "bin/feed"}, "http": true},
 		"activation_events": ["on_startup"],
 		"contributes": {
 			"api": [{"id": "feed", "prefix": "examplefeed", "features": ["example_feed"], "events": ["examplefeed"]},
 			        {"id": "lark", "prefix": "lark"}, {"id": "mine", "prefix": "machines"}],
-			"assistant": [{"id": "feed", "skills": ["skills/example-feed"], "instructions": "assistant.md"}]}}`, runtime.GOOS+"-"+runtime.GOARCH)
+			"assistant": [{"id": "feed", "skills": ["skills/example-feed"], "instructions": "assistant.md", "gate": "gate.json"}]}}`, runtime.GOOS+"-"+runtime.GOARCH)
 	_ = os.WriteFile(filepath.Join(dir, plugin.ManifestFile), []byte(manifest), 0o644)
 	return dir
 }
@@ -153,6 +172,25 @@ func TestPluginAPI(t *testing.T) {
 		t.Fatal("each machine gets them once")
 	}
 
+	// Its command gate reaches the assistant's machine: the user's rules for its connector first, only the credentials
+	// it declares; a card about its calls is put in its words.
+	h.cfg.ConnectorGate = []connector.Rule{{Connector: "examplefeed", Action: "POST /posts", Decision: "deny"}}
+	lk, err := h.assistantLark(context.Background())
+	if err != nil || len(lk.Gates) != 1 {
+		t.Fatalf("gates %+v, %v", lk.Gates, err)
+	}
+	g := lk.Gates[0]
+	if g.Plugin != "example-feed" || g.Command != "feed" || g.Tool == nil || g.Tool.Name != "example_feed" ||
+		len(g.Env) != 2 || g.Env["FEED_TOKEN"] != "feed-secret" || g.Env["PERSONA_HUB_TOKEN"] != "" {
+		t.Fatalf("gate %+v", g)
+	}
+	if len(g.Rules) != 2 || g.Rules[0].Action != "deny" || g.Rules[0].Path != "/posts" || g.Rules[1].Action != "allow" {
+		t.Fatalf("rules %+v", g.Rules)
+	}
+	if s, ok := h.plugins.assistantSummary(context.Background(), "示例", "POST /channels/c42/posts"); !ok || s != "POST /channels/示例频道/posts" {
+		t.Fatalf("summary %q %v", s, ok)
+	}
+
 	// Switched off: its API, features and skills go.
 	call(t, mux, "PUT", "/api/v1/plugins/example-feed/-/enabled", master, `{"enabled": false}`)
 	if _, out := call(t, mux, "GET", "/api/v1/examplefeed/items", master, ""); out["path"] != nil {
@@ -160,6 +198,9 @@ func TestPluginAPI(t *testing.T) {
 	}
 	if slices.Contains(h.features(), "example_feed") || len(h.plugins.pluginSkills()) != 0 {
 		t.Fatal("switched off, it adds nothing")
+	}
+	if lk, _ := h.assistantLark(context.Background()); len(lk.Gates) != 0 {
+		t.Fatalf("switched off, its gate stays: %+v", lk.Gates)
 	}
 }
 

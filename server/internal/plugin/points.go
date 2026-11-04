@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // Point is an extension point: a place in the hub a plugin contributes to (docs/plan-plugins.md「contributes」).
@@ -127,6 +129,72 @@ type AssistantItem struct {
 	Skills []string `json:"skills,omitempty"`
 	// Instructions is a markdown file in the package, added to the assistant's CLAUDE.md.
 	Instructions string `json:"instructions,omitempty"`
+	// Gate is a JSON file in the package (GateFile): a command of its skills that calls an HTTP API as the user, the
+	// rules its calls go by and the credentials it needs (the plugin's assistant.credentials).
+	Gate string `json:"gate,omitempty"`
+}
+
+// GateFile is an assistant contribution's gate file: a command gate (proto.CommandGate) without the credentials'
+// values. Env are the names assistant.credentials may fill; Connector is the connector whose connector_gate rules go
+// before Rules (the user's say first).
+type GateFile struct {
+	Command    string             `json:"command"`
+	Script     string             `json:"script"`
+	Title      string             `json:"title"`
+	Connector  string             `json:"connector,omitempty"`
+	Env        []string           `json:"env,omitempty"`
+	BaseEnv    string             `json:"base_env,omitempty"`
+	Secret     []string           `json:"secret,omitempty"`
+	AllowedEnv []string           `json:"allowed_env,omitempty"`
+	Headers    []string           `json:"headers,omitempty"`
+	PathPrefix string             `json:"path_prefix,omitempty"`
+	Rules      []proto.LarkRule   `json:"rules,omitempty"`
+	Actions    []proto.GateAction `json:"actions,omitempty"`
+	Tool       *proto.GateTool    `json:"tool,omitempty"`
+}
+
+var (
+	gateCommand = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
+	gateEnv     = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
+)
+
+// ParseGate reads a gate file strictly and checks it.
+func ParseGate(raw []byte) (*GateFile, error) {
+	var g GateFile
+	if err := strict(raw, &g); err != nil {
+		return nil, err
+	}
+	if !gateCommand.MatchString(g.Command) || g.Command == "lark-cli" {
+		return nil, fmt.Errorf("gate command %q: a plain lowercase name", g.Command)
+	}
+	if err := checkPackagePath(g.Script); err != nil {
+		return nil, fmt.Errorf("gate script: %v", err)
+	}
+	if g.Title == "" {
+		return nil, errors.New("gate: no title")
+	}
+	for _, e := range append(append(append([]string(nil), g.Env...), g.Secret...), g.AllowedEnv...) {
+		if !gateEnv.MatchString(e) || strings.HasPrefix(e, "PERSONA_") || strings.HasPrefix(e, "JARVIS_") || e == "PATH" {
+			return nil, fmt.Errorf("gate env %q", e)
+		}
+	}
+	if g.BaseEnv != "" && !slices.Contains(g.Env, g.BaseEnv) {
+		return nil, errors.New("gate base_env is not one of env")
+	}
+	for _, r := range g.Rules {
+		if r.Action != "allow" && r.Action != "confirm" && r.Action != "deny" || r.Path == "" || r.Method == "" {
+			return nil, fmt.Errorf("gate rule %+v", r)
+		}
+	}
+	for _, a := range g.Actions {
+		if _, err := regexp.Compile(a.Pattern); err != nil || a.What == "" {
+			return nil, fmt.Errorf("gate action %q", a.Pattern)
+		}
+	}
+	if g.Tool != nil && (!regexp.MustCompile(`^[a-z][a-z0-9_]{0,47}$`).MatchString(g.Tool.Name) || g.Tool.Description == "") {
+		return nil, errors.New("gate tool: a name (a-z0-9_) and a description")
+	}
+	return &g, nil
 }
 
 var namePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,47}$`)
@@ -263,6 +331,14 @@ var Points = map[string]Point{
 		}
 		if !idPattern.MatchString(a.ID) {
 			return a.ID, fmt.Errorf("assistant id %q: a-z0-9_-", a.ID)
+		}
+		if a.Gate != "" {
+			if err := checkPackagePath(a.Gate); err != nil || !strings.HasSuffix(a.Gate, ".json") {
+				return a.ID, fmt.Errorf("assistant %s: gate is a .json file inside the package", a.ID)
+			}
+			if len(a.Skills) == 0 {
+				return a.ID, fmt.Errorf("assistant %s: a gate without the skills its command is in", a.ID)
+			}
 		}
 		if len(a.Skills) == 0 && a.Instructions == "" {
 			return a.ID, fmt.Errorf("assistant %s: no skills and no instructions", a.ID)

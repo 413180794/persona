@@ -7,9 +7,17 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/plugin"
+	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The assistant extension point (docs/plugins.md「助手」): a plugin's skills go to the machine that runs the assistant
@@ -143,4 +151,142 @@ func (h *Hub) prepareAssistant(ctx context.Context, m *Machine, cwd *string) err
 		}
 	}
 	return nil
+}
+
+// assistantGates are the command gates of the plugins' assistant contributions (their gate files), each with the
+// credentials its plugin gives now (assistant.credentials, only the names the file declares) and the user's rules for
+// its connector first. For the assistant's machine only: the credentials are never kept or logged.
+func (ps *plugins) assistantGates(ctx context.Context, userRules func(connectorID string) []proto.LarkRule) []proto.CommandGate {
+	var out []proto.CommandGate
+	if ps == nil {
+		return out
+	}
+	for _, p := range ps.reg.List() {
+		if !p.Record.Enabled || p.Problem != "" || p.Dir == "" {
+			continue
+		}
+		for _, a := range p.Manifest.Assistants() {
+			if a.Gate == "" {
+				continue
+			}
+			raw, err := os.ReadFile(filepath.Join(p.Dir, filepath.FromSlash(a.Gate)))
+			if err != nil {
+				continue
+			}
+			gf, err := plugin.ParseGate(raw)
+			if err != nil {
+				ps.logf("plugin %s: gate %s: %v", p.Record.ID, a.Gate, err)
+				continue
+			}
+			g := proto.CommandGate{Plugin: p.Record.ID, Command: gf.Command, Script: gf.Script, Title: gf.Title, BaseEnv: gf.BaseEnv,
+				Secret: gf.Secret, AllowedEnv: gf.AllowedEnv, Headers: gf.Headers, PathPrefix: gf.PathPrefix, Actions: gf.Actions, Tool: gf.Tool}
+			if gf.Connector != "" && userRules != nil {
+				g.Rules = append(g.Rules, userRules(gf.Connector)...)
+			}
+			g.Rules = append(g.Rules, gf.Rules...)
+			if len(gf.Env) > 0 {
+				g.Env = ps.assistantCredentials(ctx, p.Record.ID, a.ID, gf.Env)
+			}
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
+// assistantCredentials asks a plugin for its gate's credentials (assistant.credentials → {env}), keeping only the
+// names its gate file declares; nothing when it cannot answer (the command then says its API is not reachable).
+func (ps *plugins) assistantCredentials(ctx context.Context, id, contribution string, names []string) map[string]string {
+	hp := ps.get(id)
+	if hp == nil || hp.proc == nil {
+		return nil
+	}
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	params, _ := plugin.Targeted(struct{}{}, contribution)
+	var res struct {
+		Env map[string]string `json:"env"`
+	}
+	if err := hp.proc.Call(cctx, "assistant.credentials", params, &res); err != nil {
+		ps.logf("plugin %s: assistant.credentials: %v", id, err) // never the values
+		return nil
+	}
+	out := map[string]string{}
+	for _, n := range names {
+		if v, ok := res.Env[n]; ok {
+			out[n] = v
+		}
+	}
+	return out
+}
+
+// assistantSummary lets the plugin whose gate is titled title rewrite a phone card's text (ids into names:
+// assistant.summary → {summary}); the text as it was when none does or it cannot.
+func (ps *plugins) assistantSummary(ctx context.Context, title, summary string) (string, bool) {
+	if ps == nil {
+		return summary, false
+	}
+	for _, p := range ps.reg.List() {
+		if !p.Record.Enabled || p.Problem != "" || p.Dir == "" {
+			continue
+		}
+		for _, a := range p.Manifest.Assistants() {
+			if a.Gate == "" {
+				continue
+			}
+			raw, err := os.ReadFile(filepath.Join(p.Dir, filepath.FromSlash(a.Gate)))
+			if err != nil {
+				continue
+			}
+			gf, err := plugin.ParseGate(raw)
+			if err != nil || gf.Title != title {
+				continue
+			}
+			hp := ps.get(p.Record.ID)
+			if hp == nil || hp.proc == nil {
+				return summary, false
+			}
+			cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			params, _ := plugin.Targeted(map[string]any{"summary": summary}, a.ID)
+			var res struct {
+				Summary string `json:"summary"`
+			}
+			err = hp.proc.Call(cctx, "assistant.summary", params, &res)
+			cancel()
+			if err != nil || strings.TrimSpace(res.Summary) == "" {
+				return summary, true
+			}
+			return res.Summary, true
+		}
+	}
+	return summary, false
+}
+
+// assistantLark is what the assistant's machine gets for its skills' commands (proto.AssistantLark): lark-cli's
+// settings and rules, the plugins' command gates, and lark-connector's own when the hub still talks to it itself and no
+// plugin's gate has its command.
+func (h *Hub) assistantLark(ctx context.Context) (proto.AssistantLark, error) {
+	lc := h.cfg.Lark
+	larkRules := connector.LarkRules(h.cfg.ConnectorGate, h.cfg.LarkGate)
+	out := proto.AssistantLark{Rules: larkRules, Prefer: lc.Prefer}
+	if lc.CLI != nil {
+		out.CLI = &proto.LarkCLI{Bin: lc.CLI.Bin, Profile: lc.CLI.Profile}
+	}
+	out.Gates = h.plugins.assistantGates(ctx, func(id string) []proto.LarkRule {
+		if id == connector.Lark {
+			return larkRules
+		}
+		return connector.GateRules(h.cfg.ConnectorGate, id)
+	})
+	if h.lark == nil || !lc.lark-connectorConfigured() || slices.ContainsFunc(out.Gates, func(g proto.CommandGate) bool { return g.Command == "ol" }) {
+		return out, nil
+	}
+	base, token, err := h.lark.AgentAccess(ctx)
+	if err != nil {
+		return out, err
+	}
+	g := lark.AssistantGate(base, token, h.lark.Account(), larkRules)
+	t := prompts.Tool("lark-connector")
+	g.Tool = &proto.GateTool{Name: t.Name, Description: t.Description}
+	out.Gates = append(out.Gates, g)
+	return out, nil
 }

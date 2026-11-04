@@ -73,6 +73,21 @@ func LarkRules(rules []Rule, larkGate []proto.LarkRule) []proto.LarkRule {
 	return append(out, larkGate...)
 }
 
+// GateRules are connector_gate's rules of connector id written as HTTP calls ("<METHOD> <path>" or "*"), for a
+// plugin's command gate whose calls go to that connector's service (docs/plugins.md「助手」): the user's say first.
+func GateRules(rules []Rule, id string) []proto.LarkRule {
+	var out []proto.LarkRule
+	for _, r := range rules {
+		if r.Connector != id {
+			continue
+		}
+		if lr, ok := larkRule(r); ok {
+			out = append(out, lr)
+		}
+	}
+	return out
+}
+
 // larkRule is r in lark_gate's terms: the action's method and path, Match as the body's fields.
 func larkRule(r Rule) (proto.LarkRule, bool) {
 	lr := proto.LarkRule{Method: "*", Path: "**", Body: r.Match, Action: r.Decision}

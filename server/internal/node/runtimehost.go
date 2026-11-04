@@ -238,7 +238,7 @@ func (rh *RuntimeHost) request(ctx context.Context, h *runtimeConn, method strin
 			return map[string]any{"tools": []proto.Tool{}}, nil
 		}
 		// The assistant's tools (ask_user, schedule_followup…) only for a runtime that runs the assistant, with the
-		// node's own lark-connector among them (assistant_runtime.go).
+		// command gates' tools among them (assistant_runtime.go).
 		var p struct {
 			Assistant bool `json:"assistant"`
 		}
@@ -250,8 +250,8 @@ func (rh *RuntimeHost) request(ctx context.Context, h *runtimeConn, method strin
 		if err := n.peer.Call(ctx, "mcp.tools", map[string]any{"assistant": assistant}, &res); err != nil {
 			return nil, err
 		}
-		if assistant && n.lark-connectorAvailable() {
-			res.Tools = append(res.Tools, lark-connectorToolDef())
+		if assistant {
+			res.Tools = append(res.Tools, n.gateTools()...)
 		}
 		if res.Tools == nil {
 			res.Tools = []proto.Tool{}
@@ -276,8 +276,8 @@ func (rh *RuntimeHost) request(ctx context.Context, h *runtimeConn, method strin
 		}
 		// As the assistant only for one of the assistant's conversations that this runtime runs.
 		assistant := p.Assistant && h.assistant() && rh.reg.owns(h, p.SessionID) && n.isAssistantSession(p.SessionID)
-		if assistant && p.Name == lark-connectorTool {
-			return n.assistantlark-connector(ctx, p.SessionID, p.Args), nil
+		if g := n.gateTool(p.Name); assistant && g != nil {
+			return n.assistantGateTool(ctx, g, p.SessionID, p.Args), nil
 		}
 		var res json.RawMessage
 		err := n.peer.Call(ctx, "mcp.call", map[string]any{"name": p.Name, "args": p.Args, "session_id": p.SessionID, "assistant": assistant}, &res)

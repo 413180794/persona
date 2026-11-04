@@ -287,6 +287,9 @@ func TestCodexStartAndTurns(t *testing.T) {
 func TestCodexApprovals(t *testing.T) {
 	n := codexTestNode(t)
 	fh := withFakeHub(t, n)
+	n.mu.Lock()
+	n.larkCfg, n.larkCfgAt = olCfg(), time.Now().Add(time.Hour) // lark-connector's ol as the hub hands it over
+	n.mu.Unlock()
 	cwd := t.TempDir()
 	p, c, f := newFakeCodex(t, n, cwd)
 	p.id = testThread

@@ -34,17 +34,17 @@ type Field struct {
 	Enum        []Choice        `json:"enum,omitempty"`
 	Format      string          `json:"format,omitempty"` // uri | email | hostname | machine
 	// OS, for format machine: only machines of these systems (x-os: darwin, linux, windows); none, any.
-	OS []string `json:"os,omitempty"`
-	Pattern     string          `json:"pattern,omitempty"`
-	MinLength   *int            `json:"min_length,omitempty"`
-	MaxLength   *int            `json:"max_length,omitempty"`
-	Minimum     *float64        `json:"minimum,omitempty"`
-	Maximum     *float64        `json:"maximum,omitempty"`
-	Items       *Field          `json:"items,omitempty"` // array: its items (a string field)
-	MinItems    *int            `json:"min_items,omitempty"`
-	MaxItems    *int            `json:"max_items,omitempty"`
-	UniqueItems bool            `json:"unique_items,omitempty"`
-	Fields      []Field         `json:"fields,omitempty"` // object: its properties
+	OS          []string `json:"os,omitempty"`
+	Pattern     string   `json:"pattern,omitempty"`
+	MinLength   *int     `json:"min_length,omitempty"`
+	MaxLength   *int     `json:"max_length,omitempty"`
+	Minimum     *float64 `json:"minimum,omitempty"`
+	Maximum     *float64 `json:"maximum,omitempty"`
+	Items       *Field   `json:"items,omitempty"` // array: its items (a string field)
+	MinItems    *int     `json:"min_items,omitempty"`
+	MaxItems    *int     `json:"max_items,omitempty"`
+	UniqueItems bool     `json:"unique_items,omitempty"`
+	Fields      []Field  `json:"fields,omitempty"` // object: its properties
 
 	pattern *regexp.Regexp
 }

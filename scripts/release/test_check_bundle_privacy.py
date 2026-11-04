@@ -31,6 +31,14 @@ SSH_NAMES = (
     "ecdsa-sha2-nistp521-cert-v01@" + "openssh.com",
     "ssh-ed25519-cert-v01@" + "openssh.com",
 )
+GO_SSH_NAMES = SSH_NAMES + tuple(name + "@" + "openssh.com" for name in (
+    "chacha20-poly1305", "hmac-sha2-256-etm", "hmac-sha2-512-etm",
+    "rsa-sha2-256-cert-v01", "rsa-sha2-512-cert-v01", "ssh-rsa-cert-v01", "ssh-dss-cert-v01",
+    "sk-ssh-ed25519", "sk-ssh-ed25519-cert-v01", "sk-ecdsa-sha2-nistp256", "sk-ecdsa-sha2-nistp256-cert-v01",
+    "kex-strict-c-v00", "kex-strict-s-v00", "ping", "auth-agent-req", "auth-agent",
+    "direct-streamlocal", "forwarded-streamlocal", "streamlocal-forward", "cancel-streamlocal-forward", "keepalive",
+    "statvfs", "fstatvfs", "fsync", "hardlink", "posix-rename",
+))
 
 
 class SSHFieldTests(unittest.TestCase):
@@ -82,11 +90,50 @@ class PublicConstantTests(unittest.TestCase):
     def kinds(self, text, words=(), dependencies=DEPENDENCIES):
         return cbp.text_kinds(text, words, whole_short=True, dependencies=dependencies)
 
-    def test_only_the_observed_openssh_request_is_classified(self):
+    def test_openssh_request_is_classified(self):
         self.assertEqual(self.kinds("failed to unmarshal " + SSH_REQUEST + " message: %w"), set())
         for text in ("person@" + "openssh.com", "prefix" + SSH_REQUEST, SSH_REQUEST + ".cn"):
             with self.subTest(text=text):
                 self.assertIn("email", self.kinds(text))
+
+    def test_ssh_wire_identifiers_in_fields_lists_and_format_strings(self):
+        for name in GO_SSH_NAMES:
+            for text in (name, '"' + name + '"', "failed to unmarshal " + name + " message: %w",
+                         "algorithms=" + name + ",ssh-ed25519", "extension:" + name + ";next"):
+                with self.subTest(text=text):
+                    self.assertEqual(self.kinds(text, dependencies={"golang.org/x/crypto"}), set())
+        self.assertEqual(self.kinds(",".join(GO_SSH_NAMES)), set())
+
+    def test_ssh_classification_requires_crypto_except_existing_swift_fields(self):
+        for dependencies in (frozenset(), DEPENDENCIES - {"golang.org/x/crypto"}):
+            for name in GO_SSH_NAMES:
+                with self.subTest(name=name, dependencies=dependencies):
+                    self.assertIn("email", self.kinds("algorithm: " + name, dependencies=dependencies))
+                    # Preserve the existing swift-nio-ssh complete-field exception.
+                    if name not in SSH_NAMES:
+                        self.assertIn("email", self.kinds(name, dependencies=dependencies))
+
+    def test_ssh_domains_and_extended_identifiers_still_fail(self):
+        for text in ("person@" + "openssh.com", "other@" + "libssh.org",
+                     "aes128-gcm@" + "libssh.org", "curve25519-sha256@" + "openssh.com"):
+            with self.subTest(text=text):
+                self.assertIn("email", self.kinds(text))
+                self.assertIn("email", self.kinds(",".join((*GO_SSH_NAMES, text))))
+        for name in GO_SSH_NAMES:
+            for boundary in "Az09._%+-":
+                for text in (boundary + name, name + boundary):
+                    with self.subTest(text=text):
+                        self.assertEqual(cbp.generic_text(text, DEPENDENCIES), text)
+            for text in ("prefix" + name, name + ".cn", name.replace("@", "+account@"), name.upper()):
+                with self.subTest(text=text):
+                    self.assertIn("email", self.kinds(text))
+
+    def test_registered_ssh_values_win_over_public_classification(self):
+        for name in GO_SSH_NAMES:
+            for word in (name, *name.split("@")):
+                with self.subTest(name=name, word=word):
+                    self.assertIn(f"private value ({len(word)} chars)",
+                                  self.kinds("algorithm: " + name, words=(word,)))
 
     def test_exact_upstream_contact_link_not_the_entire_domain(self):
         self.assertEqual(self.kinds(CONTACT), set())
@@ -191,7 +238,7 @@ class GoDependenciesTests(unittest.TestCase):
 
 
 class BundleScanIntegrationTests(unittest.TestCase):
-    def scan(self, text, words=(), public=True, config=None):
+    def scan(self, text, words=(), public=True, config=None, dependencies=DEPENDENCIES):
         with tempfile.TemporaryDirectory(prefix="bundle-privacy-test-") as directory:
             (Path(directory) / "binary").write_bytes(text.encode())
             output = io.StringIO()
@@ -199,7 +246,7 @@ class BundleScanIntegrationTests(unittest.TestCase):
             with patch.object(sys, "argv", args), patch.object(cbp.pc, "module_paths", return_value=None), \
                     patch.object(cbp.pc, "terms", return_value=(words, set())), \
                     patch.object(cbp.jarvis_config, "load", return_value=config or {}), \
-                    patch.object(cbp, "go_dependencies", return_value=DEPENDENCIES), redirect_stdout(output):
+                    patch.object(cbp, "go_dependencies", return_value=dependencies), redirect_stdout(output):
                 try:
                     cbp.main()
                 except SystemExit as error:
@@ -211,6 +258,26 @@ class BundleScanIntegrationTests(unittest.TestCase):
         code, output = self.scan(text)
         self.assertEqual(code, 0, output)
         self.assertIn("check_bundle_privacy: clean", output)
+
+    def test_public_binary_ssh_rodata_regression(self):
+        text = "\0".join((",".join(GO_SSH_NAMES), *("ssh: %s [" + name + "]" for name in GO_SSH_NAMES)))
+        code, output = self.scan(text)
+        self.assertEqual(code, 0, output)
+        self.assertIn("check_bundle_privacy: clean", output)
+        for dependencies in (frozenset(), DEPENDENCIES - {"golang.org/x/crypto"}):
+            code, output = self.scan(text, dependencies=dependencies)
+            self.assertNotEqual(code, 0)
+            self.assertIn("email", output)
+        for address in ("person@" + "openssh.com", "other@" + "libssh.org"):
+            code, output = self.scan(text + "," + address)
+            self.assertNotEqual(code, 0)
+            self.assertIn("email", output)
+            self.assertNotIn(address, output)
+        for name in GO_SSH_NAMES:
+            code, output = self.scan(text, words=(name,))
+            self.assertNotEqual(code, 0)
+            self.assertIn("private value", output)
+            self.assertNotIn(name, output)
 
     def test_registered_values_still_fail_and_are_not_logged(self):
         for text, value in ((CONTACT, "support+webclient@" + "tailscale.com"),
@@ -319,9 +386,10 @@ class BundleScanIntegrationTests(unittest.TestCase):
                 self.assertNotEqual(code, 0)
                 self.assertIn("private value", output)
                 self.assertNotIn(name, output)
-                code, output = self.scan("mailto:" + name, public=public)
-                self.assertNotEqual(code, 0)
-                self.assertIn("email", output)
+                if not public:  # Only verified Go dependencies allow names inside surrounding context.
+                    code, output = self.scan("mailto:" + name, public=public)
+                    self.assertNotEqual(code, 0)
+                    self.assertIn("email", output)
 
     def test_app_mode_stays_strict(self):
         code, output = self.scan(CONTACT + "\n" + str(NETWORKS[0]), public=False)

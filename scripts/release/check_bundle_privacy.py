@@ -24,8 +24,8 @@ up inside ordinary words: a surname inside "touchend"); app bundles keep the str
 Prints the file and the kind of hit, never the value.
 For public Go builds, narrowly scoped dependency constants are classified separately from private data. This requires
 unreplaced dependencies whose build-info checksums match server/go.sum; registered personal values always win.
-The seven known SSH algorithm/certificate names are classified only as a complete original printable field or a
-complete comma-separated list of those names; URLs, surrounding context and normalized fragments are not classified.
+The seven known swift-nio-ssh algorithm/certificate names are also classified as a complete original printable field
+or a complete comma-separated list; that fallback excludes URLs, surrounding context and normalized fragments.
 """
 import ipaddress
 import os
@@ -44,8 +44,20 @@ SKIP = {"embedded.mobileprovision", "embedded.provisionprofile", "CodeResources"
 PRINTABLE = re.compile(rb"[\x20-\x7e]{4,}")
 
 # These are protocol and standards constants, not accounts or deployment addresses. Keep contexts narrow:
-# OpenSSH's global request name, the upstream web client's exact contact link, and complete RFC 1918 networks.
-SSH_REQUEST = re.compile(r"(?<![A-Za-z0-9._%+-])ping@openssh[.]com(?![A-Za-z0-9._%+-])")
+# SSH wire identifiers, the upstream web client's exact contact link, and complete RFC 1918 networks.
+# Exact names from x/crypto/ssh, gliderssh and pkg/sftp; never exempt either domain as a whole.
+GO_SSH_IDENTIFIERS = re.compile(
+    r"(?<![A-Za-z0-9._%+-])(?:"
+    r"(?:aes128-gcm|aes256-gcm|chacha20-poly1305|"
+    r"hmac-sha2-256-etm|hmac-sha2-512-etm|"
+    r"rsa-sha2-256-cert-v01|rsa-sha2-512-cert-v01|ssh-rsa-cert-v01|ssh-dss-cert-v01|ssh-ed25519-cert-v01|"
+    r"ecdsa-sha2-nistp256-cert-v01|ecdsa-sha2-nistp384-cert-v01|ecdsa-sha2-nistp521-cert-v01|"
+    r"sk-ssh-ed25519|sk-ssh-ed25519-cert-v01|sk-ecdsa-sha2-nistp256|sk-ecdsa-sha2-nistp256-cert-v01|"
+    r"kex-strict-c-v00|kex-strict-s-v00|ping|auth-agent-req|auth-agent|"
+    r"direct-streamlocal|forwarded-streamlocal|streamlocal-forward|cancel-streamlocal-forward|keepalive|"
+    r"statvfs|fstatvfs|fsync|hardlink|posix-rename)@openssh[.]com|"
+    r"curve25519-sha256@libssh[.]org)(?![A-Za-z0-9._%+-])"
+)
 # Fixed wire names from swift-nio-ssh. A whole field may be one name or a complete known name-list, never a URL.
 SSH_ALGORITHM_NAMES = frozenset(name + "@" + domain for name, domain in (
     ("aes128-gcm", "openssh.com"), ("aes256-gcm", "openssh.com"), ("curve25519-sha256", "libssh.org"),
@@ -95,7 +107,7 @@ def generic_text(text, dependencies, original_text=None):
         if text in SSH_ALGORITHM_NAMES or ("," in text and all(name in SSH_ALGORITHM_NAMES for name in text.split(","))):
             return ""
     if "golang.org/x/crypto" in dependencies:
-        text = SSH_REQUEST.sub("", text)
+        text = GO_SSH_IDENTIFIERS.sub("", text)
     if "github.com/tailscale/web-client-prebuilt" in dependencies:
         text = TAILSCALE_CONTACT.sub("", text)
     if "tailscale.com" not in dependencies:

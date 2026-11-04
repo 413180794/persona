@@ -36,7 +36,7 @@ func isLarkCLI(name string) bool { return name == "lark-cli" || filepath.Base(na
 // parseLarkCLI reads `lark-cli <words…> [flags]`: the words name the command (`im +messages-send`, `api POST
 // /open-apis/…`), the flags are its input. ok is false when the gate cannot tell what the command is.
 func parseLarkCLI(args []string, risk larkRisk) (c larkCall, deny string, ok bool) {
-	c = larkCall{CLI: true, Method: "CLI", Args: args}
+	c = larkCall{Gate: -1, CLI: true, Method: "CLI", Args: args}
 	var words, flags []string
 	for i, a := range args {
 		if strings.HasPrefix(a, "-") {

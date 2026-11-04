@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -439,6 +441,20 @@ func (r *Registry) checkPackage(m *Manifest, root string) error {
 		if a.Instructions != "" {
 			if fi, err := os.Stat(filepath.Join(root, filepath.FromSlash(a.Instructions))); err != nil || !fi.Mode().IsRegular() {
 				return fmt.Errorf("assistant %s: %s 不在包里", a.ID, a.Instructions)
+			}
+		}
+		if a.Gate != "" {
+			raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(a.Gate)))
+			if err != nil {
+				return fmt.Errorf("assistant %s: %s 不在包里", a.ID, a.Gate)
+			}
+			g, err := ParseGate(raw)
+			if err != nil {
+				return fmt.Errorf("assistant %s: %s: %v", a.ID, a.Gate, err)
+			}
+			// The script is in one of its skills (the skills directory on the assistant's machine is where they go).
+			if !slices.ContainsFunc(a.Skills, func(sk string) bool { return strings.HasPrefix(g.Script, path.Base(sk)+"/") }) {
+				return fmt.Errorf("assistant %s: the gate's script %s is not in its skills", a.ID, g.Script)
 			}
 		}
 	}

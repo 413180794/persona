@@ -72,7 +72,7 @@ func TestLarkCLIGate(t *testing.T) {
 		{`lark-cli "$CMD" +chat-list`, "other"},
 		{`lark-cli`, "other"},
 	} {
-		v := classifyLark(tc.cmd, "", "", fakeRisk)
+		v := classifyLark(tc.cmd, nil, "", fakeRisk)
 		got := "allow"
 		switch {
 		case v.deny != "":
@@ -81,7 +81,7 @@ func TestLarkCLIGate(t *testing.T) {
 			got = "other"
 		default:
 			for _, c := range v.calls {
-				if larkDecision(nil, c) == "confirm" {
+				if larkDecision(proto.AssistantLark{}, c) == "confirm" {
 					got = "confirm"
 				}
 			}
@@ -98,12 +98,12 @@ func TestLarkCLIGate(t *testing.T) {
 // Without a way to ask lark-cli (no lark.cli in the hub's config), every lark-cli command that is not one of its own
 // printing commands is confirmed.
 func TestLarkCLIGateWithoutRisk(t *testing.T) {
-	v := classifyLark(`lark-cli im +chat-list`, "", "", nil)
-	if len(v.calls) != 1 || larkDecision(nil, v.calls[0]) != "confirm" {
+	v := classifyLark(`lark-cli im +chat-list`, nil, "", nil)
+	if len(v.calls) != 1 || larkDecision(proto.AssistantLark{}, v.calls[0]) != "confirm" {
 		t.Fatalf("unknown risk should be confirmed: %+v", v)
 	}
-	v = classifyLark(`lark-cli skills list`, "", "", nil)
-	if len(v.calls) != 1 || larkDecision(nil, v.calls[0]) != "allow" {
+	v = classifyLark(`lark-cli skills list`, nil, "", nil)
+	if len(v.calls) != 1 || larkDecision(proto.AssistantLark{}, v.calls[0]) != "allow" {
 		t.Fatalf("skills list only prints: %+v", v)
 	}
 }
@@ -120,11 +120,11 @@ func TestLarkCLIRules(t *testing.T) {
 		`lark-cli im +messages-reply --message-id om_x`:       "confirm",
 		`lark-cli im +chat-list`:                              "allow",
 	} {
-		v := classifyLark(cmd, "", "", fakeRisk)
+		v := classifyLark(cmd, nil, "", fakeRisk)
 		if len(v.calls) != 1 {
 			t.Fatalf("%s: %+v", cmd, v)
 		}
-		if got := larkDecision(rules, v.calls[0]); got != want {
+		if got := larkDecision(proto.AssistantLark{Rules: rules}, v.calls[0]); got != want {
 			t.Errorf("%s: got %s, want %s", cmd, got, want)
 		}
 	}
@@ -137,7 +137,7 @@ func TestLarkCLIInComplexCommands(t *testing.T) {
 		`lark-cli im +messages-send --chat-id oc_x --text hi | python3 -c 'print(1)'`: true,
 		`lark-cli im +chat-list | python3 -c 'print(1)'`:                              false,
 	} {
-		v := classifyLark(cmd, "", "", fakeRisk)
+		v := classifyLark(cmd, nil, "", fakeRisk)
 		if !v.other {
 			t.Fatalf("%s: the gate should not decide it alone: %+v", cmd, v)
 		}
@@ -150,8 +150,8 @@ func TestLarkCLIInComplexCommands(t *testing.T) {
 
 // The phone card shows what the write does and the command as typed.
 func TestLarkCLISummary(t *testing.T) {
-	v := classifyLark(`lark-cli im +messages-send --chat-id oc_x --text "下午三点开会" && lark-cli im messages delete --params '{"message_id":"om_x"}' && lark-cli wiki +move --node x && lark-cli im +messages-reply --as bot --message-id om_y --text 收到`, "", "", fakeRisk)
-	s := larkSummary(v.calls)
+	v := classifyLark(`lark-cli im +messages-send --chat-id oc_x --text "下午三点开会" && lark-cli im messages delete --params '{"message_id":"om_x"}' && lark-cli wiki +move --node x && lark-cli im +messages-reply --as bot --message-id om_y --text 收到`, nil, "", fakeRisk)
+	s := larkSummary(nil, v.calls)
 	for _, want := range []string{"以你的身份在飞书上发消息\nlark-cli im +messages-send --chat-id oc_x --text 下午三点开会",
 		"撤回消息（lark-cli 标为高风险）", "写文档（lark-cli 没给出风险等级）\nlark-cli wiki +move --node x",
 		"以机器人身份在飞书上回复消息\nlark-cli im +messages-reply --as bot --message-id om_y --text 收到"} {

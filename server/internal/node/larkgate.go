@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -14,56 +16,20 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The assistant drives Feishu through lark-connector's own skill (lark-connector, in the user's ~/.jarvis/skills): Bash runs `ol METHOD PATH
-// [BODY]` against the lark-connector agent API as the user. Every Bash call of the assistant passes a PreToolUse hook that
-// reads the command (docs/assistant.md「飞书：lark-connector skill」):
+// The assistant's skills call HTTP APIs as the user through commands (`<command> METHOD PATH [BODY]`, the
+// command gates the hub hands over: plugins' assistant.gate, docs/plugins.md「助手」) and through lark-cli. Every Bash
+// call of the assistant passes a PreToolUse hook that reads the command (docs/assistant.md):
 //
-//   - only `ol` calls (and a few output filters): reads run at once; writes that others would see as the user (send,
-//     reply, recall, react, docs, calendar, mail, approvals, tasks for others…) are approved on the phone first,
-//     with method, path and body on the card; writes that only touch the user (marking read, completing their own
-//     todo) run at once. Rules: hub.json lark_gate first, then defaultLarkRules; the first match decides.
-//   - anything naming the token, curl / wget at lark-connector, or curl flags that would print or redirect the token: denied.
+//   - only gated calls (and a few output filters): each call goes by its gate's rules (the first match: allow, confirm
+//     on the phone first with method, path and body on the card, or deny; none matching is confirmed); lark-cli's
+//     by its own risk level (larkcligate.go).
+//   - anything naming a gate's secret, a process's environ, curl / wget at a gate's API, or curl flags that would
+//     print or redirect the credentials: denied.
 //   - anything else: no decision, the usual permission flow (the phone asks about the whole command).
-var defaultLarkRules = []proto.LarkRule{
-	// GETs that act as the user or dump the account.
-	{Method: "GET", Path: "/links/open", Action: "confirm"},
-	{Method: "GET", Path: "/conversations/*/qr-code", Action: "confirm"},
-	{Method: "GET", Path: "/maintenance/export", Action: "confirm"},
-	{Method: "GET", Path: "**", Action: "allow"},
-	{Method: "HEAD", Path: "**", Action: "allow"},
-	// POSTs that only read (lark-connector's read-only token allows the same ones; references/platform.md), and translation.
-	{Method: "POST", Path: "/context/harvest", Action: "allow"},
-	{Method: "POST", Path: "/context/read", Action: "allow"},
-	{Method: "POST", Path: "/context/jobs", Action: "allow"},
-	{Method: "POST", Path: "/context/jobs/*/cancel", Action: "allow"},
-	{Method: "POST", Path: "/context/jobs/*/query", Action: "allow"},
-	{Method: "POST", Path: "/context/jobs/*/read", Action: "allow"},
-	{Method: "POST", Path: "/search/page", Action: "allow"},
-	{Method: "POST", Path: "/search/mention-history", Action: "allow"},
-	{Method: "POST", Path: "/wiki/spaces/*/search", Action: "allow"},
-	{Method: "POST", Path: "/documents/reader/export", Action: "allow"},
-	{Method: "POST", Path: "/documents/share/export", Action: "allow"},
-	{Method: "POST", Path: "/documents/base/attachments/export", Action: "allow"},
-	{Method: "POST", Path: "/messages/read-states", Action: "allow"},
-	{Method: "POST", Path: "/translate/text", Action: "allow"},
-	{Method: "POST", Path: "/messages/*/translate", Action: "allow"},
-	{Method: "POST", Path: "/messages/*/audio-text", Action: "allow"},
-	// Finding the DM with someone (an existing one comes back with created:false; a new one is empty, nobody sees it).
-	{Method: "POST", Path: "/conversations", Body: map[string]any{"type": "p2p"}, Action: "allow"},
-	// Writes nobody else sees: the user's own read state, their own todo.
-	{Method: "POST", Path: "/conversations/*/read-position", Action: "allow"},
-	{Method: "POST", Path: "/conversations/*/read-thread-position", Action: "allow"},
-	{Method: "POST", Path: "/conversations/*/local-read-position", Action: "allow"},
-	{Method: "POST", Path: "/conversations/*/threads/*/read-position", Action: "allow"},
-	{Method: "PUT", Path: "/conversations/*/unread", Action: "allow"},
-	{Method: "PUT", Path: "/conversations/*/local-unread", Action: "allow"},
-	{Method: "POST", Path: "/todos/*/complete", Body: map[string]any{"scope": "self"}, Action: "allow"},
-	// Everything else acts as the user where others see it.
-	{Method: "*", Path: "**", Action: "confirm"},
-}
 
-// larkCall is one `ol` or `lark-cli` invocation read off a Bash command.
+// larkCall is one gated command's or lark-cli's invocation read off a Bash command.
 type larkCall struct {
+	Gate   int    // the command gate (index in the config's Gates); -1 for lark-cli
 	Method string // HTTP method; "CLI" for a lark-cli command (larkcligate.go)
 	Path   string // without /agent/v1 and the query string; a lark-cli command's words joined by "/"
 	Query  string
@@ -78,31 +44,37 @@ type larkCall struct {
 type larkVerdict struct {
 	calls    []larkCall
 	deny     string // why the command is refused
-	other    bool   // something besides `ol` calls and filters: the usual permission flow decides
+	other    bool   // something besides gated calls and filters: the usual permission flow decides
 	unsure   bool   // command substitution / unknown variables: fine for writes (the user sees them), not for reads
 	unparsed bool   // the command could not be split into its parts at all
 	cliWrite bool   // a lark-cli call that is not a known read, even in a command the gate cannot follow
 }
 
 var (
-	olScript    = regexp.MustCompile(`(^|/)lark-connector/scripts/ol\.sh$`)
 	larkFilters = map[string]bool{"jq": true, "head": true, "tail": true, "grep": true, "egrep": true, "wc": true, "sort": true, "uniq": true, "cut": true, "tr": true, "column": true,
 		// and commands that only print
 		"echo": true, "printf": true, "true": true, "date": true, "which": true, "type": true, "cd": true}
-	olEnvAllowed = map[string]bool{"lark-connector_ACCOUNT": true, "OL_TIMEOUT": true}
-	// curl flags ol passes on that cannot leak the token or reach another host, with whether they take a value.
-	olCurlFlags = map[string]bool{"--url-query": true, "-G": false, "--get": false, "--data-urlencode": true, "-d": true, "--data": true,
+	// curl flags a gated command passes on that cannot leak the token or reach another host, with whether they take a value.
+	gateCurlFlags = map[string]bool{"--url-query": true, "-G": false, "--get": false, "--data-urlencode": true, "-d": true, "--data": true,
 		"--data-raw": true, "-o": true, "--output": true, "-i": false, "--include": false, "-m": true, "--max-time": true, "-s": false,
 		"-S": false, "-f": false, "--compressed": false, "-H": true, "--header": true, "--upload": true, "-X": true, "--request": true}
-	olHeaders = map[string]bool{"content-type": true, "accept": true, "x-lark-connector-account": true}
 )
 
-// classifyLark reads a Bash command; host is lark-connector's host (curl / wget aimed at it is refused), cwd resolves @file
-// bodies, risk tells lark-cli's reads from its writes (nil without lark-cli: its commands are all confirmed).
-func classifyLark(cmd, host, cwd string, risk larkRisk) larkVerdict {
+// classifyLark reads a Bash command against the command gates (curl / wget aimed at one's API is refused); cwd
+// resolves @file bodies, risk tells lark-cli's reads from its writes (nil without lark-cli: its commands are all
+// confirmed).
+func classifyLark(cmd string, gates []proto.CommandGate, cwd string, risk larkRisk) larkVerdict {
 	var v larkVerdict
-	if strings.Contains(cmd, "lark-connector_AGENT_TOKEN") || strings.Contains(cmd, "/proc/") && strings.Contains(cmd, "environ") {
-		v.deny = "不要读取、打印或直接使用 lark-connector_AGENT_TOKEN：飞书一律用 ol（lark-connector skill），它自己带 token。"
+	for _, g := range gates {
+		for _, name := range g.Secret {
+			if name != "" && strings.Contains(cmd, name) {
+				v.deny = "不要读取、打印或直接使用 " + name + "：" + g.Title + "一律用 " + g.Command + "，它自己带凭据。"
+				return v
+			}
+		}
+	}
+	if strings.Contains(cmd, "/proc/") && strings.Contains(cmd, "environ") {
+		v.deny = "不要读取进程的环境变量（/proc/*/environ）：里面有凭据。"
 		return v
 	}
 	if strings.Contains(cmd, ".lark-cli/") || strings.HasSuffix(cmd, ".lark-cli") {
@@ -141,13 +113,14 @@ func classifyLark(cmd, host, cwd string, risk larkRisk) larkVerdict {
 			words = []string{"which"}
 		}
 		name := words[0]
-		if name == "bash" || name == "sh" {
-			if len(words) > 1 && olScript.MatchString(words[1]) {
-				name, words = "ol", words[1:]
+		gate := -1
+		if (name == "bash" || name == "sh") && len(words) > 1 {
+			if i := gateOf(gates, words[1]); i >= 0 {
+				gate, words = i, words[1:]
 			}
 		}
-		if olScript.MatchString(name) {
-			name = "ol"
+		if gate < 0 {
+			gate = gateOf(gates, name)
 		}
 		switch {
 		case isLarkCLI(name):
@@ -170,13 +143,14 @@ func classifyLark(cmd, host, cwd string, risk larkRisk) larkVerdict {
 				v.cliWrite = true
 			}
 			v.calls = append(v.calls, c)
-		case name == "ol":
+		case gate >= 0:
+			g := gates[gate]
 			for _, a := range env {
-				if k, _, _ := strings.Cut(a, "="); !olEnvAllowed[k] {
+				if k, _, _ := strings.Cut(a, "="); !slices.Contains(g.AllowedEnv, k) {
 					v.other = true
 				}
 			}
-			c, deny, ok := parseOl(words[1:], vars, cwd)
+			c, deny, ok := parseGateCall(g, words[1:], vars, cwd)
 			if deny != "" {
 				v.deny = deny
 				return v
@@ -185,13 +159,17 @@ func classifyLark(cmd, host, cwd string, risk larkRisk) larkVerdict {
 				v.other = true
 				continue
 			}
+			c.Gate = gate
 			if s.redirect != "" && !safeRedirect(s.redirect) {
 				v.other = true
 			}
 			v.calls = append(v.calls, c)
-		case (name == "curl" || name == "wget" || name == "http" || name == "xh") && (host != "" && strings.Contains(s.text, host) || strings.Contains(s.text, "/agent/v1")):
-			v.deny = "不要直接 curl lark-connector：用 ol（lark-connector skill），写操作要先在手机上确认。"
-			return v
+		case name == "curl" || name == "wget" || name == "http" || name == "xh":
+			if g, ok := gateAimed(gates, s.text); ok {
+				v.deny = "不要直接 curl " + g.Title + " 的接口：用 " + g.Command + "，写操作要先在手机上确认。"
+				return v
+			}
+			v.other = true
 		case larkFilters[name] && len(env) == 0 && (s.redirect == "" || safeRedirect(s.redirect)):
 		default:
 			v.other = true
@@ -223,8 +201,28 @@ func safeRedirect(r string) bool {
 	return true
 }
 
-// parseOl reads `METHOD PATH [BODY] [curl flags]`.
-func parseOl(args []string, vars map[string]string, cwd string) (larkCall, string, bool) {
+// gateOf is the gate whose command or script name is, -1 for none.
+func gateOf(gates []proto.CommandGate, name string) int {
+	for i, g := range gates {
+		if g.Command != "" && name == g.Command || g.Script != "" && (name == g.Script || strings.HasSuffix(name, "/"+g.Script)) {
+			return i
+		}
+	}
+	return -1
+}
+
+// gateAimed: text reaches a gate's API (its base's host, or its path prefix).
+func gateAimed(gates []proto.CommandGate, text string) (proto.CommandGate, bool) {
+	for _, g := range gates {
+		if h := larkHost(g.Env[g.BaseEnv]); h != "" && strings.Contains(text, h) || g.PathPrefix != "" && strings.Contains(text, g.PathPrefix) {
+			return g, true
+		}
+	}
+	return proto.CommandGate{}, false
+}
+
+// parseGateCall reads `METHOD PATH [BODY] [curl flags]` after a gated command.
+func parseGateCall(g proto.CommandGate, args []string, vars map[string]string, cwd string) (larkCall, string, bool) {
 	expand := func(s string) (string, bool) {
 		if !strings.Contains(s, "$") {
 			return s, true
@@ -238,8 +236,8 @@ func parseOl(args []string, vars map[string]string, cwd string) (larkCall, strin
 		})
 		return out, !strings.Contains(out, "$")
 	}
-	if len(args) < 2 || args[0] == "events" {
-		return larkCall{}, "", false
+	if len(args) < 2 || !httpMethod.MatchString(strings.ToUpper(args[0])) && !strings.Contains(args[0], "$") {
+		return larkCall{}, "", false // a subcommand of its own (ol events …): not a call the rules know
 	}
 	method, ok1 := expand(strings.ToUpper(args[0]))
 	path, ok2 := expand(args[1])
@@ -247,7 +245,9 @@ func parseOl(args []string, vars map[string]string, cwd string) (larkCall, strin
 		return larkCall{}, "", false
 	}
 	c := larkCall{Method: method}
-	path = strings.TrimPrefix(path, "/agent/v1")
+	if g.PathPrefix != "" {
+		path = strings.TrimPrefix(path, g.PathPrefix)
+	}
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
@@ -262,13 +262,13 @@ func parseOl(args []string, vars map[string]string, cwd string) (larkCall, strin
 		f := rest[i]
 		switch f {
 		case "-v", "--verbose", "--trace", "--trace-ascii", "--trace-time", "-K", "--config", "--libcurl", "-w", "--write-out", "-D", "--dump-header":
-			return larkCall{}, "不要给 ol 加会打印请求头（含 token）或改写请求的 curl 参数（" + f + "）。", false
+			return larkCall{}, "不要给 " + g.Command + " 加会打印请求头（含凭据）或改写请求的 curl 参数（" + f + "）。", false
 		}
 		name, val, inline := strings.Cut(f, "=")
 		if strings.HasPrefix(f, "-X") && len(f) > 2 { // -XPOST
 			name, val, inline = "-X", f[2:], true
 		}
-		takes, known := olCurlFlags[name]
+		takes, known := gateCurlFlags[name]
 		if !known {
 			return larkCall{}, "", false // a positional word would be another URL curl sends the token to
 		}
@@ -283,7 +283,7 @@ func parseOl(args []string, vars map[string]string, cwd string) (larkCall, strin
 		case "-X", "--request":
 			c.Method = strings.ToUpper(val) // curl takes the last -X
 		case "-H", "--header":
-			if h, _, _ := strings.Cut(val, ":"); !olHeaders[strings.ToLower(strings.TrimSpace(h))] {
+			if h, _, _ := strings.Cut(val, ":"); !slices.Contains(g.Headers, strings.ToLower(strings.TrimSpace(h))) {
 				return larkCall{}, "", false
 			}
 		case "--upload":
@@ -311,12 +311,14 @@ func readBodyFile(p, cwd string) string {
 	return string(b)
 }
 
-// decideLark: the action for a call, from the rules in order (the first match).
-// larkDecision is the gate's call on one call: hub.json's lark_gate rules first, then the defaults for ol, or lark-cli's
-// own risk level for a lark-cli command (a rule for one: `{"method":"CLI","path":"im/+messages-send","action":"allow"}`).
-func larkDecision(user []proto.LarkRule, c larkCall) string {
+var httpMethod = regexp.MustCompile(`^(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$`)
+
+// larkDecision is the gate's call on one call: its command gate's rules (the user's first, the hub put them there),
+// or for a lark-cli command the configured rules and then lark-cli's own risk level (a rule for one:
+// `{"method":"CLI","path":"im/+messages-send","action":"allow"}`).
+func larkDecision(cfg proto.AssistantLark, c larkCall) string {
 	if c.CLI && c.Method == "CLI" {
-		if action, ok := matchLark(user, c); ok {
+		if action, ok := matchLark(cfg.Rules, c); ok {
 			return action
 		}
 		if c.Risk == "read" {
@@ -324,8 +326,22 @@ func larkDecision(user []proto.LarkRule, c larkCall) string {
 		}
 		return "confirm"
 	}
-	return decideLark(append(append([]proto.LarkRule(nil), user...), defaultLarkRules...), c)
+	if c.CLI { // lark-cli api METHOD PATH: the configured rules, then reads go
+		if action, ok := matchLark(cfg.Rules, c); ok {
+			return action
+		}
+		if c.Method == "GET" || c.Method == "HEAD" {
+			return "allow"
+		}
+		return "confirm"
+	}
+	if c.Gate < 0 || c.Gate >= len(cfg.Gates) {
+		return "confirm"
+	}
+	return decideLark(cfg.Gates[c.Gate].Rules, c)
 }
+
+// decideLark: the action for a call, from the rules in order (the first match); none matching is confirmed.
 
 func decideLark(rules []proto.LarkRule, c larkCall) string {
 	if action, ok := matchLark(rules, c); ok {
@@ -400,23 +416,13 @@ var larkActions = []struct {
 	{regexp.MustCompile(`^CLI /(markdown|slides|whiteboard|mindnotes)`), "写文档"},
 	{regexp.MustCompile(`^CLI /task`), "改待办"},
 	{regexp.MustCompile(`^CLI /approval`), "处理审批"},
-	// ol paths
-	{regexp.MustCompile(`^POST /conversations/[^/]+/(messages|files|images|videos|audios|stickers)`), "发消息"},
-	{regexp.MustCompile(`^POST /messages/[^/]+/replies`), "回复消息"},
-	{regexp.MustCompile(`^POST /messages/[^/]+/(group-)?recall`), "撤回消息"},
-	{regexp.MustCompile(`^(POST|DELETE) /messages/[^/]+/reactions`), "表情回复"},
-	{regexp.MustCompile(`^POST /messages/([^/]+/)?(forward|merge-forward|forward-many)`), "转发消息"},
-	{regexp.MustCompile(`^POST /messages/[^/]+/urgent`), "加急"},
-	{regexp.MustCompile(`^\S+ /calendar`), "建 / 改日程"},
-	{regexp.MustCompile(`^\S+ /(documents|docs|sheets|wiki|drive|base)`), "写文档"},
-	{regexp.MustCompile(`^\S+ /mail`), "发 / 改邮件"},
-	{regexp.MustCompile(`^\S+ /todos`), "改待办"},
-	{regexp.MustCompile(`^\S+ /approvals`), "处理审批"},
-	{regexp.MustCompile(`^\S+ /(groups|conversations)`), "改群 / 会话"},
+	{regexp.MustCompile(`^CLI /calendar`), "建 / 改日程"},
+	{regexp.MustCompile(`^CLI /(docs|sheets|wiki|drive|base)`), "写文档"},
+	{regexp.MustCompile(`^CLI /mail`), "发 / 改邮件"},
 }
 
 // larkSummary is the phone card's text: what each write does, then its method, path and body.
-func larkSummary(calls []larkCall) string {
+func larkSummary(gates []proto.CommandGate, calls []larkCall) string {
 	var b strings.Builder
 	for i, c := range calls {
 		if i > 0 {
@@ -429,11 +435,19 @@ func larkSummary(calls []larkCall) string {
 				break
 			}
 		}
+		if c.Gate >= 0 && c.Gate < len(gates) {
+			for _, a := range gates[c.Gate].Actions {
+				if re, err := regexp.Compile(a.Pattern); err == nil && re.MatchString(c.Method+" "+c.Path) {
+					what = a.What
+					break
+				}
+			}
+		}
 		if c.CLI {
 			b.WriteString(larkCLIActor(c.Args) + "在飞书上" + what + larkRiskNote(c) + "\n" + prettyBody("lark-cli "+shellJoin(c.Args)))
 			continue
 		}
-		b.WriteString("以你的身份在飞书上" + what + "\n" + c.Method + " " + c.Path)
+		b.WriteString("以你的身份在" + callTitle(gates, c) + "上" + what + "\n" + c.Method + " " + c.Path)
 		if c.Query != "" {
 			b.WriteString("?" + c.Query)
 		}
@@ -457,7 +471,7 @@ func prettyBody(body string) string {
 	return body
 }
 
-// larkGate decides an assistant Bash call (see defaultLarkRules); nil leaves it to the usual permission flow.
+// larkGate decides an assistant Bash call (see the top of the file); nil leaves it to the usual permission flow.
 func (n *Node) larkGate(ctx context.Context, in hookInput, ix proto.Interaction) (any, error) {
 	var a struct {
 		Command string `json:"command"`
@@ -478,25 +492,30 @@ func (n *Node) larkGate(ctx context.Context, in hookInput, ix proto.Interaction)
 // the app-server's command approvals (assistant_codex.go).
 func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix proto.Interaction) (string, string, error) {
 	cfg := n.assistantLark(ctx)
-	v := classifyLark(command, larkHost(cfg.Base), cwd, n.larkCLIRisk(cfg))
+	v := classifyLark(command, cfg.Gates, cwd, n.larkCLIRisk(cfg))
 	if v.deny != "" {
 		return "deny", v.deny, nil
 	}
 	if v.other {
-		// A command the gate cannot follow (loops, $(…), scripts) that still calls ol with a write: the phone confirms
-		// it here, whole, whatever the permission mode (bypassPermissions would otherwise run it unasked).
-		if olWriteRe.MatchString(command) || v.cliWrite || v.unparsed && larkCLIRe.MatchString(command) {
-			ix.Kind, ix.ToolName = proto.IxPermission, "飞书"
-			ix.Summary = "以你的身份在飞书上写（命令较复杂，整条显示）\n" + prettyBody(command)
+		// A command the gate cannot follow (loops, $(…), scripts) that still calls a gated command with a write: the
+		// phone confirms it here, whole, whatever the permission mode (bypassPermissions would otherwise run it unasked).
+		g, write := gateWrite(cfg.Gates, command)
+		if write || v.cliWrite || v.unparsed && larkCLIRe.MatchString(command) {
+			title := "飞书" // lark-cli's
+			if write {
+				title = g.Title
+			}
+			ix.Kind, ix.ToolName = proto.IxPermission, title
+			ix.Summary = "以你的身份在" + title + "上写（命令较复杂，整条显示）\n" + prettyBody(command)
 			return n.confirmLark(ctx, session, ix, nil)
 		}
 		return "", "", nil
 	}
 	var ask []larkCall
 	for _, c := range v.calls {
-		switch larkDecision(cfg.Rules, c) {
+		switch larkDecision(cfg, c) {
 		case "deny":
-			return "deny", "这个飞书操作按配置不允许（" + c.Method + " " + c.Path + "）。", nil
+			return "deny", "这个操作按配置不允许（" + c.Method + " " + c.Path + "）。", nil
 		case "allow":
 		default:
 			if !n.larkAlways(session, larkPattern(c)) {
@@ -508,14 +527,40 @@ func (n *Node) larkCheck(ctx context.Context, session, cwd, command string, ix p
 		if v.unsure {
 			return "", "", nil // reads, but $(…) could run anything: the usual flow asks about the whole command
 		}
-		return "allow", "飞书读操作", nil
+		return "allow", "读操作", nil
 	}
-	ix.Kind, ix.ToolName, ix.Summary = proto.IxPermission, "飞书", larkSummary(ask)
+	ix.Kind, ix.ToolName, ix.Summary = proto.IxPermission, callTitle(cfg.Gates, ask[0]), larkSummary(cfg.Gates, ask)
 	return n.confirmLark(ctx, session, ix, ask)
 }
 
-// olWriteRe: an ol call (or ol.sh) whose method is not a read, anywhere in a command.
-var olWriteRe = regexp.MustCompile("(?i)(^|[\\s;&|(`])(ol|\\S*/ol\\.sh)\\s+(POST|PUT|PATCH|DELETE|\"?\\$)")
+// gateWrite: a gated command (or its script) called with a method that is not a read, anywhere in a command.
+func gateWrite(gates []proto.CommandGate, command string) (proto.CommandGate, bool) {
+	for _, g := range gates {
+		var names []string
+		if g.Command != "" {
+			names = append(names, regexp.QuoteMeta(g.Command))
+		}
+		if g.Script != "" {
+			names = append(names, `\S*/`+regexp.QuoteMeta(path.Base(g.Script)))
+		}
+		if len(names) == 0 {
+			continue
+		}
+		re := regexp.MustCompile("(?i)(^|[\\s;&|(`])(" + strings.Join(names, "|") + ")\\s+(POST|PUT|PATCH|DELETE|\"?\\$)")
+		if re.MatchString(command) {
+			return g, true
+		}
+	}
+	return proto.CommandGate{}, false
+}
+
+// callTitle is what the phone card names as the place a call acts on.
+func callTitle(gates []proto.CommandGate, c larkCall) string {
+	if c.Gate >= 0 && c.Gate < len(gates) && gates[c.Gate].Title != "" {
+		return gates[c.Gate].Title
+	}
+	return "飞书" // lark-cli
+}
 
 // confirmLark asks the phone; "本会话总是允许" remembers the calls' routes (not for whole commands).
 func (n *Node) confirmLark(ctx context.Context, session string, ix proto.Interaction, ask []larkCall) (string, string, error) {
@@ -590,10 +635,10 @@ func (n *Node) assistantLark(ctx context.Context) proto.AssistantLark {
 	return cfg
 }
 
-// assistantLarkEnv puts the skills in the assistant's directory (the user's from ~/.jarvis/skills, linked, and the
-// built-in ones, assistantskills) and gives its process what ol.sh needs when the lark-connector skill is among them:
-// lark-connector's base and token (from the hub, only in this process's environment) and `ol` on PATH. Without a config
-// from the hub, ol says the agent API is not reachable.
+// assistantLarkEnv puts the skills in the assistant's directory (the user's from ~/.jarvis/skills, linked, the
+// built-in ones and the plugins', assistantskills) and gives its process what its gated commands need: each gate's
+// command on PATH (a wrapper running the skill's script, when the skill is there) and its credentials, only in this
+// process's environment. Without a config from the hub the commands say their API is not reachable.
 func (n *Node) assistantLarkEnv(cwd string) []string {
 	skills := filepath.Join(cwd, ".claude", "skills")
 	if err := assistantskills.Sync(skills, assistantskills.UserDir(), n.signedInConnectors(), n.logger.Printf); err != nil {
@@ -601,24 +646,54 @@ func (n *Node) assistantLarkEnv(cwd string) []string {
 	}
 	bin := filepath.Join(n.dir, "assistant-bin")
 	_ = os.MkdirAll(bin, 0o755)
-	ol := filepath.Join(bin, "ol")
-	if _, err := os.Stat(assistantskills.OlScript(skills)); err == nil {
-		wrapper := "#!/bin/sh\n# lark-connector's helper (the lark-connector skill), on the assistant's PATH (node/larkgate.go).\nexec bash " +
-			shellQuote(assistantskills.OlScript(skills)) + " \"$@\"\n"
-		_ = os.WriteFile(ol, []byte(wrapper), 0o755)
-	} else {
-		_ = os.Remove(ol) // no lark-connector skill on this machine: no ol to call
-	}
 	env := []string{"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"), "JARVIS_ASSISTANT_BIN=" + bin}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cfg := n.assistantLark(ctx)
-	if cfg.Base != "" && cfg.Token != "" {
-		env = append(env, "lark-connector_AGENT_BASE="+cfg.Base, "lark-connector_AGENT_TOKEN="+cfg.Token)
-		if cfg.Account > 0 {
-			env = append(env, fmt.Sprintf("lark-connector_ACCOUNT=%d", cfg.Account))
+	wrote := map[string]bool{}
+	for _, g := range cfg.Gates {
+		if !safeCommandName(g.Command) || g.Script == "" {
+			continue
+		}
+		script := filepath.Join(skills, filepath.FromSlash(g.Script))
+		if !fileExists(script) || !strings.HasPrefix(filepath.Clean(script), filepath.Clean(skills)+string(os.PathSeparator)) {
+			continue
+		}
+		wrapper := "#!/bin/sh\n" + gateWrapperMark + " (" + g.Title + ", node/larkgate.go)\nexec bash " + shellQuote(script) + " \"$@\"\n"
+		_ = os.WriteFile(filepath.Join(bin, g.Command), []byte(wrapper), 0o755)
+		wrote[g.Command] = true
+		keys := make([]string, 0, len(g.Env))
+		for k := range g.Env {
+			keys = append(keys, k)
+		}
+		slices.Sort(keys)
+		for _, k := range keys {
+			if envName.MatchString(k) && !strings.HasPrefix(k, "PERSONA_") && !strings.HasPrefix(k, "JARVIS_") && k != "PATH" {
+				env = append(env, k+"="+g.Env[k])
+			}
+		}
+	}
+	// A gate gone (the plugin switched off, the skill removed): its command goes too.
+	if ents, err := os.ReadDir(bin); err == nil {
+		for _, e := range ents {
+			if wrote[e.Name()] {
+				continue
+			}
+			p := filepath.Join(bin, e.Name())
+			if b, err := os.ReadFile(p); err == nil && (strings.Contains(string(b), gateWrapperMark) || strings.Contains(string(b), "lark-connector's helper")) {
+				_ = os.Remove(p)
+			}
 		}
 	}
 	n.writeLarkCLIWrapper(bin, cfg.CLI) // lark-cli, when hub.json has lark.cli (larkcligate.go)
 	return env
+}
+
+const gateWrapperMark = "# a skill's gated command"
+
+var envName = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
+
+// safeCommandName: a plain file name for a command on PATH.
+func safeCommandName(s string) bool {
+	return regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`).MatchString(s) && s != "lark-cli"
 }

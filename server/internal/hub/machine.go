@@ -15,7 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -538,30 +537,21 @@ func (m *Machine) onRequest(ctx context.Context, method string, params json.RawM
 			return nil, err
 		}
 		p.Interaction.MachineID = m.cfg.ID
-		if p.Interaction.ToolName == "飞书" { // the assistant's lark-connector write (node/larkgate.go): name the chats it goes to
+		// A write through a skill's gated command (node/larkgate.go): its plugin names what the ids are; Feishu's own
+		// (the hub's lark-connector, lark-cli) names the chats it goes to.
+		if s, ok := m.hub.plugins.assistantSummary(ctx, p.Interaction.ToolName, p.Interaction.Summary); ok {
+			p.Interaction.Summary = s
+		} else if p.Interaction.ToolName == "飞书" {
 			p.Interaction.Summary = m.hub.larkChatNames(ctx, p.Interaction.Summary)
 		}
 		return m.hub.waitInteraction(ctx, p.Interaction)
 	case "assistant.lark":
-		// lark-connector's token goes to the assistant's machine only (its process runs the lark-connector skill); so does how to
-		// run lark-cli (its login stays on that machine, in lark-cli's own store).
-		if m.hub.lark == nil || m.cfg.ID != m.hub.assistantConfig(ctx).MachineID {
+		// The skills' gated commands' credentials go to the assistant's machine only (its process runs them); so does
+		// how to run lark-cli (its login stays on that machine, in lark-cli's own store).
+		if m.cfg.ID != m.hub.assistantConfig(ctx).MachineID {
 			return proto.AssistantLark{}, nil
 		}
-		lc := m.hub.cfg.Lark
-		out := proto.AssistantLark{Rules: connector.LarkRules(m.hub.cfg.ConnectorGate, m.hub.cfg.LarkGate), Prefer: lc.Prefer}
-		if lc.CLI != nil {
-			out.CLI = &proto.LarkCLI{Bin: lc.CLI.Bin, Profile: lc.CLI.Profile}
-		}
-		if lc.CLI != nil && !lc.lark-connectorConfigured() {
-			return out, nil // lark-cli only: there is no lark-connector to hand out
-		}
-		base, token, err := m.hub.lark.AgentAccess(ctx)
-		if err != nil {
-			return nil, err
-		}
-		out.Base, out.Token, out.Account = base, token, m.hub.lark.Account()
-		return out, nil
+		return m.hub.assistantLark(ctx)
 	case "state.load":
 		out := map[string]db.NodeSession{}
 		if m.hub.store != nil {

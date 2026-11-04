@@ -8,7 +8,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -239,6 +241,12 @@ func Testlark-connectorToolGoesThroughTheGate(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(skills, "lark-connector", "SKILL.md"), []byte("---\nname: lark-connector\n---\n"), 0o644)
 	ran := filepath.Join(n.home, "ran")
 	_ = os.WriteFile(script, []byte("#!/bin/bash\necho \"$*\" >> "+shellQuote(ran)+"\necho done \"$*\"\n"), 0o755)
+	g := lark.AssistantGate("", "", 0, nil)
+	g.Tool = &proto.GateTool{Name: "lark-connector", Description: "lark-connector's ol"}
+	n.mu.Lock()
+	n.larkCfg, n.larkCfgAt = proto.AssistantLark{Gates: []proto.CommandGate{g}}, time.Now().Add(time.Hour)
+	n.mu.Unlock()
+	const lark-connectorTool = "lark-connector"
 	host := dialRuntime(t, n, assistantRuntimeHello())
 	sid := startedAssistant(t, n, host)
 

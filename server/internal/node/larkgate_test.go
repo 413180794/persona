@@ -9,15 +9,29 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
+// olGate is lark-connector's ol as a command gate (the hub's own, until the plugin's is the only one), its API on host.
+func olGate(host string) []proto.CommandGate {
+	return []proto.CommandGate{lark.AssistantGate("https://"+host, "test-token", 0, nil)}
+}
+
+func olCfg(user ...proto.LarkRule) proto.AssistantLark {
+	return proto.AssistantLark{Gates: []proto.CommandGate{lark.AssistantGate("", "", 0, user)}}
+}
+
 func TestAssistantLarkAccountEnvironment(t *testing.T) {
 	t.Setenv("JARVIS_SKILLS_DIR", t.TempDir())
-	n := &Node{dir: t.TempDir(), larkCfgAt: time.Now(), larkCfg: proto.AssistantLark{
-		Base: "http://127.0.0.1:18000", Token: "test-token", Account: 2,
+	n := &Node{dir: t.TempDir(), larkCfgAt: time.Now(), logger: log.New(io.Discard, "", 0), larkCfg: proto.AssistantLark{
+		Gates: []proto.CommandGate{lark.AssistantGate("http://127.0.0.1:18000", "test-token", 2, nil)},
 	}}
-	env := n.assistantLarkEnv(t.TempDir())
+	cwd := t.TempDir()
+	skill := filepath.Join(cwd, ".claude", "skills", "lark-connector", "scripts")
+	_ = os.MkdirAll(skill, 0o755)
+	_ = os.WriteFile(filepath.Join(skill, "ol.sh"), []byte("#!/bin/bash\n"), 0o755)
+	env := n.assistantLarkEnv(cwd)
 	if !strings.Contains(strings.Join(env, "\n"), "lark-connector_ACCOUNT=2") {
 		t.Fatal("assistant did not inherit the configured account")
 	}
@@ -28,7 +42,7 @@ func TestAssistantLarkAccountEnvironment(t *testing.T) {
 func TestOlOnlyWithTheSkill(t *testing.T) {
 	user, cwd := t.TempDir(), t.TempDir()
 	t.Setenv("JARVIS_SKILLS_DIR", user)
-	n := &Node{dir: t.TempDir(), larkCfgAt: time.Now(), logger: log.New(io.Discard, "", 0)}
+	n := &Node{dir: t.TempDir(), larkCfgAt: time.Now(), logger: log.New(io.Discard, "", 0), larkCfg: olCfg()}
 	ol := filepath.Join(n.dir, "assistant-bin", "ol")
 	n.assistantLarkEnv(cwd)
 	if _, err := os.Stat(ol); !os.IsNotExist(err) {
@@ -119,7 +133,7 @@ func TestLarkGate(t *testing.T) {
 {"text":"hi"}
 EOF`, "other"},
 	} {
-		v := classifyLark(tc.cmd, host, cwd, nil)
+		v := classifyLark(tc.cmd, olGate(host), cwd, nil)
 		got := "allow"
 		switch {
 		case v.deny != "":
@@ -128,7 +142,7 @@ EOF`, "other"},
 			got = "other"
 		default:
 			for _, c := range v.calls {
-				if decideLark(defaultLarkRules, c) == "confirm" {
+				if larkDecision(olCfg(), c) == "confirm" {
 					got = "confirm"
 				}
 			}
@@ -146,8 +160,8 @@ EOF`, "other"},
 func TestLarkSummary(t *testing.T) {
 	cwd := t.TempDir()
 	_ = os.WriteFile(filepath.Join(cwd, "msg.json"), []byte(`{"text":"来自文件"}`), 0o600)
-	v := classifyLark(`ol POST /conversations/7123/messages @msg.json && ol POST /messages/9/reactions '{"type":"OK"}'`, "", cwd, nil)
-	s := larkSummary(v.calls)
+	v := classifyLark(`ol POST /conversations/7123/messages @msg.json && ol POST /messages/9/reactions '{"type":"OK"}'`, olGate(""), cwd, nil)
+	s := larkSummary(olGate(""), v.calls)
 	for _, want := range []string{"以你的身份在飞书上发消息", "POST /conversations/7123/messages", `"text": "来自文件"`, "表情回复", "POST /messages/9/reactions"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("summary lacks %q:\n%s", want, s)
@@ -161,12 +175,11 @@ func TestLarkSummary(t *testing.T) {
 // hub.json rules come first: the user can let a write through, or forbid one.
 func TestLarkRulesFromConfig(t *testing.T) {
 	send := larkCall{Method: "POST", Path: "/conversations/7123/messages", Body: `{"text":"hi"}`}
-	rules := append([]proto.LarkRule{{Method: "POST", Path: "/conversations/*/messages", Action: "allow"}}, defaultLarkRules...)
-	if decideLark(rules, send) != "allow" {
+	if larkDecision(olCfg(proto.LarkRule{Method: "POST", Path: "/conversations/*/messages", Action: "allow"}), send) != "allow" {
 		t.Fatal("a configured allow did not win")
 	}
-	rules = append([]proto.LarkRule{{Method: "*", Path: "/mail/**", Action: "deny"}}, defaultLarkRules...)
-	if decideLark(rules, larkCall{Method: "POST", Path: "/mail/send"}) != "deny" || decideLark(rules, send) != "confirm" {
+	cfg := olCfg(proto.LarkRule{Method: "*", Path: "/mail/**", Action: "deny"})
+	if larkDecision(cfg, larkCall{Method: "POST", Path: "/mail/send"}) != "deny" || larkDecision(cfg, send) != "confirm" {
 		t.Fatal("a configured deny")
 	}
 }
@@ -182,10 +195,11 @@ func TestOlWriteInComplexCommands(t *testing.T) {
 		`echo hello`:                                 false,
 		`cat tool.go | grep "ol POST"`:               false,
 	} {
-		v := classifyLark(cmd, "", "", nil)
-		got := v.other && olWriteRe.MatchString(cmd) // followed or not, a write is confirmed
+		v := classifyLark(cmd, olGate(""), "", nil)
+		_, write := gateWrite(olGate(""), cmd)
+		got := v.other && write // followed or not, a write is confirmed
 		for _, c := range v.calls {
-			if !v.other && decideLark(defaultLarkRules, c) == "confirm" {
+			if !v.other && larkDecision(olCfg(), c) == "confirm" {
 				got = true
 			}
 		}

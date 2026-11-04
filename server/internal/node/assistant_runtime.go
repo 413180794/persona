@@ -30,11 +30,9 @@ const assistantOnRuntime = "runtime"
 // assistantCall are the calls about an assistant conversation on a runtime that the assistant answers (node.handle).
 var assistantCall = map[string]bool{"session.send": true, "session.interrupt": true, "session.close": true, "session.modes": true}
 
-// lark-connectorTool is the node's own tool for an assistant on a runtime: the lark-connector skill's ol, run here.
-const lark-connectorTool = "lark-connector"
-
-// lark-connectorTimeout bounds one ol run (ol events waits at most 300 s by its own flags).
-var lark-connectorTimeout = 6 * time.Minute
+// gateToolTimeout bounds one run of a gated command as a runtime's tool (ol events waits at most 300 s by its own
+// flags).
+var gateToolTimeout = 6 * time.Minute
 
 // assistantRuntime is the runtime offering launcher as an assistant launcher (caps.assistant), nil when none does or
 // the login shell has a launcher of that name (it runs instead, as for session.start).
@@ -160,7 +158,7 @@ func (n *Node) runtimeStartWith(ctx context.Context, h *runtimeConn, params map[
 // runtimeInstructions is the first message's instructions for an assistant on a runtime: the memory it shares with
 // Claude and Codex (memory.go), and Feishu through lark-connector when the lark-connector skill is on this machine.
 func (n *Node) runtimeInstructions(cwd, memDir string) string {
-	r := prompts.RuntimeInstructions{Dir: memDir, lark-connector: n.lark-connectorScript(cwd) != ""}
+	r := prompts.RuntimeInstructions{Dir: memDir, lark-connector: n.gateScript(cwd, n.gateTool("lark-connector")) != ""}
 	index, _ := os.ReadFile(filepath.Join(memDir, "MEMORY.md"))
 	if len(index) > 24*1024 {
 		r.Index, r.Truncated = strings.TrimLeftFunc(string(index[:24*1024]), unicode.IsSpace), true
@@ -178,41 +176,66 @@ func (n *Node) assistantRuntimeSkills(cwd string) {
 	}
 }
 
-// lark-connectorScript is the lark-connector skill's ol.sh in the assistant's directory, "" when the skill is not there.
-func (n *Node) lark-connectorScript(cwd string) string {
+// gateScript is a command gate's script in the assistant's directory, "" when its skill is not there.
+func (n *Node) gateScript(cwd string, g *proto.CommandGate) string {
+	if g == nil || g.Script == "" {
+		return ""
+	}
 	for _, dir := range []string{filepath.Join(cwd, ".agents", "skills"), filepath.Join(cwd, ".claude", "skills")} {
-		if p := assistantskills.OlScript(dir); fileExists(p) {
+		p := filepath.Join(dir, filepath.FromSlash(g.Script))
+		if strings.HasPrefix(filepath.Clean(p), filepath.Clean(dir)+string(os.PathSeparator)) && fileExists(p) {
 			return p
 		}
 	}
 	return ""
 }
 
-// lark-connectorAvailable: the lark-connector skill is on this machine (the user's skills, or already in the assistant's directory).
-func (n *Node) lark-connectorAvailable() bool {
-	return fileExists(assistantskills.OlScript(assistantskills.UserDir())) || n.lark-connectorScript(identity.AssistantDir(n.home)) != ""
+// gateTool is the command gate offering the runtime tool name, nil when none does.
+func (n *Node) gateTool(name string) *proto.CommandGate {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for _, g := range n.assistantLark(ctx).Gates {
+		if g.Tool != nil && g.Tool.Name == name {
+			return &g
+		}
+	}
+	return nil
 }
 
-func fileExists(p string) bool {
-	st, err := os.Stat(p)
-	return err == nil && !st.IsDir()
+// gateTools are the runtime tools of the command gates whose skill is on this machine (the user's skills, or already
+// in the assistant's directory).
+func (n *Node) gateTools() []proto.Tool {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var out []proto.Tool
+	for _, g := range n.assistantLark(ctx).Gates {
+		if g.Tool == nil || g.Tool.Name == "" {
+			continue
+		}
+		if !fileExists(filepath.Join(assistantskills.UserDir(), filepath.FromSlash(g.Script))) && n.gateScript(identity.AssistantDir(n.home), &g) == "" {
+			continue
+		}
+		out = append(out, proto.Tool{Name: g.Tool.Name, Description: g.Tool.Description, InputSchema: gateToolSchema(g)})
+	}
+	return out
 }
 
-// lark-connectorToolDef is the lark-connector tool as the model sees it.
-func lark-connectorToolDef() proto.Tool {
-	t := prompts.Tool(lark-connectorTool)
-	return proto.Tool{Name: t.Name, Description: t.Description, InputSchema: t.InputSchema}
+func gateToolSchema(g proto.CommandGate) json.RawMessage {
+	raw, _ := json.Marshal(map[string]any{"type": "object", "required": []string{"args"}, "properties": map[string]any{
+		"args": map[string]any{"type": "array", "items": map[string]any{"type": "string"},
+			"description": "The words after " + g.Command + ": METHOD PATH [JSON body] and its flags, one per item"}}})
+	return raw
 }
 
-// assistantlark-connector runs ol for an assistant conversation on a runtime: the lark gate decides first, as for a Bash ol
-// call of Claude's (larkCheck: reads go, writes are confirmed on the phone, the configured rules deny), then the skill's
-// ol.sh runs here with lark-connector's base and token in its environment only.
-func (n *Node) assistantlark-connector(ctx context.Context, session string, raw json.RawMessage) proto.ToolResult {
+// assistantGateTool runs a gated command for an assistant conversation on a runtime: the gate decides first, as for a
+// Bash call of Claude's (larkCheck: reads go, writes are confirmed on the phone, the configured rules deny), then the
+// skill's script runs here with the gate's credentials in its environment only.
+func (n *Node) assistantGateTool(ctx context.Context, g *proto.CommandGate, session string, raw json.RawMessage) proto.ToolResult {
 	var a struct {
 		Args []string `json:"args"`
 	}
 	if json.Unmarshal(raw, &a) != nil || len(a.Args) == 0 {
-		return proto.TextResult(`args: the words after ol, e.g. ["GET", "/me"]`, true)
+		return proto.TextResult(`args: the words after `+g.Command+`, e.g. ["GET", "/me"]`, true)
 	}
 	st, _ := n.state.get(session)
 	cwd := st.Cwd
@@ -220,17 +243,17 @@ func (n *Node) assistantlark-connector(ctx context.Context, session string, raw 
 		cwd = identity.AssistantDir(n.home)
 	}
 	env := n.assistantLarkEnv(cwd) // also syncs the skills into .claude/skills
-	script := n.lark-connectorScript(cwd)
+	script := n.gateScript(cwd, g)
 	if script == "" {
-		return proto.TextResult("这台电脑上没有 lark-connector skill（~/.jarvis/skills/lark-connector）", true)
+		return proto.TextResult("这台电脑上没有 "+g.Command+" 所在的技能（"+g.Script+"）", true)
 	}
 	words := make([]string, len(a.Args))
 	for i, w := range a.Args {
 		words[i] = shellQuote(w)
 	}
-	command := "ol " + strings.Join(words, " ")
+	command := g.Command + " " + strings.Join(words, " ")
 	ix := proto.Interaction{SessionID: session, Cwd: cwd, CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(HookTimeout).UTC(),
-		ToolName: lark-connectorTool, SessionTitle: filepath.Base(cwd)}
+		ToolName: g.Tool.Name, SessionTitle: filepath.Base(cwd)}
 	if s, _, ok := n.runtimes.rowOf(session); ok && s.Title != "" {
 		ix.SessionTitle = s.Title
 	}
@@ -241,7 +264,7 @@ func (n *Node) assistantlark-connector(ctx context.Context, session string, raw 
 	if decision == "deny" {
 		return proto.TextResult("没有执行："+reason, true)
 	}
-	rctx, cancel := context.WithTimeout(ctx, lark-connectorTimeout)
+	rctx, cancel := context.WithTimeout(ctx, gateToolTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(rctx, "bash", append([]string{script}, a.Args...)...)
 	cmd.Dir = cwd
@@ -253,7 +276,12 @@ func (n *Node) assistantlark-connector(ctx context.Context, session string, raw 
 	}
 	var exit *exec.ExitError
 	if err != nil && !errors.As(err, &exit) {
-		return proto.TextResult("ol: "+err.Error(), true)
+		return proto.TextResult(g.Command+": "+err.Error(), true)
 	}
 	return proto.TextResult(text, err != nil)
+}
+
+func fileExists(p string) bool {
+	st, err := os.Stat(p)
+	return err == nil && !st.IsDir()
 }

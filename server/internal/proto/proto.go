@@ -960,6 +960,47 @@ type AssistantLark struct {
 	Rules   []LarkRule `json:"rules,omitempty"`
 	CLI     *LarkCLI   `json:"cli,omitempty"`    // lark-cli is configured (hub.json lark.cli, docs/plan-lark-cli.md)
 	Prefer  string     `json:"prefer,omitempty"` // "lark-connector" | "cli": the primary source when both are there
+	// Gates are the command gates of the assistant's skills (plugins' assistant.gate, docs/plugins.md「助手」):
+	// a command calling an HTTP API as the user, its credentials and the rules its calls go by.
+	Gates []CommandGate `json:"gates,omitempty"`
+}
+
+// CommandGate is one skill command that calls an HTTP API as the user (`<command> METHOD PATH [BODY] [curl flags]`),
+// as the assistant's machine gates it (node/larkgate.go): the command on the assistant's PATH runs the skill's
+// script with Env (the credentials, only in the assistant's process); every Bash call of it is read, and its calls
+// go by Rules (the first match; none matching is confirmed on the phone).
+type CommandGate struct {
+	Plugin  string `json:"plugin,omitempty"`
+	Command string `json:"command"` // the name on the assistant's PATH
+	Script  string `json:"script"`  // the script it runs, relative to the skills directory ("<skill>/scripts/x.sh")
+	Title   string `json:"title"`   // what the phone card says it acts on ("在<Title>上…")
+	// Env is put into the assistant's process; BaseEnv names the one holding the API's base URL (curl / wget at its
+	// host is refused); Secret are names the assistant may never mention (the token); AllowedEnv may be set before
+	// the command (VAR=x cmd …).
+	Env        map[string]string `json:"env,omitempty"`
+	BaseEnv    string            `json:"base_env,omitempty"`
+	Secret     []string          `json:"secret,omitempty"`
+	AllowedEnv []string          `json:"allowed_env,omitempty"`
+	Headers    []string          `json:"headers,omitempty"`     // -H headers the command may be given (lowercase)
+	PathPrefix string            `json:"path_prefix,omitempty"` // dropped from a call's path ("/agent/v1")
+	Rules      []LarkRule        `json:"rules,omitempty"`
+	// Actions name what a call does on the phone card: the first whose pattern (a regexp over "METHOD /path")
+	// matches.
+	Actions []GateAction `json:"actions,omitempty"`
+	// Tool is the command as a tool for an assistant on a runtime without Bash ({args: [words after the command]}).
+	Tool *GateTool `json:"tool,omitempty"`
+}
+
+// GateAction names a kind of call for the phone card.
+type GateAction struct {
+	Pattern string `json:"pattern"`
+	What    string `json:"what"`
+}
+
+// GateTool is a command gate's tool for runtimes.
+type GateTool struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 // LarkCLI is how the assistant's machine runs lark-cli.

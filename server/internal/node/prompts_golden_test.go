@@ -4,12 +4,15 @@ package node
 // intended change with UPDATE_GOLDEN=1 go test ./internal/node -run Golden, and read the diff.
 
 import (
+	"github.com/nwverse/persona/server/internal/lark"
+	"github.com/nwverse/persona/server/internal/proto"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func goldenNode(t *testing.T, name, got string) {
@@ -43,6 +46,9 @@ func TestGoldenCodexMemory(t *testing.T) {
 func TestGoldenRuntimeInstructions(t *testing.T) {
 	n, home := testNode(t)
 	n.logger = log.New(io.Discard, "", 0)
+	g := lark.AssistantGate("", "", 0, nil)
+	g.Tool = &proto.GateTool{Name: "lark-connector", Description: "lark-connector's ol"}
+	n.larkCfg, n.larkCfgAt = proto.AssistantLark{Gates: []proto.CommandGate{g}}, time.Now().Add(time.Hour)
 	cwd := filepath.Join(home, ".jarvis", "assistant")
 	mem := t.TempDir()
 	_ = os.WriteFile(filepath.Join(mem, "MEMORY.md"), []byte("- [习惯](habits.md) — 回复先给结论\n"), 0o600)
