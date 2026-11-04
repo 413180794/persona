@@ -27,6 +27,8 @@ GENERATED = {
     "apple/Config.xcconfig",
     "apple/Persona.xcodeproj",
     "android/app/build/outputs/apk/debug/app-debug.apk",
+    "android/feature/settings/build/channel-shots",  # Robolectric screenshots (docs/android.md)
+    "android/feature/chat/build/channel-shots",
     "web/dist",
     "apple/Jarvis.xcodeproj",  # the kept compatibility symlink to the generated Persona.xcodeproj
 }
