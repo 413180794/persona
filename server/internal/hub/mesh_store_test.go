@@ -439,6 +439,9 @@ func (s *meshStore) UpdateTodo(context.Context, string, *string, *string, *bool,
 func (s *meshStore) FailTodo(context.Context, string, string, time.Time) (*db.TodoRow, error) {
 	return nil, db.ErrTodoNotFound
 }
+func (s *meshStore) AutoDoneTodo(context.Context, string, string, time.Time, time.Time) (*db.TodoRow, bool, error) {
+	return nil, false, db.ErrTodoNotFound
+}
 func (s *meshStore) DeleteTodo(context.Context, string) error             { return nil }
 func (s *meshStore) CreateTaskPlan(context.Context, db.TaskPlanRow) error { return nil }
 func (s *meshStore) TaskPlan(context.Context, string) (*db.TaskPlanRow, error) {

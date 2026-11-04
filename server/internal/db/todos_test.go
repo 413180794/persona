@@ -105,6 +105,34 @@ func TestTodos(t *testing.T) {
 		t.Fatalf("reopened todo kept its failure: %+v", up)
 	}
 
+	// AutoDoneTodo (#1092): the hub closes an open task with why, unless the user reopened it after the judged work
+	// began; the user's own done / reopen clears the mark, and reopening is remembered.
+	if up.ReopenedAt == nil || !up.ReopenedAt.Equal(reopenTime) {
+		t.Fatalf("reopen not remembered: %+v", up)
+	}
+	autoTime := reopenTime.Add(time.Minute)
+	if row, ok, err := d.AutoDoneTodo(ctx, "t1", "已合并 PR", autoTime, reopenTime.Add(-time.Second)); err != nil || ok || row != nil {
+		t.Fatalf("auto done over work from before the reopen: %+v %v %v", row, ok, err)
+	}
+	row, ok, err := d.AutoDoneTodo(ctx, "t1", "已合并 PR", autoTime, reopenTime.Add(time.Second))
+	if err != nil || !ok || row.DoneAt == nil || !row.DoneAt.Equal(autoTime) || row.DoneBy != DoneByAuto || row.DoneReason != "已合并 PR" {
+		t.Fatalf("auto done = %+v %v %v", row, ok, err)
+	}
+	if row, ok, err := d.AutoDoneTodo(ctx, "t1", "again", autoTime.Add(time.Minute), autoTime); err != nil || ok || row != nil {
+		t.Fatalf("auto done twice: %+v %v %v", row, ok, err)
+	}
+	if _, _, err := d.AutoDoneTodo(ctx, "nope", "x", autoTime, autoTime); err != ErrTodoNotFound {
+		t.Fatalf("AutoDoneTodo on a missing todo: %v", err)
+	}
+	reopen2 := autoTime.Add(time.Minute)
+	up, err = d.UpdateTodo(ctx, "t1", nil, nil, &doneFalse, reopen2)
+	if err != nil || up.DoneAt != nil || up.DoneBy != "" || up.DoneReason != "" || up.ReopenedAt == nil || !up.ReopenedAt.Equal(reopen2) {
+		t.Fatalf("reopen after auto done = %+v %v", up, err)
+	}
+	if got, _ := d.GetTodo(ctx, "t1"); got.DoneBy != "" || got.ReopenedAt == nil {
+		t.Fatalf("stored reopened todo = %+v", got)
+	}
+
 	// 4. LinkTodoAgent and transfer
 	l1Time := now.Add(5 * time.Minute)
 	_, err = d.LinkTodoAgent(ctx, "t1", "macbook", "s1", "测试 Agent", "/code/weather", "claude", "", l1Time)

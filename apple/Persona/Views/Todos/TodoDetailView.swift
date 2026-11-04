@@ -113,7 +113,7 @@ struct TodoDetailView: View {
                         }
 
                     HStack(spacing: Theme.Space.sm) {
-                        Chip(text: status.todoLabel, look: .tone(status.todoTone))
+                        Chip(text: todo.statusLabel(status), look: .tone(status.todoTone))
                         Text("·")
                             .foregroundStyle(.secondary)
                         Text("\(activeAgents.count) 个 Agent")
@@ -126,6 +126,15 @@ struct TodoDetailView: View {
                                 .font(Theme.Font.caption)
                                 .foregroundStyle(.secondary)
                         }
+                    }
+
+                    if todo.autoDone {
+                        // The hub closed it (docs/todos.md「自动完成」): say why, and how to undo it.
+                        Text(todo.autoDoneReason.map { "Agent 停下后判断已经做完，自动标成了完成：\($0)。没做完就点「重新打开」。" }
+                             ?? "Agent 停下后判断已经做完，自动标成了完成。没做完就点「重新打开」。")
+                            .font(Theme.Font.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .padding(.vertical, Theme.Space.xs)

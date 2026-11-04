@@ -15,6 +15,8 @@ import {
   mostUrgentAgent,
   sortTodos,
   TODO_STATUS_INFO,
+  isAutoDone,
+  todoStatusLabel,
   todoStatus,
   unlinkAgentFromTodo,
   unlinkSpaceFromTodo,
@@ -363,7 +365,7 @@ function TodoListItem({
         {/* Status Line */}
         <div className="mt-1 flex items-center gap-1.5 text-[12px]">
           {!todo.done_at && <StatusDot state={dotState} size={6} />}
-          <span className={cx("font-medium", toneClass)}>{statusInfo.label}</span>
+          <span className={cx("font-medium", toneClass)}>{todoStatusLabel(todo, status)}</span>
           {!todo.done_at && activeCount > 0 && (
             <>
               <span className="text-ink-3">·</span>
@@ -374,6 +376,11 @@ function TodoListItem({
             <span className="text-ink-3">· 还没交给 Agent</span>
           )}
         </div>
+
+        {/* Why the hub closed it */}
+        {isAutoDone(todo) && todo.done_reason && (
+          <div className="mt-1 truncate text-[11.5px] text-ink-3">{todo.done_reason}</div>
+        )}
 
         {/* Most Urgent Agent Line */}
         {!todo.done_at && urgent?.session?.last_text && (
@@ -554,13 +561,18 @@ function TodoDetail({
       <div className="mt-2.5 flex flex-wrap items-center gap-2.5 text-[12.5px] text-ink-2">
         <span className={cx("inline-flex h-5.5 items-center gap-1.5 rounded-md px-2 text-[12px] font-semibold", toneClass)}>
           <StatusDot state={dotState} size={6} />
-          {statusInfo.label}
+          {todoStatusLabel(todo, status)}
         </span>
         <span className="text-ink-3">·</span>
         <span>{activeAgents.length} 个 Agent</span>
         <span className="text-ink-3">·</span>
         <span>{clock(todo.created_at)} 创建</span>
       </div>
+      {isAutoDone(todo) && (
+        <p className="mt-2 text-[12.5px] leading-[1.6] text-ink-3">
+          Agent 停下后判断已经做完，自动标成了完成{todo.done_reason ? `：${todo.done_reason}` : ""}。没做完就点「重新打开」。
+        </p>
+      )}
 
       {/* Notes / Description */}
       <div className="mt-4">

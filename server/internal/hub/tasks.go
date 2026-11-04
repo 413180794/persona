@@ -638,7 +638,7 @@ type receiptBody struct {
 var prLink = regexp.MustCompile(`https://github\.com/[\w.-]+/[\w.-]+/pull/\d+`)
 
 // taskTurnEnded: one of the task's agents ended a turn. Once none of them works or waits for the user any more, the
-// conversation gets a receipt (once per stretch of work).
+// conversation gets a receipt (once per stretch of work), and the todo is closed if the judge finds the work finished.
 func (m *Machine) taskTurnEnded(sid string) {
 	h := m.hub
 	time.Sleep(taskSettleDelay(h.cfg.Notify)) // a turn that ends to ask, or goes on at once, is not the end
@@ -679,6 +679,7 @@ func (m *Machine) taskTurnEnded(sid string) {
 	if _, err := h.appendFeed(ctx, t.Origin, feedReceipt, t.ID, body); err != nil {
 		h.logf("task %s: receipt: %v", t.ID, err)
 	}
+	h.autoFinishTask(t, since, worked) // the work may be finished: then the todo is done (tasks_done.go)
 }
 
 type answeredBody struct {
@@ -839,7 +840,7 @@ func (h *Hub) messageCard(ctx context.Context, itemID string, body messageBody) 
 func (h *Hub) inboxTasks() []prompts.InboxTask {
 	var out []prompts.InboxTask
 	for _, t := range h.snapshotTasks() {
-		if t.State == taskStateLabel("done") || t.State == taskStateLabel("failed") {
+		if t.State == taskStateLabel("done") || t.State == taskStateLabel("auto_done") || t.State == taskStateLabel("failed") {
 			continue
 		}
 		out = append(out, prompts.InboxTask{ID: t.ID, Title: t.Title, State: t.State, Last: t.Last})
@@ -866,6 +867,9 @@ func (h *Hub) snapshotTasks() []prompts.SnapshotTask {
 		st := taskState(t, agents)
 		if st == "followup" && time.Since(t.UpdatedAt) > 24*time.Hour {
 			continue
+		}
+		if st == "done" && t.DoneBy == db.DoneByAuto {
+			st = "auto_done"
 		}
 		task := prompts.SnapshotTask{ID: t.ID, Title: t.Title, State: taskStateLabel(st)}
 		var last proto.Session
@@ -912,13 +916,14 @@ func taskState(t Todo, agents []proto.Session) string {
 }
 
 func taskStateLabel(st string) string {
-	return map[string]string{"done": "已完成", "failed": "没开起来", "needs_you": "等用户", "unread": "做完了（用户还没看）", "working": "在做",
+	return map[string]string{"done": "已完成", "auto_done": "已完成（hub 判断做完了，自动关的）", "failed": "没开起来", "needs_you": "等用户", "unread": "做完了（用户还没看）", "working": "在做",
 		"followup": "停着", "not_started": "还没开始"}[st]
 }
 
 // ---- HTTP ----
 
 func (h *Hub) taskRoutes(api *http.ServeMux) {
+	h.doneCheckRoute(api)
 	api.HandleFunc("GET /api/v1/task-plans/{id}", func(w http.ResponseWriter, r *http.Request) {
 		p, err := h.loadPlan(r.Context(), r.PathValue("id"))
 		if err != nil {

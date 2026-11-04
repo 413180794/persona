@@ -3,6 +3,17 @@ import SwiftUI
 
 nonisolated extension TodoItem {
     var isDone: Bool { doneAt != nil }
+
+    /// The state's label for this todo: 「自动完成」 for one the hub closed (docs/todos.md「自动完成」).
+    func statusLabel(_ state: TaskState) -> String {
+        state == .done && autoDone ? "自动完成" : state.todoLabel
+    }
+
+    /// Why the hub closed it, when it did.
+    var autoDoneReason: String? {
+        guard autoDone, let r = doneReason?.trimmingCharacters(in: .whitespacesAndNewlines), !r.isEmpty else { return nil }
+        return r
+    }
 }
 
 nonisolated extension TaskState {

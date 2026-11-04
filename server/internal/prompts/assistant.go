@@ -206,3 +206,26 @@ type TurnContext struct {
 }
 
 func RenderTurnContext(c TurnContext) string { return render("assistant/turn_context", c) }
+
+// TaskDone is the system prompt deciding whether a task opened from an assistant conversation is finished, so the
+// hub can mark its todo done (assistant/task_done, docs/todos.md「自动完成」).
+type TaskDone struct {
+	Owner string
+}
+
+func RenderTaskDone(d TaskDone) string { return render("assistant/task_done", d) }
+
+// TaskDoneInput is the task as it was handed out and what its agents said when they stopped (assistant/task_done_input).
+type TaskDoneInput struct {
+	Title, Prompt string
+	Replies       []TaskDoneReply
+	// Hints the hub found in the replies: a merged pull request, a TestFlight build number.
+	MergedPR, Build bool
+}
+
+// TaskDoneReply is one agent's last reply.
+type TaskDoneReply struct {
+	Machine, Text string
+}
+
+func RenderTaskDoneInput(in TaskDoneInput) string { return render("assistant/task_done_input", in) }

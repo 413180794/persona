@@ -48,7 +48,12 @@ type Todo struct {
 	Origin string `json:"origin,omitempty"`
 	PlanID string `json:"plan_id,omitempty"`
 	// StartError: a task whose agent did not start ends done with why (#1077); reopening clears it.
-	StartError string      `json:"start_error,omitempty"`
+	StartError string `json:"start_error,omitempty"`
+	// DoneBy is "auto" when the hub closed the task because its judge found the work finished (#1092,
+	// docs/todos.md「自动完成」), with DoneReason; ReopenedAt: when the user last reopened it after it was done.
+	DoneBy     string      `json:"done_by,omitempty"`
+	DoneReason string      `json:"done_reason,omitempty"`
+	ReopenedAt *time.Time  `json:"reopened_at,omitempty"`
 	Spaces     []TodoSpace `json:"spaces"`
 	Agents     []TodoAgent `json:"agents"`
 }
@@ -151,6 +156,9 @@ func (h *Hub) loadTodosLocked(ctx context.Context) error {
 			Origin:     tr.Origin,
 			PlanID:     tr.PlanID,
 			StartError: tr.StartError,
+			DoneBy:     tr.DoneBy,
+			DoneReason: tr.DoneReason,
+			ReopenedAt: tr.ReopenedAt,
 			Spaces:     make([]TodoSpace, 0),
 			Agents:     make([]TodoAgent, 0),
 		}
@@ -231,6 +239,10 @@ func copyTodoLocked(t *Todo) Todo {
 	if t.DoneAt != nil {
 		da := *t.DoneAt
 		out.DoneAt = &da
+	}
+	if t.ReopenedAt != nil {
+		ra := *t.ReopenedAt
+		out.ReopenedAt = &ra
 	}
 	out.Spaces = make([]TodoSpace, len(t.Spaces))
 	copy(out.Spaces, t.Spaces)
@@ -417,49 +429,27 @@ func (h *Hub) todoRoutes(api *http.ServeMux) {
 			if in.Notes != nil {
 				updatedRow.Notes = *in.Notes
 			}
+			h.todos.mu.RLock()
+			updatedRow.StartError, updatedRow.DoneBy, updatedRow.DoneReason = cur.StartError, cur.DoneBy, cur.DoneReason
+			updatedRow.ReopenedAt = cur.ReopenedAt
+			h.todos.mu.RUnlock()
 			if in.Done != nil {
 				if *in.Done {
 					if updatedRow.DoneAt == nil {
 						updatedRow.DoneAt = &now
+						updatedRow.DoneBy, updatedRow.DoneReason = "", ""
 					}
 				} else {
-					updatedRow.DoneAt = nil
-				}
-			}
-			if updatedRow.DoneAt != nil {
-				updatedRow.StartError = cur.StartError
-			}
-		}
-
-		affectedMachines := make(map[string]bool)
-		h.todos.mu.Lock()
-		if t, ok := h.todos.todos[id]; ok {
-			t.Title = updatedRow.Title
-			t.Notes = updatedRow.Notes
-			t.DoneAt = updatedRow.DoneAt
-			t.StartError = updatedRow.StartError
-			t.UpdatedAt = updatedRow.UpdatedAt
-			for _, a := range t.Agents {
-				if a.ReleasedAt == nil && a.DismissedAt == nil {
-					key := [2]string{a.MachineID, a.SessionID}
-					affectedMachines[a.MachineID] = true
-					if t.DoneAt != nil {
-						delete(h.todos.activeBySession, key)
-					} else {
-						h.todos.activeBySession[key] = t.ID
+					if updatedRow.DoneAt != nil {
+						updatedRow.ReopenedAt = &now
 					}
+					updatedRow.DoneAt = nil
+					updatedRow.StartError, updatedRow.DoneBy, updatedRow.DoneReason = "", "", ""
 				}
 			}
 		}
-		resTodo := formatTodo(copyTodoLocked(h.todos.todos[id]))
-		h.todos.mu.Unlock()
 
-		for mid := range affectedMachines {
-			if m := h.localMachine(mid); m != nil {
-				h.sessionsChanged(m)
-			}
-		}
-		h.broadcast(map[string]any{"type": "todos"})
+		resTodo, _ := h.applyTodoRow(id, *updatedRow, nil)
 		writeJSON(w, map[string]any{"todo": resTodo})
 	})
 
@@ -830,6 +820,47 @@ func (h *Hub) linkTodoSpace(ctx context.Context, todoID, mid, space string) (int
 
 	h.broadcast(map[string]any{"type": "todos"})
 	return linkedCount, nil
+}
+
+// applyTodoRow puts a todo's row as it now is in the store into memory and lets everything that follows from done
+// happen as for the user's PATCH: its agents' links count again or no longer do (sessions lose or regain the todo,
+// the nodes' persona_todo tokens follow on their next sync), and the clients refetch. guard, when given, is checked
+// under the lock first (false: nothing changes); false also when the todo is gone.
+func (h *Hub) applyTodoRow(id string, row db.TodoRow, guard func(*Todo) bool) (Todo, bool) {
+	affectedMachines := make(map[string]bool)
+	h.todos.mu.Lock()
+	t, ok := h.todos.todos[id]
+	if !ok || guard != nil && !guard(t) {
+		h.todos.mu.Unlock()
+		return Todo{}, false
+	}
+	t.Title = row.Title
+	t.Notes = row.Notes
+	t.DoneAt = row.DoneAt
+	t.StartError = row.StartError
+	t.DoneBy, t.DoneReason, t.ReopenedAt = row.DoneBy, row.DoneReason, row.ReopenedAt
+	t.UpdatedAt = row.UpdatedAt
+	for _, a := range t.Agents {
+		if a.ReleasedAt == nil && a.DismissedAt == nil {
+			key := [2]string{a.MachineID, a.SessionID}
+			affectedMachines[a.MachineID] = true
+			if t.DoneAt != nil {
+				delete(h.todos.activeBySession, key)
+			} else {
+				h.todos.activeBySession[key] = t.ID
+			}
+		}
+	}
+	out := formatTodo(copyTodoLocked(t))
+	h.todos.mu.Unlock()
+
+	for mid := range affectedMachines {
+		if m := h.localMachine(mid); m != nil {
+			h.sessionsChanged(m)
+		}
+	}
+	h.broadcast(map[string]any{"type": "todos"})
+	return out, true
 }
 
 // unlinkTodoSpace unlinks a space from todoID and physically deletes source=space agents linked via this space.

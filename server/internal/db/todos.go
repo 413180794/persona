@@ -26,7 +26,15 @@ type TodoRow struct {
 	PlanID string `json:"plan_id"`
 	// StartError: the task's agent did not start, and why; such a todo is done (#1077). Empty otherwise.
 	StartError string `json:"start_error"`
+	// DoneBy is who marked it done: "" the user (or a failed start), DoneByAuto the hub's judge (#1092), with
+	// DoneReason. ReopenedAt: when the user last reopened it after it was done.
+	DoneBy     string     `json:"done_by"`
+	DoneReason string     `json:"done_reason"`
+	ReopenedAt *time.Time `json:"reopened_at"`
 }
+
+// DoneByAuto marks a todo the hub closed because its task's work was judged finished (docs/todos.md「自动完成」).
+const DoneByAuto = "auto"
 
 type TodoSpaceRow struct {
 	TodoID    string    `json:"todo_id"`
@@ -50,9 +58,11 @@ type TodoAgentRow struct {
 	DismissedAt *time.Time `json:"dismissed_at"`
 }
 
+const todoColumns = `id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error, done_by, done_reason, reopened_at`
+
 // ListTodos returns all todos ordered by created_at DESC.
 func (d *DB) ListTodos(ctx context.Context) ([]TodoRow, error) {
-	rows, err := d.pool.Query(ctx, `SELECT id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error FROM todos ORDER BY created_at DESC`)
+	rows, err := d.pool.Query(ctx, `SELECT id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error, done_by, done_reason, reopened_at FROM todos ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +70,7 @@ func (d *DB) ListTodos(ctx context.Context) ([]TodoRow, error) {
 	var out []TodoRow
 	for rows.Next() {
 		var r TodoRow
-		if err := rows.Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError); err != nil {
+		if err := rows.Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError, &r.DoneBy, &r.DoneReason, &r.ReopenedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -107,8 +117,8 @@ func (d *DB) ListAllTodoAgents(ctx context.Context) ([]TodoAgentRow, error) {
 // GetTodo returns one todo by id, or ErrTodoNotFound.
 func (d *DB) GetTodo(ctx context.Context, id string) (*TodoRow, error) {
 	var r TodoRow
-	err := d.pool.QueryRow(ctx, `SELECT id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error FROM todos WHERE id = $1`, id).
-		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError)
+	err := d.pool.QueryRow(ctx, `SELECT id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error, done_by, done_reason, reopened_at FROM todos WHERE id = $1`, id).
+		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError, &r.DoneBy, &r.DoneReason, &r.ReopenedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTodoNotFound
 	}
@@ -120,8 +130,8 @@ func (d *DB) GetTodo(ctx context.Context, id string) (*TodoRow, error) {
 
 // CreateTodo inserts a new todo.
 func (d *DB) CreateTodo(ctx context.Context, t TodoRow) error {
-	_, err := d.pool.Exec(ctx, `INSERT INTO todos (id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		t.ID, t.Title, t.Notes, t.DoneAt, t.CreatedAt, t.UpdatedAt, t.Origin, t.PlanID, t.StartError)
+	_, err := d.pool.Exec(ctx, `INSERT INTO todos (id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error, done_by, done_reason, reopened_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+		t.ID, t.Title, t.Notes, t.DoneAt, t.CreatedAt, t.UpdatedAt, t.Origin, t.PlanID, t.StartError, t.DoneBy, t.DoneReason, t.ReopenedAt)
 	return err
 }
 
@@ -136,8 +146,8 @@ func (d *DB) UpdateTodo(ctx context.Context, id string, title *string, notes *st
 	var updated TodoRow
 	err = pgx.BeginFunc(ctx, conn, func(tx pgx.Tx) error {
 		var cur TodoRow
-		err := tx.QueryRow(ctx, `SELECT id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error FROM todos WHERE id = $1 FOR UPDATE`, id).
-			Scan(&cur.ID, &cur.Title, &cur.Notes, &cur.DoneAt, &cur.CreatedAt, &cur.UpdatedAt, &cur.Origin, &cur.PlanID, &cur.StartError)
+		err := tx.QueryRow(ctx, `SELECT id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error, done_by, done_reason, reopened_at FROM todos WHERE id = $1 FOR UPDATE`, id).
+			Scan(&cur.ID, &cur.Title, &cur.Notes, &cur.DoneAt, &cur.CreatedAt, &cur.UpdatedAt, &cur.Origin, &cur.PlanID, &cur.StartError, &cur.DoneBy, &cur.DoneReason, &cur.ReopenedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrTodoNotFound
 		}
@@ -155,16 +165,22 @@ func (d *DB) UpdateTodo(ctx context.Context, id string, title *string, notes *st
 			if *done {
 				if cur.DoneAt == nil {
 					cur.DoneAt = &updatedAt
+					cur.DoneBy, cur.DoneReason = "", ""
 				}
 			} else {
+				if cur.DoneAt != nil {
+					cur.ReopenedAt = &updatedAt // the same stretch of work must not close it again
+				}
 				cur.DoneAt = nil
 				cur.StartError = "" // reopened: no longer failed
+				cur.DoneBy, cur.DoneReason = "", ""
 			}
 		}
 		cur.UpdatedAt = updatedAt
 
-		_, err = tx.Exec(ctx, `UPDATE todos SET title = $2, notes = $3, done_at = $4, updated_at = $5, start_error = $6 WHERE id = $1`,
-			cur.ID, cur.Title, cur.Notes, cur.DoneAt, cur.UpdatedAt, cur.StartError)
+		_, err = tx.Exec(ctx, `UPDATE todos SET title = $2, notes = $3, done_at = $4, updated_at = $5, start_error = $6,
+			done_by = $7, done_reason = $8, reopened_at = $9 WHERE id = $1`,
+			cur.ID, cur.Title, cur.Notes, cur.DoneAt, cur.UpdatedAt, cur.StartError, cur.DoneBy, cur.DoneReason, cur.ReopenedAt)
 		if err != nil {
 			return err
 		}
@@ -181,8 +197,8 @@ func (d *DB) UpdateTodo(ctx context.Context, id string, title *string, notes *st
 func (d *DB) FailTodo(ctx context.Context, id, startError string, at time.Time) (*TodoRow, error) {
 	var r TodoRow
 	err := d.pool.QueryRow(ctx, `UPDATE todos SET done_at = COALESCE(done_at, $2), start_error = $3, updated_at = $2 WHERE id = $1
-		RETURNING id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error`, id, at, startError).
-		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError)
+		RETURNING id, title, notes, done_at, created_at, updated_at, origin, plan_id, start_error, done_by, done_reason, reopened_at`, id, at, startError).
+		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError, &r.DoneBy, &r.DoneReason, &r.ReopenedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTodoNotFound
 	}
@@ -190,6 +206,26 @@ func (d *DB) FailTodo(ctx context.Context, id, startError string, at time.Time) 
 		return nil, err
 	}
 	return &r, nil
+}
+
+// AutoDoneTodo marks a task done by the hub (DoneByAuto, with why) when it is still open and the user has not
+// reopened it since workSince, the start of the work that was judged; false (and no error) when either changed.
+func (d *DB) AutoDoneTodo(ctx context.Context, id, reason string, at, workSince time.Time) (*TodoRow, bool, error) {
+	var r TodoRow
+	err := d.pool.QueryRow(ctx, `UPDATE todos SET done_at = $2, done_by = $3, done_reason = $4, updated_at = $2
+		WHERE id = $1 AND done_at IS NULL AND (reopened_at IS NULL OR reopened_at < $5)
+		RETURNING `+todoColumns, id, at, DoneByAuto, reason, workSince).
+		Scan(&r.ID, &r.Title, &r.Notes, &r.DoneAt, &r.CreatedAt, &r.UpdatedAt, &r.Origin, &r.PlanID, &r.StartError, &r.DoneBy, &r.DoneReason, &r.ReopenedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		if _, gerr := d.GetTodo(ctx, id); gerr != nil {
+			return nil, false, gerr
+		}
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return &r, true, nil
 }
 
 // DeleteTodo deletes a todo by id. Cascading deletes remove its todo_agents.

@@ -37,6 +37,11 @@ export interface Todo {
   /** The assistant conversation that opened it as a task, and the plan (docs/unified-entry.md); unset for a todo made by hand. */
   origin?: string;
   plan_id?: string;
+  /** "auto" when the hub marked the task done because its work was judged finished, with why (docs/todos.md「自动完成」). */
+  done_by?: string;
+  done_reason?: string;
+  /** When the user last reopened it after it was done. */
+  reopened_at?: string | null;
 }
 
 export type TodoStatus = "done" | "needs_you" | "unread" | "working" | "follow_up" | "not_started";
@@ -60,6 +65,16 @@ export const TODO_STATUS_INFO: Record<TodoStatus, { label: string; tone: "red" |
 };
 
 export type SessionLookup = (mid: string, sid: string) => Session | undefined;
+
+/** The hub closed it because its task's work was judged finished; reopening undoes it (docs/todos.md「自动完成」). */
+export function isAutoDone(todo: Todo): boolean {
+  return Boolean(todo.done_at) && todo.done_by === "auto";
+}
+
+/** The status's label for this todo: 「自动完成」 for one the hub closed. */
+export function todoStatusLabel(todo: Todo, status: TodoStatus): string {
+  return status === "done" && isAutoDone(todo) ? "自动完成" : TODO_STATUS_INFO[status].label;
+}
 
 export function makeSessionLookup(sessions: Session[] | Record<string, Session[]>): SessionLookup {
   if (Array.isArray(sessions)) {

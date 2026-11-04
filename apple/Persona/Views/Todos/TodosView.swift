@@ -15,6 +15,8 @@ struct TodosView: View {
     @State private var creatingTitle = ""
     @State private var creatingNotes = ""
     @State private var expandedDone = false
+    /// DEBUG screenshots: `-openTodoTitled <text>` opens the first todo whose title has the text.
+    @State private var debugOpen: TodoDetailRoute?
 
     private var allTodos: [TodoItem] {
         let lookup = TodosLogic.makeSessionLookup(AppModel.shared.allSessions)
@@ -137,7 +139,16 @@ struct TodosView: View {
         }
         .task {
             await store.refresh()
+            #if DEBUG
+            // `-showDoneTodos YES`: the 已完成 section starts open (screenshots of done todos).
+            if UserDefaults.standard.bool(forKey: "showDoneTodos") { expandedDone = true }
+            if let match = UserDefaults.standard.string(forKey: "openTodoTitled"),
+               let todo = store.todos.first(where: { $0.title.contains(match) }) {
+                debugOpen = TodoDetailRoute(id: todo.id)
+            }
+            #endif
         }
+        .navigationDestination(item: $debugOpen) { r in TodoDetailView(todoID: r.id) }
     }
 
     private var searchRow: some View {
@@ -253,7 +264,7 @@ struct TodoRow: View {
 
                 HStack(spacing: Theme.Space.sm) {
                     StatusDot(state: urgent?.status ?? (status == .done ? .idle : .unknown), size: Theme.Size.dotS)
-                    Text(status.todoLabel)
+                    Text(todo.statusLabel(status))
                         .font(Theme.Font.labelStrong)
                         .foregroundStyle(status.todoTone.text)
                     if !activeAgents.isEmpty {
@@ -263,7 +274,12 @@ struct TodoRow: View {
                     }
                 }
 
-                if let summary = mostUrgentSummary(urgent: urgent) {
+                if let reason = todo.autoDoneReason {
+                    Text(reason)
+                        .font(Theme.Font.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                } else if let summary = mostUrgentSummary(urgent: urgent) {
                     Text(summary)
                         .font(Theme.Font.caption)
                         .foregroundStyle(urgent?.status == .needsYou ? Theme.danger : .secondary)

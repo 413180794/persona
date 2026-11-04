@@ -19,6 +19,9 @@
 - `updated_at` (timestamptz, NOT NULL)：最后修改时间。
 - `origin` (text, NOT NULL, DEFAULT '')：从哪段助手对话开的任务（会话 id），手动建的为空（[unified-entry.md](unified-entry.md)）。
 - `plan_id` (text, NOT NULL, DEFAULT '')：由哪个计划开的（`task_plans.id`）。
+- `done_by` (text, NOT NULL, DEFAULT '')：谁把它标成完成的：空 = 用户点的（或没开起来，见 `start_error`），`auto` = hub 判断任务做完后自动完成（见「自动完成」）。
+- `done_reason` (text, NOT NULL, DEFAULT '')：自动完成时判断模型给的理由（如「已合并 PR 并发了 TestFlight」），用户点完成或重新打开时清空。
+- `reopened_at` (timestamptz)：用户最近一次把已完成的待办重新打开的时间；在它之后有新的一轮工作，hub 才会再判断要不要自动完成。
 
 ### 2. todo_spaces 表
 记录整组挂到待办的项目工作区（herdr workspace）：
@@ -64,7 +67,8 @@
 | --- | --- | --- |
 | GET | `/api/v1/todos` | 全部待办列表（`created_at` 降序），每个待办包含 `spaces` 列表和 `agents` 列表（过滤掉已移出行；活跃在前按 `linked_at` 降序，参与过在后按 `released_at` 降序） |
 | POST | `/api/v1/todos` | 新建待办 `{"title", "notes"?}` → `{"todo": Todo}`；`title` 不能为空（400）；只读角色（手表）403 |
-| PATCH | `/api/v1/todos/{id}` | 修改待办 `{"title"?, "notes"?, "done"?}` → `{"todo": Todo}`；只修改传入的字段；不存在 404；只读角色 403 |
+| PATCH | `/api/v1/todos/{id}` | 修改待办 `{"title"?, "notes"?, "done"?}` → `{"todo": Todo}`；只修改传入的字段；用户改完成状态时清掉 `done_by` / `done_reason`，从已完成改回未完成时记 `reopened_at`；不存在 404；只读角色 403 |
+| POST | `/api/v1/todos/{id}/done-check` | 只读地跑一次「自动完成」的判断 → `{"verdict", "reason", "would_close", "skip", "replies", "signals"}`，不写库（见「自动完成」）；不存在 404；只读角色 403 |
 | DELETE | `/api/v1/todos/{id}` | 删除待办及其关联 → `{"ok": true}`；Agent 会话本身不动；不存在 404；只读角色 403 |
 | PUT | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | 整组挂工作区项目到待办 → `{"ok": true, "linked": N}`；`space` 为 URL 编码的项目名（通配路径）；已完成待办不可挂（409）；不存在 404；只读角色 403 |
 | DELETE | `/api/v1/todos/{id}/spaces/{mid}/{space...}` | 解除整组挂（物理删除待办下该项目的 space 关联 Agents） → `{"ok": true}`；不存在 404；只读角色 403 |
@@ -147,7 +151,7 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 | 优先级 | 状态 | 条件 |
 | :--- | :--- | :--- |
 | 0 | 没开起来 | 从对话开的任务 Agent 没启动起来，hub 把待办结束掉（`done_at` + `start_error`，#1077）；客户端显示失败、能移除，不算进行中 |
-| 1 | 已完成 | 用户点击了完成（`done_at != null`） |
+| 1 | 已完成 | 用户点击了完成，或 hub 判断从对话派出去的任务已经做完（`done_at != null`；`done_by = "auto"` 时客户端标「自动完成」） |
 | 2 | 等你 | 有挂着的活跃 Agent 处于 `needs_you` 状态（等待用户回答提问、审批计划或授权） |
 | 3 | 待查看 | 有挂着的活跃 Agent 处于 `unread` 状态（任务完成，用户尚未查看） |
 | 4 | 进行中 | 有挂着的活跃 Agent 处于 `working` 状态（工作中或正在启动） |
@@ -156,6 +160,40 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 
 - 待办列表排序：未完成的在前（同状态按 `created_at` 降序），已完成的收起在列表底部。
 - 完成即代表该事项结束：事项下所有 Agent 的会话中不再标注当前在为该待办干活；如需继续可「重新打开」。
+
+## 自动完成
+
+从助手对话派出去的任务（`task_plan` 开的待办，`origin` 不为空）做完以后由 hub 自动标成完成，不用用户逐个点；用户手建的待办（`origin` 为空）一律不自动完成，仍然是「用户点了完成」才算完成。
+
+**什么时候判断**：任务的 Agent 全部停下（没有在工作、没有等用户回答、没有待处理的卡片）、hub 往对话里发 done 回执的同一处（`tasks.go` 的 `taskTurnEnded`，一段工作只发一次回执，也只判断一次）。
+
+**怎么判断**：Agent 停下不等于做完了：停在「没有全改完……」「等待审核」的都不该关。hub 用判断模型（模型配置里的「AI 分身判断器」`inbox.judge`，即 hub.json 的 `inbox.judge_ai`，没配时继承 `ai`）看三样东西：任务标题、派活时的要求（待办的 `notes`）、每个活跃 Agent 最后一条完整回复（经 `session.items` 读，读不到时用会话列表里截短的 `last_text`）。模型答五选一：
+
+| 结论 | 含义 | 自动完成 |
+| --- | --- | --- |
+| `done` | 要求的事做完了，回复交代了结果，不需要用户再做什么，也不等别人 | 是 |
+| `not_done` | 只做了一部分、出错、卡住、只是汇报进度或计划 | 否 |
+| `waiting` | 自己能做的做完了，在等外部结果（审核、CI、别人回复、发布排队） | 否 |
+| `needs_user` | 要用户拍板、提供信息、批准、手动操作或验收 | 否 |
+| `unsure` | 看不出来 | 否 |
+
+- 宁可不关：模型不可用、超时、回复不是合法 JSON、结论不是 `done`，都不动待办，只记日志；回执照发。
+- 便宜的线索：最后的回复里有 GitHub PR 链接且提到合并（merged / 已合并 / 合入），或提到 TestFlight 加构建号，hub 把这两个线索写进输入，只作提示，不能单凭它判完成。
+- 提示词在 `server/internal/prompts/assistant/task_done.md`、`task_done_input.md`（`docs/prompts.md`）。
+
+**能看出来、能撤销**：自动完成写 `done_at`、`done_by = "auto"`、`done_reason`。iOS / Mac / 网页的待办列表行和详情页在已完成的状态旁标「自动完成」，详情页显示理由；「重新打开」和手动完成的一样回到未完成，同时清掉 `done_by`、`done_reason`，记下 `reopened_at`。
+
+**重新打开以后**：用户重新打开过的待办，同一段工作不再被自动关：只有 `reopened_at` 之后任务的某个 Agent 又开始了一轮（用户再给它发消息、它又接着干），这一轮做完时才重新判断。hub 重启后不知道这一轮是什么时候开始的，这时对重新打开过的待办不判断（宁可不关）。写库时再核对一次（`done_at IS NULL` 且 `reopened_at` 早于这段工作的开始），用户在判断途中刚点了完成或重新打开的，以用户的为准。
+
+**完成之后**：和用户点完成走同一条路：会话不再带待办字段，node 对账时清掉 `persona_todo` / `persona_todo_ref` 标记，整组挂和派生跟随停止，收件箱的 AI 分身不再把消息关联到它；助手的实时快照里这个任务标成「已完成（hub 判断做完了自动关的）」，24 小时后不再列出。
+
+**排查**：`POST /api/v1/todos/{id}/done-check` 按同样的输入跑一次判断，只返回结论，不写库（只读角色 403）：
+
+```jsonc
+{"verdict": "waiting", "reason": "等 App 审核", "would_close": false, "skip": "", "replies": 1, "signals": {"merged_pr": false, "build": false}}
+```
+
+`skip` 不为空时表示这次自动流程不会判断它（`not_a_task` 手建的待办、`done` 已经完成、`reopened` 重新打开后还没有新一轮工作），但接口照样给出模型的结论，方便看。
 
 ## 各端交互设计
 
@@ -185,6 +223,7 @@ REF=$(herdr pane get "$HERDR_PANE_ID" | jq -r '.result.pane.tokens.persona_todo_
 1. **不做第二个飞书任务或提醒事项**：Persona 的待办专为驱动和跟踪 Agent 工作流设计，聚焦于「一件事分工给哪些 Agent、各自进展如何」，不做复杂的子任务、截止日、优先级树、日历提醒或多方协同步同。
 2. **状态不入库**：待办整体状态完全派生自关联 Agent 的实时运行状态（提问中、工作中、已完成未看等）。Agent 状态变化极为频繁，派生计算避免了双写状态一致性与庞大的状态同步开销。
 3. **单待办活跃限制**：通过 `UNIQUE (machine_id, session_id) WHERE released_at IS NULL` 强制一个 Agent 同时只能全心全意服务于一个当前待办。当需要它做别的事时，前一任务自动划为「参与过」，保证会话上下文与执行目标清晰。
+4. **自动完成只给从对话派出去的任务，并且由模型判断**：这类任务有明确的要求（派活 prompt）和交付（Agent 的最后回复），做完了还要用户逐个点完成是负担；手建的待办往往是用户自己的打算，hub 看不出做没做完。Agent 停下不等于做完，所以不按状态直接关，而是交给判断模型，拿不准时不关；自动关错的代价（用户以为做完了）远大于漏关（多点一下），所以可撤销、有理由、重新打开后不会被同一段工作再关一次。
 
 ## 已知限制
 

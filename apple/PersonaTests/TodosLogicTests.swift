@@ -687,4 +687,25 @@ struct TodosLogicTests {
         #expect(store.todos.map(\.id) == ["fresh"])
         #expect(hub.sent("GET", "/api/v1/todos").count == 1)
     }
+
+    /// A task the hub closed (docs/todos.md「自动完成」) reads 「自动完成」 with its reason; reopened or closed by the user, it does not.
+    @Test func autoDoneTodo() throws {
+        let json = """
+        {"id":"t","title":"统一连接器 logo 尺寸","done_at":"2026-11-04T08:00:00Z","origin":"conv","done_by":"auto",
+         "done_reason":" 已合并 PR 并发了 TestFlight ","agents":[]}
+        """
+        let auto = try JSON.decoder.decode(TodoItem.self, from: Data(json.utf8))
+        #expect(auto.autoDone && auto.isDone)
+        #expect(TodosLogic.todoStatus(auto) == .done)
+        #expect(auto.statusLabel(.done) == "自动完成")
+        #expect(auto.autoDoneReason == "已合并 PR 并发了 TestFlight")
+
+        var reopened = auto
+        reopened.doneAt = nil
+        #expect(!reopened.autoDone && reopened.autoDoneReason == nil)
+        #expect(reopened.statusLabel(.followup) == "待跟进")
+
+        let byUser = TodoItem(id: "u", title: "自己点的", doneAt: Date())
+        #expect(!byUser.autoDone && byUser.statusLabel(.done) == "已完成" && byUser.autoDoneReason == nil)
+    }
 }

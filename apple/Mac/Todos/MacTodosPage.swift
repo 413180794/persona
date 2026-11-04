@@ -157,7 +157,7 @@ struct MacTodosPage: View {
 
                     HStack(spacing: Theme.Space.xs) {
                         StatusDot(state: urgent?.status ?? (status == .done ? .idle : .unknown), size: Theme.Size.dotS)
-                        Text(status.todoLabel)
+                        Text(todo.statusLabel(status))
                             .font(Theme.Font.labelStrong)
                             .foregroundStyle(status.todoTone.text)
                         if !activeAgents.isEmpty {
@@ -167,7 +167,12 @@ struct MacTodosPage: View {
                         }
                     }
 
-                    if let summary = mostUrgentSummary(urgent: urgent) {
+                    if let reason = todo.autoDoneReason {
+                        Text(reason)
+                            .font(Theme.Font.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    } else if let summary = mostUrgentSummary(urgent: urgent) {
                         Text(summary)
                             .font(Theme.Font.caption)
                             .foregroundStyle(urgent?.status == .needsYou ? Theme.danger : .secondary)

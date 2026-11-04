@@ -169,16 +169,22 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
     var planID: String?
     /// The task's agent did not start, and why: the hub ended the todo there (it is done, #1077).
     var startError: String?
+    /// "auto" when the hub marked the task done because its work was judged finished, with why (#1092,
+    /// docs/todos.md「自动完成」); nil when the user did.
+    var doneBy: String?
+    var doneReason: String?
     var agents: [Agent]
     var spaces: [Space]?
 
     enum CodingKeys: String, CodingKey {
         case id, title, notes, origin, agents, spaces
-        case doneAt = "done_at", createdAt = "created_at", updatedAt = "updated_at", planID = "plan_id", startError = "start_error"
+        case doneAt = "done_at", createdAt = "created_at", updatedAt = "updated_at", planID = "plan_id", startError = "start_error",
+             doneBy = "done_by", doneReason = "done_reason"
     }
 
     init(id: String, title: String, notes: String? = nil, doneAt: Date? = nil, createdAt: Date? = nil, updatedAt: Date? = nil,
-         origin: String? = nil, planID: String? = nil, startError: String? = nil, agents: [Agent] = [], spaces: [Space]? = nil) {
+         origin: String? = nil, planID: String? = nil, startError: String? = nil, doneBy: String? = nil, doneReason: String? = nil,
+         agents: [Agent] = [], spaces: [Space]? = nil) {
         self.id = id
         self.title = title
         self.notes = notes
@@ -188,6 +194,8 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
         self.origin = origin
         self.planID = planID
         self.startError = startError
+        self.doneBy = doneBy
+        self.doneReason = doneReason
         self.agents = agents
         self.spaces = spaces
     }
@@ -203,6 +211,8 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
         origin = try c.decodeIfPresent(String.self, forKey: .origin)
         planID = try c.decodeIfPresent(String.self, forKey: .planID)
         startError = try c.decodeIfPresent(String.self, forKey: .startError)
+        doneBy = try c.decodeIfPresent(String.self, forKey: .doneBy)
+        doneReason = try c.decodeIfPresent(String.self, forKey: .doneReason)
         agents = try c.decodeIfPresent([Agent].self, forKey: .agents) ?? []
         spaces = try c.decodeIfPresent([Space].self, forKey: .spaces)
     }
@@ -210,6 +220,8 @@ nonisolated struct TodoItem: Codable, Hashable, Identifiable, Sendable {
     var activeAgents: [Agent] { agents.filter(\.isActive) }
     /// The hub ended it because its agent did not start.
     var failedToStart: Bool { !(startError ?? "").isEmpty }
+    /// The hub marked it done because its task's work was judged finished; reopening undoes it.
+    var autoDone: Bool { doneAt != nil && doneBy == "auto" }
 }
 
 /// Where a task is, from its todo and its agents' states (docs/todos.md「状态计算规则」, the hub's taskState).

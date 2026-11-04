@@ -17,6 +17,7 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `assistant/turn_context.md` | 消息开头的 `<jarvis-context>`：全量，或和上一份比变了的几节 | `node/assistant_context.go` |
 | `assistant/context.md` | 快照外面那层：主对话时开头多一句「这是主对话」 | `hub/machine.go` `assistant.context` |
 | `assistant/task_run.md`、`routine_kb_hint.md` | 定时任务 / 跟进到点发给助手的消息（⏰ 行、晚了多久、会自己重复；每天的任务加知识库提示） | `hub/assistant_schedule.go` `taskPrompt` |
+| `assistant/task_done.md`、`task_done_input.md` | 从对话派出去的任务停下后判断做没做完（done / not_done / waiting / needs_user / unsure），只有 done 才自动完成待办（`docs/todos.md`「自动完成」）；用判断模型 `inbox.judge` | `hub/tasks_done.go` |
 | `assistant/routine_morning.md`、`routine_evening.md` | 默认的早报、晚间回顾任务的内容（存进任务列表后用户可以改） | `defaultRoutines` |
 | `assistant/lost_tasks.md` | personad 重启后告诉对话哪些后台任务没了 | `node/assistant.go` |
 | `assistant/codex_memory.md`、`codex_instructions.md` | Codex 跑助手时的 developer instructions：和 Claude 共用的记忆（目录、格式、当前索引；快照随消息带） | `node/assistant_codex.go` |

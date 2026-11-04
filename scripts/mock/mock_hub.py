@@ -936,6 +936,20 @@ TODOS_INIT = [
         "agents": [],
     },
     {
+        # A task the hub closed itself (docs/todos.md「自动完成」).
+        "id": "todo_done_auto",
+        "title": "统一连接器 logo 尺寸",
+        "notes": "设置页里各个连接器的 logo 统一成同样大小、同一中心，走 PR 合并后发 TestFlight。",
+        "done_at": ago(hours=2),
+        "created_at": ago(hours=5),
+        "updated_at": ago(hours=2),
+        "origin": "conv_demo",
+        "done_by": "auto",
+        "done_reason": "已合并 PR 并发了 TestFlight",
+        "spaces": [],
+        "agents": [],
+    },
+    {
         "id": "todo_done_1",
         "title": "重构邮件解析模块",
         "notes": "支持多部分邮件与附件提取。",
@@ -6136,9 +6150,13 @@ class H(BaseHTTPRequestHandler):
                     t["notes"] = body["notes"] or ""
                 if "done" in body:
                     if body["done"]:
-                        if not t.get("done_at"): t["done_at"] = now_str
+                        if not t.get("done_at"):
+                            t["done_at"] = now_str
+                            t.pop("done_by", None); t.pop("done_reason", None)
                     else:
+                        if t.get("done_at"): t["reopened_at"] = now_str
                         t["done_at"] = None
+                        t.pop("done_by", None); t.pop("done_reason", None)
                 t["updated_at"] = now_str
                 for mid in aff: push_machine(mid)
                 push_todos()

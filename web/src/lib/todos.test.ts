@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Machine, Session } from "./types";
 import {
+  isAutoDone,
+  todoStatusLabel,
   buildTodoAgentGroups,
   findTodoForSpace,
   formatAgentSource,
@@ -497,3 +499,19 @@ describe("弹窗关联目标判定 (resolveLinkCurrentTodoId)", () => {
   });
 });
 
+describe("自动完成 (docs/todos.md「自动完成」)", () => {
+  const base = { id: "t", title: "统一连接器 logo 尺寸", created_at: "2026-11-04T06:00:00Z", updated_at: "2026-11-04T08:00:00Z" };
+  it("hub 判断做完后关掉的任务标「自动完成」", () => {
+    const todo = { ...base, done_at: "2026-11-04T08:00:00Z", done_by: "auto", done_reason: "已合并 PR 并发了 TestFlight" };
+    expect(isAutoDone(todo)).toBe(true);
+    expect(todoStatusLabel(todo, todoStatus(todo))).toBe("自动完成");
+  });
+  it("用户点的完成、重新打开以后都不算自动完成", () => {
+    const byUser = { ...base, done_at: "2026-11-04T08:00:00Z" };
+    expect(isAutoDone(byUser)).toBe(false);
+    expect(todoStatusLabel(byUser, "done")).toBe("已完成");
+    const reopened = { ...base, done_at: null, done_by: "auto", reopened_at: "2026-11-04T09:00:00Z" };
+    expect(isAutoDone(reopened)).toBe(false);
+    expect(todoStatusLabel(reopened, todoStatus(reopened))).toBe("未开始");
+  });
+});

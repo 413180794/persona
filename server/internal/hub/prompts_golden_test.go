@@ -569,3 +569,15 @@ func TestGoldenInboxTask(t *testing.T) {
 		Item: promptItem(items["dm"]), Tasks: []prompts.InboxTask{task}}))
 	golden(t, "inbox_agent.with_task", inboxAgentPromptFor(items["dm"], "示例用户", nil, &task))
 }
+
+// Closing a finished task (docs/todos.md「自动完成」): the judge's system prompt and its input, with and without hints.
+func TestGoldenTaskDone(t *testing.T) {
+	golden(t, "task_done", prompts.RenderTaskDone(prompts.TaskDone{Owner: "示例用户"}))
+	golden(t, "task_done_input.hints", prompts.RenderTaskDoneInput(prompts.TaskDoneInput{Title: "修登录崩溃",
+		Prompt: "iPad 横屏时登录页崩溃，修好并补测试，走 PR 合并后发 TestFlight",
+		Replies: []prompts.TaskDoneReply{{Machine: "box", Text: "修好了，PR https://github.com/o/r/pull/901 已合并，TestFlight 构建号 202611041200"}},
+		MergedPR: true, Build: true}))
+	golden(t, "task_done_input.two_agents", prompts.RenderTaskDoneInput(prompts.TaskDoneInput{Title: "用新 logo 设计默认形象",
+		Prompt: "按新 logo 重画默认形象的全部表情",
+		Replies: []prompts.TaskDoneReply{{Machine: "box", Text: "没有全改完，还差三个表情"}, {Machine: "mac", Text: "预览图放在 /tmp/preview.png"}}}))
+}
