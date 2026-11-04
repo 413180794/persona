@@ -7,7 +7,7 @@ import { Button, Collapse, cx, Dialog, toast, useNow } from "../../ui/atoms";
 import { Switch } from "../../views/settings/SettingsParts";
 import { AdminError, errorText, getPlugins, installPlugin, previewPlugin, rollbackPlugin, setPluginEnabled, uninstallPlugin, upgradePlugin, uploadPlugin } from "../api";
 import { AdminIcon, type AdminIconName } from "../icons";
-import { canRollBack, canUpgrade, countdown, pluginSourceLabel, pluginStatus, pointLabel, sourceProblem, uploadProblem } from "../logic";
+import { canRollBack, canUpgrade, countdown, pluginRunNote, pluginSourceLabel, pluginStatus, pointLabel, sourceProblem, uploadProblem } from "../logic";
 import { devDialog } from "../router";
 import { PluginMarkets } from "./PluginMarket";
 import type { AdminPlugin, PermissionLine, PluginPreview } from "../types";
@@ -184,6 +184,7 @@ function PluginRow({ p, onChanged, onUpgrade, onRollBack, onRemove }: { p: Admin
         <div className="mt-3 ml-12 grid gap-3">
           {p.permissions.length > 0 && <Permissions lines={p.permissions} title="它可以" />}
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[12px]">
+            {pluginRunNote(p) && <Meta label="现在">{pluginRunNote(p)}</Meta>}
             {contributes.length > 0 && <Meta label="提供">{contributes.map(([point, ids]) => `${pointLabel(point)}：${ids.join("、")}`).join("；")}</Meta>}
             {p.previous_version && <Meta label="上一个版本" mono>{p.previous_version}</Meta>}
             {p.origin && <Meta label="安装自" mono>{p.origin}</Meta>}

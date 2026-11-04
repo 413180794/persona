@@ -122,26 +122,30 @@ export function configError(e: unknown): { field: string; message: string } | nu
 
 // ── words ───────────────────────────────────────────────
 
+// Running or idle (stopped: started again when something needs it) is all one to the user: it is on.
 const STATES: Record<string, string> = {
-  running: "运行中",
-  stopped: "空闲，用到时启动",
+  running: "启动",
+  stopped: "启动",
   starting: "正在启动",
   needs_setup: "需要设置",
-  disabled: "已停用",
+  disabled: "停用",
   incompatible: "这台 hub 用不了",
   error: "出错了",
 };
 
 export const pluginState = (p: HubPlugin) => STATES[p.status] ?? "状态未知";
 
+/** Whether an enabled plugin's program runs right now (the detail page's small print); "" for any other state. */
+export const runNote = (p: HubPlugin) => (p.status === "running" ? "正在运行" : p.status === "stopped" ? "暂未运行，用到时自动启动" : "");
+
 export const isProblem = (p: HubPlugin) => p.status === "error" || p.status === "incompatible";
 
-/** The tone of a plugin's dot: red broken, orange waiting on the user, green running, gray otherwise. */
+/** The tone of a plugin's dot: red broken, orange waiting on the user, green on (running or idle), gray otherwise. */
 export function pluginTone(p?: HubPlugin | null): "red" | "orange" | "green" | "idle" {
   if (!p) return "idle";
   if (isProblem(p)) return "red";
   if (p.status === "needs_setup") return "orange";
-  return p.status === "running" ? "green" : "idle";
+  return p.status === "running" || p.status === "stopped" ? "green" : "idle";
 }
 
 export function sourceText(s?: string): string | undefined {

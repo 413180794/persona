@@ -817,7 +817,7 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
 
 - 数据：`core:contracts` 的 `PluginManagement`（`available` 跟着所选 hub 的 features，列表、详情、开关、整份保存设置、设 / 清密钥）、`HubPlugin`（和语音页共用，多了版本、来源、启用、描述、提供、还缺、警告）、`PluginDetail`（列表那一项加上 `form`、`config`、`secrets`、`permissions`…，`PluginDetail.decode` 从同一个对象里读两遍）；`core:hub` 的 `HttpPluginManagement`（hub 自己的接口在保留的 `-` 段下；插件 id 和密钥名先校验，不让它们变成别的路径；400 `invalid_config` 变成 `PluginConfigRejected(field, message)`），在 `MachineManagementModule` 里按当前配对注入。
 - 页面：`feature:settings` 的 `PluginsScreen.kt`（列表 `PluginsPage`、一个插件 `PluginPage`，`PluginRoute(pluginId)` 是详情页，宽屏在右栏）和 `PluginsState.kt`（文案 `PluginText`、草稿 `PluginDraft`、两个页的模型）。
-  - 列表：名字、状态（运行中 / 空闲，用到时启动 / 正在启动 / 需要设置 / 已停用 / 这台 hub 用不了 / 出错了），右边是该风格的状态点，坏了的是危险色的警告图标；页脚说只能在 hub 机器上装。
+  - 列表：名字、状态（启动 / 正在启动 / 需要设置 / 停用 / 这台 hub 用不了 / 出错了；`running`、`stopped` 都是「启动」，详情里小字写是否在跑），右边是该风格的状态点，坏了的是危险色的警告图标；页脚说只能在 hub 机器上装。
   - 详情：状态行（状态 · 版本 · 来源）、描述、「还缺：…」、错误；「启用」开关；「设置」按 `form.fields` 画：文字（`uri` / `email` 换键盘）、数字（打字时保留原文，读不成数时那一项下面写「要是一个整数 / 数」、保存按钮灰掉）、开关、选择（底部面板）、文字列表（逐项删除、下面加一项）和多选（每个选项一个开关），对象是单独一节；底部「保存」整份提交（空字符串和空列表不发，用插件默认值），hub 拒绝的字段原因写在那一项下面、草稿留着，表单画不到的字段写在页顶。没保存的修改在切换开关、设密钥后还在。「密钥」每项只写已设置 / 未设置（必填），点开是底部面板，输入不回显，已设置的可以清除；「提供」「它可以」「关于」（版本、上一个版本、来源、发布者、安装自、主页、警告）。hub.json 来的只能看：不显示开关、表单和密钥。
 - 调试直达：`--es debug.openLink 'jarvis://open?target=settings&page=plugins'`、`--es debug.openPage plugin:<id>`；截图见「假 hub 批量截图」的 `SHOTS_PLUGINS=1`。
 - 单测：`core:hub` 的 `HttpPluginManagementTest`（MockWebServer：列表和旧 hub、详情、hub.json 的、开关 / 保存 / 密钥的路径和正文、拒绝的字段、不合法的 id 和密钥名、读不懂的回答），`feature:settings` 的 `PluginsStateTest`（文案、草稿按路径改和清理、数字、整份保存、拒绝的字段、没保存的修改留着、失败文案、只读、列表）。

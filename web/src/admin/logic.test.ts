@@ -3,6 +3,7 @@ import {
   canChoose,
   canRollBack,
   canUpgrade,
+  pluginRunNote,
   pluginStatus,
   sourceProblem,
   uploadProblem,
@@ -288,7 +289,12 @@ describe("the group", () => {
 
 describe("plugins", () => {
   it("says each state", () => {
-    expect(pluginStatus({ status: "running" })).toEqual({ tone: "green", label: "运行中" });
+    expect(pluginStatus({ status: "running" })).toEqual({ tone: "green", label: "启动" });
+    expect(pluginStatus({ status: "stopped" })).toEqual({ tone: "green", label: "启动" });
+    expect(pluginStatus({ status: "disabled" })).toEqual({ tone: "gray", label: "停用" });
+    expect([pluginRunNote({ status: "running" }), pluginRunNote({ status: "stopped" }), pluginRunNote({ status: "error" })]).toEqual([
+      "正在运行", "暂未运行，用到时自动启动", "",
+    ]);
     expect(pluginStatus({ status: "needs_setup" }).tone).toBe("orange");
     expect(pluginStatus({ status: "incompatible" }).tone).toBe("red");
     expect(pluginStatus({ status: "whatever" }).label).toBe("状态未知");

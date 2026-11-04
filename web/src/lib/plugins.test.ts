@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "./api";
 import {
   clearPluginSecret, compact, configError, fieldTitle, isDirty, listItems, listPlugins, listSummary, numberProblems, placeholder, pluginDetail,
-  machineStatus, pluginState, pluginTone, readNumber, same, secretState, setAt, setPluginConfig, setPluginEnabled, setPluginSecret, sourceText,
+  machineStatus, pluginState, pluginTone, readNumber, runNote, same, secretState, setAt, setPluginConfig, setPluginEnabled, setPluginSecret, sourceText,
   stateLine, valueAt,
   type HubPlugin, type PluginField,
 } from "./plugins";
@@ -13,11 +13,15 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("插件的文字", () => {
   it("says each state, its tone, and the list's summary", () => {
-    expect(pluginState(plugin("stopped"))).toBe("空闲，用到时启动");
+    // Running or idle until something needs it: both are just on to the user.
+    expect(["running", "stopped", "disabled", "starting", "needs_setup"].map((s) => pluginState(plugin(s)))).toEqual([
+      "启动", "启动", "停用", "正在启动", "需要设置",
+    ]);
     expect(pluginState(plugin("weird"))).toBe("状态未知");
     expect(["running", "needs_setup", "error", "incompatible", "disabled", "stopped"].map((s) => pluginTone(plugin(s)))).toEqual([
-      "green", "orange", "red", "red", "idle", "idle",
+      "green", "orange", "red", "red", "idle", "green",
     ]);
+    expect(["running", "stopped", "disabled", "error"].map((s) => runNote(plugin(s)))).toEqual(["正在运行", "暂未运行，用到时自动启动", "", ""]);
     expect(pluginTone(null)).toBe("idle");
     expect(listSummary(null)).toBe("");
     expect(listSummary([])).toBe("没有");
@@ -25,8 +29,8 @@ describe("插件的文字", () => {
     expect(listSummary([plugin("running")])).toBe("1 个");
   });
   it("puts the state, version and source on one line", () => {
-    expect(stateLine(plugin("running", { version: "1.2.0", source: "installed" }))).toBe("运行中 · 1.2.0 · 已安装");
-    expect(stateLine(plugin("running", { source: "hub.json" }))).toBe("运行中 · hub.json");
+    expect(stateLine(plugin("running", { version: "1.2.0", source: "installed" }))).toBe("启动 · 1.2.0 · 已安装");
+    expect(stateLine(plugin("running", { source: "hub.json" }))).toBe("启动 · hub.json");
     expect(sourceText("other")).toBeUndefined();
   });
   it("marks required fields without a default, and shows the default as a placeholder", () => {

@@ -9,7 +9,7 @@ import { useStore } from "../../lib/store";
 import { marketOf, pluginsRoute, routeSub } from "../../lib/plugin-market";
 import {
   choiceLabel, clearPluginSecret, compact, configError, fieldLabel, fieldTitle, isDirty, listItems, listPluginsInfo, listSummary, numberProblems,
-  placeholder, pluginDetail, pluginState, pluginTone, pointText, readNumber, same, secretState, setAt, setPluginConfig, setPluginEnabled,
+  placeholder, pluginDetail, pluginState, pluginTone, pointText, readNumber, runNote, same, secretState, setAt, setPluginConfig, setPluginEnabled,
   machineStatus, saveFooter, setPluginSecret, sourceText, stateLine, valueAt,
   type HubPlugin, type HubPluginDetail, type Json, type JsonObject, type PluginField, type PluginSecret,
 } from "../../lib/plugins";
@@ -350,9 +350,10 @@ function PluginDetail({ id, onBack, onPage }: { id: string; onBack: () => void; 
           </div>
           {loading && !p && <Spinner />}
         </div>
-        {(p?.description || p?.needs_setup?.length || p?.error || error) && (
+        {(p?.description || (p && runNote(p)) || p?.needs_setup?.length || p?.error || error) && (
           <div className="flex flex-col gap-1.5 border-t border-line px-4 py-3">
             {p?.description && <p className="text-[12.5px] leading-relaxed text-ink-2">{p.description}</p>}
+            {p && runNote(p) && <p className="text-[11.5px] text-ink-3">{runNote(p)}</p>}
             {!!p?.needs_setup?.length && <p className="text-[12px] text-orange">还缺：{p.needs_setup.join("、")}</p>}
             {p?.error && <p className="text-[12px] break-words text-red select-text">{p.error}</p>}
             {error && <p className="text-[12px] break-words text-red select-text">读不到这个插件：{error}</p>}

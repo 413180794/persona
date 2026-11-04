@@ -59,7 +59,9 @@ class PluginsStateTest {
 
     @Test fun wordsForStatesSourcesAndTheSettingsRow() {
         fun p(status: String) = HubPlugin("x", "X", "connectors", status)
-        assertEquals("空闲，用到时启动", PluginText.state(p("stopped")))
+        assertEquals(listOf("启动", "启动", "停用"), listOf(p("running"), p("stopped"), p("disabled")).map(PluginText::state))
+        assertEquals(listOf("正在运行", "暂未运行，用到时自动启动", null), listOf(p("running"), p("stopped"), p("error")).map(PluginText::runNote))
+        assertEquals(Status.Unread, PluginText.status(p("stopped")))
         assertEquals("这台 hub 用不了", PluginText.state(p("incompatible")))
         assertEquals("状态未知", PluginText.state(p("new_state")))
         assertTrue(PluginText.isProblem(p("error")) && PluginText.isProblem(p("incompatible")))

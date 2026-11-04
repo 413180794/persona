@@ -174,6 +174,7 @@ private fun LazyListScope.header(id: String, state: PluginState, onRetry: () -> 
         }
     }
     plugin?.description?.takeIf { it.isNotBlank() }?.let { item("description") { Note(it) } }
+    plugin?.let(PluginText::runNote)?.let { item("run-note") { Note(it) } }
     plugin?.needsSetup?.takeIf { it.isNotEmpty() }?.let { needs ->
         item("needs") { JInlineStatus("还缺：" + needs.joinToString("、"), Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Caution) }
     }

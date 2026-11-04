@@ -21,26 +21,32 @@ import kotlinx.serialization.json.JsonPrimitive
 
 /** What a plugin is called and says in the settings. */
 internal object PluginText {
+    /** Running or idle until something needs it (stopped) is all one to the user: it is on. */
     fun state(p: HubPlugin): String = when (p.status) {
-        "running" -> "运行中"
-        "stopped" -> "空闲，用到时启动"
+        "running", "stopped" -> "启动"
         "starting" -> "正在启动"
         "needs_setup" -> "需要设置"
-        "disabled" -> "已停用"
+        "disabled" -> "停用"
         "incompatible" -> "这台 hub 用不了"
         "error" -> "出错了"
         else -> "状态未知"
     }
 
+    /** Whether an enabled plugin's program runs right now (the detail page's small print); null for any other state. */
+    fun runNote(p: HubPlugin): String? = when (p.status) {
+        "running" -> "正在运行"
+        "stopped" -> "暂未运行，用到时自动启动"
+        else -> null
+    }
+
     /** Broken: drawn in the danger colour, not as a status dot. */
     fun isProblem(p: HubPlugin): Boolean = p.status == "error" || p.status == "incompatible"
 
-    /** The dot beside the state: green running, amber waiting on the user, blue starting, grey otherwise. */
+    /** The dot beside the state: green on (running or idle), amber waiting on the user, blue starting, grey otherwise. */
     fun status(p: HubPlugin): Status = when (p.status) {
-        "running" -> Status.Unread
+        "running", "stopped" -> Status.Unread
         "needs_setup" -> Status.NeedsYou
         "starting" -> Status.Working
-        "stopped" -> Status.Idle
         else -> Status.Offline
     }
 

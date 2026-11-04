@@ -332,22 +332,27 @@ export function memberNotice(mesh: MeshView | null | undefined): { title: string
 // pluginStatus: the state's words (as the app's 设置 › 插件 says them) and tone.
 export function pluginStatus(p: Pick<AdminPlugin, "status">): { tone: "green" | "red" | "orange" | "gray"; label: string } {
   switch (p.status) {
+    // Running or idle until something needs it (stopped): both are on, as the switch says.
     case "running":
-      return { tone: "green", label: "运行中" };
     case "stopped":
-      return { tone: "gray", label: "空闲，用到时启动" };
+      return { tone: "green", label: "启动" };
     case "starting":
       return { tone: "orange", label: "正在启动" };
     case "needs_setup":
       return { tone: "orange", label: "需要设置" };
     case "disabled":
-      return { tone: "gray", label: "已停用" };
+      return { tone: "gray", label: "停用" };
     case "incompatible":
       return { tone: "red", label: "这台 hub 用不了" };
     case "error":
       return { tone: "red", label: "出错了" };
   }
   return { tone: "gray", label: "状态未知" };
+}
+
+// pluginRunNote: whether an enabled plugin's program runs right now (the details' small print); "" otherwise.
+export function pluginRunNote(p: Pick<AdminPlugin, "status">): string {
+  return p.status === "running" ? "正在运行" : p.status === "stopped" ? "暂未运行，用到时自动启动" : "";
 }
 
 export function pluginSourceLabel(source?: string): string {
