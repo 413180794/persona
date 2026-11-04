@@ -28,7 +28,7 @@ struct DirectoryPathTests {
         #expect(denied.contains("直接输入"))
         #expect(DirectoryPath.problem("open /x/y: no such file or directory", path: "/x/y") == "「/x/y」不存在")
         #expect(DirectoryPath.problem("readdirent /x/f: not a directory", path: "/x/f") == "「/x/f」不是目录")
-        #expect(DirectoryPath.problem("machine example-machine is offline", path: "/x") == "machine example-machine is offline")
+        #expect(DirectoryPath.problem("machine mac-a is offline", path: "/x") == "machine mac-a is offline")
         #expect(DirectoryPath.problem("", path: "/x") == "打不开「/x」")
     }
 }

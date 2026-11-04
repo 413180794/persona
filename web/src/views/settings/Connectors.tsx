@@ -9,12 +9,12 @@ import { api, enc, errorText } from "../../lib/api";
 import { ago } from "../../lib/format";
 import { accountTitle, type LarkAccount, type LarkAccountList } from "../../lib/lark-accounts";
 import { useLarkOn, useStore } from "../../lib/store";
-import { Button, cx, Dialog, EASE, IconButton, Loading, toast } from "../../ui/atoms";
+import { Button, cx, Dialog, IconButton, Loading, toast } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { Count, Monogram } from "../inbox/InboxParts";
 import { ConnectorDetail, ConnectorList } from "./HubConnector";
 import { LarkHomeSwitch } from "./LarkHomeSwitch";
-import { Group, Pill } from "./SettingsParts";
+import { Group, Pill, RowConfirm } from "./SettingsParts";
 import { FeishuBot } from "./FeishuBot";
 
 interface LarkStatus {
@@ -114,19 +114,14 @@ function Mail() {
                 {mailAccountLine(a)}
               </div>
             </div>
-            <span className="relative">
-              <IconButton icon="trash" label={`删除 ${a.email}`} onClick={() => setConfirm(confirm === a.id ? null : a.id)} active={confirm === a.id} />
-              {confirm === a.id && (
-                <span className="absolute top-full right-0 z-10 mt-1 flex items-center gap-1 rounded-control bg-surface p-1 shadow-overlay" style={{ animation: `pop-in 160ms ${EASE} both` }}>
-                  <Button tone="quiet" onClick={() => setConfirm(null)}>
-                    取消
-                  </Button>
-                  <Button tone="danger" busy={deleting === a.id} onClick={() => void remove(a)}>
-                    确认删除
-                  </Button>
-                </span>
-              )}
-            </span>
+            <RowConfirm
+              open={confirm === a.id}
+              confirm="确认删除"
+              busy={deleting === a.id}
+              onCancel={() => setConfirm(null)}
+              onConfirm={() => void remove(a)}
+              trigger={<IconButton icon="trash" label={`删除 ${a.email}`} onClick={() => setConfirm(a.id)} />}
+            />
           </div>
         ))}
       </Group>

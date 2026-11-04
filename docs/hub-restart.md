@@ -33,7 +33,7 @@
 | 连接器程序（telegram、wechat） | 同上，退避 5 s 起 | `connector/proc/proc.go:162-199` |
 | jarvis-link（kind link 的电脑） | 收到 1001，1–60 s 指数退避重连，状态文字「hub 重启了」 | `link/client.go:368-377, 602` |
 
-新 hub 起来后：本机 node 0.2 s 内连上，ssh 的 Mac 要 2–8 s（实测 example-machine +2.4 s、example-machine +8 s）。这段时间里机器显示离线、它的会话列表是空的。
+新 hub 起来后：本机 node 0.2 s 内连上，ssh 的 Mac 要 2–8 s（实测一台 +2.4 s、另一台 +8 s）。这段时间里机器显示离线、它的会话列表是空的。
 
 ### 客户端怎么发现断线、怎么恢复
 

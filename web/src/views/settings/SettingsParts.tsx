@@ -1,4 +1,4 @@
-import { cx, EASE } from "../../ui/atoms";
+import { Button, cx, EASE } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 
 export function Group({ title, footer, children, right }: { title?: React.ReactNode; footer?: React.ReactNode; children: React.ReactNode; right?: React.ReactNode }) {
@@ -13,6 +13,29 @@ export function Group({ title, footer, children, right }: { title?: React.ReactN
       <div className="divide-y divide-line overflow-hidden rounded-card bg-surface shadow-card">{children}</div>
       {footer && <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">{footer}</p>}
     </section>
+  );
+}
+
+// A row's destructive action, confirmed in the row itself: the trigger gives way to 取消 and the confirm button. A
+// popover under the trigger would be clipped by the card (Group's overflow-hidden) on the card's last row (#1504).
+export function RowConfirm({ open, trigger, confirm, busy, onCancel, onConfirm }: {
+  open: boolean;
+  trigger: React.ReactNode;
+  confirm: string;
+  busy?: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (!open) return <>{trigger}</>;
+  return (
+    <span className="flex shrink-0 items-center gap-1" style={{ animation: `pop-in 160ms ${EASE} both` }}>
+      <Button tone="quiet" disabled={busy} onClick={onCancel}>
+        取消
+      </Button>
+      <Button tone="danger" busy={busy} onClick={onConfirm}>
+        {confirm}
+      </Button>
+    </span>
   );
 }
 

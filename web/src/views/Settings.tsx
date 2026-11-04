@@ -7,7 +7,7 @@ import { reset, useStore } from "../lib/store";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from "../ui/atoms";
 import { Icon, type IconName } from "../ui/icons";
 import { setTheme, useTheme, type Theme } from "./theme";
-import { Group, Row, Pill } from "./settings/SettingsParts";
+import { Group, Row, Pill, RowConfirm } from "./settings/SettingsParts";
 import { HubList } from "./Hubs";
 import { ModelConfiguration } from "./settings/ModelConfiguration";
 import { AgentSettings } from "./settings/AgentSettings";
@@ -900,18 +900,17 @@ function Devices() {
                 </div>
               </div>
               {t.id !== data.current && (
-                <span className="relative">
-                  <Button tone="quiet" onClick={() => setConfirm(confirm === t.id ? null : t.id)} className="text-red enabled:hover:text-red">
-                    撤销
-                  </Button>
-                  {confirm === t.id && (
-                    <span className="absolute top-full right-0 z-10 mt-1 rounded-control bg-surface p-1 shadow-overlay" style={{ animation: `pop-in 160ms ${EASE} both` }}>
-                      <Button tone="danger" onClick={() => void revoke(t.id)}>
-                        确认撤销
-                      </Button>
-                    </span>
-                  )}
-                </span>
+                <RowConfirm
+                  open={confirm === t.id}
+                  confirm="确认撤销"
+                  onCancel={() => setConfirm(null)}
+                  onConfirm={() => void revoke(t.id)}
+                  trigger={
+                    <Button tone="quiet" onClick={() => setConfirm(t.id)} className="text-red enabled:hover:text-red">
+                      撤销
+                    </Button>
+                  }
+                />
               )}
             </div>
           ))}

@@ -760,7 +760,7 @@ func TestSnapshotTaskFollowsTheAgent(t *testing.T) {
 	now := time.Date(2026, 11, 4, 11, 52, 0, 0, time.UTC)
 	todo := Todo{ID: "todo_1", Title: "hub 重启无感"}
 	started := now.Add(-3*time.Minute - 10*time.Second)
-	lead := proto.Session{MachineID: "example-machine", SessionID: "b00502b8-82a3", State: proto.StateWorking, UpdatedAt: now,
+	lead := proto.Session{MachineID: "mac-a", SessionID: "b00502b8-82a3", State: proto.StateWorking, UpdatedAt: now,
 		Activity: "在跑测试", ActivityAt: &started}
 
 	got := snapshotTask(todo, "working", []proto.Session{lead}, now)
@@ -781,7 +781,7 @@ func TestSnapshotTaskFollowsTheAgent(t *testing.T) {
 	}
 	golden(t, "assistant_snapshot.tasks", prompts.RenderSnapshot(prompts.Snapshot{Now: now, Zone: "UTC",
 		Tasks: []prompts.SnapshotTask{
-			snapshotTask(Todo{ID: "todo_2", Title: "只跑工具"}, "working", []proto.Session{{MachineID: "example-machine",
+			snapshotTask(Todo{ID: "todo_2", Title: "只跑工具"}, "working", []proto.Session{{MachineID: "mac-a",
 				SessionID: "c1", State: proto.StateWorking, UpdatedAt: now, Activity: "在读 tasks.go", ActivityAt: &started}}, now),
 			got,
 		}}))

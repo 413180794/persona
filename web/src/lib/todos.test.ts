@@ -663,7 +663,7 @@ describe("模型服务出错中断的任务 (#1516)", () => {
 });
 
 describe("任务卡片的进度 (taskNow, #1583)", () => {
-  const base: Session = { machine_id: "example-machine", session_id: "s1", title: "", cwd: "/code", status: "working", state: "working" };
+  const base: Session = { machine_id: "mac-a", session_id: "s1", title: "", cwd: "/code", status: "working", state: "working" };
 
   it("只调了工具、还没说过话：显示这一步和开始时间，不是「还没有动静」", () => {
     const s = { ...base, activity: "在跑测试", activity_at: "2026-11-04T11:50:00Z" };

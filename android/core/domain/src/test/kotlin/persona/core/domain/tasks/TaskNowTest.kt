@@ -8,7 +8,7 @@ import persona.core.contracts.Subagent
 
 /** A task card's progress (#1583), as iOS TaskNow and web taskNow. */
 class TaskNowTest {
-    private val base = Session(machineId = "example-machine", sessionId = "s1", status = "working", state = "working")
+    private val base = Session(machineId = "mac-a", sessionId = "s1", status = "working", state = "working")
 
     @Test fun anAgentThatOnlyRanToolsShowsItsStep() {
         val s = base.copy(activity = "在跑测试", activityAt = "2026-11-04T11:50:00Z")
