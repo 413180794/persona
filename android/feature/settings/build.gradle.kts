@@ -23,6 +23,8 @@ dependencies {
     implementation(libs.compose.preview)
     testImplementation(libs.junit)
     testImplementation(project(":core:hub"))
+    // An inbox item's page in pictures: the inbox's header over a plugin's body (InboxItemShotsTest).
+    testImplementation(project(":feature:inbox"))
     testImplementation(libs.coroutines.test)
     testImplementation(platform(libs.compose.bom))
     testImplementation("androidx.compose.ui:ui-test-junit4")

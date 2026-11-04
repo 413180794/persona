@@ -44,17 +44,19 @@ internal class PluginViewHandle(
 
 /**
  * The view's dialogs (a button's confirm, a choice field's choices) and the way its buttons go: an action's toast
- * shows as the app's notice, its link opens in the app, a new view replaces the page.
+ * shows as the app's notice, its link opens in the app, a new view replaces the page. [appLink] takes the app's own
+ * links a page may open (an inbox item's source) before https ones go to the app's link handling.
  */
 @Composable
-internal fun rememberPluginView(model: PluginViewModel): PluginViewHandle {
+internal fun rememberPluginView(model: PluginViewModel, appLink: (String) -> Boolean = { false }): PluginViewHandle {
     val scope = rememberCoroutineScope()
     val feedback = LocalAppFeedback.current
     val uri = LocalUriHandler.current
     val state by model.state.collectAsState()
     var confirming by remember(model) { mutableStateOf<Pair<PluginViewItem, PluginViewAction>?>(null) }
     var choosing by remember(model) { mutableStateOf<PluginViewItem?>(null) }
-    val open: (String) -> Unit = { url -> if (PluginViewText.isHttps(url)) runCatching { uri.openUri(url) } }
+    val routes by rememberUpdatedState(appLink)
+    val open: (String) -> Unit = { url -> if (!routes(url) && PluginViewText.isHttps(url)) runCatching { uri.openUri(url) } }
     fun show(outcome: PluginActionOutcome) {
         outcome.toast?.let { feedback?.notice(it) }
         outcome.error?.let { feedback?.notice(it) }

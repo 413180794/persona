@@ -17,9 +17,10 @@ import kotlinx.serialization.json.JsonDecoder
 interface PluginUi {
     /**
      * `GET /api/v1/plugins/-/ui?placement=…`: what the enabled, running plugins draw at [placement]
-     * (`plugin_page`, `launcher_section`); a launcher's section names the launcher (and the machine it is on). An empty
-     * [placement] lists every slot but launcher sections at once (`nav_page`, `overview_card`, `machine_section`, with
-     * their badges; docs/plugins.md「UI 插槽」), only on a hub that says `plugin_ui_slots`.
+     * (`plugin_page`, `launcher_section`, `inbox_item`); a launcher's section names the launcher (and the machine it is
+     * on). An empty [placement] lists every slot but launcher sections at once (`nav_page`, `overview_card`,
+     * `machine_section`, with their badges; docs/plugins.md「UI 插槽」), only on a hub that says `plugin_ui_slots`. A hub
+     * that does not know a placement lists nothing there.
      */
     suspend fun uiPlaces(placement: String, launcher: String? = null, machine: String? = null): List<PluginUiPlace>
 
@@ -37,9 +38,9 @@ interface PluginUi {
 }
 
 /**
- * Where a plugin draws something (`{plugin, plugin_name, id, title, placement, size, icon?, opens?, badge?}`). The
- * slots of docs/plugins.md「UI 插槽」: a `nav_page` has an [icon] and maybe a [badge]; an `overview_card` [opens] one of
- * the plugin's pages.
+ * Where a plugin draws something (`{plugin, plugin_name, id, title, placement, size, icon?, opens?, badge?, connector?}`).
+ * The slots of docs/plugins.md「UI 插槽」: a `nav_page` has an [icon] and maybe a [badge]; an `overview_card` [opens] one
+ * of the plugin's pages; an `inbox_item` draws the page of its [connector]'s inbox items.
  */
 @Serializable
 data class PluginUiPlace(
@@ -56,17 +57,21 @@ data class PluginUiPlace(
     val opens: String? = null,
     /** A `nav_page`'s badge, set by the plugin (and changed by `plugin_ui` events). */
     val badge: PluginViewBadge? = null,
+    /** An `inbox_item`'s: the connector whose inbox items it draws (`lark`), the items' `source`. */
+    val connector: String? = null,
 )
 
 /**
  * Where a view is drawn and for whom (docs/plugins.md「UI 插槽」「上下文」): a launcher's page names the launcher and its
- * machine, a machine's section the machine; [size] is `compact` for a card. The time zone, language, platform and UI
- * version are the app's: the HTTP client fills in what is left empty.
+ * machine, a machine's section the machine, an inbox item's page the [item]; [size] is `compact` for a card. The time
+ * zone, language, platform and UI version are the app's: the HTTP client fills in what is left empty.
  */
 @Serializable
 data class PluginUiContext(
     val launcher: String? = null,
     val machine: String? = null,
+    /** `inbox_item`: the inbox item's id; the hub hands the plugin that row. */
+    val item: String? = null,
     val size: String? = null,
     val tz: String? = null,
     val locale: String? = null,
@@ -201,3 +206,9 @@ class PluginUiUnsupported : Exception("unsupported")
  * another hub), a plugin that has gone. A machine's page leaves the section out.
  */
 class PluginUiNotFound(message: String) : Exception(message)
+
+/**
+ * This device may not draw plugins' views (403: a device that can only read and answer). An inbox item's page opens
+ * the item's own page instead; elsewhere it reads as any failure, in the hub's words.
+ */
+class PluginUiForbidden(message: String) : Exception(message)

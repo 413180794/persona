@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/url"
 	"slices"
+	"time"
 	"unicode/utf8"
 )
 
@@ -23,13 +24,15 @@ type UIItem struct {
 	// Placement is one of UISlots: plugin_page (a page opened from the plugin's settings), launcher_section (a section
 	// on the page of a launcher whose gateway is one of Hosts, or of any launcher when there are none: the plugin then
 	// answers unsupported for gateways not its own; it may send requests there with the key, as quota does), nav_page,
-	// overview_card, machine_section.
+	// overview_card, machine_section, inbox_item.
 	Placement string   `json:"placement"`
 	Hosts     []string `json:"hosts,omitempty"`
 	// Icon is a nav_page's icon, from UIIcons (each app draws its own); plugin when empty.
 	Icon string `json:"icon,omitempty"`
 	// Opens is the ui (a nav_page or plugin_page of the same plugin) an overview_card opens when tapped.
 	Opens string `json:"opens,omitempty"`
+	// Connector is the connector an inbox_item draws the items of: one of the plugin's own connectors.
+	Connector string `json:"connector,omitempty"`
 }
 
 // UISlot is a place in the apps plugins may draw (docs/plugins.md「UI 插槽」).
@@ -37,7 +40,7 @@ type UISlot struct {
 	Name string
 	// Size is what the plugin is asked to draw there: compact (a card) or full (a page, a section).
 	Size string
-	// Context is what the apps say about where it is drawn: launcher, machine.
+	// Context is what the apps say about where it is drawn: launcher, machine, item.
 	Context string
 	// Badge: the plugin may put a badge (ui.badge) on its entry.
 	Badge bool
@@ -55,6 +58,9 @@ var UISlots = []UISlot{
 	{Name: "nav_page", Size: SizeFull, Badge: true, Shown: "主导航上的入口", Since: 2},
 	{Name: "overview_card", Size: SizeCompact, Shown: "总览上的卡片", Since: 2},
 	{Name: "machine_section", Size: SizeFull, Context: "machine", Shown: "机器详情页里的一节（会知道是哪台机器）", Since: 2},
+	// inbox_item draws the body of an inbox item from the plugin's connector (its own header stays the app's): the
+	// same items a plugin's connector brought in, with the hub's triage on them. Drawn with UI version 2's items.
+	{Name: "inbox_item", Size: SizeFull, Context: "item", Shown: "收件箱里它的连接器的条目详情（会读到那一条的标题、总结和分级）", Since: 2},
 }
 
 // Slot is the slot named name.
@@ -90,6 +96,24 @@ type UIMachine struct {
 	Online bool   `json:"online"`
 }
 
+// UIInboxItem is the inbox item an inbox_item is drawn for: the row as the hub keeps it. Meta is the connector's own
+// record of what the item gathers, passed as it is stored (null when it has none): the hub never reads it. Extra are
+// the item's source blocks as the apps get them (lark, doc, moment, connector…), for a plugin drawing an item that has
+// no meta.
+type UIInboxItem struct {
+	ID      string                     `json:"id"`
+	Title   string                     `json:"title"`
+	Summary string                     `json:"summary,omitempty"`
+	Tier    string                     `json:"tier,omitempty"`
+	Reason  string                     `json:"reason,omitempty"`
+	Done    bool                       `json:"done"`
+	Meta    json.RawMessage            `json:"meta"`
+	Extra   map[string]json.RawMessage `json:"extra,omitempty"`
+	// Count is how many messages the item holds (for an event, the hub's own count); StartedAt is when it began.
+	Count     int       `json:"count,omitempty"`
+	StartedAt time.Time `json:"started_at,omitzero"`
+}
+
 // UILauncher is the launcher a launcher_section is drawn for; QueryID lets the plugin reach its gateway
 // (gateway.http) while it draws.
 type UILauncher struct {
@@ -107,12 +131,13 @@ type UIParams struct {
 	Placement    string            `json:"placement"`
 	Size         string            `json:"size"`
 	// UIVersion is what the app that asks draws (UIVersion at most): a plugin may draw an older app something it knows.
-	UIVersion int         `json:"ui_version"`
-	TZ        string      `json:"tz,omitempty"`     // the user's time zone ("Asia/Shanghai"); "" when unknown
-	Locale    string      `json:"locale,omitempty"` // the app's language ("zh-Hans-CN")
-	Platform  string      `json:"platform,omitempty"`
-	Machine   *UIMachine  `json:"machine,omitempty"`
-	Launcher  *UILauncher `json:"launcher,omitempty"`
+	UIVersion int          `json:"ui_version"`
+	TZ        string       `json:"tz,omitempty"`     // the user's time zone ("Asia/Shanghai"); "" when unknown
+	Locale    string       `json:"locale,omitempty"` // the app's language ("zh-Hans-CN")
+	Platform  string       `json:"platform,omitempty"`
+	Machine   *UIMachine   `json:"machine,omitempty"`
+	Launcher  *UILauncher  `json:"launcher,omitempty"`
+	Item      *UIInboxItem `json:"item,omitempty"`
 }
 
 // BadgeEvent is ui.badge, sent by a plugin: the badge on its nav_page's entry (no text clears it).
@@ -249,6 +274,13 @@ type UIAction struct {
 type UIChoice struct {
 	Value string `json:"value"`
 	Title string `json:"title,omitempty"`
+}
+
+// InboxSourceURL is the one link besides https an action may open, and only on an inbox_item, for the item it is
+// drawn for: the apps open the item's own source page there (what opening the item showed before the slot: a Feishu
+// chat at the item's first message). The id is escaped as one path segment ("lark:F1:1051" stays as it is).
+func InboxSourceURL(itemID string) string {
+	return "persona://inbox/" + url.PathEscape(itemID) + "/source"
 }
 
 // ActionResult is what ui.action answers: a new View, a short message, a link to open, or nothing (draw again).

@@ -42,10 +42,11 @@ struct MacInboxDetail: View {
     }
 }
 
-/// One inbox item opened, in the detail column or a window of its own: the content, and beside it a column with the
-/// AI's summary and the item's actions as labelled buttons (`MacInboxActions`: AI 草拟回复 / 查看草稿, 交给 AI,
-/// 已处理 / 移回; over the item when there is no room). Links in it open in the panel at the trailing edge; Feishu
-/// pages (a profile, another chat) push in the column's own stack.
+/// One inbox item opened, in the detail column or a window of its own: the content (what a plugin draws for its source
+/// when one does, placement inbox_item), and beside it a column with the AI's summary and the item's actions as
+/// labelled buttons (`MacInboxActions`: AI 草拟回复 / 查看草稿, 交给 AI, 已处理 / 移回; over the item when there is no
+/// room). Links in it open in the panel at the trailing edge; Feishu pages (a profile, another chat) push in the
+/// column's own stack.
 struct MacInboxItemDetail: View {
     @Environment(AppModel.self) private var model
     var item: InboxItem
@@ -54,12 +55,19 @@ struct MacInboxItemDetail: View {
     @State private var handingOff = false
     @State private var link: LinkTarget?
     @State private var path = NavigationPath()
+    @State private var slot: InboxItemSlotModel
+
+    init(item: InboxItem, accounts: [MailAccount]) {
+        self.item = item
+        self.accounts = accounts
+        _slot = State(initialValue: InboxItemSlotModel(item: item))
+    }
 
     private var current: InboxItem { InboxStore.shared.items.first { $0.id == item.id } ?? item }
 
     var body: some View {
         NavigationStack(path: $path) {
-            content
+            InboxItemSlotContent(item: current, slot: slot) { content }
                 .feishuRoutes()
                 .navigationDestination(for: InboxItem.self) { MacInboxItemDetail(item: $0, accounts: accounts) }
         }

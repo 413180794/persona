@@ -39,6 +39,18 @@ internal object PluginViewText {
     /** Links and `open_url` are https only (the hub checks it too). */
     fun isHttps(url: String?): Boolean = url != null && url.startsWith("https://") && url.length > "https://".length
 
+    /**
+     * The inbox item an inbox item's page asks to see at its source (`open_url: persona://inbox/<id>/source`, the one
+     * app link the hub lets that slot open, docs/plugins.md「UI 插槽」): the item's id, else null.
+     */
+    fun inboxSource(url: String?): String? {
+        val uri = runCatching { java.net.URI(url ?: return null) }.getOrNull() ?: return null
+        if (!uri.scheme.equals("persona", ignoreCase = true) || uri.rawAuthority != "inbox" || uri.rawQuery != null || uri.rawFragment != null) return null
+        val segments = uri.rawPath?.removePrefix("/")?.split("/") ?: return null
+        if (segments.size != 2 || segments[1] != "source") return null
+        return runCatching { java.net.URLDecoder.decode(segments[0].replace("+", "%2B"), Charsets.UTF_8) }.getOrNull()?.takeIf { it.isNotBlank() }
+    }
+
     /** A field's value before the user touches it: the plugin's, never for a secret; a switch is off. */
     fun initial(item: PluginViewItem): String = when (item.kind) {
         "secret" -> ""
@@ -131,6 +143,8 @@ internal data class PluginViewState(
     val acting: String? = null,
     /** Reading the view failed: the page shows it with 重试. */
     val error: String? = null,
+    /** Why reading it last failed (an inbox item's page tells a refusal from a breakdown); none once drawn. */
+    val failure: Throwable? = null,
     /**
      * The plugin said this launcher's gateway is not its own, or the hub does not know the machine of a machine's
      * section: the section is not drawn at all.
@@ -147,7 +161,8 @@ internal data class PluginActionOutcome(val toast: String? = null, val openUrl: 
 
 /**
  * One view a plugin draws: at [place], with [context] (a launcher's page, a machine's, a card's size). [now] is the
- * clock `refresh_after` counts on.
+ * clock `refresh_after` counts on; [opens] is which `open_url` a button may bring back (https, and an inbox item's
+ * page also its source link).
  */
 internal class PluginViewModel(
     private val api: PluginUi,
@@ -155,6 +170,7 @@ internal class PluginViewModel(
     val ui: String,
     private val context: PluginUiContext? = null,
     private val now: () -> Long = System::currentTimeMillis,
+    private val opens: (String) -> Boolean = PluginViewText::isHttps,
 ) {
     private val mutable = MutableStateFlow(PluginViewState())
     val state = mutable.asStateFlow()
@@ -167,11 +183,11 @@ internal class PluginViewModel(
         mutable.update { it.copy(loading = true) }
         try {
             val view = api.renderUi(plugin, ui, context, state.value.view?.state)
-            mutable.update { it.copy(view = view, values = PluginViewText.fields(view), error = null, unsupported = false) }
+            mutable.update { it.copy(view = view, values = PluginViewText.fields(view), error = null, failure = null, unsupported = false) }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: PluginUiUnsupported) { mutable.update { it.copy(unsupported = true, error = null) } }
         catch (_: PluginUiNotFound) { mutable.update { it.copy(unsupported = true, error = null) } }
-        catch (error: Exception) { mutable.update { it.copy(error = "读取失败：${failureReason(error)}") } }
+        catch (error: Exception) { mutable.update { it.copy(error = "读取失败：${failureReason(error)}", failure = error) } }
         finally { mutable.update { it.copy(loading = false, drawnAt = now()) } }
     }
 
@@ -219,7 +235,7 @@ internal class PluginViewModel(
                 result.view != null -> mutable.update { it.copy(view = result.view, values = PluginViewText.fields(result.view), error = null, drawnAt = now()) }
                 result.toast == null && result.openUrl == null -> { mutable.update { it.copy(acting = null) }; load() }
             }
-            PluginActionOutcome(result.toast?.takeIf { it.isNotBlank() }, result.openUrl?.takeIf(PluginViewText::isHttps))
+            PluginActionOutcome(result.toast?.takeIf { it.isNotBlank() }, result.openUrl?.takeIf(opens))
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: PluginUiUnsupported) {
             mutable.update { it.copy(unsupported = true) }

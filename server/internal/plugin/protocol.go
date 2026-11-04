@@ -68,7 +68,18 @@ type HubInfo struct {
 	// Timezone is the user's time zone by name (IANA, as their devices say it): for the times a plugin shows people
 	// ("today", a message's time). Empty while only the hub's own clock is known. Read at each start.
 	Timezone string `json:"timezone,omitempty"`
+	// Capabilities are what this hub does that a plugin may go by ("inbox_group": it relates a connector's batches of
+	// new messages to inbox events, docs/inbox.md「事件合成」). Absent or without one: the hub does not do it.
+	Capabilities []string `json:"capabilities,omitempty"`
 }
+
+// Hub capabilities (HubInfo.Capabilities).
+const (
+	HubInboxGroup = "inbox_group"
+)
+
+// HubCapabilities are this hub's.
+func HubCapabilities() []string { return []string{HubInboxGroup} }
 
 // PluginInfo is the plugin as the hub installed it.
 type PluginInfo struct {

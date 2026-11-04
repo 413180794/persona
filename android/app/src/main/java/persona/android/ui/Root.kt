@@ -59,8 +59,13 @@ import persona.feature.agents.AgentsWiring
 import persona.feature.assistant.AssistantScreen
 import persona.feature.assistant.assistantEntries
 import persona.feature.chat.*
+import persona.feature.inbox.InboxItemPages
+import persona.feature.inbox.InboxItemPluginScreen
 import persona.feature.inbox.InboxRepository
+import persona.feature.inbox.LocalInboxItemPages
 import persona.feature.inbox.inboxEntries
+import persona.feature.inbox.inboxItemPage
+import persona.feature.inbox.inboxSourcePage
 import persona.feature.knowledge.*
 import persona.feature.machines.machinesEntries
 import persona.feature.settings.*
@@ -168,7 +173,8 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
     // machines' pages share one list, read while the hub is online.
     val pluginSlots = persona.feature.settings.rememberPluginSlots(shellServices.plugins?.takeUnless { shellServices.demo }, session.connection.state)
     val services = remember(shellServices, pluginSlots) { shellServices.copy(pluginSlots = pluginSlots) }
-    val slotBadge = pluginSlots?.state?.collectAsStateWithLifecycle()?.value?.tabBadge ?: persona.feature.settings.SlotBadge()
+    val slotsState = pluginSlots?.state?.collectAsStateWithLifecycle()?.value
+    val slotBadge = slotsState?.tabBadge ?: persona.feature.settings.SlotBadge()
     val context = LocalContext.current
     val store = remember(session.identity) { ShellPositionStore(context, session.identity) }
     // Automated captures start from each tab's root instead of whatever the previous capture left open;
@@ -298,6 +304,33 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
     fun replace(from: NavKey, to: NavKey) {
         stacks.values.forEach { stack -> stack.indexOf(from).takeIf { it >= 0 }?.let { stack[it] = to } }
     }
+    // The pages plugins draw for their connectors' inbox items (inbox_item, #1683): the inbox list and inbox links
+    // open those. An item whose page broke opens its own page, which says so until 重试 tries the plugin's page again.
+    val itemPagePlaces = slotsState?.inboxItems.orEmpty()
+    val itemPageFailures = remember(session.identity) { mutableStateMapOf<String, String>() }
+    val currentItemPlaces by rememberUpdatedState(itemPagePlaces)
+    val currentRecords by rememberUpdatedState(inbox.records)
+    val retryItemPage = remember(itemPageFailures) {
+        { from: NavKey, itemId: String ->
+            itemPageFailures.remove(itemId)
+            currentRecords.firstOrNull { it.item.id == itemId }?.let { InboxItemPages(currentItemPlaces).route(it) }?.let { replace(from, it) }
+            Unit
+        }
+    }
+    // An item opened before the hub's list was read (at launch, before its hello) opens its own page; once the list
+    // comes, those its connector's plugin draws get the plugin's page in their place, as if opened now.
+    val itemPagesKnown = pluginSlots == null || slotsState?.inboxItemsKnown == true
+    val provisionalPages = remember(session.identity) { mutableSetOf<NavKey>() }
+    val notePage = remember(provisionalPages) { { page: NavKey -> provisionalPages += page; Unit } }
+    val inboxItemPages = InboxItemPages(itemPagePlaces, itemPageFailures.toMap(), retryItemPage, itemPagesKnown, notePage)
+    LaunchedEffect(itemPagesKnown) {
+        if (!itemPagesKnown) return@LaunchedEffect
+        val pages = InboxItemPages(currentItemPlaces)
+        stacks.values.forEach { stack -> pages.swaps(stack.toList(), provisionalPages, currentRecords).forEach { (from, to) -> replace(from, to) } }
+        provisionalPages.clear()
+    }
+    // A plugin enabled since the hub was last read draws its items as soon as the inbox shows.
+    LaunchedEffect(selected, pluginSlots) { if (selected == AppTab.Inbox) pluginSlots?.loadInboxItems() }
     val tools = LocalDeveloperTools.current
     val decorators = AppTab.entries.associateWith { tab -> key(tab) {
         listOf(rememberSaveableStateHolderNavEntryDecorator<NavKey>(), rememberViewModelStoreNavEntryDecorator<NavKey>())
@@ -439,6 +472,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
             inboxEntries(navigator, session.inbox)
             entry<InboxItemRoute> { InboxLink(it, session.inbox, navigator, ::replace) }
             entry<LarkChatRoute> { InboxLink(it, session.inbox, navigator, ::replace) }
+            entry<InboxItemUiRoute> { InboxItemUi(it, session.inbox, services.pluginSlots, navigator, ::replace, itemPageFailures) }
             entry<SettingsRoute> {
                 SettingsWithTools(if (shell.automation) null else tools, navigator) { ShellSettings(services, navigator, shell) }
             }
@@ -483,7 +517,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
         val sides = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)
         val sideRoom = sides.getLeft(LocalDensity.current, LocalLayoutDirection.current) > 0 ||
             sides.getRight(LocalDensity.current, LocalLayoutDirection.current) > 0
-        CompositionLocalProvider(LocalAmbience provides ambience, LocalWindowLayout provides windowLayout) {
+        CompositionLocalProvider(LocalAmbience provides ambience, LocalWindowLayout provides windowLayout, LocalInboxItemPages provides inboxItemPages) {
           Box(Modifier.fillMaxSize().background(PersonaTheme.palette.background)) {
             // One background for the window. Pages paint the same light at the same place (PageBackdrop), so in wide
             // windows the rail, the panes and the room between them read as one surface; cards are what separate them.
@@ -593,10 +627,51 @@ private fun InboxLink(route: NavKey, inbox: InboxRepository, navigator: Navigato
         catch (_: Exception) { /* Cached records still resolve the link; a miss is reported below. */ }
         loaded = true
     }
-    val destination = inboxDestination(route, snapshot.records, loaded)
-    LaunchedEffect(destination) { (destination as? InboxDestination.Open)?.let { replace(route, it.key) } }
+    val pages = LocalInboxItemPages.current
+    val destination = inboxDestination(route, snapshot.records, loaded, pages)
+    LaunchedEffect(destination) {
+        (destination as? InboxDestination.Open)?.let {
+            // An item link (not a chat link) opened before the hub's list was read may be the plugin's to draw.
+            if (route is InboxItemRoute) pages.opened(it.key)
+            replace(route, it.key)
+        }
+    }
     if (destination == InboxDestination.Missing) UnavailablePage("没有找到这条事项，可能已经处理或被移除", navigator)
     else Box(Modifier.fillMaxSize().statusBarsPadding(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+}
+
+/**
+ * An inbox item whose connector's plugin draws its body (inbox_item, #1683): the inbox's header of the item over the
+ * plugin's view. When the plugin cannot draw it, the item's own page takes its place: quietly when the plugin declines
+ * (a read-only device, 404, unsupported, nothing drawn), with a line and 重试 there when it broke ([failures]). The
+ * plugin's `persona://inbox/<id>/source` opens that item's own page on top.
+ */
+@Composable
+private fun InboxItemUi(route: InboxItemUiRoute, inbox: InboxRepository, slots: PluginSlots?, navigator: Navigator,
+    replace: (NavKey, NavKey) -> Unit, failures: MutableMap<String, String>) {
+    val snapshot by inbox.snapshot.collectAsStateWithLifecycle()
+    val records by rememberUpdatedState(snapshot.records)
+    val feedback = LocalAppFeedback.current
+    val record = snapshot.records.firstOrNull { it.item.id == route.itemId }
+    // The plugin draws the item again when it changes: new messages joined the event, it was done or reopened.
+    val revision = record?.let { listOf(it.item.version, it.item.updatedAt, it.count, it.item.doneAt) }
+    val body = rememberInboxItemBody(slots, route, revision, onSource = { id ->
+        inboxSourcePage(id, records)?.let(navigator::navigate) ?: feedback?.notice("没有找到这条事项，可能已经处理或被移除")
+    })
+    val fallback = body.fallback
+    val drawn = fallback == null && !body.loading
+    LaunchedEffect(drawn) { if (drawn) failures.remove(route.itemId) }
+    val own by rememberUpdatedState(record?.let(::inboxItemPage))
+    LaunchedEffect(fallback, own != null) {
+        val page = own ?: return@LaunchedEffect
+        if (fallback is InboxItemFallback.Notice) failures[route.itemId] = fallback.message
+        if (fallback != null) replace(route, page)
+    }
+    when {
+        fallback == null -> InboxItemPluginScreen(inbox, route, navigator, body.title, body.loading, body.refreshing, body.refresh, body.items)
+        record == null -> UnavailablePage("没有找到这条事项，可能已经处理或被移除", navigator)
+        else -> Box(Modifier.fillMaxSize())
+    }
 }
 
 /** Debug builds add one row under the settings page; release builds and automated captures show nothing. */

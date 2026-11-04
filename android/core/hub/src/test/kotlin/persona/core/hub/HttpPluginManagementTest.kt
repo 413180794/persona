@@ -243,6 +243,40 @@ class HttpPluginManagementTest {
         assertEquals("""{"context":{"size":"full",$deviceJson},"action":"range","values":{"range":"30d"}}""", server.takeRequest().body.readUtf8())
     }
 
+    // An inbox item's page (`inbox_item`, #1683): listed by its placement with the connector it draws for, drawn and
+    // pressed with the item's id in the context. An older hub lists nothing there.
+    @Test fun drawsAnInboxItemsPageWithTheItem() = withHub { server, api ->
+        server.enqueue(MockResponse().setBody("""{"ui":[{"plugin":"lark-connector","plugin_name":"飞书","id":"event","title":"事件",
+            "placement":"inbox_item","size":"full","connector":"lark"}]}"""))
+        val places = api.uiPlaces("inbox_item")
+        assertEquals("/api/v1/plugins/-/ui?placement=inbox_item", server.takeRequest().path)
+        assertEquals("lark", places.single().connector)
+        assertEquals("event", places.single().id)
+
+        server.enqueue(MockResponse().setBody("""{"view":{"title":"周四的评审","sections":[{"items":[{"type":"text","text":"x"}]}],"state":"s"}}"""))
+        val view = api.renderUi("lark-connector", "event", PluginUiContext(item = "lark:F1:1051"))
+        server.takeRequest().let {
+            assertEquals("/api/v1/plugins/lark-connector/-/ui/event", it.path)
+            assertEquals("""{"context":{"item":"lark:F1:1051",$deviceJson}}""", it.body.readUtf8())
+        }
+        assertEquals("周四的评审", view.title)
+
+        // 在会话里看: the item's source, the one app link the hub lets this slot answer.
+        server.enqueue(MockResponse().setBody("""{"open_url":"persona://inbox/lark:F1:1051/source"}"""))
+        assertEquals("persona://inbox/lark:F1:1051/source",
+            api.uiAction("lark-connector", "event", "open_chat", PluginUiContext(item = "lark:F1:1051"), state = "s").openUrl)
+        assertEquals("""{"context":{"item":"lark:F1:1051",$deviceJson},"state":"s","action":"open_chat"}""", server.takeRequest().body.readUtf8())
+
+        server.enqueue(MockResponse().setBody("""{"ui":[]}"""))
+        assertTrue(api.uiPlaces("inbox_item").isEmpty())
+
+        // A device that may only read and answer is refused (403): the item opens its own page.
+        server.enqueue(MockResponse().setResponseCode(403).setBody("""{"error":"this device can only read and answer"}"""))
+        val refused = runCatching { api.renderUi("lark-connector", "event", PluginUiContext(item = "lark:F1:1051")) }.exceptionOrNull()
+        assertTrue(refused is persona.core.contracts.api.PluginUiForbidden)
+        assertEquals("this device can only read and answer", refused?.message)
+    }
+
     @Test fun theDeviceContextIsThePhones() {
         val context = HttpPluginManagement.deviceContext()
         assertEquals("android", context.platform)

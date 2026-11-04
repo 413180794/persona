@@ -129,7 +129,8 @@ func notesPackage(t *testing.T, version string) string {
 	manifest := fmt.Sprintf(`{"manifest_version": 1, "id": "example-notes", "name": "Example Notes", "version": %q,
 		"engines": {"plugin_protocol": 1},
 		"runtime": {"command": {%q: "bin/notes"}},
-		"contributes": {"connectors": [{"id": "examplenotes", "name": "Example Notes", "capabilities": ["status", "tools"], "hosts": ["notes.example.com"]}]},
+		"contributes": {"connectors": [{"id": "examplenotes", "name": "Example Notes", "capabilities": ["status", "tools", "future_example"],
+			"hosts": ["notes.example.com"]}]},
 		"configuration": {"type": "object", "properties": {"folders": {"type": "array", "title": "文件夹", "items": {"type": "string"}}}},
 		"secrets": [{"name": "api_key", "title": "API Key", "required": true}],
 		"permissions": {"network": ["notes.example.com"]}}`, version, runtime.GOOS+"-"+runtime.GOARCH)
@@ -231,6 +232,10 @@ func TestInstalledConnectorPlugin(t *testing.T) {
 	}
 	if !fromPlugin("examplenotes") { // its new inbox items are triaged before they enter (inbox_admit.go)
 		t.Fatal("an installed plugin's connector is not taken as a plugin's")
+	}
+	// A capability this hub does not have (a plugin made for a newer one) is left out, not a reason to refuse it.
+	if m := h.connectors.Get("examplenotes").Manifest(); m.Has("future_example") || !m.Has(connector.CapTools) {
+		t.Fatalf("manifest %+v", m.Capabilities)
 	}
 	res := h.callConnector(context.Background(), "", "examplenotes_search", json.RawMessage(`{}`))
 	if res.IsError || len(res.Content) != 1 || !strings.Contains(res.Content[0].Text, "examplenotes_search in work") {

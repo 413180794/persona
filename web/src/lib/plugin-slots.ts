@@ -1,10 +1,11 @@
 // The plugins' places outside their settings (docs/plugins.md「UI 插槽」): entries on the sidebar (nav_page), cards on
-// 总览 (overview_card), sections on a machine's page (machine_section). One list for the whole web, asked for once
+// 总览 (overview_card), sections on a machine's page (machine_section), inbox items' pages (inbox_item: the list is
+// cached here, so opening an item asks nothing). One list for the whole web, asked for once
 // (GET /api/v1/plugins/-/ui without a placement) and again on reconnect, when a plugin changes here, and when the tab
 // comes back after a while; a nav_page's badge changes in place on the plugin_ui event. Only on a hub with
 // plugin_ui_slots: an older one is never asked (it would answer an empty list anyway).
 import { useMemo, useSyncExternalStore } from "react";
-import { applyBadge, placesOf, uiPlaces, type BadgeEvent, type SlotName, type UIPlace } from "./plugin-ui";
+import { applyBadge, inboxItemPlace, placesOf, uiPlaces, type BadgeEvent, type SlotName, type UIPlace } from "./plugin-ui";
 import { isResumed } from "./reconnect";
 import { getState, onHubEvent, useStore } from "./store";
 
@@ -74,4 +75,13 @@ export function usePluginSlot(placement: SlotName): UIPlace[] {
 export function usePluginPlace(plugin: string, id: string): UIPlace | undefined {
   const all = useSyncExternalStore(subscribe, () => places);
   return useMemo(() => all.find((u) => u.plugin === plugin && u.id === id), [all, plugin, id]);
+}
+
+/**
+ * The plugin page that draws the inbox items of `source` (an inbox_item of the plugin whose connector it is), if the hub
+ * lists one; none on a hub without the slot (it lists none), and the item keeps its own detail.
+ */
+export function useInboxItemPlace(source?: string): UIPlace | undefined {
+  const items = usePluginSlot("inbox_item");
+  return useMemo(() => inboxItemPlace(items, source), [items, source]);
 }

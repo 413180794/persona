@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "./api";
 import {
-  actUI, applyBadge, barSpans, blocks, chartExtent, compactNumber, edgeLabels, fieldValues, isHttps, isUnsupported, labelWidth, linear, niceTicks, numberProblem, outcome,
+  actUI, applyBadge, barSpans, blocks, chartExtent, compactNumber, edgeLabels, fieldValues, inboxItemPlace, inboxSourceItem, isHttps, isUnsupported, labelWidth, linear, niceTicks, numberProblem, outcome,
   percent, placesOf, pointText, readView, refreshDelay, renderUI, seriesColors, submitValues, thinLabels, toneOf, uiContext, uiIcon, uiPlaces, UI_VERSION, type UIPlace, type UIView,
 } from "./plugin-ui";
 
@@ -186,6 +186,59 @@ describe("UI 插槽", () => {
     expect(applyBadge(a, { plugin: "g", id: "usage", badge: null })[0].badge).toBeNull();
     expect(applyBadge(list, { plugin: "g", id: "usage", badge: { text: "3", tone: "danger" } })).toBe(list);
     expect(applyBadge(list, { plugin: "other", id: "usage", badge: { text: "1" } })).toBe(list);
+  });
+});
+
+describe("收件箱条目（inbox_item）", () => {
+  const list: UIPlace[] = [
+    { plugin: "g", id: "usage", title: "用量", placement: "nav_page" },
+    { plugin: "chat", id: "event", title: "事件", placement: "inbox_item", size: "full", connector: "examplechat" },
+    { plugin: "odd", id: "nothing", title: "没写连接器", placement: "inbox_item" },
+  ];
+  it("finds the page of the connector that brought the item in; none: the item's own detail", () => {
+    expect(placesOf(list, "inbox_item").map((u) => u.id)).toEqual(["event", "nothing"]);
+    expect(inboxItemPlace(list, "examplechat")?.id).toBe("event");
+    expect(inboxItemPlace(list, "mail")).toBeUndefined();
+    expect(inboxItemPlace(list, undefined)).toBeUndefined();
+    expect(inboxItemPlace(list, "")).toBeUndefined();
+    expect(inboxItemPlace([], "examplechat")).toBeUndefined();
+  });
+  it("opens the item's own source page only for the item it is drawn for", () => {
+    expect(inboxSourceItem("persona://inbox/lark:F1:1051/source")).toBe("lark:F1:1051");
+    expect(inboxSourceItem("persona://inbox/lark%3AF1%3A1051/source")).toBe("lark:F1:1051");
+    expect(inboxSourceItem("persona://inbox/x%2Fy%20z/source")).toBe("x/y z");
+    for (const bad of ["persona://inbox//source", "persona://inbox/a/b/source", "persona://inbox/a/source?x=1", "persona://settings", "https://example.com/inbox/a/source", "persona://inbox/%E0/source"]) {
+      expect(inboxSourceItem(bad)).toBeUndefined();
+    }
+    const src = { open_url: "persona://inbox/lark:F1:1051/source" };
+    expect(outcome(src, "lark:F1:1051")).toEqual({ view: undefined, reload: false, toast: undefined, url: undefined, source: true });
+    expect(outcome(src, "lark:F1:9999")).not.toHaveProperty("source");
+    expect(outcome(src)).not.toHaveProperty("source"); // not drawn for an inbox item: nothing opens
+    expect(outcome({ open_url: "https://example.com/c" }, "lark:F1:1051")).toEqual({ view: undefined, reload: false, toast: undefined, url: "https://example.com/c" });
+  });
+  it("tells the hub which item, with every draw and press", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("localStorage", { getItem: () => "t", setItem: () => {}, removeItem: () => {} });
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      calls.push(`${init.method ?? "GET"} ${url} ${(init.body as string) ?? ""}`.trim());
+      if (url.includes("placement")) return new Response(JSON.stringify({ ui: [list[1]] }));
+      if (String(init.body).includes(`"item":"mail:1"`)) return new Response(JSON.stringify({ error: "这一条不是这个插件的连接器收进来的", code: "forbidden" }), { status: 403 });
+      return new Response(JSON.stringify({ view, toast: "已处理" }));
+    });
+    expect(await uiPlaces("inbox_item")).toEqual([list[1]]);
+    expect(uiContext({ item: "examplechat:1" }).item).toBe("examplechat:1");
+    expect(uiContext()).not.toHaveProperty("item");
+    expect((await renderUI("chat", "event", { item: "examplechat:1" })).title).toBe("概况");
+    expect((await actUI("chat", "event", "done", { context: { item: "examplechat:1" } })).toast).toBe("已处理");
+    const err = await renderUI("chat", "event", { item: "mail:1" }).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect([err.status, err.code, isUnsupported(err)]).toEqual([403, "forbidden", false]);
+    const ctx = JSON.stringify(uiContext({ item: "examplechat:1" }));
+    expect(calls.slice(0, 3)).toEqual([
+      "GET /api/v1/plugins/-/ui?placement=inbox_item",
+      `POST /api/v1/plugins/chat/-/ui/event {"context":${ctx}}`,
+      `POST /api/v1/plugins/chat/-/ui/event {"context":${ctx},"action":"done"}`,
+    ]);
   });
 });
 

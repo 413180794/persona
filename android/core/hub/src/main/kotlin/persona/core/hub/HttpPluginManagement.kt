@@ -10,6 +10,7 @@ import persona.core.contracts.api.PluginManagement
 import persona.core.contracts.api.PluginMarket
 import persona.core.contracts.api.PluginPreview
 import persona.core.contracts.api.PluginUiContext
+import persona.core.contracts.api.PluginUiForbidden
 import persona.core.contracts.api.PluginUiNotFound
 import persona.core.contracts.api.PluginUiPlace
 import persona.core.contracts.api.PluginUiResult
@@ -98,15 +99,16 @@ class HttpPluginManagement internal constructor(
     ): PluginUiResult = read(uiCall(plugin, ui, uiBody(context, state, action, values)), PluginUiResult.serializer())
 
     /**
-     * Every call says where and for whom it draws (docs/plugins.md「UI 插槽」「上下文」): the caller's launcher, machine
-     * and size, and this app's time zone, language, platform and UI version (2: charts, stat grids, segmented). An
-     * older hub ignores what it does not know.
+     * Every call says where and for whom it draws (docs/plugins.md「UI 插槽」「上下文」): the caller's launcher, machine,
+     * inbox item and size, and this app's time zone, language, platform and UI version (2: charts, stat grids,
+     * segmented). An older hub ignores what it does not know.
      */
     private fun uiBody(context: PluginUiContext?, state: String?, action: String?, values: Map<String, String>?) = buildJsonObject {
         val app = device()
         putJsonObject("context") {
             context?.launcher?.takeIf { it.isNotEmpty() }?.let { put("launcher", it) }
             context?.machine?.takeIf { it.isNotEmpty() }?.let { put("machine", it) }
+            context?.item?.takeIf { it.isNotEmpty() }?.let { put("item", it) }
             context?.size?.takeIf { it.isNotEmpty() }?.let { put("size", it) }
             (context?.tz ?: app.tz)?.takeIf { it.isNotEmpty() }?.let { put("tz", it) }
             (context?.locale ?: app.locale)?.takeIf { it.isNotEmpty() }?.let { put("locale", it) }
@@ -120,13 +122,15 @@ class HttpPluginManagement internal constructor(
 
     /**
      * A plugin that says the launcher's gateway is not its own answers 404 `unsupported`: the section is hidden. 404
-     * `not_found` is a machine (or plugin) the hub does not know: [PluginUiNotFound].
+     * `not_found` is a machine (or plugin) the hub does not know: [PluginUiNotFound]. 403 is a device that may only read
+     * and answer: [PluginUiForbidden].
      */
     private suspend fun uiCall(plugin: String, ui: String, body: JsonObject): String = try {
         call(path(plugin, "-", "ui", id(ui)), "POST", body)
     } catch (failure: HubFailure) {
         if (failure.status == 404 && failure.code == "unsupported") throw PluginUiUnsupported()
         if (failure.status == 404 && failure.code == "not_found") throw PluginUiNotFound(failure.message)
+        if (failure.status == 403) throw PluginUiForbidden(failure.message)
         throw failure
     }
 

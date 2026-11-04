@@ -21,6 +21,35 @@ type InboxTriage struct {
 
 func RenderInboxTriage(t InboxTriage) string { return render("inbox/triage", t) }
 
+// InboxGroup is the system prompt that relates a conversation's new messages to its events (inbox/group, #1680).
+type InboxGroup struct {
+	Owner string // "" is 你
+	// MetaDescription is what the connector says its events' meta is (its manifest's meta_description), trimmed.
+	MetaDescription string
+	Rules           string // the user's own rules, trimmed: the batch's source's (InboxThing.Rules), else inbox.rules
+	MaxCalls        int    // tool calls the batch may make
+	NewMax          int    // new events one batch may open
+}
+
+func RenderInboxGroup(g InboxGroup) string { return render("inbox/group", g) }
+
+// InboxGroupInput is one batch as the model reads it, with the tool calls made so far (inbox/group_input).
+type InboxGroupInput struct {
+	Thread  string
+	New     []string // the new messages' ids
+	Context string   // their text, as the connector wrote it
+	Events  string   // the events tool's answer without a query (JSON)
+	Calls   []InboxGroupCall
+	Left    int // tool calls still allowed
+}
+
+// InboxGroupCall is one tool call and its result (JSON as the tool answered, cut).
+type InboxGroupCall struct {
+	Tool, Args, Result string
+}
+
+func RenderInboxGroupInput(in InboxGroupInput) string { return render("inbox/group_input", in) }
+
 // InboxDraft is the system prompt for drafting a reply in the user's voice (inbox/draft).
 type InboxDraft struct {
 	Owner string // "" is 你

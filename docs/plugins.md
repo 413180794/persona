@@ -30,7 +30,7 @@ Persona 的插件底座（#1101）：开源仓库只放通用能力和**扩展�
 | `providers`（版本 1） | `provider.` | `id`、`name`、`description?`、`kind?`（`launcher` / `api`）、`api?`（`messages` / `responses`）、`base_url`、`model?`、`small_model?`、`models?: [{id, name?}]`、`dynamic_models?`、`key_hint?` | 纯声明即可；`dynamic_models` 要进程说协议 | 设置 › 模型供应商的「从插件添加」，见下面「模型供应商」 |
 | `api`（版本 1） | `api.` | `id`、`prefix`（一段路径）、`features?`、`events?`、`receipts?`（`[{method, path, kind}]`：要发送回执的写） | `runtime.http`，`on_startup`；有 `events` 要进程说协议 | App 用的一段接口 `/api/v1/<prefix>/…`，见下面「App 接口」 |
 | `assistant`（版本 1） | `assistant.` | `id`、`skills?`（包里的目录，各有 `SKILL.md`）、`instructions?`（包里的 `.md`）、`gate?`（包里的 `.json`：技能里一个命令的闸门） | 包里有这些文件；`gate` 要有 `skills`，要凭据时进程说协议 | 助手的技能、说明和命令闸门，见下面「助手」 |
-| `ui`（版本 2） | `ui.` | `id`、`title`、`placement`（插槽，见「UI 插槽」：`plugin_page` / `launcher_section` / `nav_page` / `overview_card` / `machine_section`）、`hosts?`（只有 `launcher_section` 能写：网关主机名，可 `*.` 开头；不写就是任何启动器，插件自己判断）、`icon?`（只有 `nav_page`）、`opens?`（只有 `overview_card`） | 进程说协议；`launcher_section` 要权限 `launcher_keys` | 插件详情里的页面、启动器页上的一节、主导航、总览、机器详情，见下面「声明式 UI」「UI 插槽」 |
+| `ui`（版本 2） | `ui.` | `id`、`title`、`placement`（插槽，见「UI 插槽」：`plugin_page` / `launcher_section` / `nav_page` / `overview_card` / `machine_section` / `inbox_item`）、`hosts?`（只有 `launcher_section` 能写：网关主机名，可 `*.` 开头；不写就是任何启动器，插件自己判断）、`icon?`（只有 `nav_page`）、`opens?`（只有 `overview_card`）、`connector?`（只有 `inbox_item`，而且必须写：插件自己贡献的一个连接器的 id） | 进程说协议；`launcher_section` 要权限 `launcher_keys` | 插件详情里的页面、启动器页上的一节、主导航、总览、机器详情、收件箱条目的详情，见下面「声明式 UI」「UI 插槽」 |
 | `agent_sources`（版本 1） | `agentsrc.` | `id`（`a-z0-9_-`，也是会话 id 的来源段 `<id>:<sessionKey>`）、`name`、`providers?`（`a-z0-9_`，如 `grok_bot`） | 进程说协议，`on_startup` | Agents 页的个人 Agent，和 hub 自己的 lark-connector 来源并列，见下面「个人 Agent 来源」 |
 | `channel`（版本 1） | `channel.` | `id`（`^[a-z][a-z0-9_]{0,31}$`，不能是 8 位十六进制）、`name`、`kind`（`im`）、`connector?`（绑定和状态来自同一个插件的这个连接器）、`bind?`（`qr` / `code` / `fields`）、`description?`、`capabilities`（收图片 / 文件 / 语音、`format`、`max_text`、`asks`、`push`、`typing`、`progress`、`threads`） | 进程说协议；没有 `connector` 时 `on_startup` | 和 Persona 对话的渠道：hub 跑统一管线（进对话、跟踪这一轮、答案发回、提问），插件只管和 IM 说话，见 [channels.md](channels.md) |
 | `events`（版本 1） | `event.` | `id`、`subscribe`（事件名的列表，见「事件」） | 进程说协议，`on_startup` | 只是告诉插件 hub 上发生了什么，见下面「事件」 |
@@ -159,7 +159,7 @@ hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的�
 | `network` | 主机名列表，可以 `*.` 开头，小写，不带协议、端口、路径 | 会访问哪些地方 | 只展示和记录；hub 暂不拦截别的地址 |
 | `hub_api` | `true` | 拿到 hub 的地址和完整 token（`PERSONA_HUB_URL`、`PERSONA_HUB_TOKEN`），能做 hub 主人能做的一切 | 没接受就不给这两个变量 |
 | `launcher_keys` | `true` | 用启动器的 Key 访问它的网关（贡献 `quota`、`launcher_section` 的 `ui` 必须有） | 插件看不到 Key：hub 或那台电脑替它发请求，只发到启动器自己的网关；没接受就不问它 |
-| 显示在 App 里（有 `nav_page` / `overview_card` / `machine_section` 的 `ui` 就有） | — | 在主导航、总览、机器详情页里显示自己的界面（列出每处的标题） | 和事件一样不用写在 `permissions` 里，按贡献算进安装前给人看的「它可以」和权限摘要；升级时多了一处要重新同意，见「UI 插槽」「权限」 |
+| 显示在 App 里（有 `nav_page` / `overview_card` / `machine_section` / `inbox_item` 的 `ui` 就有） | — | 在主导航、总览、机器详情页、收件箱条目的详情里显示自己的界面（列出每处的标题） | 和事件一样不用写在 `permissions` 里，按贡献算进安装前给人看的「它可以」和权限摘要；升级时多了一处要重新同意，见「UI 插槽」「权限」 |
 | 密钥（有 `secrets` 就有） | — | 用你填的密钥 | 每个插件只拿到自己的 |
 
 后面的扩展点会加细的权限（`kb.read`、`inbox.read`、`agents.control`……），按接受的权限放行 hub 提供给插件的方法，没接受回 `permission_denied`。
@@ -445,11 +445,12 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 - `GET /api/v1/plugins/-/ui?placement=<p>[&launcher=<名字>&machine=<机器>]` → `{ui: [{plugin, plugin_name, id, title, placement, size, icon?, opens?, badge?}]}`：启用、在跑的插件在这里画什么；
   `launcher_section` 要带 `launcher`，只列网关对得上的；不带 `placement` 是除了 `launcher_section` 以外的全部插槽（一次拿齐主导航、总览、机器详情）。
   插件详情里也有 `ui`（它的 `plugin_page` 和 `nav_page`，都是能从设置里点进去的整页）。
-- `POST /api/v1/plugins/{id}/-/ui/{ui}` `{context?: {launcher, machine, tz, locale, platform, size, ui_version}, state?, action?, values?}`（`context` 的各项见「UI 插槽」「上下文」）：不带 `action` 是画（回 `{view}`），
+- `POST /api/v1/plugins/{id}/-/ui/{ui}` `{context?: {launcher, machine, item, tz, locale, platform, size, ui_version}, state?, action?, values?}`（`context` 的各项见「UI 插槽」「上下文」）：不带 `action` 是画（回 `{view}`），
   带 `action` 是点了按钮（回 `{view?, toast?, open_url?}`；什么都没有就重新画一次）。插件不在、没启用回 404；不写 `hosts` 的一节插件说不是它的网关回 404 `unsupported`；
-  `machine_section` 没带 `machine` 或没有这台机器回 404 `not_found`；插件出错、View 画不了回 502 `plugin_failed`。
+  `machine_section` 没带 `machine` 或没有这台机器回 404 `not_found`；`inbox_item` 没带 `item` 或收件箱里没有这一条回 404 `not_found`，这一条不是它的连接器收进来的回 403 `forbidden`，
+  它的连接器现在不归这个插件（没注册上）回 404 `unsupported`；插件出错、View 画不了回 502 `plugin_failed`。
 
-**hub 调插件**：`ui.render {contribution, state, placement, size, ui_version, tz?, locale?, platform?, machine?, launcher?}` → View；
+**hub 调插件**：`ui.render {contribution, state, placement, size, ui_version, tz?, locale?, platform?, machine?, launcher?, item?}` → View；
 `ui.action {…同上, action, values}` → `{view?, toast?, open_url?}`（参数是 `plugin.UIParams`，各项见「UI 插槽」「上下文」）。
 `launcher` 是 `{name, base_url, query_id}`：`launcher_section` 才有，插件拿 `query_id` 调 hub 的 `gateway.http`（和「额度」的 `quota.http` 一样：
 `${launcher_key}` 由手里有 Key 的一方换上，只发到这个网关，一次最多 16 个请求），画完就失效。
@@ -475,7 +476,7 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 `confirm` 有字就先让用户确认，`submit` 时把这一页所有 `field` 的值作为 `values`（名字 → 字符串，开关是 `"true"` / `"false"`）带上。
 限制：一页最多 300 个条目，每个字符串最多 2000 个字符；`tone` 不在上面四个里、不是 https 的链接、认识的条目缺字段，整页拒绝（不画一半）。
 hub 不认识的 `type`（给更新的 hub 写的插件）和 App 画不了的（老 App）从 View 里拿掉、照常画其余的，见「UI 插槽」「兼容」。
-`open_url` 也只能是 https。
+`open_url` 也只能是 https；唯一的例外是 `inbox_item` 打开这一条自己的来源页（`persona://inbox/<条目 id>/source`，见「UI 插槽」「收件箱条目」）。
 
 ## UI 插槽
 
@@ -492,6 +493,7 @@ hub 不认识的 `type`（给更新的 hub 写的插件）和 App 画不了的�
 | `nav_page` | **主导航上的一个入口**，点进去是一整页 | full | — | 有 | 主导航上的入口 | 2 |
 | `overview_card` | **「总览」上的一张卡片**，点卡片打开 `opens` 指的页 | compact | — | — | 总览上的卡片 | 2 |
 | `machine_section` | **机器详情页里的一节**，在机器自己的各节后面 | full | `machine` | — | 机器详情页里的一节（会知道是哪台机器） | 2 |
+| `inbox_item` | **收件箱里一件事的详情正文**：`connector` 收进来的条目，App 自己的头部下面（见下面「收件箱条目」） | full | `item` | — | 收件箱里它的连接器的条目详情（会读到那一条的标题、总结和分级） | 2 |
 
 各端放在哪：
 
@@ -500,6 +502,7 @@ hub 不认识的 `type`（给更新的 hub 写的插件）和 App 画不了的�
 | `nav_page` | 侧栏「总览 / 机器 / 设置」那一组里，设置前面，一页一行（图标、标题、角标） | 左边的分区列，和网页同一组、同样的位置 | 设置首页最上面的「插件」一节，一页一行（图标、标题、角标）；设置 tab 的角标加上这些角标（数字相加，只有文字角标时是一个点） | 同 iOS：设置首页最上面的「插件」一节 |
 | `overview_card` | 总览页（`/overview`）上，Agent 概况下面一排卡片 | 没有总览页：放在设置 › 插件的列表上面 | 没有总览页：放在设置首页「插件」一节的入口上面 | 同 iOS |
 | `machine_section` | 机器详情页 | 机器详情页 | 机器详情页 | 机器详情页 |
+| `inbox_item` | 收件箱的详情栏：头部（标题、来源、已处理、✦ 摘要、AI 草拟回复 / 交给 AI）照旧，下面原来的会话 / 正文换成插件画的 | 收件箱里打开这个连接器来源的条目时，右边一栏（✦ 摘要和按钮、已处理）照旧，左边原来的会话 / 正文换成插件画的 View | 收件箱里打开这个连接器来源的条目时，导航栏下的操作条（✦ 摘要、AI 草拟回复 / 交给 AI）和已处理照旧，下面原来的会话 / 正文换成插件画的 View | 同网页（Android 自己的 PR） |
 
 清单里的写法：
 
@@ -515,6 +518,7 @@ hub 不认识的 `type`（给更新的 hub 写的插件）和 App 画不了的�
   不认识的画成 `plugin`。插件不能给图片、SF Symbol 名字或颜色。
 - `opens` 只有 `overview_card` 能写：同一个插件的一个 `nav_page` 或 `plugin_page` 的 id，不写就是卡片不能点（卡片里的按钮、行照样能点）。
 - 标题 1–40 个字；导航里放不下时各端截断（单行），不换行。
+- `connector` 只有 `inbox_item` 能写，而且必须写，见下面「收件箱条目」。
 
 **没做的位置**（评估过，先不开；名字留着）：
 
@@ -537,6 +541,45 @@ App 画一个插槽时在 `context` 里说清楚是给谁画、画在哪，hub �
 | `platform` | `ios` / `mac` / `android` / `web` | 别的值丢掉 |
 | `machine` | `machine_section`：机器 id（机器名也认） | `{id, name, os, online}`；`machine_section` 没有它回 404 |
 | `launcher` | `launcher_section`：启动器名（`machine` 是它所在的电脑） | `{name, base_url, query_id}`，见上面「声明式 UI」 |
+| `item` | `inbox_item`：收件箱条目的 id | `{id, title, summary?, tier?, reason?, done, meta, extra?}`，见下面「收件箱条目」；`inbox_item` 没有它回 404 |
+
+### 收件箱条目（`inbox_item`，#1681）
+
+插件的连接器收进收件箱的事，详情页的正文可以由插件按这一条的数据画（比如收件箱按事件合成之后（#1680），飞书插件按条目的 meta 画出一件事的消息链）。没有这个插槽的来源照旧走现在的详情。
+
+```json
+"contributes": {
+  "connectors": [{"id": "lark", "name": "飞书", "capabilities": ["status", "inbox"]}],
+  "ui": [{"id": "event", "title": "事件", "placement": "inbox_item", "connector": "lark"}]
+}
+```
+
+- **只画自己连接器的条目**：`connector` 必须是同一个插件 `contributes.connectors` 里的一个（和 `channel.connector` 一样），一个连接器最多一个 `inbox_item`。
+  别的来源（邮件、GitHub……）的条目不是它的，不能读也不能画。清单检查时就拒绝；连接器 id 现在有没有注册上（比如 hub 自己的飞书还没让出来）到运行时才查：
+  没注册上、或注册的不是这个插件的，列表里不出现，画的时候回 404 `unsupported`。
+- **列出**：`GET /api/v1/plugins/-/ui?placement=inbox_item` → `{ui: [{plugin, plugin_name, id, title, placement: "inbox_item", size: "full", connector}]}`；
+  不带 `placement` 的列表里也有（不认识 `inbox_item` 的老 App 按规矩忽略）。App 缓存这个列表（和别的插槽一起拿，见「兼容」），打开一件事时按条目的 `source` 找 `connector` 对得上的那一项，不用每次问 hub。
+- **画**：`POST /api/v1/plugins/{id}/-/ui/{ui}` `{context: {item: "<条目 id>", …}}`。hub 在收件箱里找到这一条，核对它的来源（`source`）就是这个界面的 `connector`，
+  然后在 `ui.render` / `ui.action` 里带上 `item`：
+
+  | 字段 | 说明 |
+  | --- | --- |
+  | `id`、`title`、`summary?`、`tier?`、`reason?` | 这一行：标题、AI 的总结、分级（`action` / `fyi` / `noise`，没分拣时没有）、理由 |
+  | `done` | 是否已处理 |
+  | `meta` | 连接器自己记的这件事的数据（收件箱事件合成，#1680），**原样**交给插件，hub 不解析；没有时是 `null` |
+  | `extra?` | 这一条的来源块（`lark` / `doc` / `moment` / `connector` 等，和 App 拿到的一样），原样；给还没有 meta 的条目（老条目、没有关联的来源）用 |
+
+  hub 读的是条目的 JSON（不是固定的字段），条目上有了 `meta` 就原样带上，`meta` 由哪个 PR 加进条目都一样。条目的会话原文（`context`）不交给插件。
+  App 每次画、每个动作都带 `item`，hub 每次重新读这一条（插件按钮做完事后重画，看到的是最新的）。
+- **画在哪**：App 自己的头部（标题、来源、已处理、✦ 摘要、AI 草拟回复 / 交给 AI）不变，插件画的是下面的正文，代替原来的会话页 / 正文
+  （插槽不能改 App 自己的页面和行为，见上面）。所以插件不重复画标题、分级、总结和已处理，画 meta 里才有的：涉及的人、时间跨度、「接着《…》」、消息链。
+  按钮走 `ui.action`：回复是输入框加提交，插件经 `hub_api` 调现有的 `POST /api/v1/inbox/{id}/reply`（App 收到 `inbox` 推送照常刷新）；已处理在 App 的头部里，插件不画。
+- **在会话里看**（通用，不认飞书）：`ui.action` 回 `open_url: "persona://inbox/<条目 id>/source"`（id 按一段路径转义，`plugin.InboxSourceURL`；`lark:F1:1051` 这样的原样）。
+  `open_url` 本来只收 https，hub 只为 `inbox_item`、只为这次画的那一条（`context.item`）放行这一个 app 内链接，别的 `persona:` 链接、别的条目的、其他插槽的都回 502 `plugin_failed`。
+  App 收到就打开这件事来源的原生页面，也就是没有插槽时点开这件事进的那一页：飞书是会话页，按条目的 `lark.start_position` 停在这件事的第一条（插件写 `extra` 时就填事件的第一条）。
+  插件不拼飞书专用的链接。网页在正文的位置换成原来的会话页，上面一行「回到<页面标题>」，插件的页还留着、回去时原样。
+- **不画某一条**：插件不想画的条目（比如飞书的云文档、公司圈条目，没有 meta）在 `ui.render` 里回错误码 `unsupported`，hub 回 404 `unsupported`，App 画原来的正文。hub 不解析 meta，所以总是问插件。
+- **画不出来时**：hub 回 403 / 404（只读设备、条目没了、连接器不归它、插件说 `unsupported`）App 直接画原来的正文；插件出错（502）也画原来的正文，上面一行说插件的详情没画出来、可以重试。
 
 ### 新条目（UI 版本 2）
 
@@ -604,7 +647,8 @@ View 带 `refresh_after`（秒）：这个 View 在屏幕上时，App 过这么�
 
 - 安装前的「它可以」里多一行「在 App 里显示自己的界面」，列出每处和标题（「主导航上的入口：用量；总览上的卡片：今天的用量」）；
 - 这几个插槽算进权限摘要：升级时多了一处（比如新加一个 `nav_page`）要重新同意（预览的 `more_permissions`，`added_permissions` 里是「在 App 的更多位置显示自己的界面」），同一处多一页不用；
-- `machine_section` 会让插件知道是哪台机器（id、名字、系统、在不在线），所以这一行写明了；`launcher_section` 已经要 `launcher_keys`；`plugin_page` 只在插件自己的设置里，不展示。
+- `machine_section` 会让插件知道是哪台机器（id、名字、系统、在不在线），所以这一行写明了；`inbox_item` 会让插件读到自己连接器那几条的标题、总结和分级（AI 的分拣结果），也写明了；
+  `launcher_section` 已经要 `launcher_keys`；`plugin_page` 只在插件自己的设置里，不展示。
 
 不想看到某个插件的入口和卡片：停用这个插件。
 
@@ -621,8 +665,11 @@ View 带 `refresh_after`（秒）：这个 View 在屏幕上时，App 过这么�
 - **插件比 hub 新**：hub 不认识的条目 `type` 不再整页拒绝，拿掉并在 hub 日志里记一行，其余照常画。清单是严格读的：老 hub 不认识的 `placement`、`icon`、`opens` 让插件装不上，
   用新插槽的插件在 `engines.persona` 里写上带 UI 插槽的 hub 构建号，或在 `initialize` 里看 `hub.extension_points.ui >= 2`。
 - **新 App 连老 hub**：hello / `/health` 的 `features` 没有 `plugin_ui_slots` 时不问新插槽、不画导航入口和卡片（老 hub 对不认识的 `placement` 只会回空列表，也不出错）。
+- **`inbox_item`（#1681）**：没有新的 feature，也不升 UI 版本（画的还是版本 2 的条目）。没有这个插槽的 hub 不会在列表里给出 `inbox_item`（不带 `placement` 的列表没有，
+  `?placement=inbox_item` 是空列表），App 就照旧画原来的详情。带 `inbox_item` 或 `connector` 的插件装到老 hub 上会被严格的清单检查拒绝（上一条），
+  这是预期的：要用它的插件在 `engines.persona` 里写上带这个插槽的 hub 构建号，或者把它放进单独的版本。
 
-**一致性测试**：`conformance.Check` 对清单里的每个 `ui` 贡献按它的插槽调一次 `ui.render`（带上一份示例上下文）：回了 View 就必须是 App 在那个插槽画得了的
+**一致性测试**：`conformance.Check` 对清单里的每个 `ui` 贡献按它的插槽调一次 `ui.render`（带上一份示例上下文；`inbox_item` 是它连接器的一条示例条目，`meta` 为 `null`）：回了 View 就必须是 App 在那个插槽画得了的
 （`plugin.Fit` 通过、没有不认识的条目、键是 snake_case）；回错误也行（测试里连不上插件自己的服务），但不能是 `unknown_method` / `no_contribution`。
 
 ## 个人 Agent 来源
@@ -703,6 +750,17 @@ iOS（Mac 共用同一套页面）在 hub 带 `plugin_manager` 时，设置首�
   （`SegmentedChoice`，选了马上发 `values: {name: 值}`）；不认识的条目跳过，不认识的 `tone` 当 `neutral`。`refresh_after` 只在页面在前台、
   App 在前台时计时（`.pluginRefresh`，最少 30 秒），回来时过了就马上画，自动重画时正在填的字段留着。卡片和机器上的一节不在列表里画链接面板：
   链接交给页面（Mac 的侧边面板会把整页包起来，放在一行里会把那一行压成只剩标题）。
+- 收件箱条目的正文（#1682，`inbox_item`，见上面「收件箱条目」）：hub 有 `plugin_ui_slots` 时（App 刚启动、hello 还没到时也问：启动就点开的一件不能因此定成原来的正文，
+  不认识这个插槽的 hub 只回空列表），每台 hub 问一次 `GET /api/v1/plugins/-/ui?placement=inbox_item`（配对 / 换 hub、打开收件箱时再问），
+  记下哪些连接器有插件画（`InboxItemSlots`，`connector` 对条目的 `source`）。打开这些来源的条目时 `POST …/-/ui/{ui}`、`context.item` 是条目 id，
+  拿到 View 就用 `PluginViewRenderer` 画在详情的头部下面，代替原来的会话 / 正文（和 `plugin_page` 一样，下拉刷新、`refresh_after`），条目变了（新消息、已处理 / 移回）再画一次。
+  头部照旧：iPhone 导航栏下的操作条（✦ 摘要、AI 草拟回复 / 交给 AI）和右上角已处理，Mac 右边一栏。列表里没有它的来源不等，马上是原来的正文；还没问过时先转一下圈。
+  403 / 404 / `unsupported` 安静地画原来的正文；插件出错（502）、连不上 hub、没有 View 时也画原来的正文，上面一行「<插件名>的详情没画出来：<原因>」和「重试」。
+  按钮回 `open_url: persona://inbox/<这一条>/source`（在会话里看，`InboxSourceLink`；只认这次画的那一条）就换成原来的正文（飞书会话停在这件事的第一条），
+  上面一行「回到<页面标题>」回到插件的页（同一个 `PluginViewModel`，状态和填的字都在）；别的 `open_url`、链接照插件页面的规矩，经页面的 `openURL` 打开
+  （飞书文档进阅读器，Mac 在旁边的面板）。代码 `Persona/Views/Inbox/InboxItemSlot.swift`（`InboxItemSlots`、`InboxItemSlotModel`、`InboxPluginItemPage`），
+  单元测试 `InboxItemSlotTests`；截图：mock 加 `MOCK_INBOX_ITEM_UI=1`（插件 `example-chat`），`-ui.oldLayout YES -tab mail -openInboxItem lark:f1:100`
+  （`lark:f3:300` 是群聊、插件出错的那一条）。
 - 插件市场（#1328，「插件市场」）：`GET /api/v1/plugins` 回 `markets: true` 时列表最上面一行「插件市场」。目录有搜索框（停 0.3 秒再问 hub）、
   按市场筛选的 chip（`FilterChip`，两个以上市场才有）、每个插件的名字、版本、说明、标签和状态（可安装 / 可升级 / 已安装 / 装不了的原因），
   读不到的市场在上面写原因；详情列权限，「安装」「升级到 …」先 `catalog/preview`，弹出的确认页列出权限（升级时先单列「新版本多要的」），
@@ -720,6 +778,7 @@ iOS（Mac 共用同一套页面）在 hub 带 `plugin_manager` 时，设置首�
   单元测试 `PluginsModelTests`、`PluginMarketModelTests`、`PluginViewModelTests`、`PluginSlotsModelTests`。
 - 网页（#1207）：设置 › 插件，同样的列表和详情（`web/src/views/settings/Plugins.tsx`、`web/src/lib/plugins.ts`，`/settings?tab=plugins&plugin=<id>`），见 `docs/web.md`「设置」。
   #1330 加上声明式 UI（`settings/PluginView.tsx`、`lib/plugin-ui.ts`：插件详情的「页面」、启动器详情里的一节）和插件市场（`settings/PluginMarket.tsx`、`lib/plugin-market.ts`：目录、详情、管理市场）。
+  #1681 加上 `inbox_item`（`inbox/InboxPluginBody.tsx`：收件箱详情的正文；列表来自 `lib/plugin-slots.ts` 的缓存），见 `docs/web.md`「设置」的「UI 插槽」。
 - Android（#1206）同样的功能，入口在设置首页的「扩展」一节，代码和截图方法见 [android.md](android.md)「插件（设置 › 插件）」；插件画的界面（插件页面、启动器页上的一节）和插件市场（#1329）见同一节下的「插件画的界面和插件市场」。
 
 ## 管理界面：插件
@@ -748,7 +807,8 @@ hub 管理界面（[admin.md](admin.md)）的「插件」页（`web/src/admin/pa
 
 ```json
 {"protocol": 1,
- "hub": {"build": 202611050000, "extension_points": {"computer": 1, "connectors": 2, "voice": 1}, "role": "center", "timezone": "Asia/Shanghai"},
+ "hub": {"build": 202611050000, "extension_points": {"computer": 1, "connectors": 2, "voice": 1}, "role": "center", "timezone": "Asia/Shanghai",
+         "capabilities": ["inbox_group"]},
  "plugin": {"id": "example-notes", "version": "1.2.0", "dir": "…", "data_dir": "…"},
  "config": {"base_url": "https://notes.example.com", "folders": ["work"], "include_shared": false},
  "secrets": {"api_key": "…"},
@@ -758,7 +818,9 @@ hub 管理界面（[admin.md](admin.md)）的「插件」页（`web/src/admin/pa
 
 `active` 是这次要用的贡献（关着的连接器不在里面）。`hub.role`（#1503）是这台 hub 在互联组里的角色：`center`（独自一台，或组的中心：服务 App、驱动电脑）或
 `member`（别的 hub 是中心：替组做的事，比如响应聊天服务的实时事件、跑 /agent、爬全量，交给中心那台）；角色变了，hub 重启贡献了 `connectors` 或 `api` 的插件。
-`hub.timezone` 是用户的时区（IANA 名字，和用户设备上报的一样），给插件显示时间用（「今天」、一条消息的时间）；只知道 hub 自己的时钟时为空，每次启动时读。程序回 `{"protocol": 1, "id", "version", "contributes"?}`：`protocol` 不一致回错误 `wrong_protocol`
+`hub.timezone` 是用户的时区（IANA 名字，和用户设备上报的一样），给插件显示时间用（「今天」、一条消息的时间）；只知道 hub 自己的时钟时为空，每次启动时读。
+`hub.capabilities`（#1680）是这台 hub 做得了、插件可以据此换做法的事：`inbox_group`（把连接器交来的一批新消息关联到收件箱里的事件，`docs/inbox.md`「事件合成」）。
+没有这个字段或里面没有某一项，就当这台 hub 不做。程序回 `{"protocol": 1, "id", "version", "contributes"?}`：`protocol` 不一致回错误 `wrong_protocol`
 （或 hub 看到不对就停掉它）；`id`、`version` 必须和清单一致；`contributes` 是清单的子集，和清单不一致时 hub 记日志、以清单为准。
 
 基础方法：`initialize`、`ping`（`initialize` 之后，回 `{}`）、`manifest`（`initialize` 之前也能调，回 `persona-plugin.json`；跑在别处的插件必须有，hub 从包里起的可以没有）。

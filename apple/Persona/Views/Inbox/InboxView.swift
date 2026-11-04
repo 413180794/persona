@@ -122,6 +122,8 @@ struct InboxPage: View {
                 .sheet(item: $composing) { d in ComposeView(draft: d, accounts: accounts) }
                 .sheet(item: $editingDraft) { InboxDraftSheet(item: $0, accounts: accounts) }
                 .sheet(isPresented: $showingMutes) { InboxMutesView() }
+                // A plugin enabled or set up since: its sources' items open as it draws them.
+                .task { await InboxItemSlots.shared.reload() }
                 .task {
                     store.reload()
                     await loadAccounts()
@@ -647,19 +649,27 @@ struct InboxAgentRow: View {
 
 // MARK: - Detail
 
-/// One inbox item opened: the Feishu chat at its first new message, or the mail; the AI's summary with AI 草拟回复 /
-/// 交给 AI on top, 已处理 in the toolbar.
+/// One inbox item opened: the Feishu chat at its first new message, or the mail, or what a plugin draws for its source
+/// (placement inbox_item, `InboxItemSlotContent`); the AI's summary with AI 草拟回复 / 交给 AI on top, 已处理 in the
+/// toolbar, whoever draws the body.
 struct InboxDetailView: View {
     var item: InboxItem
     var accounts: [MailAccount]
     @Environment(\.dismiss) private var dismiss
     @State private var drafting = false
     @State private var handingOff = false
+    @State private var slot: InboxItemSlotModel
+
+    init(item: InboxItem, accounts: [MailAccount]) {
+        self.item = item
+        self.accounts = accounts
+        _slot = State(initialValue: InboxItemSlotModel(item: item))
+    }
 
     private var current: InboxItem { InboxStore.shared.items.first { $0.id == item.id } ?? item }
 
     var body: some View {
-        content
+        InboxItemSlotContent(item: current, slot: slot) { content }
             .safeAreaInset(edge: .top, spacing: 0) {
                 InboxActionBar(item: current, draft: { drafting = true }, handOff: { handingOff = true })
             }

@@ -271,6 +271,8 @@ private fun LarkConversationScreen(repository: InboxRepository, route: LarkRoute
     }, bottomBar = {
         ReplyComposerField(reply, composer::update, composer::send, "回复 ${conversation.title}",
             modifier = Modifier.imePadding(), accessory = {
+                // Opened in place of the item's plugin page, which broke: one line with 重试 (inbox_item, #1683).
+                InboxPluginNotice(route.itemId, route, Modifier)
                 record?.let { InboxAiActions(onDraft = { drafting = true }, onHandOff = { handingOff = true }) }
                 record?.item?.summary?.let { Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                 if (record != null && !record.item.isDone) AgentDraftCard(record, composers, navigator, onEditingChange = { editingDraft = it },

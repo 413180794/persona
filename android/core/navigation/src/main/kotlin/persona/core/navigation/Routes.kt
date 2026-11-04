@@ -27,6 +27,14 @@ sealed interface RouteSource {
 ) : NavKey
 
 @Serializable @SerialName("jarvis.core.navigation.InboxItemRoute") data class InboxItemRoute(val itemId: String) : NavKey
+
+/**
+ * An inbox item drawn by the plugin of the connector it comes from (its `inbox_item` UI, docs/plugins.md「UI 插槽」):
+ * [pluginId]'s [uiId] for item [itemId]; [title] is the item's until the plugin's view has one. When the plugin cannot
+ * draw it, the item's own page opens instead.
+ */
+@Serializable @SerialName("persona.core.navigation.InboxItemUiRoute")
+data class InboxItemUiRoute(val itemId: String, val pluginId: String, val uiId: String, val title: String = "") : NavKey
 @Serializable @SerialName("jarvis.core.navigation.LarkChatRoute") data class LarkChatRoute(val chatId: String) : NavKey
 @Serializable @SerialName("jarvis.core.navigation.InteractionRoute") data class InteractionRoute(val chat: ChatRoute, val requestId: String) : NavKey
 @Serializable @SerialName("jarvis.core.navigation.PairingRoute") data object PairingRoute : NavKey

@@ -6,6 +6,7 @@ import (
 	"path"
 	"reflect"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -14,8 +15,9 @@ import (
 type Capability string
 
 // Capabilities and the interface each stands for. The names are the ones GET /api/v1/connectors lists (except
-// CapSettle and CapFallback, which only the hub uses). CapFallback is a promise, not an interface: every inbox thing
-// carries a fallback tier (ThingExtra.RuleTier), so its items never need the model to come in (docs/plugins.md).
+// CapSettle, CapGroup, CapMeta and CapFallback, which only the hub uses). CapFallback is a promise, not an interface:
+// every inbox thing carries a fallback tier (ThingExtra.RuleTier), so its items never need the model to come in
+// (docs/plugins.md).
 const (
 	CapStatus   Capability = "status"   // Accounts
 	CapTools    Capability = "tools"    // ReadTools
@@ -30,6 +32,8 @@ const (
 	CapOptions  Capability = "options"  // Options
 	CapThreads  Capability = "threads"  // Threads
 	CapSnapshot Capability = "snapshot" // Snapshot
+	CapGroup    Capability = "group"    // Grouper
+	CapMeta     Capability = "meta"     // EventWriter (with CapGroup and MetaDescription)
 	CapFallback Capability = "fallback" // (none: every inbox thing carries extra.rule_tier)
 )
 
@@ -55,6 +59,8 @@ var capabilities = []capability{
 	{CapOptions, reflect.TypeFor[Options](), true},
 	{CapThreads, reflect.TypeFor[Threads](), true},
 	{CapSnapshot, reflect.TypeFor[Snapshot](), true},
+	{CapGroup, reflect.TypeFor[Grouper](), false},
+	{CapMeta, reflect.TypeFor[EventWriter](), false},
 	{CapFallback, nil, false},
 }
 
@@ -84,6 +90,9 @@ type Manifest struct {
 	// one kind of conversation kept apart from the rest (a feed's posts the user is in, besides the chats), or ids
 	// the knowledge base had before a connector moved (docs/connector-protocol.md「知识库」). Same pattern as an id.
 	ArchiveSources []string
+	// MetaDescription says what its events' meta is, for the model that relates new messages to them: required with
+	// CapMeta, refused without it.
+	MetaDescription string
 	// CLI is the command on the assistant's PATH that is this connector's command line (Telegram's tg): the node
 	// writes it to run `personad tool --cli <id>`, which has the connector's <id>_cli tool read each command line and
 	// calls the tool it names, through the gate (docs/connector-protocol.md「命令行」). Empty: none.
@@ -95,6 +104,11 @@ type Manifest struct {
 
 // Has says whether the manifest declares cp.
 func (m Manifest) Has(cp Capability) bool { return slices.Contains(m.Capabilities, cp) }
+
+// Known says whether this hub has capability cp (Check refuses a connector declaring one it does not).
+func Known(cp Capability) bool {
+	return slices.ContainsFunc(capabilities, func(x capability) bool { return x.cap == cp })
+}
 
 // ForAgents says whether the coding agents get the tool name too.
 func (m Manifest) ForAgents(name string) bool {
@@ -138,9 +152,7 @@ func Check(c Connector) error {
 	m := c.Manifest()
 	var errs []error
 	for i, cp := range m.Capabilities {
-		if !slices.ContainsFunc(capabilities, func(x capability) bool {
-			return x.cap == cp
-		}) {
+		if !Known(cp) {
 			errs = append(errs, fmt.Errorf("unknown capability %q", cp))
 		} else if slices.Index(m.Capabilities, cp) != i {
 			errs = append(errs, fmt.Errorf("capability %q declared twice", cp))
@@ -161,6 +173,18 @@ func Check(c Connector) error {
 	}
 	if len(m.Kinds) > 0 && !m.Has(CapInbox) {
 		errs = append(errs, errors.New("declares inbox kinds without an inbox"))
+	}
+	if m.Has(CapGroup) && !m.Has(CapInbox) {
+		errs = append(errs, errors.New("declares group without an inbox"))
+	}
+	if m.Has(CapMeta) && !m.Has(CapGroup) {
+		errs = append(errs, errors.New("declares meta without group"))
+	}
+	if m.Has(CapMeta) && strings.TrimSpace(m.MetaDescription) == "" {
+		errs = append(errs, errors.New("declares meta without a meta_description"))
+	}
+	if !m.Has(CapMeta) && m.MetaDescription != "" {
+		errs = append(errs, errors.New("has a meta_description without declaring meta"))
 	}
 	if m.Has(CapFallback) && !m.Has(CapInbox) {
 		errs = append(errs, errors.New("declares fallback without an inbox"))

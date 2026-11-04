@@ -465,6 +465,46 @@ func TestUIAndEventsPoints(t *testing.T) {
 	}
 }
 
+// An inbox_item draws the inbox items of one of the plugin's own connectors, named in connector; it is shown before
+// installing like the other slots outside the plugin's settings.
+func TestInboxItemSlot(t *testing.T) {
+	item := func(extra ...any) func(m map[string]any) {
+		return func(m map[string]any) {
+			ui := []any{map[string]any{"id": "event", "title": "事件", "placement": "inbox_item", "connector": "examplenotes"}}
+			m["contributes"].(map[string]any)["ui"] = append(ui, extra...)
+		}
+	}
+	m, err := Parse(with(t, item()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u := m.UIs(); len(u) != 1 || u[0].Connector != "examplenotes" || strings.Join(m.Surfaces(), ",") != "inbox_item" {
+		t.Fatalf("%+v %v", u, m.Surfaces())
+	}
+	if !strings.Contains(fmt.Sprint(Explain(m)), "收件箱里它的连接器的条目详情（会读到那一条的标题、总结和分级）：事件") {
+		t.Fatal(Explain(m))
+	}
+	for name, change := range map[string]func(m map[string]any){
+		"no connector": func(m map[string]any) {
+			m["contributes"].(map[string]any)["ui"] = []any{map[string]any{"id": "event", "title": "事件", "placement": "inbox_item"}}
+		},
+		"not a connector id": func(m map[string]any) {
+			m["contributes"].(map[string]any)["ui"] = []any{map[string]any{"id": "event", "title": "事件", "placement": "inbox_item", "connector": "Example-Notes"}}
+		},
+		"another's connector": func(m map[string]any) {
+			m["contributes"].(map[string]any)["ui"] = []any{map[string]any{"id": "event", "title": "事件", "placement": "inbox_item", "connector": "mail"}}
+		},
+		"a connector off the inbox": func(m map[string]any) {
+			m["contributes"].(map[string]any)["ui"] = []any{map[string]any{"id": "x", "title": "x", "placement": "nav_page", "connector": "examplenotes"}}
+		},
+		"two for one connector": item(map[string]any{"id": "again", "title": "又一个", "placement": "inbox_item", "connector": "examplenotes"}),
+	} {
+		if _, err := Parse(with(t, change)); err == nil {
+			t.Errorf("%s: parsed", name)
+		}
+	}
+}
+
 // The slots outside a plugin's settings are shown before installing, in the digest, and agreed to again when an
 // upgrade adds one.
 func TestUISurfaces(t *testing.T) {

@@ -41,6 +41,9 @@ internal fun FilePreview(state: FilesState, controller: FilesController, images:
     // A CSV / TSV is text too: ⋯ switches between the grid and its source.
     val delimited = table && file?.text != null
     val notebook = file?.text != null && Notebooks.isNotebook(file.name)
+    val html = file?.text != null && HtmlPreview.isHtml(file.name)
+    // Per file and only while it's open: scripts and the network come back off next time.
+    var policy by remember(file?.path) { mutableStateOf(HtmlPreview.Policy()) }
     var source by rememberSaveable(selection.toString()) { mutableStateOf(false) }
     val path = when (selection) {
         is FileSelection.File -> file?.path?.ifEmpty { null } ?: selection.path
@@ -74,6 +77,12 @@ internal fun FilePreview(state: FilesState, controller: FilesController, images:
                 NotebookFile(file.text.orEmpty(), FilesPaths.parent(file.path) ?: controller.cwd, padding, header,
                     onOpenPath = { controller.push(FileSelection.File(it)) }, loadImage = images::load, truncated = file.truncated)
             }
+            file != null && html && !source -> key(file.path) {
+                Column(Modifier.fillMaxSize().padding(padding)) {
+                    FileMeta(file.size, file.truncated)
+                    HtmlFile(file, policy, Modifier.weight(1f))
+                }
+            }
             file != null -> key(file.path) { FileBody(file, markdown && !source, padding, header, controller, images) }
             diff != null -> key(selection) {
                 if (diff.diff.isBlank()) LazyColumn(contentPadding = padding) {
@@ -87,6 +96,13 @@ internal fun FilePreview(state: FilesState, controller: FilesController, images:
         if (markdown) add(JAction(if (source) "渲染 Markdown" else "查看源文件", if (source) PhIcons.FileText else PhIcons.Code) { source = !source })
         if (delimited) add(JAction(if (source) "查看表格" else "查看源文件", if (source) PhIcons.SquaresFour else PhIcons.Code) { source = !source })
         if (notebook) add(JAction(if (source) "查看笔记本" else "查看源文件", if (source) PhIcons.BookOpen else PhIcons.Code) { source = !source })
+        if (html) {
+            add(JAction(if (source) "预览网页" else "查看源文件", if (source) PhIcons.GlobeSimple else PhIcons.Code) { source = !source })
+            if (!source) {
+                add(JAction("允许运行脚本", PhIcons.Lightning, checked = policy.scripts) { policy = policy.copy(scripts = !policy.scripts) })
+                add(JAction("允许联网", PhIcons.WifiHigh, checked = policy.network) { policy = policy.copy(network = !policy.network) })
+            }
+        }
         if (path != null) add(JAction("拷贝路径", PhIcons.Copy) { copyText(context, path, feedback, "已拷贝路径") })
         file?.text?.let { text -> add(JAction("拷贝内容", PhIcons.Copy) { copyText(context, text, feedback, "已拷贝内容") }) }
         state.diff?.diff?.takeIf { it.isNotEmpty() }?.let { text -> add(JAction("拷贝 diff", PhIcons.Copy) { copyText(context, text, feedback, "已拷贝 diff") }) }

@@ -7214,7 +7214,11 @@ def markets_route(handler, p, body):
                 # clients hide it (docs/plugins.md「声明式 UI」, #1339)
                 ui = [{"plugin": "example-gateway", "id": "panel", "title": "Example 网关", "placement": "launcher_section"},
                       {"plugin": "example-gateway", "id": "elsewhere", "title": "别家网关", "placement": "launcher_section"}]
+        ui += [u for u in INBOX_ITEM_UI if placement in ("", u["placement"])]
         handler.send_json({"ui": ui}); return True
+    if len(parts) == 8 and parts[4] == "example-chat" and parts[5:7] == ["-", "ui"] and method == "POST" and INBOX_ITEM_UI:
+        code, out = inbox_item_ui(parts[7], req)
+        handler.send_json(out, code); return True
     if len(parts) == 8 and parts[3] == "plugins" and parts[5] == "-" and parts[6] == "ui" and method == "POST":
         if parts[4] != "example-gateway" or "example-gateway" not in PLUGINS:
             handler.send_json({"error": "no such plugin", "code": "not_found"}, 404); return True
@@ -9757,6 +9761,69 @@ if DOC_COMMENTS:
     H.do_GET = _doc_get
     H.do_POST = _doc_post
 MOCK_HELP.append("MOCK_DOC_COMMENTS=1  飞书文档阅读页能写评论（#1290）：features 带 lark_doc_comments，每篇文档三条编造的评论，回复 / 新评论 / 解决 / 重新打开 / @人都改它们；GET /mock/doc-comments 看写了什么")
+
+
+# ---------- area: an inbox item's page drawn by a plugin (docs/plugins.md「收件箱条目」, #1681) ----------
+# MOCK_INBOX_ITEM_UI=1 (with MOCK_PLUGINS=1): a plugin example-chat draws the page of Feishu's items (inbox_item for
+# connector lark), from the item it is told of (context.item): the people, the time it spans, the thing it continues
+# and its messages, a reply (files the item as replied) and 在会话里看 (persona://inbox/<item>/source: the apps open the
+# item's own chat). 已处理 stays the app's own. Items of another source are refused (403), an unknown one is 404, like
+# the hub; it fails (502) on groups' items. The hub's own detail stays for other sources.
+INBOX_ITEM_UI = [{"plugin": "example-chat", "plugin_name": "Example 飞书事件", "id": "event", "title": "事件", "placement": "inbox_item",
+                  "size": "full", "connector": "lark"}] if os.environ.get("MOCK_INBOX_ITEM_UI") == "1" else []
+# The made-up meta of a few items (the plugin's own record: who said what, in order).
+_EVENT_META = {
+    "lark:f1:100": {"continues": "上周的发布排期", "messages": [
+        ("韩梅梅", 40, "周五的发布能赶上吗？"), ("韩梅梅", 39, "下午我要和客户确认时间"),
+        ("你", 30, "我先看下 release 分支还剩什么"), ("韩梅梅", 18, "好，三点前给我个准话就行")]},
+    "lark:f2:200": {"messages": [("李雷", 90, "新版图标放在这里了"), ("王芳", 70, "圆角是不是大了一点"), ("李雷", 55, "@你 下午评审前看一眼？")]},
+}
+
+
+def inbox_item_ui(ui, req):
+    """POST /api/v1/plugins/example-chat/-/ui/<ui>: (status, body) as the hub answers for an inbox_item."""
+    iid = (req.get("context") or {}).get("item", "")
+    it = next((x for x in INBOX if x["id"] == iid), None)
+    if ui != "event" or not it:
+        return 404, {"error": "收件箱里没有这一条", "code": "not_found"}
+    if it.get("source") != "lark":
+        return 403, {"error": "这一条不是这个插件的连接器收进来的", "code": "forbidden"}
+    if it.get("kind") == "group":  # the plugin fails on these: the apps draw the item's own body, and say so
+        return 502, {"error": "插件画的界面这个 hub 画不了：section 0 item 0 (link): link needs title and an https url", "code": "plugin_failed"}
+    action = req.get("action") or ""
+    if action == "reply":
+        if not ((req.get("values") or {}).get("reply") or "").strip():
+            return 200, {"toast": "先写点什么"}
+        it["done_at"], it["done_by"] = ago(), "replied"
+        return 200, {"toast": "已回复"}
+    if action == "open":
+        return 200, {"open_url": "persona://inbox/%s/source" % iid}
+    meta = _EVENT_META.get(iid) or {"messages": [(it.get("sender") or it["title"], 30, it.get("preview", ""))]}
+    msgs = meta["messages"]
+    people = list(dict.fromkeys(m[0] for m in msgs))
+    first, last = ago(minutes=msgs[0][1]), ago(minutes=msgs[-1][1])
+    clock = lambda iso: datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone().strftime("%H:%M")
+    facts = [{"type": "row", "title": "涉及的人", "value": "、".join(people)},
+             {"type": "row", "title": "时间", "value": "%s–%s · %d 分钟" % (clock(first), clock(last), msgs[0][1] - msgs[-1][1])}]
+    if meta.get("continues"):
+        facts.append({"type": "row", "title": "接着《%s》" % meta["continues"], "subtitle": "上一件已处理的事", "badge": {"text": "已处理"}})
+    chain = [{"type": "row", "title": who, "subtitle": text, "value": clock(ago(minutes=m)),
+              **({"badge": {"text": "最新", "tone": "caution"}} if i == len(msgs) - 1 else {})} for i, (who, m, text) in enumerate(msgs)]
+    actions = [{"type": "field", "name": "reply", "label": "回复", "kind": "text", "placeholder": "回复 %s" % msgs[-1][0]},
+               {"type": "button", "title": "回复", "action": {"id": "reply", "submit": True}},
+               {"type": "button", "title": "在会话里看", "action": {"id": "open"}}]
+    return 200, {"view": {"sections": [{"items": facts}, {"title": "消息 · %d 条" % len(msgs), "items": chain}, {"items": actions}]}}
+
+
+_features_without_inbox_item_ui = features
+
+
+def features():
+    f = _features_without_inbox_item_ui()
+    return f + (["plugin_ui_slots"] if INBOX_ITEM_UI and "plugin_ui_slots" not in f else [])
+
+
+MOCK_HELP.append("MOCK_INBOX_ITEM_UI=1  （和 MOCK_PLUGINS=1 一起）收件箱里飞书的条目由插件 example-chat 画详情正文（inbox_item）：涉及的人、时间、接着哪件、消息链、回复、在会话里看（persona://inbox/<条目>/source）；群聊的条目插件出错")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="用于客户端测试的 mock hub")

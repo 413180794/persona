@@ -67,6 +67,95 @@ type InboxThing struct {
 	// Extra is what an item the hub used to make itself had besides the generic fields (ThingExtra): only a connector
 	// taking over one of the hub's own (MigratableConnectors) sends it, and only for it does the hub read it.
 	Extra *ThingExtra `json:"extra,omitempty"`
+	// Group makes the thing a batch of a conversation's new messages to relate to its events (a connector that
+	// declares CapGroup, docs/inbox.md「事件合成」): the hub never makes it an item. Thread, Context (the new messages'
+	// text), Rules and Last go with it.
+	Group *ThingGroup `json:"group,omitempty"`
+	// ID and Meta are an event's (Grouper.GroupAppend's answer): the item's id, and what the connector keeps about the
+	// event (its messages…), stored and handed back as it is: the hub never reads it.
+	ID   string          `json:"id,omitempty"`
+	Meta json.RawMessage `json:"meta,omitempty"`
+}
+
+// ThingGroup is a batch to relate: its id (the same each time the same batch is handed again) and the new messages'
+// ids, opaque to the hub.
+type ThingGroup struct {
+	Batch string   `json:"batch"`
+	New   []string `json:"new"`
+}
+
+// Grouper is an inbox whose new messages are related to events (CapGroup): the hub's model decides which event each
+// message belongs to, reading the conversation through GroupTool, and the connector groups them by structure itself
+// when the model can't (GroupFallback). Both may answer that they have no such thing (an unknown method): the model
+// is told the tool is not there; without a fallback the batch waits for the model. The hub writes the events itself,
+// unless the connector also keeps their meta (CapMeta, EventWriter).
+type Grouper interface {
+	GroupTool(ctx context.Context, call GroupToolCall) (json.RawMessage, error)
+	GroupFallback(ctx context.Context, f GroupFallback) (GroupFallbackResult, error)
+}
+
+// EventWriter is a grouping inbox that keeps each event's meta (CapMeta): the hub has it write every event it
+// composed (GroupAppend: one event a call, meta in, meta out) and stores what comes back.
+type EventWriter interface {
+	GroupAppend(ctx context.Context, a GroupAppend) (InboxThing, error)
+}
+
+// The connector's tools for relating (GroupToolCall.Name): the messages before one, around one, and a search.
+const (
+	GroupMessagesBefore = "messages_before"
+	GroupMessagesAround = "messages_around"
+	GroupSearch         = "search"
+)
+
+// GroupToolCall is one of the connector's tools called for the model, in a conversation; Args as the model wrote them.
+type GroupToolCall struct {
+	Thread string          `json:"thread"`
+	Name   string          `json:"name"`
+	Args   json.RawMessage `json:"args,omitempty"`
+}
+
+// GroupAppend adds messages to one event: an existing one (Event, with its Meta) or a new one (Event "", Meta null),
+// which may continue a done one. The answer is the event as a thing, with its ID and Meta.
+type GroupAppend struct {
+	Thread    string          `json:"thread"`
+	Event     string          `json:"event"`
+	Meta      json.RawMessage `json:"meta"`
+	Messages  []string        `json:"messages"`
+	Continues string          `json:"continues,omitempty"`
+}
+
+// GroupEvent is an event as the connector's fallback reads it.
+type GroupEvent struct {
+	ID   string          `json:"id"`
+	Meta json.RawMessage `json:"meta"`
+	Done bool            `json:"done"`
+}
+
+// GroupFallback asks the connector to group a batch by structure (replies and quotes, topics, one sender's run,
+// gaps in time), with the conversation's events.
+type GroupFallback struct {
+	Thread string       `json:"thread"`
+	Batch  string       `json:"batch"`
+	Events []GroupEvent `json:"events"`
+}
+
+// GroupFallbackResult puts each new message in an existing event (Assign) or a new one (New, by its own key, with its
+// rule tier and a title).
+type GroupFallbackResult struct {
+	Assign []GroupAssign `json:"assign"`
+	New    []GroupNew    `json:"new"`
+}
+
+type GroupAssign struct {
+	Message string `json:"message"`
+	Event   string `json:"event"`
+}
+
+type GroupNew struct {
+	Key      string   `json:"key"`
+	Messages []string `json:"messages"`
+	RuleTier Tier     `json:"rule_tier,omitempty"`
+	Title    string   `json:"title,omitempty"`
 }
 
 // MigratableConnectors are the hub's own connectors a plugin may take over while they move out of the hub (Feishu

@@ -31,6 +31,8 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `lark/chat_agent.md`、`doc_agent.md` | 飞书 `/agent`（会话里 / 文档评论里）的第一条消息 | `hub/lark_agent.go`、`lark_agent_docs.go` |
 | `lark/chat_context.md`、`doc_context.md`、`line.md` | 上面两种请求的上下文：位置、聊天记录 / 评论讨论、引用、文档、知识库 | 同上 |
 | `inbox/triage.md` | 收件箱分拣（需要你 / 知悉即可 / 噪音）的 system | `hub/inbox_triage.go` |
+| `inbox/tiers.md` | 三档的判断标准，分拣和事件合成共用 | 同上 |
+| `inbox/group.md`、`group_input.md` | 事件合成：一个会话的一批新消息各归哪件事，给动到的事写标题、总结、分级；输入里带着这个会话的事和已经调过的工具（`docs/inbox.md`「事件合成」） | `hub/inbox_group.go` |
 | `inbox/item.md` | 一件事给模型看的样子（类型行 + 内容），分拣、代写、判断、AI 分身共用 | 同上 |
 | `inbox/draft.md`、`draft_input.md` | 代写回复 | 同上 |
 | `inbox/judge.md`、`judge_input.md` | 要不要交给 AI 分身 | `hub/inbox_agent.go` |

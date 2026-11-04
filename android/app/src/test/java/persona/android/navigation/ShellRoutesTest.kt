@@ -1,8 +1,10 @@
 package persona.android.navigation
 
 import androidx.navigation3.runtime.NavKey
+import persona.core.contracts.api.PluginUiPlace
 import persona.core.domain.inbox.InboxItem
 import persona.core.navigation.*
+import persona.feature.inbox.InboxItemPages
 import persona.feature.inbox.InboxMomentRef
 import persona.feature.inbox.InboxRecord
 import persona.feature.inbox.LarkMomentRoute
@@ -65,6 +67,20 @@ class ShellRoutesTest {
         assertNull(inboxDestination(LarkChatRoute("other"), records, false))
         assertEquals(InboxDestination.Open(LarkRoute("other")), inboxDestination(LarkChatRoute("other"), records, true))
         assertNull(inboxDestination(InboxRoute, records, true))
+    }
+
+    // inbox_item (#1683): a link to an item whose connector's plugin draws its page opens that page, as the list does;
+    // a chat link is still the chat.
+    @Test fun inboxLinksOpenThePluginsPageOfAnItem() {
+        val lark = InboxRecord(InboxItem("lark-item", kind = "group", title = "评审"), feedId = "chat", startPosition = 42, source = "lark")
+        val mail = InboxRecord(InboxItem("mail-item", kind = "mail"), source = "mail")
+        val pages = InboxItemPages(listOf(PluginUiPlace("lark-connector", "event", "事件", "inbox_item", connector = "lark")))
+        assertEquals(InboxDestination.Open(InboxItemUiRoute("lark-item", "lark-connector", "event", "评审")),
+            inboxDestination(InboxItemRoute("lark-item"), listOf(lark, mail), false, pages))
+        assertEquals(InboxDestination.Open(MailRoute("mail-item")), inboxDestination(InboxItemRoute("mail-item"), listOf(lark, mail), false, pages))
+        assertEquals(InboxDestination.Open(LarkRoute("chat", "lark-item", 42)), inboxDestination(LarkChatRoute("chat"), listOf(lark), false, pages))
+        // No pages (an older hub): the item's own page.
+        assertEquals(InboxDestination.Open(LarkRoute("chat", "lark-item", 42)), inboxDestination(InboxItemRoute("lark-item"), listOf(lark), false))
     }
 
     @Test fun personaTerminalLinksRetainTheLegacyStack() {

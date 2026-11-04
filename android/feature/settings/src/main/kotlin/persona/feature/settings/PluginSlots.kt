@@ -41,16 +41,22 @@ import kotlinx.coroutines.launch
 
 // Plugins' UI slots (docs/plugins.md「UI 插槽」) on Android: the「插件」section at the top of the settings home (the
 // cards first, then a row per nav page with its icon and badge), the settings tab's badge (the nav pages' badges added
-// up), and the sections plugins draw on a machine's page. A hub without plugin_ui_slots has none of them.
+// up), the sections plugins draw on a machine's page, and the pages they draw for their connectors' inbox items
+// (PluginInboxItem.kt). A hub without plugin_ui_slots has none of them.
 
 /** The slots this app draws; a placement it does not know is ignored. */
 internal object PluginSlotText {
     const val NavPage = "nav_page"
     const val Card = "overview_card"
     const val MachineSection = "machine_section"
+    const val InboxItem = "inbox_item"
     private val known = setOf(NavPage, Card, MachineSection)
 
     fun known(place: PluginUiPlace): Boolean = place.placement in known && place.plugin.isNotEmpty() && place.id.isNotEmpty()
+
+    /** An inbox item's page: for the items of one connector; one that names none draws for nobody's. */
+    fun inboxItem(place: PluginUiPlace): Boolean =
+        place.placement == InboxItem && place.plugin.isNotEmpty() && place.id.isNotEmpty() && !place.connector.isNullOrBlank()
 
     /** A nav page's icon from the few a plugin may name; anything else is the plugin's puzzle piece. */
     fun icon(name: String?): PhIcon = when (name) {
@@ -89,6 +95,10 @@ data class PluginSlotsState(
     val available: Boolean = false,
     val places: List<PluginUiPlace> = emptyList(),
     val error: String? = null,
+    /** The pages plugins draw for their connectors' inbox items (`inbox_item`); none on a hub that lists none. */
+    val inboxItems: List<PluginUiPlace> = emptyList(),
+    /** [inboxItems] has been read from this hub; until then an item opened (at launch) may turn out to be a plugin's. */
+    val inboxItemsKnown: Boolean = false,
 ) {
     val navPages: List<PluginUiPlace> get() = places.filter { it.placement == PluginSlotText.NavPage }
     val cards: List<PluginUiPlace> get() = places.filter { it.placement == PluginSlotText.Card }
@@ -122,14 +132,32 @@ class PluginSlots internal constructor(
         }
     }
 
-    /** Reads the list again (the settings list shows, the hub reconnected); a failure keeps what was there. */
+    /**
+     * Reads the list again (the settings list shows, the hub reconnected), then the inbox items' pages, which the hub
+     * lists by their placement only; a failure keeps what was there.
+     */
     suspend fun load() {
         if (!supported) return
         try {
             val places = api.uiPlaces("").filter(PluginSlotText::known)
-            mutable.value = PluginSlotsState(available = true, places = places)
+            mutable.update { it.copy(available = true, places = places, error = null) }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { mutable.update { it.copy(error = "插件的入口读不到：${failureReason(error)}") } }
+        loadInboxItems()
+    }
+
+    /**
+     * The `inbox_item` pages (#1683), read with the other slots and again whenever the inbox shows. A hub that does not
+     * know the slot lists none; one that cannot answer keeps the pages known so far, and an item whose page cannot be
+     * drawn opens its own page instead (rememberInboxItemBody).
+     */
+    suspend fun loadInboxItems() {
+        if (!supported) return
+        try {
+            val pages = api.uiPlaces(PluginSlotText.InboxItem).filter(PluginSlotText::inboxItem)
+            mutable.update { it.copy(inboxItems = pages, inboxItemsKnown = true) }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { /* Nothing to tell: these items open their own pages. */ }
     }
 
     /** A `plugin_ui` event: the nav page's badge changes (none clears it). */

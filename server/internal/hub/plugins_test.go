@@ -36,6 +36,10 @@ func TestMain(m *testing.M) {
 		serveUIPluginForTest()
 		return
 	}
+	if os.Getenv("JARVIS_TEST_PLUGIN") == "inboxui" {
+		serveInboxUIPluginForTest()
+		return
+	}
 	if os.Getenv("JARVIS_TEST_PLUGIN") == "quota" {
 		serveQuotaPluginForTest()
 		return

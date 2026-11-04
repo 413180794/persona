@@ -52,11 +52,17 @@ function useRefresh(delay: number, drawnAt: number, draw: () => void) {
 /**
  * Loads and draws one of a plugin's views. `embedded`: inside another page (a launcher's), lighter, and gone when the
  * plugin says the launcher is not its (404 unsupported) instead of showing an error. `compact`: a card (总览), no
- * chrome of its own, small charts. `bare`: no heading of its own (the page around it has one).
+ * chrome of its own, small charts. `bare`: no heading of its own (the page around it has one). `onFailed`: the first
+ * draw failed (no view yet), and the page around it shows something else instead of the error. `revision`: what it is
+ * drawn for changed (an inbox item took new messages): drawn again, the fields typed into kept. `onOpenSource`: a press
+ * opened the inbox item's own source page (persona://inbox/<context.item>/source).
  */
 export function PluginUI({
-  plugin, ui, context, embedded, compact, bare, title, onUnsupported, onMissing,
-}: { plugin: string; ui: string; context?: UIContext; embedded?: boolean; compact?: boolean; bare?: boolean; title?: string; onUnsupported?: () => void; onMissing?: () => void }) {
+  plugin, ui, context, embedded, compact, bare, title, onUnsupported, onMissing, onFailed, revision, onOpenSource,
+}: {
+  plugin: string; ui: string; context?: UIContext; embedded?: boolean; compact?: boolean; bare?: boolean; title?: string;
+  onUnsupported?: () => void; onMissing?: () => void; onFailed?: (e: unknown) => void; revision?: string; onOpenSource?: () => void;
+}) {
   const [view, setView] = useState<UIView | null>(null);
   const [error, setError] = useState("");
   const [unsupported, setUnsupported] = useState(false);
@@ -66,22 +72,27 @@ export function PluginUI({
   const [confirming, setConfirming] = useState<{ action: UIAction; destructive: boolean } | null>(null);
   const [drawnAt, setDrawnAt] = useState(0);
   const stateRef = useRef<string | undefined>(undefined);
-  const ctxKey = `${context?.launcher ?? ""}\n${context?.machine ?? ""}\n${context?.size ?? ""}`;
+  const drawnRef = useRef(false); // a view has been drawn
+  const ctxKey = `${context?.launcher ?? ""}\n${context?.machine ?? ""}\n${context?.item ?? ""}\n${context?.size ?? ""}`;
 
-  const show = (v: UIView) => {
+  // keep: drawn again for the same thing, the fields typed into stay as typed
+  const show = (v: UIView, keep = false) => {
     setView(v);
-    setValues(fieldValues(v));
+    const start = fieldValues(v);
+    setValues((old) => (keep ? Object.fromEntries(Object.entries(start).map(([k, x]) => [k, old[k] ?? x])) : start));
     stateRef.current = v.state;
+    drawnRef.current = true;
     setError("");
     setDrawnAt(Date.now());
   };
-  const load = useCallback(() => {
+  const load = useCallback((keep?: boolean) => {
     setLoading(true);
     renderUI(plugin, ui, context, stateRef.current)
-      .then(show)
+      .then((v) => show(v, keep === true))
       .catch((e) => {
         if (isUnsupported(e)) (setUnsupported(true), onUnsupported?.());
         else if (onMissing && e instanceof ApiError && e.status === 404) onMissing();
+        else if (onFailed && !drawnRef.current) onFailed(e);
         else {
           setError(errorText(e));
           setDrawnAt(Date.now()); // a failed refresh waits a whole interval too
@@ -90,10 +101,16 @@ export function PluginUI({
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plugin, ui, ctxKey]);
-  useEffect(load, [load]);
+  useEffect(() => load(), [load]);
   useRefresh(refreshDelay(view), drawnAt, () => {
     if (!busy) load();
   });
+  const drawnFor = useRef(revision);
+  useEffect(() => {
+    if (drawnFor.current === revision) return;
+    drawnFor.current = revision;
+    if (drawnRef.current) load(true);
+  }, [revision, load]);
 
   const run = async (action: UIAction, extra?: Record<string, string>) => {
     const sent = action.submit ? { ...submitValues(view, values), ...extra } : extra;
@@ -106,10 +123,11 @@ export function PluginUI({
     }
     setBusy(action.id);
     try {
-      const r = outcome(await actUI(plugin, ui, action.id, { context, state: stateRef.current, values: sent }));
+      const r = outcome(await actUI(plugin, ui, action.id, { context, state: stateRef.current, values: sent }), context?.item);
       if (r.view) show(r.view);
       if (r.toast) toast(r.toast, "ok");
       if (r.url) openLink(r.url);
+      if (r.source) onOpenSource?.();
       if (r.reload) load();
     } catch (e) {
       if (isUnsupported(e)) (setUnsupported(true), onUnsupported?.());
@@ -157,7 +175,7 @@ export function PluginUI({
             {view ? "没有更新：" : "插件没画出来："}
             {error}
           </p>
-          <Button tone="quiet" icon="retry" busy={loading} onClick={load}>
+          <Button tone="quiet" icon="retry" busy={loading} onClick={() => load()}>
             重试
           </Button>
         </div>
@@ -169,7 +187,7 @@ export function PluginUI({
           </span>
           <p className="text-[13px] font-medium text-ink">{view ? "没有更新" : "插件没画出来"}</p>
           <p className="max-w-[420px] text-[12px] leading-relaxed break-words text-ink-3 select-text">{error}</p>
-          <Button tone="secondary" icon="retry" busy={loading} onClick={load}>
+          <Button tone="secondary" icon="retry" busy={loading} onClick={() => load()}>
             重试
           </Button>
         </div>

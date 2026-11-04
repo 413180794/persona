@@ -40,13 +40,14 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 
 | 字段 | 意思 |
 | --- | --- |
-| `capabilities` | `status`、`tools`、`actions`（写操作，见下）、`events`、`inbox`、`archive`、`items`（知识库的条目：文档、会议、日程）、`login`、`options`、`threads`（收件箱的会话在 App 里打开成会话页）、`snapshot`（助手快照里的未读会话和今天的会）、`fallback`（承诺每个收件箱条目都带兜底分级 `extra.rule_tier`，没有方法；要有 `inbox`，见 `docs/plugins.md`「收件箱的通用规则」）；hub 只调声明了的 |
+| `capabilities` | `status`、`tools`、`actions`（写操作，见下）、`events`、`inbox`、`archive`、`items`（知识库的条目：文档、会议、日程）、`login`、`options`、`threads`（收件箱的会话在 App 里打开成会话页）、`snapshot`（助手快照里的未读会话和今天的会）、`group`（收件箱的事件合成，要有 `inbox`，见下面「事件合成」）、`meta`（事件合成时自己记每件事的 meta：hub 合成一件事后调 `group.append`，要有 `group` 和 `meta_description`）、`fallback`（承诺每个收件箱条目都带兜底分级 `extra.rule_tier`，没有方法；要有 `inbox`，见 `docs/plugins.md`「收件箱的通用规则」）；hub 只调声明了的 |
 | `hosts` | 链接所在的主机名（App 认链接） |
 | `agent_tools` | 哪些工具也给编程 Agent，按名字的通配（不写就只给助手） |
 | `unlisted` | 哪些工具和写操作不进模型的工具列表，按名字的通配：连接器自己的前端按名字调（Telegram 的 `tg` 命令行）。不是权限：按名字调照常能调，写的照常过闸门，Agent 能不能调照旧看 `agent_tools` |
 | `confirm_always` | 哪些写操作永远要用户在手机上确认，按名字的通配（可选，没写行为不变）：`connector_gate` 里命中它的 `allow` 规则（含 `*`）被钳成 `confirm`，`deny` 不变；用户本人在 App 里点发送（`Registry.Run`）不过闸门，不受影响。只加可选字段，协议版本不变 |
 | `poll_seconds` | 多久问一次 `archive.changes`，0 用 hub 的默认 |
 | `kinds` | 收件箱条目的种类；hub 收到没声明的记一行日志 |
+| `meta_description` | 声明了 `meta` 的必须有（没声明 `meta` 的不能有）：一段话说清事件的 `meta` 里每个字段是什么，原样放进关联用的提示词（最多 4000 字） |
 | `archive_sources` | 除了自己的 id，归档还能放在哪些名字下（最多 4 个，格式同 id，不能是别的连接器的 id）：一类会话和其余的分开存（一个动态 feed 里和用户有关的帖子），或连接器迁出 hub 之前知识库里已有的会话 id（见下面「知识库」） |
 | `cli` | 连接器自己的命令行在助手 PATH 上的名字（小写字母、数字、`-`，如 Telegram 的 `tg`），见下面「命令行」；没有就不写 |
 
@@ -69,12 +70,15 @@ hub 用插件协议的 `initialize` 打开它，下面每个方法名前加 `con
 | `items.list` | `{}` → `{items: [{kind, id, title, url?, at?, where?}]}` | 知识库的条目（`kind`：`docs` / `meetings` / `events`）；声明了 `items` 才调 |
 | `items.doc_title` | `{url}` → `{title}` | 会话里出现的文档链接的标题，读不到回 `""` |
 | `snapshot.get` | `{tz?}` → `{chats?: {at_me: [{name, unread, preview?}], other: [{name, unread}]}, meetings?: [{start, end, title}]}` | 声明了 `snapshot` 才调（#1520）：用户此刻的状态，给助手的实时快照和「今天」卡片——在等用户的未读会话（@ 了用户的带最新一条的开头）、今天（`tz` 里的今天）还没结束、没拒绝的会，按开始时间排。要快：hub 最多等 3 秒，超时就不带它。不知道的部分不给 |
+| `group.tool` | `{thread, name, args}` → 任意 JSON | 声明了 `group` 才调，可以没有（回 `unknown_method`：模型看到这个工具用不了）：关联一批新消息时模型要看会话，`name` 是 `messages_before`（`{message, n}`，这条之前的 n 条，n ≤ 30）、`messages_around`（`{message, n}`，前后各 n 条）、`search`（`{query, n}`，这个会话里匹配的消息）。每条消息给 id、时间、发送人、截断的正文。结果原样给模型（去掉头像、媒体这类字段，超过 8 KB 截掉）；出错时模型看到 `{"error": …}` |
+| `group.append` | `{thread, event, meta, messages, continues?}` → `InboxThing` | 声明了 `meta` 才调。往一件事里加消息，一次一件：`event` 是已有事件的 id、`meta` 是它现在的 meta；新事件 `event` 为空、`meta` 为 `null`，`continues` 是它接着的那件已处理的事。回这件事完整的样子，带 `id` 和追加后的 `meta`（见「事件合成」）。同一次追加可能重发（hub 重试），按消息 id 去重 |
+| `group.fallback` | `{thread, batch, events: [{id, meta, done}]}` → `{assign: [{message, event}], new: [{key, messages, rule_tier, title}]}` | 可以没有（回 `unknown_method`：模型分不了时这一批等着，下一轮再交，和没有兜底的收件箱条目一样）。模型分不了或给的结果不合格时，程序自己按结构分组（回复和引用链、话题、同一人连发、时间断档）：`assign` 放进已有的事（只能是给的、没处理完的），`new` 新开的事；每条新消息恰好出现一次 |
 | `login.step` | `{step, values}` → `Prompt` | 分步登录；`step` 为 `""` 从头开始 |
 | `logout` | `{}` → `{}` | |
 
 `InboxThing`：`thread`（必填，这件事的稳定键）、`kind`、`label`、`title`、`sender`、`preview`、`context`、`at`、`last`（最新一步的标记，变了就算新动静）、
 `url`、`open_url`、`reply_to`、`can_reply`、`tier`（`action` / `fyi` / `noise`，空的交给模型）、`why`、`done`（`read` / `replied`：这件事结束了）、
-`read`、`tags: [{key, value, name}]`（`repo` / `chat` / `sender` 能被用户静音）、`rules`、`extra`（见下）。
+`read`、`tags: [{key, value, name}]`（`repo` / `chat` / `sender` 能被用户静音）、`rules`、`extra`（见下）、`group`、`id`、`meta`（见下面「事件合成」）。
 
 - `rules`：用户给这件事定的分拣规则，原话（这个来源、这个账号的，比如插件设置里的 `triage_rules`，`docs/plugins.md`「约定的设置项」）。
   有就**只用它**，不用 hub 的全局 `inbox.rules`；空的用全局。hub 的默认判断标准照旧在下面，用户的规则优先。可以有换行；最多 4000 字，多了截掉。和别的字段一样在 thing 的第一层，迁出 hub 的连接器（带 `extra` 的）也是。
@@ -99,6 +103,33 @@ hub 只对这些连接器读它：条目保持 hub 原来自己做的样子（�
 以及不填字段的两种步骤：`kind: "device_code"`（`url`、`user_code`、`interval`：显示验证码、去网页输入）和 `kind: "qr"`（`url`、`interval`：
 `url` 是要用别的 App 扫的二维码内容，比如微信，#1351）。这两种 App 都每隔 `interval` 秒带同一个 `step`（不带值）再问一次，直到回来别的步骤或 `done`；
 二维码过期了就回一个新的 `url`（同一步）。程序只给 `url`，二维码的点阵由 hub 画（`qr`），程序给了也会被换掉。
+
+### 事件合成（`group`，#1680）
+
+声明了 `group` 的连接器不再一个会话交一条，而是把一个会话的新消息交成**待关联的一批**，由 hub 的模型判断各归哪件事（`docs/inbox.md`「事件合成」）。
+只在 hub 的 `initialize` 报了 `inbox_group`（`hub.capabilities`，`docs/plugins.md`）时这么做；否则照旧一个会话交一条。
+
+- **一批**：`inbox.collect` 的 thing 带 `group: {batch, new}`。`batch` 是这一批的 id，同一批再交时不变；`new` 是要归类的新消息 id（对 hub 不透明）。
+  同时带 `thread`（会话）、`context`（这些新消息的文字，给模型看，每条带上它的 id）、`rules`、`last`；不用带 `extra`。hub **不把它写进收件箱**。
+  一批里的消息都写进了某件事（`group.append` 回过它），下一轮就别再交；没写完的（模型、兜底或某一件的追加失败）下一轮再交剩下的。
+  同一个会话同一时间 hub 只关联一批（同一批再交、同一轮交两份都只做一次），别的批下一轮再来。
+- **两种写法**：
+  - **只声明 `group`**：hub 自己写事件，不调程序、没有 meta。新事件的 id 是 `<连接器 id>:<thread>#<它的第一条消息 id>`；thread、kind、label、sender、preview、last、rules、
+    `extra` 都取这一批的，`context` 是这件事那几条消息的文字：`context` 里写上了某条新消息 id 的行（`id=<id>`，或者行里最后一个出现的这一批的 id）
+    算那条消息的，下面的续行跟着它，第一条这样的行之前的标题行放进每件新事；一行都没写 id 时用整段。并进已有的事时把这几行接在它原来的 `context` 后面，
+    `last`、`preview` 换成这一批的。`continues` 没有 meta 可记，新事件照常新开。
+  - **声明了 `group` 和 `meta`**：程序自己记每件事的 meta，hub 合成一件事后调 `group.append`，见下。
+- **件数和开始时间由 hub 记**：消息是 hub 分进事件的，所以一件事的 `count` 由 hub 算：新事件是分给它的条数，以后每批再加上新分进去的条数；
+  事件不读程序给的 `extra.count`（meta 可能只留最近的消息，程序不一定知道总数）。`started_at` 只在新建时读一次，之后不变。
+- **事件**（`meta`）：`group.append` 回的 thing 和平时交的一样（迁出 hub 的连接器带 `extra`：飞书块、`rule_tier`……），另加 `id`（这件事在收件箱里的 id，
+  新事件由程序按规则生成，必填）和 `meta`（程序自己的账：这件事有哪些消息……，hub 原样存、原样交回给模型和程序，**从不解析**）。`context` 写这件事的文字（AI 分身要用），
+  `at`、`last` 是最新一条的。hub 按 `id` 写进收件箱，标题、总结、分级用模型的（`triaged_by: "model"`）；兜底时分级用 `group.fallback` 给的 `rule_tier`
+  （已有的事用回来的 thing 的 `rule_tier`），标题用程序的，理由「按规则」（`triaged_by: "rules"`），这一版不再交给模型。`last` 没变的回答当作重发，不再存、不再推。
+- **旧 hub**：没有 #1680 的 hub 不认 `group`，声明了它的连接器**整个注册不上**（`unknown capability`），也不认 `meta_description`（清单装不上）。
+  声明 `group` 的插件在 `engines.persona` 里写上带 #1680 的 hub 构建号（`">=YYYYMMDDHHMM"`：hub 的构建号是构建时的 UTC 时间，取 #1680 合入的时间），
+  让旧 hub 拒绝安装、升级，而不是升上去以后连接器没了；开发构建（构建号 0）不查。
+- **以后的新能力**：从 #1680 起，hub 对**插件提供的**连接器声明的、自己不认识的能力只记一行日志（每个插件每个能力一次），去掉它照常跑；
+  hub 自己的连接器照旧严格（不认识就注册不上）。所以以后再加能力，老 hub 不会因为它把整个连接器丢掉，但已经部署的、没有 #1680 的 hub 还是会。
 
 ## 程序调 hub
 

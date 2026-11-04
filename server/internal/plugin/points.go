@@ -49,9 +49,15 @@ type ConnectorItem struct {
 	KindDescriptions map[string]string `json:"kind_descriptions,omitempty"`
 	// ArchiveSources are other names its archive files conversations under (connector.Manifest.ArchiveSources).
 	ArchiveSources []string `json:"archive_sources,omitempty"`
+	// MetaDescription says what its inbox events' meta is, for the model that relates new messages to them: required
+	// with capability "meta" (the connector keeps its events' meta), refused without it (connector.Manifest.MetaDescription).
+	MetaDescription string `json:"meta_description,omitempty"`
 	// CLI is the connector's command line on the assistant's PATH (connector.Manifest.CLI): a lowercase name.
 	CLI string `json:"cli,omitempty"`
 }
+
+// metaDescriptionMost is the longest meta_description (runes): a paragraph the relating prompt carries every time.
+const metaDescriptionMost = 4000
 
 // VoiceItem is a contribution to voice: the voice conversation's contract (docs/plugins.md「语音」).
 type VoiceItem struct {
@@ -272,6 +278,18 @@ var Points = map[string]Point{
 		if len(c.ArchiveSources) > 4 {
 			return c.ID, errors.New("connector " + c.ID + ": more than 4 archive_sources")
 		}
+		if utf8.RuneCountInString(c.MetaDescription) > metaDescriptionMost {
+			return c.ID, fmt.Errorf("connector %s: meta_description longer than %d characters", c.ID, metaDescriptionMost)
+		}
+		meta := slices.Contains(c.Capabilities, "meta")
+		switch {
+		case meta && !slices.Contains(c.Capabilities, "group"):
+			return c.ID, errors.New("connector " + c.ID + ": meta without group")
+		case meta && strings.TrimSpace(c.MetaDescription) == "":
+			return c.ID, errors.New("connector " + c.ID + ": meta needs a meta_description (what its events' meta is)")
+		case !meta && c.MetaDescription != "":
+			return c.ID, errors.New("connector " + c.ID + ": meta_description without meta")
+		}
 		for _, s := range c.ArchiveSources {
 			if !connectorID.MatchString(s) || s == c.ID {
 				return c.ID, fmt.Errorf("connector %s: archive source %q: lowercase letters and digits, a letter first, not its own id", c.ID, s)
@@ -428,6 +446,12 @@ var Points = map[string]Point{
 		}
 		if u.Opens != "" && u.Placement != "overview_card" {
 			return u.ID, fmt.Errorf("ui %s: only an overview_card opens a page", u.ID)
+		}
+		switch {
+		case u.Placement == "inbox_item" && !connectorID.MatchString(u.Connector):
+			return u.ID, fmt.Errorf("ui %s: an inbox_item names the connector whose items it draws (connector, a-z0-9)", u.ID)
+		case u.Placement != "inbox_item" && u.Connector != "":
+			return u.ID, fmt.Errorf("ui %s: only an inbox_item has a connector", u.ID)
 		}
 		for _, h := range u.Hosts {
 			if !hostPattern.MatchString(h) {

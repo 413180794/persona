@@ -74,7 +74,8 @@ class PluginSlotsTest {
         assertTrue("an older hub is never asked", api.asked.isEmpty())
         slotsOn.value = true
         runCurrent()
-        assertEquals(listOf(""), api.asked)
+        // All slots at once, then the inbox items' pages, which are listed by their placement only.
+        assertEquals(listOf("", "inbox_item"), api.asked)
         val state = slots.state.value
         assertTrue(state.available)
         assertEquals(listOf("usage"), state.navPages.map { it.id })
@@ -102,7 +103,7 @@ class PluginSlotsTest {
         api.fail = HubFailure(HubError.Server, "坏了", status = 500)
         online.value = true
         runCurrent()
-        assertEquals(2, api.asked.size)
+        assertEquals(4, api.asked.size)
         assertEquals("插件的入口读不到：坏了", slots.state.value.error)
         assertEquals(1, slots.state.value.navPages.size)
 

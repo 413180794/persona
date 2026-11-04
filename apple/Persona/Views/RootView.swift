@@ -42,7 +42,12 @@ struct RootView: View {
             }
         }
         // The plugins' main-navigation entries and cards, for 设置's badge (docs/plugins.md「UI 插槽」).
-        .task(id: PluginSlots.source(model)) { await PluginSlots.shared.reload(for: PluginSlots.source(model).hub) }
+        .task(id: PluginSlots.source(model)) {
+            let hub = PluginSlots.source(model).hub
+            await PluginSlots.shared.reload(for: hub)
+            // Which inbox sources a plugin draws (placement inbox_item): known before an item is opened.
+            await InboxItemSlots.shared.reload(for: hub)
+        }
         // A new style, 主题色 or persona rebuilds the whole tree (tokens are static); the open tab and chat are remembered.
         .id(model.look)
         #if DEBUG

@@ -51,6 +51,8 @@ func (h *Hub) collectConnectors(ctx context.Context) []*InboxItem {
 		}
 		h.inbox.readSource(c.ID(), c.Name())
 		h.vetThings(c, things)
+		// Batches of new messages go to the model, not the list.
+		things = h.relateBatches(ctx, c, things)
 		var own []connector.InboxThing // a migrated connector's things that keep the hub's own item shape
 		if isMigrated(c.ID()) {
 			generic := things[:0:0]

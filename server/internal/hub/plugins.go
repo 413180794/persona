@@ -616,7 +616,8 @@ func (ps *plugins) spec(ctx context.Context, p *plugin.Plugin, hp *hubPlugin) (h
 		if ps.h != nil {
 			tz = ps.h.userTZName()
 		}
-		params := plugin.InitializeParams{Hub: plugin.HubInfo{Build: build, ExtensionPoints: plugin.PointVersions(), Role: role, Timezone: tz}, Plugin: info,
+		params := plugin.InitializeParams{Hub: plugin.HubInfo{Build: build, ExtensionPoints: plugin.PointVersions(), Role: role, Timezone: tz,
+			Capabilities: plugin.HubCapabilities()}, Plugin: info,
 			Config: ps.reg.Config(p), Secrets: secrets, Granted: p.Record.Granted, Active: map[string][]string{}}
 		if builtin && id == telegramPluginID && ps.h != nil {
 			params.Config = ps.h.telegramSettings()
@@ -711,7 +712,8 @@ func (ps *plugins) spec(ctx context.Context, p *plugin.Plugin, hp *hubPlugin) (h
 		} else {
 			pluginConnectors.Store(c.ID, p.Record.Source)
 		}
-		conn := proc.New(proc.Config{ID: c.ID, Name: c.Name, Manifest: connectorManifest(c), Secrets: secrets, KB: kbase, Logf: ps.logf, Link: link})
+		conn := proc.New(proc.Config{ID: c.ID, Name: c.Name, Manifest: ps.knownOnly(id, connectorManifest(c)), Secrets: secrets, KB: kbase,
+			Logf: ps.logf, Link: link})
 		byID[c.ID] = conn
 		hp.conns = append(hp.conns, conn)
 	}
@@ -729,6 +731,23 @@ func sameItem(a, b plugin.ConnectorItem) bool {
 	jb, _ := json.Marshal(connectorManifest(b))
 	return string(ja) == string(jb)
 }
+
+// knownOnly is a plugin connector's manifest without the capabilities this hub does not have (a plugin made for a
+// newer hub): the connector runs with the rest, rather than being refused, and each is logged once per plugin.
+func (ps *plugins) knownOnly(pluginID string, m connector.Manifest) connector.Manifest {
+	kept := m.Capabilities[:0:0]
+	for _, cp := range m.Capabilities {
+		if connector.Known(cp) {
+			kept = append(kept, cp)
+		} else if _, logged := unknownCapabilities.LoadOrStore(pluginID+"\x00"+string(cp), true); !logged {
+			ps.logf("plugin %s: this hub has no connector capability %q: its connectors run without it", pluginID, cp)
+		}
+	}
+	m.Capabilities = kept
+	return m
+}
+
+var unknownCapabilities sync.Map
 
 // pluginKinds are the plugin connectors' kinds of inbox things as they describe them: "<connector>/<kind>" → words.
 var pluginKinds sync.Map
@@ -755,7 +774,7 @@ func pluginSource(connectorID string) string {
 func connectorManifest(c plugin.ConnectorItem) connector.Manifest {
 	m := serve.Manifest{ID: c.ID, Name: c.Name, Capabilities: slices.Clone(c.Capabilities), Hosts: c.Hosts, AgentTools: c.AgentTools,
 		Unlisted: c.Unlisted, ConfirmAlways: c.ConfirmAlways, PollSeconds: c.PollSeconds, Kinds: c.Kinds, ArchiveSources: c.ArchiveSources,
-		CLI: c.CLI}.Of()
+		MetaDescription: c.MetaDescription, CLI: c.CLI}.Of()
 	slices.Sort(m.Capabilities)
 	return m
 }

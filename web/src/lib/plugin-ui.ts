@@ -3,7 +3,8 @@
 // colors, sizes or icons: a tone becomes one of the theme's role colors. The checks match server/internal/plugin/ui.go
 // (the hub refuses a bad view before it gets here; the web still draws only what it knows). UI version 2
 // (docs/plugins.md「UI 插槽」) adds the slots (nav_page, overview_card, machine_section), chart, stat_grid, segmented,
-// refresh_after and the render context; an item type the web does not know is skipped, never a white page.
+// refresh_after and the render context; an item type the web does not know is skipped, never a white page. An
+// inbox_item (docs/plugins.md「收件箱条目」) draws the body of an inbox item from the plugin's own connector.
 import { api, ApiError, enc } from "./api";
 
 /** The UI version the web draws (context.ui_version). */
@@ -100,7 +101,7 @@ export interface UIPlace {
   plugin_name?: string;
   id: string;
   title: string;
-  placement: "plugin_page" | "launcher_section" | "nav_page" | "overview_card" | "machine_section" | string;
+  placement: "plugin_page" | "launcher_section" | "nav_page" | "overview_card" | "machine_section" | "inbox_item" | string;
   /** compact (a card) or full (a page, a section). */
   size?: "compact" | "full" | string;
   /** A nav_page's icon, from UI_ICONS. */
@@ -109,6 +110,8 @@ export interface UIPlace {
   opens?: string;
   /** On a nav_page's entry; updated by the plugin_ui event. */
   badge?: UIBadge | null;
+  /** The connector whose inbox items an inbox_item draws (the items' `source`). */
+  connector?: string;
 }
 
 export interface UIBadge {
@@ -123,10 +126,11 @@ export interface UIActionResult {
   open_url?: string;
 }
 
-/** Where a view is drawn: the launcher (launcher_section), the machine (machine_section), the size (a card). */
+/** Where a view is drawn: the launcher (launcher_section), the machine (machine_section), the inbox item (inbox_item), the size (a card). */
 export interface UIContext {
   launcher?: string;
   machine?: string;
+  item?: string;
   size?: "compact" | "full";
 }
 
@@ -152,6 +156,7 @@ export function uiContext(context?: UIContext): UIContextSent {
   if (locale) out.locale = locale;
   if (context?.launcher) out.launcher = context.launcher;
   if (context?.machine) out.machine = context.machine;
+  if (context?.item) out.item = context.item;
   if (context?.size) out.size = context.size;
   return out;
 }
@@ -257,10 +262,29 @@ export function blocks(items: UIItem[]): UIBlock[] {
   return out;
 }
 
-/** What to do after a press: the view to show (new, or "reload" to draw again), a word to say, a link to open. */
-export function outcome(r: UIActionResult): { view?: UIView; reload: boolean; toast?: string; url?: string } {
+/**
+ * What to do after a press: the view to show (new, or "reload" to draw again), a word to say, a link to open; `source`:
+ * open the inbox item's own source page (an inbox_item's open_url persona://inbox/<item>/source, for the item it is
+ * drawn for).
+ */
+export function outcome(r: UIActionResult, item?: string): { view?: UIView; reload: boolean; toast?: string; url?: string; source?: true } {
   const url = r.open_url && isHttps(r.open_url) ? r.open_url : undefined;
-  return { view: r.view, reload: !r.view && !r.toast && !r.open_url, toast: r.toast || undefined, url };
+  const source = !!item && !!r.open_url && inboxSourceItem(r.open_url) === item;
+  return { view: r.view, reload: !r.view && !r.toast && !r.open_url, toast: r.toast || undefined, url, ...(source ? { source: true as const } : {}) };
+}
+
+/**
+ * The item an inbox item's source link names (persona://inbox/<item>/source, the id escaped as one path segment, as
+ * docs/plugins.md「收件箱条目」 says); undefined for any other link.
+ */
+export function inboxSourceItem(url: string): string | undefined {
+  const m = /^persona:\/\/inbox\/([^/?#]+)\/source$/.exec(url);
+  if (!m) return undefined;
+  try {
+    return decodeURIComponent(m[1]);
+  } catch {
+    return undefined;
+  }
 }
 
 // ── reading what the hub sent (UI version 2) ─────────────
@@ -326,11 +350,18 @@ export type UIIcon = (typeof UI_ICONS)[number];
 export const uiIcon = (name?: string): UIIcon => ((UI_ICONS as readonly string[]).includes(name ?? "") ? (name as UIIcon) : "plugin");
 
 /** The slots the web draws, besides a plugin's own pages in its settings. */
-export const SLOTS = ["nav_page", "overview_card", "machine_section"] as const;
+export const SLOTS = ["nav_page", "overview_card", "machine_section", "inbox_item"] as const;
 export type SlotName = (typeof SLOTS)[number];
 
 /** The places of one placement, in the hub's order; a placement the web does not know is never asked for. */
 export const placesOf = (list: readonly UIPlace[], placement: SlotName) => list.filter((u) => u.placement === placement);
+
+/**
+ * The plugin page that draws an inbox item's body (inbox_item): the one whose connector brought the item in (its
+ * `source`). None: the item's own detail.
+ */
+export const inboxItemPlace = (list: readonly UIPlace[], source?: string): UIPlace | undefined =>
+  source ? list.find((u) => u.placement === "inbox_item" && !!u.connector && u.connector === source) : undefined;
 
 /** The plugin_ui event: a nav_page's badge changed (null clears it). */
 export interface BadgeEvent {

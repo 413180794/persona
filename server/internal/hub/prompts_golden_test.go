@@ -507,6 +507,23 @@ func TestTodoDecisionsGolden(t *testing.T) {
 	}}))
 }
 
+// Relating a batch to events: the first call (rules, the connector's meta description, the events) and the call after
+// one tool call.
+func TestGoldenInboxGroup(t *testing.T) {
+	g := &groupLark{batch: groupBatch(), placed: map[string]bool{}}
+	model, client := newGroupModel(t, `{"tool":"messages_before","args":{"message":"m1060","n":5}}`, groupAnswerOK)
+	h, _ := groupHub(t, g, client)
+	h.cfg.Assistant.Owner = "示例用户"
+	h.collectInbox(context.Background(), roundPoll)
+	h.waitGrouping()
+	calls := model.asked()
+	if len(calls) != 2 {
+		t.Fatalf("%d calls", len(calls))
+	}
+	goldenCall(t, "inbox_group.first", calls[0])
+	golden(t, "inbox_group.after_tool.user", calls[1].User)
+}
+
 func TestGoldenMainHandoff(t *testing.T) {
 	golden(t, "main_handoff", prompts.RenderMainHandoff(prompts.MainHandoff{FromID: "a1b2c3d4-0000-4000-8000-000000000001",
 		Until: "11月4日 21:30", Summary: "示例摘要：用户在整理周末出游计划，酒店已订好，还差火车票。",

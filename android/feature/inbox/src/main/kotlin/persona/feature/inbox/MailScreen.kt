@@ -210,6 +210,7 @@ private fun MailDetail(
             }
         }) {
         item("status") {
+            InboxPluginNotice(route.itemId, route)
             if (transport == null) JNotice("邮件服务尚未接入，请更新应用后重试")
             if (loading || busy) JLoading(text = "正在读取邮件")
             error?.let {

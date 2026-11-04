@@ -13,6 +13,7 @@ import persona.platform.phonetools.PhoneToolsRoute
  */
 internal fun isDetailDestination(key: NavKey): Boolean = when (key) {
     is ChatRoute, is InteractionRoute, is TerminalRoute, is LarkRoute, is LarkMomentRoute, is MailRoute, is InboxItemRoute, is LarkChatRoute,
+    is InboxItemUiRoute,
     is SettingsPageRoute, PairingRoute, PhoneToolsRoute, MachinesRoute, is MachineDetailRoute,
     is EngineRoute, is ModelPurposeRoute, is PluginRoute, is PluginUiRoute, PluginMarketRoute, is PluginCatalogRoute,
     PluginMarketsRoute, is LauncherRoute, is ChannelRoute -> true

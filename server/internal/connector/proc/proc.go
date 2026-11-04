@@ -141,7 +141,8 @@ func sameManifest(declared, said connector.Manifest) bool {
 	}
 	a, b := norm(declared), norm(said)
 	return slices.Equal(a.Capabilities, b.Capabilities) && slices.Equal(a.Hosts, b.Hosts) && slices.Equal(a.AgentTools, b.AgentTools) &&
-		slices.Equal(a.Unlisted, b.Unlisted) && slices.Equal(a.ConfirmAlways, b.ConfirmAlways) && a.Poll == b.Poll && slices.Equal(a.Kinds, b.Kinds)
+		slices.Equal(a.Unlisted, b.Unlisted) && slices.Equal(a.ConfirmAlways, b.ConfirmAlways) && a.Poll == b.Poll && slices.Equal(a.Kinds, b.Kinds) &&
+		a.MetaDescription == b.MetaDescription
 }
 
 // Status answers from memory: the program's last status, or why it is not running.
@@ -592,6 +593,25 @@ func (c *Conn) Reply(ctx context.Context, r connector.InboxReply) error {
 	return c.call(ctx, serve.MReply, r, nil)
 }
 
+// GroupTool runs one of the program's tools for relating messages (group.tool); the answer is its JSON as it is.
+func (c *Conn) GroupTool(ctx context.Context, call connector.GroupToolCall) (json.RawMessage, error) {
+	var out json.RawMessage
+	err := c.call(ctx, serve.MGroupTool, call, &out)
+	return out, err
+}
+
+func (c *Conn) GroupAppend(ctx context.Context, a connector.GroupAppend) (connector.InboxThing, error) {
+	var out connector.InboxThing
+	err := c.call(ctx, serve.MGroupAppend, a, &out)
+	return out, err
+}
+
+func (c *Conn) GroupFallback(ctx context.Context, f connector.GroupFallback) (connector.GroupFallbackResult, error) {
+	var out connector.GroupFallbackResult
+	err := c.call(ctx, serve.MGroupFallback, f, &out)
+	return out, err
+}
+
 // Tools answers from memory: what the program listed when it was last asked.
 func (c *Conn) Tools() []proto.Tool {
 	c.mu.Lock()
@@ -688,6 +708,8 @@ var (
 	_ connector.Items        = (*Conn)(nil)
 	_ connector.ArchiveMedia = (*Conn)(nil)
 	_ connector.Snapshot     = (*Conn)(nil)
+	_ connector.Grouper      = (*Conn)(nil)
+	_ connector.EventWriter  = (*Conn)(nil)
 )
 
 // Snapshot is the program's live state (snapshot.get).

@@ -194,7 +194,12 @@ private struct MacShell: View {
         // backdrop and hairline cut it off at the toolbar (2026-11-02).
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         // The plugins' sidebar entries and cards (docs/plugins.md「UI 插槽」): with a hub that has them.
-        .task(id: PluginSlots.source(model)) { await PluginSlots.shared.reload(for: PluginSlots.source(model).hub) }
+        .task(id: PluginSlots.source(model)) {
+            let hub = PluginSlots.source(model).hub
+            await PluginSlots.shared.reload(for: hub)
+            // Which inbox sources a plugin draws (placement inbox_item): known before an item is opened.
+            await InboxItemSlots.shared.reload(for: hub)
+        }
         // A page whose plugin took it away (disabled, uninstalled) goes back to the section.
         .onChange(of: PluginSlots.shared.pages) { if shell.pluginPage != nil, pluginPlace == nil { shell.pluginPage = nil } }
         // No page title in the bar: the system puts it after the items beside the traffic lights, over this column, and

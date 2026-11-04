@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector/proc"
 	"github.com/nwverse/persona/server/internal/plugin"
 	"github.com/nwverse/persona/server/internal/quota"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -22,7 +24,8 @@ import (
 // Declarative UI and events (docs/plugins.md「声明式 UI」「事件」). The apps ask the hub what plugins draw where
 // (GET /api/v1/plugins/-/ui) and for one of them (POST /api/v1/plugins/{id}/-/ui/{ui}); the hub asks the plugin
 // (ui.render, ui.action), holds the View to what the apps draw (plugin.CheckView) and gives it to them. A launcher
-// section may reach the launcher's gateway with its key the way quota does (gateway.http), never seeing the key.
+// section may reach the launcher's gateway with its key the way quota does (gateway.http), never seeing the key. An
+// inbox item's page is drawn from that item (context.item), only for the items of the plugin's own connector.
 
 const uiTimeout = 20 * time.Second
 
@@ -34,10 +37,12 @@ type UIPlace struct {
 	Title      string `json:"title"`
 	Placement  string `json:"placement"`
 	Size       string `json:"size,omitempty"`
-	// Icon: a nav_page's (plugin.UIIcons); Opens: the page an overview_card opens; Badge: on a nav_page's entry.
-	Icon  string        `json:"icon,omitempty"`
-	Opens string        `json:"opens,omitempty"`
-	Badge *plugin.Badge `json:"badge,omitempty"`
+	// Icon: a nav_page's (plugin.UIIcons); Opens: the page an overview_card opens; Badge: on a nav_page's entry;
+	// Connector: the connector whose items an inbox_item draws.
+	Icon      string        `json:"icon,omitempty"`
+	Opens     string        `json:"opens,omitempty"`
+	Badge     *plugin.Badge `json:"badge,omitempty"`
+	Connector string        `json:"connector,omitempty"`
 }
 
 // uiPlaces are the plugins' UI of placement (every slot's but launcher sections' when it is empty); for launcher
@@ -72,9 +77,11 @@ func (ps *plugins) uiPlaces(placement, base string) []UIPlace {
 				continue
 			case u.Placement == "launcher_section" && (host == "" || (len(u.Hosts) > 0 && !hostMatches(host, u.Hosts)) || !p.Record.Granted.LauncherKeys):
 				continue
+			case u.Placement == "inbox_item" && !ps.servesConnector(hp, u.Connector):
+				continue
 			}
 			place := UIPlace{Plugin: p.Record.ID, PluginName: p.Manifest.Name, ID: u.ID, Title: u.Title, Placement: u.Placement,
-				Size: slot.Size, Icon: u.Icon, Opens: u.Opens}
+				Size: slot.Size, Icon: u.Icon, Opens: u.Opens, Connector: u.Connector}
 			if slot.Badge {
 				if b, ok := ps.badges.Load(p.Record.ID + "/" + u.ID); ok {
 					badge := b.(plugin.Badge)
@@ -87,12 +94,74 @@ func (ps *plugins) uiPlaces(placement, base string) []UIPlace {
 	return out
 }
 
+// servesConnector: the connector registered as id is hp's own (the plugin brought it, or took it over from the hub).
+func (ps *plugins) servesConnector(hp *hubPlugin, id string) bool {
+	if ps.h == nil || ps.h.connectors == nil || id == "" {
+		return false
+	}
+	c := ps.h.connectors.Get(id)
+	return c != nil && slices.ContainsFunc(hp.conns, func(own *proc.Conn) bool { return connector.Connector(own) == c })
+}
+
+// uiItem is inbox item id as an inbox_item is drawn for it, and the connector it came from (its source). The item is
+// read as its JSON, not its fields: meta and the source blocks go to the plugin as they are stored.
+func (h *Hub) uiItem(id string) (*plugin.UIInboxItem, string, bool) {
+	h.inbox.mu.Lock()
+	it := h.inbox.items[id]
+	var raw []byte
+	if it != nil {
+		raw, _ = json.Marshal(it)
+	}
+	h.inbox.mu.Unlock()
+	if it == nil {
+		return nil, "", false
+	}
+	return uiItemOf(raw)
+}
+
+// uiItemOf reads an inbox item's JSON as an inbox_item gets it, and its source.
+func uiItemOf(raw []byte) (*plugin.UIInboxItem, string, bool) {
+	var row struct {
+		ID      string          `json:"id"`
+		Source  string          `json:"source"`
+		Title   string          `json:"title"`
+		Summary string          `json:"summary"`
+		Tier    string          `json:"tier"`
+		Reason  string          `json:"reason"`
+		DoneAt  json.RawMessage `json:"done_at"`
+		Meta    json.RawMessage `json:"meta"`
+		// Count and StartedAt: for an event, the hub keeps both itself (inbox_group.go).
+		Count     int       `json:"count"`
+		StartedAt time.Time `json:"started_at"`
+	}
+	var all map[string]json.RawMessage
+	if json.Unmarshal(raw, &row) != nil || json.Unmarshal(raw, &all) != nil {
+		return nil, "", false
+	}
+	out := &plugin.UIInboxItem{ID: row.ID, Title: row.Title, Summary: row.Summary, Tier: row.Tier, Reason: row.Reason,
+		Done: len(row.DoneAt) > 0 && string(row.DoneAt) != "null", Meta: row.Meta, Count: row.Count, StartedAt: row.StartedAt}
+	for _, k := range uiItemBlocks {
+		if b, ok := all[k]; ok && string(b) != "null" {
+			if out.Extra == nil {
+				out.Extra = map[string]json.RawMessage{}
+			}
+			out.Extra[k] = b
+		}
+	}
+	return out, row.Source, true
+}
+
+// uiItemBlocks are an inbox item's source blocks an inbox_item gets as extra.
+var uiItemBlocks = []string{"lark", "doc", "moment", "mail", "connector"}
+
 // uiRequest is what the apps send: render (no action) or an action, with where it is drawn, for whom, and the
 // plugin's state.
 type uiRequest struct {
 	Context struct {
 		Launcher string `json:"launcher,omitempty"`
 		Machine  string `json:"machine,omitempty"`
+		// Item is the inbox item an inbox_item is drawn for.
+		Item     string `json:"item,omitempty"`
 		TZ       string `json:"tz,omitempty"`
 		Locale   string `json:"locale,omitempty"`
 		Platform string `json:"platform,omitempty"`
@@ -188,6 +257,21 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (plugin
 		}
 		s := m.snapshot()
 		params.Machine = &plugin.UIMachine{ID: s.ID, Name: s.Name, OS: s.OS, Online: s.Online}
+	case "inbox_item":
+		if in.Context.Item == "" {
+			return res, errNoItem
+		}
+		if !h.plugins.servesConnector(hp, item.Connector) {
+			return res, errNotServed
+		}
+		it, source, ok := h.uiItem(in.Context.Item)
+		if !ok {
+			return res, errNoItem
+		}
+		if source != item.Connector {
+			return res, errNotItsItem
+		}
+		params.Item = it
 	}
 	method := "ui.render"
 	if in.Action != "" {
@@ -235,12 +319,28 @@ func (h *Hub) uiCall(ctx context.Context, id, uiID string, in uiRequest) (plugin
 			return plugin.ActionResult{}, err
 		}
 	}
-	if res.OpenURL != "" {
-		if u, err := url.Parse(res.OpenURL); err != nil || u.Scheme != "https" || u.Host == "" {
-			return plugin.ActionResult{}, errors.New("插件要打开的不是 https 链接")
-		}
+	if err := checkOpenURL(*item, in.Context.Item, res.OpenURL); err != nil {
+		return plugin.ActionResult{}, err
 	}
 	return res, nil
+}
+
+// checkOpenURL holds what an action opens to https; an inbox_item may also open its item's own source page
+// (plugin.InboxSourceURL), that item's only.
+func checkOpenURL(ui plugin.UIItem, itemID, raw string) error {
+	if raw == "" {
+		return nil
+	}
+	if ui.Placement == "inbox_item" && itemID != "" && raw == plugin.InboxSourceURL(itemID) {
+		return nil
+	}
+	if u, err := url.Parse(raw); err != nil || u.Scheme != "https" || u.Host == "" {
+		if strings.HasPrefix(raw, "persona:") {
+			return errors.New("插件要打开的 persona: 链接不是这一条的来源（只有收件箱条目的界面能开 persona://inbox/<这一条>/source）")
+		}
+		return errors.New("插件要打开的不是 https 链接")
+	}
+	return nil
 }
 
 var (
@@ -250,6 +350,13 @@ var (
 	errUnsupportedGateway = errors.New("not this plugin's gateway")
 	// errNoMachine: a machine section for a machine the hub does not have.
 	errNoMachine = errors.New("没有这台机器")
+	// errNoItem: an inbox item's page without the item, or for one the inbox does not have.
+	errNoItem = errors.New("收件箱里没有这一条")
+	// errNotItsItem: an inbox item's page for an item of another source than its connector.
+	errNotItsItem = errors.New("这一条不是这个插件的连接器收进来的")
+	// errNotServed: an inbox item's page whose connector is not the plugin's now (not registered, or another's); the
+	// apps draw the item's own detail.
+	errNotServed = errors.New("这个插件现在不管这个连接器")
 )
 
 func (h *Hub) pluginUIRoutes(api *http.ServeMux) {
@@ -277,10 +384,12 @@ func (h *Hub) pluginUIRoutes(api *http.ServeMux) {
 		}
 		res, err := h.uiCall(r.Context(), r.PathValue("id"), r.PathValue("ui"), in)
 		switch {
-		case errors.Is(err, errNoPlugin), errors.Is(err, errNoMachine):
+		case errors.Is(err, errNoPlugin), errors.Is(err, errNoMachine), errors.Is(err, errNoItem):
 			writeErrCode(w, http.StatusNotFound, "not_found", err)
-		case errors.Is(err, errUnsupportedGateway):
+		case errors.Is(err, errUnsupportedGateway), errors.Is(err, errNotServed):
 			writeErrCode(w, http.StatusNotFound, "unsupported", err)
+		case errors.Is(err, errNotItsItem):
+			writeErrCode(w, http.StatusForbidden, "forbidden", err)
 		case errors.Is(err, errOffline):
 			writeErrCode(w, http.StatusServiceUnavailable, "offline", err)
 		case err != nil:

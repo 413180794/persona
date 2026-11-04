@@ -262,7 +262,7 @@ func (m *Manifest) Validate() error {
 		}
 		if name == "ui" {
 			uis := m.UIs()
-			for _, u := range uis {
+			for i, u := range uis {
 				if u.Placement == "launcher_section" && !m.Permissions.LauncherKeys {
 					bad("contributes.ui: %s sits on launchers' pages and reaches their gateways: permissions.launcher_keys", u.ID)
 				}
@@ -270,6 +270,17 @@ func (m *Manifest) Validate() error {
 					return o.ID == u.Opens && (o.Placement == "nav_page" || o.Placement == "plugin_page")
 				}) {
 					bad("contributes.ui: %s opens %q, which is not a nav_page or plugin_page of this plugin", u.ID, u.Opens)
+				}
+				if u.Placement != "inbox_item" || u.Connector == "" {
+					continue
+				}
+				// A plugin draws only the items its own connector brought in: another source's (mail, GitHub…) are
+				// not its to read, nor its to draw.
+				if !slices.Contains(m.Items("connectors"), u.Connector) {
+					bad("contributes.ui: %s draws the inbox items of connector %s, which the plugin does not contribute", u.ID, u.Connector)
+				}
+				if slices.ContainsFunc(uis[:i], func(o UIItem) bool { return o.Placement == "inbox_item" && o.Connector == u.Connector }) {
+					bad("contributes.ui: more than one inbox_item draws connector %s's items", u.Connector)
 				}
 			}
 		}

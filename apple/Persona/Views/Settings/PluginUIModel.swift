@@ -10,8 +10,8 @@ nonisolated struct PluginUIPlace: Codable, Hashable, Sendable, Identifiable {
     var plugin: String
     var id: String
     var title: String
-    /// plugin_page | launcher_section | nav_page | overview_card | machine_section (docs/plugins.md「UI 插槽」); one the
-    /// app does not know is left out where it lists them.
+    /// plugin_page | launcher_section | nav_page | overview_card | machine_section | inbox_item (docs/plugins.md「UI 插槽」);
+    /// one the app does not know is left out where it lists them.
     var placement: String?
     /// The plugin's name (its entries say whose they are).
     var pluginName: String?
@@ -23,14 +23,16 @@ nonisolated struct PluginUIPlace: Codable, Hashable, Sendable, Identifiable {
     var opens: String?
     /// A nav_page entry's badge, set by the plugin (`plugin_ui` events change it).
     var badge: PluginBadge?
+    /// An inbox_item's: the connector whose inbox items it draws (an item's `source`).
+    var connector: String?
 
     enum CodingKeys: String, CodingKey {
-        case plugin, id, title, placement, size, icon, opens, badge
+        case plugin, id, title, placement, size, icon, opens, badge, connector
         case pluginName = "plugin_name"
     }
 
     /// The slots this app draws (anything else from a newer hub is ignored).
-    static let slots: Set<String> = ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section"]
+    static let slots: Set<String> = ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item"]
 }
 
 /// Where and for whom a plugin's View is drawn (docs/plugins.md「UI 插槽」上下文): the hub checks it and hands it on.
@@ -39,6 +41,8 @@ nonisolated struct PluginUIContext: Encodable, Hashable, Sendable {
     var launcher: String?
     /// machine_section's machine id.
     var machine: String?
+    /// inbox_item's: the id of the inbox item drawn.
+    var item: String?
     /// compact (a card) | full; nil: the slot's own.
     var size: String?
     var tz: String? = TimeZone.current.identifier
@@ -50,7 +54,7 @@ nonisolated struct PluginUIContext: Encodable, Hashable, Sendable {
     static let version = 2
 
     enum CodingKeys: String, CodingKey {
-        case launcher, machine, size, tz, locale, platform
+        case launcher, machine, item, size, tz, locale, platform
         case uiVersion = "ui_version"
     }
 
@@ -162,6 +166,21 @@ nonisolated struct PluginUIAction: Codable, Hashable, Sendable {
     var submit: Bool?
 }
 
+/// `persona://inbox/<item id>/source` (the id path-escaped): an inbox_item page asking to open its item's own source
+/// page, what opening the item showed before the slot (a Feishu chat at the item's first message). The only `open_url`
+/// that is not https, and only for the item the page is drawn for (docs/plugins.md「收件箱条目」).
+nonisolated enum InboxSourceLink {
+    /// The item `url` opens the source of, nil when it is no such link.
+    static func item(_ url: URL) -> String? {
+        guard url.scheme?.lowercased() == "persona",
+              let c = URLComponents(url: url, resolvingAgainstBaseURL: false), c.host?.lowercased() == "inbox" else { return nil }
+        let parts = c.percentEncodedPath.split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count == 3, parts[0].isEmpty, parts[2] == "source",
+              let id = String(parts[1]).removingPercentEncoding, !id.isEmpty else { return nil }
+        return id
+    }
+}
+
 /// The answer to a button: a new view, a word to show, a link to open (none: draw again).
 nonisolated struct PluginUIResult: Decodable, Sendable {
     var view: PluginUIView?
@@ -220,6 +239,8 @@ extension APIClient {
     private(set) var view: PluginUIView?
     private(set) var loading = false
     private(set) var error: String?
+    /// The hub's status when the last draw failed (403, 404, 502…); nil when it did not fail or never got an answer.
+    private(set) var failedStatus: Int?
     /// The plugin says this is not its business (a launcher whose gateway is not its own: 404 `unsupported`): the
     /// section is not drawn at all, and that is no error.
     private(set) var unsupported = false
@@ -245,6 +266,7 @@ extension APIClient {
         defer { loading = false }
         do {
             let r = try await call(nil, values: nil)
+            failedStatus = nil
             show(r.view)
             if r.view == nil { error = "插件没有返回内容" }
         } catch let e as APIError where Self.isUnsupported(e) || (context.machine != nil && e.status == 404) {
@@ -252,8 +274,10 @@ extension APIClient {
             // not drawn at all.
             unsupported = true
             error = nil
+            failedStatus = e.status
         } catch {
             self.error = error.localizedDescription
+            failedStatus = (error as? APIError)?.status
         }
     }
 
@@ -267,7 +291,7 @@ extension APIClient {
             let sent = (action.submit == true ? submitted : [:]).merging(chosen) { _, c in c }
             let r = try await call(action.id, values: sent.isEmpty ? nil : sent)
             if let v = r.view { show(v) } else if r.toast == nil && r.openURL == nil { await redraw() }
-            let url = r.openURL.flatMap(URL.init(string:)).flatMap { $0.scheme == "https" ? $0 : nil }
+            let url = r.openURL.flatMap(URL.init(string:)).flatMap { Self.opens($0, item: context.item) ? $0 : nil }
             return Outcome(toast: r.toast?.isEmpty == false ? r.toast : nil, url: url)
         } catch let e as APIError where Self.isUnsupported(e) {
             unsupported = true
@@ -348,6 +372,14 @@ extension APIClient {
     }
 
     static func isUnsupported(_ e: APIError) -> Bool { e.status == 404 && e.code == "unsupported" }
+
+    /// What a button's `open_url` may open: an https page; on an inbox item's page (`item`), also that item's own
+    /// source (`InboxSourceLink`), never another item's.
+    static func opens(_ url: URL, item: String?) -> Bool {
+        if url.scheme?.lowercased() == "https" { return true }
+        guard let item, let source = InboxSourceLink.item(url) else { return false }
+        return source == item
+    }
 }
 
 /// The sections a launcher's page shows from plugins (placement launcher_section).

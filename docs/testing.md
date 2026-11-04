@@ -49,6 +49,10 @@ transcript 解析用真实样本做 golden 测试（`server/internal/transcript/
 截图不能带真实的业务数据：`scripts/mock/mock_hub.py` 是一个只返回编造数据的假 hub（三台机器、几个项目的 Agent、助手对话、
 一个提问、一个计划审批、飞书 + 邮件的收件箱），够主要界面用。
 
+真 hub 的收件箱端到端（分拣、事件合成、AI 分身的判断）用 `scripts/mock/mock_model.py`：一个假的 Anthropic Messages 接口（`POST /v1/messages`），
+按提示词回固定的 JSON（事件合成把这一批都并进输入里第一件开着的事，没有就新开一件；有问号的算需要你），`POST /_mode` 切成失败、没额度、
+不合格的结果，`GET /_calls` 看收到了什么。hub.json 的 `inbox.triage_ai`（事件合成也用它）和 `judge_ai` 指过去，用法写在文件开头；`scripts/mock/test_mock_model.py` 管它。
+
 ```sh
 python3 scripts/mock/mock_hub.py &                                  # 127.0.0.1:18760
 SIM=$(xcrun simctl create "Jarvis Shots" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro <iOS 26 runtime>)

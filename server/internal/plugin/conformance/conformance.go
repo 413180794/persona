@@ -161,6 +161,9 @@ func Check(t testing.TB, m *plugin.Manifest, run Run, init plugin.InitializePara
 			params.Machine = &plugin.UIMachine{ID: "example-machine", Name: "Example", OS: "darwin", Online: true}
 		case "launcher":
 			params.Launcher = &plugin.UILauncher{Name: "example", BaseURL: "https://gateway.example.com", QueryID: "conformance"}
+		case "item":
+			params.Item = &plugin.UIInboxItem{ID: u.Connector + ":conformance", Title: "示例", Summary: "一件示例的事", Tier: "fyi",
+				Meta: json.RawMessage("null")}
 		}
 		var raw json.RawMessage
 		err := hub.Call(ctx, "ui.render", params, &raw)

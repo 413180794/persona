@@ -270,6 +270,7 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
     onHandOff: () -> Unit,
 ) {
     val item = record.item
+    val pages = LocalInboxItemPages.current
     val translated = rememberItemTranslation(record)
     var menu by remember { mutableStateOf(false) }
     if (menu) JActionSheet(title = item.title, onDismiss = { menu = false }, actions = listOf(
@@ -292,11 +293,8 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
             status = when { done -> null; record.agent?.state in setOf("running", "queued") -> Status.Working; item.triage == InboxTier.Action -> Status.NeedsYou; else -> null },
             tags = listOfNotNull(kindLabel(record).takeIf { it.isNotBlank() }, record.sourceLabel.takeIf { it.isNotBlank() && it !in setOf("飞书", "邮件") },
                 "${record.count} 条消息".takeIf { record.count > 0 }),
-            onClick = {
-                record.moment?.let { navigator.navigate(LarkMomentRoute(it.postId, item.id)) }
-                    ?: record.feedId?.let { navigator.navigate(LarkRoute(it, item.id, record.startPosition)) }
-                    ?: navigator.navigate(MailRoute(item.id))
-            }, onLongClick = { menu = true }, extra = {
+            // A plugin may draw the page of its connector's items (inbox_item); the rest open their own page.
+            onClick = { navigator.navigate(pages.open(record)) }, onLongClick = { menu = true }, extra = {
                 record.localDelivery?.pendingStatus()?.let { PendingBadge(it) }
                     ?: record.localStatus?.let { InboxLocalStatus(it) }
                 if (!done) AgentDraftCard(record, composers, navigator, repository = repository)

@@ -86,6 +86,9 @@ type InboxItem struct {
 	// Version names what the item holds now (listed only): a bulk 已处理 sends it back, so an item that took new
 	// messages since the list was drawn is not filed with them (inbox_bulk.go).
 	Version string `json:"version,omitempty"`
+	// TriagedBy says who sorted an event (inbox_group.go): "model" (its title, summary and tier are the model's) or
+	// "rules" (the connector grouped it and its rule tier stands, 按规则).
+	TriagedBy string `json:"triaged_by,omitempty"`
 
 	// Bookkeeping: persisted, not listed (GET /api/v1/inbox/{id} returns Context).
 	Last      string `json:"last,omitempty"`       // newest message position / mail uid in the item
@@ -95,6 +98,10 @@ type InboxItem struct {
 	JudgedAt  string `json:"judged_at,omitempty"` // Last when model 2 looked at it    // mail: Last when the full text was read into Preview / Context
 	// Rules are the item's own triage rules, from its connector (InboxThing.Rules): they replace inbox.rules for it.
 	Rules string `json:"rules,omitempty"`
+	// Meta is an event's meta as its connector wrote it (which messages are in it…): kept and handed back as it is,
+	// never read here. Group is the event's conversation (inbox_group.go).
+	Meta  json.RawMessage `json:"meta,omitempty"`
+	Group *InboxGroup     `json:"group,omitempty"`
 }
 
 type InboxLark struct {
@@ -140,6 +147,7 @@ func (it *InboxItem) open() bool { return it.DoneAt == nil }
 func (it *InboxItem) listed() InboxItem {
 	c := *it
 	c.Context, c.Last, c.TriagedAt, c.BodyOf, c.JudgedAt, c.Rules = "", "", "", "", "", ""
+	c.Meta, c.Group = nil, nil
 	c.Mutes = mutesOf(it)
 	c.Version = inboxVersion(it)
 	if it.Agent != nil { // the copy is encoded after the lock is released
@@ -195,6 +203,7 @@ type inbox struct {
 	admitting sync.Mutex
 	batch     *inboxBatch          // while a collection runs: the items it starts, which enter once triaged
 	held      map[string]inboxHeld // by source: the new items its last collection held back (inbox_admit.go)
+	grouping  inboxGrouping        // the batches being related to events (inbox_group.go)
 }
 
 func (b *inbox) init() {

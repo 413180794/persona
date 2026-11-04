@@ -98,6 +98,8 @@ struct MacInboxList: View {
         }
         .sheet(item: $state.composing) { d in ComposeView(draft: d, accounts: state.accounts).macSheet() }
         .sheet(item: $state.editingDraft) { InboxDraftSheet(item: $0, accounts: state.accounts).macSheet() }
+        // A plugin enabled or set up since: its sources' items open as it draws them.
+        .task { await InboxItemSlots.shared.reload() }
         .task {
             store.reload()
             await state.loadAccounts(model)

@@ -54,6 +54,12 @@ const (
 	MArchiveMedia = "archive.media"
 	// The live state for the assistant's snapshot (connector.Snapshot): SnapshotParams → connector.SnapshotData.
 	MSnapshot = "snapshot.get"
+	// Relating new messages to events (connector.Grouper): connector.GroupToolCall → any JSON,
+	// connector.GroupFallback → connector.GroupFallbackResult; with meta (connector.EventWriter)
+	// connector.GroupAppend → connector.InboxThing.
+	MGroupTool     = "group.tool"
+	MGroupAppend   = "group.append"
+	MGroupFallback = "group.fallback"
 )
 
 // Methods the program calls on the hub, and its event.
@@ -126,6 +132,8 @@ type Manifest struct {
 	Kinds         []string `json:"kinds,omitempty"`
 	// ArchiveSources: connector.Manifest.ArchiveSources.
 	ArchiveSources []string `json:"archive_sources,omitempty"`
+	// MetaDescription: connector.Manifest.MetaDescription.
+	MetaDescription string `json:"meta_description,omitempty"`
 	// CLI: connector.Manifest.CLI.
 	CLI string `json:"cli,omitempty"`
 }
@@ -562,6 +570,22 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 			return nil, err
 		}
 		return th.Thread(ctx, p.Thread, p.Before, min(max(p.Limit, 1), connector.ThreadMost))
+	case MGroupAppend:
+		w, ok := connector.As[connector.EventWriter](c)
+		if !ok {
+			return nil, noCapability(c, "meta")
+		}
+		var p connector.GroupAppend
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		return w.GroupAppend(ctx, p)
+	case MGroupTool, MGroupFallback:
+		g, ok := connector.As[connector.Grouper](c)
+		if !ok {
+			return nil, noCapability(c, "group")
+		}
+		return groupCall(ctx, g, method, params)
 	case MSnapshot:
 		sn, ok := connector.As[connector.Snapshot](c)
 		if !ok {
@@ -681,7 +705,25 @@ func (s *server) initialize(params json.RawMessage) (any, error) {
 // ItemOf is a connector's manifest as a contribution to the connectors extension point.
 func ItemOf(m Manifest) plugin.ConnectorItem {
 	return plugin.ConnectorItem{ID: m.ID, Name: m.Name, Capabilities: m.Capabilities, Hosts: m.Hosts, AgentTools: m.AgentTools,
-		Unlisted: m.Unlisted, ConfirmAlways: m.ConfirmAlways, PollSeconds: m.PollSeconds, Kinds: m.Kinds}
+		Unlisted: m.Unlisted, ConfirmAlways: m.ConfirmAlways, PollSeconds: m.PollSeconds, Kinds: m.Kinds, MetaDescription: m.MetaDescription}
+}
+
+// groupCall answers group.tool and group.fallback.
+func groupCall(ctx context.Context, g connector.Grouper, method string, params json.RawMessage) (any, error) {
+	switch method {
+	case MGroupTool:
+		var p connector.GroupToolCall
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		return g.GroupTool(ctx, p)
+	default:
+		var p connector.GroupFallback
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		return g.GroupFallback(ctx, p)
+	}
 }
 
 // init builds the connector the first time and starts its Run and Watch; a second init answers the same.
@@ -779,7 +821,8 @@ func (w *writes) do(id string, run func() (CallResult, error)) (CallResult, erro
 func ManifestOf(c connector.Connector) Manifest {
 	cm := c.Manifest()
 	m := Manifest{Protocol: Protocol, ID: c.ID(), Name: c.Name(), Capabilities: []string{}, Hosts: cm.Hosts, AgentTools: cm.AgentTools,
-		Unlisted: cm.Unlisted, ConfirmAlways: cm.ConfirmAlways, PollSeconds: int(cm.Poll / time.Second), Kinds: cm.Kinds, CLI: cm.CLI}
+		Unlisted: cm.Unlisted, ConfirmAlways: cm.ConfirmAlways, PollSeconds: int(cm.Poll / time.Second), Kinds: cm.Kinds,
+		MetaDescription: cm.MetaDescription, CLI: cm.CLI}
 	for _, cp := range cm.Capabilities {
 		m.Capabilities = append(m.Capabilities, string(cp))
 	}
@@ -789,7 +832,8 @@ func ManifestOf(c connector.Connector) Manifest {
 // Of is the connector.Manifest a program sent (a proxy's: it answers for the program).
 func (m Manifest) Of() connector.Manifest {
 	out := connector.Manifest{Hosts: m.Hosts, AgentTools: m.AgentTools, Unlisted: m.Unlisted, ConfirmAlways: m.ConfirmAlways,
-		Poll: time.Duration(m.PollSeconds) * time.Second, Kinds: m.Kinds, ArchiveSources: m.ArchiveSources, CLI: m.CLI, Proxy: true}
+		Poll: time.Duration(m.PollSeconds) * time.Second, Kinds: m.Kinds, ArchiveSources: m.ArchiveSources,
+		MetaDescription: m.MetaDescription, CLI: m.CLI, Proxy: true}
 	for _, cp := range m.Capabilities {
 		out.Capabilities = append(out.Capabilities, connector.Capability(cp))
 	}

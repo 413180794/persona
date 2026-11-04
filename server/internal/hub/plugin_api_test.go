@@ -11,12 +11,14 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector/proc"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/plugin"
 	pserve "github.com/nwverse/persona/server/internal/plugin/serve"
@@ -30,11 +32,12 @@ func serveAPIPluginForTest() {
 		os.Exit(1)
 	}
 	var sends atomic.Int32
-	var role atomic.Value
+	var role, caps atomic.Value
 	role.Store("")
+	caps.Store([]string(nil))
 	go http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/role") {
-			_ = json.NewEncoder(w).Encode(map[string]any{"role": role.Load()})
+			_ = json.NewEncoder(w).Encode(map[string]any{"role": role.Load(), "capabilities": caps.Load()})
 			return
 		}
 		if strings.HasSuffix(r.URL.Path, "/send") {
@@ -50,6 +53,7 @@ func serveAPIPluginForTest() {
 	_ = pserve.Serve(context.Background(), os.Stdin, os.Stdout, pserve.Program{ID: "example-feed", Version: "1.0.0",
 		Init: func(_ context.Context, ip plugin.InitializeParams, h *pserve.Hub) (map[string]any, error) {
 			role.Store(ip.Hub.Role)
+			caps.Store(ip.Hub.Capabilities)
 			go func() {
 				time.Sleep(300 * time.Millisecond)
 				_ = h.Notify("api.broadcast", map[string]any{"type": "examplefeed", "n": 1})
@@ -147,8 +151,9 @@ func TestPluginAPI(t *testing.T) {
 			t.Fatalf("%s: %d Cache-Control %q, want %q", path, w.Code, got, want)
 		}
 	}
-	if _, out := call(t, mux, "GET", "/api/v1/examplefeed/role", master, ""); out["role"] != "center" {
-		t.Fatalf("the hub's role at initialize: %v", out)
+	if _, out := call(t, mux, "GET", "/api/v1/examplefeed/role", master, ""); out["role"] != "center" ||
+		fmt.Sprint(out["capabilities"]) != "[inbox_group]" {
+		t.Fatalf("the hub's role and capabilities at initialize: %v", out)
 	}
 	// A send it declared a receipt for: a retry with the same client_id gets the first answer without reaching it
 	// again, another body under that id is refused; the receipt is there to look up.
@@ -275,4 +280,71 @@ func (s opsStore) ClientOp(ctx context.Context, id string) (*db.ClientOp, error)
 }
 func (s opsStore) FinishClientOp(ctx context.Context, id, state string, result json.RawMessage) error {
 	return s.ops.FinishClientOp(ctx, id, state, result)
+}
+
+// A plugin connector declares group with its meta_description (the manifest takes both); the registry takes it with an
+// inbox only, and a meta_description longer than a paragraph is refused.
+func TestPluginConnectorDeclaresGroup(t *testing.T) {
+	parse := func(caps, desc string) (*plugin.Manifest, error) {
+		return plugin.Parse([]byte(`{"manifest_version": 1, "id": "example-chat", "name": "Example Chat", "version": "1.0.0",
+			"engines": {"plugin_protocol": 1}, "runtime": {"command": "bin/chat"},
+			"contributes": {"connectors": [{"id": "examplechat", "name": "Example Chat", "capabilities": ` + caps + `,
+				"meta_description": ` + strconv.Quote(desc) + `}]}}`))
+	}
+	m, err := parse(`["inbox", "group", "meta"]`, "示例：messages 是这件事的消息")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var items []plugin.ConnectorItem
+	_ = json.Unmarshal(m.Contributes["connectors"], &items)
+	cm := connectorManifest(items[0])
+	if !cm.Has(connector.CapGroup) || cm.MetaDescription != "示例：messages 是这件事的消息" {
+		t.Fatalf("manifest %+v", cm)
+	}
+	reg := connector.NewRegistry(nil)
+	if err := reg.Add(proc.New(proc.Config{ID: "examplechat", Name: "Example Chat", Manifest: cm})); err != nil {
+		t.Fatal(err)
+	}
+	m, _ = parse(`["status", "group"]`, "")
+	_ = json.Unmarshal(m.Contributes["connectors"], &items)
+	if err := reg.Add(proc.New(proc.Config{ID: "examplechat2", Name: "x", Manifest: connectorManifest(items[0])})); err == nil ||
+		!strings.Contains(err.Error(), "group without an inbox") {
+		t.Fatalf("group without an inbox: %v", err)
+	}
+	if _, err := parse(`["inbox", "group", "meta"]`, strings.Repeat("长", 4001)); err == nil {
+		t.Fatal("a meta_description of 4001 characters was taken")
+	}
+	for caps, desc := range map[string]string{`["inbox", "group"]`: "示例：没声明 meta", `["inbox", "group", "meta"]`: "", `["inbox", "meta"]`: "示例"} {
+		if _, err := parse(caps, desc); err == nil {
+			t.Errorf("%s with meta_description %q was taken", caps, desc)
+		}
+	}
+	if _, err := parse(`["inbox", "group"]`, ""); err != nil {
+		t.Fatalf("group alone: %v", err)
+	}
+}
+
+// A plugin connector declaring a capability this hub does not have runs with the others, logged once per plugin and
+// capability; the hub's own connectors are still held to what they declare.
+func TestPluginConnectorUnknownCapability(t *testing.T) {
+	var logs []string
+	ps := newPlugins(t.TempDir(), nil, func(f string, a ...any) { logs = append(logs, fmt.Sprintf(f, a...)) })
+	declared := connector.Manifest{Capabilities: []connector.Capability{connector.CapInbox, "future_example", connector.CapGroup}}
+	for range 2 {
+		m := ps.knownOnly("example-chat", declared)
+		if !slices.Equal(m.Capabilities, []connector.Capability{connector.CapInbox, connector.CapGroup}) {
+			t.Fatalf("capabilities %v", m.Capabilities)
+		}
+	}
+	if len(logs) != 1 || !strings.Contains(logs[0], `plugin example-chat: this hub has no connector capability "future_example"`) {
+		t.Fatalf("logs %q", logs)
+	}
+	reg := connector.NewRegistry(nil)
+	if err := reg.Add(proc.New(proc.Config{ID: "examplechat", Name: "Example Chat", Manifest: ps.knownOnly("example-chat", declared)})); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Add(proc.New(proc.Config{ID: "examplechat2", Name: "x", Manifest: declared})); err == nil ||
+		!strings.Contains(err.Error(), "unknown capability") {
+		t.Fatalf("not through a plugin: %v", err)
+	}
 }
