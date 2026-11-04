@@ -136,6 +136,9 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	if execution.Model != "" {
 		cmd += " --model " + shellQuote(execution.Model)
 	}
+	if n.claudeLoadsPlugins(ctx) {
+		cmd += " --plugin-dir " + shellQuote(n.pluginDir())
+	}
 	st := sessionState{Pane: pane, Launcher: launcher, Cwd: cwd, StartedAt: time.Now().UTC(), Model: execution.Model, ModelFingerprint: execution.Fingerprint}
 	if prev, ok := n.state.get(id); ok && resume != "" {
 		st.StartedAt = prev.StartedAt

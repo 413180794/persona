@@ -1,0 +1,73 @@
+package node
+
+import (
+	"context"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+// The agents Persona starts get Persona's skills (persona-office, #1300) as a plugin in the node's own directory,
+// loaded for that session only (claude --plugin-dir), like its --settings and --mcp-config: nothing goes into the
+// machine's Claude or Codex skills, so sessions the user starts themselves are left as they are. The assistant gets
+// them in its directory instead (assistantskills.Sync).
+
+// pluginMinVersion is the first Claude Code taken to know --plugin-dir: an older one would refuse to start over it,
+// so it starts without the skills.
+var pluginMinVersion = [3]int{2, 1, 0}
+
+func (n *Node) pluginDir() string { return filepath.Join(n.dir, "agent-plugin") }
+
+// claudeLoadsPlugins says whether this machine's claude takes --plugin-dir; not when its version is not known.
+func (n *Node) claudeLoadsPlugins(ctx context.Context) bool {
+	return versionAtLeast(n.claudeV.get(ctx), pluginMinVersion)
+}
+
+// claudeVersionCache is claude's version as last asked: at each hello, and at a start when it is older than
+// claudeVersionFor (asking runs a login shell).
+type claudeVersionCache struct {
+	mu sync.Mutex
+	v  string
+	at time.Time
+}
+
+const claudeVersionFor = 10 * time.Minute
+
+// claudeVersionOf is how the version is asked (tests replace it).
+var claudeVersionOf = claudeVersion
+
+func (c *claudeVersionCache) set(v string) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.v, c.at = v, time.Now()
+	return v
+}
+
+func (c *claudeVersionCache) get(ctx context.Context) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.at.IsZero() || time.Since(c.at) > claudeVersionFor {
+		c.v, c.at = claudeVersionOf(ctx), time.Now()
+	}
+	return c.v
+}
+
+// versionAtLeast says whether version v ("2.1.318", "2.1.0-beta") is min or later; false when it is not one.
+func versionAtLeast(v string, min [3]int) bool {
+	parts := strings.SplitN(strings.SplitN(v, "-", 2)[0], ".", 3)
+	if len(parts) != 3 {
+		return false
+	}
+	for i, p := range parts {
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return false
+		}
+		if n != min[i] {
+			return n > min[i]
+		}
+	}
+	return true
+}

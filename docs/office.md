@@ -1,7 +1,7 @@
 # 生成 Office 文件（`personad office`，#1300）
 
 助手和 Agent 生成 Word、PowerPoint、Excel 文件用的命令，是 #1289 的 M9。文件生成在那台机器上；回复里写出它的绝对路径，App 就把它显示成文件，点开是 M1–M3 的预览。
-让助手和 Agent 用上它的 skill 是 #1300 的下一步。
+助手和 Persona 启动的 Agent 经 skill `persona-office` 用它（见下面「skill」）。
 
 ## 为什么做进 personad
 
@@ -9,6 +9,20 @@
 依赖 python-docx / python-pptx（要编译的 lxml）或 Node 的 docx / pptxgenjs 的做法在那里跑不起来，各台电脑的环境也不一定齐。
 每台机器都有 `personad`，所以生成器做在它里面（`server/internal/office`）。Go 没有许可证合适又成熟的 docx / pptx 库，所以自己写最小的合法 Office Open XML；
 Markdown 用 goldmark（MIT）解析。参考了 Anthropic 官方 docx / xlsx / pptx skill 的思路（写完自查、表格用公式、版式统一），只借思路，没有搬内容。
+
+## skill（persona-office）
+
+内置 skill `server/internal/assistantskills/builtin/persona-office`：SKILL.md 讲什么时候用、怎么写源文件、生成后看 `check`、回复里写出文件的绝对路径；
+skill 自带的 `office.sh` 找本机的 personad（先看 `PERSONA_BIN`，再看 `~/.persona/bin`、`~/.jarvis/bin`、`/opt/jarvis/bin`，最后是 PATH，都没有就退出码 3）。
+
+谁拿得到（2026-11-04 用户定的）：**只有助手和 Persona 启动的 Agent**，不写进机器上用户级的 Claude / Codex skills 目录，用户自己开的会话不受影响。
+
+- 助手：和别的内置 skill 一样装进它的目录（`assistantskills.Sync`：`.claude/skills`、`.agents/skills`，Codex 助手经 extraRoots）。
+- Persona 启动的 Claude Agent：node 启动时把 skill 写成一个插件（`<node 目录>/agent-plugin`，`assistantskills.WritePlugin`，`ForAgents` 列出给 Agent 的），
+  启动命令加 `--plugin-dir`，和 `--settings`、`--mcp-config` 一样只作用于这一个会话。在会话里它叫 `persona:persona-office`。
+  - 只在 Claude Code 2.1 及以上加（`pluginMinVersion`）：更老的会拒绝不认识的参数、整个启动失败；版本问不出来时也不加，照旧启动。
+  - 版本每次 hello 时问一次，启动时超过 10 分钟没问才再问（每次要起一个登录 shell）。
+- Persona 启动的 Codex Agent：还没带上。没找到按会话给 Codex 加 skill 目录、又不写 `CODEX_HOME/skills` 的办法。
 
 ## 命令
 

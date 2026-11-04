@@ -10,6 +10,8 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"github.com/nwverse/persona/server/internal/identity"
 	"io/fs"
 	"os"
@@ -26,8 +28,14 @@ var builtin, _ = fs.Sub(embedded, "builtin")
 
 // Redistributable is every built-in skill and why Persona may ship it (TestBuiltinsAreRedistributable).
 var Redistributable = map[string]string{
-	"telegram": "Persona's own (the tg CLI's skill, docs/plan-telegram.md「tg 命令行」)",
+	"telegram":       "Persona's own (the tg CLI's skill, docs/plan-telegram.md「tg 命令行」)",
+	"persona-office": "Persona's own (personad office's skill, docs/office.md)",
 }
+
+// ForAgents are the built-in skills the agents Persona starts get too, as the plugin WritePlugin makes (the
+// assistant gets every built-in one in its directory). Only for the agents Persona starts: nothing goes into a
+// machine's own Claude or Codex skills, so sessions the user starts themselves are left as they are (#1300).
+var ForAgents = []string{"persona-office"}
 
 // Requires are the built-in skills that need a connector of the hub signed in (its id): put in while it is, taken
 // out once it is not (the hub says which are with assistant.prepare).
@@ -210,25 +218,7 @@ func installBuiltins(dir string, mine, connectors []string) error {
 	for _, name := range names {
 		tmp := filepath.Join(dir, "."+name+".new")
 		_ = os.RemoveAll(tmp)
-		err := fs.WalkDir(builtin, name, func(p string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			out := filepath.Join(tmp, strings.TrimPrefix(p, name))
-			if d.IsDir() {
-				return os.MkdirAll(out, 0o755)
-			}
-			b, err := fs.ReadFile(builtin, p)
-			if err != nil {
-				return err
-			}
-			mode := os.FileMode(0o644)
-			if strings.HasSuffix(p, ".sh") {
-				mode = 0o755
-			}
-			return os.WriteFile(out, b, mode)
-		})
-		if err != nil {
+		if err := copyBuiltin(name, tmp); err != nil {
 			return err
 		}
 		final := filepath.Join(dir, name)
@@ -238,6 +228,71 @@ func installBuiltins(dir string, mine, connectors []string) error {
 		}
 	}
 	return os.WriteFile(stamp, []byte(want+"\n"), 0o644)
+}
+
+// copyBuiltin writes the built-in skill name into dir, its scripts (*.sh) runnable.
+func copyBuiltin(name, dir string) error {
+	return fs.WalkDir(builtin, name, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		out := filepath.Join(dir, strings.TrimPrefix(p, name))
+		if d.IsDir() {
+			return os.MkdirAll(out, 0o755)
+		}
+		b, err := fs.ReadFile(builtin, p)
+		if err != nil {
+			return err
+		}
+		mode := os.FileMode(0o644)
+		if strings.HasSuffix(p, ".sh") {
+			mode = 0o755
+		}
+		return os.WriteFile(out, b, mode)
+	})
+}
+
+// pluginManifest is the plugin's .claude-plugin/plugin.json.
+const pluginManifest = `{
+  "name": "persona",
+  "description": "Persona's skills for the agents it starts (docs/office.md)",
+  "version": "%s"
+}
+`
+
+// WritePlugin makes dir the Claude Code plugin the agents Persona starts load (claude --plugin-dir dir): the
+// ForAgents built-in skills under skills/. Written again only when what this binary carries changed (the stamp), and
+// swapped in whole, so a session reading it never sees half of one.
+func WritePlugin(dir string) error {
+	want := builtinVersion()
+	if old, err := os.ReadFile(filepath.Join(dir, builtinStamp)); err == nil && strings.TrimSpace(string(old)) == want {
+		return nil
+	}
+	tmp := dir + ".new"
+	_ = os.RemoveAll(tmp)
+	if err := os.MkdirAll(filepath.Join(tmp, ".claude-plugin"), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(tmp, ".claude-plugin", "plugin.json"), []byte(fmt.Sprintf(pluginManifest, want)), 0o644); err != nil {
+		return err
+	}
+	for _, name := range ForAgents {
+		if err := copyBuiltin(name, filepath.Join(tmp, "skills", name)); err != nil {
+			return err
+		}
+	}
+	if err := os.WriteFile(filepath.Join(tmp, builtinStamp), []byte(want+"\n"), 0o644); err != nil {
+		return err
+	}
+	old := dir + ".old"
+	_ = os.RemoveAll(old)
+	if err := os.Rename(dir, old); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	if err := os.Rename(tmp, dir); err != nil {
+		return err
+	}
+	return os.RemoveAll(old)
 }
 
 // List is the skills the assistant gets on this machine: the user's, then the built-in ones they have none of whose

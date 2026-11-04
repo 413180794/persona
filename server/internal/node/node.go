@@ -126,6 +126,9 @@ type Node struct {
 
 	// connectors are the hub's signed in, as the last assistant.prepare said (clicall.go).
 	connectors []string
+
+	// claudeV is claude's version as last asked (agentplugin.go).
+	claudeV claudeVersionCache
 }
 
 func New(version string) (*Node, error) {
@@ -299,7 +302,10 @@ func (n *Node) writeClaudeConfig() error {
 		return err
 	}
 	mcp := map[string]any{"mcpServers": map[string]any{"jarvis": map[string]any{"command": n.bin, "args": []string{"mcp"}}}}
-	return writeJSON(filepath.Join(n.dir, "mcp.json"), mcp)
+	if err := writeJSON(filepath.Join(n.dir, "mcp.json"), mcp); err != nil {
+		return err
+	}
+	return assistantskills.WritePlugin(n.pluginDir()) // the skills the agents Persona starts load (agentplugin.go)
 }
 
 func (n *Node) handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
@@ -941,7 +947,7 @@ func (n *Node) info(ctx context.Context) proto.NodeInfo {
 		Home:               n.home,
 		DataDir:            n.dir,
 		HerdrVersion:       hv,
-		ClaudeVersion:      claudeVersion(ctx),
+		ClaudeVersion:      n.claudeV.set(claudeVersionOf(ctx)),
 		Version:            n.Version,
 		System:             n.system(ctx),
 		Engine:             n.engine(),

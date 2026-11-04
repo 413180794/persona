@@ -1,7 +1,10 @@
 package assistantskills
 
 import (
+	"encoding/json"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -142,7 +145,9 @@ func TestListAndDescriptions(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := List(user, nil)
-	if len(got) != 2 || got[0] != (Skill{"alpha", "quoted one", "user"}) || got[1] != (Skill{"folded", "first line second line", "user"}) {
+	// The user's, then the built-in ones that need no connector (persona-office).
+	if len(got) != 3 || got[0] != (Skill{"alpha", "quoted one", "user"}) || got[1] != (Skill{"folded", "first line second line", "user"}) ||
+		got[2].Name != "persona-office" || got[2].Source != "builtin" || !strings.HasPrefix(got[2].Description, "生成 Word") {
 		t.Fatalf("%+v", got)
 	}
 }
@@ -180,5 +185,72 @@ func TestConnectorSkillFollowsItsConnector(t *testing.T) {
 	}
 	if target, _ := os.Readlink(filepath.Join(dir, "telegram")); target != filepath.Join(user, "telegram") {
 		t.Fatalf("the user's telegram skill gave way to the built-in one: %q", target)
+	}
+}
+
+// The agents Persona starts get the ForAgents skills as a Claude Code plugin: a manifest, the skills with their
+// scripts runnable; written again only when what the binary carries changed.
+func TestWritePlugin(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "agent-plugin")
+	if err := WritePlugin(dir); err != nil {
+		t.Fatal(err)
+	}
+	var manifest struct{ Name, Version string }
+	b, err := os.ReadFile(filepath.Join(dir, ".claude-plugin", "plugin.json"))
+	if err != nil || json.Unmarshal(b, &manifest) != nil || manifest.Name != "persona" || manifest.Version != builtinVersion() {
+		t.Fatalf("manifest %s %v", b, err)
+	}
+	for _, name := range ForAgents {
+		if _, err := os.Stat(filepath.Join(dir, "skills", name, "SKILL.md")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if st, err := os.Stat(filepath.Join(dir, "skills", "persona-office", "scripts", "office.sh")); err != nil || st.Mode()&0o111 == 0 {
+		t.Fatalf("the script is not runnable: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "skills", "telegram")); !os.IsNotExist(err) {
+		t.Fatal("an assistant-only skill is in the agents' plugin")
+	}
+	// The same binary: nothing written; another one: written again.
+	marker := filepath.Join(dir, "skills", "persona-office", "marker")
+	os.WriteFile(marker, nil, 0o644)
+	if err := WritePlugin(dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatal("written again with nothing changed")
+	}
+	os.WriteFile(filepath.Join(dir, builtinStamp), []byte("older\n"), 0o644)
+	if err := WritePlugin(dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatal("not written again for another binary")
+	}
+	if _, err := os.Stat(dir + ".old"); !os.IsNotExist(err) {
+		t.Fatal("the old copy stayed")
+	}
+}
+
+// The skill's script runs `personad office …` with the node's personad (PERSONA_BIN), or says there is none.
+func TestOfficeScript(t *testing.T) {
+	dir := t.TempDir()
+	if err := copyBuiltin("persona-office", filepath.Join(dir, "skill")); err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(dir, "personad")
+	os.WriteFile(bin, []byte("#!/bin/sh\necho \"$@\"\n"), 0o755)
+	script := filepath.Join(dir, "skill", "scripts", "office.sh")
+	cmd := exec.Command("sh", script, "docx", "周报.md", "-o", "周报.docx")
+	cmd.Env = []string{"PERSONA_BIN=" + bin, "HOME=" + dir, "PATH=/usr/bin:/bin"}
+	if out, err := cmd.CombinedOutput(); err != nil || strings.TrimSpace(string(out)) != "office docx 周报.md -o 周报.docx" {
+		t.Fatalf("%v %s", err, out)
+	}
+	cmd = exec.Command("sh", script, "check", "x.docx")
+	cmd.Env = []string{"HOME=" + dir, "PATH=/usr/bin:/bin"}
+	out, err := cmd.CombinedOutput()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 3 || !strings.Contains(string(out), "no personad") {
+		t.Fatalf("no personad: %v %s", err, out)
 	}
 }
