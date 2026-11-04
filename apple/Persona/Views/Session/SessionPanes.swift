@@ -359,13 +359,29 @@ struct TerminalPanel: View {
 
     @ViewBuilder private var bottomOverlay: some View {
         if feed.paused {
-            Button {
-                Haptics.tap()
-                feed.resume()
-            } label: {
-                Label("回到最新", systemImage: "arrow.down.to.line").lineLimit(1).font(Theme.Font.captionStrong)
+            VStack(spacing: Theme.Space.s) {
+                // Over the page (the slim bar has no room for the card header's history line): where the history
+                // ends, once there is nothing older to load (#1133).
+                if grab != nil, let end = historyEnd {
+                    Text(end)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .font(Theme.Font.labelMedium)
+                        .foregroundStyle(Color(hex: side.foreground).opacity(0.7))
+                        .padding(.horizontal, Theme.Space.m)
+                        .padding(.vertical, Theme.Space.xs)
+                        .background(Color(hex: side.background).opacity(0.9), in: .capsule)
+                        .allowsHitTesting(false) // the terminal under it keeps its scrolling and selection
+                        .accessibilityIdentifier("terminal-history-end")
+                }
+                Button {
+                    Haptics.tap()
+                    feed.resume()
+                } label: {
+                    Label("回到最新", systemImage: "arrow.down.to.line").lineLimit(1).font(Theme.Font.captionStrong)
+                }
+                .themedButton()
             }
-            .themedButton()
             .padding(Theme.Space.m)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         } else if Self.touchTips, !tipsSeen {
@@ -448,16 +464,23 @@ struct TerminalPanel: View {
         .padding(.top, Theme.Space.s)
     }
 
+    /// Where the history ends, once nothing older is left to load: herdr keeps about 1000 lines of a pane. Nothing
+    /// while driving or taking the terminal over: scrolling up is the program's own history then.
+    private var historyEnd: String? {
+        if feed.drives || feed.control == .starting { return nil }
+        if feed.atLimit { return "— herdr 只保留最近约 1000 行，更早的过程在「对话」里 —" }
+        if !feed.hasOlder { return "— 已到最前面 —" }
+        return nil
+    }
+
     @ViewBuilder private var historyStatus: some View {
         Group {
             if feed.loading {
                 HStack(spacing: Theme.Space.sm) { ProgressView().controlSize(.mini).tint(Color(hex: side.foreground)); Text("加载更早的输出…").lineLimit(1) }
             } else if feed.drives || feed.control == .starting {
                 EmptyView() // driving: scrolling up is the terminal's own history since the takeover, nothing to say
-            } else if feed.atLimit {
-                Text("— herdr 只保留最近约 1000 行，更早的过程在「对话」里 —").lineLimit(1).minimumScaleFactor(0.7)
-            } else if !feed.hasOlder {
-                Text("— 已到最前面 —").lineLimit(1)
+            } else if let end = historyEnd {
+                Text(end).lineLimit(1).minimumScaleFactor(0.7)
             } else {
                 Text(TerminalHelpText.loadOlder).lineLimit(1).minimumScaleFactor(0.8)
             }

@@ -390,7 +390,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 
 2026-11-01 全部过了一遍：分 5 组并行，每组用离屏截图（体验模式和 `scripts/mock/mock_hub.py` 的假数据，深浅色）和单元测试（`JarvisMacTests`）逐条核对，顺手修了能修的；再由一个 reviewer 逐条试着推翻打的勾，推翻了的不勾，写清看到了什么、没看到什么。
 核对后 106 条 [x]、118 条 [ ]。没勾的每条下面都写了原因：「要到 Mac 前看」是要解锁后在 Mac 上点、按、看的，「没做」是还没做的，「Mac 上没有」是 Mac 上本来就不该有的。
-2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 134 条 [x]、88 条 [ ]。
+2026-11-02 晚起在 Mac mini 上用真窗口续核（#403）：隔离的验收副本（独立 bundle id + `CFFIXED_USER_HOME`）+ 体验模式 / `scripts/mock/mock_hub.py`，cua-driver 在真窗口里点、按、看，配合离屏截图和假 hub 的请求日志；新勾的条目下面写了「真窗口核对」看到了什么，部分核对的写了还剩什么。现在 139 条 [x]、83 条 [ ]。
 待你确认：`-showSampleScreen` 的示例「终端在问你」里原来有像内部工具 / 服务的名字，已在提交「chore: the sample terminal dialog uses made-up names only」里全换成编造的名字；以前拍的截图里可能还是旧文字。
 
 ### 真窗口验收怎么分工（2026-11-03 起）
@@ -672,10 +672,11 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac 真窗口（2026-11-03）：切换「长行换行」后长行在折行和截断之间切换；配色换成 Solarized 后背景和文字色跟着变，再换回墨黑；⌘= 两次字变大（终端从 132×24 变成 116×21），⌘- 两次复原。还剩触控板捏合没试（cua 模拟不了捏合）。
 - [ ] Selection (long-press word, drag, 拷贝 / 全选), OSC 8 / URL tap → in-app link — TerminalView.swift (SelectionHandle)
   - Mac 真窗口（2026-11-03）：拖选第一行 ⌘C 拷出「Welcome to Claude Code」，双击选中一个词，⌘A ⌘C 拷出整屏；右键弹出 拷贝（没选中时灰）/ 粘贴 / 全选，系统还会自动加一项「自动填充」。还剩点带下划线的 OSC 8 链接在 App 里打开没试。
-- [ ] Scrollback loading 200 lines at a time (screen/before), 回到最新, ~1000-line limit notice — SessionPanes.swift
+- [x] Scrollback loading 200 lines at a time (screen/before), 回到最新, ~1000-line limit notice — SessionPanes.swift
   - Mac 真窗口（2026-11-04，mock `MOCK_TERMINAL_STREAM=1`，不接管）：滚轮往上翻，接上了更早的输出（Step15 → Step3 → 翻到最前面的 Step1，假 hub 的约 430 行分两页加载），
     底部出现「回到最新」，用鼠标点（按无障碍树的位置点）和 AXPress 都回到最新一屏。还差：翻到头没有「约 1000 行」/「已到最前面」的提示（浮层的细顶栏没带这行字，iOS 同样，#1133）。
   - 接管时（`MOCK_TERMINAL_CONTROL=1`）滚轮按设计发给程序，不翻 App 自己的历史（2026-11-03 执行者因此报过不通过）。
+  - #1133 之后（2026-11-04）：翻到头在「回到最新」上面出现「— herdr 只保留最近约 1000 行，更早的过程在「对话」里 —」：真窗口（`-openTerminal YES -terminalPages 3`，流式 mock，浅色的 Persona 终端配色，提示条白底）、离屏截图的深色终端和单独的终端窗口（`-openTerminalWindow`）、iPhone 模拟器都看过。接管时不显示。
 - [ ] Link status bar (last update, retry backoff, 重试) — SessionPanes.swift (TerminalLinkStatus)
   - 要到 Mac 前看：mock hub 加 `MOCK_SCREEN_FAIL_AFTER=3:14`，状态条出现（最后更新、退避、重试）后再恢复。体验模式和正常的 mock 都不出这条。
 - [ ] Key bar: sticky/locked/held ctrl/alt/shift, esc, tab, ⌃C, D-pad, paste, shortcuts — Views/Chat/TerminalKeys.swift (TerminalKeyBar, KeyCap, DirectionPad)
