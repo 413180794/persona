@@ -63,17 +63,19 @@ func retryTailcat(ctx context.Context, k *tunnel.NodeKey, logger *log.Logger, ex
 func serveTailcatOnce(ctx context.Context, k *tunnel.NodeKey, logger *log.Logger, exe string, conns chan<- net.Conn, upgraded func()) error {
 	s := k.Server(tunnel.Logf(logger.Printf))
 	defer s.Close()
-	defer func() { // let the closes of the connections handed out leave before the endpoint goes
-		dctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		_ = s.DrainTCP(dctx)
-		cancel()
-	}()
 	sctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	ln, err := s.Listen(sctx, "tcp", fmt.Sprintf(":%d", tunnel.NodePort))
 	cancel()
 	if err != nil {
 		return fmt.Errorf("start: %w", err)
 	}
+	// Only a started server has a netstack to drain: DrainTCP on one that failed to start (no network, no DERP)
+	// panics, which used to crash the resident node before retryTailcat could back off.
+	defer func() { // let the closes of the connections handed out leave before the endpoint goes
+		dctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		_ = s.DrainTCP(dctx)
+		cancel()
+	}()
 	up, err := s.Listen(ctx, "tcp", fmt.Sprintf(":%d", tunnel.UploadPort))
 	if err != nil {
 		return fmt.Errorf("listen for uploads: %w", err)
