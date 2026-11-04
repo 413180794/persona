@@ -20,6 +20,15 @@ interface PluginManagement : PluginUi, PluginMarkets {
     /** Whether the paired hub manages plugins (`plugin_manager` in its features); the settings row shows only then. */
     val available: Flow<Boolean>
 
+    /**
+     * Whether the paired hub has plugins' UI slots (`plugin_ui_slots`, docs/plugins.md「UI 插槽」): only then the app
+     * asks for nav pages, cards and machine sections. An older hub has none.
+     */
+    val slotsAvailable: Flow<Boolean> get() = kotlinx.coroutines.flow.flowOf(false)
+
+    /** Badge changes the hub pushes (`plugin_ui` events) for nav pages. */
+    val uiEvents: Flow<persona.core.contracts.PluginUiEvent> get() = kotlinx.coroutines.flow.emptyFlow()
+
     /** `GET /api/v1/plugins`. */
     suspend fun plugins(): List<HubPlugin>
 
@@ -114,7 +123,7 @@ data class PluginDetail(
     val config: JsonObject = JsonObject(emptyMap()),
     val secrets: List<PluginSecret> = emptyList(),
     val permissions: List<PluginPermission> = emptyList(),
-    /** The pages it draws (its `plugin_page` UI). */
+    /** The pages it draws: its `plugin_page` and `nav_page` UI (both whole pages, opened from its settings too). */
     val ui: List<PluginUiPlace> = emptyList(),
 ) {
     /** Installed from a plugin market (`market:<market>/<plugin>`): a phone may upgrade and remove it. */
@@ -145,7 +154,7 @@ data class PluginDetail(
             return PluginDetail(
                 plugin, extra.publisher, extra.homepage, extra.origin, extra.previousVersion, extra.readOnly,
                 extra.form?.fields.orEmpty(), extra.config ?: JsonObject(emptyMap()), extra.secrets, extra.permissions,
-                extra.ui.filter { it.placement.isEmpty() || it.placement == "plugin_page" },
+                extra.ui.filter { it.placement.isEmpty() || it.placement == "plugin_page" || it.placement == "nav_page" },
             )
         }
     }

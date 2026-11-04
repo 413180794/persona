@@ -5,6 +5,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import persona.core.contracts.GroupKeys
+import persona.core.contracts.PluginUiEvent
 import persona.core.contracts.api.*
 import persona.core.hub.HttpMachineManagement
 import persona.core.hub.HttpModelConfiguration
@@ -18,6 +19,8 @@ import persona.android.PersonaApp
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -63,9 +66,13 @@ object MachineManagementModule {
     @OptIn(ExperimentalCoroutinesApi::class)
     @Provides @Singleton fun plugins(runtime: ConnectionRuntime, application: Application): PluginManagement = object : PluginManagement {
         // The selected hub's features, from its hello: the settings row shows while it says plugin_manager.
-        override val available: Flow<Boolean> = (application as PersonaApp).hub
+        private val features = (application as PersonaApp).hub
             .flatMapLatest { hub -> hub?.connection?.serverFeatures ?: flowOf(emptySet()) }
-            .map { "plugin_manager" in it }.distinctUntilChanged()
+        override val available: Flow<Boolean> = features.map { "plugin_manager" in it }.distinctUntilChanged()
+        // Plugins' UI slots (docs/plugins.md「UI 插槽」) and the badge events of the selected hub.
+        override val slotsAvailable: Flow<Boolean> = features.map { "plugin_ui_slots" in it }.distinctUntilChanged()
+        override val uiEvents: Flow<PluginUiEvent> = (application as PersonaApp).hub
+            .flatMapLatest { hub -> hub?.connection?.events ?: emptyFlow() }.filterIsInstance<PluginUiEvent>()
         private fun api() = HttpPluginManagement(runtime.connection(), available)
         override suspend fun plugins() = api().plugins()
         override suspend fun plugin(id: String) = api().plugin(id)

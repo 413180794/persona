@@ -19,9 +19,13 @@ class HttpPluginManagementTest {
             val http = OkHttpClient.Builder().retryOnConnectionFailure(false).build()
             block(server, HttpPluginManagement({ path, method, body ->
                 http.newCall(Request.Builder().url(server.url(path)).method(method, body).build()).execute()
-            }))
+            }, device = { device }))
         }
     }
+
+    // What the phone says of itself in every view's context; a fixed one so the bodies are exact.
+    private val device = PluginUiContext(tz = "Asia/Shanghai", locale = "zh-Hans-CN", platform = "android", uiVersion = 2)
+    private val deviceJson = """"tz":"Asia/Shanghai","locale":"zh-Hans-CN","platform":"android","ui_version":2"""
 
     private val detail = """{"id":"example-notes","name":"Example Notes","kind":"connectors","status":"needs_setup","version":"1.2.0",
         "source":"installed","enabled":true,"description":"同步笔记","contributes":{"connectors":["examplenotes"]},
@@ -154,12 +158,15 @@ class HttpPluginManagementTest {
         assertFalse(api.listing().markets)
     }
 
+    // Its pages are its plugin_page and nav_page UI (both whole pages); a launcher's section or a card is not one.
     @Test fun theDetailListsItsPagesOnly() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"id":"example-gateway","name":"网关","status":"running","origin":"market:3f2a9c1d0b/example-gateway",
             "ui":[{"plugin":"example-gateway","id":"home","title":"概况","placement":"plugin_page"},
-                  {"plugin":"example-gateway","id":"panel","title":"面板","placement":"launcher_section"}]}"""))
+                  {"plugin":"example-gateway","id":"panel","title":"面板","placement":"launcher_section"},
+                  {"plugin":"example-gateway","id":"usage","title":"用量","placement":"nav_page","icon":"chart"},
+                  {"plugin":"example-gateway","id":"today","title":"今天","placement":"overview_card","opens":"usage"}]}"""))
         val d = api.plugin("example-gateway")
-        assertEquals(listOf("home"), d.ui.map { it.id })
+        assertEquals(listOf("home", "usage"), d.ui.map { it.id })
         assertTrue(d.fromMarket)
     }
 
@@ -181,7 +188,7 @@ class HttpPluginManagementTest {
         server.takeRequest().let {
             assertEquals("POST", it.method)
             assertEquals("/api/v1/plugins/example-gateway/-/ui/panel", it.path)
-            assertEquals("""{"context":{"launcher":"work","machine":"workstation"}}""", it.body.readUtf8())
+            assertEquals("""{"context":{"launcher":"work","machine":"workstation",$deviceJson}}""", it.body.readUtf8())
         }
         val items = view.sections.single().items
         assertEquals("s1", view.state)
@@ -195,10 +202,80 @@ class HttpPluginManagementTest {
     @Test fun pressesAButtonWithTheStateAndValues() = withHub { server, api ->
         server.enqueue(MockResponse().setBody("""{"toast":"已保存","open_url":"https://example.com/k"}"""))
         val result = api.uiAction("example-gateway", "home", "save", state = "tab=overview", values = mapOf("note" to "hi", "auto" to "true"))
-        assertEquals("""{"state":"tab=overview","action":"save","values":{"note":"hi","auto":"true"}}""", server.takeRequest().body.readUtf8())
+        assertEquals("""{"context":{$deviceJson},"state":"tab=overview","action":"save","values":{"note":"hi","auto":"true"}}""",
+            server.takeRequest().body.readUtf8())
         assertEquals("已保存", result.toast)
         assertEquals("https://example.com/k", result.openUrl)
         assertNull(result.view)
+    }
+
+    // docs/plugins.md「UI 插槽」: without a placement the hub lists every slot but launcher sections, with badges.
+    @Test fun listsTheSlotsAtOnce() = withHub { server, api ->
+        server.enqueue(MockResponse().setBody("""{"ui":[
+            {"plugin":"example-gateway","plugin_name":"Example 网关面板","id":"usage","title":"用量","placement":"nav_page","size":"full",
+             "icon":"chart","badge":{"text":"3","tone":"danger"}},
+            {"plugin":"example-gateway","id":"today","title":"今天的用量","placement":"overview_card","size":"compact","opens":"usage"},
+            {"plugin":"example-gateway","id":"gpu","title":"网关调用","placement":"machine_section","later":{"x":1}}]}"""))
+        val places = api.uiPlaces("")
+        assertEquals("/api/v1/plugins/-/ui", server.takeRequest().path)
+        assertEquals(listOf("nav_page", "overview_card", "machine_section"), places.map { it.placement })
+        assertEquals("Example 网关面板", places[0].pluginName)
+        assertEquals("chart", places[0].icon)
+        assertEquals("3", places[0].badge?.text)
+        assertEquals("danger", places[0].badge?.tone)
+        assertEquals("compact", places[1].size)
+        assertEquals("usage", places[1].opens)
+        assertNull(places[2].badge)
+    }
+
+    // A card asks for the compact size, a machine's section names the machine; the phone's own context goes along.
+    @Test fun drawsASlotWithItsContext() = withHub { server, api ->
+        server.enqueue(MockResponse().setBody("""{"view":{"sections":[],"refresh_after":300}}"""))
+        val view = api.renderUi("example-gateway", "today", PluginUiContext(size = "compact"))
+        assertEquals("""{"context":{"size":"compact",$deviceJson}}""", server.takeRequest().body.readUtf8())
+        assertEquals(300, view.refreshAfter)
+        server.enqueue(MockResponse().setBody("""{"view":{"sections":[]}}"""))
+        api.renderUi("example-gateway", "gpu", PluginUiContext(machine = "workstation"), state = "range=7d")
+        assertEquals("""{"context":{"machine":"workstation",$deviceJson},"state":"range=7d"}""", server.takeRequest().body.readUtf8())
+        // A segmented choice: the action with {name: value}.
+        server.enqueue(MockResponse().setBody("""{}"""))
+        api.uiAction("example-gateway", "usage", "range", PluginUiContext(size = "full"), values = mapOf("range" to "30d"))
+        assertEquals("""{"context":{"size":"full",$deviceJson},"action":"range","values":{"range":"30d"}}""", server.takeRequest().body.readUtf8())
+    }
+
+    @Test fun theDeviceContextIsThePhones() {
+        val context = HttpPluginManagement.deviceContext()
+        assertEquals("android", context.platform)
+        assertEquals(2, context.uiVersion)
+        assertEquals(java.util.TimeZone.getDefault().id, context.tz)
+        assertFalse(context.locale.isNullOrEmpty())
+    }
+
+    // UI version 2's items read; one this app cannot even decode (a newer hub's, a field of another type) is left out
+    // and the rest of the view stays: never a blank page.
+    @Test fun readsTheNewItemsAndSkipsWhatItCannotRead() = withHub { server, api ->
+        server.enqueue(MockResponse().setBody("""{"view":{"refresh_after":600,"sections":[{"items":[
+            {"type":"segmented","name":"range","value":"7d","action":{"id":"range"},"choices":[{"value":"1d","title":"今天"},{"value":"7d"}]},
+            {"type":"stat_grid","stats":[{"label":"今天","value":"1.2M","detail":"+12%","tone":"caution"},{"label":"费用","value":"¥36.20"}]},
+            {"type":"chart","kind":"bar","unit":"tokens","stacked":true,"title":"近 7 天","series":[
+              {"name":"输入","points":[{"label":"11-01","value":1200000,"display":"1.2M"},{"label":"11-02","value":-3.5}]},
+              {"name":"输出","tone":"positive","points":[{"label":"11-01","value":3},{"label":"11-02","value":4}]}]},
+            {"type":"chart","kind":"line","series":"not a list"},
+            {"type":"future","ratio":"not a number"},
+            "not even an object",
+            {"type":"text","text":"still here"}]}]}}"""))
+        val view = api.renderUi("example-gateway", "usage")
+        val items = view.sections.single().items
+        assertEquals(listOf("segmented", "stat_grid", "chart", "text"), items.map { it.type })
+        assertEquals(600, view.refreshAfter)
+        assertEquals(listOf("今天", "7d"), items[0].choices!!.map { it.label })
+        assertEquals("caution", items[1].stats!![0].tone)
+        val chart = items[2]
+        assertEquals(true, chart.stacked)
+        assertEquals("tokens", chart.unit)
+        assertEquals(-3.5, chart.series!![0].points[1].value, 0.0)
+        assertEquals("1.2M", chart.series!![0].points[0].display)
+        assertEquals("positive", chart.series!![1].tone)
     }
 
     // #1339: a plugin that says the launcher's gateway is not its own answers 404 unsupported; any other 404 is an error.
@@ -207,9 +284,13 @@ class HttpPluginManagementTest {
         assertTrue(runCatching { api.renderUi("example-gateway", "other", PluginUiContext("work")) }.exceptionOrNull() is PluginUiUnsupported)
         server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"not my gateway","code":"unsupported"}"""))
         assertTrue(runCatching { api.uiAction("example-gateway", "other", "refresh") }.exceptionOrNull() is PluginUiUnsupported)
-        server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"no such plugin","code":"not_found"}"""))
+        server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"no such plugin","code":"gone"}"""))
         val other = runCatching { api.renderUi("gone", "home") }.exceptionOrNull()
         assertTrue(other is HubFailure && other.status == 404)
+        // A machine's section for a machine this hub does not know.
+        server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"没有这台机器","code":"not_found"}"""))
+        assertTrue(runCatching { api.renderUi("example-gateway", "gpu", PluginUiContext(machine = "elsewhere")) }.exceptionOrNull()
+            is persona.core.contracts.api.PluginUiNotFound)
         server.enqueue(MockResponse().setResponseCode(502).setBody("""{"error":"插件画的界面这个 hub 画不了","code":"plugin_failed"}"""))
         assertEquals("插件画的界面这个 hub 画不了", (runCatching { api.renderUi("x", "home") }.exceptionOrNull() as HubFailure).message)
     }

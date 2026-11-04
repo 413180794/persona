@@ -334,6 +334,9 @@ SHOTS_PY
         capture "$theme" plugin-market-unavailable --es debug.openPage "market-plugin:8e01b7c4a2:team-windows"
         capture "$theme" plugin-markets --es debug.openPage markets
         capture "$theme" launcher --es debug.openPage "launcher:macbook:claude"
+        # UI slots (#1451): the settings home with the plugins' card and nav pages, and a nav page (charts, number grid).
+        capture "$theme" settings-plugin-slots --es debug.openTab Settings
+        capture "$theme" plugin-nav-page --es debug.openPage "plugin-ui:example-gateway:usage"
       fi
     done
     echo "截图已输出到：$OUTPUT"

@@ -1,0 +1,114 @@
+package persona.feature.settings
+
+import persona.core.contracts.PluginUiEvent
+import persona.core.contracts.api.*
+import persona.core.designsystem.icons.PhIcons
+import persona.core.hub.HubError
+import persona.core.hub.HubFailure
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.*
+import org.junit.Test
+
+// Plugins' UI slots on Android (docs/plugins.md「UI 插槽」): what the settings home, the settings tab's badge and
+// machines' pages get from the hub's list, and the badge events.
+class PluginSlotsTest {
+    private fun nav(id: String, badge: String? = null, icon: String? = "chart") =
+        PluginUiPlace("example-gateway", id, "用量 $id", "nav_page", icon = icon, badge = badge?.let { PluginViewBadge(it, "danger") })
+
+    private val card = PluginUiPlace("example-gateway", "today", "今天的用量", "overview_card", size = "compact", opens = "usage")
+    private val section = PluginUiPlace("example-gateway", "gpu", "网关调用", "machine_section")
+
+    private class FakeSlots(var places: List<PluginUiPlace>) : PluginApiStub() {
+        val asked = mutableListOf<String>()
+        var fail: Exception? = null
+        override suspend fun uiPlaces(placement: String, launcher: String?, machine: String?): List<PluginUiPlace> {
+            asked += placement
+            fail?.let { throw it }
+            return places
+        }
+    }
+
+    @Test fun theSettingsTabAddsTheNavPagesBadgesUp() {
+        assertEquals(SlotBadge(5), PluginSlotText.tabBadge(listOf(nav("a", "3"), nav("b", "2"), nav("c", "新"), nav("d"))))
+        // Only words: a dot, no number.
+        assertEquals(SlotBadge(0, dot = true), PluginSlotText.tabBadge(listOf(nav("a", "新"), nav("b", " "))))
+        assertEquals(SlotBadge(), PluginSlotText.tabBadge(listOf(nav("a"))))
+        // Only nav pages have badges.
+        assertEquals(SlotBadge(), PluginSlotText.tabBadge(listOf(card.copy(badge = PluginViewBadge("9")))))
+    }
+
+    @Test fun iconsFromTheFixedListAndThePluginsOtherwise() {
+        assertSame(PhIcons.ChartBar, PluginSlotText.icon("chart"))
+        assertSame(PhIcons.Coins, PluginSlotText.icon("money"))
+        assertSame(PhIcons.CalendarBlank, PluginSlotText.icon("calendar"))
+        assertSame(PhIcons.PuzzlePiece, PluginSlotText.icon("plugin"))
+        assertSame(PhIcons.PuzzlePiece, PluginSlotText.icon("rocket"))
+        assertSame(PhIcons.PuzzlePiece, PluginSlotText.icon(null))
+    }
+
+    @Test fun aCardOpensThePageItNames() {
+        val places = listOf(nav("usage"), card)
+        assertEquals("用量 usage", PluginSlotText.opened(places, card)?.title)
+        // A page that is not listed (a plugin_page) still opens, under the card's title.
+        assertEquals("今天的用量", PluginSlotText.opened(listOf(card.copy(opens = "home")), card.copy(opens = "home"))?.title)
+        assertNull(PluginSlotText.opened(places, card.copy(opens = null)))
+    }
+
+    // Read only on a hub with plugin_ui_slots while it is online, all slots at once (no placement); a placement this app
+    // does not know is ignored; plugin_ui events change one nav page's badge, none clears it.
+    @Test fun readsTheSlotsAndAppliesBadgeEvents() = runTest {
+        val api = FakeSlots(listOf(nav("usage", "3"), card, section, PluginUiPlace("example-gateway", "bar", "工具栏", "session_action"),
+            PluginUiPlace("example-gateway", "home", "概况", "plugin_page")))
+        val slotsOn = MutableStateFlow(false)
+        val online = MutableStateFlow(true)
+        val events = MutableSharedFlow<PluginUiEvent>()
+        val slots = PluginSlots(api, slotsOn, events)
+        backgroundScope.launch { slots.run(online) }
+        runCurrent()
+        assertTrue(api.asked.isEmpty())
+        slots.load()
+        assertTrue("an older hub is never asked", api.asked.isEmpty())
+        slotsOn.value = true
+        runCurrent()
+        assertEquals(listOf(""), api.asked)
+        val state = slots.state.value
+        assertTrue(state.available)
+        assertEquals(listOf("usage"), state.navPages.map { it.id })
+        assertEquals(listOf("today"), state.cards.map { it.id })
+        assertEquals(listOf("gpu"), state.machineSections.map { it.id })
+        assertEquals(3, state.places.size)
+        assertEquals(SlotBadge(3), state.tabBadge)
+
+        events.emit(PluginUiEvent("example-gateway", "usage", PluginViewBadge("7", "caution")))
+        runCurrent()
+        assertEquals("7", slots.state.value.navPages.single().badge?.text)
+        assertEquals(SlotBadge(7), slots.state.value.tabBadge)
+        events.emit(PluginUiEvent("example-gateway", "today", PluginViewBadge("1")))
+        events.emit(PluginUiEvent("other", "usage", PluginViewBadge("1")))
+        runCurrent()
+        assertNull(slots.state.value.cards.single().badge)
+        assertEquals(SlotBadge(7), slots.state.value.tabBadge)
+        events.emit(PluginUiEvent("example-gateway", "usage", null))
+        runCurrent()
+        assertNull(slots.state.value.navPages.single().badge)
+
+        // Back online: read again. A failure keeps what was there.
+        online.value = false
+        runCurrent()
+        api.fail = HubFailure(HubError.Server, "坏了", status = 500)
+        online.value = true
+        runCurrent()
+        assertEquals(2, api.asked.size)
+        assertEquals("插件的入口读不到：坏了", slots.state.value.error)
+        assertEquals(1, slots.state.value.navPages.size)
+
+        // The hub lost plugin_ui_slots (another hub selected, an older one): nothing is drawn.
+        slotsOn.value = false
+        runCurrent()
+        assertEquals(PluginSlotsState(), slots.state.value)
+    }
+}

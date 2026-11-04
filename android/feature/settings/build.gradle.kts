@@ -4,7 +4,11 @@ plugins {
     id("jarvis.hilt")
 }
 
-android { namespace = "persona.feature.settings" }
+android {
+    namespace = "persona.feature.settings"
+    // Plugins' views are rendered on the JVM (Robolectric's native graphics) for their pixel checks and screenshots.
+    testOptions { unitTests { isIncludeAndroidResources = true } }
+}
 
 dependencies {
     implementation(libs.androidx.activity)
@@ -17,6 +21,11 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(project(":core:hub"))
     testImplementation(libs.coroutines.test)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("androidx.compose.ui:ui-test-manifest")
+    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("androidx.test.ext:junit:1.3.0")
     implementation(project(":core:contracts"))
     implementation(project(":core:domain"))
     implementation(project(":core:designsystem"))

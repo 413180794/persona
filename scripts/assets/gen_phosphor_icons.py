@@ -15,7 +15,7 @@ address-book archive arrow-bend-up-left arrow-clockwise arrow-down arrow-left ar
 arrows-clockwise at battery-charging bell-ringing bell-simple book-open bookmark-simple brain broadcast calendar-blank
 calendar-check caret-down caret-left caret-right caret-up chart-bar chart-line chat-circle chat-circle-dots
 chat-teardrop-text chats chats-circle check check-circle checks circle-dashed circle-notch clock clock-countdown cloud
-cloud-check code command copy cpu cube cursor-text desktop device-mobile dots-three dots-three-vertical envelope-simple
+cloud-check code coins command copy cpu cube cursor-text desktop device-mobile dots-three dots-three-vertical envelope-simple
 eye file file-text files fingerprint flag folder folder-simple funnel-simple gauge gear gear-six git-branch git-diff
 globe-simple hand hand-palm hard-drives hash hourglass-medium house image info kanban key keyboard laptop lightbulb lightning
 link-simple list-checks lock-simple magnifying-glass map-pin microphone microphone-slash monitor moon moon-stars note-pencil paper-plane-right

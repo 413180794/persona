@@ -1,6 +1,8 @@
 package persona.feature.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,15 +26,20 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import kotlinx.coroutines.launch
 
-// Draws a plugin's View (docs/plugins.md「声明式 UI」) with this app's design system: each of the eight kinds of item
-// as a component of the style in use, tones as role colours. The plugin gives no colour, size or icon.
+// Draws a plugin's View (docs/plugins.md「声明式 UI」「UI 插槽」) with this app's design system: each kind of item as
+// a component of the style in use (charts and number grids from the design system's), tones as role colours. The
+// plugin gives no colour, size or icon. A kind this app does not know is skipped.
 
-/** What the page does for a view: press a button (after its confirm), choose for a choice field, open a link. */
+/**
+ * What the page does for a view: press a button (after its confirm), choose for a choice field, open a link, switch a
+ * segmented control (its action goes at once).
+ */
 internal class PluginViewHandle(
     val press: (PluginViewItem, PluginViewAction) -> Unit,
     val edit: (String, String) -> Unit,
     val choose: (PluginViewItem) -> Unit,
     val open: (String) -> Unit,
+    val segment: (PluginViewItem, String) -> Unit = { _, _ -> },
 )
 
 /**
@@ -48,18 +55,19 @@ internal fun rememberPluginView(model: PluginViewModel): PluginViewHandle {
     var confirming by remember(model) { mutableStateOf<Pair<PluginViewItem, PluginViewAction>?>(null) }
     var choosing by remember(model) { mutableStateOf<PluginViewItem?>(null) }
     val open: (String) -> Unit = { url -> if (PluginViewText.isHttps(url)) runCatching { uri.openUri(url) } }
-    fun run(action: PluginViewAction) = scope.launch {
-        val outcome = model.press(action)
+    fun show(outcome: PluginActionOutcome) {
         outcome.toast?.let { feedback?.notice(it) }
         outcome.error?.let { feedback?.notice(it) }
         outcome.openUrl?.let(open)
     }
+    fun run(action: PluginViewAction) = scope.launch { show(model.press(action)) }
     val handle = remember(model) {
         PluginViewHandle(
             press = { item, action -> if (!action.confirm.isNullOrBlank()) confirming = item to action else run(action) },
             edit = model::edit,
             choose = { choosing = it },
             open = open,
+            segment = { item, value -> scope.launch { show(model.choose(item, value)) } },
         )
     }
     confirming?.let { (item, action) ->
@@ -188,6 +196,79 @@ private fun StandaloneItem(item: PluginViewItem, state: PluginViewState, handle:
         }
         "field" -> FieldBox(item, state, handle, top)
         "divider" -> JDivider(top.padding(vertical = Tokens.Space.s))
+        "chart" -> JGroupItem(GroupPosition.Single, top) { ChartItem(item, Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m), compact = false) }
+        "stat_grid" -> JGroupItem(GroupPosition.Single, top) {
+            JStatGrid(PluginViewText.stats(item), Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m))
+        }
+        "segmented" -> SegmentedItem(item, state, handle, top)
+    }
+}
+
+/** A chart from the design system; a card's is short, with no scale. */
+@Composable
+private fun ChartItem(item: PluginViewItem, modifier: Modifier, compact: Boolean) {
+    val data = remember(item) { PluginViewText.chart(item) } ?: return
+    JChart(data, modifier, compact = compact, title = item.title?.takeIf { it.isNotBlank() }, detail = item.detail?.takeIf { it.isNotBlank() })
+}
+
+/**
+ * One of a few, switched at once (a time range): the style's segmented control in the width there is (the board's
+ * cells share it out, so it must not sit in a sideways scroll: its cells collapsed there).
+ */
+@Composable
+private fun SegmentedItem(item: PluginViewItem, state: PluginViewState, handle: PluginViewHandle, modifier: Modifier) {
+    val choices = item.choices.orEmpty()
+    val current = state.values[item.name.orEmpty()] ?: item.value
+    Box(modifier.fillMaxWidth()) {
+        JSegmented(choices.map { JSegment(it.label) }, choices.indexOfFirst { it.value == current },
+            { index -> if (!state.busy) choices.getOrNull(index)?.let { handle.segment(item, it.value) } })
+    }
+}
+
+/**
+ * A plugin's compact view (a card, `size: compact`), not lazily: its sections one under another, no fields. Rows and
+ * links are plain rows, buttons small.
+ */
+@Composable
+internal fun PluginCardContent(state: PluginViewState, handle: PluginViewHandle, modifier: Modifier = Modifier) {
+    val view = state.view ?: return
+    val palette = PersonaTheme.palette
+    val type = PersonaTheme.type
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
+        view.sections.forEach { section ->
+            val items = section.items.filter(PluginViewText::drawableOnCard)
+            if (items.isEmpty() && section.footer.isNullOrBlank()) return@forEach
+            section.title?.takeIf { it.isNotBlank() }?.let { Text(it, style = type.caption, color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            items.forEach { item -> CardItem(item, state, handle) }
+            section.footer?.takeIf { it.isNotBlank() }?.let { Text(it, style = type.caption, color = palette.ink3) }
+        }
+    }
+}
+
+@Composable
+private fun CardItem(item: PluginViewItem, state: PluginViewState, handle: PluginViewHandle) {
+    val palette = PersonaTheme.palette
+    val type = PersonaTheme.type
+    when (item.type) {
+        "text" -> Text(item.text.orEmpty(), style = when (item.style) { "caption" -> type.caption; "secondary" -> type.callout; "code" -> type.code; else -> type.body },
+            color = when (item.style) { "caption" -> palette.ink3; "secondary" -> palette.ink2; else -> palette.ink })
+        "metric" -> JStatGrid(listOf(JStat(item.label.orEmpty(), item.value.orEmpty(), item.detail, PluginViewText.tone(item.tone))))
+        "progress" -> Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(item.label.orEmpty(), Modifier.weight(1f), style = type.callout, color = palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(PluginViewText.percent(item), style = type.micro, color = palette.ink2, maxLines = 1)
+            }
+            JLinearProgress(PluginViewText.ratio(item), tone = PluginViewText.tone(item.tone))
+        }
+        "row", "link" -> CardLine(item, state, handle)
+        "button" -> item.action?.let { action ->
+            JButton(item.title.orEmpty(), { handle.press(item, action) }, kind = if (item.role == "destructive") JButtonKind.Destructive else JButtonKind.Secondary,
+                size = JButtonSize.Small, loading = state.acting == action.id, enabled = !state.busy)
+        }
+        "divider" -> JDivider()
+        "chart" -> ChartItem(item, Modifier, compact = true)
+        "stat_grid" -> JStatGrid(PluginViewText.stats(item))
+        "segmented" -> SegmentedItem(item, state, handle, Modifier)
     }
 }
 
@@ -206,4 +287,38 @@ private fun FieldBox(item: PluginViewItem, state: PluginViewState, handle: Plugi
             number -> KeyboardType.Decimal
             else -> KeyboardType.Text
         }))
+}
+
+/** A row or a link on a card: on the card's own text column (a settings row would indent it a second time). */
+@Composable
+private fun CardLine(item: PluginViewItem, state: PluginViewState, handle: PluginViewHandle) {
+    val palette = PersonaTheme.palette
+    val type = PersonaTheme.type
+    val link = item.type == "link"
+    val action = item.action?.takeIf { it.id.isNotEmpty() && !link }
+    val click: (() -> Unit)? = when {
+        link -> ({ handle.open(item.url.orEmpty()) })
+        action != null -> ({ handle.press(item, action) })
+        else -> null
+    }
+    Row(Modifier.fillMaxWidth().then(if (click != null) Modifier.clickable(enabled = !state.busy || link, onClick = click) else Modifier)
+        .padding(vertical = Tokens.Space.xs), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(item.title.orEmpty(), style = type.body, color = if (link) palette.accent else palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            item.subtitle?.takeIf { it.isNotBlank() && !link }?.let { Text(it, style = type.caption, color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        }
+        item.value?.takeIf { it.isNotBlank() && !link }?.let {
+            Spacer(Modifier.width(Tokens.Space.s))
+            Text(it, style = type.callout, color = palette.ink3, maxLines = 1)
+        }
+        item.badge?.takeIf { it.text.isNotBlank() && !link }?.let {
+            Spacer(Modifier.width(Tokens.Space.s))
+            JTag(it.text, PluginViewText.tone(it.tone))
+        }
+        if (action != null && state.acting == action.id) { Spacer(Modifier.width(Tokens.Space.s)); JSpinner() }
+        else if (click != null) {
+            Spacer(Modifier.width(Tokens.Space.xs))
+            JIcon(if (link) PhIcons.ArrowSquareOut else PhIcons.CaretRight, null, size = Tokens.Space.l, tint = palette.ink3)
+        }
+    }
 }

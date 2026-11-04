@@ -822,6 +822,20 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
 - 调试直达：`--es debug.openPage plugin-ui:<插件>:<界面>`、`market`、`market-plugin:<市场>:<插件>`、`markets`、`launcher:<机器>:<启动器>`；`SHOTS_PLUGINS=1` 的 `android.sh shots` 会截这些（`plugin-example-gateway`、`plugin-ui`、`plugin-market*`、`plugin-markets`、`launcher`）。假 hub 的 `example-gateway` 还有一节总是回 `unsupported` 的 `launcher_section`（`elsewhere`），启动器页上不应出现。
 - 单测：`HttpPluginManagementTest`（列表的 `markets`、详情的 `ui`、`uiPlaces` 的查询串、画和按按钮的正文、`unsupported` 和别的 404、市场的增删刷新和 token、目录的查询串、预览、安装 / 升级带摘要、卸载 `keep_data`），`PluginUiStateTest`（tone、https、哪些条目画、字段初值（密钥不预填）、submit 的值、新 view、什么都没回就重画、`open_url` 只认 https、失败文案、`unsupported` 隐藏不报错、启动器的位置），`PluginMarketStateTest`（各种状态和能做的事、确认按钮文案、市场文案、搜索和筛选、晚到的回答、预览后才装、升级、失败、卸载、市场管理、地址原样交给 hub）。
 
+### 插件的 UI 插槽（#1451）
+
+规格见 [plugins.md](plugins.md)「UI 插槽」。hub 的 features 有 `plugin_ui_slots` 时才问新插槽（`PluginManagement.slotsAvailable`），老 hub 上什么都不画。
+
+- **数据**：`PluginUiPlace` 加了 `plugin_name`、`size`、`icon`、`opens`、`badge`；`uiPlaces("")` 不带 `placement`，一次拿齐 `nav_page`、`overview_card`、`machine_section`。`PluginUiContext` 加了 `size`、`tz`、`locale`、`platform`、`ui_version`：`HttpPluginManagement` 每次画、按按钮都带上这台手机的时区、语言、`android` 和 UI 版本 2（`deviceContext()`），调用方只给启动器、机器和尺寸。`PluginView.refresh_after`；条目加了 `chart`（`series`、`unit`、`stacked`）、`stat_grid`（`stats`）、`segmented`。一节里读不出来的条目（更新的 hub 的、字段类型对不上的）单独丢掉，其余照画，不会白屏（`LenientItemsSerializer`）。404 `not_found`（hub 不认识这台机器，比如另一台 hub 的）是 `PluginUiNotFound`，那一节不画。WebSocket 事件 `plugin_ui {plugin, id, badge}` 解成 `PluginUiEvent`（`PluginManagement.uiEvents`）。插件详情的 `ui` 现在是 `plugin_page` 和 `nav_page`（都能从设置 › 插件 › 这个插件点进去）。
+- **整个外壳一份**：`PluginSlots`（`feature:settings` 的 `PluginSlots.kt`）在 `Root.kt` 的 `PersonaShell` 里建（`rememberPluginSlots`），放进 `SettingsServices.pluginSlots`：hub 在线时读一次列表，回到设置首页时再读，收到 `plugin_ui` 只改那一项的角标。不认识的 `placement` 忽略，不认识的 `icon` 画成拼图（`PluginSlotText.icon`，`money` 用新加的 `PhIcons.Coins`）。
+- **设置首页最上面的「插件」一节**：先是卡片（`overview_card`，`size: compact` 画，`JCard` 里标题、插件名，内容由 `PluginCardContent` 不懒加载地画，不画 `field`；有 `opens` 时整张卡可点，进那一页），再是每个 `nav_page` 一行（图标、标题、插件名、角标 `JTag(tone)`），点进 `PluginUiRoute`，就是原来的插件页面（`PluginUiPage`）。没有卡片也没有入口时这一节不出现；体验模式没有。
+- **设置 tab 的角标**：各 `nav_page` 角标里的数字相加（`PluginSlotText.tabBadge`）；只有文字角标时是一个点（`NavItem.dot`，设计系统加的）。
+- **机器详情页**：`machinesEntries(pluginSections = …)` 由 app 传入 `rememberMachinePluginSections`，在机器自己的各节（系统信息和统计口径）后面画每个 `machine_section`，`context` 带 hub 自己的机器 id（去掉组后缀）。
+- **新条目**：`chart` 和 `stat_grid` 用设计系统新加的 `JChart` / `JStatGrid`（`core:designsystem` 的 `Charts.kt`，Canvas 画，颜色取色板：不写 `tone` 时第一个系列是风格的强调色、后面是 Hue 的紫、橙、绿，写了就是角色色）。柱状图并排或叠起来（负数往下），折线图最多 4 条；整页的图右边是取整的刻度、下面的标签按实际宽度隔几个写一个、首尾不挤（`ChartMath.labelIndices`），卡片里的图不画刻度，只写首尾两个标签；点一下（或横着拖）选中那一列，图上方写标签和各系列的 `display`（没给就按 `unit` 写成 `1.2M tokens`），再点一下取消。`stat_grid` 一行 2–3 个（4 个是两行两个）。`segmented` 用 `JSegmented`，选了马上 `ui.action`，`values` 是 `{name: 选的值}`（`submit` 时连同字段），界面先换过去，失败了换回原来的。
+- **刷新**：`refresh_after`（30 秒到一天）只在页面 resumed 时算（`KeepFresh` → `PluginViewModel.keepFresh`），切走、退到后台就停，回来时过了点马上重画；插件页、卡片、机器上的一节都一样。
+- **截图（不用模拟器）**：`./gradlew :feature:settings:testDebugUnitTest --tests '*PluginSlotsShotsTest*'`，Robolectric 原生绘制，三种风格 × 深浅色，设置首页的「插件」一节和一个插件页（segmented、四个数、叠起来和并排的柱子、折线、30 个点的标签、选中一列），还有设置 tab 的点，PNG 在 `android/feature/settings/build/plugin-ui-shots/`（`-Dpersona.shots=<目录>` 换地方）。在真机 / 模拟器上看：`MOCK_PLUGINS=1` 的假 hub（`example-gateway` 有全部新插槽），`--es debug.openPage plugin-ui:example-gateway:usage` 直达插件页，`machine:<id>` 看机器上的一节。
+- **单测**：`HttpPluginManagementTest`（不带 placement 的列表、角标、上下文的正文、`refresh_after`、新条目、读不出的条目跳过、`not_found`），`PluginUiContractTest`（`plugin_ui` 事件），`ChartMathTest`（紧凑数字、范围、刻度、标签不重叠、点选），`PluginUiStateTest`（新条目画不画、图的转换和 tone、segmented 的动作和失败回退、`refresh_after` 在前台才刷新），`PluginSlotsTest`（只在有 `plugin_ui_slots` 且在线时读、不认识的插槽忽略、角标事件、tab 角标相加 / 点、图标、卡片打开哪一页）。
+
 ## 语音对话（hub 语音插件）
 
 和 hub 上的语音插件全双工对话（契约见 [plugins.md](plugins.md)「语音」）：页面开着就一直听，Persona 说话时直接开口就能打断。代码在 `feature/voice`，传输在 `core/hub` 的 `HttpVoicePlugins`，契约 `core/contracts` 的 `VoicePlugins`，路由 `VoiceRoute(pluginId, title)`。

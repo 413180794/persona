@@ -132,6 +132,18 @@ data class NotifyEvent(
     @SerialName("interaction_id") val interactionId: String? = null,
 ) : ServerEvent
 
+/**
+ * A plugin changed the badge of its entry on the navigation (`nav_page`, docs/plugins.md「UI 插槽」「角标」): `null`
+ * clears it. The app changes the badge without reading the list again.
+ */
+@KeepGeneratedSerializer
+@Serializable(with = PluginUiEventSerializer::class)
+data class PluginUiEvent(
+    val plugin: String,
+    val id: String,
+    val badge: persona.core.contracts.api.PluginViewBadge? = null,
+) : ServerEvent
+
 data object UnknownEvent : ServerEvent
 
 object ServerEventSerializer : KSerializer<ServerEvent> {
@@ -155,6 +167,7 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             "client_hello_ack" -> input.json.decodeFromJsonElement<ClientHelloAck>(obj)
             "pong" -> input.json.decodeFromJsonElement<Pong>(obj)
             "notify" -> input.json.decodeFromJsonElement<NotifyEvent>(obj)
+            "plugin_ui" -> input.json.decodeFromJsonElement<PluginUiEvent>(obj)
             "lock_test" -> input.json.decodeFromJsonElement<LockTestEvent>(obj).also {
                 require(it.testId.isNotBlank() && it.dueAt.isNotBlank() && it.sentAt.isNotBlank())
             }
@@ -193,6 +206,7 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             is ClientHelloAck -> "client_hello_ack" to output.json.encodeToJsonElement(value)
             is Pong -> "pong" to output.json.encodeToJsonElement(value)
             is NotifyEvent -> "notify" to output.json.encodeToJsonElement(value)
+            is PluginUiEvent -> "plugin_ui" to output.json.encodeToJsonElement(value)
             is LockTestEvent -> "lock_test" to output.json.encodeToJsonElement(value)
             is DeltaEvent -> "delta" to output.json.encodeToJsonElement(value)
             is ScreenEvent -> "screen" to output.json.encodeToJsonElement(value)
@@ -226,3 +240,4 @@ object EndpointsEventSerializer : WireSerializer<EndpointsEvent>(EndpointsEvent.
 object ClientHelloAckSerializer : WireSerializer<ClientHelloAck>(ClientHelloAck.generatedSerializer())
 object PongSerializer : WireSerializer<Pong>(Pong.generatedSerializer())
 object NotifyEventSerializer : WireSerializer<NotifyEvent>(NotifyEvent.generatedSerializer())
+object PluginUiEventSerializer : WireSerializer<PluginUiEvent>(PluginUiEvent.generatedSerializer())

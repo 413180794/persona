@@ -4,7 +4,12 @@ import persona.core.contracts.api.*
 import persona.core.designsystem.Tone
 import persona.core.hub.HubError
 import persona.core.hub.HubFailure
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import persona.core.designsystem.JChartKind
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -179,5 +184,126 @@ class PluginUiStateTest {
         places.load()
         assertEquals("插件的内容读不到：坏了", places.state.value.error)
         assertEquals(1, places.state.value.places?.size)
+    }
+
+    // UI version 2 (docs/plugins.md「UI 插槽」「新条目」): charts, number grids and segmented controls draw; a kind this
+    // app does not know, or one it cannot draw, is skipped and the rest of the view stays.
+    @Test fun theNewItemsDrawAndUnknownOnesAreSkipped() {
+        val chart = PluginViewItem("chart", kind = "bar", unit = "tokens", stacked = true, series = listOf(
+            PluginChartSeries("输入", points = listOf(PluginChartPoint("11-01", 1_200_000.0, "1.2M"), PluginChartPoint("11-02", 800_000.0))),
+            PluginChartSeries("输出", "positive", listOf(PluginChartPoint("11-01", 3.0), PluginChartPoint("11-02", 4.5), PluginChartPoint("11-03", 9.0))),
+            PluginChartSeries("别的", "purple", listOf(PluginChartPoint("11-01", 1.0), PluginChartPoint("11-02", 2.0)))))
+        assertTrue(PluginViewText.drawable(chart))
+        val data = PluginViewText.chart(chart)!!
+        assertEquals(JChartKind.Bar, data.kind)
+        assertTrue(data.stacked)
+        assertEquals(listOf("11-01", "11-02"), data.labels)
+        assertEquals(listOf("1.2M", "800K tokens"), data.series[0].displays)
+        // Every series has as many points as the labels; a tone is a role colour, an unknown one neutral, none the series colour.
+        assertEquals(listOf(3.0, 4.5), data.series[1].values)
+        assertEquals(Tone.Positive, data.series[1].tone)
+        assertEquals(Tone.Neutral, data.series[2].tone)
+        assertNull(data.series[0].tone)
+        assertEquals("3.5 元", PluginViewText.display(3.5, null, "元"))
+        assertEquals("¥1.20", PluginViewText.display(1.2, "¥1.20", "元"))
+        assertNull(PluginViewText.chart(chart.copy(kind = "pie")))
+        assertFalse(PluginViewText.drawable(chart.copy(kind = "pie")))
+        assertFalse(PluginViewText.drawable(chart.copy(series = listOf(PluginChartSeries("空")))))
+        assertEquals(JChartKind.Line, PluginViewText.chart(chart.copy(kind = "line"))!!.kind)
+
+        val grid = PluginViewItem("stat_grid", stats = listOf(PluginStat("今天", "1.2M", "+12%", "caution"), PluginStat("费用", "¥36.20", tone = "lilac")))
+        assertTrue(PluginViewText.drawable(grid))
+        assertFalse(PluginViewText.drawable(PluginViewItem("stat_grid")))
+        assertEquals(listOf(Tone.Caution, Tone.Neutral), PluginViewText.stats(grid).map { it.tone })
+
+        val segmented = PluginViewItem("segmented", name = "range", value = "7d", action = PluginViewAction("range"),
+            choices = listOf(PluginViewChoice("1d", "今天"), PluginViewChoice("7d")))
+        assertTrue(PluginViewText.drawable(segmented))
+        assertFalse(PluginViewText.drawable(segmented.copy(choices = segmented.choices!!.take(1))))
+        assertFalse(PluginViewText.drawable(segmented.copy(action = null)))
+
+        assertFalse(PluginViewText.drawable(PluginViewItem("calendar_heatmap")))
+        // A card draws no fields (it opens a page for that).
+        assertFalse(PluginViewText.drawableOnCard(PluginViewItem("field", name = "x", kind = "text")))
+        assertTrue(PluginViewText.drawableOnCard(grid))
+    }
+
+    private val range = PluginViewItem("segmented", name = "range", value = "7d", action = PluginViewAction("range"),
+        choices = listOf(PluginViewChoice("1d", "今天"), PluginViewChoice("7d", "7 天"), PluginViewChoice("30d", "30 天")))
+
+    private fun rangeView(value: String, state: String = "range=$value") = PluginView(title = "用量", state = state, sections = listOf(
+        PluginViewSection(items = listOf(range.copy(value = value), PluginViewItem("field", name = "note", kind = "text", value = "备注")))))
+
+    // Choosing another segment sends its action at once with {name: value}; the page shows the choice right away and
+    // the plugin's new view replaces it. The same choice sends nothing; a failure puts the old choice back.
+    @Test fun aSegmentedChoiceGoesAtOnce() = runBlocking {
+        val api = FakeUi()
+        api.view = rangeView("7d")
+        val model = PluginViewModel(api, "example-gateway", "usage")
+        model.load()
+        assertEquals("7d", model.state.value.values["range"])
+        api.answer = PluginUiResult(view = rangeView("30d"))
+        model.choose(range, "30d")
+        assertEquals(Triple("range", "range=7d", mapOf("range" to "30d")), api.actions.single())
+        assertEquals("range=30d", model.state.value.view?.state)
+        assertEquals("30d", model.state.value.values["range"])
+        model.choose(range, "30d")
+        assertEquals(1, api.actions.size)
+        api.fail = HubFailure(HubError.Server, "坏了", status = 502)
+        val out = model.choose(range, "1d")
+        assertEquals("没有做成：坏了", out.error)
+        assertEquals("30d", model.state.value.values["range"])
+        // Submitting: the page's fields go with it.
+        api.fail = null
+        api.answer = PluginUiResult(view = rangeView("1d"))
+        model.choose(range.copy(action = PluginViewAction("range", submit = true)), "1d")
+        assertEquals(mapOf("range" to "1d", "note" to "备注"), api.actions.last().third)
+    }
+
+    // refresh_after (docs/plugins.md「UI 插槽」「刷新」): drawn again with the plugin's state once the time is up (30 s at
+    // least) while the page runs it; stopped, nothing; run again after the time is up, drawn at once.
+    @Test fun refreshAfterDrawsAgainWhileOnScreen() = runTest {
+        val api = FakeUi()
+        api.view = api.view.copy(refreshAfter = 10)
+        val model = PluginViewModel(api, "example-gateway", "usage", now = { testScheduler.currentTime })
+        model.load()
+        val fresh = launch { model.keepFresh() }
+        advanceTimeBy(29_000); runCurrent()
+        assertEquals(1, api.renders.size)
+        advanceTimeBy(1_500); runCurrent()
+        assertEquals(2, api.renders.size)
+        assertEquals("tab=1", api.renders.last().second)
+        advanceTimeBy(30_500); runCurrent()
+        assertEquals(3, api.renders.size)
+        fresh.cancel()
+        advanceTimeBy(120_000); runCurrent()
+        assertEquals(3, api.renders.size)
+        val back = launch { model.keepFresh() }
+        runCurrent()
+        assertEquals(4, api.renders.size)
+        back.cancel()
+    }
+
+    @Test fun aViewWithoutRefreshAfterIsNotDrawnAgain() = runTest {
+        val api = FakeUi()
+        val model = PluginViewModel(api, "example-gateway", "usage", now = { testScheduler.currentTime })
+        model.load()
+        val fresh = launch { model.keepFresh() }
+        advanceTimeBy(48L * 3600 * 1000); runCurrent()
+        assertEquals(1, api.renders.size)
+        fresh.cancel()
+        // A day at most.
+        assertEquals(1_000L + 86_400_000L, PluginViewText.refreshAt(PluginViewState(PluginView(refreshAfter = 1_000_000), drawnAt = 1_000L)))
+        assertNull(PluginViewText.refreshAt(PluginViewState(PluginView(refreshAfter = 0), drawnAt = 1_000L)))
+    }
+
+    // A machine's section for a machine the hub does not know (another hub's) is hidden, not an error.
+    @Test fun aMachineTheHubDoesNotKnowHidesItsSection() = runBlocking {
+        val api = FakeUi()
+        api.fail = PluginUiNotFound("没有这台机器")
+        val model = PluginViewModel(api, "example-gateway", "gpu", PluginUiContext(machine = "elsewhere"))
+        model.load()
+        assertTrue(model.state.value.unsupported)
+        assertNull(model.state.value.error)
     }
 }

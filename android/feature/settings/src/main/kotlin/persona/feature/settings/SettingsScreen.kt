@@ -104,6 +104,13 @@ private fun SettingsContent(
         pluginSummary = try { PluginText.listSummary(pluginService.plugins()) }
         catch (error: CancellationException) { throw error } catch (_: Exception) { pluginSummary }
     }
+    // Plugins' UI slots (docs/plugins.md「UI 插槽」): read again whenever the settings list shows.
+    val slots = services.pluginSlots.takeUnless { services.demo }
+    val slotsState = slots?.state?.collectAsState()?.value ?: PluginSlotsState()
+    val slotCards = if (page == "settings" && onNavigate != null) rememberPluginCards(slots) else emptyList()
+    LaunchedEffect(slots, page, connection) {
+        if (slots != null && page == "settings" && connection == ConnectionState.Online) slots.load()
+    }
     val back: () -> Unit = onBack ?: { page = "settings" }
     BackHandler(page != "settings" && onBack == null, onBack = back)
     val detailKey = LocalDetailKey.current
@@ -171,6 +178,10 @@ private fun SettingsContent(
                     item { JButton("连接我的 hub", exit, Modifier.fillMaxWidth().padding(top = Tokens.Space.m)) }
                 }
             }
+            // The plugins' cards and nav pages head the list; they open by key, so only with a navigation host.
+            if (onNavigate != null) pluginSlotItems(slotsState, slotCards,
+                selected = { place -> detailKey == persona.core.navigation.PluginUiRoute(place.plugin, place.id, place.title.ifBlank { place.id }) },
+                onOpen = { place -> onNavigate(persona.core.navigation.PluginUiRoute(place.plugin, place.id, place.title.ifBlank { place.id })) })
             item {
                 HubCard(name = "Persona hub", connected = paired && connection == ConnectionState.Online,
                     statusText = if (paired) connection.label() else "尚未配对",

@@ -209,9 +209,18 @@ fun HubCard(
 
 // ------------------------------------------------------------------ app navigation
 
-/** A top-level destination. [badge] counts things waiting for the user; [badgeText] replaces it (体验). */
+/**
+ * A top-level destination. [badge] counts things waiting for the user; [badgeText] replaces it (体验); [dot] is a
+ * mark without a number (plugins' badges that are words, not counts).
+ */
 @Immutable
-data class NavItem(val key: String, val label: String, val icon: PhIcon, val badge: Int = 0, val badgeText: String? = null)
+data class NavItem(val key: String, val label: String, val icon: PhIcon, val badge: Int = 0, val badgeText: String? = null, val dot: Boolean = false)
+
+/** A count's small dot: where there is no number to show. */
+@Composable
+private fun NavDot(modifier: Modifier) {
+    Box(modifier.size(8.dp).clip(CircleShape).background(PersonaTheme.palette.needsYou.dot))
+}
 
 /**
  * The app's top-level navigation in the active style: a floating glass dock, a quiet paper bar, or a board bar with
@@ -243,7 +252,7 @@ fun AppNavigation(items: List<NavItem>, selected: String?, onSelect: (String) ->
                             JIcon(item.icon, null, size = 24.dp, tint = if (on) palette.ink else palette.ink3, selected = on)
                             when {
                                 item.badgeText != null -> JTag(item.badgeText, Modifier.align(Alignment.TopEnd).offset(16.dp, (-6).dp))
-                                item.badge > 0 -> Box(Modifier.align(Alignment.TopEnd).offset(4.dp, (-2).dp).size(9.dp).clip(CircleShape).background(palette.marker).border(1.5.dp, palette.ink, CircleShape))
+                                item.badge > 0 || item.dot -> Box(Modifier.align(Alignment.TopEnd).offset(4.dp, (-2).dp).size(9.dp).clip(CircleShape).background(palette.marker).border(1.5.dp, palette.ink, CircleShape))
                             }
                         }
                         Spacer(Modifier.height(4.dp))
@@ -266,6 +275,7 @@ fun AppNavigation(items: List<NavItem>, selected: String?, onSelect: (String) ->
                                 when {
                                     item.badgeText != null -> JTag(item.badgeText, Modifier.align(Alignment.TopEnd).offset(16.dp, (-6).dp))
                                     item.badge > 0 -> JBadge(item.badge, Modifier.align(Alignment.TopEnd).offset(12.dp, (-7).dp))
+                                    item.dot -> NavDot(Modifier.align(Alignment.TopEnd).offset(3.dp, (-1).dp))
                                 }
                             }
                             Spacer(Modifier.height(3.dp))
@@ -319,6 +329,7 @@ private fun RailItem(item: NavItem, on: Boolean, onSelect: (String) -> Unit) {
                 when {
                     item.badgeText != null -> JTag(item.badgeText, Modifier.align(Alignment.TopEnd).offset(16.dp, (-6).dp))
                     item.badge > 0 -> JBadge(item.badge, Modifier.align(Alignment.TopEnd).offset(12.dp, (-7).dp))
+                    item.dot -> NavDot(Modifier.align(Alignment.TopEnd).offset(3.dp, (-1).dp))
                 }
             }
             Spacer(Modifier.height(4.dp))
@@ -341,7 +352,7 @@ private fun DockItem(item: NavItem, on: Boolean, modifier: Modifier, onSelect: (
             JIcon(item.icon, null, size = 24.dp, tint = if (on) palette.ink else palette.ink2, selected = on)
             when {
                 item.badgeText != null -> JTag(item.badgeText, Modifier.align(Alignment.TopEnd).offset(16.dp, (-6).dp))
-                item.badge > 0 -> Box(Modifier.align(Alignment.TopEnd).offset(3.dp, (-1).dp).size(8.dp).clip(CircleShape).background(palette.needsYou.dot))
+                item.badge > 0 || item.dot -> NavDot(Modifier.align(Alignment.TopEnd).offset(3.dp, (-1).dp))
             }
         }
         Spacer(Modifier.height(3.dp))

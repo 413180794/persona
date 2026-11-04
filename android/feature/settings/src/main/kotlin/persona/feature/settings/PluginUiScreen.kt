@@ -20,9 +20,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 // The places a plugin's View is drawn (docs/plugins.md「声明式 UI」): a page of its own (plugin_page, from the
-// plugin's page in 设置 › 插件) and a section on a launcher's page (launcher_section).
+// plugin's page in 设置 › 插件; nav_page, from the「插件」section of the settings home) and a section on a launcher's
+// page (launcher_section). The UI slots of the settings home and a machine's page are in PluginSlots.kt.
 
-/** 设置 › 插件 › one › a page it draws. */
+/** 设置 › 插件 › one › a page it draws, or a nav page opened from the settings home. */
 @Composable
 fun PluginUiPage(plugins: PluginManagement?, pluginId: String, uiId: String, title: String, onBack: () -> Unit) {
     if (plugins == null) {
@@ -34,6 +35,8 @@ fun PluginUiPage(plugins: PluginManagement?, pluginId: String, uiId: String, tit
     val scope = rememberCoroutineScope()
     val handle = rememberPluginView(model)
     LaunchedEffect(model) { model.load() }
+    // A view with refresh_after is drawn again while this page is on screen (docs/plugins.md「UI 插槽」「刷新」).
+    KeepFresh(model)
     val view = state.view
     JListPage(title = view?.title?.takeIf { it.isNotBlank() } ?: title, onBack = onBack, largeTitle = false,
         refreshing = state.loading && view != null, onRefresh = { scope.launch { model.load() } }) {

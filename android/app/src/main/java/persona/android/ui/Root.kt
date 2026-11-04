@@ -159,7 +159,12 @@ fun PersonaRoot(
 }
 
 @Composable
-private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((Router) -> ResolvedRoute?)?>, services: SettingsServices, shell: AppServices) {
+private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((Router) -> ResolvedRoute?)?>, shellServices: SettingsServices, shell: AppServices) {
+    // Where the selected hub's plugins draw (docs/plugins.md「UI 插槽」): the settings home, the settings tab's badge and
+    // machines' pages share one list, read while the hub is online.
+    val pluginSlots = persona.feature.settings.rememberPluginSlots(shellServices.plugins?.takeUnless { shellServices.demo }, session.connection.state)
+    val services = remember(shellServices, pluginSlots) { shellServices.copy(pluginSlots = pluginSlots) }
+    val slotBadge = pluginSlots?.state?.collectAsStateWithLifecycle()?.value?.tabBadge ?: persona.feature.settings.SlotBadge()
     val context = LocalContext.current
     val store = remember(session.identity) { ShellPositionStore(context, session.identity) }
     // Automated captures start from each tab's root instead of whatever the previous capture left open;
@@ -301,7 +306,8 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
         buildInboxList(inbox.records.map { it.item }, inbox.interactions, inbox.sessions, inbox.mutes)
             .groups.firstOrNull { it.id == "action" }?.count ?: 0
     }
-    val badges = mapOf(AppTab.Agents to agentNeeds, AppTab.Jarvis to assistantRequests.size, AppTab.Inbox to inboxNeeds)
+    // Settings carries the plugins' nav page badges added up (a dot when they are words).
+    val badges = mapOf(AppTab.Agents to agentNeeds, AppTab.Jarvis to assistantRequests.size, AppTab.Inbox to inboxNeeds, AppTab.Settings to slotBadge.count)
     // 现在要你处理的事 on the Persona home: the agents waiting (not Persona's own, not muted), then the inbox's 需要你.
     val needsYou = remember(agentRequests, sessions, preferences.mutes, inbox.records) {
         persona.feature.assistant.needsYou(agentRequests, sessions, preferences.mutes,
@@ -324,7 +330,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
             else -> Ambience.Calm
         }
         val demoBadge = if (session.demo != null) "体验" else null
-        val items = navigationItems(badges, demoBadge)
+        val items = navigationItems(badges, demoBadge, settingsDot = slotBadge.dot)
         // The window decides the layout (WindowSizeClass and the fold posture), never the device model: split screen,
         // free-form windows, rotation and folding all just recompose this.
         val windowSize = LocalWindowInfo.current.containerSize
@@ -432,7 +438,8 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
             session.terminal?.let { terminalEntries(navigator, it) { key -> sessions.firstOrNull { s -> s.key == key }?.displayTitle } }
                 ?: run { entry<TerminalRoute> { UnavailablePage("体验模式没有终端数据", navigator) } }
             session.metrics?.let { machinesEntries(navigator, it, session.sessions, session.machines,
-                launcherPages = services.plugins?.takeUnless { services.demo }?.available ?: kotlinx.coroutines.flow.flowOf(false)) } ?: run {
+                launcherPages = services.plugins?.takeUnless { services.demo }?.available ?: kotlinx.coroutines.flow.flowOf(false),
+                pluginSections = { id -> persona.feature.settings.rememberMachinePluginSections(services.pluginSlots, id) }) } ?: run {
                 entry<MachinesRoute> { UnavailablePage("体验模式没有机器监控数据", navigator) }
                 entry<MachineDetailRoute> { UnavailablePage("体验模式没有机器监控数据", navigator) }
             }
@@ -540,9 +547,10 @@ private fun Modifier.unplaced(): Modifier = layout { measurable, constraints ->
 }
 
 /** The four destinations, in the same order and with labels in every style. */
-private fun navigationItems(badges: Map<AppTab, Int>, demo: String?): List<NavItem> {
+private fun navigationItems(badges: Map<AppTab, Int>, demo: String?, settingsDot: Boolean = false): List<NavItem> {
     fun item(tab: AppTab, label: String, icon: persona.core.designsystem.icons.PhIcon) =
-        NavItem(tab.name, label, icon, badge = badges[tab] ?: 0, badgeText = if (tab == AppTab.Settings) demo else null)
+        NavItem(tab.name, label, icon, badge = badges[tab] ?: 0, badgeText = if (tab == AppTab.Settings) demo else null,
+            dot = tab == AppTab.Settings && settingsDot)
     return listOf(
         item(AppTab.Jarvis, "Persona", PhIcons.Sparkle),
         item(AppTab.Agents, "Agents", PhIcons.SquaresFour),

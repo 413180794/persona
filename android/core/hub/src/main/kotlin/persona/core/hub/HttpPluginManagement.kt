@@ -10,6 +10,7 @@ import persona.core.contracts.api.PluginManagement
 import persona.core.contracts.api.PluginMarket
 import persona.core.contracts.api.PluginPreview
 import persona.core.contracts.api.PluginUiContext
+import persona.core.contracts.api.PluginUiNotFound
 import persona.core.contracts.api.PluginUiPlace
 import persona.core.contracts.api.PluginUiResult
 import persona.core.contracts.api.PluginUiUnsupported
@@ -41,6 +42,8 @@ import okhttp3.Response
 class HttpPluginManagement internal constructor(
     private val request: suspend (String, String, RequestBody?) -> Response,
     override val available: Flow<Boolean> = flowOf(true),
+    /** The app's side of every view's context: time zone, language, platform, UI version (read on each call). */
+    private val device: () -> PluginUiContext = { deviceContext() },
 ) : PluginManagement {
     constructor(connection: OkHttpHubConnection, available: Flow<Boolean>) : this({ path, method, body ->
         connection.request(path, method, body)
@@ -73,11 +76,13 @@ class HttpPluginManagement internal constructor(
     // ---- declarative UI (docs/plugins.md「声明式 UI」)
 
     override suspend fun uiPlaces(placement: String, launcher: String?, machine: String?): List<PluginUiPlace> {
-        val url = hubUrl("ui").addQueryParameter("placement", placement).apply {
+        // No placement: every slot but launcher sections (docs/plugins.md「UI 插槽」).
+        val url = hubUrl("ui").apply {
+            placement.takeIf { it.isNotEmpty() }?.let { addQueryParameter("placement", it) }
             launcher?.takeIf { it.isNotEmpty() }?.let { addQueryParameter("launcher", it) }
             machine?.takeIf { it.isNotEmpty() }?.let { addQueryParameter("machine", it) }
         }.build()
-        val list = (parse(call(url.encodedPath + "?" + url.encodedQuery, "GET")) as? JsonObject)?.get("ui") as? JsonArray
+        val list = (parse(call(url.encodedPath + (url.encodedQuery?.let { "?$it" } ?: ""), "GET")) as? JsonObject)?.get("ui") as? JsonArray
             ?: throw HubFailure(HubError.Protocol)
         return decode { JsonCodec.decodeFromJsonElement(ListSerializer(PluginUiPlace.serializer()), list) }
     }
@@ -92,21 +97,36 @@ class HttpPluginManagement internal constructor(
         plugin: String, ui: String, action: String, context: PluginUiContext?, state: String?, values: Map<String, String>?,
     ): PluginUiResult = read(uiCall(plugin, ui, uiBody(context, state, action, values)), PluginUiResult.serializer())
 
+    /**
+     * Every call says where and for whom it draws (docs/plugins.md「UI 插槽」「上下文」): the caller's launcher, machine
+     * and size, and this app's time zone, language, platform and UI version (2: charts, stat grids, segmented). An
+     * older hub ignores what it does not know.
+     */
     private fun uiBody(context: PluginUiContext?, state: String?, action: String?, values: Map<String, String>?) = buildJsonObject {
-        if (context != null && (context.launcher != null || context.machine != null)) putJsonObject("context") {
-            context.launcher?.let { put("launcher", it) }
-            context.machine?.let { put("machine", it) }
+        val app = device()
+        putJsonObject("context") {
+            context?.launcher?.takeIf { it.isNotEmpty() }?.let { put("launcher", it) }
+            context?.machine?.takeIf { it.isNotEmpty() }?.let { put("machine", it) }
+            context?.size?.takeIf { it.isNotEmpty() }?.let { put("size", it) }
+            (context?.tz ?: app.tz)?.takeIf { it.isNotEmpty() }?.let { put("tz", it) }
+            (context?.locale ?: app.locale)?.takeIf { it.isNotEmpty() }?.let { put("locale", it) }
+            (context?.platform ?: app.platform)?.takeIf { it.isNotEmpty() }?.let { put("platform", it) }
+            (context?.uiVersion ?: app.uiVersion)?.let { put("ui_version", it) }
         }
         state?.takeIf { it.isNotEmpty() }?.let { put("state", it) }
         action?.let { put("action", it) }
         values?.let { v -> putJsonObject("values") { v.forEach { (key, value) -> put(key, value) } } }
     }
 
-    /** A plugin that says the launcher's gateway is not its own answers 404 `unsupported`: the section is hidden. */
+    /**
+     * A plugin that says the launcher's gateway is not its own answers 404 `unsupported`: the section is hidden. 404
+     * `not_found` is a machine (or plugin) the hub does not know: [PluginUiNotFound].
+     */
     private suspend fun uiCall(plugin: String, ui: String, body: JsonObject): String = try {
         call(path(plugin, "-", "ui", id(ui)), "POST", body)
     } catch (failure: HubFailure) {
         if (failure.status == 404 && failure.code == "unsupported") throw PluginUiUnsupported()
+        if (failure.status == 404 && failure.code == "not_found") throw PluginUiNotFound(failure.message)
         throw failure
     }
 
@@ -211,9 +231,16 @@ class HttpPluginManagement internal constructor(
     // Secret names come from the plugin's manifest; anything else must not become a path ("..").
     private fun secret(name: String): String = name.also { require(it.matches(SecretName)) { "Invalid secret name" } }
 
-    private companion object {
-        val json = "application/json; charset=utf-8".toMediaType()
-        val PluginId = Regex("[A-Za-z0-9_-]{1,64}")
-        val SecretName = Regex("[A-Za-z][A-Za-z0-9_]{0,63}")
+    companion object {
+        /** The UI version this app draws: 2 has charts, stat grids, segmented controls and `refresh_after`. */
+        const val UI_VERSION = 2
+
+        /** This phone's time zone (IANA) and language (a BCP 47 tag), the platform and the UI version it draws. */
+        fun deviceContext() = PluginUiContext(tz = java.util.TimeZone.getDefault().id, locale = java.util.Locale.getDefault().toLanguageTag(),
+            platform = "android", uiVersion = UI_VERSION)
+
+        private val json = "application/json; charset=utf-8".toMediaType()
+        private val PluginId = Regex("[A-Za-z0-9_-]{1,64}")
+        private val SecretName = Regex("[A-Za-z][A-Za-z0-9_]{0,63}")
     }
 }
