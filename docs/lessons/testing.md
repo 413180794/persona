@@ -43,6 +43,11 @@
   上一个测试停在别的 tab 时对话就打不开（2026-10-31 `LiveUpdateTests` 的看图用例在别的车道「第一步就找不到过程卡」）。只想打开某个对话用 `-openSession`。
 - `-pairURL` 配的 hub 和这台模拟器上次配的不同时，App 从头开始、停在助手页：`-app.tab`、`-dev.openChat`、`-tab dev` 都不起作用（2026-11-01）。
   老测试一直连同一个 mock 地址，碰不到；换了端口、换了 hub 就碰到。要可靠：先只带 `-pairURL` 启动一次、退出，再带页面参数启动（`ScrollUnderPushTests`）。
+- `-tab` 只认 `PersonaApp` 里列出的值，不认的值什么都不做，App 落在上一轮存下的 `app.tab` 上（2026-11-04，#1664）：`-tab feishu` 一直没人认，
+  四组飞书测试（加密消息、多账号、置顶栏、会话置顶）全靠上一轮停在哪。UI 测试默认是旧布局：带 `-tab settings` 的测试（`SecretFieldTests`）存下 `settings`、没有外壳改回去，
+  下一个用新外壳的测试一启动就开着设置 sheet，「消息」点了也被挡住，看起来像「消息页找不到会话」；它失败一次外壳就把 `app.tab` 写回 `assistant`，再跑又好了。
+  加新页面时同时给 `-tab` 加上它的值；复现「单跑能过、接在别的测试后面就挂」先看 App 容器里的 `Library/Preferences/<bundle id>.plist`
+  （`simctl spawn … defaults write` 写不进 App 的容器）。
 - 「推送时不打断」要在手指还在、惯性还在的时候推。停下后再推，测不出滚动中整屏跳：`LiveUpdateTests` 的「滚到中间行不动」一直是绿的，
   真实 hub 上 Agents 列表滚动中跳到 900 pt 以上。逐帧量用 `PerfScroll`（`docs/testing.md`「滚动中推送」）。
 - mock hub 要按真 hub 的样子答，尤其是「还没准备好」的那几种：Telegram 关着时真 hub 列不出它的能力（程序没跑过，能力是程序自己报的），

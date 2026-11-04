@@ -79,6 +79,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   App 里发出后对话页一直是这句（不出「还没有消息」）、侧栏的新对话选中、带工作中转圈。`MOCK_ASSISTANT_START_SECONDS=<秒>` 让这个 POST 晚回，
   等待中看气泡和「Persona 正在准备…」。`scripts/mock/test_assistant_mock.py` 管着 mock 的这几件事。
 - 飞书多账号（#1321）：mock 加 `MOCK_LARK_ACCOUNTS=1`，`/api/v1/lark/accounts` 有「我」「工作号」和一个未登录的账号，`ol_account=2` 读到工作号自己的会话，收件箱最上面一件来自工作号；`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口>` 跑 `LarkAccountsFlowTests`（「消息」页切换账号、打开工作号的会话、设置 › 飞书的账号列表；`JARVIS_SHOTS` 存截图）；网页用 `scripts/test/web_lark_accounts_e2e.py <网页地址> [--shots <目录>]`（用法见脚本开头）。
+- 飞书加密消息（#689、#1664）：mock 加 `MOCK_LARK_NATIVE_OLK=1`，`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口>` 跑 `LarkNativeEncryptionFlowTests`（「消息」页打开「设计评审」、选对外展示、解锁、发送、失败重发、收件箱不能把加密草稿当普通消息发；解锁后查不弹「保存密码」）；`JARVIS_SHOTS` 存截图（`docs/screenshots/lark-native-encryption/`）。多账号的用例里第二个账号置顶了「季度规划」，它只在置顶栏（`feishu-pin-w1`），不在列表里（#1342）。
 - 没装 lark-connector 插件的 hub（#1530）：mock 默认在 features 里带 `lark`、`lark_moments`（插件给的）；加 `MOCK_NO_LARK=1` 去掉它们和 `lark_attachments`，`/api/v1/lark/…` 一律 404、连接器里没有飞书，看「消息」页、设置 › 连接器 › 飞书、翻译的「飞书会话」都不出现，飞书文档 / 公司圈链接照普通网页打开。
 - 飞书 /agent 的上下文（#876）：mock 加 `MOCK_LARK_AGENT=1`，「帮我约周五…」变成一条飞书 /agent 请求（说明和 7 项上下文在 `<jarvis-context>` 里，标签外只有请求）；`-openSession server/b2e4d6f8-0000-4000-8000-000000000003`，`-showContexts YES` 让上下文组和第一项打开。
 - Persona 侧栏：mock 加 `MOCK_ASSISTANT_SIDEBAR=1`，「最近」多 36 个对话（超过显示的 30 个，出「查看全部」），前三个依次是需要你（红点）、未读（蓝点）、工作中（转圈）。

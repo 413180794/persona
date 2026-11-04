@@ -83,11 +83,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         #if os(iOS)
         PagePerf.runIfAsked()
         #endif
+        // Every tab a UI test can ask for. One it asks for and this does not know leaves the tab the last run saved
+        // (`app.tab`): after a run in the old layout with `-tab settings`, the shell opened on the 设置 sheet and the
+        // Feishu tests that asked for `-tab feishu` never saw the 消息 page (#1664).
         switch d.string(forKey: "tab") {
         case "dev": AppModel.shared.selectedTab = .chats
         case "mail": AppModel.shared.selectedTab = .mail
         case "settings": AppModel.shared.selectedTab = .settings
         case "assistant": AppModel.shared.selectedTab = .assistant
+        case "feishu": AppModel.shared.selectedTab = LarkHomePreference.shared.shows ? .feishu : .assistant
         default: break
         }
         // "machine/session", or "group|machine/session" for another group.
