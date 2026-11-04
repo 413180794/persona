@@ -4,7 +4,7 @@
 
 | 部分 | 代码 |
 | --- | --- |
-| 采集（解析 /proc、vm_stat、iostat、sw_vers 等） | `server/internal/sysmon/`（`sysmon.go` 纯解析，`linux.go` / `darwin.go` 读系统） |
+| 采集（解析 /proc、vm_stat、iostat、sw_vers、Win32 的返回等） | `server/internal/sysmon/`（`sysmon.go`、`winparse.go` 纯解析，`linux.go` / `darwin.go` / `windows.go` 读系统） |
 | node 发送 | `server/internal/node/metrics.go` |
 | hub 存储、降采样、清理、API | `server/internal/hub/metrics.go`、`server/internal/db/metrics.go`、迁移 `0051_machine_metrics.sql` |
 | App | `apple/Persona/Views/Machines/`（`MachinesView` 机器页、`MachineDetailView` 机器详情、`MetricCharts`、`OSBadge`），模型 `apple/Shared/MachineMetrics.swift` |
@@ -15,13 +15,13 @@
 node 启动时读一次，随 `node.info` 的 `system` 字段给 hub；hub 存进 `machine_systems`（机器离线、hub 重启后也知道它是什么系统），
 放进 `Machine.system` 下发给 App。
 
-| 字段 | Linux | macOS |
-| --- | --- | --- |
-| `distro` / `like` / `name` / `version` | `/etc/os-release` 的 `ID` / `ID_LIKE` / `PRETTY_NAME` / `VERSION_ID`（没有就读 `/usr/lib/os-release`） | `macos`，`sw_vers` 的 ProductName + ProductVersion、BuildVersion |
-| `kernel` | `/proc/sys/kernel/osrelease` | `Darwin ` + `kern.osrelease` |
-| `model` | DMI `sys_vendor` + `product_name`（去掉「To be filled by O.E.M.」这类占位） | `system_profiler SPHardwareDataType` 的 Model Name（只取这一行，同一输出里有序列号），失败用 `hw.model` |
-| `cpu` | `/proc/cpuinfo` 第一个 `model name`（ARM 板子取 `Hardware` / `Model`） | `machdep.cpu.brand_string` |
-| `cores` / `memory` / `boot_time` | `runtime.NumCPU`、`MemTotal`、`/proc/stat` 的 `btime` | `runtime.NumCPU`、`hw.memsize`、`kern.boottime` |
+| 字段 | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| `distro` / `like` / `name` / `version` | `/etc/os-release` 的 `ID` / `ID_LIKE` / `PRETTY_NAME` / `VERSION_ID`（没有就读 `/usr/lib/os-release`） | `macos`，`sw_vers` 的 ProductName + ProductVersion、BuildVersion | `windows`，注册表 `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion` 的 ProductName + DisplayVersion（「Windows 11 Home 25H2」；Windows 11 的 ProductName 还写着 Windows 10，按 CurrentBuild ≥ 22000 改过来），`build` 是 CurrentBuild.UBR |
+| `kernel` | `/proc/sys/kernel/osrelease` | `Darwin ` + `kern.osrelease` | `NT ` + `RtlGetVersion` 的版本号（`NT 10.0.26200`） |
+| `model` | DMI `sys_vendor` + `product_name`（去掉「To be filled by O.E.M.」这类占位） | `system_profiler SPHardwareDataType` 的 Model Name（只取这一行，同一输出里有序列号），失败用 `hw.model` | 注册表 `HARDWARE\DESCRIPTION\System\BIOS` 的 SystemManufacturer + SystemProductName（同样去掉占位） |
+| `cpu` | `/proc/cpuinfo` 第一个 `model name`（ARM 板子取 `Hardware` / `Model`） | `machdep.cpu.brand_string` | 注册表 `CentralProcessor\0` 的 ProcessorNameString |
+| `cores` / `memory` / `boot_time` | `runtime.NumCPU`、`MemTotal`、`/proc/stat` 的 `btime` | `runtime.NumCPU`、`hw.memsize`、`kern.boottime` | `runtime.NumCPU`、`GlobalMemoryStatusEx` 的总物理内存、现在减去开机以来的毫秒数 |
 
 系统图标（`OSBadge`）：macOS 是 SF Symbols 的苹果标，各 Linux 发行版是自己的官方标志（Simple Icons 的矢量图，`Theme.Brand.os`），
 染发行版的颜色；不认识的发行版先看 `ID_LIKE`（Pop!_OS → Ubuntu），再不行是通用 Linux 的企鹅。矢量资源，任何尺寸、深浅色都清楚。
@@ -32,17 +32,19 @@ node 启动时读一次，随 `node.info` 的 `system` 字段给 hub；hub 存�
 node 每 10 秒（`proto.MetricEvery`，对齐到整 10 秒，所有机器的点落在同一时刻）采一个样本，发 `metrics` 事件给 hub。
 第一个样本没有 CPU 和网络速率（要两次读数相减），字段缺省（不是 0）。
 
-| 指标 | Linux | macOS |
-| --- | --- | --- |
-| CPU | `/proc/stat` 两次读数之差：忙 = 总 − idle − iowait（等 I/O 算空闲，同 top 的 id + wa；guest 已含在 user 里不重复加）；每核同样算，只放在最新样本里（不入库） | 常驻的 `iostat -n 0 -w 10`，取最新一行的 100 − id（过去 10 秒的平均；第一行是开机以来的平均，丢掉） |
-| 负载 | `/proc/loadavg` 第一列 | `sysctl vm.loadavg`（二进制 struct loadavg） |
-| 内存 | 已用 = MemTotal − MemAvailable（页缓存算空闲，同 `free` 的 available）；没有 MemAvailable 的老内核用 free + buffers + cached | 常驻的 `vm_stat 10`：已用 = 匿名页 − 可清除页 + wired + 压缩器占用，等于「活动监视器」的「已使用内存」（App 内存 + 联动内存 + 被压缩）；文件缓存算空闲 |
-| 交换 | SwapTotal − SwapFree | `sysctl vm.swapusage` |
-| 网络 | `/proc/net/dev` 物理网卡的收发字节之差 / 时间 | 路由 socket `NET_RT_IFLIST2`（`if_msghdr2` 的 64 位计数）的物理网卡之差 / 时间 |
-| 磁盘 | `/proc/self/mounts` 里每个本地块设备（`/dev/…`，去掉 loop、squashfs / iso9660 这类只读镜像，同一设备的 bind mount 只算一次）各 `statfs` 一次加起来：数据盘常挂在 `/data00` 之类，只看 `/` 一台 5 TB 的机器只显示 118 GB；每个的已用 = 总块 − 空闲块，总量 = 已用 + 普通用户可用（同 df） | `statfs("/System/Volumes/Data")`（`/` 是只读的系统快照，只有几 GB） |
+| 指标 | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| CPU | `/proc/stat` 两次读数之差：忙 = 总 − idle − iowait（等 I/O 算空闲，同 top 的 id + wa；guest 已含在 user 里不重复加）；每核同样算，只放在最新样本里（不入库） | 常驻的 `iostat -n 0 -w 10`，取最新一行的 100 − id（过去 10 秒的平均；第一行是开机以来的平均，丢掉） | `GetSystemTimes` 两次读数之差：忙 = 内核 + 用户 − 空闲（内核时间里含空闲、DPC 和中断）；每核用 `NtQuerySystemInformation(SystemProcessorPerformanceInformation)` 同样算，只放在最新样本里；超过 64 个逻辑处理器（处理器组）时没有每核 |
+| 负载 | `/proc/loadavg` 第一列 | `sysctl vm.loadavg`（二进制 struct loadavg） | 没有（Windows 没有负载平均），字段缺省 |
+| 内存 | 已用 = MemTotal − MemAvailable（页缓存算空闲，同 `free` 的 available）；没有 MemAvailable 的老内核用 free + buffers + cached | 常驻的 `vm_stat 10`：已用 = 匿名页 − 可清除页 + wired + 压缩器占用，等于「活动监视器」的「已使用内存」（App 内存 + 联动内存 + 被压缩）；文件缓存算空闲 | `GlobalMemoryStatusEx`：已用 = 总量 − 可用（备用列表里的文件缓存算可用，同 Linux 的 MemAvailable） |
+| 交换 | SwapTotal − SwapFree | `sysctl vm.swapusage` | 页面文件：`NtQuerySystemInformation(SystemPageFileInformation)` 各页面文件的大小和在用量之和 |
+| 网络 | `/proc/net/dev` 物理网卡的收发字节之差 / 时间 | 路由 socket `NET_RT_IFLIST2`（`if_msghdr2` 的 64 位计数）的物理网卡之差 / 时间 | `GetIfEntry2Ex` 的 InOctets / OutOctets，物理网卡之差 / 时间；算哪些网卡每分钟列一次（列网卡要约 7 ms，读计数约 0.2 ms），网卡集合一变就丢掉这一个点 |
+| 磁盘 | `/proc/self/mounts` 里每个本地块设备（`/dev/…`，去掉 loop、squashfs / iso9660 这类只读镜像，同一设备的 bind mount 只算一次）各 `statfs` 一次加起来：数据盘常挂在 `/data00` 之类，只看 `/` 一台 5 TB 的机器只显示 118 GB；每个的已用 = 总块 − 空闲块，总量 = 已用 + 普通用户可用（同 df） | `statfs("/System/Volumes/Data")`（`/` 是只读的系统快照，只有几 GB） | 每个落在磁盘上的固定盘（`GetDriveType` = `DRIVE_FIXED`，卷在某块磁盘上有长度大于 0 的区段，同一个卷只算一次）各 `GetDiskFreeSpaceEx` 一次加起来，已用 = 总量 − 空闲，总量 = 已用 + 用户可用（同 df）；网络盘、U 盘、光驱不算，Google Drive 这类同步客户端的虚拟盘也不算（它自称 FAT32 固定盘、容量照抄 C 盘，但卷在磁盘上的区段长度是 0）；盘符每分钟列一次 |
 
 macOS 为什么起两个常驻进程：构建是 `CGO_ENABLED=0`，拿不到 `host_statistics` 这类 Mach 调用；`vm.page_*` 的 sysctl 缺匿名页和压缩器数字。
 两个进程每 10 秒各打印一行，比每次采集都起 `vm_stat` / `top` 便宜得多；退出了就一分钟后重起，node 退出时一起结束（`exec.CommandContext`）。
+
+Windows 不起进程：同样是 `CGO_ENABLED=0`，但 Win32 的这些调用纯 Go 就能做（`golang.org/x/sys/windows`，`GetSystemTimes` 和 `GlobalMemoryStatusEx` 经 kernel32 直接调）。
 
 ### 哪些网卡算
 
@@ -53,6 +55,9 @@ macOS 为什么起两个常驻进程：构建是 `CGO_ENABLED=0`，拿不到 `ho
   没有 `/sys` 时按名字前缀排除（`sysmon.virtualName`：lo、docker、br-、veth、virbr、tailscale、tun、tap、wg、zt、cni、flannel、cali 等）。
 - **macOS**：只算以太网类型（IFT_ETHER）、名字是 `en*`、不是回环的：Wi-Fi、网线、雷雳口。utun*（Tailscale、VPN、TUN 代理）、
   bridge*（雷雳网桥，成员 en* 已经算了）、awdl / llw（隔空投送）、anpi、gif、stf、ap 都不算。
+- **Windows**：`MIB_IF_ROW2` 的 `HardwareInterface` 标志置位、`FilterInterface` 没置位的才算：Wi-Fi、网线、USB 共享网络。
+  Tailscale（wintun）、VPN 适配器、Hyper-V / WSL 的 vEthernet、Wi-Fi Direct 虚拟网卡、蓝牙个人局域网、回环都是软件网卡，不算；
+  叠在物理网卡上的过滤层（WFP、QoS）会重复它的计数，也不算。
 
 两次读数之间计数变小（网卡没了、计数清零）就丢掉这一个点，不画一个巨大的尖峰。
 
@@ -62,6 +67,7 @@ macOS 为什么起两个常驻进程：构建是 `CGO_ENABLED=0`，拿不到 `ho
 | --- | --- | --- | --- |
 | Mac Studio（M1 Ultra，20 核，macOS 26） | 0.55–0.70 ms | 51 ms / 5 分钟 = 0.017% | iostat + vm_stat 两个进程 2 小时 21 分钟共 0.34 s CPU（0.004%） |
 | Linux 虚拟机（32 核，Ubuntu 24.04，6 块网卡） | 0.76 ms | 46 ms / 5 分钟 = 0.015% | 不起进程 |
+| Windows 11 台式机（16 线程，4 个盘符、7 块网卡，2026-11-04） | 1.8 ms（每分钟列一次网卡和盘符约 8 ms，其余每次约 0.5 ms） | 47 ms / 5 分钟 = 0.016% | 不起进程 |
 
 node 启动 5 分钟后在日志里记一次平均耗时（`metrics: a sample takes …`）。刚启动的 node 同时在扫 transcript，这个数会偏高
 （同一台 Linux 上记到过 4.7 ms，单独跑 `jarvisd sysmon` 是 0.76 ms）。

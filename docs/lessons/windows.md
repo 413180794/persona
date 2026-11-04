@@ -39,6 +39,19 @@
   它一没（`/End`、崩溃、被杀）子进程跟着没。
 - 跑着的 `.exe` 不能覆盖也不能删：重装前先 `/End` 任务、等 jarvis-link 放开运行锁；卸载时守护进程的文件可能要等一下才删得掉。
 
+## 机器监控（sysmon）
+
+`sysmon/windows.go`，口径见 [machines.md](../machines.md)。2026-11-04 在真机上试出来的：
+
+- **`NtQuerySystemInformation(SystemProcessorPerformanceInformation)` 只认正好的缓冲区**：给 4096 字节它回 `STATUS_INFO_LENGTH_MISMATCH`，
+  按回的长度加大也一样，要正好「逻辑 CPU 数 × 48 字节」。别的类（页面文件）可以按回的长度加大。每核数据一开始全是空的就是这个。
+- **注册表的 ProductName 在 Windows 11 上还写着「Windows 10」**：同一个 NT 10.0 内核，按 CurrentBuild ≥ 22000 认 Windows 11。
+- **Google Drive 的 G: 是假的固定盘**：`GetDriveType` 说 `DRIVE_FIXED`、文件系统自称 FAT32、容量照抄 C 盘，还有卷 GUID；
+  只有问卷在磁盘上的区段（`IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS`，不要管理员）时露馅：磁盘 0、起点 0、长度 0。按这个排除，不按文件系统名猜。
+- **`net.Interfaces()` 一次要约 7 ms**（底下是 `GetAdaptersAddresses`），读一块网卡的计数（`GetIfEntry2Ex`）只要几十微秒：网卡列表缓存一分钟。
+- 网卡算不算看 `MIB_IF_ROW2.InterfaceAndOperStatusFlags`：第 0 位 HardwareInterface、第 1 位 FilterInterface。Tailscale（wintun）、
+  Wi-Fi Direct、蓝牙个人局域网、回环都没有 HardwareInterface。
+
 ## Orca
 
 - **Windows 版 Orca 的 runtime 走命名管道**：`orca-runtime.json` 的 `transports` 是 `named-pipe`（`\\.\pipe\orca-<pid>-…`）和 `websocket`，没有 `unix`。

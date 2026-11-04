@@ -357,7 +357,7 @@ type System struct {
 type MetricSample struct {
 	T         int64     `json:"t"`               // Unix seconds
 	CPU       *float64  `json:"cpu,omitempty"`   // busy %, all cores (0–100)
-	Cores     []float64 `json:"cores,omitempty"` // busy % per core (Linux; the latest sample only, not kept)
+	Cores     []float64 `json:"cores,omitempty"` // busy % per core (Linux, Windows; the latest sample only, not kept)
 	Load      *float64  `json:"load,omitempty"`  // 1-minute load average
 	MemUsed   int64     `json:"mem_used"`        // bytes
 	MemTotal  int64     `json:"mem_total"`

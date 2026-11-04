@@ -1,7 +1,7 @@
 // Package sysmon reads what a machine is (OS, hardware) and how busy it is (CPU, memory, network, disk), for the
 // machine pages and their 24-hour history (docs/machines.md). Linux reads /proc and /sys; macOS reads sysctl and two
-// long-lived processes (iostat, vm_stat), so a sample starts no process. The parsers are plain functions over the
-// files' text, tested with fixtures on any OS.
+// long-lived processes (iostat, vm_stat); Windows calls Win32 (windows.go): a sample starts no process. The parsers are
+// plain functions over the files' text or the bytes the system returns (winparse.go), tested with fixtures on any OS.
 package sysmon
 
 import (

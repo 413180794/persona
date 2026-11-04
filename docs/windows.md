@@ -15,7 +15,8 @@ hub 在别处（WSL2 / Docker / 另一台机器）。需求和分步见 #1090，
 | 回答对话框（AskUserQuestion、权限） | ✅ | 读屏回答，同 macOS 上的 Orca |
 | 关闭会话 | ✅ | |
 | 从手机新建会话、继续未运行的会话 | ❌ | Orca 引擎在所有平台上都还不支持（[plan-orca-support.md](plan-orca-support.md)「第二期」），不是 Windows 的问题 |
-| 端口转发、机器监控、Codex / TRAEX 发现 | ❌ | 依赖 `ps` / `lsof` / `/proc`，Windows 上安静地不可用（#1179） |
+| 机器监控（CPU、内存、交换、网络、磁盘、系统信息） | ✅ | Win32 调用，不起进程，口径见 [machines.md](machines.md)「采集口径」的 Windows 一列（#1943） |
+| 端口转发、Codex / TRAEX 发现 | ❌ | 依赖 `ps` / `lsof` / `/proc`，Windows 上安静地不可用（#1179） |
 | node 自己起的进程：受管启动器、`codex` 启动、自更新 | ❌ | 用 `syscall.Exec`，Windows 上能编译但跑不通；Orca 引擎用不到 |
 | 经 hub 更新常驻 node（[node-update.md](node-update.md)） | ❌ | node 报告不支持（「常驻 node 未由 launchd/systemd 管理」），App 里看得到原因；升级是再跑一次 `jarvis-link install --jarvisd <新的 personad.exe>` |
 | 被动模式（hub 来连这台） | 没验证 | 能编译、`install --listen` 走同一条路；Windows 防火墙要自己放行端口（`install` 打印 `New-NetFirewallRule` 的写法） |
