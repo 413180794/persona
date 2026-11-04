@@ -7028,9 +7028,21 @@ class H(BaseHTTPRequestHandler):
         self.close_connection = True
         self.send_json({"error": message or self.responses.get(code, ("请求失败",))[0]}, code)
 
+    def token_refused(self):
+        """MOCK_DEVICE_TOKEN=<token>: /api/ takes only that token, in Authorization or ?token=, and answers anything else
+        401 invalid token as the hub does (#1498: the live screen's page got the app's token encoded twice)."""
+        want = os.environ.get("MOCK_DEVICE_TOKEN")
+        u = urlparse(self.path)
+        if not want or not u.path.startswith("/api/"): return False
+        got = self.headers.get("Authorization", "").removeprefix("Bearer ").strip() or (parse_qs(u.query).get("token") or [""])[0]
+        if got == want: return False
+        self.send_json({"error": "invalid token"}, 401)
+        return True
+
     def do_GET(self):
         u = urlparse(self.path); p = u.path; q = parse_qs(u.query)
         HITS["GET " + p] = HITS.get("GET " + p, 0) + 1
+        if self.token_refused(): return
         if net_control(p, q): return self.send_json({"ok": True, **NET})
         if p == "/mock/git-pull" and os.environ.get("MOCK_GIT_PULL"):
             if "mode" in q:
@@ -7572,6 +7584,7 @@ class H(BaseHTTPRequestHandler):
         return self.send_json({"path": path, "name": path.rsplit("/", 1)[1], "size": n})
 
     def do_POST(self):
+        if self.token_refused(): return
         if self.command == "POST" and urlparse(self.path).path.startswith("/api/v1/machines/") and urlparse(self.path).path.endswith("/files"):
             return self.upload()
         self.last_body = self.body()

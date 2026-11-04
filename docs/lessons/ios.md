@@ -712,3 +712,15 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
 - **`file://` 页面加载不了包里的字体**：字体请求走 CORS，file 页面的来源是不透明的，KaTeX 的 woff2 一直没加载，字体的 block 期间字是隐形的（Mermaid 用系统字体所以正常）。把字体以 data: URL 内联进 CSS（`font-src data:`）。另外 KaTeX 用相对定位把分子、上下标挪到自己的框外面，截图框要取所有子元素框的并集，内容也别贴着页面左上角画。
 - **Mac 上屏幕外的窗口里没有 `requestAnimationFrame`**：页面等两帧再量尺寸，在 Mac 上永远等不到，每张图都转圈。等帧要和一个短的 `setTimeout` 赛跑；截图也不等屏幕刷新（`afterScreenUpdates = false`）。
 - 截图缓存要带版本号（`MarkdownRenderer.version`）：调这些的时候，坏图已经存进了模拟器的缓存目录，不改键就一直读到旧的空图。
+
+## 看画面 invalid token：`URLComponents.fragment` 会把 `%` 再编一次（2026-11-04，#1498）
+
+- **现象**：App 打开实时画面页，页面说「invalid token」，hub 记一条 401。网页上登录后打开同一页是好的。
+- **原因**：token 先用 `addingPercentEncoding(.alphanumerics)` 编码，再赋给 `URLComponents.fragment`。
+  - 不带 `percentEncoded` 的 setter 会再编一次：`jd_` 先成了 `jd%5F`，再成了 `jd%255F`。
+  - 页面只解码一次，拿到的是 `jd%5F…`。
+- **为什么没测出来**：mock 的 token 是 `mock`，没有要编码的字符。
+- **以后**：
+  - 自己编过的值放进 `percentEncodedFragment` / `percentEncodedQuery`，没编过的才用 `fragment` / `queryItems`，两样不要叠。
+  - 只放过 RFC 3986 的非保留字符（`A–Z a–z 0–9 - . _ ~`），`+` 要编（页面的 URLSearchParams 把裸的 `+` 读成空格）。
+  - 测试用和真的一样形状的 token（`jd_…`），并按页面的读法读回来比对。

@@ -15,7 +15,7 @@ final class ScreenDrawerTests: XCTestCase {
         }
         continueAfterFailure = false
         let app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=" + UITestToken.device
         app.launchArguments = ["-pairURL", pair] + args
         app.launchPinned()
         return app

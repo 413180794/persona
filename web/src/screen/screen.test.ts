@@ -11,12 +11,21 @@ describe("the live screen's page", () => {
 
   it("takes the app's token from the fragment, out of the address bar", () => {
     const { target, rest } = screenTarget("http://hub.example:18660/screen/macbook#token=t0k&embed=1", () => "stored");
-    expect(target).toEqual({ mid: "macbook", token: "t0k", embedded: true });
+    expect(target).toEqual({ mid: "macbook", token: "t0k", embedded: true, name: "macbook" });
     expect(rest).toBe("/screen/macbook");
   });
 
+  // #1498: the address the app builds (ScreenViewer.url): a device token (jd_…) and the Mac's name, each encoded once.
+  it("reads the app's device token and the Mac's name as they were", () => {
+    const { target, rest } = screenTarget("http://127.0.0.1:18660/screen/macstudio#token=jd_cafe00a1&name=Mac%20Studio&embed=1", () => "stored");
+    expect(target).toEqual({ mid: "macstudio", token: "jd_cafe00a1", embedded: true, name: "Mac Studio" });
+    expect(rest).toBe("/screen/macstudio");
+    const odd = screenTarget("http://127.0.0.1/screen/m#token=a%2Bb%2Fc%3D%26d&embed=1").target;
+    expect(odd?.token).toBe("a+b/c=&d");
+  });
+
   it("uses the browser's own token without one", () => {
-    expect(screenTarget("https://hub.example/screen/macbook", () => "stored").target).toEqual({ mid: "macbook", token: "stored", embedded: false });
+    expect(screenTarget("https://hub.example/screen/macbook", () => "stored").target).toEqual({ mid: "macbook", token: "stored", embedded: false, name: "macbook" });
     expect(screenTarget("https://hub.example/inbox#token=x", () => "stored").target).toBeNull();
   });
 

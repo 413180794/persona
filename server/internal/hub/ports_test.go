@@ -9,14 +9,17 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/coder/websocket"
 
+	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 	"github.com/nwverse/persona/server/internal/streams"
@@ -25,6 +28,12 @@ import (
 // portNode is a node as the hub sees it for ports: port.dial connects to 127.0.0.1 and streams it, port.probe says
 // whether anything is there.
 func portNode(t *testing.T, h *Hub, sessions []proto.Session) *Machine {
+	t.Helper()
+	return portNodeAt(t, h, sessions, func(port int) string { return "127.0.0.1:" + strconv.Itoa(port) })
+}
+
+// portNodeAt is portNode whose ports are at addr(port) (the live screen's 5900 at a stand-in for Screen Sharing).
+func portNodeAt(t *testing.T, h *Hub, sessions []proto.Session, addr func(port int) string) *Machine {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	h2nR, h2nW := io.Pipe()
@@ -39,7 +48,7 @@ func portNode(t *testing.T, h *Hub, sessions []proto.Session) *Machine {
 			Port int    `json:"port"`
 		}
 		_ = json.Unmarshal(params, &p)
-		c, err := net.DialTimeout("tcp", "127.0.0.1:"+strconv.Itoa(p.Port), 2*time.Second)
+		c, err := net.DialTimeout("tcp", addr(p.Port), 2*time.Second)
 		switch method {
 		case "port.probe":
 			if err != nil {
@@ -280,5 +289,103 @@ func TestForwardedPortRefusals(t *testing.T) {
 	h.withMachine(h.connectPort)(ro, req)
 	if ro.Code != http.StatusForbidden {
 		t.Errorf("read-only device: %d", ro.Code)
+	}
+}
+
+// The live screen as the app opens it (#1498): the page's WebSocket carries this device's token in ?token= (a page
+// cannot set a WebSocket's headers) and reaches the Mac's Screen Sharing through the relay. A wrong token, the app's
+// as it arrived before (encoded twice: jd%5F…) and an answer-only device's are refused before anything is dialed.
+func TestTheLiveScreenTakesTheAppsDeviceToken(t *testing.T) {
+	ctx := context.Background()
+	h := newTestHub(t)
+	h.store = &marketTestStore{pluginStore: newPluginStore(), tokens: &tokenStore{memStore: *newMemStore(), rows: map[string]db.DeviceToken{}, rev: map[string]bool{}}}
+	startTestPlugins(t, h)
+	phone, watch := "jd_"+randomHex(24), "jd_"+randomHex(24)
+	_ = h.store.CreateDeviceToken(ctx, db.DeviceToken{ID: "dev_phone", Name: "iPhone", Kind: "phone", Role: roleFull}, hashToken(phone))
+	_ = h.store.CreateDeviceToken(ctx, db.DeviceToken{ID: "dev_watch", Name: "Watch", Kind: "watch", Role: roleAnswer}, hashToken(watch))
+
+	// Screen Sharing speaks first: its protocol version.
+	vnc, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { vnc.Close() })
+	var dialed atomic.Int32
+	go func() {
+		for {
+			c, err := vnc.Accept()
+			if err != nil {
+				return
+			}
+			dialed.Add(1)
+			_, _ = c.Write([]byte("RFB 003.889\n"))
+			go func() { _, _ = io.Copy(io.Discard, c); c.Close() }()
+		}
+	}()
+	mac := portNodeAt(t, h, nil, func(port int) string {
+		if port == screenPort {
+			return vnc.Addr().String()
+		}
+		return "127.0.0.1:1"
+	})
+	mac.mu.Lock()
+	mac.info = proto.NodeInfo{OS: "darwin"}
+	mac.mu.Unlock()
+	h.mu.Lock()
+	h.machines = append(h.machines, mac)
+	h.mu.Unlock()
+	if err := h.plugins.reg.SetEnabled(ctx, cuaPluginID, true, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.plugins.reg.SetConfig(ctx, cuaPluginID, json.RawMessage(`{"machines": ["m1"]}`), "test"); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(h.routes())
+	t.Cleanup(srv.Close)
+	open := func(token string) (*websocket.Conn, int) {
+		u := "ws" + strings.TrimPrefix(srv.URL, "http") + "/api/v1/machines/m1/ports/5900/connect?token=" + url.QueryEscape(token)
+		dctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		c, res, err := websocket.Dial(dctx, u, &websocket.DialOptions{Subprotocols: []string{"binary"}})
+		if err != nil {
+			if res == nil {
+				t.Fatal(err)
+			}
+			return nil, res.StatusCode
+		}
+		return c, http.StatusSwitchingProtocols
+	}
+
+	c, code := open(phone)
+	if c == nil {
+		t.Fatalf("the app's device token: %d", code)
+	}
+	defer c.CloseNow()
+	rctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if _, b, err := c.Read(rctx); err != nil || string(b) != "RFB 003.889\n" {
+		t.Fatalf("Screen Sharing's greeting through the relay: %q %v", b, err)
+	}
+
+	before := dialed.Load()
+	for _, bad := range []struct {
+		why   string
+		token string
+		want  int
+	}{
+		{"a token the hub never gave", "jd_" + randomHex(24), http.StatusUnauthorized},
+		{"the app's, encoded twice", strings.Replace(phone, "_", "%5F", 1), http.StatusUnauthorized},
+		{"an answer-only device's", watch, http.StatusForbidden},
+	} {
+		if c, code := open(bad.token); c != nil || code != bad.want {
+			if c != nil {
+				c.CloseNow()
+			}
+			t.Errorf("%s: %d, want %d", bad.why, code, bad.want)
+		}
+	}
+	if dialed.Load() != before {
+		t.Fatal("refused before anything is dialed")
 	}
 }

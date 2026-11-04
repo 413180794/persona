@@ -5,7 +5,8 @@
 
 import { getToken } from "../lib/api";
 
-export type ScreenTarget = { mid: string; token: string; embedded: boolean };
+/** `name`: the machine as the app calls it (Mac Studio), shown until the hub says; else its id. */
+export type ScreenTarget = { mid: string; token: string; embedded: boolean; name: string };
 
 /** /screen/<mid> → mid; anything else is not the live screen. */
 export function screenMachine(pathname: string): string | null {
@@ -20,11 +21,13 @@ export function screenTarget(href: string, stored: () => string = getToken): { t
   const hash = new URLSearchParams(u.hash.replace(/^#/, ""));
   const token = hash.get("token")?.trim() ?? "";
   const embedded = hash.get("embed") === "1";
+  const name = hash.get("name")?.trim() || "";
   hash.delete("token");
   hash.delete("embed");
+  hash.delete("name");
   const rest = u.pathname + u.search + (hash.toString() ? "#" + hash.toString() : "");
   if (!mid) return { target: null, rest };
-  return { target: { mid, token: token || stored(), embedded }, rest };
+  return { target: { mid, token: token || stored(), embedded, name: name || mid }, rest };
 }
 
 /** The WebSocket that carries the Mac's VNC (its port 5900) through the hub's port relay (docs/ports.md). */

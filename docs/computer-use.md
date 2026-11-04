@@ -210,6 +210,10 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
 - **加载**：网页的入口在路径是 `/screen/…` 时不走登录和侧栏，只动态加载这一页。noVNC（[noVNC](https://github.com/novnc/noVNC) 1.7，MPL-2.0，`@novnc/novnc`）在单独的代码块里，不进主包。
 - **token**：
   - App 打开时把自己的设备 token 放在 `#token=…&embed=1` 里：URL 的 fragment 不发给服务器；页面一加载就从地址栏去掉，只放在内存里。
+    - 还带上机器的显示名 `name=`（Mac Studio），页面在 hub 回答之前就用它，不显示 id。
+    - 每个值只做一次百分号编码（`ScreenViewer.url`，`percentEncodedFragment`）。#1498 之前编了两次，`jd_` 的设备 token 到页面成了 `jd%5F…`，hub 回 invalid token。
+    - hub 一侧照常：设备 token 走 `Authorization` 或 WebSocket 的 `?token=`，只答不打字的设备（手表）403。
+    - 测试：`ScreenViewerTests`、`screen.test.ts`、`TestTheLiveScreenTakesTheAppsDeviceToken`。最后一个用一个替身「屏幕共享」，确认设备 token 能经转发收到它的版本号，错的 token 和编两次的 token 都在拨号之前被拒。
   - 不像网页的登录链接那样换一个新的浏览器 token（那样每打开一次就多一个设备 token）。
   - 网页里已经登录的用户直接用自己的 token。
 - **先问 hub**：有没有这台、在不在线、插件开没开、屏幕共享开没开，各给一句中文说明。然后才连。

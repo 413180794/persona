@@ -110,9 +110,22 @@ struct ScreenDrawer: View {
 enum ScreenViewer {
     @MainActor static func url(_ model: AppModel, _ ref: MachineRef) -> URL? {
         guard let api = model.api(ref.group) else { return nil }
-        var c = URLComponents(url: api.url("/screen/\(ref.id)"), resolvingAgainstBaseURL: false)
-        let token = api.config.token.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
-        c?.fragment = "token=\(token)&embed=1"
+        return url(api.url("/screen/\(ref.id)"), token: api.config.token, name: model.machine(ref)?.name)
+    }
+
+    /// RFC 3986's unreserved characters, the only ones that go into the fragment as they are.
+    nonisolated static let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+
+    /// The page with this device's token and the Mac's name in its fragment (`#token=…&name=…&embed=1`), each value
+    /// percent-encoded once: the page reads them back with URLSearchParams. Set as the encoded fragment, since
+    /// `URLComponents.fragment` encodes a second time (a `jd_` token arrived as `jd%5F`, #1498).
+    nonisolated static func url(_ page: URL, token: String, name: String?) -> URL? {
+        func encoded(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: unreserved) ?? "" }
+        var parts = ["token=" + encoded(token)]
+        if let name, !name.isEmpty { parts.append("name=" + encoded(name)) }
+        parts.append("embed=1")
+        var c = URLComponents(url: page, resolvingAgainstBaseURL: false)
+        c?.percentEncodedFragment = parts.joined(separator: "&")
         return c?.url
     }
 }

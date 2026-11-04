@@ -22,7 +22,7 @@ type MachineRow = { id: string; name: string; home?: string; online: boolean };
 
 export function ScreenView({ target }: { target: ScreenTarget }) {
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
-  const [name, setName] = useState(target.mid);
+  const [name, setName] = useState(target.name);
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
   const [control, setControl] = useState(false);
@@ -54,7 +54,9 @@ export function ScreenView({ target }: { target: ScreenTarget }) {
           setGo(true);
         }
       } catch (e) {
-        const why = e instanceof ApiError && e.status === 404 ? "操控电脑的插件没打开，或这台不是 Mac。" : errorText(e);
+        const why = e instanceof ApiError && e.status === 404 ? "操控电脑的插件没打开，或这台不是 Mac。"
+          : e instanceof ApiError && e.status === 401 ? (target.embedded ? "hub 没认这台设备的凭据：在 App 的「设置 › hub」里重新配对。" : "hub 没认这个凭据：在网页上重新登录 hub。")
+          : errorText(e);
         if (!gone) setPhase({ kind: "blocked", why });
       }
     })();
