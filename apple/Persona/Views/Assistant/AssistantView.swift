@@ -172,7 +172,7 @@ struct AssistantView: View {
             .onChange(of: model.assistantReveal) { backToRoot(); activeDrawer.close() }
             #if DEBUG
             // `-openAssistantPage profile|avatars|routines|runs|…` (with `-tab assistant`): the profile and its pages;
-            // `-openAssistantSidebar YES`: the sidebar is out; `-showDrawerAutoDrag <rounds>`: scripted drags, measured
+            // `-openAssistantSidebar YES` (or a fraction): the sidebar is out; `-showDrawerAutoDrag <rounds>`: scripted drags, measured
             // (`DrawerProbe`, with `-showDrawerProbe YES`).
             .navigationDestination(isPresented: $showAvatars) { PersonaGallery() }
             .onAppear {
@@ -183,7 +183,10 @@ struct AssistantView: View {
                 case .some(let p) where p != "assistant": showProfile = true
                 default: break
                 }
-                if UserDefaults.standard.bool(forKey: "openAssistantSidebar") { activeDrawer.progress = 1 }
+                // `-openAssistantSidebar 0.5`: held part way out, as a drag leaves it (screenshots of its corners).
+                let sidebarAt = UserDefaults.standard.double(forKey: "openAssistantSidebar")
+                if sidebarAt > 0 { activeDrawer.progress = min(sidebarAt, 1) }
+                else if UserDefaults.standard.bool(forKey: "openAssistantSidebar") { activeDrawer.progress = 1 }
                 let rounds = UserDefaults.standard.integer(forKey: "showDrawerAutoDrag")
                 if rounds > 0 { Task { await DrawerAutoDrag(drawer: activeDrawer).run(rounds: rounds) } }
                 // `-openShellPage inbox|machines|routines|knowledge|profile` (the new shell): that page pushed.

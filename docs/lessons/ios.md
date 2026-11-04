@@ -677,3 +677,10 @@ DEBUG 构建启动后主线程常常一直 100%：RootView 的 body 每次新建
 （runtime CLI ping 不通、XCUITest「Timed out while evaluating UI query」都是它）。`sample <pid>` 里能看到这条链。
 只给别人看、自己不读的记录（trace、计数）：存储标 `@ObservationIgnored`，读取的计算属性里手动 `access`，写入时包在 `withMutation` 里，
 调用它的 body 就不会依赖它。另外，`@State` 的初始值表达式不要有副作用，它不只算一次。
+
+## 侧栏展开时卡片圆角外侧发灰：`.mask` 之后的 `.overlay` 不受遮罩（2026-11-04，#1247）
+
+页面推开成圆角卡片时，卡片上那层「压暗 + 点一下关闭」写的是 `Color.black.opacity(0.06)`，放在 `.mask { card }` 后面的 `.overlay` 里。
+modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay 还是整块矩形，于是四个圆角外侧的侧栏底色也被压暗了一层，像露出了别的灰色底。
+画在卡片上的东西（压暗、描边）一律用卡片自己的形状（`card.fill(…)`、`card.strokeBorder(…)`），点按区域可以另用 `.contentShape(.rect)`。
+核对时别只看整张截图：裁出圆角附近放大、取圆角外侧和侧栏同一行的像素比（`-openAssistantSidebar YES|0.5`，浅色 / 深色）。
