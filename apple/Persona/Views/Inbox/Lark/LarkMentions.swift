@@ -110,14 +110,19 @@ nonisolated enum LarkMentions {
 struct LarkMentionPicker: View {
     var query: String
     var members: [LarkMember]
+    /// 所有人 is a group's: a document's comment has no one to notify that way.
+    var everyone = true
     var pick: (LarkMention) -> Void
+    /// The rows' height: the list is as tall as they are up to 240 pt, then scrolls. (A height-limited frame took all
+    /// the box's container offered: one name sat in the middle of a tall empty panel.)
+    @State private var rowsHeight: CGFloat = 0
 
     var body: some View {
-        ViewThatFits(in: .vertical) {
-            list
-            ScrollView { list }
+        ScrollView {
+            list.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowsHeight = $0 }
         }
-        .frame(maxHeight: Theme.Size.box240)
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(height: min(rowsHeight, Theme.Size.box240))
         .surface(in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("lark.mentionPicker")
@@ -125,7 +130,7 @@ struct LarkMentionPicker: View {
 
     private var list: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if LarkMentions.offersEveryone(query) {
+            if everyone && LarkMentions.offersEveryone(query) {
                 row(name: LarkMention.everyone.name, avatar: nil, isGroup: true) { pick(.everyone) }
             }
             ForEach(members) { m in

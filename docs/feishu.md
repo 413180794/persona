@@ -16,7 +16,7 @@
 | 能力 | 位置 | 说明 |
 | --- | --- | --- |
 | 飞书消息 | 「收件箱」（`docs/inbox.md`）及可选的「消息」页 | 未读 / @我 / 私聊和邮件混在一个列表，按件聚合，AI 分拣；点开是这段对话（`LarkChatView`） |
-| 飞书文档链接 | `FeishuDocReader`（`Views/Feishu/Docs/`） | 任何地方点飞书文档链接都在 App 内原生渲染（链接卡片 `LinkSheet`、飞书消息里的链接） |
+| 飞书文档链接 | `FeishuDocReader`（`Views/Feishu/Docs/`） | 任何地方点飞书文档链接都在 App 内原生渲染（链接卡片 `LinkSheet`、飞书消息里的链接）。插件声明 `lark_doc_comments` 时，评论页能回复线程、评论全文、标为已解决 / 重新打开、@ 人（#1290，`FeishuDocsComments.swift`；接口见 `docs/protocol.md` 飞书 API） |
 | 公司圈链接 | `LarkMomentsCard` / `LarkMomentsPostView` | 消息里的分享显示预览卡，点开看单条帖子和评论；没有 feed，不能刷 |
 | 公司圈里和我有关的 | 收件箱（`hub/inbox_moments.go`）、知识库 | 评论我的帖子、回复我、@ 我：一个帖子一件事，AI 分拣、起草评论，点发送评论回去（`docs/inbox.md`「公司圈」） |
 | 其他飞书链接 | `LinkSheet` 的 WebView | 妙记、日程、任务、审批等链接在 App 内的网页卡片里打开 |

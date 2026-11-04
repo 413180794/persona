@@ -95,6 +95,7 @@ struct FeishuDocReader: View {
     var title: String?
 
     @Environment(\.feishuOpen) private var open
+    @Environment(AppModel.self) private var app
     @State private var model = FeishuDocsReaderModel()
     @State private var showTitle = false
     @State private var showOutline = false
@@ -304,6 +305,11 @@ struct FeishuDocReader: View {
                 if (model.info?.comments ?? 0) > 0 {
                     Button { showComments = true } label: {
                         Label("\(model.info?.comments ?? 0) 条评论", systemImage: Theme.Icon.conversation).lineLimit(1)
+                    }
+                    .themedButton()
+                } else if app.larkFeatures.docComments {
+                    Button { showComments = true } label: {
+                        Label("写评论", systemImage: Theme.Icon.conversation).lineLimit(1)
                     }
                     .themedButton()
                 }
@@ -578,145 +584,6 @@ struct FeishuDocsOutlineSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .macSheetDone { dismiss() }
         }
-    }
-}
-
-// MARK: - Comments
-
-/// Every comment thread of a document: the quoted text and its replies; open threads first, resolved ones on their own tab.
-struct FeishuDocsCommentsView: View {
-    var url: String
-    var title: String
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.feishuOpen) private var open
-    @State private var threads: [FeishuDocsComments.Thread]?
-    @State private var error: String?
-    @State private var resolved = false
-
-    var body: some View {
-        let shown = (threads ?? []).filter { $0.resolved == resolved }
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: Theme.Space.m) {
-                Picker("状态", selection: $resolved) {
-                    Text("未解决 \(count(false))").tag(false)
-                    Text("已解决 \(count(true))").tag(true)
-                }
-                .pickerStyle(.segmented)
-                .padding(.bottom, Theme.Space.xs)
-                if threads == nil {
-                    FeishuDocsListState(loading: error == nil, error: error, empty: ("text.bubble", "", ""), retry: load)
-                } else if shown.isEmpty {
-                    EmptyStateView(symbol: Theme.Icon.conversation, title: resolved ? "没有已解决的评论" : "没有未解决的评论",
-                                   message: resolved ? "解决后的评论会收在这里" : "在飞书里对文档发表的评论会出现在这里")
-                        .padding(.top, 40)
-                } else {
-                    ForEach(shown) { FeishuDocsThreadCard(thread: $0) }
-                }
-            }
-            .padding(Theme.Space.l)
-        }
-        .themedPage()
-        .navigationTitle("评论")
-        .navigationBarTitleDisplayMode(.inline)
-        #if os(macOS)
-        .macSheetDone { dismiss() }
-        #else
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button { dismiss() } label: { Label("关闭", systemImage: Theme.Icon.close) }
-            }
-        }
-        #endif
-        .refreshable { await load() }
-        .task {
-            LarkMedia.shared.loadEmojiCatalog()
-            if threads == nil { await load() }
-        }
-    }
-
-    private func count(_ r: Bool) -> Int { (threads ?? []).filter { $0.resolved == r }.count }
-
-    private func load() async {
-        guard let api = AppModel.shared.api else { return }
-        do {
-            let c: FeishuDocsComments = try await api.feishuDocsGet("documents/comments", query: ["url": url])
-            threads = feishuDocsSortedThreads(c.threads)
-            error = nil
-        } catch {
-            if let m = error.feishuDocsMessage { self.error = m }
-        }
-    }
-}
-
-struct FeishuDocsThreadCard: View {
-    var thread: FeishuDocsComments.Thread
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.m) {
-            HStack(spacing: Theme.Space.sm) {
-                if thread.whole {
-                    Text("全文评论").font(Theme.Font.label).foregroundStyle(.secondary)
-                } else if !thread.quote.isEmpty {
-                    Text(thread.quote)
-                        .font(Theme.Font.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .padding(.leading, Theme.Space.s)
-                        .overlay(alignment: .leading) { Capsule().fill(LarkColor.hue("yellow")).frame(width: Theme.Size.bar) }
-                }
-                Spacer(minLength: 0)
-                if thread.resolved { FeishuDocsTag(text: "已解决", hue: "green") }
-                if thread.visibility != nil { FeishuDocsTag(text: "部分可见", hue: "grey") }
-            }
-            ForEach(thread.replies) { r in
-                HStack(alignment: .top, spacing: Theme.Space.s) {
-                    LarkAvatarImage(name: r.author.name, url: r.author.avatarUrl, size: 28)
-                    VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                        HStack(spacing: Theme.Space.sm) {
-                            Text(r.author.name).font(Theme.Font.captionStrong).lineLimit(1)
-                            Text(FeishuTime.short(r.created)).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
-                            if r.edited == true { Text("已编辑").font(Theme.Font.label).foregroundStyle(.tertiary) }
-                        }
-                        Text(replyText(r)).font(Theme.Font.secondary).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
-                        if let n = r.imageCount, n > 0 {
-                            Label("\(n) 张图片", systemImage: Theme.Icon.photo).font(Theme.Font.label).foregroundStyle(.secondary)
-                        }
-                        if let rs = r.reactions, !rs.isEmpty {
-                            HStack(spacing: Theme.Space.sm) {
-                                ForEach(rs, id: \.key) { re in
-                                    HStack(spacing: Theme.Space.xs) {
-                                        LarkEmojiImage(key: re.key, size: 16)
-                                        Text("\(re.count)").font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary)
-                                    }
-                                    .padding(.horizontal, Theme.Space.sm).padding(.vertical, Theme.Space.xxs)
-                                    .background(Color.primary.opacity(0.05), in: .capsule)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        .padding(Theme.Space.m)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(LarkColor.cardBackground, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(LarkColor.cardStroke, lineWidth: 0.5))
-    }
-
-    private func replyText(_ r: FeishuDocsComments.Reply) -> AttributedString {
-        var out = AttributedString()
-        for seg in r.content {
-            var s = AttributedString(seg.text)
-            switch seg.kind {
-            case "mention": s.foregroundColor = LarkColor.blue
-            case "link":
-                s.foregroundColor = LarkColor.blue
-                if let h = seg.href { s.link = URL(string: h) }
-            default: break
-            }
-            out += s
-        }
-        return out
     }
 }
 

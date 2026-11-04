@@ -36,6 +36,8 @@ struct LarkComposer: View {
     var preparingAttachment = false
     /// The group whose members @ offers; nil in a 1:1 chat (no picker).
     var mentionFeed: String? = nil
+    /// Where @ finds people when there is no group to take them from (a document's comment): by what follows the @.
+    var findPeople: ((String) async throws -> [LarkMember])? = nil
     /// My user id there (I am not offered).
     var me: String? = nil
     /// Those picked so far; what is sent keeps the ones whose `@name` is still in the text (LarkMentions).
@@ -51,7 +53,7 @@ struct LarkComposer: View {
     /// The @ being typed before the cursor, in a group. Before the field reports a cursor it is the end of the text;
     /// while a range is selected no @ is being typed.
     private var typing: LarkMentions.Typing? {
-        guard mentionFeed != nil else { return nil }
+        guard mentionFeed != nil || findPeople != nil else { return nil }
         guard let selection else { return LarkMentions.typing(in: text) }
         guard case .selection(let r) = selection.indices, r.isEmpty else { return nil }
         let at = min(r.lowerBound, text.endIndex) // the text may have changed since (a send, a draft put back)
@@ -64,8 +66,8 @@ struct LarkComposer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
-            if let q = mentionQuery, membersAnswered, !members.isEmpty || LarkMentions.offersEveryone(q) {
-                LarkMentionPicker(query: q, members: members) { m in
+            if let q = mentionQuery, membersAnswered, !members.isEmpty || (mentionFeed != nil && LarkMentions.offersEveryone(q)) {
+                LarkMentionPicker(query: q, members: members, everyone: mentionFeed != nil) { m in
                     let picked = LarkMentions.insert(m, into: text, cursor: typing?.end)
                     text = picked.text
                     selection = TextSelection(insertionPoint: text.index(text.startIndex, offsetBy: picked.cursor))
@@ -126,14 +128,21 @@ struct LarkComposer: View {
 
     /// Asks the hub for members a moment after the last keystroke after @.
     private func lookUp(_ query: String?) async {
-        guard let query, let feed = mentionFeed else {
+        guard let query, mentionFeed != nil || findPeople != nil else {
             membersAnswered = false
             return
         }
         try? await Task.sleep(for: .milliseconds(200))
-        guard !Task.isCancelled, let api = model.api?.lark(larkAccount) else { return }
+        guard !Task.isCancelled else { return }
         do {
-            let found = try await api.larkMembers(feed, query: query).members
+            let found: [LarkMember]
+            if let findPeople {
+                found = try await findPeople(query)
+            } else if let feed = mentionFeed, let api = model.api?.lark(larkAccount) {
+                found = try await api.larkMembers(feed, query: query).members
+            } else {
+                return
+            }
             members = found.filter { $0.userID != me }
             membersAnswered = true
         } catch {

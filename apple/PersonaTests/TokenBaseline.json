@@ -44,7 +44,7 @@
   "Persona\/Views\/Feishu\/Docs\/FeishuDocReader.swift" : {
     "animation" : 1,
     "cornerRadius" : 1,
-    "padding" : 3
+    "padding" : 2
   },
   "Persona\/Views\/Feishu\/Docs\/FeishuDocRenderer.swift" : {
     "cornerRadius" : 1,

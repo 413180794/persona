@@ -1487,6 +1487,10 @@ lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 
 | GET | `/api/v1/lark/users/{id}?feed_id=` | 用户资料，原样转发上游 JSON |
 | POST | `/api/v1/lark/users/{id}/chat` | 打开私聊，返回 `{feed_id}` |
 | GET | `/api/v1/lark/messages/{id}/url-preview?url=` | 消息内链接预览，原样转发上游 JSON |
+| POST | `/api/v1/lark/documents/comments` | `{url, content, mentions?:[{user_id,name}], quote?, block_id?, client_id}`：以用户本人在文档上发一条新评论（#1290）。没有 `quote` 是全文评论，有 `quote`（和它所在的块 `block_id`）是对那段正文的评论；`content` 里每个被 @ 的人写成 `@名字`，和发消息一样。回 `{ok, threads, anchored?}`：`threads` 是写完后读回的全部线程（同 `documents/comments` 的形状，读不回时为 null，评论已经发出），对一段正文的评论另带 `anchored`（`false`：找不到那段所在的块，改成在全文评论里引用那段话）。正文锚点走 lark-connector 的 inline 评论，块由插件按 `quote` 在文档的 JSON 里找（App 知道 `block_id` 时直接带上）。插件声明 `lark_doc_comments` 才有这几条路由；是用户自己设备上的写，不过 AI 的闸门；写进回执（`client_id` 派生回执 id，同一个 id 重试不会发两次） |
+| POST | `/api/v1/lark/documents/comments/{thread}/replies` | `{url, content, mentions?, client_id}`：回复这条评论线程，回 `{ok, threads}` |
+| POST | `/api/v1/lark/documents/comments/{thread}/resolve` | `{url, resolved}`：标为已解决（`true`）或重新打开（`false`），回 `{ok, threads}`；内容不对 400 `comment_invalid`、这种文档不能这样评论 400 `comment_unsupported` |
+| GET | `/api/v1/lark/documents/people?url=&q=` | `{members:[{user_id,name,avatar?}]}`：评论里 @ 的候选人，按名字找（和群的 `members` 同一个形状） |
 | GET | `/api/v1/lark/moments/posts/{id}` | 单帖内容，原样转发上游 JSON |
 | GET | `/api/v1/lark/moments/posts/{id}/comments` | 单帖评论，原样转发上游 JSON |
 

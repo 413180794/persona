@@ -9552,6 +9552,104 @@ if os.environ.get("MOCK_MOMENTS_FEED"):  # the project's posts say which feed th
 MOCK_HELP.append("MOCK_MOMENTS_FEED=<名字>  知识库的公司圈帖子带 feed（项目的「相关<名字>」和存档帖子页的标题用它；不设时叫「公司圈」）")
 MOCK_HELP.append("MOCK_NO_LARK=1  没装 lark-connector 插件的 hub：features 里没有 lark / lark_moments / lark_attachments，/api/v1/lark/… 404，连接器里没有飞书")
 
+# ---------- area: commenting in the Feishu document reader (#1290) ----------
+# MOCK_DOC_COMMENTS=1: the plugin says `lark_doc_comments`; GET /api/v1/lark/raw/documents/comments has three made-up
+# threads for every document (a passage, the whole document, a resolved one), and the plugin's write routes change
+# them: POST /api/v1/lark/documents/comments (the whole document, or a passage with `quote`), …/comments/{thread}/replies,
+# …/comments/{thread}/resolve, GET /api/v1/lark/documents/people?q= for @. GET /mock/doc-comments lists what was written.
+DOC_COMMENTS = os.environ.get("MOCK_DOC_COMMENTS") == "1"
+DOC_WRITES = []
+
+
+def _doc_reply(rid, name, text, minutes, mention=None, mentions=()):
+    """A reply as lark-connector gives it: text, with each @ a mention segment of its own."""
+    content = [{"kind": "text", "text": text}]
+    if mention:
+        content = [{"kind": "mention", "text": "@" + mention}, {"kind": "text", "text": " " + text}]
+    for m in mentions:  # what was written: the text holds `@name` for each one mentioned
+        token, out = "@" + m.get("name", ""), []
+        for seg in content:
+            parts = seg["text"].split(token) if seg["kind"] == "text" and token != "@" else [seg["text"]]
+            for i, part in enumerate(parts):
+                if i: out.append({"kind": "mention", "text": token})
+                if part or len(parts) == 1: out.append(dict(seg, text=part))
+        content = out
+    return {"id": rid, "author": {"id": "u-" + rid, "name": name}, "content": content, "createdAt": ago(minutes=minutes)}
+
+
+DOC_THREADS = [
+    {"id": "c1", "whole": False, "resolved": False, "quote": "这一版统一了圆角和描边", "anchorBlockId": "b2", "createdAt": ago(hours=5),
+     "replies": [_doc_reply("r1", "韩梅梅", "圆角统一成 12 还是 14？两种都试过吗", 300),
+                 _doc_reply("r2", "李雷", "试过，14 在小尺寸下太圆了", 280, mention="韩梅梅")]},
+    {"id": "c2", "whole": True, "resolved": False, "quote": "", "createdAt": ago(hours=3),
+     "replies": [_doc_reply("r3", "王五", "深色模式的截图能补一张吗", 180)]},
+    {"id": "c3", "whole": False, "resolved": True, "quote": "待确认", "anchorBlockId": "b3", "createdAt": ago(days=1),
+     "replies": [_doc_reply("r4", "赵六", "图标导出尺寸已经确认", 1500)]},
+]
+DOC_PEOPLE = [{"user_id": "ou_mock_hmm", "name": "韩梅梅"}, {"user_id": "ou_mock_ll", "name": "李雷"},
+              {"user_id": "ou_mock_ww", "name": "王五"}, {"user_id": "ou_mock_zl", "name": "赵六"}]
+
+if DOC_COMMENTS:
+    _features_before_doc_comments = features
+
+    def features():
+        return _features_before_doc_comments() + ["lark_doc_comments"]
+
+    _get_before_doc_comments, _post_before_doc_comments = H.do_GET, H.do_POST
+
+    def _doc_get(handler):
+        u = urlparse(handler.path)
+        q = parse_qs(u.query)
+        if u.path == "/api/v1/lark/raw/documents/comments":
+            return handler.send_json({"threads": DOC_THREADS})
+        if u.path == "/api/v1/lark/raw/documents/read" and (q.get("format") or [""])[0] == "markdown":
+            # The reader asks for Markdown first: the made-up document as lark-connector exports it.
+            return handler.send_json({"type": "docx", "token": "AbC123", "title": LARK_DOCUMENT["title"], "url": (q.get("url") or [""])[0],
+                                      "authority": {"copy": True, "print": True, "export": True},
+                                      "markdown": "# 新版图标评审\n\n这一版统一了圆角和描边，深色模式单独调了对比度。\n\n## 待确认\n\n- 圆角统一成 12 还是 14\n- 小尺寸下描边是否加粗\n"})
+        if u.path == "/api/v1/lark/documents/people":
+            want = (q.get("q") or [""])[0]
+            return handler.send_json({"members": [p for p in DOC_PEOPLE if want in p["name"]]})
+        if u.path == "/mock/doc-comments":
+            return handler.send_json({"writes": DOC_WRITES})
+        return _get_before_doc_comments(handler)
+
+    def _doc_post(handler):
+        p = urlparse(handler.path).path
+        if not p.startswith("/api/v1/lark/documents/comments"):
+            return _post_before_doc_comments(handler)
+        try:
+            b = json.loads(handler.body() or b"{}")
+        except ValueError:
+            return handler.send_json({"error": "bad json"}, 400)
+        parts = p.split("/")
+        DOC_WRITES.append({"path": p, "body": b})
+        text = (b.get("content") or "").strip()
+        if p == "/api/v1/lark/documents/comments":
+            if not text:
+                return handler.send_json({"error": "content is required"}, 400)
+            t = {"id": "c%d" % (len(DOC_THREADS) + 1), "whole": not b.get("quote"), "resolved": False, "quote": b.get("quote") or "",
+                 "anchorBlockId": b.get("block_id"), "createdAt": ago(),
+                 "replies": [_doc_reply("n%d" % len(DOC_WRITES), "我", text, 0, mentions=b.get("mentions") or [])]}
+            DOC_THREADS.insert(0, t)
+            return handler.send_json({"ok": True, "threads": DOC_THREADS, **({"anchored": True} if b.get("quote") else {})})
+        thread = next((t for t in DOC_THREADS if len(parts) > 6 and t["id"] == unquote(parts[6])), None)
+        if thread is None:
+            return handler.send_json({"error": "no such comment"}, 404)
+        if p.endswith("/replies"):
+            if not text:
+                return handler.send_json({"error": "content is required"}, 400)
+            thread["replies"].append(_doc_reply("n%d" % len(DOC_WRITES), "我", text, 0, mentions=b.get("mentions") or []))
+            return handler.send_json({"ok": True, "threads": DOC_THREADS})
+        if p.endswith("/resolve"):
+            thread["resolved"] = bool(b.get("resolved"))
+            return handler.send_json({"ok": True, "threads": DOC_THREADS})
+        return handler.send_json({"error": "not found"}, 404)
+
+    H.do_GET = _doc_get
+    H.do_POST = _doc_post
+MOCK_HELP.append("MOCK_DOC_COMMENTS=1  飞书文档阅读页能写评论（#1290）：features 带 lark_doc_comments，每篇文档三条编造的评论，回复 / 新评论 / 解决 / 重新打开 / @人都改它们；GET /mock/doc-comments 看写了什么")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="用于客户端测试的 mock hub")
     parser.add_argument("--tls-port", type=int, help="额外的 TLS 监听端口；0 表示自动分配")

@@ -14,13 +14,17 @@ nonisolated struct LarkFeatures: Hashable, Sendable {
     var chats: Bool
     /// `lark_moments`: company-feed posts open in the native reader.
     var moments: Bool
+    /// `lark_doc_comments`: the document reader can reply to, write, resolve and reopen comments (#1290). Not part of
+    /// "unknown is everything": a hub that does not say so has no such routes.
+    var docComments = false
 
     static let all = LarkFeatures(chats: true, moments: true)
     static let none = LarkFeatures(chats: false, moments: false)
 
-    init(chats: Bool, moments: Bool) {
+    init(chats: Bool, moments: Bool, docComments: Bool = false) {
         self.chats = chats
         self.moments = chats && moments
+        self.docComments = chats && docComments
     }
 
     /// From the hub's hello features.
@@ -28,7 +32,8 @@ nonisolated struct LarkFeatures: Hashable, Sendable {
         if features.isEmpty || (!features.contains("lark") && features.contains("lark_attachments")) {
             self = .all // unknown, or a hub that serves Feishu itself (from before the plugin)
         } else {
-            self.init(chats: features.contains("lark"), moments: features.contains("lark_moments"))
+            self.init(chats: features.contains("lark"), moments: features.contains("lark_moments"),
+                      docComments: features.contains("lark_doc_comments"))
         }
     }
 }
