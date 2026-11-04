@@ -24,6 +24,7 @@ class SettingsNavigationTest {
             SettingsPage.Mail to "mail",
             SettingsPage.Feishu to "feishu",
             SettingsPage.Channels to "channels",
+            SettingsPage.HubUpdate to "hub-update",
         )
         assertEquals(SettingsPage.entries.toSet(), pages.keys)
         assertEquals(pages.size, pages.values.toSet().size)

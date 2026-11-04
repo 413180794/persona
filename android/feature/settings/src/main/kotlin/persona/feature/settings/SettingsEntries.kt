@@ -59,6 +59,8 @@ data class SettingsServices(
     val addHub: PairingService? = null,
     /** 设置 › 连接器 on the paired hub; null in 体验模式. */
     val connectors: ConnectorsManagement? = null,
+    /** 设置 › hub 版本 (the hub's version and its updating itself) on the paired hub; null in 体验模式. */
+    val hubUpdates: HubUpdates? = null,
 )
 
 fun EntryProviderScope<NavKey>.settingsEntries(navigator: Navigator, services: SettingsServices? = null) {

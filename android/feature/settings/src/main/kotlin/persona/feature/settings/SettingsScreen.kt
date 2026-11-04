@@ -135,6 +135,15 @@ private fun SettingsContent(
         channelList = try { channelService.channels() }
         catch (error: CancellationException) { throw error } catch (_: Exception) { channelList }
     }
+    // 设置 › hub 版本's row value (iOS `hubSummary`): read when the list shows or the hub reconnects, then each push.
+    val hubUpdates = services.hubUpdates.takeUnless { services.demo }
+    var hubUpdateStatus by remember(hubUpdates) { mutableStateOf<persona.core.contracts.api.HubUpdateStatus?>(null) }
+    LaunchedEffect(hubUpdates, page, connection) {
+        if (hubUpdates == null || page != "settings" || connection != ConnectionState.Online) return@LaunchedEffect
+        hubUpdateStatus = try { hubUpdates.status() }
+        catch (error: CancellationException) { throw error } catch (_: Exception) { hubUpdateStatus }
+    }
+    LaunchedEffect(hubUpdates) { hubUpdates?.events?.collect { hubUpdateStatus = it } }
     LaunchedEffect(connectorsService, page, connection, larkChats) {
         if (connectorsService == null || page != "settings" || connection != ConnectionState.Online) return@LaunchedEffect
         try {
@@ -187,6 +196,7 @@ private fun SettingsContent(
                 header = preferences, footer = deviceFeedback)
         }
         "devices" -> DevicesPage(deviceController, paired && services.deviceSettings != null, back, deviceFeedback)
+        "hub-update" -> HubUpdatePage(hubUpdates, machines, back, online = connection == ConnectionState.Online, onMachine = onNavigate)
         "hubs" -> HubsScreen(services.hubs ?: HubGroups.None, services.addHub?.let { { page = "hubs-add" } }, back, deviceFeedback)
         // Adding a hub is the pairing page with an adding service; it returns to the hub list.
         "hubs-add" -> PairingScreen(services.addHub ?: services.pairing, services.sessions,
@@ -238,8 +248,10 @@ private fun SettingsContent(
             }
             item { JSectionHeader("连接") }
             // The hub list is the one row a single hub group adds to settings (docs/android.md「多 hub」).
-            val hubRows = if (services.hubs != null) 1 else 0
+            // hub 版本 (docs/hub-update.md「App 里」) follows it while there is a real hub (not 体验模式).
+            val hubRows = (if (services.hubs != null) 1 else 0) + (if (hubUpdates != null) 1 else 0)
             if (services.hubs != null) item { JGroupItem(GroupPosition.of(0, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Hubs), title = "hub", leadingIcon = PhIcons.HardDrives, subtitle = "添加、改名和断开 hub", onClick = { open(SettingsPage.Hubs) }) } }
+            if (hubUpdates != null) item { JGroupItem(GroupPosition.of(hubRows - 1, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.HubUpdate), title = "hub 版本", leadingIcon = PhIcons.ArrowsClockwise, subtitle = "版本、检查和安装更新、自动更新", value = HubUpdateText.summary(hubUpdateStatus), onClick = { open(SettingsPage.HubUpdate) }) } }
             item { JGroupItem(GroupPosition.of(hubRows, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Pairing), title = "配对", leadingIcon = PhIcons.QrCode, subtitle = "扫码、粘贴链接或手动输入", onClick = { open(SettingsPage.Pairing) }) } }
             item { JGroupItem(GroupPosition.of(hubRows + 1, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Devices), title = "设备", leadingIcon = PhIcons.DeviceMobile, subtitle = "已配对设备和访问权限", onClick = { open(SettingsPage.Devices) }) } }
             item { JGroupItem(GroupPosition.of(hubRows + 2, 3 + hubRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Diagnostics), title = "连接诊断", leadingIcon = PhIcons.Gauge, subtitle = "连接路径、探测结果和记录", onClick = { open(SettingsPage.Diagnostics) }) } }

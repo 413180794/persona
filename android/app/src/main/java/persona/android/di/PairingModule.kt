@@ -35,10 +35,11 @@ object PairingModule {
         updates: AppUpdates, diagnostics: SettingsDiagnostics, devices: WiredDeviceSettings, runtime: ConnectionRuntime,
         machines: MachineManagement, models: ModelConfiguration, plugins: PluginManagement, providers: ProviderSetup,
         connectors: ConnectorsManagement, channels: ChannelManagement, platform: persona.android.platform.PlatformPairing,
+        hubUpdates: HubUpdates,
     ) = SettingsServices(pairing, connection, sessions, updates, diagnostics, binding = devices.binding,
         // Explicit: the runtime cannot be a ConnectionEndpoints itself (its HubConnection.state has another type).
         disconnect = { pairing.unpair() }, endpoints = runtime.endpoints, machines = machines, models = models, plugins = plugins, providers = providers,
-        channels = channels,
+        channels = channels, hubUpdates = hubUpdates,
         hubs = runtime.hubGroups, addHub = platform.adding, connectors = connectors)
 }
 

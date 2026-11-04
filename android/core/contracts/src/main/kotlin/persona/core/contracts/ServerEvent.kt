@@ -151,6 +151,11 @@ data class PluginUiEvent(
     val badge: persona.core.contracts.api.PluginViewBadge? = null,
 ) : ServerEvent
 
+/** The hub's update status changed (docs/hub-update.md「App 里」): `update` is what GET /api/v1/hub/update answers. */
+@KeepGeneratedSerializer
+@Serializable(with = HubUpdateEventSerializer::class)
+data class HubUpdateEvent(val update: persona.core.contracts.api.HubUpdateStatus) : ServerEvent
+
 data object UnknownEvent : ServerEvent
 
 object ServerEventSerializer : KSerializer<ServerEvent> {
@@ -175,6 +180,7 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             "pong" -> input.json.decodeFromJsonElement<Pong>(obj)
             "notify" -> input.json.decodeFromJsonElement<NotifyEvent>(obj)
             "plugin_ui" -> input.json.decodeFromJsonElement<PluginUiEvent>(obj)
+            "hub_update" -> input.json.decodeFromJsonElement<HubUpdateEvent>(obj)
             "lock_test" -> input.json.decodeFromJsonElement<LockTestEvent>(obj).also {
                 require(it.testId.isNotBlank() && it.dueAt.isNotBlank() && it.sentAt.isNotBlank())
             }
@@ -214,6 +220,7 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             is Pong -> "pong" to output.json.encodeToJsonElement(value)
             is NotifyEvent -> "notify" to output.json.encodeToJsonElement(value)
             is PluginUiEvent -> "plugin_ui" to output.json.encodeToJsonElement(value)
+            is HubUpdateEvent -> "hub_update" to output.json.encodeToJsonElement(value)
             is LockTestEvent -> "lock_test" to output.json.encodeToJsonElement(value)
             is DeltaEvent -> "delta" to output.json.encodeToJsonElement(value)
             is ScreenEvent -> "screen" to output.json.encodeToJsonElement(value)
@@ -248,3 +255,4 @@ object ClientHelloAckSerializer : WireSerializer<ClientHelloAck>(ClientHelloAck.
 object PongSerializer : WireSerializer<Pong>(Pong.generatedSerializer())
 object NotifyEventSerializer : WireSerializer<NotifyEvent>(NotifyEvent.generatedSerializer())
 object PluginUiEventSerializer : WireSerializer<PluginUiEvent>(PluginUiEvent.generatedSerializer())
+object HubUpdateEventSerializer : WireSerializer<HubUpdateEvent>(HubUpdateEvent.generatedSerializer())

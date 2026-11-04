@@ -872,6 +872,21 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
 
 ![对话里来自渠道的消息（Board，浅色）](screenshots/android-channel-source-light.png)
 
+## hub 版本（设置 › hub 版本，#1746）
+
+规格见 [hub-update.md](hub-update.md)「App 里」，和 iOS 的 `HubSettingsPage`、网页的 `HubSettings` 同样的内容和文案。设置首页「连接」一节在「hub」下面多一行「hub 版本」，右边是版本，更新中写状态，有新版本写「有新版本」/「有新镜像」（`HubUpdateText.summary`；回到设置首页、重连后重读，`hub_update` 推送随时改）。体验模式没有这一行。
+
+- 数据：`core:contracts` 的 `HubUpdates`（`status` / `check` / `start(now)` / `settings(auto, noticeSeen)` 只发带了的 / `history`，`events` 是所选 hub 的 `hub_update` 推送）、`HubUpdateStatus`（`working` 是下载、等空闲、重启、确认这四种）、`HubUpdateEvent`（`ServerEvent` 的 `hub_update`）。`core:hub` 的 `HttpHubUpdates`：状态 404 是老 hub（`HubUpdatesUnsupported`），别的错误照 hub 的原话显示（409「正在更新」）。`app` 的 `MachineManagementModule.hubUpdates` 按所选 hub 组注入。
+- 页面：`feature:settings` 的 `HubUpdateScreen.kt`（`HubUpdatePage`，`SettingsPage.HubUpdate`，页名 `hub-update`）和 `HubUpdateState.kt`（`HubUpdateModel`，文案 `HubUpdateText`）。从上到下：第一次的「hub 会在空闲时自动更新。」提示（「关闭」关掉自动更新，「知道了」记下 `auto_notice_seen`，和网页一样）；版本、渠道、上次检查、「检查更新」（下拉也是检查）；更新：新版本、发布时间和说明、回滚过 / 自动更新不装的提醒、「更新 hub」，更新中是进度，等空闲时列出在忙的对话和「现在就更新…」（先确认会中断什么），开发版说为什么不会自己更新，Docker 写要运行的命令（钉了版本的先改 `.env`），每条可复制；「自动更新 hub」开关（只有能自己更新的 hub）；各台电脑上的 personad 版本，「版本不同」的标出来，点进机器页「重新部署」；最近 10 次更新记录。更新结束（已更新 / 已回滚 / 没更新成功）时重读记录；连接断了又连上时（hub 重启后）整页重读一次。页面标题是「hub 版本」而不是 iOS 的「hub」：Android 设置里「hub」那一行已经是 hub 组的列表。
+- 还没做：Agents 页顶上的那一行提示（iOS 的 `HubNoticeRow`）。
+- 调试直达：`--es debug.openPage hub-update`。
+- 单测：`core:hub` 的 `HttpHubUpdatesTest`（MockWebServer：状态和读不懂的字段、Docker 的镜像和缺字段、老 hub 404、检查 / 开始 / 现在就更新 / 设置各自的路径和正文、409 的原话、记录和 `null`、读不懂的回答），`core:contracts` 的 `HubUpdateContractTest`（`hub_update` 事件），`feature:settings` 的 `HubUpdateStateTest`（读取、老 hub、读不到、开始和拒绝、开关和提示、更新结束重读记录、文案、更新一组显示什么、提醒、Docker 的步骤）。
+- **截图（不用模拟器）**：`./gradlew :feature:settings:testDebugUnitTest --tests '*HubUpdateShotsTest*'`，Robolectric 原生绘制，三种风格 × 深浅色：设置首页的两种行、自动更新不装的新版本、等两个在忙的、钉了版本的 Docker、已是最新加更新记录；另一个用例在页面上点「更新 hub」→「现在就更新…」→ 确认，再收一条推送、点开关。PNG 在 `android/feature/settings/build/hub-update-shots/`（`-Dpersona.shots=<目录>` 换地方）。
+
+![设置 › hub 版本：自动更新不装的新版本（Glass，浅色）](screenshots/android-hub-update-light.png)
+
+![设置 › hub 版本：已是最新和更新记录（Board，深色）](screenshots/android-hub-update-dark.png)
+
 ## 语音对话（hub 语音插件）
 
 和 hub 上的语音插件全双工对话（契约见 [plugins.md](plugins.md)「语音」）：页面开着就一直听，Persona 说话时直接开口就能打断。代码在 `feature/voice`，传输在 `core/hub` 的 `HttpVoicePlugins`，契约 `core/contracts` 的 `VoicePlugins`，路由 `VoiceRoute(pluginId, title)`。

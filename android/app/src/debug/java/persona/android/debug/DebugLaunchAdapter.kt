@@ -28,6 +28,7 @@ private val pages = mapOf(
     "catalog" to ResolvedRoute(AppTab.Settings, ComponentCatalogRoute),
     "voice" to ResolvedRoute(AppTab.Jarvis, persona.core.navigation.VoiceRoute("voice", "语音")),
     "channels" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Channels)),
+    "hub-update" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.HubUpdate)),
 )
 
 class DebugLaunchAdapter : LaunchAdapter {

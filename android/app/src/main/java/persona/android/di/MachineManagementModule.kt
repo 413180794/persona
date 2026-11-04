@@ -5,9 +5,11 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import persona.core.contracts.GroupKeys
+import persona.core.contracts.HubUpdateEvent
 import persona.core.contracts.PluginUiEvent
 import persona.core.contracts.api.*
 import persona.core.hub.HttpConnectorsManagement
+import persona.core.hub.HttpHubUpdates
 import persona.core.hub.HttpMachineManagement
 import persona.core.hub.HttpModelConfiguration
 import persona.core.hub.HttpPluginManagement
@@ -29,7 +31,7 @@ import kotlinx.serialization.json.JsonObject
 import javax.inject.Singleton
 
 /**
- * Machine management (机器页, 引擎, Claude Code 设置), 模型配置 and 插件. Machine management goes to the hub group of the
+ * Machine management (机器页, 引擎, Claude Code 设置), 模型配置, 插件 and hub 版本. Machine management goes to the hub group of the
  * machine it names; 模型配置 and 插件 to the selected group. Either way the connection waits for its route, adds the device token
  * and drops calls of a pairing that has gone.
  */
@@ -98,6 +100,19 @@ object MachineManagementModule {
         override suspend fun install(preview: PluginPreview) = api().install(preview)
         override suspend fun upgrade(id: String, preview: PluginPreview) = api().upgrade(id, preview)
         override suspend fun uninstall(id: String, keepData: Boolean) = api().uninstall(id, keepData)
+    }
+
+    // 设置 › hub 版本 (docs/hub-update.md「App 里」): the selected group's hub, following its `hub_update` pushes.
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Provides @Singleton fun hubUpdates(runtime: ConnectionRuntime, application: Application): HubUpdates = object : HubUpdates {
+        override val events: Flow<HubUpdateStatus> = (application as PersonaApp).hub
+            .flatMapLatest { hub -> hub?.connection?.events ?: emptyFlow() }.filterIsInstance<HubUpdateEvent>().map { it.update }
+        private fun api() = HttpHubUpdates(runtime.connection())
+        override suspend fun status() = api().status()
+        override suspend fun check() = api().check()
+        override suspend fun start(now: Boolean) = api().start(now)
+        override suspend fun settings(auto: Boolean?, noticeSeen: Boolean?) = api().settings(auto, noticeSeen)
+        override suspend fun history() = api().history()
     }
 
     // A hub-level page: the selected group's connectors (docs/connectors.md).

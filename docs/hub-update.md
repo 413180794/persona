@@ -290,6 +290,7 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
   - 各台电脑上的 personad：版本，和 hub 不是同一次部署的标「版本不同」，点进机器页「重新部署」；
   - 「更新记录」：最近 10 次，结果（已更新 / 已回滚 / 没更新成功 / 没有自动装）、自动的标出来、从哪版到哪版、时间、回滚和没有自动装的原因。
   - 老 hub（没有 `/api/v1/hub/update`）：说明要在 hub 所在的机器上用 install.sh 更新一次。
+- Android 的设置页同样有这些（「hub 版本」，`HubUpdatePage`，见 `android.md`「hub 版本」）；Agents 页顶上的那一行 Android 还没有。
 - **Agents 页顶上的一行**（`HubNoticeRow`，和「Mac 上的 Persona 已登录」同一个位置和样子，搜索时不出现）：同一时间只有一条，最要紧的在前：
   1. App 太旧（App 的 build 号低于 hub 报的 `min_app_build`）：「App 版本太旧，配不上这个 hub：请到 TestFlight 更新」，不能关；
   2. hub 太旧（`protocol` 比 App 要的低，老 hub 不报就是 0）：「hub 版本太旧，部分功能用不了」，× 关掉后不再提示；
