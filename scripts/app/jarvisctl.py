@@ -19,7 +19,7 @@
   jarvisctl.py tree [filters] | find [filters]                                the accessibility tree (what XCUITest sees)
   jarvisctl.py wait [filters] [--gone] [--timeout s]                          until an element is there (or gone)
   jarvisctl.py wait-loaded [--session m/s] [--timeout s]                      the chat on screen has its history from the hub
-  jarvisctl.py tap [filters] [--hid]                                          activate it; a real touch (idb) if it does not take that
+  jarvisctl.py tap [filters] [--hid] [--allow-hidden]                         activate it; a real touch (idb) if it does not take that
   jarvisctl.py longpress [filters] [--duration s]                             a real touch held on it (idb)
   jarvisctl.py swipe [filters] --dir left|right|up|down [--distance pt] [--duration s]   a real swipe across it
   jarvisctl.py drag --from x,y --to x,y [--duration s]                        a real finger between two points (pt)
@@ -207,17 +207,24 @@ class Ctl:
     def tap(self, hid=False, **f):
         """Accessibility activation (a button's action, a menu opening), or with `hid` / when the element does not take
         it (a menu's items) a real touch at the middle of its frame through `idb ui tap`, once the screen settles (an
-        opening menu moves its items under the touch)."""
+        opening menu moves its items under the touch). Only on a match a touch reaches (`allowHidden=True`: any)."""
         if not hid:
-            r = self.call("activate", **f)
+            try:
+                r = self.call("activate", **f)
+            except CtlError as e:
+                if "not visible" not in str(e):
+                    raise
+                # An opening menu's items fade in: not reached yet, then reached once the screen settles.
+                self.call("settle", timeout=2, stable=2, every=80, pixels=600)
+                r = self.call("activate", **f)
             if r.get("activated"):
                 return r
         if self.via_hub:
             raise CtlError(f"tap: {f} takes no accessibility activation, and a real touch needs idb (the simulator)")
         self.call("settle", timeout=2, stable=2, every=80, pixels=600)
-        e = self.call("find", **f)["element"]
+        e = self.call("find", **(f if f.get("allowHidden") or "index" in f else {"visibleOnly": True} | f))["element"]
         if not e:
-            raise CtlError(f"tap: not found {f}")
+            raise CtlError(f"tap: no match a touch reaches {f}")
         x, y, w, h = e["frame"]
         self._idb("tap", round(x + w / 2), round(y + h / 2))
         return {"ok": True, "hid": True, "element": e}
@@ -374,7 +381,7 @@ def filters(a):
     """The element filters of the command line, as the app's commands take them."""
     f = {"id": a.id, "idPrefix": a.id_prefix, "label": a.label, "labelContains": a.label_contains,
          "labelPrefix": a.label_prefix, "trait": a.trait, "index": a.index, "visibleOnly": a.visible or None,
-         "onScreenOnly": a.on_screen or None}
+         "onScreenOnly": a.on_screen or None, "allowHidden": a.allow_hidden or None}
     return {k: v for k, v in f.items() if v is not None}
 
 
@@ -431,6 +438,7 @@ def main(argv):
     p.add_argument("--index", type=int)
     p.add_argument("--visible", action="store_true")
     p.add_argument("--on-screen", action="store_true")
+    p.add_argument("--allow-hidden", action="store_true")
     p.add_argument("--ignore-id", action="append", default=[])
     p.add_argument("--ignore-label-contains", action="append", default=[])
     p.add_argument("--ignore-rect", action="append", default=[])

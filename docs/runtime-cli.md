@@ -42,9 +42,9 @@ scripts/app/personactl.py call <命令> k=v …           # 任何 App 认识的
 | `perf` | | `counts`：各视图 body 次数、事件数、主线程耗时（要 `-perfCounts YES` 启动，`LiveUpdateTests` 读的同一份） |
 | `refresh` | | 向 hub 拉一次（下拉刷新做的事） |
 | `wait-loaded` | `session`（`<机器>/<会话>`，不给就是屏幕上的：Agents 页打开的对话或助手的那个；只等，不会去打开它）、`timeout`（15 s） | 等这个对话第一次从 hub 拿到历史（或报错），行也重建完（300 ms 不变）；`items`、`rows`、`error`、`waited`（ms）。超时报错 |
-| `activate` | 元素过滤 | 对找到的元素做 VoiceOver 双击做的事（按钮的动作、打开菜单）；`activated` 为 false 说明它不吃（菜单项） |
+| `activate` | 元素过滤、`allowHidden` | 对第一个点得到的匹配做 VoiceOver 双击做的事（按钮的动作、打开菜单）；`activated` 为 false 说明它不吃（菜单项）。有匹配但都点不到时报 `not visible`，不去激活外壳藏起来那页的元素；`allowHidden: true` 或给 `index` 时照旧按 `find` 的取法 |
 | `scroll` | `pages`（屏数，负数往上，每屏 0.8 个高度）或 `to`（top / bottom） | 屏幕上最大的那个滚动视图直接设偏移量，没有惯性；只挑画出来的（外壳藏起来的那页一样大，但透明）；`offset`、`contentHeight`、`frame`（动的是哪个） |
-| `type` | `text`，可带元素过滤（先激活它拿焦点） | 往有焦点的输入框里打字 |
+| `type` | `text`，可带元素过滤（先激活它拿焦点，取法同 `activate`） | 往有焦点的输入框里打字 |
 | `dismiss-keyboard` | | 收起键盘 |
 | `snapshot` | `path` 或不带（回 base64），`scale` | App 窗口的 PNG（不含状态栏；要和老截图逐像素比用 `jarvisctl.py screenshot`） |
 | `navigate` | `scene`（home / assistant / agents / chat / inbox / settings / machines），`session`（`<机器>/<会话>`，chat 和 assistant 要），`machine`（machines 下打开某台），`defaults`（只在建页面时读的开关，如 `{"openWork": true}`），`keep`（不换新的界面树），`coldChats`、`dropChatCache`（同 `reset`） | 落到和对应启动开关一样的页面（`-newAssistant`、`-openAssistant`、`-tab dev`、`-openSession`、`-tab mail`、`-tab settings`、`-openMachines`），默认在一棵新的界面树上（窗口的根换成新的 `RootView`，Agents 页推进去的对话、抽屉、滚动位置都从头来）。回答同 `state` |
@@ -146,6 +146,7 @@ scripts/app/personactl.py snapshot app.png
 ```
 
 - `tap` 先做无障碍激活；元素不吃（菜单项）或带 `--hid` 时，等画面停下、重新取 frame，用 `idb ui tap` 在中心点一下真的触摸
+  （只取点得到的匹配；App 答 `not visible` 时先等画面停下再试一次，正在淡入的菜单项要这一下；还是点不到就报错。`--allow-hidden` 恢复旧的取法）
   （要装 `idb` 和 `idb_companion`，第一次调用可能要等 companion 起来，脚本会重试一次）。
 - `scroll` 直接设偏移量，没有惯性：要真实手指滚动的（`ChatFollowTests`）用下面的 `drag` / `swipe`，或留在 XCUITest。
 

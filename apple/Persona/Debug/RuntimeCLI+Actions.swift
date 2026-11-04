@@ -13,11 +13,13 @@ extension RuntimeCLI {
         "snapshot": { a in snapshot(a) },
     ]
 
-    /// What VoiceOver's double tap does to the element `pick` finds: a button's action, a menu opening. No touch, so
-    /// no hit-testing; `activated` false when the element does not take it (a menu's items).
+    /// What VoiceOver's double tap does to the element `target` finds: a button's action, a menu opening.
+    /// `activated` false when the element does not take it (a menu's items).
     private static func activate(_ a: Args) -> Reply {
-        guard let e = pick(a) else { return fail("not found") }
-        return ["activated": e.object.accessibilityActivate(), "element": e.json]
+        switch target(a) {
+        case .failure(let f): return fail(f.why)
+        case .success(let e): return ["activated": e.object.accessibilityActivate(), "element": e.json]
+        }
     }
 
     /// The largest scroll view on screen, moved by `pages` screens (negative: up; 0.8 of its height each) or `to` top /
@@ -65,7 +67,11 @@ extension RuntimeCLI {
     /// made first responder (what a tap on it does, without a touch: the hub has none on a real phone).
     private static func type(_ a: Args) -> Reply {
         if ["id", "idPrefix", "label", "labelContains", "labelPrefix", "trait"].contains(where: { a[$0] != nil }) {
-            guard let e = pick(a) else { return fail("not found") }
+            let e: Element
+            switch target(a) {
+            case .failure(let f): return fail(f.why)
+            case .success(let found): e = found
+            }
             _ = e.object.accessibilityActivate()
             if !(firstResponder() is UIKeyInput) { focus(e) }
         }

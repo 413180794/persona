@@ -138,11 +138,28 @@ extension RuntimeCLI {
     }
 
     /// The `index`-th match, or without `index` the first one a touch reaches (then the first on screen, then the
-    /// first at all).
+    /// first at all): what `find` and `wait` answer.
     static func pick(_ a: Args) -> Element? {
         let all = elements(matching: a)
         if let i = a["index"] as? Int { return i >= 0 && i < all.count ? all[i] : nil }
         return all.first(where: \.visible) ?? all.first(where: \.onScreen) ?? all.first
+    }
+
+    /// What `activate` and `type` act on: the first match a touch reaches, else why not. `pick`'s fallbacks acted on
+    /// the shell's page behind (in the tree at opacity 0) and answered success; `allowHidden` or an `index` keeps them.
+    static func target(_ a: Args) -> Result<Element, Failure> {
+        if a["index"] != nil || a["allowHidden"] as? Bool == true {
+            return pick(a).map { .success($0) } ?? .failure(Failure("not found"))
+        }
+        let all = elements(matching: a)
+        if let e = all.first(where: \.visible) { return .success(e) }
+        return .failure(Failure(all.isEmpty ? "not found"
+            : "not visible: \(all.count) match, none a touch reaches (allowHidden: true acts on it anyway)"))
+    }
+
+    struct Failure: Error {
+        let why: String
+        init(_ why: String) { self.why = why }
     }
 
     private static func find(_ a: Args) -> Reply {
