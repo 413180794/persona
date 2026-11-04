@@ -158,6 +158,7 @@
   另外：macOS 26 上 `.toolbar { }` 的内容在某个平台分支里为空会编不过（`EmptyView` 当 `ToolbarContent` 要 macOS 27），整个 `.toolbar` 用 `#if` 包起来。
 - `NSColor.withAlphaComponent(_:)` 是把透明度换成给的值，不是乘上去（2026-11-04，#1224）：兼容层里 `tertiaryLabelColor.withAlphaComponent(0.18)` 得到的是 18% 的黑 / 白，
   不是 tertiaryLabel 本来的 26% 再乘 0.18，所以 Mac 的 `Theme.Fill.well` / `chip` 比 iPhone 深好几倍（真窗口取像素：卡片 248，选项区 212；深色 54 对 98）。量颜色用真窗口截图取像素，别凭感觉。
+  #1169 把兼容层的四档填充改成了 UIKit 的原值：要照搬 iPhone 的颜色，在模拟器里 `simctl spawn` 一个打印 `resolvedColor(with:)` 的小程序取值，别凭记忆。
 - 列表往上滚时，行从标题栏那一行透出来，和壳画在那里的分区标题（`MacPageTitle`）叠在一起（2026-11-04，#1243，真窗口实测）：列表的滚动视图自己伸到窗口工具栏下面、内容往下让出工具栏的高度，
   本来有系统的滚动边缘效果（AppKit 的 `NSScrollPocket`）在那一行挡住滚上去的行；壳为了让分区列伸到红绿灯后面隐藏了工具栏的底色
   （`.toolbarBackgroundVisibility(.hidden, for: .windowToolbar)`），这块挡板也跟着没了。设置、收件箱、机器（窄窗口）都能滚出来，

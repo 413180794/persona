@@ -85,12 +85,12 @@ extension Theme.Icon {
 }
 
 extension Theme.Fill {
-    /// The well a question card's options sit in (#1224 B5): a third of `well`. The Mac's `well` (the compat layer's
-    /// quaternarySystemFill) is the label color at 18% in all, much darker than the phone's: the options looked pressed,
-    /// or disabled, a mid-gray block on the card.
-    static let macOptionsWell = Theme.Fill.well.opacity(0.35)
-    /// A row under the pointer in the shell's sidebar: half the selected row's well.
-    static let macHover = Theme.Fill.well.opacity(0.5)
+    /// The selected row in the shell's sidebar and the inbox list: the label color at 18 %, about AppKit's own
+    /// unemphasized selection. It was `well` until the fills became the phone's (#1169); a selection that faint was
+    /// hard to find in the sidebar's material.
+    static let macSelected = Color(nsColor: .tertiaryLabelColor.withAlphaComponent(0.18))
+    /// A row under the pointer in those lists: half the selected row's.
+    static let macHover = macSelected.opacity(0.5)
     /// The faint dim behind ⌘K (a click on it closes the panel).
     static let macScrim = Color.black.opacity(0.12)
     /// Floating panels over the page (⌘K): the window background, opaque like Xcode's Open Quickly.

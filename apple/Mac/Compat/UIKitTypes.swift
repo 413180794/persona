@@ -68,14 +68,25 @@ extension NSColor {
     nonisolated static var link: NSColor { .linkColor }
     nonisolated static var placeholderText: NSColor { .placeholderTextColor }
     nonisolated static var tintColor: NSColor { .controlAccentColor }
-    // iOS's fills are translucent greys over the content; AppKit's fill roles are the same idea.
-    nonisolated static var systemFill: NSColor { .tertiaryLabelColor.withAlphaComponent(0.36) }
-    nonisolated static var secondarySystemFill: NSColor { .quaternarySystemFill }
-    nonisolated static var tertiarySystemFill: NSColor { .tertiaryLabelColor.withAlphaComponent(0.24) }
-    nonisolated static var quaternarySystemFill: NSColor { .tertiaryLabelColor.withAlphaComponent(0.18) }
+    // iOS's fills: translucent grays over the content, UIKit's own values in each appearance (#1169). They used to be
+    // the label color at 18–36 %, two to four times the phone's: every chip, well and avatar looked pressed. Each is
+    // still stronger than AppKit's fill of the same rank (black or white at 3–10 %), so none goes faint.
+    nonisolated static var systemFill: NSColor { phoneFill(120, light: 0.2, dark: 0.36) }
+    nonisolated static var secondarySystemFill: NSColor { phoneFill(120, light: 0.16, dark: 0.32) }
+    nonisolated static var tertiarySystemFill: NSColor { phoneFill(118, light: 0.12, dark: 0.24) }
+    nonisolated static var quaternarySystemFill: NSColor { phoneFill(116, 118, light: 0.08, dark: 0.18) }
     nonisolated static var systemGray6: NSColor { .init(dynamicProvider: { $0.userInterfaceStyle == .dark ? NSColor(white: 0.11, alpha: 1) : NSColor(white: 0.95, alpha: 1) }) }
     nonisolated static var systemGray5: NSColor { .init(dynamicProvider: { $0.userInterfaceStyle == .dark ? NSColor(white: 0.17, alpha: 1) : NSColor(white: 0.9, alpha: 1) }) }
     nonisolated static var systemGray4: NSColor { .init(dynamicProvider: { $0.userInterfaceStyle == .dark ? NSColor(white: 0.23, alpha: 1) : NSColor(white: 0.82, alpha: 1) }) }
+
+    /// One of UIKit's fills: a blue-tinted gray (`gray`, or `darkGray` in dark mode, of 255; blue 128) at `light` / `dark`.
+    private nonisolated static func phoneFill(_ gray: CGFloat, _ darkGray: CGFloat? = nil, light: CGFloat, dark: CGFloat) -> NSColor {
+        .init(dynamicProvider: { traits in
+            let isDark = traits.userInterfaceStyle == .dark
+            let g = (isDark ? darkGray ?? gray : gray) / 255
+            return NSColor(srgbRed: g, green: g, blue: 128 / 255, alpha: isDark ? dark : light)
+        })
+    }
 }
 
 extension Color {

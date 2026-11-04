@@ -356,6 +356,7 @@ Session 新增可选字段：`source_kind`（`codex_history` / `codex_app_server
 {"allow":true,"always":false} / {"allow":false,"message":"…"}                // permission
 {"keys":["down","enter"],"text":""}                                         // screen：按键 / 文本发到 pane
 {"dismiss":true}                                                            // 任意：放弃，交回电脑 TUI 处理
+{"answers":{"…":"…"},"answered_by":"assistant"}                               // 助手代答（#1602）：只有 question 可以，App 回复不带 answered_by
 ```
 
 ### MCP elicitation
@@ -534,7 +535,7 @@ Resolution 新增可选 `action`、`content`。`{"action":"accept","content":{"c
 | `terminal_control` | `machine_id`, `session_id`, `state`：`active`（接管了，带 `cols`, `rows`）、`busy`（电脑上别的程序占着，问用户要不要 `takeover`；先镜像着）、`taken`（被别的设备或程序抢走）、`lost`（node 自己放手了）、`unsupported`（旧 node / herdr，只能镜像），`error` 是给人看的原因 |
 | `terminal` | `machine_id`, `session_id`，以及一帧 `epoch`, `seq`, `full`, `cols`, `rows`, `data`（base64 的 VT 字节），或者 `error`（流停了：电脑离线、会话不在跑……）+ `unsupported`（旧 node / herdr 不能推流，改用 `/screen` 轮询）。见下「终端流」 |
 | `interaction` | `interaction`（新的待处理，推给所有客户端） |
-| `interaction_resolved` | `id` |
+| `interaction_resolved` | `id`；助手代答时另带 `answered_by: "assistant"`（#1602） |
 | `fleet` | `fleet`（实时活动汇总，与 HTTP `/api/v1/fleet` 的内容对应） |
 | `hook_event` | node hook 事件的原字段，hub 补 `machine_id` 并置 `type: hook_event`；用于刷新会话运行状态 |
 | `tool_call` | `call_id`, `name`, `args`（只发给已 `register_phone` 且提供该工具的手机） |

@@ -647,6 +647,14 @@ private struct SidebarClosed: View {
 /// (新对话, 定时任务, 知识库); 置顶 (the main conversation first) and 最近, one line each with a round mark; Persona's face,
 /// where it runs and 设置 at the foot.
 struct AssistantSidebar: View {
+    /// The open conversation's row. On the Mac, the shade the shell's other lists select with (`macSelected`): the
+    /// phone's `well` on the Mac's lighter fills (#1169) was hard to find there.
+    #if os(macOS)
+    private static let selectedFill = Theme.Fill.macSelected
+    #else
+    private static let selectedFill = Theme.Fill.well
+    #endif
+
     @Environment(AppModel.self) private var model
     var current: SessionKey?
     var open: (SessionKey) -> Void
@@ -1056,7 +1064,7 @@ struct AssistantSidebar: View {
             .background {
                 if selected {
                     // Rounder in the shell: a pill, like ChatGPT's selected chat.
-                    RoundedRectangle(cornerRadius: isShell ? Theme.Radius.panel : Theme.Radius.card, style: .continuous).fill(Theme.Fill.well)
+                    RoundedRectangle(cornerRadius: isShell ? Theme.Radius.panel : Theme.Radius.card, style: .continuous).fill(Self.selectedFill)
                 }
             }
             .contentShape(.rect)

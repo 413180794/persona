@@ -61,7 +61,7 @@ hub 提供给 Agent / 助手的 MCP 工具，每个一个文件：`mcp/<场景>/
 | --- | --- | --- |
 | `mcp/assistant/` | `ask_user`、`notify_user`、`jarvis_settings`（设置读写与手机确认） | 助手对话（`hub/assistant_tools.go` 的 `assistantTools`） |
 | `mcp/schedule/` | `schedule_followup`、`schedule_routine`、`delete_routine`、`list_followups`、`cancel_followup` | 同上 |
-| `mcp/agents/` | `agents_list`、`agent_read`、`agent_send`、`agent_start` | 同上 |
+| `mcp/agents/` | `agents_list`、`agent_read`、`agent_send`、`agent_start`、`interaction_answer` | 同上 |
 | `mcp/inbox/` | `inbox_draft`（AI 分身交草稿） | 同上 |
 | `mcp/assistant/lark-connector.md` | `lark-connector`：助手跑在 Agent 运行时上时的飞书（lark-connector skill 的 `ol` 在 node 上跑，先过飞书闸门） | node（`node/assistant_runtime.go`，经 `runtime.sock` 的 `mcp.tools` 给运行时） |
 | `mcp/lark/` | `lark_agent_reply`（飞书 /agent 交答案）；`lark_chats`、`lark_messages`、`lark_search`（配了 lark-connector 才有） | 同上 |

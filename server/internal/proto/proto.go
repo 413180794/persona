@@ -792,6 +792,9 @@ const (
 	IxElicitation = "elicitation"
 )
 
+// AnsweredByAssistant marks a resolution the assistant gave for the user (Resolution.AnsweredBy).
+const AnsweredByAssistant = "assistant"
+
 type QuestionOption struct {
 	Label       string `json:"label"`
 	Description string `json:"description,omitempty"`
@@ -882,6 +885,9 @@ type Resolution struct {
 	Message  string            `json:"message,omitempty"`
 	Keys     []string          `json:"keys,omitempty"`
 	Text     string            `json:"text,omitempty"`
+	// AnsweredBy is who answered when it was not the user in the app: AnsweredByAssistant for a question the
+	// assistant answered on their behalf (docs/assistant.md). Absent when the app answered.
+	AnsweredBy string `json:"answered_by,omitempty"`
 	// PreKeys go in before Text (Keys after it): pick "Type something." by its number, type the answer, enter.
 	PreKeys []string `json:"pre_keys,omitempty"`
 	Dismiss bool     `json:"dismiss,omitempty"`

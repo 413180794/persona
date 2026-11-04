@@ -375,11 +375,7 @@ struct QuestionForm: View {
             Divider().padding(.leading, 50)
             otherRow(q)
         }
-        #if os(macOS)
-        .background(Theme.Fill.macOptionsWell, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
-        #else
         .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
-        #endif
     }
 
     private func option(_ q: Question, _ opt: QuestionOption, number: Int) -> some View {

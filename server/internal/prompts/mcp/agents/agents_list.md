@@ -1,5 +1,7 @@
 The Claude Code / Codex agents running on the user's computers (herdr), with their state: needs_you (waiting for an answer / approval), working, unread (finished, result not looked at), idle. Each line has machine, session id, project, title, last update and the last thing the agent said. Much faster and more accurate than ssh + herdr.
 
+A line under an agent is something waiting for the user: a question lists its options and the interaction id to answer it with (interaction_answer), an approval is the user's to give in the app.
+
 ```json
 {
   "type": "object",

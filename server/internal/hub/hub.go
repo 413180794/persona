@@ -247,6 +247,8 @@ type pending struct {
 	// checkedAt / checking bound transcript reads for a plan answered outside Persona.
 	checkedAt time.Time
 	checking  bool
+	// answeredBy is who resolved it (Resolution.AnsweredBy), so the broadcast can say the assistant answered.
+	answeredBy string
 	// codex: a card a node listed for a Codex TUI (codexcards.go); it lasts as long as the node lists it.
 	codex bool
 }
@@ -917,6 +919,9 @@ func (h *Hub) resolve(id string, r proto.Resolution) error {
 	if p != nil && p.local != nil {
 		delete(h.interactions, id) // claimed: a second answer to the same card is not pending any more
 	}
+	if p != nil {
+		p.answeredBy = r.AnsweredBy // read by finished(), under this lock
+	}
 	h.mu.Unlock()
 	if p == nil {
 		return fmt.Errorf("interaction %s is %w", id, errNotPending)
@@ -990,9 +995,16 @@ func (h *Hub) finishInteraction(id string) {
 // finished tells everyone an interaction, already out of the pending set, is over.
 func (h *Hub) finished(p *pending) {
 	id := p.ix.ID
+	h.mu.Lock()
+	answeredBy := p.answeredBy
+	h.mu.Unlock()
 	h.botInteractionDone(p.ix, "已结束")
 	h.channelInteractionDone(p.ix)
-	h.broadcast(map[string]any{"type": "interaction_resolved", "id": id})
+	event := map[string]any{"type": "interaction_resolved", "id": id}
+	if answeredBy != "" {
+		event["answered_by"] = answeredBy // the app marks a question the assistant answered (docs/assistant.md)
+	}
+	h.broadcast(event)
 	if m := h.localMachine(p.ix.MachineID); m != nil {
 		h.broadcastSessions(m, h.decorated(m))
 	}

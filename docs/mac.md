@@ -254,7 +254,10 @@ open ../../build/DerivedDataMac/Build/Products/Debug/Persona.app   # 或直接�
 
 - 设置列表顶上的「体验模式」两项、「服务器」里的「重新配对」「断开并忘记服务器」在 Mac 上是和别的行一样的行（`SettingsButtonLook` 在 Mac 上是 `.plain`），断开 / 退出是红字（#1224 B4）。
 - 体验模式下没有演示数据的页（模型供应商、飞书机器人）在 Mac 上用灰色说明「体验模式没有这部分的演示数据」，不显示红字错误（`LoadProblem`，#1224 A4）。
-- 待查（用户定）：Mac 兼容层的系统填充色（`quaternarySystemFill` 等）用 `withAlphaComponent` 换掉了标签色本来的透明度，比 iPhone 深好几倍（提问卡片的选项区就是这样，#1224 B5 只改了那一处：`Theme.Fill.macOptionsWell`）。
+- 系统填充色（#1169，用户定）：兼容层的 `systemFill`、`secondary/tertiary/quaternarySystemFill`（也就是 `Theme.Fill.pressed` / `chip` / `well`、头像底色）
+  用和 iPhone 一样的值（UIKit 在模拟器里取出来的：浅色 116–120 灰带一点蓝、8 / 12 / 16 / 20%，深色 18 / 24 / 32 / 36%）。原来是标签色的 18–36%，比 iPhone 深两到四倍，
+  chip 和衬底像按下去了。每一档都还比 AppKit 自己同一档的填充（黑 / 白 3–10%）明显，衬底上的次要文字对比度深浅色都比原来高。
+  选中的行不跟着变浅：壳的侧栏、收件箱列表、Persona 栏的会话列表用 `Theme.Fill.macSelected`（还是标签色 18%，接近 AppKit 不在焦点时的选中色），悬停是它的一半。
 
 ## 卡顿怎么量（Mac，#1337）
 

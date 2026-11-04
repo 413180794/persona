@@ -274,7 +274,7 @@ private struct MacHoverRow: ViewModifier {
             .foregroundStyle(Theme.macLabel)
             .environment(\.backgroundProminence, .standard)
             .padding(.horizontal, Theme.Space.xs)
-            .background(selected ? Theme.Fill.well : hovering ? Theme.Fill.macHover : Color.clear,
+            .background(selected ? Theme.Fill.macSelected : hovering ? Theme.Fill.macHover : Color.clear,
                         in: .rect(cornerRadius: Theme.Radius.control))
             .onHover { hovering = $0 }
             .listRowBackground(Theme.pageBackground)

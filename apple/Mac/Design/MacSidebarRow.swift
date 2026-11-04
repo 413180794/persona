@@ -46,7 +46,7 @@ struct MacSidebarRow: View {
             .background {
                 if selected || hovering {
                     RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                        .fill(selected ? Theme.Fill.well : Theme.Fill.macHover)
+                        .fill(selected ? Theme.Fill.macSelected : Theme.Fill.macHover)
                 }
             }
             .contentShape(.rect)
