@@ -695,8 +695,9 @@ hub 管理界面（[admin.md](admin.md)）的「插件」页（`web/src/admin/pa
 不认识的贡献回 `no_contribution`、每个 `ui` 贡献画出来的 View 在它的插槽画得了（见「UI 插槽」「兼容」）、关掉 stdin 后 5 秒内退出。任何语言写的程序用 `conformance.Program(t, path, args…)` 跑，Go 的用 `conformance.Serve`。
 连接器的 `connector/conformance.Check` 对每个连接器两种开头各跑一遍（直接调 / 经协议，结果一字不差）。
 
-外部程序的一个完整例子是微信（wechat-connector）：连接器程序在 wechat-connector 自己的仓库里，不在本仓库，用插件协议 1 加连接器协议 v2 和 hub 说话，
-接入手册见 [wechat-connector.md](wechat-connector.md)。
+外部程序的一个完整例子是微信（wechat-connector）：外部 API 服务 wechat-connector 的连接器插件，不在本仓库，以插件包（`.tar.gz` 加 sha256）交付，
+用 `file:` 安装或在管理界面上传，用插件协议 1 加连接器协议 v2 和 hub 说话。接入手册见 [wechat-connector.md](wechat-connector.md)；
+连接器一侧逐个能力的检查（`CheckProgram`、合成的线上夹具）见 [connector-protocol.md](connector-protocol.md)「一致性测试」。
 
 ## 内置插件：Telegram
 

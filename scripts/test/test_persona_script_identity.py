@@ -402,3 +402,20 @@ sys.exit(2)
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class PrefixParsesInSystemBash(unittest.TestCase):
+    """The --prefix preamble is piped to `ssh host 'bash -s'`; on a Mac hub that is /bin/bash 3.2, which broke on a
+    heredoc inside $(...) ("unexpected EOF while looking for matching `")."""
+
+    @unittest.skipUnless(os.path.exists('/bin/bash'), 'no /bin/bash')
+    def test_prefix_parses_and_resolves(self):
+        with tempfile.TemporaryDirectory() as home:
+            env = {**os.environ, 'HOME': home}
+            out = subprocess.run([sys.executable, str(SCRIPT), '--service', 'hub', '--prefix', '-'],
+                                 check=True, capture_output=True, text=True, env=env).stdout
+            subprocess.run(['/bin/bash', '-n'], input=out, check=True, text=True)
+            got = subprocess.run(['/bin/bash', '-c', 'eval "$(cat)"; printf %s "$PERSONA_HOME"'], input=out,
+                                 check=True, capture_output=True, text=True, env=env).stdout
+            self.assertTrue(got.startswith(home), got)
+

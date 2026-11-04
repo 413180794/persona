@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Resolve runtime state roots without reading build configuration or credentials."""
 import argparse
+import base64
 import glob
 import os
 import pathlib
@@ -324,8 +325,11 @@ def main():
     parser.add_argument("--prefix", metavar="SCRIPT")
     args = parser.parse_args()
     if args.prefix:
-        code = pathlib.Path(__file__).read_text()
-        print("_PERSONA_STATE_DIR=$(python3 - --service " + (args.service or "auto") + (" --prepare" if args.prepare else "") + " <<'PERSONA_STATE_RESOLVER'\n" + code + "\nPERSONA_STATE_RESOLVER\n) || exit $?")
+        # The resolver travels base64-encoded on the python3 -c line: a heredoc inside $(...) breaks macOS's bash 3.2,
+        # which mis-parses the backticks and quotes in the code ("unexpected EOF while looking for matching `").
+        code = base64.b64encode(pathlib.Path(__file__).read_bytes()).decode()
+        print("_PERSONA_STATE_DIR=$(python3 -c \"import base64; exec(base64.b64decode('" + code + "'))\" --service "
+              + (args.service or "auto") + (" --prepare" if args.prepare else "") + ") || exit $?")
         print('export PERSONA_HOME="$_PERSONA_STATE_DIR" JARVIS_HOME="$_PERSONA_STATE_DIR"')
         if args.prefix != "-": print(pathlib.Path(args.prefix).read_text(), end="")
         return
