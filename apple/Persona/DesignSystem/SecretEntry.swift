@@ -77,6 +77,12 @@ private struct SecretTextField: UIViewRepresentable {
         context.coordinator.field = self
         f.accessibilityIdentifier = identifier
         f.tintColor = UIColor(Theme.accent)
+        // `.multilineTextAlignment` as on a SwiftUI field: a form row's value sits on the trailing side.
+        f.textAlignment = switch context.environment.multilineTextAlignment {
+        case .leading: .natural
+        case .center: .center
+        case .trailing: f.effectiveUserInterfaceLayoutDirection == .rightToLeft ? .left : .right
+        }
         if !f.isFirstResponder && !(f.text ?? "").isEmpty { f.text = "" }
         context.coordinator.refresh(f)
     }

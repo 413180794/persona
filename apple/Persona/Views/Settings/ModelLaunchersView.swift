@@ -579,7 +579,8 @@ struct LauncherEditor: View {
         Section {
             TextField("https://…", text: $baseURL)
                 .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-            SecureField(isNew || existing?.hasKey != true ? "API Key" : "API Key（不改就留空）", text: $apiKey)
+            SecretField(isNew || existing?.hasKey != true ? "API Key" : "API Key（不改就留空）", filled: "已填写，点保存",
+                        text: $apiKey, identifier: "launcher.editor.key")
         } header: { Text("网关") } footer: { Text("填写所选协议兼容的地址。Key 加密存在 hub，不会返回到客户端。") }
         Section {
             TextField("默认模型", text: $modelName).textInputAutocapitalization(.never).autocorrectionDisabled()

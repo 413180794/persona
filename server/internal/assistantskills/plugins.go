@@ -107,7 +107,8 @@ func pluginNames(dir string) []string {
 const pluginsCopied = ".persona-plugins" // in the assistant's skills: the plugin skills last copied in, with digests
 
 // installPlugins copies the plugin skills from plugins into dir, except those the user has their own of; one copied
-// before and no longer there is removed.
+// before and no longer there is removed. The stamp (pluginsCopied) lists only skills that really are copies in dir:
+// one a user's link holds is left out, so it is copied once the user's goes (#1635).
 func installPlugins(dir, plugins string, mine []string) error {
 	var want []string
 	for _, n := range pluginNames(plugins) {
@@ -120,7 +121,10 @@ func installPlugins(dir, plugins string, mine []string) error {
 	line := strings.Join(want, ",")
 	stampFile := filepath.Join(dir, pluginsCopied)
 	old, _ := os.ReadFile(stampFile)
-	if strings.TrimSpace(string(old)) == line {
+	if strings.TrimSpace(string(old)) == line && slices.IndexFunc(want, func(w string) bool {
+		n, _, _ := strings.Cut(w, "=")
+		return !isCopy(filepath.Join(dir, n))
+	}) < 0 {
 		return nil
 	}
 	for _, entry := range strings.Split(strings.TrimSpace(string(old)), ",") {
@@ -128,17 +132,27 @@ func installPlugins(dir, plugins string, mine []string) error {
 		if n == "" || slices.ContainsFunc(want, func(w string) bool { return strings.HasPrefix(w, n+"=") }) {
 			continue
 		}
-		if st, err := os.Lstat(filepath.Join(dir, n)); err == nil && st.IsDir() {
+		if isCopy(filepath.Join(dir, n)) {
 			_ = os.RemoveAll(filepath.Join(dir, n))
 		}
 	}
+	var copied []string
 	for _, w := range want {
 		n, _, _ := strings.Cut(w, "=")
 		if err := copyDir(filepath.Join(plugins, n), filepath.Join(dir, n)); err != nil {
 			return err
 		}
+		if isCopy(filepath.Join(dir, n)) { // not when a user's link holds the name
+			copied = append(copied, w)
+		}
 	}
-	return os.WriteFile(stampFile, []byte(line+"\n"), 0o644)
+	return os.WriteFile(stampFile, []byte(strings.Join(copied, ",")+"\n"), 0o644)
+}
+
+// isCopy: p is a directory of its own, not a link.
+func isCopy(p string) bool {
+	st, err := os.Lstat(p)
+	return err == nil && st.IsDir()
 }
 
 // copyDir replaces to with a copy of from.
@@ -171,8 +185,11 @@ func copyDir(from, to string) error {
 		return err
 	}
 	if st, err := os.Lstat(to); err == nil && st.Mode()&os.ModeSymlink != 0 {
-		_ = os.RemoveAll(tmp)
-		return nil // the user's link: theirs wins
+		if _, err := os.Stat(to); err == nil {
+			_ = os.RemoveAll(tmp)
+			return nil // the user's link: theirs wins
+		}
+		_ = os.Remove(to) // a link to a user's skill that is gone: the plugin's takes the name
 	}
 	_ = os.RemoveAll(to)
 	return os.Rename(tmp, to)

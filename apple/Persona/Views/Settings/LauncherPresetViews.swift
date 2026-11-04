@@ -30,8 +30,7 @@ struct LauncherPresetSections: View {
             }
         }
         Section {
-            SecureField("API Key", text: $model.apiKey)
-                .accessibilityIdentifier("launcher.preset.key")
+            SecretField("API Key", filled: "已填写，点保存", text: $model.apiKey, identifier: "launcher.preset.key")
         } header: {
             Text("Key")
         } footer: {

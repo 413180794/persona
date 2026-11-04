@@ -34,7 +34,7 @@ final class SSHTunnelPairingTests: XCTestCase {
         XCTAssertTrue(address.waitForExistence(timeout: 10))
         address.tap()
         address.typeText(env["HUB_URL"]!)
-        let token = app.secureTextFields["Token"]
+        let token = app.secureTextFields["pair.token"]
         token.tap()
         token.typeText(env["HUB_TOKEN"]!)
 

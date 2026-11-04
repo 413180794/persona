@@ -63,3 +63,39 @@ func TestPluginSkills(t *testing.T) {
 		t.Fatal("a file that leaves the skill")
 	}
 }
+
+// The user's own skill of a plugin skill's name goes (moved away): the plugin's takes the name at the next sync and
+// stays there, whatever was recorded before (#1635).
+func TestPluginSkillAfterTheUsersGoes(t *testing.T) {
+	plugins, user, dir := t.TempDir(), t.TempDir(), t.TempDir()
+	t.Setenv("JARVIS_PLUGIN_SKILLS_DIR", plugins)
+	t.Setenv("PERSONA_PLUGIN_SKILLS_DIR", plugins)
+	sk := PluginSkill{Name: "example-feed", Plugin: "example", Digest: "d1", Files: map[string][]byte{"SKILL.md": []byte("plugin\n")}}
+	if _, err := ApplyPlugins(plugins, []PluginSkill{sk}); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.MkdirAll(filepath.Join(user, "example-feed"), 0o755)
+	_ = os.WriteFile(filepath.Join(user, "example-feed", "SKILL.md"), []byte("mine\n"), 0o644)
+	if err := Sync(dir, user, nil, t.Logf); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Join(user, "example-feed")); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := Sync(dir, user, nil, t.Logf); err != nil {
+			t.Fatal(err)
+		}
+		if b, _ := os.ReadFile(filepath.Join(dir, "example-feed", "SKILL.md")); string(b) != "plugin\n" {
+			t.Fatalf("sync %d: the plugin's skill is not there (%q)", i, b)
+		}
+	}
+	// A stamp that says it was copied while it is not: copied again.
+	_ = os.RemoveAll(filepath.Join(dir, "example-feed"))
+	if err := Sync(dir, user, nil, t.Logf); err != nil {
+		t.Fatal(err)
+	}
+	if !isCopy(filepath.Join(dir, "example-feed")) {
+		t.Fatal("a stamp without its directory stopped the copy")
+	}
+}

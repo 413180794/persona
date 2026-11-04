@@ -509,6 +509,18 @@ struct ConnectorSignInSteps: View {
     @ViewBuilder private func input(_ f: ConnectorPrompt.Field) -> some View {
         let text = Binding(get: { model.values[f.name] ?? "" }, set: { model.values[f.name] = $0 })
         let prompt = Text(f.placeholder ?? f.label)
+        #if os(iOS)
+        if f.secret == true {
+            // A token, an API hash, another service's password: never offered to the system's passwords (#1598).
+            SecretField(f.placeholder ?? f.label, filled: "已填写", text: text, identifier: "connector.field." + f.name)
+        } else {
+            TextField(f.label, text: text, prompt: prompt)
+                .keyboardType(Self.keyboard(f.name))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .accessibilityIdentifier("connector.field." + f.name)
+        }
+        #else
         Group {
             if f.secret == true {
                 SecureField(f.label, text: text, prompt: prompt)
@@ -520,6 +532,7 @@ struct ConnectorSignInSteps: View {
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled()
         .accessibilityIdentifier("connector.field." + f.name)
+        #endif
     }
 
     /// Whether a field's label and placeholder together are wider than a phone's row holds on one line, in widths of a

@@ -88,8 +88,8 @@ struct FeishuBotView: View {
             TextField("App ID", text: $model.appID)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                 .font(Theme.Font.code)
-            SecureField(model.status?.hasSecret == true ? "App Secret（已保存，留空不改）" : "App Secret", text: $model.appSecret)
-                .textInputAutocapitalization(.never).autocorrectionDisabled()
+            SecretField(model.status?.hasSecret == true ? "App Secret（已保存，留空不改）" : "App Secret", filled: "已填写，点验证并保存",
+                        text: $model.appSecret, identifier: "bot.appSecret")
             #endif
             Picker("平台", selection: $model.domain) {
                 Text("飞书").tag("feishu")

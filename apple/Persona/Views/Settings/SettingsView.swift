@@ -768,9 +768,9 @@ struct PairView: View {
                     SecureField("Token", text: $token, prompt: Text("配对链接里的 token"))
                     #else
                     TextField("服务器地址", text: $url).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    // A one-time credential, not a password: iOS would otherwise offer to save it as one ("Save
-                    // Password?") the moment the page moves on, e.g. to 经 SSH 隧道连接.
-                    SecureField("Token", text: $token).textContentType(.oneTimeCode)
+                    // A one-time credential, not a password: beside the address it looks like a login form, and iOS
+                    // would offer to save it as one ("Save Password?") once the sheet goes (#1598).
+                    SecretField("Token", filled: "已填写，点连接", text: $token, identifier: "pair.token")
                     #endif
                 }
                 Section {

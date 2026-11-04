@@ -548,7 +548,9 @@ struct AddMailAccountView: View {
                 } else {
                     Section {
                         TextField("邮箱地址", text: $form.email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        SecureField("密码 / 授权码", text: $form.password)
+                        // The mail server's password or a code made for one client, handed to the hub (kept there,
+                        // encrypted): not this app's password, so not offered to the system's passwords (#1598).
+                        SecretField("密码 / 授权码", filled: "已填写，点连接", text: $form.password, identifier: "mail.password")
                     } footer: {
                         switch form.kind {
                         case .gmail, .outlook: EmptyView()

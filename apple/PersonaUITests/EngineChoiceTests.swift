@@ -137,14 +137,16 @@ final class EngineChoiceTests: XCTestCase {
         XCTAssertTrue(address.waitForExistence(timeout: 10))
         address.tap()
         address.typeText(hub)
-        app.secureTextFields["Token"].tap()
-        app.secureTextFields["Token"].typeText("mock")
+        app.secureTextFields["pair.token"].tap()
+        app.secureTextFields["pair.token"].typeText("mock")
         app.navigationBars.buttons["连接"].tap()
         XCTAssertTrue(app.buttons["engine.save"].waitForExistence(timeout: 15))
         // Never chosen: herdr is preselected; confirming saves it.
         XCTAssertTrue(app.buttons["engine.option.herdr"].isSelected)
         confirmEngine()
         pairedRoot()
+        // The address beside the token looked like a login: iOS must not offer to save the token (#1598).
+        PasswordPrompt.assertNone(app, "the pairing token")
         XCTAssertEqual(try current("server"), "herdr")
     }
 

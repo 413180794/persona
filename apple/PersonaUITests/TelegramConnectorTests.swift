@@ -96,6 +96,8 @@ final class TelegramConnectorTests: XCTestCase {
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "api_id 1234567")).firstMatch.exists, "no api_id")
         XCTAssertFalse(any["connector.signIn"].exists)
         shot(app, "signed-in")
+        // api_id beside the hidden api_hash, then the two-step password: none of it is offered to Passwords (#1598).
+        PasswordPrompt.assertNone(app, "Telegram's api_hash and password")
 
         logout.tap()
         // Once the dialog is up (its title), its own 退出登录 (an action sheet or a popover, by size), not the row's.

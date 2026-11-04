@@ -3,7 +3,7 @@
 // answering 502/503/504) is sent again with the same id when the socket is back, or after a short wait, for up to a
 // minute before the caller shows its failure.
 import { api, ApiError } from "./api";
-import { uuid } from "./format";
+import { isUUID, uuid } from "./format";
 import { onHubEvent } from "./store";
 
 export const OP_HEADER = "X-Jarvis-Op-Id";
@@ -65,7 +65,9 @@ export function apiOp<T>(path: string, init: Parameters<typeof api>[1] & { opId?
   const { opId = uuid(), ...rest } = init;
   return untilDelivered(() => {
     const headers = new Headers(rest.headers);
-    headers.set(OP_HEADER, opId);
+    // an id made before #1651 (a message still in the outbox) is no UUID: the hub would refuse it; client_msg_id
+    // still keeps a message from going twice
+    if (isUUID(opId)) headers.set(OP_HEADER, opId);
     return api<T>(path, { ...rest, headers });
   }, clock);
 }

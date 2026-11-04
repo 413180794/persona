@@ -1017,7 +1017,8 @@ struct ScreenForm: View {
         HStack {
             Group {
                 if interaction.secret == true {
-                    SecureField("输入密码（不会保存）", text: $text)
+                    // A password the terminal asks for (sudo, ssh): typed once, never offered to the system's passwords.
+                    SecretField("输入密码（不会保存）", filled: "已填写，点发送", text: $text, identifier: "terminal.secret")
                 } else {
                     TextField("输入文字发送到终端", text: $text)
                 }
@@ -1032,6 +1033,7 @@ struct ScreenForm: View {
             } label: { Image(systemName: Theme.Icon.enter) }
                 .themedButton(prominent: true)
                 .disabled(text.isEmpty)
+                .accessibilityIdentifier("terminal.send")
         }
     }
 
@@ -1482,7 +1484,8 @@ struct BUIScreenForm: View {
         HStack {
             Group {
                 if interaction.secret == true {
-                    SecureField("输入密码（不会保存）", text: $text)
+                    // A password the terminal asks for (sudo, ssh): typed once, never offered to the system's passwords.
+                    SecretField("输入密码（不会保存）", filled: "已填写，点发送", text: $text, identifier: "terminal.secret")
                 } else {
                     TextField("输入文字发送到终端", text: $text)
                 }
@@ -1497,6 +1500,7 @@ struct BUIScreenForm: View {
             } label: { Image(systemName: Theme.Icon.enter) }
                 .themedButton(prominent: true)
                 .disabled(text.isEmpty)
+                .accessibilityIdentifier("terminal.send")
         }
     }
 

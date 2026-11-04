@@ -88,6 +88,8 @@ final class ChannelSettingsTests: XCTestCase {
         XCTAssertTrue(app.buttons["channel-unbind"].exists, "bound: 解除绑定:\n\(app.debugDescription)")
         XCTAssertTrue(text(app, containing: "示例机器人").waitForExistence(timeout: 5), "the account:\n\(app.debugDescription)")
         shot(app, "bound")
+        // The token's field has gone: iOS must not offer to save the token as a password (#1598).
+        PasswordPrompt.assertNone(app, "a channel's token")
     }
 
     /// The Feishu bot unbound, then bound again with its pairing code (the mock pairs it after a few asks).

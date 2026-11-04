@@ -29,6 +29,8 @@ final class PermissionInputUITests: XCTestCase {
                 let resolution = row["resolution"] as? [String: Any]
                 XCTAssertEqual(resolution?["allow"] as? Bool, true)
                 XCTAssertEqual((resolution?["values"] as? [String: String])?["password"], "example-password")
+                // The card goes once answered: iOS must not offer to save the value as a password (#1598).
+                PasswordPrompt.assertNone(app, "a permission form's secret field")
                 return
             }
             Thread.sleep(forTimeInterval: 0.1)

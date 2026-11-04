@@ -20,6 +20,8 @@ function fakeClock(): RetryClock & { waits: number[] } {
   };
 }
 
+const OP = "0b6c1c9e-4f1a-4c3b-9d2e-7a5f8e1d2c3b";
+
 beforeEach(() => vi.stubGlobal("localStorage", { getItem: () => "tok" }));
 afterEach(() => vi.unstubAllGlobals());
 
@@ -44,10 +46,10 @@ describe("a write through a gap", () => {
       .mockResolvedValueOnce(response({ ok: true }));
     vi.stubGlobal("fetch", fetcher);
     const clock = fakeClock();
-    await expect(apiOp("/interactions/i1/resolve", { method: "POST", opId: "op-1", json: { answer: "yes" } }, clock)).resolves.toEqual({ ok: true });
+    await expect(apiOp("/interactions/i1/resolve", { method: "POST", opId: OP, json: { answer: "yes" } }, clock)).resolves.toEqual({ ok: true });
     expect(fetcher).toHaveBeenCalledTimes(3);
     const ids = fetcher.mock.calls.map((c) => (c[1].headers as Headers).get(OP_HEADER));
-    expect(ids).toEqual(["op-1", "op-1", "op-1"]);
+    expect(ids).toEqual([OP, OP, OP]);
     expect(fetcher.mock.calls.every((c) => c[1].body === JSON.stringify({ answer: "yes" }))).toBe(true);
     expect(clock.waits).toEqual([500, 1000]);
   });
@@ -65,10 +67,10 @@ describe("a write through a gap", () => {
     const fetcher = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
     vi.stubGlobal("fetch", fetcher);
     const clock = fakeClock();
-    await expect(apiOp("/x", { method: "POST", opId: "op-2" }, clock)).rejects.toBeInstanceOf(TypeError);
+    await expect(apiOp("/x", { method: "POST", opId: "5d1e2f3a-6b7c-4d8e-9f0a-1b2c3d4e5f6a" }, clock)).rejects.toBeInstanceOf(TypeError);
     expect(clock.now()).toBe(OP_RETRY_MS);
     expect(clock.waits.slice(0, 4)).toEqual([500, 1000, 2000, 4000]);
-    expect(new Set(fetcher.mock.calls.map((c) => (c[1].headers as Headers).get(OP_HEADER)))).toEqual(new Set(["op-2"]));
+    expect(new Set(fetcher.mock.calls.map((c) => (c[1].headers as Headers).get(OP_HEADER)))).toEqual(new Set(["5d1e2f3a-6b7c-4d8e-9f0a-1b2c3d4e5f6a"]));
   });
 
   it("does not retry an answer from the hub", async () => {
@@ -77,5 +79,24 @@ describe("a write through a gap", () => {
     await expect(untilDelivered(run, clock)).rejects.toBeInstanceOf(ApiError);
     expect(run).toHaveBeenCalledTimes(1);
     expect(clock.waits).toEqual([]);
+  });
+});
+
+describe("op ids the hub takes (#1651)", () => {
+  it("are UUIDs even where crypto.randomUUID is missing (a hub opened over plain http)", async () => {
+    const { uuid, isUUID } = await import("./format");
+    const real = globalThis.crypto;
+    vi.stubGlobal("crypto", { getRandomValues: (a: Uint8Array) => real.getRandomValues(a) });
+    const ids = Array.from({ length: 50 }, () => uuid());
+    expect(ids.every((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id))).toBe(true);
+    expect(new Set(ids).size).toBe(50);
+    expect(isUUID("18f2a3b4c5d-9e8f7a6b5c4d")).toBe(false);
+  });
+
+  it("an id that is no UUID (an old outbox entry) goes without the header instead of being refused", async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(response({ ok: true }));
+    vi.stubGlobal("fetch", fetcher);
+    await apiOp("/sessions/m/s/messages", { method: "POST", opId: "18f2a3b4c5d-9e8f7a6b5c4d", json: { text: "hi" } }, fakeClock());
+    expect((fetcher.mock.calls[0][1].headers as Headers).has(OP_HEADER)).toBe(false);
   });
 });

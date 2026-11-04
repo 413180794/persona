@@ -21,7 +21,10 @@ struct PermissionInputForm: View {
                     Text(field.label).font(Theme.Font.labelStrong)
                     Group {
                         if field.secret == true {
-                            SecureField(field.placeholder ?? field.label, text: binding(field.key))
+                            // A key or a password handed to the Agent, not this app's: never offered to the system's
+                            // passwords (#1598).
+                            SecretField(field.placeholder ?? field.label, filled: "已填写", text: binding(field.key),
+                                        identifier: "interaction.field." + field.key)
                         } else {
                             TextField(field.placeholder ?? field.label, text: binding(field.key))
                         }
