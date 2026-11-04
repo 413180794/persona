@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -14,6 +15,9 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/github"
 	"github.com/nwverse/persona/server/internal/connector/imessage"
+	"github.com/nwverse/persona/server/internal/connector/proc"
+	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/extension/host"
 	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -177,18 +181,14 @@ func TestConnectorsEndpoint(t *testing.T) {
 	}
 }
 
-// What GET /api/v1/connectors?all=1 says each built-in connector can do (the app goes by these names). Telegram's
-// program has never run here: it lists what it declares (#666).
+// What GET /api/v1/connectors?all=1 says each built-in connector can do (the app goes by these names).
 func TestConnectorsListTheSameCapabilities(t *testing.T) {
 	h := newTestHub(t)
 	h.mail = (*mail.Service)(nil)
 	h.connectors = connector.NewRegistry(nil)
 	h.registerConnectors()
-	for _, c := range []connector.Connector{imessage.NewRemote(imessage.Config{Machine: "mac"}, "Mac", nil),
-		h.telegramConnector("/nonexistent")} {
-		if err := h.addConnector(c); err != nil {
-			t.Fatal(err)
-		}
+	if err := h.addConnector(imessage.NewRemote(imessage.Config{Machine: "mac"}, "Mac", nil)); err != nil {
+		t.Fatal(err)
 	}
 	var got []string
 	for _, info := range h.listedConnectors(context.Background(), true) {
@@ -198,7 +198,6 @@ func TestConnectorsListTheSameCapabilities(t *testing.T) {
 		"mail tools,actions,archive hosts=[] options=false",
 		"github status,tools,actions,events,hosts,inbox,archive,login,options,threads hosts=[github.com] options=true",
 		"imessage status,tools,events,inbox,archive hosts=[] options=false",
-		"telegram status,tools,actions,events,inbox,archive,login,threads hosts=[] options=false", // actions: the tg CLI's writes; threads: #1054
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("got\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
@@ -211,25 +210,54 @@ func TestConnectorsListTheSameCapabilities(t *testing.T) {
 	}
 }
 
-// Telegram switched off from the start, its program never run: it can still be signed in to (the hub says to switch
-// it on first) and out of (the program would run just for that; here it is not there), never "has no sign-in" (#666).
+// programConnector is a built-in plugin's connector whose program is at path, as the hub registers one (Telegram's
+// was, until #1704): known from what it declares before the program ever runs.
+func programConnector(t *testing.T, h *Hub, item extension.ConnectorItem, path string) *proc.Conn {
+	t.Helper()
+	items, _ := json.Marshal([]extension.ConnectorItem{item})
+	m := &extension.Manifest{ManifestVersion: extension.ManifestVersion, ID: item.ID, Name: item.Name, Version: h.version,
+		Engines: extension.Engines{ExtensionProtocol: extension.Protocol}, Runtime: &extension.Runtime{Command: extension.Command{Path: filepath.Base(path)}},
+		Contributes: map[string]json.RawMessage{"connectors": items}}
+	ps := newExtensions(h.dataDirOrTemp(), nil, h.logf)
+	ps.h, ps.ctx = h, context.Background()
+	if err := ps.reg.AddBuiltin(m, filepath.Dir(path), true); err != nil {
+		t.Fatal(err)
+	}
+	hp := &hubExtension{id: item.ID}
+	s, err := ps.spec(context.Background(), ps.reg.Get(item.ID), hp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pr := host.Start(context.Background(), s)
+	t.Cleanup(pr.Stop)
+	for _, l := range hp.links {
+		l.Proc = pr
+	}
+	return hp.conns[0]
+}
+
+// A program's connector switched off from the start, its program never run: it can still be signed in to (the hub
+// says to switch it on first) and out of (the program would run just for that; here it is not there), never "has no
+// sign-in" (#666).
 func TestSwitchedOffProgramSignsInAndOut(t *testing.T) {
 	h := newTestHub(t)
 	h.connectors = connector.NewRegistry(nil)
-	if err := h.addConnectorOff(h.telegramConnector("/nonexistent/jarvisd-telegram")); err != nil {
+	item := extension.ConnectorItem{ID: "examplechat", Name: "Example Chat", Kinds: []string{"dm"},
+		Capabilities: []string{"status", "tools", "actions", "events", "inbox", "archive", "login", "threads"}}
+	if err := h.addConnectorOff(programConnector(t, h, item, "/nonexistent/example-chat")); err != nil {
 		t.Fatal(err)
 	}
 	h.restoreConnectorSwitches(context.Background())
-	if h.connectors.Enabled("telegram") {
-		t.Fatal("telegram is on")
+	if h.connectors.Enabled("examplechat") {
+		t.Fatal("examplechat is on")
 	}
 	mux := h.routes()
-	code, out := call(t, mux, "POST", "/api/v1/connectors/telegram/login", h.cfg.Token, `{"step":""}`)
+	code, out := call(t, mux, "POST", "/api/v1/connectors/examplechat/login", h.cfg.Token, `{"step":""}`)
 	if code != 200 || !strings.Contains(fmt.Sprint(out["error"]), "先打开") {
 		t.Fatalf("login: %d %v", code, out)
 	}
-	code, out = call(t, mux, "POST", "/api/v1/connectors/telegram/logout", h.cfg.Token, `{}`)
-	if code == http.StatusConflict || !strings.Contains(fmt.Sprint(out["error"]), "没有找到") {
+	code, out = call(t, mux, "POST", "/api/v1/connectors/examplechat/logout", h.cfg.Token, `{}`)
+	if code == http.StatusConflict || out["error"] == nil {
 		t.Fatalf("logout: %d %v", code, out)
 	}
 	_, out = call(t, mux, "GET", "/api/v1/connectors", h.cfg.Token, "")

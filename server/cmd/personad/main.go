@@ -27,7 +27,6 @@ import (
 	"github.com/nwverse/persona/server/internal/office"
 	"github.com/nwverse/persona/server/internal/relay"
 	"github.com/nwverse/persona/server/internal/sysmon"
-	"github.com/nwverse/persona/server/internal/tgcli"
 	"github.com/nwverse/persona/server/internal/toolcli"
 	"github.com/nwverse/persona/server/internal/tunnel"
 	"github.com/nwverse/persona/server/internal/update"
@@ -84,7 +83,6 @@ const usage = `usage:
                            with another's home directory, which hubs would take for that one (docs/mesh.md)
   personad hook             Claude Code hook entry (reads hook JSON on stdin)
   personad mcp              Claude Code MCP server (stdio)
-  personad tg …             the user's Telegram through the hub, for the assistant (the telegram skill): personad tg --help
   personad office docx|pptx|xlsx|check …
                            write a Word document or a deck from Markdown, a workbook from JSON / CSV, or say what is in
                            one (the office skill): personad office --help
@@ -229,8 +227,6 @@ func main() {
 		err = relay.Run(ctx, path)
 	case "mcp":
 		err = mcpserver.Serve(ctx, version, os.Stdin, os.Stdout)
-	case "tg":
-		os.Exit(tgcli.Main(ctx, os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
 	case "tool": // a connector's tools and command line from the assistant's shell (internal/toolcli)
 		os.Exit(toolcli.Main(ctx, os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
 	case "office":

@@ -11,7 +11,7 @@ ANDROID_TARGET = '{http://schemas.android.com/apk/res/android}targetActivity'
 
 class PersonaIdentifiersTest(unittest.TestCase):
     def test_old_go_commands_share_the_new_source(self):
-        for old, new in (('jarvisd', 'personad'), ('jarvisd-telegram', 'personad-telegram'), ('jarvisd-wechat', 'personad-wechat')):
+        for old, new in (('jarvisd', 'personad'), ('jarvisd-wechat', 'personad-wechat')):
             legacy = ROOT / 'server/cmd' / old
             target = ROOT / 'server/cmd' / new
             self.assertTrue(legacy.is_symlink())

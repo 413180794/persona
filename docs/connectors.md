@@ -10,7 +10,7 @@
   **2026-11-03 已拍板**（结果在第四部分，正文已按拍板改好）；V1、V3–V6 已做完，V2、V7 决定不做，v2 已收尾。
 - **三、迁移顺序**，**四、拍板结果**。
 
-过程和历史（为什么这样拆、每一步的验收）在 `docs/plan-connectors.md`；Telegram 的在 `docs/plan-telegram.md`。
+过程和历史（为什么这样拆、每一步的验收）在 `docs/plan-connectors.md`；Telegram 的在 `docs/archive/plan-telegram.md`（2026-11-05 起它是私有扩展，#1704）。
 
 ## 一、现在的样子（v1）
 
@@ -20,7 +20,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `github` | GitHub | hub 里（`connector/github`） | `Archive`（`updated_at` 游标） | 有，规则定档 + 降噪（`rules.go`） | `github_search/read/diff/checks` | `github_comment`、`github_review`（过闸门） | 读某台电脑上 `gh` 的登录（`credential.gh_token`） |
 | `imessage` | 信息 | 读在 Mac 的 node 上，hub 里是个转 RPC 的适配（`connector/imessage`） | `Archive`（ROWID） | 有 | `imessage_chats/read/search` | 没有 | 没有（给 Mac 上的 personad 完全磁盘访问权限） |
-| `telegram` | Telegram | 单独的程序 `jarvisd-telegram`，hub 经 stdin / stdout 调（`connector/proc` + `connector/serve`） | `Archive` | 有 | 只读工具；`tg` 命令行的读（`Unlisted`） | `telegram_send/forward/react/mark_read`（`tg` 命令行，`Unlisted`，过闸门） | `Login` 分步（手机号、验证码、两步验证密码），会话加密存 `connector_secrets` |
+| `telegram` | Telegram | 私有扩展市场里的扩展 `telegram`（#1704，代码不在本仓库），hub 经插件协议调（`connector/proc`） | `Archive` | 有 | 只读工具；`tg` 命令行的读（`Unlisted`） | `telegram_send/forward/react/mark_read`（`tg` 命令行，`Unlisted`，过闸门） | `Login` 分步（手机号、验证码、两步验证密码），会话加密存 `connector_secrets` |
 | `wechat` | 微信 | 内置插件的单独程序 `jarvisd-wechat`（`docs/wechat.md`）：微信里的机器人，不是数据来源，是渠道（`docs/channels.md`）；连接器只管绑定和状态 | 没有 | 没有 | 没有 | 没有 | `Login` 扫码（`kind: qr`），token 加密存 `connector_secrets` |
 | `lark` | 飞书 | hub 里（`hub/lark_connector.go`，包住原来的 lark-connector 代码） | `Chats`（每个会话一个游标）+ `Items`（文档、会议、日程） | hub 自己的收件箱块（`inbox_own.go`） | `lark_chats/messages/search` | 走 lark-connector skill + node 的 Bash 闸门（规则见下） | 在 hub 机器的 lark-connector 里登录 |
 | `mail` | 邮件 | hub 里（`hub/mail_connector.go`） | `Archive`（每个账号的 UID） | hub 自己的收件箱块 | `mail_accounts/search/read` | `mail_send`（过闸门） | 自己的接口：密码 / Gmail、Outlook 的 OAuth（`/api/v1/mail/…`） |
@@ -34,7 +34,7 @@
 | `Capabilities` | 有类型的能力（`CapStatus`、`CapTools`、`CapActions`、`CapEvents`、`CapInbox`、`CapSettle`、`CapArchive`、`CapChats`、`CapItems`、`CapLogin`、`CapOptions`），每个对应一个接口 |
 | `Hosts` | 链接所在的主机名（App 认链接） |
 | `AgentTools` | 哪些工具也给 Agent（不只给助手），按名字的通配（邮件是 `mail_*`） |
-| `Unlisted` | 哪些工具和写操作不进模型的工具列表，按名字的通配：连接器自己的前端按名字调（Telegram 的 `tg` 命令行和 skill，`docs/plan-telegram.md`「tg 命令行」）。不是权限 |
+| `Unlisted` | 哪些工具和写操作不进模型的工具列表，按名字的通配：连接器自己的前端按名字调（Telegram 扩展的 `tg` 命令行和 skill，`docs/connector-protocol.md`「命令行」）。不是权限 |
 | `ConfirmAlways` | 哪些写操作永远要用户在手机上确认，按名字的通配（可选）：`connector_gate` 里命中它的 `allow` 规则被钳成 `confirm`，`deny` 不变（见「闸门」）。插件清单里写 `confirm_always` |
 | `Poll` | 多久问一次 `Archive`（0 是 hub 的默认；邮件 6 分钟） |
 | `Kinds` | 收件箱条目的种类；每个种类在 `prompts/inbox/kinds/<id>.md` 里要有自己的说明（`connector.CheckKinds`，各连接器的 `TestKindsAreDescribed`），收到没声明的种类记一行日志 |
@@ -62,11 +62,11 @@ hub 收到不认识的档就丢掉、交给模型分拣。
 ### 三种跑法
 
 - **在 hub 里**：Go 代码直接实现接口。
-- **子进程**（`connector/proc` ↔ `connector/serve`）：第一方、只是依赖太大不想编进 personad 的（Telegram 的 gotd）。hub 起程序，stdin / stdout 上跑 hub↔node 那套
+- **子进程**（`connector/proc` ↔ `connector/serve`）：第一方、只是依赖太大不想编进 personad 的（Telegram 的 gotd；#1704 起 Telegram 是扩展，走插件协议）。hub 起程序，stdin / stdout 上跑 hub↔node 那套
   JSON-lines RPC（`internal/rpc`），方法一一对应接口（`serve.go` 的 `init`、`status`、`archive.changes`、`inbox.collect`、`tools.call`……），
-  程序反过来调 hub 的 `secrets.*`。hub 注册时就给 `proc.Conn` 一份静态的清单（`proc.Config.Manifest`；Telegram 的在不依赖 gotd 的
-  `connector/telegram/spec`，程序和 hub 共用），所以从没启动过、默认关着的连接器也报得出能力、能登录和退出（#666）；`init` 回的程序清单
-  （`serve.Manifest`，线上的字段是 snake_case）拿来核对，不一致记日志、仍用静态的。程序必须和 hub 同一次构建（`version -v` 一字不差）；协议有版本号（v2，`docs/connector-protocol.md`）。
+  程序反过来调 hub 的 `secrets.*`。hub 注册时就给 `proc.Conn` 一份静态的清单（`proc.Config.Manifest`；插件的来自它的
+  `persona-plugin.json`），所以从没启动过、默认关着的连接器也报得出能力、能登录和退出（#666）；`init` 回的程序清单
+  （`serve.Manifest`，线上的字段是 snake_case）拿来核对，不一致记日志、仍用静态的。内置插件的程序（微信机器人）必须和 hub 同一次构建（`version -v` 一字不差）；协议有版本号（v2，`docs/connector-protocol.md`）。
 - **node 中转**：数据只在某台 Mac 上（`chat.db`）。node 上有一个读本地数据的 `Reader`，hub 经 node 的 RPC（`connector.list/chats/older/changes/search`，
   `node/node.go` 里写死的 5 个方法）去读，hub 一侧的 `imessage.Remote` 才是连接器。
 

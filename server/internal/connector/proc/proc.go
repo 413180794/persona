@@ -1,8 +1,8 @@
 // Package proc is a connector that runs in a program of its own (connector/serve) and answers for it in the hub. It
 // implements every capability and declares what the program said it has (a proxy's manifest): the hub uses only
 // those. The program is either a plugin's, run by the plugin host (Config.Link: the hub's way, docs/plugins.md), or
-// started here with the connector protocol's own opening (Config.Path). jarvisd-telegram is one: its dependencies
-// would double jarvisd's size (docs/plan-telegram.md).
+// started here with the connector protocol's own opening (Config.Path). The Telegram extension is one (#1704): its
+// dependencies would double jarvisd's size (docs/archive/plan-telegram.md).
 package proc
 
 import (

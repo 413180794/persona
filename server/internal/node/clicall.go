@@ -13,14 +13,10 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The tg CLI (internal/tgcli, the telegram skill) reaches the hub through the node's socket like the MCP server, but
-// the node, not the caller, says whether the assistant is asking: only a process the node started for the assistant,
+// A connector's command line (personad tool, internal/toolcli) reaches the hub through the node's socket like the MCP
+// server, but the node, not the caller, says whether the assistant is asking: only a process the node started for the assistant,
 // or one of its descendants (its Bash tool), gets the assistant's tools. Any other caller (an agent, a program run by
 // hand) is refused; so is a system where the other end of a socket cannot be known.
-
-// cliPrefix is what the built-in tg (personad tg) may call: Telegram's tools and actions (the hub's gate still decides
-// each write). personad tool may call the tools of the connectors signed in (mayCall).
-const cliPrefix = "telegram_"
 
 // ancestorsMost bounds the walk up the process tree.
 const ancestorsMost = 64
@@ -58,15 +54,12 @@ func (n *Node) assistantOf(pid int, parent func(int) (int, error)) (string, bool
 }
 
 // mayCall says whether the command lines may call tool: one of a connector signed in as of the last
-// assistant.prepare ("<id>_…", the connector's own tools and its <id>_cli), or Telegram's (the built-in tg).
+// assistant.prepare ("<id>_…", the connector's own tools and its <id>_cli).
 func (n *Node) mayCall(tool string) bool {
-	if strings.HasPrefix(tool, cliPrefix) {
-		return true
-	}
 	return slices.ContainsFunc(n.signedInConnectors(), func(id string) bool { return strings.HasPrefix(tool, id+"_") })
 }
 
-// cliCall runs one of the command lines' calls (personad tg, personad tool) on the hub as the assistant's, or refuses
+// cliCall runs one of the command lines' calls (personad tool) on the hub as the assistant's, or refuses
 // it.
 func (n *Node) cliCall(ctx context.Context, c net.Conn, req sockRequest) proto.ToolResult {
 	if !n.mayCall(req.Name) {
@@ -95,7 +88,7 @@ func (n *Node) signedInConnectors() []string {
 }
 
 // syncAssistantSkills puts the assistant's skills in its directory (cwd): the user's, and the built-in ones whose
-// connector is signed in; tg is on the assistant's PATH while Telegram is. A runtime's directory (.agents/skills) is
+// connector is signed in; a connector's command line is on the assistant's PATH while it is. A runtime's directory (.agents/skills) is
 // kept the same once it is there.
 func (n *Node) syncAssistantSkills(cwd string) {
 	conns := n.signedInConnectors()
@@ -108,7 +101,7 @@ func (n *Node) syncAssistantSkills(cwd string) {
 			n.logger.Printf("assistant: skills: %v", err)
 		}
 	}
-	n.writeCLIs(n.connectorCLIs(), slices.Contains(conns, "telegram"))
+	n.writeCLIs(n.connectorCLIs())
 }
 
 // connectorCLIs are the signed-in connectors' command lines as of the last assistant.prepare (name → connector).
@@ -123,16 +116,13 @@ func (n *Node) connectorCLIs() map[string]string {
 const cliMark = "# a connector's command line, on the assistant's PATH while it is signed in (node/clicall.go)"
 
 // writeCLIs puts the signed-in connectors' command lines on the assistant's PATH (personad tool --cli <id>) and takes
-// away those whose connector is not. The built-in Telegram has none of its own: while it is signed in without one,
-// tg is personad tg, as before the connector moved into a plugin (#1704).
-func (n *Node) writeCLIs(clis map[string]string, telegram bool) {
+// away those whose connector is not, and the built-in Telegram's tg (personad tg) it wrote before Telegram became an
+// extension (#1704).
+func (n *Node) writeCLIs(clis map[string]string) {
 	bin := filepath.Join(n.dir, "assistant-bin")
 	want := map[string]string{}
 	for name, id := range clis {
 		want[name] = "#!/bin/sh\n" + cliMark + "\nexec " + shellQuote(n.bin) + " tool --cli " + shellQuote(id) + " \"$@\"\n"
-	}
-	if _, ok := want["tg"]; !ok && telegram {
-		want["tg"] = "#!/bin/sh\n" + cliMark + "\n# Telegram through the hub (the telegram skill).\nexec " + shellQuote(n.bin) + " tg \"$@\"\n"
 	}
 	entries, _ := os.ReadDir(bin)
 	for _, e := range entries {

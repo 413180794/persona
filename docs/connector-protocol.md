@@ -1,6 +1,6 @@
 # 连接器协议（v2）
 
-一个连接器跑在自己的程序里时，hub 和它之间说的话。第一方的 `jarvisd-telegram` 用它；第三方写连接器也照这份来。
+一个连接器跑在自己的程序里时，hub 和它之间说的话。第一方的 Telegram 扩展（#1704）用它；第三方写连接器也照这份来。
 为什么这样设计、和在 hub 里跑的连接器什么关系，见 `docs/connectors.md`「二 · 4」。代码：程序一侧 `server/internal/connector/serve`，
 hub 一侧 `server/internal/connector/proc`，一致性测试 `server/internal/connector/conformance`。
 

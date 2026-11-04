@@ -14,10 +14,6 @@ import (
 
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/github"
-	"github.com/nwverse/persona/server/internal/connector/proc"
-	"github.com/nwverse/persona/server/internal/connector/telegram/spec"
-	"github.com/nwverse/persona/server/internal/extension"
-	"github.com/nwverse/persona/server/internal/extension/host"
 	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -410,7 +406,7 @@ func (h *Hub) setConnectorFeed(ctx context.Context, id string, f connector.Feed,
 }
 
 // restoreConnectorSwitches applies the user's switches before the connectors start. One the user never switched is
-// on, unless it was added to start off (addConnectorOff: Telegram waits for the user to turn it on and sign in).
+// on, unless it was added to start off (addConnectorOff: a built-in plugin's waits for the user to turn it on).
 func (h *Hub) restoreConnectorSwitches(ctx context.Context) {
 	cs := h.connectorSettings(ctx)
 	for _, c := range h.connectors.All() {
@@ -518,7 +514,7 @@ func (s connectorSecrets) Delete(ctx context.Context) error {
 // startConnectors registers the connectors, applies the user's switches and runs them.
 func (h *Hub) startConnectors(ctx context.Context) {
 	h.registerConnectors()
-	h.attachExtensions(ctx) // the plugins' connectors (Telegram's), after the hub's own: those ids are taken
+	h.attachExtensions(ctx) // the plugins' connectors, after the hub's own: those ids are taken
 	h.restoreConnectorSwitches(ctx)
 	h.restoreGitHubSource(ctx)
 	h.githubMutes(ctx)
@@ -562,9 +558,6 @@ func (h *Hub) registerConnectors() {
 	}
 }
 
-// telegramProgram is jarvisd-telegram next to the running jarvisd ("" when there is none).
-func telegramProgram() string { return siblingProgram("jarvisd-telegram") }
-
 // siblingProgram is a program released with jarvisd (update.ProgramNames) next to the running jarvisd ("" when there
 // is none).
 func siblingProgram(name string) string {
@@ -580,25 +573,6 @@ func siblingProgram(name string) string {
 		return ""
 	}
 	return p
-}
-
-// telegramPluginID is the built-in plugin the Telegram connector runs in.
-const telegramExtensionID = "telegram"
-
-// telegramManifest is the Telegram connector as a built-in plugin (docs/plan-telegram.md, docs/plugins.md): the
-// program at path, contributing the connector with what it declares (spec), known before it ever runs: switched
-// off, it still lists its capabilities and signs in and out. It runs while the connector is on.
-func telegramManifest(h *Hub, path string) *extension.Manifest {
-	m := spec.Manifest()
-	item := extension.ConnectorItem{ID: spec.ID, Name: spec.Name, Hosts: m.Hosts, AgentTools: m.AgentTools, Unlisted: m.Unlisted,
-		ConfirmAlways: m.ConfirmAlways, PollSeconds: int(m.Poll / time.Second), Kinds: m.Kinds}
-	for _, c := range m.Capabilities {
-		item.Capabilities = append(item.Capabilities, string(c))
-	}
-	items, _ := json.Marshal([]extension.ConnectorItem{item})
-	return &extension.Manifest{ManifestVersion: extension.ManifestVersion, ID: telegramExtensionID, Name: spec.Name, Version: h.version,
-		Description: "Telegram 连接器（personad 自带）", Engines: extension.Engines{ExtensionProtocol: extension.Protocol},
-		Runtime: &extension.Runtime{Command: extension.Command{Path: filepath.Base(path)}}, Contributes: map[string]json.RawMessage{"connectors": items}}
 }
 
 // sameBuild holds a built-in plugin's program (named name, for people) to the hub's build: the two come from one
@@ -621,34 +595,6 @@ func sameBuild(h *Hub, name, path string) func(context.Context) error {
 		}
 		return nil
 	}
-}
-
-// telegramConnector is the program at path as the hub's connector, run as the built-in plugin: what the plugin
-// registry does for it, for one that is not registered (tests).
-func (h *Hub) telegramConnector(path string) *proc.Conn {
-	ps := newExtensions(h.dataDirOrTemp(), nil, h.logf)
-	ps.h, ps.ctx = h, context.Background()
-	if err := ps.reg.AddBuiltin(telegramManifest(h, path), filepath.Dir(path), true); err != nil {
-		h.logf("telegram: %v", err)
-	}
-	p := ps.reg.Get(telegramExtensionID)
-	hp := &hubExtension{id: telegramExtensionID}
-	s, err := ps.spec(context.Background(), p, hp)
-	if err != nil {
-		h.logf("telegram: %v", err)
-	}
-	pr := host.Start(context.Background(), s)
-	for _, l := range hp.links {
-		l.Proc = pr
-	}
-	return hp.conns[0]
-}
-
-// telegramSettings is what jarvisd-telegram gets at each start: the user's time zone by name, for the times the
-// assistant's tools show (the program runs on the hub's clock, in UTC); "" while only the hub's own is known.
-func (h *Hub) telegramSettings() json.RawMessage {
-	b, _ := json.Marshal(map[string]string{"zone": h.userTZName()})
-	return b
 }
 
 // ghToken reads the token of machine's gh login (credential.gh_token); it never goes to a log.

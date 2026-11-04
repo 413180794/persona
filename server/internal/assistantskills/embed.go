@@ -1,8 +1,8 @@
 // Package assistantskills puts the assistant's skills in its directory (<assistant dir>/.claude/skills,
 // docs/hub-update.md「skill 从二进制里拿出来」): the user's own, kept in ~/.jarvis/skills/<name> on the machine that runs
 // the assistant and linked in, and the built-in ones this binary carries, copied in. Built-in skills are only those
-// Persona may redistribute (telegram, the tg CLI's): a copied one, like lark-connector, lives in the user's space. jarvisd
-// never writes that space, so an update cannot touch the user's skills.
+// Persona may redistribute (persona-office, personad office's): a copied one, like lark-connector, lives in the user's
+// space. jarvisd never writes that space, so an update cannot touch the user's skills.
 package assistantskills
 
 import (
@@ -29,7 +29,6 @@ var builtin, _ = fs.Sub(embedded, "builtin")
 
 // Redistributable is every built-in skill and why Persona may ship it (TestBuiltinsAreRedistributable).
 var Redistributable = map[string]string{
-	"telegram":       "Persona's own (the tg CLI's skill, docs/plan-telegram.md「tg 命令行」)",
 	"persona-office": "Persona's own (personad office's skill, docs/office.md)",
 }
 
@@ -39,8 +38,9 @@ var Redistributable = map[string]string{
 var ForAgents = []string{"persona-office"}
 
 // Requires are the built-in skills that need a connector of the hub signed in (its id): put in while it is, taken
-// out once it is not (the hub says which are with assistant.prepare).
-var Requires = map[string]string{"telegram": "telegram"}
+// out once it is not (the hub says which are with assistant.prepare). None now: Telegram's skill, the one that did,
+// comes with its extension (#1704), as a plugin skill (plugins.go).
+var Requires = map[string]string{}
 
 // wanted says whether the built-in skill name goes in with the connectors signed in.
 func wanted(name string, connectors []string) bool {

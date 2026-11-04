@@ -537,16 +537,16 @@ func TestUpdateDockerSaysNewImage(t *testing.T) {
 	}
 }
 
-// A release with a program the hub runs beside it (jarvisd-telegram): the program is checked and put next to the
+// A release with a program the hub runs beside it (jarvisd-wechat): the program is checked and put next to the
 // hub's binary with it, and going back takes it away again (it was new here).
 func TestUpdateSwapsPrograms(t *testing.T) {
 	plat := runtime.GOOS + "-" + runtime.GOARCH
 	prog := []byte("#!/bin/sh\necho v2-202611021700\necho 'channel release, build 202611021700'\n")
 	pgz := gz(prog)
 	outer, inner := sha256.Sum256(pgz), sha256.Sum256(prog)
-	pf := update.File{Name: "jarvisd-telegram-" + plat + ".gz", Size: int64(len(pgz)), SHA256: hex.EncodeToString(outer[:]), BinarySHA256: hex.EncodeToString(inner[:])}
+	pf := update.File{Name: "jarvisd-wechat-" + plat + ".gz", Size: int64(len(pgz)), SHA256: hex.EncodeToString(outer[:]), BinarySHA256: hex.EncodeToString(inner[:])}
 	p := newPublisherWith(t, "v2-202611021700", 202611021700, func(m *update.Manifest) {
-		m.Programs = map[string]map[string]update.File{"jarvisd-telegram": {plat: pf}}
+		m.Programs = map[string]map[string]update.File{"jarvisd-wechat": {plat: pf}}
 	})
 	p.extra = map[string][]byte{"/dl/" + pf.Name: pgz}
 	h, _, target, execd := updatingHub(t, p, "release")
@@ -558,7 +558,7 @@ func TestUpdateSwapsPrograms(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the restart", func() bool { return len(*execd) == 1 })
-	placed := filepath.Join(filepath.Dir(target), "jarvisd-telegram")
+	placed := filepath.Join(filepath.Dir(target), "jarvisd-wechat")
 	if b, _ := os.ReadFile(placed); !bytes.Equal(b, prog) {
 		t.Fatal("the program is not next to the hub's binary")
 	}
@@ -581,9 +581,9 @@ func TestUpdateRefusesAWrongProgram(t *testing.T) {
 	prog := []byte("#!/bin/sh\necho v1-old\necho 'channel release, build 1'\n") // says another build
 	pgz := gz(prog)
 	outer, inner := sha256.Sum256(pgz), sha256.Sum256(prog)
-	pf := update.File{Name: "jarvisd-telegram-" + plat + ".gz", Size: int64(len(pgz)), SHA256: hex.EncodeToString(outer[:]), BinarySHA256: hex.EncodeToString(inner[:])}
+	pf := update.File{Name: "jarvisd-wechat-" + plat + ".gz", Size: int64(len(pgz)), SHA256: hex.EncodeToString(outer[:]), BinarySHA256: hex.EncodeToString(inner[:])}
 	p := newPublisherWith(t, "v2-202611021700", 202611021700, func(m *update.Manifest) {
-		m.Programs = map[string]map[string]update.File{"jarvisd-telegram": {plat: pf}}
+		m.Programs = map[string]map[string]update.File{"jarvisd-wechat": {plat: pf}}
 	})
 	p.extra = map[string][]byte{"/dl/" + pf.Name: pgz}
 	h, _, target, execd := updatingHub(t, p, "release")
@@ -599,7 +599,7 @@ func TestUpdateRefusesAWrongProgram(t *testing.T) {
 	if b, _ := os.ReadFile(target); string(b) != "#!/bin/sh\necho old\n" {
 		t.Fatal("the hub's binary was swapped")
 	}
-	if !strings.Contains(h.upd.view().Error, "jarvisd-telegram") {
+	if !strings.Contains(h.upd.view().Error, "jarvisd-wechat") {
 		t.Fatalf("error %q", h.upd.view().Error)
 	}
 }

@@ -942,7 +942,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		var a struct {
 			Dir      string `json:"dir"`
 			ClaudeMD string `json:"claude_md"`
-			// Connectors are the hub's signed in: their built-in skills go in the directory (Telegram's tg).
+			// Connectors are the hub's signed in: the built-in skills that need one go in the directory (Requires).
 			Connectors []string `json:"connectors"`
 			// CLIs are their command lines (name → connector id), on the assistant's PATH (node/clicall.go).
 			CLIs map[string]string `json:"clis"`

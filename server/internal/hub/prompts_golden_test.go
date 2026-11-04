@@ -294,7 +294,13 @@ func contextOf(t *testing.T, res any) string {
 	return out.Text
 }
 
-func goldenItems() map[string]*InboxItem {
+func goldenItems(t *testing.T) map[string]*InboxItem {
+	t.Helper()
+	// Telegram's kinds come in its extension's own words (kind_descriptions, #1704): the hub's template had the same.
+	for kind, d := range map[string]string{"dm": "Telegram 里有人私聊用户，还没读", "mention": "Telegram 群里 @ 了用户，或回复了用户的消息"} {
+		extensionKinds.Store("telegram/"+kind, d)
+		t.Cleanup(func() { extensionKinds.Delete("telegram/" + kind) })
+	}
 	at := time.Date(2026, 10, 31, 9, 0, 0, 0, time.UTC)
 	agent := &InboxAgent{State: AgentQueued, Task: "查清楚构建为什么挂了，回复对方结论"}
 	return map[string]*InboxItem{
@@ -335,7 +341,7 @@ func goldenItems() map[string]*InboxItem {
 
 func TestGoldenInboxTriage(t *testing.T) {
 	ctx := context.Background()
-	for name, it := range goldenItems() {
+	for name, it := range goldenItems(t) {
 		h := agentHub(t)
 		model, calls := captureModel(t, `{"tier":"action","summary":"s","reason":"r"}`)
 		h.triageAI = model
@@ -351,7 +357,7 @@ func TestGoldenInboxTriage(t *testing.T) {
 
 func TestGoldenInboxDraft(t *testing.T) {
 	ctx := context.Background()
-	items := goldenItems()
+	items := goldenItems(t)
 	for _, c := range []struct {
 		name, item, owner, notes, instruction string
 	}{
@@ -373,7 +379,7 @@ func TestGoldenInboxDraft(t *testing.T) {
 
 func TestGoldenInboxJudge(t *testing.T) {
 	ctx := context.Background()
-	items := goldenItems()
+	items := goldenItems(t)
 	for _, c := range []struct{ name, item, owner, rules string }{
 		{"summary_rules", "dm", "示例用户", " 告警都不用交 "},
 		{"plain", "bot", "", ""},
@@ -390,7 +396,7 @@ func TestGoldenInboxJudge(t *testing.T) {
 }
 
 func TestGoldenInboxAgentPrompt(t *testing.T) {
-	items := goldenItems()
+	items := goldenItems(t)
 	for _, name := range []string{"dm", "doc_rows", "doc_plain", "moment", "mail_direct", "github_review"} {
 		h := agentHub(t)
 		h.cfg.Assistant.Owner = "示例用户"
@@ -473,7 +479,7 @@ func TestGoldenChannelMessage(t *testing.T) {
 
 // An item about one of the user's tasks: the judge's input lists the tasks, the AI 分身 is told the linked one.
 func TestGoldenInboxTask(t *testing.T) {
-	items := goldenItems()
+	items := goldenItems(t)
 	task := prompts.InboxTask{ID: "todo_1", Title: "修登录崩溃", State: "在做", Last: "测试通过 42/42"}
 	golden(t, "inbox_judge_input.with_task", prompts.RenderInboxJudgeInput(prompts.InboxJudgeInput{Summary: "张三问修复进度",
 		Item: promptItem(items["dm"]), Tasks: []prompts.InboxTask{task}}))

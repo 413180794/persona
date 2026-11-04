@@ -236,19 +236,6 @@ func TestConnectorThatStartsOff(t *testing.T) {
 	}
 }
 
-// jarvisd-telegram gets the user's time zone by name, and none while only the hub's own is known (the hub runs in
-// UTC: its zone is not the user's).
-func TestTelegramGetsTheUserZone(t *testing.T) {
-	h := newTestHub(t)
-	if got := string(h.telegramSettings()); got != `{"zone":""}` {
-		t.Fatalf("unknown: %s", got)
-	}
-	h.userTZ = "Asia/Shanghai"
-	if got := string(h.telegramSettings()); got != `{"zone":"Asia/Shanghai"}` {
-		t.Fatalf("known: %s", got)
-	}
-}
-
 // 删除已存的数据: the connector is switched off (and stays off), its chats, people and inbox items go, the rest stays.
 func TestConnectorDataDelete(t *testing.T) {
 	h := newTestHub(t)

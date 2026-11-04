@@ -56,7 +56,7 @@ export function ConnectorList({ onOpen }: { onOpen: (id: string) => void }) {
   const list = useMemo(() => all && otherConnectors(all, lark), [all, lark]);
   if (list?.length === 0) return null;
   return (
-    <Group title="更多连接器" footer="GitHub、Telegram 和插件提供的连接器：点进去看状态、登录和设置。">
+    <Group title="更多连接器" footer="hub 自带的和插件提供的连接器：点进去看状态、登录和设置。">
       {!list && !error && <div className="px-4 py-3"><Loading /></div>}
       {error && <p className="px-4 py-3 text-[12.5px] text-red">读不到连接器：{error}</p>}
       {list?.map((c) => (

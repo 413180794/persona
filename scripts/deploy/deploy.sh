@@ -162,8 +162,8 @@ $command")
   fi
 }
 
-# install_program <hub machine id> <os-arch> <name>: a built-in plugin's program (telegram: the Telegram connector,
-# docs/plan-telegram.md; wechat: the WeChat bot, docs/wechat.md) next to the hub's jarvisd (only the hub runs it), the
+# install_program <hub machine id> <os-arch> <name>: a built-in plugin's program (wechat: the WeChat bot, docs/wechat.md;
+# Telegram's connector is an extension now, #1704) next to the hub's jarvisd (only the hub runs it), the
 # same build as jarvisd: the hub starts it only when `version -v` matches.
 install_program() {
   local id=$1 plat=$2 name=$3 bin
@@ -230,7 +230,6 @@ for t in "${TARGETS[@]}"; do
       done
       hub_plat="$(field "$t" os)-$( [ "$(field "$t" os)" = darwin ] && echo arm64 || echo amd64)"
       install_bin "$t" "bin/jarvisd-$hub_plat"
-      install_program "$t" "$hub_plat" telegram
       install_program "$t" "$hub_plat" wechat
       ensure_herdr "$t"
       hub_admin_access

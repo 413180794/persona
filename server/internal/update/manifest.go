@@ -30,15 +30,15 @@ type Manifest struct {
 	// Ancestors is every commit the release's code contains (EncodeAncestors of git rev-list <commit>): a hub installs
 	// it by itself only when its own commit is one of them (Build.Hold).
 	Ancestors string `json:"ancestors,omitempty"`
-	// Programs are the programs released with jarvisd that the hub runs beside it (jarvisd-telegram): name ->
+	// Programs are the programs released with jarvisd that the hub runs beside it (jarvisd-wechat): name ->
 	// "linux-amd64" -> its download. The hub swaps them with jarvisd, and goes back with it. Older hubs ignore them.
 	Programs map[string]map[string]File `json:"programs,omitempty"`
 }
 
 // ProgramNames are the programs released with jarvisd, each built from server/cmd/<name>.
-var ProgramNames = []string{"jarvisd-telegram", "jarvisd-wechat"}
+var ProgramNames = []string{"jarvisd-wechat"}
 
-// program names the program a download belongs to ("jarvisd-telegram-linux-amd64.gz" -> "jarvisd-telegram"), "" for
+// program names the program a download belongs to ("jarvisd-wechat-linux-amd64.gz" -> "jarvisd-wechat"), "" for
 // jarvisd's own.
 func program(gz string) string {
 	for _, p := range ProgramNames {

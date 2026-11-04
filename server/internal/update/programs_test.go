@@ -19,13 +19,13 @@ func writeGz(t *testing.T, path string, content []byte) {
 	}
 }
 
-// A program released with jarvisd (jarvisd-telegram-<os>-<arch>.gz) is listed under its name, not taken for a
-// jarvisd platform ("telegram-linux-amd64").
+// A program released with jarvisd (jarvisd-wechat-<os>-<arch>.gz) is listed under its name, not taken for a
+// jarvisd platform ("wechat-linux-amd64").
 func TestBuildManifestPrograms(t *testing.T) {
 	dir := t.TempDir()
 	writeGz(t, filepath.Join(dir, "jarvisd-linux-amd64.gz"), []byte("jarvisd"))
-	writeGz(t, filepath.Join(dir, "jarvisd-telegram-linux-amd64.gz"), []byte("jarvisd-telegram"))
-	writeGz(t, filepath.Join(dir, "jarvisd-telegram-darwin-arm64.gz"), []byte("jarvisd-telegram for a Mac"))
+	writeGz(t, filepath.Join(dir, "jarvisd-wechat-linux-amd64.gz"), []byte("jarvisd-wechat"))
+	writeGz(t, filepath.Join(dir, "jarvisd-wechat-darwin-arm64.gz"), []byte("jarvisd-wechat for a Mac"))
 	m, err := BuildManifest(dir, Manifest{Version: "v1", Build: 202611030000})
 	if err != nil {
 		t.Fatal(err)
@@ -33,13 +33,13 @@ func TestBuildManifestPrograms(t *testing.T) {
 	if len(m.Files) != 1 || m.Files["linux-amd64"].Name != "jarvisd-linux-amd64.gz" {
 		t.Fatalf("files %+v", m.Files)
 	}
-	tg := m.Programs["jarvisd-telegram"]
-	if len(tg) != 2 || tg["linux-amd64"].Name != "jarvisd-telegram-linux-amd64.gz" || tg["darwin-arm64"].BinarySHA256 == "" {
+	tg := m.Programs["jarvisd-wechat"]
+	if len(tg) != 2 || tg["linux-amd64"].Name != "jarvisd-wechat-linux-amd64.gz" || tg["darwin-arm64"].BinarySHA256 == "" {
 		t.Fatalf("programs %+v", m.Programs)
 	}
 	// Only programs, no jarvisd: not a release.
 	only := t.TempDir()
-	writeGz(t, filepath.Join(only, "jarvisd-telegram-linux-amd64.gz"), []byte("x"))
+	writeGz(t, filepath.Join(only, "jarvisd-wechat-linux-amd64.gz"), []byte("x"))
 	if _, err := BuildManifest(only, Manifest{Version: "v1", Build: 1}); err == nil {
 		t.Fatal("a release without jarvisd")
 	}

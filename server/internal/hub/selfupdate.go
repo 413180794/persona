@@ -558,7 +558,7 @@ func (u *updater) install(ctx context.Context, auto bool) {
 		fail(err)
 		return
 	}
-	// The programs the hub runs beside it (jarvisd-telegram): this platform's build of each, checked like jarvisd.
+	// The programs the hub runs beside it (jarvisd-wechat): this platform's build of each, checked like jarvisd.
 	programs := map[string]string{} // name -> the downloaded binary
 	for _, name := range update.ProgramNames {
 		f, ok := m.Programs[name][runtime.GOOS+"-"+runtime.GOARCH]

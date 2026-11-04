@@ -277,13 +277,6 @@ func (h *Hub) attachExtensions(ctx context.Context) {
 			reg.Reserve("agent_sources", id)
 		}
 	}
-	if path := telegramProgram(); path != "" {
-		if err := reg.AddBuiltin(telegramManifest(h, path), filepath.Dir(path), true); err != nil {
-			h.logf("plugin telegram: %v", err)
-		}
-		// The Telegram plugin from the market takes its place (#1704): the connector id and the sign-in stay.
-		reg.Yields(telegramExtensionID)
-	}
 	if path := siblingProgram(wechat.Program); path != "" {
 		if err := reg.AddBuiltin(wechatManifest(h, path), filepath.Dir(path), true); err != nil {
 			h.logf("plugin wechat: %v", err)
@@ -629,9 +622,6 @@ func (ps *extensions) spec(ctx context.Context, p *extension.Extension, hp *hubE
 		params := extension.InitializeParams{Hub: extension.HubInfo{Build: build, ExtensionPoints: extension.PointVersions(), Role: role, Timezone: tz,
 			Capabilities: extension.HubCapabilities()}, Extension: info,
 			Config: ps.reg.Config(p), Secrets: secrets, Granted: p.Record.Granted, Active: map[string][]string{}}
-		if builtin && id == telegramExtensionID && ps.h != nil {
-			params.Config = ps.h.telegramSettings()
-		}
 		for _, c := range conns {
 			if ps.h == nil || ps.h.connectors.Enabled(c.ID) {
 				params.Active["connectors"] = append(params.Active["connectors"], c.ID)
@@ -642,7 +632,7 @@ func (ps *extensions) spec(ctx context.Context, p *extension.Extension, hp *hubE
 		}
 		return params, nil
 	}
-	if builtin && (id == telegramExtensionID || id == wechat.ID) && ps.h != nil {
+	if builtin && id == wechat.ID && ps.h != nil {
 		s.Check = sameBuild(ps.h, p.Manifest.Name, s.Command) // the program must be the hub's build
 	}
 	s.Accept = func(res extension.InitializeResult) error {
@@ -765,8 +755,8 @@ var unknownCapabilities sync.Map
 // pluginKinds are the plugin connectors' kinds of inbox things as they describe them: "<connector>/<kind>" → words.
 var extensionKinds sync.Map
 
-// pluginConnectors are the connectors a plugin provides (installed, or from hub.json), not one built into personad
-// (Telegram's): their new inbox items are triaged before they enter (inbox_admit.go). Connector id → the plugin's
+// pluginConnectors are the connectors a plugin provides (installed, or from hub.json), not a built-in plugin's: their
+// new inbox items are triaged before they enter (inbox_admit.go). Connector id → the plugin's
 // source (plugin.SourceInstalled, plugin.SourceHubJSON).
 var extensionConnectors sync.Map
 
@@ -846,8 +836,8 @@ func (ps *extensions) remoteManifest(ctx context.Context, r extension.Remote) (*
 	return extension.Parse(b)
 }
 
-// addPluginConnector registers a plugin's connector: built-in ones start switched off until the user turns them on
-// (Telegram waits for the user to sign in), installed ones on; the user's switches and settings apply.
+// addPluginConnector registers a plugin's connector: built-in ones start switched off until the user turns them on,
+// installed ones on; the user's switches and settings apply.
 func (h *Hub) addExtensionConnector(ctx context.Context, c *proc.Conn, off bool) error {
 	if off {
 		if h.connectorsOff == nil {

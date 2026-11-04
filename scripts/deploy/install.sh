@@ -276,10 +276,10 @@ case ":$PATH:" in
 *) echo "(not on PATH: run it as $DEST/jarvisd, or add $DEST to PATH)" ;;
 esac
 
-# On the computer that runs the hub, JARVIS_WITH=telegram also installs jarvisd-telegram, the Telegram connector's
-# program, next to jarvisd (docs/plan-telegram.md); JARVIS_WITH=wechat jarvisd-wechat, the WeChat bot's
-# (docs/wechat.md). Other computers do not need them; a hub that updates itself gets them with its next update anyway.
-for p in telegram wechat; do
+# On the computer that runs the hub, JARVIS_WITH=wechat also installs jarvisd-wechat, the WeChat bot's program, next
+# to jarvisd (docs/wechat.md). Other computers do not need it; a hub that updates itself gets it with its next update
+# anyway. (Telegram's connector is an extension now, installed from the hub's extension market: #1704.)
+for p in wechat; do
 	case ",${JARVIS_WITH:-}," in
 	*,$p,*)
 		get "jarvisd-$p-$os-$arch" "jarvisd-$p"
@@ -419,5 +419,5 @@ else
 fi
 
 echo "On the machine that runs the hub: jarvisd hub run (the first run writes ~/.jarvis/hub.json), then jarvisd hub pair."
-echo "(With JARVIS_WITH=telegram there it also installs the Telegram connector.)"
+echo "(With JARVIS_WITH=wechat there it also installs the WeChat bot.)"
 echo "Other computers: the node service, sh -s -- --node --pair '<jarvisd hub pair --machine <id> link>' (or --listen: the hub dials in)."

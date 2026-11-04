@@ -18,3 +18,4 @@
 | `android-p0-acceptance.md` | Android P0 第 4 轮联合验收清单 |
 | `ios-p0-verification.md` | 2026-10-31 iOS 对 P0 hub 改动的接口验收记录 |
 | `hub-contracts-report.md` | 2026-10-31 hub 契约核对 |
+| `plan-telegram.md` | 2026-11-03 Telegram 连接器的方案（gotd、分步登录、收件箱、`tg` 命令行）；2026-11-05 起它是私有扩展（#1704），代码不在本仓库 |

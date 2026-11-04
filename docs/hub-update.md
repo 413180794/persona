@@ -130,8 +130,9 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 ```
 
 - `ancestors`：这次的 commit 能到达的所有提交（`git rev-list <commit>`），每个取前 6 字节，排序后 base64（「防退回」）。
-- `programs`：和 personad 一起发布、hub 在旁边跑的程序（`update.ProgramNames`：`jarvisd-telegram`，`docs/plan-telegram.md`「架构」；`jarvisd-wechat`，`docs/wechat.md`）：
-  `{"jarvisd-telegram": {"linux-amd64": {name, size, sha256, binary_sha256}, …}}`。老 hub 不认这个字段，照旧只换 personad。
+- `programs`：和 personad 一起发布、hub 在旁边跑的程序（`update.ProgramNames`：`jarvisd-wechat`，`docs/wechat.md`；
+  Telegram 的 `jarvisd-telegram` 到 #1704 为止也在这里，之后它是扩展、走扩展市场）：
+  `{"jarvisd-wechat": {"linux-amd64": {name, size, sha256, binary_sha256}, …}}`。老 hub 不认这个字段，照旧只换 personad。
 
 - 下载的文件要同时对得上 `sha256`（压缩包）和 `binary_sha256`（解压后），新二进制的 `version -v` 还要报出清单里的版本和 build 号。
   `SHA256SUMS` 照旧给 install.sh 用。
@@ -170,7 +171,8 @@ issue #284。方案已拍板（见文末「拍板」）：skill 从二进制里�
 - 主会话的部署脚本在仓库外，要在它的 `go build` 里加上同样的四个 `-X`（回报里会给出要加的那一行）。
 - **只从包含 master 的工作区部署**（#1314）：`deploy.sh` 先 `git fetch origin master`，当前 HEAD 不包含它就什么都不部署、退出 2（取不到 master 也一样）；
   落后的分支部署出去会把别人刚部署的改动（hub 和网页）换回旧的。故意回滚时用 `PERSONA_DEPLOY_ANY_COMMIT=1`。见 `docs/lessons/server.md`「从落后的分支部署」。
-- hub 那台还要放 `jarvisd-telegram`（Telegram 连接器的程序，`docs/plan-telegram.md`）：`deploy.sh` 给 hub 编同一个版本、放在 personad 旁边；node 不需要。
+- hub 那台还要放 `jarvisd-wechat`（微信机器人的程序，`docs/wechat.md`）：`deploy.sh` 给 hub 编同一个版本、放在 personad 旁边；node 不需要。
+  Telegram 不在这里：它是扩展（#1704），在 hub 上从扩展市场装和升级。
 - 不做灰度：发布后所有 hub（包括我们的）在空闲时同时更新；出了问题靠各 hub 自己的回滚和坏版本标记。
 
 ### 防退回（2026-11-02，#454）

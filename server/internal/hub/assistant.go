@@ -123,8 +123,8 @@ func isAssistant(s proto.Session, dir string) bool {
 // machine, and a link (or tailcat) machine has no ssh at all; from anywhere else there is no command to give, only the
 // Agents tools.
 // assistantPrepare is what the node is told before a message to the assistant: its directory, its CLAUDE.md, and the
-// connectors signed in (rate limited counts: still signed in), whose built-in skills it puts in the directory (the
-// telegram skill and tg, node/clicall.go) or takes out.
+// connectors signed in (rate limited counts: still signed in), whose built-in skills it puts in the directory
+// (assistantskills.Requires) or takes out.
 //
 // clis are the command lines of those connectors (connector.Manifest.CLI → its id): the node puts them on the
 // assistant's PATH (personad tool --cli <id>).

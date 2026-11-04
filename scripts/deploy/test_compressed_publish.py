@@ -62,41 +62,41 @@ class InstallTestCase(unittest.TestCase):
         self.assertEqual(self.installed.read_bytes(), b"previous-install")
 
 
-class InstallTelegramTests(InstallTestCase):
-    """JARVIS_WITH=telegram: the hub's computer also gets jarvisd-telegram (docs/plan-telegram.md); others do not."""
+class InstallProgramTests(InstallTestCase):
+    """JARVIS_WITH=wechat: the hub's computer also gets jarvisd-wechat (docs/wechat.md); others do not."""
 
-    telegram = b"#!/bin/sh\nprintf '%s\\n' telegram\n"
+    program = b"#!/bin/sh\nprintf '%s\\n' wechat\n"
 
     def both(self):
         files = {"jarvisd-linux-amd64.gz": gzip.compress(self.binary, mtime=0),
-                 "jarvisd-telegram-linux-amd64.gz": gzip.compress(self.telegram, mtime=0)}
+                 "jarvisd-wechat-linux-amd64.gz": gzip.compress(self.program, mtime=0)}
         for name, data in files.items():
             (self.downloads / name).write_bytes(data)
         (self.downloads / "SHA256SUMS").write_text("".join(hashlib.sha256(d).hexdigest() + "  " + n + "\n" for n, d in files.items()))
 
-    def test_the_hub_asks_for_telegram(self):
+    def test_the_hub_asks_for_it(self):
         self.both()
-        self.env["JARVIS_WITH"] = "telegram"
+        self.env["JARVIS_WITH"] = "wechat"
         result = self.run_install()
         self.assertEqual(result.returncode, 0, result.stderr)
-        program = self.home / ".jarvis/bin/jarvisd-telegram"
-        self.assertEqual(program.read_bytes(), self.telegram)
+        program = self.home / ".jarvis/bin/jarvisd-wechat"
+        self.assertEqual(program.read_bytes(), self.program)
         self.assertTrue(os.access(program, os.X_OK))
 
     def test_other_computers_do_not_get_it(self):
         self.both()
         result = self.run_install()
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertFalse((self.home / ".jarvis/bin/jarvisd-telegram").exists())
+        self.assertFalse((self.home / ".jarvis/bin/jarvisd-wechat").exists())
 
     def test_a_program_that_does_not_check_out_is_not_installed(self):
         self.both()
-        (self.downloads / "jarvisd-telegram-linux-amd64.gz").write_bytes(gzip.compress(b"something else", mtime=0))
-        self.env["JARVIS_WITH"] = "telegram"
+        (self.downloads / "jarvisd-wechat-linux-amd64.gz").write_bytes(gzip.compress(b"something else", mtime=0))
+        self.env["JARVIS_WITH"] = "wechat"
         result = self.run_install()
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("checksum mismatch for jarvisd-telegram-linux-amd64.gz", result.stderr)
-        self.assertFalse((self.home / ".jarvis/bin/jarvisd-telegram").exists())
+        self.assertIn("checksum mismatch for jarvisd-wechat-linux-amd64.gz", result.stderr)
+        self.assertFalse((self.home / ".jarvis/bin/jarvisd-wechat").exists())
 
 
 class InstallCompressedTests(InstallTestCase):

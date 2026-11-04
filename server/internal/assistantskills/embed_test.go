@@ -132,6 +132,7 @@ func TestBuiltinsAreRedistributable(t *testing.T) {
 }
 
 func TestListAndDescriptions(t *testing.T) {
+	t.Setenv("JARVIS_PLUGIN_SKILLS_DIR", t.TempDir()) // not this machine's plugins' skills
 	user := t.TempDir()
 	skill(t, user, "alpha", `"quoted one"`)
 	if err := os.MkdirAll(filepath.Join(user, "folded"), 0o755); err != nil {
@@ -152,39 +153,65 @@ func TestListAndDescriptions(t *testing.T) {
 	}
 }
 
-// The telegram skill is in while Telegram is signed in on the hub and out once it is not; the user's own skill of the
-// name wins.
+// A built-in skill that needs a connector (Requires) is in while it is signed in on the hub and out once it is not; the
+// user's own skill of the name wins.
 func TestConnectorSkillFollowsItsConnector(t *testing.T) {
+	old := Requires
+	Requires = map[string]string{"persona-office": "example"}
+	t.Cleanup(func() { Requires = old })
 	user, dir := t.TempDir(), t.TempDir()
 	if err := Sync(dir, user, nil, quiet); err != nil {
 		t.Fatal(err)
 	}
-	if Has(dir, "telegram") || slices.ContainsFunc(List(user, nil), func(s Skill) bool { return s.Name == "telegram" }) {
-		t.Fatal("the telegram skill is in with Telegram not signed in")
+	if Has(dir, "persona-office") || slices.ContainsFunc(List(user, nil), func(s Skill) bool { return s.Name == "persona-office" }) {
+		t.Fatal("the skill is in with its connector not signed in")
 	}
-	if err := Sync(dir, user, []string{"telegram"}, quiet); err != nil {
+	if err := Sync(dir, user, []string{"example"}, quiet); err != nil {
 		t.Fatal(err)
 	}
-	if !Has(dir, "telegram") {
-		t.Fatal("Telegram signed in, no telegram skill")
+	if !Has(dir, "persona-office") {
+		t.Fatal("its connector signed in, no skill")
 	}
-	listed := List(user, []string{"telegram"})
-	if i := slices.IndexFunc(listed, func(s Skill) bool { return s.Name == "telegram" }); i < 0 || listed[i].Source != "builtin" ||
-		!strings.Contains(listed[i].Description, "tg") {
+	listed := List(user, []string{"example"})
+	if i := slices.IndexFunc(listed, func(s Skill) bool { return s.Name == "persona-office" }); i < 0 || listed[i].Source != "builtin" {
 		t.Fatalf("listed %+v", listed)
 	}
 	if err := Sync(dir, user, nil, quiet); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Lstat(filepath.Join(dir, "telegram")); !os.IsNotExist(err) {
-		t.Fatalf("signed out, the telegram skill stayed: %v", err)
+	if _, err := os.Lstat(filepath.Join(dir, "persona-office")); !os.IsNotExist(err) {
+		t.Fatalf("signed out, the skill stayed: %v", err)
 	}
-	skill(t, user, "telegram", "mine")
+	skill(t, user, "persona-office", "mine")
+	if err := Sync(dir, user, []string{"example"}, quiet); err != nil {
+		t.Fatal(err)
+	}
+	if target, _ := os.Readlink(filepath.Join(dir, "persona-office")); target != filepath.Join(user, "persona-office") {
+		t.Fatalf("the user's skill gave way to the built-in one: %q", target)
+	}
+}
+
+// Telegram's skill was built in until the connector became an extension (#1704): the copy an older personad put in
+// goes, and the extension's skill of the same name comes in, with Telegram still signed in.
+func TestABuiltinSkillNoLongerCarriedGivesWayToAPlugins(t *testing.T) {
+	user, dir, plugins := t.TempDir(), t.TempDir(), t.TempDir()
+	t.Setenv("JARVIS_PLUGIN_SKILLS_DIR", plugins)
+	skill(t, dir, "telegram", "built in")
+	if err := os.WriteFile(filepath.Join(dir, builtinStamp), []byte("0123456789ab persona-office,telegram\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	md := []byte("---\nname: telegram\ndescription: the extension's\n---\n")
+	if _, err := ApplyPlugins(plugins, []PluginSkill{{Name: "telegram", Plugin: "telegram", Digest: "d1", Files: map[string][]byte{"SKILL.md": md}}}); err != nil {
+		t.Fatal(err)
+	}
 	if err := Sync(dir, user, []string{"telegram"}, quiet); err != nil {
 		t.Fatal(err)
 	}
-	if target, _ := os.Readlink(filepath.Join(dir, "telegram")); target != filepath.Join(user, "telegram") {
-		t.Fatalf("the user's telegram skill gave way to the built-in one: %q", target)
+	if b, err := os.ReadFile(filepath.Join(dir, "telegram", "SKILL.md")); err != nil || !strings.Contains(string(b), "the extension's") {
+		t.Fatalf("telegram: %q %v", b, err)
+	}
+	if !Has(dir, "persona-office") {
+		t.Fatal("the built-in that is still carried went too")
 	}
 }
 
@@ -208,8 +235,8 @@ func TestWritePlugin(t *testing.T) {
 	if st, err := os.Stat(filepath.Join(dir, "skills", "persona-office", "scripts", "office.sh")); err != nil || st.Mode()&0o111 == 0 {
 		t.Fatalf("the script is not runnable: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "skills", "telegram")); !os.IsNotExist(err) {
-		t.Fatal("an assistant-only skill is in the agents' plugin")
+	if entries, _ := os.ReadDir(filepath.Join(dir, "skills")); len(entries) != len(ForAgents) {
+		t.Fatalf("the agents' plugin has %d skills, ForAgents %d: an assistant-only one is in", len(entries), len(ForAgents))
 	}
 	// The same binary: nothing written; another one: written again.
 	marker := filepath.Join(dir, "skills", "persona-office", "marker")

@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// jarvisd stays small: Telegram's MTProto client (gotd) is only in jarvisd-telegram, which the hub runs as a program
-// of its own (docs/plan-telegram.md「架构」). Linked into jarvisd it would add about 35 MB.
+// jarvisd stays small: Telegram's MTProto client (gotd) lives in the Telegram extension, a program of its own (#1704;
+// docs/archive/plan-telegram.md「架构」). Linked into jarvisd it would add about 35 MB.
 func TestJarvisdDoesNotLinkTelegram(t *testing.T) {
 	out, err := exec.Command("go", "list", "-deps", ".").CombinedOutput()
 	if err != nil {
@@ -15,7 +15,7 @@ func TestJarvisdDoesNotLinkTelegram(t *testing.T) {
 	}
 	for _, dep := range strings.Fields(string(out)) {
 		if strings.HasPrefix(dep, "github.com/gotd/") || strings.HasSuffix(dep, "/connector/telegram") {
-			t.Fatalf("jarvisd links %s: keep it in jarvisd-telegram", dep)
+			t.Fatalf("jarvisd links %s: Telegram is an extension", dep)
 		}
 	}
 }

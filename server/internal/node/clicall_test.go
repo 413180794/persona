@@ -71,7 +71,8 @@ func TestPeerProcess(t *testing.T) {
 	}
 }
 
-// tg's calls reach the hub only from the assistant's processes, as the assistant's, and only for Telegram.
+// The command lines' calls reach the hub only from the assistant's processes, as the assistant's, and only for the
+// connectors signed in.
 func TestCLICallOnlyForTheAssistant(t *testing.T) {
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
 		t.Skip("no peer process here")
@@ -129,63 +130,63 @@ func TestCLICallOnlyForTheAssistant(t *testing.T) {
 		return res
 	}
 
+	n.mu.Lock()
+	n.connectors = []string{"example"}
+	n.mu.Unlock()
 	// This test is no assistant process, whatever it says.
-	if res := ask("telegram_list_chats"); !res.IsError || !strings.Contains(res.Content[0].Text, "只能在助手的对话里用") || len(asked) != 0 {
+	if res := ask("example_list"); !res.IsError || !strings.Contains(res.Content[0].Text, "只能在助手的对话里用") || len(asked) != 0 {
 		t.Fatalf("not the assistant: %+v, the hub was asked %v", res, asked)
 	}
 	n.mu.Lock()
 	n.procs["s1"] = &assistantProc{id: "s1", cmd: &exec.Cmd{Process: &os.Process{Pid: os.Getpid()}}}
 	n.mu.Unlock()
 	if res := ask("phone_contacts"); !res.IsError || len(asked) != 0 {
-		t.Fatalf("not Telegram's: %+v", res)
+		t.Fatalf("not a signed-in connector's: %+v", res)
 	}
-	if res := ask("telegram_list_chats"); res.IsError {
+	if res := ask("example_list"); res.IsError {
 		t.Fatalf("the assistant: %+v", res)
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(asked) != 1 || asked[0]["name"] != "telegram_list_chats" || asked[0]["assistant"] != true || asked[0]["session_id"] != "s1" {
+	if len(asked) != 1 || asked[0]["name"] != "example_list" || asked[0]["assistant"] != true || asked[0]["session_id"] != "s1" {
 		t.Fatalf("the hub was asked %v", asked)
 	}
 }
 
-// Before each message the hub says which connectors are signed in: the telegram skill and tg are there while
-// Telegram is, and gone once it is not.
-func TestPrepareFollowsTheConnectors(t *testing.T) {
+// The tg an older node wrote for the built-in Telegram (personad tg) goes at the next message, Telegram signed in or
+// not: Telegram's command line is its extension's now (#1704), which the hub names in clis like any connector's.
+func TestPrepareTakesAwayTheBuiltInTg(t *testing.T) {
 	t.Setenv("JARVIS_SKILLS_DIR", t.TempDir())
-	n, home := testNode(t)
+	n, _ := testNode(t)
 	n.dir, n.bin, n.logger = t.TempDir(), "/opt/example/personad", log.New(io.Discard, "", 0)
-	prepare := func(conns ...string) {
+	prepare := func(conns []string, clis map[string]string) {
 		t.Helper()
-		params, _ := json.Marshal(map[string]any{"dir": ".jarvis/assistant", "claude_md": "# 示例", "connectors": conns})
+		params, _ := json.Marshal(map[string]any{"dir": ".jarvis/assistant", "claude_md": "# 示例", "connectors": conns, "clis": clis})
 		if _, err := n.handle(context.Background(), "assistant.prepare", params); err != nil {
 			t.Fatal(err)
 		}
 	}
-	skill := filepath.Join(home, ".jarvis/assistant/.claude/skills/telegram/SKILL.md")
 	tg := filepath.Join(n.dir, "assistant-bin", "tg")
-	prepare("github")
-	if _, err := os.Stat(skill); !os.IsNotExist(err) {
-		t.Fatalf("Telegram not signed in, yet its skill is there: %v", err)
-	}
-	prepare("github", "telegram")
-	if _, err := os.Stat(skill); err != nil {
-		t.Fatalf("Telegram signed in, no skill: %v", err)
-	}
-	if b, err := os.ReadFile(tg); err != nil || !strings.Contains(string(b), "exec /opt/example/personad tg \"$@\"") {
-		t.Fatalf("tg: %q %v", b, err)
-	}
-	prepare()
-	if _, err := os.Stat(skill); !os.IsNotExist(err) {
-		t.Fatalf("signed out, the skill stayed: %v", err)
-	}
+	_ = os.MkdirAll(filepath.Dir(tg), 0o755)
+	old := "#!/bin/sh\n# Telegram through the hub (the telegram skill), on the assistant's PATH while it is signed in (node/clicall.go).\n" +
+		"exec /opt/example/personad tg \"$@\"\n"
+	_ = os.WriteFile(tg, []byte(old), 0o755)
+	prepare([]string{"telegram"}, nil)
 	if _, err := os.Stat(tg); !os.IsNotExist(err) {
-		t.Fatalf("signed out, tg stayed: %v", err)
+		t.Fatalf("the built-in's tg stayed: %v", err)
+	}
+	prepare([]string{"telegram"}, map[string]string{"tg": "telegram"})
+	if b, err := os.ReadFile(tg); err != nil || !strings.Contains(string(b), "exec /opt/example/personad tool --cli telegram \"$@\"") {
+		t.Fatalf("the extension's tg: %q %v", b, err)
+	}
+	prepare(nil, nil)
+	if n.mayCall("telegram_list_chats") {
+		t.Fatal("Telegram signed out, its tools are still called")
 	}
 }
 
 // A connector with a command line of its own (connector.Manifest.CLI, #1704): the hub says it with the connectors, the
-// node puts it on the assistant's PATH as personad tool --cli <id> (the built-in Telegram's tg until then), lets the
+// node puts it on the assistant's PATH as personad tool --cli <id>, lets the
 // command lines call that connector's tools, and takes away only the command lines it wrote once the connector is
 // signed out (a plugin's gate commands live there too).
 func TestConnectorCommandLines(t *testing.T) {
@@ -214,9 +215,9 @@ func TestConnectorCommandLines(t *testing.T) {
 		t.Fatal("the command lines call the signed-in connectors' tools, and only those")
 	}
 
-	prepare([]string{"telegram"}, nil) // the built-in Telegram: no command line of its own
-	if b, err := os.ReadFile(filepath.Join(bin, "tg")); err != nil || !strings.Contains(string(b), "exec /opt/example/personad tg \"$@\"") {
-		t.Fatalf("the built-in's tg: %q %v", b, err)
+	prepare([]string{"telegram"}, nil) // signed in, and no command line said: none on the PATH
+	if _, err := os.Stat(filepath.Join(bin, "tg")); !os.IsNotExist(err) {
+		t.Fatalf("no command line said, tg stayed: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(bin, "ex")); !os.IsNotExist(err) {
 		t.Fatalf("example signed out, ex stayed: %v", err)

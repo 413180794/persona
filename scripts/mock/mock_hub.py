@@ -2522,7 +2522,7 @@ if os.environ.get("MOCK_GITHUB") == "guide":  # a status with the steps to fix i
 LEGACY_CONNECTORS = [{"id": "lark", "name": "飞书", "status": "ok", "capabilities": ["tools", "inbox", "archive"], "enabled": True},
                      {"id": "mail", "name": "邮件", "status": "ok", "capabilities": ["tools", "actions", "inbox", "archive"], "enabled": True}]
 
-# Telegram (docs/plan-telegram.md): the user's own account, signed in from 设置 › 连接器 › Telegram a step at a time.
+# Telegram (the Telegram extension, #1704; docs/archive/plan-telegram.md): the user's own account, signed in from 设置 › 连接器 › Telegram a step at a time.
 # All made up: api_id 1234567 (a hash of 32 zeros is refused), any phone starting with +, the code 12345, the 2FA
 # password example-password. MOCK_TELEGRAM=off|signed_out|signed_in|2fa|limited (unset: no Telegram connector at all;
 # limited: signed in and waiting out a flood wait Telegram asked for);

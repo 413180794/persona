@@ -1,6 +1,6 @@
 // Package serve runs a connector in a program of its own, for the hub (connector/proc): the hub starts the program
 // and talks to it over its stdin / stdout with the hub↔node JSON-lines RPC (internal/rpc). One connector per program.
-// A connector whose dependencies would make jarvisd much bigger lives this way (jarvisd-telegram, docs/plan-telegram.md).
+// A connector whose dependencies would make jarvisd much bigger lives this way (the Telegram extension, #1704).
 //
 // The hub calls the methods below; the program calls back for its secret (secrets.*: the hub binds them to this
 // program's connector) and tells the hub what changed (the changed event). Nothing here logs what crosses the pipe.

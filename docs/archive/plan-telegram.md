@@ -1,5 +1,9 @@
 # 计划：Telegram 连接器（用户自己的账号）
 
+> 已结束（2026-11-05）：Telegram 连接器搬出了开源仓库，成了私有扩展市场里的扩展 `telegram`（#1704）。
+> 连接器 id 不变，登录、收件箱、知识库照旧接着用；代码、`tg` 命令行（现在是 `personad tool --cli telegram`）、telegram 技能都在扩展里。
+> 这里只作当时的设计记录，文中的路径（`connector/telegram`、`jarvisd-telegram`、`personad tg`）在本仓库里已经没有了。
+
 状态：方案已定，开工（2026-11-03）。用户定了：用自己的账号（MTProto 用户客户端，不是机器人）；消息文字可以交给 AI，和飞书一样进知识库和收件箱，
 助手能查、能总结；设置里留开关。第一版**只读**。框架见 `docs/plan-connectors.md`（Connector 接口、Registry、闸门），本文只写 Telegram 自己的部分。
 做完后把设计并进 `docs/connectors.md`（或那份计划的「Telegram」一节），删掉这份。

@@ -131,7 +131,7 @@ hub 不认识的扩展点：插件照样能装（可能是给新版 hub 写的�
 1. **唤醒**（原来就有）：连接器有变化就发 `connector.changed {scope: "inbox"}`，hub 另外按 `poll_seconds` 定期拉（`docs/connector-protocol.md`）。
 2. **自己的分拣规则**：设置里必须有第一层的 `triage_rules`（`string`，上面「约定的设置项」），交条目时带在 `rules` 上。
    **装、升级时查**（预览这一步：命令行、App、管理界面、浏览器上传、市场，连同市场插件的自动升级）：没有就装不上（「设置里却没有 triage_rules……装不上」）。
-   已经装好的不重新查，照常运行；回滚回到装过的版本也不查。内置插件（Telegram 这些）不受这条管。
+   已经装好的不重新查，照常运行；回滚回到装过的版本也不查。内置插件（微信机器人这些）不受这条管。
 3. **自己的兜底（可选）**：连接器的 `capabilities` 加 `fallback`，承诺每个收件箱条目都带兜底分级 `extra.rule_tier`（`action` / `fyi` / `noise`）：
    模型分不了时按它进收件箱（`docs/inbox.md`「AI 分拣」），模型照样先分。**没声明 `fallback` 的，必须有能用的分拣模型**（设置 › 模型 的「信息筛选」，`inbox.triage`）：
    - **启用**：打开开关（`PUT /api/v1/plugins/{id}/-/enabled`，管理界面同理、渠道页的开关也是），以及装好（装上就是开着的）、开着时升级（含自动升级）时，
@@ -881,17 +881,18 @@ node 照做（`node/plugins.go`）。什么时候对齐：这台电脑连上时�
 用 `file:` 安装或在管理界面上传，用插件协议 1 加连接器协议 v2 和 hub 说话。接入手册见 [wechat-connector.md](wechat-connector.md)；
 连接器一侧逐个能力的检查（`CheckProgram`、合成的线上夹具）见 [connector-protocol.md](connector-protocol.md)「一致性测试」。
 
-## 内置插件：Telegram
+## Telegram：从内置插件到扩展（#1704）
 
-`jarvisd-telegram` 在 personad 旁边时注册成内置插件 `telegram`，贡献连接器 `telegram`（能力在 `connector/telegram/spec`，程序没跑过也报得出）。
-程序必须和 hub 是同一次构建（`version -v` 一样），否则状态写明「不是同一个版本」、不启动。连接器 id、`connector_secrets` 里的会话、连接器的开关和选项都没变，
-默认关着；用户平时只碰连接器的开关（插件默认启用，开着连接器才跑进程）。
+Telegram 连接器原来是内置插件 `telegram`（`jarvisd-telegram`，在 personad 旁边）。2026-11-05 起它是私有扩展市场里的扩展 `telegram`，代码不在本仓库：
+连接器 id 还是 `telegram`，所以 `connector_secrets` 里的登录、收件箱、知识库、连接器的开关和选项都按同一个 id 接着用，装上不用重新登录。
+交接时注册表让内置的给同 id 的已装扩展让位（`Registry.Yields`）：先停掉内置的进程再起扩展的，同一个 Telegram 会话不会两边同时连。
+内置的删掉以后，没装扩展的 hub 上就没有 Telegram 连接器（App 按 hub 列出的连接器显示，不出现）；那一行登录留在库里，装上扩展接着用。
 
 ## 内置插件：微信（`wechat`）
 
 `jarvisd-wechat` 在 personad 旁边时注册成内置插件 `wechat`（#1352，`docs/wechat.md`）：贡献连接器 `wechat`（只有 `status` 和扫码的 `login`，
 声明在 `wechat/spec`）和渠道 `wechat`（`channel` 扩展点，#1466，[channels.md](channels.md)），权限只有 `network: *.weixin.qq.com`。
-和 Telegram 一样要和 hub 同一次构建、跟着连接器的开关跑。第一版用 `hub_api` + `events` 拼（插件自己轮询会话、跟踪这一轮），#1466 起这些都是 hub 的渠道管线，
+要和 hub 同一次构建、跟着连接器的开关跑。第一版用 `hub_api` + `events` 拼（插件自己轮询会话、跟踪这一轮），#1466 起这些都是 hub 的渠道管线，
 插件不再拿 hub 的 token、不订事件。连接器程序当渠道用：实现 `channel.Transport`（`Send`，可选 `Typing` / `Edit`），收到的消息交给 `serve.Init.Channel`（`Receive`），
 `connector/serve` 把 `channel.*` 转给它、按 `ref` 只发一次。
 
