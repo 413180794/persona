@@ -153,8 +153,14 @@ data class NotifyEvent(
 @Serializable(with = ExtensionUiEventSerializer::class)
 data class ExtensionUiEvent(
     @SerialName("extension") @JsonNames("plugin") val extension: String,
-    val id: String,
+    /** The UI it is about; none (only with [invalidate]): all of the extension's. */
+    val id: String? = null,
     val badge: persona.core.contracts.api.ExtensionViewBadge? = null,
+    /**
+     * UI version 3 (`ui.invalidate`, only as `extension_ui`): the extension's data changed, the views on screen are drawn
+     * again. Not a badge change: the badge stays.
+     */
+    val invalidate: Boolean = false,
 ) : ServerEvent
 
 /** The hub's update status changed (docs/hub-update.md「App 里」): `update` is what GET /api/v1/hub/update answers. */
@@ -185,7 +191,9 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             "client_hello_ack" -> input.json.decodeFromJsonElement<ClientHelloAck>(obj)
             "pong" -> input.json.decodeFromJsonElement<Pong>(obj)
             "notify" -> input.json.decodeFromJsonElement<NotifyEvent>(obj)
-            "extension_ui", "plugin_ui" -> input.json.decodeFromJsonElement<ExtensionUiEvent>(obj)
+            "extension_ui", "plugin_ui" -> input.json.decodeFromJsonElement<ExtensionUiEvent>(obj).also {
+                require(it.invalidate || !it.id.isNullOrEmpty()) { "A badge names its UI" }
+            }
             "hub_update" -> input.json.decodeFromJsonElement<HubUpdateEvent>(obj)
             "lock_test" -> input.json.decodeFromJsonElement<LockTestEvent>(obj).also {
                 require(it.testId.isNotBlank() && it.dueAt.isNotBlank() && it.sentAt.isNotBlank())

@@ -40,7 +40,8 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
             onChannel = { navigator.navigate(ChannelRoute(it)) })
     }
     entry<ExtensionUiRoute> { route ->
-        ExtensionUiPage(services.extensions.takeUnless { demo }, route.extensionId, route.uiId, route.title, onBack = navigator::back)
+        ExtensionUiPage(services.extensions.takeUnless { demo }, route.extensionId, route.uiId, route.title, onBack = navigator::back,
+            initialState = route.state, depth = route.depth, onPush = navigator::navigate)
     }
     entry<ExtensionMarketRoute> {
         ExtensionMarketPage(services.extensions.takeUnless { demo }, onBack = navigator::back,
@@ -61,6 +62,6 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
         }.collectAsState(emptyMap())
         val machineName = remember(names) { { id: String -> names[id]?.takeIf { it.isNotBlank() } ?: id } }
         LauncherPage(services.machines.takeUnless { demo }, services.extensions.takeUnless { demo }, route.machineId, route.name, onBack = navigator::back,
-            machineName = machineName)
+            machineName = machineName, onOpen = navigator::navigate)
     }
 }

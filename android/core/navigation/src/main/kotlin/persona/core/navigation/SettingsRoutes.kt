@@ -13,9 +13,12 @@ import kotlinx.serialization.Serializable
 /** One extension of 设置 › 扩展 (docs/extensions.md「App：设置 › 扩展」), by the hub's extension id. */
 @Serializable @SerialName("jarvis.core.navigation.PluginRoute") data class ExtensionRoute(val extensionId: String) : NavKey
 
-/** A page an extension draws (its `extension_page` UI, docs/extensions.md「声明式 UI」), opened from the extension's page. */
+/**
+ * A page an extension draws (its `extension_page` UI, docs/extensions.md「声明式 UI」), opened from the extension's page.
+ * A page the extension pushed on another (UI version 3) is first drawn with its [state], [depth] pages up.
+ */
 @Serializable @SerialName("persona.core.navigation.PluginUiRoute")
-data class ExtensionUiRoute(val extensionId: String, val uiId: String, val title: String) : NavKey
+data class ExtensionUiRoute(val extensionId: String, val uiId: String, val title: String, val state: String? = null, val depth: Int = 0) : NavKey
 
 /** 设置 › 扩展 › 扩展市场: what the hub's extension markets offer (docs/extensions.md「扩展市场」). */
 @Serializable @SerialName("persona.core.navigation.PluginMarketRoute") data object ExtensionMarketRoute : NavKey

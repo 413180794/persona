@@ -22,6 +22,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import persona.core.contracts.api.ExtensionViewAction
 import persona.core.contracts.api.ExtensionViewItem
+import persona.core.contracts.api.ExtensionViewPush
+import persona.core.contracts.api.ExtensionViewSection
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import kotlinx.coroutines.launch
@@ -32,7 +34,7 @@ import kotlinx.coroutines.launch
 
 /**
  * What the page does for a view: press a button (after its confirm), choose for a choice field, open a link, switch a
- * segmented control (its action goes at once).
+ * segmented control (its action goes at once), and since UI version 3 search, filter and load more.
  */
 internal class ExtensionViewHandle(
     val press: (ExtensionViewItem, ExtensionViewAction) -> Unit,
@@ -40,15 +42,20 @@ internal class ExtensionViewHandle(
     val choose: (ExtensionViewItem) -> Unit,
     val open: (String) -> Unit,
     val segment: (ExtensionViewItem, String) -> Unit = { _, _ -> },
+    val search: (String) -> Unit = {},
+    val filter: (String) -> Unit = {},
+    val more: (Int, ExtensionViewSection) -> Unit = { _, _ -> },
 )
 
 /**
  * The view's dialogs (a button's confirm, a choice field's choices) and the way its buttons go: an action's toast
  * shows as the app's notice, its link opens in the app, a new view replaces the page. [appLink] takes the app's own
- * links a page may open (an inbox item's source) before https ones go to the app's link handling.
+ * links a page may open (an inbox item's source) before https ones go to the app's link handling. A push (UI version
+ * 3) goes to [onPush] (a page of the extension drawn on top), a pop to [onPop] (back).
  */
 @Composable
-internal fun rememberExtensionView(model: ExtensionViewModel, appLink: (String) -> Boolean = { false }): ExtensionViewHandle {
+internal fun rememberExtensionView(model: ExtensionViewModel, appLink: (String) -> Boolean = { false },
+                                   onPush: (ExtensionViewPush) -> Unit = {}, onPop: () -> Unit = {}): ExtensionViewHandle {
     val scope = rememberCoroutineScope()
     val feedback = LocalAppFeedback.current
     val uri = LocalUriHandler.current
@@ -56,11 +63,15 @@ internal fun rememberExtensionView(model: ExtensionViewModel, appLink: (String) 
     var confirming by remember(model) { mutableStateOf<Pair<ExtensionViewItem, ExtensionViewAction>?>(null) }
     var choosing by remember(model) { mutableStateOf<ExtensionViewItem?>(null) }
     val routes by rememberUpdatedState(appLink)
+    val push by rememberUpdatedState(onPush)
+    val pop by rememberUpdatedState(onPop)
     val open: (String) -> Unit = { url -> if (!routes(url) && ExtensionViewText.isHttps(url)) runCatching { uri.openUri(url) } }
     fun show(outcome: ExtensionActionOutcome) {
         outcome.toast?.let { feedback?.notice(it) }
         outcome.error?.let { feedback?.notice(it) }
         outcome.openUrl?.let(open)
+        outcome.push?.let(push)
+        if (outcome.pop) pop()
     }
     fun run(action: ExtensionViewAction) = scope.launch { show(model.press(action)) }
     val handle = remember(model) {
@@ -70,6 +81,9 @@ internal fun rememberExtensionView(model: ExtensionViewModel, appLink: (String) 
             choose = { choosing = it },
             open = open,
             segment = { item, value -> scope.launch { show(model.choose(item, value)) } },
+            search = { query -> scope.launch { show(model.search(query)) } },
+            filter = { value -> scope.launch { show(model.filter(value)) } },
+            more = { index, section -> scope.launch { show(model.more(index, section)) } },
         )
     }
     confirming?.let { (item, action) ->
@@ -93,18 +107,23 @@ internal fun rememberExtensionView(model: ExtensionViewModel, appLink: (String) 
  */
 internal fun LazyListScope.extensionViewItems(key: String, state: ExtensionViewState, handle: ExtensionViewHandle, showTitles: Boolean = true) {
     val view = state.view ?: return
+    if (view.search != null || view.filter != null) item("$key-search") {
+        ExtensionSearchBar(view, state, handle, Modifier.padding(bottom = Tokens.Space.s))
+    }
     view.sections.forEachIndexed { s, section ->
         val title = section.title?.takeIf { it.isNotBlank() }
         if (title != null && showTitles) item("$key-s$s-title") { JSectionHeader(title) }
         else if (s > 0) item("$key-s$s-gap") { Spacer(Modifier.padding(top = Tokens.Space.l)) }
         val items = section.items.filter(ExtensionViewText::drawable)
+        // The extension's keys keep a list's place when it is drawn again (a page's 加载更多, a search).
+        val keys = ExtensionViewText.itemKeys(items)
         var i = 0
         while (i < items.size) {
             val start = i
             if (ExtensionViewText.grouped(items[i])) while (i < items.size && ExtensionViewText.grouped(items[i])) i++ else i++
             val run = items.subList(start, i)
             run.forEachIndexed { index, item ->
-                item("$key-s$s-i${start + index}") {
+                item(keys[start + index]?.let { "$key-s$s-k-$it" } ?: "$key-s$s-i${start + index}") {
                     if (ExtensionViewText.grouped(item)) {
                         JGroupItem(GroupPosition.of(index, run.size), if (index == 0 && start > 0) Modifier.padding(top = Tokens.Space.s) else Modifier) {
                             GroupedItem(item, state, handle)
@@ -112,6 +131,9 @@ internal fun LazyListScope.extensionViewItems(key: String, state: ExtensionViewS
                     } else StandaloneItem(item, state, handle, first = start == 0)
                 }
             }
+        }
+        if (section.more?.action?.id?.isNotEmpty() == true) item("$key-s$s-more") {
+            JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.s)) { ExtensionMore(s, section, state, handle) }
         }
         section.footer?.takeIf { it.isNotBlank() }?.let { footer ->
             item("$key-s$s-footer") { SettingsCaption(footer, Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s)) }
@@ -121,13 +143,14 @@ internal fun LazyListScope.extensionViewItems(key: String, state: ExtensionViewS
 
 /** A row, a link, a switch or a choice: one line of a group. */
 @Composable
-private fun GroupedItem(item: ExtensionViewItem, state: ExtensionViewState, handle: ExtensionViewHandle) {
+internal fun GroupedItem(item: ExtensionViewItem, state: ExtensionViewState, handle: ExtensionViewHandle) {
     val enabled = !state.busy
     when (item.type) {
         "row" -> {
             val action = item.action?.takeIf { it.id.isNotEmpty() }
             val badge = item.badge?.takeIf { it.text.isNotBlank() }
             JRow(item.title.orEmpty(), subtitle = item.subtitle?.takeIf { it.isNotBlank() }, value = item.value?.takeIf { it.isNotBlank() },
+                leadingIcon = item.icon?.takeIf { it.isNotBlank() }?.let(ExtensionIcons::of), leading = rowLeading(item),
                 trailing = when {
                     action != null && state.acting == action.id -> ({ JSpinner() })
                     badge != null -> ({ JTag(badge.text, ExtensionViewText.tone(badge.tone)) })
@@ -152,7 +175,7 @@ private fun GroupedItem(item: ExtensionViewItem, state: ExtensionViewState, hand
 
 /** Text, a number, a progress bar, a button, a text field, a divider: each on its own. */
 @Composable
-private fun StandaloneItem(item: ExtensionViewItem, state: ExtensionViewState, handle: ExtensionViewHandle, first: Boolean) {
+internal fun StandaloneItem(item: ExtensionViewItem, state: ExtensionViewState, handle: ExtensionViewHandle, first: Boolean) {
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     val top = if (first) Modifier else Modifier.padding(top = Tokens.Space.s)
@@ -203,6 +226,41 @@ private fun StandaloneItem(item: ExtensionViewItem, state: ExtensionViewState, h
             JStatGrid(ExtensionViewText.stats(item), Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m))
         }
         "segmented" -> SegmentedItem(item, state, handle, top)
+        "markdown" -> ExtensionMarkdown(item.text.orEmpty(), top.padding(horizontal = rowPadding))
+        "table" -> JGroupItem(GroupPosition.Single, top) { ExtensionTable(item, Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m)) }
+        "empty" -> JEmptyState(item.title.orEmpty(), item.detail.orEmpty(), top, icon = item.icon?.takeIf { it.isNotBlank() }?.let(ExtensionIcons::of),
+            action = item.button?.takeIf { it.title.isNotBlank() && it.action.id.isNotEmpty() }?.let { b ->
+                { JButton(b.title, { handle.press(item, b.action) }, kind = JButtonKind.Secondary, loading = state.acting == b.action.id,
+                    enabled = !state.busy) }
+            })
+        "loading" -> JLoading(top, item.title?.takeIf { it.isNotBlank() })
+    }
+}
+
+/**
+ * A view drawn in place, not in a lazy list (an assistant's ```persona-view in a reply): the same items in the same
+ * groups as a page's, one section under another.
+ */
+@Composable
+internal fun ExtensionViewColumn(state: ExtensionViewState, handle: ExtensionViewHandle, modifier: Modifier = Modifier) {
+    val view = state.view ?: return
+    val palette = PersonaTheme.palette
+    val type = PersonaTheme.type
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+        view.title?.takeIf { it.isNotBlank() }?.let { Text(it, style = type.headline, color = palette.ink) }
+        view.sections.forEach { section ->
+            section.title?.takeIf { it.isNotBlank() }?.let { Text(it, style = type.caption, color = palette.ink2) }
+            val items = section.items.filter(ExtensionViewText::drawable)
+            var i = 0
+            while (i < items.size) {
+                val start = i
+                if (ExtensionViewText.grouped(items[i])) while (i < items.size && ExtensionViewText.grouped(items[i])) i++ else i++
+                val run = items.subList(start, i)
+                if (ExtensionViewText.grouped(run.first())) JGroup(rows = run.map { item -> { GroupedItem(item, state, handle) } })
+                else run.forEach { StandaloneItem(it, state, handle, first = true) }
+            }
+            section.footer?.takeIf { it.isNotBlank() }?.let { Text(it, style = type.caption, color = palette.ink3) }
+        }
     }
 }
 
@@ -271,6 +329,12 @@ private fun CardItem(item: ExtensionViewItem, state: ExtensionViewState, handle:
         "chart" -> ChartItem(item, Modifier, compact = true)
         "stat_grid" -> JStatGrid(ExtensionViewText.stats(item))
         "segmented" -> SegmentedItem(item, state, handle, Modifier)
+        "markdown" -> ExtensionMarkdown(item.text.orEmpty())
+        "empty" -> Text(item.title.orEmpty(), style = type.callout, color = palette.ink2)
+        "loading" -> Row(verticalAlignment = Alignment.CenterVertically) {
+            JSpinner()
+            item.title?.takeIf { it.isNotBlank() }?.let { Spacer(Modifier.width(Tokens.Space.s)); Text(it, style = type.caption, color = palette.ink3) }
+        }
     }
 }
 

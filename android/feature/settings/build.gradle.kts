@@ -19,6 +19,10 @@ dependencies {
     implementation(libs.androidx.core)
     implementation(libs.zxing)
     implementation(libs.okhttp)
+    // An extension's view (UI version 3): markdown, and a row's avatar or thumbnail loaded from https.
+    implementation(libs.markdown)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
     implementation(libs.compose.icons)
     implementation(libs.compose.preview)
     testImplementation(libs.junit)

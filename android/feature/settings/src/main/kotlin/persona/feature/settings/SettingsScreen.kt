@@ -128,7 +128,7 @@ private fun SettingsContent(
     // Extensions' UI slots (docs/extensions.md「UI 插槽」): read again whenever the settings list shows.
     val slots = services.extensionSlots.takeUnless { services.demo }
     val slotsState = slots?.state?.collectAsState()?.value ?: ExtensionSlotsState()
-    val slotCards = if (page == "settings" && onNavigate != null) rememberExtensionCards(slots) else emptyList()
+    val slotCards = if (page == "settings" && onNavigate != null) rememberExtensionCards(slots) { onNavigate(it) } else emptyList()
     LaunchedEffect(slots, page, connection) {
         if (slots != null && page == "settings" && connection == ConnectionState.Online) slots.load()
     }

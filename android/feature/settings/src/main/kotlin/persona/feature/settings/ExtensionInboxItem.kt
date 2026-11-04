@@ -73,7 +73,7 @@ fun rememberInboxItemBody(slots: ExtensionSlots?, route: InboxItemUiRoute, revis
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
     val source by rememberUpdatedState(onSource)
-    val handle = rememberExtensionView(model) { url -> ExtensionViewText.inboxSource(url)?.let { source(it); true } ?: false }
+    val handle = rememberExtensionView(model, appLink = { url -> ExtensionViewText.inboxSource(url)?.let { source(it); true } ?: false })
     LaunchedEffect(model, revision) { model.load() }
     KeepFresh(model)
     val reload = remember(model) { { scope.launch { model.load() }; Unit } }

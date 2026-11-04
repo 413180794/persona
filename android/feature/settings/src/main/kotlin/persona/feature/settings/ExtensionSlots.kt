@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -160,8 +161,11 @@ class ExtensionSlots internal constructor(
         catch (_: Exception) { /* Nothing to tell: these items open their own pages. */ }
     }
 
-    /** A `extension_ui` event: the nav page's badge changes (none clears it). */
-    fun badge(event: ExtensionUiEvent) = mutable.update { s ->
+    /** The `ui.invalidate`s among the hub's events (UI version 3): the views on screen are drawn again. */
+    val invalidations: Flow<ExtensionUiEvent> get() = events.filter { it.invalidate }
+
+    /** An `extension_ui` event: the nav page's badge changes (none clears it); an invalidation leaves badges alone. */
+    fun badge(event: ExtensionUiEvent) = if (event.invalidate) Unit else mutable.update { s ->
         s.copy(places = s.places.map { if (it.extension == event.extension && it.id == event.id && it.placement == ExtensionSlotText.NavPage) it.copy(badge = event.badge?.takeIf { b -> b.text.isNotBlank() }) else it })
     }
 }
@@ -174,11 +178,22 @@ fun rememberExtensionSlots(extensions: ExtensionManagement?, connection: StateFl
     return slots
 }
 
-/** Runs [model]'s `refresh_after` while the page is resumed (not in the background, not left for another page). */
+/**
+ * Runs [model]'s `refresh_after` while the page is resumed (not in the background, not left for another page), and
+ * follows [events]' `ui.invalidate` for it: drawn at once while resumed, else when it resumes.
+ */
 @Composable
-internal fun KeepFresh(model: ExtensionViewModel) {
+internal fun KeepFresh(model: ExtensionViewModel, events: Flow<ExtensionUiEvent>? = null) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(model, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { model.keepFresh() } }
+    LaunchedEffect(model, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            model.shown(true)
+            try { model.keepFresh() } finally { model.shown(false) }
+        }
+    }
+    if (events != null) LaunchedEffect(model, events) {
+        events.filter { ExtensionViewText.invalidates(it, model.extension, model.ui) }.collect { model.invalidate() }
+    }
 }
 
 /**
@@ -248,7 +263,7 @@ internal class ExtensionCardSlot(val place: ExtensionUiPlace, val state: Extensi
 
 /** The cards of the settings home, each drawn compact and kept fresh while settings is on screen. */
 @Composable
-internal fun rememberExtensionCards(slots: ExtensionSlots?): List<ExtensionCardSlot> {
+internal fun rememberExtensionCards(slots: ExtensionSlots?, onOpen: (persona.core.navigation.ExtensionUiRoute) -> Unit = {}): List<ExtensionCardSlot> {
     slots ?: return emptyList()
     val state by slots.state.collectAsState()
     val cards = state.cards
@@ -259,8 +274,9 @@ internal fun rememberExtensionCards(slots: ExtensionSlots?): List<ExtensionCardS
     return models.map { (place, model) ->
         key(place.extension, place.id) {
             LaunchedEffect(model) { model.load() }
-            KeepFresh(model)
-            ExtensionCardSlot(place, model.state.collectAsState().value, rememberExtensionView(model)) { scope.launch { model.load() } }
+            KeepFresh(model, slots.invalidations)
+            ExtensionCardSlot(place, model.state.collectAsState().value,
+                rememberExtensionView(model, onPush = { onOpen(ExtensionViewText.opened(place, it)) })) { scope.launch { model.load() } }
         }
     }
 }
@@ -271,7 +287,8 @@ internal fun rememberExtensionCards(slots: ExtensionSlots?): List<ExtensionCardS
  * machine (one of another hub) draws nothing; a failure shows with 重试.
  */
 @Composable
-fun rememberMachineExtensionSections(slots: ExtensionSlots?, machineId: String): LazyListScope.() -> Unit {
+fun rememberMachineExtensionSections(slots: ExtensionSlots?, machineId: String,
+                                     onOpen: (persona.core.navigation.ExtensionUiRoute) -> Unit = {}): LazyListScope.() -> Unit {
     slots ?: return {}
     val state by slots.state.collectAsState()
     val places = state.machineSections
@@ -284,8 +301,9 @@ fun rememberMachineExtensionSections(slots: ExtensionSlots?, machineId: String):
     val sections = models.map { (place, model) ->
         key(place.extension, place.id) {
             LaunchedEffect(model) { model.load() }
-            KeepFresh(model)
-            Triple(place to model, model.state.collectAsState().value, rememberExtensionView(model))
+            KeepFresh(model, slots.invalidations)
+            Triple(place to model, model.state.collectAsState().value,
+                rememberExtensionView(model, onPush = { onOpen(ExtensionViewText.opened(place, it)) }))
         }
     }
     return {

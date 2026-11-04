@@ -107,8 +107,8 @@ class HttpExtensionManagement internal constructor(
 
     /**
      * Every call says where and for whom it draws (docs/extensions.md「UI 插槽」「上下文」): the caller's launcher, machine,
-     * inbox item and size, and this app's time zone, language, platform and UI version (2: charts, stat grids,
-     * segmented). An older hub ignores what it does not know.
+     * inbox item and size, and this app's time zone, language, platform and UI version ([UI_VERSION]). An older hub
+     * ignores what it does not know, and takes the lower of its version and the app's.
      */
     private fun uiBody(context: ExtensionUiContext?, state: String?, action: String?, values: Map<String, String>?) = buildJsonObject {
         val app = device()
@@ -243,8 +243,11 @@ class HttpExtensionManagement internal constructor(
     private fun secret(name: String): String = name.also { require(it.matches(SecretName)) { "Invalid secret name" } }
 
     companion object {
-        /** The UI version this app draws: 2 has charts, stat grids, segmented controls and `refresh_after`. */
-        const val UI_VERSION = 2
+        /**
+         * The UI version this app draws: 2 has charts, stat grids, segmented controls and `refresh_after`; 3 markdown,
+         * tables, empty and loading states, a row's picture, search, filter, 加载更多, push / pop and `ui.invalidate`.
+         */
+        const val UI_VERSION = 3
 
         /** This phone's time zone (IANA) and language (a BCP 47 tag), the platform and the UI version it draws. */
         fun deviceContext() = ExtensionUiContext(tz = java.util.TimeZone.getDefault().id, locale = java.util.Locale.getDefault().toLanguageTag(),

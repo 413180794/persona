@@ -92,13 +92,37 @@ data class ExtensionView(
     val sections: List<ExtensionViewSection> = emptyList(),
     val state: String? = null,
     @SerialName("refresh_after") val refreshAfter: Int? = null,
+    /** UI version 3: a search box on top; typing (after a pause) sends its action with `{q}`. */
+    val search: ExtensionViewSearch? = null,
+    /** UI version 3: one of a few beside the search box; choosing sends its action with `{name: value}` (and `q`). */
+    val filter: ExtensionViewFilter? = null,
 )
+
+/** A view's search box (UI version 3): [value] is what it holds now (the extension keeps it in its state). */
+@Serializable
+data class ExtensionViewSearch(val placeholder: String? = null, val value: String? = null, val action: ExtensionViewAction = ExtensionViewAction())
+
+/** A view's filter (UI version 3): [choices] (2 to 20), the chosen [value], sent under [name]. */
+@Serializable
+data class ExtensionViewFilter(
+    val name: String = "",
+    val title: String? = null,
+    val choices: List<ExtensionViewChoice> = emptyList(),
+    val value: String? = null,
+    val action: ExtensionViewAction = ExtensionViewAction(),
+)
+
+/** A section's 加载更多 (UI version 3): reaching the end, or tapping it, sends [action] once and waits. */
+@Serializable
+data class ExtensionViewMore(val title: String? = null, val action: ExtensionViewAction = ExtensionViewAction())
 
 /** A section of a view. An item this app cannot even read (a newer hub's) is left out, never the whole view. */
 @Serializable
 data class ExtensionViewSection(
     val title: String? = null,
     val footer: String? = null,
+    /** UI version 3: more items to load at the section's end. */
+    val more: ExtensionViewMore? = null,
     @Serializable(with = LenientItemsSerializer::class) val items: List<ExtensionViewItem> = emptyList(),
 )
 
@@ -121,9 +145,9 @@ internal object LenientItemsSerializer : KSerializer<List<ExtensionViewItem>> {
 }
 
 /**
- * One item of a view, by [type]: `text`, `metric`, `progress`, `row`, `button`, `link`, `field` or `divider`, and
- * since UI version 2 `chart`, `stat_grid` and `segmented`; each uses a few of the fields. `tone` is
- * `neutral | positive | caution | danger`. A type this app does not know is skipped when drawn.
+ * One item of a view, by [type]: `text`, `metric`, `progress`, `row`, `button`, `link`, `field` or `divider`, since UI
+ * version 2 `chart`, `stat_grid` and `segmented`, and since 3 `markdown`, `table`, `empty` and `loading`; each uses a
+ * few of the fields. `tone` is `neutral | positive | caution | danger`. A type this app does not know is skipped when drawn.
  */
 @Serializable
 data class ExtensionViewItem(
@@ -160,7 +184,37 @@ data class ExtensionViewItem(
     val stacked: Boolean? = null,
     /** stat_grid: 1 to 6 numbers side by side. */
     val stats: List<ExtensionStat>? = null,
+    /** Any item (UI version 3): stays the same across drawings, so a list keeps its place and what is open. */
+    val key: String? = null,
+    /** row, empty (UI version 3): one of the fixed icons (docs/extensions.md); one this app does not know is the default. */
+    val icon: String? = null,
+    /** row (UI version 3): a picture (https) or one or two letters standing in for one. */
+    val avatar: ExtensionViewAvatar? = null,
+    /** row (UI version 3): a small picture (https) on the leading side. */
+    val thumbnail: ExtensionViewThumbnail? = null,
+    /** table (UI version 3): 1 to 8 columns. */
+    val columns: List<ExtensionTableColumn>? = null,
+    /** table (UI version 3): up to 100 rows, as many cells as columns. */
+    val rows: List<List<String>>? = null,
+    /** table (UI version 3): a line under it. */
+    val caption: String? = null,
+    /** empty (UI version 3): at most one button. */
+    val button: ExtensionEmptyButton? = null,
 )
+
+@Serializable
+data class ExtensionEmptyButton(val title: String = "", val action: ExtensionViewAction = ExtensionViewAction())
+
+@Serializable
+data class ExtensionViewAvatar(val url: String? = null, val text: String? = null)
+
+/** [aspect]: `square` (default) or `wide`. */
+@Serializable
+data class ExtensionViewThumbnail(val url: String = "", val aspect: String? = null)
+
+/** [align]: `start` (default) or `end` (numbers). */
+@Serializable
+data class ExtensionTableColumn(val title: String = "", val align: String? = null)
 
 /** One line, or one colour of bars, of a chart. No [tone]: the app's own colours for series, in order. */
 @Serializable
@@ -181,9 +235,24 @@ data class ExtensionStat(val label: String = "", val value: String = "", val det
 @Serializable
 data class ExtensionViewBadge(val text: String = "", val tone: String? = null)
 
-/** A button's action: [confirm] asks first, [submit] sends the page's fields with it. */
+/**
+ * A button's action: [confirm] asks first, [submit] sends the page's fields with it. With [push] (UI version 3) it is not
+ * sent at all: a page of the extension is drawn on top, with the push's state.
+ */
 @Serializable
-data class ExtensionViewAction(val id: String = "", val confirm: String? = null, val submit: Boolean = false)
+data class ExtensionViewAction(
+    val id: String = "",
+    val confirm: String? = null,
+    val submit: Boolean = false,
+    val push: ExtensionViewPush? = null,
+)
+
+/**
+ * A page drawn on top (UI version 3): the extension's UI [ui] (this one when empty, a whole page's), first drawn with
+ * [state]; [title] stands until the view brings its own.
+ */
+@Serializable
+data class ExtensionViewPush(val state: String? = null, val title: String? = null, val ui: String? = null)
 
 @Serializable
 data class ExtensionViewChoice(val value: String = "", val title: String? = null) {
@@ -196,6 +265,10 @@ data class ExtensionUiResult(
     val view: ExtensionView? = null,
     val toast: String? = null,
     @SerialName("open_url") val openUrl: String? = null,
+    /** UI version 3: draw a page on top (after a list's 新建, say). */
+    val push: ExtensionViewPush? = null,
+    /** UI version 3: back to the page underneath (after 保存), which is drawn again. */
+    val pop: Boolean = false,
 )
 
 /**

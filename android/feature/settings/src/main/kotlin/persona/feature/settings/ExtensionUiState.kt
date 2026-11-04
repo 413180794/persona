@@ -8,6 +8,8 @@ import persona.core.contracts.api.ExtensionUiUnsupported
 import persona.core.contracts.api.ExtensionView
 import persona.core.contracts.api.ExtensionViewAction
 import persona.core.contracts.api.ExtensionViewItem
+import persona.core.contracts.api.ExtensionViewPush
+import persona.core.contracts.api.ExtensionViewSection
 import persona.core.designsystem.ChartMath
 import persona.core.designsystem.JChartData
 import persona.core.designsystem.JChartKind
@@ -74,7 +76,10 @@ internal object ExtensionViewText {
      * is not https is not drawn, nor a chart without points or a segmented without choices to switch between.
      */
     fun drawable(item: ExtensionViewItem): Boolean = when (item.type) {
-        "text", "metric", "progress", "row", "divider" -> true
+        "text", "metric", "progress", "row", "divider", "loading" -> true
+        "markdown" -> !item.text.isNullOrBlank()
+        "table" -> !item.columns.isNullOrEmpty()
+        "empty" -> !item.title.isNullOrBlank()
         "button" -> item.action?.id?.isNotEmpty() == true
         "link" -> isHttps(item.url)
         "field" -> !item.name.isNullOrEmpty() && item.kind in setOf("text", "secret", "number", "toggle", "choice")
@@ -84,8 +89,70 @@ internal object ExtensionViewText {
         else -> false
     }
 
+    /**
+     * A row's picture: an avatar or a thumbnail, https only (anything else is not loaded: the letters or the icon stand
+     * in); the app loads it itself, with no credentials.
+     */
+    fun picture(url: String?): String? = url?.takeIf(::isHttps)
+
+    /** An avatar's letters: the extension's one or two, else the first of the row's title. */
+    fun initials(item: ExtensionViewItem): String =
+        item.avatar?.text?.trim()?.takeIf { it.isNotEmpty() }?.take(2) ?: item.title.orEmpty().trim().take(1)
+
+    /**
+     * A table's rows as many cells as it has columns (a short row is filled, a long one cut), at most 100 rows of 8
+     * columns: the hub refuses more, an older one may not.
+     */
+    fun tableRows(item: ExtensionViewItem): List<List<String>> {
+        val width = item.columns.orEmpty().take(8).size
+        return item.rows.orEmpty().take(100).map { row -> List(width) { row.getOrNull(it).orEmpty() } }
+    }
+
+    /**
+     * Markdown an extension may write (docs/extensions.md「声明式 UI」): headings, paragraphs, lists, emphasis, code,
+     * quotes and https links. Pictures become their words, other links their words; HTML is drawn as the text it is
+     * (the renderer has no HTML).
+     */
+    fun safeMarkdown(text: String): String = text.take(20_000)
+        .replace(Regex("!\\[([^\\]]*)]\\([^)]*\\)"), "$1")
+        .replace(Regex("\\[([^\\]]*)]\\((?!https://)[^)]*\\)"), "$1")
+
+    /** Lazy-list keys for a section's items: the extension's [ExtensionViewItem.key] when it gives one (and unique). */
+    fun itemKeys(items: List<ExtensionViewItem>): List<String?> {
+        val seen = HashSet<String>()
+        return items.map { item -> item.key?.takeIf { it.isNotBlank() && seen.add(it) } }
+    }
+
     /** Fields aren't drawn on a card (the hub refuses them there too): it opens a page for that. */
-    fun drawableOnCard(item: ExtensionViewItem): Boolean = item.type != "field" && drawable(item)
+    fun drawableOnCard(item: ExtensionViewItem): Boolean = item.type != "field" && item.type != "table" && drawable(item)
+
+    /** How deep pages pushed on each other may go (docs/extensions.md「页面跳转」). */
+    const val MaxDepth = 8
+
+    /**
+     * The page a push opens on top of [uiId]'s ([depth] pages up): the push's UI of the same extension (this one when
+     * empty), its state and title; none past [MaxDepth].
+     */
+    fun pushed(extensionId: String, uiId: String, title: String, depth: Int, push: ExtensionViewPush): persona.core.navigation.ExtensionUiRoute? {
+        if (depth + 1 >= MaxDepth) return null
+        return persona.core.navigation.ExtensionUiRoute(extensionId, push.ui?.takeIf { it.isNotBlank() } ?: uiId,
+            push.title?.takeIf { it.isNotBlank() } ?: title, push.state, depth + 1)
+    }
+
+    /**
+     * The whole page a push on a card, a machine's section or a launcher's section opens (it has no stack of its own):
+     * the push's UI, else the place's own.
+     */
+    fun opened(place: ExtensionUiPlace, push: ExtensionViewPush): persona.core.navigation.ExtensionUiRoute =
+        persona.core.navigation.ExtensionUiRoute(place.extension, push.ui?.takeIf { it.isNotBlank() } ?: place.id,
+            push.title?.takeIf { it.isNotBlank() } ?: place.title.ifBlank { place.id }, push.state)
+
+    /** Whether an `extension_ui` event asks to draw [extension]'s UI [ui] again (`ui.invalidate`, all of it when no id). */
+    fun invalidates(event: persona.core.contracts.ExtensionUiEvent, extension: String, ui: String): Boolean =
+        event.invalidate && event.extension == extension && (event.id.isNullOrEmpty() || event.id == ui)
+
+    /** How long the search box waits after typing stops before asking the extension. */
+    const val SearchPauseMillis = 300L
 
     /** How a chart's value is written: the extension's own words, else short with the unit (`1.2M tokens`). */
     fun display(value: Double, display: String?, unit: String?): String =
@@ -152,12 +219,25 @@ internal data class ExtensionViewState(
     val unsupported: Boolean = false,
     /** When the view was last drawn (or tried), for `refresh_after`. */
     val drawnAt: Long? = null,
+    /** What the search box holds now (UI version 3); null: as the view says. */
+    val query: String? = null,
+    /** A section's 加载更多 on its way (the section's index): its row spins, the page stays usable. */
+    val loadingMore: Int? = null,
 ) {
     val busy: Boolean get() = loading || acting != null
 }
 
-/** What pressing a button brought back for the page to show: a notice, a link to open, a failure. */
-internal data class ExtensionActionOutcome(val toast: String? = null, val openUrl: String? = null, val error: String? = null)
+/**
+ * What pressing a button brought back for the page to show: a notice, a link to open, a failure, and since UI version 3
+ * a page to draw on top ([push]) or going back ([pop]).
+ */
+internal data class ExtensionActionOutcome(
+    val toast: String? = null,
+    val openUrl: String? = null,
+    val error: String? = null,
+    val push: ExtensionViewPush? = null,
+    val pop: Boolean = false,
+)
 
 /**
  * One view an extension draws: at [place], with [context] (a launcher's page, a machine's, a card's size). [now] is the
@@ -171,18 +251,28 @@ internal class ExtensionViewModel(
     private val context: ExtensionUiContext? = null,
     private val now: () -> Long = System::currentTimeMillis,
     private val opens: (String) -> Boolean = ExtensionViewText::isHttps,
+    /** A pushed page's first state (the push's); later drawings send the view's own. */
+    private val initialState: String? = null,
 ) {
     private val mutable = MutableStateFlow(ExtensionViewState())
     val state = mutable.asStateFlow()
 
+    /** The view is on screen ([shown]); an `ui.invalidate` while it is not marks it [stale], drawn when it comes back. */
+    private var shown = false
+    private var stale = false
+    /** Answers to the search box come back in order; an older one that arrives late is dropped. */
+    private var asked = 0
+
     constructor(api: ExtensionUi, place: ExtensionUiPlace, context: ExtensionUiContext? = null) : this(api, place.extension, place.id, context)
+
+    private fun currentState(): String? = state.value.view?.state ?: initialState
 
     /** Draws it (again), with the extension's state of the last view. */
     suspend fun load() {
         if (state.value.loading) return
         mutable.update { it.copy(loading = true) }
         try {
-            val view = api.renderUi(extension, ui, context, state.value.view?.state)
+            val view = api.renderUi(extension, ui, context, currentState())
             mutable.update { it.copy(view = view, values = ExtensionViewText.fields(view), error = null, failure = null, unsupported = false) }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: ExtensionUiUnsupported) { mutable.update { it.copy(unsupported = true, error = null) } }
@@ -190,6 +280,29 @@ internal class ExtensionViewModel(
         catch (error: Exception) { mutable.update { it.copy(error = "读取失败：${failureReason(error)}", failure = error) } }
         finally { mutable.update { it.copy(loading = false, drawnAt = now()) } }
     }
+
+    /**
+     * The extension's data changed (`ui.invalidate`, docs/extensions.md「声明式 UI」): drawn again if on screen, else when it
+     * comes back.
+     */
+    suspend fun invalidate() {
+        if (shown) load() else stale = true
+    }
+
+    /**
+     * The view came on screen or left it (the page resumed or paused): one that was invalidated meanwhile, or that a
+     * page was pushed on ([covered]: the user comes back from it, maybe after saving there), is drawn now.
+     */
+    suspend fun shown(on: Boolean) {
+        shown = on
+        if (on && stale && state.value.view != null) {
+            stale = false
+            load()
+        }
+    }
+
+    /** A page of the extension was pushed on this one: it is drawn again when it shows (docs/extensions.md「页面跳转」). */
+    fun covered() { stale = true }
 
     /**
      * Draws it again when its `refresh_after` is up, for as long as it is called (the page runs it while it is
@@ -221,21 +334,47 @@ internal class ExtensionViewModel(
     fun edit(name: String, value: String) = mutable.update { it.copy(values = it.values + (name to value)) }
 
     /**
+     * An action that does not hold the page (search, filter, 加载更多): sent with [values]; a new view replaces this one,
+     * keeping what is being typed into its fields; [before] marks the state while it goes, [loadingMore] the section
+     * spinning. An answer that a later one has overtaken is dropped.
+     */
+    internal suspend fun quietly(id: String, values: Map<String, String>, loadingMore: Int? = null,
+                                 before: (ExtensionViewState) -> ExtensionViewState): ExtensionActionOutcome {
+        val ask = ++asked
+        mutable.update { before(it).copy(loadingMore = loadingMore ?: it.loadingMore) }
+        return try {
+            val result = api.uiAction(extension, ui, id, context, currentState(), values)
+            if (ask == asked) result.view?.let { view ->
+                mutable.update { s ->
+                    // What was typed stays; the view's new fields come in with its values.
+                    val fresh = ExtensionViewText.fields(view)
+                    s.copy(view = view, values = fresh + s.values.filterKeys { it in fresh }, error = null, drawnAt = now())
+                }
+            }
+            ExtensionActionOutcome(result.toast?.takeIf { it.isNotBlank() }, result.openUrl?.takeIf(opens), push = result.push, pop = result.pop)
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) { ExtensionActionOutcome(error = "没有做成：${failureReason(error)}") }
+        finally { if (loadingMore != null) mutable.update { it.copy(loadingMore = null) } }
+    }
+
+    /**
      * A button or a row was pressed (after its confirm, which the page asks): sends it, with the fields when it
      * submits. A new view replaces the page; nothing back draws it again.
      */
     suspend fun press(action: ExtensionViewAction, values: Map<String, String>? = null): ExtensionActionOutcome {
+        // A push is not sent: the page draws the extension's page on top (UI version 3).
+        action.push?.let { return ExtensionActionOutcome(push = it) }
         if (state.value.busy || action.id.isEmpty()) return ExtensionActionOutcome()
         mutable.update { it.copy(acting = action.id) }
         return try {
             val current = state.value
-            val result = api.uiAction(extension, ui, action.id, context, current.view?.state,
+            val result = api.uiAction(extension, ui, action.id, context, current.view?.state ?: initialState,
                 values ?: current.values.takeIf { action.submit })
             when {
                 result.view != null -> mutable.update { it.copy(view = result.view, values = ExtensionViewText.fields(result.view), error = null, drawnAt = now()) }
-                result.toast == null && result.openUrl == null -> { mutable.update { it.copy(acting = null) }; load() }
+                result.toast == null && result.openUrl == null && result.push == null && !result.pop -> { mutable.update { it.copy(acting = null) }; load() }
             }
-            ExtensionActionOutcome(result.toast?.takeIf { it.isNotBlank() }, result.openUrl?.takeIf(opens))
+            ExtensionActionOutcome(result.toast?.takeIf { it.isNotBlank() }, result.openUrl?.takeIf(opens), push = result.push, pop = result.pop)
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: ExtensionUiUnsupported) {
             mutable.update { it.copy(unsupported = true) }
@@ -244,6 +383,40 @@ internal class ExtensionViewModel(
             ExtensionActionOutcome(error = "没有做成：${failureReason(error)}")
         } finally { mutable.update { it.copy(acting = null) } }
     }
+}
+
+/**
+ * The search box was typed into (the page waits for a pause first): the view's search action with `{q}`, and the
+ * filter's choice beside it. The page stays usable meanwhile; an answer overtaken by a later one is dropped.
+ */
+internal suspend fun ExtensionViewModel.search(query: String): ExtensionActionOutcome {
+    val view = state.value.view ?: return ExtensionActionOutcome()
+    val search = view.search?.action?.takeIf { it.id.isNotEmpty() } ?: return ExtensionActionOutcome()
+    val values = buildMap {
+        put("q", query)
+        view.filter?.takeIf { it.name.isNotEmpty() }?.let { f -> (state.value.values[f.name] ?: f.value)?.let { put(f.name, it) } }
+    }
+    return quietly(search.id, values) { it.copy(query = query) }
+}
+
+/** The filter beside the search box was set to [value]: its action with `{name: value}` and the search's `q`. */
+internal suspend fun ExtensionViewModel.filter(value: String): ExtensionActionOutcome {
+    val view = state.value.view ?: return ExtensionActionOutcome()
+    val filter = view.filter?.takeIf { it.name.isNotEmpty() && it.action.id.isNotEmpty() } ?: return ExtensionActionOutcome()
+    val q = state.value.query ?: view.search?.value
+    val values = buildMap {
+        put(filter.name, value)
+        q?.let { put("q", it) }
+    }
+    edit(filter.name, value)
+    return quietly(filter.action.id, values) { it }
+}
+
+/** The end of section [index] came on screen, or its 加载更多 was tapped: its action, once until the answer is back. */
+internal suspend fun ExtensionViewModel.more(index: Int, section: ExtensionViewSection): ExtensionActionOutcome {
+    val action = section.more?.action?.takeIf { it.id.isNotEmpty() } ?: return ExtensionActionOutcome()
+    if (state.value.loadingMore != null || state.value.loading) return ExtensionActionOutcome()
+    return quietly(action.id, emptyMap(), loadingMore = index) { it }
 }
 
 internal data class ExtensionPlacesState(

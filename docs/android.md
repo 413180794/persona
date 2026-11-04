@@ -869,6 +869,36 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
 - **截图（不用模拟器）**：`./gradlew :feature:settings:testDebugUnitTest --tests '*ExtensionSlotsShotsTest*'`，Robolectric 原生绘制，三种风格 × 深浅色，设置首页的「扩展」一节和一个扩展页（segmented、四个数、叠起来和并排的柱子、折线、30 个点的标签、选中一列），还有设置 tab 的点，PNG 在 `build/plugin-ui-shots/`（`-Dpersona.shots=<目录>` 换地方）。收件箱条目的页：`--tests '*InboxItemShotsTest*'`，App 的条目头（标题、分级、来源、已处理、AI 摘要、AI 草拟 / 交给 AI）下面一件飞书事件的正文（涉及的人、时间跨度、「接着《…》」、消息链、回复框、在会话里看），点「在会话里看」回到外壳的是这件事的来源，条目变了才重画，PNG 在 `build/inbox-item-shots/`。在真机 / 模拟器上看：`MOCK_PLUGINS=1` 的假 hub（`example-gateway` 有全部新插槽），`--es debug.openPage plugin-ui:example-gateway:usage` 直达扩展页，`machine:<id>` 看机器上的一节。
 - **单测**：`HttpExtensionManagementTest`（不带 placement 的列表、角标、上下文的正文、`refresh_after`、新条目、读不出的条目跳过、`not_found`），`ExtensionUiContractTest`（`plugin_ui` 事件），`ChartMathTest`（紧凑数字、范围、刻度、标签不重叠、点选），`ExtensionUiStateTest`（新条目画不画、图的转换和 tone、segmented 的动作和失败回退、`refresh_after` 在前台才刷新），`ExtensionSlotsTest`（只在有 `plugin_ui_slots` 且在线时读、不认识的插槽忽略、角标事件、tab 角标相加 / 点、图标、卡片打开哪一页）；收件箱条目的页：`HttpExtensionManagementTest.drawsAnInboxItemsPageWithTheItem`（`placement=inbox_item` 的查询串、`connector`、画和按按钮的 `context.item`、老 hub 的空列表、403 是 `ExtensionUiForbidden`），`ExtensionInboxItemTest`（按 placement 读、没有 `connector` 的不要、读不到留着上次的、切到收件箱只再读这一种、读到过才算知道、老 hub 不问；带着条目画和按按钮、提交回复框、新 view；`persona://inbox/<id>/source` 怎么认、只有条目的页放它过去；403 / 404 / `unsupported` / 什么都没画时悄悄换、502 和连不上时带一行和重试，画出来以后失败不换），`InboxItemPagesTest`（按连接器找页、列表读到前打开的条目读到后换成扩展的页、会话链接不换、别的来源和老 hub 照旧、第一个为准、条目自己的页、来源链接打开哪一页、页头的分级和来源一行、左栏选中），`ShellRoutesTest`（深链打开扩展的页、会话链接还是会话）、`ShellPanesTest`（在右栏）。
 
+### UI 版本 3：统一组件、页面跳转、invalidate（#1851）
+
+规格见 [extensions.md](extensions.md)「UI 版本 3」，字段以 `schema/extension/view.schema.json` 为准。App 每次画都发 `ui_version: 3`（`HttpExtensionManagement.UI_VERSION`；老 hub 按自己的版本截到 2）。
+
+- **类型**：`ExtensionUi.kt` 手写的契约加了 View 的 `search` / `filter`、节的 `more`、条目的 `key` / `icon` / `avatar` / `thumbnail` / `columns` / `rows` / `caption` / `button`（`empty` 的按钮）、
+  动作的 `push`、回答的 `push` / `pop`；`ExtensionUiEvent` 加 `invalidate`（这时 `id` 可以没有：这个扩展的全部界面），角标事件仍要有 `id`。`ExtensionUiContractTest` 读 schema 自己的
+  `examples/View.components-v3.json`，每个组件的每个键都要落到字段上（字段名漂移会在这里失败）。
+- **新组件**（`ExtensionViewParts.kt`）：`markdown` 用 mikepenz 的渲染器和设计系统的字号、颜色，图片变成它的文字、非 https 链接变成文字，链接只开 https；`table` 是自己排的网格
+  （一列和最宽的格一样宽、一行和最高的格一样高，`end` 列靠右，格子不换行、整张表横向滚动）；`empty` 是 `JEmptyState`（图标、一个按钮）；`loading` 是 `JLoading`。
+  行的 `icon` 从固定图标集换成 `PhIcons`（`ExtensionIcons.of`，不认识的是拼图），`avatar` 是 `JAvatar`（https 的图经 Coil 直接加载、不带凭据，没加载出来时是首字母），
+  `thumbnail` 是一块圆角的格子（加载失败是空格子）；卡片上不画 `table`。
+- **搜索、筛选、加载更多**：View 有 `search` / `filter` 时页面最上面一行 `JSearchField`（停 0.3 秒再问）和筛选 `JChip`（点开是 `JActionSheet`）；节有 `more` 时节尾一行「加载更多」，
+  滚到它（LazyColumn 组合它时）自动问一次，回答之前不再问，也能点。这三样不占住整页（`ExtensionViewModel.quietly`：页面照样能点，正在输入的字段留着，被后来的回答超过的旧回答丢掉）；
+  筛选现在选的是哪个以扩展回来的 View 的 `filter.value` 为准。列表的 lazy key 用扩展的 `key`（重复的退回位置），重画时滚动位置不跳。
+- **页面跳转**：`ExtensionUiRoute` 加了 `state`、`depth`（`@SerialName` 不变）。点一个带 `push` 的动作不发给扩展，直接推一页 `ExtensionUiRoute(扩展, push.ui ?: 这个界面, 标题, push.state, depth + 1)`
+  （`ExtensionViewText.pushed`，最多 8 层）；回答带 `push` 同样推，带 `pop` 就返回（系统返回键也是）。被推过一页的页面在回来时重画一次（`ExtensionViewModel.covered`）。
+  卡片、机器详情的一节、启动器页的一节没有自己的栈：push 打开一整页（`ExtensionViewText.opened`）。
+- **`ui.invalidate`**：`KeepFresh(model, events)` 除了 `refresh_after` 还跟着 `extension_ui` 的 invalidate：页面在前台就马上重画，不在就记下、回来时画（`ExtensionViewModel.invalidate` / `shown`）。
+  扩展页、启动器页的节跟 `ExtensionManagement.uiEvents`，卡片和机器详情的节跟 `ExtensionSlots.invalidations`；`ExtensionSlots.badge` 不理 invalidate 事件（不会清掉角标）。
+- **助手回答里的卡片**：`core:designsystem` 的 `LocalViewBlocks`（`ViewBlocks(parse, draw)`），App 在 `Root.kt` 提供 `PersonaViewBlocks.blocks`；对话的 Markdown（`ChatContent` 的
+  `codeFence`）遇到 ```` ```persona-view ````（一个 View 或一个组件）和 ```` ```persona-card ```` 时用扩展的渲染器画（`PersonaViewBlock` → `ExtensionViewColumn`，不懒加载），
+  读不出来（还在流式输出、不是 View、画不了的卡片）就照旧是代码块。回答里的卡片不能点：按钮、字段、segmented、搜索、筛选、加载更多拿掉，行的动作去掉，链接照常。
+  `persona-card` 按 `sdk/go/wire/personacard.go` 的规则转成组件（`PersonaViewBlocks.fromCard`，数字的写法 `number` 也照它：千分位、最多一位小数、一半往远离 0 的方向取），
+  单测 `PersonaViewBlocksTest.cardsBecomeTheSameViewsAsOnEveryApp` 逐个对照 `schema/extension/examples/persona-card/` 的用例。
+- **截图（不用模拟器）**：`./gradlew :feature:settings:testDebugUnitTest --tests '*ExtensionComponentsShotsTest*'`，三套风格 × 深浅色，一页列表（搜索框、筛选、带图标 / 头像 / 缩略图的行、
+  加载更多、markdown、表格、带按钮的空状态、加载中）和一段回答里的卡片（`stacked_bar`、`line`、一个 `persona-view`），PNG 在 `build/extension-v3-shots/`。
+- **单测**：`ExtensionUiV3Test`（push 不发给扩展、推的页的路由和层数、带初始 state 画、回答的 push / pop、搜索 / 筛选 / 加载更多不占住页面、加载更多只问一次、晚到的搜索回答丢掉、
+  invalidate 在前台马上画 / 不在前台回来再画、被推过的页回来重画、哪些事件让哪个界面重画、新组件画不画、表格补齐和截断、只认 https 的图、首字母、markdown 的清理、key、图标），
+  `PersonaViewBlocksTest`、`ExtensionUiContractTest.aVersionThreeView` / `theSchemasVersionThreeExampleReads`、`HttpExtensionManagementTest.theDeviceContextIsThePhones`（UI 版本 3）。
+
 ## 渠道（设置 › 扩展 › 渠道，#1466）
 
 规格见 [channels.md](channels.md)「接口」「界面」「来源标记」。hub 的 hello 带 `channels` 时，设置首页「扩展」一节在「扩展」下面多一行「渠道」，右边写「N 个已连接」（Persona 自己的各端不算），有出错的写成「N 个已连接 · M 个出错」、危险色带警告图标（`ChannelText.listSummary`，回到设置首页、重连后重读）；hub 没有 `plugin_manager` 只有 `channels` 时这一节只有「渠道」。体验模式没有。

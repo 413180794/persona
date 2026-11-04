@@ -118,7 +118,10 @@ private fun ChatMarkdownBody(text: String, id: String, bodyStyle: TextStyle, col
                     listModifier = { Modifier.weight(1f).alignBy(FirstBaseline) }) },
                 codeFence = { model ->
                     MarkdownFence(model.content.substring(model.node.startOffset, model.node.endOffset), color, bodyStyle) {
-                        CodeText(it.code, it.language)
+                        // ```persona-view / ```persona-card: drawn as an extension's view (LocalViewBlocks).
+                        val blocks = LocalViewBlocks.current
+                        val view = remember(blocks, it.language, it.code) { blocks?.parse(it.language, it.code) }
+                        if (blocks != null && view != null) blocks.draw(view) else CodeText(it.code, it.language)
                     }
                 },
                 codeBlock = { model -> CodeText(model.content.substring(model.node.startOffset, model.node.endOffset).trimIndent()) },

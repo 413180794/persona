@@ -158,6 +158,8 @@ fun PersonaRoot(
                             persona.core.designsystem.LocalLarkFeatures provides if (demo) persona.core.contracts.LarkFeatures.All else persona.core.designsystem.LocalLarkFeatures.current,
                             // The demo's mail and chats are made up: nothing to send to a hub for translating.
                             persona.feature.inbox.LocalTranslator provides if (demo) null else persona.feature.inbox.LocalTranslator.current,
+                            // A reply's ```persona-view / ```persona-card drawn with the extensions' components (#1851).
+                            persona.core.designsystem.LocalViewBlocks provides persona.feature.settings.PersonaViewBlocks.blocks,
                         ) {
                             PersonaShell(displayed, openNavigation, services.copy(connection = displayed.connection, sessions = displayed.sessions, demo = displayed.demo != null), shell)
                         }
@@ -506,7 +508,7 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
                 ?: run { entry<TerminalRoute> { UnavailablePage("体验模式没有终端数据", navigator) } }
             session.metrics?.let { machinesEntries(navigator, it, session.sessions, session.machines,
                 launcherPages = services.extensions?.takeUnless { services.demo }?.available ?: kotlinx.coroutines.flow.flowOf(false),
-                extensionSections = { id -> persona.feature.settings.rememberMachineExtensionSections(services.extensionSlots, id) }) } ?: run {
+                extensionSections = { id -> persona.feature.settings.rememberMachineExtensionSections(services.extensionSlots, id, onOpen = navigator::navigate) }) } ?: run {
                 entry<MachinesRoute> { UnavailablePage("体验模式没有机器监控数据", navigator) }
                 entry<MachineDetailRoute> { UnavailablePage("体验模式没有机器监控数据", navigator) }
             }

@@ -14,6 +14,8 @@ import persona.core.contracts.api.MachineManagement
 import persona.core.contracts.api.ExtensionManagement
 import persona.core.contracts.api.ExtensionUiContext
 import persona.core.contracts.api.ExtensionUiPlace
+import persona.core.contracts.api.ExtensionViewPush
+import persona.core.navigation.ExtensionUiRoute
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import kotlinx.coroutines.CancellationException
@@ -23,20 +25,30 @@ import kotlinx.coroutines.launch
 // extension's page in 设置 › 扩展; nav_page, from the「扩展」section of the settings home) and a section on a launcher's
 // page (launcher_section). The UI slots of the settings home and a machine's page are in ExtensionSlots.kt.
 
-/** 设置 › 扩展 › one › a page it draws, or a nav page opened from the settings home. */
+/**
+ * 设置 › 扩展 › one › a page it draws, or a nav page opened from the settings home; or (UI version 3) a page the
+ * extension pushed on another, first drawn with [initialState]. A push opens the next page through [onPush]; a pop goes
+ * back, and the page underneath is drawn again when it shows.
+ */
 @Composable
-fun ExtensionUiPage(extensions: ExtensionManagement?, extensionId: String, uiId: String, title: String, onBack: () -> Unit) {
+fun ExtensionUiPage(extensions: ExtensionManagement?, extensionId: String, uiId: String, title: String, onBack: () -> Unit,
+                    initialState: String? = null, depth: Int = 0, onPush: (ExtensionUiRoute) -> Unit = {}) {
     if (extensions == null) {
         JListPage(title = title, onBack = onBack) { item { JNotice("体验模式没有 hub 的扩展。") } }
         return
     }
-    val model = remember(extensions, extensionId, uiId) { ExtensionViewModel(extensions, extensionId, uiId) }
+    val model = remember(extensions, extensionId, uiId, initialState) {
+        ExtensionViewModel(extensions, extensionId, uiId, initialState = initialState)
+    }
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
-    val handle = rememberExtensionView(model)
+    val handle = rememberExtensionView(model, onPush = { push ->
+        ExtensionViewText.pushed(extensionId, uiId, title, depth, push)?.let { model.covered(); onPush(it) }
+    }, onPop = onBack)
     LaunchedEffect(model) { model.load() }
-    // A view with refresh_after is drawn again while this page is on screen (docs/extensions.md「UI 插槽」「刷新」).
-    KeepFresh(model)
+    // A view with refresh_after is drawn again while this page is on screen (docs/extensions.md「UI 插槽」「刷新」),
+    // one the extension invalidated (ui.invalidate) at once or when it shows again, and one back from a page pushed on it.
+    KeepFresh(model, extensions.uiEvents)
     val view = state.view
     JListPage(title = view?.title?.takeIf { it.isNotBlank() } ?: title, onBack = onBack, largeTitle = false,
         refreshing = state.loading && view != null, onRefresh = { scope.launch { model.load() } }) {
@@ -83,7 +95,7 @@ internal fun LazyListScope.extensionPages(pages: List<ExtensionUiPlace>, onOpen:
  */
 @Composable
 fun LauncherPage(machines: MachineManagement?, extensions: ExtensionManagement?, machineId: String, name: String, onBack: () -> Unit,
-                 machineName: (String) -> String = { it }) {
+                 machineName: (String) -> String = { it }, onOpen: (ExtensionUiRoute) -> Unit = {}) {
     val scope = rememberCoroutineScope()
     var launcher by remember(machineId, name) { mutableStateOf<AgentLauncher?>(null) }
     var launcherError by remember(machineId, name) { mutableStateOf<String?>(null) }
@@ -109,7 +121,8 @@ fun LauncherPage(machines: MachineManagement?, extensions: ExtensionManagement?,
     val sections = models.map { (place, model) ->
         key(place.extension, place.id) {
             LaunchedEffect(model) { model.load() }
-            Triple(place, model.state.collectAsState().value, rememberExtensionView(model))
+            KeepFresh(model, extensions?.uiEvents)
+            Triple(place, model.state.collectAsState().value, rememberExtensionView(model, onPush = { onOpen(ExtensionViewText.opened(place, it)) }))
         }
     }
     fun reload() = scope.launch {
