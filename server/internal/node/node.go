@@ -773,6 +773,12 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return nil, err
 		}
 		return n.readFileChunk(chunk)
+	case "git.blob":
+		var b proto.GitBlobRequest
+		if err := json.Unmarshal(params, &b); err != nil {
+			return nil, err
+		}
+		return n.gitBlob(ctx, b)
 	case "file.convert":
 		var c proto.FileConvertRequest
 		if err := json.Unmarshal(params, &c); err != nil {

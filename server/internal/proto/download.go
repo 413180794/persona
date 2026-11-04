@@ -63,3 +63,18 @@ type FileConverted struct {
 	Size int64  `json:"size"`
 	Mime string `json:"mime"`
 }
+
+// A file at one version of its repository (GET /api/v1/machines/{mid}/git/blob → node git.blob), written into the
+// node's cache for comparing: Rev is HEAD, INDEX (staged), a commit hash, or a hash followed by ^ (its parent); Path is
+// relative to the repository root.
+type GitBlobRequest struct {
+	Cwd  string `json:"cwd"`
+	Path string `json:"path"`
+	Rev  string `json:"rev"`
+}
+
+type GitBlob struct {
+	Path    string `json:"path,omitempty"` // on the machine; read with file/download
+	Size    int64  `json:"size,omitempty"`
+	Missing bool   `json:"missing,omitempty"` // the file does not exist at that version
+}

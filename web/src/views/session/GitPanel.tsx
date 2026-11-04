@@ -23,6 +23,7 @@ import { openPanel } from "../../lib/panel";
 import { Button, copyText, cx, IconButton, Loading, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { PanelHeader } from "../SidePanel";
+import { CompareView, compareKind } from "./files/CompareView";
 import { DiffLines } from "./files/DiffLines";
 import { BackHeader, Empty, GitBadge, Segmented } from "./files/parts";
 
@@ -130,13 +131,17 @@ export function GitPanel({ mid, sid, cwd, onClose }: { mid: string; sid: string;
         </div>
       </div>
       {top?.kind === "diff" && (
-        <DiffView key={top.file.path} base={base} cwd={cwd} file={top.file} staged={top.staged} onStaged={(staged) => setViews((vs) => [...vs.slice(0, -1), { ...top, staged }])} onBack={back} onClose={onClose} />
+        <DiffView key={top.file.path} mid={mid} root={status?.root ?? cwd} base={base} cwd={cwd} file={top.file} staged={top.staged} onStaged={(staged) => setViews((vs) => [...vs.slice(0, -1), { ...top, staged }])} onBack={back} onClose={onClose} />
       )}
       {top?.kind === "commit" && <CommitView key={top.commit.hash} base={base} cwd={cwd} commit={top.commit} onOpen={push} onBack={back} onClose={onClose} />}
       {top?.kind === "commitFile" && (
         <>
           <BackHeader title={fileName(top.file.path)} subtitle={`${top.commit.short} · ${dirName(top.file.path) || "仓库根目录"}`} onBack={back} onClose={onClose} actions={<IconButton icon="copy" label="拷贝 diff" onClick={() => copyText(top.diff)} />} />
-          <DiffLines diff={top.diff} truncated={top.truncated} />
+          {compareKind(top.file.path) ? (
+            <CompareView mid={mid} cwd={cwd} root={status?.root ?? cwd} path={top.file.path} before={`${top.commit.hash}^`} after={top.commit.hash} />
+          ) : (
+            <DiffLines diff={top.diff} truncated={top.truncated} />
+          )}
         </>
       )}
     </>
@@ -265,6 +270,8 @@ function CommitRow({ c, onOpen }: { c: GitCommit; onOpen: () => void }) {
 }
 
 function DiffView({
+  mid,
+  root,
   base,
   cwd,
   file,
@@ -273,6 +280,8 @@ function DiffView({
   onBack,
   onClose,
 }: {
+  mid: string;
+  root: string;
   base: string;
   cwd: string;
   file: GitFile;
@@ -287,6 +296,7 @@ function DiffView({
     (signal?: AbortSignal) => {
       setDiff(null);
       setError("");
+      if (compareKind(file.path)) return; // compared as versions, not as text
       api<GitDiff>(`${base}/diff?cwd=${enc(cwd)}&path=${enc(file.path)}&staged=${staged ? 1 : 0}`, { signal })
         .then(setDiff)
         .catch((e) => !isAbort(e) && setError(errorText(e)));
@@ -313,7 +323,10 @@ function DiffView({
           <Segmented<"0" | "1"> label="哪部分改动" value={staged ? "1" : "0"} onChange={(v) => onStaged(v === "1")} options={[["0", "未暂存"], ["1", "已暂存"]]} />
         </div>
       )}
-      {diff ? (
+      {compareKind(file.path) ? (
+        // documents and pictures: the two versions themselves (unstaged: index → disk; staged: HEAD → index)
+        <CompareView key={staged ? "s" : "w"} mid={mid} cwd={cwd} root={root} path={file.path} before={staged ? "HEAD" : "INDEX"} after={staged ? "INDEX" : "WORKTREE"} deleted={!staged && file.worktree === "D"} />
+      ) : diff ? (
         <DiffLines diff={diff.diff} truncated={diff.truncated} />
       ) : error ? (
         <Empty icon="info" title="读不到改动" detail={error} action={<Button icon="retry" onClick={() => load()}>重试</Button>} />

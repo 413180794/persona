@@ -1,0 +1,257 @@
+// Comparing two versions of a document in the Git panel (docs/web.md「对比」, #1437; iOS / Mac: #1299): each side's text
+// by page / paragraph / slide / sheet, then a line diff like code. Pure apart from the readers' parsers, which are
+// passed in or imported lazily by the caller; tested in compare.test.ts.
+import type JSZip from "jszip";
+import type { WorkBook } from "xlsx";
+import { readPptx } from "./pptx";
+
+/** One page / slide / sheet: what it is called and its lines of text. */
+export interface Unit {
+  label: string;
+  lines: string[];
+}
+
+export type Op = { kind: "same" | "add" | "del"; text: string };
+
+/** A table row whose cells changed: each cell before and after (equal when that cell did not change). */
+export type RowChange = { kind: "row"; cells: { old: string; new: string }[] };
+
+/**
+ * Removed lines followed by as many added ones that are table rows with the same number of cells become one row each,
+ * showing old → new only in the cells that changed (instead of the whole row twice).
+ */
+export function pairRows(ops: Op[]): (Op | RowChange)[] {
+  const out: (Op | RowChange)[] = [];
+  for (let i = 0; i < ops.length; ) {
+    if (ops[i].kind !== "del") {
+      out.push(ops[i++]);
+      continue;
+    }
+    let d = i;
+    while (d < ops.length && ops[d].kind === "del") d++;
+    let a = d;
+    while (a < ops.length && ops[a].kind === "add") a++;
+    const dels = ops.slice(i, d);
+    const adds = ops.slice(d, a);
+    // pair the k-th removed line with the k-th added one when both are rows of the same width
+    const isRowPair = (k: number) => k < adds.length && dels[k].text.includes(ROW_SEP) && dels[k].text.split(ROW_SEP).length === adds[k].text.split(ROW_SEP).length;
+    const paired = new Set<number>();
+    dels.forEach((o, k) => {
+      if (!isRowPair(k)) return;
+      paired.add(k);
+      const after = adds[k].text.split(ROW_SEP);
+      out.push({ kind: "row", cells: o.text.split(ROW_SEP).map((b, j) => ({ old: b, new: after[j] })) });
+    });
+    out.push(...dels.filter((_, k) => !paired.has(k)), ...adds.filter((_, k) => !paired.has(k)));
+    i = a;
+  }
+  return out;
+}
+
+/** A shown stretch of the diff, with the unit (page, slide…) it starts in. */
+export interface Hunk {
+  unit: string;
+  ops: Op[];
+  skippedBefore: number; // unchanged lines folded away before it
+}
+
+const HEADER = "\u0000§";
+/** Between the cells of a table row on one line. */
+export const ROW_SEP = " | "; // marks a unit's start inside the flattened text; never in a document's own text
+
+/** Units into one list of lines, each unit led by a header line, so a diff can say where a change is. */
+export function flatten(units: Unit[]): string[] {
+  return units.flatMap((u) => [HEADER + u.label, ...u.lines]);
+}
+
+/**
+ * Myers' line diff (the one git uses). Inputs past `limit` lines in all, or with more than `maxEdits` changes, come
+ * back as null: too much to show as a diff.
+ */
+export function diffLines(a: string[], b: string[], limit = 60_000, maxEdits = 6_000): Op[] | null {
+  const n = a.length;
+  const m = b.length;
+  if (n + m > limit) return null;
+  const max = Math.min(n + m, maxEdits);
+  const off = max + 1;
+  const v = new Int32Array(2 * max + 3);
+  const trace: Int32Array[] = [];
+  let found = -1;
+  for (let d = 0; d <= max; d++) {
+    trace.push(v.slice());
+    for (let k = -d; k <= d; k += 2) {
+      let x = k === -d || (k !== d && v[off + k - 1] < v[off + k + 1]) ? v[off + k + 1] : v[off + k - 1] + 1;
+      let y = x - k;
+      while (x < n && y < m && a[x] === b[y]) {
+        x++;
+        y++;
+      }
+      v[off + k] = x;
+      if (x >= n && y >= m) {
+        found = d;
+        break;
+      }
+    }
+    if (found >= 0) break;
+  }
+  if (found < 0) return null;
+  // walk back through the saved frontiers
+  const ops: Op[] = [];
+  let x = n;
+  let y = m;
+  for (let d = found; d > 0; d--) {
+    const pv = trace[d];
+    const k = x - y;
+    const prevK = k === -d || (k !== d && pv[off + k - 1] < pv[off + k + 1]) ? k + 1 : k - 1;
+    const prevX = pv[off + prevK];
+    const prevY = prevX - prevK;
+    while (x > prevX && y > prevY) ops.push({ kind: "same", text: a[--x] }), y--;
+    if (x === prevX) ops.push({ kind: "add", text: b[--y] });
+    else ops.push({ kind: "del", text: a[--x] });
+  }
+  while (x > 0 && y > 0) ops.push({ kind: "same", text: a[--x] }), y--;
+  return ops.reverse();
+}
+
+/** The changed stretches with `context` unchanged lines around each, labeled by the unit they start in. */
+export function hunks(ops: Op[], context = 2): Hunk[] {
+  const out: Hunk[] = [];
+  let unit = "";
+  const unitAt: string[] = [];
+  for (const o of ops) {
+    if (o.text.startsWith(HEADER)) unit = o.text.slice(HEADER.length);
+    unitAt.push(unit);
+  }
+  const changed = ops.map((o) => o.kind !== "same");
+  let i = 0;
+  let last = 0;
+  while (i < ops.length) {
+    if (!changed[i]) {
+      i++;
+      continue;
+    }
+    const start = Math.max(last, i - context);
+    let end = i;
+    while (end < ops.length) {
+      if (changed[end]) {
+        end++;
+        continue;
+      }
+      let j = end;
+      while (j < ops.length && !changed[j] && j - end < context * 2) j++;
+      if (j < ops.length && changed[j] && j - end < context * 2) end = j;
+      else break;
+    }
+    const stop = Math.min(ops.length, end + context);
+    const slice = ops.slice(start, stop).filter((o) => !(o.text.startsWith(HEADER) && o.kind === "same"));
+    out.push({ unit: unitAt[start] || unitAt[i], ops: slice, skippedBefore: start - last });
+    last = stop;
+    i = stop;
+  }
+  return out;
+}
+
+/** A line of a diff, shown: unit headers that were added or removed read as the unit's name. */
+export function shownText(text: string): string {
+  return text.startsWith(HEADER) ? `—— ${text.slice(HEADER.length)} ——` : text;
+}
+
+const linesOf = (s: string) =>
+  s
+    .split(/\r?\n/)
+    .map((l) => l.replace(/\s+$/, ""))
+    .filter((l) => l.trim() !== "");
+
+// ── readers ───────────────────────────────────────────────
+
+type ParseXML = (s: string) => Document;
+
+/** A Word document's paragraphs (tables' cells one per line), split into pages where the document breaks them. */
+export async function docxUnits(zip: JSZip, parse: ParseXML): Promise<Unit[]> {
+  const f = zip.file("word/document.xml");
+  if (!f) throw new Error("不是有效的 Word 文件");
+  const doc = parse(await f.async("string"));
+  const units: Unit[] = [{ label: "第 1 页", lines: [] }];
+  const walk = (el: Element) => {
+    for (let c = el.firstChild; c; c = c.nextSibling) {
+      if (c.nodeType !== 1) continue;
+      const e = c as Element;
+      if (e.localName === "tbl") {
+        // a table row reads as one line, its cells joined with " | ", so a change shows the row it is in
+        for (const tr of [...e.getElementsByTagName("w:tr")].filter((r) => r.parentNode === e)) {
+          const cells = [...tr.getElementsByTagName("w:tc")]
+            .filter((tc) => tc.parentNode === tr)
+            .map((tc) =>
+              [...tc.getElementsByTagName("w:t")]
+                .map((t) => t.textContent ?? "")
+                .join("")
+                .trim(),
+            );
+          if (cells.some(Boolean)) units[units.length - 1].lines.push(cells.join(ROW_SEP));
+        }
+      } else if (e.localName === "p") {
+        let text = "";
+        let pageBreak = false;
+        const collect = (n: Element) => {
+          for (let k = n.firstChild; k; k = k.nextSibling) {
+            if (k.nodeType !== 1) continue;
+            const ke = k as Element;
+            if (ke.localName === "t") text += ke.textContent ?? "";
+            else if (ke.localName === "tab") text += "\t";
+            else if (ke.localName === "br" && ke.getAttribute("w:type") === "page") pageBreak = true;
+            else if (ke.localName === "lastRenderedPageBreak") pageBreak = true;
+            else if (ke.localName !== "del" && ke.localName !== "instrText") collect(ke);
+          }
+        };
+        collect(e);
+        if (pageBreak) units.push({ label: `第 ${units.length + 1} 页`, lines: [] });
+        if (text.trim()) units[units.length - 1].lines.push(text.replace(/\s+$/, ""));
+      } else walk(e);
+    }
+  };
+  const body = doc.getElementsByTagName("w:body")[0] ?? doc.documentElement;
+  walk(body);
+  return units.filter((u, i) => u.lines.length || i === 0);
+}
+
+/** A deck's text, slide by slide (notes after a marker). */
+export async function pptxUnits(zip: JSZip, parse: ParseXML): Promise<Unit[]> {
+  const deck = await readPptx(zip, parse);
+  return deck.slides.map((s, i) => {
+    const lines: string[] = [];
+    for (const sh of s.shapes) {
+      for (const p of sh.paras ?? []) {
+        const t = p.runs.map((r) => (r.br ? "\n" : r.text)).join("");
+        lines.push(...linesOf(t).map((l) => "  ".repeat(p.level) + l));
+      }
+      for (const row of sh.table?.rows ?? []) lines.push(row.cells.filter((c) => !c.hidden).map((c) => c.paras.map((p) => p.runs.map((r) => r.text).join("")).join(" ")).join(" | "));
+      if (sh.chart) lines.push(`[图表${sh.chart.title ? `：${sh.chart.title}` : ""}] ${sh.chart.series.map((x) => `${x.name} = ${x.values.map((v) => v ?? "").join(", ")}`).join("；")}`);
+    }
+    if (s.notes) lines.push("备注：", ...linesOf(s.notes));
+    return { label: `第 ${i + 1} 张幻灯片`, lines };
+  });
+}
+
+/** A workbook's sheets as rows of tab-separated cells. */
+export function workbookUnits(XLSX: typeof import("xlsx"), wb: WorkBook): Unit[] {
+  return wb.SheetNames.map((name) => ({ label: `工作表「${name}」`, lines: linesOf(XLSX.utils.sheet_to_csv(wb.Sheets[name], { FS: "\t", blankrows: false })) }));
+}
+
+/** A PDF's text page by page, lines as pdf.js sees them end. */
+export async function pdfUnits(data: ArrayBuffer): Promise<Unit[]> {
+  const pdfjs = await import("pdfjs-dist");
+  const { default: worker } = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
+  pdfjs.GlobalWorkerOptions.workerSrc = worker;
+  const task = pdfjs.getDocument({ data: new Uint8Array(data) });
+  const doc = await task.promise;
+  const units: Unit[] = [];
+  for (let i = 1; i <= Math.min(doc.numPages, 500); i++) {
+    const page = await doc.getPage(i);
+    const content = await page.getTextContent();
+    let text = "";
+    for (const it of content.items) if ("str" in it) text += it.str + (it.hasEOL ? "\n" : "");
+    units.push({ label: `第 ${i} 页`, lines: linesOf(text) });
+  }
+  await task.destroy();
+  return units;
+}

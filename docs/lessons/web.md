@@ -206,3 +206,8 @@
 
 - **`<video>` / `<audio>` 直接用 `file/download` 的地址就能拖动**：hub 用 `http.ServeContent` 回 Range，浏览器自己按需取；不要先 fetch 成 blob（大视频要等下完、占满内存）。地址里带 `?token=`，因为媒体元素发不了 Authorization 头。
 - **HEIC 只有 Safari 认**：Chrome / Firefox 的 `<img>` 直接报错。解码库 libheif 是 LGPL，不在可用许可证里，所以退到那台电脑画的缩略图（Mac 上 Quick Look 能读 HEIC）。
+
+## 文档对比（2026-11-04，#1437）
+
+- **旧版本不要经 JSON 传**：node 把 `git cat-file blob` 的内容写进缓存（按 blob id 命名，带原扩展名，内容不变名字就不变），回一个路径，客户端用已有的 `file/download` 按 Range 读，查看器、PDF、Office 渲染全都能直接复用。
+- **pdf.js 6 的接口变了**：`getDocument` 没有 `isEvalSupported` 了，释放用 loading task 的 `destroy()`（文档对象上没有）；worker 用 `pdfjs-dist/build/pdf.worker.min.mjs?url` 交给 Vite 出地址。

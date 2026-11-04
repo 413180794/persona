@@ -4733,10 +4733,10 @@ def _zip(files):
 _PNG_DOT = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
 
 
-def _bar_png(w=360, h=150):
+def _bar_png(w=360, h=150, heights=(0.45, 0.62, 0.78, 0.93)):
     """A small bar chart as a PNG (zlib, no imaging library): pictures inside the mock's Word and PowerPoint files."""
     import zlib
-    bars = [(40, 0.45), (110, 0.62), (180, 0.78), (250, 0.93)]
+    bars = list(zip((40, 110, 180, 250), heights))
     rows = []
     for y in range(h):
         row = bytearray([0])
@@ -5543,7 +5543,8 @@ def mock_files(p, q):
                      **diff_counts(MOCK_DIFFS["WeatherWidget/Provider.swift"]), "binary": False},
                     {"path": "WeatherWidget/WidgetView.swift", "index": "A", "worktree": ".",
                      **diff_counts(MOCK_DIFFS["WeatherWidget/WidgetView.swift"]), "binary": False},
-                    {"path": "docs/icon.png", "index": "?", "worktree": "?", "added": 0, "deleted": 0, "binary": True}]}, 200
+                    {"path": "docs/icon.png", "index": "?", "worktree": "?", "added": 0, "deleted": 0, "binary": True}]
+                + [{"path": rel, "index": ".", "worktree": "M", "added": 0, "deleted": 0, "binary": True} for rel in COMPARE_BLOBS]}, 200
     if what == "git/diff":
         return {"path": arg("path"), "diff": MOCK_DIFFS.get(arg("path"), ""), "truncated": False}, 200
     if what == "git/log":
@@ -5668,6 +5669,27 @@ if os.environ.get("MOCK_MEDIA"):  # the web's media (#1422): a sound, an SVG, a 
                                                 '<script>alert(1)</script></svg>')
     if os.environ.get("MOCK_VIDEO_FILE"):
         MOCK_TREE[MOCK_REPO + "/media/preview.mp4"] = ("video/mp4", "")
+# MOCK_COMPARE=1 (with MOCK_FILES): a changed Word file, deck and picture in the repository's status, and git/blob
+# answering their staged (INDEX) / HEAD versions from the node's "cache", for the web's comparing (#1437).
+COMPARE_BLOBS = {}
+if os.environ.get("MOCK_COMPARE"):
+    import io as _io, zipfile as _zf
+
+    def _zip_edit(data, name, fn):
+        src = _zf.ZipFile(_io.BytesIO(data))
+        return _zip({n: (fn(src.read(n).decode()) if n == name else src.read(n)) for n in src.namelist()})
+
+    _cache = "/Users/me/Library/Caches/persona/blobs/"
+    _docx_new, _pptx_new = office_docx(), office_pptx()
+    _docx_old = _zip_edit(_docx_new, "word/document.xml", lambda x: x.replace("+10.2%", "+9.8%").replace("6 个百分点", "4 个百分点").replace("海外区域接入本地天气数据源。", "海外区域先观望。"))
+    _pptx_old = _zip_edit(_pptx_new, "ppt/slides/slide2.xml", lambda x: x.replace("日活提高 18%", "日活提高 12%").replace("锁屏小组件适配深色壁纸", "锁屏小组件"))
+    for _rel, _new, _old in (("reports/季度报告.docx", _docx_new, _docx_old), ("reports/季度回顾.pptx", _pptx_new, _pptx_old),
+                             ("assets/banner.png", _bar_png(480, 200), _bar_png(480, 200, (0.3, 0.5, 0.55, 0.7)))):
+        FILES["/Users/me/code/weather/" + _rel] = _new
+        _blob = _cache + hashlib.sha1(_old).hexdigest() + os.path.splitext(_rel)[1]
+        FILES[_blob] = _old
+        COMPARE_BLOBS[_rel] = _blob
+        MOCK_TREE.setdefault(MOCK_REPO + "/" + _rel.rsplit("/", 1)[0] + "/", None)
 if os.environ.get("MOCK_OFFICE"):  # the Office viewer's files (#1345): rendered in the browser, or converted by "LibreOffice"
     MOCK_TREE.setdefault(MOCK_REPO + "/reports/", None)
     MOCK_TREE[MOCK_REPO + "/reports/季度报告.docx"] = (MOCK_MIMES[".docx"], base64.b64encode(office_docx()).decode())
@@ -7045,6 +7067,9 @@ class H(BaseHTTPRequestHandler):
             if src.endswith((".pages", ".key")):
                 return self.send_json({"error": "LibreOffice is not installed on this machine", "code": "no_converter"}, 404)
             return self.send_json({"path": "/Users/me/Library/Caches/persona/convert/mock.pdf", "size": len(FILES.get("/Users/me/Library/Caches/persona/convert/mock.pdf", b"")), "mime": "application/pdf"})
+        if p.startswith("/api/v1/machines/") and p.endswith("/git/blob"):  # node git.blob: a version written into the cache
+            blob = COMPARE_BLOBS.get(q.get("path", [""])[0])
+            return self.send_json({"path": blob, "size": len(FILES[blob])} if blob and q.get("rev", [""])[0] in ("HEAD", "INDEX") else {"missing": True})
         if p.startswith("/api/v1/machines/") and p.endswith("/file/thumb"):  # node file.thumb: a drawn stand-in for a HEIC
             if not q.get("path", [""])[0].lower().endswith((".heic", ".heif")):
                 return self.send_json({"error": "no thumbnail", "code": "no_thumbnail"}, 404)

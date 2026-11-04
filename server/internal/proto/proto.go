@@ -225,6 +225,7 @@ var Features = []string{
 	"file_stream",            // file?stream=1 (binary described, bytes by Range), file/download?inline=1, sniffed MIME
 	"file_thumb",             // GET /api/v1/machines/{mid}/file/thumb (docs/protocol.md「文件预览」)
 	"file_convert",           // GET /api/v1/machines/{mid}/file/convert: LibreOffice → PDF on the machine
+	"git_blob",               // GET /api/v1/machines/{mid}/git/blob: a file at a version, for comparing
 	"file_upload",            // POST /api/v1/machines/{mid}/files (docs/protocol.md「发送文件」)
 	"lark_attachments",       // Feishu image/file sends with stable client IDs and receipts
 	"lark_native_encryption", // native vault status, unlock, replay covers and encrypted sends
