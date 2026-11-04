@@ -457,6 +457,8 @@ nonisolated enum Theme {
         /// bar reached into the search field pulled out under it on Agents, whose room is a line of the system's that
         /// does not grow with the text (`ShellNavigationClearance`).
         static let topBarLargestTypeSize: DynamicTypeSize = .xxxLarge
+        /// The optional third segment must leave both side buttons reachable on narrow screens.
+        static let compactSwitchLargestTypeSize: DynamicTypeSize = .large
     }
 
     /// The page behind lists and chats.

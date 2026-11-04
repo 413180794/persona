@@ -25,6 +25,10 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 	})
 	api.HandleFunc("GET /api/v1/lark/conversations", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
+		if q.Get("account_bound") == "1" {
+			h.larkConversationSnapshot(w, r, false)
+			return
+		}
 		convs, next, err := h.lark.Conversations(r.Context(), q.Get("scope"), q.Get("cursor"), atoi(q.Get("limit")))
 		if err != nil {
 			writeLarkErr(w, err)
@@ -33,6 +37,10 @@ func (h *Hub) larkRoutes(api *http.ServeMux) {
 		writeJSON(w, map[string]any{"conversations": convs, "next_cursor": next})
 	})
 	api.HandleFunc("GET /api/v1/lark/pinned", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("account_bound") == "1" {
+			h.larkConversationSnapshot(w, r, true)
+			return
+		}
 		convs, err := h.lark.Pinned(r.Context())
 		if err != nil {
 			writeLarkErr(w, err)

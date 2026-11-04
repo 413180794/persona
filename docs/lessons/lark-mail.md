@@ -115,6 +115,10 @@ Hub 在 400ms 内合并事件时，设置变化必须独立累积为 `settings_c
 
 SwiftUI List 默认行 inset 会叠加内容自己的 padding。#957 在 iOS 27 实测：46 pt 头像 + 上下各 8 pt 内容留白，最终行高却是 92 pt；显式把行上下 inset 设为 0 并用现有 48 pt 头像 token 后，普通行是 64 pt。不要用固定高度掩盖重复留白，动态字体应允许增高。仅在消息列表的 NavigationLink 上设定，避免改变共用收件箱。
 
+给行增加 `.id`、几何观测或背景探针后，再把 `.listRowInsets` 放在最外层。#949 的首轮截图发现原来的零 inset 因包装顺序失效，普通行重新变成约 94 pt；调整顺序并用 UI 测试约束普通字号行高，恢复 64 pt。不能只检查 Swift 源码里是否出现 `top: 0`。
+
+首页置顶与普通分页需要共同绑定真实选中账号。Hub 的 `SelectedUserID` 在上游读前、读后校验；旧客户端通过不加 `account_bound=1` 保持原接口。缓存清理和写入用同一串行队列，避免换号清空后被旧异步写恢复。实时事件的订阅要在首次读取之前建立，否则读取期间的变化可能错过。
+
 - When merging message-display controls with interactive quotes, keep the shared `QuoteCard` and `larkJump` action. Apply recall visibility to the card summary before rendering; UI tests should query the quote button, not the former static text.
 
 - 原生消息新能力必须在入口核验当前会话所用 Hub 的接口，并给出明确的升级对象。客户端更新早于 Hub 时，普通 404 不能直接展示成 not found；上游接口缺失须由 Hub 区分为 lark-connector 需要升级，未授权不能误报旧版本。保留加密草稿和重新检查入口，避免失败后隐式改成普通发送。
@@ -125,3 +129,5 @@ SwiftUI List 默认行 inset 会叠加内容自己的 padding。#957 在 iOS 27 
   以前新消息照样写进那件已处理的条目，`done_at` 不变，于是谁都看不到。现在重新上锁后先看这件还开着没有，已处理就把它当成「上一件」，新消息另开一件。
   别的来源（邮件、文档、removed、连接器）的合并都在一把锁里做完，没有这个空档；新加采集时也别在锁外读完再往锁外拿到的条目里写。
 - 批量已处理带列表里的 `version`，在锁里比：用户看到的那份之后又并进来新消息的那件不标。
+
+- 置顶头像区的大字体验要同时看头像、角标、展开图标和顶部三段切换。头像/角标可采用设计系统已有的尺寸上限，标题仍随辅助字号；顶部空间不足时用设计 token 控制紧凑切换，避免遮挡两侧入口。

@@ -2955,6 +2955,22 @@ if os.environ.get("MOCK_LARK_OLK"):
     }
 
 LARK_ACCOUNT_ID = "123" if os.environ.get("MOCK_LARK_NATIVE_OLK") else "trainer-account" if os.environ.get("MOCK_LARK_TRAINER") else "mock-lark-account"
+# Isolated pin shelf fixtures: real list endpoints, account checks and realtime changes.
+LARK_PIN_FIXTURE = {"count": 18, "account": "pin-account-one", "offline": False, "reverse": False, "unread": 3, "newest": False, "requests": 0}
+def lark_pin_rows():
+    rows = [dict(c) for c in LARK_CHATS]
+    for i in range(1, 81):
+        rows.append({"id": f"pin-{i}", "name": f"会话 {i:02d}", "is_group": i % 2 == 0,
+                     "unread": i % 4, "at_me": False, "muted": i % 3 == 0, "is_mine": False,
+                     "preview": f"第 {i} 条会话摘要", "updated_at": ago(minutes=i)})
+    rows[0]["unread"] = LARK_PIN_FIXTURE["unread"]
+    if LARK_PIN_FIXTURE["newest"]:
+        rows.insert(0, dict(rows[0], id="incoming", name="新会话", preview="实时更新的摘要"))
+        rows = [dict(c, preview="实时更新 · " + c["preview"]) for c in rows]
+    if LARK_PIN_FIXTURE["account"] != "pin-account-one":
+        rows = [dict(c, id="other-" + c["id"], name="新账号 " + c["name"]) for c in rows]
+    return rows
+
 LARK_DISPLAY = {"account_id": LARK_ACCOUNT_ID, "anti_recall": False, "show_edit_history": False}
 if os.environ.get("MOCK_LARK_TRAINER"):
     retained = _lm("200", "李雷", "已留存的评审时间：周五下午", mins=55)
@@ -6066,6 +6082,8 @@ class H(BaseHTTPRequestHandler):
             if unavailable == "authorization":
                 return self.send_json({"code": "OLK_VAULT_NATIVE_NOT_AUTHORIZED", "error": "尚未开启手机加密。请在 Hub 和 lark-connector 的部署配置中开启原生加密授权，再重新检查。"}, 403)
             return self.send_json({"accountId": "123", "configured": True, "locked": LARK_NATIVE_OLK["locked"], "unifiedPassword": False})
+        if p == "/test/lark-pins/state" and os.environ.get("MOCK_LARK_PINS"):
+            return self.send_json(LARK_PIN_FIXTURE)
         if p == "/api/v1/lark/status":  # 设置 › 连接器 › 飞书
             return self.send_json({"configured": True, "connected": True, "name": "我", "last_event_at": int(time.time()) - 95})
         lark_read = p in ("/api/v1/lark/conversations", "/api/v1/lark/pinned") or (
@@ -6073,7 +6091,23 @@ class H(BaseHTTPRequestHandler):
         if lark_read and os.environ.get("MOCK_LARK_LOGGED_OUT"):
             return self.send_json({"error": LARK_LOGGED_OUT, "code": "lark_not_logged_in"}, 502)
         if p in ("/api/v1/lark/conversations", "/api/v1/lark/pinned"):
-            return self.send_json({"conversations": LARK_CHATS if p.endswith("conversations") else [], "next_cursor": ""})
+            if os.environ.get("MOCK_LARK_PINS"):
+                LARK_PIN_FIXTURE["requests"] += 1
+                if LARK_PIN_FIXTURE["offline"]:
+                    return self.send_json({"error": "synthetic offline"}, 503)
+                account = LARK_PIN_FIXTURE["account"]
+                if q.get("account_id", [account])[0] != account:
+                    return self.send_json({"code": "lark_account_changed", "error": "account changed"}, 409)
+                rows = lark_pin_rows()
+                if p.endswith("pinned"):
+                    rows = rows[:LARK_PIN_FIXTURE["count"]]
+                    if LARK_PIN_FIXTURE["reverse"]: rows.reverse()
+                    return self.send_json({"conversations": rows, "account_id": account, "next_cursor": ""})
+                cursor = int(q.get("cursor", ["0"])[0] or "0")
+                limit = int(q.get("limit", ["60"])[0])
+                return self.send_json({"conversations": rows[cursor:cursor+limit], "account_id": account,
+                                       "next_cursor": str(cursor+limit) if cursor+limit < len(rows) else ""})
+            return self.send_json({"conversations": LARK_CHATS if p.endswith("conversations") else [], "next_cursor": "", "account_id": LARK_ACCOUNT_ID})
         if p.startswith("/api/v1/lark/conversations/") and p.endswith("/messages"):
             return self.send_json(lark_window(LARK_MESSAGES.get(p.split("/")[5], []), q))
         if p.startswith("/api/v1/lark/messages/") and p.endswith("/thread"):
@@ -6267,6 +6301,14 @@ class H(BaseHTTPRequestHandler):
         p = urlparse(self.path).path
         if pins_route(self, p): return
         if plugins_route(self, p, self.last_body): return
+        if p == "/test/lark-pins/state" and os.environ.get("MOCK_LARK_PINS"):
+            req = json.loads(self.last_body or b"{}")
+            for key in ("count", "account", "offline", "reverse", "unread", "newest"):
+                if key in req: LARK_PIN_FIXTURE[key] = req[key]
+            for send, _ in list(LIVE):
+                try: send({"type": "lark", "feed_ids": ["f2"]})
+                except Exception: pass
+            return self.send_json(LARK_PIN_FIXTURE)
         if p == "/mock/trainer/recall" and os.environ.get("MOCK_LARK_TRAINER"):
             req = json.loads(self.last_body or b"{}")
             if type(req.get("recalled")) is not bool:

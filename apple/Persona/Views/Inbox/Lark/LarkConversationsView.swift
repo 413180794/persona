@@ -19,6 +19,9 @@ private struct LarkConversationsPage: View {
     @State private var store: LarkConversationsModel
     @State private var path: [LarkConversation] = []
     @State private var query = ""
+    @State private var pins = LarkPinnedInteraction()
+    @State private var canExpandPins = false
+    @State private var scroll = LarkConversationScroll()
 
     init(config: ServerConfig) {
         _store = State(initialValue: LarkConversationsModel(deps: .live(config)))
@@ -33,14 +36,23 @@ private struct LarkConversationsPage: View {
 
     var body: some View {
         NavigationStack(path: $path) {
+            ScrollViewReader { proxy in
             List {
+                if query.isEmpty, !store.pinned.isEmpty {
+                    LarkPinnedShelf(conversations: store.pinned, interaction: $pins, expandable: $canExpandPins) { path.append($0) }
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { scroll.shelfChanged($0) }
+                        .background(LarkConversationScroll.Finder(scroll: scroll))
+                        .listRowInsets(EdgeInsets(top: 0, leading: Theme.Space.page, bottom: 0, trailing: Theme.Space.page))
+                        .listRowSeparator(.hidden)
+                        .themedRow()
+                }
                 if store.conversations.isEmpty {
                     empty
                         .listRowSeparator(.hidden)
                 } else {
                     if store.failed {
                         Button { Task { await store.refresh() } } label: {
-                            Label("暂未更新 · 重试", systemImage: Theme.Icon.retry)
+                            Label(store.needsUpgrade ? "更新 Hub 后可同步置顶 · 重新检查" : "暂未更新 · 重试", systemImage: Theme.Icon.retry)
                                 .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                         }
                         .listRowSeparator(.hidden)
@@ -48,6 +60,9 @@ private struct LarkConversationsPage: View {
                     ForEach(filtered) { conversation in
                         NavigationLink(value: conversation) { row(conversation) }
                             .accessibilityIdentifier("feishu-chat-" + conversation.id)
+                            .id(conversation.id)
+                            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { scroll.reader.row(conversation.id, top: $0) }
+                            .onDisappear { scroll.reader.gone(conversation.id) }
                             .listRowInsets(EdgeInsets(top: 0, leading: Theme.Space.page, bottom: 0, trailing: Theme.Space.page))
                             .themedRow()
                     }
@@ -65,6 +80,26 @@ private struct LarkConversationsPage: View {
                 }
             }
             .listStyle(.plain)
+            .accessibilityIdentifier("feishu-conversations")
+            .onAppear {
+                store.willChange = { [weak scroll] in scroll?.reader.willChange() }
+                scroll.reader.reveal = { id, at in proxy.scrollTo(id, anchor: UnitPoint(x: 0.5, y: at)) }
+            }
+            .onScrollGeometryChange(for: Double.self) { Double($0.contentOffset.y + $0.contentInsets.top) } action: { _, offset in
+                updatePins(offset)
+            }
+            .onScrollPhaseChange { old, phase, context in
+                let offset = Double(context.geometry.contentOffset.y + context.geometry.contentInsets.top)
+                if phase != .idle { scroll.reader.cancel() }
+                store.holdScrolling(phase != .idle)
+                if (phase == .tracking || phase == .interacting) && old != .tracking && old != .interacting {
+                    pins.beginDrag(scrollOffset: offset, shelfPassed: shelfPassed(offset), canExpand: canExpandPins && query.isEmpty)
+                }
+                if old == .interacting && phase != .interacting && phase != .tracking {
+                    updatePins(offset)
+                    withAnimation(Theme.Motion.standard) { _ = pins.endDrag(canExpand: canExpandPins && query.isEmpty) }
+                } else if old == .tracking && phase != .interacting { pins.cancelDrag() }
+            }
             .themedPage()
             .searchable(text: $query, prompt: "搜索已加载的会话")
             .navigationTitle("消息")
@@ -78,12 +113,20 @@ private struct LarkConversationsPage: View {
                     Button { openConnectionSettings() } label: { Label("飞书设置", systemImage: Theme.Icon.settings) }
                 }
             }
+            }
             .navigationDestination(for: LarkConversation.self) { LarkChatView(conversation: $0, messageComposer: true) }
         }
+        .onChange(of: store.accountID) { _, _ in path = []; pins = LarkPinnedInteraction() }
+        .onChange(of: query) { _, _ in pins = LarkPinnedInteraction(); scroll.resetShelf() }
+        .onChange(of: store.pinned.isEmpty) { _, empty in
+            if empty { pins = LarkPinnedInteraction(); scroll.resetShelf() }
+        }
+        .onDisappear { pins.cancelDrag(); store.holdScrolling(false); store.willChange = {} }
         .onChange(of: path.isEmpty, initial: true) { _, root in shell?.feishuAtRoot = root }
         .tabActiveTask(id: model.connection.shown == .online) {
+            let changes = LarkSync.shared.changes()
             await store.refresh()
-            for await _ in LarkSync.shared.changes() {
+            for await _ in changes {
                 guard !Task.isCancelled else { return }
                 await store.refresh()
             }
@@ -91,11 +134,23 @@ private struct LarkConversationsPage: View {
 
     }
 
+    private func shelfPassed(_ offset: Double) -> Bool {
+        scroll.shelfHeight > 0 && offset >= Double(scroll.shelfHeight) - LarkPinnedInteraction.topTolerance
+    }
+
+    private func updatePins(_ offset: Double) {
+        let expanded = pins.isExpanded
+        pins.update(scrollOffset: offset, shelfPassed: shelfPassed(offset))
+        if expanded && !pins.isExpanded { scroll.compensateCollapse = true }
+    }
+
     @ViewBuilder private var empty: some View {
         if store.loading {
             ProgressView("加载中…").frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xxl)
         } else if store.status?.configured == false {
             notice("还没有连接飞书", detail: "连接 Hub 上的飞书账号后，会话会显示在这里。", action: "连接设置") { openConnectionSettings() }
+        } else if store.needsUpgrade {
+            notice("需要更新 Hub", detail: "更新后可显示置顶会话，并同步当前飞书账号。", action: "重新检查") { Task { await store.refresh() } }
         } else if store.failed {
             notice("暂时无法加载会话", detail: "请检查飞书连接，稍后重试。", action: "重试") { Task { await store.refresh() } }
         } else {
@@ -146,10 +201,13 @@ private struct LarkConversationsPage: View {
         return HStack(alignment: .top, spacing: Theme.Space.s) {
             ShellPersonaButton(id: "feishu-sidebar") { shell.drawer.open() }
             Spacer(minLength: 0)
+            ViewThatFits(in: .horizontal) {
+                ShellSwitch(tab: $model.selectedTab) { EmptyView() } workMenu: { EmptyView() }
+                ShellSwitch(tab: $model.selectedTab) { EmptyView() } workMenu: { EmptyView() }
+                    .dynamicTypeSize(...Theme.Shell.compactSwitchLargestTypeSize)
+            }
+            Spacer(minLength: 0)
             ShellCircleButton(symbol: Theme.Icon.settings, label: "飞书设置", id: "feishu-settings") { openConnectionSettings() }
-        }
-        .overlay(alignment: .top) {
-            ShellSwitch(tab: $model.selectedTab) { EmptyView() } workMenu: { EmptyView() }
         }
         .padding(.horizontal, Theme.Space.l).padding(.top, Theme.Space.xxs)
         .shellTopBarScaled().modifier(ShellBarAtRest(page: 2))

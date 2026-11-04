@@ -2,104 +2,193 @@ import CryptoKit
 import Foundation
 import Observation
 
-/// The conversation browser uses the same Hub API and chat caches as the inbox.
+/// The browser shares the inbox's routes and chat UI, with one account-bound list snapshot.
 @MainActor @Observable
 final class LarkConversationsModel {
+    nonisolated struct Snapshot: Codable, Sendable {
+        var accountID: String
+        var conversations: [LarkConversation]
+        var pinned: [LarkConversation]
+        var nextCursor: String? = nil
+        var loadedPages: Int = 1
+    }
+
     struct Deps {
-        var page: (String?) async throws -> APIClient.LarkConversations
+        var page: (String?, String) async throws -> APIClient.LarkConversations
+        var pinned: () async throws -> APIClient.LarkConversations
         var status: () async throws -> LarkStatus
-        var cached: () -> [LarkConversation]
-        var save: ([LarkConversation]) -> Void
+        var cached: () -> Snapshot?
+        var save: (Snapshot?) -> Void
 
         static func live(_ config: ServerConfig) -> Self {
             let api = APIClient(config: config)
-            let name = cacheName(config)
-            return Self(page: { try await api.larkConversations(cursor: $0) },
-                        status: { try await api.larkStatus() },
-                        cached: { StateCache.load(name) ?? [] },
-                        save: { StateCache.save(name, $0) })
+            let cache = LarkConversationCache(name: cacheName(config))
+            return Self(page: { try await api.larkConversationPage(cursor: $0, accountID: $1) },
+                        pinned: { try await api.larkPinnedSnapshot() },
+                        status: { try await api.larkStatus() }, cached: { cache.load() }, save: { cache.save($0) })
         }
     }
 
-    private(set) var conversations: [LarkConversation]
+    private(set) var conversations: [LarkConversation] = []
+    private(set) var pinned: [LarkConversation] = []
+    private(set) var accountID: String?
     private(set) var loading = false
     private(set) var loadingMore = false
     private(set) var nextCursor: String?
     private(set) var status: LarkStatus?
     private(set) var failed = false
     private(set) var pageFailed = false
+    private(set) var needsUpgrade = false
+    @ObservationIgnored var willChange: () -> Void = {}
     @ObservationIgnored private let deps: Deps
     @ObservationIgnored private var loadedPages = 1
+    @ObservationIgnored private var revision = 0
+    @ObservationIgnored private var scrolling = false
+    @ObservationIgnored private var pending: Snapshot?
     @ObservationIgnored private var pageWaiters: [CheckedContinuation<Void, Never>] = []
 
     init(deps: Deps) {
         self.deps = deps
-        conversations = deps.cached()
+        if let saved = deps.cached(), !saved.accountID.isEmpty {
+            accountID = saved.accountID
+            conversations = saved.conversations
+            pinned = saved.pinned
+            nextCursor = saved.nextCursor
+            loadedPages = max(1, saved.loadedPages)
+        }
     }
 
-    /// Switching Hub or device credentials cannot show the previous connection's list.
     static func cacheName(_ config: ServerConfig) -> String {
         let digest = SHA256.hash(data: Data((config.url.absoluteString + "\n" + config.token).utf8))
-        return "lark-conversations-" + digest.map { String(format: "%02x", $0) }.joined()
+        // Old snapshots have no owner. Do not import them into an account-bound shelf.
+        return "lark-conversations-v2-" + digest.map { String(format: "%02x", $0) }.joined()
     }
 
-    /// Replace the loaded window atomically: old tail rows must not override fresh unread counts or
-    /// survive indefinitely after leaving a group. Keep the old snapshot visible until all pages succeed.
+    /// Fetch the complete shelf and every loaded page before replacing the snapshot.
+    /// A newer refresh invalidates the previous result even if its HTTP cancellation arrives late.
     func refresh() async {
+        revision += 1
+        let request = revision
         while loading || loadingMore {
             await withCheckedContinuation { pageWaiters.append($0) }
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, request == revision else { return }
         }
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, request == revision else { return }
         loading = true
         defer { loading = false; wakePageWaiters() }
         do {
+            let shelf = try await deps.pinned()
+            try check(request)
+            let owner = try Self.owner(shelf)
+            if let accountID, accountID != owner { clearAccount() }
+            // Record the new owner immediately; no old account's screen may stay open while pages load.
+            accountID = owner
             var rows: [LarkConversation] = []
             var cursor: String?
             var seen = Set<String>()
             var count = 0
+            let pageCount = pending?.loadedPages ?? loadedPages
             repeat {
-                let page = try await deps.page(cursor)
-                try Task.checkCancellation()
+                let page = try await deps.page(cursor, owner)
+                try check(request)
+                guard try Self.owner(page) == owner else { throw LoadError.accountChanged }
                 rows = Self.merge(rows, page.conversations)
                 count += 1
                 cursor = page.nextCursor.flatMap { $0.isEmpty || !seen.insert($0).inserted ? nil : $0 }
-            } while cursor != nil && count < loadedPages
-            conversations = rows
-            loadedPages = count
-            nextCursor = cursor
+            } while cursor != nil && count < pageCount
+            let fresh = Snapshot(accountID: owner, conversations: rows, pinned: Self.merge([], shelf.conversations),
+                                 nextCursor: cursor, loadedPages: count)
             failed = false
             pageFailed = false
-            deps.save(conversations)
+            needsUpgrade = false
+            publish(fresh)
         } catch {
-            if !Self.cancelled(error) { failed = true }
+            guard request == revision, !Self.cancelled(error) else { return }
+            handle(error)
+            failed = true
         }
-        if !Task.isCancelled { status = try? await deps.status() }
+        if !Task.isCancelled {
+            let value = try? await deps.status()
+            if request == revision { status = value }
+        }
     }
 
     func more() async {
-        // The visible footer may ask while refresh is running. Resume it on the new cursor instead
-        // of silently dropping the request (its SwiftUI task id may not change after refresh).
-        while loading {
+        while loading || scrolling {
             await withCheckedContinuation { pageWaiters.append($0) }
             guard !Task.isCancelled else { return }
         }
-        guard let cursor = nextCursor, !loadingMore, !Task.isCancelled else { return }
+        guard let cursor = nextCursor, let owner = accountID, !loadingMore, !Task.isCancelled else { return }
+        let request = revision
         loadingMore = true
+        defer { loadingMore = false; wakePageWaiters() }
         do {
-            let page = try await deps.page(cursor)
-            try Task.checkCancellation()
-            conversations = Self.merge(conversations, page.conversations)
-            loadedPages += 1
-            nextCursor = page.nextCursor.flatMap { $0.isEmpty || $0 == cursor ? nil : $0 }
+            let page = try await deps.page(cursor, owner)
+            try check(request)
+            guard try Self.owner(page) == owner, accountID == owner else { throw LoadError.accountChanged }
+            let fresh = Snapshot(accountID: owner, conversations: Self.merge(conversations, page.conversations), pinned: pinned,
+                                 nextCursor: page.nextCursor.flatMap { $0.isEmpty || $0 == cursor ? nil : $0 }, loadedPages: loadedPages + 1)
             pageFailed = false
-            deps.save(conversations)
+            publish(fresh)
         } catch {
-            if !Self.cancelled(error) { pageFailed = true }
+            guard request == revision, !Self.cancelled(error) else { return }
+            handle(error)
+            pageFailed = true
         }
-        loadingMore = false
-        wakePageWaiters()
     }
+
+    /// Keep a moving list stable. The newest atomic snapshot lands as soon as scrolling rests.
+    /// Account changes bypass this hold and immediately remove the former user's data.
+    func holdScrolling(_ value: Bool) {
+        scrolling = value
+        if !value {
+            if let fresh = pending { pending = nil; apply(fresh) }
+            wakePageWaiters()
+        }
+    }
+
+    private func apply(_ fresh: Snapshot) {
+        guard fresh.accountID == accountID else { return }
+        willChange()
+        conversations = fresh.conversations
+        pinned = fresh.pinned
+        nextCursor = fresh.nextCursor
+        loadedPages = fresh.loadedPages
+        deps.save(fresh)
+    }
+
+    private func publish(_ fresh: Snapshot) {
+        if scrolling { pending = fresh; deps.save(fresh) } else { apply(fresh) }
+    }
+
+    private func clearAccount() {
+        willChange()
+        accountID = nil
+        pending = nil
+        conversations = []
+        pinned = []
+        nextCursor = nil
+        loadedPages = 1
+        deps.save(nil)
+    }
+
+    private func handle(_ error: Error) {
+        if error as? LoadError == .upgradeRequired { needsUpgrade = true }
+        if error as? LoadError == .accountChanged || (error as? APIError)?.code == "lark_account_changed"
+            || (error as? APIError)?.code == "lark_not_logged_in" { clearAccount() }
+    }
+
+    private func check(_ request: Int) throws {
+        try Task.checkCancellation()
+        if request != revision { throw CancellationError() }
+    }
+
+    private static func owner(_ page: APIClient.LarkConversations) throws -> String {
+        guard let id = page.accountID, !id.isEmpty else { throw LoadError.upgradeRequired }
+        return id
+    }
+
+    private enum LoadError: Error { case accountChanged, upgradeRequired }
 
     private func wakePageWaiters() {
         let waiting = pageWaiters
@@ -111,7 +200,6 @@ final class LarkConversationsModel {
         error is CancellationError || (error as? URLError)?.code == .cancelled || Task.isCancelled
     }
 
-    /// Keep the server's order, but a fresh copy always replaces an older row with the same id.
     static func merge(_ existing: [LarkConversation], _ fresh: [LarkConversation]) -> [LarkConversation] {
         var rows = existing
         var indices = Dictionary(existing.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: { first, _ in first })
@@ -120,5 +208,29 @@ final class LarkConversationsModel {
             else { indices[row.id] = rows.count; rows.append(row) }
         }
         return rows
+    }
+}
+
+/// Serialize disk mutations so clearing a switched account cannot race an older asynchronous save.
+/// Only this browser uses the file; no frequent UserDefaults writes or unowned legacy cache import.
+nonisolated private struct LarkConversationCache: Sendable {
+    let name: String
+    private static let writer = DispatchQueue(label: "persona.lark-conversation-cache", qos: .utility)
+    private var url: URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appending(path: "state").appending(path: name + ".json")
+    }
+    func load() -> LarkConversationsModel.Snapshot? {
+        Self.writer.sync {
+            guard let url, let data = try? Data(contentsOf: url) else { return nil }
+            return try? JSON.decoder.decode(LarkConversationsModel.Snapshot.self, from: data)
+        }
+    }
+    func save(_ value: LarkConversationsModel.Snapshot?) {
+        Self.writer.async {
+            guard let url, let data = try? JSON.encoder.encode(value) else { return }
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? data.write(to: url, options: .atomic)
+        }
     }
 }

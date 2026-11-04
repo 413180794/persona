@@ -190,7 +190,8 @@ extension APIClient {
     struct LarkConversations: Decodable {
         var conversations: [LarkConversation]
         var nextCursor: String?
-        enum CodingKeys: String, CodingKey { case conversations; case nextCursor = "next_cursor" }
+        var accountID: String? = nil
+        enum CodingKeys: String, CodingKey { case conversations; case nextCursor = "next_cursor", accountID = "account_id" }
     }
     nonisolated struct LarkMessages: Decodable, Sendable {
         var messages: [LarkMessage]
@@ -239,6 +240,14 @@ extension APIClient {
     /// One page of a feed scope: `chats` (消息), `unread`, `done` (已完成), `label:<id>`.
     func larkConversations(scope: String = "chats", cursor: String? = nil) async throws -> LarkConversations {
         try await get("/api/v1/lark/conversations", query: ["scope": scope, "cursor": cursor ?? "", "limit": "60"])
+    }
+    /// The browser opts into account checks without changing inbox or prefetch reads.
+    func larkConversationPage(cursor: String?, accountID: String) async throws -> LarkConversations {
+        try await get("/api/v1/lark/conversations", query: ["scope": "chats", "cursor": cursor ?? "", "limit": "60",
+            "account_bound": "1", "account_id": accountID])
+    }
+    func larkPinnedSnapshot() async throws -> LarkConversations {
+        try await get("/api/v1/lark/pinned", query: ["account_bound": "1"])
     }
     func larkPinned() async throws -> [LarkConversation] {
         try await get("/api/v1/lark/pinned", as: LarkConversations.self).conversations

@@ -1209,6 +1209,7 @@ lark-connector 出错时这些路由回 502 `{"error"}`；其中 lark-connector 
 | POST | `/api/v1/lark/conversations/{id}/encrypted-messages` | `{account_id,ciphertext,client_id,reply_id?}` → `{ok,message_id?}`。必需稳定 UUID，仅接受 OLK2/OLK3 wire shape，重新校验原生授权与实际账号；上游写入携带 `expectedSenderId`。多段按顺序发送，仅最后一段可引用；每段单独保存去重回执。所有原生加密响应 `no-store`，失败不会改走普通文字接口；协议与限制见 [加密消息](lark-encryption.md) |
 | GET | `/api/v1/lark/conversations?scope=&cursor=&limit=` | `{"conversations":[LarkConversation],"next_cursor"}`；scope：`chats`（默认，飞书「消息」：不含已完成 / 折叠，按标签显示规则过滤）、`unread`、`done`（已完成）、`label:<id>`、`inbox`、`mentions`、`muted`、`p2p`、`group`、`thread`、`later` |
 | GET | `/api/v1/lark/pinned` | 全部置顶会话（持续读取 inbox + done 的置顶头部，合并去重后按置顶时间排序）；分页异常返回错误，不把截断集合当作成功结果 |
+| GET | 上述 `/conversations`、`/pinned` 加 `account_bound=1` | 额外返回实际选中账号 `account_id`，集合为空时为 `[]`，禁止中间缓存。可带预期 `account_id`；请求前后身份变化或预期不匹配返回 409 `lark_account_changed`，不带会话数据。未登录沿用 `lark_not_logged_in`；旧调用不加参数，保持原契约 |
 | GET | `/api/v1/lark/labels` | `{"labels":[{"id","name","count"}]}` |
 | GET | `/api/v1/lark/unread-count` | `{"count"}`：「未读 N」（不含免打扰） |
 | GET | `/api/v1/lark/flags` | 标记：`{"conversations":[LarkConversation],"messages":[{"feed_id","chat_name","chat_avatar","flagged_at","message":LarkMessage}]}` |

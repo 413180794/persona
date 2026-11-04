@@ -7,12 +7,19 @@ import Testing
         LarkConversation(id: id, name: id, isGroup: true, preview: preview)
     }
 
+    private func snapshot(_ rows: [LarkConversation], pinned: [LarkConversation] = [], owner: String = "one") -> LarkConversationsModel.Snapshot {
+        .init(accountID: owner, conversations: rows, pinned: pinned)
+    }
+    private func reply(conversations: [LarkConversation], nextCursor: String? = nil, owner: String = "one") -> APIClient.LarkConversations {
+        .init(conversations: conversations, nextCursor: nextCursor, accountID: owner)
+    }
+
     @Test func paintsCacheThenUpdatesWithoutDuplicatingRows() async {
         var saved: [LarkConversation] = []
         let store = LarkConversationsModel(deps: .init(
-            page: { _ in .init(conversations: [chat("new"), chat("old", "updated")], nextCursor: "next") },
-            status: { .init(configured: true, connected: true) },
-            cached: { [chat("old"), chat("history")] }, save: { saved = $0 }))
+            page: { _, _ in reply(conversations: [chat("new"), chat("old", "updated")], nextCursor: "next") },
+            pinned: { reply(conversations: []) }, status: { .init(configured: true, connected: true) },
+            cached: { snapshot([chat("old"), chat("history")]) }, save: { saved = $0?.conversations ?? [] }))
         #expect(store.conversations.map(\.id) == ["old", "history"])
         await store.refresh()
         #expect(store.conversations.map(\.id) == ["new", "old"])
@@ -22,8 +29,8 @@ import Testing
 
     @Test func paginationDeduplicatesAndStopsOnRepeatedCursor() async {
         let store = LarkConversationsModel(deps: .init(
-            page: { cursor in .init(conversations: cursor == nil ? [chat("a")] : [chat("a"), chat("b")], nextCursor: "same") },
-            status: { .init(configured: true, connected: true) }, cached: { [] }, save: { _ in }))
+            page: { cursor, _ in reply(conversations: cursor == nil ? [chat("a")] : [chat("a"), chat("b")], nextCursor: "same") },
+            pinned: { reply(conversations: []) }, status: { .init(configured: true, connected: true) }, cached: { nil }, save: { _ in }))
         await store.refresh()
         await store.more()
         #expect(store.conversations.map(\.id) == ["a", "b"])
@@ -33,11 +40,11 @@ import Testing
     @Test func offlineAndCancellationPreserveTheList() async {
         var offline = true
         let store = LarkConversationsModel(deps: .init(
-            page: { _ in
+            page: { _, _ in
                 if offline { throw URLError(.notConnectedToInternet) }
                 throw CancellationError()
-            }, status: { .init(configured: true, connected: false) },
-            cached: { [chat("cached")] }, save: { _ in Issue.record("Failed fetch must not overwrite cache") }))
+            }, pinned: { reply(conversations: []) }, status: { .init(configured: true, connected: false) },
+            cached: { snapshot([chat("cached")]) }, save: { _ in Issue.record("Failed fetch must not overwrite cache") }))
         await store.refresh()
         #expect(store.failed)
         #expect(store.conversations.map(\.id) == ["cached"])
@@ -51,12 +58,12 @@ import Testing
         var refreshed = false
         var cursors: [String?] = []
         let store = LarkConversationsModel(deps: .init(
-            page: { cursor in
+            page: { cursor, _ in
                 cursors.append(cursor)
-                if cursor == nil { return .init(conversations: [chat("head")], nextCursor: "tail") }
-                if refreshed { return .init(conversations: [chat("tail", "read elsewhere")], nextCursor: "third") }
-                return .init(conversations: [chat("tail", "unread"), chat("left-group")], nextCursor: "third")
-            }, status: { .init(configured: true, connected: true) }, cached: { [] }, save: { _ in }))
+                if cursor == nil { return reply(conversations: [chat("head")], nextCursor: "tail") }
+                if refreshed { return reply(conversations: [chat("tail", "read elsewhere")], nextCursor: "third") }
+                return reply(conversations: [chat("tail", "unread"), chat("left-group")], nextCursor: "third")
+            }, pinned: { reply(conversations: []) }, status: { .init(configured: true, connected: true) }, cached: { nil }, save: { _ in }))
         await store.refresh()
         await store.more()
         refreshed = true
@@ -72,10 +79,10 @@ import Testing
         var fail = false
         var saves = 0
         let store = LarkConversationsModel(deps: .init(
-            page: { cursor in
+            page: { cursor, _ in
                 if cursor != nil, fail { throw URLError(.networkConnectionLost) }
-                return .init(conversations: [chat(cursor ?? "head", fail ? "changed" : "old")], nextCursor: cursor == nil ? "tail" : "third")
-            }, status: { .init(configured: true, connected: true) }, cached: { [] }, save: { _ in saves += 1 }))
+                return reply(conversations: [chat(cursor ?? "head", fail ? "changed" : "old")], nextCursor: cursor == nil ? "tail" : "third")
+            }, pinned: { reply(conversations: []) }, status: { .init(configured: true, connected: true) }, cached: { nil }, save: { _ in saves += 1 }))
         await store.refresh()
         await store.more()
         let old = store.conversations
@@ -91,10 +98,10 @@ import Testing
         var gate: CheckedContinuation<Void, Never>?
         var hold = false
         let store = LarkConversationsModel(deps: .init(
-            page: { cursor in
+            page: { cursor, _ in
                 if hold, cursor == nil { await withCheckedContinuation { gate = $0 } }
-                return .init(conversations: [chat(cursor ?? "head")], nextCursor: cursor == nil ? "tail" : nil)
-            }, status: { .init(configured: true, connected: true) }, cached: { [] }, save: { _ in }))
+                return reply(conversations: [chat(cursor ?? "head")], nextCursor: cursor == nil ? "tail" : nil)
+            }, pinned: { reply(conversations: []) }, status: { .init(configured: true, connected: true) }, cached: { nil }, save: { _ in }))
         await store.refresh()
         hold = true
         let refresh = Task { await store.refresh() }
@@ -113,11 +120,11 @@ import Testing
         var gate: CheckedContinuation<Void, Never>?
         var calls = 0
         let store = LarkConversationsModel(deps: .init(
-            page: { _ in
+            page: { _, _ in
                 calls += 1
                 if calls == 1 { await withCheckedContinuation { gate = $0 } }
-                return .init(conversations: [chat("fresh")], nextCursor: nil)
-            }, status: { .init(configured: true, connected: true) }, cached: { [] }, save: { _ in }))
+                return reply(conversations: [chat("fresh")], nextCursor: nil)
+            }, pinned: { reply(conversations: []) }, status: { .init(configured: true, connected: true) }, cached: { nil }, save: { _ in }))
         let old = Task { await store.refresh() }
         while gate == nil { await Task.yield() }
         old.cancel()
@@ -138,5 +145,153 @@ import Testing
         #expect(LarkConversationsModel.cacheName(a) != LarkConversationsModel.cacheName(b))
         #expect(LarkConversationsModel.cacheName(a) != LarkConversationsModel.cacheName(c))
         #expect(!LarkConversationsModel.cacheName(a).contains(a.token))
+    }
+    @Test func pinsAndRowsCommitTogetherAndOfflineKeepsBoth() async {
+        var fail = false
+        let oldPins = [chat("old-pin")]
+        let store = LarkConversationsModel(deps: .init(
+            page: { _, _ in if fail { throw URLError(.networkConnectionLost) }; return reply(conversations: [chat("new")]) },
+            pinned: { reply(conversations: [chat("new-pin")]) }, status: { .init(configured: true, connected: true) },
+            cached: { snapshot([chat("old")], pinned: oldPins) }, save: { _ in }))
+        #expect(store.pinned == oldPins)
+        fail = true
+        await store.refresh()
+        #expect(store.pinned == oldPins)
+        #expect(store.conversations.map(\.id) == ["old"])
+        fail = false
+        await store.refresh()
+        #expect(store.pinned.map(\.id) == ["new-pin"])
+        #expect(store.conversations.map(\.id) == ["new"])
+    }
+
+    @Test func changingAccountClearsOldRowsBeforeNewPagesFinish() async {
+        var gate: CheckedContinuation<Void, Never>?
+        var saves: [LarkConversationsModel.Snapshot?] = []
+        let store = LarkConversationsModel(deps: .init(
+            page: { _, owner in
+                #expect(owner == "two")
+                await withCheckedContinuation { gate = $0 }
+                return reply(conversations: [chat("new")], owner: "two")
+            }, pinned: { reply(conversations: [chat("new-pin")], owner: "two") },
+            status: { .init(configured: true, connected: true) },
+            cached: { snapshot([chat("old")], pinned: [chat("old-pin")]) }, save: { saves.append($0) }))
+        let task = Task { await store.refresh() }
+        while gate == nil { await Task.yield() }
+        #expect(store.accountID == "two")
+        #expect(store.conversations.isEmpty && store.pinned.isEmpty)
+        #expect(saves.count == 1 && saves[0] == nil)
+        gate?.resume(); await task.value
+        #expect(store.conversations.map(\.id) == ["new"])
+        #expect(saves.last??.accountID == "two")
+    }
+
+    @Test func accountChangeDuringPaginationNeverMergesUsers() async {
+        let store = LarkConversationsModel(deps: .init(
+            page: { cursor, _ in reply(conversations: [chat("row")], nextCursor: cursor == nil ? "tail" : nil,
+                                      owner: cursor == nil ? "one" : "two") },
+            pinned: { reply(conversations: [chat("pin")]) }, status: { .init(configured: true, connected: true) },
+            cached: { nil }, save: { _ in }))
+        await store.refresh(); await store.more()
+        #expect(store.accountID == nil)
+        #expect(store.conversations.isEmpty && store.pinned.isEmpty)
+        #expect(store.pageFailed)
+    }
+
+    @Test func olderHubCannotWriteAnUnownedSnapshot() async {
+        var saved = false
+        let store = LarkConversationsModel(deps: .init(
+            page: { _, _ in Issue.record("Must check owner before pages"); return reply(conversations: []) },
+            pinned: { .init(conversations: [chat("unknown")], nextCursor: nil) },
+            status: { .init(configured: true, connected: true) }, cached: { nil }, save: { _ in saved = true }))
+        await store.refresh()
+        #expect(store.needsUpgrade && store.failed)
+        #expect(!saved && store.pinned.isEmpty)
+    }
+
+    @Test func liveChangesWaitForRestAndOnlyTheNewestSnapshotAppears() async {
+        var version = 0
+        let store = LarkConversationsModel(deps: .init(
+            page: { _, _ in reply(conversations: [chat("row", "version \(version)")]) },
+            pinned: { reply(conversations: [chat("pin-\(version)")]) }, status: { .init(configured: true, connected: true) },
+            cached: { nil }, save: { _ in }))
+        await store.refresh()
+        store.holdScrolling(true)
+        version = 1; await store.refresh()
+        version = 2; await store.refresh()
+        #expect(store.conversations.first?.preview == "version 0")
+        #expect(store.pinned.first?.id == "pin-0")
+        store.holdScrolling(false)
+        #expect(store.conversations.first?.preview == "version 2")
+        #expect(store.pinned.first?.id == "pin-2")
+    }
+
+    @Test func aNewerRefreshDiscardsLateResponsesEvenWhenTheyIgnoreCancellation() async {
+        var gate: CheckedContinuation<Void, Never>?
+        var calls = 0
+        var published: [String] = []
+        let store = LarkConversationsModel(deps: .init(
+            page: { _, _ in
+                calls += 1
+                let id = calls == 1 ? "stale" : "fresh"
+                if calls == 1 { await withCheckedContinuation { gate = $0 } }
+                return reply(conversations: [chat(id)])
+            }, pinned: { reply(conversations: []) }, status: { .init(configured: true, connected: true) },
+            cached: { nil }, save: { published += $0?.conversations.map(\.id) ?? [] }))
+        let old = Task { await store.refresh() }
+        while gate == nil { await Task.yield() }
+        let newer = Task { await store.refresh() }
+        await Task.yield()
+        gate?.resume()
+        await old.value; await newer.value
+        #expect(published == ["fresh"])
+    }
+
+    @Test func changingAccountWhileScrollingImmediatelyClearsOldAndPendingData() async {
+        var owner = "one"
+        var offline = false
+        let store = LarkConversationsModel(deps: .init(
+            page: { _, account in
+                if offline { throw URLError(.networkConnectionLost) }
+                return reply(conversations: [chat(account)], owner: account)
+            }, pinned: { reply(conversations: [chat(owner + "-pin")], owner: owner) },
+            status: { .init(configured: true, connected: true) }, cached: { nil }, save: { _ in }))
+        await store.refresh()
+        store.holdScrolling(true)
+        await store.refresh()
+        owner = "two"; offline = true
+        await store.refresh()
+        #expect(store.conversations.isEmpty && store.pinned.isEmpty)
+        store.holdScrolling(false)
+        #expect(store.conversations.isEmpty && store.pinned.isEmpty)
+        #expect(store.accountID == "two")
+    }
+
+    @Test func signedOutRemovesCachedAccountButNetworkFailureDoesNot() async {
+        let store = LarkConversationsModel(deps: .init(
+            page: { _, _ in reply(conversations: []) },
+            pinned: { throw APIError(status: 502, message: "signed out", fields: ["code": "lark_not_logged_in"]) },
+            status: { .init(configured: true, connected: false) },
+            cached: { snapshot([chat("old")], pinned: [chat("old-pin")]) }, save: { _ in }))
+        await store.refresh()
+        #expect(store.accountID == nil && store.conversations.isEmpty && store.pinned.isEmpty)
+    }
+
+    @Test func paginationArrivingDuringAnotherDragWaitsForRest() async {
+        var gate: CheckedContinuation<Void, Never>?
+        let store = LarkConversationsModel(deps: .init(
+            page: { cursor, _ in
+                if cursor != nil { await withCheckedContinuation { gate = $0 } }
+                return reply(conversations: [chat(cursor ?? "head")], nextCursor: cursor == nil ? "tail" : nil)
+            }, pinned: { reply(conversations: []) }, status: { .init(configured: true, connected: true) },
+            cached: { nil }, save: { _ in }))
+        await store.refresh()
+        let more = Task { await store.more() }
+        while gate == nil { await Task.yield() }
+        store.holdScrolling(true)
+        gate?.resume(); await more.value
+        #expect(store.conversations.map(\.id) == ["head"])
+        store.holdScrolling(false)
+        #expect(store.conversations.map(\.id) == ["head", "tail"])
+        #expect(store.nextCursor == nil)
     }
 }
